@@ -75,7 +75,7 @@ class QubicInstrument(object):
         nx = int(np.sqrt(n))
         if nx**2 != n:
             raise ValueError('Non-square arrays are not handled.')
-        a = (nx * np.arange(nx) / (nx-1) - nx * 0.5) * size_
+        a = (np.arange(nx) - (nx - 1) * 0.5) * size_
         x, y = np.meshgrid(a, a)
         detector.center.x = x.ravel()
         detector.center.y = y.ravel()

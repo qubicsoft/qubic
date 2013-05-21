@@ -3,25 +3,41 @@ from __future__ import division
 
 import healpy as hp
 import numpy as np
-import qubic_v1
 from pysimulators import PointingMatrix, ProjectionInMemoryOperator
 from scipy.constants import c, pi
-
-from .operators import HealpixConvolutionGaussianOperator
-
+from .utils import _rotateuv
+from .version import VERSION
 
 __all__ = ['QubicInstrument']
 
 class QubicInstrument(object):
 
+    # update it when the scientific inputs or outputs of this class change
+    VERSION = '2.0'
+
     def __init__(self, fwhm_deg=14, focal_length=0.3, nu=150e9, dnu_nu=0,
                  ndetector=1024, detector_size=3e-3, nhorn=400, kappa=1.344,
-                 horn_thickness=0.001, nside=256):
+                 horn_thickness=0.001, nside=256, version=VERSION):
         self.init_sky(nside)
         self.init_primary_beam(fwhm_deg)
         self.init_optics(focal_length, nu, dnu_nu)
         self.init_detectors(ndetector, detector_size)
         self.init_horns(nhorn, horn_thickness, kappa)
+
+    def __str__(self):
+        state = [('nside', self.sky.nside),
+                 ('fwhm_deg', self.primary_beam.fwhm_deg),
+                 ('focal_length', self.optics.focal_length),
+                 ('nu', self.optics.nu),
+                 ('dnu_nu', self.optics.dnu_nu),
+                 ('ndetector', self.detector.size),
+                 ('detector_size', self.detector.size_),
+                 ('nhorn', self.horn.size),
+                 ('kappa', self.horn.kappa),
+                 ('horn_thickness', self.horn.thickness),
+                 ('version', self.VERSION),
+                ]
+        return '\n'.join([a + ': ' + repr(v) for a,v in state])
 
     def init_sky(self, nside):
         class Sky(object):
@@ -89,15 +105,10 @@ class QubicInstrument(object):
         horn.thickness = thickness
         self.horn = horn
 
-    def get_convolution_peak_operator(self, fwhm=np.radians(0.64883707),
-                                      **keywords):
-        return HealpixConvolutionGaussianOperator(self.sky.nside, fwhm=fwhm,
-                                                  **keywords)
-
     def get_projection_peak_operator(self, pointing, kmax=2):
         matrix = _peak_pointing_matrix(self, kmax, pointing)
         return ProjectionInMemoryOperator(matrix)
-        
+
 
 def _peak_angles(q, kmax):
     """
@@ -140,7 +151,7 @@ def _peak_pointing_matrix(q, kmax, pointings):
 
     for i, p in enumerate(pointings):
         theta, phi, psi = p
-        newpeakvec = qubic_v1.qubic.rotateuv(peakvec, theta, phi, psi, inverse=True)
+        newpeakvec = _rotateuv(peakvec, theta, phi, psi, inverse=True)
         newtheta, newphi = [a.reshape(shape) for a in hp.vec2ang(newpeakvec)]
         matrix[:,i,:]['index'] = hp.ang2pix(q.sky.nside, newtheta, newphi)
         matrix[:,i,:]['value'] = weight0

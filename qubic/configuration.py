@@ -346,5 +346,5 @@ class QubicConfiguration(object):
     @staticmethod
     def _get_time_id():
         t = time.time()
-        return time.strftime('%Y:%m:%d_%H:%M:%S', time.localtime(t)) + \
+        return time.strftime('%Y-%m-%d_%H:%M:%S', time.localtime(t)) + \
                '{:.9f}'.format(t-int(t))[1:]

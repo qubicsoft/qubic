@@ -9,7 +9,8 @@ import time
 import types
 import yaml
 from glob import glob
-from pyoperators.utils import strplural
+from pyoperators.utils import ifind, strplural
+from .calibration import QubicCalibration
 from .instrument import QubicInstrument
 from .operators import HealpixConvolutionGaussianOperator
 
@@ -21,19 +22,19 @@ class QubicConfiguration(object):
     pointing setups.
 
     """
-    def __init__(self, pointing, instrument=None, block_id=None,
-                 selection=None):
+    def __init__(self, instrument, pointing, block_id=None, selection=None):
         """
         Parameters
         ----------
+        instrument : str or QubicInstrument
+            Module name (only 'monochromatic' for now), or a QubicInstrument
+            instance.
         pointing : array-like of shape (n,3) or sequence of
             The triplets (θ,φ,ψ), where (φ,θ,ψ) are the Euler angles
             of the intrinsic ZY'Z'' rotations. Note the ordering of the angles.
             θ : co-latitude
             φ : longitude
             ψ : minus the position angle
-        instrument : QubicInstrument, optional
-           The Qubic instrumental setup.
         block_id : string or sequence of, optional
            The pointing block identifier.
         selection : integer or sequence of, optional
@@ -41,12 +42,12 @@ class QubicConfiguration(object):
            the pointing configuration.
 
         """
-        if not isinstance(instrument, (QubicInstrument, types.NoneType)):
+        if not isinstance(instrument, (QubicInstrument, str)):
             raise TypeError("Invalid type for the instrument ('{}' instead of '"
-                            "QubicInstrument').".format(type(
+                            "QubicInstrument' or 'str').".format(type(
                             instrument).__name__))
-        if instrument is None:
-            instrument = QubicInstrument()
+        if isinstance(instrument, str):
+            raise NotImplementedError('Module names not fixed yet.')
         if not isinstance(pointing, (list, tuple)):
             pointing = (pointing,)
         elif isinstance(pointing, types.GeneratorType):
@@ -74,9 +75,10 @@ class QubicConfiguration(object):
         self.block = self._get_block(pointing, block_id)
 
     def __str__(self):
-        return 'Pointings:\n    {} in {}\n'.format(self.get_nsamples(),
-            strplural('block', len(self.block))) + 'Instrument:\n' + \
-            ('\n'.join(('    ') + i for i in str(self.instrument).splitlines()))
+        return 'Pointings:\n    {} in {}\n\n'.format(self.get_nsamples(),
+               strplural(len(self.block), 'block')) +  str(self.instrument)
+
+    __repr__ = __str__
 
     def get_nsamples(self):
         """ Return the number of valid pointings. """
@@ -84,7 +86,7 @@ class QubicConfiguration(object):
 
     def get_ndetectors(self):
         """ Return the number of valid detectors. """
-        return self.instrument.detector.size
+        return self.instrument.get_ndetectors()
 
     def get_pointing_hitmap(self, nside=None):
         """
@@ -103,10 +105,31 @@ class QubicConfiguration(object):
 
     def get_convolution_peak_operator(self, fwhm=np.radians(0.64883707),
                                       **keywords):
+        """
+        Return an operator that convolves the Healpix sky by the gaussian kernel
+        that, if used in conjonction with the peak sampling operator, best
+        approximates the synthetic beam.
+
+        Parameters
+        ----------
+        fwhm : float, optional
+            The Full Width Half Maximum of the gaussian.
+
+        """
         return HealpixConvolutionGaussianOperator(self.instrument.sky.nside,
                                                   fwhm=fwhm, **keywords)
 
     def get_projection_peak_operator(self, kmax=2):
+        """
+        Return the projection operator for the peak sampling.
+
+        Parameters
+        ----------
+        kmax : int, optional
+            The diffraction order above which the peaks are ignored.
+            For a value of 0, only the central peak is sampled.
+
+        """
         return self.instrument.get_projection_peak_operator(self.pointing,
                                                             kmax=kmax)
 
@@ -143,15 +166,15 @@ class QubicConfiguration(object):
         with open(os.path.join(filename, 'info.txt')) as f:
             info = f.read()
         ptg, ptg_id = cls._get_files_from_selection(filename, 'ptg', selection)
-        return QubicConfiguration(ptg, instrument=instrument, selection= \
-                                  selection, block_id=ptg_id), info
+        return QubicConfiguration(instrument, ptg, selection=selection,
+                                  block_id=ptg_id), info
 
     @classmethod
-    def load_observation(cls, filename, instrument=None, selection=None):
+    def _load_observation(cls, filename, instrument=None, selection=None):
         """
         Load a QUBIC configuration, info and TOD.
 
-        obs, tod, info = QubicConfiguration.load_observation(filename,
+        obs, tod, info = QubicConfiguration._load_observation(filename,
                              [instrument=None, selection=None])
 
         Parameters
@@ -216,7 +239,7 @@ class QubicConfiguration(object):
            The info file of the simulation.
 
         """
-        obs, tod, info = cls.load_observation(filename, instrument=instrument,
+        obs, tod, info = cls._load_observation(filename, instrument=instrument,
                                               selection=selection)
         input_map = hp.read_map(os.path.join(filename, 'input_map.fits'))
         return obs, input_map, tod, info
@@ -237,7 +260,7 @@ class QubicConfiguration(object):
         self._save_configuration(filename, info)
         self._save_ptg(filename)
 
-    def save_observation(self, filename, tod, info):
+    def _save_observation(self, filename, tod, info):
         """
         Write a QUBIC configuration to disk with a TOD.
     
@@ -272,7 +295,7 @@ class QubicConfiguration(object):
             All information deemed necessary to describe the simulation.
     
         """
-        self.save_observation(filename, tod, info)
+        self._save_observation(filename, tod, info)
         hp.write_map(os.path.join(filename, 'input_map.fits'), input_map)
 
     def _save_configuration(self, filename, info):
@@ -326,8 +349,13 @@ class QubicConfiguration(object):
     @staticmethod
     def _get_instrument_from_file(filename):
         with open(os.path.join(filename, 'instrument.txt')) as f:
-            keywords = yaml.load(f.read())
-        return QubicInstrument(**keywords)
+            lines = f.readlines()[1:]
+        sep = ifind(lines, lambda l: l == '\n')
+        keywords_instrument = yaml.load(''.join(lines[:sep]))
+        name = keywords_instrument.pop('name')
+        keywords_calibration = yaml.load(''.join(lines[sep+2:]))
+        calibration = QubicCalibration(**keywords_calibration)
+        return QubicInstrument(name, calibration, **keywords_instrument)
 
     @staticmethod
     def _get_files_from_selection(filename, filetype, selection):

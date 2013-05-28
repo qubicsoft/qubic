@@ -63,13 +63,13 @@ class QubicInstrument(object):
                 self.fwhm_sr = 2 * pi * self.sigma**2
             def __call__(self, theta):
                 return np.exp(-theta**2 / (2 * self.sigma**2))
-        self.primary_beam = PrimaryBeam(self.calibration.get('fwhm'))
+        self.primary_beam = PrimaryBeam(self.calibration.get('primbeam'))
 
     def _init_optics(self, nu=150e9, dnu_nu=0, **keywords):
         class Optics(object):
             pass
         optics = Optics()
-        optics.focal_length = self.calibration.get('focal length')
+        optics.focal_length = self.calibration.get('optics')['focal length']
         optics.nu = nu
         optics.dnu_nu = dnu_nu
         self.optics = optics
@@ -102,7 +102,7 @@ class QubicInstrument(object):
         self.detector = detector
 
     def _init_horns(self):
-        shape, center = self.calibration.get('horn')
+        shape, center = self.calibration.get('hornarray')
         n = shape[0] * shape[1]
         class Horn(np.recarray):
             pass

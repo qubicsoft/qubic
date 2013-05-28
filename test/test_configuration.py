@@ -24,8 +24,7 @@ ptgs = ptg, [ptg], [ptg,ptg], [[ptg,ptg], [ptg2,ptg2,ptg2]], \
 block_n = [[1], [1], [2], [2,3],
            [1], [1], [2], [2,3],
            [1], [2], [2], [2,3], [2,3]]
-caltree = QubicCalibration(fwhm_deg=15, focal_length=0.2,
-                           detarray='CalQubic_DetArray_v1.fits')
+caltree = QubicCalibration(detarray='CalQubic_DetArray_v1.fits')
 qubic = QubicInstrument('monochromatic,nopol', caltree, nu=160e9)
 qubic.detector.removed = True
 qubic.detector.removed[30:,30:] = False

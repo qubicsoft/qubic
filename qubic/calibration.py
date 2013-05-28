@@ -12,10 +12,10 @@ __all__ = ['QubicCalibration']
 
 PATH = join(os.path.dirname(__file__), 'calfiles')
 
-FWHM_DEG = 14
-FOCAL_LENGTH = 0.3
 FILE_DETARRAY = 'CalQubic_DetArray_v*.fits'
 FILE_HORNARRAY = 'CalQubic_HornArray_v*.fits'
+FILE_OPTICS = 'CalQubic_Optics_v*.fits'
+FILE_PRIMBEAM = 'CalQubic_PrimBeam_v*.fits'
 
 class QubicCalibration(object):
     """
@@ -27,43 +27,37 @@ class QubicCalibration(object):
     path.
 
     """
-    def __init__(self, path=PATH, fwhm_deg=FWHM_DEG, focal_length=FOCAL_LENGTH,
-                 detarray=FILE_DETARRAY, hornarray=FILE_HORNARRAY):
+    def __init__(self, path=PATH, detarray=FILE_DETARRAY,
+                 hornarray=FILE_HORNARRAY, optics=FILE_OPTICS,
+                 primbeam=FILE_PRIMBEAM):
         """
         Parameters
         ----------
         path : str, optional
             The directory path of the calibration tree. The default one is
             the one that is contained in the qubic package.
-        fwhm_deg : float, optional
-            The primary beam FWHM, in degrees.
-        focal_length : float, optional
-            The instrument focal length.
-        nhorns : int, optional
-            The number of back-to-back horns.
-        horn_kappa : float, optional
-            The horn kappa value.
-        horn_thickness : float, optional
-            Half the distance between two adjacent horn collecting surfaces,
-            in meters.
         detarray : str, optional
             The detector array layout calibration file name.
         hornarray : str, optional
             The horn array layout calibration file name.
+        optics : str, optional
+            The optics parameters calibration file name.
+        primbeam : str, optional
+            The primary beam parameter calibration file name.
 
         """
         self.path = os.path.abspath(path)
-        self.fwhm_deg = fwhm_deg
-        self.focal_length = focal_length
         self.detarray = self._newest(detarray)
         self.hornarray = self._newest(hornarray)
+        self.optics = self._newest(optics)
+        self.primbeam = self._newest(primbeam)
 
     def __str__(self):
         state = [('path', self.path),
-                 ('fwhm_deg', self.fwhm_deg),
-                 ('focal_length', self.focal_length),
                  ('detarray', self.detarray),
                  ('hornarray', self.hornarray),
+                 ('optics', self.optics),
+                 ('primbeam', self.primbeam),
                 ]
         return '\n'.join([a + ': ' + repr(v) for a,v in state])
 
@@ -76,18 +70,14 @@ class QubicCalibration(object):
         Parameters
         ----------
         name : str
-            One of the following
-                - 'fwhm'
-                - 'focal length'
-                - 'horn'
-                - 'detarray'.
+            One of the following:
+                - 'detarray'
+                - 'hornarray'
+                - 'optics'
+                - 'primbeam'
 
         """
-        if name == 'fwhm':
-            return self.fwhm_deg
-        elif name == 'focal length':
-            return self.focal_length
-        elif name == 'detarray':
+        if name == 'detarray':
             hdus = fits.open(self.detarray)
             version = hdus[0].header['format version']
             center, corner = hdus[1].data, hdus[2].data
@@ -102,11 +92,24 @@ class QubicCalibration(object):
                 index = hdus[4].data
                 quadrant = hdus[5].data
             return shape, center, corner, removed, index, quadrant
-        elif name == 'horn':
+
+        elif name == 'hornarray':
             hdus = fits.open(self.hornarray)
             center = hdus[1].data
             shape = center.shape[:-1]
             return shape, center
+
+        elif name == 'optics':
+            header = fits.open(self.optics)[0].header
+            return {'focal length':header['flength']}
+
+        elif name == 'primbeam':
+            header = fits.open(self.primbeam)[0].header
+            fwhm0_deg = header['fwhm']
+            return fwhm0_deg
+            # nu0 = hdu['freq']
+            # return lambda nu: fwhm0_deg * (nu0 / nu)
+
         raise ValueError("Invalid calibration item: '{}'".format(name))
 
     def _newest(self, filename):

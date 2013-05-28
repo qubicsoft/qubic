@@ -102,26 +102,15 @@ class QubicInstrument(object):
         self.detector = detector
 
     def _init_horns(self):
-        n, kappa, thickness = self.calibration.get('horn')
+        shape, center = self.calibration.get('horn')
+        n = shape[0] * shape[1]
         class Horn(np.recarray):
             pass
         dtype = [('center', [('x', float), ('y', float)])]
         horn = Horn(n, dtype=dtype)
-
-        nx = int(np.sqrt(n))
-        if nx**2 != n:
-            raise ValueError('Non-square arrays are not handled.')
-        lmbda = c / self.optics.nu
-        surface = kappa**2 * lmbda**2 / self.primary_beam.fwhm_sr
-        radius = np.sqrt(surface / pi) + thickness
-        sizex = 2 * radius * nx
-        a = -sizex * 0.5 + radius + sizex * np.arange(nx) / nx
-        x, y = np.meshgrid(a, a)
-        horn.center.x = x.ravel()
-        horn.center.y = y.ravel()
-        horn.kappa = kappa
-        horn.spacing = a[1] - a[0]
-        horn.thickness = thickness
+        horn.center.x = center[...,0].ravel()
+        horn.center.y = center[...,1].ravel()
+        horn.spacing = abs(center[0,0,0] - center[0,1,0])
         self.horn = horn
 
     def __str__(self):

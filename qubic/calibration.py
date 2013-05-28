@@ -14,10 +14,8 @@ PATH = join(os.path.dirname(__file__), 'calfiles')
 
 FWHM_DEG = 14
 FOCAL_LENGTH = 0.3
-NHORNS = 400
-HORN_KAPPA = 1.344
-HORN_THICKNESS = 0.001
 FILE_DETARRAY = 'CalQubic_DetArray_v*.fits'
+FILE_HORNARRAY = 'CalQubic_HornArray_v*.fits'
 
 class QubicCalibration(object):
     """
@@ -30,8 +28,7 @@ class QubicCalibration(object):
 
     """
     def __init__(self, path=PATH, fwhm_deg=FWHM_DEG, focal_length=FOCAL_LENGTH,
-                 nhorns=NHORNS, horn_kappa=HORN_KAPPA,
-                 horn_thickness=HORN_THICKNESS, detarray=FILE_DETARRAY):
+                 detarray=FILE_DETARRAY, hornarray=FILE_HORNARRAY):
         """
         Parameters
         ----------
@@ -50,25 +47,23 @@ class QubicCalibration(object):
             Half the distance between two adjacent horn collecting surfaces,
             in meters.
         detarray : str, optional
-            The detector array calibration file name.
+            The detector array layout calibration file name.
+        hornarray : str, optional
+            The horn array layout calibration file name.
 
         """
         self.path = os.path.abspath(path)
         self.fwhm_deg = fwhm_deg
         self.focal_length = focal_length
-        self.nhorns = nhorns
-        self.horn_kappa = horn_kappa
-        self.horn_thickness = horn_thickness
         self.detarray = self._newest(detarray)
+        self.hornarray = self._newest(hornarray)
 
     def __str__(self):
         state = [('path', self.path),
                  ('fwhm_deg', self.fwhm_deg),
                  ('focal_length', self.focal_length),
-                 ('nhorns', self.nhorns),
-                 ('horn_kappa', self.horn_kappa),
-                 ('horn_thickness', self.horn_thickness),
                  ('detarray', self.detarray),
+                 ('hornarray', self.hornarray),
                 ]
         return '\n'.join([a + ': ' + repr(v) for a,v in state])
 
@@ -92,9 +87,7 @@ class QubicCalibration(object):
             return self.fwhm_deg
         elif name == 'focal length':
             return self.focal_length
-        elif name == 'horn':
-            return self.nhorns, self.horn_kappa, self.horn_thickness
-        if name == 'detarray':
+        elif name == 'detarray':
             hdus = fits.open(self.detarray)
             version = hdus[0].header['format version']
             center, corner = hdus[1].data, hdus[2].data
@@ -109,6 +102,11 @@ class QubicCalibration(object):
                 index = hdus[4].data
                 quadrant = hdus[5].data
             return shape, center, corner, removed, index, quadrant
+        elif name == 'horn':
+            hdus = fits.open(self.hornarray)
+            center = hdus[1].data
+            shape = center.shape[:-1]
+            return shape, center
         raise ValueError("Invalid calibration item: '{}'".format(name))
 
     def _newest(self, filename):

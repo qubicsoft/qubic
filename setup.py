@@ -8,6 +8,9 @@ def version():
     m = re.search(r"VERSION = '(.*)'", f)
     return m.groups()[0]
 
+# force sdist to copy files
+delattr(os, 'link')
+
 version = version()
 long_description = open('README.rst').read()
 keywords = 'scientific computing'
@@ -37,3 +40,4 @@ setup(name='qubic',
           'Topic :: Scientific/Engineering',
           'Topic :: Scientific/Engineering :: Astronomy',
           ])
+

@@ -79,8 +79,10 @@ def create_sweeping_pointings(center, duration, sampling_period, angspeed,
     # time samples
     nsamples = duration * 3600 / sampling_period
     tunix = t0.unix + np.arange(nsamples) * sampling_period
-    #XXX Astropy's time module doesn't handle leap seconds correctly
-    if astropy.__version__ < '0.4':
+
+    # Astropy's time module didn't handle leap seconds correctly until 0.2.3
+    # see https://github.com/astropy/astropy/pull/1118
+    if astropy.__version__ < '0.2.3':
         tunix -= 27
     tsamples = _gst2lst(_jd2gst(_unix2jd(tunix)), lon)
 

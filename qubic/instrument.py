@@ -7,7 +7,9 @@ try:
 except:
     pass
 import numpy as np
-from pysimulators import PointingMatrix, ProjectionInMemoryOperator
+from pyoperators import MPI
+from pysimulators import (Instrument, PointingMatrix,
+                          ProjectionInMemoryOperator, Map, Tod)
 from scipy.constants import c, pi
 from .calibration import QubicCalibration
 from .utils import _rotateuv, _compress_mask, _uncompress_mask
@@ -15,10 +17,13 @@ from .utils import _rotateuv, _compress_mask, _uncompress_mask
 __all__ = ['QubicInstrument']
 
 
-class QubicInstrument(object):
+class QubicInstrument(Instrument):
+    """
+    The QubicInstrument class. It represents the instrument setup.
 
+    """
     def __init__(self, name, calibration=None, removed=None, nside=256,
-                 **keywords):
+                 comm_map=MPI.COMM_WORLD, comm_tod=MPI.COMM_WORLD, **keywords):
         """
         Parameters
         ----------
@@ -78,13 +83,13 @@ class QubicInstrument(object):
     def _init_detectors(self, removed):
         class Detector(np.recarray):
             pass
-        dtype = [('center', [('x', float), ('y', float)]),
-                 ('corner', [('x', float), ('y', float)], 4),
+        dtype = [('center', float, 2),
+                 ('vertex', float, (4, 2)),
                  ('index', int),
                  ('quadrant', np.int8),
                  ('masked', bool),
                  ('removed', bool)]
-        shape, center, corner, removed_, index, quadrant = \
+        shape, center, vertex, removed_, index, quadrant = \
             self.calibration.get('detarray')
         if removed is not None:
             if isinstance(removed, str):
@@ -92,10 +97,8 @@ class QubicInstrument(object):
             removed_ |= removed
         removed = removed_
         detector = Detector(shape, dtype=dtype)
-        detector.center.x = center[..., 0]
-        detector.center.y = center[..., 1]
-        detector.corner.x = corner[..., 0]
-        detector.corner.y = corner[..., 1]
+        detector.center = center
+        detector.vertex = vertex
         detector.masked = False
         detector.removed = removed
         detector.index = index
@@ -107,10 +110,9 @@ class QubicInstrument(object):
             pass
         shape, center = self.calibration.get('hornarray')
         n = shape[0] * shape[1]
-        dtype = [('center', [('x', float), ('y', float)])]
+        dtype = [('center', float, 2)]
         horn = Horn(n, dtype=dtype)
-        horn.center.x = center[..., 0].ravel()
-        horn.center.y = center[..., 1].ravel()
+        horn.center = center.reshape((-1, 2))
         horn.spacing = abs(center[0, 0, 0] - center[0, 1, 0])
         self.horn = horn
 
@@ -126,10 +128,6 @@ class QubicInstrument(object):
                join('    ' + l for l in str(self.calibration).splitlines())
 
     __repr__ = __str__
-
-    def get_ndetectors(self):
-        """ Return the number of valid detectors. """
-        return int(np.sum(~self.detector.removed))
 
     def pack(self, x):
         """
@@ -182,10 +180,10 @@ class QubicInstrument(object):
 
         """
         a = mp.gca()
-        corner = self.pack(self.detector.corner).view(float).reshape(
+        vertex = self.pack(self.detector.vertex).view(float).reshape(
             (-1, 4, 2))
-        for c in corner:
-            a.add_patch(mp.Polygon(c, closed=True, fill=False, **keywords))
+        for v in vertex:
+            a.add_patch(mp.Polygon(v, closed=True, fill=False, **keywords))
         if autoscale:
             mp.autoscale()
         mp.show()
@@ -204,7 +202,7 @@ class QubicInstrument(object):
 
         """
         matrix = _peak_pointing_matrix(self, kmax, pointing)
-        return ProjectionInMemoryOperator(matrix)
+        return ProjectionInMemoryOperator(matrix, classin=Map, classout=Tod)
 
 
 def _peak_angles(q, kmax):
@@ -216,8 +214,8 @@ def _peak_angles(q, kmax):
     center = q.pack(q.detector.center)
     lmbda = c / q.optics.nu
     dx = q.horn.spacing
-    detvec = np.vstack([-center.x,
-                        -center.y,
+    detvec = np.vstack([-center[..., 0],
+                        -center[..., 1],
                         np.zeros(ndetector) + q.optics.focal_length]).T
     detvec.T[...] /= np.sqrt(np.sum(detvec**2, axis=1))
 
@@ -245,14 +243,13 @@ def _peak_pointing_matrix(q, kmax, pointings):
     peakvec = hp.ang2vec(theta0.ravel(), phi0.ravel())
     shape = theta0.shape
 
-    matrix = PointingMatrix.empty((ndetector, npointing, npeak), npixel,
-                                  info={})
+    matrix = PointingMatrix.empty((ndetector, npointing, npeak), npixel)
 
     for i, p in enumerate(pointings):
         theta, phi, psi = p
         newpeakvec = _rotateuv(peakvec, theta, phi, psi, inverse=True)
         newtheta, newphi = [a.reshape(shape) for a in hp.vec2ang(newpeakvec)]
-        matrix[:, i, :]['index'] = hp.ang2pix(q.sky.nside, newtheta, newphi)
-        matrix[:, i, :]['value'] = weight0
+        matrix[:, i, :].index = hp.ang2pix(q.sky.nside, newtheta, newphi)
+        matrix[:, i, :].value = weight0
 
     return matrix

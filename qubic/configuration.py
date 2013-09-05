@@ -51,14 +51,6 @@ class QubicConfiguration(Configuration):
         Configuration.__init__(self, instrument, pointing, block_id=block_id,
                                selection=selection)
 
-    def get_nsamples(self):
-        """ Return the number of valid pointings. """
-        return sum(self.block.n)
-
-    def get_ndetectors(self):
-        """ Return the number of valid detectors. """
-        return self.instrument.get_ndetectors()
-
     def get_pointing_hitmap(self, nside=None):
         """
         Return a healpy map whose values are the number of times a pointing

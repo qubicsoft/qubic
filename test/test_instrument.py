@@ -7,7 +7,11 @@ from qubic import QubicInstrument
 def test_packunpack():
     q = QubicInstrument('monochromatic,nopol')
     d = q.detector
-    data = (d.center, d.corner, d.index, d.removed, d.quadrant)
+    center = np.recarray(d.center.shape[:-1], [('x', float), ('y', float)])
+    center.x, center.y = d.center[..., 0], d.center[..., 1]
+    vertex = np.recarray(d.vertex.shape[:-1], [('x', float), ('y', float)])
+    vertex.x, vertex.y = d.vertex[..., 0], d.vertex[..., 1]
+    data = (d.center, center, d.vertex, vertex, d.index, d.removed, d.quadrant)
 
     def iseq(a, b):
         if a.dtype.kind == 'V':

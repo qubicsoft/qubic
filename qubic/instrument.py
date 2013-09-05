@@ -14,6 +14,7 @@ from .utils import _rotateuv, _compress_mask, _uncompress_mask
 
 __all__ = ['QubicInstrument']
 
+
 class QubicInstrument(object):
 
     def __init__(self, name, calibration=None, removed=None, nside=256,
@@ -83,18 +84,18 @@ class QubicInstrument(object):
                  ('quadrant', np.int8),
                  ('masked', bool),
                  ('removed', bool)]
-        shape, center, corner, removed_, index, quadrant = self.calibration.get(
-            'detarray')
+        shape, center, corner, removed_, index, quadrant = \
+            self.calibration.get('detarray')
         if removed is not None:
             if isinstance(removed, str):
                 removed = _uncompress_mask(removed).reshape(shape)
             removed_ |= removed
         removed = removed_
         detector = Detector(shape, dtype=dtype)
-        detector.center.x = center[...,0]
-        detector.center.y = center[...,1]
-        detector.corner.x = corner[...,0]
-        detector.corner.y = corner[...,1]
+        detector.center.x = center[..., 0]
+        detector.center.y = center[..., 1]
+        detector.corner.x = corner[..., 0]
+        detector.corner.y = corner[..., 1]
         detector.masked = False
         detector.removed = removed
         detector.index = index
@@ -102,15 +103,15 @@ class QubicInstrument(object):
         self.detector = detector
 
     def _init_horns(self):
-        shape, center = self.calibration.get('hornarray')
-        n = shape[0] * shape[1]
         class Horn(np.recarray):
             pass
+        shape, center = self.calibration.get('hornarray')
+        n = shape[0] * shape[1]
         dtype = [('center', [('x', float), ('y', float)])]
         horn = Horn(n, dtype=dtype)
-        horn.center.x = center[...,0].ravel()
-        horn.center.y = center[...,1].ravel()
-        horn.spacing = abs(center[0,0,0] - center[0,1,0])
+        horn.center.x = center[..., 0].ravel()
+        horn.center.y = center[..., 1].ravel()
+        horn.spacing = abs(center[0, 0, 0] - center[0, 1, 0])
         self.horn = horn
 
     def __str__(self):
@@ -118,12 +119,11 @@ class QubicInstrument(object):
                  ('nu', self.optics.nu),
                  ('dnu_nu', self.optics.dnu_nu),
                  ('nside', self.sky.nside),
-                 ('removed', _compress_mask(self.detector.removed))
-                ]
+                 ('removed', _compress_mask(self.detector.removed))]
         return 'Instrument:\n' + \
-               '\n'.join(['    ' + a + ': ' + repr(v) for a,v in state]) + \
-               '\n\nCalibration:\n' + \
-               '\n'.join('    ' + l for l in str(self.calibration).splitlines())
+               '\n'.join(['    ' + a + ': ' + repr(v) for a, v in state]) + \
+               '\n\nCalibration:\n' + '\n'. \
+               join('    ' + l for l in str(self.calibration).splitlines())
 
     __repr__ = __str__
 
@@ -175,13 +175,15 @@ class QubicInstrument(object):
         for i in range(n):
             new_x_[num[isort[i]]] = x[i]
         return new_x
-        
+
     def plot(self, autoscale=True, **keywords):
         """
-        Plot the detector surfaces.
+        Plot detectors on the image plane.
+
         """
         a = mp.gca()
-        corner = self.pack(self.detector.corner).view(float).reshape((-1,4,2))
+        corner = self.pack(self.detector.corner).view(float).reshape(
+            (-1, 4, 2))
         for c in corner:
             a.add_patch(mp.Polygon(c, closed=True, fill=False, **keywords))
         if autoscale:
@@ -218,12 +220,12 @@ def _peak_angles(q, kmax):
                         -center.y,
                         np.zeros(ndetector) + q.optics.focal_length]).T
     detvec.T[...] /= np.sqrt(np.sum(detvec**2, axis=1))
-    
-    kx, ky = np.mgrid[-kmax:kmax+1,-kmax:kmax+1]
-    nx = detvec[:,0,np.newaxis] - lmbda * kx.ravel() / dx
-    ny = detvec[:,1,np.newaxis] - lmbda * ky.ravel() / dx  
+
+    kx, ky = np.mgrid[-kmax:kmax+1, -kmax:kmax+1]
+    nx = detvec[:, 0, np.newaxis] - lmbda * kx.ravel() / dx
+    ny = detvec[:, 1, np.newaxis] - lmbda * ky.ravel() / dx
     theta = np.arcsin(np.sqrt(nx**2 + ny**2))
-    phi = np.arctan2(ny,nx)
+    phi = np.arctan2(ny, nx)
 
     return theta, phi
 
@@ -238,20 +240,19 @@ def _peak_pointing_matrix(q, kmax, pointings):
     pointings = np.radians(pointings)
     theta0, phi0 = _peak_angles(q, kmax)
     weight0 = q.primary_beam(theta0).astype(np.float32)
-    weight0 /= np.sum(weight0, axis=-1)[...,None]
-    
+    weight0 /= np.sum(weight0, axis=-1)[..., None]
+
     peakvec = hp.ang2vec(theta0.ravel(), phi0.ravel())
     shape = theta0.shape
 
-    matrix = PointingMatrix.empty((ndetector, npointing, npeak), npixel, info={})
+    matrix = PointingMatrix.empty((ndetector, npointing, npeak), npixel,
+                                  info={})
 
     for i, p in enumerate(pointings):
         theta, phi, psi = p
         newpeakvec = _rotateuv(peakvec, theta, phi, psi, inverse=True)
         newtheta, newphi = [a.reshape(shape) for a in hp.vec2ang(newpeakvec)]
-        matrix[:,i,:]['index'] = hp.ang2pix(q.sky.nside, newtheta, newphi)
-        matrix[:,i,:]['value'] = weight0
+        matrix[:, i, :]['index'] = hp.ang2pix(q.sky.nside, newtheta, newphi)
+        matrix[:, i, :]['value'] = weight0
 
     return matrix
-
-

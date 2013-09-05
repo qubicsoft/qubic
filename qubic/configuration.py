@@ -43,8 +43,8 @@ class QubicConfiguration(Configuration):
 
         """
         if not isinstance(instrument, (QubicInstrument, str)):
-            raise TypeError("Invalid type for the instrument ('{}' instead of '"
-                            "QubicInstrument' or 'str').".format(type(
+            raise TypeError("Invalid type for the instrument ('{}' instead of "
+                            "'QubicInstrument' or 'str').".format(type(
                             instrument).__name__))
         if isinstance(instrument, str):
             raise NotImplementedError('Module names not fixed yet.')
@@ -68,7 +68,7 @@ class QubicConfiguration(Configuration):
         if nside is None:
             nside = self.instrument.sky.nside
         hit = np.zeros(12 * nside**2)
-        theta, phi = self.pointing[...,0], self.pointing[...,1]
+        theta, phi = self.pointing[..., 0], self.pointing[..., 1]
         ipixel = hp.ang2pix(nside, np.radians(theta), np.radians(phi))
         for i in ipixel:
             hit[i] += 1
@@ -77,9 +77,9 @@ class QubicConfiguration(Configuration):
     def get_convolution_peak_operator(self, fwhm=np.radians(0.64883707),
                                       **keywords):
         """
-        Return an operator that convolves the Healpix sky by the gaussian kernel
-        that, if used in conjonction with the peak sampling operator, best
-        approximates the synthetic beam.
+        Return an operator that convolves the Healpix sky by the gaussian
+        kernel that, if used in conjonction with the peak sampling operator,
+        best approximates the synthetic beam.
 
         Parameters
         ----------
@@ -172,8 +172,8 @@ class QubicConfiguration(Configuration):
                              selection=selection)
         tod, tod_id = cls._get_files_from_selection(filename, 'tod', selection)
         if len(tod) != len(obs.block):
-            raise ValueError('The number of pointing and tod files is not the s'
-                             'ame.')
+            raise ValueError('The number of pointing and tod files is not the '
+                             'same.')
         if any(p != t for p, t in zip(obs.block.identifier, tod_id)):
             raise ValueError('Incompatible pointing and tod files.')
         tod = np.hstack(tod)
@@ -185,8 +185,8 @@ class QubicConfiguration(Configuration):
         Load a simulation, including the QUBIC configuration, info, TOD and
         input map.
 
-        obs, input_map, tod, info = QubicConfiguration.load_simulation(filename,
-                                        [instrument=None, selection=None])
+        obs, input_map, tod, info = QubicConfiguration.load_simulation(
+            filename, [instrument=None, selection=None])
 
         Parameters
         ----------
@@ -211,14 +211,14 @@ class QubicConfiguration(Configuration):
 
         """
         obs, tod, info = cls._load_observation(filename, instrument=instrument,
-                                              selection=selection)
+                                               selection=selection)
         input_map = hp.read_map(os.path.join(filename, 'input_map.fits'))
         return obs, input_map, tod, info
 
     def save(self, filename, info):
         """
         Write a Qubic configuration to disk.
-    
+
         Parameters
         ----------
         filename : string
@@ -226,7 +226,7 @@ class QubicConfiguration(Configuration):
             saved.
         info : string
             All information deemed necessary to describe the configuration.
-    
+
         """
         self._save_configuration(filename, info)
         self._save_ptg(filename)
@@ -234,7 +234,7 @@ class QubicConfiguration(Configuration):
     def _save_observation(self, filename, tod, info):
         """
         Write a QUBIC configuration to disk with a TOD.
-    
+
         Parameters
         ----------
         filename : string
@@ -244,7 +244,7 @@ class QubicConfiguration(Configuration):
             The simulated time ordered data, of shape (ndetectors, npointings).
         info : string
             All information deemed necessary to describe the simulation.
-    
+
         """
         self._save_configuration(filename, info)
         self._save_ptg_tod(filename, tod)
@@ -252,7 +252,7 @@ class QubicConfiguration(Configuration):
     def save_simulation(self, filename, input_map, tod, info):
         """
         Write a QUBIC configuration to disk with a TOD and an input image.
-    
+
         Parameters
         ----------
         filename : string
@@ -264,7 +264,7 @@ class QubicConfiguration(Configuration):
             The simulated time ordered data, of shape (ndetectors, npointings).
         info : string
             All information deemed necessary to describe the simulation.
-    
+
         """
         self._save_observation(filename, tod, info)
         hp.write_map(os.path.join(filename, 'input_map.fits'), input_map)
@@ -296,7 +296,7 @@ class QubicConfiguration(Configuration):
         for b in self.block:
             postfix = self._get_time_id() + '.fits'
             p = self.pointing[b.start:b.stop]
-            t = tod[:,b.start:b.stop]
+            t = tod[:, b.start:b.stop]
             file_ptg = os.path.join(filename, 'ptg_' + postfix)
             file_tod = os.path.join(filename, 'tod_' + postfix)
             hdu_ptg = pyfits.PrimaryHDU(p)
@@ -332,5 +332,5 @@ class QubicConfiguration(Configuration):
     @staticmethod
     def _get_time_id():
         t = time.time()
-        return time.strftime('%Y-%m-%d_%H:%M:%S', time.localtime(t)) + \
-               '{:.9f}'.format(t-int(t))[1:]
+        return time.strftime('%Y-%m-%d_%H:%M:%S',
+                             time.localtime(t)) + '{:.9f}'.format(t-int(t))[1:]

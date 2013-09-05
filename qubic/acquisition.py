@@ -16,6 +16,7 @@ from .operators import HealpixConvolutionGaussianOperator
 
 __all__ = ['QubicAcquisition']
 
+
 class QubicAcquisition(Acquisition):
     """
     The QubicAcquisition class, which represents the instrument and

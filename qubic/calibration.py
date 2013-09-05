@@ -17,6 +17,7 @@ FILE_HORNARRAY = 'CalQubic_HornArray_v*.fits'
 FILE_OPTICS = 'CalQubic_Optics_v*.fits'
 FILE_PRIMBEAM = 'CalQubic_PrimBeam_v*.fits'
 
+
 class QubicCalibration(object):
     """
     Class representing the QUBIC calibration tree. It stores the calibration
@@ -57,9 +58,8 @@ class QubicCalibration(object):
                  ('detarray', self.detarray),
                  ('hornarray', self.hornarray),
                  ('optics', self.optics),
-                 ('primbeam', self.primbeam),
-                ]
-        return '\n'.join([a + ': ' + repr(v) for a,v in state])
+                 ('primbeam', self.primbeam)]
+        return '\n'.join([a + ': ' + repr(v) for a, v in state])
 
     __repr__ = __str__
 
@@ -101,7 +101,7 @@ class QubicCalibration(object):
 
         elif name == 'optics':
             header = fits.open(self.optics)[0].header
-            return {'focal length':header['flength']}
+            return {'focal length': header['flength']}
 
         elif name == 'primbeam':
             header = fits.open(self.primbeam)[0].header

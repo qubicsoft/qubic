@@ -12,17 +12,15 @@ import os
 
 from pyoperators import pcg, DiagonalOperator, UnpackOperator
 from pysimulators import ProjectionInMemoryOperator
-from qubic import QubicConfiguration, QubicInstrument, create_random_pointings
-
-path = os.path.dirname(__file__)
+from qubic import QubicAcquisition, QubicInstrument, create_random_pointings
 
 kmax = 2
 qubic = QubicInstrument('monochromatic,nopol')
 pointings = create_random_pointings(1000, 10)
-input_map = hp.read_map(os.path.join(path, '..', 'test', 'data', 'syn256.fits'))
+input_map = hp.read_map('test/data/syn256.fits')
 
 # configure observation
-obs = QubicConfiguration(qubic, pointings)
+obs = QubicAcquisition(qubic, pointings)
 C = obs.get_convolution_peak_operator()
 P = obs.get_projection_peak_operator(kmax=kmax)
 H = P * C

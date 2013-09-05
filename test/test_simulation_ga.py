@@ -5,7 +5,7 @@ import numpy as np
 import os
 from os.path import dirname, join
 from pysimulators import FitsArray
-from qubic import QubicCalibration, QubicConfiguration, QubicInstrument
+from qubic import QubicCalibration, QubicAcquisition, QubicInstrument
 
 path = join(dirname(__file__), 'data')
 
@@ -17,7 +17,7 @@ def test_ga():
     c = QubicCalibration(join(path, 'calfiles'))
     q = QubicInstrument('monochromatic,nopol', c, nu=150e9, dnu_nu=0,
                         nside=256)
-    obs = QubicConfiguration(q, p)
+    obs = QubicAcquisition(q, p)
     C = obs.get_convolution_peak_operator(fwhm=np.radians(0.64883707))
     P = obs.get_projection_peak_operator(kmax=2)
     H = P * C

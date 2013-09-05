@@ -9,16 +9,16 @@ import time
 import yaml
 from glob import glob
 from pyoperators.utils import ifirst
-from pysimulators import Configuration
+from pysimulators import Acquisition
 from .calibration import QubicCalibration
 from .instrument import QubicInstrument
 from .operators import HealpixConvolutionGaussianOperator
 
-__all__ = ['QubicConfiguration']
+__all__ = ['QubicAcquisition']
 
-class QubicConfiguration(Configuration):
+class QubicAcquisition(Acquisition):
     """
-    The QubicConfiguration class, which represents the instrument and
+    The QubicAcquisition class, which represents the instrument and
     pointing setups.
 
     """
@@ -48,8 +48,8 @@ class QubicConfiguration(Configuration):
                             instrument).__name__))
         if isinstance(instrument, str):
             raise NotImplementedError('Module names not fixed yet.')
-        Configuration.__init__(self, instrument, pointing, block_id=block_id,
-                               selection=selection)
+        Acquisition.__init__(self, instrument, pointing, block_id=block_id,
+                             selection=selection)
 
     def get_pointing_hitmap(self, nside=None):
         """
@@ -99,15 +99,15 @@ class QubicConfiguration(Configuration):
     @classmethod
     def load(cls, filename, instrument=None, selection=None):
         """
-        Load a QUBIC configuration, and info.
+        Load a QUBIC acquisition, and info.
 
-        obs, info = QubicConfiguration.load(filename, [instrument=None,
-                                            selection=None])
+        obs, info = QubicAcquisition.load(filename, [instrument=None,
+                                          selection=None])
 
         Parameters
         ----------
         filename : string
-           The QUBIC configuration file name.
+           The QUBIC acquisition file name.
         instrument : QubicInstrument, optional
            The Qubic instrumental setup.
         selection : integer or sequence of
@@ -116,10 +116,10 @@ class QubicConfiguration(Configuration):
 
         Returns
         -------
-        obs : QubicConfiguration
-           The QUBIC configuration instance as read from the file.
+        obs : QubicAcquisition
+            The QUBIC acquisition instance as read from the file.
         info : string
-           The info file stored alongside the configuration.
+            The info file stored alongside the acquisition.
 
         """
         if not isinstance(filename, str):
@@ -129,21 +129,21 @@ class QubicConfiguration(Configuration):
         with open(os.path.join(filename, 'info.txt')) as f:
             info = f.read()
         ptg, ptg_id = cls._get_files_from_selection(filename, 'ptg', selection)
-        return QubicConfiguration(instrument, ptg, selection=selection,
-                                  block_id=ptg_id), info
+        return QubicAcquisition(instrument, ptg, selection=selection,
+                                block_id=ptg_id), info
 
     @classmethod
     def _load_observation(cls, filename, instrument=None, selection=None):
         """
-        Load a QUBIC configuration, info and TOD.
+        Load a QUBIC acquisition, info and TOD.
 
-        obs, tod, info = QubicConfiguration._load_observation(filename,
+        obs, tod, info = QubicAcquisition._load_observation(filename,
                              [instrument=None, selection=None])
 
         Parameters
         ----------
         filename : string
-           The QUBIC configuration file name.
+           The QUBIC acquisition file name.
         instrument : QubicInstrument, optional
            The Qubic instrumental setup.
         selection : integer or sequence of
@@ -152,12 +152,12 @@ class QubicConfiguration(Configuration):
 
         Returns
         -------
-        obs : QubicConfiguration
-           The QUBIC configuration instance as read from the file.
+        obs : QubicAcquisition
+           The QUBIC acquisition instance as read from the file.
         tod : ndarray
            The stored time-ordered data.
         info : string
-           The info file stored alongside the configuration.
+           The info file stored alongside the acquisition.
 
         """
         obs, info = cls.load(filename, instrument=instrument,
@@ -174,16 +174,16 @@ class QubicConfiguration(Configuration):
     @classmethod
     def load_simulation(cls, filename, instrument=None, selection=None):
         """
-        Load a simulation, including the QUBIC configuration, info, TOD and
+        Load a simulation, including the QUBIC acquisition, info, TOD and
         input map.
 
-        obs, input_map, tod, info = QubicConfiguration.load_simulation(
+        obs, input_map, tod, info = QubicAcquisition.load_simulation(
             filename, [instrument=None, selection=None])
 
         Parameters
         ----------
         filename : string
-           The QUBIC configuration file name.
+           The QUBIC acquisition file name.
         instrument : QubicInstrument, optional
            The Qubic instrumental setup.
         selection : integer or sequence of
@@ -192,8 +192,8 @@ class QubicConfiguration(Configuration):
 
         Returns
         -------
-        obs : QubicConfiguration
-           The QUBIC configuration instance as read from the file.
+        obs : QubicAcquisition
+           The QUBIC acquisition instance as read from the file.
         input_map : Healpy map
            The simulation input map.
         tod : Tod
@@ -209,23 +209,23 @@ class QubicConfiguration(Configuration):
 
     def save(self, filename, info):
         """
-        Write a Qubic configuration to disk.
+        Write a Qubic acquisition to disk.
 
         Parameters
         ----------
         filename : string
-            The output path of the directory in which the configuration will be
+            The output path of the directory in which the acquisition will be
             saved.
         info : string
-            All information deemed necessary to describe the configuration.
+            All information deemed necessary to describe the acquisition.
 
         """
-        self._save_configuration(filename, info)
+        self._save_acquisition(filename, info)
         self._save_ptg(filename)
 
     def _save_observation(self, filename, tod, info):
         """
-        Write a QUBIC configuration to disk with a TOD.
+        Write a QUBIC acquisition to disk with a TOD.
 
         Parameters
         ----------
@@ -238,12 +238,12 @@ class QubicConfiguration(Configuration):
             All information deemed necessary to describe the simulation.
 
         """
-        self._save_configuration(filename, info)
+        self._save_acquisition(filename, info)
         self._save_ptg_tod(filename, tod)
 
     def save_simulation(self, filename, input_map, tod, info):
         """
-        Write a QUBIC configuration to disk with a TOD and an input image.
+        Write a QUBIC acquisition to disk with a TOD and an input image.
 
         Parameters
         ----------
@@ -261,7 +261,7 @@ class QubicConfiguration(Configuration):
         self._save_observation(filename, tod, info)
         hp.write_map(os.path.join(filename, 'input_map.fits'), input_map)
 
-    def _save_configuration(self, filename, info):
+    def _save_acquisition(self, filename, info):
         # create directory
         try:
             os.mkdir(filename)

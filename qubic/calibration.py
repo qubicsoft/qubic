@@ -80,8 +80,8 @@ class QubicCalibration(object):
         if name == 'detarray':
             hdus = fits.open(self.detarray)
             version = hdus[0].header['format version']
-            center, corner = hdus[1].data, hdus[2].data
-            shape = center.shape[:-1]
+            corner = hdus[2].data
+            shape = corner.shape[:-2]
             n = shape[0] * shape[1]
             if version == '1.0':
                 removed = np.zeros(shape, bool)
@@ -91,7 +91,7 @@ class QubicCalibration(object):
                 removed = hdus[3].data.view(bool)
                 index = hdus[4].data
                 quadrant = hdus[5].data
-            return shape, center, corner, removed, index, quadrant
+            return shape, corner, removed, index, quadrant
 
         elif name == 'hornarray':
             hdus = fits.open(self.hornarray)

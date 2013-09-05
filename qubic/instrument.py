@@ -8,7 +8,7 @@ except:
     pass
 import numpy as np
 from pyoperators import MPI
-from pysimulators import (Instrument, PointingMatrix,
+from pysimulators import (Instrument, Layout, PointingMatrix,
                           ProjectionInMemoryOperator, Map, Tod)
 from scipy.constants import c, pi
 from .calibration import QubicCalibration
@@ -23,7 +23,7 @@ class QubicInstrument(Instrument):
 
     """
     def __init__(self, name, calibration=None, removed=None, nside=256,
-                 comm_map=MPI.COMM_WORLD, comm_tod=MPI.COMM_WORLD, **keywords):
+                 commin=MPI.COMM_WORLD, commout=MPI.COMM_WORLD, **keywords):
         """
         Parameters
         ----------
@@ -46,13 +46,23 @@ class QubicInstrument(Instrument):
             calibration = QubicCalibration()
         if name != 'monochromatic,nopol':
             raise ValueError("Only 'monochromatic,nopol' is implemented.")
-        self.name = name
         self.calibration = calibration
+        layout = self._get_detector_layout(removed)
+        Instrument.__init__(self, name, layout, commin=commin, commout=commout)
         self._init_sky(nside)
         self._init_primary_beam()
         self._init_optics(**keywords)
-        self._init_detectors(removed)
         self._init_horns()
+
+    def _get_detector_layout(self, removed):
+        shape, vertex, removed_, index, quadrant = \
+            self.calibration.get('detarray')
+        if removed is not None:
+            if isinstance(removed, str):
+                removed = _uncompress_mask(removed).reshape(shape)
+            removed_ |= removed
+        return Layout(shape, vertex=vertex, removed=removed_, index=index,
+                      quadrant=quadrant)
 
     def _init_sky(self, nside):
         class Sky(object):
@@ -80,31 +90,6 @@ class QubicInstrument(Instrument):
         optics.dnu_nu = dnu_nu
         self.optics = optics
 
-    def _init_detectors(self, removed):
-        class Detector(np.recarray):
-            pass
-        dtype = [('center', float, 2),
-                 ('vertex', float, (4, 2)),
-                 ('index', int),
-                 ('quadrant', np.int8),
-                 ('masked', bool),
-                 ('removed', bool)]
-        shape, center, vertex, removed_, index, quadrant = \
-            self.calibration.get('detarray')
-        if removed is not None:
-            if isinstance(removed, str):
-                removed = _uncompress_mask(removed).reshape(shape)
-            removed_ |= removed
-        removed = removed_
-        detector = Detector(shape, dtype=dtype)
-        detector.center = center
-        detector.vertex = vertex
-        detector.masked = False
-        detector.removed = removed
-        detector.index = index
-        detector.quadrant = quadrant
-        self.detector = detector
-
     def _init_horns(self):
         class Horn(np.recarray):
             pass
@@ -129,59 +114,13 @@ class QubicInstrument(Instrument):
 
     __repr__ = __str__
 
-    def pack(self, x):
-        """
-        Convert representation from 2D to 1D, under the control of the detector
-        mask 'removed'.
-
-        """
-        d = self.detector
-        n = self.get_ndetectors()
-        if d.shape != x.shape[:d.ndim]:
-            raise ValueError("Invalid input dimensions '{}'.".format(x.shape))
-        new_shape = (n,) + x.shape[d.ndim:]
-        new_x = np.empty(new_shape, dtype=x.dtype).view(type(x))
-        valid_index = d.index[~d.removed]
-        num = np.arange(d.size, dtype=int).reshape(d.shape)[~d.removed]
-        isort = np.argsort(valid_index)
-        x_ = x.reshape((d.size,) + x.shape[d.ndim:])
-        for i in range(n):
-            new_x[i] = x_[num[isort[i]]]
-        return new_x
-
-    def unpack(self, x):
-        """
-        Convert representation from 1D to 2D, under the control of the detector
-        mask 'removed'.
-
-        """
-        d = self.detector
-        n = self.get_ndetectors()
-        if self.get_ndetectors() != x.shape[0]:
-            raise ValueError("Invalid input dimensions '{}'.".format(x.shape))
-        new_shape = d.shape + x.shape[1:]
-        new_x = np.empty(new_shape, dtype=x.dtype).view(type(x))
-        #XXX improve me
-        if x.dtype == float or x.dtype.kind == 'V':
-            new_x[...] = np.nan
-        else:
-            new_x[...] = 0
-        valid_index = d.index[~d.removed]
-        num = np.arange(d.size, dtype=int).reshape(d.shape)[~d.removed]
-        isort = np.argsort(valid_index)
-        new_x_ = new_x.reshape((d.size,) + x.shape[1:])
-        for i in range(n):
-            new_x_[num[isort[i]]] = x[i]
-        return new_x
-
     def plot(self, autoscale=True, **keywords):
         """
         Plot detectors on the image plane.
 
         """
         a = mp.gca()
-        vertex = self.pack(self.detector.vertex).view(float).reshape(
-            (-1, 4, 2))
+        vertex = self.detector.packed.vertex.reshape((-1, 4, 2))
         for v in vertex:
             a.add_patch(mp.Polygon(v, closed=True, fill=False, **keywords))
         if autoscale:
@@ -210,8 +149,8 @@ def _peak_angles(q, kmax):
     Return the spherical coordinates (theta,phi) of the beam peaks, in radians.
 
     """
-    ndetector = q.get_ndetectors()
-    center = q.pack(q.detector.center)
+    ndetector = len(q.detector.packed)
+    center = q.detector.packed.center
     lmbda = c / q.optics.nu
     dx = q.horn.spacing
     detvec = np.vstack([-center[..., 0],
@@ -231,7 +170,7 @@ def _peak_angles(q, kmax):
 def _peak_pointing_matrix(q, kmax, pointings):
     pointings = np.atleast_2d(pointings)
     npointing = len(pointings)
-    ndetector = q.get_ndetectors()
+    ndetector = len(q.detector.packed)
     npeak = (2 * kmax + 1)**2
     npixel = q.sky.npixel
 

@@ -6,17 +6,17 @@ import healpy as hp
 import numpy as np
 import os
 import time
-import types
 import yaml
 from glob import glob
-from pyoperators.utils import ifind, strplural
+from pyoperators.utils import ifirst
+from pysimulators import Configuration
 from .calibration import QubicCalibration
 from .instrument import QubicInstrument
 from .operators import HealpixConvolutionGaussianOperator
 
 __all__ = ['QubicConfiguration']
 
-class QubicConfiguration(object):
+class QubicConfiguration(Configuration):
     """
     The QubicConfiguration class, which represents the instrument and
     pointing setups.
@@ -48,37 +48,8 @@ class QubicConfiguration(object):
                             instrument).__name__))
         if isinstance(instrument, str):
             raise NotImplementedError('Module names not fixed yet.')
-        if not isinstance(pointing, (list, tuple)):
-            pointing = (pointing,)
-        elif isinstance(pointing, types.GeneratorType):
-            pointing = tuple(pointing)
-        pointing = [np.asarray(p) for p in pointing]
-        if len(pointing) == 3 and all(p.ndim == 0 for p in pointing):
-            pointing = [np.hstack(pointing)]
-        if any(p.ndim not in (1, 2) or p.shape[-1] != 3 for p in pointing):
-            raise ValueError('Invalid pointing dimensions.')
-        if len(pointing) > 1 and all(p.ndim == 1 for p in pointing):
-            pointing = [np.vstack(pointing)]
-        pointing = [np.atleast_2d(p) for p in pointing]
-        if selection is None:
-            selection = tuple(range(len(pointing)))
-        pointing = [pointing[i] for i in selection]
-        if block_id is not None:
-            block_id = [block_id[i] for i in selection]
-        if not isinstance(block_id, (list, tuple, types.NoneType)):
-            block_id = (block_id,)
-            if any(not isinstance(i, str) for i in block_id):
-                raise TypeError('The block id is not a string.')
-
-        self.instrument = instrument
-        self.pointing = np.concatenate(pointing)
-        self.block = self._get_block(pointing, block_id)
-
-    def __str__(self):
-        return 'Pointings:\n    {} in {}\n\n'.format(self.get_nsamples(),
-               strplural(len(self.block), 'block')) +  str(self.instrument)
-
-    __repr__ = __str__
+        Configuration.__init__(self, instrument, pointing, block_id=block_id,
+                               selection=selection)
 
     def get_nsamples(self):
         """ Return the number of valid pointings. """
@@ -199,7 +170,7 @@ class QubicConfiguration(object):
         """
         obs, info = cls.load(filename, instrument=instrument,
                              selection=selection)
-        tod, tod_id = obs._get_files_from_selection(filename, 'tod', selection)
+        tod, tod_id = cls._get_files_from_selection(filename, 'tod', selection)
         if len(tod) != len(obs.block):
             raise ValueError('The number of pointing and tod files is not the s'
                              'ame.')
@@ -334,23 +305,10 @@ class QubicConfiguration(object):
             pyfits.HDUList([hdu_tod]).writeto(file_tod)
 
     @staticmethod
-    def _get_block(pointing, block_id):
-        npointings = [p.shape[0] for p in pointing]
-        start = np.concatenate([[0], np.cumsum(npointings)[:-1]])
-        stop = np.cumsum(npointings)
-        block = np.recarray(len(pointing), dtype=[('start', int), ('stop', int),
-                                                  ('n', int), ('id', 'S29')])
-        block.n = npointings
-        block.start = start
-        block.stop = stop
-        block.identifier = block_id if block_id is not None else ''
-        return block
-
-    @staticmethod
     def _get_instrument_from_file(filename):
         with open(os.path.join(filename, 'instrument.txt')) as f:
             lines = f.readlines()[1:]
-        sep = ifind(lines, lambda l: l == '\n')
+        sep = ifirst(lines, '\n')
         keywords_instrument = yaml.load(''.join(lines[:sep]))
         name = keywords_instrument.pop('name')
         keywords_calibration = yaml.load(''.join(lines[sep+2:]))

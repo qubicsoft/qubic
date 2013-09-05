@@ -68,7 +68,7 @@ class QubicConfiguration(Configuration):
         if nside is None:
             nside = self.instrument.sky.nside
         hit = np.zeros(12 * nside**2)
-        theta, phi = self.pointings[...,0], self.pointings[...,1]
+        theta, phi = self.pointing[...,0], self.pointing[...,1]
         ipixel = hp.ang2pix(nside, np.radians(theta), np.radians(phi))
         for i in ipixel:
             hit[i] += 1

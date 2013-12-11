@@ -7,6 +7,7 @@ from scipy.constants import c, pi
 from pyoperators import MaskOperator
 from pysimulators import create_fitsheader, DiscreteSurface
 from qubic import QubicInstrument
+from qubic.beams import GaussianBeam
 
 qubic = QubicInstrument('monochromatic,nopol')
 
@@ -50,34 +51,8 @@ source_E = np.sqrt(SOURCE_POWER)
 ########
 # BEAMS
 ########
-class Beam(object):
-    def __init__(self, fwhm_deg):
-        self.sigma_deg = fwhm_deg / np.sqrt(8 * np.log(2))
-        self.sigma_rad = np.radians(self.sigma_deg)
-        self.fwhm_deg = fwhm_deg
-        self.sr = 2 * pi * self.sigma_rad**2
-
-
-class PrimaryBeam(Beam):
-    def __call__(self, theta_rad):
-        return np.exp(-theta_rad**2 / (2 * self.sigma_rad**2))
-
-
-class SecondaryBeam(Beam):
-    def __call__(self, theta_rad):
-        return np.exp(-(pi - theta_rad)**2 / (2 * self.sigma_rad**2))
-
-
-class UniformHalfSpaceBeam(object):
-    def __init__(self):
-        self.sr = 2 * pi
-
-    def __call__(self, theta_rad):
-        return 1
-
-primary_beam = PrimaryBeam(PRIMARY_BEAM_FWHM)
-secondary_beam = SecondaryBeam(SECONDARY_BEAM_FWHM)
-#secondary_beam = UniformHalfSpaceBeam()
+primary_beam = GaussianBeam(PRIMARY_BEAM_FWHM)
+secondary_beam = GaussianBeam(SECONDARY_BEAM_FWHM, backward=True)
 
 
 ########

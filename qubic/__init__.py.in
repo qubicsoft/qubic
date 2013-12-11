@@ -1,3 +1,4 @@
+from .beams import *
 from .calibration import *
 from .operators import *
 from .instrument import *

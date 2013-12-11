@@ -8,7 +8,7 @@ from subprocess import Popen, PIPE
 # force sdist to copy files
 delattr(os, 'link')
 
-VERSION = '2.5.0'
+VERSION = '2.5.1'
 
 
 def version_sdist():

@@ -7,6 +7,7 @@ import re
 from astropy.io import fits
 from glob import glob
 from os.path import join
+from pysimulators import Layout, LayoutGridCircles
 
 __all__ = ['QubicCalibration']
 
@@ -95,9 +96,24 @@ class QubicCalibration(object):
 
         elif name == 'hornarray':
             hdus = fits.open(self.hornarray)
-            center = hdus[1].data
-            shape = center.shape[:-1]
-            return shape, center
+            h = hdus[0].header
+            version = h['format version']
+            spacing = h['spacing']
+            if version == '1.0':
+                center = hdus[1].data
+                shape = center.shape[:-1]
+                layout = Layout(shape, center=center, radius=h['innerrad'])
+                layout.spacing = spacing
+            else:
+                xreflection = h['xreflection']
+                yreflection = h['yreflection']
+                radius = h['radius']
+                removed = hdus[1].data.view(bool)
+                layout = LayoutGridCircles(
+                    removed.shape, spacing, removed=removed, radius=radius,
+                    xreflection=xreflection, yreflection=yreflection)
+            layout.kappa = h['kappa']
+            return layout
 
         elif name == 'optics':
             header = fits.open(self.optics)[0].header

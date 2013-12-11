@@ -91,15 +91,7 @@ class QubicInstrument(Instrument):
         self.optics = optics
 
     def _init_horns(self):
-        class Horn(np.recarray):
-            pass
-        shape, center = self.calibration.get('hornarray')
-        n = shape[0] * shape[1]
-        dtype = [('center', float, 2)]
-        horn = Horn(n, dtype=dtype)
-        horn.center = center.reshape((-1, 2))
-        horn.spacing = abs(center[0, 0, 0] - center[0, 1, 0])
-        self.horn = horn
+        self.horn = self.calibration.get('hornarray')
 
     def __str__(self):
         state = [('name', self.name),

@@ -22,15 +22,19 @@ SOURCE_PHI = np.radians(45)  # [rad]
 PRIMARY_BEAM_FWHM = 14       # [degrees]
 SECONDARY_BEAM_FWHM = 14     # [degrees]
 
-HORN_OPEN = np.zeros((22, 22), dtype=bool)  # all closed
+HORN_OPEN = np.zeros(qubic.horn.shape, dtype=bool)  # all closed
 HORN_OPEN[10,10] = True
 HORN_OPEN[11,11] = True
 HORN_OPEN[0,1] = True
 HORN_OPEN[17,18] = True
-HORN_OPEN = ~qubic.horn.removed & np.ones((22, 22), dtype=bool)  # all open
+HORN_OPEN = ~qubic.horn.removed  # all open
+
+DETECTOR_OFFSET = [0, 0]  # [m]
+qubic.detector.vertex += [0.001, 0.001]
 
 NPOINT_DETECTOR_PLANE = 512**2 # number of detector plane sampling points
-DETECTOR_PLANE_LIMITS = (-0.051, 0.051) # [m]
+DETECTOR_PLANE_LIMITS = (np.nanmin(qubic.detector.vertex[..., 0]),
+                         np.nanmax(qubic.detector.vertex[..., 0]))  # [m]
 
 # to check energy conservation (unrealistic detector plane):
 #DETECTOR_PLANE_LIMITS = (-4, 4) # [m]
@@ -74,7 +78,7 @@ det_x, det_y = np.meshgrid(a, a)
 det_spacing = (DETECTOR_PLANE_LIMITS[1] - DETECTOR_PLANE_LIMITS[0]) / ndet_x
 det_vec = np.dstack([det_x, det_y, np.zeros_like(det_x) - FOCAL_LENGTH])
 det_uvec = norm(det_vec)
-det_theta = np.arccos(det_uvec[...,2])
+det_theta = np.arccos(det_uvec[..., 2])
 
 # solid angle of a detector plane pixel (gnomonic projection)
 central_pixel_sr = np.arctan(det_spacing / FOCAL_LENGTH)**2
@@ -109,6 +113,10 @@ D = integ(I)
 ##########
 # DISPLAY
 ##########
+mp.figure()
+mp.imshow(np.log10(I), interpolation='nearest', origin='lower')
+mp.autoscale(False)
+qubic.detector.plot(transform=detector_plane.topixel)
 mp.figure()
 mp.imshow(D, interpolation='nearest')
 mp.gca().format_coord = lambda x,y: 'x={} y={} z={}'.format(x, y, D[x,y])

@@ -1,6 +1,7 @@
 from __future__ import division
 
 import matplotlib.pyplot as mp
+import numexpr as ne
 import numpy as np
 from scipy.constants import c, pi
 
@@ -30,7 +31,6 @@ HORN_OPEN[17,18] = True
 HORN_OPEN = ~qubic.horn.removed  # all open
 
 DETECTOR_OFFSET = [0, 0]  # [m]
-qubic.detector.vertex += [0.001, 0.001]
 
 NPOINT_DETECTOR_PLANE = 512**2 # number of detector plane sampling points
 DETECTOR_PLANE_LIMITS = (np.nanmin(qubic.detector.vertex[..., 0]),
@@ -39,17 +39,11 @@ DETECTOR_PLANE_LIMITS = (np.nanmin(qubic.detector.vertex[..., 0]),
 # to check energy conservation (unrealistic detector plane):
 #DETECTOR_PLANE_LIMITS = (-4, 4) # [m]
 
-
-#########
-# SOURCE
-#########
 def ang2vec(theta_rad, phi_rad):
     sintheta = np.sin(theta_rad)
     return np.array([sintheta * np.cos(phi_rad),
                      sintheta * np.sin(phi_rad),
                      np.cos(theta_rad)])
-source_uvec = ang2vec(SOURCE_THETA, SOURCE_PHI)
-source_E = np.sqrt(SOURCE_POWER)
 
 
 ########
@@ -88,6 +82,7 @@ detector_plane_pixel_sr = -central_pixel_sr * np.cos(det_theta)**3
 ############
 # DETECTORS
 ############
+qubic.detector.vertex += DETECTOR_OFFSET
 header = create_fitsheader((ndet_x, ndet_x), cdelt=det_spacing, crval=(0, 0),
                            ctype=['X---CAR', 'Y---CAR'], cunit=['m', 'm'])
 detector_plane = DiscreteSurface.fromfits(header)
@@ -98,14 +93,33 @@ integ = MaskOperator(qubic.detector.removed) * \
 ########
 # MODEL
 ########
-E = np.sum(source_E *
-           np.sqrt(primary_beam(SOURCE_THETA)) *
-           np.sqrt(secondary_beam(det_theta) /
-                   secondary_beam.sr *
-                   detector_plane_pixel_sr)[..., None] *
-           np.exp(2j * pi / LAMBDA * (np.dot(det_uvec, horn_vec.T) +
-                                      np.dot(horn_vec, source_uvec))),
-           axis=-1)
+def get_model_A():
+    """ Phase and transmission from the switches to the focal plane. """
+    transmission = np.sqrt(secondary_beam(det_theta) /
+                           secondary_beam.sr *
+                           detector_plane_pixel_sr)[..., None]
+    const = 2j * pi / LAMBDA
+    product = np.dot(det_uvec, horn_vec.T)
+    return ne.evaluate('transmission * exp(const * product)')
+
+
+def get_model_B():
+    """ Phase and transmission from the source to the switches. """
+    source_uvec = ang2vec(SOURCE_THETA, SOURCE_PHI)
+    source_E = np.sqrt(SOURCE_POWER) * np.sqrt(primary_beam(SOURCE_THETA))
+    const = 2j * pi / LAMBDA
+    product = np.dot(horn_vec, source_uvec)
+    return ne.evaluate('source_E * exp(const * product)')
+
+
+def get_model():
+    return np.sum(get_model_A() * get_model_B(), axis=-1)
+
+
+###############
+# COMPUTATIONS
+###############
+E = get_model()
 I = np.abs(E)**2
 D = integ(I)
 

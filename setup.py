@@ -1,18 +1,42 @@
 #!/usr/bin/env python
 import os
 import re
+import sys
 from distutils.core import setup
-
-
-def version():
-    f = open(os.path.join('qubic', 'version.py')).read()
-    m = re.search(r"VERSION = '(.*)'", f)
-    return m.groups()[0]
+from subprocess import Popen, PIPE
 
 # force sdist to copy files
 delattr(os, 'link')
 
-version = version()
+VERSION = '2.4'
+
+
+def version_sdist():
+    stdout, stderr = Popen(['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+                           stdout=PIPE, stderr=PIPE).communicate()
+    if stderr:
+        return VERSION
+    branch = stdout[:-1]
+    if re.search('^v[0-9]', branch) is not None:
+        branch = branch[1:]
+    if branch != 'master':
+        return VERSION
+    stdout, stderr = Popen(['git', 'rev-parse', '--verify', '--short', 'HEAD'],
+                           stdout=PIPE, stderr=PIPE).communicate()
+    if stderr:
+        return VERSION
+    return VERSION + '-' + stdout[:-1]
+
+version = version_sdist()
+if 'install' in sys.argv[1:]:
+    if '-' in version:
+        version = VERSION + '-dev'
+
+if any(c in sys.argv[1:] for c in ('install', 'sdist')):
+    init = open('qubic/__init__.py.in').readlines()
+    init += ['\n', '__version__ = ' + repr(version) + '\n']
+    open('qubic/__init__.py', 'w').writelines(init)
+
 long_description = open('README.rst').read()
 keywords = 'scientific computing'
 platforms = 'MacOS X,Linux,Solaris,Unix,Windows'

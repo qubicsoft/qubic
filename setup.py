@@ -8,7 +8,7 @@ from subprocess import Popen, PIPE
 # force sdist to copy files
 delattr(os, 'link')
 
-VERSION = '2.4.1'
+VERSION = '2.5'
 
 
 def version_sdist():
@@ -49,7 +49,7 @@ setup(name='qubic',
       author='Pierre Chanial',
       author_email='pierre.chanial@apc.univ-paris7.fr',
       install_requires=['progressbar',
-                        'pysimulators>=0.6',
+                        'pysimulators>=0.6.3',
                         'healpy>=0.6.1',
                         'pyYAML'],
       packages=['qubic'],

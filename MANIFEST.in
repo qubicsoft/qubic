@@ -1,3 +1,4 @@
 include README.rst
+include qubic/__init__.py.in
 include script/*.py
 graft test/data

@@ -9,7 +9,7 @@ import time
 import yaml
 from astropy.time import TimeDelta
 from glob import glob
-from pyoperators import Rotation3dOperator
+from pyoperators import DenseOperator, HomothetyOperator, Rotation3dOperator
 from pyoperators.utils import ifirst
 from pysimulators import (
     Acquisition, CartesianEquatorial2HorizontalOperator,
@@ -125,6 +125,36 @@ class QubicAcquisition(Acquisition):
         """
         return Rotation3dOperator('X', -4 * self.pointing.angle_hwp,
                                   degrees=True)
+
+    def get_polarizer_operator(self):
+        """
+        Return operator for the polarizer grid.
+
+        """
+        if not self.instrument.sky.polarized:
+            return HomothetyOperator(1 / self.instrument.detector.ngrids)
+
+        if self.instrument.detector.ngrids == 1:
+            return DenseOperator([[0.5, 0.5, 0],
+                                  [0.5,-0.5, 0]])
+
+        grid = self.instrument.detector.packed.quadrant // 4
+        z = np.zeros(self.get_ndetectors())
+        data = np.array([z + 0.5, 0.5 - grid, z]).T[:, None, :]
+
+        def direct(x, y):
+            np.sum(x * data, axis=-1, out=y)
+
+        def transpose(x, y):
+            np.multiply(x[..., None], data, out=y)
+
+        shapeout = self.get_ndetectors(), self.get_nsamples()[0]
+        shapein = shapeout + (3,)
+
+        from pyoperators import Operator
+        return Operator(direct=direct, transpose=transpose, dtype=float,
+                        shapein=shapein, shapeout=shapeout,
+                        flags='real, linear')
 
     def get_projection_peak_operator(self, kmax=2, rotation=None):
         """

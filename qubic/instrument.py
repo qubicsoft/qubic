@@ -23,19 +23,24 @@ class QubicInstrument(Instrument):
     The QubicInstrument class. It represents the instrument setup.
 
     """
-    def __init__(self, name, calibration=None, removed=None, nside=256,
-                 commin=MPI.COMM_WORLD, commout=MPI.COMM_WORLD, **keywords):
+    def __init__(self, name, calibration=None, removed=None, ngrids=None,
+                 nside=256, commin=MPI.COMM_WORLD, commout=MPI.COMM_WORLD,
+                 **keywords):
         """
         Parameters
         ----------
         name : str
-            The module name. So far, only 'monochromatic,nopol' is available.
+            The module name. So far, only 'monochromatic,nopol' and
+            'monochromatic' are available.
         calibration : QubicCalibration
             The calibration tree.
         removed : str or 2D-array of bool
             Array specifying which bolometers are removed.
-        nside : int
+        nside : int, optional
             The Healpix nside of the sky.
+        ngrids : int, optional
+            Number of detector grids. (Default: 2 for the polarized case,
+            1 otherwise)
         nu : float, optional
             The operating monochromatic frequency or the filter central
             frequency, in Hz.
@@ -45,28 +50,40 @@ class QubicInstrument(Instrument):
         """
         if calibration is None:
             calibration = QubicCalibration()
+        name = name.replace(' ', '').lower()
         names = 'monochromatic,nopol', 'monochromatic'
         if name not in names:
             raise ValueError(
                 "The only modes implemented are {0}.".format(
                 strenum(names, 'and')))
         self.calibration = calibration
-        layout = self._get_detector_layout(removed)
+        layout = self._get_detector_layout(name, removed, ngrids)
         Instrument.__init__(self, name, layout, commin=commin, commout=commout)
         self._init_sky(nside)
         self._init_primary_beam()
         self._init_optics(**keywords)
         self._init_horns()
 
-    def _get_detector_layout(self, removed):
+    def _get_detector_layout(self, name, removed, ngrids):
+        polarized = 'nopol' not in name.split(',')
+        if ngrids is None:
+            ngrids = 2 if polarized else 1
         shape, vertex, removed_, index, quadrant = \
             self.calibration.get('detarray')
+        if ngrids == 2:
+            shape = (2,) + shape
+            vertex = np.array([vertex, vertex])
+            removed_ = np.array([removed_, removed_])
+            index = np.array([index, index + np.max(index) + 1], index.dtype)
+            quadrant = np.array([quadrant, quadrant + 4], quadrant.dtype)
         if removed is not None:
             if isinstance(removed, str):
                 removed = _uncompress_mask(removed).reshape(shape)
             removed_ |= removed
-        return Layout(shape, vertex=vertex, removed=removed_, index=index,
-                      quadrant=quadrant)
+        layout = Layout(shape, vertex=vertex, removed=removed_, index=index,
+                        quadrant=quadrant)
+        layout.ngrids = ngrids
+        return layout
 
     def _init_sky(self, nside):
         class Sky(object):

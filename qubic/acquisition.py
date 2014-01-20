@@ -7,12 +7,19 @@ import numpy as np
 import os
 import time
 import yaml
+from astropy.time import TimeDelta
 from glob import glob
+from pyoperators import Rotation3dOperator
 from pyoperators.utils import ifirst
-from pysimulators import Acquisition
+from pysimulators import (
+    Acquisition, CartesianEquatorial2HorizontalOperator,
+    CartesianGalactic2EquatorialOperator,
+    CartesianHorizontal2EquatorialOperator,
+    CartesianEquatorial2GalacticOperator)
+from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
+
 from .calibration import QubicCalibration
 from .instrument import QubicInstrument
-from .operators import HealpixConvolutionGaussianOperator
 
 __all__ = ['QubicAcquisition']
 
@@ -68,6 +75,34 @@ class QubicAcquisition(Acquisition):
         npixel = 12 * nside**2
         return np.histogram(ipixel, bins=npixel, range=(0, npixel))[0]
 
+    def get_rotation(self):
+        """
+        Return the instrument-to-galactic rotation matrix.
+
+        """
+        p = self.pointing
+        time = p.date_obs + TimeDelta(p.time, format='sec')
+        r = CartesianEquatorial2GalacticOperator() * \
+            Rotation3dOperator("ZY'Z''", p.azimuth, 90 - p.elevation, p.pitch,
+                               degrees=True) * \
+            CartesianHorizontal2EquatorialOperator('NE', time, p.latitude,
+                                                   p.longitude)
+        return r
+
+    def get_rotation_g2i(self):
+        """
+        Return the galactic-to-instrument rotation matrix.
+
+        """
+        p = self.pointing
+        time = p.date_obs + TimeDelta(p.time, format='sec')
+        r = Rotation3dOperator("ZY'Z''", p.azimuth, 90 - p.elevation, p.pitch,
+                               degrees=True).T * \
+            CartesianEquatorial2HorizontalOperator('NE', time, p.latitude,
+                                                   p.longitude) * \
+            CartesianGalactic2EquatorialOperator()
+        return r
+
     def get_convolution_peak_operator(self, fwhm=np.radians(0.64883707),
                                       **keywords):
         """
@@ -81,10 +116,17 @@ class QubicAcquisition(Acquisition):
             The Full Width Half Maximum of the gaussian.
 
         """
-        return HealpixConvolutionGaussianOperator(self.instrument.sky.nside,
-                                                  fwhm=fwhm, **keywords)
+        return HealpixConvolutionGaussianOperator(fwhm=fwhm, **keywords)
 
-    def get_projection_peak_operator(self, kmax=2):
+    def get_hwp_operator(self):
+        """
+        Return the rotation matrix for the half-wave plate.
+
+        """
+        return Rotation3dOperator('X', -4 * self.pointing.angle_hwp,
+                                  degrees=True)
+
+    def get_projection_peak_operator(self, kmax=2, rotation=None):
         """
         Return the projection operator for the peak sampling.
 
@@ -93,9 +135,13 @@ class QubicAcquisition(Acquisition):
         kmax : int, optional
             The diffraction order above which the peaks are ignored.
             For a value of 0, only the central peak is sampled.
+        rotation : array (npointings, 3, 3)
+            The Instrument-to-Reference rotation matrix
 
         """
-        return self.instrument.get_projection_peak_operator(self.pointing,
+        if rotation is None:
+            rotation = self.get_rotation_g2i()
+        return self.instrument.get_projection_peak_operator(rotation,
                                                             kmax=kmax)
 
     @classmethod

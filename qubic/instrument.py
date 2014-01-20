@@ -1,18 +1,19 @@
 # coding: utf-8
 from __future__ import division
 
-import healpy as hp
 try:
     import matplotlib.pyplot as mp
 except:
     pass
 import numpy as np
-from pyoperators import MPI
-from pysimulators import (Instrument, Layout, PointingMatrix,
-                          ProjectionInMemoryOperator, Map, Tod)
+from pyoperators import Spherical2CartesianOperator, MPI
+from pyoperators.utils import strenum
+from pysimulators import Instrument, Layout, ProjectionOperator, _flib as flib
+from pysimulators.interfaces.healpy import Cartesian2HealpixOperator
+from pysimulators.sparse import FSRMatrix, FSRRotation3dMatrix
 from scipy.constants import c, pi
 from .calibration import QubicCalibration
-from .utils import _rotateuv, _compress_mask, _uncompress_mask
+from .utils import _compress_mask, _uncompress_mask
 
 __all__ = ['QubicInstrument']
 
@@ -44,8 +45,11 @@ class QubicInstrument(Instrument):
         """
         if calibration is None:
             calibration = QubicCalibration()
-        if name != 'monochromatic,nopol':
-            raise ValueError("Only 'monochromatic,nopol' is implemented.")
+        names = 'monochromatic,nopol', 'monochromatic'
+        if name not in names:
+            raise ValueError(
+                "The only modes implemented are {0}.".format(
+                strenum(names, 'and')))
         self.calibration = calibration
         layout = self._get_detector_layout(removed)
         Instrument.__init__(self, name, layout, commin=commin, commout=commout)
@@ -70,6 +74,7 @@ class QubicInstrument(Instrument):
         self.sky = Sky()
         self.sky.npixel = 12 * nside**2
         self.sky.nside = nside
+        self.sky.polarized = 'nopol' not in self.name.split(',')
 
     def _init_primary_beam(self):
         class PrimaryBeam(object):
@@ -119,21 +124,59 @@ class QubicInstrument(Instrument):
             mp.autoscale()
         mp.show()
 
-    def get_projection_peak_operator(self, pointing, kmax=2):
+    def get_projection_peak_operator(self, rotation, kmax=2):
         """
         Return the peak sampling operator.
 
         Parameters
         ----------
-        pointing : ndarray
-            The pointing for which the sampling is calculated.
+        rotation : ndarray (ntimes, 3, 3)
+            The Reference-to-Instrument rotation matrix.
         kmax : int, optional
             The diffraction order above which the peaks are ignored.
             For a value of 0, only the central peak is sampled.
 
         """
-        matrix = _peak_pointing_matrix(self, kmax, pointing)
-        return ProjectionInMemoryOperator(matrix, classin=Map, classout=Tod)
+        ndetectors = len(self.detector.packed)
+        ntimes = rotation.data.shape[0]
+        nside = self.sky.nside
+        ncolmax = (2 * kmax + 1)**2
+
+        theta, phi = _peak_angles(self, kmax)
+        thetaphi = _pack_vector(theta, phi)  # (ndetectors, ncolmax, 2)
+        direction = Spherical2CartesianOperator('zenith,azimuth')(thetaphi)
+        e_nf = _replicate(direction, ntimes)  # (ndets, ntimes, ncolmax, 3)
+        if nside > 8192:
+            raise 'With nside={0}, pixels cannot be stored using int32.'
+
+        if not self.sky.polarized:
+            s = FSRMatrix((ndetectors*ntimes, 12*nside**2),
+                          ncolmax=ncolmax, dtype=np.float32,
+                          dtype_index=np.int32)
+        else:
+            s = FSRRotation3dMatrix((ndetectors*ntimes*3, 12*nside**2*3),
+                                    ncolmax=ncolmax, dtype=np.float32,
+                                    dtype_index=np.int32)
+
+        index = s.data.index.reshape((ndetectors, ntimes, ncolmax))
+        for i in xrange(ndetectors):
+            # e_ni, e_nf[i] shape: (ntimes, ncolmax, 3)
+            e_ni = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
+            index[i] = Cartesian2HealpixOperator(nside)(e_ni)
+        vals = self.primary_beam(theta)  # (ndetectors, ncolmax)
+
+        if not self.sky.polarized:
+            vals /= np.sum(vals, axis=-1)[..., None]  # remove me
+            value = s.data.value.reshape(ndetectors, ntimes, ncolmax)
+            value[...] = vals[:, None, :]
+            shapeout = (ndetectors, ntimes)
+        else:
+            flib.polarization.pointing_matrix_i4_m4(
+                rotation.data.T, direction.T, s.data.ravel().view(np.int8),
+                vals.T)
+            shapeout = (ndetectors, ntimes, 3)
+
+        return ProjectionOperator(s, shapeout=shapeout)
 
 
 def _peak_angles(q, kmax):
@@ -159,28 +202,15 @@ def _peak_angles(q, kmax):
     return theta, phi
 
 
-def _peak_pointing_matrix(q, kmax, pointings):
-    pointings = np.atleast_2d(pointings)
-    npointing = len(pointings)
-    ndetector = len(q.detector.packed)
-    npeak = (2 * kmax + 1)**2
-    npixel = q.sky.npixel
+def _pack_vector(*args):
+    shape = np.broadcast(*args).shape
+    out = np.empty(shape + (len(args),))
+    for i, arg in enumerate(args):
+        out[..., i] = arg
+    return out
 
-    pointings = np.radians(pointings)
-    theta0, phi0 = _peak_angles(q, kmax)
-    weight0 = q.primary_beam(theta0).astype(np.float32)
-    weight0 /= np.sum(weight0, axis=-1)[..., None]
 
-    peakvec = hp.ang2vec(theta0.ravel(), phi0.ravel())
-    shape = theta0.shape
-
-    matrix = PointingMatrix.empty((ndetector, npointing, npeak), npixel)
-
-    for i, p in enumerate(pointings):
-        theta, phi, psi = p
-        newpeakvec = _rotateuv(peakvec, theta, phi, psi, inverse=True)
-        newtheta, newphi = [a.reshape(shape) for a in hp.vec2ang(newpeakvec)]
-        matrix[:, i, :].index = hp.ang2pix(q.sky.nside, newtheta, newphi)
-        matrix[:, i, :].value = weight0
-
-    return matrix
+def _replicate(v, n):
+    shape = v.shape[:-2] + (n,) + v.shape[-2:]
+    strides = v.strides[:-2] + (0,) + v.strides[-2:]
+    return np.lib.stride_tricks.as_strided(v, shape, strides)

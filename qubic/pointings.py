@@ -1,39 +1,136 @@
 # coding: utf-8
 from __future__ import division
 
-import astropy
 import numpy as np
-from astropy.time import Time
-
+from astropy.time import TimeDelta
 from numpy.random import random_sample as randomu
+from pyoperators import (
+    Cartesian2SphericalOperator, Rotation3dOperator,
+    Spherical2CartesianOperator)
+from pysimulators import (
+    PointingHorizontal, CartesianEquatorial2GalacticOperator,
+    CartesianEquatorial2HorizontalOperator,
+    CartesianHorizontal2EquatorialOperator)
+from pysimulators.interfaces.healpy import Cartesian2HealpixOperator
 
-__all__ = ['create_random_pointings',
+__all__ = ['QubicPointing',
+           'create_random_pointings',
            'create_sweeping_pointings']
 
-
-DOMECLON = 123 + 20 / 60
 DOMECLAT = -(75 + 6 / 60)
+DOMECLON = 123 + 20 / 60
 
-def create_random_pointings(npointings, dtheta):
+
+class QubicPointing(PointingHorizontal):
     """
-    Return the Euler angles (φ,θ,ψ) of the ZY'Z'' intrinsic rotation
-    as (θ,φ,ψ) triplets.
+    Attributes
+    ----------
+    azimuth : array-like
+        The pointing azimuth [degrees].
+    elevation : array-like
+        The pointing elevation [degrees].
+    pitch : array-like
+        The instrument pitch angle [degrees].
+    angle_hwp : array-like
+        The half-wave plate angle [degrees].
+    time : array-like
+        Elapsed time for each pointing since the observation start date,
+        in seconds.
+    date_obs : string or astropy.time.Time
+        The observation start date.
+    sampling_period : float
+        The sampling period [s].
+    latitude : float
+        Telescope latitude [degrees].
+    longitude : float
+        Telescope longitude [degrees].
+
+    Examples
+    --------
+    pointing = QubicPointing((azimuth, elevation, pitch))
+    pointing = QubicPointing(azimuth=azimuth, elevation=elevation,
+                             angle_hwp=angle_hwp)
 
     """
-    dtheta=np.radians(dtheta)
-    theta = np.degrees(np.arccos(np.cos(dtheta) + (1 - np.cos(dtheta)) *
-                       randomu(npointings)))
+    MANDATORY_NAMES = 'azimuth', 'elevation'
+    DEFAULT_DATE_OBS = '2016-01-01 00:00:00'
+    DEFAULT_DTYPE = [('azimuth', float), ('elevation', float),
+                     ('pitch', float), ('angle_hwp', float), ('time', float)]
+    DEFAULT_SAMPLING_PERIOD = 1
+    DEFAULT_LATITUDE = DOMECLAT
+    DEFAULT_LONGITUDE = DOMECLON
+
+    def __new__(cls, x=None, azimuth=None, elevation=None, pitch=None,
+                angle_hwp=None, time=None, date_obs=None, sampling_period=None,
+                latitude=None, longitude=None, dtype=None, copy=True):
+        return PointingHorizontal.__new__(
+            cls, x=x, azimuth=azimuth, elevation=elevation, pitch=pitch,
+            angle_hwp=angle_hwp, time=time, date_obs=date_obs,
+            sampling_period=sampling_period, latitude=latitude,
+            longitude=longitude, dtype=dtype, copy=copy)
+
+    def tohealpix(self, nside):
+        time = self.date_obs + TimeDelta(self.time, format='sec')
+        r = (Cartesian2HealpixOperator(nside) *
+             CartesianEquatorial2GalacticOperator() *
+             CartesianHorizontal2EquatorialOperator('NE', time, self.latitude,
+                                                    self.longitude) *
+             Spherical2CartesianOperator('azimuth,elevation', degrees=True))
+        return r(np.array([self.azimuth, self.elevation]).T)
+
+
+def create_random_pointings(center, npointings, dtheta, date_obs=None,
+                            sampling_period=None, latitude=None,
+                            longitude=None):
+    """
+    Return pointings randomly and uniformly distributed in a spherical cap.
+
+    Parameters
+    ----------
+    center : 2-tuple
+        The R.A. and declination of the center of the FOV, in degrees.
+    npointings : int
+        The number of requested pointings
+    dtheta : float
+        The maximum angular distance to the center.
+    date_obs : str or astropy.time.Time, optional
+        The starting date of the observation (UTC).
+    sampling_period : float, optional
+        The sampling period of the pointings, in seconds.
+    latitude : float, optional
+        The observer's latitude [degrees]. Default is DOMEC's.
+    longitude : float, optional
+        The observer's longitude [degrees]. Default is DOMEC's.
+
+    """
+    cosdtheta = np.cos(np.radians(dtheta))
+    theta = np.degrees(np.arccos(cosdtheta +
+                                 (1 - cosdtheta) * randomu(npointings)))
     phi = randomu(npointings) * 360
     pitch = randomu(npointings) * 360
-    pointings = np.array([theta, phi, pitch]).T
-    return pointings
+    p = QubicPointing.zeros(
+        npointings, date_obs=date_obs, sampling_period=sampling_period,
+        latitude=latitude, longitude=longitude)
+    time = p.date_obs + TimeDelta(p.time, format='sec')
+    rotation = (
+        Cartesian2SphericalOperator('azimuth,elevation', degrees=True) *
+        CartesianEquatorial2HorizontalOperator(
+            'NE', time, p.latitude, p.longitude) *
+        Rotation3dOperator("ZY'", center[0], 90 - center[1], degrees=True) *
+        Spherical2CartesianOperator('zenith,azimuth', degrees=True))
+    coords = rotation(np.asarray([theta.T, phi.T]).T)
+    p.azimuth = coords[..., 0]
+    p.elevation = coords[..., 1]
+    p.pitch = pitch
+    return p
 
-def create_sweeping_pointings(center, duration, sampling_period, angspeed,
-                              delta_az, nsweeps_el, angspeed_psi, maxpsi,
-                              lon=DOMECLON, lat=DOMECLAT,
-                              date_obs='2014-01-01 00:00:00', return_hor=False):
+
+def create_sweeping_pointings(
+        center, duration, sampling_period, angspeed, delta_az,
+        nsweeps_per_elevation, angspeed_psi, maxpsi, date_obs=None,
+        latitude=None, longitude=None, return_hor=True):
     """
-    Return pointing according to the sweeping strategy:
+    Return pointings according to the sweeping strategy:
     Sweep around the tracked FOV center azimuth at a fixed elevation, and
     update elevation towards the FOV center at discrete times.
 
@@ -44,98 +141,88 @@ def create_sweeping_pointings(center, duration, sampling_period, angspeed,
     duration : float
         The duration of the observation, in hours.
     sampling_period : float
-        The sampling period of the pointings.
+        The sampling period of the pointings, in seconds.
     angspeed : float
         The pointing angular speed, in deg / s.
     delta_az : float
         The sweeping extent in degrees.
-    nsweeps_el : int
+    nsweeps_per_elevation : int
         The number of sweeps during a phase of constant elevation.
     angspeed_psi : float
         The pitch angular speed, in deg / s.
     maxpsi : float
         The maximum pitch angle, in degrees.
-    lon : float, optional
-        The observer's longitude. Default is DOMEC's.
-    lat : float, optional
-        The observer's latitude. Default is DOMEC's.
-    date_obs : str, optional
+    latitude : float, optional
+        The observer's latitude [degrees]. Default is DOMEC's.
+    longitude : float, optional
+        The observer's longitude [degrees]. Default is DOMEC's.
+    date_obs : str or astropy.time.Time, optional
         The starting date of the observation (UTC).
-    return_hor : bool
-        If True, return the azimuth and elevation of the pointings.
+    return_hor : bool, optional
+        Obsolete keyword.
 
     Returns
     -------
-    pointings : ndarray of shape (N,3)
-        The Euler angles (φ,θ,ψ) of the ZY'Z'' intrinsic rotation as (θ,φ,ψ)
-        triplets for the sweeping strategy.
+    pointings : QubicPointing
+        Structured array containing the azimuth, elevation and pitch angles,
+        in degrees.
 
     """
-    t0 = Time(date_obs, scale='utc')
+    nsamples = int(np.ceil(duration * 3600 / sampling_period))
+    out = QubicPointing.zeros(
+        nsamples, date_obs=date_obs, sampling_period=sampling_period,
+        latitude=latitude, longitude=longitude)
     racenter = center[0]
     deccenter = center[1]
     backforthdt = delta_az / angspeed * 2
-    
-    # time samples
-    nsamples = duration * 3600 / sampling_period
-    tunix = t0.unix + np.arange(nsamples) * sampling_period
 
-    # Astropy's time module didn't handle leap seconds correctly until 0.2.3
-    # see https://github.com/astropy/astropy/pull/1118
-    if astropy.__version__ < '0.2.3':
-        tunix -= 27
-    tsamples = _gst2lst(_jd2gst(_unix2jd(tunix)), lon)
+    jd = (out.date_obs + TimeDelta(out.time, format='sec')).jd
+    tsamples = _gst2lst(_jd2gst(jd), out.longitude)
 
-    # count of the number of sweeps
-    nsweeps = duration * 3600 / backforthdt
-    swnum = np.floor(np.linspace(0, nsweeps, nsamples)).astype(int)
+    # compute the sweep number
+    isweeps = np.floor(out.time / backforthdt).astype(int)
 
     # azimuth/elevation of the center of the field as a function of time
-    azcenter, elcenter = _equ2hor(racenter, deccenter, lat, tsamples)
+    azcenter, elcenter = _equ2hor(racenter, deccenter, out.latitude, tsamples)
 
     # compute azimuth offset for all time samples
-    daz = np.arange(nsamples) * sampling_period * angspeed
+    daz = out.time * angspeed
     daz = daz % (delta_az * 2)
     mask = daz > delta_az
     daz[mask] = -daz[mask] + 2 * delta_az
-    daz = daz - delta_az / 2
+    daz -= delta_az / 2
 
-    # elevation is kept constant during nsweeps_el sweeps
+    # elevation is kept constant during nsweeps_per_elevation
     elcst = np.zeros(nsamples)
-    nelevation = max(swnum // nsweeps_el) + 1
-    for i in xrange(nelevation):
-        mask = swnum // nsweeps_el == i
+    ielevations = isweeps // nsweeps_per_elevation
+    nelevations = ielevations[-1] + 1
+    for i in xrange(nelevations):
+        mask = ielevations == i
         elcst[mask] = np.mean(elcenter[mask])
 
     # azimuth and elevations to use for pointing
     azptg = azcenter + daz
     elptg = elcst
 
-    if return_hor:
-        return azptg, elptg
-
-    # convert them to RA, Dec
-    raptg, decptg = _hor2equ(azptg, elptg, lat, tsamples)
-    theta = 90 - decptg
-    phi = raptg
-
     ### scan psi as well
-    pitch = (np.arange(nsamples) * sampling_period * angspeed_psi)
+    pitch = out.time * angspeed_psi
     pitch = pitch % (4 * maxpsi)
     mask = pitch > (2 * maxpsi)
     pitch[mask] = -pitch[mask] + 4 * maxpsi
-    pitch = pitch - maxpsi
-    
-    pointings = np.array([theta, phi, pitch]).T
-    return pointings
+    pitch -= maxpsi
 
+    if not return_hor:
+        # convert them to RA, Dec
+        raptg, decptg = _hor2equ(azptg, elptg, out.latitude, tsamples)
+        theta = 90 - decptg
+        phi = raptg
+        pointings = np.array([theta, phi, pitch]).T
+        return pointings
 
-def _unix2jd(unixtime):
-    """
-    Convert unix time into julian day
-    """
-    # Jan, 1st 1970, 00:00:00 is jd = 2440587.5
-    return unixtime / 86400 + 2440587.5
+    out.azimuth = azptg
+    out.elevation = elptg
+    out.pitch = pitch
+    return out
 
 
 def _jd2gst(jd):
@@ -152,80 +239,81 @@ def _jd2gst(jd):
     T0 += ut * 1.002737909
     T0 %= 24
     return T0
-    
+
 
 def _gst2lst(gst, geolon):
     """
     Convert Greenwich Sidereal Time into Local Sidereal Time.
+
     """
-    # geolon: Geographic longitude EAST in degrees. 
+    # geolon: Geographic longitude EAST in degrees.
     return (gst + geolon / 15.) % 24
 
 
 def _equ2hor(ra, dec, geolat, lst):
-   """
-   Convert from ra/dec to az/el (by Ken Genga).
+    """
+    Convert from ra/dec to az/el (by Ken Genga).
 
-   """
-   # Imports
-   from numpy import arccos, arcsin, cos, pi, sin, where
+    """
+    # Imports
+    from numpy import arccos, arcsin, cos, pi, sin, where
 
-   d2r = pi/180.0
-   r2d = 180.0/pi
-   sin_dec = sin(dec*d2r)
-   phi_rad = geolat*d2r
-   sin_phi = sin(phi_rad)
-   cos_phi = cos(phi_rad)
-   ha = 15.0*_ra2ha(ra, lst)
-   sin_el  = sin_dec*sin_phi + cos(dec*d2r)*cos_phi*cos(ha*d2r)
-   el = arcsin(sin_el)*r2d
+    d2r = pi/180.0
+    r2d = 180.0/pi
+    sin_dec = sin(dec*d2r)
+    phi_rad = geolat*d2r
+    sin_phi = sin(phi_rad)
+    cos_phi = cos(phi_rad)
+    ha = 15.0*_ra2ha(ra, lst)
+    sin_el = sin_dec*sin_phi + cos(dec*d2r)*cos_phi*cos(ha*d2r)
+    el = arcsin(sin_el)*r2d
 
-   az = arccos( (sin_dec-sin_phi*sin_el)/(cos_phi*cos(el*d2r)))
-   az = where(sin(ha*d2r) > 0.0, 2.0*pi-az, az)*r2d
+    az = arccos((sin_dec - sin_phi * sin_el) / (cos_phi * cos(el * d2r)))
+    az = where(sin(ha*d2r) > 0.0, 2.0*pi-az, az)*r2d
 
-   # Later
-   return az, el
+    # Later
+    return az, el
 
 
 def _hor2equ(az, el, geolat, lst):
-   """
-   Convert from az/el to ra/dec (by Ken Genga).
+    """
+    Convert from az/el to ra/dec (by Ken Genga).
 
-   """
-   # Imports
-   from numpy import arccos, arcsin, cos, pi, sin, where
+    """
+    # Imports
+    from numpy import arccos, arcsin, cos, pi, sin, where
 
-   d2r = pi/180.0
-   r2d = 180.0/pi
-   az_r     = az*d2r
-   el_r     = el*d2r
-   geolat_r = geolat*d2r
+    d2r = pi/180.0
+    r2d = 180.0/pi
+    az_r = az*d2r
+    el_r = el*d2r
+    geolat_r = geolat*d2r
 
-   # Convert to equatorial coordinates
-   cos_el  = cos(el_r)
-   sin_el  = sin(el_r)
-   cos_phi = cos(geolat_r)
-   sin_phi = sin(geolat_r)
-   cos_az  = cos(az_r)
-   sin_dec = sin_el*sin_phi + cos_el*cos_phi*cos_az
-   dec     = arcsin(sin_dec)*r2d
-   cos_ha  = (sin_el-sin_phi*sin_dec)/(cos_phi*cos(dec*d2r))
-   cos_ha  = where(cos_ha <= -1.0, -0.99999, cos_ha)
-   cos_ha  = where(cos_ha >=  1.0,  0.99999, cos_ha)
-   ha      = arccos(cos_ha)
-   ha      = where( sin(az_r) > 0.0 , 2.0*pi-ha, ha)*r2d
+    # Convert to equatorial coordinates
+    cos_el = cos(el_r)
+    sin_el = sin(el_r)
+    cos_phi = cos(geolat_r)
+    sin_phi = sin(geolat_r)
+    cos_az = cos(az_r)
+    sin_dec = sin_el*sin_phi + cos_el*cos_phi*cos_az
+    dec = arcsin(sin_dec) * r2d
+    cos_ha = (sin_el - sin_phi * sin_dec) / (cos_phi * cos(dec * d2r))
+    cos_ha = where(cos_ha <= -1.0, -0.99999, cos_ha)
+    cos_ha = where(cos_ha >= 1.0,  0.99999, cos_ha)
+    ha = arccos(cos_ha)
+    ha = where(sin(az_r) > 0.0, 2.0 * pi - ha, ha) * r2d
 
-   ra      = lst*15.0-ha
-   ra = where(ra >= 360.0, ra-360.0, ra)
-   ra = where(ra <    0.0, ra+360.0, ra)
+    ra = lst*15.0-ha
+    ra = where(ra >= 360.0, ra - 360.0, ra)
+    ra = where(ra < 0.0, ra + 360.0, ra)
 
-   # Later
-   return ra, dec
+    # Later
+    return ra, dec
 
 
 def _ra2ha(ra, lst):
-   """
-   Converts a right ascension to an hour angle.
-   """
-   return (lst - ra / 15.0) % 24
+    """
+    Converts a right ascension to an hour angle.
 
+    """
+    return (lst - ra / 15.0) % 24

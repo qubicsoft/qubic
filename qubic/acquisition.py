@@ -51,8 +51,12 @@ class QubicAcquisition(Acquisition):
             raise NotImplementedError('Module names not fixed yet.')
         Acquisition.__init__(self, instrument, pointing, block_id=block_id,
                              selection=selection)
+        # XXX HACK
+        from .pointings import QubicPointing
+        if isinstance(pointing, QubicPointing):
+            self.pointing = pointing
 
-    def get_pointing_hitmap(self, nside=None):
+    def get_hitmap(self, nside=None):
         """
         Return a healpy map whose values are the number of times a pointing
         hits the pixel.
@@ -60,12 +64,9 @@ class QubicAcquisition(Acquisition):
         """
         if nside is None:
             nside = self.instrument.sky.nside
-        hit = np.zeros(12 * nside**2)
-        theta, phi = self.pointing[..., 0], self.pointing[..., 1]
-        ipixel = hp.ang2pix(nside, np.radians(theta), np.radians(phi))
-        for i in ipixel:
-            hit[i] += 1
-        return hit
+        ipixel = self.pointing.tohealpix(nside)
+        npixel = 12 * nside**2
+        return np.histogram(ipixel, bins=npixel, range=(0, npixel))[0]
 
     def get_convolution_peak_operator(self, fwhm=np.radians(0.64883707),
                                       **keywords):

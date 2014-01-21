@@ -1,7 +1,6 @@
 from __future__ import division
 
 import numpy as np
-from numpy import cos, sin
 from progressbar import ProgressBar, Bar, ETA, Percentage
 
 def progress_bar(n, info=''):

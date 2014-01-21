@@ -3,6 +3,7 @@ from __future__ import division
 import numpy as np
 from progressbar import ProgressBar, Bar, ETA, Percentage
 
+
 def progress_bar(n, info=''):
     """
     Return a default progress bar.
@@ -37,6 +38,7 @@ def _compress_mask(mask):
     output += '+' if old else '-'
     return output
 
+
 def _uncompress_mask(mask):
     i = 0
     l = []
@@ -58,4 +60,3 @@ def _uncompress_mask(mask):
             l.extend(int(mask[i:j]) * (True if val == '+' else False,))
             i = j + 1
     return np.array(l, bool)
-

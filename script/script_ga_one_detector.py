@@ -9,15 +9,15 @@ from qubic import QubicAcquisition, QubicInstrument, create_sweeping_pointings
 
 # acquisition parameters
 nside = 256
-racenter = 0.0
-deccenter = -57.0
-angspeed = 1    # deg/sec
-delta_az = 15.
-angspeed_psi = 0.1
-maxpsi = 45.
+racenter = 0.0      # deg
+deccenter = -57.0   # deg
+angspeed = 1        # deg/sec
+delta_az = 15.      # deg
+angspeed_psi = 0.1  # deg/sec
+maxpsi = 45.        # deg
 nsweeps_el = 300
-duration = 24   # hours
-ts = 20         # seconds
+duration = 24       # hours
+ts = 0.1            # seconds
 
 # get the observation model
 pointing = create_sweeping_pointings(
@@ -74,9 +74,9 @@ e2g = SphericalEquatorial2GalacticOperator(degrees=True)
 center = e2g([racenter, deccenter])
 
 mp.figure(1)
-display(x0, 'Original map')
+display(x0_convolved, 'Original map')
 mp.figure(2)
 display(output_map, 'Reconstructed map')
 mp.figure(3)
-display(output_map-x0, 'Difference map')
+display(output_map-x0_convolved, 'Difference map')
 mp.show()

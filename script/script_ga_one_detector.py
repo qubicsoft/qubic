@@ -7,7 +7,7 @@ from pyoperators import DiagonalOperator, PackOperator, pcg, rules_inplace
 from pysimulators import SphericalEquatorial2GalacticOperator
 from qubic import QubicAcquisition, QubicInstrument, create_sweeping_pointings
 
-
+# acquisition parameters
 nside = 256
 racenter = 0.0
 deccenter = -57.0
@@ -18,27 +18,31 @@ maxpsi = 45.
 nsweeps_el = 300
 duration = 24   # hours
 ts = 20         # seconds
+
+# get the observation model
 pointing = create_sweeping_pointings(
     [racenter, deccenter], duration, ts, angspeed, delta_az, nsweeps_el,
     angspeed_psi, maxpsi)
 pointing.angle_hwp = np.random.random_integers(0, 7, pointing.size) * 22.5
 
-ntimes = len(pointing)
-
-# get instrument model with only one detector
+# get the instrument model with only one detector
 idetector = 0
 instrument = QubicInstrument('monochromatic')
-mask_packed = np.ones(len(instrument.detector.packed), bool)
-mask_packed[idetector] = False
+mask_packed = np.ones(len(instrument.detector.packed), bool)  # remove all
+mask_packed[idetector] = False                                # except this one
 mask_unpacked = instrument.unpack(mask_packed)
 instrument = QubicInstrument('monochromatic', removed=mask_unpacked)
 
+# get the acquisition model from the instrument and observation models
 obs = QubicAcquisition(instrument, pointing)
+
+# get it as operators
 convolution = obs.get_convolution_peak_operator()
 projection = obs.get_projection_peak_operator()
 hwp = obs.get_hwp_operator()
 polarizer = obs.get_polarizer_operator()
 
+# restrict the projection to the observed sky pixels
 coverage = projection.pT1()
 mask = coverage > 0
 projection.restrict(mask)
@@ -47,9 +51,12 @@ pack = PackOperator(mask, broadcast='rightward')
 with rules_inplace():
     H = polarizer * (hwp * projection)
 
+# get noiseless timeline
 x0 = np.array(hp.read_map('test/data/syn256_pol.fits', field=(0, 1, 2))).T
 x0_convolved = convolution(x0)
 y = H(pack(x0_convolved))
+
+# inversion through Preconditioned Conjugate Gradient
 preconditioner = DiagonalOperator(1/coverage[mask], broadcast='rightward')
 solution = pcg(H.T * H, H.T(y), M=preconditioner, disp=True, tol=1e-3)
 output_map = pack.T(solution['x'])

@@ -14,7 +14,8 @@ from pysimulators import SphericalGalactic2EquatorialOperator
 from qubic import QubicAcquisition, QubicInstrument, create_random_pointings
 
 # Let's take the galactic north pole as the center of the observation field
-center = SphericalGalactic2EquatorialOperator(degrees=True)([0, 90])
+center_gal = [0, 90]
+center = SphericalGalactic2EquatorialOperator(degrees=True)(center_gal)
 kmax = 2
 
 np.random.seed(0)
@@ -43,17 +44,15 @@ solution = pcg(P.T * P, P.T(tod),
                M=DiagonalOperator(1/coverage[mask]), disp=True)
 output_map = unpack(solution['x'])
 
-# some display
-orig = input_map.copy()
-orig[~mask] = np.nan
-hp.gnomview(orig, rot=[0, 90], reso=5, xsize=600, min=-200, max=200,
-            title='Original map')
-cmap = C(input_map)
-cmap[~mask] = np.nan
-hp.gnomview(cmap, rot=[0, 90], reso=5, xsize=600, min=-200, max=200,
-            title='Convolved original map')
-output_map[~mask] = np.nan
-hp.gnomview(output_map, rot=[0, 90], reso=5, xsize=600, min=-200, max=200,
-            title='Reconstructed map (simulpeak)')
 
+# some display
+def display(x, title):
+    x = x.copy()
+    x[~mask] = np.nan
+    hp.gnomview(x, rot=center_gal, reso=5, xsize=600, min=-200, max=200,
+                title=title)
+
+display(input_map, 'Original map')
+display(C(input_map), 'Convolved original map')
+display(output_map, 'Reconstructed map (gaussian approximation)')
 mp.show()

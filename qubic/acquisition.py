@@ -156,7 +156,7 @@ class QubicAcquisition(Acquisition):
                         shapein=shapein, shapeout=shapeout,
                         flags='real, linear')
 
-    def get_projection_peak_operator(self, kmax=2, rotation=None):
+    def get_projection_peak_operator(self, kmax=2, rotation=None, dtype=None):
         """
         Return the projection operator for the peak sampling.
 
@@ -166,13 +166,15 @@ class QubicAcquisition(Acquisition):
             The diffraction order above which the peaks are ignored.
             For a value of 0, only the central peak is sampled.
         rotation : array (npointings, 3, 3)
-            The Instrument-to-Reference rotation matrix
+            The Instrument-to-Reference rotation matrix.
+        dtype : dtype
+            The datatype of the elements in the projection matrix.
 
         """
         if rotation is None:
             rotation = self.get_rotation_g2i()
-        return self.instrument.get_projection_peak_operator(rotation,
-                                                            kmax=kmax)
+        return self.instrument.get_projection_peak_operator(
+            rotation, kmax=kmax, dtype=dtype)
 
     @classmethod
     def load(cls, filename, instrument=None, selection=None):

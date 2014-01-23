@@ -141,7 +141,7 @@ class QubicInstrument(Instrument):
             mp.autoscale()
         mp.show()
 
-    def get_projection_peak_operator(self, rotation, kmax=2):
+    def get_projection_peak_operator(self, rotation, kmax=2, dtype=None):
         """
         Return the peak sampling operator.
 
@@ -152,8 +152,13 @@ class QubicInstrument(Instrument):
         kmax : int, optional
             The diffraction order above which the peaks are ignored.
             For a value of 0, only the central peak is sampled.
+        dtype : dtype
+            The datatype of the elements in the projection matrix.
 
         """
+        if dtype is None:
+            dtype = np.float32
+        dtype = np.dtype(dtype)
         ndetectors = len(self.detector.packed)
         ntimes = rotation.data.shape[0]
         nside = self.sky.nside
@@ -164,16 +169,18 @@ class QubicInstrument(Instrument):
         direction = Spherical2CartesianOperator('zenith,azimuth')(thetaphi)
         e_nf = _replicate(direction, ntimes)  # (ndets, ntimes, ncolmax, 3)
         if nside > 8192:
-            raise 'With nside={0}, pixels cannot be stored using int32.'
+            dtype_index = np.dtype(np.int64)
+        else:
+            dtype_index = np.dtype(np.int32)
 
         if not self.sky.polarized:
             s = FSRMatrix((ndetectors*ntimes, 12*nside**2),
-                          ncolmax=ncolmax, dtype=np.float32,
-                          dtype_index=np.int32)
+                          ncolmax=ncolmax, dtype=dtype,
+                          dtype_index=dtype_index)
         else:
             s = FSRRotation3dMatrix((ndetectors*ntimes*3, 12*nside**2*3),
-                                    ncolmax=ncolmax, dtype=np.float32,
-                                    dtype_index=np.int32)
+                                    ncolmax=ncolmax, dtype=dtype,
+                                    dtype_index=dtype_index)
 
         index = s.data.index.reshape((ndetectors, ntimes, ncolmax))
         for i in xrange(ndetectors):
@@ -188,9 +195,16 @@ class QubicInstrument(Instrument):
             value[...] = vals[:, None, :]
             shapeout = (ndetectors, ntimes)
         else:
-            flib.polarization.pointing_matrix_i4_m4(
-                rotation.data.T, direction.T, s.data.ravel().view(np.int8),
-                vals.T)
+            func = 'pointing_matrix_i{0}_m{1}'.format(dtype_index.itemsize,
+                                                      dtype.itemsize)
+            try:
+                getattr(flib.polarization, func)(
+                    rotation.data.T, direction.T, s.data.ravel().view(np.int8),
+                    vals.T)
+            except AttributeError:
+                raise TypeError(
+                    'The projection matrix cannot be created with types: {0} a'
+                    'nd {1}.'.format(dtype, dtype_index))
             shapeout = (ndetectors, ntimes, 3)
 
         return ProjectionOperator(s, shapeout=shapeout)

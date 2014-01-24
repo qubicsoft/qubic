@@ -9,7 +9,8 @@ import time
 import yaml
 from astropy.time import TimeDelta
 from glob import glob
-from pyoperators import DenseOperator, HomothetyOperator, Rotation3dOperator
+from pyoperators import (
+    DenseOperator, HomothetyOperator, IdentityOperator, Rotation3dOperator)
 from pyoperators.utils import ifirst
 from pysimulators import (
     Acquisition, CartesianEquatorial2HorizontalOperator,
@@ -123,6 +124,8 @@ class QubicAcquisition(Acquisition):
         Return the rotation matrix for the half-wave plate.
 
         """
+        if not self.instrument.sky.polarized:
+            return IdentityOperator()
         return Rotation3dOperator('X', -4 * self.pointing.angle_hwp,
                                   degrees=True)
 

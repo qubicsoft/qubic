@@ -159,19 +159,19 @@ class QubicAcquisition(Acquisition):
                         shapein=shapein, shapeout=shapeout,
                         flags='real, linear')
 
-    def get_projection_peak_operator(self, kmax=2, rotation=None, dtype=None):
+    def get_projection_peak_operator(self, rotation=None, dtype=None,
+                                     kmax=None):
         """
         Return the projection operator for the peak sampling.
 
         Parameters
         ----------
-        kmax : int, optional
-            The diffraction order above which the peaks are ignored.
-            For a value of 0, only the central peak is sampled.
         rotation : array (npointings, 3, 3)
             The Instrument-to-Reference rotation matrix.
         dtype : dtype
             The datatype of the elements in the projection matrix.
+        kmax : int, optional
+            Override the instrument kmax.
 
         """
         if rotation is None:

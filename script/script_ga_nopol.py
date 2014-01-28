@@ -19,7 +19,7 @@ center = SphericalGalactic2EquatorialOperator(degrees=True)(center_gal)
 kmax = 2
 
 np.random.seed(0)
-qubic = QubicInstrument('monochromatic,nopol')
+qubic = QubicInstrument('monochromatic,nopol', kmax=kmax)
 pointings = create_random_pointings(center, 1000, 10)
 input_map = hp.read_map('test/data/syn256.fits')
 
@@ -28,7 +28,7 @@ obs = QubicAcquisition(qubic, pointings)
 hit = obs.get_hitmap()
 
 C = obs.get_convolution_peak_operator()
-P = obs.get_projection_peak_operator(kmax=kmax)
+P = obs.get_projection_peak_operator()
 H = P * C
 
 # Produce the Time-Ordered data

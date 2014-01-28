@@ -23,9 +23,9 @@ class QubicInstrument(Instrument):
     The QubicInstrument class. It represents the instrument setup.
 
     """
-    def __init__(self, name, calibration=None, removed=None, ngrids=None,
-                 nside=256, commin=MPI.COMM_WORLD, commout=MPI.COMM_WORLD,
-                 **keywords):
+    def __init__(self, name, calibration=None, removed=None, kmax=2,
+                 ngrids=None, nside=256, commin=MPI.COMM_WORLD,
+                 commout=MPI.COMM_WORLD, **keywords):
         """
         Parameters
         ----------
@@ -36,6 +36,11 @@ class QubicInstrument(Instrument):
             The calibration tree.
         removed : str or 2D-array of bool
             Array specifying which bolometers are removed.
+        kmax : int, optional
+            The diffraction order above which the peaks are ignored.
+            For instance, a value of kmax=2 will model the synthetic beam by
+            (2 * kmax + 1)**2 = 25 peaks and a value of kmax=0 will only sample
+            the central peak.
         nside : int, optional
             The Healpix nside of the sky.
         ngrids : int, optional
@@ -63,6 +68,7 @@ class QubicInstrument(Instrument):
         self._init_primary_beam()
         self._init_optics(**keywords)
         self._init_horns()
+        self._init_synthetic_beam(kmax)
 
     def _get_detector_layout(self, name, removed, ngrids):
         polarized = 'nopol' not in name.split(',')
@@ -115,11 +121,20 @@ class QubicInstrument(Instrument):
     def _init_horns(self):
         self.horn = self.calibration.get('hornarray')
 
+    def _init_synthetic_beam(self, kmax):
+        class SyntheticBeam(object):
+            pass
+        sb = SyntheticBeam()
+        sb.kmax = kmax
+        self.synthetic_beam = sb
+
     def __str__(self):
         state = [('name', self.name),
                  ('nu', self.optics.nu),
                  ('dnu_nu', self.optics.dnu_nu),
                  ('nside', self.sky.nside),
+                 ('kmax', self.synthetic_beam.kmax),
+                 ('ngrids', self.detector.ngrids),
                  ('removed', _compress_mask(self.detector.removed))]
         return 'Instrument:\n' + \
                '\n'.join(['    ' + a + ': ' + repr(v) for a, v in state]) + \
@@ -141,7 +156,7 @@ class QubicInstrument(Instrument):
             mp.autoscale()
         mp.show()
 
-    def get_projection_peak_operator(self, rotation, kmax=2, dtype=None):
+    def get_projection_peak_operator(self, rotation, dtype=None, kmax=None):
         """
         Return the peak sampling operator.
 
@@ -149,13 +164,14 @@ class QubicInstrument(Instrument):
         ----------
         rotation : ndarray (ntimes, 3, 3)
             The Reference-to-Instrument rotation matrix.
-        kmax : int, optional
-            The diffraction order above which the peaks are ignored.
-            For a value of 0, only the central peak is sampled.
         dtype : dtype
             The datatype of the elements in the projection matrix.
+        kmax : int, optional
+            Override the instrument kmax.
 
         """
+        if kmax is None:
+            kmax = self.synthetic_beam.kmax
         if dtype is None:
             dtype = np.float32
         dtype = np.dtype(dtype)
@@ -174,13 +190,13 @@ class QubicInstrument(Instrument):
             dtype_index = np.dtype(np.int32)
 
         if not self.sky.polarized:
-            s = FSRMatrix((ndetectors*ntimes, 12*nside**2),
-                          ncolmax=ncolmax, dtype=dtype,
-                          dtype_index=dtype_index)
+            s = FSRMatrix(
+                (ndetectors*ntimes, 12*nside**2), ncolmax=ncolmax, dtype=dtype,
+                dtype_index=dtype_index)
         else:
-            s = FSRRotation3dMatrix((ndetectors*ntimes*3, 12*nside**2*3),
-                                    ncolmax=ncolmax, dtype=dtype,
-                                    dtype_index=dtype_index)
+            s = FSRRotation3dMatrix(
+                (ndetectors*ntimes*3, 12*nside**2*3), ncolmax=ncolmax,
+                dtype=dtype, dtype_index=dtype_index)
 
         index = s.data.index.reshape((ndetectors, ntimes, ncolmax))
         for i in xrange(ndetectors):

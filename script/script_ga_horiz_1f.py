@@ -9,8 +9,7 @@ from pysimulators import SphericalEquatorial2GalacticOperator
 from pysimulators.noises import _gaussian_psd_1f
 from qubic import QubicAcquisition, QubicInstrument, create_sweeping_pointings
 
-kmax = 2
-qubic = QubicInstrument('monochromatic,nopol')
+qubic = QubicInstrument('monochromatic,nopol', kmax=2)
 input_map = hp.read_map('test/data/syn256.fits')
 
 # pointing
@@ -30,7 +29,7 @@ pointings = create_sweeping_pointings(
 # configure observation
 obs = QubicAcquisition(qubic, pointings)
 C = obs.get_convolution_peak_operator()
-P = obs.get_projection_peak_operator(kmax=kmax)
+P = obs.get_projection_peak_operator()
 H = P * C
 
 # produce the Time-Ordered data

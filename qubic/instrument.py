@@ -156,7 +156,8 @@ class QubicInstrument(Instrument):
             mp.autoscale()
         mp.show()
 
-    def get_projection_peak_operator(self, rotation, dtype=None, kmax=None):
+    def get_projection_peak_operator(self, rotation, dtype=None, kmax=None,
+                                     verbose=True):
         """
         Return the peak sampling operator.
 
@@ -192,11 +193,11 @@ class QubicInstrument(Instrument):
         if not self.sky.polarized:
             s = FSRMatrix(
                 (ndetectors*ntimes, 12*nside**2), ncolmax=ncolmax, dtype=dtype,
-                dtype_index=dtype_index)
+                dtype_index=dtype_index, verbose=verbose)
         else:
             s = FSRRotation3dMatrix(
                 (ndetectors*ntimes*3, 12*nside**2*3), ncolmax=ncolmax,
-                dtype=dtype, dtype_index=dtype_index)
+                dtype=dtype, dtype_index=dtype_index, verbose=verbose)
 
         index = s.data.index.reshape((ndetectors, ntimes, ncolmax))
         for i in xrange(ndetectors):

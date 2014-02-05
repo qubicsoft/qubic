@@ -160,7 +160,7 @@ class QubicAcquisition(Acquisition):
                         flags='real, linear')
 
     def get_projection_peak_operator(self, rotation=None, dtype=None,
-                                     kmax=None):
+                                     synthbeam_fraction=None):
         """
         Return the projection operator for the peak sampling.
 
@@ -170,14 +170,14 @@ class QubicAcquisition(Acquisition):
             The Instrument-to-Reference rotation matrix.
         dtype : dtype
             The datatype of the elements in the projection matrix.
-        kmax : int, optional
-            Override the instrument kmax.
+        synthbeam_fraction : float, optional
+            Override the instrument synthetic beam fraction.
 
         """
         if rotation is None:
             rotation = self.get_rotation_g2i()
         return self.instrument.get_projection_peak_operator(
-            rotation, kmax=kmax, dtype=dtype)
+            rotation, synthbeam_fraction=synthbeam_fraction, dtype=dtype)
 
     @classmethod
     def load(cls, filename, instrument=None, selection=None):

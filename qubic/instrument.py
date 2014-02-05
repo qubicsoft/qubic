@@ -24,9 +24,9 @@ class QubicInstrument(Instrument):
     The QubicInstrument class. It represents the instrument setup.
 
     """
-    def __init__(self, name, calibration=None, removed=None, kmax=2,
-                 ngrids=None, nside=256, commin=MPI.COMM_WORLD,
-                 commout=MPI.COMM_WORLD, **keywords):
+    def __init__(self, name, calibration=None, removed=None,
+                 synthbeam_fraction=0.99, ngrids=None, nside=256,
+                 commin=MPI.COMM_WORLD, commout=MPI.COMM_WORLD, **keywords):
         """
         Parameters
         ----------
@@ -37,13 +37,11 @@ class QubicInstrument(Instrument):
             The calibration tree.
         removed : str or 2D-array of bool
             Array specifying which bolometers are removed.
-        kmax : int, optional
-            The diffraction order above which the peaks are ignored.
-            For instance, a value of kmax=2 will model the synthetic beam by
-            (2 * kmax + 1)**2 = 25 peaks and a value of kmax=0 will only sample
-            the central peak.
         nside : int, optional
             The Healpix nside of the sky.
+        synthbeam_fraction: float, optional
+            The fraction of significant peaks retained for the computation
+            of the synthetic beam.
         ngrids : int, optional
             Number of detector grids. (Default: 2 for the polarized case,
             1 otherwise)
@@ -69,7 +67,7 @@ class QubicInstrument(Instrument):
         self._init_primary_beam()
         self._init_optics(**keywords)
         self._init_horns()
-        self._init_synthetic_beam(kmax)
+        self._init_synthetic_beam(synthbeam_fraction)
 
     def _get_detector_layout(self, name, removed, ngrids):
         polarized = 'nopol' not in name.split(',')
@@ -122,11 +120,11 @@ class QubicInstrument(Instrument):
     def _init_horns(self):
         self.horn = self.calibration.get('hornarray')
 
-    def _init_synthetic_beam(self, kmax):
+    def _init_synthetic_beam(self, synthbeam_fraction):
         class SyntheticBeam(object):
             pass
         sb = SyntheticBeam()
-        sb.kmax = kmax
+        sb.fraction = synthbeam_fraction
         self.synthetic_beam = sb
 
     def __str__(self):
@@ -134,7 +132,7 @@ class QubicInstrument(Instrument):
                  ('nu', self.optics.nu),
                  ('dnu_nu', self.optics.dnu_nu),
                  ('nside', self.sky.nside),
-                 ('kmax', self.synthetic_beam.kmax),
+                 ('synthbeam_fraction', self.synthetic_beam.fraction),
                  ('ngrids', self.detector.ngrids),
                  ('removed', _compress_mask(self.detector.removed))]
         return 'Instrument:\n' + \
@@ -157,8 +155,8 @@ class QubicInstrument(Instrument):
             mp.autoscale()
         mp.show()
 
-    def get_projection_peak_operator(self, rotation, dtype=None, kmax=None,
-                                     verbose=True):
+    def get_projection_peak_operator(self, rotation, dtype=None,
+                                     synthbeam_fraction=None, verbose=True):
         """
         Return the peak sampling operator.
 
@@ -168,12 +166,12 @@ class QubicInstrument(Instrument):
             The Reference-to-Instrument rotation matrix.
         dtype : dtype
             The datatype of the elements in the projection matrix.
-        kmax : int, optional
-            Override the instrument kmax.
+        synthbeam_fraction : float, optional
+            Override the instrument synthetic beam fraction.
 
         """
-        if kmax is None:
-            kmax = self.synthetic_beam.kmax
+        if synthbeam_fraction is None:
+            synthbeam_fraction = self.synthetic_beam.fraction
         if dtype is None:
             dtype = np.float32
         dtype = np.dtype(dtype)
@@ -183,9 +181,9 @@ class QubicInstrument(Instrument):
         else:
             ntimes = rotation.data.shape[0]
         nside = self.sky.nside
-        ncolmax = (2 * kmax + 1)**2
 
-        theta, phi = _peak_angles(self, kmax)
+        theta, phi, vals = _peak_angles_fraction(self, synthbeam_fraction)
+        ncolmax = theta.shape[-1]
         thetaphi = _pack_vector(theta, phi)  # (ndetectors, ncolmax, 2)
         direction = Spherical2CartesianOperator('zenith,azimuth')(thetaphi)
         e_nf = _replicate(direction, ntimes)  # (ndets, ntimes, ncolmax, 3)
@@ -208,10 +206,8 @@ class QubicInstrument(Instrument):
             # e_ni, e_nf[i] shape: (ntimes, ncolmax, 3)
             e_ni = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
             index[i] = Cartesian2HealpixOperator(nside)(e_ni)
-        vals = self.primary_beam(theta)  # (ndetectors, ncolmax)
 
         if not self.sky.polarized:
-            vals /= np.sum(vals, axis=-1)[..., None]  # remove me
             value = s.data.value.reshape(ndetectors, ntimes, ncolmax)
             value[...] = vals[:, None, :]
             shapeout = (ndetectors, ntimes)
@@ -235,6 +231,13 @@ def _peak_angles(q, kmax):
     """
     Return the spherical coordinates (theta,phi) of the beam peaks, in radians.
 
+    Parameters
+    ----------
+    kmax : int, optional
+        The diffraction order above which the peaks are ignored.
+        For instance, a value of kmax=2 will model the synthetic beam by
+        (2 * kmax + 1)**2 = 25 peaks and a value of kmax=0 will only sample
+        the central peak.
     """
     ndetector = len(q.detector.packed)
     center = q.detector.packed.center
@@ -252,6 +255,41 @@ def _peak_angles(q, kmax):
     theta = ne.evaluate('arcsin(sqrt(nx**2 + ny**2))', local_dict=local_dict)
     phi = ne.evaluate('arctan2(ny, nx)', local_dict=local_dict)
     return theta, phi
+
+
+def _peak_angles_fraction(q, fraction):
+
+    # there is no need to go beyond kmax=5
+    theta, phi = _peak_angles(q, kmax=5)
+    index = _argsort(theta)
+    theta = theta[index]
+    phi = phi[index]
+    val = q.primary_beam(theta)
+    val[~np.isfinite(val)] = 0
+    val /= np.sum(val, axis=-1)[:, None]
+    cumval = np.cumsum(val, axis=-1)
+    imaxs = cumval.shape[-1] - np.sum(cumval > fraction, axis=-1) + 1
+    imax = max(imaxs)
+
+    # slice initial arrays to discard the non-significant peaks
+    theta = theta[:, :imax]
+    phi = phi[:, :imax]
+    val = val[:, :imax]
+
+    # remove additional per-detector non-significant peaks
+    # and remove potential NaN in theta, phi
+    for idet, imax_ in enumerate(imaxs):
+        val[idet, imax_:] = 0
+        theta[idet, imax_:] = pi / 2 #XXX 0 leads to NaN
+        phi[idet, imax_:] = 0
+    val /= np.sum(val, axis=-1)[:, None]
+    return theta, phi, val
+
+
+def _argsort(a, axis=-1):
+    i = list(np.ogrid[[slice(x) for x in a.shape]])
+    i[axis] = a.argsort(axis)
+    return i
 
 
 def _pack_vector(*args):

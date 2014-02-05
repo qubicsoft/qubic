@@ -16,10 +16,9 @@ from qubic import QubicAcquisition, QubicInstrument, create_random_pointings
 # Let's take the galactic north pole as the center of the observation field
 center_gal = [0, 90]
 center = SphericalGalactic2EquatorialOperator(degrees=True)(center_gal)
-kmax = 2
 
 np.random.seed(0)
-qubic = QubicInstrument('monochromatic,nopol', kmax=kmax)
+qubic = QubicInstrument('monochromatic,nopol')
 pointings = create_random_pointings(center, 1000, 10)
 input_map = hp.read_map('test/data/syn256.fits')
 

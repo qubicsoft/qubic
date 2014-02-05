@@ -19,7 +19,7 @@ def test_ga():
                         nside=256)
     obs = QubicAcquisition(q, p)
     C = obs.get_convolution_peak_operator(fwhm=np.radians(0.64883707))
-    P = obs.get_projection_peak_operator(kmax=2)
+    P = obs.get_projection_peak_operator()
     H = P * C
     t2 = H(map_orig)
     np.testing.assert_almost_equal(t, t2)

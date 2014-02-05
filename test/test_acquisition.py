@@ -28,7 +28,7 @@ caltree = QubicCalibration(detarray='CalQubic_DetArray_v1.fits')
 removed = np.ones((32, 32), dtype=bool)
 removed[30:, 30:] = False
 qubic = QubicInstrument('monochromatic,nopol', caltree, nu=160e9,
-                        removed=removed)
+                        removed=removed, synthbeam_fraction=0.99)
 
 
 def test_qubicacquisition_pointing():
@@ -70,7 +70,7 @@ def test_qubicacquisition_load_save():
 
     for p in ptgs:
         obs = QubicAcquisition(qubic, p)
-        P = obs.get_projection_peak_operator(kmax=2)
+        P = obs.get_projection_peak_operator()
         tod = P(input_map)
         yield func_acquisition, obs, info
         yield func_observation, obs, tod, info

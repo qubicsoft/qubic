@@ -9,7 +9,8 @@ from pysimulators import SphericalEquatorial2GalacticOperator
 from pysimulators.noises import _gaussian_psd_1f
 from qubic import QubicAcquisition, QubicInstrument, create_sweeping_pointings
 
-qubic = QubicInstrument('monochromatic,nopol', kmax=2)
+np.random.seed(0)
+qubic = QubicInstrument('monochromatic,nopol', synthbeam_fraction=0.99)
 input_map = hp.read_map('test/data/syn256.fits')
 
 # pointing

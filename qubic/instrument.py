@@ -5,6 +5,7 @@ try:
     import matplotlib.pyplot as mp
 except:
     pass
+import numexpr as ne
 import numpy as np
 from pyoperators import Spherical2CartesianOperator, MPI
 from pyoperators.utils import strenum
@@ -247,9 +248,9 @@ def _peak_angles(q, kmax):
     kx, ky = np.mgrid[-kmax:kmax+1, -kmax:kmax+1]
     nx = detvec[:, 0, np.newaxis] - lmbda * kx.ravel() / dx
     ny = detvec[:, 1, np.newaxis] - lmbda * ky.ravel() / dx
-    theta = np.arcsin(np.sqrt(nx**2 + ny**2))
-    phi = np.arctan2(ny, nx)
-
+    local_dict = {'nx': nx, 'ny': ny}
+    theta = ne.evaluate('arcsin(sqrt(nx**2 + ny**2))', local_dict=local_dict)
+    phi = ne.evaluate('arctan2(ny, nx)', local_dict=local_dict)
     return theta, phi
 
 

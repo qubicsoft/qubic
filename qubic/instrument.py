@@ -177,7 +177,10 @@ class QubicInstrument(Instrument):
             dtype = np.float32
         dtype = np.dtype(dtype)
         ndetectors = len(self.detector.packed)
-        ntimes = rotation.data.shape[0]
+        if rotation.data.ndim == 2:
+            ntimes = 1
+        else:
+            ntimes = rotation.data.shape[0]
         nside = self.sky.nside
         ncolmax = (2 * kmax + 1)**2
 

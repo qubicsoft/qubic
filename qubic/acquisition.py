@@ -10,7 +10,8 @@ import yaml
 from astropy.time import TimeDelta
 from glob import glob
 from pyoperators import (
-    DenseOperator, HomothetyOperator, IdentityOperator, Rotation3dOperator)
+    DenseOperator, DenseBlockDiagonalOperator, HomothetyOperator,
+    IdentityOperator, Rotation3dOperator)
 from pyoperators.utils import ifirst
 from pysimulators import (
     Acquisition, CartesianEquatorial2HorizontalOperator,
@@ -18,7 +19,6 @@ from pysimulators import (
     CartesianHorizontal2EquatorialOperator,
     CartesianEquatorial2GalacticOperator)
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
-
 from .calibration import QubicCalibration
 from .instrument import QubicInstrument
 
@@ -54,7 +54,7 @@ class QubicAcquisition(Acquisition):
         if not isinstance(instrument, (QubicInstrument, str)):
             raise TypeError("Invalid type for the instrument ('{}' instead of "
                             "'QubicInstrument' or 'str').".format(type(
-                            instrument).__name__))
+                                instrument).__name__))
         if isinstance(instrument, str):
             raise NotImplementedError('Module names not fixed yet.')
         Acquisition.__init__(self, instrument, pointing, block_id=block_id,
@@ -84,10 +84,10 @@ class QubicAcquisition(Acquisition):
         p = self.pointing
         time = p.date_obs + TimeDelta(p.time, format='sec')
         r = CartesianEquatorial2GalacticOperator() * \
+            CartesianHorizontal2EquatorialOperator(
+                'NE', time, p.latitude, p.longitude) * \
             Rotation3dOperator("ZY'Z''", p.azimuth, 90 - p.elevation, p.pitch,
-                               degrees=True) * \
-            CartesianHorizontal2EquatorialOperator('NE', time, p.latitude,
-                                                   p.longitude)
+                               degrees=True)
         return r
 
     def get_rotation_g2i(self):
@@ -99,8 +99,8 @@ class QubicAcquisition(Acquisition):
         time = p.date_obs + TimeDelta(p.time, format='sec')
         r = Rotation3dOperator("ZY'Z''", p.azimuth, 90 - p.elevation, p.pitch,
                                degrees=True).T * \
-            CartesianEquatorial2HorizontalOperator('NE', time, p.latitude,
-                                                   p.longitude) * \
+            CartesianEquatorial2HorizontalOperator(
+                'NE', time, p.latitude, p.longitude) * \
             CartesianGalactic2EquatorialOperator()
         return r
 
@@ -143,21 +143,8 @@ class QubicAcquisition(Acquisition):
 
         grid = self.instrument.detector.packed.quadrant // 4
         z = np.zeros(self.get_ndetectors())
-        data = np.array([z + 0.5, 0.5 - grid, z]).T[:, None, :]
-
-        def direct(x, y):
-            np.sum(x * data, axis=-1, out=y)
-
-        def transpose(x, y):
-            np.multiply(x[..., None], data, out=y)
-
-        shapeout = self.get_ndetectors(), self.get_nsamples()[0]
-        shapein = shapeout + (3,)
-
-        from pyoperators import Operator
-        return Operator(direct=direct, transpose=transpose, dtype=float,
-                        shapein=shapein, shapeout=shapeout,
-                        flags='real, linear')
+        data = np.array([z + 0.5, 0.5 - grid, z]).T[:, None, None, :]
+        return DenseBlockDiagonalOperator(data)
 
     def get_projection_peak_operator(self, rotation=None, dtype=None,
                                      synthbeam_fraction=None):

@@ -3,7 +3,8 @@ from __future__ import division
 import healpy as hp
 import matplotlib.pyplot as mp
 import numpy as np
-from pyoperators import DiagonalOperator, PackOperator, pcg, rules_inplace
+from pyoperators import DiagonalOperator, PackOperator, pcg
+from pyoperators.rules import rules
 from pysimulators import SphericalEquatorial2GalacticOperator
 from qubic import QubicAcquisition, QubicInstrument, create_sweeping_pointings
 
@@ -50,7 +51,7 @@ mask = coverage > 0
 projection.restrict(mask)
 pack = PackOperator(mask, broadcast='rightward')
 
-with rules_inplace():
+with rules(inplace=True):
     H = polarizer * (hwp * projection)
 
 # get noiseless timeline

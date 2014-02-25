@@ -71,12 +71,13 @@ class QubicPointing(PointingHorizontal):
 
     def tohealpix(self, nside):
         time = self.date_obs + TimeDelta(self.time, format='sec')
-        r = (Cartesian2HealpixOperator(nside) *
-             CartesianEquatorial2GalacticOperator() *
-             CartesianHorizontal2EquatorialOperator('NE', time, self.latitude,
-                                                    self.longitude) *
-             Spherical2CartesianOperator('azimuth,elevation', degrees=True))
-        return r(np.array([self.azimuth, self.elevation]).T)
+        c2h = Cartesian2HealpixOperator(nside)
+        e2g = CartesianEquatorial2GalacticOperator()
+        h2e = CartesianHorizontal2EquatorialOperator(
+            'NE', time, self.latitude, self.longitude)
+        s2c = Spherical2CartesianOperator('azimuth,elevation', degrees=True)
+        rotation = c2h(e2g(h2e(s2c)))
+        return rotation(np.array([self.azimuth, self.elevation]).T)
 
 
 def create_random_pointings(center, npointings, dtheta, date_obs=None,
@@ -112,12 +113,12 @@ def create_random_pointings(center, npointings, dtheta, date_obs=None,
         npointings, date_obs=date_obs, sampling_period=sampling_period,
         latitude=latitude, longitude=longitude)
     time = p.date_obs + TimeDelta(p.time, format='sec')
-    rotation = (
-        Cartesian2SphericalOperator('azimuth,elevation', degrees=True) *
-        CartesianEquatorial2HorizontalOperator(
-            'NE', time, p.latitude, p.longitude) *
-        Rotation3dOperator("ZY'", center[0], 90 - center[1], degrees=True) *
-        Spherical2CartesianOperator('zenith,azimuth', degrees=True))
+    c2s = Cartesian2SphericalOperator('azimuth,elevation', degrees=True)
+    e2h = CartesianEquatorial2HorizontalOperator(
+        'NE', time, p.latitude, p.longitude)
+    rot = Rotation3dOperator("ZY'", center[0], 90-center[1], degrees=True)
+    s2c = Spherical2CartesianOperator('zenith,azimuth', degrees=True)
+    rotation = c2s(e2h(rot(s2c)))
     coords = rotation(np.asarray([theta.T, phi.T]).T)
     p.azimuth = coords[..., 0]
     p.elevation = coords[..., 1]

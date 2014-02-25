@@ -186,7 +186,7 @@ class QubicInstrument(Instrument):
         ncolmax = theta.shape[-1]
         thetaphi = _pack_vector(theta, phi)  # (ndetectors, ncolmax, 2)
         direction = Spherical2CartesianOperator('zenith,azimuth')(thetaphi)
-        e_nf = _replicate(direction, ntimes)  # (ndets, ntimes, ncolmax, 3)
+        e_nf = direction[:, None, :, :]
         if nside > 8192:
             dtype_index = np.dtype(np.int64)
         else:
@@ -203,7 +203,8 @@ class QubicInstrument(Instrument):
 
         index = s.data.index.reshape((ndetectors, ntimes, ncolmax))
         for i in xrange(ndetectors):
-            # e_ni, e_nf[i] shape: (ntimes, ncolmax, 3)
+            # e_nf[i] shape: (1, ncolmax, 3)
+            # e_ni shape: (ntimes, ncolmax, 3)
             e_ni = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
             index[i] = Cartesian2HealpixOperator(nside)(e_ni)
 
@@ -298,9 +299,3 @@ def _pack_vector(*args):
     for i, arg in enumerate(args):
         out[..., i] = arg
     return out
-
-
-def _replicate(v, n):
-    shape = v.shape[:-2] + (n,) + v.shape[-2:]
-    strides = v.strides[:-2] + (0,) + v.strides[-2:]
-    return np.lib.stride_tricks.as_strided(v, shape, strides)

@@ -2,20 +2,31 @@
 from __future__ import division
 
 import numpy as np
-from astropy.time import TimeDelta
+from astropy.time import Time, TimeDelta
 from numpy.random import random_sample as randomu
 from pyoperators import (
     Cartesian2SphericalOperator, Rotation3dOperator,
     Spherical2CartesianOperator)
+from pyoperators.utils import isscalarlike
 from pysimulators import (
     PointingHorizontal, CartesianEquatorial2GalacticOperator,
     CartesianEquatorial2HorizontalOperator,
-    CartesianHorizontal2EquatorialOperator)
+    CartesianHorizontal2EquatorialOperator,
+    SphericalEquatorial2GalacticOperator,
+    SphericalGalactic2EquatorialOperator,
+    SphericalEquatorial2HorizontalOperator,
+    SphericalHorizontal2EquatorialOperator)
 from pysimulators.interfaces.healpy import Cartesian2HealpixOperator
 
 __all__ = ['QubicPointing',
            'create_random_pointings',
-           'create_sweeping_pointings']
+           'create_sweeping_pointings',
+           'equ2gal',
+           'equ2hor',
+           'gal2equ',
+           'gal2hor',
+           'hor2equ',
+           'hor2gal']
 
 DOMECLAT = -(75 + 6 / 60)
 DOMECLON = 123 + 20 / 60
@@ -129,7 +140,7 @@ def create_random_pointings(center, npointings, dtheta, date_obs=None,
 def create_sweeping_pointings(
         center, duration, sampling_period, angspeed, delta_az,
         nsweeps_per_elevation, angspeed_psi, maxpsi, date_obs=None,
-        latitude=None, longitude=None, return_hor=True):
+        latitude=None, longitude=None):
     """
     Return pointings according to the sweeping strategy:
     Sweep around the tracked FOV center azimuth at a fixed elevation, and
@@ -177,14 +188,13 @@ def create_sweeping_pointings(
     deccenter = center[1]
     backforthdt = delta_az / angspeed * 2
 
-    jd = (out.date_obs + TimeDelta(out.time, format='sec')).jd
-    tsamples = _gst2lst(_jd2gst(jd), out.longitude)
-
     # compute the sweep number
     isweeps = np.floor(out.time / backforthdt).astype(int)
 
     # azimuth/elevation of the center of the field as a function of time
-    azcenter, elcenter = _equ2hor(racenter, deccenter, out.latitude, tsamples)
+    azcenter, elcenter = equ2hor(racenter, deccenter, out.time,
+                                 date_obs=out.date_obs, latitude=out.latitude,
+                                 longitude=out.longitude)
 
     # compute azimuth offset for all time samples
     daz = out.time * angspeed
@@ -212,109 +222,164 @@ def create_sweeping_pointings(
     pitch[mask] = -pitch[mask] + 4 * maxpsi
     pitch -= maxpsi
 
-    if not return_hor:
-        # convert them to RA, Dec
-        raptg, decptg = _hor2equ(azptg, elptg, out.latitude, tsamples)
-        theta = 90 - decptg
-        phi = raptg
-        pointings = np.array([theta, phi, pitch]).T
-        return pointings
-
     out.azimuth = azptg
     out.elevation = elptg
     out.pitch = pitch
     return out
 
 
-def _jd2gst(jd):
-    """
-    Convert julian dates into Greenwich Sidereal Time.
-
-    From Practical Astronomy With Your Calculator.
-    """
-    jd0 = np.floor(jd - 0.5) + 0.5
-    T = (jd0 - 2451545.0) / 36525
-    T0 = 6.697374558 + 2400.051336 * T + 0.000025862 * T**2
-    T0 %= 24
-    ut = (jd - jd0) * 24
-    T0 += ut * 1.002737909
-    T0 %= 24
-    return T0
+def _format_sphconv(a, b, date_obs=None, time=None):
+    incoords = np.empty(np.broadcast(a, b).shape + (2,))
+    incoords[..., 0] = a
+    incoords[..., 1] = b
+    if date_obs is None:
+        return incoords
+    time = Time(date_obs if isscalarlike(time)
+                         else [date_obs], scale='utc') + \
+           TimeDelta(time, format='sec')
+    return incoords, time
 
 
-def _gst2lst(gst, geolon):
+def equ2gal(ra, dec):
     """
-    Convert Greenwich Sidereal Time into Local Sidereal Time.
+    equ2gal(ra, dec) -> l, b
+    Equatorial to galactic spherical conversion. Angles are in degrees.
 
     """
-    # geolon: Geographic longitude EAST in degrees.
-    return (gst + geolon / 15.) % 24
+    incoords = _format_sphconv(ra, dec)
+    outcoords = SphericalEquatorial2GalacticOperator(degrees=True)(incoords)
+    return outcoords[..., 0], outcoords[..., 1]
 
 
-def _equ2hor(ra, dec, geolat, lst):
+def gal2equ(l, b):
     """
-    Convert from ra/dec to az/el (by Ken Genga).
-
-    """
-    # Imports
-    from numpy import arccos, arcsin, cos, pi, sin, where
-
-    d2r = pi/180.0
-    r2d = 180.0/pi
-    sin_dec = sin(dec*d2r)
-    phi_rad = geolat*d2r
-    sin_phi = sin(phi_rad)
-    cos_phi = cos(phi_rad)
-    ha = 15.0*_ra2ha(ra, lst)
-    sin_el = sin_dec*sin_phi + cos(dec*d2r)*cos_phi*cos(ha*d2r)
-    el = arcsin(sin_el)*r2d
-
-    az = arccos((sin_dec - sin_phi * sin_el) / (cos_phi * cos(el * d2r)))
-    az = where(sin(ha*d2r) > 0.0, 2.0*pi-az, az)*r2d
-
-    # Later
-    return az, el
-
-
-def _hor2equ(az, el, geolat, lst):
-    """
-    Convert from az/el to ra/dec (by Ken Genga).
+    gal2equ(l, b) -> ra, dec
+    Galactic to equatorial spherical conversion. Angles are in degrees.
 
     """
-    # Imports
-    from numpy import arccos, arcsin, cos, pi, sin, where
-
-    d2r = pi/180.0
-    r2d = 180.0/pi
-    az_r = az*d2r
-    el_r = el*d2r
-    geolat_r = geolat*d2r
-
-    # Convert to equatorial coordinates
-    cos_el = cos(el_r)
-    sin_el = sin(el_r)
-    cos_phi = cos(geolat_r)
-    sin_phi = sin(geolat_r)
-    cos_az = cos(az_r)
-    sin_dec = sin_el*sin_phi + cos_el*cos_phi*cos_az
-    dec = arcsin(sin_dec) * r2d
-    cos_ha = (sin_el - sin_phi * sin_dec) / (cos_phi * cos(dec * d2r))
-    cos_ha = where(cos_ha <= -1.0, -0.99999, cos_ha)
-    cos_ha = where(cos_ha >= 1.0,  0.99999, cos_ha)
-    ha = arccos(cos_ha)
-    ha = where(sin(az_r) > 0.0, 2.0 * pi - ha, ha) * r2d
-
-    ra = lst*15.0-ha
-    ra = where(ra >= 360.0, ra - 360.0, ra)
-    ra = where(ra < 0.0, ra + 360.0, ra)
-
-    # Later
-    return ra, dec
+    incoords = _format_sphconv(l, b)
+    outcoords = SphericalGalactic2EquatorialOperator(degrees=True)(incoords)
+    return outcoords[..., 0], outcoords[..., 1]
 
 
-def _ra2ha(ra, lst):
+def equ2hor(ra, dec, time, date_obs=QubicPointing.DEFAULT_DATE_OBS,
+            latitude=DOMECLAT, longitude=DOMECLON):
     """
-    Converts a right ascension to an hour angle.
+    equ2hor(ra, dec, time, [date_obs, [latitude, [longitude]]]) -> az, el
+    Equatorial to horizontal spherical conversion. Angles are in degrees.
+
+    Parameters
+    ----------
+    time : array-like
+        Elapsed time in seconds since date_obs.
+    date_obs : string
+        The starting date, UTC.
+    latitude : float
+        The observer's latitude geolocation. Default is Dome C.
+    longitude : float
+        The observer's longitude geolocation. Default is Dome C.
+
+    Example
+    -------
+    >>> equ2hor(0, 0, 0, date_obs='2000-01-01 00:00:00')
+    (array(135.71997181016644), array(-10.785386358099927))
 
     """
-    return (lst - ra / 15.0) % 24
+    incoords, time = _format_sphconv(ra, dec, date_obs, time)
+    outcoords = SphericalEquatorial2HorizontalOperator(
+        'NE', time, latitude, longitude, degrees=True)(incoords)
+    return outcoords[..., 0], outcoords[..., 1]
+
+
+def hor2equ(azimuth, elevation, time, date_obs=QubicPointing.DEFAULT_DATE_OBS,
+            latitude=DOMECLAT, longitude=DOMECLON):
+    """
+    hor2equ(az, el, time, [date_obs, [latitude, [longitude]]]) -> ra, dec
+    Horizontal to equatorial spherical conversion. Angles are in degrees.
+
+
+    Parameters
+    ----------
+    time : array-like
+        Elapsed time in seconds since date_obs.
+    date_obs : string
+        The starting date, UTC.
+    latitude : float
+        The observer's latitude geolocation. Default is Dome C.
+    longitude : float
+        The observer's longitude geolocation. Default is Dome C.
+
+    Example
+    -------
+    >>> hor2equ(135.71997181016644, -10.785386358099927, 0,
+    ...         date_obs='2000-01-01 00:00:00')
+    (array(1.1927080055488187e-14), array(-1.2722218725854067e-14))
+
+    """
+    incoords, time = _format_sphconv(azimuth, elevation, date_obs, time)
+    outcoords = SphericalHorizontal2EquatorialOperator(
+        'NE', time, latitude, longitude, degrees=True)(incoords)
+    return outcoords[..., 0], outcoords[..., 1]
+
+
+def gal2hor(l, b, time, date_obs=QubicPointing.DEFAULT_DATE_OBS,
+            latitude=DOMECLAT, longitude=DOMECLON):
+    """
+    gal2hor(l, b, time, [date_obs, [latitude, [longitude]]]) -> az, el
+    Galactic to horizontal spherical conversion. Angles are in degrees.
+
+
+    Parameters
+    ----------
+    time : array-like
+        Elapsed time in seconds since date_obs.
+    date_obs : string
+        The starting date, UTC.
+    latitude : float
+        The observer's latitude geolocation. Default is Dome C.
+    longitude : float
+        The observer's longitude geolocation. Default is Dome C.
+
+    Example
+    -------
+    >>> gal2hor(0, 0, 0)
+    (array(50.35837815921487), array(39.212362279976155))
+
+    """
+    incoords, time = _format_sphconv(l, b, date_obs, time)
+    g2e = SphericalGalactic2EquatorialOperator(degrees=True)
+    e2h = SphericalEquatorial2HorizontalOperator(
+        'NE', time, latitude, longitude, degrees=True)
+    outcoords = e2h(g2e(incoords))
+    return outcoords[..., 0], outcoords[..., 1]
+
+
+def hor2gal(azimuth, elevation, time, date_obs=QubicPointing.DEFAULT_DATE_OBS,
+            latitude=DOMECLAT, longitude=DOMECLON):
+    """
+    hor2gal(az, el, time, [date_obs, [latitude, [longitude]]]) -> l, b
+    Horizontal to galactic spherical conversion. Angles are in degrees.
+
+    Parameters
+    ----------
+    time : array-like
+        Elapsed time in seconds since date_obs.
+    date_obs : string
+        The starting date, UTC.
+    latitude : float
+        The observer's latitude geolocation. Default is Dome C.
+    longitude : float
+        The observer's longitude geolocation. Default is Dome C.
+
+    Example
+    -------
+    >>> hor2gal(50.35837815921487, 39.212362279976155, 0)
+    (array(4.452776554048925e-14), array(-7.63333123551244e-14))
+
+    """
+    incoords, time = _format_sphconv(azimuth, elevation, date_obs, time)
+    h2e = SphericalHorizontal2EquatorialOperator(
+        'NE', time, latitude, longitude, degrees=True)
+    e2g = SphericalEquatorial2GalacticOperator(degrees=True)
+    outcoords = e2g(h2e(incoords))
+    return outcoords[..., 0], outcoords[..., 1]

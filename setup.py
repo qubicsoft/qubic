@@ -1,26 +1,20 @@
 #!/usr/bin/env python
 import os
-import re
-import sys
-from distutils.core import setup
-from subprocess import Popen, PIPE
+from numpy.distutils.core import setup
+from hooks import get_cmdclass, get_version
 
 # force sdist to copy files
 delattr(os, 'link')
 
-VERSION = '3.0.1'
+VERSION = '3.1'
 
-if any(c in sys.argv[1:] for c in ('install', 'sdist')):
-    init = open('qubic/__init__.py.in').readlines()
-    init += ['\n', '__version__ = ' + repr(VERSION) + '\n']
-    open('qubic/__init__.py', 'w').writelines(init)
-
+name = 'qubic'
 long_description = open('README.rst').read()
 keywords = 'scientific computing'
 platforms = 'MacOS X,Linux,Solaris,Unix,Windows'
 
-setup(name='qubic',
-      version=VERSION,
+setup(name=name,
+      version=get_version(name, VERSION),
       description='Simulation and map-making tools for the QUBIC experiment.',
       long_description=long_description,
       url='',
@@ -34,6 +28,7 @@ setup(name='qubic',
       package_data={'qubic': ['calfiles/*fits', 'data/*']},
       platforms=platforms.split(','),
       keywords=keywords.split(','),
+      cmdclass=get_cmdclass(),
       license='CeCILL-B',
       classifiers=[
           'Programming Language :: Python',

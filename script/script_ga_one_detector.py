@@ -7,6 +7,8 @@ from pyoperators import DiagonalOperator, PackOperator, pcg, rules_inplace
 from pysimulators import SphericalEquatorial2GalacticOperator
 from qubic import QubicAcquisition, QubicInstrument, create_sweeping_pointings
 
+np.random.seed(0)
+
 # acquisition parameters
 nside = 256
 racenter = 0.0      # deg
@@ -23,7 +25,7 @@ ts = 0.1            # seconds
 pointing = create_sweeping_pointings(
     [racenter, deccenter], duration, ts, angspeed, delta_az, nsweeps_el,
     angspeed_psi, maxpsi)
-pointing.angle_hwp = np.random.random_integers(0, 7, pointing.size) * 22.5
+pointing.angle_hwp = np.random.random_integers(0, 7, pointing.size) * 11.25
 
 # get the instrument model with only one detector
 idetector = 0

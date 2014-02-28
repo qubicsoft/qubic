@@ -1,4 +1,6 @@
+.coverage
+MANIFEST
 build
 dist
-MANIFEST
+htmlcov
 qubic/__init__.py

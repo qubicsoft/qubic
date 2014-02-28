@@ -1,17 +1,30 @@
 from __future__ import division
 
-import healpy as hp
 import numpy as np
 import os
+import qubic
 import shutil
-from qubic import QubicCalibration, QubicAcquisition, QubicInstrument
 from numpy.testing import assert_equal
+from pyoperators.utils.testing import skiptest
+from qubic import (
+    QubicCalibration, QubicAcquisition, QubicInstrument, QubicPointing)
+from qubic.io import read_map
 from uuid import uuid1
 
-inpath = os.path.join(os.path.dirname(__file__), 'data')
-input_map = hp.read_map(os.path.join(inpath, 'syn256.fits'))
-outpath = 'test-' + str(uuid1())[:8]
-os.mkdir(outpath)
+outpath = ''
+
+
+def setup():
+    global outpath
+    outpath = 'test-' + str(uuid1())[:8]
+    os.mkdir(outpath)
+
+
+def teardown():
+    shutil.rmtree(outpath)
+
+DATAPATH = os.path.join(os.path.dirname(qubic.__file__), 'data')
+input_map = read_map(os.path.join(DATAPATH, 'syn256_pol.fits'), field=0)
 
 ptg = [1., 0, 180]
 ptg2 = [1., 1, 180]
@@ -31,16 +44,21 @@ qubic = QubicInstrument('monochromatic,nopol', caltree, nu=160e9,
                         removed=removed, synthbeam_fraction=0.99)
 
 
-def test_qubicacquisition_pointing():
+@skiptest
+def test_pointing():
     def func(p, n):
-        obs = QubicAcquisition(qubic, p)
-        assert_equal(obs.block.n, n)
-        assert_equal(len(obs.pointing), sum(n))
+        p = np.asarray(p)
+        obs = QubicPointing(azimuth=p[..., 0], elevation=p[..., 1],
+                            pitch=p[..., 2])
+        acq = QubicAcquisition(qubic, obs)
+        assert_equal(acq.block.n, n)
+        assert_equal(len(acq.pointing), sum(n))
     for p, n in zip(ptgs, block_n):
         yield func, p, n
 
 
-def test_qubicacquisition_load_save():
+@skiptest
+def test_load_save():
     info = 'test\nconfig'
 
     def func_acquisition(obs, info):
@@ -69,13 +87,12 @@ def test_qubicacquisition_load_save():
         assert_equal(info, info2)
 
     for p in ptgs:
-        obs = QubicAcquisition(qubic, p)
-        P = obs.get_projection_peak_operator()
+        p = np.asarray(p)
+        obs = QubicPointing(azimuth=p[..., 0], elevation=p[..., 1],
+                            pitch=p[..., 2])
+        acq = QubicAcquisition(qubic, obs)
+        P = acq.get_projection_peak_operator()
         tod = P(input_map)
-        yield func_acquisition, obs, info
-        yield func_observation, obs, tod, info
-        yield func_simulation, obs, input_map, tod, info
-
-
-def teardown():
-    shutil.rmtree(outpath)
+        yield func_acquisition, acq, info
+        yield func_observation, acq, tod, info
+        yield func_simulation, acq, input_map, tod, info

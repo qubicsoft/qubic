@@ -96,15 +96,17 @@ class QubicCalibration(object):
 
         elif name == 'hornarray':
             hdus = fits.open(self.hornarray)
-            h = hdus[0].header
-            version = h['format version']
-            spacing = h['spacing']
+            version = hdus[0].header['format version']
             if version == '1.0':
+                h = hdus[0].header
+                spacing = h['spacing']
                 center = hdus[1].data
                 shape = center.shape[:-1]
                 layout = Layout(shape, center=center, radius=h['innerrad'])
                 layout.spacing = spacing
-            else:
+            elif version == '2.0':
+                h = hdus[0].header
+                spacing = h['spacing']
                 xreflection = h['xreflection']
                 yreflection = h['yreflection']
                 radius = h['radius']
@@ -112,6 +114,19 @@ class QubicCalibration(object):
                 layout = LayoutGridCircles(
                     removed.shape, spacing, removed=removed, radius=radius,
                     xreflection=xreflection, yreflection=yreflection)
+            else:
+                h = hdus[1].header
+                spacing = h['spacing']
+                xreflection = h['xreflection']
+                yreflection = h['yreflection']
+                angle = h['angle']
+                radius = h['radius']
+                removed = hdus[2].data.view(bool)
+                layout = LayoutGridCircles(
+                    removed.shape, spacing, removed=removed, radius=radius,
+                    xreflection=xreflection, yreflection=yreflection,
+                    angle=angle)
+                layout.setattr_packed('id', np.arange(len(layout.packed)))
             layout.kappa = h['kappa']
             return layout
 

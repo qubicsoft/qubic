@@ -46,7 +46,7 @@ tod = H(input_map)
 # noise
 white = 10
 alpha = 1
-fknee = 0.025
+fknee = 1  # Hz
 psd = _gaussian_psd_1f(len(acq.pointing), sigma=white, fknee=fknee,
                        fslope=alpha, sampling_frequency=1/ts)
 invntt = acq.get_invntt_operator(sigma=white, fknee=fknee, fslope=alpha,

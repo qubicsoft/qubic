@@ -10,8 +10,8 @@ import yaml
 from astropy.time import TimeDelta
 from glob import glob
 from pyoperators import (
-    DenseOperator, DenseBlockDiagonalOperator, HomothetyOperator,
-    IdentityOperator, Rotation3dOperator)
+    DenseBlockDiagonalOperator, HomothetyOperator, IdentityOperator,
+    Rotation2dOperator, Rotation3dOperator)
 from pyoperators.utils import ifirst
 from pysimulators import (
     Acquisition, CartesianEquatorial2HorizontalOperator,
@@ -124,8 +124,11 @@ class QubicAcquisition(Acquisition):
         Return the rotation matrix for the half-wave plate.
 
         """
-        if not self.instrument.sky.polarized:
+        if self.instrument.sky.kind == 'I':
             return IdentityOperator()
+        if self.instrument.sky.kind == 'QU':
+            return Rotation2dOperator(-4 * self.pointing.angle_hwp,
+                                      degrees=True)
         return Rotation3dOperator('X', -4 * self.pointing.angle_hwp,
                                   degrees=True)
 
@@ -134,16 +137,19 @@ class QubicAcquisition(Acquisition):
         Return operator for the polarizer grid.
 
         """
-        if not self.instrument.sky.polarized:
+        if self.instrument.sky.kind == 'I':
             return HomothetyOperator(1 / self.instrument.detector.ngrids)
 
         if self.instrument.detector.ngrids == 1:
-            return DenseOperator([[0.5, 0.5, 0],
-                                  [0.5,-0.5, 0]])
+            raise ValueError(
+                'Polarized input not handled by a single detector grid.')
 
         grid = self.instrument.detector.packed.quadrant // 4
         z = np.zeros(self.get_ndetectors())
-        data = np.array([z + 0.5, 0.5 - grid, z]).T[:, None, None, :]
+        if self.instrument.sky.kind == 'QU':
+            data = np.array([0.5 - grid, z]).T[:, None, None, :]
+        else:
+            data = np.array([z + 0.5, 0.5 - grid, z]).T[:, None, None, :]
         return DenseBlockDiagonalOperator(data)
 
     def get_projection_peak_operator(self, rotation=None, dtype=None,

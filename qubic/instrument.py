@@ -9,10 +9,12 @@ import numexpr as ne
 import numpy as np
 from pyoperators import Spherical2CartesianOperator, MPI
 from pyoperators.utils import strenum
-from pysimulators import Instrument, Layout, ProjectionOperator, _flib as flib
+from pysimulators import Instrument, Layout, ProjectionOperator
 from pysimulators.interfaces.healpy import Cartesian2HealpixOperator
-from pysimulators.sparse import FSRMatrix, FSRRotation3dMatrix
+from pysimulators.sparse import (
+    FSRMatrix, FSRRotation2dMatrix, FSRRotation3dMatrix)
 from scipy.constants import c, pi
+from . import _flib as flib
 from .calibration import QubicCalibration
 from .utils import _compress_mask, _uncompress_mask
 
@@ -55,11 +57,11 @@ class QubicInstrument(Instrument):
         if calibration is None:
             calibration = QubicCalibration()
         name = name.replace(' ', '').lower()
-        names = 'monochromatic,nopol', 'monochromatic'
+        names = 'monochromatic', 'monochromatic,qu', 'monochromatic,nopol'
         if name not in names:
             raise ValueError(
                 "The only modes implemented are {0}.".format(
-                strenum(names, 'and')))
+                    strenum(names, 'and')))
         self.calibration = calibration
         layout = self._get_detector_layout(name, removed, ngrids)
         Instrument.__init__(self, name, layout, commin=commin, commout=commout)
@@ -93,10 +95,13 @@ class QubicInstrument(Instrument):
     def _init_sky(self, nside):
         class Sky(object):
             pass
+        names = self.name.split(',')
         self.sky = Sky()
         self.sky.npixel = 12 * nside**2
         self.sky.nside = nside
-        self.sky.polarized = 'nopol' not in self.name.split(',')
+        self.sky.kind = 'I' if 'nopol' in names \
+                            else 'QU' if 'qu' in names \
+                                      else 'IQU'
 
     def _init_primary_beam(self):
         class PrimaryBeam(object):
@@ -192,14 +197,13 @@ class QubicInstrument(Instrument):
         else:
             dtype_index = np.dtype(np.int32)
 
-        if not self.sky.polarized:
-            s = FSRMatrix(
-                (ndetectors*ntimes, 12*nside**2), ncolmax=ncolmax, dtype=dtype,
-                dtype_index=dtype_index, verbose=verbose)
-        else:
-            s = FSRRotation3dMatrix(
-                (ndetectors*ntimes*3, 12*nside**2*3), ncolmax=ncolmax,
-                dtype=dtype, dtype_index=dtype_index, verbose=verbose)
+        cls = {'I': FSRMatrix,
+               'QU': FSRRotation2dMatrix,
+               'IQU': FSRRotation3dMatrix}[self.sky.kind]
+        ndims = len(self.sky.kind)
+        s = cls((ndetectors * ntimes * ndims, 12 * nside**2 * ndims),
+                ncolmax=ncolmax, dtype=dtype, dtype_index=dtype_index,
+                verbose=verbose)
 
         index = s.data.index.reshape((ndetectors, ntimes, ncolmax))
         for i in xrange(ndetectors):
@@ -208,13 +212,13 @@ class QubicInstrument(Instrument):
             e_ni = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
             index[i] = Cartesian2HealpixOperator(nside)(e_ni)
 
-        if not self.sky.polarized:
+        if self.sky.kind == 'I':
             value = s.data.value.reshape(ndetectors, ntimes, ncolmax)
             value[...] = vals[:, None, :]
             shapeout = (ndetectors, ntimes)
         else:
-            func = 'pointing_matrix_i{0}_m{1}'.format(dtype_index.itemsize,
-                                                      dtype.itemsize)
+            func = 'pointing_matrix_rot{0}d_i{1}_m{2}'.format(
+                ndims, dtype_index.itemsize, dtype.itemsize)
             try:
                 getattr(flib.polarization, func)(
                     rotation.data.T, direction.T, s.data.ravel().view(np.int8),
@@ -223,7 +227,10 @@ class QubicInstrument(Instrument):
                 raise TypeError(
                     'The projection matrix cannot be created with types: {0} a'
                     'nd {1}.'.format(dtype, dtype_index))
-            shapeout = (ndetectors, ntimes, 3)
+            if self.sky.kind == 'QU':
+                shapeout = (ndetectors, ntimes, 2)
+            else:
+                shapeout = (ndetectors, ntimes, 3)
 
         return ProjectionOperator(s, shapeout=shapeout)
 

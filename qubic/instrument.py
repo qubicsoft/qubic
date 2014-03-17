@@ -27,6 +27,7 @@ class QubicInstrument(Instrument):
 
     """
     def __init__(self, name, calibration=None, removed=None,
+                 detector_tau=0.01,
                  synthbeam_fraction=0.99, ngrids=None, nside=256,
                  commin=MPI.COMM_WORLD, commout=MPI.COMM_WORLD, **keywords):
         """
@@ -39,6 +40,8 @@ class QubicInstrument(Instrument):
             The calibration tree.
         removed : str or 2D-array of bool
             Array specifying which bolometers are removed.
+        detector_tau : array-like
+            The detector time constants in seconds.
         nside : int, optional
             The Healpix nside of the sky.
         synthbeam_fraction: float, optional
@@ -63,7 +66,7 @@ class QubicInstrument(Instrument):
                 "The only modes implemented are {0}.".format(
                     strenum(names, 'and')))
         self.calibration = calibration
-        layout = self._get_detector_layout(name, removed, ngrids)
+        layout = self._get_detector_layout(name, removed, ngrids, detector_tau)
         Instrument.__init__(self, name, layout, commin=commin, commout=commout)
         self._init_sky(nside)
         self._init_primary_beam()
@@ -71,7 +74,7 @@ class QubicInstrument(Instrument):
         self._init_horns()
         self._init_synthetic_beam(synthbeam_fraction)
 
-    def _get_detector_layout(self, name, removed, ngrids):
+    def _get_detector_layout(self, name, removed, ngrids, tau):
         polarized = 'nopol' not in name.split(',')
         if ngrids is None:
             ngrids = 2 if polarized else 1
@@ -88,7 +91,7 @@ class QubicInstrument(Instrument):
                 removed = _uncompress_mask(removed).reshape(shape)
             removed_ |= removed
         layout = Layout(shape, vertex=vertex, removed=removed_, index=index,
-                        quadrant=quadrant)
+                        quadrant=quadrant, tau=tau)
         layout.ngrids = ngrids
         return layout
 

@@ -80,6 +80,11 @@ class QubicPointing(PointingHorizontal):
             sampling_period=sampling_period, latitude=latitude,
             longitude=longitude, dtype=dtype, copy=copy)
 
+    def get_sampling_period(self):
+        if self.size < 2:
+            return self.DEFAULT_SAMPLING_PERIOD
+        return self.time[1] - self.time[0]
+
     def tohealpix(self, nside):
         time = self.date_obs + TimeDelta(self.time, format='sec')
         c2h = Cartesian2HealpixOperator(nside)

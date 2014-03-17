@@ -17,7 +17,8 @@ from pysimulators import (
     Acquisition, CartesianEquatorial2HorizontalOperator,
     CartesianGalactic2EquatorialOperator,
     CartesianHorizontal2EquatorialOperator,
-    CartesianEquatorial2GalacticOperator)
+    CartesianEquatorial2GalacticOperator,
+    ConvolutionTruncatedExponentialOperator)
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from .calibration import QubicCalibration
 from .instrument import QubicInstrument
@@ -118,6 +119,18 @@ class QubicAcquisition(Acquisition):
 
         """
         return HealpixConvolutionGaussianOperator(fwhm=fwhm, **keywords)
+
+    def get_detector_response_operator(self, tau=None):
+        """
+        Return the operator for the bolometer responses.
+
+        """
+        if tau is None:
+            tau = self.instrument.detector.packed.tau
+        sampling_period = self.pointing.get_sampling_period()
+        shapein = (self.get_ndetectors(), self.pointing.size)
+        return ConvolutionTruncatedExponentialOperator(tau / sampling_period,
+                                                       shapein=shapein)
 
     def get_hwp_operator(self):
         """

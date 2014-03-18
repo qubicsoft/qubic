@@ -11,7 +11,7 @@ from astropy.time import TimeDelta
 from glob import glob
 from pyoperators import (
     DenseBlockDiagonalOperator, HomothetyOperator, IdentityOperator,
-    Rotation2dOperator, Rotation3dOperator)
+    ReshapeOperator, Rotation2dOperator, Rotation3dOperator)
 from pyoperators.utils import ifirst
 from pysimulators import (
     Acquisition, CartesianEquatorial2HorizontalOperator,
@@ -157,13 +157,16 @@ class QubicAcquisition(Acquisition):
             raise ValueError(
                 'Polarized input not handled by a single detector grid.')
 
+        nd = len(self.instrument)
+        nt = len(self.pointing)
         grid = self.instrument.detector.packed.quadrant // 4
         z = np.zeros(self.get_ndetectors())
         if self.instrument.sky.kind == 'QU':
             data = np.array([0.5 - grid, z]).T[:, None, None, :]
         else:
             data = np.array([z + 0.5, 0.5 - grid, z]).T[:, None, None, :]
-        return DenseBlockDiagonalOperator(data)
+        return ReshapeOperator((nd, nt, 1), (nd, nt)) * \
+            DenseBlockDiagonalOperator(data)
 
     def get_projection_peak_operator(self, rotation=None, dtype=None,
                                      synthbeam_fraction=None):

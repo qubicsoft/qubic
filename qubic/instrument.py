@@ -113,8 +113,12 @@ class QubicInstrument(Instrument):
         class Sky(object):
             pass
         names = self.name.split(',')
+        size = 12 * nside**2
         self.sky = Sky()
-        self.sky.npixel = 12 * nside**2
+        self.sky.size = size
+        self.sky.shape = (size,) if 'nopol' in names \
+                                 else (size, 2) if 'qu' in names \
+                                                else (size, 3)
         self.sky.nside = nside
         self.sky.kind = 'I' if 'nopol' in names \
                             else 'QU' if 'qu' in names \

@@ -181,7 +181,7 @@ class QubicAcquisition(Acquisition):
             DenseBlockDiagonalOperator(data)
 
     def get_projection_peak_operator(self, rotation=None, dtype=None,
-                                     synthbeam_fraction=None):
+                                     synthbeam_fraction=None, verbose=True):
         """
         Return the projection operator for the peak sampling.
 
@@ -198,7 +198,8 @@ class QubicAcquisition(Acquisition):
         if rotation is None:
             rotation = self.get_rotation_g2i()
         return self.instrument.get_projection_peak_operator(
-            rotation, synthbeam_fraction=synthbeam_fraction, dtype=dtype)
+            rotation, synthbeam_fraction=synthbeam_fraction, dtype=dtype,
+            verbose=verbose)
 
     @classmethod
     def load(cls, filename, instrument=None, selection=None):

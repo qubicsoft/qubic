@@ -27,7 +27,8 @@ class QubicInstrument(Instrument):
 
     """
     def __init__(self, name, calibration=None, removed=None,
-                 detector_tau=0.01,
+                 detector_sigma=10, detector_fknee=0, detector_fslope=1,
+                 detector_ncorr=10, detector_tau=0.01,
                  synthbeam_fraction=0.99, ngrids=None, nside=256,
                  commin=MPI.COMM_WORLD, commout=MPI.COMM_WORLD, **keywords):
         """
@@ -42,6 +43,14 @@ class QubicInstrument(Instrument):
             Array specifying which bolometers are removed.
         detector_tau : array-like
             The detector time constants in seconds.
+        detector_sigma : array-like
+            The standard deviation of the detector white noise component.
+        detector_fknee : array-like
+            The detector 1/f knee frequency in Hertz.
+        detector_fslope : array-like
+            The detector 1/f slope index.
+        detector_ncorr : int
+            The detector 1/f correlation length.
         nside : int, optional
             The Healpix nside of the sky.
         synthbeam_fraction: float, optional
@@ -66,7 +75,9 @@ class QubicInstrument(Instrument):
                 "The only modes implemented are {0}.".format(
                     strenum(names, 'and')))
         self.calibration = calibration
-        layout = self._get_detector_layout(name, removed, ngrids, detector_tau)
+        layout = self._get_detector_layout(
+            name, removed, ngrids, detector_sigma, detector_fknee,
+            detector_fslope, detector_ncorr, detector_tau)
         Instrument.__init__(self, name, layout, commin=commin, commout=commout)
         self._init_sky(nside)
         self._init_primary_beam()
@@ -74,7 +85,8 @@ class QubicInstrument(Instrument):
         self._init_horns()
         self._init_synthetic_beam(synthbeam_fraction)
 
-    def _get_detector_layout(self, name, removed, ngrids, tau):
+    def _get_detector_layout(self, name, removed, ngrids, sigma, fknee, fslope,
+                             ncorr, tau):
         polarized = 'nopol' not in name.split(',')
         if ngrids is None:
             ngrids = 2 if polarized else 1
@@ -91,7 +103,9 @@ class QubicInstrument(Instrument):
                 removed = _uncompress_mask(removed).reshape(shape)
             removed_ |= removed
         layout = Layout(shape, vertex=vertex, removed=removed_, index=index,
-                        quadrant=quadrant, tau=tau)
+                        quadrant=quadrant, sigma=sigma, fknee=fknee,
+                        fslope=fslope, tau=tau)
+        layout.ncorr = ncorr
         layout.ngrids = ngrids
         return layout
 

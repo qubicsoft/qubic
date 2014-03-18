@@ -145,6 +145,18 @@ class QubicAcquisition(Acquisition):
         return Rotation3dOperator('X', -4 * self.pointing.angle_hwp,
                                   degrees=True)
 
+    def get_invntt_operator(self):
+        """
+        Return the inverse time-time noise correlation matrix as an Operator.
+
+        """
+
+        l = self.instrument.detector.packed
+        fs = 1 / self.pointing.get_sampling_period()
+        return Acquisition.get_invntt_operator(
+            self, sigma=l.sigma, fknee=l.fknee, fslope=l.fslope,
+            sampling_frequency=fs, ncorr=self.instrument.detector.ncorr)
+
     def get_polarizer_operator(self):
         """
         Return operator for the polarizer grid.

@@ -3,6 +3,5 @@ include hooks.py
 include README.rst
 include qubic/__init__.py.in
 exclude qubic/__init__.py
-include qubic/script/*.py
 exclude qubic/module_polarization.f90
 graft test/data

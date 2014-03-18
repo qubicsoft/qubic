@@ -4,13 +4,32 @@ import numpy as np
 from progressbar import ProgressBar, Bar, ETA, Percentage
 
 
+class _ProgressBar(ProgressBar):
+    def update(self, n=None):
+        if n is not None:
+            ProgressBar.update(self, n)
+            return
+        ProgressBar.update(self, self.currval + 1)
+        if self.currval >= self.maxval:
+            self.finish()
+
+
 def progress_bar(n, info=''):
     """
     Return a default progress bar.
 
+    Example
+    -------
+    >>> import time
+    >>> n = 10
+    >>> bar = progress_bar(n, 'LOOP')
+    >>> for i in range(n):
+    ...     time.sleep(1)
+    ...     bar.update()
+
     """
-    return ProgressBar(widgets=[info, Percentage(), Bar('=', '[', ']'),
-                                ETA()], maxval=n).start()
+    return _ProgressBar(widgets=[info, Percentage(), Bar('=', '[', ']'),
+                                 ETA()], maxval=n).start()
 
 
 def _compress_mask(mask):

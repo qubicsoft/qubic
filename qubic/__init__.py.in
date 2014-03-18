@@ -4,4 +4,5 @@ from .calibration import *
 from .cl import *
 from .instrument import *
 from .acquisition import *
+from .mapmaking import *
 from .pointings import *

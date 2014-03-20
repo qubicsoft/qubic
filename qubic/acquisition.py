@@ -10,8 +10,8 @@ import yaml
 from astropy.time import TimeDelta
 from glob import glob
 from pyoperators import (
-    DenseBlockDiagonalOperator, HomothetyOperator, IdentityOperator,
-    ReshapeOperator, Rotation2dOperator, Rotation3dOperator)
+    I, BlockRowOperator, DenseBlockDiagonalOperator, HomothetyOperator,
+    IdentityOperator, ReshapeOperator, Rotation2dOperator, Rotation3dOperator)
 from pyoperators.utils import ifirst
 from pysimulators import (
     Acquisition, CartesianEquatorial2HorizontalOperator,
@@ -173,12 +173,25 @@ class QubicAcquisition(Acquisition):
         nt = len(self.pointing)
         grid = self.instrument.detector.packed.quadrant // 4
         z = np.zeros(self.get_ndetectors())
-        if self.instrument.sky.kind == 'QU':
-            data = np.array([0.5 - grid, z]).T[:, None, None, :]
-        else:
-            data = np.array([z + 0.5, 0.5 - grid, z]).T[:, None, None, :]
+        data = np.array([z + 0.5, 0.5 - grid, z]).T[:, None, None, :]
         return ReshapeOperator((nd, nt, 1), (nd, nt)) * \
             DenseBlockDiagonalOperator(data)
+
+    def get_add_grids_operator(self):
+        """ Return operator to add signal from detector pairs. """
+        nd = len(self.instrument)
+        if nd % 2 != 0:
+            raise ValueError('Odd number of detectors.')
+        partitionin = 2 * (len(self.instrument) // 2,)
+        return BlockRowOperator([I, I], axisin=0, partitionin=partitionin)
+
+    def get_subtract_grids_operator(self):
+        """ Return operator to subtract signal from detector pairs. """
+        nd = len(self.instrument)
+        if nd % 2 != 0:
+            raise ValueError('Odd number of detectors.')
+        partitionin = 2 * (len(self.instrument) // 2,)
+        return BlockRowOperator([I, -I], axisin=0, partitionin=partitionin)
 
     def get_projection_peak_operator(self, rotation=None, dtype=None,
                                      synthbeam_fraction=None, verbose=True):

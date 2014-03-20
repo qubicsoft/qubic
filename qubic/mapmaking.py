@@ -46,6 +46,8 @@ def map2tod(instrument, obs, map, convolution=True):
 
     with rule_manager(inplace=True):
         H = response * polarizer * (hwp * projection)
+    if acq.instrument.sky == 'QU':
+        H = acq.get_subtract_grid_operator() * H
 
     tod = H(map)
 
@@ -66,6 +68,8 @@ def _tod2map(acq, tod, coverage_threshold, disp, tol):
     response = acq.get_detector_response_operator()
     with rule_manager(inplace=True):
         H = response * polarizer * (hwp * projection)
+    if acq.instrument.sky == 'QU':
+        H = acq.get_subtract_grid_operator() * H
 
     invNtt = acq.get_invntt_operator()
     preconditioner = DiagonalOperator(1/coverage[mask], broadcast='rightward')

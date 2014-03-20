@@ -5,9 +5,10 @@ import os
 import qubic
 import shutil
 from numpy.testing import assert_equal
-from pyoperators.utils.testing import skiptest
+from pyoperators.utils.testing import assert_same, skiptest
 from qubic import (
-    QubicCalibration, QubicAcquisition, QubicInstrument, QubicPointing)
+    QubicCalibration, QubicAcquisition, QubicInstrument, QubicPointing,
+    create_random_pointings, gal2equ, map2tod)
 from qubic.io import read_map
 from uuid import uuid1
 
@@ -24,7 +25,10 @@ def teardown():
     shutil.rmtree(outpath)
 
 DATAPATH = os.path.join(os.path.dirname(qubic.__file__), 'data')
-input_map = read_map(os.path.join(DATAPATH, 'syn256_pol.fits'), field=0)
+input_map = read_map(os.path.join(DATAPATH, 'syn256_pol.fits'))
+np.random.seed(0)
+center = gal2equ(0, 90)
+observation = create_random_pointings(center, 100, 10)
 
 ptg = [1., 0, 180]
 ptg2 = [1., 1, 180]
@@ -96,3 +100,13 @@ def test_load_save():
         yield func_acquisition, acq, info
         yield func_observation, acq, tod, info
         yield func_simulation, acq, input_map, tod, info
+
+
+def test_add_subtract_grid_operator():
+    instrument = QubicInstrument('monochromatic')
+    tod = map2tod(instrument, observation, input_map, convolution=False)
+    acq = QubicAcquisition(instrument, observation)
+    add = acq.get_add_grids_operator()
+    sub = acq.get_subtract_grids_operator()
+    assert_same(add(tod), tod[:992] + tod[992:])
+    assert_same(sub(tod), tod[:992] - tod[992:])

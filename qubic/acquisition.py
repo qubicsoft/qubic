@@ -129,6 +129,8 @@ class QubicAcquisition(Acquisition):
             tau = self.instrument.detector.packed.tau
         sampling_period = self.pointing.get_sampling_period()
         shapein = (self.get_ndetectors(), self.pointing.size)
+        if sampling_period == 0:
+            return IdentityOperator(shapein)
         return ConvolutionTruncatedExponentialOperator(tau / sampling_period,
                                                        shapein=shapein)
 

@@ -125,8 +125,8 @@ class QubicCalibration(object):
                 layout = LayoutGridCircles(
                     removed.shape, spacing, removed=removed, radius=radius,
                     xreflection=xreflection, yreflection=yreflection,
-                    angle=angle)
-                layout.setattr_packed('id', np.arange(len(layout.packed)))
+                    angle=angle, startswith1=True)
+                layout.setattr_packed('id', np.arange(len(layout.packed)) + 1)
             layout.kappa = h['kappa']
             return layout
 

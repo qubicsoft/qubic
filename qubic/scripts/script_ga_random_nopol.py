@@ -11,8 +11,8 @@ import numpy as np
 import os
 import qubic
 from pyoperators import pcg, DiagonalOperator, UnpackOperator
-from pysimulators import SphericalGalactic2EquatorialOperator
-from qubic import QubicAcquisition, QubicInstrument, create_random_pointings
+from qubic import (
+    QubicAcquisition, QubicInstrument, create_random_pointings, gal2equ)
 
 # read the input map
 DATAPATH = os.path.join(os.path.dirname(qubic.__file__), 'data',
@@ -20,18 +20,17 @@ DATAPATH = os.path.join(os.path.dirname(qubic.__file__), 'data',
 input_map = qubic.io.read_map(DATAPATH, field='I_STOKES')
 
 # let's take the galactic north pole as the center of the observation field
-center_gal = [0, 90]
-center = SphericalGalactic2EquatorialOperator(degrees=True)(center_gal)
+center = gal2equ(0, 90)
 
 # instrument model
 instrument = QubicInstrument('monochromatic,nopol')
 
 # observation model
 np.random.seed(0)
-pointings = create_random_pointings(center, 1000, 10)
+sampling = create_random_pointings(center, 1000, 10)
 
 # acquisition model
-acq = QubicAcquisition(instrument, pointings)
+acq = QubicAcquisition(instrument, sampling)
 hit = acq.get_hitmap()
 
 C = acq.get_convolution_peak_operator()

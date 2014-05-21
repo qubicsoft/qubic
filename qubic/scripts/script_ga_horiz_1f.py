@@ -5,85 +5,74 @@ import matplotlib.pyplot as mp
 import numpy as np
 import os
 import qubic
-from pyoperators import pcg, DiagonalOperator, UnpackOperator
-from pysimulators import SphericalEquatorial2GalacticOperator
-from pysimulators.noises import _gaussian_psd_1f
-from qubic import QubicAcquisition, QubicInstrument, create_sweeping_pointings
+from qubic import (
+    QubicAcquisition, QubicInstrument, create_sweeping_pointings, equ2gal,
+    map2tod, tod2map_all, tod2map_each)
 
-# read the input map
 DATAPATH = os.path.join(os.path.dirname(qubic.__file__), 'data',
                         'syn256_pol.fits')
-input_map = qubic.io.read_map(DATAPATH, field='I_STOKES')
+x0 = qubic.io.read_map(DATAPATH)
 
-
-# instrument model
-instrument = QubicInstrument('monochromatic,nopol', synthbeam_fraction=0.99)
-
-# observation model
-np.random.seed(0)
-racenter = 0.0
-deccenter = -57.0
-angspeed = 1  # deg/sec
-delta_az = 15.
-angspeed_psi = 0.1
-maxpsi = 45.
+# parameters
+nside = 256
+racenter = 0.0      # deg
+deccenter = -57.0   # deg
+angspeed = 1        # deg/sec
+delta_az = 15.      # deg
+angspeed_psi = 0.1  # deg/sec
+maxpsi = 45.        # deg
 nsweeps_el = 300
-duration = 24   # hours
-ts = 20         # seconds
-pointings = create_sweeping_pointings(
+duration = 24       # hours
+ts = 20             # seconds
+
+# get the instrument model
+instrument = QubicInstrument('monochromatic',
+                             nside=nside,
+                             detector_tau=0.01,
+                             synthbeam_fraction=0.99,
+                             detector_sigma=1.,
+                             detector_fknee=1.,
+                             detector_alpha=1)
+
+# get the sampling model
+np.random.seed(0)
+sampling = create_sweeping_pointings(
     [racenter, deccenter], duration, ts, angspeed, delta_az, nsweeps_el,
     angspeed_psi, maxpsi)
+sampling.angle_hwp = np.random.random_integers(
+    0, 7, sampling.size) * 11.25
 
-# acquisition model
-acq = QubicAcquisition(instrument, pointings)
-C = acq.get_convolution_peak_operator()
-P = acq.get_projection_peak_operator()
-H = P * C
+# get the acquisition model = instrument model + pointing model
+acquisition = QubicAcquisition(instrument, sampling)
 
-# produce the Time-Ordered data
-tod = H(input_map)
+# simulate the timeline
+tod, x0_convolved = map2tod(acquisition, x0, convolution=True)
+tod_noisy = tod + acquisition.get_noise()
 
-# noise
-white = 10
-alpha = 1
-fknee = 1  # Hz
-psd = _gaussian_psd_1f(len(acq.pointing), sigma=white, fknee=fknee,
-                       fslope=alpha, sampling_frequency=1/ts)
-invntt = acq.get_invntt_operator(sigma=white, fknee=fknee, fslope=alpha,
-                                 sampling_frequency=1/ts, ncorr=10)
-noise = acq.get_noise(sigma=white, fknee=fknee, fslope=alpha,
-                      sampling_frequency=1/ts)
-
-# map-making
-coverage = P.pT1()
-mask = coverage > 10
-P.restrict(mask)
-unpack = UnpackOperator(mask)
-
-# map without covariance matrix
-solution1 = pcg(P.T * P, P.T(tod + noise),
-                M=DiagonalOperator(1/coverage[mask]), disp=True)
-output_map1 = unpack(solution1['x'])
-
-# map with covariance matrix
-solution2 = pcg(P.T * invntt * P, (P.T * invntt)(tod + noise),
-                M=DiagonalOperator(1/coverage[mask]), disp=True)
-output_map2 = unpack(solution2['x'])
-
-e2g = SphericalEquatorial2GalacticOperator(degrees=True)
-center = e2g([racenter, deccenter])
+# reconstruct using two methods
+map_all, cov_all = tod2map_all(acquisition, tod, tol=1e-2)
+map_each, cov_each = tod2map_each(acquisition, tod, tol=1e-2)
 
 
-def display(x, title):
-    x = x.copy()
-    x[~mask] = np.nan
-    hp.gnomview(x, rot=center, reso=5, xsize=600, min=-200, max=200,
-                title=title)
+# some display
+def display(map, cov, msg, sub):
+    for i, (kind, lim) in enumerate(zip('IQU', [200, 10, 10])):
+        map_ = map[..., i].copy()
+        mask = cov == 0
+        map_[mask] = np.nan
+        hp.gnomview(map_, rot=center, reso=5, xsize=400, min=-lim, max=lim,
+                    title=msg + ' ' + kind, sub=(3, 3, 3 * (sub-1) + i+1))
 
-display(C(input_map), 'Original convolved map')
-#hp.projplot(np.radians(pointings[..., 0]), np.radians(pointings[..., 1]))
-display(output_map1, 'Reconstructed map no invntt')
-display(output_map2, 'Reconstructed map with invntt')
-display(coverage, 'Coverage')
+center = equ2gal(racenter, deccenter)
 
+mp.figure(1)
+display(x0_convolved, cov_all, 'Original map', 1)
+display(map_all, cov_all, 'Reconstructed map', 2)
+display(map_all - x0_convolved, cov_all, 'Difference map', 3)
+mp.show()
+
+mp.figure(2)
+display(x0_convolved, cov_each, 'Original map', 1)
+display(map_each, cov_each, 'Reconstructed map', 2)
+display(map_each - x0_convolved, cov_each, 'Difference map', 3)
 mp.show()

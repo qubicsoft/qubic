@@ -1,7 +1,5 @@
 include .coveragerc
 include hooks.py
 include README.rst
-include qubic/__init__.py.in
-exclude qubic/__init__.py
 exclude qubic/module_polarization.f90
 graft test/data

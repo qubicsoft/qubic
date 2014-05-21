@@ -176,6 +176,9 @@ class SDistCommand(sdist):
     def make_release_tree(self, base_dir, files):
         write_version(self.distribution.get_name(),
                       self.distribution.get_version())
+        initfile = os.path.join(self.distribution.get_name(), '__init__.py')
+        if initfile not in files:
+            files.append(initfile)
         sdist.make_release_tree(self, base_dir, files)
 
 

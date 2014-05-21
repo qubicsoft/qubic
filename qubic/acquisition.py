@@ -159,6 +159,17 @@ class QubicAcquisition(Acquisition):
             self, sigma=l.sigma, fknee=l.fknee, fslope=l.fslope,
             sampling_frequency=fs, ncorr=self.instrument.detector.ncorr)
 
+    def get_noise(self, out=None):
+        """
+        Return a noisy timeline.
+
+        """
+        l = self.instrument.detector.packed
+        fs = 1 / self.pointing.get_sampling_period()
+        return Acquisition.get_noise(
+            self, sigma=l.sigma, fknee=l.fknee, fslope=l.fslope,
+            sampling_frequency=fs, out=out)
+
     def get_polarizer_operator(self):
         """
         Return operator for the polarizer grid.

@@ -18,7 +18,13 @@ input_map = qubic.io.read_map(DATAPATH, field='I_STOKES')
 
 
 # instrument model
-instrument = QubicInstrument('monochromatic,nopol', synthbeam_fraction=0.99)
+sigma = 10
+fknee = 1  # Hz
+fslope = 1
+ncorr = 10
+instrument = QubicInstrument('monochromatic,nopol', synthbeam_fraction=0.99,
+                             detector_sigma=sigma, detector_fknee=fknee,
+                             detector_fslope=fslope, detector_ncorr=ncorr)
 
 # observation model
 np.random.seed(0)
@@ -45,15 +51,10 @@ H = P * C
 tod = H(input_map)
 
 # noise
-white = 10
-alpha = 1
-fknee = 1  # Hz
-psd = _gaussian_psd_1f(len(acq.pointing), sigma=white, fknee=fknee,
-                       fslope=alpha, sampling_frequency=1/ts)
-invntt = acq.get_invntt_operator(sigma=white, fknee=fknee, fslope=alpha,
-                                 sampling_frequency=1/ts, ncorr=10)
-noise = acq.get_noise(sigma=white, fknee=fknee, fslope=alpha,
-                      sampling_frequency=1/ts)
+psd = _gaussian_psd_1f(len(acq.sampling), sigma=sigma, fknee=fknee,
+                       fslope=fslope, sampling_frequency=1/ts)
+invntt = acq.get_invntt_operator()
+noise = acq.get_noise()
 
 # map-making
 coverage = P.pT1()

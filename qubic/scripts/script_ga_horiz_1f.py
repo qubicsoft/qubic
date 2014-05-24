@@ -28,21 +28,20 @@ ts = 20             # seconds
 # get the instrument model
 instrument = QubicInstrument('monochromatic',
                              nside=nside,
-                             detector_tau=0.01,
                              synthbeam_fraction=0.99,
+                             detector_tau=0.01,
                              detector_sigma=1.,
                              detector_fknee=1.,
-                             detector_alpha=1)
+                             detector_fslope=1)
 
 # get the sampling model
 np.random.seed(0)
 sampling = create_sweeping_pointings(
     [racenter, deccenter], duration, ts, angspeed, delta_az, nsweeps_el,
     angspeed_psi, maxpsi)
-sampling.angle_hwp = np.random.random_integers(
-    0, 7, sampling.size) * 11.25
+sampling.angle_hwp = np.random.random_integers(0, 7, len(sampling)) * 11.25
 
-# get the acquisition model = instrument model + pointing model
+# get the acquisition model = instrument model + sampling model
 acquisition = QubicAcquisition(instrument, sampling)
 
 # simulate the timeline

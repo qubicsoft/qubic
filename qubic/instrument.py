@@ -9,7 +9,7 @@ import numexpr as ne
 import numpy as np
 from pyoperators import Spherical2CartesianOperator, MPI
 from pyoperators.utils import strenum
-from pysimulators import Instrument, Layout, ProjectionOperator
+from pysimulators import Instrument, LayoutSpatialVertex, ProjectionOperator
 from pysimulators.interfaces.healpy import Cartesian2HealpixOperator
 from pysimulators.sparse import (
     FSRMatrix, FSRRotation2dMatrix, FSRRotation3dMatrix)
@@ -26,7 +26,7 @@ class QubicInstrument(Instrument):
     The QubicInstrument class. It represents the instrument setup.
 
     """
-    def __init__(self, name, calibration=None, removed=None,
+    def __init__(self, name, calibration=None,
                  detector_sigma=10, detector_fknee=0, detector_fslope=1,
                  detector_ncorr=10, detector_tau=0.01,
                  synthbeam_fraction=0.99, ngrids=None, nside=256,
@@ -39,8 +39,6 @@ class QubicInstrument(Instrument):
             'monochromatic' are available.
         calibration : QubicCalibration
             The calibration tree.
-        removed : str or 2D-array of bool
-            Array specifying which bolometers are removed.
         detector_tau : array-like
             The detector time constants in seconds.
         detector_sigma : array-like
@@ -76,8 +74,8 @@ class QubicInstrument(Instrument):
                     strenum(names, 'and')))
         self.calibration = calibration
         layout = self._get_detector_layout(
-            name, removed, ngrids, detector_sigma, detector_fknee,
-            detector_fslope, detector_ncorr, detector_tau)
+            name, ngrids, detector_sigma, detector_fknee, detector_fslope,
+            detector_ncorr, detector_tau)
         Instrument.__init__(self, name, layout, commin=commin, commout=commout)
         self._init_sky(nside)
         self._init_primary_beam()
@@ -85,8 +83,8 @@ class QubicInstrument(Instrument):
         self._init_horns()
         self._init_synthetic_beam(synthbeam_fraction)
 
-    def _get_detector_layout(self, name, removed, ngrids, sigma, fknee, fslope,
-                             ncorr, tau):
+    def _get_detector_layout(self, name, ngrids, sigma, fknee, fslope, ncorr,
+                             tau):
         polarized = 'nopol' not in name.split(',')
         if ngrids is None:
             ngrids = 2 if polarized else 1
@@ -98,13 +96,10 @@ class QubicInstrument(Instrument):
             removed_ = np.array([removed_, removed_])
             index = np.array([index, index + np.max(index) + 1], index.dtype)
             quadrant = np.array([quadrant, quadrant + 4], quadrant.dtype)
-        if removed is not None:
-            if isinstance(removed, str):
-                removed = _uncompress_mask(removed).reshape(shape)
-            removed_ |= removed
-        layout = Layout(shape, vertex=vertex, removed=removed_, index=index,
-                        quadrant=quadrant, sigma=sigma, fknee=fknee,
-                        fslope=fslope, tau=tau)
+        layout = LayoutSpatialVertex(
+            shape, 4, vertex=vertex, selection=~removed_, ordering=index,
+            quadrant=quadrant, sigma=sigma, fknee=fknee, fslope=fslope,
+            tau=tau)
         layout.ncorr = ncorr
         layout.ngrids = ngrids
         return layout
@@ -160,7 +155,7 @@ class QubicInstrument(Instrument):
                  ('nside', self.sky.nside),
                  ('synthbeam_fraction', self.synthetic_beam.fraction),
                  ('ngrids', self.detector.ngrids),
-                 ('removed', _compress_mask(self.detector.removed))]
+                 ('selection', _compress_mask(~self.detector.all.removed))]
         return 'Instrument:\n' + \
                '\n'.join(['    ' + a + ': ' + repr(v) for a, v in state]) + \
                '\n\nCalibration:\n' + '\n'. \
@@ -174,7 +169,7 @@ class QubicInstrument(Instrument):
 
         """
         a = mp.gca()
-        vertex = self.detector.packed.vertex.reshape((-1, 4, 2))
+        vertex = self.detector.vertex
         for v in vertex:
             a.add_patch(mp.Polygon(v, closed=True, fill=False, **keywords))
         if autoscale:
@@ -201,7 +196,7 @@ class QubicInstrument(Instrument):
         if dtype is None:
             dtype = np.float32
         dtype = np.dtype(dtype)
-        ndetectors = len(self.detector.packed)
+        ndetectors = len(self)
         if rotation.data.ndim == 2:
             ntimes = 1
         else:
@@ -268,8 +263,8 @@ def _peak_angles(q, kmax):
         (2 * kmax + 1)**2 = 25 peaks and a value of kmax=0 will only sample
         the central peak.
     """
-    ndetector = len(q.detector.packed)
-    center = q.detector.packed.center
+    ndetector = len(q)
+    center = q.detector.center
     lmbda = c / q.optics.nu
     dx = q.horn.spacing
     detvec = np.vstack([-center[..., 0],

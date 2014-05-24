@@ -7,7 +7,7 @@ import re
 from astropy.io import fits
 from glob import glob
 from os.path import join
-from pysimulators import Layout, LayoutGridCircles
+from pysimulators import LayoutSpatial, LayoutSpatialGridCircles
 
 __all__ = ['QubicCalibration']
 
@@ -102,7 +102,8 @@ class QubicCalibration(object):
                 spacing = h['spacing']
                 center = hdus[1].data
                 shape = center.shape[:-1]
-                layout = Layout(shape, center=center, radius=h['innerrad'])
+                layout = LayoutSpatial(shape, center=center,
+                                       radius=h['innerrad'])
                 layout.spacing = spacing
             elif version == '2.0':
                 h = hdus[0].header
@@ -110,9 +111,9 @@ class QubicCalibration(object):
                 xreflection = h['xreflection']
                 yreflection = h['yreflection']
                 radius = h['radius']
-                removed = hdus[1].data.view(bool)
-                layout = LayoutGridCircles(
-                    removed.shape, spacing, removed=removed, radius=radius,
+                selection = ~hdus[1].data.view(bool)
+                layout = LayoutSpatialGridCircles(
+                    removed.shape, spacing, selection=selection, radius=radius,
                     xreflection=xreflection, yreflection=yreflection)
             else:
                 h = hdus[1].header
@@ -121,12 +122,13 @@ class QubicCalibration(object):
                 yreflection = h['yreflection']
                 angle = h['angle']
                 radius = h['radius']
-                removed = hdus[2].data.view(bool)
-                layout = LayoutGridCircles(
-                    removed.shape, spacing, removed=removed, radius=radius,
+                selection = ~hdus[2].data.view(bool)
+                shape = selection.shape
+                layout = LayoutSpatialGridCircles(
+                    shape, spacing, selection=selection, radius=radius,
                     xreflection=xreflection, yreflection=yreflection,
-                    angle=angle, startswith1=True)
-                layout.setattr_packed('id', np.arange(len(layout.packed)) + 1)
+                    angle=angle, startswith1=True, id=None)
+                layout.id = np.arange(len(layout))
             layout.kappa = h['kappa']
             return layout
 

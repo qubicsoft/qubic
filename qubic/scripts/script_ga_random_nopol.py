@@ -20,12 +20,13 @@ DATAPATH = os.path.join(os.path.dirname(qubic.__file__), 'data',
 input_map = qubic.io.read_map(DATAPATH, field='I_STOKES')
 
 # let's take the galactic north pole as the center of the observation field
-center = gal2equ(0, 90)
+center_gal = 0, 90
+center = gal2equ(center_gal[0], center_gal[1])
 
 # instrument model
 instrument = QubicInstrument('monochromatic,nopol')
 
-# observation model
+# sampling model
 np.random.seed(0)
 sampling = create_random_pointings(center, 1000, 10)
 
@@ -49,6 +50,7 @@ unpack = UnpackOperator(mask)
 solution = pcg(P.T * P, P.T(tod),
                M=DiagonalOperator(1/coverage[mask]), disp=True)
 output_map = unpack(solution['x'])
+
 
 # some display
 def display(x, title):

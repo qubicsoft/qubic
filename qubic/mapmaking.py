@@ -140,7 +140,7 @@ def tod2map_each(acquisition, tod, coverage_threshold=0, disp=True, tol=1e-4):
     if disp:
         bar = progress_bar(len(instrument), 'TOD2MAP_EACH')
     for i, t in izip(instrument, tod):
-        acq = QubicAcquisition(i, acquisition.pointing)
+        acq = QubicAcquisition(i, acquisition.sampling)
         x_, n_ = _tod2map(acq, t[None, :], coverage_threshold, False, tol)
         x += x_
         n += n_

@@ -7,7 +7,7 @@ from numpy.random import random_sample as randomu
 from pyoperators import (
     Cartesian2SphericalOperator, Rotation3dOperator,
     Spherical2CartesianOperator)
-from pyoperators.utils import isscalarlike
+from pyoperators.utils import deprecated, isscalarlike
 from pysimulators import (
     PointingHorizontal, CartesianEquatorial2GalacticOperator,
     CartesianEquatorial2HorizontalOperator,
@@ -18,7 +18,7 @@ from pysimulators import (
     SphericalHorizontal2EquatorialOperator)
 from pysimulators.interfaces.healpy import Cartesian2HealpixOperator
 
-__all__ = ['QubicPointing',
+__all__ = ['QubicSampling',
            'create_random_pointings',
            'create_sweeping_pointings',
            'equ2gal',
@@ -32,7 +32,7 @@ DOMECLAT = -(75 + 6 / 60)
 DOMECLON = 123 + 20 / 60
 
 
-class QubicPointing(PointingHorizontal):
+class QubicSampling(PointingHorizontal):
     """
     Attributes
     ----------
@@ -58,32 +58,29 @@ class QubicPointing(PointingHorizontal):
 
     Examples
     --------
-    pointing = QubicPointing((azimuth, elevation, pitch))
-    pointing = QubicPointing(azimuth=azimuth, elevation=elevation,
-                             angle_hwp=angle_hwp)
+    pointing = QubicSampling(azimuth=azimuth, elevation=elevation,
+                             angle_hwp=angle_hwp, sampling_period=...)
+    pointing = QubicSampling(azimuth, elevation, pitch, angle_hwp,
+                             sampling_period=...)
 
     """
-    MANDATORY_NAMES = 'azimuth', 'elevation'
     DEFAULT_DATE_OBS = '2016-01-01 00:00:00'
-    DEFAULT_DTYPE = [('azimuth', float), ('elevation', float),
-                     ('pitch', float), ('angle_hwp', float), ('time', float)]
     DEFAULT_SAMPLING_PERIOD = 1
     DEFAULT_LATITUDE = DOMECLAT
     DEFAULT_LONGITUDE = DOMECLON
 
-    def __new__(cls, x=None, azimuth=None, elevation=None, pitch=None,
-                angle_hwp=None, time=None, date_obs=None, sampling_period=None,
-                latitude=None, longitude=None, dtype=None, copy=True):
-        return PointingHorizontal.__new__(
-            cls, x=x, azimuth=azimuth, elevation=elevation, pitch=pitch,
-            angle_hwp=angle_hwp, time=time, date_obs=date_obs,
-            sampling_period=sampling_period, latitude=latitude,
-            longitude=longitude, dtype=dtype, copy=copy)
+    def __init__(self, *args, **keywords):
+        angle_hwp = keywords.get('angle_hwp', None)
+        if len(args) == 4:
+            args = list(args)
+            angle_hwp = args.pop()
+        PointingHorizontal.__init__(self, angle_hwp=angle_hwp, *args,
+                                    **keywords)
 
-    def get_sampling_period(self):
-        if self.size < 2:
-            return self.DEFAULT_SAMPLING_PERIOD
-        return self.time[1] - self.time[0]
+    @property
+    @deprecated('use len() instead.')
+    def size(self):
+        return len(self)
 
     def tohealpix(self, nside):
         time = self.date_obs + TimeDelta(self.time, format='sec')
@@ -94,6 +91,8 @@ class QubicPointing(PointingHorizontal):
         s2c = Spherical2CartesianOperator('azimuth,elevation', degrees=True)
         rotation = c2h(e2g(h2e(s2c)))
         return rotation(np.array([self.azimuth, self.elevation]).T)
+
+QubicPointing = QubicSampling
 
 
 def create_random_pointings(center, npointings, dtheta, date_obs=None,
@@ -125,7 +124,7 @@ def create_random_pointings(center, npointings, dtheta, date_obs=None,
                                  (1 - cosdtheta) * randomu(npointings)))
     phi = randomu(npointings) * 360
     pitch = randomu(npointings) * 360
-    p = QubicPointing.zeros(
+    p = QubicSampling(
         npointings, date_obs=date_obs, sampling_period=sampling_period,
         latitude=latitude, longitude=longitude)
     time = p.date_obs + TimeDelta(p.time, format='sec')
@@ -186,7 +185,7 @@ def create_sweeping_pointings(
 
     """
     nsamples = int(np.ceil(duration * 3600 / sampling_period))
-    out = QubicPointing.zeros(
+    out = QubicPointing(
         nsamples, date_obs=date_obs, sampling_period=sampling_period,
         latitude=latitude, longitude=longitude)
     racenter = center[0]

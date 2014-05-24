@@ -28,28 +28,23 @@ __all__ = ['QubicAcquisition']
 
 class QubicAcquisition(Acquisition):
     """
-    The QubicAcquisition class, which represents the instrument and
-    pointing setups.
+    The QubicAcquisition class, which combines the instrument and
+    sampling models.
 
     """
-    def __init__(self, instrument, pointing, block_id=None, selection=None):
+    def __init__(self, instrument, sampling):
         """
         Parameters
         ----------
         instrument : str or QubicInstrument
             Module name (only 'monochromatic' for now), or a QubicInstrument
             instance.
-        pointing : array-like of shape (n,3) or sequence of
+        sampling : array-like of shape (n,3) or sequence of
             The triplets (θ,φ,ψ), where (φ,θ,ψ) are the Euler angles
             of the intrinsic ZY'Z'' rotations. Note the ordering of the angles.
             θ : co-latitude
             φ : longitude
             ψ : minus the position angle
-        block_id : string or sequence of, optional
-           The pointing block identifier.
-        selection : integer or sequence of, optional
-           The indices of the pointing sequence to be selected to construct
-           the pointing configuration.
 
         """
         if not isinstance(instrument, (QubicInstrument, str)):
@@ -58,12 +53,7 @@ class QubicAcquisition(Acquisition):
                                 instrument).__name__))
         if isinstance(instrument, str):
             raise NotImplementedError('Module names not fixed yet.')
-        Acquisition.__init__(self, instrument, pointing, block_id=block_id,
-                             selection=selection)
-        # XXX HACK
-        from .pointings import QubicPointing
-        if isinstance(pointing, QubicPointing):
-            self.pointing = pointing
+        Acquisition.__init__(self, instrument, sampling)
 
     def get_hitmap(self, nside=None):
         """
@@ -73,7 +63,7 @@ class QubicAcquisition(Acquisition):
         """
         if nside is None:
             nside = self.instrument.sky.nside
-        ipixel = self.pointing.tohealpix(nside)
+        ipixel = self.sampling.tohealpix(nside)
         npixel = 12 * nside**2
         return np.histogram(ipixel, bins=npixel, range=(0, npixel))[0]
 
@@ -82,7 +72,7 @@ class QubicAcquisition(Acquisition):
         Return the instrument-to-galactic rotation matrix.
 
         """
-        p = self.pointing
+        p = self.sampling
         time = p.date_obs + TimeDelta(p.time, format='sec')
         r = CartesianEquatorial2GalacticOperator() * \
             CartesianHorizontal2EquatorialOperator(
@@ -96,7 +86,7 @@ class QubicAcquisition(Acquisition):
         Return the galactic-to-instrument rotation matrix.
 
         """
-        p = self.pointing
+        p = self.sampling
         time = p.date_obs + TimeDelta(p.time, format='sec')
         r = Rotation3dOperator("ZY'Z''", p.azimuth, 90 - p.elevation, p.pitch,
                                degrees=True).T * \
@@ -126,9 +116,9 @@ class QubicAcquisition(Acquisition):
 
         """
         if tau is None:
-            tau = self.instrument.detector.packed.tau
-        sampling_period = self.pointing.get_sampling_period()
-        shapein = (self.get_ndetectors(), self.pointing.size)
+            tau = self.instrument.detector.tau
+        sampling_period = self.sampling.sampling_period
+        shapein = (len(self.instrument), len(self.sampling))
         if sampling_period == 0:
             return IdentityOperator(shapein)
         return ConvolutionTruncatedExponentialOperator(tau / sampling_period,
@@ -142,9 +132,9 @@ class QubicAcquisition(Acquisition):
         if self.instrument.sky.kind == 'I':
             return IdentityOperator()
         if self.instrument.sky.kind == 'QU':
-            return Rotation2dOperator(-4 * self.pointing.angle_hwp,
+            return Rotation2dOperator(-4 * self.sampling.angle_hwp,
                                       degrees=True)
-        return Rotation3dOperator('X', -4 * self.pointing.angle_hwp,
+        return Rotation3dOperator('X', -4 * self.sampling.angle_hwp,
                                   degrees=True)
 
     def get_invntt_operator(self):
@@ -152,9 +142,8 @@ class QubicAcquisition(Acquisition):
         Return the inverse time-time noise correlation matrix as an Operator.
 
         """
-
-        l = self.instrument.detector.packed
-        fs = 1 / self.pointing.get_sampling_period()
+        l = self.instrument.detector
+        fs = 1 / self.sampling.sampling_period
         return Acquisition.get_invntt_operator(
             self, sigma=l.sigma, fknee=l.fknee, fslope=l.fslope,
             sampling_frequency=fs, ncorr=self.instrument.detector.ncorr)
@@ -164,8 +153,8 @@ class QubicAcquisition(Acquisition):
         Return a noisy timeline.
 
         """
-        l = self.instrument.detector.packed
-        fs = 1 / self.pointing.get_sampling_period()
+        l = self.instrument.detector
+        fs = 1 / self.sampling.sampling_period
         return Acquisition.get_noise(
             self, sigma=l.sigma, fknee=l.fknee, fslope=l.fslope,
             sampling_frequency=fs, out=out)
@@ -183,9 +172,9 @@ class QubicAcquisition(Acquisition):
                 'Polarized input not handled by a single detector grid.')
 
         nd = len(self.instrument)
-        nt = len(self.pointing)
-        grid = self.instrument.detector.packed.quadrant // 4
-        z = np.zeros(self.get_ndetectors())
+        nt = len(self.sampling)
+        grid = self.instrument.detector.quadrant // 4
+        z = np.zeros(nd)
         data = np.array([z + 0.5, 0.5 - grid, z]).T[:, None, None, :]
         return ReshapeOperator((nd, nt, 1), (nd, nt)) * \
             DenseBlockDiagonalOperator(data)
@@ -213,7 +202,7 @@ class QubicAcquisition(Acquisition):
 
         Parameters
         ----------
-        rotation : array (npointings, 3, 3)
+        rotation : array (nsamplings, 3, 3)
             The Instrument-to-Reference rotation matrix.
         dtype : dtype
             The datatype of the elements in the projection matrix.

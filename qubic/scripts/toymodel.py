@@ -27,7 +27,7 @@ HORN_OPEN[10,10] = True
 HORN_OPEN[11,11] = True
 HORN_OPEN[0,1] = True
 HORN_OPEN[17,18] = True
-HORN_OPEN = ~qubic.horn.removed  # all open
+HORN_OPEN = ~qubic.horn.all.removed  # all open
 
 DETECTOR_OFFSET = [0, 0]  # [m]
 
@@ -56,7 +56,7 @@ secondary_beam = GaussianBeam(SECONDARY_BEAM_FWHM, backward=True)
 # HORNS
 ########
 nhorn_open = np.sum(HORN_OPEN)
-horn_vec = np.column_stack([qubic.horn.center[HORN_OPEN],
+horn_vec = np.column_stack([qubic.horn.all.center[HORN_OPEN],
                             np.zeros(nhorn_open)])
 
 
@@ -85,8 +85,8 @@ qubic.detector.vertex += DETECTOR_OFFSET
 header = create_fitsheader((ndet_x, ndet_x), cdelt=det_spacing, crval=(0, 0),
                            ctype=['X---CAR', 'Y---CAR'], cunit=['m', 'm'])
 detector_plane = DiscreteSurface.fromfits(header)
-integ = MaskOperator(qubic.detector.removed) * \
-        detector_plane.get_integration_operator(qubic.detector.vertex)
+integ = MaskOperator(qubic.detector.all.removed) * \
+        detector_plane.get_integration_operator(qubic.detector.all.vertex)
 
 
 ########

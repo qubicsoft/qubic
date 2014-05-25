@@ -11,7 +11,8 @@ from astropy.time import TimeDelta
 from glob import glob
 from pyoperators import (
     I, BlockRowOperator, DenseBlockDiagonalOperator, HomothetyOperator,
-    IdentityOperator, ReshapeOperator, Rotation2dOperator, Rotation3dOperator)
+    IdentityOperator, ReshapeOperator, Rotation2dOperator, Rotation3dOperator,
+    rule_manager)
 from pyoperators.utils import ifirst
 from pysimulators import (
     Acquisition, CartesianEquatorial2HorizontalOperator,
@@ -74,11 +75,12 @@ class QubicAcquisition(Acquisition):
         """
         p = self.sampling
         time = p.date_obs + TimeDelta(p.time, format='sec')
-        r = CartesianEquatorial2GalacticOperator() * \
-            CartesianHorizontal2EquatorialOperator(
-                'NE', time, p.latitude, p.longitude) * \
-            Rotation3dOperator("ZY'Z''", p.azimuth, 90 - p.elevation, p.pitch,
-                               degrees=True)
+        with rule_manager(none=False):
+            r = CartesianEquatorial2GalacticOperator() * \
+                CartesianHorizontal2EquatorialOperator(
+                    'NE', time, p.latitude, p.longitude) * \
+                Rotation3dOperator("ZY'Z''", p.azimuth, 90 - p.elevation,
+                                   p.pitch, degrees=True)
         return r
 
     def get_rotation_g2i(self):
@@ -88,11 +90,12 @@ class QubicAcquisition(Acquisition):
         """
         p = self.sampling
         time = p.date_obs + TimeDelta(p.time, format='sec')
-        r = Rotation3dOperator("ZY'Z''", p.azimuth, 90 - p.elevation, p.pitch,
-                               degrees=True).T * \
-            CartesianEquatorial2HorizontalOperator(
-                'NE', time, p.latitude, p.longitude) * \
-            CartesianGalactic2EquatorialOperator()
+        with rule_manager(none=False):
+            r = Rotation3dOperator("ZY'Z''", p.azimuth, 90 - p.elevation,
+                                   p.pitch, degrees=True).T * \
+                CartesianEquatorial2HorizontalOperator(
+                    'NE', time, p.latitude, p.longitude) * \
+                CartesianGalactic2EquatorialOperator()
         return r
 
     def get_convolution_peak_operator(self, fwhm=np.radians(0.64883707),

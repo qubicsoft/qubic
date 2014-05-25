@@ -132,13 +132,14 @@ class QubicAcquisition(Acquisition):
         Return the rotation matrix for the half-wave plate.
 
         """
+        shape = (len(self.instrument), len(self.sampling))
         if self.instrument.sky.kind == 'I':
-            return IdentityOperator()
+            return IdentityOperator(shapein=shape)
         if self.instrument.sky.kind == 'QU':
             return Rotation2dOperator(-4 * self.sampling.angle_hwp,
-                                      degrees=True)
+                                      degrees=True, shapein=shape + (2,))
         return Rotation3dOperator('X', -4 * self.sampling.angle_hwp,
-                                  degrees=True)
+                                  degrees=True, shapein=shape + (3,))
 
     def get_invntt_operator(self):
         """
@@ -161,6 +162,22 @@ class QubicAcquisition(Acquisition):
         return Acquisition.get_noise(
             self, sigma=l.sigma, fknee=l.fknee, fslope=l.fslope,
             sampling_frequency=fs, out=out)
+
+    def get_operator(self):
+        """
+        Return the operator of the acquisition.
+
+        """
+        projection = self.get_projection_peak_operator()
+        hwp = self.get_hwp_operator()
+        polarizer = self.get_polarizer_operator()
+        response = self.get_detector_response_operator()
+
+        with rule_manager(inplace=True):
+            H = response * polarizer * (hwp * projection)
+        if self.instrument.sky == 'QU':
+            H = self.get_subtract_grid_operator() * H
+        return H
 
     def get_polarizer_operator(self):
         """

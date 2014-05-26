@@ -29,8 +29,7 @@ class QubicInstrument(Instrument):
     def __init__(self, name, calibration=None,
                  detector_sigma=10, detector_fknee=0, detector_fslope=1,
                  detector_ncorr=10, detector_tau=0.01,
-                 synthbeam_fraction=0.99, ngrids=None, nside=256,
-                 commin=MPI.COMM_WORLD, commout=MPI.COMM_WORLD, **keywords):
+                 synthbeam_fraction=0.99, ngrids=None, nside=256, **keywords):
         """
         Parameters
         ----------
@@ -76,7 +75,7 @@ class QubicInstrument(Instrument):
         layout = self._get_detector_layout(
             name, ngrids, detector_sigma, detector_fknee, detector_fslope,
             detector_ncorr, detector_tau)
-        Instrument.__init__(self, name, layout, commin=commin, commout=commout)
+        Instrument.__init__(self, name, layout)
         self._init_sky(nside)
         self._init_primary_beam()
         self._init_optics(**keywords)

@@ -33,7 +33,8 @@ class QubicAcquisition(Acquisition):
     sampling models.
 
     """
-    def __init__(self, instrument, sampling):
+    def __init__(self, instrument, sampling, nprocs_instrument=None,
+                 nprocs_sampling=None, comm=None):
         """
         Parameters
         ----------
@@ -54,7 +55,9 @@ class QubicAcquisition(Acquisition):
                                 instrument).__name__))
         if isinstance(instrument, str):
             raise NotImplementedError('Module names not fixed yet.')
-        Acquisition.__init__(self, instrument, sampling)
+        Acquisition.__init__(self, instrument, sampling,
+                             nprocs_instrument=nprocs_instrument,
+                             nprocs_sampling=nprocs_sampling, comm=comm)
 
     def get_hitmap(self, nside=None):
         """

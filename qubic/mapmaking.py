@@ -4,7 +4,8 @@ import numpy as np
 from itertools import izip
 from pyoperators import (
     BlockColumnOperator, BlockDiagonalOperator, DiagonalOperator,
-    PackOperator, pcg, proxy_group, rule_manager)
+    MPIDistributionIdentityOperator, PackOperator, pcg, proxy_group,
+    rule_manager)
 from pysimulators import ProjectionOperator
 from .acquisition import QubicAcquisition
 from .utils import progress_bar
@@ -22,32 +23,40 @@ def _get_operator(acq, max_sampling=None):
         H = response * polarizer * (hwp * projection)
     if acq.instrument.sky == 'QU':
         H = acq.get_subtract_grid_operator() * H
+
     return H
 
 
 def _get_projection(acq, max_sampling=None):
     if max_sampling is None or len(acq.sampling) <= max_sampling:
-        return acq.get_projection_peak_operator()
+        P = acq.get_projection_peak_operator()
+    else:
+        n = int(np.ceil(len(acq.sampling) / max_sampling))
+        samplings = acq.sampling.split(n)
+        acqs = [QubicAcquisition(acq.instrument, _) for _ in samplings]
 
-    n = int(np.ceil(len(acq.sampling) / max_sampling))
-    samplings = acq.sampling.split(n)
-    acqs = [QubicAcquisition(acq.instrument, _) for _ in samplings]
-
-    def callback(i):
-        return acqs[i].get_projection_peak_operator()
-    return BlockColumnOperator(proxy_group(n, callback), axisout=1)
+        def callback(i):
+            return acqs[i].get_projection_peak_operator()
+        P = BlockColumnOperator(proxy_group(n, callback), axisout=1)
+    return _distribute(acq, P)
 
 
-def _get_projection_restricted(acq, mask, max_sampling=None):
-    n = int(np.ceil(len(acq.sampling) / max_sampling))
-    samplings = acq.sampling.split(n)
-    acqs = [QubicAcquisition(acq.instrument, _) for _ in samplings]
+def _get_projection_restricted(acq, P, mask, max_sampling=None):
+    if max_sampling is None or len(acq.sampling) <= max_sampling:
+        if acq.comm.size > 1:
+            P = P.operands[0]
+        P.restrict(mask)
+    else:
+        n = int(np.ceil(len(acq.sampling) / max_sampling))
+        samplings = acq.sampling.split(n)
+        acqs = [QubicAcquisition(acq.instrument, _) for _ in samplings]
 
-    def callback(i):
-        p = acqs[i].get_projection_peak_operator()
-        p.restrict(mask)
-        return p
-    return BlockColumnOperator(proxy_group(n, callback), axisout=1)
+        def callback(i):
+            p = acqs[i].get_projection_peak_operator()
+            p.restrict(mask)
+            return p
+        P = BlockColumnOperator(proxy_group(n, callback), axisout=1)
+    return _distribute(acq, P)
 
 
 def _get_hwp(acq, max_sampling=None):
@@ -61,6 +70,12 @@ def _get_hwp(acq, max_sampling=None):
     def callback(i):
         return acqs[i].get_hwp_operator()
     return BlockDiagonalOperator(proxy_group(n, callback), axisout=1)
+
+
+def _distribute(acq, H):
+    if acq.comm.size > 1:
+        H = H(MPIDistributionIdentityOperator(acq.comm))
+    return H
 
 
 def map2tod(acq, map, convolution=False, max_sampling=None):
@@ -114,11 +129,8 @@ def _tod2map(acq, tod, coverage_threshold, disp, max_sampling, tol):
     if kind == 'IQU':
         coverage = coverage[..., 0]
     mask = coverage > coverage_threshold
-    if isinstance(projection, ProjectionOperator):
-        projection.restrict(mask)
-    else:
-        projection = _get_projection_restricted(
-            acq, mask, max_sampling=max_sampling)
+    projection = _get_projection_restricted(acq, projection, mask,
+                                            max_sampling=max_sampling)
     pack = PackOperator(mask, broadcast='rightward')
     hwp = _get_hwp(acq, max_sampling=max_sampling)
     polarizer = acq.get_polarizer_operator()

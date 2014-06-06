@@ -5,11 +5,11 @@ import numexpr as ne
 import numpy as np
 from scipy.constants import c, pi
 from pyoperators import MaskOperator
-from pysimulators import create_fitsheader, DiscreteSurface
+from pysimulators import create_fitsheader, SceneGrid
 from qubic import QubicInstrument
 from qubic.beams import GaussianBeam
 
-qubic = QubicInstrument('monochromatic,nopol')
+qubic = QubicInstrument(ngrids=1)
 
 NU = 150e9                   # [Hz]
 LAMBDA = c / NU              # [m]
@@ -84,7 +84,7 @@ detector_plane_pixel_sr = -central_pixel_sr * np.cos(det_theta)**3
 qubic.detector.vertex += DETECTOR_OFFSET
 header = create_fitsheader((ndet_x, ndet_x), cdelt=det_spacing, crval=(0, 0),
                            ctype=['X---CAR', 'Y---CAR'], cunit=['m', 'm'])
-detector_plane = DiscreteSurface.fromfits(header)
+detector_plane = SceneGrid.fromfits(header)
 integ = MaskOperator(qubic.detector.all.removed) * \
         detector_plane.get_integration_operator(qubic.detector.all.vertex)
 

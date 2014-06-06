@@ -6,8 +6,8 @@ import numpy as np
 import os
 import qubic
 from qubic import (
-    QubicAcquisition, QubicInstrument, create_sweeping_pointings, equ2gal,
-    map2tod, tod2map_all, tod2map_each)
+    QubicAcquisition, create_sweeping_pointings, equ2gal, map2tod, tod2map_all,
+    tod2map_each)
 
 DATAPATH = os.path.join(os.path.dirname(qubic.__file__), 'data',
                         'syn256_pol.fits')
@@ -25,15 +25,6 @@ nsweeps_el = 300
 duration = 24       # hours
 ts = 20             # seconds
 
-# get the instrument model
-instrument = QubicInstrument('monochromatic',
-                             nside=nside,
-                             synthbeam_fraction=0.99,
-                             detector_tau=0.01,
-                             detector_sigma=1.,
-                             detector_fknee=1.,
-                             detector_fslope=1)
-
 # get the sampling model
 np.random.seed(0)
 sampling = create_sweeping_pointings(
@@ -41,8 +32,14 @@ sampling = create_sweeping_pointings(
     angspeed_psi, maxpsi)
 sampling.angle_hwp = np.random.random_integers(0, 7, len(sampling)) * 11.25
 
-# get the acquisition model = instrument model + sampling model
-acquisition = QubicAcquisition(instrument, sampling)
+# get the acquisition model
+acquisition = QubicAcquisition(150, sampling,
+                               nside=nside,
+                               synthbeam_fraction=0.99,
+                               detector_tau=0.01,
+                               detector_sigma=1.,
+                               detector_fknee=1.,
+                               detector_fslope=1)
 
 # simulate the timeline
 tod, x0_convolved = map2tod(acquisition, x0, convolution=True)

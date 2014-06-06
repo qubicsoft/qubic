@@ -19,12 +19,9 @@ input_map = qubic.io.read_map(DATAPATH, field='I_STOKES')
 
 # instrument model
 sigma = 10
-fknee = 1  # Hz
+fknee = 1
 fslope = 1
 ncorr = 10
-instrument = QubicInstrument('monochromatic,nopol', synthbeam_fraction=0.99,
-                             detector_sigma=sigma, detector_fknee=fknee,
-                             detector_fslope=fslope, detector_ncorr=ncorr)
 
 # observation model
 np.random.seed(0)
@@ -42,9 +39,11 @@ sampling = create_sweeping_pointings(
     angspeed_psi, maxpsi)
 
 # acquisition model
-acq = QubicAcquisition(instrument, sampling)
+acq = QubicAcquisition(150, sampling, kind='I', synthbeam_fraction=0.99,
+                       detector_sigma=sigma, detector_fknee=fknee,
+                       detector_fslope=fslope, detector_ncorr=ncorr)
 C = acq.get_convolution_peak_operator()
-P = acq.get_projection_peak_operator()
+P = acq.get_projection_operator()
 H = P * C
 
 # produce the Time-Ordered data

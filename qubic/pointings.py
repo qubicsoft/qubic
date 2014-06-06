@@ -6,12 +6,13 @@ from astropy.time import Time, TimeDelta
 from numpy.random import random_sample as randomu
 from pyoperators import (
     Cartesian2SphericalOperator, Rotation3dOperator,
-    Spherical2CartesianOperator)
-from pyoperators.utils import deprecated, isscalarlike
+    Spherical2CartesianOperator, rule_manager)
+from pyoperators.utils import isscalarlike
 from pysimulators import (
     PointingHorizontal, CartesianEquatorial2GalacticOperator,
     CartesianEquatorial2HorizontalOperator,
     CartesianHorizontal2EquatorialOperator,
+    CartesianGalactic2EquatorialOperator,
     SphericalEquatorial2GalacticOperator,
     SphericalGalactic2EquatorialOperator,
     SphericalEquatorial2HorizontalOperator,
@@ -49,7 +50,7 @@ class QubicSampling(PointingHorizontal):
         in seconds.
     date_obs : string or astropy.time.Time
         The observation start date.
-    sampling_period : float
+    period : float
         The sampling period [s].
     latitude : float
         Telescope latitude [degrees].
@@ -59,45 +60,57 @@ class QubicSampling(PointingHorizontal):
     Examples
     --------
     pointing = QubicSampling(azimuth=azimuth, elevation=elevation,
-                             angle_hwp=angle_hwp, sampling_period=...)
-    pointing = QubicSampling(azimuth, elevation, pitch, angle_hwp,
-                             sampling_period=...)
+                             angle_hwp=angle_hwp, period=...)
+    pointing = QubicSampling(azimuth, elevation, pitch, angle_hwp, period=...)
 
     """
     DEFAULT_DATE_OBS = '2016-01-01 00:00:00'
-    DEFAULT_SAMPLING_PERIOD = 1
+    DEFAULT_PERIOD = 1
     DEFAULT_LATITUDE = DOMECLAT
     DEFAULT_LONGITUDE = DOMECLON
 
     def __init__(self, *args, **keywords):
-        angle_hwp = keywords.get('angle_hwp', None)
+        angle_hwp = keywords.get('angle_hwp', 0)
         if len(args) == 4:
             args = list(args)
             angle_hwp = args.pop()
-        PointingHorizontal.__init__(self, angle_hwp=angle_hwp, *args,
-                                    **keywords)
+        PointingHorizontal.__init__(self, angle_hwp=angle_hwp, healpix=None,
+                                    *args, **keywords)
 
-    @property
-    @deprecated('use len() instead.')
-    def size(self):
-        return len(self)
-
-    def tohealpix(self, nside):
+    def healpix(self, nside):
         time = self.date_obs + TimeDelta(self.time, format='sec')
         c2h = Cartesian2HealpixOperator(nside)
         e2g = CartesianEquatorial2GalacticOperator()
         h2e = CartesianHorizontal2EquatorialOperator(
             'NE', time, self.latitude, self.longitude)
-        s2c = Spherical2CartesianOperator('azimuth,elevation', degrees=True)
-        rotation = c2h(e2g(h2e(s2c)))
-        return rotation(np.array([self.azimuth, self.elevation]).T)
+        rotation = c2h(e2g(h2e))
+        return rotation(self.cartesian)
+
+    @property
+    def cartesian_galactic2instrument(self):
+        """
+        Return the galactic-to-instrument transform.
+
+        """
+        time = self.date_obs + TimeDelta(self.time, format='sec')
+        with rule_manager(none=False):
+            r = Rotation3dOperator("ZY'Z''", self.azimuth, 90 - self.elevation,
+                                   self.pitch, degrees=True).T * \
+                CartesianEquatorial2HorizontalOperator(
+                    'NE', time, self.latitude, self.longitude) * \
+                CartesianGalactic2EquatorialOperator()
+        return r
+
+    @property
+    def cartesian_instrument2galactic(self):
+        return self.cartesian_galactic2instrument.I
+
 
 QubicPointing = QubicSampling
 
 
 def create_random_pointings(center, npointings, dtheta, date_obs=None,
-                            sampling_period=None, latitude=None,
-                            longitude=None):
+                            period=None, latitude=None, longitude=None):
     """
     Return pointings randomly and uniformly distributed in a spherical cap.
 
@@ -111,7 +124,7 @@ def create_random_pointings(center, npointings, dtheta, date_obs=None,
         The maximum angular distance to the center.
     date_obs : str or astropy.time.Time, optional
         The starting date of the observation (UTC).
-    sampling_period : float, optional
+    period : float, optional
         The sampling period of the pointings, in seconds.
     latitude : float, optional
         The observer's latitude [degrees]. Default is DOMEC's.
@@ -125,8 +138,8 @@ def create_random_pointings(center, npointings, dtheta, date_obs=None,
     phi = randomu(npointings) * 360
     pitch = randomu(npointings) * 360
     p = QubicSampling(
-        npointings, date_obs=date_obs, sampling_period=sampling_period,
-        latitude=latitude, longitude=longitude)
+        npointings, date_obs=date_obs, period=period, latitude=latitude,
+        longitude=longitude)
     time = p.date_obs + TimeDelta(p.time, format='sec')
     c2s = Cartesian2SphericalOperator('azimuth,elevation', degrees=True)
     e2h = CartesianEquatorial2HorizontalOperator(
@@ -142,9 +155,8 @@ def create_random_pointings(center, npointings, dtheta, date_obs=None,
 
 
 def create_sweeping_pointings(
-        center, duration, sampling_period, angspeed, delta_az,
-        nsweeps_per_elevation, angspeed_psi, maxpsi, date_obs=None,
-        latitude=None, longitude=None):
+        center, duration, period, angspeed, delta_az, nsweeps_per_elevation,
+        angspeed_psi, maxpsi, date_obs=None, latitude=None, longitude=None):
     """
     Return pointings according to the sweeping strategy:
     Sweep around the tracked FOV center azimuth at a fixed elevation, and
@@ -156,7 +168,7 @@ def create_sweeping_pointings(
         The R.A. and Declination of the center of the FOV.
     duration : float
         The duration of the observation, in hours.
-    sampling_period : float
+    period : float
         The sampling period of the pointings, in seconds.
     angspeed : float
         The pointing angular speed, in deg / s.
@@ -184,10 +196,10 @@ def create_sweeping_pointings(
         in degrees.
 
     """
-    nsamples = int(np.ceil(duration * 3600 / sampling_period))
+    nsamples = int(np.ceil(duration * 3600 / period))
     out = QubicPointing(
-        nsamples, date_obs=date_obs, sampling_period=sampling_period,
-        latitude=latitude, longitude=longitude)
+        nsamples, date_obs=date_obs, period=period, latitude=latitude,
+        longitude=longitude)
     racenter = center[0]
     deccenter = center[1]
     backforthdt = delta_az / angspeed * 2

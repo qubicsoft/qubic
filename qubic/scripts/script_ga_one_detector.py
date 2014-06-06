@@ -34,14 +34,14 @@ sampling.angle_hwp = np.random.random_integers(0, 7, len(sampling)) * 11.25
 
 # get the instrument model with only one detector
 idetector = 0
-instrument = QubicInstrument('monochromatic')[idetector]
+instrument = QubicInstrument()[idetector]
 
 # get the acquisition model from the instrument and sampling models
-acq = QubicAcquisition(instrument, sampling)
+acq = QubicAcquisition(instrument, sampling, nside=nside)
 
 # get it as operators
 convolution = acq.get_convolution_peak_operator()
-projection = acq.get_projection_peak_operator()
+projection = acq.get_projection_operator()
 hwp = acq.get_hwp_operator()
 polarizer = acq.get_polarizer_operator()
 

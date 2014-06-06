@@ -11,8 +11,7 @@ import numpy as np
 import os
 import qubic
 from pyoperators import pcg, DiagonalOperator, UnpackOperator
-from qubic import (
-    QubicAcquisition, QubicInstrument, create_random_pointings, gal2equ)
+from qubic import QubicAcquisition, create_random_pointings, gal2equ
 
 # read the input map
 DATAPATH = os.path.join(os.path.dirname(qubic.__file__), 'data',
@@ -23,19 +22,16 @@ input_map = qubic.io.read_map(DATAPATH, field='I_STOKES')
 center_gal = 0, 90
 center = gal2equ(center_gal[0], center_gal[1])
 
-# instrument model
-instrument = QubicInstrument('monochromatic,nopol')
-
 # sampling model
 np.random.seed(0)
 sampling = create_random_pointings(center, 1000, 10)
 
 # acquisition model
-acq = QubicAcquisition(instrument, sampling)
+acq = QubicAcquisition(150, sampling, kind='I')
 hit = acq.get_hitmap()
 
 C = acq.get_convolution_peak_operator()
-P = acq.get_projection_peak_operator()
+P = acq.get_projection_operator()
 H = P * C
 
 # Produce the Time-Ordered data

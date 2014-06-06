@@ -7,57 +7,112 @@ import numpy as np
 import os
 import time
 import yaml
-from astropy.time import TimeDelta
 from glob import glob
 from pyoperators import (
-    I, BlockRowOperator, DenseBlockDiagonalOperator, HomothetyOperator,
-    IdentityOperator, ReshapeOperator, Rotation2dOperator, Rotation3dOperator,
-    rule_manager)
+    BlockColumnOperator, BlockDiagonalOperator, BlockRowOperator,
+    MPIDistributionIdentityOperator, I, MPI, proxy_group, rule_manager)
 from pyoperators.utils import ifirst
-from pysimulators import (
-    Acquisition, CartesianEquatorial2HorizontalOperator,
-    CartesianGalactic2EquatorialOperator,
-    CartesianHorizontal2EquatorialOperator,
-    CartesianEquatorial2GalacticOperator,
-    ConvolutionTruncatedExponentialOperator)
+from pyoperators.utils.mpi import as_mpi
+from pysimulators import Acquisition
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from .calibration import QubicCalibration
 from .instrument import QubicInstrument
+from .scene import QubicScene
 
 __all__ = ['QubicAcquisition']
 
 
 class QubicAcquisition(Acquisition):
     """
-    The QubicAcquisition class, which combines the instrument and
-    sampling models.
+    The QubicAcquisition class, which combines the instrument, sampling and
+    scene models.
 
     """
-    def __init__(self, instrument, sampling, nprocs_instrument=None,
-                 nprocs_sampling=None, comm=None):
+    def __init__(self, instrument, sampling, scene=None, block=None,
+                 calibration=None, detector_sigma=10, detector_fknee=0,
+                 detector_fslope=1, detector_ncorr=10, detector_tau=0.01,
+                 ngrids=None, synthbeam_fraction=0.99, kind='IQU', nside=256,
+                 max_nbytes=None, nprocs_instrument=None, nprocs_sampling=None,
+                 comm=None):
         """
+        acq = QubicAcquisition(instrument, sampling, [scene=|kind=, nside=],
+                               nprocs_instrument=, nprocs_sampling=, comm=)
+        acq = QubicAcquisition(band, sampling, [scene=|kind=, nside=],
+                               nprocs_instrument=, nprocs_sampling=, comm=)
+
         Parameters
         ----------
-        instrument : str or QubicInstrument
+        band : int
+            The sky frequency, in GHz.
+        scene : QubicScene, optional
+            The discretized observed scene (the sky).
+        block : tuple of slices, optional
+            Partition of the samplings.
+        kind : 'I', 'QU', 'IQU', optional
+            The sky kind: 'I' for intensity-only, 'QU' for Q and U maps,
+            and 'IQU' for intensity plus QU maps.
+        nside : int, optional
+            The Healpix scene's nside.
+        instrument : QubicInstrument, optional
             Module name (only 'monochromatic' for now), or a QubicInstrument
             instance.
-        sampling : array-like of shape (n,3) or sequence of
-            The triplets (θ,φ,ψ), where (φ,θ,ψ) are the Euler angles
-            of the intrinsic ZY'Z'' rotations. Note the ordering of the angles.
-            θ : co-latitude
-            φ : longitude
-            ψ : minus the position angle
+        calibration : QubicCalibration, optional
+            The calibration tree.
+        detector_tau : array-like, optional
+            The detector time constants in seconds.
+        detector_sigma : array-like, optional
+            The standard deviation of the detector white noise component.
+        detector_fknee : array-like, optional
+            The detector 1/f knee frequency in Hertz.
+        detector_fslope : array-like, optional
+            The detector 1/f slope index.
+        detector_ncorr : int, optional
+            The detector 1/f correlation length.
+        synthbeam_fraction: float, optional
+            The fraction of significant peaks retained for the computation
+            of the synthetic beam.
+        ngrids : int, optional
+            Number of detector grids.
+        max_nbytes : int or None, optional
+            Maximum number of bytes to be allocated for the acquisition's
+            operator.
+        nprocs_instrument : int
+            For a given sampling slice, number of procs dedicated to
+            the instrument.
+        nprocs_sampling : int
+            For a given detector slice, number of procs dedicated to
+            the sampling.
+        comm : mpi4py.MPI.Comm
+            The acquisition's MPI communicator. Note that it is transformed
+            into a 2d cartesian communicator before being stored as the 'comm'
+            attribute. The following relationship must hold:
+                comm.size = nprocs_instrument * nprocs_sampling
 
         """
-        if not isinstance(instrument, (QubicInstrument, str)):
-            raise TypeError("Invalid type for the instrument ('{}' instead of "
-                            "'QubicInstrument' or 'str').".format(type(
-                                instrument).__name__))
-        if isinstance(instrument, str):
-            raise NotImplementedError('Module names not fixed yet.')
-        Acquisition.__init__(self, instrument, sampling,
-                             nprocs_instrument=nprocs_instrument,
-                             nprocs_sampling=nprocs_sampling, comm=comm)
+        if scene is None:
+            if isinstance(instrument, QubicInstrument):
+                try:
+                    scene = instrument._deprecated_sky
+                except AttributeError:
+                    scene = 150
+            else:
+                scene = instrument
+        if not isinstance(scene, QubicScene):
+            scene = QubicScene(scene, kind=kind, nside=nside)
+
+        if not isinstance(instrument, QubicInstrument):
+            if ngrids is None:
+                ngrids = 1 if scene.kind == 'I' else 2
+            instrument = QubicInstrument(
+                calibration=calibration, detector_sigma=detector_sigma,
+                detector_fknee=detector_fknee, detector_fslope=detector_fslope,
+                detector_ncorr=detector_ncorr, detector_tau=detector_tau,
+                synthbeam_fraction=synthbeam_fraction, ngrids=ngrids)
+
+        Acquisition.__init__(
+            self, instrument, sampling, scene, block,
+            max_nbytes=max_nbytes, nprocs_instrument=nprocs_instrument,
+            nprocs_sampling=nprocs_sampling, comm=comm)
 
     def get_hitmap(self, nside=None):
         """
@@ -66,40 +121,12 @@ class QubicAcquisition(Acquisition):
 
         """
         if nside is None:
-            nside = self.instrument.sky.nside
-        ipixel = self.sampling.tohealpix(nside)
+            nside = self.scene.nside
+        ipixel = self.sampling.healpix(nside)
         npixel = 12 * nside**2
-        return np.histogram(ipixel, bins=npixel, range=(0, npixel))[0]
-
-    def get_rotation(self):
-        """
-        Return the instrument-to-galactic rotation matrix.
-
-        """
-        p = self.sampling
-        time = p.date_obs + TimeDelta(p.time, format='sec')
-        with rule_manager(none=False):
-            r = CartesianEquatorial2GalacticOperator() * \
-                CartesianHorizontal2EquatorialOperator(
-                    'NE', time, p.latitude, p.longitude) * \
-                Rotation3dOperator("ZY'Z''", p.azimuth, 90 - p.elevation,
-                                   p.pitch, degrees=True)
-        return r
-
-    def get_rotation_g2i(self):
-        """
-        Return the galactic-to-instrument rotation matrix.
-
-        """
-        p = self.sampling
-        time = p.date_obs + TimeDelta(p.time, format='sec')
-        with rule_manager(none=False):
-            r = Rotation3dOperator("ZY'Z''", p.azimuth, 90 - p.elevation,
-                                   p.pitch, degrees=True).T * \
-                CartesianEquatorial2HorizontalOperator(
-                    'NE', time, p.latitude, p.longitude) * \
-                CartesianGalactic2EquatorialOperator()
-        return r
+        hit = np.histogram(ipixel, bins=npixel, range=(0, npixel))[0]
+        self.sampling.comm.Allreduce(MPI.IN_PLACE, as_mpi(hit), op=MPI.SUM)
+        return hit
 
     def get_convolution_peak_operator(self, fwhm=np.radians(0.64883707),
                                       **keywords):
@@ -116,91 +143,84 @@ class QubicAcquisition(Acquisition):
         """
         return HealpixConvolutionGaussianOperator(fwhm=fwhm, **keywords)
 
-    def get_detector_response_operator(self, tau=None):
+    def get_detector_response_operator(self):
         """
         Return the operator for the bolometer responses.
 
         """
-        if tau is None:
-            tau = self.instrument.detector.tau
-        sampling_period = self.sampling.sampling_period
-        shapein = (len(self.instrument), len(self.sampling))
-        if sampling_period == 0:
-            return IdentityOperator(shapein)
-        return ConvolutionTruncatedExponentialOperator(tau / sampling_period,
-                                                       shapein=shapein)
+        return BlockDiagonalOperator(
+            [self.instrument.get_detector_response_operator(self.sampling[b])
+             for b in self.block], axisin=1)
+
+    def get_distribution_operator(self):
+        """
+        Return the MPI distribution operator.
+
+        """
+        return MPIDistributionIdentityOperator(self.comm)
 
     def get_hwp_operator(self):
         """
-        Return the rotation matrix for the half-wave plate.
+        Return the operator for the bolometer responses.
 
         """
-        shape = (len(self.instrument), len(self.sampling))
-        if self.instrument.sky.kind == 'I':
-            return IdentityOperator(shapein=shape)
-        if self.instrument.sky.kind == 'QU':
-            return Rotation2dOperator(-4 * self.sampling.angle_hwp,
-                                      degrees=True, shapein=shape + (2,))
-        return Rotation3dOperator('X', -4 * self.sampling.angle_hwp,
-                                  degrees=True, shapein=shape + (3,))
-
-    def get_invntt_operator(self):
-        """
-        Return the inverse time-time noise correlation matrix as an Operator.
-
-        """
-        l = self.instrument.detector
-        fs = 1 / self.sampling.sampling_period
-        return Acquisition.get_invntt_operator(
-            self, sigma=l.sigma, fknee=l.fknee, fslope=l.fslope,
-            sampling_frequency=fs, ncorr=self.instrument.detector.ncorr)
-
-    def get_noise(self, out=None):
-        """
-        Return a noisy timeline.
-
-        """
-        l = self.instrument.detector
-        fs = 1 / self.sampling.sampling_period
-        return Acquisition.get_noise(
-            self, sigma=l.sigma, fknee=l.fknee, fslope=l.fslope,
-            sampling_frequency=fs, out=out)
+        return BlockDiagonalOperator(
+            [self.instrument.get_hwp_operator(self.sampling[b], self.scene)
+             for b in self.block], axisin=1)
 
     def get_operator(self):
         """
         Return the operator of the acquisition.
 
         """
-        projection = self.get_projection_peak_operator()
+        projection = self.get_projection_operator()
         hwp = self.get_hwp_operator()
         polarizer = self.get_polarizer_operator()
         response = self.get_detector_response_operator()
+        distribution = self.get_distribution_operator()
 
         with rule_manager(inplace=True):
-            H = response * polarizer * (hwp * projection)
-        if self.instrument.sky == 'QU':
+            H = response * polarizer * (hwp * projection) * distribution
+        if self.scene == 'QU':
             H = self.get_subtract_grid_operator() * H
         return H
+
+    def get_operator_nbytes(self):
+        # return self.get_invntt_nbytes() + self.get_projection_nbytes()
+        return self.get_projection_nbytes()
 
     def get_polarizer_operator(self):
         """
         Return operator for the polarizer grid.
 
         """
-        if self.instrument.sky.kind == 'I':
-            return HomothetyOperator(1 / self.instrument.detector.ngrids)
+        return BlockDiagonalOperator(
+            [self.instrument.get_polarizer_operator(
+                self.sampling[b], self.scene) for b in self.block], axisin=1)
 
-        if self.instrument.detector.ngrids == 1:
-            raise ValueError(
-                'Polarized input not handled by a single detector grid.')
+    def get_projection_operator(self, verbose=True):
+        """
+        Return the projection operator for the peak sampling.
 
-        nd = len(self.instrument)
-        nt = len(self.sampling)
-        grid = self.instrument.detector.quadrant // 4
-        z = np.zeros(nd)
-        data = np.array([z + 0.5, 0.5 - grid, z]).T[:, None, None, :]
-        return ReshapeOperator((nd, nt, 1), (nd, nt)) * \
-            DenseBlockDiagonalOperator(data)
+        Parameters
+        ----------
+        verbose : bool, optional
+            If true, display information about the memory allocation.
+
+        """
+        f = self.instrument.get_projection_operator
+        if len(self.block) == 1:
+            return BlockColumnOperator(
+                [f(self.sampling[b], self.scene, verbose=verbose)
+                 for b in self.block], axisout=1)
+        #XXX HACK
+        def callback(i):
+            p = f(self.sampling[self.block[i]], self.scene, verbose=False)
+            return p
+        shapeouts = [(len(self.instrument), s.stop-s.start) +
+                      self.scene.shape[1:] for s in self.block]
+        proxies = proxy_group(len(self.block), callback, shapeouts=shapeouts)
+        return BlockColumnOperator(proxies, axisout=1)
 
     def get_add_grids_operator(self):
         """ Return operator to add signal from detector pairs. """
@@ -217,27 +237,6 @@ class QubicAcquisition(Acquisition):
             raise ValueError('Odd number of detectors.')
         partitionin = 2 * (len(self.instrument) // 2,)
         return BlockRowOperator([I, -I], axisin=0, partitionin=partitionin)
-
-    def get_projection_peak_operator(self, rotation=None, dtype=None,
-                                     synthbeam_fraction=None, verbose=True):
-        """
-        Return the projection operator for the peak sampling.
-
-        Parameters
-        ----------
-        rotation : array (nsamplings, 3, 3)
-            The Instrument-to-Reference rotation matrix.
-        dtype : dtype
-            The datatype of the elements in the projection matrix.
-        synthbeam_fraction : float, optional
-            Override the instrument synthetic beam fraction.
-
-        """
-        if rotation is None:
-            rotation = self.get_rotation_g2i()
-        return self.instrument.get_projection_peak_operator(
-            rotation, synthbeam_fraction=synthbeam_fraction, dtype=dtype,
-            verbose=verbose)
 
     @classmethod
     def load(cls, filename, instrument=None, selection=None):

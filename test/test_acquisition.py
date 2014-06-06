@@ -7,7 +7,7 @@ import shutil
 from numpy.testing import assert_equal
 from pyoperators.utils.testing import assert_same, skiptest
 from qubic import (
-    QubicCalibration, QubicAcquisition, QubicInstrument, QubicPointing,
+    QubicCalibration, QubicAcquisition, QubicInstrument, QubicSampling,
     create_random_pointings, gal2equ, map2tod)
 from qubic.io import read_map
 from uuid import uuid1
@@ -28,7 +28,7 @@ DATAPATH = os.path.join(os.path.dirname(qubic.__file__), 'data')
 input_map = read_map(os.path.join(DATAPATH, 'syn256_pol.fits'))
 np.random.seed(0)
 center = gal2equ(0, 90)
-observation = create_random_pointings(center, 100, 10)
+sampling = create_random_pointings(center, 100, 10)
 
 ptg = [1., 0, 180]
 ptg2 = [1., 1, 180]
@@ -44,7 +44,7 @@ block_n = [[1], [1], [2], [2, 3],
 caltree = QubicCalibration(detarray='CalQubic_DetArray_v1.fits')
 removed = np.ones((32, 32), dtype=bool)
 removed[30:, 30:] = False
-qubic = QubicInstrument('monochromatic,nopol', caltree, nu=160e9,
+qubic = QubicInstrument(calibration=caltree, nu=160e9,
                         removed=removed, synthbeam_fraction=0.99)
 
 
@@ -52,9 +52,9 @@ qubic = QubicInstrument('monochromatic,nopol', caltree, nu=160e9,
 def test_pointing():
     def func(p, n):
         p = np.asarray(p)
-        obs = QubicPointing(azimuth=p[..., 0], elevation=p[..., 1],
+        smp = QubicSampling(azimuth=p[..., 0], elevation=p[..., 1],
                             pitch=p[..., 2])
-        acq = QubicAcquisition(qubic, obs)
+        acq = QubicAcquisition(qubic, smp)
         assert_equal(acq.block.n, n)
         assert_equal(len(acq.pointing), sum(n))
     for p, n in zip(ptgs, block_n):
@@ -92,9 +92,9 @@ def test_load_save():
 
     for p in ptgs:
         p = np.asarray(p)
-        obs = QubicPointing(azimuth=p[..., 0], elevation=p[..., 1],
+        smp = QubicSampling(azimuth=p[..., 0], elevation=p[..., 1],
                             pitch=p[..., 2])
-        acq = QubicAcquisition(qubic, obs)
+        acq = QubicAcquisition(qubic, smp)
         P = acq.get_projection_peak_operator()
         tod = P(input_map)
         yield func_acquisition, acq, info
@@ -103,9 +103,8 @@ def test_load_save():
 
 
 def test_add_subtract_grid_operator():
-    instrument = QubicInstrument('monochromatic')
-    tod = map2tod(instrument, observation, input_map, convolution=False)
-    acq = QubicAcquisition(instrument, observation)
+    acq = QubicAcquisition(150, sampling)
+    tod = map2tod(acq, input_map, convolution=False)
     add = acq.get_add_grids_operator()
     sub = acq.get_subtract_grids_operator()
     assert_same(add(tod), tod[:992] + tod[992:])

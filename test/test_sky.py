@@ -35,16 +35,13 @@ pT1s = {}
 pTx_pT1s = {}
 cbiks = {}
 outputs = {}
-instruments = [QubicInstrument('monochromatic,nopol', ngrids=2),
-               QubicInstrument('monochromatic,qu'),
-               QubicInstrument('monochromatic')]
+kinds = ['I', 'QU', 'IQU']
 input_maps = [I,
               np.array([Q, U]).T,
               np.array([I, Q, U]).T]
-for instrument, input_map in zip(instruments, input_maps):
-    kind = instrument.sky.kind
-    acq = QubicAcquisition(instrument, pointings)
-    P = acq.get_projection_peak_operator()
+for kind, input_map in zip(kinds, input_maps):
+    acq = QubicAcquisition(150, pointings, kind=kind, ngrids=2)
+    P = acq.get_projection_operator()
     W = acq.get_hwp_operator()
     H = W * P
     coverage = P.pT1()

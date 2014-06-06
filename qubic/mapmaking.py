@@ -6,79 +6,49 @@ from pyoperators import (
     BlockColumnOperator, BlockDiagonalOperator, DiagonalOperator,
     MPIDistributionIdentityOperator, PackOperator, pcg, proxy_group,
     rule_manager)
-from pysimulators import ProjectionOperator
 from .acquisition import QubicAcquisition
 from .utils import progress_bar
 
 __all__ = ['map2tod', 'tod2map_all', 'tod2map_each']
 
 
-def _get_operator(acq, max_sampling=None):
-    projection = _get_projection(acq, max_sampling=max_sampling)
-    hwp = _get_hwp(acq, max_sampling=max_sampling)
-    polarizer = acq.get_polarizer_operator()
-    response = acq.get_detector_response_operator()
-
-    with rule_manager(inplace=True):
-        H = response * polarizer * (hwp * projection)
-    if acq.instrument.sky == 'QU':
-        H = acq.get_subtract_grid_operator() * H
-
-    return H
-
-
-def _get_projection(acq, max_sampling=None):
-    if max_sampling is None or len(acq.sampling) <= max_sampling:
-        P = acq.get_projection_peak_operator()
-    else:
-        n = int(np.ceil(len(acq.sampling) / max_sampling))
-        samplings = acq.sampling.split(n)
-        acqs = [QubicAcquisition(acq.instrument, _) for _ in samplings]
-
-        def callback(i):
-            return acqs[i].get_projection_peak_operator()
-        P = BlockColumnOperator(proxy_group(n, callback), axisout=1)
-    return _distribute(acq, P)
-
-
-def _get_projection_restricted(acq, P, mask, max_sampling=None):
-    if max_sampling is None or len(acq.sampling) <= max_sampling:
-        if acq.comm.size > 1:
-            P = P.operands[0]
+def _get_projection_restricted(acq, P, mask):
+    #XXX HACK
+    if len(acq.block) == 1:
         P.restrict(mask)
-    else:
-        n = int(np.ceil(len(acq.sampling) / max_sampling))
-        samplings = acq.sampling.split(n)
-        acqs = [QubicAcquisition(acq.instrument, _) for _ in samplings]
-
-        def callback(i):
-            p = acqs[i].get_projection_peak_operator()
-            p.restrict(mask)
-            return p
-        P = BlockColumnOperator(proxy_group(n, callback), axisout=1)
-    return _distribute(acq, P)
-
-
-def _get_hwp(acq, max_sampling=None):
-    if max_sampling is None or len(acq.sampling) <= max_sampling:
-        return acq.get_hwp_operator()
-
-    n = int(np.ceil(len(acq.sampling) / max_sampling))
-    samplings = acq.sampling.split(n)
-    acqs = [QubicAcquisition(acq.instrument, _) for _ in samplings]
+        return P
 
     def callback(i):
-        return acqs[i].get_hwp_operator()
-    return BlockDiagonalOperator(proxy_group(n, callback), axisout=1)
+        f = acq.instrument.get_projection_operator
+        p = f(acq.sampling[acq.block[i]], acq.scene, verbose=False)
+        p.restrict(mask)
+        return p
+    return BlockColumnOperator(proxy_group(len(acq.block), callback),
+                               axisout=1)
+
+#    nbytes = acq.get_projection_nbytes()
+#    if max_nbytes is None or nbytes <= max_nbytes:
+#        if acq.comm.size > 1:
+#            P = P.operands[0]
+#        if isinstance(P, BlockColumnOperator):
+#            for _ in P.operands:
+#                _.restrict(mask)
+#        else:
+#            P.restrict(mask)
+#        return P
+#    n = int(np.ceil(nbytes / max_nbytes))
+#    samplings = acq.sampling.split(n)
+#    acqs = [QubicAcquisition(acq.instrument, _, acq.scene, acq.block)
+#            for _ in samplings]
+#
+#    def callback(i):
+#        p = acqs[i].get_projection_operator(verbose=False)
+#        p.restrict(mask)
+#        return p
+#    return BlockColumnOperator(proxy_group(n, callback), axisout=1)
 
 
-def _distribute(acq, H):
-    if acq.comm.size > 1:
-        H = H(MPIDistributionIdentityOperator(acq.comm))
-    return H
-
-
-def map2tod(acq, map, convolution=False, max_sampling=None):
+def map2tod(acq, map, convolution=False, max_nbytes=None):
     """
     tod = map2tod(acquisition, map)
     tod, convolved_map = map2tod(acquisition, map, convolution=True)
@@ -92,6 +62,10 @@ def map2tod(acq, map, convolution=False, max_sampling=None):
         with npix = 12 * nside**2
     convolution : boolean, optional
         Set to True to convolve the input map by a gaussian and return it.
+    max_nbytes : int
+        Maximum number of bytes for the pointing matrix. If the actual size
+        is greater than this number, the computation of the pointing matrix
+        will be performed on the fly at each iteration.
 
     Returns
     -------
@@ -105,7 +79,7 @@ def map2tod(acq, map, convolution=False, max_sampling=None):
         convolution = acq.get_convolution_peak_operator()
         map = convolution(map)
 
-    H = _get_operator(acq, max_sampling=max_sampling)
+    H = acq.get_operator()
     tod = H(map)
 
     if convolution:
@@ -114,10 +88,14 @@ def map2tod(acq, map, convolution=False, max_sampling=None):
     return tod
 
 
-def _tod2map(acq, tod, coverage_threshold, disp, max_sampling, tol):
-    projection = _get_projection(acq, max_sampling=max_sampling)
-    shape = (len(acq.instrument), len(acq.sampling))
-    kind = acq.instrument.sky.kind
+def _tod2map(acq, tod, coverage_threshold, disp_pcg, disp_pmatrix,
+             max_nbytes, tol):
+    projection = acq.get_projection_operator(verbose=disp_pmatrix)
+    distribution = acq.get_distribution_operator()
+    P = projection * distribution
+
+    shape = len(acq.instrument), len(acq.sampling)
+    kind = acq.scene.kind
     if kind == 'I':
         ones = np.ones(shape)
     elif kind == 'IQU':
@@ -125,31 +103,30 @@ def _tod2map(acq, tod, coverage_threshold, disp, max_sampling, tol):
         ones[..., 0] = 1
     else:
         raise NotImplementedError()
-    coverage = projection.T(ones)
+    coverage = P.T(ones)
     if kind == 'IQU':
         coverage = coverage[..., 0]
     mask = coverage > coverage_threshold
-    projection = _get_projection_restricted(acq, projection, mask,
-                                            max_sampling=max_sampling)
+    projection = _get_projection_restricted(acq, projection, mask)
     pack = PackOperator(mask, broadcast='rightward')
-    hwp = _get_hwp(acq, max_sampling=max_sampling)
+    hwp = acq.get_hwp_operator()
     polarizer = acq.get_polarizer_operator()
     response = acq.get_detector_response_operator()
-    H = response * polarizer * (hwp * projection)
-    if acq.instrument.sky == 'QU':
+    H = response * polarizer * (hwp * projection) * distribution
+    if acq.scene.kind == 'QU':
         H = acq.get_subtract_grid_operator() * H
 
     invNtt = acq.get_invntt_operator()
     preconditioner = DiagonalOperator(1/coverage[mask], broadcast='rightward')
     A = H.T * invNtt * H
     solution = pcg(A, H.T(invNtt(tod)), M=preconditioner,
-                   disp=disp, tol=tol)
+                   disp=disp_pcg, tol=tol)
     output_map = pack.T(solution['x'])
     return output_map, coverage
 
 
-def tod2map_all(acquisition, tod, coverage_threshold=0, disp=True,
-                max_sampling=None, tol=1e-4):
+def tod2map_all(acquisition, tod, coverage_threshold=0, disp=True, tol=1e-4,
+                max_nbytes=None):
     """
     Compute map using all detectors.
 
@@ -169,6 +146,10 @@ def tod2map_all(acquisition, tod, coverage_threshold=0, disp=True,
         Display of solver's iterations.
     tol : float, optional
         Solver tolerance.
+    max_nbytes : int
+        Maximum number of bytes for the pointing matrix. If the actual size
+        is greater than this number, the computation of the pointing matrix
+        will be performed on the fly at each iteration.
 
     Returns
     -------
@@ -176,12 +157,12 @@ def tod2map_all(acquisition, tod, coverage_threshold=0, disp=True,
         Temperature, QU or IQU maps of shapes npix, (npix, 2), (npix, 3)
         with npix = 12 * nside**2
     """
-    return _tod2map(acquisition, tod, coverage_threshold, disp, max_sampling,
-                    tol)
+    return _tod2map(acquisition, tod, coverage_threshold, disp, True,
+                    max_nbytes, tol)
 
 
-def tod2map_each(acquisition, tod, coverage_threshold=0, disp=True,
-                 max_sampling=None, tol=1e-4):
+def tod2map_each(acquisition, tod, coverage_threshold=0, disp=True, tol=1e-4,
+                 max_nbytes=None):
     """
     Compute average map from each detector.
 
@@ -201,6 +182,10 @@ def tod2map_each(acquisition, tod, coverage_threshold=0, disp=True,
         Display of solver's iterations.
     tol : float, optional
         Solver tolerance.
+    max_nbytes : int
+        Maximum number of bytes for the pointing matrix. If the actual size
+        is greater than this number, the computation of the pointing matrix
+        will be performed on the fly at each iteration.
 
     Returns
     -------
@@ -210,19 +195,19 @@ def tod2map_each(acquisition, tod, coverage_threshold=0, disp=True,
 
     """
     instrument = acquisition.instrument
-    x = np.zeros(instrument.sky.shape)
-    n = np.zeros(instrument.sky.size)
+    x = np.zeros(acquisition.scene.shape)
+    n = np.zeros(acquisition.scene.shape[0])
     if disp:
         bar = progress_bar(len(instrument), 'TOD2MAP_EACH')
     for i, t in izip(instrument, tod):
-        acq = QubicAcquisition(i, acquisition.sampling)
-        x_, n_ = _tod2map(acq, t[None, :], coverage_threshold, False,
-                          max_sampling, tol)
+        acq = QubicAcquisition(i, acquisition.sampling, acquisition.scene)
+        x_, n_ = _tod2map(acq, t[None, :], coverage_threshold, False, False,
+                          max_nbytes, tol)
         x += x_
         n += n_
         if disp:
             bar.update()
 
-    if acq.instrument.sky.kind == 'I':
+    if acq.scene.kind == 'I':
         return np.nan_to_num(x / n), n
     return np.nan_to_num(x / n[:, None]), n

@@ -5,9 +5,9 @@ from pyoperators.utils.testing import assert_same
 from pysimulators import FitsArray
 from qubic import QubicInstrument
 
-q = QubicInstrument('monochromatic,nopol')
+q = QubicInstrument(ngrids=1)
 
 
 def test_detector_indexing():
     expected = FitsArray('test/data/detector_indexing.fits')
-    assert_same(q.detector.packed.index, expected)
+    assert_same(q.detector.index, expected)

@@ -7,16 +7,23 @@ except:
     pass
 import numexpr as ne
 import numpy as np
-from pyoperators import Spherical2CartesianOperator, MPI
+from pyoperators import (
+    DenseBlockDiagonalOperator, IdentityOperator, HomothetyOperator,
+    ReshapeOperator, Rotation2dOperator, Rotation3dOperator,
+    Spherical2CartesianOperator)
 from pyoperators.utils import strenum
-from pysimulators import Instrument, LayoutSpatialVertex, ProjectionOperator
+from pysimulators import (
+    Instrument, LayoutVertex, ConvolutionTruncatedExponentialOperator,
+    ProjectionOperator)
 from pysimulators.interfaces.healpy import Cartesian2HealpixOperator
 from pysimulators.sparse import (
     FSRMatrix, FSRRotation2dMatrix, FSRRotation3dMatrix)
 from scipy.constants import c, pi
 from . import _flib as flib
 from .calibration import QubicCalibration
-from .utils import _compress_mask, _uncompress_mask
+from .scene import QubicScene
+from .utils import _compress_mask
+from .warnings import QubicDeprecationWarning, warn
 
 __all__ = ['QubicInstrument']
 
@@ -26,16 +33,16 @@ class QubicInstrument(Instrument):
     The QubicInstrument class. It represents the instrument setup.
 
     """
-    def __init__(self, name, calibration=None,
+    def __init__(self, name=None, calibration=None,
                  detector_sigma=10, detector_fknee=0, detector_fslope=1,
                  detector_ncorr=10, detector_tau=0.01,
-                 synthbeam_fraction=0.99, ngrids=None, nside=256, **keywords):
+                 synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
+                 ngrids=2, nside=256, **keywords):
         """
         Parameters
         ----------
         name : str
-            The module name. So far, only 'monochromatic,nopol' and
-            'monochromatic' are available.
+            Deprecated.
         calibration : QubicCalibration
             The calibration tree.
         detector_tau : array-like
@@ -49,44 +56,45 @@ class QubicInstrument(Instrument):
         detector_ncorr : int
             The detector 1/f correlation length.
         nside : int, optional
-            The Healpix nside of the sky.
+            Deprecated.
+        synthbeam_dtype : dtype, optional
+            The data type for the synthetic beams (default: float32).
+            It is the dtype used to store the values of the pointing matrix.
         synthbeam_fraction: float, optional
             The fraction of significant peaks retained for the computation
             of the synthetic beam.
         ngrids : int, optional
-            Number of detector grids. (Default: 2 for the polarized case,
-            1 otherwise)
-        nu : float, optional
-            The operating monochromatic frequency or the filter central
-            frequency, in Hz.
-        dnu_nu : float, optional
-            The filter width.
+            Number of detector grids.
 
         """
+        if name is not None:
+            skind = ", kind='I'" if 'nopol' in name else ''
+            snside = ', nside={0}'.format(nside) if nside is not None else ''
+            warn('Please update your code:\nacq = QubicAcquisition(150, sam'
+                 'pling{0}{1})\n'.format(skind, snside),
+                 QubicDeprecationWarning)
+            name = name.replace(' ', '').lower()
+            names = 'monochromatic', 'monochromatic,qu', 'monochromatic,nopol'
+            if name not in names:
+                raise ValueError(
+                    "The only modes implemented are {0}.".format(
+                        strenum(names, 'and')))
+            self._init_deprecated_sky(name, nside)
+
         if calibration is None:
             calibration = QubicCalibration()
-        name = name.replace(' ', '').lower()
-        names = 'monochromatic', 'monochromatic,qu', 'monochromatic,nopol'
-        if name not in names:
-            raise ValueError(
-                "The only modes implemented are {0}.".format(
-                    strenum(names, 'and')))
         self.calibration = calibration
         layout = self._get_detector_layout(
-            name, ngrids, detector_sigma, detector_fknee, detector_fslope,
+            ngrids, detector_sigma, detector_fknee, detector_fslope,
             detector_ncorr, detector_tau)
-        Instrument.__init__(self, name, layout)
-        self._init_sky(nside)
+        Instrument.__init__(self, 'QUBIC', layout)
         self._init_primary_beam()
         self._init_optics(**keywords)
         self._init_horns()
-        self._init_synthetic_beam(synthbeam_fraction)
+        self._init_synthetic_beam(synthbeam_dtype, synthbeam_fraction)
 
-    def _get_detector_layout(self, name, ngrids, sigma, fknee, fslope, ncorr,
+    def _get_detector_layout(self, ngrids, sigma, fknee, fslope, ncorr,
                              tau):
-        polarized = 'nopol' not in name.split(',')
-        if ngrids is None:
-            ngrids = 2 if polarized else 1
         shape, vertex, removed_, index, quadrant = \
             self.calibration.get('detarray')
         if ngrids == 2:
@@ -95,7 +103,7 @@ class QubicInstrument(Instrument):
             removed_ = np.array([removed_, removed_])
             index = np.array([index, index + np.max(index) + 1], index.dtype)
             quadrant = np.array([quadrant, quadrant + 4], quadrant.dtype)
-        layout = LayoutSpatialVertex(
+        layout = LayoutVertex(
             shape, 4, vertex=vertex, selection=~removed_, ordering=index,
             quadrant=quadrant, sigma=sigma, fknee=fknee, fslope=fslope,
             tau=tau)
@@ -103,20 +111,13 @@ class QubicInstrument(Instrument):
         layout.ngrids = ngrids
         return layout
 
-    def _init_sky(self, nside):
-        class Sky(object):
-            pass
-        names = self.name.split(',')
-        size = 12 * nside**2
-        self.sky = Sky()
-        self.sky.size = size
-        self.sky.shape = (size,) if 'nopol' in names \
-                                 else (size, 2) if 'qu' in names \
-                                                else (size, 3)
-        self.sky.nside = nside
-        self.sky.kind = 'I' if 'nopol' in names \
-                            else 'QU' if 'qu' in names \
-                                      else 'IQU'
+    def _init_deprecated_sky(self, name, nside):
+        names = name.split(',')
+        kind = 'I' if 'nopol' in names \
+                   else 'QU' if 'qu' in names \
+                             else 'IQU'
+        sky = QubicScene(150, kind=kind, nside=nside)
+        self._deprecated_sky = sky
 
     def _init_primary_beam(self):
         class PrimaryBeam(object):
@@ -128,31 +129,26 @@ class QubicInstrument(Instrument):
                 return np.exp(-theta**2 / (2 * self.sigma**2))
         self.primary_beam = PrimaryBeam(self.calibration.get('primbeam'))
 
-    def _init_optics(self, nu=150e9, dnu_nu=0, **keywords):
+    def _init_optics(self, **keywords):
         class Optics(object):
             pass
         optics = Optics()
         optics.focal_length = self.calibration.get('optics')['focal length']
-        optics.nu = nu
-        optics.dnu_nu = dnu_nu
         self.optics = optics
 
     def _init_horns(self):
         self.horn = self.calibration.get('hornarray')
 
-    def _init_synthetic_beam(self, synthbeam_fraction):
+    def _init_synthetic_beam(self, synthbeam_dtype, synthbeam_fraction):
         class SyntheticBeam(object):
             pass
         sb = SyntheticBeam()
+        sb.dtype = np.dtype(synthbeam_dtype)
         sb.fraction = synthbeam_fraction
         self.synthetic_beam = sb
 
     def __str__(self):
-        state = [('name', self.name),
-                 ('nu', self.optics.nu),
-                 ('dnu_nu', self.optics.dnu_nu),
-                 ('nside', self.sky.nside),
-                 ('synthbeam_fraction', self.synthetic_beam.fraction),
+        state = [('synthbeam_fraction', self.synthetic_beam.fraction),
                  ('ngrids', self.detector.ngrids),
                  ('selection', _compress_mask(~self.detector.all.removed))]
         return 'Instrument:\n' + \
@@ -175,34 +171,95 @@ class QubicInstrument(Instrument):
             mp.autoscale()
         mp.show()
 
-    def get_projection_peak_operator(self, rotation, dtype=None,
-                                     synthbeam_fraction=None, verbose=True):
+    def get_noise(self, sampling, out=None):
+        """
+        Return a noisy timeline.
+
+        """
+        return Instrument.get_noise(
+            self, sampling, sigma=self.detector.sigma,
+            fknee=self.detector.fknee, fslope=self.detector.fslope, out=out)
+
+    def get_detector_response_operator(self, sampling, tau=None):
+        """
+        Return the operator for the bolometer responses.
+
+        """
+        if tau is None:
+            tau = self.detector.tau
+        sampling_period = sampling.period
+        shapein = len(self), len(sampling)
+        if sampling_period == 0:
+            return IdentityOperator(shapein)
+        return ConvolutionTruncatedExponentialOperator(
+            tau / sampling_period, shapein=shapein)
+
+    def get_hwp_operator(self, sampling, scene):
+        """
+        Return the rotation matrix for the half-wave plate.
+
+        """
+        shape = (len(self), len(sampling))
+        if scene.kind == 'I':
+            return IdentityOperator(shapein=shape)
+        if scene.kind == 'QU':
+            return Rotation2dOperator(-4 * sampling.angle_hwp,
+                                      degrees=True, shapein=shape + (2,))
+        return Rotation3dOperator('X', -4 * sampling.angle_hwp,
+                                  degrees=True, shapein=shape + (3,))
+
+    def get_invntt_operator(self, sampling):
+        """
+        Return the inverse time-time noise correlation matrix as an Operator.
+
+        """
+        return Instrument.get_invntt_operator(
+            self, sampling, sigma=self.detector.sigma,
+            fknee=self.detector.fknee, fslope=self.detector.fslope,
+            ncorr=self.detector.ncorr)
+
+    def get_polarizer_operator(self, sampling, scene):
+        """
+        Return operator for the polarizer grid.
+
+        """
+        if scene.kind == 'I':
+            return HomothetyOperator(1 / self.detector.ngrids)
+
+        if self.detector.ngrids == 1:
+            raise ValueError(
+                'Polarized input not handled by a single detector grid.')
+
+        nd = len(self)
+        nt = len(sampling)
+        grid = self.detector.quadrant // 4
+        z = np.zeros(nd)
+        data = np.array([z + 0.5, 0.5 - grid, z]).T[:, None, None, :]
+        return ReshapeOperator((nd, nt, 1), (nd, nt)) * \
+            DenseBlockDiagonalOperator(data, shapein=(nd, nt, 3))
+
+    def get_projection_operator(self, sampling, scene, verbose=True):
         """
         Return the peak sampling operator.
 
         Parameters
         ----------
-        rotation : ndarray (ntimes, 3, 3)
-            The Reference-to-Instrument rotation matrix.
-        dtype : dtype
-            The datatype of the elements in the projection matrix.
-        synthbeam_fraction : float, optional
-            Override the instrument synthetic beam fraction.
+        sampling : QubicSampling
+            The pointing information.
+        scene : QubicScene
+            The observed scene.
+        verbose : bool, optional
+            If true, display information about the memory allocation.
 
         """
-        if synthbeam_fraction is None:
-            synthbeam_fraction = self.synthetic_beam.fraction
-        if dtype is None:
-            dtype = np.float32
-        dtype = np.dtype(dtype)
+        rotation = sampling.cartesian_galactic2instrument
+        dtype = self.synthetic_beam.dtype
+        fraction = self.synthetic_beam.fraction
         ndetectors = len(self)
-        if rotation.data.ndim == 2:
-            ntimes = 1
-        else:
-            ntimes = rotation.data.shape[0]
-        nside = self.sky.nside
+        ntimes = len(sampling)
+        nside = scene.nside
 
-        theta, phi, vals = _peak_angles_fraction(self, synthbeam_fraction)
+        theta, phi, vals = _peak_angles_fraction(self, scene, fraction)
         ncolmax = theta.shape[-1]
         thetaphi = _pack_vector(theta, phi)  # (ndetectors, ncolmax, 2)
         direction = Spherical2CartesianOperator('zenith,azimuth')(thetaphi)
@@ -214,8 +271,8 @@ class QubicInstrument(Instrument):
 
         cls = {'I': FSRMatrix,
                'QU': FSRRotation2dMatrix,
-               'IQU': FSRRotation3dMatrix}[self.sky.kind]
-        ndims = len(self.sky.kind)
+               'IQU': FSRRotation3dMatrix}[scene.kind]
+        ndims = len(scene.kind)
         s = cls((ndetectors * ntimes * ndims, 12 * nside**2 * ndims),
                 ncolmax=ncolmax, dtype=dtype, dtype_index=dtype_index,
                 verbose=verbose)
@@ -227,7 +284,7 @@ class QubicInstrument(Instrument):
             e_ni = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
             index[i] = Cartesian2HealpixOperator(nside)(e_ni)
 
-        if self.sky.kind == 'I':
+        if scene.kind == 'I':
             value = s.data.value.reshape(ndetectors, ntimes, ncolmax)
             value[...] = vals[:, None, :]
             shapeout = (ndetectors, ntimes)
@@ -242,7 +299,7 @@ class QubicInstrument(Instrument):
                 raise TypeError(
                     'The projection matrix cannot be created with types: {0} a'
                     'nd {1}.'.format(dtype, dtype_index))
-            if self.sky.kind == 'QU':
+            if scene.kind == 'QU':
                 shapeout = (ndetectors, ntimes, 2)
             else:
                 shapeout = (ndetectors, ntimes, 3)
@@ -250,7 +307,7 @@ class QubicInstrument(Instrument):
         return ProjectionOperator(s, shapeout=shapeout)
 
 
-def _peak_angles(q, kmax):
+def _peak_angles(q, scene, kmax):
     """
     Return the spherical coordinates (theta,phi) of the beam peaks, in radians.
 
@@ -264,7 +321,7 @@ def _peak_angles(q, kmax):
     """
     ndetector = len(q)
     center = q.detector.center
-    lmbda = c / q.optics.nu
+    lmbda = c / scene.nu
     dx = q.horn.spacing
     detvec = np.vstack([-center[..., 0],
                         -center[..., 1],
@@ -280,10 +337,10 @@ def _peak_angles(q, kmax):
     return theta, phi
 
 
-def _peak_angles_fraction(q, fraction):
+def _peak_angles_fraction(q, scene, fraction):
 
     # there is no need to go beyond kmax=5
-    theta, phi = _peak_angles(q, kmax=5)
+    theta, phi = _peak_angles(q, scene, kmax=5)
     index = _argsort(theta)
     theta = theta[index]
     phi = phi[index]

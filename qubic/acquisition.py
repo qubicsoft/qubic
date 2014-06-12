@@ -4,6 +4,7 @@ from __future__ import division
 import astropy.io.fits as pyfits
 import healpy as hp
 import numpy as np
+import operator
 import os
 import time
 import yaml
@@ -13,7 +14,7 @@ from pyoperators import (
     MPIDistributionIdentityOperator, I, MPI, proxy_group, rule_manager)
 from pyoperators.utils import ifirst
 from pyoperators.utils.mpi import as_mpi
-from pysimulators import Acquisition
+from pysimulators import Acquisition, ProjectionOperator
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from .calibration import QubicCalibration
 from .instrument import QubicInstrument
@@ -113,6 +114,21 @@ class QubicAcquisition(Acquisition):
             self, instrument, sampling, scene, block,
             max_nbytes=max_nbytes, nprocs_instrument=nprocs_instrument,
             nprocs_sampling=nprocs_sampling, comm=comm)
+
+    def get_coverage(self, out=None):
+        """
+        Return the acquisition scene coverage given by P.T(1).
+
+        """
+        P = self.get_projection_operator()
+        if isinstance(P, ProjectionOperator):
+            out = P.pT1(out=out)
+        else:
+            out = P.operands[0].pT1(out=out)
+            for op in P.operands[1:]:
+                op.pT1(out, operation=operator.iadd)
+        self.get_distribution_operator().T(out, out=out)
+        return out
 
     def get_hitmap(self, nside=None):
         """

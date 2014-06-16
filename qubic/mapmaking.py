@@ -23,8 +23,10 @@ def _get_projection_restricted(acq, P, mask):
         p = f(acq.sampling[acq.block[i]], acq.scene, verbose=False)
         p.restrict(mask)
         return p
-    return BlockColumnOperator(proxy_group(len(acq.block), callback),
-                               axisout=1)
+    shapeouts = [(len(acq.instrument), s.stop-s.start) +
+                 acq.scene.shape[1:] for s in acq.block]
+    proxies = proxy_group(len(acq.block), callback, shapeouts=shapeouts)
+    return BlockColumnOperator(proxies, axisout=1)
 
 #    nbytes = acq.get_projection_nbytes()
 #    if max_nbytes is None or nbytes <= max_nbytes:

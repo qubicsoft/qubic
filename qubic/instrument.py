@@ -35,10 +35,10 @@ class QubicInstrument(Instrument):
 
     """
     def __init__(self, name=None, calibration=None,
-                 detector_sigma=10, detector_fknee=0, detector_fslope=1,
-                 detector_ncorr=10, detector_tau=0.01,
+                 detector_fknee=0, detector_fslope=1, detector_ncorr=10,
+                 detector_ngrids=2, detector_sigma=10, detector_tau=0.01,
                  synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
-                 ngrids=2, **keywords):
+                 **keywords):
         """
         Parameters
         ----------
@@ -46,24 +46,24 @@ class QubicInstrument(Instrument):
             Deprecated.
         calibration : QubicCalibration
             The calibration tree.
-        detector_tau : array-like
-            The detector time constants in seconds.
-        detector_sigma : array-like
-            The standard deviation of the detector white noise component.
         detector_fknee : array-like
             The detector 1/f knee frequency in Hertz.
         detector_fslope : array-like
             The detector 1/f slope index.
         detector_ncorr : int
             The detector 1/f correlation length.
+        detector_ngrids : int, optional
+            Number of detector grids.
+        detector_sigma : array-like
+            The standard deviation of the detector white noise component.
+        detector_tau : array-like
+            The detector time constants in seconds.
         synthbeam_dtype : dtype, optional
             The data type for the synthetic beams (default: float32).
             It is the dtype used to store the values of the pointing matrix.
         synthbeam_fraction: float, optional
             The fraction of significant peaks retained for the computation
             of the synthetic beam.
-        ngrids : int, optional
-            Number of detector grids.
 
         """
         if name is not None:
@@ -85,7 +85,7 @@ class QubicInstrument(Instrument):
             calibration = QubicCalibration()
         self.calibration = calibration
         layout = self._get_detector_layout(
-            ngrids, detector_sigma, detector_fknee, detector_fslope,
+            detector_ngrids, detector_sigma, detector_fknee, detector_fslope,
             detector_ncorr, detector_tau)
         Instrument.__init__(self, 'QUBIC', layout)
         self._init_primary_beam()

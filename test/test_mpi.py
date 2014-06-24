@@ -13,7 +13,7 @@ size = MPI.COMM_WORLD.size
 
 def test():
     kinds = 'I', 'IQU'
-    instrument = QubicInstrument()[:400]
+    instrument = QubicInstrument(synthbeam_dtype=float)[:400]
     np.random.seed(0)
     sampling = create_random_pointings([0, 90], 30, 5)
     sampling.angle_hwp = np.random.random_integers(0, 7, len(sampling)) * 11.25

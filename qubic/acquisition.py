@@ -31,8 +31,9 @@ class QubicAcquisition(Acquisition):
     """
     def __init__(self, instrument, sampling, scene=None, block=None,
                  calibration=None, detector_sigma=10, detector_fknee=0,
-                 detector_fslope=1, detector_ncorr=10, detector_tau=0.01,
-                 ngrids=None, synthbeam_fraction=0.99, kind='IQU', nside=256,
+                 detector_fslope=1, detector_ncorr=10, detector_ngrids=None,
+                 detector_tau=0.01, synthbeam_dtype=np.float32,
+                 synthbeam_fraction=0.99, kind='IQU', nside=256,
                  max_nbytes=None, nprocs_instrument=None, nprocs_sampling=None,
                  comm=None):
         """
@@ -59,8 +60,6 @@ class QubicAcquisition(Acquisition):
             instance.
         calibration : QubicCalibration, optional
             The calibration tree.
-        detector_tau : array-like, optional
-            The detector time constants in seconds.
         detector_sigma : array-like, optional
             The standard deviation of the detector white noise component.
         detector_fknee : array-like, optional
@@ -69,11 +68,16 @@ class QubicAcquisition(Acquisition):
             The detector 1/f slope index.
         detector_ncorr : int, optional
             The detector 1/f correlation length.
+        detector_ngrids : int, optional
+            Number of detector grids.
+        detector_tau : array-like, optional
+            The detector time constants in seconds.
+        synthbeam_dtype : dtype, optional
+            The data type for the synthetic beams (default: float32).
+            It is the dtype used to store the values of the pointing matrix.
         synthbeam_fraction: float, optional
             The fraction of significant peaks retained for the computation
             of the synthetic beam.
-        ngrids : int, optional
-            Number of detector grids.
         max_nbytes : int or None, optional
             Maximum number of bytes to be allocated for the acquisition's
             operator.
@@ -102,13 +106,14 @@ class QubicAcquisition(Acquisition):
             scene = QubicScene(scene, kind=kind, nside=nside)
 
         if not isinstance(instrument, QubicInstrument):
-            if ngrids is None:
-                ngrids = 1 if scene.kind == 'I' else 2
+            if detector_ngrids is None:
+                detector_ngrids = 1 if scene.kind == 'I' else 2
             instrument = QubicInstrument(
-                calibration=calibration, detector_sigma=detector_sigma,
-                detector_fknee=detector_fknee, detector_fslope=detector_fslope,
-                detector_ncorr=detector_ncorr, detector_tau=detector_tau,
-                synthbeam_fraction=synthbeam_fraction, ngrids=ngrids)
+                calibration=calibration, detector_fknee=detector_fknee,
+                detector_fslope=detector_fslope, detector_ncorr=detector_ncorr,
+                detector_ngrids=detector_ngrids, detector_sigma=detector_sigma,
+                detector_tau=detector_tau, synthbeam_dtype=synthbeam_dtype,
+                synthbeam_fraction=synthbeam_fraction)
 
         Acquisition.__init__(
             self, instrument, sampling, scene, block,

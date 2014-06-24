@@ -38,7 +38,7 @@ class QubicInstrument(Instrument):
                  detector_sigma=10, detector_fknee=0, detector_fslope=1,
                  detector_ncorr=10, detector_tau=0.01,
                  synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
-                 ngrids=2, nside=256, **keywords):
+                 ngrids=2, **keywords):
         """
         Parameters
         ----------
@@ -56,8 +56,6 @@ class QubicInstrument(Instrument):
             The detector 1/f slope index.
         detector_ncorr : int
             The detector 1/f correlation length.
-        nside : int, optional
-            Deprecated.
         synthbeam_dtype : dtype, optional
             The data type for the synthetic beams (default: float32).
             It is the dtype used to store the values of the pointing matrix.
@@ -69,6 +67,7 @@ class QubicInstrument(Instrument):
 
         """
         if name is not None:
+            nside = keywords.pop('nside', None)
             skind = ", kind='I'" if 'nopol' in name else ''
             snside = ', nside={0}'.format(nside) if nside is not None else ''
             warn('Please update your code:\nacq = QubicAcquisition(150, sam'

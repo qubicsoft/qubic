@@ -34,7 +34,7 @@ def test():
         assert_same(actual2, ref2, atol=10)
         actual2 = (H.T * H)(sky)
         assert_same(actual2, ref2, atol=10)
-        actual3, actual4 = tod2map_all(acq, tod, disp=False)
+        actual3, actual4 = tod2map_all(acq, tod, disp=False, maxiter=2)
         assert_same(actual3, ref3, atol=10)
         assert_same(actual4, ref4)
         #actual5, actual6 = tod2map_each(acq, tod, disp=False)
@@ -50,7 +50,7 @@ def test():
         tod = H(sky)
         ref1 = acq.unpack(tod)
         ref2 = H.T(tod)
-        ref3, ref4 = tod2map_all(acq, tod, disp=False)
+        ref3, ref4 = tod2map_all(acq, tod, disp=False, maxiter=2)
         ref5, ref6 = None, None #tod2map_each(acq, tod, disp=False)
         yield (func, copy(sampling), kind, sky, ref1, ref2, ref3,
                ref4, ref5, ref6)

@@ -90,8 +90,8 @@ def map2tod(acq, map, convolution=False, max_nbytes=None):
     return tod
 
 
-def _tod2map(acq, tod, coverage_threshold, disp_pcg, disp_pmatrix,
-             max_nbytes, tol):
+def _tod2map(acq, tod, coverage_threshold, disp_pmatrix, max_nbytes, callback,
+             disp_pcg, maxiter, tol):
     projection = acq.get_projection_operator(verbose=disp_pmatrix)
     distribution = acq.get_distribution_operator()
     P = projection * distribution
@@ -121,19 +121,19 @@ def _tod2map(acq, tod, coverage_threshold, disp_pcg, disp_pmatrix,
     invNtt = acq.get_invntt_operator()
     preconditioner = DiagonalOperator(1/coverage[mask], broadcast='rightward')
     A = H.T * invNtt * H
-    solution = pcg(A, H.T(invNtt(tod)), M=preconditioner,
-                   disp=disp_pcg, tol=tol)
+    solution = pcg(A, H.T(invNtt(tod)), M=preconditioner, callback=callback,
+                   disp=disp_pcg, maxiter=maxiter, tol=tol)
     output_map = pack.T(solution['x'])
     return output_map, coverage
 
 
-def tod2map_all(acquisition, tod, coverage_threshold=0, disp=True, tol=1e-4,
-                max_nbytes=None):
+def tod2map_all(acquisition, tod, coverage_threshold=0, max_nbytes=None,
+                callback=None, disp=True, maxiter=300, tol=1e-4):
     """
     Compute map using all detectors.
 
     map, coverage = tod2map_all(acquisition, tod, [coverage_threshold,
-                                coverage_threshold, disp, tol])
+                                max_nbytes, callback, disp, tol])
 
     Parameters
     ----------
@@ -144,14 +144,20 @@ def tod2map_all(acquisition, tod, coverage_threshold=0, disp=True, tol=1e-4,
     coverage_threshold : float, optional
         The coverage threshold used to reject map pixels from
         the reconstruction.
-    disp : boolean, optional
-        Display of solver's iterations.
-    tol : float, optional
-        Solver tolerance.
     max_nbytes : int
         Maximum number of bytes for the pointing matrix. If the actual size
         is greater than this number, the computation of the pointing matrix
         will be performed on the fly at each iteration.
+    callback : function, optional
+        User-supplied function to call after each iteration.  It is called
+        as callback(solver), where solver is an Algorithm instance.
+    disp : boolean, optional
+        Display of solver's iterations.
+    maxiter : integer, optional
+        Maximum number of iterations.  Iteration will stop after maxiter
+        steps even if the specified tolerance has not been achieved.
+    tol : float, optional
+        Solver tolerance.
 
     Returns
     -------
@@ -159,17 +165,17 @@ def tod2map_all(acquisition, tod, coverage_threshold=0, disp=True, tol=1e-4,
         Temperature, QU or IQU maps of shapes npix, (npix, 2), (npix, 3)
         with npix = 12 * nside**2
     """
-    return _tod2map(acquisition, tod, coverage_threshold, disp, True,
-                    max_nbytes, tol)
+    return _tod2map(acquisition, tod, coverage_threshold, True, max_nbytes,
+                    callback, disp, maxiter, tol)
 
 
-def tod2map_each(acquisition, tod, coverage_threshold=0, disp=True, tol=1e-4,
-                 max_nbytes=None):
+def tod2map_each(acquisition, tod, coverage_threshold=0, max_nbytes=None,
+                 callback=None, disp=True, maxiter=300, tol=1e-4):
     """
     Compute average map from each detector.
 
     map, coverage = tod2map_each(acquisition, tod, [coverage_threshold,
-                                 coverage_threshold, disp, tol])
+                                 max_nbytes, callback, disp, tol])
 
     Parameters
     ----------
@@ -180,14 +186,20 @@ def tod2map_each(acquisition, tod, coverage_threshold=0, disp=True, tol=1e-4,
     coverage_threshold : float, optional
         The coverage threshold used to reject map pixels from
         the reconstruction.
-    disp : boolean, optional
-        Display of solver's iterations.
-    tol : float, optional
-        Solver tolerance.
     max_nbytes : int
         Maximum number of bytes for the pointing matrix. If the actual size
         is greater than this number, the computation of the pointing matrix
         will be performed on the fly at each iteration.
+    callback : function, optional
+        User-supplied function to call after each iteration.  It is called
+        as callback(solver), where solver is an Algorithm instance.
+    disp : boolean, optional
+        Display of solver's iterations.
+    maxiter : integer, optional
+        Maximum number of iterations.  Iteration will stop after maxiter
+        steps even if the specified tolerance has not been achieved.
+    tol : float, optional
+        Solver tolerance.
 
     Returns
     -------
@@ -203,8 +215,8 @@ def tod2map_each(acquisition, tod, coverage_threshold=0, disp=True, tol=1e-4,
         bar = progress_bar(len(instrument), 'TOD2MAP_EACH')
     for i, t in izip(instrument, tod):
         acq = QubicAcquisition(i, acquisition.sampling, acquisition.scene)
-        x_, n_ = _tod2map(acq, t[None, :], coverage_threshold, False, False,
-                          max_nbytes, tol)
+        x_, n_ = _tod2map(acq, t[None, :], coverage_threshold, False,
+                          max_nbytes, callback, False, maxiter, tol)
         x += x_
         n += n_
         if disp:

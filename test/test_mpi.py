@@ -1,6 +1,5 @@
 from __future__ import division
 import numpy as np
-from copy import copy
 from pyoperators import MPI
 from numpy.testing import assert_equal
 from pyoperators.utils.testing import assert_same
@@ -27,12 +26,13 @@ def test():
         assert_equal(acq.instrument.detector.comm.size, nprocs_instrument)
         assert_equal(acq.sampling.comm.size, size / nprocs_instrument)
         H = acq.get_operator()
+        invntt = acq.get_invntt_operator()
         tod = H(sky)
         #actual1 = acq.unpack(H(sky))
         #assert_same(actual1, ref1, atol=10)
-        actual2 = H.T(tod)
+        actual2 = H.T(invntt(tod))
         assert_same(actual2, ref2, atol=10)
-        actual2 = (H.T * H)(sky)
+        actual2 = (H.T * invntt * H)(sky)
         assert_same(actual2, ref2, atol=10)
         actual3, actual4 = tod2map_all(acq, tod, disp=False, maxiter=2)
         assert_same(actual3, ref3, atol=10)
@@ -46,11 +46,10 @@ def test():
                                comm=MPI.COMM_SELF)
         assert_equal(acq.comm.size, 1)
         H = acq.get_operator()
-
+        invntt = acq.get_invntt_operator()
         tod = H(sky)
         ref1 = acq.unpack(tod)
-        ref2 = H.T(tod)
+        ref2 = H.T(invntt(tod))
         ref3, ref4 = tod2map_all(acq, tod, disp=False, maxiter=2)
         ref5, ref6 = None, None #tod2map_each(acq, tod, disp=False)
-        yield (func, copy(sampling), kind, sky, ref1, ref2, ref3,
-               ref4, ref5, ref6)
+        yield (func, sampling, kind, sky, ref1, ref2, ref3, ref4, ref5, ref6)

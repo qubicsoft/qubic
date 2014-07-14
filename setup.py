@@ -17,7 +17,7 @@ platforms = 'MacOS X,Linux,Solaris,Unix,Windows'
 extra_f90_compile_args = ['-cpp -fopenmp -fpack-derived']
 
 ext_modules = [Extension('qubic._flib',
-                         sources=['qubic/module_polarization.f90.src'],
+                         sources=['src/polarization.f90.src'],
                          extra_f90_compile_args=extra_f90_compile_args,
                          include_dirs=['.', np.get_include()],
                          libraries=['gomp'])]

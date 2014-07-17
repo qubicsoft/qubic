@@ -225,7 +225,7 @@ def tod2map_each(acquisition, tod, coverage_threshold=0, max_nbytes=None,
     if disp:
         bar = progress_bar(len(instrument), 'TOD2MAP_EACH')
     for i, t in izip(instrument, tod):
-        acq = QubicAcquisition(i, acquisition.sampling, acquisition.scene)
+        acq = type(acquisition)(i, acquisition.sampling, acquisition.scene)
         x_, n_ = _tod2map(acq, t[None, :], coverage_threshold, False,
                           max_nbytes, callback, False, maxiter, tol)
         x += x_
@@ -233,6 +233,6 @@ def tod2map_each(acquisition, tod, coverage_threshold=0, max_nbytes=None,
         if disp:
             bar.update()
 
-    if acq.scene.kind == 'I':
+    if acquisition.scene.kind == 'I':
         return np.nan_to_num(x / n), n
     return np.nan_to_num(x / n[:, None]), n

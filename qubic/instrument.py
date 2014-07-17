@@ -12,7 +12,7 @@ from pyoperators import (
     DenseBlockDiagonalOperator, IdentityOperator, HomothetyOperator,
     ReshapeOperator, Rotation2dOperator, Rotation3dOperator,
     Spherical2CartesianOperator)
-from pyoperators.utils import openmp_num_threads, strenum
+from pyoperators.utils import openmp_num_threads
 from pysimulators import (
     Instrument, LayoutVertex, ConvolutionTruncatedExponentialOperator,
     ProjectionOperator)
@@ -22,28 +22,24 @@ from pysimulators.sparse import (
 from scipy.constants import c, pi
 from . import _flib as flib
 from .calibration import QubicCalibration
-from .scene import QubicScene
 from .utils import _compress_mask
-from .warnings import QubicDeprecationWarning, warn
 
-__all__ = ['QubicInstrument']
+__all__ = ['QubicInstrument',
+           'SimpleInstrument']
 
 
-class QubicInstrument(Instrument):
+class SimpleInstrument(Instrument):
     """
-    The QubicInstrument class. It represents the instrument setup.
+    The SimpleInstrument class. Classical imager with a well-behaved
+    single-peak beam.
 
     """
-    def __init__(self, name=None, calibration=None,
-                 detector_fknee=0, detector_fslope=1, detector_ncorr=10,
-                 detector_ngrids=2, detector_sigma=10, detector_tau=0.01,
-                 synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
-                 **keywords):
+    def __init__(self, calibration=None, detector_fknee=0, detector_fslope=1,
+                 detector_ncorr=10, detector_ngrids=2, detector_sigma=10,
+                 detector_tau=0.01, synthbeam_dtype=np.float32, **keywords):
         """
         Parameters
         ----------
-        name : str
-            Deprecated.
         calibration : QubicCalibration
             The calibration tree.
         detector_fknee : array-like
@@ -61,26 +57,8 @@ class QubicInstrument(Instrument):
         synthbeam_dtype : dtype, optional
             The data type for the synthetic beams (default: float32).
             It is the dtype used to store the values of the pointing matrix.
-        synthbeam_fraction: float, optional
-            The fraction of significant peaks retained for the computation
-            of the synthetic beam.
 
         """
-        if name is not None:
-            nside = keywords.pop('nside', None)
-            skind = ", kind='I'" if 'nopol' in name else ''
-            snside = ', nside={0}'.format(nside) if nside is not None else ''
-            warn('Please update your code:\nacq = QubicAcquisition(150, sam'
-                 'pling{0}{1})\n'.format(skind, snside),
-                 QubicDeprecationWarning)
-            name = name.replace(' ', '').lower()
-            names = 'monochromatic', 'monochromatic,qu', 'monochromatic,nopol'
-            if name not in names:
-                raise ValueError(
-                    "The only modes implemented are {0}.".format(
-                        strenum(names, 'and')))
-            self._init_deprecated_sky(name, nside)
-
         if calibration is None:
             calibration = QubicCalibration()
         self.calibration = calibration
@@ -88,10 +66,8 @@ class QubicInstrument(Instrument):
             detector_ngrids, detector_sigma, detector_fknee, detector_fslope,
             detector_ncorr, detector_tau)
         Instrument.__init__(self, 'QUBIC', layout)
-        self._init_primary_beam()
         self._init_optics(**keywords)
-        self._init_horns()
-        self._init_synthetic_beam(synthbeam_dtype, synthbeam_fraction)
+        self._init_synthetic_beam(synthbeam_dtype)
 
     def _get_detector_layout(self, ngrids, sigma, fknee, fslope, ncorr,
                              tau):
@@ -111,24 +87,6 @@ class QubicInstrument(Instrument):
         layout.ngrids = ngrids
         return layout
 
-    def _init_deprecated_sky(self, name, nside):
-        names = name.split(',')
-        kind = 'I' if 'nopol' in names \
-                   else 'QU' if 'qu' in names \
-                             else 'IQU'
-        sky = QubicScene(150, kind=kind, nside=nside)
-        self._deprecated_sky = sky
-
-    def _init_primary_beam(self):
-        class PrimaryBeam(object):
-            def __init__(self, fwhm_deg):
-                self.sigma = np.radians(fwhm_deg) / np.sqrt(8 * np.log(2))
-                self.fwhm_deg = fwhm_deg
-                self.fwhm_sr = 2 * pi * self.sigma**2
-            def __call__(self, theta):
-                return np.exp(-theta**2 / (2 * self.sigma**2))
-        self.primary_beam = PrimaryBeam(self.calibration.get('primbeam'))
-
     def _init_optics(self, **keywords):
         class Optics(object):
             pass
@@ -136,20 +94,15 @@ class QubicInstrument(Instrument):
         optics.focal_length = self.calibration.get('optics')['focal length']
         self.optics = optics
 
-    def _init_horns(self):
-        self.horn = self.calibration.get('hornarray')
-
-    def _init_synthetic_beam(self, synthbeam_dtype, synthbeam_fraction):
+    def _init_synthetic_beam(self, dtype):
         class SyntheticBeam(object):
             pass
         sb = SyntheticBeam()
-        sb.dtype = np.dtype(synthbeam_dtype)
-        sb.fraction = synthbeam_fraction
+        sb.dtype = np.dtype(dtype)
         self.synthetic_beam = sb
 
     def __str__(self):
-        state = [('synthbeam_fraction', self.synthetic_beam.fraction),
-                 ('ngrids', self.detector.ngrids),
+        state = [('ngrids', self.detector.ngrids),
                  ('selection', _compress_mask(~self.detector.all.removed))]
         return 'Instrument:\n' + \
                '\n'.join(['    ' + a + ': ' + repr(v) for a, v in state]) + \
@@ -254,12 +207,11 @@ class QubicInstrument(Instrument):
         """
         rotation = sampling.cartesian_galactic2instrument
         dtype = self.synthetic_beam.dtype
-        fraction = self.synthetic_beam.fraction
         ndetectors = len(self)
         ntimes = len(sampling)
         nside = scene.nside
 
-        theta, phi, vals = _peak_angles_fraction(self, scene, fraction)
+        theta, phi, vals = self._peak_angles(scene)
         ncolmax = theta.shape[-1]
         thetaphi = _pack_vector(theta, phi)  # (ndetectors, ncolmax, 2)
         direction = Spherical2CartesianOperator('zenith,azimuth')(thetaphi)
@@ -324,64 +276,148 @@ class QubicInstrument(Instrument):
 
         return ProjectionOperator(s, shapeout=shapeout)
 
+    def _peak_angles(self, scene):
+        """
+        Return the spherical coordinates (theta, phi) of the beam peaks,
+        in radians.
 
-def _peak_angles(q, scene, kmax):
+        """
+        local_dict = {'f': self.optics.focal_length,
+                      'x': np.ascontiguousarray(self.detector.center[..., 0]),
+                      'y': np.ascontiguousarray(self.detector.center[..., 1])}
+        theta = ne.evaluate('arctan2(sqrt(x**2 + x**2), f)',
+                            local_dict=local_dict).reshape(-1, 1)
+        phi = ne.evaluate('arctan2(y, x)+pi',
+                          local_dict=local_dict).reshape(-1, 1)
+        vals = np.ones_like(theta)
+        return theta, phi, vals
+
+
+class QubicInstrument(SimpleInstrument):
     """
-    Return the spherical coordinates (theta,phi) of the beam peaks, in radians.
+    The QubicInstrument class. It represents the instrument setup.
 
-    Parameters
-    ----------
-    kmax : int, optional
-        The diffraction order above which the peaks are ignored.
-        For instance, a value of kmax=2 will model the synthetic beam by
-        (2 * kmax + 1)**2 = 25 peaks and a value of kmax=0 will only sample
-        the central peak.
     """
-    ndetector = len(q)
-    center = q.detector.center
-    lmbda = c / scene.nu
-    dx = q.horn.spacing
-    detvec = np.vstack([-center[..., 0],
-                        -center[..., 1],
-                        np.zeros(ndetector) + q.optics.focal_length]).T
-    detvec.T[...] /= np.sqrt(np.sum(detvec**2, axis=1))
+    def __init__(self, calibration=None, detector_fknee=0, detector_fslope=1,
+                 detector_ncorr=10, detector_ngrids=2, detector_sigma=10,
+                 detector_tau=0.01, synthbeam_dtype=np.float32,
+                 synthbeam_fraction=0.99, **keywords):
+        """
+        Parameters
+        ----------
+        calibration : QubicCalibration
+            The calibration tree.
+        detector_fknee : array-like
+            The detector 1/f knee frequency in Hertz.
+        detector_fslope : array-like
+            The detector 1/f slope index.
+        detector_ncorr : int
+            The detector 1/f correlation length.
+        detector_ngrids : int, optional
+            Number of detector grids.
+        detector_sigma : array-like
+            The standard deviation of the detector white noise component.
+        detector_tau : array-like
+            The detector time constants in seconds.
+        synthbeam_dtype : dtype, optional
+            The data type for the synthetic beams (default: float32).
+            It is the dtype used to store the values of the pointing matrix.
+        synthbeam_fraction: float, optional
+            The fraction of significant peaks retained for the computation
+            of the synthetic beam.
 
-    kx, ky = np.mgrid[-kmax:kmax+1, -kmax:kmax+1]
-    nx = detvec[:, 0, np.newaxis] - lmbda * kx.ravel() / dx
-    ny = detvec[:, 1, np.newaxis] - lmbda * ky.ravel() / dx
-    local_dict = {'nx': nx, 'ny': ny}
-    theta = ne.evaluate('arcsin(sqrt(nx**2 + ny**2))', local_dict=local_dict)
-    phi = ne.evaluate('arctan2(ny, nx)', local_dict=local_dict)
-    return theta, phi
+        """
+        if calibration is None:
+            calibration = QubicCalibration()
+        SimpleInstrument.__init__(
+            self, calibration, detector_fknee, detector_fslope, detector_ncorr,
+            detector_ngrids, detector_sigma, detector_tau, synthbeam_dtype,
+            **keywords)
+        self._init_primary_beam()
+        self._init_horns()
+        self.synthetic_beam.fraction = synthbeam_fraction
 
+    def _init_primary_beam(self):
+        class PrimaryBeam(object):
+            def __init__(self, fwhm_deg):
+                self.sigma = np.radians(fwhm_deg) / np.sqrt(8 * np.log(2))
+                self.fwhm_deg = fwhm_deg
+                self.fwhm_sr = 2 * pi * self.sigma**2
+            def __call__(self, theta):
+                return np.exp(-theta**2 / (2 * self.sigma**2))
+        self.primary_beam = PrimaryBeam(self.calibration.get('primbeam'))
 
-def _peak_angles_fraction(q, scene, fraction):
+    def _init_horns(self):
+        self.horn = self.calibration.get('hornarray')
 
-    # there is no need to go beyond kmax=5
-    theta, phi = _peak_angles(q, scene, kmax=5)
-    index = _argsort(theta)
-    theta = theta[index]
-    phi = phi[index]
-    val = q.primary_beam(theta)
-    val[~np.isfinite(val)] = 0
-    val /= np.sum(val, axis=-1)[:, None]
-    cumval = np.cumsum(val, axis=-1)
-    imaxs = cumval.shape[-1] - np.sum(cumval > fraction, axis=-1) + 1
-    imax = max(imaxs)
+    def __str__(self):
+        state = [('synthbeam_fraction', self.synthetic_beam.fraction)]
+        out = SimpleInstrument.__str__(self)
+        index = out.index('\nCalibration')
+        return out[:index] + \
+               '\n'.join(['    {0}: {1!r}'.format(*_) for _ in state]) + \
+               out[index:]
 
-    # slice initial arrays to discard the non-significant peaks
-    theta = theta[:, :imax]
-    phi = phi[:, :imax]
-    val = val[:, :imax]
+    __repr__ = __str__
 
-    # remove additional per-detector non-significant peaks
-    # and remove potential NaN in theta, phi
-    for idet, imax_ in enumerate(imaxs):
-        val[idet, imax_:] = 0
-        theta[idet, imax_:] = pi / 2 #XXX 0 leads to NaN
-        phi[idet, imax_:] = 0
-    val /= np.sum(val, axis=-1)[:, None]
-    return theta, phi, val
+    def _peak_angles(self, scene):
+        fraction = self.synthetic_beam.fraction
+        # there is no need to go beyond kmax=5
+        theta, phi = self._peak_angles_kmax(scene, kmax=5)
+        index = _argsort(theta)
+        theta = theta[index]
+        phi = phi[index]
+        val = self.primary_beam(theta)
+        val[~np.isfinite(val)] = 0
+        val /= np.sum(val, axis=-1)[:, None]
+        cumval = np.cumsum(val, axis=-1)
+        imaxs = cumval.shape[-1] - np.sum(cumval > fraction, axis=-1) + 1
+        imax = max(imaxs)
+
+        # slice initial arrays to discard the non-significant peaks
+        theta = theta[:, :imax]
+        phi = phi[:, :imax]
+        val = val[:, :imax]
+
+        # remove additional per-detector non-significant peaks
+        # and remove potential NaN in theta, phi
+        for idet, imax_ in enumerate(imaxs):
+            val[idet, imax_:] = 0
+            theta[idet, imax_:] = pi / 2 #XXX 0 leads to NaN
+            phi[idet, imax_:] = 0
+        val /= np.sum(val, axis=-1)[:, None]
+        return theta, phi, val
+
+    def _peak_angles_kmax(self, scene, kmax):
+        """
+        Return the spherical coordinates (theta, phi) of the beam peaks,
+        in radians.
+
+        Parameters
+        ----------
+        kmax : int, optional
+            The diffraction order above which the peaks are ignored.
+            For instance, a value of kmax=2 will model the synthetic beam by
+            (2 * kmax + 1)**2 = 25 peaks and a value of kmax=0 will only sample
+            the central peak.
+        """
+        ndetector = len(self)
+        center = self.detector.center
+        lmbda = c / scene.nu
+        dx = self.horn.spacing
+        detvec = np.vstack([-center[..., 0],
+                            -center[..., 1],
+                            np.zeros(ndetector) + self.optics.focal_length]).T
+        detvec.T[...] /= np.sqrt(np.sum(detvec**2, axis=1))
+
+        kx, ky = np.mgrid[-kmax:kmax+1, -kmax:kmax+1]
+        nx = detvec[:, 0, np.newaxis] - lmbda * kx.ravel() / dx
+        ny = detvec[:, 1, np.newaxis] - lmbda * ky.ravel() / dx
+        local_dict = {'nx': nx, 'ny': ny}
+        theta = ne.evaluate('arcsin(sqrt(nx**2 + ny**2))',
+                            local_dict=local_dict)
+        phi = ne.evaluate('arctan2(ny, nx)', local_dict=local_dict)
+        return theta, phi
 
 
 def _argsort(a, axis=-1):

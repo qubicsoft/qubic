@@ -17,30 +17,29 @@ from pyoperators.utils.mpi import as_mpi
 from pysimulators import Acquisition, ProjectionOperator
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from .calibration import QubicCalibration
-from .instrument import QubicInstrument
+from .instrument import QubicInstrument, SimpleInstrument
 from .scene import QubicScene
 
-__all__ = ['QubicAcquisition']
+__all__ = ['QubicAcquisition',
+           'SimpleAcquisition']
 
 
-class QubicAcquisition(Acquisition):
+class SimpleAcquisition(Acquisition):
     """
-    The QubicAcquisition class, which combines the instrument, sampling and
-    scene models.
+    The Acquisition class for the single-peak simple instrument
 
     """
     def __init__(self, instrument, sampling, scene=None, block=None,
                  calibration=None, detector_sigma=10, detector_fknee=0,
                  detector_fslope=1, detector_ncorr=10, detector_ngrids=None,
                  detector_tau=0.01, synthbeam_dtype=np.float32,
-                 synthbeam_fraction=0.99, kind='IQU', nside=256,
-                 max_nbytes=None, nprocs_instrument=None, nprocs_sampling=None,
-                 comm=None):
+                 kind='IQU', nside=256, max_nbytes=None,
+                 nprocs_instrument=None, nprocs_sampling=None, comm=None):
         """
-        acq = QubicAcquisition(instrument, sampling, [scene=|kind=, nside=],
-                               nprocs_instrument=, nprocs_sampling=, comm=)
-        acq = QubicAcquisition(band, sampling, [scene=|kind=, nside=],
-                               nprocs_instrument=, nprocs_sampling=, comm=)
+        acq = SimpleAcquisition(instrument, sampling, [scene=|kind=, nside=],
+                                nprocs_instrument=, nprocs_sampling=, comm=)
+        acq = SimpleAcquisition(band, sampling, [scene=|kind=, nside=],
+                                nprocs_instrument=, nprocs_sampling=, comm=)
 
         Parameters
         ----------
@@ -55,7 +54,7 @@ class QubicAcquisition(Acquisition):
             and 'IQU' for intensity plus QU maps.
         nside : int, optional
             The Healpix scene's nside.
-        instrument : QubicInstrument, optional
+        instrument : SimpleInstrument, optional
             Module name (only 'monochromatic' for now), or a QubicInstrument
             instance.
         calibration : QubicCalibration, optional
@@ -75,9 +74,6 @@ class QubicAcquisition(Acquisition):
         synthbeam_dtype : dtype, optional
             The data type for the synthetic beams (default: float32).
             It is the dtype used to store the values of the pointing matrix.
-        synthbeam_fraction: float, optional
-            The fraction of significant peaks retained for the computation
-            of the synthetic beam.
         max_nbytes : int or None, optional
             Maximum number of bytes to be allocated for the acquisition's
             operator.
@@ -94,27 +90,19 @@ class QubicAcquisition(Acquisition):
                 comm.size = nprocs_instrument * nprocs_sampling
 
         """
-        if scene is None:
-            if isinstance(instrument, QubicInstrument):
-                try:
-                    scene = instrument._deprecated_sky
-                except AttributeError:
-                    scene = 150
-            else:
-                scene = instrument
-        if not isinstance(scene, QubicScene):
-            scene = QubicScene(scene, kind=kind, nside=nside)
-
-        if not isinstance(instrument, QubicInstrument):
+        if not isinstance(instrument, SimpleInstrument):
+            if scene is not None:
+                raise TypeError('Invalid calling sequence.')
+            scene = QubicScene(instrument, kind=kind, nside=nside)
             if detector_ngrids is None:
                 detector_ngrids = 1 if scene.kind == 'I' else 2
-            instrument = QubicInstrument(
+            instrument = SimpleInstrument(
                 calibration=calibration, detector_fknee=detector_fknee,
                 detector_fslope=detector_fslope, detector_ncorr=detector_ncorr,
                 detector_ngrids=detector_ngrids, detector_sigma=detector_sigma,
-                detector_tau=detector_tau, synthbeam_dtype=synthbeam_dtype,
-                synthbeam_fraction=synthbeam_fraction)
-
+                detector_tau=detector_tau, synthbeam_dtype=synthbeam_dtype)
+        elif scene is None:
+            raise ValueError('Undefined scene.')
         Acquisition.__init__(
             self, instrument, sampling, scene, block,
             max_nbytes=max_nbytes, nprocs_instrument=nprocs_instrument,
@@ -489,3 +477,94 @@ class QubicAcquisition(Acquisition):
         t = time.time()
         return time.strftime('%Y-%m-%d_%H:%M:%S',
                              time.localtime(t)) + '{:.9f}'.format(t-int(t))[1:]
+
+
+class QubicAcquisition(SimpleAcquisition):
+    """
+    The QubicAcquisition class, which combines the instrument, sampling and
+    scene models.
+
+    """
+    def __init__(self, instrument, sampling, scene=None, block=None,
+                 calibration=None, detector_sigma=10, detector_fknee=0,
+                 detector_fslope=1, detector_ncorr=10, detector_ngrids=None,
+                 detector_tau=0.01, synthbeam_dtype=np.float32,
+                 synthbeam_fraction=0.99, kind='IQU', nside=256,
+                 max_nbytes=None, nprocs_instrument=None, nprocs_sampling=None,
+                 comm=None):
+        """
+        acq = QubicAcquisition(instrument, sampling, [scene=|kind=, nside=],
+                               nprocs_instrument=, nprocs_sampling=, comm=)
+        acq = QubicAcquisition(band, sampling, [scene=|kind=, nside=],
+                               nprocs_instrument=, nprocs_sampling=, comm=)
+
+        Parameters
+        ----------
+        band : int
+            The sky frequency, in GHz.
+        scene : QubicScene, optional
+            The discretized observed scene (the sky).
+        block : tuple of slices, optional
+            Partition of the samplings.
+        kind : 'I', 'QU', 'IQU', optional
+            The sky kind: 'I' for intensity-only, 'QU' for Q and U maps,
+            and 'IQU' for intensity plus QU maps.
+        nside : int, optional
+            The Healpix scene's nside.
+        instrument : QubicInstrument, optional
+            Module name (only 'monochromatic' for now), or a QubicInstrument
+            instance.
+        calibration : QubicCalibration, optional
+            The calibration tree.
+        detector_sigma : array-like, optional
+            The standard deviation of the detector white noise component.
+        detector_fknee : array-like, optional
+            The detector 1/f knee frequency in Hertz.
+        detector_fslope : array-like, optional
+            The detector 1/f slope index.
+        detector_ncorr : int, optional
+            The detector 1/f correlation length.
+        detector_ngrids : int, optional
+            Number of detector grids.
+        detector_tau : array-like, optional
+            The detector time constants in seconds.
+        synthbeam_dtype : dtype, optional
+            The data type for the synthetic beams (default: float32).
+            It is the dtype used to store the values of the pointing matrix.
+        synthbeam_fraction: float, optional
+            The fraction of significant peaks retained for the computation
+            of the synthetic beam.
+        max_nbytes : int or None, optional
+            Maximum number of bytes to be allocated for the acquisition's
+            operator.
+        nprocs_instrument : int
+            For a given sampling slice, number of procs dedicated to
+            the instrument.
+        nprocs_sampling : int
+            For a given detector slice, number of procs dedicated to
+            the sampling.
+        comm : mpi4py.MPI.Comm
+            The acquisition's MPI communicator. Note that it is transformed
+            into a 2d cartesian communicator before being stored as the 'comm'
+            attribute. The following relationship must hold:
+                comm.size = nprocs_instrument * nprocs_sampling
+
+        """
+        if not isinstance(instrument, QubicInstrument):
+            if scene is not None:
+                raise TypeError('Invalid calling sequence.')
+            scene = QubicScene(instrument, kind=kind, nside=nside)
+            if detector_ngrids is None:
+                detector_ngrids = 1 if scene.kind == 'I' else 2
+            instrument = QubicInstrument(
+                calibration=calibration, detector_fknee=detector_fknee,
+                detector_fslope=detector_fslope, detector_ncorr=detector_ncorr,
+                detector_ngrids=detector_ngrids, detector_sigma=detector_sigma,
+                detector_tau=detector_tau, synthbeam_dtype=synthbeam_dtype,
+                synthbeam_fraction=synthbeam_fraction)
+        elif scene is None:
+            raise ValueError('Undefined scene.')
+        SimpleAcquisition.__init__(
+            self, instrument, sampling, scene, block=block,
+            max_nbytes=max_nbytes, nprocs_instrument=nprocs_instrument,
+            nprocs_sampling=nprocs_sampling, comm=comm)

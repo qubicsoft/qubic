@@ -108,7 +108,17 @@ def _tod2map(acq, tod, coverage_threshold, disp_pmatrix, max_nbytes, callback,
     coverage = P.T(ones)
     if kind == 'IQU':
         coverage = coverage[..., 0]
-    mask = coverage > coverage_threshold
+    cov = coverage[coverage > 0]
+    i = np.argsort(cov)
+    cdf = np.cumsum(cov[i])
+    j = np.argmax(cdf >= coverage_threshold * cdf[-1])
+    threshold = cov[i[j]]
+    mask = coverage >= threshold
+    if acq.comm.rank == 0 and coverage_threshold > 0:
+        print 'Total coverage:', cdf[-1]
+        print 'Threshold coverage set to:', threshold
+        print 'Fraction of rejected pixels:', 1 - np.sum(mask) / cov.size
+
     projection = _get_projection_restricted(acq, projection, mask)
     pack = PackOperator(mask, broadcast='rightward')
     hwp = acq.get_hwp_operator()
@@ -127,7 +137,7 @@ def _tod2map(acq, tod, coverage_threshold, disp_pmatrix, max_nbytes, callback,
     return output_map, coverage
 
 
-def tod2map_all(acquisition, tod, coverage_threshold=0, max_nbytes=None,
+def tod2map_all(acquisition, tod, coverage_threshold=0.01, max_nbytes=None,
                 callback=None, disp=True, maxiter=300, tol=1e-4):
     """
     Compute map using all detectors.
@@ -142,8 +152,9 @@ def tod2map_all(acquisition, tod, coverage_threshold=0, max_nbytes=None,
     tod : array-like
         The Time-Ordered-Data of shape (ndetectors, ntimes).
     coverage_threshold : float, optional
-        The coverage threshold used to reject map pixels from
-        the reconstruction.
+        The low-coverage sky pixels whose cumulative coverage is below a
+        fraction of the total coverage are rejected. This keyword speficies
+        this fraction (between 0 and 1]).
     max_nbytes : int
         Maximum number of bytes for the pointing matrix. If the actual size
         is greater than this number, the computation of the pointing matrix

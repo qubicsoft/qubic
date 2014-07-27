@@ -488,10 +488,10 @@ class QubicAcquisition(SimpleAcquisition):
     def __init__(self, instrument, sampling, scene=None, block=None,
                  calibration=None, detector_sigma=10, detector_fknee=0,
                  detector_fslope=1, detector_ncorr=10, detector_ngrids=None,
-                 detector_tau=0.01, synthbeam_dtype=np.float32,
-                 synthbeam_fraction=0.99, kind='IQU', nside=256,
-                 max_nbytes=None, nprocs_instrument=None, nprocs_sampling=None,
-                 comm=None):
+                 detector_tau=0.01, primary_beam=None, secondary_beam=None,
+                 synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
+                 kind='IQU', nside=256, max_nbytes=None,
+                 nprocs_instrument=None, nprocs_sampling=None, comm=None):
         """
         acq = QubicAcquisition(instrument, sampling, [scene=|kind=, nside=],
                                nprocs_instrument=, nprocs_sampling=, comm=)
@@ -528,6 +528,10 @@ class QubicAcquisition(SimpleAcquisition):
             Number of detector grids.
         detector_tau : array-like, optional
             The detector time constants in seconds.
+        primary_beam : function f(theta [rad], phi [rad])
+            The primary beam transmission function.
+        secondary_beam : function f(theta [rad], phi [rad])
+            The secondary beam transmission function.
         synthbeam_dtype : dtype, optional
             The data type for the synthetic beams (default: float32).
             It is the dtype used to store the values of the pointing matrix.
@@ -560,7 +564,8 @@ class QubicAcquisition(SimpleAcquisition):
                 calibration=calibration, detector_fknee=detector_fknee,
                 detector_fslope=detector_fslope, detector_ncorr=detector_ncorr,
                 detector_ngrids=detector_ngrids, detector_sigma=detector_sigma,
-                detector_tau=detector_tau, synthbeam_dtype=synthbeam_dtype,
+                detector_tau=detector_tau, primary_beam=primary_beam,
+                secondary_beam=secondary_beam, synthbeam_dtype=synthbeam_dtype,
                 synthbeam_fraction=synthbeam_fraction)
         elif scene is None:
             raise ValueError('Undefined scene.')

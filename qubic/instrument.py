@@ -21,6 +21,7 @@ from pysimulators.sparse import (
     FSRMatrix, FSRRotation2dMatrix, FSRRotation3dMatrix)
 from scipy.constants import c, pi
 from . import _flib as flib
+from .beams import GaussianBeam
 from .calibration import QubicCalibration
 from .utils import _compress_mask
 
@@ -300,8 +301,9 @@ class QubicInstrument(SimpleInstrument):
     """
     def __init__(self, calibration=None, detector_fknee=0, detector_fslope=1,
                  detector_ncorr=10, detector_ngrids=2, detector_sigma=10,
-                 detector_tau=0.01, synthbeam_dtype=np.float32,
-                 synthbeam_fraction=0.99, **keywords):
+                 detector_tau=0.01, primary_beam=None, secondary_beam=None,
+                 synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
+                 **keywords):
         """
         Parameters
         ----------
@@ -319,6 +321,10 @@ class QubicInstrument(SimpleInstrument):
             The standard deviation of the detector white noise component.
         detector_tau : array-like
             The detector time constants in seconds.
+        primary_beam : function f(theta [rad], phi [rad])
+            The primary beam transmission function.
+        secondary_beam : function f(theta [rad], phi [rad])
+            The secondary beam transmission function.
         synthbeam_dtype : dtype, optional
             The data type for the synthetic beams (default: float32).
             It is the dtype used to store the values of the pointing matrix.
@@ -333,19 +339,19 @@ class QubicInstrument(SimpleInstrument):
             self, calibration, detector_fknee, detector_fslope, detector_ncorr,
             detector_ngrids, detector_sigma, detector_tau, synthbeam_dtype,
             **keywords)
-        self._init_primary_beam()
+        self._init_beams(primary_beam, secondary_beam)
         self._init_horns()
         self.synthetic_beam.fraction = synthbeam_fraction
+        self.synthetic_beam.kmax = 8  # all peaks are considered
 
-    def _init_primary_beam(self):
-        class PrimaryBeam(object):
-            def __init__(self, fwhm_deg):
-                self.sigma = np.radians(fwhm_deg) / np.sqrt(8 * np.log(2))
-                self.fwhm_deg = fwhm_deg
-                self.fwhm_sr = 2 * pi * self.sigma**2
-            def __call__(self, theta):
-                return np.exp(-theta**2 / (2 * self.sigma**2))
-        self.primary_beam = PrimaryBeam(self.calibration.get('primbeam'))
+    def _init_beams(self, primary, secondary):
+        if primary is None:
+            primary = GaussianBeam(self.calibration.get('primbeam'))
+        self.primary_beam = primary
+        if secondary is None:
+            secondary = GaussianBeam(self.calibration.get('primbeam'),
+                                     backward=True)
+        self.secondary_beam = secondary
 
     def _init_horns(self):
         self.horn = self.calibration.get('hornarray')
@@ -362,16 +368,16 @@ class QubicInstrument(SimpleInstrument):
 
     def _peak_angles(self, scene):
         fraction = self.synthetic_beam.fraction
-        # there is no need to go beyond kmax=5
-        theta, phi = self._peak_angles_kmax(scene, kmax=5)
-        index = _argsort(theta)
-        theta = theta[index]
-        phi = phi[index]
-        val = self.primary_beam(theta)
+        theta, phi = self._peak_angles_kmax(scene, self.synthetic_beam.kmax)
+        val = np.array(self.primary_beam(theta, phi), dtype=float, copy=False)
         val[~np.isfinite(val)] = 0
         val /= np.sum(val, axis=-1)[:, None]
+        index = _argsort_reverse(val)
+        theta = theta[index]
+        phi = phi[index]
+        val = val[index]
         cumval = np.cumsum(val, axis=-1)
-        imaxs = cumval.shape[-1] - np.sum(cumval > fraction, axis=-1) + 1
+        imaxs = np.argmax(cumval >= fraction, axis=-1) + 1
         imax = max(imaxs)
 
         # slice initial arrays to discard the non-significant peaks
@@ -420,9 +426,9 @@ class QubicInstrument(SimpleInstrument):
         return theta, phi
 
 
-def _argsort(a, axis=-1):
+def _argsort_reverse(a, axis=-1):
     i = list(np.ogrid[[slice(x) for x in a.shape]])
-    i[axis] = a.argsort(axis)
+    i[axis] = a.argsort(axis)[:, ::-1]
     return i
 
 

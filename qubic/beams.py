@@ -7,6 +7,15 @@ __all__ = []
 
 
 class Beam(object):
+    def __init__(self, solid_angle):
+        """
+        Parameter
+        ---------
+        solid_angle : float
+            The beam solid angle [sr].
+        """
+        self.solid_angle = float(solid_angle)
+
     def __call__(self, theta_rad, phi_rad):
         raise NotImplementedError()
 
@@ -20,8 +29,8 @@ class GaussianBeam(Beam):
         self.sigma_deg = fwhm_deg / np.sqrt(8 * np.log(2))
         self.sigma_rad = np.radians(self.sigma_deg)
         self.fwhm_deg = fwhm_deg
-        self.sr = 2 * pi * self.sigma_rad**2
         self.backward = bool(backward)
+        Beam.__init__(self, 2 * pi * self.sigma_rad**2)
 
     def __call__(self, theta_rad, phi_rad=None):
         if self.backward:
@@ -35,7 +44,7 @@ class UniformHalfSpaceBeam(Beam):
 
     """
     def __init__(self):
-        self.sr = 2 * pi
+        Beam.__init__(self, 2 * pi)
 
     def __call__(self, theta_rad, phi_rad=None):
         return 1

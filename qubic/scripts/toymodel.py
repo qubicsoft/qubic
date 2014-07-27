@@ -7,9 +7,8 @@ from scipy.constants import c, pi
 from pyoperators import MaskOperator
 from pysimulators import create_fitsheader, SceneGrid
 from qubic import QubicInstrument
-from qubic.beams import GaussianBeam
 
-qubic = QubicInstrument(ngrids=1)
+qubic = QubicInstrument(detector_ngrids=1)
 
 NU = 150e9                   # [Hz]
 LAMBDA = c / NU              # [m]
@@ -18,9 +17,6 @@ FOCAL_LENGTH = 0.3           # [m]
 SOURCE_POWER = 1             # [W]
 SOURCE_THETA = np.radians(0) # [rad]
 SOURCE_PHI = np.radians(45)  # [rad]
-
-PRIMARY_BEAM_FWHM = 14       # [degrees]
-SECONDARY_BEAM_FWHM = 14     # [degrees]
 
 HORN_OPEN = np.zeros(qubic.horn.shape, dtype=bool)  # all closed
 HORN_OPEN[10,10] = True
@@ -43,13 +39,6 @@ def ang2vec(theta_rad, phi_rad):
     return np.array([sintheta * np.cos(phi_rad),
                      sintheta * np.sin(phi_rad),
                      np.cos(theta_rad)])
-
-
-########
-# BEAMS
-########
-primary_beam = GaussianBeam(PRIMARY_BEAM_FWHM)
-secondary_beam = GaussianBeam(SECONDARY_BEAM_FWHM, backward=True)
 
 
 ########
@@ -86,7 +75,8 @@ header = create_fitsheader((ndet_x, ndet_x), cdelt=det_spacing, crval=(0, 0),
                            ctype=['X---CAR', 'Y---CAR'], cunit=['m', 'm'])
 detector_plane = SceneGrid.fromfits(header)
 integ = MaskOperator(qubic.detector.all.removed) * \
-        detector_plane.get_integration_operator(qubic.detector.all.vertex)
+        detector_plane.get_integration_operator(
+            detector_plane.topixel(qubic.detector.all.vertex))
 
 
 ########
@@ -94,9 +84,9 @@ integ = MaskOperator(qubic.detector.all.removed) * \
 ########
 def get_model_A():
     """ Phase and transmission from the switches to the focal plane. """
-    transmission = np.sqrt(secondary_beam(det_theta) /
-                           secondary_beam.sr *
-                           detector_plane_pixel_sr)[..., None]
+    transmission = np.sqrt(qubic.secondary_beam(det_theta) *
+                           detector_plane_pixel_sr /
+                           qubic.secondary_beam.solid_angle)[..., None]
     const = 2j * pi / LAMBDA
     product = np.dot(det_uvec, horn_vec.T)
     return ne.evaluate('transmission * exp(const * product)')
@@ -105,7 +95,8 @@ def get_model_A():
 def get_model_B():
     """ Phase and transmission from the source to the switches. """
     source_uvec = ang2vec(SOURCE_THETA, SOURCE_PHI)
-    source_E = np.sqrt(SOURCE_POWER) * np.sqrt(primary_beam(SOURCE_THETA))
+    source_E = np.sqrt(SOURCE_POWER) * \
+               np.sqrt(qubic.primary_beam(SOURCE_THETA, SOURCE_PHI))
     const = 2j * pi / LAMBDA
     product = np.dot(horn_vec, source_uvec)
     return ne.evaluate('source_E * exp(const * product)')

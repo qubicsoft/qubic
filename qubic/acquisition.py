@@ -102,7 +102,7 @@ class SimpleAcquisition(Acquisition):
                 detector_ngrids=detector_ngrids, detector_sigma=detector_sigma,
                 detector_tau=detector_tau, synthbeam_dtype=synthbeam_dtype)
         elif scene is None:
-            raise ValueError('Undefined scene.')
+            scene = QubicScene(150, kind=kind, nside=nside)
         Acquisition.__init__(
             self, instrument, sampling, scene, block,
             max_nbytes=max_nbytes, nprocs_instrument=nprocs_instrument,
@@ -567,8 +567,6 @@ class QubicAcquisition(SimpleAcquisition):
                 detector_tau=detector_tau, primary_beam=primary_beam,
                 secondary_beam=secondary_beam, synthbeam_dtype=synthbeam_dtype,
                 synthbeam_fraction=synthbeam_fraction)
-        elif scene is None:
-            raise ValueError('Undefined scene.')
         SimpleAcquisition.__init__(
             self, instrument, sampling, scene, block=block,
             max_nbytes=max_nbytes, nprocs_instrument=nprocs_instrument,

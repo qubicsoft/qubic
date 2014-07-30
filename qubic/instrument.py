@@ -7,12 +7,11 @@ except:
     pass
 import numexpr as ne
 import numpy as np
-from multiprocessing.dummy import Pool
 from pyoperators import (
     DenseBlockDiagonalOperator, IdentityOperator, HomothetyOperator,
     ReshapeOperator, Rotation2dOperator, Rotation3dOperator,
     Spherical2CartesianOperator)
-from pyoperators.utils import openmp_num_threads
+from pyoperators.utils import pool_threading
 from pysimulators import (
     Instrument, LayoutVertex, ConvolutionTruncatedExponentialOperator,
     ProjectionOperator)
@@ -232,28 +231,14 @@ class SimpleInstrument(Instrument):
 
         index = s.data.index.reshape((ndetectors, ntimes, ncolmax))
 
-        nthreads = openmp_num_threads()
-        try:
-            import mkl
-            mkl.set_num_threads(1)
-        except:
-            pass
-
         def func_thread(i):
             # e_nf[i] shape: (1, ncolmax, 3)
             # e_ni shape: (ntimes, ncolmax, 3)
             e_ni = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
             index[i] = Cartesian2HealpixOperator(nside)(e_ni)
 
-        pool = Pool(nthreads)
-        pool.map(func_thread, xrange(ndetectors))
-        pool.close()
-        pool.join()
-
-        try:
-            mkl.set_num_threads(nthreads)
-        except:
-            pass
+        with pool_threading() as pool:
+            pool.map(func_thread, xrange(ndetectors))
 
         if scene.kind == 'I':
             value = s.data.value.reshape(ndetectors, ntimes, ncolmax)

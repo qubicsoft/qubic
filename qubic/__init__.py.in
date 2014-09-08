@@ -7,3 +7,4 @@ from .instrument import *
 from .mapmaking import *
 from .pointings import *
 from .scene import *
+from .xpol import *

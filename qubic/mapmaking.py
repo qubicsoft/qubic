@@ -1,15 +1,72 @@
 from __future__ import division
 
+import healpy as hp
 import numpy as np
 from itertools import izip
 from pyoperators import (
     BlockColumnOperator, BlockDiagonalOperator, DiagonalOperator,
     MPIDistributionIdentityOperator, PackOperator, pcg, proxy_group,
     rule_manager)
-from .acquisition import QubicAcquisition
 from .utils import progress_bar
 
-__all__ = ['map2tod', 'tod2map_all', 'tod2map_each']
+__all__ = ['angular_distance_from_mask',
+           'apodize_mask',
+           'map2tod',
+           'tod2map_all',
+           'tod2map_each']
+
+
+def angular_distance_from_mask(mask):
+    """
+    For each pixel of a Healpix map, return the smallest angular distance
+    to a set of masked pixels (of value True), in degrees.
+
+    Parameter
+    ---------
+    maskok : boolean Healpix map
+        The Healpix mask that defines the set of masked pixels (of value True)
+        whose smallest angular distance to each pixel of a Healpix map of same
+        nside is computed.
+
+    """
+    nside = hp.npix2nside(len(mask))
+
+    # get the list of pixels on the external border of the mask
+    ip = np.arange(12*nside**2)[~mask]
+    neigh = hp.get_all_neighbours(nside, ip)
+    nn = np.unique(neigh.ravel())
+    if nn[0] == -1:
+        nn = nn[1:]
+    nn = nn[mask[nn]]
+
+    # get unit vectors for border and inner pixels
+    vecpix_inner = np.array(hp.pix2vec(nside, ip))
+    vecpix_outer = np.array(hp.pix2vec(nside, nn))
+
+    # get angles between the border pixels and inner pixels
+    cosang = np.dot(vecpix_inner.T, vecpix_outer)
+    mapang = np.zeros(12*nside**2)
+    mapang[~mask] = np.degrees(np.arccos(np.max(cosang, axis=1)))
+    return mapang
+
+
+def apodize_mask(maskok, fwhm_deg):
+    """
+    Apodize a mask.
+
+    Parameters
+    ----------
+    maskok : boolean Healpix map
+        The mask to be apodized (of value True).
+
+    fwhm_deg : float
+        The FWHM of the apodization function, counted from the mask edges,
+        in degrees.
+
+    """
+    sigma_deg = fwhm_deg / np.sqrt(8 * np.log(2))
+    mapang = angular_distance_from_mask(~maskok)
+    return 1 - np.exp(-0.5 * mapang**2 / sigma_deg**2)
 
 
 def _get_projection_restricted(acq, P, mask):

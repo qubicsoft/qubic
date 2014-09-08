@@ -1,0 +1,1 @@
+{'real': {'sp': 'float', 'dp': 'double', 'p': 'double'}, 'complex': {'sp': 'complex', 'dp': 'complex_double', 'p': 'complex_double'}}

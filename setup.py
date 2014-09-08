@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import numpy as np
 import os
+import sys
 from numpy.distutils.core import setup
 from numpy.distutils.extension import Extension
 from hooks import get_cmdclass, get_version
@@ -14,13 +15,26 @@ name = 'qubic'
 long_description = open('README.rst').read()
 keywords = 'scientific computing'
 platforms = 'MacOS X,Linux,Solaris,Unix,Windows'
-extra_f90_compile_args = ['-cpp -fopenmp -fpack-derived']
+extra_f90_compile_args = ['-g -cpp -fopenmp -fpack-derived']
+if '--debug' in sys.argv:
+    extra_f90_compile_args += ['-fbounds-check']
+
+if any(c in sys.argv for c in ('build', 'build_ext')):
+    # write f2py's type mapping file
+    root = os.path.dirname(__file__)
+    with open(os.path.join(root, '.f2py_f2cmap'), 'w') as f:
+        f.write("{'real': {'sp': 'float', 'dp': 'double', 'p': 'double'}, 'com"
+                "plex': {'sp': 'complex', 'dp': 'complex_double', 'p': 'comple"
+                "x_double'}}\n")
 
 ext_modules = [Extension('qubic._flib',
-                         sources=['src/polarization.f90.src'],
+                         sources=['src/polarization.f90.src',
+                                  'src/xpol.f90'],
                          extra_f90_compile_args=extra_f90_compile_args,
+                         f2py_options=['--quiet'],
                          include_dirs=['.', np.get_include()],
-                         libraries=['gomp'])]
+                         libraries=['gomp',
+                                    ('fmod', {'sources': ['src/wig3j.f']})])]
 
 setup(name=name,
       version=get_version(name, VERSION),

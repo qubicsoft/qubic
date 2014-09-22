@@ -9,7 +9,7 @@ from hooks import get_cmdclass, get_version
 # force sdist to copy files
 delattr(os, 'link')
 
-VERSION = '4.1'
+VERSION = '4.2'
 
 name = 'qubic'
 long_description = open('README.rst').read()
@@ -45,7 +45,7 @@ setup(name=name,
       author_email='pierre.chanial@apc.univ-paris7.fr',
       install_requires=['progressbar',
                         'pyoperators>=0.12.12',
-                        'pysimulators>=1.0',
+                        'pysimulators>=1.0.8',
                         'healpy>=0.6.1',
                         'pyYAML'],
       packages=['qubic', 'qubic/io'],

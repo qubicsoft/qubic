@@ -19,7 +19,7 @@ extra_f90_compile_args = ['-g -cpp -fopenmp -fpack-derived']
 if '--debug' in sys.argv:
     extra_f90_compile_args += ['-fbounds-check']
 
-if any(c in sys.argv for c in ('build', 'build_ext')):
+if any(c in sys.argv for c in ('build', 'build_ext', 'install')):
     # write f2py's type mapping file
     root = os.path.dirname(__file__)
     with open(os.path.join(root, '.f2py_f2cmap'), 'w') as f:

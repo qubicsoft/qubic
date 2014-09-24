@@ -9,7 +9,7 @@ from hooks import get_cmdclass, get_version
 # force sdist to copy files
 delattr(os, 'link')
 
-VERSION = '4.2'
+VERSION = '4.3'
 
 name = 'qubic'
 long_description = open('README.rst').read()

@@ -23,9 +23,9 @@ if any(c in sys.argv for c in ('build', 'build_ext', 'install')):
     # write f2py's type mapping file
     root = os.path.dirname(__file__)
     with open(os.path.join(root, '.f2py_f2cmap'), 'w') as f:
-        f.write("{'real': {'sp': 'float', 'dp': 'double', 'p': 'double'}, 'com"
-                "plex': {'sp': 'complex', 'dp': 'complex_double', 'p': 'comple"
-                "x_double'}}\n")
+        f.write("{'integer': {'int8': 'char', 'int16': 'short', 'int32': 'int', 'int64': 'long_long'},"
+                " 'real': {'sp': 'float', 'dp': 'double', 'p': 'double', 'real32': 'float', 'real64': 'double'},"
+                " 'complex': {'sp': 'complex', 'dp': 'complex_double', 'p': 'complex_double'}}\n")
 
 ext_modules = [Extension('qubic._flib',
                          sources=['src/polarization.f90.src',

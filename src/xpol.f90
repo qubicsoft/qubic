@@ -1,14 +1,15 @@
 module xpol
 
+  use, intrinsic :: iso_fortran_env, only : real64
   implicit none
-  integer, parameter :: dp = kind(1.d0)
 
   interface
     subroutine wig3j(l2, l3, m2, m3, l1min, l1max, array, ndim, ier)
-      real*8, intent(in)  :: l2, l3, m2, m3
-      real*8, intent(out) :: l1min, l1max
+      use, intrinsic :: iso_fortran_env, only : real64
+      real(real64), intent(in)  :: l2, l3, m2, m3
+      real(real64), intent(out) :: l1min, l1max
       integer, intent(in) :: ndim
-      real*8, dimension(*), intent(out) :: array
+      real(real64), dimension(*), intent(out) :: array
       integer :: ier
     end subroutine wig3j
   end interface
@@ -17,18 +18,19 @@ contains
 
   subroutine Mll_blocks_pol(lmax, well, nwell, mll_TT_TT, mll_EE_EE, mll_EE_BB,&
                      mll_TE_TE, mll_EB_EB, ier)
-    integer, intent(in)  :: lmax
-    real(dp), intent(in) :: well(nwell)
-    integer, intent(in)  :: nwell
-    real(dp), intent(out), dimension(0:lmax, 0:lmax) ::                        &
+    integer, intent(in)      :: lmax
+    integer, intent(in)      :: nwell
+    real(real64), intent(in) :: well(nwell)
+    real(real64), intent(out), dimension(0:lmax, 0:lmax) ::                    &
          mll_TT_TT, mll_EE_EE, mll_EE_BB, mll_TE_TE, mll_EB_EB
     integer, intent(out) :: ier
 
-    real(dp), parameter  :: one_fourpi = 1.d0 / (atan(1.d0) * 16.d0)
-    real(dp), dimension(2*lmax+1)  :: wigner0, wigner2
-    real(dp), dimension(0:nwell-1) :: well_TT, well_TP, well_PP, thewell, ell
-    real(dp) :: rl1, rl2, rl1min, rl1max, wig00, wig02, wig22, coef,           &
-                sum_TT, sum_TE, sum_EE_EE, sum_EE_BB, sum_EB
+    real(real64), parameter  :: one_fourpi = 1.d0 / (atan(1.d0) * 16.d0)
+    real(real64), dimension(2*lmax+1)  :: wigner0, wigner2
+    real(real64), dimension(0:nwell-1) :: well_TT, well_TP, well_PP, thewell,  &
+                                          ell
+    real(real64) :: rl1, rl2, rl1min, rl1max, wig00, wig02, wig22, coef,       &
+                    sum_TT, sum_TE, sum_EE_EE, sum_EE_BB, sum_EB
     integer  :: l, l1, l2, l1min, l1max, ndim, ier_, iwig
     logical  :: mask
 
@@ -43,9 +45,9 @@ contains
     !$omp& shared(ier, lmax, nwell, well_tt, well_tp, well_pp) &
     !$omp& shared(mll_TT_TT, mll_EE_EE, mll_EE_BB, mll_TE_TE, mll_EB_EB)
     do l1=0, lmax
-      rl1 = real(l1, dp)
+      rl1 = real(l1, real64)
       do l2=0, lmax
-        rl2 = real(l2, dp)
+        rl2 = real(l2, real64)
         ndim = l1 + l2 + 1
         call wig3j(rl1, rl2, 0.d0, 0.d0, rl1min, rl1max, wigner0, ndim, ier_)
         if (ier_ /= 0) then

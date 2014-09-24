@@ -245,16 +245,17 @@ class SimpleInstrument(Instrument):
             value[...] = vals[:, None, :]
             shapeout = (ndetectors, ntimes)
         else:
-            func = 'pointing_matrix_rot{0}d_i{1}_m{2}'.format(
-                ndims, dtype_index.itemsize, dtype.itemsize)
-            try:
-                getattr(flib.polarization, func)(
-                    rotation.data.T, direction.T, s.data.ravel().view(np.int8),
-                    vals.T)
-            except AttributeError:
+            if str(dtype_index) not in ('int32', 'int64') or \
+               str(dtype) not in ('float32', 'float64'):
                 raise TypeError(
                     'The projection matrix cannot be created with types: {0} a'
-                    'nd {1}.'.format(dtype, dtype_index))
+                    'nd {1}.'.format(dtype_index, dtype))
+            func = 'matrix_rot{0}d_i{1}_r{2}'.format(
+                ndims, dtype_index.itemsize, dtype.itemsize)
+            getattr(flib.polarization, func)(
+                rotation.data.T, direction.T, s.data.ravel().view(np.int8),
+                vals.T)
+
             if scene.kind == 'QU':
                 shapeout = (ndetectors, ntimes, 2)
             else:

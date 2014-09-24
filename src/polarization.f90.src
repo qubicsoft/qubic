@@ -1,58 +1,61 @@
 module polarization
 
+    use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
     implicit none
 
-    type PointingElementRot2d_i4_m4
-        integer*4 :: index
-        real*4    :: r11, r21
+    type PointingElementRot2d_i4_r4
+        integer(int32) :: index
+        real(real32)   :: r11, r21
     end type
 
-    type PointingElementRot2d_i8_m4
-        integer*8 :: index
-        real*4    :: r11, r21
+    type PointingElementRot2d_i8_r4
+        integer(int64) :: index
+        real(real32)   :: r11, r21
     end type
 
-    type PointingElementRot2d_i4_m8
-        integer*4 :: index
-        real*8    :: r11, r21
+    type PointingElementRot2d_i4_r8
+        integer(int32) :: index
+        real(real64)   :: r11, r21
     end type
 
-    type PointingElementRot2d_i8_m8
-        integer*8 :: index
-        real*8    :: r11, r21
+    type PointingElementRot2d_i8_r8
+        integer(int64) :: index
+        real(real64)   :: r11, r21
     end type
 
-    type PointingElementRot3d_i4_m4
-        integer*4 :: index
-        real*4    :: r11, r22, r32
+    type PointingElementRot3d_i4_r4
+        integer(int32) :: index
+        real(real32)   :: r11, r22, r32
     end type
 
-    type PointingElementRot3d_i8_m4
-        integer*8 :: index
-        real*4    :: r11, r22, r32
+    type PointingElementRot3d_i8_r4
+        integer(int64) :: index
+        real(real32)   :: r11, r22, r32
     end type
 
-    type PointingElementRot3d_i4_m8
-        integer*4 :: index
-        real*8    :: r11, r22, r32
+    type PointingElementRot3d_i4_r8
+        integer(int32) :: index
+        real(real64)   :: r11, r22, r32
     end type
 
-    type PointingElementRot3d_i8_m8
-        integer*8 :: index
-        real*8    :: r11, r22, r32
+    type PointingElementRot3d_i8_r8
+        integer(int64) :: index
+        real(real64)   :: r11, r22, r32
     end type
 
-    ! <itype=4,8,4,8>
-    ! <mtype=4,4,8,8>
+    ! <ikind=int32,int64,int32,int64>
+    ! <isize=4,8,4,8>
+    ! <rkind=real32,real32,real64,real64>
+    ! <rsize=4,4,8,8>
 
 
 contains
 
 
     subroutine en2ephi(en, ephi)
-        real*8, intent(in)  :: en(3)
-        real*8, intent(out) :: ephi(2)
-        real*8 :: tmp
+        real(real64), intent(in)  :: en(3)
+        real(real64), intent(out) :: ephi(2)
+        real(real64) :: tmp
 
         tmp = 1 / sqrt(1 - en(3)**2)
         ephi(1) = -en(2) * tmp
@@ -61,9 +64,9 @@ contains
 
 
     subroutine en2etheta_ephi(en, etheta, ephi)
-        real*8, intent(in)  :: en(3)
-        real*8, intent(out) :: etheta(3), ephi(2)
-        real*8 :: x, y, z, tmp
+        real(real64), intent(in)  :: en(3)
+        real(real64), intent(out) :: etheta(3), ephi(2)
+        real(real64) :: x, y, z, tmp
 
         x = en(1)
         y = en(2)
@@ -80,9 +83,9 @@ contains
 
 
     subroutine rot_ephi(rot, ephi, out)
-        real*8, intent(in)  :: rot(3,3) ! transpose of rotation matrix
-        real*8, intent(in)  :: ephi(2)
-        real*8, intent(out) :: out(3)
+        real(real64), intent(in)  :: rot(3,3) ! transpose of rotation matrix
+        real(real64), intent(in)  :: ephi(2)
+        real(real64), intent(out) :: out(3)
 
         out(1) = rot(1,1) * ephi(1) + rot(2,1) * ephi(2)
         out(2) = rot(1,2) * ephi(1) + rot(2,2) * ephi(2)
@@ -91,9 +94,9 @@ contains
 
 
     subroutine rotinv_e(rot, e, rot_e)
-        real*8, intent(in)  :: rot(3,3) ! transpose of rotation matrix
-        real*8, intent(in)  :: e(3)
-        real*8, intent(out) :: rot_e(3)
+        real(real64), intent(in)  :: rot(3,3) ! transpose of rotation matrix
+        real(real64), intent(in)  :: e(3)
+        real(real64), intent(out) :: rot_e(3)
 
         rot_e(1) = rot(1,1) * e(1) + rot(1,2) * e(2) + rot(1,3) * e(3)
         rot_e(2) = rot(2,1) * e(1) + rot(2,2) * e(2) + rot(2,3) * e(3)
@@ -102,12 +105,12 @@ contains
 
 
     subroutine eni2rotation(rot, ethetaf, ephif, eni, r23, r33)
-        real*8, intent(in)  :: rot(3,3)
-        real*8, intent(in)  :: ethetaf(3)
-        real*8, intent(in)  :: ephif(2)
-        real*8, intent(in)  :: eni(3)
-        real*8, intent(out) :: r23, r33
-        real*8 :: ephii(2), rot_ephii(3)
+        real(real64), intent(in)  :: rot(3,3)
+        real(real64), intent(in)  :: ethetaf(3)
+        real(real64), intent(in)  :: ephif(2)
+        real(real64), intent(in)  :: eni(3)
+        real(real64), intent(out) :: r23, r33
+        real(real64) :: ephii(2), rot_ephii(3)
 
         call en2ephi(eni, ephii)
         call rot_ephi(rot, ephii, rot_ephii)
@@ -117,22 +120,22 @@ contains
     end subroutine eni2rotation
 
 
-    subroutine pointing_matrix_rot2d_i<itype>_m<mtype>(rot, enf, matrix,       &
-                                           vals, npixels, ntimes, ndetectors)
-        integer, parameter    :: s = <itype> + 2 * <mtype>
-        integer*8, intent(in) :: npixels, ntimes, ndetectors
-        real*8, intent(in)    :: rot(3,3,ntimes)
-        real*8, intent(in)    :: vals(npixels,ndetectors)
-        real*8, intent(in)    :: enf(3,npixels,ndetectors)
+    subroutine matrix_rot2d_i<isize>_r<rsize>(rot, enf, matrix, vals, npixels, &
+                                  ntimes, ndetectors)
+        integer, parameter          :: s = <isize> + 2 * <rsize>
+        integer(int64), intent(in)  :: npixels, ntimes, ndetectors
+        real(real64), intent(in)    :: rot(3,3,ntimes)
+        real(real64), intent(in)    :: vals(npixels,ndetectors)
+        real(real64), intent(in)    :: enf(3,npixels,ndetectors)
         !f2py integer*1, intent(in) :: matrix(npixels*ntimes*ndetectors*s)
-        type(PointingElementRot2d_i<itype>_m<mtype>), intent(inout) ::         &
-                                 matrix(npixels,ntimes,ndetectors)
-        integer*8 :: idetector, itime, ipixel
-        real*8    :: eni(3), ethetaf(3,npixels), ephif(2,npixels)
-        real*8    :: val, r23, r33
-        real*<mtype>    :: direct
+        type(PointingElementRot2d_i<isize>_r<rsize>), intent(inout) ::         &
+            matrix(npixels,ntimes,ndetectors)
+        integer(int64) :: idetector, itime, ipixel
+        real(real64)   :: eni(3), ethetaf(3,npixels), ephif(2,npixels)
+        real(real64)   :: val, r23, r33
+        real(<rkind>)  :: direct
 
-        direct = -1
+        direct = -1._<rkind>
 
         !$omp parallel do private(ethetaf, ephif, eni, val, r23, r33)
         do idetector = 1, ndetectors
@@ -147,32 +150,32 @@ contains
                                       ephif(:,ipixel), eni, r23, r33)
                     r33 = direct * r33
                     val = vals(ipixel,idetector)
-                    matrix(ipixel,itime,idetector)%r11 = real(val*(r33**2 - r23**2), <mtype>)
-                    matrix(ipixel,itime,idetector)%r21 = real(-val*2*r33*r23, <mtype>)
+                    matrix(ipixel,itime,idetector)%r11 = real(val*(r33**2 - r23**2), <rkind>)
+                    matrix(ipixel,itime,idetector)%r21 = real(-val*2*r33*r23, <rkind>)
                 end do
             end do
         end do
         !$omp end parallel do
 
-    end subroutine pointing_matrix_rot2d_i<itype>_m<mtype>
+    end subroutine matrix_rot2d_i<isize>_r<rsize>
 
 
-    subroutine pointing_matrix_rot3d_i<itype>_m<mtype>(rot, enf, matrix,       &
-                                           vals, npixels, ntimes, ndetectors)
-        integer, parameter    :: s = <itype> + 3 * <mtype>
-        integer*8, intent(in) :: npixels, ntimes, ndetectors
-        real*8, intent(in)    :: rot(3,3,ntimes)
-        real*8, intent(in)    :: vals(npixels,ndetectors)
-        real*8, intent(in)    :: enf(3,npixels,ndetectors)
+    subroutine matrix_rot3d_i<isize>_r<rsize>(rot, enf, matrix, vals, npixels, &
+                                  ntimes, ndetectors)
+        integer, parameter          :: s = <isize> + 3 * <rsize>
+        integer(int64), intent(in)  :: npixels, ntimes, ndetectors
+        real(real64), intent(in)    :: rot(3,3,ntimes)
+        real(real64), intent(in)    :: vals(npixels,ndetectors)
+        real(real64), intent(in)    :: enf(3,npixels,ndetectors)
         !f2py integer*1, intent(in) :: matrix(npixels*ntimes*ndetectors*s)
-        type(PointingElementRot3d_i<itype>_m<mtype>), intent(inout) ::         &
-                                 matrix(npixels,ntimes,ndetectors)
-        integer*8 :: idetector, itime, ipixel
-        real*8    :: eni(3), ethetaf(3,npixels), ephif(2,npixels)
-        real*8    :: val, r23, r33
-        real*<mtype>    :: direct
+        type(PointingElementRot3d_i<isize>_r<rsize>), intent(inout) ::         &
+            matrix(npixels,ntimes,ndetectors)
+        integer(int64) :: idetector, itime, ipixel
+        real(real64)   :: eni(3), ethetaf(3,npixels), ephif(2,npixels)
+        real(real64)   :: val, r23, r33
+        real(<rkind>)  :: direct
 
-        direct = -1
+        direct = -1._<rkind>
 
         !$omp parallel do private(ethetaf, ephif, eni, val, r23, r33)
         do idetector = 1, ndetectors
@@ -187,15 +190,15 @@ contains
                                       ephif(:,ipixel), eni, r23, r33)
                     r33 = direct * r33
                     val = vals(ipixel,idetector)
-                    matrix(ipixel,itime,idetector)%r11 = real(val, <mtype>)
-                    matrix(ipixel,itime,idetector)%r22 = real(val*(r33**2 - r23**2), <mtype>)
-                    matrix(ipixel,itime,idetector)%r32 = real(-val*2*r33*r23, <mtype>)
+                    matrix(ipixel,itime,idetector)%r11 = real(val, <rkind>)
+                    matrix(ipixel,itime,idetector)%r22 = real(val*(r33**2 - r23**2), <rkind>)
+                    matrix(ipixel,itime,idetector)%r32 = real(-val*2*r33*r23, <rkind>)
                 end do
             end do
         end do
         !$omp end parallel do
 
-    end subroutine pointing_matrix_rot3d_i<itype>_m<mtype>
+    end subroutine matrix_rot3d_i<isize>_r<rsize>
 
 
 end module polarization

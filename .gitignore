@@ -1,5 +1,6 @@
 *pyc
 .coverage
+.f2py_f2cmap
 MANIFEST
 build
 dist

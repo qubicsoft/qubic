@@ -72,14 +72,12 @@ def apodize_mask(maskok, fwhm_deg):
 def _get_projection_restricted(acq, P, mask):
     #XXX HACK
     if len(acq.block) == 1:
-        P.restrict(mask)
-        return P
+        return P.restrict(mask, inplace=True)
 
     def callback(i):
         f = acq.instrument.get_projection_operator
         p = f(acq.sampling[acq.block[i]], acq.scene, verbose=False)
-        p.restrict(mask)
-        return p
+        return p.restrict(mask, inplace=True)
     shapeouts = [(len(acq.instrument), s.stop-s.start) +
                  acq.scene.shape[1:] for s in acq.block]
     proxies = proxy_group(len(acq.block), callback, shapeouts=shapeouts)

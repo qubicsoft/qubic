@@ -7,7 +7,7 @@ import re
 from astropy.io import fits
 from glob import glob
 from os.path import join
-from pysimulators import Layout, LayoutGridCircles
+from pysimulators import Layout, LayoutGrid
 
 __all__ = ['QubicCalibration']
 
@@ -111,7 +111,7 @@ class QubicCalibration(object):
                 yreflection = h['yreflection']
                 radius = h['radius']
                 selection = ~hdus[1].data.view(bool)
-                layout = LayoutGridCircles(
+                layout = LayoutGrid(
                     removed.shape, spacing, selection=selection, radius=radius,
                     xreflection=xreflection, yreflection=yreflection)
             else:
@@ -123,7 +123,7 @@ class QubicCalibration(object):
                 radius = h['radius']
                 selection = ~hdus[2].data.view(bool)
                 shape = selection.shape
-                layout = LayoutGridCircles(
+                layout = LayoutGrid(
                     shape, spacing, selection=selection, radius=radius,
                     xreflection=xreflection, yreflection=yreflection,
                     angle=angle, startswith1=True, id=None)

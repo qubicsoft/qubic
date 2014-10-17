@@ -13,7 +13,7 @@ from pyoperators import (
     Spherical2CartesianOperator)
 from pyoperators.utils import pool_threading
 from pysimulators import (
-    Instrument, LayoutVertex, ConvolutionTruncatedExponentialOperator,
+    ConvolutionTruncatedExponentialOperator, Instrument, Layout,
     ProjectionOperator)
 from pysimulators.interfaces.healpy import Cartesian2HealpixOperator
 from pysimulators.sparse import (
@@ -79,8 +79,8 @@ class SimpleInstrument(Instrument):
             removed_ = np.array([removed_, removed_])
             index = np.array([index, index + np.max(index) + 1], index.dtype)
             quadrant = np.array([quadrant, quadrant + 4], quadrant.dtype)
-        layout = LayoutVertex(
-            shape, 4, vertex=vertex, selection=~removed_, ordering=index,
+        layout = Layout(
+            shape, vertex=vertex, selection=~removed_, ordering=index,
             quadrant=quadrant, sigma=sigma, fknee=fknee, fslope=fslope,
             tau=tau)
         layout.ncorr = ncorr

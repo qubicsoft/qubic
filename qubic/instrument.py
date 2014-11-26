@@ -79,10 +79,21 @@ class SimpleInstrument(Instrument):
             removed_ = np.array([removed_, removed_])
             index = np.array([index, index + np.max(index) + 1], index.dtype)
             quadrant = np.array([quadrant, quadrant + 4], quadrant.dtype)
+
+        focal_length = self.calibration.get('optics')['focal length']
+
+        def theta(self):
+            ndetector = len(self)
+            detvec = np.vstack([self.center[..., 0],
+                                self.center[..., 1],
+                                np.zeros(ndetector) - focal_length]).T
+            norm = np.sqrt(np.sum(detvec**2, axis=1))
+            return np.arccos(detvec[:, 2] / norm)
+
         layout = Layout(
             shape, vertex=vertex, selection=~removed_, ordering=index,
             quadrant=quadrant, sigma=sigma, fknee=fknee, fslope=fslope,
-            tau=tau)
+            tau=tau, theta=theta)
         layout.ncorr = ncorr
         layout.ngrids = ngrids
         return layout
@@ -378,6 +389,7 @@ class QubicInstrument(SimpleInstrument):
             theta[idet, imax_:] = pi / 2 #XXX 0 leads to NaN
             phi[idet, imax_:] = 0
         val /= np.sum(val, axis=-1)[:, None]
+        val *= self.secondary_beam(self.detector.theta, 0.)
         return theta, phi, val
 
     def _peak_angles_kmax(self, scene, kmax):

@@ -7,6 +7,7 @@ from pyoperators import (
     asoperator, BlockColumnOperator, BlockDiagonalOperator, DiagonalOperator,
     MPIDistributionIdentityOperator, PackOperator, pcg, proxy_group,
     rule_manager)
+from pysimulators.interfaces.healpy import HealpixLaplacianOperator
 from .utils import progress_bar
 
 __all__ = ['angular_distance_from_mask',
@@ -146,7 +147,7 @@ def map2tod(acq, map, convolution=False, max_nbytes=None):
 
 
 def _tod2map(acq, tod, coverage_threshold, disp_pmatrix, max_nbytes, callback,
-             disp_pcg, maxiter, tol, _factor, full_output):
+             disp_pcg, maxiter, tol, _factor, criterion, full_output, save_map, hyper):
     projection = acq.get_projection_operator(verbose=disp_pmatrix)
     distribution = acq.get_distribution_operator()
     P = projection * distribution
@@ -189,9 +190,51 @@ def _tod2map(acq, tod, coverage_threshold, disp_pmatrix, max_nbytes, callback,
 
     invNtt = acq.get_invntt_operator()
     preconditioner = DiagonalOperator(1/coverage[mask], broadcast='rightward')
-    A = H.T * invNtt * H
-    solution = pcg(A, H.T(invNtt(tod)), M=preconditioner, callback=callback,
-                   disp=disp_pcg, maxiter=maxiter, tol=tol)
+    nsamplings = acq.comm.allreduce(len(acq.sampling))
+    npixels = np.sum(mask)
+
+    A = H.T * invNtt * H / nsamplings
+    if hyper != 0:
+        L = HealpixLaplacianOperator(acq.scene.nside)
+        L = L.restrict(mask, inplace=True).corestrict(mask, inplace=True)
+        A = A - hyper / npixels / 4e5 * L
+
+    if criterion:
+        def f(x):
+            Hx_y = H(x)
+            Hx_y -= tod
+            out = [np.dot(Hx_y.ravel(), invNtt(Hx_y).ravel()) / nsamplings]
+            if hyper != 0:
+                out += [-np.dot(x.ravel(),
+                                hyper / npixels / 4e5 * L(x).ravel())]
+            else:
+                out += [0.]
+            return out
+
+        def callback(self):
+            criteria = f(self.x)
+            if len(criteria) == 1:
+                details = ''
+            else:
+                fmt = ', '.join(len(criteria) * ['{:e}'])
+                details = ' (' + fmt.format(*criteria) + ')'
+            print('{:4}: {:e} {:e}{}'.format(self.niterations, self.error,
+                                             sum(criteria), details))
+            if not hasattr(self, 'history'):
+                self.history = {}
+                self.history['criterion'] = []
+                self.history['error'] = []
+                self.history['iteration'] = []
+            self.history['criterion'].append(criteria)
+            self.history['error'].append(self.error)
+            self.history['iteration'].append(self.niterations)
+            if save_map is not None and self.niterations in save_map:
+                if not hasattr(self, 'xs'):
+                    self.xs = {}
+                self.xs[self.niterations] = self.x.copy()
+
+    solution = pcg(A, H.T(invNtt(tod)) / nsamplings, M=preconditioner,
+                   callback=callback, disp=disp_pcg, maxiter=maxiter, tol=tol)
     if _factor is not None:
         solution['x'] *= coef
     output = pack.T(solution['x']), coverage
@@ -207,7 +250,7 @@ def _tod2map(acq, tod, coverage_threshold, disp_pmatrix, max_nbytes, callback,
 
 def tod2map_all(acquisition, tod, coverage_threshold=0.01, max_nbytes=None,
                 callback=None, disp=True, maxiter=300, tol=1e-4, _factor=None,
-                full_output=False):
+                criterion=False, full_output=False, save_map=None, hyper=0):
     """
     Compute map using all detectors.
 
@@ -240,6 +283,9 @@ def tod2map_all(acquisition, tod, coverage_threshold=0.01, max_nbytes=None,
         steps even if the specified tolerance has not been achieved.
     tol : float, optional
         Solver tolerance.
+    criterion : boolean, optional
+        If True, also display the criterion at each iteration. It slows down
+        the solving process.
 
     Returns
     -------
@@ -248,7 +294,8 @@ def tod2map_all(acquisition, tod, coverage_threshold=0.01, max_nbytes=None,
         with npix = 12 * nside**2
     """
     return _tod2map(acquisition, tod, coverage_threshold, True, max_nbytes,
-                    callback, disp, maxiter, tol, _factor, full_output)
+                    callback, disp, maxiter, tol, _factor, criterion, full_output,
+                    save_map, hyper)
 
 
 def tod2map_each(acquisition, tod, coverage_threshold=0, max_nbytes=None,

@@ -4,7 +4,7 @@ import healpy as hp
 import numpy as np
 from itertools import izip
 from pyoperators import (
-    BlockColumnOperator, BlockDiagonalOperator, DiagonalOperator,
+    asoperator, BlockColumnOperator, BlockDiagonalOperator, DiagonalOperator,
     MPIDistributionIdentityOperator, PackOperator, pcg, proxy_group,
     rule_manager)
 from .utils import progress_bar
@@ -146,7 +146,7 @@ def map2tod(acq, map, convolution=False, max_nbytes=None):
 
 
 def _tod2map(acq, tod, coverage_threshold, disp_pmatrix, max_nbytes, callback,
-             disp_pcg, maxiter, tol, _factor):
+             disp_pcg, maxiter, tol, _factor, full_output):
     projection = acq.get_projection_operator(verbose=disp_pmatrix)
     distribution = acq.get_distribution_operator()
     P = projection * distribution
@@ -194,17 +194,27 @@ def _tod2map(acq, tod, coverage_threshold, disp_pmatrix, max_nbytes, callback,
                    disp=disp_pcg, maxiter=maxiter, tol=tol)
     if _factor is not None:
         solution['x'] *= coef
-    output_map = pack.T(solution['x'])
-    return output_map, coverage
+    output = pack.T(solution['x']), coverage
+    if full_output:
+        algo = solution['algorithm']
+        algo.H = H
+        algo.pack = pack
+        if criterion:
+            algo.f = asoperator(f, shapeout=2)(pack)
+        output += (algo,)
+    return output
 
 
 def tod2map_all(acquisition, tod, coverage_threshold=0.01, max_nbytes=None,
-                callback=None, disp=True, maxiter=300, tol=1e-4, _factor=None):
+                callback=None, disp=True, maxiter=300, tol=1e-4, _factor=None,
+                full_output=False):
     """
     Compute map using all detectors.
 
     map, coverage = tod2map_all(acquisition, tod, [coverage_threshold,
                                 max_nbytes, callback, disp, tol])
+
+    map, coverage, pcg = tod2map_all(acquisition, tod, [...], full_output=True)
 
     Parameters
     ----------
@@ -238,7 +248,7 @@ def tod2map_all(acquisition, tod, coverage_threshold=0.01, max_nbytes=None,
         with npix = 12 * nside**2
     """
     return _tod2map(acquisition, tod, coverage_threshold, True, max_nbytes,
-                    callback, disp, maxiter, tol, _factor)
+                    callback, disp, maxiter, tol, _factor, full_output)
 
 
 def tod2map_each(acquisition, tod, coverage_threshold=0, max_nbytes=None,
@@ -288,7 +298,8 @@ def tod2map_each(acquisition, tod, coverage_threshold=0, max_nbytes=None,
     for i, t in izip(instrument, tod):
         acq = type(acquisition)(i, acquisition.sampling, acquisition.scene)
         x_, n_ = _tod2map(acq, t[None, :], coverage_threshold, False,
-                          max_nbytes, callback, False, maxiter, tol, _factor)
+                          max_nbytes, callback, False, maxiter, tol, _factor,
+                          False)
         x += x_
         n += n_
         if disp:

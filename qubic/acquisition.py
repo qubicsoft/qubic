@@ -26,19 +26,22 @@ __all__ = ['QubicAcquisition',
 
 class SimpleAcquisition(Acquisition):
     """
-    The Acquisition class for the single-peak simple instrument
+    The Acquisition class for the single-peak simple instrument.
 
     """
-    def __init__(self, instrument, sampling, scene=None, block=None,
-                 calibration=None, detector_sigma=10, detector_fknee=0,
-                 detector_fslope=1, detector_ncorr=10, detector_ngrids=None,
-                 detector_tau=0.01, synthbeam_dtype=np.float32,
-                 kind='IQU', nside=256, max_nbytes=None,
-                 nprocs_instrument=None, nprocs_sampling=None, comm=None):
+    def __init__(self, instrument, sampling, scene=None, absolute=False,
+                 block=None, calibration=None, detector_sigma=10,
+                 detector_fknee=0, detector_fslope=1, detector_ncorr=10,
+                 detector_ngrids=None, detector_tau=0.01,
+                 synthbeam_dtype=np.float32, kind='IQU', nside=256,
+                 max_nbytes=None, nprocs_instrument=None, nprocs_sampling=None,
+                 comm=None):
         """
-        acq = SimpleAcquisition(instrument, sampling, [scene=|kind=, nside=],
+        acq = SimpleAcquisition(instrument, sampling,
+                                [scene=|absolute=, kind=, nside=],
                                 nprocs_instrument=, nprocs_sampling=, comm=)
-        acq = SimpleAcquisition(band, sampling, [scene=|kind=, nside=],
+        acq = SimpleAcquisition(band, sampling,
+                                [scene=|absolute=, kind=, nside=],
                                 nprocs_instrument=, nprocs_sampling=, comm=)
 
         Parameters
@@ -49,14 +52,17 @@ class SimpleAcquisition(Acquisition):
             The discretized observed scene (the sky).
         block : tuple of slices, optional
             Partition of the samplings.
-        kind : 'I', 'QU', 'IQU', optional
+        absolute : boolean, optional
+            If true, the scene pixel values include the CMB background and the
+            fluctuations in units of Kelvin, otherwise it only represents the
+            fluctuations, in microKelvin.
+        kind : 'I', 'QU' or 'IQU', optional
             The sky kind: 'I' for intensity-only, 'QU' for Q and U maps,
             and 'IQU' for intensity plus QU maps.
         nside : int, optional
             The Healpix scene's nside.
         instrument : SimpleInstrument, optional
-            Module name (only 'monochromatic' for now), or a QubicInstrument
-            instance.
+            The SimpleInstrument instance.
         calibration : QubicCalibration, optional
             The calibration tree.
         detector_sigma : array-like, optional
@@ -93,7 +99,8 @@ class SimpleAcquisition(Acquisition):
         if not isinstance(instrument, SimpleInstrument):
             if scene is not None:
                 raise TypeError('Invalid calling sequence.')
-            scene = QubicScene(instrument, kind=kind, nside=nside)
+            scene = QubicScene(instrument, absolute=absolute, kind=kind,
+                               nside=nside)
             if detector_ngrids is None:
                 detector_ngrids = 1 if scene.kind == 'I' else 2
             instrument = SimpleInstrument(
@@ -102,7 +109,7 @@ class SimpleAcquisition(Acquisition):
                 detector_ngrids=detector_ngrids, detector_sigma=detector_sigma,
                 detector_tau=detector_tau, synthbeam_dtype=synthbeam_dtype)
         elif scene is None:
-            scene = QubicScene(150, kind=kind, nside=nside)
+            scene = QubicScene(150, absolute=absolute, kind=kind, nside=nside)
         Acquisition.__init__(
             self, instrument, sampling, scene, block,
             max_nbytes=max_nbytes, nprocs_instrument=nprocs_instrument,
@@ -177,11 +184,26 @@ class SimpleAcquisition(Acquisition):
             [self.instrument.get_hwp_operator(self.sampling[b], self.scene)
              for b in self.block], axisin=1)
 
+    def get_temperature_conversion_operator(self):
+        """
+        Convert sky temperature into W / m^2 / Hz.
+
+        If the scene has been initialised with the 'absolute' keyword, the
+        scene is assumed to include the CMB background and the fluctuations
+        (in Kelvin) and the operator follows the non-linear Planck law.
+        Otherwise, the scene only includes the fluctuations (in microKelvin)
+        and the operator is linear (i.e. the output also corresponds to power
+        fluctuations).
+
+        """
+        return self.scene.get_temperature_conversion_operator()
+
     def get_operator(self):
         """
         Return the operator of the acquisition.
 
         """
+        temp = self.get_temperature_conversion_operator()
         projection = self.get_projection_operator()
         hwp = self.get_hwp_operator()
         polarizer = self.get_polarizer_operator()
@@ -189,7 +211,7 @@ class SimpleAcquisition(Acquisition):
         distribution = self.get_distribution_operator()
 
         with rule_manager(inplace=True):
-            H = response * polarizer * (hwp * projection) * distribution
+            H = response * polarizer * (hwp * projection * temp) * distribution
         if self.scene == 'QU':
             H = self.get_subtract_grid_operator() * H
         return H
@@ -490,12 +512,14 @@ class QubicAcquisition(SimpleAcquisition):
                  detector_fslope=1, detector_ncorr=10, detector_ngrids=None,
                  detector_tau=0.01, primary_beam=None, secondary_beam=None,
                  synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
-                 kind='IQU', nside=256, max_nbytes=None,
+                 absolute=False, kind='IQU', nside=256, max_nbytes=None,
                  nprocs_instrument=None, nprocs_sampling=None, comm=None):
         """
-        acq = QubicAcquisition(instrument, sampling, [scene=|kind=, nside=],
+        acq = QubicAcquisition(instrument, sampling,
+                               [scene=|absolute=, kind=, nside=],
                                nprocs_instrument=, nprocs_sampling=, comm=)
-        acq = QubicAcquisition(band, sampling, [scene=|kind=, nside=],
+        acq = QubicAcquisition(band, sampling,
+                               [scene=|absolute=, kind=, nside=],
                                nprocs_instrument=, nprocs_sampling=, comm=)
 
         Parameters
@@ -506,14 +530,17 @@ class QubicAcquisition(SimpleAcquisition):
             The discretized observed scene (the sky).
         block : tuple of slices, optional
             Partition of the samplings.
-        kind : 'I', 'QU', 'IQU', optional
+        absolute : boolean, optional
+            If true, the scene pixel values include the CMB background and the
+            fluctuations in units of Kelvin, otherwise it only represents the
+            fluctuations, in microKelvin.
+        kind : 'I', 'QU' or 'IQU', optional
             The sky kind: 'I' for intensity-only, 'QU' for Q and U maps,
             and 'IQU' for intensity plus QU maps.
         nside : int, optional
             The Healpix scene's nside.
         instrument : QubicInstrument, optional
-            Module name (only 'monochromatic' for now), or a QubicInstrument
-            instance.
+            The QubicInstrument instance.
         calibration : QubicCalibration, optional
             The calibration tree.
         detector_sigma : array-like, optional
@@ -557,7 +584,8 @@ class QubicAcquisition(SimpleAcquisition):
         if not isinstance(instrument, QubicInstrument):
             if scene is not None:
                 raise TypeError('Invalid calling sequence.')
-            scene = QubicScene(instrument, kind=kind, nside=nside)
+            scene = QubicScene(instrument, absolute=absolute, kind=kind,
+                               nside=nside)
             if detector_ngrids is None:
                 detector_ngrids = 1 if scene.kind == 'I' else 2
             instrument = QubicInstrument(

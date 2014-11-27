@@ -37,17 +37,17 @@ class SimpleAcquisition(Acquisition):
                  max_nbytes=None, nprocs_instrument=None, nprocs_sampling=None,
                  comm=None):
         """
-        acq = SimpleAcquisition(instrument, sampling,
+        acq = SimpleAcquisition(band, sampling,
                                 [scene=|absolute=, kind=, nside=],
                                 nprocs_instrument=, nprocs_sampling=, comm=)
-        acq = SimpleAcquisition(band, sampling,
+        acq = SimpleAcquisition(instrument, sampling,
                                 [scene=|absolute=, kind=, nside=],
                                 nprocs_instrument=, nprocs_sampling=, comm=)
 
         Parameters
         ----------
         band : int
-            The sky frequency, in GHz.
+            The module nominal frequency, in GHz.
         scene : QubicScene, optional
             The discretized observed scene (the sky).
         block : tuple of slices, optional
@@ -515,17 +515,17 @@ class QubicAcquisition(SimpleAcquisition):
                  absolute=False, kind='IQU', nside=256, max_nbytes=None,
                  nprocs_instrument=None, nprocs_sampling=None, comm=None):
         """
-        acq = QubicAcquisition(instrument, sampling,
-                               [scene=|absolute=, kind=, nside=],
-                               nprocs_instrument=, nprocs_sampling=, comm=)
         acq = QubicAcquisition(band, sampling,
+                               [scene=|absolute=, kind=, nside=],
+                               nprcs_instrument=, nprocs_sampling=, comm=)
+        acq = QubicAcquisition(instrument, sampling,
                                [scene=|absolute=, kind=, nside=],
                                nprocs_instrument=, nprocs_sampling=, comm=)
 
         Parameters
         ----------
         band : int
-            The sky frequency, in GHz.
+            The module nominal frequency, in GHz.
         scene : QubicScene, optional
             The discretized observed scene (the sky).
         block : tuple of slices, optional
@@ -595,6 +595,8 @@ class QubicAcquisition(SimpleAcquisition):
                 detector_tau=detector_tau, primary_beam=primary_beam,
                 secondary_beam=secondary_beam, synthbeam_dtype=synthbeam_dtype,
                 synthbeam_fraction=synthbeam_fraction)
+        elif scene is None:
+            scene = QubicScene(150, absolute=absolute, kind=kind, nside=nside)
         SimpleAcquisition.__init__(
             self, instrument, sampling, scene, block=block,
             max_nbytes=max_nbytes, nprocs_instrument=nprocs_instrument,

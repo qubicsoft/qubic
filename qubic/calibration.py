@@ -102,7 +102,8 @@ class QubicCalibration(object):
                 spacing = h['spacing']
                 center = hdus[1].data
                 shape = center.shape[:-1]
-                layout = Layout(shape, center=center, radius=h['innerrad'])
+                layout = Layout(shape, center=center, radius=h['innerrad'],
+                                open=None)
                 layout.spacing = spacing
             elif version == '2.0':
                 h = hdus[0].header
@@ -113,7 +114,8 @@ class QubicCalibration(object):
                 selection = ~hdus[1].data.view(bool)
                 layout = LayoutGrid(
                     removed.shape, spacing, selection=selection, radius=radius,
-                    xreflection=xreflection, yreflection=yreflection)
+                    xreflection=xreflection, yreflection=yreflection,
+                    open=None)
             else:
                 h = hdus[1].header
                 spacing = h['spacing']
@@ -126,9 +128,9 @@ class QubicCalibration(object):
                 layout = LayoutGrid(
                     shape, spacing, selection=selection, radius=radius,
                     xreflection=xreflection, yreflection=yreflection,
-                    angle=angle, startswith1=True, id=None)
+                    angle=angle, startswith1=True, id=None, open=None)
                 layout.id = np.arange(len(layout))
-            layout.kappa = h['kappa']
+            layout.open = np.ones(len(layout), bool)
             return layout
 
         elif name == 'optics':

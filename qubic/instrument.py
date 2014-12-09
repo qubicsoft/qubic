@@ -67,7 +67,7 @@ class SimpleInstrument(Instrument):
             detector_ncorr, detector_tau)
         Instrument.__init__(self, 'QUBIC', layout)
         self._init_optics(**keywords)
-        self._init_synthetic_beam(synthbeam_dtype)
+        self._init_synthbeam(synthbeam_dtype)
 
     def _get_detector_layout(self, ngrids, sigma, fknee, fslope, ncorr,
                              tau):
@@ -105,12 +105,12 @@ class SimpleInstrument(Instrument):
         optics.focal_length = self.calibration.get('optics')['focal length']
         self.optics = optics
 
-    def _init_synthetic_beam(self, dtype):
+    def _init_synthbeam(self, dtype):
         class SyntheticBeam(object):
             pass
         sb = SyntheticBeam()
         sb.dtype = np.dtype(dtype)
-        self.synthetic_beam = sb
+        self.synthbeam = sb
 
     def __str__(self):
         state = [('ngrids', self.detector.ngrids),
@@ -217,7 +217,7 @@ class SimpleInstrument(Instrument):
 
         """
         rotation = sampling.cartesian_galactic2instrument
-        dtype = self.synthetic_beam.dtype
+        dtype = self.synthbeam.dtype
         ndetectors = len(self)
         ntimes = len(sampling)
         nside = scene.nside
@@ -338,8 +338,8 @@ class QubicInstrument(SimpleInstrument):
             **keywords)
         self._init_beams(primary_beam, secondary_beam)
         self._init_horns()
-        self.synthetic_beam.fraction = synthbeam_fraction
-        self.synthetic_beam.kmax = 8  # all peaks are considered
+        self.synthbeam.fraction = synthbeam_fraction
+        self.synthbeam.kmax = 8  # all peaks are considered
 
     def _init_beams(self, primary, secondary):
         if primary is None:
@@ -354,7 +354,7 @@ class QubicInstrument(SimpleInstrument):
         self.horn = self.calibration.get('hornarray')
 
     def __str__(self):
-        state = [('synthbeam_fraction', self.synthetic_beam.fraction)]
+        state = [('synthbeam_fraction', self.synthbeam.fraction)]
         out = SimpleInstrument.__str__(self)
         index = out.index('\nCalibration')
         return out[:index] + \
@@ -364,8 +364,8 @@ class QubicInstrument(SimpleInstrument):
     __repr__ = __str__
 
     def _peak_angles(self, scene):
-        fraction = self.synthetic_beam.fraction
-        theta, phi = self._peak_angles_kmax(scene, self.synthetic_beam.kmax)
+        fraction = self.synthbeam.fraction
+        theta, phi = self._peak_angles_kmax(scene, self.synthbeam.kmax)
         val = np.array(self.primary_beam(theta, phi), dtype=float, copy=False)
         val[~np.isfinite(val)] = 0
         val /= np.sum(val, axis=-1)[:, None]

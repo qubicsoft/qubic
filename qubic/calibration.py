@@ -1,6 +1,5 @@
 # coding: utf-8
 from __future__ import division
-
 import numpy as np
 import os
 import re
@@ -8,6 +7,7 @@ from astropy.io import fits
 from glob import glob
 from os.path import join
 from pysimulators import Layout, LayoutGrid
+from .horns import HornLayout
 
 __all__ = ['QubicCalibration']
 
@@ -125,7 +125,7 @@ class QubicCalibration(object):
                 radius = h['radius']
                 selection = ~hdus[2].data.view(bool)
                 shape = selection.shape
-                layout = LayoutGrid(
+                layout = HornLayout(
                     shape, spacing, selection=selection, radius=radius,
                     xreflection=xreflection, yreflection=yreflection,
                     angle=angle, startswith1=True, id=None, open=None)

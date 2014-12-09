@@ -45,7 +45,7 @@ def ang2vec(theta_rad, phi_rad):
 # HORNS
 ########
 nhorn_open = np.sum(HORN_OPEN)
-horn_vec = np.column_stack([qubic.horn.all.center[HORN_OPEN],
+horn_vec = np.column_stack([qubic.horn.all.center[HORN_OPEN, :2],
                             np.zeros(nhorn_open)])
 
 
@@ -70,13 +70,13 @@ detector_plane_pixel_sr = -central_pixel_sr * np.cos(det_theta)**3
 ############
 # DETECTORS
 ############
-qubic.detector.vertex += DETECTOR_OFFSET
+qubic.detector.vertex[..., :2] += DETECTOR_OFFSET
 header = create_fitsheader((ndet_x, ndet_x), cdelt=det_spacing, crval=(0, 0),
                            ctype=['X---CAR', 'Y---CAR'], cunit=['m', 'm'])
 detector_plane = SceneGrid.fromfits(header)
 integ = MaskOperator(qubic.detector.all.removed) * \
         detector_plane.get_integration_operator(
-            detector_plane.topixel(qubic.detector.all.vertex))
+            detector_plane.topixel(qubic.detector.all.vertex[..., :2]))
 
 
 ########

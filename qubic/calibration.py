@@ -130,6 +130,8 @@ class QubicCalibration(object):
                     xreflection=xreflection, yreflection=yreflection,
                     angle=angle, startswith1=True, id=None, open=None)
                 layout.id = np.arange(len(layout))
+            layout.center = np.concatenate(
+                [layout.center, np.full_like(layout.center[..., :1], 0)], -1)
             layout.open = np.ones(len(layout), bool)
             return layout
 

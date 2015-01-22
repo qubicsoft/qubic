@@ -2,6 +2,7 @@ from __future__ import division
 
 import numpy as np
 from numpy import pi
+import healpy as hp
 
 __all__ = []
 
@@ -18,6 +19,20 @@ class Beam(object):
 
     def __call__(self, theta_rad, phi_rad):
         raise NotImplementedError()
+
+    def healpix(self, nside):
+        """
+        Return the beam as a Healpix map.
+
+        Parameter
+        ---------
+        nside : int
+             The Healpix map's nside.
+
+        """
+        npix = hp.nside2npix(nside)
+        theta, phi = hp.pix2ang(nside, np.arange(npix))
+        return self(theta, phi)
 
 
 class GaussianBeam(Beam):

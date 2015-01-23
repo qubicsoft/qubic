@@ -2,10 +2,6 @@
 from __future__ import division
 
 import healpy as hp
-try:
-    import matplotlib.pyplot as mp
-except:
-    pass
 import numexpr as ne
 import numpy as np
 from pyoperators import (
@@ -124,19 +120,6 @@ class SimpleInstrument(Instrument):
                join('    ' + l for l in str(self.calibration).splitlines())
 
     __repr__ = __str__
-
-    def plot(self, autoscale=True, **keywords):
-        """
-        Plot detectors on the image plane.
-
-        """
-        a = mp.gca()
-        vertex = self.detector.vertex
-        for v in vertex:
-            a.add_patch(mp.Polygon(v, closed=True, fill=False, **keywords))
-        if autoscale:
-            mp.autoscale()
-        mp.show()
 
     def get_noise(self, sampling, out=None):
         """

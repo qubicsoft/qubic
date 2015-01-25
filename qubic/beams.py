@@ -1,8 +1,9 @@
 from __future__ import division
-
-import numpy as np
-from numpy import pi
 import healpy as hp
+import numexpr as ne
+import numpy as np
+from pyoperators.utils import reshape_broadcast
+from numpy import pi
 
 __all__ = []
 
@@ -14,6 +15,7 @@ class Beam(object):
         ---------
         solid_angle : float
             The beam solid angle [sr].
+
         """
         self.solid_angle = float(solid_angle)
 
@@ -47,10 +49,12 @@ class GaussianBeam(Beam):
         self.backward = bool(backward)
         Beam.__init__(self, 2 * pi * self.sigma_rad**2)
 
-    def __call__(self, theta_rad, phi_rad=None):
+    def __call__(self, theta_rad, phi_rad):
         if self.backward:
             theta_rad = pi - theta_rad
-        return np.exp(-theta_rad**2 / (2 * self.sigma_rad**2))
+        coef = -0.5 / self.sigma_rad**2
+        out = ne.evaluate('exp(coef * theta_rad**2)')
+        return reshape_broadcast(out, np.broadcast(theta_rad, phi_rad).shape)
 
 
 class UniformHalfSpaceBeam(Beam):
@@ -61,5 +65,6 @@ class UniformHalfSpaceBeam(Beam):
     def __init__(self):
         Beam.__init__(self, 2 * pi)
 
-    def __call__(self, theta_rad, phi_rad=None):
-        return 1
+    def __call__(self, theta_rad, phi_rad):
+        out = 1.
+        return reshape_broadcast(out, np.broadcast(theta_rad, phi_rad).shape)

@@ -1,6 +1,7 @@
 # coding: utf-8
 from __future__ import division
 
+import healpy as hp
 try:
     import matplotlib.pyplot as mp
 except:
@@ -8,13 +9,15 @@ except:
 import numexpr as ne
 import numpy as np
 from pyoperators import (
-    DenseBlockDiagonalOperator, IdentityOperator, HomothetyOperator,
-    ReshapeOperator, Rotation2dOperator, Rotation3dOperator,
+    Cartesian2SphericalOperator, DenseBlockDiagonalOperator, IdentityOperator,
+    HomothetyOperator, ReshapeOperator, Rotation2dOperator, Rotation3dOperator,
     Spherical2CartesianOperator)
 from pyoperators.utils import pool_threading
+from pyoperators.utils.ufuncs import abs2
 from pysimulators import (
     ConvolutionTruncatedExponentialOperator, Instrument, Layout,
     ProjectionOperator)
+from pysimulators.geometry import surface_simple_polygon
 from pysimulators.interfaces.healpy import Cartesian2HealpixOperator
 from pysimulators.sparse import (
     FSRMatrix, FSRRotation2dMatrix, FSRRotation3dMatrix)
@@ -417,6 +420,165 @@ class QubicInstrument(SimpleInstrument):
                             local_dict=local_dict)
         phi = ne.evaluate('arctan2(ny, nx)', local_dict=local_dict)
         return theta, phi
+
+    def get_response_A(self, scene, x=None, y=None, area=1):
+        """
+        Phase and transmission from the switches to the focal plane.
+
+        Parameters
+        ----------
+        scene : QubicScene
+            The scene.
+        x : array-like, optional
+            The X-coordinate in the focal plane where the response is computed,
+            in meters. If not provided, the detector central positions are
+            assumed.
+        y : array-like, optional
+            The Y-coordinate in the focal plane where the response is computed,
+            in meters. If not provided, the detector central positions are
+            assumed.
+        area : array-like, optional
+            The integration area, in m^2.
+
+        Returns
+        -------
+        out : complex array of shape (#positions, #horns)
+            The phase and transmission from the horns to the focal plane.
+
+        """
+        f = self.optics.focal_length
+        if x is None and y is None:
+            uvec = self.detector.center
+            area = self.detector.area
+        elif x is not None and y is not None:
+            x, y, area = [np.array(_, dtype=float, copy=False)
+                          for _ in x, y, area]
+            x, y, area = np.broadcast_arrays(x, y, area)
+            uvec = np.array([x, y, np.full_like(x, -f)])
+            # roll first axis to last
+            uvec = np.rollaxis(uvec[..., None], 0, -1)[..., 0]
+        else:
+            raise ValueError('Input x or y not specified.')
+        uvec /= np.sqrt(np.sum(uvec**2, axis=-1))[..., None]
+        thetaphi = Cartesian2SphericalOperator('zenith,azimuth')(uvec)
+        sr = -area / f**2 * np.cos(thetaphi[..., 0])**3
+        tr = np.sqrt(self.secondary_beam(thetaphi[..., 0], thetaphi[..., 1]) *
+                     sr / self.secondary_beam.solid_angle)[..., None]
+        const = 2j * pi * scene.nu / c
+        product = np.dot(uvec, self.horn[self.horn.open].center.T)
+        return ne.evaluate('tr * exp(const * product)')
+
+    def get_response_B(self, scene, theta, phi, power=1):
+        """
+        Phase and transmission from the source to the switches.
+
+        Parameters
+        ----------
+        scene : QubicScene
+            The scene.
+        theta : array-like
+            The source zenith angle [rad].
+        phi : array-like
+            The source azimuthal angle [rad].
+        power : array-like
+            The source power [W].
+
+        Returns
+        -------
+        out : complex array of shape (#horns, #sources)
+            The phase and transmission from the source to the horns.
+
+        """
+        shape = np.broadcast(theta, phi, power).shape
+        theta, phi, power = [np.ravel(_) for _ in theta, phi, power]
+        uvec = hp.ang2vec(theta, phi)
+        source_E = np.sqrt(power * self.primary_beam(theta, phi))
+        const = 2j * pi * scene.nu / c
+        product = np.dot(self.horn[self.horn.open].center, uvec.T)
+        out = ne.evaluate('source_E * exp(const * product)')
+        return out.reshape((-1,) + shape)
+
+    def get_response(self, scene, theta, phi, power=1, x=None, y=None,
+                     area=1):
+        """
+        Return the electric field created by sources at specified angles
+        on specified locations of the focal planes.
+
+        Parameters
+        ----------
+        scene : QubicScene
+            The scene.
+        theta : array-like
+            The source zenith angle [rad].
+        phi : array-like
+            The source azimuthal angle [rad].
+        power : array-like
+            The source power [W].
+        x : array-like, optional
+            The X-coordinate in the focal plane where the response is computed,
+            in meters. If not provided, the detector central positions are
+            assumed.
+        y : array-like, optional
+            The Y-coordinate in the focal plane where the response is computed,
+            in meters. If not provided, the detector central positions are
+            assumed.
+        area : array-like, optional
+            The integration area, in m^2.
+
+        Returns
+        -------
+        out : array of shape (#positions, #sources)
+            The electric field on the specified focal plane positions.
+
+        """
+        A = self.get_response_A(scene, x, y, area)
+        B = self.get_response_B(scene, theta, phi, power)
+        E = np.dot(A, B.reshape((B.shape[0], -1))).reshape(
+            A.shape[:-1] + B.shape[1:])
+        return E
+
+    def get_synthbeam_healpix_from_position(self, scene, x, y, theta_max=45):
+
+        """
+        Return the monochromatic synthetic beam for a specified location
+        on the focal plane.
+
+        Parameters
+        ----------
+        scene : QubicScene
+            The scene.
+        x : array-like, optional
+            The X-coordinate in the focal plane where the response is computed,
+            in meters. If not provided, the detector central positions are
+            assumed.
+        y : array-like, optional
+            The Y-coordinate in the focal plane where the response is computed,
+            in meters. If not provided, the detector central positions are
+            assumed.
+        theta_max : float, optional
+            The maximum zenithal angle above which the synthetic beam is
+            assumed to be zero, in radians.
+
+        """
+        MAX_MEMORY_B = 1e9
+        theta, phi = hp.pix2ang(scene.nside, scene.index)
+        index = np.where(theta <= np.radians(theta_max))[0]
+        nhorn = len(self.horn.open)
+        npix = len(index)
+        nbytes_B = npix * nhorn * 24
+        ngroup = np.ceil(nbytes_B / MAX_MEMORY_B)
+        if x is None and y is None:
+            shape = ()
+        else:
+            shape = np.broadcast(x, y).shape
+        out = np.zeros(shape + (len(scene),), dtype=self.synthbeam.dtype)
+        for s in split(npix, ngroup):
+            index_ = index[s]
+            sb = self.get_response(scene, theta[index_], phi[index_], power=1,
+                                   x=x, y=y, area=1)
+            out[..., index_] = abs2(sb, dtype=self.synthbeam.dtype)
+        out /= np.sum(out)
+        return out
 
 
 def _argsort_reverse(a, axis=-1):

@@ -35,7 +35,8 @@ class SimpleInstrument(Instrument):
     """
     def __init__(self, calibration=None, detector_fknee=0, detector_fslope=1,
                  detector_ncorr=10, detector_ngrids=2, detector_sigma=10,
-                 detector_tau=0.01, synthbeam_dtype=np.float32, **keywords):
+                 detector_tau=0.01, polarizer=True,
+                 synthbeam_dtype=np.float32):
         """
         Parameters
         ----------
@@ -47,12 +48,14 @@ class SimpleInstrument(Instrument):
             The detector 1/f slope index.
         detector_ncorr : int
             The detector 1/f correlation length.
-        detector_ngrids : int, optional
-            Number of detector grids.
+        detector_ngrids : 1 or 2
+            Number of detector grids. It doesn't affect the optics setup.
         detector_sigma : array-like
             The standard deviation of the detector white noise component.
         detector_tau : array-like
             The detector time constants in seconds.
+        polarizer : boolean
+            If true, the polarizer grid is present in the optics setup.
         synthbeam_dtype : dtype, optional
             The data type for the synthetic beams (default: float32).
             It is the dtype used to store the values of the pointing matrix.
@@ -65,7 +68,7 @@ class SimpleInstrument(Instrument):
             detector_ngrids, detector_sigma, detector_fknee, detector_fslope,
             detector_ncorr, detector_tau)
         Instrument.__init__(self, 'QUBIC', layout)
-        self._init_optics(**keywords)
+        self._init_optics(polarizer)
         self._init_synthbeam(synthbeam_dtype)
 
     def _get_detector_layout(self, ngrids, sigma, fknee, fslope, ncorr,
@@ -97,11 +100,12 @@ class SimpleInstrument(Instrument):
         layout.ngrids = ngrids
         return layout
 
-    def _init_optics(self, **keywords):
+    def _init_optics(self, polarizer):
         class Optics(object):
             pass
         optics = Optics()
         optics.focal_length = self.calibration.get('optics')['focal length']
+        optics.polarizer = bool(polarizer)
         self.optics = optics
 
     def _init_synthbeam(self, dtype):
@@ -171,18 +175,26 @@ class SimpleInstrument(Instrument):
     def get_polarizer_operator(self, sampling, scene):
         """
         Return operator for the polarizer grid.
+        When the polarizer is not present a transmission of 1 is assumed
+        for the detectors on the first focal plane and of 0 for the other.
+        Otherwise, the signal is split onto the focal planes.
 
         """
-        if scene.kind == 'I':
-            return HomothetyOperator(1 / self.detector.ngrids)
-
-        if self.detector.ngrids == 1:
-            raise ValueError(
-                'Polarized input not handled by a single detector grid.')
-
         nd = len(self)
         nt = len(sampling)
         grid = self.detector.quadrant // 4
+
+        if scene.kind == 'I':
+            if self.optics.polarizer:
+                return HomothetyOperator(1 / 2)
+            # 1 for the first detector grid and 0 for the second one
+            return DiagonalOperator(1 - grid, shapein=(nd, nt),
+                                    broadcast='rightward')
+
+        if not self.optics.polarizer:
+            raise NotImplementedError(
+                'Polarized input is not handled without the polarizer grid.')
+
         z = np.zeros(nd)
         data = np.array([z + 0.5, 0.5 - grid, z]).T[:, None, None, :]
         return ReshapeOperator((nd, nt, 1), (nd, nt)) * \
@@ -279,9 +291,9 @@ class QubicInstrument(SimpleInstrument):
     """
     def __init__(self, calibration=None, detector_fknee=0, detector_fslope=1,
                  detector_ncorr=10, detector_ngrids=2, detector_sigma=10,
-                 detector_tau=0.01, primary_beam=None, secondary_beam=None,
-                 synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
-                 **keywords):
+                 detector_tau=0.01, polarizer=True, primary_beam=None,
+                 secondary_beam=None, synthbeam_dtype=np.float32,
+                 synthbeam_fraction=0.99):
         """
         Parameters
         ----------
@@ -299,6 +311,8 @@ class QubicInstrument(SimpleInstrument):
             The standard deviation of the detector white noise component.
         detector_tau : array-like
             The detector time constants in seconds.
+        polarizer : boolean
+            If true, the polarizer grid is present in the optics setup.
         primary_beam : function f(theta [rad], phi [rad])
             The primary beam transmission function.
         secondary_beam : function f(theta [rad], phi [rad])
@@ -315,8 +329,8 @@ class QubicInstrument(SimpleInstrument):
             calibration = QubicCalibration()
         SimpleInstrument.__init__(
             self, calibration, detector_fknee, detector_fslope, detector_ncorr,
-            detector_ngrids, detector_sigma, detector_tau, synthbeam_dtype,
-            **keywords)
+            detector_ngrids, detector_sigma, detector_tau, polarizer,
+            synthbeam_dtype)
         self._init_beams(primary_beam, secondary_beam)
         self._init_horns()
         self.synthbeam.fraction = synthbeam_fraction

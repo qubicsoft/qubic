@@ -29,19 +29,19 @@ class SimpleAcquisition(Acquisition):
     The Acquisition class for the single-peak simple instrument.
 
     """
-    def __init__(self, instrument, sampling, scene=None, absolute=False,
-                 block=None, calibration=None, detector_sigma=10,
-                 detector_fknee=0, detector_fslope=1, detector_ncorr=10,
-                 detector_ngrids=None, detector_tau=0.01,
-                 synthbeam_dtype=np.float32, kind='IQU', nside=256,
+    def __init__(self, instrument, sampling, scene=None, block=None,
+                 calibration=None, detector_sigma=10, detector_fknee=0,
+                 detector_fslope=1, detector_ncorr=10, detector_ngrids=None,
+                 detector_tau=0.01, polarizer=True, synthbeam_dtype=np.float32,
+                 absolute=False, kind='IQU', nside=256,
                  max_nbytes=None, nprocs_instrument=None, nprocs_sampling=None,
                  comm=None):
         """
         acq = SimpleAcquisition(band, sampling,
-                                [scene=|absolute=, kind=, nside=],
+                                [scene=|absolute=, kind=, nside=, temperature=],
                                 nprocs_instrument=, nprocs_sampling=, comm=)
         acq = SimpleAcquisition(instrument, sampling,
-                                [scene=|absolute=, kind=, nside=],
+                                [scene=|absolute=, kind=, nside=, temperature=],
                                 nprocs_instrument=, nprocs_sampling=, comm=)
 
         Parameters
@@ -77,6 +77,8 @@ class SimpleAcquisition(Acquisition):
             Number of detector grids.
         detector_tau : array-like, optional
             The detector time constants in seconds.
+        polarizer : boolean
+            If true, the polarizer grid is present in the optics setup.
         synthbeam_dtype : dtype, optional
             The data type for the synthetic beams (default: float32).
             It is the dtype used to store the values of the pointing matrix.
@@ -107,7 +109,8 @@ class SimpleAcquisition(Acquisition):
                 calibration=calibration, detector_fknee=detector_fknee,
                 detector_fslope=detector_fslope, detector_ncorr=detector_ncorr,
                 detector_ngrids=detector_ngrids, detector_sigma=detector_sigma,
-                detector_tau=detector_tau, synthbeam_dtype=synthbeam_dtype)
+                detector_tau=detector_tau, polarizer=polarizer,
+                synthbeam_dtype=synthbeam_dtype)
         elif scene is None:
             scene = QubicScene(150, absolute=absolute, kind=kind, nside=nside)
         Acquisition.__init__(
@@ -510,16 +513,17 @@ class QubicAcquisition(SimpleAcquisition):
     def __init__(self, instrument, sampling, scene=None, block=None,
                  calibration=None, detector_sigma=10, detector_fknee=0,
                  detector_fslope=1, detector_ncorr=10, detector_ngrids=None,
-                 detector_tau=0.01, primary_beam=None, secondary_beam=None,
-                 synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
-                 absolute=False, kind='IQU', nside=256, max_nbytes=None,
+                 detector_tau=0.01, polarizer=True,  primary_beam=None,
+                 secondary_beam=None, synthbeam_dtype=np.float32,
+                 synthbeam_fraction=0.99, absolute=False, kind='IQU',
+                 nside=256, temperature=True, max_nbytes=None,
                  nprocs_instrument=None, nprocs_sampling=None, comm=None):
         """
         acq = QubicAcquisition(band, sampling,
-                               [scene=|absolute=, kind=, nside=],
-                               nprcs_instrument=, nprocs_sampling=, comm=)
+                               [scene=|absolute=, kind=, nside=, temperature=],
+                               nprocs_instrument=, nprocs_sampling=, comm=)
         acq = QubicAcquisition(instrument, sampling,
-                               [scene=|absolute=, kind=, nside=],
+                               [scene=|absolute=, kind=, nside=, temperature=],
                                nprocs_instrument=, nprocs_sampling=, comm=)
 
         Parameters
@@ -555,6 +559,8 @@ class QubicAcquisition(SimpleAcquisition):
             Number of detector grids.
         detector_tau : array-like, optional
             The detector time constants in seconds.
+        polarizer : boolean
+            If true, the polarizer grid is present in the optics setup.
         primary_beam : function f(theta [rad], phi [rad])
             The primary beam transmission function.
         secondary_beam : function f(theta [rad], phi [rad])
@@ -594,7 +600,7 @@ class QubicAcquisition(SimpleAcquisition):
                 detector_ngrids=detector_ngrids, detector_sigma=detector_sigma,
                 detector_tau=detector_tau, primary_beam=primary_beam,
                 secondary_beam=secondary_beam, synthbeam_dtype=synthbeam_dtype,
-                synthbeam_fraction=synthbeam_fraction)
+                synthbeam_fraction=synthbeam_fraction, polarizer=polarizer)
         elif scene is None:
             scene = QubicScene(150, absolute=absolute, kind=kind, nside=nside)
         SimpleAcquisition.__init__(

@@ -11,7 +11,8 @@ import yaml
 from glob import glob
 from pyoperators import (
     BlockColumnOperator, BlockDiagonalOperator, BlockRowOperator,
-    MPIDistributionIdentityOperator, I, MPI, proxy_group, rule_manager)
+    CompositionOperator, MPIDistributionIdentityOperator, I, MPI, proxy_group,
+    rule_manager)
 from pyoperators.utils import ifirst
 from pyoperators.utils.mpi import as_mpi
 from pysimulators import Acquisition, ProjectionOperator
@@ -148,6 +149,14 @@ class SimpleAcquisition(Acquisition):
         self.sampling.comm.Allreduce(MPI.IN_PLACE, as_mpi(hit), op=MPI.SUM)
         return hit
 
+    def get_aperture_integration_operator(self):
+        """
+        Integrate flux density in the telescope aperture.
+        Convert signal from W / m^2 / Hz into W / Hz.
+
+        """
+        return self.instrument.get_aperture_integration_operator()
+
     def get_convolution_peak_operator(self, fwhm=None, **keywords):
         """
         Return an operator that convolves the Healpix sky by the gaussian
@@ -163,6 +172,14 @@ class SimpleAcquisition(Acquisition):
         if fwhm is None:
             fwhm = np.radians(self.instrument.synthbeam.peak.fwhm_deg)
         return HealpixConvolutionGaussianOperator(fwhm=fwhm, **keywords)
+
+    def get_detector_integration_operator(self):
+        """
+        Integrate flux density in detector solid angles.
+        Convert W / m^2 / Hz into W / Hz.
+
+        """
+        return self.instrument.get_detector_integration_operator()
 
     def get_detector_response_operator(self):
         """
@@ -205,20 +222,25 @@ class SimpleAcquisition(Acquisition):
 
     def get_operator(self):
         """
-        Return the operator of the acquisition.
+        Return the operator of the acquisition. Note that the operator is only
+        linear if the scene temperature is differential.
 
         """
+        distribution = self.get_distribution_operator()
         temp = self.get_unit_conversion_operator()
+        aperture = self.get_aperture_integration_operator()
         projection = self.get_projection_operator()
         hwp = self.get_hwp_operator()
         polarizer = self.get_polarizer_operator()
+        integ = self.get_detector_integration_operator()
         response = self.get_detector_response_operator()
-        distribution = self.get_distribution_operator()
 
         with rule_manager(inplace=True):
-            H = response * polarizer * (hwp * projection * temp) * distribution
+            H = CompositionOperator([
+                response, integ, polarizer, hwp * projection, aperture, temp,
+                distribution])
         if self.scene == 'QU':
-            H = self.get_subtract_grid_operator() * H
+            H = self.get_subtract_grid_operator()(H)
         return H
 
     def get_operator_nbytes(self):

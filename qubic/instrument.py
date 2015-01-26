@@ -5,10 +5,10 @@ import healpy as hp
 import numexpr as ne
 import numpy as np
 from pyoperators import (
-    Cartesian2SphericalOperator, DenseBlockDiagonalOperator, IdentityOperator,
-    HomothetyOperator, ReshapeOperator, Rotation2dOperator, Rotation3dOperator,
-    Spherical2CartesianOperator)
-from pyoperators.utils import pool_threading
+    Cartesian2SphericalOperator, DenseBlockDiagonalOperator, DiagonalOperator,
+    IdentityOperator, HomothetyOperator, ReshapeOperator, Rotation2dOperator,
+    Rotation3dOperator, Spherical2CartesianOperator)
+from pyoperators.utils import pool_threading, split
 from pyoperators.utils.ufuncs import abs2
 from pysimulators import (
     ConvolutionTruncatedExponentialOperator, Instrument, Layout,
@@ -134,6 +134,28 @@ class SimpleInstrument(Instrument):
         return Instrument.get_noise(
             self, sampling, sigma=self.detector.sigma,
             fknee=self.detector.fknee, fslope=self.detector.fslope, out=out)
+
+    def get_aperture_integration_operator(self):
+        """
+        Integrate flux density in the telescope aperture.
+        Convert signal from W / m^2 / Hz into W / Hz.
+
+        """
+        horn = self.calibration.get('hornarray')
+        return HomothetyOperator(len(horn) * np.pi * horn.radius**2)
+
+    def get_detector_integration_operator(self):
+        """
+        Integrate flux density in detector solid angles.
+        Convert W / Hz / sr into W / Hz.
+
+        """
+        area = self.detector.area
+        theta = self.detector.theta
+        sr_det = -area / self.optics.focal_length**2 * np.cos(theta)**3
+        sr_beam = self.secondary_beam.solid_angle
+        # the secondary beam transmission is handled in get_projection_operator
+        return DiagonalOperator(sr_det / sr_beam, broadcast='rightward')
 
     def get_detector_response_operator(self, sampling, tau=None):
         """
@@ -365,18 +387,24 @@ class QubicInstrument(SimpleInstrument):
 
     __repr__ = __str__
 
+    def get_aperture_integration_operator(self):
+        nhorns = np.sum(self.horn.open)
+        return HomothetyOperator(nhorns * np.pi * self.horn.radius**2)
+    get_aperture_integration_operator.__doc__ = \
+        SimpleInstrument.get_aperture_integration_operator.__doc__
+
     def _peak_angles(self, scene):
         fraction = self.synthbeam.fraction
         theta, phi = self._peak_angles_kmax(scene, self.synthbeam.kmax)
         val = np.array(self.primary_beam(theta, phi), dtype=float, copy=False)
         val[~np.isfinite(val)] = 0
-        val /= np.sum(val, axis=-1)[:, None]
+        norm = np.sum(val, axis=-1)[:, None]
         index = _argsort_reverse(val)
         theta = theta[index]
         phi = phi[index]
         val = val[index]
         cumval = np.cumsum(val, axis=-1)
-        imaxs = np.argmax(cumval >= fraction, axis=-1) + 1
+        imaxs = np.argmax(cumval >= fraction * norm, axis=-1) + 1
         imax = max(imaxs)
 
         # slice initial arrays to discard the non-significant peaks
@@ -390,8 +418,10 @@ class QubicInstrument(SimpleInstrument):
             val[idet, imax_:] = 0
             theta[idet, imax_:] = pi / 2 #XXX 0 leads to NaN
             phi[idet, imax_:] = 0
-        val /= np.sum(val, axis=-1)[:, None]
-        val *= self.secondary_beam(self.detector.theta, 0.)
+        pixel_solid_angle = 4 * np.pi / scene.shape[0]
+        val *= self.synthbeam.peak.solid_angle / pixel_solid_angle * \
+               len(self.horn) * self.secondary_beam(self.detector.theta,
+                                                    self.detector.phi)[:, None]
         return theta, phi, val
 
     def _peak_angles_kmax(self, scene, kmax):
@@ -581,7 +611,7 @@ class QubicInstrument(SimpleInstrument):
             sb = self.get_response(scene, theta[index_], phi[index_], power=1,
                                    x=x, y=y, area=1)
             out[..., index_] = abs2(sb, dtype=self.synthbeam.dtype)
-        out /= np.sum(out)
+        out *= np.pi * self.horn.radius**2
         return out
 
 

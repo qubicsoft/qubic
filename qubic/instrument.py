@@ -245,12 +245,13 @@ class SimpleInstrument(Instrument):
                 verbose=verbose)
 
         index = s.data.index.reshape((ndetectors, ntimes, ncolmax))
+        c2h = Cartesian2HealpixOperator(nside)
 
         def func_thread(i):
             # e_nf[i] shape: (1, ncolmax, 3)
             # e_ni shape: (ntimes, ncolmax, 3)
             e_ni = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
-            index[i] = Cartesian2HealpixOperator(nside)(e_ni)
+            index[i] = c2h(e_ni)
 
         with pool_threading() as pool:
             pool.map(func_thread, xrange(ndetectors))

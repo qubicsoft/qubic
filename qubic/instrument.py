@@ -71,27 +71,29 @@ class SimpleInstrument(Instrument):
 
     def _get_detector_layout(self, ngrids, sigma, fknee, fslope, ncorr,
                              tau):
-        shape, vertex, removed_, index, quadrant = \
+        shape, vertex, removed, index, quadrant = \
             self.calibration.get('detarray')
         if ngrids == 2:
             shape = (2,) + shape
             vertex = np.array([vertex, vertex])
-            removed_ = np.array([removed_, removed_])
+            removed = np.array([removed, removed])
             index = np.array([index, index + np.max(index) + 1], index.dtype)
             quadrant = np.array([quadrant, quadrant + 4], quadrant.dtype)
         focal_length = self.calibration.get('optics')['focal length']
 
         vertex = np.concatenate(
             [vertex, np.full_like(vertex[..., :1], -focal_length)], -1)
-
-        def theta(self):
-            norm = np.sqrt(np.sum(self.center**2, axis=-1))
-            return np.arccos(-focal_length / norm)
+        center = np.mean(vertex, axis=-2)
+        # assume all detectors have the same area
+        theta = np.pi - np.arctan2(
+            np.sqrt(np.sum(center[..., :2]**2, axis=-1)), focal_length)
+        phi = np.arctan2(center[..., 1], center[..., 0])
 
         layout = Layout(
-            shape, vertex=vertex, selection=~removed_, ordering=index,
+            shape, vertex=vertex, selection=~removed, ordering=index,
             quadrant=quadrant, sigma=sigma, fknee=fknee, fslope=fslope,
-            tau=tau, theta=theta)
+            tau=tau, theta=theta, phi=phi)
+        layout.area = surface_simple_polygon(layout.vertex[0, :, :2])
         layout.ncorr = ncorr
         layout.ngrids = ngrids
         return layout
@@ -278,15 +280,10 @@ class SimpleInstrument(Instrument):
         in radians.
 
         """
-        local_dict = {'f': self.optics.focal_length,
-                      'x': np.ascontiguousarray(self.detector.center[..., 0]),
-                      'y': np.ascontiguousarray(self.detector.center[..., 1])}
-        theta = ne.evaluate('arctan2(sqrt(x**2 + x**2), f)',
-                            local_dict=local_dict).reshape(-1, 1)
-        phi = ne.evaluate('arctan2(y, x)+pi',
-                          local_dict=local_dict).reshape(-1, 1)
-        vals = np.ones_like(theta)
-        return theta, phi, vals
+        theta = -self.detector.theta[:, None]
+        phi = self.detector.phi[:, None] + np.pi
+        val = np.ones_like(theta)
+        return theta, phi, val
 
 
 class QubicInstrument(SimpleInstrument):

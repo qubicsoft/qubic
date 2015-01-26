@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 import numpy as np
-from pyoperators import asoperator, ReciprocalOperator
+from pyoperators import asoperator, IdentityOperator, ReciprocalOperator
 from pysimulators.interfaces.healpy import SceneHealpix
 from scipy.constants import c, h, k
 
@@ -8,7 +8,8 @@ __all__ = ['QubicScene']
 
 
 class QubicScene(SceneHealpix):
-    def __init__(self, band, nside=256, kind='IQU', absolute=False):
+    def __init__(self, band, nside=256, kind='IQU', absolute=False,
+                 temperature=True):
         """
         Parameters
         ----------
@@ -23,14 +24,19 @@ class QubicScene(SceneHealpix):
             If true, the scene pixel values include the CMB background and the
             fluctuations in units of Kelvin, otherwise it only represents the
             fluctuations, in microKelvin.
+        temperature : boolean, optional
+            If true, the scene represents a temperature (absolute in Kelvin or
+            differential in microKelvin according the the absolute keyword) and
+            a power in W/m^2/Hz otherwise.
 
         """
         self.nu = band * 1e9
         self.monochromatic = True
-        self.absolute = absolute
+        self.absolute = bool(absolute)
+        self.temperature = bool(temperature)
         SceneHealpix.__init__(self, nside, kind=kind)
 
-    def get_temperature_conversion_operator(self):
+    def get_unit_conversion_operator(self):
         """
         Convert sky temperature into W / m^2 / Hz / pixel.
 
@@ -42,6 +48,9 @@ class QubicScene(SceneHealpix):
         fluctuations).
 
         """
+        if not self.temperature:
+            return IdentityOperator()
+
         # solid angle of a sky pixel
         omega = 4 * np.pi / self.shape[0]
         a = 2 * omega * h * self.nu**3 / c**2

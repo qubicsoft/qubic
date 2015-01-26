@@ -33,7 +33,7 @@ class SimpleAcquisition(Acquisition):
                  calibration=None, detector_sigma=10, detector_fknee=0,
                  detector_fslope=1, detector_ncorr=10, detector_ngrids=None,
                  detector_tau=0.01, polarizer=True, synthbeam_dtype=np.float32,
-                 absolute=False, kind='IQU', nside=256,
+                 absolute=False, kind='IQU', nside=256, temperature=True,
                  max_nbytes=None, nprocs_instrument=None, nprocs_sampling=None,
                  comm=None):
         """
@@ -112,7 +112,8 @@ class SimpleAcquisition(Acquisition):
                 detector_tau=detector_tau, polarizer=polarizer,
                 synthbeam_dtype=synthbeam_dtype)
         elif scene is None:
-            scene = QubicScene(150, absolute=absolute, kind=kind, nside=nside)
+            scene = QubicScene(150, absolute=absolute, kind=kind, nside=nside,
+                               temperature=temperature)
         Acquisition.__init__(
             self, instrument, sampling, scene, block,
             max_nbytes=max_nbytes, nprocs_instrument=nprocs_instrument,
@@ -187,7 +188,7 @@ class SimpleAcquisition(Acquisition):
             [self.instrument.get_hwp_operator(self.sampling[b], self.scene)
              for b in self.block], axisin=1)
 
-    def get_temperature_conversion_operator(self):
+    def get_unit_conversion_operator(self):
         """
         Convert sky temperature into W / m^2 / Hz.
 
@@ -199,14 +200,14 @@ class SimpleAcquisition(Acquisition):
         fluctuations).
 
         """
-        return self.scene.get_temperature_conversion_operator()
+        return self.scene.get_unit_conversion_operator()
 
     def get_operator(self):
         """
         Return the operator of the acquisition.
 
         """
-        temp = self.get_temperature_conversion_operator()
+        temp = self.get_unit_conversion_operator()
         projection = self.get_projection_operator()
         hwp = self.get_hwp_operator()
         polarizer = self.get_polarizer_operator()
@@ -591,7 +592,7 @@ class QubicAcquisition(SimpleAcquisition):
             if scene is not None:
                 raise TypeError('Invalid calling sequence.')
             scene = QubicScene(instrument, absolute=absolute, kind=kind,
-                               nside=nside)
+                               nside=nside, temperature=temperature)
             if detector_ngrids is None:
                 detector_ngrids = 1 if scene.kind == 'I' else 2
             instrument = QubicInstrument(
@@ -602,7 +603,8 @@ class QubicAcquisition(SimpleAcquisition):
                 secondary_beam=secondary_beam, synthbeam_dtype=synthbeam_dtype,
                 synthbeam_fraction=synthbeam_fraction, polarizer=polarizer)
         elif scene is None:
-            scene = QubicScene(150, absolute=absolute, kind=kind, nside=nside)
+            scene = QubicScene(150, absolute=absolute, kind=kind, nside=nside,
+                               temperature=temperature)
         SimpleAcquisition.__init__(
             self, instrument, sampling, scene, block=block,
             max_nbytes=max_nbytes, nprocs_instrument=nprocs_instrument,

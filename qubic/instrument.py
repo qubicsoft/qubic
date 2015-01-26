@@ -216,9 +216,14 @@ class SimpleInstrument(Instrument):
 
         """
         rotation = sampling.cartesian_galactic2instrument
+        return self._get_projection_operator_from_rotation(rotation, scene,
+                                                           verbose=verbose)
+
+    def _get_projection_operator_from_rotation(self, rotation, scene,
+                                               verbose=True):
         dtype = self.synthbeam.dtype
         ndetectors = len(self)
-        ntimes = len(sampling)
+        ntimes = rotation.data.shape[0]
         nside = scene.nside
 
         theta, phi, vals = self._peak_angles(scene)

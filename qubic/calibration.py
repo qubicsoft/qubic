@@ -86,7 +86,7 @@ class QubicCalibration(object):
             n = shape[0] * shape[1]
             if version == '1.0':
                 removed = np.zeros(shape, bool)
-                index = np.arange(n, dtype=np.int16).reshape(shape)
+                index = np.arange(n, dtype=np.int32).reshape(shape)
                 quadrant = np.zeros(shape, np.int8)
             else:
                 removed = hdus[3].data.view(bool)

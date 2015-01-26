@@ -113,6 +113,7 @@ class SimpleInstrument(Instrument):
             pass
         sb = SyntheticBeam()
         sb.dtype = np.dtype(dtype)
+        sb.peak = GaussianBeam(0.39268176)
         self.synthbeam = sb
 
     def __str__(self):

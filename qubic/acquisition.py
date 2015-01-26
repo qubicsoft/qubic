@@ -148,8 +148,7 @@ class SimpleAcquisition(Acquisition):
         self.sampling.comm.Allreduce(MPI.IN_PLACE, as_mpi(hit), op=MPI.SUM)
         return hit
 
-    def get_convolution_peak_operator(self, fwhm=np.radians(0.64883707),
-                                      **keywords):
+    def get_convolution_peak_operator(self, fwhm=None, **keywords):
         """
         Return an operator that convolves the Healpix sky by the gaussian
         kernel that, if used in conjonction with the peak sampling operator,
@@ -158,9 +157,11 @@ class SimpleAcquisition(Acquisition):
         Parameters
         ----------
         fwhm : float, optional
-            The Full Width Half Maximum of the gaussian.
+            The Full Width Half Maximum of the gaussian, in radians.
 
         """
+        if fwhm is None:
+            fwhm = np.radians(self.instrument.synthbeam.peak.fwhm_deg)
         return HealpixConvolutionGaussianOperator(fwhm=fwhm, **keywords)
 
     def get_detector_response_operator(self):

@@ -16,7 +16,6 @@ from pyoperators import (
 from pyoperators.utils import ifirst
 from pyoperators.utils.mpi import as_mpi
 from pysimulators import Acquisition, ProjectionOperator
-from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from .calibration import QubicCalibration
 from .instrument import QubicInstrument, SimpleInstrument
 from .scene import QubicScene
@@ -169,9 +168,8 @@ class SimpleAcquisition(Acquisition):
             The Full Width Half Maximum of the gaussian, in radians.
 
         """
-        if fwhm is None:
-            fwhm = np.radians(self.instrument.synthbeam.peak.fwhm_deg)
-        return HealpixConvolutionGaussianOperator(fwhm=fwhm, **keywords)
+        return self.instrument.get_convolution_peak_operator(fwhm=fwhm,
+                                                             **keywords)
 
     def get_detector_integration_operator(self):
         """

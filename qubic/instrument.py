@@ -14,7 +14,8 @@ from pysimulators import (
     ConvolutionTruncatedExponentialOperator, Instrument, Layout,
     ProjectionOperator)
 from pysimulators.geometry import surface_simple_polygon
-from pysimulators.interfaces.healpy import Cartesian2HealpixOperator
+from pysimulators.interfaces.healpy import (
+    Cartesian2HealpixOperator, HealpixConvolutionGaussianOperator)
 from pysimulators.sparse import (
     FSRMatrix, FSRRotation2dMatrix, FSRRotation3dMatrix)
 from scipy.constants import c, pi
@@ -143,6 +144,22 @@ class SimpleInstrument(Instrument):
         """
         horn = self.calibration.get('hornarray')
         return HomothetyOperator(len(horn) * np.pi * horn.radius**2)
+
+    def get_convolution_peak_operator(self, fwhm=None, **keywords):
+        """
+        Return an operator that convolves the Healpix sky by the gaussian
+        kernel that, if used in conjonction with the peak sampling operator,
+        best approximates the synthetic beam.
+
+        Parameters
+        ----------
+        fwhm : float, optional
+            The Full Width Half Maximum of the gaussian, in radians.
+
+        """
+        if fwhm is None:
+            fwhm = np.radians(self.synthbeam.peak.fwhm_deg)
+        return HealpixConvolutionGaussianOperator(fwhm=fwhm, **keywords)
 
     def get_detector_integration_operator(self):
         """

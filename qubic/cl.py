@@ -1,10 +1,6 @@
 from __future__ import division
 
 import numpy as np
-try:
-    import matplotlib.pyplot as mp
-except:
-    pass
 import os
 from pyoperators.utils import settingerr
 
@@ -88,6 +84,7 @@ def plot_spectra(ell, spectra=None, lmax=None, Dl=False, yerr=None, xerr=None,
         keyword passed to `legend` if there is more than one input spectrum.
 
     """
+    import matplotlib.pyplot as mp
     if spectra is None:
         spectra = ell
         ell = None
@@ -167,6 +164,7 @@ def semilogy_spectra(ell, spectra=None, lmax=None, Dl=False, yerr=None,
         keyword passed to `legend` if there is more than one input spectrum.
 
     """
+    import matplotlib.pyplot as mp
     if spectra is None:
         spectra = ell
         ell = None

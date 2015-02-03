@@ -30,8 +30,8 @@ class SimpleAcquisition(Acquisition):
 
     """
     def __init__(self, instrument, sampling, scene=None, block=None,
-                 calibration=None, detector_sigma=10, detector_fknee=0,
-                 detector_fslope=1, detector_ncorr=10, detector_ngrids=None,
+                 calibration=None, detector_fknee=0, detector_fslope=1,
+                 detector_ncorr=10, detector_ngrids=None, detector_nep=6e-17,
                  detector_tau=0.01, polarizer=True, synthbeam_dtype=np.float32,
                  absolute=False, kind='IQU', nside=256, temperature=True,
                  max_nbytes=None, nprocs_instrument=None, nprocs_sampling=None,
@@ -65,14 +65,14 @@ class SimpleAcquisition(Acquisition):
             The SimpleInstrument instance.
         calibration : QubicCalibration, optional
             The calibration tree.
-        detector_sigma : array-like, optional
-            The standard deviation of the detector white noise component.
         detector_fknee : array-like, optional
             The detector 1/f knee frequency in Hertz.
         detector_fslope : array-like, optional
             The detector 1/f slope index.
         detector_ncorr : int, optional
             The detector 1/f correlation length.
+        detector_nep : array-like, optional
+            The detector NEP [W/sqrt(Hz)].
         detector_ngrids : int, optional
             Number of detector grids.
         detector_tau : array-like, optional
@@ -108,7 +108,7 @@ class SimpleAcquisition(Acquisition):
             instrument = SimpleInstrument(
                 calibration=calibration, detector_fknee=detector_fknee,
                 detector_fslope=detector_fslope, detector_ncorr=detector_ncorr,
-                detector_ngrids=detector_ngrids, detector_sigma=detector_sigma,
+                detector_ngrids=detector_ngrids, detector_nep=detector_nep,
                 detector_tau=detector_tau, polarizer=polarizer,
                 synthbeam_dtype=synthbeam_dtype)
         elif scene is None:
@@ -533,7 +533,7 @@ class QubicAcquisition(SimpleAcquisition):
 
     """
     def __init__(self, instrument, sampling, scene=None, block=None,
-                 calibration=None, detector_sigma=10, detector_fknee=0,
+                 calibration=None, detector_nep=4.7e-17, detector_fknee=0,
                  detector_fslope=1, detector_ncorr=10, detector_ngrids=None,
                  detector_tau=0.01, polarizer=True,  primary_beam=None,
                  secondary_beam=None, synthbeam_dtype=np.float32,
@@ -569,14 +569,14 @@ class QubicAcquisition(SimpleAcquisition):
             The QubicInstrument instance.
         calibration : QubicCalibration, optional
             The calibration tree.
-        detector_sigma : array-like, optional
-            The standard deviation of the detector white noise component.
         detector_fknee : array-like, optional
             The detector 1/f knee frequency in Hertz.
         detector_fslope : array-like, optional
             The detector 1/f slope index.
         detector_ncorr : int, optional
             The detector 1/f correlation length.
+        detector_nep : array-like, optional
+            The detector NEP [W/sqrt(Hz)].
         detector_ngrids : int, optional
             Number of detector grids.
         detector_tau : array-like, optional
@@ -619,7 +619,7 @@ class QubicAcquisition(SimpleAcquisition):
             instrument = QubicInstrument(
                 calibration=calibration, detector_fknee=detector_fknee,
                 detector_fslope=detector_fslope, detector_ncorr=detector_ncorr,
-                detector_ngrids=detector_ngrids, detector_sigma=detector_sigma,
+                detector_nep=detector_nep, detector_ngrids=detector_ngrids,
                 detector_tau=detector_tau, primary_beam=primary_beam,
                 secondary_beam=secondary_beam, synthbeam_dtype=synthbeam_dtype,
                 synthbeam_fraction=synthbeam_fraction, polarizer=polarizer)

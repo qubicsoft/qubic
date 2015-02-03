@@ -34,9 +34,9 @@ class SimpleInstrument(Instrument):
     single-peak beam.
 
     """
-    def __init__(self, calibration=None, detector_fknee=0, detector_fslope=1,
-                 detector_ncorr=10, detector_ngrids=2, detector_sigma=10,
-                 detector_tau=0.01, polarizer=True,
+    def __init__(self, calibration=None, detector_fknee=0,
+                 detector_fslope=1, detector_ncorr=10, detector_nep=4.7e-17,
+                 detector_ngrids=2, detector_tau=0.01, polarizer=True,
                  synthbeam_dtype=np.float32):
         """
         Parameters
@@ -49,10 +49,10 @@ class SimpleInstrument(Instrument):
             The detector 1/f slope index.
         detector_ncorr : int
             The detector 1/f correlation length.
+        detector_nep : array-like, optional
+            The detector NEP [W/sqrt(Hz)].
         detector_ngrids : 1 or 2
             Number of detector grids. It doesn't affect the optics setup.
-        detector_sigma : array-like
-            The standard deviation of the detector white noise component.
         detector_tau : array-like
             The detector time constants in seconds.
         polarizer : boolean
@@ -66,14 +66,13 @@ class SimpleInstrument(Instrument):
             calibration = QubicCalibration()
         self.calibration = calibration
         layout = self._get_detector_layout(
-            detector_ngrids, detector_sigma, detector_fknee, detector_fslope,
+            detector_ngrids, detector_nep, detector_fknee, detector_fslope,
             detector_ncorr, detector_tau)
         Instrument.__init__(self, 'QUBIC', layout)
         self._init_optics(polarizer)
         self._init_synthbeam(synthbeam_dtype)
 
-    def _get_detector_layout(self, ngrids, sigma, fknee, fslope, ncorr,
-                             tau):
+    def _get_detector_layout(self, ngrids, nep, fknee, fslope, ncorr, tau):
         shape, vertex, removed, index, quadrant = \
             self.calibration.get('detarray')
         if ngrids == 2:
@@ -94,7 +93,7 @@ class SimpleInstrument(Instrument):
 
         layout = Layout(
             shape, vertex=vertex, selection=~removed, ordering=index,
-            quadrant=quadrant, sigma=sigma, fknee=fknee, fslope=fslope,
+            quadrant=quadrant, nep=nep, fknee=fknee, fslope=fslope,
             tau=tau, theta=theta, phi=phi)
         layout.area = surface_simple_polygon(layout.vertex[0, :, :2])
         layout.ncorr = ncorr
@@ -133,8 +132,8 @@ class SimpleInstrument(Instrument):
 
         """
         return Instrument.get_noise(
-            self, sampling, sigma=self.detector.sigma,
-            fknee=self.detector.fknee, fslope=self.detector.fslope, out=out)
+            self, sampling, nep=self.detector.nep, fknee=self.detector.fknee,
+            fslope=self.detector.fslope, out=out)
 
     def get_aperture_integration_operator(self):
         """
@@ -208,9 +207,9 @@ class SimpleInstrument(Instrument):
 
         """
         return Instrument.get_invntt_operator(
-            self, sampling, sigma=self.detector.sigma,
-            fknee=self.detector.fknee, fslope=self.detector.fslope,
-            ncorr=self.detector.ncorr)
+            self, sampling, fknee=self.detector.fknee,
+            fslope=self.detector.fslope, ncorr=self.detector.ncorr,
+            nep=self.detector.nep)
 
     def get_polarizer_operator(self, sampling, scene):
         """
@@ -336,7 +335,7 @@ class QubicInstrument(SimpleInstrument):
 
     """
     def __init__(self, calibration=None, detector_fknee=0, detector_fslope=1,
-                 detector_ncorr=10, detector_ngrids=2, detector_sigma=10,
+                 detector_ncorr=10, detector_nep=4.7e-17, detector_ngrids=2,
                  detector_tau=0.01, polarizer=True, primary_beam=None,
                  secondary_beam=None, synthbeam_dtype=np.float32,
                  synthbeam_fraction=0.99):
@@ -353,8 +352,8 @@ class QubicInstrument(SimpleInstrument):
             The detector 1/f correlation length.
         detector_ngrids : int, optional
             Number of detector grids.
-        detector_sigma : array-like
-            The standard deviation of the detector white noise component.
+        detector_nep : array-like, optional
+            The detector NEP [W/sqrt(Hz)].
         detector_tau : array-like
             The detector time constants in seconds.
         polarizer : boolean
@@ -374,9 +373,11 @@ class QubicInstrument(SimpleInstrument):
         if calibration is None:
             calibration = QubicCalibration()
         SimpleInstrument.__init__(
-            self, calibration, detector_fknee, detector_fslope, detector_ncorr,
-            detector_ngrids, detector_sigma, detector_tau, polarizer,
-            synthbeam_dtype)
+            self, calibration=calibration, detector_fknee=detector_fknee,
+            detector_fslope=detector_fslope, detector_ncorr=detector_ncorr,
+            detector_nep=detector_nep, detector_ngrids=detector_ngrids,
+            detector_tau=detector_tau, polarizer=polarizer,
+            synthbeam_dtype=synthbeam_dtype)
         self._init_beams(primary_beam, secondary_beam)
         self._init_horns()
         self.synthbeam.fraction = synthbeam_fraction

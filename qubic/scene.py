@@ -8,7 +8,7 @@ __all__ = ['QubicScene']
 
 
 class QubicScene(SceneHealpix):
-    def __init__(self, band, nside=256, kind='IQU', absolute=False,
+    def __init__(self, nside=256, kind='IQU', absolute=False,
                  temperature=True):
         """
         Parameters
@@ -30,13 +30,11 @@ class QubicScene(SceneHealpix):
             a power in W/m^2/Hz otherwise.
 
         """
-        self.nu = band * 1e9
-        self.monochromatic = True
         self.absolute = bool(absolute)
         self.temperature = bool(temperature)
         SceneHealpix.__init__(self, nside, kind=kind)
 
-    def get_unit_conversion_operator(self):
+    def get_unit_conversion_operator(self, nu):
         """
         Convert sky temperature into W / m^2 / Hz / pixel.
 
@@ -53,11 +51,11 @@ class QubicScene(SceneHealpix):
 
         # solid angle of a sky pixel
         omega = 4 * np.pi / self.shape[0]
-        a = 2 * omega * h * self.nu**3 / c**2
+        a = 2 * omega * h * nu**3 / c**2
         if self.absolute:
-            hnu_k = h * self.nu / k
+            hnu_k = h * nu / k
             return a / asoperator(np.expm1)(hnu_k * ReciprocalOperator())
         T = 2.7255  # Fixsen et al. 2009
-        hnu_kT = h * self.nu / (k * T)
+        hnu_kT = h * nu / (k * T)
         val = 1e-6 * a * hnu_kT * np.exp(hnu_kT) / (np.expm1(hnu_kT)**2 * T)
         return asoperator(val)

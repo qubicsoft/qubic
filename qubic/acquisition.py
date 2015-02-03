@@ -11,7 +11,7 @@ import yaml
 from glob import glob
 from pyoperators import (
     BlockColumnOperator, BlockDiagonalOperator, BlockRowOperator,
-    CompositionOperator, MPIDistributionIdentityOperator, I, MPI, proxy_group,
+    CompositionOperator, I, MPIDistributionIdentityOperator, MPI, proxy_group,
     rule_manager)
 from pyoperators.utils import ifirst
 from pyoperators.utils.mpi import as_mpi
@@ -31,11 +31,11 @@ class SimpleAcquisition(Acquisition):
     """
     def __init__(self, instrument, sampling, scene=None, block=None,
                  calibration=None, detector_fknee=0, detector_fslope=1,
-                 detector_ncorr=10, detector_ngrids=None, detector_nep=6e-17,
-                 detector_tau=0.01, polarizer=True, synthbeam_dtype=np.float32,
-                 absolute=False, kind='IQU', nside=256, temperature=True,
-                 max_nbytes=None, nprocs_instrument=None, nprocs_sampling=None,
-                 comm=None):
+                 detector_ncorr=10, detector_ngrids=2, detector_nep=6e-17,
+                 detector_tau=0.01, filter_relative_bandwidth=0.25,
+                 polarizer=True, synthbeam_dtype=np.float32, absolute=False,
+                 kind='IQU', nside=256, temperature=True, max_nbytes=None,
+                 nprocs_instrument=None, nprocs_sampling=None, comm=None):
         """
         acq = SimpleAcquisition(band, sampling,
                                 [scene=|absolute=, kind=, nside=, temperature=],
@@ -73,11 +73,13 @@ class SimpleAcquisition(Acquisition):
             The detector 1/f correlation length.
         detector_nep : array-like, optional
             The detector NEP [W/sqrt(Hz)].
-        detector_ngrids : int, optional
+        detector_ngrids : 1 or 2, optional
             Number of detector grids.
         detector_tau : array-like, optional
             The detector time constants in seconds.
-        polarizer : boolean
+        filter_relative_bandwidth : float, optional
+            The filter relative bandwidth Δν/ν.
+        polarizer : boolean, optional
             If true, the polarizer grid is present in the optics setup.
         synthbeam_dtype : dtype, optional
             The data type for the synthetic beams (default: float32).
@@ -85,13 +87,13 @@ class SimpleAcquisition(Acquisition):
         max_nbytes : int or None, optional
             Maximum number of bytes to be allocated for the acquisition's
             operator.
-        nprocs_instrument : int
+        nprocs_instrument : int, optional
             For a given sampling slice, number of procs dedicated to
             the instrument.
-        nprocs_sampling : int
+        nprocs_sampling : int, optional
             For a given detector slice, number of procs dedicated to
             the sampling.
-        comm : mpi4py.MPI.Comm
+        comm : mpi4py.MPI.Comm, optional
             The acquisition's MPI communicator. Note that it is transformed
             into a 2d cartesian communicator before being stored as the 'comm'
             attribute. The following relationship must hold:
@@ -99,20 +101,16 @@ class SimpleAcquisition(Acquisition):
 
         """
         if not isinstance(instrument, SimpleInstrument):
-            if scene is not None:
-                raise TypeError('Invalid calling sequence.')
-            scene = QubicScene(instrument, absolute=absolute, kind=kind,
-                               nside=nside)
-            if detector_ngrids is None:
-                detector_ngrids = 1 if scene.kind == 'I' else 2
+            filter_nu = band * 1e9
             instrument = SimpleInstrument(
                 calibration=calibration, detector_fknee=detector_fknee,
                 detector_fslope=detector_fslope, detector_ncorr=detector_ncorr,
                 detector_ngrids=detector_ngrids, detector_nep=detector_nep,
-                detector_tau=detector_tau, polarizer=polarizer,
-                synthbeam_dtype=synthbeam_dtype)
-        elif scene is None:
-            scene = QubicScene(150, absolute=absolute, kind=kind, nside=nside,
+                detector_tau=detector_tau, filter_nu=filter_nu,
+                filter_relative_bandwidth=filter_relative_bandwidth,
+                polarizer=polarizer, synthbeam_dtype=synthbeam_dtype)
+        if scene is None:
+            scene = QubicScene(absolute=absolute, kind=kind, nside=nside,
                                temperature=temperature)
         Acquisition.__init__(
             self, instrument, sampling, scene, block,
@@ -174,7 +172,7 @@ class SimpleAcquisition(Acquisition):
     def get_detector_integration_operator(self):
         """
         Integrate flux density in detector solid angles.
-        Convert W / m^2 / Hz into W / Hz.
+        Convert W / sr into W.
 
         """
         return self.instrument.get_detector_integration_operator()
@@ -194,6 +192,14 @@ class SimpleAcquisition(Acquisition):
 
         """
         return MPIDistributionIdentityOperator(self.comm)
+
+    def get_filter_operator(self):
+        """
+        Return the filter operator.
+        Convert units from W/Hz to W.
+
+        """
+        return self.instrument.get_filter_operator()
 
     def get_hwp_operator(self):
         """
@@ -216,7 +222,8 @@ class SimpleAcquisition(Acquisition):
         fluctuations).
 
         """
-        return self.scene.get_unit_conversion_operator()
+        nu = self.instrument.filter.nu
+        return self.scene.get_unit_conversion_operator(nu)
 
     def get_operator(self):
         """
@@ -227,6 +234,7 @@ class SimpleAcquisition(Acquisition):
         distribution = self.get_distribution_operator()
         temp = self.get_unit_conversion_operator()
         aperture = self.get_aperture_integration_operator()
+        filter = self.get_filter_operator()
         projection = self.get_projection_operator()
         hwp = self.get_hwp_operator()
         polarizer = self.get_polarizer_operator()
@@ -235,8 +243,8 @@ class SimpleAcquisition(Acquisition):
 
         with rule_manager(inplace=True):
             H = CompositionOperator([
-                response, integ, polarizer, hwp * projection, aperture, temp,
-                distribution])
+                response, integ, polarizer, hwp * projection, filter, aperture,
+                temp, distribution])
         if self.scene == 'QU':
             H = self.get_subtract_grid_operator()(H)
         return H
@@ -257,6 +265,7 @@ class SimpleAcquisition(Acquisition):
     def get_projection_operator(self, verbose=True):
         """
         Return the projection operator for the peak sampling.
+        Convert units from W to W/sr.
 
         Parameters
         ----------
@@ -534,12 +543,13 @@ class QubicAcquisition(SimpleAcquisition):
     """
     def __init__(self, instrument, sampling, scene=None, block=None,
                  calibration=None, detector_nep=4.7e-17, detector_fknee=0,
-                 detector_fslope=1, detector_ncorr=10, detector_ngrids=None,
-                 detector_tau=0.01, polarizer=True,  primary_beam=None,
-                 secondary_beam=None, synthbeam_dtype=np.float32,
-                 synthbeam_fraction=0.99, absolute=False, kind='IQU',
-                 nside=256, temperature=True, max_nbytes=None,
-                 nprocs_instrument=None, nprocs_sampling=None, comm=None):
+                 detector_fslope=1, detector_ncorr=10, detector_ngrids=2,
+                 detector_tau=0.01, filter_relative_bandwidth=0.25,
+                 polarizer=True,  primary_beam=None, secondary_beam=None,
+                 synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
+                 absolute=False, kind='IQU', nside=256, temperature=True,
+                 max_nbytes=None, nprocs_instrument=None, nprocs_sampling=None,
+                 comm=None):
         """
         acq = QubicAcquisition(band, sampling,
                                [scene=|absolute=, kind=, nside=, temperature=],
@@ -577,15 +587,17 @@ class QubicAcquisition(SimpleAcquisition):
             The detector 1/f correlation length.
         detector_nep : array-like, optional
             The detector NEP [W/sqrt(Hz)].
-        detector_ngrids : int, optional
+        detector_ngrids : 1 or 2, optional
             Number of detector grids.
         detector_tau : array-like, optional
             The detector time constants in seconds.
-        polarizer : boolean
+        filter_relative_bandwidth : float, optional
+            The filter relative bandwidth Δν/ν.
+        polarizer : boolean, optional
             If true, the polarizer grid is present in the optics setup.
-        primary_beam : function f(theta [rad], phi [rad])
+        primary_beam : function f(theta [rad], phi [rad]), optional
             The primary beam transmission function.
-        secondary_beam : function f(theta [rad], phi [rad])
+        secondary_beam : function f(theta [rad], phi [rad]), optional
             The secondary beam transmission function.
         synthbeam_dtype : dtype, optional
             The data type for the synthetic beams (default: float32).
@@ -596,13 +608,13 @@ class QubicAcquisition(SimpleAcquisition):
         max_nbytes : int or None, optional
             Maximum number of bytes to be allocated for the acquisition's
             operator.
-        nprocs_instrument : int
+        nprocs_instrument : int, optional
             For a given sampling slice, number of procs dedicated to
             the instrument.
-        nprocs_sampling : int
+        nprocs_sampling : int, optional
             For a given detector slice, number of procs dedicated to
             the sampling.
-        comm : mpi4py.MPI.Comm
+        comm : mpi4py.MPI.Comm, optional
             The acquisition's MPI communicator. Note that it is transformed
             into a 2d cartesian communicator before being stored as the 'comm'
             attribute. The following relationship must hold:
@@ -610,21 +622,18 @@ class QubicAcquisition(SimpleAcquisition):
 
         """
         if not isinstance(instrument, QubicInstrument):
-            if scene is not None:
-                raise TypeError('Invalid calling sequence.')
-            scene = QubicScene(instrument, absolute=absolute, kind=kind,
-                               nside=nside, temperature=temperature)
-            if detector_ngrids is None:
-                detector_ngrids = 1 if scene.kind == 'I' else 2
+            filter_nu = instrument * 1e9
             instrument = QubicInstrument(
                 calibration=calibration, detector_fknee=detector_fknee,
                 detector_fslope=detector_fslope, detector_ncorr=detector_ncorr,
                 detector_nep=detector_nep, detector_ngrids=detector_ngrids,
-                detector_tau=detector_tau, primary_beam=primary_beam,
+                detector_tau=detector_tau, filter_nu=filter_nu,
+                filter_relative_bandwidth=filter_relative_bandwidth,
+                polarizer=polarizer, primary_beam=primary_beam,
                 secondary_beam=secondary_beam, synthbeam_dtype=synthbeam_dtype,
-                synthbeam_fraction=synthbeam_fraction, polarizer=polarizer)
-        elif scene is None:
-            scene = QubicScene(150, absolute=absolute, kind=kind, nside=nside,
+                synthbeam_fraction=synthbeam_fraction)
+        if scene is None:
+            scene = QubicScene(absolute=absolute, kind=kind, nside=nside,
                                temperature=temperature)
         SimpleAcquisition.__init__(
             self, instrument, sampling, scene, block=block,

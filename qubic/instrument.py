@@ -36,26 +36,31 @@ class SimpleInstrument(Instrument):
     """
     def __init__(self, calibration=None, detector_fknee=0,
                  detector_fslope=1, detector_ncorr=10, detector_nep=4.7e-17,
-                 detector_ngrids=2, detector_tau=0.01, polarizer=True,
+                 detector_ngrids=2, detector_tau=0.01, filter_nu=150e9,
+                 filter_relative_bandwidth=0.25, polarizer=True,
                  synthbeam_dtype=np.float32):
         """
         Parameters
         ----------
         calibration : QubicCalibration
             The calibration tree.
-        detector_fknee : array-like
+        detector_fknee : array-like, optional
             The detector 1/f knee frequency in Hertz.
-        detector_fslope : array-like
+        detector_fslope : array-like, optional
             The detector 1/f slope index.
-        detector_ncorr : int
+        detector_ncorr : int, optional
             The detector 1/f correlation length.
         detector_nep : array-like, optional
             The detector NEP [W/sqrt(Hz)].
-        detector_ngrids : 1 or 2
+        detector_ngrids : 1 or 2, optional
             Number of detector grids. It doesn't affect the optics setup.
-        detector_tau : array-like
+        detector_tau : array-like, optional
             The detector time constants in seconds.
-        polarizer : boolean
+        filter_nu : float, optional
+            The filter central wavelength, in Hz.
+        filter_relative_bandwidth : float, optional
+            The filter relative bandwidth Δν/ν.
+        polarizer : boolean, optional
             If true, the polarizer grid is present in the optics setup.
         synthbeam_dtype : dtype, optional
             The data type for the synthetic beams (default: float32).
@@ -68,7 +73,8 @@ class SimpleInstrument(Instrument):
         layout = self._get_detector_layout(
             detector_ngrids, detector_nep, detector_fknee, detector_fslope,
             detector_ncorr, detector_tau)
-        Instrument.__init__(self, 'QUBIC', layout)
+        Instrument.__init__(self, layout)
+        self._init_filter(filter_nu, filter_relative_bandwidth)
         self._init_optics(polarizer)
         self._init_synthbeam(synthbeam_dtype)
 
@@ -99,6 +105,13 @@ class SimpleInstrument(Instrument):
         layout.ncorr = ncorr
         layout.ngrids = ngrids
         return layout
+
+    def _init_filter(self, nu, bandwidth):
+        class Filter(object):
+            def __init__(self, nu, bandwidth):
+                self.nu = float(nu)
+                self.relative_bandwidth = float(bandwidth)
+        self.filter = Filter(nu, bandwidth)
 
     def _init_optics(self, polarizer):
         class Optics(object):
@@ -163,7 +176,7 @@ class SimpleInstrument(Instrument):
     def get_detector_integration_operator(self):
         """
         Integrate flux density in detector solid angles.
-        Convert W / Hz / sr into W / Hz.
+        Convert W / sr into W.
 
         """
         area = self.detector.area
@@ -186,6 +199,15 @@ class SimpleInstrument(Instrument):
             return IdentityOperator(shapein)
         return ConvolutionTruncatedExponentialOperator(
             tau / sampling_period, shapein=shapein)
+
+    def get_filter_operator(self):
+        """
+        Return the filter operator.
+        Convert units from W/Hz to W.
+
+        """
+        return HomothetyOperator(self.filter.relative_bandwidth *
+                                 self.filter.nu)
 
     def get_hwp_operator(self, sampling, scene):
         """
@@ -242,6 +264,7 @@ class SimpleInstrument(Instrument):
     def get_projection_operator(self, sampling, scene, verbose=True):
         """
         Return the peak sampling operator.
+        Convert units from W to W/sr.
 
         Parameters
         ----------
@@ -336,31 +359,36 @@ class QubicInstrument(SimpleInstrument):
     """
     def __init__(self, calibration=None, detector_fknee=0, detector_fslope=1,
                  detector_ncorr=10, detector_nep=4.7e-17, detector_ngrids=2,
-                 detector_tau=0.01, polarizer=True, primary_beam=None,
-                 secondary_beam=None, synthbeam_dtype=np.float32,
-                 synthbeam_fraction=0.99):
+                 detector_tau=0.01, filter_nu=150e9,
+                 filter_relative_bandwidth=0.25, polarizer=True,
+                 primary_beam=None, secondary_beam=None,
+                 synthbeam_dtype=np.float32, synthbeam_fraction=0.99):
         """
         Parameters
         ----------
         calibration : QubicCalibration
             The calibration tree.
-        detector_fknee : array-like
+        detector_fknee : array-like, optional
             The detector 1/f knee frequency in Hertz.
-        detector_fslope : array-like
+        detector_fslope : array-like, optional
             The detector 1/f slope index.
-        detector_ncorr : int
+        detector_ncorr : int, optional
             The detector 1/f correlation length.
         detector_ngrids : int, optional
             Number of detector grids.
         detector_nep : array-like, optional
             The detector NEP [W/sqrt(Hz)].
-        detector_tau : array-like
+        detector_tau : array-like, optional
             The detector time constants in seconds.
-        polarizer : boolean
+        filter_nu : float, optional
+            The filter central wavelength, in Hz.
+        filter_relative_bandwidth : float, optional
+            The filter relative bandwidth Δν/ν.
+        polarizer : boolean, optional
             If true, the polarizer grid is present in the optics setup.
-        primary_beam : function f(theta [rad], phi [rad])
+        primary_beam : function f(theta [rad], phi [rad]), optional
             The primary beam transmission function.
-        secondary_beam : function f(theta [rad], phi [rad])
+        secondary_beam : function f(theta [rad], phi [rad]), optional
             The secondary beam transmission function.
         synthbeam_dtype : dtype, optional
             The data type for the synthetic beams (default: float32).
@@ -457,7 +485,7 @@ class QubicInstrument(SimpleInstrument):
         """
         ndetector = len(self)
         center = self.detector.center
-        lmbda = c / scene.nu
+        lmbda = c / self.filter.nu
         dx = self.horn.spacing
         detvec = np.vstack([-center[..., 0],
                             -center[..., 1],
@@ -473,14 +501,12 @@ class QubicInstrument(SimpleInstrument):
         phi = ne.evaluate('arctan2(ny, nx)', local_dict=local_dict)
         return theta, phi
 
-    def get_response_A(self, scene, x=None, y=None, area=1):
+    def get_response_A(self, x=None, y=None, area=1):
         """
         Phase and transmission from the switches to the focal plane.
 
         Parameters
         ----------
-        scene : QubicScene
-            The scene.
         x : array-like, optional
             The X-coordinate in the focal plane where the response is computed,
             in meters. If not provided, the detector central positions are
@@ -516,18 +542,16 @@ class QubicInstrument(SimpleInstrument):
         sr = -area / f**2 * np.cos(thetaphi[..., 0])**3
         tr = np.sqrt(self.secondary_beam(thetaphi[..., 0], thetaphi[..., 1]) *
                      sr / self.secondary_beam.solid_angle)[..., None]
-        const = 2j * pi * scene.nu / c
+        const = 2j * pi * self.filter.nu / c
         product = np.dot(uvec, self.horn[self.horn.open].center.T)
         return ne.evaluate('tr * exp(const * product)')
 
-    def get_response_B(self, scene, theta, phi, power=1):
+    def get_response_B(self, theta, phi, power=1):
         """
         Phase and transmission from the source to the switches.
 
         Parameters
         ----------
-        scene : QubicScene
-            The scene.
         theta : array-like
             The source zenith angle [rad].
         phi : array-like
@@ -545,12 +569,12 @@ class QubicInstrument(SimpleInstrument):
         theta, phi, power = [np.ravel(_) for _ in theta, phi, power]
         uvec = hp.ang2vec(theta, phi)
         source_E = np.sqrt(power * self.primary_beam(theta, phi))
-        const = 2j * pi * scene.nu / c
+        const = 2j * pi * self.filter.nu / c
         product = np.dot(self.horn[self.horn.open].center, uvec.T)
         out = ne.evaluate('source_E * exp(const * product)')
         return out.reshape((-1,) + shape)
 
-    def get_response(self, scene, theta, phi, power=1, x=None, y=None,
+    def get_response(self, theta, phi, power=1, x=None, y=None,
                      area=1):
         """
         Return the electric field created by sources at specified angles
@@ -558,8 +582,6 @@ class QubicInstrument(SimpleInstrument):
 
         Parameters
         ----------
-        scene : QubicScene
-            The scene.
         theta : array-like
             The source zenith angle [rad].
         phi : array-like
@@ -583,8 +605,8 @@ class QubicInstrument(SimpleInstrument):
             The electric field on the specified focal plane positions.
 
         """
-        A = self.get_response_A(scene, x, y, area)
-        B = self.get_response_B(scene, theta, phi, power)
+        A = self.get_response_A(x, y, area)
+        B = self.get_response_B(theta, phi, power)
         E = np.dot(A, B.reshape((B.shape[0], -1))).reshape(
             A.shape[:-1] + B.shape[1:])
         return E
@@ -626,7 +648,7 @@ class QubicInstrument(SimpleInstrument):
         out = np.zeros(shape + (len(scene),), dtype=self.synthbeam.dtype)
         for s in split(npix, ngroup):
             index_ = index[s]
-            sb = self.get_response(scene, theta[index_], phi[index_], power=1,
+            sb = self.get_response(theta[index_], phi[index_], power=1,
                                    x=x, y=y, area=1)
             out[..., index_] = abs2(sb, dtype=self.synthbeam.dtype)
         out *= np.pi * self.horn.radius**2

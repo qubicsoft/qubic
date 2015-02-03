@@ -48,9 +48,10 @@ except ImportError:
 
 import numpy
 import re
+import shutil
 import sys
+from distutils.command.clean import clean
 from numpy.distutils.command.build import build
-from numpy.distutils.command.build_ext import build_ext
 from numpy.distutils.command.build_src import build_src
 from numpy.distutils.command.sdist import sdist
 from numpy.distutils.core import Command
@@ -80,7 +81,11 @@ def get_cmdclass():
                            self.distribution.get_version())
             build.run(self)
 
-    class BuildExtCommand(build_ext):
+    class BuildSrcCommand(build_src):
+        def initialize_options(self):
+            build_src.initialize_options(self)
+            self.f2py_opts = '--quiet'
+
         def run(self):
             has_fortran = False
             has_cython = False
@@ -88,21 +93,20 @@ def get_cmdclass():
                 has_fortran = has_fortran or has_f_sources(ext.sources)
                 for isource, source in enumerate(ext.sources):
                     if source.endswith('.pyx'):
-                        if USE_CYTHON:
-                            has_cython = True
-                        else:
+                        if not USE_CYTHON:
                             ext.sources[isource] = source[:-3] + 'c'
-            if has_cython:
-                self.extensions = cythonize(self.extensions, force=True)
+                        else:
+                            has_cython = True
             if has_fortran:
                 with open(os.path.join(root, '.f2py_f2cmap'), 'w') as f:
                     f.write(repr(F2PY_TABLE))
-            build_ext.run(self)
-
-    class BuildSrcCommand(build_src):
-        def initialize_options(self):
-            build_src.initialize_options(self)
-            self.f2py_opts = '--quiet'
+            if has_cython:
+                build_dir = None if self.inplace else self.build_src
+                new_extensions = cythonize(self.extensions, force=True,
+                                           build_dir=build_dir)
+                for i in range(len(self.extensions)):
+                    self.extensions[i] = new_extensions[i]
+            build_src.run(self)
 
     class SDistCommand(sdist):
         def make_release_tree(self, base_dir, files):
@@ -110,9 +114,50 @@ def get_cmdclass():
                            self.distribution.get_version())
             initfile = os.path.join(self.distribution.get_name(),
                                     '__init__.py')
+            new_files = []
+            for f in files:
+                if f.endswith('.pyx'):
+                    new_files.append(f[:-3] + 'c')
             if initfile not in files:
-                files.append(initfile)
+                new_files.append(initfile)
+            files.extend(new_files)
             sdist.make_release_tree(self, base_dir, files)
+
+    class CleanCommand(clean):
+        def run(self):
+            clean.run(self)
+            try:
+                print(run_git('clean -fdX' + ('n' if self.dry_run else '')))
+                return
+            except RuntimeError:
+                pass
+
+            extensions = '.o', '.pyc', 'pyd', 'pyo', '.so'
+            for root_, dirs, files in os.walk(root):
+                for f in files:
+                    if os.path.splitext(f)[-1] in extensions:
+                        self.__delete(os.path.join(root_, f))
+                for d in dirs:
+                    if d in ('build', '__pycache__'):
+                        self.__delete(os.path.join(root_, d), dir=True)
+            files = (
+                'MANIFEST',
+                os.path.join(self.distribution.get_name(), '__init__.py'))
+            for f in files:
+                if os.path.exists(f):
+                    self.__delete(f)
+
+        def __delete(self, file_, dir=False):
+            msg = 'would remove' if self.dry_run else 'removing'
+            try:
+                if not self.dry_run:
+                    if dir:
+                        shutil.rmtree(file_)
+                    else:
+                        os.unlink(file_)
+            except OSError:
+                msg = 'problem removing'
+            print(msg + ' {!r}'.format(file_))
 
     class CoverageCommand(Command):
         description = "run the package coverage"
@@ -123,7 +168,7 @@ def get_cmdclass():
                          'Produce HTML coverage information in dir')]
 
         def run(self):
-            cmd = ['nosetests', '--with-coverage', '--cover-html',
+            cmd = [sys.executable, '-mnose', '--with-coverage', '--cover-html',
                    '--cover-package=' + self.distribution.get_name(),
                    '--cover-html-dir=' + self.html_dir]
             if self.erase:
@@ -143,7 +188,7 @@ def get_cmdclass():
         user_options = [('file=', 'f', 'restrict test to a specific file')]
 
         def run(self):
-            call(['nosetests', self.file])
+            call([sys.executable, '-mnose', self.file])
 
         def initialize_options(self):
             self.file = 'test'
@@ -152,8 +197,8 @@ def get_cmdclass():
             pass
 
     return {'build': BuildCommand,
-            'build_ext': BuildExtCommand,
             'build_src': BuildSrcCommand,
+            'clean': CleanCommand,
             'coverage': CoverageCommand,
             'sdist': SDistCommand,
             'test': TestCommand}
@@ -163,41 +208,43 @@ def get_version(name, default):
     return _get_version_git(default) or _get_version_init_file(name) or default
 
 
+def run_git(cmd, cwd=root):
+    git = 'git'
+    if sys.platform == 'win32':
+        git = 'git.cmd'
+    cmd = git + ' ' + cmd
+    process = Popen(cmd.split(), cwd=cwd, stdout=PIPE, stderr=PIPE)
+    stdout, stderr = process.communicate()
+    if process.returncode != 0:
+        if stderr != '':
+            stderr = '\n' + stderr.decode('utf-8')
+        raise RuntimeError(
+            'Command failed (error {}): {}{}'.format(
+                process.returncode, cmd, stderr))
+    return stdout.strip().decode('utf-8')
+
+
 def _get_version_git(default):
     INF = 2147483647
 
-    def run(cmd, cwd=root):
-        git = 'git'
-        if sys.platform == 'win32':
-            git = 'git.cmd'
-        cmd = git + ' ' + cmd
-        process = Popen(cmd.split(), cwd=cwd, stdout=PIPE, stderr=PIPE)
-        stdout, stderr = process.communicate()
-        if process.returncode != 0:
-            if stderr != '':
-                stderr = '\n' + stderr.decode('utf-8')
-            raise RuntimeError(
-                'Command failed (error {}): {}{}'.format(
-                    process.returncode, cmd, stderr))
-        return stdout.strip().decode('utf-8')
-
     def get_branches():
-        return run('for-each-ref --sort=-committerdate --format=%(refname) '
-                   'refs/heads refs/remotes/origin').splitlines()
+        return run_git('for-each-ref --sort=-committerdate --format=%(refname)'
+                       ' refs/heads refs/remotes/origin').splitlines()
 
     def get_branch_name():
-        branch = run('rev-parse --abbrev-ref HEAD')
+        branch = run_git('rev-parse --abbrev-ref HEAD')
         if branch != 'HEAD':
             return branch
-        branch = run('branch --no-color --contains HEAD').splitlines()
+        branch = run_git('branch --no-color --contains HEAD').splitlines()
         return branch[min(1, len(branch)-1)].strip()
 
     def get_description():
         branch = get_branch_name()
         try:
-            description = run('describe --abbrev={} --tags'.format(ABBREV))
+            description = run_git('describe --abbrev={} --tags'.format(ABBREV))
         except RuntimeError:
-            description = run('describe --abbrev={} --always'.format(ABBREV))
+            description = run_git(
+                'describe --abbrev={} --always'.format(ABBREV))
             regex = r"""^
             (?P<commit>.*?)
             (?P<dirty>(-dirty)?)
@@ -227,10 +274,10 @@ def _get_version_git(default):
     def get_rev_since_branch(branch):
         try:
             # get best common ancestor
-            common = run('merge-base HEAD ' + branch)
+            common = run_git('merge-base HEAD ' + branch)
         except RuntimeError:
             return INF  # no common ancestor, the branch is dangling
-        return int(run('rev-list --count HEAD ^' + common))
+        return int(run_git('rev-list --count HEAD ^' + common))
 
     def get_rev_since_any_branch():
         if REGEX_RELEASE.startswith('^'):
@@ -251,7 +298,7 @@ def _get_version_git(default):
         return INF
 
     try:
-        run('rev-parse --is-inside-work-tree')
+        run_git('rev-parse --is-inside-work-tree')
     except (OSError, RuntimeError):
         return ''
 
@@ -284,7 +331,7 @@ def _get_version_git(default):
 
     if rev_branch == rev_tag == INF:
         # no branch and no tag from ancestors, counting from root
-        rev = int(run('rev-list --count HEAD'))
+        rev = int(run_git('rev-list --count HEAD'))
         if branch != 'master':
             suffix = 'rev'
     elif rev_tag <= rev_branch:
@@ -299,7 +346,7 @@ def _get_version_git(default):
             suffix = 'pre'
     if name != '':
         name += '.'
-    return '{}{}{:02}-g{}{}'.format(name, suffix, rev, commit, dirty)
+    return '{}{}{:02}{}'.format(name, suffix, rev, dirty)
 
 
 def _get_version_init_file(name):

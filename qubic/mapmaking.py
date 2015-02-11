@@ -147,7 +147,7 @@ def map2tod(acq, map, convolution=False, max_nbytes=None):
 
 
 def _tod2map(acq, tod, coverage_threshold, disp_pmatrix, max_nbytes, callback,
-             disp_pcg, maxiter, tol, _factor, criterion, full_output, save_map, hyper):
+             disp_pcg, maxiter, tol, criterion, full_output, save_map, hyper):
     projection = acq.get_projection_operator(verbose=disp_pmatrix)
     distribution = acq.get_distribution_operator()
     P = projection * distribution
@@ -183,10 +183,6 @@ def _tod2map(acq, tod, coverage_threshold, disp_pmatrix, max_nbytes, callback,
     H = response * polarizer * (hwp * projection) * distribution
     if acq.scene.kind == 'QU':
         H = acq.get_subtract_grid_operator() * H
-
-    if _factor is not None:
-        coef = np.array([1, _factor, _factor])
-        H = H * DiagonalOperator(1 / coef, broadcast='leftward')
 
     invNtt = acq.get_invntt_operator()
     preconditioner = DiagonalOperator(1/coverage[mask], broadcast='rightward')
@@ -235,8 +231,6 @@ def _tod2map(acq, tod, coverage_threshold, disp_pmatrix, max_nbytes, callback,
 
     solution = pcg(A, H.T(invNtt(tod)) / nsamplings, M=preconditioner,
                    callback=callback, disp=disp_pcg, maxiter=maxiter, tol=tol)
-    if _factor is not None:
-        solution['x'] *= coef
     output = pack.T(solution['x']), coverage
     if full_output:
         algo = solution['algorithm']
@@ -249,7 +243,7 @@ def _tod2map(acq, tod, coverage_threshold, disp_pmatrix, max_nbytes, callback,
 
 
 def tod2map_all(acquisition, tod, coverage_threshold=0.01, max_nbytes=None,
-                callback=None, disp=True, maxiter=300, tol=1e-4, _factor=None,
+                callback=None, disp=True, maxiter=300, tol=1e-4,
                 criterion=False, full_output=False, save_map=None, hyper=0):
     """
     Compute map using all detectors.
@@ -294,12 +288,12 @@ def tod2map_all(acquisition, tod, coverage_threshold=0.01, max_nbytes=None,
         with npix = 12 * nside**2
     """
     return _tod2map(acquisition, tod, coverage_threshold, True, max_nbytes,
-                    callback, disp, maxiter, tol, _factor, criterion, full_output,
+                    callback, disp, maxiter, tol, criterion, full_output,
                     save_map, hyper)
 
 
 def tod2map_each(acquisition, tod, coverage_threshold=0, max_nbytes=None,
-                 callback=None, disp=True, maxiter=300, tol=1e-4, _factor=None):
+                 callback=None, disp=True, maxiter=300, tol=1e-4):
     """
     Compute average map from each detector.
 
@@ -345,8 +339,7 @@ def tod2map_each(acquisition, tod, coverage_threshold=0, max_nbytes=None,
     for i, t in izip(instrument, tod):
         acq = type(acquisition)(i, acquisition.sampling, acquisition.scene)
         x_, n_ = _tod2map(acq, t[None, :], coverage_threshold, False,
-                          max_nbytes, callback, False, maxiter, tol, _factor,
-                          False)
+                          max_nbytes, callback, False, maxiter, tol, False)
         x += x_
         n += n_
         if disp:

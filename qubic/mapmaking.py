@@ -4,9 +4,8 @@ import healpy as hp
 import numpy as np
 from itertools import izip
 from pyoperators import (
-    asoperator, BlockColumnOperator, BlockDiagonalOperator, DiagonalOperator,
-    MPIDistributionIdentityOperator, PackOperator, pcg, proxy_group,
-    rule_manager)
+    asoperator, BlockColumnOperator, CompositionOperator, DiagonalOperator,
+    PackOperator, pcg, proxy_group, rule_manager)
 from pysimulators.interfaces.healpy import HealpixLaplacianOperator
 from .utils import progress_bar
 
@@ -177,10 +176,19 @@ def _tod2map(acq, tod, coverage_threshold, disp_pmatrix, max_nbytes, callback,
 
     projection = _get_projection_restricted(acq, projection, mask)
     pack = PackOperator(mask, broadcast='rightward')
+
+    # should implement a restrict method to avoid duplication of code
+    temp = acq.get_unit_conversion_operator()
+    aperture = acq.get_aperture_integration_operator()
+    filter = acq.get_filter_operator()
     hwp = acq.get_hwp_operator()
     polarizer = acq.get_polarizer_operator()
+    integ = acq.get_detector_integration_operator()
     response = acq.get_detector_response_operator()
-    H = response * polarizer * (hwp * projection) * distribution
+    with rule_manager(inplace=True):
+        H = CompositionOperator([
+            response, integ, polarizer, hwp * projection, filter, aperture,
+            temp, distribution])
     if acq.scene.kind == 'QU':
         H = acq.get_subtract_grid_operator() * H
 

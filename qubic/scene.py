@@ -9,7 +9,7 @@ __all__ = ['QubicScene']
 
 class QubicScene(SceneHealpix):
     def __init__(self, nside=256, kind='IQU', absolute=False,
-                 temperature=True):
+                 temperature=True, T_cmb=2.7255):
         """
         Parameters
         ----------
@@ -28,10 +28,15 @@ class QubicScene(SceneHealpix):
             If true, the scene represents a temperature (absolute in Kelvin or
             differential in microKelvin according the the absolute keyword) and
             a power in W/m^2/Hz otherwise.
+        T_cmb : float, optional
+            The CMB temperature used to convert a temperature fluctuation into
+            power fluctuation (if absolute is False). The default value is
+            taken from Fixsen et al. 2009.
 
         """
         self.absolute = bool(absolute)
         self.temperature = bool(temperature)
+        self.T_cmb = float(T_cmb)
         SceneHealpix.__init__(self, nside, kind=kind)
 
     def get_unit_conversion_operator(self, nu):
@@ -55,7 +60,7 @@ class QubicScene(SceneHealpix):
         if self.absolute:
             hnu_k = h * nu / k
             return a / asoperator(np.expm1)(hnu_k * ReciprocalOperator())
-        T = 2.7255  # Fixsen et al. 2009
+        T = self.T_cmb
         hnu_kT = h * nu / (k * T)
         val = 1e-6 * a * hnu_kT * np.exp(hnu_kT) / (np.expm1(hnu_kT)**2 * T)
         return asoperator(val)

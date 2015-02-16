@@ -161,6 +161,11 @@ def _tod2map(acq, tod, coverage_threshold, disp_pmatrix, max_nbytes, callback,
     else:
         raise NotImplementedError()
     coverage = P.T(ones)
+    # normalization: sum coverage = #detectors x #samplings for a uniform
+    # secondary beam
+    theta, phi = acq.instrument.detector.theta, acq.instrument.detector.phi
+    coverage *= np.sum(acq.instrument.secondary_beam(theta, phi)) * \
+                len(acq.sampling) / np.sum(coverage)
     if kind == 'IQU':
         coverage = coverage[..., 0]
     cov = coverage[coverage > 0]

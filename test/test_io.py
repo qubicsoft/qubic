@@ -70,7 +70,8 @@ def test_read_header():
     with tempfile.TemporaryFile('a+b') as tmpfile:
         write_map(tmpfile, np.arange(12), coord='E')
         tmpfile.seek(0)
-        actual, header = read_map(tmpfile, h=True)
+        actual = read_map(tmpfile)
+    header = actual.header
     assert_equal(header['coordsys'], 'E')
     assert_equal(header['nmaps'], 1)
     assert not header['hasmask']
@@ -81,17 +82,14 @@ def test_read_healpy():
         with tempfile.NamedTemporaryFile('a+b') as tmpfile:
             hp.write_map(tmpfile.name, (np.arange(12), np.arange(12) + 1),
                          coord='E')
-            actual = read_map(tmpfile.name, h=h, partial=partial)
+            actual = read_map(tmpfile.name, partial=partial)
             expected = hp.read_map(tmpfile.name, h=h, field=(0, 1))
         if partial:
             assert_is_none(actual[1])
-            if h:
-                actual = actual[0], actual[2]
-            else:
-                actual = actual[0]
+            actual = actual[0]
         if h:
-            assert actual[1].items() == expected[-1]
-            assert_equal(actual[0], np.column_stack(expected[:-1]))
+            assert actual.header == expected[-1]
+            assert_equal(actual, np.column_stack(expected[:-1]))
         else:
             assert_equal(actual, np.column_stack(expected))
     for h in False, True:

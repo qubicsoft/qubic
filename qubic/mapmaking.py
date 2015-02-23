@@ -1,13 +1,14 @@
-from __future__ import division
-
-import healpy as hp
-import numpy as np
+from __future__ import absolute_import, division, print_function
+from collections import OrderedDict
 from itertools import izip
 from pyoperators import (
     asoperator, BlockColumnOperator, CompositionOperator, DiagonalOperator,
     PackOperator, pcg, proxy_group, rule_manager)
+from pyoperators.utils import ndarraywrap
 from pysimulators.interfaces.healpy import HealpixLaplacianOperator
 from .utils import progress_bar
+import healpy as hp
+import numpy as np
 
 __all__ = ['angular_distance_from_mask',
            'apodize_mask',
@@ -174,10 +175,17 @@ def _tod2map(acq, tod, coverage_threshold, disp_pmatrix, max_nbytes, callback,
     j = np.argmax(cdf >= coverage_threshold * cdf[-1])
     threshold = cov[i[j]]
     mask = coverage >= threshold
+    rejected = 1 - np.sum(mask) / cov.size
     if acq.comm.rank == 0 and coverage_threshold > 0:
-        print 'Total coverage:', cdf[-1]
-        print 'Threshold coverage set to:', threshold
-        print 'Fraction of rejected pixels:', 1 - np.sum(mask) / cov.size
+        print('Total coverage:', cdf[-1])
+        print('Threshold coverage set to:', threshold)
+        print('Fraction of rejected observed pixels:', rejected)
+    header = OrderedDict()
+    coverage = coverage.view(ndarraywrap)
+    coverage.header = header
+    header['thresrel'] = coverage_threshold, 'Relative coverage threshold'
+    header['thresabs'] = threshold, 'Absolute coverage threshold'
+    header['fracrej'] = rejected, 'Fraction of rejected observed pixels'
 
     projection = _get_projection_restricted(acq, projection, mask)
     pack = PackOperator(mask, broadcast='rightward')

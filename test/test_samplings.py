@@ -1,19 +1,18 @@
 from __future__ import division
-
-import numpy as np
 from astropy.time import Time
 from pyoperators.utils.testing import assert_same
 from pysimulators import (
     SphericalEquatorial2GalacticOperator,
     SphericalEquatorial2HorizontalOperator)
-from qubic.pointings import (
+from qubic.samplings import (
     equ2gal, gal2equ, equ2hor, hor2equ, gal2hor, hor2gal, DOMECLAT, DOMECLON,
-    QubicPointing)
+    QubicSampling)
+import numpy as np
 
 
 def test_sphconv():
 
-    time = Time(QubicPointing.DEFAULT_DATE_OBS, scale='utc')
+    time = Time(QubicSampling.DEFAULT_DATE_OBS, scale='utc')
 
     def _pack(x):
         return np.array([x[0], x[1]]).T

@@ -7,12 +7,13 @@ from numpy.random import random_sample as randomu
 from pyoperators import (
     Cartesian2SphericalOperator, Rotation3dOperator,
     Spherical2CartesianOperator, rule_manager)
-from pyoperators.utils import isscalarlike
+from pyoperators.utils import deprecated, isscalarlike
 from pysimulators import (
-    PointingHorizontal, CartesianEquatorial2GalacticOperator,
+    CartesianEquatorial2GalacticOperator,
     CartesianEquatorial2HorizontalOperator,
     CartesianHorizontal2EquatorialOperator,
     CartesianGalactic2EquatorialOperator,
+    SamplingHorizontal,
     SphericalEquatorial2GalacticOperator,
     SphericalGalactic2EquatorialOperator,
     SphericalEquatorial2HorizontalOperator,
@@ -33,7 +34,7 @@ DOMECLAT = -(75 + 6 / 60)
 DOMECLON = 123 + 20 / 60
 
 
-class QubicSampling(PointingHorizontal):
+class QubicSampling(SamplingHorizontal):
     """
     Attributes
     ----------
@@ -74,7 +75,7 @@ class QubicSampling(PointingHorizontal):
         if len(args) == 4:
             args = list(args)
             angle_hwp = args.pop()
-        PointingHorizontal.__init__(self, angle_hwp=angle_hwp, healpix=None,
+        SamplingHorizontal.__init__(self, angle_hwp=angle_hwp, healpix=None,
                                     *args, **keywords)
 
     def healpix(self, nside):
@@ -106,7 +107,9 @@ class QubicSampling(PointingHorizontal):
         return self.cartesian_galactic2instrument.I
 
 
-QubicPointing = QubicSampling
+@deprecated
+class QubicPointing(QubicSampling):
+    pass
 
 
 def create_random_pointings(center, npointings, dtheta, date_obs=None,
@@ -191,13 +194,13 @@ def create_sweeping_pointings(
 
     Returns
     -------
-    pointings : QubicPointing
+    pointings : QubicSampling
         Structured array containing the azimuth, elevation and pitch angles,
         in degrees.
 
     """
     nsamples = int(np.ceil(duration * 3600 / period))
-    out = QubicPointing(
+    out = QubicSampling(
         nsamples, date_obs=date_obs, period=period, latitude=latitude,
         longitude=longitude)
     racenter = center[0]
@@ -278,7 +281,7 @@ def gal2equ(l, b):
     return outcoords[..., 0], outcoords[..., 1]
 
 
-def equ2hor(ra, dec, time, date_obs=QubicPointing.DEFAULT_DATE_OBS,
+def equ2hor(ra, dec, time, date_obs=QubicSampling.DEFAULT_DATE_OBS,
             latitude=DOMECLAT, longitude=DOMECLON):
     """
     equ2hor(ra, dec, time, [date_obs, [latitude, [longitude]]]) -> az, el
@@ -307,7 +310,7 @@ def equ2hor(ra, dec, time, date_obs=QubicPointing.DEFAULT_DATE_OBS,
     return outcoords[..., 0], outcoords[..., 1]
 
 
-def hor2equ(azimuth, elevation, time, date_obs=QubicPointing.DEFAULT_DATE_OBS,
+def hor2equ(azimuth, elevation, time, date_obs=QubicSampling.DEFAULT_DATE_OBS,
             latitude=DOMECLAT, longitude=DOMECLON):
     """
     hor2equ(az, el, time, [date_obs, [latitude, [longitude]]]) -> ra, dec
@@ -338,7 +341,7 @@ def hor2equ(azimuth, elevation, time, date_obs=QubicPointing.DEFAULT_DATE_OBS,
     return outcoords[..., 0], outcoords[..., 1]
 
 
-def gal2hor(l, b, time, date_obs=QubicPointing.DEFAULT_DATE_OBS,
+def gal2hor(l, b, time, date_obs=QubicSampling.DEFAULT_DATE_OBS,
             latitude=DOMECLAT, longitude=DOMECLON):
     """
     gal2hor(l, b, time, [date_obs, [latitude, [longitude]]]) -> az, el
@@ -370,7 +373,7 @@ def gal2hor(l, b, time, date_obs=QubicPointing.DEFAULT_DATE_OBS,
     return outcoords[..., 0], outcoords[..., 1]
 
 
-def hor2gal(azimuth, elevation, time, date_obs=QubicPointing.DEFAULT_DATE_OBS,
+def hor2gal(azimuth, elevation, time, date_obs=QubicSampling.DEFAULT_DATE_OBS,
             latitude=DOMECLAT, longitude=DOMECLON):
     """
     hor2gal(az, el, time, [date_obs, [latitude, [longitude]]]) -> l, b

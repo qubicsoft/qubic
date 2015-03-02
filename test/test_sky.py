@@ -1,18 +1,13 @@
 from __future__ import division
-
-import numpy as np
-import os
-import qubic
 from numpy.testing import assert_allclose, assert_equal
 from pyoperators import pcg, DiagonalOperator, UnpackOperator
 from pyoperators.utils.testing import assert_same
-from qubic import QubicAcquisition, QubicInstrument, create_sweeping_pointings
+from qubic import QubicAcquisition, create_sweeping_pointings
+import numpy as np
+import qubic
 
 # read the input map
-DATAPATH = os.path.join(os.path.dirname(qubic.__file__), 'data',
-                        'syn256_pol.fits')
-I, Q, U = qubic.io.read_map(DATAPATH,
-                            field=('I_STOKES', 'Q_STOKES', 'U_STOKES')).T
+I, Q, U = qubic.io.read_map(qubic.data.PATH + 'syn256_pol.fits').T
 
 # observation model
 np.random.seed(0)

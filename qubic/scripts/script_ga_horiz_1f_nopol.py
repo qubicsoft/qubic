@@ -1,21 +1,16 @@
 from __future__ import division
-
+from pyoperators import pcg, DiagonalOperator, UnpackOperator
+from pysimulators.noises import _gaussian_psd_1f
+from qubic import (
+    QubicAcquisition, create_sweeping_pointings, equ2gal)
 import healpy as hp
 import matplotlib.pyplot as mp
 import numpy as np
-import os
 import qubic
-from pyoperators import pcg, DiagonalOperator, UnpackOperator
-from pysimulators import SphericalEquatorial2GalacticOperator
-from pysimulators.noises import _gaussian_psd_1f
-from qubic import (
-    QubicAcquisition, QubicInstrument, create_sweeping_pointings, equ2gal)
 
 # read the input map
-DATAPATH = os.path.join(os.path.dirname(qubic.__file__), 'data',
-                        'syn256_pol.fits')
-input_map = qubic.io.read_map(DATAPATH, field='I_STOKES')
-
+input_map = qubic.io.read_map(qubic.data.PATH + 'syn256_pol.fits',
+                              field='I_STOKES')
 
 # instrument model
 sigma = 10

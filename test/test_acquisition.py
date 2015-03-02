@@ -1,9 +1,4 @@
 from __future__ import division
-
-import numpy as np
-import os
-import qubic
-import shutil
 from numpy.testing import assert_equal
 from pyoperators.utils.testing import assert_same, skiptest
 from qubic import (
@@ -11,6 +6,10 @@ from qubic import (
     create_random_pointings, gal2equ, map2tod)
 from qubic.io import read_map
 from uuid import uuid1
+import numpy as np
+import os
+import qubic
+import shutil
 
 outpath = ''
 
@@ -24,8 +23,7 @@ def setup():
 def teardown():
     shutil.rmtree(outpath)
 
-DATAPATH = os.path.join(os.path.dirname(qubic.__file__), 'data')
-input_map = read_map(os.path.join(DATAPATH, 'syn256_pol.fits'))
+input_map = read_map(qubic.data.PATH + 'syn256_pol.fits')
 np.random.seed(0)
 center = gal2equ(0, 90)
 sampling = create_random_pointings(center, 100, 10)

@@ -1,17 +1,16 @@
 # coding: utf-8
 from __future__ import division
-import numpy as np
-import os
-import re
 from astropy.io import fits
 from glob import glob
 from os.path import join
 from pysimulators import Layout, LayoutGrid
+from .calfiles import PATH
 from .horns import HornLayout
+import numpy as np
+import os
+import re
 
 __all__ = ['QubicCalibration']
-
-PATH = join(os.path.dirname(__file__), 'calfiles')
 
 FILE_DETARRAY = 'CalQubic_DetArray_v*.fits'
 FILE_HORNARRAY = 'CalQubic_HornArray_v*.fits'

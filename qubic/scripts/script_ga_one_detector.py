@@ -1,17 +1,12 @@
 from __future__ import division
-
-import healpy as hp
-import matplotlib.pyplot as mp
-import numpy as np
-import os
-import qubic
 from pyoperators import DiagonalOperator, PackOperator, pcg
 from pyoperators import rule_manager
 from qubic import (
     QubicAcquisition, QubicInstrument, create_sweeping_pointings, equ2gal)
-
-DATAPATH = os.path.join(os.path.dirname(qubic.__file__), 'data',
-                        'syn256_pol.fits')
+import healpy as hp
+import matplotlib.pyplot as mp
+import numpy as np
+import qubic
 
 # acquisition parameters
 nside = 256
@@ -55,7 +50,7 @@ with rule_manager(inplace=True):
     H = polarizer * (hwp * projection)
 
 # get noiseless timeline
-x0 = qubic.io.read_map(DATAPATH)
+x0 = qubic.io.read_map(qubic.data.PATH + 'syn256_pol.fits')
 x0_convolved = convolution(x0)
 y = H(pack(x0_convolved))
 

@@ -1,17 +1,13 @@
 from __future__ import division
-
-import healpy as hp
-import matplotlib.pyplot as mp
-import numpy as np
-import os
-import qubic
 from qubic import (
     QubicAcquisition, create_sweeping_pointings, equ2gal, map2tod, tod2map_all,
     tod2map_each)
+import healpy as hp
+import matplotlib.pyplot as mp
+import numpy as np
+import qubic
 
-DATAPATH = os.path.join(os.path.dirname(qubic.__file__), 'data',
-                        'syn256_pol.fits')
-x0 = qubic.io.read_map(DATAPATH)
+x0 = qubic.io.read_map(qubic.data.PATH + 'syn256_pol.fits')
 
 # parameters
 nside = 256

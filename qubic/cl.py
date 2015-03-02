@@ -1,8 +1,7 @@
 from __future__ import division
-
-import numpy as np
-import os
 from pyoperators.utils import settingerr
+from .data import PATH
+import numpy as np
 
 __all__ = ['camb_spectra', 'read_spectra', 'plot_spectra', 'semilogy_spectra']
 
@@ -53,8 +52,7 @@ def read_spectra(r):
         not weighted by l(l+1)/2pi, starting from l=0.
 
     """
-    filename = os.path.join(os.path.dirname(__file__),
-                            'data', 'planck1303.5075_r{}.txt'.format(r))
+    filename = PATH + 'planck1303.5075_r{}.txt'.format(r)
     ell, ctt, cee, cbb, cte = np.loadtxt(filename, unpack=True)
     return ctt, cee, cbb, cte
 

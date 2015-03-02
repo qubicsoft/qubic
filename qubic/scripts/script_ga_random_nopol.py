@@ -4,19 +4,16 @@ for the synthetic beam.
 
 """
 from __future__ import division
-
+from pyoperators import pcg, DiagonalOperator, UnpackOperator
+from qubic import QubicAcquisition, create_random_pointings, gal2equ
 import healpy as hp
 import matplotlib.pyplot as mp
 import numpy as np
-import os
 import qubic
-from pyoperators import pcg, DiagonalOperator, UnpackOperator
-from qubic import QubicAcquisition, create_random_pointings, gal2equ
 
 # read the input map
-DATAPATH = os.path.join(os.path.dirname(qubic.__file__), 'data',
-                        'syn256_pol.fits')
-input_map = qubic.io.read_map(DATAPATH, field='I_STOKES')
+input_map = qubic.io.read_map(qubic.data.PATH + 'syn256_pol.fits',
+                              field='I_STOKES')
 
 # let's take the galactic north pole as the center of the observation field
 center_gal = 0, 90

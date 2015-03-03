@@ -1,5 +1,4 @@
 include .coveragerc
 include hooks.py
 include README.rst
-exclude qubic/module_polarization.f90
 graft test/data

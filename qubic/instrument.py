@@ -8,7 +8,7 @@ from pyoperators import (
     Cartesian2SphericalOperator, DenseBlockDiagonalOperator, DiagonalOperator,
     IdentityOperator, HomothetyOperator, ReshapeOperator, Rotation2dOperator,
     Rotation3dOperator, Spherical2CartesianOperator)
-from pyoperators.utils import pool_threading, split
+from pyoperators.utils import operation_assignment, pool_threading, split
 from pyoperators.utils.ufuncs import abs2
 from pysimulators import (
     ConvolutionTruncatedExponentialOperator, Instrument, Layout,
@@ -139,14 +139,14 @@ class SimpleInstrument(Instrument):
 
     __repr__ = __str__
 
-    def get_noise(self, sampling, out=None):
+    def get_noise(self, sampling, out=None, operation=operation_assignment):
         """
         Return a noisy timeline.
 
         """
         return Instrument.get_noise(
             self, sampling, nep=self.detector.nep, fknee=self.detector.fknee,
-            fslope=self.detector.fslope, out=out)
+            fslope=self.detector.fslope, out=out, operation=operation)
 
     def get_aperture_integration_operator(self):
         """

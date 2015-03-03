@@ -8,7 +8,7 @@ from pyoperators import (
     Cartesian2SphericalOperator, DenseBlockDiagonalOperator, DiagonalOperator,
     IdentityOperator, HomothetyOperator, ReshapeOperator, Rotation2dOperator,
     Rotation3dOperator, Spherical2CartesianOperator)
-from pyoperators.utils import operation_assignment, pool_threading, split
+from pyoperators.utils import operation_assignment, pool_threading, product, split
 from pyoperators.utils.ufuncs import abs2
 from pysimulators import (
     ConvolutionTruncatedExponentialOperator, Instrument, Layout,
@@ -301,18 +301,26 @@ class SimpleInstrument(Instrument):
                'QU': FSRRotation2dMatrix,
                'IQU': FSRRotation3dMatrix}[scene.kind]
         ndims = len(scene.kind)
-        s = cls((ndetectors * ntimes * ndims, 12 * nside**2 * ndims),
+        nscene = len(scene)
+        nscenetot = product(scene.shape[:scene.ndim])
+        s = cls((ndetectors * ntimes * ndims, nscene * ndims),
                 ncolmax=ncolmax, dtype=dtype, dtype_index=dtype_index,
                 verbose=verbose)
 
         index = s.data.index.reshape((ndetectors, ntimes, ncolmax))
         c2h = Cartesian2HealpixOperator(nside)
+        if nscene != nscenetot:
+            table = np.full(nscenetot, -1, dtype_index)
+            table[scene.index] = np.arange(len(scene))
 
         def func_thread(i):
             # e_nf[i] shape: (1, ncolmax, 3)
             # e_ni shape: (ntimes, ncolmax, 3)
             e_ni = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
-            index[i] = c2h(e_ni)
+            if nscene != nscenetot:
+                np.take(table, c2h(e_ni).astype(int), out=index[i])
+            else:
+                index[i] = c2h(e_ni)
 
         with pool_threading() as pool:
             pool.map(func_thread, xrange(ndetectors))

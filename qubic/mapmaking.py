@@ -282,14 +282,16 @@ def tod2map_all(acquisition, tod, coverage_threshold=0.01, max_nbytes=None,
     map : I, QU or IQU maps
         Temperature, QU or IQU maps of shapes npix, (npix, 2), (npix, 3)
         with npix = 12 * nside**2
+
     """
     return _tod2map(acquisition, tod, coverage_threshold, max_nbytes,
                     callback, disp, maxiter, tol, criterion, full_output,
                     save_map, hyper)
 
 
-def tod2map_each(acquisition, tod, coverage_threshold=0, max_nbytes=None,
-                 callback=None, disp=True, maxiter=300, tol=1e-4):
+def tod2map_each(acquisition, tod, coverage_threshold=0.01, max_nbytes=None,
+                 callback=None, disp=True, maxiter=300, tol=1e-4,
+                 criterion=False, full_output=False, save_map=None, hyper=0):
     """
     Compute average map from each detector.
 
@@ -319,6 +321,9 @@ def tod2map_each(acquisition, tod, coverage_threshold=0, max_nbytes=None,
         steps even if the specified tolerance has not been achieved.
     tol : float, optional
         Solver tolerance.
+    criterion : boolean, optional
+        If True, also display the criterion at each iteration. It slows down
+        the solving process.
 
     Returns
     -------
@@ -327,15 +332,17 @@ def tod2map_each(acquisition, tod, coverage_threshold=0, max_nbytes=None,
         with npix = 12 * nside**2
 
     """
-    instrument = acquisition.instrument
-    x = np.zeros(acquisition.scene.shape)
+    if tod.shape != (len(acquisition.instrument), len(acquisition.sampling)):
+        raise ValueError('The TOD has an invalid shape.')
+    x = acquisition.scene.zeros()
     n = np.zeros(acquisition.scene.shape[0])
     if disp:
-        bar = progress_bar(len(instrument), 'TOD2MAP_EACH')
-    for i, t in izip(instrument, tod):
-        acq = type(acquisition)(i, acquisition.sampling, acquisition.scene)
+        bar = progress_bar(tod.shape[0], 'TOD2MAP_EACH')
+    for i, t in enumerate(tod):
+        acq = acquisition[i]
         x_, n_ = _tod2map(acq, t[None, :], coverage_threshold, max_nbytes,
-                          callback, False, maxiter, tol, False)
+                          callback, False, maxiter, tol, criterion,
+                          full_output, save_map, hyper)
         x += x_
         n += n_
         if disp:

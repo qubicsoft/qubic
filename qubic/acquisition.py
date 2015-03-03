@@ -248,10 +248,6 @@ class SimpleAcquisition(Acquisition):
             H = self.get_subtract_grid_operator()(H)
         return H
 
-    def get_operator_nbytes(self):
-        # return self.get_invntt_nbytes() + self.get_projection_nbytes()
-        return self.get_projection_nbytes()
-
     def get_polarizer_operator(self):
         """
         Return operator for the polarizer grid.

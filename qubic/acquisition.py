@@ -34,14 +34,14 @@ class SimpleAcquisition(Acquisition):
                  detector_ncorr=10, detector_ngrids=2, detector_nep=6e-17,
                  detector_tau=0.01, filter_relative_bandwidth=0.25,
                  polarizer=True, synthbeam_dtype=np.float32, absolute=False,
-                 kind='IQU', nside=256, temperature=True, max_nbytes=None,
+                 kind='IQU', nside=256, max_nbytes=None,
                  nprocs_instrument=None, nprocs_sampling=None, comm=None):
         """
         acq = SimpleAcquisition(band, sampling,
-                                [scene=|absolute=, kind=, nside=, temperature=],
+                                [scene=|absolute=, kind=, nside=],
                                 nprocs_instrument=, nprocs_sampling=, comm=)
         acq = SimpleAcquisition(instrument, sampling,
-                                [scene=|absolute=, kind=, nside=, temperature=],
+                                [scene=|absolute=, kind=, nside=],
                                 nprocs_instrument=, nprocs_sampling=, comm=)
 
         Parameters
@@ -110,8 +110,7 @@ class SimpleAcquisition(Acquisition):
                 filter_relative_bandwidth=filter_relative_bandwidth,
                 polarizer=polarizer, synthbeam_dtype=synthbeam_dtype)
         if scene is None:
-            scene = QubicScene(absolute=absolute, kind=kind, nside=nside,
-                               temperature=temperature)
+            scene = QubicScene(absolute=absolute, kind=kind, nside=nside)
         Acquisition.__init__(
             self, instrument, sampling, scene, block,
             max_nbytes=max_nbytes, nprocs_instrument=nprocs_instrument,
@@ -228,7 +227,7 @@ class SimpleAcquisition(Acquisition):
     def get_operator(self):
         """
         Return the operator of the acquisition. Note that the operator is only
-        linear if the scene temperature is differential.
+        linear if the scene temperature is differential (absolute=False).
 
         """
         distribution = self.get_distribution_operator()
@@ -547,15 +546,14 @@ class QubicAcquisition(SimpleAcquisition):
                  detector_tau=0.01, filter_relative_bandwidth=0.25,
                  polarizer=True,  primary_beam=None, secondary_beam=None,
                  synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
-                 absolute=False, kind='IQU', nside=256, temperature=True,
-                 max_nbytes=None, nprocs_instrument=None, nprocs_sampling=None,
-                 comm=None):
+                 absolute=False, kind='IQU', nside=256, max_nbytes=None,
+                 nprocs_instrument=None, nprocs_sampling=None, comm=None):
         """
         acq = QubicAcquisition(band, sampling,
-                               [scene=|absolute=, kind=, nside=, temperature=],
+                               [scene=|absolute=, kind=, nside=],
                                nprocs_instrument=, nprocs_sampling=, comm=)
         acq = QubicAcquisition(instrument, sampling,
-                               [scene=|absolute=, kind=, nside=, temperature=],
+                               [scene=|absolute=, kind=, nside=],
                                nprocs_instrument=, nprocs_sampling=, comm=)
 
         Parameters
@@ -633,8 +631,7 @@ class QubicAcquisition(SimpleAcquisition):
                 secondary_beam=secondary_beam, synthbeam_dtype=synthbeam_dtype,
                 synthbeam_fraction=synthbeam_fraction)
         if scene is None:
-            scene = QubicScene(absolute=absolute, kind=kind, nside=nside,
-                               temperature=temperature)
+            scene = QubicScene(absolute=absolute, kind=kind, nside=nside)
         SimpleAcquisition.__init__(
             self, instrument, sampling, scene, block=block,
             max_nbytes=max_nbytes, nprocs_instrument=nprocs_instrument,

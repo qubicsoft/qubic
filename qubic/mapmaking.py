@@ -2,8 +2,8 @@ from __future__ import absolute_import, division, print_function
 from collections import OrderedDict
 from itertools import izip
 from pyoperators import (
-    asoperator, BlockColumnOperator, CompositionOperator, DiagonalOperator,
-    PackOperator, pcg, proxy_group, rule_manager)
+    asoperator, BlockColumnOperator, DiagonalOperator, pcg, proxy_group)
+from pyoperators.memory import ones
 from pyoperators.utils import ndarraywrap
 from pysimulators.interfaces.healpy import HealpixLaplacianOperator
 from .utils import progress_bar
@@ -146,29 +146,21 @@ def map2tod(acq, map, convolution=False, max_nbytes=None):
     return tod
 
 
-def _tod2map(acq, tod, coverage_threshold, disp_pmatrix, max_nbytes, callback,
+def _tod2map(acq, tod, coverage_threshold, max_nbytes, callback,
              disp_pcg, maxiter, tol, criterion, full_output, save_map, hyper):
-    projection = acq.get_projection_operator(verbose=disp_pmatrix)
-    distribution = acq.get_distribution_operator()
-    P = projection * distribution
-
-    shape = len(acq.instrument), len(acq.sampling)
-    kind = acq.scene.kind
-    if kind == 'I':
-        ones = np.ones(shape)
-    elif kind == 'IQU':
-        ones = np.zeros(shape + (3,))
-        ones[..., 0] = 1
-    else:
-        raise NotImplementedError()
-    coverage = P.T(ones)
-    # normalization: sum coverage = #detectors x #samplings for a uniform
-    # secondary beam
-    theta, phi = acq.instrument.detector.theta, acq.instrument.detector.phi
-    coverage *= np.sum(acq.instrument.secondary_beam(theta, phi)) * \
-                len(acq.sampling) / np.sum(coverage)
-    if kind == 'IQU':
+    # coverage normalization:
+    # sum coverage = #detectors x #samplings for a uniform secondary beam
+    H = acq.get_operator()
+    coverage = H.T(ones(H.shapeout))
+    if acq.scene.kind == 'IQU':
         coverage = coverage[..., 0]
+    elif acq.scene.kind == 'QU':
+        raise NotImplementedError()
+    theta, phi = acq.instrument.detector.theta, acq.instrument.detector.phi
+    ndetectors = acq.instrument.detector.comm.allreduce(
+        np.sum(acq.instrument.secondary_beam(theta, phi)))
+    nsamplings = acq.sampling.comm.allreduce(len(acq.sampling))
+    coverage *= ndetectors * nsamplings / np.sum(coverage)
     cov = coverage[coverage > 0]
     i = np.argsort(cov)
     cdf = np.cumsum(cov[i])
@@ -187,25 +179,9 @@ def _tod2map(acq, tod, coverage_threshold, disp_pmatrix, max_nbytes, callback,
     header['thresabs'] = threshold, 'Absolute coverage threshold'
     header['fracrej'] = rejected, 'Fraction of rejected observed pixels'
 
-    projection = _get_projection_restricted(acq, projection, mask)
-    pack = PackOperator(mask, broadcast='rightward')
-
-    # should implement a restrict method to avoid duplication of code
-    temp = acq.get_unit_conversion_operator()
-    aperture = acq.get_aperture_integration_operator()
-    filter = acq.get_filter_operator()
-    hwp = acq.get_hwp_operator()
-    polarizer = acq.get_polarizer_operator()
-    integ = acq.get_detector_integration_operator()
-    response = acq.get_detector_response_operator()
-    with rule_manager(inplace=True):
-        H = CompositionOperator([
-            response, integ, polarizer, hwp * projection, filter, aperture,
-            temp, distribution])
-    if acq.scene.kind == 'QU':
-        H = acq.get_subtract_grid_operator() * H
-
-    invNtt = acq.get_invntt_operator()
+    acq_restricted = acq[..., mask]
+    H = acq_restricted.get_operator()
+    invNtt = acq_restricted.get_invntt_operator()
     preconditioner = DiagonalOperator(1/coverage[mask], broadcast='rightward')
     nsamplings = acq.comm.allreduce(len(acq.sampling))
     npixels = np.sum(mask)
@@ -252,13 +228,12 @@ def _tod2map(acq, tod, coverage_threshold, disp_pmatrix, max_nbytes, callback,
 
     solution = pcg(A, H.T(invNtt(tod)) / nsamplings, M=preconditioner,
                    callback=callback, disp=disp_pcg, maxiter=maxiter, tol=tol)
-    output = pack.T(solution['x']), coverage
+    output = acq_restricted.scene.unpack(solution['x']), coverage
     if full_output:
         algo = solution['algorithm']
         algo.H = H
-        algo.pack = pack
         if criterion:
-            algo.f = asoperator(f, shapeout=2)(pack)
+            algo.f = asoperator(f, shapeout=2)(acq_restricted.scene.unpack)
         output += (algo,)
     return output
 
@@ -308,7 +283,7 @@ def tod2map_all(acquisition, tod, coverage_threshold=0.01, max_nbytes=None,
         Temperature, QU or IQU maps of shapes npix, (npix, 2), (npix, 3)
         with npix = 12 * nside**2
     """
-    return _tod2map(acquisition, tod, coverage_threshold, True, max_nbytes,
+    return _tod2map(acquisition, tod, coverage_threshold, max_nbytes,
                     callback, disp, maxiter, tol, criterion, full_output,
                     save_map, hyper)
 
@@ -359,8 +334,8 @@ def tod2map_each(acquisition, tod, coverage_threshold=0, max_nbytes=None,
         bar = progress_bar(len(instrument), 'TOD2MAP_EACH')
     for i, t in izip(instrument, tod):
         acq = type(acquisition)(i, acquisition.sampling, acquisition.scene)
-        x_, n_ = _tod2map(acq, t[None, :], coverage_threshold, False,
-                          max_nbytes, callback, False, maxiter, tol, False)
+        x_, n_ = _tod2map(acq, t[None, :], coverage_threshold, max_nbytes,
+                          callback, False, maxiter, tol, False)
         x += x_
         n += n_
         if disp:

@@ -33,7 +33,7 @@ acquisition = QubicAcquisition(150, sampling,
                                nside=nside,
                                synthbeam_fraction=0.99,
                                detector_tau=0.01,
-                               detector_sigma=1.,
+                               detector_nep=1.e-17,
                                detector_fknee=1.,
                                detector_fslope=1)
 

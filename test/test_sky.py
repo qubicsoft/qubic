@@ -35,7 +35,7 @@ input_maps = [I,
               np.array([Q, U]).T,
               np.array([I, Q, U]).T]
 for kind, input_map in zip(kinds, input_maps):
-    acq = QubicAcquisition(150, pointings, kind=kind, ngrids=2)
+    acq = QubicAcquisition(150, pointings, kind=kind)
     P = acq.get_projection_operator()
     W = acq.get_hwp_operator()
     H = W * P
@@ -48,7 +48,7 @@ for kind, input_map in zip(kinds, input_maps):
         pTx_pT1s[kind] = pTx_pT1[0][coverage > 0], pTx_pT1[1][coverage > 0]
     cbik = P.canonical_basis_in_kernel()
     mask = coverage > 10
-    P.restrict(mask)
+    P = P.restrict(mask, inplace=True)
     unpack = UnpackOperator(mask, broadcast='rightward')
     x0 = unpack.T(input_map)
 
@@ -60,18 +60,20 @@ for kind, input_map in zip(kinds, input_maps):
     cbiks[kind] = cbik
     outputs[kind] = solution['x']
 
-assert_same(tods['I'], tods['IQU'][..., 0])
-assert_same(tods['QU'], tods['IQU'][..., 1:])
 
-assert_same(pTxs['I'], pTxs['IQU'][..., 0].astype(np.float32))
-assert_same(pTxs['QU'], pTxs['IQU'][..., 1:].astype(np.float32))
+def test_sky():
+    assert_same(tods['I'], tods['IQU'][..., 0])
+    assert_same(tods['QU'], tods['IQU'][..., 1:])
 
-assert_same(pTx_pT1s['I'][0], pTx_pT1s['IQU'][0].astype(np.float32))
-assert_same(pTx_pT1s['I'][1], pTx_pT1s['IQU'][1].astype(np.float32))
+    assert_same(pTxs['I'], pTxs['IQU'][..., 0].astype(np.float32))
+    assert_same(pTxs['QU'], pTxs['IQU'][..., 1:].astype(np.float32))
 
-assert_allclose(outputs['I'], outputs['IQU'][..., 0], atol=2e-2)
-assert_allclose(outputs['QU'], outputs['IQU'][..., 1:], atol=2e-2)
+    assert_same(pTx_pT1s['I'][0], pTx_pT1s['IQU'][0].astype(np.float32))
+    assert_same(pTx_pT1s['I'][1], pTx_pT1s['IQU'][1].astype(np.float32))
 
-for k in ('QU', 'IQU'):
-    assert_equal(cbiks[k], cbiks['I'])
-    assert_same(pT1s[k], pT1s['I'].astype(np.float32), rtol=15)
+    assert_allclose(outputs['I'], outputs['IQU'][..., 0], atol=2e-2)
+    assert_allclose(outputs['QU'], outputs['IQU'][..., 1:], atol=2e-2)
+
+    for k in ('QU', 'IQU'):
+        assert_equal(cbiks[k], cbiks['I'])
+        assert_same(pT1s[k], pT1s['I'].astype(np.float32), rtol=15)

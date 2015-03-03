@@ -11,7 +11,7 @@ def test():
     sampling = create_random_pointings([0, 90], 30, 5)
     sampling.angle_hwp = np.random.random_integers(0, 7, len(sampling)) * 11.25
     nside = 64
-    scenes = QubicScene(150, nside, kind='I'), QubicScene(150, nside)
+    scenes = QubicScene(nside, kind='I'), QubicScene(nside)
 
     def func(scene, max_nbytes, ref1, ref2, ref3, ref4, ref5, ref6):
         acq = QubicAcquisition(instrument, sampling, scene,

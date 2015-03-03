@@ -40,10 +40,11 @@ block_n = [[1], [1], [2], [2, 3],
            [1], [1], [2], [2, 3],
            [1], [2], [2], [2, 3], [2, 3]]
 caltree = QubicCalibration(detarray='CalQubic_DetArray_v1.fits')
-removed = np.ones((32, 32), dtype=bool)
-removed[30:, 30:] = False
-qubic = QubicInstrument(calibration=caltree, nu=160e9,
-                        removed=removed, synthbeam_fraction=0.99)
+selection = np.zeros((32, 32), dtype=bool)
+selection[30:, 30:] = True
+qubic = QubicInstrument(calibration=caltree, filter_nu=160e9,
+                        detector_ngrids=1, synthbeam_fraction=0.99)
+qubic = qubic[qubic.pack(selection)]
 
 
 @skiptest

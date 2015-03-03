@@ -36,7 +36,7 @@ def test():
         assert_same(actual2, ref2, atol=10)
         actual3, actual4 = tod2map_all(acq, tod, disp=False, maxiter=2)
         assert_same(actual3, ref3, atol=10)
-        assert_same(actual4, ref4)
+        assert_same(actual4, ref4, atol=20)
         #actual5, actual6 = tod2map_each(acq, tod, disp=False)
         #assert_same(actual5, ref5, atol=1000)
         #assert_same(actual6, ref6)

@@ -11,16 +11,21 @@ import yaml
 from glob import glob
 from pyoperators import (
     BlockColumnOperator, BlockDiagonalOperator, BlockRowOperator,
-    CompositionOperator, I, MPIDistributionIdentityOperator, MPI, proxy_group,
+    CompositionOperator, DiagonalOperator, I, IdentityOperator,
+    MPIDistributionIdentityOperator, MPI, proxy_group, ReshapeOperator,
     rule_manager)
-from pyoperators.utils import ifirst
+from pyoperators.utils import ifirst, isscalarlike
 from pyoperators.utils.mpi import as_mpi
 from pysimulators import Acquisition, ProjectionOperator
+from pysimulators.interfaces.healpy import (
+    HealpixConvolutionGaussianOperator, SceneHealpixCMB)
 from .calibration import QubicCalibration
 from .instrument import QubicInstrument, SimpleInstrument
 from .scene import QubicScene
 
-__all__ = ['QubicAcquisition',
+__all__ = ['PlanckAcquisition',
+           'QubicAcquisition',
+           'QubicPlanckAcquisition',
            'SimpleAcquisition']
 
 
@@ -297,6 +302,44 @@ class SimpleAcquisition(Acquisition):
             raise ValueError('Odd number of detectors.')
         partitionin = 2 * (len(self.instrument) // 2,)
         return BlockRowOperator([I, -I], axisin=0, partitionin=partitionin)
+
+    def get_observation(self, map, noiseless=False, convolution=False):
+        """
+        tod = map2tod(acquisition, map)
+        tod, convolved_map = map2tod(acquisition, map, convolution=True)
+
+        Parameters
+        ----------
+        map : I, QU or IQU maps
+            Temperature, QU or IQU maps of shapes npix, (npix, 2), (npix, 3)
+            with npix = 12 * nside**2
+        noiseless : boolean, optional
+            If True, no noise is added to the observation.
+        convolution : boolean, optional
+            Set to True to convolve the input map by a gaussian and return it.
+
+        Returns
+        -------
+        tod : array
+            The Time-Ordered-Data of shape (ndetectors, ntimes).
+        convolved_map : array, optional
+            The convolved map, if the convolution keyword is set.
+
+        """
+        if convolution:
+            convolution = self.get_convolution_peak_operator()
+            map = convolution(map)
+
+        H = self.get_operator()
+        tod = H(map)
+
+        if not noiseless:
+            tod += self.get_noise()
+
+        if convolution:
+            return tod, map
+
+        return tod
 
     @classmethod
     def load(cls, filename, instrument=None, selection=None):
@@ -632,3 +675,238 @@ class QubicAcquisition(SimpleAcquisition):
             self, instrument, sampling, scene, block=block,
             max_nbytes=max_nbytes, nprocs_instrument=nprocs_instrument,
             nprocs_sampling=nprocs_sampling, comm=comm)
+
+
+class PlanckAcquisition(object):
+    def __init__(self, true_sky, scene=None, sigma=None, absolute=False,
+                 kind='IQU', nside=None, fwhm=0):
+        """
+        Parameters
+        ----------
+        true_sky : array of shape (npixel,) or (npixel, 3)
+            The true CMB sky (temperature or polarized). The Planck observation
+            will be this true sky plus a random independent gaussian noise
+            realization.
+        sigma : float, optional
+            The temperature sensitivity, in units of µK.deg. Default value is
+            is 1.2µK.deg / sqrt(2) (from arXiv:1502.00612: A Joint Analysis of
+            BICEP2/Keck Array and Planck Data). This value is used to draw
+            the gaussian noise realization of the Planck observation.
+        fwhm : float, optional
+            The fwhm of the Gaussian used to smooth the map [radians].
+
+        """
+        if true_sky is None:
+            raise ValueError('The Planck Q & U maps are not released yet.')
+        if kind == 'IQU' and true_sky.shape[-1] != 3:
+            raise TypeError('The Planck sky shape is not (npix, 3).')
+        if scene is None:
+            if nside is None:
+                nside = hp.npix2nside(true_sky.shape[0])
+            scene = SceneHealpixCMB(nside, absolute=absolute, kind=kind)
+        true_sky = np.array(hp.ud_grade(true_sky.T, nside_out=scene.nside),
+                            copy=False).T
+        if scene.kind == 'IQU' and true_sky.shape[-1] != 3:
+            raise TypeError('The Planck sky shape is not (npix, 3).')
+        self.scene = scene
+        self.fwhm = fwhm
+        self._true_sky = true_sky
+        if sigma is None:
+            sigma = 1.2 / np.sqrt(2)
+        if self.scene.kind == 'IQU' and isscalarlike(sigma):
+            sigma = np.array([1, 1 * np.sqrt(2), 1 * np.sqrt(2)]) * sigma
+        angle = np.degrees(np.sqrt(4 * np.pi / scene.npixel))
+        self.sigma = sigma / angle
+
+    def get_operator(self):
+        return IdentityOperator(shapein=self.scene.shape)
+
+    def get_invntt_operator(self):
+        return DiagonalOperator(1 / self.sigma**2, broadcast='leftward',
+                                shapein=self.scene.shape)
+
+    def get_noise(self):
+        return np.random.standard_normal(self._true_sky.shape) * self.sigma
+
+    def get_observation(self, noiseless=False, seed=0):
+        obs = self._true_sky
+        if not noiseless:
+            np.random.seed(seed)
+            obs = obs + self.get_noise()
+        return obs
+        HealpixConvolutionGaussianOperator(fwhm=self.fwhm)(obs, obs)
+        return obs
+
+
+class QubicPlanckAcquisition(object):
+    """
+    The QubicPlanckAcquisition class, which combines the Qubic and Planck
+    acquisitions.
+
+    """
+    def __init__(self, instrument, sampling, scene=None, true_sky=None,
+                 block=None, calibration=None, detector_nep=4.7e-17,
+                 detector_fknee=0, detector_fslope=1, detector_ncorr=10,
+                 detector_ngrids=2, detector_tau=0.01,
+                 filter_relative_bandwidth=0.25, polarizer=True,
+                 primary_beam=None, secondary_beam=None,
+                 synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
+                 absolute=False, kind='IQU', nside=256, sigma_planck=None,
+                 max_nbytes=None, nprocs_instrument=None, nprocs_sampling=None,
+                 comm=None):
+        """
+        acq = QubicPlanckAcquisition(band, sampling, true_sky=,
+                                     [scene=|absolute=, kind=, nside=],
+                                     nprocs_instrument=, nprocs_sampling=,
+                                     comm=)
+        acq = QubicPlanckAcquisition(instrument, sampling, true_sky=,
+                                     [scene=|absolute=, kind=, nside=],
+                                     nprocs_instrument=, nprocs_sampling=,
+                                     comm=)
+
+        Parameters
+        ----------
+        band : int
+            The module nominal frequency, in GHz.
+        scene : QubicScene, optional
+            The discretized observed scene (the sky).
+        true_sky : Healpix map
+            The non-convolved true sky, that is used to draw a Planck
+            realization.
+        absolute : boolean, optional
+            If true, the scene pixel values include the CMB background and the
+            fluctuations in units of Kelvin, otherwise it only represents the
+            fluctuations, in microKelvin.
+        kind : 'I', 'QU' or 'IQU', optional
+            The sky kind: 'I' for intensity-only, 'QU' for Q and U maps,
+            and 'IQU' for intensity plus QU maps.
+        nside : int, optional
+            The Healpix scene's nside.
+        instrument : QubicInstrument, optional
+            The QubicInstrument instance.
+        calibration : QubicCalibration, optional
+            The calibration tree.
+        detector_fknee : array-like, optional
+            The detector 1/f knee frequency in Hertz.
+        detector_fslope : array-like, optional
+            The detector 1/f slope index.
+        detector_ncorr : int, optional
+            The detector 1/f correlation length.
+        detector_nep : array-like, optional
+            The detector NEP [W/sqrt(Hz)].
+        detector_ngrids : 1 or 2, optional
+            Number of detector grids.
+        detector_tau : array-like, optional
+            The detector time constants in seconds.
+        filter_relative_bandwidth : float, optional
+            The filter relative bandwidth Δν/ν.
+        polarizer : boolean, optional
+            If true, the polarizer grid is present in the optics setup.
+        primary_beam : function f(theta [rad], phi [rad]), optional
+            The primary beam transmission function.
+        secondary_beam : function f(theta [rad], phi [rad]), optional
+            The secondary beam transmission function.
+        synthbeam_dtype : dtype, optional
+            The data type for the synthetic beams (default: float32).
+            It is the dtype used to store the values of the pointing matrix.
+        synthbeam_fraction: float, optional
+            The fraction of significant peaks retained for the computation
+            of the synthetic beam.
+        max_nbytes : int or None, optional
+            Maximum number of bytes to be allocated for the acquisition's
+            operator.
+        nprocs_instrument : int, optional
+            For a given sampling slice, number of procs dedicated to
+            the instrument.
+        nprocs_sampling : int, optional
+            For a given detector slice, number of procs dedicated to
+            the sampling.
+        comm : mpi4py.MPI.Comm, optional
+            The acquisition's MPI communicator. Note that it is transformed
+            into a 2d cartesian communicator before being stored as the 'comm'
+            attribute. The following relationship must hold:
+                comm.size = nprocs_instrument * nprocs_sampling
+
+        """
+        qubic = QubicAcquisition(
+            instrument, sampling, scene=scene, block=block,
+            calibration=calibration, detector_nep=detector_nep,
+            detector_fknee=detector_fknee, detector_fslope=detector_fslope,
+            detector_ncorr=detector_ncorr, detector_ngrids=detector_ngrids,
+            detector_tau=detector_tau,
+            filter_relative_bandwidth=filter_relative_bandwidth,
+            polarizer=polarizer,  primary_beam=primary_beam,
+            secondary_beam=secondary_beam, synthbeam_dtype=synthbeam_dtype,
+            synthbeam_fraction=synthbeam_fraction, absolute=absolute,
+            kind=kind, nside=nside, max_nbytes=max_nbytes,
+            nprocs_instrument=nprocs_instrument,
+            nprocs_sampling=nprocs_sampling, comm=comm)
+        sky_convolved = qubic.get_convolution_peak_operator()(true_sky)
+        #XXX sigma should change after convolution
+        fwhm = np.radians(qubic.instrument.synthbeam.peak.fwhm_deg)
+        planck = PlanckAcquisition(sky_convolved, scene=qubic.scene,
+                                   sigma=sigma_planck, fwhm=fwhm)
+        self.qubic = qubic
+        self.planck = planck
+
+    def get_noise(self):
+        """
+        Return a noise realization compatible with the fused noise
+        covariance matrix.
+
+        """
+        noise_qubic = self.qubic.get_noise()
+        if self.qubic.comm.rank > 0:
+            return noise_qubic
+        noise_planck = self.planck.get_noise()
+        return np.r_[noise_qubic.ravel(), noise_planck.ravel()]
+
+    def get_operator(self):
+        """
+        Return the fused observation as an operator.
+
+        """
+        H_qubic = self.qubic.get_operator()
+        if self.qubic.comm.rank > 0:
+            return H_qubic
+        R_qubic = ReshapeOperator(H_qubic.shapeout, H_qubic.shape[0])
+        H_planck = self.planck.get_operator()
+        R_planck = ReshapeOperator(H_planck.shapeout, H_planck.shape[0])
+        return BlockColumnOperator(
+            [R_qubic(H_qubic), R_planck(H_planck)], axisout=0)
+
+    def get_invntt_operator(self):
+        """
+        Return the inverse covariance matrix of the fused observation
+        as an operator.
+
+        """
+        invntt_qubic = self.qubic.get_invntt_operator()
+        if self.qubic.comm.rank > 0:
+            return invntt_qubic
+        R_qubic = ReshapeOperator(invntt_qubic.shapeout, invntt_qubic.shape[0])
+        invntt_planck = self.planck.get_invntt_operator()
+        R_planck = ReshapeOperator(invntt_planck.shapeout,
+                                   invntt_planck.shape[0])
+        return BlockDiagonalOperator(
+            [R_qubic(invntt_qubic(R_qubic.T)),
+             R_planck(invntt_planck(R_planck.T))], axisout=0)
+
+    def get_observation(self, noiseless=False, convolution=False):
+        """
+        Return the fused observation.
+
+        Parameters
+        ----------
+        noiseless : boolean, optional
+            If set, return a noiseless observation
+        """
+        obs_qubic_ = self.qubic.get_observation(
+            self.planck._true_sky, noiseless=noiseless,
+            convolution=convolution)
+        obs_qubic = obs_qubic_[0] if convolution else obs_qubic_
+        obs_planck = self.planck.get_observation(noiseless=noiseless)
+        obs = np.r_[obs_qubic.ravel(), obs_planck.ravel()]
+        if convolution:
+            return obs, obs_qubic[1]
+        return obs

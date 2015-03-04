@@ -14,12 +14,13 @@ from pyoperators import (
     CompositionOperator, DiagonalOperator, I, IdentityOperator,
     MPIDistributionIdentityOperator, MPI, proxy_group, ReshapeOperator,
     rule_manager)
-from pyoperators.utils import ifirst, isscalarlike
+from pyoperators.utils import ifirst
 from pyoperators.utils.mpi import as_mpi
-from pysimulators import Acquisition, ProjectionOperator
+from pysimulators import Acquisition, FitsArray, ProjectionOperator
 from pysimulators.interfaces.healpy import (
     HealpixConvolutionGaussianOperator, SceneHealpixCMB)
 from .calibration import QubicCalibration
+from .data import PATH
 from .instrument import QubicInstrument, SimpleInstrument
 from .scene import QubicScene
 
@@ -678,32 +679,30 @@ class QubicAcquisition(SimpleAcquisition):
 
 
 class PlanckAcquisition(object):
-    def __init__(self, true_sky, scene=None, sigma=None, absolute=False,
-                 kind='IQU', nside=None, fwhm=0):
+    def __init__(self, band, scene, true_sky=None, factor=1, fwhm=0):
         """
         Parameters
         ----------
+        band : int
+            The band 150 or 220.
+        scene : Scene
+            The acquisition scene.
         true_sky : array of shape (npixel,) or (npixel, 3)
             The true CMB sky (temperature or polarized). The Planck observation
             will be this true sky plus a random independent gaussian noise
             realization.
-        sigma : float, optional
-            The temperature sensitivity, in units of µK.deg. Default value is
-            is 1.2µK.deg / sqrt(2) (from arXiv:1502.00612: A Joint Analysis of
-            BICEP2/Keck Array and Planck Data). This value is used to draw
-            the gaussian noise realization of the Planck observation.
-        fwhm : float, optional
+        factor : 1 or 3 floats, optional
+            The factor by which the Planck standard deviation is multiplied.
+        fwhm : float, optional, !not used!
             The fwhm of the Gaussian used to smooth the map [radians].
 
         """
+        if band not in (150, 220):
+            raise ValueError("Invalid band '{}'.".format(band))
         if true_sky is None:
             raise ValueError('The Planck Q & U maps are not released yet.')
-        if kind == 'IQU' and true_sky.shape[-1] != 3:
+        if scene.kind == 'IQU' and true_sky.shape[-1] != 3:
             raise TypeError('The Planck sky shape is not (npix, 3).')
-        if scene is None:
-            if nside is None:
-                nside = hp.npix2nside(true_sky.shape[0])
-            scene = SceneHealpixCMB(nside, absolute=absolute, kind=kind)
         true_sky = np.array(hp.ud_grade(true_sky.T, nside_out=scene.nside),
                             copy=False).T
         if scene.kind == 'IQU' and true_sky.shape[-1] != 3:
@@ -711,12 +710,19 @@ class PlanckAcquisition(object):
         self.scene = scene
         self.fwhm = fwhm
         self._true_sky = true_sky
-        if sigma is None:
-            sigma = 1.2 / np.sqrt(2)
-        if self.scene.kind == 'IQU' and isscalarlike(sigma):
-            sigma = np.array([1, 1 * np.sqrt(2), 1 * np.sqrt(2)]) * sigma
-        angle = np.degrees(np.sqrt(4 * np.pi / scene.npixel))
-        self.sigma = sigma / angle
+        if band == 150:
+            filename = 'Variance_Planck143GHz_Kcmb2_ns256.fits'
+        else:
+            filename = 'Variance_Planck217GHz_Kcmb2_ns256.fits'
+        sigma = 1e6 * factor * np.sqrt(FitsArray(PATH + filename))
+        if scene.kind == 'I':
+            sigma = sigma[:, 0]
+        elif scene.kind == 'QU':
+            sigma = sigma[:, :2]
+        if self.scene.nside != 256:
+            sigma = np.array(hp.ud_grade(sigma.T, self.scene.nside, power=2),
+                             copy=False).T
+        self.sigma = sigma
 
     def get_operator(self):
         return IdentityOperator(shapein=self.scene.shape)
@@ -734,6 +740,7 @@ class PlanckAcquisition(object):
             np.random.seed(seed)
             obs = obs + self.get_noise()
         return obs
+        #XXX neglecting convolution effects...
         HealpixConvolutionGaussianOperator(fwhm=self.fwhm)(obs, obs)
         return obs
 
@@ -744,108 +751,24 @@ class QubicPlanckAcquisition(object):
     acquisitions.
 
     """
-    def __init__(self, instrument, sampling, scene=None, true_sky=None,
-                 block=None, calibration=None, detector_nep=4.7e-17,
-                 detector_fknee=0, detector_fslope=1, detector_ncorr=10,
-                 detector_ngrids=2, detector_tau=0.01,
-                 filter_relative_bandwidth=0.25, polarizer=True,
-                 primary_beam=None, secondary_beam=None,
-                 synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
-                 absolute=False, kind='IQU', nside=256, sigma_planck=None,
-                 max_nbytes=None, nprocs_instrument=None, nprocs_sampling=None,
-                 comm=None):
+    def __init__(self, qubic, planck):
         """
-        acq = QubicPlanckAcquisition(band, sampling, true_sky=,
-                                     [scene=|absolute=, kind=, nside=],
-                                     nprocs_instrument=, nprocs_sampling=,
-                                     comm=)
-        acq = QubicPlanckAcquisition(instrument, sampling, true_sky=,
-                                     [scene=|absolute=, kind=, nside=],
-                                     nprocs_instrument=, nprocs_sampling=,
-                                     comm=)
+        acq = QubicPlanckAcquisition(qubic_acquisition, planck_acquisition)
 
         Parameters
         ----------
-        band : int
-            The module nominal frequency, in GHz.
-        scene : QubicScene, optional
-            The discretized observed scene (the sky).
-        true_sky : Healpix map
-            The non-convolved true sky, that is used to draw a Planck
-            realization.
-        absolute : boolean, optional
-            If true, the scene pixel values include the CMB background and the
-            fluctuations in units of Kelvin, otherwise it only represents the
-            fluctuations, in microKelvin.
-        kind : 'I', 'QU' or 'IQU', optional
-            The sky kind: 'I' for intensity-only, 'QU' for Q and U maps,
-            and 'IQU' for intensity plus QU maps.
-        nside : int, optional
-            The Healpix scene's nside.
-        instrument : QubicInstrument, optional
-            The QubicInstrument instance.
-        calibration : QubicCalibration, optional
-            The calibration tree.
-        detector_fknee : array-like, optional
-            The detector 1/f knee frequency in Hertz.
-        detector_fslope : array-like, optional
-            The detector 1/f slope index.
-        detector_ncorr : int, optional
-            The detector 1/f correlation length.
-        detector_nep : array-like, optional
-            The detector NEP [W/sqrt(Hz)].
-        detector_ngrids : 1 or 2, optional
-            Number of detector grids.
-        detector_tau : array-like, optional
-            The detector time constants in seconds.
-        filter_relative_bandwidth : float, optional
-            The filter relative bandwidth Δν/ν.
-        polarizer : boolean, optional
-            If true, the polarizer grid is present in the optics setup.
-        primary_beam : function f(theta [rad], phi [rad]), optional
-            The primary beam transmission function.
-        secondary_beam : function f(theta [rad], phi [rad]), optional
-            The secondary beam transmission function.
-        synthbeam_dtype : dtype, optional
-            The data type for the synthetic beams (default: float32).
-            It is the dtype used to store the values of the pointing matrix.
-        synthbeam_fraction: float, optional
-            The fraction of significant peaks retained for the computation
-            of the synthetic beam.
-        max_nbytes : int or None, optional
-            Maximum number of bytes to be allocated for the acquisition's
-            operator.
-        nprocs_instrument : int, optional
-            For a given sampling slice, number of procs dedicated to
-            the instrument.
-        nprocs_sampling : int, optional
-            For a given detector slice, number of procs dedicated to
-            the sampling.
-        comm : mpi4py.MPI.Comm, optional
-            The acquisition's MPI communicator. Note that it is transformed
-            into a 2d cartesian communicator before being stored as the 'comm'
-            attribute. The following relationship must hold:
-                comm.size = nprocs_instrument * nprocs_sampling
+        qubic_acquisition : QubicAcquisition
+            The QUBIC acquisition.
+        planck_acquisition : PlanckAcquisition
+            The Planck acquisition.
 
         """
-        qubic = QubicAcquisition(
-            instrument, sampling, scene=scene, block=block,
-            calibration=calibration, detector_nep=detector_nep,
-            detector_fknee=detector_fknee, detector_fslope=detector_fslope,
-            detector_ncorr=detector_ncorr, detector_ngrids=detector_ngrids,
-            detector_tau=detector_tau,
-            filter_relative_bandwidth=filter_relative_bandwidth,
-            polarizer=polarizer,  primary_beam=primary_beam,
-            secondary_beam=secondary_beam, synthbeam_dtype=synthbeam_dtype,
-            synthbeam_fraction=synthbeam_fraction, absolute=absolute,
-            kind=kind, nside=nside, max_nbytes=max_nbytes,
-            nprocs_instrument=nprocs_instrument,
-            nprocs_sampling=nprocs_sampling, comm=comm)
-        sky_convolved = qubic.get_convolution_peak_operator()(true_sky)
-        #XXX sigma should change after convolution
-        fwhm = np.radians(qubic.instrument.synthbeam.peak.fwhm_deg)
-        planck = PlanckAcquisition(sky_convolved, scene=qubic.scene,
-                                   sigma=sigma_planck, fwhm=fwhm)
+        if not isinstance(qubic, QubicAcquisition):
+            raise TypeError('The first argument is not a QubicAcquisition.')
+        if not isinstance(planck, PlanckAcquisition):
+            raise TypeError('The second argument is not a PlanckAcquisition.')
+        if qubic.scene is not planck.scene:
+            raise ValueError('The Qubic and Planck scenes are different.')
         self.qubic = qubic
         self.planck = planck
 

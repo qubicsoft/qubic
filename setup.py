@@ -6,7 +6,7 @@ import hooks
 from numpy.distutils.core import setup
 from numpy.distutils.extension import Extension
 
-VERSION = '4.3'
+VERSION = '4.4'
 
 name = 'qubic'
 long_description = open('README.rst').read()

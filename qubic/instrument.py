@@ -206,6 +206,8 @@ class SimpleInstrument(Instrument):
         Convert units from W/Hz to W.
 
         """
+        if self.filter.relative_bandwidth == 0:
+            return IdentityOperator()
         return HomothetyOperator(self.filter.relative_bandwidth *
                                  self.filter.nu)
 
@@ -345,7 +347,6 @@ class SimpleInstrument(Instrument):
                 shapeout = (ndetectors, ntimes, 2)
             else:
                 shapeout = (ndetectors, ntimes, 3)
-
         return ProjectionOperator(s, shapeout=shapeout)
 
     def _peak_angles(self, scene):
@@ -412,8 +413,9 @@ class QubicInstrument(SimpleInstrument):
             self, calibration=calibration, detector_fknee=detector_fknee,
             detector_fslope=detector_fslope, detector_ncorr=detector_ncorr,
             detector_nep=detector_nep, detector_ngrids=detector_ngrids,
-            detector_tau=detector_tau, polarizer=polarizer,
-            synthbeam_dtype=synthbeam_dtype)
+            detector_tau=detector_tau, filter_nu=filter_nu,
+            filter_relative_bandwidth=filter_relative_bandwidth,
+            polarizer=polarizer, synthbeam_dtype=synthbeam_dtype)
         self._init_beams(primary_beam, secondary_beam)
         self._init_horns()
         self.synthbeam.fraction = synthbeam_fraction

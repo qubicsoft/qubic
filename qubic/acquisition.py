@@ -737,8 +737,10 @@ class PlanckAcquisition(object):
     def get_observation(self, noiseless=False, seed=0):
         obs = self._true_sky
         if not noiseless:
+            state = np.random.get_state()
             np.random.seed(seed)
             obs = obs + self.get_noise()
+            np.random.set_state(state)
         return obs
         #XXX neglecting convolution effects...
         HealpixConvolutionGaussianOperator(fwhm=self.fwhm)(obs, obs)
@@ -828,7 +830,7 @@ class QubicPlanckAcquisition(object):
             self.planck._true_sky, noiseless=noiseless,
             convolution=convolution)
         obs_qubic = obs_qubic_[0] if convolution else obs_qubic_
-        obs_planck = self.planck.get_observation(noiseless=noiseless)
+        obs_planck = self.planck.get_observation()
         obs = np.r_[obs_qubic.ravel(), obs_planck.ravel()]
         if convolution:
             return obs, obs_qubic[1]

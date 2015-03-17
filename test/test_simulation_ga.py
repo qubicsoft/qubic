@@ -1,9 +1,8 @@
 from __future__ import division
-from pysimulators import FitsArray
+from pysimulators import FitsArray, BeamGaussian
 from qubic import (
     QubicCalibration, QubicAcquisition, QubicInstrument, QubicSampling,
     QubicScene)
-from qubic.beams import GaussianBeam
 import numpy as np
 import os
 import qubic
@@ -21,7 +20,7 @@ def test_ga():
     t = FitsArray(os.path.join(DATAPATH, 'tod_ndet16_np100_ga.fits'))
     c = QubicCalibration(os.path.join(DATAPATH, 'calfiles'))
     i = QubicInstrument(c, detector_ngrids=1, synthbeam_fraction=0.99)
-    i.synthbeam.peak = GaussianBeam(0.64883707)
+    i.synthbeam.peak = BeamGaussian(np.radians(0.64883707))
     acq = QubicAcquisition(i, o, s)
     C = acq.get_convolution_peak_operator()
     P = acq.get_projection_operator()

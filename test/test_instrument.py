@@ -2,11 +2,10 @@ from __future__ import division
 import numpy as np
 from pyoperators.utils import settingerr
 from pyoperators.utils.testing import assert_equal, assert_same, assert_is_type
-from pysimulators import FitsArray
+from pysimulators import BeamGaussian, BeamUniformHalfSpace, FitsArray
 from qubic import (
     create_random_pointings, QubicAcquisition, QubicInstrument, QubicSampling,
     QubicScene)
-from qubic.beams import GaussianBeam, UniformHalfSpaceBeam
 
 q = QubicInstrument(detector_ngrids=1)
 s = create_random_pointings([0, 90], 5, 10.)
@@ -18,12 +17,12 @@ def test_detector_indexing():
 
 
 def test_beams():
-    assert_is_type(q.primary_beam, GaussianBeam)
-    assert_is_type(q.secondary_beam, GaussianBeam)
-    a = QubicAcquisition(150, s, primary_beam=UniformHalfSpaceBeam(),
-                         secondary_beam=UniformHalfSpaceBeam())
-    assert_is_type(a.instrument.primary_beam, UniformHalfSpaceBeam)
-    assert_is_type(a.instrument.secondary_beam, UniformHalfSpaceBeam)
+    assert_is_type(q.primary_beam, BeamGaussian)
+    assert_is_type(q.secondary_beam, BeamGaussian)
+    a = QubicAcquisition(150, s, primary_beam=BeamUniformHalfSpace(),
+                         secondary_beam=BeamUniformHalfSpace())
+    assert_is_type(a.instrument.primary_beam, BeamUniformHalfSpace)
+    assert_is_type(a.instrument.secondary_beam, BeamUniformHalfSpace)
 
 
 def test_primary_beam():

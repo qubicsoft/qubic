@@ -11,7 +11,7 @@ from pyoperators import (
 from pyoperators.utils import operation_assignment, pool_threading, product, split
 from pyoperators.utils.ufuncs import abs2
 from pysimulators import (
-    ConvolutionTruncatedExponentialOperator, Instrument, Layout,
+    BeamGaussian, ConvolutionTruncatedExponentialOperator, Instrument, Layout,
     ProjectionOperator)
 from pysimulators.geometry import surface_simple_polygon
 from pysimulators.interfaces.healpy import (
@@ -20,7 +20,6 @@ from pysimulators.sparse import (
     FSRMatrix, FSRRotation2dMatrix, FSRRotation3dMatrix)
 from scipy.constants import c, pi
 from . import _flib as flib
-from .beams import GaussianBeam
 from .calibration import QubicCalibration
 from .utils import _compress_mask
 
@@ -126,7 +125,7 @@ class SimpleInstrument(Instrument):
             pass
         sb = SyntheticBeam()
         sb.dtype = np.dtype(dtype)
-        sb.peak = GaussianBeam(0.39268176)
+        sb.peak = BeamGaussian(np.radians(0.39268176))
         self.synthbeam = sb
 
     def __str__(self):
@@ -170,7 +169,7 @@ class SimpleInstrument(Instrument):
 
         """
         if fwhm is None:
-            fwhm = np.radians(self.synthbeam.peak.fwhm_deg)
+            fwhm = self.synthbeam.peak.fwhm
         return HealpixConvolutionGaussianOperator(fwhm=fwhm, **keywords)
 
     def get_detector_integration_operator(self):
@@ -423,11 +422,12 @@ class QubicInstrument(SimpleInstrument):
 
     def _init_beams(self, primary, secondary):
         if primary is None:
-            primary = GaussianBeam(self.calibration.get('primbeam'))
+            primary = BeamGaussian(
+                np.radians(self.calibration.get('primbeam')))
         self.primary_beam = primary
         if secondary is None:
-            secondary = GaussianBeam(self.calibration.get('primbeam'),
-                                     backward=True)
+            secondary = BeamGaussian(
+                np.radians(self.calibration.get('primbeam')), backward=True)
         self.secondary_beam = secondary
 
     def _init_horns(self):

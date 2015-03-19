@@ -829,9 +829,11 @@ class QubicPlanckAcquisition(object):
         obs_qubic_ = self.qubic.get_observation(
             self.planck._true_sky, noiseless=noiseless,
             convolution=convolution)
+        if self.qubic.comm.rank > 0:
+            return obs_qubic_
         obs_qubic = obs_qubic_[0] if convolution else obs_qubic_
         obs_planck = self.planck.get_observation()
         obs = np.r_[obs_qubic.ravel(), obs_planck.ravel()]
         if convolution:
-            return obs, obs_qubic[1]
+            return obs, obs_qubic_[1]
         return obs

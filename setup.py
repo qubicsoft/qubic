@@ -12,17 +12,16 @@ name = 'qubic'
 long_description = open('README.rst').read()
 keywords = 'scientific computing'
 platforms = 'MacOS X,Linux,Solaris,Unix,Windows'
-extra_f90_compile_args = ['-g -cpp -fopenmp -fpack-derived']
-if '--debug' in sys.argv:
-    extra_f90_compile_args += ['-fbounds-check']
 delattr(os, 'link')  # force sdist to copy files
-hooks.REQUIRES_FORTRAN = True
+hooks.F90_COMPILE_ARGS_GFORTRAN += ['-fpack-derived -g']
+hooks.F90_COMPILE_ARGS_IFORT += ['-align norecords -g']
+if sys.platform == 'darwin':
+    hooks.F90_COMPILE_OPT_GFORTRAN = ['-O2']
 
 
 ext_modules = [Extension('qubic._flib',
                          sources=['src/polarization.f90.src',
                                   'src/xpol.f90'],
-                         extra_f90_compile_args=extra_f90_compile_args,
                          include_dirs=['.', np.get_include()],
                          libraries=['gomp',
                                     ('fmod', {'sources': ['src/wig3j.f']})])]

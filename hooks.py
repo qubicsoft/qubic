@@ -30,6 +30,20 @@ configurable) or the last tag.
 
 # These variables can be changed by the hooks importer
 ABBREV = 5
+F77_OPENMP = True
+F90_OPENMP = True
+F77_COMPILE_ARGS_GFORTRAN = []
+F77_COMPILE_DEBUG_GFORTRAN = ['-fcheck=all -Og']
+F77_COMPILE_OPT_GFORTRAN = ['-Ofast -march=native']
+F90_COMPILE_ARGS_GFORTRAN = ['-cpp']
+F90_COMPILE_DEBUG_GFORTRAN = ['-fcheck=all -Og']
+F90_COMPILE_OPT_GFORTRAN = ['-Ofast -march=native']
+F77_COMPILE_ARGS_IFORT = []
+F77_COMPILE_DEBUG_IFORT = ['-check all']
+F77_COMPILE_OPT_IFORT = ['-fast']
+F90_COMPILE_ARGS_IFORT = ['-fpp -ftz -fp-model precise -ftrapuv -warn all']
+F90_COMPILE_DEBUG_IFORT = ['-check all']
+F90_COMPILE_OPT_IFORT = ['-fast']
 F2PY_TABLE = {'integer': {'int8': 'char',
                           'int16': 'short',
                           'int32': 'int',
@@ -38,6 +52,9 @@ F2PY_TABLE = {'integer': {'int8': 'char',
                        'real64': 'double'},
               'complex': {'real32': 'complex_float',
                           'real64': 'complex_double'}}
+FCOMPILERS_DEFAULT = 'intelem', 'gfortran'
+LIBRARY_OPENMP_GFORTRAN = 'gomp'
+LIBRARY_OPENMP_IFORT = 'iomp5'
 REGEX_RELEASE = '^v(?P<name>[0-9.]+)$'
 try:
     import os
@@ -52,10 +69,16 @@ import shutil
 import sys
 from distutils.command.clean import clean
 from numpy.distutils.command.build import build
+from numpy.distutils.command.build_clib import build_clib
+from numpy.distutils.command.build_ext import build_ext
 from numpy.distutils.command.build_src import build_src
 from numpy.distutils.command.sdist import sdist
 from numpy.distutils.core import Command
-from numpy.distutils.misc_util import has_f_sources
+from numpy.distutils.exec_command import find_executable
+from numpy.distutils.fcompiler import new_fcompiler
+from numpy.distutils.fcompiler.gnu import Gnu95FCompiler
+from numpy.distutils.fcompiler.intel import IntelEM64TFCompiler
+from numpy.distutils.misc_util import f90_ext_match, has_f_sources
 from subprocess import call, Popen, PIPE
 from warnings import filterwarnings
 
@@ -72,6 +95,12 @@ numpy.distutils.from_template.routine_start_re = re.compile(
 numpy.distutils.from_template.function_start_re = re.compile(
     r'\n     (\$|\*)\s*((im)?pure\s+|elemental\s+)*function\b', re.I)
 
+# monkey patch compilers
+Gnu95FCompiler.get_flags_debug = lambda self: []
+Gnu95FCompiler.get_flags_opt = lambda self: []
+IntelEM64TFCompiler.get_flags_debug = lambda self: []
+IntelEM64TFCompiler.get_flags_opt = lambda self: []
+
 
 def get_cmdclass():
 
@@ -80,6 +109,131 @@ def get_cmdclass():
             _write_version(self.distribution.get_name(),
                            self.distribution.get_version())
             build.run(self)
+
+    class BuildClibCommand(build_clib):
+        def finalize_options(self):
+            build_clib.finalize_options(self)
+            if self.fcompiler is None:
+                old_value = numpy.distutils.log.set_verbosity(-2)
+                for _ in FCOMPILERS_DEFAULT:
+                    exe = find_executable(_)
+                    if exe is not None:
+                        self.fcompiler = _
+                        break
+                numpy.distutils.log.set_verbosity(old_value)
+
+        def build_libraries(self, libraries):
+            if isinstance(self._f_compiler,
+                          numpy.distutils.fcompiler.gnu.Gnu95FCompiler):
+                old_value = numpy.distutils.log.set_verbosity(-2)
+                exe = numpy.distutils.exec_command.find_executable('gcc-ar')
+                if exe is None:
+                    exe = numpy.distutils.exec_command.find_executable('ar')
+                numpy.distutils.log.set_verbosity(old_value)
+                self._f_compiler.executables['archiver'][0] = exe
+                flags = F77_COMPILE_ARGS_GFORTRAN + F77_COMPILE_OPT_GFORTRAN
+                if self.debug:
+                    flags += F77_COMPILE_DEBUG_GFORTRAN
+                if F77_OPENMP:
+                    flags += ['-openmp']
+                self._f_compiler.executables['compiler_f77'] += flags
+                flags = F90_COMPILE_ARGS_GFORTRAN + F90_COMPILE_OPT_GFORTRAN
+                if self.debug:
+                    flags += F90_COMPILE_DEBUG_GFORTRAN
+                if F90_OPENMP:
+                    flags += ['-openmp']
+                self._f_compiler.executables['compiler_f90'] += flags
+                self._f_compiler.libraries += [LIBRARY_OPENMP_GFORTRAN]
+            elif isinstance(self._f_compiler,
+                          numpy.distutils.fcompiler.intel.IntelFCompiler):
+                old_value = numpy.distutils.log.set_verbosity(-2)
+                exe = numpy.distutils.exec_command.find_executable('xiar')
+                numpy.distutils.log.set_verbosity(old_value)
+                self._f_compiler.executables['archiver'][0] = exe
+                flags = F77_COMPILE_ARGS_IFORT + F77_COMPILE_OPT_IFORT
+                if self.debug:
+                    flags += F77_COMPILE_DEBUG_IFORT
+                if F77_OPENMP:
+                    flags += ['-openmp']
+                self._f_compiler.executables['compiler_f77'] += flags
+                flags = F90_COMPILE_ARGS_IFORT + F90_COMPILE_OPT_IFORT
+                if self.debug:
+                    flags += F90_COMPILE_DEBUG_IFORT
+                if F90_OPENMP:
+                    flags += ['-openmp']
+                self._f_compiler.executables['compiler_f90'] += flags
+                self._f_compiler.libraries += [LIBRARY_OPENMP_IFORT]
+            build_clib.build_libraries(self, libraries)
+
+    class BuildExtCommand(build_ext):
+        def finalize_options(self):
+            build_ext.finalize_options(self)
+            if self.fcompiler is None:
+                old_value = numpy.distutils.log.set_verbosity(-2)
+                for _ in FCOMPILERS_DEFAULT:
+                    exe = find_executable(_)
+                    if exe is not None:
+                        self.fcompiler = _
+                        break
+                numpy.distutils.log.set_verbosity(old_value)
+
+        def build_extensions(self):
+            # Numpy bug: if an extension has a library only consisting of f77
+            # files, the extension language will always be f77 and no f90
+            # compiler will be initialized
+            need_f90_compiler = self._f90_compiler is None and \
+                any(any(f90_ext_match(s) for s in _.sources)
+                    for _ in self.extensions)
+            if need_f90_compiler:
+                self._f90_compiler = new_fcompiler(compiler=self.fcompiler,
+                                                   verbose=self.verbose,
+                                                   dry_run=self.dry_run,
+                                                   force=self.force,
+                                                   requiref90=True,
+                                                   c_compiler=self.compiler)
+                fcompiler = self._f90_compiler
+                if fcompiler:
+                    fcompiler.customize(self.distribution)
+                if fcompiler and fcompiler.get_version():
+                    fcompiler.customize_cmd(self)
+                    fcompiler.show_customization()
+                else:
+                    ctype = fcompiler.compiler_type if fcompiler \
+                        else self.fcompiler
+                    self.warn('f90_compiler=%s is not available.' % ctype)
+
+            for fc in self._f77_compiler, self._f90_compiler:
+                if isinstance(fc,
+                                numpy.distutils.fcompiler.gnu.Gnu95FCompiler):
+                    flags = F77_COMPILE_ARGS_GFORTRAN + F77_COMPILE_OPT_GFORTRAN
+                    if self.debug:
+                        flags += F77_COMPILE_DEBUG_GFORTRAN
+                    if F77_OPENMP:
+                        flags += ['-openmp']
+                    fc.executables['compiler_f77'] += flags
+                    flags = F90_COMPILE_ARGS_GFORTRAN + F90_COMPILE_OPT_GFORTRAN
+                    if self.debug:
+                        flags += F90_COMPILE_DEBUG_GFORTRAN
+                    if F90_OPENMP:
+                        flags += ['-openmp']
+                    fc.executables['compiler_f90'] += flags
+                    fc.libraries += [LIBRARY_OPENMP_GFORTRAN]
+                elif isinstance(fc,
+                              numpy.distutils.fcompiler.intel.IntelFCompiler):
+                    flags = F77_COMPILE_ARGS_IFORT + F77_COMPILE_OPT_IFORT
+                    if self.debug:
+                        flags += F77_COMPILE_DEBUG_IFORT
+                    if F77_OPENMP:
+                        flags += ['-openmp']
+                    fc.executables['compiler_f77'] += flags
+                    flags = F90_COMPILE_ARGS_IFORT + F90_COMPILE_OPT_IFORT
+                    if self.debug:
+                        flags += F90_COMPILE_DEBUG_IFORT
+                    if F90_OPENMP:
+                        flags += ['-openmp']
+                    fc.executables['compiler_f90'] += flags
+                    fc.libraries += [LIBRARY_OPENMP_IFORT]
+            build_ext.build_extensions(self)
 
     class BuildSrcCommand(build_src):
         def initialize_options(self):
@@ -197,6 +351,8 @@ def get_cmdclass():
             pass
 
     return {'build': BuildCommand,
+            'build_clib': BuildClibCommand,
+            'build_ext': BuildExtCommand,
             'build_src': BuildSrcCommand,
             'clean': CleanCommand,
             'coverage': CoverageCommand,

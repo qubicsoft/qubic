@@ -781,8 +781,6 @@ class QubicPlanckAcquisition(object):
 
         """
         noise_qubic = self.qubic.get_noise()
-        if self.qubic.comm.rank > 0:
-            return noise_qubic
         noise_planck = self.planck.get_noise()
         return np.r_[noise_qubic.ravel(), noise_planck.ravel()]
 
@@ -792,8 +790,6 @@ class QubicPlanckAcquisition(object):
 
         """
         H_qubic = self.qubic.get_operator()
-        if self.qubic.comm.rank > 0:
-            return H_qubic
         R_qubic = ReshapeOperator(H_qubic.shapeout, H_qubic.shape[0])
         H_planck = self.planck.get_operator()
         R_planck = ReshapeOperator(H_planck.shapeout, H_planck.shape[0])
@@ -807,8 +803,6 @@ class QubicPlanckAcquisition(object):
 
         """
         invntt_qubic = self.qubic.get_invntt_operator()
-        if self.qubic.comm.rank > 0:
-            return invntt_qubic
         R_qubic = ReshapeOperator(invntt_qubic.shapeout, invntt_qubic.shape[0])
         invntt_planck = self.planck.get_invntt_operator()
         R_planck = ReshapeOperator(invntt_planck.shapeout,
@@ -829,8 +823,6 @@ class QubicPlanckAcquisition(object):
         obs_qubic_ = self.qubic.get_observation(
             self.planck._true_sky, noiseless=noiseless,
             convolution=convolution)
-        if self.qubic.comm.rank > 0:
-            return obs_qubic_
         obs_qubic = obs_qubic_[0] if convolution else obs_qubic_
         obs_planck = self.planck.get_observation()
         obs = np.r_[obs_qubic.ravel(), obs_planck.ravel()]

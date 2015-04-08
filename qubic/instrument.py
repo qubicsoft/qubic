@@ -312,7 +312,7 @@ class SimpleInstrument(Instrument):
         c2h = Cartesian2HealpixOperator(nside)
         if nscene != nscenetot:
             table = np.full(nscenetot, -1, dtype_index)
-            table[scene.index] = np.arange(len(scene))
+            table[scene.index] = np.arange(len(scene), dtype=dtype_index)
 
         def func_thread(i):
             # e_nf[i] shape: (1, ncolmax, 3)

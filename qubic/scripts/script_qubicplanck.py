@@ -16,7 +16,7 @@ deccenter = -57.0   # deg
 
 sky = read_map(PATH + 'syn256_pol.fits')
 sampling = create_random_pointings([racenter, deccenter], 1000, 10)
-detector_nep = 4.7e-17/np.sqrt(365*86400 / len(sampling)*sampling.period)
+detector_nep = 4.7e-17*np.sqrt(len(sampling) * sampling.period / (365 * 86400))
 
 acq_qubic = QubicAcquisition(150, sampling, nside=nside,
                              detector_nep=detector_nep)

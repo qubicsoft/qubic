@@ -253,9 +253,13 @@ def _format_sphconv(a, b, date_obs=None, time=None):
     incoords[..., 1] = b
     if date_obs is None:
         return incoords
-    time = Time(date_obs if isscalarlike(time)
-                         else [date_obs], scale='utc') + \
-           TimeDelta(time, format='sec')
+    import astropy
+    if astropy.__version__ < "1":
+        time = Time(date_obs if isscalarlike(time)
+                             else [date_obs], scale='utc') + \
+               TimeDelta(time, format='sec')
+    else:
+        time = Time(date_obs, scale='utc') + TimeDelta(time, format='sec')
     return incoords, time
 
 

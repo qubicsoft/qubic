@@ -84,7 +84,7 @@ integ = MaskOperator(qubic.detector.all.removed) * \
 ########
 def get_model_A():
     """ Phase and transmission from the switches to the focal plane. """
-    transmission = np.sqrt(qubic.secondary_beam(det_theta) *
+    transmission = np.sqrt(qubic.secondary_beam(det_theta, 0) *
                            detector_plane_pixel_sr /
                            qubic.secondary_beam.solid_angle)[..., None]
     const = 2j * pi / LAMBDA

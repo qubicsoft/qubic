@@ -294,12 +294,6 @@ def get_cmdclass():
                 for d in dirs:
                     if d in ('build', '__pycache__'):
                         self.__delete(os.path.join(root_, d), dir=True)
-            files = (
-                'MANIFEST',
-                os.path.join(self.distribution.get_name(), '__init__.py'))
-            for f in files:
-                if os.path.exists(f):
-                    self.__delete(f)
 
         def __delete(self, file_, dir=False):
             msg = 'would remove' if self.dry_run else 'removing'

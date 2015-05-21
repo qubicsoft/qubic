@@ -123,46 +123,46 @@ def get_cmdclass():
                 numpy.distutils.log.set_verbosity(old_value)
 
         def build_libraries(self, libraries):
-            if isinstance(self._f_compiler,
+            if isinstance(self.fcompiler,
                           numpy.distutils.fcompiler.gnu.Gnu95FCompiler):
                 old_value = numpy.distutils.log.set_verbosity(-2)
                 exe = numpy.distutils.exec_command.find_executable('gcc-ar')
                 if exe is None:
                     exe = numpy.distutils.exec_command.find_executable('ar')
                 numpy.distutils.log.set_verbosity(old_value)
-                self._f_compiler.executables['archiver'][0] = exe
+                self.fcompiler.executables['archiver'][0] = exe
                 flags = F77_COMPILE_ARGS_GFORTRAN + F77_COMPILE_OPT_GFORTRAN
                 if self.debug:
                     flags += F77_COMPILE_DEBUG_GFORTRAN
                 if F77_OPENMP:
                     flags += ['-openmp']
-                self._f_compiler.executables['compiler_f77'] += flags
+                self.fcompiler.executables['compiler_f77'] += flags
                 flags = F90_COMPILE_ARGS_GFORTRAN + F90_COMPILE_OPT_GFORTRAN
                 if self.debug:
                     flags += F90_COMPILE_DEBUG_GFORTRAN
                 if F90_OPENMP:
                     flags += ['-openmp']
-                self._f_compiler.executables['compiler_f90'] += flags
-                self._f_compiler.libraries += [LIBRARY_OPENMP_GFORTRAN]
-            elif isinstance(self._f_compiler,
-                          numpy.distutils.fcompiler.intel.IntelFCompiler):
+                self.fcompiler.executables['compiler_f90'] += flags
+                self.fcompiler.libraries += [LIBRARY_OPENMP_GFORTRAN]
+            elif isinstance(self.fcompiler,
+                            numpy.distutils.fcompiler.intel.IntelFCompiler):
                 old_value = numpy.distutils.log.set_verbosity(-2)
                 exe = numpy.distutils.exec_command.find_executable('xiar')
                 numpy.distutils.log.set_verbosity(old_value)
-                self._f_compiler.executables['archiver'][0] = exe
+                self.fcompiler.executables['archiver'][0] = exe
                 flags = F77_COMPILE_ARGS_IFORT + F77_COMPILE_OPT_IFORT
                 if self.debug:
                     flags += F77_COMPILE_DEBUG_IFORT
                 if F77_OPENMP:
                     flags += ['-openmp']
-                self._f_compiler.executables['compiler_f77'] += flags
+                self.fcompiler.executables['compiler_f77'] += flags
                 flags = F90_COMPILE_ARGS_IFORT + F90_COMPILE_OPT_IFORT
                 if self.debug:
                     flags += F90_COMPILE_DEBUG_IFORT
                 if F90_OPENMP:
                     flags += ['-openmp']
-                self._f_compiler.executables['compiler_f90'] += flags
-                self._f_compiler.libraries += [LIBRARY_OPENMP_IFORT]
+                self.fcompiler.executables['compiler_f90'] += flags
+                self.fcompiler.libraries += [LIBRARY_OPENMP_IFORT]
             build_clib.build_libraries(self, libraries)
 
     class BuildExtCommand(build_ext):

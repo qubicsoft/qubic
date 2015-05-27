@@ -26,10 +26,10 @@ acq_fusion = QubicPlanckAcquisition(acq_qubic, acq_planck)
 
 H = acq_fusion.get_operator()
 invntt = acq_fusion.get_invntt_operator()
-obs = acq_fusion.get_observation()
+y = acq_fusion.get_observation()
 
 A = H.T * invntt * H
-b = H.T * invntt * obs
+b = H.T * invntt * y
 
 solution_fusion = pcg(A, b, disp=True)
 
@@ -37,10 +37,10 @@ acq_qubic = QubicAcquisition(150, sampling, nside=nside,
                              detector_nep=detector_nep)
 H = acq_qubic.get_operator()
 invntt = acq_qubic.get_invntt_operator()
-obs, sky_convolved = acq_qubic.get_observation(sky, convolution=True)
+y, sky_convolved = acq_qubic.get_observation(sky, convolution=True)
 
 A = H.T * invntt * H
-b = H.T * invntt * obs
+b = H.T * invntt * y
 
 solution_qubic = pcg(A, b, disp=True)
 

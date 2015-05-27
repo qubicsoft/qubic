@@ -15,7 +15,6 @@ def test():
     instrument = QubicInstrument(synthbeam_dtype=float)[:400]
     np.random.seed(0)
     sampling = create_random_pointings([0, 90], 30, 5)
-    sampling.angle_hwp = np.random.random_integers(0, 7, len(sampling)) * 11.25
     skies = np.ones(12 * 256**2), np.ones((12 * 256**2, 3))
 
     def func(sampling, kind, sky, ref1, ref2, ref3, ref4, ref5, ref6):

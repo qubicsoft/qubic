@@ -154,6 +154,7 @@ def create_random_pointings(center, npointings, dtheta, date_obs=None,
     p.azimuth = coords[..., 0]
     p.elevation = coords[..., 1]
     p.pitch = pitch
+    p.angle_hwp = np.random.random_integers(0, 7, npointings) * 11.25
     return p
 
 
@@ -244,6 +245,7 @@ def create_sweeping_pointings(
     out.azimuth = azptg
     out.elevation = elptg
     out.pitch = pitch
+    out.angle_hwp = np.random.random_integers(0, 7, nsamples) * 11.25
     return out
 
 

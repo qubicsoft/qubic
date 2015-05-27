@@ -26,7 +26,6 @@ np.random.seed(0)
 sampling = create_sweeping_pointings(
     [racenter, deccenter], duration, ts, angspeed, delta_az, nsweeps_el,
     angspeed_psi, maxpsi)
-sampling.angle_hwp = np.random.random_integers(0, 7, len(sampling)) * 11.25
 
 # get the acquisition model
 acquisition = QubicAcquisition(150, sampling,

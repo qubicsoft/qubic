@@ -567,7 +567,7 @@ class QubicInstrument(SimpleInstrument):
         phi : array-like
             The source azimuthal angle [rad].
         power : array-like
-            The source power [W].
+            The source power [W/m^2].
 
         Returns
         -------
@@ -578,7 +578,8 @@ class QubicInstrument(SimpleInstrument):
         shape = np.broadcast(theta, phi, power).shape
         theta, phi, power = [np.ravel(_) for _ in theta, phi, power]
         uvec = hp.ang2vec(theta, phi)
-        source_E = np.sqrt(power * self.primary_beam(theta, phi))
+        source_E = np.sqrt(power * self.primary_beam(theta, phi) *
+                           np.pi * self.horn.radius**2)
         const = 2j * pi * self.filter.nu / c
         product = np.dot(self.horn[self.horn.open].center, uvec.T)
         out = ne.evaluate('source_E * exp(const * product)')
@@ -627,6 +628,19 @@ class QubicInstrument(SimpleInstrument):
         Return the monochromatic synthetic beam for a specified location
         on the focal plane.
 
+        Example
+        -------
+        >>> scene = QubicScene(1024)
+        >>> inst = QubicInstrument()
+        >>> xpos = 0
+        >>> ypos = 0
+        >>> sb = inst.get_synthbeam_healpix_from_position(scene, xpos, ypos)
+
+        The power per unit surface collected on the point (xpos, ypos) of
+        the focal plane, given a sky in W/m² is:
+        >>> sky = scene.ones()    # [W/m²]
+        >>> P = np.sum(sky * sb)  # [W/m²]
+
         Parameters
         ----------
         scene : QubicScene
@@ -647,7 +661,7 @@ class QubicInstrument(SimpleInstrument):
         MAX_MEMORY_B = 1e9
         theta, phi = hp.pix2ang(scene.nside, scene.index)
         index = np.where(theta <= np.radians(theta_max))[0]
-        nhorn = len(self.horn.open)
+        nhorn = int(np.sum(self.horn.open))
         npix = len(index)
         nbytes_B = npix * nhorn * 24
         ngroup = np.ceil(nbytes_B / MAX_MEMORY_B)
@@ -658,10 +672,8 @@ class QubicInstrument(SimpleInstrument):
         out = np.zeros(shape + (len(scene),), dtype=self.synthbeam.dtype)
         for s in split(npix, ngroup):
             index_ = index[s]
-            sb = self.get_response(theta[index_], phi[index_], power=1,
-                                   x=x, y=y, area=1)
+            sb = self.get_response(theta[index_], phi[index_], x=x, y=y)
             out[..., index_] = abs2(sb, dtype=self.synthbeam.dtype)
-        out *= np.pi * self.horn.radius**2
         return out
 
 

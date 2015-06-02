@@ -1,115 +1,65 @@
+"""
+We compute the output power collected on the focal plane, given 1 W entering
+the instrument through the open horns.
+
+"""
 from __future__ import division
 
 import matplotlib.pyplot as mp
-import numexpr as ne
 import numpy as np
-from scipy.constants import c, pi
 from pyoperators import MaskOperator
 from pysimulators import create_fitsheader, SceneGrid
 from qubic import QubicInstrument
 
-qubic = QubicInstrument(detector_ngrids=1)
-
 NU = 150e9                   # [Hz]
-LAMBDA = c / NU              # [m]
-FOCAL_LENGTH = 0.3           # [m]
 
-SOURCE_POWER = 1             # [W]
 SOURCE_THETA = np.radians(0) # [rad]
-SOURCE_PHI = np.radians(45)  # [rad]
+SOURCE_PHI = np.radians(0)   # [rad]
 
-HORN_OPEN = np.zeros(qubic.horn.shape, dtype=bool)  # all closed
-HORN_OPEN[10,10] = True
-HORN_OPEN[11,11] = True
-HORN_OPEN[0,1] = True
-HORN_OPEN[17,18] = True
-HORN_OPEN = ~qubic.horn.all.removed  # all open
+NPOINT_FOCAL_PLANE = 512**2  # number of detector plane sampling points
 
-DETECTOR_OFFSET = [0, 0]  # [m]
+qubic = QubicInstrument(detector_ngrids=1, filter_nu=NU)
 
-NPOINT_DETECTOR_PLANE = 512**2 # number of detector plane sampling points
-DETECTOR_PLANE_LIMITS = (np.nanmin(qubic.detector.vertex[..., 0]),
-                         np.nanmax(qubic.detector.vertex[..., 0]))  # [m]
+# example for a baseline selection:
+#qubic.horn.open[:] = False
+#qubic.horn.open[0] = True
+#qubic.horn.open[14] = True
+
+FOCAL_PLANE_LIMITS = (np.nanmin(qubic.detector.vertex[..., 0]),
+                      np.nanmax(qubic.detector.vertex[..., 0]))  # [m]
 
 # to check energy conservation (unrealistic detector plane):
-#DETECTOR_PLANE_LIMITS = (-4, 4) # [m]
-
-def ang2vec(theta_rad, phi_rad):
-    sintheta = np.sin(theta_rad)
-    return np.array([sintheta * np.cos(phi_rad),
-                     sintheta * np.sin(phi_rad),
-                     np.cos(theta_rad)])
-
-
-########
-# HORNS
-########
-nhorn_open = np.sum(HORN_OPEN)
-horn_vec = np.column_stack([qubic.horn.all.center[HORN_OPEN, :2],
-                            np.zeros(nhorn_open)])
+FOCAL_PLANE_LIMITS = (-0.2, 0.2) # [m]
 
 
 #################
-# DETECTOR PLANE
+# FOCAL PLANE
 #################
-def norm(x):
-    return x / np.sqrt(np.sum(x**2, axis=-1))[..., None]
-ndet_x = int(np.sqrt(NPOINT_DETECTOR_PLANE))
-a = np.r_[DETECTOR_PLANE_LIMITS[0]:DETECTOR_PLANE_LIMITS[1]:ndet_x*1j]
-det_x, det_y = np.meshgrid(a, a)
-det_spacing = (DETECTOR_PLANE_LIMITS[1] - DETECTOR_PLANE_LIMITS[0]) / ndet_x
-det_vec = np.dstack([det_x, det_y, np.zeros_like(det_x) - FOCAL_LENGTH])
-det_uvec = norm(det_vec)
-det_theta = np.arccos(det_uvec[..., 2])
-
-# solid angle of a detector plane pixel (gnomonic projection)
-central_pixel_sr = np.arctan(det_spacing / FOCAL_LENGTH)**2
-detector_plane_pixel_sr = -central_pixel_sr * np.cos(det_theta)**3
+nfp_x = int(np.sqrt(NPOINT_FOCAL_PLANE))
+a = np.r_[FOCAL_PLANE_LIMITS[0]:FOCAL_PLANE_LIMITS[1]:nfp_x*1j]
+fp_x, fp_y = np.meshgrid(a, a)
+fp_spacing = (FOCAL_PLANE_LIMITS[1] - FOCAL_PLANE_LIMITS[0]) / nfp_x
 
 
 ############
 # DETECTORS
 ############
-qubic.detector.vertex[..., :2] += DETECTOR_OFFSET
-header = create_fitsheader((ndet_x, ndet_x), cdelt=det_spacing, crval=(0, 0),
+header = create_fitsheader((nfp_x, nfp_x), cdelt=fp_spacing, crval=(0, 0),
                            ctype=['X---CAR', 'Y---CAR'], cunit=['m', 'm'])
-detector_plane = SceneGrid.fromfits(header)
+focal_plane = SceneGrid.fromfits(header)
 integ = MaskOperator(qubic.detector.all.removed) * \
-        detector_plane.get_integration_operator(
-            detector_plane.topixel(qubic.detector.all.vertex[..., :2]))
-
-
-########
-# MODEL
-########
-def get_model_A():
-    """ Phase and transmission from the switches to the focal plane. """
-    transmission = np.sqrt(qubic.secondary_beam(det_theta, 0) *
-                           detector_plane_pixel_sr /
-                           qubic.secondary_beam.solid_angle)[..., None]
-    const = 2j * pi / LAMBDA
-    product = np.dot(det_uvec, horn_vec.T)
-    return ne.evaluate('transmission * exp(const * product)')
-
-
-def get_model_B():
-    """ Phase and transmission from the source to the switches. """
-    source_uvec = ang2vec(SOURCE_THETA, SOURCE_PHI)
-    source_E = np.sqrt(SOURCE_POWER) * \
-               np.sqrt(qubic.primary_beam(SOURCE_THETA, SOURCE_PHI))
-    const = 2j * pi / LAMBDA
-    product = np.dot(horn_vec, source_uvec)
-    return ne.evaluate('source_E * exp(const * product)')
-
-
-def get_model():
-    return np.sum(get_model_A() * get_model_B(), axis=-1)
+        focal_plane.get_integration_operator(
+            focal_plane.topixel(qubic.detector.all.vertex[..., :2]))
 
 
 ###############
 # COMPUTATIONS
 ###############
-E = get_model()
+
+# we make sure that exacty 1 W goes through the open horns
+SOURCE_POWER = 1 / (np.sum(qubic.horn.open) * np.pi * qubic.horn.radius**2)
+E = qubic.get_response(SOURCE_THETA, SOURCE_PHI, SOURCE_POWER,
+                       x=fp_x, y=fp_y, area=fp_spacing**2)
 I = np.abs(E)**2
 D = integ(I)
 
@@ -120,10 +70,10 @@ D = integ(I)
 mp.figure()
 mp.imshow(np.log10(I), interpolation='nearest', origin='lower')
 mp.autoscale(False)
-qubic.detector.plot(transform=detector_plane.topixel)
+qubic.detector.plot(transform=focal_plane.topixel)
 mp.figure()
-mp.imshow(D, interpolation='nearest')
+mp.imshow(np.log(D), interpolation='nearest')
 mp.gca().format_coord = lambda x, y: 'x={} y={} z={}'.format(x, y, D[x, y])
 mp.show()
-print('Given {} horns, we get {} W in the detector plane and {} W in the detec'
-      'tors.'.format(nhorn_open, np.sum(I), np.sum(D)))
+print('From an input of 1 W, we get {} W on the detector plane and {} W in the'
+      ' detectors.'.format(np.sum(I), np.sum(D)))

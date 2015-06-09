@@ -126,6 +126,7 @@ class SimpleInstrument(Instrument):
         sb = SyntheticBeam()
         sb.dtype = np.dtype(dtype)
         sb.peak = BeamGaussian(np.radians(0.39268176))
+        sb.peak.nu = 150e9
         self.synthbeam = sb
 
     def __str__(self):
@@ -169,7 +170,8 @@ class SimpleInstrument(Instrument):
 
         """
         if fwhm is None:
-            fwhm = self.synthbeam.peak.fwhm
+            fwhm = self.synthbeam.peak.fwhm * (self.synthbeam.peak.nu /
+                                               self.filter.nu)
         return HealpixConvolutionGaussianOperator(fwhm=fwhm, **keywords)
 
     def get_detector_integration_operator(self):

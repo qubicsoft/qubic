@@ -35,7 +35,7 @@ class SimpleInstrument(Instrument):
     """
     def __init__(self, calibration=None, detector_fknee=0,
                  detector_fslope=1, detector_ncorr=10, detector_nep=4.7e-17,
-                 detector_ngrids=2, detector_tau=0.01, filter_nu=150e9,
+                 detector_ngrids=1, detector_tau=0.01, filter_nu=150e9,
                  filter_relative_bandwidth=0.25, polarizer=True,
                  synthbeam_dtype=np.float32):
         """
@@ -368,7 +368,7 @@ class QubicInstrument(SimpleInstrument):
 
     """
     def __init__(self, calibration=None, detector_fknee=0, detector_fslope=1,
-                 detector_ncorr=10, detector_nep=4.7e-17, detector_ngrids=2,
+                 detector_ncorr=10, detector_nep=4.7e-17, detector_ngrids=1,
                  detector_tau=0.01, filter_nu=150e9,
                  filter_relative_bandwidth=0.25, polarizer=True,
                  primary_beam=None, secondary_beam=None,

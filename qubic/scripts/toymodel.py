@@ -18,7 +18,7 @@ SOURCE_PHI = np.radians(0)   # [rad]
 
 NPOINT_FOCAL_PLANE = 512**2  # number of detector plane sampling points
 
-qubic = QubicInstrument(detector_ngrids=1, filter_nu=NU)
+qubic = QubicInstrument(filter_nu=NU)
 
 # example for a baseline selection:
 #qubic.horn.open[:] = False

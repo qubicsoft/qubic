@@ -43,7 +43,7 @@ caltree = QubicCalibration(detarray='CalQubic_DetArray_v1.fits')
 selection = np.zeros((32, 32), dtype=bool)
 selection[30:, 30:] = True
 qubic = QubicInstrument(calibration=caltree, filter_nu=160e9,
-                        detector_ngrids=1, synthbeam_fraction=0.99)
+                        synthbeam_fraction=0.99)
 qubic = qubic[qubic.pack(selection)]
 
 

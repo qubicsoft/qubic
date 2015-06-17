@@ -7,7 +7,7 @@ from qubic import (
     create_random_pointings, QubicAcquisition, QubicInstrument, QubicSampling,
     QubicScene)
 
-q = QubicInstrument(detector_ngrids=1)
+q = QubicInstrument()
 s = create_random_pointings([0, 90], 5, 10.)
 
 
@@ -38,12 +38,12 @@ def test_primary_beam():
 def test_polarizer():
     sampling = QubicSampling(0, 0, 0)
     scene = QubicScene(150, kind='I')
-    instruments = [QubicInstrument(polarizer=False),
+    instruments = [QubicInstrument(polarizer=False, detector_ngrids=2),
+                   QubicInstrument(polarizer=True, detector_ngrids=2),
+                   QubicInstrument(polarizer=False),
                    QubicInstrument(polarizer=True),
-                   QubicInstrument(polarizer=False, detector_ngrids=1),
-                   QubicInstrument(polarizer=True, detector_ngrids=1),
-                   QubicInstrument(polarizer=False)[:992],
-                   QubicInstrument(polarizer=True)[:992]]
+                   QubicInstrument(polarizer=False, detector_ngrids=2)[:992],
+                   QubicInstrument(polarizer=True, detector_ngrids=2)[:992]]
 
     n = len(instruments[0])
     expecteds = [np.r_[np.ones(n // 2), np.zeros(n // 2)],

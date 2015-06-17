@@ -19,7 +19,7 @@ def test_ga():
     s = QubicScene(256, kind='I')
     t = FitsArray(os.path.join(DATAPATH, 'tod_ndet16_np100_ga.fits'))
     c = QubicCalibration(os.path.join(DATAPATH, 'calfiles'))
-    i = QubicInstrument(c, detector_ngrids=1, synthbeam_fraction=0.99)
+    i = QubicInstrument(c, synthbeam_fraction=0.99)
     i.synthbeam.peak = BeamGaussian(np.radians(0.64883707))
     acq = QubicAcquisition(i, o, s)
     C = acq.get_convolution_peak_operator()

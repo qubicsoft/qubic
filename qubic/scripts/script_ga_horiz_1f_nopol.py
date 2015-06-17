@@ -9,8 +9,7 @@ import numpy as np
 import qubic
 
 # read the input map
-input_map = qubic.io.read_map(qubic.data.PATH + 'syn256_pol.fits',
-                              field='I_STOKES')
+x0 = qubic.io.read_map(qubic.data.PATH + 'syn256_pol.fits', field='I_STOKES')
 
 # instrument model
 sigma = 10
@@ -42,7 +41,7 @@ P = acq.get_projection_operator()
 H = P * C
 
 # produce the Time-Ordered data
-tod = H(input_map)
+y = H(x0)
 
 # noise
 psd = _gaussian_psd_1f(len(acq.sampling), sigma=sigma, fknee=fknee,
@@ -53,20 +52,18 @@ noise = acq.get_noise()
 # map-making
 coverage = P.pT1()
 mask = coverage > 10
-P.restrict(mask)
+P = P.restrict(mask, inplace=True)
 unpack = UnpackOperator(mask)
 
 # map without covariance matrix
-solution1 = pcg(P.T * P, P.T(tod + noise),
+solution1 = pcg(P.T * P, P.T(y + noise),
                 M=DiagonalOperator(1/coverage[mask]), disp=True)
-output_map1 = unpack(solution1['x'])
+x1 = unpack(solution1['x'])
 
 # map with covariance matrix
-solution2 = pcg(P.T * invntt * P, (P.T * invntt)(tod + noise),
+solution2 = pcg(P.T * invntt * P, (P.T * invntt)(y + noise),
                 M=DiagonalOperator(1/coverage[mask]), disp=True)
-output_map2 = unpack(solution2['x'])
-
-center = equ2gal(racenter, deccenter)
+x2 = unpack(solution2['x'])
 
 
 def display(x, title):
@@ -75,10 +72,11 @@ def display(x, title):
     hp.gnomview(x, rot=center, reso=5, xsize=600, min=-200, max=200,
                 title=title)
 
-display(C(input_map), 'Original convolved map')
+center = equ2gal(racenter, deccenter)
+display(C(x0), 'Original convolved map')
 #hp.projplot(np.radians(pointings[..., 0]), np.radians(pointings[..., 1]))
-display(output_map1, 'Reconstructed map no invntt')
-display(output_map2, 'Reconstructed map with invntt')
+display(x1, 'Reconstructed map no invntt')
+display(x2, 'Reconstructed map with invntt')
 display(coverage, 'Coverage')
 
 mp.show()

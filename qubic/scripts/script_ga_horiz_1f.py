@@ -19,7 +19,7 @@ angspeed_psi = 0.1  # deg/sec
 maxpsi = 45.        # deg
 nsweeps_el = 300
 duration = 24       # hours
-ts = 20             # seconds
+ts = 60             # seconds
 
 # get the sampling model
 np.random.seed(0)
@@ -37,8 +37,8 @@ acquisition = QubicAcquisition(150, sampling,
                                detector_fslope=1)
 
 # simulate the timeline
-tod, x0_convolved = map2tod(acquisition, x0, convolution=True)
-tod_noisy = tod + acquisition.get_noise()
+tod, x0_convolved = acquisition.get_observation(
+    x0, convolution=True, noiseless=True)
 
 # reconstruct using two methods
 map_all, cov_all = tod2map_all(acquisition, tod, tol=1e-2)

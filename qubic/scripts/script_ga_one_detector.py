@@ -1,8 +1,7 @@
 from __future__ import division
-from pyoperators import DiagonalOperator, PackOperator, pcg
-from pyoperators import rule_manager
 from qubic import (
-    QubicAcquisition, QubicInstrument, create_sweeping_pointings, equ2gal)
+    create_sweeping_pointings, equ2gal, QubicAcquisition, QubicInstrument,
+    tod2map_all)
 import healpy as hp
 import matplotlib.pyplot as mp
 import numpy as np
@@ -33,30 +32,14 @@ instrument = QubicInstrument()[idetector]
 # get the acquisition model from the instrument and sampling models
 acq = QubicAcquisition(instrument, sampling, nside=nside)
 
-# get it as operators
-convolution = acq.get_convolution_peak_operator()
-projection = acq.get_projection_operator()
-hwp = acq.get_hwp_operator()
-polarizer = acq.get_polarizer_operator()
-
-# restrict the projection to the observed sky pixels
-coverage = projection.pT1()
-mask = coverage > 0
-projection.restrict(mask)
-pack = PackOperator(mask, broadcast='rightward')
-
-with rule_manager(inplace=True):
-    H = polarizer * (hwp * projection)
-
 # get noiseless timeline
 x0 = qubic.io.read_map(qubic.data.PATH + 'syn256_pol.fits')
-x0_convolved = convolution(x0)
-y = H(pack(x0_convolved))
+y, x0_convolved = acq.get_observation(x0, convolution=True, noiseless=True)
 
 # inversion through Preconditioned Conjugate Gradient
-preconditioner = DiagonalOperator(1/coverage[mask], broadcast='rightward')
-solution = pcg(H.T * H, H.T(y), M=preconditioner, disp=True, tol=1e-3)
-output_map = pack.T(solution['x'])
+x, coverage = tod2map_all(acq, y, disp=True, tol=1e-3,
+                          coverage_threshold=0)
+mask = coverage > 0
 
 
 # some display
@@ -72,7 +55,7 @@ center = equ2gal(racenter, deccenter)
 mp.figure(1)
 display(x0_convolved, 'Original map')
 mp.figure(2)
-display(output_map, 'Reconstructed map')
+display(x, 'Reconstructed map')
 mp.figure(3)
-display(output_map-x0_convolved, 'Difference map')
+display(x-x0_convolved, 'Difference map')
 mp.show()

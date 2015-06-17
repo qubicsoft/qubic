@@ -26,7 +26,7 @@ acq = QubicAcquisition(150, sampling, kind='I')
 hit = acq.get_hitmap()
 
 # Produce the Time-Ordered data
-tod = map2tod(acq, input_map)
+tod = acq.get_observation(input_map)
 output_map, coverage = tod2map_all(acq, tod)
 
 print acq.comm.rank, output_map[coverage > 0][:5]

@@ -30,12 +30,12 @@ acq_simple = SimpleAcquisition(150, sampling, kind='I')
 hit = acq.get_hitmap()
 C = acq.get_convolution_peak_operator()
 
-tod = map2tod(acq, input_map)
+tod = acq.get_observation(input_map)
 output_map, coverage = tod2map_all(acq, tod)
 output_map[coverage == 0] = np.nan
 coverage[coverage == 0] = np.nan
 
-tod_simple = map2tod(acq_simple, input_map)
+tod_simple = acq_simple.get_observation(input_map)
 output_map_simple, coverage_simple = tod2map_all(acq_simple, tod_simple)
 output_map_simple[coverage_simple == 0] = np.nan
 coverage_simple[coverage_simple == 0] = np.nan

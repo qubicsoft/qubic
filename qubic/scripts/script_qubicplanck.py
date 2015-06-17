@@ -46,9 +46,8 @@ b = H.T * invntt * y
 
 solution_qubic = pcg(A, b, disp=True, maxiter=maxiter, tol=tol)
 
+
 # some display
-
-
 def display(input, msg, iplot=1):
     out = []
     for i, (kind, lim) in enumerate(zip('IQU', [50, 5, 5])):

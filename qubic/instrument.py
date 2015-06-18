@@ -105,12 +105,13 @@ class SimpleInstrument(Instrument):
         layout.ngrids = ngrids
         return layout
 
-    def _init_filter(self, nu, bandwidth):
+    def _init_filter(self, nu, relative_bandwidth):
         class Filter(object):
-            def __init__(self, nu, bandwidth):
+            def __init__(self, nu, relative_bandwidth):
                 self.nu = float(nu)
-                self.relative_bandwidth = float(bandwidth)
-        self.filter = Filter(nu, bandwidth)
+                self.relative_bandwidth = float(relative_bandwidth)
+                self.bandwidth = self.nu * self.relative_bandwidth
+        self.filter = Filter(nu, relative_bandwidth)
 
     def _init_optics(self, polarizer):
         class Optics(object):
@@ -207,10 +208,9 @@ class SimpleInstrument(Instrument):
         Convert units from W/Hz to W.
 
         """
-        if self.filter.relative_bandwidth == 0:
+        if self.filter.bandwidth == 0:
             return IdentityOperator()
-        return HomothetyOperator(self.filter.relative_bandwidth *
-                                 self.filter.nu)
+        return HomothetyOperator(self.filter.bandwidth)
 
     def get_hwp_operator(self, sampling, scene):
         """

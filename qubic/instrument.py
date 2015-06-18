@@ -513,22 +513,23 @@ class QubicInstrument(SimpleInstrument):
         phi = ne.evaluate('arctan2(ny, nx)', local_dict=local_dict)
         return theta, phi
 
-    def get_response_A(self, x=None, y=None, area=1):
+    @staticmethod
+    def _get_response_A(position, area, nu, horn, secondary_beam):
         """
         Phase and transmission from the switches to the focal plane.
 
         Parameters
         ----------
-        x : array-like, optional
-            The X-coordinate in the focal plane where the response is computed,
-            in meters. If not provided, the detector central positions are
-            assumed.
-        y : array-like, optional
-            The Y-coordinate in the focal plane where the response is computed,
-            in meters. If not provided, the detector central positions are
-            assumed.
-        area : array-like, optional
+        position : array-like of shape (..., 3)
+            The 3D coordinates where the response is computed [m].
+        area : array-like
             The integration area, in m^2.
+        nu : float
+            The frequency for which the response is computed [Hz].
+        horn : PackedArray
+            The horn layout.
+        secondary_beam : Beam
+            The secondary beam.
 
         Returns
         -------
@@ -536,31 +537,21 @@ class QubicInstrument(SimpleInstrument):
             The phase and transmission from the horns to the focal plane.
 
         """
-        f = self.optics.focal_length
-        if x is None and y is None:
-            uvec = self.detector.center
-            area = self.detector.area
-        elif x is not None and y is not None:
-            x, y, area = [np.array(_, dtype=float, copy=False)
-                          for _ in x, y, area]
-            x, y, area = np.broadcast_arrays(x, y, area)
-            uvec = np.array([x, y, np.full_like(x, -f)])
-            # roll first axis to last
-            uvec = np.rollaxis(uvec[..., None], 0, -1)[..., 0]
-        else:
-            raise ValueError('Input x or y not specified.')
-        uvec /= np.sqrt(np.sum(uvec**2, axis=-1))[..., None]
+        uvec = position / np.sqrt(np.sum(position**2, axis=-1))[..., None]
         thetaphi = Cartesian2SphericalOperator('zenith,azimuth')(uvec)
-        sr = -area / f**2 * np.cos(thetaphi[..., 0])**3
-        tr = np.sqrt(self.secondary_beam(thetaphi[..., 0], thetaphi[..., 1]) *
-                     sr / self.secondary_beam.solid_angle)[..., None]
-        const = 2j * pi * self.filter.nu / c
-        product = np.dot(uvec, self.horn[self.horn.open].center.T)
+        sr = -area / position[..., 2]**2 * np.cos(thetaphi[..., 0])**3
+        tr = np.sqrt(secondary_beam(thetaphi[..., 0], thetaphi[..., 1]) *
+                     sr / secondary_beam.solid_angle)[..., None]
+        const = 2j * pi * nu / c
+        product = np.dot(uvec, horn[horn.open].center.T)
         return ne.evaluate('tr * exp(const * product)')
 
-    def get_response_B(self, theta, phi, power=1):
+    @staticmethod
+    def _get_response_B(theta, phi, spectral_irradiance, nu, horn,
+                        primary_beam):
         """
-        Phase and transmission from the source to the switches.
+        Return the complex electric amplitude and phase [W^(1/2)] from sources
+        of specified spectral irradiance [W/m^2/Hz] going through each horn.
 
         Parameters
         ----------
@@ -568,30 +559,39 @@ class QubicInstrument(SimpleInstrument):
             The source zenith angle [rad].
         phi : array-like
             The source azimuthal angle [rad].
-        power : array-like
-            The source power [W/m^2].
+        spectral_irradiance : array-like
+            The source spectral power per unit surface [W/m^2/Hz].
+        nu : float
+            The frequency for which the response is computed [Hz].
+        horn : PackedArray
+            The horn layout.
+        primary_beam : Beam
+            The primary beam.
 
         Returns
         -------
         out : complex array of shape (#horns, #sources)
-            The phase and transmission from the source to the horns.
+            The phase and amplitudes from the sources to the horns.
 
         """
-        shape = np.broadcast(theta, phi, power).shape
-        theta, phi, power = [np.ravel(_) for _ in theta, phi, power]
+        shape = np.broadcast(theta, phi, spectral_irradiance).shape
+        theta, phi, spectral_irradiance = [np.ravel(_) for _ in theta, phi,
+                                           spectral_irradiance]
         uvec = hp.ang2vec(theta, phi)
-        source_E = np.sqrt(power * self.primary_beam(theta, phi) *
-                           np.pi * self.horn.radius**2)
-        const = 2j * pi * self.filter.nu / c
-        product = np.dot(self.horn[self.horn.open].center, uvec.T)
+        source_E = np.sqrt(spectral_irradiance *
+                           primary_beam(theta, phi) * np.pi * horn.radius**2)
+        const = 2j * pi * nu / c
+        product = np.dot(horn[horn.open].center, uvec.T)
         out = ne.evaluate('source_E * exp(const * product)')
         return out.reshape((-1,) + shape)
 
-    def get_response(self, theta, phi, power=1, x=None, y=None,
-                     area=1):
+    @staticmethod
+    def _get_response(theta, phi, spectral_irradiance, position, area, nu,
+                      horn, primary_beam, secondary_beam):
         """
-        Return the electric field created by sources at specified angles
-        on specified locations of the focal planes.
+        Return the monochromatic complex field [(W/Hz)^(1/2)] related to
+        the electric field over a specified area of the focal plane created
+        by sources of specified spectral irradiance [W/m^2/Hz]
 
         Parameters
         ----------
@@ -599,84 +599,132 @@ class QubicInstrument(SimpleInstrument):
             The source zenith angle [rad].
         phi : array-like
             The source azimuthal angle [rad].
-        power : array-like
-            The source power [W].
-        x : array-like, optional
-            The X-coordinate in the focal plane where the response is computed,
-            in meters. If not provided, the detector central positions are
-            assumed.
-        y : array-like, optional
-            The Y-coordinate in the focal plane where the response is computed,
-            in meters. If not provided, the detector central positions are
-            assumed.
-        area : array-like, optional
+        spectral_irradiance : array-like
+            The source spectral_irradiance [W/m^2/Hz].
+        position : array-like of shape (..., 3)
+            The 3D coordinates where the response is computed, in meters.
+        area : array-like
             The integration area, in m^2.
+        nu : float
+            The frequency for which the response is computed [Hz].
+        horn : PackedArray
+            The horn layout.
+        primary_beam : Beam
+            The primary beam.
+        secondary_beam : Beam
+            The secondary beam.
 
         Returns
         -------
         out : array of shape (#positions, #sources)
-            The electric field on the specified focal plane positions.
+            The complex field related to the electric field over a speficied
+            area of the focal plane, in units of (W/Hz)^(1/2).
 
         """
-        A = self.get_response_A(x, y, area)
-        B = self.get_response_B(theta, phi, power)
+        A = QubicInstrument._get_response_A(
+            position, area, nu, horn, secondary_beam)
+        B = QubicInstrument._get_response_B(
+            theta, phi, spectral_irradiance, nu, horn, primary_beam)
         E = np.dot(A, B.reshape((B.shape[0], -1))).reshape(
             A.shape[:-1] + B.shape[1:])
         return E
 
-    def get_synthbeam_healpix_from_position(self, scene, x, y, theta_max=45):
-
+    @staticmethod
+    def _get_synthbeam(scene, position, area, nu, bandwidth, horn,
+                       primary_beam, secondary_beam,
+                       synthbeam_dtype=np.float32, theta_max=45):
         """
         Return the monochromatic synthetic beam for a specified location
-        on the focal plane.
-
-        Example
-        -------
-        >>> scene = QubicScene(1024)
-        >>> inst = QubicInstrument()
-        >>> xpos = 0
-        >>> ypos = 0
-        >>> sb = inst.get_synthbeam_healpix_from_position(scene, xpos, ypos)
-
-        The power per unit surface collected on the point (xpos, ypos) of
-        the focal plane, given a sky in W/m² is:
-        >>> sky = scene.ones()    # [W/m²]
-        >>> P = np.sum(sky * sb)  # [W/m²]
+        on the focal plane, multiplied by a given area and bandwidth.
 
         Parameters
         ----------
         scene : QubicScene
             The scene.
-        x : array-like, optional
+        x : array-like
             The X-coordinate in the focal plane where the response is computed,
             in meters. If not provided, the detector central positions are
             assumed.
-        y : array-like, optional
+        y : array-like
             The Y-coordinate in the focal plane where the response is computed,
             in meters. If not provided, the detector central positions are
             assumed.
+        area : array-like
+            The integration area, in m^2.
+        nu : float
+            The frequency for which the response is computed [Hz].
+        bandwidth : float
+            The filter bandwidth [Hz].
+        horn : PackedArray
+            The horn layout.
+        primary_beam : Beam
+            The primary beam.
+        secondary_beam : Beam
+            The secondary beam.
+        synthbeam_dtype : dtype, optional
+            The data type for the synthetic beams (default: float32).
+            It is the dtype used to store the values of the pointing matrix.
         theta_max : float, optional
             The maximum zenithal angle above which the synthetic beam is
-            assumed to be zero, in radians.
+            assumed to be zero, in degrees.
 
         """
         MAX_MEMORY_B = 1e9
         theta, phi = hp.pix2ang(scene.nside, scene.index)
         index = np.where(theta <= np.radians(theta_max))[0]
-        nhorn = int(np.sum(self.horn.open))
+        nhorn = int(np.sum(horn.open))
         npix = len(index)
         nbytes_B = npix * nhorn * 24
         ngroup = np.ceil(nbytes_B / MAX_MEMORY_B)
-        if x is None and y is None:
-            shape = ()
-        else:
-            shape = np.broadcast(x, y).shape
-        out = np.zeros(shape + (len(scene),), dtype=self.synthbeam.dtype)
+        out = np.zeros(position.shape[:-1] + (len(scene),),
+                       dtype=synthbeam_dtype)
         for s in split(npix, ngroup):
             index_ = index[s]
-            sb = self.get_response(theta[index_], phi[index_], x=x, y=y)
-            out[..., index_] = abs2(sb, dtype=self.synthbeam.dtype)
+            sb = QubicInstrument._get_response(
+                theta[index_], phi[index_], bandwidth, position, area, nu,
+                horn, primary_beam, secondary_beam)
+            out[..., index_] = abs2(sb, dtype=synthbeam_dtype)
         return out
+
+    def get_synthbeam(self, scene, idet=None, theta_max=45):
+        """
+        Return the detector synthetic beams, computed from the superposition
+        of the electromagnetic fields.
+
+        The synthetic beam B_d = (B_d,i) of a given detector d is such that
+        the power I_d in [W] collected by this detector observing a sky S=(S_i)
+        in [W/m^2/Hz] is:
+            I_d = (S | B_d) = sum_i S_i * B_d,i.
+
+        Example
+        -------
+        >>> scene = QubicScene(1024)
+        >>> inst = QubicInstrument()
+        >>> sb = inst.get_synthbeam(scene, 0)
+
+        The power collected by the bolometers in W, given a sky in W/m²/Hz is:
+        >>> sb = inst.get_synthbeam(scene)
+        >>> sky = scene.ones()   # [W/m²/Hz]
+        >>> P = np.dot(sb, sky)  # [W]
+
+        Parameters
+        ----------
+        scene : QubicScene
+            The scene.
+        idet : int, optional
+            The detector number. By default, the synthetic beam is computed for
+            all detectors.
+        theta_max : float, optional
+            The maximum zenithal angle above which the synthetic beam is
+            assumed to be zero, in degrees.
+
+        """
+        if idet is not None:
+            return self[idet].get_synthbeam(scene, theta_max=theta_max)[0]
+        return QubicInstrument._get_synthbeam(
+            scene, self.detector.center, self.detector.area, self.filter.nu,
+            self.filter.bandwidth, self.horn, self.primary_beam,
+            self.secondary_beam, self.synthbeam.dtype, theta_max)
 
 
 def _argsort_reverse(a, axis=-1):

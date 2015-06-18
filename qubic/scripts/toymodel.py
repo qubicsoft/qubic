@@ -38,6 +38,7 @@ FOCAL_PLANE_LIMITS = (-0.2, 0.2) # [m]
 nfp_x = int(np.sqrt(NPOINT_FOCAL_PLANE))
 a = np.r_[FOCAL_PLANE_LIMITS[0]:FOCAL_PLANE_LIMITS[1]:nfp_x*1j]
 fp_x, fp_y = np.meshgrid(a, a)
+fp = np.dstack([fp_x, fp_y, np.full_like(fp_x, -qubic.optics.focal_length)])
 fp_spacing = (FOCAL_PLANE_LIMITS[1] - FOCAL_PLANE_LIMITS[0]) / nfp_x
 
 
@@ -58,8 +59,9 @@ integ = MaskOperator(qubic.detector.all.removed) * \
 
 # we make sure that exacty 1 W goes through the open horns
 SOURCE_POWER = 1 / (np.sum(qubic.horn.open) * np.pi * qubic.horn.radius**2)
-E = qubic.get_response(SOURCE_THETA, SOURCE_PHI, SOURCE_POWER,
-                       x=fp_x, y=fp_y, area=fp_spacing**2)
+E = qubic._get_response(SOURCE_THETA, SOURCE_PHI, SOURCE_POWER,
+                        fp, fp_spacing**2, qubic.filter.nu, qubic.horn,
+                        qubic.primary_beam, qubic.secondary_beam)
 I = np.abs(E)**2
 D = integ(I)
 

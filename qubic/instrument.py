@@ -174,16 +174,27 @@ class SimpleInstrument(Instrument):
 
     def get_detector_integration_operator(self):
         """
-        Integrate flux density in detector solid angles.
-        Convert W / sr into W.
+        Integrate flux density in detector solid angles and take into account
+        the secondary beam transmission.
 
         """
-        area = self.detector.area
-        theta = self.detector.theta
-        sr_det = -area / self.optics.focal_length**2 * np.cos(theta)**3
-        sr_beam = self.secondary_beam.solid_angle
-        # the secondary beam transmission is handled in get_projection_operator
-        return DiagonalOperator(sr_det / sr_beam, broadcast='rightward')
+        return SimpleInstrument._get_detector_integration_operator(
+            self.detector.center, self.detector.area, self.secondary_beam)
+
+    @staticmethod
+    def _get_detector_integration_operator(position, area, secondary_beam):
+        """
+        Integrate flux density in detector solid angles and take into account
+        the secondary beam transmission.
+
+        """
+        theta = np.arctan2(
+            np.sqrt(np.sum(position[..., :2]**2, axis=-1)), position[..., 2])
+        phi = np.arctan2(position[..., 1], position[..., 0])
+        sr_det = -area / position[..., 2]**2 * np.cos(theta)**3
+        sr_beam = secondary_beam.solid_angle
+        sec = secondary_beam(theta, phi)
+        return DiagonalOperator(sr_det / sr_beam * sec, broadcast='rightward')
 
     def get_detector_response_operator(self, sampling, tau=None):
         """
@@ -276,20 +287,25 @@ class SimpleInstrument(Instrument):
             If true, display information about the memory allocation.
 
         """
+        horn = getattr(self, 'horn', None)
+        primary_beam = getattr(self, 'primary_beam', None)
         rotation = sampling.cartesian_galactic2instrument
-        return self._get_projection_operator_from_rotation(rotation, scene,
-                                                           verbose=verbose)
+        return QubicInstrument._get_projection_operator(
+            rotation, scene, self.filter.nu, self.detector.center,
+            self.synthbeam, horn, primary_beam, verbose=verbose)
 
-    def _get_projection_operator_from_rotation(self, rotation, scene,
-                                               verbose=True):
-        dtype = self.synthbeam.dtype
-        ndetectors = len(self)
+    @staticmethod
+    def _get_projection_operator(
+            rotation, scene, nu, position, synthbeam, horn, primary_beam,
+            verbose=True):
+        ndetectors = position.shape[0]
         ntimes = rotation.data.shape[0]
         nside = scene.nside
 
-        theta, phi, vals = self._peak_angles(scene)
-        ncolmax = theta.shape[-1]
-        thetaphi = _pack_vector(theta, phi)  # (ndetectors, ncolmax, 2)
+        thetas, phis, vals = QubicInstrument._peak_angles(
+            scene, nu, position, synthbeam, horn, primary_beam)
+        ncolmax = thetas.shape[-1]
+        thetaphi = _pack_vector(thetas, phis)  # (ndetectors, ncolmax, 2)
         direction = Spherical2CartesianOperator('zenith,azimuth')(thetaphi)
         e_nf = direction[:, None, :, :]
         if nside > 8192:
@@ -303,8 +319,8 @@ class SimpleInstrument(Instrument):
         ndims = len(scene.kind)
         nscene = len(scene)
         nscenetot = product(scene.shape[:scene.ndim])
-        s = cls((ndetectors * ntimes * ndims, nscene * ndims),
-                ncolmax=ncolmax, dtype=dtype, dtype_index=dtype_index,
+        s = cls((ndetectors * ntimes * ndims, nscene * ndims), ncolmax=ncolmax,
+                dtype=synthbeam.dtype, dtype_index=dtype_index,
                 verbose=verbose)
 
         index = s.data.index.reshape((ndetectors, ntimes, ncolmax))
@@ -331,12 +347,12 @@ class SimpleInstrument(Instrument):
             shapeout = (ndetectors, ntimes)
         else:
             if str(dtype_index) not in ('int32', 'int64') or \
-               str(dtype) not in ('float32', 'float64'):
+               str(synthbeam.dtype) not in ('float32', 'float64'):
                 raise TypeError(
                     'The projection matrix cannot be created with types: {0} a'
-                    'nd {1}.'.format(dtype_index, dtype))
+                    'nd {1}.'.format(dtype_index, synthbeam.dtype))
             func = 'matrix_rot{0}d_i{1}_r{2}'.format(
-                ndims, dtype_index.itemsize, dtype.itemsize)
+                ndims, dtype_index.itemsize, synthbeam.dtype.itemsize)
             getattr(flib.polarization, func)(
                 rotation.data.T, direction.T, s.data.ravel().view(np.int8),
                 vals.T)
@@ -347,14 +363,16 @@ class SimpleInstrument(Instrument):
                 shapeout = (ndetectors, ntimes, 3)
         return ProjectionOperator(s, shapeout=shapeout)
 
-    def _peak_angles(self, scene):
+    @staticmethod
+    def _peak_angles(self, scene, nu, position, synthbeam, *args):
         """
         Return the spherical coordinates (theta, phi) of the beam peaks,
         in radians.
 
         """
-        theta = -self.detector.theta[:, None]
-        phi = self.detector.phi[:, None] + np.pi
+        theta = np.arctan2(
+            np.sqrt(-np.sum(position[..., :2]**2, axis=-1)), -position[..., 2])
+        phi = np.arctan2(-position[..., 1], -position[..., 0])
         val = np.ones_like(theta)
         return theta, phi, val
 
@@ -448,10 +466,16 @@ class QubicInstrument(SimpleInstrument):
     get_aperture_integration_operator.__doc__ = \
         SimpleInstrument.get_aperture_integration_operator.__doc__
 
-    def _peak_angles(self, scene):
-        fraction = self.synthbeam.fraction
-        theta, phi = self._peak_angles_kmax(scene, self.synthbeam.kmax)
-        val = np.array(self.primary_beam(theta, phi), dtype=float, copy=False)
+    @staticmethod
+    def _peak_angles(scene, nu, position, synthbeam, horn, primary_beam):
+        """
+        Compute the angles and intensity of the syntheam beam peaks which
+        accounts for a specified energy fraction.
+
+        """
+        theta, phi = QubicInstrument._peak_angles_kmax(
+            synthbeam.kmax, horn.spacing, nu, position)
+        val = np.array(primary_beam(theta, phi), dtype=float, copy=False)
         val[~np.isfinite(val)] = 0
         norm = np.sum(val, axis=-1)[:, None]
         index = _argsort_reverse(val)
@@ -459,7 +483,7 @@ class QubicInstrument(SimpleInstrument):
         phi = phi[index]
         val = val[index]
         cumval = np.cumsum(val, axis=-1)
-        imaxs = np.argmax(cumval >= fraction * norm, axis=-1) + 1
+        imaxs = np.argmax(cumval >= synthbeam.fraction * norm, axis=-1) + 1
         imax = max(imaxs)
 
         # slice initial arrays to discard the non-significant peaks
@@ -474,16 +498,14 @@ class QubicInstrument(SimpleInstrument):
             theta[idet, imax_:] = np.pi / 2 #XXX 0 leads to NaN
             phi[idet, imax_:] = 0
         solid_angle = synthbeam.peak150.solid_angle * (150e9 / nu)**2
-        val *= solid_angle / scene.solid_angle * len(horn) * \
-               self.secondary_beam(self.detector.theta,
-                                   self.detector.phi)[:, None]
+        val *= solid_angle / scene.solid_angle * len(horn)
         return theta, phi, val
 
-    def _peak_angles_kmax(self, scene, kmax):
+    @staticmethod
+    def _peak_angles_kmax(kmax, horn_spacing, nu, position):
         """
         Return the spherical coordinates (theta, phi) of the beam peaks,
-        in radians.
-
+        in radians up to a maximum diffraction order.
         Parameters
         ----------
         kmax : int, optional
@@ -491,19 +513,19 @@ class QubicInstrument(SimpleInstrument):
             For instance, a value of kmax=2 will model the synthetic beam by
             (2 * kmax + 1)**2 = 25 peaks and a value of kmax=0 will only sample
             the central peak.
+        horn_spacing : float
+            The spacing between horns, in meters.
+        nu : float
+            The frequency at which the interference peaks are computed.
+        position : array of shape (..., 3)
+            The focal plane positions for which the angles of the interference
+            peaks are computed.
         """
-        ndetector = len(self)
-        center = self.detector.center
-        lmbda = c / self.filter.nu
-        dx = self.horn.spacing
-        detvec = np.vstack([-center[..., 0],
-                            -center[..., 1],
-                            np.zeros(ndetector) + self.optics.focal_length]).T
-        detvec.T[...] /= np.sqrt(np.sum(detvec**2, axis=1))
-
+        lmbda = c / nu
+        position = -position / np.sqrt(np.sum(position**2, axis=-1))[..., None]
         kx, ky = np.mgrid[-kmax:kmax+1, -kmax:kmax+1]
-        nx = detvec[:, 0, np.newaxis] - lmbda * kx.ravel() / dx
-        ny = detvec[:, 1, np.newaxis] - lmbda * ky.ravel() / dx
+        nx = position[:, 0, None] - lmbda * kx.ravel() / horn_spacing
+        ny = position[:, 1, None] - lmbda * ky.ravel() / horn_spacing
         local_dict = {'nx': nx, 'ny': ny}
         theta = ne.evaluate('arcsin(sqrt(nx**2 + ny**2))',
                             local_dict=local_dict)

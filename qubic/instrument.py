@@ -131,8 +131,7 @@ class SimpleInstrument(Instrument):
             pass
         sb = SyntheticBeam()
         sb.dtype = np.dtype(dtype)
-        sb.peak = BeamGaussian(np.radians(0.39268176))
-        sb.peak.nu = 150e9
+        sb.peak150 = BeamGaussian(np.radians(0.39268176))
         self.synthbeam = sb
 
     def __str__(self):
@@ -163,21 +162,14 @@ class SimpleInstrument(Instrument):
         horn = self.calibration.get('hornarray')
         return HomothetyOperator(len(horn) * np.pi * horn.radius**2)
 
-    def get_convolution_peak_operator(self, fwhm=None, **keywords):
+    def get_convolution_peak_operator(self, **keywords):
         """
         Return an operator that convolves the Healpix sky by the gaussian
         kernel that, if used in conjonction with the peak sampling operator,
         best approximates the synthetic beam.
 
-        Parameters
-        ----------
-        fwhm : float, optional
-            The Full Width Half Maximum of the gaussian, in radians.
-
         """
-        if fwhm is None:
-            fwhm = self.synthbeam.peak.fwhm * (self.synthbeam.peak.nu /
-                                               self.filter.nu)
+        fwhm = self.synthbeam.peak150.fwhm * (150e9 / self.filter.nu)
         return HealpixConvolutionGaussianOperator(fwhm=fwhm, **keywords)
 
     def get_detector_integration_operator(self):
@@ -481,10 +473,10 @@ class QubicInstrument(SimpleInstrument):
             val[idet, imax_:] = 0
             theta[idet, imax_:] = np.pi / 2 #XXX 0 leads to NaN
             phi[idet, imax_:] = 0
-        pixel_solid_angle = 4 * np.pi / scene.shape[0]
-        val *= self.synthbeam.peak.solid_angle / pixel_solid_angle * \
-               len(self.horn) * self.secondary_beam(self.detector.theta,
-                                                    self.detector.phi)[:, None]
+        solid_angle = synthbeam.peak150.solid_angle * (150e9 / nu)**2
+        val *= solid_angle / scene.solid_angle * len(horn) * \
+               self.secondary_beam(self.detector.theta,
+                                   self.detector.phi)[:, None]
         return theta, phi, val
 
     def _peak_angles_kmax(self, scene, kmax):

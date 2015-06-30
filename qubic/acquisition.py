@@ -159,20 +159,14 @@ class SimpleAcquisition(Acquisition):
         """
         return self.instrument.get_aperture_integration_operator()
 
-    def get_convolution_peak_operator(self, fwhm=None, **keywords):
+    def get_convolution_peak_operator(self, **keywords):
         """
         Return an operator that convolves the Healpix sky by the gaussian
         kernel that, if used in conjonction with the peak sampling operator,
         best approximates the synthetic beam.
 
-        Parameters
-        ----------
-        fwhm : float, optional
-            The Full Width Half Maximum of the gaussian, in radians.
-
         """
-        return self.instrument.get_convolution_peak_operator(fwhm=fwhm,
-                                                             **keywords)
+        return self.instrument.get_convolution_peak_operator(**keywords)
 
     def get_detector_integration_operator(self):
         """

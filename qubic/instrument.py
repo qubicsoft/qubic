@@ -18,7 +18,7 @@ from pysimulators.interfaces.healpy import (
     Cartesian2HealpixOperator, HealpixConvolutionGaussianOperator)
 from pysimulators.sparse import (
     FSRMatrix, FSRRotation2dMatrix, FSRRotation3dMatrix)
-from scipy.constants import c, pi
+from scipy.constants import c
 from . import _flib as flib
 from .calibration import QubicCalibration
 from .utils import _compress_mask
@@ -90,16 +90,21 @@ class SimpleInstrument(Instrument):
 
         vertex = np.concatenate(
             [vertex, np.full_like(vertex[..., :1], -focal_length)], -1)
-        center = np.mean(vertex, axis=-2)
-        # assume all detectors have the same area
-        theta = np.pi - np.arctan2(
-            np.sqrt(np.sum(center[..., :2]**2, axis=-1)), focal_length)
-        phi = np.arctan2(center[..., 1], center[..., 0])
+
+        def theta(self):
+            return np.arctan2(
+                np.sqrt(np.sum(self.center[..., :2]**2, axis=-1)),
+                self.center[..., 2])
+
+        def phi(self):
+            return np.arctan2(self.center[..., 1], self.center[..., 0])
 
         layout = Layout(
             shape, vertex=vertex, selection=~removed, ordering=index,
             quadrant=quadrant, nep=nep, fknee=fknee, fslope=fslope,
             tau=tau, theta=theta, phi=phi)
+
+        # assume all detectors have the same area
         layout.area = surface_simple_polygon(layout.vertex[0, :, :2])
         layout.ncorr = ncorr
         layout.ngrids = ngrids
@@ -474,7 +479,7 @@ class QubicInstrument(SimpleInstrument):
         # and remove potential NaN in theta, phi
         for idet, imax_ in enumerate(imaxs):
             val[idet, imax_:] = 0
-            theta[idet, imax_:] = pi / 2 #XXX 0 leads to NaN
+            theta[idet, imax_:] = np.pi / 2 #XXX 0 leads to NaN
             phi[idet, imax_:] = 0
         pixel_solid_angle = 4 * np.pi / scene.shape[0]
         val *= self.synthbeam.peak.solid_angle / pixel_solid_angle * \
@@ -542,7 +547,7 @@ class QubicInstrument(SimpleInstrument):
         sr = -area / position[..., 2]**2 * np.cos(thetaphi[..., 0])**3
         tr = np.sqrt(secondary_beam(thetaphi[..., 0], thetaphi[..., 1]) *
                      sr / secondary_beam.solid_angle)[..., None]
-        const = 2j * pi * nu / c
+        const = 2j * np.pi * nu / c
         product = np.dot(uvec, horn[horn.open].center.T)
         return ne.evaluate('tr * exp(const * product)')
 
@@ -580,7 +585,7 @@ class QubicInstrument(SimpleInstrument):
         uvec = hp.ang2vec(theta, phi)
         source_E = np.sqrt(spectral_irradiance *
                            primary_beam(theta, phi) * np.pi * horn.radius**2)
-        const = 2j * pi * nu / c
+        const = 2j * np.pi * nu / c
         product = np.dot(horn[horn.open].center, uvec.T)
         out = ne.evaluate('source_E * exp(const * product)')
         return out.reshape((-1,) + shape)

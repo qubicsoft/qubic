@@ -37,7 +37,7 @@ class SimpleAcquisition(Acquisition):
     """
     def __init__(self, instrument, sampling, scene=None, block=None,
                  calibration=None, detector_fknee=0, detector_fslope=1,
-                 detector_ncorr=10, detector_ngrids=1, detector_nep=6e-17,
+                 detector_ncorr=10, detector_ngrids=1, detector_nep=4.7e-17,
                  detector_tau=0.01, filter_relative_bandwidth=0.25,
                  polarizer=True, synthbeam_dtype=np.float32, absolute=False,
                  kind='IQU', nside=256, max_nbytes=None,

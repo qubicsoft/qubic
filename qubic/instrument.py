@@ -37,7 +37,8 @@ class SimpleInstrument(Instrument):
                  detector_fslope=1, detector_ncorr=10, detector_nep=4.7e-17,
                  detector_ngrids=1, detector_tau=0.01, filter_nu=150e9,
                  filter_relative_bandwidth=0.25, polarizer=True,
-                 synthbeam_dtype=np.float32):
+                 synthbeam_dtype=np.float32,
+                 synthbeam_peak150_fwhm=np.radians(0.39268176)):
         """
         Parameters
         ----------
@@ -64,6 +65,8 @@ class SimpleInstrument(Instrument):
         synthbeam_dtype : dtype, optional
             The data type for the synthetic beams (default: float32).
             It is the dtype used to store the values of the pointing matrix.
+        synthbeam_peak150_fwhm : float
+            The peak's FWHM, in radians.
 
         """
         if calibration is None:
@@ -75,7 +78,7 @@ class SimpleInstrument(Instrument):
         Instrument.__init__(self, layout)
         self._init_filter(filter_nu, filter_relative_bandwidth)
         self._init_optics(polarizer)
-        self._init_synthbeam(synthbeam_dtype)
+        self._init_synthbeam(synthbeam_dtype, synthbeam_peak150_fwhm)
 
     def _get_detector_layout(self, ngrids, nep, fknee, fslope, ncorr, tau):
         shape, vertex, removed, index, quadrant = \
@@ -126,12 +129,12 @@ class SimpleInstrument(Instrument):
         optics.polarizer = bool(polarizer)
         self.optics = optics
 
-    def _init_synthbeam(self, dtype):
+    def _init_synthbeam(self, dtype, synthbeam_peak150_fwhm):
         class SyntheticBeam(object):
             pass
         sb = SyntheticBeam()
         sb.dtype = np.dtype(dtype)
-        sb.peak150 = BeamGaussian(np.radians(0.39268176))
+        sb.peak150 = BeamGaussian(synthbeam_peak150_fwhm)
         self.synthbeam = sb
 
     def __str__(self):
@@ -387,7 +390,8 @@ class QubicInstrument(SimpleInstrument):
                  detector_tau=0.01, filter_nu=150e9,
                  filter_relative_bandwidth=0.25, polarizer=True,
                  primary_beam=None, secondary_beam=None,
-                 synthbeam_dtype=np.float32, synthbeam_fraction=0.99):
+                 synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
+                 synthbeam_peak150_fwhm=np.radians(0.39268176)):
         """
         Parameters
         ----------
@@ -431,7 +435,8 @@ class QubicInstrument(SimpleInstrument):
             detector_nep=detector_nep, detector_ngrids=detector_ngrids,
             detector_tau=detector_tau, filter_nu=filter_nu,
             filter_relative_bandwidth=filter_relative_bandwidth,
-            polarizer=polarizer, synthbeam_dtype=synthbeam_dtype)
+            polarizer=polarizer, synthbeam_dtype=synthbeam_dtype,
+            synthbeam_peak150_fwhm=synthbeam_peak150_fwhm)
         self._init_beams(primary_beam, secondary_beam)
         self._init_horns()
         self.synthbeam.fraction = synthbeam_fraction

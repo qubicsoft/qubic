@@ -4,7 +4,6 @@ from __future__ import division
 import astropy.io.fits as pyfits
 import healpy as hp
 import numpy as np
-import operator
 import os
 import time
 import yaml
@@ -16,9 +15,9 @@ from pyoperators import (
     rule_manager)
 from pyoperators.utils import ifirst
 from pyoperators.utils.mpi import as_mpi
-from pysimulators import Acquisition, FitsArray, ProjectionOperator
+from pysimulators import Acquisition, FitsArray
 from pysimulators.interfaces.healpy import (
-    HealpixConvolutionGaussianOperator, SceneHealpixCMB)
+    HealpixConvolutionGaussianOperator)
 from .calibration import QubicCalibration
 from .data import PATH
 from .instrument import QubicInstrument, SimpleInstrument

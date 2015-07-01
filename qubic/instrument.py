@@ -8,7 +8,8 @@ from pyoperators import (
     Cartesian2SphericalOperator, DenseBlockDiagonalOperator, DiagonalOperator,
     IdentityOperator, HomothetyOperator, ReshapeOperator, Rotation2dOperator,
     Rotation3dOperator, Spherical2CartesianOperator)
-from pyoperators.utils import operation_assignment, pool_threading, product, split
+from pyoperators.utils import (
+    operation_assignment, pool_threading, product, split)
 from pyoperators.utils.ufuncs import abs2
 from pysimulators import (
     BeamGaussian, ConvolutionTruncatedExponentialOperator, Instrument, Layout,

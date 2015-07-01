@@ -6,7 +6,8 @@ for the synthetic beam.
 from __future__ import division
 from pyoperators import DiagonalOperator, pcg
 from qubic import (
-    create_random_pointings, gal2equ, QubicAcquisition, QubicInstrument, QubicScene)
+    create_random_pointings, gal2equ, QubicAcquisition, QubicInstrument,
+    QubicScene)
 import healpy as hp
 import matplotlib.pyplot as mp
 import numpy as np

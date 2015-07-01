@@ -1,6 +1,6 @@
 from __future__ import division
 from qubic import (
-    QubicAcquisition, create_sweeping_pointings, equ2gal, map2tod, tod2map_all,
+    QubicAcquisition, create_sweeping_pointings, equ2gal, tod2map_all,
     tod2map_each)
 import healpy as hp
 import matplotlib.pyplot as mp

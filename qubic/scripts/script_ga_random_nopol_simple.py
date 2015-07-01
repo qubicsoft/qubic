@@ -5,8 +5,8 @@ for the synthetic beam.
 """
 from __future__ import division
 from qubic import (
-    create_random_pointings, gal2equ, map2tod, QubicAcquisition,
-    SimpleAcquisition, tod2map_all)
+    create_random_pointings, gal2equ, QubicAcquisition, SimpleAcquisition,
+    tod2map_all)
 import healpy as hp
 import matplotlib.pyplot as mp
 import numpy as np

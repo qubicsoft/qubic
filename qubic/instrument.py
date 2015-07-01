@@ -392,6 +392,7 @@ class QubicInstrument(SimpleInstrument):
                  filter_relative_bandwidth=0.25, polarizer=True,
                  primary_beam=None, secondary_beam=None,
                  synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
+                 synthbeam_kmax=8,
                  synthbeam_peak150_fwhm=np.radians(0.39268176)):
         """
         Parameters
@@ -423,6 +424,11 @@ class QubicInstrument(SimpleInstrument):
         synthbeam_dtype : dtype, optional
             The data type for the synthetic beams (default: float32).
             It is the dtype used to store the values of the pointing matrix.
+        synthbeam_kmax : integer, optional
+            The diffraction order above which the peaks are ignored.
+            For instance, a value of kmax=2 will model the synthetic beam by
+            (2 * kmax + 1)**2 = 25 peaks and a value of kmax=0 will only sample
+            the central peak.
         synthbeam_fraction: float, optional
             The fraction of significant peaks retained for the computation
             of the synthetic beam.
@@ -441,7 +447,7 @@ class QubicInstrument(SimpleInstrument):
         self._init_beams(primary_beam, secondary_beam)
         self._init_horns()
         self.synthbeam.fraction = synthbeam_fraction
-        self.synthbeam.kmax = 8  # all peaks are considered
+        self.synthbeam.kmax = synthbeam_kmax
 
     def _init_beams(self, primary, secondary):
         if primary is None:

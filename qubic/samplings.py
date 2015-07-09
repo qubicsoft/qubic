@@ -71,10 +71,11 @@ class QubicSampling(SamplingHorizontal):
     DEFAULT_LONGITUDE = DOMECLON
 
     def __init__(self, *args, **keywords):
-        angle_hwp = keywords.get('angle_hwp', 0)
         if len(args) == 4:
             args = list(args)
             angle_hwp = args.pop()
+        else:
+            angle_hwp = keywords.pop('angle_hwp', 0)
         SamplingHorizontal.__init__(self, angle_hwp=angle_hwp, healpix=None,
                                     *args, **keywords)
 

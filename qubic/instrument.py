@@ -489,13 +489,13 @@ class QubicInstrument(SimpleInstrument):
             synthbeam.kmax, horn.spacing, nu, position)
         val = np.array(primary_beam(theta, phi), dtype=float, copy=False)
         val[~np.isfinite(val)] = 0
-        norm = np.sum(val, axis=-1)[:, None]
         index = _argsort_reverse(val)
         theta = theta[index]
         phi = phi[index]
         val = val[index]
         cumval = np.cumsum(val, axis=-1)
-        imaxs = np.argmax(cumval >= synthbeam.fraction * norm, axis=-1) + 1
+        imaxs = np.argmax(cumval >= synthbeam.fraction * cumval[:, -1, None],
+                          axis=-1) + 1
         imax = max(imaxs)
 
         # slice initial arrays to discard the non-significant peaks
@@ -507,7 +507,7 @@ class QubicInstrument(SimpleInstrument):
         # and remove potential NaN in theta, phi
         for idet, imax_ in enumerate(imaxs):
             val[idet, imax_:] = 0
-            theta[idet, imax_:] = np.pi / 2 #XXX 0 leads to NaN
+            theta[idet, imax_:] = np.pi / 2 #XXX 0 fails in polarization.f90.src (en2ephi and en2etheta_ephi)
             phi[idet, imax_:] = 0
         solid_angle = synthbeam.peak150.solid_angle * (150e9 / nu)**2
         val *= solid_angle / scene.solid_angle * len(horn)

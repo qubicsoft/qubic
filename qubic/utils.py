@@ -1,10 +1,25 @@
-from __future__ import division
+from __future__ import division, print_function
 
-import numpy as np
 from progressbar import ProgressBar, Bar, ETA, Percentage
+import numpy as np
+import signal
+import traceback
+
+_NLEVELS = 0
+_MAX_NLEVELS = 0
 
 
 class _ProgressBar(ProgressBar):
+    def __init__(self, poll=0.1, **keywords):
+        global _NLEVELS, _MAX_NLEVELS
+        self._nlevels = _NLEVELS
+        _NLEVELS += 1
+        _MAX_NLEVELS = max(_MAX_NLEVELS, _NLEVELS)
+        ProgressBar.__init__(self, poll=poll, **keywords)
+        if self._nlevels == 0:
+            self._signal_old = signal.signal(signal.SIGINT, self._int_handler)
+        print('\n\n\033[F', end='')
+
     def update(self, n=None):
         if n is not None:
             ProgressBar.update(self, n)
@@ -12,6 +27,26 @@ class _ProgressBar(ProgressBar):
         ProgressBar.update(self, self.currval + 1)
         if self.currval >= self.maxval:
             self.finish()
+
+    def finish(self):
+        global _NLEVELS, _MAX_NLEVELS
+        ProgressBar.finish(self)
+        if self._nlevels == 0:
+            print((_MAX_NLEVELS - 1) * '\n', end='')
+            signal.signal(signal.SIGINT, self._signal_old)
+            _MAX_NLEVELS = 0
+        else:
+            print('\033[F\033[F', end='')
+        _NLEVELS -= 1
+
+    def _int_handler(self, signum, frame):
+        global _NLEVELS, _MAX_NLEVELS
+        _NLEVELS = 0
+        _MAX_NLEVELS = 0
+        signal.signal(signal.SIGINT, self._signal_old)
+        e = KeyboardInterrupt()
+        e.__traceback__ = traceback.extract_stack(frame)
+        raise e
 
 
 def progress_bar(n, info=''):

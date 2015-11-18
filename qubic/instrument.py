@@ -672,14 +672,8 @@ class QubicInstrument(SimpleInstrument):
         ----------
         scene : QubicScene
             The scene.
-        x : array-like
-            The X-coordinate in the focal plane where the response is computed,
-            in meters. If not provided, the detector central positions are
-            assumed.
-        y : array-like
-            The Y-coordinate in the focal plane where the response is computed,
-            in meters. If not provided, the detector central positions are
-            assumed.
+        position : array-like of shape (..., 3)
+            The 3D coordinates where the response is computed, in meters.
         area : array-like
             The integration area, in m^2.
         nu : float

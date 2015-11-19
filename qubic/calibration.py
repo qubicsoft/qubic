@@ -1,6 +1,7 @@
 # coding: utf-8
 from __future__ import division
 from astropy.io import fits
+from ConfigParser import ConfigParser
 from glob import glob
 from os.path import join
 from pysimulators import Layout, LayoutGrid
@@ -14,7 +15,7 @@ __all__ = ['QubicCalibration']
 
 FILE_DETARRAY = 'CalQubic_DetArray_v*.fits'
 FILE_HORNARRAY = 'CalQubic_HornArray_v*.fits'
-FILE_OPTICS = 'CalQubic_Optics_v*.fits'
+FILE_OPTICS = 'CalQubic_Optics_v*'
 FILE_PRIMBEAM = 'CalQubic_PrimBeam_v*.fits'
 
 
@@ -87,11 +88,16 @@ class QubicCalibration(object):
                 removed = np.zeros(shape, bool)
                 index = np.arange(n, dtype=np.int32).reshape(shape)
                 quadrant = np.zeros(shape, np.int8)
+                efficiency = np.ones(shape)
             else:
                 removed = hdus[3].data.view(bool)
                 index = hdus[4].data
                 quadrant = hdus[5].data
-            return shape, corner, removed, index, quadrant
+                if version > '2.0':
+                    efficiency = hdus[6].data
+                else:
+                    efficiency = np.ones(shape)
+            return shape, corner, removed, index, quadrant, efficiency
 
         elif name == 'hornarray':
             hdus = fits.open(self.hornarray)
@@ -135,8 +141,25 @@ class QubicCalibration(object):
             return layout
 
         elif name == 'optics':
-            header = fits.open(self.optics)[0].header
-            return {'focal length': header['flength']}
+            dtype = [('name', 'S16'), ('temperature', float),
+                     ('transmission', float), ('emissivity', float),
+                     ('nstates_pol', int)]
+            if self.optics.endswith('fits'):
+                header = fits.open(self.optics)[0].header
+                return {'focal length': header['flength'],
+                        'detector efficiency': 1.,
+                        'components': np.empty(0, dtype=dtype)}
+            parser = ConfigParser()
+            parser.read(self.optics)
+            keys = 'focal length',
+            out = dict((key, parser.getfloat('general', key)) for key in keys)
+            raw = parser.items('components')
+            components = np.empty(len(raw), dtype=dtype)
+            for i, r in enumerate(raw):
+                component = (r[0],) + tuple(float(_) for _ in r[1].split(', '))
+                components[i] = component
+            out['components'] = components
+            return out
 
         elif name == 'primbeam':
             header = fits.open(self.primbeam)[0].header

@@ -19,7 +19,7 @@ from pysimulators.interfaces.healpy import (
     Cartesian2HealpixOperator, HealpixConvolutionGaussianOperator)
 from pysimulators.sparse import (
     FSRMatrix, FSRRotation2dMatrix, FSRRotation3dMatrix)
-from scipy.constants import c
+from scipy.constants import c, h, k
 from . import _flib as flib
 from .calibration import QubicCalibration
 from .utils import _compress_mask
@@ -82,7 +82,7 @@ class SimpleInstrument(Instrument):
         self._init_synthbeam(synthbeam_dtype, synthbeam_peak150_fwhm)
 
     def _get_detector_layout(self, ngrids, nep, fknee, fslope, ncorr, tau):
-        shape, vertex, removed, index, quadrant = \
+        shape, vertex, removed, index, quadrant, efficiency = \
             self.calibration.get('detarray')
         if ngrids == 2:
             shape = (2,) + shape
@@ -90,6 +90,7 @@ class SimpleInstrument(Instrument):
             removed = np.array([removed, removed])
             index = np.array([index, index + np.max(index) + 1], index.dtype)
             quadrant = np.array([quadrant, quadrant + 4], quadrant.dtype)
+            efficiency = np.array([efficiency, efficiency])
         focal_length = self.calibration.get('optics')['focal length']
 
         vertex = np.concatenate(
@@ -106,7 +107,7 @@ class SimpleInstrument(Instrument):
         layout = Layout(
             shape, vertex=vertex, selection=~removed, ordering=index,
             quadrant=quadrant, nep=nep, fknee=fknee, fslope=fslope,
-            tau=tau, theta=theta, phi=phi)
+            tau=tau, theta=theta, phi=phi, efficiency=efficiency)
 
         # assume all detectors have the same area
         layout.area = surface_simple_polygon(layout.vertex[0, :, :2])
@@ -126,7 +127,9 @@ class SimpleInstrument(Instrument):
         class Optics(object):
             pass
         optics = Optics()
-        optics.focal_length = self.calibration.get('optics')['focal length']
+        calib = self.calibration.get('optics')
+        optics.components = calib['components']
+        optics.focal_length = calib['focal length']
         optics.polarizer = bool(polarizer)
         self.optics = optics
 
@@ -148,14 +151,70 @@ class SimpleInstrument(Instrument):
 
     __repr__ = __str__
 
-    def get_noise(self, sampling, out=None, operation=operation_assignment):
+    def get_noise(self, sampling, scene, photon_noise=True, out=None,
+                  operation=operation_assignment):
         """
         Return a noisy timeline.
 
         """
+        if out is None:
+            out = np.empty((len(self), len(sampling)))
+        self.get_noise_detector(sampling, out=out)
+        if photon_noise:
+            out += self.get_noise_photon(sampling, scene)
+        return out
+
+    def get_noise_detector(self, sampling, out=None):
+        """
+        Return the detector noise (#det, #sampling).
+
+        """
         return Instrument.get_noise(
             self, sampling, nep=self.detector.nep, fknee=self.detector.fknee,
-            fslope=self.detector.fslope, out=out, operation=operation)
+            fslope=self.detector.fslope, out=out)
+
+    def get_noise_photon(self, sampling, scene, out=None):
+        """
+        Return the photon noise (#det, #sampling).
+
+        """
+        nep_photon = self._get_noise_photon_nep(scene)
+        return Instrument.get_noise(self, sampling, nep=nep_photon, out=out)
+
+    def _get_noise_photon_nep(self, scene):
+        """
+        Return the photon noise NEP (#det,).
+        """
+        T_atm = scene.atmosphere.temperature
+        tr_atm = scene.atmosphere.transmission
+        em_atm = scene.atmosphere.emissivity
+        T_cmb = scene.temperature
+        cc = self.optics.components
+        temperatures = np.r_[T_cmb, T_atm, cc['temperature']]
+        transmissions = np.r_[1, tr_atm, cc['transmission']]
+        emissivities = np.r_[1, em_atm, cc['emissivity']]
+        gp = np.r_[1, 1, cc['nstates_pol']]
+
+        n = len(temperatures)
+        # tr_prod = np.cumprod(np.r_[1, transmissions[::-1]])[-2::-1]
+        tr_prod = np.r_[[np.prod(transmissions[j+1:]) for j in range(n-1)], 1]
+
+        nu = self.filter.nu
+        dnu = self.filter.bandwidth
+        omega_det = -self.detector.area / \
+                    self.optics.focal_length**2 * \
+                    np.cos(self.detector.theta)**3
+        S_horn = np.pi * self.horn.radius**2 * len(self.horn)
+        g = gp[:, None] * S_horn * omega_det * (nu / c)**2 * dnu
+        P_phot = (emissivities * tr_prod * h * nu /
+                  (np.exp(h * nu / k / temperatures) - 1))[:, None] * g
+        sec_beam = self.secondary_beam(self.detector.theta,
+                                       self.detector.phi)
+        P_phot = P_phot * self.detector.efficiency * sec_beam
+        NEP_phot_nobunch = np.sqrt(h * nu * P_phot) * np.sqrt(2)
+        # note the factor sqrt(2) in the definition of the NEP
+        NEP_phot = NEP_phot_nobunch * np.sqrt(1 + P_phot / (h * nu * g))
+        return np.sqrt(np.sum(NEP_phot**2, 0))
 
     def get_aperture_integration_operator(self):
         """
@@ -366,6 +425,15 @@ class SimpleInstrument(Instrument):
             else:
                 shapeout = (ndetectors, ntimes, 3)
         return ProjectionOperator(s, shapeout=shapeout)
+
+    def get_transmission_operator(self):
+        """
+        Return the operator that multiplies by the cumulative instrumental
+        transmission.
+        """
+        return DiagonalOperator(
+            np.product(self.optics.components['transmission']) *
+            self.detector.efficiency, broadcast='rightward')
 
     @staticmethod
     def _peak_angles(self, scene, nu, position, synthbeam, *args):

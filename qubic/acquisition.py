@@ -150,6 +150,15 @@ class SimpleAcquisition(Acquisition):
         self.sampling.comm.Allreduce(MPI.IN_PLACE, as_mpi(hit), op=MPI.SUM)
         return hit
 
+    def get_noise(self, out=None):
+        out = self.instrument.get_noise(
+            self.sampling, self.scene, photon_noise=self.photon_noise, out=out)
+        if self.effective_duration is not None:
+            out *= np.sqrt(len(self.sampling) * self.sampling.period /
+                           (self.effective_duration * 31557600))
+        return out
+    get_noise.__doc__ = Acquisition.get_noise.__doc__
+
     def get_aperture_integration_operator(self):
         """
         Integrate flux density in the telescope aperture.
@@ -208,6 +217,24 @@ class SimpleAcquisition(Acquisition):
             [self.instrument.get_hwp_operator(self.sampling[b], self.scene)
              for b in self.block], axisin=1)
 
+    def get_invntt_operator(self):
+        sigma_detector = self.instrument.detector.nep / \
+            np.sqrt(2*self.sampling.period)
+        if self.photon_noise:
+            sigma_photon = self.instrument._get_noise_photon_nep(self.scene) /\
+                           np.sqrt(2 * self.sampling.period)
+        else:
+            sigma_photon = 0
+        out = DiagonalOperator(
+            1 / (sigma_detector**2 + sigma_photon**2),
+            broadcast='rightward',
+            shapein=(len(self.instrument), len(self.sampling)))
+        if self.effective_duration is not None:
+            out /= (len(self.sampling) * self.sampling.period /
+                    (self.effective_duration * 31557600))
+        return out
+    get_invntt_operator.__doc__ = Acquisition.get_invntt_operator.__doc__
+
     def get_unit_conversion_operator(self):
         """
         Convert sky temperature into W / m^2 / Hz.
@@ -237,12 +264,14 @@ class SimpleAcquisition(Acquisition):
         hwp = self.get_hwp_operator()
         polarizer = self.get_polarizer_operator()
         integ = self.get_detector_integration_operator()
+        trans_inst = self.instrument.get_transmission_operator()
+        trans_atm = self.scene.atmosphere.transmission
         response = self.get_detector_response_operator()
 
         with rule_manager(inplace=True):
             H = CompositionOperator([
-                response, integ, polarizer, hwp * projection, filter, aperture,
-                temp, distribution])
+                response, trans_inst, integ, polarizer, hwp * projection,
+                filter, aperture, trans_atm, temp, distribution])
         if self.scene == 'QU':
             H = self.get_subtract_grid_operator()(H)
         return H
@@ -576,7 +605,8 @@ class QubicAcquisition(SimpleAcquisition):
     def __init__(self, instrument, sampling, scene=None, block=None,
                  calibration=None, detector_nep=4.7e-17, detector_fknee=0,
                  detector_fslope=1, detector_ncorr=10, detector_ngrids=1,
-                 detector_tau=0.01, filter_relative_bandwidth=0.25,
+                 detector_tau=0.01, effective_duration=None,
+                 filter_relative_bandwidth=0.25, photon_noise=True,
                  polarizer=True,  primary_beam=None, secondary_beam=None,
                  synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
                  absolute=False, kind='IQU', nside=256, max_nbytes=None,
@@ -622,10 +652,16 @@ class QubicAcquisition(SimpleAcquisition):
             Number of detector grids.
         detector_tau : array-like, optional
             The detector time constants in seconds.
+        effective_duration : float, optional
+            If not None, the noise properties are rescaled so that this
+            acquisition has an effective duration equal to the specified value,
+            in years.
         filter_relative_bandwidth : float, optional
             The filter relative bandwidth Δν/ν.
         polarizer : boolean, optional
             If true, the polarizer grid is present in the optics setup.
+        photon_noise : boolean, optional
+            If true, the photon noise contribution is included.
         primary_beam : function f(theta [rad], phi [rad]), optional
             The primary beam transmission function.
         secondary_beam : function f(theta [rad], phi [rad]), optional
@@ -669,6 +705,8 @@ class QubicAcquisition(SimpleAcquisition):
             self, instrument, sampling, scene, block=block,
             max_nbytes=max_nbytes, nprocs_instrument=nprocs_instrument,
             nprocs_sampling=nprocs_sampling, comm=comm)
+        self.photon_noise = bool(photon_noise)
+        self.effective_duration = effective_duration
 
 
 class PlanckAcquisition(object):

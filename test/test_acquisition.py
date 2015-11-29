@@ -102,7 +102,7 @@ def test_load_save():
 
 
 def test_add_subtract_grid_operator():
-    acq = QubicAcquisition(150, sampling)
+    acq = QubicAcquisition(150, sampling, detector_ngrids=2)
     tod = map2tod(acq, input_map, convolution=False)
     add = acq.get_add_grids_operator()
     sub = acq.get_subtract_grids_operator()

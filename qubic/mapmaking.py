@@ -1,7 +1,8 @@
 from __future__ import absolute_import, division, print_function
 from collections import OrderedDict
 from pyoperators import (
-    asoperator, BlockColumnOperator, DiagonalOperator, pcg, proxy_group)
+    asoperator, BlockColumnOperator, DiagonalOperator, PackOperator, pcg,
+    proxy_group)
 from pyoperators.memory import ones
 from pyoperators.utils import ndarraywrap
 from pysimulators.interfaces.healpy import HealpixLaplacianOperator
@@ -232,7 +233,8 @@ def _tod2map(acq, tod, coverage_threshold, max_nbytes, callback,
         algo = solution['algorithm']
         algo.H = H
         if criterion:
-            algo.f = asoperator(f, shapeout=2)(acq_restricted.scene.unpack)
+            pack = PackOperator(mask, broadcast='rightward')
+            algo.f = asoperator(f, shapeout=2)(pack)
         output += (algo,)
     return output
 

@@ -13,34 +13,36 @@ from pysimulators import Acquisition, FitsArray
 from pysimulators.interfaces.healpy import (
     HealpixConvolutionGaussianOperator)
 from .data import PATH
-from .instrument import QubicInstrument, SimpleInstrument
+from .instrument import QubicInstrument
 from .scene import QubicScene
 
 __all__ = ['PlanckAcquisition',
            'QubicAcquisition',
-           'QubicPlanckAcquisition',
-           'SimpleAcquisition']
+           'QubicPlanckAcquisition']
 
 
-class SimpleAcquisition(Acquisition):
+class QubicAcquisition(Acquisition):
     """
-    The Acquisition class for the single-peak simple instrument.
+    The QubicAcquisition class, which combines the instrument, sampling and
+    scene models.
 
     """
     def __init__(self, instrument, sampling, scene=None, block=None,
-                 calibration=None, detector_fknee=0, detector_fslope=1,
-                 detector_ncorr=10, detector_ngrids=1, detector_nep=4.7e-17,
-                 detector_tau=0.01, filter_relative_bandwidth=0.25,
-                 polarizer=True, synthbeam_dtype=np.float32, absolute=False,
-                 kind='IQU', nside=256, max_nbytes=None,
+                 calibration=None, detector_nep=4.7e-17, detector_fknee=0,
+                 detector_fslope=1, detector_ncorr=10, detector_ngrids=1,
+                 detector_tau=0.01, effective_duration=None,
+                 filter_relative_bandwidth=0.25, photon_noise=True,
+                 polarizer=True,  primary_beam=None, secondary_beam=None,
+                 synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
+                 absolute=False, kind='IQU', nside=256, max_nbytes=None,
                  nprocs_instrument=None, nprocs_sampling=None, comm=None):
         """
-        acq = SimpleAcquisition(band, sampling,
-                                [scene=|absolute=, kind=, nside=],
-                                nprocs_instrument=, nprocs_sampling=, comm=)
-        acq = SimpleAcquisition(instrument, sampling,
-                                [scene=|absolute=, kind=, nside=],
-                                nprocs_instrument=, nprocs_sampling=, comm=)
+        acq = QubicAcquisition(band, sampling,
+                               [scene=|absolute=, kind=, nside=],
+                               nprocs_instrument=, nprocs_sampling=, comm=)
+        acq = QubicAcquisition(instrument, sampling,
+                               [scene=|absolute=, kind=, nside=],
+                               nprocs_instrument=, nprocs_sampling=, comm=)
 
         Parameters
         ----------
@@ -59,8 +61,8 @@ class SimpleAcquisition(Acquisition):
             and 'IQU' for intensity plus QU maps.
         nside : int, optional
             The Healpix scene's nside.
-        instrument : SimpleInstrument, optional
-            The SimpleInstrument instance.
+        instrument : QubicInstrument, optional
+            The QubicInstrument instance.
         calibration : QubicCalibration, optional
             The calibration tree.
         detector_fknee : array-like, optional
@@ -75,13 +77,26 @@ class SimpleAcquisition(Acquisition):
             Number of detector grids.
         detector_tau : array-like, optional
             The detector time constants in seconds.
+        effective_duration : float, optional
+            If not None, the noise properties are rescaled so that this
+            acquisition has an effective duration equal to the specified value,
+            in years.
         filter_relative_bandwidth : float, optional
             The filter relative bandwidth Δν/ν.
         polarizer : boolean, optional
             If true, the polarizer grid is present in the optics setup.
+        photon_noise : boolean, optional
+            If true, the photon noise contribution is included.
+        primary_beam : function f(theta [rad], phi [rad]), optional
+            The primary beam transmission function.
+        secondary_beam : function f(theta [rad], phi [rad]), optional
+            The secondary beam transmission function.
         synthbeam_dtype : dtype, optional
             The data type for the synthetic beams (default: float32).
             It is the dtype used to store the values of the pointing matrix.
+        synthbeam_fraction: float, optional
+            The fraction of significant peaks retained for the computation
+            of the synthetic beam.
         max_nbytes : int or None, optional
             Maximum number of bytes to be allocated for the acquisition's
             operator.
@@ -98,21 +113,25 @@ class SimpleAcquisition(Acquisition):
                 comm.size = nprocs_instrument * nprocs_sampling
 
         """
-        if not isinstance(instrument, SimpleInstrument):
-            filter_nu = band * 1e9
-            instrument = SimpleInstrument(
+        if not isinstance(instrument, QubicInstrument):
+            filter_nu = instrument * 1e9
+            instrument = QubicInstrument(
                 calibration=calibration, detector_fknee=detector_fknee,
                 detector_fslope=detector_fslope, detector_ncorr=detector_ncorr,
-                detector_ngrids=detector_ngrids, detector_nep=detector_nep,
+                detector_nep=detector_nep, detector_ngrids=detector_ngrids,
                 detector_tau=detector_tau, filter_nu=filter_nu,
                 filter_relative_bandwidth=filter_relative_bandwidth,
-                polarizer=polarizer, synthbeam_dtype=synthbeam_dtype)
+                polarizer=polarizer, primary_beam=primary_beam,
+                secondary_beam=secondary_beam, synthbeam_dtype=synthbeam_dtype,
+                synthbeam_fraction=synthbeam_fraction)
         if scene is None:
             scene = QubicScene(absolute=absolute, kind=kind, nside=nside)
         Acquisition.__init__(
-            self, instrument, sampling, scene, block,
+            self, instrument, sampling, scene, block=block,
             max_nbytes=max_nbytes, nprocs_instrument=nprocs_instrument,
             nprocs_sampling=nprocs_sampling, comm=comm)
+        self.photon_noise = bool(photon_noise)
+        self.effective_duration = effective_duration
 
     def get_coverage(self, out=None):
         """
@@ -356,119 +375,6 @@ class SimpleAcquisition(Acquisition):
             return tod, map
 
         return tod
-
-
-class QubicAcquisition(SimpleAcquisition):
-    """
-    The QubicAcquisition class, which combines the instrument, sampling and
-    scene models.
-
-    """
-    def __init__(self, instrument, sampling, scene=None, block=None,
-                 calibration=None, detector_nep=4.7e-17, detector_fknee=0,
-                 detector_fslope=1, detector_ncorr=10, detector_ngrids=1,
-                 detector_tau=0.01, effective_duration=None,
-                 filter_relative_bandwidth=0.25, photon_noise=True,
-                 polarizer=True,  primary_beam=None, secondary_beam=None,
-                 synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
-                 absolute=False, kind='IQU', nside=256, max_nbytes=None,
-                 nprocs_instrument=None, nprocs_sampling=None, comm=None):
-        """
-        acq = QubicAcquisition(band, sampling,
-                               [scene=|absolute=, kind=, nside=],
-                               nprocs_instrument=, nprocs_sampling=, comm=)
-        acq = QubicAcquisition(instrument, sampling,
-                               [scene=|absolute=, kind=, nside=],
-                               nprocs_instrument=, nprocs_sampling=, comm=)
-
-        Parameters
-        ----------
-        band : int
-            The module nominal frequency, in GHz.
-        scene : QubicScene, optional
-            The discretized observed scene (the sky).
-        block : tuple of slices, optional
-            Partition of the samplings.
-        absolute : boolean, optional
-            If true, the scene pixel values include the CMB background and the
-            fluctuations in units of Kelvin, otherwise it only represents the
-            fluctuations, in microKelvin.
-        kind : 'I', 'QU' or 'IQU', optional
-            The sky kind: 'I' for intensity-only, 'QU' for Q and U maps,
-            and 'IQU' for intensity plus QU maps.
-        nside : int, optional
-            The Healpix scene's nside.
-        instrument : QubicInstrument, optional
-            The QubicInstrument instance.
-        calibration : QubicCalibration, optional
-            The calibration tree.
-        detector_fknee : array-like, optional
-            The detector 1/f knee frequency in Hertz.
-        detector_fslope : array-like, optional
-            The detector 1/f slope index.
-        detector_ncorr : int, optional
-            The detector 1/f correlation length.
-        detector_nep : array-like, optional
-            The detector NEP [W/sqrt(Hz)].
-        detector_ngrids : 1 or 2, optional
-            Number of detector grids.
-        detector_tau : array-like, optional
-            The detector time constants in seconds.
-        effective_duration : float, optional
-            If not None, the noise properties are rescaled so that this
-            acquisition has an effective duration equal to the specified value,
-            in years.
-        filter_relative_bandwidth : float, optional
-            The filter relative bandwidth Δν/ν.
-        polarizer : boolean, optional
-            If true, the polarizer grid is present in the optics setup.
-        photon_noise : boolean, optional
-            If true, the photon noise contribution is included.
-        primary_beam : function f(theta [rad], phi [rad]), optional
-            The primary beam transmission function.
-        secondary_beam : function f(theta [rad], phi [rad]), optional
-            The secondary beam transmission function.
-        synthbeam_dtype : dtype, optional
-            The data type for the synthetic beams (default: float32).
-            It is the dtype used to store the values of the pointing matrix.
-        synthbeam_fraction: float, optional
-            The fraction of significant peaks retained for the computation
-            of the synthetic beam.
-        max_nbytes : int or None, optional
-            Maximum number of bytes to be allocated for the acquisition's
-            operator.
-        nprocs_instrument : int, optional
-            For a given sampling slice, number of procs dedicated to
-            the instrument.
-        nprocs_sampling : int, optional
-            For a given detector slice, number of procs dedicated to
-            the sampling.
-        comm : mpi4py.MPI.Comm, optional
-            The acquisition's MPI communicator. Note that it is transformed
-            into a 2d cartesian communicator before being stored as the 'comm'
-            attribute. The following relationship must hold:
-                comm.size = nprocs_instrument * nprocs_sampling
-
-        """
-        if not isinstance(instrument, QubicInstrument):
-            filter_nu = instrument * 1e9
-            instrument = QubicInstrument(
-                calibration=calibration, detector_fknee=detector_fknee,
-                detector_fslope=detector_fslope, detector_ncorr=detector_ncorr,
-                detector_nep=detector_nep, detector_ngrids=detector_ngrids,
-                detector_tau=detector_tau, filter_nu=filter_nu,
-                filter_relative_bandwidth=filter_relative_bandwidth,
-                polarizer=polarizer, primary_beam=primary_beam,
-                secondary_beam=secondary_beam, synthbeam_dtype=synthbeam_dtype,
-                synthbeam_fraction=synthbeam_fraction)
-        if scene is None:
-            scene = QubicScene(absolute=absolute, kind=kind, nside=nside)
-        SimpleAcquisition.__init__(
-            self, instrument, sampling, scene, block=block,
-            max_nbytes=max_nbytes, nprocs_instrument=nprocs_instrument,
-            nprocs_sampling=nprocs_sampling, comm=comm)
-        self.photon_noise = bool(photon_noise)
-        self.effective_duration = effective_duration
 
 
 class PlanckAcquisition(object):

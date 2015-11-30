@@ -24,21 +24,21 @@ from . import _flib as flib
 from .calibration import QubicCalibration
 from .utils import _compress_mask
 
-__all__ = ['QubicInstrument',
-           'SimpleInstrument']
+__all__ = ['QubicInstrument']
 
 
-class SimpleInstrument(Instrument):
+class QubicInstrument(Instrument):
     """
-    The SimpleInstrument class. Classical imager with a well-behaved
-    single-peak beam.
+    The QubicInstrument class. It represents the instrument setup.
 
     """
-    def __init__(self, calibration=None, detector_fknee=0,
-                 detector_fslope=1, detector_ncorr=10, detector_nep=4.7e-17,
-                 detector_ngrids=1, detector_tau=0.01, filter_nu=150e9,
+    def __init__(self, calibration=None, detector_fknee=0, detector_fslope=1,
+                 detector_ncorr=10, detector_nep=4.7e-17, detector_ngrids=1,
+                 detector_tau=0.01, filter_nu=150e9,
                  filter_relative_bandwidth=0.25, polarizer=True,
-                 synthbeam_dtype=np.float32,
+                 primary_beam=None, secondary_beam=None,
+                 synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
+                 synthbeam_kmax=8,
                  synthbeam_peak150_fwhm=np.radians(0.39268176)):
         """
         Parameters
@@ -51,10 +51,10 @@ class SimpleInstrument(Instrument):
             The detector 1/f slope index.
         detector_ncorr : int, optional
             The detector 1/f correlation length.
+        detector_ngrids : int, optional
+            Number of detector grids.
         detector_nep : array-like, optional
             The detector NEP [W/sqrt(Hz)].
-        detector_ngrids : 1 or 2, optional
-            Number of detector grids. It doesn't affect the optics setup.
         detector_tau : array-like, optional
             The detector time constants in seconds.
         filter_nu : float, optional
@@ -63,11 +63,21 @@ class SimpleInstrument(Instrument):
             The filter relative bandwidth Δν/ν.
         polarizer : boolean, optional
             If true, the polarizer grid is present in the optics setup.
+        primary_beam : function f(theta [rad], phi [rad]), optional
+            The primary beam transmission function.
+        secondary_beam : function f(theta [rad], phi [rad]), optional
+            The secondary beam transmission function.
         synthbeam_dtype : dtype, optional
             The data type for the synthetic beams (default: float32).
             It is the dtype used to store the values of the pointing matrix.
-        synthbeam_peak150_fwhm : float
-            The peak's FWHM, in radians.
+        synthbeam_kmax : integer, optional
+            The diffraction order above which the peaks are ignored.
+            For instance, a value of kmax=2 will model the synthetic beam by
+            (2 * kmax + 1)**2 = 25 peaks and a value of kmax=0 will only sample
+            the central peak.
+        synthbeam_fraction: float, optional
+            The fraction of significant peaks retained for the computation
+            of the synthetic beam.
 
         """
         if calibration is None:
@@ -77,9 +87,14 @@ class SimpleInstrument(Instrument):
             detector_ngrids, detector_nep, detector_fknee, detector_fslope,
             detector_ncorr, detector_tau)
         Instrument.__init__(self, layout)
+        self._init_beams(primary_beam, secondary_beam)
         self._init_filter(filter_nu, filter_relative_bandwidth)
+        self._init_horns()
         self._init_optics(polarizer)
         self._init_synthbeam(synthbeam_dtype, synthbeam_peak150_fwhm)
+        self.synthbeam.fraction = synthbeam_fraction
+        self.synthbeam.kmax = synthbeam_kmax
+
 
     def _get_detector_layout(self, ngrids, nep, fknee, fslope, ncorr, tau):
         shape, vertex, removed, index, quadrant, efficiency = \
@@ -115,6 +130,16 @@ class SimpleInstrument(Instrument):
         layout.ngrids = ngrids
         return layout
 
+    def _init_beams(self, primary, secondary):
+        if primary is None:
+            primary = BeamGaussian(
+                np.radians(self.calibration.get('primbeam')))
+        self.primary_beam = primary
+        if secondary is None:
+            secondary = BeamGaussian(
+                np.radians(self.calibration.get('primbeam')), backward=True)
+        self.secondary_beam = secondary
+
     def _init_filter(self, nu, relative_bandwidth):
         class Filter(object):
             def __init__(self, nu, relative_bandwidth):
@@ -122,6 +147,9 @@ class SimpleInstrument(Instrument):
                 self.relative_bandwidth = float(relative_bandwidth)
                 self.bandwidth = self.nu * self.relative_bandwidth
         self.filter = Filter(nu, relative_bandwidth)
+
+    def _init_horns(self):
+        self.horn = self.calibration.get('hornarray')
 
     def _init_optics(self, polarizer):
         class Optics(object):
@@ -143,7 +171,11 @@ class SimpleInstrument(Instrument):
 
     def __str__(self):
         state = [('ngrids', self.detector.ngrids),
-                 ('selection', _compress_mask(~self.detector.all.removed))]
+                 ('selection', _compress_mask(~self.detector.all.removed)),
+                 ('synthbeam_fraction', self.synthbeam.fraction),
+                 ('synthbeam_peak150_fwhm_deg',
+                  np.degrees(self.synthbeam.peak150.fwhm)),
+                 ('synthbeam_kmax', self.synthbeam.kmax)]
         return 'Instrument:\n' + \
                '\n'.join(['    ' + a + ': ' + repr(v) for a, v in state]) + \
                '\n\nCalibration:\n' + '\n'. \
@@ -222,8 +254,8 @@ class SimpleInstrument(Instrument):
         Convert signal from W / m^2 / Hz into W / Hz.
 
         """
-        horn = self.calibration.get('hornarray')
-        return HomothetyOperator(len(horn) * np.pi * horn.radius**2)
+        nhorns = np.sum(self.horn.open)
+        return HomothetyOperator(nhorns * np.pi * self.horn.radius**2)
 
     def get_convolution_peak_operator(self, **keywords):
         """
@@ -241,7 +273,7 @@ class SimpleInstrument(Instrument):
         the secondary beam transmission.
 
         """
-        return SimpleInstrument._get_detector_integration_operator(
+        return QubicInstrument._get_detector_integration_operator(
             self.detector.center, self.detector.area, self.secondary_beam)
 
     @staticmethod
@@ -434,117 +466,6 @@ class SimpleInstrument(Instrument):
         return DiagonalOperator(
             np.product(self.optics.components['transmission']) *
             self.detector.efficiency, broadcast='rightward')
-
-    @staticmethod
-    def _peak_angles(self, scene, nu, position, synthbeam, *args):
-        """
-        Return the spherical coordinates (theta, phi) of the beam peaks,
-        in radians.
-
-        """
-        theta = np.arctan2(
-            np.sqrt(-np.sum(position[..., :2]**2, axis=-1)), -position[..., 2])
-        phi = np.arctan2(-position[..., 1], -position[..., 0])
-        val = np.ones_like(theta)
-        return theta, phi, val
-
-
-class QubicInstrument(SimpleInstrument):
-    """
-    The QubicInstrument class. It represents the instrument setup.
-
-    """
-    def __init__(self, calibration=None, detector_fknee=0, detector_fslope=1,
-                 detector_ncorr=10, detector_nep=4.7e-17, detector_ngrids=1,
-                 detector_tau=0.01, filter_nu=150e9,
-                 filter_relative_bandwidth=0.25, polarizer=True,
-                 primary_beam=None, secondary_beam=None,
-                 synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
-                 synthbeam_kmax=8,
-                 synthbeam_peak150_fwhm=np.radians(0.39268176)):
-        """
-        Parameters
-        ----------
-        calibration : QubicCalibration
-            The calibration tree.
-        detector_fknee : array-like, optional
-            The detector 1/f knee frequency in Hertz.
-        detector_fslope : array-like, optional
-            The detector 1/f slope index.
-        detector_ncorr : int, optional
-            The detector 1/f correlation length.
-        detector_ngrids : int, optional
-            Number of detector grids.
-        detector_nep : array-like, optional
-            The detector NEP [W/sqrt(Hz)].
-        detector_tau : array-like, optional
-            The detector time constants in seconds.
-        filter_nu : float, optional
-            The filter central wavelength, in Hz.
-        filter_relative_bandwidth : float, optional
-            The filter relative bandwidth Δν/ν.
-        polarizer : boolean, optional
-            If true, the polarizer grid is present in the optics setup.
-        primary_beam : function f(theta [rad], phi [rad]), optional
-            The primary beam transmission function.
-        secondary_beam : function f(theta [rad], phi [rad]), optional
-            The secondary beam transmission function.
-        synthbeam_dtype : dtype, optional
-            The data type for the synthetic beams (default: float32).
-            It is the dtype used to store the values of the pointing matrix.
-        synthbeam_kmax : integer, optional
-            The diffraction order above which the peaks are ignored.
-            For instance, a value of kmax=2 will model the synthetic beam by
-            (2 * kmax + 1)**2 = 25 peaks and a value of kmax=0 will only sample
-            the central peak.
-        synthbeam_fraction: float, optional
-            The fraction of significant peaks retained for the computation
-            of the synthetic beam.
-
-        """
-        if calibration is None:
-            calibration = QubicCalibration()
-        SimpleInstrument.__init__(
-            self, calibration=calibration, detector_fknee=detector_fknee,
-            detector_fslope=detector_fslope, detector_ncorr=detector_ncorr,
-            detector_nep=detector_nep, detector_ngrids=detector_ngrids,
-            detector_tau=detector_tau, filter_nu=filter_nu,
-            filter_relative_bandwidth=filter_relative_bandwidth,
-            polarizer=polarizer, synthbeam_dtype=synthbeam_dtype,
-            synthbeam_peak150_fwhm=synthbeam_peak150_fwhm)
-        self._init_beams(primary_beam, secondary_beam)
-        self._init_horns()
-        self.synthbeam.fraction = synthbeam_fraction
-        self.synthbeam.kmax = synthbeam_kmax
-
-    def _init_beams(self, primary, secondary):
-        if primary is None:
-            primary = BeamGaussian(
-                np.radians(self.calibration.get('primbeam')))
-        self.primary_beam = primary
-        if secondary is None:
-            secondary = BeamGaussian(
-                np.radians(self.calibration.get('primbeam')), backward=True)
-        self.secondary_beam = secondary
-
-    def _init_horns(self):
-        self.horn = self.calibration.get('hornarray')
-
-    def __str__(self):
-        state = [('synthbeam_fraction', self.synthbeam.fraction)]
-        out = SimpleInstrument.__str__(self)
-        index = out.index('\nCalibration')
-        return out[:index] + \
-               '\n'.join(['    {0}: {1!r}'.format(*_) for _ in state]) + \
-               out[index:]
-
-    __repr__ = __str__
-
-    def get_aperture_integration_operator(self):
-        nhorns = np.sum(self.horn.open)
-        return HomothetyOperator(nhorns * np.pi * self.horn.radius**2)
-    get_aperture_integration_operator.__doc__ = \
-        SimpleInstrument.get_aperture_integration_operator.__doc__
 
     @staticmethod
     def _peak_angles(scene, nu, position, synthbeam, horn, primary_beam):

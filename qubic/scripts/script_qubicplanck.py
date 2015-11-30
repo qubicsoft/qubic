@@ -18,10 +18,8 @@ tol = 5e-6
 
 sky = read_map(PATH + 'syn256_pol.fits')
 sampling = create_random_pointings([racenter, deccenter], 1000, 10)
-detector_nep = 4.7e-17*np.sqrt(len(sampling) * sampling.period / (365 * 86400))
 
-acq_qubic = QubicAcquisition(150, sampling, nside=nside,
-                             detector_nep=detector_nep)
+acq_qubic = QubicAcquisition(150, sampling, nside=nside, effective_duration=1)
 convolved_sky = acq_qubic.instrument.get_convolution_peak_operator()(sky)
 acq_planck = PlanckAcquisition(150, acq_qubic.scene, true_sky=convolved_sky)
 acq_fusion = QubicPlanckAcquisition(acq_qubic, acq_planck)
@@ -35,8 +33,7 @@ b = H.T * invntt * y
 
 solution_fusion = pcg(A, b, disp=True, maxiter=maxiter, tol=tol)
 
-acq_qubic = QubicAcquisition(150, sampling, nside=nside,
-                             detector_nep=detector_nep)
+acq_qubic = QubicAcquisition(150, sampling, nside=nside, effective_duration=1)
 H = acq_qubic.get_operator()
 invntt = acq_qubic.get_invntt_operator()
 y, sky_convolved = acq_qubic.get_observation(sky, convolution=True)

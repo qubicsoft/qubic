@@ -126,6 +126,13 @@ class QubicAcquisition(Acquisition):
                 synthbeam_fraction=synthbeam_fraction)
         if scene is None:
             scene = QubicScene(absolute=absolute, kind=kind, nside=nside)
+        else:
+            attr = 'absolute', 'kind', 'nside'
+            for a in attr:
+                if locals()[a] != getattr(scene, a):
+                    raise ValueError(
+                        "The attribute '{}' is already specified in the input "
+                        "scene.".format(a))
         Acquisition.__init__(
             self, instrument, sampling, scene, block=block,
             max_nbytes=max_nbytes, nprocs_instrument=nprocs_instrument,

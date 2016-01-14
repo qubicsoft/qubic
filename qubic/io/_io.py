@@ -61,7 +61,7 @@ def read_map(filename, field=None, dtype=float, nest=False, partial=False):
             field = range(header['TFIELDS'])
         out = hp.read_map(filename, dtype=dtype, nest=nest, field=field,
                           h=True, verbose=False)
-        out, header = out[:-1], out[-1]
+        out, header = out[:-1], fits.header.Header(out[-1])
         out = np.column_stack(out)
         out = out.view(ndarraywrap)
         out.header = header

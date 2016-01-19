@@ -9,7 +9,7 @@ from pyoperators import (
     MPIDistributionIdentityOperator, MPI, proxy_group, ReshapeOperator,
     rule_manager)
 from pyoperators.utils.mpi import as_mpi
-from pysimulators import Acquisition, FitsArray
+from pysimulators import Acquisition, FitsArray, ProjectionOperator
 from pysimulators.interfaces.healpy import (
     HealpixConvolutionGaussianOperator)
 from .data import PATH
@@ -385,7 +385,8 @@ class QubicAcquisition(Acquisition):
 
 
 class PlanckAcquisition(object):
-    def __init__(self, band, scene, true_sky=None, factor=1, fwhm=0):
+    def __init__(self, band, scene, true_sky=None, factor=1, fwhm=0, seed=None, comm=None):
+
         """
         Parameters
         ----------
@@ -401,6 +402,10 @@ class PlanckAcquisition(object):
             The factor by which the Planck standard deviation is multiplied.
         fwhm : float, optional, !not used!
             The fwhm of the Gaussian used to smooth the map [radians].
+        seed : integer, optional.
+            The seed used to generate Planck noise.
+        comm : mpi4py.MPI.Comm
+            The acquisition's MPI communicator.
 
         """
         if band not in (150, 220):
@@ -429,8 +434,13 @@ class PlanckAcquisition(object):
             sigma = np.array(hp.ud_grade(sigma.T, self.scene.nside, power=2),
                              copy=False).T
         self.sigma = sigma
+        if comm is None:
+            comm = MPI.COMM_WORLD
+        self.comm = comm
 
-    _SIMULATED_PLANCK_SEED = 0
+        if seed is not None and seed != comm.bcast(seed, root=0):
+            raise ValueError('The specified seed is not the same on all the nodes.')
+        self.seed = seed
 
     def get_operator(self):
         return IdentityOperator(shapein=self.scene.shape)
@@ -441,9 +451,13 @@ class PlanckAcquisition(object):
 
     def get_noise(self):
         state = np.random.get_state()
-        np.random.seed(self._SIMULATED_PLANCK_SEED)
+        if self.seed is None:
+            np.random.set_state(self.comm.bcast(state, root=0))
+        else:
+            np.random.seed(self.seed)
         out = np.random.standard_normal(self._true_sky.shape) * self.sigma
-        np.random.set_state(state)
+        if self.seed is not None or self.comm.rank != 0:
+            np.random.set_state(state)
         return out
 
     def get_observation(self, noiseless=False):

@@ -140,19 +140,20 @@ class QubicAcquisition(Acquisition):
         self.photon_noise = bool(photon_noise)
         self.effective_duration = effective_duration
 
-    def get_coverage(self, out=None):
+    def get_coverage(self):
         """
-        Return the acquisition scene coverage given by P.T(1).
+        Return the acquisition scene coverage as given by H.T(1), normalized
+        so that its integral over the sky is the number of detectors times
+        the duration of the acquisition.
 
         """
-        P = self.get_projection_operator()
-        if isinstance(P, ProjectionOperator):
-            out = P.pT1(out=out)
-        else:
-            out = P.operands[0].pT1(out=out)
-            for op in P.operands[1:]:
-                op.pT1(out, operation=operator.iadd)
-        self.get_distribution_operator().T(out, out=out)
+        H = self.get_operator()
+        out = H.T(np.ones((len(self.instrument), len(self.sampling))))
+        if self.scene.kind != 'I':
+            out = out[..., 0].copy()  # to avoid keeping QU in memory
+        ndetectors = self.comm.allreduce(len(self.instrument))
+        nsamplings = self.comm.allreduce(len(self.sampling))
+        out *= ndetectors * nsamplings * self.sampling.period / np.sum(out)
         return out
 
     def get_hitmap(self, nside=None):

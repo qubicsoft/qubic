@@ -1,7 +1,7 @@
 from __future__ import division
 from qubic import (
     create_sweeping_pointings, equ2gal, QubicAcquisition, QubicInstrument,
-    tod2map_all)
+    QubicScene, tod2map_all)
 import healpy as hp
 import matplotlib.pyplot as mp
 import numpy as np
@@ -24,13 +24,14 @@ np.random.seed(0)
 sampling = create_sweeping_pointings(
     [racenter, deccenter], duration, ts, angspeed, delta_az, nsweeps_el,
     angspeed_psi, maxpsi)
+scene = QubicScene(nside)
 
 # get the instrument model with only one detector
 idetector = 0
 instrument = QubicInstrument()[idetector]
 
-# get the acquisition model from the instrument and sampling models
-acq = QubicAcquisition(instrument, sampling, nside=nside)
+# get the acquisition model from the instrument, sampling and scene models
+acq = QubicAcquisition(instrument, sampling, scene)
 
 # get noiseless timeline
 x0 = qubic.io.read_map(qubic.data.PATH + 'syn256_pol.fits')

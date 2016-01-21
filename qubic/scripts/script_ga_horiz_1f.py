@@ -1,7 +1,7 @@
 from __future__ import division
 from qubic import (
-    QubicAcquisition, create_sweeping_pointings, equ2gal, tod2map_all,
-    tod2map_each)
+    create_sweeping_pointings, equ2gal, QubicAcquisition, QubicScene,
+    tod2map_all, tod2map_each)
 import healpy as hp
 import matplotlib.pyplot as mp
 import numpy as np
@@ -26,10 +26,10 @@ np.random.seed(0)
 sampling = create_sweeping_pointings(
     [racenter, deccenter], duration, ts, angspeed, delta_az, nsweeps_el,
     angspeed_psi, maxpsi)
+scene = QubicScene(nside)
 
 # get the acquisition model
-acquisition = QubicAcquisition(150, sampling,
-                               nside=nside,
+acquisition = QubicAcquisition(150, sampling, scene,
                                synthbeam_fraction=0.99,
                                detector_tau=0.01,
                                detector_nep=1.e-17,

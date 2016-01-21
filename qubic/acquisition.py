@@ -34,33 +34,23 @@ class QubicAcquisition(Acquisition):
                  filter_relative_bandwidth=0.25, photon_noise=True,
                  polarizer=True,  primary_beam=None, secondary_beam=None,
                  synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
-                 absolute=False, kind='IQU', nside=256, max_nbytes=None,
-                 nprocs_instrument=None, nprocs_sampling=None, comm=None):
+                 max_nbytes=None, nprocs_instrument=None,
+                 nprocs_sampling=None, comm=None):
         """
-        acq = QubicAcquisition(band, sampling,
-                               [scene=|absolute=, kind=, nside=],
-                               nprocs_instrument=, nprocs_sampling=, comm=)
-        acq = QubicAcquisition(instrument, sampling,
-                               [scene=|absolute=, kind=, nside=],
-                               nprocs_instrument=, nprocs_sampling=, comm=)
+        acq = QubicAcquisition(band, sampling, [scene, nprocs_instrument,
+                               nprocs_sampling, comm])
+        acq = QubicAcquisition(instrument, sampling, [scene, nprocs_instrument,
+                               nprocs_sampling, comm])
 
         Parameters
         ----------
         band : int
             The module nominal frequency, in GHz.
         scene : QubicScene, optional
-            The discretized observed scene (the sky).
+            The discretized observed scene (the sky). If not specified,
+            the scene is instantiated using QubicScene().
         block : tuple of slices, optional
             Partition of the samplings.
-        absolute : boolean, optional
-            If true, the scene pixel values include the CMB background and the
-            fluctuations in units of Kelvin, otherwise it only represents the
-            fluctuations, in microKelvin.
-        kind : 'I', 'QU' or 'IQU', optional
-            The sky kind: 'I' for intensity-only, 'QU' for Q and U maps,
-            and 'IQU' for intensity plus QU maps.
-        nside : int, optional
-            The Healpix scene's nside.
         instrument : QubicInstrument, optional
             The QubicInstrument instance.
         calibration : QubicCalibration, optional
@@ -125,14 +115,7 @@ class QubicAcquisition(Acquisition):
                 secondary_beam=secondary_beam, synthbeam_dtype=synthbeam_dtype,
                 synthbeam_fraction=synthbeam_fraction)
         if scene is None:
-            scene = QubicScene(absolute=absolute, kind=kind, nside=nside)
-        else:
-            attr = 'absolute', 'kind', 'nside'
-            for a in attr:
-                if locals()[a] != getattr(scene, a):
-                    raise ValueError(
-                        "The attribute '{}' is already specified in the input "
-                        "scene.".format(a))
+            scene = QubicScene()
         Acquisition.__init__(
             self, instrument, sampling, scene, block=block,
             max_nbytes=max_nbytes, nprocs_instrument=nprocs_instrument,

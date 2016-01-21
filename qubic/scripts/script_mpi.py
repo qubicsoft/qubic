@@ -5,13 +5,15 @@ for the synthetic beam.
 """
 from __future__ import division
 from qubic import (
-    QubicAcquisition, create_random_pointings, gal2equ, tod2map_all)
+    create_random_pointings, gal2equ, QubicAcquisition, QubicScene,
+    tod2map_all)
 import numpy as np
 import qubic
 
 # read the input map
 input_map = qubic.io.read_map(qubic.data.PATH + 'syn256_pol.fits',
                               field='I_STOKES')
+nside = 256
 
 # let's take the galactic north pole as the center of the observation field
 center_gal = 0, 90
@@ -20,9 +22,10 @@ center = gal2equ(center_gal[0], center_gal[1])
 # sampling model
 np.random.seed(0)
 sampling = create_random_pointings(center, 1000, 10)
+scene = QubicScene(nside, kind='I')
 
 # acquisition model
-acq = QubicAcquisition(150, sampling, kind='I')
+acq = QubicAcquisition(150, sampling, scene)
 hit = acq.get_hitmap()
 
 # Produce the Time-Ordered data

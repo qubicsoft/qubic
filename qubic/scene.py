@@ -13,8 +13,6 @@ class QubicScene(SceneHealpixCMB):
         """
         Parameters
         ----------
-        band : int
-            The operating frequency, in GHz.
         nside : int, optional
             The Healpix scene's nside.
         kind : 'I', 'QU' or 'IQU', optional

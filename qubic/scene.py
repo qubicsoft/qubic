@@ -7,6 +7,13 @@ from scipy.constants import c, h, k
 __all__ = ['QubicScene']
 
 
+class Atmosphere(object):
+    def __init__(self, temperature, emissivity, transmission):
+        self.temperature = temperature
+        self.emissivity = emissivity
+        self.transmission = transmission
+
+
 class QubicScene(SceneHealpixCMB):
     def __init__(self, nside=256, kind='IQU', absolute=False,
                  temperature=2.7255, summer=False):
@@ -31,11 +38,6 @@ class QubicScene(SceneHealpixCMB):
             atmosphere.
 
         """
-        class Atmosphere(object):
-            def __init__(self, temperature, emissivity, transmission):
-                self.temperature = temperature
-                self.emissivity = emissivity
-                self.transmission = transmission
         if summer:
             self.atmosphere = Atmosphere(233., 0.05, 1.)
         else:

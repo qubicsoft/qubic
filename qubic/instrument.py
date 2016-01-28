@@ -27,6 +27,21 @@ from .utils import _compress_mask
 __all__ = ['QubicInstrument']
 
 
+class Filter(object):
+    def __init__(self, nu, relative_bandwidth):
+        self.nu = float(nu)
+        self.relative_bandwidth = float(relative_bandwidth)
+        self.bandwidth = self.nu * self.relative_bandwidth
+
+
+class Optics(object):
+    pass
+
+
+class SyntheticBeam(object):
+    pass
+
+
 class QubicInstrument(Instrument):
     """
     The QubicInstrument class. It represents the instrument setup.
@@ -141,19 +156,12 @@ class QubicInstrument(Instrument):
         self.secondary_beam = secondary
 
     def _init_filter(self, nu, relative_bandwidth):
-        class Filter(object):
-            def __init__(self, nu, relative_bandwidth):
-                self.nu = float(nu)
-                self.relative_bandwidth = float(relative_bandwidth)
-                self.bandwidth = self.nu * self.relative_bandwidth
         self.filter = Filter(nu, relative_bandwidth)
 
     def _init_horns(self):
         self.horn = self.calibration.get('hornarray')
 
     def _init_optics(self, polarizer):
-        class Optics(object):
-            pass
         optics = Optics()
         calib = self.calibration.get('optics')
         optics.components = calib['components']
@@ -162,8 +170,6 @@ class QubicInstrument(Instrument):
         self.optics = optics
 
     def _init_synthbeam(self, dtype, synthbeam_peak150_fwhm):
-        class SyntheticBeam(object):
-            pass
         sb = SyntheticBeam()
         sb.dtype = np.dtype(dtype)
         sb.peak150 = BeamGaussian(synthbeam_peak150_fwhm)

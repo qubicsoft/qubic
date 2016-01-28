@@ -79,6 +79,7 @@ from numpy.distutils.fcompiler import new_fcompiler
 from numpy.distutils.fcompiler.gnu import Gnu95FCompiler
 from numpy.distutils.fcompiler.intel import IntelEM64TFCompiler
 from numpy.distutils.misc_util import f90_ext_match, has_f_sources
+from pkg_resources import parse_version
 from subprocess import call, Popen, PIPE
 from warnings import filterwarnings
 
@@ -124,7 +125,7 @@ def get_cmdclass():
 
     class BuildClibCommand(build_clib):
         def build_libraries(self, libraries):
-            if numpy.__version__ < "1.7":
+            if parse_version(numpy.__version__) < parse_version('1.7'):
                 fcompiler = self.fcompiler
             else:
                 fcompiler = self._f_compiler

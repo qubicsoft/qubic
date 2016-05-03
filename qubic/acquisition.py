@@ -157,7 +157,8 @@ class QubicAcquisition(Acquisition):
         out = self.instrument.get_noise(
             self.sampling, self.scene, photon_noise=self.photon_noise, out=out)
         if self.effective_duration is not None:
-            out *= np.sqrt(len(self.sampling) * self.sampling.period /
+            nsamplings = self.comm.allreduce(len(self.sampling))
+            out *= np.sqrt(nsamplings * self.sampling.period /
                            (self.effective_duration * 31557600))
         return out
     get_noise.__doc__ = Acquisition.get_noise.__doc__
@@ -233,7 +234,8 @@ class QubicAcquisition(Acquisition):
             broadcast='rightward',
             shapein=(len(self.instrument), len(self.sampling)))
         if self.effective_duration is not None:
-            out /= (len(self.sampling) * self.sampling.period /
+            nsamplings = self.comm.allreduce(len(self.sampling))
+            out /= (nsamplings * self.sampling.period /
                     (self.effective_duration * 31557600))
         return out
     get_invntt_operator.__doc__ = Acquisition.get_invntt_operator.__doc__

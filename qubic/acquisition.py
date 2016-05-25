@@ -35,7 +35,8 @@ class QubicAcquisition(Acquisition):
                  polarizer=True,  primary_beam=None, secondary_beam=None,
                  synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
                  max_nbytes=None, nprocs_instrument=None,
-                 nprocs_sampling=None, comm=None):
+                 nprocs_sampling=None, comm=None,
+                 ripples=False, nripples=0):
         """
         acq = QubicAcquisition(band, sampling, [scene, nprocs_instrument,
                                nprocs_sampling, comm])
@@ -113,7 +114,8 @@ class QubicAcquisition(Acquisition):
                 filter_relative_bandwidth=filter_relative_bandwidth,
                 polarizer=polarizer, primary_beam=primary_beam,
                 secondary_beam=secondary_beam, synthbeam_dtype=synthbeam_dtype,
-                synthbeam_fraction=synthbeam_fraction)
+                synthbeam_fraction=synthbeam_fraction,
+                ripples=ripples, nripples=nripples)
         if scene is None:
             scene = QubicScene()
         Acquisition.__init__(

@@ -23,6 +23,7 @@ from scipy.constants import c, h, k
 from . import _flib as flib
 from .calibration import QubicCalibration
 from .utils import _compress_mask
+from .ripples import ConvolutionRippledGaussianOperator, BeamGaussianRippled
 
 __all__ = ['QubicInstrument']
 
@@ -54,7 +55,8 @@ class QubicInstrument(Instrument):
                  primary_beam=None, secondary_beam=None,
                  synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
                  synthbeam_kmax=8,
-                 synthbeam_peak150_fwhm=np.radians(0.39268176)):
+                 synthbeam_peak150_fwhm=np.radians(0.39268176),
+                 ripples=False, nripples=0):
         """
         Parameters
         ----------
@@ -102,6 +104,8 @@ class QubicInstrument(Instrument):
             detector_ngrids, detector_nep, detector_fknee, detector_fslope,
             detector_ncorr, detector_tau)
         Instrument.__init__(self, layout)
+        self.ripples = ripples
+        self.nripples = nripples
         self._init_beams(primary_beam, secondary_beam)
         self._init_filter(filter_nu, filter_relative_bandwidth)
         self._init_horns()
@@ -172,7 +176,11 @@ class QubicInstrument(Instrument):
     def _init_synthbeam(self, dtype, synthbeam_peak150_fwhm):
         sb = SyntheticBeam()
         sb.dtype = np.dtype(dtype)
-        sb.peak150 = BeamGaussian(synthbeam_peak150_fwhm)
+        if not self.ripples:
+            sb.peak150 = BeamGaussian(synthbeam_peak150_fwhm)
+        else:
+            sb.peak150 = BeamGaussianRippled(synthbeam_peak150_fwhm,
+                                             nripples=self.nripples)
         self.synthbeam = sb
 
     def __str__(self):
@@ -270,6 +278,9 @@ class QubicInstrument(Instrument):
         best approximates the synthetic beam.
 
         """
+        if self.ripples:
+            return ConvolutionRippledGaussianOperator(self.filter.nu,
+                                                      **keywords)
         fwhm = self.synthbeam.peak150.fwhm * (150e9 / self.filter.nu)
         return HealpixConvolutionGaussianOperator(fwhm=fwhm, **keywords)
 

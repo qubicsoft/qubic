@@ -30,7 +30,7 @@ class ConvolutionRippledGaussianOperator(HealpixConvolutionGaussianOperator):
                 format(nripples_max + 1))
         self.nripples = nripples
         fl = hp.mrdfits(PATH + 'sb_peak_plus_two_ripples_150HGz.fits')[0]
-        fl = fl / fl.max()
+        fl /= fl.max()
         fl = np.sqrt(fl)
         if freq == 150e9:
             self.fl = fl
@@ -47,7 +47,9 @@ class ConvolutionRippledGaussianOperator(HealpixConvolutionGaussianOperator):
         for i, o in zip(input.T, output.T):
             ialm = hp.map2alm(i)
             alm_smoothed = hp.almxfl(ialm, self.fl)
-            o[...] = hp.alm2map(alm_smoothed, hp.npix2nside(len(i)))
+            o[...] = hp.alm2map(alm_smoothed, hp.npix2nside(len(i)))# * \
+#                     2.2196409083134503 ## A map convolved with ripples is
+#                                        ## this factor lower than the map conv. with gaussian
 
         
 class BeamGaussianRippled(BeamGaussian):

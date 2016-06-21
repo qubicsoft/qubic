@@ -282,6 +282,8 @@ class QubicInstrument(Instrument):
             return ConvolutionRippledGaussianOperator(self.filter.nu,
                                                       **keywords)
         fwhm = self.synthbeam.peak150.fwhm * (150e9 / self.filter.nu)
+        if 'ripples' in keywords.keys():
+            del keywords['ripples']
         return HealpixConvolutionGaussianOperator(fwhm=fwhm, **keywords)
 
     def get_detector_integration_operator(self):

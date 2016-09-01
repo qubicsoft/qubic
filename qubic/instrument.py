@@ -25,7 +25,8 @@ from .calibration import QubicCalibration
 from .utils import _compress_mask
 from .ripples import ConvolutionRippledGaussianOperator, BeamGaussianRippled
 
-__all__ = ['QubicInstrument']
+__all__ = ['QubicInstrument',
+           'QubicMultibandInstrument']
 
 
 class Filter(object):
@@ -553,6 +554,30 @@ class QubicInstrument(Instrument):
         return theta, phi
 
     @staticmethod
+    def _1st_ripple_angles(horn_spacing, nu, theta, phi):
+        """
+        Return the spherical coordinates (theta, phi) of the first ripple,
+        in radians
+        Parameters
+        ----------
+        horn_spacing : float
+            The spacing between horns, in meters.
+        nu : float
+            The frequency at which the interference peaks are computed.
+        theta, phi : arrays
+            The peak positions, computed with _peak_angles_kmax method
+        """
+        lmbda = c / nu
+
+        nx = position[:, 0, None] - lmbda * kx.ravel() / horn_spacing
+        ny = position[:, 1, None] - lmbda * ky.ravel() / horn_spacing
+        local_dict = {'nx': nx, 'ny': ny}
+        theta = ne.evaluate('arcsin(sqrt(nx**2 + ny**2))',
+                            local_dict=local_dict)
+        phi = ne.evaluate('arctan2(ny, nx)', local_dict=local_dict)
+        return theta, phi
+    
+    @staticmethod
     def _get_response_A(position, area, nu, horn, secondary_beam):
         """
         Phase and transmission from the switches to the focal plane.
@@ -772,3 +797,50 @@ def _pack_vector(*args):
     for i, arg in enumerate(args):
         out[..., i] = arg
     return out
+
+class QubicMultibandInstrument():
+    """
+    The QubicMultibandInstrument class
+    Represents the QUBIC multiband features 
+    as an array of QubicInstrumet objects
+    """
+    def __init__(self, calibration=None, detector_fknee=0, detector_fslope=1,
+                 detector_ncorr=10, detector_nep=4.7e-17, detector_ngrids=1,
+                 detector_tau=0.01, 
+                 filter_nus=[150e9], filter_relative_bandwidths=[0.25],
+                 polarizer=True,
+                 primary_beams=None, secondary_beams=None,
+                 synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
+                 synthbeam_kmax=8,
+                 synthbeam_peak150_fwhm=np.radians(0.39268176)):
+        '''
+        filter_nus -- base frequencies array
+        filter_relative_bandwidths -- array of relative bandwidths 
+        '''
+        self.nsubbands = len(filter_nus)
+        if self.nsubbands == 1:
+            raise ValueError('Number of subbands must be > 1')
+        self.subinstruments = [QubicInstrument(filter_nu=filter_nus[i],
+                                    filter_relative_bandwidth=filter_relative_bandwidths[i],
+                                    calibration=calibration, detector_fknee=detector_fknee,
+                                    detector_ncorr=detector_ncorr, detector_nep=detector_nep,
+                                    detector_ngrids=detector_ngrids, detector_tau=detector_tau,
+                                    polarizer=polarizer, 
+                                    primary_beam=primary_beams[i] if primary_beams is not None else None,
+                                    secondary_beam=secondary_beams[i] if secondary_beams is not None else None,
+                                    synthbeam_dtype=synthbeam_dtype, synthbeam_fraction=synthbeam_fraction,
+                                    synthbeam_kmax=synthbeam_kmax, synthbeam_peak150_fwhm=synthbeam_peak150_fwhm)
+                                for i in range(self.nsubbands)]
+
+    def __getitem__(self, i):
+        return self.subinstruments[i]
+
+    def __len__(self):
+        return len(self.subinstruments)
+        
+    def get_synthbeam(self, scene, idet=None, theta_max=45):
+        sb = map(lambda i: i.get_synthbeam(scene, idet, theta_max),
+                 self.subinstruments)
+        sb = np.array(sb)
+        sb = sb.sum(axis=0)
+        return sb

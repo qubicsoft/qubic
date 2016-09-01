@@ -14,7 +14,7 @@ from .data import PATH
 
 __all__ = ['ConvolutionRippledGaussianOperator',
            'BeamGaussianRippled']
-                
+
 class ConvolutionRippledGaussianOperator(HealpixConvolutionGaussianOperator):
     """
     Convolve a Healpix map by a gaussian kernel, modulated by ripples.
@@ -51,6 +51,26 @@ class ConvolutionRippledGaussianOperator(HealpixConvolutionGaussianOperator):
 #                     2.2196409083134503 ## A map convolved with ripples is
 #                                        ## this factor lower than the map conv. with gaussian
 
+class ConvolutionRingOperator(ConvolutionRippledGaussianOperator):
+    def __init__(self, freq,
+                 nripple=1,
+                 **keywords):
+        nripple_max = 2
+        if nripple not in np.arange(1, nripple_max + 1):
+            raise ValueError(
+                'Input nripple is not a positive integer '
+                'less or equal {}'.format(nripples_max))
+        self.nripple = nripple
+        fl = hp.mrdfits(PATH + 'sb_peak_ripple{}_150HGz.fits'.
+                               format(nripple))[0]
+#        fl /= fl.max()
+        fl = np.sqrt(fl)
+        if freq == 150e9:
+            self.fl = fl
+        else:
+            ell = np.arange(len(fl)) + 1
+            spl = splrep(ell * freq / 150e9, fl)
+            self.fl = splev(ell, spl)
         
 class BeamGaussianRippled(BeamGaussian):
     """

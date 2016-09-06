@@ -818,8 +818,6 @@ class QubicMultibandInstrument():
         filter_relative_bandwidths -- array of relative bandwidths 
         '''
         self.nsubbands = len(filter_nus)
-        if self.nsubbands == 1:
-            raise ValueError('Number of subbands must be > 1')
         self.subinstruments = [QubicInstrument(filter_nu=filter_nus[i],
                                     filter_relative_bandwidth=filter_relative_bandwidths[i],
                                     calibration=calibration, detector_fknee=detector_fknee,

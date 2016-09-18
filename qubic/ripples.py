@@ -10,6 +10,7 @@ from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from pysimulators import BeamGaussian
 from pdb import set_trace
 from scipy.interpolate import splrep, splev
+from cPickle import load
 from .data import PATH
 
 __all__ = ['ConvolutionRippledGaussianOperator',
@@ -29,7 +30,8 @@ class ConvolutionRippledGaussianOperator(HealpixConvolutionGaussianOperator):
                 'Input nripples is not a non-negative integer less than {}'.
                 format(nripples_max + 1))
         self.nripples = nripples
-        fl = hp.mrdfits(PATH + 'sb_peak_plus_two_ripples_150HGz.fits')[0]
+        with open(PATH + 'sb_peak_plus_two_ripples_150HGz.pkl', 'r') as f:
+            fl = load(f)
         fl /= fl.max()
         fl = np.sqrt(fl)
         if freq == 150e9:

@@ -37,7 +37,12 @@ class ConvolutionRippledGaussianOperator(HealpixConvolutionGaussianOperator):
         else:
             ell = np.arange(len(fl)) + 1
             spl = splrep(ell * freq / 150e9, fl)
-            self.fl = splev(ell, spl)
+            if freq > 150e9:
+                self.fl = splev(ell, spl)
+            else:
+                fl_ = np.zeros(len(ell))
+                fl_ = splev(ell[ell < ell.max() * freq / 150e9], spl)
+                self.fl = fl_
         print 'Ripples: ', freq
 
     def direct(self, input, output):

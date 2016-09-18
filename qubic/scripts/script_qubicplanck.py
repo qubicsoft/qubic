@@ -56,7 +56,7 @@ def display(input, msg, iplot=1):
     return out
 
 center = equ2gal(racenter, deccenter)
-mp.figure(1)
+mp.figure(1, figsize=(10,8))
 mp.clf()
 solution_qubic['x'][solution_qubic['x'] == 0] = np.nan
 display(convolved_sky, 'Original map', iplot=1)
@@ -64,7 +64,7 @@ display(solution_qubic['x'], 'Reconstructed map', iplot=4)
 res_qubic = display(solution_qubic['x'] - convolved_sky,
                     'Difference map', iplot=7)
 
-mp.figure(2)
+mp.figure(2, figsize=(10,8))
 mp.clf()
 display(convolved_sky, 'Original map', iplot=1)
 display(solution_fusion['x'], 'Reconstructed map', iplot=4)

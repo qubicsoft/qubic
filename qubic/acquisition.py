@@ -374,7 +374,7 @@ class QubicAcquisition(Acquisition):
 
 
 class PlanckAcquisition(object):
-    def __init__(self, band, scene, true_sky=None, factor=1, fwhm=0):
+    def __init__(self, band, scene, true_sky=None, factor=1, fwhm=0, mask=None):
         """
         Parameters
         ----------
@@ -390,7 +390,9 @@ class PlanckAcquisition(object):
             The factor by which the Planck standard deviation is multiplied.
         fwhm : float, optional, !not used!
             The fwhm of the Gaussian used to smooth the map [radians].
-
+        mask : array of shape (npixel, ) or None
+            The boolean mask, which is equal True at pixels where we need Planck,
+            that is outside the QUBIC field.
         """
         if band not in (150, 220):
             raise ValueError("Invalid band '{}'.".format(band))
@@ -405,6 +407,10 @@ class PlanckAcquisition(object):
         self.scene = scene
         self.fwhm = fwhm
         self._true_sky = true_sky
+        if mask is not None:
+            self.mask = mask
+        else:
+            self.mask = np.ones(scene.npixel)
         if band == 150:
             filename = 'Variance_Planck143GHz_Kcmb2_ns256.fits'
         else:
@@ -421,8 +427,9 @@ class PlanckAcquisition(object):
 
     _SIMULATED_PLANCK_SEED = 0
 
-    def get_operator(self):
-        return IdentityOperator(shapein=self.scene.shape)
+    def get_operator(self):        
+        return DiagonalOperator(self.mask.astype(np.int), broadcast='rightward',
+                                shapein=self.scene.shape)
 
     def get_invntt_operator(self):
         return DiagonalOperator(1 / self.sigma**2, broadcast='leftward',
@@ -439,6 +446,11 @@ class PlanckAcquisition(object):
         obs = self._true_sky
         if not noiseless:
             obs = obs + self.get_noise()
+        if len(self.scene.shape) == 2:
+            for i in xrange(self.scene.shape[1]):
+                obs[~(self.mask), i] = 0.
+        else:
+            obs[~(self.mask)] = 0.
         return obs
         #XXX neglecting convolution effects...
         HealpixConvolutionGaussianOperator(fwhm=self.fwhm)(obs, obs)

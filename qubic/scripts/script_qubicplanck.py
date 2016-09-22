@@ -22,7 +22,9 @@ scene = QubicScene(nside)
 
 acq_qubic = QubicAcquisition(150, sampling, scene, effective_duration=1)
 convolved_sky = acq_qubic.instrument.get_convolution_peak_operator()(sky)
-acq_planck = PlanckAcquisition(150, acq_qubic.scene, true_sky=convolved_sky)
+cov = acq_qubic.get_coverage()
+mask = cov < cov.max() * 0.2
+acq_planck = PlanckAcquisition(150, acq_qubic.scene, true_sky=convolved_sky, mask=mask)
 acq_fusion = QubicPlanckAcquisition(acq_qubic, acq_planck)
 
 H = acq_fusion.get_operator()

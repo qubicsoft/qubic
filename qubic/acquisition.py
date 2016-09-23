@@ -374,7 +374,7 @@ class QubicAcquisition(Acquisition):
 
 
 class PlanckAcquisition(object):
-    def __init__(self, band, scene, true_sky=None, factor=1, fwhm=0, mask=None):
+    def __init__(self, band, scene, true_sky=None, factor=1, fwhm=0, mask=None, convolution_operator=None):
         """
         Parameters
         ----------
@@ -424,6 +424,10 @@ class PlanckAcquisition(object):
             sigma = np.array(hp.ud_grade(sigma.T, self.scene.nside, power=2),
                              copy=False).T
         self.sigma = sigma
+        if convolution_operator is None:
+            self.C = IdentityOperator()
+        else:
+            self.C = convolution_operator
 
     _SIMULATED_PLANCK_SEED = 0
 
@@ -445,7 +449,7 @@ class PlanckAcquisition(object):
     def get_observation(self, noiseless=False):
         obs = self._true_sky
         if not noiseless:
-            obs = obs + self.get_noise()
+            obs = obs + self.C(self.get_noise())
         if len(self.scene.shape) == 2:
             for i in xrange(self.scene.shape[1]):
                 obs[~(self.mask), i] = 0.

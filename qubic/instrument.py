@@ -709,7 +709,7 @@ class QubicInstrument(Instrument):
         nhorn = int(np.sum(horn.open))
         npix = len(index)
         nbytes_B = npix * nhorn * 24
-        ngroup = np.ceil(nbytes_B / MAX_MEMORY_B)
+        ngroup = np.ceil(nbytes_B / MAX_MEMORY_B).astype(np.int)
         out = np.zeros(position.shape[:-1] + (len(scene),),
                        dtype=synthbeam_dtype)
         for s in split(npix, ngroup):
@@ -784,18 +784,38 @@ class QubicMultibandInstrument():
                  detector_ncorr=10, detector_nep=4.7e-17, detector_ngrids=1,
                  detector_tau=0.01, 
                  filter_nus=[150e9], filter_relative_bandwidths=[0.25],
+                 center_detector=False,
                  polarizer=True,
                  primary_beams=None, secondary_beams=None,
                  synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
                  synthbeam_kmax=8,
                  synthbeam_peak150_fwhm=np.radians(0.39268176),
-                 ripples=False, nripples=0):
+                 ripples=False, nripples=0,):
         '''
         filter_nus -- base frequencies array
         filter_relative_bandwidths -- array of relative bandwidths 
+        center_detector -- bolean, optional
+            if True, take only one detector at the centre of the focal plane
+            Needed to study the synthesised beam
         '''
         self.nsubbands = len(filter_nus)
-        self.subinstruments = [QubicInstrument(filter_nu=filter_nus[i],
+        if not center_detector:
+            self.subinstruments = [QubicInstrument(filter_nu=filter_nus[i],
+                                        filter_relative_bandwidth=filter_relative_bandwidths[i],
+                                        calibration=calibration, detector_fknee=detector_fknee,
+                                        detector_ncorr=detector_ncorr, detector_nep=detector_nep,
+                                        detector_ngrids=detector_ngrids, detector_tau=detector_tau,
+                                        polarizer=polarizer, 
+                                        primary_beam=primary_beams[i] if primary_beams is not None else None,
+                                        secondary_beam=secondary_beams[i] if secondary_beams is not None else None,
+                                        synthbeam_dtype=synthbeam_dtype, synthbeam_fraction=synthbeam_fraction,
+                                        synthbeam_kmax=synthbeam_kmax, synthbeam_peak150_fwhm=synthbeam_peak150_fwhm,
+                                        ripples=ripples, nripples=nripples)
+                                    for i in range(self.nsubbands)]
+        else:
+            self.subinstruments = []
+            for i in range(self.nsubbands):
+                q = QubicInstrument(filter_nu=filter_nus[i],
                                     filter_relative_bandwidth=filter_relative_bandwidths[i],
                                     calibration=calibration, detector_fknee=detector_fknee,
                                     detector_ncorr=detector_ncorr, detector_nep=detector_nep,
@@ -805,8 +825,9 @@ class QubicMultibandInstrument():
                                     secondary_beam=secondary_beams[i] if secondary_beams is not None else None,
                                     synthbeam_dtype=synthbeam_dtype, synthbeam_fraction=synthbeam_fraction,
                                     synthbeam_kmax=synthbeam_kmax, synthbeam_peak150_fwhm=synthbeam_peak150_fwhm,
-                                    ripples=ripples, nripples=nripples)
-                                for i in range(self.nsubbands)]
+                                    ripples=ripples, nripples=nripples)[0]
+                q.detector.center = np.array([[0., 0., -0.3]])
+                self.subinstruments.append(q)
 
     def __getitem__(self, i):
         return self.subinstruments[i]

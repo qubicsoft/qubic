@@ -33,19 +33,21 @@ class ConvolutionRippledGaussianOperator(HealpixConvolutionGaussianOperator):
         with open(PATH + 'sb_peak_plus_two_ripples_150HGz.pkl', 'r') as f:
             fl = load(f)
         fl /= fl.max()
-        fl = np.sqrt(fl)
         if freq == 150e9:
-            self.fl = fl
+            fl_ = fl
         else:
+            corr = [1.46267864e-02, -2.00357954e-04, 8.78667514e-07, -1.28273853e-09]
+            def f(x, p):
+                return p[0] + p[1] * x + p[2] * x**2 + p[3] * x**3
             ell = np.arange(len(fl)) + 1
             spl = splrep(ell * freq / 150e9, fl)
             if freq > 150e9:
-                self.fl = splev(ell, spl)
+                fl_ = splev(ell, spl) * (1 + ell * f(freq / 1e9, corr))
             else:
                 fl_ = np.zeros(len(ell))
-                fl_ = splev(ell[ell < ell.max() * freq / 150e9], spl)
-                self.fl = fl_
-        print 'Ripples: ', freq
+                fl_ = splev(ell[ell < ell.max() * freq / 150e9], spl) * \
+                       (1 + ell[ell < ell.max() * freq / 150e9] * f(freq / 1e9, corr))
+        self.fl = np.sqrt(fl_)
 
     def direct(self, input, output):
         if input.ndim == 1:

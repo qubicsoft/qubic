@@ -36,17 +36,18 @@ class ConvolutionRippledGaussianOperator(HealpixConvolutionGaussianOperator):
         if freq == 150e9:
             fl_ = fl
         else:
-            corr = [1.46267864e-02, -2.00357954e-04, 8.78667514e-07, -1.28273853e-09]
+            corr1 = [  1.65327594e-02, -2.24216210e-04, 9.70939946e-07, -1.40191824e-09]
+            corr2 = [ -3.80559542e-01, 4.76370274e-03, -1.84237511e-05, 2.37962542e-08]
             def f(x, p):
                 return p[0] + p[1] * x + p[2] * x**2 + p[3] * x**3
             ell = np.arange(len(fl)) + 1
             spl = splrep(ell * freq / 150e9, fl)
             if freq > 150e9:
-                fl_ = splev(ell, spl) * (1 + ell * f(freq / 1e9, corr))
+                fl_ = splev(ell, spl) * (1 + f(freq / 1e9, corr2) + ell * f(freq / 1e9, corr1))
             else:
                 fl_ = np.zeros(len(ell))
                 fl_ = splev(ell[ell < ell.max() * freq / 150e9], spl) * \
-                       (1 + ell[ell < ell.max() * freq / 150e9] * f(freq / 1e9, corr))
+                       (1 + f(freq / 1e9, corr2) + ell[ell < ell.max() * freq / 150e9] * f(freq / 1e9, corr1))
         self.fl = np.sqrt(fl_)
 
     def direct(self, input, output):

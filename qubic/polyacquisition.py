@@ -231,7 +231,6 @@ class QubicPolyAcquisition(object):
         if cov is not None:
             cov_inv = 1 / cov
             cov_inv[cov == 0.] = 1.
-            cov_inv = np.sqrt(cov_inv)
             preconditioner = DiagonalOperator(cov_inv, broadcast='rightward')
         else:
             preconditioner = None
@@ -320,6 +319,15 @@ class QubicPolyPlanckAcquisition(QubicPlanckAcquisition):
                                    axis=0,
                                    weights=self.weights)
         return tod
+
+    def get_preconditioner(self, cov):
+        if cov is not None:
+            cov[cov == 0.] = cov[cov != 0.].min()
+            cov_inv = 1 / cov
+            preconditioner = DiagonalOperator(cov_inv, broadcast='rightward')
+        else:
+            preconditioner = None
+        return preconditioner
 
     def tod2map(self, tod, cov=None, tol=1e-5, maxiter=1000, verbose=True):
         H = self.get_operator()

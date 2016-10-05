@@ -410,7 +410,7 @@ class PlanckAcquisition(object):
         if mask is not None:
             self.mask = mask
         else:
-            self.mask = np.ones(scene.npixel)
+            self.mask = np.ones(scene.npixel, dtype=np.bool)
         if band == 150:
             filename = 'Variance_Planck143GHz_Kcmb2_ns256.fits'
         else:

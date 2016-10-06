@@ -120,8 +120,6 @@ class QubicMultibandAcquisition(QubicPolyAcquisition):
     def get_preconditioner(self, cov):
         if cov is not None:
             cov_inv = 1 / cov
-            cov_inv[cov == 0.] = 1.
-            cov_inv = np.sqrt(cov_inv)
             return BlockDiagonalOperator(\
                 [DiagonalOperator(cov_inv, broadcast='rightward')], new_axisin=0)
         else:

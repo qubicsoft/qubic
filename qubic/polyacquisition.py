@@ -322,9 +322,9 @@ class QubicPolyPlanckAcquisition(QubicPlanckAcquisition):
 
     def get_preconditioner(self, cov):
         if cov is not None:
-            cov[cov == 0.] = cov[cov != 0.].min()
-            cov_inv = 1 / cov
-            preconditioner = DiagonalOperator(cov_inv, broadcast='rightward')
+            denominator = cov * self.planck.sigma**2 + \
+                          np.ones(len(cov)) * self.qubic[0].sigma**2
+            preconditioner = DiagonalOperator(1 / denominator, broadcast='rightward')
         else:
             preconditioner = None
         return preconditioner

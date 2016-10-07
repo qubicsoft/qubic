@@ -210,7 +210,7 @@ class QubicMultibandPlanckAcquisition(QubicPolyPlanckAcquisition):
         else:
             b = b.reshape((sh[0] * sh[1]))
 
-        preconditioner = self.qubic.get_preconditioner(cov)
+        preconditioner = self.get_preconditioner(cov)
         solution = pcg(A, b, disp=verbose, tol=tol, maxiter=maxiter)
         if len(sh) == 3:
             maps_recon = solution['x'].reshape(sh[0], sh[1], sh[2])

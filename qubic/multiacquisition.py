@@ -121,7 +121,9 @@ class QubicMultibandAcquisition(QubicPolyAcquisition):
         if cov is not None:
             cov_inv = 1 / cov
             return BlockDiagonalOperator(\
-                [DiagonalOperator(cov_inv, broadcast='rightward')], new_axisin=0)
+                [DiagonalOperator(cov_inv[(self.nus > mi) * (self.nus < ma)], 
+                    broadcast='rightward') for (mi, ma) in self.bands], 
+                new_axisin=0)
         else:
             return None
 

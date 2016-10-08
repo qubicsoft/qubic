@@ -119,10 +119,11 @@ class QubicMultibandAcquisition(QubicPolyAcquisition):
 
     def get_preconditioner(self, cov):
         if cov is not None:
-            cov_inv = 1 / cov
+            cov_inv = np.array([1. / cov[(self.nus > mi) * (self.nus < ma)].mean(axis=0) \
+                for (mi, ma) in self.bands])
+            cov_inv = np.nan_to_num(cov_inv)
             return BlockDiagonalOperator(\
-                [DiagonalOperator(cov_inv[(self.nus > mi) * (self.nus < ma)], 
-                    broadcast='rightward') for (mi, ma) in self.bands], 
+                [DiagonalOperator(ci, broadcast='rightward') for ci in cov_inv],
                 new_axisin=0)
         else:
             return None

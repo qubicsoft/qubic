@@ -186,6 +186,17 @@ class QubicMultibandPlanckAcquisition(QubicPolyPlanckAcquisition):
             return obs, np.array(obs_qubic_[1])
         return obs
 
+    def get_preconditioner(self, cov):
+        if cov is not None:
+            cov += np.ones(cov.shape) * cov.max() * 0.001
+            cov_inv = np.array([1. / cov[(self.nus > mi) * (self.nus < ma)].mean(axis=0) \
+                for (mi, ma) in self.bands])
+            return BlockDiagonalOperator(\
+                [DiagonalOperator(ci, broadcast='rightward') for ci in cov_inv],
+                new_axisin=0)
+        else:
+            return None
+
     def tod2map(self, tod, cov=None, tol=1e-5, maxiter=1000, verbose=True):
         p = self.planck
         H = []

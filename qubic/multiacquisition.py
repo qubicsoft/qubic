@@ -189,11 +189,10 @@ class QubicMultibandPlanckAcquisition(QubicPolyPlanckAcquisition):
     def get_preconditioner(self, cov):
         if cov is not None:
             cov += np.ones(cov.shape) * cov.max() * 0.001
-            cov_inv = np.array([1. / cov[(self.nus > mi) * (self.nus < ma)].mean(axis=0) \
-                for (mi, ma) in self.bands])
-            return BlockDiagonalOperator(\
-                [DiagonalOperator(ci, broadcast='rightward') for ci in cov_inv],
-                new_axisin=0)
+            cov_inv = np.array([1. / cov[(self.qubic.nus > mi) * \
+                                         (self.qubic.nus < ma)].mean(axis=0) \
+                                for (mi, ma) in self.qubic.bands])
+            return DiagonalOperator(cov_inv.flatten(), broadcast='rightward')
         else:
             return None
 
@@ -224,8 +223,9 @@ class QubicMultibandPlanckAcquisition(QubicPolyPlanckAcquisition):
         else:
             b = b.reshape((sh[0] * sh[1]))
 
-        preconditioner = self.qubic.get_preconditioner(cov)
-        solution = pcg(A, b, disp=verbose, tol=tol, maxiter=maxiter)
+        preconditioner = self.get_preconditioner(cov)
+        solution = pcg(A, b, M=preconditioner, disp=verbose, tol=tol, maxiter=maxiter)
+#        solution = pcg(A, b, disp=verbose, tol=tol, maxiter=maxiter)
         if len(sh) == 3:
             maps_recon = solution['x'].reshape(sh[0], sh[1], sh[2])
         else:

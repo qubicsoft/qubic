@@ -230,6 +230,7 @@ class QubicPolyAcquisition(object):
     def get_preconditioner(self, cov):
         if cov is not None:
             cov_inv = 1 / cov
+            cov_inv[np.isinf(cov_inv)] = 0.
             preconditioner = DiagonalOperator(cov_inv, broadcast='rightward')
         else:
             preconditioner = None

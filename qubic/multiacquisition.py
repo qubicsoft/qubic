@@ -121,7 +121,8 @@ class QubicMultibandAcquisition(QubicPolyAcquisition):
         if cov is not None:
             cov_inv = np.array([1. / cov[(self.nus > mi) * (self.nus < ma)].mean(axis=0) \
                 for (mi, ma) in self.bands])
-            cov_inv = np.nan_to_num(cov_inv)
+            cov_inv[np.isinf(cov_inv)] = 0.
+            # cov_inv = np.nan_to_num(cov_inv)
             return BlockDiagonalOperator(\
                 [DiagonalOperator(ci, broadcast='rightward') for ci in cov_inv],
                 new_axisin=0)

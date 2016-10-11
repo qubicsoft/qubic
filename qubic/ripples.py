@@ -49,6 +49,7 @@ class ConvolutionRippledGaussianOperator(HealpixConvolutionGaussianOperator):
                 fl_ = splev(ell[ell < ell.max() * freq / 150e9], spl) * \
                        (1 + f(freq / 1e9, corr2) + ell[ell < ell.max() * freq / 150e9] * f(freq / 1e9, corr1))
         self.fl = np.sqrt(fl_)
+        self.fl[np.isnan(self.fl)] = 0.
 
     def direct(self, input, output):
         if input.ndim == 1:

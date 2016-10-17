@@ -82,9 +82,6 @@ class QubicMultibandAcquisition(QubicPolyAcquisition):
         noiseless : boolean, optional [default=False]
             if False, add noise to the TOD due to the model
         '''
-        if len(self) == 1:
-            return self[0].get_observation(m, convolution=convolution, noiseless=noiseless)
-
         if self.scene.kind != 'I':
             shape = (len(self), m.shape[1], m.shape[2])
         else:
@@ -219,10 +216,11 @@ class QubicMultibandPlanckAcquisition(QubicPolyPlanckAcquisition):
         H = [h.T for h in H]
         b = BlockColumnOperator(H, new_axisout=0) * (invntt * tod)
         sh = b.shape
-        if len(sh) == 3:
-            b = b.reshape((sh[0] * sh[1], sh[2]))
-        else:
-            b = b.reshape((sh[0] * sh[1]))
+        if len(self.qubic.nus) - 1 > 1: # If number of subbands is more than one
+            if len(sh) == 3:
+                b = b.reshape((sh[0] * sh[1], sh[2]))
+            else:
+                b = b.reshape((sh[0] * sh[1]))
 
         preconditioner = self.get_preconditioner(cov)
         solution = pcg(A, b, M=preconditioner, disp=verbose, tol=tol, maxiter=maxiter)

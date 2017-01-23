@@ -182,7 +182,9 @@ def _tod2map(acq, tod, coverage_threshold, max_nbytes, callback,
     acq_restricted = acq[..., mask]
     H = acq_restricted.get_operator()
     invNtt = acq_restricted.get_invntt_operator()
-    preconditioner = DiagonalOperator(1/coverage[mask], broadcast='rightward')
+    M = (H.T * H * np.ones(H.shapein))[..., 0]
+    preconditioner = DiagonalOperator(1/M, broadcast='rightward')
+#    preconditioner = DiagonalOperator(1/coverage[mask], broadcast='rightward')
     nsamplings = acq.comm.allreduce(len(acq.sampling))
     npixels = np.sum(mask)
 

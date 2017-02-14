@@ -82,9 +82,6 @@ class QubicMultibandAcquisition(QubicPolyAcquisition):
         noiseless : boolean, optional [default=False]
             if False, add noise to the TOD due to the model
         '''
-        if len(self) == 1:
-            return self[0].get_observation(m, convolution=convolution, noiseless=noiseless)
-
         if self.scene.kind != 'I':
             shape = (len(self), m.shape[1], m.shape[2])
         else:
@@ -119,9 +116,13 @@ class QubicMultibandAcquisition(QubicPolyAcquisition):
 
     def get_preconditioner(self, cov):
         if cov is not None:
-            cov_inv = 1 / cov
+            cov_inv = np.array([1. / cov[(self.nus > mi) * (self.nus < ma)].mean(axis=0) \
+                for (mi, ma) in self.bands])
+            cov_inv[np.isinf(cov_inv)] = 0.
+            # cov_inv = np.nan_to_num(cov_inv)
             return BlockDiagonalOperator(\
-                [DiagonalOperator(cov_inv, broadcast='rightward')], new_axisin=0)
+                [DiagonalOperator(ci, broadcast='rightward') for ci in cov_inv],
+                new_axisin=0)
         else:
             return None
 
@@ -183,6 +184,16 @@ class QubicMultibandPlanckAcquisition(QubicPolyPlanckAcquisition):
             return obs, np.array(obs_qubic_[1])
         return obs
 
+    def get_preconditioner(self, cov):
+        if cov is not None:
+            cov += np.ones(cov.shape) * cov.max() * 0.001
+            cov_inv = np.array([1. / cov[(self.qubic.nus > mi) * \
+                                         (self.qubic.nus < ma)].mean(axis=0) \
+                                for (mi, ma) in self.qubic.bands])
+            return DiagonalOperator(cov_inv.flatten(), broadcast='rightward')
+        else:
+            return None
+
     def tod2map(self, tod, cov=None, tol=1e-5, maxiter=1000, verbose=True):
         p = self.planck
         H = []
@@ -205,6 +216,7 @@ class QubicMultibandPlanckAcquisition(QubicPolyPlanckAcquisition):
         H = [h.T for h in H]
         b = BlockColumnOperator(H, new_axisout=0) * (invntt * tod)
         sh = b.shape
+<<<<<<< HEAD
         if len(sh) == 3:
             b = b.reshape((sh[0] * sh[1], sh[2]))
         else:
@@ -212,6 +224,17 @@ class QubicMultibandPlanckAcquisition(QubicPolyPlanckAcquisition):
 
         preconditioner = self.get_preconditioner(cov)
         solution = pcg(A, b, disp=verbose, tol=tol, maxiter=maxiter)
+=======
+        if len(self.qubic.nus) - 1 > 1: # If number of subbands is more than one
+            if len(sh) == 3:
+                b = b.reshape((sh[0] * sh[1], sh[2]))
+            else:
+                b = b.reshape((sh[0] * sh[1]))
+
+        preconditioner = self.get_preconditioner(cov)
+        solution = pcg(A, b, M=preconditioner, disp=verbose, tol=tol, maxiter=maxiter)
+#        solution = pcg(A, b, disp=verbose, tol=tol, maxiter=maxiter)
+>>>>>>> good
         if len(sh) == 3:
             maps_recon = solution['x'].reshape(sh[0], sh[1], sh[2])
         else:

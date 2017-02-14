@@ -230,7 +230,7 @@ class QubicPolyAcquisition(object):
     def get_preconditioner(self, cov):
         if cov is not None:
             cov_inv = 1 / cov
-            cov_inv[cov == 0.] = 1.
+            cov_inv[np.isinf(cov_inv)] = 0.
             preconditioner = DiagonalOperator(cov_inv, broadcast='rightward')
         else:
             preconditioner = None
@@ -320,6 +320,7 @@ class QubicPolyPlanckAcquisition(QubicPlanckAcquisition):
                                    weights=self.weights)
         return tod
 
+<<<<<<< HEAD
     def get_preconditioner(self, cov):
         if cov is not None:
             denominator = cov * self.planck.sigma**2 + \
@@ -327,14 +328,19 @@ class QubicPolyPlanckAcquisition(QubicPlanckAcquisition):
             preconditioner = DiagonalOperator(1 / denominator, broadcast='rightward')
         else:
             preconditioner = None
+=======
+    def get_preconditioner(self, H):
+        M = (H.T * H * np.ones(H.shapein))[..., 0]
+        preconditioner = DiagonalOperator(1 / M, broadcast='rightward')
+>>>>>>> good
         return preconditioner
 
-    def tod2map(self, tod, cov=None, tol=1e-5, maxiter=1000, verbose=True):
+    def tod2map(self, tod, tol=1e-5, maxiter=1000, verbose=True):
         H = self.get_operator()
         invntt = self.get_invntt_operator()
         A = H.T * invntt * H
         b = H.T * invntt * tod
 
-        preconditioner = self.qubic.get_preconditioner(cov)
+        preconditioner = self.get_preconditioner(H)
         solution = pcg(A, b, M=preconditioner, disp=verbose, tol=tol, maxiter=maxiter)
         return solution['x']

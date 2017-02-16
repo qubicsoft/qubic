@@ -9,6 +9,7 @@ from qubic import (create_random_pointings, gal2equ,
                   QubicMultibandInstrument,
                   QubicPolyAcquisition,
                   PlanckAcquisition,
+                  QubicPlanckAcquisition,
                   QubicPolyPlanckAcquisition)
 
 nside = 256
@@ -64,7 +65,7 @@ for i, (inp, rec, iqu) in enumerate(zip(maps_convolved.T, maps_recon.T, 'IQU')):
         sub=(3, 3, i+7), min=-_max[i], max=_max[i], title='Diff, {}'.format(iqu))
 
 # Now let's play with the fusion acquisition
-planck = PlanckAcquisition(band, a.scene, true_sky=maps_convolved[0])
+planck = PlanckAcquisition(band, a.scene, true_sky=maps_convolved)
 acq_fusion = QubicPlanckAcquisition(a, acq_planck)
 
 TOD, maps_convolved = a.get_observation(x0)

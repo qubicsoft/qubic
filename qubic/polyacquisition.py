@@ -320,19 +320,9 @@ class QubicPolyPlanckAcquisition(QubicPlanckAcquisition):
                                    weights=self.weights)
         return tod
 
-<<<<<<< HEAD
-    def get_preconditioner(self, cov):
-        if cov is not None:
-            denominator = cov * self.planck.sigma**2 + \
-                          np.ones(len(cov)) * self.qubic[0].sigma**2
-            preconditioner = DiagonalOperator(1 / denominator, broadcast='rightward')
-        else:
-            preconditioner = None
-=======
     def get_preconditioner(self, H):
         M = (H.T * H * np.ones(H.shapein))[..., 0]
         preconditioner = DiagonalOperator(1 / M, broadcast='rightward')
->>>>>>> good
         return preconditioner
 
     def tod2map(self, tod, tol=1e-5, maxiter=1000, verbose=True):

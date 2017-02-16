@@ -10,6 +10,9 @@ from .mapmaking import *
 from .samplings import *
 from .scene import *
 from .xpol import *
+from .polyacquisition import *
+from .multiacquisition import *
+from .ripples import *
 
 
 def full(shape, fill_value, dtype=None, order='C'):

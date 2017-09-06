@@ -82,6 +82,7 @@ class QubicMultibandAcquisition(QubicPolyAcquisition):
         noiseless : boolean, optional [default=False]
             if False, add noise to the TOD due to the model
         '''
+
         if self.scene.kind != 'I':
             shape = (len(self), m.shape[1], m.shape[2])
         else:
@@ -92,20 +93,20 @@ class QubicMultibandAcquisition(QubicPolyAcquisition):
             for i in range(len(self)):
                 C = self[i].get_convolution_peak_operator()
                 _maps_convolved[i] = C(m[i])
-            y = self.get_operator_to_make_TOD() * _maps_convolved
+            tod = self.get_operator_to_make_TOD() * _maps_convolved
         else:
-            y = self.get_operator() * m
+            tod = self.get_operator() * m
 
         if not noiseless:
-            y += self.get_noise()
+            tod += self.get_noise()
 
         if convolution:
             maps_convolved = [np.average(_maps_convolved[(self.nus > mi) * (self.nus < ma)], 
                               axis=0, weights=self.weights[(self.nus > mi) * (self.nus < ma)]) \
                               for (mi, ma) in self.bands]
-            return y, maps_convolved
+            return tod, maps_convolved
 
-        return y
+        return tod
 
     def get_operator(self):
         op = np.array(self._get_array_of_operators())
@@ -153,7 +154,7 @@ class QubicMultibandPlanckAcquisition(QubicPolyPlanckAcquisition):
         self.qubic = qubic
         self.planck = planck
         if weights == None:
-            self.weights = np.ones(len(self)) / len(self)
+            self.weights = np.ones(len(self)) #/ len(self)
         else:
             self.weights = weights
 
@@ -161,7 +162,7 @@ class QubicMultibandPlanckAcquisition(QubicPolyPlanckAcquisition):
     def __len__(self):
         return len(self.qubic)
 
-    def get_observation(self, maps, noiseless=False, convolution=True):
+    def get_observation(self, maps, noiseless=False, convolution=False):
         """
         Return the fused observation.
 

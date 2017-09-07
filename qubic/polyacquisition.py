@@ -89,7 +89,7 @@ class QubicPolyAcquisition(object):
             a.comm = self[0].comm
         self.scene = scene
         if weights == None:
-            self.weights = np.ones(len(self)) / len(self)
+            self.weights = np.ones(len(self)) #/ len(self)
         else:
             self.weights = weights
 
@@ -278,7 +278,7 @@ class QubicPolyPlanckAcquisition(QubicPlanckAcquisition):
         self.qubic = qubic
         self.planck = planck
         if weights == None:
-            self.weights = np.ones(len(self)) / len(self)
+            self.weights = np.ones(len(self)) #/ len(self)
         else:
             self.weights = weights
 

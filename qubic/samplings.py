@@ -114,7 +114,7 @@ class QubicPointing(QubicSampling):
 
 
 def create_random_pointings(center, npointings, dtheta, date_obs=None,
-                            period=None, latitude=None, longitude=None):
+                            period=None, latitude=None, longitude=None, seed=None):
     """
     Return pointings randomly and uniformly distributed in a spherical cap.
 
@@ -136,11 +136,12 @@ def create_random_pointings(center, npointings, dtheta, date_obs=None,
         The observer's longitude [degrees]. Default is DOMEC's.
 
     """
+    r = np.random.RandomState(seed)
+    
     cosdtheta = np.cos(np.radians(dtheta))
-    theta = np.degrees(np.arccos(cosdtheta +
-                                 (1 - cosdtheta) * randomu(npointings)))
-    phi = randomu(npointings) * 360
-    pitch = randomu(npointings) * 360
+    theta = np.degrees(np.arccos(cosdtheta + (1 - cosdtheta) * r.rand(npointings)))
+    phi   = r.rand(npointings) * 360
+    pitch = r.rand(npointings) * 360
     p = QubicSampling(
         npointings, date_obs=date_obs, period=period, latitude=latitude,
         longitude=longitude)
@@ -155,7 +156,7 @@ def create_random_pointings(center, npointings, dtheta, date_obs=None,
     p.azimuth = coords[..., 0]
     p.elevation = coords[..., 1]
     p.pitch = pitch
-    p.angle_hwp = np.random.random_integers(0, 7, npointings) * 11.25
+    p.angle_hwp = r.random_integers(0, 7, npointings) * 11.25
     return p
 
 

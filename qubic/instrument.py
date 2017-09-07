@@ -127,9 +127,7 @@ class QubicInstrument(Instrument):
             quadrant = np.array([quadrant, quadrant + 4], quadrant.dtype)
             efficiency = np.array([efficiency, efficiency])
         focal_length = self.calibration.get('optics')['focal length']
-
-        vertex = np.concatenate(
-            [vertex, np.full_like(vertex[..., :1], -focal_length)], -1)
+        vertex = np.concatenate([vertex, np.full_like(vertex[..., :1], -focal_length)], -1)
 
         def theta(self):
             return np.arctan2(

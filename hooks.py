@@ -34,10 +34,10 @@ F77_OPENMP = True
 F90_OPENMP = True
 F77_COMPILE_ARGS_GFORTRAN = []
 F77_COMPILE_DEBUG_GFORTRAN = ['-fcheck=all -Og']
-F77_COMPILE_OPT_GFORTRAN = ['-Ofast -march=native']
+F77_COMPILE_OPT_GFORTRAN = ['-O2 -march=native']
 F90_COMPILE_ARGS_GFORTRAN = ['-cpp']
 F90_COMPILE_DEBUG_GFORTRAN = ['-fcheck=all -Og']
-F90_COMPILE_OPT_GFORTRAN = ['-Ofast -march=native']
+F90_COMPILE_OPT_GFORTRAN = ['-O2 -march=native']
 F77_COMPILE_ARGS_IFORT = []
 F77_COMPILE_DEBUG_IFORT = ['-check all']
 F77_COMPILE_OPT_IFORT = ['-fast']
@@ -132,7 +132,7 @@ def get_cmdclass():
             if isinstance(fcompiler,
                           numpy.distutils.fcompiler.gnu.Gnu95FCompiler):
                 old_value = numpy.distutils.log.set_verbosity(-2)
-                exe = numpy.distutils.exec_command.find_executable('gcc-ar')
+                exe = numpy.distutils.exec_command.find_executable('gcc-ar --enable-plugin')
                 if exe is None:
                     exe = numpy.distutils.exec_command.find_executable('ar')
                 numpy.distutils.log.set_verbosity(old_value)

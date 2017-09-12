@@ -22,7 +22,9 @@ scene = QubicScene(nside)
 
 acq_qubic = QubicAcquisition(150, sampling, scene, effective_duration=1)
 convolved_sky = acq_qubic.instrument.get_convolution_peak_operator()(sky)
-acq_planck = PlanckAcquisition(150, acq_qubic.scene, true_sky=convolved_sky)
+cov = acq_qubic.get_coverage()
+mask = cov < cov.max() * 0.2
+acq_planck = PlanckAcquisition(150, acq_qubic.scene, true_sky=convolved_sky, mask=mask)
 acq_fusion = QubicPlanckAcquisition(acq_qubic, acq_planck)
 
 H = acq_fusion.get_operator()
@@ -56,7 +58,7 @@ def display(input, msg, iplot=1):
     return out
 
 center = equ2gal(racenter, deccenter)
-mp.figure(1)
+mp.figure(1, figsize=(10,8))
 mp.clf()
 solution_qubic['x'][solution_qubic['x'] == 0] = np.nan
 display(convolved_sky, 'Original map', iplot=1)
@@ -64,7 +66,7 @@ display(solution_qubic['x'], 'Reconstructed map', iplot=4)
 res_qubic = display(solution_qubic['x'] - convolved_sky,
                     'Difference map', iplot=7)
 
-mp.figure(2)
+mp.figure(2, figsize=(10,8))
 mp.clf()
 display(convolved_sky, 'Original map', iplot=1)
 display(solution_fusion['x'], 'Reconstructed map', iplot=4)

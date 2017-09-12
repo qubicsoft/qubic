@@ -23,8 +23,10 @@ from scipy.constants import c, h, k
 from . import _flib as flib
 from .calibration import QubicCalibration
 from .utils import _compress_mask
+from .ripples import ConvolutionRippledGaussianOperator, BeamGaussianRippled
 
-__all__ = ['QubicInstrument']
+__all__ = ['QubicInstrument',
+           'QubicMultibandInstrument']
 
 
 class Filter(object):
@@ -54,7 +56,8 @@ class QubicInstrument(Instrument):
                  primary_beam=None, secondary_beam=None,
                  synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
                  synthbeam_kmax=8,
-                 synthbeam_peak150_fwhm=np.radians(0.39268176)):
+                 synthbeam_peak150_fwhm=np.radians(0.39268176),
+                 ripples=False, nripples=0):
         """
         Parameters
         ----------
@@ -102,6 +105,8 @@ class QubicInstrument(Instrument):
             detector_ngrids, detector_nep, detector_fknee, detector_fslope,
             detector_ncorr, detector_tau)
         Instrument.__init__(self, layout)
+        self.ripples = ripples
+        self.nripples = nripples
         self._init_beams(primary_beam, secondary_beam)
         self._init_filter(filter_nu, filter_relative_bandwidth)
         self._init_horns()
@@ -122,9 +127,7 @@ class QubicInstrument(Instrument):
             quadrant = np.array([quadrant, quadrant + 4], quadrant.dtype)
             efficiency = np.array([efficiency, efficiency])
         focal_length = self.calibration.get('optics')['focal length']
-
-        vertex = np.concatenate(
-            [vertex, np.full_like(vertex[..., :1], -focal_length)], -1)
+        vertex = np.concatenate([vertex, np.full_like(vertex[..., :1], -focal_length)], -1)
 
         def theta(self):
             return np.arctan2(
@@ -172,7 +175,11 @@ class QubicInstrument(Instrument):
     def _init_synthbeam(self, dtype, synthbeam_peak150_fwhm):
         sb = SyntheticBeam()
         sb.dtype = np.dtype(dtype)
-        sb.peak150 = BeamGaussian(synthbeam_peak150_fwhm)
+        if not self.ripples:
+            sb.peak150 = BeamGaussian(synthbeam_peak150_fwhm)
+        else:
+            sb.peak150 = BeamGaussianRippled(synthbeam_peak150_fwhm,
+                                             nripples=self.nripples)
         self.synthbeam = sb
 
     def __str__(self):
@@ -270,7 +277,12 @@ class QubicInstrument(Instrument):
         best approximates the synthetic beam.
 
         """
+        if self.ripples:
+            return ConvolutionRippledGaussianOperator(self.filter.nu,
+                                                      **keywords)
         fwhm = self.synthbeam.peak150.fwhm * (150e9 / self.filter.nu)
+        if 'ripples' in keywords.keys():
+            del keywords['ripples']
         return HealpixConvolutionGaussianOperator(fwhm=fwhm, **keywords)
 
     def get_detector_integration_operator(self):
@@ -695,7 +707,7 @@ class QubicInstrument(Instrument):
         nhorn = int(np.sum(horn.open))
         npix = len(index)
         nbytes_B = npix * nhorn * 24
-        ngroup = np.ceil(nbytes_B / MAX_MEMORY_B)
+        ngroup = np.ceil(nbytes_B / MAX_MEMORY_B).astype(np.int)
         out = np.zeros(position.shape[:-1] + (len(scene),),
                        dtype=synthbeam_dtype)
         for s in split(npix, ngroup):
@@ -759,3 +771,94 @@ def _pack_vector(*args):
     for i, arg in enumerate(args):
         out[..., i] = arg
     return out
+
+class QubicMultibandInstrument():
+    """
+    The QubicMultibandInstrument class
+    Represents the QUBIC multiband features 
+    as an array of QubicInstrumet objects
+    """
+    def __init__(self, calibration=None, detector_fknee=0, detector_fslope=1,
+                 detector_ncorr=10, detector_nep=4.7e-17, detector_ngrids=1,
+                 detector_tau=0.01, 
+                 filter_nus=[150e9], filter_relative_bandwidths=[0.25],
+                 center_detector=False,
+                 polarizer=True,
+                 primary_beams=None, secondary_beams=None,
+                 synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
+                 synthbeam_kmax=8,
+                 synthbeam_peak150_fwhm=np.radians(0.39268176),
+                 ripples=False, nripples=0,):
+        '''
+        filter_nus -- base frequencies array
+        filter_relative_bandwidths -- array of relative bandwidths 
+        center_detector -- bolean, optional
+            if True, take only one detector at the centre of the focal plane
+            Needed to study the synthesised beam
+        '''
+        self.nsubbands = len(filter_nus)
+        if not center_detector:
+            self.subinstruments = [QubicInstrument(filter_nu=filter_nus[i],
+                                        filter_relative_bandwidth=filter_relative_bandwidths[i],
+                                        calibration=calibration, detector_fknee=detector_fknee,
+                                        detector_ncorr=detector_ncorr, detector_nep=detector_nep,
+                                        detector_ngrids=detector_ngrids, detector_tau=detector_tau,
+                                        polarizer=polarizer, 
+                                        primary_beam=primary_beams[i] if primary_beams is not None else None,
+                                        secondary_beam=secondary_beams[i] if secondary_beams is not None else None,
+                                        synthbeam_dtype=synthbeam_dtype, synthbeam_fraction=synthbeam_fraction,
+                                        synthbeam_kmax=synthbeam_kmax, synthbeam_peak150_fwhm=synthbeam_peak150_fwhm,
+                                        ripples=ripples, nripples=nripples)
+                                    for i in range(self.nsubbands)]
+        else:
+            self.subinstruments = []
+            for i in range(self.nsubbands):
+                q = QubicInstrument(filter_nu=filter_nus[i],
+                                    filter_relative_bandwidth=filter_relative_bandwidths[i],
+                                    calibration=calibration, detector_fknee=detector_fknee,
+                                    detector_ncorr=detector_ncorr, detector_nep=detector_nep,
+                                    detector_ngrids=detector_ngrids, detector_tau=detector_tau,
+                                    polarizer=polarizer, 
+                                    primary_beam=primary_beams[i] if primary_beams is not None else None,
+                                    secondary_beam=secondary_beams[i] if secondary_beams is not None else None,
+                                    synthbeam_dtype=synthbeam_dtype, synthbeam_fraction=synthbeam_fraction,
+                                    synthbeam_kmax=synthbeam_kmax, synthbeam_peak150_fwhm=synthbeam_peak150_fwhm,
+                                    ripples=ripples, nripples=nripples)[0]
+                q.detector.center = np.array([[0., 0., -0.3]])
+                self.subinstruments.append(q)
+
+    def __getitem__(self, i):
+        return self.subinstruments[i]
+
+    def __len__(self):
+        return len(self.subinstruments)
+        
+    def get_synthbeam(self, scene, idet=None, theta_max=45):
+        sb = map(lambda i: i.get_synthbeam(scene, idet, theta_max),
+                 self.subinstruments)
+        sb = np.array(sb)
+        sb = sb.sum(axis=0)
+        return sb
+
+    def direct_convolution(self, scene, idet=None, theta_max=45):
+        synthbeam = [q.synthbeam for q in self.subinstruments]
+        for i in xrange(len(synthbeam)):
+            synthbeam[i].kmax = 4
+        sb_peaks = map(lambda i: QubicInstrument._peak_angles(scene, self[i].filter.nu, 
+                                                        self[i][idet].detector.center, 
+                                                        synthbeam[i], 
+                                                        self[i].horn, 
+                                                        self[i].primary_beam),
+                       xrange(len(self)))
+        def peaks_to_map(peaks):
+            m = np.zeros(hp.nside2npix(scene.nside))
+            m[hp.ang2pix(scene.nside, 
+                peaks[0], 
+                peaks[1])] = peaks[2]
+            return m
+        sb = map(peaks_to_map, sb_peaks)
+        C = [i.get_convolution_peak_operator() for i in self.subinstruments]
+        sb = [(C[i])(sb[i]) for i in xrange(len(self))]
+        sb = np.array(sb)
+        sb = sb.sum(axis=0)
+        return sb

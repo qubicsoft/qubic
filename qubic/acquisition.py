@@ -7,7 +7,7 @@ from pyoperators import (
     BlockColumnOperator, BlockDiagonalOperator, BlockRowOperator,
     CompositionOperator, DiagonalOperator, I, IdentityOperator,
     MPIDistributionIdentityOperator, MPI, proxy_group, ReshapeOperator,
-    rule_manager)
+    rule_manager, pcg)
 from pyoperators.utils.mpi import as_mpi
 from pysimulators import Acquisition, FitsArray
 from pysimulators.interfaces.healpy import (
@@ -15,6 +15,7 @@ from pysimulators.interfaces.healpy import (
 from .data import PATH
 from .instrument import QubicInstrument
 from .scene import QubicScene
+from .samplings import create_random_pointings
 
 __all__ = ['PlanckAcquisition',
            'QubicAcquisition',
@@ -35,7 +36,8 @@ class QubicAcquisition(Acquisition):
                  polarizer=True,  primary_beam=None, secondary_beam=None,
                  synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
                  max_nbytes=None, nprocs_instrument=None,
-                 nprocs_sampling=None, comm=None):
+                 nprocs_sampling=None, comm=None,
+                 ripples=False, nripples=0):
         """
         acq = QubicAcquisition(band, sampling, [scene, nprocs_instrument,
                                nprocs_sampling, comm])
@@ -113,7 +115,8 @@ class QubicAcquisition(Acquisition):
                 filter_relative_bandwidth=filter_relative_bandwidth,
                 polarizer=polarizer, primary_beam=primary_beam,
                 secondary_beam=secondary_beam, synthbeam_dtype=synthbeam_dtype,
-                synthbeam_fraction=synthbeam_fraction)
+                synthbeam_fraction=synthbeam_fraction,
+                ripples=ripples, nripples=nripples)
         if scene is None:
             scene = QubicScene()
         Acquisition.__init__(
@@ -371,7 +374,7 @@ class QubicAcquisition(Acquisition):
 
 
 class PlanckAcquisition(object):
-    def __init__(self, band, scene, true_sky=None, factor=1, fwhm=0):
+    def __init__(self, band, scene, true_sky=None, factor=1, fwhm=0, mask=None, convolution_operator=None):
         """
         Parameters
         ----------
@@ -387,7 +390,9 @@ class PlanckAcquisition(object):
             The factor by which the Planck standard deviation is multiplied.
         fwhm : float, optional, !not used!
             The fwhm of the Gaussian used to smooth the map [radians].
-
+        mask : array of shape (npixel, ) or None
+            The boolean mask, which is equal True at pixels where we need Planck,
+            that is outside the QUBIC field.
         """
         if band not in (150, 220):
             raise ValueError("Invalid band '{}'.".format(band))
@@ -402,6 +407,10 @@ class PlanckAcquisition(object):
         self.scene = scene
         self.fwhm = fwhm
         self._true_sky = true_sky
+        if mask is not None:
+            self.mask = mask
+        else:
+            self.mask = np.ones(scene.npixel, dtype=np.bool)
         if band == 150:
             filename = 'Variance_Planck143GHz_Kcmb2_ns256.fits'
         else:
@@ -415,11 +424,16 @@ class PlanckAcquisition(object):
             sigma = np.array(hp.ud_grade(sigma.T, self.scene.nside, power=2),
                              copy=False).T
         self.sigma = sigma
+        if convolution_operator is None:
+            self.C = IdentityOperator()
+        else:
+            self.C = convolution_operator
 
     _SIMULATED_PLANCK_SEED = 0
 
-    def get_operator(self):
-        return IdentityOperator(shapein=self.scene.shape)
+    def get_operator(self):        
+        return DiagonalOperator(self.mask.astype(np.int), broadcast='rightward',
+                                shapein=self.scene.shape)
 
     def get_invntt_operator(self):
         return DiagonalOperator(1 / self.sigma**2, broadcast='leftward',
@@ -435,7 +449,12 @@ class PlanckAcquisition(object):
     def get_observation(self, noiseless=False):
         obs = self._true_sky
         if not noiseless:
-            obs = obs + self.get_noise()
+            obs = obs + self.C(self.get_noise())
+        if len(self.scene.shape) == 2:
+            for i in xrange(self.scene.shape[1]):
+                obs[~(self.mask), i] = 0.
+        else:
+            obs[~(self.mask)] = 0.
         return obs
         #XXX neglecting convolution effects...
         HealpixConvolutionGaussianOperator(fwhm=self.fwhm)(obs, obs)

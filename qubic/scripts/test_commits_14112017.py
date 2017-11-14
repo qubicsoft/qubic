@@ -10,17 +10,6 @@ import time
 import os
 
 
-################################## TO BE EXECUTED IN AN EXTERNAL SHELL ########################
-#### Copy and rename TD calfiles
-#### If TD
-\cp /Users/hamilton/Python/MySoft/Qubic/TD/TD_CalQubic_HornArray_v4.fits /Users/hamilton/Python/GitQubicJCH/qubic/qubic/calfiles/CalQubic_HornArray_v5.fits
-\cp /Users/hamilton/Python/MySoft/Qubic/TD/TD_CalQubic_DetArray_v3.fits /Users/hamilton/Python/GitQubicJCH/qubic/qubic/calfiles/CalQubic_DetArray_v4.fits
-#### if not TD
-#rm -f /Users/hamilton/Python/GitQubicJCH/qubic/qubic/calfiles/CalQubic_HornArray_v5.fits
-#rm -f /Users/hamilton/Python/GitQubicJCH/qubic/qubic/calfiles/CalQubic_DetArray_v4.fits
-
-
-
 ### NB: Some of the pathes here are on my computer. You will have to change them
 TD = False
 path = QubicCalibration().path

@@ -5,22 +5,9 @@ import healpy as hp
 import numpy as np
 import matplotlib.pyplot as mp
 from qubic import *
-from SpectroImager import SpectroImLib as si
 from pysimulators import FitsArray
 import time
 import os
-
-
-### NB: Some of the pathes here are on my computer. You will have to change them
-TD = 'True'
-path = QubicCalibration().path
-if TD:
-	os.system('\cp '+path+'/TD_CalQubic_HornArray_v4.fits '+path+'/CalQubic_HornArray_v5.fits')
-	os.system('\cp '+path+'/TD_CalQubic_DetArray_v3.fits '+path+'/CalQubic_DetArray_v4.fits')
-else:
-	os.system('rm -f '+path+'/CalQubic_HornArray_v5.fits')
-	os.system('rm -f '+path+'/CalQubic_DetArray_v4.fits')
-
 
 
 ################################## TO BE EXECUTED IN AN EXTERNAL SHELL ########################
@@ -31,6 +18,21 @@ else:
 #### if not TD
 #rm -f /Users/hamilton/Python/GitQubicJCH/qubic/qubic/calfiles/CalQubic_HornArray_v5.fits
 #rm -f /Users/hamilton/Python/GitQubicJCH/qubic/qubic/calfiles/CalQubic_DetArray_v4.fits
+
+
+
+### NB: Some of the pathes here are on my computer. You will have to change them
+TD = False
+path = QubicCalibration().path
+if(TD):
+	print('Technological Demonstrator')
+	os.system('\cp '+path+'/TD_CalQubic_HornArray_v4.fits '+path+'/CalQubic_HornArray_v5.fits')
+	os.system('\cp '+path+'/TD_CalQubic_DetArray_v3.fits '+path+'/CalQubic_DetArray_v4.fits')
+else:
+	print('First Instrument')
+	os.system('rm -f '+path+'/CalQubic_HornArray_v5.fits')
+	os.system('rm -f '+path+'/CalQubic_DetArray_v4.fits')
+
 
 
 ###### Monochromatic Instrument #####################################################################

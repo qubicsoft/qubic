@@ -115,7 +115,6 @@ class QubicInstrument(Instrument):
         self.synthbeam.fraction = synthbeam_fraction
         self.synthbeam.kmax = synthbeam_kmax
 
-
     def _get_detector_layout(self, ngrids, nep, fknee, fslope, ncorr, tau):
         shape, vertex, removed, index, quadrant, efficiency = \
             self.calibration.get('detarray')
@@ -552,7 +551,7 @@ class QubicInstrument(Instrument):
         return theta, phi
 
     @staticmethod
-    def _get_response_A(position, area, nu, horn, secondary_beam):
+    def _get_response_A(position, area, nu, horn, secondary_beam, external_A=None):
         """
         Phase and transmission from the switches to the focal plane.
 
@@ -568,6 +567,12 @@ class QubicInstrument(Instrument):
             The horn layout.
         secondary_beam : Beam
             The secondary beam.
+        external_A : list of tables describing the phase and amplitude at each point of the focal
+            plane for each of the horns:
+            [0] : array of nn with x values in meters
+            [1] : array of nn with y values in meters
+            [2] : array of [nhorns, nn, nn] with amplitude
+            [3] : array of [nhorns, nn, nn] with phase in degrees
 
         Returns
         -------
@@ -575,14 +580,24 @@ class QubicInstrument(Instrument):
             The phase and transmission from the horns to the focal plane.
 
         """
-        uvec = position / np.sqrt(np.sum(position**2, axis=-1))[..., None]
-        thetaphi = Cartesian2SphericalOperator('zenith,azimuth')(uvec)
-        sr = -area / position[..., 2]**2 * np.cos(thetaphi[..., 0])**3
-        tr = np.sqrt(secondary_beam(thetaphi[..., 0], thetaphi[..., 1]) *
+        if external_A is None:
+            uvec = position / np.sqrt(np.sum(position**2, axis=-1))[..., None]
+            thetaphi = Cartesian2SphericalOperator('zenith,azimuth')(uvec)
+            sr = -area / position[..., 2]**2 * np.cos(thetaphi[..., 0])**3
+            tr = np.sqrt(secondary_beam(thetaphi[..., 0], thetaphi[..., 1]) *
                      sr / secondary_beam.solid_angle)[..., None]
-        const = 2j * np.pi * nu / c
-        product = np.dot(uvec, horn[horn.open].center.T)
-        return ne.evaluate('tr * exp(const * product)')
+            const = 2j * np.pi * nu / c
+            product = np.dot(uvec, horn[horn.open].center.T)
+            return ne.evaluate('tr * exp(const * product)')
+        else:
+            xx = external_A[0]
+            yy =external_A[1]
+            amp = external_A[2]
+            phi = external_A[3]
+            ix = np.argmin(np.abs(xx-position[0,0]))
+            jy = np.argmin(np.abs(yy-position[0,1]))
+            return np.array([amp[:,ix,jy] * (np.cos(phi[:,ix,jy]) + 1j*np.sin(phi[:,ix,jy]))])
+            
 
     @staticmethod
     def _get_response_B(theta, phi, spectral_irradiance, nu, horn,
@@ -625,7 +640,7 @@ class QubicInstrument(Instrument):
 
     @staticmethod
     def _get_response(theta, phi, spectral_irradiance, position, area, nu,
-                      horn, primary_beam, secondary_beam):
+                      horn, primary_beam, secondary_beam, external_A=None):
         """
         Return the monochromatic complex field [(W/Hz)^(1/2)] related to
         the electric field over a specified area of the focal plane created
@@ -651,6 +666,12 @@ class QubicInstrument(Instrument):
             The primary beam.
         secondary_beam : Beam
             The secondary beam.
+        external_A : list of tables describing the phase and amplitude at each point of the focal
+            plane for each of the horns:
+            [0] : array of nn with x values in meters
+            [1] : array of nn with y values in meters
+            [2] : array of [nhorns, nn, nn] with amplitude
+            [3] : array of [nhorns, nn, nn] with phase in degrees
 
         Returns
         -------
@@ -660,7 +681,7 @@ class QubicInstrument(Instrument):
 
         """
         A = QubicInstrument._get_response_A(
-            position, area, nu, horn, secondary_beam)
+                position, area, nu, horn, secondary_beam, external_A=external_A)
         B = QubicInstrument._get_response_B(
             theta, phi, spectral_irradiance, nu, horn, primary_beam)
         E = np.dot(A, B.reshape((B.shape[0], -1))).reshape(
@@ -670,7 +691,7 @@ class QubicInstrument(Instrument):
     @staticmethod
     def _get_synthbeam(scene, position, area, nu, bandwidth, horn,
                        primary_beam, secondary_beam,
-                       synthbeam_dtype=np.float32, theta_max=45):
+                       synthbeam_dtype=np.float32, theta_max=45, external_A=None):
         """
         Return the monochromatic synthetic beam for a specified location
         on the focal plane, multiplied by a given area and bandwidth.
@@ -699,6 +720,12 @@ class QubicInstrument(Instrument):
         theta_max : float, optional
             The maximum zenithal angle above which the synthetic beam is
             assumed to be zero, in degrees.
+        external_A : list of tables describing the phase and amplitude at each point of the focal
+            plane for each of the horns:
+            [0] : array of nn with x values in meters
+            [1] : array of nn with y values in meters
+            [2] : array of [nhorns, nn, nn] with amplitude
+            [3] : array of [nhorns, nn, nn] with phase in degrees
 
         """
         MAX_MEMORY_B = 1e9
@@ -707,18 +734,18 @@ class QubicInstrument(Instrument):
         nhorn = int(np.sum(horn.open))
         npix = len(index)
         nbytes_B = npix * nhorn * 24
-        ngroup = np.ceil(nbytes_B / MAX_MEMORY_B).astype(np.int)
+        ngroup = int(np.ceil(nbytes_B / MAX_MEMORY_B))
         out = np.zeros(position.shape[:-1] + (len(scene),),
                        dtype=synthbeam_dtype)
         for s in split(npix, ngroup):
             index_ = index[s]
             sb = QubicInstrument._get_response(
                 theta[index_], phi[index_], bandwidth, position, area, nu,
-                horn, primary_beam, secondary_beam)
+                horn, primary_beam, secondary_beam, external_A=external_A)
             out[..., index_] = abs2(sb, dtype=synthbeam_dtype)
         return out
 
-    def get_synthbeam(self, scene, idet=None, theta_max=45):
+    def get_synthbeam(self, scene, idet=None, theta_max=45, external_A=None, detector_integrate=None, detpos=None):
         """
         Return the detector synthetic beams, computed from the superposition
         of the electromagnetic fields.
@@ -749,14 +776,50 @@ class QubicInstrument(Instrument):
         theta_max : float, optional
             The maximum zenithal angle above which the synthetic beam is
             assumed to be zero, in degrees.
+        external_A : list of tables describing the phase and amplitude at each point of the focal
+            plane for each of the horns:
+            [0] : array of nn with x values in meters
+            [1] : array of nn with y values in meters
+            [2] : array of [nhorns, nn, nn] with amplitude
+            [3] : array of [nhorns, nn, nn] with phase in degrees
+        detector_integrate: Optional, number of subpixels in x direction for integration over detectors
+            default (None) is no integration => uses the center of the pixel
+        detpos: Optional, position in the focal plane at which the Synthesized Beam is desider as np.array([x,y,z])
+        
 
         """
-        if idet is not None:
-            return self[idet].get_synthbeam(scene, theta_max=theta_max)[0]
-        return QubicInstrument._get_synthbeam(
-            scene, self.detector.center, self.detector.area, self.filter.nu,
-            self.filter.bandwidth, self.horn, self.primary_beam,
-            self.secondary_beam, self.synthbeam.dtype, theta_max)
+        if detpos is None:
+            pos = self.detector.center
+        else:
+            pos = detpos
+
+        if ((idet is not None) and (detpos is None)):
+            return self[idet].get_synthbeam(scene, theta_max=theta_max, external_A=external_A,
+                                            detector_integrate=detector_integrate)[0]
+        if detector_integrate is None:
+            return QubicInstrument._get_synthbeam(
+                scene, pos, self.detector.area, self.filter.nu,
+                self.filter.bandwidth, self.horn, self.primary_beam,
+                self.secondary_beam, self.synthbeam.dtype, theta_max, external_A=external_A)
+        else:
+            xmin = np.min(self.detector.vertex[...,0:1])
+            xmax = np.max(self.detector.vertex[...,0:1])
+            ymin = np.min(self.detector.vertex[...,1:2])
+            ymax = np.max(self.detector.vertex[...,1:2])
+            allx = np.linspace(xmin, xmax, detector_integrate)
+            ally = np.linspace(ymin, ymax, detector_integrate)
+            sb = 0
+            for i in xrange(len(allx)):
+                print(i,len(allx))
+                for j in xrange(len(ally)):
+                    pos = self.detector.center
+                    pos[0][0] = allx[i]
+                    pos[0][1] = ally[j]
+                    sb += QubicInstrument._get_synthbeam(
+                            scene, pos, self.detector.area, self.filter.nu,
+                            self.filter.bandwidth, self.horn, self.primary_beam,
+                            self.secondary_beam, self.synthbeam.dtype, theta_max, external_A=external_A)/detector_integrate**2
+            return sb        
 
 
 def _argsort_reverse(a, axis=-1):
@@ -788,7 +851,7 @@ class QubicMultibandInstrument():
                  synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
                  synthbeam_kmax=8,
                  synthbeam_peak150_fwhm=np.radians(0.39268176),
-                 ripples=False, nripples=0,):
+                 ripples=False, nripples=0):
         '''
         filter_nus -- base frequencies array
         filter_relative_bandwidths -- array of relative bandwidths 
@@ -833,11 +896,16 @@ class QubicMultibandInstrument():
     def __len__(self):
         return len(self.subinstruments)
         
-    def get_synthbeam(self, scene, idet=None, theta_max=45):
-        sb = map(lambda i: i.get_synthbeam(scene, idet, theta_max),
+    def get_synthbeam(self, scene, idet=None, theta_max=45, detector_integrate=None, detpos=None):
+        sb = map(lambda i: i.get_synthbeam(scene, idet, theta_max, 
+                detector_integrate=detector_integrate, detpos=detpos),
                  self.subinstruments)
         sb = np.array(sb)
-        sb = sb.sum(axis=0)
+        bw = np.zeros(len(self))
+        for i in xrange(len(self)):
+            bw[i] = self[i].filter.bandwidth / 1e9
+            sb[i] *= bw[i]
+        sb = sb.sum(axis=0) / np.sum(bw)
         return sb
 
     def direct_convolution(self, scene, idet=None, theta_max=45):

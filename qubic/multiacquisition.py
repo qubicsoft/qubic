@@ -98,7 +98,7 @@ class QubicMultibandAcquisition(QubicPolyAcquisition):
             tod = self.get_operator() * m
 
         if not noiseless:
-            tod += self.get_noise()
+             tod += self.get_noise()
 
         if convolution:
             maps_convolved = [np.average(_maps_convolved[(self.nus > mi) * (self.nus < ma)], 

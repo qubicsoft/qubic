@@ -15,8 +15,7 @@ class Atmosphere(object):
 
 
 class QubicScene(SceneHealpixCMB):
-    def __init__(self, nside=256, kind='IQU', absolute=False,
-                 temperature=2.7255, summer=False):
+    def __init__(self, d):
         """
         Parameters
         ----------
@@ -38,6 +37,13 @@ class QubicScene(SceneHealpixCMB):
             atmosphere.
 
         """
+        nside=d['nside']
+        kind=d['kind']
+        absolute=d['absolute']
+        temperature=d['temperature']
+        summer=d['summer']
+        
+        
         if summer:
             self.atmosphere = Atmosphere(233., 0.05, 1.)
         else:

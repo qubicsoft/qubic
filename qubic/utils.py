@@ -4,6 +4,9 @@ from progressbar import ProgressBar, Bar, ETA, Percentage
 import numpy as np
 import signal
 import traceback
+import os
+import string
+
 
 _NLEVELS = 0
 _MAX_NLEVELS = 0
@@ -114,3 +117,5 @@ def _uncompress_mask(mask):
             l.extend(int(mask[i:j]) * (True if val == '+' else False,))
             i = j + 1
     return np.array(l, bool)
+
+

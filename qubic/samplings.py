@@ -21,6 +21,7 @@ from pysimulators import (
 from pysimulators.interfaces.healpy import Cartesian2HealpixOperator
 
 __all__ = ['QubicSampling',
+           'get_pointing',
            'create_random_pointings',
            'create_sweeping_pointings',
            'equ2gal',
@@ -69,7 +70,7 @@ class QubicSampling(SamplingHorizontal):
     DEFAULT_PERIOD = 1
     DEFAULT_LATITUDE = DOMECLAT
     DEFAULT_LONGITUDE = DOMECLON
-
+    
     def __init__(self, *args, **keywords):
         if len(args) == 4:
             args = list(args)
@@ -113,8 +114,26 @@ class QubicPointing(QubicSampling):
     pass
 
 
+
+def get_pointing(d):
+    if d['random_pointing']==d['sweeping_pointing']:
+        raise ValueError, "Error: you should choose between random and sweeping pointing"
+    
+    center=(d['RA_center'],d['DEC_center'])
+
+    if d['random_pointing']==True:
+        
+        return create_random_pointings(center, d['npointings'], d['dtheta'], date_obs=d['date_obs'],period=d['period'], latitude=d['latitude'], longitude=d['longitude'], seed=d['seed'])
+    else:
+        return create_sweeping_pointings(center, d['duration'], d['period'], d['angspeed'], d['delta_az'],
+                                         d['nsweeps_per_elevation'], d['angspeed_psi'], d['maxpsi'], date_obs=d['date_obs'],
+                                         latitude=d['latitude'], longitude=d['longitude'],fix_azimuth=d['fix_azimuth'])
+
+
 def create_random_pointings(center, npointings, dtheta, date_obs=None,
                             period=None, latitude=None, longitude=None, seed=None):
+    
+    
     """
     Return pointings randomly and uniformly distributed in a spherical cap.
 
@@ -136,6 +155,8 @@ def create_random_pointings(center, npointings, dtheta, date_obs=None,
         The observer's longitude [degrees]. Default is DOMEC's.
 
     """
+    
+    
     r = np.random.RandomState(seed)
     
     cosdtheta = np.cos(np.radians(dtheta))
@@ -162,7 +183,7 @@ def create_random_pointings(center, npointings, dtheta, date_obs=None,
 
 def create_sweeping_pointings(
         center, duration, period, angspeed, delta_az, nsweeps_per_elevation,
-        angspeed_psi, maxpsi, date_obs=None, latitude=None, longitude=None):
+        angspeed_psi, maxpsi, date_obs=None, latitude=None, longitude=None,fix_azimuth=None):
     """
     Return pointings according to the sweeping strategy:
     Sweep around the tracked FOV center azimuth at a fixed elevation, and
@@ -214,9 +235,12 @@ def create_sweeping_pointings(
     isweeps = np.floor(out.time / backforthdt).astype(int)
 
     # azimuth/elevation of the center of the field as a function of time
-    azcenter, elcenter = equ2hor(racenter, deccenter, out.time,
-                                 date_obs=out.date_obs, latitude=out.latitude,
-                                 longitude=out.longitude)
+    
+    if fix_azimuth['apply']:
+        azcenter= out.time*0+ fix_azimuth['az']
+        elcenter= out.time*0+ fix_azimuth['el']
+    else:
+        azcenter, elcenter = equ2hor(racenter, deccenter, out.time,date_obs=out.date_obs, latitude=out.latitude,longitude=out.longitude)
 
     # compute azimuth offset for all time samples
     daz = out.time * angspeed
@@ -232,6 +256,10 @@ def create_sweeping_pointings(
     for i in xrange(nelevations):
         mask = ielevations == i
         elcst[mask] = np.mean(elcenter[mask])
+        if fix_azimuth is not None:
+            if fix_azimuth['apply']:
+                el_step=fix_azimuth['el_step']
+                elcst[mask]=elcenter[mask]- nelevations/2*el_step+i*el_step
 
     # azimuth and elevations to use for pointing
     azptg = azcenter + daz
@@ -248,7 +276,7 @@ def create_sweeping_pointings(
     out.elevation = elptg
     out.pitch = pitch
     out.angle_hwp = np.random.random_integers(0, 7, nsamples) * 11.25
-    return out
+    return  out
 
 
 def _format_sphconv(a, b, date_obs=None, time=None):

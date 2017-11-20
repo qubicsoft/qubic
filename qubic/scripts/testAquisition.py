@@ -1,13 +1,19 @@
 import os
-os.system('python ../compile_all_QUBIC.py QUBIC_dev')
-
-
 import qubic
 import healpy as hp
 import numpy as np
 import pylab as plt
 import matplotlib as mpl
 import sys
+
+
+
+try:
+    os.makedirs('result')
+except:
+    pass
+
+
 
 mpl.style.use('classic')
 name='run_dict'
@@ -43,7 +49,7 @@ TOD, maps_convolved_useless = a.get_observation(x0, noiseless=True)
 nf_sub_rec = 2
 Nbfreq, nus_edge, nus, deltas, Delta, Nbbands = qubic.compute_freq(d['filter_nu']/1e9, d['filter_relative_bandwidth'], nf_sub_rec) 
 arec = qubic.QubicMultibandAcquisition(q, p, s,d, nus_edge)
-maps_recon = arec.tod2map(TOD, tol=1e-4, maxiter=100000)
+maps_recon = arec.tod2map(TOD, tol=1e-3, maxiter=100000)
 
 
 

@@ -869,7 +869,7 @@ class QubicMultibandInstrument():
         d1=d.copy()
         
         self.nsubbands = len(filter_nus)
-        if not center_detector:
+        if not d['center_detector']:
             self.subinstruments = []
             for i in range(self.nsubbands):
                 d1['filter_nu']= filter_nus[i]*1e9

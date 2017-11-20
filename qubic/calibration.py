@@ -29,9 +29,7 @@ class QubicCalibration(object):
     path.
 
     """
-    def __init__(self, path=PATH, detarray=FILE_DETARRAY,
-                 hornarray=FILE_HORNARRAY, optics=FILE_OPTICS,
-                 primbeam=FILE_PRIMBEAM):
+    def __init__(self, d, path=PATH):
         """
         Parameters
         ----------
@@ -49,10 +47,10 @@ class QubicCalibration(object):
 
         """
         self.path = os.path.abspath(path)
-        self.detarray = self._newest(detarray)
-        self.hornarray = self._newest(hornarray)
-        self.optics = self._newest(optics)
-        self.primbeam = self._newest(primbeam)
+        self.detarray =   os.path.abspath(join(self.path, d['detarray']))
+        self.hornarray = os.path.abspath(join(self.path, d['hornarray']))
+        self.optics = os.path.abspath(join(self.path, d['optics'])) 
+        self.primbeam =  os.path.abspath(join(self.path, d['primbeam'])) 
 
     def __str__(self):
         state = [('path', self.path),
@@ -170,20 +168,20 @@ class QubicCalibration(object):
 
         raise ValueError("Invalid calibration item: '{}'".format(name))
 
-    def _newest(self, filename):
-        if '*' not in filename:
-            if not os.path.exists(filename):
-                filename = join(self.path, filename)
-            if not os.path.exists(filename):
-                raise ValueError("No calibration file '{}'.".format(filename))
-            return os.path.abspath(filename)
+# def _newest(self, filename):
+#        if '*' not in filename:
+    #           if not os.path.exists(filename):
+    #              filename = join(self.path, filename)
+    #        if not os.path.exists(filename):
+    #            raise ValueError("No calibration file '{}'.".format(filename))
+    #        return os.path.abspath(filename)
 
-        filenames = glob(filename)
-        if len(filenames) == 0:
-            filename = join(self.path, filename)
-            filenames = glob(filename)
-            if len(filenames) == 0:
-                raise ValueError("No calibration files '{}'.".format(filename))
-        regex = re.compile(filename.replace('*', '(.*)'))
-        version = sorted(regex.search(f).group(1) for f in filenames)[-1]
-        return os.path.abspath(filename.replace('*', version))
+##        filenames = glob(filename)
+#       if len(filenames) == 0:
+#            filename = join(self.path, filename)
+#            filenames = glob(filename)
+#            if len(filenames) == 0:
+#                raise ValueError("No calibration files '{}'.".format(filename))
+#       regex = re.compile(filename.replace('*', '(.*)'))
+    #        version = sorted(regex.search(f).group(1) for f in filenames)[-1]
+#    return os.path.abspath(filename.replace('*', version))

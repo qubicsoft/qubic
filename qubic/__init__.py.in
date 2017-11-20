@@ -13,7 +13,7 @@ from .xpol import *
 from .polyacquisition import *
 from .multiacquisition import *
 from .ripples import *
-
+from . import qubicdict 
 
 def full(shape, fill_value, dtype=None, order='C'):
     import numpy as np

@@ -18,7 +18,7 @@ from .acquisition import (QubicAcquisition,
                           PlanckAcquisition,
                           QubicPlanckAcquisition)
 from .scene import QubicScene
-from .samplings import create_random_pointings
+from .samplings import create_random_pointings, get_pointing
 
 __all__ = ['compute_freq',
            'QubicPolyAcquisition',
@@ -57,12 +57,9 @@ def compute_freq(band, relative_bandwidth=0.25, Nfreq=None):
     return Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands
 
 class QubicPolyAcquisition(object):
-    def __init__(self, multiinstrument, sampling, scene, block=None,
-                 effective_duration=None,
-                 photon_noise=True, max_nbytes=None,
-                 nprocs_instrument=None, nprocs_sampling=None,
-                 ripples=False, nripples=0,
-                 weights=None):
+    def __init__(self, multiinstrument, sampling, scene,d):
+        
+        weights=d['weights']
         '''
         acq = QubicPolyAcquisition(QubicMultibandInstrument, sampling, scene)
 
@@ -79,15 +76,11 @@ class QubicPolyAcquisition(object):
 
         '''
         self.subacqs = [QubicAcquisition(multiinstrument[i], 
-                                 sampling, scene=scene, block=block,
-                                 effective_duration=effective_duration,
-                                 photon_noise=photon_noise, max_nbytes=max_nbytes,
-                                 nprocs_instrument=nprocs_instrument, 
-                                 nprocs_sampling=nprocs_sampling,
-                                 ripples=ripples, nripples=nripples) for i in range(len(multiinstrument))]
+                                 sampling, scene, d) for i in range(len(multiinstrument))]
         for a in self[1:]:
             a.comm = self[0].comm
         self.scene = scene
+        self.d=d
         if weights == None:
             self.weights = np.ones(len(self)) #/ len(self)
         else:
@@ -135,16 +128,31 @@ class QubicPolyAcquisition(object):
         nep = q0.detector.nep
         fknee = q0.detector.fknee
         fslope = q0.detector.fslope
-        q = QubicInstrument(
-            filter_nu=(nu_max + nu_min) / 2.,
-            filter_relative_bandwidth=(nu_max - nu_min) / ((nu_max + nu_min) / 2.),
-            detector_nep=nep, detector_fknee=fknee, detector_fslope=fslope)
+
+        d1=self.d.copy()
+        
+        d1['filter_nu']=(nu_max + nu_min) / 2.
+        d1['filter_relative_bandwidth']=(nu_max - nu_min) / ((nu_max + nu_min) / 2.)
+        d1['detector_nep']=nep
+        d1['detector_fknee']=fknee
+        d1['detector_fslope']=fslope
+
+        q = QubicInstrument(d1)
+            
         s_ = self[0].sampling
         nsamplings = self[0].comm.allreduce(len(s_))
-        s = create_random_pointings([0., 0.], nsamplings, 10., period=s_.period)
-        a = QubicAcquisition(
-            q, s, self[0].scene, photon_noise=True,  
-            effective_duration=self[0].effective_duration)
+
+        d1['random_pointing']=True
+        d1['sweeping_pointing']=False
+        d1['RA_center']= 0.
+        d1['DEC_center']=0.
+        d1['npointings']=nsamplings
+        d1['dtheta']=10.
+        d1['period']=s_.period
+
+        s= get_pointing(d1)
+#s = create_random_pointings([0., 0.], nsamplings, 10., period=s_.period)
+        a = QubicAcquisition(q, s, self[0].scene, d1)
         return a
 
     def get_noise(self):

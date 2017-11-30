@@ -15,6 +15,7 @@ from pysimulators.interfaces.healpy import (
 from .data import PATH
 from .instrument import QubicInstrument
 from .scene import QubicScene
+from .calibration import QubicCalibration
 from .samplings import create_random_pointings
 
 __all__ = ['PlanckAcquisition',
@@ -28,16 +29,34 @@ class QubicAcquisition(Acquisition):
     scene models.
 
     """
-    def __init__(self, instrument, sampling, scene=None, block=None,
-                 calibration=None, detector_nep=4.7e-17, detector_fknee=0,
-                 detector_fslope=1, detector_ncorr=10, detector_ngrids=1,
-                 detector_tau=0.01, effective_duration=None,
-                 filter_relative_bandwidth=0.25, photon_noise=True,
-                 polarizer=True,  primary_beam=None, secondary_beam=None,
-                 synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
-                 max_nbytes=None, nprocs_instrument=None,
-                 nprocs_sampling=None, comm=None,
-                 ripples=False, nripples=0):
+    def __init__(self, instrument, sampling, scene, d):
+        
+        filter_nu=d['filter_nu']
+        filter_relative_bandwidth=d['filter_relative_bandwidth']
+        detector_fknee=d['detector_fknee']
+        detector_fslope=d['detector_fslope']
+        detector_ncorr=d['detector_ncorr']
+        detector_nep=d['detector_nep']
+        detector_ngrids=d['detector_ngrids']
+        detector_tau=d['detector_tau']
+        polarizer=d['polarizer']
+        synthbeam_dtype=np.float32
+        synthbeam_fraction=d['synthbeam_fraction']
+        synthbeam_kmax=d['synthbeam_kmax']
+        synthbeam_peak150_fwhm=d['synthbeam_peak150_fwhm']
+        ripples=d['ripples']
+        nripples=d['nripples']
+        primary_beam=None
+        secondary_beam=None
+        calibration = QubicCalibration(d)
+        block=d['block']
+        effective_duration=d['effective_duration']
+        photon_noise=d['photon_noise']
+        max_nbytes=d['max_nbytes']
+        nprocs_instrument=d['nprocs_instrument']
+        nprocs_sampling=d['nprocs_sampling']
+        comm=d['comm']
+        
         """
         acq = QubicAcquisition(band, sampling, [scene, nprocs_instrument,
                                nprocs_sampling, comm])
@@ -105,20 +124,7 @@ class QubicAcquisition(Acquisition):
                 comm.size = nprocs_instrument * nprocs_sampling
 
         """
-        if not isinstance(instrument, QubicInstrument):
-            filter_nu = instrument * 1e9
-            instrument = QubicInstrument(
-                calibration=calibration, detector_fknee=detector_fknee,
-                detector_fslope=detector_fslope, detector_ncorr=detector_ncorr,
-                detector_nep=detector_nep, detector_ngrids=detector_ngrids,
-                detector_tau=detector_tau, filter_nu=filter_nu,
-                filter_relative_bandwidth=filter_relative_bandwidth,
-                polarizer=polarizer, primary_beam=primary_beam,
-                secondary_beam=secondary_beam, synthbeam_dtype=synthbeam_dtype,
-                synthbeam_fraction=synthbeam_fraction,
-                ripples=ripples, nripples=nripples)
-        if scene is None:
-            scene = QubicScene()
+
         Acquisition.__init__(
             self, instrument, sampling, scene, block=block,
             max_nbytes=max_nbytes, nprocs_instrument=nprocs_instrument,
@@ -232,6 +238,7 @@ class QubicAcquisition(Acquisition):
                            np.sqrt(2 * self.sampling.period)
         else:
             sigma_photon = 0
+        
         out = DiagonalOperator(
             1 / (sigma_detector**2 + sigma_photon**2),
             broadcast='rightward',

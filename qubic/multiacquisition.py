@@ -25,12 +25,7 @@ __all__ = ['QubicMultibandAcquisition',
            'QubicMultibandPlanckAcquisition']
 
 class QubicMultibandAcquisition(QubicPolyAcquisition):
-    def __init__(self, multiinstrument, sampling, scene, nus, block=None,
-                 effective_duration=None,
-                 photon_noise=True, max_nbytes=None,
-                 nprocs_instrument=None, nprocs_sampling=None,
-                 ripples=False, nripples=0,
-                 weights=None):
+    def __init__(self, multiinstrument, sampling, scene, d, nus):
         '''
         Parameters:
         -----------
@@ -42,13 +37,8 @@ class QubicMultibandAcquisition(QubicPolyAcquisition):
         Within each subband there are multiple frequencies
         Documentation for other parameters see in QubicPolyAcquisition
         '''
-        QubicPolyAcquisition.__init__(self, multiinstrument, sampling, scene, 
-            block=block, effective_duration=effective_duration,
-            photon_noise=photon_noise, max_nbytes=max_nbytes,
-            nprocs_instrument=nprocs_instrument,
-            nprocs_sampling=nprocs_sampling,
-            ripples=ripples, nripples=nripples,
-            weights=weights)
+        QubicPolyAcquisition.__init__(self, multiinstrument, sampling, scene, d)
+
         if len(nus) > 1:
             self.bands = np.array([[nus[i], nus[i + 1]] for i in xrange(len(nus) - 1)])
         else:
@@ -98,7 +88,7 @@ class QubicMultibandAcquisition(QubicPolyAcquisition):
             tod = self.get_operator() * m
 
         if not noiseless:
-             tod += self.get_noise()
+            tod += self.get_noise()
 
         if convolution:
             maps_convolved = [np.average(_maps_convolved[(self.nus > mi) * (self.nus < ma)], 
@@ -126,6 +116,10 @@ class QubicMultibandAcquisition(QubicPolyAcquisition):
                 new_axisin=0)
         else:
             return None
+
+
+
+
 
 class QubicMultibandPlanckAcquisition(QubicPolyPlanckAcquisition):
     """

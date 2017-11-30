@@ -49,15 +49,7 @@ class QubicInstrument(Instrument):
     The QubicInstrument class. It represents the instrument setup.
 
     """
-    def __init__(self, calibration=None, detector_fknee=0, detector_fslope=1,
-                 detector_ncorr=10, detector_nep=4.7e-17, detector_ngrids=1,
-                 detector_tau=0.01, filter_nu=150e9,
-                 filter_relative_bandwidth=0.25, polarizer=True,
-                 primary_beam=None, secondary_beam=None,
-                 synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
-                 synthbeam_kmax=8,
-                 synthbeam_peak150_fwhm=np.radians(0.39268176),
-                 ripples=False, nripples=0):
+    def __init__(self, d):
         """
         Parameters
         ----------
@@ -98,12 +90,34 @@ class QubicInstrument(Instrument):
             of the synthetic beam.
 
         """
-        if calibration is None:
-            calibration = QubicCalibration()
+        if d['nf_sub'] is None and d['MultiBand']==True:
+            raise ValueError, "Error: you want Multiband instrument but you have not specified the number of subband"
+        
+        filter_nu=d['filter_nu']
+        filter_relative_bandwidth=d['filter_relative_bandwidth']
+        
+        detector_fknee=d['detector_fknee']
+        detector_fslope=d['detector_fslope']
+        detector_ncorr=d['detector_ncorr']
+        detector_nep=d['detector_nep']
+        detector_ngrids=d['detector_ngrids']
+        detector_tau=d['detector_tau']
+        
+        polarizer=d['polarizer']
+        synthbeam_dtype=np.float32
+        synthbeam_fraction=d['synthbeam_fraction']
+        synthbeam_kmax=d['synthbeam_kmax']
+        synthbeam_peak150_fwhm=np.radians(d['synthbeam_peak150_fwhm'])
+        ripples=d['ripples']
+        nripples=d['nripples']
+        primary_beam=None
+        secondary_beam=None
+        
+        calibration = QubicCalibration(d)
+        
+        
         self.calibration = calibration
-        layout = self._get_detector_layout(
-            detector_ngrids, detector_nep, detector_fknee, detector_fslope,
-            detector_ncorr, detector_tau)
+        layout = self._get_detector_layout(detector_ngrids, detector_nep, detector_fknee, detector_fslope,detector_ncorr, detector_tau)
         Instrument.__init__(self, layout)
         self.ripples = ripples
         self.nripples = nripples
@@ -114,6 +128,7 @@ class QubicInstrument(Instrument):
         self._init_synthbeam(synthbeam_dtype, synthbeam_peak150_fwhm)
         self.synthbeam.fraction = synthbeam_fraction
         self.synthbeam.kmax = synthbeam_kmax
+
 
     def _get_detector_layout(self, ngrids, nep, fknee, fslope, ncorr, tau):
         shape, vertex, removed, index, quadrant, efficiency = \
@@ -841,17 +856,7 @@ class QubicMultibandInstrument():
     Represents the QUBIC multiband features 
     as an array of QubicInstrumet objects
     """
-    def __init__(self, calibration=None, detector_fknee=0, detector_fslope=1,
-                 detector_ncorr=10, detector_nep=4.7e-17, detector_ngrids=1,
-                 detector_tau=0.01, 
-                 filter_nus=[150e9], filter_relative_bandwidths=[0.25],
-                 center_detector=False,
-                 polarizer=True,
-                 primary_beams=None, secondary_beams=None,
-                 synthbeam_dtype=np.float32, synthbeam_fraction=0.99,
-                 synthbeam_kmax=8,
-                 synthbeam_peak150_fwhm=np.radians(0.39268176),
-                 ripples=False, nripples=0):
+    def __init__(self, d):
         '''
         filter_nus -- base frequencies array
         filter_relative_bandwidths -- array of relative bandwidths 
@@ -859,36 +864,25 @@ class QubicMultibandInstrument():
             if True, take only one detector at the centre of the focal plane
             Needed to study the synthesised beam
         '''
+        
+        Nf, nus_edge, filter_nus, deltas, Delta, Nbbands = self._compute_freq(d['filter_nu']/1e9, d['filter_relative_bandwidth'], d['nf_sub'])
+        d1=d.copy()
+        
         self.nsubbands = len(filter_nus)
-        if not center_detector:
-            self.subinstruments = [QubicInstrument(filter_nu=filter_nus[i],
-                                        filter_relative_bandwidth=filter_relative_bandwidths[i],
-                                        calibration=calibration, detector_fknee=detector_fknee,
-                                        detector_ncorr=detector_ncorr, detector_nep=detector_nep,
-                                        detector_ngrids=detector_ngrids, detector_tau=detector_tau,
-                                        polarizer=polarizer, 
-                                        primary_beam=primary_beams[i] if primary_beams is not None else None,
-                                        secondary_beam=secondary_beams[i] if secondary_beams is not None else None,
-                                        synthbeam_dtype=synthbeam_dtype, synthbeam_fraction=synthbeam_fraction,
-                                        synthbeam_kmax=synthbeam_kmax, synthbeam_peak150_fwhm=synthbeam_peak150_fwhm,
-                                        ripples=ripples, nripples=nripples)
-                                    for i in range(self.nsubbands)]
-        else:
+        if not d['center_detector']:
             self.subinstruments = []
             for i in range(self.nsubbands):
-                q = QubicInstrument(filter_nu=filter_nus[i],
-                                    filter_relative_bandwidth=filter_relative_bandwidths[i],
-                                    calibration=calibration, detector_fknee=detector_fknee,
-                                    detector_ncorr=detector_ncorr, detector_nep=detector_nep,
-                                    detector_ngrids=detector_ngrids, detector_tau=detector_tau,
-                                    polarizer=polarizer, 
-                                    primary_beam=primary_beams[i] if primary_beams is not None else None,
-                                    secondary_beam=secondary_beams[i] if secondary_beams is not None else None,
-                                    synthbeam_dtype=synthbeam_dtype, synthbeam_fraction=synthbeam_fraction,
-                                    synthbeam_kmax=synthbeam_kmax, synthbeam_peak150_fwhm=synthbeam_peak150_fwhm,
-                                    ripples=ripples, nripples=nripples)[0]
-                q.detector.center = np.array([[0., 0., -0.3]])
-                self.subinstruments.append(q)
+                d1['filter_nu']= filter_nus[i]*1e9
+                d1['filter_relative_bandwidth'] = deltas[i]/filter_nus[i]
+                self.subinstruments +=[QubicInstrument(d1)]
+        else:
+                self.subinstruments = []
+                for i in range(self.nsubbands):
+                    d1['filter_nu']= filter_nus[i]*1e9
+                    d1['filter_relative_bandwidth']= deltas[i]/filter_nus[i]
+                    q = QubicInstrument(d1)[0]
+                    q.detector.center = np.array([[0., 0., -0.3]])
+                    self.subinstruments.append(q)
 
     def __getitem__(self, i):
         return self.subinstruments[i]
@@ -930,3 +924,39 @@ class QubicMultibandInstrument():
         sb = np.array(sb)
         sb = sb.sum(axis=0)
         return sb
+
+
+    @staticmethod
+    def _compute_freq(band, relative_bandwidth=0.25, Nfreq=None):
+        '''
+            Prepare frequency bands parameters
+            band -- int,
+            QUBIC frequency band, in GHz.
+            Typical values: 150, 220
+            relative_bandwidth -- float, optional
+            Ratio of the difference between the edges of the
+            frequency band over the average frequency of the band:
+            2 * (nu_max - nu_min) / (nu_max + nu_min)
+            Typical value: 0.25
+            Nfreq -- int, optional
+            Number of frequencies within the wide band.
+            If not specified, then Nfreq = 15 if band == 150
+            and Nfreq = 20 if band = 220
+            '''
+        if Nfreq is None:
+            Nfreq = {150: 15, 220: 20}[band]
+        
+        nu_min = band * (1 - relative_bandwidth / 2)
+        nu_max = band * (1 + relative_bandwidth / 2)
+        
+        Nfreq_edges = Nfreq + 1
+        base = (nu_max / nu_min) ** (1. / Nfreq)
+        
+        nus_edge = nu_min * np.logspace(0, Nfreq, Nfreq_edges, endpoint=True, base=base)
+        nus = np.array([(nus_edge[i] + nus_edge[i-1]) / 2 for i in range(1, Nfreq_edges)])
+        deltas = np.array([(nus_edge[i] - nus_edge[i-1])  for i in range(1, Nfreq_edges)])
+        Delta = nu_max - nu_min
+        Nbbands = len(nus)
+        return Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands
+
+

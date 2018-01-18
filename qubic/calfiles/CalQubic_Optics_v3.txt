@@ -1,0 +1,23 @@
+[general]
+focal length = 0.3
+
+[components]
+#name T transmission emissivity nstate_polarization
+WinB1        =   290    , 0.98  , 0.010, 1
+Block1       =   290    , 0.98  , 0.010, 1
+Block2       =   290    , 0.98  , 0.010, 1
+Block3       =    45    , 0.95  , 0.010, 1
+Block4       =    45    , 0.98  , 0.010, 1
+Block5       =    45    , 0.98  , 0.010, 1
+Block6       =     5    , 0.98  , 0.010, 1
+12cmEd       =     5    , 0.95  , 0.020, 1 
+HWP          =     5    , 0.95  , 0.025, 1
+PolGr        =     5    , 0.99  , 0.010, 2
+Ba2Ba        =     5    , 0.99  , 0.050, 2
+Combin       =     1    , 0.99  , 0.010, 2
+CSLPE        =     1    , 0.95  , 0.020, 2
+NDF          =     1    , 0.03  , 0.970, 2 
+7or9cmLPE    =     0.35 , 0.98  , 0.020, 2
+6or11.2cmLPE =     0.35 , 0.98  , 0.020, 2
+BandFilter   =     0.35 , 0.98  , 0.020, 2
+

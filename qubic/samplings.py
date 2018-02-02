@@ -109,6 +109,24 @@ class QubicSampling(SamplingHorizontal):
         return self.cartesian_galactic2instrument.I
 
 
+    @property
+    def cartesian_horizontal2instrument(self):
+        """
+        Return the galactic-to-instrument transform.
+        """
+        time = self.date_obs + TimeDelta(self.time, format='sec')
+        with rule_manager(none=False):
+            r = Rotation3dOperator("ZY'Z''", self.azimuth, 90 - self.elevation,
+                                   self.pitch, degrees=True).T 
+        return r
+    
+    @property
+    def cartesian_instrument2horizontal(self):
+        return self.cartesian_horizontal2instrument.I
+
+
+
+
 @deprecated
 class QubicPointing(QubicSampling):
     pass
@@ -251,6 +269,7 @@ def create_sweeping_pointings(
 
     # elevation is kept constant during nsweeps_per_elevation
     elcst = np.zeros(nsamples)
+    angle_hwp= np.zeros(nsamples)
     ielevations = isweeps // nsweeps_per_elevation
     nelevations = ielevations[-1] + 1
     for i in xrange(nelevations):
@@ -276,6 +295,16 @@ def create_sweeping_pointings(
     out.elevation = elptg
     out.pitch = pitch
     out.angle_hwp = np.random.random_integers(0, 7, nsamples) * 11.25
+
+    if fix_azimuth['apply']:
+        out.fix_az=True
+        if fix_azimuth['fix_hwp']:
+            out.angle_hwp=out.pitch*0+ 11.25
+        if fix_azimuth['fix_pitch']:
+            out.pitch= 0
+    else:
+        out.fix_az=False
+    
     return  out
 
 

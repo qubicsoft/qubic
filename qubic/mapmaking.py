@@ -346,6 +346,7 @@ def tod2map_each(acquisition, tod, coverage_threshold=0.01, max_nbytes=None,
         x_, n_ = _tod2map(acq, t[None, :], coverage_threshold, max_nbytes,
                           callback, False, maxiter, tol, criterion,
                           full_output, save_map, hyper)
+                          
         x += x_
         n += n_
         if disp:

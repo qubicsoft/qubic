@@ -396,6 +396,8 @@ class QubicInstrument(Instrument):
 
         z = np.zeros(nd)
         data = np.array([z + 0.5, 0.5 - grid, z]).T[:, None, None, :]
+        
+        #print data
         return ReshapeOperator((nd, nt, 1), (nd, nt)) * \
             DenseBlockDiagonalOperator(data, shapein=(nd, nt, 3))
 
@@ -416,7 +418,12 @@ class QubicInstrument(Instrument):
         """
         horn = getattr(self, 'horn', None)
         primary_beam = getattr(self, 'primary_beam', None)
-        rotation = sampling.cartesian_galactic2instrument
+        
+        if sampling.fix_az:
+            rotation = sampling.cartesian_horizontal2instrument
+        else:
+            rotation = sampling.cartesian_galactic2instrument
+        
         return QubicInstrument._get_projection_operator(
             rotation, scene, self.filter.nu, self.detector.center,
             self.synthbeam, horn, primary_beam, verbose=verbose)
@@ -507,7 +514,7 @@ class QubicInstrument(Instrument):
 
         """
         theta, phi = QubicInstrument._peak_angles_kmax(
-            synthbeam.kmax, horn.spacing, nu, position)
+            synthbeam.kmax, horn.spacing,horn.angle, nu, position)
         val = np.array(primary_beam(theta, phi), dtype=float, copy=False)
         val[~np.isfinite(val)] = 0
         index = _argsort_reverse(val)
@@ -530,12 +537,16 @@ class QubicInstrument(Instrument):
             val[idet, imax_:] = 0
             theta[idet, imax_:] = np.pi / 2 #XXX 0 fails in polarization.f90.src (en2ephi and en2etheta_ephi)
             phi[idet, imax_:] = 0
+        
+        
         solid_angle = synthbeam.peak150.solid_angle * (150e9 / nu)**2
         val *= solid_angle / scene.solid_angle * len(horn)
+        
+        
         return theta, phi, val
 
     @staticmethod
-    def _peak_angles_kmax(kmax, horn_spacing, nu, position):
+    def _peak_angles_kmax(kmax, horn_spacing,angle, nu, position):
         """
         Return the spherical coordinates (theta, phi) of the beam peaks,
         in radians up to a maximum diffraction order.
@@ -556,7 +567,13 @@ class QubicInstrument(Instrument):
         """
         lmbda = c / nu
         position = -position / np.sqrt(np.sum(position**2, axis=-1))[..., None]
-        kx, ky = np.mgrid[-kmax:kmax+1, -kmax:kmax+1]
+        if angle !=0:
+            _kx, _ky = np.mgrid[-kmax:kmax+1, -kmax:kmax+1]
+            kx= _kx*np.cos(angle*np.pi/180) - _ky*np.sin(angle*np.pi/180)
+            ky= _kx*np.sin(angle*np.pi/180) + _ky*np.cos(angle*np.pi/180)
+        else:
+            kx, ky = np.mgrid[-kmax:kmax+1, -kmax:kmax+1]
+        
         nx = position[:, 0, None] - lmbda * kx.ravel() / horn_spacing
         ny = position[:, 1, None] - lmbda * ky.ravel() / horn_spacing
         local_dict = {'nx': nx, 'ny': ny}

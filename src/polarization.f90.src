@@ -176,6 +176,9 @@ contains
         real(<rkind>)  :: direct
 
         direct = -1._<rkind>
+        write(*,*) npixels,ndetectors
+        write(*,*) matrix
+        stop
 
         !$omp parallel do private(ethetaf, ephif, eni, val, r23, r33)
         do idetector = 1, ndetectors
@@ -185,6 +188,7 @@ contains
             end do
             do itime = 1, ntimes
                 do ipixel = 1, npixels
+                    
                     call rotinv_e(rot(:,:,itime), enf(:,ipixel,idetector), eni)
                     call eni2rotation(rot(:,:,itime), ethetaf(:,ipixel),       &
                                       ephif(:,ipixel), eni, r23, r33)

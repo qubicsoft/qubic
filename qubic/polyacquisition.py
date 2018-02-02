@@ -250,6 +250,7 @@ class QubicPolyAcquisition(object):
         '''
         H = self.get_operator()
         invntt = self.get_invntt_operator()
+        
 
         A = H.T * invntt * H
         b = H.T * invntt * tod

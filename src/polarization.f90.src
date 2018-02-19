@@ -176,9 +176,6 @@ contains
         real(<rkind>)  :: direct
 
         direct = -1._<rkind>
-        write(*,*) npixels,ndetectors
-        write(*,*) matrix
-        stop
 
         !$omp parallel do private(ethetaf, ephif, eni, val, r23, r33)
         do idetector = 1, ndetectors

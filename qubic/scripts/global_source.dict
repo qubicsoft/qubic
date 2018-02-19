@@ -53,7 +53,7 @@ dtheta=10.
 seed=1
 
 sweeping_pointing=True
-duration=1 #h
+duration=0.5 #h
 angspeed= 1 #deg/s
 delta_az= 20 #deg
 nsweeps_per_elevation= 3

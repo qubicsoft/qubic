@@ -196,6 +196,7 @@ def create_random_pointings(center, npointings, dtheta, date_obs=None,
     p.elevation = coords[..., 1]
     p.pitch = pitch
     p.angle_hwp = r.random_integers(0, 7, npointings) * 11.25
+    p.fix_az=False
     return p
 
 

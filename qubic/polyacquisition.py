@@ -72,11 +72,12 @@ class QubicPolyAcquisition(object):
         scene :
             QubicScene instance
 
-        For other parameters see the documentation for the QubicAcquisition class
+        For other parameters see documentation for the QubicAcquisition class
 
         '''
         self.subacqs = [QubicAcquisition(multiinstrument[i], 
-                                 sampling, scene, d) for i in range(len(multiinstrument))]
+                        sampling, scene, d)
+                        for i in range(len(multiinstrument))]
         for a in self[1:]:
             a.comm = self[0].comm
         self.scene = scene
@@ -137,8 +138,8 @@ class QubicPolyAcquisition(object):
         d1['detector_fknee']=fknee
         d1['detector_fslope']=fslope
 
-        q = QubicInstrument(d1)
-            
+        q = QubicInstrument(d1,FRBW=self[0].instrument.FRBW)
+        q.detector = self[0].instrument.detector   
         s_ = self[0].sampling
         nsamplings = self[0].comm.allreduce(len(s_))
 

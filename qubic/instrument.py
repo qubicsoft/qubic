@@ -4,6 +4,7 @@ from __future__ import division
 import healpy as hp
 import numexpr as ne
 import numpy as np
+import copy
 from pyoperators import (
     Cartesian2SphericalOperator, DenseBlockDiagonalOperator, DiagonalOperator,
     IdentityOperator, HomothetyOperator, ReshapeOperator, Rotation2dOperator,
@@ -12,7 +13,7 @@ from pyoperators.utils import (
     operation_assignment, pool_threading, product, split)
 from pyoperators.utils.ufuncs import abs2
 from pysimulators import (
-    BeamGaussian, ConvolutionTruncatedExponentialOperator, Instrument, Layout,
+    ConvolutionTruncatedExponentialOperator, Instrument, Layout,
     ProjectionOperator)
 from pysimulators.geometry import surface_simple_polygon
 from pysimulators.interfaces.healpy import (
@@ -25,10 +26,10 @@ from . import _flib as flib
 from .calibration import QubicCalibration
 from .utils import _compress_mask
 from .ripples import ConvolutionRippledGaussianOperator, BeamGaussianRippled
-
+from .beams import (BeamGaussian, BeamFitted, MultiFreqBeam)
+                            
 __all__ = ['QubicInstrument',
            'QubicMultibandInstrument']
-
 
 class Filter(object):
     def __init__(self, nu, relative_bandwidth):
@@ -52,8 +53,13 @@ class QubicInstrument(Instrument):
     The QubicInstrument class. It represents the instrument setup.
 
     """
-    def __init__(self, d):
+    def __init__(self, d, FRBW=None):
         """
+        d : Input dictionary, from which the following Parameters are read
+        FRBW: float, optional
+            keeps the Full Relative Band Width when building subinstruments
+            Needed to compute the photon noise
+        
         Parameters
         ----------
         calibration : QubicCalibration
@@ -91,26 +97,44 @@ class QubicInstrument(Instrument):
         synthbeam_fraction: float, optional
             The fraction of significant peaks retained for the computation
             of the synthetic beam.
+        beam_shape: dictionary entry, string
+            the shape of the primary and secondary beams:
+            'gaussian', 'fitted_beam' or 'multi_freq'
 
         """
-        d['optics'] = d['optics'].replace('CC',d['config'])
-        d['optics'] = d['optics'].replace('FF',str(int(d['filter_nu']/1e9)))
-        d['detarray'] = d['detarray'].replace('CC',d['config'])
-        d['hornarray'] = d['hornarray'].replace('CC',d['config'])
-        
-        if int(d['filter_nu']/1e9) != 220 and \
-           int(d['filter_nu']/1e9) != 150:
-            raise  ValueError(" frequency = " + str(int(d['filter_nu']/1e9))
-                              + " GHz, should be 150 or 220 GHz") 
-        if int(d['filter_nu']/1e9) == 220 and d['config'] == 'TD':
-            raise ValueError("220 GHz not used for TD")
-
-        if d['nf_sub'] is None and d['MultiBand']==True:
-            raise ValueError ("Error: number of subband not specified")
-        
+        self.debug = d['debug'] # if True allows debuging prints
         filter_nu=d['filter_nu']
         filter_relative_bandwidth=d['filter_relative_bandwidth']
+        if FRBW is not None:
+            self.FRBW = FRBW
+        else:
+            self.FRBW = filter_relative_bandwidth
+        if self.debug:
+            print 'FRBW = ', self.FRBW, 'dnu = ', filter_relative_bandwidth
+        ## Choose the relevant Optics calibration file  
+        self.nu1 = 150e9
+        self.nu1_up = 150e9 * (1  + self.FRBW / 1.9)
+        self.nu1_down = 150e9 * (1  - self.FRBW / 1.9)
+        self.nu2 = 220e9
+        self.nu2_up = 220e9 * (1  + self.FRBW / 1.9)
+        self.nu2_down = 220e9 * (1  - self.FRBW / 1.9)
+        if (filter_nu <= self.nu1_up) and (filter_nu >= self.nu1_down):
+            d['optics'] = d['optics'].replace(d['optics'][-7:-4],'150')
+        elif (filter_nu <= self.nu2_up) and (filter_nu >= self.nu2_down):
+            d['optics'] = d['optics'].replace(d['optics'][-7:-4],'220')
+            if d['config'] == 'TD':
+                raise ValueError("TD Not used at frequency " +
+                                     str(int(d['filter_nu']/1e9)) + ' GHz')
+        else:
+            raise ValueError("frequency = " + str(int(d['filter_nu']/1e9)) +
+                    " out of bounds" )
+        d['optics'] = d['optics'].replace(d['optics'][-10:-8],d['config'])
+        d['detarray'] = d['detarray'].replace(d['detarray'][-7:-5],d['config'])
+        d['hornarray'] = d['hornarray'].replace(d['hornarray'][-7:-5],d['config'])
         
+        if d['nf_sub'] is None and d['MultiBand']==True:
+            raise ValueError ("Error: number of subband not specified")
+                
         detector_fknee=d['detector_fknee']
         detector_fslope=d['detector_fslope']
         detector_ncorr=d['detector_ncorr']
@@ -125,11 +149,27 @@ class QubicInstrument(Instrument):
         synthbeam_peak150_fwhm=np.radians(d['synthbeam_peak150_fwhm'])
         ripples=d['ripples']
         nripples=d['nripples']
-        primary_beam=None
-        secondary_beam=None
-        
+
+        # Choose the primary beam calibration file
+        if d['beam_shape'] == 'gaussian':
+            aux = d['primbeam']
+            d['primbeam'] = d['primbeam'].replace(d['primbeam'][-6],'2')
+            primary_shape='gaussian'
+            secondary_shape='gaussian'
+        elif d['beam_shape'] == 'fitted_beam':
+            aux = d['primbeam']
+            d['primbeam'] = d['primbeam'].replace(d['primbeam'][-6],'3')
+            primary_shape = 'fitted_beam'
+            secondary_shape = 'fitted_beam'
+        else:
+            aux = d['primbeam']
+            d['primbeam'] = d['primbeam'].replace(d['primbeam'][-6],'4')
+            primary_shape = 'multi_freq'
+            secondary_shape = 'multi_freq'
+        if self.debug:
+            print 'primary_shape', primary_shape
+            print "d['primbeam']",d['primbeam']
         calibration = QubicCalibration(d)
-        self.debug = d['debug']
         self.config = d['config']
         self.calibration = calibration
         layout = self._get_detector_layout(detector_ngrids, detector_nep,
@@ -138,14 +178,13 @@ class QubicInstrument(Instrument):
         Instrument.__init__(self, layout)
         self.ripples = ripples
         self.nripples = nripples
-        self._init_beams(primary_beam, secondary_beam)
+        self._init_beams(primary_shape, secondary_shape, filter_nu)
         self._init_filter(filter_nu, filter_relative_bandwidth)
         self._init_horns(filter_nu)
         self._init_optics(polarizer)
         self._init_synthbeam(synthbeam_dtype, synthbeam_peak150_fwhm)
         self.synthbeam.fraction = synthbeam_fraction
         self.synthbeam.kmax = synthbeam_kmax
-
 
     def _get_detector_layout(self, ngrids, nep, fknee, fslope, ncorr, tau):
         shape, vertex, removed, index, quadrant, efficiency = \
@@ -180,15 +219,32 @@ class QubicInstrument(Instrument):
         layout.ngrids = ngrids
         return layout
 
-    def _init_beams(self, primary, secondary):
-        if primary is None:
-            primary = BeamGaussian(
-                np.radians(self.calibration.get('primbeam')))
-        self.primary_beam = primary
-        if secondary is None:
-            secondary = BeamGaussian(
-                np.radians(self.calibration.get('primbeam')), backward=True)
-        self.secondary_beam = secondary
+    def _init_beams(self, primary, secondary, filter_nu):
+        # The beam shape is taken into account
+        nu = int(filter_nu / 1e9)
+        if primary == 'gaussian':
+            PrimBeam = BeamGaussian(
+                np.radians(self.calibration.get('primbeam')), nu=nu)
+        elif primary == 'fitted_beam':
+            par, omega = self.calibration.get('primbeam')
+            PrimBeam = BeamFitted(par, omega)
+        elif primary == 'multi_freq':
+            parth,parfr,parbeam,alpha,xspl = self.calibration.get('primbeam')
+            PrimBeam = MultiFreqBeam(parth, parfr, parbeam, alpha, xspl,
+                                    nu=nu)
+        self.primary_beam = PrimBeam
+        if secondary is 'gaussian':
+            SecBeam = BeamGaussian(
+                np.radians(self.calibration.get('primbeam')), nu=nu,
+                                                backward=True)
+        elif secondary == 'fitted_beam':
+            par, omega = self.calibration.get('primbeam')
+            SecBeam = BeamFitted(par, omega, backward=True)
+        elif secondary == 'multi_freq':
+            parth,parfr,parbeam,alpha,xspl = self.calibration.get('primbeam')
+            SecBeam = MultiFreqBeam(parth, parfr, parbeam, alpha, xspl, nu=nu
+                                      , backward=True)
+        self.secondary_beam = SecBeam
 
     def _init_filter(self, nu, relative_bandwidth):
         self.filter = Filter(nu, relative_bandwidth)
@@ -196,8 +252,8 @@ class QubicInstrument(Instrument):
     def _init_horns(self,filter_nu):
         self.horn = self.calibration.get('hornarray')
         self.horn.radeff = self.horn.radius
-        # At 150 GHz, horns are one moded 
-        if filter_nu == 150e9:
+        # In the 150 GHz band, horns are one moded 
+        if (filter_nu <= self.nu1_up) and (filter_nu >= self.nu1_down):
             kappa = np.pi * self.horn.radius**2 * self.primary_beam.solid_angle * \
                 filter_nu**2 / c**2
             self.horn.radeff = self.horn.radius / np.sqrt(kappa)
@@ -284,12 +340,17 @@ class QubicInstrument(Instrument):
 
         n = len(temperatures)
         ndet = len(self.detector)
-        # tr_prod : product of transmissions of all components lying after the 
-        # present one        
+        # tr_prod : product of transmissions of all components lying
+        # after the present one        
         tr_prod = np.r_[[np.prod(transmissions[j+1:]) for j in range(n-1)], 1]
-
-        nu = self.filter.nu
-        dnu = self.filter.bandwidth
+        # insures that the noise is comuted for the full bandwidth.
+        if (self.filter.nu <= self.nu1_up) \
+          and (self.filter.nu >= self.nu1_down):
+            nu = self.nu1
+        if (self.filter.nu <= self.nu2_up) \
+          and (self.filter.nu >= self.nu2_down):
+            nu = self.nu2
+        dnu = nu * self.FRBW
         S_det = self.detector.area
         omega_det = -self.detector.area / \
                     self.optics.focal_length**2 * \
@@ -298,7 +359,6 @@ class QubicInstrument(Instrument):
         S_horns = np.pi * self.horn.radius**2 * len(self.horn)
         # Effective horn area, taking the number of modes into account 
         S_horns_eff = np.pi * self.horn.radeff**2 * len(self.horn)
-        g = gp[:, None] * S_horns_eff * omega_det * (nu / c)**2 * dnu
         sec_beam = self.secondary_beam(self.detector.theta,
                                        self.detector.phi)
         alpha = np.arctan(0.5) # half oppening angle of the combiner
@@ -316,12 +376,15 @@ class QubicInstrument(Instrument):
         for i in xrange(len(cc)):
             names.append(cc[i][0])
         if self.debug:
-            print self.config, int(nu/1e9), 'GHz, n_modes = ',\
-                np.pi * self.horn.radeff**2 * self.primary_beam.solid_angle *\
-                self.filter.nu**2 / c**2
+            print self.config,', central frequency:', int(nu/1e9),'+-',\
+              int(dnu/2e9), 'GHz, subband:', int(self.filter.nu/1e9),\
+              'GHz, n_modes =', np.pi * self.horn.radeff**2 * \
+              self.primary_beam.solid_angle *\
+              self.filter.nu**2 / c**2
             indf = names.index('ndf')-2
             if cc[indf][2] != 1.0: 
-                print 'Neutral density filter present, trans = ', cc[indf][2]
+                print 'Neutral density filter present, trans = ', \
+                  cc[indf][2]
             else:
                 print 'No neutral density filter'
         # compnents before the horn plane
@@ -342,8 +405,9 @@ class QubicInstrument(Instrument):
                 print names[j], ', T=',temperatures[j],\
                     'K, P = {0:.2e} W'.format(P_phot[j].max()),\
                     ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[j]).max()) +\
-                    '  W/sqrt(Hz)' 
-        if int(self.filter.nu/1e9) == 150:
+                    '  W/sqrt(Hz)'
+        # bifurcation for the whole 150 GHz
+        if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
             nu_up = 168e9
             # back to back horns, as seen by the detectors through the combiner
             T = temperatures[ib2b]
@@ -451,8 +515,8 @@ class QubicInstrument(Instrument):
                         'K, P = {0:.2e} W'.format(P_phot[indf].max()),\
                         ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[indf]).max()) +\
                         '  W/sqrt(Hz)' 
-            # Last low pass Edges
-            for i in range(indf+1,indf+4):
+            # The two before last low pass Edges
+            for i in range(indf+1,indf+3):
                 T = temperatures[i]
                 b = h * nu_up / k / T
                 J1 = quad(funct,0,b,(4,1))[0]
@@ -572,22 +636,19 @@ class QubicInstrument(Instrument):
                             'K, P = {0:.2e} W'.format(P_phot[i].max()),\
                             ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[i]).max())+\
                             ' W/sqrt(Hz)'
-            # Band Defining Filter
-            ibdf = i+1
-            T = temperatures[ibdf]
-            eta = emissivities[ibdf] * tr_prod[ibdf] * self.detector.efficiency
-            P_phot[ibdf]= eta * gp[ibdf] * S_det * sigma * T**4 / 2
-            NEP_phot2[ibdf] = eta * 2 * gp[ibdf] * S_det * np.pi * (k*T)**5 \
-                              / c**2 / h**3 * (24.9 + eta * 1.1)
-            if self.debug:
-                print names[ibdf], \
-                    ', T=',temperatures[ibdf], \
-                    'K, P = {0:.2e} W'.format(P_phot[ibdf].max()),\
-                    ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ibdf]).max())+\
-                    ' W/sqrt(Hz)'
-            # if self.debug:
-            #     print 'Environment, T =',temperatures[ib2b],\
-            #     ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2_env).max())
+        # 5.6 cm EDGE (150 GHz) or Band Defining Filter (220 GHZ)
+        ilast = i+1
+        T = temperatures[ilast]
+        eta = emissivities[ilast] * tr_prod[ilast] * self.detector.efficiency
+        P_phot[ilast]= eta * gp[ilast] * S_det * sigma * T**4 / 2
+        NEP_phot2[ilast] = eta * 2 * gp[ilast] * S_det * np.pi * (k*T)**5 \
+                          / c**2 / h**3 * (24.9 + eta * 1.1)
+        if self.debug:
+            print names[ilast], \
+                ', T=',temperatures[ilast], \
+                'K, P = {0:.2e} W'.format(P_phot[ilast].max()),\
+                ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ilast]).max())+\
+                ' W/sqrt(Hz)'
         P_phot_tot = np.sum(P_phot, axis=0)
         NEP_tot = np.sqrt(np.sum(NEP_phot2, axis=0) + NEP_phot2_env)
         if self.debug:
@@ -1168,6 +1229,10 @@ class QubicInstrument(Instrument):
                             self.secondary_beam, self.synthbeam.dtype, theta_max, external_A=external_A)/detector_integrate**2
             return sb        
 
+    def detector_subset(self,dets):
+        subset_inst = copy.deepcopy(self)
+        subset_inst.detector = self.detector[dets]
+        return subset_inst
 
 def _argsort_reverse(a, axis=-1):
     i = list(np.ogrid[[slice(x) for x in a.shape]])
@@ -1193,11 +1258,14 @@ class QubicMultibandInstrument():
         filter_nus -- base frequencies array
         filter_relative_bandwidths -- array of relative bandwidths 
         center_detector -- bolean, optional
-            if True, take only one detector at the centre of the focal plane
+        if True, take only one detector at the centre of the focal plane
             Needed to study the synthesised beam
         '''
-        
-        Nf, nus_edge, filter_nus, deltas, Delta, Nbbands = self._compute_freq(d['filter_nu']/1e9, d['filter_relative_bandwidth'], d['nf_sub'])
+        Nf, nus_edge, filter_nus, deltas, Delta, Nbbands = \
+            self._compute_freq(d['filter_nu']/1e9,
+                                d['filter_relative_bandwidth'], 
+                                d['nf_sub'])
+        self.FRBW = d['filter_relative_bandwidth'] # initial Full Relative Band Width
         d1=d.copy()
         
         self.nsubbands = len(filter_nus)
@@ -1206,15 +1274,15 @@ class QubicMultibandInstrument():
             for i in range(self.nsubbands):
                 d1['filter_nu']= filter_nus[i]*1e9
                 d1['filter_relative_bandwidth'] = deltas[i]/filter_nus[i]
-                self.subinstruments +=[QubicInstrument(d1)]
+                self.subinstruments +=[QubicInstrument(d1,FRBW=self.FRBW)]
         else:
-                self.subinstruments = []
-                for i in range(self.nsubbands):
-                    d1['filter_nu']= filter_nus[i]*1e9
-                    d1['filter_relative_bandwidth']= deltas[i]/filter_nus[i]
-                    q = QubicInstrument(d1)[0]
-                    q.detector.center = np.array([[0., 0., -0.3]])
-                    self.subinstruments.append(q)
+            self.subinstruments = []
+            for i in range(self.nsubbands):
+                d1['filter_nu']= filter_nus[i]*1e9
+                d1['filter_relative_bandwidth']= deltas[i]/filter_nus[i]
+                q = QubicInstrument(d1,FRBW=self.FRBW)[0]
+                q.detector.center = np.array([[0., 0., -0.3]])
+                self.subinstruments.append(q)
 
     def __getitem__(self, i):
         return self.subinstruments[i]
@@ -1256,6 +1324,12 @@ class QubicMultibandInstrument():
         sb = np.array(sb)
         sb = sb.sum(axis=0)
         return sb
+
+    def detector_subset(self, dets):
+        subset_inst = copy.deepcopy(self)
+        for i in range(len(subset_inst)):
+            subset_inst[i].detector = self[i].detector[dets]
+        return subset_inst
 
 
     @staticmethod

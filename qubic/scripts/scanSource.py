@@ -10,7 +10,7 @@ import sys
 mpl.style.use('classic')
 name='test_scan_source'
 resultDir='%s'%name
-alaImager=False
+alaImager=True
 
 
 try:
@@ -26,8 +26,7 @@ q = qubic.QubicMultibandInstrument(d)
 p= qubic.get_pointing(d)
 s = qubic.QubicScene(d)
 
-
-#q[0].detector.plot()
+print 'beam_shape =', d['beam_shape']
 
 fix_azimuth=d['fix_azimuth']
 
@@ -45,6 +44,7 @@ plt.subplot(4,1,4)
 plt.plot(p.time,p.angle_hwp)
 plt.ylabel('HWP angle')
 plt.savefig(resultDir+'/%s_pointing.png'%name,bbox_inches='tight')
+
 plt.clf()
 plt.close()
 
@@ -78,8 +78,6 @@ arec = qubic.QubicMultibandAcquisition(q, p, s,d, nus_edge)
 out=arec.get_coverage()
 
 hp.mollview(out[0,:])
-plt.show()
-
 
 if alaImager==True:
     
@@ -88,7 +86,6 @@ if alaImager==True:
     p= qubic.get_pointing(d)
     s = qubic.QubicScene(d)
     arec = qubic.QubicMultibandAcquisition(q, p, s,d, nus_edge)
-
 
 maps_recon = arec.tod2map(TOD, tol=1e-3, maxiter=100000)
 

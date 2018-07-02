@@ -13,12 +13,6 @@ import re
 
 __all__ = ['QubicCalibration']
 
-FILE_DETARRAY = 'CalQubic_DetArray_v*.fits'
-FILE_HORNARRAY = 'CalQubic_HornArray_v*.fits'
-FILE_OPTICS = 'CalQubic_Optics_v*'
-FILE_PRIMBEAM = 'CalQubic_PrimBeam_v*.fits'
-
-
 class QubicCalibration(object):
     """
     Class representing the QUBIC calibration tree. It stores the calibration
@@ -51,6 +45,7 @@ class QubicCalibration(object):
         self.hornarray = os.path.abspath(join(self.path, d['hornarray']))
         self.optics = os.path.abspath(join(self.path, d['optics'])) 
         self.primbeam =  os.path.abspath(join(self.path, d['primbeam'])) 
+        self.nu = int(d['filter_nu']/1e9)
 
     def __str__(self):
         state = [('path', self.path),
@@ -160,11 +155,31 @@ class QubicCalibration(object):
             return out
 
         elif name == 'primbeam':
-            header = fits.open(self.primbeam)[0].header
-            fwhm0_deg = header['fwhm']
-            return fwhm0_deg
-            # nu0 = hdu['freq']
-            # return lambda nu: fwhm0_deg * (nu0 / nu)
+            hdu =  fits.open(self.primbeam)
+            header = hdu[0].header
+            # Gaussian beam
+            if header['format version'] == '1.0':
+                fwhm0_deg = header['fwhm']
+                return fwhm0_deg
+            # Fitted beam
+            elif header['format version'] =='2.0':
+                if (self.nu < 170 and self.nu > 130):
+                    omega = hdu[1].header['omega']
+                    par = hdu[1].data
+                else:
+                    omega = hdu[2].header['omega']
+                    par = hdu[2].data
+                return par, omega
+            # Multi frequency beam
+            else:   
+                 parth = hdu[1].data
+                 parfr = hdu[2].data
+                 parbeam = hdu[3].data
+                 alpha = hdu[4].data
+                 xspl = hdu[5].data
+                 return parth, parfr, parbeam, alpha, xspl
+                
+            raise ValueError('Invalid primary beam calibration version')
 
         raise ValueError("Invalid calibration item: '{}'".format(name))
 

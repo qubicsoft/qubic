@@ -140,12 +140,19 @@ def get_pointing(d):
     center=(d['RA_center'],d['DEC_center'])
 
     if d['random_pointing']==True:
-        
-        return create_random_pointings(center, d['npointings'], d['dtheta'], date_obs=d['date_obs'],period=d['period'], latitude=d['latitude'], longitude=d['longitude'], seed=d['seed'])
+        return create_random_pointings(center, d['npointings'], d['dtheta'],
+                                       date_obs=d['date_obs'], period=d['period'],
+                                       latitude=d['latitude'],
+                                       longitude=d['longitude'], seed=d['seed'])
     else:
-        return create_sweeping_pointings(center, d['duration'], d['period'], d['angspeed'], d['delta_az'],
-                                         d['nsweeps_per_elevation'], d['angspeed_psi'], d['maxpsi'], date_obs=d['date_obs'],
-                                         latitude=d['latitude'], longitude=d['longitude'],fix_azimuth=d['fix_azimuth'])
+        return create_sweeping_pointings(center, d['duration'], d['period'],
+                                         d['angspeed'], d['delta_az'],
+                                         d['nsweeps_per_elevation'],
+                                         d['angspeed_psi'], d['maxpsi'],
+                                         date_obs=d['date_obs'],
+                                         latitude=d['latitude'],
+                                         longitude=d['longitude'],
+                                         fix_azimuth=d['fix_azimuth'])
 
 
 def create_random_pointings(center, npointings, dtheta, date_obs=None,

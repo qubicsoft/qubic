@@ -170,7 +170,7 @@ class QubicInstrument(Instrument):
             print 'primary_shape', primary_shape
             print "d['primbeam']",d['primbeam']
         calibration = QubicCalibration(d)
-        self.config = d['config'
+        self.config = d['config']
         self.calibration = calibration
         layout = self._get_detector_layout(detector_ngrids, detector_nep, 
                                            detector_fknee, detector_fslope,

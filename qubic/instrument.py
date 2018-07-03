@@ -21,7 +21,7 @@ from pysimulators.interfaces.healpy import (
 from pysimulators.sparse import (
     FSRMatrix, FSRRotation2dMatrix, FSRRotation3dMatrix)
 from scipy.constants import c, h, k, sigma
-from scipy.constants import c, h, k
+from scipy.integrate import quad 
 from . import _flib as flib
 from .calibration import QubicCalibration
 from .utils import _compress_mask
@@ -170,9 +170,9 @@ class QubicInstrument(Instrument):
             print 'primary_shape', primary_shape
             print "d['primbeam']",d['primbeam']
         calibration = QubicCalibration(d)
-        self.config = d['config'
+        self.config = d['config']
         self.calibration = calibration
-        layout = self._get_detector_layout(detector_ngrids, detector_nep, 
+        layout = self._get_detector_layout(detector_ngrids, detector_nep,
                                            detector_fknee, detector_fslope,
                                            detector_ncorr, detector_tau)
         Instrument.__init__(self, layout)
@@ -180,7 +180,7 @@ class QubicInstrument(Instrument):
         self.nripples = nripples
         self._init_beams(primary_shape, secondary_shape, filter_nu)
         self._init_filter(filter_nu, filter_relative_bandwidth)
-        self._init_horns()
+        self._init_horns(filter_nu)
         self._init_optics(polarizer)
         self._init_synthbeam(synthbeam_dtype, synthbeam_peak150_fwhm)
         self.synthbeam.fraction = synthbeam_fraction
@@ -197,7 +197,7 @@ class QubicInstrument(Instrument):
             quadrant = np.array([quadrant, quadrant + 4], quadrant.dtype)
             efficiency = np.array([efficiency, efficiency])
         focal_length = self.calibration.get('optics')['focal length']
-        vertex = np.concatenate([vertex, np.full_like(vertex[..., :1], 
+        vertex = np.concatenate([vertex, np.full_like(vertex[..., :1],
                                                       -focal_length)], -1)
 
         def theta(self):
@@ -249,7 +249,7 @@ class QubicInstrument(Instrument):
     def _init_filter(self, nu, relative_bandwidth):
         self.filter = Filter(nu, relative_bandwidth)
 
-    def _init_horns(self):
+    def _init_horns(self,filter_nu):
         self.horn = self.calibration.get('hornarray')
         self.horn.radeff = self.horn.radius
         # In the 150 GHz band, horns are one moded 
@@ -664,7 +664,7 @@ class QubicInstrument(Instrument):
 
         """
         nhorns = np.sum(self.horn.open)
-        return HomothetyOperator(nhorns * np.pi * self.horn.radius**2)
+        return HomothetyOperator(nhorns * np.pi * self.horn.radeff**2)
 
     def get_convolution_peak_operator(self, **keywords):
         """
@@ -1040,7 +1040,7 @@ class QubicInstrument(Instrument):
                                            spectral_irradiance]
         uvec = hp.ang2vec(theta, phi)
         source_E = np.sqrt(spectral_irradiance *
-                           primary_beam(theta, phi) * np.pi * horn.radius**2)
+                           primary_beam(theta, phi) * np.pi * horn.radeff**2)
         const = 2j * np.pi * nu / c
         product = np.dot(horn[horn.open].center, uvec.T)
         out = ne.evaluate('source_E * exp(const * product)')

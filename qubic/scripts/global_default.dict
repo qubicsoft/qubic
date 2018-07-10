@@ -70,3 +70,9 @@ nprocs_instrument=None
 nprocs_sampling=None
 comm=None
 weights=None
+
+############################################# Output ##############################
+
+output = 'result/'
+
+

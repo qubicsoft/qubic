@@ -26,10 +26,10 @@ ripples=False
 nripples=0
 
 ########## Calibration files, should not be edited #####################@
-optics='CalQubic_Optics_v3_TD_150.txt'
-primbeam='CalQubic_PrimBeam_v2.fits' # X=2 gaussian, 3 fitted, 4 multi frequency splines
-detarray='CalQubic_DetArray_TD.fits'
-hornarray='CalQubic_HornArray_TD.fits'
+optics='CalQubic_Optics_v3_CC_FFF.txt'
+primbeam='CalQubic_PrimBeam_vX.fits' # X=2 gaussian, 3 fitted, 4 multi frequency splines
+detarray='CalQubic_DetArray_CC.fits'
+hornarray='CalQubic_HornArray_CC.fits'
 
 ############################################# Scene ################################
 nside=256

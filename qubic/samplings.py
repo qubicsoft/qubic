@@ -152,7 +152,7 @@ def get_pointing(d):
                                          date_obs=d['date_obs'],
                                          latitude=d['latitude'],
                                          longitude=d['longitude'],
-                                         fix_azimuth=d['fix_azimuth'])
+                                         fix_azimuth=d['fix_azimuth'],random_hwp=d['random_hwp'])
 
 
 def create_random_pointings(center, npointings, dtheta, date_obs=None,
@@ -209,7 +209,7 @@ def create_random_pointings(center, npointings, dtheta, date_obs=None,
 
 def create_sweeping_pointings(
         center, duration, period, angspeed, delta_az, nsweeps_per_elevation,
-        angspeed_psi, maxpsi, date_obs=None, latitude=None, longitude=None,fix_azimuth=None):
+        angspeed_psi, maxpsi, date_obs=None, latitude=None, longitude=None,fix_azimuth=None,random_hwp=True):
     """
     Return pointings according to the sweeping strategy:
     Sweep around the tracked FOV center azimuth at a fixed elevation, and
@@ -302,7 +302,16 @@ def create_sweeping_pointings(
     out.azimuth = azptg
     out.elevation = elptg
     out.pitch = pitch
-    out.angle_hwp = np.random.random_integers(0, 7, nsamples) * 11.25
+    if random_hwp:
+        out.angle_hwp = np.random.random_integers(0, 7, nsamples) * 11.25
+    else:
+        out.angle_hwp=np.zeros(nsamples)
+        max_sweeps=np.max(isweeps)
+        delta=int(nsamples/max_sweeps)
+        for i in range(max_sweeps):
+            out.angle_hwp[i*delta:(i+1)*delta]=11.25*np.mod(i,7)
+
+
 
     if fix_azimuth['apply']:
         out.fix_az=True

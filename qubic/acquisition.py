@@ -230,25 +230,135 @@ class QubicAcquisition(Acquisition):
             [self.instrument.get_hwp_operator(self.sampling[b], self.scene)
              for b in self.block], axisin=1)
 
-    def get_invntt_operator(self):
-        sigma_detector = self.instrument.detector.nep / \
-            np.sqrt(2*self.sampling.period)
+
+
+    def get_diag_invntt_operator(self):
+    
+        print 'Use diagonal noise covariance matrix'
+        
+        sigma_detector = self.instrument.detector.nep / np.sqrt(2*self.sampling.period)
         if self.photon_noise:
-            sigma_photon = self.instrument._get_noise_photon_nep(self.scene) /\
-                           np.sqrt(2 * self.sampling.period)
+            sigma_photon = self.instrument._get_noise_photon_nep(self.scene) / np.sqrt(2 * self.sampling.period)
         else:
             sigma_photon = 0
-        
-        out = DiagonalOperator(
-            1 / (sigma_detector**2 + sigma_photon**2),
-            broadcast='rightward',
-            shapein=(len(self.instrument), len(self.sampling)))
+
+        out = DiagonalOperator(1 / (sigma_detector**2 + sigma_photon**2),broadcast='rightward',shapein=(len(self.instrument), len(self.sampling)))
         if self.effective_duration is not None:
             nsamplings = self.comm.allreduce(len(self.sampling))
-            out /= (nsamplings * self.sampling.period /
-                    (self.effective_duration * 31557600))
+            out /= (nsamplings * self.sampling.period /(self.effective_duration * 31557600))
         return out
+    
+    
+    def get_invntt_operator(self, d):
+        
+        """
+        Return the inverse time-time noise correlation matrix as an Operator.
+            
+        The input Power Spectrum Density can either be fully specified by using
+        the 'bandwidth' and 'psd' keywords, or by providing the parameters of
+        the gaussian distribution:
+        psd = sigma**2 * (1 + (fknee/f)**fslope) / B
+        where B is the sampling bandwidth equal to sampling_frequency / N.
+            
+        Parameters
+        ----------
+        sampling : Sampling
+            The temporal sampling.
+        psd : array-like, optional
+            The one-sided or two-sided power spectrum density
+            [signal unit/sqrt Hz].
+        bandwidth : float, optional
+            The PSD frequency increment [Hz].
+        twosided : boolean, optional
+            Whether or not the input psd is one-sided (only positive
+            frequencies) or two-sided (positive and negative frequencies).
+        sigma : float
+            Standard deviation of the white noise component.
+        fknee : float
+            The 1/f noise knee frequency [Hz].
+        fslope : float
+            The 1/f noise slope.
+        sampling_frequency : float
+            The sampling frequency [Hz].
+        ncorr : int
+            The correlation length of the time-time noise correlation matrix.
+        fftw_flag : string, optional
+            The flags FFTW_ESTIMATE, FFTW_MEASURE, FFTW_PATIENT and
+            FFTW_EXHAUSTIVE can be used to describe the increasing amount of
+            effort spent during the planning stage to create the fastest
+            possible transform. Usually, FFTW_MEASURE is a good compromise
+            and is the default.
+        nthreads : int, optional
+            Tells how many threads to use when invoking FFTW or MKL. Default is
+            the number of cores.
+            
+        """
+        
+        psd=d['psd']
+        bandwidth=d['bandwidth']
+        twosided= d['twosided']
+        sigma=d['sigma']
+        fknee=d['detector_fknee']
+        fslope=d['detector_fslope']
+        ncorr=d['detector_ncorr']
+        fftw_flag='FFTW_MEASURE'
+        nthreads=None
+        
+        if bandwidth is None and psd is not None or bandwidth is not None and psd is None:
+            raise ValueError('The bandwidth or the PSD is not specified.')
+        if self.instrument.detector.nep is not None:
+            sigma = self.instrument.detector.nep / np.sqrt(2 * self.sampling.period)
+            
+            if self.photon_noise:
+                sigma_photon = self.instrument._get_noise_photon_nep(self.scene) /np.sqrt(2 * self.sampling.period)
+                sigma = np.sqrt(sigma**2+sigma_photon**2)
+            else:
+                sigma_photon = 0
+        
+        if bandwidth is None and psd is None and sigma is None:
+            raise ValueError('The noise model is not specified.')
+    
+        shapein=(len(self.instrument), len(self.sampling))
+                
+        if bandwidth is None and fknee == 0:
+            print 'diagonal case'
+            
+            out = DiagonalOperator(1 / sigma**2, broadcast='rightward', shapein=(len(self.instrument), len(self.sampling)))
+            
+            if self.effective_duration is not None:
+                nsamplings = self.comm.allreduce(len(self.sampling))
+                out /= (nsamplings * self.sampling.period / (self.effective_duration * 31557600))
+            return out
+                
+    
+        sampling_frequency = 1 / self.sampling.period
+        
+        nsamples_max = len(self.sampling)
+        fftsize = 2
+        while fftsize < nsamples_max:
+            fftsize *= 2
+
+        new_bandwidth = sampling_frequency / fftsize
+        if bandwidth is not None and psd is not None:
+            if twosided:
+                psd = _fold_psd(psd)
+            f = np.arange(fftsize // 2 + 1, dtype=float) * new_bandwidth
+            p = _unfold_psd(_logloginterp_psd(f, bandwidth, psd))
+        else:
+            p = _gaussian_psd_1f(fftsize, sampling_frequency, sigma, fknee,fslope, twosided=True)
+        p[..., 0] = p[..., 1]
+        invntt = _psd2invntt(p, new_bandwidth, ncorr, fftw_flag=fftw_flag)
+        
+        print 'non diagonal case'
+        if self.effective_duration is not None:
+            nsamplings = self.comm.allreduce(len(self.sampling))
+            invntt /= (nsamplings * self.sampling.period / (self.effective_duration * 31557600))
+
+
+        return SymmetricBandToeplitzOperator(shapein, invntt, fftw_flag=fftw_flag, nthreads=nthreads)
+
     get_invntt_operator.__doc__ = Acquisition.get_invntt_operator.__doc__
+    
 
     def get_unit_conversion_operator(self):
         """
@@ -378,6 +488,36 @@ class QubicAcquisition(Acquisition):
             return tod, map
 
         return tod
+
+
+    def tod2map(self,tod,d):
+        '''
+        Reconstruct map from tod
+        '''
+        tol=d['tol']
+        maxiter=d['maxiter']
+        cov=d['cov']
+        verbose=d['verbose']
+        sampling= self[0].sampling
+            
+        H = self.get_operator()
+        invntt = self.get_invntt_operator(d)
+            
+        A = H.T * invntt * H
+        b = H.T * invntt * tod
+                    
+        preconditioner = self.get_preconditioner(cov)
+        solution = pcg(A, b, M=preconditioner,disp=verbose, tol=tol, maxiter=maxiter)
+        return solution['x']
+
+    def get_preconditioner(self, cov):
+        if cov is not None:
+            cov_inv = 1 / cov
+            cov_inv[np.isinf(cov_inv)] = 0.
+            preconditioner = DiagonalOperator(cov_inv, broadcast='rightward')
+        else:
+            preconditioner = None
+        return preconditioner
 
 
 class PlanckAcquisition(object):

@@ -56,7 +56,11 @@ class QubicAcquisition(Acquisition):
         nprocs_instrument=d['nprocs_instrument']
         nprocs_sampling=d['nprocs_sampling']
         comm=d['comm']
-        
+        psd=d['psd']
+        bandwidth=d['bandwidth']
+        twosided=d['twosided']
+        sigma=d['sigma']
+       
         """
         acq = QubicAcquisition(band, sampling, [scene, nprocs_instrument,
                                nprocs_sampling, comm])
@@ -122,6 +126,16 @@ class QubicAcquisition(Acquisition):
             into a 2d cartesian communicator before being stored as the 'comm'
             attribute. The following relationship must hold:
                 comm.size = nprocs_instrument * nprocs_sampling
+        psd : array-like, optional
+            The one-sided or two-sided power spectrum density
+            [signal unit/sqrt Hz].
+        bandwidth : float, optional
+            The PSD frequency increment [Hz].
+        twosided : boolean, optional
+            Whether or not the input psd is one-sided (only positive
+            frequencies) or two-sided (positive and negative frequencies).
+        sigma : float
+            Standard deviation of the white noise component.
 
         """
 
@@ -131,6 +145,15 @@ class QubicAcquisition(Acquisition):
             nprocs_sampling=nprocs_sampling, comm=comm)
         self.photon_noise = bool(photon_noise)
         self.effective_duration = effective_duration
+        self.bandwidth = bandwidth
+        self.psd = psd
+        self.twosided = twosided
+        self.sigma = sigma
+        self.detector_fknee = detector_fknee
+        self.detector_fslope = detector_fslope
+        self.detector_ncorr = detector_ncorr
+
+
 
     def get_coverage(self):
         """
@@ -249,7 +272,7 @@ class QubicAcquisition(Acquisition):
         return out
     
     
-    def get_invntt_operator(self, d):
+    def get_invntt_operator(self):
         
         """
         Return the inverse time-time noise correlation matrix as an Operator.
@@ -274,13 +297,13 @@ class QubicAcquisition(Acquisition):
             frequencies) or two-sided (positive and negative frequencies).
         sigma : float
             Standard deviation of the white noise component.
-        fknee : float
+        detector_fknee : float
             The 1/f noise knee frequency [Hz].
-        fslope : float
+        detector_fslope : float
             The 1/f noise slope.
         sampling_frequency : float
             The sampling frequency [Hz].
-        ncorr : int
+        detector_ncorr : int
             The correlation length of the time-time noise correlation matrix.
         fftw_flag : string, optional
             The flags FFTW_ESTIMATE, FFTW_MEASURE, FFTW_PATIENT and
@@ -294,36 +317,29 @@ class QubicAcquisition(Acquisition):
             
         """
         
-        psd=d['psd']
-        bandwidth=d['bandwidth']
-        twosided= d['twosided']
-        sigma=d['sigma']
-        fknee=d['detector_fknee']
-        fslope=d['detector_fslope']
-        ncorr=d['detector_ncorr']
-        fftw_flag='FFTW_MEASURE'
-        nthreads=None
+        fftw_flag = 'FFTW_MEASURE'
+        nthreads = None
         
-        if bandwidth is None and psd is not None or bandwidth is not None and psd is None:
+        if self.bandwidth is None and self.psd is not None or self.bandwidth is not None and self.psd is None:
             raise ValueError('The bandwidth or the PSD is not specified.')
         if self.instrument.detector.nep is not None:
-            sigma = self.instrument.detector.nep / np.sqrt(2 * self.sampling.period)
+            self.sigma = self.instrument.detector.nep / np.sqrt(2 * self.sampling.period)
             
             if self.photon_noise:
                 sigma_photon = self.instrument._get_noise_photon_nep(self.scene) /np.sqrt(2 * self.sampling.period)
-                sigma = np.sqrt(sigma**2+sigma_photon**2)
+                self.sigma = np.sqrt(self.sigma**2+sigma_photon**2)
             else:
                 sigma_photon = 0
         
-        if bandwidth is None and psd is None and sigma is None:
+        if self.bandwidth is None and self.psd is None and self.sigma is None:
             raise ValueError('The noise model is not specified.')
     
-        shapein=(len(self.instrument), len(self.sampling))
+        shapein = (len(self.instrument), len(self.sampling))
                 
-        if bandwidth is None and fknee == 0:
+        if self.bandwidth is None and self.detector_fknee == 0:
             print 'diagonal case'
             
-            out = DiagonalOperator(1 / sigma**2, broadcast='rightward', shapein=(len(self.instrument), len(self.sampling)))
+            out = DiagonalOperator(1 / self.sigma**2, broadcast='rightward', shapein=(len(self.instrument), len(self.sampling)))
             
             if self.effective_duration is not None:
                 nsamplings = self.comm.allreduce(len(self.sampling))
@@ -339,15 +355,15 @@ class QubicAcquisition(Acquisition):
             fftsize *= 2
 
         new_bandwidth = sampling_frequency / fftsize
-        if bandwidth is not None and psd is not None:
-            if twosided:
-                psd = _fold_psd(psd)
+        if self.bandwidth is not None and self.psd is not None:
+            if self.twosided:
+                self.psd = _fold_psd(self.psd)
             f = np.arange(fftsize // 2 + 1, dtype=float) * new_bandwidth
-            p = _unfold_psd(_logloginterp_psd(f, bandwidth, psd))
+            p = _unfold_psd(_logloginterp_psd(f, self.bandwidth, self.psd))
         else:
-            p = _gaussian_psd_1f(fftsize, sampling_frequency, sigma, fknee,fslope, twosided=True)
+            p = _gaussian_psd_1f(fftsize, sampling_frequency, self.sigma, self.detector_fknee,self.detector_fslope, twosided=True)
         p[..., 0] = p[..., 1]
-        invntt = _psd2invntt(p, new_bandwidth, ncorr, fftw_flag=fftw_flag)
+        invntt = _psd2invntt(p, new_bandwidth, self.detector_ncorr, fftw_flag=fftw_flag)
         
         print 'non diagonal case'
         if self.effective_duration is not None:

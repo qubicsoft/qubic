@@ -11,6 +11,10 @@ MultiBand=True
 nf_sub=5
 center_detector=False
 
+psd=None
+bandwidth=None
+twosided=None
+sigma=None
 detector_fknee=0
 detector_fslope=1
 detector_ncorr=10
@@ -74,3 +78,4 @@ nprocs_instrument=None
 nprocs_sampling=None
 comm=None
 weights=None
+

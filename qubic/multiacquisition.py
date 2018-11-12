@@ -211,11 +211,11 @@ class QubicMultibandPlanckAcquisition(QubicPolyPlanckAcquisition):
         H = [h.T for h in H]
         b = BlockColumnOperator(H, new_axisout=0) * (invntt * tod)
         sh = b.shape
-        if len(self.qubic.nus) - 1 > 1: # If number of subbands is more than one
+        if (len(self.qubic.nus) - 1) > 1: # If number of subbands is more than one
             if len(sh) == 3:
                 b = b.reshape((sh[0] * sh[1], sh[2]))
             else:
-                b = b.reshape((sh[0] * sh[1]))
+                b = b.reshape((sh[0], sh[1]))
 
         preconditioner = self.get_preconditioner(cov)
         solution = pcg(A, b, M=preconditioner, disp=verbose, tol=tol, maxiter=maxiter)

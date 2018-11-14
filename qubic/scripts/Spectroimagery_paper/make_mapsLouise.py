@@ -76,11 +76,11 @@ for nf_sub_rec in np.arange(noutmin, noutmax+1):
     cov = np.sum(cov, axis=0)
     maxcov = np.max(cov)
     unseen = cov < maxcov*0.1
-    diffmap = maps_convolved - maps_recon
+    #diffmap = maps_convolved - maps_recon
     maps_convolved[:,unseen,:] = hp.UNSEEN
     maps_recon[:,unseen,:] = hp.UNSEEN
-    diffmap[:,unseen,:] = hp.UNSEEN
-    therms = np.std(diffmap[:,~unseen,:], axis = 1)
+    #diffmap[:,unseen,:] = hp.UNSEEN
+    #therms = np.std(diffmap[:,~unseen,:], axis = 1)
     
     print('************************** Map-Making on {} sub-map(s)Done'.format(nf_sub_rec))
 

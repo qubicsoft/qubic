@@ -30,7 +30,7 @@ rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/test
 
 
 #Number of subbands used during the simulation
-# nsubvals = np.array([1,2,3,4])
+nsubvals = np.array([1,2,3,4])
 
 
 #Archetypes of the files .fits you want to work on
@@ -152,7 +152,7 @@ for isub in xrange(len(nsubvals)):
 		for n in xrange(nsub):
 			for i in xrange(3):
 				mapsconv[seenmap_conv, i] = allmaps_conv[isub][real,n,:,i] * mymask[seenmap_conv]
-                maps_recon[seenmap_conv, i] = allmaps_recon[isub][real,n,:,i] * mymask[seenmap_recon]
+				maps_recon[seenmap_conv, i] = allmaps_recon[isub][real,n,:,i] * mymask[seenmap_recon]
 			cells_in[:, :, n , real] = xpol.get_spectra(mapsconv)[1]
 			cells[:, :, n, real] = xpol.get_spectra(maps_recon)[1]
 

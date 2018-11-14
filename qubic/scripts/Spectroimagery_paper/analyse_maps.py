@@ -54,22 +54,21 @@ plt.plot(np.sort(ang))
 plt.show()
 
 # ================== Residus estimation ===============
-
 #Two ways of obtain residus:
 residus = []
-for isub in xrange(len(nsubvals)): 
-	residus.append(allmaps_recon[isub] - allmaps_conv[isub])
+for j in xrange(len(allmaps_conv)): 
+	residus.append(allmaps_recon[j] - allmaps_conv[j])
 
 residus = []
-for isub in xrange(len(nsubvals)): 
-	residus.append(allmaps_recon[isub] - np.mean(allmaps_recon[isub], axis=0))
+for j in xrange(len(allmaps_conv)): 
+	residus.append(allmaps_recon[j] - np.mean(allmaps_recon[j], axis=0))
 
 
 #Histogram of the residus
 plt.clf()
 for i in xrange(3):
 	plt.subplot(1, 3, i+1)
-	plt.hist(np.ravel(residus[3][:,3,:,i]), range=[-20,20], bins=100)
+	plt.hist(np.ravel(residus[0][:,3,:,i]), range=[-20,20], bins=100)
 	plt.title(stokes[i])
 
 

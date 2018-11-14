@@ -23,24 +23,27 @@ def scaling_dust(freq1, freq2, sp_index=1.59):
     scaling_factor_termo = S1 / S2 * scaling_factor_dust
     return scaling_factor_termo
 
-def cmb_plus_dust(cmb, dust, Nbsubbands, sub_nus):
+def cmb_plus_dust(cmb, dust, Nbsubbands, sub_nus, kind='IQU'):
     '''
     Sum up clean CMB map with dust using proper scaling coefficients
     '''
     Nbpixels = cmb.shape[0]
+    nstokes =  len(kind) #Number of stokes parameters used in the simu
     x0 = np.zeros((Nbsubbands, Nbpixels, 3))
+    #Let's fill the maps:
     for i in range(Nbsubbands):
-        x0[i, :, 0] = cmb.T[0] + dust.T[0] * scaling_dust(150, sub_nus[i], 1.59)
-        x0[i, :, 1] = cmb.T[1] + dust.T[1] * scaling_dust(150, sub_nus[i], 1.59)
-        x0[i, :, 2] = cmb.T[2] + dust.T[2] * scaling_dust(150, sub_nus[i], 1.59)
+      for istokes in xrange(nstokes):
+        if kind == 'QU': #This condition keeps the order IQU in the healpix map
+          x0[i, :, istokes+1] = cmb.T[istokes+1] + dust.T[istokes+1] * scaling_dust(150, sub_nus[i], 1.59)
+        else:
+          x0[i, :, istokes] = cmb.T[istokes] + dust.T[istokes] * scaling_dust(150, sub_nus[i], 1.59)
     return x0
-
 
 def create_input_sky(d, skypars):
   Nf = int(d['nf_sub'])
   band = d['filter_nu']/1e9
   filter_relative_bandwidth = d['filter_relative_bandwidth']
-  Nbfreq_in, nus_edge_in, nus_in, deltas_in, Delta_in, Nbbands_in = qubic.compute_freq(band, filter_relative_bandwidth, Nf)
+  _, _, nus_in, _, _, Nbbands_in = qubic.compute_freq(band, filter_relative_bandwidth, Nf)
   # seed
   if d['seed']:
     np.random.seed(d['seed'])
@@ -58,9 +61,8 @@ def create_input_sky(d, skypars):
   dust = np.array(hp.synfast(spectra_dust, d['nside'], new=True, pixwin=True, verbose=False)).T
 
   # Combine CMB and dust. As output we have N 3-component maps of sky.
-  x0 = cmb_plus_dust(cmb, dust, Nbbands_in, nus_in)
+  x0 = cmb_plus_dust(cmb, dust, Nbbands_in, nus_in, d['kind'])
   return x0
-
 
 
 def create_acquisition_operator_TOD(pointing, d):
@@ -69,7 +71,7 @@ def create_acquisition_operator_TOD(pointing, d):
   # scene
   s = qubic.QubicScene(d)
   # number of sub frequencies to build the TOD
-  Nbfreq_in, nus_edge_in, nus_in, deltas_in, Delta_in, Nbbands_in = qubic.compute_freq(d['filter_nu']/1e9, 
+  _, nus_edge_in, _, _, _, _ = qubic.compute_freq(d['filter_nu']/1e9, 
                                               d['filter_relative_bandwidth'], d['nf_sub']) # Multiband instrument model
   # Multi-band acquisition model for TOD fabrication
   atod = qubic.QubicMultibandAcquisition(q, pointing, s, d, nus_edge_in)
@@ -81,7 +83,7 @@ def create_acquisition_operator_REC(pointing, d, nf_sub_rec):
   # scene
   s = qubic.QubicScene(d)
   # number of sub frequencies for reconstruction
-  Nbfreq, nus_edge, nus, deltas, Delta, Nbbands = qubic.compute_freq(d['filter_nu']/1e9, 
+  _, nus_edge, _, _, _, _ = qubic.compute_freq(d['filter_nu']/1e9, 
                                               d['filter_relative_bandwidth'], nf_sub_rec)
   ### Operators for Maps Reconstruction ################################################
   arec = qubic.QubicMultibandAcquisition(q, pointing, s, d, nus_edge)
@@ -90,12 +92,11 @@ def create_acquisition_operator_REC(pointing, d, nf_sub_rec):
 
 def create_TOD(d, pointing, x0):
   atod = create_acquisition_operator_TOD(pointing, d)
-  TOD, maps_convolved_useless = atod.get_observation(x0, noiseless=d['noiseless'])
-  maps_convolved_useless=0
+  TOD, _ = atod.get_observation(x0, noiseless=d['noiseless'])
   return TOD
 
 def reconstruct_maps(TOD, d, pointing, nf_sub_rec, x0=None, tol=1e-4):
-  Nbfreq, nus_edge, nus, deltas, Delta, Nbbands = qubic.compute_freq(d['filter_nu']/1e9, 
+  _, nus_edge, nus, _, _, _ = qubic.compute_freq(d['filter_nu']/1e9, 
                                               d['filter_relative_bandwidth'], nf_sub_rec)
   arec = create_acquisition_operator_REC(pointing, d, nf_sub_rec)
   maps_recon = arec.tod2map(TOD, tol=tol, maxiter=1500)
@@ -103,10 +104,11 @@ def reconstruct_maps(TOD, d, pointing, nf_sub_rec, x0=None, tol=1e-4):
   if x0 is None:
     return maps_recon, cov, nus, nus_edge
   else:
-    TOD_useless, maps_convolved = arec.get_observation(x0)
-    TOD_useless=0
+    _, maps_convolved = arec.get_observation(x0)
     maps_convolved = np.array(maps_convolved)
     return maps_recon, cov, nus, nus_edge, maps_convolved
+
+
 
 
 

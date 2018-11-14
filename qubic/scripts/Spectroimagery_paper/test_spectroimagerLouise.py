@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 from scipy import interpolate
 
 
-import Tools_Louise as tl
-import ReadMC_Louise as rmc
+import Tools as tl
+import ReadMC as rmc
 
 import qubic
 from qubic import gal2equ, equ2gal

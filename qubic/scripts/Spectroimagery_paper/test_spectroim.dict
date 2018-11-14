@@ -1,7 +1,7 @@
 ############################################# Instrument ################################
 debug = False #False/True # Boolean
 
-config = 'FI' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
+config = 'TD' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
 filter_nu = 150*1e9 # 150e9 or 220e9 Hz
 filter_relative_bandwidth = 0.25 
 beam_shape =  'multi_freq' # 'gaussian', 'fitted_beam', 'multi_freq'
@@ -19,7 +19,7 @@ detector_fknee=0
 detector_fslope=1
 detector_ncorr=10
 ## Detector nep  + reading noise: sqrt(4.7e-17**2 + 2e-16**2)
-detector_nep=1.e-21
+detector_nep=4.7e-17
 detector_ngrids=1
 detector_tau=0.01
 polarizer=True
@@ -56,8 +56,8 @@ longitude= 123 + 20. / 60  #DOME C
 
 
 random_pointing=True   
-npointings=100
-dtheta=10.
+npointings=2000
+dtheta=4.
 seed=1
 
 sweeping_pointing=False
@@ -72,7 +72,7 @@ fix_azimuth={'apply':False,'az':50,'el':50,'el_step':1}
 ############################################# Acquisition ##############################
 block=None
 effective_duration=1 #years
-noiseless=False
+noiseless=True
 photon_noise=False
 max_nbytes=None
 nprocs_instrument=None

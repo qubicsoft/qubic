@@ -95,11 +95,11 @@ def create_TOD(d, pointing, x0):
   TOD, _ = atod.get_observation(x0, noiseless=d['noiseless'])
   return TOD
 
-def reconstruct_maps(TOD, d, pointing, nf_sub_rec, x0=None, tol=1e-4):
+def reconstruct_maps(TOD, d, pointing, nf_sub_rec, x0=None):
   _, nus_edge, nus, _, _, _ = qubic.compute_freq(d['filter_nu']/1e9, 
                                               d['filter_relative_bandwidth'], nf_sub_rec)
   arec = create_acquisition_operator_REC(pointing, d, nf_sub_rec)
-  maps_recon = arec.tod2map(TOD, tol=tol, maxiter=1500)
+  maps_recon = arec.tod2map(TOD, tol=d['tol'], maxiter=1500)
   cov = arec.get_coverage()
   if x0 is None:
     return maps_recon, cov, nus, nus_edge

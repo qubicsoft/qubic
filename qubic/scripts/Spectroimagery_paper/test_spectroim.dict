@@ -79,3 +79,6 @@ nprocs_instrument=None
 nprocs_sampling=None
 comm=None
 weights=None
+
+################### Tolerance value for the convergence of the conjugate gradient ################
+tol=1e-4

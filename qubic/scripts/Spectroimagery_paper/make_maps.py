@@ -31,7 +31,7 @@ d.read_from_file(dictfilename)
 #Print dictionary and others parameters
 #Save a file with al parameters
 tem = sys.stdout
-sys.stdout = f = open('simu_QU.txt','wt')
+sys.stdout = f = open(name + '.txt','wt')
 
 print('Simulation General Name: ' + name)
 print('Dictionnary File: ' + dictfilename)

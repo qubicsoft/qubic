@@ -26,38 +26,50 @@ center = equ2gal(0., -57.)
 
 #============= Get the simulation files ==================
 #Simulation repository
-# rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuJCResults/Duration20'
-rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/noiseless_50reals'
+# rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuJCResults/noiseless211118'
+rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/noiseless_I=0'
 # rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/test_ptg'
 # rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/fix_hwp'
+# rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/vary_tol'
 
 
 #Number of subbands used during the simulation
-# nsubvals = np.array([1,2,3,4])
-nsubvals = np.tile(4, 50) 
+nsubvals = np.array([1,2,3,4])
+#nsubvals = np.tile(4, 3) 
 
 #Archetypes of the files .fits you want to work on
 arch_conv, arch_recon = [], []
-#for isub in xrange(len(nsubvals)):
+for isub in xrange(len(nsubvals)):
 	# arch_conv.append('mpiQ_Nodes_2_Ptg_40000_Noutmax_6_Tol_1e-4_*_nf{}_maps_convolved.fits'.format(nsubvals[isub]))
 	# arch_recon.append('mpiQ_Nodes_2_Ptg_40000_Noutmax_6_Tol_1e-4_*_nf{}_maps_recon.fits'.format(nsubvals[isub]))
+	
+	arch_conv.append('Test_*_Ptg_16000_Noiseless_True_QP_False_Guess_True_NoI_False_nf{}_maps_convolved.fits'.format(nsubvals[isub]))
+	arch_recon.append('Test_*_Ptg_16000_Noiseless_True_QP_False_Guess_True_NoI_False_nf{}_maps_recon.fits'.format(nsubvals[isub]))
 
-	# arch_conv.append('noiseless_04_nf{}_maps_convolved.fits'.format(nsubvals[isub]))
-	# arch_recon.append('noiseless_04_nf{}_maps_recon.fits'.format(nsubvals[isub]))
+	# arch_conv.append('noiseless_05_nf{}_maps_convolved.fits'.format(nsubvals[isub]))
+	# arch_recon.append('noiseless_05_nf{}_maps_recon.fits'.format(nsubvals[isub]))
 
 # for ptg in xrange(6):
 # 	arch_conv.append('test_ptg02_nf4_ptg{}_maps_convolved.fits'.format(ptg))
 # 	arch_recon.append('test_ptg02_nf4_ptg{}_maps_recon.fits'.format(ptg))
 
-for real in xrange(50):
-	arch_conv.append('noiseless_50reals_nf4_real{}_maps_convolved.fits'.format(real))
-	arch_recon.append('noiseless_50reals_nf4_real{}_maps_recon.fits'.format(real))
+# for real in xrange(50):
+# 	arch_conv.append('noiseless_50reals_nf4_real{}_maps_convolved.fits'.format(real))
+# 	arch_recon.append('noiseless_50reals_nf4_real{}_maps_recon.fits'.format(real))
 
 # for hwp in xrange(4):
 #  	arch_conv.append('fix_hwp0{0}_nf4_maps_convolved.fits'.format(hwp+1))
 #  	arch_recon.append('fix_hwp0{0}_nf4_maps_recon.fits'.format(hwp+1))
 # arch_conv.append('random_hwp01_nf4_maps_convolved.fits')
 # arch_recon.append('random_hwp01_nf4_maps_recon.fits')
+
+# for tol in ['1e-4', '5e-5', '1e-5']:
+# 	arch_conv.append('mpiQ_Nodes_1_Ptg_40000_Noutmax_6_Tol_{}_*_nf4_maps_convolved.fits'.format(tol))
+# 	arch_recon.append('mpiQ_Nodes_1_Ptg_40000_Noutmax_6_Tol_{}_*_nf4_maps_recon.fits'.format(tol))
+
+# for tol in [0.001, 0.0005, 0.0001, 5e-05, 1e-05]:
+	# arch_conv.append('vary_tol_nf4_tol{}_maps_convolved.fits'.format(tol))
+	# arch_recon.append('vary_tol_nf4_tol{}_maps_recon.fits'.format(tol))
 
 
 #Get all maps
@@ -117,8 +129,16 @@ for i in xrange(3):
 	plt.hist(np.ravel(residus[0][:,3,:,i]), range=[-20,20], bins=100)
 	plt.title(stokes[i])
 
+#Residus en fonction de l'angle
+plt.figure('noiseless_05_residus')
+for i in xrange(3):
+	plt.subplot(1,3,i+1)
+	plt.plot(ang, residus[1][0,0,:,i], '.')
+	plt.ylabel('residu '+stokes[i])
+	plt.xlabel('angle in deg')
+
 #================ Look at the maps =================
-isub = 0
+isub = 1
 real = 0
 freq = 0
 
@@ -133,7 +153,7 @@ maps_residus[seenmap_conv, :] = residus[isub][real,freq,:,:]
 
 #hp.mollview(maps_conv[:,1], title='maps_conv')
 
-plt.figure('maps')
+plt.figure('noiseless_05_maps_1subbands_freq1')
 for i in xrange(3):
 	if i==0:
 		min=None
@@ -145,6 +165,24 @@ for i in xrange(3):
 	hp.gnomview(maps_recon[:,i], rot=center, reso=9, sub=(3,3,3+i+1), title='recon '+stokes[i], min=min, max=max)
 	hp.gnomview(maps_residus[:,i], rot=center, reso=9, sub=(3,3,6+i+1), title='residus '+stokes[i], min=min, max=max)
 plt.show()
+
+#Plot of residus
+isub=0
+sh=residus[isub].shape
+plt.figure('guess=True_16000_res4')
+for freq in xrange(sh[1]):
+	maps_residus = np.zeros((12*ns**2, 3))
+	maps_residus[seenmap_conv, :] = residus[isub][0,freq,:,:]
+	for i in xrange(3):
+		if i==0:
+			min=None
+			max=None
+		else:
+			min=None
+			max=None
+		hp.gnomview(maps_residus[:,i], rot=center, reso=9, sub=(sh[1],3,3*freq+i+1), title=stokes[i]+' subband'+str(freq+1), min=min, max=max)
+
+
 
 # #####plots pour fix_hwp
 # freq = 0
@@ -206,22 +244,26 @@ for pix in xrange(npix_seen):
 	if ang[pix] <= a1:
 		n0+=1
 		mask0[:,:,pix,:] = 1.
-		recon0.append(allmaps_recon[0][:,:,pix,:])	
+		recon0.append(allmaps_recon[0][:,:,pix,:])
+		#recon0.append(residus[3][:,:,pix,:])		
 		#recon0.append(maps_recon_test[:,:,pix,:])	
 	elif a1<ang[pix]<=a2:
 		n1+=1
 		mask1[:,:,pix,:] = 1.
 		recon1.append(allmaps_recon[0][:,:,pix,:])
+		#recon1.append(residus[3][:,:,pix,:])
 		#recon1.append(maps_recon_test[:,:,pix,:])
 	elif a2<ang[pix]<=a3:
 		n2+=1
 		mask2[:,:,pix,:] = 1.
 		recon2.append(allmaps_recon[0][:,:,pix,:])
+		#recon2.append(residus[3][:,:,pix,:])
 		#recon2.append(maps_recon_test[:,:,pix,:])
 	else:
 		n3+=1
 		mask3[:,:,pix,:] = 1.
 		recon3.append(allmaps_recon[0][:,:,pix,:])
+		#recon3.append(residus[3][:,:,pix,:])
 		#recon3.append(maps_recon_test[:,:,pix,:])
 
 #number of pixels in each zone
@@ -233,6 +275,7 @@ allmask =[mask0, mask1, mask2, mask3]
 allrecon_mask= []
 for zone in xrange(nzones):
 	recon_mask = allmaps_recon[0] * allmask[zone]
+	#recon_mask = residus[3] * allmask[zone]
 	allrecon_mask.append(recon_mask)
 
 freq = 3
@@ -258,7 +301,7 @@ for n in xrange(len(all_n)):
 r_coeff = ['r_IQ', 'r_IU', 'r_QU']
 nptg = 6
 nsub = 4
-ngroup = 20 #pour avoir des barres d'erreur on fait des sous-zones
+ngroup = 1 #pour avoir des barres d'erreur on fait des sous-zones
 
 r = np.zeros((len(r_coeff), nzones, nptg, nsub))
 std = np.zeros((len(r_coeff), nzones, nptg, nsub))
@@ -285,7 +328,7 @@ plt.figure('test_ptg02_rcoeff')
 for coeff in xrange(len(r_coeff)):
 	for freq in xrange(nsub):
 		plt.subplot(3,4,4*coeff+freq+1)
-		for ptg in xrange(3):
+		for ptg in xrange(1):
 			plt.errorbar(np.arange(4), r[coeff,:,ptg,freq], yerr = std[coeff,:,ptg,freq], fmt ='-o', label='ptg='+str(1000*(1+ptg)))
 		if coeff == 2: plt.xlabel('zone')
 		if freq == 0: plt.ylabel(r_coeff[coeff])
@@ -396,14 +439,12 @@ for isub in xrange(len(nsubvals)):
 	print(cells.shape)
 	for real in xrange(nreals):
 		for n in xrange(nsub):
-			for i in xrange(3):
-				mapsconv[seenmap_conv, i] = allmaps_conv[isub][real,n,:,i] * mymask[seenmap_conv]
-				#noise_in[seenmap_conv, :] = residus[isub][real,n,:,:] * mymask[seenmap_conv]
-			
-
-				#maps_recon_mean[seenmap_conv, i] = np.mean(allmaps_recon[isub][:,n,:,i], axis=0)* mymask[seenmap_recon]
-				maps_recon[seenmap_conv, i] = allmaps_recon[isub][real,n,:,i] * mymask[seenmap_recon]
-			
+			mapsconv[seenmap_conv, :] = allmaps_conv[isub][real,n,:,:]
+			#noise_in[seenmap_conv, :] = residus[isub][real,n,:,:]
+		
+			#maps_recon_mean[seenmap_conv, :] = np.mean(allmaps_recon[isub][:,n,:,:], axis=0)
+			maps_recon[seenmap_conv, :] = allmaps_recon[isub][real,n,:,:]
+		
 			#Let's put I=0 (optional)
 			# mapsconv[:,0] *= 0
 			# maps_recon_mean[:,0] *= 0
@@ -420,12 +461,14 @@ for isub in xrange(len(nsubvals)):
 	scls.append(np.std(cells, axis = 3))
 	scls_in.append(np.std(cells_in, axis = 3))
 
+tol = [0.001, 0.0005, 0.0001, 5e-05, 1e-05]
+
 #plot all spectra
-plt.figure('fix_hwp_EE_BB')
+plt.figure('guess=True_ptg16000')
 for isub in xrange(len(nsubvals)):
-	for s in [1,2]:
-		plt.subplot(4,2,isub*2+s)
-		plt.ylabel(thespec[s]+'_ptg='+str((isub+1)*1000))
+	for s in xrange(3):
+		plt.subplot(4,3,isub*3+s+1)
+		plt.ylabel(thespec[s] + ' tol=' + str(tol[isub]))
 		plt.xlabel('l')
 		sh = mcls[isub].shape
 		nsub = sh[2]
@@ -435,9 +478,8 @@ for isub in xrange(len(nsubvals)):
 				yerr= ell_binned * (ell_binned + 1) * scls[isub][s,:,k], 
 				fmt='o', color=p[0].get_color(),
 				label='subband'+str(k+1))
-		
-		if isub == 0 and s==1: 
-			#plt.title('from 1 to 4 hwp angles')
+		if s==0 and isub==0:
+			#plt.title('from 1 to 4 hwp angles') 
 			plt.legend(numpoints=1, prop={'size': 7})
 plt.show()
 	

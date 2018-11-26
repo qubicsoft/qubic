@@ -149,9 +149,8 @@ for isub in xrange(len(nsubvals)):
 	print(cells.shape)
 	for real in xrange(nreals):
 		for n in xrange(nsub):
-			for i in xrange(3):
-				mapsconv[seenmap_conv, i] = allmaps_conv[isub][real,n,:,i] * mymask[seenmap_conv]
-				maps_recon[seenmap_conv, i] = allmaps_recon[isub][real,n,:,i] * mymask[seenmap_recon]
+			mapsconv[seenmap_conv, :] = allmaps_conv[isub][real,n,:,:]
+			maps_recon[seenmap_conv, :] = allmaps_recon[isub][real,n,:,:]
 			cells_in[:, :, n , real] = xpol.get_spectra(mapsconv)[1]
 			cells[:, :, n, real] = xpol.get_spectra(maps_recon)[1]
 

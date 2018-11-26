@@ -18,9 +18,6 @@ dictfilename = 'test_spectroim.dict'
 
 name = 'simu_QU'
 
-#Tolerance value for converge in mapmaking
-tol = 1e-3
-
 #Numbers of subbands for spectroimaging
 noutmin = 1
 noutmax = 4
@@ -34,14 +31,13 @@ d.read_from_file(dictfilename)
 #Print dictionary and others parameters
 #Save a file with al parameters
 tem = sys.stdout
-sys.stdout = f = open('simu_QU.txt','wt')
+sys.stdout = f = open(name + '.txt','wt')
 
 print('Simulation General Name: ' + name)
 print('Dictionnary File: ' + dictfilename)
 for k in d.keys(): 
     print(k, d[k])
 
-print('Mapmaking Tolerance: {}'.format(tol))
 print('Minimum Number of Sub Frequencies: {}'.format(noutmin))
 print('Maximum Number of Sub Frequencies: {}'.format(noutmax))
 print(skypars)
@@ -59,6 +55,7 @@ x0 = si.create_input_sky(d, skypars)
 t1 = time.time()
 print('********************* Input Sky done in {} seconds'.format(t1-t0))
 
+##### Pointing strategy #####
 p = qubic.get_pointing(d)
 t2 = time.time()
 print('************************** Pointing done in {} seconds'.format(t2-t1))
@@ -70,7 +67,7 @@ TOD = si.create_TOD(d, p, x0)
 ##### Mapmaking #####
 for nf_sub_rec in np.arange(noutmin, noutmax+1):
     print('-------------------------- Map-Making on {} sub-map(s)'.format(nf_sub_rec))
-    maps_recon, cov, nus, nus_edge, maps_convolved = si.reconstruct_maps(TOD, d, p, nf_sub_rec, tol=tol, x0=x0)
+    maps_recon, cov, nus, nus_edge, maps_convolved = si.reconstruct_maps(TOD, d, p, nf_sub_rec, x0=x0)
     if nf_sub_rec==1:
         maps_recon = np.reshape(maps_recon, np.shape(maps_convolved))
     cov = np.sum(cov, axis=0)

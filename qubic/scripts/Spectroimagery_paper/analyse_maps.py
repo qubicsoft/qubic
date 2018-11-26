@@ -26,7 +26,7 @@ center = equ2gal(0., -57.)
 
 ################## Get the simulation files ########################
 #repository where you find
-rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/test_ptg'
+rep_simu = '/home/federico/qubic/qubic/scripts/Spectroimagery_paper'
 
 
 #Number of subbands used during the simulation
@@ -36,8 +36,8 @@ nsubvals = np.array([1,2,3,4])
 #Archetypes of the files .fits you want to work on
 arch_conv, arch_recon = [], []
 for isub in xrange(len(nsubvals)):
-	arch_conv.append('noiseless_04_nf{}_maps_convolved.fits'.format(nsubvals[isub]))
-	arch_recon.append('noiseless_04_nf{}_maps_recon.fits'.format(nsubvals[isub]))
+	arch_conv.append('simu_QU_nf{}_maps_convolved.fits'.format(nsubvals[isub]))
+	arch_recon.append('simu_QU_nf{}_maps_recon.fits'.format(nsubvals[isub]))
 
 #Get all maps
 allmaps_conv, seenmap_conv = rmc.get_all_maps(rep_simu, arch_conv, nsubvals)
@@ -68,7 +68,7 @@ for j in xrange(len(allmaps_conv)):
 plt.clf()
 for i in xrange(3):
 	plt.subplot(1, 3, i+1)
-	plt.hist(np.ravel(residus[0][:,3,:,i]), range=[-20,20], bins=100)
+	plt.hist(np.ravel(residus[0][:,0,:,i]), range=[-20,20], bins=100)
 	plt.title(stokes[i])
 
 

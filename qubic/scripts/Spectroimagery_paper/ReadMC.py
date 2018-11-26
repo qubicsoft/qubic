@@ -21,11 +21,11 @@ def get_seenmap(files):
     npix = np.shape(m)[1]
     seenmap = np.zeros(npix) == 0
     for i in xrange(len(files)):
-            sys.stdout.flush()
-            sys.stdout.write('\r Reading: '+files[i]+' ({:3.1f} %)'.format(100*(i+1)*1./len(files)))
-            m = FitsArray(files[i])
-            bla = np.mean(m, axis=(0,2)) != hp.UNSEEN
-            seenmap *= bla
+        sys.stdout.flush()
+        sys.stdout.write('\r Reading: '+files[i]+' ({:3.1f} %)'.format(100*(i+1)*1./len(files)))
+        m = FitsArray(files[i])
+        bla = np.mean(m, axis=(0,2)) != hp.UNSEEN
+        seenmap *= bla
     sys.stdout.flush()
     return seenmap
 

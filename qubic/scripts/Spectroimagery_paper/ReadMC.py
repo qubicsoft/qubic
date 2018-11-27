@@ -5,6 +5,9 @@ import glob
 import healpy as hp
 import numpy as np
 
+from joblib import Parallel, delayed
+import multiprocessing
+
 import qubic
 from pysimulators import FitsArray
 
@@ -98,7 +101,6 @@ def maps_from_files(files, silent=False):
         maps[i,:,:,:] = FitsArray(files[i])
     totmap = np.sum(np.sum(np.sum(maps, axis=0), axis=0),axis=1)
     seenmap = totmap > -1e20
-    bla = maps[:,:,seenmap,:]
     return maps, seenmap
 
 
@@ -112,7 +114,7 @@ def get_maps_residuals(frec, fconv=None, silent=False):
             resid[i,:,:,:] = mrec[i,:,:,:]- mean_mrec[:,:,:]
     else:
         if not silent: print('Getting Residuals from convolved input maps')
-        mconv, seenmap_c = maps_from_files(fconv)
+        mconv, _ = maps_from_files(fconv)
         resid = mrec-mconv
     resid[:,:,~seenmap,:] = 0
     return mrec, resid, seenmap

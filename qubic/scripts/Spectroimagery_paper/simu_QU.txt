@@ -30,6 +30,7 @@ Dictionnary File: test_spectroim.dict
 ('config', 'TD')
 ('filter_relative_bandwidth', 0.25)
 ('maxpsi', 10)
+('tol', 0.0001)
 ('nside', 128)
 ('beam_shape', 'multi_freq')
 ('psd', None)
@@ -60,7 +61,6 @@ Dictionnary File: test_spectroim.dict
 ('detector_fslope', 1)
 ('block', None)
 ('npointings', 2000)
-Mapmaking Tolerance: 0.001
 Minimum Number of Sub Frequencies: 1
 Maximum Number of Sub Frequencies: 4
 {'dust_coeff': 0.0139, 'r': 0}

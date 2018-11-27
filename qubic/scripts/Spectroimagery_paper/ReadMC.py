@@ -8,6 +8,8 @@ import numpy as np
 import qubic
 from pysimulators import FitsArray
 
+
+#============ Functions to get maps ===========#
 def get_seenmap(files):
     """ 
     Return a list of len the number of pixels, 
@@ -83,6 +85,40 @@ def get_all_maps(rep, archetype, nsubvals):
     return allmapsout, seenmap
 
 
+def maps_from_files(files, silent=False):
+    """allmost equivalent to get_all_maps, 
+    used in the functions that compute spectra 
+    """
+    if not silent: print('Reading Files')
+    nn = len(files)
+    mm = FitsArray(files[0])
+    sh = np.shape(mm)
+    maps = np.zeros((nn, sh[0], sh[1], sh[2]))
+    for i in xrange(nn):
+        maps[i,:,:,:] = FitsArray(files[i])
+    totmap = np.sum(np.sum(np.sum(maps, axis=0), axis=0),axis=1)
+    seenmap = totmap > -1e20
+    bla = maps[:,:,seenmap,:]
+    return maps, seenmap
+
+
+def get_maps_residuals(frec, fconv=None, silent=False):
+    mrec, seenmap = maps_from_files(frec)
+    if fconv==None:
+        if not silent: print('Getting Residuals from average MC')
+        resid = np.zeros_like(mrec)
+        mean_mrec = np.mean(mrec, axis =0)
+        for i in xrange(len(frec)):
+            resid[i,:,:,:] = mrec[i,:,:,:]- mean_mrec[:,:,:]
+    else:
+        if not silent: print('Getting Residuals from convolved input maps')
+        mconv, seenmap_c = maps_from_files(fconv)
+        resid = mrec-mconv
+    resid[:,:,~seenmap,:] = 0
+    return mrec, resid, seenmap
+
+
+#============ Functions do statistical tests on maps ===========#
 def get_rms_covar(nsubvals, seenmap, allmapsout):
     """Test done by Matthieu Tristram :
 Calculate the variance map in each case accounting for the band-band covariance matrix for each pixel from the MC. 
@@ -178,6 +214,108 @@ def get_rms_covarmean(nsubvals, seenmap, allmapsout, allmeanmat):
               
     return meanmap_cov, rmsmap_cov
 
+#============ Functions to get auto and cross spectra from maps ===========#
+def allcross_par(xpol, allmaps, silent=False, verbose=1):
+    num_cores = multiprocessing.cpu_count()
+    nmaps = len(allmaps)
+    nbl = len(xpol.ell_binned)
+    autos = np.zeros((nmaps,6,nbl))
+    ncross = nmaps*(nmaps-1)/2
+    cross = np.zeros((ncross, 6, nbl))
+    jcross = 0
+    if not silent: 
+        print('Computing spectra:')
+
+    #### Auto spectra ran in //
+    if not silent: print('  Doing All Autos ({}):'.format(nmaps))
+    results_auto = Parallel(n_jobs=num_cores,verbose=verbose)(delayed(xpol.get_spectra)(allmaps[i]) for i in xrange(nmaps))
+    for i in xrange(nmaps): autos[i,:,:] = results_auto[i][1]
+
+    #### Cross Spectra ran in // - need to prepare indices in a global variable
+    if not silent: print('  Doing All Cross ({}):'.format(ncross))
+    global cross_indices 
+    cross_indices = np.zeros((2, ncross), dtype=int)
+    for i in xrange(nmaps):
+        for j in xrange(i+1, nmaps):
+            cross_indices[:,jcross] = np.array([i,j])
+            jcross += 1
+    results_cross = Parallel(n_jobs=num_cores,verbose=verbose)(delayed(xpol.get_spectra)(allmaps[cross_indices[0,i]], allmaps[cross_indices[1,i]]) for i in xrange(ncross))
+    for i in xrange(ncross): cross[i,:,:] = results_cross[i][1]
+
+    if not silent: 
+        sys.stdout.write(' Done \n')
+        sys.stdout.flush()
+
+    #### The error-bars are absolutely incorrect if calculated as the following... There is an analytical estimate in Xpol paper. See if implemented in the gitlab xpol from Tristram instead of in qubic.xpol...
+    m_autos = np.mean(autos, axis = 0)
+    s_autos = np.std(autos, axis = 0) / np.sqrt(nmaps)
+    m_cross = np.mean(cross, axis = 0)
+    s_cross = np.std(cross, axis = 0) / np.sqrt(ncross)
+    return m_autos, s_autos, m_cross, s_cross
+
+
+
+def get_maps_cl(frec, fconv=None, lmin=20, delta_ell=40, apodization_degrees=5.):
+    mrec, resid, seenmap = get_maps_residuals(frec,fconv=fconv)
+    sh = np.shape(mrec)
+    nbsub = sh[1]
+    ns = hp.npix2nside(sh[2])
+
+    from qubic import apodize_mask
+    mymask = apodize_mask(seenmap, apodization_degrees)
+
+
+    #### Create XPol object
+    from qubic import Xpol
+    lmax = 2*ns
+    xpol = Xpol(mymask, lmin, lmax, delta_ell)
+    ell_binned = xpol.ell_binned
+    nbins = len(ell_binned)
+    # Pixel window function
+    pw = hp.pixwin(ns)
+    pwb = xpol.bin_spectra(pw[:lmax+1])
+
+    #### Calculate all crosses and auto
+    m_autos = np.zeros((nbsub, 6, nbins))
+    s_autos = np.zeros((nbsub, 6, nbins))
+    m_cross = np.zeros((nbsub, 6, nbins))
+    s_cross = np.zeros((nbsub, 6, nbins))
+    fact = ell_binned * (ell_binned+1) /2. /np.pi
+    for isub in xrange(nbsub):
+        m_autos[isub, :, :], s_autos[isub, :, :], m_cross[isub, :, :], s_cross[isub, :, :] = allcross_par(xpol, mrec[:,isub,:,:], silent=False, verbose=0)
+
+    return mrec, resid, seenmap, ell_binned, m_autos*fact/pwb**2, s_autos*fact/pwb**2, m_cross*fact/pwb**2, s_cross*fact/pwb**2
+
+#===================== Functions for dust ==================#
+
+def scaling_dust(freq1, freq2, sp_index=1.59): 
+    '''
+    Calculate scaling factor for dust contamination
+    Frequencies are in GHz
+    '''
+    freq1 = float(freq1)
+    freq2 = float(freq2)
+    x1 = freq1 / 56.78
+    x2 = freq2 / 56.78
+    S1 = x1**2. * np.exp(x1) / (np.exp(x1) - 1)**2.
+    S2 = x2**2. * np.exp(x2) / (np.exp(x2) - 1)**2.
+    vd = 375.06 / 18. * 19.6
+    scaling_factor_dust = (np.exp(freq1 / vd) - 1) / \
+                          (np.exp(freq2 / vd) - 1) * \
+                          (freq2 / freq1)**(sp_index + 1)
+    scaling_factor_termo = S1 / S2 * scaling_factor_dust
+    return scaling_factor_termo
+
+
+def dust_spectra(ll, nu):
+    fact = (ll * (ll + 1)) / (2 * np.pi)
+    coef = 1.39e-2
+    spectra_dust = [np.zeros(len(ll)), 
+                  coef * (ll / 80.)**(-0.42) / (fact * 0.52), 
+                  coef * (ll / 80.)**(-0.42) / fact, 
+                  np.zeros(len(ll))]
+    sc_dust = scaling_dust(150, nu)
+    return fact * sc_dust * spectra_dust
 
 
 

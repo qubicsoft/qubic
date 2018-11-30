@@ -89,6 +89,21 @@ def create_acquisition_operator_REC(pointing, d, nf_sub_rec):
     arec = qubic.QubicMultibandAcquisition(q, pointing, s, d, nus_edge)
     return arec
 
+def get_hitmap(instrument, scene, pointings, threshold=0.01):
+    beams = instrument.get_synthbeam(scene)
+    ratio = beams / np.max(beams, axis=1)[..., None]
+    beams[ratio>=threshold] = 1
+    beams[beams!=1] = 0
+    beam = np.sum(beams, axis=0)
+    t, p = hp.pix2ang(scene.nside, np.arange(hp.nside2npix(scene.nside)))
+    rot_beams = np.zeros((len(pointings), len(beam)))
+    for i, (theta, phi) in enumerate(zip(pointings.galactic[:, 1],
+                                         pointings.galactic[:, 0])):
+        r = hp.Rotator(deg=False, rot=[np.deg2rad(phi),
+                                       np.pi/2 - np.deg2rad(theta)])
+        trot, prot = r(t, p)
+        rot_beams[i] = hp.get_interp_val(beam, trot, prot) 
+    return rot_beams
 
 def create_TOD(d, pointing, x0):
     atod = create_acquisition_operator_TOD(pointing, d)

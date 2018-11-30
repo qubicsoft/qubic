@@ -56,7 +56,7 @@ longitude= 123 + 20. / 60  #DOME C
 
 
 random_pointing=True   
-npointings=2000
+npointings=10000
 dtheta=4.
 seed=1
 

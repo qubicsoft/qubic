@@ -22,6 +22,7 @@ d.read_from_file("parameters.dict")
 ### Sky ###
 skypars = {'dust_coeff':1.39e-2, 'r':0}
 x0 = si.create_input_sky(d, skypars) #shape is (num of sub-bands, npix, IQU)
+#x0[..., 1:3] = np.zeros_like(x0[..., 1:3])
 
 ### QUBIC TOD ###
 p = qubic.get_pointing(d)

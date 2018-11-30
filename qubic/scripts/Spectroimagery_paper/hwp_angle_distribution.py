@@ -54,7 +54,8 @@ k = 0
 j = 0
 for i, alpha in enumerate(hwp_angles):
     mp.axes(axes[k, j])
-    hp.mollview(hwp_angles_distribution[i, :], coord=['C','G'], hold=True,
+    hp.gnomview(hwp_angles_distribution[i, :],
+                rot=[p.azimuth[i]-20, p.galactic[i, 1]-3], xsize=2000, hold=True,
                 title="HWP angle = {} deg".format(alpha), unit='hits', min=0,
                 norm=None)
     k += 1

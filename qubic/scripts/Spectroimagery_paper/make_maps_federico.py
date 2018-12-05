@@ -20,9 +20,10 @@ d = qubic.qubicdict.qubicDict()
 d.read_from_file("parameters.dict")
 
 ### Sky ###
-skypars = {'dust_coeff':1.39e-2, 'r':0}
+skypars = {'dust_coeff':0, 'r':0} # 1.39e-2
 x0 = si.create_input_sky(d, skypars) #shape is (num of sub-bands, npix, IQU)
-#x0[..., 1:3] = np.zeros_like(x0[..., 1:3])
+#x0[..., 1:3] = 0
+#x0[..., 0] = 0
 
 ### QUBIC TOD ###
 p = qubic.get_pointing(d)
@@ -38,7 +39,7 @@ TOD = TODq - TODp
 ##### Mapmaking #####
 
 #Numbers of subbands for spectroimaging
-noutmin = 1
+noutmin = 4
 noutmax = 4
 path = 'bpmaps'
 for nf_sub_rec in np.arange(noutmin, noutmax+1):

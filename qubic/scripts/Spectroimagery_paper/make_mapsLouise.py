@@ -16,7 +16,7 @@ import SpectroImLib as si
 
 dictfilename = 'test_spectroim.dict' 
 
-name = 'fix_hwp_nospectro_piover10_500ptg'
+name = 'fix_hwp_nospectro_piover16_500ptg'
 
 #Numbers of subbands for spectroimaging
 noutmin = 1
@@ -103,7 +103,7 @@ print(x0.shape)
 ##### SIMU fix_hwp
 p = qubic.get_pointing(d)
 #I = np.array([0,2,4,6])
-pi_fraction = 10
+pi_fraction = 16
 I = np.arange(pi_fraction/2)
 for simu in xrange(len(I)):
 
@@ -136,7 +136,7 @@ for simu in xrange(len(I)):
 
         # pp.angle_hwp = np.concatenate((pnew.angle_hwp, hwp_ang))
 
-    name = 'fix_hwp_nospectro_piover10_500ptg_0' + str(simu+1)
+    name = 'fix_hwp_nospectro_piover16_500ptg_0' + str(simu+1)
 
     TOD = si.create_TOD(d, pp, x0)
 

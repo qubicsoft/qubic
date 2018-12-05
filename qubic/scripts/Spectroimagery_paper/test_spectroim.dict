@@ -56,7 +56,7 @@ longitude= 123 + 20. / 60  #DOME C
 
 
 random_pointing=True   
-npointings=2000
+npointings=500
 dtheta=4.
 seed=1
 
@@ -81,4 +81,4 @@ comm=None
 weights=None
 
 ################### Tolerance value for the convergence of the conjugate gradient ################
-tol=1e-4
+tol=1e-3

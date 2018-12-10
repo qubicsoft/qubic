@@ -20,14 +20,15 @@ d = qubic.qubicdict.qubicDict()
 d.read_from_file("parameters.dict")
 
 ### Sky ###
-skypars = {'dust_coeff':0, 'r':0} # 1.39e-2
+skypars = {'dust_coeff':1.39e-2, 'r':0} # 1.39e-2
 x0 = si.create_input_sky(d, skypars) #shape is (num of sub-bands, npix, IQU)
-#x0[..., 1:3] = 0
-#x0[..., 0] = 0
 
 ### QUBIC TOD ###
 p = qubic.get_pointing(d)
 TODq = si.create_TOD(d, p, x0)
+
+### Put Q and U to zero ###
+x0[..., 1:3] = 0
 
 ### Planck TOD ###
 xav = np.mean(x0, axis=0)
@@ -36,10 +37,16 @@ TODp = si.create_TOD(d, p, np.repeat(xav[None, ...], d['nf_sub'], axis=0))
 ### Create difference TOD ###
 TOD = TODq - TODp
 
+### QUBIC TOD with I=0 ###
+x01 = si.create_input_sky(d, skypars) #shape is (num of sub-bands, npix, IQU)
+x01[..., 0] = 0
+TOD0 = si.create_TOD(d, p, x01)
+
+
 ##### Mapmaking #####
 
 #Numbers of subbands for spectroimaging
-noutmin = 4
+noutmin = 2
 noutmax = 4
 path = 'bpmaps'
 for nf_sub_rec in np.arange(noutmin, noutmax+1):

@@ -119,14 +119,9 @@ plt.legend()
 
 
 #======================= Apply Xpoll to get spectra ============================
-lmin = 20
-lmax = 2 * ns
-delta_ell = 20
 
-#Xpoll needs a mask
-mymask = apodize_mask(seenmap_conv, 5)
-xpol = Xpol(mymask, lmin, lmax, delta_ell)
-ell_binned = xpol.ell_binned
+xpol, ell_binned, pwb = rmc.get_xpol(seenmap_conv, ns)
+
 nbins = len(ell_binned)
 print('nbins = {}'.format(nbins))
 

@@ -10,6 +10,8 @@ import multiprocessing
 
 import qubic
 from pysimulators import FitsArray
+from qubic import Xpol
+from qubic import apodize_mask
 
 
 #============ Functions to get maps ===========#
@@ -99,6 +101,7 @@ def maps_from_files(files, silent=False):
     maps = np.zeros((nn, sh[0], sh[1], sh[2]))
     for i in xrange(nn):
         maps[i,:,:,:] = FitsArray(files[i])
+        
     totmap = np.sum(np.sum(np.sum(maps, axis=0), axis=0),axis=1)
     seenmap = totmap > -1e20
     return maps, seenmap
@@ -217,6 +220,23 @@ def get_rms_covarmean(nsubvals, seenmap, allmapsout, allmeanmat):
     return meanmap_cov, rmsmap_cov
 
 #============ Functions to get auto and cross spectra from maps ===========#
+def get_xpol(seenmap, ns, lmin=20, delta_ell=20, apodization_degrees=5.):
+    """
+    Returns a Xpoll object to get spectra, the bin used and the pixel window function.
+    """
+    #### Create a mask
+    mymask = apodize_mask(seenmap, apodization_degrees)
+
+    #### Create XPol object
+    lmax = 2 * ns
+    xpol = Xpol(mymask, lmin, lmax, delta_ell)
+    ell_binned = xpol.ell_binned
+    # Pixel window function
+    pw = hp.pixwin(ns)
+    pwb = xpol.bin_spectra(pw[:lmax+1])
+
+    return xpol, ell_binned, pwb
+
 def allcross_par(xpol, allmaps, silent=False, verbose=1):
     num_cores = multiprocessing.cpu_count()
     nmaps = len(allmaps)
@@ -248,7 +268,8 @@ def allcross_par(xpol, allmaps, silent=False, verbose=1):
         sys.stdout.write(' Done \n')
         sys.stdout.flush()
 
-    #### The error-bars are absolutely incorrect if calculated as the following... There is an analytical estimate in Xpol paper. See if implemented in the gitlab xpol from Tristram instead of in qubic.xpol...
+    #### The error-bars are absolutely incorrect if calculated as the following... 
+    # There is an analytical estimate in Xpol paper. See if implemented in the gitlab xpol from Tristram instead of in qubic.xpol...
     m_autos = np.mean(autos, axis = 0)
     s_autos = np.std(autos, axis = 0) / np.sqrt(nmaps)
     m_cross = np.mean(cross, axis = 0)
@@ -260,6 +281,7 @@ def allcross_par(xpol, allmaps, silent=False, verbose=1):
 def get_maps_cl(frec, fconv=None, lmin=20, delta_ell=40, apodization_degrees=5.):
     mrec, resid, seenmap = get_maps_residuals(frec,fconv=fconv)
     sh = np.shape(mrec)
+    print(sh, np.shape(resid))
     nbsub = sh[1]
     ns = hp.npix2nside(sh[2])
 

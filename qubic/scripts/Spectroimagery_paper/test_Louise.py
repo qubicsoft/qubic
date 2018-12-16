@@ -1,6 +1,7 @@
 import os
 import sys
 import glob
+import time
 
 
 import healpy as hp
@@ -24,52 +25,29 @@ stokes = ['I', 'Q', 'U']
 #Coordinates of the zone observed in the sky
 center = equ2gal(0., -57.)
 
+name = 'fix_hwp_noise_0'
+
 #============= Get the simulation files ==================
 #Simulation repository
 # rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuJCResults/noiseless211118'
-rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/noiseless_I=0'
+# rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/noiseless_I=0'
 # rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/test_ptg'
-# rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/fix_hwp'
+rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/fix_hwp_noise/'
 # rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/vary_tol'
 
 
 #Number of subbands used during the simulation
 nsubvals = np.array([1,2,3,4])
-#nsubvals = np.tile(4, 3) 
+# nfiles = 1
+# nsubvals = np.tile(1, nfiles) 
+# nsubvals = np.tile([1,2,3,4], 5)
 
 #Archetypes of the files .fits you want to work on
 arch_conv, arch_recon = [], []
-for isub in xrange(len(nsubvals)):
-	# arch_conv.append('mpiQ_Nodes_2_Ptg_40000_Noutmax_6_Tol_1e-4_*_nf{}_maps_convolved.fits'.format(nsubvals[isub]))
-	# arch_recon.append('mpiQ_Nodes_2_Ptg_40000_Noutmax_6_Tol_1e-4_*_nf{}_maps_recon.fits'.format(nsubvals[isub]))
-	
-	arch_conv.append('Test_*_Ptg_16000_Noiseless_True_QP_False_Guess_True_NoI_False_nf{}_maps_convolved.fits'.format(nsubvals[isub]))
-	arch_recon.append('Test_*_Ptg_16000_Noiseless_True_QP_False_Guess_True_NoI_False_nf{}_maps_recon.fits'.format(nsubvals[isub]))
-
-	# arch_conv.append('noiseless_05_nf{}_maps_convolved.fits'.format(nsubvals[isub]))
-	# arch_recon.append('noiseless_05_nf{}_maps_recon.fits'.format(nsubvals[isub]))
-
-# for ptg in xrange(6):
-# 	arch_conv.append('test_ptg02_nf4_ptg{}_maps_convolved.fits'.format(ptg))
-# 	arch_recon.append('test_ptg02_nf4_ptg{}_maps_recon.fits'.format(ptg))
-
-# for real in xrange(50):
-# 	arch_conv.append('noiseless_50reals_nf4_real{}_maps_convolved.fits'.format(real))
-# 	arch_recon.append('noiseless_50reals_nf4_real{}_maps_recon.fits'.format(real))
-
-# for hwp in xrange(4):
-#  	arch_conv.append('fix_hwp0{0}_nf4_maps_convolved.fits'.format(hwp+1))
-#  	arch_recon.append('fix_hwp0{0}_nf4_maps_recon.fits'.format(hwp+1))
-# arch_conv.append('random_hwp01_nf4_maps_convolved.fits')
-# arch_recon.append('random_hwp01_nf4_maps_recon.fits')
-
-# for tol in ['1e-4', '5e-5', '1e-5']:
-# 	arch_conv.append('mpiQ_Nodes_1_Ptg_40000_Noutmax_6_Tol_{}_*_nf4_maps_convolved.fits'.format(tol))
-# 	arch_recon.append('mpiQ_Nodes_1_Ptg_40000_Noutmax_6_Tol_{}_*_nf4_maps_recon.fits'.format(tol))
-
-# for tol in [0.001, 0.0005, 0.0001, 5e-05, 1e-05]:
-	# arch_conv.append('vary_tol_nf4_tol{}_maps_convolved.fits'.format(tol))
-	# arch_recon.append('vary_tol_nf4_tol{}_maps_recon.fits'.format(tol))
+for sim in [6]:
+	for hwp in [1,2,3,4]:
+		arch_conv.append(name+'{}_nf{}_maps_convolved.fits'.format(sim, hwp))
+		arch_recon.append(name+'{}_nf{}_maps_recon.fits'.format(sim, hwp))
 
 
 #Get all maps
@@ -88,17 +66,17 @@ allmaps_recon, seenmap_recon = rmc.get_all_maps(rep_simu, arch_recon, nsubvals)
 # allmaps_conv.append(conv)
 # allmaps_recon.append(recon)
 
-#noiseless_50reals: On met toutes les realisations dans un même tableau
-sh = allmaps_conv[0].shape
-conv = np.zeros((50,sh[1],sh[2],sh[3]))
-recon = np.zeros((50,sh[1],sh[2],sh[3]))
-for real in xrange(50):
-	conv[real,:,:,:] = allmaps_conv[real]
-	recon[real,:,:,:] = allmaps_recon[real]
-allmaps_conv = []
-allmaps_recon = []
-allmaps_conv.append(conv)
-allmaps_recon.append(recon)
+# #noiseless_50reals: On met toutes les realisations dans un même tableau
+# sh = allmaps_conv[0].shape
+# conv = np.zeros((50,sh[1],sh[2],sh[3]))
+# recon = np.zeros((50,sh[1],sh[2],sh[3]))
+# for real in xrange(50):
+# 	conv[real,:,:,:] = allmaps_conv[real]
+# 	recon[real,:,:,:] = allmaps_recon[real]
+# allmaps_conv = []
+# allmaps_recon = []
+# allmaps_conv.append(conv)
+# allmaps_recon.append(recon)
 
 #Number of pixels and nside
 npix = len(seenmap_recon)
@@ -106,9 +84,8 @@ ns = int(np.sqrt(npix/12))
 
 # Angle associated to each pixel 
 ang = tl.pix2ang(ns, center, seenmap_recon)
-print(ang.shape)
-plt.plot(np.sort(ang))
-plt.show()
+# print(ang.shape)
+# plt.plot(np.sort(ang))
 
 #===================== Residus estimation ===================
 
@@ -137,8 +114,28 @@ for i in xrange(3):
 	plt.ylabel('residu '+stokes[i])
 	plt.xlabel('angle in deg')
 
+#Residus std as a function of the nep
+nbands = 4
+
+nep = np.array([1e-21, 1e-20, 1e-19, 1e-18, 1e-17])*4.7
+plt.figure('fix_hwp_noise_05to09_std_Residus_4_subbands')
+for freq in xrange(nbands):
+	plt.subplot(1,nbands,freq+1)
+	std = np.zeros((3,5))
+	for i in [1,2]:
+		for res in xrange(5):
+			print(4*(res)+nbands-1)
+			std[i, res] = float(np.std(residus[4*(res)+nbands-1][:,freq,:,i], axis=1))
+		plt.plot(nep, std[i,:], 'o', label=stokes[i]+' residus')
+		plt.semilogx()
+		plt.semilogy()
+		plt.xlabel('nep')
+		plt.ylabel('std of the residus')
+		plt.title('subband '+str(freq+1)+'/'+str(nbands))
+		if freq==0: plt.legend(numpoints=1, loc='best')
+
 #================ Look at the maps =================
-isub = 1
+isub = 0
 real = 0
 freq = 0
 
@@ -153,7 +150,7 @@ maps_residus[seenmap_conv, :] = residus[isub][real,freq,:,:]
 
 #hp.mollview(maps_conv[:,1], title='maps_conv')
 
-plt.figure('noiseless_05_maps_1subbands_freq1')
+plt.figure('Maps')
 for i in xrange(3):
 	if i==0:
 		min=None
@@ -167,9 +164,9 @@ for i in xrange(3):
 plt.show()
 
 #Plot of residus
-isub=0
+isub=11
 sh=residus[isub].shape
-plt.figure('guess=True_16000_res4')
+plt.figure('noiseless_NoQU_residus_4subbands')
 for freq in xrange(sh[1]):
 	maps_residus = np.zeros((12*ns**2, 3))
 	maps_residus[seenmap_conv, :] = residus[isub][0,freq,:,:]
@@ -178,33 +175,46 @@ for freq in xrange(sh[1]):
 			min=None
 			max=None
 		else:
-			min=None
-			max=None
+			min=-0.4
+			max=0.4
 		hp.gnomview(maps_residus[:,i], rot=center, reso=9, sub=(sh[1],3,3*freq+i+1), title=stokes[i]+' subband'+str(freq+1), min=min, max=max)
 
+##### plots des residus
+freq = 0
+plt.figure('fix_hwp_nospectro_piover6to16_500ptg_residus_freescale_subband'+str(freq+1)+'over1')
+for hwp in xrange(nfiles):
+	maps_residus = np.zeros((12*ns**2, 3))
+	maps_residus[seenmap_conv, :] = residus[hwp][0,freq,:,:]
+	for i in xrange(3):
+		if i==0:
+			min=None
+			max=None
+		else:
+			min=None
+			max=None
+		hp.gnomview(maps_residus[:,i], rot=center, reso=9, sub=(3,nfiles,nfiles*i+hwp+1), 
+					# title=('residus ' + stokes[i]+' ptg='+str((hwp+1)*500)), min=min, max=max)
+					title=('residus ' + stokes[i]+' hwp_step=pi/'+str((hwp*2)+6)), min=min, max=max)
 
+##### plots des maps conv QU
+freq = 0
+plt.figure('fix_hwp_new_map_convQU_subband'+str(freq+1))
+maps_conv = np.zeros((12*ns**2, 3))
+maps_conv[seenmap_conv, :] = allmaps_conv[0][0,freq,:,:]
+for i in xrange(2):
+	hp.gnomview(maps_conv[:,i+1], rot=center, reso=9, sub=(2,1,i+1), 
+				title=('conv ' + stokes[i+1]), min=None, max=None)
 
-# #####plots pour fix_hwp
-# freq = 0
-# plt.figure('fix_hwp_map_reconQU_subband'+str(freq+1))
-# for hwp in xrange(4):
-# 	maps_recon = np.zeros((12*ns**2, 3))
-# 	maps_recon[seenmap_conv, :] = allmaps_recon[hwp][0,freq,:,:]
-# 	for i in xrange(2):
-# 		hp.gnomview(maps_recon[:,i+1], rot=center, reso=9, sub=(2,4,4*i+hwp+1), 
-# 					title=(stokes[i+1]+' ptg='+str((hwp+1)*1000)), min=-25, max=25)
+##### plots des maps recon QU
+freq = 0
+plt.figure('fix_hwp_new_map_reconQU_subband'+str(freq+1))
+for hwp in xrange(4):
+	maps_recon = np.zeros((12*ns**2, 3))
+	maps_recon[seenmap_conv, :] = allmaps_recon[hwp][0,freq,:,:]
+	for i in xrange(2):
+		hp.gnomview(maps_recon[:,i+1], rot=center, reso=9, sub=(2,4,4*i+hwp+1), 
+					title=(stokes[i+1]+' ptg='+str((hwp+1)*1000)), min=None, max=None)
 
-# ######plots for test_ptg
-
-# freq = 1
-# plt.figure('test_ptg02_map_reconQU_subband'+str(freq+1))
-# for ptg in xrange(6):
-# 	maps_recon = np.zeros((12*ns**2, 3))
-# 	maps_recon[seenmap_conv, :] = allmaps_recon[0][ptg,freq,:,:]
-# 	for i in xrange(2):
-# 		hp.gnomview(maps_recon[:,i+1], rot=center, reso=12, sub=(2,6,6*i+ptg+1), 
-# 					title=(stokes[i+1]+' ptg='+str(ptg*1000+1000)), min=-8, max=8)
-# plt.show()
 
 #=============== Separate a map in different zones ====================
 nzones = 4
@@ -299,7 +309,7 @@ for n in xrange(len(all_n)):
 ############Pour test_ptg02 
 # Méthode 2: On fait des matrices de covariance IQU en moyennant sur les pixels d'une zone
 r_coeff = ['r_IQ', 'r_IU', 'r_QU']
-nptg = 6
+nptg = 4
 nsub = 4
 ngroup = 1 #pour avoir des barres d'erreur on fait des sous-zones
 
@@ -407,14 +417,9 @@ for coeff in xrange(len(r_coeff)):
 
 
 #======================= Apply Xpoll to get spectra ============================
-lmin = 20
-lmax = 2 * ns
-delta_ell = 20
 
-#Xpoll needs a mask
-mymask = apodize_mask(seenmap_conv, 5)
-xpol = Xpol(mymask, lmin, lmax, delta_ell)
-ell_binned = xpol.ell_binned
+xpol, ell_binned, pwb = rmc.get_xpol(seenmap_conv, ns)
+
 nbins = len(ell_binned)
 print('nbins = {}'.format(nbins))
 
@@ -430,7 +435,7 @@ mapsconv = np.zeros((12*ns**2, 3))
 maps_recon = np.zeros((12*ns**2, 3))
 
 
-for isub in xrange(len(nsubvals)):
+for isub in [16,17,18,19]:
 	sh = allmaps_conv[isub].shape
 	nreals = sh[0]
 	nsub = sh[1]
@@ -461,14 +466,13 @@ for isub in xrange(len(nsubvals)):
 	scls.append(np.std(cells, axis = 3))
 	scls_in.append(np.std(cells_in, axis = 3))
 
-tol = [0.001, 0.0005, 0.0001, 5e-05, 1e-05]
 
 #plot all spectra
-plt.figure('guess=True_ptg16000')
-for isub in xrange(len(nsubvals)):
+plt.figure('fix_hwp_nospectro_0to7_500ptg_spectra')
+for isub in xrange(4):
 	for s in xrange(3):
 		plt.subplot(4,3,isub*3+s+1)
-		plt.ylabel(thespec[s] + ' tol=' + str(tol[isub]))
+		plt.ylabel(thespec[s] + ' ptg=' +str((isub+1)*500))# + ' tol=' + str(tol[isub]))
 		plt.xlabel('l')
 		sh = mcls[isub].shape
 		nsub = sh[2]

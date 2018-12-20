@@ -63,7 +63,17 @@ def create_input_sky(d, skypars):
         # Combine CMB and dust. As output we have N 3-component maps of sky.
         x0 = cmb_plus_dust(cmb, dust, Nbbands_in, nus_in, d['kind'])
         return x0
-    
+
+# def create_TOD(d, pointing, x0):
+#     # Polychromatic instrument model
+#     q = qubic.QubicMultibandInstrument(d)
+#     # scene
+#     s = qubic.QubicScene(d)
+#     # Poly-acquisition model for TOD fabrication
+#     atod = qubic.QubicPolyAcquisition(q, pointing, s, d)
+#     # Create TOD
+#     TOD, _ = atod.get_observation(x0, noiseless=d['noiseless'])
+#     return TOD
     
 def create_acquisition_operator_TOD(pointing, d):
     # Polychromatic instrument model
@@ -76,6 +86,11 @@ def create_acquisition_operator_TOD(pointing, d):
     # Multi-band acquisition model for TOD fabrication
     atod = qubic.QubicMultibandAcquisition(q, pointing, s, d, nus_edge_in)
     return atod
+
+def create_TOD(d, pointing, x0):
+    atod = create_acquisition_operator_TOD(pointing, d)
+    TOD, _ = atod.get_observation(x0, noiseless=d['noiseless'])
+    return TOD
 
 def create_acquisition_operator_REC(pointing, d, nf_sub_rec):
     # Polychromatic instrument model
@@ -105,17 +120,12 @@ def get_hitmap(instrument, scene, pointings, threshold=0.01):
         rot_beams[i] = hp.get_interp_val(beam, trot, prot) 
     return rot_beams
 
-def create_TOD(d, pointing, x0):
-    atod = create_acquisition_operator_TOD(pointing, d)
-    TOD, _ = atod.get_observation(x0, noiseless=d['noiseless'])
-    return TOD
-
 def reconstruct_maps(TOD, d, pointing, nf_sub_rec, x0=None):
     _, nus_edge, nus, _, _, _ = qubic.compute_freq(d['filter_nu']/1e9, 
                                                    d['filter_relative_bandwidth'], nf_sub_rec)
     arec = create_acquisition_operator_REC(pointing, d, nf_sub_rec)
-    maps_recon = arec.tod2map(TOD, tol=d['tol'], maxiter=1500)
     cov = arec.get_coverage()
+    maps_recon = arec.tod2map(TOD, cov=cov, tol=d['tol'], maxiter=1500)
     if x0 is None:
         return maps_recon, cov, nus, nus_edge
     else:

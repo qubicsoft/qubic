@@ -13,6 +13,7 @@ import copy
 
 import Tools as tl
 import ReadMC as rmc
+import SpectroImLib as si
 
 import qubic
 from qubic import gal2equ, equ2gal
@@ -25,29 +26,34 @@ stokes = ['I', 'Q', 'U']
 #Coordinates of the zone observed in the sky
 center = equ2gal(0., -57.)
 
-name = 'fix_hwp_noise_0'
+name = 'pitch_test_I=0_0'
 
 #============= Get the simulation files ==================
 #Simulation repository
 # rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuJCResults/noiseless211118'
 # rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/noiseless_I=0'
 # rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/test_ptg'
-rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/fix_hwp_noise/'
+rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/pitch_test/'
 # rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/vary_tol'
 
 
 #Number of subbands used during the simulation
-nsubvals = np.array([1,2,3,4])
-# nfiles = 1
-# nsubvals = np.tile(1, nfiles) 
-# nsubvals = np.tile([1,2,3,4], 5)
+# nsubvals = np.array([1,2,3,4])
+nfiles = 7
+# nsubvals = np.tile(4, nfiles) 
+nsubvals = np.tile([1,2,3,4], nfiles)
 
 #Archetypes of the files .fits you want to work on
 arch_conv, arch_recon = [], []
-for sim in [6]:
-	for hwp in [1,2,3,4]:
-		arch_conv.append(name+'{}_nf{}_maps_convolved.fits'.format(sim, hwp))
-		arch_recon.append(name+'{}_nf{}_maps_recon.fits'.format(sim, hwp))
+for test in xrange(7):
+	for nsub in [1,2,3,4]:
+		arch_conv.append(name+'{0}_nf{1}_maps_convolved.fits'.format(test+1, nsub))
+		arch_recon.append(name+'{0}_nf{1}_maps_recon.fits'.format(test+1, nsub))
+
+# for sim in [6]:
+# 	for hwp in [1,2,3,4]:
+# 		arch_conv.append(name+'{}_nf{}_maps_convolved.fits'.format(sim, hwp))
+# 		arch_recon.append(name+'{}_nf{}_maps_recon.fits'.format(sim, hwp))
 
 
 #Get all maps
@@ -134,8 +140,83 @@ for freq in xrange(nbands):
 		plt.title('subband '+str(freq+1)+'/'+str(nbands))
 		if freq==0: plt.legend(numpoints=1, loc='best')
 
+#Residus std as a function of pitch std
+nbands = 4
+pitch_std = np.array([1.46, 5.84, 2.92, 11.68, 29.2, 0.58, 0.])
+pitch_mean = np.array([2.48, 9.9, 4.95, 19.81, 49.52, 0.99, 0.])
+plt.figure('pitch_test_' + str(nbands) + 'subbands_std_residus_corrected')
+std = np.empty((7, nbands, 2))
+for freq in xrange(nbands):
+	for i in xrange(2):
+		for pitch in xrange(7):
+			std[pitch, freq, i] = np.std(residus[pitch][:,freq,:,i+1])
+	std_meanQU = np.mean(std, axis=2) / np.sqrt(nbands)
+	plt.plot(pitch_std, std_meanQU[:,freq], 'o', label='subband ' + str(freq+1) + '/' + str(nbands))
+	# plt.plot(pitch_mean, std[:,i], '.', label=stokes[i+1])
+	plt.xlim(-0.5, 31)
+	plt.xlabel('pitch std')
+	plt.ylabel('std_Residus / sqrt(nbands)')
+	plt.legend(numpoints=1, loc=4)
+	plt.title('Q an U std residus averaged and corrected by sqrt(nbands)')
+	
+#Calcul de la correction
+Nfreq = 12
+_, nus_edge, nus, deltas, Delta, _ = qubic.compute_freq(band=150, relative_bandwidth=0.25, Nfreq=Nfreq)
+print(Delta)
+print(deltas)
+plot(nus, deltas, 'o')
+
+#si on les import tous
+plt.figure('pitch_test_I=0_std_residus_corrected2')
+for nbands in [1,2,3,4]:
+	plt.subplot(2,2,nbands)
+	std = np.empty((7, nbands, 2))
+	for freq in xrange(nbands):
+		for i in xrange(2):
+			for pitch in xrange(7):
+				res = pitch*4+nbands-1
+				#print(res)
+				std[pitch, freq, i] = np.std(residus[res][:,freq,:,i+1])
+		#std_meanQU = np.mean(std, axis=2) / np.sqrt(nbands)
+
+		print(nbands)
+		print(deltas[freq*Nfreq/nbands : freq*Nfreq/nbands + Nfreq/nbands])
+		correction = np.sqrt(deltas[freq*Nfreq/nbands : freq*Nfreq/nbands + Nfreq/nbands].sum()/Delta)
+		print('new'+str(correction))
+		print('old'+str(1./np.sqrt(nbands)))
+		std_meanQU = np.mean(std, axis=2) * correction
+
+		plt.plot(pitch_std, std_meanQU[:,freq], 'o', label='subband ' + str(freq+1) + '/' + str(nbands))
+		plt.xlim(-0.5, 31)
+		plt.ylim(0., 0.026)
+		plt.xlabel('pitch std')
+		plt.ylabel('std_Residus * sqrt(sum(deltas)/Delta)')
+		plt.legend(numpoints=1, loc=3)
+		plt.title('Q an U std residus averaged and corrected by the width of the subband')		
+
+
+#sans subplot
+plt.figure('pitch_test_nfsub12_std_residus_corrected_one_plot')
+symbol = ['o', '+', 's', 'x']
+for nbands in [1,2,3,4]:
+	std = np.empty((7, nbands, 2))
+	for freq in xrange(nbands):
+		for i in xrange(2):
+			for pitch in xrange(7):
+				res = pitch*4+nbands-1
+				print(res)
+				std[pitch, freq, i] = np.std(residus[res][:,freq,:,i+1])
+		std_meanQU = np.mean(std, axis=2) / np.sqrt(nbands)
+		plt.plot(pitch_std, std_meanQU[:,freq], symbol[nbands-1], label='subband ' + str(freq+1) + '/' + str(nbands))
+		plt.xlim(-0.5, 31)
+		plt.xlabel('pitch std')
+		plt.ylabel('std_Residus / sqrt(nbands)')
+		plt.legend(numpoints=1, loc=4)
+		plt.title('Q an U std residus averaged and corrected by sqrt(nbands)')		
+
+
 #================ Look at the maps =================
-isub = 0
+isub = 4
 real = 0
 freq = 0
 
@@ -164,24 +245,25 @@ for i in xrange(3):
 plt.show()
 
 #Plot of residus
-isub=11
+isub=0
 sh=residus[isub].shape
-plt.figure('noiseless_NoQU_residus_4subbands')
+plt.figure(name + 'residus_' + str(isub+1) + 'subbands')
 for freq in xrange(sh[1]):
 	maps_residus = np.zeros((12*ns**2, 3))
 	maps_residus[seenmap_conv, :] = residus[isub][0,freq,:,:]
 	for i in xrange(3):
 		if i==0:
-			min=None
-			max=None
+			min=-20
+			max=20
 		else:
-			min=-0.4
-			max=0.4
-		hp.gnomview(maps_residus[:,i], rot=center, reso=9, sub=(sh[1],3,3*freq+i+1), title=stokes[i]+' subband'+str(freq+1), min=min, max=max)
+			min=-0.3
+			max=0.3
+		hp.gnomview(maps_residus[:,i], rot=center, reso=9, sub=(sh[1],3,3*freq+i+1), 
+			title=stokes[i]+' subband'+str(freq+1) +'/'+str(isub+1), min=min, max=max)
 
 ##### plots des residus
 freq = 0
-plt.figure('fix_hwp_nospectro_piover6to16_500ptg_residus_freescale_subband'+str(freq+1)+'over1')
+plt.figure(name + '_residus_freescale_subband'+str(freq+1)+'over1')
 for hwp in xrange(nfiles):
 	maps_residus = np.zeros((12*ns**2, 3))
 	maps_residus[seenmap_conv, :] = residus[hwp][0,freq,:,:]
@@ -198,7 +280,7 @@ for hwp in xrange(nfiles):
 
 ##### plots des maps conv QU
 freq = 0
-plt.figure('fix_hwp_new_map_convQU_subband'+str(freq+1))
+plt.figure(name + '_map_convQU_subband'+str(freq+1))
 maps_conv = np.zeros((12*ns**2, 3))
 maps_conv[seenmap_conv, :] = allmaps_conv[0][0,freq,:,:]
 for i in xrange(2):
@@ -207,7 +289,7 @@ for i in xrange(2):
 
 ##### plots des maps recon QU
 freq = 0
-plt.figure('fix_hwp_new_map_reconQU_subband'+str(freq+1))
+plt.figure(name + '_map_reconQU_subband'+str(freq+1))
 for hwp in xrange(4):
 	maps_recon = np.zeros((12*ns**2, 3))
 	maps_recon[seenmap_conv, :] = allmaps_recon[hwp][0,freq,:,:]
@@ -435,7 +517,7 @@ mapsconv = np.zeros((12*ns**2, 3))
 maps_recon = np.zeros((12*ns**2, 3))
 
 
-for isub in [16,17,18,19]:
+for isub in xrange(4):
 	sh = allmaps_conv[isub].shape
 	nreals = sh[0]
 	nsub = sh[1]
@@ -468,11 +550,11 @@ for isub in [16,17,18,19]:
 
 
 #plot all spectra
-plt.figure('fix_hwp_nospectro_0to7_500ptg_spectra')
+plt.figure(name + 'spectra')
 for isub in xrange(4):
 	for s in xrange(3):
 		plt.subplot(4,3,isub*3+s+1)
-		plt.ylabel(thespec[s] + ' ptg=' +str((isub+1)*500))# + ' tol=' + str(tol[isub]))
+		plt.ylabel(thespec[s])# + ' tol=' + str(tol[isub]))
 		plt.xlabel('l')
 		sh = mcls[isub].shape
 		nsub = sh[2]
@@ -481,8 +563,8 @@ for isub in xrange(4):
 			plt.errorbar(ell_binned, ell_binned * (ell_binned + 1) * mcls[isub][s,:,k], 
 				yerr= ell_binned * (ell_binned + 1) * scls[isub][s,:,k], 
 				fmt='o', color=p[0].get_color(),
-				label='subband'+str(k+1))
-		if s==0 and isub==0:
+				label='subband'+str(k+1)+'/' + str(isub+1))
+		if s==0:
 			#plt.title('from 1 to 4 hwp angles') 
 			plt.legend(numpoints=1, prop={'size': 7})
 plt.show()

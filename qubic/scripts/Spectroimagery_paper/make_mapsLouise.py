@@ -13,13 +13,13 @@ from pysimulators import FitsArray
 
 import SpectroImLib as si
 
-dictfilename = 'test_spectroim.dict' 
-
-name = 'fix_hwp_noise_08'
+dictfilename = '/sps/hep/qubic/Users/lmousset/myqubic/qubic/scripts/Spectroimagery_paper/test_spectroim.dict' 
+rep_out = '/sps/hep/qubic/Users/lmousset/SpectroImaging/'
+name = 'testCC_01'
 
 #Numbers of subbands for spectroimaging
 noutmin = 1
-noutmax = 4
+noutmax = 1
 
 ## Input sky parameters
 skypars = {'dust_coeff':1e-2, 'r':0}#1.39e-2
@@ -30,7 +30,7 @@ d.read_from_file(dictfilename)
 #Print dictionary and others parameters
 #Save a file with al parameters
 tem = sys.stdout
-sys.stdout = f = open(name + '.txt','wt')
+sys.stdout = f = open(rep_out + name + '.txt','wt')
 
 print('Simulation General Name: ' + name)
 print('Dictionnary File: ' + dictfilename)
@@ -94,8 +94,8 @@ for nf_sub_rec in np.arange(noutmin, noutmax+1):
 
     #FitsArray(nus_edge).save(name + '_nf{0}_ptg{1}'.format(nf_sub_rec, ptg) + '_nus_edges.fits')
     #FitsArray(nus).save(name + '_nf{0}_ptg{1}'.format(nf_sub_rec, ptg)+ '_nus.fits')
-    FitsArray(maps_convolved).save(name + '_nf{}'.format(nf_sub_rec) + '_maps_convolved.fits')
-    FitsArray(maps_recon).save(name + '_nf{}'.format(nf_sub_rec) + '_maps_recon.fits')
+    FitsArray(maps_convolved).save(rep_out + name + '_nf{}'.format(nf_sub_rec) + '_maps_convolved.fits')
+    FitsArray(maps_recon).save(rep_out + name + '_nf{}'.format(nf_sub_rec) + '_maps_recon.fits')
         
     t1 = time.time()
     print('************************** All Done in {} minutes'.format((t1-t0)/60))

@@ -132,8 +132,9 @@ FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0, dd,
 ### Signal is also badpass filtered before folding
 
 #set up band pass filter
+theTES=45
 lowcut = 0.5
-highcut = 15.
+highcut = 15
 nbins=50
 folded, tt, folded_nonorm = ft.fold_data(time, dd, 1./fff, lowcut, highcut, nbins)
 

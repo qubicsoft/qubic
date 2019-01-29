@@ -1,7 +1,6 @@
 import numpy as np
 import scipy.ndimage.filters as f
 from qubicpack import qubicpack as qp
-#from scipy import signal
 from scipy.signal import butter, lfilter, iirnotch
 import scipy.signal as scsig
 import scipy.stats

@@ -67,11 +67,8 @@ def FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0):
 	return
 
 def FoldedFiltTES(tt, pars, theTES, folded, folded_notch):
-
 	plt.figure()
 	### Plot it along with a guess for fiber signal
-	theTES = best_det
-
 	plt.plot(tt, folded[theTES,:], label='Data TES #{}'.format(theTES))
 	plt.plot(tt, folded_notch[theTES,:], label='Data TES #{} (with Notch filter)'.format(theTES))
 		  #for simsig, we should pass in 'pars' values
@@ -79,3 +76,20 @@ def FoldedFiltTES(tt, pars, theTES, folded, folded_notch):
 	plt.legend()
 	plt.ylabel('Current [nA]')
 	plt.xlabel('time [s]')
+	
+	return
+
+def FoldedTESFreeFit(tt, bla, theTES, folded):
+	figure()
+	#takes in free fit result as 'bla'
+	params =  bla[1]
+	err = bla[2]
+	
+	plt.plot(tt, folded[theTES,:], label='Data TES #{}'.format(theTES))
+	plt.plot(tt, ft.simsig(tt, bla[1]), label='Fitted: \n cycle={0:8.3f}+/-{1:8.3f} \n tau = {2:8.3f}+/-{3:8.3f}s \n t0 = {4:8.3f}+/-{5:8.3f}s \n amp = {6:8.3f}+/-{7:8.3f}'.format(params[0], err[0], params[1], err[1], params[2], err[2], params[3], err[3]))
+	plt.legend()
+	plt.ylabel('Current [nA]')
+	plt.xlabel('time [s]')
+	plt.title('TES {} folded with simsig params'.format(theTES))
+	
+	return

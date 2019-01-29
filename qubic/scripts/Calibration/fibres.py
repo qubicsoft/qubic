@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 from pysimulators import FitsArray
 import matplotlib.mlab as mlab
 import scipy.ndimage.filters as f
-from plotters import *#FreqResp, FiltFreqResp, FoldedFiltTES
+from plotters import *
+
 
 
 ################################################ INPUT FILES ######################################
@@ -140,8 +141,6 @@ pars = [dc, 0.05, 0., 1.2]
 #plot folded TES data
 FoldedFiltTES(tt, pars, theTES, folded, folded_notch)
 
-guess = [dc, 0.06, 0., 1.2]
-FoldedFiltTES(tt, guess, theTES, folded, folded_notch)
 ### Plot it along with a guess for fiber signal
 #theTES = best_det
 #plt.clf()
@@ -160,15 +159,19 @@ bla = ft.do_minuit(tt, folded[theTES,:], np.ones(len(tt)),
 	guess, functname=ft.simsig,
 	rangepars=[[0.,1.], [0., 1], [0.,1], [0., 1]], fixpars=[0,0,0,0], 
 	force_chi2_ndf=True, verbose=False, nohesse=True)
-params =  bla[1]
-err = bla[2]
+#plot the free fit
+FoldedTESFreeFit(tt, bla, theTES, folded)
 
-plt.clf()
-plt.plot(tt, folded[theTES,:], label='Data TES #{}'.format(theTES))
-plt.plot(tt, ft.simsig(tt, bla[1]), label='Fitted: \n cycle={0:8.3f}+/-{1:8.3f} \n tau = {2:8.3f}+/-{3:8.3f}s \n t0 = {4:8.3f}+/-{5:8.3f}s \n amp = {6:8.3f}+/-{7:8.3f}'.format(params[0], err[0], params[1], err[1], params[2], err[2], params[3], err[3]))
-plt.legend()
-plt.ylabel('Current [nA]')
-plt.xlabel('time [s]')
+
+#params =  bla[1]
+#err = bla[2]
+
+#plt.clf()
+#plt.plot(tt, folded[theTES,:], label='Data TES #{}'.format(theTES))
+#plt.plot(tt, ft.simsig(tt, bla[1]), label='Fitted: \n cycle={0:8.3f}+/-{1:8.3f} \n tau = {2:8.3f}+/-{3:8.3f}s \n t0 = {4:8.3f}+/-{5:8.3f}s \n amp = {6:8.3f}+/-{7:8.3f}'.format(params[0], err[0], params[1], err[1], params[2], err[2], params[3], err[3]))
+#plt.legend()
+#plt.ylabel('Current [nA]')
+#plt.xlabel('time [s]')
 
 
 

@@ -71,7 +71,7 @@ plt.ylabel('Current [nA]')
 #theTES=best_det
 frange = [0.3, 15]
 filt = 5
-FreqResp(best_det, frange, fff, filt, dd)
+FreqResp(best_det, frange, fff, filt, dd, FREQ_SAMPLING, nsamples)
 #spectrum, freq = mlab.psd(dd[theTES,:], Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
 #filt = 5
 #clf()
@@ -94,7 +94,10 @@ FreqResp(best_det, frange, fff, filt, dd)
 #### Filtering out the signal from the PT
 freqs_pt = [1.72383, 3.24323, 3.44727, 5.69583, 6.7533, 9.64412, 12.9874]
 bw_0 = 0.005
-FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0)
+spectrum, freq = mlab.psd(dd[theTES,:], Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
+filtered_spec = f.gaussian_filter1d(spectrum, filt)
+FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0, dd, 
+			 FREQ_SAMPLING, nsamples, freq, spectrum, filtered_spec)
 #notch = []
 #for i in xrange(len(freqs_pt)):
 #	notch.append([freqs_pt[i], bw_0*(1+i)])
@@ -227,7 +230,7 @@ allerr = np.append(allerr1, allerr2, axis=0)
 allchi2 = np.append(allchi21, allchi22, axis=0)
 ndf = ndf1
 
-Allplots(fib, allparams, allparams1, allparams2, okfinal, okfinal1, okfinal2, med=False, rng=[0,0.4])
+Allplots(fib, allparams, allparams1, allparams2, okfinal, okfinal1, okfinal2, asic, med=False, rng=[0,0.4])
 
 # plt.figure()
 # plt.clf()

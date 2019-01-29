@@ -37,9 +37,11 @@ def FreqResp(theTES, frange, fff, filt, dd, FREQ_SAMPLING,nsamples):
 
 	return
 
-def FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0):
+def FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0, dd, 
+				 FREQ_SAMPLING, nsamples, freq, spectrum, filtered_spec):
 	plt.figure()
 	#set up data
+	notch = []
 	
 	for i in xrange(len(freqs_pt)):
 		notch.append([freqs_pt[i], bw_0*(1+i)])
@@ -50,19 +52,19 @@ def FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0):
 	
 	spectrum_f, freq_f = mlab.psd(sigfilt, Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
 
-	xlim(frange[0], frange[1])
+	plt.xlim(frange[0], frange[1])
 	rng = (freq > frange[0]) & (freq < frange[1])
-	loglog(freq[rng], filtered_spec[rng], label='Data')
-	loglog(freq[rng], f.gaussian_filter1d(spectrum_f,filt)[rng], label='Filt')
-	title('Tes #{}'.format(theTES+1))
-	ylim(np.min(filtered_spec[rng])*0.8, np.max(filtered_spec[rng])*1.2)
-	xlabel('Freq [Hz]')
-	ylabel('Power Spectrum [$nA^2.Hz^{-1}$]')
+	plt.loglog(freq[rng], filtered_spec[rng], label='Data')
+	plt.loglog(freq[rng], f.gaussian_filter1d(spectrum_f,filt)[rng], label='Filt')
+	plt.title('Tes #{}'.format(theTES+1))
+	plt.ylim(np.min(filtered_spec[rng])*0.8, np.max(filtered_spec[rng])*1.2)
+	plt.xlabel('Freq [Hz]')
+	plt.ylabel('Power Spectrum [$nA^2.Hz^{-1}$]')
 	#### Show where the signal is expected
-	for ii in xrange(10): plot(np.array([fff,fff])*(ii+1),[1e-20,1e-10],'r--', alpha=0.3)
+	for ii in xrange(10): plt.plot(np.array([fff,fff])*(ii+1),[1e-20,1e-10],'r--', alpha=0.3)
 	#### PT frequencies
 	fpt = 1.724
-	for ii in xrange(10): plot(np.array([fpt,fpt])*(ii+1),[1e-20,1e-10],'k--', alpha=0.3)
+	for ii in xrange(10): plt.plot(np.array([fpt,fpt])*(ii+1),[1e-20,1e-10],'k--', alpha=0.3)
 
 	return
 
@@ -80,7 +82,7 @@ def FoldedFiltTES(tt, pars, theTES, folded, folded_notch):
 	return
 
 def FoldedTESFreeFit(tt, bla, theTES, folded):
-	figure()
+	plt.figure()
 	#takes in free fit result as 'bla'
 	params =  bla[1]
 	err = bla[2]
@@ -95,7 +97,7 @@ def FoldedTESFreeFit(tt, bla, theTES, folded):
 	return
 
 
-def Allplots(fib, allparams, allparams1, allparams2, okfinal, okfinal1, okfinal2, med=False, rng=[0,0.4]):
+def Allplots(fib, allparams, allparams1, allparams2, okfinal, okfinal1, okfinal2, asic, med=False, rng=[0,0.4]):
 	plt.figure()
 	
 	plt.subplot(2,2,1)

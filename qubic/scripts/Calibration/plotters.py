@@ -65,3 +65,17 @@ def FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0):
 	for ii in xrange(10): plot(np.array([fpt,fpt])*(ii+1),[1e-20,1e-10],'k--', alpha=0.3)
 
 	return
+
+def FoldedFiltTES(tt, pars, theTES, folded, folded_notch):
+
+	figure()
+	### Plot it along with a guess for fiber signal
+	theTES = best_det
+
+	plt.plot(tt, folded[theTES,:], label='Data TES #{}'.format(theTES))
+	plt.plot(tt, folded_notch[theTES,:], label='Data TES #{} (with Notch filter)'.format(theTES))
+		  #for simsig, we should pass in 'pars' values
+	plt.plot(tt, ft.simsig(tt, pars), label='Expected')
+	plt.legend()
+	plt.ylabel('Current [nA]')
+	plt.xlabel('time [s]')

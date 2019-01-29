@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from pysimulators import FitsArray
 import matplotlib.mlab as mlab
 import scipy.ndimage.filters as f
-from plotters import FreqResp, FiltFreqResp
+from plotters import FreqResp, FiltFreqResp, FoldedFiltTES
 
 
 ################################################ INPUT FILES ######################################
@@ -60,6 +60,7 @@ clf()
 plot(time, dd[theTES,:])
 xlabel('Time [s]')
 ylabel('Current [nA]')
+
 
 ###### TOD Power Spectrum #####
 
@@ -122,6 +123,8 @@ FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0)
 ############################################################################
 ### Fold the data at the modulation period of the fibers
 ### Signal is also badpass filtered before folding
+
+#set up band pass filter
 lowcut = 0.5
 highcut = 15.
 nbins=50
@@ -130,15 +133,21 @@ folded, tt, folded_nonorm = ft.fold_data(time, dd, 1./fff, lowcut, highcut, nbin
 folded_notch, tt, folded_notch_nonorm = ft.fold_data(time, dd, 1./fff, lowcut, highcut, nbins,
 	notch = notch)
 
+pars = [dc, 0.05, 0., 1.2]
+#plot folded TES data
+FoldedFiltTES(tt, pars, theTES, folded, folded_notch)
+
+guess = [dc, 0.06, 0., 1.2]
+FoldedFiltTES(tt, guess, theTES, folded, folded_notch)
 ### Plot it along with a guess for fiber signal
-theTES = best_det
-plt.clf()
-plt.plot(tt, folded[theTES,:], label='Data TES #{}'.format(theTES))
-plt.plot(tt, folded_notch[theTES,:], label='Data TES #{} (with Notch filter)'.format(theTES))
-plt.plot(tt, ft.simsig(tt, [dc, 0.05, 0.0, 1.2]), label='Expected')
-plt.legend()
-plt.ylabel('Current [nA]')
-plt.xlabel('time [s]')
+#theTES = best_det
+#plt.clf()
+#plt.plot(tt, folded[theTES,:], label='Data TES #{}'.format(theTES))
+#plt.plot(tt, folded_notch[theTES,:], label='Data TES #{} (with Notch filter)'.format(theTES))
+#plt.plot(tt, ft.simsig(tt, [dc, 0.05, 0.0, 1.2]), label='Expected')
+#plt.legend()
+#plt.ylabel('Current [nA]')
+#plt.xlabel('time [s]')
 
 
 #### Now fit the fiber signal 

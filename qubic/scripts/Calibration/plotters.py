@@ -13,7 +13,7 @@ from pysimulators import FitsArray
 import matplotlib.mlab as mlab
 import scipy.ndimage.filters as f
 
-def FreqResp(theTES, frange, fff, filt):
+def FreqResp(theTES, frange, fff, filt, dd):
 	plt.figure()
 	#setup plot params
 	

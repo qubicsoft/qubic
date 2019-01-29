@@ -94,66 +94,6 @@ def FoldedTESFreeFit(tt, bla, theTES, folded):
 	
 	return
 
-def AnalyseASIC(tt, folded, folded_nonorm, okfinal, fff, dc, fib, Vtes):
-	plt.figure(figsize=(6,8))
-	plt.subplot(3,1,1)
-	### Now redo the fits one last time
-	av, params, err = fit_average(tt, folded[okfinal,:], fff, dc, 
-			fib, Vtes, 
-			initpars = [dc, 0.1, 0., 1.],
-			fixpars = [0,0,0,0],
-			doplot=True,clear=False)
-
-	if lastpassallfree:
-		fixed = [0, 0, 0, 0]
-	else: 
-		fixed = [1, 0, 1, 0]
-	allparams, allerr, allchi2, ndf, ok_useless = fit_all(tt, folded_nonorm*1e9, 
-			av, fff, dc, fib, Vtes, 
-			initpars = [dc, params[1], params[2], params[3]],
-			fixpars = fixed, functname=simsig_nonorm)
-
-	plt.subplot(3,2,3)
-	plt.hist(allparams[okfinal,1],range=[0,1],bins=30,label=statstr(allparams[okfinal,1]))
-	plt.xlabel('Tau [sec]')
-	plt.legend()
-	plt.title('Asic {} - Fib {}'.format(asic, fib))
-	plt.subplot(3,2,4)
-	plt.hist(allparams[okfinal,3],range=[0,1],bins=30, label=statstr(allparams[okfinal,3]))
-	plt.legend()
-	plt.xlabel('Amp [nA]')
-
-	pars = allparams
-	tau = pars[:,1]
-	tau[~okfinal]=np.nan
-	amp = pars[:,3]
-	amp[~okfinal]=np.nan
-
-	if asic==1:
-		tau1 = tau
-		tau2 = None
-		amp1 = amp
-		amp2 = None
-	else:
-		tau1 = None
-		tau2 = tau
-		amp1 = None
-		amp2 = amp
-
-	plt.subplot(3,2,5)
-	imtau = image_asics(data1=tau1, data2=tau2)	
-	plt.imshow(imtau,vmin=0,vmax=0.5)
-	plt.title('Tau - Fiber {} - asic {}'.format(fib,asic))
-	plt.colorbar()
-	plt.subplot(3,2,6)
-	imamp = image_asics(data1=amp1, data2=amp2)	
-	plt.imshow(imamp,vmin=0,vmax=1)
-	plt.colorbar()
-	plt.title('Amp - Fiber {} - asic {}'.format(fib, asic))
-	plt.tight_layout()
-	return
-
-
 
 def Allplots(fib, allparams, allparams1, allparams2, okfinal, okfinal1, okfinal2, med=False, rng=[0,0.4]):
 	plt.figure()

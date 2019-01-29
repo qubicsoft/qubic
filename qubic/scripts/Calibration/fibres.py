@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from pysimulators import FitsArray
 import matplotlib.mlab as mlab
 import scipy.ndimage.filters as f
+from plotters import FreqResp
 
 
 ################################################ INPUT FILES ######################################
@@ -13,8 +14,8 @@ fib = 2
 Vtes = 3.
 fff = 1.
 dc = 0.3
-asic1 = '/home/louisemousset/QUBIC/Qubic_work/Calibration/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic1-2018.12.20.172722.fits'
-asic2 = '/home/louisemousset/QUBIC/Qubic_work/Calibration/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
+asic1 = '/home/james/fibdata/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic1-2018.12.20.172722.fits'
+asic2 = '/home/james/fibdata/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
 
 
 ##### Fiber 3: Fiber@1V; Freq=1.5Hz; DutyCycle=50%; Voffset_TES=3V
@@ -61,28 +62,30 @@ xlabel('Time [s]')
 ylabel('Current [nA]')
 
 ###### TOD Power Spectrum #####
-theTES=best_det
+
+#theTES=best_det
 frange = [0.3, 15]
-spectrum, freq = mlab.psd(dd[theTES,:], Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
-
 filt = 5
-clf()
-xlim(frange[0], frange[1])
-rng = (freq > frange[0]) & (freq < frange[1])
-filtered_spec = f.gaussian_filter1d(spectrum, filt)
-loglog(freq[rng], filtered_spec[rng], label='Data')
-title('Tes #{}'.format(theTES+1))
-ylim(np.min(filtered_spec[rng])*0.8, np.max(filtered_spec[rng])*1.2)
-xlabel('Freq [Hz]')
-ylabel('Power Spectrum [$nA^2.Hz^{-1}$]')
-#### Show where the signal is expected
-for ii in xrange(10): plot(np.array([fff,fff])*(ii+1),[1e-20,1e-10],'r--', alpha=0.3)
-#### PT frequencies
-fpt = 1.724
-for ii in xrange(10): plot(np.array([fpt,fpt])*(ii+1),[1e-20,1e-10],'k--', alpha=0.3)
+FreqResp(best_det, frange, fff, filt)
+#spectrum, freq = mlab.psd(dd[theTES,:], Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
+#filt = 5
+#clf()
+#xlim(frange[0], frange[1])
+#rng = (freq > frange[0]) & (freq < frange[1])
+#filtered_spec = f.gaussian_filter1d(spectrum, filt)
+#loglog(freq[rng], filtered_spec[rng], label='Data')
+#title('Tes #{}'.format(theTES+1))
+#ylim(np.min(filtered_spec[rng])*0.8, np.max(filtered_spec[rng])*1.2)
+#xlabel('Freq [Hz]')
+#ylabel('Power Spectrum [$nA^2.Hz^{-1}$]')
+##### Show where the signal is expected
+#for ii in xrange(10): plot(np.array([fff,fff])*(ii+1),[1e-20,1e-10],'r--', alpha=0.3)
+##### PT frequencies
+#fpt = 1.724
+#for ii in xrange(10): plot(np.array([fpt,fpt])*(ii+1),[1e-20,1e-10],'k--', alpha=0.3)
 
 
-
+###NEW PLOT WITH FILTERED OVERPLOT
 #### Filtering out the signal from the PT
 freqs_pt = [1.72383, 3.24323, 3.44727, 5.69583, 6.7533, 9.64412, 12.9874]
 bw_0 = 0.005

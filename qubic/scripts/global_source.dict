@@ -1,18 +1,25 @@
 ############################################# Instrument ################################
+debug = False #False/True # Boolean
 
-MultiBand=True
-
-filter_nu = 150*1e9
+config = 'TD' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
+filter_nu = 150*1e9 # 150e9 or 220e9 Hz
 filter_relative_bandwidth = 0.25 
+beam_shape =  'multi_freq' # 'gaussian', 'fitted_beam', 'multi_freq'
 
 # multifreq instrument 
+MultiBand=True
 nf_sub=15
 center_detector=False
 
+psd=None
+bandwidth=None
+twosided=None
+sigma=None
 detector_fknee=0
 detector_fslope=1
 detector_ncorr=10
-detector_nep=4.7e-17
+## Detector nep  + reading noise: sqrt(4.7e-17**2 + 2e-16**2)
+detector_nep=4.7e-17 #2.05e-16 (TD), 4.7e-17(FI)
 detector_ngrids=1
 detector_tau=0.01
 polarizer=True
@@ -22,10 +29,13 @@ synthbeam_peak150_fwhm=0.39268176 # in degree
 ripples=False
 nripples=0
 
-optics='CalQubic_Optics_v2.txt'
-primbeam='CalQubic_PrimBeam_v2.fits'
-detarray='CalQubic_DetArray_FI.fits'
-hornarray='CalQubic_HornArray_FI.fits'
+########## Calibration files, should not be edited #####################@
+
+optics='CalQubic_Optics_v3_CC_FFF.txt'
+primbeam='CalQubic_PrimBeam_v2.fits' # X=2 gaussian, 3 fitted, 4 multi frequency splines
+detarray='CalQubic_DetArray_CC.fits'
+hornarray='CalQubic_HornArray_CC.fits'
+
 
 ############################################# Scene ################################
 nside=256
@@ -33,6 +43,7 @@ kind='IQU'
 absolute=False
 temperature=2.7255
 summer=False
+
 ############################################# Pointing ##############################
 
 RA_center= 0.
@@ -64,7 +75,8 @@ fix_azimuth={'apply':True,'az':50,'el':50,'el_step':1, 'fix_hwp':False, 'fix_pit
 
 ############################################# Acquisition ##############################
 block=None
-effective_duration=2
+effective_duration=2 #years
+noiseless=True
 photon_noise=False
 max_nbytes=None
 nprocs_instrument=None

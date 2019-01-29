@@ -14,8 +14,11 @@ fib = 2
 Vtes = 3.
 fff = 1.
 dc = 0.3
-asic1 = '/home/james/fibdata/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic1-2018.12.20.172722.fits'
-asic2 = '/home/james/fibdata/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
+asic1 = '/home/louisemousset/QUBIC/Qubic_work/Calibration/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic1-2018.12.20.172722.fits'
+asic2 = '/home/louisemousset/QUBIC/Qubic_work/Calibration/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
+
+# asic1 = '/home/james/fibdata/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic1-2018.12.20.172722.fits'
+# asic2 = '/home/james/fibdata/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
 
 
 ##### Fiber 3: Fiber@1V; Freq=1.5Hz; DutyCycle=50%; Voffset_TES=3V
@@ -56,10 +59,10 @@ best_det = 37
 
 ###### TOD Example #####
 theTES = best_det
-clf()
-plot(time, dd[theTES,:])
-xlabel('Time [s]')
-ylabel('Current [nA]')
+plt.clf()
+plt.plot(time, dd[theTES,:])
+plt.xlabel('Time [s]')
+plt.ylabel('Current [nA]')
 
 ###### TOD Power Spectrum #####
 

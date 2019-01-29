@@ -13,22 +13,22 @@ from pysimulators import FitsArray
 import matplotlib.mlab as mlab
 import scipy.ndimage.filters as f
 
-def FreqResp(theTES, frange, fff, filt, dd):
+def FreqResp(theTES, frange, fff, filt, dd, FREQ_SAMPLING,nsamples):
 	plt.figure()
 	#setup plot params
 	
 	spectrum, freq = mlab.psd(dd[theTES,:], Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
 	filtered_spec = f.gaussian_filter1d(spectrum, filt)
 	rng = (freq > frange[0]) & (freq < frange[1])
-	loglog(freq[rng], filtered_spec[rng], label='Data')
+	plt.loglog(freq[rng], filtered_spec[rng], label='Data')
 	
 	#do plot
 
-	xlim(frange[0], frange[1])
-	title('Tes #{}'.format(theTES+1))
-	ylim(np.min(filtered_spec[rng])*0.8, np.max(filtered_spec[rng])*1.2)
-	xlabel('Freq [Hz]')
-	ylabel('Power Spectrum [$nA^2.Hz^{-1}$]')
+	plt.xlim(frange[0], frange[1])
+	plt.title('Tes #{}'.format(theTES+1))
+	plt.ylim(np.min(filtered_spec[rng])*0.8, np.max(filtered_spec[rng])*1.2)
+	plt.xlabel('Freq [Hz]')
+	plt.ylabel('Power Spectrum [$nA^2.Hz^{-1}$]')
 	#### Show where the signal is expected
 	for ii in xrange(10): plt.plot(np.array([fff,fff])*(ii+1),[1e-20,1e-10],'r--', alpha=0.3)
 	#### PT frequencies

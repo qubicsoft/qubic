@@ -71,7 +71,7 @@ plt.ylabel('Current [nA]')
 #theTES=best_det
 frange = [0.3, 15]
 filt = 5
-FreqResp(best_det, frange, fff, filt)
+FreqResp(best_det, frange, fff, filt, dd)
 #spectrum, freq = mlab.psd(dd[theTES,:], Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
 #filt = 5
 #clf()

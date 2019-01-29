@@ -71,6 +71,7 @@ def FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0, dd,
 def FoldedFiltTES(tt, pars, theTES, folded, folded_notch):
 	plt.figure()
 	### Plot it along with a guess for fiber signal
+	plt.plot(tt, np.mean(folded, axis=0), label='Median of Folding')
 	plt.plot(tt, folded[theTES,:], label='Data TES #{}'.format(theTES))
 	plt.plot(tt, folded_notch[theTES,:], label='Data TES #{} (with Notch filter)'.format(theTES))
 		  #for simsig, we should pass in 'pars' values
@@ -118,7 +119,7 @@ def Allplots(fib, allparams, allparams1, allparams2, okfinal, okfinal1, okfinal2
 
 	plt.subplot(2,2,3)
 	imtau = ft.image_asics(data1=allparams1[:,1], data2=allparams2[:,1])	
-	plt.imshow(imtau,vmin=0,vmax=0.5)
+	plt.imshow(imtau,vmin=0,vmax=0.5,interpolation='nearest')
 	plt.title('Tau [s] - Fiber {}'.format(fib,asic))
 	plt.colorbar()
 

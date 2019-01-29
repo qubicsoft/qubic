@@ -93,3 +93,19 @@ def FoldedTESFreeFit(tt, bla, theTES, folded):
 	plt.title('TES {} folded with simsig params'.format(theTES))
 	
 	return
+
+def TESvsThermo(fib, tt, folded1, folded2, okfinal1, okfinal2, thermos):
+	plt.figure()
+	plt.subplot(2,1,1)
+	plt.plot(tt, np.mean(folded1[okfinal1 * ~thermos,:], axis=0), 'b', lw=2, label='Valid TES average')
+	plt.plot(tt, np.mean(folded1[thermos,:],axis=0), 'r', lw=2, label='Thermometers')
+	plt.title('Fib = {} - ASIC 1'.format(fib))
+	plt.legend(loc='upper left', fontsize=8)
+
+	plt.subplot(2,1,2)
+	plt.plot(tt, np.mean(folded2[okfinal2 * ~thermos,:], axis=0), 'b', lw=2, label='Valid TES average')
+	plt.plot(tt, np.mean(folded2[thermos,:],axis=0), 'r', lw=2, label='Thermometers')
+	plt.title('Fib = {} - ASIC 2'.format(fib))
+	plt.savefig('fib{}_thermoVsTES.png'.format(fib))
+
+	return

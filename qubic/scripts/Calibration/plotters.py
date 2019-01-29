@@ -66,7 +66,7 @@ def FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0, dd,
 	fpt = 1.724
 	for ii in xrange(10): plt.plot(np.array([fpt,fpt])*(ii+1),[1e-20,1e-10],'k--', alpha=0.3)
 
-	return
+	return notch
 
 def FoldedFiltTES(tt, pars, theTES, folded, folded_notch):
 	plt.figure()
@@ -125,7 +125,7 @@ def Allplots(fib, allparams, allparams1, allparams2, okfinal, okfinal1, okfinal2
 
 	plt.subplot(2,2,4)
 	imamp = ft.image_asics(data1=allparams1[:,3], data2=allparams2[:,3])	
-	plt.imshow(imamp,vmin=0,vmax=1)
+	plt.imshow(imamp,  vmin=0, vmax=1, interpolation='nearest')
 	plt.title('Amp [nA] - Fiber {}'.format(fib,asic))
 	plt.colorbar()
 	plt.tight_layout()

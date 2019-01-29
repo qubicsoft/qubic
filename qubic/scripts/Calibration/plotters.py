@@ -14,7 +14,7 @@ import matplotlib.mlab as mlab
 import scipy.ndimage.filters as f
 
 def FreqResp(theTES, frange, fff, filt):
-	figure()
+	plt.figure()
 	#setup plot params
 	
 	spectrum, freq = mlab.psd(dd[theTES,:], Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
@@ -68,7 +68,7 @@ def FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0):
 
 def FoldedFiltTES(tt, pars, theTES, folded, folded_notch):
 
-	figure()
+	plt.figure()
 	### Plot it along with a guess for fiber signal
 	theTES = best_det
 

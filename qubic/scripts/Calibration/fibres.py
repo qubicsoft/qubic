@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from pysimulators import FitsArray
 import matplotlib.mlab as mlab
 import scipy.ndimage.filters as f
-from plotters import FreqResp, FiltFreqResp, FoldedFiltTES
+from plotters import *#FreqResp, FiltFreqResp, FoldedFiltTES
 
 
 ################################################ INPUT FILES ######################################
@@ -246,13 +246,13 @@ plt.imshow(imtau,vmin=0,vmax=0.5)
 plt.title('Tau [s] - Fiber {}'.format(fib,asic))
 plt.colorbar()
 
-subplot(2,2,4)
+plt.subplot(2,2,4)
 imamp = ft.image_asics(data1=allparams1[:,3], data2=allparams2[:,3])	
-imshow(imamp,vmin=0,vmax=1)
-title('Amp [nA] - Fiber {}'.format(fib,asic))
-colorbar()
+plt.imshow(imamp,vmin=0,vmax=1)
+plt.title('Amp [nA] - Fiber {}'.format(fib,asic))
+plt.colorbar()
 plt.tight_layout()
-savefig('fib{}_summary.png'.format(fib))
+plt.savefig('fib{}_summary.png'.format(fib))
 
 
 ##### Compare TES with Thermometers
@@ -260,16 +260,15 @@ thermos = np.zeros(128, dtype=bool)
 thnum = [3, 35, 67, 99]
 thermos[thnum] = True
 
-figure()
-clf()
-subplot(2,1,1)
-plot(tt, np.mean(folded1[okfinal1 * ~thermos,:], axis=0), 'b', lw=2, label='Valid TES average')
-plot(tt, np.mean(folded1[thermos,:],axis=0), 'r', lw=2, label='Thermometers')
-title('Fib = {} - ASIC 1'.format(fib))
-legend(loc='upper left', fontsize=8)
-subplot(2,1,2)
-plot(tt, np.mean(folded2[okfinal2 * ~thermos,:], axis=0), 'b', lw=2, label='Valid TES average')
-plot(tt, np.mean(folded2[thermos,:],axis=0), 'r', lw=2, label='Thermometers')
-title('Fib = {} - ASIC 2'.format(fib))
-savefig('fib{}_thermoVsTES.png'.format(fib))
+plt.figure()
+plt.subplot(2,1,1)
+plt.plot(tt, np.mean(folded1[okfinal1 * ~thermos,:], axis=0), 'b', lw=2, label='Valid TES average')
+plt.plot(tt, np.mean(folded1[thermos,:],axis=0), 'r', lw=2, label='Thermometers')
+plt.title('Fib = {} - ASIC 1'.format(fib))
+plt.legend(loc='upper left', fontsize=8)
+plt.subplot(2,1,2)
+plt.plot(tt, np.mean(folded2[okfinal2 * ~thermos,:], axis=0), 'b', lw=2, label='Valid TES average')
+plt.plot(tt, np.mean(folded2[thermos,:],axis=0), 'r', lw=2, label='Thermometers')
+plt.title('Fib = {} - ASIC 2'.format(fib))
+plt.savefig('fib{}_thermoVsTES.png'.format(fib))
 

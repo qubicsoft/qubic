@@ -197,9 +197,13 @@ FoldedTESFreeFit(tt, bla, theTES, folded)
 ### with reslect_ok=False
 ##################################################
 #### Asic 1
+#run ASIC analysis code
 tt, folded1, okfinal1, allparams1, allerr1, allchi21, ndf1 = ft.run_asic(fib, Vtes, fff, dc, 
 	asic1, 1, reselect_ok=False, lowcut=0.5, highcut=15., nbins=50, 
 	nointeractive=False, doplot=True, notch=notch)
+#run ASIC plotter
+
+
 plt.savefig('fib{}_ASIC1_summary.png'.format(fib))
 
 

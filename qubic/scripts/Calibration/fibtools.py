@@ -554,12 +554,12 @@ def run_asic(fib, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=0.
 
 		plt.subplot(3,2,5)
 		imtau = image_asics(data1=tau1, data2=tau2)	
-		plt.imshow(imtau,vmin=0,vmax=0.5)
+		plt.imshow(imtau,vmin=0,vmax=0.5, interpolation='nearest')
 		plt.title('Tau - Fiber {} - asic {}'.format(fib,asic))
 		plt.colorbar()
 		plt.subplot(3,2,6)
 		imamp = image_asics(data1=amp1, data2=amp2)	
-		plt.imshow(imamp,vmin=0,vmax=1)
+		plt.imshow(imamp,vmin=0,vmax=1, interpolation='nearest')
 		plt.colorbar()
 		plt.title('Amp - Fiber {} - asic {}'.format(fib, asic))
 		plt.tight_layout()
@@ -640,13 +640,13 @@ def calibrate(fib, pow_maynooth, allparams, allerr, allok, cutparam=None, cuterr
 
 
 	plt.subplot(2,2,2)
-	plt.imshow(img_maynooth,vmin=np.min(pow_maynooth), vmax=np.max(pow_maynooth))
+	plt.imshow(img_maynooth,vmin=np.min(pow_maynooth), vmax=np.max(pow_maynooth), interpolation='nearest')
 	plt.colorbar()
 	plt.title('Maynooth [mW]')
 
 	plt.subplot(2,2,4)
 	plt.img = image_asics(allparams[:,3]/res[1][0], all1=True)
-	plt.imshow(img)
+	plt.imshow(img, interpolation='nearest')
 	plt.colorbar()
 	plt.title('Amp Fib{}  converted to mW'.format(fib))
 	plt.tight_layout()

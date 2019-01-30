@@ -1,22 +1,21 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
-"""
-Created on Tue Jan 29 21:35:22 2019
-
-@author: Louise
-"""
 
 import numpy as np
 import matplotlib.pyplot as plt
 import healpy as hp
 import qubic
+import fibtools as ft
 
-dictfilename = '/home/james/qubicmoussett/qubic/qubic/scripts/global_source.dict' 
+dictfilename = '/home/louisemousset/QUBIC/MyGitQUBIC/qubic/qubic/scripts/global_source.dict' 
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
 # Get sweeping pointing in a fix frame
 p = qubic.get_pointing(d)
+
+
+
 el_angles = np.unique(p.elevation) # all different elevation angles 
 az_angles = np.unique(p.azimuth) # all different azimuth angles 
 print('el_angles = ' + str(el_angles))
@@ -58,7 +57,6 @@ x0[:,:,0] = sky
 
 # Polychromatic instrument model
 q = qubic.QubicMultibandInstrument(d)
-q[0].detector.plot()
 
 # Scene
 s = qubic.QubicScene(d)
@@ -72,10 +70,44 @@ a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_in)
 
 # Get TOD
 TOD, _ = a.get_observation(x0, noiseless=True)
+print('TOD.shape = ' + str(TOD.shape))
+nTES = TOD.shape[0] 
+npointings = TOD.shape[1]
 
-# We have to find a way to have the position of the TES in the focal plane from its number 
-# and then we can plot TOD on the focal plane as a function of the pointing.
-plt.figure()
-for i in xrange(10):
-    plt.plot(TOD[:, i], '.', label='time = '+str(i))
-plt.legend()
+TOD_mean = np.mean(TOD)
+
+# Let's insert the 8 thermometers among the TES
+thermos = np.array([3, 35, 67, 99, 131, 163, 195, 227]) # Indices of thermometers
+TOD_thermo = np.zeros((nTES+8,npointings))
+for ptg in xrange(npointings):
+    TOD_thermo[:,ptg] = np.insert(TOD[:,ptg], thermos-np.arange(0,8), TOD_mean, axis=None)
+
+
+# Check thermometers have been inserted at good places
+for i in xrange(nTES+8):
+    if TOD_thermo[i,0]==TOD_mean:
+        if i in thermos:
+            print(str(i) + ' ok')
+        else:
+            print(str(i) + ' bug') 
+
+# Normalization 
+TOD_thermo_mean = TOD_thermo / TOD_mean
+#TOD_thermo_mean = np.abs(TOD_thermo - TOD_mean) / TOD_mean
+
+plt.figure('focal plane')
+for ptg in xrange(10):
+    img = ft.image_asics(data1=TOD_thermo_mean[:,ptg], data2=None, all1=True)
+    plt.imshow(img, interpolation='nearest')
+    plt.title('ptg'+str(ptg) + ' el=' + str(p.elevation[ptg]) + ' az=' + str(p.azimuth[ptg]))
+    #plt.title('pointing #{}'.format(ptg))
+    plt.pause(0.5)
+
+plt.colorbar()
+
+# Find the TES number on the  focal plane
+test = np.arange(0, 256)
+img = ft.image_asics(data1=test, data2=None, all1=True)
+plt.figure('TES position')
+plt.imshow(img, interpolation='nearest')
+plt.colorbar()

@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import healpy as hp
 import qubic
 
-dictfilename = '/home/louisemousset/QUBIC/MyGitQUBIC/qubic/qubic/scripts/global_source.dict' 
+dictfilename = '/home/james/qubicmoussett/qubic/qubic/scripts/global_source.dict' 
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 

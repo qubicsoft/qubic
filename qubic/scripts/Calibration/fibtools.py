@@ -402,23 +402,46 @@ def fit_all(t, folded, av, fff, dc, fib, Vtes,
 		allparams[i,:] = params
 		allerr[i,:] = err
 		allchi2[i] = theres[4]
+		
+		#initialise plot figure
+		
+		plt.figure()
 		if stop_each:
-			plt.clf()
+			plt.clf() # was clf
+			plt.ion()
 			plt.plot(t, thedd, color='k')
 			plt.plot(t,av,color='b',lw=4, alpha=0.2, label='Median')
 			plt.plot(t,	functname(t, theres[1]), 'r--', lw=4, 
 			label='Fitted: \n cycle={0:8.3f}+/-{1:8.3f} \n tau = {2:8.3f}+/-{3:8.3f}s \n t0 = {4:8.3f}+/-{5:8.3f}s \n amp = {6:8.3f}+/-{7:8.3f}'.format(params[0], 
 				err[0], params[1], err[1], params[2], err[2], params[3], err[3]))
 			plt.legend()
+			plt.pause(3)
+			plt.draw()
 			plt.show()
 			msg = 'TES #{}'.format(i)
 			if i in [3, 35, 67, 99]:
 				msg = 'Channel #{} - BEWARE THIS IS A THERMOMETER !'.format(i)
 			plt.title(msg)
-			bla=raw_input("Press [y] if fit OK other key otherwise...")
+			#Changing so 'i' select prompts plot inversion
+			bla=raw_input("Press [y] if fit OK, [i] to invert, other key otherwise...")
 			if (bla=='y'):
 				ok[i]=True
+				
+			#invert to check if TES okay, 
+			#thedd refers to the indexed TES in loop
+			elif (bla == 'i'):
+				plt.plot(t, thedd*-1.0, color='olive')
+				plt.pause(3)
+				plt.draw()
+				plt.show()
+				ibla = raw_input("Press [y] if INVERTED fit OK, otherwise anykey")
+				#and invert thedd in the original datset
+				if (ibla == 'y'):
+					ok[i]=True
+					folded[i,:] = thedd * -1.0
+					
 			print(ok[i])
+			
 	return allparams, allerr, allchi2, ndf,ok
 
 

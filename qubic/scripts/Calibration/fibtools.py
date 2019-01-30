@@ -13,6 +13,7 @@ import math
 import matplotlib.pyplot as plt
 from pysimulators import FitsArray
 
+#blbljdj test
 
 def statstr(x,divide=False, median=False):
 	if median:

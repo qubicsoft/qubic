@@ -15,11 +15,11 @@ fib = 2
 Vtes = 3.
 fff = 1.
 dc = 0.3
-asic1 = '/home/louisemousset/QUBIC/Qubic_work/Calibration/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic1-2018.12.20.172722.fits'
-asic2 = '/home/louisemousset/QUBIC/Qubic_work/Calibration/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
+#asic1 = '/home/louisemousset/QUBIC/Qubic_work/Calibration/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic1-2018.12.20.172722.fits'
+#asic2 = '/home/louisemousset/QUBIC/Qubic_work/Calibration/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
 
-# asic1 = '/home/james/fibdata/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic1-2018.12.20.172722.fits'
-# asic2 = '/home/james/fibdata/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
+asic1 = '/home/james/fibdata/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic1-2018.12.20.172722.fits'
+asic2 = '/home/james/fibdata/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
 
 
 ##### Fiber 3: Fiber@1V; Freq=1.5Hz; DutyCycle=50%; Voffset_TES=3V
@@ -140,7 +140,7 @@ FoldedTESFreeFit(tt, bla, theTES, folded)
 #### Asic 1
 #run ASIC analysis code
 tt, folded1, okfinal1, allparams1, allerr1, allchi21, ndf1 = ft.run_asic(fib, Vtes, fff, dc, 
-	asic1, 1, reselect_ok=False, lowcut=0.5, highcut=15., nbins=50, 
+	asic1, 1, reselect_ok=True, lowcut=0.5, highcut=15., nbins=50, 
 	nointeractive=False, doplot=True, notch=notch)
 #run ASIC plotter
 

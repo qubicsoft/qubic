@@ -13,7 +13,7 @@ from pysimulators import FitsArray
 import matplotlib.mlab as mlab
 import scipy.ndimage.filters as f
 
-def TimeSigPlot(time, dd):
+def TimeSigPlot(time, dd, theTES):
 	plt.figure()
 	plt.clf()
 	plt.plot(time, dd[theTES,:])

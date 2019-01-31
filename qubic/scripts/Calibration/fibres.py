@@ -19,6 +19,7 @@ from pysimulators import FitsArray
 import matplotlib.mlab as mlab
 import scipy.ndimage.filters as f
 #from Calibration.plotters import *
+from plotters import *
 
 ################################################ INPUT FILES ######################################
 
@@ -70,10 +71,11 @@ good_dets=[37, 45, 49, 70, 77, 90, 106, 109, 110]
 best_det = 37
 theTES = best_det
 ###### TOD Example #####
-TimeSigPlot(time, dd)
+TimeSigPlot(time, dd, theTES)
 
 ###### TOD Power Spectrum #####
 frange = [0.3, 15] #range of plot frequencies desired
+filt = 5
 spectrum, freq = mlab.psd(dd[theTES,:], Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
 filtered_spec = f.gaussian_filter1d(spectrum, filt)
 
@@ -83,7 +85,6 @@ FreqResp(freq, frange, filtered_spec, theTES, fff)
 #### Filtering out the signal from the PT
 freqs_pt = [1.72383, 3.24323, 3.44727, 5.69583, 6.7533, 9.64412, 12.9874]
 bw_0 = 0.005
-filt = 5
 
 notch = FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0, dd, 
 			 FREQ_SAMPLING, nsamples, freq, spectrum, filtered_spec)

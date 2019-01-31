@@ -84,74 +84,80 @@ def image_asics(data1=None, data2=None, all1=False):
 ###############################################################################
 ################################### Fitting ###################################
 ###############################################################################
-### Generic polynomial function ##########
-def thepolynomial(x,pars):
-    f=np.poly1d(pars)
+def thepolynomial(x, pars):
+	"""
+	Generic polynomial function
+	"""
+    f = np.poly1d(pars)
     return(f(x))
-  
-### Class defining the minimizer and the data
+
 class MyChi2:
-    def __init__(self,xin,yin,covarin,functname):
-        self.x=xin
-        self.y=yin
-        self.covar=covarin
-        self.invcov=np.linalg.inv(covarin)
-        self.functname=functname
+	"""
+	Class defining the minimizer and the data
+	"""
+    def __init__(self, xin, yin, covarin, functname):
+        self.x = xin
+        self.y = yin
+        self.covar = covarin
+        self.invcov = np.linalg.inv(covarin)
+        self.functname = functname
             
-    def __call__(self,*pars):
-        val=self.functname(self.x,pars)
-        chi2=np.dot(np.dot(self.y-val,self.invcov),self.y-val)
+    def __call__(self, *pars):
+        val = self.functname(self.x, pars)
+        chi2 = np.dot(np.dot(self.y-val, self.invcov), self.y-val)
         return(chi2)
         
 ### Call Minuit
-def do_minuit(x,y,covarin,guess,functname=thepolynomial, fixpars = None, chi2=None, rangepars=None, nohesse=False, force_chi2_ndf=False, verbose=True):
+def do_minuit(x, y, covarin, guess, functname=thepolynomial, 
+		fixpars=None, chi2=None, rangepars=None, nohesse=False, 
+		force_chi2_ndf=False, verbose=True):
     # check if covariance or error bars were given
-    covar=covarin
+    covar = covarin
     if np.size(np.shape(covarin)) == 1:
-        err=covarin
-        covar=np.zeros((np.size(err),np.size(err)))
-        covar[np.arange(np.size(err)),np.arange(np.size(err))]=err**2
+        err = covarin
+        covar = np.zeros((np.size(err), np.size(err)))
+        covar[np.arange(np.size(err)), np.arange(np.size(err))] = err**2
                                     
     # instantiate minimizer
     if chi2 is None:
-        chi2=MyChi2(x,y,covar,functname)
+        chi2 = MyChi2(x, y, covar, functname)
         #nohesse=False
     else:
-        nohesse=True
+        nohesse = True
     # variables
-    ndim=np.size(guess)
-    parnames=[]
-    for i in range(ndim): parnames.append('c'+np.str(i))
+    ndim = np.size(guess)
+    parnames = []
+    for i in range(ndim): parnames.append('c' + np.str(i))
     # initial guess
-    theguess=dict(zip(parnames,guess))
+    theguess = dict(zip(parnames, guess))
     # fixed parameters
     dfix = {}
     if fixpars is not None:
-        for i in xrange(len(parnames)): dfix['fix_'+parnames[i]]=fixpars[i]
+        for i in xrange(len(parnames)): dfix['fix_'+parnames[i]] = fixpars[i]
     else:
-        for i in xrange(len(parnames)): dfix['fix_'+parnames[i]]=False
+        for i in xrange(len(parnames)): dfix['fix_'+parnames[i]] = False
     # range for parameters
     drng = {}
     if rangepars is not None:
-        for i in xrange(len(parnames)): drng['limit_'+parnames[i]]=rangepars[i]
+        for i in xrange(len(parnames)): drng['limit_'+parnames[i]] = rangepars[i]
     else:
-        for i in xrange(len(parnames)): drng['limit_'+parnames[i]]=False
-    #stop
-    # Run Minuit
+        for i in xrange(len(parnames)): drng['limit_'+parnames[i]] = False
+    
+	# Run Minuit
     if verbose: print('Fitting with Minuit')
     theargs = dict(theguess.items() + dfix.items())
     if rangepars is not None: theargs.update(dict(theguess.items() + drng.items()))
-    m = iminuit.Minuit(chi2,forced_parameters=parnames,errordef=1.,**theargs)
+    m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=1., **theargs)
     m.migrad()
-    if nohesse==False:
+    if nohesse == False:
         m.hesse()
     # build np.array output
-    parfit=[]
+    parfit = []
     for i in parnames: parfit.append(m.values[i])
-    errfit=[]
+    errfit = []
     for i in parnames: errfit.append(m.errors[i])
     ndimfit = int(np.sqrt(len(m.errors)))
-    covariance=np.zeros((ndimfit,ndimfit))
+    covariance = np.zeros((ndimfit,ndimfit))
     if fixpars is not None:
         parnamesfit = []
         for i in xrange(len(parnames)):
@@ -162,7 +168,7 @@ def do_minuit(x,y,covarin,guess,functname=thepolynomial, fixpars = None, chi2=No
     if m.covariance:
         for i in xrange(ndimfit):
             for j in xrange(ndimfit):
-                covariance[i,j]=m.covariance[(parnamesfit[i],parnamesfit[j])]
+                covariance[i,j] = m.covariance[(parnamesfit[i],parnamesfit[j])]
 
     chisq = chi2(*parfit)
     ndf = np.size(x)-ndim
@@ -176,7 +182,7 @@ def do_minuit(x,y,covarin,guess,functname=thepolynomial, fixpars = None, chi2=No
         print(np.array(errfit)*np.sqrt(correct))
         print('Chi2=',chisq)
         print('ndf=',ndf)
-    return(m,np.array(parfit), np.array(errfit)*np.sqrt(correct), np.array(covariance)*correct,chi2(*parfit), ndf)
+    return(m, np.array(parfit), np.array(errfit)*np.sqrt(correct), np.array(covariance)*correct, chi2(*parfit), ndf)
 
 ###############################################################################
 ###############################################################################

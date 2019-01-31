@@ -73,8 +73,6 @@ theTES = best_det
 TimeSigPlot(time, dd)
 
 ###### TOD Power Spectrum #####
-
-#theTES=best_det
 frange = [0.3, 15]
 filt = 5
 FreqResp(best_det, frange, fff, filt, dd, FREQ_SAMPLING, nsamples)

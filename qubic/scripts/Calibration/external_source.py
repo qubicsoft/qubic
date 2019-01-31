@@ -199,11 +199,6 @@ for i in xrange(len(infos)):
 plt.tight_layout()
 
 
-clf()
-cols = ['r', 'g', 'b', 'k']
-for i in xrange(len(infos)):
-    plot(img_amp[okfinal1,i], color=cols[i])
-
 freqs = np.array([infos[i]['fnum'] for i in xrange(len(infos))])
 ampsok = img_amp[okfinal1,:]
 av_shape = np.zeros(len(infos))

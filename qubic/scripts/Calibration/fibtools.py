@@ -12,6 +12,14 @@ import math
 import matplotlib.pyplot as plt
 from pysimulators import FitsArray
 
+def isfloat(s):
+    try:
+        a=float(s)
+        return True
+    except ValueError:
+        pass
+        return False
+
 
 def statstr(x,divide=False, median=False, cut=None):
 	if median:
@@ -30,11 +38,11 @@ def statstr(x,divide=False, median=False, cut=None):
 
 
 
-def image_asics(data1=None, data2=None, all1=False):
-	if all1:
-		nn = len(data1)/2
-		data2 = data1[nn:]
-		data1 = data1[0:nn]
+def image_asics(data1=None, data2=None, all1=None):
+	if all1 is not None:
+		nn = len(all1)/2
+		data2 = all1[nn:]
+		data1 = all1[0:nn]
 	if data1 is not None:
 		a1 = qp()
 		a1.assign_asic(1)
@@ -49,7 +57,6 @@ def image_asics(data1=None, data2=None, all1=False):
 		a2.pix_grid[0,14] = 1003
 		a2.pix_grid[0,13] = 1002
 		a2.pix_grid[0,12] = 1001
-
 	nrows = 17
 	ncols = 17
 	img = np.zeros((nrows,ncols))+np.nan
@@ -137,8 +144,6 @@ def do_minuit(x,y,covarin,guess,functname=thepolynomial, fixpars = None, chi2=No
     for i in parnames: parfit.append(m.values[i])
     errfit=[]
     for i in parnames: errfit.append(m.errors[i])
-    ndimfit = int(np.sqrt(len(m.errors)))
-    covariance=np.zeros((ndimfit,ndimfit))
     if fixpars is not None:
         parnamesfit = []
         for i in xrange(len(parnames)):
@@ -146,6 +151,8 @@ def do_minuit(x,y,covarin,guess,functname=thepolynomial, fixpars = None, chi2=No
             if fixpars[i] == True: errfit[i]=0
     else:
         parnamesfit = parnames
+    ndimfit = len(parnamesfit)#int(np.sqrt(len(m.errors)))
+    covariance=np.zeros((ndimfit,ndimfit))
     if m.covariance:
         for i in xrange(ndimfit):
             for j in xrange(ndimfit):
@@ -345,7 +352,7 @@ def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None):
 
 
 def fit_average(t, folded, fff, dc, fib, Vtes, 
-						initpars=[0.3, 0.06, 0.1, 0.6], 
+						initpars=None, 
 						fixpars = [0,0,0,0],
 						doplot=True, functname=simsig, clear=True,name='fib'):
 	sh = np.shape(folded)
@@ -353,6 +360,16 @@ def fit_average(t, folded, fff, dc, fib, Vtes,
 	nbins = sh[1]
 	####### Average folded data
 	av = np.median(np.nan_to_num(folded),axis=0)
+
+	if initpars is None:
+		#derivatives = np.gradient(av)
+		#src_on = np.min()
+		# try to detect the start time
+		bla = do_minuit(t, av, np.ones(len(t)), [dc, 0.1, 1./fff/2, 1.], functname=functname, 
+		rangepars=[[0.,1.], [0., 1], [0.,1./fff], [0., 2.]], 
+		fixpars=[1,1,0,1], 
+		force_chi2_ndf=True, verbose=False, nohesse=True)
+		initpars = [dc, 0.1, bla[1][2], 1.]
 
 	####### Fit
 	bla = do_minuit(t, av, np.ones(len(t)), initpars, functname=functname, 
@@ -402,7 +419,7 @@ def fit_all(t, folded, av, fff, dc, fib, Vtes,
 		#### First a fit with no error correction in order to have a chi2 distribution
 		theres = do_minuit(t, thedd, np.ones(len(t)), initpars, functname=functname,
 			fixpars = fixpars, 
-			rangepars=[[0.,1.], [0., 10], [0.,1/fff], [0., 100]], 
+			rangepars=[[0.,1.], [0., 10], [0.,1/fff], [0., 10000]], 
 			force_chi2_ndf=True, verbose=False, nohesse=True)
 		chi2 = theres[4]
 		ndf = theres[5]
@@ -431,7 +448,7 @@ def fit_all(t, folded, av, fff, dc, fib, Vtes,
 			#invert to check if TES okay, 
 			#thedd refers to the indexed TES in loop
 			if (bla == 'i'):
-				plt.clf()
+				#plt.clf()
 				plt.plot(t, thedd*(-1.0), color='olive')
 				plt.show()
 				ibla = raw_input("Press [y] if INVERTED fit OK, otherwise anykey")
@@ -445,7 +462,7 @@ def fit_all(t, folded, av, fff, dc, fib, Vtes,
 
 
 def run_asic(idnum, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=0.5, highcut=15., nbins=50, nointeractive=False, doplot=True, notch=None, lastpassallfree=False, name='fib', okfile=None, initpars=None,
-timerange=None):
+timerange=None, removesat=False):
 	fib = idnum
 	### Read data
 	FREQ_SAMPLING = (2e6/128/100)    
@@ -473,8 +490,9 @@ timerange=None):
 		print('')
 		print('FIRST PASS')
 		print('First Pass is only to have a good guess of the t0, your selection should be very conservative - only high S/N')
-		if initpars == None:
-			initpars = [dc, 0.06, 0., 0.6]
+		# if initpars == Noy
+		# ne:
+		# 	initpars = [dc, 0.06, 0., 0.6]
 		av, params, err = fit_average(tt, folded, fff, dc, 
 				fib, Vtes, 
 				initpars = initpars,
@@ -494,7 +512,7 @@ timerange=None):
 		print('Second pass is the final one, please select the pixels that seem OK')
 		av, params, err = fit_average(tt, folded[ok,:], fff, dc, 
 				fib, Vtes, 
-				initpars = [dc, 0.1, 0., 1.],
+				initpars = initpars,
 				fixpars = [0,0,0,0],
 				doplot=True, name=name)
 
@@ -521,12 +539,16 @@ timerange=None):
 		else:
 			FitsArray(okfinal.astype(int)).save(okfile)
 	else:
-		if initpars == None:
-			initpars = [dc, 0.06, 0., 0.6]
+		# if initpars == None:
+		# 	initpars = [dc, 0.06, 0., 0.6]
 		if okfile==None:
 			okfinal=np.array(FitsArray('TES-OK-{}{}-asic{}.fits'.format(name, fib,asic))).astype(bool)
 		else:
 			okfinal = np.array(FitsArray(okfile)).astype(bool)
+		if removesat:
+			#### remove pixels looking saturated
+			saturated = (np.min(folded_nonorm, axis=1) < removesat)
+			okfinal = (okfinal * ~saturated).astype(bool)
 
 	if doplot==False:
 		### Now redo the fits one last time

@@ -36,39 +36,62 @@ subdirs = np.array(subdirs)[order]
 ### Analyse one to define the list of pixok
 name = 'ExtSrc'
 fnum = 150
-asic1 = as1[0]
 fff = 0.333
 dc = 0.33
 
-tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum, 0, fff, 
-        dc, asic1, 1, name,
+#### Saturation value: 2.235174179076e-08
+
+tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum,
+        0, fff, 
+        dc, as1[0], 1, name=name,
         initpars=None, lowcut=0.05, highcut=15., 
-        okfile='ScanAz2019-01-30_OK_Asic1.fits')
+        reselect_ok=False, okfile='ScanAz2019-01-30_OK_Asic1.fits')
+
+tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum,
+        0, fff, 
+        dc, as2[0], 2, name=name,
+        initpars=None, lowcut=0.05, highcut=15., 
+        reselect_ok=False,
+        okfile='ScanAz2019-01-30_OK_Asic2.fits')
 
 #### Now loop on asic1
-amps = np.zeros((128,len(az)))
-taus = np.zeros((128,len(az)))
-erramps = np.zeros((128,len(az)))
-errtaus = np.zeros((128,len(az)))
+amps = np.zeros((256,len(az)))
+taus = np.zeros((256,len(az)))
+erramps = np.zeros((256,len(az)))
+errtaus = np.zeros((256,len(az)))
 for i in xrange(len(as1)):
     asic = as1[i]
     tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum, 0, fff, 
         dc, asic, 1, name,
         initpars=None, lowcut=0.05, highcut=15., okfile='ScanAz2019-01-30_OK_Asic1.fits')
-    amps[:,i] = params[:,3]
-    erramps[:,i] = err[:,3]
-    taus[:,i] = params[:,1]
-    errtaus[:,i] = err[:,1]
+    amps[:128,i] = params[:,3]
+    erramps[:128,i] = err[:,3]
+    taus[:128,i] = params[:,1]
+    errtaus[:128,i] = err[:,1]
+
+    asic = as2[i]
+    tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum, 0, fff, 
+        dc, asic, 2, name,
+        initpars=None, lowcut=0.05, highcut=15., okfile='ScanAz2019-01-30_OK_Asic2.fits')
+    amps[128:,i] = params[:,3]
+    erramps[128:,i] = err[:,3]
+    taus[128:,i] = params[:,1]
+    errtaus[128:,i] = err[:,1]
+
+
+cutval = 200
 
 allimg = np.zeros((len(as1),17,17))
 for i in xrange(len(as1)):
-    allimg[i,:,:] = ft.image_asics(data1=amps[:,i])
+    allimg[i,:,:] = ft.image_asics(all1=amps[:,i])
+    bad = allimg[i,:,:] > cutval
+    allimg[i,:,:][bad] = np.nan
     clf()
-    imshow(allimg[i,:,:]/allimg[0,:,:],vmin=0,vmax=5)
+    imshow(allimg[i,:,:],vmin=0,vmax=200)
     colorbar()
-    title(az[i])
+    title('$\Delta$az={}'.format(az[i]))
     show()
-    savefig('imgscan_az_{}.png'.format(az[i]))
+    savefig('imgscan_az_{}.png'.format(1000+az[i]))
     raw_input('Press a key')
 
 thepix = 93

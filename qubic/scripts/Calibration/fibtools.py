@@ -245,24 +245,34 @@ def exponential_filter1d(input, sigma, axis=-1, output=None,
 
 
 def qs2array(file, FREQ_SAMPLING, timerange=None):
+	"""
+	Loads qubic instance to create 'dd' which is TOD for each TES
+	Also normalises raw data
+	Also returns 'time' which is linear time array
+	Can also specify a timerange
+	"""
 	a = qp()
 	a.read_fits(file)
 	npix = a.NPIXELS
 	nsamples = len(a.timeline(TES=1))
 	dd = np.zeros((npix, nsamples))
+	##### Normalisation en courant
+	Rfb=100e3
+	NbSamplesPerSum = 64.
+	gain=1./2.**7*20./2.**16/(NbSamplesPerSum*Rfb)
+	
 	for i in xrange(npix):
 		dd[i,:] = a.timeline(TES=i+1)
-		##### Normalisation en courant
-		Rfb=100e3
-		NbSamplesPerSum = 64.
-		gain=1./2.**7*20./2.**16/(NbSamplesPerSum*Rfb)
 		dd[i,:] = gain * dd[i,:]
+		
 	time = np.arange(nsamples)/FREQ_SAMPLING
+	
 	if timerange is not None:
 		print('Selecting time range: {} to {} sec'.format(timerange[0], timerange[1]))
 		oktime = (time >= timerange[0]) & (time <= timerange[1])
 		time = time[oktime]
 		dd = dd[:,oktime]
+		
 	return time, dd, a
 
 

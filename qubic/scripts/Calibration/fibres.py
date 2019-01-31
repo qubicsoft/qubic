@@ -75,14 +75,17 @@ TimeSigPlot(time, dd)
 ###### TOD Power Spectrum #####
 frange = [0.3, 15]
 filt = 5
-FreqResp(best_det, frange, fff, filt, dd, FREQ_SAMPLING, nsamples)
+spectrum, freq = mlab.psd(dd[theTES,:], Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
+filtered_spec = f.gaussian_filter1d(spectrum, filt)
+
+FreqResp(freq, frange, filtered_spec, theTES, fff)
 
 ###NEW PLOT WITH FILTERED OVERPLOT
 #### Filtering out the signal from the PT
 freqs_pt = [1.72383, 3.24323, 3.44727, 5.69583, 6.7533, 9.64412, 12.9874]
 bw_0 = 0.005
-spectrum, freq = mlab.psd(dd[theTES,:], Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
-filtered_spec = f.gaussian_filter1d(spectrum, filt)
+
+
 notch = FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0, dd, 
 			 FREQ_SAMPLING, nsamples, freq, spectrum, filtered_spec)
 

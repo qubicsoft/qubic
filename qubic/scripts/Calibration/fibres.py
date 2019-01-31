@@ -1,27 +1,40 @@
+"""
+File first written by JCH and modified by JM & LM
+
+This file is mainly used to analyse calibration data
+fibres.py loads the raw ASIC .fits data
+takes revevant signal info such as;
+fibre #, TES voltage, fff=signal timing, dc=duty cycle
+
+fibres calls analysis tools and functions from fibtools.py
+fibres calls plots from plotters.py
+fibtools will also have some useful functions for generic use in qubicsoft
+"""
+
 import numpy as np
-from Calibration import fibtools as ft
+#from Calibration import fibtools as ft
+import fibtools as ft
 import matplotlib.pyplot as plt
 from pysimulators import FitsArray
 import matplotlib.mlab as mlab
 import scipy.ndimage.filters as f
-from Calibration.plotters import *
-
-
+#from Calibration.plotters import *
+from plotters import *
 
 ################################################ INPUT FILES ######################################
 
-#basedir = '/home/louisemousset/QUBIC/Qubic_work/Calibration/'
+basedir = '/home/louisemousset/QUBIC/Qubic_work/Calibration/'
 #basedir = '/home/james/fibdata/'
-basedir = '/Users/hamilton/CMB/Qubic/Fibres/'
+#basedir = '/Users/hamilton/CMB/Qubic/Fibres/'
 
 ##### Fiber_2 Fiber@1V; Freq=1Hz; DutyCycle=30%; Voffset_TES=3V
 fib = 2
 Vtes = 3.
 fff = 1.
 dc = 0.3
+
 asic1 = basedir + '/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic1-2018.12.20.172722.fits'
 asic2 = basedir + '/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
-
 
 ##### Fiber 3: Fiber@1V; Freq=1.5Hz; DutyCycle=50%; Voffset_TES=3V
 # fib = 3
@@ -40,8 +53,6 @@ asic2 = basedir + '/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2
 # asic2 = basedir + '/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
 ############################################################################
 
-
-
 ############################# Reading files Example ########################
 asic = 1
 reselect_ok = True
@@ -58,34 +69,25 @@ ndet, nsamples = np.shape(dd)
 #### Selection of detectors for which the signal is obvious
 good_dets=[37, 45, 49, 70, 77, 90, 106, 109, 110]
 best_det = 37
-
-###### TOD Example #####
 theTES = best_det
-plt.clf()
-plt.plot(time, dd[theTES,:])
-plt.xlabel('Time [s]')
-plt.ylabel('Current [nA]')
-
+###### TOD Example #####
+TimeSigPlot(time, dd, theTES)
 
 ###### TOD Power Spectrum #####
-
-#theTES=best_det
-frange = [0.3, 15]
+frange = [0.3, 15] #range of plot frequencies desired
 filt = 5
-FreqResp(best_det, frange, fff, filt, dd, FREQ_SAMPLING, nsamples)
+spectrum, freq = mlab.psd(dd[theTES,:], Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
+filtered_spec = f.gaussian_filter1d(spectrum, filt)
+
+FreqResp(freq, frange, filtered_spec, theTES, fff)
 
 ###NEW PLOT WITH FILTERED OVERPLOT
 #### Filtering out the signal from the PT
 freqs_pt = [1.72383, 3.24323, 3.44727, 5.69583, 6.7533, 9.64412, 12.9874]
 bw_0 = 0.005
-spectrum, freq = mlab.psd(dd[theTES,:], Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
-filtered_spec = f.gaussian_filter1d(spectrum, filt)
+
 notch = FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0, dd, 
 			 FREQ_SAMPLING, nsamples, freq, spectrum, filtered_spec)
-
-############################################################################
-
-
 
 ############################################################################
 ### Fold the data at the modulation period of the fibers
@@ -96,12 +98,15 @@ theTES=45
 lowcut = 0.5
 highcut = 15
 nbins=50
+#trying to make fibres so that dd can be deleted
 folded, tt, folded_nonorm = ft.fold_data(time, dd, 1./fff, lowcut, highcut, nbins)
 
 folded_notch, tt, folded_notch_nonorm = ft.fold_data(time, dd, 1./fff, lowcut, highcut, nbins,
 	notch = notch)
 
+#set values for fold plot
 pars = [dc, 0.05, 0., 1.2]
+theTES=45
 #plot folded TES data
 FoldedFiltTES(tt, pars, theTES, folded, folded_notch)
 
@@ -140,9 +145,8 @@ FoldedTESFreeFit(tt, bla, theTES, folded)
 ##################################################
 #### Asic 1
 #run ASIC analysis code
-tt, folded1, okfinal1, allparams1, allerr1, allchi21, ndf1 = ft.run_asic(fib, Vtes, fff, dc, 
-	asic1, 1, reselect_ok=True, lowcut=0.5, highcut=15., nbins=50, 
-	nointeractive=False, doplot=True, notch=notch)
+tt, folded1, okfinal1, allparams1, allerr1, allchi21, ndf1 = ft.run_asic(folded, tt, folded_nonorm, fib, Vtes, fff, dc, 
+	asic1, 1, reselect_ok=True, notch=notch)
 #run ASIC plotter
 
 

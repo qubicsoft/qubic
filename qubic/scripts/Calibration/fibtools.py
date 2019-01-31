@@ -88,25 +88,25 @@ def thepolynomial(x, pars):
 	"""
 	Generic polynomial function
 	"""
-    f = np.poly1d(pars)
-    return(f(x))
-
+	f = np.poly1d(pars)
+	return(f(x))
+	
 class MyChi2:
 	"""
 	Class defining the minimizer and the data
-	"""
-    def __init__(self, xin, yin, covarin, functname):
-        self.x = xin
-        self.y = yin
-        self.covar = covarin
-        self.invcov = np.linalg.inv(covarin)
-        self.functname = functname
-            
-    def __call__(self, *pars):
-        val = self.functname(self.x, pars)
-        chi2 = np.dot(np.dot(self.y-val, self.invcov), self.y-val)
-        return(chi2)
-        
+	"""	
+	def __init__(self, xin, yin, covarin, functname):
+		self.x = xin
+		self.y = yin
+		self.covar = covarin
+		self.invcov = np.linalg.inv(covarin)
+		self.functname = functname
+			
+	def __call__(self, *pars):
+		val = self.functname(self.x, pars)
+		chi2 = np.dot(np.dot(self.y-val, self.invcov), self.y-val)
+		return(chi2)
+		
 ### Call Minuit
 def do_minuit(x, y, covarin, guess, functname=thepolynomial, 
 		fixpars=None, chi2=None, rangepars=None, nohesse=False, 
@@ -474,8 +474,10 @@ def fit_all(t, folded, av, fff, dc, fib, Vtes,
 	return allparams, allerr, allchi2, ndf,ok
 
 
-def run_asic(folded, tt, folded_nonorm, idnum, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=0.5, highcut=15., nbins=50, nointeractive=False, doplot=True, notch=None, lastpassallfree=False, name='fib', okfile=None, initpars=None,
-timerange=None):
+def run_asic(folded, tt, folded_nonorm, idnum, Vtes, fff, dc, 
+theasicfile, asic, reselect_ok=False, lowcut=0.5, highcut=15., 
+nbins=50, nointeractive=False, doplot=True, notch=None, lastpassallfree=False, 
+name='fib', okfile=None, initpars=None, timerange=None):
 	fib = idnum
 	### Read data
 	#GOING TO TEST PASSING IN THESE VARS
@@ -488,7 +490,7 @@ timerange=None):
 	#folded, tt, folded_nonorm = fold_data(time, dd, 1./fff, lowcut, highcut, nbins, notch=notch)
 
 	if nointeractive==True:
-		releselct_ok=False
+		reselect_ok=False
 		answer = 'n'
 	else:
 		if reselect_ok==True:
@@ -498,7 +500,7 @@ timerange=None):
 			answer='n'
 
 	if answer=='y':
-		print('Now going to reselct the OK TES and overwrite the corresponding file')
+		print('Now going to reselect the OK TES and overwrite the corresponding file')
 		#### Pass 1 - allows to obtain good values for t0 basically
 		#### Now perform the fit on the median folded data
 		print('')

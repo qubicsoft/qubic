@@ -9,20 +9,23 @@ from scipy.ndimage.filters import correlate1d
 import time
 import iminuit
 import math
-#from matplotlib.pyplot import *
 import matplotlib.pyplot as plt
 from pysimulators import FitsArray
 
-#blbljdj test
 
-def statstr(x,divide=False, median=False):
+def statstr(x,divide=False, median=False, cut=None):
 	if median:
 		m = np.median(x[np.isfinite(x)])
+		nn = len(x[np.isfinite(x)])
+		s = np.std(x[np.isfinite(x)])
+	elif cut is not None:
+		m, s = meancut(x[np.isfinite(x)], cut)
 	else:
 		m = np.mean(x[np.isfinite(x)])
-	s = np.std(x[np.isfinite(x)])
+		nn = len(x[np.isfinite(x)])
+		s = np.std(x[np.isfinite(x)])
 	if divide==True:
-		s /= len(x[np.isfinite(x)])
+		s /= nn
 	return '{0:6.2f} +/- {1:6.2f}'.format(m,s)
 
 
@@ -241,7 +244,7 @@ def exponential_filter1d(input, sigma, axis=-1, output=None,
     return correlate1d(input, weights, axis, output, mode, cval, 0)
 
 
-def qs2array(file, FREQ_SAMPLING):
+def qs2array(file, FREQ_SAMPLING, timerange=None):
 	a = qp()
 	a.read_fits(file)
 	npix = a.NPIXELS
@@ -255,6 +258,11 @@ def qs2array(file, FREQ_SAMPLING):
 		gain=1./2.**7*20./2.**16/(NbSamplesPerSum*Rfb)
 		dd[i,:] = gain * dd[i,:]
 	time = np.arange(nsamples)/FREQ_SAMPLING
+	if timerange is not None:
+		print('Selecting time range: {} to {} sec'.format(timerange[0], timerange[1]))
+		oktime = (time >= timerange[0]) & (time <= timerange[1])
+		time = time[oktime]
+		dd = dd[:,oktime]
 	return time, dd, a
 
 
@@ -279,7 +287,7 @@ def notch_filter(data, f0, bw, fs):
 
 def meancut(data, nsig):
 	dd, mini, maxi = scipy.stats.sigmaclip(data, low=nsig, high=nsig)
-	return np.mean(dd)
+	return np.mean(dd), np.std(dd)
 
 
 
@@ -339,7 +347,7 @@ def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None):
 def fit_average(t, folded, fff, dc, fib, Vtes, 
 						initpars=[0.3, 0.06, 0.1, 0.6], 
 						fixpars = [0,0,0,0],
-						doplot=True, functname=simsig, clear=True):
+						doplot=True, functname=simsig, clear=True,name='fib'):
 	sh = np.shape(folded)
 	npix = sh[0]
 	nbins = sh[1]
@@ -348,7 +356,7 @@ def fit_average(t, folded, fff, dc, fib, Vtes,
 
 	####### Fit
 	bla = do_minuit(t, av, np.ones(len(t)), initpars, functname=functname, 
-		rangepars=[[0.,1.], [0., 1], [0.,1], [0., 1]], fixpars=fixpars, 
+		rangepars=[[0.,1.], [0., 10], [0.,1./fff], [0., 2.]], fixpars=fixpars, 
 		force_chi2_ndf=True, verbose=False, nohesse=True)
 	params_av = bla[1]
 	err_av = bla[2]
@@ -363,10 +371,10 @@ def fit_average(t, folded, fff, dc, fib, Vtes,
 		plt.plot(t, functname(t, bla[1]), 'r--',lw=4, 
 			label='Fitted average of {8:} pixels \n cycle={0:8.3f}+/-{1:8.3f} \n tau = {2:8.3f}+/-{3:8.3f}s \n t0 = {4:8.3f}+/-{5:8.3f}s \n amp = {6:8.3f}+/-{7:8.3f}'.format(params_av[0], 
 				err_av[0], params_av[1], err_av[1], params_av[2], err_av[2], params_av[3], err_av[3],npix))
-		plt.legend(fontsize=7,frameon=False, loc='lower right')
+		plt.legend(fontsize=7,frameon=False, loc='lower left')
 		plt.xlabel('Time(sec)')
 		plt.ylabel('Stacked')
-		plt.title('Fiber {}: Freq_Fiber={}Hz - Cycle={}% - Vtes={}V'.format(fib,fff,dc*100,Vtes))
+		plt.title('{} {}: Freq_Mod={}Hz - Cycle={}% - Vtes={}V'.format(name, fib,fff,dc*100,Vtes))
 		plt.show()
 		time.sleep(0.1)
 	return(av, params_av, err_av)
@@ -394,7 +402,7 @@ def fit_all(t, folded, av, fff, dc, fib, Vtes,
 		#### First a fit with no error correction in order to have a chi2 distribution
 		theres = do_minuit(t, thedd, np.ones(len(t)), initpars, functname=functname,
 			fixpars = fixpars, 
-			rangepars=[[0.,1.], [0., 10], [0.,1], [0., 1]], 
+			rangepars=[[0.,1.], [0., 10], [0.,1/fff], [0., 100]], 
 			force_chi2_ndf=True, verbose=False, nohesse=True)
 		chi2 = theres[4]
 		ndf = theres[5]
@@ -403,11 +411,8 @@ def fit_all(t, folded, av, fff, dc, fib, Vtes,
 		allparams[i,:] = params
 		allerr[i,:] = err
 		allchi2[i] = theres[4]
-		
-		#initialise plot figure
-		
 		if stop_each:
-			plt.clf() # was clf
+			plt.clf()
 			plt.plot(t, thedd, color='k')
 			plt.plot(t,av,color='b',lw=4, alpha=0.2, label='Median')
 			plt.plot(t,	functname(t, theres[1]), 'r--', lw=4, 
@@ -423,7 +428,6 @@ def fit_all(t, folded, av, fff, dc, fib, Vtes,
 			bla=raw_input("Press [y] if fit OK, [i] to invert, other key otherwise...")
 			if (bla=='y'):
 				ok[i]=True
-				
 			#invert to check if TES okay, 
 			#thedd refers to the indexed TES in loop
 			if (bla == 'i'):
@@ -437,14 +441,15 @@ def fit_all(t, folded, av, fff, dc, fib, Vtes,
 					folded[i,:] = thedd * -1.0
 					
 			print(ok[i])
-			
 	return allparams, allerr, allchi2, ndf,ok
 
 
-def run_asic(fib, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=0.5, highcut=15., nbins=50, nointeractive=False, doplot=True, notch=None, lastpassallfree=False):
+def run_asic(idnum, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=0.5, highcut=15., nbins=50, nointeractive=False, doplot=True, notch=None, lastpassallfree=False, name='fib', okfile=None, initpars=None,
+timerange=None):
+	fib = idnum
 	### Read data
 	FREQ_SAMPLING = (2e6/128/100)    
-	time, dd, a = qs2array(theasicfile, FREQ_SAMPLING)
+	time, dd, a = qs2array(theasicfile, FREQ_SAMPLING, timerange=timerange)
 	ndet, nsamples = np.shape(dd)
 
 	### Fold the data at the modulation period of the fibers
@@ -468,11 +473,13 @@ def run_asic(fib, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=0.
 		print('')
 		print('FIRST PASS')
 		print('First Pass is only to have a good guess of the t0, your selection should be very conservative - only high S/N')
+		if initpars == None:
+			initpars = [dc, 0.06, 0., 0.6]
 		av, params, err = fit_average(tt, folded, fff, dc, 
 				fib, Vtes, 
-				initpars = [dc, 0.06, 0., 0.6],
+				initpars = initpars,
 				fixpars = [0,0,0,0],
-				doplot=True)
+				doplot=True, name=name)
 
 		#### And the fit on all data with this as a first guess forcing some parameters - it returns the list of OK detectorsy
 		allparams, allerr, allchi2, ndf, ok = fit_all(tt, folded, av, fff, dc, fib, Vtes, 
@@ -489,7 +496,7 @@ def run_asic(fib, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=0.
 				fib, Vtes, 
 				initpars = [dc, 0.1, 0., 1.],
 				fixpars = [0,0,0,0],
-				doplot=True)
+				doplot=True, name=name)
 
 		#### And the fit on all data with this as a first guess forcing some parameters - it returns the list of OK detectors
 		allparams, allerr, allchi2, ndf, ok = fit_all(tt, folded, av, fff, dc, fib, Vtes, 
@@ -509,17 +516,25 @@ def run_asic(fib, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=0.
 		### Make sure no thermometer is included
 		okfinal[[3, 35, 67, 99]] = False
 		# Save the list of OK bolometers
-		FitsArray(okfinal.astype(int)).save('TES-OK-fib{}-asic{}.fits'.format(fib,asic))
+		if okfile==None:
+			FitsArray(okfinal.astype(int)).save('TES-OK-{}{}-asic{}.fits'.format(name,fib,asic))
+		else:
+			FitsArray(okfinal.astype(int)).save(okfile)
 	else:
-		okfinal=np.array(FitsArray('TES-OK-fib{}-asic{}.fits'.format(fib,asic))).astype(bool)
+		if initpars == None:
+			initpars = [dc, 0.06, 0., 0.6]
+		if okfile==None:
+			okfinal=np.array(FitsArray('TES-OK-{}{}-asic{}.fits'.format(name, fib,asic))).astype(bool)
+		else:
+			okfinal = np.array(FitsArray(okfile)).astype(bool)
 
 	if doplot==False:
 		### Now redo the fits one last time
 		av, params, err = fit_average(tt, folded[okfinal,:], fff, dc, 
 				fib, Vtes, 
-				initpars = [dc, 0.1, 0., 1.],
+				initpars = initpars,
 				fixpars = [0,0,0,0],
-				doplot=False,clear=False)
+				doplot=False,clear=False, name=name)
 
 		allparams, allerr, allchi2, ndf, ok_useless = fit_all(tt, folded_nonorm*1e9, 
 				av, fff, dc, fib, Vtes, 
@@ -531,10 +546,11 @@ def run_asic(fib, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=0.
 		### Now redo the fits one last time
 		av, params, err = fit_average(tt, folded[okfinal,:], fff, dc, 
 				fib, Vtes, 
-				initpars = [dc, 0.1, 0., 1.],
+				initpars = initpars,
 				fixpars = [0,0,0,0],
-				doplot=True,clear=False)
-
+				doplot=True,clear=False, name=name)
+		print(params)
+		print(err)
 		if lastpassallfree:
 			fixed = [0, 0, 0, 0]
 		else: 
@@ -545,12 +561,14 @@ def run_asic(fib, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=0.
 				fixpars = fixed, functname=simsig_nonorm)
 
 		plt.subplot(3,2,3)
-		plt.hist(allparams[okfinal,1],range=[0,1],bins=30,label=statstr(allparams[okfinal,1]))
+		mmt, sst = meancut(allparams[okfinal,1], 3)
+		plt.hist(allparams[okfinal,1],range=[0,mmt+4*sst],bins=10,label=statstr(allparams[okfinal,1], cut=3))
 		plt.xlabel('Tau [sec]')
 		plt.legend()
-		plt.title('Asic {} - Fib {}'.format(asic, fib))
+		plt.title('Asic {} - {} {}'.format(name, asic, fib))
 		plt.subplot(3,2,4)
-		plt.hist(allparams[okfinal,3],range=[0,1],bins=30, label=statstr(allparams[okfinal,3]))
+		mma, ssa = meancut(allparams[okfinal,3], 3)
+		plt.hist(allparams[okfinal,3],range=[0,mma+4*ssa],bins=10, label=statstr(allparams[okfinal,3],cut=3))
 		plt.legend()
 		plt.xlabel('Amp [nA]')
 
@@ -573,14 +591,14 @@ def run_asic(fib, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=0.
 
 		plt.subplot(3,2,5)
 		imtau = image_asics(data1=tau1, data2=tau2)	
-		plt.imshow(imtau,vmin=0,vmax=0.5, interpolation='nearest')
-		plt.title('Tau - Fiber {} - asic {}'.format(fib,asic))
+		plt.imshow(imtau,vmin=0,vmax=mmt+4*sst)
+		plt.title('Tau - {} {} - asic {}'.format(name,fib,asic))
 		plt.colorbar()
 		plt.subplot(3,2,6)
 		imamp = image_asics(data1=amp1, data2=amp2)	
-		plt.imshow(imamp,vmin=0,vmax=1, interpolation='nearest')
+		plt.imshow(imamp,vmin=0,vmax=mma+6*ssa)
 		plt.colorbar()
-		plt.title('Amp - Fiber {} - asic {}'.format(fib, asic))
+		plt.title('Amp - {} {} - asic {}'.format(name,fib, asic))
 		plt.tight_layout()
 		
 

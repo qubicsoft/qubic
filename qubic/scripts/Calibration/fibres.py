@@ -1,25 +1,26 @@
 import numpy as np
-import fibtools as ft
+from Calibration import fibtools as ft
 import matplotlib.pyplot as plt
 from pysimulators import FitsArray
 import matplotlib.mlab as mlab
 import scipy.ndimage.filters as f
-from plotters import *
+from Calibration.plotters import *
 
 
 
 ################################################ INPUT FILES ######################################
+
+#basedir = '/home/louisemousset/QUBIC/Qubic_work/Calibration/'
+#basedir = '/home/james/fibdata/'
+basedir = '/Users/hamilton/CMB/Qubic/Fibres/'
 
 ##### Fiber_2 Fiber@1V; Freq=1Hz; DutyCycle=30%; Voffset_TES=3V
 fib = 2
 Vtes = 3.
 fff = 1.
 dc = 0.3
-asic1 = '/home/louisemousset/QUBIC/Qubic_work/Calibration/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic1-2018.12.20.172722.fits'
-asic2 = '/home/louisemousset/QUBIC/Qubic_work/Calibration/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
-
-# asic1 = '/home/james/fibdata/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic1-2018.12.20.172722.fits'
-# asic2 = '/home/james/fibdata/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
+asic1 = basedir + '/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic1-2018.12.20.172722.fits'
+asic2 = basedir + '/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
 
 
 ##### Fiber 3: Fiber@1V; Freq=1.5Hz; DutyCycle=50%; Voffset_TES=3V
@@ -27,16 +28,16 @@ asic2 = '/home/louisemousset/QUBIC/Qubic_work/Calibration/2018-12-20/2018-12-20_
 # Vtes = 3.
 # fff = 1.5
 # dc = 0.5
-# asic1 = '/Users/hamilton/Qubic/Fibres/2018-12-20/2018-12-20_17.52.08__Fiber_3/Sums/science-asic1-2018.12.20.175208.fits'
-# asic2 = '/Users/hamilton/Qubic/Fibres/2018-12-20/2018-12-20_17.52.08__Fiber_3/Sums/science-asic2-2018.12.20.175208.fits'
+# asic1 = basedir +  '/2018-12-20/2018-12-20_17.52.08__Fiber_3/Sums/science-asic1-2018.12.20.175208.fits'
+# asic2 = basedir + '/2018-12-20/2018-12-20_17.52.08__Fiber_3/Sums/science-asic2-2018.12.20.175208.fits'
 
 # ##### Fiber 4: Fiber@1V; Freq=1Hz; DutyCycle=50%; Voffset_TES=2.6V
 # fib = 4
 # Vtes = 2.6
 # fff = 1.
 # dc = 0.5
-# asic1 = '/home/louisemousset/QUBIC/Qubic_work/Calibration/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic1-2018.12.20.172722.fits'
-# asic2 = '/home/louisemousset/QUBIC/Qubic_work/Calibration/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
+# asic1 = basedir +  '/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic1-2018.12.20.172722.fits'
+# asic2 = basedir + '/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
 ############################################################################
 
 

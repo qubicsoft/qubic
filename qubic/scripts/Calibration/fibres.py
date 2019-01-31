@@ -23,8 +23,8 @@ from plotters import *
 
 ################################################ INPUT FILES ######################################
 
-#basedir = '/home/louisemousset/QUBIC/Qubic_work/Calibration/'
-basedir = '/home/james/fibdata/'
+basedir = '/home/louisemousset/QUBIC/Qubic_work/Calibration/'
+#basedir = '/home/james/fibdata/'
 #basedir = '/Users/hamilton/CMB/Qubic/Fibres/'
 
 ##### Fiber_2 Fiber@1V; Freq=1Hz; DutyCycle=30%; Voffset_TES=3V
@@ -146,8 +146,7 @@ FoldedTESFreeFit(tt, bla, theTES, folded)
 #### Asic 1
 #run ASIC analysis code
 tt, folded1, okfinal1, allparams1, allerr1, allchi21, ndf1 = ft.run_asic(folded, tt, folded_nonorm, fib, Vtes, fff, dc, 
-	asic1, 1, reselect_ok=False, lowcut=0.5, highcut=15., nbins=50, 
-	nointeractive=False, doplot=True, notch=notch)
+	asic1, 1, reselect_ok=True, notch=notch)
 #run ASIC plotter
 
 

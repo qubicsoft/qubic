@@ -15,11 +15,11 @@ fib = 2
 Vtes = 3.
 fff = 1.
 dc = 0.3
-asic1 = '/home/louisemousset/QUBIC/Qubic_work/Calibration/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic1-2018.12.20.172722.fits'
-asic2 = '/home/louisemousset/QUBIC/Qubic_work/Calibration/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
+#asic1 = '/home/louisemousset/QUBIC/Qubic_work/Calibration/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic1-2018.12.20.172722.fits'
+#asic2 = '/home/louisemousset/QUBIC/Qubic_work/Calibration/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
 
-# asic1 = '/home/james/fibdata/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic1-2018.12.20.172722.fits'
-# asic2 = '/home/james/fibdata/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
+asic1 = '/home/james/fibdata/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic1-2018.12.20.172722.fits'
+asic2 = '/home/james/fibdata/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
 
 
 ##### Fiber 3: Fiber@1V; Freq=1.5Hz; DutyCycle=50%; Voffset_TES=3V
@@ -95,6 +95,7 @@ theTES=45
 lowcut = 0.5
 highcut = 15
 nbins=50
+#trying to make fibres so that dd can be deleted
 folded, tt, folded_nonorm = ft.fold_data(time, dd, 1./fff, lowcut, highcut, nbins)
 
 folded_notch, tt, folded_notch_nonorm = ft.fold_data(time, dd, 1./fff, lowcut, highcut, nbins,

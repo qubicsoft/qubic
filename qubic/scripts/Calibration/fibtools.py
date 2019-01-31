@@ -257,8 +257,9 @@ def qs2array(file, FREQ_SAMPLING, timerange=None):
 	nsamples = len(a.timeline(TES=1))
 	dd = np.zeros((npix, nsamples))
 	##### Normalisation en courant
-	Rfb=100e3
-	NbSamplesPerSum = 64.
+	#Rfb=100e3 #changing to read from pystudio dictionary
+	Rfb = a.Rfeedback
+	NbSamplesPerSum = 64. #this could also be a.NPIXELS_sampled
 	gain=1./2.**7*20./2.**16/(NbSamplesPerSum*Rfb)
 	
 	for i in xrange(npix):

@@ -73,8 +73,7 @@ theTES = best_det
 TimeSigPlot(time, dd)
 
 ###### TOD Power Spectrum #####
-frange = [0.3, 15]
-filt = 5
+frange = [0.3, 15] #range of plot frequencies desired
 spectrum, freq = mlab.psd(dd[theTES,:], Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
 filtered_spec = f.gaussian_filter1d(spectrum, filt)
 
@@ -84,14 +83,10 @@ FreqResp(freq, frange, filtered_spec, theTES, fff)
 #### Filtering out the signal from the PT
 freqs_pt = [1.72383, 3.24323, 3.44727, 5.69583, 6.7533, 9.64412, 12.9874]
 bw_0 = 0.005
-
+filt = 5
 
 notch = FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0, dd, 
 			 FREQ_SAMPLING, nsamples, freq, spectrum, filtered_spec)
-
-############################################################################
-
-
 
 ############################################################################
 ### Fold the data at the modulation period of the fibers

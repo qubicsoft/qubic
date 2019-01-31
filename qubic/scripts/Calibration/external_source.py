@@ -216,4 +216,4 @@ errorbar(freqs, av_shape, yerr = err_shape/np.sqrt(okfinal1.sum()), fmt='ko-')
 ylim(0,1.2)
 xlabel('Freq. [GHz]')
 ylabel('Relative Signal amplitude (w.r.t. 150 GHz)')
-
+savefig('filter.png')

@@ -13,6 +13,15 @@ from pysimulators import FitsArray
 import matplotlib.mlab as mlab
 import scipy.ndimage.filters as f
 
+def TimeSigPlot(time, dd):
+	plt.figure()
+	plt.clf()
+	plt.plot(time, dd[theTES,:])
+	plt.xlabel('Time [s]')
+	plt.ylabel('Current [nA]')
+	
+	return
+
 def FreqResp(theTES, frange, fff, filt, dd, FREQ_SAMPLING,nsamples):
 	plt.figure()
 	#setup plot params

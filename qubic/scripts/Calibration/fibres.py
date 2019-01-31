@@ -11,22 +11,20 @@ fibres calls plots from plotters.py
 fibtools will also have some useful functions for generic use in qubicsoft
 """
 
-
 import numpy as np
-from Calibration import fibtools as ft
+#from Calibration import fibtools as ft
+import fibtools as ft
 import matplotlib.pyplot as plt
 from pysimulators import FitsArray
 import matplotlib.mlab as mlab
 import scipy.ndimage.filters as f
-from Calibration.plotters import *
-
-
+#from Calibration.plotters import *
 
 ################################################ INPUT FILES ######################################
 
 #basedir = '/home/louisemousset/QUBIC/Qubic_work/Calibration/'
-#basedir = '/home/james/fibdata/'
-basedir = '/Users/hamilton/CMB/Qubic/Fibres/'
+basedir = '/home/james/fibdata/'
+#basedir = '/Users/hamilton/CMB/Qubic/Fibres/'
 
 ##### Fiber_2 Fiber@1V; Freq=1Hz; DutyCycle=30%; Voffset_TES=3V
 fib = 2
@@ -36,7 +34,6 @@ dc = 0.3
 
 asic1 = basedir + '/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic1-2018.12.20.172722.fits'
 asic2 = basedir + '/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
-
 
 ##### Fiber 3: Fiber@1V; Freq=1.5Hz; DutyCycle=50%; Voffset_TES=3V
 # fib = 3
@@ -55,8 +52,6 @@ asic2 = basedir + '/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2
 # asic2 = basedir + '/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
 ############################################################################
 
-
-
 ############################# Reading files Example ########################
 asic = 1
 reselect_ok = True
@@ -73,14 +68,9 @@ ndet, nsamples = np.shape(dd)
 #### Selection of detectors for which the signal is obvious
 good_dets=[37, 45, 49, 70, 77, 90, 106, 109, 110]
 best_det = 37
-
-###### TOD Example #####
 theTES = best_det
-plt.clf()
-plt.plot(time, dd[theTES,:])
-plt.xlabel('Time [s]')
-plt.ylabel('Current [nA]')
-
+###### TOD Example #####
+TimeSigPlot(time, dd)
 
 ###### TOD Power Spectrum #####
 

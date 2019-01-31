@@ -468,17 +468,18 @@ def fit_all(t, folded, av, fff, dc, fib, Vtes,
 	return allparams, allerr, allchi2, ndf,ok
 
 
-def run_asic(idnum, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=0.5, highcut=15., nbins=50, nointeractive=False, doplot=True, notch=None, lastpassallfree=False, name='fib', okfile=None, initpars=None,
+def run_asic(folded, tt, folded_nonorm, idnum, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=0.5, highcut=15., nbins=50, nointeractive=False, doplot=True, notch=None, lastpassallfree=False, name='fib', okfile=None, initpars=None,
 timerange=None):
 	fib = idnum
 	### Read data
-	FREQ_SAMPLING = (2e6/128/100)    
-	time, dd, a = qs2array(theasicfile, FREQ_SAMPLING, timerange=timerange)
-	ndet, nsamples = np.shape(dd)
+	#GOING TO TEST PASSING IN THESE VARS
+	#FREQ_SAMPLING = (2e6/128/100)    
+	#time, dd, a = qs2array(theasicfile, FREQ_SAMPLING, timerange=timerange)
+	#ndet, nsamples = np.shape(dd)
 
 	### Fold the data at the modulation period of the fibers
 	### Signal is also badpass filtered before folding
-	folded, tt, folded_nonorm = fold_data(time, dd, 1./fff, lowcut, highcut, nbins, notch=notch)
+	#folded, tt, folded_nonorm = fold_data(time, dd, 1./fff, lowcut, highcut, nbins, notch=notch)
 
 	if nointeractive==True:
 		releselct_ok=False

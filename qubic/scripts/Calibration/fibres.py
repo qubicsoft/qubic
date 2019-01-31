@@ -144,8 +144,8 @@ FoldedTESFreeFit(tt, bla, theTES, folded)
 ##################################################
 #### Asic 1
 #run ASIC analysis code
-tt, folded1, okfinal1, allparams1, allerr1, allchi21, ndf1 = ft.run_asic(fib, Vtes, fff, dc, 
-	asic1, 1, reselect_ok=True, lowcut=0.5, highcut=15., nbins=50, 
+tt, folded1, okfinal1, allparams1, allerr1, allchi21, ndf1 = ft.run_asic(folded, tt, folded_nonorm, fib, Vtes, fff, dc, 
+	asic1, 1, reselect_ok=False, lowcut=0.5, highcut=15., nbins=50, 
 	nointeractive=False, doplot=True, notch=notch)
 #run ASIC plotter
 

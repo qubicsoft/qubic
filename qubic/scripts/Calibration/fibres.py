@@ -1,3 +1,13 @@
+"""
+File first written by JCH and modified by JM & LM
+
+This file is mainly used to analyse calibration data
+fibres.py loads the raw ASIC .fits data
+takes revevant signal info such as;
+fibre #, TES voltage, fff=signal timing, dc=duty cycle
+"""
+
+
 import numpy as np
 from Calibration import fibtools as ft
 import matplotlib.pyplot as plt

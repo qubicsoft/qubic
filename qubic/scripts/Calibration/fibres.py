@@ -103,7 +103,9 @@ folded, tt, folded_nonorm = ft.fold_data(time, dd, 1./fff, lowcut, highcut, nbin
 folded_notch, tt, folded_notch_nonorm = ft.fold_data(time, dd, 1./fff, lowcut, highcut, nbins,
 	notch = notch)
 
+#set values for fold plot
 pars = [dc, 0.05, 0., 1.2]
+theTES=45
 #plot folded TES data
 FoldedFiltTES(tt, pars, theTES, folded, folded_notch)
 

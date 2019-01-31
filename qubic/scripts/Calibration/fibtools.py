@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from pysimulators import FitsArray
 
 
-def statstr(x,divide=False, median=False, cut=None):
+def statstr(x, divide=False, median=False, cut=None):
 	if median:
 		m = np.median(x[np.isfinite(x)])
 		nn = len(x[np.isfinite(x)])
@@ -31,6 +31,19 @@ def statstr(x,divide=False, median=False, cut=None):
 
 
 def image_asics(data1=None, data2=None, all1=False):
+	"""
+	Return an image of detectors on the focal plane.
+	Each asic has 124 TES and 4 thermometers.
+
+    Parameters
+    ----------
+	data1 : 1D array of shape 128 or 256
+		Signal of 1 or 2 asics at a given time sample.
+	data2 : same as data1
+
+	all1 : bool
+		True if you have 2 asics and False if you have only one.
+	"""
 	if all1:
 		nn = len(data1)/2
 		data2 = data1[nn:]
@@ -52,19 +65,19 @@ def image_asics(data1=None, data2=None, all1=False):
 
 	nrows = 17
 	ncols = 17
-	img = np.zeros((nrows,ncols))+np.nan
+	img = np.zeros((nrows,ncols)) + np.nan
 	for row in range(nrows):
 		for col in range(ncols):
 			if data1 is not None:
-				physpix=a1.pix_grid[row,col]
+				physpix = a1.pix_grid[row , col]
 				if physpix in a1.TES2PIX[0]:
-					TES=a1.pix2tes(physpix)
-					img[row,col] = data1[TES-1]
+					TES = a1.pix2tes(physpix)
+					img[row,col] = data1[TES - 1]
 			if data2 is not None:
-				physpix=a2.pix_grid[row,col]
+				physpix = a2.pix_grid[row, col]
 				if physpix in a2.TES2PIX[1]:
-					TES=a2.pix2tes(physpix)
-					img[row,col] = data2[TES-1]
+					TES = a2.pix2tes(physpix)
+					img[row,col] = data2[TES - 1]
 	return img
 
 

@@ -1,4 +1,5 @@
-from Fibres import fibtools as ft
+from Calibration import fibtools as ft
+from Calibration.plotters import *
 import matplotlib.pyplot as plt
 from pysimulators import FitsArray
 import matplotlib.mlab as mlab
@@ -7,11 +8,16 @@ import scipy.ndimage.filters as f
 
 ################################################ INPUT FILES ######################################
 
+#basedir = '/home/louisemousset/QUBIC/Qubic_work/Calibration/'
+#basedir = '/home/james/fibdata/'
+basedir = '/Users/hamilton/Qubic/ExternalSource/'
+
+
 ##### Cal Lamps List of files - Select one a bit further
 ###################### Src at 150 GHz ####################
 name = 'ExtSrc'
 fnum = 150
-asic1 = '/Users/hamilton/Qubic/ExternalSource/2019-01-24_17.25.20__CalibSource 150GHz/Sums/science-asic1-2019.01.24.172520.fits'
+asic1 = basedir + '/2019-01-24_17.25.20__CalibSource 150GHz/Sums/science-asic1-2019.01.24.172520.fits'
 fff = 0.5
 dc = 0.5
 initpars = [dc, 0.1, 0.5, 1.]
@@ -20,7 +26,7 @@ infos150 = {'name':name, 'fnum':fnum, 'asic':asic1, 'fff':fff, 'dc':dc, 'initpar
 ###################### Src at 130 GHz ####################
 name = 'ExtSrc'
 fnum = 130
-asic1 = '/Users/hamilton/Qubic/ExternalSource/2019-01-24_17.45.49__CalibSource 130GHz/Sums/science-asic1-2019.01.24.174549.fits'
+asic1 = basedir + '/2019-01-24_17.45.49__CalibSource 130GHz/Sums/science-asic1-2019.01.24.174549.fits'
 fff = 0.5
 dc = 0.5
 initpars = [dc, 0.1, 1.2, 1.]
@@ -29,7 +35,7 @@ infos130 = {'name':name, 'fnum':fnum, 'asic':asic1, 'fff':fff, 'dc':dc, 'initpar
 ###################### Src at 160 GHz ####################
 name = 'ExtSrc'
 fnum = 160
-asic1 = '/Users/hamilton/Qubic/ExternalSource/2019-01-24_17.34.57__CalibSource 160GHz/Sums/science-asic1-2019.01.24.173457.fits'
+asic1 = basedir + '/2019-01-24_17.34.57__CalibSource 160GHz/Sums/science-asic1-2019.01.24.173457.fits'
 fff = 0.5
 dc = 0.5
 initpars = [dc, 0.1, 0.9, 1.]
@@ -38,7 +44,7 @@ infos160 = {'name':name, 'fnum':fnum, 'asic':asic1, 'fff':fff, 'dc':dc, 'initpar
 ###################### Src at 165 GHz ####################
 name = 'ExtSrc'
 fnum = 165
-asic1 = '/Users/hamilton/Qubic/ExternalSource/2019-01-24_17.55.31__CalibSource 165GHz/Sums/science-asic1-2019.01.24.175531.fits'
+asic1 = basedir + '/2019-01-24_17.55.31__CalibSource 165GHz/Sums/science-asic1-2019.01.24.175531.fits'
 fff = 0.5
 dc = 0.5
 initpars = [dc, 0.1, 1.4, 1.]
@@ -52,7 +58,7 @@ fnum = the_info['fnum']
 asic1 = the_info['asic']
 fff = the_info['fff']
 dc = the_info['dc']
-
+initpars = the_info['initpars']
 
 
 
@@ -86,56 +92,21 @@ for i in xrange(256):
 
 
 
-
 ###### TOD Power Spectrum #####
 theTES=best_det
 frange = [0.3, 15]
-spectrum, freq = mlab.psd(dd[theTES,:], Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
-
 filt = 5
-clf()
-xlim(frange[0], frange[1])
-rng = (freq > frange[0]) & (freq < frange[1])
-filtered_spec = f.gaussian_filter1d(spectrum, filt)
-loglog(freq[rng], filtered_spec[rng], label='Data')
-title('Tes #{}'.format(theTES+1))
-ylim(np.min(filtered_spec[rng])*0.8, np.max(filtered_spec[rng])*1.2)
-xlabel('Freq [Hz]')
-ylabel('Power Spectrum [$nA^2.Hz^{-1}$]')
-#### Show where the signal is expected
-for ii in xrange(30): plot(np.array([fff,fff])*(ii+1),[1e-20,1e-10],'r--', alpha=0.3)
-#### PT frequencies
-fpt = 1.724
-for ii in xrange(30): plot(np.array([fpt,fpt])*(ii+1),[1e-20,1e-10],'k--', alpha=0.3)
+FreqResp(best_det, frange, fff, filt, dd, FREQ_SAMPLING, nsamples)
 
 
 
 #### Filtering out the signal from the PT
 freqs_pt = [1.72383, 3.24323, 3.44727, 5.69583, 6.7533, 9.64412, 12.9874]
 bw_0 = 0.005
-notch = []
-for i in xrange(len(freqs_pt)):
-	notch.append([freqs_pt[i], bw_0*(1+i)])
-
-sigfilt = dd[theTES,:]
-for i in xrange(len(notch)):
-	sigfilt = ft.notch_filter(sigfilt, notch[i][0], notch[i][1], FREQ_SAMPLING)
-
-spectrum_f, freq_f = mlab.psd(sigfilt, Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
-
-clf()
-xlim(frange[0], frange[1])
-rng = (freq > frange[0]) & (freq < frange[1])
-loglog(freq[rng], filtered_spec[rng], label='Data')
-loglog(freq[rng], f.gaussian_filter1d(spectrum_f,filt)[rng], label='Filt')
-title('Tes #{}'.format(theTES+1))
-ylim(np.min(filtered_spec[rng])*0.8, np.max(filtered_spec[rng])*1.2)
-xlabel('Freq [Hz]')
-ylabel('Power Spectrum [$nA^2.Hz^{-1}$]')
-#### Show where the signal is expected
-for ii in xrange(20): plot(np.array([fff,fff])*(ii+1),[1e-20,1e-10],'r--', alpha=0.3)
-#### PT frequencies
-for ii in xrange(len(freqs_pt)): plot(np.array([freqs_pt[ii],freqs_pt[ii]]),[1e-20,1e-10],'k--', alpha=0.3)
+spectrum, freq = mlab.psd(dd[theTES,:], Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
+filtered_spec = f.gaussian_filter1d(spectrum, filt)
+notch = FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0, dd, 
+			 FREQ_SAMPLING, nsamples, freq, spectrum, filtered_spec)
 
 ############################################################################
 
@@ -151,26 +122,25 @@ lowcut = 0.01
 highcut = 20.
 nbins=50*nper
 
+# Not filtered
+folded, tt, folded_nonorm = ft.fold_data(time, dd, 1./fff, lowcut, highcut, nbins)
+
+# Filtered
 folded_notch, tt, folded_notch_nonorm = ft.fold_data(time, dd, 1./fff, lowcut, highcut, nbins,
 	notch = notch)
 
-### Plot it along with a guess for fiber signal
-theTES = best_det
-for i in xrange(128):
-    clf()
-    theTES = i
-    plot(tt, folded_notch_nonorm[theTES,:]*1e9, label='Data TES #{} (with Notch filter)'.format(theTES))
-    legend()
-    ylabel('Current [nA]')
-    xlabel('time [s]')
-    show()
-    raw_input('press a key')
+# plot folded TES data along with a guess for source signal
+pars = [dc, 0.05, 0., 1.2]
+FoldedFiltTES(tt, pars, theTES, folded, folded_notch)
 
 
-
-tt, folded1, okfinal1, allparams1, allerr1, allchi21, ndf1 = ft.run_asic(fnum, 0, fff, dc, 
-	asic1, 1, reselect_ok=False, lowcut=0.05, highcut=15., nbins=50, 
-	nointeractive=False, doplot=True, notch=notch, lastpassallfree=False, okfile='TES_OK_ExtSrc150GHz_asic1.fits', name=name)
+# now plot it with a fitting of the source signal parameters
+guess = [dc, 0.06, 0., 1.2]
+bla = ft.do_minuit(tt, folded[theTES,:], np.ones(len(tt)),
+	guess, functname=ft.simsig,
+	rangepars=[[0.,1.], [0., 1], [0.,1], [0., 1]], fixpars=[0,0,0,0], 
+	force_chi2_ndf=True, verbose=False, nohesse=True)
+FoldedTESFreeFit(tt, bla, theTES, folded)
 
 
 
@@ -180,20 +150,70 @@ tt, folded1, okfinal1, allparams1, allerr1, allchi21, ndf1 = ft.run_asic(fnum, 0
 #### Now loop on the files
 infos = [infos130, infos150, infos160, infos165]
 
-the_info = infos150
-name = the_info['name']
-fnum = the_info['fnum']
-asic1 = the_info['asic']
-fff = the_info['fff']
-dc = the_info['dc']
-initpars = the_info['initpars']
-tt, folded1, okfinal1, allparams1, allerr1, allchi21, ndf1 = ft.run_asic(fnum, 0, fff, dc, 
-	asic1, 1, reselect_ok=False, lowcut=0.05, highcut=15., nbins=50, 
-	nointeractive=False, doplot=True, notch=notch, lastpassallfree=False, okfile='TES_OK_ExtSrc150GHz_asic1.fits', name=name,
-    initpars=initpars)
+pars = []
+for i in xrange(len(infos)):
+    the_info = infos[i]
+    name = the_info['name']
+    fnum = the_info['fnum']
+    asic1 = the_info['asic']
+    fff = the_info['fff']
+    dc = the_info['dc']
+    initpars = the_info['initpars']
+    tt, folded1, okfinal1, allparams1, allerr1, allchi21, ndf1 = ft.run_asic(fnum, 0, fff, dc, 
+        asic1, 1, reselect_ok=False, lowcut=0.05, highcut=15., nbins=50, 
+        nointeractive=False, doplot=True, lastpassallfree=False, okfile='TES_OK_ExtSrc150GHz_asic1.fits', name=name,
+        initpars=initpars)
+    pars.append(allparams1)
+
+
+img_amp = np.zeros((128, len(infos))) + np.nan
+img_tau = np.zeros((128, len(infos))) + np.nan
+for i in xrange(len(infos)):
+    img_amp[okfinal1, i] = pars[i][okfinal1,3]
+    img_tau[okfinal1, i] = pars[i][okfinal1,1]
+
+clf()
+for i in xrange(len(infos)):
+    subplot(2,2,i+1)
+    imshow(ft.image_asics(data1=img_tau[:,i]), vmin=0, vmax=0.2)
+    title('tau {} {} GHz'.format(infos[i]['name'], infos[i]['fnum']))
+    colorbar()
+plt.tight_layout()
 
 
 
+clf()
+for i in xrange(len(infos)):
+    subplot(2,2,i+1)
+    imshow(ft.image_asics(data1=img_amp[:,i]), vmin=0, vmax=60)
+    title('Amp {} {} GHz'.format(infos[i]['name'], infos[i]['fnum']))
+    colorbar()
+plt.tight_layout()
+
+clf()
+for i in xrange(len(infos)):
+    subplot(2,2,i+1)
+    imshow(ft.image_asics(data1=img_amp[:,i]/img_amp[:,3]), vmin=0, vmax=5)
+    title('Amp {} {} GHz'.format(infos[i]['name'], infos[i]['fnum']))
+    colorbar()
+plt.tight_layout()
 
 
+clf()
+cols = ['r', 'g', 'b', 'k']
+for i in xrange(len(infos)):
+    plot(img_amp[okfinal1,i], color=cols[i])
+
+freqs = np.array([infos[i]['fnum'] for i in xrange(len(infos))])
+ampsok = img_amp[okfinal1,:]
+av_shape = np.zeros(len(infos))
+err_shape = np.zeros(len(infos))
+for i in xrange(len(infos)):
+    av_shape[i], err_shape[i] = ft.meancut(ampsok[:,i]/ampsok[:,1], 4)
+
+clf()
+errorbar(freqs, av_shape, yerr = err_shape/np.sqrt(okfinal1.sum()), fmt='ko-')
+ylim(0,1.2)
+xlabel('Freq. [GHz]')
+ylabel('Relative Signal amplitude (w.r.t. 150 GHz)')
 

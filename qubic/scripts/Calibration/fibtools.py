@@ -21,7 +21,7 @@ def isfloat(s):
         return False
 
 
-def statstr(x,divide=False, median=False, cut=None):
+def statstr(x, divide=False, median=False, cut=None):
 	if median:
 		m = np.median(x[np.isfinite(x)])
 		nn = len(x[np.isfinite(x)])
@@ -38,11 +38,25 @@ def statstr(x,divide=False, median=False, cut=None):
 
 
 
-def image_asics(data1=None, data2=None, all1=None):
+def image_asics(data1=None, data2=None, all1=False):
+	"""
+	Return an image of detectors on the focal plane.
+	Each asic has 124 TES and 4 thermometers.
+
+    Parameters
+    ----------
+	data1 : 1D array of shape 128 or 256
+		Signal of 1 or 2 asics at a given time sample.
+	data2 : same as data1
+
+	all1 : bool
+		True if you have 2 asics and False if you have only one.
+	"""
 	if all1 is not None:
 		nn = len(all1)/2
 		data2 = all1[nn:]
 		data1 = all1[0:nn]
+
 	if data1 is not None:
 		a1 = qp()
 		a1.assign_asic(1)
@@ -59,90 +73,96 @@ def image_asics(data1=None, data2=None, all1=None):
 		a2.pix_grid[0,12] = 1001
 	nrows = 17
 	ncols = 17
-	img = np.zeros((nrows,ncols))+np.nan
+	img = np.zeros((nrows,ncols)) + np.nan
 	for row in range(nrows):
 		for col in range(ncols):
 			if data1 is not None:
-				physpix=a1.pix_grid[row,col]
+				physpix = a1.pix_grid[row , col]
 				if physpix in a1.TES2PIX[0]:
-					TES=a1.pix2tes(physpix)
-					img[row,col] = data1[TES-1]
+					TES = a1.pix2tes(physpix)
+					img[row,col] = data1[TES - 1]
 			if data2 is not None:
-				physpix=a2.pix_grid[row,col]
+				physpix = a2.pix_grid[row, col]
 				if physpix in a2.TES2PIX[1]:
-					TES=a2.pix2tes(physpix)
-					img[row,col] = data2[TES-1]
+					TES = a2.pix2tes(physpix)
+					img[row,col] = data2[TES - 1]
 	return img
 
 
 ###############################################################################
 ################################### Fitting ###################################
 ###############################################################################
-### Generic polynomial function ##########
-def thepolynomial(x,pars):
-    f=np.poly1d(pars)
-    return(f(x))
-  
-### Class defining the minimizer and the data
+def thepolynomial(x, pars):
+	"""
+	Generic polynomial function
+	"""
+	f = np.poly1d(pars)
+	return(f(x))
+	
 class MyChi2:
-    def __init__(self,xin,yin,covarin,functname):
-        self.x=xin
-        self.y=yin
-        self.covar=covarin
-        self.invcov=np.linalg.inv(covarin)
-        self.functname=functname
-            
-    def __call__(self,*pars):
-        val=self.functname(self.x,pars)
-        chi2=np.dot(np.dot(self.y-val,self.invcov),self.y-val)
-        return(chi2)
-        
+	"""
+	Class defining the minimizer and the data
+	"""	
+	def __init__(self, xin, yin, covarin, functname):
+		self.x = xin
+		self.y = yin
+		self.covar = covarin
+		self.invcov = np.linalg.inv(covarin)
+		self.functname = functname
+			
+	def __call__(self, *pars):
+		val = self.functname(self.x, pars)
+		chi2 = np.dot(np.dot(self.y-val, self.invcov), self.y-val)
+		return(chi2)
+		
 ### Call Minuit
-def do_minuit(x,y,covarin,guess,functname=thepolynomial, fixpars = None, chi2=None, rangepars=None, nohesse=False, force_chi2_ndf=False, verbose=True):
+def do_minuit(x, y, covarin, guess, functname=thepolynomial, 
+		fixpars=None, chi2=None, rangepars=None, nohesse=False, 
+		force_chi2_ndf=False, verbose=True):
     # check if covariance or error bars were given
-    covar=covarin
+    covar = covarin
     if np.size(np.shape(covarin)) == 1:
-        err=covarin
-        covar=np.zeros((np.size(err),np.size(err)))
-        covar[np.arange(np.size(err)),np.arange(np.size(err))]=err**2
+        err = covarin
+        covar = np.zeros((np.size(err), np.size(err)))
+        covar[np.arange(np.size(err)), np.arange(np.size(err))] = err**2
                                     
     # instantiate minimizer
     if chi2 is None:
-        chi2=MyChi2(x,y,covar,functname)
+        chi2 = MyChi2(x, y, covar, functname)
         #nohesse=False
     else:
-        nohesse=True
+        nohesse = True
     # variables
-    ndim=np.size(guess)
-    parnames=[]
-    for i in range(ndim): parnames.append('c'+np.str(i))
+    ndim = np.size(guess)
+    parnames = []
+    for i in range(ndim): parnames.append('c' + np.str(i))
     # initial guess
-    theguess=dict(zip(parnames,guess))
+    theguess = dict(zip(parnames, guess))
     # fixed parameters
     dfix = {}
     if fixpars is not None:
-        for i in xrange(len(parnames)): dfix['fix_'+parnames[i]]=fixpars[i]
+        for i in xrange(len(parnames)): dfix['fix_'+parnames[i]] = fixpars[i]
     else:
-        for i in xrange(len(parnames)): dfix['fix_'+parnames[i]]=False
+        for i in xrange(len(parnames)): dfix['fix_'+parnames[i]] = False
     # range for parameters
     drng = {}
     if rangepars is not None:
-        for i in xrange(len(parnames)): drng['limit_'+parnames[i]]=rangepars[i]
+        for i in xrange(len(parnames)): drng['limit_'+parnames[i]] = rangepars[i]
     else:
-        for i in xrange(len(parnames)): drng['limit_'+parnames[i]]=False
-    #stop
-    # Run Minuit
+        for i in xrange(len(parnames)): drng['limit_'+parnames[i]] = False
+    
+	# Run Minuit
     if verbose: print('Fitting with Minuit')
     theargs = dict(theguess.items() + dfix.items())
     if rangepars is not None: theargs.update(dict(theguess.items() + drng.items()))
-    m = iminuit.Minuit(chi2,forced_parameters=parnames,errordef=1.,**theargs)
+    m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=1., **theargs)
     m.migrad()
-    if nohesse==False:
+    if nohesse == False:
         m.hesse()
     # build np.array output
-    parfit=[]
+    parfit = []
     for i in parnames: parfit.append(m.values[i])
-    errfit=[]
+    errfit = []
     for i in parnames: errfit.append(m.errors[i])
     if fixpars is not None:
         parnamesfit = []
@@ -156,7 +176,7 @@ def do_minuit(x,y,covarin,guess,functname=thepolynomial, fixpars = None, chi2=No
     if m.covariance:
         for i in xrange(ndimfit):
             for j in xrange(ndimfit):
-                covariance[i,j]=m.covariance[(parnamesfit[i],parnamesfit[j])]
+                covariance[i,j] = m.covariance[(parnamesfit[i],parnamesfit[j])]
 
     chisq = chi2(*parfit)
     ndf = np.size(x)-ndim
@@ -170,7 +190,7 @@ def do_minuit(x,y,covarin,guess,functname=thepolynomial, fixpars = None, chi2=No
         print(np.array(errfit)*np.sqrt(correct))
         print('Chi2=',chisq)
         print('ndf=',ndf)
-    return(m,np.array(parfit), np.array(errfit)*np.sqrt(correct), np.array(covariance)*correct,chi2(*parfit), ndf)
+    return(m, np.array(parfit), np.array(errfit)*np.sqrt(correct), np.array(covariance)*correct, chi2(*parfit), ndf)
 
 ###############################################################################
 ###############################################################################
@@ -252,24 +272,35 @@ def exponential_filter1d(input, sigma, axis=-1, output=None,
 
 
 def qs2array(file, FREQ_SAMPLING, timerange=None):
+	"""
+	Loads qubic instance to create 'dd' which is TOD for each TES
+	Also normalises raw data
+	Also returns 'time' which is linear time array
+	Can also specify a timerange
+	"""
 	a = qp()
 	a.read_fits(file)
 	npix = a.NPIXELS
 	nsamples = len(a.timeline(TES=1))
 	dd = np.zeros((npix, nsamples))
+	##### Normalisation en courant
+	#Rfb=100e3 #changing to read from pystudio dictionary
+	Rfb = a.Rfeedback
+	NbSamplesPerSum = 64. #this could also be a.NPIXELS_sampled
+	gain=1./2.**7*20./2.**16/(NbSamplesPerSum*Rfb)
+	
 	for i in xrange(npix):
 		dd[i,:] = a.timeline(TES=i+1)
-		##### Normalisation en courant
-		Rfb=100e3
-		NbSamplesPerSum = 64.
-		gain=1./2.**7*20./2.**16/(NbSamplesPerSum*Rfb)
 		dd[i,:] = gain * dd[i,:]
+		
 	time = np.arange(nsamples)/FREQ_SAMPLING
+	
 	if timerange is not None:
 		print('Selecting time range: {} to {} sec'.format(timerange[0], timerange[1]))
 		oktime = (time >= timerange[0]) & (time <= timerange[1])
 		time = time[oktime]
 		dd = dd[:,oktime]
+		
 	return time, dd, a
 
 
@@ -465,6 +496,7 @@ def run_asic(idnum, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=
 timerange=None, removesat=False):
 	fib = idnum
 	### Read data
+	#GOING TO TEST PASSING IN THESE VARS
 	FREQ_SAMPLING = (2e6/128/100)    
 	time, dd, a = qs2array(theasicfile, FREQ_SAMPLING, timerange=timerange)
 	ndet, nsamples = np.shape(dd)
@@ -474,7 +506,7 @@ timerange=None, removesat=False):
 	folded, tt, folded_nonorm = fold_data(time, dd, 1./fff, lowcut, highcut, nbins, notch=notch)
 
 	if nointeractive==True:
-		releselct_ok=False
+		reselect_ok=False
 		answer = 'n'
 	else:
 		if reselect_ok==True:
@@ -484,7 +516,7 @@ timerange=None, removesat=False):
 			answer='n'
 
 	if answer=='y':
-		print('Now going to reselct the OK TES and overwrite the corresponding file')
+		print('Now going to reselect the OK TES and overwrite the corresponding file')
 		#### Pass 1 - allows to obtain good values for t0 basically
 		#### Now perform the fit on the median folded data
 		print('')

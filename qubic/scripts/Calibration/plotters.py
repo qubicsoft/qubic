@@ -3,7 +3,7 @@
 """
 Created on Tue Jan 29 09:44:35 2019
 
-@author: james
+@author: james, louise, JCH
 """
 
 import numpy as np
@@ -13,17 +13,22 @@ from pysimulators import FitsArray
 import matplotlib.mlab as mlab
 import scipy.ndimage.filters as f
 
-def FreqResp(theTES, frange, fff, filt, dd, FREQ_SAMPLING,nsamples):
+def TimeSigPlot(time, dd, theTES):
+	plt.figure()
+	plt.clf()
+	plt.plot(time, dd[theTES,:])
+	plt.xlabel('Time [s]')
+	plt.ylabel('Current [nA]')
+	
+	return
+
+def FreqResp(freq, frange, filtered_spec, theTES, fff):
 	plt.figure()
 	#setup plot params
-	
-	spectrum, freq = mlab.psd(dd[theTES,:], Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
-	filtered_spec = f.gaussian_filter1d(spectrum, filt)
 	rng = (freq > frange[0]) & (freq < frange[1])
 	plt.loglog(freq[rng], filtered_spec[rng], label='Data')
 	
 	#do plot
-
 	plt.xlim(frange[0], frange[1])
 	plt.title('Tes #{}'.format(theTES+1))
 	plt.ylim(np.min(filtered_spec[rng])*0.8, np.max(filtered_spec[rng])*1.2)

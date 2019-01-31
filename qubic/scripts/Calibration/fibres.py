@@ -5,6 +5,10 @@ This file is mainly used to analyse calibration data
 fibres.py loads the raw ASIC .fits data
 takes revevant signal info such as;
 fibre #, TES voltage, fff=signal timing, dc=duty cycle
+
+fibres calls analysis tools and functions from fibtools.py
+fibres calls plots from plotters.py
+fibtools will also have some useful functions for generic use in qubicsoft
 """
 
 

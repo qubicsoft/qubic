@@ -8,6 +8,7 @@ import qubic
 import fibtools as ft
 
 dictfilename = '/home/louisemousset/QUBIC/MyGitQUBIC/qubic/qubic/scripts/global_source.dict' 
+dictfilename = '/home/james/moussetqubic/qubic/qubic/scripts/global_source.dict'
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
@@ -97,7 +98,7 @@ TOD_thermo_mean = TOD_thermo / TOD_mean
 
 plt.figure('focal plane')
 for ptg in xrange(10):
-    img = ft.image_asics(data1=TOD_thermo_mean[:,ptg], data2=None, all1=True)
+    img = ft.image_asics(all1=TOD_thermo_mean[:,ptg])
     plt.imshow(img, interpolation='nearest')
     plt.title('ptg'+str(ptg) + ' el=' + str(p.elevation[ptg]) + ' az=' + str(p.azimuth[ptg]))
     #plt.title('pointing #{}'.format(ptg))

@@ -270,7 +270,6 @@ def exponential_filter1d(input, sigma, axis=-1, output=None,
         weights[ii] /= sum
     return correlate1d(input, weights, axis, output, mode, cval, 0)
 
-
 def qs2array(file, FREQ_SAMPLING, timerange=None):
 	"""
 	Loads qubic instance to create 'dd' which is TOD for each TES
@@ -316,6 +315,17 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
     b, a = butter_bandpass(lowcut, highcut, fs, order=order)
     y = scsig.lfilter(b, a, data)
     return y
+
+def notch_array(freqs, bw):
+	"""
+	Returns array to be used with notch_filter
+	"""
+	notch = []
+	
+	for i in xrange(len(freqs)):
+		notch.append([freqs[i], bw*(1+i)])
+		
+	return notch
 
 def notch_filter(data, f0, bw, fs):
 	Q = f0/bw

@@ -42,15 +42,16 @@ def FreqResp(freq, frange, filtered_spec, theTES, fff):
 
 	return
 
-def FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0, dd, 
+def FiltFreqResp(theTES, frange, fff, filt, dd, notch,
 				 FREQ_SAMPLING, nsamples, freq, spectrum, filtered_spec):
 	plt.figure()
 	#set up data
+	"""
 	notch = []
 	
 	for i in xrange(len(freqs_pt)):
 		notch.append([freqs_pt[i], bw_0*(1+i)])
-
+	"""
 	sigfilt = dd[theTES,:]
 	for i in xrange(len(notch)):
 		sigfilt = ft.notch_filter(sigfilt, notch[i][0], notch[i][1], FREQ_SAMPLING)
@@ -71,7 +72,7 @@ def FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0, dd,
 	fpt = 1.724
 	for ii in xrange(10): plt.plot(np.array([fpt,fpt])*(ii+1),[1e-20,1e-10],'k--', alpha=0.3)
 
-	return notch
+	return
 
 def FoldedFiltTES(tt, pars, theTES, folded, folded_notch):
 	plt.figure()

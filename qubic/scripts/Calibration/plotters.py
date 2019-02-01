@@ -44,20 +44,19 @@ def FreqResp(freq, frange, filtered_spec, theTES, fff):
 
 def FiltFreqResp(theTES, frange, fff, filt, dd, notch,
 				 FREQ_SAMPLING, nsamples, freq, spectrum, filtered_spec):
-	plt.figure()
-	#set up data
 	"""
-	notch = []
-	
-	for i in xrange(len(freqs_pt)):
-		notch.append([freqs_pt[i], bw_0*(1+i)])
+	Plot original and notch filtered frequency.
+	sigfilt requires you select for which TES you would like to
+	apply the notch filter - single TES analysis
 	"""
+	#notch filter according to notch - must select TES
 	sigfilt = dd[theTES,:]
 	for i in xrange(len(notch)):
 		sigfilt = ft.notch_filter(sigfilt, notch[i][0], notch[i][1], FREQ_SAMPLING)
-	
+	#get new spectrum with notch filter applied
 	spectrum_f, freq_f = mlab.psd(sigfilt, Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
-
+	#start plotting
+	plt.figure()
 	plt.xlim(frange[0], frange[1])
 	rng = (freq > frange[0]) & (freq < frange[1])
 	plt.loglog(freq[rng], filtered_spec[rng], label='Data')

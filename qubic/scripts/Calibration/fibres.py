@@ -89,12 +89,12 @@ bw_0 = 0.005
 notch = FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0, dd, 
 			 FREQ_SAMPLING, nsamples, freq, spectrum, filtered_spec)
 
+
 ############################################################################
 ### Fold the data at the modulation period of the fibers
-### Signal is also badpass filtered before folding
+### Signal is also bandpass filtered before folding
 
 #set up band pass filter
-theTES=45
 lowcut = 0.5
 highcut = 15
 nbins=50
@@ -106,7 +106,7 @@ folded_notch, tt, folded_notch_nonorm = ft.fold_data(time, dd, 1./fff, lowcut, h
 
 #set values for fold plot
 pars = [dc, 0.05, 0., 1.2]
-theTES=45
+#theTES=45
 #plot folded TES data
 FoldedFiltTES(tt, pars, theTES, folded, folded_notch)
 
@@ -145,7 +145,7 @@ FoldedTESFreeFit(tt, bla, theTES, folded)
 ##################################################
 #### Asic 1
 #run ASIC analysis code
-tt, folded1, okfinal1, allparams1, allerr1, allchi21, ndf1 = ft.run_asic(folded, tt, folded_nonorm, fib, Vtes, fff, dc, 
+tt, folded1, okfinal1, allparams1, allerr1, allchi21, ndf1 = ft.run_asic(fib, Vtes, fff, dc, 
 	asic1, 1, reselect_ok=True, notch=notch)
 #run ASIC plotter
 

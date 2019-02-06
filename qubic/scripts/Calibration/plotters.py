@@ -44,7 +44,7 @@ def FreqResp(freq, frange, filtered_spec, theTES, fff):
 
 def FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0, dd, 
 				 FREQ_SAMPLING, nsamples, freq, spectrum, filtered_spec):
-	plt.figure()
+	
 	#set up data
 	notch = []
 	
@@ -56,7 +56,8 @@ def FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0, dd,
 		sigfilt = ft.notch_filter(sigfilt, notch[i][0], notch[i][1], FREQ_SAMPLING)
 	
 	spectrum_f, freq_f = mlab.psd(sigfilt, Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
-
+	
+	plt.figure()
 	plt.xlim(frange[0], frange[1])
 	rng = (freq > frange[0]) & (freq < frange[1])
 	plt.loglog(freq[rng], filtered_spec[rng], label='Data')

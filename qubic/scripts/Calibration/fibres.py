@@ -23,8 +23,8 @@ from plotters import *
 
 ################################################ INPUT FILES ######################################
 
-basedir = '/home/louisemousset/QUBIC/Qubic_work/Calibration/'
-#basedir = '/home/james/fibdata/'
+#basedir = '/home/louisemousset/QUBIC/Qubic_work/Calibration/'
+basedir = '/home/james/fibdata/'
 #basedir = '/Users/hamilton/CMB/Qubic/Fibres/'
 
 ##### Fiber_2 Fiber@1V; Freq=1Hz; DutyCycle=30%; Voffset_TES=3V
@@ -86,7 +86,9 @@ FreqResp(freq, frange, filtered_spec, theTES, fff)
 freqs_pt = [1.72383, 3.24323, 3.44727, 5.69583, 6.7533, 9.64412, 12.9874]
 bw_0 = 0.005
 
-notch = FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0, dd, 
+notch = ft.notch_array(freqs_pt, bw_0)
+
+FiltFreqResp(theTES, frange, fff, filt, dd, notch,
 			 FREQ_SAMPLING, nsamples, freq, spectrum, filtered_spec)
 
 
@@ -148,8 +150,6 @@ FoldedTESFreeFit(tt, bla, theTES, folded)
 tt, folded1, okfinal1, allparams1, allerr1, allchi21, ndf1 = ft.run_asic(fib, Vtes, fff, dc, 
 	asic1, 1, reselect_ok=True, notch=notch)
 #run ASIC plotter
-
-
 plt.savefig('fib{}_ASIC1_summary.png'.format(fib))
 
 

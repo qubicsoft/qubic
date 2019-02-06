@@ -38,7 +38,7 @@ def statstr(x, divide=False, median=False, cut=None):
 
 
 
-def image_asics(data1=None, data2=None, all1=False):
+def image_asics(data1=None, data2=None, all1=None):
 	"""
 	Return an image of detectors on the focal plane.
 	Each asic has 124 TES and 4 thermometers.

@@ -1,14 +1,14 @@
 ############################################# Instrument ################################
-debug = False #False/True # Boolean
+debug=False #False/True # Boolean
 
-config = 'TD' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
-filter_nu = 150*1e9 # 150e9 or 220e9 Hz
-filter_relative_bandwidth = 0.25 
-beam_shape =  'gaussian' # 'gaussian', 'fitted_beam', 'multi_freq'
+config='FI' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
+filter_nu=150e9 # 150e9 or 220e9 Hz
+filter_relative_bandwidth=0.25 
+beam_shape='gaussian' # 'gaussian', 'fitted_beam', 'multi_freq'
 
 # multifreq instrument 
-MultiBand=True
-nf_sub=15
+MultiBand=False
+nf_sub=3
 center_detector=False
 
 psd=None
@@ -38,7 +38,7 @@ hornarray='CalQubic_HornArray_CC.fits'
 
 
 ############################################# Scene ################################
-nside=512
+nside=256
 kind='IQU'
 absolute=False
 temperature=2.7255
@@ -65,9 +65,9 @@ nhwp_angles=3
 seed=1
 
 sweeping_pointing=True
-duration=0.025 #h
-angspeed=1 #deg/s
-delta_az=20. #deg
+duration=0.05 #h
+angspeed=0.4 #deg/s
+delta_az=10. #deg
 nsweeps_per_elevation=1
 angspeed_psi=0.1 #deg/s
 maxpsi=10 #deg

@@ -4,16 +4,18 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import healpy as hp
+from astropy.io import fits
 import qubic
-import fibtools as ft
 
-dictfilename = '/home/louisemousset/QUBIC/MyGitQUBIC/qubic/qubic/scripts/global_source.dict'
-# dictfilename = '/home/james/moussetqubic/qubic/qubic/scripts/global_source.dict'
+basedir = '/home/louisemousset/QUBIC/MyGitQUBIC'
+dictfilename = basedir + '/qubic/qubic/scripts/global_source.dict'
+
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
 # Get sweeping pointing in a fix frame
 p = qubic.get_pointing(d)
+nptg = len(p.index)  # Pointing number
 
 el_angles = np.unique(p.elevation)  # all different elevation angles
 az_angles = np.unique(p.azimuth)  # all different azimuth angles
@@ -36,11 +38,9 @@ plt.plot(p.azimuth, p.elevation, '.')
 plt.xlabel('azimuth angle')
 plt.ylabel('elevation angle')
 
-# Point source
-az = 50.
-el = 50.
-source_coords = (az, el)
-print('source_coords = {}'.format(source_coords))
+# ============= Point source ==========
+az, el = d['fix_azimuth']['az'], d['fix_azimuth']['el']
+print('source_coords = {0},{1}'.format(az, el))
 
 npix = 12 * d['nside'] ** 2  # pixel number
 sky = np.zeros(npix)
@@ -49,13 +49,13 @@ sky[source_pix] = 1.
 arcToRad = np.pi / (180 * 60.)  # conversion factor
 sky = hp.sphtfunc.smoothing(sky, fwhm=30 * arcToRad)
 
-hp.gnomview(sky, rot=source_coords)
+hp.gnomview(sky, rot=(az, el))
 
 x0 = np.zeros((d['nf_sub'], npix, 3))
 x0[:, :, 0] = sky
 
 
-# Get TOD
+# =========== Get TOD for the FI =========
 def get_tod(d, p, x0):
     # Polychromatic instrument model
     q = qubic.QubicMultibandInstrument(d)
@@ -77,68 +77,52 @@ def get_tod(d, p, x0):
 
 q, tod_fi = get_tod(d, p, x0)
 
-# Take tod of the TD instrument
-nTES = tod_fi.shape[0] / 4
-npointings = tod_fi.shape[1]
-print('nTES = {0} npointings = {1}'.format(nTES, npointings))
-tes_simu = q[0].detector.index[q[0].detector.quadrant == 0]
+# ========= Project TOD on the focal plane ============
+detarray = fits.open(basedir + '/qubic/qubic/calfiles/CalQubic_DetArray_FI.fits')
 
-tod_td = np.take(tod_fi, tes_simu, axis=0)
+tes_index = detarray['index'].data
+plt.clf()
+plt.imshow(tes_index, interpolation='nearest', origin='lower')
 
-plt.figure('TOD')
-for i in xrange(248):
-    plt.plot(tod_td[i, :])
+# size of one side of the focal plane
+size_fi = tes_index.shape[0]
 
-tod_mean = np.mean(tod_td)
+# Position of the TES in the array
+tes_position = detarray['removed'].data
+plt.clf()
+plt.imshow(tes_position, interpolation='nearest', origin='lower')  # 0 on focal plane, 1 elsewhere
 
-# Let's insert the 8 thermometers among the TES
-thermos = np.array([3, 35, 67, 99, 131, 163, 195, 227])  # Indices of thermometers
-tod_thermo = np.zeros((nTES + 8, npointings))
-for ptg in xrange(npointings):
-    tod_thermo[:, ptg] = np.insert(tod_td[:, ptg], thermos - np.arange(0, 8), 0., axis=None)
+plt.clf()
+tes_position_rev = tes_position * (-1) + 1
+plt.imshow(tes_position_rev, interpolation='nearest', origin='lower')  # reverse
 
-# Check thermometers have been inserted at good places
-for i in xrange(nTES + 8):
-    if tod_thermo[i, 0] == tod_mean:
-        if i in thermos:
-            print(str(i) + ' ok')
-        else:
-            print(str(i) + ' bug')
+# Indices of TES on the focal plane, 0 outside
+focal_plane = tes_index * tes_position_rev
+plt.clf()
+plt.imshow(focal_plane, interpolation='nearest', origin='lower')
 
+#  Plot the signal on the focal plane for each pointing
+plt.figure('tracker')
+tod_focal_plane = np.zeros((size_fi, size_fi, nptg))
+for ptg in xrange(nptg):
+    j = 0
+    for i in xrange(1156):
+        pos = np.where(focal_plane == i)
+        # print(pos[0].size)
 
-# Use the experimental TES positions
-def mix_tod(tod, thermos):
+        #  For the TES 0
+        if pos[0].size == 165:
+            tod_focal_plane[0, 17, ptg] = tod_fi[j, ptg]
+            j += 1
 
-    tes_exp = ft.image_asics(all1=np.arange(0, 256))
-    tes_exp = np.reshape(tes_exp, 17**2)
-    tes_exp = tes_exp[~np.isnan(tes_exp)]
-    #tes_exp = np.delete(tes_exp, thermos)
+        # For other TES
+        elif pos[0].size == 1:
+            # print(j)
+            tod_focal_plane[pos[0][0], pos[1][0], ptg] = tod_fi[j, ptg]
+            j += 1
+            # print(pos)
 
-
-    tod_mix = np.copy(tod)
-    for i in xrange(256):
-        if i not in thermos:
-            print(i)
-            exp = np.int(tes_exp[i])
-            print(exp)
-            tod_mix[i, :] = tod[exp, :]
-    return tod_mix
-
-tod_thermo_mix = mix_tod(tod_thermo, thermos)
-
-
-plt.figure('focal plane')
-for ptg in xrange(0, 35):
-    img = ft.image_asics(all1=tod_thermo_mix[:, ptg])
-    plt.imshow(img, interpolation='nearest')
+    plt.imshow(tod_focal_plane[:, :, ptg], interpolation='nearest', origin='lower')
     plt.title('ptg' + str(ptg) + ' el=' + str(p.elevation[ptg]) + ' az=' + str(p.azimuth[ptg]))
-    plt.pause(1)
-
-plt.colorbar()
-
-# Find the TES number on the  focal plane
-test = np.arange(0, 256)
-img = ft.image_asics(all1=test)
-plt.figure('TES position')
-plt.imshow(img, interpolation='nearest')
+    plt.pause(0.5)
 plt.colorbar()

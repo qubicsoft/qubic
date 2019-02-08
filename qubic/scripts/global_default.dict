@@ -50,6 +50,7 @@ longitude= 123 + 20. / 60  #DOME C
 random_pointing=True   
 npointings=1000
 dtheta=10.
+nhwp_angles=3
 seed=1
 
 sweeping_pointing=False

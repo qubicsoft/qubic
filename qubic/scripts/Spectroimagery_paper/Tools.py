@@ -45,11 +45,11 @@ def myprofile(ang, maps, nbins):
 			allstd_profile.append(std_profile)
 	return bin_centers, std_bin, allstd_profile
 
-def statistic_distrib(maps):
+def covariance_IQU_subbands(allmaps):
 	"""
 	Return : - the mean maps, averaged over pixels and realisations.
 			- the covariance matrices of the maps.
-		maps : list of arrays of shape (nreals, nsub, npix, 3)
+		allmaps : list of arrays of shape (nreals, nsub, npix, 3)
 			list of maps for each number of subband 
 		mean : list of arrays of shape 3*nsub
 			mean for I, Q, U for each subband
@@ -57,11 +57,9 @@ def statistic_distrib(maps):
 			covariance matrices between stokes parameters and sub frequency bands
 	"""
 	allmean, allcov = [], []
-	for isub in xrange(len(maps)):
-		sh = maps[isub].shape
-		nreals = sh[0] #Number of realisations
+	for isub in xrange(len(allmaps)):
+		sh = allmaps[isub].shape
 		nsub = sh[1] #Number of subbands
-		npixok = sh[2]
 
 		mean = np.zeros(3*nsub)
 		cov = np.zeros((3*nsub, 3*nsub))
@@ -69,12 +67,12 @@ def statistic_distrib(maps):
 		for iqu in xrange(3):
 			for band in xrange(nsub):
 				i = 3 * band + iqu
-				map_i = maps[isub][:, band, :, iqu]
+				map_i = allmaps[isub][:, band, :, iqu]
 				mean[i] = np.mean(map_i)
 				for iqu2 in xrange(3):
 					for band2 in xrange(nsub):
 						j = 3 * band2 + iqu2
-						map_j = maps[isub][:, band2, :, iqu2]
+						map_j = allmaps[isub][:, band2, :, iqu2]
 						cov[i, j] = np.mean((map_i - np.mean(map_i)) * (map_j - np.mean(map_j)))
 		allmean.append(mean)
 		allcov.append(cov)

@@ -40,12 +40,14 @@ tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum,
         0, fff, 
         dc, as1, 1, name=name, timerange=time_ranges[:,0],
         initpars=None, lowcut=0.05, highcut=15., 
+        rangepars=[[0.,1.], [0., 0.5], [0.,1./fff], [0., 5000.]],  
         reselect_ok=False, okfile='ScanAz2019-02-01_nuscan_OK_Asic1.fits')
 
 tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum,
         0, fff, 
         dc, as2, 2, name=name, timerange=time_ranges[:,0],
         initpars=None, lowcut=0.05, highcut=15., 
+        rangepars=[[0.,1.], [0., 0.5], [0.,1./fff], [0., 5000.]],  
         reselect_ok=False,
         okfile='ScanAz2019-02-01_nuscan_OK_Asic2.fits')
 
@@ -62,7 +64,9 @@ for i in xrange(len(tf)):
     asic = as1
     tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum, 0, fff, 
         dc, asic, 1, name=name, doplot=False,timerange=time_ranges[:,i],
-        initpars=None, lowcut=0.05, highcut=15., okfile='ScanAz2019-02-01_nuscan_OK_Asic1.fits')
+        initpars=None, lowcut=0.05, highcut=15., 
+        rangepars=[[0.,1.], [0., 0.5], [0.,1./fff], [0., 5000.]],  
+        okfile='ScanAz2019-02-01_nuscan_OK_Asic1.fits')
     params[~okfinal,:] = np.nan
     amps[:128,i] = params[:,3]
     erramps[:128,i] = err[:,3]
@@ -72,7 +76,9 @@ for i in xrange(len(tf)):
     asic = as2
     tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum, 0, fff, 
         dc, asic, 2, name=name, doplot=False,timerange=time_ranges[:,i],
-        initpars=None, lowcut=0.05, highcut=15., okfile='ScanAz2019-02-01_nuscan_OK_Asic2.fits')
+        initpars=None, lowcut=0.05, highcut=15., 
+        rangepars=[[0.,1.], [0., 0.5], [0.,1./fff], [0., 5000.]],  
+        okfile='ScanAz2019-02-01_nuscan_OK_Asic2.fits')
     params[~okfinal,:] = np.nan
     amps[128:,i] = params[:,3]
     erramps[128:,i] = err[:,3]
@@ -80,7 +86,7 @@ for i in xrange(len(tf)):
     errtaus[128:,i] = err[:,1]
 
 
-cutval = 2000
+cutval = 200000
 
 allimg = np.zeros((len(tf),17,17)) + np.nan
 for i in xrange(len(tf)):
@@ -90,58 +96,9 @@ for i in xrange(len(tf)):
     ok = isfinite(allimg[i,:,:])
     mm = np.mean(allimg[i,:,:][ok])
     clf()
-    imshow(allimg[i,:,:]/mm,vmin=0,vmax=3, cmap='viridis')
+    imshow(allimg[i,:,:]/mm,vmin=0,vmax=4, cmap='viridis')
     colorbar()
-    title('$\nu$={}'.format(f[i]))
+    title(r'$\nu$={} GHz'.format(f[i]))
     show()
     savefig('imgscan01022019_nu_{}.png'.format(f[i]))
-    raw_input('Press a key')
-
-thepix = 93
-clf()
-plot(az, amps[thepix,:])
-
-
-#### Trying intercalibration from old fiber data (probably worthless as at the time they were superconducting and now they are not)
-
-from pysimulators import FitsArray
-calibration = FitsArray('/Users/hamilton/CMB/Qubic/Fibres/calibration.fits')
-calibration_restrict = FitsArray('/Users/hamilton/CMB/Qubic/Fibres/calibration_restrict.fits')
-
-
-cutval = 200
-
-allimg = np.zeros((len(as1),17,17)) + np.nan
-allimg_c = np.zeros((len(as1),17,17)) + np.nan
-allimg_cr = np.zeros((len(as1),17,17)) + np.nan
-for i in xrange(len(as1)):
-    allimg[i,:,:] = ft.image_asics(all1=amps[:,i])
-    bad = allimg[i,:,:] > cutval
-    allimg[i,:,:][bad] = np.nan
-
-    allimg_c[i,:,:] = ft.image_asics(all1=amps[:,i]*calibration)
-    bad = allimg_c[i,:,:] > cutval
-    allimg_c[i,:,:][bad] = np.nan
-
-    allimg_cr[i,:,:] = ft.image_asics(all1=amps[:,i]*calibration_restrict)
-    bad = allimg_cr[i,:,:] > cutval
-    allimg_cr[i,:,:][bad] = np.nan
-
-    cmap = cm.get_cmap('viridis', 10)
-
-    clf()
-    subplot(1,2,1)
-    imshow(allimg[i,:,:],vmin=0,vmax=75, cmap=cmap)
-    colorbar()
-    title('$\Delta$az={} - Not calibrated'.format(az[i]))
-    subplot(1,2,2)
-    imshow(allimg_c[i,:,:],vmin=0,vmax=75, cmap=cmap)
-    colorbar()
-    title('$\Delta$az={} - Calibrated'.format(az[i]))
-    # subplot(2,2,3)
-    # imshow(allimg_cr[i,:,:],vmin=0,vmax=75, cmap=cmap)
-    # colorbar()
-    # title('$\Delta$az={} - Calibrated (restr)'.format(az[i]))
-    show()
-    savefig('imgscan01022019_calib_az_{}.png'.format(1000+az[i]))
     #raw_input('Press a key')

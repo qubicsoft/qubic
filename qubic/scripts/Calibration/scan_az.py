@@ -46,8 +46,8 @@ dc = 0.33
 tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum,
         0, fff, dc, as1[0], 1, name=name,
         initpars=None, lowcut=0.05, highcut=15., 
-        rangepars=[[0.,1.], [0., 0.5], [0.,1./fff], [0., 5000.]],  
-        stop_each=True,
+        rangepars=[[0.,1.], [0., 0.5], [0.,1./fff], [0., 1000.]],  
+        stop_each=False,
         reselect_ok=False, okfile='ScanAz2019-01-30_OK_Asic1.fits')
 
 tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum,
@@ -55,7 +55,7 @@ tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum,
         dc, as2[0], 2, name=name,
         initpars=None, lowcut=0.05, highcut=15., 
         reselect_ok=False,
-        rangepars=[[0.,1.], [0., 0.5], [0.,1./fff], [0., 50.]],  
+        rangepars=[[0.,1.], [0., 0.5], [0.,1./fff], [0., 1000.]],  
         okfile='ScanAz2019-01-30_OK_Asic2.fits')
 
 #### Now loop on asics
@@ -67,7 +67,9 @@ for i in xrange(len(as1)):
     asic = as1[i]
     tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum, 0, fff, 
         dc, asic, 1, name, doplot=False,
-        initpars=None, lowcut=0.05, highcut=15., okfile='ScanAz2019-01-30_OK_Asic1.fits')
+        initpars=None, lowcut=0.05, highcut=15.,         
+        rangepars=[[0.,1.], [0., 0.5], [0.,1./fff], [0., 1000.]],  
+        okfile='ScanAz2019-01-30_OK_Asic1.fits')
     params[~okfinal,:] = np.nan
     amps[:128,i] = params[:,3]
     erramps[:128,i] = err[:,3]
@@ -77,7 +79,9 @@ for i in xrange(len(as1)):
     asic = as2[i]
     tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum, 0, fff, 
         dc, asic, 2, name, doplot=False,
-        initpars=None, lowcut=0.05, highcut=15., okfile='ScanAz2019-01-30_OK_Asic2.fits')
+        initpars=None, lowcut=0.05, highcut=15.,         
+        rangepars=[[0.,1.], [0., 0.5], [0.,1./fff], [0., 1000.]],  
+        okfile='ScanAz2019-01-30_OK_Asic2.fits')
     params[~okfinal,:] = np.nan
     amps[128:,i] = params[:,3]
     erramps[128:,i] = err[:,3]
@@ -85,7 +89,7 @@ for i in xrange(len(as1)):
     errtaus[128:,i] = err[:,1]
 
 
-cutval = 200
+cutval = 1000
 
 allimg = np.zeros((len(as1),17,17)) + np.nan
 for i in xrange(len(as1)):
@@ -93,7 +97,7 @@ for i in xrange(len(as1)):
     bad = allimg[i,:,:] > cutval
     allimg[i,:,:][bad] = np.nan
     clf()
-    imshow(allimg[i,:,:],vmin=0,vmax=75, cmap='viridis')
+    imshow(allimg[i,:,:],vmin=0,vmax=1000, cmap='viridis')
     colorbar()
     title('$\Delta$az={}'.format(az[i]))
     show()

@@ -405,10 +405,17 @@ def fit_average(t, folded, fff, dc, fib, Vtes,
 		#derivatives = np.gradient(av)
 		#src_on = np.min()
 		# try to detect the start time
-		bla = do_minuit(t, av, np.ones(len(t)), [dc, 0.1, 1./fff, 1.], functname=functname, 
+
+		nnn = 100
+		t0 = np.linspace(0,1./fff,nnn)
+		diff2 = np.zeros(nnn)
+		for i in xrange(nnn): diff2[i] = np.sum((av-functname(t,[dc, 0.1, t0[i], 1.]))**2)
+		ttry = t0[np.argmin(diff2)]
+
+		bla = do_minuit(t, av, np.ones(len(t)), [dc, 0.1, ttry, 1.], functname=functname, 
 		rangepars=[[0.,1.], [0., 0.2], [0.,1./fff], [0., 20.]], 
 		fixpars=[1,1,0,1], 
-		force_chi2_ndf=True, verbose=False, nohesse=True)
+		force_chi2_ndf=True, verbose=True, nohesse=True)
 		initpars = [dc, 0.1, bla[1][2], 1.]
 		# plt.ion()
 		# plt.clf()
@@ -416,7 +423,6 @@ def fit_average(t, folded, fff, dc, fib, Vtes,
 		# plt.plot(t,av,color='b',lw=4,alpha=0.3, label='Median')
 		# plt.plot(t, functname(t, bla[1]), 'r--',lw=4)
 		# plt.show()
-		# stop
 
 	####### Fit
 	bla = do_minuit(t, av, np.ones(len(t)), initpars, functname=functname, 
@@ -550,7 +556,7 @@ timerange=None, removesat=False, stop_each=False, rangepars=None):
 		#### And the fit on all data with this as a first guess forcing some parameters - it returns the list of OK detectorsy
 		allparams, allerr, allchi2, ndf, ok = fit_all(tt, folded, av, fff, dc, fib, Vtes, 
 				initpars = [dc, params[1], params[2], params[3]],
-				fixpars = [1,0,1,0],stop_each=True)
+				fixpars = [1,0,1,0], rangepars=rangepars,stop_each=True)
 
 		#### Pass 2
 		#### Refit with only the above selected ones in order to have good t0
@@ -567,6 +573,7 @@ timerange=None, removesat=False, stop_each=False, rangepars=None):
 		#### And the fit on all data with this as a first guess forcing some parameters - it returns the list of OK detectors
 		allparams, allerr, allchi2, ndf, ok = fit_all(tt, folded, av, fff, dc, fib, Vtes, 
 				initpars = [dc, params[1], params[2], params[3]],
+				rangepars=rangepars,
 				fixpars = [1,0,1,0],stop_each=True)
 
 
@@ -576,6 +583,7 @@ timerange=None, removesat=False, stop_each=False, rangepars=None):
 		allparams, allerr, allchi2, ndf, ok_useless = fit_all(tt, folded_nonorm*1e9, 
 				av, fff, dc, fib, Vtes, 
 				initpars = [dc, params[1], params[2], params[3]],
+				rangepars=rangepars,
 				fixpars = [1,0,1,0], functname=simsig_nonorm)
 
 		okfinal = ok * (allparams[:,1] < 1.)

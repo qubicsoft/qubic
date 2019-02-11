@@ -340,6 +340,49 @@ def notch_array(freqs, bw):
 
     return notch
 
+def notch_filter(data, f0, bw, fs):
+    Q = f0 / bw
+    b, a = scsig.iirnotch(f0 / fs * 2, Q)
+    y = scsig.lfilter(b, a, data)
+    return y
+
+
+def meancut(data, nsig):
+    dd, mini, maxi = scipy.stats.sigmaclip(data, low=nsig, high=nsig)
+    return np.mean(dd), np.std(dd)
+
+
+def simsig(x, pars):
+    dx = x[1] - x[0]
+    cycle = np.nan_to_num(pars[0])
+    ctime = np.nan_to_num(pars[1])
+    t0 = np.nan_to_num(pars[2])
+    amp = np.nan_to_num(pars[3])
+    sim_init = np.zeros(len(x))
+    ok = x < (cycle * (np.max(x)))
+    sim_init[ok] = 1.
+    sim_init_shift = np.interp((x - t0) % max(x), x, sim_init)
+    # thesim = -1*f.gaussian_filter1d(sim_init_shift, ctime, mode='wrap')
+    thesim = -1 * exponential_filter1d(sim_init_shift, ctime / dx, mode='wrap')
+    thesim = (thesim - np.mean(thesim)) / np.std(thesim) * amp
+    return thesim
+
+
+def simsig_nonorm(x, pars):
+    dx = x[1] - x[0]
+    cycle = np.nan_to_num(pars[0])
+    ctime = np.nan_to_num(pars[1])
+    t0 = np.nan_to_num(pars[2])
+    amp = np.nan_to_num(pars[3])
+    sim_init = np.zeros(len(x))
+    ok = x < (cycle * (np.max(x)))
+    sim_init[ok] = amp
+    sim_init_shift = np.interp((x - t0) % max(x), x, sim_init)
+    thesim = -1 * exponential_filter1d(sim_init_shift, ctime / dx, mode='wrap')
+    thesim = (thesim - np.mean(thesim))
+    return thesim
+
+
 def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None):
 	tfold = time % period
 	FREQ_SAMPLING = 1./(time[1]-time[0])
@@ -655,49 +698,6 @@ timerange=None, removesat=False, stop_each=False, rangepars=None):
 		
 
 	return tt, folded, okfinal, allparams, allerr, allchi2, ndf
-
-def notch_filter(data, f0, bw, fs):
-    Q = f0 / bw
-    b, a = scsig.iirnotch(f0 / fs * 2, Q)
-    y = scsig.lfilter(b, a, data)
-    return y
-
-
-def meancut(data, nsig):
-    dd, mini, maxi = scipy.stats.sigmaclip(data, low=nsig, high=nsig)
-    return np.mean(dd), np.std(dd)
-
-
-def simsig(x, pars):
-    dx = x[1] - x[0]
-    cycle = np.nan_to_num(pars[0])
-    ctime = np.nan_to_num(pars[1])
-    t0 = np.nan_to_num(pars[2])
-    amp = np.nan_to_num(pars[3])
-    sim_init = np.zeros(len(x))
-    ok = x < (cycle * (np.max(x)))
-    sim_init[ok] = 1.
-    sim_init_shift = np.interp((x - t0) % max(x), x, sim_init)
-    # thesim = -1*f.gaussian_filter1d(sim_init_shift, ctime, mode='wrap')
-    thesim = -1 * exponential_filter1d(sim_init_shift, ctime / dx, mode='wrap')
-    thesim = (thesim - np.mean(thesim)) / np.std(thesim) * amp
-    return thesim
-
-
-def simsig_nonorm(x, pars):
-    dx = x[1] - x[0]
-    cycle = np.nan_to_num(pars[0])
-    ctime = np.nan_to_num(pars[1])
-    t0 = np.nan_to_num(pars[2])
-    amp = np.nan_to_num(pars[3])
-    sim_init = np.zeros(len(x))
-    ok = x < (cycle * (np.max(x)))
-    sim_init[ok] = amp
-    sim_init_shift = np.interp((x - t0) % max(x), x, sim_init)
-    thesim = -1 * exponential_filter1d(sim_init_shift, ctime / dx, mode='wrap')
-    thesim = (thesim - np.mean(thesim))
-    return thesim
-
 
 
 def calibrate(fib, pow_maynooth, allparams, allerr, allok, cutparam=None, cuterr=None, bootstrap=None):

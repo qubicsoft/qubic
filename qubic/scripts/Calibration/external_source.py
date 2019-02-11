@@ -78,30 +78,35 @@ best_det = 9
 
 ###### TOD Example #####
 theTES = best_det
-for i in xrange(256):
-    clf()
-    theTES = i
-    plot(time, dd[theTES, :])
-    xlabel('Time [s]')
-    ylabel('Current [nA]')
-    title(i)
-    show()
-    raw_input('press any key')
+clf()   
+plot(time, dd[theTES,:])
+xlabel('Time [s]')
+ylabel('Current [nA]')
+title(theTES)
+show()
+#raw_input('press any key')
+
 
 ###### TOD Power Spectrum #####
 theTES = best_det
 frange = [0.3, 15]
 filt = 5
-FreqResp(best_det, frange, fff, filt, dd, FREQ_SAMPLING, nsamples)
+frange = [0.3, 15] #range of plot frequencies desired
+filt = 5
+spectrum, freq = mlab.psd(dd[theTES,:], Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
+filtered_spec = f.gaussian_filter1d(spectrum, filt)
+
+FreqResp(freq, frange, filtered_spec, theTES, fff)
+
 
 #### Filtering out the signal from the PT
 freqs_pt = [1.72383, 3.24323, 3.44727, 5.69583, 6.7533, 9.64412, 12.9874]
 bw_0 = 0.005
-spectrum, freq = mlab.psd(dd[theTES, :], Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
-filtered_spec = f.gaussian_filter1d(spectrum, filt)
-notch = FiltFreqResp(theTES, frange, fff, filt, freqs_pt, bw_0, dd,
-                     FREQ_SAMPLING, nsamples, freq, spectrum, filtered_spec)
 
+notch = ft.notch_array(freqs_pt, bw_0)
+
+FiltFreqResp(theTES, frange, fff, filt, dd, notch,
+			 FREQ_SAMPLING, nsamples, freq, spectrum, filtered_spec)
 ############################################################################
 
 
@@ -147,14 +152,12 @@ for i in xrange(len(infos)):
     fff = the_info['fff']
     dc = the_info['dc']
     initpars = the_info['initpars']
-    tt, folded1, okfinal1, allparams1, allerr1, allchi21, ndf1 = ft.run_asic(fnum, 0, fff, dc,
-                                                                             asic1, 1, reselect_ok=False, lowcut=0.05,
-                                                                             highcut=15., nbins=50,
-                                                                             nointeractive=False, doplot=True,
-                                                                             lastpassallfree=False,
-                                                                             okfile='TES_OK_ExtSrc150GHz_asic1.fits',
-                                                                             name=name,
-                                                                             initpars=initpars)
+    tt, folded1, okfinal1, allparams1, allerr1, allchi21, ndf1 = ft.run_asic(fnum, 
+        0, fff, dc, 
+        asic1, 1, reselect_ok=False, lowcut=0.05, highcut=15., nbins=50,
+        rangepars=[[0.,1.], [0., 0.5], [0.,1./fff], [0., 5000.]], 
+        initpars=the_info['initpars'],
+        okfile='TES_OK_ExtSrc150GHz_asic1.fits')
     pars.append(allparams1)
 
 img_amp = np.zeros((128, len(infos))) + np.nan
@@ -171,18 +174,12 @@ for i in xrange(len(infos)):
     colorbar()
 plt.tight_layout()
 
-clf()
-for i in xrange(len(infos)):
-    subplot(2, 2, i + 1)
-    imshow(ft.image_asics(data1=img_amp[:, i]), vmin=0, vmax=60)
-    title('Amp {} {} GHz'.format(infos[i]['name'], infos[i]['fnum']))
-    colorbar()
-plt.tight_layout()
 
 clf()
 for i in xrange(len(infos)):
-    subplot(2, 2, i + 1)
-    imshow(ft.image_asics(data1=img_amp[:, i] / img_amp[:, 3]), vmin=0, vmax=5)
+    subplot(2,2,i+1)
+    imshow(ft.image_asics(data1=img_amp[:,i]), vmin=0, vmax=500)
+
     title('Amp {} {} GHz'.format(infos[i]['name'], infos[i]['fnum']))
     colorbar()
 plt.tight_layout()

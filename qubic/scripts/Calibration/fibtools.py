@@ -288,6 +288,7 @@ def qs2array(file, FREQ_SAMPLING, timerange=None):
 	Also returns 'time' which is linear time array
 	Can also specify a timerange
 	"""
+
     a = qp()
     a.read_fits(file)
     npix = a.NPIXELS

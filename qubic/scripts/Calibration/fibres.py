@@ -90,12 +90,12 @@ notch = ft.notch_array(freqs_pt, bw_0)
 FiltFreqResp(theTES, frange, fff, filt, dd, notch,
 			 FREQ_SAMPLING, nsamples, freq, spectrum, filtered_spec)
 
+
 ############################################################################
 ### Fold the data at the modulation period of the fibers
-### Signal is also badpass filtered before folding
+### Signal is also bandpass filtered before folding
 
 #set up band pass filter
-theTES=45
 lowcut = 0.5
 highcut = 15
 nbins=50
@@ -107,7 +107,7 @@ folded_notch, tt, folded_notch_nonorm = ft.fold_data(time, dd, 1./fff, lowcut, h
 
 #set values for fold plot
 pars = [dc, 0.05, 0., 1.2]
-theTES=45
+#theTES=45
 #plot folded TES data
 FoldedFiltTES(tt, pars, theTES, folded, folded_notch)
 

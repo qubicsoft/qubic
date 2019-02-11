@@ -55,6 +55,7 @@ def FiltFreqResp(theTES, frange, fff, filt, dd, notch,
 		sigfilt = ft.notch_filter(sigfilt, notch[i][0], notch[i][1], FREQ_SAMPLING)
 	#get new spectrum with notch filter applied
 	spectrum_f, freq_f = mlab.psd(sigfilt, Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
+
 	#start plotting
 	plt.figure()
 	plt.xlim(frange[0], frange[1])

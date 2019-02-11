@@ -12,29 +12,28 @@ fibtools will also have some useful functions for generic use in qubicsoft
 """
 
 import numpy as np
-#from Calibration import fibtools as ft
-import fibtools as ft
+from Calibration import fibtools as ft
+#import fibtools as ft
 import matplotlib.pyplot as plt
 from pysimulators import FitsArray
 import matplotlib.mlab as mlab
 import scipy.ndimage.filters as f
-#from Calibration.plotters import *
-from plotters import *
+from Calibration.plotters import *
+#from plotters import *
 
 ################################################ INPUT FILES ######################################
 
 #basedir = '/home/louisemousset/QUBIC/Qubic_work/Calibration/'
-basedir = '/home/james/fibdata/'
-#basedir = '/Users/hamilton/CMB/Qubic/Fibres/'
+#basedir = '/home/james/fibdata/'
+basedir = '/Users/hamilton/CMB/Qubic/Fibres/'
 
 ##### Fiber_2 Fiber@1V; Freq=1Hz; DutyCycle=30%; Voffset_TES=3V
-fib = 2
-Vtes = 3.
-fff = 1.
-dc = 0.3
-
-asic1 = basedir + '/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic1-2018.12.20.172722.fits'
-asic2 = basedir + '/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
+# fib = 2
+# Vtes = 3.
+# fff = 1.
+# dc = 0.3
+# asic1 = basedir + '/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic1-2018.12.20.172722.fits'
+# asic2 = basedir + '/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
 
 ##### Fiber 3: Fiber@1V; Freq=1.5Hz; DutyCycle=50%; Voffset_TES=3V
 # fib = 3
@@ -45,12 +44,12 @@ asic2 = basedir + '/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2
 # asic2 = basedir + '/2018-12-20/2018-12-20_17.52.08__Fiber_3/Sums/science-asic2-2018.12.20.175208.fits'
 
 # ##### Fiber 4: Fiber@1V; Freq=1Hz; DutyCycle=50%; Voffset_TES=2.6V
-# fib = 4
-# Vtes = 2.6
-# fff = 1.
-# dc = 0.5
-# asic1 = basedir +  '/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic1-2018.12.20.172722.fits'
-# asic2 = basedir + '/2018-12-20/2018-12-20_17.27.22__Fiber_2/Sums/science-asic2-2018.12.20.172722.fits'
+fib = 4
+Vtes = 2.6
+fff = 1.
+dc = 0.5
+asic1 = basedir +  '/2018-12-20/2018-12-20_18.16.58__Fiber_4/Sums/science-asic1-2018.12.20.181658.fits'
+asic2 = basedir + '/2018-12-20/2018-12-20_18.16.58__Fiber_4/Sums/science-asic2-2018.12.20.181658.fits'
 ############################################################################
 
 ############################# Reading files Example ########################
@@ -147,8 +146,10 @@ FoldedTESFreeFit(tt, bla, theTES, folded)
 ##################################################
 #### Asic 1
 #run ASIC analysis code
-tt, folded1, okfinal1, allparams1, allerr1, allchi21, ndf1 = ft.run_asic(fib, Vtes, fff, dc, 
-	asic1, 1, reselect_ok=True, notch=notch)
+tt, folded1, okfinal1, allparams1, allerr1, allchi21, ndf1 = ft.run_asic(fib, Vtes, 
+	fff, dc, 
+	asic1, 1, reselect_ok=False, notch=notch,
+	rangepars=[[0.,1.], [0., 0.5], [0.,1./fff], [0., 20.]])
 #run ASIC plotter
 plt.savefig('fib{}_ASIC1_summary.png'.format(fib))
 
@@ -156,12 +157,13 @@ plt.savefig('fib{}_ASIC1_summary.png'.format(fib))
 #### Asic 2
 tt, folded2, okfinal2, allparams2, allerr2, allchi22, ndf2 = ft.run_asic(fib, Vtes, fff, dc, 
 	asic2, 2, reselect_ok=False, lowcut=0.5, highcut=15., nbins=50, 
-	nointeractive=False, doplot=True, notch=notch)
+	nointeractive=False, doplot=True, notch=notch, 
+	rangepars=[[0.,1.], [0., 0.5], [0.,1./fff], [0., 20.]])
 plt.savefig('fib{}_ASIC2_summary.png'.format(fib))
 
 
 #### Additional cuts:
-tau_max = 0.3
+tau_max = 0.4
 okfinal1 = okfinal1 * (allparams1[:,1] < tau_max)
 okfinal2 = okfinal2 * (allparams2[:,1] < tau_max)
 
@@ -173,7 +175,8 @@ allerr = np.append(allerr1, allerr2, axis=0)
 allchi2 = np.append(allchi21, allchi22, axis=0)
 ndf = ndf1
 
-Allplots(fib, allparams, allparams1, allparams2, okfinal, okfinal1, okfinal2, asic, med=False, rng=[0,0.4])
+Allplots(fib, allparams, allparams1, allparams2, okfinal, okfinal1, okfinal2, asic, med=False)
+plt.savefig('fib{}_summary.png'.format(fib))
 
 ##### Compare TES with Thermometers
 thermos = np.zeros(128, dtype=bool)
@@ -181,3 +184,4 @@ thnum = [3, 35, 67, 99]
 thermos[thnum] = True
 
 TESvsThermo(fib, tt, folded1, folded2, okfinal1, okfinal2, thermos)
+plt.savefig('fib{}_thermoVsTES.png'.format(fib))

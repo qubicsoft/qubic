@@ -38,7 +38,7 @@ def statstr(x, divide=False, median=False, cut=None):
 
 
 
-def image_asics(data1=None, data2=None, all1=False):
+def image_asics(data1=None, data2=None, all1=None):
 	"""
 	Return an image of detectors on the focal plane.
 	Each asic has 124 TES and 4 thermometers.
@@ -287,7 +287,6 @@ def qs2array(file, FREQ_SAMPLING, timerange=None):
 	Rfb = a.Rfeedback
 	NbSamplesPerSum = 64. #this could also be a.NPIXELS_sampled
 	gain=1./2.**7*20./2.**16/(NbSamplesPerSum*Rfb)
-	
 	for i in xrange(npix):
 		dd[i,:] = a.timeline(TES=i+1)
 		dd[i,:] = gain * dd[i,:]
@@ -406,15 +405,22 @@ def fit_average(t, folded, fff, dc, fib, Vtes,
 		#derivatives = np.gradient(av)
 		#src_on = np.min()
 		# try to detect the start time
-		bla = do_minuit(t, av, np.ones(len(t)), [dc, 0.1, 1./fff/2, 1.], functname=functname, 
-		rangepars=[[0.,1.], [0., 1], [0.,1./fff], [0., 2.]], 
+		bla = do_minuit(t, av, np.ones(len(t)), [dc, 0.1, 1./fff, 1.], functname=functname, 
+		rangepars=[[0.,1.], [0., 0.2], [0.,1./fff], [0., 20.]], 
 		fixpars=[1,1,0,1], 
 		force_chi2_ndf=True, verbose=False, nohesse=True)
 		initpars = [dc, 0.1, bla[1][2], 1.]
+		# plt.ion()
+		# plt.clf()
+		# plt.xlim(0,1./fff)
+		# plt.plot(t,av,color='b',lw=4,alpha=0.3, label='Median')
+		# plt.plot(t, functname(t, bla[1]), 'r--',lw=4)
+		# plt.show()
+		# stop
 
 	####### Fit
 	bla = do_minuit(t, av, np.ones(len(t)), initpars, functname=functname, 
-		rangepars=[[0.,1.], [0., 10], [0.,1./fff], [0., 2.]], fixpars=fixpars, 
+		rangepars=[[0.,1.], [0., 0.5], [0.,1./fff], [0., 2.]], fixpars=fixpars, 
 		force_chi2_ndf=True, verbose=False, nohesse=True)
 	params_av = bla[1]
 	err_av = bla[2]
@@ -441,13 +447,13 @@ def fit_average(t, folded, fff, dc, fib, Vtes,
 def fit_all(t, folded, av, fff, dc, fib, Vtes, 
 						initpars=None, 
 						fixpars = [0,0,0,0],
-						doplot=True, stop_each=False, functname=simsig):
+						doplot=True, stop_each=False, functname=simsig, 
+						rangepars=None):
 
 	sh = np.shape(folded)
 	npix = sh[0]
 	nbins = sh[1]
 	print('       Got {} pixels to fit'.format(npix))
-
 	##### Now fit each TES fixing cycle to dc and t0 to the one fitted on the median
 	allparams = np.zeros((npix,4))
 	allerr = np.zeros((npix,4))
@@ -460,7 +466,7 @@ def fit_all(t, folded, av, fff, dc, fib, Vtes,
 		#### First a fit with no error correction in order to have a chi2 distribution
 		theres = do_minuit(t, thedd, np.ones(len(t)), initpars, functname=functname,
 			fixpars = fixpars, 
-			rangepars=[[0.,1.], [0., 10], [0.,1/fff], [0., 10000]], 
+			rangepars=rangepars, 
 			force_chi2_ndf=True, verbose=False, nohesse=True)
 		chi2 = theres[4]
 		ndf = theres[5]
@@ -503,7 +509,7 @@ def fit_all(t, folded, av, fff, dc, fib, Vtes,
 
 
 def run_asic(idnum, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=0.5, highcut=15., nbins=50, nointeractive=False, doplot=True, notch=None, lastpassallfree=False, name='fib', okfile=None, initpars=None,
-timerange=None, removesat=False):
+timerange=None, removesat=False, stop_each=False, rangepars=None):
 	fib = idnum
 	### Read data
 	#GOING TO TEST PASSING IN THESE VARS
@@ -603,7 +609,7 @@ timerange=None, removesat=False):
 		allparams, allerr, allchi2, ndf, ok_useless = fit_all(tt, folded_nonorm*1e9, 
 				av, fff, dc, fib, Vtes, 
 				initpars = [dc, params[1], params[2], params[3]],
-				fixpars = [1,0,1,0], functname=simsig_nonorm)
+				fixpars = [1,0,1,0], functname=simsig_nonorm, rangepars=rangepars)
 	else:
 		plt.figure(figsize=(6,8))
 		plt.subplot(3,1,1)
@@ -615,6 +621,7 @@ timerange=None, removesat=False):
 				doplot=True,clear=False, name=name)
 		print(params)
 		print(err)
+	
 		if lastpassallfree:
 			fixed = [0, 0, 0, 0]
 		else: 
@@ -622,7 +629,7 @@ timerange=None, removesat=False):
 		allparams, allerr, allchi2, ndf, ok_useless = fit_all(tt, folded_nonorm*1e9, 
 				av, fff, dc, fib, Vtes, 
 				initpars = [dc, params[1], params[2], params[3]],
-				fixpars = fixed, functname=simsig_nonorm)
+				fixpars = fixed, functname=simsig_nonorm, stop_each=stop_each, rangepars=rangepars)
 
 		plt.subplot(3,2,3)
 		mmt, sst = meancut(allparams[okfinal,1], 3)
@@ -655,12 +662,12 @@ timerange=None, removesat=False):
 
 		plt.subplot(3,2,5)
 		imtau = image_asics(data1=tau1, data2=tau2)	
-		plt.imshow(imtau,vmin=0,vmax=mmt+4*sst)
+		plt.imshow(imtau,vmin=0,vmax=mmt+4*sst, cmap='viridis')
 		plt.title('Tau - {} {} - asic {}'.format(name,fib,asic))
 		plt.colorbar()
 		plt.subplot(3,2,6)
 		imamp = image_asics(data1=amp1, data2=amp2)	
-		plt.imshow(imamp,vmin=0,vmax=mma+6*ssa)
+		plt.imshow(imamp,vmin=0,vmax=mma+6*ssa, cmap='viridis')
 		plt.colorbar()
 		plt.title('Amp - {} {} - asic {}'.format(name,fib, asic))
 		plt.tight_layout()
@@ -741,13 +748,13 @@ def calibrate(fib, pow_maynooth, allparams, allerr, allok, cutparam=None, cuterr
 
 
 	plt.subplot(2,2,2)
-	plt.imshow(img_maynooth,vmin=np.min(pow_maynooth), vmax=np.max(pow_maynooth), interpolation='nearest')
+	plt.imshow(img_maynooth,vmin=np.min(pow_maynooth), vmax=np.max(pow_maynooth), interpolation='nearest',cmap='viridis')
 	plt.colorbar()
 	plt.title('Maynooth [mW]')
 
 	plt.subplot(2,2,4)
 	plt.img = image_asics(allparams[:,3]/res[1][0], all1=True)
-	plt.imshow(img, interpolation='nearest')
+	plt.imshow(img, interpolation='nearest',cmap='viridis')
 	plt.colorbar()
 	plt.title('Amp Fib{}  converted to mW'.format(fib))
 	plt.tight_layout()

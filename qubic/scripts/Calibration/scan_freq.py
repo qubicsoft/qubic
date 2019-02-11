@@ -7,33 +7,26 @@ import scipy.ndimage.filters as f
 import glob
 from qubicpack import qubicpack as qp
 
-#### Directory where the files for various angles are located
-#dir = '/Users/hamilton/Qubic/ExternalSource/ScanAz2019-01-30/'
-#dir = '/Users/hamilton/Qubic/ExternalSource/ScanAz2019-01-31/'
-dir = '/Users/hamilton/Qubic/ExternalSource/ScanAz2019-01-31-Long/'
+
+#### Calsource Stepping
+tf, f = np.loadtxt('freq_modulation.txt').T
+
+
+#### Directory where the files are located
+dir = '/Users/hamilton/Qubic/ExternalSource/2019-02-01_17.24.02__Sweepinfrequency/'
+init_time = time.mktime(datetime.datetime(2019,2,1,17,24).timetuple())-3600
+#init_time = 1549034752.612113
+
 
 #### Now find the az and el corresponding to each directory and prepare the files to read
 subdirs = glob.glob(dir+'*')
-as1 = glob.glob(dir+'*/Sums/*asic1*.fits')
-as2 = glob.glob(dir+'*/Sums/*asic2*.fits')
+as1 = glob.glob(dir+'Sums/*asic1*.fits')[0]
+as2 = glob.glob(dir+'Sums/*asic2*.fits')[0]
 
-els = np.zeros(len(subdirs))
-azs = np.zeros(len(subdirs))
-for i in xrange(len(subdirs)):
-    els[i], azs[i] = [float(s) for s in subdirs[i].split('_') if ft.isfloat(s)]
-
-
-#a = qp()
-#a.read_qubicstudio_dataset(subdirs[0])
-
-
-
-order = np.argsort(azs)
-az = azs[order]
-el = els[order]
-as1 = np.array(as1)[order]
-as2 = np.array(as2)[order]
-subdirs = np.array(subdirs)[order]
+time_ranges = np.zeros((2,len(tf)))
+time_ranges[0,:]=tf-init_time
+time_ranges[1,:]= np.roll(time_ranges[0,:],-1)
+time_ranges[1,-1] = time_ranges[0,-1]+60
 
 ### Analyse one to define the list of pixok
 name = 'ExtSrc(Auto)'
@@ -44,40 +37,42 @@ dc = 0.33
 #### Saturation value: 2.235174179076e-08
 
 tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum,
-        0, fff, dc, as1[0], 1, name=name,
+        0, fff, 
+        dc, as1, 1, name=name, timerange=time_ranges[:,0],
         initpars=None, lowcut=0.05, highcut=15., 
-        rangepars=[[0.,1.], [0., 0.5], [0.,1./fff], [0., 5000.]],  
-        stop_each=True,
-        reselect_ok=False, okfile='ScanAz2019-01-30_OK_Asic1.fits')
+        reselect_ok=False, okfile='ScanAz2019-02-01_nuscan_OK_Asic1.fits')
 
 tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum,
         0, fff, 
-        dc, as2[0], 2, name=name,
+        dc, as2, 2, name=name, timerange=time_ranges[:,0],
         initpars=None, lowcut=0.05, highcut=15., 
         reselect_ok=False,
-        rangepars=[[0.,1.], [0., 0.5], [0.,1./fff], [0., 50.]],  
-        okfile='ScanAz2019-01-30_OK_Asic2.fits')
+        okfile='ScanAz2019-02-01_nuscan_OK_Asic2.fits')
+
+
+## problems: 155, 142.5, 137.5
+##            11     5      3
 
 #### Now loop on asics
-amps = np.zeros((256,len(az)))
-taus = np.zeros((256,len(az)))
-erramps = np.zeros((256,len(az)))
-errtaus = np.zeros((256,len(az)))
-for i in xrange(len(as1)):
-    asic = as1[i]
+amps = np.zeros((256,len(tf)))
+taus = np.zeros((256,len(tf)))
+erramps = np.zeros((256,len(tf)))
+errtaus = np.zeros((256,len(tf)))
+for i in xrange(len(tf)):
+    asic = as1
     tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum, 0, fff, 
-        dc, asic, 1, name, doplot=False,
-        initpars=None, lowcut=0.05, highcut=15., okfile='ScanAz2019-01-30_OK_Asic1.fits')
+        dc, asic, 1, name=name, doplot=False,timerange=time_ranges[:,i],
+        initpars=None, lowcut=0.05, highcut=15., okfile='ScanAz2019-02-01_nuscan_OK_Asic1.fits')
     params[~okfinal,:] = np.nan
     amps[:128,i] = params[:,3]
     erramps[:128,i] = err[:,3]
     taus[:128,i] = params[:,1]
     errtaus[:128,i] = err[:,1]
 
-    asic = as2[i]
+    asic = as2
     tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum, 0, fff, 
-        dc, asic, 2, name, doplot=False,
-        initpars=None, lowcut=0.05, highcut=15., okfile='ScanAz2019-01-30_OK_Asic2.fits')
+        dc, asic, 2, name=name, doplot=False,timerange=time_ranges[:,i],
+        initpars=None, lowcut=0.05, highcut=15., okfile='ScanAz2019-02-01_nuscan_OK_Asic2.fits')
     params[~okfinal,:] = np.nan
     amps[128:,i] = params[:,3]
     erramps[128:,i] = err[:,3]
@@ -85,20 +80,22 @@ for i in xrange(len(as1)):
     errtaus[128:,i] = err[:,1]
 
 
-cutval = 200
+cutval = 2000
 
-allimg = np.zeros((len(as1),17,17)) + np.nan
-for i in xrange(len(as1)):
+allimg = np.zeros((len(tf),17,17)) + np.nan
+for i in xrange(len(tf)):
     allimg[i,:,:] = ft.image_asics(all1=amps[:,i])
     bad = allimg[i,:,:] > cutval
     allimg[i,:,:][bad] = np.nan
+    ok = isfinite(allimg[i,:,:])
+    mm = np.mean(allimg[i,:,:][ok])
     clf()
-    imshow(allimg[i,:,:],vmin=0,vmax=75, cmap='viridis')
+    imshow(allimg[i,:,:]/mm,vmin=0,vmax=3, cmap='viridis')
     colorbar()
-    title('$\Delta$az={}'.format(az[i]))
+    title('$\nu$={}'.format(f[i]))
     show()
-    savefig('imgscan01022019_az_{}.png'.format(1000+az[i]))
-    #raw_input('Press a key')
+    savefig('imgscan01022019_nu_{}.png'.format(f[i]))
+    raw_input('Press a key')
 
 thepix = 93
 clf()

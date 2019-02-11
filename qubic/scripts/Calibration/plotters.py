@@ -103,38 +103,39 @@ def FoldedTESFreeFit(tt, bla, theTES, folded):
 	return
 
 
-def Allplots(fib, allparams, allparams1, allparams2, okfinal, okfinal1, okfinal2, asic, med=False, rng=[0,0.4]):
+def Allplots(fib, allparams, allparams1, allparams2, okfinal, okfinal1, okfinal2, asic, med=False, rng=None, cmap='viridis'):
 	plt.figure()
 	
 	plt.subplot(2,2,1)
-	plt.hist(allparams[okfinal, 1],range=rng,bins=30,label='All ({}) '.format(okfinal.sum())+ft.statstr(allparams[okfinal,1]*1000, median=med)+' ms', alpha=0.5)
-	plt.hist(allparams1[okfinal1, 1],range=rng,bins=30,label='Asic1 ({})'.format(okfinal1.sum())+ft.statstr(allparams1[okfinal1,1]*1000, median=med)+' ms', alpha=0.5)
-	plt.hist(allparams1[okfinal2, 1],range=rng,bins=30,label='Asic2 ({})'.format(okfinal2.sum())+ft.statstr(allparams2[okfinal2,1]*1000, median=med)+' ms', alpha=0.5)
+	mmt, sst = ft.meancut(allparams[okfinal,1], 3)
+	plt.hist(allparams[okfinal, 1],range=[0, mmt+4*sst],bins=15,label='All ({}) '.format(okfinal.sum())+ft.statstr(allparams[okfinal,1]*1000, median=med)+' ms', alpha=0.5)
+	plt.hist(allparams1[okfinal1, 1],range=[0, mmt+4*sst],bins=15,label='Asic1 ({})'.format(okfinal1.sum())+ft.statstr(allparams1[okfinal1,1]*1000, median=med)+' ms', alpha=0.5)
+	plt.hist(allparams1[okfinal2, 1],range=[0, mmt+4*sst],bins=15,label='Asic2 ({})'.format(okfinal2.sum())+ft.statstr(allparams2[okfinal2,1]*1000, median=med)+' ms', alpha=0.5)
 	plt.xlabel('Tau [sec]')
 	plt.legend(fontsize=7, frameon=False)
 	plt.title('Fib {} - Tau [s]'.format(fib))
 
 	plt.subplot(2,2,2)
-	plt.hist(allparams[okfinal, 3],range=[0,1],bins=15,label='All ({}) '.format(okfinal.sum())+ft.statstr(allparams[okfinal,3], median=med)+' nA', alpha=0.5)
-	plt.hist(allparams1[okfinal1, 3],range=[0,1],bins=15,label='Asic1 ({}) '.format(okfinal1.sum())+ft.statstr(allparams1[okfinal1,3], median=med)+' nA', alpha=0.5)
-	plt.hist(allparams1[okfinal2, 3],range=[0,1],bins=15,label='Asic2 ({}) '.format(okfinal2.sum())+ft.statstr(allparams2[okfinal2,3], median=med)+' nA', alpha=0.5)
+	mma, ssa = ft.meancut(allparams[okfinal,3], 3)
+	plt.hist(allparams[okfinal, 3],range=[0, mma+4*ssa],bins=15,label='All ({}) '.format(okfinal.sum())+ft.statstr(allparams[okfinal,3], median=med)+' nA', alpha=0.5)
+	plt.hist(allparams1[okfinal1, 3],range=[0, mma+4*ssa],bins=15,label='Asic1 ({}) '.format(okfinal1.sum())+ft.statstr(allparams1[okfinal1,3], median=med)+' nA', alpha=0.5)
+	plt.hist(allparams1[okfinal2, 3],range=[0, mma+4*ssa],bins=15,label='Asic2 ({}) '.format(okfinal2.sum())+ft.statstr(allparams2[okfinal2,3], median=med)+' nA', alpha=0.5)
 	plt.xlabel('Amp [nA]')
 	plt.legend(fontsize=7, frameon=False)
 	plt.title('Fib {} - Amp [nA]'.format(fib))
 
 	plt.subplot(2,2,3)
 	imtau = ft.image_asics(data1=allparams1[:,1], data2=allparams2[:,1])	
-	plt.imshow(imtau,vmin=0,vmax=0.5,interpolation='nearest')
+	plt.imshow(imtau,vmin=0,vmax=mmt+4*sst,interpolation='nearest', cmap=cmap)
 	plt.title('Tau [s] - Fiber {}'.format(fib,asic))
 	plt.colorbar()
 
 	plt.subplot(2,2,4)
 	imamp = ft.image_asics(data1=allparams1[:,3], data2=allparams2[:,3])	
-	plt.imshow(imamp,  vmin=0, vmax=1, interpolation='nearest')
+	plt.imshow(imamp,  vmin=0, vmax=mma+4*ssa, interpolation='nearest', cmap=cmap)
 	plt.title('Amp [nA] - Fiber {}'.format(fib,asic))
 	plt.colorbar()
 	plt.tight_layout()
-	plt.savefig('fib{}_summary.png'.format(fib))
 
 	return
 
@@ -151,6 +152,5 @@ def TESvsThermo(fib, tt, folded1, folded2, okfinal1, okfinal2, thermos):
 	plt.plot(tt, np.mean(folded2[okfinal2 * ~thermos,:], axis=0), 'b', lw=2, label='Valid TES average')
 	plt.plot(tt, np.mean(folded2[thermos,:],axis=0), 'r', lw=2, label='Thermometers')
 	plt.title('Fib = {} - ASIC 2'.format(fib))
-	plt.savefig('fib{}_thermoVsTES.png'.format(fib))
 
 	return

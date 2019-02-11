@@ -41,3 +41,29 @@ for i in xrange(len(allfib)):
     allcal[i] = cal[0]
     allerrcal[i] = errcal[0]
     #raw_input('Press a key to continue...')
+
+
+
+### TES Intercalibration with i=2 (best S/N)
+i=2
+fib = allfib[i]
+free = 'free13'
+allok = np.array(FitsArray('listok_fib{}_{}.fits'.format(fib,free))).astype(bool)
+allparams = np.array(FitsArray('params_fib{}_{}.fits'.format(fib,free)))
+allerr = np.array(FitsArray('err_fib{}_{}.fits'.format(fib,free)))
+allok = allok * isfinite(np.sum(allparams, axis=1)) * isfinite(np.sum(allerr, axis=1))
+
+
+calibration = np.zeros(256) + np.nan
+calibration[allok] = pow_maynooth[allok] / allparams[allok,3]
+
+cal, errcal, newok = ft.calibrate(fib, pow_maynooth, allparams, allerr, allok, cutparam=0.4, cuterr=0.03, bootstrap=10000)
+
+calibration_restrict = np.zeros(256) + np.nan
+calibration_restrict[newok] = pow_maynooth[newok] / allparams[newok,3]
+
+from pysimulators import FitsArray
+FitsArray(calibration).save('calibration.fits')
+FitsArray(calibration_restrict).save('calibration_restrict.fits')
+
+

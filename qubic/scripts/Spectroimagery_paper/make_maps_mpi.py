@@ -11,10 +11,6 @@ import matplotlib.pyplot as plt
 import qubic
 from pysimulators import FitsArray
 
-# #To have new random pointings
-# sys.path.insert(0, '/home/louisemousset/QUBIC/MyGitQUBIC/qubic/qubic')
-# import samplings as sam 
-
 import SpectroImLib as si
 
 #from mpi4py import MPI
@@ -34,7 +30,7 @@ if rank == 0:
 print '========================================================== Hello ! I am rank number {}'.format(rank)
 
 #### Simulation name ####
-name = 'pitch_test_I=0_07'
+name = 'simu'
 
 #### Dictionary ####
 dictfilename = 'test_spectroim.dict' 
@@ -87,16 +83,6 @@ x0 = MPI.COMM_WORLD.bcast(x0)
 t1 = time.time()
 p = qubic.get_pointing(d)
 
-# pitch_rand = np.random.rand(2000)*2
-# print('pitch_rand mean = ' + str(np.mean(pitch_rand)))
-# print('pitch_rand std = ' + str(np.std(pitch_rand)))
-# p.pitch[1000:] += pitch_rand
-# for i in xrange(len(p.pitch)):
-#       if p.pitch[i]> 360:
-#             #print(p.pitch[i])
-#             p.pitch[i] -= 360
-#             #print('new pitch = ' + str(p.pitch[i]))
-
 t2 = time.time()
 print('************************** Pointing - rank {} - done in {} seconds'.format(rank, t2-t1))
 
@@ -141,4 +127,4 @@ for nf_sub_rec in np.arange(noutmin, noutmax+1):
 
       MPI.COMM_WORLD.Barrier()
 
-#MPI.Finalize()
+MPI.Finalize()

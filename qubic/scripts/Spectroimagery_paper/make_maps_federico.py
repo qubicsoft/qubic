@@ -20,7 +20,7 @@ d = qubic.qubicdict.qubicDict()
 d.read_from_file("parameters.dict")
 
 ### Sky ###
-skypars = {'dust_coeff':1.39e-2, 'r':0} # 1.39e-2
+skypars = {'dust_coeff':0, 'r':0} # 1.39e-2
 x0 = si.create_input_sky(d, skypars) #shape is (num of sub-bands, npix, IQU)
 
 ### QUBIC TOD ###

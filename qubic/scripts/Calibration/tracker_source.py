@@ -51,14 +51,34 @@ sky = hp.sphtfunc.smoothing(sky, fwhm=30 * arcToRad)
 
 hp.gnomview(sky, rot=(az, el))
 
+## Sky x0 with only I
+
+# For a Multiband instrument
 x0 = np.zeros((d['nf_sub'], npix, 3))
 x0[:, :, 0] = sky
+
+# For a PolyInstrument
+# x0 = np.zeros((npix, 3))
+# x0[:, 0] = sky
 
 
 # =========== Get TOD for the FI =========
 def get_tod(d, p, x0):
+    """
+
+    Parameters
+    ----------
+    d : dictionnary
+    p : pointing
+    x0 : sky
+
+    Returns
+    -------
+    Returns a qubicMultiband instrument and TOD
+    """
     # Polychromatic instrument model
     q = qubic.QubicMultibandInstrument(d)
+    # q = qubic.QubicInstrument(d)
 
     # Scene
     s = qubic.QubicScene(d)
@@ -69,8 +89,9 @@ def get_tod(d, p, x0):
 
     # Multi-band acquisition operator
     a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_in)
+    # a = qubic.QubicPolyAcquisition(q, p, s, d)
 
-    tod, _ = a.get_observation(x0, noiseless=True)
+    tod = a.get_observation(x0, convolution=False, noiseless=True)
 
     return q, tod
 

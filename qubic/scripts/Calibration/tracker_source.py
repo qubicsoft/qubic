@@ -63,7 +63,7 @@ x0[:, :, 0] = sky
 
 
 # =========== Get TOD for the FI =========
-def get_tod(d, p, x0):
+def get_tod(d, p, x0, closed_horns=None):
     """
 
     Parameters
@@ -71,14 +71,20 @@ def get_tod(d, p, x0):
     d : dictionnary
     p : pointing
     x0 : sky
+    closed_horns : list
+        index of closed horns
 
     Returns
     -------
-    Returns a qubicMultiband instrument and TOD
+    Returns an instrument with closed horns and TOD
     """
     # Polychromatic instrument model
     q = qubic.QubicMultibandInstrument(d)
     # q = qubic.QubicInstrument(d)
+    if closed_horns is not None:
+        for i in xrange(d['nf_sub']):
+            for h in closed_horns:
+                q[i].horn.open[h]=False
 
     # Scene
     s = qubic.QubicScene(d)
@@ -96,9 +102,11 @@ def get_tod(d, p, x0):
     return q, tod
 
 
-q, tod_fi = get_tod(d, p, x0)
+q, tod_fi = get_tod(d, p, x0, closed_horns=None)
+q[0].horn.plot()
 
-# ========= Project TOD on the focal plane ============
+
+# ========= Get indices of TES on the focal plane ============
 detarray = fits.open(basedir + '/qubic/qubic/calfiles/CalQubic_DetArray_FI.fits')
 
 tes_index = detarray['index'].data
@@ -122,28 +130,50 @@ focal_plane = tes_index * tes_position_rev
 plt.clf()
 plt.imshow(focal_plane, interpolation='nearest', origin='lower')
 
-#  Plot the signal on the focal plane for each pointing
-plt.figure('tracker')
-tod_focal_plane = np.zeros((size_fi, size_fi, nptg))
-for ptg in xrange(nptg):
-    j = 0
-    for i in xrange(1156):
-        pos = np.where(focal_plane == i)
-        # print(pos[0].size)
+# ========= Project TOD on the focal plane for each pointing ============
+def plot_focalplane(size, nptg, focal_plane, tod):
+    plt.figure('focalplane')
+    tod_focal_plane = np.zeros((size, size, nptg))
+    for ptg in xrange(nptg):
+        j = 0
+        for i in xrange(1156):
+            pos = np.where(focal_plane == i)
+            # print(pos[0].size)
 
-        #  For the TES 0
-        if pos[0].size == 165:
-            tod_focal_plane[0, 17, ptg] = tod_fi[j, ptg]
-            j += 1
+            #  For the TES 0
+            if pos[0].size == 165:
+                tod_focal_plane[0, 17, ptg] = tod[j, ptg]
+                j += 1
 
-        # For other TES
-        elif pos[0].size == 1:
-            # print(j)
-            tod_focal_plane[pos[0][0], pos[1][0], ptg] = tod_fi[j, ptg]
-            j += 1
-            # print(pos)
+            # For other TES
+            elif pos[0].size == 1:
+                # print(j)
+                tod_focal_plane[pos[0][0], pos[1][0], ptg] = tod[j, ptg]
+                j += 1
+                # print(pos)
 
-    plt.imshow(tod_focal_plane[:, :, ptg], interpolation='nearest', origin='lower')
-    plt.title('ptg' + str(ptg) + ' el=' + str(p.elevation[ptg]) + ' az=' + str(p.azimuth[ptg]))
-    plt.pause(0.5)
-plt.colorbar()
+        plt.imshow(tod_focal_plane[:, :, ptg], interpolation='nearest', origin='lower')
+        plt.title('ptg' + str(ptg) + ' el=' + str(p.elevation[ptg]) + ' az=' + str(p.azimuth[ptg]))
+        plt.pause(0.5)
+    plt.colorbar()
+    return
+
+plot_focalplane(size_fi, nptg, focal_plane, tod_fi)
+
+# ========= Same thing with closed horns to see the franges ============
+a = 40
+b = 100
+q_a, tod_fi_a = get_tod(d, p, x0, closed_horns=[a])
+q_a[0].horn.plot()
+plt.pause(0.5)
+
+q_b, tod_fi_b = get_tod(d, p, x0, closed_horns=[b])
+q_b[0].horn.plot()
+plt.pause(0.5)
+
+q_ab, tod_fi_ab = get_tod(d, p, x0, closed_horns=[a, b])
+q_ab[0].horn.plot()
+
+#  Plot the interference pattern on the focal plane for each pointing
+tod_frange = tod_fi - tod_fi_a - tod_fi_b + tod_fi_ab
+plot_focalplane(size_fi, nptg, focal_plane, tod_frange)

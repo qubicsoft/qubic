@@ -2,8 +2,9 @@
 # from Calibration.plotters import *
 
 import fibtools as ft
-from plotters import *
+import plotters as p
 
+import numpy as np
 import matplotlib.pyplot as plt
 from pysimulators import FitsArray
 
@@ -56,15 +57,12 @@ infos165 = {'name': name, 'fnum': fnum, 'asic': asic1, 'fff': fff, 'dc': dc, 'in
 
 ############################################################
 the_info = infos150
-name = the_info['name']
-fnum = the_info['fnum']
 asic1 = the_info['asic']
 fff = the_info['fff']
 dc = the_info['dc']
-initpars = the_info['initpars']
 
-asic = 1
 # Select ASIC
+asic = 1
 if asic == 1:
     theasic = asic1
 else:
@@ -94,7 +92,7 @@ filt = 5
 spectrum, freq = mlab.psd(dd[theTES, :], Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
 filtered_spec = f.gaussian_filter1d(spectrum, filt)
 
-FreqResp(freq, frange, filtered_spec, theTES, fff)
+p.FreqResp(freq, frange, filtered_spec, theTES, fff)
 
 #### Filtering out the signal from the PT
 freqs_pt = [1.72383, 3.24323, 3.44727, 5.69583, 6.7533, 9.64412, 12.9874]  # frequencies of pics from PT
@@ -102,7 +100,7 @@ bw_0 = 0.005  # Bandwidth of the filter
 
 notch = ft.notch_array(freqs_pt, bw_0)
 
-FiltFreqResp(theTES, frange, fff, filt, dd, notch, FREQ_SAMPLING, nsamples, freq, spectrum, filtered_spec)
+p.FiltFreqResp(theTES, frange, fff, filt, dd, notch, FREQ_SAMPLING, nsamples, freq, spectrum, filtered_spec)
 ############################################################################
 
 
@@ -125,16 +123,16 @@ folded_notch, tt, folded_notch_nonorm = ft.fold_data(time, dd, 1. / fff, lowcut,
 
 # plot folded TES data along with a guess for source signal
 pars = [dc, 0.05, 0., 1.2]
-FoldedFiltTES(tt, pars, theTES, folded, folded_notch)
+p.FoldedFiltTES(tt, pars, theTES, folded, folded_notch)
 
 # now plot it with a fitting of the source signal parameters
 guess = [dc, 0.06, 0., 1.2]
 bla = ft.do_minuit(tt, folded[theTES, :], np.ones(len(tt)), guess, functname=ft.simsig,
                    rangepars=[[0., 1.], [0., 1], [0., 1], [0., 1]], fixpars=[0, 0, 0, 0], force_chi2_ndf=True,
                    verbose=False, nohesse=True)
-FoldedTESFreeFit(tt, bla, theTES, folded)
+p.FoldedTESFreeFit(tt, bla, theTES, folded)
 
-#### Now loop on the files
+###################### Now loop on the files ##################################
 infos = [infos130, infos150, infos160, infos165]
 
 pars = []
@@ -151,7 +149,7 @@ for i in xrange(len(infos)):
                                                                              rangepars=[[0., 1.], [0., 0.5],
                                                                                         [0., 1. / fff], [0., 5000.]],
                                                                              initpars=initpars,
-                                                                             okfile='TES_OK_ExtSrc150GHz_asic1.fits')
+                                                                             okfile='TES_OK_ExtSrc{}GHz_asic1.fits'.format(fnum))
     pars.append(allparams1)
 
 img_amp = np.zeros((128, len(infos))) + np.nan
@@ -164,7 +162,7 @@ for i in xrange(len(infos)):
 clf()
 for i in xrange(len(infos)):
     subplot(2, 2, i + 1)
-    imshow(ft.image_asics(data1=img_tau[:, i]), vmin=0, vmax=0.2)
+    imshow(ft.image_asics(data1=img_tau[:, i]), vmin=0, vmax=0.2, interpolation='nearest')
     title('tau {} {} GHz'.format(infos[i]['name'], infos[i]['fnum']))
     colorbar()
 plt.tight_layout()
@@ -173,8 +171,7 @@ plt.tight_layout()
 clf()
 for i in xrange(len(infos)):
     subplot(2, 2, i + 1)
-    imshow(ft.image_asics(data1=img_amp[:, i]), vmin=0, vmax=500)
-
+    imshow(ft.image_asics(data1=img_amp[:, i]), vmin=0, vmax=500, interpolation='nearest')
     title('Amp {} {} GHz'.format(infos[i]['name'], infos[i]['fnum']))
     colorbar()
 plt.tight_layout()

@@ -1,11 +1,11 @@
 # from Calibration import fibtools as ft
-# from Calibration.plotters import *
+# import Calibration.plotters as p
 
 import fibtools as ft
 import plotters as p
 
 import numpy as np
-import matplotlib.pyplot as plt
+from matplotlib.pyplot import *
 from pysimulators import FitsArray
 
 import matplotlib.mlab as mlab
@@ -165,7 +165,7 @@ for i in xrange(len(infos)):
     imshow(ft.image_asics(data1=img_tau[:, i]), vmin=0, vmax=0.2, interpolation='nearest')
     title('tau {} {} GHz'.format(infos[i]['name'], infos[i]['fnum']))
     colorbar()
-plt.tight_layout()
+tight_layout()
 
 # Amplitude
 clf()
@@ -174,7 +174,7 @@ for i in xrange(len(infos)):
     imshow(ft.image_asics(data1=img_amp[:, i]), vmin=0, vmax=500, interpolation='nearest')
     title('Amp {} {} GHz'.format(infos[i]['name'], infos[i]['fnum']))
     colorbar()
-plt.tight_layout()
+tight_layout()
 
 freqs = np.array([infos[i]['fnum'] for i in xrange(len(infos))])
 ampsok = img_amp[okfinal1, :]
@@ -188,4 +188,4 @@ errorbar(freqs, av_shape, yerr=err_shape / np.sqrt(okfinal1.sum()), fmt='ko-')
 ylim(0, 1.2)
 xlabel('Freq. [GHz]')
 ylabel('Relative Signal amplitude (w.r.t. 150 GHz)')
-savefig('filter.png')
+# savefig('filter.png')

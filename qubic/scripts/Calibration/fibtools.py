@@ -1,16 +1,18 @@
 import numpy as np
-import scipy.ndimage.filters as f
-from qubicpack import qubicpack as qp
-from scipy.signal import butter, lfilter, iirnotch
-import scipy.signal as scsig
-import scipy.stats
-from qubic.utils import progress_bar
-from scipy.ndimage.filters import correlate1d
 import time
 import iminuit
 import math
-import matplotlib.pyplot as plt
+from matplotlib.pyplot import *
 from pysimulators import FitsArray
+
+# from scipy.signal import butter, lfilter, iirnotch
+
+import scipy.signal as scsig
+import scipy.stats
+from scipy.ndimage.filters import correlate1d, gaussian_filter1d
+
+from qubic.utils import progress_bar
+from qubicpack import qubicpack as qp
 
 
 def isfloat(s):
@@ -23,6 +25,19 @@ def isfloat(s):
 
 
 def statstr(x, divide=False, median=False, cut=None):
+    """
+
+    Parameters
+    ----------
+    x
+    divide
+    median
+    cut
+
+    Returns
+    -------
+
+    """
     if median:
         m = np.median(x[np.isfinite(x)])
         nn = len(x[np.isfinite(x)])
@@ -126,6 +141,26 @@ class MyChi2:
 ### Call Minuit
 def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=None, rangepars=None, nohesse=False,
               force_chi2_ndf=False, verbose=True):
+    """
+
+    Parameters
+    ----------
+    x
+    y
+    covarin
+    guess
+    functname
+    fixpars
+    chi2
+    rangepars
+    nohesse
+    force_chi2_ndf
+    verbose
+
+    Returns
+    -------
+
+    """
     # check if covariance or error bars were given
     covar = covarin
     if np.size(np.shape(covarin)) == 1:
@@ -206,6 +241,23 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 
 
 def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True, log=False):
+    """
+
+    Parameters
+    ----------
+    xin
+    yin
+    range
+    nbins
+    fmt
+    plot
+    dispersion
+    log
+
+    Returns
+    -------
+
+    """
     ok = np.isfinite(xin) * np.isfinite(yin)
     x = xin[ok]
     y = yin[ok]
@@ -239,7 +291,7 @@ def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True
         dx[i] = np.std(x[ok]) / fact
     if plot:
         if fmt is None: fmt = 'ro'
-        plt.errorbar(xc, yval, xerr=dx, yerr=dy, fmt=fmt)
+        errorbar(xc, yval, xerr=dx, yerr=dy, fmt=fmt)
     ok = nn != 0
     return xc[ok], yval[ok], dx[ok], dy[ok]
 
@@ -285,12 +337,21 @@ def exponential_filter1d(input, sigma, axis=-1, output=None, mode="reflect", cva
 
 def qs2array(file, FREQ_SAMPLING, timerange=None):
     """
-	Loads qubic instance to create 'dd' which is TOD for each TES
-	Also normalises raw data
-	Also returns 'time' which is linear time array
-	Can also specify a timerange
-	"""
+    Loads qubic instance to create 'dd' which is TOD for each TES
+    Also normalises raw data
+    Also returns 'time' which is linear time array
+    Can also specify a timerange
 
+    Parameters
+    ----------
+    file
+    FREQ_SAMPLING
+    timerange
+
+    Returns
+    -------
+
+    """
     a = qp()
     a.read_fits(file)
     npix = a.NPIXELS
@@ -318,14 +379,46 @@ def qs2array(file, FREQ_SAMPLING, timerange=None):
 
 
 def butter_bandpass(lowcut, highcut, fs, order=5):
+    """
+
+    Parameters
+    ----------
+    lowcut : scalar
+    highcut : scalar
+    fs :
+    order : int
+        order of the filter
+
+    Returns
+    -------
+    b, a : (ndarray, ndarray)
+        Numerator (b) and denominator (a) polynomials of the IIR filter.
+
+    """
     nyq = 0.5 * fs
     low = lowcut / nyq
     high = highcut / nyq
-    b, a = butter(order, [low, high], btype='band')
+    b, a = scsig.butter(order, [low, high], btype='band', output='ba')
     return b, a
 
 
 def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
+    """
+
+    Parameters
+    ----------
+    data : array like
+    lowcut
+    highcut
+    fs
+    order
+
+    Returns
+    -------
+    y : array
+        The output of the digital filter.
+
+    """
     b, a = butter_bandpass(lowcut, highcut, fs, order=order)
     y = scsig.lfilter(b, a, data)
     return y
@@ -333,8 +426,19 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
 
 def notch_array(freqs, bw):
     """
-	Returns array to be used with notch_filter
-	"""
+    Returns array to be used with notch_filter
+
+    Parameters
+    ----------
+    freqs : list
+        Frequencies to filter
+    bw : scalar
+        The filter bandwidth
+
+    Returns
+    -------
+
+    """
     notch = []
 
     for i in xrange(len(freqs)):
@@ -344,6 +448,20 @@ def notch_array(freqs, bw):
 
 
 def notch_filter(data, f0, bw, fs):
+    """
+
+    Parameters
+    ----------
+    data
+    f0
+    bw
+    fs
+
+    Returns
+    -------
+    y : array
+        Output of the notch filter
+    """
     Q = f0 / bw
     b, a = scsig.iirnotch(f0 / fs * 2, Q)
     y = scsig.lfilter(b, a, data)
@@ -351,11 +469,33 @@ def notch_filter(data, f0, bw, fs):
 
 
 def meancut(data, nsig):
+    """
+
+    Parameters
+    ----------
+    data : array like
+    nsig : float
+        Lower and upper bound factor of sigma clipping.
+    Returns
+    -------
+
+    """
     dd, mini, maxi = scipy.stats.sigmaclip(data, low=nsig, high=nsig)
     return np.mean(dd), np.std(dd)
 
 
 def simsig(x, pars):
+    """
+
+    Parameters
+    ----------
+    x
+    pars
+
+    Returns
+    -------
+
+    """
     dx = x[1] - x[0]
     cycle = np.nan_to_num(pars[0])
     ctime = np.nan_to_num(pars[1])
@@ -365,13 +505,24 @@ def simsig(x, pars):
     ok = x < (cycle * (np.max(x)))
     sim_init[ok] = 1.
     sim_init_shift = np.interp((x - t0) % max(x), x, sim_init)
-    # thesim = -1*f.gaussian_filter1d(sim_init_shift, ctime, mode='wrap')
+    # thesim = -1 * gaussian_filter1d(sim_init_shift, ctime, mode='wrap')
     thesim = -1 * exponential_filter1d(sim_init_shift, ctime / dx, mode='wrap')
     thesim = (thesim - np.mean(thesim)) / np.std(thesim) * amp
     return thesim
 
 
 def simsig_nonorm(x, pars):
+    """
+
+    Parameters
+    ----------
+    x
+    pars
+
+    Returns
+    -------
+
+    """
     dx = x[1] - x[0]
     cycle = np.nan_to_num(pars[0])
     ctime = np.nan_to_num(pars[1])
@@ -387,6 +538,22 @@ def simsig_nonorm(x, pars):
 
 
 def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None):
+    """
+
+    Parameters
+    ----------
+    time
+    dd
+    period
+    lowcut
+    highcut
+    nbins
+    notch
+
+    Returns
+    -------
+
+    """
     tfold = time % period
     FREQ_SAMPLING = 1. / (time[1] - time[0])
     sh = np.shape(dd)
@@ -412,6 +579,27 @@ def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None):
 
 def fit_average(t, folded, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 0], doplot=True, functname=simsig,
                 clear=True, name='fib'):
+    """
+
+    Parameters
+    ----------
+    t
+    folded
+    fff
+    dc
+    fib
+    Vtes
+    initpars
+    fixpars
+    doplot
+    functname
+    clear
+    name
+
+    Returns
+    -------
+
+    """
     sh = np.shape(folded)
     npix = sh[0]
     nbins = sh[1]
@@ -433,12 +621,12 @@ def fit_average(t, folded, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 
                         rangepars=[[0., 1.], [0., 0.2], [0., 1. / fff], [0., 20.]], fixpars=[1, 1, 0, 1],
                         force_chi2_ndf=True, verbose=True, nohesse=True)
         initpars = [dc, 0.1, bla[1][2], 1.]
-    # plt.ion()
-    # plt.clf()
-    # plt.xlim(0,1./fff)
-    # plt.plot(t,av,color='b',lw=4,alpha=0.3, label='Median')
-    # plt.plot(t, functname(t, bla[1]), 'r--',lw=4)
-    # plt.show()
+    # ion()
+    # clf()
+    # xlim(0,1./fff)
+    # plot(t,av,color='b',lw=4,alpha=0.3, label='Median')
+    # plot(t, functname(t, bla[1]), 'r--',lw=4)
+    # show()
 
     ####### Fit
     bla = do_minuit(t, av, np.ones(len(t)), initpars, functname=functname,
@@ -448,27 +636,49 @@ def fit_average(t, folded, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 
     err_av = bla[2]
 
     if doplot:
-        plt.ion()
-        if clear: plt.clf()
-        plt.xlim(0, 1. / fff)
+        ion()
+        if clear: clf()
+        xlim(0, 1. / fff)
         for i in xrange(npix):
-            plt.plot(t, folded[i, :], alpha=0.1, color='k')
-        plt.plot(t, av, color='b', lw=4, alpha=0.3, label='Median')
-        plt.plot(t, functname(t, bla[1]), 'r--', lw=4,
+            plot(t, folded[i, :], alpha=0.1, color='k')
+        plot(t, av, color='b', lw=4, alpha=0.3, label='Median')
+        plot(t, functname(t, bla[1]), 'r--', lw=4,
                  label='Fitted average of {8:} pixels \n cycle={0:8.3f}+/-{1:8.3f} \n tau = {2:8.3f}+/-{3:8.3f}s \n t0 = {4:8.3f}+/-{5:8.3f}s \n amp = {6:8.3f}+/-{7:8.3f}'.format(
                      params_av[0], err_av[0], params_av[1], err_av[1], params_av[2], err_av[2], params_av[3], err_av[3],
                      npix))
-        plt.legend(fontsize=7, frameon=False, loc='lower left')
-        plt.xlabel('Time(sec)')
-        plt.ylabel('Stacked')
-        plt.title('{} {}: Freq_Mod={}Hz - Cycle={}% - Vtes={}V'.format(name, fib, fff, dc * 100, Vtes))
-        plt.show()
+        legend(fontsize=7, frameon=False, loc='lower left')
+        xlabel('Time(sec)')
+        ylabel('Stacked')
+        title('{} {}: Freq_Mod={}Hz - Cycle={}% - Vtes={}V'.format(name, fib, fff, dc * 100, Vtes))
+        show()
         time.sleep(0.1)
     return (av, params_av, err_av)
 
 
 def fit_all(t, folded, av, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 0], doplot=True, stop_each=False,
             functname=simsig, rangepars=None):
+    """
+
+    Parameters
+    ----------
+    t
+    folded
+    av
+    fff
+    dc
+    fib
+    Vtes
+    initpars
+    fixpars
+    doplot
+    stop_each
+    functname
+    rangepars
+
+    Returns
+    -------
+
+    """
     sh = np.shape(folded)
     npix = sh[0]
     nbins = sh[1]
@@ -493,18 +703,18 @@ def fit_all(t, folded, av, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 
         allerr[i, :] = err
         allchi2[i] = theres[4]
         if stop_each:
-            plt.clf()
-            plt.plot(t, thedd, color='k')
-            plt.plot(t, av, color='b', lw=4, alpha=0.2, label='Median')
-            plt.plot(t, functname(t, theres[1]), 'r--', lw=4,
+            clf()
+            plot(t, thedd, color='k')
+            plot(t, av, color='b', lw=4, alpha=0.2, label='Median')
+            plot(t, functname(t, theres[1]), 'r--', lw=4,
                      label='Fitted: \n cycle={0:8.3f}+/-{1:8.3f} \n tau = {2:8.3f}+/-{3:8.3f}s \n t0 = {4:8.3f}+/-{5:8.3f}s \n amp = {6:8.3f}+/-{7:8.3f}'.format(
                          params[0], err[0], params[1], err[1], params[2], err[2], params[3], err[3]))
-            plt.legend()
-            plt.show()
+            legend()
+            show()
             msg = 'TES #{}'.format(i)
             if i in [3, 35, 67, 99]:
                 msg = 'Channel #{} - BEWARE THIS IS A THERMOMETER !'.format(i)
-            plt.title(msg)
+            title(msg)
             # Changing so 'i' select prompts plot inversion
             bla = raw_input("Press [y] if fit OK, [i] to invert, other key otherwise...")
             if (bla == 'y'):
@@ -512,9 +722,9 @@ def fit_all(t, folded, av, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 
             # invert to check if TES okay,
             # thedd refers to the indexed TES in loop
             if (bla == 'i'):
-                # plt.clf()
-                plt.plot(t, thedd * (-1.0), color='olive')
-                plt.show()
+                # clf()
+                plot(t, thedd * (-1.0), color='olive')
+                show()
                 ibla = raw_input("Press [y] if INVERTED fit OK, otherwise anykey")
                 # and invert thedd in the original datset
                 if (ibla == 'y'):
@@ -528,6 +738,36 @@ def fit_all(t, folded, av, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 
 def run_asic(idnum, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=0.5, highcut=15., nbins=50,
              nointeractive=False, doplot=True, notch=None, lastpassallfree=False, name='fib', okfile=None,
              initpars=None, timerange=None, removesat=False, stop_each=False, rangepars=None):
+    """
+
+    Parameters
+    ----------
+    idnum
+    Vtes
+    fff
+    dc
+    theasicfile
+    asic
+    reselect_ok
+    lowcut
+    highcut
+    nbins
+    nointeractive
+    doplot
+    notch
+    lastpassallfree
+    name
+    okfile
+    initpars
+    timerange
+    removesat
+    stop_each
+    rangepars
+
+    Returns
+    -------
+
+    """
     fib = idnum
     ### Read data
     # GOING TO TEST PASSING IN THESE VARS
@@ -620,8 +860,8 @@ def run_asic(idnum, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=
                                                               fixpars=[1, 0, 1, 0], functname=simsig_nonorm,
                                                               rangepars=rangepars)
     else:
-        plt.figure(figsize=(6, 8))
-        plt.subplot(3, 1, 1)
+        figure(figsize=(6, 8))
+        subplot(3, 1, 1)
         ### Now redo the fits one last time
         av, params, err = fit_average(tt, folded[okfinal, :], fff, dc, fib, Vtes, initpars=initpars,
                                       fixpars=[0, 0, 0, 0], doplot=True, clear=False, name=name)
@@ -637,17 +877,17 @@ def run_asic(idnum, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=
                                                               fixpars=fixed, functname=simsig_nonorm,
                                                               stop_each=stop_each, rangepars=rangepars)
 
-        plt.subplot(3, 2, 3)
+        subplot(3, 2, 3)
         mmt, sst = meancut(allparams[okfinal, 1], 3)
-        plt.hist(allparams[okfinal, 1], range=[0, mmt + 4 * sst], bins=10, label=statstr(allparams[okfinal, 1], cut=3))
-        plt.xlabel('Tau [sec]')
-        plt.legend()
-        plt.title('Asic {} - {} {}'.format(name, asic, fib))
-        plt.subplot(3, 2, 4)
+        hist(allparams[okfinal, 1], range=[0, mmt + 4 * sst], bins=10, label=statstr(allparams[okfinal, 1], cut=3))
+        xlabel('Tau [sec]')
+        legend()
+        title('Asic {} - {} {}'.format(name, asic, fib))
+        subplot(3, 2, 4)
         mma, ssa = meancut(allparams[okfinal, 3], 3)
-        plt.hist(allparams[okfinal, 3], range=[0, mma + 4 * ssa], bins=10, label=statstr(allparams[okfinal, 3], cut=3))
-        plt.legend()
-        plt.xlabel('Amp [nA]')
+        hist(allparams[okfinal, 3], range=[0, mma + 4 * ssa], bins=10, label=statstr(allparams[okfinal, 3], cut=3))
+        legend()
+        xlabel('Amp [nA]')
 
         pars = allparams
         tau = pars[:, 1]
@@ -666,27 +906,45 @@ def run_asic(idnum, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=
             amp1 = None
             amp2 = amp
 
-        plt.subplot(3, 2, 5)
+        subplot(3, 2, 5)
         imtau = image_asics(data1=tau1, data2=tau2)
-        plt.imshow(imtau, vmin=0, vmax=mmt + 4 * sst, cmap='viridis', interpolation='nearest')
-        plt.title('Tau - {} {} - asic {}'.format(name, fib, asic))
-        plt.colorbar()
-        plt.subplot(3, 2, 6)
+        imshow(imtau, vmin=0, vmax=mmt + 4 * sst, cmap='viridis', interpolation='nearest')
+        title('Tau - {} {} - asic {}'.format(name, fib, asic))
+        colorbar()
+        subplot(3, 2, 6)
         imamp = image_asics(data1=amp1, data2=amp2)
-        plt.imshow(imamp, vmin=0, vmax=mma + 6 * ssa, cmap='viridis', interpolation='nearest')
-        plt.colorbar()
-        plt.title('Amp - {} {} - asic {}'.format(name, fib, asic))
-        plt.tight_layout()
+        imshow(imamp, vmin=0, vmax=mma + 6 * ssa, cmap='viridis', interpolation='nearest')
+        colorbar()
+        title('Amp - {} {} - asic {}'.format(name, fib, asic))
+        tight_layout()
 
     return tt, folded, okfinal, allparams, allerr, allchi2, ndf
 
 
 def calibrate(fib, pow_maynooth, allparams, allerr, allok, cutparam=None, cuterr=None, bootstrap=None):
+    """
+
+    Parameters
+    ----------
+    fib
+    pow_maynooth
+    allparams
+    allerr
+    allok
+    cutparam
+    cuterr
+    bootstrap
+
+    Returns
+    -------
+
+    """
+    # Should not be img_maynooth = image_asics(all1=pow_maynooth) ??
     img_maynooth = image_asics(pow_maynooth, all1=True)
 
-    plt.clf()
-    plt.subplot(2, 2, 1)
-    plt.plot(allparams[allok, 3], allerr[allok, 3], 'k.')
+    clf()
+    subplot(2, 2, 1)
+    plot(allparams[allok, 3], allerr[allok, 3], 'k.')
     if cuterr is not None:
         thecut_err = cuterr
     else:
@@ -697,15 +955,15 @@ def calibrate(fib, pow_maynooth, allparams, allerr, allok, cutparam=None, cuterr
         thecut_amp = 1e10
 
     newok = allok * (allerr[:, 3] < thecut_err) * (allparams[:, 3] < thecut_amp)
-    plt.plot([np.min(allparams[allok, 3]), np.max(allparams[allok, 3])], [thecut_err, thecut_err], 'g--')
-    plt.plot([thecut_amp, thecut_amp], [np.min(allerr[allok, 3]), np.max(allerr[allok, 3])], 'g--')
-    plt.plot(allparams[newok, 3], allerr[newok, 3], 'r.')
+    plot([np.min(allparams[allok, 3]), np.max(allparams[allok, 3])], [thecut_err, thecut_err], 'g--')
+    plot([thecut_amp, thecut_amp], [np.min(allerr[allok, 3]), np.max(allerr[allok, 3])], 'g--')
+    plot(allparams[newok, 3], allerr[newok, 3], 'r.')
     allparams[~newok, :] = np.nan
-    plt.ylabel('$\sigma_{amp}$ [nA]')
-    plt.xlabel('Amp Fib{} [nA]'.format(fib))
+    ylabel('$\sigma_{amp}$ [nA]')
+    xlabel('Amp Fib{} [nA]'.format(fib))
 
-    plt.subplot(2, 2, 3)
-    plt.errorbar(pow_maynooth[newok], allparams[newok, 3], yerr=allerr[newok, 3], fmt='r.')
+    subplot(2, 2, 3)
+    errorbar(pow_maynooth[newok], allparams[newok, 3], yerr=allerr[newok, 3], fmt='r.')
     xx = pow_maynooth[newok]
     yy = allparams[newok, 3]
     yyerr = allerr[newok, 3]
@@ -730,7 +988,7 @@ def calibrate(fib, pow_maynooth, allparams, allerr, allok, cutparam=None, cuterr
         typerr = 'Bootstrap'
 
     xxx = np.linspace(0, np.max(pow_maynooth), 100)
-    plt.plot(xxx, thepolynomial(xxx, res[1]), 'g', lw=3,
+    plot(xxx, thepolynomial(xxx, res[1]), 'g', lw=3,
              label='a={0:8.3f} +/- {1:8.3f} \n b={2:8.3f} +/- {3:8.3f}'.format(paramfit[0], errfit[0], paramfit[1],
                                                                                errfit[1]))
     if bootstrap is not None:
@@ -739,29 +997,30 @@ def calibrate(fib, pow_maynooth, allparams, allerr, allok, cutparam=None, cuterr
             bsdata[i, :] = thepolynomial(xxx, bsres[i, :])
         mm = np.mean(bsdata, axis=0)
         ss = np.std(bsdata, axis=0)
-        plt.fill_between(xxx, mm - ss, y2=mm + ss, color='b', alpha=0.3)
-        plt.fill_between(xxx, mm - 2 * ss, y2=mm + 2 * ss, color='b', alpha=0.2)
-        plt.fill_between(xxx, mm - 3 * ss, y2=mm + 3 * ss, color='b', alpha=0.1)
-        plt.plot(xxx, mm, 'b', label='Mean bootstrap')
+        fill_between(xxx, mm - ss, y2=mm + ss, color='b', alpha=0.3)
+        fill_between(xxx, mm - 2 * ss, y2=mm + 2 * ss, color='b', alpha=0.2)
+        fill_between(xxx, mm - 3 * ss, y2=mm + 3 * ss, color='b', alpha=0.1)
+        plot(xxx, mm, 'b', label='Mean bootstrap')
+
     # indices = np.argsort(np.random.rand(bootstrap))[0:1000]
     # for i in xrange(len(indices)):
     # 	plot(xxx, thepolynomial(xxx, bsres[indices[i],:]), 'k', alpha=0.01)
-    plt.ylim(0, np.max(allparams[newok, 3]) * 1.1)
-    plt.xlim(np.min(pow_maynooth[newok]) * 0.99, np.max(pow_maynooth[newok]) * 1.01)
-    plt.ylabel('Amp Fib{} [nA]'.format(fib))
-    plt.xlabel('Maynooth [mW]')
-    plt.legend(fontsize=8, framealpha=0.5)
+    ylim(0, np.max(allparams[newok, 3]) * 1.1)
+    xlim(np.min(pow_maynooth[newok]) * 0.99, np.max(pow_maynooth[newok]) * 1.01)
+    ylabel('Amp Fib{} [nA]'.format(fib))
+    xlabel('Maynooth [mW]')
+    legend(fontsize=8, framealpha=0.5)
 
-    plt.subplot(2, 2, 2)
-    plt.imshow(img_maynooth, vmin=np.min(pow_maynooth), vmax=np.max(pow_maynooth), interpolation='nearest')
-    plt.colorbar()
-    plt.title('Maynooth [mW]')
+    subplot(2, 2, 2)
+    imshow(img_maynooth, vmin=np.min(pow_maynooth), vmax=np.max(pow_maynooth), interpolation='nearest')
+    colorbar()
+    title('Maynooth [mW]')
 
-    plt.subplot(2, 2, 4)
+    subplot(2, 2, 4)
     img = image_asics(allparams[:, 3] / res[1][0], all1=True)
-    plt.imshow(img, interpolation='nearest')
-    plt.colorbar()
-    plt.title('Amp Fib{}  converted to mW'.format(fib))
-    plt.tight_layout()
+    imshow(img, interpolation='nearest')
+    colorbar()
+    title('Amp Fib{}  converted to mW'.format(fib))
+    tight_layout()
 
     return res[1], res[2], newok

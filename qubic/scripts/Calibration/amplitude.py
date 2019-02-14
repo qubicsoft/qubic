@@ -4,8 +4,8 @@ from pysimulators import FitsArray
 import matplotlib.mlab as mlab
 import scipy.ndimage.filters as f
 
-#from Fibres import fibtools as ft
-import fibtools as ft
+from Calibration import fibtools as ft
+
 
 from qubicpack import qubicpack as qp
 

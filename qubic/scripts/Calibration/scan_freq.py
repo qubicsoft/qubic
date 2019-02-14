@@ -1,14 +1,11 @@
-# from Calibration import fibtools as ft
-# from Calibration.plotters import *
-
 import numpy as np
 from matplotlib.pyplot import *
 import glob
 import time
 import datetime
 
-import fibtools as ft
-from plotters import *
+from Calibration import fibtools as ft
+from Calibration.plotters import *
 from qubicpack import qubicpack as qp
 
 from pysimulators import FitsArray

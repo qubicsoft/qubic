@@ -1,8 +1,5 @@
-# from Calibration import fibtools as ft
-# from Calibration.plotters import *
-
-import fibtools as ft
-from plotters import *
+from Calibration import fibtools as ft
+from Calibration.plotters import *
 
 import numpy as np
 from matplotlib.pyplot import *
@@ -14,9 +11,14 @@ import glob
 from qubicpack import qubicpack as qp
 
 #### Directory where the files for various angles are located
-# dir = '/Users/hamilton/Qubic/ExternalSource/ScanAz2019-01-30/'
-# dir = '/Users/hamilton/Qubic/ExternalSource/ScanAz2019-01-31/'
-dir = '/Users/hamilton/Qubic/ExternalSource/ScanAz2019-01-31-Long/'
+# basedir = '/Users/hamilton/Qubic/ExternalSource'
+basedir = '/home/louisemousset/QUBIC/Qubic_work/Calibration'
+
+# dir = basedir + '/ScanAz2019-01-30/'
+# dir = basedir + '/ScanAz2019-01-31/'
+# dir = basedir + '/ScanAz2019-01-31-Long/'
+
+dir = basedir + '/2019-01-31/Scan_az/'
 
 #### Now find the az and el corresponding to each directory and prepare the files to read
 subdirs = glob.glob(dir + '*')
@@ -31,22 +33,22 @@ for i in xrange(len(subdirs)):
 # a = qp()
 # a.read_qubicstudio_dataset(subdirs[0])
 
-
-
+#### Sort files with azimuth and elevation in ascending order
 order = np.argsort(azs)
 az = azs[order]
 el = els[order]
+
 as1 = np.array(as1)[order]
 as2 = np.array(as2)[order]
 subdirs = np.array(subdirs)[order]
 
-### Analyse one to define the list of pixok
+#### Analyse one to define the list of pixok
 name = 'ExtSrc(Auto)'
 fnum = 150
 fff = 0.333
 dc = 0.33
 
-#### Saturation value: 2.235174179076e-08
+# Saturation value: 2.235174179076e-08
 
 tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum, 0, fff, dc, as1[0], 1, name=name, initpars=None,
                                                           lowcut=0.05, highcut=15.,
@@ -108,9 +110,8 @@ thepix = 93
 clf()
 plot(az, amps[thepix, :])
 
-#### Trying intercalibration from old fiber data (probably worthless as at the time they were superconducting and now they are not)
-
-from pysimulators import FitsArray
+#### Trying intercalibration from old fiber data
+#### (probably worthless as at the time they were superconducting and now they are not)
 
 calibration = FitsArray('/Users/hamilton/CMB/Qubic/Fibres/calibration.fits')
 calibration_restrict = FitsArray('/Users/hamilton/CMB/Qubic/Fibres/calibration_restrict.fits')

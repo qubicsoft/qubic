@@ -149,7 +149,7 @@ for i in xrange(len(infos)):
                                                                              rangepars=[[0., 1.], [0., 0.5],
                                                                                         [0., 1. / fff], [0., 5000.]],
                                                                              initpars=initpars,
-                                                                             okfile='TES_OK_ExtSrc{}GHz_asic1.fits'.format(fnum))
+                                                                             okfile='TES_OK_ExtSrc150GHz_asic1.fits')
     pars.append(allparams1)
 
 img_amp = np.zeros((128, len(infos))) + np.nan

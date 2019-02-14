@@ -5,8 +5,6 @@ import math
 from matplotlib.pyplot import *
 from pysimulators import FitsArray
 
-# from scipy.signal import butter, lfilter, iirnotch
-
 import scipy.signal as scsig
 import scipy.stats
 from scipy.ndimage.filters import correlate1d, gaussian_filter1d
@@ -204,6 +202,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     # build np.array output
     parfit = []
     for i in parnames: parfit.append(m.values[i])
+
     errfit = []
     for i in parnames: errfit.append(m.errors[i])
     if fixpars is not None:
@@ -655,8 +654,7 @@ def fit_average(t, folded, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 
     return (av, params_av, err_av)
 
 
-def fit_all(t, folded, av, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 0], doplot=True, stop_each=False,
-            functname=simsig, rangepars=None):
+def fit_all(t, folded, av, initpars=None, fixpars=[0, 0, 0, 0], stop_each=False, functname=simsig, rangepars=None):
     """
 
     Parameters
@@ -804,7 +802,7 @@ def run_asic(idnum, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=
                                       doplot=True, name=name)
 
         #### And the fit on all data with this as a first guess forcing some parameters - it returns the list of OK detectorsy
-        allparams, allerr, allchi2, ndf, ok = fit_all(tt, folded, av, fff, dc, fib, Vtes,
+        allparams, allerr, allchi2, ndf, ok = fit_all(tt, folded, av,
                                                       initpars=[dc, params[1], params[2], params[3]],
                                                       fixpars=[1, 0, 1, 0], rangepars=rangepars, stop_each=True)
 
@@ -818,14 +816,14 @@ def run_asic(idnum, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=
                                       doplot=True, name=name)
 
         #### And the fit on all data with this as a first guess forcing some parameters - it returns the list of OK detectors
-        allparams, allerr, allchi2, ndf, ok = fit_all(tt, folded, av, fff, dc, fib, Vtes,
+        allparams, allerr, allchi2, ndf, ok = fit_all(tt, folded, av,
                                                       initpars=[dc, params[1], params[2], params[3]],
                                                       rangepars=rangepars, fixpars=[1, 0, 1, 0], stop_each=True)
 
         #### Final Pass
         #### The refit them all with only tau and amp as free parameters
         #### also do not normalize amplitudes of folded
-        allparams, allerr, allchi2, ndf, ok_useless = fit_all(tt, folded_nonorm * 1e9, av, fff, dc, fib, Vtes,
+        allparams, allerr, allchi2, ndf, ok_useless = fit_all(tt, folded_nonorm * 1e9, av,
                                                               initpars=[dc, params[1], params[2], params[3]],
                                                               rangepars=rangepars, fixpars=[1, 0, 1, 0],
                                                               functname=simsig_nonorm)
@@ -872,7 +870,7 @@ def run_asic(idnum, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=
             fixed = [0, 0, 0, 0]
         else:
             fixed = [1, 0, 1, 0]
-        allparams, allerr, allchi2, ndf, ok_useless = fit_all(tt, folded_nonorm * 1e9, av, fff, dc, fib, Vtes,
+        allparams, allerr, allchi2, ndf, ok_useless = fit_all(tt, folded_nonorm * 1e9, av,
                                                               initpars=[dc, params[1], params[2], params[3]],
                                                               fixpars=fixed, functname=simsig_nonorm,
                                                               stop_each=stop_each, rangepars=rangepars)

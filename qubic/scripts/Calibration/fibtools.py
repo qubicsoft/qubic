@@ -46,7 +46,7 @@ def statstr(x, divide=False, median=False, cut=None):
         m = np.mean(x[np.isfinite(x)])
         nn = len(x[np.isfinite(x)])
         s = np.std(x[np.isfinite(x)])
-    if divide == True:
+    if divide:
         s /= nn
     return '{0:6.2f} +/- {1:6.2f}'.format(m, s)
 
@@ -133,7 +133,7 @@ class MyChi2:
     def __call__(self, *pars):
         val = self.functname(self.x, pars)
         chi2 = np.dot(np.dot(self.y - val, self.invcov), self.y - val)
-        return (chi2)
+        return chi2
 
 
 ### Call Minuit
@@ -197,7 +197,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     if rangepars is not None: theargs.update(dict(theguess.items() + drng.items()))
     m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=1., **theargs)
     m.migrad()
-    if nohesse == False:
+    if nohesse is False:
         m.hesse()
     # build np.array output
     parfit = []
@@ -208,8 +208,8 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     if fixpars is not None:
         parnamesfit = []
         for i in xrange(len(parnames)):
-            if fixpars[i] == False: parnamesfit.append(parnames[i])
-            if fixpars[i] == True: errfit[i] = 0
+            if fixpars[i] is False: parnamesfit.append(parnames[i])
+            if fixpars[i]: errfit[i] = 0
     else:
         parnamesfit = parnames
     ndimfit = len(parnamesfit)  # int(np.sqrt(len(m.errors)))
@@ -231,8 +231,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
         print(np.array(errfit) * np.sqrt(correct))
         print('Chi2=', chisq)
         print('ndf=', ndf)
-    return (
-        m, np.array(parfit), np.array(errfit) * np.sqrt(correct), np.array(covariance) * correct, chi2(*parfit), ndf)
+    return m, np.array(parfit), np.array(errfit) * np.sqrt(correct), np.array(covariance) * correct, chi2(*parfit), ndf
 
 
 ###############################################################################
@@ -260,13 +259,13 @@ def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True
     ok = np.isfinite(xin) * np.isfinite(yin)
     x = xin[ok]
     y = yin[ok]
-    if range == None:
+    if range is None:
         mini = np.min(x)
         maxi = np.max(x)
     else:
         mini = range[0]
         maxi = range[1]
-    if log == False:
+    if log is False:
         xx = np.linspace(mini, maxi, nbins + 1)
     else:
         xx = np.logspace(np.log10(mini), np.log10(maxi), nbins + 1)
@@ -343,9 +342,11 @@ def qs2array(file, FREQ_SAMPLING, timerange=None):
 
     Parameters
     ----------
-    file
+    file : fits file
+        File containing data.
     FREQ_SAMPLING
-    timerange
+    timerange : array
+        Time range, low and high boundaries
 
     Returns
     -------
@@ -543,7 +544,8 @@ def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None):
     ----------
     time
     dd
-    period
+    period : float
+        Modulation period of spectral source signal in second.
     lowcut
     highcut
     nbins
@@ -584,15 +586,20 @@ def fit_average(t, folded, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 
     ----------
     t
     folded
-    fff
-    dc
+    fff : float
+        Modulation frequency of the external source.
+    dc : float
+        Duty cycle of the modulation.
     fib
     Vtes
     initpars
     fixpars
-    doplot
+    doplot : bool
+        If true make the plot.
     functname
-    clear
+    clear : bool
+        If true, clear the window before plotting.
+
     name
 
     Returns
@@ -642,16 +649,16 @@ def fit_average(t, folded, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 
             plot(t, folded[i, :], alpha=0.1, color='k')
         plot(t, av, color='b', lw=4, alpha=0.3, label='Median')
         plot(t, functname(t, bla[1]), 'r--', lw=4,
-                 label='Fitted average of {8:} pixels \n cycle={0:8.3f}+/-{1:8.3f} \n tau = {2:8.3f}+/-{3:8.3f}s \n t0 = {4:8.3f}+/-{5:8.3f}s \n amp = {6:8.3f}+/-{7:8.3f}'.format(
-                     params_av[0], err_av[0], params_av[1], err_av[1], params_av[2], err_av[2], params_av[3], err_av[3],
-                     npix))
+             label='Fitted average of {8:} pixels \n cycle={0:8.3f}+/-{1:8.3f} \n tau = {2:8.3f}+/-{3:8.3f}s \n t0 = {4:8.3f}+/-{5:8.3f}s \n amp = {6:8.3f}+/-{7:8.3f}'.format(
+                 params_av[0], err_av[0], params_av[1], err_av[1], params_av[2], err_av[2], params_av[3], err_av[3],
+                 npix))
         legend(fontsize=7, frameon=False, loc='lower left')
         xlabel('Time(sec)')
         ylabel('Stacked')
         title('{} {}: Freq_Mod={}Hz - Cycle={}% - Vtes={}V'.format(name, fib, fff, dc * 100, Vtes))
         show()
         time.sleep(0.1)
-    return (av, params_av, err_av)
+    return av, params_av, err_av
 
 
 def fit_all(t, folded, av, initpars=None, fixpars=[0, 0, 0, 0], stop_each=False, functname=simsig, rangepars=None):
@@ -662,13 +669,8 @@ def fit_all(t, folded, av, initpars=None, fixpars=[0, 0, 0, 0], stop_each=False,
     t
     folded
     av
-    fff
-    dc
-    fib
-    Vtes
     initpars
     fixpars
-    doplot
     stop_each
     functname
     rangepars
@@ -705,8 +707,8 @@ def fit_all(t, folded, av, initpars=None, fixpars=[0, 0, 0, 0], stop_each=False,
             plot(t, thedd, color='k')
             plot(t, av, color='b', lw=4, alpha=0.2, label='Median')
             plot(t, functname(t, theres[1]), 'r--', lw=4,
-                     label='Fitted: \n cycle={0:8.3f}+/-{1:8.3f} \n tau = {2:8.3f}+/-{3:8.3f}s \n t0 = {4:8.3f}+/-{5:8.3f}s \n amp = {6:8.3f}+/-{7:8.3f}'.format(
-                         params[0], err[0], params[1], err[1], params[2], err[2], params[3], err[3]))
+                 label='Fitted: \n cycle={0:8.3f}+/-{1:8.3f} \n tau = {2:8.3f}+/-{3:8.3f}s \n t0 = {4:8.3f}+/-{5:8.3f}s \n amp = {6:8.3f}+/-{7:8.3f}'.format(
+                     params[0], err[0], params[1], err[1], params[2], err[2], params[3], err[3]))
             legend()
             show()
             msg = 'TES #{}'.format(i)
@@ -715,17 +717,17 @@ def fit_all(t, folded, av, initpars=None, fixpars=[0, 0, 0, 0], stop_each=False,
             title(msg)
             # Changing so 'i' select prompts plot inversion
             bla = raw_input("Press [y] if fit OK, [i] to invert, other key otherwise...")
-            if (bla == 'y'):
+            if bla == 'y':
                 ok[i] = True
             # invert to check if TES okay,
             # thedd refers to the indexed TES in loop
-            if (bla == 'i'):
+            if bla == 'i':
                 # clf()
                 plot(t, thedd * (-1.0), color='olive')
                 show()
                 ibla = raw_input("Press [y] if INVERTED fit OK, otherwise anykey")
                 # and invert thedd in the original datset
-                if (ibla == 'y'):
+                if ibla == 'y':
                     ok[i] = True
                     folded[i, :] = thedd * -1.0
 
@@ -742,11 +744,14 @@ def run_asic(idnum, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=
     ----------
     idnum
     Vtes
-    fff
-    dc
+    fff : float
+        Modulation frequency of the external source
+    dc : float
+        Duty cycle of the modulation
     theasicfile
     asic
-    reselect_ok
+    reselect_ok : bool
+        If true, you will select the good TES one by one, if False, you will use the file created before.
     lowcut
     highcut
     nbins
@@ -777,11 +782,11 @@ def run_asic(idnum, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=
     ### Signal is also badpass filtered before folding
     folded, tt, folded_nonorm = fold_data(time, dd, 1. / fff, lowcut, highcut, nbins, notch=notch)
 
-    if nointeractive == True:
+    if nointeractive:
         reselect_ok = False
         answer = 'n'
     else:
-        if reselect_ok == True:
+        if reselect_ok:
             print('\n\n')
             answer = raw_input('This will overwrite the file for OK TES. Are you sure you want to proceed [y/n]')
         else:
@@ -794,16 +799,17 @@ def run_asic(idnum, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=
         print('')
         print('FIRST PASS')
         print(
-            'First Pass is only to have a good guess of the t0, your selection should be very conservative - only high S/N')
+            'First Pass is only to have a good guess of the t0, '
+            'your selection should be very conservative - only high S/N')
         # if initpars == Noy
         # ne:
         # 	initpars = [dc, 0.06, 0., 0.6]
         av, params, err = fit_average(tt, folded, fff, dc, fib, Vtes, initpars=initpars, fixpars=[0, 0, 0, 0],
                                       doplot=True, name=name)
 
-        #### And the fit on all data with this as a first guess forcing some parameters - it returns the list of OK detectorsy
-        allparams, allerr, allchi2, ndf, ok = fit_all(tt, folded, av,
-                                                      initpars=[dc, params[1], params[2], params[3]],
+        #### And the fit on all data with this as a first guess forcing some parameters
+        #### it returns the list of OK detectorsy
+        allparams, allerr, allchi2, ndf, ok = fit_all(tt, folded, av, initpars=[dc, params[1], params[2], params[3]],
                                                       fixpars=[1, 0, 1, 0], rangepars=rangepars, stop_each=True)
 
         #### Pass 2
@@ -815,9 +821,9 @@ def run_asic(idnum, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=
         av, params, err = fit_average(tt, folded[ok, :], fff, dc, fib, Vtes, initpars=initpars, fixpars=[0, 0, 0, 0],
                                       doplot=True, name=name)
 
-        #### And the fit on all data with this as a first guess forcing some parameters - it returns the list of OK detectors
-        allparams, allerr, allchi2, ndf, ok = fit_all(tt, folded, av,
-                                                      initpars=[dc, params[1], params[2], params[3]],
+        #### And the fit on all data with this as a first guess forcing some parameters
+        #### it returns the list of OK detectors
+        allparams, allerr, allchi2, ndf, ok = fit_all(tt, folded, av, initpars=[dc, params[1], params[2], params[3]],
                                                       rangepars=rangepars, fixpars=[1, 0, 1, 0], stop_each=True)
 
         #### Final Pass
@@ -832,14 +838,14 @@ def run_asic(idnum, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=
         ### Make sure no thermometer is included
         okfinal[[3, 35, 67, 99]] = False
         # Save the list of OK bolometers
-        if okfile == None:
+        if okfile is None:
             FitsArray(okfinal.astype(int)).save('TES-OK-{}{}-asic{}.fits'.format(name, fib, asic))
         else:
             FitsArray(okfinal.astype(int)).save(okfile)
     else:
-        # if initpars == None:
+        # if initpars is None:
         # 	initpars = [dc, 0.06, 0., 0.6]
-        if okfile == None:
+        if okfile is None:
             okfinal = np.array(FitsArray('TES-OK-{}{}-asic{}.fits'.format(name, fib, asic))).astype(bool)
         else:
             okfinal = np.array(FitsArray(okfile)).astype(bool)
@@ -848,7 +854,7 @@ def run_asic(idnum, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=
             saturated = (np.min(folded_nonorm, axis=1) < removesat)
             okfinal = (okfinal * ~saturated).astype(bool)
 
-    if doplot == False:
+    if doplot is False:
         ### Now redo the fits one last time
         av, params, err = fit_average(tt, folded[okfinal, :], fff, dc, fib, Vtes, initpars=initpars,
                                       fixpars=[0, 0, 0, 0], doplot=False, clear=False, name=name)
@@ -987,8 +993,8 @@ def calibrate(fib, pow_maynooth, allparams, allerr, allok, cutparam=None, cuterr
 
     xxx = np.linspace(0, np.max(pow_maynooth), 100)
     plot(xxx, thepolynomial(xxx, res[1]), 'g', lw=3,
-             label='a={0:8.3f} +/- {1:8.3f} \n b={2:8.3f} +/- {3:8.3f}'.format(paramfit[0], errfit[0], paramfit[1],
-                                                                               errfit[1]))
+         label='a={0:8.3f} +/- {1:8.3f} \n b={2:8.3f} +/- {3:8.3f}'.format(paramfit[0], errfit[0], paramfit[1],
+                                                                           errfit[1]))
     if bootstrap is not None:
         bsdata = np.zeros((bootstrap, len(xxx)))
         for i in xrange(bootstrap):
@@ -1015,6 +1021,7 @@ def calibrate(fib, pow_maynooth, allparams, allerr, allok, cutparam=None, cuterr
     title('Maynooth [mW]')
 
     subplot(2, 2, 4)
+    # same problem here...
     img = image_asics(allparams[:, 3] / res[1][0], all1=True)
     imshow(img, interpolation='nearest')
     colorbar()

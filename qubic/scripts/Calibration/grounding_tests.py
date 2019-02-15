@@ -1,7 +1,7 @@
 from Calibration import fibtools as ft
 from Calibration.plotters import *
 
-import matplotlib.pyplot as plt
+from matplotlib.pyplot import *
 from pysimulators import FitsArray
 import matplotlib.mlab as mlab
 import scipy.ndimage.filters as f

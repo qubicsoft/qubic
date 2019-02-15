@@ -13,16 +13,32 @@ from pysimulators import FitsArray
 
 import SpectroImLib as si
 
+def get_maps_recon(TOD, d, p, nf_sub_rec, x0):
+    maps_recon, cov, nus, nus_edge, maps_convolved = si.reconstruct_maps(
+        TOD, d, p, nf_sub_rec, x0=x0)
+    if nf_sub_rec==1:
+        maps_recon = np.reshape(maps_recon, np.shape(maps_convolved))
+    cov = np.sum(cov, axis=0)
+    maxcov = np.max(cov)
+    unseen = cov < maxcov*0.1
+    #diffmap = maps_convolved - maps_recon
+    maps_convolved[:,unseen,:] = hp.UNSEEN
+    maps_recon[:,unseen,:] = hp.UNSEEN
+    #maps_recon += np.repeat(xav[None, ...], nf_sub_rec, axis=0)
+    return maps_recon
+
 t0 = time.time()
 
 ### Instrument ###
 d = qubic.qubicdict.qubicDict()
 d.read_from_file("parameters.dict")
+p = qubic.get_pointing(d)
 
 dust_coeffs = [0, 1.39e-2, 1.39e-1, 1.39, 1.39e1, 1.39e2]
 
-mean_res = np.zeros(len(dust_coeffs))
-mean_res_max = np.zeros(len(dust_coeffs))
+map_res = []
+
+nf_sub_rec = 4
 
 for j, dust in enumerate(dust_coeffs):
     ### Sky ###
@@ -48,20 +64,28 @@ for j, dust in enumerate(dust_coeffs):
     x01[..., 0] = 0
     TOD0 = si.create_TOD(d, p, x01)
 
-    for i in range(TOD.shape[0]):                             
-        mp.figure()
-        mp.plot((TOD[i, :] - TOD0[i, :]) / TOD[i, :])
-        mp.savefig("/home/federico/Desktop/TOD_relative_diff_dust={}.png".format(dust))
+    ##### Mapmaking #####
+    maps_recon = get_maps_recon(TOD, d, p, nf_sub_rec, x0)
+    maps_recon0 = get_maps_recon(TOD0, d, p, nf_sub_rec, x01)
 
-    mean_res[j] = np.mean(np.abs(TOD - TOD0))
-    mean_res_max[j] = np.abs(TOD.max() - TOD0.max())
+    map_res.append(maps_recon - maps_recon0)
     
-mp.figure()
-mp.plot(mean_res, 'x')
-mp.xticks(np.arange(len(dust_coeffs)), dust_coeffs)
-mp.savefig("/home/federico/Desktop/TOD_coeffVSres.png")
+t1 = time.time()
+print('************************** All Done in {} minutes'.format((t1-t0)/60))
 
-mp.figure()
-mp.plot(mean_res_max, 'x')
-mp.xticks(np.arange(len(dust_coeffs)), dust_coeffs)
-mp.savefig("/home/federico/Desktop/TOD_coeffVSres_max.png")
+mean_res_val = np.zeros(len(dust_coeffs))
+ 
+fig, axes = mp.subplots(len(dust_coeffs), 4, figsize=(12, 15))
+fig.tight_layout()
+for i, d in enumerate(dust_coeffs):
+    mean_res_val[i] = np.mean(map_res[i][..., 0][map_res[i][..., 0] > 0])
+    for l in range(4):
+        mp.axes(axes[i, l])
+        hp.gnomview(map_res[i][l][:, 0],
+                    rot=[-45, -60],
+                    xsize=2000,
+                    hold=True,
+                    title="{}".format(d),
+                    unit='K')
+
+mp.show()

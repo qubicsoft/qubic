@@ -68,7 +68,7 @@ for i in xrange(len(as1)):
     tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum, 0, fff, 
         dc, asic, 1, name, doplot=False,
         initpars=None, lowcut=0.05, highcut=15.,         
-        rangepars=[[0.,1.], [0., 0.5], [0.,1./fff], [0., 1000.]],  
+        rangepars=[[0.,1.], [0., 0.5], [0.,1./fff], [0., 10000.]],  
         okfile='ScanAz2019-01-30_OK_Asic1.fits')
     params[~okfinal,:] = np.nan
     amps[:128,i] = params[:,3]
@@ -80,7 +80,7 @@ for i in xrange(len(as1)):
     tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum, 0, fff, 
         dc, asic, 2, name, doplot=False,
         initpars=None, lowcut=0.05, highcut=15.,         
-        rangepars=[[0.,1.], [0., 0.5], [0.,1./fff], [0., 1000.]],  
+        rangepars=[[0.,1.], [0., 0.5], [0.,1./fff], [0., 10000.]],  
         okfile='ScanAz2019-01-30_OK_Asic2.fits')
     params[~okfinal,:] = np.nan
     amps[128:,i] = params[:,3]
@@ -89,7 +89,7 @@ for i in xrange(len(as1)):
     errtaus[128:,i] = err[:,1]
 
 
-cutval = 1000
+cutval = 2500
 
 allimg = np.zeros((len(as1),17,17)) + np.nan
 for i in xrange(len(as1)):
@@ -101,12 +101,35 @@ for i in xrange(len(as1)):
     colorbar()
     title('$\Delta$az={}'.format(az[i]))
     show()
-    savefig('imgscan01022019_az_{}.png'.format(1000+az[i]))
+    savefig('imgscan01022019_az_{}.png'.format(1100+az[i]))
     #raw_input('Press a key')
+
+
+FitsArray(allimg).save('allimg_scan_az.fits')
+FitsArray(az).save('az_scan_az.fits')
+
 
 thepix = 93
 clf()
 plot(az, amps[thepix,:])
+
+
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.colors import LightSource
+
+xx, yy = meshgrid(arange(17), arange(17))
+#clf()
+fig, ax = plt.subplots(subplot_kw=dict(projection='3d'))
+ls = LightSource(270, 45)
+rgb = ls.shade(np.nan_to_num(allimg[0,:,:]), cmap=cm.gist_earth, blend_mode='soft')
+surf = ax.plot_surface(xx, yy, np.nan_to_num(allimg[0,:,:]), rstride=1, cstride=1, facecolors=rgb,
+                       linewidth=0, antialiased=False, shade=False)
+
+
+
+
+
+
 
 
 #### Trying intercalibration from old fiber data (probably worthless as at the time they were superconducting and now they are not)

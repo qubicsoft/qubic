@@ -1,16 +1,15 @@
 #!/bin/env python
 from __future__ import division
 import sys
-import os
 import time
 
 import healpy as hp
 import numpy as np
-import matplotlib.pyplot as mp
 
 import qubic
 from pysimulators import FitsArray
 
+import input_sky as sky
 import SpectroImLib as si
 
 
@@ -51,7 +50,7 @@ f.close()
 ##### Sky Creation #####
 
 t0 = time.time()
-x0 = si.create_input_sky(d, skypars)
+x0 = sky.create_input_sky(d, skypars)
 t1 = time.time()
 print('********************* Input Sky done in {} seconds'.format(t1-t0))
 

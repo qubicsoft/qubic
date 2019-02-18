@@ -97,7 +97,7 @@ def create_acquisition_operator_REC(pointing, d, nf_sub_rec):
     # number of sub frequencies for reconstruction
     _, nus_edge, _, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9,
                                                  d['filter_relative_bandwidth'], nf_sub_rec)
-    ### Operators for Maps Reconstruction ################################################
+    # Operator for Maps Reconstruction
     arec = qubic.QubicMultibandAcquisition(q, pointing, s, d, nus_edge)
     return arec
 

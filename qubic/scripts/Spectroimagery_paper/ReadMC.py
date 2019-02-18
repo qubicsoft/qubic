@@ -1,4 +1,3 @@
-import os
 import sys
 import glob
 
@@ -96,7 +95,8 @@ def maps_from_files(files, silent=False):
     """allmost equivalent to get_all_maps, 
     used in the functions that compute spectra 
     """
-    if not silent: print('Reading Files')
+    if not silent:
+        print('Reading Files')
     nn = len(files)
     mm = FitsArray(files[0])
     sh = np.shape(mm)
@@ -111,14 +111,16 @@ def maps_from_files(files, silent=False):
 
 def get_maps_residuals(frec, fconv=None, silent=False):
     mrec, seenmap = maps_from_files(frec)
-    if fconv == None:
-        if not silent: print('Getting Residuals from average MC')
+    if fconv is None:
+        if not silent:
+            print('Getting Residuals from average MC')
         resid = np.zeros_like(mrec)
         mean_mrec = np.mean(mrec, axis=0)
         for i in xrange(len(frec)):
             resid[i, :, :, :] = mrec[i, :, :, :] - mean_mrec[:, :, :]
     else:
-        if not silent: print('Getting Residuals from convolved input maps')
+        if not silent:
+            print('Getting Residuals from convolved input maps')
         mconv, _ = maps_from_files(fconv)
         resid = mrec - mconv
     resid[:, :, ~seenmap, :] = 0
@@ -162,7 +164,7 @@ allstdmat : list of arrays (nsub, nsub, 3)
                 else:
                     variance_map[isub, i, p] = 1. / np.sum(np.linalg.inv(mat))
                 covmat_freqfreq[:, :, p, i] = mat / np.mean(
-                    mat)  ### its normalization is irrelevant for the later average
+                    mat)  # its normalization is irrelevant for the later average
         # Average and std over pixels
         meanmat = np.zeros((nsubvals[isub], nsubvals[isub], 3))
         stdmat = np.zeros((nsubvals[isub], nsubvals[isub], 3))
@@ -227,10 +229,10 @@ def get_xpol(seenmap, ns, lmin=20, delta_ell=20, apodization_degrees=5.):
     """
     Returns a Xpoll object to get spectra, the bin used and the pixel window function.
     """
-    #### Create a mask
+    # Create a mask
     mymask = apodize_mask(seenmap, apodization_degrees)
 
-    #### Create XPol object
+    # Create XPol object
     lmax = 2 * ns
     xpol = Xpol(mymask, lmin, lmax, delta_ell)
     ell_binned = xpol.ell_binned
@@ -252,14 +254,17 @@ def allcross_par(xpol, allmaps, silent=False, verbose=1):
     if not silent:
         print('Computing spectra:')
 
-    #### Auto spectra ran in //
-    if not silent: print('  Doing All Autos ({}):'.format(nmaps))
+    # Auto spectra ran in //
+    if not silent:
+        print('  Doing All Autos ({}):'.format(nmaps))
     results_auto = Parallel(n_jobs=num_cores, verbose=verbose)(
         delayed(xpol.get_spectra)(allmaps[i]) for i in xrange(nmaps))
-    for i in xrange(nmaps): autos[i, :, :] = results_auto[i][1]
+    for i in xrange(nmaps):
+        autos[i, :, :] = results_auto[i][1]
 
-    #### Cross Spectra ran in // - need to prepare indices in a global variable
-    if not silent: print('  Doing All Cross ({}):'.format(ncross))
+    # Cross Spectra ran in // - need to prepare indices in a global variable
+    if not silent:
+        print('  Doing All Cross ({}):'.format(ncross))
     global cross_indices
     cross_indices = np.zeros((2, ncross), dtype=int)
     for i in xrange(nmaps):
@@ -268,14 +273,16 @@ def allcross_par(xpol, allmaps, silent=False, verbose=1):
             jcross += 1
     results_cross = Parallel(n_jobs=num_cores, verbose=verbose)(
         delayed(xpol.get_spectra)(allmaps[cross_indices[0, i]], allmaps[cross_indices[1, i]]) for i in xrange(ncross))
-    for i in xrange(ncross): cross[i, :, :] = results_cross[i][1]
+    for i in xrange(ncross):
+        cross[i, :, :] = results_cross[i][1]
 
     if not silent:
         sys.stdout.write(' Done \n')
         sys.stdout.flush()
 
-    #### The error-bars are absolutely incorrect if calculated as the following... 
-    # There is an analytical estimate in Xpol paper. See if implemented in the gitlab xpol from Tristram instead of in qubic.xpol...
+    # The error-bars are absolutely incorrect if calculated as the following...
+    # There is an analytical estimate in Xpol paper.
+    # See if implemented in the gitlab xpol from Tristram instead of in qubic.xpol...
     m_autos = np.mean(autos, axis=0)
     s_autos = np.std(autos, axis=0) / np.sqrt(nmaps)
     m_cross = np.mean(cross, axis=0)
@@ -293,7 +300,7 @@ def get_maps_cl(frec, fconv=None, lmin=20, delta_ell=40, apodization_degrees=5.)
     from qubic import apodize_mask
     mymask = apodize_mask(seenmap, apodization_degrees)
 
-    #### Create XPol object
+    # Create XPol object
     from qubic import Xpol
     lmax = 2 * ns
     xpol = Xpol(mymask, lmin, lmax, delta_ell)
@@ -303,17 +310,15 @@ def get_maps_cl(frec, fconv=None, lmin=20, delta_ell=40, apodization_degrees=5.)
     pw = hp.pixwin(ns)
     pwb = xpol.bin_spectra(pw[:lmax + 1])
 
-    #### Calculate all crosses and auto
+    # Calculate all crosses and auto
     m_autos = np.zeros((nbsub, 6, nbins))
     s_autos = np.zeros((nbsub, 6, nbins))
     m_cross = np.zeros((nbsub, 6, nbins))
     s_cross = np.zeros((nbsub, 6, nbins))
     fact = ell_binned * (ell_binned + 1) / 2. / np.pi
     for isub in xrange(nbsub):
-        m_autos[isub, :, :], s_autos[isub, :, :], m_cross[isub, :, :], s_cross[isub, :, :] = allcross_par(xpol,
-                                                                                                          mrec[:, isub,
-                                                                                                          :, :],
-                                                                                                          silent=False,
-                                                                                                          verbose=0)
+        m_autos[isub, :, :], s_autos[isub, :, :], m_cross[isub, :, :], s_cross[isub, :, :] = \
+            allcross_par(xpol, mrec[:, isub, :, :], silent=False, verbose=0)
 
-    return mrec, resid, seenmap, ell_binned, m_autos * fact / pwb ** 2, s_autos * fact / pwb ** 2, m_cross * fact / pwb ** 2, s_cross * fact / pwb ** 2
+    return mrec, resid, seenmap, ell_binned, m_autos * fact / pwb ** 2, s_autos * fact / pwb ** 2, \
+           m_cross * fact / pwb ** 2, s_cross * fact / pwb ** 2

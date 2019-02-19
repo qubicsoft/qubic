@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
-import matplotlib.pyplot as plt
+from matplotlib.pyplot import *
 import healpy as hp
 from astropy.io import fits
 import qubic
@@ -22,21 +22,19 @@ az_angles = np.unique(p.azimuth)  # all different azimuth angles
 print('el_angles = ' + str(el_angles))
 print('az_angles = ' + str(az_angles))
 
-plt.figure('pointing')
-plt.subplot(3, 1, 1)
-plt.plot(p.index, p.azimuth, '.')
-plt.xlabel('index pointing')
-plt.ylabel('azimuth angle')
-
-plt.subplot(3, 1, 2)
-plt.plot(p.index, p.elevation, '.')
-plt.xlabel('index pointing')
-plt.ylabel('elevation angle')
-
-plt.subplot(3, 1, 3)
-plt.plot(p.azimuth, p.elevation, '.')
-plt.xlabel('azimuth angle')
-plt.ylabel('elevation angle')
+figure('pointing')
+subplot(3, 1, 1)
+plot(p.index, p.azimuth, '.')
+xlabel('index pointing')
+ylabel('azimuth angle')
+subplot(3, 1, 2)
+plot(p.index, p.elevation, '.')
+xlabel('index pointing')
+ylabel('elevation angle')
+subplot(3, 1, 3)
+plot(p.azimuth, p.elevation, '.')
+xlabel('azimuth angle')
+ylabel('elevation angle')
 
 # ============= Point source ==========
 az, el = d['fix_azimuth']['az'], d['fix_azimuth']['el']
@@ -57,6 +55,7 @@ hp.gnomview(sky, rot=(az, el))
 x0 = np.zeros((d['nf_sub'], npix, 3))
 x0[:, :, 0] = sky
 
+
 # For a PolyInstrument
 # x0 = np.zeros((npix, 3))
 # x0[:, 0] = sky
@@ -71,7 +70,7 @@ def get_tod(d, p, x0, closed_horns=None):
     d : dictionnary
     p : pointing
     x0 : sky
-    closed_horns : list
+    closed_horns : array
         index of closed horns
 
     Returns
@@ -84,14 +83,13 @@ def get_tod(d, p, x0, closed_horns=None):
     if closed_horns is not None:
         for i in xrange(d['nf_sub']):
             for h in closed_horns:
-                q[i].horn.open[h]=False
+                q[i].horn.open[h] = False
 
     # Scene
     s = qubic.QubicScene(d)
 
     # Number of sub frequencies to build the TOD
-    _, nus_edge_in, _, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9,
-                                                    d['filter_relative_bandwidth'], d['nf_sub'])
+    _, nus_edge_in, _, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, d['filter_relative_bandwidth'], d['nf_sub'])
 
     # Multi-band acquisition operator
     a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_in)
@@ -102,39 +100,39 @@ def get_tod(d, p, x0, closed_horns=None):
     return q, tod
 
 
-q, tod_fi = get_tod(d, p, x0, closed_horns=None)
+q, tod_fi = get_tod(d, p, x0)
 q[0].horn.plot()
-
 
 # ========= Get indices of TES on the focal plane ============
 detarray = fits.open(basedir + '/qubic/qubic/calfiles/CalQubic_DetArray_FI.fits')
 
 tes_index = detarray['index'].data
-plt.clf()
-plt.imshow(tes_index, interpolation='nearest', origin='lower')
+clf()
+imshow(tes_index, interpolation='nearest', origin='lower')
 
 # size of one side of the focal plane
 size_fi = tes_index.shape[0]
 
 # Position of the TES in the array
 tes_position = detarray['removed'].data
-plt.clf()
-plt.imshow(tes_position, interpolation='nearest', origin='lower')  # 0 on focal plane, 1 elsewhere
+clf()
+imshow(tes_position, interpolation='nearest', origin='lower')  # 0 on focal plane, 1 elsewhere
 
-plt.clf()
+clf()
 tes_position_rev = tes_position * (-1) + 1
-plt.imshow(tes_position_rev, interpolation='nearest', origin='lower')  # reverse
+imshow(tes_position_rev, interpolation='nearest', origin='lower')  # reverse
 
 # Indices of TES on the focal plane, 0 outside
 focal_plane = tes_index * tes_position_rev
-plt.clf()
-plt.imshow(focal_plane, interpolation='nearest', origin='lower')
+clf()
+imshow(focal_plane, interpolation='nearest', origin='lower')
+
 
 # ========= Project TOD on the focal plane for each pointing ============
-def plot_focalplane(size, nptg, focal_plane, tod):
-    plt.figure('focalplane')
+def plot_focalplane(size, nptg, ptg_start, ptg_stop, focal_plane, tod):
+    figure('focalplane')
     tod_focal_plane = np.zeros((size, size, nptg))
-    for ptg in xrange(nptg):
+    for ptg in xrange(ptg_start, ptg_stop+1):
         j = 0
         for i in xrange(1156):
             pos = np.where(focal_plane == i)
@@ -152,28 +150,44 @@ def plot_focalplane(size, nptg, focal_plane, tod):
                 j += 1
                 # print(pos)
 
-        plt.imshow(tod_focal_plane[:, :, ptg], interpolation='nearest', origin='lower')
-        plt.title('ptg' + str(ptg) + ' el=' + str(p.elevation[ptg]) + ' az=' + str(p.azimuth[ptg]))
-        plt.pause(0.5)
-    plt.colorbar()
+        imshow(tod_focal_plane[:, :, ptg], interpolation='nearest', origin='lower')
+        title('ptg' + str(ptg) + ' el=' + str(p.elevation[ptg]) + ' az=' + str(p.azimuth[ptg]))
+        pause(0.02)
+    colorbar()
     return
 
-plot_focalplane(size_fi, nptg, focal_plane, tod_fi)
+
+plot_focalplane(size_fi, nptg, 30, nptg-1, focal_plane, tod_fi)
 
 # ========= Same thing with closed horns to see the franges ============
-a = 40
-b = 100
-q_a, tod_fi_a = get_tod(d, p, x0, closed_horns=[a])
-q_a[0].horn.plot()
-plt.pause(0.5)
+i = 40
+j = 100
 
-q_b, tod_fi_b = get_tod(d, p, x0, closed_horns=[b])
-q_b[0].horn.plot()
-plt.pause(0.5)
+# i closed, j closed, i and j closed
+q_i_close, tod_i_close = get_tod(d, p, x0, closed_horns=[i])
+q_i_close[0].horn.plot()
 
-q_ab, tod_fi_ab = get_tod(d, p, x0, closed_horns=[a, b])
-q_ab[0].horn.plot()
+q_j_close, tod_j_close = get_tod(d, p, x0, closed_horns=[j])
+q_j_close[0].horn.plot()
+
+q_ij_close, tod_ij_close = get_tod(d, p, x0, closed_horns=[i, j])
+q_ij_close[0].horn.plot()
+
+# Only i opened, only j open, only i and j opened
+closed_horns = np.delete(np.arange(400), [i], 0)
+q_i_open, tod_i_open = get_tod(d, p, x0, closed_horns=closed_horns)
+q_i_open[0].horn.plot()
+
+closed_horns = np.delete(np.arange(400), [j], 0)
+q_j_open, tod_j_open = get_tod(d, p, x0, closed_horns=closed_horns)
+q_j_open[0].horn.plot()
+
+closed_horns = np.delete(np.arange(400), [i, j], 0)
+q_ij_open, tod_ij_open = get_tod(d, p, x0, closed_horns=closed_horns)
+q_ij_open[0].horn.plot()
 
 #  Plot the interference pattern on the focal plane for each pointing
-tod_frange = tod_fi - tod_fi_a - tod_fi_b + tod_fi_ab
-plot_focalplane(size_fi, nptg, focal_plane, tod_frange)
+tod_frange = tod_fi + tod_ij_close - tod_i_close - tod_j_close
+plot_focalplane(size_fi, nptg, 30, 30, focal_plane, tod_frange)
+
+

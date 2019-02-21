@@ -1,68 +1,105 @@
 from Calibration import fibtools as ft
 from Calibration.plotters import *
-import matplotlib.pyplot as plt
-from pysimulators import FitsArray
-import matplotlib.mlab as mlab
-import scipy.ndimage.filters as f
+
+import numpy as np
+from matplotlib.pyplot import *
 import glob
-from qubicpack import qubicpack as qp
+
+from pysimulators import FitsArray
 
 #### Directory where the files for various angles are located
-dir = '/Users/hamilton/Qubic/ExternalSource/2019-02-14_16.53.38__Test_int_sphere150Ghz_150mHz'
-
-as1 = glob.glob(dir+'/Sums/*asic1*.fits')
-as2 = glob.glob(dir+'/Sums/*asic2*.fits')
+# basedir = '/Users/hamilton/Qubic/ExternalSource/'
+basedir = '/home/louisemousset/QUBIC/Qubic_work/Calibration/datas/'
 
 
-### Analyse one to define the list of pixok
-name = 'Integrating_sphere'
-fnum = 150
-fff = 0.15
-dc = 0.33
+def make_amp(dir, name='Integrating_sphere', fnum=150, fff=0.15, dc=0.33):
+    """
+
+    Parameters
+    ----------
+    dir : str
+        Directory for data files
+    name : str
+        Name of the data set
+    fnum : float
+        Frequency of the calibration source in GHz.
+    fff : float
+        Modulation frequency of the calibration source.
+    dc : float
+        Duty cycle of the modulation.
+
+    Returns
+    -------
+
+    """
+    as1 = glob.glob(dir + '/Sums/*asic1*.fits')
+    as2 = glob.glob(dir + '/Sums/*asic2*.fits')
+
+    # Asic 1
+    tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum, 0, fff, dc, as1[0], 1, name=name, initpars=None,
+                                                              lowcut=0.05, highcut=15.,
+                                                              rangepars=[[0., 1.], [0., 0.5], [0., 1. / fff],
+                                                                         [0., 10000.]], stop_each=False,
+                                                              reselect_ok=False,
+                                                              okfile='TES_OK_2019-02-15_Sphere_Asic1.fits')
+    amps1 = params[:, 3]
+
+    # Asic 2
+    tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum, 0, fff, dc, as2[0], 2, name=name, initpars=None,
+                                                              lowcut=0.05, highcut=15., reselect_ok=False,
+                                                              rangepars=[[0., 1.], [0., 0.5], [0., 1. / fff],
+                                                                         [0., 10000.]],
+                                                              okfile='TES_OK_2019-02-15_Sphere_Asic2.fits')
+    amps2 = params[:, 3]
+
+    # Put the 2 asics together
+    amps = np.append(amps1, amps2)
+
+    return amps
 
 
+# Ref, data 2019-02-14
+dir = basedir + '2019-02-14/2019-02-14_16.53.38__Test_int_sphere150Ghz_150mHz'
+amps = make_amp(dir)
+img_ref = ft.image_asics(all1=amps / np.nanmean(amps))
 
-tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum,
-        0, fff, dc, as1[0], 1, name=name,
-        initpars=None, lowcut=0.05, highcut=15., 
-        rangepars=[[0.,1.], [0., 0.5], [0.,1./fff], [0., 10000.]],  
-        stop_each=False,
-        reselect_ok=False, okfile='ScanAz2019-01-30_OK_Asic1.fits')
-amps1 = params[:,3]
+amps_all = []
+amps_all.append(amps)
 
+# Test with different positions
+for pos in xrange(1, 6):
+    dir = basedir + '2019-02-15/*_pos{}'.format(pos)
+    amps = make_amp(dir, fff=0.333)
+    amps_all.append(amps)
 
-tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum,
-        0, fff, 
-        dc, as2[0], 2, name=name,
-        initpars=None, lowcut=0.05, highcut=15., 
-        reselect_ok=False,
-        rangepars=[[0.,1.], [0., 0.5], [0.,1./fff], [0., 10000.]],  
-        okfile='ScanAz2019-01-30_OK_Asic2.fits')
-amps2 = params[:,3]
+# Plot for different positions compared to the ref
+figure('Integration Sphere, divided by 2019-02-14 ')
+for pos in xrange(5):
+    img = ft.image_asics(all1=amps_all[pos] / np.nanmean(amps_all[pos]))
+    subplot(2, 3, pos + 1)
+    imshow(img / img_ref, cmap='viridis', vmin=0, vmax=3, interpolation='nearest')
+    # imshow(img / np.nanmean(img), cmap='viridis', vmin=0, vmax=3, interpolation='nearest')
+    colorbar()
+    if pos == 0:
+        title('Int Sphere Ref 2019-02-14')
+    else:
+        title('Int Sphere 2019-02-15 pos{}'.format(pos))
 
+savefig(basedir + 'int_sphere_pos1-4_divided_ref')
 
-amps = np.append(amps1, amps2)
-
-img = ft.image_asics(all1=amps)
-clf()
-imshow(img/img[16,0], cmap='viridis', vmin=0,vmax=2)
-colorbar()
-title('Intercalibration Int. Sphere')
-
-
-
-intercal = img/img[16,0]
+# Try intercalibration
+intercal = img / img[16, 0]
 
 allimg = np.array(FitsArray('allimg_scan_az.fits'))
 az = np.array(FitsArray('az_scan_az.fits'))
 
 for i in xrange(len(az)):
     clf()
-    subplot(1,2,1)
-    imshow(allimg[i,:,:], cmap='viridis', vmin=0,vmax=1000)
+    subplot(1, 2, 1)
+    imshow(allimg[i, :, :], cmap='viridis', vmin=0, vmax=1000)
     title(az[i])
-    subplot(1,2,2)
-    imshow(allimg[i,:,:]/intercal, cmap='viridis', vmin=0,vmax=1000)
+    subplot(1, 2, 2)
+    imshow(allimg[i, :, :] / intercal, cmap='viridis', vmin=0, vmax=1000)
     title('Intercalibrated')
     show()
     savefig('scan_az_int_sphere_{}.png'.format(1100+az[i]))

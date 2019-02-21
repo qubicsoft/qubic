@@ -1,8 +1,12 @@
-from Fibres import fibtools as ft
-import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.pyplot import *
 from pysimulators import FitsArray
 import matplotlib.mlab as mlab
 import scipy.ndimage.filters as f
+
+from Calibration import fibtools as ft
+
+
 from qubicpack import qubicpack as qp
 
 ########### Read Maynooth Files
@@ -32,7 +36,7 @@ for i in xrange(len(allfib)):
     allok = np.array(FitsArray('listok_fib{}_{}.fits'.format(fib,free))).astype(bool)
     allparams = np.array(FitsArray('params_fib{}_{}.fits'.format(fib,free)))
     allerr = np.array(FitsArray('err_fib{}_{}.fits'.format(fib,free)))
-    allok = allok * isfinite(np.sum(allparams, axis=1)) * isfinite(np.sum(allerr, axis=1))
+    allok = allok * np.isfinite(np.sum(allparams, axis=1)) * np.isfinite(np.sum(allerr, axis=1))
 
     cal, errcal, newok = ft.calibrate(fib, pow_maynooth, allparams, allerr, allok, cutparam=0.4, cuterr=0.03, bootstrap=10000)
     savefig('Calibration-Fib{}_new250119.png'.format(fib))
@@ -51,7 +55,7 @@ free = 'free13'
 allok = np.array(FitsArray('listok_fib{}_{}.fits'.format(fib,free))).astype(bool)
 allparams = np.array(FitsArray('params_fib{}_{}.fits'.format(fib,free)))
 allerr = np.array(FitsArray('err_fib{}_{}.fits'.format(fib,free)))
-allok = allok * isfinite(np.sum(allparams, axis=1)) * isfinite(np.sum(allerr, axis=1))
+allok = allok * np.isfinite(np.sum(allparams, axis=1)) * np.isfinite(np.sum(allerr, axis=1))
 
 
 calibration = np.zeros(256) + np.nan

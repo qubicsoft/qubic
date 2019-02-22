@@ -8,6 +8,9 @@ from pysimulators import FitsArray
 import scipy.signal as scsig
 import scipy.stats
 from scipy.ndimage.filters import correlate1d, gaussian_filter1d
+import glob
+from astropy.io import fits
+import datetime as dt
 
 from qubic.utils import progress_bar
 from qubicpack import qubicpack as qp
@@ -376,6 +379,42 @@ def qs2array(file, FREQ_SAMPLING, timerange=None):
         dd = dd[:, oktime]
 
     return time, dd, a
+
+
+def read_hkintern(basedir,thefieldname=None):
+    hkinternfile = glob.glob(basedir+'/Hks/hk-intern*')
+    hk = fits.open(hkinternfile[0])
+    nfields = hk[1].header['TFIELDS']
+    fields = {}
+    for idx in range(nfields):
+        fieldno = idx + 1
+        ttype = 'TTYPE%i' % fieldno
+        fieldname = hk[1].header[ttype]
+        fields[fieldname] = fieldno
+    
+    if thefieldname is None:
+        print('List of available fields:')
+        print('-------------------------')
+        for idx in range(nfields):
+            print(fields.keys()[idx])
+        return None
+    else:
+        fieldname_ct = 'ComputerDate'    
+        fieldno = fields[fieldname_ct]
+        timestamps = hk[1].data.field(fieldno) * 1.0e-3 # convert timestamps from millisec to sec
+
+        # convert timestamps to human readable dates
+        dates = []
+        for tstamp in timestamps:
+            d = dt.datetime.fromtimestamp(tstamp)
+            dates.append(d)
+
+        # read the azimuth position
+        #fieldname = 'Platform-Azimut'
+        fieldno = fields[thefieldname]
+        hk = hk[1].data.field(fieldno-1)
+        return timestamps, hk
+
 
 
 def butter_bandpass(lowcut, highcut, fs, order=5):

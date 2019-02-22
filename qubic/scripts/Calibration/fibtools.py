@@ -399,21 +399,19 @@ def read_hkintern(basedir,thefieldname=None):
             print(fields.keys()[idx])
         return None
     else:
-        fieldname_ct = 'ComputerDate'    
-        fieldno = fields[fieldname_ct]
-        timestamps = hk[1].data.field(fieldno) * 1.0e-3 # convert timestamps from millisec to sec
-
-        # convert timestamps to human readable dates
-        dates = []
-        for tstamp in timestamps:
-            d = dt.datetime.fromtimestamp(tstamp)
-            dates.append(d)
-
+        gpsdate = hk[1].data.field(fields['GPSDate']-1) # in ms
+        pps = hk[1].data.field(fields['Platform-PPS']-1) # 0 and 1
+        pps[0]=1
+        gpsdate[0]-=1000
+        ppson = pps == 1
+        indices = np.arange(len(gpsdate))
+        newdate = np.interp(indices, indices[ppson], gpsdate[ppson]+1000)*1e-3
+        
         # read the azimuth position
-        #fieldname = 'Platform-Azimut'
+        fieldname = 'Platform-Azimut'
         fieldno = fields[thefieldname]
         hk = hk[1].data.field(fieldno-1)
-        return timestamps, hk
+        return newdate,hk
 
 
 

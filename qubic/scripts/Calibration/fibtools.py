@@ -574,7 +574,7 @@ def simsig_nonorm(x, pars):
     return thesim
 
 
-def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None):
+def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None, return_error=False):
     """
 
     Parameters
@@ -612,8 +612,10 @@ def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None):
         t, yy, dx, dy = profile(tfold, newdata, range=[0, period], nbins=nbins, dispersion=False, plot=False)
         folded[THEPIX, :] = (yy - np.mean(yy)) / np.std(yy)
         folded_nonorm[THEPIX, :] = (yy - np.mean(yy))
-    return folded, t, folded_nonorm
-
+    if return_error==True:
+        return folded, t, folded_nonorm, dy
+    else:
+        return folded, t, folded_nonorm
 
 def fit_average(t, folded, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 0], doplot=True, functname=simsig,
                 clear=True, name='fib'):

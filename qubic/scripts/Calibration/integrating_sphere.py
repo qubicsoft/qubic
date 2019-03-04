@@ -93,19 +93,37 @@ for pos in xrange(4):
 # savefig(basedir + 'int_sphere_pos1-4_divided_ref')
 
 # Try intercalibration
-# intercal = img / img[16, 0]
-#
-# allimg = np.array(FitsArray('allimg_scan_az.fits'))
-# az = np.array(FitsArray('az_scan_az.fits'))
-#
-# for i in xrange(len(az)):
-#     clf()
-#     subplot(1, 2, 1)
-#     imshow(allimg[i, :, :], cmap='viridis', vmin=0, vmax=1000)
-#     title(az[i])
-#     subplot(1, 2, 2)
-#     imshow(allimg[i, :, :] / intercal, cmap='viridis', vmin=0, vmax=1000)
-#     title('Intercalibrated')
-#     show()
-#     savefig('scan_az_int_sphere_{}.png'.format(1100 + az[i]))
-#     # raw_input('press a key')
+intercal = img / img[16, 0]
+
+allimg = np.array(FitsArray('allimg_scan_az.fits'))
+az = np.array(FitsArray('az_scan_az.fits'))
+
+for i in xrange(len(az)):
+    clf()
+    subplot(1, 2, 1)
+    imshow(allimg[i, :, :], cmap='viridis', vmin=0, vmax=1000)
+    title(az[i])
+    subplot(1, 2, 2)
+    imshow(allimg[i, :, :] / intercal, cmap='viridis', vmin=0, vmax=1000)
+    title('Intercalibrated')
+    show()
+    savefig('scan_az_int_sphere_{}.png'.format(1100+az[i]))
+    #raw_input('press a key')
+
+
+pixnums = [2,96,67,58+128]
+clf()
+for i in xrange(len(pixnums)):
+    subplot(2,2,i+1)
+    ax = plt.gca();
+    pixnum = pixnums[i]
+    test = np.zeros(256)+1
+    test[pixnum-1]=2
+    imshow(ft.image_asics(all1=test),vmin=0,vmax=2)
+    title('Pix Num (starting at 1) = {}'.format(pixnum))
+    # Minor ticks
+    ax.set_xticks(np.arange(-.5, 17, 1), minor=True);
+    ax.set_yticks(np.arange(-.5, 17, 1), minor=True);
+    ax.grid(which='minor',color='w', linestyle='-', linewidth=0.5)
+
+savefig('pixels.png')

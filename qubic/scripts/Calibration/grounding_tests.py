@@ -65,34 +65,36 @@ for i in xrange(len(dirs)):
 
 
 
-theTES = 7
-median=False
-filt = 10
-#cpls = [[0,1], [3,2], [0,3], [1,2]]
-cpls = [[0,1], [4,5], [0,4], [1,5]]
-clf()
-for j in xrange(len(cpls)):
-    subplot(len(cpls),1,j+1)
-    xscale('log')
-    yscale('log')
-    xlim(0.9, FREQ_SAMPLING/2)
-    ylim(1e5, 1e8)
-    for i in cpls[j]:
-        if median:
-            toplot = medspec[i]
-        else:
-            toplot = allspecs[i][theTES,:]
-        plot(allfreqs[i], f.gaussian_filter1d(toplot,filt), label=grounding[i]+'-'+motor[i])
-    legend(loc='lower left', fontsize=8)
-    xlabel('Frequency [Hz]')
-    if j==0: 
-        if median:
-            title('Median of {} good TES'.format(ok.sum()))
-            fname = 'median.png'
-        else:
-            title('TES={} - Status={}'.format(theTES, ok[theTES]))
-            fname = 'tes{}.png'.format(theTES)
-savefig(fname)
+for theTES in xrange(256):
+    median=False
+    filt = 10
+    #cpls = [[0,1], [3,2], [0,3], [1,2]]
+    cpls = [[0,1], [4,5], [0,4], [1,5]]
+    clf()
+    for j in xrange(len(cpls)):
+        subplot(len(cpls),1,j+1)
+        xscale('log')
+        yscale('log')
+        xlim(0.9, FREQ_SAMPLING/2)
+        ylim(1e5, 1e8)
+        for i in cpls[j]:
+            if median:
+                toplot = medspec[i]
+            else:
+                toplot = allspecs[i][theTES,:]
+            plot(allfreqs[i], f.gaussian_filter1d(toplot,filt), label=grounding[i]+'-'+motor[i])
+        legend(loc='lower left', fontsize=8)
+        xlabel('Frequency [Hz]')
+        if j==0: 
+            if median:
+                title('Median of {} good TES'.format(ok.sum()))
+                fname = 'median.png'
+            else:
+                title('TES={} - Status={}'.format(theTES, ok[theTES]))
+                fname = 'tes{}.png'.format(theTES)
+    #savefig(fname)
+    show()
+    raw_input('Press a key')
 
 
 

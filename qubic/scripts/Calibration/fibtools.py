@@ -8,6 +8,9 @@ from pysimulators import FitsArray
 import scipy.signal as scsig
 import scipy.stats
 from scipy.ndimage.filters import correlate1d, gaussian_filter1d
+import glob
+from astropy.io import fits
+import datetime as dt
 
 from qubic.utils import progress_bar
 from qubicpack import qubicpack as qp
@@ -378,6 +381,40 @@ def qs2array(file, FREQ_SAMPLING, timerange=None):
     return time, dd, a
 
 
+def read_hkintern(basedir,thefieldname=None):
+    hkinternfile = glob.glob(basedir+'/Hks/hk-intern*')
+    hk = fits.open(hkinternfile[0])
+    nfields = hk[1].header['TFIELDS']
+    fields = {}
+    for idx in range(nfields):
+        fieldno = idx + 1
+        ttype = 'TTYPE%i' % fieldno
+        fieldname = hk[1].header[ttype]
+        fields[fieldname] = fieldno
+    
+    if thefieldname is None:
+        print('List of available fields:')
+        print('-------------------------')
+        for idx in range(nfields):
+            print(fields.keys()[idx])
+        return None
+    else:
+        gpsdate = hk[1].data.field(fields['GPSDate']-1) # in ms
+        pps = hk[1].data.field(fields['Platform-PPS']-1) # 0 and 1
+        pps[0]=1
+        gpsdate[0]-=1000
+        ppson = pps == 1
+        indices = np.arange(len(gpsdate))
+        newdate = np.interp(indices, indices[ppson], gpsdate[ppson]+1000)*1e-3
+        
+        # read the azimuth position
+        fieldname = 'Platform-Azimut'
+        fieldno = fields[thefieldname]
+        hk = hk[1].data.field(fieldno-1)
+        return newdate,hk
+
+
+
 def butter_bandpass(lowcut, highcut, fs, order=5):
     """
 
@@ -537,7 +574,7 @@ def simsig_nonorm(x, pars):
     return thesim
 
 
-def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None):
+def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None, return_error=False):
     """
 
     Parameters
@@ -575,8 +612,10 @@ def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None):
         t, yy, dx, dy = profile(tfold, newdata, range=[0, period], nbins=nbins, dispersion=False, plot=False)
         folded[THEPIX, :] = (yy - np.mean(yy)) / np.std(yy)
         folded_nonorm[THEPIX, :] = (yy - np.mean(yy))
-    return folded, t, folded_nonorm
-
+    if return_error==True:
+        return folded, t, folded_nonorm, dy
+    else:
+        return folded, t, folded_nonorm
 
 def fit_average(t, folded, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 0], doplot=True, functname=simsig,
                 clear=True, name='fib'):

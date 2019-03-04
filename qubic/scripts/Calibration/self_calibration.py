@@ -2,9 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
+import copy
 from matplotlib.pyplot import *
-import healpy as hp
-from astropy.io import fits
 import qubic
 
 basedir = '/home/louisemousset/QUBIC/MyGitQUBIC'
@@ -43,14 +42,15 @@ def get_power_on_array(q, nn, xmin, xmax, theta, phi, spectral_irradiance):
         The power on the focal plane for each pointing.
     """
     nptg = len(theta)
-    xx, yy = np.meshgrid(np.linspace(xmin, xmax, nn), np.linspace(xmin, xmax, nn))
+    step = (xmax - xmin) / nn
+    xx, yy = np.meshgrid(np.arange(xmin, xmax, step), np.arange(xmin, xmax, step))
     x1d = np.ravel(xx)
     y1d = np.ravel(yy)
     z1d = x1d * 0 - 0.3
     position = np.array([x1d, y1d, z1d]).T
 
-    field = q._get_response(theta, phi, spectral_irradiance, position, q.detector.area,
-                                      q.filter.nu, q.horn, q.primary_beam, q.secondary_beam)
+    field = q._get_response(theta, phi, spectral_irradiance, position, q.detector.area, q.filter.nu, q.horn,
+                            q.primary_beam, q.secondary_beam)
     power = np.reshape(np.abs(field) ** 2, (nn, nn, nptg))
     return power
 
@@ -96,7 +96,7 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
         subplot(4, 4, 1)
         q.horn.plot()
         subplot(4, 4, 2)
-        imshow(S[:,:,0])
+        imshow(S[:, :, 0])
         title('$S$')
 
     # All open except i
@@ -108,7 +108,7 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
         subplot(4, 4, 3)
         q.horn.plot()
         subplot(4, 4, 4)
-        imshow(Cminus_i[:,:,0])
+        imshow(Cminus_i[:, :, 0])
         title('$C_{-i}$')
 
     # All open except j
@@ -120,7 +120,7 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
         subplot(4, 4, 5)
         q.horn.plot()
         subplot(4, 4, 6)
-        imshow(Cminus_j[:,:,0])
+        imshow(Cminus_j[:, :, 0])
         title('$C_{-j}$')
 
     # All open except baseline [i, j]
@@ -133,7 +133,7 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
         subplot(4, 4, 7)
         q.horn.plot()
         subplot(4, 4, 8)
-        imshow(Sminus_ij[:,:,0])
+        imshow(Sminus_ij[:, :, 0])
         title('$S_{-ij}$')
 
     # Only i open (not a realistic observable)
@@ -145,7 +145,7 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
         subplot(4, 4, 9)
         q.horn.plot()
         subplot(4, 4, 10)
-        imshow(Ci[:,:,0])
+        imshow(Ci[:, :, 0])
         title('$C_i$')
 
     # Only j open (not a realistic observable)
@@ -157,7 +157,7 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
         subplot(4, 4, 11)
         q.horn.plot()
         subplot(4, 4, 12)
-        imshow(Cj[:,:,0])
+        imshow(Cj[:, :, 0])
         title('$C_j$')
 
     # Only baseline [i, j] open (not a realistic observable)
@@ -170,7 +170,7 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
         subplot(4, 4, 13)
         q.horn.plot()
         subplot(4, 4, 14)
-        imshow(Sij[:,:,0])
+        imshow(Sij[:, :, 0])
         title('$S_{ij}$')
 
     return S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij
@@ -179,42 +179,41 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
 nn = 100
 xmin = -0.06
 xmax = 0.06
-phi = np.linspace(0.2, 0.4, 4)
-theta = np.linspace(0.2, 0.4, 4)
+phi = np.arange(0.2, 0.4, 0.05)
+theta = np.arange(0.2, 0.4, 0.05)
 spectral_irradiance = 0.5
 baseline = [161, 165]
 nptg = len(theta)
 
 power = get_power_on_array(q[0], nn, xmin, xmax, theta, phi, spectral_irradiance)
-S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = selfcal_data(q[0], nn, xmin, xmax, theta, phi,
-                                                    spectral_irradiance, baseline, doplot=True)
-
+S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = selfcal_data(q[0], nn, xmin, xmax, theta, phi, spectral_irradiance,
+                                                             baseline, doplot=True)
 
 figure()
 subplot(2, 2, 1)
-imshow(Sij[:,:,0], interpolation='nearest', origin='lower')
+imshow(Sij[:, :, 0], interpolation='nearest', origin='lower')
 colorbar()
 title('True Baseline $S_{ij}$')
 
 subplot(2, 2, 2)
-imshow((S - Cminus_i - Cminus_j + Sminus_ij)[:,:,0], interpolation='nearest', origin='lower')
+imshow((S - Cminus_i - Cminus_j + Sminus_ij)[:, :, 0], interpolation='nearest', origin='lower')
 colorbar()
 title('$S - C_{-i} - C_{-j} + S_{-ij}$ (Old JC)')
 
 subplot(2, 2, 3)
-imshow((Cminus_i + Cminus_j - 2 * Sminus_ij)[:,:,0], interpolation='nearest', origin='lower')
+imshow((Cminus_i + Cminus_j - 2 * Sminus_ij)[:, :, 0], interpolation='nearest', origin='lower')
 colorbar()
 title('$C_{-i} + C_{-j} - 2*S_{-ij}$ (Paper - Wrong !)')
 
 subplot(2, 2, 4)
-imshow((Ci + Cj - Cminus_i - Cminus_j + Sminus_ij + S)[:,:,0], interpolation='nearest', origin='lower')
+imshow((Ci + Cj - Cminus_i - Cminus_j + Sminus_ij + S)[:, :, 0], interpolation='nearest', origin='lower')
 colorbar()
 title('$C_i + C_j - C_{-i} - C_{-j} + S_{-ij} + S$ (Creidhe)')
-
 
 figure()
 for ptg in xrange(nptg):
     imshow((S - Cminus_i - Cminus_j + Sminus_ij)[:, :, ptg], interpolation='nearest', origin='lower')
     title('$S - C_{-i} - C_{-j} + S_{-ij}$\n' + 'ptg={}'.format(ptg))
     pause(1)
-    if s==0: colorbar()
+    if s == 0:
+        colorbar()

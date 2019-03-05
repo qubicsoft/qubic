@@ -72,8 +72,7 @@ for pos in xrange(1, 5):
     amps = make_amp(dir, fff=0.333)
     amps_all.append(amps)
     img = ft.image_asics(all1=amps_all[pos])
-    allimg[pos-1, :, :] = img
-
+    allimg[pos - 1, :, :] = img
 
 # Plot for different positions compared to the ref
 figure('Integration Sphere, divided the mean of 2019-02-15 measurements ')
@@ -88,7 +87,7 @@ for pos in xrange(4):
     # if pos == 0:
     #     title('Int Sphere Ref 2019-02-14')
     # else:
-    title('Int Sphere 2019-02-15 pos{}'.format(pos+1))
+    title('Int Sphere 2019-02-15 pos{}'.format(pos + 1))
 
 # savefig(basedir + 'int_sphere_pos1-4_divided_ref')
 
@@ -107,23 +106,22 @@ for i in xrange(len(az)):
     imshow(allimg[i, :, :] / intercal, cmap='viridis', vmin=0, vmax=1000)
     title('Intercalibrated')
     show()
-    savefig('scan_az_int_sphere_{}.png'.format(1100+az[i]))
-    #raw_input('press a key')
+    savefig('scan_az_int_sphere_{}.png'.format(1100 + az[i]))
+    # raw_input('press a key')
 
-
-pixnums = [2,96,67,58+128]
+pixnums = [2, 96, 67, 58 + 128]
 clf()
 for i in xrange(len(pixnums)):
-    subplot(2,2,i+1)
-    ax = plt.gca();
+    subplot(2, 2, i + 1)
+    ax = gca();
     pixnum = pixnums[i]
-    test = np.zeros(256)+1
-    test[pixnum-1]=2
-    imshow(ft.image_asics(all1=test),vmin=0,vmax=2)
+    test = np.zeros(256) + 1
+    test[pixnum - 1] = 2
+    imshow(ft.image_asics(all1=test), vmin=0, vmax=2)
     title('Pix Num (starting at 1) = {}'.format(pixnum))
     # Minor ticks
     ax.set_xticks(np.arange(-.5, 17, 1), minor=True);
     ax.set_yticks(np.arange(-.5, 17, 1), minor=True);
-    ax.grid(which='minor',color='w', linestyle='-', linewidth=0.5)
+    ax.grid(which='minor', color='w', linestyle='-', linewidth=0.5)
 
 savefig('pixels.png')

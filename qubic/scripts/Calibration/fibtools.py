@@ -118,14 +118,13 @@ def thepolynomial(x, pars):
     """
 
     f = np.poly1d(pars)
-    return (f(x))
+    return f(x)
 
 
 class MyChi2:
     """
     Class defining the minimizer and the data
-	"""
-
+    """
     def __init__(self, xin, yin, covarin, functname):
         self.x = xin
         self.y = yin
@@ -178,21 +177,26 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     # variables
     ndim = np.size(guess)
     parnames = []
-    for i in range(ndim): parnames.append('c' + np.str(i))
+    for i in range(ndim):
+        parnames.append('c' + np.str(i))
     # initial guess
     theguess = dict(zip(parnames, guess))
     # fixed parameters
     dfix = {}
     if fixpars is not None:
-        for i in xrange(len(parnames)): dfix['fix_' + parnames[i]] = fixpars[i]
+        for i in xrange(len(parnames)):
+            dfix['fix_' + parnames[i]] = fixpars[i]
     else:
-        for i in xrange(len(parnames)): dfix['fix_' + parnames[i]] = False
+        for i in xrange(len(parnames)):
+            dfix['fix_' + parnames[i]] = False
     # range for parameters
     drng = {}
     if rangepars is not None:
-        for i in xrange(len(parnames)): drng['limit_' + parnames[i]] = rangepars[i]
+        for i in xrange(len(parnames)):
+            drng['limit_' + parnames[i]] = rangepars[i]
     else:
-        for i in xrange(len(parnames)): drng['limit_' + parnames[i]] = False
+        for i in xrange(len(parnames)):
+            drng['limit_' + parnames[i]] = False
 
     # Run Minuit
     if verbose: print('Fitting with Minuit')
@@ -211,8 +215,10 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     if fixpars is not None:
         parnamesfit = []
         for i in xrange(len(parnames)):
-            if fixpars[i] is False: parnamesfit.append(parnames[i])
-            if fixpars[i]: errfit[i] = 0
+            if fixpars[i] is False:
+                parnamesfit.append(parnames[i])
+            if fixpars[i]:
+                errfit[i] = 0
     else:
         parnamesfit = parnames
     ndimfit = len(parnamesfit)  # int(np.sqrt(len(m.errors)))
@@ -226,7 +232,8 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     ndf = np.size(x) - ndim
     if force_chi2_ndf:
         correct = chisq / ndf
-        if verbose: print('correcting errorbars to have chi2/ndf=1 - correction = {}'.format(chisq))
+        if verbose:
+            print('correcting errorbars to have chi2/ndf=1 - correction = {}'.format(chisq))
     else:
         correct = 1.
     if verbose:
@@ -381,8 +388,23 @@ def qs2array(file, FREQ_SAMPLING, timerange=None):
     return time, dd, a
 
 
-def read_hkintern(basedir,thefieldname=None):
-    hkinternfile = glob.glob(basedir+'/Hks/hk-intern*')
+def read_hkintern(basedir, thefieldname=None):
+    """
+
+    Parameters
+    ----------
+    basedir : str
+        directory of the file
+    thefieldname : str
+
+    Returns
+    -------
+    newdate : array
+        New time array of te measurement
+    hk : array
+        Angle position given by the encoder (number of encoder steps).
+    """
+    hkinternfile = glob.glob(basedir + '/Hks/hk-intern*')
     hk = fits.open(hkinternfile[0])
     nfields = hk[1].header['TFIELDS']
     fields = {}
@@ -391,7 +413,7 @@ def read_hkintern(basedir,thefieldname=None):
         ttype = 'TTYPE%i' % fieldno
         fieldname = hk[1].header[ttype]
         fields[fieldname] = fieldno
-    
+
     if thefieldname is None:
         print('List of available fields:')
         print('-------------------------')
@@ -399,20 +421,19 @@ def read_hkintern(basedir,thefieldname=None):
             print(fields.keys()[idx])
         return None
     else:
-        gpsdate = hk[1].data.field(fields['GPSDate']-1) # in ms
-        pps = hk[1].data.field(fields['Platform-PPS']-1) # 0 and 1
-        pps[0]=1
-        gpsdate[0]-=1000
+        gpsdate = hk[1].data.field(fields['GPSDate'] - 1)  # in ms
+        pps = hk[1].data.field(fields['Platform-PPS'] - 1)  # 0 and 1
+        pps[0] = 1
+        gpsdate[0] -= 1000
         ppson = pps == 1
         indices = np.arange(len(gpsdate))
-        newdate = np.interp(indices, indices[ppson], gpsdate[ppson]+1000)*1e-3
-        
+        newdate = np.interp(indices, indices[ppson], gpsdate[ppson] + 1000) * 1e-3
+
         # read the azimuth position
         fieldname = 'Platform-Azimut'
         fieldno = fields[thefieldname]
-        hk = hk[1].data.field(fieldno-1)
-        return newdate,hk
-
+        hk = hk[1].data.field(fieldno - 1)
+        return newdate, hk
 
 
 def butter_bandpass(lowcut, highcut, fs, order=5):
@@ -581,12 +602,12 @@ def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None, return_error
     ----------
     time
     dd
-    period : float
-        Modulation period of spectral source signal in second.
+    period
     lowcut
     highcut
     nbins
     notch
+    return_error
 
     Returns
     -------
@@ -612,10 +633,11 @@ def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None, return_error
         t, yy, dx, dy = profile(tfold, newdata, range=[0, period], nbins=nbins, dispersion=False, plot=False)
         folded[THEPIX, :] = (yy - np.mean(yy)) / np.std(yy)
         folded_nonorm[THEPIX, :] = (yy - np.mean(yy))
-    if return_error==True:
+    if return_error:
         return folded, t, folded_nonorm, dy
     else:
         return folded, t, folded_nonorm
+
 
 def fit_average(t, folded, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 0], doplot=True, functname=simsig,
                 clear=True, name='fib'):
@@ -659,7 +681,8 @@ def fit_average(t, folded, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 
         nnn = 100
         t0 = np.linspace(0, 1. / fff, nnn)
         diff2 = np.zeros(nnn)
-        for i in xrange(nnn): diff2[i] = np.sum((av - functname(t, [dc, 0.1, t0[i], 1.])) ** 2)
+        for i in xrange(nnn):
+            diff2[i] = np.sum((av - functname(t, [dc, 0.1, t0[i], 1.])) ** 2)
         ttry = t0[np.argmin(diff2)]
 
         bla = do_minuit(t, av, np.ones(len(t)), [dc, 0.1, ttry, 1.], functname=functname,
@@ -682,7 +705,8 @@ def fit_average(t, folded, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 
 
     if doplot:
         ion()
-        if clear: clf()
+        if clear:
+            clf()
         xlim(0, 1. / fff)
         for i in xrange(npix):
             plot(t, folded[i, :], alpha=0.1, color='k')
@@ -718,9 +742,7 @@ def fit_all(t, folded, av, initpars=None, fixpars=[0, 0, 0, 0], stop_each=False,
     -------
 
     """
-    sh = np.shape(folded)
-    npix = sh[0]
-    nbins = sh[1]
+    npix, nbins = np.shape(folded)
     print('       Got {} pixels to fit'.format(npix))
     ##### Now fit each TES fixing cycle to dc and t0 to the one fitted on the median
     allparams = np.zeros((npix, 4))
@@ -734,7 +756,6 @@ def fit_all(t, folded, av, initpars=None, fixpars=[0, 0, 0, 0], stop_each=False,
         #### First a fit with no error correction in order to have a chi2 distribution
         theres = do_minuit(t, thedd, np.ones(len(t)), initpars, functname=functname, fixpars=fixpars,
                            rangepars=rangepars, force_chi2_ndf=True, verbose=False, nohesse=True)
-        chi2 = theres[4]
         ndf = theres[5]
         params = theres[1]
         err = theres[2]
@@ -837,9 +858,8 @@ def run_asic(idnum, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=
         #### Now perform the fit on the median folded data
         print('')
         print('FIRST PASS')
-        print(
-            'First Pass is only to have a good guess of the t0, '
-            'your selection should be very conservative - only high S/N')
+        print('First Pass is only to have a good guess of the t0, '
+              'your selection should be very conservative - only high S/N')
         # if initpars == Noy
         # ne:
         # 	initpars = [dc, 0.06, 0., 0.6]
@@ -898,7 +918,7 @@ def run_asic(idnum, Vtes, fff, dc, theasicfile, asic, reselect_ok=False, lowcut=
         av, params, err = fit_average(tt, folded[okfinal, :], fff, dc, fib, Vtes, initpars=initpars,
                                       fixpars=[0, 0, 0, 0], doplot=False, clear=False, name=name)
 
-        allparams, allerr, allchi2, ndf, ok_useless = fit_all(tt, folded_nonorm * 1e9, av, fff, dc, fib, Vtes,
+        allparams, allerr, allchi2, ndf, ok_useless = fit_all(tt, folded_nonorm * 1e9, av,
                                                               initpars=[dc, params[1], params[2], params[3]],
                                                               fixpars=[1, 0, 1, 0], functname=simsig_nonorm,
                                                               rangepars=rangepars)
@@ -982,8 +1002,7 @@ def calibrate(fib, pow_maynooth, allparams, allerr, allok, cutparam=None, cuterr
     -------
 
     """
-    # Should not be img_maynooth = image_asics(all1=pow_maynooth) ??
-    img_maynooth = image_asics(pow_maynooth, all1=True)
+    img_maynooth = image_asics(all1=pow_maynooth)
 
     clf()
     subplot(2, 2, 1)
@@ -1060,8 +1079,7 @@ def calibrate(fib, pow_maynooth, allparams, allerr, allok, cutparam=None, cuterr
     title('Maynooth [mW]')
 
     subplot(2, 2, 4)
-    # same problem here...
-    img = image_asics(allparams[:, 3] / res[1][0], all1=True)
+    img = image_asics(all1=allparams[:, 3] / res[1][0])
     imshow(img, interpolation='nearest')
     colorbar()
     title('Amp Fib{}  converted to mW'.format(fib))

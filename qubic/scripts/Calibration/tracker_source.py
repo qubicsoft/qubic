@@ -13,7 +13,7 @@ dictfilename = basedir + '/qubic/qubic/scripts/global_source.dict'
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
-# Get sweeping pointing in a fix frame
+# ========== Sweeping pointing in a fix frame ===========
 p = qubic.get_pointing(d)
 nptg = len(p.index)  # Pointing number
 
@@ -132,7 +132,7 @@ imshow(focal_plane, interpolation='nearest', origin='lower')
 def plot_focalplane(size, nptg, ptg_start, ptg_stop, focal_plane, tod):
     figure('focalplane')
     tod_focal_plane = np.zeros((size, size, nptg))
-    for ptg in xrange(ptg_start, ptg_stop+1):
+    for ptg in xrange(ptg_start, ptg_stop + 1):
         j = 0
         for i in xrange(1156):
             pos = np.where(focal_plane == i)
@@ -152,12 +152,12 @@ def plot_focalplane(size, nptg, ptg_start, ptg_stop, focal_plane, tod):
 
         imshow(tod_focal_plane[:, :, ptg], interpolation='nearest', origin='lower')
         title('ptg' + str(ptg) + ' el=' + str(p.elevation[ptg]) + ' az=' + str(p.azimuth[ptg]))
-        pause(0.02)
+        pause(0.2)
     colorbar()
     return
 
 
-plot_focalplane(size_fi, nptg, 30, nptg-1, focal_plane, tod_fi)
+plot_focalplane(size_fi, nptg, 30, nptg - 1, focal_plane, tod_fi)
 
 # ========= Same thing with closed horns to see the franges ============
 i = 40
@@ -177,6 +177,7 @@ q_ij_close[0].horn.plot()
 closed_horns = np.delete(np.arange(400), [i], 0)
 q_i_open, tod_i_open = get_tod(d, p, x0, closed_horns=closed_horns)
 q_i_open[0].horn.plot()
+plot_focalplane(size_fi, nptg, 30, 30, focal_plane, np.abs(tod_i_open) ** 2)
 
 closed_horns = np.delete(np.arange(400), [j], 0)
 q_j_open, tod_j_open = get_tod(d, p, x0, closed_horns=closed_horns)
@@ -189,5 +190,3 @@ q_ij_open[0].horn.plot()
 #  Plot the interference pattern on the focal plane for each pointing
 tod_frange = tod_fi + tod_ij_close - tod_i_close - tod_j_close
 plot_focalplane(size_fi, nptg, 30, 30, focal_plane, tod_frange)
-
-

@@ -7,8 +7,8 @@ filter_relative_bandwidth=0.25
 beam_shape='gaussian' # 'gaussian', 'fitted_beam', 'multi_freq'
 
 # multifreq instrument 
-MultiBand=False
-nf_sub=3
+MultiBand=True
+nf_sub=2
 center_detector=False
 
 psd=None
@@ -59,13 +59,13 @@ longitude= 123 + 20. / 60  #DOME C
 
 
 random_pointing=False   
-npointings=1000
+npointings=900
 dtheta=10.
 nhwp_angles=3
 seed=1
 
 sweeping_pointing=True
-duration=0.05 #h
+duration=0.02 #h
 angspeed=0.4 #deg/s
 delta_az=10. #deg
 nsweeps_per_elevation=1

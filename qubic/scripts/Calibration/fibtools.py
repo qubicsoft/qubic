@@ -202,7 +202,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     if verbose: print('Fitting with Minuit')
     theargs = dict(theguess.items() + dfix.items())
     if rangepars is not None: theargs.update(dict(theguess.items() + drng.items()))
-    m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=1., **theargs)
+    m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=1., print_level=0, **theargs)
     m.migrad()
     if nohesse is False:
         m.hesse()
@@ -595,7 +595,7 @@ def simsig_nonorm(x, pars):
     return thesim
 
 
-def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None, return_error=False):
+def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None, return_error=False, silent=False):
     """
 
     Parameters
@@ -619,9 +619,9 @@ def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None, return_error
     ndet = sh[0]
     folded = np.zeros((ndet, nbins))
     folded_nonorm = np.zeros((ndet, nbins))
-    bar = progress_bar(ndet, 'Detectors ')
+    if not silent: bar = progress_bar(ndet, 'Detectors ')
     for THEPIX in xrange(ndet):
-        bar.update()
+        if not silent: bar.update()
         data = dd[THEPIX, :]
         filt = scsig.butter(3, [lowcut / FREQ_SAMPLING, highcut / FREQ_SAMPLING], btype='bandpass', output='sos')
         newdata = scsig.sosfilt(filt, data)

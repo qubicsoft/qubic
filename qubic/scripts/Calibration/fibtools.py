@@ -140,7 +140,7 @@ class MyChi2:
 
 ### Call Minuit
 def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=None, rangepars=None, nohesse=False,
-              force_chi2_ndf=False, verbose=True):
+              force_chi2_ndf=False, verbose=True, minos=False):
     """
 
     Parameters
@@ -204,6 +204,8 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     if rangepars is not None: theargs.update(dict(theguess.items() + drng.items()))
     m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=1., print_level=0, **theargs)
     m.migrad()
+    if minos:
+        m.minos()
     if nohesse is False:
         m.hesse()
     # build np.array output
@@ -248,7 +250,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 ###############################################################################
 
 
-def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True, log=False):
+def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True, log=False, median=False):
     """
 
     Parameters
@@ -289,7 +291,10 @@ def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True
     for i in np.arange(nbins):
         ok = (x > xmin[i]) & (x < xmax[i])
         nn[i] = np.sum(ok)
-        yval[i] = np.mean(y[ok])
+        if median:
+            yval[i] = np.median(y[ok])
+        else:
+            yval[i] = np.mean(y[ok])
         xc[i] = np.mean(x[ok])
         if dispersion:
             fact = 1

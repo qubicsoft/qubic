@@ -140,7 +140,7 @@ def get_pointing(d):
     center=(d['RA_center'],d['DEC_center'])
 
     if d['random_pointing']==True:
-        return create_random_pointings(center, d['npointings'], d['dtheta'],
+        return create_random_pointings(center, d['npointings'], d['dtheta'], d['nhwp_angles'],
                                        date_obs=d['date_obs'], period=d['period'],
                                        latitude=d['latitude'],
                                        longitude=d['longitude'], seed=d['seed'])
@@ -152,15 +152,17 @@ def get_pointing(d):
                                          date_obs=d['date_obs'],
                                          latitude=d['latitude'],
                                          longitude=d['longitude'],
-                                         fix_azimuth=d['fix_azimuth'])
+                                         fix_azimuth=d['fix_azimuth'],random_hwp=d['random_hwp'])
 
 
-def create_random_pointings(center, npointings, dtheta, date_obs=None,
+def create_random_pointings(center, npointings, dtheta, nhwp_angles=3, date_obs=None,
                             period=None, latitude=None, longitude=None, seed=None):
     
     
     """
-    Return pointings randomly and uniformly distributed in a spherical cap.
+    Return pointings randomly and uniformly distributed in a spherical cap. 
+    The same pointing is repeated nhwp_angles times with a different
+    hwp angle each time. 
 
     Parameters
     ----------
@@ -170,6 +172,8 @@ def create_random_pointings(center, npointings, dtheta, date_obs=None,
         The number of requested pointings
     dtheta : float
         The maximum angular distance to the center.
+    nhwp_angles : int
+        The number of HWP angles used.
     date_obs : str or astropy.time.Time, optional
         The starting date of the observation (UTC).
     period : float, optional
@@ -183,15 +187,20 @@ def create_random_pointings(center, npointings, dtheta, date_obs=None,
     
     
     r = np.random.RandomState(seed)
+    nrandom = np.int(npointings/nhwp_angles) #number of real random pointings
     
+    # Creation of nrandom pointing 
     cosdtheta = np.cos(np.radians(dtheta))
-    theta = np.degrees(np.arccos(cosdtheta + (1 - cosdtheta) * r.rand(npointings)))
-    phi   = r.rand(npointings) * 360
-    pitch = r.rand(npointings) * 360
+    theta = np.degrees(np.arccos(cosdtheta + (1 - cosdtheta) * r.rand(nrandom)))
+    phi   = r.rand(nrandom) * 360
+    pitch = r.rand(nrandom) * 360
+
     p = QubicSampling(
-        npointings, date_obs=date_obs, period=period, latitude=latitude,
+        nrandom, date_obs=date_obs, period=period, latitude=latitude,
         longitude=longitude)
+
     time = p.date_obs + TimeDelta(p.time, format='sec')
+    
     c2s = Cartesian2SphericalOperator('azimuth,elevation', degrees=True)
     e2h = CartesianEquatorial2HorizontalOperator(
         'NE', time, p.latitude, p.longitude)
@@ -199,17 +208,31 @@ def create_random_pointings(center, npointings, dtheta, date_obs=None,
     s2c = Spherical2CartesianOperator('zenith,azimuth', degrees=True)
     rotation = c2s(e2h(rot(s2c)))
     coords = rotation(np.asarray([theta.T, phi.T]).T)
+
     p.azimuth = coords[..., 0]
     p.elevation = coords[..., 1]
     p.pitch = pitch
-    p.angle_hwp = r.random_integers(0, 7, npointings) * 11.25
-    p.fix_az=False
-    return p
+    p.fix_az = False
 
+    # Replication of the same pointing with others fix hwp angles
+    pp = QubicSampling(
+        nrandom * nhwp_angles, date_obs=date_obs, period=period, latitude=latitude,
+        longitude=longitude)
+    
+    pp.azimuth = np.tile(p.azimuth, nhwp_angles)
+    pp.elevation = np.tile(p.elevation, nhwp_angles)
+    pp.pitch = np.tile(p.pitch, nhwp_angles)
+    pp.time = np.tile(p.time, nhwp_angles)
+    pp.angle_hwp = np.zeros(nrandom * nhwp_angles)
+    pp.fix_az = False
+    for hwp in xrange(nhwp_angles):
+       pp.angle_hwp[hwp*nrandom : (hwp+1)*nrandom] = np.array(np.rad2deg((hwp) * np.pi / (nhwp_angles*2)))
+
+    return pp
 
 def create_sweeping_pointings(
         center, duration, period, angspeed, delta_az, nsweeps_per_elevation,
-        angspeed_psi, maxpsi, date_obs=None, latitude=None, longitude=None,fix_azimuth=None):
+        angspeed_psi, maxpsi, date_obs=None, latitude=None, longitude=None,fix_azimuth=None,random_hwp=True):
     """
     Return pointings according to the sweeping strategy:
     Sweep around the tracked FOV center azimuth at a fixed elevation, and
@@ -302,7 +325,16 @@ def create_sweeping_pointings(
     out.azimuth = azptg
     out.elevation = elptg
     out.pitch = pitch
-    out.angle_hwp = np.random.random_integers(0, 7, nsamples) * 11.25
+    if random_hwp:
+        out.angle_hwp = np.random.random_integers(0, 7, nsamples) * 11.25
+    else:
+        out.angle_hwp=np.zeros(nsamples)
+        max_sweeps=np.max(isweeps)
+        delta=int(nsamples/max_sweeps)
+        for i in range(max_sweeps):
+            out.angle_hwp[i*delta:(i+1)*delta]=11.25*np.mod(i,7)
+
+
 
     if fix_azimuth['apply']:
         out.fix_az=True

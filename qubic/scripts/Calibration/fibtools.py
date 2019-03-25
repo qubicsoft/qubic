@@ -250,7 +250,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 ###############################################################################
 
 
-def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True, log=False, median=False):
+def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True, log=False, median=False,cutbad=True):
     """
 
     Parameters
@@ -306,7 +306,12 @@ def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True
         if fmt is None: fmt = 'ro'
         errorbar(xc, yval, xerr=dx, yerr=dy, fmt=fmt)
     ok = nn != 0
-    return xc[ok], yval[ok], dx[ok], dy[ok]
+    if cutbad:
+        return xc[ok], yval[ok], dx[ok], dy[ok]
+    else:
+        yval[~ok] = 0
+        dy[~ok] = 0
+        return xc, yval, dx, dy
 
 
 def exponential_filter1d(input, sigma, axis=-1, output=None, mode="reflect", cval=0.0, truncate=10.0):

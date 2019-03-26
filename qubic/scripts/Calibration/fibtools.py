@@ -140,7 +140,7 @@ class MyChi2:
 
 ### Call Minuit
 def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=None, rangepars=None, nohesse=False,
-              force_chi2_ndf=False, verbose=True):
+              force_chi2_ndf=False, verbose=True, minos=False):
     """
 
     Parameters
@@ -202,8 +202,10 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     if verbose: print('Fitting with Minuit')
     theargs = dict(theguess.items() + dfix.items())
     if rangepars is not None: theargs.update(dict(theguess.items() + drng.items()))
-    m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=1., **theargs)
+    m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=1., print_level=0, **theargs)
     m.migrad()
+    if minos:
+        m.minos()
     if nohesse is False:
         m.hesse()
     # build np.array output
@@ -248,7 +250,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 ###############################################################################
 
 
-def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True, log=False):
+def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True, log=False, median=False,cutbad=True):
     """
 
     Parameters
@@ -289,7 +291,10 @@ def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True
     for i in np.arange(nbins):
         ok = (x > xmin[i]) & (x < xmax[i])
         nn[i] = np.sum(ok)
-        yval[i] = np.mean(y[ok])
+        if median:
+            yval[i] = np.median(y[ok])
+        else:
+            yval[i] = np.mean(y[ok])
         xc[i] = np.mean(x[ok])
         if dispersion:
             fact = 1
@@ -301,7 +306,12 @@ def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True
         if fmt is None: fmt = 'ro'
         errorbar(xc, yval, xerr=dx, yerr=dy, fmt=fmt)
     ok = nn != 0
-    return xc[ok], yval[ok], dx[ok], dy[ok]
+    if cutbad:
+        return xc[ok], yval[ok], dx[ok], dy[ok]
+    else:
+        yval[~ok] = 0
+        dy[~ok] = 0
+        return xc, yval, dx, dy
 
 
 def exponential_filter1d(input, sigma, axis=-1, output=None, mode="reflect", cval=0.0, truncate=10.0):
@@ -595,7 +605,7 @@ def simsig_nonorm(x, pars):
     return thesim
 
 
-def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None, return_error=False):
+def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None, return_error=False, silent=False):
     """
 
     Parameters
@@ -619,9 +629,9 @@ def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None, return_error
     ndet = sh[0]
     folded = np.zeros((ndet, nbins))
     folded_nonorm = np.zeros((ndet, nbins))
-    bar = progress_bar(ndet, 'Detectors ')
+    if not silent: bar = progress_bar(ndet, 'Detectors ')
     for THEPIX in xrange(ndet):
-        bar.update()
+        if not silent: bar.update()
         data = dd[THEPIX, :]
         filt = scsig.butter(3, [lowcut / FREQ_SAMPLING, highcut / FREQ_SAMPLING], btype='bandpass', output='sos')
         newdata = scsig.sosfilt(filt, data)

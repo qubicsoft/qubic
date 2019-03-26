@@ -70,17 +70,20 @@ import qubic
 # ===================================
 
 def create_acquisition_operator_TOD(pointing, d):
-    # Polychromatic instrument model
-    q = qubic.QubicMultibandInstrument(d)
     # scene
     s = qubic.QubicScene(d)
-    # number of sub frequencies to build the TOD
-    _, nus_edge_in, _, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9,
+    if d['nf_sub']==1:
+        q = qubic.QubicInstrument(d)
+        return qubic.QubicAcquisition(q, pointing, s, d)
+    else:
+        # Polychromatic instrument model
+        q = qubic.QubicMultibandInstrument(d)
+        # number of sub frequencies to build the TOD
+        _, nus_edge_in, _, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9,
                                                     d['filter_relative_bandwidth'],
                                                     d['nf_sub'])  # Multiband instrument model
-    # Multi-band acquisition model for TOD fabrication
-    atod = qubic.QubicMultibandAcquisition(q, pointing, s, d, nus_edge_in)
-    return atod
+        # Multi-band acquisition model for TOD fabrication
+        return qubic.QubicMultibandAcquisition(q, pointing, s, d, nus_edge_in)
 
 
 def create_TOD(d, pointing, x0):

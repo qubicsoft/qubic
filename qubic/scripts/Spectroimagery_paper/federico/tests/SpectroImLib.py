@@ -1,94 +1,187 @@
 from __future__ import division
+
 import healpy as hp
 import numpy as np
 
+import os
+import pysm
 import qubic
 
+__all__ = ['sky', 'Planck_sky', 'Qubic_sky']
 
-# ========================================
-# These 3 functions have been put in input_sky.py (will bee remove soon)
-# def scaling_dust(freq1, freq2, sp_index=1.59):
-#     '''
-#     Calculate scaling factor for dust contamination
-#     Frequencies are in GHz
-#     '''
-#     freq1 = float(freq1)
-#     freq2 = float(freq2)
-#     x1 = freq1 / 56.78
-#     x2 = freq2 / 56.78
-#     S1 = x1 ** 2. * np.exp(x1) / (np.exp(x1) - 1) ** 2.
-#     S2 = x2 ** 2. * np.exp(x2) / (np.exp(x2) - 1) ** 2.
-#     vd = 375.06 / 18. * 19.6
-#     scaling_factor_dust = (np.exp(freq1 / vd) - 1) / \
-#                           (np.exp(freq2 / vd) - 1) * \
-#                           (freq2 / freq1) ** (sp_index + 1)
-#     scaling_factor_termo = S1 / S2 * scaling_factor_dust
-#     return scaling_factor_termo
-#
-#
-# def cmb_plus_dust(cmb, dust, Nbsubbands, sub_nus, kind='IQU'):
-#     '''
-#     Sum up clean CMB map with dust using proper scaling coefficients
-#     '''
-#     Nbpixels = cmb.shape[0]
-#     nstokes = len(kind)  # Number of stokes parameters used in the simu
-#     x0 = np.zeros((Nbsubbands, Nbpixels, 3))
-#     # Let's fill the maps:
-#     for i in range(Nbsubbands):
-#         for istokes in xrange(nstokes):
-#             if kind == 'QU':  # This condition keeps the order IQU in the healpix map
-#                 x0[i, :, istokes + 1] = cmb.T[istokes + 1] + dust.T[istokes + 1] * scaling_dust(150, sub_nus[i], 1.59)
-#             else:
-#                 x0[i, :, istokes] = cmb.T[istokes] + dust.T[istokes] * scaling_dust(150, sub_nus[i], 1.59)
-#     return x0
-#
-#
-# def create_input_sky(d, skypars):
-#     Nf = int(d['nf_sub'])
-#     band = d['filter_nu'] / 1e9
-#     filter_relative_bandwidth = d['filter_relative_bandwidth']
-#     _, _, nus_in, _, _, Nbbands_in = qubic.compute_freq(band, filter_relative_bandwidth, Nf)
-#     # seed
-#     if d['seed']:
-#         np.random.seed(d['seed'])
-#         # Generate the input CMB map
-#         sp = qubic.read_spectra(skypars['r'])
-#         cmb = np.array(hp.synfast(sp, d['nside'], new=True, pixwin=True, verbose=False)).T
-#         # Generate the dust map
-#         coef = skypars['dust_coeff']
-#         ell = np.arange(1, 3 * d['nside'])
-#         fact = (ell * (ell + 1)) / (2 * np.pi)
-#         spectra_dust = [np.zeros(len(ell)),
-#                         coef * (ell / 80.) ** (-0.42) / (fact * 0.52),
-#                         coef * (ell / 80.) ** (-0.42) / fact,
-#                         np.zeros(len(ell))]
-#         dust = np.array(hp.synfast(spectra_dust, d['nside'], new=True, pixwin=True, verbose=False)).T
-#
-#         # Combine CMB and dust. As output we have N 3-component maps of sky.
-#         x0 = cmb_plus_dust(cmb, dust, Nbbands_in, nus_in, d['kind'])
-#         return x0
-# ===================================
-
-def input_sky_pysm(sky_config, d):
+class sky(object):
     """
-    Create as many skies as the number of input frequencies.
+    Define a sky object as seen by an instrument.
+    """
+    def __init__(self, skyconfig, d, instrument, out_dir, out_prefix):
+        """
+        Parameters:
+        skyconfig  : a skyconfig dictionary to pass to (as expected by) `PySM`
+        d          : input dictionary, from which the following Parameters are read
+        instrument : a `PySM` instrument describing the instrument
+        out_dir    : default path where the sky maps will be saved
+        out_prefix : default world for the output files
+
+        For more details about `PySM` see the `PySM` documentation at the floowing link: 
+        https://pysm-public.readthedocs.io/en/latest/index.html
+        """
+        self.skyconfig = skyconfig
+        self.nside = d['nside']
+        self.dictionary = d
+        self.instrument = instrument
+        self.output_directory = out_dir
+        self.output_prefix = out_prefix
+        self.sky = pysm.Sky(skyconfig)
+
+    def get_simple_sky_map(self):
+        """
+        Create as many skies as the number of input frequencies. Instrumental
+        effects are not considered. For this use the `get_sky_map` method.
+        Return a vector of shape (number_of_input_subfrequencies, npix, 3)
+        """
+        sky_signal = self.sky.signal()
+        Nf = int(self.dictionary['nf_sub'])
+        band = self.dictionary['filter_nu']/1e9
+        filter_relative_bandwidth = self.dictionary['filter_relative_bandwidth']
+        _, _, nus_in, _, _, Nbbands_in = qubic.compute_freq(
+            band, filter_relative_bandwidth, Nf)
+        return np.rollaxis(sky_signal(nu=nus_in), 2, 1)
+
+    def read_sky_map(self, read_all=True):
+        """
+        Returns the maps saved in the `output_directory` containing the `output_prefix`.
+        """
+        map_list = [s for s in os.listdir(self.output_directory) if self.output_prefix in s]
+        map_list = [m for m in map_list if 'total' in m]
+        if not read_all:
+            map_list = np.array([[m for m in map_list if x in m]
+                                 for x in self.instrument.Channel_Names]).ravel().tolist()
+        maps = np.zeros((len(map_list), hp.nside2npix(self.nside), 3))
+        for i, title in enumerate(map_list):
+            maps[i] = hp.read_map(title, field=(0, 1, 2)).T
+        return map_list, maps
+
+    def get_sky_map(self):
+        """
+        Returns the maps saved in the `output_directory` containing the `output_prefix`. If
+        there are no maps in the `ouput_directory` they will be created.
+        """
+        sky_map_list, sky_map = self.read_sky_map()
+        if len(sky_map_list) < len(self.instrument.Frequencies):
+            self.instrument.observe(self.sky)
+            sky_map_list, sky_map = self.read_sky_map()
+        if len(sky_map_list) > len(self.instrument.Frequencies):
+            sky_map_list, sky_map = self.read_sky_map(read_all=False)
+        return sky_map
+
     
-    The parameter `sky_config` must be a `pysm` configuration dictionary while 
-    `d` must be the qubic configuration dictionary. For more details see the 
-    `pysm` documentation at the floowing link: 
-    https://pysm-public.readthedocs.io/en/latest/index.html
-
-    Return a vector of shape (number_of_input_subfrequencies, npix, 3)
+class Planck_sky(sky):
     """
-    sky = pysm.Sky(sky_config)
-    sky_signal = sky.signal()
-    Nf = int(d['nf_sub'])
-    band = d['filter_nu']/1e9
-    filter_relative_bandwidth = d['filter_relative_bandwidth']
-    _, _, nus_in, _, _, Nbbands_in = qubic.compute_freq(
-        band, filter_relative_bandwidth, Nf)
-    return np.rollaxis(sky_signal(nu=nus_in), 2, 1)
+    Define a sky object as seen by Planck.
+    """
+    def __init__(self, skyconfig, d, output_directory="./", output_prefix="planck_sky", band=143):
+        self.band = band
+        self.planck_central_nus = np.array([30, 44, 70, 100, 143, 217, 353, 545, 857])
+        self.planck_relative_bandwidths = np.array([0.2, 0.2, 0.2, 0.33, 0.33, 0.33, 0.33, 0.33, 0.33])
+        self.planck_beams = np.array([33, 24, 14, 9.2, 7.1, 5.5, 5, 5, 5])
+        self.planck_Isensitivities_pixel = np.array([2, 2.7, 4.7, 2, 2.2, 4.8, 14.7, 147, 6700])
+        self.planck_Psensitivities_pixel = np.array([2.8, 3.9, 6.7, np.NaN, 4.2, 9.8, 29.8, np.NaN, np.NaN])
+        self.planck_channels = self.create_planck_bandwidth()
+        self.planck_channels_names = ['33_GHz', '44_GHz','70_GHz','100_GHz', '143_GHz', '217_GHz','353_GHz', '545_GHz','857_GHz']
 
+        if band is not None:
+            idx = np.argwhere(self.planck_central_nus == band)[0][0]
+            instrument = pysm.Instrument({
+                'nside': d['nside'],
+                'frequencies' : self.planck_central_nus[idx:idx+1], # GHz
+                'use_smoothing' : True,
+                'beams' : self.planck_beams[idx:idx+1], # arcmin 
+                'add_noise' : True,  # If True `sens_I` and `sens_Q` are required
+                'noise_seed' : 0,  # Not used if `add_noise` is False
+                'sens_I': self.get_planck_sensitivity("I")[idx:idx+1], # Not used if `add_noise` is False
+                'sens_P': self.get_planck_sensitivity("P")[idx:idx+1], # Not used if `add_noise` is False
+                'use_bandpass' : True,  # If True pass banpasses  with the key `channels`
+                'channel_names' : self.planck_channels_names[idx:idx+1],
+                'channels' : self.planck_channels[idx:idx+1],
+                'output_units' : 'uK_RJ',
+                'output_directory' : output_directory,
+                'output_prefix' : output_prefix,
+                'pixel_indices' : np.arange(hp.nside2npix(d['nside']))})
+        else:
+            instrument = pysm.Instrument({
+                'nside': d['nside'],
+                'frequencies' : self.planck_central_nus, # GHz
+                'use_smoothing' : True,
+                'beams' : self.planck_beams, # arcmin 
+                'add_noise' : True,  # If True `sens_I` and `sens_Q` are required
+                'noise_seed' : 0,  # Not used if `add_noise` is False
+                'sens_I': self.get_planck_sensitivity("I"), # Not used if `add_noise` is False
+                'sens_P': self.get_planck_sensitivity("P"), # Not used if `add_noise` is False
+                'use_bandpass' : True,  # If True pass banpasses  with the key `channels`
+                'channel_names' : self.planck_channels_names,
+                'channels' : self.planck_channels,
+                'output_units' : 'uK_RJ',
+                'output_directory' : output_directory,
+                'output_prefix' : output_prefix,
+                'pixel_indices' : np.arange(hp.nside2npix(d['nside']))})
+            
+        sky.__init__(self, skyconfig, d, instrument, output_directory, output_prefix)
+    
+    def create_planck_bandwidth(self, length=100):
+        """
+        Returns a list of bandwidths and respectively weights correponding to the ideal Planck bandwidths.
+        `planck_central_nus` must be an array containing the central frequency of the channel while the
+        `planck_relative_bandwidth` parameter must be an array containig the relative bandwidths for 
+        each Planck channel. `length` is the length of the output array; default is 100.
+        """
+        halfband = self.planck_relative_bandwidths * self.planck_central_nus / 2
+        bandwidths = np.zeros((len(self.planck_relative_bandwidths), length))
+        v = []
+        for i, hb in enumerate(halfband):
+            bandwidths[i] = np.linspace(self.planck_central_nus[i] - hb, self.planck_central_nus[i] + hb,
+                                        num=length)
+            v.append((bandwidths[i], np.ones_like(bandwidths[i])))
+        return v
+
+    def get_planck_sensitivity(self, kind):
+        """
+        Convert the sensitiviy per pixel to sensitivity per arcmin.
+        """
+        if kind == "I":
+            return self.planck_Isensitivities_pixel / self.planck_beams**2
+        return self.planck_Psensitivities_pixel / self.planck_beams**2
+
+
+class Qubic_sky(sky):
+    """
+    Define a sky object as seen by Qubic
+    """
+    def __init__(self, skyconfig, d, output_directory="./", output_prefix="qubic_sky"):
+
+        _, nus_edge_in, central_nus, deltas, _, _ = qubic.compute_freq(
+            d['filter_nu']/1e9,
+            d['filter_relative_bandwidth'],
+            d['nf_sub']) # Multiband instrument model
+
+        instrument = pysm.Instrument({
+            'nside': d['nside'],
+            'frequencies' : central_nus, # GHz
+            'use_smoothing' : False,
+            'beams': np.ones_like(central_nus), # arcmin 
+            'add_noise': False,  # If True `sens_I` and `sens_Q` are required
+            'noise_seed' : 0,  # Not used if `add_noise` is False
+            'sens_I': np.ones_like(central_nus), # Not used if `add_noise` is False
+            'sens_P': np.ones_like(central_nus), # Not used if `add_noise` is False
+            'use_bandpass': False,  # If True pass banpasses  with the key `channels`
+            'channel_names': np.ones_like(central_nus),
+            'channels': np.ones_like(central_nus),
+            'output_units': 'uK_RJ',
+            'output_directory': output_directory,
+            'output_prefix': output_prefix,
+            'pixel_indices': np.arange(hp.nside2npix(d['nside']))})
+        
+        sky.__init__(self, skyconfig, d, instrument, output_directory, output_prefix)
+        
 
 def create_acquisition_operator_TOD(pointing, d):
     # scene
@@ -109,7 +202,10 @@ def create_acquisition_operator_TOD(pointing, d):
 
 def create_TOD(d, pointing, x0):
     atod = create_acquisition_operator_TOD(pointing, d)
-    TOD, _ = atod.get_observation(x0, noiseless=d['noiseless'])
+    if d['nf_sub']==1:
+        TOD = atod.get_observation(x0[0], noiseless=d['noiseless'])
+    else:
+        TOD, _ = atod.get_observation(x0, noiseless=d['noiseless'])
     return TOD
 
 

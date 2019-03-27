@@ -21,8 +21,10 @@ from .acquisition import (QubicAcquisition,
                           QubicPlanckAcquisition)
 from .polyacquisition import (QubicPolyAcquisition,
                               QubicPolyPlanckAcquisition)
+
 __all__ = ['QubicMultibandAcquisition',
            'QubicMultibandPlanckAcquisition']
+
 
 class QubicMultibandAcquisition(QubicPolyAcquisition):
     def __init__(self, multiinstrument, sampling, scene, d, nus):
@@ -39,12 +41,12 @@ class QubicMultibandAcquisition(QubicPolyAcquisition):
         '''
         QubicPolyAcquisition.__init__(self, multiinstrument, sampling, scene, d)
 
-        if len(nus) > 1:
+        if len(nus) > 2:
             self.bands = np.array([[nus[i], nus[i + 1]] for i in xrange(len(nus) - 1)])
         else:
-            raise ValueError('The QubicMultibandAcquisition class is designed to'\
-                'work with multiple frequencies. For monochromatic case you can use'\
-                'the QubicAcquisition class')
+            raise ValueError('The QubicMultibandAcquisition class is designed to '
+                             'work with multiple frequencies. For monochromatic case you can use '
+                             'the QubicAcquisition class')
         self.nus = np.array([q.filter.nu / 1e9 for q in multiinstrument])
 
     def get_observation(self, m, convolution=True, noiseless=False):
@@ -79,7 +81,7 @@ class QubicMultibandAcquisition(QubicPolyAcquisition):
             shape = m.shape
 
         if convolution:
-            _maps_convolved = np.zeros(shape) # array of sky maps, each convolved with its own gaussian
+            _maps_convolved = np.zeros(shape)  # array of sky maps, each convolved with its own gaussian
             for i in range(len(self)):
                 C = self[i].get_convolution_peak_operator()
                 _maps_convolved[i] = C(m[i])
@@ -91,8 +93,8 @@ class QubicMultibandAcquisition(QubicPolyAcquisition):
             tod += self.get_noise()
 
         if convolution:
-            maps_convolved = [np.average(_maps_convolved[(self.nus > mi) * (self.nus < ma)], 
-                              axis=0, weights=self.weights[(self.nus > mi) * (self.nus < ma)]) \
+            maps_convolved = [np.average(_maps_convolved[(self.nus > mi) * (self.nus < ma)],
+                                         axis=0, weights=self.weights[(self.nus > mi) * (self.nus < ma)]) \
                               for (mi, ma) in self.bands]
             return tod, maps_convolved
 
@@ -108,17 +110,14 @@ class QubicMultibandAcquisition(QubicPolyAcquisition):
     def get_preconditioner(self, cov):
         if cov is not None:
             cov_inv = np.array([1. / cov[(self.nus > mi) * (self.nus < ma)].mean(axis=0) \
-                for (mi, ma) in self.bands])
+                                for (mi, ma) in self.bands])
             cov_inv[np.isinf(cov_inv)] = 0.
             # cov_inv = np.nan_to_num(cov_inv)
-            return BlockDiagonalOperator(\
+            return BlockDiagonalOperator( \
                 [DiagonalOperator(ci, broadcast='rightward') for ci in cov_inv],
                 new_axisin=0)
         else:
             return None
-
-
-
 
 
 class QubicMultibandPlanckAcquisition(QubicPolyPlanckAcquisition):
@@ -127,6 +126,7 @@ class QubicMultibandPlanckAcquisition(QubicPolyPlanckAcquisition):
     acquisitions.
 
     """
+
     def __init__(self, qubic, planck, weights=None):
         """
         acq = QubicPlanckAcquisition(qubic_acquisition, planck_acquisition)
@@ -148,10 +148,9 @@ class QubicMultibandPlanckAcquisition(QubicPolyPlanckAcquisition):
         self.qubic = qubic
         self.planck = planck
         if weights == None:
-            self.weights = np.ones(len(self)) #/ len(self)
+            self.weights = np.ones(len(self))  # / len(self)
         else:
             self.weights = weights
-
 
     def __len__(self):
         return len(self.qubic)
@@ -197,7 +196,7 @@ class QubicMultibandPlanckAcquisition(QubicPolyPlanckAcquisition):
         H = np.array(H)
         H = [H[(self.qubic.nus > mi) * (self.qubic.nus < ma)].sum() * \
              self.weights[(self.qubic.nus > mi) * (self.qubic.nus < ma)].sum() \
-                for (mi, ma) in self.qubic.bands]
+             for (mi, ma) in self.qubic.bands]
         invntt = self.get_invntt_operator()
 
         A_columns = []
@@ -211,7 +210,7 @@ class QubicMultibandPlanckAcquisition(QubicPolyPlanckAcquisition):
         H = [h.T for h in H]
         b = BlockColumnOperator(H, new_axisout=0) * (invntt * tod)
         sh = b.shape
-        if (len(self.qubic.nus) - 1) > 1: # If number of subbands is more than one
+        if (len(self.qubic.nus) - 1) > 1:  # If number of subbands is more than one
             if len(sh) == 3:
                 b = b.reshape((sh[0] * sh[1], sh[2]))
             else:
@@ -219,7 +218,7 @@ class QubicMultibandPlanckAcquisition(QubicPolyPlanckAcquisition):
 
         preconditioner = self.get_preconditioner(cov)
         solution = pcg(A, b, M=preconditioner, disp=verbose, tol=tol, maxiter=maxiter)
-#        solution = pcg(A, b, disp=verbose, tol=tol, maxiter=maxiter)
+        #        solution = pcg(A, b, disp=verbose, tol=tol, maxiter=maxiter)
         if len(sh) == 3:
             maps_recon = solution['x'].reshape(sh[0], sh[1], sh[2])
         else:

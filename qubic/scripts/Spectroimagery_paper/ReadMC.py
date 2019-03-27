@@ -92,8 +92,8 @@ def get_all_maps(rep, archetype, nsubvals):
 
 
 def maps_from_files(files, silent=False):
-    """allmost equivalent to get_all_maps, 
-    used in the functions that compute spectra 
+    """
+    allmost equivalent to get_all_maps, used in the functions that compute spectra
     """
     if not silent:
         print('Reading Files')

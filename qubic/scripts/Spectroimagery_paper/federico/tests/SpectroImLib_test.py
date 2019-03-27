@@ -13,6 +13,7 @@ import qubic
 import pysm
 from pysm.nominal import models
 
+import SpectroImLib as si
 
 class TestSpectroImLib(ut.TestCase):
 
@@ -23,13 +24,10 @@ class TestSpectroImLib(ut.TestCase):
         p = qubic.get_pointing(d)
 
         sky_config0 = {'cmb': models('c1', d['nside'])}
-        sky0 = input_sky_pysm(sky_config0, d)
+        sky0 = si.input_sky_pysm(sky_config0, d)
         self.assertTrue(sky0.shape[0] == int(d['nf_sub']))
         self.assertTrue(sky0.shape[1] == 12*d['nside']**2)
         self.assertTrue(sky0.shape[2] == 3)
-        for j in range(3):
-            for i in range(len(sky0)-1):
-                self.assertTrue(np.all(sky0[i, :, j] == x0[i+1, :, j]))
         
         sky_config = {
             'synchrotron': models('s1', d['nside']),
@@ -38,6 +36,11 @@ class TestSpectroImLib(ut.TestCase):
             'cmb': models('c1', d['nside']),
             'ame': models('a1', d['nside']),  #not polarized
         }
-        sky = input_sky_pysm(sky_config, d)
+        sky = si.input_sky_pysm(sky_config, d)
         
-        self.assertTrue(np.allclose(expected, cond.matr))
+        for j in range(3):
+            for i in range(len(sky0)):
+                self.assertTrue(np.all(sky0[i, :, j] != sky[i, :, j]))
+
+
+        

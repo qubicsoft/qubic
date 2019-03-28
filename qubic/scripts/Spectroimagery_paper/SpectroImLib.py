@@ -4,6 +4,26 @@ import numpy as np
 
 import qubic
 
+def input_sky_pysm(sky_config, d):
+    """
+    Create as many skies as the number of input frequencies.
+    
+    The parameter `sky_config` must be a `pysm` configuration dictionary while 
+    `d` must be the qubic configuration dictionary. For more details see the 
+    `pysm` documentation at the floowing link: 
+    https://pysm-public.readthedocs.io/en/latest/index.html
+
+    Return a vector of shape (number_of_input_subfrequencies, npix, 3)
+    """
+    sky = pysm.Sky(sky_config)
+    sky_signal = sky.signal()
+    Nf = int(d['nf_sub'])
+    band = d['filter_nu']/1e9
+    filter_relative_bandwidth = d['filter_relative_bandwidth']
+    _, _, nus_in, _, _, Nbbands_in = qubic.compute_freq(
+        band, filter_relative_bandwidth, Nf)
+    return np.rollaxis(sky_signal(nu=nus_in), 2, 1)
+
 
 def create_acquisition_operator_TOD(pointing, d):
     # scene

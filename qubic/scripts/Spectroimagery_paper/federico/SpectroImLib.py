@@ -47,13 +47,13 @@ class sky(object):
             band, filter_relative_bandwidth, Nf)
         return np.rollaxis(sky_signal(nu=nus_in), 2, 1)
 
-    def read_sky_map(self, read_all=True):
+    def read_sky_map(self):
         """
         Returns the maps saved in the `output_directory` containing the `output_prefix`.
         """
         map_list = [s for s in os.listdir(self.output_directory) if self.output_prefix in s]
         map_list = [m for m in map_list if 'total' in m]
-        if not read_all:
+        if len(map_list) > len(self.instrument.Frequencies):
             map_list = np.array([[m for m in map_list if x in m]
                                  for x in self.instrument.Channel_Names]).ravel().tolist()
         maps = np.zeros((len(map_list), hp.nside2npix(self.nside), 3))
@@ -70,8 +70,6 @@ class sky(object):
         if len(sky_map_list) < len(self.instrument.Frequencies):
             self.instrument.observe(self.sky)
             sky_map_list, sky_map = self.read_sky_map()
-        if len(sky_map_list) > len(self.instrument.Frequencies):
-            sky_map_list, sky_map = self.read_sky_map(read_all=False)
         return sky_map
 
     
@@ -106,7 +104,7 @@ class Planck_sky(sky):
                 'output_units' : 'uK_RJ',
                 'output_directory' : output_directory,
                 'output_prefix' : output_prefix,
-                'pixel_indices' : np.arange(hp.nside2npix(d['nside']))})
+                'pixel_indices' : None})
         else:
             instrument = pysm.Instrument({
                 'nside': d['nside'],
@@ -123,7 +121,7 @@ class Planck_sky(sky):
                 'output_units' : 'uK_RJ',
                 'output_directory' : output_directory,
                 'output_prefix' : output_prefix,
-                'pixel_indices' : np.arange(hp.nside2npix(d['nside']))})
+                'pixel_indices' : None})
             
         sky.__init__(self, skyconfig, d, instrument, output_directory, output_prefix)
     
@@ -148,8 +146,8 @@ class Planck_sky(sky):
         Convert the sensitiviy per pixel to sensitivity per arcmin.
         """
         if kind == "I":
-            return self.planck_Isensitivities_pixel / self.planck_beams**2
-        return self.planck_Psensitivities_pixel / self.planck_beams**2
+            return self.planck_Isensitivities_pixel * self.planck_beams**2
+        return self.planck_Psensitivities_pixel * self.planck_beams**2
 
 
 class Qubic_sky(sky):
@@ -178,7 +176,7 @@ class Qubic_sky(sky):
             'output_units': 'uK_RJ',
             'output_directory': output_directory,
             'output_prefix': output_prefix,
-            'pixel_indices': np.arange(hp.nside2npix(d['nside']))})
+            'pixel_indices': None})
         
         sky.__init__(self, skyconfig, d, instrument, output_directory, output_prefix)
         

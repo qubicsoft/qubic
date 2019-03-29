@@ -1,0 +1,87 @@
+############################################# Instrument ################################
+debug = False #False/True # Boolean
+
+config = 'FI' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
+filter_nu = 150*1e9 # 150e9 or 220e9 Hz
+filter_relative_bandwidth = 0.25 
+beam_shape =  'multi_freq' # 'gaussian', 'fitted_beam', 'multi_freq'
+
+# multifreq instrument 
+MultiBand=True
+nf_sub=16
+center_detector=False
+
+psd=None
+bandwidth=None
+twosided=None
+sigma=None
+detector_fknee=0
+detector_fslope=1
+detector_ncorr=10
+## Detector nep  + reading noise: sqrt(4.7e-17**2 + 2e-16**2)
+detector_nep=4.7e-17 #2.05e-16 (TD), 4.7e-17(FI)
+detector_ngrids=1
+detector_tau=0.01
+polarizer=True
+synthbeam_fraction=0.99
+synthbeam_kmax=8
+synthbeam_peak150_fwhm=0.39268176 # in degree
+ripples=False
+nripples=0
+
+########## Calibration files, should not be edited #####################@
+
+optics='CalQubic_Optics_v3_FI_150.txt'
+primbeam='CalQubic_PrimBeam_v2.fits' # X=2 gaussian, 3 fitted, 4 multi frequency splines
+detarray='CalQubic_DetArray_FI.fits'
+hornarray='CalQubic_HornArray_FI.fits'
+
+############################################# Scene ################################
+nside=256
+kind='IQU'
+absolute=False
+temperature=2.7255 # K for CMB, 300 K for TD in lab # 
+summer=False
+
+############################################# Pointing ##############################
+
+RA_center= 0. #deg
+DEC_center=-57. #deg
+period=1. #s
+date_obs='2016-01-01 00:00:00'
+#latitude= -(75 + 6. / 60)  #DOME C
+#longitude= 123 + 20. / 60  #DOME C
+
+
+latitude= -(24 + 11. / 60)   #ARGENTINA
+longitude= -(66 + 28. / 60)   #ARGENTINA
+
+
+random_pointing=True   
+npointings=1000
+dtheta=4.
+nhwp_angles=3
+seed=1
+
+sweeping_pointing=False
+duration=12 #h
+angspeed= 1 #deg/s
+delta_az= 20 #deg
+nsweeps_per_elevation= 1
+angspeed_psi= 0.1 #deg/s
+maxpsi= 10 #deg
+fix_azimuth={'apply':False,'az':50,'el':50,'el_step':1}
+
+############################################# Acquisition ##############################
+block=None
+effective_duration=1 #years
+noiseless=True
+photon_noise=False
+max_nbytes=None
+nprocs_instrument=None
+nprocs_sampling=None
+comm=None
+weights=None
+
+################### Tolerance value for the convergence of the conjugate gradient ################
+tol=1e-5

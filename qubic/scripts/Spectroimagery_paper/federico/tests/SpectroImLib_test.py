@@ -29,7 +29,7 @@ sky_config = {
 sky_q = si.Qubic_sky(sky_config, d)
 sky_p = si.Planck_sky(sky_config, d)
 sky_p_all = si.Planck_sky(sky_config, d, band=None)
-        
+
 class TestSpectroImLib(ut.TestCase):
 
     def test_get_simple_sky_map(self):
@@ -81,53 +81,63 @@ class TestSpectroImLib(ut.TestCase):
             'sens_P': sky_p.get_planck_sensitivity("P")[4:5], # Not used if `add_noise` is False
             'use_bandpass' : False,  # If True pass banpasses  with the key `channels`
             'channel_names' : sky_p.planck_channels_names[4:5],
-            'channels' : sky_p.planck_channels[4:5],
+            'channels' : None,
             'output_units' : 'uK_RJ',
             'output_directory' : "./",
             'output_prefix' : "planck_sky_mono",
-            'pixel_indices' : np.arange(hp.nside2npix(d['nside']))})
+            'pixel_indices' : None})
         sky_p_mono = si.sky(sky_config, d, instrument_mono, "./", "planck_sky_mono")
-        maps_p_mono = sky_p_mono.get_sky_map()   
-
+        maps_p_mono = sky_p_mono.get_sky_map()
+        list_mono, _ = sky_p_mono.read_sky_map()
+        self.assertTrue(list_mono == ['planck_sky_mono_nu0143p00GHz_total_nside0128.fits'])
+        self.assertTrue(maps_p_mono.shape == (1, 196608, 3))
+        
         instrument_mono_noiseless = pysm.Instrument({
             'nside': d['nside'],
             'frequencies' : sky_p.planck_central_nus[4:5], # GHz
             'use_smoothing' : True,
             'beams' : sky_p.planck_beams[4:5], # arcmin 
             'add_noise' : False,  # If True `sens_I` and `sens_Q` are required
-            'noise_seed' : 0,  # Not used if `add_noise` is False
-            'sens_I': sky_p.get_planck_sensitivity("I")[4:5], # Not used if `add_noise` is False
-            'sens_P': sky_p.get_planck_sensitivity("P")[4:5], # Not used if `add_noise` is False
+            'noise_seed' : None,  # Not used if `add_noise` is False
+            'sens_I': None, # Not used if `add_noise` is False
+            'sens_P': None, # Not used if `add_noise` is False
             'use_bandpass' : False,  # If True pass banpasses  with the key `channels`
             'channel_names' : sky_p.planck_channels_names[4:5],
-            'channels' : sky_p.planck_channels[4:5],
+            'channels' : None,
             'output_units' : 'uK_RJ',
             'output_directory' : "./",
-            'output_prefix' : "planck_sky_mono_noiseless",
-            'pixel_indices' : np.arange(hp.nside2npix(d['nside']))})
+            'output_prefix' : "planck_sky_noiseless_mono",
+            'pixel_indices' : None})
         sky_p_mono_noiseless = si.sky(sky_config, d, instrument_mono_noiseless,
-                                   "./", "planck_sky_mono_noiseless")
-        maps_p_mono_noiseless = sky_p_mono_noiseless.get_sky_map()   
-
+                                   "./", "planck_sky_noiseless_mono")
+        maps_p_mono_noiseless = sky_p_mono_noiseless.get_sky_map()
+        list_mono_noiseless, _ = sky_p_mono_noiseless.read_sky_map()
+        self.assertTrue(list_mono_noiseless ==
+                        ['planck_sky_noiseless_mono_nu0143p00GHz_total_nside0128.fits'])
+        self.assertTrue(maps_p_mono_noiseless.shape == (1, 196608, 3))
+        
         instrument_mono_noiseless_pointless = pysm.Instrument({
             'nside': d['nside'],
             'frequencies' : sky_p.planck_central_nus[4:5], # GHz
             'use_smoothing' : False,
-            'beams' : sky_p.planck_beams[4:5], # arcmin 
+            'beams' : None, # arcmin 
             'add_noise' : False,  # If True `sens_I` and `sens_Q` are required
-            'noise_seed' : 0,  # Not used if `add_noise` is False
-            'sens_I': sky_p.get_planck_sensitivity("I")[4:5], # Not used if `add_noise` is False
-            'sens_P': sky_p.get_planck_sensitivity("P")[4:5], # Not used if `add_noise` is False
+            'noise_seed' : None,  # Not used if `add_noise` is False
+            'sens_I': None, # Not used if `add_noise` is False
+            'sens_P': None, # Not used if `add_noise` is False
             'use_bandpass' : False,  # If True pass banpasses  with the key `channels`
             'channel_names' : sky_p.planck_channels_names[4:5],
-            'channels' : sky_p.planck_channels[4:5],
+            'channels' : None,
             'output_units' : 'uK_RJ',
             'output_directory' : "./",
-            'output_prefix' : "planck_sky_mono_noiseless_pointless",
-            'pixel_indices' : np.arange(hp.nside2npix(d['nside']))})
+            'output_prefix' : "planck_sky_pointless_noiseless_mono",
+            'pixel_indices' : None})
         sky_p_mono_noiseless_pointless = si.sky(
             sky_config, d, instrument_mono_noiseless_pointless, "./",
-            "planck_sky_mono_noiseless_pointless")
-        maps_p_mono_noiseless_pointless = sky_p_mono_noiseless_pointless.get_sky_map()   
+            "planck_sky_pointless_noiseless_mono")
+        maps_p_mono_noiseless_pointless = sky_p_mono_noiseless_pointless.get_sky_map()
+        list_mono_noiseless_pointless, _ = sky_p_mono_noiseless_pointless.read_sky_map()
+        self.assertTrue(list_mono_noiseless_pointless ==
+                        ['planck_sky_pointless_noiseless_mono_nu0143p00GHz_total_nside0128.fits'])
         self.assertTrue(np.allclose(maps_p_mono_noiseless_pointless[0],
                                     pysm.Sky(sky_config).signal()(nu=143).T))

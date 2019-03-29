@@ -85,5 +85,4 @@ weights=None
 ############################################# Map Making ##############################
 tol=1*1e-3
 maxiter=100000
-cov=None
 verbose=True

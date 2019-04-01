@@ -7,8 +7,8 @@ filter_relative_bandwidth = 0.25
 beam_shape =  'multi_freq' # 'gaussian', 'fitted_beam', 'multi_freq'
 
 # multifreq instrument 
-MultiBand=True
-nf_sub=12
+MultiBand=False
+nf_sub=1
 center_detector=False
 
 psd=None
@@ -83,5 +83,8 @@ nprocs_sampling=None
 comm=None
 weights=None
 
-################### Tolerance value for the convergence of the conjugate gradient ################
-tol=5e-4
+####################################### Map making #####################################
+tol=1e-2
+maxiter=1500
+verbose=True
+

@@ -188,7 +188,10 @@ class QubicMultibandPlanckAcquisition(QubicPolyPlanckAcquisition):
         else:
             return None
 
-    def tod2map(self, tod, cov=None, tol=1e-5, maxiter=1000, verbose=True):
+    def tod2map(self, tod, d, cov=None):
+        tol = d['tol']
+        maxiter = d['maxiter']
+        verbose = d['verbose']
         p = self.planck
         H = []
         for q, w in zip(self.qubic, self.weights):

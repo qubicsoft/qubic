@@ -83,3 +83,8 @@ nprocs_instrument=None
 nprocs_sampling=None
 comm=None
 weights=None
+
+####################################### Map making #####################################
+tol=5e-4
+maxiter=1500
+verbose=True

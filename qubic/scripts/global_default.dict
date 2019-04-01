@@ -1,11 +1,11 @@
 ############################################# Instrument ################################
-
-MultiBand=True
+debug=False #False/True # Boolean
 
 filter_nu = 150*1e9
 filter_relative_bandwidth = 0.25 
 
 # multifreq instrument 
+MultiBand=True
 nf_sub=15
 center_detector=False
 
@@ -71,3 +71,8 @@ nprocs_instrument=None
 nprocs_sampling=None
 comm=None
 weights=None
+
+####################################### Map making #####################################
+tol=5e-4
+maxiter=1500
+verbose=True

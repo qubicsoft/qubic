@@ -53,7 +53,14 @@ class sky(object):
         if len(map_list) > len(self.instrument.Frequencies):
             map_list = np.array([[m for m in map_list if x in m]
                 for x in self.instrument.Channel_Names]).ravel().tolist()
-        maps = np.zeros((len(map_list), hp.nside2npix(self.nside), 3))
+        if len(map_list) != 0:
+            idx = np.zeros(len(self.instrument.Channel_Names), dtype=int)
+            for (j, channels) in enumerate(self.instrument.Channel_Names):
+                for (i, maplist) in enumerate(map_list):
+                    if channels in maplist:
+                        idx[j] = i
+            map_list = np.array(map_list)[idx]
+        maps = np.zeros((len(map_list), hp.nside2npix(self.instrument.Nside), 3))
         for i, title in enumerate(map_list):
             maps[i] = hp.read_map(title, field=(0, 1, 2)).T
         return map_list, maps
@@ -150,11 +157,15 @@ class Planck_sky(sky):
 
     def get_planck_sensitivity(self, kind):
         """
-        Convert the sensitiviy per pixel to sensitivity per arcmin.
+        Convert the sensitiviy per pixel to sensitivity per arcmin. The 
+        sensitivity per pixel is given by:
+        sigma_pix = sigma_arcmin / sqrt(FHWM_beam**2) 
+        since it contains FHWM_beam**2 arcminute-beams that sum as a sum with the
+        propagation of errors law.
         """
         if kind == "I":
-            return self.planck_Isensitivities_pixel * self.planck_beams**2
-        return self.planck_Psensitivities_pixel * self.planck_beams**2
+            return self.planck_Isensitivities_pixel * self.planck_beams
+        return self.planck_Psensitivities_pixel * self.planck_beams
 
 
 class Qubic_sky(sky):
@@ -168,7 +179,8 @@ class Qubic_sky(sky):
         filter_relative_bandwidth = d['filter_relative_bandwidth']
         _, _, central_nus, _, _, _ = qubic.compute_freq(
             band, filter_relative_bandwidth, Nf)
-
+        names = [np.str(np.round(cn, 2)) for cn in central_nus]
+        names = [n.replace('.', 'p') for n in names]
         instrument = pysm.Instrument({
             'nside': d['nside'],
             'frequencies' : central_nus, # GHz
@@ -179,7 +191,7 @@ class Qubic_sky(sky):
             'sens_I': np.ones_like(central_nus),
             'sens_P': np.ones_like(central_nus),
             'use_bandpass': False,  
-            'channel_names': np.ones_like(central_nus),
+            'channel_names': names,
             'channels': np.ones_like(central_nus),
             'output_units': 'uK_RJ',
             'output_directory': "./",

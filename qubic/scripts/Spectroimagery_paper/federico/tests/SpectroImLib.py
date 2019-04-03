@@ -30,7 +30,7 @@ class sky(object):
 
     def get_simple_sky_map(self):
         """
-        Create as many skies as the number of input frequencies. Instrumental
+        Create as many skies as the number of the qubic sub-frequencies. Instrumental
         effects are not considered. For this use the `get_sky_map` method.
         Return a vector of shape (number_of_input_subfrequencies, npix, 3)
         """

@@ -30,8 +30,9 @@ class sky(object):
 
     def get_simple_sky_map(self):
         """
-        Create as many skies as the number of the qubic sub-frequencies. Instrumental
-        effects are not considered. For this use the `get_sky_map` method.
+        Create as many skies as the number of the qubic sub-frequencies. 
+        Instrumental effects are not considered. For this use the `get_sky_map` 
+        method.
         Return a vector of shape (number_of_input_subfrequencies, npix, 3)
         """
         sky_signal = self.sky.signal()
@@ -42,40 +43,17 @@ class sky(object):
             band, filter_relative_bandwidth, Nf)
         return np.rollaxis(sky_signal(nu=central_nus), 2, 1)
 
-    def read_sky_map(self):
-        """
-        Returns the maps saved in the `output_directory` containing the 
-        `output_prefix`.
-        """
-        map_list = [s for s in os.listdir(self.instrument.Output_Directory) if
-                    self.instrument.Output_Prefix in s]
-        map_list = [m for m in map_list if 'total' in m]
-        if len(map_list) > len(self.instrument.Frequencies):
-            map_list = np.array([[m for m in map_list if x in m]
-                for x in self.instrument.Channel_Names]).ravel().tolist()
-        if len(map_list) != 0:
-            idx = np.zeros(len(self.instrument.Channel_Names), dtype=int)
-            for (j, channels) in enumerate(self.instrument.Channel_Names):
-                for (i, maplist) in enumerate(map_list):
-                    if channels in maplist:
-                        idx[j] = i
-            map_list = np.array(map_list)[idx]
-        maps = np.zeros((len(map_list), hp.nside2npix(self.instrument.Nside), 3))
-        for i, title in enumerate(map_list):
-            maps[i] = hp.read_map(title, field=(0, 1, 2)).T
-        return map_list, maps
-
-    def get_sky_map(self):
+    def get_sky_map(self, noise_map=False):
         """
         Returns the maps saved in the `output_directory` containing the 
         `output_prefix`. If
         there are no maps in the `ouput_directory` they will be created.
         """
-        sky_map_list, sky_map = self.read_sky_map()
-        if len(sky_map_list) < len(self.instrument.Frequencies):
-            self.instrument.observe(self.sky)
-            sky_map_list, sky_map = self.read_sky_map()
-        return sky_map
+        output, noise = self.instrument.observe(self.sky, write_outputs=False)
+        if noise_map:
+            return np.rollaxis(output+noise, 2, 1), np.rollaxis(noise, 2, 1)
+        else:
+            return np.rollaxis(output+noise, 2, 1)
 
     
 class Planck_sky(sky):
@@ -114,7 +92,7 @@ class Planck_sky(sky):
                 'channels' : self.planck_channels[idx:idx+1],
                 'output_units' : 'uK_RJ',
                 'output_directory' : "./",
-                'output_prefix' : "planck",
+                'output_prefix' : "planck_one",
                 'pixel_indices' : None})
         else:
             instrument = pysm.Instrument({
@@ -131,7 +109,7 @@ class Planck_sky(sky):
                 'channels' : self.planck_channels,
                 'output_units' : 'uK_RJ',
                 'output_directory' : "./",
-                'output_prefix' : "planck",
+                'output_prefix' : "planck_all",
                 'pixel_indices' : None})
             
         sky.__init__(self, skyconfig, d, instrument)

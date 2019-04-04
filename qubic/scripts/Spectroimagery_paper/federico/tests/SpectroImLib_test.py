@@ -82,10 +82,10 @@ class TestSpectroImLib(ut.TestCase):
 
     def test_planck_sky(self):
 
-        maps_p = sky_p.get_sky_map()        
-        maps_p_all = sky_p_all.get_sky_map()
-
-        self.assertTrue(np.allclose(maps_p_all[4], maps_p[0]))
+        maps_p, n_p = sky_p.get_sky_map(noise_map=True)        
+        maps_p_all, n_p_all = sky_p_all.get_sky_map(noise_map=True)
+        self.assertTrue(np.allclose(np.std(maps_p_all[4], axis=0),
+                                    np.std(maps_p[0], axis=0), atol=9e-2))
 
         instrument_nless_pless = pysm.Instrument({
             'nside': d['nside'],
@@ -105,13 +105,10 @@ class TestSpectroImLib(ut.TestCase):
             'pixel_indices' : None})
         sky_p_nless_pless = si.sky(sky_config, d, instrument_nless_pless)
         maps_p_nless_pless = sky_p_nless_pless.get_sky_map()
-        list_nless_pless, _ = sky_p_nless_pless.read_sky_map()
-        self.assertTrue(
-            list_nless_pless ==
-            ['planck_sky_pless_nless_bandpass_143_GHz_total_nside0128.fits'])
         disintegrated_maps = np.rollaxis(sky_p.sky.signal()(
             nu=sky_p.planck_channels[4:5][0][0]), 2, 1)
-        integrated_maps = np.mean(disintegrated_maps, axis=0) 
+        integrated_maps = (np.trapz(disintegrated_maps, axis=0) /
+                           len(disintegrated_maps))
 #        self.assertTrue(np.allclose(maps_p_nless_pless, integrated_maps))
 
         instrument_noisy = pysm.Instrument({
@@ -131,15 +128,10 @@ class TestSpectroImLib(ut.TestCase):
             'output_prefix' : "planck_sky_noisy",
             'pixel_indices' : None})
         sky_p_noisy = si.sky(sky_config, d, instrument_noisy)
-        maps_p_noisy = sky_p_noisy.get_sky_map()
-        list_noisy, _ = sky_p_noisy.read_sky_map()
-        self.assertTrue(
-            list_noisy ==
-            ['planck_sky_noisy_nu0143p00GHz_total_nside0128.fits'])
+        maps_p_noisy, noise_map_produced = sky_p_noisy.get_sky_map(
+            noise_map=True)
         noise_map = maps_p_noisy[0] - sky_p.sky.signal()(
             nu=sky_p.planck_central_nus[4:5]).T
-        noise_map_produced = hp.read_map(
-            'planck_sky_noisy_nu0143p00GHz_noise_nside0128.fits', field=(0,1,2)).T
         self.assertTrue(np.allclose(noise_map, noise_map_produced, atol=9e-3))
 #        self.assertTrue(np.std(noise_map, axis=0)[0] ==
 #                        sky_p.get_planck_sensitivity("I")[4:5])
@@ -166,9 +158,6 @@ class TestSpectroImLib(ut.TestCase):
         #     'pixel_indices' : None})
         # sky_p_mono = si.sky(sky_config, d, instrument_mono)
         # maps_p_mono = sky_p_mono.get_sky_map()
-        # list_mono, _ = sky_p_mono.read_sky_map()
-        # self.assertTrue(list_mono ==
-        #                 ['planck_sky_mono_nu0143p00GHz_total_nside0128.fits'])
         # self.assertTrue(maps_p_mono.shape == (1, 196608, 3))
         
         # instrument_mono_nless = pysm.Instrument({
@@ -189,10 +178,6 @@ class TestSpectroImLib(ut.TestCase):
         #     'pixel_indices' : None})
         # sky_p_mono_nless = si.sky(sky_config, d, instrument_mono_nless)
         # maps_p_mono_nless = sky_p_mono_nless.get_sky_map()
-        # list_mono_nless, _ = sky_p_mono_nless.read_sky_map()
-        # self.assertTrue(
-        #     list_mono_nless ==
-        #     ['planck_sky_nless_mono_nu0143p00GHz_total_nside0128.fits'])
         # self.assertTrue(maps_p_mono_nless.shape == (1, 196608, 3))
         
         instrument_mono_nless_pless = pysm.Instrument({
@@ -214,12 +199,5 @@ class TestSpectroImLib(ut.TestCase):
         sky_p_mono_nless_pless = si.sky(
             sky_config, d, instrument_mono_nless_pless)
         maps_p_mono_nless_pless = sky_p_mono_nless_pless.get_sky_map()
-        list_mono_nless_pless, _ = sky_p_mono_nless_pless.read_sky_map()
-        self.assertTrue(
-            list_mono_nless_pless ==
-            ['planck_sky_pless_nless_mono_nu0143p00GHz_total_nside0128.fits'])
         self.assertTrue(np.allclose(maps_p_mono_nless_pless[0],
                                     pysm.Sky(sky_config).signal()(nu=143).T))
-
-    def test_remove_fits(self):
-        os.system("rm *.fits")

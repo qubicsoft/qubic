@@ -187,7 +187,6 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
     return S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij
 
 
-
 def horn_manip2simu(ihorn):
     """
 
@@ -224,7 +223,7 @@ phi = np.arange(0., 0.2, 0.2)
 theta = np.arange(0.4, 0.6, 0.2)
 spectral_irradiance = 0.5
 
-baseline_manip = [45, 56]
+baseline_manip = [39, 54]
 baseline_simu = [horn_manip2simu(baseline_manip[0]), horn_manip2simu(baseline_manip[1])]
 nptg = len(theta)
 

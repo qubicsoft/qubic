@@ -3,6 +3,8 @@ import healpy as hp
 import numpy as np
 
 import qubic
+import pysm
+
 
 def input_sky_pysm(sky_config, d):
     """

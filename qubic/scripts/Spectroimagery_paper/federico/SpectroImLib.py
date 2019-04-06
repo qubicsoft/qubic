@@ -6,8 +6,11 @@ import numpy as np
 import os
 import pysm
 import qubic
+import warnings
+
 
 __all__ = ['sky', 'Planck_sky', 'Qubic_sky']
+
 
 class sky(object):
     """
@@ -28,11 +31,12 @@ class sky(object):
         self.instrument = instrument
         self.sky = pysm.Sky(skyconfig)
 
+        
     def get_simple_sky_map(self):
         """
         Create as many skies as the number of the qubic sub-frequencies. 
-        Instrumental effects are not considered. For this use the `get_sky_map` 
-        method.
+        Instrumental effects are not considered. For this purpose use the 
+        `get_sky_map` method.
         Return a vector of shape (number_of_input_subfrequencies, npix, 3)
         """
         sky_signal = self.sky.signal()
@@ -43,6 +47,7 @@ class sky(object):
             band, filter_relative_bandwidth, Nf)
         return np.rollaxis(sky_signal(nu=central_nus), 2, 1)
 
+    
     def get_sky_map(self, noise_map=False):
         """
         Returns the maps saved in the `output_directory` containing the 
@@ -50,6 +55,8 @@ class sky(object):
         there are no maps in the `ouput_directory` they will be created.
         """
         output, noise = self.instrument.observe(self.sky, write_outputs=False)
+        if output.shape != noise.shape:
+            warnings.warn("signal and noise maps have different shapes!")
         if noise_map:
             return np.rollaxis(output+noise, 2, 1), np.rollaxis(noise, 2, 1)
         else:
@@ -60,7 +67,7 @@ class Planck_sky(sky):
     """
     Define a sky object as seen by Planck.
     """
-    def __init__(self, skyconfig, d, band=143):
+    def __init__(self, skyconfig, d, band=143, channel_length=100):
         self.band = band
         self.planck_central_nus = np.array(
             [30, 44, 70, 100, 143, 217, 353, 545, 857])
@@ -71,7 +78,7 @@ class Planck_sky(sky):
             [2, 2.7, 4.7, 2.5, 2.2, 4.8, 14.7, 147, 6700])
         self.planck_Psensitivities_pixel = np.array(
             [2.8, 3.9, 6.7, 4.0, 4.2, 9.8, 29.8, np.NaN, np.NaN])
-        self.planck_channels = self.create_planck_bandwidth()
+        self.planck_channels = self.create_planck_bandwidth(channel_length)
         self.planck_channels_names = [
             '33_GHz', '44_GHz','70_GHz','100_GHz', '143_GHz', '217_GHz',
             '353_GHz', '545_GHz', '857_GHz']
@@ -113,8 +120,9 @@ class Planck_sky(sky):
                 'pixel_indices' : None})
             
         sky.__init__(self, skyconfig, d, instrument)
-    
-    def create_planck_bandwidth(self, length=100):
+
+        
+    def create_planck_bandwidth(self, length):
         """
         Returns a list of bandwidths and respectively weights correponding to the
         ideal Planck bandwidths. `planck_central_nus` must be an array containing
@@ -133,17 +141,22 @@ class Planck_sky(sky):
             v.append((bandwidths[i], np.ones_like(bandwidths[i])))
         return v
 
+    
     def get_planck_sensitivity(self, kind):
         """
-        Convert the sensitiviy per pixel to sensitivity per arcmin. The 
-        sensitivity per pixel is given by:
+        Convert the sensitiviy per pixel to sensitivity per arcmin. Units are 
+        'uK_CMB arcmin'. The sensitivity per pixel is given by:
         sigma_pix = sigma_arcmin / sqrt(FHWM_beam**2) 
         since it contains FHWM_beam**2 arcminute-beams that sum as a sum with the
         propagation of errors law.
         """
+        C = pysm.pysm.convert_units("uK_RJ", "uK_CMB", self.planck_central_nus)
         if kind == "I":
-            return self.planck_Isensitivities_pixel * self.planck_beams
-        return self.planck_Psensitivities_pixel * self.planck_beams
+            return self.planck_Isensitivities_pixel * self.planck_beams * C
+        elif kind == "P":
+            return self.planck_Psensitivities_pixel * self.planck_beams * C
+        else:
+            raise ValueError("kind must be `I` or `P` ")
 
 
 class Qubic_sky(sky):

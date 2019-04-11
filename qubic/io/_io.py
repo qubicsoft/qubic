@@ -208,7 +208,7 @@ def write_map(filename, map, mask=None, nest=False, dtype=np.float32,
 
     if mask is not None:
         hdu = fits.CompImageHDU(mask)
-        hdu.header.set('VALIDMASK')
+        hdu.header.set('name', 'VALIDMASK')
         hdus.append(hdu)
 
     if extnames is None:
@@ -217,7 +217,7 @@ def write_map(filename, map, mask=None, nest=False, dtype=np.float32,
 
     for m, extname in zip(map.T, extnames):
         hdu = _imageHDU(np.array(m, dtype=dtype, copy=False))
-        hdu.header.set(extname)
+        hdu.header.set('name', extname)
         hdus.append(hdu)
 
     fits.HDUList(hdus).writeto(filename, clobber=True)

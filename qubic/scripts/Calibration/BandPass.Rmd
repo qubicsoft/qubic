@@ -45,7 +45,7 @@ Lets get the directories corresponding to each dataset:
 
 ```{python}
 n = 'ScanFreq'
-days = ['2019-04-12']
+days = ['2019-04-15']
 
 dirs = []
 freqs=[]
@@ -90,7 +90,7 @@ AsicNum = 1
 a = qp()
 a.read_qubicstudio_dataset(thedir, asic=AsicNum)
 data=a.azel_etc(TES=None)
-data['t_src'] += 7200
+#data['t_src'] += 7200
 
 ```
 
@@ -103,15 +103,16 @@ freq_mod = 1.
 ppp = 1./freq_mod
 lowcut = 0.3
 highcut = 10.
-nbins = 250 #int((np.max(data['t_data'])-np.min(data['t_data']))/ppp/2)
 elevation = 50
 
-method = 'rms'
+method = 'demod'
 
 unbinned, binned = dl.general_demodulate(ppp, data, lowcut, highcut,
-                                                    nbins=nbins, median=True, method=method, 
+                                                    median=True, method=method, 
                                                     doplot=False, rebin=False, 
                                                     renormalize_plot=False, verbose=True)
+
+
 
 ntes = data['data'].shape[0]
 mm = np.zeros(ntes)
@@ -119,6 +120,11 @@ ss = np.zeros(ntes)
 for i in xrange(ntes):
     mm[i], ss[i] = ft.meancut(unbinned['sb'][i,:], 3)
 
+TESindex = 92
+subplot(1,2,1)
+errorbar(unbinned['t'],unbinned['sb'][TESindex,:], yerr=unbinned['dsb'][TESindex,:], fmt='ro')
+
+subplot(1,2,2)
 img = ft.image_asics(data1=mm)
 imshow(img)
 colorbar()
@@ -129,7 +135,7 @@ colorbar()
 ppp = 1./freq_mod
 lowcut = 0.3
 highcut = 10.
-method = 'rms'
+method = 'demod'
 
 nbins = 250
 
@@ -163,31 +169,39 @@ for ii in xrange(len(dirs)):
 ```
 
 ```{python}
-allmm.shape
-```
+def db(y):
+    return 10*np.log10(y/np.max(y))
 
-```{python}
-tesindex=93
+tesindex=92
 for i in xrange(1):
-    errorbar(freqs, (allmm[tesindex+i,:]),yerr=allss[tesindex,:],fmt='ro-')
-
+    plot(freqs, db(allmm[tesindex+i,:]))
+    plot(freqs, db(allmm[tesindex+i,:]+allss[tesindex+i,:]))
+    plot(freqs, db(allmm[tesindex+i,:]-allss[tesindex+i,:]))
+ylim(-30,0)
 ```
 
 ```{python}
-tesindex = 93
+
 freqs = np.array(freqs)
 allfnorm = np.zeros((256, len(freqs)))
+allsnorm = np.zeros((256, len(freqs)))
 infilter = (freqs >= 124) & (freqs <= 182)
 outfilter =  ~infilter
 for tesindex in xrange(256):
     baseline = np.mean(allmm[tesindex,outfilter])
     integ = np.sum(allmm[tesindex, infilter]-baseline)
     allfnorm[tesindex,:] = (allmm[tesindex,:]-baseline)/integ
+    allsnorm[tesindex,:] = allss[tesindex,:]/integ
 
+```
+
+```{python}
 automean = np.sum(allfnorm, axis=1)
 autoerror = np.std(allfnorm, axis=1)    
 plot(automean/autoerror)
-ok = (automean/autoerror > 30)
+threshold = 60
+plot(automean/autoerror*0+threshold,'k--')
+ok = (automean/autoerror > threshold)
 
 filtershape = np.zeros(len(freqs))
 errfiltershape = np.zeros(len(freqs))
@@ -196,18 +210,31 @@ for i in xrange(len(freqs)):
 ```
 
 ```{python}
-plot(freqs, np.median(allfnorm[ok,:], axis=0), label='Median over all TES')
-plot(freqs, np.mean(allfnorm[ok,:], axis=0), label='Mean over all TES')
-errorbar(freqs, filtershape,yerr=errfiltershape/np.sqrt(ok.sum()), fmt='ro-', label='$3\sigma$ Clipped mean over all TES')
-legend()
-xlabel('Frequency [GHz]')
-ylabel('Relative Transmission')
-#ylim(-0.01,0.08)
-plot(freqs,freqs*0,'k--')
+np.shape(np.array([filtershape, filtershape]))
 ```
 
 ```{python}
-allmm.shape
+errorbar(freqs, db(filtershape), yerr=10*errfiltershape/np.sqrt(256)/filtershape,fmt='ro-', label='$3\sigma$ Clipped mean over all TES')
+legend()
+xlabel('Frequency [GHz]')
+ylabel('dB')
+ylim(-40,0)
+```
+
+```{python}
+### Read the calsrc data
+ff, dbm = np.loadtxt('/Users/hamilton/Qubic/Calib-TD/calsrc_freq_good.txt').T
+power_mW = 10**(dbm/10)
+plot(ff,power_mW)
+```
+
+```{python}
+errorbar(freqs, db(filtershape), yerr=10*errfiltershape/np.sqrt(256)/filtershape,fmt='ro-', label='Raw')
+errorbar(freqs, db(filtershape/np.interp(freqs, ff,power_mW)), yerr=10*errfiltershape/np.sqrt(256)/filtershape,fmt='ko-', label='Source Spectral Response corrected')
+legend()
+xlabel('Frequency [GHz]')
+ylabel('dB')
+ylim(-40,0)
 ```
 
 ```{python}

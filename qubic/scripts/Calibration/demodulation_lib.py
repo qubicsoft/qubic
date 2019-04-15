@@ -170,7 +170,7 @@ def demodulate(indata, fmod, lowcut=None, highcut=None, verbose=False):
     return demodulated
 
     
-    
+
 def fit_ang_gauss(ang, data, errdata=None, cut=None):
     # Guess for the peak location
     datar = (data-np.min(data))
@@ -390,7 +390,11 @@ def general_demodulate(period, indata, lowcut, highcut,
             if verbose: 
                 if (16*(i/16))==i: 
                     printnow('Rebinning TES {} over {}'.format(i,sh[0]))
-            ang, sb[i,:], dang, dsb[i,:], others = ft.profile(unbinned['az_ang'], unbinned['sb'][i,:], nbins=nbins, plot=False, dispersion=True, log=False, median=median, cutbad=False, rebin_as_well=[unbinned['az'], unbinned['el']])
+            ang, sb[i,:], dang, dsb[i,:], others = ft.profile(unbinned['az_ang'], 
+                                                              unbinned['sb'][i,:], nbins=nbins, plot=False, 
+                                                              dispersion=True, log=False, median=median, 
+                                                              cutbad=False, rebin_as_well=[unbinned['az'], 
+                                                                                           unbinned['el']])
         binned = {}
         binned['az'] = others[:,0]
         binned['el'] = others[:,1]

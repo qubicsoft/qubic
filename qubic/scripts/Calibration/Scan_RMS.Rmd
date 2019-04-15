@@ -1,0 +1,326 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.0
+  kernelspec:
+    display_name: Python 2
+    language: python
+    name: python2
+---
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(16,8))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack import qubicpack as qp
+import fibtools as ft
+import plotters as p
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+```
+
+## Dataset
+
+Get the directories corresponding to the day we consider:
+
+```{python}
+day = '2019-02-22'
+data_dir = '/qubic/Data/Calib-TD/'+day+'/'
+dirs = np.sort(glob.glob(data_dir+'/*'))
+print dirs
+labels = []
+for d in dirs:
+    bla = str.split(d,'__')
+    labels.append(bla[1])
+print labels
+```
+
+## Select one directory to start with
+
+```{python}
+thedir = dirs[1]
+```
+
+## Reading Azimuth data
+
+```{python}
+t_az, azinit = ft.read_hkintern(thedir,thefieldname='Platform-Azimut')
+az = (azinit-2.**15)/(2.**16)*360
+plot(t_az, az)
+```
+
+## Reading data for a given asic and pixel
+
+```{python}
+AsicNum = 1
+TESNum = 96
+
+a = qp()
+a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+data = a.timeline(TES=TESNum)
+
+#t_data = a.timeline_timeaxis(axistype='pps')
+#t_data = a.timeline_timeaxis(axistype='index')
+t_data = a.timeline_timeaxis(axistype='index')
+pps=a.pps()
+gps=a.gps()
+t0 = np.min(a.pps2date(pps,gps))
+t_data = t_data + t0
+
+plot(t_data, data)
+```
+
+## Reading CalSrc Data
+
+```{python}
+##### The date format for calsrc has no '-' so we need to change the day to this very format.
+daycalsrc = "".join(str.split(day,'-'))
+fcalsrc = glob.glob('/qubic/Data/Calib-TD/calsource/*'+daycalsrc+'*')
+fcalsrc.sort()
+print fcalsrc
+
+ttsrc_i = []
+ddsrc_i = []
+for ff in fcalsrc:
+    thett, thedd = np.loadtxt(ff).T
+    ttsrc_i.append(thett+3600)
+    ddsrc_i.append(thedd)
+    
+t_src = np.concatenate(ttsrc_i)
+data_src = np.concatenate(ddsrc_i)
+
+############### Plot this data
+plot(t_src,data_src,',')
+ylim(0,256)
+title('Calibration Source Data \n Whole dataset (one cloud of points for each file)')
+ylabel('ADU (source)')
+xlabel('Time (s)')
+
+```
+
+## Display Data along with Azimuth and CalSrc, synchronize them
+
+
+We first check for synchronization of the three datasets
+
+```{python}
+plot(t_data, (data-np.mean(data))/np.std(data),',',label='TES')
+plot(t_az, (az-np.mean(az))/np.std(az),',',label='Az')
+plot(t_src, (data_src-np.mean(data_src))/np.std(data_src)/5,',',label='CalSrc')
+legend()
+ylim(-3,3)
+```
+
+We will focus on the first part where there is common data... we loose the rest for now but may get it back if we use the model of the source signal instead of the source itself.
+
+```{python}
+tmin = np.max([np.min(t_data), np.min(t_az), np.min(ttsrc_i[0])])
+tmax = np.min([np.max(t_data), np.max(t_az), np.max(ttsrc_i[0])])
+
+okdata = (t_data >= tmin) & (t_data <= tmax)
+t_data = t_data[okdata]
+data = data[okdata]
+
+okaz = (t_az >= tmin) & (t_az <= tmax)
+t_az = t_az[okaz]
+az = az[okaz]
+
+oksrc = (t_src >= tmin) & (t_src <= tmax)
+t_src = t_src[oksrc]
+data_src = data_src[oksrc]
+```
+
+```{python}
+plot(t_data, (data-np.mean(data))/np.std(data),',',label='TES')
+plot(t_az, (az-np.mean(az))/np.std(az),',',label='Az')
+plot(t_src, (data_src-np.mean(data_src))/np.std(data_src)/5,',',label='CalSrc', alpha=0.3)
+legend()
+ylim(-3,3)
+```
+
+# Beam Measurement
+
+
+## First Method: RMS over a period
+This method is really a poorman's approach to demodulation but it has the advantage of being fast: we measure the RMS of the data for each epriod of the source signal and knowing the azimuth for each of these period we can plot the amplitude of the source as a function of azimuth. It has the advantage of naturally getting rid of the varying offset of the data. This method does not use the CalSrc signal, only its modulation frequency (0.333 Hz)
+
+We first need to measure the epriod of the signal:
+
+```{python}
+FREQ_SAMPLING = 1./(t_data[1]-t_data[0])
+spectrum_f, freq_f = mlab.psd(data, Fs=FREQ_SAMPLING, NFFT=len(data), window=mlab.window_hanning)
+plot(freq_f, f.gaussian_filter1d(spectrum_f,2))
+yscale('log')
+xscale('log')
+xlim(0.2,0.45)
+
+freq_mod = 0.333
+plot([freq_mod, freq_mod], [1e6, 1e12])
+ylim(1e6, 1e12)
+```
+
+Now we go for the RMS per period analysis
+
+```{python}
+### Interpolate azimuth on the 
+new_az = np.interp(t_data, t_az, az)
+
+### Period of the modulation in sec
+ppp = 1./freq_mod
+
+def return_rms_period(period, time, azimuth, data):
+    ### we label each data sample with a period
+    period_index = ((time-time[0])/period).astype(int)
+    ### We loop on periods to measure their respective amplitude and azimuth
+    allperiods = np.unique(period_index)
+    tper = np.zeros(len(allperiods))
+    azper = np.zeros(len(allperiods))
+    ampdata = np.zeros(len(allperiods))
+    err_ampdata = np.zeros(len(allperiods))
+    for i in xrange(len(allperiods)):
+        ok = (period_index == allperiods[i])
+        azper[i] = np.mean(azimuth[ok])
+        tper[i] = np.mean(time[ok])
+        ampdata[i] = np.std(data[ok])
+        err_ampdata[i] = np.std(data[ok])/np.sqrt(2*ok.sum())
+    return tper, azper, ampdata, err_ampdata
+
+tper, azper, ampdata, err_ampdata = return_rms_period(ppp, t_data, new_az, data)
+```
+
+```{python}
+### Correct for cos(elevation) in order to get angles on the sky
+elevation = 50.
+angle = azper * np.cos(np.radians(elevation))
+
+def gauss(x,par):
+    return par[3]+par[2]*np.exp(-0.5 * (x-par[0])**2 / (par[1]/2.35)**2)
+
+thecut = 3500000
+okfit = (ampdata < thecut) & (err_ampdata > 0)
+
+### Guess for the peak location
+amprenorm = (ampdata-np.min(ampdata))
+amprenorm = amprenorm / np.sum(amprenorm)
+peak_guess = np.sum(azper * (amprenorm))
+
+reload(ft)
+guess = np.array([peak_guess, 1., np.max(ampdata)-np.min(ampdata), np.min(ampdata)])
+res = ft.do_minuit(angle[okfit], ampdata[okfit], err_ampdata[okfit], guess, 
+                   functname=gauss, verbose=False,nohesse=True)
+
+xxx = np.linspace(np.min(angle), np.max(angle), 1000)
+
+rc('figure',figsize=(15,8))
+subplot(1,2,1)
+plot(tper,ampdata,'b')
+xlabel('Time')
+ylabel('RMS over a period')
+subplot(1,2,2)
+plot(angle,ampdata,'b.', label='Data')
+plot(xxx, gauss(xxx, res[1]),'r',lw=2, 
+     label='FWHM = {0:5.2f} +/- {1:5.2f} deg.'.format(res[1][1], res[2][1]))
+plot()
+xlabel('Azimuth')
+ylabel('RMS over a period')
+legend()
+tight_layout()
+```
+
+We now can loop on TES to get the result for the whole array
+
+```{python}
+allamps = np.zeros((256, len(angle)))
+allres = np.zeros((256,4))
+allerr = np.zeros((256,4))
+
+
+for AsicNum in [1,2]:
+    a = qp()
+    a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+    for TESNum in np.arange(128)+1:
+        print(TESNum)
+        TESindex = (TESNum-1)+128*(AsicNum-1)
+        thedata = a.timeline(TES=TESNum)[okdata]
+        tper, azper, ampdata, err_ampdata = return_rms_period(ppp, t_data, new_az, thedata)
+        thecut = 3500000
+        okfit = (ampdata < thecut) & (err_ampdata > 0)
+        ### Guess for the peak location
+        amprenorm = (ampdata-np.min(ampdata))
+        amprenorm = amprenorm / np.sum(amprenorm)
+        peak_guess = np.sum(azper * (amprenorm))
+        guess = np.array([peak_guess, 1., np.max(ampdata)-np.min(ampdata), np.min(ampdata)])
+        res = ft.do_minuit(angle[okfit], ampdata[okfit], err_ampdata[okfit], guess, 
+                       functname=gauss, verbose=False,nohesse=True, force_chi2_ndf=True)
+        allamps[TESindex,:] = ampdata
+        allres[TESindex,:] = res[1]
+        allerr[TESindex,:] = res[2]
+        
+```
+
+```{python}
+subplot(1,2,1)
+hist(allres[:,1], range=[0.,5], bins=10)
+title('FWHM')
+subplot(1,2,2)
+vals = np.zeros(256)+np.nan
+okfwhm = (np.abs(allres[:,1]) < 5) & ((allres[:,1])<5)
+vals[okfwhm] = np.abs(allres[okfwhm,1]*2.35)
+imgfwhm = ft.image_asics(all1=vals)
+imshow(imgfwhm)
+title('FWHM')
+colorbar()
+tight_layout()
+```
+
+```{python}
+TESNum =6
+plot(angle, allamps[TESNum-1,:],'.-')
+plot(xxx, gauss(xxx, allres[TESNum-1,:]),
+                label='FWHM = {0:5.2f} +/- {1:5.2f} deg.'.format(allres[TESNum,1], allerr[TESNum,1]))
+legend()
+title('TES {}'.format(TESNum))
+```
+
+```{python}
+rc('figure',figsize=(12,12))
+imshow(allamps,aspect='auto')
+```
+
+```{python}
+nbins=150
+angfinalbins = min(angle)+(max(angle)-min(angle))*np.linspace(0,1,nbins+1)
+angfinal = np.zeros(nbins)
+ampfinal = np.zeros((256,nbins))
+for ites in xrange(256):
+    for i in xrange(nbins):
+        ok = (angle >= angfinalbins[i]) & (angle < angfinalbins[i+1])
+        angfinal[i] = 0.5 * (angfinalbins[i] + angfinalbins[i+1])
+        ampfinal[ites, i] = np.mean(allamps[ites,ok])
+
+rc('figure',figsize=(8,8))
+imshow(ampfinal,aspect='auto', extent=[np.min(angle), np.max(angle),1,256], vmin=0, vmax=50000)
+colorbar()
+```
+
+```{python}
+bla = ((ampfinal.T-np.median(ampfinal, axis=1))/(np.max(ampfinal,axis=1)-np.min(ampfinal,axis=1))).T
+imshow(bla,aspect='auto', extent=[np.min(angle), np.max(angle),1,256],vmin=0,vmax=1)
+colorbar()
+xlabel('Sky Angle')
+ylabel('TES Number')
+title('Azimuth Scan Amplitude')
+```

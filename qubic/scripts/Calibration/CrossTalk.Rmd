@@ -1,0 +1,147 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.0
+  kernelspec:
+    display_name: Python [default]
+    language: python
+    name: python2
+---
+
+```{python}
+# ##### %matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(15,15))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack import qubicpack as qp
+import fibtools as ft
+import plotters as p
+import lin_lib as ll
+import demodulation_lib as dl
+import qubic.io
+
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import os
+import healpy as hp
+import pandas as pd
+```
+
+```{python}
+dirfreq = '140GHz-2019-04-10/Healpix/'
+dirallfreqs = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/'
+dirfiles = dirallfreqs+dirfreq
+allfiles = glob.glob(dirfiles+'*TESNum*.fits')
+```
+
+```{python}
+def get_hpmap(TESNum, directory):
+    return qubic.io.read_map(directory+'/healpix_TESNum_{}.fits'.format(TESNum))
+    
+def get_lines(lines, directory):
+    nn = len(lines)
+    hpmaps = np.zeros((nn, 4, 12*256**2))
+    nums = np.zeros((nn, 4),dtype=int)
+    for l in xrange(nn):
+        for i in xrange(4):
+            if lines[l] < 33:
+                nums[l,i] = int(lines[l]+32*i)
+            else:
+                nums[l,i] = int(lines[l]-32+32*i)+128
+            hpmaps[l,i,:] = get_hpmap(nums[l,i],directory)
+    return hpmaps, nums
+
+def show_lines(maps, nums, min=None, max=None):
+    sh = np.shape(maps)
+    nl = sh[0]
+    for l in xrange(nl):
+        for i in xrange(4):
+            hp.gnomview(maps[l,i,:], reso=10, min=min, max=max, sub=(nl, 4, l*4+i+1), title=nums[l,i])
+    tight_layout()
+
+
+```
+
+```{python}
+### Get the median image
+mm, nn = get_lines(arange(32)+1, dirfiles)
+med = np.median(mm,axis=[0,1])
+hp.gnomview(med, reso=10)
+```
+
+```{python}
+rc('figure',figsize=(15,20))
+#mm, nn = get_lines(arange(64)+1, dirfiles)
+mm, nn = get_lines([25,26,27,28], dirfiles)
+
+## Remove median image from all
+sh = np.shape(mm)
+for i in xrange(sh[0]):
+    for j in xrange(sh[1]):
+        mm[i,j,:] -= med
+        
+## Show the lines
+show_lines(mm,nn,min=-1e3,max=1e4)
+```
+
+```{python}
+okpix = np.prod(mm,axis=(0,1)) != 0
+mmok = mm[:,:,okpix]
+
+
+rc('figure',figsize=(10,10))
+
+subplot(1,2,1)
+sh = mmok.shape
+mmall = np.reshape(mmok, (sh[0]*sh[1],sh[2]))
+bla = np.corrcoef(mmall)
+matshow(bla)
+for i in xrange(sh[0]):
+    plot([-0.5,sh[0]*sh[1]-0.5], [i*4-0.5, i*4-0.5], 'w',lw=1)
+    plot([i*4-0.5, i*4-0.5], [-0.5,sh[0]*sh[1]-0.5], 'w',lw=1)
+tt = np.reshape(np.repeat('   ', sh[0]*sh[1]),(sh[0],sh[1]))
+for k in xrange(sh[0]): tt[k,1]=str(nn[k,0])
+plt.xticks(range(sh[0]*sh[1]), np.ravel(tt))
+plt.yticks(range(sh[0]*sh[1]), np.ravel(tt))
+colorbar()
+xlabel('Asic Line Number')
+ylabel('Asic Line Number')
+
+subplot(1,2,2)
+bla = np.cov(mmall)
+matshow(np.log10(np.abs(bla)),vmin=4,vmax=9)
+for i in xrange(sh[0]):
+    plot([-0.5,sh[0]*sh[1]-0.5], [i*4-0.5, i*4-0.5], 'w',lw=1)
+    plot([i*4-0.5, i*4-0.5], [-0.5,sh[0]*sh[1]-0.5], 'w',lw=1)
+tt = np.reshape(np.repeat('   ', sh[0]*sh[1]),(sh[0],sh[1]))
+for k in xrange(sh[0]): tt[k,1]=str(nn[k,0])
+plt.xticks(range(sh[0]*sh[1]), np.ravel(tt))
+plt.yticks(range(sh[0]*sh[1]), np.ravel(tt))
+colorbar()
+xlabel('Asic Line Number')
+ylabel('Asic Line Number')
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

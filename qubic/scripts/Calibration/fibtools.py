@@ -250,7 +250,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 ###############################################################################
 
 
-def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True, log=False, median=False,cutbad=True):
+def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True, log=False, median=False,cutbad=True,rebin_as_well=None):
     """
 
     Parameters
@@ -288,6 +288,11 @@ def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True
     dy = np.zeros(nbins)
     dx = np.zeros(nbins)
     nn = np.zeros(nbins)
+    if rebin_as_well is not None:
+        nother = len(rebin_as_well)
+        others = np.zeros((nbins, nother))
+    else:
+        others = None
     for i in np.arange(nbins):
         ok = (x > xmin[i]) & (x < xmax[i])
         nn[i] = np.sum(ok)
@@ -295,7 +300,10 @@ def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True
             yval[i] = np.median(y[ok])
         else:
             yval[i] = np.mean(y[ok])
-        xc[i] = np.mean(x[ok])
+        xc[i] = (xmax[i]+xmin[i])/2
+        if rebin_as_well is not None:
+            for o in xrange(nother):
+                others[i,o] = np.mean(rebin_as_well[o][ok])
         if dispersion:
             fact = 1
         else:
@@ -307,11 +315,11 @@ def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True
         errorbar(xc, yval, xerr=dx, yerr=dy, fmt=fmt)
     ok = nn != 0
     if cutbad:
-        return xc[ok], yval[ok], dx[ok], dy[ok]
+        return xc[ok], yval[ok], dx[ok], dy[ok], others[ok,:]
     else:
         yval[~ok] = 0
         dy[~ok] = 0
-        return xc, yval, dx, dy
+        return xc, yval, dx, dy, others
 
 
 def exponential_filter1d(input, sigma, axis=-1, output=None, mode="reflect", cval=0.0, truncate=10.0):

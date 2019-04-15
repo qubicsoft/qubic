@@ -7,7 +7,7 @@ jupyter:
       format_version: '1.1'
       jupytext_version: 1.1.0
   kernelspec:
-    display_name: Python [default]
+    display_name: Python 2
     language: python
     name: python2
 ---
@@ -42,7 +42,8 @@ import healpy as hp
 
 ```{python}
 nside = 128
-hp.mollview(np.arange(12*nside**2))
+# hp.mollview(np.arange(12*nside**2))
+print('coucou')
 ```
 
 ```{python}

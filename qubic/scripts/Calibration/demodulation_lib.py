@@ -355,7 +355,6 @@ def scan2ang_splfit(period, time, data, t_src, src, t_az, az, lowcut, highcut, e
     sb = np.interp(ang, new_az*np.cos(np.radians(elevation)), simsrc.amplitude(x_data, res[1]))
     dsb = np.ones(nbins)
     return azvals, ang, sb, dsb
-    
 
 
 def general_demodulate(period, indata, lowcut, highcut, 
@@ -417,7 +416,6 @@ def general_demodulate(period, indata, lowcut, highcut,
         legend()
     
     return unbinned, binned
-
 
 
 def array_info(ar):
@@ -483,7 +481,6 @@ def read_data_azel_src(dirfile, AsicNum, TESNum=None,
 
 def renorm(ar):
     return (ar-np.mean(ar))/np.std(ar)
-
 
 
 

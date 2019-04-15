@@ -276,7 +276,7 @@ def scan2ang_splfit(period, time, data, t_src, src, t_az, az, lowcut, highcut, e
     sb = np.interp(ang, new_az*np.cos(np.radians(elevation)), simsrc.amplitude(x_data, res[1]))
     dsb = np.ones(nbins)
     return ang, sb, dsb
-    
+
 
 
 def general_demodulate(period, time, data, t_src, src, t_az, az, lowcut, highcut, elevation, 
@@ -317,7 +317,7 @@ def general_demodulate(period, time, data, t_src, src, t_az, az, lowcut, highcut
         legend()
 
     return angle, sb, dsb, pars, err_pars
-    
+
 
 
 

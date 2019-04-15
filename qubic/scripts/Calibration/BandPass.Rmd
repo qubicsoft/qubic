@@ -1,0 +1,215 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.0
+  kernelspec:
+    display_name: Python [default]
+    language: python
+    name: python2
+---
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(16,8))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack import qubicpack as qp
+import fibtools as ft
+import plotters as p
+import lin_lib as ll
+import demodulation_lib as dl
+import satorchipy as stpy
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import datetime as dt
+
+```
+
+## Dataset
+Lets get the directories corresponding to each dataset:
+
+```{python}
+n = 'ScanFreq'
+days = ['2019-04-12']
+
+dirs = []
+freqs=[]
+for d in days:
+    dd = glob.glob('/qubic/Data/Calib-TD/'+d+'/*'+n+'*')
+    for i in xrange(len(dd)): 
+        #print dd[i]
+        truc = str.split(dd[i],'_')
+        the_nu = truc[-1]
+        try:
+            nufloat = np.float(the_nu)
+            freqs.append(np.float(the_nu))
+            dirs.append(dd[i])
+        except:
+            print 'File '+dd[i]+' has a format that des not comply with expectations => rejected'
+            continue
+    print '  * ',d,' : {} files'.format(len(dd))
+print '  => Total = {} files'.format(len(dirs))
+print '  => Frequency ranges from {} to {}'.format(np.min(freqs),np.max(freqs))
+
+```
+
+```{python}
+labels = []
+dir_time = []
+for d in dirs:
+    bla = str.split(d,'__')
+    blo = str.split(bla[0],'/')
+    labels.append(bla[1])
+    dir_time.append(blo[-1])
+    
+for i in xrange(len(labels)): 
+    print i, labels[i], dir_time[i], 'Frequency: ', freqs[i]
+
+```
+
+```{python}
+ii = 20
+thedir = dirs[ii]
+print thedir, 'Frequency =',freqs[ii]
+AsicNum = 1
+a = qp()
+a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+data=a.azel_etc(TES=None)
+data['t_src'] += 7200
+
+```
+
+```{python}
+reload(dl)
+reload(ft)
+
+#### Parameters
+freq_mod = 1.
+ppp = 1./freq_mod
+lowcut = 0.3
+highcut = 10.
+nbins = 250 #int((np.max(data['t_data'])-np.min(data['t_data']))/ppp/2)
+elevation = 50
+
+method = 'rms'
+
+unbinned, binned = dl.general_demodulate(ppp, data, lowcut, highcut,
+                                                    nbins=nbins, median=True, method=method, 
+                                                    doplot=False, rebin=False, 
+                                                    renormalize_plot=False, verbose=True)
+
+ntes = data['data'].shape[0]
+mm = np.zeros(ntes)
+ss = np.zeros(ntes)
+for i in xrange(ntes):
+    mm[i], ss[i] = ft.meancut(unbinned['sb'][i,:], 3)
+
+img = ft.image_asics(data1=mm)
+imshow(img)
+colorbar()
+```
+
+```{python}
+#### Parameters
+ppp = 1./freq_mod
+lowcut = 0.3
+highcut = 10.
+method = 'rms'
+
+nbins = 250
+
+reload(dl)
+reload(ft)
+
+allmm = np.zeros((256, len(dirs)))
+allss = np.zeros((256, len(dirs)))
+
+for ii in xrange(len(dirs)):
+    thedir = dirs[ii]
+    print '##############################################################'
+    print 'Directory {} / {} :'.format(ii, len(dirs)), thedir
+    print '##############################################################'
+    for iasic in [0,1]:
+        print '======== ASIC {} ====================='.format(iasic)
+        AsicNum = iasic+1
+        a = qp()
+        a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+        data=a.azel_etc(TES=None)
+        data['t_src'] += 7200
+        unbinned, binned = dl.general_demodulate(ppp, data, 
+                                                lowcut, highcut,
+                                                nbins=nbins, median=True, method=method, 
+                                                doplot=False, rebin=False, verbose=False)
+
+        for i in xrange(128):
+            allmm[iasic*128+i,ii], allss[iasic*128+i,ii] = ft.meancut(unbinned['sb'][i,:], 3)
+    
+
+```
+
+```{python}
+allmm.shape
+```
+
+```{python}
+tesindex=93
+for i in xrange(1):
+    errorbar(freqs, (allmm[tesindex+i,:]),yerr=allss[tesindex,:],fmt='ro-')
+
+```
+
+```{python}
+tesindex = 93
+freqs = np.array(freqs)
+allfnorm = np.zeros((256, len(freqs)))
+infilter = (freqs >= 124) & (freqs <= 182)
+outfilter =  ~infilter
+for tesindex in xrange(256):
+    baseline = np.mean(allmm[tesindex,outfilter])
+    integ = np.sum(allmm[tesindex, infilter]-baseline)
+    allfnorm[tesindex,:] = (allmm[tesindex,:]-baseline)/integ
+
+automean = np.sum(allfnorm, axis=1)
+autoerror = np.std(allfnorm, axis=1)    
+plot(automean/autoerror)
+ok = (automean/autoerror > 30)
+
+filtershape = np.zeros(len(freqs))
+errfiltershape = np.zeros(len(freqs))
+for i in xrange(len(freqs)):
+    filtershape[i], errfiltershape[i] = ft.meancut(allfnorm[ok,i],3)
+```
+
+```{python}
+plot(freqs, np.median(allfnorm[ok,:], axis=0), label='Median over all TES')
+plot(freqs, np.mean(allfnorm[ok,:], axis=0), label='Mean over all TES')
+errorbar(freqs, filtershape,yerr=errfiltershape/np.sqrt(ok.sum()), fmt='ro-', label='$3\sigma$ Clipped mean over all TES')
+legend()
+xlabel('Frequency [GHz]')
+ylabel('Relative Transmission')
+#ylim(-0.01,0.08)
+plot(freqs,freqs*0,'k--')
+```
+
+```{python}
+allmm.shape
+```
+
+```{python}
+
+```

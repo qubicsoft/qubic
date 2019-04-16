@@ -1,0 +1,90 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.0
+  kernelspec:
+    display_name: Python [default]
+    language: python
+    name: python2
+---
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(16,8))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack import qubicpack as qp
+import fibtools as ft
+import plotters as p
+import lin_lib as ll
+import demodulation_lib as dl
+import qubic
+
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import os
+import healpy as hp
+```
+
+```{python}
+dirallfreqs = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/'
+dirfreq = ['140GHz-2019-04-10/', '150GHz-2019-04-06/', '160GHz-2019-04-08/']
+freqs = np.array([140, 150, 160])
+```
+
+```{python}
+reload(dl)
+ifreq = 1
+img, az, el = dl.get_flatmap(93, dirallfreqs+dirfreq[ifreq])
+
+def disp(img, az, el, nsmin=2, nsmax=40, vmin = None, vmax = None):
+    mm, ss = ft.meancut(img, 3)
+    if vmin is None:
+        vmin = mm-nsmin*ss
+    if vmax is None:
+        vmax = mm+nsmax*ss
+    imshow(img, extent=[np.min(az)*np.cos(np.radians(50)), np.max(az)*np.cos(np.radians(50)), np.min(el), np.max(el)],
+       aspect='equal', vmin=vmin, vmax=vmax)
+    xlabel(r'$Az \times \cos(50)$')
+    ylabel(r'$Elevation$')
+    title('Frequency: {} GHz'.format(freqs[ifreq]))
+    colorbar()
+
+disp(img, az, el)
+mm, ss = ft.meancut(img, 3)
+```
+
+```{python}
+nbl = len(el)
+nbaz = len(az)
+nperaz = 4
+daz = nbaz/nperaz
+ifile = 0
+theimg = np.zeros_like(img)
+for i in xrange(len(el)):
+    for k in xrange(nperaz):
+        clf()
+        theimg[i,k*daz:np.min([(k+1)*daz,nbaz])] += img[i,k*daz:np.min([(k+1)*daz,nbaz])]
+        disp(theimg, az, el, vmin=mm-2*ss, vmax=mm+40*ss)
+        savefig('/Volumes/Data/Qubic/Calib-TD/Animations/scan_150GHz/imgscan_{0:04d}.png'.format(ifile))
+        ifile += 1
+```
+
+```{python}
+
+```

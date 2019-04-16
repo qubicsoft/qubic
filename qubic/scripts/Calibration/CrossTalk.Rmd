@@ -43,43 +43,16 @@ import pandas as pd
 ```
 
 ```{python}
-dirfreq = '140GHz-2019-04-10/Healpix/'
+dirfreq = '140GHz-2019-04-10/'
 dirallfreqs = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/'
 dirfiles = dirallfreqs+dirfreq
-allfiles = glob.glob(dirfiles+'*TESNum*.fits')
+allfiles = glob.glob(dirfiles+'Healpix/*TESNum*.fits')
 ```
 
 ```{python}
-def get_hpmap(TESNum, directory):
-    return qubic.io.read_map(directory+'/healpix_TESNum_{}.fits'.format(TESNum))
-    
-def get_lines(lines, directory):
-    nn = len(lines)
-    hpmaps = np.zeros((nn, 4, 12*256**2))
-    nums = np.zeros((nn, 4),dtype=int)
-    for l in xrange(nn):
-        for i in xrange(4):
-            if lines[l] < 33:
-                nums[l,i] = int(lines[l]+32*i)
-            else:
-                nums[l,i] = int(lines[l]-32+32*i)+128
-            hpmaps[l,i,:] = get_hpmap(nums[l,i],directory)
-    return hpmaps, nums
-
-def show_lines(maps, nums, min=None, max=None):
-    sh = np.shape(maps)
-    nl = sh[0]
-    for l in xrange(nl):
-        for i in xrange(4):
-            hp.gnomview(maps[l,i,:], reso=10, min=min, max=max, sub=(nl, 4, l*4+i+1), title=nums[l,i])
-    tight_layout()
-
-
-```
-
-```{python}
+reload(dl)
 ### Get the median image
-mm, nn = get_lines(arange(32)+1, dirfiles)
+mm, nn = dl.get_lines(arange(32)+1, dirfiles)
 med = np.median(mm,axis=[0,1])
 hp.gnomview(med, reso=10)
 ```

@@ -2,6 +2,8 @@ from qubicpack import qubicpack as qp
 import fibtools as ft
 import plotters as p
 import lin_lib as ll
+import qubic
+from pysimulators import FitsArray
 
 import numpy as np
 from matplotlib.pyplot import *
@@ -579,5 +581,39 @@ def make_tod(scans, axis=1):
     return tod
 
 
+def get_hpmap(TESNum, directory):
+    return qubic.io.read_map(directory+'/Healpix/healpix_TESNum_{}.fits'.format(TESNum))    
 
 
+def get_flatmap(TESNum, directory):
+    return qubic.io.read_map(directory+'/healpix_TESNum_{}.fits'.format(TESNum))    
+
+
+def get_lines(lines, directory):
+    nn = len(lines)
+    hpmaps = np.zeros((nn, 4, 12*256**2))
+    nums = np.zeros((nn, 4),dtype=int)
+    for l in xrange(nn):
+        for i in xrange(4):
+            if lines[l] < 33:
+                nums[l,i] = int(lines[l]+32*i)
+            else:
+                nums[l,i] = int(lines[l]-32+32*i)+128
+            hpmaps[l,i,:] = get_hpmap(nums[l,i],directory)
+    return hpmaps, nums
+
+
+def show_lines(maps, nums, min=None, max=None):
+    sh = np.shape(maps)
+    nl = sh[0]
+    for l in xrange(nl):
+        for i in xrange(4):
+            hp.gnomview(maps[l,i,:], reso=10, min=min, max=max, sub=(nl, 4, l*4+i+1), title=nums[l,i])
+    tight_layout()
+
+
+def get_flatmap(TESNum, directory):
+    themap = FitsArray(directory+'/Flat/imgflat_TESNum_{}.fits'.format(TESNum))
+    az = FitsArray(directory+'/Flat/azimuth.fits'.format(TESNum))    
+    el = FitsArray(directory+'/Flat/elevation.fits'.format(TESNum))
+    return themap, az, el

@@ -1,0 +1,331 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.0
+  kernelspec:
+    display_name: Python [conda env:anaconda]
+    language: python
+    name: conda-env-anaconda-py
+---
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(16,8))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack import qubicpack as qp
+import fibtools as ft
+import plotters as p
+import lin_lib as ll
+import demodulation_lib as dl
+from qubic.utils import progress_bar
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+```
+
+```{python}
+day = '2019-04-01'
+data_dir = '/qubic/Data/Calib-TD/'+day+'/'
+dirs = np.sort(glob.glob(data_dir+'*test_sw*'))
+print (dirs)
+print (len(dirs))
+
+labels = []
+for d in dirs:
+    bla = str.split(d,'__')
+    labels.append(bla[1])
+print labels
+
+thedir = dirs[0]
+print(thedir)
+```
+
+## Reading Data for a given asic
+
+```{python}
+AsicNum = 2
+a = qp()
+a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+```
+
+## Reading TES Data
+
+```{python}
+TESNum = 44
+data = a.timeline(TES=TESNum)
+#data = data[:18000]
+t_data = a.timeline_timeaxis(axistype='pps')
+print(len(t_data))
+plot((data-np.mean(data))/np.std(data), label='Data')
+
+
+```
+
+## Let's use the amplitude of the first harmonic in the data as a measure of the signal
+
+```{python}
+reload(dl)
+period_sampling = t_data[1] - t_data[0]
+FREQ_SAMPLING = 1. / (t_data[1] - t_data[0])
+print('FREQ_SAMPLING = {}'.format(FREQ_SAMPLING))
+print('Period_SAMPLING = {}'.format(period_sampling))
+
+spectrum_f, freq_f = mlab.psd(data, Fs=FREQ_SAMPLING, NFFT=len(data), 
+                              window=mlab.window_hanning)
+
+freq_mod = 1.
+okfit = np.abs(freq_f-freq_mod) < 0.1
+
+guess = np.array([freq_mod, 0.01, np.max(spectrum_f[okfit]), np.median(spectrum_f[okfit])])
+res = ft.do_minuit(freq_f[okfit], spectrum_f[okfit], np.ones(okfit.sum()), guess, 
+                   functname=dl.gauss, fixpars=[1,0,0,0,0], 
+                   nohesse=True,
+                   force_chi2_ndf=True)
+
+# Look at the amplitude of the peak
+print('Amplitude = {}'.format(res[1][2]))
+
+plot(freq_f, spectrum_f,label='Data')
+plot(freq_f[okfit], dl.gauss(freq_f[okfit], res[1]), 
+     label='Gaussian: amplitude = {0:5.3g}'.format(res[1][2]))
+plot([freq_mod, freq_mod], [1e6, 1e15], label='Modulation Frequency: {}'.format(freq_mod))
+yscale('log')
+xscale('log')
+xlim(freq_mod-0.2, freq_mod+0.2)
+ylim(1e4, 1e15)
+legend()
+```
+
+### Now do the same on both asics and all TES
+
+```{python}
+allres = np.zeros((256,4))
+allerr = np.zeros((256,4))
+allamp1hz = np.zeros(256)
+
+for AsicNum in [1,2]:
+    a = qp()
+    a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+    t_data = a.timeline_timeaxis(axistype='index')
+    FREQ_SAMPLING = 1. / (t_data[1] - t_data[0])
+    bar = progress_bar(128, 'ASIC #{}'.format(AsicNum))
+    for TESNum in np.arange(128)+1:
+        bar.update()
+        TESindex = (TESNum-1) + 128 * (AsicNum-1)
+        thedata = a.timeline(TES=TESNum)
+        spectrum_f, freq_f = mlab.psd(thedata, Fs=FREQ_SAMPLING, NFFT=len(thedata), 
+                              window=mlab.window_hanning)
+        freq_mod = 1.
+        allamp1hz[TESindex] = np.interp(freq_mod, freq_f, spectrum_f)
+        okfit = np.abs(freq_f-freq_mod) < 0.1
+        guess = np.array([freq_mod, 0.01, np.max(spectrum_f[okfit]), np.median(spectrum_f[okfit])])
+        res = ft.do_minuit(freq_f[okfit], spectrum_f[okfit], np.ones(okfit.sum()), guess, 
+                   functname=dl.gauss, fixpars=[1,0,0,0,0], 
+                   nohesse=True, verbose=False,
+                   force_chi2_ndf=True)
+        allres[TESindex,:] = res[1]
+        allerr[TESindex,:] = res[2]
+        
+```
+
+```{python}
+amps = allres[:,2]
+img = ft.image_asics(all1=amps)
+mm = np.median(amps)
+print(mm)
+ss = np.std(amps)
+print(ss)
+imshow(img, vmin = 0, vmax=mm+3*ss)
+colorbar()
+```
+
+# Now loop on all files
+
+```{python}
+allres_tot = np.zeros((len(dirs),256,4))
+allerr_tot = np.zeros((len(dirs),256,4))
+allamp_peak = np.zeros((len(dirs), 256))
+from qubic.utils import progress_bar
+
+for idir in xrange(len(dirs)):
+    thedir = dirs[idir]
+    for AsicNum in [1,2]:
+        a = qp()
+        a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+        t_data = a.timeline_timeaxis(axistype='index')
+        FREQ_SAMPLING = 1./(t_data[1]-t_data[0])
+        bar = progress_bar(128, 'ASIC #{}'.format(AsicNum))
+        for TESNum in np.arange(128)+1:
+            bar.update()
+            TESindex = (TESNum-1)+128*(AsicNum-1)
+            thedata = a.timeline(TES=TESNum)
+            spectrum_f, freq_f = mlab.psd(thedata, Fs=FREQ_SAMPLING, NFFT=len(thedata), 
+                                  window=mlab.window_hanning)
+            freq_mod = 1.
+            allamp_peak[idir,TESindex] = np.interp(freq_mod, freq_f, spectrum_f)
+            okfit = np.abs(freq_f-freq_mod) < 0.1
+            guess = np.array([freq_mod, 0.01, np.max(spectrum_f[okfit]), np.median(spectrum_f[okfit])])
+            res = ft.do_minuit(freq_f[okfit], spectrum_f[okfit], np.ones(okfit.sum()), guess, 
+                       functname=dl.gauss, fixpars=[1,0,0,0,0], 
+                       nohesse=True, verbose=False,
+                       force_chi2_ndf=True)
+            allres_tot[idir, TESindex,:] = res[1]
+            allerr_tot[idir, TESindex,:] = res[2]
+```
+
+```{python}
+print('Fini')
+allres_tot.shape
+```
+
+## Amplitude on the focal plane for each file
+
+```{python}
+allamp_peak
+```
+
+```{python}
+rc('figure',figsize=(16,12))
+mm,ss = ft.meancut(allres_tot[:,:,2],3)
+#mm,ss = ft.meancut(allres_tot,3)
+allimg = np.zeros((len(dirs), 17, 17))
+for i in xrange(len(dirs)):
+    subplot(4,4,i+1)
+    amps = allres_tot[i,:,2]
+    #amps = allamp_peak[i,:]
+    img = ft.image_asics(all1=amps)
+    allimg[i,:,:] = img
+    imshow(img, vmin=0, vmax=5*ss)
+    colorbar()
+    title(labels[i])
+tight_layout()
+```
+
+```{python}
+rc('figure',figsize=(16,12))
+mm,ss = ft.meancut(allres_tot[:,:,2],3)
+#mm,ss = ft.meancut(allamp_peak,3)
+allimg = np.zeros((len(dirs), 17, 17))
+for i in xrange(len(dirs)):
+    amps = allres_tot[i,:,2]
+    #amps = allamp_peak[i,:]
+    allimg[i,:,:] = ft.image_asics(all1=amps)
+
+iref = 1
+for i in xrange(len(dirs)):
+    subplot(4,4,i+1)
+    imshow(allimg[i,:,:]/allimg[iref,:,:], vmin=0, vmax=2)
+    colorbar()
+    title(labels[i])
+tight_layout()
+```
+
+```{python}
+amplitudes = allres_tot[:,:,2]
+
+#### This is Stot
+index_tot = 0
+
+#### These are C-i, C-j and S-ij
+index_11_14 = ['11_14', 1, 2, 3]
+
+allsets = [index_11_14]
+
+allimg = np.zeros((len(allsets), 17, 17))
+for iset in xrange(len(allsets)):
+    theset = allsets[iset]
+    tit = theset[0]
+    Stot = amplitudes[index_tot, :]
+    #Stot = Stot / np.median(Stot)
+    C_i = amplitudes[theset[1], :]
+    #C_i = C_i / np.median(C_i) * 63./64
+    C_j = amplitudes[theset[2], :]
+    #C_j = C_j / np.median(C_j) * 63./64
+    S_ij = amplitudes[theset[3], :]
+    #S_ij = S_ij / np.median(S_ij) * 62./64
+    fringe = Stot + S_ij - C_i - C_j
+    allimg[iset,:,:] = ft.image_asics(all1=fringe)
+```
+
+```{python}
+rc('figure',figsize=(16,5))
+mm,ss = ft.meancut(allimg[np.isfinite(allimg)],3)
+rng = ss
+figure()
+for i in xrange(len(allsets)):
+    #subplot(2,2,i+1)
+    imshow(allimg[i,:,:], vmin=-rng, vmax=rng)
+    title(allsets[i][0])
+    colorbar()
+
+tight_layout()
+```
+
+## Try to normalize by all open
+
+```{python}
+amps_ref = np.abs(allres_tot[0,:,2])
+#amps_ref = allamp_peak[0,:]
+img_ref = ft.image_asics(all1=amps_ref)
+
+# do lists with amplitudes and images
+allamps = []
+allimages = []
+for i in xrange(len(dirs)):
+    amps = np.abs(allres_tot[i,:,2])
+    #amps = allamp_peak[i,:]
+    allamps.append(amps)
+    
+    img = ft.image_asics(all1=amps)
+    allimages.append(img)
+    
+    subplot(1,4,i+1)
+    imshow(img/img_ref, vmin=0, vmax=2)
+    title(labels[i])
+    
+tight_layout()
+```
+
+```{python}
+index_11_14 = ['11_14', 1, 2, 3]
+
+allsets = [index_11_14]
+
+S_tot = img_ref
+figure()
+for i in xrange(len(allsets)):
+    theset = allsets[i]
+    C_i = allimages[theset[1]]
+    C_j = allimages[theset[2]]
+    S_ij = allimages[theset[3]]
+    fringe = S_tot + S_ij - C_i - C_j
+    
+    #subplot(2,2,i+1)
+    #imshow(fringe/Stot, vmin=-1, vmax=1)
+    imshow(fringe,vmin=-1e11,vmax=1e11)
+    title(theset[0])
+    colorbar()
+    
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

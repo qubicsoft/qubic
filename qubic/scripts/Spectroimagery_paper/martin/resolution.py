@@ -6,12 +6,22 @@ import sys
 from qubic.io import *
 import matplotlib.pyplot as mp
 from scipy.optimize import curve_fit
+import datetime as dt
 
 def NameRun(d):
 	"""
 	Create same file output name
 	"""
-	name = '20190326_modular_{}_{}'.format(str(int(d['filter_nu']/1e9)), d['nhwp_angles'])
+
+	now = dt.datetime.now()
+	name = now.strftime("%Y%m%d")#str(now.year)+str(now.month).zfill(2)+str(now.day).zfill(2)+'/'
+	
+	try:
+		os.path.isdir(name)
+	except:
+		os.mkdir(name)
+	
+	#name = bla+'_modular_{}_{}'.format(str(int(d['filter_nu']/1e9)), d['nhwp_angles'])
 	return name
 
 def NameCalib(method):
@@ -75,7 +85,7 @@ def ParametersMC():
 	n_subpop = 30
 	fwhm_ini = 0.21
 	fwhm_end = 0.70
-	sample = 50
+	sample = 5
 	step_fwhm = (fwhm_end - fwhm_ini) / sample
 	amplitude =  np.array([1.,])
 
@@ -192,7 +202,7 @@ def SigmaMethod(maparray, d, size = 200, reso = 1.5):
 
 	return input_fwhm_sigma
 
-def GenerateMaps(d, nus_in):
+def GenerateMaps(d, nus_in, p=None ):
 
 	"""
 	Compute input maps to use in: calibration (for both methods Fit and Sigma) & QUBIC pipeline. 
@@ -202,13 +212,18 @@ def GenerateMaps(d, nus_in):
 		nus_in: frequencies where compute the point source map
 
 	Return:
-		m0: point source (already integrated over pixels)
 		input_maps: partition of the sky where the point source is.
+		m0: point source (already integrated over pixels) [RING ordered]
 
 	"""
 
+	if p:
+		if p.fix_az:
+			center_gal = (d['fix_azimuth']['az'],d['fix_azimuth']['el'])
+		elif not p.fix_az:
+			center_gal = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 	nsideLow, nsideHigh, reso, size, sigma2fwhm = Parameters(d) 
-	center_gal = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+	#center_gal = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 	pixel = hp.pixelfunc.ang2pix(nsideHigh, np.deg2rad(90-center_gal[1]), np.deg2rad(center_gal[0]), nest = True)
 	vec_pix = hp.pix2vec(nsideHigh, pixel, nest = True)
 	vec_pixeles = hp.pix2vec(nsideHigh, np.arange(12*nsideHigh**2), nest = True )

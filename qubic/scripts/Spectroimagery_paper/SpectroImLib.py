@@ -6,6 +6,8 @@ import numpy as np
 import os
 import pysm
 import qubic
+import pysm
+
 
 __all__ = ['sky', 'Planck_sky', 'Qubic_sky']
 

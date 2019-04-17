@@ -1,0 +1,273 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.0
+  kernelspec:
+    display_name: Python [conda env:anaconda]
+    language: python
+    name: conda-env-anaconda-py
+---
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(16,8))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack import qubicpack as qp
+import fibtools as ft
+import plotters as p
+import lin_lib as ll
+import demodulation_lib as dl
+
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+```
+
+```{python}
+
+```
+
+## Dataset
+
+
+```{python}
+names = ['ScanMap_VE1','ScanMap_VE3','ScanMap_VE5','ScanMap_VE10']
+days = [['2019-03-27'],['2019-03-27'],['2019-03-27'],['2019-03-27']]
+el_start = [50., 50., 50., 50.]
+delta_el = 0
+
+all_elevation = []
+datasets=[]
+for inames in xrange(len(names)):
+    n = names[inames]
+    print n, ' Elevation starts at {}'.format(el_start[inames])
+    datasets.append([])
+    for d in days[inames]:
+        dd = glob.glob('/qubic/Data/Calib-TD/'+d+'/*'+n)
+        for i in xrange(len(dd)): 
+            datasets[inames].append(dd[i])
+        print '  * ',d,' : {} files'.format(len(dd))
+    print '  => Total = {} files'.format(len(datasets[inames]))
+    elevations = el_start[inames]+arange(len(datasets[inames]))*delta_el
+    all_elevation.append(elevations)
+    print '  => Elevation ends at {}'.format(np.max(elevations))
+
+```
+
+We start with the forst dataset ('ScanMap'):
+
+```{python}
+index = 2
+dirs = datasets[index]
+elevation = all_elevation[index]
+
+labels = []
+dir_time = []
+for d in dirs:
+    bla = str.split(d,'__')
+    blo = str.split(bla[0],'/')
+    labels.append(bla[1])
+    dir_time.append(blo[-1])
+    
+for i in xrange(len(labels)): 
+    print labels[i], dir_time[i], 'Elevation: ', elevation[i]
+
+```
+
+And we first start with the middle file: i=21
+
+```{python}
+ii = 0
+thedir = datasets[index][ii]
+print thedir, 'Elevation =',all_elevation[index][ii]
+```
+
+## Reading Data for a given asic
+
+```{python}
+AsicNum = 1
+a = qp()
+a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+```
+
+## Reading TES data
+
+```{python}
+TESNum = 93
+data = a.timeline(TES=TESNum)
+t_data = a.timeline_timeaxis(axistype='index')
+
+plot(t_data-t_data[0], (data-np.mean(data))/np.std(data), label='Data')
+#a.plot_timestamp_diagnostic()
+```
+
+## Reading Azimuth Data
+
+```{python}
+az = a.azimuth()
+#t_az = a.timeaxis(datatype='hk',axistype='pps')
+t_az = (np.max(t_data)-np.min(t_data))*np.linspace(0,1,len(az))
+
+plot(t_az, az)
+```
+
+```{python}
+plot(t_az, np.abs(np.gradient(az,t_az[1]-t_az[0])))
+plot(t_az, t_az*0+np.median(np.abs(np.gradient(az,t_az[1]-t_az[0]))))
+```
+
+### Plot Data and Azimuth together (they should match)
+
+```{python}
+subplot(1,2,1)
+plot(t_data, f.gaussian_filter1d((data-np.mean(data))/np.std(data),15), label='Data')
+plot(t_az, (az-np.mean(az))/np.std(az), label='Az')
+legend()
+
+subplot(1,2,2)
+plot(np.interp(t_data, t_az, az), data-f.gaussian_filter1d(data,1000))
+xlim(-5,5)
+```
+
+Let's check the modulation frequency (main peak in data)
+
+```{python}
+FREQ_SAMPLING = 1./(t_data[1]-t_data[0])
+
+newt = np.linspace(t_data[0], t_data[-1], len(t_data))
+print len(t_data), t_data[0], t_data[-1]
+print len(newt), newt[0], newt[-1]
+newdata = np.interp(newt, t_data, data)
+spectrum_f, freq_f = mlab.psd(newdata, Fs=1./(newt[1]-newt[0]), NFFT=len(data), window=mlab.window_hanning)
+plot(freq_f, f.gaussian_filter1d(spectrum_f,1),label='Data')
+yscale('log')
+xscale('log')
+xlim(0.8,1.2)
+freq_mod = 1.
+plot([freq_mod, freq_mod], [1e6, 1e12], label='Modulation Frequency: {}'.format(freq_mod))
+ylim(1e6, 1e12)
+legend()
+```
+
+# Demodulation with RMS per period
+
+```{python}
+reload(dl)
+
+#### Parameters
+ppp = 1./freq_mod
+lowcut = 0.1
+highcut = 15.
+nbins = 100
+elevation = 50
+
+t_src = []
+data_src = []
+angle, sb, dsb, pars, err_pars = dl.general_demodulate(ppp, t_data, data, t_src, data_src, t_az, az, 
+                                                    lowcut, highcut, elevation, 
+                                                    nbins=nbins, median=True, method='rms', 
+                                                    doplot=True, unbinned=True, 
+                                                    renormalize_plot=False)
+
+
+```
+
+Now we loop on the TES
+
+```{python}
+ppp = 1./freq_mod
+lowcut = 0.3
+highcut = 10.
+nbins = 100
+elevation = 50
+
+reload(dl)
+reload(ft)
+all = []
+angs = []
+parfit = []
+err_parfit = []
+speeds = []
+for ids in xrange(len(datasets)):
+    dirs = datasets[ids]
+    for ii in xrange(len(dirs)):
+        thedir = dirs[ii]
+        print '##############################################################'
+        print 'Dataset {} / {} :'.format(ids,len(datasets)),names[ids]
+        print 'Directory {} / {} :'.format(ii, len(dirs)), thedir
+        print '##############################################################'
+        alldemod = np.zeros((256,nbins))
+        allpars = np.zeros((256,4))
+        allerrpars = np.zeros((256,4))
+        for iasic in [0,1]:
+            print '======== ASIC {} ====================='.format(iasic)
+            AsicNum = iasic+1
+            a = qp()
+            a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+#             t_data = a.timeline_timeaxis(axistype='index')
+#             FREQ_SAMPLING = 1./(t_data[1]-t_data[0])
+#             az = a.azimuth()
+#             t_az = (np.max(t_data)-np.min(t_data))*np.linspace(0,1,len(az))
+            t_data = a.timeline_timeaxis(axistype='pps')
+            FREQ_SAMPLING = 1./(t_data[1]-t_data[0])
+            az = a.azimuth()
+            t_az = a.timeaxis(datatype='hk',axistype='pps')
+            speed = np.median(np.abs(np.gradient(az,t_az[1]-t_az[0])))
+            print '############# SPEED', speed
+            #for TESNum in np.arange(128*0)+1:
+            TESNum = 96
+            if (16*(TESNum/16))==TESNum: print(TESNum)
+            TESindex = iasic*128+(TESNum-1)
+            thedata = a.timeline(TES=TESNum)
+            t_src=[]
+            data_src=[]
+            angle, sb, dsb, pars, err_pars = dl.general_demodulate(ppp, t_data, thedata, t_src, data_src, t_az, az, 
+                                                        lowcut, highcut, all_elevation[ids][ii], 
+                                                        nbins=nbins, median=False, method='rms', 
+                                                        doplot=False, unbinned=False)
+            alldemod[TESindex,:] = sb
+            allpars[TESindex,:] = pars
+            allerrpars[TESindex,:] = err_pars
+        speeds.append(speed)    
+        angs.append(angle)
+        all.append(alldemod)
+        parfit.append(allpars)
+        err_parfit.append(allerrpars)
+```
+
+```{python}
+print 'Fini'
+```
+
+```{python}
+TESNum = 96
+xxx = np.linspace(np.nanmin(angs), np.nanmax(angs), 1000)
+for i in xrange(len(names)*0+3):
+    #subplot(2,2,1+i)
+    p=plot(angs[i],all[i][TESNum-1,:], 'o-', label=names[i]+' - Speed={0:5.3f} deg/sec - FWHM = {1:5.2f} +/- {2:5.2f}'.format(speeds[i],parfit[i][TESNum-1,1],err_parfit[i][TESNum-1,1]),lw=3)
+    plot(xxx, dl.gauss(xxx, parfit[i][TESNum-1,:]), color=p[0].get_color())
+legend()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

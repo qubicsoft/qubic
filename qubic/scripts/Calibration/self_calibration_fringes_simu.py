@@ -1,8 +1,6 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 
-import numpy as np
-import copy
 from matplotlib.pyplot import *
 import qubic
 
@@ -53,7 +51,7 @@ def get_power_on_array(q, nn, xmin, xmax, theta, phi, spectral_irradiance):
 
     field = q._get_response(theta, phi, spectral_irradiance, position, q.detector.area, q.filter.nu, q.horn,
                             q.primary_beam, q.secondary_beam)
-    power = np.reshape(np.abs(field)**2, (nn, nn, nptg))
+    power = np.reshape(np.abs(field) ** 2, (nn, nn, nptg))
     return power
 
 
@@ -187,7 +185,6 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
     return S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij
 
 
-
 def horn_manip2simu(ihorn):
     """
 
@@ -224,14 +221,14 @@ phi = np.arange(0., 0.2, 0.2)
 theta = np.arange(0.4, 0.6, 0.2)
 spectral_irradiance = 0.5
 
-baseline_manip = [45, 56]
+baseline_manip = [39, 54]
 baseline_simu = [horn_manip2simu(baseline_manip[0]), horn_manip2simu(baseline_manip[1])]
 nptg = len(theta)
 
 power = get_power_on_array(q[0], nn, xmin, xmax, theta, phi, spectral_irradiance)
 
 S_tot, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = selfcal_data(q[0], nn, xmin, xmax, theta, phi, spectral_irradiance,
-                                                             baseline_simu, doplot=True)
+                                                                 baseline_simu, doplot=True)
 
 figure()
 subplot(2, 2, 1)
@@ -260,3 +257,6 @@ for ptg in xrange(nptg):
 figure()
 imshow(Sij[:, :, 0], interpolation='nearest', origin='lower')
 axis('off')
+
+show()
+input()

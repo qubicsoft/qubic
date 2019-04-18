@@ -44,6 +44,11 @@ import datetime as dt
 Lets get the directories corresponding to each dataset:
 
 ```{python}
+#### All OK
+# n = 'ScanFreq'
+# days = ['2019-04-12']
+
+#### Only take from 80 to the end
 n = 'ScanFreq'
 days = ['2019-04-15', '2019-04-16']
 
@@ -131,7 +136,8 @@ subplot(1,3,1)
 errorbar(unbinned['t'],unbinned['sb'][TESindex,:], yerr=unbinned['dsb'][TESindex,:], fmt='ro')
 
 print unbinned['sb'].shape
-mmi, ssi = ft.meancut(unbinned['sb'][TESindex,100:], 3)
+mmi, ssi = ft.meancut(unbinned['sb'][TESindex,:], 3)
+print mmi,ssi
 subplot(1,3,2)
 errorbar(unbinned['t'],unbinned['sb'][TESindex,:], yerr=unbinned['dsb'][TESindex,:], fmt='ro')
 ylim(mmi-5*ssi, mmi+5*ssi)
@@ -140,6 +146,8 @@ subplot(1,3,3)
 img = ft.image_asics(data1=mm)
 imshow(img)
 colorbar()
+
+print unbinned.keys()
 ```
 
 ```{python}
@@ -185,13 +193,25 @@ for ii in xrange(len(dirs)):
         done[ii] = 1
     else:
         print('Already Done: skipping')
-        
-    
+
+name = method+'_'+n
+for d in days:
+    name = name+'_'+d
+FitsArray(allmm).save('/Users/hamilton/Qubic/Calib-TD/SpectralResponse/allmm_'+name+'.fits')
+FitsArray(allss).save('/Users/hamilton/Qubic/Calib-TD/SpectralResponse/allss_'+name+'.fits')    
 
 ```
 
 ```{python}
 print 'Done !'
+```
+
+```{python}
+name = method+'_'+n
+for d in days:
+    name = name+'_'+d
+allmm = FitsArray('/Users/hamilton/Qubic/Calib-TD/SpectralResponse/allmm_'+name+'.fits')
+allss = FitsArray('/Users/hamilton/Qubic/Calib-TD/SpectralResponse/allss_'+name+'.fits')
 ```
 
 ```{python}
@@ -247,6 +267,7 @@ legend()
 xlabel('Frequency [GHz]')
 ylabel('dB')
 ylim(-40,0)
+xlim(105,195)
 ```
 
 ```{python}
@@ -266,6 +287,8 @@ legend()
 xlabel('Frequency [GHz]')
 ylabel('dB')
 ylim(-40,0)
+xlim(105,195)
+title(method)
 ```
 
 ```{python}

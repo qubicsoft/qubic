@@ -72,17 +72,16 @@ mm, ss = ft.meancut(img, 3)
 ```{python}
 nbl = len(el)
 nbaz = len(az)
-nperaz = 4
+nperaz = 1
 daz = nbaz/nperaz
 ifile = 0
 theimg = np.zeros_like(img)
 for i in xrange(len(el)):
-    for k in xrange(nperaz):
-        clf()
-        theimg[i,k*daz:np.min([(k+1)*daz,nbaz])] += img[i,k*daz:np.min([(k+1)*daz,nbaz])]
-        disp(theimg, az, el, vmin=mm-2*ss, vmax=mm+40*ss)
-        savefig('/Volumes/Data/Qubic/Calib-TD/Animations/scan_150GHz/imgscan_{0:04d}.png'.format(ifile))
-        ifile += 1
+    clf()
+    theimg[i,:] += img[i,:]
+    disp(theimg, az, el, vmin=mm-2*ss, vmax=mm+40*ss)
+    savefig('/Volumes/Data/Qubic/Calib-TD/Animations/scan_150GHz/imgscan_{0:04d}.png'.format(ifile))
+    ifile += 1
 ```
 
 ```{python}
@@ -109,26 +108,44 @@ dictfilename = '/Users/hamilton/testTD.dict'
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 d['nside'] = 256
+d['filter_relative_bandwidth'] = 0.35
 
 
-# Create scene
-s = qubic.QubicScene(d)
+for ff in freqs:
+    d['filter_nu'] = ff*1e9
 
-# Create instrument model
-inst = qubic.QubicInstrument(d)
+    # Create scene
+    s = qubic.QubicScene(d)
 
-# clf()
-# inst.detector.plot()
-# for i in xrange(248): text(inst.detector.center[i,0], inst.detector.center[i,1], 
-# 	inst.detector.index[i]*0+i, fontsize='8')
-
-
-sb = inst[180].get_synthbeam(s)[0]
-hp.gnomview(sb/np.max(sb), reso=10, rot=[0,90],min=0, max=0.05,cmap='viridis')
+    # Create instrument model
+    inst = qubic.QubicInstrument(d)
+    sb = inst[180].get_synthbeam(s)[0]
+    clf()
+    hp.gnomview(sb/np.max(sb), reso=10, rot=[0,90],min=0, max=0.15,cmap='viridis',title='Frequency = {} GHz'.format(ff))
+    savefig('/Volumes/Data/Qubic/Calib-TD/Animations/all_freqs/imgTrue_{0:04d}.png'.format(ff))
 ```
 
 ```{python}
-d.keys()
+reload(dl)
+for ifreq in xrange(len(freqs)):
+    img = dl.get_hpmap(93, dirallfreqs+dirfreq[ifreq])
+    clf()
+    mm, ss = ft.meancut(img[img != 0],3)
+    hp.gnomview(img, reso=10, min=mm-1*ss, max=mm+60*ss, title='Frequency: {} GHz - Data'.format(freqs[ifreq]),
+               sub=(1,2,1))
+    
+    ff = freqs[ifreq]
+    d['filter_nu'] = ff*1e9
+    # Create scene
+    s = qubic.QubicScene(d)
+    # Create instrument model
+    inst = qubic.QubicInstrument(d)
+    sb = inst[180].get_synthbeam(s)[0]
+    hp.gnomview(sb/np.max(sb), reso=10, rot=[0,90],min=0, max=0.15,cmap='viridis',
+                title='Frequency = {} GHz - Theory'.format(ff), sub=(1,2,2))
+    
+    savefig('/Volumes/Data/Qubic/Calib-TD/Animations/all_freqs/imgscan_and_True_{0:04d}.png'.format(freqs[ifreq]))
+    
 ```
 
 ```{python}

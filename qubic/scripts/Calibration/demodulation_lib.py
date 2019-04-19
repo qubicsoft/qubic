@@ -2,6 +2,8 @@ from qubicpack import qubicpack as qp
 import fibtools as ft
 import plotters as p
 import lin_lib as ll
+import qubic
+from pysimulators import FitsArray
 
 import numpy as np
 from matplotlib.pyplot import *
@@ -391,13 +393,14 @@ def general_demodulate(period, indata, lowcut, highcut, nbins=150, median=True, 
         dsb = np.zeros((sh[0], nbins))
         others = np.zeros((nbins, 2))
         for i in xrange(sh[0]):
-            if verbose:
-                if (16 * (i / 16)) == i:
-                    printnow('Rebinning TES {} over {}'.format(i, sh[0]))
-            ang, sb[i, :], dang, dsb[i, :], others = ft.profile(unbinned['az_ang'], unbinned['sb'][i, :], nbins=nbins,
-                                                                plot=False, dispersion=True, log=False, median=median,
-                                                                cutbad=False,
-                                                                rebin_as_well=[unbinned['az'], unbinned['el']])
+            if verbose: 
+                if (16*(i/16))==i: 
+                    printnow('Rebinning TES {} over {}'.format(i,sh[0]))
+            ang, sb[i,:], dang, dsb[i,:], others = ft.profile(unbinned['az_ang'], 
+                                                              unbinned['sb'][i,:], nbins=nbins, plot=False, 
+                                                              dispersion=True, log=False, median=median, 
+                                                              cutbad=False, rebin_as_well=[unbinned['az'], 
+                                                                                           unbinned['el']])
         binned = {}
         binned['az'] = others[:, 0]
         binned['el'] = others[:, 1]
@@ -584,3 +587,41 @@ def make_tod(scans, axis=1):
     for i in np.arange(len(scans) - 1) + 1:
         tod = np.concatenate((tod, scans[i]), axis=axis)
     return tod
+
+
+def get_hpmap(TESNum, directory):
+    return qubic.io.read_map(directory+'/Healpix/healpix_TESNum_{}.fits'.format(TESNum))    
+
+
+def get_flatmap(TESNum, directory):
+    return qubic.io.read_map(directory+'/healpix_TESNum_{}.fits'.format(TESNum))    
+
+
+def get_lines(lines, directory):
+    nn = len(lines)
+    hpmaps = np.zeros((nn, 4, 12*256**2))
+    nums = np.zeros((nn, 4),dtype=int)
+    for l in xrange(nn):
+        for i in xrange(4):
+            if lines[l] < 33:
+                nums[l,i] = int(lines[l]+32*i)
+            else:
+                nums[l,i] = int(lines[l]-32+32*i)+128
+            hpmaps[l,i,:] = get_hpmap(nums[l,i],directory)
+    return hpmaps, nums
+
+
+def show_lines(maps, nums, min=None, max=None):
+    sh = np.shape(maps)
+    nl = sh[0]
+    for l in xrange(nl):
+        for i in xrange(4):
+            hp.gnomview(maps[l,i,:], reso=10, min=min, max=max, sub=(nl, 4, l*4+i+1), title=nums[l,i])
+    tight_layout()
+
+
+def get_flatmap(TESNum, directory):
+    themap = FitsArray(directory+'/Flat/imgflat_TESNum_{}.fits'.format(TESNum))
+    az = FitsArray(directory+'/Flat/azimuth.fits'.format(TESNum))    
+    el = FitsArray(directory+'/Flat/elevation.fits'.format(TESNum))
+    return themap, az, el

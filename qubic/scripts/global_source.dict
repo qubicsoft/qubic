@@ -1,7 +1,7 @@
 ############################################# Instrument ################################
 debug=False #False/True # Boolean
 
-config='TD' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
+config='FI' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
 filter_nu=150e9 # 150e9 or 220e9 Hz
 filter_relative_bandwidth=0.25 
 beam_shape='gaussian' # 'gaussian', 'fitted_beam', 'multi_freq'

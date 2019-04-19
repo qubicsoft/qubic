@@ -170,7 +170,7 @@ class Qubic_sky(sky):
             'nside': d['nside'],
             'frequencies' : central_nus, # GHz
             'use_smoothing' : False,
-            'beams': self.qubic_resolution_nus, #np.ones_like(central_nus), # arcmin 
+            'beams': np.ones_like(central_nus), # arcmin 
             'add_noise': False,  # If True `sens_I` and `sens_Q` are required
             'noise_seed' : 0.,  # Not used if `add_noise` is False
             'sens_I': np.ones_like(central_nus), # Not used if `add_noise` is False
@@ -203,18 +203,14 @@ def create_acquisition_operator_TOD(pointing, d):
         return qubic.QubicMultibandAcquisition(q, pointing, s, d, nus_edge_in)
 
 
-def create_TOD(d, pointing, x0, conv = True):
+def create_TOD(d, pointing, x0):
     atod = create_acquisition_operator_TOD(pointing, d)
 
     if d['nf_sub']==1:
-        if conv:
-            TOD, _ = atod.get_observation(x0[0], noiseless=d['noiseless'])
-        elif not conv:
-            TOD = atod.get_observation(x0[0], noiseless=d['noiseless'], convolution = conv)
-
+        TOD, maps_convolved = atod.get_observation(x0[0], noiseless=d['noiseless'])
     else:
-        TOD, _ = atod.get_observation(x0, noiseless=d['noiseless'])
-    return TOD
+        TOD, maps_convolved = atod.get_observation(x0, noiseless=d['noiseless'])
+    return TOD, maps_convolved
 
 
 def create_acquisition_operator_REC(pointing, d, nf_sub_rec):

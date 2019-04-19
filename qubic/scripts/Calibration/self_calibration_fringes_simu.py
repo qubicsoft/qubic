@@ -99,7 +99,9 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
         q.horn.plot()
         axis('off')
         subplot(4, 4, 2)
-        imshow(S[:, :, 0], interpolation='nearest', origin='lower')
+        imshow(S[nn/2:, :nn/2, 0], interpolation='nearest', origin='lower')
+        print(S[:, :, 0].shape)
+        colorbar()
         title('$S$')
 
     # All open except i
@@ -112,7 +114,8 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
         q.horn.plot()
         axis('off')
         subplot(4, 4, 4)
-        imshow(Cminus_i[:, :, 0], interpolation='nearest', origin='lower')
+        imshow(Cminus_i[nn/2:, :nn/2, 0], interpolation='nearest', origin='lower')
+        colorbar()
         title('$C_{-i}$')
 
     # All open except j
@@ -125,7 +128,8 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
         q.horn.plot()
         axis('off')
         subplot(4, 4, 6)
-        imshow(Cminus_j[:, :, 0], interpolation='nearest', origin='lower')
+        imshow(Cminus_j[nn/2:, :nn/2, 0], interpolation='nearest', origin='lower')
+        colorbar()
         title('$C_{-j}$')
 
     # All open except baseline [i, j]
@@ -139,7 +143,8 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
         q.horn.plot()
         axis('off')
         subplot(4, 4, 8)
-        imshow(Sminus_ij[:, :, 0], interpolation='nearest', origin='lower')
+        imshow(Sminus_ij[nn/2:, :nn/2, 0], interpolation='nearest', origin='lower')
+        colorbar()
         title('$S_{-ij}$')
 
     # Only i open (not a realistic observable)
@@ -152,7 +157,8 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
         q.horn.plot()
         axis('off')
         subplot(4, 4, 10)
-        imshow(Ci[:, :, 0], interpolation='nearest', origin='lower')
+        imshow(Ci[nn/2:, :nn/2, 0], interpolation='nearest', origin='lower')
+        colorbar()
         title('$C_i$')
 
     # Only j open (not a realistic observable)
@@ -165,7 +171,8 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
         q.horn.plot()
         axis('off')
         subplot(4, 4, 12)
-        imshow(Cj[:, :, 0], interpolation='nearest', origin='lower')
+        imshow(Cj[nn/2:, :nn/2, 0], interpolation='nearest', origin='lower')
+        colorbar()
         title('$C_j$')
 
     # Only baseline [i, j] open (not a realistic observable)
@@ -179,7 +186,8 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
         q.horn.plot()
         axis('off')
         subplot(4, 4, 14)
-        imshow(Sij[:, :, 0], interpolation='nearest', origin='lower')
+        imshow(Sij[nn/2:, :nn/2, 0], interpolation='nearest', origin='lower')
+        colorbar()
         title('$S_{ij}$')
 
     return S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij
@@ -219,9 +227,9 @@ xmax = 0.06
 # theta = np.arange(0.2, 0.4, 0.05)
 phi = np.arange(0., 0.2, 0.2)
 theta = np.arange(0.4, 0.6, 0.2)
-spectral_irradiance = 0.5
+spectral_irradiance = 10
 
-baseline_manip = [39, 54]
+baseline_manip = [19, 46]
 baseline_simu = [horn_manip2simu(baseline_manip[0]), horn_manip2simu(baseline_manip[1])]
 nptg = len(theta)
 

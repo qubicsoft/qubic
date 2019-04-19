@@ -101,7 +101,7 @@ def create_input_sky(d, skypars):
     Nf = int(d['nf_sub'])
     band = d['filter_nu'] / 1e9
     filter_relative_bandwidth = d['filter_relative_bandwidth']
-    _, _, nus_in, _, _, Nbbands_in = qubic.compute_freq(band, filter_relative_bandwidth, Nf)
+    _, _, nus_in, _, _, Nbbands_in = qubic.compute_freq(band, Nf, filter_relative_bandwidth)
     # seed
     if d['seed']:
         np.random.seed(d['seed'])

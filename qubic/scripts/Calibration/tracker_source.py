@@ -89,7 +89,7 @@ def get_tod(d, p, x0, closed_horns=None):
     s = qubic.QubicScene(d)
 
     # Number of sub frequencies to build the TOD
-    _, nus_edge_in, _, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, d['filter_relative_bandwidth'], d['nf_sub'])
+    _, nus_edge_in, _, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, d['nf_sub'], d['filter_relative_bandwidth'])
 
     # Multi-band acquisition operator
     a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_in)

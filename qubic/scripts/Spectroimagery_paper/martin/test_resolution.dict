@@ -37,7 +37,7 @@ detarray='CalQubic_DetArray_FI.fits'
 hornarray='CalQubic_HornArray_FI.fits'
 
 ############################################# Scene ################################
-nside=256
+nside=128
 kind='IQU'
 absolute=False
 temperature=2.7255 # K for CMB, 300 K for TD in lab # 
@@ -58,7 +58,7 @@ longitude= -(66 + 28. / 60)   #ARGENTINA
 
 
 random_pointing=True   
-npointings=1000
+npointings=500
 dtheta=4.
 nhwp_angles=3
 seed=1
@@ -84,4 +84,4 @@ comm=None
 weights=None
 
 ################### Tolerance value for the convergence of the conjugate gradient ################
-tol=1e-5
+tol=1e-2

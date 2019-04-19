@@ -216,7 +216,6 @@ def create_TOD(d, pointing, x0):
 def create_acquisition_operator_REC(pointing, d, nf_sub_rec):
     # Polychromatic instrument model
 
-    #Martin: add single reconstruction instrument
     if d['nf_sub'] == 1:
         q = qubic.QubicInstrument(d)
         # scene
@@ -265,6 +264,9 @@ def reconstruct_maps(TOD, d, pointing, nf_sub_rec, x0=None):
     if x0 is None:
         return maps_recon, cov, nus, nus_edge
     else:
-        _, maps_convolved = arec.get_observation(x0)
+        if d['nf_sub'] == 1:
+            _, maps_convolved = arec.get_observation(x0[0], noiseless = d['noiseless'])
+        else:
+            _, maps_convolved = arec.get_observation(x0, noiseless = d['noiseless'])
         maps_convolved = np.array(maps_convolved)
         return maps_recon, cov, nus, nus_edge, maps_convolved

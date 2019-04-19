@@ -161,7 +161,7 @@ for freq in xrange(nbands):
 	
 #Calcul de la correction
 Nfreq = 12
-_, nus_edge, nus, deltas, Delta, _ = qubic.compute_freq(band=150, relative_bandwidth=0.25, Nfreq=Nfreq)
+_, nus_edge, nus, deltas, Delta, _ = qubic.compute_freq(band=150, Nfreq=Nfreq, relative_bandwidth=0.25)
 print(Delta)
 print(deltas)
 plot(nus, deltas, 'o')

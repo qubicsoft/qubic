@@ -65,13 +65,13 @@ nhwp_angles=3
 seed=1
 
 sweeping_pointing=True
-duration=0.02 #h
+duration=0.2 #h
 angspeed=0.4 #deg/s
 delta_az=10. #deg
 nsweeps_per_elevation=1
 angspeed_psi=0.1 #deg/s
 maxpsi=10 #deg
-fix_azimuth={'apply':True,'az':50,'el':50,'el_step':5, 'fix_hwp':True, 'fix_pitch':True}
+fix_azimuth={'apply':True,'az':50,'el':50,'el_step':1, 'fix_hwp':True, 'fix_pitch':True}
 
 ############################################# Acquisition ##############################
 block=None

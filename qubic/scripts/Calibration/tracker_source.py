@@ -1,7 +1,10 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 
-import numpy as np
+# This code was supposed to simulate the fringes in the focal plane.
+# It is not working because when we make TOD, the code doesn't care
+# about closed horns.
+
 from matplotlib.pyplot import *
 import healpy as hp
 from astropy.io import fits
@@ -147,8 +150,7 @@ def plot_focalplane(size, nptg, ptg_start, ptg_stop, focal_plane, tod):
             elif pos[0].size == 1:
                 # print(j)
                 tod_focal_plane[pos[0][0], pos[1][0], ptg] = tod[j, ptg]
-                j += 1
-                # print(pos)
+                j += 1  # print(pos)
 
         imshow(tod_focal_plane[:, :, ptg], interpolation='nearest', origin='lower')
         title('ptg' + str(ptg) + ' el=' + str(p.elevation[ptg]) + ' az=' + str(p.azimuth[ptg]))

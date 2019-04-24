@@ -13,28 +13,28 @@ from pysimulators import FitsArray
 
 import SpectroImLib as si
 
-dictfilename = '/sps/hep/qubic/Users/lmousset/myqubic/qubic/scripts/Spectroimagery_paper/test_spectroim.dict' 
+dictfilename = '/sps/hep/qubic/Users/lmousset/myqubic/qubic/scripts/Spectroimagery_paper/test_spectroim.dict'
 rep_out = '/sps/hep/qubic/Users/lmousset/SpectroImaging/'
 name = 'testCC_01'
 
-#Numbers of subbands for spectroimaging
+# Numbers of subbands for spectroimaging
 noutmin = 1
 noutmax = 1
 
 ## Input sky parameters
-skypars = {'dust_coeff':1e-2, 'r':0}#1.39e-2
+skypars = {'dust_coeff': 1e-2, 'r': 0}  # 1.39e-2
 
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
-#Print dictionary and others parameters
-#Save a file with al parameters
+# Print dictionary and others parameters
+# Save a file with al parameters
 tem = sys.stdout
-sys.stdout = f = open(rep_out + name + '.txt','wt')
+sys.stdout = f = open(rep_out + name + '.txt', 'wt')
 
 print('Simulation General Name: ' + name)
 print('Dictionnary File: ' + dictfilename)
-for k in d.keys(): 
+for k in d.keys():
     print(k, d[k])
 
 print('Minimum Number of Sub Frequencies: {}'.format(noutmin))
@@ -52,7 +52,7 @@ f.close()
 t0 = time.time()
 x0 = si.create_input_sky(d, skypars)
 t1 = time.time()
-print('********************* Input Sky done in {} seconds'.format(t1-t0))
+print('********************* Input Sky done in {} seconds'.format(t1 - t0))
 
 print(x0.shape)
 
@@ -75,30 +75,30 @@ TOD = si.create_TOD(d, p, x0)
 # for tol in [1e-3, 5e-4, 1e-4, 5e-5, 1e-5]:
 #     d['tol'] = tol
 #     print(tol)
-for nf_sub_rec in np.arange(noutmin, noutmax+1):
+for nf_sub_rec in np.arange(noutmin, noutmax + 1):
     print('-------------------------- Map-Making on {} sub-map(s)'.format(nf_sub_rec))
     maps_recon, cov, nus, nus_edge, maps_convolved = si.reconstruct_maps(TOD, d, p, nf_sub_rec, x0=x0)
-    if nf_sub_rec==1:
+    if nf_sub_rec == 1:
         maps_recon = np.reshape(maps_recon, np.shape(maps_convolved))
-    #Look at the coverage of the sky
+    # Look at the coverage of the sky
     cov = np.sum(cov, axis=0)
     maxcov = np.max(cov)
-    unseen = cov < maxcov*0.1
-    #diffmap = maps_convolved - maps_recon
-    maps_convolved[:,unseen,:] = hp.UNSEEN
-    maps_recon[:,unseen,:] = hp.UNSEEN
-    #diffmap[:,unseen,:] = hp.UNSEEN
-    #therms = np.std(diffmap[:,~unseen,:], axis = 1)
-        
+    unseen = cov < maxcov * 0.1
+    # diffmap = maps_convolved - maps_recon
+    maps_convolved[:, unseen, :] = hp.UNSEEN
+    maps_recon[:, unseen, :] = hp.UNSEEN
+    # diffmap[:,unseen,:] = hp.UNSEEN
+    # therms = np.std(diffmap[:,~unseen,:], axis = 1)
+
     print('************************** Map-Making on {} sub-map(s)Done'.format(nf_sub_rec))
 
-    #FitsArray(nus_edge).save(name + '_nf{0}_ptg{1}'.format(nf_sub_rec, ptg) + '_nus_edges.fits')
-    #FitsArray(nus).save(name + '_nf{0}_ptg{1}'.format(nf_sub_rec, ptg)+ '_nus.fits')
+    # FitsArray(nus_edge).save(name + '_nf{0}_ptg{1}'.format(nf_sub_rec, ptg) + '_nus_edges.fits')
+    # FitsArray(nus).save(name + '_nf{0}_ptg{1}'.format(nf_sub_rec, ptg)+ '_nus.fits')
     FitsArray(maps_convolved).save(rep_out + name + '_nf{}'.format(nf_sub_rec) + '_maps_convolved.fits')
     FitsArray(maps_recon).save(rep_out + name + '_nf{}'.format(nf_sub_rec) + '_maps_recon.fits')
-        
+
     t1 = time.time()
-    print('************************** All Done in {} minutes'.format((t1-t0)/60))
+    print('************************** All Done in {} minutes'.format((t1 - t0) / 60))
 
 ##### SIMU fix_hwp
 # p = qubic.get_pointing(d)
@@ -124,7 +124,7 @@ for nf_sub_rec in np.arange(noutmin, noutmax+1):
 
 #         #hwp angle fix
 #         pp.angle_hwp = np.concatenate((pnew.angle_hwp, np.tile(np.rad2deg(np.pi/pi_fraction )*I[simu], ptg_start)))
-        
+
 #         #hwp angle random
 #         # hwp_ang = np.zeros(ptg_start)
 #         # for ang in xrange(ptg_start):
@@ -154,14 +154,14 @@ for nf_sub_rec in np.arange(noutmin, noutmax+1):
 #         maps_recon[:,unseen,:] = hp.UNSEEN
 #         #diffmap[:,unseen,:] = hp.UNSEEN
 #         #therms = np.std(diffmap[:,~unseen,:], axis = 1)
-            
+
 #         print('************************** Map-Making on {} sub-map(s)Done'.format(nf_sub_rec))
 
 #         #FitsArray(nus_edge).save(name + '_nf{0}_ptg{1}'.format(nf_sub_rec, ptg) + '_nus_edges.fits')
 #         #FitsArray(nus).save(name + '_nf{0}_ptg{1}'.format(nf_sub_rec, ptg)+ '_nus.fits')
 #         FitsArray(maps_convolved).save(name + '_nf{}'.format(nf_sub_rec) + '_maps_convolved.fits')
 #         FitsArray(maps_recon).save(name + '_nf{}'.format(nf_sub_rec) + '_maps_recon.fits')
-            
+
 #         t1 = time.time()
 #         print('************************** All Done in {} minutes'.format((t1-t0)/60))
 
@@ -238,17 +238,16 @@ for nf_sub_rec in np.arange(noutmin, noutmax+1):
 #         maps_recon[:,unseen,:] = hp.UNSEEN
 #         #diffmap[:,unseen,:] = hp.UNSEEN
 #         #therms = np.std(diffmap[:,~unseen,:], axis = 1)
-        
+
 #         print('************************** Map-Making on {} sub-map(s)Done'.format(nf_sub_rec))
 
 #         FitsArray(nus_edge).save(name + '_nf{0}_ptg{1}'.format(nf_sub_rec, ptg) + '_nus_edges.fits')
 #         FitsArray(nus).save(name + '_nf{0}_ptg{1}'.format(nf_sub_rec, ptg)+ '_nus.fits')
 #         FitsArray(maps_convolved).save(name + '_nf{0}_ptg{1}'.format(nf_sub_rec, ptg) + '_maps_convolved.fits')
 #         FitsArray(maps_recon).save(name + '_nf{0}_ptg{1}'.format(nf_sub_rec, ptg) + '_maps_recon.fits')
-        
+
 #         t1 = time.time()
 #         print('************************** All Done in {} minutes'.format((t1-t0)/60))
-
 
 
 # ##### Plusieurs realisations #####
@@ -281,13 +280,13 @@ for nf_sub_rec in np.arange(noutmin, noutmax+1):
 #         maps_recon[:,unseen,:] = hp.UNSEEN
 #         #diffmap[:,unseen,:] = hp.UNSEEN
 #         #therms = np.std(diffmap[:,~unseen,:], axis = 1)
-        
+
 #         print('************************** Map-Making on {} sub-map(s)Done'.format(nf_sub_rec))
 
 #         #FitsArray(nus_edge).save(name + '_nf{0}_real{1}'.format(nf_sub_rec, real) + '_nus_edges.fits')
 #         #FitsArray(nus).save(name + '_nf{0}_real{1}'.format(nf_sub_rec, real)+ '_nus.fits')
 #         FitsArray(maps_convolved).save(name + '_nf{0}_real{1}'.format(nf_sub_rec, real) + '_maps_convolved.fits')
 #         FitsArray(maps_recon).save(name + '_nf{0}_real{1}'.format(nf_sub_rec, real) + '_maps_recon.fits')
-        
+
 #         t1 = time.time()
 #         print('************************** All Done in {} minutes'.format((t1-t0)/60))

@@ -1,0 +1,217 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.1
+  kernelspec:
+    display_name: Python 2
+    language: python
+    name: python2
+---
+
+<!-- #region -->
+## Simulation (avec SpecIm) 
+
+We use the SpectroImLib.py created by F. Incardona. These libraries generates input sky (CMB $+$ Synch $+$ dust $+$ free$-$free) as looked for an instrument (using PySM). As Louise and Federico showed, the mapmaking process introduce a leakage in the QU maps by I component. So we will use SpectroImLib class in order to generate skies as seen by QUBIC and by Planck.
+
+Global idea: With real data, we will have TOD from QUBIC and we will have access to the map of the sky seen by Planck at its resolution. Using this Planck map and the QUBIC pipeline, we can create "Planck TOD" with only I component and get the Planck sky observed by QUBIC. 
+
+Then, one can compute the difference between the QUBIC TOD and the Planck TOD and obtain TOD where the I component is zero. Finally, to get the sky seen by QUBIC, we apply the map-maker on that TOD difference and we add the Planck sky convolved at the QUBIC resolution.In this way, we never apply the map-maker on TOD containing I and so we avoid leakage.
+For simulations, we will create a sky observed by Planck using the library PySM. The 
+Planck and QUBIC TOD will be created using the QUBIC soft.
+
+
+Posibilities: 
+
+#### · Monochrimatic instrument (${\rm nfsub} = 1$) and no spectroimaging (${\rm N} = 1$), $\lambda_{i} = \lambda_{k} = \lambda_{p} = \lambda$
+
+${\rm H}_{\lambda}^{-1} {\rm H}_{\lambda} C_{\lambda}^{Qubic} C_{\lambda_p}^{Planck} X^{I00} =C_{\lambda}^{Qubic} C_{\lambda_p}^{Planck} X^{I00} $
+    
+
+#### · Polychromatic instrument (${\rm nfsub} > 1$) and spectroimaging (${\rm N} > 1$)
+   ${\rm H}^{-1}_{\lambda_{k}} \sum_{\lambda_i} {\rm H}_{\lambda_{i}} C_{\lambda_i}^{Qubic} \{\rm C_{\lambda_p}^{Planck} X^{I00} \} \overset{?}{=} C_{\lambda_k}^{Qubic} C_{\lambda_p}^{Planck} X^{\rm I00}$
+
+<!-- #endregion -->
+
+```{python}
+from __future__ import division
+import sys
+import os
+import time
+import pysm
+import qubic 
+import glob
+
+import healpy as hp
+import numpy as np
+import matplotlib.pyplot as mp
+#import SpectroImLib as si
+
+from pysimulators import FitsArray
+from pysm.nominal import models
+from scipy.constants import c
+mp.rc('text', usetex = False)
+```
+
+```{python}
+### Instrument ###
+d = qubic.qubicdict.qubicDict()
+dp = qubic.qubicdict.qubicDict()
+d.read_from_file("parameters.dict")
+d['MultiBand'] = True # spectro imager
+d['nf_sub'] = 16
+dp.read_from_file("parameters.dict")
+dp['MultiBand'] = False
+dp['nf_sub'] = 1
+
+
+### Sky ###
+sky_config = {
+    'synchrotron': models('s1', d['nside']),
+    'dust': models('d1', d['nside']),
+    'freefree': models('f1', d['nside']), #not polarized
+    'cmb': models('c1', d['nside']),
+    'ame': models('a1', d['nside'])} #not polarized
+
+
+```
+
+```{python}
+# In spectro imager case:
+# x0_planck.shape = (nf_sub, npix, 3)
+# Planck maps: Convolve the Planck map with the Planck beam and copy nf_sub times
+x0_planck = np.empty((d['nf_sub'],12*dp['nside']**2, len(dp['kind'])))
+planck_sky = si.Planck_sky(sky_config, d)
+x0_planck[0,:,:] = planck_sky.get_sky_map()
+x0_planck[1:,:,:] = x0_planck[0,:,:]
+
+qubic_sky = si.Qubic_sky(sky_config, d)
+x0_qubic = qubic_sky.get_sky_map()
+```
+
+```{python}
+p = qubic.get_pointing(d)
+TODq, map_qubic_conv_input = si.create_TOD(d, p, x0_qubic)
+
+### Put Q and U to zero ###
+x0_planckI = np.copy(x0_planck)
+x0_planckI[..., 1:3] = 0
+
+'''Hacemos tres pruebas:
+. I,     Q = 0, U = 0 -> make TOD -> mapmaking 
+. I = 0, Q,     U = 0 -> make TOD -> mapmaking NOT ANYMORE
+. I = 0, Q = 0, U     -> make TOD -> mapmaking NOT ANYMORE
+
+'''
+### Planck TOD ###
+#Watch out: pass the QUBIC dict because of the nus used
+TODp, map_planck_conv_input = si.create_TOD(d, p, x0_planckI)
+
+### Create difference TOD ###
+
+TODI = TODq - TODp 
+
+```
+
+```{python}
+#Numbers of subbands for spectroimaging
+noutmin = 2
+noutmax = 3
+
+#recons for Planck
+for nf_sub_rec in np.arange(noutmin, noutmax+1):
+    print 'recons in {} subbands'.format(nf_sub_rec)
+    maps_reconpI, cov, nus, nus_edge, map_planck_conv = si.reconstruct_maps(
+        TODp, d, p, nf_sub_rec, x0 = x0_planckI)
+    
+    cov = np.sum(cov, axis=0)
+    maxcov = np.max(cov)
+    unseen = cov < maxcov*0.1
+    maps_reconpI[unseen,:] = hp.UNSEEN
+
+# convolve Planck reconstruction as seen for qubic @nf_sub_rec's
+
+#recons for qubic
+for nf_sub_rec in np.arange(noutmin, noutmax+1):
+    maps_reconq, covq, nus, nus_edge = si.reconstruct_maps(
+        TODq, d, p, nf_sub_rec)
+    maps_reconq[unseen,:] = hp.UNSEEN
+    
+#recons for the diff between TODq-TODp
+for nf_sub_rec in np.arange(noutmin, noutmax+1):
+    maps_reconI, covd, nus, nus_edge = si.reconstruct_maps(
+        TODI, d, p, nf_sub_rec)
+```
+
+```{python}
+###Map for  I != 0
+mp.clf()
+mp.figure(figsize=(15,15))
+j=1
+#inrec = 0
+nrow = 3
+ncolumn = 3
+size = 300
+carte = np.empty((3,size,size))
+for istokes in [0,1,2]:
+
+    if istokes == 0:
+        minx = -205.
+        maxx = 152
+    elif istokes == 1:
+        minx = -2.72
+        maxx = 2.71
+    elif istokes == 2:
+        minx = -3.08
+        maxx = 3.27
+    hp.gnomview(maps_reconpI[:,istokes], sub = (nrow,ncolumn,j), #min=minx, max=maxx,
+        rot = qubic.equ2gal(d['RA_center'], d['DEC_center']), xsize = size, reso = 5, 
+        title = r'Rec. Planck')
+
+    hp.gnomview(map_planck_conv[:,istokes], sub = (nrow,ncolumn,j+1), #min=minx, max=maxx,
+        rot = qubic.equ2gal(d['RA_center'], d['DEC_center']), xsize = size, reso = 5, 
+        title = r'Planck convolved {}'.format(d['kind'][istokes]))
+    
+    carte[istokes,:,:] = hp.gnomview(maps_reconpI[:,istokes]-map_planck_conv[:,istokes], sub = (nrow,ncolumn,j+2), #min=minx, max=maxx,
+        rot = qubic.equ2gal(d['RA_center'], d['DEC_center']), xsize = size, reso = 5, 
+        title = r'Rec. Planck-Planck convolved {}'.format(d['kind'][istokes]), return_projected_map=True)
+    
+    j += 3
+    
+mp.show()
+    
+```
+
+```{python}
+print(carte.shape)
+print(np.mean(carte[0]))
+```
+
+```{python}
+hp.mollview(maps_reconpI[:,0]-map_planck_conv[:,0],# sub = (nrow,ncolumn,j+2), #min=minx, max=maxx,
+        rot = qubic.equ2gal(d['RA_center'], d['DEC_center']), min=-1, max=1,#xsize = size, reso = 5, 
+        title = r'Rec. Planck-Planck convolved {}'.format(d['kind'][0]))
+mp.show()
+```
+
+```{python}
+
+```
+
+```{python}
+print(np.std(maps_reconI[1:,0]+x0_planckI[0,1:,0]-maps_reconq[1:,0]))#[-1]
+mp.plot(maps_reconI[1:,0]+x0_planckI[0,1:,0]-maps_reconq[1:,0])
+hp.mollview(cov)#, xsize = 300, reso = 5)
+mp.show()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

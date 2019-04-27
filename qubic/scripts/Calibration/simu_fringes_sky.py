@@ -11,87 +11,89 @@ d.read_from_file(dictfilename)
 # Scene
 s = qubic.QubicScene(d)
 
+
+def get_synthetic_beam_sky(d, switches, tes, plot_loc, title_plot, default_open=True):
+    """
+    Return a qubic instrument with closed horns and the synthetic beam
+    projected on the sky for a given TES. Plot the horn matrix and the
+    synthetic beam.
+
+    Parameters
+    ----------
+    d : dictionary
+    switches : list of int
+        Index of switches between 1 and 64 that you want to close or open.
+    tes : int
+        TES number for which you reconstruct the synthetic beam.
+    plot_loc : tuple
+        Subplot number, the third index should be odd.
+    title_plot : str
+        Title for the figure.
+    default_open : bool
+        If True, all switches are open except the ones in switches.
+        If False, all switches are close except the one in switches.
+        True by default.
+
+    Returns
+    -------
+    The qubic instrument and the synthetic beam.
+
+    """
+    q = qubic.QubicInstrument(d)
+    if default_open:
+        q.horn.open = True
+        for i in switches:
+            q.horn.open[i - 1] = False
+    else:
+        q.horn.open = False
+        for i in switches:
+            q.horn.open[i - 1] = True
+    sb = q.get_synthbeam(s, idet=tes)
+
+    subplot(plot_loc[0], plot_loc[1], plot_loc[2])
+    q.horn.plot()
+    axis('off')
+    hp.gnomview(sb, sub=(plot_loc[0], plot_loc[1], plot_loc[2] + 1), rot=(0, 90), reso=5, xsize=350, ysize=350,
+                title=title_plot, cbar=True, notext=True)
+    return q, sb
+
+
 # TES number
-tes = 39
+tes_number = 39
 
 # Baseline of the switches
 switch_1 = 46
 switch_2 = 64
-
-q_full_open = qubic.QubicInstrument(d)
-sb_full_open = q_full_open.get_synthbeam(s, idet=tes)
-
-q_both_close = qubic.QubicInstrument(d)
-q_both_close.horn.open[switch_1 - 1] = False
-q_both_close.horn.open[switch_2 - 1] = False
-sb_both_close = q_both_close.get_synthbeam(s, idet=tes)
-
-q1_close = qubic.QubicInstrument(d)
-q1_close.horn.open[switch_1 - 1] = False
-sb1_close = q1_close.get_synthbeam(s, idet=tes)
-
-q2_close = qubic.QubicInstrument(d)
-q2_close.horn.open[switch_2 - 1] = False
-sb2_close = q2_close.get_synthbeam(s, idet=tes)
-
-q1_open = qubic.QubicInstrument(d)
-q1_open.horn.open = False
-q1_open.horn.open[switch_1 - 1] = True
-sb1_open = q1_open.get_synthbeam(s, idet=tes)
-
-q2_open = qubic.QubicInstrument(d)
-q2_open.horn.open = False
-q2_open.horn.open[switch_2 - 1] = True
-sb2_open = q2_open.get_synthbeam(s, idet=tes)
-
-q_only2open = qubic.QubicInstrument(d)
-q_only2open.horn.open = False
-q_only2open.horn.open[switch_1 - 1] = True
-q_only2open.horn.open[switch_2 - 1] = True
-sb_only2open = q_only2open.get_synthbeam(s, idet=tes)
+baseline = [switch_1, switch_2]
 
 figure('Synthetic beam on the sky, all configurations')
-subplot(441)
-q_full_open.horn.plot()
-axis('off')
-hp.gnomview(sb_full_open, sub=(4, 4, 2), rot=(0, 90), reso=5, xsize=350, ysize=350, title='$S_{tot}$', cbar=True,
-            notext=True)
+q_full_open, sb_full_open = get_synthetic_beam_sky(d, switches=[], tes=tes_number,
+                                                   plot_loc=(4, 4, 1), title_plot='$S_{tot}$',
+                                                   default_open=True)
 
-subplot(443)
-q_only2open.horn.plot()
-axis('off')
-hp.gnomview(sb_only2open, sub=(4, 4, 4), rot=(0, 90), reso=5, xsize=350, ysize=350, title='$S_{ij}$', cbar=True,
-            notext=True)
+q_both_close, sb_both_close = get_synthetic_beam_sky(d, switches=baseline, tes=tes_number,
+                                                     plot_loc=(4, 4, 3), title_plot='$S_{-ij}$',
+                                                     default_open=True)
 
-subplot(445)
-q_both_close.horn.plot()
-axis('off')
-hp.gnomview(sb_both_close, sub=(4, 4, 6), rot=(0, 90), reso=5, xsize=350, ysize=350, title='$S_{-ij}$', cbar=True,
-            notext=True)
+q1_close, sb1_close = get_synthetic_beam_sky(d, switches=[switch_1], tes=tes_number,
+                                             plot_loc=(4, 4, 5), title_plot='$C_{-i}$',
+                                             default_open=True)
 
-subplot(447)
-q1_close.horn.plot()
-axis('off')
-hp.gnomview(sb1_close, sub=(4, 4, 8), rot=(0, 90), reso=5, xsize=350, ysize=350, title='$C_{-i}$', cbar=True,
-            notext=True)
+q2_close, sb2_close = get_synthetic_beam_sky(d, switches=[switch_2], tes=tes_number,
+                                             plot_loc=(4, 4, 7), title_plot='$C_{-j}$',
+                                             default_open=True)
 
-subplot(449)
-q2_close.horn.plot()
-axis('off')
-hp.gnomview(sb2_close, sub=(4, 4, 10), rot=(0, 90), reso=5, xsize=350, ysize=350, title='$C_{-j}$', cbar=True,
-            notext=True)
+q1_open, sb1_open = get_synthetic_beam_sky(d, switches=[switch_1], tes=tes_number,
+                                           plot_loc=(4, 4, 9), title_plot='$C_{i}$',
+                                           default_open=False)
 
-subplot(4, 4, 11)
-q1_open.horn.plot()
-axis('off')
-hp.gnomview(sb1_open, sub=(4, 4, 12), rot=(0, 90), reso=5, xsize=350, ysize=350, title='$C_{i}$', cbar=True,
-            notext=True)
+q2_open, sb2_open = get_synthetic_beam_sky(d, switches=[switch_2], tes=tes_number,
+                                           plot_loc=(4, 4, 11), title_plot='$C_{j}$',
+                                           default_open=False)
 
-subplot(4, 4, 13)
-q2_open.horn.plot()
-axis('off')
-hp.gnomview(sb2_open, sub=(4, 4, 14), rot=(0, 90), reso=5, xsize=350, ysize=350, title='$C_{j}$', cbar=True,
-            notext=True)
+q_only2open, sb_only2open = get_synthetic_beam_sky(d, switches=baseline, tes=tes_number,
+                                                   plot_loc=(4, 4, 13), title_plot='$S_{ij}$',
+                                                   default_open=False)
 
 figure('Fringes on the sky')
 hp.gnomview(sb_only2open, sub=(2, 2, 1), rot=(0, 90), reso=5, xsize=350, ysize=350, title='$S_{ij}$', cbar=True,

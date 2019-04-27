@@ -46,10 +46,9 @@ sb2_open = q2_open.get_synthbeam(s, idet=tes)
 
 q_only2open = qubic.QubicInstrument(d)
 q_only2open.horn.open = False
-q_only2open.horn.open[switch_1-1] = True
-q_only2open.horn.open[switch_2-1] = True
+q_only2open.horn.open[switch_1 - 1] = True
+q_only2open.horn.open[switch_2 - 1] = True
 sb_only2open = q_only2open.get_synthbeam(s, idet=tes)
-
 
 figure('Synthetic beam on the sky, all configurations')
 subplot(441)
@@ -82,24 +81,24 @@ axis('off')
 hp.gnomview(sb2_close, sub=(4, 4, 10), rot=(0, 90), reso=5, xsize=350, ysize=350, title='$C_{-j}$', cbar=True,
             notext=True)
 
-subplot(4,4,11)
+subplot(4, 4, 11)
 q1_open.horn.plot()
 axis('off')
 hp.gnomview(sb1_open, sub=(4, 4, 12), rot=(0, 90), reso=5, xsize=350, ysize=350, title='$C_{i}$', cbar=True,
             notext=True)
 
-subplot(4,4,13)
+subplot(4, 4, 13)
 q2_open.horn.plot()
 axis('off')
 hp.gnomview(sb2_open, sub=(4, 4, 14), rot=(0, 90), reso=5, xsize=350, ysize=350, title='$C_{j}$', cbar=True,
             notext=True)
 
-
 figure('Fringes on the sky')
 hp.gnomview(sb_only2open, sub=(2, 2, 1), rot=(0, 90), reso=5, xsize=350, ysize=350, title='$S_{ij}$', cbar=True,
             notext=True)
 
-hp.gnomview(sb_full_open + sb_both_close - sb1_close - sb2_close + sb1_open + sb2_open, sub=(2, 2, 2), rot=(0, 90), reso=5, xsize=350,
+hp.gnomview(sb_full_open + sb_both_close - sb1_close - sb2_close + sb1_open + sb2_open, sub=(2, 2, 2), rot=(0, 90),
+            reso=5, xsize=350,
             ysize=350,
             title='$S_{-ij} - C_{-i} - C_{-j} + C_{i} + C_{j}+ S_{tot}$', cbar=True, notext=True)
 

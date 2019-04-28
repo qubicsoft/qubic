@@ -4,7 +4,6 @@ import healpy as hp
 import numpy as np
 
 import os
-import pysm
 import qubic
 import pysm
 

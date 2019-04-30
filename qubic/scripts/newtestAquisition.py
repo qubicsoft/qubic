@@ -47,8 +47,8 @@ center_gal = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 
 # Choosing the subfrequencies for map acquisition
 Nbfreq_in, nus_edge_in, nus_in, deltas_in, Delta_in, Nbbands_in =\
-  qubic.compute_freq(d['filter_nu']/1e9, d['filter_relative_bandwidth'],
-                     d['nf_sub']) # Multiband instrument model
+  qubic.compute_freq(d['filter_nu']/1e9, d['nf_sub'],
+                     d['filter_relative_bandwidth']) # Multiband instrument model
 
 # Map acquisition for the full and reduced instruments
 a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_in)
@@ -65,9 +65,8 @@ print 'TOD time =', time()-t
 # Choosing the subfrequencies for map reconstruction
 nf_sub_rec = 2
 Nbfreq_edge, nus_edge, nus, deltas, Delta, Nbbands = \
-  qubic.compute_freq(d['filter_nu']/1e9,
-                         d['filter_relative_bandwidth'],
-                         nf_sub_rec)
+  qubic.compute_freq(d['filter_nu']/1e9, nf_sub_rec,
+                         d['filter_relative_bandwidth'])
 
 # A new instance of the acquisition class is required
 arec = qubic.QubicMultibandAcquisition(q, p, s,d, nus_edge)

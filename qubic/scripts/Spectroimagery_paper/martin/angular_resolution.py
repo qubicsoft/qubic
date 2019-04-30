@@ -62,8 +62,8 @@ f_sig = interp1d(interpNusSig, interpDeltaFwhmSig, kind = 'cubic')
 
 # Build input maps 
 center_gal = qubic.equ2gal(d['RA_center'], d['DEC_center'])
-Nbfreq_in, nus_edge_in, nus_in, deltas_in, Delta_in, Nbbands_in = qubic.compute_freq(d['filter_nu']/1e9, 
-    d['filter_relative_bandwidth'], d['nf_sub']) 
+Nbfreq_in, nus_edge_in, nus_in, deltas_in, Delta_in, Nbbands_in = qubic.compute_freq(d['filter_nu']/1e9, d['nf_sub'],
+    d['filter_relative_bandwidth']) 
 
 # Generate the 16 input maps
 input_maps = np.empty((d['nf_sub'],size,size))
@@ -153,8 +153,8 @@ _deltaSigma_PLOTALL = []
 for nf_i in sub_band:
 	print 'Working reconstructing = ', nf_i, ' freq.'
 	Nbfreq, nus_edge, nus, deltas, Delta, Nbbands = qubic.compute_freq(d['filter_nu']/1e9, 
-	                                                                d['filter_relative_bandwidth'], 
-	                                                                nf_i) 
+	                                                                nf_i, d['filter_relative_bandwidth'])
+	                                                              
 	arec = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge) 
 	
 	maps_recon1 = arec.tod2map(TOD1, tol=d['tol'], maxiter=5000)

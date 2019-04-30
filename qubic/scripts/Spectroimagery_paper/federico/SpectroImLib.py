@@ -44,7 +44,7 @@ class sky(object):
         band = self.dictionary['filter_nu']/1e9
         filter_relative_bandwidth = self.dictionary['filter_relative_bandwidth']
         _, _, central_nus, _, _, _ = qubic.compute_freq(
-            band, filter_relative_bandwidth, Nf)
+            band, Nf, filter_relative_bandwidth)
         return np.rollaxis(sky_signal(nu=central_nus), 2, 1)
 
     
@@ -169,7 +169,7 @@ class Qubic_sky(sky):
         band = d['filter_nu']/1e9
         filter_relative_bandwidth = d['filter_relative_bandwidth']
         _, _, central_nus, _, _, _ = qubic.compute_freq(
-            band, filter_relative_bandwidth, Nf)
+            band, Nf, filter_relative_bandwidth)
         names = [np.str(np.round(cn, 2)) for cn in central_nus]
         names = [n.replace('.', 'p') for n in names]
         instrument = pysm.Instrument({
@@ -203,7 +203,7 @@ def create_acquisition_operator_TOD(pointing, d):
         q = qubic.QubicMultibandInstrument(d)
         # number of sub frequencies to build the TOD
         _, nus_edge_in, _, _, _, _ = qubic.compute_freq(
-            d['filter_nu'] / 1e9, d['filter_relative_bandwidth'], d['nf_sub'])
+            d['filter_nu'] / 1e9, d['nf_sub'], d['filter_relative_bandwidth'])
         
         return qubic.QubicMultibandAcquisition(q, pointing, s, d, nus_edge_in)
 
@@ -224,8 +224,8 @@ def create_acquisition_operator_REC(pointing, d, nf_sub_rec):
     s = qubic.QubicScene(d)
     # number of sub frequencies for reconstruction
     _, nus_edge, _, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9,
-                                                 d['filter_relative_bandwidth'],
-                                                 nf_sub_rec)
+                                                 nf_sub_rec,
+                                                 d['filter_relative_bandwidth'])
     # Operator for Maps Reconstruction
     arec = qubic.QubicMultibandAcquisition(q, pointing, s, d, nus_edge)
     return arec
@@ -250,7 +250,7 @@ def get_hitmap(instrument, scene, pointings, threshold=0.01):
 
 def reconstruct_maps(TOD, d, pointing, nf_sub_rec, x0=None):
     _, nus_edge, nus, _, _, _ = qubic.compute_freq(
-        d['filter_nu'] / 1e9, d['filter_relative_bandwidth'], nf_sub_rec)
+        d['filter_nu'] / 1e9, nf_sub_rec, d['filter_relative_bandwidth'])
     arec = create_acquisition_operator_REC(pointing, d, nf_sub_rec)
     cov = arec.get_coverage()
     maps_recon = arec.tod2map(TOD, cov=cov, tol=d['tol'], maxiter=1500)

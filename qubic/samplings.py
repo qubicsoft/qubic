@@ -23,6 +23,7 @@ from pysimulators.interfaces.healpy import Cartesian2HealpixOperator
 __all__ = ['QubicSampling',
            'get_pointing',
            'create_random_pointings',
+           'create_repeat_pointings',
            'create_sweeping_pointings',
            'equ2gal',
            'equ2hor',
@@ -134,17 +135,25 @@ class QubicPointing(QubicSampling):
 
 
 def get_pointing(d):
-    if d['random_pointing']==d['sweeping_pointing']:
-        raise ValueError, "Error: you should choose between random and sweeping pointing"
+    if [d['random_pointing'],d['sweeping_pointing'],d['repeat_pointing']].count(True)!=1:
+        raise ValueError, "Error: you should choose one pointing"
     
     center=(d['RA_center'],d['DEC_center'])
 
     if d['random_pointing']==True:
-        return create_random_pointings(center, d['npointings'], d['dtheta'], d['nhwp_angles'],
+        return create_random_pointings(center, d['npointings'], d['dtheta'],
                                        date_obs=d['date_obs'], period=d['period'],
                                        latitude=d['latitude'],
                                        longitude=d['longitude'], seed=d['seed'])
-    else:
+    
+    elif d['repeat_pointing'] == True:
+        return create_repeat_pointings(center, d['npointings'], d['dtheta'], d['nhwp_angles'],
+                                       date_obs=d['date_obs'], period=d['period'],
+                                       latitude=d['latitude'],
+                                       longitude=d['longitude'], seed=d['seed'])
+
+
+    elif d['sweeping_pointing'] == True:
         return create_sweeping_pointings(center, d['duration'], d['period'],
                                          d['angspeed'], d['delta_az'],
                                          d['nsweeps_per_elevation'],
@@ -155,7 +164,60 @@ def get_pointing(d):
                                          fix_azimuth=d['fix_azimuth'],random_hwp=d['random_hwp'])
 
 
-def create_random_pointings(center, npointings, dtheta, nhwp_angles=3, date_obs=None,
+def create_random_pointings(center, npointings, dtheta, date_obs=None,
+                            period=None, latitude=None, longitude=None, seed=None):
+    
+    
+    """
+    Return pointings randomly and uniformly distributed in a spherical cap.
+
+    Parameters
+    ----------
+    center : 2-tuple
+        The R.A. and declination of the center of the FOV, in degrees.
+    npointings : int
+        The number of requested pointings
+    dtheta : float
+        The maximum angular distance to the center.
+    date_obs : str or astropy.time.Time, optional
+        The starting date of the observation (UTC).
+    period : float, optional
+        The sampling period of the pointings, in seconds.
+    latitude : float, optional
+        The observer's latitude [degrees]. Default is DOMEC's.
+    longitude : float, optional
+        The observer's longitude [degrees]. Default is DOMEC's.
+
+    """
+    
+    
+    r = np.random.RandomState(seed)
+    
+    cosdtheta = np.cos(np.radians(dtheta))
+    theta = np.degrees(np.arccos(cosdtheta + (1 - cosdtheta) * r.rand(npointings)))
+    phi   = r.rand(npointings) * 360
+    pitch = r.rand(npointings) * 360
+    p = QubicSampling(
+        npointings, date_obs=date_obs, period=period, latitude=latitude,
+        longitude=longitude)
+    time = p.date_obs + TimeDelta(p.time, format='sec')
+    c2s = Cartesian2SphericalOperator('azimuth,elevation', degrees=True)
+    e2h = CartesianEquatorial2HorizontalOperator(
+        'NE', time, p.latitude, p.longitude)
+    rot = Rotation3dOperator("ZY'", center[0], 90-center[1], degrees=True)
+    s2c = Spherical2CartesianOperator('zenith,azimuth', degrees=True)
+    rotation = c2s(e2h(rot(s2c)))
+    coords = rotation(np.asarray([theta.T, phi.T]).T)
+    p.azimuth = coords[..., 0]
+    p.elevation = coords[..., 1]
+    p.pitch = pitch
+    p.angle_hwp = r.random_integers(0, 7, npointings) * 11.25
+    return p
+
+
+
+
+def create_repeat_pointings(center, npointings, dtheta, nhwp_angles=3, date_obs=None,
                             period=None, latitude=None, longitude=None, seed=None):
     
     

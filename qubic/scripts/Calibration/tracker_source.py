@@ -1,7 +1,10 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 
-import numpy as np
+# This code was supposed to simulate the fringes in the focal plane.
+# It is not working because when we make TOD, the code doesn't care
+# about closed horns.
+
 from matplotlib.pyplot import *
 import healpy as hp
 from astropy.io import fits
@@ -89,7 +92,7 @@ def get_tod(d, p, x0, closed_horns=None):
     s = qubic.QubicScene(d)
 
     # Number of sub frequencies to build the TOD
-    _, nus_edge_in, _, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, d['filter_relative_bandwidth'], d['nf_sub'])
+    _, nus_edge_in, _, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, d['nf_sub'], d['filter_relative_bandwidth'])
 
     # Multi-band acquisition operator
     a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_in)
@@ -147,8 +150,7 @@ def plot_focalplane(size, nptg, ptg_start, ptg_stop, focal_plane, tod):
             elif pos[0].size == 1:
                 # print(j)
                 tod_focal_plane[pos[0][0], pos[1][0], ptg] = tod[j, ptg]
-                j += 1
-                # print(pos)
+                j += 1  # print(pos)
 
         imshow(tod_focal_plane[:, :, ptg], interpolation='nearest', origin='lower')
         title('ptg' + str(ptg) + ' el=' + str(p.elevation[ptg]) + ' az=' + str(p.azimuth[ptg]))

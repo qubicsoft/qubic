@@ -34,6 +34,10 @@ ${\rm H}_{\lambda}^{-1} {\rm H}_{\lambda} C_{\lambda}^{Qubic} C_{\lambda_p}^{Pla
 #### · Polychromatic instrument (${\rm nfsub} > 1$) and spectroimaging (${\rm N} > 1$)
    ${\rm H}^{-1}_{\lambda_{k}} \sum_{\lambda_i} {\rm H}_{\lambda_{i}} C_{\lambda_i}^{Qubic} \{\rm C_{\lambda_p}^{Planck} X^{I00} \} \overset{?}{=} C_{\lambda_k}^{Qubic} C_{\lambda_p}^{Planck} X^{\rm I00}$
 
+
+We have to check if:
+
+
 <!-- #endregion -->
 
 ```{python}
@@ -48,7 +52,7 @@ import glob
 import healpy as hp
 import numpy as np
 import matplotlib.pyplot as mp
-#import SpectroImLib as si
+import SpectroImLib as si
 
 from pysimulators import FitsArray
 from pysm.nominal import models
@@ -83,36 +87,30 @@ sky_config = {
 # In spectro imager case:
 # x0_planck.shape = (nf_sub, npix, 3)
 # Planck maps: Convolve the Planck map with the Planck beam and copy nf_sub times
-x0_planck = np.empty((d['nf_sub'],12*dp['nside']**2, len(dp['kind'])))
 planck_sky = si.Planck_sky(sky_config, d)
-x0_planck[0,:,:] = planck_sky.get_sky_map()
-x0_planck[1:,:,:] = x0_planck[0,:,:]
+x0_planck = planck_sky.get_sky_map()
+x0_planck[..., 1:3] = 0
 
 qubic_sky = si.Qubic_sky(sky_config, d)
 x0_qubic = qubic_sky.get_sky_map()
 ```
 
 ```{python}
+x0_planck_full = np.empty((d['nf_sub'],12*dp['nside']**2, len(dp['kind'])))
+x0_planck_full[1:,:,:] = x0_planck[:,:]
+```
+
+```{python}
 p = qubic.get_pointing(d)
-TODq, map_qubic_conv_input = si.create_TOD(d, p, x0_qubic)
+#TODq, map_qubic_conv_input = si.create_TOD(d, p, x0_qubic)
 
-### Put Q and U to zero ###
-x0_planckI = np.copy(x0_planck)
-x0_planckI[..., 1:3] = 0
-
-'''Hacemos tres pruebas:
-. I,     Q = 0, U = 0 -> make TOD -> mapmaking 
-. I = 0, Q,     U = 0 -> make TOD -> mapmaking NOT ANYMORE
-. I = 0, Q = 0, U     -> make TOD -> mapmaking NOT ANYMORE
-
-'''
 ### Planck TOD ###
 #Watch out: pass the QUBIC dict because of the nus used
-TODp, map_planck_conv_input = si.create_TOD(d, p, x0_planckI)
+TODp,  _ = si.create_TOD(d, p, x0_planck_full)
 
 ### Create difference TOD ###
 
-TODI = TODq - TODp 
+#TODI = TODq - TODp 
 
 ```
 

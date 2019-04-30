@@ -1,14 +1,14 @@
 ############################################# Instrument ################################
 debug = False #False/True # Boolean
 
-config = 'TD' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
+config = 'FI' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
 filter_nu = 150*1e9 # 150e9 or 220e9 Hz
 filter_relative_bandwidth = 0.25 
 beam_shape =  'multi_freq' # 'gaussian', 'fitted_beam', 'multi_freq'
 
 # multifreq instrument 
-MultiBand=False
-nf_sub=1
+MultiBand=True
+nf_sub=12
 center_detector=False
 
 psd=None
@@ -49,28 +49,28 @@ RA_center= 0. #deg
 DEC_center=-57. #deg
 period=1. #s
 date_obs='2016-01-01 00:00:00'
-latitude= -(75 + 6. / 60)  #DOME C
-longitude= 123 + 20. / 60  #DOME C
+#latitude= -(75 + 6. / 60)  #DOME C
+#longitude= 123 + 20. / 60  #DOME C
 
+latitude= -(24 + 11. / 60)   #ARGENTINA
+longitude= -(66 + 28. / 60)   #ARGENTINA
 
-#latitude= -(24 + 11. / 60)   #ARGENTINA
-#longitude= -(66 + 28. / 60)   #ARGENTINA
+random_pointing=False   
 
-
-random_pointing=True   
-npointings=3000
+repeat_pointing=True
+npointings=1500 
 dtheta=4.
-nhwp_angles=3
+nhwp_angles=3 # use only for repeat_pointing
 seed=1
 
 sweeping_pointing=False
-duration=12 #h
-angspeed= 1 #deg/s
+duration=20 #h
+angspeed= 0.4 #deg/s
 delta_az= 20 #deg
 nsweeps_per_elevation= 1
 angspeed_psi= 0.1 #deg/s
 maxpsi= 10 #deg
-fix_azimuth={'apply':False,'az':50,'el':50,'el_step':1}
+fix_azimuth={'apply':True,'az':50,'el':50,'el_step':1, 'fix_hwp':True, 'fix_pitch':True}
 
 ############################################# Acquisition ##############################
 block=None

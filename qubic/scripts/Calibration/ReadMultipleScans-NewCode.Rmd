@@ -43,6 +43,9 @@ import healpy as hp
 ```{python}
 method = 'rms'
 
+dirfiles = '/Volumes/Data/Qubic/Calib-TD/ScanData_2019-04-18_130GHz_'+method+'_NewCode/'
+names = 'unbinned_ScanMap_170GHz_Speed_VE4_El' ### They are labelled 170 but this is a mistake: it is really 130 GHz
+freq = '130 GHz - 2019-04-18'
 # dirfiles = '/Volumes/Data/Qubic/Calib-TD/ScanData_2019-04-10_140GHz_'+method+'_NewCode/'
 # names = 'unbinned_ScanMap_140GHz_Speed_VE4_El'
 # freq = '140GHz-2019-04-10'
@@ -55,9 +58,9 @@ method = 'rms'
 # dirfiles = '/Volumes/Data/Qubic/Calib-TD/ScanData_2019-04-08_160GHz_'+method+'_NewCode/'
 # names = 'unbinned_ScanMap_160GHz_Speed_VE4_El'
 # freq = '160GHz-2019-04-08'
-dirfiles = '/Volumes/Data/Qubic/Calib-TD/ScanData_2019-04-14_170GHz_'+method+'_NewCode/'
-names = 'unbinned_ScanMap_170GHz_Speed_VE4_El'
-freq = '170 GHz - 2019-04-14'
+# dirfiles = '/Volumes/Data/Qubic/Calib-TD/ScanData_2019-04-14_170GHz_'+method+'_NewCode/'
+# names = 'unbinned_ScanMap_170GHz_Speed_VE4_El'
+# freq = '170 GHz - 2019-04-14'
 
 nu = int(str.split(freq,'-')[0][0:3])
 allfiles = np.sort(glob.glob(dirfiles+'alltes*_'+names+'_*.fits'))

@@ -116,7 +116,7 @@ lowcut = 0.3
 highcut = 10.
 elevation = 50
 
-method = 'demod'
+method = 'rms'
 
 unbinned, binned = dl.general_demodulate(ppp, data, lowcut, highcut,
                                                     median=True, method=method, 
@@ -199,6 +199,7 @@ for d in days:
     name = name+'_'+d
 FitsArray(allmm).save('/Users/hamilton/Qubic/Calib-TD/SpectralResponse/allmm_'+name+'.fits')
 FitsArray(allss).save('/Users/hamilton/Qubic/Calib-TD/SpectralResponse/allss_'+name+'.fits')    
+FitsArray(freqs).save('/Users/hamilton/Qubic/Calib-TD/SpectralResponse/freqs_'+name+'.fits')    
 
 ```
 
@@ -207,88 +208,31 @@ print 'Done !'
 ```
 
 ```{python}
-name = method+'_'+n
+reload(dl)
+name = n
 for d in days:
     name = name+'_'+d
-allmm = FitsArray('/Users/hamilton/Qubic/Calib-TD/SpectralResponse/allmm_'+name+'.fits')
-allss = FitsArray('/Users/hamilton/Qubic/Calib-TD/SpectralResponse/allss_'+name+'.fits')
-```
 
-```{python}
-def db(y):
-    return 10*np.log10(y/np.max(y))
+nsig=3
+ff, f_demod, errf_demod = dl.get_spectral_response(name, freqs, allmm, allss, method='demod',nsig=nsig)
+ff, f_rms, errf_rms = dl.get_spectral_response(name, freqs, allmm, allss, method='rms',nsig=nsig)
 
-tesindex=92
-for i in xrange(1):
-    plot(freqs, db(allmm[tesindex+i,:]))
-    plot(freqs, db(allmm[tesindex+i,:]+allss[tesindex+i,:]))
-    plot(freqs, db(allmm[tesindex+i,:]-allss[tesindex+i,:]))
-ylim(-30,0)
-```
-
-```{python}
-
-freqs = np.array(freqs)
-allfnorm = np.zeros((256, len(freqs)))
-allsnorm = np.zeros((256, len(freqs)))
-infilter = (freqs >= 124) & (freqs <= 182)
-outfilter =  ~infilter
-for tesindex in xrange(256):
-    baseline = np.mean(allmm[tesindex,outfilter])
-    integ = np.sum(allmm[tesindex, infilter]-baseline)
-    allfnorm[tesindex,:] = (allmm[tesindex,:]-baseline)/integ
-    allsnorm[tesindex,:] = allss[tesindex,:]/integ
-
-```
-
-```{python}
-automean = np.sum(allfnorm, axis=1)
-autoerror = np.std(allfnorm, axis=1)    
-plot(automean/autoerror)
-threshold = 200
-plot(automean/autoerror*0+threshold,'k--')
-ok = (automean/autoerror > threshold)
-
-filtershape = np.zeros(len(freqs))
-errfiltershape = np.zeros(len(freqs))
-for i in xrange(len(freqs)):
-    filtershape[i], errfiltershape[i] = ft.meancut(allfnorm[ok,i],3)
-```
-
-```{python}
-np.shape(np.array([filtershape, filtershape]))
-```
-
-```{python}
-toplot = filtershape.copy()
-toplot[filtershape <= 0]-=np.min(filtershape)
-errorbar(freqs, db(toplot), yerr=10*errfiltershape/np.sqrt(256)/filtershape,fmt='r.-', label='$3\sigma$ Clipped mean over all TES')
+errorbar(ff, dl.dB(f_rms), yerr=dl.dB(f_rms+errf_rms)-dl.dB(f_rms),label='rms', fmt='b.-')
+errorbar(ff, dl.dB(f_demod), yerr=dl.dB(f_demod+errf_demod)-dl.dB(f_demod), label='demod', fmt='r.-')
 legend()
-xlabel('Frequency [GHz]')
 ylabel('dB')
+xlabel('Frequency [GHz]')
+title(name)
 ylim(-40,0)
-xlim(105,195)
 ```
 
 ```{python}
-### Read the calsrc data
-ff, dbm = np.loadtxt('/Users/hamilton/Qubic/Calib-TD/calsrc_freq_good.txt').T
-power_mW = 10**(dbm/10)
-plot(ff,power_mW)
-```
-
-```{python}
-toplot = filtershape.copy()
-toplot[filtershape <= 0]-=np.min(filtershape)
-errorbar(freqs, db(toplot), yerr=10*errfiltershape/np.sqrt(256)/toplot,fmt='r.-', label='Raw')
-errorbar(freqs, db(toplot/np.interp(freqs, ff,power_mW)), 
-         yerr=10*errfiltershape/np.sqrt(256)/toplot,fmt='k.-', label='Source Spectral Response corrected')
+errorbar(ff, dl.dB(f_demod), yerr=dl.dB(f_demod+errf_demod)-dl.dB(f_demod), label='Demodulated', fmt='r.-')
 legend()
-xlabel('Frequency [GHz]')
 ylabel('dB')
+xlabel('Frequency [GHz]')
+title(name)
 ylim(-40,0)
-xlim(105,195)
-title(method)
 ```
 
 ```{python}

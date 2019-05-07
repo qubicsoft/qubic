@@ -593,10 +593,6 @@ def get_hpmap(TESNum, directory):
     return qubic.io.read_map(directory+'/Healpix/healpix_TESNum_{}.fits'.format(TESNum))    
 
 
-def get_flatmap(TESNum, directory):
-    return qubic.io.read_map(directory+'/healpix_TESNum_{}.fits'.format(TESNum))    
-
-
 def get_lines(lines, directory):
     nn = len(lines)
     hpmaps = np.zeros((nn, 4, 12*256**2))
@@ -625,3 +621,116 @@ def get_flatmap(TESNum, directory):
     az = FitsArray(directory+'/Flat/azimuth.fits'.format(TESNum))    
     el = FitsArray(directory+'/Flat/elevation.fits'.format(TESNum))
     return themap, az, el
+
+
+def CalSrcPower_Vs_Nu(freq):
+    ### Taken from Tx 263 130-170GHz User Guide available on Atrium
+    ff = np.array([129.93109059, 130.93364949, 131.93662559, 132.93897589,
+       133.94132618, 134.94430228, 135.94686118, 136.95004589,
+       137.90587712, 138.90927044, 139.91203794, 140.91501405,
+       141.91882458, 142.92326092, 143.92686285, 144.92942175,
+       145.93218925, 146.93537396, 147.93876728, 148.99034851,
+       149.94597113, 150.94853003, 151.95171474, 153.00350458,
+       153.9593358 , 154.96335494, 155.96695686, 156.97076739,
+       157.9259728 , 158.92790588, 159.97948711, 160.98371485,
+       161.98794259, 162.94419103, 163.99702389, 165.00292048,
+       165.91431869, 167.01429644, 167.92068812, 168.92387283,
+       169.97399383])
+    power_mW = np.array([12.83207659, 13.22505174, 13.35869985, 13.90693552, 14.47767056,
+       14.62397723, 15.07182833, 15.07182833, 14.77176243, 14.62397723,
+       14.9210411 , 15.07182833, 14.62397723, 13.76780255, 13.49369857,
+       13.90693552, 14.18943378, 14.18943378, 14.04747453, 13.63006154,
+       13.49369857, 13.90693552, 13.90693552, 13.35869985, 13.09274073,
+       12.57660204, 12.32621374, 11.95994707, 12.08081044, 12.83207659,
+       12.45077849, 11.84029289, 11.25974057, 10.81586195,  9.88006554,
+        8.66944441,  7.23416893,  6.81063762,  7.23416893,  7.23416893,
+        7.53105632])
+    return np.interp(freq, ff, power_mW)
+
+
+def CalSrcPowerMeterResponse_Vs_Nu(freq):
+    ### Taken from Tx 263 130-170GHz User Guide available on Atrium
+    ### It ic=ncludes both output response and power meter response
+    ff = np.array([129.96075353, 130.90266876, 131.89167975, 133.02197802,
+       133.96389325, 134.90580848, 135.89481947, 136.97802198,
+       137.96703297, 139.00313972, 139.89795918, 141.02825746,
+       141.97017268, 143.00627943, 144.04238619, 144.93720565,
+       145.9733124 , 147.00941915, 147.95133438, 148.98744113,
+       150.02354788, 150.96546311, 151.90737834, 153.03767661,
+       153.97959184, 154.92150706, 155.95761381, 156.99372057,
+       157.93563579, 158.97174254, 159.91365777, 160.99686028,
+       161.98587127, 162.9277865 , 163.96389325, 164.95290424,
+       165.89481947, 166.97802198, 167.91993721, 168.95604396,
+       169.94505495])
+    response = np.array([1.48598131, 1.56133453, 1.67410027, 1.80564562, 1.91838202,
+       1.97504365, 2.0691178 , 2.16325063, 2.0704089 , 2.22058716,
+       2.07161197, 2.18446573, 2.07290306, 2.07354861, 2.07419416,
+       2.22428439, 2.33707948, 2.46856615, 2.52522778, 2.54456491,
+       2.63866841, 2.88224592, 3.0323655 , 3.03306973, 3.2018809 ,
+       3.16508458, 3.16573013, 3.27852521, 3.63425226, 4.10218753,
+       4.70090524, 4.85111284, 4.47789727, 4.68409161, 4.62866239,
+       4.34890477, 3.88220191, 3.80811045, 4.1638375 , 4.4074737 ,
+       4.66977215])
+    return np.interp(freq, ff, response)
+
+
+def dB(y):
+    negative = y <= 0
+    bla = 10*np.log10(y/np.max(y))
+    bla[negative] = -50
+    return bla
+
+
+def get_spectral_response(name, freqs, allmm, allss, nsig=3, method='demod', TESNum = None,
+                          directory='/Users/hamilton/Qubic/Calib-TD/SpectralResponse/'):
+    #### Restore the data already treated
+    allmm = FitsArray(directory+'/allmm_'+method+'_'+name+'.fits')
+    allss = FitsArray(directory+'/allss_'+method+'_'+name+'.fits')
+    freqs = FitsArray(directory+'/freqs_'+method+'_'+name+'.fits')
+
+    #### Correct for Source Characteristics
+    if method == 'rms':
+        ### Then the analysis does not use the power meter data and we only need to correct for the output power
+        allmm /= (CalSrcPower_Vs_Nu(freqs))
+        allss /= (CalSrcPower_Vs_Nu(freqs))
+    else:
+        ### In the case of demod we need to correct for both the power_meter response and the output power
+        ### This is done using the function below
+        allmm /= (CalSrcPowerMeterResponse_Vs_Nu(freqs))
+        allss /= (CalSrcPowerMeterResponse_Vs_Nu(freqs))
+
+    sh = np.shape(allmm)
+    nTES = sh[0]
+    
+    #### Normalize all TES to the same integral
+    allfnorm = np.zeros((256, len(freqs)))
+    allsnorm = np.zeros((256, len(freqs)))
+    infilter = (freqs >= 124) & (freqs <= 182)
+    outfilter =  ~infilter
+    for tesindex in xrange(256):
+        baseline = np.mean(allmm[tesindex,outfilter])
+        integ = np.sum(allmm[tesindex, infilter]-baseline)
+        allfnorm[tesindex,:] = (allmm[tesindex,:]-baseline)/integ
+        allsnorm[tesindex,:] = allss[tesindex,:]/integ
+
+    ### If only one TES is requested we return it. Otherwise we need to do an average over nicely
+    ### Behaving TES...
+    if TESNum is not None:
+        return freqs, allfnorm[TESNum-1,:]-np.min(allfnorm[TESNum-1,:]), allsnorm[TESNum-1,:]
+    else:
+        ### Discriminant Variable: a chi2 we want it to be bad in the sense that 
+        ### we want the spectrum to be inconsistent with a straight line inside the QUBIC band
+        discrim = np.nansum(allfnorm[:,infilter]**2/allsnorm[:,infilter]**2, axis=1)
+        mr, sr = ft.meancut(discrim,3)
+        threshold = mr+nsig*sr
+        ok = (discrim > threshold)
+        print 'Spectral Response calculated over {} TES'.format(ok.sum())
+        filtershape = np.zeros(len(freqs))
+        errfiltershape = np.zeros(len(freqs))
+        for i in xrange(len(freqs)):
+            filtershape[i], errfiltershape[i] = ft.meancut(allfnorm[ok,i],2)
+        #errfiltershape /= np.sqrt(ok.sum())
+        # Then remove the smallest value in order to avoid negative values
+        filtershape -= np.min(filtershape)
+        return freqs, filtershape, errfiltershape
+    

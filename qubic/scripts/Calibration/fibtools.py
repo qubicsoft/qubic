@@ -108,9 +108,10 @@ def image_asics(data1=None, data2=None, all1=None):
     return img
 
 
-###############################################################################
-################################### Fitting ###################################
-###############################################################################
+"""
+################################## Fitting ###################################
+##############################################################################
+"""
 def thepolynomial(x, pars):
     """
     Generic polynomial function
@@ -135,6 +136,20 @@ class MyChi2:
     def __call__(self, *pars):
         val = self.functname(self.x, pars)
         chi2 = np.dot(np.dot(self.y - val, self.invcov), self.y - val)
+        return chi2
+
+class MyChi2_nocov:
+    """
+    Class defining the minimizer and the data
+    """
+    def __init__(self, xin, yin, invcovarin, functname):
+        self.x = xin
+        self.y = yin
+        self.functname = functname
+
+    def __call__(self, *pars):
+        val = self.functname(self.x, pars)
+        chi2 = np.dot(self.y - val, self.y - val)
         return chi2
 
 
@@ -167,12 +182,12 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
         err = covarin
         covar = np.zeros((np.size(err), np.size(err)))
         covar[np.arange(np.size(err)), np.arange(np.size(err))] = err ** 2
-
     # instantiate minimizer
     if chi2 is None:
         chi2 = MyChi2(x, y, covar, functname)
     # nohesse=False
     else:
+        chi2 = chi2(x,y, covar, functname)
         nohesse = True
     # variables
     ndim = np.size(guess)
@@ -246,11 +261,12 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     return m, np.array(parfit), np.array(errfit) * np.sqrt(correct), np.array(covariance) * correct, chi2(*parfit), ndf
 
 
-###############################################################################
-###############################################################################
+# ##############################################################################
+# ##############################################################################
 
 
-def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True, log=False, median=False,cutbad=True,rebin_as_well=None):
+def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True, log=False, 
+            median=False,cutbad=True,rebin_as_well=None):
     """
 
     Parameters
@@ -648,7 +664,7 @@ def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None, return_error
                 ftocut = notch[i][0]
                 bw = notch[i][1]
                 newdata = notch_filter(newdata, ftocut, bw, FREQ_SAMPLING)
-        t, yy, dx, dy = profile(tfold, newdata, range=[0, period], nbins=nbins, dispersion=False, plot=False)
+        t, yy, dx, dy, others = profile(tfold, newdata, range=[0, period], nbins=nbins, dispersion=False, plot=False, cutbad=False)    
         folded[THEPIX, :] = (yy - np.mean(yy)) / np.std(yy)
         folded_nonorm[THEPIX, :] = (yy - np.mean(yy))
     if return_error:

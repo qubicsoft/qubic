@@ -43,8 +43,8 @@ import healpy as hp
 
 ```{python}
 dirallfreqs = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/'
-dirfreq = ['140GHz-2019-04-10/', '150GHz-2019-04-06/', '160GHz-2019-04-08/', '170GHz-2019-04-14/']
-freqs = np.array([140, 150, 160, 170])
+dirfreq = ['130GHz-2019-04-18/', '140GHz-2019-04-10/', '150GHz-2019-04-06/', '160GHz-2019-04-08/', '170GHz-2019-04-14/']
+freqs = np.array([130, 140, 150, 160, 170])
 ```
 
 ```{python}

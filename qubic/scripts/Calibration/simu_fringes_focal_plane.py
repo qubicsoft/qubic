@@ -3,6 +3,7 @@
 
 from matplotlib.pyplot import *
 import qubic
+from qubicpack import qubicpack as qp
 
 basedir = '/home/louisemousset/QUBIC/MyGitQUBIC'
 dictfilename = basedir + '/qubic/qubic/scripts/global_source.dict'
@@ -55,7 +56,8 @@ def get_power_on_array(q, nn, xmin, xmax, theta, phi, spectral_irradiance):
     return power
 
 
-def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, doplot=False):
+def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline,
+                        dead_switch=None, doplot=False):
     """
         Returns the power on the focal plane for each pointing, for different configurations
         of the horn array: all open, all open except i, except j, except i and j, only i open,
@@ -77,6 +79,8 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
         The source spectral_irradiance [W/m^2/Hz].
     baseline : array
         Baseline formed with 2 horns, index between 1 and 64 as in the manip..
+    dead_switch : int or list of int
+        Broken switches, always closed.
     doplot : bool
         If True, do the plots for the first pointing.
 
@@ -89,6 +93,8 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
 
     # All open
     q.horn.open = True
+    if dead_switch is not None:
+        q.horn.open[dead_switch] = False
     S = get_power_on_array(q, nn, xmin, xmax, theta, phi, spectral_irradiance)
     if doplot:
         figure()
@@ -96,13 +102,15 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
         q.horn.plot()
         axis('off')
         subplot(4, 4, 2)
-        imshow(S[nn / 2:, :nn / 2, 0], interpolation='nearest', origin='lower')
+        imshow(S[:, :, 0], interpolation='nearest')
         print(S[:, :, 0].shape)
         colorbar()
         title('$S$')
 
     # All open except i
     q.horn.open = True
+    if dead_switch is not None:
+        q.horn.open[dead_switch] = False
     q.horn.open[baseline[0] - 1] = False
     Cminus_i = get_power_on_array(q, nn, xmin, xmax, theta, phi, spectral_irradiance)
     if doplot:
@@ -110,12 +118,14 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
         q.horn.plot()
         axis('off')
         subplot(4, 4, 4)
-        imshow(Cminus_i[nn / 2:, :nn / 2, 0], interpolation='nearest', origin='lower')
+        imshow(Cminus_i[:, :, 0], interpolation='nearest')
         colorbar()
         title('$C_{-i}$')
 
     # All open except j
     q.horn.open = True
+    if dead_switch is not None:
+        q.horn.open[dead_switch] = False
     q.horn.open[baseline[1] - 1] = False
     Cminus_j = get_power_on_array(q, nn, xmin, xmax, theta, phi, spectral_irradiance)
     if doplot:
@@ -123,12 +133,14 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
         q.horn.plot()
         axis('off')
         subplot(4, 4, 6)
-        imshow(Cminus_j[nn / 2:, :nn / 2, 0], interpolation='nearest', origin='lower')
+        imshow(Cminus_j[:, :, 0], interpolation='nearest')
         colorbar()
         title('$C_{-j}$')
 
     # All open except baseline [i, j]
     q.horn.open = True
+    if dead_switch is not None:
+        q.horn.open[dead_switch] = False
     q.horn.open[baseline[0] - 1] = False
     q.horn.open[baseline[1] - 1] = False
     Sminus_ij = get_power_on_array(q, nn, xmin, xmax, theta, phi, spectral_irradiance)
@@ -137,12 +149,14 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
         q.horn.plot()
         axis('off')
         subplot(4, 4, 8)
-        imshow(Sminus_ij[nn / 2:, :nn / 2, 0], interpolation='nearest', origin='lower')
+        imshow(Sminus_ij[:, :, 0], interpolation='nearest')
         colorbar()
         title('$S_{-ij}$')
 
     # Only i open (not a realistic observable)
     q.horn.open = False
+    if dead_switch is not None:
+        q.horn.open[dead_switch] = False
     q.horn.open[baseline[0] - 1] = True
     Ci = get_power_on_array(q, nn, xmin, xmax, theta, phi, spectral_irradiance)
     if doplot:
@@ -150,7 +164,7 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
         q.horn.plot()
         axis('off')
         subplot(4, 4, 10)
-        imshow(Ci[nn / 2:, :nn / 2, 0], interpolation='nearest', origin='lower')
+        imshow(Ci[:, :, 0], interpolation='nearest')
         colorbar()
         title('$C_i$')
 
@@ -163,7 +177,7 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
         q.horn.plot()
         axis('off')
         subplot(4, 4, 12)
-        imshow(Cj[nn / 2:, :nn / 2, 0], interpolation='nearest', origin='lower')
+        imshow(Cj[:, :, 0], interpolation='nearest')
         colorbar()
         title('$C_j$')
 
@@ -177,15 +191,28 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline, d
         q.horn.plot()
         axis('off')
         subplot(4, 4, 14)
-        imshow(Sij[nn / 2:, :nn / 2, 0], interpolation='nearest', origin='lower')
+        imshow(Sij[:, :, 0], interpolation='nearest')
         colorbar()
         title('$S_{ij}$')
 
     return S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij
 
 
+def full2quarter(s):
+    focal_plan = np.where(qp().pix_grid > 0, 1, qp().pix_grid)
+    # imshow(focal_plan, interpolation='nearest')
+    nn = s.shape[0]
+    nptg = s.shape[2]
+    s_quarter = np.empty((nn/2, nn/2, nptg))
+
+    for ptg in xrange(nptg):
+        s_quarter[:, :, ptg] = s[:nn / 2, nn / 2:, ptg] * focal_plan
+
+    return s_quarter
+
+
 # Focal plane parameters
-nn = 200
+nn = 34
 xmin = - 0.06
 xmax = 0.06
 
@@ -198,40 +225,142 @@ irradiance = 1.
 nptg = len(theta)
 
 # Horns
-baseline_manip = [46, 64]
+baseline_manip = [19, 1]
 
+baseline_manip_1 = [46, 64]
 
+baseline_manip_2 = [19, 1]
+
+# Test with 2 pairs of horns
+S_tot1, Cminus_i1, Cminus_j1, Sminus_ij1, Ci1, Cj1, Sij1 = selfcal_data(q[0], nn, xmin, xmax, theta, phi,
+                                                                        irradiance, baseline_manip_1,
+                                                                        dead_switch=None, doplot=True)
+
+S_tot2, Cminus_i2, Cminus_j2, Sminus_ij2, Ci2, Cj2, Sij2 = selfcal_data(q[0], nn, xmin, xmax, theta, phi,
+                                                                        irradiance, baseline_manip_2,
+                                                                        dead_switch=None, doplot=True)
+
+# Test with a close horn
 S_tot, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = selfcal_data(q[0], nn, xmin, xmax, theta, phi,
-                                                                 irradiance, baseline_manip, doplot=True)
+                                                                 irradiance, baseline_manip,
+                                                                 dead_switch=None, doplot=True)
+
+S_totc, Cminus_ic, Cminus_jc, Sminus_ijc, Cic, Cjc, Sijc = selfcal_data(q[0], nn, xmin, xmax, theta, phi,
+                                                                        irradiance, baseline_manip,
+                                                                        dead_switch=[2,9], doplot=True)
+
+# Reduce to the quarter of the focal plane
+S_tot = full2quarter(S_tot)
+Cminus_i = full2quarter(Cminus_i)
+Cminus_j = full2quarter(Cminus_j)
+Sminus_ij = full2quarter(Sminus_ij)
+Ci = full2quarter(Ci)
+Cj = full2quarter(Cj)
+Sij = full2quarter(Sij)
+
+
+
+
+figure()
+imshow(s_cut, interpolation='nearest', vmin=0., vmax=0.0005)
+colorbar()
+
+figure()
+imshow(S_tot2[:, :, 0], interpolation='nearest', vmin=0., vmax=0.0005)
+colorbar()
+
+
+
 
 # Figure with the fringes
 figure('combination_nn={0}_baseline{1}_{2}'.format(nn, baseline_manip[0], baseline_manip[1]))
 subplot(2, 2, 1)
-imshow(Sij[nn / 2:, :nn / 2, 0], interpolation='nearest', origin='lower')
+imshow(Sij[:, :, 0], interpolation='nearest')
 colorbar()
 title('True Baseline $S_{ij}$')
 
 subplot(2, 2, 2)
-imshow((S_tot + Ci + Cj - Cminus_i - Cminus_j + Sminus_ij)[nn / 2:, :nn / 2, 0], interpolation='nearest',
-       origin='lower')
+imshow((S_tot + Ci + Cj - Cminus_i - Cminus_j + Sminus_ij)[:, :, 0], interpolation='nearest')
 colorbar()
 title('$S_{-ij} + C_i + C_j - C_{-i} - C_{-j} + S_{tot}$')
 
 subplot(2, 2, 3)
-imshow((S_tot - Cminus_i - Cminus_j + Sminus_ij)[nn / 2:, :nn / 2, 0], interpolation='nearest', origin='lower')
+imshow((S_tot - Cminus_i - Cminus_j + Sminus_ij)[:, :, 0], interpolation='nearest')
 colorbar()
 title('$S_{-ij} - C_{-i} - C_{-j} + S_{tot}$')
 
 # Animation with the fringes reconstructed for each pointing
 figure()
 for ptg in xrange(nptg):
-    imshow((S_tot - Cminus_i - Cminus_j + Sminus_ij)[nn / 2:, :nn / 2, ptg], interpolation='nearest', origin='lower')
+    imshow((S_tot - Cminus_i - Cminus_j + Sminus_ij)[:, :, ptg],
+           interpolation='nearest')
     title('$S - C_{-i} - C_{-j} + S_{-ij}$\n' + 'ptg={}'.format(ptg))
     pause(1)
     if s == 0:
         colorbar()
 
 
+# Mapping with TES
+Sij = a1.pix_grid
+Sij = np.reshape(Sij, (17,17, 1))
+imshow(Sij, interpolation='nearest')
+
+
+def get_tes_signal(s):
+    nlin = s.shape[0]
+    ncol = s.shape[1]
+    nptg = s.shape[2]
+
+    a1 = qp()
+    a1.assign_asic(1)
+    a2 = qp()
+    a2.assign_asic(2)
+
+    tes_signal_a1 = np.zeros((nptg, 129))
+    tes_signal_a2 = np.zeros((nptg, 129))
+
+    for ptg in range(nptg):
+        pix = 1
+        for l in range(nlin):
+            for c in range(ncol):
+                if Sij[l, c, ptg] != 0.:
+                    # print(Sij_new[l][c])
+                    if a1.pix2tes(pix) is not None:
+                        tes = a1.pix2tes(pix)
+                        tes_signal_a1[ptg, tes] = Sij[l, c, ptg]
+                        # print('coucou')
+                    else:
+                        # print(a1.pix2tes(pix))
+                        tes = a2.pix2tes(pix)
+                        tes_signal_a2[ptg, tes] = Sij[l, c, ptg]
+                    # print(tes)
+                    pix += 1
+    return tes_signal_a1, tes_signal_a2
+
+
+
+# Test============
+figure()
+subplot(2, 2, 1)
+imshow((S_tot - Cminus_i - Cminus_j + Sminus_ij)[nn / 2:, :nn / 2, 0], interpolation='nearest')
+# imshow((Sminus_ij)[nn / 2:, :nn / 2, 0], interpolation='nearest', origin='lower')
+
+colorbar()
+
+subplot(2, 2, 2)
+imshow((S_totc - Cminus_ic - Cminus_jc + Sminus_ijc)[nn / 2:, :nn / 2, 0], interpolation='nearest')
+# imshow((Sminus_ijc)[nn / 2:, :nn / 2, 0], interpolation='nearest', origin='lower')
+colorbar()
+
+
+subplot(2, 2, 3)
+imshow(((S_tot - Cminus_i - Cminus_j + Sminus_ij)
+        - (S_totc - Cminus_ic - Cminus_jc + Sminus_ijc))
+       [nn / 2:, :nn / 2, 0], interpolation='nearest')
+# imshow(((Sminus_ij) - (Sminus_ijc))
+#        [nn / 2:, :nn / 2, 0], interpolation='nearest', origin='lower')
+colorbar()
+#===================
 
 # ============== Old functions, not used anymore ====================
 # These 2 functions  were used before, they use the index of the horns in simulations.

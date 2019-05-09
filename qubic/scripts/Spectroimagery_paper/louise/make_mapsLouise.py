@@ -6,23 +6,25 @@ import time
 
 import healpy as hp
 import numpy as np
-import matplotlib.pyplot as plt
+
+from pysm.nominal import models
 
 import qubic
 from pysimulators import FitsArray
 
 import SpectroImLib as si
 
-dictfilename = '/sps/hep/qubic/Users/lmousset/myqubic/qubic/scripts/Spectroimagery_paper/test_spectroim.dict'
-rep_out = '/sps/hep/qubic/Users/lmousset/SpectroImaging/'
-name = 'testCC_01'
+dictfilename = '/home/louisemousset/QUBIC/MyGitQUBIC/qubic/qubic/scripts' \
+               '/Spectroimagery_paper/spectroimaging.dict'
+
+out_dir = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/pysmstudy'
+#out_dir = '/sps/hep/qubic/Users/lmousset/SpectroImaging/'
+name = 'pysm_test01'
 
 # Numbers of subbands for spectroimaging
 noutmin = 1
 noutmax = 1
 
-## Input sky parameters
-skypars = {'dust_coeff': 1e-2, 'r': 0}  # 1.39e-2
 
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
@@ -30,7 +32,7 @@ d.read_from_file(dictfilename)
 # Print dictionary and others parameters
 # Save a file with al parameters
 tem = sys.stdout
-sys.stdout = f = open(rep_out + name + '.txt', 'wt')
+sys.stdout = f = open(out_dir + name + '.txt', 'wt')
 
 print('Simulation General Name: ' + name)
 print('Dictionnary File: ' + dictfilename)
@@ -39,7 +41,6 @@ for k in d.keys():
 
 print('Minimum Number of Sub Frequencies: {}'.format(noutmin))
 print('Maximum Number of Sub Frequencies: {}'.format(noutmax))
-print(skypars)
 
 sys.stdout = tem
 f.close()
@@ -47,14 +48,26 @@ f.close()
 ####################################################################################################
 
 
-##### Sky Creation #####
+# ===== Sky Creation =====
+sky_config = {
+    'synchrotron': models('s1', d['nside']),
+    'dust': models('d1', d['nside']),
+    'freefree': models('f1', d['nside']), #not polarized
+    'cmb': models('c1', d['nside']),
+    'ame': models('a1', d['nside'])} #not polarized
 
 t0 = time.time()
-x0 = si.create_input_sky(d, skypars)
+Qubic_sky = si.Qubic_sky(sky_config, d)#, output_directory=out_dir, output_prefix='qubic_sky')
+x0 = Qubic_sky.get_sky_map()
 t1 = time.time()
 print('********************* Input Sky done in {} seconds'.format(t1 - t0))
 
-print(x0.shape)
+map_list, maps = Qubic_sky.read_sky_map()
+print(map_list)
+hp.mollview(maps[0, :, 0])
+
+
+
 
 ##### Test : Let's put I to 0 ######
 # x0[:,:,0] = 0
@@ -68,10 +81,10 @@ p = qubic.get_pointing(d)
 # p.angle_hwp = np.random.choice(I*11.25, d['npointings'])
 # print(np.unique(p.angle_hwp))
 
-##### TOD making #####
+# ==== TOD making ====
 TOD = si.create_TOD(d, p, x0)
 
-#### Mapmaking #####
+# ==== Mapmaking ====
 # for tol in [1e-3, 5e-4, 1e-4, 5e-5, 1e-5]:
 #     d['tol'] = tol
 #     print(tol)
@@ -94,8 +107,8 @@ for nf_sub_rec in np.arange(noutmin, noutmax + 1):
 
     # FitsArray(nus_edge).save(name + '_nf{0}_ptg{1}'.format(nf_sub_rec, ptg) + '_nus_edges.fits')
     # FitsArray(nus).save(name + '_nf{0}_ptg{1}'.format(nf_sub_rec, ptg)+ '_nus.fits')
-    FitsArray(maps_convolved).save(rep_out + name + '_nf{}'.format(nf_sub_rec) + '_maps_convolved.fits')
-    FitsArray(maps_recon).save(rep_out + name + '_nf{}'.format(nf_sub_rec) + '_maps_recon.fits')
+    FitsArray(maps_convolved).save(out_dir + name + '_nf{}'.format(nf_sub_rec) + '_maps_convolved.fits')
+    FitsArray(maps_recon).save(out_dir + name + '_nf{}'.format(nf_sub_rec) + '_maps_recon.fits')
 
     t1 = time.time()
     print('************************** All Done in {} minutes'.format((t1 - t0) / 60))

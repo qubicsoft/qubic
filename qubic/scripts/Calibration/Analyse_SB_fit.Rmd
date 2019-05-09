@@ -1,0 +1,364 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.0
+  kernelspec:
+    display_name: Python [default]
+    language: python
+    name: python2
+---
+
+```{python}
+# ##### %matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(12,12))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack import qubicpack as qp
+import fibtools as ft
+import plotters as p
+import lin_lib as ll
+import demodulation_lib as dl
+import qubic.io
+
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import os
+import healpy as hp
+import pandas as pd
+```
+
+```{python}
+#### We look at the symmetric version first
+#### Teh variables are the following:
+#     xc = pars[0]
+#     yc = pars[1]
+#     dist = pars[2]
+#     angle = pars[3]
+#     distx = pars[4]
+#     disty = pars[5]
+#     ampgauss = pars[6]
+#     xcgauss = pars[7]
+#     ycgauss = pars[8]
+#     fwhmgauss = pars[9]
+#     fwhmpeaks = pars[10]
+keys_sym = ['xc', 'yc', 'dist', 'angle', 'distx', 'disty', 'ampgauss', 
+            'xcgauss', 'ycgauss', 'fwhmgauss', 'fwhmpeaks']
+print(keys_sym)
+### For the asymetric files:
+#     xc = pars[0]
+#     yc = pars[1]
+#     dist = pars[2]
+#     angle = pars[3]
+#     distx = pars[4]
+#     disty = pars[5]
+#     ampgauss = pars[6]
+#     xcgauss = pars[7]
+#     ycgauss = pars[8]
+#     fwhmgauss = pars[9]
+#     fwhmxpeaks = pars[10:19]
+#     fwhmypeaks = pars[19:28]
+#     rhopeaks = pars[28:37]
+keys_asym = ['xc', 'yc', 'dist', 'angle', 'distx', 'disty', 'ampgauss', 
+            'xcgauss', 'ycgauss', 'fwhmgauss']
+for i in xrange(9):
+    keys_asym.append('fwhmxpeak_{}'.format(i))
+for i in xrange(9):
+    keys_asym.append('fwhmypeak_{}'.format(i))
+for i in xrange(9):
+    keys_asym.append('rhopeak_{}'.format(i))
+print(keys_asym)
+
+```
+
+```{python}
+dirfreq = '150GHz-2019-04-06/'
+dirallfreqs = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/'
+dirfiles = dirallfreqs+dirfreq
+dirsave = '/Users/hamilton/Qubic/Calib-TD/Synthesized_beams_fits/'+dirfreq
+dir_sym = '/Users/hamilton/Qubic/Calib-TD/Synthesized_beams_fits/'+dirfreq
+dir_asym = '/Users/hamilton/Qubic/Calib-TD/Synthesized_beams_fits/'+dirfreq
+```
+
+```{python}
+def show_flatmap_fit_res(directory, dirfit, TESNum, cbar=False, defname='fit_sb_TESNum_'):
+    
+    flatmap, az, el = dl.get_flatmap(TESNum, dirfiles)
+    
+    fit = np.array(FitsArray(dirfit+'/'+defname+'{}.fits'.format(TESNum)))
+    az2d, el2d = np.meshgrid(az*np.cos(np.radians(50)), np.flip(el))
+    x = [az2d,el2d]
+    themap, newxxyy = dl.qubic_sb_model(x,fit, return_peaks=True)
+
+    subplot(1,3,1)
+    imshow(flatmap,extent=[np.min(az)*np.cos(np.radians(50)), 
+                    np.max(az)*np.cos(np.radians(50)), 
+                    np.min(el), np.max(el)])
+    title('Data TES #{}'.format(TESNum))
+    if cbar: colorbar()
+
+    subplot(1,3,2)
+    imshow(themap,extent=[np.min(az)*np.cos(np.radians(50)), 
+                    np.max(az)*np.cos(np.radians(50)), 
+                    np.min(el), np.max(el)])
+    title('Fit TES #{}'.format(TESNum))
+    if cbar: colorbar()
+
+    subplot(1,3,3)
+    imshow(flatmap-themap,extent=[np.min(az)*np.cos(np.radians(50)), 
+                    np.max(az)*np.cos(np.radians(50)), 
+                    np.min(el), np.max(el)])
+    title('Residuals TES #{}'.format(TESNum))
+    if cbar: colorbar()
+
+```
+
+```{python}
+rc('figure',figsize=(15,3))
+show_flatmap_fit_res(dirfiles, dir_sym , 93, cbar=True)
+```
+
+```{python}
+rc('figure',figsize=(15,3))
+show_flatmap_fit_res(dirfiles, dir_asym , 93, cbar=True, defname='fit_sb_asym_TESNum_')
+```
+
+```{python}
+#### Restore all of the paramters
+allpars = np.zeros((256, npsym))
+allerr = np.zeros((256, npsym))
+integ = np.zeros(256)
+allpars_asym = np.zeros((256, npasym))
+allerr_asym = np.zeros((256, npasym))
+integ_asym = np.zeros(256)
+
+data_sym = {}
+data_asym = {}
+err_sym = {}
+err_asym = {}
+
+for i in xrange(256):
+    TESNum = i+1
+    if (32*(i/32))==i: print(i)
+    allpars[i,:] = np.array(FitsArray(dirsave+'/fit_sb_TESNum_{}.fits'.format(TESNum)))
+    allerr[i,:]  = np.array(FitsArray(dirsave+'/errfit_sb_TESNum_{}.fits'.format(TESNum)))
+    themap_sym, newxxyy_sym = dl.qubic_sb_model(x,allpars[i,:], return_peaks=True)
+    integ[i] = np.sum(themap_sym)
+
+    allpars_asym[i,:] = np.array(FitsArray(dirsave+'/fit_sb_asym_TESNum_{}.fits'.format(TESNum)))
+    allerr_asym[i,:] = np.array(FitsArray(dirsave+'/errfit_sb_asym_TESNum_{}.fits'.format(TESNum)))
+    themap_asym, newxxyy_asym = dl.qubic_sb_model_asym(x,allpars_asym[i,:], return_peaks=True)
+    integ_asym[i] = np.sum(themap_asym)
+
+    
+for i in xrange(len(keys_sym)):
+    data_sym[keys_sym[i]] = allpars[:,i]
+    err_sym[keys_sym[i]] = allerr[:,i]
+data_sym['integ'] = integ
+err_sym['integ'] = 0
+
+for i in xrange(len(keys_asym)):
+    data_asym[keys_asym[i]] = allpars_asym[:,i]
+    err_asym[keys_asym[i]] = allerr_asym[:,i]
+data_asym['integ'] = integ_asym
+err_asym['integ'] = 0
+
+
+```
+
+```{python}
+rc('figure',figsize=(10,10))
+subplot(3,1,1)
+plot(data_sym['integ'], label='Symmetric')
+plot(data_asym['integ'], label='Asymetric')
+ylim(1e5,1e9)
+yscale('log')
+legend()
+xlabel('TES #')
+ylabel('SB Integral [ADU]')
+
+subplot(3,2,3)
+imshow(ft.image_asics(all1=data_sym['integ']), vmin=0,vmax=5e7)
+title('SB integral - Sym')
+colorbar()
+subplot(3,2,4)
+imshow(ft.image_asics(all1=data_asym['integ']), vmin=0,vmax=5e7)
+title('SB integral - Asym')
+colorbar()
+
+subplot(3,2,5)
+imshow(ft.image_asics(all1=np.log10(data_sym['integ'])))
+title('Log(SB integral) - Sym')
+colorbar()
+subplot(3,2,6)
+imshow(ft.image_asics(all1=np.log10(data_asym['integ'])))
+title('Log(SB integral) - Asym')
+colorbar()
+
+tight_layout()
+```
+
+```{python}
+rc('figure',figsize=(15,5))
+for i in xrange(10):
+    subplot(2,5,i+1)
+    toplot = data_sym[keys_sym[i]].copy()
+    toplot[~okfwhmpeaks] = np.nan
+    imshow(ft.image_asics(all1=toplot))
+    colorbar()
+    title(keys_sym[i]+' - Sym')
+tight_layout()
+```
+
+```{python}
+# Location of the "central pixel"
+ax=subplot(1,2,1)
+scatter(allpars[:,0], allpars[:,1], c=arange(256),marker='.')
+ax.set_aspect(1)
+title('Central Pixel location')
+xlabel('Az Ang')
+ylabel('El')
+colorbar()
+
+# Location of the Gaussian Primary Beam
+ax=subplot(1,2,2)
+scatter(allpars[:,7], allpars[:,8], c=arange(256), marker='.')
+ax.set_aspect(1)
+title('Primary Beam center')
+xlabel('Az Ang')
+ylabel('El')
+colorbar()
+```
+
+```{python}
+def plot_hist(data, name, cutbad=None, okin=None):
+    if okin is None:
+        okin = np.ones(256).astype(bool)
+    
+    rc('figure',figsize=(15,7))
+    subplot(2,3,1)
+    toplot = data.copy()
+    toplot[~okin] = np.nan
+    imshow(ft.image_asics(all1=toplot))
+    colorbar()
+    title(name)
+    
+    if cutbad is None:
+        cutbad = [np.min(data[okin]), np.max(data[okin])]
+    
+    subplot(2,3,2)
+    a=hist(data[okin],bins=20, range=[np.min(data[okin]), np.max(data[okin])],label='All')
+    ok = (data >= cutbad[0]) & (data <= cutbad[1])
+    ok = ok & okin
+    a=hist(data[ok],bins=20, range=[np.min(data[okin]), np.max(data[okin])], 
+       label='Bad Fit removed: {0:4.2f} +/- {1:4.2f}'.format(np.mean(data[ok]), 
+                                                                 np.std(data[ok])))
+    xlabel(name)
+    legend(fontsize=10)
+
+    subplot(2,3,3)
+    toplot = data.copy()
+    toplot[~ok] = np.nan
+    imshow(ft.image_asics(all1=toplot))
+    colorbar()
+    title(name+' n={}'.format(ok.sum()))
+    
+    newrejected = (~ok) & okin
+    nums = np.arange(256)+1
+    print 'Rejected at this step:'
+    print nums[newrejected]
+    
+    return ok, newrejected
+
+```
+
+```{python}
+okfwhmpeaks, rejected = plot_hist(data_sym['fwhmpeaks'], 'fwhmpeaks', cutbad = [0.6,1.4])
+```
+
+```{python}
+okxc, rejected = plot_hist(data_sym['xc'], 'xc', okin=okfwhmpeaks)
+```
+
+```{python}
+okyc, rejected = plot_hist(data_sym['yc'], 'yc', okin=okxc)
+```
+
+```{python}
+okdist, rejected = plot_hist(data_sym['dist'], 'dist', okin=okyc, cutbad=[8.,8.25])
+```
+
+```{python}
+okangle, rejected = plot_hist(data_sym['angle'], 'angle', okin=okdist)
+```
+
+```{python}
+okdistx, rejected = plot_hist(data_sym['distx'], 'distx', okin=okangle, cutbad=[-0.015,0.01] )
+```
+
+```{python}
+okdisty, rejected = plot_hist(data_sym['disty'], 'disty', okin=okdistx, cutbad=[-0.005, 0.016])
+```
+
+```{python}
+okampgauss, rejected = plot_hist(data_sym['ampgauss'], 'ampgauss', okin=okdisty, cutbad=[0, 1e6])
+```
+
+```{python}
+okxcgauss, rejected = plot_hist(data_sym['xcgauss'], 'xcgauss', okin=okampgauss, cutbad=[-2., 2.])
+```
+
+```{python}
+okycgauss, rejected = plot_hist(data_sym['ycgauss'], 'ycgauss', okin=okxcgauss, cutbad=[48., 52.5])
+```
+
+```{python}
+okfwhmgauss, rejected = plot_hist(data_sym['fwhmgauss'], 'fwhmgauss', okin=okycgauss)
+```
+
+```{python}
+rc('figure',figsize=(15,15))
+reload(dl)
+dl.show_flatmaps_list(dirfiles, (np.arange(256)+1)[rejected], nx=5, tight=True)
+```
+
+```{python}
+rc('figure',figsize=(15,3))
+show_flatmap_fit_res(dirfiles, dir_sym , 115, cbar=True)
+```
+
+```{python}
+toto, tata = plot_hist(data_sym['integ'], 'integ',okin=okfwhmgauss)
+```
+
+```{python}
+a=hist(data_sym['integ'][okfwhmgauss], range=[0,0.2e8], bins=100)
+```
+
+```{python}
+integ = data_sym['integ'].copy()
+integ[~okfwhmgauss] = np.nan
+integ
+```
+
+```{python}
+data_sym['integ']
+```
+
+```{python}
+
+```

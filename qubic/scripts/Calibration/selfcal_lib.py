@@ -1,5 +1,6 @@
 import fibtools as ft
 from qubicpack import qubicpack as qp
+import qubic
 
 import numpy as np
 from matplotlib.pyplot import *
@@ -283,8 +284,8 @@ def get_tes_signal(s):
     a2 = qp()
     a2.assign_asic(2)
 
-    tes_signal_a1 = np.zeros((nptg, 129))
-    tes_signal_a2 = np.zeros((nptg, 129))
+    tes_signal_a1 = np.zeros((nptg, 128))
+    tes_signal_a2 = np.zeros((nptg, 128))
 
     for ptg in range(nptg):
         pix = 1
@@ -293,11 +294,48 @@ def get_tes_signal(s):
                 if s[l, c, ptg] != 0.:
                     if a1.pix2tes(pix) is not None:
                         tes = a1.pix2tes(pix)
-                        tes_signal_a1[ptg, tes] = s[l, c, ptg]
+                        if tes is not None: tes_signal_a1[ptg, tes-1] = s[l, c, ptg]
                     else:
-                        # print(a1.pix2tes(pix))
                         tes = a2.pix2tes(pix)
-                        tes_signal_a2[ptg, tes] = s[l, c, ptg]
-                    print(tes)
+                        if tes is not None: tes_signal_a2[ptg, tes-1] = s[l, c, ptg]
+                    #print(tes)
                     pix += 1
     return tes_signal_a1, tes_signal_a2
+
+
+# +
+def get_fringes_th_TD(baseline, basedir='../', phi=np.array([0.]), theta=np.array([0.])):
+    
+    dictfilename = basedir + 'global_source.dict'
+    d = qubic.qubicdict.qubicDict()
+    d.read_from_file(dictfilename)
+    q = qubic.QubicMultibandInstrument(d)
+    s = qubic.QubicScene(d)
+
+    # Source parameters : positions and spectral irradiance
+    irradiance = 1.
+    nptg = len(theta)
+
+    S_tot, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = selfcal_data(q[0], theta, phi,
+                                                                 irradiance, baseline,
+                                                                 dead_switch=None, doplot=False)
+
+    S_tot = full2quarter(S_tot)
+    Cminus_i = full2quarter(Cminus_i)
+    Cminus_j = full2quarter(Cminus_j)
+    Sminus_ij = full2quarter(Sminus_ij)
+    Ci = full2quarter(Ci)
+    Cj = full2quarter(Cj)
+    Sij = full2quarter(Sij)
+
+    fringes = (S_tot - Cminus_i - Cminus_j + Sminus_ij)
+    imshow(Ci[:,:,0])
+    print np.sum(fringes)
+    print np.sum(1./Ci)
+    print np.sum(fringes/Ci)
+    
+    tes_signal_a1, tes_signal_a2 = get_tes_signal(fringes/Ci)
+ 
+    return np.append(tes_signal_a1, tes_signal_a2)
+
+

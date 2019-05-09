@@ -126,15 +126,16 @@ class MyChi2:
     """
     Class defining the minimizer and the data
     """
-    def __init__(self, xin, yin, covarin, functname):
+    def __init__(self, xin, yin, covarin, functname, extra_args=None):
         self.x = xin
         self.y = yin
         self.covar = covarin
         self.invcov = np.linalg.inv(covarin)
         self.functname = functname
+        self.extra_args = extra_args
 
     def __call__(self, *pars):
-        val = self.functname(self.x, pars)
+        val = self.functname(self.x, pars, extra_args=self.extra_args)
         chi2 = np.dot(np.dot(self.y - val, self.invcov), self.y - val)
         return chi2
 
@@ -155,7 +156,7 @@ class MyChi2_nocov:
 
 ### Call Minuit
 def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=None, rangepars=None, nohesse=False,
-              force_chi2_ndf=False, verbose=True, minos=False):
+              force_chi2_ndf=False, verbose=True, minos=False, extra_args=None):
     """
 
     Parameters
@@ -184,7 +185,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
         covar[np.arange(np.size(err)), np.arange(np.size(err))] = err ** 2
     # instantiate minimizer
     if chi2 is None:
-        chi2 = MyChi2(x, y, covar, functname)
+        chi2 = MyChi2(x, y, covar, functname, extra_args=extra_args)
     # nohesse=False
     else:
         chi2 = chi2(x,y, covar, functname)

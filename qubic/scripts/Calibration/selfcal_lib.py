@@ -2,9 +2,6 @@ import fibtools as ft
 from qubicpack import qubicpack as qp
 import numpy as np
 
-def toto():
-    print 'toto'
-
 def tes2imgpix(tesnum, extra_args=None):
     if extra_args is None:
         a1 = qp()

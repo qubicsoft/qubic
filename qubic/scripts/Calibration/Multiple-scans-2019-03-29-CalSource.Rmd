@@ -48,12 +48,14 @@ Lets get the directories corresponding to each dataset:
 # days = ['2019-03-28', '2019-03-29']
 # n = 'ScanMap_Speed_VE4_El'
 # days = ['2019-03-30', '2019-03-31']
-# n = 'ScanMap_Speed_VE4_El'
-# days = ['2019-04-05', '2019-04-06']
+n = 'ScanMap_Speed_VE4_El'
+days = ['2019-04-05', '2019-04-06']
 # n = 'ScanMap_160GHz_Speed_VE4_El'
 # days = ['2019-04-07', '2019-04-08']
-n = 'ScanMap_170GHz_Speed_VE4_El'
-days = ['2019-04-11', '2019-04-12']
+# n = 'ScanMap_170GHz_Speed_VE4_El'
+# days = ['2019-04-11', '2019-04-12']
+# n = 'ScanSmallMap_150GHz_1V_AllOpen_Speed_VE4'
+# days = ['2019-04-28']
 
 dirs = []
 elevations=[]
@@ -93,7 +95,7 @@ for i in xrange(len(labels)):
 # Demodulation
 
 ```{python}
-ii = 69
+ii = 65
 thedir = dirs[ii]
 print thedir, 'Elevation =',elevations[ii]
 AsicNum = 1
@@ -108,6 +110,23 @@ print data['data'].shape
 ```
 
 ```{python}
+rc('figure',figsize=(16,8))
+#plot(data['t_data']-data['t_data'][0], data['data'][0,:])
+#plot(data['t_azel']-data['t_data'][0], data['az'])
+
+plot(np.interp(data['t_data'], data['t_azel'], data['az']), data['data'][0,:])
+xlim(-5,5)
+```
+
+```{python}
+rc('figure',figsize=(16,8))
+#plot(data['t_data']-data['t_data'][0], data['data'][0,:])
+#plot(data['t_azel']-data['t_data'][0], data['az'])
+
+plot(np.interp(data['t_data'], data['t_azel'], data['az']), data['data'][0,:])
+```
+
+```{python}
 reload(dl)
 reload(ft)
 
@@ -116,7 +135,7 @@ freq_mod = 1.
 ppp = 1./freq_mod
 lowcut = 0.3
 highcut = 10.
-nbins = 250 #int((np.max(data['t_data'])-np.min(data['t_data']))/ppp/2)
+nbins = 200
 elevation = 50
 
 method = 'rms'

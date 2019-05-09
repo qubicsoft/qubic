@@ -623,6 +623,28 @@ def get_flatmap(TESNum, directory):
     return themap, az, el
 
 
+def show_flatmap(directory, TESNum, vmin=None, vmax=None, cbar=False):
+    flatmap, az, el = get_flatmap(TESNum, directory)
+    imshow(flatmap,extent=[np.min(az)*np.cos(np.radians(50)), 
+                    np.max(az)*np.cos(np.radians(50)), 
+                    np.min(el), np.max(el)], vmin=vmin, vmax=vmax)
+    title('TES #{}'.format(TESNum))
+    xlabel('Az angle')
+    ylabel('El')
+    if cbar: colorbar()
+
+
+def show_flatmaps_list(directory, TESNums, vmin=None, vmax=None, cbar=False, nx=5, tight=True):
+    nn = len(TESNums)
+    ny = nn/nx+1
+    ii=1
+    for nn in TESNums:
+        subplot(ny, nx, ii)
+        show_flatmap(directory, nn, vmin=vmin, vmax=vmax, cbar=cbar)
+        ii += 1
+    if tight: tight_layout()
+
+
 def CalSrcPower_Vs_Nu(freq):
     ### Taken from Tx 263 130-170GHz User Guide available on Atrium
     ff = np.array([129.93109059, 130.93364949, 131.93662559, 132.93897589,
@@ -733,4 +755,285 @@ def get_spectral_response(name, freqs, allmm, allss, nsig=3, method='demod', TES
         # Then remove the smallest value in order to avoid negative values
         filtershape -= np.min(filtershape)
         return freqs, filtershape, errfiltershape
+
+
+def qubic_sb_model(x, pars, return_peaks=False):
+    x2d = x[0]
+    y2d = x[1]
+    xc = pars[0]
+    yc = pars[1]
+    dist = pars[2]
+    angle = pars[3]
+    distx = pars[4]
+    disty = pars[5]
+    ampgauss = pars[6]
+    xcgauss = pars[7]
+    ycgauss = pars[8]
+    fwhmgauss = pars[9]
+    fwhmpeaks = pars[10]
+    nrings = 2
+    amps = np.zeros(9)
+    npeaks_tot = len(amps)
+    npeaks_line = int(np.sqrt(npeaks_tot))
+    nrings = (npeaks_line-1)/2+1
+    x = (np.arange(npeaks_line) - (nrings-1))*dist
+    xx, yy = np.meshgrid(x,x)
+    xxyy = np.array([np.ravel(xx), np.ravel(yy)])
+    cosang = np.cos(np.radians(angle))
+    sinang = np.sin(np.radians(angle))
+    rotmat = np.array([[cosang, -sinang],[sinang, cosang]])
+    newxxyy = []
+    for i in xrange(npeaks_tot):
+        thexxyy = np.dot(rotmat, xxyy[:,i])
+        newxxyy.append(thexxyy)
+    newxxyy =  np.array(newxxyy).T
+
+    newxxyy[0,:] += distx*(newxxyy[1,:])**2 
+    newxxyy[1,:] += disty*(newxxyy[0,:])**2
+    
+    newxxyy[0,:] += xc
+    newxxyy[1,:] += yc
+    
+    themap = np.zeros_like(x2d)
+    for i in xrange(npeaks_tot):
+        amps[i] = ampgauss * np.exp(-0.5 * ((xcgauss-newxxyy[0,i])**2 + (ycgauss-newxxyy[1,i])**2)/(fwhmgauss/2.35)**2)
+        themap += amps[i]*np.exp(-((x2d-newxxyy[0,i])**2 +(y2d-newxxyy[1,i])**2)/(2*(fwhmpeaks/2.35)**2) )
+
+    #satpix = themap >= saturation
+    #themap[satpix] = saturation
+    
+    if return_peaks:
+        return themap, newxxyy
+    else:
+        return themap
+
+
+def flattened_qubic_sb_model(x, pars, return_peaks=False):
+    return np.ravel(qubic_sb_model(x, pars))
+
+
+def fit_sb(TESNum, dirfiles, scaling=140e3, newsize=70, dmax = 5., az_center=0., el_center=50., doplot=False,
+          vmin=None, vmax=None, resample=True):
+    ### Read flat maps
+    flatmap_init, az_init, el_init = get_flatmap(TESNum, dirfiles)
+
+    if resample:
+        ### Resample input map to have less pixels to deal with for fitting
+        flatmap = scsig.resample(scsig.resample(flatmap_init, newsize, axis=0), newsize, axis=1)
+        delta_az = np.median(az_init-np.roll(az_init,1))
+        delta_el = np.median(el_init-np.roll(el_init,1))
+        az = np.linspace(np.min(az_init)-delta_az/2, np.max(az_init)+delta_az/2, newsize)
+        el = np.linspace(np.min(el_init)-delta_el/2, np.max(el_init)+delta_el/2, newsize)
+    else:
+        flatmap = flatmap_init
+        az = az_init
+        el = el_init
+    az2d, el2d = np.meshgrid(az*np.cos(np.radians(50)), np.flip(el))
+
+    ### First find the location of the maximum close to the center
+    distance_max = dmax
+    mask = (np.sqrt((az2d-az_center)**2+(el2d-el_center)**2) < distance_max).astype(int)
+    wmax = np.where((flatmap*mask) == np.max(flatmap*mask))
+    maxval = flatmap[wmax][0]
+    print 'Maximum of map is {0:5.2g} and was found at: az={1:5.2f}, el={2:5.2f}'.format(maxval,
+                                                                                         az2d[wmax][0], el2d[wmax][0])
+
+
+    ### Now fit all parameters
+    x = [az2d,el2d]
+    parsinit = np.array([az2d[wmax][0], el2d[wmax][0], 8.3, 44., 0., 0.009, maxval/scaling, 0., 50., 13., 1.])
+    rng = [[az2d[wmax][0]-1., az2d[wmax][0]+1.],
+            [el2d[wmax][0]-1., el2d[wmax][0]+1.],
+            [8., 8.75],
+            [43., 47.],
+            [-0.02, 0.02],
+            [-0.02, 0.02],
+            [0,1000],
+            [-3,3],
+            [47., 53],
+            [10., 16.],
+            [0.5, 1.5]]
+    fit = ft.do_minuit(x, np.ravel(flatmap/scaling), np.ones_like(np.ravel(flatmap)), parsinit, 
+                       functname=flattened_qubic_sb_model, chi2=ft.MyChi2_nocov, rangepars=rng,
+                        force_chi2_ndf=True)
+    themap, newxxyy = qubic_sb_model(x,fit[1], return_peaks=True)
+    
+    if doplot:
+        rc('figure',figsize=(18,4))
+        parfit = fit[1]
+        sh = np.shape(newxxyy)
+        print sh
+        subplot(1,2,1)
+        imshow(flatmap/scaling, extent=[np.min(az)*np.cos(np.radians(50)), 
+                                             np.max(az)*np.cos(np.radians(50)), 
+                                             np.min(el), np.max(el)],
+              vmin=vmin, vmax=vmax)
+        colorbar()
+        for i in xrange(sh[1]):
+            ax=plot(newxxyy[0,i], newxxyy[1,i], 'r.')
+        title('Input Map - TES #{}'.format(TESNum))
+        xlabel('Angle in Az direction [deg.]')
+        ylabel('Elevation [deg.]')
+            
+        subplot(1,2,2)
+        imshow(flatmap/scaling-themap, extent=[np.min(az)*np.cos(np.radians(50)), 
+                                               np.max(az)*np.cos(np.radians(50)), 
+                                               np.min(el), np.max(el)],
+              vmin=vmin, vmax=vmax)
+        colorbar()
+        title('Residual Map - TES #{}'.format(TESNum))
+        xlabel('Angle in Az direction [deg.]')
+        ylabel('Elevation [deg.]')
+
+    fit[1][6] *= scaling
+    fit[2][6] *= scaling
+    #fit[1][11] *= scaling
+    #fit[2][11] *= scaling
+    return flatmap_init, az_init, el_init, fit, newxxyy
+    
+
+def mygauss2d(x2d, y2d, center, sx, sy, rho):
+    sh = np.shape(x2d)
+    xx = np.ravel(x2d)-center[0]
+    yy = np.ravel(y2d)-center[1]
+    z = (xx/sx)**2 - 2*rho*xx*yy/sx/sy+(yy/sy)**2
+    return np.reshape(np.exp(-z/(2*(1-rho**2))),sh)
+
+
+def qubic_sb_model_asym(x, pars, return_peaks=False):
+    x2d = x[0]
+    y2d = x[1]
+    nrings = 2
+    xc = pars[0]
+    yc = pars[1]
+    dist = pars[2]
+    angle = pars[3]
+    distx = pars[4]
+    disty = pars[5]
+    ampgauss = pars[6]
+    xcgauss = pars[7]
+    ycgauss = pars[8]
+    fwhmgauss = pars[9]
+    fwhmxpeaks = pars[10:19]
+    fwhmypeaks = pars[19:28]
+    rhopeaks = pars[28:37]
+    
+    amps = np.zeros(9)
+    npeaks_tot = len(amps)
+    npeaks_line = int(np.sqrt(npeaks_tot))
+    nrings = (npeaks_line-1)/2+1
+    x = (np.arange(npeaks_line) - (nrings-1))*dist
+    xx, yy = np.meshgrid(x,x)
+    xxyy = np.array([np.ravel(xx), np.ravel(yy)])
+    cosang = np.cos(np.radians(angle))
+    sinang = np.sin(np.radians(angle))
+    rotmat = np.array([[cosang, -sinang],[sinang, cosang]])
+    newxxyy = []
+    for i in xrange(npeaks_tot):
+        thexxyy = np.dot(rotmat, xxyy[:,i])
+        newxxyy.append(thexxyy)
+    newxxyy =  np.array(newxxyy).T
+
+    newxxyy[0,:] += distx*(newxxyy[1,:])**2 
+    newxxyy[1,:] += disty*(newxxyy[0,:])**2
+    
+    newxxyy[0,:] += xc
+    newxxyy[1,:] += yc
+    
+    themap = np.zeros_like(x2d)
+    for i in xrange(npeaks_tot):
+        amps[i] = ampgauss * np.exp(-0.5 * ((xcgauss-newxxyy[0,i])**2 + (ycgauss-newxxyy[1,i])**2)/(fwhmgauss/2.35)**2)
+        themap += amps[i] * mygauss2d(x2d, y2d, newxxyy[:,i], fwhmxpeaks[i]/2.35, fwhmypeaks[i]/2.35, rhopeaks[i])
+
+
+#     satpix = themap >= saturation
+#     themap[satpix] = saturation
+
+    if return_peaks:
+        return themap, newxxyy
+    else:
+        return themap
+
+
+def flattened_qubic_sb_model_asym(x, pars, return_peaks=False):
+    return np.ravel(qubic_sb_model_asym(x, pars))
+
+
+def fit_sb_asym(TESNum, dirfiles, scaling=140e3, newsize=70, dmax = 5., az_center=0., el_center=50., doplot=False):
+    ### Read flat maps
+    flatmap_init, az_init, el_init = get_flatmap(TESNum, dirfiles)
+
+    ### Resample input map to have less pixels to deal with for fitting
+    flatmap = scsig.resample(scsig.resample(flatmap_init, newsize, axis=0), newsize, axis=1)
+    delta_az = np.median(az_init-np.roll(az_init,1))
+    delta_el = np.median(el_init-np.roll(el_init,1))
+    az = np.linspace(np.min(az_init)-delta_az/2, np.max(az_init)+delta_az/2, newsize)
+    el = np.linspace(np.min(el_init)-delta_el/2, np.max(el_init)+delta_el/2, newsize)
+    az2d, el2d = np.meshgrid(az*np.cos(np.radians(50)), np.flip(el))
+
+    ### First find the location of the maximum close to the center
+    distance_max = dmax
+    mask = (np.sqrt((az2d-az_center)**2+(el2d-el_center)**2) < distance_max).astype(int)
+    wmax = np.where((flatmap*mask) == np.max(flatmap*mask))
+    maxval = flatmap[wmax][0]
+    print 'Maximum of map is {0:5.2g} and was found at: az={1:5.2f}, el={2:5.2f}'.format(maxval,
+                                                                                         az2d[wmax][0], el2d[wmax][0])
+
+
+    ### Now fit all parameters
+    x = [az2d,el2d]
+    parsinit = np.array([az2d[wmax][0], el2d[wmax][0], 8.3, 44., 0., 0.01, maxval/scaling, 0., 50., 13.])
+    fwhmxinit = np.zeros(9)+1
+    fwhmyinit = np.zeros(9)+1
+    rhosinit = np.zeros(9)
+    parsinit = np.append(np.append(np.append(parsinit, fwhmxinit),fwhmyinit), rhosinit)
+    rng = [[az2d[wmax][0]-1., az2d[wmax][0]+1.],
+            [el2d[wmax][0]-1., el2d[wmax][0]+1.],
+            [8., 8.75],
+            [43., 47.],
+            [-0.1, 0.1],
+            [-0.1, 0.1],
+            [0,1000],
+            [-3,3],
+            [47., 53],
+            [10., 16.]]
+    for i in xrange(9): rng.append([0.5, 1.5])
+    for i in xrange(9): rng.append([0.5, 1.5])
+    for i in xrange(9): rng.append([-1, 1])
+
+    fit = ft.do_minuit(x, np.ravel(flatmap/scaling), np.ones_like(np.ravel(flatmap)), parsinit, 
+                       functname=flattened_qubic_sb_model_asym, chi2=ft.MyChi2_nocov, rangepars=rng,
+                        force_chi2_ndf=True)
+    themap, newxxyy = qubic_sb_model(x,fit[1], return_peaks=True)
+    
+    if doplot:
+        rc('figure',figsize=(18,4))
+        parfit = fit[1]
+        sh = np.shape(newxxyy)
+        print sh
+        subplot(1,2,1)
+        imshow(flatmap/scaling, extent=[np.min(az)*np.cos(np.radians(50)), 
+                                             np.max(az)*np.cos(np.radians(50)), 
+                                             np.min(el), np.max(el)])
+        colorbar()
+        for i in xrange(sh[1]):
+            ax=plot(newxxyy[0,i], newxxyy[1,i], 'r.')
+        title('Input Map - TES #{}'.format(TESNum))
+        xlabel('Angle in Az direction [deg.]')
+        ylabel('Elevation [deg.]')
+            
+        subplot(1,2,2)
+        imshow(flatmap/scaling-themap, extent=[np.min(az)*np.cos(np.radians(50)), 
+                                               np.max(az)*np.cos(np.radians(50)), 
+                                               np.min(el), np.max(el)])
+        colorbar()
+        title('Residual Map - TES #{}'.format(TESNum))
+        xlabel('Angle in Az direction [deg.]')
+        ylabel('Elevation [deg.]')
+
+    fit[1][6] *= scaling
+    fit[2][6] *= scaling
+    fit[1][10] *= scaling
+    fit[2][10] *= scaling
+    return flatmap_init, az_init, el_init, fit, newxxyy
     

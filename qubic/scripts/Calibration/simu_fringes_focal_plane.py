@@ -199,6 +199,17 @@ def selfcal_data(q, nn, xmin, xmax, theta, phi, spectral_irradiance, baseline,
 
 
 def full2quarter(s):
+    """
+    Reduce to a quarter of the focal plane
+    Parameters
+    ----------
+    s : array
+        Power on the total focal plane for each pointing
+
+    Returns
+        The power on a quarter of the focal plane
+
+    """
     focal_plan = np.where(qp().pix_grid > 0, 1, qp().pix_grid)
     # imshow(focal_plan, interpolation='nearest')
     nn = s.shape[0]
@@ -209,6 +220,50 @@ def full2quarter(s):
         s_quarter[:, :, ptg] = s[:nn / 2, nn / 2:, ptg] * focal_plan
 
     return s_quarter
+
+
+def get_tes_signal(s):
+    """
+    Power in each TES is put in 2 arrays, one for each
+    asic with the index of the TES of the real instrument.
+
+    Parameters
+    ----------
+    s : array of shape (17, 17, nptg)
+        Power on a quarter of the focal plane for each pointing
+
+    Returns
+    -------
+    Two arrays, one for each asic, of shape (nptg, 129)
+
+    """
+    nlin = s.shape[0]
+    ncol = s.shape[1]
+    nptg = s.shape[2]
+
+    a1 = qp()
+    a1.assign_asic(1)
+    a2 = qp()
+    a2.assign_asic(2)
+
+    tes_signal_a1 = np.zeros((nptg, 129))
+    tes_signal_a2 = np.zeros((nptg, 129))
+
+    for ptg in range(nptg):
+        pix = 1
+        for l in range(nlin):
+            for c in range(ncol):
+                if s[l, c, ptg] != 0.:
+                    if a1.pix2tes(pix) is not None:
+                        tes = a1.pix2tes(pix)
+                        tes_signal_a1[ptg, tes] = s[l, c, ptg]
+                    else:
+                        # print(a1.pix2tes(pix))
+                        tes = a2.pix2tes(pix)
+                        tes_signal_a2[ptg, tes] = s[l, c, ptg]
+                    print(tes)
+                    pix += 1
+    return tes_signal_a1, tes_signal_a2
 
 
 # Focal plane parameters
@@ -259,19 +314,6 @@ Cj = full2quarter(Cj)
 Sij = full2quarter(Sij)
 
 
-
-
-figure()
-imshow(s_cut, interpolation='nearest', vmin=0., vmax=0.0005)
-colorbar()
-
-figure()
-imshow(S_tot2[:, :, 0], interpolation='nearest', vmin=0., vmax=0.0005)
-colorbar()
-
-
-
-
 # Figure with the fringes
 figure('combination_nn={0}_baseline{1}_{2}'.format(nn, baseline_manip[0], baseline_manip[1]))
 subplot(2, 2, 1)
@@ -300,43 +342,15 @@ for ptg in xrange(nptg):
         colorbar()
 
 
-# Mapping with TES
-Sij = a1.pix_grid
-Sij = np.reshape(Sij, (17,17, 1))
-imshow(Sij, interpolation='nearest')
+# Test the TES mapping
+focal_plan = np.where(qp().pix_grid > 0, 1, qp().pix_grid)
 
+S_test = np.arange(1, 290)
+S_test = np.reshape(S_test, (17, 17)) * focal_plan
+S_test = np.reshape(S_test, (17, 17, 1))
+imshow(S_test[:,:,0], interpolation='nearest')
 
-def get_tes_signal(s):
-    nlin = s.shape[0]
-    ncol = s.shape[1]
-    nptg = s.shape[2]
-
-    a1 = qp()
-    a1.assign_asic(1)
-    a2 = qp()
-    a2.assign_asic(2)
-
-    tes_signal_a1 = np.zeros((nptg, 129))
-    tes_signal_a2 = np.zeros((nptg, 129))
-
-    for ptg in range(nptg):
-        pix = 1
-        for l in range(nlin):
-            for c in range(ncol):
-                if Sij[l, c, ptg] != 0.:
-                    # print(Sij_new[l][c])
-                    if a1.pix2tes(pix) is not None:
-                        tes = a1.pix2tes(pix)
-                        tes_signal_a1[ptg, tes] = Sij[l, c, ptg]
-                        # print('coucou')
-                    else:
-                        # print(a1.pix2tes(pix))
-                        tes = a2.pix2tes(pix)
-                        tes_signal_a2[ptg, tes] = Sij[l, c, ptg]
-                    # print(tes)
-                    pix += 1
-    return tes_signal_a1, tes_signal_a2
-
+tes_signal_a1, tes_signal_a2 = get_tes_signal(S_test)
 
 
 # Test============

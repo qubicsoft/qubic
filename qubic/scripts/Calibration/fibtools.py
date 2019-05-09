@@ -629,7 +629,7 @@ def simsig_nonorm(x, pars):
     return thesim
 
 
-def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None, return_error=False, silent=False):
+def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None, return_error=False, silent=False, median=False):
     """
 
     Parameters
@@ -664,7 +664,9 @@ def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None, return_error
                 ftocut = notch[i][0]
                 bw = notch[i][1]
                 newdata = notch_filter(newdata, ftocut, bw, FREQ_SAMPLING)
-        t, yy, dx, dy, others = profile(tfold, newdata, range=[0, period], nbins=nbins, dispersion=False, plot=False, cutbad=False)    
+        t, yy, dx, dy, others = profile(tfold, newdata, range=[0, period], 
+                                        nbins=nbins, dispersion=False, plot=False, 
+                                        cutbad=False, median=median)    
         folded[THEPIX, :] = (yy - np.mean(yy)) / np.std(yy)
         folded_nonorm[THEPIX, :] = (yy - np.mean(yy))
     if return_error:

@@ -266,7 +266,7 @@ def get_tes_signal(s):
 
     Parameters
     ----------
-    s : array of shape (17, 17, nptg)
+    s : array of shape (17, 17, #pointings)
         Power on a quarter of the focal plane for each pointing
 
     Returns
@@ -284,37 +284,31 @@ def get_tes_signal(s):
     a2 = qp()
     a2.assign_asic(2)
 
-    tes_signal_a1 = np.zeros((nptg, 128))
-    tes_signal_a2 = np.zeros((nptg, 128))
+    tes_signal = np.zeros((256, nptg))
+    # tes_signal_a2 = np.zeros((128, nptg))
 
     for ptg in range(nptg):
         pix = 1
         for l in range(nlin):
             for c in range(ncol):
-                if s[l, c, ptg] != 0.:
-                    if a1.pix2tes(pix) is not None:
-                        tes = a1.pix2tes(pix)
-                        if tes is not None: tes_signal_a1[ptg, tes-1] = s[l, c, ptg]
+                if s[l, c, ptg] != 0. and np.isnan(s[l, c, ptg])==False:
+                    tes = a1.pix2tes(pix)
+                    if tes is not None:
+                        tes_signal[tes-1, ptg] = s[l, c, ptg]
                     else:
                         tes = a2.pix2tes(pix)
-                        if tes is not None: tes_signal_a2[ptg, tes-1] = s[l, c, ptg]
-                    #print(tes)
+                        tes_signal[tes-1+128, ptg] = s[l, c, ptg]
+                    print(tes)
                     pix += 1
-    return tes_signal_a1, tes_signal_a2
+    return tes_signal
 
 
-# +
-def get_fringes_th_TD(baseline, basedir='../', phi=np.array([0.]), theta=np.array([0.])):
+def get_fringes_TD(baseline, basedir='../', phi=np.array([0.]), theta=np.array([0.]), irradiance=1.):
     
     dictfilename = basedir + 'global_source.dict'
     d = qubic.qubicdict.qubicDict()
     d.read_from_file(dictfilename)
     q = qubic.QubicMultibandInstrument(d)
-    s = qubic.QubicScene(d)
-
-    # Source parameters : positions and spectral irradiance
-    irradiance = 1.
-    nptg = len(theta)
 
     S_tot, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = selfcal_data(q[0], theta, phi,
                                                                  irradiance, baseline,
@@ -325,17 +319,8 @@ def get_fringes_th_TD(baseline, basedir='../', phi=np.array([0.]), theta=np.arra
     Cminus_j = full2quarter(Cminus_j)
     Sminus_ij = full2quarter(Sminus_ij)
     Ci = full2quarter(Ci)
-    Cj = full2quarter(Cj)
-    Sij = full2quarter(Sij)
 
-    fringes = (S_tot - Cminus_i - Cminus_j + Sminus_ij)
-    imshow(Ci[:,:,0])
-    print np.sum(fringes)
-    print np.sum(1./Ci)
-    print np.sum(fringes/Ci)
-    
-    tes_signal_a1, tes_signal_a2 = get_tes_signal(fringes/Ci)
+    fringes = (S_tot - Cminus_i - Cminus_j + Sminus_ij)/Ci
  
-    return np.append(tes_signal_a1, tes_signal_a2)
-
+    return get_tes_signal(fringes)
 

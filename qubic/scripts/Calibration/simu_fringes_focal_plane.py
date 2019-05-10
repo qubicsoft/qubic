@@ -99,7 +99,8 @@ S_test = np.reshape(S_test, (17, 17)) * focal_plan
 S_test = np.reshape(S_test, (17, 17, 1))
 imshow(S_test[:, :, 0], interpolation='nearest')
 
-tes_signal_a1, tes_signal_a2 = get_tes_signal(S_tot)
+tes_signal = get_tes_signal(S_tot)
+imshow(ft.image_asics(all1=tes_signal[:, 0]), interpolation='nearest')
 
 # Test============
 figure()

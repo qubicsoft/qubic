@@ -19,9 +19,20 @@ dictfilename = './spectroimaging.dict'
 out_dir = './'#'/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/repeat_ptg/'
 name = 'repeat_pointing_01'
 
-# Numbers of subbands for spectroimaging
-nrecon = d['nf_recon']
+''' Parameters to be change for simulations:
 
+[0] Sky creation:	d['nf_sub'] = 12 to 24 ? 4/5 diferent values?
+
+[1] Pointing: 		d['random_pointing'] = True, 
+					d['npointings'] = [1000,1500,2000]
+
+[2] TOD creation: 	d['noiseless'] = [True, False]
+					if False: change d['detector_nep'] only? 
+
+[3] Reconstruction:	d['nf_sub_rec'] = [1,2,3,4,5,6,7,8] ? 
+					tol = [5e-4, 1e-4, 5e-5, 1e-5, 5e-6] :o
+					
+'''
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
@@ -45,7 +56,8 @@ f.close()
 
 t0 = time.time()
 
-# ===== Sky Creation =====
+# ===== Sky Creation or Reading =====
+
 sky_config = {
     'dust': models('d1', d['nside']),
     'cmb': models('c1', d['nside'])}
@@ -57,6 +69,7 @@ hp.mollview(x0[0, :, 0])
 
 
 # ==== Pointing strategy ====
+
 p = qubic.get_pointing(d)
 
 

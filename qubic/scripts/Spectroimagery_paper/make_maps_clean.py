@@ -9,14 +9,14 @@ import healpy as hp
 import numpy as np
 
 from pysm.nominal import models
-
+from pysimulators 
 import qubic
 
 import ReadMC
 import SpectroImLib as si
 
 dictfilename = './spectroimaging.dict'
-
+dictmaps = './maps/'
 out_dir = '/home/louisemousset/Desktop/'
 try:
     os.makedirs(out_dir)
@@ -55,13 +55,8 @@ t0 = time.time()
 
 # ===== Sky Creation or Reading =====
 
-sky_config = {
-    'dust': models('d1', d['nside']),
-    'cmb': models('c1', d['nside'])}
-
-Qubic_sky = si.Qubic_sky(sky_config, d)
-x0 = Qubic_sky.get_simple_sky_map()
-
+x0 = FitsArray(dictmaps + 'nf_sub={}'.d['nf_sub'])
+print('Input Map with shape:', np.shape(x0))
 
 # ==== Pointing strategy ====
 

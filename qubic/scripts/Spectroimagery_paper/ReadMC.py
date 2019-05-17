@@ -13,6 +13,7 @@ from qubic import Xpol
 from qubic import apodize_mask
 
 
+# =============== Save a simulation ==================
 def save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved,
                    save_dir, simu_name):
     """
@@ -33,8 +34,6 @@ def save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved,
         Directory where the .fits is saved.
     simu_name : str
         Name of the simulation.
-    nf_sub_rec : int
-        Number of reconstructed subbands.
 
     """
 
@@ -50,6 +49,7 @@ def save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved,
     the_file.writeto(save_dir + simu_name, 'warn')
 
 
+# =============== Read saved maps ==================
 def get_seenmap_new(file):
     """
     Returns an array with the pixels seen or not.
@@ -65,7 +65,7 @@ def get_seenmap_new(file):
         True inside the patch and False outside.
     """
     simu = fits.open(file)
-    map = simu[1].data
+    map = simu['MAPS_RECON'].data
     npix = np.shape(map)[1]
     seenmap = np.full(npix, True, dtype=bool)
 
@@ -74,7 +74,59 @@ def get_seenmap_new(file):
     return seenmap
 
 
-# ============ Functions to get maps ===========#
+def get_maps(file):
+    """
+    Returns the full maps of a simulation.
+    Parameters
+    ----------
+    file : str
+        A fits file saved from a simulation.
+
+    Returns
+    -------
+    Reconstructed maps, convolved maps and residuals,
+    all with a shape (#subbands, #pixels, 3).
+
+    """
+
+    simu = fits.open(file)
+
+    maps_recon = simu['MAPS_RECON'].data
+    maps_convo = simu['MAPS_CONVOLVED'].data
+
+    residuals = maps_recon - maps_convo
+
+    return maps_recon, maps_convo, residuals
+
+
+def get_patch(file, seenmap):
+    """
+        Returns the observed patch in the maps to save memory.
+        Parameters
+        ----------
+        file : str
+            A fits file saved from a simulation.
+        seenmap : array
+            Array of booleans of shape #pixels,
+            True inside the patch and False outside.
+
+        Returns
+        -------
+        Reconstructed patches, convolved patches and residual patches,
+        all with a shape (#subbands, #pixels_seen, 3).
+
+        """
+
+    maps_recon, maps_convo, residuals = get_maps(file)
+
+    maps_recon_cut = maps_recon[:, seenmap, :]
+    maps_convo_cut = maps_convo[:, seenmap, :]
+    residuals_cut = residuals[:, seenmap, :]
+
+    return maps_recon_cut, maps_convo_cut, residuals_cut
+
+
+# ============ OLD Functions to get maps ===========#
 def get_seenmap(files):
     """ 
     Return a list of len the number of pixels, 

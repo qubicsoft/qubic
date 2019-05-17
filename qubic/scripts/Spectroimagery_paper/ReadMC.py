@@ -3,14 +3,51 @@ import glob
 
 import healpy as hp
 import numpy as np
+from astropy.io import fits
 
 from joblib import Parallel, delayed
 import multiprocessing
 
-import qubic
 from pysimulators import FitsArray
 from qubic import Xpol
 from qubic import apodize_mask
+
+
+def save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved,
+                   save_dir, simu_name, nf_sub_rec):
+    """
+    Save a complete simulation in a .fits file for one number of reconstructed subbands.
+    Parameters
+    ----------
+    maps_recon : array
+        Reconstructed maps in each subband.
+    cov : array
+        Coverage of the sky.
+    nus : array
+        Central frequencies of each subband reconstructed.
+    nus_edge : array
+        Edge frequencies of each subband reconstructed.
+    maps_convolved : array
+        Maps convolved at the resolution of each subband.
+    save_dir : str
+        Directory where the .fits is saved.
+    simu_name : str
+        Name of the simulation.
+    nf_sub_rec : int
+        Number of reconstructed subbands.
+
+    """
+
+    hdu_primary = fits.PrimaryHDU()
+    hdu_recon = fits.ImageHDU(data=maps_recon, name='maps_recon')
+    hdu_cov = fits.ImageHDU(data=cov, name='coverage')
+    hdu_nus = fits.ImageHDU(data=nus, name='central_freq', )
+    hdu_nus_edge = fits.ImageHDU(data=nus_edge, name='edge_freq')
+    hdu_convolved = fits.ImageHDU(data=maps_convolved, name='maps_convolved')
+
+    the_file = fits.HDUList([hdu_primary, hdu_recon, hdu_cov, hdu_nus, hdu_nus_edge, hdu_convolved])
+    file_name = save_dir + simu_name + '_nf_sub_rec{}.fits'.format(nf_sub_rec)
+    the_file.writeto(file_name, 'warn')
 
 
 # ============ Functions to get maps ===========#
@@ -320,5 +357,5 @@ def get_maps_cl(frec, fconv=None, lmin=20, delta_ell=40, apodization_degrees=5.)
         m_autos[isub, :, :], s_autos[isub, :, :], m_cross[isub, :, :], s_cross[isub, :, :] = \
             allcross_par(xpol, mrec[:, isub, :, :], silent=False, verbose=0)
 
-    return mrec, resid, seenmap, ell_binned, m_autos * fact / pwb ** 2, s_autos * fact / pwb ** 2, \
-           m_cross * fact / pwb ** 2, s_cross * fact / pwb ** 2
+    return mrec, resid, seenmap, ell_binned, m_autos * fact / pwb ** 2, \
+           s_autos * fact / pwb ** 2, m_cross * fact / pwb ** 2, s_cross * fact / pwb ** 2

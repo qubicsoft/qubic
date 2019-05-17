@@ -5,13 +5,11 @@ import time
 import healpy as hp
 import numpy as np
 
-from astropy.io import fits
-
 from pysm.nominal import models
 
 import qubic
-from pysimulators import FitsArray
 
+import ReadMC
 import SpectroImLib as si
 
 dictfilename = './spectroimaging.dict'
@@ -37,17 +35,14 @@ d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
 # Print dictionary and others parameters
-# Save a file with al parameters
+# Save a file with all parameters
 tem = sys.stdout
 sys.stdout = f = open(out_dir + name + '.txt', 'wt')
 
-print('Simulation General Name: ' + name)
+print('Simulation Name: ' + name)
 print('Dictionnary File: ' + dictfilename)
 for k in d.keys():
     print(k, d[k])
-
-print('Minimum Number of Sub Frequencies: {}'.format(np.min(d['nf_recon'])))
-print('Maximum Number of Sub Frequencies: {}'.format(np.max(d['nf_recon'])))
 
 sys.stdout = tem
 f.close()
@@ -65,24 +60,21 @@ sky_config = {
 Qubic_sky = si.Qubic_sky(sky_config, d)
 x0 = Qubic_sky.get_simple_sky_map()
 
-hp.mollview(x0[0, :, 0])
-
 
 # ==== Pointing strategy ====
 
 p = qubic.get_pointing(d)
 
-
 # ==== TOD making ====
 TOD, maps_convolved = si.create_TOD(d, p, x0)
 
 # ==== Reconstruction ====
-for nf_sub_rec in nrecon: # np.arange(noutmin, noutmax + 1):
+for nf_sub_rec in d['nf_nrecon']:
     print(nf_sub_rec)
     print('-------------------------- Map-Making on {} sub-map(s)'.format(nf_sub_rec))
     maps_recon, cov, nus, nus_edge, maps_convolved = si.reconstruct_maps(TOD, d, p, nf_sub_rec, x0=x0)
-    # if nf_sub_rec == 1:
-    #     maps_recon = np.reshape(maps_recon, np.shape(maps_convolved))
+    if nf_sub_rec == 1:
+        maps_recon = np.reshape(maps_recon, np.shape(maps_convolved))
     # Look at the coverage of the sky
     cov = np.sum(cov, axis=0)
     maxcov = np.max(cov)
@@ -91,14 +83,8 @@ for nf_sub_rec in nrecon: # np.arange(noutmin, noutmax + 1):
     maps_recon[:, unseen, :] = hp.UNSEEN
     print('************************** Map-Making on {} sub-map(s)Done'.format(nf_sub_rec))
 
-    # hdu_convolved = fits.PrimaryHDU()
-    # hdu_recon.data =
-
-    # FitsArray(nus_edge).save(name + '_nf{0}_ptg{1}'.format(nf_sub_rec, ptg) + '_nus_edges.fits')
-    # FitsArray(nus).save(name + '_nf{0}_ptg{1}'.format(nf_sub_rec, ptg)+ '_nus.fits')
-    FitsArray(maps_convolved).save(out_dir + name + '_nf{}_maps_convolved.fits'.format(nf_sub_rec))
-    FitsArray(maps_recon).save(out_dir + name + '_nf{}_maps_recon.fits'.format(nf_sub_rec))
+    ReadMC.save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved,
+                          out_dir, name, nf_sub_rec)
 
     t1 = time.time()
     print('************************** All Done in {} minutes'.format((t1 - t0) / 60))
-

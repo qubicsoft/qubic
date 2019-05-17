@@ -18,9 +18,6 @@ dictfilename = '/home/louisemousset/QUBIC/MyGitQUBIC/qubic/qubic/scripts' \
 out_dir = '/home/louisemousset/Desktop/'
 name = 'name_simu'
 
-# Numbers of subbands for spectroimaging
-nrecon = [2, 3]
-
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
@@ -29,12 +26,10 @@ d.read_from_file(dictfilename)
 tem = sys.stdout
 sys.stdout = f = open(out_dir + name + '.txt', 'wt')
 
-print('Simulation General Name: ' + name)
+print('Simulation Name: ' + name)
 print('Dictionnary File: ' + dictfilename)
 for k in d.keys():
     print(k, d[k])
-
-print('Numbers of reconstructed subbands: {}'.format(nrecon))
 
 sys.stdout = tem
 f.close()
@@ -51,8 +46,6 @@ sky_config = {
 Qubic_sky = si.Qubic_sky(sky_config, d)
 x0 = Qubic_sky.get_simple_sky_map()
 
-# hp.mollview(x0[0, :, 0])
-
 
 # ==== Pointing strategy ====
 p = qubic.get_pointing(d)
@@ -61,7 +54,7 @@ p = qubic.get_pointing(d)
 TOD, maps_convolved = si.create_TOD(d, p, x0)
 
 # ==== Reconstruction ====
-for nf_sub_rec in nrecon:
+for nf_sub_rec in d['nf_nrecon']:
     print(nf_sub_rec)
     print('-------------------------- Map-Making on {} sub-map(s)'.format(nf_sub_rec))
     maps_recon, cov, nus, nus_edge, maps_convolved = si.reconstruct_maps(TOD, d, p, nf_sub_rec, x0=x0)

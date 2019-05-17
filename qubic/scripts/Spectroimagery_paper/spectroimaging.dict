@@ -15,11 +15,11 @@ psd=None
 bandwidth=None
 twosided=None
 sigma=None
+## Detector nep  + reading noise: sqrt(4.7e-17**2 + 2e-16**2)
+detector_nep=4.7e-17 #2.05e-16 (TD), 4.7e-17(FI)
 detector_fknee=0
 detector_fslope=1
 detector_ncorr=10
-## Detector nep  + reading noise: sqrt(4.7e-17**2 + 2e-16**2)
-detector_nep=4.7e-17 #2.05e-16 (TD), 4.7e-17(FI)
 detector_ngrids=1
 detector_tau=0.01
 polarizer=True
@@ -84,8 +84,8 @@ comm=None
 weights=None
 
 ####################################### Map making #####################################
-tol=[1e-2,1e-3]
-nf_recon = [2,3,4,5]
+tol=1e-2
+nf_recon = [2,3]
 maxiter=1500
 verbose=True
 

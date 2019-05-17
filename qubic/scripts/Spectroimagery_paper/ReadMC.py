@@ -14,7 +14,7 @@ from qubic import apodize_mask
 
 
 def save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved,
-                   save_dir, simu_name, nf_sub_rec):
+                   save_dir, simu_name):
     """
     Save a complete simulation in a .fits file for one number of reconstructed subbands.
     Parameters
@@ -45,9 +45,9 @@ def save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved,
     hdu_nus_edge = fits.ImageHDU(data=nus_edge, name='edge_freq')
     hdu_convolved = fits.ImageHDU(data=maps_convolved, name='maps_convolved')
 
-    the_file = fits.HDUList([hdu_primary, hdu_recon, hdu_cov, hdu_nus, hdu_nus_edge, hdu_convolved])
-    file_name = save_dir + simu_name + '_nf_sub_rec{}.fits'.format(nf_sub_rec)
-    the_file.writeto(file_name, 'warn')
+    the_file = fits.HDUList([hdu_primary, hdu_recon, hdu_cov, hdu_nus,
+                             hdu_nus_edge, hdu_convolved])
+    the_file.writeto(save_dir + simu_name, 'warn')
 
 
 # ============ Functions to get maps ===========#

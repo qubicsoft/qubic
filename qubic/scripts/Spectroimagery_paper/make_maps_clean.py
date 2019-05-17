@@ -1,6 +1,9 @@
 from __future__ import division
+import os
 import sys
 import time
+import datetime
+import shutil
 
 import healpy as hp
 import numpy as np
@@ -14,8 +17,19 @@ import SpectroImLib as si
 
 dictfilename = './spectroimaging.dict'
 
-out_dir = './'#'/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/repeat_ptg/'
-name = 'repeat_pointing_01'
+out_dir = '/home/louisemousset/Desktop/'
+try:
+    os.makedirs(out_dir)
+except:
+    pass
+
+today = datetime.datetime.now().strftime('%Y%m%d')
+
+name = today +'_' + sys.argv[1]
+
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+
 
 ''' Parameters to be change for simulations:
 
@@ -31,21 +45,9 @@ name = 'repeat_pointing_01'
 					tol = [5e-4, 1e-4, 5e-5, 1e-5, 5e-6] :o
 					
 '''
-d = qubic.qubicdict.qubicDict()
-d.read_from_file(dictfilename)
 
-# Print dictionary and others parameters
-# Save a file with all parameters
-tem = sys.stdout
-sys.stdout = f = open(out_dir + name + '.txt', 'wt')
-
-print('Simulation Name: ' + name)
-print('Dictionnary File: ' + dictfilename)
-for k in d.keys():
-    print(k, d[k])
-
-sys.stdout = tem
-f.close()
+# Save the dictionary
+shutil.copyfile(dictfilename, out_dir + name + '.dict')
 
 # ==========================================
 
@@ -69,8 +71,7 @@ p = qubic.get_pointing(d)
 TOD, maps_convolved = si.create_TOD(d, p, x0)
 
 # ==== Reconstruction ====
-for nf_sub_rec in d['nf_nrecon']:
-    print(nf_sub_rec)
+for i, nf_sub_rec in enumerate(d['nf_recon']):
     print('-------------------------- Map-Making on {} sub-map(s)'.format(nf_sub_rec))
     maps_recon, cov, nus, nus_edge, maps_convolved = si.reconstruct_maps(TOD, d, p, nf_sub_rec, x0=x0)
     if nf_sub_rec == 1:
@@ -83,8 +84,13 @@ for nf_sub_rec in d['nf_nrecon']:
     maps_recon[:, unseen, :] = hp.UNSEEN
     print('************************** Map-Making on {} sub-map(s)Done'.format(nf_sub_rec))
 
+    name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}.fits'.format(d['nf_sub'],
+                                                                 d['nf_recon'][i],
+                                                                 d['noiseless'],
+                                                                 d['npointings'],
+                                                                 d['tol'])
     ReadMC.save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved,
-                          out_dir, name, nf_sub_rec)
+                          out_dir, name+name_map)
 
     t1 = time.time()
     print('************************** All Done in {} minutes'.format((t1 - t0) / 60))

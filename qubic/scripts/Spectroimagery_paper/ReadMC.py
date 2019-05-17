@@ -13,7 +13,8 @@ from qubic import Xpol
 from qubic import apodize_mask
 
 
-def save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved, save_dir, simu_name, nf_sub_rec):
+def save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved,
+                   save_dir, simu_name, nf_sub_rec):
     """
     Save a complete simulation in a .fits file for one number of reconstructed subbands.
     Parameters

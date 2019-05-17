@@ -50,6 +50,30 @@ def save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved,
     the_file.writeto(save_dir + simu_name, 'warn')
 
 
+def get_seenmap_new(file):
+    """
+    Returns an array with the pixels seen or not.
+    Parameters
+    ----------
+    file : str
+        A fits file saved from a simulation.
+
+    Returns
+    -------
+    seenmap : array
+        Array of booleans of shape #pixels,
+        True inside the patch and False outside.
+    """
+    simu = fits.open(file)
+    map = simu[1].data
+    npix = np.shape(map)[1]
+    seenmap = np.full(npix, True, dtype=bool)
+
+    bla = np.mean(map, axis=(0, 2)) != hp.UNSEEN
+    seenmap *= bla
+    return seenmap
+
+
 # ============ Functions to get maps ===========#
 def get_seenmap(files):
     """ 

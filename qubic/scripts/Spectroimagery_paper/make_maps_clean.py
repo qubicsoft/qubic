@@ -14,15 +14,13 @@ from pysimulators import FitsArray
 
 import SpectroImLib as si
 
-dictfilename = '/home/louisemousset/QUBIC/MyGitQUBIC/qubic/qubic/scripts' \
-               '/Spectroimagery_paper/spectroimaging.dict'
+dictfilename = './spectroimaging.dict'
 
-out_dir = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/repeat_ptg/'
+out_dir = './'#'/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/repeat_ptg/'
 name = 'repeat_pointing_01'
 
 # Numbers of subbands for spectroimaging
-nrecon = [2]
-
+nrecon = d['nf_recon']
 
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
@@ -37,8 +35,8 @@ print('Dictionnary File: ' + dictfilename)
 for k in d.keys():
     print(k, d[k])
 
-print('Minimum Number of Sub Frequencies: {}'.format(noutmin))
-print('Maximum Number of Sub Frequencies: {}'.format(noutmax))
+print('Minimum Number of Sub Frequencies: {}'.format(np.min(d['nf_recon'])))
+print('Maximum Number of Sub Frequencies: {}'.format(np.max(d['nf_recon'])))
 
 sys.stdout = tem
 f.close()

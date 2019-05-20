@@ -54,15 +54,17 @@ t0 = time.time()
 
 # ===== Sky Creation or Reading =====
 
-x0 = FitsArray(dictmaps + 'nf_sub={}'.d['nf_sub'])
+x0 = FitsArray(dictmaps + 'nf_sub={}'.format(d['nf_sub']))
 print('Input Map with shape:', np.shape(x0))
 
 # ==== Pointing strategy ====
 
 p = qubic.get_pointing(d)
 
+
 # ==== TOD making ====
 TOD, maps_convolved = si.create_TOD(d, p, x0)
+print('TOD with shape:', np.shape(TOD))
 
 # ==== Reconstruction ====
 for i, nf_sub_rec in enumerate(d['nf_recon']):

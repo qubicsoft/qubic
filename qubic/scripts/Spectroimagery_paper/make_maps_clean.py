@@ -8,8 +8,7 @@ import shutil
 import healpy as hp
 import numpy as np
 
-from pysm.nominal import models
-from pysimulators 
+from pysimulators import FitsArray
 import qubic
 
 import ReadMC

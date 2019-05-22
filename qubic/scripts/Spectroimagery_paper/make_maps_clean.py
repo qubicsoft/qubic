@@ -16,7 +16,7 @@ import SpectroImLib as si
 
 dictfilename = './spectroimaging.dict'
 dictmaps = 'maps/'
-out_dir = './'
+out_dir = './TEST/'
 try:
     os.makedirs(out_dir)
 except:
@@ -67,7 +67,7 @@ p = qubic.get_pointing(d)
 for j in range(nreals):
 
     TOD, maps_convolved = si.create_TOD(d, p, x0)
-    print('TOD with shape:', np.shape(TOD))
+    print('Noise TOD with shape:', np.shape(TOD))
 
     # ==== Reconstruction ====
     for i, nf_sub_rec in enumerate(d['nf_recon']):
@@ -81,7 +81,7 @@ for j in range(nreals):
         unseen = cov < maxcov * 0.1
         maps_convolved[:, unseen, :] = hp.UNSEEN
         maps_recon[:, unseen, :] = hp.UNSEEN
-        print('************************** Map-Making on {} sub-map(s)Done'.format(nf_sub_rec))
+        print('************************** Map-Making on {} sub-map(s). Done'.format(nf_sub_rec))
 
         name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_{5}.fits'.format(d['nf_sub'],
                                                                                       d['nf_recon'][i],
@@ -91,6 +91,39 @@ for j in range(nreals):
                                                                                       str(j).zfill(2))
         ReadMC.save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved,
                               out_dir, name + name_map)
+
+
+    # =============== Noiseles ===================== #
+
+    d['noiseless'] = True
+    TOD_noiseless, maps_convolved_noiseless = si.createTOD(d, p, x0)
+    print('Noiseless TOD with shape:', np.shape(TOD_noiseless))
+
+    # Reconstruction noiseless
+    for i, nf_sub_rec in enumerate(d['nf_recon']):
+        print('-------------------------- Map-Making on {} sub-map(s) (noiseless)'.format(nf_sub_rec))
+
+        maps_recon_noiseless, cov_noiseless, nus, nus_edge, maps_convolved_noiseless = si.reconstruct_maps(TOD_noiseless, d, p,
+                                                                                                            nf_sub_rec, x0=x0)
+        if nf_sub_rec == 1:
+            maps_recon_noiseless = np.reshape(maps_recon_noiseless, np.shape(maps_convolved_noiseless))
+        # Look at the coverage of the sky
+        cov_noiseless = np.sum(cov_noiseless, axis=0)
+        maxcov_noiseless = np.max(cov_noiseless)
+        unseen = cov_noiseless < maxcov_noiseless * 0.1
+        maps_convolved_noiseless[:, unseen, :] = hp.UNSEEN
+        maps_recon_noiseless[:, unseen, :] = hp.UNSEEN
+        print('************************** Map-Making on {} sub-map(s) (noiseless). Done'.format(nf_sub_rec))
+
+        name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_{5}.fits'.format(d['nf_sub'],
+                                                                                      d['nf_recon'][i],
+                                                                                      d['noiseless'],
+                                                                                      d['npointings'],
+                                                                                      d['tol'],
+                                                                                      str(j).zfill(2))
+        ReadMC.save_simu_fits(maps_recon_noiseless, cov_noiseless, nus, nus_edge, maps_convolved_noiseless,
+                              out_dir, name + name_map)
+
 
         t1 = time.time()
         print('************************** All Done in {} minutes'.format((t1 - t0) / 60))

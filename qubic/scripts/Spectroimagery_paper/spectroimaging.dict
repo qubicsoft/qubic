@@ -8,7 +8,7 @@ beam_shape =  'multi_freq' # 'gaussian', 'fitted_beam', 'multi_freq'
 
 # multifreq instrument 
 MultiBand=True
-nf_sub=12
+nf_sub=14
 center_detector=False
 
 psd=None
@@ -58,7 +58,7 @@ longitude= -(66 + 28. / 60)   #ARGENTINA
 random_pointing=False   
 
 repeat_pointing=True
-npointings=1500 
+npointings=150 
 dtheta=4.
 nhwp_angles=3 # use only for repeat_pointing
 seed=1

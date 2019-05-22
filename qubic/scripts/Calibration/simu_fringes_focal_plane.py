@@ -37,13 +37,19 @@ baseline_manip_1 = [46, 64]
 
 baseline_manip_2 = [19, 1]
 
+baseline_manip_3 = [40, 5]
+
 # Test with 2 pairs of horns
-S_tot1, Cminus_i1, Cminus_j1, Sminus_ij1, Ci1, Cj1, Sij1 = selfcal_data(q[0], reso, xmin, xmax, theta, phi,
+S_tot1, Cminus_i1, Cminus_j1, Sminus_ij1, Ci1, Cj1, Sij1 = selfcal_data(q[0], theta, phi,
                                                                         irradiance, baseline_manip_1,
                                                                         dead_switch=None, doplot=True)
 
-S_tot2, Cminus_i2, Cminus_j2, Sminus_ij2, Ci2, Cj2, Sij2 = selfcal_data(q[0], reso, xmin, xmax, theta, phi,
+S_tot2, Cminus_i2, Cminus_j2, Sminus_ij2, Ci2, Cj2, Sij2 = selfcal_data(q[0],theta, phi,
                                                                         irradiance, baseline_manip_2,
+                                                                        dead_switch=None, doplot=True)
+
+S_tot3, Cminus_i3, Cminus_j3, Sminus_ij3, Ci3, Cj3, Sij3 = selfcal_data(q[0],theta, phi,
+                                                                        irradiance, baseline_manip_3,
                                                                         dead_switch=None, doplot=True)
 
 # Test with a close horn
@@ -54,6 +60,92 @@ S_tot, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = selfcal_data(q[0], theta, ph
 S_totc, Cminus_ic, Cminus_jc, Sminus_ijc, Cic, Cjc, Sijc = selfcal_data(q[0], reso, xmin, xmax, theta, phi,
                                                                         irradiance, baseline_manip,
                                                                         dead_switch=[2, 9], doplot=True)
+
+# Look at the differences between beams
+figure()
+subplot(231)
+imshow((Sij1)[:, :, 0], interpolation='nearest')
+title('$S_{ij1}$')
+colorbar()
+
+subplot(232)
+imshow((Sij2)[:, :, 0], interpolation='nearest')
+title('$S_{ij2}$')
+colorbar()
+
+subplot(233)
+imshow((Sij1 - Sij2)[:, :, 0], interpolation='nearest')
+title('$S_{ij1} - S_{ij2}$')
+colorbar()
+
+subplot(234)
+imshow((Sminus_ij1)[:, :, 0], interpolation='nearest')
+title('$S_{-ij1}$')
+colorbar()
+
+subplot(235)
+imshow((Sminus_ij2)[:, :, 0], interpolation='nearest')
+title('$S_{-ij2}$')
+colorbar()
+
+subplot(236)
+imshow((Sminus_ij1 - Sminus_ij2)[:, :, 0], interpolation='nearest')
+title('$S_{-ij1} - S_{-ij2}$')
+colorbar()
+# ========
+
+figure()
+subplot(221)
+imshow((Sij1 - Sij3)[:, :, 0], interpolation='nearest')
+title('$S_{ij1} - S_{ij2}$ No equivalent')
+colorbar()
+
+subplot(222)
+imshow((Sij1 - Sij2)[:, :, 0], interpolation='nearest')
+title('$S_{ij1} - S_{ij2}$ equivalent')
+colorbar()
+
+subplot(223)
+imshow((Sminus_ij1 - Sminus_ij3)[:, :, 0], interpolation='nearest')
+title('$S_{-ij1} - S_{-ij2}$ No equivalent')
+colorbar()
+
+subplot(224)
+imshow((Sminus_ij1 - Sminus_ij2)[:, :, 0], interpolation='nearest')
+title('$S_{-ij1} - S_{-ij2}$ equivalent')
+colorbar()
+# ======
+figure()
+subplot(131)
+imshow((Sminus_ij1 - Sminus_ij2)[:, :, 0], interpolation='nearest')
+title('$S_{-ij1} - S_{-ij2}$ equivalent')
+colorbar()
+
+subplot(132)
+imshow((Cminus_i2 + Cminus_j2 - Cminus_i1 - Cminus_j1)[:, :, 0], interpolation='nearest')
+# title('$S_{-ij1} - S_{-ij2}$ equivalent')
+colorbar()
+
+subplot(133)
+imshow(((Sminus_ij1 - Sminus_ij2)-(Cminus_i2 + Cminus_j2 - Cminus_i1 - Cminus_j1))[:, :, 0], interpolation='nearest')
+# title('$S_{-ij1} - S_{-ij2}$ equivalent')
+colorbar()
+
+figure()
+imshow((S_tot - Cminus_j)[:, :, 0], interpolation='nearest')
+title('All open - one close')
+colorbar()
+
+figure()
+subplot(121)
+imshow((Sminus_ij1 - Sminus_ij3)[:, :, 0], interpolation='nearest', vmin=)
+title('$S_{-ij1} - S_{-ij2}$ Not equivalent')
+colorbar()
+
+subplot(122)
+imshow((Sminus_ij1 - Sminus_ij2)[:, :, 0], interpolation='nearest')
+title('$S_{-ij1} - S_{-ij2}$ Equivalent')
+colorbar()
 
 # Reduce to the quarter of the focal plane
 S_tot = full2quarter(S_tot)

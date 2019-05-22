@@ -126,6 +126,41 @@ def get_patch(file, seenmap):
     return maps_recon_cut, maps_convo_cut, residuals_cut
 
 
+def get_patch_many_files(rep_simu, name):
+    """
+    Get all the maps you want to analyze saved in many fits files.
+    Parameters
+    ----------
+    rep_simu : str
+        Repository where the fits files are.
+    name : str
+        Name of the files you are interested in.
+    Returns
+    -------
+    A list with the names of all the files you took.
+    Three arrays containing the reconstructed maps, the convolved maps
+    and the residuals.
+
+    """
+    all_fits = glob.glob(rep_simu + name)
+    nfiles = len(all_fits)
+    print('{} files have been found.'.format(nfiles))
+
+    seenmap = get_seenmap_new(all_fits[0])
+
+    all_patch_recon = np.empty((nfiles,), dtype=object)
+    all_patch_convo = np.empty((nfiles,), dtype=object)
+    all_patch_residuals = np.empty((nfiles,), dtype=object)
+
+    for i, fits in enumerate(all_fits):
+        patch_recon, patch_convo, patch_residuals = get_patch(fits, seenmap)
+        all_patch_recon[i] = patch_recon
+        all_patch_convo[i] = patch_convo
+        all_patch_residuals[i] = patch_residuals
+
+    return all_fits, all_patch_recon, all_patch_convo, all_patch_residuals
+
+
 # ============ OLD Functions to get maps ===========#
 def get_seenmap(files):
     """ 

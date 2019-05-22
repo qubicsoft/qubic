@@ -50,7 +50,7 @@ def save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved,
 
 
 # =============== Read saved maps ==================
-def get_seenmap_new(file):
+def get_seenmap(file):
     """
     Returns an array with the pixels seen or not.
     Parameters
@@ -146,7 +146,7 @@ def get_patch_many_files(rep_simu, name):
     nfiles = len(all_fits)
     print('{} files have been found.'.format(nfiles))
 
-    seenmap = get_seenmap_new(all_fits[0])
+    seenmap = get_seenmap(all_fits[0])
 
     all_patch_recon = np.empty((nfiles,), dtype=object)
     all_patch_convo = np.empty((nfiles,), dtype=object)
@@ -192,120 +192,6 @@ def get_maps_many_files(rep_simu, name):
         all_maps_diff[i] = map_diff
 
     return all_fits, all_maps_recon, all_maps_convo, all_maps_diff
-
-
-# ============ OLD Functions to get maps ===========#
-def get_seenmap(files):
-    """ 
-    Return a list of len the number of pixels, 
-    True or False if the pixel is observed or not in files.
-    files : list of .fits files
-
-    seenmap : list of len npix
-    """
-    print('\nGetting Observed pixels map')
-    m = FitsArray(files[0])
-    npix = np.shape(m)[1]
-    seenmap = np.zeros(npix) == 0
-    for i in xrange(len(files)):
-        sys.stdout.flush()
-        sys.stdout.write('\r Reading: ' + files[i] + ' ({:3.1f} %)'.format(100 * (i + 1) * 1. / len(files)))
-        m = FitsArray(files[i])
-        bla = np.mean(m, axis=(0, 2)) != hp.UNSEEN
-        seenmap *= bla
-    sys.stdout.flush()
-    return seenmap
-
-
-def read_all_maps(files, nsub, seenmap):
-    """
-    Read all realisations of I,Q,U maps for one number of subbands 
-    Only seen pixels are stored in order to save memory.
-
-    nsub : number of subbands
-    seenmap : list of booleans for pixels observed or not
-
-    mapsout : array of shape (nreals, nsub, npixok, 3)
-        
-    """
-    print('\nReading all maps')
-
-    nfiles = len(files)
-    print(files, nfiles)
-    npixok = np.sum(seenmap)
-    mapsout = np.zeros((nfiles, nsub, npixok, 3))
-    for ifile in xrange(nfiles):
-        print('Doing: ' + files[ifile], 'nsub=' + str(nsub))
-        sys.stdout.flush()
-        sys.stdout.write('\r Reading: ' + files[ifile] + ' ({:3.1f} %)'.format(100 * (ifile + 1) * 1. / nfiles))
-        mm = FitsArray(files[ifile])
-        mapsout[ifile, :, :, :] = mm[:, seenmap, :]
-    sys.stdout.flush()
-    return mapsout
-
-
-def get_all_maps(rep, archetype, nsubvals):
-    """
-    This function conbines get_seenmap and read_all_maps 
-    for several numbers of subbands.
-    
-    nsubvals : list containing the numbers of subbands used
-
-    rep : repository path 
-    archetype : list of the .fits files in rep
-
-    allmapsout : list of arrays of len len(nsubvals)
-        Each array is a mapsout for one number of subbands
-    """
-
-    seenmap = True
-    for i in xrange(len(archetype)):
-        files = glob.glob(rep + '/' + archetype[i])
-        seenmap *= get_seenmap(files)
-
-    allmapsout = []
-    for j in xrange(len(nsubvals)):
-        files = glob.glob(rep + '/' + archetype[j])
-        mapsout = read_all_maps(files, nsubvals[j], seenmap)
-        allmapsout.append(mapsout)
-
-    return allmapsout, seenmap
-
-
-def maps_from_files(files, silent=False):
-    """
-    allmost equivalent to get_all_maps, used in the functions that compute spectra
-    """
-    if not silent:
-        print('Reading Files')
-    nn = len(files)
-    mm = FitsArray(files[0])
-    sh = np.shape(mm)
-    maps = np.zeros((nn, sh[0], sh[1], sh[2]))
-    for i in xrange(nn):
-        maps[i, :, :, :] = FitsArray(files[i])
-
-    totmap = np.sum(np.sum(np.sum(maps, axis=0), axis=0), axis=1)
-    seenmap = totmap > -1e20
-    return maps, seenmap
-
-
-def get_maps_residuals(frec, fconv=None, silent=False):
-    mrec, seenmap = maps_from_files(frec)
-    if fconv is None:
-        if not silent:
-            print('Getting Residuals from average MC')
-        resid = np.zeros_like(mrec)
-        mean_mrec = np.mean(mrec, axis=0)
-        for i in xrange(len(frec)):
-            resid[i, :, :, :] = mrec[i, :, :, :] - mean_mrec[:, :, :]
-    else:
-        if not silent:
-            print('Getting Residuals from convolved input maps')
-        mconv, _ = maps_from_files(fconv)
-        resid = mrec - mconv
-    resid[:, :, ~seenmap, :] = 0
-    return mrec, resid, seenmap
 
 
 # ============ Functions do statistical tests on maps ===========#

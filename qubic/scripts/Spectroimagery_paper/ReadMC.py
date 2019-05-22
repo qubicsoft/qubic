@@ -84,7 +84,7 @@ def get_maps(file):
 
     Returns
     -------
-    Reconstructed maps, convolved maps and residuals,
+    Reconstructed maps, convolved maps and the difference between both,
     all with a shape (#subbands, #pixels, 3).
 
     """
@@ -94,9 +94,9 @@ def get_maps(file):
     maps_recon = simu['MAPS_RECON'].data
     maps_convo = simu['MAPS_CONVOLVED'].data
 
-    residuals = maps_recon - maps_convo
+    diff = maps_recon - maps_convo
 
-    return maps_recon, maps_convo, residuals
+    return maps_recon, maps_convo, diff
 
 
 def get_patch(file, seenmap):
@@ -112,18 +112,18 @@ def get_patch(file, seenmap):
 
         Returns
         -------
-        Reconstructed patches, convolved patches and residual patches,
+        Reconstructed patches, convolved patches and difference between both,
         all with a shape (#subbands, #pixels_seen, 3).
 
         """
 
-    maps_recon, maps_convo, residuals = get_maps(file)
+    maps_recon, maps_convo, diff = get_maps(file)
 
     maps_recon_cut = maps_recon[:, seenmap, :]
     maps_convo_cut = maps_convo[:, seenmap, :]
-    residuals_cut = residuals[:, seenmap, :]
+    diff_cut = diff[:, seenmap, :]
 
-    return maps_recon_cut, maps_convo_cut, residuals_cut
+    return maps_recon_cut, maps_convo_cut, diff_cut
 
 
 def get_patch_many_files(rep_simu, name):
@@ -139,7 +139,7 @@ def get_patch_many_files(rep_simu, name):
     -------
     A list with the names of all the files you took.
     Three arrays containing the reconstructed patches, the convolved patches
-    and the residuals.
+    and the difference between both.
 
     """
     all_fits = glob.glob(rep_simu + name)
@@ -150,15 +150,15 @@ def get_patch_many_files(rep_simu, name):
 
     all_patch_recon = np.empty((nfiles,), dtype=object)
     all_patch_convo = np.empty((nfiles,), dtype=object)
-    all_patch_residuals = np.empty((nfiles,), dtype=object)
+    all_patch_diff = np.empty((nfiles,), dtype=object)
 
     for i, fits in enumerate(all_fits):
-        patch_recon, patch_convo, patch_residuals = get_patch(fits, seenmap)
+        patch_recon, patch_convo, patch_diff = get_patch(fits, seenmap)
         all_patch_recon[i] = patch_recon
         all_patch_convo[i] = patch_convo
-        all_patch_residuals[i] = patch_residuals
+        all_patch_diff[i] = patch_diff
 
-    return all_fits, all_patch_recon, all_patch_convo, all_patch_residuals
+    return all_fits, all_patch_recon, all_patch_convo, all_patch_diff
 
 
 def get_maps_many_files(rep_simu, name):
@@ -174,7 +174,7 @@ def get_maps_many_files(rep_simu, name):
     -------
     A list with the names of all the files you took.
     Three arrays containing the reconstructed maps, the convolved maps
-    and the residuals.
+    and the difference between both.
 
     """
     all_fits = glob.glob(rep_simu + name)
@@ -183,15 +183,15 @@ def get_maps_many_files(rep_simu, name):
 
     all_maps_recon = np.empty((nfiles,), dtype=object)
     all_maps_convo = np.empty((nfiles,), dtype=object)
-    all_maps_residuals = np.empty((nfiles,), dtype=object)
+    all_maps_diff = np.empty((nfiles,), dtype=object)
 
     for i, fits in enumerate(all_fits):
-        map_recon, map_convo, map_residuals = get_maps(fits)
+        map_recon, map_convo, map_diff = get_maps(fits)
         all_maps_recon[i] = map_recon
         all_maps_convo[i] = map_convo
-        all_maps_residuals[i] = map_residuals
+        all_maps_diff[i] = map_diff
 
-    return all_fits, all_maps_recon, all_maps_convo, all_maps_residuals
+    return all_fits, all_maps_recon, all_maps_convo, all_maps_diff
 
 
 # ============ OLD Functions to get maps ===========#

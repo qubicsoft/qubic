@@ -128,7 +128,7 @@ def get_patch(file, seenmap):
 
 def get_patch_many_files(rep_simu, name):
     """
-    Get all the maps you want to analyze saved in many fits files.
+    Get all the patches you want to analyze from many fits files.
     Parameters
     ----------
     rep_simu : str
@@ -138,7 +138,7 @@ def get_patch_many_files(rep_simu, name):
     Returns
     -------
     A list with the names of all the files you took.
-    Three arrays containing the reconstructed maps, the convolved maps
+    Three arrays containing the reconstructed patches, the convolved patches
     and the residuals.
 
     """
@@ -159,6 +159,39 @@ def get_patch_many_files(rep_simu, name):
         all_patch_residuals[i] = patch_residuals
 
     return all_fits, all_patch_recon, all_patch_convo, all_patch_residuals
+
+
+def get_maps_many_files(rep_simu, name):
+    """
+    Get all the maps you want to analyze from many fits files.
+    Parameters
+    ----------
+    rep_simu : str
+        Repository where the fits files are.
+    name : str
+        Name of the files you are interested in.
+    Returns
+    -------
+    A list with the names of all the files you took.
+    Three arrays containing the reconstructed maps, the convolved maps
+    and the residuals.
+
+    """
+    all_fits = glob.glob(rep_simu + name)
+    nfiles = len(all_fits)
+    print('{} files have been found.'.format(nfiles))
+
+    all_maps_recon = np.empty((nfiles,), dtype=object)
+    all_maps_convo = np.empty((nfiles,), dtype=object)
+    all_maps_residuals = np.empty((nfiles,), dtype=object)
+
+    for i, fits in enumerate(all_fits):
+        map_recon, map_convo, map_residuals = get_maps(fits)
+        all_maps_recon[i] = map_recon
+        all_maps_convo[i] = map_convo
+        all_maps_residuals[i] = map_residuals
+
+    return all_fits, all_maps_recon, all_maps_convo, all_maps_residuals
 
 
 # ============ OLD Functions to get maps ===========#

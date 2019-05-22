@@ -95,8 +95,11 @@ for j in range(nreals):
 
     # =============== Noiseles ===================== #
 
-    d['noiseless'] = True
-    TOD_noiseless, maps_convolved_noiseless = si.createTOD(d, p, x0)
+d['noiseless'] = True
+
+for j in range(nreals):
+    
+    TOD_noiseless, maps_convolved_noiseless = si.create_TOD(d, p, x0)
     print('Noiseless TOD with shape:', np.shape(TOD_noiseless))
 
     # Reconstruction noiseless

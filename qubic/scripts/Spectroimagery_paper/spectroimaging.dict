@@ -75,7 +75,7 @@ fix_azimuth={'apply':True,'az':50,'el':50,'el_step':1, 'fix_hwp':True, 'fix_pitc
 ############################################# Acquisition ##############################
 block=None
 effective_duration=1 #years
-noiseless=True
+noiseless=False
 photon_noise=False
 max_nbytes=None
 nprocs_instrument=None
@@ -85,7 +85,11 @@ weights=None
 
 ####################################### Map making #####################################
 tol=1e-2
-nf_recon = [2,3]
-maxiter=1500
+nf_recon = 2
+maxiter=1e5
 verbose=True
+
+
+
+
 

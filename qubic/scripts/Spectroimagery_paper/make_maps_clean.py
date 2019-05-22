@@ -16,7 +16,7 @@ import SpectroImLib as si
 
 dictfilename = './spectroimaging.dict'
 dictmaps = 'maps/'
-out_dir = './'
+out_dir = './TEST/'
 try:
     os.makedirs(out_dir)
 except:

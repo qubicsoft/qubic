@@ -241,6 +241,33 @@ def get_maps_residuals(frec, fconv=None, silent=False):
 
 
 # ============ Functions do statistical tests on maps ===========#
+
+def get_cov1pix(name, ipix,):
+    """
+    
+    This function return the covariance matrix for one pixel given a list of maps. 
+    Each of the Nreal maps has the shape (nfrec, npix, 3).
+
+    Parameters
+    -------
+    name: str
+        the desired files to use (you can use '*' in the string)
+    ipix: int
+        pixel where the covariance will be computed
+    
+    Return
+    -------
+    
+
+    """
+
+    name = glob.glob(name)
+    for file in name:
+        maps_recon, maps_convo, residuals = get_maps(file)
+
+
+
+
 def get_rms_covar(nsubvals, seenmap, allmapsout):
     """Test done by Matthieu Tristram :
 Calculate the variance map in each case accounting for the band-band covariance matrix for each pixel from the MC. 
@@ -254,6 +281,8 @@ allmeanmat : list of arrays (nsub, nsub, 3)
         Mean over pixels of the cov matrices freq-freq
 allstdmat : list of arrays (nsub, nsub, 3)
         Std over pixels of the cov matrices freq-freq
+
+
 """
     print('\nCalculating variance map with freq-freq cov matrix for each pixel from MC')
     seen = np.where(seenmap == 1)[0]

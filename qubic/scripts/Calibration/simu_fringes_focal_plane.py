@@ -132,13 +132,13 @@ imshow(((Sminus_ij1 - Sminus_ij2)-(Cminus_i2 + Cminus_j2 - Cminus_i1 - Cminus_j1
 colorbar()
 
 figure()
-imshow((S_tot - Cminus_j)[:, :, 0], interpolation='nearest')
-title('All open - one close')
+imshow((S_tot - Cminus_i)[:, :, 0], interpolation='nearest')
+title('$S_{tot} - C_{-i}$ ')
 colorbar()
 
 figure()
 subplot(121)
-imshow((Sminus_ij1 - Sminus_ij3)[:, :, 0], interpolation='nearest', vmin=)
+imshow((Sminus_ij1 - Sminus_ij3)[:, :, 0], interpolation='nearest')
 title('$S_{-ij1} - S_{-ij2}$ Not equivalent')
 colorbar()
 

@@ -135,22 +135,31 @@ def get_patch_many_files(rep_simu, name):
 
     """
     all_fits = glob.glob(rep_simu + name)
+
+
     nfiles = len(all_fits)
     print('{} files have been found.'.format(nfiles))
 
     seenmap = get_seenmap(all_fits[0])
 
-    all_patch_recon = np.empty((nfiles,), dtype=object)
-    all_patch_convo = np.empty((nfiles,), dtype=object)
-    all_patch_diff = np.empty((nfiles,), dtype=object)
+    all_patch_recon = []
+    all_patch_convo = []
+    all_patch_diff = []
+
 
     for i, fits in enumerate(all_fits):
         patch_recon, patch_convo, patch_diff = get_patch(fits, seenmap)
-        all_patch_recon[i] = patch_recon
-        all_patch_convo[i] = patch_convo
-        all_patch_diff[i] = patch_diff
+        if i == 0:
+            right_shape = patch_recon.shape
+        else:
+            if patch_recon.shape != right_shape:
+                raise ValueError('You should take maps with identical shapes.')
+        all_patch_recon.append(patch_recon)
+        all_patch_convo.append(patch_convo)
+        all_patch_diff.append(patch_diff)
 
-    return all_fits, all_patch_recon, all_patch_convo, all_patch_diff
+    return all_fits, np.asarray(all_patch_recon), \
+           np.asarray(all_patch_convo), np.asarray(all_patch_diff)
 
 
 def get_maps_many_files(rep_simu, name):
@@ -173,17 +182,23 @@ def get_maps_many_files(rep_simu, name):
     nfiles = len(all_fits)
     print('{} files have been found.'.format(nfiles))
 
-    all_maps_recon = np.empty((nfiles,), dtype=object)
-    all_maps_convo = np.empty((nfiles,), dtype=object)
-    all_maps_diff = np.empty((nfiles,), dtype=object)
+    all_maps_recon = []
+    all_maps_convo = []
+    all_maps_diff = []
 
     for i, fits in enumerate(all_fits):
         map_recon, map_convo, map_diff = get_maps(fits)
-        all_maps_recon[i] = map_recon
-        all_maps_convo[i] = map_convo
-        all_maps_diff[i] = map_diff
+        if i == 0:
+            right_shape = map_recon.shape
+        else:
+            if map_recon.shape != right_shape:
+                raise ValueError('You should take maps with identical shapes.')
+        all_maps_recon.append(map_recon)
+        all_maps_convo.append(map_convo)
+        all_maps_diff.append(map_diff)
 
-    return all_fits, all_maps_recon, all_maps_convo, all_maps_diff
+    return all_fits, np.asarray(all_maps_recon), \
+           np.asarray(all_maps_convo), np.asarray(all_maps_diff)
 
 
 def pix2ang(ns, center, seenmap):
@@ -193,7 +208,7 @@ def pix2ang(ns, center, seenmap):
     """
     # central pixel vector
     v0 = hp.ang2vec(center[0], center[1], lonlat=True)
-    # indices of the pixels seen
+    # seen pixel indices
     ip = np.arange(12 * ns ** 2)[seenmap]
     # vectors associated to each pixel seen
     vpix = hp.pix2vec(ns, ip)

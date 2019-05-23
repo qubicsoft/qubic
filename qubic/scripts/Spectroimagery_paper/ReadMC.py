@@ -135,8 +135,6 @@ def get_patch_many_files(rep_simu, name):
 
     """
     all_fits = glob.glob(rep_simu + name)
-
-
     nfiles = len(all_fits)
     print('{} files have been found.'.format(nfiles))
 
@@ -145,7 +143,6 @@ def get_patch_many_files(rep_simu, name):
     all_patch_recon = []
     all_patch_convo = []
     all_patch_diff = []
-
 
     for i, fits in enumerate(all_fits):
         patch_recon, patch_convo, patch_diff = get_patch(fits, seenmap)
@@ -201,6 +198,7 @@ def get_maps_many_files(rep_simu, name):
            np.asarray(all_maps_convo), np.asarray(all_maps_diff)
 
 
+# ================== Cut a patch in different zones ====================
 def pix2ang(ns, center, seenmap):
     """
     Return the angles between the vector of the central pixel
@@ -214,4 +212,63 @@ def pix2ang(ns, center, seenmap):
     vpix = hp.pix2vec(ns, ip)
 
     return np.degrees(np.arccos(np.dot(v0, vpix)))
+
+
+def make_zones(patch, nzones, nside, center, seenmap, doplot=True):
+    """
+    Mask a path to get different concentric zones.
+
+    Parameters
+    ----------
+    patch : array
+        Patch you want to cut of shape (#subbands, #pix_seen, 3)
+    nzones : int
+        Number of zones you want to make.
+    nside : int
+    center : array
+        Coordinates of the center of the patch in degree (lon, lat)
+    seenmap : array
+        Array of booleans of shape #pixels,
+        True inside the patch and False outside.
+    doplot : bool
+        If True, makes a plot with the different zones obtained.
+
+    Returns
+    -------
+    A list with the number of pixels in each zone.
+    A list with the patch masked to get each zone.
+
+    """
+    npixok = patch.shape[1]
+
+    # Angle associated to each pixel in the patch
+    ang = pix2ang(nside, center, seenmap)
+
+    # Angles at the border of each zone
+    angles_zone = [np.float((z + 1)) / nzones * np.max(ang) for z in range(nzones)]
+
+    # Make a list with the masks
+    allmask = [np.zeros_like(patch) for _ in range(nzones)]
+    for pix in range(npixok):
+        for a, angle in enumerate(angles_zone):
+            if ang[pix] <= angle:
+                allmask[a][:, pix, :] = 1.
+                break
+
+    # Apply the masks on the patch
+    allmaps_mask = allmask * patch
+
+    # Compute the numbers of pixels in each zone
+    pix_per_zone = [np.count_nonzero(m[0, :, 0]) for m in allmask]
+    print('Number of pixels in each zones : {}'.format(pix_per_zone))
+
+    # Plot the patch masked
+    if doplot:
+        for i in range(nzones):
+            map = np.zeros((patch.shape[0], 12 * nside ** 2, 3))
+            map[:, seenmap, :] = allmaps_mask[i]
+            hp.gnomview(map[0, :, 0], sub=(1, nzones, i+1),
+                        rot=center, reso=12, title='Zone {}'.format(i))
+
+    return pix_per_zone, allmaps_mask
 

@@ -3,6 +3,9 @@ import healpy as hp
 import numpy as np
 from scipy import interpolate
 
+import glob
+import ReadMC as rmc
+
 from qubic import apodize_mask
 from qubic import Xpol
 
@@ -93,6 +96,57 @@ def covariance_IQU_subbands(allmaps):
 
 
 # ============ Functions do statistical tests on maps ===========#
+def get_cov1pix(dirct, namein, ipix):
+    """
+
+    This function return the covariance matrix for one pixel given a list of maps.
+    Each of the Nreal maps has the shape (nfrec, npix, 3) (see save_simu_fits() ).
+
+    Parameters
+    -------
+    dir: str
+        where the files are
+    name: str
+        the desired files to use (you can use '*' in the string)
+    ipix: int
+        pixel where the covariance will be computed
+
+    Return
+    -------
+    cov: np.array
+        covariance matrix with shape 3*nfrec x 3*nfrec
+
+    """
+
+    if type(ipix) != int:
+        raise TypeError('ipix has to be an integer number')
+
+    allfits, maps_recon, maps_convo, diff = rmc.get_maps_many_files(dirct, namein)
+
+    nfrec = maps_recon[0].shape[0]
+    nreal = maps_recon.shape[0]
+    #print(np.where(diff[0,0,:,0] > 48))
+    print('ipix ', diff[:,0,1,0])
+    data_mean = np.zeros((nfrec,3))
+
+    #arra = np.array([diff[g][1][ipix,2] for g in xrange(0,5)])
+
+    for irec in range(0,nfrec):
+        for istokes in range(0,3):
+            #ipix_from_real = np.array([diff[g][irec][ipix,istokes] for g in xrange(0,5)])
+            ipix_from_real =
+            data_mean[irec,istokes] = np.mean(ipix_from_real)
+
+    #np.hsplit(I_arr, nfrec)
+    #np.hsplit(Q_arr, nfrec)
+    #np.hsplit(U_arr, nfrec)
+    data_oneD = data_mean.ravel()
+    covariance = np.cov(np.tile(data_oneD,(2,1)), rowvar = False) 
+
+    return covariance
+
+
+
 def get_rms_covar(nsubvals, seenmap, allmapsout):
     """Test done by Matthieu Tristram :
 Calculate the variance map in each case accounting for the band-band covariance matrix for each pixel from the MC.

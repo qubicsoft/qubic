@@ -96,7 +96,7 @@ def covariance_IQU_subbands(allmaps):
 
 
 # ============ Functions do statistical tests on maps ===========#
-def get_cov1pix(dirct, namein, ipix):
+def get_covcorr1pix(maps, ipix):
     """
 
     This function return the covariance matrix for one pixel given a list of maps.
@@ -104,48 +104,79 @@ def get_cov1pix(dirct, namein, ipix):
 
     Parameters
     -------
-    dir: str
-        where the files are
-    name: str
-        the desired files to use (you can use '*' in the string)
+    maps: array
+        Input maps with shape (nrealizations, nfrecons, npix, 3)
     ipix: int
         pixel where the covariance will be computed
 
     Return
     -------
-    cov: np.array
-        covariance matrix with shape 3*nfrec x 3*nfrec
+    cov1pix: np.array
+        covariance matrix for a given pixel (ipix) with shape 3*nfrec x 3*nfrec
+
+    corr1pix: np.array
+        correlation matrix for a given pixel (ipix) with shape 3*nfrec x 3*nfrec
 
     """
+
+    print('The shape of the input map has to be: (nsample, nfrecons, npix, 3): {}'.format(maps.shape))
 
     if type(ipix) != int:
         raise TypeError('ipix has to be an integer number')
 
-    allfits, maps_recon, maps_convo, diff = rmc.get_maps_many_files(dirct, namein)
+    nfrec = maps[0].shape[0] # Sub-bands
+    nreal = maps.shape[0] # Sample realizations
+    
+    print('Number of reconstructed sub-bands to analyze: {}'.format(nfrec))
+    print('Number of realizations: {}'.format( nreal))
+    print('Computing covariance matrix in pixel {}'.format(ipix))
 
-    nfrec = maps_recon[0].shape[0]
-    nreal = maps_recon.shape[0]
-    #print(np.where(diff[0,0,:,0] > 48))
-    print('ipix ', diff[:,0,1,0])
-    data_mean = np.zeros((nfrec,3))
+    data = np.zeros((nreal,nfrec*3))
 
-    #arra = np.array([diff[g][1][ipix,2] for g in xrange(0,5)])
+    for j in range(nreal):
+        for irec in range(nfrec):
+            for istokes in range(3):
+                data[j,3*irec+istokes] = maps[j,irec,ipix,istokes]
+                
+    cov1pix = np.cov( data, rowvar = False ) 
+    corr1pix = np.corrcoef( data, rowvar = False)
+    return cov1pix, corr1pix
 
-    for irec in range(0,nfrec):
-        for istokes in range(0,3):
-            #ipix_from_real = np.array([diff[g][irec][ipix,istokes] for g in xrange(0,5)])
-            ipix_from_real =
-            data_mean[irec,istokes] = np.mean(ipix_from_real)
+def get_covcorr_patch(patch):
+    """
+    This function computes the covariance matrix and the correlation one for a given patch in the sky. 
+    It uses get_covcorr1pix() to compute the covariance and correlation matrix for each pixel (ipix) 
+    and then computes the average in the choosen pixels (patch).
+    
+    Asumptions: patch.shape = (nsamples, nrecons, npix_patch, 3) --> to be able to use get_covcorr1pix
 
-    #np.hsplit(I_arr, nfrec)
-    #np.hsplit(Q_arr, nfrec)
-    #np.hsplit(U_arr, nfrec)
-    data_oneD = data_mean.ravel()
-    covariance = np.cov(np.tile(data_oneD,(2,1)), rowvar = False) 
+    Parameters:
+    -----------
+    patch: np.array
+        Sky patch observed (see get_patch_many_files() from ReadMC module)
 
-    return covariance
+    Returns:
+    -----------
+    cov: np.array
+        Covariance matrix for the given patch in the sky. Is the simple mean between the pixels inside the patch.
 
+    corr: np.array
+        Correlation matrix for a given patch in the sky. Is the simple mean between the pixels inside the patch. 
+    """
 
+    npix = patch.shape[2]
+
+    covpix, corrpix = [], []
+
+    for ipix in xrange(npix):
+        mat = get_covcorr1pix(patch,ipix)
+        covpix.append(mat[0])
+        corrpix.append(mat[1])
+
+    meancov = np.mean(np.asarray(covpix), axis = 0)
+    meancorr = np.mean(np.asarray(corrpix), axis = 0)
+
+    return meancov, meancorr
 
 def get_rms_covar(nsubvals, seenmap, allmapsout):
     """Test done by Matthieu Tristram :

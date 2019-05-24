@@ -174,5 +174,3 @@ for i, nf_sub_rec in enumerate(d['nf_recon']):
                        out_dir, name + name_map)
 
 print('============== All Done in {} minutes ================'.format((time.time() - t0) / 60))
-
-MPI.Finalize()

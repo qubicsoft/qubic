@@ -56,7 +56,8 @@ def myprofile(ang, maps, nbins):
 
 def covariance_IQU_subbands(allmaps):
     """
-    Returns the mean maps, averaged over pixels and realisations and the covariance matrices of the maps.
+    Returns the mean maps, averaged over pixels and realisations and the
+    covariance matrices of the maps.
 
     Parameters
     ----------

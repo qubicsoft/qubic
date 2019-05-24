@@ -44,7 +44,7 @@ npix = len(seen_map)
 ns = d['nside']
 
 # Get full maps
-maps_recon, maps_convo, residuals = rmc.get_maps(fits_files[0])
+maps_recon, maps_convo, residuals = rmc.get_maps(fits_files[1])
 print('Getting maps with shape : {}'.format(maps_recon.shape))
 
 # Look at the maps
@@ -59,7 +59,7 @@ for i in xrange(3):
                 title='residus ' + stokes[i])
 
 # Get only patches to save memory
-maps_recon_cut, maps_convo_cut, residuals_cut = rmc.get_patch(fits_files[0], seen_map)
+maps_recon_cut, maps_convo_cut, residuals_cut = rmc.get_patch(fits_files[1], seen_map)
 print('Getting patches with shape : {}'.format(maps_recon_cut.shape))
 
 
@@ -72,6 +72,14 @@ for i in xrange(3):
     plt.hist(np.ravel(residuals_cut[0, :, i]), range=[-20, 20], bins=100)
     plt.title(stokes[i])
 
+# ================= Correlations matrices=======================
+# For each Stoke parameter separately, between subbands
+
+residuals_meanpix = np.mean(residuals_cut, axis=1)
+cov = np.cov(residuals_meanpix, rowvar=False)
+plt.imshow(cov, rowvar=False)
+
+# Between subbands and between Stokes parameters
 
 # ================= Noise Evolution as a function of the subband number=======================
 # To do that, you need many realisations

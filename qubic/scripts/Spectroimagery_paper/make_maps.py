@@ -67,11 +67,11 @@ p = qubic.get_pointing(d)
 for j in range(nreals):
 
     TOD, maps_convolved = si.create_TOD(d, p, x0)
-    print('Noise TOD with shape:', np.shape(TOD))
+    print('Noise TOD with shape: {} - Realisation {}'.format(np.shape(TOD), j))
 
     # ==== Reconstruction ====
     for i, nf_sub_rec in enumerate(d['nf_recon']):
-        print('************* Map-Making on {} sub-map(s) *************'.format(nf_sub_rec))
+        print('************* Map-Making on {} sub-map(s) - Realisation {}*************'.format(nf_sub_rec, j))
         maps_recon, cov, nus, nus_edge, maps_convolved = si.reconstruct_maps(TOD, d, p, nf_sub_rec, x0=x0)
         if nf_sub_rec == 1:
             maps_recon = np.reshape(maps_recon, np.shape(maps_convolved))
@@ -81,7 +81,7 @@ for j in range(nreals):
         unseen = cov < maxcov * 0.1
         maps_convolved[:, unseen, :] = hp.UNSEEN
         maps_recon[:, unseen, :] = hp.UNSEEN
-        print('************* Map-Making on {} sub-map(s). Done *************'.format(nf_sub_rec))
+        print('************* Map-Making on {} sub-map(s) - Realisation {}. Done *************'.format(nf_sub_rec, j))
 
         name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_{5}.fits'.format(d['nf_sub'],
                                                                                       d['nf_recon'][i],
@@ -89,8 +89,7 @@ for j in range(nreals):
                                                                                       d['npointings'],
                                                                                       d['tol'],
                                                                                       str(j).zfill(2))
-        ReadMC.save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved,
-                              out_dir, name + name_map)
+        ReadMC.save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved, out_dir, name + name_map)
 
 # =============== Noiseless ===================== #
 

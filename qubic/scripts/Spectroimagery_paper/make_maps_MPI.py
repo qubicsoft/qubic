@@ -24,11 +24,9 @@ size = MPI.COMM_WORLD.size
 if rank == 0:
     print('**************************')
     print('Master rank {} is speaking:'.format(rank))
-    print('mpi is in')
     print('There are {} ranks'.format(size))
     print('**************************')
 
-print '============= Hello ! I am rank number {} ============'.format(rank)
 
 dictfilename = './spectroimaging.dict'
 dictmaps = 'maps/'

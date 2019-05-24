@@ -67,7 +67,7 @@ p = qubic.get_pointing(d)
 for j in range(nreals):
 
     TOD, maps_convolved = si.create_TOD(d, p, x0)
-    print('Noise TOD with shape: {} - Realisation {}'.format(np.shape(TOD), j))
+    print('-------- Noise TOD with shape: {} - Realisation {} - Done --------'.format(np.shape(TOD), j))
 
     # ==== Reconstruction ====
     for i, nf_sub_rec in enumerate(d['nf_recon']):
@@ -95,7 +95,7 @@ for j in range(nreals):
 
 d['noiseless'] = True
 TOD_noiseless, maps_convolved_noiseless = si.create_TOD(d, p, x0)
-print('Noiseless TOD with shape:', np.shape(TOD_noiseless))
+print('--------- Noiseless TOD with shape: {} - Done ---------'.format(np.shape(TOD_noiseless)))
 
 # Reconstruction noiseless
 for i, nf_sub_rec in enumerate(d['nf_recon']):

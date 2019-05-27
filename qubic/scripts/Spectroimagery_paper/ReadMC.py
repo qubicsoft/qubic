@@ -28,6 +28,9 @@ def save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved,
         Name of the simulation.
 
     """
+    
+    if save_dir[-1] != '/':
+        save_dir = save_dir+'/'
 
     hdu_primary = fits.PrimaryHDU()
     hdu_recon = fits.ImageHDU(data=maps_recon, name='maps_recon')

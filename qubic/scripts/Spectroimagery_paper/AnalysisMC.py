@@ -142,6 +142,7 @@ def get_covcorr1pix(maps, ipix, verbose = False):
                 
     cov1pix = np.cov( data, rowvar = False ) 
     corr1pix = np.corrcoef( data, rowvar = False)
+
     return cov1pix, corr1pix
 
 def get_covcorr_patch(patch):

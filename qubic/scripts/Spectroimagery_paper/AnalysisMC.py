@@ -97,7 +97,7 @@ def covariance_IQU_subbands(allmaps):
 
 
 # ============ Functions do statistical tests on maps ===========#
-def get_covcorr1pix(maps, ipix):
+def get_covcorr1pix(maps, ipix, verbose = False):
     """
 
     This function return the covariance matrix for one pixel given a list of maps.
@@ -120,7 +120,6 @@ def get_covcorr1pix(maps, ipix):
 
     """
 
-    print('The shape of the input map has to be: (nsample, nfrecons, npix, 3): {}'.format(maps.shape))
 
     if type(ipix) != int:
         raise TypeError('ipix has to be an integer number')
@@ -128,9 +127,11 @@ def get_covcorr1pix(maps, ipix):
     nfrec = maps[0].shape[0] # Sub-bands
     nreal = maps.shape[0] # Sample realizations
     
-    print('Number of reconstructed sub-bands to analyze: {}'.format(nfrec))
-    print('Number of realizations: {}'.format( nreal))
-    print('Computing covariance matrix in pixel {}'.format(ipix))
+    if verbose:
+        print('The shape of the input map has to be: (nsample, nfrecons, npix, 3): {}'.format(maps.shape))
+        print('Number of reconstructed sub-bands to analyze: {}'.format(nfrec))
+        print('Number of realizations: {}'.format( nreal))
+        print('Computing covariance matrix in pixel {}'.format(ipix))
 
     data = np.zeros((nreal,nfrec*3))
 

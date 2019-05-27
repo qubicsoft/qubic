@@ -30,7 +30,7 @@ if rank == 0:
 
 dictfilename = './spectroimaging.dict'
 dictmaps = 'maps/'
-out_dir = './TEST/'
+out_dir = './TEST/20190527/'
 try:
     os.makedirs(out_dir)
 except:
@@ -165,12 +165,15 @@ for i, nf_sub_rec in enumerate(d['nf_recon']):
         print('************* Map-Making on {} sub-map(s) (noiseless). Rank {} Done *************'
               .format(nf_sub_rec, rank))
 
-    name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}.fits'.format(d['nf_sub'],
+    MPI.COMM_WORLD.Barrier()
+
+    if rank == 0:
+        name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}.fits'.format(d['nf_sub'],
                                                                               d['nf_recon'][i],
                                                                               d['noiseless'],
                                                                               d['npointings'],
                                                                               d['tol'])
-    rmc.save_simu_fits(maps_recon_noiseless, cov_noiseless, nus, nus_edge, maps_convolved_noiseless,
+        rmc.save_simu_fits(maps_recon_noiseless, cov_noiseless, nus, nus_edge, maps_convolved_noiseless,
                        out_dir, name + name_map)
 
 print('============== All Done in {} minutes ================'.format((time.time() - t0) / 60))

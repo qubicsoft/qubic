@@ -62,7 +62,8 @@ d.read_from_file(dictfilename)
 '''
 
 # Save the dictionary
-shutil.copyfile(dictfilename, out_dir + name + '.dict')
+if rank == 0:
+    shutil.copyfile(dictfilename, out_dir + name + '.dict')
 
 # ===== Sky Creation or Reading =====
 # Done only on rank0 and shared after between all ranks

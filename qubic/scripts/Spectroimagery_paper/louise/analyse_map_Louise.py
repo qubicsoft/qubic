@@ -9,12 +9,12 @@ import matplotlib.pyplot as plt
 from scipy import interpolate
 import copy
 
-import Tools as tl
+import AnalysisMC as amc
 import ReadMC as rmc
 import SpectroImLib as si
 
 import qubic
-from qubic import gal2equ, equ2gal
+from qubic import equ2gal
 from qubic import Xpol
 from qubic import apodize_mask
 
@@ -87,7 +87,7 @@ npix = len(seenmap_recon)
 ns = int(np.sqrt(npix / 12))
 
 # Angle associated to each pixel 
-ang = tl.pix2ang(ns, center, seenmap_recon)
+ang = rmc.pix2ang(ns, center, seenmap_recon)
 # print(ang.shape)
 # plt.plot(np.sort(ang))
 
@@ -163,7 +163,7 @@ Nfreq = 12
 _, nus_edge, nus, deltas, Delta, _ = qubic.compute_freq(band=150, Nfreq=Nfreq, relative_bandwidth=0.25)
 print(Delta)
 print(deltas)
-plot(nus, deltas, 'o')
+plt.plot(nus, deltas, 'o')
 
 # si on les import tous
 plt.figure('pitch_test_I=0_std_residus_corrected2')
@@ -399,7 +399,7 @@ for ptg in xrange(nptg):
                 print(sh)
                 cov_zone = np.cov(allrecon_new[zone][ptg, freq, g * sh[2] / ngroup:(g + 1) * sh[2] / ngroup, :],
                                   rowvar=False)
-                corr_zone[g, :, :] = tl.cov2corr(cov_zone)
+                corr_zone[g, :, :] = amc.cov2corr(cov_zone)
             r_mean = np.mean(corr_zone, axis=0)
             r_std = np.std(corr_zone, axis=0)
             r[0, zone, ptg, freq] = r_mean[0, 1]
@@ -439,7 +439,7 @@ for sub in xrange(nsub):
     for pix in xrange(npix_seen):
         # cov = np.cov(maps_recon_test[:,sub,pix,:], rowvar = False)
         cov = np.cov(allmaps_recon[0][:, sub, pix, :], rowvar=False)
-        corr[pix, :, :] = tl.cov2corr(cov)
+        corr[pix, :, :] = amc.cov2corr(cov)
         if pix == 0:
             print(cov)
     if sub == 0:
@@ -458,7 +458,7 @@ for pix in [50, 200, 500, 1000, 2000]:
 plt.show()
 
 # Correlation coeff as a function of the angle
-ang = tl.pix2ang(ns, center, seenmap_recon)
+ang = amc.pix2ang(ns, center, seenmap_recon)
 plt.figure('noiseless_50reals_rQU')
 plt.plot(ang, all_corr[0][:, 0, 2], '.')
 plt.ylabel('r_QU')
@@ -475,7 +475,7 @@ for real in xrange(nreals):
     for freq in xrange(nsub):
         for zone in xrange(nzones):
             cov_zone = np.cov(allrecon_new[zone][real, freq, :, :], rowvar=False)
-            corr_zone = tl.cov2corr(cov_zone)
+            corr_zone = amc.cov2corr(cov_zone)
             r[0, zone, real, freq] = corr_zone[0, 1]
             r[1, zone, real, freq] = corr_zone[0, 2]
             r[2, zone, real, freq] = corr_zone[1, 2]

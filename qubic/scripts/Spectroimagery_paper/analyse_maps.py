@@ -1,7 +1,4 @@
-import os
-import sys
 import glob
-
 import healpy as hp
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,8 +8,6 @@ import ReadMC as rmc
 
 import qubic
 from qubic import equ2gal
-from qubic import Xpol
-from qubic import apodize_mask
 
 thespec = ['TT', 'EE', 'BB', 'TE', 'EB', 'TB']
 stokes = ['I', 'Q', 'U']
@@ -21,79 +16,70 @@ stokes = ['I', 'Q', 'U']
 center = equ2gal(0., -57.)
 
 # ================= Get the simulation files ================
-# repository where you find
-rep_simu = '/home/federico/qubic/qubic/scripts/Spectroimagery_paper'
+# repository where the .fits was saved
+rep_simu = '/home/louisemousset/Desktop/'
+
+# Simulation name
+name = '20190517_truc'
+
+# Dictionary saved during the simulation
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(rep_simu + name + '.dict')
+
+# Get fits files names in a list
+fits_files = []
+for fits in glob.glob(rep_simu + name + '*.fits'):
+    fits_files.append(fits)
+    print fits
 
 # Number of subbands used during the simulation
-nsubvals = np.array([1, 2, 3, 4])
+nf_recon = d['nf_recon']
 
-# Archetypes of the files .fits you want to work on
-arch_conv, arch_recon = [], []
-for isub in xrange(len(nsubvals)):
-    arch_conv.append('simu_QU_nf{}_maps_convolved.fits'.format(nsubvals[isub]))
-    arch_recon.append('simu_QU_nf{}_maps_recon.fits'.format(nsubvals[isub]))
-
-# Get all maps
-allmaps_conv, seenmap_conv = rmc.get_all_maps(rep_simu, arch_conv, nsubvals)
-allmaps_recon, seenmap_recon = rmc.get_all_maps(rep_simu, arch_recon, nsubvals)
+# ================= Get the maps ================
+# Get seen map (observed pixels)
+seen_map = rmc.get_seenmap_new(fits_files[0])
 
 # Number of pixels and nside
-npix = len(seenmap_recon)
-ns = int(np.sqrt(npix / 12))
+npix = len(seen_map)
+ns = d['nside']
 
-# Angle associated to each pixel 
-ang = tl.pix2ang(ns, center, seenmap_recon)
-print(ang.shape)
-plt.plot(np.sort(ang))
-plt.show()
+# Get full maps
+maps_recon, maps_convo, residuals = rmc.get_maps(fits_files[1])
+print('Getting maps with shape : {}'.format(maps_recon.shape))
 
-# ================== Residus estimation ===============
-# Two ways of obtain residus:
-residus = []
-for j in xrange(len(allmaps_conv)):
-    residus.append(allmaps_recon[j] - allmaps_conv[j])
+# Look at the maps
+isub = 0
+plt.figure('Maps in subband {}'.format(isub))
+for i in xrange(3):
+    hp.gnomview(maps_convo[isub, :, i], rot=center, reso=9, sub=(3, 3, i + 1),
+                title='conv ' + stokes[i])
+    hp.gnomview(maps_recon[isub, :, i], rot=center, reso=9, sub=(3, 3, 3 + i + 1),
+                title='recon ' + stokes[i])
+    hp.gnomview(residuals[isub, :, i], rot=center, reso=9, sub=(3, 3, 6 + i + 1),
+                title='residus ' + stokes[i])
 
-residus = []
-for j in xrange(len(allmaps_conv)):
-    residus.append(allmaps_recon[j] - np.mean(allmaps_recon[j], axis=0))
+# Get only patches to save memory
+maps_recon_cut, maps_convo_cut, residuals_cut = rmc.get_patch(fits_files[1], seen_map)
+print('Getting patches with shape : {}'.format(maps_recon_cut.shape))
 
-# Histogram of the residus
+
+# ================== Look at residuals ===============
+
+# Histogram of the residuals
 plt.clf()
 for i in xrange(3):
     plt.subplot(1, 3, i + 1)
-    plt.hist(np.ravel(residus[0][:, 0, :, i]), range=[-20, 20], bins=100)
+    plt.hist(np.ravel(residuals_cut[0, :, i]), range=[-20, 20], bins=100)
     plt.title(stokes[i])
 
-# ================ Look at the maps =================
-isub = 0
-real = 0
-freq = 0
+# ================= Correlations matrices=======================
+# For each Stoke parameter separately, between subbands
 
-maps_conv = np.zeros((12 * ns ** 2, 3))
-maps_conv[seenmap_recon, :] = allmaps_conv[isub][real, freq, :, :]
+residuals_meanpix = np.mean(residuals_cut, axis=1)
+cov = np.cov(residuals_meanpix, rowvar=False)
+plt.imshow(cov, rowvar=False)
 
-maps_recon = np.zeros((12 * ns ** 2, 3))
-maps_recon[seenmap_conv, :] = allmaps_recon[isub][real, freq, :, :]
-
-maps_residus = np.zeros((12 * ns ** 2, 3))
-maps_residus[seenmap_conv, :] = residus[isub][real, freq, :, :]
-
-# hp.mollview(maps_conv[:,1], title='maps_conv')
-
-plt.figure('maps')
-for i in xrange(3):
-    if i == 0:
-        min = None
-        max = None
-    else:
-        min = None
-        max = None
-    hp.gnomview(maps_conv[:, i], rot=center, reso=9, sub=(3, 3, i + 1), title='conv ' + stokes[i], min=min, max=max)
-    hp.gnomview(maps_recon[:, i], rot=center, reso=9, sub=(3, 3, 3 + i + 1), title='recon ' + stokes[i], min=min,
-                max=max)
-    hp.gnomview(maps_residus[:, i], rot=center, reso=9, sub=(3, 3, 6 + i + 1), title='residus ' + stokes[i], min=min,
-                max=max)
-plt.show()
+# Between subbands and between Stokes parameters
 
 # ================= Noise Evolution as a function of the subband number=======================
 # To do that, you need many realisations

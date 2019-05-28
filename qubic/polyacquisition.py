@@ -79,7 +79,7 @@ class QubicPolyAcquisition(object):
             a.comm = self[0].comm
         self.scene = scene
         self.d = d
-        if weights == None:
+        if weights is None:
             self.weights = np.ones(len(self))  # / len(self)
         else:
             self.weights = weights
@@ -128,7 +128,6 @@ class QubicPolyAcquisition(object):
         fslope = q0.detector.fslope
 
         d1 = self.d.copy()
-
         d1['filter_nu'] = (nu_max + nu_min) / 2.
         d1['filter_relative_bandwidth'] = (nu_max - nu_min) / ((nu_max + nu_min) / 2.)
         d1['detector_nep'] = nep
@@ -142,6 +141,7 @@ class QubicPolyAcquisition(object):
 
         d1['random_pointing'] = True
         d1['sweeping_pointing'] = False
+        d1['repeat_pointing'] = False
         d1['RA_center'] = 0.
         d1['DEC_center'] = 0.
         d1['npointings'] = nsamplings

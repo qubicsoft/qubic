@@ -3,7 +3,6 @@ import healpy as hp
 import numpy as np
 from scipy import interpolate
 
-import glob
 import ReadMC as rmc
 
 from qubic import apodize_mask
@@ -22,36 +21,51 @@ def cov2corr(mat):
     return newmat
 
 
-def myprofile(ang, maps, nbins):
+def std_profile(many_patch, nbins, nside, center, seenmap):
     """
-    Return the std profile over realisations
+    Get the std profile of a patch over pixels and realisations
+    from the center to the border.
 
     Parameters
     ----------
-    ang
-    maps : array of shape (nreals, nsub, npixok, 3)
-    nbins
+    many_patch : array of shape (nreal, nsub, npixok, 3)
+        Many realisations of one patch.
+    nbins : int
+        Number of bins.
+    nside : int
+        NSIDE in the patch.
+    center : array
+        Coordinates of the center of the patch in degree (lon, lat)
+    seenmap : array
+        Array of booleans of shape #pixels,
+        True inside the patch and False outside.
 
     Returns
     -------
+    bin_centers : array with angles associated to each bin.
     std_bin : array of shape (nbins, nsub, 3)
-    allstd_profile : list of len 3*nsub
+        Std value in each bin, for each subband and IQU.
+    std_profile : array of shape (npixok, nsub, 3)
+        Quadratic interpolation of the std_bin.
+
     """
-    sh = maps.shape
+    ang = rmc.pix2ang(nside, center, seenmap)
+
     bin_edges = np.linspace(0, np.max(ang), nbins + 1)
     bin_centers = 0.5 * (bin_edges[0:nbins] + bin_edges[1:])
 
-    std_bin = np.zeros((nbins, sh[1], 3))
-    allstd_profile = []
-    for l in xrange(sh[1]):
-        for i in xrange(3):
-            for b in xrange(nbins):
-                ok = (ang > bin_edges[b]) & (ang < bin_edges[b + 1])
-                std_bin[b, l, i] = np.std(maps[:, l, ok, i])
-            fit = interpolate.interp1d(bin_centers, std_bin[:, l, i], fill_value='extrapolate')
-            std_profile = fit(ang)
-            allstd_profile.append(std_profile)
-    return bin_centers, std_bin, allstd_profile
+    # Std in each bin
+    nsub = np.shape(many_patch)[1]
+    std_bin = np.empty((nbins, nsub, 3))
+    for b in xrange(nbins):
+        ok = (ang > bin_edges[b]) & (ang < bin_edges[b + 1])
+        std_bin[b, :, :] = np.std(many_patch[:, :, ok, :], axis=(0, 2))
+
+    # Interpolation to get a profile
+    fit = interpolate.interp1d(bin_centers, std_bin, axis=0, kind='quadratic', fill_value='extrapolate', )
+    std_profile = fit(ang)
+
+    return bin_centers, std_bin, std_profile
 
 
 def covariance_IQU_subbands(allmaps):
@@ -97,7 +111,7 @@ def covariance_IQU_subbands(allmaps):
 
 
 # ============ Functions do statistical tests on maps ===========#
-def get_covcorr1pix(maps, ipix, verbose = False):
+def get_covcorr1pix(maps, ipix, verbose=False):
     """
 
     This function return the covariance matrix for one pixel given a list of maps.
@@ -120,29 +134,29 @@ def get_covcorr1pix(maps, ipix, verbose = False):
 
     """
 
-
     if type(ipix) != int:
         raise TypeError('ipix has to be an integer number')
 
-    nfrec = maps[0].shape[0] # Sub-bands
-    nreal = maps.shape[0] # Sample realizations
-    
+    nfrec = maps[0].shape[0]  # Sub-bands
+    nreal = maps.shape[0]  # Sample realizations
+
     if verbose:
         print('The shape of the input map has to be: (nsample, nfrecons, npix, 3): {}'.format(maps.shape))
         print('Number of reconstructed sub-bands to analyze: {}'.format(nfrec))
-        print('Number of realizations: {}'.format( nreal))
+        print('Number of realizations: {}'.format(nreal))
         print('Computing covariance matrix in pixel {}'.format(ipix))
 
-    data = np.zeros((nreal,nfrec*3))
+    data = np.zeros((nreal, nfrec * 3))
 
     for j in range(nreal):
         for irec in range(nfrec):
             for istokes in range(3):
-                data[j,3*irec+istokes] = maps[j,irec,ipix,istokes]
-                
-    cov1pix = np.cov( data, rowvar = False ) 
-    corr1pix = np.corrcoef( data, rowvar = False)
+                data[j, 3 * irec + istokes] = maps[j, irec, ipix, istokes]
+
+    cov1pix = np.cov(data, rowvar=False)
+    corr1pix = np.corrcoef(data, rowvar=False)
     return cov1pix, corr1pix
+
 
 def get_covcorr_patch(patch):
     """
@@ -171,14 +185,15 @@ def get_covcorr_patch(patch):
     covpix, corrpix = [], []
 
     for ipix in xrange(npix):
-        mat = get_covcorr1pix(patch,ipix)
+        mat = get_covcorr1pix(patch, ipix)
         covpix.append(mat[0])
         corrpix.append(mat[1])
 
-    meancov = np.mean(np.asarray(covpix), axis = 0)
-    meancorr = np.mean(np.asarray(corrpix), axis = 0)
+    meancov = np.mean(np.asarray(covpix), axis=0)
+    meancorr = np.mean(np.asarray(corrpix), axis=0)
 
     return meancov, meancorr
+
 
 def get_rms_covar(nsubvals, seenmap, allmapsout):
     """Test done by Matthieu Tristram :

@@ -32,6 +32,7 @@ def std_profile(many_patch, nbins, nside, center, seenmap):
     Returns
     -------
     bin_centers : array with angles associated to each bin.
+    ang : array with angles associated to each pixel
     std_bin : array of shape (nbins, nsub, 3)
         Std value in each bin, for each subband and IQU.
     std_profile : array of shape (npixok, nsub, 3)
@@ -54,7 +55,7 @@ def std_profile(many_patch, nbins, nside, center, seenmap):
     fit = interpolate.interp1d(bin_centers, std_bin, axis=0, kind='quadratic', fill_value='extrapolate', )
     std_profile = fit(ang)
 
-    return bin_centers, std_bin, std_profile
+    return bin_centers, ang, std_bin, std_profile
 
 
 def get_covcorr1pix(maps, ipix, verbose=False):

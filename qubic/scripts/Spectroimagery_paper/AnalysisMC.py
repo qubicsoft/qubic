@@ -9,18 +9,7 @@ from qubic import apodize_mask
 from qubic import Xpol
 
 
-def cov2corr(mat):
-    """
-    Converts a Covariance Matrix in a Correlation Matrix
-    """
-    newmat = mat.copy()
-    sh = np.shape(mat)
-    for i in xrange(sh[0]):
-        for j in xrange(sh[1]):
-            newmat[i, j] = mat[i, j] / np.sqrt(mat[i, i] * mat[j, j])
-    return newmat
-
-
+# ============ Functions do statistical tests on maps ===========#
 def std_profile(many_patch, nbins, nside, center, seenmap):
     """
     Get the std profile of a patch over pixels and realisations
@@ -68,49 +57,6 @@ def std_profile(many_patch, nbins, nside, center, seenmap):
     return bin_centers, std_bin, std_profile
 
 
-def covariance_IQU_subbands(allmaps):
-    """
-    Returns the mean maps, averaged over pixels and realisations and the
-    covariance matrices of the maps.
-
-    Parameters
-    ----------
-    allmaps : list of arrays of shape (nreals, nsub, npix, 3)
-        list of maps for each number of subband
-
-    Returns
-    -------
-    allmean : list of arrays of shape 3*nsub
-        mean for I, Q, U for each subband
-    allcov : list of arrays of shape (3*nsub, 3*nsub)
-        covariance matrices between stokes parameters and sub frequency bands
-
-    """
-    allmean, allcov = [], []
-    for isub in xrange(len(allmaps)):
-        sh = allmaps[isub].shape
-        nsub = sh[1]  # Number of subbands
-
-        mean = np.zeros(3 * nsub)
-        cov = np.zeros((3 * nsub, 3 * nsub))
-
-        for iqu in xrange(3):
-            for band in xrange(nsub):
-                i = 3 * band + iqu
-                map_i = allmaps[isub][:, band, :, iqu]
-                mean[i] = np.mean(map_i)
-                for iqu2 in xrange(3):
-                    for band2 in xrange(nsub):
-                        j = 3 * band2 + iqu2
-                        map_j = allmaps[isub][:, band2, :, iqu2]
-                        cov[i, j] = np.mean((map_i - np.mean(map_i)) * (map_j - np.mean(map_j)))
-        allmean.append(mean)
-        allcov.append(cov)
-
-    return allmean, allcov
-
-
-# ============ Functions do statistical tests on maps ===========#
 def get_covcorr1pix(maps, ipix, verbose=False):
     """
 
@@ -194,6 +140,60 @@ def get_covcorr_patch(patch):
     meancorr = np.mean(np.asarray(corrpix), axis=0)
 
     return meancov, meancorr
+
+
+def cov2corr(mat):
+    """
+    Converts a Covariance Matrix in a Correlation Matrix
+    """
+    newmat = mat.copy()
+    sh = np.shape(mat)
+    for i in xrange(sh[0]):
+        for j in xrange(sh[1]):
+            newmat[i, j] = mat[i, j] / np.sqrt(mat[i, i] * mat[j, j])
+    return newmat
+
+
+def covariance_IQU_subbands(allmaps):
+    """
+    Returns the mean maps, averaged over pixels and realisations and the
+    covariance matrices of the maps.
+
+    Parameters
+    ----------
+    allmaps : list of arrays of shape (nreals, nsub, npix, 3)
+        list of maps for each number of subband
+
+    Returns
+    -------
+    allmean : list of arrays of shape 3*nsub
+        mean for I, Q, U for each subband
+    allcov : list of arrays of shape (3*nsub, 3*nsub)
+        covariance matrices between stokes parameters and sub frequency bands
+
+    """
+    allmean, allcov = [], []
+    for isub in xrange(len(allmaps)):
+        sh = allmaps[isub].shape
+        nsub = sh[1]  # Number of subbands
+
+        mean = np.zeros(3 * nsub)
+        cov = np.zeros((3 * nsub, 3 * nsub))
+
+        for iqu in xrange(3):
+            for band in xrange(nsub):
+                i = 3 * band + iqu
+                map_i = allmaps[isub][:, band, :, iqu]
+                mean[i] = np.mean(map_i)
+                for iqu2 in xrange(3):
+                    for band2 in xrange(nsub):
+                        j = 3 * band2 + iqu2
+                        map_j = allmaps[isub][:, band2, :, iqu2]
+                        cov[i, j] = np.mean((map_i - np.mean(map_i)) * (map_j - np.mean(map_j)))
+        allmean.append(mean)
+        allcov.append(cov)
+
+    return allmean, allcov
 
 
 def get_rms_covar(nsubvals, seenmap, allmapsout):

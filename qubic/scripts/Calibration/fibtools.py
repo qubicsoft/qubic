@@ -4,6 +4,7 @@ import iminuit
 import math
 from matplotlib.pyplot import *
 from pysimulators import FitsArray
+import matplotlib.mlab as mlab
 
 import scipy.signal as scsig
 import scipy.stats
@@ -14,6 +15,11 @@ import datetime as dt
 
 from qubic.utils import progress_bar
 from qubicpack import qubicpack as qp
+
+
+def printnow(truc):
+    print(truc)
+    sys.stdout.flush()
 
 
 def isfloat(s):
@@ -630,7 +636,9 @@ def simsig_nonorm(x, pars):
     return thesim
 
 
-def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None, return_error=False, silent=False, median=False):
+def fold_data(time, dd, period, lowcut, highcut, nbins, 
+              notch=None, rebin=None, verbose=None,
+              return_error=False, silent=False, median=False):
     """
 
     Parameters
@@ -658,22 +666,71 @@ def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None, return_error
     for THEPIX in xrange(ndet):
         if not silent: bar.update()
         data = dd[THEPIX, :]
-        filt = scsig.butter(3, [lowcut / FREQ_SAMPLING, highcut / FREQ_SAMPLING], btype='bandpass', output='sos')
-        newdata = scsig.sosfilt(filt, data)
-        if notch is not None:
-            for i in xrange(len(notch)):
-                ftocut = notch[i][0]
-                bw = notch[i][1]
-                newdata = notch_filter(newdata, ftocut, bw, FREQ_SAMPLING)
+        newdata = filter_data(time, data, lowcut, highcut, notch=notch, rebin=rebin, verbose=verbose)
         t, yy, dx, dy, others = profile(tfold, newdata, range=[0, period], 
                                         nbins=nbins, dispersion=False, plot=False, 
                                         cutbad=False, median=median)    
         folded[THEPIX, :] = (yy - np.mean(yy)) / np.std(yy)
         folded_nonorm[THEPIX, :] = (yy - np.mean(yy))
     if return_error:
-        return folded, t, folded_nonorm, dy
+        return folded, t, folded_nonorm, dy, newdata
     else:
-        return folded, t, folded_nonorm
+        return folded, t, folded_nonorm, newdata
+
+
+def power_spectrum(time_in, data_in, rebin=True):
+    if rebin:
+        ### Resample the data on a reguklar grid
+        time = np.linspace(time_in[0], time_in[-1], len(time_in))
+        data = np.interp(time, time_in, data_in)
+    else:
+        time = time_in
+        data = data_in
+
+    spectrum_f, freq_f = mlab.psd(data, Fs=1. / (time[1] - time[0]), NFFT=len(data), window=mlab.window_hanning)
+    return spectrum_f, freq_f
+
+
+def filter_data(time_in, data_in, lowcut, highcut, rebin=True, verbose=False, notch=None):
+    sh = np.shape(data_in)
+    if rebin:
+        if verbose: printnow('Rebinning before Filtering')
+        ### Resample the data on a regular grid
+        time = np.linspace(time_in[0], time_in[-1], len(time_in))
+        if len(sh) == 1:
+            data = np.interp(time, time_in, data_in)
+        else:
+            data = vec_interp(time, time_in, data_in)
+    else:
+        if verbose: printnow('No rebinning before Filtering')
+        time = time_in
+        data = data_in
+
+    FREQ_SAMPLING = 1. / ((np.max(time) - np.min(time)) / len(time))
+    filt = scsig.butter(5, [lowcut / FREQ_SAMPLING, highcut / FREQ_SAMPLING], btype='bandpass', output='sos')
+    if len(sh) == 1:
+        dataf = scsig.sosfilt(filt, data)
+    else:
+        dataf = scsig.sosfilt(filt, data, axis=1)
+    
+    if notch is not None:
+        for i in range(len(notch)):
+            ftocut = notch[i][0]
+            bw = notch[i][1]
+            nharmonics = notch[i][2].astype(int)
+            for j in range(nharmonics):
+                newdata = notch_filter(dataf, ftocut*(j+1), bw*(j+1), FREQ_SAMPLING)
+    
+    return dataf
+
+
+def vec_interp(x, xin, yin):
+    sh = np.shape(yin)
+    nvec = sh[0]
+    yout = np.zeros_like(yin)
+    for i in xrange(nvec):
+        yout[i, :] = np.interp(x, xin, yin[i, :])
+    return yout
 
 
 def fit_average(t, folded, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 0], doplot=True, functname=simsig,

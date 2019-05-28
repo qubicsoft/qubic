@@ -61,7 +61,7 @@ def return_rms_period(period, time, azimuth, elevation, data, verbose=False):
         elper[i] = np.mean(elevation[ok])
         tper[i] = np.mean(time[ok])
         if nTES == 1:
-            mm, ss = ft.meancut(data[ok], 3)
+            mm, ss = ft.meancut(data[0,ok], 3)
             ampdata[0, i] = ss
             err_ampdata[0, i] = 1
         else:
@@ -80,7 +80,7 @@ def scan2ang_RMS(period, indata, median=True, lowcut=None, highcut=None, verbose
         dataf = indata['data'].copy()
     else:
         if verbose: printnow('Filtering data')
-        dataf = filter_data(indata['t_data'], indata['data'], lowcut, highcut)
+        dataf = ft.filter_data(indata['t_data'], indata['data'], lowcut, highcut)
 
     ### First get the RMS per period
     if verbose: printnow('Resampling Azimuth')
@@ -161,8 +161,8 @@ def demodulate(indata, fmod, lowcut=None, highcut=None, verbose=False):
             new_src = np.interp(indata['t_data'], indata['t_src'], indata['data_src'])
         else:
             if verbose: printnow('Filtering data and Src Signal')
-            dataf = filter_data(indata['t_data'], indata['data'], lowcut, highcut)
-            new_src = filter_data(indata['t_data'], np.interp(indata['t_data'], indata['t_src'], indata['data_src']),
+            dataf = ft.filter_data(indata['t_data'], indata['data'], lowcut, highcut)
+            new_src = ft.filter_data(indata['t_data'], np.interp(indata['t_data'], indata['t_src'], indata['data_src']),
                                   lowcut, highcut)
 
         if nTES == 1: dataf = np.reshape(dataf, (1, len(indata['data'])))
@@ -302,8 +302,8 @@ class SimSrcTOD:
 def scan2ang_splfit(period, time, data, t_src, src, t_az, az, lowcut, highcut, elevation, nbins=150, superbinning=1.,
                     doplot=False):
     ### Filter Data and Source Signal the same way + change sign of data
-    new_data = -filter_data(time, data, lowcut, highcut)
-    new_src = filter_data(time, np.interp(time, t_src, src), lowcut, highcut)
+    new_data = -ft.filter_data(time, data, lowcut, highcut)
+    new_src = ft.filter_data(time, np.interp(time, t_src, src), lowcut, highcut)
 
     ### Now resample data into bins such that the modulation period is well sampled
     ### We want bins with size < period/4
@@ -422,7 +422,7 @@ def general_demodulate(period, indata, lowcut, highcut, nbins=150, median=True, 
         else:
             sh = np.shape(indata['data'])
         for i in xrange(sh[0]):
-            errorbar(toplot['az_ang'], toplot['sb'][i, :], yerr=toplot['dsb'][i, :], fmt='.-',
+            errorbar(toplot['az'], toplot['sb'][i, :], yerr=toplot['dsb'][i, :], fmt='.-',
                      label=label + ' {}'.format(i))
         legend()
 
@@ -496,52 +496,6 @@ def read_data_azel_src(dirfile, AsicNum, TESNum=None, calsource_dir='/qubic/Data
 
 def renorm(ar):
     return (ar - np.mean(ar)) / np.std(ar)
-
-
-def power_spectrum(time_in, data_in, rebin=True):
-    if rebin:
-        ### Resample the data on a reguklar grid
-        time = np.linspace(time_in[0], time_in[-1], len(time_in))
-        data = np.interp(time, time_in, data_in)
-    else:
-        time = time_in
-        data = data_in
-
-    spectrum_f, freq_f = mlab.psd(data, Fs=1. / (time[1] - time[0]), NFFT=len(data), window=mlab.window_hanning)
-    return spectrum_f, freq_f
-
-
-def filter_data(time_in, data_in, lowcut, highcut, rebin=True, verbose=False):
-    sh = np.shape(data_in)
-    if rebin:
-        if verbose: printnow('Rebinning before Filtering')
-        ### Resample the data on a regular grid
-        time = np.linspace(time_in[0], time_in[-1], len(time_in))
-        if len(sh) == 1:
-            data = np.interp(time, time_in, data_in)
-        else:
-            data = vec_interp(time, time_in, data_in)
-    else:
-        if verbose: printnow('No rebinning before Filtering')
-        time = time_in
-        data = data_in
-
-    FREQ_SAMPLING = 1. / ((np.max(time) - np.min(time)) / len(time))
-    filt = scsig.butter(5, [lowcut / FREQ_SAMPLING, highcut / FREQ_SAMPLING], btype='bandpass', output='sos')
-    if len(sh) == 1:
-        dataf = scsig.sosfilt(filt, data)
-    else:
-        dataf = scsig.sosfilt(filt, data, axis=1)
-    return dataf
-
-
-def vec_interp(x, xin, yin):
-    sh = np.shape(yin)
-    nvec = sh[0]
-    yout = np.zeros_like(yin)
-    for i in xrange(nvec):
-        yout[i, :] = np.interp(x, xin, yin[i, :])
-    return yout
 
 
 def bin_image_elscans(x, y, data, xr, nx, TESIndex):
@@ -782,15 +736,16 @@ def qubic_sb_model(x, pars, return_peaks=False):
     cosang = np.cos(np.radians(angle))
     sinang = np.sin(np.radians(angle))
     rotmat = np.array([[cosang, -sinang],[sinang, cosang]])
-    newxxyy = []
+    newxxyy = np.zeros((4,9))
     for i in xrange(npeaks_tot):
         thexxyy = np.dot(rotmat, xxyy[:,i])
-        newxxyy.append(thexxyy)
-    newxxyy =  np.array(newxxyy).T
+        newxxyy[0,i] = thexxyy[0]
+        newxxyy[1,i] = thexxyy[1]
+        #newxxyy.append(thexxyy)
+    #newxxyy =  np.array(newxxyy).T
 
     newxxyy[0,:] += distx*(newxxyy[1,:])**2 
     newxxyy[1,:] += disty*(newxxyy[0,:])**2
-    
     newxxyy[0,:] += xc
     newxxyy[1,:] += yc
     
@@ -798,7 +753,9 @@ def qubic_sb_model(x, pars, return_peaks=False):
     for i in xrange(npeaks_tot):
         amps[i] = ampgauss * np.exp(-0.5 * ((xcgauss-newxxyy[0,i])**2 + (ycgauss-newxxyy[1,i])**2)/(fwhmgauss/2.35)**2)
         themap += amps[i]*np.exp(-((x2d-newxxyy[0,i])**2 +(y2d-newxxyy[1,i])**2)/(2*(fwhmpeaks/2.35)**2) )
-
+    newxxyy[2,:] = amps
+    newxxyy[3,:] = fwhmpeaks
+        
     #satpix = themap >= saturation
     #themap[satpix] = saturation
     
@@ -890,7 +847,7 @@ def fit_sb(TESNum, dirfiles, scaling=140e3, newsize=70, dmax = 5., az_center=0.,
     #fit[1][11] *= scaling
     #fit[2][11] *= scaling
     return flatmap_init, az_init, el_init, fit, newxxyy
-    
+
 
 def mygauss2d(x2d, y2d, center, sx, sy, rho):
     sh = np.shape(x2d)
@@ -1036,4 +993,84 @@ def fit_sb_asym(TESNum, dirfiles, scaling=140e3, newsize=70, dmax = 5., az_cente
     fit[1][10] *= scaling
     fit[2][10] *= scaling
     return flatmap_init, az_init, el_init, fit, newxxyy
-    
+
+
+# def demodulate_directory(thedir, ppp, lowcut=0.3, highcut=10., nbins=250, method='rms', rebin=True):
+#     print ''
+#     print '##############################################################'
+#     print 'Directory {} '.format(thedir)
+#     print '##############################################################'
+#     allsb = []
+#     all_az_el_azang = []
+#     for iasic in [0,1]:
+#         print '======== ASIC {} ====================='.format(iasic)
+#         AsicNum = iasic+1
+#         a = qp()
+#         a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+#         data=a.azel_etc(TES=None)
+#         data['t_src'] += 7200
+#         stop
+#         unbinned, binned = general_demodulate(ppp, data, 
+#                                                 lowcut, highcut,
+#                                                 nbins=nbins, median=True, method=method, 
+#                                                 doplot=False, rebin=rebin, verbose=False)
+#         # all_az_el_azang.append(np.array([unbinned['az'], unbinned['el'], unbinned['az_ang']]))
+#         # allsb.append(unbinned['sb'])
+#         all_az_el_azang.append(np.array([binned['az'], binned['el'], binned['az_ang']]))
+#         allsb.append(binned['sb'])
+#     sh0 = allsb[0].shape
+#     sh1 = allsb[1].shape
+#     mini = np.min([sh0[1], sh1[1]])
+#     sb = np.append(allsb[0][:,:mini], allsb[1][:,:mini], axis=0)
+#     az_el_azang = np.array(all_az_el_azang[0][:,:mini])
+#     print az_el_azang.shape
+#     print sb.shape
+#     return sb, az_el_azang
+
+def demodulate_directory(thedir, ppp, TESmask=None, srcshift=0.,
+        lowcut=0.3, highcut=10., nbins=250, method='rms', rebin=True):
+    print ''
+    print '##############################################################'
+    print 'Directory {} '.format(thedir)
+    print '##############################################################'
+    datas = []
+    for iasic in [0,1]:
+        print '======== ASIC {} ====================='.format(iasic)
+        AsicNum = iasic+1
+        a = qp()
+        a.verbosity=0
+        #print('Verbosity:',a.verbosity)
+        a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+        data=a.azel_etc(TES=None)
+        ndata = len(data['t_data'])
+        data['t_src'] = np.array(data['t_src'])
+        data['data_src'] = np.array(data['data_src'])
+        data['t_src'] -= srcshift
+        #data['t_src'] += 7200
+        datas.append(data)
+    ### Concatenate the data from the two asics in a single one
+    data = datas[0].copy()
+    data['data'] = np.concatenate((datas[0]['data'], datas[1]['data']), axis=0)
+    #for k in data.keys(): print(k, data[k].shape)
+ 
+    if TESmask is not None:
+        data['data'] = data['data'][TESmask,:]
+
+    unbinned, binned = general_demodulate(ppp, data, 
+                                            lowcut, highcut,
+                                            nbins=nbins, median=True, method=method, 
+                                            doplot=False, rebin=rebin, verbose=False)
+    if rebin:
+        az_el_azang = np.array([binned['az'], binned['el'], binned['az_ang']])
+        sb = binned['sb']
+    else:
+        az_el_azang = np.array([unbinned['az'], unbinned['el'], unbinned['az_ang'], unbinned['t']])
+        sb = unbinned['sb']
+
+    print az_el_azang.shape
+    #print sb.shape
+    return sb, az_el_azang
+
+
+
+

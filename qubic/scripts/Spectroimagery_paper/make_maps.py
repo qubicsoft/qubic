@@ -18,12 +18,11 @@ today = datetime.datetime.now().strftime('%Y%m%d')
 
 # CC must be yes if you run the simu on the CC
 CC = sys.argv[1]
-
 if CC == 'yes':
-    global_dir = '/sps/hep/qubic/Users/lmousset/myqubic/qubic/scripts/Spectroimagery_paper/'
-    dictfilename = global_dir + 'spectroimaging.dict'
-    dictmaps = global_dir + 'maps/'
-    out_dir = global_dir + 'TEST/{}/'.format(today)
+    global_dir = '/sps/hep/qubic/Users/lmousset/'
+    dictfilename = global_dir + 'myqubic/qubic/scripts/Spectroimagery_paper/spectroimaging.dict'
+    dictmaps = global_dir + 'myqubic/qubic/scripts/Spectroimagery_paper/maps/'
+    out_dir = global_dir + 'SpectroImaging/data/{}/'.format(today)
 else:
     dictfilename = './spectroimaging.dict'
     dictmaps = './maps/'
@@ -72,6 +71,7 @@ print('Input Map with shape:', np.shape(x0))
 # ==== Pointing strategy ====
 
 p = qubic.get_pointing(d)
+print('===Pointing done!===')
 
 # ==== TOD making ====
 for j in range(nreals):

@@ -1,5 +1,7 @@
 import fibtools as ft
 from qubicpack import qubicpack as qp
+from qubicpack import pix2tes
+
 import qubic
 
 import numpy as np
@@ -236,25 +238,30 @@ def selfcal_data(q, theta, phi, spectral_irradiance, baseline, reso=34,
     return S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij
 
 
-def full2quarter(s):
+def full2quarter(signal):
     """
     Reduce a complete focal plane to a quarter.
     Parameters
     ----------
-    s : array
-        Power on the total focal plane for each pointing
+    signal : array of shape (34, 34, #pointings)
+        Power on the total focal plane for each pointing.
 
     Returns
-        The power on a quarter of the focal plane
+        s_quarter : array of shape (17, 17, #pointings)
+            The power on a quarter of the focal plane
 
     """
-    focal_plan = np.where(qp().pix_grid > 0, 1, qp().pix_grid)
-    reso = s.shape[0]
-    nptg = s.shape[2]
-    s_quarter = np.empty((reso / 2, reso / 2, nptg))
+    if np.shape(signal)[0] != 34:
+        raise ValueError('The complete focal plane must be 34*34')
+
+    pix_grid = pix2tes.assign_pix_grid()
+    focal_plan = np.where(pix_grid > 0, 1, pix_grid)
+
+    nptg = np.shape(signal)[2]
+    s_quarter = np.empty((17, 17, nptg))
 
     for ptg in xrange(nptg):
-        s_quarter[:, :, ptg] = s[:reso / 2, reso / 2:, ptg] * focal_plan
+        s_quarter[:, :, ptg] = signal[:17, 17:, ptg] * focal_plan
 
     return s_quarter
 
@@ -323,4 +330,5 @@ def get_fringes_TD(baseline, basedir='../', phi=np.array([0.]), theta=np.array([
     fringes = (S_tot - Cminus_i - Cminus_j + Sminus_ij)/Ci
  
     return get_tes_signal(fringes)
+
 

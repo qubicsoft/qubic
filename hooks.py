@@ -33,11 +33,11 @@ ABBREV = 5
 F77_OPENMP = True
 F90_OPENMP = True
 F77_COMPILE_ARGS_GFORTRAN = []
-F77_COMPILE_DEBUG_GFORTRAN = ['-fcheck=all -Og']
-F77_COMPILE_OPT_GFORTRAN = ['-O2 -march=native']
+F77_COMPILE_DEBUG_GFORTRAN = ['-fcheck=all','-Og']
+F77_COMPILE_OPT_GFORTRAN = ['-O2','-march=native']
 F90_COMPILE_ARGS_GFORTRAN = ['-cpp']
-F90_COMPILE_DEBUG_GFORTRAN = ['-fcheck=all -Og']
-F90_COMPILE_OPT_GFORTRAN = ['-O2 -march=native']
+F90_COMPILE_DEBUG_GFORTRAN = ['-fcheck=all','-Og']
+F90_COMPILE_OPT_GFORTRAN = ['-O2','-march=native']
 F77_COMPILE_ARGS_IFORT = []
 F77_COMPILE_DEBUG_IFORT = ['-check all']
 F77_COMPILE_OPT_IFORT = ['-fast']

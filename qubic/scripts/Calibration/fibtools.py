@@ -14,7 +14,9 @@ import datetime as dt
 
 from qubic.utils import progress_bar
 from qubicpack import qubicpack as qp
-
+from qubicpack.pix2tes import assign_pix_grid, assign_pix2tes, tes2pix, pix2tes, TES2PIX
+pix_grid = assign_pix_grid()
+TES2PIX = assign_pix2tes()
 
 def isfloat(s):
     try:
@@ -77,33 +79,29 @@ def image_asics(data1=None, data2=None, all1=None):
         data1 = all1[0:nn]
 
     if data1 is not None:
-        a1 = qp()
-        a1.assign_asic(1)
-        a1.pix_grid[1, 16] = 1005
-        a1.pix_grid[2, 16] = 1006
-        a1.pix_grid[3, 16] = 1007
-        a1.pix_grid[4, 16] = 1008
+        pix_grid[1, 16] = 1005
+        pix_grid[2, 16] = 1006
+        pix_grid[3, 16] = 1007
+        pix_grid[4, 16] = 1008
     if data2 is not None:
-        a2 = qp()
-        a2.assign_asic(2)
-        a2.pix_grid[0, 15] = 1004
-        a2.pix_grid[0, 14] = 1003
-        a2.pix_grid[0, 13] = 1002
-        a2.pix_grid[0, 12] = 1001
+        pix_grid[0, 15] = 1004
+        pix_grid[0, 14] = 1003
+        pix_grid[0, 13] = 1002
+        pix_grid[0, 12] = 1001
     nrows = 17
     ncols = 17
     img = np.zeros((nrows, ncols)) + np.nan
     for row in range(nrows):
         for col in range(ncols):
             if data1 is not None:
-                physpix = a1.pix_grid[row, col]
-                if physpix in a1.TES2PIX[0]:
-                    TES = a1.pix2tes(physpix)
+                physpix = pix_grid[row, col]
+                if physpix in TES2PIX[0]:
+                    TES = pix2tes(physpix,asic=1)
                     img[row, col] = data1[TES - 1]
             if data2 is not None:
-                physpix = a2.pix_grid[row, col]
-                if physpix in a2.TES2PIX[1]:
-                    TES = a2.pix2tes(physpix)
+                physpix = pix_grid[row, col]
+                if physpix in TES2PIX[1]:
+                    TES = pix2tes(physpix,asic=2)
                     img[row, col] = data2[TES - 1]
     return img
 

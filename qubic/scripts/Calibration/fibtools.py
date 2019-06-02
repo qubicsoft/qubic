@@ -1,5 +1,3 @@
-import numpy as np
-import time
 import iminuit
 import math
 from matplotlib.pyplot import *
@@ -10,9 +8,9 @@ import scipy.stats
 from scipy.ndimage.filters import correlate1d, gaussian_filter1d
 import glob
 from astropy.io import fits
-import datetime as dt
 
 from qubic.utils import progress_bar
+
 from qubicpack import qubicpack as qp
 
 
@@ -26,19 +24,6 @@ def isfloat(s):
 
 
 def statstr(x, divide=False, median=False, cut=None):
-    """
-
-    Parameters
-    ----------
-    x
-    divide
-    median
-    cut
-
-    Returns
-    -------
-
-    """
     if median:
         m = np.median(x[np.isfinite(x)])
         nn = len(x[np.isfinite(x)])
@@ -54,6 +39,7 @@ def statstr(x, divide=False, median=False, cut=None):
     return '{0:6.2f} +/- {1:6.2f}'.format(m, s)
 
 
+# This function doesn't work anymore with the new qubicpack I think
 def image_asics(data1=None, data2=None, all1=None):
     """
     Return an image of detectors on the focal plane.

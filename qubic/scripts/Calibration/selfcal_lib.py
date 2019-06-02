@@ -1,10 +1,9 @@
-import fibtools as ft
 from qubicpack import qubicpack as qp
 from qubicpack import pix2tes
+from qubicpack.utilities import ASIC_index
 
 import qubic
 
-import numpy as np
 from matplotlib.pyplot import *
 
 
@@ -47,13 +46,86 @@ def fringe_focalplane(x, pars, extra_args=None):
     ijtes = tes2imgpix(np.arange(256) + 1, extra_args=extra_args)
 
     fringe = amplitude * np.cos(2. * np.pi * freq_fringe * (
-                ijtes[:, 0] * np.cos(alpha * np.pi / 180) + ijtes[:, 1] * np.sin(
-            alpha * np.pi / 180)) * TESsize / f + phase * np.pi / 180)
+            ijtes[:, 0] * np.cos(alpha * np.pi / 180) + ijtes[:, 1] * np.sin(
+        alpha * np.pi / 180)) * TESsize / f + phase * np.pi / 180)
     thermos = [4 - 1, 36 - 1, 68 - 1, 100 - 1, 4 - 1 + 128, 36 - 1 + 128, 68 - 1 + 128, 100 - 1 + 128]
     fringe[thermos] = 0
     mask = x > 0
     fringe[~mask] = 0
     return fringe
+
+
+def image_fp2tes_signal(image_fp):
+    """
+    Go from an image of one quarter of the focal plane to the signal of each TES.
+
+    Parameters
+    ----------
+    image_fp : array of shape (17, 17)
+        Image of one quarter of the focal plane with the signal for each TES.
+
+    Returns
+    -------
+    tes_signal : array of shape (256,)
+        Signals in each TES, the 128 first elements are for asic 1
+        and the 128 next are for asic 2.
+    """
+
+    tes_signal = np.zeros(256)
+    pix_grid = pix2tes.assign_pix_grid()
+
+    TES2PIX = pix2tes.assign_pix2tes()
+    for l in range(17):
+        for c in range(17):
+            pix = pix_grid[l, c]
+            if pix != 0.:
+                if pix in TES2PIX[ASIC_index(1), :]:
+                    tes = pix2tes.pix2tes(pix, 1)
+                    tes_signal[tes - 1] = image_fp[l, c]
+
+                else:
+                    tes = pix2tes.pix2tes(pix, 2)
+                    tes_signal[tes - 1 + 128] = image_fp[l, c]
+
+    return tes_signal
+
+
+def tes_signal2image_fp(tes_signal):
+    """
+    Go from the signal of each TES to an image of one quarter of the focal plane.
+
+    Parameters
+    ----------
+    tes_signal : array of shape (256,)
+        Signals in each TES, the 128 first elements are for asic 1
+        and the 128 next are for asic 2.
+
+    Returns
+    -------
+    image_fp : array of shape (17, 17)
+        Image of one quarter of the focal plane with the signal for each TES.
+
+    """
+
+    image_fp = np.zeros((17, 17))
+
+    pix_grid = pix2tes.assign_pix_grid()
+
+    for i, signal in enumerate(tes_signal):
+        tes_index = i + 1  # TES indices start at 1 and not 0
+
+        # We split between asic1 and asic2
+        if tes_index < 129:
+            pix = pix2tes.tes2pix(tes_index, 1)
+        else:
+            pix = pix2tes.tes2pix(tes_index - 128, 2)
+
+        # This condition avoids thermometers
+        if pix < 1000:
+            coord = np.reshape(np.where(pix_grid == pix), (2))
+            image_fp[coord[0], coord[1]] = signal
+
+    return image_fp
 
 
 def get_power_on_array(q, theta, phi, spectral_irradiance, reso=34, xmin=-0.06, xmax=0.06):
@@ -266,60 +338,39 @@ def full2quarter(signal):
     return s_quarter
 
 
-def get_tes_signal(s):
+def get_fringes_TD(baseline, basedir='../', theta=np.array([0.]), phi=np.array([0.]), irradiance=1.):
     """
-    Put the power seen by each TES in 2 arrays, one for each
-    asic, respecting the indices of the TES on the real instrument.
+    Computes the fringe signals in each TES for point source.
+    The sources moves and we compute the fringes for each pointing
+    that corresponds to a positio  of the source.
 
     Parameters
     ----------
-    s : array of shape (17, 17, #pointings)
-        Power on a quarter of the focal plane for each pointing
+    baseline : array
+        Baseline formed with 2 horns, index between 1 and 64 as in the manip.
+    basedir : str
+        Path of the dictionary.
+    theta : array-like of shape (#pointings,)
+        The source zenith angle [rad].
+    phi : array-like of shape (#pointings,)
+        The source azimuthal angle [rad].
+    irradiance : array-like
+        The source spectral_irradiance [W/m^2/Hz].
 
     Returns
     -------
-    Two arrays, one for each asic, of shape (#pointings, 129).
-    The first element is always 0, the thermometers are put to 0.
+    tes_fringes_signal : array of shape (256, #pointings)
+        Fringe signal (power) in each TES.
 
     """
-    nlin = s.shape[0]
-    ncol = s.shape[1]
-    nptg = s.shape[2]
-
-    a1 = qp()
-    a1.assign_asic(1)
-    a2 = qp()
-    a2.assign_asic(2)
-
-    tes_signal = np.zeros((256, nptg))
-    # tes_signal_a2 = np.zeros((128, nptg))
-
-    for ptg in range(nptg):
-        pix = 1
-        for l in range(nlin):
-            for c in range(ncol):
-                if s[l, c, ptg] != 0. and np.isnan(s[l, c, ptg])==False:
-                    tes = a1.pix2tes(pix)
-                    if tes is not None:
-                        tes_signal[tes-1, ptg] = s[l, c, ptg]
-                    else:
-                        tes = a2.pix2tes(pix)
-                        tes_signal[tes-1+128, ptg] = s[l, c, ptg]
-                    print(tes)
-                    pix += 1
-    return tes_signal
-
-
-def get_fringes_TD(baseline, basedir='../', phi=np.array([0.]), theta=np.array([0.]), irradiance=1.):
-    
     dictfilename = basedir + 'global_source.dict'
     d = qubic.qubicdict.qubicDict()
     d.read_from_file(dictfilename)
     q = qubic.QubicMultibandInstrument(d)
 
     S_tot, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = selfcal_data(q[0], theta, phi,
-                                                                 irradiance, baseline,
-                                                                 dead_switch=None, doplot=False)
+                                                                     irradiance, baseline,
+                                                                     dead_switch=None, doplot=False)
 
     S_tot = full2quarter(S_tot)
     Cminus_i = full2quarter(Cminus_i)
@@ -327,8 +378,11 @@ def get_fringes_TD(baseline, basedir='../', phi=np.array([0.]), theta=np.array([
     Sminus_ij = full2quarter(Sminus_ij)
     Ci = full2quarter(Ci)
 
-    fringes = (S_tot - Cminus_i - Cminus_j + Sminus_ij)/Ci
- 
-    return get_tes_signal(fringes)
+    fringes = (S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
 
+    nptg = np.shape(fringes)[2]
+    tes_fringes_signal = np.empty((256, nptg))
+    for ptg in range(nptg):
+        tes_fringes_signal[:, ptg] = image_fp2tes_signal(fringes[:, :, ptg])
 
+    return tes_fringes_signal

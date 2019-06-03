@@ -168,7 +168,7 @@ def get_power_on_array(q, theta, phi, spectral_irradiance, reso=34, xmin=-0.06, 
     return power
 
 
-def selfcal_data(q, theta, phi, spectral_irradiance, baseline, reso=34,
+def get_power_combinations(q, theta, phi, spectral_irradiance, baseline, reso=34,
                  xmin=-0.06, xmax=0.06, dead_switch=None, doplot=False):
     """
         Returns the power on the focal plane for each pointing, for different configurations
@@ -338,7 +338,7 @@ def full2quarter(signal):
     return s_quarter
 
 
-def get_fringes_TD(baseline, basedir='../', theta=np.array([0.]), phi=np.array([0.]), irradiance=1.):
+def get_fringes_fp_TD(baseline, basedir='../', theta=np.array([0.]), phi=np.array([0.]), irradiance=1.):
     """
     Computes the fringe signals in each TES for point source.
     The sources moves and we compute the fringes for each pointing
@@ -368,7 +368,7 @@ def get_fringes_TD(baseline, basedir='../', theta=np.array([0.]), phi=np.array([
     d.read_from_file(dictfilename)
     q = qubic.QubicMultibandInstrument(d)
 
-    S_tot, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = selfcal_data(q[0], theta, phi,
+    S_tot, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = get_power_combinations(q[0], theta, phi,
                                                                      irradiance, baseline,
                                                                      dead_switch=None, doplot=False)
 

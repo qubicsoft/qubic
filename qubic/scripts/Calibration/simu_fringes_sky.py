@@ -8,9 +8,6 @@ dictfilename = basedir + '/qubic/qubic/scripts/global_source.dict'
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
-# Scene
-s = qubic.QubicScene(d)
-
 
 def get_synthetic_beam_sky(d, switches, tes, plot_loc, title_plot, default_open=True):
     """
@@ -40,6 +37,8 @@ def get_synthetic_beam_sky(d, switches, tes, plot_loc, title_plot, default_open=
 
     """
     q = qubic.QubicInstrument(d)
+    s = qubic.QubicScene(d)
+
     if default_open:
         q.horn.open = True
         for i in switches:

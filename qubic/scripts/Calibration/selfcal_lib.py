@@ -107,7 +107,7 @@ def tes_signal2image_fp(tes_signal):
 
     """
 
-    image_fp = np.zeros((17, 17))
+    image_fp = np.zeros((17, 17)) + np.nan
 
     pix_grid = pix2tes.assign_pix_grid()
 

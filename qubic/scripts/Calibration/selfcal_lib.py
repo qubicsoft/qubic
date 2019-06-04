@@ -1,6 +1,7 @@
 from qubicpack import qubicpack as qp
 from qubicpack import pix2tes
 from qubicpack.utilities import ASIC_index
+import cv2
 
 import qubic
 
@@ -386,3 +387,79 @@ def get_fringes_fp_TD(baseline, basedir='../', theta=np.array([0.]), phi=np.arra
         tes_fringes_signal[:, ptg] = image_fp2tes_signal(fringes[:, :, ptg])
 
     return tes_fringes_signal
+
+
+def get_power_fp_aberration(rep, switches, doplot=True):
+    """
+    Compute power in the focal plane for a given horn configuration taking
+    into account optical aberrations given in Creidhe simulations.
+
+    Parameters
+    ----------
+    rep : str
+        Path of the repository for the simulated files, can be download at :
+        https://drive.google.com/open?id=1sC7-DrdsTigL0d7Z8KzPQ3uoWSy0Phxh
+    switches : 1D array of int
+        Index of switches between 1 and 64 that are open.
+    doplot : bool
+        If True, make a plot with the intensity in the focal plane.
+
+    Returns
+    -------
+    int_sampling_reso : array of shape (nn, nn)
+        Power in the focal plane at high resolution (sampling used in simulations.
+    int_fp_reso : array of shape (34, 34)
+        Power in the focal plane at the TES resolution.
+
+    """
+
+    # Get simulation files
+    files = sorted(glob.glob(rep + '*.dat'))
+
+    nhorns = len(files)
+    if nhorns != 64:
+        raise ValueError('You should have 64 .dat files')
+
+    # Get the sample number from the first file
+    data0 = pd.read_csv(files[0], sep='\t', skiprows=0)
+    nn = data0['X_Index'].iloc[-1] + 1
+    print('Sampling number = {}'.format(nn))
+
+    # Get all amplitudes and phases for each open horn
+    allampX = np.empty((len(switches), nn, nn))
+    allphiX = np.empty((len(switches), nn, nn))
+    allampY = np.empty((len(switches), nn, nn))
+    allphiY = np.empty((len(switches), nn, nn))
+    for i, swi in enumerate(switches):
+        data = pd.read_csv(files[swi], sep='\t', skiprows=0)
+        allampX[i, :, :] = np.reshape(np.asarray(data['MagX']), (nn, nn))
+        allampY[i, :, :] = np.reshape(np.asarray(data['MagY']), (nn, nn))
+
+        allphiX[i, :, :] = np.reshape(np.asarray(data['PhaseX']), (nn, nn))
+        allphiY[i, :, :] = np.reshape(np.asarray(data['PhaseY']), (nn, nn))
+
+    # Electric field for each open horn
+    Ax = allampX * (np.cos(allphiX) + 1j * np.sin(allphiX))
+    Ay = allampY * (np.cos(allphiY) + 1j * np.sin(allphiY))
+
+    # Sum of the electric fields
+    sumampx = np.sum(Ax, axis=0)
+    sumampy = np.sum(Ay, axis=0)
+
+    # Intensity in the focal plane with high resolution
+    # and with the focal plane resolution
+    int_sampling_reso = np.abs(sumampx) ** 2 + np.abs(sumampy) ** 2
+    int_fp_reso = cv2.resize(int_sampling_reso, (34, 34))
+
+    if doplot:
+        subplot(121)
+        imshow(int_sampling_reso)
+        title('Power at the sampling resolution')
+        colorbar()
+
+        subplot(122)
+        imshow(int_fp_reso)
+        title('Power at the TES resolution')
+        colorbar()
+
+    return int_sampling_reso, int_fp_reso 

@@ -41,7 +41,6 @@ def statstr(x, divide=False, median=False, cut=None):
     return '{0:6.2f} +/- {1:6.2f}'.format(m, s)
 
 
-# This function doesn't work anymore with the new qubicpack I think
 def image_asics(data1=None, data2=None, all1=None):
     """
     Return an image of detectors on the focal plane.

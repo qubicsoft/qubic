@@ -313,32 +313,28 @@ def get_power_combinations(q, theta, phi, spectral_irradiance, baseline, reso=34
     return S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij
 
 
-def full2quarter(signal):
+def full2quarter(full_fp):
     """
     Reduce a complete focal plane to a quarter.
     Parameters
     ----------
-    signal : array of shape (34, 34, #pointings)
+    full_fp : array of shape (34, 34)
         Power on the total focal plane for each pointing.
 
     Returns
-        s_quarter : array of shape (17, 17, #pointings)
-            The power on a quarter of the focal plane
+    quart_fp : array of shape (17, 17)
+        The power on a quarter of the focal plane
 
     """
-    if np.shape(signal)[0] != 34:
+    if np.shape(full_fp) != (34, 34):
         raise ValueError('The complete focal plane must be 34*34')
 
     pix_grid = pix2tes.assign_pix_grid()
     focal_plan = np.where(pix_grid > 0, 1, pix_grid)
+    quart_fp = full_fp[:17, 17:]* focal_plan
+    quart_fp[quart_fp == 0.] = np.nan
 
-    nptg = np.shape(signal)[2]
-    s_quarter = np.empty((17, 17, nptg))
-
-    for ptg in xrange(nptg):
-        s_quarter[:, :, ptg] = signal[:17, 17:, ptg] * focal_plan
-
-    return s_quarter
+    return quart_fp
 
 
 def get_fringes_fp_TD(baseline, basedir='../', theta=np.array([0.]), phi=np.array([0.]), irradiance=1.):
@@ -374,18 +370,17 @@ def get_fringes_fp_TD(baseline, basedir='../', theta=np.array([0.]), phi=np.arra
     S_tot, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = get_power_combinations(q[0], theta, phi,
                                                                                irradiance, baseline,
                                                                                dead_switch=None, doplot=False)
-
-    S_tot = full2quarter(S_tot)
-    Cminus_i = full2quarter(Cminus_i)
-    Cminus_j = full2quarter(Cminus_j)
-    Sminus_ij = full2quarter(Sminus_ij)
-    Ci = full2quarter(Ci)
-
-    fringes = (S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
-
-    nptg = np.shape(fringes)[2]
+    nptg = np.shape(S_tot)[2]
+    fringes = np.empty((17, 17, nptg))
     tes_fringes_signal = np.empty((256, nptg))
     for ptg in range(nptg):
+        S_tot4 = full2quarter(S_tot[:, :, ptg])
+        Cminus_i4 = full2quarter(Cminus_i[:, :, ptg])
+        Cminus_j4 = full2quarter(Cminus_j[:, :, ptg])
+        Sminus_ij4 = full2quarter(Sminus_ij[:, :, ptg])
+        Ci4 = full2quarter(Ci[:, :, ptg])
+        fringes[:, :, ptg] = (S_tot4 - Cminus_i4 - Cminus_j4 + Sminus_ij4) / Ci4
+        imshow(fringes[:, :, ptg])
         tes_fringes_signal[:, ptg] = image_fp2tes_signal(fringes[:, :, ptg])
 
     return tes_fringes_signal

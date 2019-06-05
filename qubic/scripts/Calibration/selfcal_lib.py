@@ -1,7 +1,9 @@
+import glob
+import cv2
+import pandas as pd
 from qubicpack import qubicpack as qp
 from qubicpack import pix2tes
 from qubicpack.utilities import ASIC_index
-import cv2
 
 import qubic
 
@@ -170,7 +172,7 @@ def get_power_on_array(q, theta, phi, spectral_irradiance, reso=34, xmin=-0.06, 
 
 
 def get_power_combinations(q, theta, phi, spectral_irradiance, baseline, reso=34,
-                 xmin=-0.06, xmax=0.06, dead_switch=None, doplot=False):
+                           xmin=-0.06, xmax=0.06, dead_switch=None, doplot=False):
     """
         Returns the power on the focal plane for each pointing, for different configurations
         of the horn array: all open, all open except i, except j, except i and j, only i open,
@@ -370,8 +372,8 @@ def get_fringes_fp_TD(baseline, basedir='../', theta=np.array([0.]), phi=np.arra
     q = qubic.QubicMultibandInstrument(d)
 
     S_tot, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = get_power_combinations(q[0], theta, phi,
-                                                                     irradiance, baseline,
-                                                                     dead_switch=None, doplot=False)
+                                                                               irradiance, baseline,
+                                                                               dead_switch=None, doplot=False)
 
     S_tot = full2quarter(S_tot)
     Cminus_i = full2quarter(Cminus_i)
@@ -431,7 +433,9 @@ def get_power_fp_aberration(rep, switches, doplot=True):
     allampY = np.empty((len(switches), nn, nn))
     allphiY = np.empty((len(switches), nn, nn))
     for i, swi in enumerate(switches):
-        data = pd.read_csv(files[swi], sep='\t', skiprows=0)
+        if swi < 1 or swi > 64:
+            raise ValueError('The switch indices must be between 1 and 64 ')
+        data = pd.read_csv(files[swi - 1], sep='\t', skiprows=0)
         allampX[i, :, :] = np.reshape(np.asarray(data['MagX']), (nn, nn))
         allampY[i, :, :] = np.reshape(np.asarray(data['MagY']), (nn, nn))
 
@@ -462,4 +466,4 @@ def get_power_fp_aberration(rep, switches, doplot=True):
         title('Power at the TES resolution')
         colorbar()
 
-    return int_sampling_reso, int_fp_reso 
+    return int_sampling_reso, int_fp_reso

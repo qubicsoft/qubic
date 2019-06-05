@@ -394,7 +394,8 @@ def get_fringes_fp_TD(baseline, basedir='../', theta=np.array([0.]), phi=np.arra
 def get_power_fp_aberration(rep, switches, doplot=True):
     """
     Compute power in the focal plane for a given horn configuration taking
-    into account optical aberrations given in Creidhe simulations.
+    into account optical aberrations given in Creidhe simulations. It is
+    simulations for an on-axis point source with a power of 1 W/m^2.
 
     Parameters
     ----------

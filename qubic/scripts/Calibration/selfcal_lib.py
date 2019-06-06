@@ -331,7 +331,7 @@ def full2quarter(full_fp):
 
     pix_grid = pix2tes.assign_pix_grid()
     focal_plan = np.where(pix_grid > 0, 1, pix_grid)
-    quart_fp = full_fp[:17, 17:]* focal_plan
+    quart_fp = np.rot90(full_fp[:17, :17], 3) * focal_plan
     quart_fp[quart_fp == 0.] = np.nan
 
     return quart_fp
@@ -341,7 +341,7 @@ def get_fringes_fp_TD(baseline, basedir='../', theta=np.array([0.]), phi=np.arra
     """
     Computes the fringe signals in each TES for point source.
     The sources moves and we compute the fringes for each pointing
-    that corresponds to a positio  of the source.
+    that corresponds to a position  of the source.
 
     Parameters
     ----------

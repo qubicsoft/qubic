@@ -224,7 +224,7 @@ class SelfCalibration:
 
         return tes_fringes_signal
 
-    def get_power_fp_aberration(self, rep, doplot=True, theta_source=0., freq_source=150.):
+    def get_power_fp_aberration(self, rep, doplot=True, theta_source=0., freq_source=150., indep_config=None):
         """
         Compute power in the focal plane for a given horn configuration taking
         into account optical aberrations given in Creidhe simulations.
@@ -239,7 +239,12 @@ class SelfCalibration:
         theta_source : float
             Angle in degree between the optical axis of Qubic and the source.
         freq_source : float
-            Frequency of the source in GHz.
+            Frequency of the source in GHz
+        indep_config : list of int
+            By default it is None and in this case, it will use the baseline
+            defined i your object on which you call the method.
+            If you want an other configuration (all open for example), you can
+            put here a list with the horns you want to open.
 
         Returns
         -------
@@ -267,17 +272,27 @@ class SelfCalibration:
         print('Sampling number = {}'.format(nn))
 
         # Get all amplitudes and phases for each open horn
-        allampX = np.empty((len(self.baseline), nn, nn))
-        allphiX = np.empty((len(self.baseline), nn, nn))
-        allampY = np.empty((len(self.baseline), nn, nn))
-        allphiY = np.empty((len(self.baseline), nn, nn))
-        for i, swi in enumerate(self.baseline):
+        if indep_config is None:
+            open_horns = self.baseline
+            nopen_horns = len(self.baseline)
+        else:
+            open_horns = indep_config
+            nopen_horns = len(indep_config)
+
+        q.horn.open = False
+        q.horn.open[np.asarray(open_horns) - 1] = True
+
+        allampX = np.empty((nopen_horns, nn, nn))
+        allphiX = np.empty((nopen_horns, nn, nn))
+        allampY = np.empty((nopen_horns, nn, nn))
+        allphiY = np.empty((nopen_horns, nn, nn))
+        for i, swi in enumerate(open_horns):
             if swi < 1 or swi > 64:
                 raise ValueError('The switch indices must be between 1 and 64 ')
 
             # Phase calculation
-            horn_x = q.horn.center[swi, 0]
-            horn_y = q.horn.center[swi, 1]
+            horn_x = q.horn.center[swi-1, 0]
+            horn_y = q.horn.center[swi-1, 1]
             d = np.sqrt(horn_x**2 + horn_y**2) # distance between the horn and the center
             phi = - 2 * np.pi / 3e8 * freq_source * 1e9 * d * np.sin(np.deg2rad(theta_source))
 
@@ -303,12 +318,15 @@ class SelfCalibration:
 
         if doplot:
             figure()
-            subplot(121)
+            subplot(131)
+            q.horn.plot()
+            axis('off')
+            subplot(132)
             imshow(int_sampling_reso)
             title('Power at the sampling resolution')
             colorbar()
 
-            subplot(122)
+            subplot(133)
             imshow(int_fp_reso)
             title('Power at the TES resolution')
             colorbar()

@@ -87,7 +87,7 @@ class SelfCalibration:
             q.horn.plot()
             axis('off')
             subplot(4, 4, 2)
-            imshow(S[:, :, 0], interpolation='nearest')
+            imshow(S[:, :, 0])
             colorbar()
             title('$S$')
 
@@ -102,7 +102,7 @@ class SelfCalibration:
             q.horn.plot()
             axis('off')
             subplot(4, 4, 4)
-            imshow(Cminus_i[:, :, 0], interpolation='nearest')
+            imshow(Cminus_i[:, :, 0])
             colorbar()
             title('$C_{-i}$')
 
@@ -117,7 +117,7 @@ class SelfCalibration:
             q.horn.plot()
             axis('off')
             subplot(4, 4, 6)
-            imshow(Cminus_j[:, :, 0], interpolation='nearest')
+            imshow(Cminus_j[:, :, 0])
             colorbar()
             title('$C_{-j}$')
 
@@ -133,7 +133,7 @@ class SelfCalibration:
             q.horn.plot()
             axis('off')
             subplot(4, 4, 8)
-            imshow(Sminus_ij[:, :, 0], interpolation='nearest')
+            imshow(Sminus_ij[:, :, 0])
             colorbar()
             title('$S_{-ij}$')
 
@@ -148,7 +148,7 @@ class SelfCalibration:
             q.horn.plot()
             axis('off')
             subplot(4, 4, 10)
-            imshow(Ci[:, :, 0], interpolation='nearest')
+            imshow(Ci[:, :, 0])
             colorbar()
             title('$C_i$')
 
@@ -161,7 +161,7 @@ class SelfCalibration:
             q.horn.plot()
             axis('off')
             subplot(4, 4, 12)
-            imshow(Cj[:, :, 0], interpolation='nearest')
+            imshow(Cj[:, :, 0])
             colorbar()
             title('$C_j$')
 
@@ -175,7 +175,7 @@ class SelfCalibration:
             q.horn.plot()
             axis('off')
             subplot(4, 4, 14)
-            imshow(Sij[:, :, 0], interpolation='nearest')
+            imshow(Sij[:, :, 0])
             colorbar()
             title('$S_{ij}$')
 
@@ -515,6 +515,8 @@ class SelfCalibration:
         field = q._get_response(theta, phi, spectral_irradiance, position, q.detector.area, q.filter.nu, q.horn,
                                 q.primary_beam, q.secondary_beam)
         power = np.reshape(np.abs(field) ** 2, (reso, reso, nptg))
+        power = np.fliplr(power) # There is a symmetry bug, need to flip it
+
         return power
 
 # ============= JC functions old

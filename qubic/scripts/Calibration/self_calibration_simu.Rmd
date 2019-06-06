@@ -57,7 +57,7 @@ d.read_from_file(dictfilename)
 ## Create an object 
 
 ```{python}
-ca = selfcal_lib.SelfCalibration([10, 28], [], d)
+ca = selfcal_lib.SelfCalibration([12, 28], [], d)
 ```
 
 Look at method that are in this class :
@@ -73,7 +73,7 @@ This is a simulation that doesn't take into account optical aberrations.
 # You need a qubic instrument for that function
 q = qubic.QubicInstrument(d)
 
-S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = ca.get_power_combinations(q)
+S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = ca.get_power_combinations(q, theta=[0., 0.2], phi=[[0., 0.2]])
 ```
 
 ```{python}
@@ -83,7 +83,8 @@ S.shape
 ## I want an instrument in a specific horn config
 
 ```{python}
-q.horn.open[56]=False
+q.horn.open[3]=True
+q.horn
 ```
 
 ```{python}
@@ -103,6 +104,11 @@ tes_fringes_signal.shape
 
 ```
 
+```{python}
+# There are 8 thermometers that are set to 0. and 248 TES
+tes_fringes_signal
+```
+
 ### The focal plane image associated
 
 ```{python}
@@ -118,6 +124,10 @@ Using Creidhe simulations (need to download the files)
 rep = '/home/louisemousset/QUBIC/Qubic_work/Calibration/RF_switch/simu_creidhe_aberrations/'
 
 int, int_fp = ca.get_power_fp_aberration(rep)
+```
+
+```{python}
+int_fp.shape
 ```
 
 ### I want only a quarter of the focal plane
@@ -141,7 +151,7 @@ signal.shape
 q = qubic.QubicInstrument(d)
 s = qubic.QubicScene(d)
 
-sb = ca.get_synthetic_beam_sky(q, s, 34, default_open=False)
+sb = ca.get_synthetic_beam_sky(q, s, 34, default_open=True)
 ```
 
 ```{python}

@@ -13,17 +13,6 @@ import qubic
 
 __all__ = ['SelfCalibration']
 
-basedir = '/home/louisemousset/QUBIC/MyGitQUBIC'
-dictfilename = basedir + '/qubic/qubic/scripts/global_source.dict'
-
-d = qubic.qubicdict.qubicDict()
-d.read_from_file(dictfilename)
-
-q = qubic.QubicInstrument(d)
-s = qubic.QubicScene(d)
-
-rep = '/home/louisemousset/QUBIC/Qubic_work/Calibration/RF_switch/simu_creidhe_aberrations/'
-
 class SelfCalibration:
     """
     Get power on the focal plane with or without optical aberrations
@@ -31,7 +20,7 @@ class SelfCalibration:
 
     """
 
-    def __init__(self, baseline, dead_switches):
+    def __init__(self, baseline, dead_switches, d):
         """
 
         Parameters
@@ -40,9 +29,11 @@ class SelfCalibration:
             Baseline formed with 2 horns, index between 1 and 64 as on the instrument.
         dead_switches : int or list of int
             Broken switches, always closed.
+        d : dictionary
         """
         self.baseline = baseline
         self.dead_switches = dead_switches
+        self.d = d
 
         if len(self.baseline) != 2:
             raise ValueError('The baseline should contain 2 horns.')
@@ -191,11 +182,11 @@ class SelfCalibration:
 
         return S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij
 
-    def get_fringes_fp_TD(self, basedir='../', theta=np.array([0.]), phi=np.array([0.]), spectral_irradiance=1.):
+    def get_fringes_fp_TD(self, theta=np.array([0.]), phi=np.array([0.]), spectral_irradiance=1.):
         """
         Computes the fringe signals in each TES for point source.
         The sources moves and we compute the fringes for each pointing
-        that corresponds to a positio  of the source.
+        that corresponds to a position  of the source.
 
         Parameters
         ----------
@@ -214,10 +205,7 @@ class SelfCalibration:
             Fringe signal (power) in each TES.
 
         """
-        dictfilename = basedir + 'global_source.dict'
-        d = qubic.qubicdict.qubicDict()
-        d.read_from_file(dictfilename)
-        q = qubic.QubicMultibandInstrument(d)
+        q = qubic.QubicMultibandInstrument(self.d)
 
         S_tot, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = \
             SelfCalibration.get_power_combinations(self, q[0], theta=theta, phi=phi,
@@ -239,7 +227,7 @@ class SelfCalibration:
 
         return tes_fringes_signal
 
-    def get_power_fp_aberration(self, d, rep, doplot=True, theta_source=0., freq_source=150.):
+    def get_power_fp_aberration(self, rep, doplot=True, theta_source=0., freq_source=150.):
         """
         Compute power in the focal plane for a given horn configuration taking
         into account optical aberrations given in Creidhe simulations.
@@ -264,10 +252,10 @@ class SelfCalibration:
             Power in the focal plane at the TES resolution.
 
         """
-        if d['config'] != 'TD':
+        if self.d['config'] != 'TD':
             raise ValueError('The instrument in the dictionary must be the TD')
 
-        q = qubic.QubicInstrument(d)
+        q = qubic.QubicInstrument(self.d)
 
         # Get simulation files
         files = sorted(glob.glob(rep + '*.dat'))

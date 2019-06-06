@@ -88,7 +88,6 @@ class SelfCalibration:
             axis('off')
             subplot(4, 4, 2)
             imshow(S[:, :, 0], interpolation='nearest')
-            print(S[:, :, 0].shape)
             colorbar()
             title('$S$')
 

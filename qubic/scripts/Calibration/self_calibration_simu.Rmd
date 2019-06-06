@@ -1,0 +1,26 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.5
+  kernelspec:
+    display_name: Python 2
+    language: python
+    name: python2
+---
+
+# Simulations for self-calibration (fringes)
+
+#### Edited by Louise
+I have implemented a class in selfcal_lib.py which allowed to do several simulations concerning the calibration. This notebook gives some examples of what you can do with.
+
+```{python}
+import selfcal_lib as sc
+```
+
+```{python}
+
+```

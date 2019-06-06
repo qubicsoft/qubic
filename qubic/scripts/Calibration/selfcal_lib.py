@@ -189,8 +189,6 @@ class SelfCalibration:
 
         Parameters
         ----------
-        basedir : str
-            Path of the dictionary.
         theta : array-like of shape (#pointings,)
             The source zenith angle [rad].
         phi : array-like of shape (#pointings,)
@@ -455,7 +453,7 @@ class SelfCalibration:
 
         pix_grid = pix2tes.assign_pix_grid()
         focal_plan = np.where(pix_grid > 0, 1, pix_grid)
-        quart_fp = np.rot90(full_fp[:17, 17:]) * focal_plan
+        quart_fp = full_fp[:17, 17:] * focal_plan
         quart_fp[quart_fp == 0.] = np.nan
 
         return quart_fp

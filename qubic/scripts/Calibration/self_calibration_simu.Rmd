@@ -127,6 +127,11 @@ int, int_fp = ca.get_power_fp_aberration(rep)
 ```
 
 ```{python}
+# If you want a specific configuration (all open for example)
+int_open, int_fp_open = ca.get_power_fp_aberration(rep, indep_config=np.arange(1, 65, 1))
+```
+
+```{python}
 int_fp.shape
 ```
 

@@ -22,6 +22,11 @@ import matplotlib as mpl
 from matplotlib.pyplot import *
 from matplotlib import rc
 #from qubicpack import qubicpack as qp
+import matplotlib.pyplot as plt
+from matplotlib import cm, colors
+from mpl_toolkits.mplot3d import Axes3D
+import numpy as np
+
 import sys
 sys.path.append('/home/martin/QUBIC/qubiclouise/qubic/scripts/Calibration')
 sys.path.append('/home/martin/QUBIC/qubiccalibration/qubicpack')
@@ -93,10 +98,10 @@ if sel_det:
     q=select_det(q,did_det['{}'.format(TESid)])
 ```
 
-```{python active="", eval=FALSE}
+```{python}
 TESid=93
 d['nside']=512
-dirflat = '/home/mgamboa/qubic/QUBIC/qubiccalibration/Data/150GHz-2019-04-06/Flat/'
+dirflat = '/home/martin/QUBIC/qubiccalibration/Data/Calib-TD/150GHz-2019-04-06/Flat/'
 filename=dirflat+'imgflat_TESNum_{}.fits'.format(TESid)
 datamap = FitsArray(filename)
 az = FitsArray(dirflat+'azimuth.fits')
@@ -107,7 +112,7 @@ s = qubic.QubicScene(d)
 
 sb = q.get_synthbeam(s, 0, detpos=q.detector.center[0])
 tes93healpy =hp.ud_grade(tes93healpy, 512)
-xr=0.1*np.max(sb)
+xr=0.35*np.max(sb)
 
 figure(figsize=(12,10))
 #min=-3.61e3, max=1.39e5,
@@ -116,13 +121,13 @@ sb2=np.copy(sb)
 sb2[sat] = xr
 
 hp.gnomview(tes93healpy/np.max(tes93healpy),title='Measured @150GHz 2019-04-06 \n Healpix TES={} \n Normalized to the maximum'.format(TESid), 
-            sub=(1,3,1), reso = 10, xsize = 200, min=0,max=1,cmap='viridis')
+            sub=(1,2,1), reso = 10, xsize = 200, min=0,max=1,cmap='viridis')
 
-hp.gnomview(sb/np.max(sb), rot=[0,90], xsize=200, reso=10, title='Theory - No aberrations  \n Normalized to the maximum', 
-            sub=(1,3,2), min=0, max=1,hold=False,cmap='viridis')
+#hp.gnomview(sb/np.max(sb), rot=[0,90], xsize=200, reso=10, title='Theory - No aberrations  \n Normalized to the maximum', 
+#            sub=(1,3,2), min=0, max=1,hold=False,cmap='viridis')
 
 hp.gnomview(sb2/np.max(sb2), rot=[0,90], xsize=200, reso=10, title='Theory - No aberrations  \n Saturated and normalized to the maximum', 
-            sub=(1,3,3), min=0, max=1,hold=False,cmap='viridis')
+            sub=(1,2,2), min=0, max=1,hold=False,cmap='viridis')
 ```
 
 ```{python}
@@ -174,7 +179,7 @@ source[id]=1
 freq = 150 # GHz
 conv = 61.3474
 #source = hp.sphtfunc.smoothing(source,fwhm=np.deg2rad(conv/freq))#
-source = hp.sphtfunc.smoothing(source,fwhm=np.deg2rad(1.3))#
+source = hp.sphtfunc.smoothing(source,fwhm=np.deg2rad(0.9))#
 x0[:,component]=source
 
 if pp.fix_az:
@@ -541,6 +546,12 @@ def neworder(arr,loc):
 ```
 
 ```{python}
+thph2uv_one(0.03,2.93)
+print('az peak', np.radians(peak95[0,:]))
+print('el peak', np.radians(peak95[1,:]))
+```
+
+```{python}
 print '======= Rotation from fit points to theoretical reference system'
 print('Position of the central peak (fifth in fit array), (az,el) = {}, {}'.format(peak95[0,4],peak95[1,4]))
 
@@ -570,6 +581,7 @@ print(angulo2)
 print('======Try angle betwen red and green (Martin notes)')
 
 th0, ph0 = np.pi/2-np.radians(el0), np.radians(az0)
+print('phis,theta_0, ', ph0[0], th0[0])
 pos0 = []
 for j in xrange(0,len(el0)):
     pos0.append(thph2uv_one(th0[j],ph0[j]))
@@ -598,9 +610,9 @@ for i in xrange(0,len(posF3)):
 
 
 newth = np.array(newcoord).T[0]#+newthoff
-newphi = np.array(newcoord).T[1]*np.cos(newth)#+newphoff
+newphi = +np.array(newcoord).T[1]*np.cos(newth)#+newphoff
 
-#np.savetxt('leb.txt',[th0.T, ph0.T])
+#np.savetxt('leb_defsynthbeam.txt',[th0.T, ph0.T])
 np.savetxt('leb2.txt', [newth,newphi])
 
 clf()
@@ -609,7 +621,8 @@ figure(figsize=(12,12))
 subplot(122, projection = 'polar')
 for i in xrange(0,len(newcoord)):
     plot(ph0[i],th0[i], 'ro')
-    plot(newcoord[i][1],newcoord[i][0],'ko')
+    #plot(newcoord[i][1],newcoord[i][0],'ko')
+    plot(newphi,newth,'ko')
     plot(0,np.pi/2,'go')
 
 print '======='
@@ -620,6 +633,92 @@ idp=[4,7,5,8,3,1,6,2,0]
 #print(neworder(newth,idp))
 #print(phis[0])
 #neworder(newth,idp)
+```
+
+```{python}
+# inverse rotation: from theoretical to FOV
+uv_def = thph2uv_one(thetas_def,phis_def).T
+#Take the fisrt 9 peaks
+newarr = np.zeros((9,3))
+for i,each in enumerate(uv_def[:9]):
+    newarr[i] = each[0]
+
+posF04 = []
+# take the first 9 elements of the default values
+thetas9 = thetas_def[0][:9]
+phis9 = phis_def[0][:9]
+
+for j,each in enumerate(newarr):
+    # rotation from center of the field in az,el to 
+    posF00 = np.dot(rotmatZ(-(np.pi-phis9[0]) )  , each  )
+    posF0i = np.dot(rotmatX(+thetas9[0] ) , np.asarray(posF00)  )
+    #posF01 = np.dot(rotmatX(-(np.pi/2 - np.radians(40)) ) , np.asarray(posF0i)  )
+    posF04.append(np.dot(rotmatX(-( np.radians(40))/np.cos(np.radians(50)) ) , np.asarray(posF0i)  ) )
+    #posF01i = np.dot(rotmatX(-thetas9[0] ) , np.asarray(posF01)  )
+    
+    #posF02 = np.dot(rotmatX(-np.radians(angulo2) )  , np.asarray(posF01  ) )
+    #posF03 = np.dot(rotmatY(-(np.radians(90-elcenter))), posF02  )
+    #posF04.append(np.dot(rotmatZ(+(np.radians(azcenter)*np.cos(np.radians(elcenter)) )), np.asarray(posF03)) )
+
+nthph = uv2thph_one(np.asarray(posF04).T)
+#print nthph[0]
+np.savetxt('leb_defsynthbeam.txt',[thetas9, phis9])
+np.savetxt('leb-inverse.txt', [nthph[0],nthph[1]])
+
+clf()
+figure(figsize=(12,12))
+
+subplot(122, projection = 'polar')
+
+for i in xrange(0,9):
+    plot(phis_def[0][i],thetas_def[0][i], 'ro')
+    plot(nthph[1][i],nthph[0][i],'ko')
+    #plot(0,np.pi/2,'go')
+    #legend()
+
+sin = np.sin
+cos = np.cos
+pi = np.pi
+r=1.
+phim, thetam = np.mgrid[0.0:pi:100j, 0.0:2.0*pi:100j]
+xi = r*sin(phim)*cos(thetam)
+yi = r*sin(phim)*sin(thetam)
+zi = r*cos(phim)
+
+data = np.genfromtxt('leb_defsynthbeam.txt', unpack=True)
+newdata2 = np.genfromtxt('leb-inverse.txt', unpack = True)
+
+thetai, phii = np.hsplit(data, 2) 
+newthetai, newphii = np.hsplit(newdata2,2)
+
+xxi = sin(thetai)*cos(phii)
+yyi = sin(thetai)*sin(phii)
+zzi = cos(thetai)
+xxxi = sin(newthetai)*cos(newphii)
+yyyi = sin(newthetai)*sin(newphii)
+zzzi = cos(newthetai)
+
+el2=50.
+cel=np.radians(90-el2)
+az2 = 0.
+px = sin(cel)*cos(az2)
+py = sin(cel)*sin(az2)
+pz = cos(cel)
+#Set colours and render
+fig = plt.figure(figsize=(12,12))
+ax = fig.add_subplot(111, projection='3d')
+ax.plot_surface(xi, yi, zi,  rstride=1, cstride=1, color='c', alpha=0.3, linewidth=0)
+ax.scatter(xxi,yyi,zzi,color="r",s=20)
+ax.scatter(xxxi,yyyi,zzzi,color="k", s =20)
+ax.scatter(px,py,pz,color="k", s = 30)
+
+ax.set_xlim([-1,1])
+ax.set_ylim([-1,1])
+ax.set_zlim([-1,1])
+
+ax.set_aspect("equal")
+plt.tight_layout()
+plt.show()
 ```
 
 ```{python}
@@ -694,6 +793,7 @@ imshow(np.reshape(mytod[0],(el.shape[0],linen)), extent=[az.min(),#*np.cos(np.ra
 for i in xrange(0,9):#len(locpeak_tod)):
     plot(peak95[0,i],peak95[1,i],'wo')
     text(peak95[0,i]*0.96, peak95[1,i]*0.95,'{}'.format(i))
+plot(0,50,'ro')
     
 subplot(222)
 if setlim:
@@ -715,6 +815,8 @@ title('TOD for PS instrument q (TES={})'.format(TESid))
 imshow(np.reshape(simTOD[0][:],(el.shape[0],linen)), extent=[az.min(),#*np.cos(np.radians(50)),
                                                             az.max(),#*np.cos(np.radians(50))
                                                             el.min(),el.max()],cmap = 'viridis')
+plot(0,50,'ro')
+
 for i in xrange(0,9):
     plot(peak95[0,i],peak95[1,i],'wo')
     text(peak95[0,i]*0.96, peak95[1,i]*0.95,'{}'.format(peak95[1,i]))#plot(peak95[0,:],peak95[1,:],'wo')
@@ -810,6 +912,7 @@ ax.scatter(0,0,1, color="r", s=20)
 ax.scatter(xxi,yyi,zzi,color="k",s=20)
 ax.scatter(xxxi,yyyi,zzzi,color="g", s =20)
 ax.scatter(px,py,pz,color="k", s = 30)
+#ax.scatter(uv_def, color = "w",s =30)
 #ax.quiver(0,0,0,px,py,pz)
 ax.set_xlim([-1,1])
 ax.set_ylim([-1,1])

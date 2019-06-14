@@ -13,8 +13,8 @@ long_description = open('README.rst').read()
 keywords = 'scientific computing'
 platforms = 'MacOS X,Linux,Solaris,Unix,Windows'
 delattr(os, 'link')  # force sdist to copy files
-hooks.F90_COMPILE_ARGS_GFORTRAN += ['-fpack-derived -g']
-hooks.F90_COMPILE_ARGS_IFORT += ['-align norecords -g']
+hooks.F90_COMPILE_ARGS_GFORTRAN += ['-fpack-derived','-g']
+hooks.F90_COMPILE_ARGS_IFORT += ['-align norecords','-g']
 if sys.platform == 'darwin':
     hooks.F77_COMPILE_OPT_GFORTRAN = ['-O2']
     hooks.F90_COMPILE_OPT_GFORTRAN = ['-O2']

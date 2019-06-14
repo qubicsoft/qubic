@@ -21,8 +21,8 @@ I have implemented a class in selfcal_lib.py which allowed to do several simulat
 One remark : I tried to put documentation for each function. On a jupyter notebook, if you want to have acces just press shift+tab when your cursor is on the name of the function. 
 
 ```{python}
-% matplotlib inline
-% matplotlib notebook
+# %matplotlib inline
+# %matplotlib notebook
 
 import glob
 import healpy as hp
@@ -117,11 +117,12 @@ imshow(img)
 ```
 
 ## The power in the focal plane with optical aberrations
-Using Creidhe simulations (need to download the files)
+Using Creidhe simulations,
+need to download the files at : https://drive.google.com/drive/folders/1sC7-DrdsTigL0d7Z8KzPQ3uoWSy0Phxh?usp=sharing
 
 ```{python}
 # Path to the simulated files 
-rep = '/home/louisemousset/QUBIC/Qubic_work/Calibration/RF_switch/simu_creidhe_aberrations/'
+rep = '/home/louisemousset/QUBIC/Qubic_work/Calibration/RF_switch/simu_creidhe_aberrations/new_files/'
 
 int, int_fp = ca.get_power_fp_aberration(rep)
 ```

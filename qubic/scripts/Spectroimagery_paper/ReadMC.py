@@ -271,7 +271,7 @@ def make_zones(patch, nzones, nside, center, seenmap, doplot=True):
             map = np.zeros((patch.shape[0], 12 * nside ** 2, 3))
             map[:, seenmap, :] = allmaps_mask[i]
             hp.gnomview(map[0, :, 0], sub=(1, nzones, i+1),
-                        rot=center, reso=12, title='Zone {}'.format(i))
+                        rot=center, reso=10, title='Zone {}'.format(i))
 
     return pix_per_zone, allmaps_mask
 

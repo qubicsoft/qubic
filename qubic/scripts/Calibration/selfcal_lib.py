@@ -233,7 +233,7 @@ class SelfCalibration:
         ----------
         rep : str
             Path of the repository for the simulated files, can be download at :
-            https://drive.google.com/open?id=1sC7-DrdsTigL0d7Z8KzPQ3uoWSy0Phxh
+            https://drive.google.com/drive/folders/1sC7-DrdsTigL0d7Z8KzPQ3uoWSy0Phxh?usp=sharing
         doplot : bool
             If True, make a plot with the intensity in the focal plane.
         theta_source : float

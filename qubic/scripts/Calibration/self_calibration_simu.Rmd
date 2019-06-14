@@ -1,0 +1,170 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.5
+  kernelspec:
+    display_name: Python 2
+    language: python
+    name: python2
+---
+
+# Simulations for self-calibration (fringes)
+
+#### Edited by Louise
+I have implemented a class in selfcal_lib.py which allowed to do several simulations concerning the calibration. This notebook gives some examples of what you can do with.
+
+
+One remark : I tried to put documentation for each function. On a jupyter notebook, if you want to have acces just press shift+tab when your cursor is on the name of the function. 
+
+```{python}
+# %matplotlib inline
+# %matplotlib notebook
+
+import glob
+import healpy as hp
+from matplotlib.pyplot import *
+import pandas as pd
+import cv2
+
+from qubicpack import qubicpack as qp
+from qubicpack import pix2tes
+from qubicpack.utilities import ASIC_index
+
+import qubic
+
+import selfcal_lib
+```
+
+```{python}
+plt.rcParams['figure.figsize'] = (8, 8)
+```
+
+## Make a dictionary 
+useful for the qubicsoft
+
+```{python}
+basedir = '/home/louisemousset/QUBIC/MyGitQUBIC'
+dictfilename = basedir + '/qubic/qubic/scripts/global_source.dict'
+
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+```
+
+## Create an object 
+
+```{python}
+ca = selfcal_lib.SelfCalibration([12, 28], [], d)
+```
+
+Look at method that are in this class :
+
+```{python}
+dir(ca)
+```
+
+## Get all combinations for one baseline
+This is a simulation that doesn't take into account optical aberrations.
+
+```{python}
+# You need a qubic instrument for that function
+q = qubic.QubicInstrument(d)
+
+S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = ca.get_power_combinations(q, theta=[0., 0.2], phi=[[0., 0.2]])
+```
+
+```{python}
+S.shape
+```
+
+## I want an instrument in a specific horn config
+
+```{python}
+q.horn.open[3]=True
+q.horn
+```
+
+```{python}
+power = ca.get_power_on_array(q)
+power.shape
+```
+
+```{python}
+imshow(power[:,:,0])
+```
+
+## Directly the fringes for each TES
+
+```{python}
+tes_fringes_signal = ca.get_fringes_fp_TD()
+tes_fringes_signal.shape
+
+```
+
+```{python}
+# There are 8 thermometers that are set to 0. and 248 TES
+tes_fringes_signal
+```
+
+### The focal plane image associated
+
+```{python}
+img = ca.tes_signal2image_fp(tes_fringes_signal[:,0])
+imshow(img)
+```
+
+## The power in the focal plane with optical aberrations
+Using Creidhe simulations,
+need to download the files at : https://drive.google.com/drive/folders/1sC7-DrdsTigL0d7Z8KzPQ3uoWSy0Phxh?usp=sharing
+
+```{python}
+# Path to the simulated files 
+rep = '/home/louisemousset/QUBIC/Qubic_work/Calibration/RF_switch/simu_creidhe_aberrations/new_files/'
+
+int, int_fp = ca.get_power_fp_aberration(rep)
+```
+
+```{python}
+# If you want a specific configuration (all open for example)
+int_open, int_fp_open = ca.get_power_fp_aberration(rep, indep_config=np.arange(1, 65, 1))
+```
+
+```{python}
+int_fp.shape
+```
+
+### I want only a quarter of the focal plane
+
+```{python}
+int_quarter_fp = ca.full2quarter(int_fp)
+imshow(int_quarter_fp)
+```
+
+### I want the signal for each TES with the real indices 
+
+```{python}
+signal = ca.image_fp2tes_signal(int_quarter_fp)
+signal.shape
+```
+
+## Beam on the sky
+
+```{python}
+# For the function, you need a instrument and a scene
+q = qubic.QubicInstrument(d)
+s = qubic.QubicScene(d)
+
+sb = ca.get_synthetic_beam_sky(q, s, 34, default_open=True)
+```
+
+```{python}
+# The synthetic beam optained has a value for each pixel on the sky. You should use Healpy if you want to plot it.
+sb.shape
+```
+
+```{python}
+
+```

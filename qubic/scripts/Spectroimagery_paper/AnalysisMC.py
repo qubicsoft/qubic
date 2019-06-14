@@ -32,6 +32,7 @@ def std_profile(many_patch, nbins, nside, center, seenmap):
     Returns
     -------
     bin_centers : array with angles associated to each bin.
+    ang : array with angles associated to each pixel
     std_bin : array of shape (nbins, nsub, 3)
         Std value in each bin, for each subband and IQU.
     std_profile : array of shape (npixok, nsub, 3)
@@ -54,7 +55,7 @@ def std_profile(many_patch, nbins, nside, center, seenmap):
     fit = interpolate.interp1d(bin_centers, std_bin, axis=0, kind='quadratic', fill_value='extrapolate', )
     std_profile = fit(ang)
 
-    return bin_centers, std_bin, std_profile
+    return bin_centers, ang, std_bin, std_profile
 
 
 def get_covcorr1pix(maps, ipix, verbose=False):
@@ -69,6 +70,8 @@ def get_covcorr1pix(maps, ipix, verbose=False):
         Input maps with shape (nrealizations, nfrecons, npix, 3)
     ipix: int
         pixel where the covariance will be computed
+    verbose : bool
+        If True, print information. False by default.
 
     Return
     -------
@@ -92,12 +95,7 @@ def get_covcorr1pix(maps, ipix, verbose=False):
         print('Number of realizations: {}'.format(nreal))
         print('Computing covariance matrix in pixel {}'.format(ipix))
 
-    data = np.zeros((nreal, nfrec * 3))
-
-    for j in range(nreal):
-        for irec in range(nfrec):
-            for istokes in range(3):
-                data[j, 3 * irec + istokes] = maps[j, irec, ipix, istokes]
+    data = np.reshape(maps[:, :, ipix, :], (nreal, nfrec * 3))
 
     cov1pix = np.cov(data, rowvar=False)
     corr1pix = np.corrcoef(data, rowvar=False)
@@ -140,6 +138,48 @@ def get_covcorr_patch(patch):
     meancorr = np.mean(np.asarray(corrpix), axis=0)
 
     return meancov, meancorr
+
+
+def get_covcorr_between_pix(maps, verbose=False):
+    """
+    Compute the pixel covariance matrix and correlation matrix
+    minus the identity over many realisations. You will obtain nsub x 3
+    matrices of shape (npix x npix).
+
+    Parameters
+    ----------
+    maps: array
+        Input maps with shape (nreal, nsub, npix, 3)
+    verbose : bool
+        If True, print information. False by default.
+
+    Returns
+    -------
+    cov_pix : array of shape (nsub, nstokes, npix, npix)
+        The covariance matrices for each subband and I, Q, U.
+    corr_pix : array of shape (nsub, nstokes, npix, npix)
+        The correlation matrices minus the identity (0. on the diagonal).
+
+    """
+
+    nreal, nsub, npix, nstokes = np.shape(maps)
+
+    if verbose:
+        print('The shape of the input map has to be: (nreal, nsub, npix, 3)')
+        print('Number of reconstructed sub-bands to analyze: {}'.format(nsub))
+        print('Number of realizations: {}'.format(nreal))
+        print('Number of pixels {}'.format(npix))
+
+    cov_pix = np.empty((nsub, nstokes, npix, npix))
+    corr_pix = np.empty((nsub, nstokes, npix, npix))
+
+    for sub in range(nsub):
+        for s in range(nstokes):
+            cov_pix[sub, s, :, :] = np.cov(maps[:, sub, :, s], rowvar=False)
+            corr_pix[sub, s, :, :] = np.corrcoef(maps[:, sub, :, s], rowvar=False) \
+                                     - np.identity(npix)
+
+    return cov_pix, corr_pix
 
 
 def cov2corr(mat):

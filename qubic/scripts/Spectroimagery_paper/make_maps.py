@@ -14,20 +14,29 @@ import qubic
 import ReadMC
 import SpectroImLib as si
 
-dictfilename = './spectroimaging.dict'
-dictmaps = 'maps/'
-out_dir = './TEST/'
+today = datetime.datetime.now().strftime('%Y%m%d')
+
+# CC must be yes if you run the simu on the CC
+CC = sys.argv[1]
+if CC == 'yes':
+    global_dir = '/sps/hep/qubic/Users/lmousset/'
+    dictfilename = global_dir + 'myqubic/qubic/scripts/Spectroimagery_paper/spectroimaging.dict'
+    dictmaps = global_dir + 'myqubic/qubic/scripts/Spectroimagery_paper/maps/'
+    out_dir = global_dir + 'SpectroImaging/data/{}/'.format(today)
+else:
+    dictfilename = './spectroimaging.dict'
+    dictmaps = './maps/'
+    out_dir = './TEST/{}/'.format(today)
+
 try:
     os.makedirs(out_dir)
 except:
     pass
 
-today = datetime.datetime.now().strftime('%Y%m%d')
-
-name = today + '_' + sys.argv[1]
+name = today + '_' + sys.argv[2]
 
 # Number of noise realisations
-nreals = int(sys.argv[2])
+nreals = int(sys.argv[3])
 
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
@@ -62,6 +71,7 @@ print('Input Map with shape:', np.shape(x0))
 # ==== Pointing strategy ====
 
 p = qubic.get_pointing(d)
+print('===Pointing done!===')
 
 # ==== TOD making ====
 for j in range(nreals):

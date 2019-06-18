@@ -3,8 +3,8 @@ import healpy as hp
 import numpy as np
 import matplotlib.pyplot as plt
 
-import Tools as tl
 import ReadMC as rmc
+import AnalysisMC as amc
 
 import qubic
 from qubic import equ2gal
@@ -17,27 +17,28 @@ center = equ2gal(0., -57.)
 
 # ================= Get the simulation files ================
 # repository where the .fits was saved
-rep_simu = '/home/louisemousset/Desktop/'
+date = '20190617'
+rep_simu = './TEST/{}/'.format(date)
 
 # Simulation name
-name = '20190517_truc'
+name = 'minitest'
 
 # Dictionary saved during the simulation
 d = qubic.qubicdict.qubicDict()
-d.read_from_file(rep_simu + name + '.dict')
+d.read_from_file(rep_simu + date + '_' + name + '.dict')
 
 # Get fits files names in a list
 fits_files = []
-for fits in glob.glob(rep_simu + name + '*.fits'):
+for fits in glob.glob(rep_simu + date + '_' + name + '*.fits'):
     fits_files.append(fits)
-    print fits
+    print(fits)
 
 # Number of subbands used during the simulation
 nf_recon = d['nf_recon']
 
 # ================= Get the maps ================
 # Get seen map (observed pixels)
-seen_map = rmc.get_seenmap_new(fits_files[0])
+seen_map = rmc.get_seenmap(fits_files[0])
 
 # Number of pixels and nside
 npix = len(seen_map)
@@ -84,8 +85,8 @@ plt.imshow(cov, rowvar=False)
 # ================= Noise Evolution as a function of the subband number=======================
 # To do that, you need many realisations
 
-allmeanmat = rmc.get_rms_covar(nsubvals, seenmap_recon, allmaps_recon)[1]
-rmsmap_cov = rmc.get_rms_covarmean(nsubvals, seenmap_recon, allmaps_recon, allmeanmat)[1]
+allmeanmat = amc.get_rms_covar(nsubvals, seenmap_recon, allmaps_recon)[1]
+rmsmap_cov = amc.get_rms_covarmean(nsubvals, seenmap_recon, allmaps_recon, allmeanmat)[1]
 mean_rms_cov = np.sqrt(np.mean(rmsmap_cov ** 2, axis=2))
 
 plt.plot(nsubvals, np.sqrt(nsubvals), 'k', label='Optimal $\sqrt{N}$', lw=2)
@@ -95,57 +96,4 @@ plt.xlabel('Number of sub-frequencies')
 plt.ylabel('Relative maps RMS')
 plt.legend()
 
-# ======================= Apply Xpoll to get spectra ============================
 
-xpol, ell_binned, pwb = rmc.get_xpol(seenmap_conv, ns)
-
-nbins = len(ell_binned)
-print('nbins = {}'.format(nbins))
-
-mcls, mcls_in = [], []
-scls, scls_in = [], []
-
-# Input : what we should find
-mapsconv = np.zeros((12 * ns ** 2, 3))
-
-# Output, what we find
-maps_recon = np.zeros((12 * ns ** 2, 3))
-
-for isub in xrange(len(nsubvals)):
-    sh = allmaps_conv[isub].shape
-    nreals = sh[0]
-    nsub = sh[1]
-    cells = np.zeros((6, nbins, nsub, nreals))
-    cells_in = np.zeros((6, nbins, nsub, nreals))
-    print(cells.shape)
-    for real in xrange(nreals):
-        for n in xrange(nsub):
-            mapsconv[seenmap_conv, :] = allmaps_conv[isub][real, n, :, :]
-            maps_recon[seenmap_conv, :] = allmaps_recon[isub][real, n, :, :]
-            cells_in[:, :, n, real] = xpol.get_spectra(mapsconv)[1]
-            cells[:, :, n, real] = xpol.get_spectra(maps_recon)[1]
-
-    mcls.append(np.mean(cells, axis=3))
-    mcls_in.append(np.mean(cells_in, axis=3))
-    scls.append(np.std(cells, axis=3))
-    scls_in.append(np.std(cells_in, axis=3))
-
-# Plot the spectra
-plt.figure('TT_EE_BB spectra')
-for isub in xrange(len(nsubvals)):
-    for s in [1, 2]:
-        plt.subplot(4, 2, isub * 2 + s)
-        plt.ylabel(thespec[s] + '_ptg=' + str((isub + 1) * 1000))
-        plt.xlabel('l')
-        sh = mcls[isub].shape
-        nsub = sh[2]
-        for k in xrange(nsub):
-            p = plt.plot(ell_binned, ell_binned * (ell_binned + 1) * mcls_in[isub][s, :, k], '--')
-            plt.errorbar(ell_binned, ell_binned * (ell_binned + 1) * mcls[isub][s, :, k],
-                         yerr=ell_binned * (ell_binned + 1) * scls[isub][s, :, k],
-                         fmt='o', color=p[0].get_color(),
-                         label='subband' + str(k + 1))
-
-        if isub == 0 and s == 1:
-            plt.legend(numpoints=1, prop={'size': 7})
-plt.show()

@@ -1,3 +1,4 @@
+from __future__ import division, print_function
 import os
 import qubic
 import healpy as hp
@@ -26,7 +27,7 @@ q = qubic.QubicMultibandInstrument(d)
 p= qubic.get_pointing(d)
 s = qubic.QubicScene(d)
 
-print 'beam_shape =', d['beam_shape']
+print('beam_shape =', d['beam_shape'])
 
 fix_azimuth=d['fix_azimuth']
 

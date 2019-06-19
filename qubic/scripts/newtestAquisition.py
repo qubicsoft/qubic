@@ -1,3 +1,4 @@
+from __future__ import division, print_function
 import os
 import qubic
 import healpy as hp
@@ -22,7 +23,7 @@ d.read_from_file('global_test.dict')
 
 # Reading the beam_shape from the dictionary. You can change it  as follows:
 # d['beam_shape' = 'multi_freq' # or 'fitted_beam' or  'multi_freq' 
-print 'beam shape :', d['beam_shape']
+print('beam shape :', d['beam_shape'])
 name += '_' + d['beam_shape']
 
 # Constructing a multiband instrument, sampling, and scene
@@ -60,7 +61,7 @@ t = time()
 TOD, maps_convolved= a.get_observation(x0, noiseless=True)
 subTOD= suba.get_observation(np.array(maps_convolved), convolution=False,
                                  noiseless=True)
-print 'TOD time =', time()-t
+print('TOD time =', time()-t)
 
 # Choosing the subfrequencies for map reconstruction
 nf_sub_rec = 2
@@ -78,7 +79,7 @@ subarec = qubic.QubicMultibandAcquisition(subq, p, s,d, nus_edge)
 t = time()
 maps_recon = arec.tod2map(TOD, tol=1e-1, maxiter=100000)
 submaps_recon = subarec.tod2map(subTOD, tol=1e-1, maxiter=100000)
-print ' beam shape :', d['beam_shape'], ', iteration time =', time()-t
+print(' beam shape :', d['beam_shape'], ', iteration time =', time()-t)
 
 # For comparison the convolved with the beam is required
 TOD_useless, maps_convolved = arec.get_observation(x0)

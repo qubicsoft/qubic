@@ -1,3 +1,4 @@
+from __future__ import division, print_function
 import os
 import qubic
 import healpy as hp
@@ -62,5 +63,5 @@ for bs in beam_shapes:
                 plt.ylim(4.6e-5, 1.6)
         plt.suptitle(beam_profile, fontsize=16)        
 
-print 'Close the figures to end'
+print('Close the figures to end')
 plt.show()

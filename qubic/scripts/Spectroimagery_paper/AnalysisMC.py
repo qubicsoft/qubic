@@ -2,6 +2,7 @@ import sys
 import healpy as hp
 import numpy as np
 from scipy import interpolate
+import matplotlib.pyplot as plt
 
 import ReadMC as rmc
 
@@ -103,7 +104,7 @@ def get_covcorr1pix(maps, ipix, verbose=False):
     return cov1pix, corr1pix
 
 
-def get_covcorr_patch(patch):
+def get_covcorr_patch(patch, doplot = False, bins = 30):
     """
     This function computes the covariance matrix and the correlation one for a given patch in the sky. 
     It uses get_covcorr1pix() to compute the covariance and correlation matrix for each pixel (ipix) 
@@ -125,14 +126,42 @@ def get_covcorr_patch(patch):
         Correlation matrix for a given patch in the sky. Is the simple mean between the pixels inside the patch. 
     """
 
+    nrecons = patch.shape[1]
     npix = patch.shape[2]
+    nstokes = patch.shape[3]
 
-    covpix, corrpix = [], []
+    covpix = np.zeros((nrecons*nstokes, nrecons*nstokes, npix))
+    corrpix = np.zeros((nrecons*nstokes, nrecons*nstokes, npix))
 
     for ipix in xrange(npix):
         mat = get_covcorr1pix(patch, ipix)
-        covpix.append(mat[0])
-        corrpix.append(mat[1])
+        covpix[:,:,ipix] = mat[0][:,:]
+        corrpix[:,:,ipix] = mat[1][:,:]
+
+    print(np.shape(corrpix[0,0]))
+
+    if doplot:
+        term = 'IQU'
+        j = 0
+        plt.figure(figsize=(10,10))
+        plt.title('Covariance values in patch')
+        for iterm in xrange(3):
+            for jterm in xrange(3):
+                plt.subplot(3,3,3*iterm+jterm+1)
+                plt.hist(covpix[iterm,jterm,:], color='r', normed = True, bins = bins)
+                plt.legend()
+        plt.show()
+
+        term = 'IQU'
+        j = 0
+        plt.figure(figsize=(10,10))
+        plt.title('Correlation values in patch')
+        for iterm in xrange(3):
+            for jterm in xrange(3):
+                plt.subplot(3,3,3*iterm+jterm+1)
+                plt.hist(corrpix[iterm,jterm,:], color='b', normed = True, bins = bins)
+                plt.legend()
+        plt.show()
 
     meancov = np.mean(np.asarray(covpix), axis=0)
     meancorr = np.mean(np.asarray(corrpix), axis=0)

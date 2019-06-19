@@ -1,3 +1,4 @@
+from __future__ import division, print_function
 import os
 import string
 
@@ -22,9 +23,9 @@ class qubicDict( dict ):
     def __getitem__( self, key ):
         if key not in self:
             if self.ask:
-                print "flipperDict: parameter '%s' not found" % key
+                print("flipperDict: parameter '%s' not found" % key)
                 val = ask_for( key )
-                print "flipperDict: setting '%s' = %s" % (key,repr(val))
+                print("flipperDict: setting '%s' = %s" % (key,repr(val)))
                 dict.__setitem__( self, key, val )
             else:
                 return None
@@ -53,8 +54,8 @@ class qubicDict( dict ):
             exec(line)
             s = line.split('=')
             if len(s) != 2:
-                print "Error parsing line:"
-                print line
+                print("Error parsing line:")
+                print(line)
                 continue
             key = s[0].strip()
             val = eval(s[1].strip()) # XXX:make safer

@@ -129,44 +129,66 @@ def get_covcorr_patch(patch, doplot = False, bins = 30):
     nrecons = patch.shape[1]
     npix = patch.shape[2]
     nstokes = patch.shape[3]
+    dim = nrecons*nstokes
 
-    covpix = np.zeros((nrecons*nstokes, nrecons*nstokes, npix))
-    corrpix = np.zeros((nrecons*nstokes, nrecons*nstokes, npix))
+    covpix = np.zeros((dim, dim, npix))
+    corrpix = np.zeros((dim, dim, npix))
 
     for ipix in xrange(npix):
         mat = get_covcorr1pix(patch, ipix)
         covpix[:,:,ipix] = mat[0][:,:]
         corrpix[:,:,ipix] = mat[1][:,:]
 
-    print(np.shape(corrpix[0,0]))
-
     if doplot:
-        term = 'IQU'
-        j = 0
+        
+        maxcov = np.max(covpix)
+        mincov = np.min(covpix)
+        maxcorr=np.max(corrpix)
+        mincorr=np.min(corrpix)
+
         plt.figure(figsize=(10,10))
         plt.title('Covariance values in patch')
-        for iterm in xrange(3):
-            for jterm in xrange(3):
-                plt.subplot(3,3,3*iterm+jterm+1)
-                plt.hist(covpix[iterm,jterm,:], color='r', normed = True, bins = bins)
+        for iterm in xrange(dim):
+            for jterm in xrange(dim):
+                idx = dim*iterm+jterm+1
+                plt.xlim(-3., 3.)
+                plt.ylim(-0.01,1.5)
+                plt.subplot(dim, dim, idx)
+                if idx%dim != 1: 
+                    plt.yticks([])
+                else:
+                    plt.yticks(np.arange(2))
+                plt.hist(covpix[iterm,jterm,:], color='r', normed = True, bins = bins)#, label = '{}{}'.format(term[iterm],term[jterm]))
                 plt.legend()
-        plt.show()
+                plt.subplots_adjust(hspace = 0., wspace = 0.)
 
         term = 'IQU'
-        j = 0
         plt.figure(figsize=(10,10))
         plt.title('Correlation values in patch')
-        for iterm in xrange(3):
-            for jterm in xrange(3):
-                plt.subplot(3,3,3*iterm+jterm+1)
-                plt.hist(corrpix[iterm,jterm,:], color='b', normed = True, bins = bins)
+        for iterm in xrange(dim):
+            for jterm in xrange(dim):
+                idx = dim*iterm+jterm+1
+                plt.xlim(-1.02,1.02)
+                plt.ylim(-0.01,maxcorr)
+                plt.subplot(dim, dim, idx)
+                if idx%dim != 1: 
+                    plt.yticks([])
+                else:
+                    plt.yticks(np.arange(3))
+                plt.xticks(label = [-0.5, 0, 0.5])
+                plt.hist(corrpix[iterm,jterm,:], color='b', normed = True, bins = bins)#, label = '{}{}'.format(term[iterm],term[jterm]))
                 plt.legend()
+                plt.subplots_adjust(hspace = 0., wspace = 0.)
         plt.show()
 
-    meancov = np.mean(np.asarray(covpix), axis=0)
-    meancorr = np.mean(np.asarray(corrpix), axis=0)
+    #mean_cov = np.array((nrecons*nstokes**2))
+    #mean_corr = np.array((nrecons*nstokes**2))
+    #for each in xrange(nrecons*nstokes**2):
+    #    mean_cov[each] = np.mean(covpix[]) 
 
-    return meancov, meancorr
+    #meancov = np.mean(np.asarray(covpix), axis=0)
+    #meancorr = np.mean(np.asarray(corrpix), axis=0)
+    #return meancov, meancorr
 
 
 def get_covcorr_between_pix(maps, verbose=False):

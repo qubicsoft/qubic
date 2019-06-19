@@ -143,6 +143,7 @@ def get_covcorr_patch(patch, doplot = False, bins = 30):
     if doplot:
         term = 'IQU'
         j = 0
+        plt.figure(figsize=(10,10))
         plt.title('Covariance values in patch')
         for iterm in xrange(3):
             for jterm in xrange(3):
@@ -153,6 +154,7 @@ def get_covcorr_patch(patch, doplot = False, bins = 30):
 
         term = 'IQU'
         j = 0
+        plt.figure(figsize=(10,10))
         plt.title('Correlation values in patch')
         for iterm in xrange(3):
             for jterm in xrange(3):

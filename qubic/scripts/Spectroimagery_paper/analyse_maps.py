@@ -9,7 +9,6 @@ import AnalysisMC as amc
 import qubic
 from qubic import equ2gal
 
-thespec = ['TT', 'EE', 'BB', 'TE', 'EB', 'TB']
 stokes = ['I', 'Q', 'U']
 
 # Coordinates of the zone observed in the sky
@@ -45,7 +44,7 @@ npix = len(seen_map)
 ns = d['nside']
 
 # Get full maps
-maps_recon, maps_convo, residuals = rmc.get_maps(fits_files[1])
+maps_recon, maps_convo, maps_diff = rmc.get_maps(fits_files[1])
 print('Getting maps with shape : {}'.format(maps_recon.shape))
 
 # Look at the maps
@@ -56,33 +55,32 @@ for i in xrange(3):
                 title='conv ' + stokes[i])
     hp.gnomview(maps_recon[isub, :, i], rot=center, reso=9, sub=(3, 3, 3 + i + 1),
                 title='recon ' + stokes[i])
-    hp.gnomview(residuals[isub, :, i], rot=center, reso=9, sub=(3, 3, 6 + i + 1),
+    hp.gnomview(maps_diff[isub, :, i], rot=center, reso=9, sub=(3, 3, 6 + i + 1),
                 title='residus ' + stokes[i])
 
 # Get only patches to save memory
-maps_recon_cut, maps_convo_cut, residuals_cut = rmc.get_patch(fits_files[1], seen_map)
+maps_recon_cut, maps_convo_cut, maps_diff_cut = rmc.get_patch(fits_files[1], seen_map)
 print('Getting patches with shape : {}'.format(maps_recon_cut.shape))
 
 
 # ================== Look at residuals ===============
 
-# Histogram of the residuals
+# Histogram of the residuals (first subband)
 plt.clf()
 for i in xrange(3):
     plt.subplot(1, 3, i + 1)
-    plt.hist(np.ravel(residuals_cut[0, :, i]), range=[-20, 20], bins=100)
+    plt.hist(np.ravel(maps_diff_cut[0, :, i]), range=[-5, 5], bins=100)
     plt.title(stokes[i])
 
 # ================= Correlations matrices=======================
-# For each Stoke parameter separately, between subbands
+# Correlation between pixels
 
-residuals_meanpix = np.mean(residuals_cut, axis=1)
-cov = np.cov(residuals_meanpix, rowvar=False)
-plt.imshow(cov, rowvar=False)
+# Correlations between subbands and I, Q, U
 
-# Between subbands and between Stokes parameters
+
 
 # ================= Noise Evolution as a function of the subband number=======================
+# This part should be rewritten (old)
 # To do that, you need many realisations
 
 allmeanmat = amc.get_rms_covar(nsubvals, seenmap_recon, allmaps_recon)[1]

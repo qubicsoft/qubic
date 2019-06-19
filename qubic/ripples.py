@@ -1,5 +1,7 @@
 # coding: utf-8
 from __future__ import division
+import sys
+pythonmajor = sys.version_info[0]
 
 import healpy as hp
 import numpy as np
@@ -10,7 +12,10 @@ from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from pysimulators import BeamGaussian
 from pdb import set_trace
 from scipy.interpolate import splrep, splev
-from cPickle import load
+if pythonmajor==3:
+    from _pickle import load
+else:
+    from cPickle import load
 from .data import PATH
 
 __all__ = ['ConvolutionRippledGaussianOperator',

@@ -1,7 +1,13 @@
 # coding: utf-8
-from __future__ import division
+from __future__ import division, print_function
 from astropy.io import fits
-from ConfigParser import ConfigParser
+import sys
+pythonmajor = sys.version_info[0]
+if pythonmajor==3:
+    from configparser import ConfigParser
+else:
+    from ConfigParser import ConfigParser
+
 from glob import glob
 from os.path import join
 from pysimulators import Layout, LayoutGrid

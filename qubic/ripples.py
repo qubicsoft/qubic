@@ -12,10 +12,10 @@ from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from pysimulators import BeamGaussian
 from pdb import set_trace
 from scipy.interpolate import splrep, splev
-if pythonmajor==3:
-    from _pickle import load
-else:
+if pythonmajor==2:
     from cPickle import load
+else:
+    from _pickle import load
 from .data import PATH
 
 __all__ = ['ConvolutionRippledGaussianOperator',

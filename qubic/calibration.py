@@ -3,10 +3,10 @@ from __future__ import division, print_function
 from astropy.io import fits
 import sys
 pythonmajor = sys.version_info[0]
-if pythonmajor==3:
-    from configparser import ConfigParser
-else:
+if pythonmajor==2:
     from ConfigParser import ConfigParser
+else:
+    from configparser import ConfigParser
 
 from glob import glob
 from os.path import join

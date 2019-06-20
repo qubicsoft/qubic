@@ -98,7 +98,7 @@ if sel_det:
     q=select_det(q,did_det['{}'.format(TESid)])
 ```
 
-```{python}
+```{python active="", eval=FALSE}
 TESid=93
 d['nside']=512
 dirflat = '/home/martin/QUBIC/qubiccalibration/Data/Calib-TD/150GHz-2019-04-06/Flat/'

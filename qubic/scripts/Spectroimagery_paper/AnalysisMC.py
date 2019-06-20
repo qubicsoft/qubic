@@ -146,6 +146,7 @@ def get_covcorr_patch(patch, doplot = False, bins = 30):
         maxcorr=np.max(corrpix)
         mincorr=np.min(corrpix)
 
+        term = 'IQU'
         plt.figure(figsize=(10,10))
         plt.title('Covariance values in patch')
         for iterm in xrange(dim):
@@ -158,11 +159,10 @@ def get_covcorr_patch(patch, doplot = False, bins = 30):
                     plt.yticks([])
                 else:
                     plt.yticks(np.arange(2))
-                plt.hist(covpix[iterm,jterm,:], color='r', normed = True, bins = bins)#, label = '{}{}'.format(term[iterm],term[jterm]))
+                plt.hist(covpix[iterm,jterm,:], color='r', normed = True, bins = bins, label = '{}{}'.format(term[iterm],jterm))
                 plt.legend()
                 plt.subplots_adjust(hspace = 0., wspace = 0.)
 
-        term = 'IQU'
         plt.figure(figsize=(10,10))
         plt.title('Correlation values in patch')
         for iterm in xrange(dim):
@@ -176,7 +176,7 @@ def get_covcorr_patch(patch, doplot = False, bins = 30):
                 else:
                     plt.yticks(np.arange(3))
                 plt.xticks(label = [-0.5, 0, 0.5])
-                plt.hist(corrpix[iterm,jterm,:], color='b', normed = True, bins = bins)#, label = '{}{}'.format(term[iterm],term[jterm]))
+                plt.hist(corrpix[iterm,jterm,:], color='b', normed = True, bins = bins, label = '{}{}'.format(term[iterm],jterm))
                 plt.legend()
                 plt.subplots_adjust(hspace = 0., wspace = 0.)
         plt.show()
@@ -231,6 +231,15 @@ def get_covcorr_between_pix(maps, verbose=False):
                                      - np.identity(npix)
 
     return cov_pix, corr_pix
+
+def distance_square(matrix):
+    """
+    Return a distance associated to a matrix (n*n).
+    Sum of the square elements normalized by n**2.
+
+    """
+    n = np.shape(matrix)[0]
+    return np.sum(np.square(matrix)) / n**2
 
 
 def cov2corr(mat):

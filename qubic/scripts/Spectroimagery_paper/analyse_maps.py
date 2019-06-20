@@ -11,8 +11,6 @@ from qubic import equ2gal
 
 stokes = ['I', 'Q', 'U']
 
-# Coordinates of the zone observed in the sky
-center = equ2gal(0., -57.)
 
 # ================= Get the simulation files ================
 # repository where the .fits was saved
@@ -22,9 +20,13 @@ rep_simu = './TEST/{}/'.format(date)
 # Simulation name
 name = 'firstdemo'
 
+
 # Dictionary saved during the simulation
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(rep_simu + date + '_' + name + '.dict')
+# Coordinates of the zone observed in the sky
+
+center = equ2gal(d['RA_center'], d['DEC_center'])
 
 # Get fits files names in a list
 fits_files = []
@@ -84,7 +86,21 @@ for i in xrange(3):
 # Correlation between pixels
 cov_pix, corr_pix = amc.get_covcorr_between_pix(residuals, verbose=True)
 
+all_fits, recon_cut, conv_cut, diff_cut = rmc.get_patch_many_files(rep_simu, '*'+name+'*.fits')
+
+cov_pix, corr_pix = amc.get_covcorr_between_pix(diff_cut)
+istk = 0
+plt.title('Covariance matrix between pixels, nsub = {}, istokes = {}'.format(isub,stokes[istk]))
+plt.imshow(cov_pix[0,0,:,:])
+plt.colorbar()
+plt.show()
+plt.title('Correlation matrix between pixels, nsub = {}, istokes = {}'.format(isub,stokes[istk]))
+plt.imshow(corr_pix[0,0,:,:])
+plt.colorbar()
+plt.show()
+
 # Correlations between subbands and I, Q, U
+amc.get_covcorr_patch(diff_cut, doplot = True, bins = 60)
 
 # ================= Noise Evolution as a function of the subband number=======================
 # This part should be rewritten (old)

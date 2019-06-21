@@ -106,9 +106,9 @@ def get_covcorr1pix(maps, ipix, verbose=False):
 
 def get_covcorr_patch(patch, doplot = False, bins = 30):
     """
-    This function computes the covariance matrix and the correlation one for a given patch in the sky. 
+    This function computes the covariance matrix and the correlation matrix for a given patch in the sky. 
     It uses get_covcorr1pix() to compute the covariance and correlation matrix for each pixel (ipix) 
-    and then computes the average in the choosen pixels (patch).
+    and then computes a histogram for each term (I_0I_0,I_0Q_0,I_0U_0, etc) (patch).
     
     Asumptions: patch.shape = (nsamples, nrecons, npix_patch, 3) --> to be able to use get_covcorr1pix
 
@@ -119,11 +119,14 @@ def get_covcorr_patch(patch, doplot = False, bins = 30):
 
     Returns:
     -----------
-    cov: np.array
-        Covariance matrix for the given patch in the sky. Is the simple mean between the pixels inside the patch.
+    covterm: np.array
+        Covariance matrix for each pixel in a given patch in the sky. Shape = ().
 
-    corr: np.array
-        Correlation matrix for a given patch in the sky. Is the simple mean between the pixels inside the patch. 
+    corrterm: np.array
+        Correlation matrix for each pixel in a given patch in the sky. Shape = ().
+
+    plot: x 2 (cov and corr)
+        Square histogram plot. Each histogram represents the values that takes the term for each pixel in a given patch. 
     """
 
     nrecons = patch.shape[1]
@@ -146,49 +149,53 @@ def get_covcorr_patch(patch, doplot = False, bins = 30):
         maxcorr=np.max(corrpix)
         mincorr=np.min(corrpix)
 
-        term = 'IQU'
-        plt.figure(figsize=(10,10))
-        plt.title('Covariance values in patch')
+        plt.figure('Covariance values in patch', figsize=(10,10))
         for iterm in xrange(dim):
             for jterm in xrange(dim):
                 idx = dim*iterm+jterm+1
                 plt.xlim(-3., 3.)
                 plt.ylim(-0.01,1.5)
                 plt.subplot(dim, dim, idx)
+                # no yticks for historgram in middle
                 if idx%dim != 1: 
                     plt.yticks([])
                 else:
-                    plt.yticks(np.arange(2))
-                plt.hist(covpix[iterm,jterm,:], color='r', normed = True, bins = bins, label = '{}{}'.format(term[iterm],jterm))
+                    plt.yticks([0.25,0.5,0.75,1,1.25])
+                # no xticks for histogram in middle
+                if idx < dim*(dim-1):
+                    plt.xticks([])
+                else: 
+                    plt.xticks([-2,-1,0,1,2])
+                plt.hist(covpix[iterm,jterm,:], color='r', normed = True, bins = bins)#, label = '{}{}'.format(term[iterm],jterm))
+                #plt.text()
                 plt.legend()
                 plt.subplots_adjust(hspace = 0., wspace = 0.)
+        #plt.savefig('cov-matrix')
 
-        plt.figure(figsize=(10,10))
-        plt.title('Correlation values in patch')
+        plt.figure('Correlation values in patch', figsize=(10,10))
         for iterm in xrange(dim):
             for jterm in xrange(dim):
                 idx = dim*iterm+jterm+1
                 plt.xlim(-1.02,1.02)
-                plt.ylim(-0.01,maxcorr)
+                plt.ylim(-0.01,maxcorr*1.4)
                 plt.subplot(dim, dim, idx)
+                # no yticks for historgram in middle
                 if idx%dim != 1: 
                     plt.yticks([])
                 else:
-                    plt.yticks(np.arange(3))
-                plt.xticks(label = [-0.5, 0, 0.5])
-                plt.hist(corrpix[iterm,jterm,:], color='b', normed = True, bins = bins, label = '{}{}'.format(term[iterm],jterm))
+                    plt.yticks([0.25,0.5,0.75,1])
+                # no xticks for histogram in middle
+                if idx < dim*(dim-1):
+                    plt.xticks([])
+                else: 
+                    plt.xticks([-0.5,0,0.5])
+                plt.hist(corrpix[iterm,jterm,:], color='b', normed = True, bins = bins)#, label = '{}{}'.format(term[iterm],jterm))
                 plt.legend()
                 plt.subplots_adjust(hspace = 0., wspace = 0.)
+        #plt.savefig('corr-matrix')
         plt.show()
 
-    #mean_cov = np.array((nrecons*nstokes**2))
-    #mean_corr = np.array((nrecons*nstokes**2))
-    #for each in xrange(nrecons*nstokes**2):
-    #    mean_cov[each] = np.mean(covpix[]) 
-
-    #meancov = np.mean(np.asarray(covpix), axis=0)
-    #meancorr = np.mean(np.asarray(corrpix), axis=0)
-    #return meancov, meancorr
+    return covpix, corrpix
 
 
 def get_covcorr_between_pix(maps, verbose=False):

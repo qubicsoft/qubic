@@ -232,6 +232,7 @@ def get_covcorr_between_pix(maps, verbose=False):
 
     return cov_pix, corr_pix
 
+
 def distance_square(matrix):
     """
     Return a distance associated to a matrix (n*n).
@@ -239,7 +240,19 @@ def distance_square(matrix):
 
     """
     n = np.shape(matrix)[0]
-    return np.sum(np.square(matrix)) / n**2
+    d = np.sum(np.square(matrix))
+    return d / n**2
+
+
+def distance_sup(matrix):
+    """
+    Return a distance associated to a matrix (n*n).
+    Normalized by n.
+
+    """
+    n = np.shape(matrix)[0]
+    d = np.max(np.sum(np.square(matrix), axis=1))
+    return d / n
 
 
 def cov2corr(mat):

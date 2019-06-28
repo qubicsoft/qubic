@@ -298,7 +298,6 @@ def get_tes_signal(s):
                     else:
                         tes = a2.pix2tes(pix)
                         tes_signal[tes-1+128, ptg] = s[l, c, ptg]
-                    print(tes)
                     pix += 1
     return tes_signal
 

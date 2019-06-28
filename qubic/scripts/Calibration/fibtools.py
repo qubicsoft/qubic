@@ -680,7 +680,7 @@ def fold_data(time, dd, period, lowcut, highcut, nbins,
 
 def power_spectrum(time_in, data_in, rebin=True):
     if rebin:
-        ### Resample the data on a reguklar grid
+        ### Resample the data on a regular grid
         time = np.linspace(time_in[0], time_in[-1], len(time_in))
         data = np.interp(time, time_in, data_in)
     else:
@@ -718,8 +718,9 @@ def filter_data(time_in, data_in, lowcut, highcut, rebin=True, verbose=False, no
             ftocut = notch[i][0]
             bw = notch[i][1]
             nharmonics = notch[i][2].astype(int)
+            if verbose: print('Notching {} Hz with width {} and {} harmonics'.format(ftocut, bw, nharmonics))
             for j in range(nharmonics):
-                newdata = notch_filter(dataf, ftocut*(j+1), bw*(j+1), FREQ_SAMPLING)
+                dataf = notch_filter(dataf, ftocut*(j+1), bw, FREQ_SAMPLING)
     
     return dataf
 

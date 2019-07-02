@@ -14,11 +14,13 @@ stokes = ['I', 'Q', 'U']
 
 # ================= Get the simulation files ================
 # repository where the .fits was saved
-date = '20190619'
+#date = '20190619'
+date = '20190620'
 rep_simu = './TEST/{}/'.format(date)
 
 # Simulation name
-name = 'firstdemo'
+#name = 'firsttest'
+name = 'lowtol'
 
 
 # Dictionary saved during the simulation

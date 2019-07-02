@@ -27,21 +27,30 @@ if rank == 0:
     print('There are {} ranks'.format(size))
     print('**************************')
 
+today = datetime.datetime.now().strftime('%Y%m%d')
 
-dictfilename = './spectroimaging.dict'
-dictmaps = 'maps/'
-out_dir = './TEST/20190527/'
+# CC is true if you run the simu on the CC
+CC = sys.argv[1]
+
+if CC == 'yes':
+    global_dir = '/sps/hep/qubic/Users/lmousset/'
+    dictfilename = global_dir + 'myqubic/qubic/scripts/Spectroimagery_paper/spectroimaging.dict'
+    dictmaps = global_dir + 'myqubic/qubic/scripts/Spectroimagery_paper/maps/'
+    out_dir = global_dir + 'SpectroImaging/data/{}/'.format(today)
+else:
+    dictfilename = './spectroimaging.dict'
+    dictmaps = './maps/'
+    out_dir = './TEST/{}/'.format(today)
+
 try:
     os.makedirs(out_dir)
 except:
     pass
 
-today = datetime.datetime.now().strftime('%Y%m%d')
-
-name = today + '_' + sys.argv[1]
+name = today + '_' + sys.argv[2]
 
 # Number of noise realisations
-nreals = int(sys.argv[2])
+nreals = int(sys.argv[3])
 
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
@@ -81,6 +90,9 @@ x0 = MPI.COMM_WORLD.bcast(x0)
 # Pointing in not picklable so cannot be broadcasted
 # => done on all ranks simultaneously
 p = qubic.get_pointing(d)
+print(rank, p.azimuth[:6], p.elevation[:6], p.pitch[:6])
+
+MPI.COMM_WORLD.Barrier()
 
 # ==== TOD making ====
 # TOD making is intrinsically parallelized (use of pyoperators)

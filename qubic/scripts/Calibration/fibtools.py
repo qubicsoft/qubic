@@ -1,5 +1,3 @@
-import numpy as np
-import time
 import iminuit
 import math
 from matplotlib.pyplot import *
@@ -11,11 +9,13 @@ import scipy.stats
 from scipy.ndimage.filters import correlate1d, gaussian_filter1d
 import glob
 from astropy.io import fits
-import datetime as dt
 
 from qubic.utils import progress_bar
-from qubicpack import qubicpack as qp
 
+from qubicpack import qubicpack as qp
+from qubicpack.pix2tes import assign_pix_grid, assign_pix2tes, tes2pix, pix2tes, TES2PIX
+pix_grid = assign_pix_grid()
+TES2PIX = assign_pix2tes()
 
 def printnow(truc):
     print(truc)
@@ -32,19 +32,6 @@ def isfloat(s):
 
 
 def statstr(x, divide=False, median=False, cut=None):
-    """
-
-    Parameters
-    ----------
-    x
-    divide
-    median
-    cut
-
-    Returns
-    -------
-
-    """
     if median:
         m = np.median(x[np.isfinite(x)])
         nn = len(x[np.isfinite(x)])
@@ -57,7 +44,7 @@ def statstr(x, divide=False, median=False, cut=None):
         s = np.std(x[np.isfinite(x)])
     if divide:
         s /= nn
-    return '{0:6.2f} +/- {1:6.2f}'.format(m, s)
+    return '{0:6.3f} +/- {1:6.3f}'.format(m, s)
 
 
 def image_asics(data1=None, data2=None, all1=None):
@@ -83,33 +70,29 @@ def image_asics(data1=None, data2=None, all1=None):
         data1 = all1[0:nn]
 
     if data1 is not None:
-        a1 = qp()
-        a1.assign_asic(1)
-        a1.pix_grid[1, 16] = 1005
-        a1.pix_grid[2, 16] = 1006
-        a1.pix_grid[3, 16] = 1007
-        a1.pix_grid[4, 16] = 1008
+        pix_grid[1, 16] = 1005
+        pix_grid[2, 16] = 1006
+        pix_grid[3, 16] = 1007
+        pix_grid[4, 16] = 1008
     if data2 is not None:
-        a2 = qp()
-        a2.assign_asic(2)
-        a2.pix_grid[0, 15] = 1004
-        a2.pix_grid[0, 14] = 1003
-        a2.pix_grid[0, 13] = 1002
-        a2.pix_grid[0, 12] = 1001
+        pix_grid[0, 15] = 1004
+        pix_grid[0, 14] = 1003
+        pix_grid[0, 13] = 1002
+        pix_grid[0, 12] = 1001
     nrows = 17
     ncols = 17
     img = np.zeros((nrows, ncols)) + np.nan
     for row in range(nrows):
         for col in range(ncols):
             if data1 is not None:
-                physpix = a1.pix_grid[row, col]
-                if physpix in a1.TES2PIX[0]:
-                    TES = a1.pix2tes(physpix)
+                physpix = pix_grid[row, col]
+                if physpix in TES2PIX[0]:
+                    TES = pix2tes(physpix,asic=1)
                     img[row, col] = data1[TES - 1]
             if data2 is not None:
-                physpix = a2.pix_grid[row, col]
-                if physpix in a2.TES2PIX[1]:
-                    TES = a2.pix2tes(physpix)
+                physpix = pix_grid[row, col]
+                if physpix in TES2PIX[1]:
+                    TES = pix2tes(physpix,asic=2)
                     img[row, col] = data2[TES - 1]
     return img
 
@@ -162,7 +145,8 @@ class MyChi2_nocov:
 
 ### Call Minuit
 def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=None, rangepars=None, nohesse=False,
-              force_chi2_ndf=False, verbose=True, minos=False, extra_args=None):
+              force_chi2_ndf=False, verbose=True, minos=False, extra_args=None, print_level=0, force_diag=False, 
+              nsplit=1, ncallmax = 10000):
     """
 
     Parameters
@@ -184,11 +168,14 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 
     """
     # check if covariance or error bars were given
-    covar = covarin
+    covar = covarin.copy()
     if np.size(np.shape(covarin)) == 1:
-        err = covarin
-        covar = np.zeros((np.size(err), np.size(err)))
-        covar[np.arange(np.size(err)), np.arange(np.size(err))] = err ** 2
+        if force_diag:
+            covar = covarin.copy()
+        else:
+            err = covarin
+            covar = np.zeros((np.size(err), np.size(err)))
+            covar[np.arange(np.size(err)), np.arange(np.size(err))] = err ** 2
     # instantiate minimizer
     if chi2 is None:
         chi2 = MyChi2(x, y, covar, functname, extra_args=extra_args)
@@ -224,8 +211,9 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     if verbose: print('Fitting with Minuit')
     theargs = dict(theguess.items() + dfix.items())
     if rangepars is not None: theargs.update(dict(theguess.items() + drng.items()))
-    m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=1., print_level=0, **theargs)
-    m.migrad()
+    m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=1., print_level=print_level, **theargs)
+    m.migrad(ncall=ncallmax*nsplit, nsplit=nsplit)
+    #m.migrad()
     if minos:
         m.minos()
     if nohesse is False:
@@ -345,7 +333,7 @@ def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True
         return xc, yval, dx, dy, others
 
 
-def exponential_filter1d(input, sigma, axis=-1, output=None, mode="reflect", cval=0.0, truncate=10.0):
+def exponential_filter1d(input, sigma, axis=-1, output=None, mode="reflect", cval=0.0, truncate=10.0, power=1):
     """
     One-dimensional Exponential filter.
 
@@ -375,7 +363,7 @@ def exponential_filter1d(input, sigma, axis=-1, output=None, mode="reflect", cva
     sum = 1.0
     # calculate the kernel:
     for ii in range(1, lw + 1):
-        tmp = math.exp(-float(ii) / sd)
+        tmp = math.exp(-(float(ii) / sd)**power)
         weights[lw + ii] = tmp * 0
         weights[lw - ii] = tmp
         sum += tmp
@@ -583,7 +571,7 @@ def meancut(data, nsig):
     return np.mean(dd), np.std(dd)
 
 
-def simsig(x, pars):
+def simsig(x, pars, extra_args=None):
     """
 
     Parameters
@@ -600,6 +588,10 @@ def simsig(x, pars):
     ctime = np.nan_to_num(pars[1])
     t0 = np.nan_to_num(pars[2])
     amp = np.nan_to_num(pars[3])
+#     cycle = pars[0]
+#     ctime = pars[1]
+#     t0 = pars[2]
+#     amp = pars[3]
     sim_init = np.zeros(len(x))
     ok = x < (cycle * (np.max(x)))
     sim_init[ok] = 1.
@@ -607,7 +599,7 @@ def simsig(x, pars):
     # thesim = -1 * gaussian_filter1d(sim_init_shift, ctime, mode='wrap')
     thesim = -1 * exponential_filter1d(sim_init_shift, ctime / dx, mode='wrap')
     thesim = (thesim - np.mean(thesim)) / np.std(thesim) * amp
-    return thesim
+    return np.nan_to_num(thesim)
 
 
 def simsig_nonorm(x, pars):
@@ -662,6 +654,8 @@ def fold_data(time, dd, period, lowcut, highcut, nbins,
     ndet = sh[0]
     folded = np.zeros((ndet, nbins))
     folded_nonorm = np.zeros((ndet, nbins))
+    dfolded = np.zeros((ndet, nbins))
+    dfolded_nonorm = np.zeros((ndet, nbins))
     if not silent: bar = progress_bar(ndet, 'Detectors ')
     for THEPIX in xrange(ndet):
         if not silent: bar.update()
@@ -672,8 +666,10 @@ def fold_data(time, dd, period, lowcut, highcut, nbins,
                                         cutbad=False, median=median)    
         folded[THEPIX, :] = (yy - np.mean(yy)) / np.std(yy)
         folded_nonorm[THEPIX, :] = (yy - np.mean(yy))
+        dfolded[THEPIX, :] = dy / np.std(yy)
+        dfolded_nonorm[THEPIX, :] = dy
     if return_error:
-        return folded, t, folded_nonorm, dy, newdata
+        return folded, t, folded_nonorm, dfolded, dfolded_nonorm, newdata
     else:
         return folded, t, folded_nonorm, newdata
 

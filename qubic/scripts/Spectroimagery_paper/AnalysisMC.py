@@ -2,6 +2,7 @@ import sys
 import healpy as hp
 import numpy as np
 from scipy import interpolate
+import matplotlib.pyplot as plt
 
 import ReadMC as rmc
 
@@ -32,6 +33,7 @@ def std_profile(many_patch, nbins, nside, center, seenmap):
     Returns
     -------
     bin_centers : array with angles associated to each bin.
+    ang : array with angles associated to each pixel
     std_bin : array of shape (nbins, nsub, 3)
         Std value in each bin, for each subband and IQU.
     std_profile : array of shape (npixok, nsub, 3)
@@ -54,7 +56,7 @@ def std_profile(many_patch, nbins, nside, center, seenmap):
     fit = interpolate.interp1d(bin_centers, std_bin, axis=0, kind='quadratic', fill_value='extrapolate', )
     std_profile = fit(ang)
 
-    return bin_centers, std_bin, std_profile
+    return bin_centers, ang, std_bin, std_profile
 
 
 def get_covcorr1pix(maps, ipix, verbose=False):
@@ -69,6 +71,8 @@ def get_covcorr1pix(maps, ipix, verbose=False):
         Input maps with shape (nrealizations, nfrecons, npix, 3)
     ipix: int
         pixel where the covariance will be computed
+    verbose : bool
+        If True, print information. False by default.
 
     Return
     -------
@@ -92,12 +96,7 @@ def get_covcorr1pix(maps, ipix, verbose=False):
         print('Number of realizations: {}'.format(nreal))
         print('Computing covariance matrix in pixel {}'.format(ipix))
 
-    data = np.zeros((nreal, nfrec * 3))
-
-    for j in range(nreal):
-        for irec in range(nfrec):
-            for istokes in range(3):
-                data[j, 3 * irec + istokes] = maps[j, irec, ipix, istokes]
+    data = np.reshape(maps[:, :, ipix, :], (nreal, nfrec * 3))
 
     cov1pix = np.cov(data, rowvar=False)
     corr1pix = np.corrcoef(data, rowvar=False)
@@ -105,11 +104,11 @@ def get_covcorr1pix(maps, ipix, verbose=False):
     return cov1pix, corr1pix
 
 
-def get_covcorr_patch(patch):
+def get_covcorr_patch(patch, doplot = False, bins = 30):
     """
-    This function computes the covariance matrix and the correlation one for a given patch in the sky. 
+    This function computes the covariance matrix and the correlation matrix for a given patch in the sky. 
     It uses get_covcorr1pix() to compute the covariance and correlation matrix for each pixel (ipix) 
-    and then computes the average in the choosen pixels (patch).
+    and then computes a histogram for each term (I_0I_0,I_0Q_0,I_0U_0, etc) (patch).
     
     Asumptions: patch.shape = (nsamples, nrecons, npix_patch, 3) --> to be able to use get_covcorr1pix
 
@@ -120,26 +119,134 @@ def get_covcorr_patch(patch):
 
     Returns:
     -----------
-    cov: np.array
-        Covariance matrix for the given patch in the sky. Is the simple mean between the pixels inside the patch.
+    covterm: np.array
+        Covariance matrix for each pixel in a given patch in the sky. Shape = ().
 
-    corr: np.array
-        Correlation matrix for a given patch in the sky. Is the simple mean between the pixels inside the patch. 
+    corrterm: np.array
+        Correlation matrix for each pixel in a given patch in the sky. Shape = ().
+
+    plot: x 2 (cov and corr)
+        Square histogram plot. Each histogram represents the values that takes the term for each pixel in a given patch. 
     """
 
+    nrecons = patch.shape[1]
     npix = patch.shape[2]
+    nstokes = patch.shape[3]
+    dim = nrecons*nstokes
 
-    covpix, corrpix = [], []
+    covpix = np.zeros((dim, dim, npix))
+    corrpix = np.zeros((dim, dim, npix))
 
     for ipix in xrange(npix):
         mat = get_covcorr1pix(patch, ipix)
-        covpix.append(mat[0])
-        corrpix.append(mat[1])
+        covpix[:,:,ipix] = mat[0][:,:]
+        corrpix[:,:,ipix] = mat[1][:,:]
 
-    meancov = np.mean(np.asarray(covpix), axis=0)
-    meancorr = np.mean(np.asarray(corrpix), axis=0)
+    if doplot:
+        
+        maxcov = np.max(covpix)
+        mincov = np.min(covpix)
+        maxcorr=np.max(corrpix)
+        mincorr=np.min(corrpix)
 
-    return meancov, meancorr
+        plt.figure('Covariance values in patch', figsize=(10,10))
+        for iterm in xrange(dim):
+            for jterm in xrange(dim):
+                idx = dim*iterm+jterm+1
+                plt.xlim(-3., 3.)
+                plt.ylim(-0.01,1.5)
+                plt.subplot(dim, dim, idx)
+                # no yticks for historgram in middle
+                if idx%dim != 1: 
+                    plt.yticks([])
+                else:
+                    plt.yticks([0.25,0.5,0.75,1,1.25])
+                # no xticks for histogram in middle
+                if idx < dim*(dim-1):
+                    plt.xticks([])
+                else: 
+                    plt.xticks([-2,-1,0,1,2])
+                plt.hist(covpix[iterm,jterm,:], color='r', normed = True, bins = bins)#, label = '{}{}'.format(term[iterm],jterm))
+                #plt.text()
+                plt.legend()
+                plt.subplots_adjust(hspace = 0., wspace = 0.)
+        #plt.savefig('cov-matrix')
+
+        plt.figure('Correlation values in patch', figsize=(10,10))
+        for iterm in xrange(dim):
+            for jterm in xrange(dim):
+                idx = dim*iterm+jterm+1
+                plt.xlim(-1.02,1.02)
+                plt.ylim(-0.01,maxcorr*1.4)
+                plt.subplot(dim, dim, idx)
+                # no yticks for historgram in middle
+                if idx%dim != 1: 
+                    plt.yticks([])
+                else:
+                    plt.yticks([0.25,0.5,0.75,1])
+                # no xticks for histogram in middle
+                if idx < dim*(dim-1):
+                    plt.xticks([])
+                else: 
+                    plt.xticks([-0.5,0,0.5])
+                plt.hist(corrpix[iterm,jterm,:], color='b', normed = True, bins = bins)#, label = '{}{}'.format(term[iterm],jterm))
+                plt.legend()
+                plt.subplots_adjust(hspace = 0., wspace = 0.)
+        #plt.savefig('corr-matrix')
+        plt.show()
+
+    return covpix, corrpix
+
+
+def get_covcorr_between_pix(maps, verbose=False):
+    """
+    Compute the pixel covariance matrix and correlation matrix
+    minus the identity over many realisations. You will obtain nsub x 3
+    matrices of shape (npix x npix).
+
+    Parameters
+    ----------
+    maps: array
+        Input maps with shape (nreal, nsub, npix, 3)
+    verbose : bool
+        If True, print information. False by default.
+
+    Returns
+    -------
+    cov_pix : array of shape (nsub, nstokes, npix, npix)
+        The covariance matrices for each subband and I, Q, U.
+    corr_pix : array of shape (nsub, nstokes, npix, npix)
+        The correlation matrices minus the identity (0. on the diagonal).
+
+    """
+
+    nreal, nsub, npix, nstokes = np.shape(maps)
+
+    if verbose:
+        print('The shape of the input map has to be: (nreal, nsub, npix, 3)')
+        print('Number of reconstructed sub-bands to analyze: {}'.format(nsub))
+        print('Number of realizations: {}'.format(nreal))
+        print('Number of pixels {}'.format(npix))
+
+    cov_pix = np.empty((nsub, nstokes, npix, npix))
+    corr_pix = np.empty((nsub, nstokes, npix, npix))
+
+    for sub in range(nsub):
+        for s in range(nstokes):
+            cov_pix[sub, s, :, :] = np.cov(maps[:, sub, :, s], rowvar=False)
+            corr_pix[sub, s, :, :] = np.corrcoef(maps[:, sub, :, s], rowvar=False) \
+                                     - np.identity(npix)
+
+    return cov_pix, corr_pix
+
+def distance_square(matrix):
+    """
+    Return a distance associated to a matrix (n*n).
+    Sum of the square elements normalized by n**2.
+
+    """
+    n = np.shape(matrix)[0]
+    return np.sum(np.square(matrix)) / n**2
 
 
 def cov2corr(mat):

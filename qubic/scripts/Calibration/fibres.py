@@ -50,8 +50,7 @@ fff = 1.
 dc = 0.5
 asic1 = basedir + '/2018-12-20/2018-12-20_18.16.58__Fiber_4/Sums/science-asic1-2018.12.20.181658.fits'
 asic2 = basedir + '/2018-12-20/2018-12-20_18.16.58__Fiber_4/Sums/science-asic2-2018.12.20.181658.fits'
-############################################################################
-
+""
 ############################# Reading files Example ########################
 asic = 1
 reselect_ok = True
@@ -90,8 +89,8 @@ notch = ft.notch_array(freqs_pt, bw_0)
 FiltFreqResp(theTES, frange, fff, filt, dd, notch, FREQ_SAMPLING, nsamples, freq, spectrum, filtered_spec)
 
 ############################################################################
-### Fold the data at the modulation period of the fibers
-### Signal is also bandpass filtered before folding
+# ## Fold the data at the modulation period of the fibers
+# ## Signal is also bandpass filtered before folding
 
 # set up band pass filter
 lowcut = 0.5
@@ -119,26 +118,26 @@ bla = ft.do_minuit(tt, folded[theTES, :], np.ones(len(tt)), guess, functname=ft.
 FoldedTESFreeFit(tt, bla, theTES, folded)
 
 ##################################################
-### Now do a kind a multipass analysis where
-### TES exhibiting nice signal are manually picked
-### I tried an automated algorithm but it was not
-### very satisfying...
-### Running the following with the keyword
-### reselect_ok = True 
-### will go through all TES and ask for a [y] if it 
-### is a valid signal.
-### This is to be done twice: first pass is used 
-### to determine the av. start time from the best TES
-### Second time fits with this start time
-### as well as the duty cycle of the fibers forced.
-### Therefore at the end we have a fit of two
-### variables for each TES: time constant and
-### signal amplitude
-### Once the reselect_ok=True case has been done,
-### a file is created with the list of valid TES
-### and the code can be ran in a much faster way
-### with reslect_ok=False
-##################################################
+# ## Now do a kind a multipass analysis where
+# ## TES exhibiting nice signal are manually picked
+# ## I tried an automated algorithm but it was not
+# ## very satisfying...
+# ## Running the following with the keyword
+# ## reselect_ok = True 
+# ## will go through all TES and ask for a [y] if it 
+# ## is a valid signal.
+# ## This is to be done twice: first pass is used 
+# ## to determine the av. start time from the best TES
+# ## Second time fits with this start time
+# ## as well as the duty cycle of the fibers forced.
+# ## Therefore at the end we have a fit of two
+# ## variables for each TES: time constant and
+# ## signal amplitude
+# ## Once the reselect_ok=True case has been done,
+# ## a file is created with the list of valid TES
+# ## and the code can be ran in a much faster way
+# ## with reslect_ok=False
+# #################################################
 
 #### Asic 1
 # run ASIC analysis code

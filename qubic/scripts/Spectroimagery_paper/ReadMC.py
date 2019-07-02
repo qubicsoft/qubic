@@ -248,7 +248,7 @@ def make_zones(patch, nzones, nside, center, seenmap, doplot=True):
     ang = pix2ang(nside, center, seenmap)
 
     # Angles at the border of each zone
-    angles_zone = [np.float((z + 1)) / nzones * np.max(ang) for z in range(nzones)]
+    angles_zone = np.linspace(0, np.max(ang), nzones + 1)[1:]
 
     # Make a list with the masks
     allmask = [np.zeros_like(patch) for _ in range(nzones)]
@@ -271,7 +271,7 @@ def make_zones(patch, nzones, nside, center, seenmap, doplot=True):
             map = np.zeros((patch.shape[0], 12 * nside ** 2, 3))
             map[:, seenmap, :] = allmaps_mask[i]
             hp.gnomview(map[0, :, 0], sub=(1, nzones, i+1),
-                        rot=center, reso=12, title='Zone {}'.format(i))
+                        rot=center, reso=10, title='Zone {}'.format(i))
 
     return pix_per_zone, allmaps_mask
 

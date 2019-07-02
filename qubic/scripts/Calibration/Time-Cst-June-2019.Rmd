@@ -67,7 +67,7 @@ for i in range(len(dirs)):
 ```
 
 ```{python}
-ifile = 4
+ifile = 0
 thedir = dirs[ifile]
 print(thedir)
 AsicNum = 1
@@ -124,8 +124,11 @@ spectrum_f, freq_f = ft.power_spectrum(tt, dd[0], rebin=True)
 plot(freq_f, f.gaussian_filter1d(spectrum_f,1),label='Raw Data')
 yscale('log')
 xscale('log')
+xlabel('Frequency [Hz]')
+ylabel('Power Spectrum')
 xlim(xmin, xmax)
 ylim(ymin, ymax)
+title('TES#={}'.format(TESNum))
 
 for i in range(10):
     plot([1./period*i,1./period*i],[ymin,ymax],'k--',alpha=0.3)
@@ -137,8 +140,11 @@ legend()
 ########## Folding
 folded, t, folded_nonorm, newdata= ft.fold_data(tt, dd, period, lowcut, highcut, nbins, median=True, rebin=True, verbose=True)
 subplot(2,1,2)
-plot(t, folded_nonorm[0,:], label='Filtered Data')
+plot(t, folded_nonorm[0,:])
+plot(t, folded_nonorm[0,:], label='Filtered Data {} < f < {} Hz'.format(lowcut,highcut))
 xlim(0,period)
+xlabel('Time [sec]')
+ylabel('Folded Signal [ADU]')
 legend()
 
 ########## New Power spectrum
@@ -146,6 +152,8 @@ spectrum_f2, freq_f2 = ft.power_spectrum(tt, newdata, rebin=True)
 subplot(2,1,1)
 plot(freq_f2, f.gaussian_filter1d(spectrum_f2,1),label='Filtered data')
 legend()
+
+tight_layout()
 ```
 
 ```{python}
@@ -238,8 +246,8 @@ offset = np.max(tofit[TESNum-1,:])
 guess = [dutycycle[ifile]/100, 0.09, 0.15, tstart, amplitude, offset]
 print(guess)
 
-subplot(2,1,1)
-errorbar(t, tofit[TESNum-1,:], yerr=errors[TESNum-1,:], fmt='k.', label='Data TES #{}'.format(TESNum-1))
+#subplot(2,1,1)
+errorbar(t, tofit[TESNum-1,:], yerr=errors[TESNum-1,:], fmt='k.', label='Data TES #{}'.format(TESNum))
 
 ok = np.isfinite(tofit[TESNum-1,:]) & (errors[TESNum-1,:] != 0)
 bla = ft.do_minuit(t, tofit[TESNum-1,ok], errors[TESNum-1,ok],
@@ -254,11 +262,11 @@ legend()
 ylabel('Current [nA]')
 xlabel('time [s]')
 
-subplot(2,1,2)
-errorbar(t, tofit[TESNum-1,:]-function(t, bla[1]),yerr=errors[TESNum-1,:], fmt='k.', label='Data TES #{}'.format(TESNum-1))
-legend()
-ylabel('Residuals [nA]')
-xlabel('time [s]')
+# subplot(2,1,2)
+# errorbar(t, tofit[TESNum-1,:]-function(t, bla[1]),yerr=errors[TESNum-1,:], fmt='k.', label='Data TES #{}'.format(TESNum))
+# legend()
+# ylabel('Residuals [nA]')
+# xlabel('time [s]')
 
 
 ```

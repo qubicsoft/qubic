@@ -63,32 +63,47 @@ AsicNum = 1
 a = qp()
 a.verbosity=0
 a.read_qubicstudio_dataset(thedir, asic=AsicNum)
-data=a.azel_etc(TES=None)
-print(a.max_bias)
+data1=a.azel_etc(TES=None)
+
+AsicNum = 2
+a = qp()
+a.verbosity=0
+a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+data2=a.azel_etc(TES=None)
+
 ```
 
 ```{python}
-TESNum = 93
-#rc('figure',figsize=(8,4))
-t0 = data['t_data'][0]
-plot(data['t_data']-t0, data['data'][TESNum-1,:])
-#xlim(0,50)
+TESNum=93
+t0=data1['t_data'][0]
+subplot(2,1,1)
+plot((data1['t_data']-t0)/3600, data1['data'][TESNum-1,:])
+xlabel('Hours')
+subplot(2,1,2)
+plot((data2['t_data']-t0)/3600, data2['data'][TESNum-1,:])
+xlabel('Hours')
 ```
 
 ```{python}
 rc('figure',figsize=(9,6))
 reload(ft)
 
-TESNum=93
-tt = data['t_data']
-dd = data['data'][TESNum-1,:].reshape((1,len(tt)))
+TESNum=59
+tt = data1['t_data']
+t0 = tt[0]
+dd = data1['data'][TESNum-1,:].reshape((1,len(tt)))
+
+# oktime = (((tt-t0)/3600) > 7) & (((tt-t0)/3600) < 10)
+# tt = tt[oktime]
+# dd = dd[:,oktime]
 
 period = 1.
-nbins = 180
-lowcut = 0.5
-highcut = 15.
-notch = np.array([[1.71, 0.003, 3],
-                  [2.38, 0.03, 1],
+nbins = 50
+lowcut = 0.05
+highcut = 20.
+notch = np.array([[0.852, 0.003, 1],
+                  [1.724, 0.003, 3],
+                  [2.35, 0.03, 1],
                   [6.939, 0.003, 1]])
 xmin = 0.4
 xmax = 20.
@@ -98,7 +113,7 @@ ymax = 1e7
 ############ Power spectrum
 subplot(2,1,1)
 spectrum_f, freq_f = ft.power_spectrum(tt, dd[0], rebin=True)
-plot(freq_f, f.gaussian_filter1d(spectrum_f,100))
+plot(freq_f, f.gaussian_filter1d(spectrum_f,10))
 yscale('log')
 xscale('log')
 xlim(xmin, xmax)
@@ -128,8 +143,32 @@ xlim(0,period)
 ########## New Power spectrum
 spectrum_f2, freq_f2 = ft.power_spectrum(tt, newdata, rebin=True)
 subplot(2,1,1)
-plot(freq_f2, f.gaussian_filter1d(spectrum_f2,100))
+plot(freq_f2, f.gaussian_filter1d(spectrum_f2,10))
 
+```
+
+```{python}
+########## Folding all Asic 1
+folded1, t1, folded_nonorm1, newdata1= ft.fold_data(data1['t_data'], data1['data'], period, lowcut, highcut, 
+                                                nbins, median=True, 
+                                                notch=notch, rebin=True, verbose=False)
+
+
+```
+
+```{python}
+########## Folding all Asic 2
+folded2, t2, folded_nonorm2, newdata2= ft.fold_data(data2['t_data'], data2['data'], period, lowcut, highcut, 
+                                                nbins, median=True, 
+                                                notch=notch, rebin=True, verbose=False)
+
+
+```
+
+```{python}
+for i in range(128):
+    plot(t1, folded1[i,:], 'k',alpha=0.1)
+plot(t1, np.median(folded1,axis=0))
 ```
 
 ```{python}

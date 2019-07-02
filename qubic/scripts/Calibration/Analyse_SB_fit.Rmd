@@ -95,7 +95,8 @@ dir_asym = '/Users/hamilton/Qubic/Calib-TD/Synthesized_beams_fits/'+dirfreq
 ```
 
 ```{python}
-def show_flatmap_fit_res(directory, dirfit, TESNum, cbar=False, defname='fit_sb_TESNum_'):
+reload(dl)
+def show_flatmap_fit_res(directory, dirfit, TESNum, cbar=False, defname='fit_sb_TESNum_', doplot=True):
     
     flatmap, az, el = dl.get_flatmap(TESNum, dirfiles)
     
@@ -104,37 +105,47 @@ def show_flatmap_fit_res(directory, dirfit, TESNum, cbar=False, defname='fit_sb_
     x = [az2d,el2d]
     themap, newxxyy = dl.qubic_sb_model(x,fit, return_peaks=True)
 
-    subplot(1,3,1)
-    imshow(flatmap,extent=[np.min(az)*np.cos(np.radians(50)), 
-                    np.max(az)*np.cos(np.radians(50)), 
-                    np.min(el), np.max(el)])
-    title('Data TES #{}'.format(TESNum))
-    if cbar: colorbar()
+    if doplot:
+        subplot(1,3,1)
+        imshow(flatmap,extent=[np.min(az)*np.cos(np.radians(50)), 
+                        np.max(az)*np.cos(np.radians(50)), 
+                        np.min(el), np.max(el)])
+        title('Data TES #{}'.format(TESNum))
+        if cbar: colorbar()
 
-    subplot(1,3,2)
-    imshow(themap,extent=[np.min(az)*np.cos(np.radians(50)), 
-                    np.max(az)*np.cos(np.radians(50)), 
-                    np.min(el), np.max(el)])
-    title('Fit TES #{}'.format(TESNum))
-    if cbar: colorbar()
+        subplot(1,3,2)
+        imshow(themap,extent=[np.min(az)*np.cos(np.radians(50)), 
+                        np.max(az)*np.cos(np.radians(50)), 
+                        np.min(el), np.max(el)])
+        title('Fit TES #{}'.format(TESNum))
+        if cbar: colorbar()
 
-    subplot(1,3,3)
-    imshow(flatmap-themap,extent=[np.min(az)*np.cos(np.radians(50)), 
-                    np.max(az)*np.cos(np.radians(50)), 
-                    np.min(el), np.max(el)])
-    title('Residuals TES #{}'.format(TESNum))
-    if cbar: colorbar()
+        subplot(1,3,3)
+        imshow(flatmap-themap,extent=[np.min(az)*np.cos(np.radians(50)), 
+                        np.max(az)*np.cos(np.radians(50)), 
+                        np.min(el), np.max(el)])
+        title('Residuals TES #{}'.format(TESNum))
+        if cbar: colorbar()
+    return newxxyy
 
 ```
 
 ```{python}
 rc('figure',figsize=(15,3))
-show_flatmap_fit_res(dirfiles, dir_sym , 93, cbar=True)
+newxxyy=show_flatmap_fit_res(dirfiles, dir_sym , 96, cbar=True)
+subplot(1,3,2)
+for i in xrange(9):
+    plot(newxxyy[0,i], newxxyy[1,i],'r+')
+```
+
+```{python}
+newxxyy=show_flatmap_fit_res(dirfiles, dir_sym , 93, cbar=True, doplot=False)
+print newxxyy.T
 ```
 
 ```{python}
 rc('figure',figsize=(15,3))
-show_flatmap_fit_res(dirfiles, dir_asym , 93, cbar=True, defname='fit_sb_asym_TESNum_')
+show_flatmap_fit_res(dirfiles, dir_asym , 95, cbar=True, defname='fit_sb_asym_TESNum_')
 ```
 
 ```{python}
@@ -350,13 +361,34 @@ a=hist(data_sym['integ'][okfwhmgauss], range=[0,0.2e8], bins=100)
 ```
 
 ```{python}
-integ = data_sym['integ'].copy()
-integ[~okfwhmgauss] = np.nan
-integ
+rc('figure',figsize=(7,7))
+nominal = np.degrees(2./(8*14.0))
+a=hist(data_sym['fwhmpeaks'][okfwhmgauss], range=[0.5,1.5], bins=15, 
+       label=ft.statstr(data_sym['fwhmpeaks'][okfwhmgauss])+' deg.')
+plot([nominal, nominal],[0,30],'r--',label='Nominal: {0:5.2f} deg.'.format(nominal))
+legend()
+ylim(0,30)
+xlabel('FWHM Synthesized Beam [deg]')
 ```
 
 ```{python}
-data_sym['integ']
+allpars = np.zeros((256, 4, 9))
+for i in xrange(256):
+    if 10*(i/10)==i: print(i)
+    allpars[i,:,:]=show_flatmap_fit_res(dirfiles, dir_sym , i+1, cbar=True, doplot=False)
+
+```
+
+```{python}
+FitsArray(allpars).save('fitted_peaks.fits')
+```
+
+```{python}
+peaks = np.array(FitsArray('fitted_peaks.fits'))
+```
+
+```{python}
+peaks.shape
 ```
 
 ```{python}

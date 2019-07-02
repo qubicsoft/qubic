@@ -506,15 +506,14 @@ class SelfCalibration:
             The power on the focal plane for each pointing.
         """
         nptg = len(theta)
-        step = (xmax - xmin) / reso
-        xx, yy = np.meshgrid(np.arange(xmin, xmax, step), np.arange(xmin, xmax, step))
+        xx, yy = np.meshgrid(np.linspace(xmin, xmax, reso), np.linspace(xmin, xmax, reso))
         x1d = np.ravel(xx)
         y1d = np.ravel(yy)
         z1d = x1d * 0 - 0.3
         position = np.array([x1d, y1d, z1d]).T
 
-        field = q._get_response(theta, phi, spectral_irradiance, position, q.detector.area, q.filter.nu, q.horn,
-                                q.primary_beam, q.secondary_beam)
+        field = q._get_response(theta, phi, spectral_irradiance, position, q.detector.area,
+                                q.filter.nu, q.horn, q.primary_beam, q.secondary_beam)
         power = np.reshape(np.abs(field) ** 2, (reso, reso, nptg))
         power = np.fliplr(power) # There is a symmetry bug, need to flip it
 

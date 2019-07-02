@@ -1,4 +1,4 @@
-#%matplotlib notebook
+# %matplotlib notebook
 from matplotlib import rc
 #rc('figure',figsize=(16,8))
 #rc('font',size=12)
@@ -71,7 +71,7 @@ for d in dirs:
     blo = str.split(bla[0],'/')
     labels.append(bla[1])
     dir_time.append(blo[-1])
-    
+
 for i in xrange(len(labels)): 
     print i, labels[i], dir_time[i], 'Elevation: ', elevations[i]
 

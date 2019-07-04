@@ -242,7 +242,7 @@ class SelfCalibration:
             Frequency of the source in GHz
         indep_config : list of int
             By default it is None and in this case, it will use the baseline
-            defined i your object on which you call the method.
+            defined in your object on which you call the method.
             If you want an other configuration (all open for example), you can
             put here a list with the horns you want to open.
 

@@ -34,6 +34,9 @@ fits_noiseless = glob.glob(rep_simu + date + '_' + name + '*noiselessTrue*.fits'
 # Number of subbands used during the simulation
 nf_recon = d['nf_recon']
 
+#Number of noise realisations
+nreals = len(fits_noise)
+
 # ================= Get maps ================
 # Get seen map (observed pixels)
 seen_map = rmc.get_seenmap(fits_noise[0])
@@ -62,6 +65,7 @@ for i in xrange(3):
 maps_recon_cut, maps_convo_cut, maps_diff_cut = rmc.get_patch(fits_noise[0], seen_map)
 print('Getting patches with shape : {}'.format(maps_recon_cut.shape))
 
+npix_patch = np.shape(maps_recon_cut)[1]
 # Get all patches (all noise realisations)
 all_fits, all_patch_recon, all_patch_conv, all_patch_diff = rmc.get_patch_many_files(
     rep_simu, date + '_' + name + '*noiselessFalse*.fits')
@@ -83,33 +87,44 @@ for i in xrange(3):
     plt.title(stokes[i] + ' real{0} subband{1}/{2}'.format(real, isub+1, nf_recon[0]))
     plt.legend()
 
-# ================= Make zones ============
-
-# ================= Correlations matrices=======================
+# ================= Correlations matrices =======================
 # Correlation between pixels
 cov_pix, corr_pix = amc.get_covcorr_between_pix(residuals, verbose=True)
 
-istk = 0
-isub = 0
-plt.subplot(121)
-plt.title('Covariance matrix between pixels, nsub = {}, istokes = {}'.format(isub, stokes[istk]))
-plt.imshow(cov_pix[isub, istk, :, :])
-plt.colorbar()
+isub = 1
+plt.figure('Cov corr pix isub{}'.format(isub))
 
-plt.subplot(122)
-plt.title('Correlation matrix between pixels, nsub = {}, istokes = {}'.format(isub, stokes[istk]))
-plt.imshow(corr_pix[isub, istk, :, :])
-plt.colorbar()
+for istk in range(3):
+    plt.subplot(2,3,istk+1)
+    plt.title('Cov matrix pix, {}, subband{}/{}'.format(stokes[istk], isub+1, nf_recon[0]))
+    plt.imshow(cov_pix[isub, istk, :, :], vmin=-50, vmax=50)
+    plt.colorbar()
+
+    plt.subplot(2, 3, istk+4)
+    plt.title('Corr matrix pix, {}, subband{}/{}'.format(stokes[istk], isub+1, nf_recon[0]))
+    plt.imshow(corr_pix[isub, istk, :, :], vmin=-0.6, vmax=0.6)
+    plt.colorbar()
 
 # Compute distances associated to the correlation matrix
-nsub = corr_pix.shape[0]
-distance = np.empty((nsub, 3))
-for isub in range(nsub):
+distance = np.empty((nf_recon[0], 3))
+for isub in range(nf_recon[0]):
     for istk in range(3):
         distance[isub, istk] = amc.distance_square(corr_pix[isub, istk, :, :])
 
 # Correlations between subbands and I, Q, U
 amc.get_covcorr_patch(residuals, doplot=True, bins=60)
+
+# ================= Make zones and do the same statistical study============
+nzones = 4
+residuals_zones = np.empty((nreals, nzones, nf_recon[0], npix_patch, 3))
+for real in range(nreals):
+    if real == 0:
+        pix_per_zone, residuals_zones[real,...] = rmc.make_zones(residuals[real,...], nzones, ns, center, seen_map)
+
+    else:
+        _, residuals_zones[real,...] = rmc.make_zones(residuals[real,...], nzones, ns, center, seen_map,
+                                  verbose=False, doplot=False)
+
 
 # ================= Noise Evolution as a function of the subband number=======================
 # This part should be rewritten (old)

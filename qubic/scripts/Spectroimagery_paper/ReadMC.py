@@ -217,7 +217,7 @@ def pix2ang(ns, center, seenmap):
     return np.degrees(np.arccos(np.dot(v0, vpix)))
 
 
-def make_zones(patch, nzones, nside, center, seenmap, doplot=True):
+def make_zones(patch, nzones, nside, center, seenmap, verbose=True, doplot=True):
     """
     Mask a path to get different concentric zones.
 
@@ -263,7 +263,8 @@ def make_zones(patch, nzones, nside, center, seenmap, doplot=True):
 
     # Compute the numbers of pixels in each zone
     pix_per_zone = [np.count_nonzero(m[0, :, 0]) for m in allmask]
-    print('Number of pixels in each zones : {}'.format(pix_per_zone))
+    if verbose:
+        print('Number of pixels in each zones : {}'.format(pix_per_zone))
 
     # Plot the patch masked
     if doplot:

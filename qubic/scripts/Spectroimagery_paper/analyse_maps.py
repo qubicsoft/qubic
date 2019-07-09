@@ -28,7 +28,7 @@ d.read_from_file(rep_simu + date + '_' + name + '.dict')
 center = equ2gal(d['RA_center'], d['DEC_center'])
 
 # Get fits files names in a list
-fits_noise = glob.glob(rep_simu + date + '_' + name + '*noiselessFalse*.fits')
+fits_noise = np.sort(glob.glob(rep_simu + date + '_' + name + '*noiselessFalse*.fits'))
 fits_noiseless = glob.glob(rep_simu + date + '_' + name + '*noiselessTrue*.fits')
 
 # Number of subbands used during the simulation
@@ -43,12 +43,13 @@ npix = len(seen_map)
 ns = d['nside']
 
 # Get one full maps
-maps_recon, maps_convo, maps_diff = rmc.get_maps(fits_noiseless[0])
+real = 10
+maps_recon, maps_convo, maps_diff = rmc.get_maps(fits_noise[real])
 print('Getting maps with shape : {}'.format(maps_recon.shape))
 
 # Look at the maps
 isub = 0
-plt.figure('Noiseless maps')
+plt.figure('Noise maps real{}'.format(real))
 for i in xrange(3):
     hp.gnomview(maps_convo[isub, :, i], rot=center, reso=9, sub=(3, 3, i + 1),
                 title='conv ' + stokes[i] + ' subband {}/{}'.format(isub+1, nf_recon[0]))
@@ -58,7 +59,7 @@ for i in xrange(3):
                 title='diff ' + stokes[i] + ' subband {}/{}'.format(isub+1, nf_recon[0]))
 
 # Get one patch
-maps_recon_cut, maps_convo_cut, maps_diff_cut = rmc.get_patch(fits_files[1], seen_map)
+maps_recon_cut, maps_convo_cut, maps_diff_cut = rmc.get_patch(fits_noise[0], seen_map)
 print('Getting patches with shape : {}'.format(maps_recon_cut.shape))
 
 # Get all patches (all noise realisations)
@@ -70,11 +71,17 @@ print('Getting all patch realizations with shape : {}'.format(all_patch_recon.sh
 residuals = all_patch_recon - np.mean(all_patch_recon, axis=0)
 
 # Histogram of the residuals (first real, first subband)
-plt.clf()
+isub = 2
+real = 0
+plt.figure('Residuals isub{} real{}'.format(isub, real))
 for i in xrange(3):
     plt.subplot(1, 3, i + 1)
-    plt.hist(np.ravel(residuals[0, 0, :, i]), range=[-5, 5], bins=100)
-    plt.title(stokes[i])
+    data = np.ravel(residuals[real, isub, :, i])
+    std = np.std(data)
+    mean = np.mean(data)
+    plt.hist(data, range=[-20, 20], bins=100, label='std={0:.2f} mean={0:.2f}'.format(std, mean))
+    plt.title(stokes[i] + ' real{0} subband{1}/{2}'.format(real, isub+1, nf_recon[0]))
+    plt.legend()
 
 # ================= Make zones ============
 

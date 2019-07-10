@@ -31,11 +31,14 @@ center = equ2gal(d['RA_center'], d['DEC_center'])
 fits_noise = np.sort(glob.glob(rep_simu + date + '_' + name + '*noiselessFalse*.fits'))
 fits_noiseless = glob.glob(rep_simu + date + '_' + name + '*noiselessTrue*.fits')
 
-# Number of subbands used during the simulation
-nf_recon = d['nf_recon']
-
 #Number of noise realisations
 nreals = len(fits_noise)
+print('nreals = ', nreals)
+
+# Number of subbands used during the simulation
+nf_recon = d['nf_recon'][0]
+print('nf_recon = ', nf_recon)
+
 
 # ================= Get maps ================
 # Get seen map (observed pixels)
@@ -54,17 +57,17 @@ print('Getting maps with shape : {}'.format(maps_recon.shape))
 
 # Look at the maps
 isub = 0
-if isub >= nf_recon[0]:
+if isub >= nf_recon:
     raise ValueError('Invalid index of subband')
 
 plt.figure('Noise maps real{}'.format(real))
 for i in xrange(3):
     hp.gnomview(maps_convo[isub, :, i], rot=center, reso=9, sub=(3, 3, i + 1),
-                title='conv ' + stokes[i] + ' subband {}/{}'.format(isub+1, nf_recon[0]))
+                title='conv ' + stokes[i] + ' subband {}/{}'.format(isub+1, nf_recon))
     hp.gnomview(maps_recon[isub, :, i], rot=center, reso=9, sub=(3, 3, 3 + i + 1),
-                title='recon ' + stokes[i] + ' subband {}/{}'.format(isub+1, nf_recon[0]))
+                title='recon ' + stokes[i] + ' subband {}/{}'.format(isub+1, nf_recon))
     hp.gnomview(maps_diff[isub, :, i], rot=center, reso=9, sub=(3, 3, 6 + i + 1),
-                title='diff ' + stokes[i] + ' subband {}/{}'.format(isub+1, nf_recon[0]))
+                title='diff ' + stokes[i] + ' subband {}/{}'.format(isub+1, nf_recon))
 
 # Get one patch
 maps_recon_cut, maps_convo_cut, maps_diff_cut = rmc.get_patch(fits_noise[0], seen_map)
@@ -81,7 +84,7 @@ residuals = all_patch_recon - np.mean(all_patch_recon, axis=0)
 
 # Histogram of the residuals (first real, first subband)
 isub = 2
-if isub >= nf_recon[0]:
+if isub >= nf_recon:
     raise ValueError('Invalid index of subband')
 
 real = 0
@@ -95,7 +98,7 @@ for i in xrange(3):
     std = np.std(data)
     mean = np.mean(data)
     plt.hist(data, range=[-20, 20], bins=100, label='std={0:.2f} mean={0:.2f}'.format(std, mean))
-    plt.title(stokes[i] + ' real{0} subband{1}/{2}'.format(real, isub+1, nf_recon[0]))
+    plt.title(stokes[i] + ' real{0} subband{1}/{2}'.format(real, isub+1, nf_recon))
     plt.legend()
 
 # ================= Correlations matrices =======================
@@ -103,25 +106,25 @@ for i in xrange(3):
 cov_pix, corr_pix = amc.get_covcorr_between_pix(residuals, verbose=True)
 
 isub = 1
-if isub >= nf_recon[0]:
+if isub >= nf_recon:
     raise ValueError('Invalid index of subband')
 
 plt.figure('Cov corr pix isub{}'.format(isub))
 
 for istk in range(3):
     plt.subplot(2,3,istk+1)
-    plt.title('Cov matrix pix, {}, subband{}/{}'.format(stokes[istk], isub+1, nf_recon[0]))
+    plt.title('Cov matrix pix, {}, subband{}/{}'.format(stokes[istk], isub+1, nf_recon))
     plt.imshow(cov_pix[isub, istk, :, :], vmin=-50, vmax=50)
     plt.colorbar()
 
     plt.subplot(2, 3, istk+4)
-    plt.title('Corr matrix pix, {}, subband{}/{}'.format(stokes[istk], isub+1, nf_recon[0]))
+    plt.title('Corr matrix pix, {}, subband{}/{}'.format(stokes[istk], isub+1, nf_recon))
     plt.imshow(corr_pix[isub, istk, :, :], vmin=-0.6, vmax=0.6)
     plt.colorbar()
 
 # Compute distances associated to the correlation matrix
-distance = np.empty((nf_recon[0], 3))
-for isub in range(nf_recon[0]):
+distance = np.empty((nf_recon, 3))
+for isub in range(nf_recon):
     for istk in range(3):
         distance[isub, istk] = amc.distance_square(corr_pix[isub, istk, :, :])
 
@@ -130,7 +133,7 @@ amc.get_covcorr_patch(residuals, doplot=True, bins=60)
 
 # ================= Make zones ============
 nzones = 4
-residuals_zones = np.empty((nreals, nzones, nf_recon[0], npix_patch, 3))
+residuals_zones = np.empty((nreals, nzones, nf_recon, npix_patch, 3))
 for real in range(nreals):
     if real == 0:
         pix_per_zone, residuals_zones[real,...] = rmc.make_zones(residuals[real,...], nzones, ns, center, seen_map)
@@ -159,19 +162,19 @@ for izone in range(nzones):
     all_corr.append(corr_pix)
 
 isub = 0
-if isub >= nf_recon[0]:
+if isub >= nf_recon:
     raise ValueError('Invalid index of subband')
 
 plt.figure('Cov corr pix isub{} {}zones'.format(isub, nzones))
 for izone in range(nzones):
     for istk in range(3):
         plt.subplot(4, 6, 6*izone+istk+1)
-        plt.title('{}, band{}/{}, zone{}/{}'.format(stokes[istk], isub+1, nf_recon[0], izone+1, nzones))
+        plt.title('{}, band{}/{}, zone{}/{}'.format(stokes[istk], isub+1, nf_recon, izone+1, nzones))
         plt.imshow(all_cov[izone][isub, istk, :, :], vmin=-50, vmax=50)
         plt.colorbar()
 
         plt.subplot(4, 6, 6*izone+istk+4)
-        plt.title('{}, band{}/{}, zone{}/{}'.format(stokes[istk], isub+1, nf_recon[0], izone+1, nzones))
+        plt.title('{}, band{}/{}, zone{}/{}'.format(stokes[istk], isub+1, nf_recon, izone+1, nzones))
         plt.imshow(all_corr[izone][isub, istk, :, :], vmin=-0.6, vmax=0.6)
         plt.colorbar()
 

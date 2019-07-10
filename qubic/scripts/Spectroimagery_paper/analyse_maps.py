@@ -110,7 +110,6 @@ if isub >= nf_recon:
     raise ValueError('Invalid index of subband')
 
 plt.figure('Cov corr pix isub{}'.format(isub))
-
 for istk in range(3):
     plt.subplot(2,3,istk+1)
     plt.title('Cov matrix pix, {}, subband{}/{}'.format(stokes[istk], isub+1, nf_recon))
@@ -149,6 +148,7 @@ print('all_zones is a list, each element is one zone and has a shape :'
       '\n(nreals, nf_sub_rec, npix_per_zone, 3)')
 all_cov = []
 all_corr = []
+all_dist = []
 for izone in range(nzones):
 
     # remove pixel outside the zone
@@ -160,6 +160,13 @@ for izone in range(nzones):
     cov_pix, corr_pix = amc.get_covcorr_between_pix(all_zones[izone], verbose=True)
     all_cov.append(cov_pix)
     all_corr.append(corr_pix)
+
+    # Compute distances associated to the correlation matrix
+    distance = np.empty((nf_recon, 3))
+    for isub in range(nf_recon):
+        for istk in range(3):
+            distance[isub, istk] = amc.distance_square(corr_pix[isub, istk, :, :])
+    all_dist.append(distance)
 
 isub = 0
 if isub >= nf_recon:
@@ -178,6 +185,20 @@ for izone in range(nzones):
         plt.imshow(all_corr[izone][isub, istk, :, :], vmin=-0.6, vmax=0.6)
         plt.colorbar()
 
+plt.figure('Distance {} zones'.format(nzones))
+for izone in range(nzones):
+    plt.subplot(121)
+    p = plt.plot(all_dist[izone][:, 1], '+', label='Q zone{}'.format(izone+1))
+    plt.plot(all_dist[izone][:, 2], 'o', color=p[0].get_color(), label='U zone{}'.format(izone+1))
+    plt.xlabel('Subband index')
+    plt.ylabel('Distance')
+    plt.legend()
+
+    plt.subplot(122)
+    plt.plot(all_dist[izone][:, 0], 's', label='I zone{}'.format(izone+1))
+    plt.xlabel('Subband index')
+    plt.ylabel('Distance')
+    plt.legend()
 
 
 # ================= Noise Evolution as a function of the subband number=======================

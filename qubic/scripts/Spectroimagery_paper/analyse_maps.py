@@ -47,11 +47,16 @@ ns = d['nside']
 
 # Get one full maps
 real = 10
+if real >= nreals:
+    raise ValueError('Invalid index of realization')
 maps_recon, maps_convo, maps_diff = rmc.get_maps(fits_noise[real])
 print('Getting maps with shape : {}'.format(maps_recon.shape))
 
 # Look at the maps
 isub = 0
+if isub >= nf_recon[0]:
+    raise ValueError('Invalid index of subband')
+
 plt.figure('Noise maps real{}'.format(real))
 for i in xrange(3):
     hp.gnomview(maps_convo[isub, :, i], rot=center, reso=9, sub=(3, 3, i + 1),
@@ -76,7 +81,13 @@ residuals = all_patch_recon - np.mean(all_patch_recon, axis=0)
 
 # Histogram of the residuals (first real, first subband)
 isub = 2
+if isub >= nf_recon[0]:
+    raise ValueError('Invalid index of subband')
+
 real = 0
+if real >= nreals:
+    raise ValueError('Invalid index of realization')
+
 plt.figure('Residuals isub{} real{}'.format(isub, real))
 for i in xrange(3):
     plt.subplot(1, 3, i + 1)
@@ -92,6 +103,9 @@ for i in xrange(3):
 cov_pix, corr_pix = amc.get_covcorr_between_pix(residuals, verbose=True)
 
 isub = 1
+if isub >= nf_recon[0]:
+    raise ValueError('Invalid index of subband')
+
 plt.figure('Cov corr pix isub{}'.format(isub))
 
 for istk in range(3):
@@ -114,7 +128,7 @@ for isub in range(nf_recon[0]):
 # Correlations between subbands and I, Q, U
 amc.get_covcorr_patch(residuals, doplot=True, bins=60)
 
-# ================= Make zones and do the same statistical study============
+# ================= Make zones ============
 nzones = 4
 residuals_zones = np.empty((nreals, nzones, nf_recon[0], npix_patch, 3))
 for real in range(nreals):
@@ -125,10 +139,47 @@ for real in range(nreals):
         _, residuals_zones[real,...] = rmc.make_zones(residuals[real,...], nzones, ns, center, seen_map,
                                   verbose=False, doplot=False)
 
+# ================= Statistical study over the zones ============
+# Correlation between pixels
+all_zones = []
+print('all_zones is a list, each element is one zone and has a shape :'
+      '\n(nreals, nf_sub_rec, npix_per_zone, 3)')
+all_cov = []
+all_corr = []
+for izone in range(nzones):
+
+    # remove pixel outside the zone
+    zone = residuals_zones[:, izone, ...]
+    indices = np.unique(np.nonzero(zone)[2])
+    all_zones.append(np.take(zone, indices, axis=2))
+
+    # Correlation between pixels
+    cov_pix, corr_pix = amc.get_covcorr_between_pix(all_zones[izone], verbose=True)
+    all_cov.append(cov_pix)
+    all_corr.append(corr_pix)
+
+isub = 0
+if isub >= nf_recon[0]:
+    raise ValueError('Invalid index of subband')
+
+plt.figure('Cov corr pix isub{} {}zones'.format(isub, nzones))
+for izone in range(nzones):
+    for istk in range(3):
+        plt.subplot(4, 6, 6*izone+istk+1)
+        plt.title('{}, band{}/{}, zone{}/{}'.format(stokes[istk], isub+1, nf_recon[0], izone+1, nzones))
+        plt.imshow(all_cov[izone][isub, istk, :, :], vmin=-50, vmax=50)
+        plt.colorbar()
+
+        plt.subplot(4, 6, 6*izone+istk+4)
+        plt.title('{}, band{}/{}, zone{}/{}'.format(stokes[istk], isub+1, nf_recon[0], izone+1, nzones))
+        plt.imshow(all_corr[izone][isub, istk, :, :], vmin=-0.6, vmax=0.6)
+        plt.colorbar()
+
+
 
 # ================= Noise Evolution as a function of the subband number=======================
 # This part should be rewritten (old)
-# To do that, you need many realisations
+# To do that, you need many realisations and different nfsub_rec
 
 allmeanmat = amc.get_rms_covar(nsubvals, seenmap_recon, allmaps_recon)[1]
 rmsmap_cov = amc.get_rms_covarmean(nsubvals, seenmap_recon, allmaps_recon, allmeanmat)[1]

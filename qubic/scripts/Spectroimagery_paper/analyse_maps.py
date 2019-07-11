@@ -128,7 +128,7 @@ for isub in range(nf_recon):
         distance[isub, istk] = amc.distance_square(corr_pix[isub, istk, :, :])
 
 # Correlations between subbands and I, Q, U
-amc.get_covcorr_patch(residuals, doplot=True, bins=60)
+cov, corr = amc.get_covcorr_patch(residuals, doplot=True)
 
 # ================= Make zones ============
 nzones = 4
@@ -146,9 +146,11 @@ for real in range(nreals):
 all_zones = []
 print('all_zones is a list, each element is one zone and has a shape :'
       '\n(nreals, nf_sub_rec, npix_per_zone, 3)')
+all_cov_pix = []
+all_corr_pix = []
+all_dist = []
 all_cov = []
 all_corr = []
-all_dist = []
 for izone in range(nzones):
 
     # remove pixel outside the zone
@@ -158,8 +160,8 @@ for izone in range(nzones):
 
     # Correlation between pixels
     cov_pix, corr_pix = amc.get_covcorr_between_pix(all_zones[izone], verbose=True)
-    all_cov.append(cov_pix)
-    all_corr.append(corr_pix)
+    all_cov_pix.append(cov_pix)
+    all_corr_pix.append(corr_pix)
 
     # Compute distances associated to the correlation matrix
     distance = np.empty((nf_recon, 3))
@@ -167,6 +169,11 @@ for izone in range(nzones):
         for istk in range(3):
             distance[isub, istk] = amc.distance_square(corr_pix[isub, istk, :, :])
     all_dist.append(distance)
+
+    # Correlations between subbands and I, Q, U
+    cov, corr = amc.get_covcorr_patch(all_zones[izone], doplot=False)
+    all_cov.append(cov)
+    all_corr.append(corr)
 
 isub = 0
 if isub >= nf_recon:
@@ -177,12 +184,12 @@ for izone in range(nzones):
     for istk in range(3):
         plt.subplot(4, 6, 6*izone+istk+1)
         plt.title('{}, band{}/{}, zone{}/{}'.format(stokes[istk], isub+1, nf_recon, izone+1, nzones))
-        plt.imshow(all_cov[izone][isub, istk, :, :], vmin=-50, vmax=50)
+        plt.imshow(all_cov_pix[izone][isub, istk, :, :], vmin=-50, vmax=50)
         plt.colorbar()
 
         plt.subplot(4, 6, 6*izone+istk+4)
         plt.title('{}, band{}/{}, zone{}/{}'.format(stokes[istk], isub+1, nf_recon, izone+1, nzones))
-        plt.imshow(all_corr[izone][isub, istk, :, :], vmin=-0.6, vmax=0.6)
+        plt.imshow(all_corr_pix[izone][isub, istk, :, :], vmin=-0.6, vmax=0.6)
         plt.colorbar()
 
 plt.figure('Distance {} zones'.format(nzones))
@@ -200,6 +207,24 @@ for izone in range(nzones):
     plt.ylabel('Distance')
     plt.legend()
 
+
+dim = np.shape(all_corr[0])[0]
+for izone in range(nzones):
+    # Complete distribution : histogram
+    amc.plot_hist(all_cov[izone], bins=10, title_prefix='Zone{} Cov'.format(izone))
+    amc.plot_hist(all_corr[izone], bins=60, title_prefix='Zone{} Corr'.format(izone))
+
+    # Means over pixels of the matrix
+    plt.figure('Mean over pixels zone{}'.format(izone))
+    plt.subplot(121)
+    plt.imshow(np.mean(all_cov[izone], axis=2) / pix_per_zone[izone])
+    plt.title('Mean cov')
+    plt.colorbar()
+
+    plt.subplot(122)
+    plt.imshow(np.mean(all_corr[izone] , axis=2)- np.identity(dim))
+    plt.title('Mean corr')
+    plt.colorbar()
 
 # ================= Noise Evolution as a function of the subband number=======================
 # This part should be rewritten (old)

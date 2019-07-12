@@ -1,22 +1,12 @@
-import os
-import sys
-import glob
-import time
-
 import healpy as hp
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy import interpolate
-import copy
 
 import AnalysisMC as amc
 import ReadMC as rmc
-import SpectroImLib as si
 
 import qubic
 from qubic import equ2gal
-from qubic import Xpol
-from qubic import apodize_mask
 
 thespec = ['TT', 'EE', 'BB', 'TE', 'EB', 'TB']
 stokes = ['I', 'Q', 'U']

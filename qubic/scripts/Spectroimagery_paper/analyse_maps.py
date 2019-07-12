@@ -97,7 +97,7 @@ for i in xrange(3):
     data = np.ravel(residuals[real, isub, :, i])
     std = np.std(data)
     mean = np.mean(data)
-    plt.hist(data, range=[-20, 20], bins=100, label='std={0:.2f} mean={0:.2f}'.format(std, mean))
+    plt.hist(data, range=[-20, 20], bins=100, label='m={0:.2f} \n $\sigma$={1:.2f}'.format(mean, std))
     plt.title(stokes[i] + ' real{0} subband{1}/{2}'.format(real, isub+1, nf_recon))
     plt.legend()
 
@@ -129,6 +129,8 @@ for isub in range(nf_recon):
 
 # Correlations between subbands and I, Q, U
 cov, corr = amc.get_covcorr_patch(residuals, doplot=True)
+amc.plot_hist(cov, bins=50, title_prefix='Cov', ymax=0.1, color='r')
+amc.plot_hist(corr, bins=30, title_prefix='Corr', ymax=4., color='b')
 
 # ================= Make zones ============
 nzones = 4
@@ -207,17 +209,16 @@ for izone in range(nzones):
     plt.ylabel('Distance')
     plt.legend()
 
-
 dim = np.shape(all_corr[0])[0]
 for izone in range(nzones):
     # Complete distribution : histogram
-    amc.plot_hist(all_cov[izone], bins=10, title_prefix='Zone{} Cov'.format(izone))
-    amc.plot_hist(all_corr[izone], bins=60, title_prefix='Zone{} Corr'.format(izone))
+    # amc.plot_hist(all_cov[izone], bins=50, title_prefix='Zone{} Cov'.format(izone), color='r')
+    # amc.plot_hist(all_corr[izone], bins=50, title_prefix='Zone{} Corr'.format(izone), color='b')
 
     # Means over pixels of the matrix
     plt.figure('Mean over pixels zone{}'.format(izone))
     plt.subplot(121)
-    plt.imshow(np.mean(all_cov[izone], axis=2) / pix_per_zone[izone])
+    plt.imshow(np.mean(all_cov[izone], axis=2) )#/ np.sqrt(pix_per_zone[izone]))
     plt.title('Mean cov')
     plt.colorbar()
 

@@ -127,6 +127,13 @@ for isub in range(nf_recon):
     for istk in range(3):
         distance[isub, istk] = amc.distance_square(corr_pix[isub, istk, :, :])
 
+plt.figure('distances')
+for i in range(3):
+    plt.plot(distance[:,i], label=stokes[i])
+plt.ylabel('Distance')
+plt.xlabel('isub')
+plt.legend(loc='best')
+
 # Correlations between subbands and I, Q, U
 cov, corr = amc.get_covcorr_patch(residuals, doplot=True)
 amc.plot_hist(cov, bins=50, title_prefix='Cov', ymax=0.1, color='r')
@@ -216,16 +223,55 @@ for izone in range(nzones):
     # amc.plot_hist(all_corr[izone], bins=50, title_prefix='Zone{} Corr'.format(izone), color='b')
 
     # Means over pixels of the matrix
-    plt.figure('Mean over pixels zone{}'.format(izone))
-    plt.subplot(121)
-    plt.imshow(np.mean(all_cov[izone], axis=2) )#/ np.sqrt(pix_per_zone[izone]))
+    plt.figure('corMean over pixels zone{}'.format(izone))
+    plt.subplot(221)
+    plt.imshow(np.mean(all_cov[izone], axis=2))
     plt.title('Mean cov')
     plt.colorbar()
 
-    plt.subplot(122)
+    plt.subplot(222)
     plt.imshow(np.mean(all_corr[izone] , axis=2)- np.identity(dim))
     plt.title('Mean corr')
     plt.colorbar()
+
+    # Normalization by the number of pixels in each zone
+    plt.subplot(223)
+    plt.imshow(np.std(all_cov[izone], axis=2) / np.sqrt(pix_per_zone[izone]))
+    plt.title('Std cov')
+    plt.colorbar()
+
+    plt.subplot(224)
+    plt.imshow((np.std(all_corr[izone] , axis=2)- np.identity(dim))/ np.sqrt(pix_per_zone[izone]))
+    plt.title('Std corr')
+    plt.colorbar()
+
+plt.figure('Mean of the variances in each zone')
+# Diagonale de la matrice de cov
+for izone in range(nzones):
+    plt.plot(np.diag(np.mean(all_cov[izone], axis=2)), 'o', label=izone)
+plt.legend()
+
+
+# ================= Correction =======================
+# Here we build a matrix that contains the corrections for the widths of each subband
+correction_mat = np.empty_like(cov[:, :, 0])
+nf_sub = d['nf_sub']
+_, nus_edge, nus, deltas, Delta, _ = qubic.compute_freq(band=150,
+                                                        Nfreq=nf_sub,
+                                                        relative_bandwidth=d['filter_relative_bandwidth'])
+print(Delta)
+print(deltas)
+plt.plot(nus, deltas, 'o')
+
+for i in range(dim):
+    for j in range(dim):
+        freq_i = i / nf_recon
+        freq_j = j/nf_recon
+        sum_delta_i = deltas[freq_i * nf_sub / nf_recon: freq_i * nf_sub / nf_recon + nf_sub / nf_recon].sum()
+        sum_delta_j = deltas[freq_j * nf_sub / nf_recon: freq_j * nf_sub / nf_recon + nf_sub / nf_recon].sum()
+        correction_mat[i, j] = Delta/(np.sqrt(sum_delta_i * sum_delta_j) * nf_sub)
+
+plt.imshow(correction_mat)
 
 # ================= Noise Evolution as a function of the subband number=======================
 # This part should be rewritten (old)

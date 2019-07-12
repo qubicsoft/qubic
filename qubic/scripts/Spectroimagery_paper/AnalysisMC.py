@@ -158,7 +158,7 @@ def get_covcorr_patch(patch, doplot=False):
     return cov, corr
 
 
-def plot_hist(mat_npix, bins, title_prefix):
+def plot_hist(mat_npix, bins, title_prefix, ymax=0.5, color='b'):
     """
     Plots the histograms of each element of the matrix.
     Each histogram represents the distribution of a given
@@ -172,11 +172,18 @@ def plot_hist(mat_npix, bins, title_prefix):
         Numbers of bins for the histogram
     title : str
         Prefix for the title of the plot.
+    ymax : float
+        Limit max on the y axis (between 0 and 1)
+    color : str
+        Color of the histogram
 
     """
+    stokes = ['I', 'Q', 'U']
     dim = np.shape(mat_npix)[0]
+    min = np.min(mat_npix)
+    max = np.max(mat_npix)
 
-    plt.figure(title_prefix + 'Hist over pix for each matrix element', figsize=(10, 10))
+    plt.figure(title_prefix + ' Hist over pix for each matrix element', figsize=(10, 10))
     for iterm in xrange(dim):
         for jterm in xrange(dim):
             idx = dim * iterm + jterm + 1
@@ -185,15 +192,25 @@ def plot_hist(mat_npix, bins, title_prefix):
             std = np.std(mat_npix[iterm, jterm, :])
 
             plt.subplot(dim, dim, idx)
+            plt.hist(mat_npix[iterm, jterm, :], color=color, normed=True,
+                     bins=bins, label='m={0:.2f} \n $\sigma$={1:.2f}'.format(mean, std))
             # no yticks for historgram in middle
             if idx % dim != 1:
                 plt.yticks([])
             # no xticks for histogram in middle
             if idx < dim * (dim - 1):
                 plt.xticks([])
-            plt.hist(mat_npix[iterm, jterm, :], color='r', normed=True,
-                     bins=bins, label='std={0:.2f} \n mean={0:.2f}'.format(std, mean))
-            # plt.text()
+
+            # Names
+            if iterm==(dim-1):
+                plt.xlabel(stokes[jterm % 3]+'{}'.format(jterm / 3))
+            if jterm == 0:
+                plt.ylabel(stokes[iterm % 3]+'{}'.format(iterm / 3))
+
+            #same scale for each plot
+            plt.xlim((min, max))
+            plt.ylim((0.,ymax))
+
             plt.legend(fontsize='xx-small')
             plt.subplots_adjust(hspace=0., wspace=0.)
 

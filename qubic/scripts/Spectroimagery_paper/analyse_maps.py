@@ -38,7 +38,8 @@ print('nreals = ', nreals)
 
 # Number of subbands used during the simulation
 nf_recon = d['nf_recon'][0]
-print('nf_recon = ', nf_recon)
+nf_sub = d['nf_sub']
+print('nf_sub = {}, nf_recon = {}'.format(nf_sub, nf_recon))
 
 # ================= Get maps ================
 # Get seen map (observed pixels)
@@ -257,7 +258,6 @@ plt.legend()
 # ================= Correction =======================
 # Here we build a matrix that contains the corrections for the widths of each subband
 correction_mat = np.empty_like(cov[:, :, 0])
-nf_sub = d['nf_sub']
 _, nus_edge, nus, deltas, Delta, _ = qubic.compute_freq(band=150,
                                                         Nfreq=nf_sub,
                                                         relative_bandwidth=d['filter_relative_bandwidth'])
@@ -265,11 +265,11 @@ print(Delta)
 print(deltas)
 plt.plot(nus, deltas, 'o')
 
+nb = nf_sub // nf_recon # Number of input subbands in each reconstructed subband
 for i in range(dim):
     for j in range(dim):
         freq_i = i // nf_recon
         freq_j = j // nf_recon
-        nb = nf_sub // nf_recon # Number of input subbands in each reconstructed subband
         sum_delta_i = deltas[freq_i * nb: freq_i * nb + nb].sum()
         sum_delta_j = deltas[freq_j * nb: freq_j * nb + nb].sum()
         correction_mat[i, j] = Delta / (np.sqrt(sum_delta_i * sum_delta_j) * nf_sub)

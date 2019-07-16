@@ -1,5 +1,4 @@
 import glob
-import time
 import healpy as hp
 import numpy as np
 import matplotlib.pyplot as plt
@@ -77,7 +76,7 @@ for i in xrange(3):
     hp.gnomview(maps_diff[isub, :, i], rot=center, reso=9, sub=(3, 3, 6 + i + 1),
                 title='diff ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon))
 
-# Get one patch
+# ================= Get patches ================
 maps_recon_cut, maps_convo_cut, maps_diff_cut = rmc.get_patch(fits_noise[0], seen_map)
 print('Getting patches with shape : {}'.format(maps_recon_cut.shape))
 
@@ -109,13 +108,30 @@ for i in xrange(3):
     plt.title(stokes[i] + ' real{0} subband{1}/{2}'.format(real, isub + 1, nf_recon))
     plt.legend(fontsize='x-small')
 
+# ================= Std profile ================
+bin_centers, ang, std_bin, std_profile = amc.std_profile(residuals, 20, d['nside'], center, seen_map)
+
+if apply_corrections:
+    for isub in range(nf_recon):
+        std_bin[:, isub, :] /= np.sqrt(corrections[isub])
+        std_profile[:, isub, :] /= np.sqrt(corrections[isub])
+
+isub = 1
+plt.figure('std profile isub{}'.format(isub))
+for istk in range(3):
+    # plt.plot(bin_centers, std_bin[:, isub, istk], 'o', label=stokes[istk])
+    plt.plot(ang, std_profile[:, isub, istk], label=stokes[istk])
+plt.xlabel('Angle (degree)')
+plt.ylabel('std profile')
+plt.legend(loc='best')
+
 # ================= Correlations matrices between pixels =======================
 cov_pix, corr_pix = amc.get_covcorr_between_pix(residuals, verbose=True)
 
 # Apply correction (don't know if it is a good idea...)
 if apply_corrections:
     for isub in range(nf_recon):
-        cov_pix[isub,...] /= corrections[isub]
+        cov_pix[isub, ...] /= corrections[isub]
         corr_pix[isub, ...] /= corrections[isub]
 
 isub = 0
@@ -126,12 +142,12 @@ plt.figure('Cov corr pix isub{}'.format(isub))
 for istk in range(3):
     plt.subplot(2, 3, istk + 1)
     plt.title('Cov matrix pix, {}, subband{}/{}'.format(stokes[istk], isub + 1, nf_recon))
-    plt.imshow(cov_pix[isub, istk, :, :])#, vmin=-50, vmax=50)
+    plt.imshow(cov_pix[isub, istk, :, :])  # , vmin=-50, vmax=50)
     plt.colorbar()
 
     plt.subplot(2, 3, istk + 4)
     plt.title('Corr matrix pix, {}, subband{}/{}'.format(stokes[istk], isub + 1, nf_recon))
-    plt.imshow(corr_pix[isub, istk, :, :])#, vmin=-0.6, vmax=0.6)
+    plt.imshow(corr_pix[isub, istk, :, :])  # , vmin=-0.6, vmax=0.6)
     plt.colorbar()
 
 # Compute distances associated to the correlation matrix
@@ -151,7 +167,7 @@ plt.legend(loc='best')
 cov, corr = amc.get_covcorr_patch(residuals, doplot=True)
 mean_cov = np.mean(cov, axis=2)
 mean_corr = np.mean(corr, axis=2)
-mean_corr -= np.identity(3 * nf_recon) # substract identity matrix
+mean_corr -= np.identity(3 * nf_recon)  # substract identity matrix
 
 # Apply correction (don't know if it is a good idea...)
 if apply_corrections:
@@ -232,12 +248,12 @@ for izone in range(nzones):
     for istk in range(3):
         plt.subplot(4, 6, 6 * izone + istk + 1)
         plt.title('{} cov, bd{}/{}, zn{}/{}'.format(stokes[istk], isub + 1, nf_recon, izone + 1, nzones))
-        plt.imshow(all_cov_pix[izone][isub, istk, :, :])#, vmin=-50, vmax=50)
+        plt.imshow(all_cov_pix[izone][isub, istk, :, :])  # , vmin=-50, vmax=50)
         plt.colorbar()
 
         plt.subplot(4, 6, 6 * izone + istk + 4)
         plt.title('{} corr, bd{}/{}, zn{}/{}'.format(stokes[istk], isub + 1, nf_recon, izone + 1, nzones))
-        plt.imshow(all_corr_pix[izone][isub, istk, :, :])#, vmin=-0.6, vmax=0.6)
+        plt.imshow(all_corr_pix[izone][isub, istk, :, :])  # , vmin=-0.6, vmax=0.6)
         plt.colorbar()
 
 plt.figure('Distance {} zonesn'.format(nzones))
@@ -255,7 +271,7 @@ for izone in range(nzones):
     plt.ylabel('Distance')
     plt.legend(loc='best', fontsize='x-small')
 
-dim =  3 * nf_recon
+dim = 3 * nf_recon
 for izone in range(nzones):
     # Complete distribution : histogram
     # amc.plot_hist(all_cov[izone], bins=50, title_prefix='Zone{} Cov'.format(izone), color='r')
@@ -288,7 +304,7 @@ for izone in range(nzones):
 # Normalization : divided by the pixel number
 plt.figure('Mean of the variances in each zone')
 for izone in range(nzones):
-    plt.plot(np.diag(np.mean(all_cov[izone], axis=2)) / (pix_per_zone[izone]), 'o', label='zone{}'.format(izone+1))
+    plt.plot(np.diag(np.mean(all_cov[izone], axis=2)) / (pix_per_zone[izone]), 'o', label='zone{}'.format(izone + 1))
     plt.xlabel('$\phi = I0, Q0, U0, I1...$')
     plt.ylabel('Mean var over pixels / Npix')
 plt.legend()

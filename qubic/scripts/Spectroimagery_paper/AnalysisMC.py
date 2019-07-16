@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 import ReadMC as rmc
 
+import qubic
 from qubic import apodize_mask
 from qubic import Xpol
 
@@ -428,6 +429,54 @@ def get_rms_covarmean(nsubvals, seenmap, allmapsout, allmeanmat):
 
     return meanmap_cov, rmsmap_cov
 
+
+def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
+    """
+    The reconstructed subbands have different widths.
+    Here, we compute the corrections you can applied to
+    the variances and covariances to take this into account.
+
+    Parameters
+    ----------
+    nf_sub : int
+        Number of input subbands
+    nf_recon : int
+        Number of reconstructed subbands
+    band : int
+        QUBIC frequency band, in GHz. 150 by default
+        Typical values: 150, 220.
+    relative_bandwidth : float
+        Ratio of the difference between the edges of the
+        frequency band over the average frequency of the band
+        Typical value: 0.25
+    Returns
+    corrections : list
+        Correction coefficients for each subband.
+    correction_mat : array of shape (3xnf_recon, 3xnf_recon)
+        Matrix containing the corrections.
+        It can be multiplied term by term to a covariance matrix.
+    -------
+
+    """
+    nb = nf_sub // nf_recon  # Number of input subbands in each reconstructed subband
+
+    _, nus_edge, nus, deltas, Delta, _ = qubic.compute_freq(band, nf_sub, relative_bandwidth)
+
+    corrections = []
+    for isub in xrange(nf_recon):
+        sum_delta_i = deltas[isub * nb: isub * nb + nb].sum()
+        corrections.append(Delta / (sum_delta_i * nf_sub))
+
+    correction_mat = np.empty((3 * nf_recon, 3 * nf_recon))
+    for i in range(3 * nf_recon):
+        for j in range(3 * nf_recon):
+            freq_i = i // nf_recon
+            freq_j = j // nf_recon
+            sum_delta_i = deltas[freq_i * nb: freq_i * nb + nb].sum()
+            sum_delta_j = deltas[freq_j * nb: freq_j * nb + nb].sum()
+            correction_mat[i, j] = Delta / (np.sqrt(sum_delta_i * sum_delta_j) * nf_sub)
+
+    return corrections, correction_mat
 
 # ============ Functions to get auto and cross spectra from maps ===========#
 def get_xpol(seenmap, ns, lmin=20, delta_ell=20, apodization_degrees=5.):

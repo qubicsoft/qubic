@@ -41,6 +41,11 @@ nf_recon = d['nf_recon'][0]
 nf_sub = d['nf_sub']
 print('nf_sub = {}, nf_recon = {}'.format(nf_sub, nf_recon))
 
+# ================= Corrections =======================
+corrections, correction_mat = amc.get_corrections(nf_sub, nf_recon)
+print('corrections : ', corrections)
+plt.imshow(correction_mat)
+
 # ================= Get maps ================
 # Get seen map (observed pixels)
 seen_map = rmc.get_seenmap(fits_noise[0])
@@ -53,7 +58,7 @@ ns = d['nside']
 real = 0
 if real >= nreals:
     raise ValueError('Invalid index of realization')
-maps_recon, maps_convo, maps_diff = rmc.get_maps(fits_noiseless[real])
+maps_recon, maps_convo, maps_diff = rmc.get_maps(fits_noise[real])
 print('Getting maps with shape : {}'.format(maps_recon.shape))
 
 # Look at the maps
@@ -84,7 +89,7 @@ print('Getting all patch realizations with shape : {}'.format(all_patch_recon.sh
 residuals = all_patch_recon - np.mean(all_patch_recon, axis=0)
 
 # Histogram of the residuals (first real, first subband)
-isub = 2
+isub = 0
 if isub >= nf_recon:
     raise ValueError('Invalid index of subband')
 
@@ -98,15 +103,15 @@ for i in xrange(3):
     data = np.ravel(residuals[real, isub, :, i])
     std = np.std(data)
     mean = np.mean(data)
-    plt.hist(data, range=[-20, 20], bins=100, label='m={0:.2f} \n $\sigma$={1:.2f}'.format(mean, std))
+    plt.hist(data, range=[-20, 20], bins=100, label='$m={0:.2f}$ \n $\sigma={1:.2f}$'.format(mean, std))
     plt.title(stokes[i] + ' real{0} subband{1}/{2}'.format(real, isub + 1, nf_recon))
-    plt.legend()
+    plt.legend(fontsize='x-small')
 
 # ================= Correlations matrices =======================
 # Correlation between pixels
 cov_pix, corr_pix = amc.get_covcorr_between_pix(residuals, verbose=True)
 
-isub = 1
+isub = 0
 if isub >= nf_recon:
     raise ValueError('Invalid index of subband')
 
@@ -114,12 +119,12 @@ plt.figure('Cov corr pix isub{}'.format(isub))
 for istk in range(3):
     plt.subplot(2, 3, istk + 1)
     plt.title('Cov matrix pix, {}, subband{}/{}'.format(stokes[istk], isub + 1, nf_recon))
-    plt.imshow(cov_pix[isub, istk, :, :], vmin=-50, vmax=50)
+    plt.imshow(cov_pix[isub, istk, :, :] * corrections[isub])#, vmin=-50, vmax=50)
     plt.colorbar()
 
     plt.subplot(2, 3, istk + 4)
     plt.title('Corr matrix pix, {}, subband{}/{}'.format(stokes[istk], isub + 1, nf_recon))
-    plt.imshow(corr_pix[isub, istk, :, :], vmin=-0.6, vmax=0.6)
+    plt.imshow(corr_pix[isub, istk, :, :])#, vmin=-0.6, vmax=0.6)
     plt.colorbar()
 
 # Compute distances associated to the correlation matrix
@@ -130,7 +135,7 @@ for isub in range(nf_recon):
 
 plt.figure('distances')
 for i in range(3):
-    plt.plot(distance[:, i], label=stokes[i])
+    plt.plot(distance[:, i], 'o', label=stokes[i])
 plt.ylabel('Distance')
 plt.xlabel('isub')
 plt.legend(loc='best')
@@ -217,7 +222,7 @@ for izone in range(nzones):
     plt.ylabel('Distance')
     plt.legend(loc='best', fontsize='x-small')
 
-dim = np.shape(all_corr[0])[0]
+dim =  3 * nf_recon
 for izone in range(nzones):
     # Complete distribution : histogram
     # amc.plot_hist(all_cov[izone], bins=50, title_prefix='Zone{} Cov'.format(izone), color='r')
@@ -254,27 +259,6 @@ for izone in range(nzones):
     plt.xlabel('$\phi = I0, Q0, U0, I1...$')
     plt.ylabel('Mean var over pixels / Npix')
 plt.legend()
-
-# ================= Correction =======================
-# Here we build a matrix that contains the corrections for the widths of each subband
-correction_mat = np.empty_like(cov[:, :, 0])
-_, nus_edge, nus, deltas, Delta, _ = qubic.compute_freq(band=150,
-                                                        Nfreq=nf_sub,
-                                                        relative_bandwidth=d['filter_relative_bandwidth'])
-print(Delta)
-print(deltas)
-plt.plot(nus, deltas, 'o')
-
-nb = nf_sub // nf_recon # Number of input subbands in each reconstructed subband
-for i in range(dim):
-    for j in range(dim):
-        freq_i = i // nf_recon
-        freq_j = j // nf_recon
-        sum_delta_i = deltas[freq_i * nb: freq_i * nb + nb].sum()
-        sum_delta_j = deltas[freq_j * nb: freq_j * nb + nb].sum()
-        correction_mat[i, j] = Delta / (np.sqrt(sum_delta_i * sum_delta_j) * nf_sub)
-
-plt.imshow(correction_mat)
 
 # ================= Noise Evolution as a function of the subband number=======================
 # This part should be rewritten (old)

@@ -46,6 +46,8 @@ corrections, correction_mat = amc.get_corrections(nf_sub, nf_recon)
 print('corrections : ', corrections)
 plt.imshow(correction_mat)
 
+apply_corrections = True
+
 # ================= Get maps ================
 # Get seen map (observed pixels)
 seen_map = rmc.get_seenmap(fits_noise[0])
@@ -111,9 +113,10 @@ for i in xrange(3):
 cov_pix, corr_pix = amc.get_covcorr_between_pix(residuals, verbose=True)
 
 # Apply correction (don't know if it is a good idea...)
-for isub in range(nf_recon):
-    cov_pix[isub,...] *= corrections[isub]
-    corr_pix[isub, ...] *= corrections[isub]
+if apply_corrections:
+    for isub in range(nf_recon):
+        cov_pix[isub,...] /= corrections[isub]
+        corr_pix[isub, ...] /= corrections[isub]
 
 isub = 0
 if isub >= nf_recon:
@@ -151,8 +154,9 @@ mean_corr = np.mean(corr, axis=2)
 mean_corr -= np.identity(3 * nf_recon) # substract identity matrix
 
 # Apply correction (don't know if it is a good idea...)
-mean_cov *= correction_mat
-mean_corr *= correction_mat
+if apply_corrections:
+    mean_cov /= correction_mat
+    mean_corr /= correction_mat
 
 plt.figure('Mean cov corr')
 plt.subplot(121)
@@ -199,6 +203,11 @@ for izone in range(nzones):
 
     # Correlation between pixels
     cov_pix, corr_pix = amc.get_covcorr_between_pix(all_zones[izone], verbose=True)
+    # Apply corrections
+    if apply_corrections:
+        for isub in range(nf_recon):
+            cov_pix[isub, ...] /= corrections[isub]
+            corr_pix[isub, ...] /= corrections[isub]
     all_cov_pix.append(cov_pix)
     all_corr_pix.append(corr_pix)
 
@@ -223,15 +232,15 @@ for izone in range(nzones):
     for istk in range(3):
         plt.subplot(4, 6, 6 * izone + istk + 1)
         plt.title('{} cov, bd{}/{}, zn{}/{}'.format(stokes[istk], isub + 1, nf_recon, izone + 1, nzones))
-        plt.imshow(all_cov_pix[izone][isub, istk, :, :], vmin=-50, vmax=50)
+        plt.imshow(all_cov_pix[izone][isub, istk, :, :])#, vmin=-50, vmax=50)
         plt.colorbar()
 
         plt.subplot(4, 6, 6 * izone + istk + 4)
         plt.title('{} corr, bd{}/{}, zn{}/{}'.format(stokes[istk], isub + 1, nf_recon, izone + 1, nzones))
-        plt.imshow(all_corr_pix[izone][isub, istk, :, :], vmin=-0.6, vmax=0.6)
+        plt.imshow(all_corr_pix[izone][isub, istk, :, :])#, vmin=-0.6, vmax=0.6)
         plt.colorbar()
 
-plt.figure('Distance {} zones'.format(nzones))
+plt.figure('Distance {} zonesn'.format(nzones))
 for izone in range(nzones):
     plt.subplot(121)
     p = plt.plot(all_dist[izone][:, 1], '+', label='Q zone{}'.format(izone + 1))

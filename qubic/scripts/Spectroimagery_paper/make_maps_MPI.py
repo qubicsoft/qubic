@@ -69,6 +69,11 @@ d.read_from_file(dictfilename)
                     tol = [5e-4, 1e-4, 5e-5, 1e-5, 5e-6] :o
 
 '''
+# Check nf_sub/nf_sub_rec is an integer
+nf_sub = d['nf_sub']
+for nf_sub_rec in d['nf_recon']:
+    if nf_sub % nf_sub_rec != 0:
+        raise ValueError('nf_sub/nf_sub_rec must be an integer.')
 
 # Save the dictionary
 if rank == 0:

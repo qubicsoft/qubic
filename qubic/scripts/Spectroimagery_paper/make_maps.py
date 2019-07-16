@@ -55,6 +55,11 @@ d.read_from_file(dictfilename)
 					tol = [5e-4, 1e-4, 5e-5, 1e-5, 5e-6] :o
 					
 '''
+# Check nf_sub/nf_sub_rec is an integer
+nf_sub = d['nf_sub']
+for nf_sub_rec in d['nf_recon']:
+    if nf_sub % nf_sub_rec !=0:
+        raise ValueError('nf_sub/nf_sub_rec must be an integer.')
 
 # Save the dictionary
 shutil.copyfile(dictfilename, out_dir + name + '.dict')
@@ -65,7 +70,7 @@ t0 = time.time()
 
 # ===== Sky Creation or Reading =====
 
-x0 = FitsArray(dictmaps + 'nf_sub={}/nf_sub={}.fits'.format(d['nf_sub'], d['nf_sub']))
+x0 = FitsArray(dictmaps + 'nf_sub={}/nf_sub={}.fits'.format(nf_sub, nf_sub))
 print('Input Map with shape:', np.shape(x0))
 
 # ==== Pointing strategy ====

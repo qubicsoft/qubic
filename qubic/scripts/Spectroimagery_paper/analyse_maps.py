@@ -107,9 +107,13 @@ for i in xrange(3):
     plt.title(stokes[i] + ' real{0} subband{1}/{2}'.format(real, isub + 1, nf_recon))
     plt.legend(fontsize='x-small')
 
-# ================= Correlations matrices =======================
-# Correlation between pixels
+# ================= Correlations matrices between pixels =======================
 cov_pix, corr_pix = amc.get_covcorr_between_pix(residuals, verbose=True)
+
+# Apply correction (don't know if it is a good idea...)
+for isub in range(nf_recon):
+    cov_pix[isub,...] *= corrections[isub]
+    corr_pix[isub, ...] *= corrections[isub]
 
 isub = 0
 if isub >= nf_recon:
@@ -119,7 +123,7 @@ plt.figure('Cov corr pix isub{}'.format(isub))
 for istk in range(3):
     plt.subplot(2, 3, istk + 1)
     plt.title('Cov matrix pix, {}, subband{}/{}'.format(stokes[istk], isub + 1, nf_recon))
-    plt.imshow(cov_pix[isub, istk, :, :] * corrections[isub])#, vmin=-50, vmax=50)
+    plt.imshow(cov_pix[isub, istk, :, :])#, vmin=-50, vmax=50)
     plt.colorbar()
 
     plt.subplot(2, 3, istk + 4)
@@ -140,8 +144,28 @@ plt.ylabel('Distance')
 plt.xlabel('isub')
 plt.legend(loc='best')
 
-# Correlations between subbands and I, Q, U
+# ================= Correlations between subbands and I, Q, U =======================
 cov, corr = amc.get_covcorr_patch(residuals, doplot=True)
+mean_cov = np.mean(cov, axis=2)
+mean_corr = np.mean(corr, axis=2)
+mean_corr -= np.identity(3 * nf_recon) # substract identity matrix
+
+# Apply correction (don't know if it is a good idea...)
+mean_cov *= correction_mat
+mean_corr *= correction_mat
+
+plt.figure('Mean cov corr')
+plt.subplot(121)
+plt.imshow(mean_cov)
+plt.title('Mean cov')
+plt.colorbar()
+
+plt.subplot(122)
+plt.imshow(mean_corr)
+plt.title('Mean corr - Id')
+plt.colorbar()
+
+# Histogram over pixels
 amc.plot_hist(cov, bins=50, title_prefix='Cov', ymax=0.1, color='r')
 amc.plot_hist(corr, bins=30, title_prefix='Corr', ymax=4., color='b')
 

@@ -1,4 +1,5 @@
 import glob
+import time
 import healpy as hp
 import numpy as np
 import matplotlib.pyplot as plt
@@ -13,12 +14,12 @@ stokes = ['I', 'Q', 'U']
 
 # ================= Get the simulation files ================
 # repository where the .fits was saved
-date = '20190704'
+date = '20190712'
 # rep_simu = './TEST/{}/'.format(date)
 rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/Noise_MCMC_201907/' + date + '/'
 
 # Simulation name
-name = 'try50reals'
+name = 'try_with_multiple'
 
 # Dictionary saved during the simulation
 d = qubic.qubicdict.qubicDict()
@@ -31,14 +32,13 @@ center = equ2gal(d['RA_center'], d['DEC_center'])
 fits_noise = np.sort(glob.glob(rep_simu + date + '_' + name + '*noiselessFalse*.fits'))
 fits_noiseless = glob.glob(rep_simu + date + '_' + name + '*noiselessTrue*.fits')
 
-#Number of noise realisations
+# Number of noise realisations
 nreals = len(fits_noise)
 print('nreals = ', nreals)
 
 # Number of subbands used during the simulation
 nf_recon = d['nf_recon'][0]
 print('nf_recon = ', nf_recon)
-
 
 # ================= Get maps ================
 # Get seen map (observed pixels)
@@ -49,10 +49,10 @@ npix = len(seen_map)
 ns = d['nside']
 
 # Get one full maps
-real = 10
+real = 0
 if real >= nreals:
     raise ValueError('Invalid index of realization')
-maps_recon, maps_convo, maps_diff = rmc.get_maps(fits_noise[real])
+maps_recon, maps_convo, maps_diff = rmc.get_maps(fits_noiseless[real])
 print('Getting maps with shape : {}'.format(maps_recon.shape))
 
 # Look at the maps
@@ -63,11 +63,11 @@ if isub >= nf_recon:
 plt.figure('Noise maps real{}'.format(real))
 for i in xrange(3):
     hp.gnomview(maps_convo[isub, :, i], rot=center, reso=9, sub=(3, 3, i + 1),
-                title='conv ' + stokes[i] + ' subband {}/{}'.format(isub+1, nf_recon))
+                title='conv ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon))
     hp.gnomview(maps_recon[isub, :, i], rot=center, reso=9, sub=(3, 3, 3 + i + 1),
-                title='recon ' + stokes[i] + ' subband {}/{}'.format(isub+1, nf_recon))
+                title='recon ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon))
     hp.gnomview(maps_diff[isub, :, i], rot=center, reso=9, sub=(3, 3, 6 + i + 1),
-                title='diff ' + stokes[i] + ' subband {}/{}'.format(isub+1, nf_recon))
+                title='diff ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon))
 
 # Get one patch
 maps_recon_cut, maps_convo_cut, maps_diff_cut = rmc.get_patch(fits_noise[0], seen_map)
@@ -87,7 +87,7 @@ isub = 2
 if isub >= nf_recon:
     raise ValueError('Invalid index of subband')
 
-real = 0
+real = 10
 if real >= nreals:
     raise ValueError('Invalid index of realization')
 
@@ -98,7 +98,7 @@ for i in xrange(3):
     std = np.std(data)
     mean = np.mean(data)
     plt.hist(data, range=[-20, 20], bins=100, label='m={0:.2f} \n $\sigma$={1:.2f}'.format(mean, std))
-    plt.title(stokes[i] + ' real{0} subband{1}/{2}'.format(real, isub+1, nf_recon))
+    plt.title(stokes[i] + ' real{0} subband{1}/{2}'.format(real, isub + 1, nf_recon))
     plt.legend()
 
 # ================= Correlations matrices =======================
@@ -111,13 +111,13 @@ if isub >= nf_recon:
 
 plt.figure('Cov corr pix isub{}'.format(isub))
 for istk in range(3):
-    plt.subplot(2,3,istk+1)
-    plt.title('Cov matrix pix, {}, subband{}/{}'.format(stokes[istk], isub+1, nf_recon))
+    plt.subplot(2, 3, istk + 1)
+    plt.title('Cov matrix pix, {}, subband{}/{}'.format(stokes[istk], isub + 1, nf_recon))
     plt.imshow(cov_pix[isub, istk, :, :], vmin=-50, vmax=50)
     plt.colorbar()
 
-    plt.subplot(2, 3, istk+4)
-    plt.title('Corr matrix pix, {}, subband{}/{}'.format(stokes[istk], isub+1, nf_recon))
+    plt.subplot(2, 3, istk + 4)
+    plt.title('Corr matrix pix, {}, subband{}/{}'.format(stokes[istk], isub + 1, nf_recon))
     plt.imshow(corr_pix[isub, istk, :, :], vmin=-0.6, vmax=0.6)
     plt.colorbar()
 
@@ -129,7 +129,7 @@ for isub in range(nf_recon):
 
 plt.figure('distances')
 for i in range(3):
-    plt.plot(distance[:,i], label=stokes[i])
+    plt.plot(distance[:, i], label=stokes[i])
 plt.ylabel('Distance')
 plt.xlabel('isub')
 plt.legend(loc='best')
@@ -144,11 +144,11 @@ nzones = 4
 residuals_zones = np.empty((nreals, nzones, nf_recon, npix_patch, 3))
 for real in range(nreals):
     if real == 0:
-        pix_per_zone, residuals_zones[real,...] = rmc.make_zones(residuals[real,...], nzones, ns, center, seen_map)
+        pix_per_zone, residuals_zones[real, ...] = rmc.make_zones(residuals[real, ...], nzones, ns, center, seen_map)
 
     else:
-        _, residuals_zones[real,...] = rmc.make_zones(residuals[real,...], nzones, ns, center, seen_map,
-                                  verbose=False, doplot=False)
+        _, residuals_zones[real, ...] = rmc.make_zones(residuals[real, ...], nzones, ns, center, seen_map,
+                                                       verbose=False, doplot=False)
 
 # ================= Statistical study over the zones ============
 # Correlation between pixels
@@ -191,30 +191,30 @@ if isub >= nf_recon:
 plt.figure('Cov corr pix isub{} {}zones'.format(isub, nzones))
 for izone in range(nzones):
     for istk in range(3):
-        plt.subplot(4, 6, 6*izone+istk+1)
-        plt.title('{}, band{}/{}, zone{}/{}'.format(stokes[istk], isub+1, nf_recon, izone+1, nzones))
+        plt.subplot(4, 6, 6 * izone + istk + 1)
+        plt.title('{} cov, bd{}/{}, zn{}/{}'.format(stokes[istk], isub + 1, nf_recon, izone + 1, nzones))
         plt.imshow(all_cov_pix[izone][isub, istk, :, :], vmin=-50, vmax=50)
         plt.colorbar()
 
-        plt.subplot(4, 6, 6*izone+istk+4)
-        plt.title('{}, band{}/{}, zone{}/{}'.format(stokes[istk], isub+1, nf_recon, izone+1, nzones))
+        plt.subplot(4, 6, 6 * izone + istk + 4)
+        plt.title('{} corr, bd{}/{}, zn{}/{}'.format(stokes[istk], isub + 1, nf_recon, izone + 1, nzones))
         plt.imshow(all_corr_pix[izone][isub, istk, :, :], vmin=-0.6, vmax=0.6)
         plt.colorbar()
 
 plt.figure('Distance {} zones'.format(nzones))
 for izone in range(nzones):
     plt.subplot(121)
-    p = plt.plot(all_dist[izone][:, 1], '+', label='Q zone{}'.format(izone+1))
-    plt.plot(all_dist[izone][:, 2], 'o', color=p[0].get_color(), label='U zone{}'.format(izone+1))
+    p = plt.plot(all_dist[izone][:, 1], '+', label='Q zone{}'.format(izone + 1))
+    plt.plot(all_dist[izone][:, 2], 'o', color=p[0].get_color(), label='U zone{}'.format(izone + 1))
     plt.xlabel('Subband index')
     plt.ylabel('Distance')
-    plt.legend()
+    plt.legend(loc='best', fontsize='x-small')
 
     plt.subplot(122)
-    plt.plot(all_dist[izone][:, 0], 's', label='I zone{}'.format(izone+1))
+    plt.plot(all_dist[izone][:, 0], 'o', label='I zone{}'.format(izone + 1))
     plt.xlabel('Subband index')
     plt.ylabel('Distance')
-    plt.legend()
+    plt.legend(loc='best', fontsize='x-small')
 
 dim = np.shape(all_corr[0])[0]
 for izone in range(nzones):
@@ -230,7 +230,7 @@ for izone in range(nzones):
     plt.colorbar()
 
     plt.subplot(222)
-    plt.imshow(np.mean(all_corr[izone] , axis=2)- np.identity(dim))
+    plt.imshow(np.mean(all_corr[izone], axis=2) - np.identity(dim))
     plt.title('Mean corr')
     plt.colorbar()
 
@@ -241,16 +241,18 @@ for izone in range(nzones):
     plt.colorbar()
 
     plt.subplot(224)
-    plt.imshow((np.std(all_corr[izone] , axis=2)- np.identity(dim))/ np.sqrt(pix_per_zone[izone]))
+    plt.imshow((np.std(all_corr[izone], axis=2) - np.identity(dim)) / np.sqrt(pix_per_zone[izone]))
     plt.title('Std corr')
     plt.colorbar()
 
+# Mean variance over pixels in each zone (diagonal of the mean cov matrix)
+# Normalization : divided by the pixel number
 plt.figure('Mean of the variances in each zone')
-# Diagonale de la matrice de cov
 for izone in range(nzones):
-    plt.plot(np.diag(np.mean(all_cov[izone], axis=2)), 'o', label=izone)
+    plt.plot(np.diag(np.mean(all_cov[izone], axis=2)) / (pix_per_zone[izone]), 'o', label='zone{}'.format(izone+1))
+    plt.xlabel('$\phi = I0, Q0, U0, I1...$')
+    plt.ylabel('Mean var over pixels / Npix')
 plt.legend()
-
 
 # ================= Correction =======================
 # Here we build a matrix that contains the corrections for the widths of each subband
@@ -265,11 +267,12 @@ plt.plot(nus, deltas, 'o')
 
 for i in range(dim):
     for j in range(dim):
-        freq_i = i / nf_recon
-        freq_j = j/nf_recon
-        sum_delta_i = deltas[freq_i * nf_sub / nf_recon: freq_i * nf_sub / nf_recon + nf_sub / nf_recon].sum()
-        sum_delta_j = deltas[freq_j * nf_sub / nf_recon: freq_j * nf_sub / nf_recon + nf_sub / nf_recon].sum()
-        correction_mat[i, j] = Delta/(np.sqrt(sum_delta_i * sum_delta_j) * nf_sub)
+        freq_i = i // nf_recon
+        freq_j = j // nf_recon
+        nb = nf_sub // nf_recon # Number of input subbands in each reconstructed subband
+        sum_delta_i = deltas[freq_i * nb: freq_i * nb + nb].sum()
+        sum_delta_j = deltas[freq_j * nb: freq_j * nb + nb].sum()
+        correction_mat[i, j] = Delta / (np.sqrt(sum_delta_i * sum_delta_j) * nf_sub)
 
 plt.imshow(correction_mat)
 

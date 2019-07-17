@@ -13,12 +13,12 @@ stokes = ['I', 'Q', 'U']
 
 # ================= Get the simulation files ================
 # repository where the .fits was saved
-date = '20190712'
+date = '20190627'
 # rep_simu = './TEST/{}/'.format(date)
-rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/Noise_MCMC_201907/' + date + '/'
+rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuMartin/' + date + '/'
 
 # Simulation name
-name = 'try_with_multiple'
+name = 'test_middle_simu'
 
 # Dictionary saved during the simulation
 d = qubic.qubicdict.qubicDict()
@@ -190,7 +190,7 @@ amc.plot_hist(cov, bins=50, title_prefix='Cov', ymax=0.1, color='r')
 amc.plot_hist(corr, bins=30, title_prefix='Corr', ymax=4., color='b')
 
 # ================= Make zones ============
-nzones = 4
+nzones = 5
 residuals_zones = np.empty((nreals, nzones, nf_recon, npix_patch, 3))
 for real in range(nreals):
     if real == 0:

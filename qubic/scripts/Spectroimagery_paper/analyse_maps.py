@@ -13,12 +13,12 @@ stokes = ['I', 'Q', 'U']
 
 # ================= Get the simulation files ================
 # repository where the .fits was saved
-date = '20190627'
+date = '20190712'
 # rep_simu = './TEST/{}/'.format(date)
-rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuMartin/' + date + '/'
+rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/Noise_MCMC_201907/' + date + '/'
 
 # Simulation name
-name = 'test_middle_simu'
+name = 'try_with_multiple'
 
 # Dictionary saved during the simulation
 d = qubic.qubicdict.qubicDict()
@@ -85,6 +85,28 @@ npix_patch = np.shape(maps_recon_cut)[1]
 all_fits, all_patch_recon, all_patch_conv, all_patch_diff = rmc.get_patch_many_files(
     rep_simu, date + '_' + name + '*noiselessFalse*.fits')
 print('Getting all patch realizations with shape : {}'.format(all_patch_recon.shape))
+
+# ================= Look at diff in zones ================
+nzones = 5
+diff_zones = np.empty((nreals, nzones, nf_recon, npix_patch, 3))
+for real in range(nreals):
+    if real == 0:
+        pix_per_zone, diff_zones[real, ...] = rmc.make_zones(all_patch_diff[real, ...], nzones, ns, center, seen_map)
+
+    else:
+        _, diff_zones[real, ...] = rmc.make_zones(all_patch_diff[real, ...], nzones, ns, center, seen_map,
+                                                       verbose=False, doplot=False)
+
+# Std over pixels and realizations in each zone
+std_diff_zones = np.std(diff_zones, axis=(0, 3))
+plt.figure('std_diff_zones')
+isub = 0
+for i in range(3):
+    plt.plot(std_diff_zones[:, isub, i], 'o', label=stokes[i])
+plt.ylabel('std over pixels and realizations')
+plt.xlabel('zone')
+plt.legend(loc='best')
+
 
 # ================== Look at residuals ===============
 residuals = all_patch_recon - np.mean(all_patch_recon, axis=0)

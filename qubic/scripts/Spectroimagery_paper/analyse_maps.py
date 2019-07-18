@@ -191,20 +191,33 @@ mean_cov = np.mean(cov, axis=2)
 mean_corr = np.mean(corr, axis=2)
 mean_corr -= np.identity(3 * nf_recon)  # substract identity matrix
 
+std_cov = np.std(cov, axis=2)
+std_corr = np.std(corr, axis=2)
+
 # Apply correction (don't know if it is a good idea...)
 if apply_corrections:
     mean_cov /= correction_mat
     mean_corr /= correction_mat
 
-plt.figure('Mean cov corr')
-plt.subplot(121)
+plt.figure('Mean Std cov corr')
+plt.subplot(221)
 plt.imshow(mean_cov)
 plt.title('Mean cov')
 plt.colorbar()
 
-plt.subplot(122)
+plt.subplot(222)
 plt.imshow(mean_corr)
 plt.title('Mean corr - Id')
+plt.colorbar()
+
+plt.subplot(223)
+plt.imshow(std_cov)
+plt.title('Std cov')
+plt.colorbar()
+
+plt.subplot(224)
+plt.imshow(std_corr)
+plt.title('Std corr')
 plt.colorbar()
 
 # Histogram over pixels
@@ -212,7 +225,7 @@ amc.plot_hist(cov, bins=50, title_prefix='Cov', ymax=0.1, color='r')
 amc.plot_hist(corr, bins=30, title_prefix='Corr', ymax=4., color='b')
 
 # ================= Make zones ============
-nzones = 5
+nzones = 4
 residuals_zones = np.empty((nreals, nzones, nf_recon, npix_patch, 3))
 for real in range(nreals):
     if real == 0:
@@ -265,17 +278,20 @@ isub = 0
 if isub >= nf_recon:
     raise ValueError('Invalid index of subband')
 
-plt.figure('Cov corr pix isub{} {}zones'.format(isub, nzones))
+plt.figure('Cov pix isub{} {}zones'.format(isub, nzones))
 for izone in range(nzones):
     for istk in range(3):
-        plt.subplot(4, 6, 6 * izone + istk + 1)
+        plt.subplot(nzones, 3, 3 * izone + istk + 1)
         plt.title('{} cov, bd{}/{}, zn{}/{}'.format(stokes[istk], isub + 1, nf_recon, izone + 1, nzones))
         plt.imshow(all_cov_pix[izone][isub, istk, :, :])  # , vmin=-50, vmax=50)
         plt.colorbar()
 
-        plt.subplot(4, 6, 6 * izone + istk + 4)
+plt.figure('Corr pix isub{} {}zones'.format(isub, nzones))
+for izone in range(nzones):
+    for istk in range(3):
+        plt.subplot(nzones, 3, 3 * izone + istk + 1)
         plt.title('{} corr, bd{}/{}, zn{}/{}'.format(stokes[istk], isub + 1, nf_recon, izone + 1, nzones))
-        plt.imshow(all_corr_pix[izone][isub, istk, :, :])  # , vmin=-0.6, vmax=0.6)
+        plt.imshow(all_corr_pix[izone][isub, istk, :, :], vmin=-0.6, vmax=0.6)
         plt.colorbar()
 
 plt.figure('Distance {} zonesn'.format(nzones))

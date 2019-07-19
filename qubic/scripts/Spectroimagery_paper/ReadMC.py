@@ -2,6 +2,7 @@ import glob
 
 import healpy as hp
 import numpy as np
+import matplotlib.pyplot as plt
 from astropy.io import fits
 
 
@@ -217,7 +218,7 @@ def pix2ang(ns, center, seenmap):
     return np.degrees(np.arccos(np.dot(v0, vpix)))
 
 
-def make_zones(patch, nzones, nside, center, seenmap, doplot=True):
+def make_zones(patch, nzones, nside, center, seenmap, verbose=True, doplot=True):
     """
     Mask a path to get different concentric zones.
 
@@ -263,15 +264,19 @@ def make_zones(patch, nzones, nside, center, seenmap, doplot=True):
 
     # Compute the numbers of pixels in each zone
     pix_per_zone = [np.count_nonzero(m[0, :, 0]) for m in allmask]
-    print('Number of pixels in each zones : {}'.format(pix_per_zone))
+    if verbose:
+        print('Number of pixels in each zones : {}'.format(pix_per_zone))
 
     # Plot the patch masked
     if doplot:
+        plt.figure('Zones')
         for i in range(nzones):
             map = np.zeros((patch.shape[0], 12 * nside ** 2, 3))
             map[:, seenmap, :] = allmaps_mask[i]
             hp.gnomview(map[0, :, 0], sub=(1, nzones, i+1),
-                        rot=center, reso=10, title='Zone {}'.format(i))
+                        rot=center, reso=10,
+                        title='Zone {}, npix = {}'.format(i, pix_per_zone[i]))
+        plt.savefig('Zones.png',format='png',dpi=100,bbox_inches='tight',figsize=[20,16])
 
     return pix_per_zone, allmaps_mask
 

@@ -288,7 +288,7 @@ def create_repeat_pointings(center, npointings, dtheta, nhwp_angles=3, date_obs=
     pp.time = np.tile(p.time, nhwp_angles)
     pp.angle_hwp = np.zeros(nrandom * nhwp_angles)
     pp.fix_az = False
-    for hwp in xrange(nhwp_angles):
+    for hwp in range(nhwp_angles):
        pp.angle_hwp[hwp*nrandom : (hwp+1)*nrandom] = np.array(np.rad2deg((hwp) * np.pi / (nhwp_angles*2)))
 
     return pp
@@ -366,7 +366,7 @@ def create_sweeping_pointings(
     angle_hwp= np.zeros(nsamples)
     ielevations = isweeps // nsweeps_per_elevation
     nelevations = ielevations[-1] + 1
-    for i in xrange(nelevations):
+    for i in range(nelevations):
         mask = ielevations == i
         elcst[mask] = np.mean(elcenter[mask])
         if fix_azimuth is not None:

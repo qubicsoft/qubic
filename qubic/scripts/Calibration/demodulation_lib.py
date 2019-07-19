@@ -1,3 +1,4 @@
+from __future__ import division, print_function
 from qubicpack import qubicpack as qp
 import fibtools as ft
 import plotters as p
@@ -55,7 +56,7 @@ def return_rms_period(period, time, azimuth, elevation, data, verbose=False):
     err_ampdata = np.zeros((nTES, len(allperiods)))
     if verbose:
         printnow('Calculating RMS per period for {} periods and {} TES'.format(len(allperiods), nTES))
-    for i in xrange(len(allperiods)):
+    for i in range(len(allperiods)):
         ok = (period_index == allperiods[i])
         azper[i] = np.mean(azimuth[ok])
         elper[i] = np.mean(elevation[ok])
@@ -65,7 +66,7 @@ def return_rms_period(period, time, azimuth, elevation, data, verbose=False):
             ampdata[0, i] = ss
             err_ampdata[0, i] = 1
         else:
-            for j in xrange(nTES):
+            for j in range(nTES):
                 mm, ss = ft.meancut(data[j, ok], 3)
                 ampdata[j, i] = ss
                 err_ampdata[j, i] = 1
@@ -125,7 +126,7 @@ def scan2ang_demod(period, indata, median=True, lowcut=None, highcut=None, verbo
     newel = np.zeros(len(allperiods))
     newsb = np.zeros((nTES, len(allperiods)))
     newdsb = np.zeros((nTES, len(allperiods)))
-    for i in xrange(len(allperiods)):
+    for i in range(len(allperiods)):
         ok = period_index == allperiods[i]
         newt[i] = np.mean(indata['t_data'][ok])
         newaz[i] = np.mean(azd[ok])
@@ -392,7 +393,7 @@ def general_demodulate(period, indata, lowcut, highcut, nbins=150, median=True, 
         sb = np.zeros((sh[0], nbins))
         dsb = np.zeros((sh[0], nbins))
         others = np.zeros((nbins, 2))
-        for i in xrange(sh[0]):
+        for i in range(sh[0]):
             if verbose: 
                 if (16*(i/16))==i: 
                     printnow('Rebinning TES {} over {}'.format(i,sh[0]))
@@ -421,7 +422,7 @@ def general_demodulate(period, indata, lowcut, highcut, nbins=150, median=True, 
             sh = [1, len(indata['data'])]
         else:
             sh = np.shape(indata['data'])
-        for i in xrange(sh[0]):
+        for i in range(sh[0]):
             errorbar(toplot['az_ang'], toplot['sb'][i, :], yerr=toplot['dsb'][i, :], fmt='.-',
                      label=label + ' {}'.format(i))
         legend()
@@ -465,23 +466,23 @@ def read_data_azel_src(dirfile, AsicNum, TESNum=None, calsource_dir='/qubic/Data
     glob_pattern = data_time.strftime('calsource_%Y%m%dT%H%M*.dat')
     bla = glob.glob(calsource_dir + glob_pattern)
     if bla == []:
-        if verbose: print 'No CalSource file found corresponding to this dataset: ' + dirfile
+        if verbose: print('No CalSource file found corresponding to this dataset: ' + dirfile)
         t_src = -1
         data_src = -1
     else:
-        if verbose: print 'Found Calibration Source date in: ' + bla[0]
+        if verbose: print('Found Calibration Source date in: ' + bla[0]
         t_src, data_src = read_cal_src_data(bla)
 
     #### Now return everything
     if verbose:
-        print 'Returning:'
-        print '   t_data  : ', array_info(t_data)
-        print '   data    : ', array_info(data)
-        print '   t_azel  : ', array_info(t_azel)
-        print '   az      : ', array_info(az)
-        print '   el      : ', array_info(el)
-        print '   t_src   : ', array_info(t_src)
-        print '   data_src: ', array_info(data_src)
+        print('Returning:')
+        print('   t_data  : ', array_info(t_data))
+        print('   data    : ', array_info(data))
+        print('   t_azel  : ', array_info(t_azel))
+        print('   az      : ', array_info(az))
+        print('   el      : ', array_info(el))
+        print('   t_src   : ', array_info(t_src))
+        print('   data_src: ', array_info(data_src))
 
     retval = {}
     retval['t_data'] = t_data
@@ -539,7 +540,7 @@ def vec_interp(x, xin, yin):
     sh = np.shape(yin)
     nvec = sh[0]
     yout = np.zeros_like(yin)
-    for i in xrange(nvec):
+    for i in range(nvec):
         yout[i, :] = np.interp(x, xin, yin[i, :])
     return yout
 
@@ -548,11 +549,11 @@ def bin_image_elscans(x, y, data, xr, nx, TESIndex):
     ny = len(y)
     mapsum = np.zeros((nx, ny))
     mapcount = np.zeros((nx, ny))
-    for i in xrange(ny):
+    for i in range(ny):
         thex = x[i]
         dd = data[i] - np.mean(data[i], axis=0)
         idx = ((thex - xr[0]) / (xr[1] - xr[0]) * nx).astype(int)
-        for j in xrange(len(thex)):
+        for j in range(len(thex)):
             if ((idx[j] >= 0) & (idx[j] < nx)):
                 mapsum[idx[j], i] += dd[TESIndex, j]
                 mapcount[idx[j], i] += 1.
@@ -570,7 +571,7 @@ def scan2hpmap(ns, azdeg, eldeg, data):
     coadd = np.zeros(12 * ns ** 2)
     count = np.zeros(12 * ns ** 2)
     ip = hp.ang2pix(ns, np.pi / 2 - np.radians(eldeg), np.radians(azdeg))
-    for i in xrange(len(azdeg)):
+    for i in range(len(azdeg)):
         coadd[ip[i]] += data[i]
         count[ip[i]] += 1
     ok = count != 0
@@ -597,8 +598,8 @@ def get_lines(lines, directory):
     nn = len(lines)
     hpmaps = np.zeros((nn, 4, 12*256**2))
     nums = np.zeros((nn, 4),dtype=int)
-    for l in xrange(nn):
-        for i in xrange(4):
+    for l in range(nn):
+        for i in range(4):
             if lines[l] < 33:
                 nums[l,i] = int(lines[l]+32*i)
             else:
@@ -610,8 +611,8 @@ def get_lines(lines, directory):
 def show_lines(maps, nums, min=None, max=None):
     sh = np.shape(maps)
     nl = sh[0]
-    for l in xrange(nl):
-        for i in xrange(4):
+    for l in range(nl):
+        for i in range(4):
             hp.gnomview(maps[l,i,:], reso=10, min=min, max=max, sub=(nl, 4, l*4+i+1), title=nums[l,i])
     tight_layout()
 
@@ -729,7 +730,7 @@ def get_spectral_response(name, freqs, allmm, allss, nsig=3, method='demod', TES
     allsnorm = np.zeros((256, len(freqs)))
     infilter = (freqs >= 124) & (freqs <= 182)
     outfilter =  ~infilter
-    for tesindex in xrange(256):
+    for tesindex in range(256):
         baseline = np.mean(allmm[tesindex,outfilter])
         integ = np.sum(allmm[tesindex, infilter]-baseline)
         allfnorm[tesindex,:] = (allmm[tesindex,:]-baseline)/integ
@@ -746,10 +747,10 @@ def get_spectral_response(name, freqs, allmm, allss, nsig=3, method='demod', TES
         mr, sr = ft.meancut(discrim,3)
         threshold = mr+nsig*sr
         ok = (discrim > threshold)
-        print 'Spectral Response calculated over {} TES'.format(ok.sum())
+        print('Spectral Response calculated over {} TES'.format(ok.sum()))
         filtershape = np.zeros(len(freqs))
         errfiltershape = np.zeros(len(freqs))
-        for i in xrange(len(freqs)):
+        for i in range(len(freqs)):
             filtershape[i], errfiltershape[i] = ft.meancut(allfnorm[ok,i],2)
         #errfiltershape /= np.sqrt(ok.sum())
         # Then remove the smallest value in order to avoid negative values
@@ -783,7 +784,7 @@ def qubic_sb_model(x, pars, return_peaks=False):
     sinang = np.sin(np.radians(angle))
     rotmat = np.array([[cosang, -sinang],[sinang, cosang]])
     newxxyy = []
-    for i in xrange(npeaks_tot):
+    for i in range(npeaks_tot):
         thexxyy = np.dot(rotmat, xxyy[:,i])
         newxxyy.append(thexxyy)
     newxxyy =  np.array(newxxyy).T
@@ -795,7 +796,7 @@ def qubic_sb_model(x, pars, return_peaks=False):
     newxxyy[1,:] += yc
     
     themap = np.zeros_like(x2d)
-    for i in xrange(npeaks_tot):
+    for i in range(npeaks_tot):
         amps[i] = ampgauss * np.exp(-0.5 * ((xcgauss-newxxyy[0,i])**2 + (ycgauss-newxxyy[1,i])**2)/(fwhmgauss/2.35)**2)
         themap += amps[i]*np.exp(-((x2d-newxxyy[0,i])**2 +(y2d-newxxyy[1,i])**2)/(2*(fwhmpeaks/2.35)**2) )
 
@@ -835,8 +836,8 @@ def fit_sb(TESNum, dirfiles, scaling=140e3, newsize=70, dmax = 5., az_center=0.,
     mask = (np.sqrt((az2d-az_center)**2+(el2d-el_center)**2) < distance_max).astype(int)
     wmax = np.where((flatmap*mask) == np.max(flatmap*mask))
     maxval = flatmap[wmax][0]
-    print 'Maximum of map is {0:5.2g} and was found at: az={1:5.2f}, el={2:5.2f}'.format(maxval,
-                                                                                         az2d[wmax][0], el2d[wmax][0])
+    print('Maximum of map is {0:5.2g} and was found at: az={1:5.2f}, el={2:5.2f}'.format(maxval,
+                                                                                         az2d[wmax][0], el2d[wmax][0]))
 
 
     ### Now fit all parameters
@@ -862,14 +863,14 @@ def fit_sb(TESNum, dirfiles, scaling=140e3, newsize=70, dmax = 5., az_center=0.,
         rc('figure',figsize=(18,4))
         parfit = fit[1]
         sh = np.shape(newxxyy)
-        print sh
+        print(sh)
         subplot(1,2,1)
         imshow(flatmap/scaling, extent=[np.min(az)*np.cos(np.radians(50)), 
                                              np.max(az)*np.cos(np.radians(50)), 
                                              np.min(el), np.max(el)],
               vmin=vmin, vmax=vmax)
         colorbar()
-        for i in xrange(sh[1]):
+        for i in range(sh[1]):
             ax=plot(newxxyy[0,i], newxxyy[1,i], 'r.')
         title('Input Map - TES #{}'.format(TESNum))
         xlabel('Angle in Az direction [deg.]')
@@ -929,7 +930,7 @@ def qubic_sb_model_asym(x, pars, return_peaks=False):
     sinang = np.sin(np.radians(angle))
     rotmat = np.array([[cosang, -sinang],[sinang, cosang]])
     newxxyy = []
-    for i in xrange(npeaks_tot):
+    for i in range(npeaks_tot):
         thexxyy = np.dot(rotmat, xxyy[:,i])
         newxxyy.append(thexxyy)
     newxxyy =  np.array(newxxyy).T
@@ -941,7 +942,7 @@ def qubic_sb_model_asym(x, pars, return_peaks=False):
     newxxyy[1,:] += yc
     
     themap = np.zeros_like(x2d)
-    for i in xrange(npeaks_tot):
+    for i in range(npeaks_tot):
         amps[i] = ampgauss * np.exp(-0.5 * ((xcgauss-newxxyy[0,i])**2 + (ycgauss-newxxyy[1,i])**2)/(fwhmgauss/2.35)**2)
         themap += amps[i] * mygauss2d(x2d, y2d, newxxyy[:,i], fwhmxpeaks[i]/2.35, fwhmypeaks[i]/2.35, rhopeaks[i])
 
@@ -976,8 +977,8 @@ def fit_sb_asym(TESNum, dirfiles, scaling=140e3, newsize=70, dmax = 5., az_cente
     mask = (np.sqrt((az2d-az_center)**2+(el2d-el_center)**2) < distance_max).astype(int)
     wmax = np.where((flatmap*mask) == np.max(flatmap*mask))
     maxval = flatmap[wmax][0]
-    print 'Maximum of map is {0:5.2g} and was found at: az={1:5.2f}, el={2:5.2f}'.format(maxval,
-                                                                                         az2d[wmax][0], el2d[wmax][0])
+    print('Maximum of map is {0:5.2g} and was found at: az={1:5.2f}, el={2:5.2f}'.format(maxval,
+                                                                                         az2d[wmax][0], el2d[wmax][0]))
 
 
     ### Now fit all parameters
@@ -997,9 +998,9 @@ def fit_sb_asym(TESNum, dirfiles, scaling=140e3, newsize=70, dmax = 5., az_cente
             [-3,3],
             [47., 53],
             [10., 16.]]
-    for i in xrange(9): rng.append([0.5, 1.5])
-    for i in xrange(9): rng.append([0.5, 1.5])
-    for i in xrange(9): rng.append([-1, 1])
+    for i in range(9): rng.append([0.5, 1.5])
+    for i in range(9): rng.append([0.5, 1.5])
+    for i in range(9): rng.append([-1, 1])
 
     fit = ft.do_minuit(x, np.ravel(flatmap/scaling), np.ones_like(np.ravel(flatmap)), parsinit, 
                        functname=flattened_qubic_sb_model_asym, chi2=ft.MyChi2_nocov, rangepars=rng,
@@ -1010,13 +1011,13 @@ def fit_sb_asym(TESNum, dirfiles, scaling=140e3, newsize=70, dmax = 5., az_cente
         rc('figure',figsize=(18,4))
         parfit = fit[1]
         sh = np.shape(newxxyy)
-        print sh
+        print(sh)
         subplot(1,2,1)
         imshow(flatmap/scaling, extent=[np.min(az)*np.cos(np.radians(50)), 
                                              np.max(az)*np.cos(np.radians(50)), 
                                              np.min(el), np.max(el)])
         colorbar()
-        for i in xrange(sh[1]):
+        for i in range(sh[1]):
             ax=plot(newxxyy[0,i], newxxyy[1,i], 'r.')
         title('Input Map - TES #{}'.format(TESNum))
         xlabel('Angle in Az direction [deg.]')

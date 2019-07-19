@@ -851,9 +851,11 @@ class QubicInstrument(Instrument):
         	print('vals_def: ', vals_def)
 
         ncolmax = thetas.shape[-1]
+        print(np.rad2deg(thetas), np.rad2deg(phis))
         thetaphi = _pack_vector(thetas, phis)  # (ndetectors, ncolmax, 2)
         direction = Spherical2CartesianOperator('zenith,azimuth')(thetaphi)
         e_nf = direction[:, None, :, :]
+        print('direction', np.rad2deg(direction))
         if nside > 8192:
             dtype_index = np.dtype(np.int64)
         else:

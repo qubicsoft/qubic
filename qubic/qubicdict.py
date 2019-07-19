@@ -1,9 +1,13 @@
 from __future__ import division, print_function
-import os
+import os,sys
 import string
 
 def ask_for( key ):
-    s = raw_input( "flipperDict: enter value for '%s': " % key )
+    pythonmajor = sys.version_info[0]
+    if pythonmajor==2:
+        s = raw_input( "flipperDict: enter value for '%s': " % key )
+    else:
+        s = input( "flipperDict: enter value for '%s': " % key )
     try:
         val = eval(s)
     except NameError:
@@ -42,12 +46,12 @@ class qubicDict( dict ):
             line = s[0]
             s = line.split('\\')
             if len(s) > 1:
-                old = string.join([old, s[0]])
+                old = ' '.join([old, s[0]])
                 continue
             else:
-                line = string.join([old, s[0]])
+                line = ' '.join([old, s[0]])
                 old = ''
-            for i in xrange(len(line)):
+            for i in range(len(line)):
                 if line[i]!=' ':
                     line = line[i:]
                     break

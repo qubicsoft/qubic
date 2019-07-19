@@ -118,7 +118,7 @@ class BeamGaussianRippled(BeamGaussian):
 
         h = [0.01687, 0.00404] # relative heights of the first two ripples
         add = np.zeros(out.shape)
-        for r in xrange(self.nripples):
+        for r in range(self.nripples):
             coef = -0.5 / s_ripple**2
             rh = h[r]
             m = s_peak * 4.014 + s_peak * r * 2.308

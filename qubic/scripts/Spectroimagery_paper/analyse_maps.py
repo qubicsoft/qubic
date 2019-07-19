@@ -1,3 +1,4 @@
+from __future__ import division
 import glob
 import healpy as hp
 import numpy as np
@@ -68,7 +69,7 @@ if isub >= nf_recon:
     raise ValueError('Invalid index of subband')
 
 plt.figure('Noise maps real{}'.format(real))
-for i in xrange(3):
+for i in range(3):
     hp.gnomview(maps_convo[isub, :, i], rot=center, reso=9, sub=(3, 3, i + 1),
                 title='conv ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon))
     hp.gnomview(maps_recon[isub, :, i], rot=center, reso=9, sub=(3, 3, 3 + i + 1),
@@ -121,7 +122,7 @@ if real >= nreals:
     raise ValueError('Invalid index of realization')
 
 plt.figure('Residuals isub{} real{}'.format(isub, real))
-for i in xrange(3):
+for i in range(3):
     plt.subplot(1, 3, i + 1)
     data = np.ravel(residuals[real, isub, :, i])
     std = np.std(data)
@@ -356,7 +357,7 @@ rmsmap_cov = amc.get_rms_covarmean(nsubvals, seenmap_recon, allmaps_recon, allme
 mean_rms_cov = np.sqrt(np.mean(rmsmap_cov ** 2, axis=2))
 
 plt.plot(nsubvals, np.sqrt(nsubvals), 'k', label='Optimal $\sqrt{N}$', lw=2)
-for i in xrange(3):
+for i in range(3):
     plt.plot(nsubvals, mean_rms_cov[:, i] / mean_rms_cov[0, i] * np.sqrt(nsubvals), label=stokes[i], lw=2, ls='--')
 plt.xlabel('Number of sub-frequencies')
 plt.ylabel('Relative maps RMS')

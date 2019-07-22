@@ -1,3 +1,4 @@
+%pylab#matplotlib inline
 import glob
 import healpy as hp
 import numpy as np
@@ -13,12 +14,12 @@ stokes = ['I', 'Q', 'U']
 
 # ================= Get the simulation files ================
 # repository where the .fits was saved
-date = '20190712'
+date = '20190627'
 # rep_simu = './TEST/{}/'.format(date)
-rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/Noise_MCMC_201907/' + date + '/'
+rep_simu = '/home/martin/QUBIC/qubiclouise/qubic/scripts/Spectroimagery_paper/TEST/runs/' + date + '/'
 
 # Simulation name
-name = 'try_with_multiple'
+name = 'test_middle_simu'
 
 # Dictionary saved during the simulation
 d = qubic.qubicdict.qubicDict()
@@ -45,7 +46,7 @@ corrections, correction_mat = amc.get_corrections(nf_sub, nf_recon)
 print('corrections : ', corrections)
 plt.imshow(correction_mat)
 
-apply_corrections = True
+apply_corrections = False
 
 # ================= Get maps ================
 # Get seen map (observed pixels)

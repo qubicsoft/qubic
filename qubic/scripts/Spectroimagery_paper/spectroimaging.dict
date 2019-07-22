@@ -84,7 +84,7 @@ comm=None
 weights=None
 
 ####################################### Map making #####################################
-tol=1e-4
+tol=1e-2
 nf_recon = [3,]
 maxiter=1e5
 verbose=True

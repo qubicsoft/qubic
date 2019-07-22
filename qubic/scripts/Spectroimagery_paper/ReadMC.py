@@ -265,7 +265,7 @@ def make_zones(patch, nzones, nside, center, seenmap, verbose=True, doplot=True)
     # Compute the numbers of pixels in each zone
     pix_per_zone = [np.count_nonzero(m[0, :, 0]) for m in allmask]
     if verbose:
-        print('Number of pixels in each zones : {}'.format(pix_per_zone))
+        print('Number of pixels in each zones : {}. Angles limit for each zone: {}'.format(pix_per_zone, angles_zone))
 
     # Plot the patch masked
     if doplot:

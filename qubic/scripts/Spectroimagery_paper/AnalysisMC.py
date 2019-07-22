@@ -1,3 +1,4 @@
+from __future__ import division
 import sys
 import healpy as hp
 import numpy as np
@@ -49,7 +50,7 @@ def std_profile(many_patch, nbins, nside, center, seenmap):
     # Std in each bin
     nsub = np.shape(many_patch)[1]
     std_bin = np.empty((nbins, nsub, 3))
-    for b in xrange(nbins):
+    for b in range(nbins):
         ok = (ang > bin_edges[b]) & (ang < bin_edges[b + 1])
         std_bin[b, :, :] = np.std(many_patch[:, :, ok, :], axis=(0, 2))
 
@@ -139,7 +140,7 @@ def get_covcorr_patch(patch, doplot=False):
     cov = np.zeros((dim, dim, npix))
     corr = np.zeros((dim, dim, npix))
 
-    for ipix in xrange(npix):
+    for ipix in range(npix):
         mat = get_covcorr1pix(patch, ipix)
         cov[:, :, ipix] = mat[0][:, :]
         corr[:, :, ipix] = mat[1][:, :]
@@ -184,16 +185,17 @@ def plot_hist(mat_npix, bins, title_prefix, ymax=0.5, color='b'):
     min = np.min(mat_npix)
     max = np.max(mat_npix)
 
-    plt.figure(title_prefix + ' Hist over pix for each matrix element', figsize=(10, 10))
-    for iterm in xrange(dim):
-        for jterm in xrange(dim):
+    ttl = title_prefix + ' Hist over pix for each matrix element'
+    plt.figure(ttl, figsize=(10, 10))
+    for iterm in range(dim):
+        for jterm in range(dim):
             idx = dim * iterm + jterm + 1
 
             mean = np.mean(mat_npix[iterm, jterm, :])
             std = np.std(mat_npix[iterm, jterm, :])
 
             plt.subplot(dim, dim, idx)
-            plt.hist(mat_npix[iterm, jterm, :], color=color, normed=True,
+            plt.hist(mat_npix[iterm, jterm, :], color=color, density=True,
                      bins=bins, label='m={0:.2f} \n $\sigma$={1:.2f}'.format(mean, std))
             # no yticks for historgram in middle
             if idx % dim != 1:
@@ -286,8 +288,8 @@ def cov2corr(mat):
     """
     newmat = mat.copy()
     sh = np.shape(mat)
-    for i in xrange(sh[0]):
-        for j in xrange(sh[1]):
+    for i in range(sh[0]):
+        for j in range(sh[1]):
             newmat[i, j] = mat[i, j] / np.sqrt(mat[i, i] * mat[j, j])
     return newmat
 
@@ -311,20 +313,20 @@ def covariance_IQU_subbands(allmaps):
 
     """
     allmean, allcov = [], []
-    for isub in xrange(len(allmaps)):
+    for isub in range(len(allmaps)):
         sh = allmaps[isub].shape
         nsub = sh[1]  # Number of subbands
 
         mean = np.zeros(3 * nsub)
         cov = np.zeros((3 * nsub, 3 * nsub))
 
-        for iqu in xrange(3):
-            for band in xrange(nsub):
+        for iqu in range(3):
+            for band in range(nsub):
                 i = 3 * band + iqu
                 map_i = allmaps[isub][:, band, :, iqu]
                 mean[i] = np.mean(map_i)
-                for iqu2 in xrange(3):
-                    for band2 in xrange(nsub):
+                for iqu2 in range(3):
+                    for band2 in range(nsub):
                         j = 3 * band2 + iqu2
                         map_j = allmaps[isub][:, band2, :, iqu2]
                         cov[i, j] = np.mean((map_i - np.mean(map_i)) * (map_j - np.mean(map_j)))
@@ -355,14 +357,14 @@ allstdmat : list of arrays (nsub, nsub, 3)
     allmeanmat = []
     allstdmat = []
 
-    for isub in xrange(len(nsubvals)):
+    for isub in range(len(nsubvals)):
         print('for nsub = {}'.format(nsubvals[isub]))
         mapsout = allmapsout[isub]
         covmat_freqfreq = np.zeros((nsubvals[isub], nsubvals[isub], len(seen), 3))
         # Loop over pixels
-        for p in xrange(len(seen)):
+        for p in range(len(seen)):
             # Loop over I Q U
-            for i in xrange(3):
+            for i in range(3):
                 mat = np.cov(mapsout[:, :, p, i].T)
                 # Normalisation
                 if np.size(mat) == 1:
@@ -374,7 +376,7 @@ allstdmat : list of arrays (nsub, nsub, 3)
         # Average and std over pixels
         meanmat = np.zeros((nsubvals[isub], nsubvals[isub], 3))
         stdmat = np.zeros((nsubvals[isub], nsubvals[isub], 3))
-        for i in xrange(3):
+        for i in range(3):
             meanmat[:, :, i] = np.mean(covmat_freqfreq[:, :, :, i], axis=2)
             stdmat[:, :, i] = np.std(covmat_freqfreq[:, :, :, i], axis=2)
 
@@ -406,21 +408,21 @@ def get_rms_covarmean(nsubvals, seenmap, allmapsout, allmeanmat):
     rmsmap_cov = np.zeros((len(nsubvals), 3, npixok)) + hp.UNSEEN
     meanmap_cov = np.zeros((len(nsubvals), 3, npixok)) + hp.UNSEEN
 
-    for isub in xrange(len(nsubvals)):
+    for isub in range(len(nsubvals)):
         print('For nsub = {}'.format(nsubvals[isub]))
         mapsout = allmapsout[isub]
         sh = mapsout.shape
         nreals = sh[0]
-        for iqu in xrange(3):
+        for iqu in range(3):
             # cov matrice freq-freq averaged over pixels
             covmat = allmeanmat[isub][:, :, iqu]
             invcovmat = np.linalg.inv(covmat)
             # Loop over pixels
-            for p in xrange(npixok):
+            for p in range(npixok):
                 mean_cov = np.zeros(nreals)
 
                 # Loop over realisations
-                for real in xrange(nreals):
+                for real in range(nreals):
                     vals = mapsout[real, :, p, iqu]
                     mean_cov[real] = get_mean_cov(vals, invcovmat)
                 # Mean and rms over realisations
@@ -463,7 +465,7 @@ def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
     _, nus_edge, nus, deltas, Delta, _ = qubic.compute_freq(band, nf_sub, relative_bandwidth)
 
     corrections = []
-    for isub in xrange(nf_recon):
+    for isub in range(nf_recon):
         sum_delta_i = deltas[isub * nb: isub * nb + nb].sum()
         corrections.append(Delta / (sum_delta_i * nf_sub))
 
@@ -512,8 +514,8 @@ def allcross_par(xpol, allmaps, silent=False, verbose=1):
     if not silent:
         print('  Doing All Autos ({}):'.format(nmaps))
     results_auto = Parallel(n_jobs=num_cores, verbose=verbose)(
-        delayed(xpol.get_spectra)(allmaps[i]) for i in xrange(nmaps))
-    for i in xrange(nmaps):
+        delayed(xpol.get_spectra)(allmaps[i]) for i in range(nmaps))
+    for i in range(nmaps):
         autos[i, :, :] = results_auto[i][1]
 
     # Cross Spectra ran in // - need to prepare indices in a global variable
@@ -521,13 +523,13 @@ def allcross_par(xpol, allmaps, silent=False, verbose=1):
         print('  Doing All Cross ({}):'.format(ncross))
     global cross_indices
     cross_indices = np.zeros((2, ncross), dtype=int)
-    for i in xrange(nmaps):
-        for j in xrange(i + 1, nmaps):
+    for i in range(nmaps):
+        for j in range(i + 1, nmaps):
             cross_indices[:, jcross] = np.array([i, j])
             jcross += 1
     results_cross = Parallel(n_jobs=num_cores, verbose=verbose)(
-        delayed(xpol.get_spectra)(allmaps[cross_indices[0, i]], allmaps[cross_indices[1, i]]) for i in xrange(ncross))
-    for i in xrange(ncross):
+        delayed(xpol.get_spectra)(allmaps[cross_indices[0, i]], allmaps[cross_indices[1, i]]) for i in range(ncross))
+    for i in range(ncross):
         cross[i, :, :] = results_cross[i][1]
 
     if not silent:
@@ -570,7 +572,7 @@ def get_maps_cl(frec, fconv=None, lmin=20, delta_ell=40, apodization_degrees=5.)
     m_cross = np.zeros((nbsub, 6, nbins))
     s_cross = np.zeros((nbsub, 6, nbins))
     fact = ell_binned * (ell_binned + 1) / 2. / np.pi
-    for isub in xrange(nbsub):
+    for isub in range(nbsub):
         m_autos[isub, :, :], s_autos[isub, :, :], m_cross[isub, :, :], s_cross[isub, :, :] = \
             allcross_par(xpol, mrec[:, isub, :, :], silent=False, verbose=0)
 

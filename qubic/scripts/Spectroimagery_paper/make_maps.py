@@ -73,6 +73,9 @@ t0 = time.time()
 x0 = FitsArray(dictmaps + 'nf_sub={}/nf_sub={}.fits'.format(nf_sub, nf_sub))
 print('Input Map with shape:', np.shape(x0))
 
+# Put I = 0
+# x0[:, :, 0] = 0.
+
 # ==== Pointing strategy ====
 
 p = qubic.get_pointing(d)

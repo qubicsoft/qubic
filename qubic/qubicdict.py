@@ -46,7 +46,7 @@ class qubicDict( dict ):
             else:
                 line = string.join([old, s[0]])
                 old = ''
-            for i in xrange(len(line)):
+            for i in range(len(line)):
                 if line[i]!=' ':
                     line = line[i:]
                     break

@@ -73,6 +73,15 @@ t0 = time.time()
 x0 = FitsArray(dictmaps + 'nf_sub={}/nf_sub={}.fits'.format(nf_sub, nf_sub))
 print('Input Map with shape:', np.shape(x0))
 
+
+if x0.shape[1] % (12*d['nside']**2) == 0:
+    print('Good size')
+else:
+    y0 = np.ones((d['nf_sub'], 12*d['nside']**2,3) )
+    for i in range(d['nf_sub']):
+        for j in range(3):
+            y0[i,:,j] = hp.ud_grade(x0[i,:,j], d['nside'])
+
 # Put I = 0
 # x0[:, :, 0] = 0.
 

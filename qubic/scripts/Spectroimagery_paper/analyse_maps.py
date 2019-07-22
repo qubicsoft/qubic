@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 %pylab#matplotlib inline
+=======
+from __future__ import division
+>>>>>>> d2eaf21f34c8548808b7ac9e1df718b4534b60f0
 import glob
 import healpy as hp
 import numpy as np
@@ -69,7 +73,7 @@ if isub >= nf_recon:
     raise ValueError('Invalid index of subband')
 
 plt.figure('Noise maps real{}'.format(real))
-for i in xrange(3):
+for i in range(3):
     hp.gnomview(maps_convo[isub, :, i], rot=center, reso=9, sub=(3, 3, i + 1),
                 title='conv ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon))
     hp.gnomview(maps_recon[isub, :, i], rot=center, reso=9, sub=(3, 3, 3 + i + 1),
@@ -87,6 +91,28 @@ all_fits, all_patch_recon, all_patch_conv, all_patch_diff = rmc.get_patch_many_f
     rep_simu, date + '_' + name + '*noiselessFalse*.fits')
 print('Getting all patch realizations with shape : {}'.format(all_patch_recon.shape))
 
+# ================= Look at diff in zones ================
+nzones = 5
+diff_zones = np.empty((nreals, nzones, nf_recon, npix_patch, 3))
+for real in range(nreals):
+    if real == 0:
+        pix_per_zone, diff_zones[real, ...] = rmc.make_zones(all_patch_diff[real, ...], nzones, ns, center, seen_map)
+
+    else:
+        _, diff_zones[real, ...] = rmc.make_zones(all_patch_diff[real, ...], nzones, ns, center, seen_map,
+                                                       verbose=False, doplot=False)
+
+# Std over pixels and realizations in each zone
+std_diff_zones = np.std(diff_zones, axis=(0, 3))
+plt.figure('std_diff_zones')
+isub = 0
+for i in range(3):
+    plt.plot(std_diff_zones[:, isub, i], 'o', label=stokes[i])
+plt.ylabel('std over pixels and realizations')
+plt.xlabel('zone')
+plt.legend(loc='best')
+
+
 # ================== Look at residuals ===============
 residuals = all_patch_recon - np.mean(all_patch_recon, axis=0)
 
@@ -100,7 +126,7 @@ if real >= nreals:
     raise ValueError('Invalid index of realization')
 
 plt.figure('Residuals isub{} real{}'.format(isub, real))
-for i in xrange(3):
+for i in range(3):
     plt.subplot(1, 3, i + 1)
     data = np.ravel(residuals[real, isub, :, i])
     std = np.std(data)
@@ -170,20 +196,33 @@ mean_cov = np.mean(cov, axis=2)
 mean_corr = np.mean(corr, axis=2)
 mean_corr -= np.identity(3 * nf_recon)  # substract identity matrix
 
+std_cov = np.std(cov, axis=2)
+std_corr = np.std(corr, axis=2)
+
 # Apply correction (don't know if it is a good idea...)
 if apply_corrections:
     mean_cov /= correction_mat
     mean_corr /= correction_mat
 
-plt.figure('Mean cov corr')
-plt.subplot(121)
+plt.figure('Mean Std cov corr')
+plt.subplot(221)
 plt.imshow(mean_cov)
 plt.title('Mean cov')
 plt.colorbar()
 
-plt.subplot(122)
+plt.subplot(222)
 plt.imshow(mean_corr)
 plt.title('Mean corr - Id')
+plt.colorbar()
+
+plt.subplot(223)
+plt.imshow(std_cov)
+plt.title('Std cov')
+plt.colorbar()
+
+plt.subplot(224)
+plt.imshow(std_corr)
+plt.title('Std corr')
 plt.colorbar()
 
 # Histogram over pixels
@@ -244,17 +283,20 @@ isub = 0
 if isub >= nf_recon:
     raise ValueError('Invalid index of subband')
 
-plt.figure('Cov corr pix isub{} {}zones'.format(isub, nzones))
+plt.figure('Cov pix isub{} {}zones'.format(isub, nzones))
 for izone in range(nzones):
     for istk in range(3):
-        plt.subplot(4, 6, 6 * izone + istk + 1)
+        plt.subplot(nzones, 3, 3 * izone + istk + 1)
         plt.title('{} cov, bd{}/{}, zn{}/{}'.format(stokes[istk], isub + 1, nf_recon, izone + 1, nzones))
         plt.imshow(all_cov_pix[izone][isub, istk, :, :])  # , vmin=-50, vmax=50)
         plt.colorbar()
 
-        plt.subplot(4, 6, 6 * izone + istk + 4)
+plt.figure('Corr pix isub{} {}zones'.format(isub, nzones))
+for izone in range(nzones):
+    for istk in range(3):
+        plt.subplot(nzones, 3, 3 * izone + istk + 1)
         plt.title('{} corr, bd{}/{}, zn{}/{}'.format(stokes[istk], isub + 1, nf_recon, izone + 1, nzones))
-        plt.imshow(all_corr_pix[izone][isub, istk, :, :])  # , vmin=-0.6, vmax=0.6)
+        plt.imshow(all_corr_pix[izone][isub, istk, :, :], vmin=-0.6, vmax=0.6)
         plt.colorbar()
 
 plt.figure('Distance {} zonesn'.format(nzones))
@@ -319,7 +361,7 @@ rmsmap_cov = amc.get_rms_covarmean(nsubvals, seenmap_recon, allmaps_recon, allme
 mean_rms_cov = np.sqrt(np.mean(rmsmap_cov ** 2, axis=2))
 
 plt.plot(nsubvals, np.sqrt(nsubvals), 'k', label='Optimal $\sqrt{N}$', lw=2)
-for i in xrange(3):
+for i in range(3):
     plt.plot(nsubvals, mean_rms_cov[:, i] / mean_rms_cov[0, i] * np.sqrt(nsubvals), label=stokes[i], lw=2, ls='--')
 plt.xlabel('Number of sub-frequencies')
 plt.ylabel('Relative maps RMS')

@@ -1,3 +1,5 @@
+from __future__ import division
+
 import glob
 import healpy as hp
 from matplotlib.pyplot import *
@@ -10,8 +12,8 @@ from qubicpack.utilities import ASIC_index
 
 import qubic
 
-
 __all__ = ['SelfCalibration']
+
 
 class SelfCalibration:
     """
@@ -38,7 +40,7 @@ class SelfCalibration:
         if len(self.baseline) != 2:
             raise ValueError('The baseline should contain 2 horns.')
         for i in self.baseline:
-            if i<1 or i>64:
+            if i < 1 or i > 64:
                 raise ValueError('Horns indices must be in [1, 64].')
         for i in self.dead_switches:
             if i < 1 or i > 64:
@@ -193,7 +195,7 @@ class SelfCalibration:
             The source zenith angle [rad].
         phi : array-like of shape (#pointings,)
             The source azimuthal angle [rad].
-        irradiance : array-like
+        spectral_irradiance : array-like
             The source spectral_irradiance [W/m^2/Hz].
 
         Returns
@@ -291,9 +293,9 @@ class SelfCalibration:
                 raise ValueError('The switch indices must be between 1 and 64 ')
 
             # Phase calculation
-            horn_x = q.horn.center[swi-1, 0]
-            horn_y = q.horn.center[swi-1, 1]
-            d = np.sqrt(horn_x**2 + horn_y**2) # distance between the horn and the center
+            horn_x = q.horn.center[swi - 1, 0]
+            horn_y = q.horn.center[swi - 1, 1]
+            d = np.sqrt(horn_x ** 2 + horn_y ** 2)  # distance between the horn and the center
             phi = - 2 * np.pi / 3e8 * freq_source * 1e9 * d * np.sin(np.deg2rad(theta_source))
 
             data = pd.read_csv(files[swi - 1], sep='\t', skiprows=0)
@@ -515,9 +517,10 @@ class SelfCalibration:
         field = q._get_response(theta, phi, spectral_irradiance, position, q.detector.area,
                                 q.filter.nu, q.horn, q.primary_beam, q.secondary_beam)
         power = np.reshape(np.abs(field) ** 2, (reso, reso, nptg))
-        power = np.fliplr(power) # There is a symmetry bug, need to flip it
+        power = np.fliplr(power)  # There is a symmetry bug, need to flip it
 
         return power
+
 
 # ============= JC functions old
 def tes2imgpix(tesnum, extra_args=None):
@@ -531,7 +534,7 @@ def tes2imgpix(tesnum, extra_args=None):
         a2 = extra_args[1]
 
     ij = np.zeros((len(tesnum), 2))
-    for i in xrange(len(tesnum)):
+    for i in range(len(tesnum)):
         if i < 128:
             pixnum = a1.tes2pix(tesnum[i])
             ww = np.where(a1.pix_grid == pixnum)

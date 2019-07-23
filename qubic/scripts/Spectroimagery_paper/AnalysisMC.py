@@ -55,7 +55,7 @@ def std_profile(many_patch, nbins, nside, center, seenmap):
         std_bin[b, :, :] = np.std(many_patch[:, :, ok, :], axis=(0, 2))
 
     # Interpolation to get a profile
-    fit = interpolate.interp1d(bin_centers, std_bin, axis=0, kind='quadratic', fill_value='extrapolate' )
+    fit = interpolate.interp1d(bin_centers, std_bin, axis=0, kind='linear', fill_value='extrapolate' )
     std_profile = fit(ang)
 
     return bin_centers, ang, std_bin, std_profile

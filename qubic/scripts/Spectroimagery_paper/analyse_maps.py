@@ -1,8 +1,5 @@
-<<<<<<< HEAD
-%pylab#matplotlib inline
-=======
+%pylab
 from __future__ import division
->>>>>>> d2eaf21f34c8548808b7ac9e1df718b4534b60f0
 import glob
 import healpy as hp
 import numpy as np

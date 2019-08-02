@@ -51,7 +51,7 @@ apply_corrections = False
 
 # ================= Get maps ================
 # Get seen map (observed pixels)
-seen_map = rmc.get_seenmap(fits_noise[0])
+seen_map = rmc.get_seenmap(fits_noiseless[0])
 
 # Number of pixels and nside
 npix = len(seen_map)
@@ -118,7 +118,7 @@ isub = 0
 if isub >= nf_recon:
     raise ValueError('Invalid index of subband')
 
-real = 10
+real = 0
 if real >= nreals:
     raise ValueError('Invalid index of realization')
 

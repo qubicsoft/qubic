@@ -219,7 +219,7 @@ def pix2ang(ns, center, seenmap):
     return np.degrees(np.arccos(np.dot(v0, vpix)))
 
 
-def make_zones(patch, nzones, nside, center, seenmap, verbose=True, doplot=True):
+def make_zones(patch, nzones, nside, center, seenmap, angle = False, verbose=True, doplot=True):
     """
     Mask a path to get different concentric zones.
 
@@ -250,19 +250,36 @@ def make_zones(patch, nzones, nside, center, seenmap, verbose=True, doplot=True)
     ang = pix2ang(nside, center, seenmap)
 
     # Angles at the border of each zone
-    angles_zone = np.linspace(0, np.max(ang), nzones + 1)[1:]
+    if not angle:
+        angles_zone = np.linspace(0, np.max(ang), nzones + 1)[1:]
+    elif angle:
+        angles_zone = np.array([4., np.max(ang)])
+    
+    angles_zone = np.insert(angles_zone, 0, 0.)
 
     # Make a list with the masks
     allmask = [np.zeros_like(patch) for _ in range(nzones)]
     for pix in range(npixok):
-        for a, angle in enumerate(angles_zone):
+        for a, angle in enumerate(angles_zone[1:]):
             if ang[pix] <= angle:
-                allmask[a][:, pix, :] = 1.
+                allmask[a][:, pix, :] = 1. 
                 break
+    #for a, angle in enumerate(angles_zone[1:]):
+    #    #print(a,angle)
+    #    if a == 0:
+    #        mask0 = np.where(ang < angle)
+    #        maski = mask0[0]
+    #    else:
+    #        mask0 = np.where(ang < angles_zone[a-1])
+    #        if mask0[0].size == 0:
+    #            mask0 = np.array([True])
+    #        mask1 = np.where(ang > angles_zone[a])
+    #        maski = mask0*mask1
+    #    allmask[a][:, maski, :] = 1.
 
     # Apply the masks on the patch
     allmaps_mask = allmask * patch
-
+    #print('allmaps_maks',np.shape(allmaps_mask))
     # Compute the numbers of pixels in each zone
     pix_per_zone = [np.count_nonzero(m[0, :, 0]) for m in allmask]
     if verbose:
@@ -270,13 +287,14 @@ def make_zones(patch, nzones, nside, center, seenmap, verbose=True, doplot=True)
 
     # Plot the patch masked
     if doplot:
+        istokes = 0
         plt.figure('Zones')
         for i in range(nzones):
             map = np.zeros((patch.shape[0], 12 * nside ** 2, 3))
             map[:, seenmap, :] = allmaps_mask[i]
-            hp.gnomview(map[0, :, 0], sub=(1, nzones, i+1),
+            map[:, ~seenmap, :] = hp.UNSEEN
+            hp.gnomview(map[0, :, istokes], sub=(1, nzones, i+1),
                         rot=center, reso=10,
-                        title='Zone {}, npix = {}'.format(i, pix_per_zone[i]))
-
+                        title='Zone {}, npix = {}, istokes = {}'.format(i, pix_per_zone[i], istokes))
     return pix_per_zone, allmaps_mask
 

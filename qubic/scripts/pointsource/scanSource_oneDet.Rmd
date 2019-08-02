@@ -73,7 +73,7 @@ resultDir='%s'%name
 alaImager=False
 component=0
 sel_det=True #If you want to select one detector
-TESid = 11
+TESid = 93
 #id_det=180 # Detector number to use, 180 == 93 from real detector?
 did_det={'93':180, '94':197, '95':214, '96':231}#180sim == 93real, 197sim == 94 real, 214sim == 95real, 231sim == 96real 
 oneComponent=True # = True if you want to work only for I component

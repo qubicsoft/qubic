@@ -98,58 +98,8 @@ if sel_det:
     q=select_det(q,did_det['{}'.format(TESid)])
 ```
 
-```{python active="", eval=FALSE}
-TESid=93
-d['nside']=512
-dirflat = '/home/martin/QUBIC/qubiccalibration/Data/Calib-TD/150GHz-2019-04-06/Flat/'
-filename=dirflat+'imgflat_TESNum_{}.fits'.format(TESid)
-datamap = FitsArray(filename)
-az = FitsArray(dirflat+'azimuth.fits')
-el = FitsArray(dirflat+'elevation.fits')
-
-tes93healpy = qubic.io.read_map(dirflat+'../Healpix/healpix_TESNum_{}.fits'.format(TESid))
-s = qubic.QubicScene(d)
-
-sb = q.get_synthbeam(s, 0, detpos=q.detector.center[0])
-tes93healpy =hp.ud_grade(tes93healpy, 512)
-xr=0.35*np.max(sb)
-
-figure(figsize=(12,10))
-#min=-3.61e3, max=1.39e5,
-sat = np.where(sb>xr)
-sb2=np.copy(sb)
-sb2[sat] = xr
-
-hp.gnomview(tes93healpy/np.max(tes93healpy),title='Measured @150GHz 2019-04-06 \n Healpix TES={} \n Normalized to the maximum'.format(TESid), 
-            sub=(1,2,1), reso = 10, xsize = 200, min=0,max=1,cmap='viridis')
-
-#hp.gnomview(sb/np.max(sb), rot=[0,90], xsize=200, reso=10, title='Theory - No aberrations  \n Normalized to the maximum', 
-#            sub=(1,3,2), min=0, max=1,hold=False,cmap='viridis')
-
-hp.gnomview(sb2/np.max(sb2), rot=[0,90], xsize=200, reso=10, title='Theory - No aberrations  \n Saturated and normalized to the maximum', 
-            sub=(1,2,2), min=0, max=1,hold=False,cmap='viridis')
-```
-
 ```{python}
 pp= qubic.get_pointing(d)
-#delta_el = pp.elevation[-1]-pp.elevation[0]
-#print('Delta_elevation = {}'.format(delta_el))
-```
-
-```{python active="", eval=FALSE}
-print(len(set(pp.elevation)))
-
-plt.figure(figsize=(8,12))
-plt.subplot(3,1,1)
-plt.plot(pp.time,pp.azimuth)
-plt.ylabel('Azimuth',fontsize=22)
-plt.subplot(3,1,2)
-plt.plot(pp.time,pp.elevation)
-plt.ylabel('Elevation',fontsize=22)
-plt.subplot(3,1,3)
-plt.plot(pp.time,pp.angle_hwp)
-plt.ylabel('HWP',fontsize=22)
-plt.show()
 ```
 
 ```{python}
@@ -220,15 +170,7 @@ peaks[:,0,:] = peaks[:,0,:]/np.cos(np.radians(50))
 ```
 
 ```{python}
-# Puedo utilizar este filtro para quedarme con aquellos detectores cuyo valor en amplitud 
-# es > a un threshold que defina
-    
-#plot(peaks[:,2,0], 'b-')
-#plot(peaks[:,2,0], 'r-')
-```
-
-```{python}
-tesid = 10
+tesid = 92
 plot(peaks[tesid,0,:], peaks[tesid,1,:],'ko')
 ```
 
@@ -328,56 +270,58 @@ simTOD, maps_conv_p = sima.get_observation(x0, convolution = True, noiseless=Tru
 ```
 
 ```{python}
-newmap = np.reshape(myTOD, datamap.shape)
-#invierto el TOD simulado
-simTOD[0,:] = simTOD[0,::-1]
-simmap = np.reshape(simTOD[0], datamap.shape)
-figure(figsize=(12,12))
-subplot(221)
-imshow(newmap, extent=[az.min(),az.max(), el.min(),el.max()],cmap='viridis')
-subplot(222)
-imshow(simmap*1e27, extent=[az.min(),az.max(), el.min(),el.max()], cmap='viridis')
-subplot(223)
-plot(myTOD)
-subplot(224)
-plot(simTOD[0]*1e27)
-show()
+simTOD.shape
 ```
 
 ```{python}
-# figure(figsize=(12,12))
-#plot(myTOD, 'b-', label = 'real TOD')
-#plot(1e28*simTOD[0], 'r-', alpha = 0.6, label = 'simu TOD')
-#legend()
-#cc=myq.horn.center
-#cc.shape
-#np.sqrt(np.sum((cc[0,:]-cc[1,:])**2))
+datamap = np.array(datamap)
 
-"""choose TES from peaks"""
-#print(TESid,tesid)
-peak95 = peaks[tesid]
-#print(peak95[1,:])
+displ = False
 
+if displ:
+    ## REVISAR ALGORITMOK
+    idx = 0
+    newmap = np.reshape(myTOD[idx], datamap[idx].shape)
+    #invierto el TOD simulado
+    for j,_ in enumerate(simTOD):
+        simTOD[j,:] = simTOD[j,::-1]
+    simmap = np.reshape(simTOD[idx], datamap[idx].shape)
+    figure(figsize=(12,12))
+    subplot(221)
+    imshow(newmap, extent=[az.min(),az.max(), el.min(),el.max()],cmap='viridis')
+    subplot(222)
+    imshow(simmap*1e27, extent=[az.min(),az.max(), el.min(),el.max()], cmap='viridis')
+    subplot(223)
+    plot(myTOD)
+    subplot(224)
+    plot(simTOD[0]*1e27)
+    show()
+```
+
+```{python}
+# I have 10 detectors more than in simulated TOD...
+print(simTOD.shape, myTOD.shape)
 ```
 
 ```{python}
 """To find the locations of the peaks in the TOD space"""
+
 az2dravel = az2d.ravel()[::-1]
 el2dravel = el2d.ravel()[::-1]
 
 locpeak_tod = []
+azloc = np.zeros()
 print('====')
-for i in xrange(0,len(peak95[0])):
-
-    azloc = np.where(abs(az2dravel-peak95[0,i]) < 0.12 )
-    elloc = np.where(abs(el2dravel-peak95[1,i]) < 0.12 )
-
-    az1=az2dravel[azloc]
-    el1=el2dravel[elloc]
+for ipeak in peaks:
+    for i in xrange(0,len(ipeak[0])):
+        azloc = np.where(abs(az2dravel-ipeak[0,i]) < 0.12 )
+        elloc = np.where(abs(el2dravel-ipeak[1,i]) < 0.12 )
+        az1 = az2dravel[azloc]
+        el1 = el2dravel[elloc]
     
-    for each in azloc[0]:
-        if each in elloc[0]:
-            locpeak_tod.append(each)
+        for each in azloc[0]:
+            if each in elloc[0]:
+                locpeak_tod.append(each)
         
 print('====')
 

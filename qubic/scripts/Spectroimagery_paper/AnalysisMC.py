@@ -461,11 +461,12 @@ def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
 
     """
     nb = nf_sub // nf_recon  # Number of input subbands in each reconstructed subband
-
+    
     _, nus_edge, nus, deltas, Delta, _ = qubic.compute_freq(band, nf_sub, relative_bandwidth)
-
+    
     corrections = []
     for isub in range(nf_recon):
+        #Compute wide of the sub-band
         sum_delta_i = deltas[isub * nb: isub * nb + nb].sum()
         corrections.append(Delta / (sum_delta_i * nf_sub))
 

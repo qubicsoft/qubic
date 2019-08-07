@@ -838,17 +838,17 @@ class QubicInstrument(Instrument):
         else:
         	#thetas = np.array([[ 0.03274388,  0.15360559,  0.14135524,  0.22899572,  0.10337803,0.08309397,  0.1485351 ,  0.12075707,  0.17072379]])
         	#phis =np.array([[-2.7003387 , -2.70984288,  2.83812377, -3.10364013, -0.96946549, 0.68030373, -2.04408117,  2.06300056, -0.11496923]])
-        	thetas,phis = np.loadtxt('/home/martin/QUBIC/qubiclouise/qubic/scripts/pointsource/leb2.txt')
+        	thetas,phis = np.loadtxt('/home/martin/QUBIC/qubiclouise/qubic/scripts/pointsource/leb-inverse.txt')
         	idp=[4,7,5,8,3,1,6,2,0]
         	thetas = np.array([list(neworder(thetas,idp)),])
         	phis = np.array([list(neworder(phis,idp)),])
         	vals = 1e27*np.array([[17.14002, 9.95124, 9.61292, 1.32998 , 15.66893, 16.772,  3.33062, 7.42635,  10.25307]])#,  0.53203,1.06430]])#,  0.68101,  40.56667]])
-        	print('thetas: ', thetas)
-        	print('thetas_def: ', thetas_def)
-        	print('phis: ', phis)
-        	print('phis_def: ', phis_def)
-        	print('vals: ', vals)
-        	print('vals_def: ', vals_def)
+        	#print('thetas: ', thetas)
+        	#print('thetas_def: ', thetas_def)
+        	#print('phis: ', phis)
+        	#print('phis_def: ', phis_def)
+        	#print('vals: ', vals)
+        	#print('vals_def: ', vals_def)
 
         ncolmax = thetas.shape[-1]
         print(np.rad2deg(thetas), np.rad2deg(phis))
@@ -868,7 +868,7 @@ class QubicInstrument(Instrument):
         nscene = len(scene)
         nscenetot = product(scene.shape[:scene.ndim])
         s = cls((ndetectors * ntimes * ndims, nscene * ndims), ncolmax=ncolmax,
-                dtype=synthbeam.dtype, dtype_index=dtype_index,
+                    dtype=synthbeam.dtype, dtype_index=dtype_index,
                 verbose=verbose)
 
         index = s.data.index.reshape((ndetectors, ntimes, ncolmax))

@@ -1,5 +1,5 @@
-%pylab
 from __future__ import division
+%pylab
 import glob
 import healpy as hp
 import numpy as np
@@ -12,6 +12,7 @@ import qubic
 from qubic import equ2gal
 
 stokes = ['I', 'Q', 'U']
+
 
 # ================= Get the simulation files ================
 # repository where the .fits was saved

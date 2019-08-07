@@ -55,7 +55,7 @@ def std_profile(many_patch, nbins, nside, center, seenmap):
         std_bin[b, :, :] = np.std(many_patch[:, :, ok, :], axis=(0, 2))
 
     # Interpolation to get a profile
-    fit = interpolate.interp1d(bin_centers, std_bin, axis=0, kind='quadratic', fill_value='extrapolate', )
+    fit = interpolate.interp1d(bin_centers, std_bin, axis=0, kind='linear', fill_value='extrapolate' )
     std_profile = fit(ang)
 
     return bin_centers, ang, std_bin, std_profile
@@ -461,11 +461,12 @@ def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
 
     """
     nb = nf_sub // nf_recon  # Number of input subbands in each reconstructed subband
-
+    
     _, nus_edge, nus, deltas, Delta, _ = qubic.compute_freq(band, nf_sub, relative_bandwidth)
-
+    
     corrections = []
     for isub in range(nf_recon):
+        #Compute wide of the sub-band
         sum_delta_i = deltas[isub * nb: isub * nb + nb].sum()
         corrections.append(Delta / (sum_delta_i * nf_sub))
 

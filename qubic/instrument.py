@@ -373,7 +373,7 @@ class QubicInstrument(Instrument):
         NEP_phot2 = np.zeros_like(P_phot)
         g = np.zeros_like(P_phot)
         names = ['CMB', 'atm']
-        for i in xrange(len(cc)):
+        for i in range(len(cc)):
             names.append(cc[i][0])
         if self.debug:
             print self.config,', central frequency:', int(nu/1e9),'+-',\
@@ -401,7 +401,7 @@ class QubicInstrument(Instrument):
         NEP_phot2[:ib2b] = NEP_phot2_nobunch[:ib2b] * (1 + P_phot[:ib2b] / \
                                                        (h * nu * g[:ib2b]))
         if self.debug:
-            for j in xrange(ib2b):
+            for j in range(ib2b):
                 print names[j], ', T=',temperatures[j],\
                     'K, P = {0:.2e} W'.format(P_phot[j].max()),\
                     ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[j]).max()) +\
@@ -853,7 +853,7 @@ class QubicInstrument(Instrument):
                 index[i] = c2h(e_ni)
 
         with pool_threading() as pool:
-            pool.map(func_thread, xrange(ndetectors))
+            pool.map(func_thread, range(ndetectors))
 
         if scene.kind == 'I':
             value = s.data.value.reshape(ndetectors, ntimes, ncolmax)
@@ -1217,9 +1217,9 @@ class QubicInstrument(Instrument):
             allx = np.linspace(xmin, xmax, detector_integrate)
             ally = np.linspace(ymin, ymax, detector_integrate)
             sb = 0
-            for i in xrange(len(allx)):
+            for i in range(len(allx)):
                 print(i,len(allx))
-                for j in xrange(len(ally)):
+                for j in range(len(ally)):
                     pos = self.detector.center
                     pos[0][0] = allx[i]
                     pos[0][1] = ally[j]
@@ -1296,7 +1296,7 @@ class QubicMultibandInstrument():
                  self.subinstruments)
         sb = np.array(sb)
         bw = np.zeros(len(self))
-        for i in xrange(len(self)):
+        for i in range(len(self)):
             bw[i] = self[i].filter.bandwidth / 1e9
             sb[i] *= bw[i]
         sb = sb.sum(axis=0) / np.sum(bw)
@@ -1304,14 +1304,14 @@ class QubicMultibandInstrument():
 
     def direct_convolution(self, scene, idet=None, theta_max=45):
         synthbeam = [q.synthbeam for q in self.subinstruments]
-        for i in xrange(len(synthbeam)):
+        for i in range(len(synthbeam)):
             synthbeam[i].kmax = 4
         sb_peaks = map(lambda i: QubicInstrument._peak_angles(scene, self[i].filter.nu, 
                                                         self[i][idet].detector.center, 
                                                         synthbeam[i], 
                                                         self[i].horn, 
                                                         self[i].primary_beam),
-                       xrange(len(self)))
+                       range(len(self)))
         def peaks_to_map(peaks):
             m = np.zeros(hp.nside2npix(scene.nside))
             m[hp.ang2pix(scene.nside, 
@@ -1320,7 +1320,7 @@ class QubicMultibandInstrument():
             return m
         sb = map(peaks_to_map, sb_peaks)
         C = [i.get_convolution_peak_operator() for i in self.subinstruments]
-        sb = [(C[i])(sb[i]) for i in xrange(len(self))]
+        sb = [(C[i])(sb[i]) for i in range(len(self))]
         sb = np.array(sb)
         sb = sb.sum(axis=0)
         return sb

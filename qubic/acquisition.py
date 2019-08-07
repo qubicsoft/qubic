@@ -610,7 +610,7 @@ class PlanckAcquisition(object):
         if not noiseless:
             obs = obs + self.C(self.get_noise())
         if len(self.scene.shape) == 2:
-            for i in xrange(self.scene.shape[1]):
+            for i in range(self.scene.shape[1]):
                 obs[~(self.mask), i] = 0.
         else:
             obs[~(self.mask)] = 0.

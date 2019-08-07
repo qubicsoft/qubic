@@ -58,7 +58,7 @@ longitude= -(66 + 28. / 60)   #ARGENTINA
 random_pointing=False   
 
 repeat_pointing=True
-npointings=100
+npointings=1500
 dtheta=4.
 nhwp_angles=3 # use only for repeat_pointing
 seed=1

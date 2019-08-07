@@ -12,14 +12,15 @@ from qubic import equ2gal
 
 stokes = ['I', 'Q', 'U']
 
+
 # ================= Get the simulation files ================
 # repository where the .fits was saved
-date = '20190712'
+date = '20190717'
 # rep_simu = './TEST/{}/'.format(date)
 rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/Noise_MCMC_201907/' + date + '/'
 
 # Simulation name
-name = 'try_with_multiple'
+name = 'noI'
 
 # Dictionary saved during the simulation
 d = qubic.qubicdict.qubicDict()
@@ -117,7 +118,7 @@ isub = 0
 if isub >= nf_recon:
     raise ValueError('Invalid index of subband')
 
-real = 10
+real = 0
 if real >= nreals:
     raise ValueError('Invalid index of realization')
 

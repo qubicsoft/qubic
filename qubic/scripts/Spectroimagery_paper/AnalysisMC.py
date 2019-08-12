@@ -61,7 +61,7 @@ def std_profile(many_patch, nbins, nside, center, seenmap):
     return bin_centers, ang, std_bin, std_profile
 
 
-def get_covcorr1pix(maps, ipix, verbose=False):
+def get_covcorr1pix(maps, ipix, verbose=False, stokesjoint = False):
     """
 
     This function return the covariance matrix for one pixel given a list of maps.
@@ -75,6 +75,11 @@ def get_covcorr1pix(maps, ipix, verbose=False):
         pixel where the covariance will be computed
     verbose : bool
         If True, print information. False by default.
+    stokesjoint: bool 
+        If True return Stokes parameter together 
+        I0,I1,..., Q0,Q1,..., U0, U1, ... . Otherwise will return
+        I0,Q0,U0,  I1,Q1,U1, ... 
+        Default: False
 
     Return
     -------
@@ -100,13 +105,24 @@ def get_covcorr1pix(maps, ipix, verbose=False):
 
     data = np.reshape(maps[:, :, ipix, :], (nreal, nfrec * 3))
 
+    if stokesjoint:
+        if nfrec == 1:
+            pass
+        elif nfrec > 1:
+            permutation = []
+            for istk in range(3):
+                for isub in range(nfrec): 
+                    permutation.append(3*isub+istk)
+        data = np.reshape(maps[:, :, ipix, :], (nreal, nfrec * 3))
+        data = data[:, permutation]
+
     cov1pix = np.cov(data, rowvar=False)
     corr1pix = np.corrcoef(data, rowvar=False)
 
     return cov1pix, corr1pix
 
 
-def get_covcorr_patch(patch, doplot=False):
+def get_covcorr_patch(patch, stokesjoint = False, doplot=False):
     """
     This function computes the covariance matrix and the correlation matrix for a given patch in the sky.
     It uses get_covcorr1pix() to compute the covariance and correlation matrix for each pixel (ipix)
@@ -118,6 +134,14 @@ def get_covcorr_patch(patch, doplot=False):
     -----------
     patch: np.array
         Sky patch observed (see get_patch_many_files() from ReadMC module)
+
+    stokesjoint: bool 
+        If True return Stokes parameter together 
+        I0,I1,..., Q0,Q1,..., U0, U1, ... . Otherwise will return
+        I0,Q0,U0,  I1,Q1,U1, ... 
+        Default: False
+
+    doplot: If True return a imshow plot of the matrix
 
     Returns:
     -----------
@@ -141,14 +165,14 @@ def get_covcorr_patch(patch, doplot=False):
     corr = np.zeros((dim, dim, npix))
 
     for ipix in range(npix):
-        mat = get_covcorr1pix(patch, ipix)
+        mat = get_covcorr1pix(patch, ipix, stokesjoint = stokesjoint)
         cov[:, :, ipix] = mat[0][:, :]
         corr[:, :, ipix] = mat[1][:, :]
 
     if doplot:
         plt.figure('Mean over pixels')
         plt.subplot(121)
-        plt.imshow(np.mean(cov, axis=2))
+        plt.imshow(np.mean(cov, axis=2), interpolation = None)
         plt.title('Mean cov')
         plt.colorbar()
 
@@ -294,7 +318,7 @@ def cov2corr(mat):
     return newmat
 
 
-def covariance_IQU_subbands(allmaps):
+def covariance_IQU_subbands(allmaps, stokesjoint = False):
     """
     Returns the mean maps, averaged over pixels and realisations and the
     covariance matrices of the maps.
@@ -303,6 +327,11 @@ def covariance_IQU_subbands(allmaps):
     ----------
     allmaps : list of arrays of shape (nreals, nsub, npix, 3)
         list of maps for each number of subband
+    
+    stokesjoint: if True return Stokes parameter together 
+        I0,I1,..., Q0,Q1,..., U0, U1, ... . Otherwise will return
+        I0,Q0,U0,  I1,Q1,U1, ... 
+        Default: False
 
     Returns
     -------
@@ -320,16 +349,30 @@ def covariance_IQU_subbands(allmaps):
         mean = np.zeros(3 * nsub)
         cov = np.zeros((3 * nsub, 3 * nsub))
 
-        for iqu in range(3):
-            for band in range(nsub):
-                i = 3 * band + iqu
-                map_i = allmaps[isub][:, band, :, iqu]
-                mean[i] = np.mean(map_i)
-                for iqu2 in range(3):
-                    for band2 in range(nsub):
-                        j = 3 * band2 + iqu2
-                        map_j = allmaps[isub][:, band2, :, iqu2]
-                        cov[i, j] = np.mean((map_i - np.mean(map_i)) * (map_j - np.mean(map_j)))
+        if not stokesjoint:
+            for iqu in range(3):
+                for band in range(nsub):
+                    i = 3 * band + iqu
+                    map_i = allmaps[:, band, :, iqu]
+                    mean[i] = np.mean(map_i)
+                    for iqu2 in range(3):
+                        for band2 in range(nsub):
+                            j = 3 * band2 + iqu2
+                            map_j = allmaps[:, band2, :, iqu2]
+                            cov[i, j] = np.mean((map_i - np.mean(map_i)) * (map_j - np.mean(map_j)))
+        
+        elif stokesjoint:
+            for iqu in range(3):
+                for band in range(nsub):
+                    i = 3 * iqu + band
+                    map_i = allmaps[:, band, :, iqu]
+                    mean[i] = np.mean(map_i)
+                    for iqu2 in range(3):
+                        for band2 in range(nsub):
+                            j = 3 * iqu2 + band2
+                            map_j = allmaps[:, band2, :, iqu2]
+                            cov[i, j] = np.mean((map_i - np.mean(map_i)) * (map_j - np.mean(map_j)))
+
         allmean.append(mean)
         allcov.append(cov)
 

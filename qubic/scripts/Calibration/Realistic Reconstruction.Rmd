@@ -1,0 +1,331 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.0
+  kernelspec:
+    display_name: Python [default]
+    language: python
+    name: python2
+---
+
+```{python}
+# %matplotlib inline
+# #%matplotlib notebook
+from matplotlib import rc
+rc('figure', figsize=(15,8))
+rc('font', size=12)
+rc('text', usetex=False)
+
+import healpy as hp
+import qubic.io
+from pysimulators import FitsArray
+import fibtools as ft
+import demodulation_lib as dl
+```
+
+```{python}
+#read xcenter, ycenter, amplitude and fwhm of the desired detector:
+peaks = np.array(FitsArray('/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/fitted_peaks.fits'))
+peaks[:,0,:] = peaks[:,0,:]/np.cos(np.radians(50))
+print(peaks.shape)
+
+directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/150GHz-2019-04-06/'
+TESNum = 93
+
+filename = directory + 'Flat/imgflat_TESNum_{}.fits'.format(TESNum)
+img = FitsArray(filename)
+az = FitsArray(directory + 'Flat/azimuth.fits')
+el = FitsArray(directory + 'Flat/elevation.fits')
+
+thecos = np.cos(np.radians(50))
+mm, ss = ft.meancut(img[img != 0], 3)
+subplot(1,2,1)
+imshow(img, 
+       extent = [np.min(az)*thecos, np.max(az)*thecos, np.min(el), np.max(el)], 
+       cmap='viridis',
+       vmin = -3*ss, vmax = 10*ss)
+plot(peaks[TESNum-1,0,:]*thecos,peaks[TESNum-1,1,:],'rX', label='Fitted')
+legend()
+
+mymap = qubic.io.read_map(directory+'/Healpix/healpix_TESNum_{}.fits'.format(TESNum))
+hp.gnomview(mymap, reso=10, sub=(1,2,2), min=-3*ss, max=10*ss,cmap='viridis')
+hp.projscatter(-peaks[TESNum-1,0,:]*thecos,peaks[TESNum-1,1,:]-50, lonlat=True, marker='X',color='r', label='Fitted')
+legend()
+```
+
+```{python}
+did_det={'93':180, '94':197, '95':214, '96':231}#180sim == 93real, 197sim == 94 real, 214sim == 95real, 231sim == 96real 
+
+
+def select_det(q,id):
+    # Select detector number id from a QubicInstrument instance q
+    # Return:
+    #     A QubicInstrument object with only detector id (insted full detector array)
+    id=[id]
+    detector_i = q.detector[id]
+    q.detector = detector_i
+    return(q)
+
+def hall_pointing(az, el, angspeed_psi, maxpsi,
+                 date_obs=None, latitude=None, longitude=None,fix_azimuth=None,random_hwp=True):
+    #This method will reproduce the pointing that is used in the hall to take the data. Will start from bottom
+    #left and will go up at fixed elevation.
+    
+    #nsamples = 2*len(az)*len(el) # commented bucause not go and back
+    nsamples = len(az)*len(el)
+    print('nsamples = ', nsamples)
+    pp = qubic.QubicSampling(nsamples,date_obs=date_obs, period=0.1, latitude=latitude,longitude=longitude)
+    
+    #Comented because we do not go and back in simulations.. 
+    #mult_el = []
+    #for eachEl in el:
+    #    mult_el.append(np.tile(eachEl, 2*len(az)))
+    # Azimuth go and back and same elevation. 
+    #az_back = az[::-1]
+    #az = list(az)
+    #az.extend(az_back)
+    #mult_az = np.tile(az, len(el))
+    #print(i,np.asarray(mult_el).ravel().shape)
+    #pp.elevation = np.asarray(mult_el).ravel()
+    #pp.azimuth = np.asarray(mult_az).ravel()
+    
+    mult_el = []
+    for eachEl in el:
+        mult_el.extend(np.tile(eachEl, len(az)))
+    mult_az = []
+    mult_az.append(np.tile(az, len(el)))
+    #print(len(mult_el))
+    pp.elevation = np.asarray(mult_el)#az2d.ravel()
+    pp.azimuth = np.asarray(mult_az[0])#el2d.ravel()
+    
+    ### scan psi as well,
+    pitch = pp.time * angspeed_psi
+    pitch = pitch % (4 * maxpsi)
+    mask = pitch > (2 * maxpsi)
+    pitch[mask] = -pitch[mask] + 4 * maxpsi
+    pitch -= maxpsi
+    
+    pp.pitch = pitch
+    
+    if random_hwp:
+        pp.angle_hwp = np.random.random_integers(0, 7, nsamples) * 11.25
+        
+    if fix_azimuth['apply']:
+        pp.fix_az=True
+        if fix_azimuth['fix_hwp']:
+            pp.angle_hwp=pp.pitch*0+ 11.25
+        if fix_azimuth['fix_pitch']:
+            pp.pitch= 0
+    else:
+        pp.fix_az=False
+
+    return pp
+    #print(pp.elevation)#, len(pp.elevation))
+```
+
+### Reconstruction with normal QUBIC instrument
+
+```{python}
+sel_det=True #If you want to select one detector
+TESid = 93
+
+# INSTRUMENT
+d = qubic.qubicdict.qubicDict()
+d.read_from_file('/Users/hamilton/Python/GitQubicMousset/qubic/scripts/pointsource/global_source_oneDet.dict')
+print(d['kind'])
+d['kind']='I'
+print(d['kind'])
+
+q = qubic.QubicInstrument(d)
+# plt.title('Detector array')
+# plt.plot(q.detector.center[did_det['93']][0],q.detector.center[did_det['93']][1], 'ko')
+# q.detector.plot()
+
+if sel_det:
+    if str(TESid) not in did_det.keys():
+        q =select_det(q,TESid)
+    else:
+        q=select_det(q,did_det['{}'.format(TESid)])
+        
+s = qubic.QubicScene(d)
+
+nu = q.filter.nu
+detcenter = q.detector.center
+synthbeam = q.synthbeam
+horn = getattr(q, 'horn', None)
+primary_beam = getattr(q, 'primary_beam', None)
+thetas, phis, vals  = q._peak_angles(s, nu, detcenter, synthbeam, horn, primary_beam)
+
+sb = q.get_synthbeam(s, 0, detpos=q.detector.center[0])
+xr=0.1*np.max(sb)
+
+
+
+hp.gnomview(sb, rot=[0,90],reso=10, min=0, max=xr,cmap='viridis', sub=(1,2,1), title='Centered at zenith')
+hp.projscatter(thetas,phis, marker='X',color='r', label='True Positions')
+legend()
+
+
+hp.gnomview(hp.ud_grade(mymap, 128), reso=10, sub=(1,2,2), min=-3*ss, max=10*ss,cmap='viridis', title='centered at (0,0)')
+hp.projscatter(-peaks[TESNum-1,0,:]*thecos,peaks[TESNum-1,1,:]-50, lonlat=True, marker='X',color='r', label='Fitted')
+legend()
+```
+
+```{python}
+hp.mollview(sb, min=0, max=xr,cmap='viridis', title='Map centered at zenith')
+hp.projscatter(thetas,phis, marker='X',color='r', label='True Positions', alpha=0.4)
+hp.projscatter(-peaks[TESNum-1,0,:]*thecos,peaks[TESNum-1,1,:]-50, lonlat=True, marker='X',color='g', label='Fitted', alpha=0.4)
+legend()
+```
+
+```{python}
+hp.mollview(hp.ud_grade(mymap, 128), min=-3*ss, max=10*ss,cmap='viridis', title='centered at (0,0)')
+hp.projscatter(-peaks[TESNum-1,0,:]*thecos,peaks[TESNum-1,1,:]-50, lonlat=True, marker='X',color='g', label='Fitted', alpha=0.4)
+legend()
+```
+
+```{python}
+plot(peaks[TESNum-1,0,:],peaks[TESNum-1,1,:],'rX')
+```
+
+```{python}
+print(np.degrees(thetas))
+print(np.degrees(phis))
+print(vals)
+
+subplot(111, projection = 'mollweide')
+for i in range(len(thetas[0])):
+    scatter(phis[0][i],np.pi/2-thetas[0][i], s=vals[0][i])
+
+```
+
+```{python}
+### Pointing
+p = hall_pointing(az, el, 0, 0, fix_azimuth=d['fix_azimuth'])
+plt.subplot(3,1,1)
+plt.plot(p.time,p.azimuth)
+plt.ylabel('Azimuth',fontsize=22)
+plt.subplot(3,1,2)
+plt.plot(p.time,p.elevation)
+plt.ylabel('Elevation',fontsize=22)
+plt.subplot(3,1,3)
+plt.plot(p.time,p.angle_hwp)
+plt.ylabel('HWP',fontsize=22)
+plt.show()
+
+```
+
+```{python}
+### In put sky: a source in the center of the pointing
+#### Input map
+fix_azimuth=d['fix_azimuth']
+m0=np.zeros(12*d['nside']**2)
+x0=np.zeros((len(m0),3))
+id=hp.pixelfunc.ang2pix(d['nside'], fix_azimuth['az'], fix_azimuth['el'],lonlat=True)
+print(id)
+source=m0*0
+source[id]=1
+
+freq = 150 # GHz
+conv = 61.3474
+component=0
+source = hp.sphtfunc.smoothing(source,fwhm=np.deg2rad(0.9))#
+x0[:,component]=source
+
+if p.fix_az:
+    center = (fix_azimuth['az'],fix_azimuth['el'])
+else:
+    center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+
+hp.gnomview(x0[:,0], rot=center,reso =10,cmap='viridis', title='Input map')
+```
+
+```{python}
+sima = qubic.QubicAcquisition(q, p, s, d)
+simTOD, maps_conv_p = sima.get_observation(source, convolution = True, noiseless=True)
+
+#simTOD[0,:] = simTOD[0,::-1]
+simmap = np.reshape(simTOD[0], img.shape)
+
+subplot(1,3,1)
+imshow(dl.renorm(img), 
+       extent = [np.min(az)*thecos, np.max(az)*thecos, np.min(el), np.max(el)], 
+       cmap='viridis', vmin=-2, vmax=10)
+title('Real Data')
+subplot(1,3,2)
+imshow(dl.renorm(simmap), extent = [np.min(az)*thecos, np.max(az)*thecos, np.min(el), np.max(el)], 
+       cmap='viridis', vmin=-2, vmax=10)
+title('Sim TOD refolded')
+
+subplot(1,3,3)
+imshow(dl.renorm(img)-dl.renorm(simmap), extent = [np.min(az)*thecos, np.max(az)*thecos, np.min(el), np.max(el)], 
+       cmap='viridis', vmin=-10, vmax=10)
+title('Diff')
+
+```
+
+```{python}
+maps_recon = sima.tod2map(simTOD, d, cov=None)
+
+realTOD = np.zeros_like(simTOD)
+realTOD[0,:] = np.ravel(img)
+maps_recon2 = sima.tod2map(realTOD, d, cov=None)
+```
+
+```{python}
+hp.gnomview(x0[:,0], rot=center,reso = 10,cmap='viridis',sub=(1,3,1), title='Input map', min=0)
+hp.gnomview(maps_recon, reso=10, rot=center, cmap = 'viridis', sub=(1,3,2), title='Reconstructed form sim TOD', min=0)
+hp.gnomview(maps_recon2, reso=10, rot=center, cmap = 'viridis', sub=(1,3,3), title='Reconstructed form Real TOD',min=0)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

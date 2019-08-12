@@ -1,5 +1,4 @@
 from __future__ import division
-%pylab
 import glob
 import healpy as hp
 import numpy as np

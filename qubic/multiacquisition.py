@@ -41,7 +41,7 @@ class QubicMultibandAcquisition(QubicPolyAcquisition):
         '''
         QubicPolyAcquisition.__init__(self, multiinstrument, sampling, scene, d)
 
-        if len(nus) > 2:
+        if len(nus) > 1:
             self.bands = np.array([[nus[i], nus[i + 1]] for i in range(len(nus) - 1)])
         else:
             raise ValueError('The QubicMultibandAcquisition class is designed to '

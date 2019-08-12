@@ -224,13 +224,6 @@ myTOD = np.ravel(datamap)
 ```
 
 ```{python}
-#Simulo un nuevo TOD con el pointing de la observacion 
-#reload(qubic)
-sima = qubic.QubicAcquisition(q, p, s, d)
-simTOD, maps_conv_p = sima.get_observation(x0, convolution = True, noiseless=True)
-```
-
-```{python}
 newmap = np.reshape(myTOD, datamap.shape)
 #invierto el TOD simulado
 simTOD[0,:] = simTOD[0,::-1]
@@ -333,6 +326,10 @@ print('el peak', np.radians(peak95[1,:]))
 ```
 
 ```{python}
+print(set(np.diff(el)))
+```
+
+```{python}
 print '======= Rotation from fit points to theoretical reference system'
 print('Position of the central peak (fifth in fit array), (az,el) = {}, {}'.format(peak95[0,4],peak95[1,4]))
 
@@ -413,6 +410,20 @@ idp=[4,7,5,8,3,1,6,2,0]
 #print(neworder(newth,idp))
 #print(phis[0])
 #neworder(newth,idp)
+```
+
+```{python}
+#figure(figsize=(10,10))
+xlim(-3,-0)
+#imshow(newmap, extent=[az.min(),az.max(), el.min(),el.max()],cmap='viridis',
+#      interpolation=None)
+plot(az2d,el2d,'yo')
+plot(az2d[0,0],el2d[0,0],'yo', label='meshgrid')
+plot(peaks[tesid,0,:], peaks[tesid,1,:],'wo', label = 'fitted')
+legend(loc='best', numpoints=1, bbox_to_anchor=(0.5,1.0))
+#show()
+grid()
+#savefig('gridproblem')
 ```
 
 ```{python}

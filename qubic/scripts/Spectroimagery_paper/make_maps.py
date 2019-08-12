@@ -89,6 +89,11 @@ else:
 # Put I = 0
 # x0[:, :, 0] = 0.
 
+# Multiply Q, U maps
+# x0[:, :, 1] *= 100
+# x0[:, :, 2] *= 100
+
+
 # ==== Pointing strategy ====
 
 p = qubic.get_pointing(d)

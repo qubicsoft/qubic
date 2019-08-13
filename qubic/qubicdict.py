@@ -1,8 +1,12 @@
-import os
+from __future__ import division, print_function
+import os,sys
 import string
 
 def ask_for( key ):
-    s = raw_input( "flipperDict: enter value for '%s': " % key )
+    if sys.version_info.major==2:
+        s = raw_input( "flipperDict: enter value for '%s': " % key )
+    else:
+        s = input( "flipperDict: enter value for '%s': " % key )
     try:
         val = eval(s)
     except NameError:
@@ -22,9 +26,9 @@ class qubicDict( dict ):
     def __getitem__( self, key ):
         if key not in self:
             if self.ask:
-                print "flipperDict: parameter '%s' not found" % key
+                print("flipperDict: parameter '%s' not found" % key)
                 val = ask_for( key )
-                print "flipperDict: setting '%s' = %s" % (key,repr(val))
+                print("flipperDict: setting '%s' = %s" % (key,repr(val)))
                 dict.__setitem__( self, key, val )
             else:
                 return None
@@ -41,10 +45,10 @@ class qubicDict( dict ):
             line = s[0]
             s = line.split('\\')
             if len(s) > 1:
-                old = string.join([old, s[0]])
+                old = ' '.join([old, s[0]])
                 continue
             else:
-                line = string.join([old, s[0]])
+                line = ' '.join([old, s[0]])
                 old = ''
             for i in range(len(line)):
                 if line[i]!=' ':
@@ -53,8 +57,8 @@ class qubicDict( dict ):
             exec(line)
             s = line.split('=')
             if len(s) != 2:
-                print "Error parsing line:"
-                print line
+                print("Error parsing line:")
+                print(line)
                 continue
             key = s[0].strip()
             val = eval(s[1].strip()) # XXX:make safer

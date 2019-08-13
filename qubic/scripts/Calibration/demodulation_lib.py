@@ -1,3 +1,4 @@
+from __future__ import division, print_function
 from qubicpack import qubicpack as qp
 import fibtools as ft
 import plotters as p
@@ -55,7 +56,7 @@ def return_rms_period(period, time, azimuth, elevation, data, verbose=False):
     err_ampdata = np.zeros((nTES, len(allperiods)))
     if verbose:
         printnow('Calculating RMS per period for {} periods and {} TES'.format(len(allperiods), nTES))
-    for i in xrange(len(allperiods)):
+    for i in range(len(allperiods)):
         ok = (period_index == allperiods[i])
         azper[i] = np.mean(azimuth[ok])
         elper[i] = np.mean(elevation[ok])
@@ -65,7 +66,7 @@ def return_rms_period(period, time, azimuth, elevation, data, verbose=False):
             ampdata[0, i] = ss
             err_ampdata[0, i] = 1
         else:
-            for j in xrange(nTES):
+            for j in range(nTES):
                 mm, ss = ft.meancut(data[j, ok], 3)
                 ampdata[j, i] = ss
                 err_ampdata[j, i] = 1
@@ -125,7 +126,7 @@ def scan2ang_demod(period, indata, median=True, lowcut=None, highcut=None, verbo
     newel = np.zeros(len(allperiods))
     newsb = np.zeros((nTES, len(allperiods)))
     newdsb = np.zeros((nTES, len(allperiods)))
-    for i in xrange(len(allperiods)):
+    for i in range(len(allperiods)):
         ok = period_index == allperiods[i]
         newt[i] = np.mean(indata['t_data'][ok])
         newaz[i] = np.mean(azd[ok])
@@ -392,7 +393,7 @@ def general_demodulate(period, indata, lowcut, highcut, nbins=150, median=True, 
         sb = np.zeros((sh[0], nbins))
         dsb = np.zeros((sh[0], nbins))
         others = np.zeros((nbins, 2))
-        for i in xrange(sh[0]):
+        for i in range(sh[0]):
             if verbose: 
                 if (16*(i/16))==i: 
                     printnow('Rebinning TES {} over {}'.format(i,sh[0]))
@@ -421,7 +422,7 @@ def general_demodulate(period, indata, lowcut, highcut, nbins=150, median=True, 
             sh = [1, len(indata['data'])]
         else:
             sh = np.shape(indata['data'])
-        for i in xrange(sh[0]):
+        for i in range(sh[0]):
             errorbar(toplot['az'], toplot['sb'][i, :], yerr=toplot['dsb'][i, :], fmt='.-',
                      label=label + ' {}'.format(i))
         legend()
@@ -502,11 +503,11 @@ def bin_image_elscans(x, y, data, xr, nx, TESIndex):
     ny = len(y)
     mapsum = np.zeros((nx, ny))
     mapcount = np.zeros((nx, ny))
-    for i in xrange(ny):
+    for i in range(ny):
         thex = x[i]
         dd = data[i] - np.mean(data[i], axis=0)
         idx = ((thex - xr[0]) / (xr[1] - xr[0]) * nx).astype(int)
-        for j in xrange(len(thex)):
+        for j in range(len(thex)):
             if ((idx[j] >= 0) & (idx[j] < nx)):
                 mapsum[idx[j], i] += dd[TESIndex, j]
                 mapcount[idx[j], i] += 1.
@@ -524,7 +525,7 @@ def scan2hpmap(ns, azdeg, eldeg, data):
     coadd = np.zeros(12 * ns ** 2)
     count = np.zeros(12 * ns ** 2)
     ip = hp.ang2pix(ns, np.pi / 2 - np.radians(eldeg), np.radians(azdeg))
-    for i in xrange(len(azdeg)):
+    for i in range(len(azdeg)):
         coadd[ip[i]] += data[i]
         count[ip[i]] += 1
     ok = count != 0
@@ -551,8 +552,8 @@ def get_lines(lines, directory):
     nn = len(lines)
     hpmaps = np.zeros((nn, 4, 12*256**2))
     nums = np.zeros((nn, 4),dtype=int)
-    for l in xrange(nn):
-        for i in xrange(4):
+    for l in range(nn):
+        for i in range(4):
             if lines[l] < 33:
                 nums[l,i] = int(lines[l]+32*i)
             else:
@@ -564,8 +565,8 @@ def get_lines(lines, directory):
 def show_lines(maps, nums, min=None, max=None):
     sh = np.shape(maps)
     nl = sh[0]
-    for l in xrange(nl):
-        for i in xrange(4):
+    for l in range(nl):
+        for i in range(4):
             hp.gnomview(maps[l,i,:], reso=10, min=min, max=max, sub=(nl, 4, l*4+i+1), title=nums[l,i])
     tight_layout()
 
@@ -683,7 +684,7 @@ def get_spectral_response(name, freqs, allmm, allss, nsig=3, method='demod', TES
     allsnorm = np.zeros((256, len(freqs)))
     infilter = (freqs >= 124) & (freqs <= 182)
     outfilter =  ~infilter
-    for tesindex in xrange(256):
+    for tesindex in range(256):
         baseline = np.mean(allmm[tesindex,outfilter])
         integ = np.sum(allmm[tesindex, infilter]-baseline)
         allfnorm[tesindex,:] = (allmm[tesindex,:]-baseline)/integ
@@ -703,7 +704,7 @@ def get_spectral_response(name, freqs, allmm, allss, nsig=3, method='demod', TES
         print 'Spectral Response calculated over {} TES'.format(ok.sum())
         filtershape = np.zeros(len(freqs))
         errfiltershape = np.zeros(len(freqs))
-        for i in xrange(len(freqs)):
+        for i in range(len(freqs)):
             filtershape[i], errfiltershape[i] = ft.meancut(allfnorm[ok,i],2)
         #errfiltershape /= np.sqrt(ok.sum())
         # Then remove the smallest value in order to avoid negative values
@@ -737,7 +738,7 @@ def qubic_sb_model(x, pars, return_peaks=False):
     sinang = np.sin(np.radians(angle))
     rotmat = np.array([[cosang, -sinang],[sinang, cosang]])
     newxxyy = np.zeros((4,9))
-    for i in xrange(npeaks_tot):
+    for i in range(npeaks_tot):
         thexxyy = np.dot(rotmat, xxyy[:,i])
         newxxyy[0,i] = thexxyy[0]
         newxxyy[1,i] = thexxyy[1]
@@ -750,7 +751,7 @@ def qubic_sb_model(x, pars, return_peaks=False):
     newxxyy[1,:] += yc
     
     themap = np.zeros_like(x2d)
-    for i in xrange(npeaks_tot):
+    for i in range(npeaks_tot):
         amps[i] = ampgauss * np.exp(-0.5 * ((xcgauss-newxxyy[0,i])**2 + (ycgauss-newxxyy[1,i])**2)/(fwhmgauss/2.35)**2)
         themap += amps[i]*np.exp(-((x2d-newxxyy[0,i])**2 +(y2d-newxxyy[1,i])**2)/(2*(fwhmpeaks/2.35)**2) )
     newxxyy[2,:] = amps
@@ -826,7 +827,7 @@ def fit_sb(TESNum, dirfiles, scaling=140e3, newsize=70, dmax = 5., az_center=0.,
                                              np.min(el), np.max(el)],
               vmin=vmin, vmax=vmax)
         colorbar()
-        for i in xrange(sh[1]):
+        for i in range(sh[1]):
             ax=plot(newxxyy[0,i], newxxyy[1,i], 'r.')
         title('Input Map - TES #{}'.format(TESNum))
         xlabel('Angle in Az direction [deg.]')
@@ -886,7 +887,7 @@ def qubic_sb_model_asym(x, pars, return_peaks=False):
     sinang = np.sin(np.radians(angle))
     rotmat = np.array([[cosang, -sinang],[sinang, cosang]])
     newxxyy = []
-    for i in xrange(npeaks_tot):
+    for i in range(npeaks_tot):
         thexxyy = np.dot(rotmat, xxyy[:,i])
         newxxyy.append(thexxyy)
     newxxyy =  np.array(newxxyy).T
@@ -898,7 +899,7 @@ def qubic_sb_model_asym(x, pars, return_peaks=False):
     newxxyy[1,:] += yc
     
     themap = np.zeros_like(x2d)
-    for i in xrange(npeaks_tot):
+    for i in range(npeaks_tot):
         amps[i] = ampgauss * np.exp(-0.5 * ((xcgauss-newxxyy[0,i])**2 + (ycgauss-newxxyy[1,i])**2)/(fwhmgauss/2.35)**2)
         themap += amps[i] * mygauss2d(x2d, y2d, newxxyy[:,i], fwhmxpeaks[i]/2.35, fwhmypeaks[i]/2.35, rhopeaks[i])
 
@@ -954,9 +955,9 @@ def fit_sb_asym(TESNum, dirfiles, scaling=140e3, newsize=70, dmax = 5., az_cente
             [-3,3],
             [47., 53],
             [10., 16.]]
-    for i in xrange(9): rng.append([0.5, 1.5])
-    for i in xrange(9): rng.append([0.5, 1.5])
-    for i in xrange(9): rng.append([-1, 1])
+    for i in range(9): rng.append([0.5, 1.5])
+    for i in range(9): rng.append([0.5, 1.5])
+    for i in range(9): rng.append([-1, 1])
 
     fit = ft.do_minuit(x, np.ravel(flatmap/scaling), np.ones_like(np.ravel(flatmap)), parsinit, 
                        functname=flattened_qubic_sb_model_asym, chi2=ft.MyChi2_nocov, rangepars=rng,
@@ -973,7 +974,7 @@ def fit_sb_asym(TESNum, dirfiles, scaling=140e3, newsize=70, dmax = 5., az_cente
                                              np.max(az)*np.cos(np.radians(50)), 
                                              np.min(el), np.max(el)])
         colorbar()
-        for i in xrange(sh[1]):
+        for i in range(sh[1]):
             ax=plot(newxxyy[0,i], newxxyy[1,i], 'r.')
         title('Input Map - TES #{}'.format(TESNum))
         xlabel('Angle in Az direction [deg.]')

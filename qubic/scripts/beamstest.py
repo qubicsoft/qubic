@@ -1,3 +1,4 @@
+from __future__ import division, print_function
 import os
 import qubic
 import healpy as hp
@@ -53,7 +54,7 @@ for bs in beam_shapes:
             isub = inu+1
             plt.subplot(1,2,isub)
             # Loop on the sub-bands
-            for i in xrange(len(q)):
+            for i in range(len(q)):
                 nu = str(int(q[i].filter.nu / 1e9)) + ' GHz'
                 plt.semilogy(theta_deg, q[i].primary_beam(theta, 0), label=nu )
                 plt.legend(loc='best')
@@ -62,5 +63,5 @@ for bs in beam_shapes:
                 plt.ylim(4.6e-5, 1.6)
         plt.suptitle(beam_profile, fontsize=16)        
 
-print 'Close the figures to end'
+print('Close the figures to end')
 plt.show()

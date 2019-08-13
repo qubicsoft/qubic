@@ -1,3 +1,4 @@
+from __future__ import division, print_function
 import iminuit
 import math
 from matplotlib.pyplot import *
@@ -193,18 +194,18 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     # fixed parameters
     dfix = {}
     if fixpars is not None:
-        for i in xrange(len(parnames)):
+        for i in range(len(parnames)):
             dfix['fix_' + parnames[i]] = fixpars[i]
     else:
-        for i in xrange(len(parnames)):
+        for i in range(len(parnames)):
             dfix['fix_' + parnames[i]] = False
     # range for parameters
     drng = {}
     if rangepars is not None:
-        for i in xrange(len(parnames)):
+        for i in range(len(parnames)):
             drng['limit_' + parnames[i]] = rangepars[i]
     else:
-        for i in xrange(len(parnames)):
+        for i in range(len(parnames)):
             drng['limit_' + parnames[i]] = False
 
     # Run Minuit
@@ -226,7 +227,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     for i in parnames: errfit.append(m.errors[i])
     if fixpars is not None:
         parnamesfit = []
-        for i in xrange(len(parnames)):
+        for i in range(len(parnames)):
             if fixpars[i] is False:
                 parnamesfit.append(parnames[i])
             if fixpars[i]:
@@ -236,8 +237,8 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     ndimfit = len(parnamesfit)  # int(np.sqrt(len(m.errors)))
     covariance = np.zeros((ndimfit, ndimfit))
     if m.covariance:
-        for i in xrange(ndimfit):
-            for j in xrange(ndimfit):
+        for i in range(ndimfit):
+            for j in range(ndimfit):
                 covariance[i, j] = m.covariance[(parnamesfit[i], parnamesfit[j])]
 
     chisq = chi2(*parfit)
@@ -313,7 +314,7 @@ def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True
             yval[i] = np.mean(y[ok])
         xc[i] = (xmax[i]+xmin[i])/2
         if rebin_as_well is not None:
-            for o in xrange(nother):
+            for o in range(nother):
                 others[i,o] = np.mean(rebin_as_well[o][ok])
         if dispersion:
             fact = 1
@@ -402,7 +403,7 @@ def qs2array(file, FREQ_SAMPLING, timerange=None):
     NbSamplesPerSum = 64.  # this could also be a.NPIXELS_sampled
     gain = 1. / 2. ** 7 * 20. / 2. ** 16 / (NbSamplesPerSum * Rfb)
 
-    for i in xrange(npix):
+    for i in range(npix):
         dd[i, :] = a.timeline(TES=i + 1)
         dd[i, :] = gain * dd[i, :]
 
@@ -528,7 +529,7 @@ def notch_array(freqs, bw):
     """
     notch = []
 
-    for i in xrange(len(freqs)):
+    for i in range(len(freqs)):
         notch.append([freqs[i], bw * (1 + i)])
 
     return notch
@@ -657,7 +658,7 @@ def fold_data(time, dd, period, lowcut, highcut, nbins,
     dfolded = np.zeros((ndet, nbins))
     dfolded_nonorm = np.zeros((ndet, nbins))
     if not silent: bar = progress_bar(ndet, 'Detectors ')
-    for THEPIX in xrange(ndet):
+    for THEPIX in range(ndet):
         if not silent: bar.update()
         data = dd[THEPIX, :]
         newdata = filter_data(time, data, lowcut, highcut, notch=notch, rebin=rebin, verbose=verbose)
@@ -725,7 +726,7 @@ def vec_interp(x, xin, yin):
     sh = np.shape(yin)
     nvec = sh[0]
     yout = np.zeros_like(yin)
-    for i in xrange(nvec):
+    for i in range(nvec):
         yout[i, :] = np.interp(x, xin, yin[i, :])
     return yout
 
@@ -772,7 +773,7 @@ def fit_average(t, folded, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 
         nnn = 100
         t0 = np.linspace(0, 1. / fff, nnn)
         diff2 = np.zeros(nnn)
-        for i in xrange(nnn):
+        for i in range(nnn):
             diff2[i] = np.sum((av - functname(t, [dc, 0.1, t0[i], 1.])) ** 2)
         ttry = t0[np.argmin(diff2)]
 
@@ -799,7 +800,7 @@ def fit_average(t, folded, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 
         if clear:
             clf()
         xlim(0, 1. / fff)
-        for i in xrange(npix):
+        for i in range(npix):
             plot(t, folded[i, :], alpha=0.1, color='k')
         plot(t, av, color='b', lw=4, alpha=0.3, label='Median')
         plot(t, functname(t, bla[1]), 'r--', lw=4,
@@ -841,7 +842,7 @@ def fit_all(t, folded, av, initpars=None, fixpars=[0, 0, 0, 0], stop_each=False,
     allchi2 = np.zeros(npix)
     bar = progress_bar(npix, 'Detectors ')
     ok = np.zeros(npix, dtype=bool)
-    for i in xrange(npix):
+    for i in range(npix):
         bar.update()
         thedd = folded[i, :]
         #### First a fit with no error correction in order to have a chi2 distribution
@@ -1128,7 +1129,7 @@ def calibrate(fib, pow_maynooth, allparams, allerr, allok, cutparam=None, cuterr
     else:
         bsres = []
         bar = progress_bar(bootstrap, 'Bootstrap')
-        for i in xrange(bootstrap):
+        for i in range(bootstrap):
             bar.update()
             order = np.argsort(np.random.rand(len(xx)))
             xxbs = xx.copy()
@@ -1146,7 +1147,7 @@ def calibrate(fib, pow_maynooth, allparams, allerr, allok, cutparam=None, cuterr
                                                                            errfit[1]))
     if bootstrap is not None:
         bsdata = np.zeros((bootstrap, len(xxx)))
-        for i in xrange(bootstrap):
+        for i in range(bootstrap):
             bsdata[i, :] = thepolynomial(xxx, bsres[i, :])
         mm = np.mean(bsdata, axis=0)
         ss = np.std(bsdata, axis=0)
@@ -1156,7 +1157,7 @@ def calibrate(fib, pow_maynooth, allparams, allerr, allok, cutparam=None, cuterr
         plot(xxx, mm, 'b', label='Mean bootstrap')
 
     # indices = np.argsort(np.random.rand(bootstrap))[0:1000]
-    # for i in xrange(len(indices)):
+    # for i in range(len(indices)):
     # 	plot(xxx, thepolynomial(xxx, bsres[indices[i],:]), 'k', alpha=0.01)
     ylim(0, np.max(allparams[newok, 3]) * 1.1)
     xlim(np.min(pow_maynooth[newok]) * 0.99, np.max(pow_maynooth[newok]) * 1.01)

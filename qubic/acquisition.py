@@ -1,5 +1,5 @@
 # coding: utf-8
-from __future__ import division
+from __future__ import division, print_function
 
 import healpy as hp
 import numpy as np
@@ -255,7 +255,7 @@ class QubicAcquisition(Acquisition):
 
     def get_diag_invntt_operator(self):
 
-        print 'Use diagonal noise covariance matrix'
+        print('Use diagonal noise covariance matrix')
 
         sigma_detector = self.instrument.detector.nep / np.sqrt(2 * self.sampling.period)
         if self.photon_noise:
@@ -335,7 +335,7 @@ class QubicAcquisition(Acquisition):
         shapein = (len(self.instrument), len(self.sampling))
 
         if self.bandwidth is None and self.detector_fknee == 0:
-            print 'diagonal case'
+            print('diagonal case')
 
             out = DiagonalOperator(1 / self.sigma ** 2, broadcast='rightward',
                                    shapein=(len(self.instrument), len(self.sampling)))
@@ -364,7 +364,7 @@ class QubicAcquisition(Acquisition):
         p[..., 0] = p[..., 1]
         invntt = _psd2invntt(p, new_bandwidth, self.detector_ncorr, fftw_flag=fftw_flag)
 
-        print 'non diagonal case'
+        print('non diagonal case')
         if self.effective_duration is not None:
             nsamplings = self.comm.allreduce(len(self.sampling))
             invntt /= (nsamplings * self.sampling.period / (self.effective_duration * 31557600))

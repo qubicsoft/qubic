@@ -1,4 +1,4 @@
-from __future__ import division
+from __future__ import division, print_function
 import healpy as hp
 import numpy as np
 import matplotlib.pyplot as mp
@@ -106,7 +106,7 @@ maps_recon = a.tod2map(TOD, tol=tol)
 cov = a.get_coverage()
 
 # We need coverages for Nsb sub-bands
-cov = np.array([cov[(nus > nus_edge[i]) * (nus < nus_edge[i+1])].mean(axis=0) for i in xrange(Nsb)])
+cov = np.array([cov[(nus > nus_edge[i]) * (nus < nus_edge[i+1])].mean(axis=0) for i in range(Nsb)])
 
 _max = [300, 5, 5]
 for iband, (inp, rec, c) in enumerate(zip(maps_convolved, maps_recon, cov)):

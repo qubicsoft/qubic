@@ -1,3 +1,4 @@
+from __future__ import division, print_function
 import healpy as hp
 import numpy as np
 import scipy as sc
@@ -58,8 +59,8 @@ autos = np.zeros((nautos, 6, nbins))
 autos_conv = np.zeros((nautos, 6, nbins))
 
 j = 0
-for real in xrange(nreal):
-    for isub in xrange(nsub):
+for real in range(nreal):
+    for isub in range(nsub):
         print(j)
         autos_conv[j,:,:] = xpol.get_spectra(mconv[real,isub,:,:])[1] * fact / pwb**2
         autos[j,:,:] = xpol.get_spectra(mrec[real,isub,:,:])[1] * fact  / pwb**2
@@ -67,12 +68,12 @@ for real in xrange(nreal):
 
 #plot all auto spectra
 plt.figure('Auto_spectra')
-for real in xrange(nreal):
-    for s in xrange(3):
+for real in range(nreal):
+    for s in range(3):
         plt.subplot(nreal,3,3*real+s+1)
         plt.ylabel(thespec[s] + ' real_' + str(real))
         plt.xlabel('l')
-        for isub in xrange(nsub):
+        for isub in range(nsub):
             j = nsub * real + isub
             # print(j)
             p = plt.plot(ell_binned, autos_conv[j,s,:], '--')
@@ -88,21 +89,21 @@ ncross = int(sc.special.binom(nreal * nsub, 2))
 
 # Combinations for cross spectra
 a = []
-for real in xrange(nreal):
-    for isub in xrange(nsub):
+for real in range(nreal):
+    for isub in range(nsub):
         a.append((real, isub))
 comb = list(it.combinations(a,2))
 comb = np.reshape(comb, (ncross,4))
 
 cross = np.zeros((ncross, 6, nbins))
 print('  Doing All Cross Spectra ({}):'.format(ncross))
-for c in xrange(ncross):
+for c in range(ncross):
     print(c, comb[c])
     cross[c,:,:] = xpol.get_spectra(mrec[comb[c][0],comb[c][1],:,:], mrec[comb[c][2],comb[c][3],:,:])[1] * fact / pwb**2
              
 plt.figure('Cross spectra')
-for s in xrange(3):
-    for c in xrange(ncross):
+for s in range(3):
+    for c in range(ncross):
         if c in [2,7,11]:#[3,10,16,21]:#[1,4]: #[2,7,11]:
             #print c
             plt.subplot(3,3,s+1)  
@@ -132,7 +133,7 @@ for s in xrange(3):
 
 #Difference
 diff = cross[2,:,:] - cross[3,:,:]
-for s in xrange(3):
+for s in range(3):
     plt.subplot(1,3,s+1)
     plt.plot(ell_binned, cross[2,s,:], 'o-',label='cross2') 
     plt.plot(ell_binned, cross[3,s,:], 'o-',label='cross3') 
@@ -155,15 +156,15 @@ mapsconv = np.zeros((12 * ns ** 2, 3))
 # Output, what we find
 maps_recon = np.zeros((12 * ns ** 2, 3))
 
-for isub in xrange(len(nsubvals)):
+for isub in range(len(nsubvals)):
     sh = allmaps_conv[isub].shape
     nreals = sh[0]
     nsub = sh[1]
     cells = np.zeros((6, nbins, nsub, nreals))
     cells_in = np.zeros((6, nbins, nsub, nreals))
     print(cells.shape)
-    for real in xrange(nreals):
-        for n in xrange(nsub):
+    for real in range(nreals):
+        for n in range(nsub):
             mapsconv[seenmap_conv, :] = allmaps_conv[isub][real, n, :, :]
             maps_recon[seenmap_conv, :] = allmaps_recon[isub][real, n, :, :]
             cells_in[:, :, n, real] = xpol.get_spectra(mapsconv)[1]
@@ -176,14 +177,14 @@ for isub in xrange(len(nsubvals)):
 
 # Plot the spectra
 plt.figure('TT_EE_BB spectra')
-for isub in xrange(len(nsubvals)):
+for isub in range(len(nsubvals)):
     for s in [1, 2]:
         plt.subplot(4, 2, isub * 2 + s)
         plt.ylabel(thespec[s] + '_ptg=' + str((isub + 1) * 1000))
         plt.xlabel('l')
         sh = mcls[isub].shape
         nsub = sh[2]
-        for k in xrange(nsub):
+        for k in range(nsub):
             p = plt.plot(ell_binned, ell_binned * (ell_binned + 1) * mcls_in[isub][s, :, k], '--')
             plt.errorbar(ell_binned, ell_binned * (ell_binned + 1) * mcls[isub][s, :, k],
                          yerr=ell_binned * (ell_binned + 1) * scls[isub][s, :, k],

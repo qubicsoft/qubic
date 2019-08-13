@@ -1,3 +1,4 @@
+from __future__ import division, print_function
 import sys
 import healpy as hp
 import numpy as np
@@ -468,6 +469,7 @@ def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
 
     corrections = []
     for isub in range(nf_recon):
+        #Compute wide of the sub-band
         sum_delta_i = deltas[isub * nb: isub * nb + nb].sum()
         corrections.append(Delta / (sum_delta_i * nf_sub))
 

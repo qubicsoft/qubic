@@ -1,4 +1,4 @@
-
+from __future__ import division, print_function
 
 from Calibration import fibtools as ft
 from Calibration.plotters import *
@@ -69,7 +69,7 @@ amps_all = [amps]
 
 # Test with different positions
 allimg = np.zeros((4, 17, 17))  # contains datas from 2019-02-15
-for pos in xrange(1, 5):
+for pos in range(1, 5):
     dir = basedir + '2019-02-15/*_pos{}'.format(pos)
     amps = make_amp(dir, fff=0.333)
     amps_all.append(amps)
@@ -78,7 +78,7 @@ for pos in xrange(1, 5):
 
 # Plot for different positions compared to the ref
 figure('Integration Sphere, divided the mean of 2019-02-15 measurements ')
-for pos in xrange(4):
+for pos in range(4):
     # img = ft.image_asics(all1=amps_all[pos] / np.nanmean(amps_all[pos]))
     subplot(2, 2, pos + 1)
     imshow(allimg[pos] / np.nanmean(allimg, axis=0), cmap='viridis', vmin=0, vmax=3, interpolation='nearest')
@@ -99,7 +99,7 @@ intercal = img / img[16, 0]
 allimg = np.array(FitsArray('allimg_scan_az.fits'))
 az = np.array(FitsArray('az_scan_az.fits'))
 
-for i in xrange(len(az)):
+for i in range(len(az)):
     clf()
     subplot(1, 2, 1)
     imshow(allimg[i, :, :], cmap='viridis', vmin=0, vmax=1000)
@@ -113,7 +113,7 @@ for i in xrange(len(az)):
 
 pixnums = [2, 96, 67, 58 + 128]
 clf()
-for i in xrange(len(pixnums)):
+for i in range(len(pixnums)):
     subplot(2, 2, i + 1)
     ax = gca();
     pixnum = pixnums[i]

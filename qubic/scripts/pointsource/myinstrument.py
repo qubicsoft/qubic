@@ -1,5 +1,5 @@
 # coding: utf-8
-from __future__ import division
+from __future__ import division, print_function
 
 import healpy as hp
 import numexpr as ne
@@ -373,7 +373,7 @@ class QubicInstrument(Instrument):
         NEP_phot2 = np.zeros_like(P_phot)
         g = np.zeros_like(P_phot)
         names = ['CMB', 'atm']
-        for i in xrange(len(cc)):
+        for i in range(len(cc)):
             names.append(cc[i][0])
         if self.debug:
             print self.config,', central frequency:', int(nu/1e9),'+-',\
@@ -401,7 +401,7 @@ class QubicInstrument(Instrument):
         NEP_phot2[:ib2b] = NEP_phot2_nobunch[:ib2b] * (1 + P_phot[:ib2b] / \
                                                        (h * nu * g[:ib2b]))
         if self.debug:
-            for j in xrange(ib2b):
+            for j in range(ib2b):
                 print names[j], ', T=',temperatures[j],\
                     'K, P = {0:.2e} W'.format(P_phot[j].max()),\
                     ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[j]).max()) +\
@@ -838,22 +838,24 @@ class QubicInstrument(Instrument):
         else:
         	#thetas = np.array([[ 0.03274388,  0.15360559,  0.14135524,  0.22899572,  0.10337803,0.08309397,  0.1485351 ,  0.12075707,  0.17072379]])
         	#phis =np.array([[-2.7003387 , -2.70984288,  2.83812377, -3.10364013, -0.96946549, 0.68030373, -2.04408117,  2.06300056, -0.11496923]])
-        	thetas,phis = np.loadtxt('/home/martin/QUBIC/qubiclouise/qubic/scripts/pointsource/leb2.txt')
+        	thetas,phis = np.loadtxt('/home/martin/QUBIC/qubiclouise/qubic/scripts/pointsource/leb-inverse.txt')
         	idp=[4,7,5,8,3,1,6,2,0]
         	thetas = np.array([list(neworder(thetas,idp)),])
         	phis = np.array([list(neworder(phis,idp)),])
         	vals = 1e27*np.array([[17.14002, 9.95124, 9.61292, 1.32998 , 15.66893, 16.772,  3.33062, 7.42635,  10.25307]])#,  0.53203,1.06430]])#,  0.68101,  40.56667]])
-        	print('thetas: ', thetas)
-        	print('thetas_def: ', thetas_def)
-        	print('phis: ', phis)
-        	print('phis_def: ', phis_def)
-        	print('vals: ', vals)
-        	print('vals_def: ', vals_def)
+        	#print('thetas: ', thetas)
+        	#print('thetas_def: ', thetas_def)
+        	#print('phis: ', phis)
+        	#print('phis_def: ', phis_def)
+        	#print('vals: ', vals)
+        	#print('vals_def: ', vals_def)
 
         ncolmax = thetas.shape[-1]
+        print(np.rad2deg(thetas), np.rad2deg(phis))
         thetaphi = _pack_vector(thetas, phis)  # (ndetectors, ncolmax, 2)
         direction = Spherical2CartesianOperator('zenith,azimuth')(thetaphi)
         e_nf = direction[:, None, :, :]
+        print('direction', np.rad2deg(direction))
         if nside > 8192:
             dtype_index = np.dtype(np.int64)
         else:
@@ -866,7 +868,7 @@ class QubicInstrument(Instrument):
         nscene = len(scene)
         nscenetot = product(scene.shape[:scene.ndim])
         s = cls((ndetectors * ntimes * ndims, nscene * ndims), ncolmax=ncolmax,
-                dtype=synthbeam.dtype, dtype_index=dtype_index,
+                    dtype=synthbeam.dtype, dtype_index=dtype_index,
                 verbose=verbose)
 
         index = s.data.index.reshape((ndetectors, ntimes, ncolmax))
@@ -885,7 +887,7 @@ class QubicInstrument(Instrument):
                 index[i] = c2h(e_ni)
 
         with pool_threading() as pool:
-            pool.map(func_thread, xrange(ndetectors))
+            pool.map(func_thread, range(ndetectors))
 
         if scene.kind == 'I':
             value = s.data.value.reshape(ndetectors, ntimes, ncolmax)
@@ -1250,9 +1252,9 @@ class QubicInstrument(Instrument):
             allx = np.linspace(xmin, xmax, detector_integrate)
             ally = np.linspace(ymin, ymax, detector_integrate)
             sb = 0
-            for i in xrange(len(allx)):
+            for i in range(len(allx)):
                 print(i,len(allx))
-                for j in xrange(len(ally)):
+                for j in range(len(ally)):
                     pos = self.detector.center
                     pos[0][0] = allx[i]
                     pos[0][1] = ally[j]
@@ -1329,7 +1331,7 @@ class QubicMultibandInstrument():
                  self.subinstruments)
         sb = np.array(sb)
         bw = np.zeros(len(self))
-        for i in xrange(len(self)):
+        for i in range(len(self)):
             bw[i] = self[i].filter.bandwidth / 1e9
             sb[i] *= bw[i]
         sb = sb.sum(axis=0) / np.sum(bw)
@@ -1337,14 +1339,14 @@ class QubicMultibandInstrument():
 
     def direct_convolution(self, scene, idet=None, theta_max=45):
         synthbeam = [q.synthbeam for q in self.subinstruments]
-        for i in xrange(len(synthbeam)):
+        for i in range(len(synthbeam)):
             synthbeam[i].kmax = 4
         sb_peaks = map(lambda i: QubicInstrument._peak_angles(scene, self[i].filter.nu, 
                                                         self[i][idet].detector.center, 
                                                         synthbeam[i], 
                                                         self[i].horn, 
                                                         self[i].primary_beam),
-                       xrange(len(self)))
+                       range(len(self)))
         def peaks_to_map(peaks):
             m = np.zeros(hp.nside2npix(scene.nside))
             m[hp.ang2pix(scene.nside, 
@@ -1353,7 +1355,7 @@ class QubicMultibandInstrument():
             return m
         sb = map(peaks_to_map, sb_peaks)
         C = [i.get_convolution_peak_operator() for i in self.subinstruments]
-        sb = [(C[i])(sb[i]) for i in xrange(len(self))]
+        sb = [(C[i])(sb[i]) for i in range(len(self))]
         sb = np.array(sb)
         sb = sb.sum(axis=0)
         return sb

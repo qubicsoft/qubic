@@ -1,3 +1,4 @@
+from __future__ import division, print_function
 import os
 import sys
 import glob
@@ -35,7 +36,7 @@ nsubvals = np.array([1,2,3,4])
 
 #Archetypes of the files .fits you want to work on
 arch_conv, arch_recon = [], []
-for isub in xrange(len(nsubvals)):
+for isub in range(len(nsubvals)):
 	arch_conv.append('mpiQ_Nodes_2_Ptg_40000_Noutmax_6_Tol_1e-4_*_nf{}_maps_convolved.fits'.format(nsubvals[isub]))
 	arch_recon.append('mpiQ_Nodes_2_Ptg_40000_Noutmax_6_Tol_1e-4_*_nf{}_maps_recon.fits'.format(nsubvals[isub]))
 
@@ -64,7 +65,7 @@ mean_rms_cov = np.sqrt(np.mean(rmsmap_cov**2, axis=2))
 
 
 plt.plot(nsubvals, np.sqrt(nsubvals), 'k', label='Optimal $\sqrt{N}$', lw=2)
-for i in xrange(3):
+for i in range(3):
     plt.plot(nsubvals, mean_rms_cov[:,i] / mean_rms_cov[0,i] * np.sqrt(nsubvals), label=stokes[i], lw=2, ls='--')
 plt.xlabel('Number of sub-frequencies')
 plt.ylabel('Relative maps RMS')
@@ -75,17 +76,17 @@ plt.legend()
 
 #Two ways
 residus = []
-for j in xrange(len(allmaps_conv)): 
+for j in range(len(allmaps_conv)): 
 	residus.append(allmaps_recon[j] - allmaps_conv[j])
 
 residus = []
-for j in xrange(len(allmaps_conv)): 
+for j in range(len(allmaps_conv)): 
 	residus.append(allmaps_recon[j] - np.mean(allmaps_recon[j], axis=0))
 
 
 #Histogram of the residus
 plt.clf()
-for i in xrange(3):
+for i in range(3):
 	plt.subplot(1, 3, i+1)
 	plt.hist(np.ravel(residus[0][:,3,:,i]), range=[-20,20], bins=100)
 	plt.title(stokes[i])
@@ -107,7 +108,7 @@ maps_residus[seenmap_conv, :] = residus[isub][real,freq,:,:]
 #hp.mollview(maps_conv[:,1], title='maps_conv')
 
 plt.figure('maps')
-for i in xrange(3):
+for i in range(3):
 	if i==0:
 		min=None
 		max=None
@@ -138,32 +139,32 @@ hp.mollview(mapsstd[:,1], title='std')
 hp.mollview(mapsmean[:,1], title='mean')
 
 plt.figure('Mean and Std for 1 subband for I Q U maps')
-for i in xrange(3):
+for i in range(3):
 	hp.gnomview(mapsmean[:,i], rot=center, reso=12, sub=(2,3,i+4), title='mean'+stokes[i])
 	hp.gnomview(mapsstd[:,i], rot=center, reso=12, sub=(2,3,i+1), title='std'+stokes[i])
 
 #Fake map using the noise distribution calculated above
 #Correct by a factor sqrt(N)
 fake_mapsrecon = []
-for j in xrange((len(nsubvals))):
+for j in range((len(nsubvals))):
 	print('For nsub = {}'.format(nsubvals[i]))
 	sh = allmaps_recon[j].shape
 	newnoise = np.zeros(sh)
-	for k in xrange(sh[0]):
-		for l in xrange(sh[1]):
+	for k in range(sh[0]):
+		for l in range(sh[1]):
 			noise = np.random.randn(len(pixmean),3) * pixstd * np.sqrt(j+1) + pixmean
 			newnoise[k,l,:,:] = noise
 	fake_mapsrecon.append(allmaps_conv[j] + newnoise)
 
 #Correct by the real evolution, not exactly sqrt(N)
 fake_mapsrecon = []
-for isub in xrange((len(nsubvals))):
+for isub in range((len(nsubvals))):
 	print('For nsub = {}'.format(nsubvals[i]))
 	sh = allmaps_recon[isub].shape
 	correction = mean_rms_cov[isub,:] / mean_rms_cov[0,:] * np.sqrt(isub+1)
 	newnoise = np.zeros(sh)
-	for k in xrange(sh[0]):
-		for l in xrange(sh[1]):
+	for k in range(sh[0]):
+		for l in range(sh[1]):
 			noise = np.random.randn(sh[2], sh[3]) * pixstd * correction + pixmean
 			newnoise[k,l,:,:] = noise
 			if (isub,k,l) == (2,0,0): 
@@ -177,14 +178,14 @@ for isub in xrange((len(nsubvals))):
 #Pour se debarrasser de cette dependence, on fabrique des residus_correct en divisant par std_profile
 residus_correct = []
 plt.clf()
-for isub in xrange(len(nsubvals)):
+for isub in range(len(nsubvals)):
 	sh = residus[isub].shape
 	nreals = sh[0]
 	nsub = sh[1]
 	residu_new = np.zeros(sh)
 	bin_centers, std_bin, allstd_profile = tl.myprofile(ang, residus[isub], nbins=15)
-	for l in xrange(nsub):
-		for i in xrange(3):
+	for l in range(nsub):
+		for i in range(3):
 			plt.subplot(4, 3, 3*isub+i+1)
 			p = plt.plot(bin_centers, std_bin[:,l,i], 'o', label='subband'+str(l))
 			plt.plot(ang, allstd_profile[3*l+i], ',', color=p[0].get_color())
@@ -204,14 +205,14 @@ for isub in xrange(len(nsubvals)):
 np.std(residus_correct[3][:,0,:,:], axis=0)
 
 plt.figure()
-for isub in xrange(len(nsubvals)):
+for isub in range(len(nsubvals)):
 	sh = residus_correct[isub].shape
 	nreals = sh[0]
 	nsub = sh[1]
 	
 	bin_centers, std_bin, allstd_profile = tl.myprofile(ang, residus_correct[isub], nbins=15)
-	for l in xrange(nsub):
-		for i in xrange(3):
+	for l in range(nsub):
+		for i in range(3):
 			plt.subplot(4, 3, 3*isub +1 +i)
 			p = plt.plot(bin_centers, std_bin[:,l,i], 'o', label='subband'+str(l+1))
 			print(np.round(np.mean(std_bin[:, l, i], axis=0),5))
@@ -226,13 +227,13 @@ allmean, allcov = tl.covariance_IQU_subbands(residus)
 
 #test de la fonction covariance_IQU_subbands
 toto = []
-for isub in xrange(len(nsubvals)):
+for isub in range(len(nsubvals)):
 	toto.append(np.random.randn(10, isub+1, 100014, 3))
 m, c = tl.covariance_IQU_subbands(toto)
 
 #Plot of the correlation or covariance matrices
 plt.clf()
-for isub in xrange(len(nsubvals)):
+for isub in range(len(nsubvals)):
 	plt.subplot(1, len(nsubvals), isub + 1)
 	plt.imshow(tl.cov2corr(allcov[isub]), interpolation='nearest', vmin=-1, vmax=1)
 	#plt.imshow(allcov[isub], interpolation='nearest')
@@ -244,7 +245,7 @@ for isub in xrange(len(nsubvals)):
 #On remultiplie par le std_profile pour avoir la dependance du std en fonction de l'angle
 
 residus_fake = []
-for isub in xrange((len(nsubvals))):
+for isub in range((len(nsubvals))):
 	print('For nsub = {}'.format(nsubvals[isub]))
 	sh = allmaps_recon[isub].shape
 	nreals = sh[0]
@@ -255,12 +256,12 @@ for isub in xrange((len(nsubvals))):
 
 	noise4D = np.zeros(sh)
 	
-	for k in xrange(nreals):
+	for k in range(nreals):
 		noise = np.random.multivariate_normal(allmean[isub], allcov[isub], size=npixok) #bruit pour la realisation k
 		if k == 0: print(noise.shape)
-		for l in xrange(nsub):
+		for l in range(nsub):
 			noise4D[k, l, :, :] = noise[:, 3*l:3*l+3]
-			for i in xrange(3):
+			for i in range(3):
 				noise4D[k, l, :, i] *= allstd_profile[3*l+i]
 	residus_fake.append(noise4D)
 
@@ -268,7 +269,7 @@ for isub in xrange((len(nsubvals))):
 
 #Histogramme des residus_fake
 plt.clf()
-for i in xrange(3):
+for i in range(3):
 	plt.subplot(1, 3, i+1)
 	plt.hist(np.ravel(residus_fake[0][:,0,:,i]), range=[-2,2], bins=100)
 	plt.title(stokes[i])
@@ -276,7 +277,7 @@ for i in xrange(3):
 #Matrice de cov des residus_fake corriges
 residus_correct_fake = []
 plt.clf()
-for isub in xrange(len(nsubvals)):
+for isub in range(len(nsubvals)):
 	sh = residus_fake[isub].shape
 	nreals = sh[0]
 	nsub = sh[1]
@@ -284,8 +285,8 @@ for isub in xrange(len(nsubvals)):
 	bin_centers, std_bin, allstd_profile = tl.myprofile(ang, residus_fake[isub], nbins=15)
 
 	residu_new = np.zeros(sh)
-	for l in xrange(nsub):
-		for i in xrange(3):
+	for l in range(nsub):
+		for i in range(3):
 			#Std profile en fonction de l'angle
 			plt.subplot(4, 3, 3*isub+i+1)
 			p = plt.plot(bin_centers, std_bin[:,l,i], 'o', label='subband'+str(l))
@@ -304,12 +305,12 @@ allmean_fake, allcov_fake = tl.covariance_IQU_subbands(residus_correct_fake)
 
 #Comparaison entre les matrices de covariance des residus_correct et des residus_correct_fake
 alldiff = []
-for isub in xrange(len(nsubvals)):
+for isub in range(len(nsubvals)):
 	alldiff.append(allcov_fake[isub] - allcov[isub])
 
 #Plot of the correlation matrices
 plt.clf()
-for isub in xrange(len(nsubvals)):
+for isub in range(len(nsubvals)):
 	plt.subplot(1, len(nsubvals), isub + 1)
 	#imshow(tl.cov2corr(alldiff[isub]), interpolation='nearest', vmin=-0.1, vmax=0.1)
 	plt.imshow(alldiff[isub], interpolation='nearest')
@@ -321,7 +322,7 @@ for isub in xrange(len(nsubvals)):
 
 #Fausse carte
 fake_mapsrecon = []
-for isub in xrange(len(nsubvals)): 
+for isub in range(len(nsubvals)): 
 	#avec les map conv
 	fake_mapsrecon.append(allmaps_conv[isub] + residus_fake[isub])
 	#que du bruit
@@ -338,7 +339,7 @@ hp.mollview(mapsfake[:,0], title='Fake map recon')
 
 plt.figure('Fake map recon')
 plt.clf()
-for i in xrange(3):
+for i in range(3):
 	hp.gnomview(mapsfake[:,i], rot=center, reso=12, sub=(1,3,i+1), title=stokes[i])
 
 
@@ -365,16 +366,16 @@ mapsconv = np.zeros((12*ns**2, 3))
 mapsfake = np.zeros((12*ns**2, 3))
 
 
-for isub in xrange(len(nsubvals)):
+for isub in range(len(nsubvals)):
 	sh = allmaps_conv[isub].shape
 	nreals = sh[0]
 	nsub = sh[1]
 	cells = np.zeros((6, nbins, nsub, nreals))
 	cells_in = np.zeros((6, nbins, nsub, nreals))
 	print(cells.shape)
-	for real in xrange(nreals):
-		for n in xrange(nsub):
-			for i in xrange(3):
+	for real in range(nreals):
+		for n in range(nsub):
+			for i in range(3):
 				mapsconv[seenmap_conv, i] = allmaps_conv[isub][real,n,:,i] * mymask[seenmap_conv]
 
 				mapsfake[seenmap_conv, i] = fake_mapsrecon[isub][real,n,:,i]* mymask[seenmap_recon]

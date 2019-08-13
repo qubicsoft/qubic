@@ -221,16 +221,14 @@ p = hall_pointing(az, el, d['angspeed_psi'], d['maxpsi'], fix_azimuth=d['fix_azi
 ```{python}
 az2d,el2d = np.meshgrid(az,el)
 myTOD = np.ravel(datamap)
-```
-
-```{python}
-#Simulo un nuevo TOD con el pointing de la observacion 
-#reload(qubic)
 sima = qubic.QubicAcquisition(q, p, s, d)
 simTOD, maps_conv_p = sima.get_observation(x0, convolution = True, noiseless=True)
 ```
 
 ```{python}
+tesid = TESid -1
+peak95 = peaks[tesid]
+
 newmap = np.reshape(myTOD, datamap.shape)
 #invierto el TOD simulado
 simTOD[0,:] = simTOD[0,::-1]
@@ -247,11 +245,42 @@ subplot(224)
 ylim(-2e4,1.7e5)
 plot(simTOD[0]*1e27)
 
+#To find the locations of the peaks in the TOD space
+az2dravel = az2d.ravel()[::-1]
+el2dravel = el2d.ravel()[::-1]
+
+locpeak_tod = []
+
+for i in xrange(0,len(peak95[0])):
+
+    azloc = np.where(abs(az2dravel-peak95[0,i]) < 0.13 )
+    elloc = np.where(abs(el2dravel-peak95[1,i]) < 0.12 )
+
+    az1=az2dravel[azloc]
+    el1=el2dravel[elloc]
+    # the intersection should be only one -> we keep it
+    for each in azloc[0]:
+        if each in elloc[0]:
+            locpeak_tod.append(each)
+        
+print('====')
+
+print('#peaks', len(locpeak_tod), locpeak_tod)
+peaktod = np.zeros((len(myTOD,)))
+peaktod[locpeak_tod] = np.max(myTOD)
+
+print('====')
+print('az loc', az2d.ravel()[locpeak_tod])
+print('az fit {}'.format([e for e in peak95[0,:]]) )
+print('====')
+print('el loc', el2d.ravel()[locpeak_tod])
+print('el fit {}'.format([e for e in peak95[1,:]]) )
+print('====')
+
 ```
 
 ```{python}
-tesid = TESid -1
-peak95 = peaks[tesid]
+
 
 thetas =     np.array([[0.03281347, 0.11251228, 0.14091657 , 0.18485994, 0.17793436,
              0.14746803, 0.12888845, 0.18494313, 0.242361  , 0.25671088,
@@ -430,8 +459,8 @@ phis9 = phis_def[0][:9]
 
 for j,each in enumerate(newarr):
     # rotation from center of the field in az,el to 
-    posF00 = np.dot(rotmatZ(-(np.pi-phis9[j]) )  , each  )
-    posF0i = np.dot(rotmatX(+thetas9[j] ) , np.asarray(posF00)  )
+    posF00 = np.dot(rotmatZ(-(np.pi-phis9[0]) )  , each  )
+    posF0i = np.dot(rotmatX(+thetas9[0] ) , np.asarray(posF00)  )
     #posF01 = np.dot(rotmatX(-(np.pi/2 - np.radians(40)) ) , np.asarray(posF0i)  )
     posF04.append(np.dot(rotmatX(-( np.radians(40))/np.cos(np.radians(50)) ) , np.asarray(posF0i)  ) )
     #posF01i = np.dot(rotmatX(-thetas9[0] ) , np.asarray(posF01)  )
@@ -453,46 +482,52 @@ subplot(122, projection = 'polar')
 for i in xrange(0,9):
     plot(phis_def[0][i],thetas_def[0][i], 'ro')
     plot(nthph[1][i],nthph[0][i],'ko')
+    #plot(0,np.pi/2,'go')
+    #legend()
+
+sin = np.sin
+cos = np.cos
+pi = np.pi
+r=1.
+phim, thetam = np.mgrid[0.0:pi:100j, 0.0:2.0*pi:100j]
+xi = r*sin(phim)*cos(thetam)
+yi = r*sin(phim)*sin(thetam)
+zi = r*cos(phim)
 
 data = np.genfromtxt('leb_defsynthbeam.txt', unpack=True)
 newdata2 = np.genfromtxt('leb-inverse.txt', unpack = True)
 
-#sin = np.sin
-#cos = np.cos
-#pi = np.pi
-#r=1.
-#phim, thetam = np.mgrid[0.0:pi:100j, 0.0:2.0*pi:100j]
-#xi = r*sin(phim)*cos(thetam)
-#yi = r*sin(phim)*sin(thetam)
-#zi = r*cos(phim)
+thetai, phii = np.hsplit(data, 2) 
+newthetai, newphii = np.hsplit(newdata2,2)
 
-#thetai, phii = np.hsplit(data, 2) 
-#newthetai, newphii = np.hsplit(newdata2,2)
-#xxi = sin(thetai)*cos(phii)
-#yyi = sin(thetai)*sin(phii)
-#zzi = cos(thetai)
-#xxxi = sin(newthetai)*cos(newphii)
-#yyyi = sin(newthetai)*sin(newphii)
-#zzzi = cos(newthetai)
-#el2=50.
-#cel=np.radians(90-el2)
-#az2 = 0.
-#px = sin(cel)*cos(az2)
-#py = sin(cel)*sin(az2)
-#pz = cos(cel)
-##Set colours and render
-#fig = plt.figure(figsize=(12,12))
-#ax = fig.add_subplot(111, projection='3d')
-#ax.plot_surface(xi, yi, zi,  rstride=1, cstride=1, color='c', alpha=0.3, linewidth=0)
-#ax.scatter(xxi,yyi,zzi,color="r",s=20)
-#ax.scatter(xxxi,yyyi,zzzi,color="k", s =20)
-#ax.scatter(px,py,pz,color="k", s = 30)
-#ax.set_xlim([-1,1])
-#ax.set_ylim([-1,1])
-#ax.set_zlim([-1,1])
-#ax.set_aspect("equal")
-#plt.tight_layout()
-#plt.show()
+xxi = sin(thetai)*cos(phii)
+yyi = sin(thetai)*sin(phii)
+zzi = cos(thetai)
+xxxi = sin(newthetai)*cos(newphii)
+yyyi = sin(newthetai)*sin(newphii)
+zzzi = cos(newthetai)
+
+el2=50.
+cel=np.radians(90-el2)
+az2 = 0.
+px = sin(cel)*cos(az2)
+py = sin(cel)*sin(az2)
+pz = cos(cel)
+#Set colours and render
+fig = plt.figure(figsize=(12,12))
+ax = fig.add_subplot(111, projection='3d')
+ax.plot_surface(xi, yi, zi,  rstride=1, cstride=1, color='c', alpha=0.3, linewidth=0)
+ax.scatter(xxi,yyi,zzi,color="r",s=20)
+ax.scatter(xxxi,yyyi,zzzi,color="k", s =20)
+ax.scatter(px,py,pz,color="k", s = 30)
+
+ax.set_xlim([-1,1])
+ax.set_ylim([-1,1])
+ax.set_zlim([-1,1])
+
+ax.set_aspect("equal")
+plt.tight_layout()
+plt.show()
 ```
 
 ```{python}
@@ -529,6 +564,27 @@ reload(myinst)
 myq = myinst.QubicInstrument(d)
 
 if sel_det:
+    myq=select_det(myq,did_det['{}'.format(TESid)])
+
+mya = qubic.QubicAcquisition(myq, p, s, d)
+mytod, my_conv = mya.get_observation(x0, convolution = True, noiseless = False)
+#mytod[0] = mytod[0,::-1]
+figure(figsize=(14,5))
+plot(myTOD, 'b-')
+#roll tod
+#mytod = np.roll(mytod, len(mytod)+4*len(az))
+mytod[0] = 3.3*mytod[0]
+#plot(mytod[0], 'g-')
+
+plot(peaktod[:], 'r--')
+```
+
+```{python}
+reload(myinst)
+
+myq = myinst.QubicInstrument(d)
+
+if sel_det:
     if TESid not in did_det.keys():
         myq=select_det(myq,TESid)
     else:
@@ -539,29 +595,7 @@ mytod, my_conv = mya.get_observation(x0, convolution = True, noiseless = False)
 #mytod[0] = mytod[0,::-1]
 figure(figsize=(14,5))
 plot(myTOD, 'b-')
-#roll tod
-#mytod = np.roll(mytod, len(mytod)+4*len(az))
-#mytod[0] = 3.3*mytod[0]
-#plot(mytod[0], 'g-')
-
-#To find the locations of the peaks in the TOD space
-#az2dravel = az2d.ravel()[::-1]
-#el2dravel = el2d.ravel()[::-1]
-#locpeak_tod = []
-#for i in xrange(0,len(peak95[0])):
-#    azloc = np.where(abs(az2dravel-peak95[0,i]) < 0.13 )
-#    elloc = np.where(abs(el2dravel-peak95[1,i]) < 0.12 )
-#    az1=az2dravel[azloc]
-#    el1=el2dravel[elloc]
-#    # the intersection should be only one -> we keep it
-#    for each in azloc[0]:
-#        if each in elloc[0]:
-#            locpeak_tod.append(each)
-#print('====')
-#print('#peaks', len(locpeak_tod), locpeak_tod)
-#peaktod = np.zeros((len(myTOD,)))
-#peaktod[locpeak_tod] = np.max(myTOD)
-#plot(1e-12*peaktod[:], 'r--')
+plot(1e5*mytod[0], 'r-')
 
 ```
 
@@ -582,9 +616,9 @@ if setlim:
     xlim(milimx,malimx)
     ylim(milimy,malimy)
 title('TOD for PS, instrument myq (TES={})'.format(TESid))
-newnew = mytod[0][::-1]
-imshow(np.reshape(mytod[0],(el.shape[0],linen)), extent=[az.min(),#*np.cos(np.radians(88)),
-                                                           az.max(),#*np.cos(np.radians(50)), 
+#newnew = mytod[0][::-1]
+imshow(np.reshape(mytod[0],(el.shape[0],linen)), extent=[az.min(),
+                                                           az.max(), 
                                                            el.min(),el.max()],cmap = 'viridis')
 
 for i in xrange(0,9):#len(locpeak_tod)):

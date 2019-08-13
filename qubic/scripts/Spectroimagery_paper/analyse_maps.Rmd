@@ -40,7 +40,7 @@ stokes = ['I', 'Q', 'U']
 
 # ================= Get the simulation files ================
 # repository where the .fits was saved
-date = '20190729'
+date = '20190717'
 # rep_simu = './TEST/{}/'.format(date)
 rep_simu = '/home/martin/QUBIC/qubiclouise/qubic/scripts/Spectroimagery_paper/TEST/runs/' + date + '/'
 
@@ -387,5 +387,45 @@ plt.savefig(rep_simu+'plots/03-{}-covcorr-full'.format('IQU'[istokes]))
 ```
 
 ```{python}
+print(all_patch_diff.shape)
+print(maps_diff.shape)
+```
+
+```{python}
+reload(amc)
+coco, _ = amc.get_covcorr_patch(all_patch_diff)
+plt.figure(figsize=(16,16))
+plt.figure('Mean over pixels')
+plt.subplot(121)
+plt.imshow(np.mean(coco, axis=2), interpolation = 'none')
+plt.title('Mean cov')
+#plt.colorbar()
+plt.subplot(122)
+plt.imshow(np.mean(_, axis=2), interpolation = 'none')
+plt.title('Mean corr')
+#plt.colorbar()
 
 ```
+
+```{python}
+coco2,_ = amc.get_covcorr_patch(all_patch_diff, stokesjoint = True)
+plt.figure(figsize=(16,16))
+plt.figure('Mean over pixels')
+plt.subplot(121)
+plt.imshow(np.mean(coco2, axis=2), interpolation = 'none')
+plt.title('Mean cov')
+#plt.colorbar()
+plt.subplot(122)
+plt.imshow(np.mean(_, axis=2), interpolation = 'none')
+plt.title('Mean corr')
+#plt.colorbar()
+
+```
+
+```{python}
+print(coco)
+print('=====================================================')
+print(coco2)
+```
+
+

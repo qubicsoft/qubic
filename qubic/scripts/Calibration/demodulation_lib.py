@@ -466,23 +466,23 @@ def read_data_azel_src(dirfile, AsicNum, TESNum=None, calsource_dir='/qubic/Data
     glob_pattern = data_time.strftime('calsource_%Y%m%dT%H%M*.dat')
     bla = glob.glob(calsource_dir + glob_pattern)
     if bla == []:
-        if verbose: print 'No CalSource file found corresponding to this dataset: ' + dirfile
+        if verbose: print('No CalSource file found corresponding to this dataset: ' + dirfile)
         t_src = -1
         data_src = -1
     else:
-        if verbose: print 'Found Calibration Source date in: ' + bla[0]
+        if verbose: print('Found Calibration Source date in: ' + bla[0])
         t_src, data_src = read_cal_src_data(bla)
 
     #### Now return everything
     if verbose:
-        print 'Returning:'
-        print '   t_data  : ', array_info(t_data)
-        print '   data    : ', array_info(data)
-        print '   t_azel  : ', array_info(t_azel)
-        print '   az      : ', array_info(az)
-        print '   el      : ', array_info(el)
-        print '   t_src   : ', array_info(t_src)
-        print '   data_src: ', array_info(data_src)
+        print('Returning:')
+        print('   t_data  : ', array_info(t_data))
+        print('   data    : ', array_info(data))
+        print('   t_azel  : ', array_info(t_azel))
+        print('   az      : ', array_info(az))
+        print('   el      : ', array_info(el))
+        print('   t_src   : ', array_info(t_src))
+        print('   data_src: ', array_info(data_src))
 
     retval = {}
     retval['t_data'] = t_data
@@ -701,7 +701,7 @@ def get_spectral_response(name, freqs, allmm, allss, nsig=3, method='demod', TES
         mr, sr = ft.meancut(discrim,3)
         threshold = mr+nsig*sr
         ok = (discrim > threshold)
-        print 'Spectral Response calculated over {} TES'.format(ok.sum())
+        print('Spectral Response calculated over {} TES'.format(ok.sum()))
         filtershape = np.zeros(len(freqs))
         errfiltershape = np.zeros(len(freqs))
         for i in range(len(freqs)):
@@ -793,8 +793,8 @@ def fit_sb(TESNum, dirfiles, scaling=140e3, newsize=70, dmax = 5., az_center=0.,
     mask = (np.sqrt((az2d-az_center)**2+(el2d-el_center)**2) < distance_max).astype(int)
     wmax = np.where((flatmap*mask) == np.max(flatmap*mask))
     maxval = flatmap[wmax][0]
-    print 'Maximum of map is {0:5.2g} and was found at: az={1:5.2f}, el={2:5.2f}'.format(maxval,
-                                                                                         az2d[wmax][0], el2d[wmax][0])
+    print('Maximum of map is {0:5.2g} and was found at: az={1:5.2f}, el={2:5.2f}'.format(maxval,
+                                                                                         az2d[wmax][0], el2d[wmax][0]))
 
 
     ### Now fit all parameters
@@ -820,7 +820,7 @@ def fit_sb(TESNum, dirfiles, scaling=140e3, newsize=70, dmax = 5., az_center=0.,
         rc('figure',figsize=(18,4))
         parfit = fit[1]
         sh = np.shape(newxxyy)
-        print sh
+        print(sh)
         subplot(1,2,1)
         imshow(flatmap/scaling, extent=[np.min(az)*np.cos(np.radians(50)), 
                                              np.max(az)*np.cos(np.radians(50)), 
@@ -934,8 +934,8 @@ def fit_sb_asym(TESNum, dirfiles, scaling=140e3, newsize=70, dmax = 5., az_cente
     mask = (np.sqrt((az2d-az_center)**2+(el2d-el_center)**2) < distance_max).astype(int)
     wmax = np.where((flatmap*mask) == np.max(flatmap*mask))
     maxval = flatmap[wmax][0]
-    print 'Maximum of map is {0:5.2g} and was found at: az={1:5.2f}, el={2:5.2f}'.format(maxval,
-                                                                                         az2d[wmax][0], el2d[wmax][0])
+    print('Maximum of map is {0:5.2g} and was found at: az={1:5.2f}, el={2:5.2f}'.format(maxval,
+                                                                                         az2d[wmax][0], el2d[wmax][0]))
 
 
     ### Now fit all parameters
@@ -968,7 +968,7 @@ def fit_sb_asym(TESNum, dirfiles, scaling=140e3, newsize=70, dmax = 5., az_cente
         rc('figure',figsize=(18,4))
         parfit = fit[1]
         sh = np.shape(newxxyy)
-        print sh
+        print(sh)
         subplot(1,2,1)
         imshow(flatmap/scaling, extent=[np.min(az)*np.cos(np.radians(50)), 
                                              np.max(az)*np.cos(np.radians(50)), 
@@ -1030,13 +1030,13 @@ def fit_sb_asym(TESNum, dirfiles, scaling=140e3, newsize=70, dmax = 5., az_cente
 
 def demodulate_directory(thedir, ppp, TESmask=None, srcshift=0.,
         lowcut=0.3, highcut=10., nbins=250, method='rms', rebin=True):
-    print ''
-    print '##############################################################'
-    print 'Directory {} '.format(thedir)
-    print '##############################################################'
+    print('')
+    print('##############################################################')
+    print('Directory {} '.format(thedir))
+    print('##############################################################')
     datas = []
     for iasic in [0,1]:
-        print '======== ASIC {} ====================='.format(iasic)
+        print('======== ASIC {} ====================='.format(iasic))
         AsicNum = iasic+1
         a = qp()
         a.verbosity=0
@@ -1068,7 +1068,7 @@ def demodulate_directory(thedir, ppp, TESmask=None, srcshift=0.,
         az_el_azang = np.array([unbinned['az'], unbinned['el'], unbinned['az_ang'], unbinned['t']])
         sb = unbinned['sb']
 
-    print az_el_azang.shape
+    print(az_el_azang.shape)
     #print sb.shape
     return sb, az_el_azang
 

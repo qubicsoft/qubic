@@ -32,7 +32,7 @@ class QubicMultibandAcquisition(QubicPolyAcquisition):
         Parameters:
         -----------
         nus : array
-            edge frequencies for subbands, for example:
+            edge frequencies for reconstructed subbands, for example:
             [140, 150, 160] means two bands: one from 140 to 150 GHz and
             one from 150 to 160 GHz
         Note, that number of subbands is not equal to len(self)
@@ -45,60 +45,10 @@ class QubicMultibandAcquisition(QubicPolyAcquisition):
             self.bands = np.array([[nus[i], nus[i + 1]] for i in range(len(nus) - 1)])
         else:
             raise ValueError('The QubicMultibandAcquisition class is designed to '
-                             'work with multiple frequencies. For monochromatic case you can use '
-                             'the QubicAcquisition class')
+                             'work with multiple reconstructed subbands. '
+                             'If you reconstruct only one subband, you can use '
+                             'the QubicPolyAcquisition class')
         self.nus = np.array([q.filter.nu / 1e9 for q in multiinstrument])
-
-    def get_observation(self, m, convolution=True, noiseless=False):
-        '''
-        Return TOD for polychromatic synthesised beam,
-        just the same way as QubicPolyAcquisition.get_observation does
-
-        Parameters
-        ----------
-        m : np.array((N, npix, 3)) if self.scene.kind == 'IQU', else np.array((npix))
-            where N = len(self) if convolution == True or
-                  N = len(self.bands) if convolution == False
-            Helpix map of CMB for all the frequencies
-        convolution : boolean, optional [default and recommended = True]
-            - if True, convolve the input map with gaussian kernel
-            with width specific for each subfrequency and
-            return TOD, convolved map,
-            (for example, we use 4 monochromatic frequencies and divide them 
-                to 2 subbands)
-            where TOD = [H1, H2, H3, H4] * [m_conv1, m_conv2, m_conv3, m_conv4].T
-            and convolved map = [average([m_conv1, m_conv2]), average([m_conv3, m_conv4])]
-            - if False, the input map is considered as already convolved
-            and the return is just TOD, which is equal to
-            [sum(H1, H2, H3, ...)] * input_map
-        noiseless : boolean, optional [default=False]
-            if False, add noise to the TOD due to the model
-        '''
-
-        if self.scene.kind != 'I':
-            shape = (len(self), m.shape[1], m.shape[2])
-        else:
-            shape = m.shape
-
-        if convolution:
-            _maps_convolved = np.zeros(shape)  # array of sky maps, each convolved with its own gaussian
-            for i in range(len(self)):
-                C = self[i].get_convolution_peak_operator()
-                _maps_convolved[i] = C(m[i])
-            tod = self.get_operator_to_make_TOD() * _maps_convolved
-        else:
-            tod = self.get_operator() * m
-
-        if not noiseless:
-            tod += self.get_noise()
-
-        if convolution:
-            maps_convolved = [np.average(_maps_convolved[(self.nus > mi) * (self.nus < ma)],
-                                         axis=0, weights=self.weights[(self.nus > mi) * (self.nus < ma)]) \
-                              for (mi, ma) in self.bands]
-            return tod, maps_convolved
-
-        return tod
 
     def get_operator(self):
         op = np.array(self._get_array_of_operators())

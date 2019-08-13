@@ -1,3 +1,4 @@
+from __future__ import division, print_function
 from matplotlib import rc
 from qubicpack import qubicpack as qp
 import fibtools as ft
@@ -37,7 +38,7 @@ allfiles_ang = np.sort(glob.glob(dirfiles+'angles*_'+names+'_*.fits'))
 allfiles_ang = np.sort(allfiles_ang)
 
 allels = np.zeros(len(allfiles))
-for i in xrange(len(allfiles)):
+for i in range(len(allfiles)):
     allels[i] = str.split(allfiles[i],'_')[-1][:-5]
 
 print 'Found {} Files'.format(len(allfiles))
@@ -48,7 +49,7 @@ alldata = []
 allaz = []
 allel = []
 allang_az = []
-for j in xrange(len(allfiles)):
+for j in range(len(allfiles)):
     data = np.array(FitsArray(allfiles[j]))
     sh = np.shape(data)
     alldata.append((data.T-np.median(data,axis=1)).T)
@@ -101,10 +102,10 @@ fs = 10
 rcParams.update({'font.size': fs})
 
 with PdfPages(dir_img+'/allTES_flat.pdf') as pdf:
-    for serie in xrange(nseries):
+    for serie in range(nseries):
         print 'Doing Flat all-in-one image: page {} out of {}'.format(serie, 256/(nn1*nn2)+1)
         rc('figure',figsize=(20,28))
-        for i in xrange(nn1*nn2):
+        for i in range(nn1*nn2):
             TESNum = serie*nn1*nn2+i+1
             TESIndex = TESNum-1
             if TESNum <= 256:
@@ -136,11 +137,11 @@ fs = 9
 rcParams.update({'font.size': fs})
 from matplotlib.backends.backend_pdf import PdfPages
 with PdfPages(dir_img+'/allTES_Healpix.pdf') as pdf:
-    for serie in xrange(nseries):
+    for serie in range(nseries):
         print 'Doing Healpix all-in-one image: page {} out of {}'.format(serie, 256/(nn1*nn2)+1)
         rc('figure',figsize=(16,28))
         clf()
-        for i in xrange(nn1*nn2):
+        for i in range(nn1*nn2):
             TESNum = serie*nn1*nn2+i+1
             TESIndex = TESNum-1
             if TESNum <= 256:
@@ -160,7 +161,7 @@ with PdfPages(dir_img+'/allTES_Healpix.pdf') as pdf:
 
 
     
-for TESIndex in xrange(256):
+for TESIndex in range(256):
     print 'Doing individual images (Flat and Healpix) for TES {} out of {}'.format(TESIndex,256)
     # Flat image
     img, xx, yy = dl.bin_image_elscans(allaz, allels, alldata, [x_min, x_max], nbins_x, TESIndex)

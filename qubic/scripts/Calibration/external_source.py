@@ -1,3 +1,4 @@
+from __future__ import division, print_function
 from Calibration import fibtools as ft
 import Calibration.plotters as p
 
@@ -133,7 +134,7 @@ p.FoldedTESFreeFit(tt, bla, theTES, folded)
 infos = [infos130, infos150, infos160, infos165]
 
 pars = []
-for i in xrange(len(infos)):
+for i in range(len(infos)):
     the_info = infos[i]
     fnum = the_info['fnum']
     asic1 = the_info['asic']
@@ -151,13 +152,13 @@ for i in xrange(len(infos)):
 
 img_amp = np.zeros((128, len(infos))) + np.nan
 img_tau = np.zeros((128, len(infos))) + np.nan
-for i in xrange(len(infos)):
+for i in range(len(infos)):
     img_amp[okfinal1, i] = pars[i][okfinal1, 3]
     img_tau[okfinal1, i] = pars[i][okfinal1, 1]
 
 # Time response tau
 clf()
-for i in xrange(len(infos)):
+for i in range(len(infos)):
     subplot(2, 2, i + 1)
     imshow(ft.image_asics(data1=img_tau[:, i]), vmin=0, vmax=0.2, interpolation='nearest')
     title('tau {} {} GHz'.format(infos[i]['name'], infos[i]['fnum']))
@@ -166,18 +167,18 @@ tight_layout()
 
 # Amplitude
 clf()
-for i in xrange(len(infos)):
+for i in range(len(infos)):
     subplot(2, 2, i + 1)
     imshow(ft.image_asics(data1=img_amp[:, i]), vmin=0, vmax=500, interpolation='nearest')
     title('Amp {} {} GHz'.format(infos[i]['name'], infos[i]['fnum']))
     colorbar()
 tight_layout()
 
-freqs = np.array([infos[i]['fnum'] for i in xrange(len(infos))])
+freqs = np.array([infos[i]['fnum'] for i in range(len(infos))])
 ampsok = img_amp[okfinal1, :]
 av_shape = np.zeros(len(infos))
 err_shape = np.zeros(len(infos))
-for i in xrange(len(infos)):
+for i in range(len(infos)):
     av_shape[i], err_shape[i] = ft.meancut(ampsok[:, i] / ampsok[:, 1], 4)
 
 clf()

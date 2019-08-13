@@ -1,5 +1,4 @@
-from __future__ import division
-%pylab
+from __future__ import division, print_function
 import glob
 import healpy as hp
 import numpy as np
@@ -16,12 +15,12 @@ stokes = ['I', 'Q', 'U']
 
 # ================= Get the simulation files ================
 # repository where the .fits was saved
-date = '20190627'
+date = '20190704'
 # rep_simu = './TEST/{}/'.format(date)
-rep_simu = '/home/martin/QUBIC/qubiclouise/qubic/scripts/Spectroimagery_paper/TEST/runs/' + date + '/'
+rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/Noise_MCMC_201907/' + date + '/'
 
 # Simulation name
-name = 'test_middle_simu'
+name = 'try50reals'
 
 # Dictionary saved during the simulation
 d = qubic.qubicdict.qubicDict()
@@ -79,6 +78,19 @@ for i in range(3):
     hp.gnomview(maps_diff[isub, :, i], rot=center, reso=9, sub=(3, 3, 6 + i + 1),
                 title='diff ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon))
 
+# ================== Look at the mean reconstructed map ===============
+all_maps_recon = np.empty((nreals, nf_recon, npix, 3))
+for real in range(nreals):
+    maps_recon, _, _ = rmc.get_maps(fits_noise[real])
+    all_maps_recon[real] = maps_recon
+
+mean_recon_map = np.mean(all_maps_recon, axis=0)
+
+plt.figure('Mean reconstructed map isub{}'.format(isub))
+for i in range(3):
+    hp.gnomview(mean_recon_map[isub, :, i], rot=center, reso=9, sub=(1, 3, i + 1),
+                title='Mean recon ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon))
+
 # ================= Get patches ================
 maps_recon_cut, maps_convo_cut, maps_diff_cut = rmc.get_patch(fits_noise[0], seen_map)
 print('Getting patches with shape : {}'.format(maps_recon_cut.shape))
@@ -110,8 +122,7 @@ plt.ylabel('std over pixels and realizations')
 plt.xlabel('zone')
 plt.legend(loc='best')
 
-
-# ================== Look at residuals ===============
+# ================ Look at residuals ===============
 residuals = all_patch_recon - np.mean(all_patch_recon, axis=0)
 
 # Histogram of the residuals (first real, first subband)

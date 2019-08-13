@@ -1,3 +1,4 @@
+from __future__ import division, print_function
 import healpy as hp
 import numpy as np
 import matplotlib.pyplot as plt
@@ -33,7 +34,7 @@ nsubvals = np.tile([1, 2, 3, 4], nfiles)
 
 # Archetypes of the files .fits you want to work on
 arch_conv, arch_recon = [], []
-for test in xrange(7):
+for test in range(7):
     for nsub in [1, 2, 3, 4]:
         arch_conv.append(name + '{0}_nf{1}_maps_convolved.fits'.format(test + 1, nsub))
         arch_recon.append(name + '{0}_nf{1}_maps_recon.fits'.format(test + 1, nsub))
@@ -52,7 +53,7 @@ allmaps_recon, seenmap_recon = rmc.get_all_maps(rep_simu, arch_recon, nsubvals)
 # sh = allmaps_conv[0].shape
 # conv = np.zeros((6,sh[1],sh[2],sh[3]))
 # recon = np.zeros((6,sh[1],sh[2],sh[3]))
-# for ptg in xrange(6):
+# for ptg in range(6):
 # 	conv[ptg,:,:,:] = allmaps_conv[ptg]
 # 	recon[ptg,:,:,:] = allmaps_recon[ptg]
 # allmaps_conv = []
@@ -64,7 +65,7 @@ allmaps_recon, seenmap_recon = rmc.get_all_maps(rep_simu, arch_recon, nsubvals)
 # sh = allmaps_conv[0].shape
 # conv = np.zeros((50,sh[1],sh[2],sh[3]))
 # recon = np.zeros((50,sh[1],sh[2],sh[3]))
-# for real in xrange(50):
+# for real in range(50):
 # 	conv[real,:,:,:] = allmaps_conv[real]
 # 	recon[real,:,:,:] = allmaps_recon[real]
 # allmaps_conv = []
@@ -85,24 +86,24 @@ ang = rmc.pix2ang(ns, center, seenmap_recon)
 
 # Two ways
 residus = []
-for j in xrange(len(allmaps_conv)):
+for j in range(len(allmaps_conv)):
     residus.append(allmaps_recon[j] - allmaps_conv[j])
 
 # residus = []
-# for j in xrange(len(allmaps_conv)): 
+# for j in range(len(allmaps_conv)): 
 # 	residus.append(allmaps_recon[j] - np.mean(allmaps_recon[j], axis=0))
 
 
 # Histogram of the residus
 plt.clf()
-for i in xrange(3):
+for i in range(3):
     plt.subplot(1, 3, i + 1)
     plt.hist(np.ravel(residus[0][:, 3, :, i]), range=[-20, 20], bins=100)
     plt.title(stokes[i])
 
 # Residus en fonction de l'angle
 plt.figure('noiseless_05_residus')
-for i in xrange(3):
+for i in range(3):
     plt.subplot(1, 3, i + 1)
     plt.plot(ang, residus[1][0, 0, :, i], '.')
     plt.ylabel('residu ' + stokes[i])
@@ -113,11 +114,11 @@ nbands = 4
 
 nep = np.array([1e-21, 1e-20, 1e-19, 1e-18, 1e-17]) * 4.7
 plt.figure('fix_hwp_noise_05to09_std_Residus_4_subbands')
-for freq in xrange(nbands):
+for freq in range(nbands):
     plt.subplot(1, nbands, freq + 1)
     std = np.zeros((3, 5))
     for i in [1, 2]:
-        for res in xrange(5):
+        for res in range(5):
             print(4 * res + nbands - 1)
             std[i, res] = float(np.std(residus[4 * res + nbands - 1][:, freq, :, i], axis=1))
         plt.plot(nep, std[i, :], 'o', label=stokes[i] + ' residus')
@@ -135,9 +136,9 @@ pitch_std = np.array([1.46, 5.84, 2.92, 11.68, 29.2, 0.58, 0.])
 pitch_mean = np.array([2.48, 9.9, 4.95, 19.81, 49.52, 0.99, 0.])
 plt.figure('pitch_test_' + str(nbands) + 'subbands_std_residus_corrected')
 std = np.empty((7, nbands, 2))
-for freq in xrange(nbands):
-    for i in xrange(2):
-        for pitch in xrange(7):
+for freq in range(nbands):
+    for i in range(2):
+        for pitch in range(7):
             std[pitch, freq, i] = np.std(residus[pitch][:, freq, :, i + 1])
     std_meanQU = np.mean(std, axis=2) / np.sqrt(nbands)
     plt.plot(pitch_std, std_meanQU[:, freq], 'o', label='subband ' + str(freq + 1) + '/' + str(nbands))
@@ -160,9 +161,9 @@ plt.figure('pitch_test_I=0_std_residus_corrected2')
 for nbands in [1, 2, 3, 4]:
     plt.subplot(2, 2, nbands)
     std = np.empty((7, nbands, 2))
-    for freq in xrange(nbands):
-        for i in xrange(2):
-            for pitch in xrange(7):
+    for freq in range(nbands):
+        for i in range(2):
+            for pitch in range(7):
                 res = pitch * 4 + nbands - 1
                 # print(res)
                 std[pitch, freq, i] = np.std(residus[res][:, freq, :, i + 1])
@@ -188,9 +189,9 @@ plt.figure('pitch_test_nfsub12_std_residus_corrected_one_plot')
 symbol = ['o', '+', 's', 'x']
 for nbands in [1, 2, 3, 4]:
     std = np.empty((7, nbands, 2))
-    for freq in xrange(nbands):
-        for i in xrange(2):
-            for pitch in xrange(7):
+    for freq in range(nbands):
+        for i in range(2):
+            for pitch in range(7):
                 res = pitch * 4 + nbands - 1
                 print(res)
                 std[pitch, freq, i] = np.std(residus[res][:, freq, :, i + 1])
@@ -220,7 +221,7 @@ maps_residus[seenmap_conv, :] = residus[isub][real, freq, :, :]
 # hp.mollview(maps_conv[:,1], title='maps_conv')
 
 plt.figure('Maps')
-for i in xrange(3):
+for i in range(3):
     if i == 0:
         min = None
         max = None
@@ -238,10 +239,10 @@ plt.show()
 isub = 0
 sh = residus[isub].shape
 plt.figure(name + 'residus_' + str(isub + 1) + 'subbands')
-for freq in xrange(sh[1]):
+for freq in range(sh[1]):
     maps_residus = np.zeros((12 * ns ** 2, 3))
     maps_residus[seenmap_conv, :] = residus[isub][0, freq, :, :]
-    for i in xrange(3):
+    for i in range(3):
         if i == 0:
             min = -20
             max = 20
@@ -254,10 +255,10 @@ for freq in xrange(sh[1]):
 ##### plots des residus
 freq = 0
 plt.figure(name + '_residus_freescale_subband' + str(freq + 1) + 'over1')
-for hwp in xrange(nfiles):
+for hwp in range(nfiles):
     maps_residus = np.zeros((12 * ns ** 2, 3))
     maps_residus[seenmap_conv, :] = residus[hwp][0, freq, :, :]
-    for i in xrange(3):
+    for i in range(3):
         if i == 0:
             min = None
             max = None
@@ -273,17 +274,17 @@ freq = 0
 plt.figure(name + '_map_convQU_subband' + str(freq + 1))
 maps_conv = np.zeros((12 * ns ** 2, 3))
 maps_conv[seenmap_conv, :] = allmaps_conv[0][0, freq, :, :]
-for i in xrange(2):
+for i in range(2):
     hp.gnomview(maps_conv[:, i + 1], rot=center, reso=9, sub=(2, 1, i + 1), title=('conv ' + stokes[i + 1]), min=None,
                 max=None)
 
 ##### plots des maps recon QU
 freq = 0
 plt.figure(name + '_map_reconQU_subband' + str(freq + 1))
-for hwp in xrange(4):
+for hwp in range(4):
     maps_recon = np.zeros((12 * ns ** 2, 3))
     maps_recon[seenmap_conv, :] = allmaps_recon[hwp][0, freq, :, :]
-    for i in xrange(2):
+    for i in range(2):
         hp.gnomview(maps_recon[:, i + 1], rot=center, reso=9, sub=(2, 4, 4 * i + hwp + 1),
                     title=(stokes[i + 1] + ' ptg=' + str((hwp + 1) * 1000)), min=None, max=None)
 
@@ -300,7 +301,7 @@ npix_seen = sh[2]
 
 # TEST: artificial correlation
 # maps_recon_test = copy.copy(allmaps_recon[0])
-# for pix in xrange(npix_seen):
+# for pix in range(npix_seen):
 # 	if ang[pix] <= a1:
 # 		maps_recon_test[:,:,pix,1] = maps_recon_test[:,:,pix,0] + np.random.rand(1)
 # 	elif a1<ang[pix]<=a2:
@@ -320,7 +321,7 @@ mask0 = np.zeros(sh)
 mask1 = np.zeros(sh)
 mask2 = np.zeros(sh)
 mask3 = np.zeros(sh)
-for pix in xrange(npix_seen):
+for pix in range(npix_seen):
     if ang[pix] <= a1:
         n0 += 1
         mask0[:, :, pix, :] = 1.
@@ -349,7 +350,7 @@ print(all_n, np.sum(all_n), sh[2])
 # Let's look at the zones
 allmask = [mask0, mask1, mask2, mask3]
 allrecon_mask = []
-for zone in xrange(nzones):
+for zone in range(nzones):
     recon_mask = allmaps_recon[0] * allmask[zone]
     # recon_mask = residus[3] * allmask[zone]
     allrecon_mask.append(recon_mask)
@@ -364,9 +365,9 @@ hp.gnomview(maps_recon[:, 2], rot=center, reso=12, title=('ptg=' + str(ptg)))
 # New reconstructed maps with only the pixels inside the zone
 allrecon = [recon0, recon1, recon2, recon3]
 allrecon_new = []
-for n in xrange(len(all_n)):
+for n in range(len(all_n)):
     recon_new = np.zeros([sh[0], sh[1], all_n[n], sh[3]])
-    for i in xrange(all_n[n]):
+    for i in range(all_n[n]):
         recon_new[:, :, i, :] = allrecon[n][i]
     allrecon_new.append(recon_new)
 
@@ -380,11 +381,11 @@ ngroup = 1  # pour avoir des barres d'erreur on fait des sous-zones
 
 r = np.zeros((len(r_coeff), nzones, nptg, nsub))
 std = np.zeros((len(r_coeff), nzones, nptg, nsub))
-for ptg in xrange(nptg):
-    for freq in xrange(nsub):
-        for zone in xrange(nzones):
+for ptg in range(nptg):
+    for freq in range(nsub):
+        for zone in range(nzones):
             corr_zone = np.zeros([ngroup, 3, 3])
-            for g in xrange(ngroup):
+            for g in range(ngroup):
                 sh = allrecon_new[zone].shape
                 print(sh)
                 cov_zone = np.cov(allrecon_new[zone][ptg, freq, g * sh[2] / ngroup:(g + 1) * sh[2] / ngroup, :],
@@ -400,10 +401,10 @@ for ptg in xrange(nptg):
             std[2, zone, ptg, freq] = r_std[1, 2]
 
 plt.figure('test_ptg02_rcoeff')
-for coeff in xrange(len(r_coeff)):
-    for freq in xrange(nsub):
+for coeff in range(len(r_coeff)):
+    for freq in range(nsub):
         plt.subplot(3, 4, 4 * coeff + freq + 1)
-        for ptg in xrange(1):
+        for ptg in range(1):
             plt.errorbar(np.arange(4), r[coeff, :, ptg, freq], yerr=std[coeff, :, ptg, freq], fmt='-o',
                          label='ptg=' + str(1000 * (1 + ptg)))
         if coeff == 2:
@@ -424,9 +425,9 @@ npix_seen = sh[2]
 nsub = sh[1]
 
 all_corr = []
-for sub in xrange(nsub):
+for sub in range(nsub):
     corr = np.zeros((npix_seen, 3, 3))
-    for pix in xrange(npix_seen):
+    for pix in range(npix_seen):
         # cov = np.cov(maps_recon_test[:,sub,pix,:], rowvar = False)
         cov = np.cov(allmaps_recon[0][:, sub, pix, :], rowvar=False)
         corr[pix, :, :] = amc.cov2corr(cov)
@@ -461,9 +462,9 @@ nsub = sh[1]
 
 r = np.zeros((len(r_coeff), nzones, nreals, nsub))
 
-for real in xrange(nreals):
-    for freq in xrange(nsub):
-        for zone in xrange(nzones):
+for real in range(nreals):
+    for freq in range(nsub):
+        for zone in range(nzones):
             cov_zone = np.cov(allrecon_new[zone][real, freq, :, :], rowvar=False)
             corr_zone = amc.cov2corr(cov_zone)
             r[0, zone, real, freq] = corr_zone[0, 1]
@@ -477,8 +478,8 @@ r_mean = np.mean(r, axis=2)
 r_std = np.std(r, axis=2)
 
 plt.figure('noiseless_50reals_rcoeff')
-for coeff in xrange(len(r_coeff)):
-    for freq in xrange(nsub):
+for coeff in range(len(r_coeff)):
+    for freq in range(nsub):
         plt.subplot(3, 4, 4 * coeff + freq + 1)
         plt.errorbar(np.arange(4), r_mean[coeff, :, freq], yerr=r_std[coeff, :, freq], fmt='-o')
         if coeff == 2:
@@ -507,15 +508,15 @@ mapsconv = np.zeros((12 * ns ** 2, 3))
 # maps_recon_mean = np.zeros((12*ns**2, 3))
 maps_recon = np.zeros((12 * ns ** 2, 3))
 
-for isub in xrange(4):
+for isub in range(4):
     sh = allmaps_conv[isub].shape
     nreals = sh[0]
     nsub = sh[1]
     cells = np.zeros((6, nbins, nsub, nreals))
     cells_in = np.zeros((6, nbins, nsub, nreals))
     print(cells.shape)
-    for real in xrange(nreals):
-        for n in xrange(nsub):
+    for real in range(nreals):
+        for n in range(nsub):
             mapsconv[seenmap_conv, :] = allmaps_conv[isub][real, n, :, :]
             # noise_in[seenmap_conv, :] = residus[isub][real,n,:,:]
 
@@ -540,14 +541,14 @@ for isub in xrange(4):
 
 # plot all spectra
 plt.figure(name + 'spectra')
-for isub in xrange(4):
-    for s in xrange(3):
+for isub in range(4):
+    for s in range(3):
         plt.subplot(4, 3, isub * 3 + s + 1)
         plt.ylabel(thespec[s])  # + ' tol=' + str(tol[isub]))
         plt.xlabel('l')
         sh = mcls[isub].shape
         nsub = sh[2]
-        for k in xrange(nsub):
+        for k in range(nsub):
             p = plt.plot(ell_binned, ell_binned * (ell_binned + 1) * mcls_in[isub][s, :, k], '--')
             plt.errorbar(ell_binned, ell_binned * (ell_binned + 1) * mcls[isub][s, :, k],
                          yerr=ell_binned * (ell_binned + 1) * scls[isub][s, :, k], fmt='o', color=p[0].get_color(),
@@ -560,14 +561,14 @@ plt.show()
 # Spectres pour chaque nb de sous-bande
 isub = 2
 plt.figure('test_xpol' + str(isub + 1))
-for s in xrange(3):
+for s in range(3):
     plt.subplot(3, 1, s + 1)
     plt.ylabel(thespec[s])
     plt.xlabel('l')
 
     sh = mcls[isub].shape
     nsub = sh[2]
-    for k in xrange(nsub):
+    for k in range(nsub):
         p = plt.plot(ell_binned, ell_binned * (ell_binned + 1) * mcls_in[isub][s, :, k], '--')
         plt.errorbar(ell_binned, ell_binned * (ell_binned + 1) * mcls[isub][s, :, k],
                      yerr=ell_binned * (ell_binned + 1) * scls[isub][s, :, k], fmt='o', color=p[0].get_color(),
@@ -579,18 +580,18 @@ for s in xrange(3):
 # Spectre par numero de sous-bande
 plt.figure('test_ptg02_subband')
 nptg = len(mcls)
-for band in xrange(4):
-    for s in xrange(3):
+for band in range(4):
+    for s in range(3):
         plt.subplot(4, 3, band * 3 + s + 1)
         plt.ylabel(thespec[s] + '_bande' + str(band + 1))
         plt.xlabel('l')
 
         plt.plot(ell_binned, ell_binned * (ell_binned + 1) * mcls_in[ptg][s, :, band], '--')
-        for ptg in xrange(nptg):
+        for ptg in range(nptg):
             plt.plot(ell_binned, ell_binned * (ell_binned + 1) * mcls[ptg][s, :, band], 'o',
                      label='ptg=' + str(ptg * 1000 + 1000))
         if band == 0 and s == 0:
             plt.legend(numpoints=1, prop={'size': 7})
         if band == 0 and s == 1:
-            plt.title('Spectres dans chaque sous-bande pour 6 pointages differents')
+            plt.title('Spectra in each sub-band for 6 different pointings')
 plt.show()

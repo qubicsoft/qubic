@@ -6,6 +6,7 @@ Created on Tue Jan 29 09:44:35 2019
 @author: james, louise, JCH
 """
 
+from __future__ import division, print_function
 import numpy as np
 import fibtools as ft
 from matplotlib.pyplot import *
@@ -37,10 +38,10 @@ def FreqResp(freq, frange, filtered_spec, theTES, fff):
     xlabel('Freq [Hz]')
     ylabel('Power Spectrum [$nA^2.Hz^{-1}$]')
     #### Show where the signal is expected
-    for ii in xrange(10): plot(np.array([fff, fff]) * (ii + 1), [1e-20, 1e-10], 'r--', alpha=0.3)
+    for ii in range(10): plot(np.array([fff, fff]) * (ii + 1), [1e-20, 1e-10], 'r--', alpha=0.3)
     #### PT frequencies
     fpt = 1.724
-    for ii in xrange(10): plot(np.array([fpt, fpt]) * (ii + 1), [1e-20, 1e-10], 'k--', alpha=0.3)
+    for ii in range(10): plot(np.array([fpt, fpt]) * (ii + 1), [1e-20, 1e-10], 'k--', alpha=0.3)
 
     return
 
@@ -56,7 +57,7 @@ def FiltFreqResp(theTES, frange, fff, filt, dd, notch, FREQ_SAMPLING, nsamples, 
     # notch filter according to notch - must select TES
 
     sigfilt = dd[theTES, :]
-    for i in xrange(len(notch)):
+    for i in range(len(notch)):
         sigfilt = ft.notch_filter(sigfilt, notch[i][0], notch[i][1], FREQ_SAMPLING)
 
     # get new spectrum with notch filter applied
@@ -73,10 +74,10 @@ def FiltFreqResp(theTES, frange, fff, filt, dd, notch, FREQ_SAMPLING, nsamples, 
     xlabel('Freq [Hz]')
     ylabel('Power Spectrum [$nA^2.Hz^{-1}$]')
     #### Show where the signal is expected
-    for ii in xrange(10): plot(np.array([fff, fff]) * (ii + 1), [1e-20, 1e-10], 'r--', alpha=0.3)
+    for ii in range(10): plot(np.array([fff, fff]) * (ii + 1), [1e-20, 1e-10], 'r--', alpha=0.3)
     #### PT frequencies
     fpt = 1.724
-    for ii in xrange(10): plot(np.array([fpt, fpt]) * (ii + 1), [1e-20, 1e-10], 'k--', alpha=0.3)
+    for ii in range(10): plot(np.array([fpt, fpt]) * (ii + 1), [1e-20, 1e-10], 'k--', alpha=0.3)
 
     return
 

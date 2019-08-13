@@ -1,5 +1,5 @@
 #!/bin/env python
-from __future__ import division
+from __future__ import division, print_function
 import sys
 import os
 import time
@@ -119,7 +119,7 @@ for nf_sub_rec in np.arange(noutmin, noutmax + 1):
 # pi_fraction = 6
 # I = np.arange(pi_fraction/2)
 # ptg_start = 500
-# for simu in xrange(len(I)):
+# for simu in range(len(I)):
 
 #     if simu==0:
 #         pp = p
@@ -140,7 +140,7 @@ for nf_sub_rec in np.arange(noutmin, noutmax + 1):
 
 #         #hwp angle random
 #         # hwp_ang = np.zeros(ptg_start)
-#         # for ang in xrange(ptg_start):
+#         # for ang in range(ptg_start):
 #         #     ptg = (simu-1)*ptg_start + ang
 #         #     if pnew.angle_hwp[ptg]>11.25:
 #         #         hwp_ang[ang] = pnew.angle_hwp[ptg] - 22.5
@@ -221,7 +221,7 @@ for nf_sub_rec in np.arange(noutmin, noutmax + 1):
 
 
 ##### Plusieurs pointings #####
-# for ptg in xrange(6):
+# for ptg in range(6):
 #     p = qubic.get_pointing(d)
 #     d['npointings'] += 1000
 #     #d['seed'] += 1
@@ -264,7 +264,7 @@ for nf_sub_rec in np.arange(noutmin, noutmax + 1):
 
 
 # ##### Plusieurs realisations #####
-# for real in xrange(50):
+# for real in range(50):
 #     p = qubic.get_pointing(d)
 #     d['seed'] += 1 #pour avoir un pointing par real
 #     print(len(p.pitch))

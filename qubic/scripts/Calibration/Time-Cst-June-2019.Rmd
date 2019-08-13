@@ -1,0 +1,489 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.0
+  kernelspec:
+    display_name: Python [default]
+    language: python
+    name: python2
+---
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(9,4.5))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack import qubicpack as qp
+import fibtools as ft
+import plotters as p
+import lin_lib as ll
+import demodulation_lib as dl
+import satorchipy as stpy
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import datetime as dt
+import pickle
+
+```
+
+```{python}
+day = '2019-06-27'
+data_dir = '/qubic/Data/Calib-TD/'+day+'/'
+#dirs = np.sort(glob.glob(data_dir+'*test_sw*'))
+dirs = np.sort(glob.glob(data_dir+'*TimeCst*'))
+print (dirs)
+
+label = []
+voltage = np.zeros(len(dirs))
+fmod = np.zeros(len(dirs))
+amp = np.zeros(len(dirs))
+offset = np.zeros(len(dirs))
+dutycycle = np.zeros(len(dirs))
+for i in range(len(dirs)):
+    d = dirs[i]
+    bla = str.split(d,'_')
+    print(bla)
+    label.append(bla[3])
+    voltage[i] = bla[4][0]
+    fmod[i] = bla[6]
+    amp[i] = bla[9]
+    offset[i] = bla[11]
+    dutycycle[i] = bla[13]
+```
+
+```{python}
+ifile = 0
+thedir = dirs[ifile]
+print(thedir)
+AsicNum = 1
+a = qp()
+a.verbosity=1
+a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+data1=a.azel_etc(TES=None)
+
+AsicNum = 2
+a = qp()
+a.verbosity=1
+a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+data2=a.azel_etc(TES=None)
+
+```
+
+```{python}
+rc('figure',figsize=(12,8))
+t0=data1['t_data'][0]
+subplot(2,1,1)
+plot((data1['t_data']-t0)/3600, data1['data'][93-1,:])
+xlabel('Hours')
+subplot(2,1,2)
+plot((data2['t_data']-t0)/3600, data2['data'][58-1,:])
+xlabel('Hours')
+```
+
+```{python}
+rc('figure',figsize=(12,8))
+reload(ft)
+
+TESNum=51
+tt = data1['t_data']
+t0 = tt[0]
+dd = data1['data'][TESNum-1,:].reshape((1,len(tt)))
+
+# oktime = (((tt-t0)/3600) > 7) & (((tt-t0)/3600) < 10)
+# tt = tt[oktime]
+# dd = dd[:,oktime]
+
+period = 1./fmod[ifile]
+nbins = 150
+lowcut = 0.000001
+highcut = 80.
+
+xmin = 0.09
+xmax = 90.
+ymin = 1e1
+ymax = 1e12
+
+############ Power spectrum
+subplot(2,1,1)
+spectrum_f, freq_f = ft.power_spectrum(tt, dd[0], rebin=True)
+plot(freq_f, f.gaussian_filter1d(spectrum_f,1),label='Raw Data')
+yscale('log')
+xscale('log')
+xlabel('Frequency [Hz]')
+ylabel('Power Spectrum')
+xlim(xmin, xmax)
+ylim(ymin, ymax)
+title('TES#={}'.format(TESNum))
+
+for i in range(10):
+    plot([1./period*i,1./period*i],[ymin,ymax],'k--',alpha=0.3)
+
+plot([lowcut, lowcut],[ymin,ymax],'k')
+plot([highcut, highcut],[ymin,ymax],'k')
+legend()
+
+########## Folding
+folded, t, folded_nonorm, newdata= ft.fold_data(tt, dd, period, lowcut, highcut, nbins, median=True, rebin=True, verbose=True)
+subplot(2,1,2)
+plot(t, folded_nonorm[0,:])
+plot(t, folded_nonorm[0,:], label='Filtered Data {} < f < {} Hz'.format(lowcut,highcut))
+xlim(0,period)
+xlabel('Time [sec]')
+ylabel('Folded Signal [ADU]')
+legend()
+
+########## New Power spectrum
+spectrum_f2, freq_f2 = ft.power_spectrum(tt, newdata, rebin=True)
+subplot(2,1,1)
+plot(freq_f2, f.gaussian_filter1d(spectrum_f2,1),label='Filtered data')
+legend()
+
+tight_layout()
+```
+
+```{python}
+########## Folding all Asic 1
+reload(ft)
+folded1, t1, folded_nonorm1, dfolded1, dfolded_nonorm1, newdata1= ft.fold_data(data1['t_data'], data1['data'], 
+                                                                              period, lowcut, highcut, 
+                                                                            nbins, median=True, rebin=True, 
+                                                                               verbose=False, return_error=True)
+
+
+```
+
+```{python}
+########## Folding all Asic 2
+folded2, t2, folded_nonorm2, dfolded2, dfolded_nonorm2,newdata2= ft.fold_data(data2['t_data'], data2['data'], 
+                                                                            period, lowcut, highcut, 
+                                                                            nbins, median=True, rebin=True, 
+                                                                              verbose=False, return_error=True)
+
+
+```
+
+```{python}
+t = t1.copy()
+folded = np.append(folded1, folded2, axis=0)
+dfolded = np.append(dfolded1, dfolded2, axis=0)
+folded_nonorm = np.append(folded_nonorm1, folded_nonorm2, axis=0)
+dfolded_nonorm = np.append(dfolded_nonorm1, dfolded_nonorm2, axis=0)
+```
+
+```{python}
+for i in range(128):
+    plot(t, folded[i,:], 'k-',alpha=0.1)
+median_fold = np.median(folded,axis=0)
+plot(t, np.median(folded,axis=0))
+ylim(-2,1)
+
+der = np.zeros_like(t)
+der[1:] = np.diff(median_fold)
+der[0]=der[1]
+plot(t,der)
+#tstart = t[np.argmin(der)]
+md, sd = ft.meancut(der,3)
+tstart = np.min(t[der < -5*sd ])
+offset = np.max(median_fold)
+amplitude = np.max(median_fold) - np.min(median_fold)
+print(tstart, offset, amplitude)
+
+plot(tstart, np.interp(tstart, t, median_fold),'ro')
+
+```
+
+```{python}
+def simsig_asym(x, pars, extra_args=None):
+    dx = x[1] - x[0]
+    cycle = np.nan_to_num(pars[0])
+    ctime_rise = np.nan_to_num(pars[1])
+    ctime_fall = np.nan_to_num(pars[2])
+    t0 = np.nan_to_num(pars[3])
+    amp = np.nan_to_num(pars[4])
+    offset = np.nan_to_num(pars[5])
+    sim_init = np.zeros(len(x))
+    ok = x < (cycle * (np.max(x)))
+    sim_init[ok] = -1+exp(-x[ok]/ctime_rise)
+    if ok.sum()>0:
+        endval = sim_init[ok][-1]
+    else:
+        endval = -1.
+    sim_init[~ok] = -exp(-(x[~ok]-x[~ok][0])/ctime_fall)+1+endval
+    thesim = np.interp((x - t0) % max(x), x, sim_init)
+    thesim = thesim*amp+offset
+    return np.nan_to_num(thesim)
+
+
+reload(ft)
+TESNum = 93
+function = simsig_asym
+
+
+# tofit = folded
+# errors = dfolded
+tofit = folded_nonorm
+errors = dfolded_nonorm
+
+
+amplitude = np.max(tofit[TESNum-1,:]) - np.min(tofit[TESNum-1,:])
+offset = np.max(tofit[TESNum-1,:])
+
+guess = [dutycycle[ifile]/100, 0.09, 0.15, tstart, amplitude, offset]
+print(guess)
+
+#subplot(2,1,1)
+errorbar(t, tofit[TESNum-1,:], yerr=errors[TESNum-1,:], fmt='k.', label='Data TES #{}'.format(TESNum))
+
+ok = np.isfinite(tofit[TESNum-1,:]) & (errors[TESNum-1,:] != 0)
+bla = ft.do_minuit(t, tofit[TESNum-1,ok], errors[TESNum-1,ok],
+	guess, functname=function,
+	rangepars=[[0.1,0.5], [0., 0.5], [0., 0.5], [0.,4], [-2*amplitude,2*amplitude], [0,offset*2]], fixpars=[0,0,0,0,0,0], 
+	force_chi2_ndf=False, verbose=False, print_level=0,nsplit=5)
+params =  bla[1]
+err = bla[2]
+print(params)
+plot(t, function(t, bla[1]), label='Fitted: \n cycle={0:8.3f}+/-{1:8.3f} \n tau = {2:8.3f}+/-{3:8.3f}s \n t0 = {4:8.3f}+/-{5:8.3f}s \n amp = {6:8.3f}+/-{7:8.3f}'.format(params[0], err[0], params[1], err[1], params[2], err[2], params[3], err[3]))
+legend()
+ylabel('Current [nA]')
+xlabel('time [s]')
+
+# subplot(2,1,2)
+# errorbar(t, tofit[TESNum-1,:]-function(t, bla[1]),yerr=errors[TESNum-1,:], fmt='k.', label='Data TES #{}'.format(TESNum))
+# legend()
+# ylabel('Residuals [nA]')
+# xlabel('time [s]')
+
+
+```
+
+```{python}
+from qubic.utils import progress_bar
+reload(ft)
+function = ft.simsig
+allpars = np.zeros((256,6))
+allerrpars = np.zeros((256,6))
+allchi2_ndf = np.zeros(256)
+
+function = simsig_asym
+bar = progress_bar(256, 'Detectors ')
+for i in range(256):
+    bar.update()
+    TESNum = i+1
+    
+    amplitude = np.max(tofit[TESNum-1,:]) - np.min(tofit[TESNum-1,:])
+    offset = np.max(tofit[TESNum-1,:])
+    guess = [dutycycle[ifile]/100, 0.1, 0.14, tstart, amplitude, offset]
+
+    ok = np.isfinite(tofit[TESNum-1,:]) & (errors[TESNum-1,:] != 0)
+    bla = ft.do_minuit(t, tofit[TESNum-1,ok], errors[TESNum-1,ok],
+        guess, functname=function,
+        rangepars=[[0.1,0.5], [0., 0.5], [0., 0.5], [0.,4], [-2*amplitude,2*amplitude], [0,offset*2]], 
+        fixpars=[1,0,0,0,0,0], 
+        force_chi2_ndf=False, verbose=False, print_level=0,nsplit=3)
+    params =  bla[1]
+    err = bla[2]
+    allpars[i,:] = params
+    allerrpars[i,:] = err
+    allchi2_ndf[i] = bla[4]/bla[5]
+
+
+```
+
+```{python}
+names = ['Duty Cycle', 'Rise Time', 'Fall Time', 'Start Time', 'Amplitude', 'Offset']
+for i in range(6):
+    subplot(2,3,1+i)
+    errorbar(allchi2_ndf,allpars[:,i], yerr=allerrpars[:,i], fmt='ro')
+    plot(allchi2_ndf,allchi2_ndf*0+np.median(allpars[:,i]),'--')
+    xscale('log')
+    xlabel(names[i])
+tight_layout()
+
+tstart_median = np.median(allpars[:,3])
+```
+
+```{python}
+from qubic.utils import progress_bar
+reload(ft)
+function = ft.simsig
+allpars = np.zeros((256,6))
+allerrpars = np.zeros((256,6))
+allchi2_ndf = np.zeros(256)
+
+function = simsig_asym
+
+bar = progress_bar(256, 'Detectors ')
+for i in range(256):
+    bar.update()
+    TESNum = i+1
+    
+    amplitude = np.max(tofit[TESNum-1,:]) - np.min(tofit[TESNum-1,:])
+    offset = np.max(tofit[TESNum-1,:])
+    guess = [dutycycle[ifile]/100, 0.1, 0.14, tstart_median, amplitude, offset]
+    ok = np.isfinite(tofit[TESNum-1,:]) & (errors[TESNum-1,:] != 0)
+    bla = ft.do_minuit(t, tofit[TESNum-1,ok], errors[TESNum-1,ok],
+        guess, functname=function,
+        rangepars=[[0.1,0.5], [0., 0.5], [0., 0.5], [0.,4], [-2*amplitude,2*amplitude], [0,offset*2]], 
+        fixpars=[1,0,0,1,0,0], 
+        force_chi2_ndf=False, verbose=False, print_level=0,nsplit=3)
+    params =  bla[1]
+    err = bla[2]
+    
+    allpars[i,:] = params
+    allerrpars[i,:] = err
+    allchi2_ndf[i] = bla[4]/bla[5]
+
+
+```
+
+```{python}
+names = ['Duty Cycle', 'Rise Time', 'Fall Time', 'Start Time', 'Amplitude', 'Offset']
+for i in range(6):
+    subplot(2,3,1+i)
+    errorbar(allchi2_ndf,allpars[:,i], yerr=allerrpars[:,i], fmt='ro')
+    plot(allchi2_ndf,allchi2_ndf*0+np.median(allpars[:,i]),'--')
+    xscale('log')
+    xlabel(names[i])
+tight_layout()
+
+tstart_median = np.median(allpars[:,3])
+```
+
+```{python}
+def normalize(x):
+    return (x-np.nanmean(x))/np.nanstd(x)
+
+from sklearn.cluster import DBSCAN
+results = np.array([normalize(allpars[:,1]), normalize(allpars[:,2]),
+                    normalize(allpars[:,4]), normalize(allpars[:,5]), 
+                    normalize(allerrpars[:,1]), normalize(allerrpars[:,2]), 
+                    normalize(allerrpars[:,4]), normalize(allerrpars[:,5]),
+                    normalize(allchi2_ndf)]).T
+clustering = DBSCAN(eps=1.3, min_samples=20).fit(results)
+labels = clustering.labels_
+nfound = len(np.unique(np.sort(labels)))
+print(nfound)
+
+unique_labels = unique(labels)  
+print(unique_labels)
+
+colors = [plt.cm.jet(each)
+          for each in np.linspace(0, 1, len(unique_labels))]
+
+for i in range(len(unique_labels)):
+    thisone = labels == unique_labels[i]
+    scatter(allpars[thisone,1],allerrpars[thisone,1],c=colors[i],
+            label='Type {} : n={}'.format(unique_labels[i],thisone.sum()))
+yscale('log')
+ylim(1e-4, 1e2)
+legend()
+
+ok = labels == 0
+fraction = ok.sum()*1./256
+print(fraction)
+title('Fraction OK = {0:4.1f}%'.format(fraction*100))
+```
+
+```{python}
+names = ['Duty Cycle', 'Rise Time', 'Fall Time', 'Start Time', 'Amplitude', 'Offset']
+for i in range(6):
+    subplot(2,3,1+i)
+    errorbar(allchi2_ndf,allpars[:,i], yerr=allerrpars[:,i], fmt='ko', label='Bad')
+    errorbar(allchi2_ndf[ok],allpars[ok,i], yerr=allerrpars[ok,i], fmt='ro', label='Good : '+ft.statstr(allpars[ok,i]))
+    plot(allchi2_ndf,allchi2_ndf*0+np.median(allpars[:,i]),'--')
+    xscale('log')
+    ylabel(names[i])
+    xlabel('$\chi^2/ndf$')
+    legend(loc='upper left', fontsize=8)
+    title('Fraction OK = {0:4.1f}%'.format(fraction*100))
+tight_layout()
+```
+
+```{python}
+rc('figure',figsize=(15,8))
+fname = 'TimeCst-'+str.split(dirs[ifile],'/')[-1]
+print(fname)
+
+reload(ft)
+subplot(2,3,1)
+hist(allpars[ok,1], bins=15, range=[0,0.3], label=ft.statstr(allpars[ok,1])+' sec')
+title('Rise Time [sec] - TES OK: {0:4.1f}%'.format(fraction*100))
+legend()
+
+subplot(2,3,2)
+hist(allpars[ok,2], bins=15, range=[0,0.3], label=ft.statstr(allpars[ok,2])+' sec')
+title('Fall Time [sec] - TES OK: {0:4.1f}%'.format(fraction*100))
+legend()
+
+subplot(2,3,3)
+hist(allpars[ok,4], bins=15, range=[0,120000], label=ft.statstr(allpars[ok,4])+' ADU')
+title('Amplitude [ADU] - TES OK: {0:4.1f}%'.format(fraction*100))
+legend()
+
+vals_rise = np.zeros(256)
+vals_rise = allpars[:,1].copy()
+vals_rise[~ok] = np.nan
+err_vals_rise = np.zeros(256)
+err_vals_rise = allerrpars[:,1].copy()
+err_vals_rise[~ok] = np.nan
+img = ft.image_asics(all1=vals_rise)
+subplot(2,3,4)
+imshow(img,vmin=0, vmax=0.3)
+colorbar()
+title('Rise Time [sec] - TES OK: {0:4.1f}%'.format(fraction*100))
+
+vals_fall = np.zeros(256)
+vals_fall = allpars[:,2].copy()
+vals_fall[~ok] = np.nan
+err_vals_fall = np.zeros(256)
+err_vals_fall = allerrpars[:,2].copy()
+err_vals_fall[~ok] = np.nan
+img = ft.image_asics(all1=vals_fall)
+subplot(2,3,5)
+imshow(img,vmin=0, vmax=0.3)
+colorbar()
+title('Fall Time [sec] - TES OK: {0:4.1f}%'.format(fraction*100))
+
+vals_amp = np.zeros(256)
+vals_amp = allpars[:,4].copy()
+vals_amp[~ok] = np.nan
+err_vals_amp = np.zeros(256)
+err_vals_amp = allerrpars[:,4].copy()
+err_vals_amp[~ok] = np.nan
+img = ft.image_asics(all1=vals_amp)
+subplot(2,3,6)
+imshow(img,vmin=0, vmax=120000)
+colorbar()
+title('Amplitude [ADU] - TES OK: {0:4.1f}%'.format(fraction*100))
+
+savefig('/Users/hamilton/Qubic/Calib-TD/TimeConstants/'+fname+'_results.png')
+```
+
+```{python}
+tesindex = np.arange(256)
+np.savetxt('/Users/hamilton/Qubic/Calib-TD/TimeConstants/'+fname+'_data.txt', 
+           np.nan_to_num(np.array([tesindex, vals_rise, err_vals_rise, 
+                                   vals_fall, err_vals_fall, 
+                                   vals_amp, err_vals_amp]).T),
+          fmt = ['%d','%12.5f','%12.5f','%12.5f','%12.5f','%12.3f','%12.3f'],
+          header ='TESIndex RiseTime[s] ErrRiseTime[s] FallTime[s] ErrFallTime[s] Amplitude[ADU] ErrAmplitude[ADU]')
+```
+
+```{python}
+
+```

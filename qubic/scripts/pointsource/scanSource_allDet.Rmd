@@ -59,6 +59,8 @@ def select_det(q,id):
     q.detector = detector_i
     return(q)
 
+
+# +
 #mpl.style.use('classic')
 name='test_scan_source'
 resultDir='%s'%name
@@ -70,10 +72,7 @@ resultDir='%s'%name
 #    - True: If you want the results for d['kind'] = 'I' and only one detector.
 alaImager=False
 component=0
-sel_det=True #If you want to select one detector
-TESid = 93
-#id_det=180 # Detector number to use, 180 == 93 from real detector?
-did_det={'93':180, '94':197, '95':214, '96':231}#180sim == 93real, 197sim == 94 real, 214sim == 95real, 231sim == 96real 
+sel_det=False #If you want to select one detector
 oneComponent=True # = True if you want to work only for I component
 # -
 
@@ -85,7 +84,7 @@ except:
 
 # INSTRUMENT
 d = qubic.qubicdict.qubicDict()
-d.read_from_file('global_source_oneDet.dict')
+d.read_from_file('global_source_allDet.dict')
 
 q = qubic.QubicInstrument(d)
 #plt.title('Detector array')
@@ -93,10 +92,10 @@ q = qubic.QubicInstrument(d)
 #q.detector.plot()
 
 if sel_det:
-    if str(TESid) not in did_det.keys():
-        q =select_det(q,TESid)
-    else:
-        q=select_det(q,did_det['{}'.format(TESid)])
+    TESid = 93
+    #id_det=180 # Detector number to use, 180 == 93 from real detector?
+    did_det={'93':180, '94':197, '95':214, '96':231}#180sim == 93real, 197sim == 94 real, 214sim == 95real, 231sim == 96real 
+    q=select_det(q,did_det['{}'.format(TESid)])
 ```
 
 ```{python}
@@ -106,15 +105,15 @@ pp= qubic.get_pointing(d)
 ```{python}
 s = qubic.QubicScene(d)
 
-sb = q.get_synthbeam(s, 0, detpos=q.detector.center[0])
+sb = q.get_synthbeam(s, 290, detpos=q.detector.center[0])
 xr=0.1*np.max(sb)
 sb_img=hp.gnomview(sb, rot=[0,90], xsize=500, reso=5, min=-xr, max=xr,title='Input ', 
                    return_projected_map=True,hold=False,cmap='viridis')
 #plt.show()
-#plt.clf()
-#plt.imshow(sb_img, cmap='viridis')
-#plt.colorbar()
-#plt.show()
+plt.clf()
+plt.imshow(sb_img, cmap='viridis')
+plt.colorbar()
+plt.show()
 
 ```
 
@@ -130,28 +129,54 @@ source[id]=1
 freq = 150 # GHz
 conv = 61.3474
 #source = hp.sphtfunc.smoothing(source,fwhm=np.deg2rad(conv/freq))#
-source = hp.sphtfunc.smoothing(source,fwhm=np.deg2rad(0.9))#
+source = hp.sphtfunc.smoothing(source,fwhm=np.deg2rad(1.07))# 1.07 == mean of the fwhm fitted in fitted_peaks.fits
 x0[:,component]=source
 
 if pp.fix_az:
     center = (fix_azimuth['az'],fix_azimuth['el'])
 else:
     center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
-#hp.gnomview(x0[:,0], rot=center,reso = 5,cmap='viridis',xsize=400)
+
+hp.gnomview(x0[:,0], rot=center,reso = 5,cmap='viridis',xsize=400)
+plt.show()
+
 ```
 
 ```{python}
 # Data already procceced and binned. The binned is 200
-TESid = TESid
+#TESid = TESid
+#filename = []
 dirflat = '/home/martin/QUBIC/qubiccalibration/Data/Calib-TD/150GHz-2019-04-06/Flat/'
-filename=dirflat+'imgflat_TESNum_{}.fits'.format(TESid)
-datamap = FitsArray(filename)
-az = FitsArray(dirflat+'azimuth.fits')#/np.cos(np.radians(50))
+filename = []
+#save current directory
+currdir = os.getcwd()
+#Change working directory and load filenames
+os.chdir(dirflat)
+datafiles = glob.glob('*.fits')
+for ifile in datafiles: 
+    filename.append(dirflat+ifile)             #'imgflat_TESNum_{}.fits'.format(TESid)
+datamap = []
+for ifile in filename:
+    datamap.append(FitsArray(ifile))
+# go back previous directory
+os.chdir(currdir)
+# Same pointing for each detector
+az = FitsArray(dirflat+'azimuth.fits')
 el = FitsArray(dirflat+'elevation.fits')
 
 #read xcenter, ycenter, amplitude and fwhm of the desired detector:
-peaks = np.array(FitsArray('fitted_peaks.fits'))
+peaks = np.array(FitsArray('/home/martin/QUBIC/qubiclouise/qubic/scripts/pointsource/fitted_peaks.fits'))
 peaks[:,0,:] = peaks[:,0,:]/np.cos(np.radians(50))
+```
+
+```{python}
+tesid = 92
+plot(peaks[tesid,0,:], peaks[tesid,1,:],'ko')
+```
+
+```{python}
+"""Do again TOD simulation with the new pointing strategy.
+Use the new pointing for TOD data too.."""
 ```
 
 ```{python}
@@ -219,8 +244,22 @@ p = hall_pointing(az, el, d['angspeed_psi'], d['maxpsi'], fix_azimuth=d['fix_azi
 ```
 
 ```{python}
+type(datamap[0])
+```
+
+```{python}
 az2d,el2d = np.meshgrid(az,el)
-myTOD = np.ravel(datamap)
+myTOD = np.zeros((len(datamap),len(datamap[0].ravel())))
+print(np.shape(myTOD), len(datamap[0].ravel()))
+for j,idata in enumerate(datamap):
+    myTOD[j,:] = np.ravel(idata)[0]
+```
+
+```{python}
+figure(figsize=(8,6))
+plt.imshow(datamap[200], cmap='viridis')
+plt.show()
+
 ```
 
 ```{python}
@@ -231,48 +270,90 @@ simTOD, maps_conv_p = sima.get_observation(x0, convolution = True, noiseless=Tru
 ```
 
 ```{python}
-newmap = np.reshape(myTOD, datamap.shape)
-#invierto el TOD simulado
-simTOD[0,:] = simTOD[0,::-1]
-simmap = np.reshape(simTOD[0], datamap.shape)
-figure(figsize=(12,12))
-subplot(221)
-imshow(newmap, extent=[az.min(),az.max(), el.min(),el.max()],cmap='viridis')
-subplot(222)
-imshow(simmap*1e27, extent=[az.min(),az.max(), el.min(),el.max()], cmap='viridis')
-subplot(223)
-ylim(-2e4,1.7e5)
-plot(myTOD)
-subplot(224)
-ylim(-2e4,1.7e5)
-plot(simTOD[0]*1e27)
-
+simTOD.shape
 ```
 
 ```{python}
-tesid = TESid -1
-peak95 = peaks[tesid]
+datamap = np.array(datamap)
 
-thetas =     np.array([[0.03281347, 0.11251228, 0.14091657 , 0.18485994, 0.17793436,
-             0.14746803, 0.12888845, 0.18494313, 0.242361  , 0.25671088,
-             0.26956301, 0.28452484, 0.2904603 ]])
+displ = False
+
+if displ:
+    ## REVISAR ALGORITMOK
+    idx = 0
+    newmap = np.reshape(myTOD[idx], datamap[idx].shape)
+    #invierto el TOD simulado
+    for j,_ in enumerate(simTOD):
+        simTOD[j,:] = simTOD[j,::-1]
+    simmap = np.reshape(simTOD[idx], datamap[idx].shape)
+    figure(figsize=(12,12))
+    subplot(221)
+    imshow(newmap, extent=[az.min(),az.max(), el.min(),el.max()],cmap='viridis')
+    subplot(222)
+    imshow(simmap*1e27, extent=[az.min(),az.max(), el.min(),el.max()], cmap='viridis')
+    subplot(223)
+    plot(myTOD)
+    subplot(224)
+    plot(simTOD[0]*1e27)
+    show()
+```
+
+```{python}
+# I have 10 detectors more than in simulated TOD...
+print(simTOD.shape, myTOD.shape)
+```
+
+```{python}
+"""To find the locations of the peaks in the TOD space"""
+
+az2dravel = az2d.ravel()[::-1]
+el2dravel = el2d.ravel()[::-1]
+
+locpeak_tod = []
+azloc = np.zeros()
+print('====')
+for ipeak in peaks:
+    for i in xrange(0,len(ipeak[0])):
+        azloc = np.where(abs(az2dravel-ipeak[0,i]) < 0.12 )
+        elloc = np.where(abs(el2dravel-ipeak[1,i]) < 0.12 )
+        az1 = az2dravel[azloc]
+        el1 = el2dravel[elloc]
+    
+        for each in azloc[0]:
+            if each in elloc[0]:
+                locpeak_tod.append(each)
+        
+print('====')
+
+print(len(locpeak_tod), locpeak_tod)
+peaktod = np.zeros((len(myTOD,)))
+peaktod[locpeak_tod] = np.max(myTOD)
+
+print(az2d.ravel()[locpeak_tod])
+print(el2d.ravel()[locpeak_tod])
+```
+
+```{python}
+
+thetas = np.array([[0.03281347, 0.11251228, 0.14091657 , 0.18485994, 0.17793436,
+0.14746803, 0.12888845, 0.18494313, 0.242361  , 0.25671088,
+0.26956301, 0.28452484, 0.2904603 ]])
 thetas_def = np.array([[ 0.01131323,  0.13182682,  0.14369991,  0.14369991,  0.15468746,
-             0.19529527,  0.19529527,  0.21161855,  0.21161855,  0.27776151,
-             0.28977923,  0.28977923,  0.30137091,  0.31428866]])
-
-phis =       np.array([[ 2.83409643, -0.97533545,  1.06666189,  0.04872912, -2.5518964 ,
-             2.47655669, -2.06418194,  1.775554977581,  2.90827761, -0.86898177,
-             0.90775038, -0.33751121,  0.3902112 ]])
-phis_def =   np.array([[ 2.35619449, -0.78539816,  0.86447862, -2.43527494,  2.35619449,
-             -1.61203054,  0.04123422,  3.10349837,  1.60889061, -0.78539816,
-             -2.39579663,  0.8250003 ,  2.35619449, -1.26541229]])
-
-vals =       np.array([[32.14002372, 33.95124927, 32.61291557,23.3299855 , 21.66893532,
-             7.77258269,  9.33062719,  30.42635041,  3.25307711,  1.53202714,
-             1.06429809,  0.68101577,  0.56667237]])
-vals_def =   np.array([[ 52.9271193 ,  20.90234505,  17.52582023,  17.52582023, 14.68904366,
-             6.83243483,   6.83243483,   4.7776674 , 4.7776674 ,   0.83580943,
-             0.57886246,   0.57886246, 0.40021914,   0.26078313]])
+         0.19529527,  0.19529527,  0.21161855,  0.21161855,  0.27776151,
+         0.28977923,  0.28977923,  0.30137091,  0.31428866]])
+phis =np.array([[ 2.83409643, -0.97533545,  1.06666189,  0.04872912, -2.5518964 ,
+ 2.47655669, -2.06418194,  1.775554977581,  2.90827761, -0.86898177,
+ 0.90775038, -0.33751121,  0.3902112 ]])
+phis_def = np.array([[ 2.35619449, -0.78539816,  0.86447862, -2.43527494,  2.35619449,
+        -1.61203054,  0.04123422,  3.10349837,  1.60889061, -0.78539816,
+        -2.39579663,  0.8250003 ,  2.35619449, -1.26541229]])
+vals = np.array([[32.14002372, 33.95124927, 32.61291557,23.3299855 , 21.66893532,
+ 7.77258269,  9.33062719,  30.42635041,  3.25307711,  1.53202714,
+ 1.06429809,  0.68101577,  0.56667237]])
+vals_def = np.array([[ 52.9271193 ,  20.90234505,  17.52582023,  17.52582023,
+         14.68904366,   6.83243483,   6.83243483,   4.7776674 ,
+          4.7776674 ,   0.83580943,   0.57886246,   0.57886246,
+          0.40021914,   0.26078313]])
  
 ```
 
@@ -336,8 +417,8 @@ print('el peak', np.radians(peak95[1,:]))
 print '======= Rotation from fit points to theoretical reference system'
 print('Position of the central peak (fifth in fit array), (az,el) = {}, {}'.format(peak95[0,4],peak95[1,4]))
 
-elcenter = el[len(el)/2]#+(offele-50.)#peak95[1,4]#
-azcenter = az[len(az)/2]#-(offaz-0)peak95[0,4]#
+elcenter = el[len(el)/2]#50.#+(offele-50.)#peak95[1,4]#
+azcenter = az[len(az)/2]#0.#-(offaz-0)peak95[0,4]#
 
 print('Central position in the observed region, (az,el) = {},{}'.format(azcenter,elcenter))
 
@@ -352,7 +433,8 @@ print('======Try angle betwen red and green (Martin notes)')
 
 xaxisred = thph2uv_one(np.radians(90-50), np.radians(0))
 xaxisgreen = thph2uv_one(np.radians(90-50.81),np.radians(0.12))
-
+#print(xaxisred)
+#print(xaxisgreen)
 angulo = np.arccos(np.dot(xaxisred,xaxisgreen)) #angular distance between xaxisred and xaxisgreen (offset?)
 import math as m
 angulo2 = m.atan2(np.radians(0.81),np.radians(0.12)*np.cos(np.radians(50.0)) ) # approximation
@@ -430,8 +512,8 @@ phis9 = phis_def[0][:9]
 
 for j,each in enumerate(newarr):
     # rotation from center of the field in az,el to 
-    posF00 = np.dot(rotmatZ(-(np.pi-phis9[j]) )  , each  )
-    posF0i = np.dot(rotmatX(+thetas9[j] ) , np.asarray(posF00)  )
+    posF00 = np.dot(rotmatZ(-(np.pi-phis9[0]) )  , each  )
+    posF0i = np.dot(rotmatX(+thetas9[0] ) , np.asarray(posF00)  )
     #posF01 = np.dot(rotmatX(-(np.pi/2 - np.radians(40)) ) , np.asarray(posF0i)  )
     posF04.append(np.dot(rotmatX(-( np.radians(40))/np.cos(np.radians(50)) ) , np.asarray(posF0i)  ) )
     #posF01i = np.dot(rotmatX(-thetas9[0] ) , np.asarray(posF01)  )
@@ -453,46 +535,52 @@ subplot(122, projection = 'polar')
 for i in xrange(0,9):
     plot(phis_def[0][i],thetas_def[0][i], 'ro')
     plot(nthph[1][i],nthph[0][i],'ko')
+    #plot(0,np.pi/2,'go')
+    #legend()
+
+sin = np.sin
+cos = np.cos
+pi = np.pi
+r=1.
+phim, thetam = np.mgrid[0.0:pi:100j, 0.0:2.0*pi:100j]
+xi = r*sin(phim)*cos(thetam)
+yi = r*sin(phim)*sin(thetam)
+zi = r*cos(phim)
 
 data = np.genfromtxt('leb_defsynthbeam.txt', unpack=True)
 newdata2 = np.genfromtxt('leb-inverse.txt', unpack = True)
 
-#sin = np.sin
-#cos = np.cos
-#pi = np.pi
-#r=1.
-#phim, thetam = np.mgrid[0.0:pi:100j, 0.0:2.0*pi:100j]
-#xi = r*sin(phim)*cos(thetam)
-#yi = r*sin(phim)*sin(thetam)
-#zi = r*cos(phim)
+thetai, phii = np.hsplit(data, 2) 
+newthetai, newphii = np.hsplit(newdata2,2)
 
-#thetai, phii = np.hsplit(data, 2) 
-#newthetai, newphii = np.hsplit(newdata2,2)
-#xxi = sin(thetai)*cos(phii)
-#yyi = sin(thetai)*sin(phii)
-#zzi = cos(thetai)
-#xxxi = sin(newthetai)*cos(newphii)
-#yyyi = sin(newthetai)*sin(newphii)
-#zzzi = cos(newthetai)
-#el2=50.
-#cel=np.radians(90-el2)
-#az2 = 0.
-#px = sin(cel)*cos(az2)
-#py = sin(cel)*sin(az2)
-#pz = cos(cel)
-##Set colours and render
-#fig = plt.figure(figsize=(12,12))
-#ax = fig.add_subplot(111, projection='3d')
-#ax.plot_surface(xi, yi, zi,  rstride=1, cstride=1, color='c', alpha=0.3, linewidth=0)
-#ax.scatter(xxi,yyi,zzi,color="r",s=20)
-#ax.scatter(xxxi,yyyi,zzzi,color="k", s =20)
-#ax.scatter(px,py,pz,color="k", s = 30)
-#ax.set_xlim([-1,1])
-#ax.set_ylim([-1,1])
-#ax.set_zlim([-1,1])
-#ax.set_aspect("equal")
-#plt.tight_layout()
-#plt.show()
+xxi = sin(thetai)*cos(phii)
+yyi = sin(thetai)*sin(phii)
+zzi = cos(thetai)
+xxxi = sin(newthetai)*cos(newphii)
+yyyi = sin(newthetai)*sin(newphii)
+zzzi = cos(newthetai)
+
+el2=50.
+cel=np.radians(90-el2)
+az2 = 0.
+px = sin(cel)*cos(az2)
+py = sin(cel)*sin(az2)
+pz = cos(cel)
+#Set colours and render
+fig = plt.figure(figsize=(12,12))
+ax = fig.add_subplot(111, projection='3d')
+ax.plot_surface(xi, yi, zi,  rstride=1, cstride=1, color='c', alpha=0.3, linewidth=0)
+ax.scatter(xxi,yyi,zzi,color="r",s=20)
+ax.scatter(xxxi,yyyi,zzzi,color="k", s =20)
+ax.scatter(px,py,pz,color="k", s = 30)
+
+ax.set_xlim([-1,1])
+ax.set_ylim([-1,1])
+ax.set_zlim([-1,1])
+
+ax.set_aspect("equal")
+plt.tight_layout()
+plt.show()
 ```
 
 ```{python}
@@ -502,10 +590,7 @@ reload(myinst)
 myq = myinst.QubicInstrument(d)
 
 if sel_det:
-    if TESid not in did_det.keys():
-        myq=select_det(myq,TESid)
-    else:
-        myq = did_det['{}'.format(TESid)]
+    myq=select_det(myq,did_det['{}'.format(TESid)])
 
 def bla(myq,p):
     horn = getattr(myq, 'horn', None)
@@ -529,10 +614,7 @@ reload(myinst)
 myq = myinst.QubicInstrument(d)
 
 if sel_det:
-    if TESid not in did_det.keys():
-        myq=select_det(myq,TESid)
-    else:
-        myq = did_det['{}'.format(TESid)]
+    myq=select_det(myq,did_det['{}'.format(TESid)])
 
 mya = qubic.QubicAcquisition(myq, p, s, d)
 mytod, my_conv = mya.get_observation(x0, convolution = True, noiseless = False)
@@ -541,27 +623,10 @@ figure(figsize=(14,5))
 plot(myTOD, 'b-')
 #roll tod
 #mytod = np.roll(mytod, len(mytod)+4*len(az))
-#mytod[0] = 3.3*mytod[0]
+mytod[0] = 3.3*mytod[0]
 #plot(mytod[0], 'g-')
 
-#To find the locations of the peaks in the TOD space
-#az2dravel = az2d.ravel()[::-1]
-#el2dravel = el2d.ravel()[::-1]
-#locpeak_tod = []
-#for i in xrange(0,len(peak95[0])):
-#    azloc = np.where(abs(az2dravel-peak95[0,i]) < 0.13 )
-#    elloc = np.where(abs(el2dravel-peak95[1,i]) < 0.12 )
-#    az1=az2dravel[azloc]
-#    el1=el2dravel[elloc]
-#    # the intersection should be only one -> we keep it
-#    for each in azloc[0]:
-#        if each in elloc[0]:
-#            locpeak_tod.append(each)
-#print('====')
-#print('#peaks', len(locpeak_tod), locpeak_tod)
-#peaktod = np.zeros((len(myTOD,)))
-#peaktod[locpeak_tod] = np.max(myTOD)
-#plot(1e-12*peaktod[:], 'r--')
+plot(1e-12*peaktod[:], 'r--')
 
 ```
 
@@ -621,6 +686,10 @@ for i in xrange(0,9):
 ```
 
 ```{python}
+
+```
+
+```{python}
 #myarec = qubic.QubicAcquisition(myq, p, s,d)
 #values_tod = np.reshape(np.asarray(values),(1,len(values)))
 d['tol'] = 1e-5
@@ -646,5 +715,390 @@ map2=hp.gnomview(x0[:,0], sub=(1,3,2),rot=center, reso = 5, xsize=resize, return
 hp.gnomview(tes93healpy,sub=(1,3,3),title='Healpy proj TES = {}'.format(TESid), reso = 5, xsize = resize)
 #hp.gnomview( (mas_recon_simu[:,0]-(maps_recon_real[:,0])),#min=-0.1,max=0.1,
 #           sub=(2,2,4),title='Diff.',rot=center,reso = 5, xsize = 400)
+
+```
+
+```{python}
+az[len(az)/2], el[len(el)/2]+1, peak95[1,4], peak95[0,4] 
+```
+
+Why will not work the rotation method? 
+
+The rotation fo the reference system will move that absolute system where the position of the points are defined. But we do not have the same relative position in between the points and it will no be able to do a rotation
+
+```{python}
+ttt,ppp = np.loadtxt('leb2.txt')
+print ttt, np.radians(50)
+```
+
+```{python}
+import matplotlib.pyplot as plt
+from matplotlib import cm, colors
+from mpl_toolkits.mplot3d import Axes3D
+import numpy as np
+
+sin = np.sin
+cos = np.cos
+pi = np.pi
+r=1.
+phim, thetam = np.mgrid[0.0:pi:100j, 0.0:2.0*pi:100j]
+xi = r*sin(phim)*cos(thetam)
+yi = r*sin(phim)*sin(thetam)
+zi = r*cos(phim)
+
+data = np.genfromtxt('leb.txt', unpack=True)
+newdata = np.genfromtxt('leb2.txt', unpack = True)
+thetai, phii = np.hsplit(data, 2) 
+newthetai, newphii = np.hsplit(newdata,2)
+
+#theta = theta * pi / 180.0
+#phi = phi * pi / 180.0
+xxi = sin(thetai)*cos(phii)
+yyi = sin(thetai)*sin(phii)
+zzi = cos(thetai)
+xxxi = sin(newthetai)*cos(newphii)
+yyyi = sin(newthetai)*sin(newphii)
+zzzi = cos(newthetai)
+
+el2=50.
+cel=np.radians(90-el2)
+az2 = 0.
+px = sin(cel)*cos(az2)
+py = sin(cel)*sin(az2)
+pz = cos(cel)
+#Set colours and render
+fig = plt.figure(figsize=(12,12))
+ax = fig.add_subplot(111, projection='3d')
+ax.plot_surface(xi, yi, zi,  rstride=1, cstride=1, color='c', alpha=0.3, linewidth=0)
+ax.scatter(0,0,1, color="r", s=20)
+ax.scatter(xxi,yyi,zzi,color="k",s=20)
+ax.scatter(xxxi,yyyi,zzzi,color="g", s =20)
+ax.scatter(px,py,pz,color="k", s = 30)
+#ax.scatter(uv_def, color = "w",s =30)
+#ax.quiver(0,0,0,px,py,pz)
+ax.set_xlim([-1,1])
+ax.set_ylim([-1,1])
+ax.set_zlim([-1,1])
+ax.set_aspect("equal")
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+
+```
+
+```{python}
+elcenter = np.radians(50.)
+azcenter = np.radians(0.)
+cel = np.cos(elcenter)
+caz = np.cos(azcenter)
+sel = np.sin(elcenter)
+saz = np.sin(azcenter)
+xcenter = np.array([cel*caz,cel*saz,sel])
+idp=[4,7,5,8,3,1,6,2,0]
+angulo = []
+for iidp in idp:
+    cenpeakel = np.radians(peak95[1,iidp])
+    cenpeakaz = np.radians(peak95[0,iidp])
+
+    celp = np.cos(cenpeakel)
+    cazp = np.cos(cenpeakaz)
+    selp = np.sin(cenpeakel)
+    sazp = np.sin(cenpeakaz)
+    xpeak = np.array([celp*cazp,celp*sazp,selp])
+    print np.arccos(np.dot(xcenter,xpeak))
+    angulo.append(np.arccos(np.dot(xcenter,xpeak)))
+print(angulo)
+```
+
+```{python}
+# Tengo las posiciones. 
+```
+
+```{python}
+map1=map1/np.max(map1)
+map2=map2/np.max(map2)
+figure(figsize=(14,8))
+subplot(131)
+imshow(abs(map1))
+colorbar()
+subplot(132)
+imshow(abs(map2))
+colorbar()
+subplot(133)
+colorbar()
+imshow(abs(map2)-abs(map1))
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+print(np.shape(maps_recon_new),np.shape(maps_recon))
+cmapcode = 'viridis'
+resol = 5
+size = 400
+plt.figure(figsize=(10,10))
+hp.gnomview(x0[:,0], sub = (2,2,1), rot=center, reso = resol, title = 'Input map', cmap=cmapcode, xsize = size)
+
+hp.gnomview(maps_recon_new[:,0], sub = (2,2,2), rot= center, reso = resol, xsize = size, 
+            title = 'Rec from real TOD', cmap=cmapcode)
+
+hp.gnomview(maps_recon[:,0], rot=center, reso=resol, sub = (2,2,3), title='Recons from simulation ', 
+            cmap=cmapcode, xsize = size)
+
+hp.gnomview(maps_recon[:,0]- maps_recon_new[:,0], sub=(2,2,4), rot = center, xsize = size,
+            reso = resol, title = 'Diff theoretical TOD- real TOD', cmap = cmapcode)
+plt.show()
+```
+
+```{python}
+plt.figure(figsize=(10,6))
+plt.subplot(121)
+plt.plot(p.azimuth[0:1200])
+plt.subplot(122)
+plt.plot(p.elevation[0:1200])
+
+plt.show()
+```
+
+```{python}
+# Test of sampling ...
+step = 100
+for i in range(2):
+    plt.clf()
+    plt.xlim(-27,27)
+    plt.ylim(33,38)
+    plt.plot(p.azimuth[0:step*(i+1)],p.elevation[0:step*(i+1)],'bo')
+    plt.pause(1.)
+    plt.show()
+for i in range(2):
+    plt.clf()
+    plt.xlim(-27,27)
+    plt.ylim(33,38)
+    plt.plot(p.azimuth[0:200],p.elevation[0:200],'bo')
+    plt.plot(p.azimuth[step*(2):step*(i+3)],0.03+p.elevation[step*(2):step*(i+3)],'ro')
+    plt.pause(1.)
+    plt.show()
+```
+
+```{python}
+# I belive that I already have the pointing strategy done. We start to think how recons the map... 
+# First, I have the TOD
+#
+#
+print(np.shape(datamap))
+print(2*np.shape(datamap.ravel())[0])
+print(type(datamap))
+
+
+```
+
+```{python}
+#invierto cada linea de elevacion constante
+keep_rev_az = []
+for azi in datamap:
+    keep_rev_az.append(azi[::-1])
+
+#intercalo la data de lectura a elevacion constante para simular el ida y vuelta a elevacion constante
+newTOD = np.empty((150,400))
+for i,each in enumerate(datamap):
+    auxlist = []
+    auxlist += list(each)
+    auxlist += keep_rev_az[i]
+    newTOD[i,:200] = each
+    newTOD[i,200:] = keep_rev_az[i]
+    
+datamap_copy = np.copy(datamap)
+#plt.plot(datamap.ravel())
+#plt.plot(datamap_copy[::-1].ravel()-2e4,'r-')
+#plt.plot(datamap_copy.ravel()[::-1]-4e4,'g-')
+#plt.show()
+```
+
+```{python}
+print(np.shape(newTOD))
+#veo si cada elemento del nuevo TOD está espejado respecto a 200
+plt.plot(newTOD.ravel())
+plt.xlim(14000,15000)
+plt.show()
+```
+
+```{python}
+# Veo todo el nuevo TOD
+print(np.shape(newTOD.ravel()))
+plt.plot(newTOD.ravel()[0:800])
+plt.show()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+doit = 1
+if doit==1:
+	#### Parameters
+	ppp = 1./freq_mod
+	lowcut = 0.3
+	highcut = 10.
+
+	nbins = 250
+
+	reload(dl)
+	reload(ft)
+	savedir = './'
+
+	ids=0
+
+	for ii in xrange(len(dirs)):
+		thedir = dirs[ii]
+		print ''
+		print '##############################################################'
+		print 'Directory {} / {} :'.format(ii, len(dirs)), thedir
+		print '##############################################################'
+		f0 = glob.glob(savedir+'alltes_unbinned_{}_{}.fits'.format(n,elevations[ii]))
+		f1 = glob.glob(savedir+'angles_unbinned_{}_{}.fits'.format(n,elevations[ii]))
+		filesalreadydone = ((f0!=[]) & (f1!=[]))
+		filesnotdone = bool(not filesalreadydone)
+		dothejob = bool(replace or filesnotdone)
+		if dothejob:
+			if filesalreadydone:
+				print 'files already exist on disk but I was asked to replace them so doing the job'
+			else: 
+				print 'Files do not exist so doing the job'
+			allsb = []
+			all_az_el_azang = []
+			for iasic in [0,1]:
+			    print '======== ASIC {} ====================='.format(iasic)
+			    AsicNum = iasic+1
+			    a = qp()
+			    a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+			    data=a.azel_etc(TES=None)
+			    data['t_src'] += 7200
+			    unbinned, binned = dl.general_demodulate(ppp, data, 
+			                                            lowcut, highcut,
+			                                            nbins=nbins, median=True, method=method, 
+			                                            doplot=False, rebin=False, verbose=False)
+			    all_az_el_azang.append(np.array([unbinned['az'], unbinned['el'], unbinned['az_ang']]))
+			    allsb.append(unbinned['sb'])
+			sh0 = allsb[0].shape
+			sh1 = allsb[1].shape
+			mini = np.min([sh0[1], sh1[1]])
+			sb = np.append(allsb[0][:,:mini], allsb[1][:,:mini], axis=0)
+			az_el_azang = np.array(all_az_el_azang[0][:,:mini])
+			print az_el_azang.shape
+			print sb.shape
+			FitsArray(sb).save(savedir+'alltes_unbinned_{}_{}.fits'.format(n,elevations[ii]))
+			FitsArray(az_el_azang).save(savedir+'angles_unbinned_{}_{}.fits'.format(n,elevations[ii]))
+		else:
+			if filesalreadydone:
+				print 'files already exist on disk and I was asked not to replace them so doing nothing'
+			else: 
+				print 'This should not happen... There is a bug'
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+# Reading real data (already procceced):
+def manual_pointing():
+    
+```
+
+```{python}
+print(TOD.shape, data.shape)
+```
+
+```{python}
+TOD_sim = np.zeros(TOD.shape)
+TOD_sim.shape
+print(len(TOD_sim[0]), len(data), (len(TOD_sim[0])-len(data))/2 ) 
+TOD_sim[0] = np.pad(data, ((len(TOD_sim[0])-len(data))/2,(len(TOD_sim[0])-len(data))/2), 'constant', constant_values=(0., 0.)) 
+print(TOD_sim.shape)
+```
+
+```{python}
+hp.gnomview(data, reso=12)
+plt.show()
+```
+
+```{python}
+print(np.shape(data))
+data_ud = hp.ud_grade(data,128)
+```
+
+```{python}
+print(len(TOD_sim), len(TOD[0]))
+plt.plot(TOD_sim[0])
+plt.show()
+```
+
+```{python}
+print(TOD_sim.shape)
+
+maps_recon_real = arec.tod2map(TOD_sim, d, cov=None)
+
+```
+
+```{python}
+#maps_recon_real.shape
+hp.gnomview(maps_recon_real[:], rot= center, xsize=500,reso=5)
+plt.show()
+```
+
+```{python}
 
 ```

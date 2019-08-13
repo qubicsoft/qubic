@@ -1,4 +1,4 @@
-from __future__ import division
+from __future__ import division, print_function
 import os
 import sys
 import time
@@ -61,6 +61,10 @@ for nf_sub_rec in d['nf_recon']:
     if nf_sub % nf_sub_rec !=0:
         raise ValueError('nf_sub/nf_sub_rec must be an integer.')
 
+# Check that we do one simulation with only one reconstructed subband
+if d['nf_recon'][0] != 1:
+    raise ValueError('You should do one simulation without spectroimaging as a reference.')
+
 # Save the dictionary
 shutil.copyfile(dictfilename, out_dir + name + '.dict')
 
@@ -85,6 +89,11 @@ else:
 # Put I = 0
 # x0[:, :, 0] = 0.
 
+# Multiply Q, U maps
+# x0[:, :, 1] *= 100
+# x0[:, :, 2] *= 100
+
+
 # ==== Pointing strategy ====
 
 p = qubic.get_pointing(d)
@@ -105,6 +114,7 @@ for i, nf_sub_rec in enumerate(d['nf_recon']):
         TOD_noiseless, d, p,
         nf_sub_rec, x0=x0)
     if nf_sub_rec == 1:
+        print(maps_recon_noiseless.shape, maps_convolved_noiseless.shape)
         maps_recon_noiseless = np.reshape(maps_recon_noiseless, np.shape(maps_convolved_noiseless))
     # Look at the coverage of the sky
     cov_noiseless = np.sum(cov_noiseless, axis=0)
@@ -129,7 +139,7 @@ for j in range(nreals):
     TOD, maps_convolved = si.create_TOD(d, p, x0)
     print('-------- Noise TOD with shape: {} - Realisation {} - Done --------'.format(np.shape(TOD), j))
 
-    # ==== Reconstruction ====
+    # ==== Reconstruction with spectroimaging ====
     for i, nf_sub_rec in enumerate(d['nf_recon']):
         print('************* Map-Making on {} sub-map(s) - Realisation {}*************'.format(nf_sub_rec, j))
         maps_recon, cov, nus, nus_edge, maps_convolved = si.reconstruct_maps(TOD, d, p, nf_sub_rec, x0=x0)

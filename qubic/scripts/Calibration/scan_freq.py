@@ -1,3 +1,4 @@
+from __future__ import division, print_function
 import numpy as np
 from matplotlib.pyplot import *
 import glob
@@ -61,7 +62,7 @@ amps = np.zeros((256, len(tf)))
 taus = np.zeros((256, len(tf)))
 erramps = np.zeros((256, len(tf)))
 errtaus = np.zeros((256, len(tf)))
-for i in xrange(len(tf)):
+for i in range(len(tf)):
     asic = as1
     tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum, 0, fff, dc, asic, 1, name=name, doplot=False,
                                                               timerange=time_ranges[:, i], initpars=None, lowcut=0.05,
@@ -91,7 +92,7 @@ for i in xrange(len(tf)):
 cutval = 200000
 
 allimg = np.zeros((len(tf), 17, 17)) + np.nan
-for i in xrange(len(tf)):
+for i in range(len(tf)):
     allimg[i, :, :] = ft.image_asics(all1=amps[:, i])
     bad = allimg[i, :, :] > cutval
     allimg[i, :, :][bad] = np.nan

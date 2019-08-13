@@ -1,3 +1,4 @@
+from __future__ import division, print_function
 import numpy as np
 from matplotlib.pyplot import *
 from pysimulators import FitsArray
@@ -16,7 +17,7 @@ num, power2 = np.loadtxt('TESPowOfile150newCF_CF.qb.txt',skiprows=1).T
 aa = qp()
 pixnums = np.ravel(aa.TES2PIX)
 pow_maynooth = np.zeros(256)
-for i in xrange(len(pixnums)):
+for i in range(len(pixnums)):
     if pixnums[i] < 992:
         pow_maynooth[i] = 1000*power1[pixnums[i]-1] + 1000*power2[pixnums[i]-1]
 
@@ -30,7 +31,7 @@ allfib = [2,3,4]
 allcal = np.zeros(len(allfib))
 allerrcal = np.zeros(len(allfib))
 allnewok = []
-for i in xrange(len(allfib)):
+for i in range(len(allfib)):
     fib = allfib[i]
     free = 'free13'
     allok = np.array(FitsArray('listok_fib{}_{}.fits'.format(fib,free))).astype(bool)

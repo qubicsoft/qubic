@@ -5,12 +5,15 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.1'
-      jupytext_version: 1.1.0
+      jupytext_version: 1.2.1
   kernelspec:
-    display_name: Python [default]
+    display_name: Python 2
     language: python
     name: python2
 ---
+
+# Reconstruction of Calibration Source map with measured synth. beam
+#### J.-Ch. Hamilton heavily inspired by Martin Gamboa's notebook scanSource_oneDet.ipynb
 
 ```{python}
 # %matplotlib inline
@@ -32,6 +35,18 @@ import demodulation_lib as dl
 peaks = np.array(FitsArray('/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/fitted_peaks.fits'))
 peaks[:,0,:] = peaks[:,0,:]/np.cos(np.radians(50))
 print(peaks.shape)
+print(peaks[TESNum-1, 0, :])
+print(peaks[TESNum-1, 1, :])
+print(peaks[TESNum-1, 2, :])
+print(peaks[TESNum-1, 3, :])
+
+### In measurement coordinate system
+thetas_measured_M = np.radians(90-(peaks[TESNum-1,1,:]-50))
+phis_measured_M = np.radians(-peaks[TESNum-1,0,:]*thecos)
+amps_measured_M = peaks[TESNum-1,2,:]
+fwhm_measured_M = peaks[TESNum-1,3,:]
+
+
 
 directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/150GHz-2019-04-06/'
 TESNum = 93
@@ -69,7 +84,225 @@ def select_det(q,id):
     detector_i = q.detector[id]
     q.detector = detector_i
     return(q)
+```
 
+### Findng realistic peaks locations in the right reference frame
+We instantiate a QUBIC instrument, get the synthesized beam for a given detector and plot the synthesized beam in the Qubic System, meaning that it is oriented towards the zenith. We also extract the locations of the peaks from the QUBIC software.
+
+```{python}
+sel_det=True #If you want to select one detector
+TESid = 93
+
+# INSTRUMENT
+d = qubic.qubicdict.qubicDict()
+d.read_from_file('../pointsource/global_source_oneDet.dict')
+print(d['kind'])
+d['kind']='I'
+print(d['kind'])
+
+q = qubic.QubicInstrument(d)
+# plt.title('Detector array')
+# plt.plot(q.detector.center[did_det['93']][0],q.detector.center[did_det['93']][1], 'ko')
+# q.detector.plot()
+
+if sel_det:
+    if str(TESid) not in did_det.keys():
+        q =select_det(q,TESid)
+    else:
+        q=select_det(q,did_det['{}'.format(TESid)])
+        
+s = qubic.QubicScene(d)
+
+nu = q.filter.nu
+detcenter = q.detector.center
+synthbeam = q.synthbeam
+horn = getattr(q, 'horn', None)
+primary_beam = getattr(q, 'primary_beam', None)
+synthbeam.kmax = 2
+thetas, phis, vals  = q._peak_angles(s, nu, detcenter, synthbeam, horn, primary_beam)
+thetas = np.reshape(thetas, thetas.shape[1])
+phis = np.reshape(phis, phis.shape[1])
+vals = np.reshape(vals, vals.shape[1])
+
+sb = q.get_synthbeam(s, 0, detpos=q.detector.center[0])
+xr=0.1*np.max(sb)
+```
+
+Now let's overplot the Synthesized beam and the peak locations in mollweide with no healpix map rotation: peaks appear towards the zenith. We also plot the same bt using healpix rotation of the map in order to have the SB on the equator, and then we plot in gnomonic (with the same rotation of course).
+
+```{python}
+hp.mollview(sb, min=0, max=xr, title='Qubic reference frame: optical center towards z (90,0)', sub=(2,2,1))
+hp.mollview(sb, min=0, max=xr, rot=[0,90], title='Qubic reference frame: optical center towards z (90,0) - Healpix Rotated', sub=(2,2,3))
+hp.gnomview(sb, rot=[0,90],reso=10, min=0, max=xr,cmap='viridis', sub=(1,2,2), title='Qubic reference frame: optical center towards z (90,0) - Healpix Rotated')
+
+#Overplotting (for some reason ot plots on both subplots...)
+hp.projscatter(thetas,phis, marker='X',color='r', label='True Positions', alpha=0.4)
+legend()
+
+```
+
+Similarly, we plot the measured synthesized beam (that is in another reference frame: towards the x axis instead of z) and overplot the location of the fitted peaks.
+
+```{python}
+hp.mollview(hp.ud_grade(mymap, 128), min=-3*ss, max=10*ss, title='Measurement reference frame: optical center towards x (0,0)', sub=(1,2,1))
+
+hp.gnomview(hp.ud_grade(mymap, 128), reso=10, sub=(1,2,2), min=-3*ss, max=10*ss,cmap='viridis', title='Measurement frame: optical center towards X <=> (0,0)')
+hp.projscatter(thetas_measured_M,phis_measured_M, marker='X',color='r', label='Fitted', alpha=0.4)
+legend()
+```
+
+The exercize is to be able to convert the peaks locations from one reference frame to the other
+
+Let's define some angular transformation functions and try to combine them in order to perform the desired rotation.
+
+```{python}
+def thph2uv(th,ph):
+    sth = np.sin(th)
+    cth = np.cos(th)
+    sph = np.sin(ph)
+    cph = np.cos(ph)
+    return np.array([sth*cph, sth*sph,cth])
+
+def uv2thph(uv):
+    r = np.sum(uv**2, axis=0)
+    th = np.nan_to_num(np.arccos(uv[2]/r))
+    ph = np.arctan2(uv[1],uv[0])
+    return np.array([th,ph])
+
+def rotmatX(th):
+    cth = np.cos(th)
+    sth = np.sin(th)
+    rotmat = np.array([[1, 0, 0],[0, cth, -sth],[0,sth,cth]])
+    return rotmat
+
+def rotmatY(th):
+    cth = np.cos(th)
+    sth = np.sin(th)
+    rotmat = np.array([[cth, 0, sth],[0, 1, 0],[-sth,0,cth]])
+    return rotmat
+
+def rotmatZ(th):
+    cth = np.cos(th)
+    sth = np.sin(th)
+    rotmat = np.array([[cth, -sth, 0], [sth, cth, 0], [0, 0, 1]])
+    return rotmat
+
+### Rotation from QUBIC reference frame to the measurement one
+def rotate_q2m(thin,phin,angs=np.radians(np.array([0., 90., 0.])), inverse=False):
+    #### All Angles in Radians
+    uvecin = thph2uv(thin, phin)
+    ### First rotation: pitch angle around optical axis
+    r0 = rotmatZ(angs[0])
+    ### Second rotation: down to actual elevation
+    r1 = rotmatY(angs[1])
+    ### Third rotation: go to actual azimuth
+    r2 = rotmatZ(angs[2])
+    #uvecout = np.dot(r2, np.dot(r1, np.dot(r0, uvecin)))
+    R = np.dot(r2, np.dot(r1, r0))
+    if inverse:
+        Rinv = np.linalg.inv(R)
+        uvecout = np.dot(Rinv, uvecin)
+    else:
+        uvecout = np.dot(R, uvecin)
+    return uv2thph(uvecout)
+
+##### Test: we draw a cross in initial reference frame (towards z) and rotate it to the new one. 
+##### We also do the reverse transformation to the points we obtained and check that we are back.
+th0 = np.radians([0., 5., 5., 5., 5.])
+ph0 = np.radians([0., 0., 90., 180., 270.])
+
+th1, ph1 = rotate_q2m(th0, ph0)
+hp.mollview(np.zeros(12), title='From Q to M')
+hp.projscatter(th0,ph0, marker='X',color='r', alpha=0.4, label='Initial points')
+hp.projscatter(th1,ph1, marker='+',color='b', alpha=0.4, label='Rotated points')
+
+th2, ph2 = rotate_q2m(th1, ph1, inverse=True)
+hp.projscatter(th2,ph2, marker='+',color='k', alpha=0.4, label='ReRotated-back points')
+legend()
+
+print(th0-th2)
+print((ph0-ph2) % (2*np.pi))
+```
+
+OK ! It's working well apparently !
+
+Now we apply this to the data: we transform the QUBIC theoretical peak locations into the measurement reference frame and overplot them onto the measured synthesized beam.
+
+```{python}
+thetas_new, phis_new = rotate_q2m(thetas, phis)
+
+hp.mollview(hp.ud_grade(mymap, 128), min=-3*ss, max=10*ss, title='Measurement reference frame: optical center towards x (0,0)', sub=(1,2,1))
+
+hp.gnomview(hp.ud_grade(mymap, 128), reso=10,min=-3*ss, max=10*ss, title='Measurement reference frame: optical center towards x (0,0)', sub=(1,2,2), cmap='viridis')
+hp.projscatter(thetas_new,phis_new, marker='X',color='r', s=100,label='Theoretical rotated')
+hp.projscatter(thetas_measured_M,phis_measured_M, marker='*',color='k',s=100, label='Fitted')
+
+legend()
+```
+
+Seems to be working OK !
+
+Let's do the opposite (which is actually what we want): rotate the measured synthesized beam peaks and overplot them onto the theoretical one.
+
+```{python}
+thetas_measured_Q, phis_measured_Q = rotate_q2m(thetas_measured_M, phis_measured_M, inverse=True)
+
+
+
+hp.mollview(sb, min=0, max=xr, title='Qubic reference frame: optical center towards z (90,0)', sub=(2,2,1))
+hp.mollview(sb, min=0, max=xr, rot=[0,90], title='Qubic reference frame: optical center towards z (90,0) - Healpix Rotated', sub=(2,2,3))
+
+hp.gnomview(sb, rot=[0,90],reso=10, min=0, max=xr,cmap='viridis', sub=(1,2,2), title='Qubic reference frame: optical center towards z (90,0) - Healpix Rotated')
+hp.projscatter(thetas,phis, marker='X',color='r', label='True Positions',s=100)
+hp.projscatter(thetas_measured_Q,phis_measured_Q, marker='*',color='g',s=300, label='Fitted Positions')
+legend()
+
+```
+
+So the nes values to put in the QUBIC reconstruction software are:
+
+```{python}
+print('Thetas:')
+print(thetas_measured_Q)
+print('Phis:')
+print(phis_measured_Q)
+
+#normalization similar to instrument.py line 920
+### Note: here we use the fitted amplitudes but they are heavily affected by saturation of the TES, 
+### so it may turn out to be a better approximation to use the primary beam shape at these locations...
+### To be revisited later
+amps_measured_Q = amps_measured_M/np.max(amps_measured_M)*synthbeam.peak150.solid_angle * (150e9 / nu)**2 / s.solid_angle * len(horn)
+print('Amps:')
+print(amps_measured_Q)
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+### Here I am right now...
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+### QUBIC Simulation
+Now we try to use this in the QUBIC simulation and reconstruction
+
+First the hall pointing (function by M. Gamboa that converts the az,el of the measured synthesized beam map to qubic pointing object)
+
+```{python}
 def hall_pointing(az, el, angspeed_psi, maxpsi,
                  date_obs=None, latitude=None, longitude=None,fix_azimuth=None,random_hwp=True):
     #This method will reproduce the pointing that is used in the hall to take the data. Will start from bottom
@@ -125,85 +358,9 @@ def hall_pointing(az, el, angspeed_psi, maxpsi,
 
     return pp
     #print(pp.elevation)#, len(pp.elevation))
-```
-
-### Reconstruction with normal QUBIC instrument
-
-```{python}
-sel_det=True #If you want to select one detector
-TESid = 93
-
-# INSTRUMENT
-d = qubic.qubicdict.qubicDict()
-d.read_from_file('/Users/hamilton/Python/GitQubicMousset/qubic/scripts/pointsource/global_source_oneDet.dict')
-print(d['kind'])
-d['kind']='I'
-print(d['kind'])
-
-q = qubic.QubicInstrument(d)
-# plt.title('Detector array')
-# plt.plot(q.detector.center[did_det['93']][0],q.detector.center[did_det['93']][1], 'ko')
-# q.detector.plot()
-
-if sel_det:
-    if str(TESid) not in did_det.keys():
-        q =select_det(q,TESid)
-    else:
-        q=select_det(q,did_det['{}'.format(TESid)])
-        
-s = qubic.QubicScene(d)
-
-nu = q.filter.nu
-detcenter = q.detector.center
-synthbeam = q.synthbeam
-horn = getattr(q, 'horn', None)
-primary_beam = getattr(q, 'primary_beam', None)
-thetas, phis, vals  = q._peak_angles(s, nu, detcenter, synthbeam, horn, primary_beam)
-
-sb = q.get_synthbeam(s, 0, detpos=q.detector.center[0])
-xr=0.1*np.max(sb)
-
-
-
-hp.gnomview(sb, rot=[0,90],reso=10, min=0, max=xr,cmap='viridis', sub=(1,2,1), title='Centered at zenith')
-hp.projscatter(thetas,phis, marker='X',color='r', label='True Positions')
-legend()
-
-
-hp.gnomview(hp.ud_grade(mymap, 128), reso=10, sub=(1,2,2), min=-3*ss, max=10*ss,cmap='viridis', title='centered at (0,0)')
-hp.projscatter(-peaks[TESNum-1,0,:]*thecos,peaks[TESNum-1,1,:]-50, lonlat=True, marker='X',color='r', label='Fitted')
-legend()
-```
-
-```{python}
-hp.mollview(sb, min=0, max=xr,cmap='viridis', title='Map centered at zenith')
-hp.projscatter(thetas,phis, marker='X',color='r', label='True Positions', alpha=0.4)
-hp.projscatter(-peaks[TESNum-1,0,:]*thecos,peaks[TESNum-1,1,:]-50, lonlat=True, marker='X',color='g', label='Fitted', alpha=0.4)
-legend()
-```
-
-```{python}
-hp.mollview(hp.ud_grade(mymap, 128), min=-3*ss, max=10*ss,cmap='viridis', title='centered at (0,0)')
-hp.projscatter(-peaks[TESNum-1,0,:]*thecos,peaks[TESNum-1,1,:]-50, lonlat=True, marker='X',color='g', label='Fitted', alpha=0.4)
-legend()
-```
-
-```{python}
-plot(peaks[TESNum-1,0,:],peaks[TESNum-1,1,:],'rX')
-```
-
-```{python}
-print(np.degrees(thetas))
-print(np.degrees(phis))
-print(vals)
-
-subplot(111, projection = 'mollweide')
-for i in range(len(thetas[0])):
-    scatter(phis[0][i],np.pi/2-thetas[0][i], s=vals[0][i])
-
-```
-
-```{python}
+    
+    
+    
 ### Pointing
 p = hall_pointing(az, el, 0, 0, fix_azimuth=d['fix_azimuth'])
 plt.subplot(3,1,1)
@@ -218,6 +375,8 @@ plt.ylabel('HWP',fontsize=22)
 plt.show()
 
 ```
+
+Input sky is a point source. It should be ponctual but because of the effect of saturation, it seems better to give it a width for now... to be revisited later.
 
 ```{python}
 ### In put sky: a source in the center of the pointing
@@ -244,6 +403,8 @@ else:
 hp.gnomview(x0[:,0], rot=center,reso =10,cmap='viridis', title='Input map')
 ```
 
+Now we perform a simulation with the QUBIC isntrument and this pointing and compared with the measured synthesized beam.
+
 ```{python}
 sima = qubic.QubicAcquisition(q, p, s, d)
 simTOD, maps_conv_p = sima.get_observation(source, convolution = True, noiseless=True)
@@ -265,6 +426,10 @@ subplot(1,3,3)
 imshow(dl.renorm(img)-dl.renorm(simmap), extent = [np.min(az)*thecos, np.max(az)*thecos, np.min(el), np.max(el)], 
        cmap='viridis', vmin=-10, vmax=10)
 title('Diff')
+
+```
+
+```{python}
 
 ```
 

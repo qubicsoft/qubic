@@ -1,3 +1,4 @@
+from __future__ import division, print_function
 import glob
 
 import numpy as np
@@ -120,7 +121,7 @@ allres_tot = np.zeros((len(dirs), 256, 4))
 allerr_tot = np.zeros((len(dirs), 256, 4))
 allamp_peak_tot = np.zeros((len(dirs), 256))
 
-for idir in xrange(len(dirs)):
+for idir in range(len(dirs)):
     thedir = dirs[idir]
     for asic in [1, 2]:
         a.read_qubicstudio_dataset(thedir, asic=asic)
@@ -142,7 +143,7 @@ mm, ss = ft.meancut(amplitudes, 3)
 allimg = np.empty((len(dirs), 17, 17))
 
 figure('Each measurement')
-for i in xrange(len(dirs)):
+for i in range(len(dirs)):
     subplot(3, 3, i + 1)
     amps = amplitudes[i, :]
     img = ft.image_asics(all1=amps)
@@ -167,7 +168,7 @@ allsets = [index_21_35, index_21_39, index_39_54, index_21_54]
 
 allfringe = np.zeros((len(allsets), 17, 17))
 
-for iset in xrange(len(allsets)):
+for iset in range(len(allsets)):
     theset = allsets[iset]
     C_i = amplitudes[theset[1], :]
     C_j = amplitudes[theset[2], :]
@@ -179,7 +180,7 @@ mm_fringe, ss_fringe = ft.meancut(np.isfinite(allfringe), 3)
 rng = ss_fringe
 
 figure('fringes')
-for i in xrange(len(allsets)):
+for i in range(len(allsets)):
     subplot(2, 2, i + 1)
     imshow(allfringe[i, :, :], vmin=0., vmax=1e13, interpolation='nearest')
     title(allsets[i][0])

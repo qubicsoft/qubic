@@ -1,4 +1,4 @@
-from __future__ import division
+from __future__ import division, print_function
 import healpy as hp
 import numpy as np
 
@@ -77,7 +77,7 @@ def cmb_plus_dust(cmb, dust, Nbsubbands, sub_nus, kind='IQU'):
     x0 = np.zeros((Nbsubbands, Nbpixels, 3))
     # Let's fill the maps:
     for i in range(Nbsubbands):
-        for istokes in xrange(nstokes):
+        for istokes in range(nstokes):
             if kind == 'QU':  # This condition keeps the order IQU in the healpix map
                 x0[i, :, istokes + 1] = cmb.T[istokes + 1] + dust.T[istokes + 1] * scaling_dust(150, sub_nus[i], 1.59)
             else:

@@ -1,5 +1,5 @@
 #!/bin/env python
-from __future__ import division
+from __future__ import division, print_function
 import sys
 import healpy as hp
 import numpy as np
@@ -37,14 +37,14 @@ subplot(1,2,1)
 instTD.detector.plot()
 xx,yy,zz = instTD.detector.center.T
 index_det = instTD.detector.index
-for i in xrange(len(instTD.detector)):
+for i in range(len(instTD.detector)):
 	text(xx[i]-0.0012,yy[i],'{}'.format(index_det[i]), fontsize=6, color='r')
 subplot(1,2,2)
 instTD.horn.plot()
 centers = instTD.horn.center[:,0:2]
 col = instTD.horn.column
 row = instTD.horn.row
-for i in xrange(len(centers)):
+for i in range(len(centers)):
     text(centers[i,0]-0.006, centers[i,1], 'c{0:}'.format(col[i]), color='r',fontsize=6)
     text(centers[i,0]+0.001, centers[i,1], 'r{0:}'.format(row[i]), color='b',fontsize=6)
 
@@ -80,7 +80,7 @@ allphiX = np.zeros((nbhorns,nn,nn))
 allampY = np.zeros((nbhorns,nn,nn))
 allphiY = np.zeros((nbhorns,nn,nn))
 #### Read the files
-for i in xrange(nbhorns):
+for i in range(nbhorns):
     print(i)
     data = np.loadtxt(rep+'x{0:02d}y{1:02d}.dat'.format(instTD.horn.row[i]-1, instTD.horn.column[i]-1), skiprows=4)
     allampX[i,:,:] = np.reshape(data[:,0],(nn,nn))
@@ -124,14 +124,14 @@ subplot(1,2,1)
 instTD[0].detector.plot()
 xx,yy,zz = instTD[0].detector.center.T
 index_det = instTD[0].detector.index
-for i in xrange(len(instTD[0].detector)):
+for i in range(len(instTD[0].detector)):
 	text(xx[i]-0.0012,yy[i],'{}'.format(index_det[i]), fontsize=6, color='r')
 subplot(1,2,2)
 instTD[0].horn.plot()
 centers = instTD[0].horn.center[:,0:2]
 col = instTD[0].horn.column
 row = instTD[0].horn.row
-for i in xrange(len(centers)):
+for i in range(len(centers)):
     text(centers[i,0]-0.006, centers[i,1], 'c{0:}'.format(col[i]), color='r',fontsize=6)
     text(centers[i,0]+0.001, centers[i,1], 'r{0:}'.format(row[i]), color='b',fontsize=6)
 

@@ -5,6 +5,7 @@
 # It is not working because when we make TOD, the code doesn't care
 # about closed horns.
 
+from __future__ import division, print_function
 from matplotlib.pyplot import *
 import healpy as hp
 from astropy.io import fits
@@ -84,7 +85,7 @@ def get_tod(d, p, x0, closed_horns=None):
     q = qubic.QubicMultibandInstrument(d)
     # q = qubic.QubicInstrument(d)
     if closed_horns is not None:
-        for i in xrange(d['nf_sub']):
+        for i in range(d['nf_sub']):
             for h in closed_horns:
                 q[i].horn.open[h] = False
 
@@ -135,9 +136,9 @@ imshow(focal_plane, interpolation='nearest', origin='lower')
 def plot_focalplane(size, nptg, ptg_start, ptg_stop, focal_plane, tod):
     figure('focalplane')
     tod_focal_plane = np.zeros((size, size, nptg))
-    for ptg in xrange(ptg_start, ptg_stop + 1):
+    for ptg in range(ptg_start, ptg_stop + 1):
         j = 0
-        for i in xrange(1156):
+        for i in range(1156):
             pos = np.where(focal_plane == i)
             # print(pos[0].size)
 

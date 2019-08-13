@@ -54,7 +54,7 @@ for bs in beam_shapes:
             isub = inu+1
             plt.subplot(1,2,isub)
             # Loop on the sub-bands
-            for i in xrange(len(q)):
+            for i in range(len(q)):
                 nu = str(int(q[i].filter.nu / 1e9)) + ' GHz'
                 plt.semilogy(theta_deg, q[i].primary_beam(theta, 0), label=nu )
                 plt.legend(loc='best')

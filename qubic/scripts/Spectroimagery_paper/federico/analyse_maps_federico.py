@@ -1,3 +1,4 @@
+from __future__ import division, print_function
 import os
 import sys
 import glob
@@ -33,7 +34,7 @@ nsubvals = np.array([2, 3, 4])
 
 #Archetypes of the files .fits you want to work on
 arch_conv, arch_recon = [], []
-for isub in xrange(len(nsubvals)):
+for isub in range(len(nsubvals)):
 	arch_conv.append('bpmaps_nf{}_maps_convolved.fits'.format(nsubvals[isub]))
 	arch_recon.append('bpmaps_nf{}_maps_recon.fits'.format(nsubvals[isub]))
 
@@ -55,17 +56,17 @@ plt.show(block=False)
 # ================== Residuals estimation ===============
 #Two ways of obtain residuals:
 residuals = []
-for j in xrange(len(allmaps_conv)): 
+for j in range(len(allmaps_conv)): 
 	residuals.append(allmaps_recon[j] - allmaps_conv[j])
 
 # residuals = []
-# for j in xrange(len(allmaps_conv)): 
+# for j in range(len(allmaps_conv)): 
 # 	residuals.append(allmaps_recon[j] - np.mean(allmaps_recon[j], axis=0))
 
 
 #Histogram of the residuals
 plt.clf()
-for i in xrange(3):
+for i in range(3):
 	plt.subplot(1, 3, i+1)
 	plt.hist(np.ravel(residuals[0][:, 0, :, i]), range=[-20, 20], bins=100)
 	plt.title(stokes[i])
@@ -91,7 +92,7 @@ for isub, j in enumerate(nsubvals):
                 #hp.mollview(maps_conv[:,1], title='maps_conv')
                 
                 plt.figure('maps - number_of_subbands{} - subband{}'.format(j, freq))
-                for i in xrange(3):
+                for i in range(3):
 	                if i==0:
 		                min=None
 		                max=None
@@ -113,7 +114,7 @@ for isub, j in enumerate(nsubvals):
 
 
 # plt.plot(nsubvals, np.sqrt(nsubvals), 'k', label='Optimal $\sqrt{N}$', lw=2)
-# for i in xrange(3):
+# for i in range(3):
 #     plt.plot(nsubvals, mean_rms_cov[:,i] / mean_rms_cov[0,i] * np.sqrt(nsubvals), label=stokes[i], lw=2, ls='--')
 # plt.xlabel('Number of sub-frequencies')
 # plt.ylabel('Relative maps RMS')
@@ -142,15 +143,15 @@ mapsconv = np.zeros((12*ns**2, 3))
 maps_recon = np.zeros((12*ns**2, 3))
 
 
-for isub in xrange(len(nsubvals)):
+for isub in range(len(nsubvals)):
 	sh = allmaps_conv[isub].shape
 	nreals = sh[0]
 	nsub = sh[1]
 	cells = np.zeros((6, nbins, nsub, nreals))
 	cells_in = np.zeros((6, nbins, nsub, nreals))
 	print(cells.shape)
-	for real in xrange(nreals):
-		for n in xrange(nsub):
+	for real in range(nreals):
+		for n in range(nsub):
 			mapsconv[seenmap_conv, :] = allmaps_conv[isub][real,n,:,:]
 			maps_recon[seenmap_conv, :] = allmaps_recon[isub][real,n,:,:]
 			cells_in[:, :, n , real] = xpol.get_spectra(mapsconv)[1]
@@ -163,14 +164,14 @@ for isub in xrange(len(nsubvals)):
 
 #Plot the spectra
 plt.figure('TT_EE_BB spectra')
-for isub in xrange(len(nsubvals)):
+for isub in range(len(nsubvals)):
 	for s in [1,2]:
 		plt.subplot(4,2,isub*2+s)
 		plt.ylabel(thespec[s]+'_ptg='+str((isub+1)*1000))
 		plt.xlabel('l')
 		sh = mcls[isub].shape
 		nsub = sh[2]
-		for k in xrange(nsub):
+		for k in range(nsub):
 			p = plt.plot(ell_binned, ell_binned * (ell_binned + 1) * mcls_in[isub][s,:,k], '--')
 			plt.errorbar(ell_binned, ell_binned * (ell_binned + 1) * mcls[isub][s,:,k], 
 				yerr= ell_binned * (ell_binned + 1) * scls[isub][s,:,k], 

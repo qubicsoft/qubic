@@ -104,7 +104,7 @@ for istokes in [0,1,2]:
         xr=200 
     else:
         xr=10
-    for i in xrange(nf_sub_rec):
+    for i in range(nf_sub_rec):
         # proxy to get nf_sub_rec maps convolved
         in_old=hp.gnomview(maps_convolved[i,:,istokes],
                                rot=center_gal, reso=10, sub=(nf_sub_rec,3,3*i+1), min=-xr,

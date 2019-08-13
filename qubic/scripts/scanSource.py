@@ -110,7 +110,7 @@ if alaImager==True:
 for istokes in [0,1,2]:
     plt.figure(istokes,figsize=(12,12)) 
     xr=0.1*np.max(maps_recon[0,:,0])
-    for i in xrange(nf_sub_rec):
+    for i in range(nf_sub_rec):
         
         im_in=hp.gnomview(maps_convolved[i,:,istokes], rot=center, reso=5, sub=(nf_sub_rec,2,2*i+1), min=-xr, max=xr,title='Input '+stokes[istokes]+' SubFreq {}'.format(i), return_projected_map=True)
         np.savetxt(resultDir+'/in_%s_%s_subfreq_%d_%s.dat'%(name,stokes[istokes],i,xname),im_in)

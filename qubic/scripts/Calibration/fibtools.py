@@ -1,7 +1,9 @@
+from __future__ import division, print_function
 import iminuit
 import math
 from matplotlib.pyplot import *
 from pysimulators import FitsArray
+import matplotlib.mlab as mlab
 
 import scipy.signal as scsig
 import scipy.stats
@@ -15,6 +17,11 @@ from qubicpack import qubicpack as qp
 from qubicpack.pix2tes import assign_pix_grid, assign_pix2tes, tes2pix, pix2tes, TES2PIX
 pix_grid = assign_pix_grid()
 TES2PIX = assign_pix2tes()
+
+def printnow(truc):
+    print(truc)
+    sys.stdout.flush()
+
 
 def isfloat(s):
     try:
@@ -38,7 +45,7 @@ def statstr(x, divide=False, median=False, cut=None):
         s = np.std(x[np.isfinite(x)])
     if divide:
         s /= nn
-    return '{0:6.2f} +/- {1:6.2f}'.format(m, s)
+    return '{0:6.3f} +/- {1:6.3f}'.format(m, s)
 
 
 def image_asics(data1=None, data2=None, all1=None):
@@ -139,7 +146,8 @@ class MyChi2_nocov:
 
 ### Call Minuit
 def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=None, rangepars=None, nohesse=False,
-              force_chi2_ndf=False, verbose=True, minos=False, extra_args=None):
+              force_chi2_ndf=False, verbose=True, minos=False, extra_args=None, print_level=0, force_diag=False, 
+              nsplit=1, ncallmax = 10000):
     """
 
     Parameters
@@ -161,11 +169,14 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 
     """
     # check if covariance or error bars were given
-    covar = covarin
+    covar = covarin.copy()
     if np.size(np.shape(covarin)) == 1:
-        err = covarin
-        covar = np.zeros((np.size(err), np.size(err)))
-        covar[np.arange(np.size(err)), np.arange(np.size(err))] = err ** 2
+        if force_diag:
+            covar = covarin.copy()
+        else:
+            err = covarin
+            covar = np.zeros((np.size(err), np.size(err)))
+            covar[np.arange(np.size(err)), np.arange(np.size(err))] = err ** 2
     # instantiate minimizer
     if chi2 is None:
         chi2 = MyChi2(x, y, covar, functname, extra_args=extra_args)
@@ -183,26 +194,27 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     # fixed parameters
     dfix = {}
     if fixpars is not None:
-        for i in xrange(len(parnames)):
+        for i in range(len(parnames)):
             dfix['fix_' + parnames[i]] = fixpars[i]
     else:
-        for i in xrange(len(parnames)):
+        for i in range(len(parnames)):
             dfix['fix_' + parnames[i]] = False
     # range for parameters
     drng = {}
     if rangepars is not None:
-        for i in xrange(len(parnames)):
+        for i in range(len(parnames)):
             drng['limit_' + parnames[i]] = rangepars[i]
     else:
-        for i in xrange(len(parnames)):
+        for i in range(len(parnames)):
             drng['limit_' + parnames[i]] = False
 
     # Run Minuit
     if verbose: print('Fitting with Minuit')
     theargs = dict(theguess.items() + dfix.items())
     if rangepars is not None: theargs.update(dict(theguess.items() + drng.items()))
-    m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=1., print_level=0, **theargs)
-    m.migrad()
+    m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=1., print_level=print_level, **theargs)
+    m.migrad(ncall=ncallmax*nsplit, nsplit=nsplit)
+    #m.migrad()
     if minos:
         m.minos()
     if nohesse is False:
@@ -215,7 +227,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     for i in parnames: errfit.append(m.errors[i])
     if fixpars is not None:
         parnamesfit = []
-        for i in xrange(len(parnames)):
+        for i in range(len(parnames)):
             if fixpars[i] is False:
                 parnamesfit.append(parnames[i])
             if fixpars[i]:
@@ -225,8 +237,8 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     ndimfit = len(parnamesfit)  # int(np.sqrt(len(m.errors)))
     covariance = np.zeros((ndimfit, ndimfit))
     if m.covariance:
-        for i in xrange(ndimfit):
-            for j in xrange(ndimfit):
+        for i in range(ndimfit):
+            for j in range(ndimfit):
                 covariance[i, j] = m.covariance[(parnamesfit[i], parnamesfit[j])]
 
     chisq = chi2(*parfit)
@@ -302,7 +314,7 @@ def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True
             yval[i] = np.mean(y[ok])
         xc[i] = (xmax[i]+xmin[i])/2
         if rebin_as_well is not None:
-            for o in xrange(nother):
+            for o in range(nother):
                 others[i,o] = np.mean(rebin_as_well[o][ok])
         if dispersion:
             fact = 1
@@ -322,7 +334,7 @@ def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True
         return xc, yval, dx, dy, others
 
 
-def exponential_filter1d(input, sigma, axis=-1, output=None, mode="reflect", cval=0.0, truncate=10.0):
+def exponential_filter1d(input, sigma, axis=-1, output=None, mode="reflect", cval=0.0, truncate=10.0, power=1):
     """
     One-dimensional Exponential filter.
 
@@ -352,7 +364,7 @@ def exponential_filter1d(input, sigma, axis=-1, output=None, mode="reflect", cva
     sum = 1.0
     # calculate the kernel:
     for ii in range(1, lw + 1):
-        tmp = math.exp(-float(ii) / sd)
+        tmp = math.exp(-(float(ii) / sd)**power)
         weights[lw + ii] = tmp * 0
         weights[lw - ii] = tmp
         sum += tmp
@@ -391,7 +403,7 @@ def qs2array(file, FREQ_SAMPLING, timerange=None):
     NbSamplesPerSum = 64.  # this could also be a.NPIXELS_sampled
     gain = 1. / 2. ** 7 * 20. / 2. ** 16 / (NbSamplesPerSum * Rfb)
 
-    for i in xrange(npix):
+    for i in range(npix):
         dd[i, :] = a.timeline(TES=i + 1)
         dd[i, :] = gain * dd[i, :]
 
@@ -517,7 +529,7 @@ def notch_array(freqs, bw):
     """
     notch = []
 
-    for i in xrange(len(freqs)):
+    for i in range(len(freqs)):
         notch.append([freqs[i], bw * (1 + i)])
 
     return notch
@@ -560,7 +572,7 @@ def meancut(data, nsig):
     return np.mean(dd), np.std(dd)
 
 
-def simsig(x, pars):
+def simsig(x, pars, extra_args=None):
     """
 
     Parameters
@@ -577,6 +589,10 @@ def simsig(x, pars):
     ctime = np.nan_to_num(pars[1])
     t0 = np.nan_to_num(pars[2])
     amp = np.nan_to_num(pars[3])
+#     cycle = pars[0]
+#     ctime = pars[1]
+#     t0 = pars[2]
+#     amp = pars[3]
     sim_init = np.zeros(len(x))
     ok = x < (cycle * (np.max(x)))
     sim_init[ok] = 1.
@@ -584,7 +600,7 @@ def simsig(x, pars):
     # thesim = -1 * gaussian_filter1d(sim_init_shift, ctime, mode='wrap')
     thesim = -1 * exponential_filter1d(sim_init_shift, ctime / dx, mode='wrap')
     thesim = (thesim - np.mean(thesim)) / np.std(thesim) * amp
-    return thesim
+    return np.nan_to_num(thesim)
 
 
 def simsig_nonorm(x, pars):
@@ -613,7 +629,9 @@ def simsig_nonorm(x, pars):
     return thesim
 
 
-def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None, return_error=False, silent=False, median=False):
+def fold_data(time, dd, period, lowcut, highcut, nbins, 
+              notch=None, rebin=None, verbose=None,
+              return_error=False, silent=False, median=False):
     """
 
     Parameters
@@ -637,26 +655,80 @@ def fold_data(time, dd, period, lowcut, highcut, nbins, notch=None, return_error
     ndet = sh[0]
     folded = np.zeros((ndet, nbins))
     folded_nonorm = np.zeros((ndet, nbins))
+    dfolded = np.zeros((ndet, nbins))
+    dfolded_nonorm = np.zeros((ndet, nbins))
     if not silent: bar = progress_bar(ndet, 'Detectors ')
-    for THEPIX in xrange(ndet):
+    for THEPIX in range(ndet):
         if not silent: bar.update()
         data = dd[THEPIX, :]
-        filt = scsig.butter(3, [lowcut / FREQ_SAMPLING, highcut / FREQ_SAMPLING], btype='bandpass', output='sos')
-        newdata = scsig.sosfilt(filt, data)
-        if notch is not None:
-            for i in xrange(len(notch)):
-                ftocut = notch[i][0]
-                bw = notch[i][1]
-                newdata = notch_filter(newdata, ftocut, bw, FREQ_SAMPLING)
+        newdata = filter_data(time, data, lowcut, highcut, notch=notch, rebin=rebin, verbose=verbose)
         t, yy, dx, dy, others = profile(tfold, newdata, range=[0, period], 
                                         nbins=nbins, dispersion=False, plot=False, 
                                         cutbad=False, median=median)    
         folded[THEPIX, :] = (yy - np.mean(yy)) / np.std(yy)
         folded_nonorm[THEPIX, :] = (yy - np.mean(yy))
+        dfolded[THEPIX, :] = dy / np.std(yy)
+        dfolded_nonorm[THEPIX, :] = dy
     if return_error:
-        return folded, t, folded_nonorm, dy
+        return folded, t, folded_nonorm, dfolded, dfolded_nonorm, newdata
     else:
-        return folded, t, folded_nonorm
+        return folded, t, folded_nonorm, newdata
+
+
+def power_spectrum(time_in, data_in, rebin=True):
+    if rebin:
+        ### Resample the data on a regular grid
+        time = np.linspace(time_in[0], time_in[-1], len(time_in))
+        data = np.interp(time, time_in, data_in)
+    else:
+        time = time_in
+        data = data_in
+
+    spectrum_f, freq_f = mlab.psd(data, Fs=1. / (time[1] - time[0]), NFFT=len(data), window=mlab.window_hanning)
+    return spectrum_f, freq_f
+
+
+def filter_data(time_in, data_in, lowcut, highcut, rebin=True, verbose=False, notch=None):
+    sh = np.shape(data_in)
+    if rebin:
+        if verbose: printnow('Rebinning before Filtering')
+        ### Resample the data on a regular grid
+        time = np.linspace(time_in[0], time_in[-1], len(time_in))
+        if len(sh) == 1:
+            data = np.interp(time, time_in, data_in)
+        else:
+            data = vec_interp(time, time_in, data_in)
+    else:
+        if verbose: printnow('No rebinning before Filtering')
+        time = time_in
+        data = data_in
+
+    FREQ_SAMPLING = 1. / ((np.max(time) - np.min(time)) / len(time))
+    filt = scsig.butter(5, [lowcut / FREQ_SAMPLING, highcut / FREQ_SAMPLING], btype='bandpass', output='sos')
+    if len(sh) == 1:
+        dataf = scsig.sosfilt(filt, data)
+    else:
+        dataf = scsig.sosfilt(filt, data, axis=1)
+    
+    if notch is not None:
+        for i in range(len(notch)):
+            ftocut = notch[i][0]
+            bw = notch[i][1]
+            nharmonics = notch[i][2].astype(int)
+            if verbose: print('Notching {} Hz with width {} and {} harmonics'.format(ftocut, bw, nharmonics))
+            for j in range(nharmonics):
+                dataf = notch_filter(dataf, ftocut*(j+1), bw, FREQ_SAMPLING)
+    
+    return dataf
+
+
+def vec_interp(x, xin, yin):
+    sh = np.shape(yin)
+    nvec = sh[0]
+    yout = np.zeros_like(yin)
+    for i in range(nvec):
+        yout[i, :] = np.interp(x, xin, yin[i, :])
+    return yout
 
 
 def fit_average(t, folded, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 0], doplot=True, functname=simsig,
@@ -701,7 +773,7 @@ def fit_average(t, folded, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 
         nnn = 100
         t0 = np.linspace(0, 1. / fff, nnn)
         diff2 = np.zeros(nnn)
-        for i in xrange(nnn):
+        for i in range(nnn):
             diff2[i] = np.sum((av - functname(t, [dc, 0.1, t0[i], 1.])) ** 2)
         ttry = t0[np.argmin(diff2)]
 
@@ -728,7 +800,7 @@ def fit_average(t, folded, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 
         if clear:
             clf()
         xlim(0, 1. / fff)
-        for i in xrange(npix):
+        for i in range(npix):
             plot(t, folded[i, :], alpha=0.1, color='k')
         plot(t, av, color='b', lw=4, alpha=0.3, label='Median')
         plot(t, functname(t, bla[1]), 'r--', lw=4,
@@ -770,7 +842,7 @@ def fit_all(t, folded, av, initpars=None, fixpars=[0, 0, 0, 0], stop_each=False,
     allchi2 = np.zeros(npix)
     bar = progress_bar(npix, 'Detectors ')
     ok = np.zeros(npix, dtype=bool)
-    for i in xrange(npix):
+    for i in range(npix):
         bar.update()
         thedd = folded[i, :]
         #### First a fit with no error correction in order to have a chi2 distribution
@@ -1057,7 +1129,7 @@ def calibrate(fib, pow_maynooth, allparams, allerr, allok, cutparam=None, cuterr
     else:
         bsres = []
         bar = progress_bar(bootstrap, 'Bootstrap')
-        for i in xrange(bootstrap):
+        for i in range(bootstrap):
             bar.update()
             order = np.argsort(np.random.rand(len(xx)))
             xxbs = xx.copy()
@@ -1075,7 +1147,7 @@ def calibrate(fib, pow_maynooth, allparams, allerr, allok, cutparam=None, cuterr
                                                                            errfit[1]))
     if bootstrap is not None:
         bsdata = np.zeros((bootstrap, len(xxx)))
-        for i in xrange(bootstrap):
+        for i in range(bootstrap):
             bsdata[i, :] = thepolynomial(xxx, bsres[i, :])
         mm = np.mean(bsdata, axis=0)
         ss = np.std(bsdata, axis=0)
@@ -1085,7 +1157,7 @@ def calibrate(fib, pow_maynooth, allparams, allerr, allok, cutparam=None, cuterr
         plot(xxx, mm, 'b', label='Mean bootstrap')
 
     # indices = np.argsort(np.random.rand(bootstrap))[0:1000]
-    # for i in xrange(len(indices)):
+    # for i in range(len(indices)):
     # 	plot(xxx, thepolynomial(xxx, bsres[indices[i],:]), 'k', alpha=0.01)
     ylim(0, np.max(allparams[newok, 3]) * 1.1)
     xlim(np.min(pow_maynooth[newok]) * 0.99, np.max(pow_maynooth[newok]) * 1.01)

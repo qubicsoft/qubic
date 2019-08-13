@@ -1,5 +1,5 @@
 # coding: utf-8
-from __future__ import division
+from __future__ import division, print_function
 
 import numpy as np
 from astropy.time import Time, TimeDelta
@@ -136,7 +136,7 @@ class QubicPointing(QubicSampling):
 
 def get_pointing(d):
     if [d['random_pointing'],d['sweeping_pointing'],d['repeat_pointing']].count(True)!=1:
-        raise ValueError, "Error: you should choose one pointing"
+        raise ValueError("Error: you should choose one pointing")
     
     center=(d['RA_center'],d['DEC_center'])
 

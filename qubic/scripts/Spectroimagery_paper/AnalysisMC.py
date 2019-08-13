@@ -1,4 +1,4 @@
-from __future__ import division
+from __future__ import division, print_function
 import sys
 import healpy as hp
 import numpy as np
@@ -217,7 +217,7 @@ def plot_hist(mat_npix, bins, title_prefix, ymax=0.5, color='b'):
             plt.legend(fontsize='xx-small')
             plt.subplots_adjust(hspace=0., wspace=0.)
 
-
+            
 def get_covcorr_between_pix(maps, verbose=False):
     """
     Compute the pixel covariance matrix and correlation matrix
@@ -461,9 +461,9 @@ def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
 
     """
     nb = nf_sub // nf_recon  # Number of input subbands in each reconstructed subband
-    
+
     _, nus_edge, nus, deltas, Delta, _ = qubic.compute_freq(band, nf_sub, relative_bandwidth)
-    
+
     corrections = []
     for isub in range(nf_recon):
         #Compute wide of the sub-band

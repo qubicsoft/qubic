@@ -1,3 +1,4 @@
+from __future__ import division, print_function
 import os
 import qubic
 import healpy as hp
@@ -102,7 +103,7 @@ else:
 
 
 maps_recon = arec.tod2map(TOD, d)
-print maps_recon.shape
+print(maps_recon.shape)
 
 cov = arec.get_coverage()
 cov[id]=np.nan

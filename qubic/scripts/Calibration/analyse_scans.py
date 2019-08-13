@@ -1,3 +1,4 @@
+from __future__ import division, print_function
 # %matplotlib notebook
 from matplotlib import rc
 #rc('figure',figsize=(16,8))
@@ -48,7 +49,7 @@ dirs = []
 elevations=[]
 for d in days:
     dd = glob.glob('/qubic/Data/Calib-TD/'+d+'/*'+n+'*')
-    for i in xrange(len(dd)): 
+    for i in range(len(dd)): 
         #print dd[i]
         truc = str.split(dd[i],'_')
         the_el = truc[-1]
@@ -72,7 +73,7 @@ for d in dirs:
     labels.append(bla[1])
     dir_time.append(blo[-1])
 
-for i in xrange(len(labels)): 
+for i in range(len(labels)): 
     print i, labels[i], dir_time[i], 'Elevation: ', elevations[i]
 
 
@@ -90,7 +91,7 @@ if doit==1:
 
 	ids=0
 
-	for ii in xrange(len(dirs)):
+	for ii in range(len(dirs)):
 		thedir = dirs[ii]
 		print ''
 		print '##############################################################'

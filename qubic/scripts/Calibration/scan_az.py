@@ -1,3 +1,4 @@
+from __future__ import division, print_function
 from Calibration import fibtools as ft
 from Calibration.plotters import *
 
@@ -27,7 +28,7 @@ as2 = glob.glob(dir + '*/Sums/*asic2*.fits')
 
 els = np.zeros(len(subdirs))
 azs = np.zeros(len(subdirs))
-for i in xrange(len(subdirs)):
+for i in range(len(subdirs)):
     els[i], azs[i] = [float(s) for s in subdirs[i].split('_') if ft.isfloat(s)]
 
 # a = qp()
@@ -66,7 +67,7 @@ amps = np.zeros((256, len(az)))
 taus = np.zeros((256, len(az)))
 erramps = np.zeros((256, len(az)))
 errtaus = np.zeros((256, len(az)))
-for i in xrange(len(as1)):
+for i in range(len(as1)):
     asic = as1[i]
     tt, folded, okfinal, params, err, chi2, ndf = ft.run_asic(fnum, 0, fff, 
         dc, asic, 1, name, doplot=False,
@@ -95,7 +96,7 @@ for i in xrange(len(as1)):
 cutval = 2500
 
 allimg = np.zeros((len(as1), 17, 17)) + np.nan
-for i in xrange(len(as1)):
+for i in range(len(as1)):
     allimg[i, :, :] = ft.image_asics(all1=amps[:, i])
     bad = allimg[i, :, :] > cutval
     allimg[i, :, :][bad] = np.nan
@@ -127,7 +128,7 @@ cutval = 200
 allimg = np.zeros((len(as1), 17, 17)) + np.nan
 allimg_c = np.zeros((len(as1), 17, 17)) + np.nan
 allimg_cr = np.zeros((len(as1), 17, 17)) + np.nan
-for i in xrange(len(as1)):
+for i in range(len(as1)):
     allimg[i, :, :] = ft.image_asics(all1=amps[:, i])
     bad = allimg[i, :, :] > cutval
     allimg[i, :, :][bad] = np.nan

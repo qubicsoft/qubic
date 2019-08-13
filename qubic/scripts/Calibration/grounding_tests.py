@@ -1,3 +1,4 @@
+from __future__ import division, print0_function
 from Calibration import fibtools as ft
 from Calibration.plotters import *
 
@@ -14,7 +15,7 @@ dirs = glob.glob(basedir+'/*')
 
 motor = []
 grounding = []
-for i in xrange(len(dirs)):
+for i in range(len(dirs)):
     bla = string.split(dirs[i],'_')
     grounding.append(bla[-2])
     motor.append(bla[-1])
@@ -44,7 +45,7 @@ yscale('log')
 allspecs = []
 allfreqs = []
 medspec = []
-for i in xrange(len(dirs)):
+for i in range(len(dirs)):
     a1 = qp()
     a1.read_qubicstudio_dataset(dirs[i], asic=1)
     a2 = qp()
@@ -53,7 +54,7 @@ for i in xrange(len(dirs)):
     FREQ_SAMPLING = 1./a1.sample_period()
 
     specs = np.zeros((256, nsamples/2+1))
-    for j in xrange(128):
+    for j in range(128):
         spectrum, freq = mlab.psd(a1.timeline(TES=j+1), Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
         specs[j,:] = spectrum
         spectrum, freq = mlab.psd(a2.timeline(TES=j+1), Fs=FREQ_SAMPLING, NFFT=nsamples, window=mlab.window_hanning)
@@ -65,13 +66,13 @@ for i in xrange(len(dirs)):
 
 
 
-for theTES in xrange(256):
+for theTES in range(256):
     median=False
     filt = 10
     #cpls = [[0,1], [3,2], [0,3], [1,2]]
     cpls = [[0,1], [4,5], [0,4], [1,5]]
     clf()
-    for j in xrange(len(cpls)):
+    for j in range(len(cpls)):
         subplot(len(cpls),1,j+1)
         xscale('log')
         yscale('log')

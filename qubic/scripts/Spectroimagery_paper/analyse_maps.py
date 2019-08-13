@@ -1,5 +1,6 @@
 from __future__ import division, print_function
 import glob
+import os
 import healpy as hp
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,13 +15,16 @@ stokes = ['I', 'Q', 'U']
 
 
 # ================= Get the simulation files ================
-# repository where the .fits was saved
-date = '20190704'
-# rep_simu = './TEST/{}/'.format(date)
-rep_simu = '/home/louisemousset/QUBIC/Qubic_work/SpectroImagerie/SimuLouise/Noise_MCMC_201907/' + date + '/'
 
-# Simulation name
-name = 'try50reals'
+# Simulation date and name
+date = '20190812'
+name = 'QU100'
+
+# repository where the .fits was saved
+if 'QUBIC_DATADIR' in os.environ.keys():
+   rep_simu = os.environ['QUBIC_DATADIR'] + date + '/'
+else:
+    rep_simu = './TEST/{}/'.format(date)
 
 # Dictionary saved during the simulation
 d = qubic.qubicdict.qubicDict()

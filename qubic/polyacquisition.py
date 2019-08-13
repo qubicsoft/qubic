@@ -71,10 +71,16 @@ class QubicPolyAcquisition(object):
         For other parameters see documentation for the QubicAcquisition class
 
         """
+
         weights = d['weights']
-        self.subacqs = [QubicAcquisition(multiinstrument[i],
-                                         sampling, scene, d)
-                        for i in range(len(multiinstrument))]
+        if d['MultiBand'] and d['nf_sub']>1:
+            self.subacqs = [QubicAcquisition(multiinstrument[i],
+                                             sampling, scene, d)
+                            for i in range(len(multiinstrument))]
+        else:
+            raise ValueError('If you do not use a multiband instrument,'
+                             'you should use the QubicAcquisition class'
+                             'which is done for the monochromatic case.')
         for a in self[1:]:
             a.comm = self[0].comm
         self.scene = scene
@@ -187,51 +193,55 @@ class QubicPolyAcquisition(object):
         return self[0].get_invntt_operator()
 
     def get_observation(self, m, convolution=True, noiseless=False):
-        """
-        Return TOD for polychromatic synthesised beam
+        '''
+        Return TOD for polychromatic synthesised beam,
+        just the same way as QubicPolyAcquisition.get_observation does
 
         Parameters
         ----------
-        m : np.array((npix, 3)) if self.scene.kind == 'IQU', else np.array((npix))
-            Helpix map of CMB
+        m : np.array((N, npix, 3)) if self.scene.kind == 'IQU', else np.array((npix))
+            where N = len(self) if convolution == True or
+                  N = len(self.bands) if convolution == False
+            Helpix map of CMB for all the frequencies
         convolution : boolean, optional [default and recommended = True]
             - if True, convolve the input map with gaussian kernel
             with width specific for each subfrequency and
             return TOD, convolved map,
-            where TOD = [H1, H2, H3...] * [m_conv1, m_conv2, m_conv3].T
-            and convolved map = average([m_conv1, m_conv2, m_conv3])
+            (for example, we use 4 monochromatic frequencies and divide them
+                to 2 subbands)
+            where TOD = [H1, H2, H3, H4] * [m_conv1, m_conv2, m_conv3, m_conv4].T
+            and convolved map = [average([m_conv1, m_conv2]), average([m_conv3, m_conv4])]
             - if False, the input map is considered as already convolved
             and the return is just TOD, which is equal to
             [sum(H1, H2, H3, ...)] * input_map
         noiseless : boolean, optional [default=False]
             if False, add noise to the TOD due to the model
-        """
-        if len(self) == 1:
-            return self[0].get_observation(m, convolution=convolution, noiseless=noiseless)
+        '''
 
-        if self.scene.kind == 'IQU':
-            shape = (len(self), m.shape[0], m.shape[1])
+        if self.scene.kind != 'I':
+            shape = (len(self), m.shape[1], m.shape[2])
         else:
-            shape = (len(self), m.shape[0])
+            shape = m.shape
 
         if convolution:
-            maps_convolved = np.zeros(shape)  # array of sky maps, each convolved with its own gaussian
-            map_convolved = np.zeros(m.shape)  # average convolved map
+            _maps_convolved = np.zeros(shape)  # array of sky maps, each convolved with its own gaussian
             for i in range(len(self)):
                 C = self[i].get_convolution_peak_operator()
-                maps_convolved[i] = C(m)
-                map_convolved += maps_convolved[i] * self.weights[i]
-            y = self.get_operator_to_make_TOD() * maps_convolved
+                _maps_convolved[i] = C(m[i])
+            tod = self.get_operator_to_make_TOD() * _maps_convolved
         else:
-            y = self.get_operator() * m
+            tod = self.get_operator() * m
 
         if not noiseless:
-            y += self.get_noise()
+            tod += self.get_noise()
 
         if convolution:
-            return y, map_convolved
+            maps_convolved = [np.average(_maps_convolved[(self.nus > mi) * (self.nus < ma)],
+                                         axis=0, weights=self.weights[(self.nus > mi) * (self.nus < ma)]) \
+                              for (mi, ma) in self.bands]
+            return tod, maps_convolved
 
-        return y
+        return tod
 
     def get_preconditioner(self, cov):
         if cov is not None:

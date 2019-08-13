@@ -2,8 +2,7 @@
 from __future__ import division, print_function
 from astropy.io import fits
 import sys
-pythonmajor = sys.version_info[0]
-if pythonmajor==2:
+if sys.version_info.major==2:
     from ConfigParser import ConfigParser
 else:
     from configparser import ConfigParser

@@ -3,8 +3,7 @@ import os,sys
 import string
 
 def ask_for( key ):
-    pythonmajor = sys.version_info[0]
-    if pythonmajor==2:
+    if sys.version_info.major==2:
         s = raw_input( "flipperDict: enter value for '%s': " % key )
     else:
         s = input( "flipperDict: enter value for '%s': " % key )

@@ -314,88 +314,240 @@ title('Raw Fringe')
 ```
 
 ```{python}
-def tes2imgpix(tesnum):
-    a1 = qp()
-    a1.assign_asic(1)
-    a2 = qp()
-    a2.assign_asic(2)
-    ij = np.zeros((len(tesnum),2))
-    for i in xrange(len(tesnum)):
-        if i < 128:
-            pixnum = a1.tes2pix(tesnum[i])
-            ww = where(a1.pix_grid == pixnum)
-        else:
-            pixnum = a2.tes2pix(tesnum[i]-128)
-            ww = where(a2.pix_grid == pixnum)
-        if len(ww[0])>0:
-            ij[i,:] = ww
-        else:
-            ij[i,:] = [17,17]
-    return ij
 
-def fringe_focalplane(x, pars):
-    baseline = pars[0]
-    alpha = pars[1]
-    phase = pars[2]
-    amplitude = pars[3]
-    print pars
-    nu = 150e9
-    lam = 3e8/nu
-    f = 300e-3 # Focal Length in mm
-    freq_fringe = baseline / lam
-    TESsize = 3.e-3
+```
 
-    ijtes = tes2imgpix(np.arange(256)+1)
+```{python}
+reload(ft)
+import selfcal_lib as sl
+reload(sl)
+
+# def tes2imgpix(tesnum, extra_args=None):
+#     if extra_args is None:
+#         a1 = qp()
+#         a1.assign_asic(1)
+#         a2 = qp()
+#         a2.assign_asic(2)
+#     else:
+#         a1 = extra_args[0]
+#         a2 = extra_args[1]
+        
+#     ij = np.zeros((len(tesnum),2))
+#     for i in xrange(len(tesnum)):
+#         if i < 128:
+#             pixnum = a1.tes2pix(tesnum[i])
+#             ww = where(a1.pix_grid == pixnum)
+#         else:
+#             pixnum = a2.tes2pix(tesnum[i]-128)
+#             ww = where(a2.pix_grid == pixnum)
+#         if len(ww[0])>0:
+#             ij[i,:] = ww
+#         else:
+#             ij[i,:] = [17,17]
+#     return ij
+
+# def fringe_focalplane(x, pars, extra_args=None):    
+#     baseline = pars[0]
+#     alpha = pars[1]
+#     phase = pars[2]
+#     amplitude = pars[3]
+#     nu = 150e9
+#     lam = 3e8/nu
+#     f = 300e-3 # Focal Length in mm
+#     freq_fringe = baseline / lam
+#     TESsize = 3.e-3
+
+#     ijtes = tes2imgpix(np.arange(256)+1, extra_args=extra_args)
     
-    fringe=amplitude*np.cos(2.*np.pi*freq_fringe*(ijtes[:,0]*np.cos(alpha*np.pi/180)+ijtes[:,1]*np.sin(alpha*np.pi/180))*TESsize/f+phase)
-    thermos = [4-1,36-1, 68-1, 100-1, 4-1+128, 36-1+128, 68-1+128, 100-1+128]
-    fringe[thermos] = 0
-    mask = x > 0
-    fringe[~mask] = 0
-    return fringe
+#     fringe=amplitude*np.cos(2.*np.pi*freq_fringe*(ijtes[:,0]*np.cos(alpha*np.pi/180)+ijtes[:,1]*np.sin(alpha*np.pi/180))*TESsize/f+phase*np.pi/180)
+#     thermos = [4-1,36-1, 68-1, 100-1, 4-1+128, 36-1+128, 68-1+128, 100-1+128]
+#     fringe[thermos] = 0
+#     mask = x > 0
+#     fringe[~mask] = 0
+#     return fringe
     
 bl=14e-3*np.sqrt(5.) #baseline
 alpha=-18.4
-phase=-1.5
+phase=np.degrees(-1.5)+60
 amplitude = 5e3
+parnames = ['Baseline [mm]', 'Angle [deg]', 'Phase [deg]', 'Amplitude [ADU]']
 pars = np.array([bl, alpha, phase, amplitude])
 
 
 fringe = (allres/intercal)
+#fringe = (allres)
+maskok = np.isfinite(fringe)
 imgfringe = ft.image_asics(all1=fringe)
 
 tes_index = np.arange(256)
 tes_index[~isfinite(fringe)] = -1
-fringe_th = fringe_focalplane(tes_index, pars)
+fringe_th = sl.fringe_focalplane(tes_index, pars)
+fringe_th[~maskok] = np.nan
 imgfringe_th = ft.image_asics(all1=fringe_th)
 
-subplot(1,2,1)
-imshow(imgfringe, vmin = -5e3, vmax = 5e3)
-colorbar()
-subplot(1,2,2)
-imshow(imgfringe_th)
-colorbar()
+a1 = qp()
+a1.assign_asic(1)
+a2 = qp()
+a2.assign_asic(2)
 
 res = ft.do_minuit(tes_index, np.nan_to_num(fringe), np.ones(256), pars, functname=fringe_focalplane, 
                 fixpars=[1,1,0,0], nohesse=True,
-              force_chi2_ndf=True)
+              force_chi2_ndf=True, extra_args=[a1, a2])
 
 
 ```
 
 ```{python}
-subplot(2,2,1)
+subplot(1,3,1)
 imshow(imgfringe, vmin = -5e3, vmax = 5e3)
 colorbar()
-subplot(2,2,2)
+title('Data')
+
+subplot(1,3 ,2)
 imshow(imgfringe_th)
 colorbar()
+title('Input Guess')
 
-fringe_fit = fringe_focalplane(tes_index, res[1])
+fringe_fit = sl.fringe_focalplane(tes_index, res[1])
+fringe_fit[~maskok] = np.nan
 imgfringe_fit = ft.image_asics(all1=fringe_fit)
-subplot(2,2,3)
+subplot(1,3,3)
 imshow(imgfringe_fit)
 colorbar()
+title('Fit')
+
+print 'Input guess:'
+for i in range(len(res[1])):
+    print parnames[i],': {}'.format(pars[i])
+
+print 'Fit:'
+for i in range(len(res[1])):
+    print parnames[i],': {} +/- {}'.format(res[1][i], res[2][i])
+
+```
+
+```{python}
+import selfcal_lib as sl
+reload(sl)
+
+
+#baseline = [63,46]
+baseline = [46,61] ## for 90deg rotation
+aa = sl.get_fringes_TD(baseline, phi=np.array([np.radians(-3.11)]), theta=np.array([np.radians(88.)]))
+```
+
+```{python}
+subplot(1,3,1)
+imshow(ft.image_asics(all1=aa))
+colorbar()
+title('Sim Louise')
+subplot(1,3,2)
+aacut = aa.copy()
+aacut[~maskok]=np.nan
+imshow(ft.image_asics(all1=aacut))
+colorbar()
+title('Sim Louise Cut')
+subplot(1,3,3)
+imshow(imgfringe, vmin = -5e3, vmax = 5e3)
+colorbar()
+title('Data')
+
+```
+
+```{python}
+plot(aacut,fringe,'o')
+ylim(-10000,30000)
+```
+
+```{python}
+np.corrcoef(aacut[maskok,0], fringe[maskok])[0,1]
+```
+
+```{python}
+xx = np.linspace(-3,3,11)
+yy = np.linspace(0,10,10)
+coeff = np.zeros((len(xx), len(yy)))
+for i in xrange(len(xx)):
+    for j in xrange(len(yy)):
+        aa = sl.get_fringes_TD(baseline, phi=np.array([np.radians(xx[i])]), 
+                               theta=np.array([np.radians(yy[j])]))
+        coeff[i,j] = np.corrcoef(aa[maskok,0], fringe[maskok])[0,1]
+```
+
+```{python}
+imshow(coeff, extent=[np.min(yy), np.max(yy), np.min(xx), np.max(xx)], aspect='equal')
+xlabel('Theta')
+ylabel('Phi')
+colorbar()
+```
+
+```{python}
+aa = sl.get_fringes_TD(baseline, phi=np.array([np.radians(0)]), 
+                       theta=np.array([np.radians(9)]))
+subplot(1,3,1)
+imshow(ft.image_asics(all1=aa))
+colorbar()
+title('Sim Louise')
+subplot(1,3,2)
+aacut = aa.copy()
+aacut[~maskok]=np.nan
+imshow(ft.image_asics(all1=aacut))
+colorbar()
+title('Sim Louise Cut')
+subplot(1,3,3)
+imshow(imgfringe, vmin = -5e3, vmax = 5e3)
+colorbar()
+title('Data')
+
+```
+
+```{python}
+coeff0 = np.corrcoef(aa[maskok,0], fringe[maskok])[0,1]
+
+nn = 10000
+allcoeffs = np.zeros(nn)
+for i in xrange(nn):
+    rndorder = argsort(np.random.rand(256))
+    aarnd = aa[rndorder].copy()
+    aarnd[~maskok]=np.nan
+    allcoeffs[i] = np.corrcoef(aarnd[maskok,0], fringe[maskok])[0,1]
+```
+
+```{python}
+h=hist(allcoeffs,range=[-2,2], bins=100)
+plot(coeff0,0,'ro')
+print coeff0
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
 
 ```
 

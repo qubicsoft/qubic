@@ -5,11 +5,11 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.1'
-      jupytext_version: 1.1.5
+      jupytext_version: 1.2.0
   kernelspec:
-    display_name: Python 2
+    display_name: Python 3
     language: python
-    name: python2
+    name: python3
 ---
 
 # Simulations for self-calibration (fringes)
@@ -23,6 +23,8 @@ One remark : I tried to put documentation for each function. On a jupyter notebo
 ```{python}
 # %matplotlib inline
 # %matplotlib notebook
+
+from __future__ import division
 
 import glob
 import healpy as hp

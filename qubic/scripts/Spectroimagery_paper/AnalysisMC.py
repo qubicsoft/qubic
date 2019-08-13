@@ -55,7 +55,7 @@ def std_profile(many_patch, nbins, nside, center, seenmap):
         std_bin[b, :, :] = np.std(many_patch[:, :, ok, :], axis=(0, 2))
 
     # Interpolation to get a profile
-    fit = interpolate.interp1d(bin_centers, std_bin, axis=0, kind='quadratic', fill_value='extrapolate', )
+    fit = interpolate.interp1d(bin_centers, std_bin, axis=0, kind='linear', fill_value='extrapolate' )
     std_profile = fit(ang)
 
     return bin_centers, ang, std_bin, std_profile
@@ -216,11 +216,8 @@ def plot_hist(mat_npix, bins, title_prefix, ymax=0.5, color='b'):
 
             plt.legend(fontsize='xx-small')
             plt.subplots_adjust(hspace=0., wspace=0.)
-    pngname = ttl.replace(' ','_')+'.png'
-    plt.savefig(pngname,format='png',dpi=100,bbox_inches='tight',figsize=[20,12])
 
-
-
+            
 def get_covcorr_between_pix(maps, verbose=False):
     """
     Compute the pixel covariance matrix and correlation matrix

@@ -11,36 +11,34 @@ import AnalysisMC as amc
 import qubic
 from qubic import equ2gal
 
+from qubicpack.utilities import Qubic_DataDir
+
 stokes = ['I', 'Q', 'U']
 
 
 # ================= Get the simulation files ================
 
 # Simulation date and name
-date = '20190812'
-name = 'QU100'
+date_name = '20190813_QU10'
 
-# repository where the .fits was saved
-if 'QUBIC_DATADIR' in os.environ.keys():
-   rep_simu = os.environ['QUBIC_DATADIR'] + date + '/'
-else:
-    rep_simu = './TEST/{}/'.format(date)
+# Get the repository where the simulation is
+rep_simu = Qubic_DataDir(datafile = date_name + '.dict') + '/'
 
 # Dictionary saved during the simulation
 d = qubic.qubicdict.qubicDict()
-d.read_from_file(rep_simu + date + '_' + name + '.dict')
+d.read_from_file(rep_simu + date_name + '.dict')
 
 # Coordinates of the zone observed in the sky
 center = equ2gal(d['RA_center'], d['DEC_center'])
 
 # Number of subbands used during the simulation
-nf_recon = d['nf_recon'][1]
+nf_recon = d['nf_recon'][0]
 nf_sub = d['nf_sub']
 print('nf_sub = {}, nf_recon = {}'.format(nf_sub, nf_recon))
 
 # Get fits files names in a list
-fits_noise = np.sort(glob.glob(rep_simu + date + '_' + name + '*nfrecon{}_noiselessFalse*.fits'.format(nf_recon)))
-fits_noiseless = glob.glob(rep_simu + date + '_' + name + '*noiselessTrue*.fits')
+fits_noise = np.sort(glob.glob(rep_simu + date_name + '*nfrecon{}_noiselessFalse*.fits'.format(nf_recon)))
+fits_noiseless = glob.glob(rep_simu + date_name + '*noiselessTrue*.fits')
 
 # Number of noise realisations
 nreals = len(fits_noise)
@@ -103,7 +101,7 @@ print('Getting patches with shape : {}'.format(maps_recon_cut.shape))
 npix_patch = np.shape(maps_recon_cut)[1]
 # Get all patches (all noise realisations)
 all_fits, all_patch_recon, all_patch_conv, all_patch_diff = rmc.get_patch_many_files(
-    rep_simu, date + '_' + name + '*nfrecon{}_noiselessFalse*.fits'.format(nf_recon))
+    rep_simu, date_name + '*nfrecon{}_noiselessFalse*.fits'.format(nf_recon))
 print('Getting all patch realizations with shape : {}'.format(all_patch_recon.shape))
 
 # ================= Look at diff in zones ================

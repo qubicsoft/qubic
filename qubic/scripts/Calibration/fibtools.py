@@ -85,16 +85,12 @@ def image_asics(data1=None, data2=None, all1=None):
     img = np.zeros((nrows, ncols)) + np.nan
     for row in range(nrows):
         for col in range(ncols):
-            if data1 is not None:
-                physpix = pix_grid[row, col]
-                if physpix in TES2PIX[0]:
-                    TES = pix2tes(physpix,asic=1)
-                    img[row, col] = data1[TES - 1]
-            if data2 is not None:
-                physpix = pix_grid[row, col]
-                if physpix in TES2PIX[1]:
-                    TES = pix2tes(physpix,asic=2)
-                    img[row, col] = data2[TES - 1]
+            physpix = pix_grid[row, col]
+            TES,asic = pix2tes(physpix)
+            if data1 is not None and asic==1:
+                img[row, col] = data1[TES - 1]
+            if data2 is not None and asic==2:
+                img[row, col] = data2[TES - 1]
     return img
 
 

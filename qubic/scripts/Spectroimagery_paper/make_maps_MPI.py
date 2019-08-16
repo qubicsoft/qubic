@@ -15,8 +15,8 @@ import ReadMC as rmc
 import SpectroImLib as si
 
 # MPI stuff
-# from mpi4py import MPI
-from pyoperators import MPI
+from mpi4py import MPI
+# from pyoperators import MPI
 
 rank = MPI.COMM_WORLD.rank
 size = MPI.COMM_WORLD.size
@@ -29,19 +29,13 @@ if rank == 0:
 
 today = datetime.datetime.now().strftime('%Y%m%d')
 
-# CC is true if you run the simu on the CC
-CC = sys.argv[1]
+# Repository for dictionary and input maps
+global_dir = Qubic_DataDir(datafile='spectroimaging.dict')
+dictfilename = global_dir + '/spectroimaging.dict'
+dictmaps = global_dir + '/maps/'
 
-if CC == 'yes':
-    global_dir = '/sps/hep/qubic/Users/lmousset/'
-    dictfilename = global_dir + 'myqubic/qubic/scripts/Spectroimagery_paper/spectroimaging.dict'
-    dictmaps = global_dir + 'myqubic/qubic/scripts/Spectroimagery_paper/maps/'
-    out_dir = global_dir + 'SpectroImaging/data/{}/'.format(today)
-else:
-    dictfilename = './spectroimaging.dict'
-    dictmaps = './maps/'
-    out_dir = './TEST/{}/'.format(today)
-
+# Repository for output maps
+out_dir = sys.argv[1]
 try:
     os.makedirs(out_dir)
 except:

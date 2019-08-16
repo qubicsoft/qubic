@@ -11,23 +11,20 @@ import numpy as np
 from pysimulators import FitsArray
 import qubic
 
+from qubicpack.utilities import Qubic_DataDir
+
 import ReadMC
 import SpectroImLib as si
 
 today = datetime.datetime.now().strftime('%Y%m%d')
 
-# CC must be yes if you run the simu on the CC
-CC = sys.argv[1]
-if CC == 'yes':
-    global_dir = '/sps/hep/qubic/Users/lmousset/'
-    dictfilename = global_dir + 'myqubic/qubic/scripts/Spectroimagery_paper/spectroimaging.dict'
-    dictmaps = global_dir + 'myqubic/qubic/scripts/Spectroimagery_paper/maps/'
-    out_dir = global_dir + 'SpectroImaging/data/{}/'.format(today)
-else:
-    dictfilename = './spectroimaging.dict'
-    dictmaps = './maps/'
-    out_dir = './TEST/{}/'.format(today)
+# Repository for dictionary and input maps
+global_dir = Qubic_DataDir(datafile='spectroimaging.dict')
+dictfilename = global_dir + '/spectroimaging.dict'
+dictmaps = global_dir + '/maps/'
 
+# Repository for output maps
+out_dir = sys.argv[1]
 try:
     os.makedirs(out_dir)
 except:
@@ -45,7 +42,7 @@ d.read_from_file(dictfilename)
 
 [0] Sky creation:	d['nf_sub'] = 12 to 24 ? 4/5 diferent values?
 
-[1] Pointing: 		d['random_pointing'] = True, 
+[1] Pointing: 		d['repeat_pointing'] = True, 
 					d['npointings'] = [1000,1500,2000]
 
 [2] TOD creation: 	d['noiseless'] = [True, False]

@@ -23,6 +23,10 @@ if CC == 'yes':
     dictfilename = global_dir + 'myqubic/qubic/scripts/Spectroimagery_paper/spectroimaging.dict'
     dictmaps = global_dir + 'myqubic/qubic/scripts/Spectroimagery_paper/maps/'
     out_dir = global_dir + 'SpectroImaging/data/{}/'.format(today)
+elif CC == 'nersc':
+    dictfilename = '/global/homes/m/mmgamboa/qubicsoft/qubic/scripts/Spectroimagery_paper/spectroimaging.dict'
+    dictmaps = '/global/homes/m/mmgamboa/qubicsoft/qubic/scripts/Spectroimagery_paper/maps/'
+    out_dir = '/global/homes/m/mmgamboa/qubicsoft/qubic/scripts/Spectroimagery_paper/TEST'
 else:
     dictfilename = './spectroimaging.dict'
     dictmaps = './maps/'

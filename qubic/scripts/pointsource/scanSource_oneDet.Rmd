@@ -14,31 +14,23 @@ jupyter:
 
 ```{python}
 import os
-import qubic
+import sys
+
 import healpy as hp
 import numpy as np
 import pylab as plt
 import matplotlib as mpl
 from matplotlib.pyplot import *
 from matplotlib import rc
-#from qubicpack import qubicpack as qp
 import matplotlib.pyplot as plt
 from matplotlib import cm, colors
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 
-import sys
-sys.path.append('/home/martin/QUBIC/qubiclouise/qubic/scripts/Calibration')
-sys.path.append('/home/martin/QUBIC/qubiccalibration/qubicpack')
-
+import qubic
 from qubic import myinstrument as myinst
 from qubic.myinstrument import QubicInstrument
 
-#import fibtools as ft
-#import plotters as p
-#import lin_lib as ll
-#import demodulation_lib as dl
-#import satorchipy as stpy
 from pysimulators import FitsArray
 
 import glob

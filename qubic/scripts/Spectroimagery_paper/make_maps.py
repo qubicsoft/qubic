@@ -24,7 +24,7 @@ dictfilename = global_dir + '/spectroimaging.dict'
 dictmaps = global_dir + '/maps/'
 
 # Repository for output maps
-out_dir = sys.argv[1]
+out_dir = sys.argv[1]+'{}'.format(today)
 try:
     os.makedirs(out_dir)
 except:

@@ -18,6 +18,7 @@ import SpectroImLib as si
 # from mpi4py import MPI
 from pyoperators import MPI
 
+
 rank = MPI.COMM_WORLD.rank
 size = MPI.COMM_WORLD.size
 

@@ -164,8 +164,11 @@ for i, nf_sub_rec in enumerate(d['nf_recon']):
         rmc.save_simu_fits(maps_recon_noiseless, cov_noiseless, nus, nus_edge, maps_convolved_noiseless,
                            out_dir, name + name_map)
 
+comm.Barrier()
+
 # ==== TOD making ====
 # TOD making is intrinsically parallelized (use of pyoperators)
+
 d['Noiseless'] = False
 for j in range(nreals):
 

@@ -11,23 +11,20 @@ import numpy as np
 from pysimulators import FitsArray
 import qubic
 
+from qubicpack.utilities import Qubic_DataDir
+
 import ReadMC
 import SpectroImLib as si
 
 today = datetime.datetime.now().strftime('%Y%m%d')
 
-# CC must be yes if you run the simu on the CC
-CC = sys.argv[1]
-if CC == 'yes':
-    global_dir = '/sps/hep/qubic/Users/lmousset/'
-    dictfilename = global_dir + 'myqubic/qubic/scripts/Spectroimagery_paper/spectroimaging.dict'
-    dictmaps = global_dir + 'myqubic/qubic/scripts/Spectroimagery_paper/maps/'
-    out_dir = global_dir + 'SpectroImaging/data/{}/'.format(today)
-else:
-    dictfilename = './spectroimaging.dict'
-    dictmaps = './maps/'
-    out_dir = './TEST/{}/'.format(today)
+# Repository for dictionary and input maps
+global_dir = Qubic_DataDir(datafile='spectroimaging.dict')
+dictfilename = global_dir + '/spectroimaging.dict'
+dictmaps = global_dir + '/maps/'
 
+# Repository for output maps
+out_dir = sys.argv[1]
 try:
     os.makedirs(out_dir)
 except:
@@ -45,7 +42,7 @@ d.read_from_file(dictfilename)
 
 [0] Sky creation:	d['nf_sub'] = 12 to 24 ? 4/5 diferent values?
 
-[1] Pointing: 		d['random_pointing'] = True, 
+[1] Pointing: 		d['repeat_pointing'] = True, 
 					d['npointings'] = [1000,1500,2000]
 
 [2] TOD creation: 	d['noiseless'] = [True, False]
@@ -58,7 +55,7 @@ d.read_from_file(dictfilename)
 # Check nf_sub/nf_sub_rec is an integer
 nf_sub = d['nf_sub']
 for nf_sub_rec in d['nf_recon']:
-    if nf_sub % nf_sub_rec !=0:
+    if nf_sub % nf_sub_rec != 0:
         raise ValueError('nf_sub/nf_sub_rec must be an integer.')
 
 # Check that we do one simulation with only one reconstructed subband
@@ -77,14 +74,13 @@ t0 = time.time()
 x0 = FitsArray(dictmaps + 'nf_sub={}/nf_sub={}.fits'.format(nf_sub, nf_sub))
 print('Input Map with shape:', np.shape(x0))
 
-
-if x0.shape[1] % (12*d['nside']**2) == 0:
+if x0.shape[1] % (12 * d['nside'] ** 2) == 0:
     print('Good size')
 else:
-    y0 = np.ones((d['nf_sub'], 12*d['nside']**2,3) )
+    y0 = np.ones((d['nf_sub'], 12 * d['nside'] ** 2, 3))
     for i in range(d['nf_sub']):
         for j in range(3):
-            y0[i,:,j] = hp.ud_grade(x0[i,:,j], d['nside'])
+            y0[i, :, j] = hp.ud_grade(x0[i, :, j], d['nside'])
 
 # Put I = 0
 # x0[:, :, 0] = 0.
@@ -124,11 +120,12 @@ for i, nf_sub_rec in enumerate(d['nf_recon']):
     maps_recon_noiseless[:, unseen, :] = hp.UNSEEN
     print('************* Map-Making on {} sub-map(s) (noiseless). Done *************'.format(nf_sub_rec))
 
-    name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}.fits'.format(d['nf_sub'],
-                                                                                  d['nf_recon'][i],
-                                                                                  d['noiseless'],
-                                                                                  d['npointings'],
-                                                                                  d['tol'])
+    name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_nep{5}.fits'.format(d['nf_sub'],
+                                                                                     d['nf_recon'][i],
+                                                                                     d['noiseless'],
+                                                                                     d['npointings'],
+                                                                                     d['tol'],
+                                                                                     d['detector_nep'])
     ReadMC.save_simu_fits(maps_recon_noiseless, cov_noiseless, nus, nus_edge, maps_convolved_noiseless,
                           out_dir, name + name_map)
 
@@ -153,12 +150,13 @@ for j in range(nreals):
         maps_recon[:, unseen, :] = hp.UNSEEN
         print('************* Map-Making on {} sub-map(s) - Realisation {}. Done *************'.format(nf_sub_rec, j))
 
-        name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_{5}.fits'.format(d['nf_sub'],
-                                                                                      d['nf_recon'][i],
-                                                                                      d['noiseless'],
-                                                                                      d['npointings'],
-                                                                                      d['tol'],
-                                                                                      str(j).zfill(2))
+        name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_nep{5}_{6}.fits'.format(d['nf_sub'],
+                                                                                             d['nf_recon'][i],
+                                                                                             d['noiseless'],
+                                                                                             d['npointings'],
+                                                                                             d['tol'],
+                                                                                             d['detector_nep'],
+                                                                                             str(j).zfill(2))
         ReadMC.save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved, out_dir, name + name_map)
 
 t1 = time.time()

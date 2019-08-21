@@ -11,16 +11,19 @@ import numpy as np
 from pysimulators import FitsArray
 import qubic
 
+from qubicpack.utilities import Qubic_DataDir
+
 import ReadMC as rmc
 import SpectroImLib as si
 
 # MPI stuff
-# from mpi4py import MPI
-from pyoperators import MPI
+from mpi4py import MPI
 
+# from pyoperators import MPI
 
-rank = MPI.COMM_WORLD.rank
-size = MPI.COMM_WORLD.size
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
 
 if rank == 0:
     print('**************************')
@@ -30,19 +33,13 @@ if rank == 0:
 
 today = datetime.datetime.now().strftime('%Y%m%d')
 
-# CC is true if you run the simu on the CC
-CC = sys.argv[1]
+# Repository for dictionary and input maps
+global_dir = Qubic_DataDir(datafile='spectroimaging.dict')
+dictfilename = global_dir + '/spectroimaging.dict'
+dictmaps = global_dir + '/maps/'
 
-if CC == 'yes':
-    global_dir = '/sps/hep/qubic/Users/lmousset/'
-    dictfilename = global_dir + 'myqubic/qubic/scripts/Spectroimagery_paper/spectroimaging.dict'
-    dictmaps = global_dir + 'myqubic/qubic/scripts/Spectroimagery_paper/maps/'
-    out_dir = global_dir + 'SpectroImaging/data/{}/'.format(today)
-else:
-    dictfilename = './spectroimaging.dict'
-    dictmaps = './maps/'
-    out_dir = './TEST/{}/'.format(today)
-
+# Repository for output maps
+out_dir = sys.argv[1]
 try:
     os.makedirs(out_dir)
 except:
@@ -110,15 +107,15 @@ else:
     t0 = time.time()
     x0 = None
 
-x0 = MPI.COMM_WORLD.bcast(x0)
+x0 = comm.bcast(x0)
 
 # ==== Pointing strategy ====
 # Pointing in not picklable so cannot be broadcasted
 # => done on all ranks simultaneously
 p = qubic.get_pointing(d)
-print(rank, p.azimuth[:6], p.elevation[:6], p.pitch[:6])
+print('Pointing done on rank :', rank)
 
-MPI.COMM_WORLD.Barrier()
+comm.Barrier()
 
 # =============== Noiseless ===================== #
 
@@ -130,7 +127,7 @@ print('-------------- Noiseless TOD with shape {} - Done in {} minutes on rank {
       .format(np.shape(TOD_noiseless), (time.time() - t1) / 60, rank))
 
 # Wait for all the TOD to be done (is it necessary ?)
-MPI.COMM_WORLD.Barrier()
+comm.Barrier()
 if rank == 0:
     print('-------------- All Noiseless TOD OK in {} minutes --------------'.format((time.time() - t1) / 60))
 
@@ -155,16 +152,17 @@ for i, nf_sub_rec in enumerate(d['nf_recon']):
         print('************* Map-Making on {} sub-map(s) (noiseless). Rank {} Done *************'
               .format(nf_sub_rec, rank))
 
-    MPI.COMM_WORLD.Barrier()
+    comm.Barrier()
 
     if rank == 0:
-        name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}.fits'.format(d['nf_sub'],
-                                                                              d['nf_recon'][i],
-                                                                              d['noiseless'],
-                                                                              d['npointings'],
-                                                                              d['tol'])
+        name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_nep{5}.fits'.format(d['nf_sub'],
+                                                                                  d['nf_recon'][i],
+                                                                                  d['noiseless'],
+                                                                                  d['npointings'],
+                                                                                  d['tol'],
+                                                                                  d['detector_nep'])
         rmc.save_simu_fits(maps_recon_noiseless, cov_noiseless, nus, nus_edge, maps_convolved_noiseless,
-                       out_dir, name + name_map)
+                           out_dir, name + name_map)
 
 # ==== TOD making ====
 # TOD making is intrinsically parallelized (use of pyoperators)
@@ -179,7 +177,7 @@ for j in range(nreals):
           .format(np.shape(TOD), j, (time.time() - t2) / 60, rank))
 
     # Wait for all the TOD to be done (is it necessary ?)
-    MPI.COMM_WORLD.Barrier()
+    comm.Barrier()
     if rank == 0:
         print('-------------- All Noise TOD realisation {} - Done in {} minutes --------------'
               .format(j, (time.time() - t2) / 60))
@@ -202,19 +200,18 @@ for j in range(nreals):
             print('************* Map-Making on {} sub-map(s) - Realisation {} - Rank {} Done *************'
                   .format(nf_sub_rec, j, rank))
 
-        MPI.COMM_WORLD.Barrier()
+        comm.Barrier()
 
         if rank == 0:
-            name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_{5}.fits'.format(d['nf_sub'],
+            name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_nep{5}_{6}.fits'.format(d['nf_sub'],
                                                                                           d['nf_recon'][i],
                                                                                           d['noiseless'],
                                                                                           d['npointings'],
                                                                                           d['tol'],
+                                                                                          d['detector_nep'],
                                                                                           str(j).zfill(2))
             rmc.save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved, out_dir, name + name_map)
 
-        MPI.COMM_WORLD.Barrier()
-
-
+        comm.Barrier()
 
 print('============== All Done in {} minutes ================'.format((time.time() - t0) / 60))

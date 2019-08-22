@@ -8,7 +8,7 @@ beam_shape =  'multi_freq' # 'gaussian', 'fitted_beam', 'multi_freq'
 
 # multifreq instrument 
 MultiBand=True
-nf_sub=15
+nf_sub=5
 center_detector=False
 
 psd=None
@@ -58,7 +58,7 @@ longitude= -(66 + 28. / 60)   #ARGENTINA
 random_pointing=False   
 
 repeat_pointing=True
-npointings=1500
+npointings=300
 dtheta=4.
 nhwp_angles=3 # use only for repeat_pointing
 seed=1
@@ -84,10 +84,10 @@ comm=None
 weights=None
 
 ####################################### Map making #####################################
-tol=1e-2
-nf_recon = [3,]
+tol=1e-1
+nf_recon = [1,]
 maxiter=1e5
-verbose=True
+verbose=False
 
 
 

@@ -511,7 +511,7 @@ def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
     for isub in range(nf_recon):
         # Compute wide of the sub-band
         sum_delta_i = deltas[isub * nb: isub * nb + nb].sum()
-        corrections.append(Delta / (sum_delta_i * nf_sub))
+        corrections.append(Delta / sum_delta_i)
 
     correction_mat = np.empty((3 * nf_recon, 3 * nf_recon))
     for i in range(3 * nf_recon):
@@ -520,7 +520,7 @@ def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
             freq_j = j // nf_recon
             sum_delta_i = deltas[freq_i * nb: freq_i * nb + nb].sum()
             sum_delta_j = deltas[freq_j * nb: freq_j * nb + nb].sum()
-            correction_mat[i, j] = Delta / (np.sqrt(sum_delta_i * sum_delta_j) * nf_sub)
+            correction_mat[i, j] = Delta / np.sqrt(sum_delta_i * sum_delta_j)
 
     return corrections, correction_mat
 

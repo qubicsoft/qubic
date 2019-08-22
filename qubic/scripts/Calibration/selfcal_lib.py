@@ -1,4 +1,4 @@
-from __future__ import division
+from __future__ import division, print_function
 
 import glob
 import healpy as hp
@@ -7,7 +7,7 @@ import pandas as pd
 import cv2
 
 from qubicpack import qubicpack as qp
-from qubicpack import pix2tes
+from qubicpack.pix2tes import pix2tes, assign_pix2tes, assign_pix_grid
 from qubicpack.utilities import ASIC_index
 
 import qubic
@@ -399,21 +399,19 @@ class SelfCalibration:
         """
 
         tes_signal = np.zeros(256)
-        pix_grid = pix2tes.assign_pix_grid()
+        pix_grid = assign_pix_grid()
 
-        TES2PIX = pix2tes.assign_pix2tes()
+        TES2PIX = assign_pix2tes()
         for l in range(17):
             for c in range(17):
                 pix = pix_grid[l, c]
                 if pix != 0.:
-                    if pix in TES2PIX[ASIC_index(1), :]:
-                        tes = pix2tes.pix2tes(pix, 1)
+                    tes,asic = pix2tes(pix)
+                    if asic==2: # ASIC2 goes from 1-128
                         tes_signal[tes - 1] = image_fp[l, c]
-
-                    else:
-                        tes = pix2tes.pix2tes(pix, 2)
+                    else: # ASIC1 goes from 129-256
                         tes_signal[tes - 1 + 128] = image_fp[l, c]
-
+                        
         return tes_signal
 
     @staticmethod

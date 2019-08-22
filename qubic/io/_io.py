@@ -4,6 +4,7 @@ from collections import Container
 from pyoperators.utils import ndarraywrap
 import healpy as hp
 import numpy as np
+from io import _io
 
 __all__ = ['read_map', 'write_map']
 
@@ -44,7 +45,7 @@ def read_map(filename, field=None, dtype=float, nest=False, partial=False):
         set to True.
 
     """
-    if isinstance(filename, file):
+    if isinstance(filename, _io.TextIOWrapper):
         modes = {'+ab': 'append'}
         mode = modes.get(''.join(sorted(filename.mode)), 'readonly')
     else:

@@ -38,20 +38,6 @@ nreals = int(sys.argv[3])
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
-''' Parameters to be change for simulations:
-
-[0] Sky creation:	d['nf_sub'] = 12 to 24 ? 4/5 diferent values?
-
-[1] Pointing: 		d['repeat_pointing'] = True, 
-					d['npointings'] = [1000,1500,2000]
-
-[2] TOD creation: 	d['noiseless'] = [True, False]
-					if False: change d['detector_nep'] only? 
-
-[3] Reconstruction:	d['nf_sub_rec'] = [1,2,3,4,5,6,7,8] ? 
-					tol = [5e-4, 1e-4, 5e-5, 1e-5, 5e-6] :o
-					
-'''
 # Check nf_sub/nf_sub_rec is an integer
 nf_sub = d['nf_sub']
 for nf_sub_rec in d['nf_recon']:

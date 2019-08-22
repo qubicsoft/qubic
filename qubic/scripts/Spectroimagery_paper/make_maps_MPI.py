@@ -16,10 +16,7 @@ from qubicpack.utilities import Qubic_DataDir
 import ReadMC as rmc
 import SpectroImLib as si
 
-# MPI stuff
 from mpi4py import MPI
-
-# from pyoperators import MPI
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -53,20 +50,6 @@ nreals = int(sys.argv[3])
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
-''' Parameters to be change for simulations:
-
-[0] Sky creation:	d['nf_sub'] = 12 to 24 ? 4/5 diferent values?
-
-[1] Pointing: 		d['random_pointing'] = True, 
-                    d['npointings'] = [1000,1500,2000]
-
-[2] TOD creation: 	d['noiseless'] = [True, False]
-                    if False: change d['detector_nep'] only? 
-
-[3] Reconstruction:	d['nf_sub_rec'] = [1,2,3,4,5,6,7,8] ? 
-                    tol = [5e-4, 1e-4, 5e-5, 1e-5, 5e-6] :o
-
-'''
 # Check nf_sub/nf_sub_rec is an integer
 nf_sub = d['nf_sub']
 for nf_sub_rec in d['nf_recon']:
@@ -113,29 +96,27 @@ x0 = comm.bcast(x0)
 # Pointing in not picklable so cannot be broadcasted
 # => done on all ranks simultaneously
 p = qubic.get_pointing(d)
-print('Pointing done on rank :', rank)
 
 comm.Barrier()
+if rank == 0:
+    print('============= All pointings done ! =============')
 
 # =============== Noiseless ===================== #
 
 d['noiseless'] = True
 t1 = time.time()
-print('-------------- Noiseless TOD - rank {} Starting --------------'.format(rank))
 TOD_noiseless, maps_convolved_noiseless = si.create_TOD(d, p, x0)
-print('-------------- Noiseless TOD with shape {} - Done in {} minutes on rank {} --------------'
-      .format(np.shape(TOD_noiseless), (time.time() - t1) / 60, rank))
 
 # Wait for all the TOD to be done (is it necessary ?)
 comm.Barrier()
 if rank == 0:
     print('-------------- All Noiseless TOD OK in {} minutes --------------'.format((time.time() - t1) / 60))
 
-# Reconstruction noiseless
+# ======== Reconstruction noiseless
 for i, nf_sub_rec in enumerate(d['nf_recon']):
     if rank == 0:
-        print('************* Map-Making on {} sub-map(s) (noiseless) - Rank {} Starting *************'
-              .format(nf_sub_rec, rank))
+        print('************* Map-Making on {} sub-map(s) (noiseless). STARTING *************'
+              .format(nf_sub_rec))
 
     maps_recon_noiseless, cov_noiseless, nus, nus_edge, maps_convolved_noiseless = si.reconstruct_maps(
         TOD_noiseless, d, p,
@@ -148,13 +129,13 @@ for i, nf_sub_rec in enumerate(d['nf_recon']):
     unseen = cov_noiseless < maxcov_noiseless * 0.1
     maps_convolved_noiseless[:, unseen, :] = hp.UNSEEN
     maps_recon_noiseless[:, unseen, :] = hp.UNSEEN
-    if rank == 0:
-        print('************* Map-Making on {} sub-map(s) (noiseless). Rank {} Done *************'
-              .format(nf_sub_rec, rank))
 
     comm.Barrier()
 
     if rank == 0:
+        print('************* Map-Making on {} sub-map(s) (noiseless). DONE *************'
+              .format(nf_sub_rec))
+
         name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_nep{5}.fits'.format(d['nf_sub'],
                                                                                   d['nf_recon'][i],
                                                                                   d['noiseless'],
@@ -171,22 +152,19 @@ for j in range(nreals):
 
     t2 = time.time()
 
-    print('-------------- Noise TOD realisation {} - rank {} Starting --------------'.format(j, rank))
     TOD, maps_convolved = si.create_TOD(d, p, x0)
-    print('-------------- Noise TOD with shape {} realisation {} - Done in {} minutes on rank {} --------------'
-          .format(np.shape(TOD), j, (time.time() - t2) / 60, rank))
 
     # Wait for all the TOD to be done (is it necessary ?)
     comm.Barrier()
     if rank == 0:
-        print('-------------- All Noise TOD realisation {} - Done in {} minutes --------------'
+        print('-------------- All Noise TOD realisations {} - DONE in {} minutes --------------'
               .format(j, (time.time() - t2) / 60))
 
     # ==== Reconstruction ====
     for i, nf_sub_rec in enumerate(d['nf_recon']):
         if rank == 0:
-            print('************* Map-Making on {} sub-map(s) - Realisation {} - Rank {} Starting *************'
-                  .format(nf_sub_rec, j, rank))
+            print('************* Map-Making on {} sub-map(s) - Realisation {} - STARTING *************'
+                  .format(nf_sub_rec, j))
         maps_recon, cov, nus, nus_edge, maps_convolved = si.reconstruct_maps(TOD, d, p, nf_sub_rec, x0=x0)
         if nf_sub_rec == 1:
             maps_recon = np.reshape(maps_recon, np.shape(maps_convolved))
@@ -196,12 +174,12 @@ for j in range(nreals):
         unseen = cov < maxcov * 0.1
         maps_convolved[:, unseen, :] = hp.UNSEEN
         maps_recon[:, unseen, :] = hp.UNSEEN
-        if rank == 0:
-            print('************* Map-Making on {} sub-map(s) - Realisation {} - Rank {} Done *************'
-                  .format(nf_sub_rec, j, rank))
 
         comm.Barrier()
         if rank == 0:
+            print('************* Map-Making on {} sub-map(s) - Realisation {} - DONE *************'
+                  .format(nf_sub_rec, j))
+
             name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_nep{5}_{6}.fits'.format(d['nf_sub'],
                                                                                           d['nf_recon'][i],
                                                                                           d['noiseless'],
@@ -212,5 +190,6 @@ for j in range(nreals):
             rmc.save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved, out_dir, name + name_map)
 
         comm.Barrier()
-
-print('============== All Done in {} minutes ================'.format((time.time() - t0) / 60))
+        
+if rank == 0:
+    print('============== All Done in {} minutes ================'.format((time.time() - t0) / 60))

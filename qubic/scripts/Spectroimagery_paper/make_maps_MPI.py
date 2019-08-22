@@ -164,12 +164,9 @@ for i, nf_sub_rec in enumerate(d['nf_recon']):
         rmc.save_simu_fits(maps_recon_noiseless, cov_noiseless, nus, nus_edge, maps_convolved_noiseless,
                            out_dir, name + name_map)
 
-comm.Barrier()
-
 # ==== TOD making ====
 # TOD making is intrinsically parallelized (use of pyoperators)
-
-d['Noiseless'] = False
+d['noiseless'] = False
 for j in range(nreals):
 
     t2 = time.time()
@@ -204,7 +201,6 @@ for j in range(nreals):
                   .format(nf_sub_rec, j, rank))
 
         comm.Barrier()
-
         if rank == 0:
             name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_nep{5}_{6}.fits'.format(d['nf_sub'],
                                                                                           d['nf_recon'][i],

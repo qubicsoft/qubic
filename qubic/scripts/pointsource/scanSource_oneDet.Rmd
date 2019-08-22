@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.1'
-      jupytext_version: 1.1.1
+      jupytext_version: 1.2.1
   kernelspec:
     display_name: Python 2
     language: python
@@ -28,8 +28,8 @@ from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 
 import qubic
-from qubic import myinstrument as myinst
-from qubic.myinstrument import QubicInstrument
+from qubic import instrumentModify as myinst
+from qubic.instrumentModify import QubicInstrument
 
 from pysimulators import FitsArray
 
@@ -243,7 +243,7 @@ el2dravel = el2d.ravel()[::-1]
 
 locpeak_tod = []
 
-for i in xrange(0,len(peak95[0])):
+for i in range(0,len(peak95[0])):
 
     azloc = np.where(abs(az2dravel-peak95[0,i]) < 0.13 )
     elloc = np.where(abs(el2dravel-peak95[1,i]) < 0.12 )
@@ -261,39 +261,31 @@ print('#peaks', len(locpeak_tod), locpeak_tod)
 peaktod = np.zeros((len(myTOD,)))
 peaktod[locpeak_tod] = np.max(myTOD)
 
-print('====')
-print('az loc', az2d.ravel()[locpeak_tod])
-print('az fit {}'.format([e for e in peak95[0,:]]) )
-print('====')
-print('el loc', el2d.ravel()[locpeak_tod])
-print('el fit {}'.format([e for e in peak95[1,:]]) )
-print('====')
-
 ```
 
 ```{python}
 
 
 thetas =     np.array([[0.03281347, 0.11251228, 0.14091657 , 0.18485994, 0.17793436,
-             0.14746803, 0.12888845, 0.18494313, 0.242361  , 0.25671088,
-             0.26956301, 0.28452484, 0.2904603 ]])
+             0.14746803, 0.12888845, 0.18494313, 0.242361]])#  , 0.25671088,
+             #0.26956301, 0.28452484, 0.2904603 ]])
 thetas_def = np.array([[ 0.01131323,  0.13182682,  0.14369991,  0.14369991,  0.15468746,
-             0.19529527,  0.19529527,  0.21161855,  0.21161855,  0.27776151,
-             0.28977923,  0.28977923,  0.30137091,  0.31428866]])
+             0.19529527,  0.19529527,  0.21161855,  0.21161855]])#,  0.27776151,
+             #0.28977923,  0.28977923,  0.30137091,  0.31428866]])
 
 phis =       np.array([[ 2.83409643, -0.97533545,  1.06666189,  0.04872912, -2.5518964 ,
-             2.47655669, -2.06418194,  1.775554977581,  2.90827761, -0.86898177,
-             0.90775038, -0.33751121,  0.3902112 ]])
+             2.47655669, -2.06418194,  1.775554977581,  2.90827761]])#, -0.86898177,
+             #0.90775038, -0.33751121,  0.3902112 ]])
 phis_def =   np.array([[ 2.35619449, -0.78539816,  0.86447862, -2.43527494,  2.35619449,
-             -1.61203054,  0.04123422,  3.10349837,  1.60889061, -0.78539816,
-             -2.39579663,  0.8250003 ,  2.35619449, -1.26541229]])
+             -1.61203054,  0.04123422,  3.10349837,  1.60889061]])#, -0.78539816,
+             #-2.39579663,  0.8250003 ,  2.35619449, -1.26541229]])
 
 vals =       np.array([[32.14002372, 33.95124927, 32.61291557,23.3299855 , 21.66893532,
-             7.77258269,  9.33062719,  30.42635041,  3.25307711,  1.53202714,
-             1.06429809,  0.68101577,  0.56667237]])
+             7.77258269,  9.33062719,  30.42635041,  3.25307711]])#,  1.53202714,
+             #1.06429809,  0.68101577,  0.56667237]])
 vals_def =   np.array([[ 52.9271193 ,  20.90234505,  17.52582023,  17.52582023, 14.68904366,
-             6.83243483,   6.83243483,   4.7776674 , 4.7776674 ,   0.83580943,
-             0.57886246,   0.57886246, 0.40021914,   0.26078313]])
+             6.83243483,   6.83243483,   4.7776674 , 4.7776674 ]])#,   0.83580943,
+             #0.57886246,   0.57886246, 0.40021914,   0.26078313]])
  
 ```
 
@@ -354,16 +346,17 @@ print('el peak', np.radians(peak95[1,:]))
 ```
 
 ```{python}
-print '======= Rotation from fit points to theoretical reference system'
+print('======= Rotation from fit points to theoretical reference system')
 print('Position of the central peak (fifth in fit array), (az,el) = {}, {}'.format(peak95[0,4],peak95[1,4]))
-
-elcenter = el[len(el)/2]#+(offele-50.)#peak95[1,4]#
-azcenter = az[len(az)/2]#-(offaz-0)peak95[0,4]#
+halfel=int(len(el)/2)
+halfaz=int(len(az)/2)
+elcenter = el[halfel]#+(offele-50.)#peak95[1,4]#
+azcenter = az[halfaz]#-(offaz-0)peak95[0,4]#
 
 print('Central position in the observed region, (az,el) = {},{}'.format(azcenter,elcenter))
 
-elcenter = el[len(el)/2+3]
-azcenter = az[len(el)/2-2]
+elcenter = el[halfel+3]
+azcenter = az[halfaz-2]
 
 print('Closest position between center of the observed region and (0.,50.) = {}, {}'.format(azcenter, elcenter))
 az0 = peak95[0,:]#*np.cos(np.radians(peak95[1,:]))
@@ -384,7 +377,7 @@ print('======Try angle betwen red and green (Martin notes)')
 th0, ph0 = np.pi/2-np.radians(el0), np.radians(az0)
 print('phis,theta_0, ', ph0[0], th0[0])
 pos0 = []
-for j in xrange(0,len(el0)):
+for j in range(0,len(el0)):
     pos0.append(thph2uv_one(th0[j],ph0[j]))
 
 posF3 =[]
@@ -392,7 +385,7 @@ posF3 =[]
 rott = 1
 
 if rott:
-    for j in xrange(0,len(el0)):
+    for j in range(0,len(el0)):
         # rotation from center of the field in az,el to 
         posFx = np.dot(rotmatZ(-(np.radians(azcenter)*np.cos(np.radians(elcenter)) )), np.asarray(pos0[j]))
         posFxx = np.dot(rotmatY(-(np.radians(90-elcenter))), posFx)
@@ -401,12 +394,12 @@ if rott:
         posF3.append(np.dot(rotmatX(-np.radians(angulo2) )  , np.asarray(posF0)  ))
 
 else:
-    for j in xrange(0,len(el0)):
+    for j in range(0,len(el0)):
         posF0 = np.dot(rotmatZ(-(np.radians(azcenter)*np.cos(np.radians(elcenter)) )), np.asarray(pos0[j]))
         posF3.append(np.dot(rotmatY(-(np.radians(90-elcenter))), posF0))
 
 newcoord = []
-for i in xrange(0,len(posF3)):
+for i in range(0,len(posF3)):
     newcoord.append(uv2thph_one(posF3[i]))
 
 
@@ -420,14 +413,11 @@ clf()
 figure(figsize=(12,12))
 
 subplot(122, projection = 'polar')
-for i in xrange(0,len(newcoord)):
-    plot(ph0[i],th0[i], 'ro')
-    #plot(newcoord[i][1],newcoord[i][0],'ko')
-    plot(newphi,newth,'ko')
-    plot(0,np.pi/2,'go')
-
-print '======='
-
+#for i in range(0,len(newcoord)):
+plot(ph0,th0, 'ro', label = 'Fitted peaks')
+plot(newphi,newth,'ko', label = 'rotated')
+plot(0,np.pi/2,'go', label = 'x-axis')
+legend(numpoints=1, scatterpoints=1)
 idp=[4,7,5,8,3,1,6,2,0]
 
 #print('ppp',newth)
@@ -453,16 +443,9 @@ for j,each in enumerate(newarr):
     # rotation from center of the field in az,el to 
     posF00 = np.dot(rotmatZ(-(np.pi-phis9[0]) )  , each  )
     posF0i = np.dot(rotmatX(+thetas9[0] ) , np.asarray(posF00)  )
-    #posF01 = np.dot(rotmatX(-(np.pi/2 - np.radians(40)) ) , np.asarray(posF0i)  )
     posF04.append(np.dot(rotmatX(-( np.radians(40))/np.cos(np.radians(50)) ) , np.asarray(posF0i)  ) )
-    #posF01i = np.dot(rotmatX(-thetas9[0] ) , np.asarray(posF01)  )
-    
-    #posF02 = np.dot(rotmatX(-np.radians(angulo2) )  , np.asarray(posF01  ) )
-    #posF03 = np.dot(rotmatY(-(np.radians(90-elcenter))), posF02  )
-    #posF04.append(np.dot(rotmatZ(+(np.radians(azcenter)*np.cos(np.radians(elcenter)) )), np.asarray(posF03)) )
 
 nthph = uv2thph_one(np.asarray(posF04).T)
-#print nthph[0]
 np.savetxt('leb_defsynthbeam.txt',[thetas9, phis9])
 np.savetxt('leb-inverse.txt', [nthph[0],nthph[1]])
 
@@ -470,12 +453,8 @@ clf()
 figure(figsize=(12,12))
 
 subplot(122, projection = 'polar')
-
-for i in xrange(0,9):
-    plot(phis_def[0][i],thetas_def[0][i], 'ro')
-    plot(nthph[1][i],nthph[0][i],'ko')
-    #plot(0,np.pi/2,'go')
-    #legend()
+plot(phis_def[0],thetas_def[0], 'ro', label = 'theoretical peaks')
+plot(nthph[1],nthph[0],'ko', label = 'theoretical in measured RF')
 
 sin = np.sin
 cos = np.cos
@@ -517,7 +496,7 @@ ax.set_xlim([-1,1])
 ax.set_ylim([-1,1])
 ax.set_zlim([-1,1])
 
-ax.set_aspect("equal")
+#ax.set_aspect("equal")
 plt.tight_layout()
 plt.show()
 ```
@@ -525,7 +504,7 @@ plt.show()
 ```{python}
 # Try to chenge the peaks location inside /usr/local/lib/python2.7/dist-packages/qubic/myinstrument.py
 
-reload(myinst)
+#reload(myinst)
 myq = myinst.QubicInstrument(d)
 
 if sel_det:
@@ -551,7 +530,7 @@ def bla(myq,p):
 ```
 
 ```{python}
-reload(myinst)
+#reload(myinst)
 
 myq = myinst.QubicInstrument(d)
 
@@ -569,26 +548,6 @@ mytod[0] = 3.3*mytod[0]
 #plot(mytod[0], 'g-')
 
 plot(peaktod[:], 'r--')
-```
-
-```{python}
-reload(myinst)
-
-myq = myinst.QubicInstrument(d)
-
-if sel_det:
-    if TESid not in did_det.keys():
-        myq=select_det(myq,TESid)
-    else:
-        myq = did_det['{}'.format(TESid)]
-
-mya = qubic.QubicAcquisition(myq, p, s, d)
-mytod, my_conv = mya.get_observation(x0, convolution = True, noiseless = False)
-#mytod[0] = mytod[0,::-1]
-figure(figsize=(14,5))
-plot(myTOD, 'b-')
-plot(1e5*mytod[0], 'r-')
-
 ```
 
 ```{python}
@@ -613,7 +572,7 @@ imshow(np.reshape(mytod[0],(el.shape[0],linen)), extent=[az.min(),
                                                            az.max(), 
                                                            el.min(),el.max()],cmap = 'viridis')
 
-for i in xrange(0,9):#len(locpeak_tod)):
+for i in range(0,9):#len(locpeak_tod)):
     plot(peak95[0,i],peak95[1,i],'wo')
     text(peak95[0,i]*0.96, peak95[1,i]*0.95,'{}'.format(i))
 plot(0,50,'ro')
@@ -626,7 +585,7 @@ title('real TOD (TES={})'.format(TESid))
 myim2 = imshow(np.reshape(myTOD[:],(el.shape[0],linen)),extent=[az.min(),#*np.cos(np.radians(50)),
                                                       az.max(),#*np.cos(np.radians(50)),
                                                       el.min(),el.max()],cmap = 'viridis')
-for i in xrange(0,9):#len(locpeak_tod)):
+for i in range(0,9):#len(locpeak_tod)):
     plot(peak95[0,i],peak95[1,i],'wo')
     text(peak95[0,i]*0.96, peak95[1,i]*0.95,'{}'.format(i))
     
@@ -640,7 +599,7 @@ imshow(np.reshape(simTOD[0][:],(el.shape[0],linen)), extent=[az.min(),#*np.cos(n
                                                             el.min(),el.max()],cmap = 'viridis')
 plot(0,50,'ro')
 
-for i in xrange(0,9):
+for i in range(0,9):
     plot(peak95[0,i],peak95[1,i],'wo')
     text(peak95[0,i]*0.96, peak95[1,i]*0.95,'{}'.format(peak95[1,i]))#plot(peak95[0,:],peak95[1,:],'wo')
 #savefig('TES={}'.format(TESid))

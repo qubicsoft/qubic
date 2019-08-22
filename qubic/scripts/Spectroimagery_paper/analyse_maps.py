@@ -1,6 +1,5 @@
 from __future__ import division, print_function
 import glob
-import os
 import healpy as hp
 import numpy as np
 import matplotlib.pyplot as plt
@@ -15,14 +14,13 @@ from qubicpack.utilities import Qubic_DataDir
 
 stokes = ['I', 'Q', 'U']
 
-
 # ================= Get the simulation files ================
 
 # Simulation date and name
 date_name = '20190813_QU10'
 
 # Get the repository where the simulation is
-rep_simu = Qubic_DataDir(datafile = date_name + '.dict') + '/'
+rep_simu = Qubic_DataDir(datafile=date_name + '.dict') + '/'
 
 # Dictionary saved during the simulation
 d = qubic.qubicdict.qubicDict()
@@ -43,7 +41,6 @@ fits_noiseless = glob.glob(rep_simu + date_name + '*noiselessTrue*.fits')
 # Number of noise realisations
 nreals = len(fits_noise)
 print('nreals = ', nreals)
-
 
 # ================= Corrections =======================
 corrections, correction_mat = amc.get_corrections(nf_sub, nf_recon)
@@ -113,7 +110,7 @@ for real in range(nreals):
 
     else:
         _, diff_zones[real, ...] = rmc.make_zones(all_patch_diff[real, ...], nzones, ns, center, seen_map,
-                                                       verbose=False, doplot=False)
+                                                  verbose=False, doplot=False)
 
 # Std over pixels and realizations in each zone
 std_diff_zones = np.std(diff_zones, axis=(0, 3))

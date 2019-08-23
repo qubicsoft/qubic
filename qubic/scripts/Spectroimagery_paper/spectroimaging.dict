@@ -1,5 +1,5 @@
 ############################################# Instrument ################################
-debug = Coucou #False/True # Boolean
+debug = Hola prueba #False #False/True # Boolean
 
 config = 'FI' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
 filter_nu = 150*1e9 # 150e9 or 220e9 Hz

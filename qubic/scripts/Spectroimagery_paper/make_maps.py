@@ -57,7 +57,7 @@ t0 = time.time()
 
 # ===== Sky Creation or Reading =====
 
-x0 = FitsArray(dictmaps + 'nf_sub={}/nf_sub={}.fits'.format(nf_sub, nf_sub))
+x0 = FitsArray(dictmaps + 'nf_sub={}/nside{}_nfsub{}.fits'.format(nf_sub, d['nside'], nf_sub))
 print('Input Map with shape:', np.shape(x0))
 
 if x0.shape[1] % (12 * d['nside'] ** 2) == 0:

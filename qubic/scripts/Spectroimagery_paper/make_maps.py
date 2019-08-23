@@ -38,20 +38,6 @@ nreals = int(sys.argv[3])
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
-''' Parameters to be change for simulations:
-
-[0] Sky creation:	d['nf_sub'] = 12 to 24 ? 4/5 diferent values?
-
-[1] Pointing: 		d['repeat_pointing'] = True, 
-					d['npointings'] = [1000,1500,2000]
-
-[2] TOD creation: 	d['noiseless'] = [True, False]
-					if False: change d['detector_nep'] only? 
-
-[3] Reconstruction:	d['nf_sub_rec'] = [1,2,3,4,5,6,7,8] ? 
-					tol = [5e-4, 1e-4, 5e-5, 1e-5, 5e-6] :o
-					
-'''
 # Check nf_sub/nf_sub_rec is an integer
 nf_sub = d['nf_sub']
 for nf_sub_rec in d['nf_recon']:
@@ -71,7 +57,7 @@ t0 = time.time()
 
 # ===== Sky Creation or Reading =====
 
-x0 = FitsArray(dictmaps + 'nf_sub={}/nf_sub={}.fits'.format(nf_sub, nf_sub))
+x0 = FitsArray(dictmaps + 'nf_sub={}/nside{}_nfsub{}.fits'.format(nf_sub, d['nside'], nf_sub))
 print('Input Map with shape:', np.shape(x0))
 
 if x0.shape[1] % (12 * d['nside'] ** 2) == 0:
@@ -93,7 +79,7 @@ else:
 # ==== Pointing strategy ====
 
 p = qubic.get_pointing(d)
-print('===Pointing done!===')
+print('=== Pointing DONE! ===')
 
 # =============== Noiseless ===================== #
 
@@ -120,12 +106,13 @@ for i, nf_sub_rec in enumerate(d['nf_recon']):
     maps_recon_noiseless[:, unseen, :] = hp.UNSEEN
     print('************* Map-Making on {} sub-map(s) (noiseless). Done *************'.format(nf_sub_rec))
 
-    name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_nep{5}.fits'.format(d['nf_sub'],
+    name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_nep{5}_nside{6}.fits'.format(d['nf_sub'],
                                                                                      d['nf_recon'][i],
                                                                                      d['noiseless'],
                                                                                      d['npointings'],
                                                                                      d['tol'],
-                                                                                     d['detector_nep'])
+                                                                                     d['detector_nep'],
+                                                                                     d['nside'])
     ReadMC.save_simu_fits(maps_recon_noiseless, cov_noiseless, nus, nus_edge, maps_convolved_noiseless,
                           out_dir, name + name_map)
 
@@ -150,12 +137,13 @@ for j in range(nreals):
         maps_recon[:, unseen, :] = hp.UNSEEN
         print('************* Map-Making on {} sub-map(s) - Realisation {}. Done *************'.format(nf_sub_rec, j))
 
-        name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_nep{5}_{6}.fits'.format(d['nf_sub'],
+        name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_nep{5}_nside{6}_{7}.fits'.format(d['nf_sub'],
                                                                                              d['nf_recon'][i],
                                                                                              d['noiseless'],
                                                                                              d['npointings'],
                                                                                              d['tol'],
                                                                                              d['detector_nep'],
+                                                                                             d['nside'],
                                                                                              str(j).zfill(2))
         ReadMC.save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved, out_dir, name + name_map)
 

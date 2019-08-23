@@ -239,7 +239,9 @@ def reconstruct_maps(TOD, d, pointing, nf_sub_rec, x0=None):
     _, nus_edge, nus, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, nf_sub_rec, d['filter_relative_bandwidth'])
     arec = create_acquisition_operator_REC(pointing, d, nf_sub_rec)
     cov = arec.get_coverage()
-    maps_recon = arec.tod2map(TOD, d, cov=cov)
+    maps_recon, nit, error = arec.tod2map(TOD, d, cov=cov)
+    if not d['verbose']:
+        print('niterations = {}, error = {}'.format(nit, error))
     if x0 is None:
         return maps_recon, cov, nus, nus_edge
     else:

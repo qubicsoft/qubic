@@ -136,12 +136,13 @@ for i, nf_sub_rec in enumerate(d['nf_recon']):
         print('************* Map-Making on {} sub-map(s) (noiseless). DONE *************'
               .format(nf_sub_rec))
 
-        name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_nep{5}.fits'.format(d['nf_sub'],
+        name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_nep{5}_nside{6}.fits'.format(d['nf_sub'],
                                                                                   d['nf_recon'][i],
                                                                                   d['noiseless'],
                                                                                   d['npointings'],
                                                                                   d['tol'],
-                                                                                  d['detector_nep'])
+                                                                                  d['detector_nep'],
+                                                                                  d['nside'])
         rmc.save_simu_fits(maps_recon_noiseless, cov_noiseless, nus, nus_edge, maps_convolved_noiseless,
                            out_dir, name + name_map)
 
@@ -180,12 +181,13 @@ for j in range(nreals):
             print('************* Map-Making on {} sub-map(s) - Realisation {} - DONE *************'
                   .format(nf_sub_rec, j))
 
-            name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_nep{5}_{6}.fits'.format(d['nf_sub'],
+            name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_nep{5}_nside{6}_{7}.fits'.format(d['nf_sub'],
                                                                                           d['nf_recon'][i],
                                                                                           d['noiseless'],
                                                                                           d['npointings'],
                                                                                           d['tol'],
                                                                                           d['detector_nep'],
+                                                                                          d['nside'],
                                                                                           str(j).zfill(2))
             rmc.save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved, out_dir, name + name_map)
 

@@ -22,15 +22,21 @@ from matplotlib import rc
 rc('figure', figsize=(15,8))
 rc('font', size=12)
 rc('text', usetex=False)
+rc('image', cmap='viridis')
 
 import healpy as hp
 import qubic.io
 from pysimulators import FitsArray
 import fibtools as ft
 import demodulation_lib as dl
+
+ns = 256
 ```
 
 ```{python}
+TESNum = 37
+thecos = np.cos(np.radians(50))
+
 #read xcenter, ycenter, amplitude and fwhm of the desired detector:
 peaks = np.array(FitsArray('/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/fitted_peaks.fits'))
 peaks[:,0,:] = peaks[:,0,:]/np.cos(np.radians(50))
@@ -49,14 +55,12 @@ fwhm_measured_M = peaks[TESNum-1,3,:]
 
 
 directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/150GHz-2019-04-06/'
-TESNum = 93
 
 filename = directory + 'Flat/imgflat_TESNum_{}.fits'.format(TESNum)
 img = FitsArray(filename)
 az = FitsArray(directory + 'Flat/azimuth.fits')
 el = FitsArray(directory + 'Flat/elevation.fits')
 
-thecos = np.cos(np.radians(50))
 mm, ss = ft.meancut(img[img != 0], 3)
 subplot(1,2,1)
 imshow(img, 
@@ -73,8 +77,19 @@ legend()
 ```
 
 ```{python}
-did_det={'93':180, '94':197, '95':214, '96':231}#180sim == 93real, 197sim == 94 real, 214sim == 95real, 231sim == 96real 
+#### Doing the fit
+# reload(dl)
+# flatmap, az, el, fit, xypeaks = dl.fit_sb(TESNum, directory,doplot=True,vmin=-0.05, vmax=0.05, resample=False)
+```
 
+```{python}
+# print(xypeaks)
+# print('')
+# print(peaks[TESNum-1,:,:])
+```
+
+```{python}
+did_det={'93':180, '94':197, '95':214, '96':231}#180sim == 93real, 197sim == 94 real, 214sim == 95real, 231sim == 96real 
 
 def select_det(q,id):
     # Select detector number id from a QubicInstrument instance q
@@ -91,7 +106,7 @@ We instantiate a QUBIC instrument, get the synthesized beam for a given detector
 
 ```{python}
 sel_det=True #If you want to select one detector
-TESid = 93
+TESid = TESNum
 
 # INSTRUMENT
 d = qubic.qubicdict.qubicDict()
@@ -99,6 +114,7 @@ d.read_from_file('../pointsource/global_source_oneDet.dict')
 print(d['kind'])
 d['kind']='I'
 print(d['kind'])
+d['nside']=ns
 
 q = qubic.QubicInstrument(d)
 # plt.title('Detector array')
@@ -229,7 +245,9 @@ OK ! It's working well apparently !
 Now we apply this to the data: we transform the QUBIC theoretical peak locations into the measurement reference frame and overplot them onto the measured synthesized beam.
 
 ```{python}
-thetas_new, phis_new = rotate_q2m(thetas, phis)
+#angs = np.radians(np.array([-0.5, 88.7, -0.5]))
+angs = np.radians(np.array([0, 90, 0]))
+thetas_new, phis_new = rotate_q2m(thetas, phis, angs=angs)
 
 hp.mollview(hp.ud_grade(mymap, 128), min=-3*ss, max=10*ss, title='Measurement reference frame: optical center towards x (0,0)', sub=(1,2,1))
 
@@ -245,9 +263,7 @@ Seems to be working OK !
 Let's do the opposite (which is actually what we want): rotate the measured synthesized beam peaks and overplot them onto the theoretical one.
 
 ```{python}
-thetas_measured_Q, phis_measured_Q = rotate_q2m(thetas_measured_M, phis_measured_M, inverse=True)
-
-
+thetas_measured_Q, phis_measured_Q = rotate_q2m(thetas_measured_M, phis_measured_M, angs=angs, inverse=True)
 
 hp.mollview(sb, min=0, max=xr, title='Qubic reference frame: optical center towards z (90,0)', sub=(2,2,1))
 hp.mollview(sb, min=0, max=xr, rot=[0,90], title='Qubic reference frame: optical center towards z (90,0) - Healpix Rotated', sub=(2,2,3))
@@ -274,31 +290,60 @@ print(phis_measured_Q)
 amps_measured_Q = amps_measured_M/np.max(amps_measured_M)*synthbeam.peak150.solid_angle * (150e9 / nu)**2 / s.solid_angle * len(horn)
 print('Amps:')
 print(amps_measured_Q)
+```
+
+Now dump them to a file that is going to be read by the QUBIC software
+
+```{python}
+# data = np.array([[thetas_measured_Q], [phis_measured_Q], [amps_measured_Q]])
+
+# import pickle
+# file = open('/Users/hamilton/Qubic/RealistcReconstruction/peaks.pk', 'wb')
+# pickle.dump(data, file)
+# file.close()
+
+# file = open('/Users/hamilton/Qubic/RealistcReconstruction/peaks.pk', 'rb')
+# blo,bla,bli = pickle.load(file)
+# file.close()
+
+# print(data.shape)
 
 ```
 
-```{python}
-
-```
+Now we apply the very same rotation to all TES and store them into a file
 
 ```{python}
+allthetas_M = np.radians(90-(peaks[:,1,:]-50))
+allphis_M = np.radians(-peaks[:,0,:]*thecos)
+allvals_M = peaks[:,2,:]
+allthetas_Q = np.zeros((256,9))
+allphis_Q = np.zeros((256,9))
+allvals_Q = np.zeros((256,9))
+for ites in xrange(256):
+    allthetas_Q[ites,:], allphis_Q[ites,:] = rotate_q2m(allthetas_M[ites,:], allphis_M[ites,:], 
+                                                        angs=angs, inverse=True)
+    allvals_Q[ites,:] = allvals_M[ites,:]/np.max(allvals_M[ites,:])*synthbeam.peak150.solid_angle * (150e9 / nu)**2 / s.solid_angle * len(horn)
 
-```
+# data = np.array([allthetas_Q, allphis_Q, allvals_Q])
 
-```{python}
-### Here I am right now...
-```
+# import pickle
+# file = open('/Users/hamilton/Qubic/RealistcReconstruction/peaks.pk', 'wb')
+# pickle.dump(data, file)
+# file.close()
 
-```{python}
+# file = open('/Users/hamilton/Qubic/RealistcReconstruction/peaks.pk', 'rb')
+# blo,bla,bli = pickle.load(file)
+# file.close()
 
-```
-
-```{python}
-
+# print(data.shape)
+# print(blo.shape)
 ```
 
 ### QUBIC Simulation
 Now we try to use this in the QUBIC simulation and reconstruction
+
+Let's furst define a pointing and an input sky:
+
 
 First the hall pointing (function by M. Gamboa that converts the az,el of the measured synthesized beam map to qubic pointing object)
 
@@ -392,7 +437,7 @@ source[id]=1
 freq = 150 # GHz
 conv = 61.3474
 component=0
-source = hp.sphtfunc.smoothing(source,fwhm=np.deg2rad(0.9))#
+source = hp.sphtfunc.smoothing(source,fwhm=np.deg2rad(1.))#
 x0[:,component]=source
 
 if p.fix_az:
@@ -403,29 +448,135 @@ else:
 hp.gnomview(x0[:,0], rot=center,reso =10,cmap='viridis', title='Input map')
 ```
 
-Now we perform a simulation with the QUBIC isntrument and this pointing and compared with the measured synthesized beam.
+```{python}
+import jchinstrument as jcinst
+reload(jcinst)
+
+# INSTRUMENT
+d = qubic.qubicdict.qubicDict()
+d.read_from_file('../pointsource/global_source_oneDet.dict')
+print(d['kind'])
+d['kind']='I'
+print(d['kind'])
+d['nside']=ns
+
+
+
+
+```
 
 ```{python}
-sima = qubic.QubicAcquisition(q, p, s, d)
-simTOD, maps_conv_p = sima.get_observation(source, convolution = True, noiseless=True)
+reload(jcinst)
 
-#simTOD[0,:] = simTOD[0,::-1]
-simmap = np.reshape(simTOD[0], img.shape)
+def select_det(q,id):
+    #### For now the ids are not matched... so we only take the len(id) first detectors...
+    detector_i = q.detector[:len(id)]
+    q.detector = detector_i
+    return(q)
 
-subplot(1,3,1)
-imshow(dl.renorm(img), 
-       extent = [np.min(az)*thecos, np.max(az)*thecos, np.min(el), np.max(el)], 
-       cmap='viridis', vmin=-2, vmax=10)
-title('Real Data')
-subplot(1,3,2)
-imshow(dl.renorm(simmap), extent = [np.min(az)*thecos, np.max(az)*thecos, np.min(el), np.max(el)], 
-       cmap='viridis', vmin=-2, vmax=10)
-title('Sim TOD refolded')
+def do_some_dets(detnums, custom=False, nside=None, tol=5e-3):
+    if nside is not None:
+        d['nside']=nside
+    s = qubic.QubicScene(d)
+    ids = []
+    for n in detnums:
+        if n in did_det.keys():
+            ids.append(did_det['{}'.format(n)])
+        else:
+            ids.append(0)
+    print(ids)
+    
+    if not custom:
+        print('Normal')
+        qcut = select_det(qubic.QubicInstrument(d),ids)
+        sima = qubic.QubicAcquisition(qcut, p, s, d)
+        #simTOD, maps_conv = sima.get_observation(source, convolution = True, noiseless=True)
+        print(qcut.detector.index.shape)
+        #print(np.shape(simTOD))
+        print('')
+    else:
+        print('Custom')
+        qcut = select_det(jcinst.QubicInstrument(d),ids)
+        print(allthetas_Q.shape)
+        print(allthetas_Q[np.array(detnums)-1,:])
 
-subplot(1,3,3)
-imshow(dl.renorm(img)-dl.renorm(simmap), extent = [np.min(az)*thecos, np.max(az)*thecos, np.min(el), np.max(el)], 
-       cmap='viridis', vmin=-10, vmax=10)
-title('Diff')
+        data = np.array([allthetas_Q[np.array(detnums)-1,:], 
+                         allphis_Q[np.array(detnums)-1,:], 
+                         allvals_Q[np.array(detnums)-1,:]])
+        print(data.shape)
+        import pickle
+        file = open('/Users/hamilton/Qubic/RealistcReconstruction/peaks.pk', 'wb')
+        pickle.dump(data, file)
+        file.close()
+        sima = qubic.QubicAcquisition(qcut, p, s, d)
+        #simTOD, maps_conv = sima.get_observation(source, convolution = True, noiseless=True)
+        print(qcut.detector.index.shape)
+        #print(np.shape(simTOD))
+
+    realTOD = np.zeros((len(detnums),len(p)))
+    for i in range(len(detnums)):
+        filename = directory + 'Flat/imgflat_TESNum_{}.fits'.format(detnums[i])
+        print('Reading {}'.format(detnums[i]))
+        img = FitsArray(filename)
+        realTOD[i,:] = np.ravel(img) * 5e-28
+        
+    d['tol'] = tol
+    maps_recon = sima.tod2map(realTOD, d, cov=None)
+    print('Mapmaking QUBIC done')
+    return maps_recon
+
+detnums = [6, 37, 38, 72, 79, 86, 94, 96, 110, 124, 149, 153, 176, 184, 185, 199, 205, 229, 231, 235, 247]
+#detnums = [6, 37, 38]
+
+```
+
+Doing all detectors indepedentely:
+
+```{python}
+nsrec = 256
+tol = 1e-4
+all_maps_recon = np.zeros((len(detnums), 12*nsrec**2))
+for i in range(len(detnums)):
+    d['verbose']=False
+    all_maps_recon[i,:] = do_some_dets([detnums[i]], custom=True, nside=nsrec, tol=tol)
+
+
+```
+
+```{python}
+okpix = np.product(all_maps_recon, axis=0) != 0
+rms = np.std(all_maps_recon[:,okpix])
+
+rc('figure', figsize=(15,12))
+reso = 20
+nnn = int(np.sqrt(len(detnums)))+1
+for i in range(len(detnums)):
+    hp.gnomview((all_maps_recon[i,:]), reso=reso/2, rot=center, cmap = 'viridis', sub=(4,7,i+1), 
+            title='Real Custom TES{}'.format(detnums[i]),min=0, max=0.002)
+#hp.projscatter(np.radians(90-center[1]), np.radians(center[0]), marker='x',color='r',s=300, label='Center')
+
+print(np.shape(all_maps_recon))
+```
+
+```{python}
+all_maps_recon_norm = np.zeros((len(detnums), 12*nsrec**2))
+for i in range(len(detnums)):
+    all_maps_recon_norm[i,:] = do_some_dets([detnums[i]], custom=False,nside=nsrec, tol=tol)
+
+```
+
+```{python}
+okpix = np.product(all_maps_recon_norm, axis=0) != 0
+rms_norm = np.std(all_maps_recon_norm[:,okpix])
+
+rc('figure', figsize=(15,12))
+reso = 20
+nnn = int(np.sqrt(len(detnums)))+1
+for i in range(len(detnums)):
+    hp.gnomview((all_maps_recon_norm[i,:]), reso=reso/2, rot=center, cmap = 'viridis', sub=(4,7,i+1), 
+            title='Real Theo. TES{}'.format(detnums[i]),min=0, max=0.01)
+#hp.projscatter(np.radians(90-center[1]), np.radians(center[0]), marker='x',color='r',s=300, label='Center')
+
 
 ```
 
@@ -434,20 +585,6 @@ title('Diff')
 ```
 
 ```{python}
-maps_recon = sima.tod2map(simTOD, d, cov=None)
-
-realTOD = np.zeros_like(simTOD)
-realTOD[0,:] = np.ravel(img)
-maps_recon2 = sima.tod2map(realTOD, d, cov=None)
-```
-
-```{python}
-hp.gnomview(x0[:,0], rot=center,reso = 10,cmap='viridis',sub=(1,3,1), title='Input map', min=0)
-hp.gnomview(maps_recon, reso=10, rot=center, cmap = 'viridis', sub=(1,3,2), title='Reconstructed form sim TOD', min=0)
-hp.gnomview(maps_recon2, reso=10, rot=center, cmap = 'viridis', sub=(1,3,3), title='Reconstructed form Real TOD',min=0)
-```
-
-```{python}
 
 ```
 
@@ -459,31 +596,31 @@ hp.gnomview(maps_recon2, reso=10, rot=center, cmap = 'viridis', sub=(1,3,3), tit
 
 ```
 
+Now doing them together
+
 ```{python}
+maps_recon_all = do_some_dets(detnums, custom=True, nside=nsrec, tol=1e-3)
+```
+
+```{python}
+reso = 20
+hp.gnomview((maps_recon_all), reso=reso/2, rot=center, cmap = 'viridis', 
+            title='Real TOD Custom TES{}'.format(detnums),min=0, max=0.005)
+#hp.projscatter(np.radians(90-center[1]), np.radians(center[0]), marker='x',color='r',s=300, label='Center')
+
 
 ```
 
 ```{python}
-
+maps_recon_all_norm = do_some_dets(detnums, custom=False, nside=nsrec, tol=1e-3)
 ```
 
 ```{python}
+reso = 20
+hp.gnomview((maps_recon_all_norm), reso=reso/2, rot=center, cmap = 'viridis', 
+            title='Real TOD Normal TES{}'.format(detnums),min=0, max=0.005)
+#hp.projscatter(np.radians(90-center[1]), np.radians(center[0]), marker='x',color='r',s=300, label='Center')
 
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
 
 ```
 

@@ -68,7 +68,7 @@ if rank == 0:
 # Done only on rank0 and shared after between all ranks
 if rank == 0:
     t0 = time.time()
-    x0 = FitsArray(dictmaps + 'nf_sub={}/nf_sub={}.fits'.format(d['nf_sub'], d['nf_sub']))
+    x0 = FitsArray(dictmaps + 'nf_sub={}/nside{}_nfsub{}.fits'.format(nf_sub, d['nside'], nf_sub))
     print('Input Map with shape:', np.shape(x0))
 
     if x0.shape[1] % (12 * d['nside'] ** 2) == 0:
@@ -190,6 +190,6 @@ for j in range(nreals):
             rmc.save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved, out_dir, name + name_map)
 
         comm.Barrier()
-        
+
 if rank == 0:
     print('============== All Done in {} minutes ================'.format((time.time() - t0) / 60))

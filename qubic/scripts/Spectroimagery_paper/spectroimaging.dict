@@ -1,5 +1,5 @@
 ############################################# Instrument ################################
-debug = False #False/True # Boolean
+debug = Coucou #False/True # Boolean
 
 config = 'FI' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
 filter_nu = 150*1e9 # 150e9 or 220e9 Hz
@@ -8,7 +8,7 @@ beam_shape =  'multi_freq' # 'gaussian', 'fitted_beam', 'multi_freq'
 
 # multifreq instrument 
 MultiBand=True
-nf_sub=5
+nf_sub=16
 center_detector=False
 
 psd=None

@@ -55,13 +55,13 @@ def std_profile(many_patch, nbins, nside, center, seenmap):
         std_bin[b, :, :] = np.std(many_patch[:, :, ok, :], axis=(0, 2))
 
     # Interpolation to get a profile
-    fit = interpolate.interp1d(bin_centers, std_bin, axis=0, kind='linear', fill_value='extrapolate' )
+    fit = interpolate.interp1d(bin_centers, std_bin, axis=0, kind='linear', fill_value='extrapolate')
     std_profile = fit(ang)
 
     return bin_centers, ang, std_bin, std_profile
 
 
-def get_covcorr1pix(maps, ipix, verbose=False, stokesjoint = False):
+def get_covcorr1pix(maps, ipix, verbose=False, stokesjoint=False):
     """
 
     This function return the covariance matrix for one pixel given a list of maps.
@@ -111,10 +111,10 @@ def get_covcorr1pix(maps, ipix, verbose=False, stokesjoint = False):
         elif nfrec > 1:
             permutation = []
             for istk in range(3):
-                for isub in range(nfrec): 
-                    permutation.append(3*isub+istk)
-        data = np.reshape(maps[:, :, ipix, :], (nreal, nfrec * 3))
-        data = data[:, permutation]
+                for isub in range(nfrec):
+                    permutation.append(3 * isub + istk)
+            data = np.reshape(maps[:, :, ipix, :], (nreal, nfrec * 3))
+            data = data[:, permutation]
 
     cov1pix = np.cov(data, rowvar=False)
     corr1pix = np.corrcoef(data, rowvar=False)
@@ -122,7 +122,7 @@ def get_covcorr1pix(maps, ipix, verbose=False, stokesjoint = False):
     return cov1pix, corr1pix
 
 
-def get_covcorr_patch(patch, stokesjoint = False, doplot=False):
+def get_covcorr_patch(patch, stokesjoint=False, doplot=False):
     """
     This function computes the covariance matrix and the correlation matrix for a given patch in the sky.
     It uses get_covcorr1pix() to compute the covariance and correlation matrix for each pixel (ipix)
@@ -165,14 +165,14 @@ def get_covcorr_patch(patch, stokesjoint = False, doplot=False):
     corr = np.zeros((dim, dim, npix))
 
     for ipix in range(npix):
-        mat = get_covcorr1pix(patch, ipix, stokesjoint = stokesjoint)
+        mat = get_covcorr1pix(patch, ipix, stokesjoint=stokesjoint)
         cov[:, :, ipix] = mat[0][:, :]
         corr[:, :, ipix] = mat[1][:, :]
 
     if doplot:
         plt.figure('Mean over pixels')
         plt.subplot(121)
-        plt.imshow(np.mean(cov, axis=2), interpolation = None)
+        plt.imshow(np.mean(cov, axis=2), interpolation=None)
         plt.title('Mean cov')
         plt.colorbar()
 
@@ -229,19 +229,19 @@ def plot_hist(mat_npix, bins, title_prefix, ymax=0.5, color='b'):
                 plt.xticks([])
 
             # Names
-            if iterm==(dim-1):
-                plt.xlabel(stokes[jterm % 3]+'{}'.format(jterm / 3))
+            if iterm == (dim - 1):
+                plt.xlabel(stokes[jterm % 3] + '{}'.format(jterm / 3))
             if jterm == 0:
-                plt.ylabel(stokes[iterm % 3]+'{}'.format(iterm / 3))
+                plt.ylabel(stokes[iterm % 3] + '{}'.format(iterm / 3))
 
-            #same scale for each plot
+            # same scale for each plot
             plt.xlim((min, max))
-            plt.ylim((0.,ymax))
+            plt.ylim((0., ymax))
 
             plt.legend(fontsize='xx-small')
             plt.subplots_adjust(hspace=0., wspace=0.)
 
-            
+
 def get_covcorr_between_pix(maps, verbose=False):
     """
     Compute the pixel covariance matrix and correlation matrix
@@ -318,7 +318,7 @@ def cov2corr(mat):
     return newmat
 
 
-def covariance_IQU_subbands(allmaps, stokesjoint = False):
+def covariance_IQU_subbands(allmaps, stokesjoint=False):
     """
     Returns the mean maps, averaged over pixels and realisations and the
     covariance matrices of the maps.
@@ -360,7 +360,7 @@ def covariance_IQU_subbands(allmaps, stokesjoint = False):
                             j = 3 * band2 + iqu2
                             map_j = allmaps[:, band2, :, iqu2]
                             cov[i, j] = np.mean((map_i - np.mean(map_i)) * (map_j - np.mean(map_j)))
-        
+
         elif stokesjoint:
             for iqu in range(3):
                 for band in range(nsub):
@@ -509,9 +509,9 @@ def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
 
     corrections = []
     for isub in range(nf_recon):
-        #Compute wide of the sub-band
+        # Compute wide of the sub-band
         sum_delta_i = deltas[isub * nb: isub * nb + nb].sum()
-        corrections.append(Delta / (sum_delta_i * nf_sub))
+        corrections.append(Delta / sum_delta_i)
 
     correction_mat = np.empty((3 * nf_recon, 3 * nf_recon))
     for i in range(3 * nf_recon):
@@ -520,9 +520,10 @@ def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
             freq_j = j // nf_recon
             sum_delta_i = deltas[freq_i * nb: freq_i * nb + nb].sum()
             sum_delta_j = deltas[freq_j * nb: freq_j * nb + nb].sum()
-            correction_mat[i, j] = Delta / (np.sqrt(sum_delta_i * sum_delta_j) * nf_sub)
+            correction_mat[i, j] = Delta / np.sqrt(sum_delta_i * sum_delta_j)
 
     return corrections, correction_mat
+
 
 # ============ Functions to get auto and cross spectra from maps ===========#
 def get_xpol(seenmap, ns, lmin=20, delta_ell=20, apodization_degrees=5.):

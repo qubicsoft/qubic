@@ -268,7 +268,7 @@ class QubicPolyAcquisition(object):
         preconditioner = self.get_preconditioner(cov)
         solution = pcg(A, b, M=preconditioner,
                        disp=verbose, tol=tol, maxiter=maxiter)
-        return solution['x']
+        return solution['x'], solution['nit'], solution['error']
 
 
 class QubicPolyPlanckAcquisition(QubicPlanckAcquisition):

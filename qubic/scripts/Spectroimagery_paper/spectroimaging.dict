@@ -8,7 +8,7 @@ beam_shape =  'multi_freq' # 'gaussian', 'fitted_beam', 'multi_freq'
 
 # multifreq instrument 
 MultiBand=True
-nf_sub=5
+nf_sub=16
 center_detector=False
 
 psd=None
@@ -37,7 +37,7 @@ detarray='CalQubic_DetArray_CC.fits'
 hornarray='CalQubic_HornArray_CC.fits'
 
 ############################################# Scene ################################
-nside=128
+nside=64
 kind='IQU'
 absolute=False
 temperature=2.7255 # K for CMB, 300 K for TD in lab # 
@@ -56,8 +56,8 @@ longitude= -(66 + 28. / 60)   #ARGENTINA
 random_pointing=False   
 
 repeat_pointing=True
-npointings=300
-dtheta=4.
+npointings=2400
+dtheta=15.
 nhwp_angles=3 # use only for repeat_pointing
 seed=1
 
@@ -82,8 +82,8 @@ comm=None
 weights=None
 
 ####################################### Map making #####################################
-tol=1e-2
-nf_recon = [1,5]
+tol=1e-4
+nf_recon = [1,2,4,8]
 maxiter=1e5
 verbose=False
 

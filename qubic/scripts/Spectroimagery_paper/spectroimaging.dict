@@ -16,7 +16,7 @@ bandwidth=None
 twosided=None
 sigma=None
 ## Detector nep  + reading noise: sqrt(4.7e-17**2 + 2e-16**2)
-detector_nep=4.7e-17 #2.05e-16 (TD), 4.7e-17(FI)
+detector_nep=1.0e-18 #2.05e-16 (TD), 4.7e-17(FI)
 detector_fknee=0
 detector_fslope=1
 detector_ncorr=10
@@ -56,7 +56,11 @@ longitude= -(66 + 28. / 60)   #ARGENTINA
 random_pointing=False   
 
 repeat_pointing=True
+<<<<<<< HEAD
 npointings=2400
+=======
+npointings=1500
+>>>>>>> 6199d08a01226effb19481f17988a2bec59826b5
 dtheta=15.
 nhwp_angles=3 # use only for repeat_pointing
 seed=1

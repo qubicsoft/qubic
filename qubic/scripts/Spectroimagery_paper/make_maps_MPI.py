@@ -31,8 +31,13 @@ if rank == 0:
 today = datetime.datetime.now().strftime('%Y%m%d')
 
 # Repository for dictionary and input maps
-global_dir = Qubic_DataDir(datafile='spectroimaging.dict')
-dictfilename = global_dir + '/spectroimaging.dict'
+#global_dir = Qubic_DataDir(datafile='spectroimaging.dict')
+if sys.argv[4].lower() == 'no':
+    global_dir = Qubic_DataDir(datafile='spectroimaging.dict')
+    dictfilename = global_dir + '/spectroimaging.dict'
+else:
+    global_dir = Qubic_DataDir(datafile=sys.argv[4])
+    dictfilename = global_dir + '/' + sys.argv[4]
 dictmaps = global_dir + '/maps/'
 
 # Repository for output maps
@@ -47,9 +52,12 @@ name = today + '_' + sys.argv[2]
 # Number of noise realisations
 nreals = int(sys.argv[3])
 
+# Option multFactor x QU 
+multFactor = int(sys.argv[5])
+
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
-
+print(d)
 # Check nf_sub/nf_sub_rec is an integer
 nf_sub = d['nf_sub']
 for nf_sub_rec in d['nf_recon']:
@@ -82,9 +90,9 @@ if rank == 0:
     # Put I = 0
     # x0[:, :, 0] = 0.
 
-    # Multiply Q, U maps
-    # x0[:, :, 1] *= 100
-    # x0[:, :, 2] *= 100
+    #Multiply Q, U maps
+    x0[:, :, 1] *= multFactor
+    x0[:, :, 2] *= multFactor
 
 else:
     t0 = time.time()

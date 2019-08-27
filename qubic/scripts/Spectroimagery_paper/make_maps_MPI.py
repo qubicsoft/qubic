@@ -64,7 +64,7 @@ if d['nf_recon'][0] != 1:
 
 # Save the dictionary
 if rank == 0:
-    shutil.copyfile(dictfilename, out_dir + name)
+    shutil.copyfile(dictfilename, out_dir + name + '.dict')
 
 # ===== Sky Creation or Reading =====
 # Done only on rank0 and shared after between all ranks

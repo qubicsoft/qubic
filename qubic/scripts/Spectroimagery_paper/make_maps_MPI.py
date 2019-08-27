@@ -37,6 +37,8 @@ dictmaps = global_dir + '/maps/'
 
 # Repository for output maps
 out_dir = sys.argv[1]
+if out_dir[-1] != '/':
+    out_dir = out_dir + '/'
 try:
     os.makedirs(out_dir)
 except:
@@ -62,7 +64,7 @@ if d['nf_recon'][0] != 1:
 
 # Save the dictionary
 if rank == 0:
-    shutil.copyfile(dictfilename, out_dir + name + '.dict')
+    shutil.copyfile(dictfilename, out_dir + name)
 
 # ===== Sky Creation or Reading =====
 # Done only on rank0 and shared after between all ranks
@@ -83,8 +85,8 @@ if rank == 0:
     # x0[:, :, 0] = 0.
 
     # Multiply Q, U maps
-    x0[:, :, 1] *= 100
-    x0[:, :, 2] *= 100
+    # x0[:, :, 1] *= 100
+    # x0[:, :, 2] *= 100
 
 else:
     t0 = time.time()

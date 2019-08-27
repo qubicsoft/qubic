@@ -59,7 +59,7 @@ multFactor = int(sys.argv[5])
 
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
-print(d)
+
 # Check nf_sub/nf_sub_rec is an integer
 nf_sub = d['nf_sub']
 for nf_sub_rec in d['nf_recon']:

@@ -1,0 +1,173 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+import glob
+import os
+import healpy as hp
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import rc
+
+import ReadMC as rmc
+import AnalysisMC as amc
+
+import qubic
+from qubic import equ2gal
+
+from qubicpack.utilities import Qubic_DataDir
+
+# %matplotlib inline
+rc({'cmap', 'viridis'})
+
+```
+
+# Get the simulation files
+
+```{python}
+# Simulation date and name
+date_name = 'TEST/runs/20190816/20190816_low_nep'
+
+# Get the repository where the simulation is
+rep_simu = Qubic_DataDir(datafile=date_name + '.dict') + '/'
+
+# Dictionary saved during the simulation
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(rep_simu + date_name + '.dict')
+```
+
+### Number of subbands used during the simulation
+
+
+# Get full maps
+
+```{python}
+# Remember: get_patch_many_file do seen_map + read each map
+iirec=3
+files, maps_recon, maps_conv, maps_diff = rmc.get_maps_many_files(rep_simu+'TEST/runs/20190816/', '*nfrecon{}*False*'.format(iirec))
+_, maps_recon_patch, maps_conv_patch, maps_diff_patch = rmc.get_patch_many_files(rep_simu+'TEST/runs/20190816/', '*nfrecon3*False*')
+nreals=len(files)
+```
+
+### Look at the noise maps
+
+```{python}
+npix_patch = maps_recon_patch.shape[2]
+nfrec = maps_recon_patch.shape[1]
+print(npix_patch, nreals, maps_recon_patch.shape)
+```
+
+```{python}
+covariance = np.zeros((npix_patch,3*nfrec,3*nfrec))
+for ipix in range(npix_patch):
+    for ireal in range(nreals):
+        covariance[ipix,:,:],_ = amc.get_covcorr1pix(maps_diff_patch, ipix, stokesjoint=True)
+```
+
+```{python}
+np.array(maps_diff_patch[1,:,1,2]).shape
+```
+
+```{python}
+Icov = np.zeros((npix_patch,nfrec,nfrec))
+Qcov = np.zeros((npix_patch,nfrec,nfrec))
+Ucov = np.zeros((npix_patch,nfrec,nfrec))
+
+Icov[:,:,:] = covariance[:,0:nfrec,0:nfrec]
+Qcov[:,:,:] = covariance[:,nfrec:2*nfrec,nfrec:2*nfrec]
+Ucov[:,:,:] = covariance[:,2*nfrec:3*nfrec,2*nfrec:3*nfrec]
+
+#generate arrays of stokes parameters to save weight average over sub-bands
+Ipr = np.zeros((npix_patch,nreals))
+Qpr = np.zeros((npix_patch,nreals))
+Upr = np.zeros((npix_patch,nreals))
+#generate arrays of sigma2 for each pixel but equal for each realization
+sig2Ipr = np.zeros((npix_patch,))
+sig2Qpr = np.zeros((npix_patch,))
+sig2Upr = np.zeros((npix_patch,))
+
+for ireal in range(nreals):
+    for ipix in range(npix_patch):
+        xI,xQ,xU = np.array(maps_diff_patch[ireal,:,ipix,0]),np.array(maps_diff_patch[ireal,:,ipix,1]),np.array(maps_diff_patch[ireal,:,ipix,2])
+        Ipr[ipix,ireal], sig2Ipr[ipix] = amc.get_weighted_correlation_average(xI, Icov[ipix])
+        Qpr[ipix,ireal], sig2Qpr[ipix] = amc.get_weighted_correlation_average(xQ, Qcov[ipix])        
+        Upr[ipix,ireal], sig2Upr[ipix] = amc.get_weighted_correlation_average(xU, Ucov[ipix])        
+        
+```
+
+```{python}
+# Average betwen pixels
+Ir = np.zeros((nreals,))
+Qr = np.zeros((nreals,))
+Ur = np.zeros((nreals,))
+
+for ireal in range(nreals):
+    Ir[ireal] = np.mean(Ipr[:,ireal])
+    sigIr = np.sqrt(np.sum(sig2Ipr))/npix_patch
+    
+    Qr[ireal] = np.mean(Qpr[:,ireal])
+    sigQr = np.sqrt(np.sum(sig2Qpr))/npix_patch
+
+    Ur[ireal] = np.mean(Upr[:,ireal])
+    sigUr = np.sqrt(np.sum(sig2Upr))/npix_patch
+```
+
+```{python}
+#average over realizations
+Iend, Qend, Uend = np.mean(Ir), np.mean(Qr), np.mean(Ur)
+sigI, sigQ, sigU = sigIr/np.sqrt(nreals), sigQr/np.sqrt(nreals), sigUr/np.sqrt(nreals)
+```
+
+```{python}
+if iirec == 1:
+    sigI1,sigQ1,sigU1 = sigI, sigQ, sigU
+if iirec == 3:
+    sigI3,sigQ3,sigU3 = sigI, sigQ, sigU
+if iirec == 5:
+    sigI5,sigQ5,sigU5 = sigI, sigQ, sigU
+```
+
+```{python}
+arrx = np.array(['1 sb','3 sb','5 sb'])
+arrI = np.array([sigI1,sigI3,sigI5])
+arrQ = np.array([sigQ1,sigQ3,sigQ5])
+arrU = np.array([sigU1,sigU3,sigU5])
+
+plt.figure(figsize=(12,4))
+
+plt.subplot(131)
+plt.ylabel(r'\sigma')
+plt.title('I Variance')
+plt.plot(arrx,arrI, 'ro')
+plt.xlabel('Subbands')
+plt.subplot(132)
+plt.title('Q Variance')
+plt.plot(arrx,arrQ, 'bo')
+plt.xlabel('Subbands')
+plt.subplot(133)
+plt.title('U Variance')
+plt.plot(arrx,arrU, 'go')
+plt.xlabel('Subbands')
+
+
+```
+
+```{python}
+
+print(arrI,arrQ,arrU)
+```
+
+```{python}
+
+```

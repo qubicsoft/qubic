@@ -24,26 +24,32 @@ def NameRun(d):
 	#name = bla+'_modular_{}_{}'.format(str(int(d['filter_nu']/1e9)), d['nhwp_angles'])
 	return name
 
-def NameCalib(method):
+def NameCalib(method, date = None):
 	""" 
 	Generate output name of calibration file given a mathod used
 
 	Input: 
-		method: 'fit', 'sigma'
+		method: 
+			'fit', 'sigma'
+		date:
+			date of calibration name. If None, computes the current day. Otherwise you can
+			pass the day of your calibration 
 
 	Return:
 		METHODname: with format day(hardcoded)+method+'calibration.txt'
 	"""
-	
-	fitname = '20190326_fitcalibration.txt'
-	signame = '20190326_sigmacalibration.txt'
+	if date == None:
+		import datetime 
+		date = datetime.datetime.now().strftime("%Y%m%d")
 
 	if method == 'fit':
+		fitname = date + '_fitcalibration'
 		return fitname
 	elif method == 'sigma':
+		signame = date + '_sigmacalibration'
 		return signame
 
-def Parameters(d, which = 'all'):
+def Parameters(d, reso = 2.5, size = 200, which = 'all'):
 	"""
 	Define parameters used several times in the resolution
 
@@ -56,21 +62,22 @@ def Parameters(d, which = 'all'):
 	"""
 	nsideLow = d['nside']
 	nsideHigh = d['nside']*2
-	reso = 1.5
-	size = 200
+	reso = reso
+	size = size
 	# 1) convert sigma to fwhm
 	sigma2fwhm = np.sqrt(8*np.log(2))
 
 	if which == 'all':
 		return nsideLow, nsideHigh, reso, size, sigma2fwhm
-	if which == 'sigma2fwhm':
-		return sigma2fwhm
-	if which == 'nside':
-		return nsideLow, nsideHigh
-	if which == 'HealPar':
-		return reso, size
+	#if which == 'sigma2fwhm':
+	#	return sigma2fwhm
+	#if which == 'nside':
+	#	return nsideLow, nsideHigh
+	#if which == 'HealPar':
+	#	return reso, size
 
-def ParametersMC():
+def ParametersMC(nsubpop = 30, fwhm_ini = 0.21, fwhm_end = 0.70,
+					sample=5, amplitude = np.array([1.,])):
 	"""
 	Parameters for the Monte-Carlo simulation to build calibration files
 
@@ -82,12 +89,12 @@ def ParametersMC():
 		step_fwhm: step size 
 		amplitude: parameter whit sense only for an old version
 	"""
-	n_subpop = 30
-	fwhm_ini = 0.21
-	fwhm_end = 0.70
-	sample = 5
+	n_subpop = nsubpop
+	fwhm_ini = fwhm_ini
+	fwhm_end = fwhm_end
+	sample = sample
 	step_fwhm = (fwhm_end - fwhm_ini) / sample
-	amplitude =  np.array([1.,])
+	amplitude =  amplitude
 
 	return n_subpop, fwhm_ini, fwhm_end, sample, step_fwhm, amplitude
 
@@ -120,7 +127,7 @@ def normalization(x,mapa):
 	ef = np.trapz((np.trapz(mapa,x,axis=0)),x)
 	return 1/ef
 
-def gaussian2d((x,y), x0, y0, varx, vary):
+def gaussian2d(x,y, x0, y0, varx, vary):
 	"""
 	Function to fit
 
@@ -132,10 +139,11 @@ def gaussian2d((x,y), x0, y0, varx, vary):
 	Return:
 		Gaussian  
 	"""
+
 	gauss = 1/(2*np.pi*varx*vary)*np.exp(-((x-x0)**2/(2*varx**2)+(y-y0)**2/(2*vary**2)))
 	return gauss.ravel()
 
-def FitMethod(maparray, d, size = 200, reso = 1.5):
+def FitMethod(maparray, d, cutlevel = 0.1, mapret = False):
 	"""
 	Method who fit a gaussian function given some parameters. 
 	The parameters for the calibration and for the used must be the same.
@@ -143,30 +151,37 @@ def FitMethod(maparray, d, size = 200, reso = 1.5):
 	Input:
 		maparray: N-array of maps
 		d: QUBIC dictionary
-		size, reso: To use in healpy (xsize, reso)
+		cutlevel: level from np.max() of map that will be cutted
+		mapret: return last map computed to calculate the fwhm.
+
 	Return:
 		N-array of fwhm fitted for each map (N-map)
 
 	"""
-	
+	_ , _ ,reso, size , _ = Parameters(d, which='all')
 	# Define cartesian coordinates to extract the map (return_projected_map = True)
 	sigma2fwhm = np.sqrt(8*np.log(2))
 	x_map = np.linspace(-size/2,size/2,size)*reso/60.
 	y_map = x_map
 	x_map, y_map = np.meshgrid(x_map, y_map)
-	xdata_map = x_map.ravel(),y_map.ravel()
-
-	input_fwhm_fit = np.empty((len(maparray)))#d['nf_sub']))
+	xdata_map = x_map.ravel()
+	input_fwhm_fit = np.empty((len(maparray)))
 	popt = []
-	for i,m in enumerate(maparray):
-		norm_fit = normalization(x_map[0],m)
-		ydata_map = (norm_fit * m).ravel()
+
+	for i,mi in enumerate(maparray):
+		maski = mi > np.max(mi)*0.1
+		mi[~maski] = 0		
+		norm_fit = normalization(x_map[0],mi)
+		ydata_map = (norm_fit * mi).ravel()
 		popt_map, pcov_map = curve_fit(gaussian2d, xdata_map, ydata_map, method='trf')
 		input_fwhm_fit[i] = abs((popt_map[2]+popt_map[3])/2*sigma2fwhm)
 
-	return input_fwhm_fit
+	if marret:
+		return input_fwhm_fit, mi
+	else:
+		return input_fwhm_fit
 
-def SigmaMethod(maparray, d, size = 200, reso = 1.5):
+def SigmaMethod(maparray, d, cutlevel = 0.1, mapret=False):
 	"""
 	Method who compute the fwhm taken a N-map array as a gaussian distribution function. 
 	The parameters for the calibration and for the used must be the same.
@@ -174,14 +189,16 @@ def SigmaMethod(maparray, d, size = 200, reso = 1.5):
 	Input:
 		maparray: N-array of maps
 		d: QUBIC dictionary
-		size, reso: To use in healpy (xsize, reso)
+		cutlevel: level from np.max() of map that will be cutted
+		mapret: return last map computed to calculate the fwhm.
 	Return:
 		N-array of fwhm computed for each map (N-map)
 
 	"""
+	_ , _ , reso, size, _ = Parameters(d, which='all')
 	
 	# Define cartesian coordinates to extract the map (return_projected_map = True)
-	sigma2fwhm = Parameters(d, which = 'sigma2fwhm')
+	_ , _ , _ , _ , sigma2fwhm = Parameters(d, which = 'all')
 	x_map = np.linspace(-size/2,size/2,size)*reso/60.
 	y_map = x_map
 	x_map, y_map = np.meshgrid(x_map, y_map)
@@ -191,7 +208,7 @@ def SigmaMethod(maparray, d, size = 200, reso = 1.5):
 	input_fwhm_sigma=np.empty((len(maparray)))#d['nf_sub']))
 	
 	for i,mi in enumerate(maparray):
-		maski = mi > np.max(mi)*0.01
+		maski = mi > np.max(mi)*cutlevel
 		mi[~maski] = 0
 		norm_sig = normalization(x,mi)
 		m = norm_sig * mi
@@ -200,7 +217,10 @@ def SigmaMethod(maparray, d, size = 200, reso = 1.5):
 		sigma_xl2 = np.trapz(x2*gx,x) - (np.trapz(x*gx,x))**2
 		input_fwhm_sigma[i] = np.sqrt(sigma_xl2)*sigma2fwhm
 
-	return input_fwhm_sigma
+	if mapret:
+		return input_fwhm_sigma, mi 
+	else:
+		return input_fwhm_sigma
 
 def GenerateMaps(d, nus_in, p=None ):
 
@@ -240,7 +260,7 @@ def GenerateMaps(d, nus_in, p=None ):
 	amplitude = 1e22
 	
 	for i, n_i in enumerate(nus_in):
-		print 'Map {}'.format(i)
+		print('Map {}'.format(i))
 		fwhm_in = 61.347409/n_i # nus to fwhm
 		for j,each in enumerate(ang_pixeles):
 			if mask[j] == True:
@@ -253,7 +273,7 @@ def GenerateMaps(d, nus_in, p=None ):
 	input_maps = np.empty((d['nf_sub'],size,size))
 	for i, mapa in enumerate(m0):
 		input_maps[i] = hp.gnomview(mapa[:,0], rot = center_gal,  
-	                            reso = 1.5, xsize = size,
+	                            reso = reso, xsize = size,
 	                            return_projected_map=True)
 	mp.close('all')
 

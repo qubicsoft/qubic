@@ -49,7 +49,7 @@ def NameCalib(method, date = None):
 		signame = date + '_sigmacalibration'
 		return signame
 
-def Parameters(d, reso = 2.5, size = 200, which = 'all'):
+def Parameters(d, reso = 2.0, size = 200, which = 'all'):
 	"""
 	Define parameters used several times in the resolution
 
@@ -169,14 +169,14 @@ def FitMethod(maparray, d, cutlevel = 0.1, mapret = False):
 	popt = []
 
 	for i,mi in enumerate(maparray):
-		maski = mi > np.max(mi)*0.1
+		maski = mi > np.max(mi)*cutlevel
 		mi[~maski] = 0		
 		norm_fit = normalization(x_map[0],mi)
 		ydata_map = (norm_fit * mi).ravel()
 		popt_map, pcov_map = curve_fit(gaussian2d, xdata_map, ydata_map, method='trf')
 		input_fwhm_fit[i] = abs((popt_map[2]+popt_map[3])/2*sigma2fwhm)
 
-	if marret:
+	if mapret:
 		return input_fwhm_fit, mi
 	else:
 		return input_fwhm_fit

@@ -542,7 +542,7 @@ def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
 
     return corrections, correction_mat
 
-def
+
 
 
 # ============ Functions to get auto and cross spectra from maps ===========#

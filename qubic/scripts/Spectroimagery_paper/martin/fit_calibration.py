@@ -12,17 +12,22 @@ from resolution import *
 
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(sys.argv[1])
+angmask = 8.
 
-"""Sensitive parameters for calibration (same in QUBIC pipeline)
+"""
+
+Sensitive parameters for calibration (same in QUBIC pipeline)
 	nsideHigh: nside to build maps and then integer over pixels
 	nsideLow
 	reso: hp.gnomview() parameter
 	size: hp.gnomview() parameter
+
 """
 
-nsideLow, nsideHigh, reso, size, sigma2fwhm = Parameters(d) #reso = 1.5 size= 200
-n_subpop, fwhm_ini, fwhm_end, sample, step_fwhm, amplitude = ParametersMC() #n_subpop = 30 fwhm_ini = 0.21 fwhm_end = 0.70 sample = 50, amplitude =  np.array([1.,])
-outputname = NameCalib(method = 'fit') # Could be 'fit' or 'sigma'
+nsideLow, nsideHigh, reso, size, sigma2fwhm = Parameters(d)#, reso = 3.5)# size= 200
+n_subpop, fwhm_ini, fwhm_end, sample, step_fwhm, amplitude = ParametersMC(fwhm_ini = 0.22, fwhm_end = 1.20,
+																			sample = 30)
+outputname = NameCalib(method = 'fit')+'.txt' # Could be 'fit' or 'sigma'
 
 # Compute the parameter space domain
 fwhm = np.arange(fwhm_ini, fwhm_end, step_fwhm)
@@ -56,7 +61,7 @@ elif onePx == False:
 vec_pix = hp.pix2vec(nsideHigh, pixel, nest = True)
 vec_pixeles = hp.pix2vec(nsideHigh, np.arange(12*nsideHigh**2), nest = True )
 ang_pixeles = np.arccos(np.dot(vec_pix,vec_pixeles))
-mask = np.rad2deg(ang_pixeles) < 5.
+mask = np.rad2deg(ang_pixeles) < angmask
 # eslaF = xPeno fi ylno desu
 
 # Cartesian coordinates to map the field extracted
@@ -86,7 +91,7 @@ ellip = np.zeros( (len(fwhm), ) )
 
 for f_i, fwhm_i in enumerate(fwhm):
 	
-	print '=== Computing map {} ==='.format(f_i)
+	print('=== Computing map {} ==='.format(f_i))
 		
 	f0_ud = np.zeros((n_subpop, 12*nsideHigh**2,))
 
@@ -108,7 +113,7 @@ for f_i, fwhm_i in enumerate(fwhm):
 	noise = np.empty((n_subpop,12*nsideHigh**2))
 			
 	# Noise amplitude?
-	amp = 1.6*np.mean(f0_ud[0,:])
+	amp = 2.*np.mean(f0_ud[0,:])
 	for i in range(n_subpop):
 		noise[i,:] = amp*np.random.random(np.shape(f0_ud[0]))
 		f0_ud[i,:] += noise[i,:]
@@ -126,7 +131,7 @@ for f_i, fwhm_i in enumerate(fwhm):
 			
 	for i, mapa in enumerate(m0_ud):
 	    maps_subpop[i,:,:] = hp.gnomview(mapa[:], rot = center_gal,  
-		                            reso = 1.5, xsize = size,
+		                            reso = reso, xsize = size,
 		                            return_projected_map=True)
 	mp.close('all')
 

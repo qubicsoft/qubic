@@ -231,7 +231,7 @@ mp.show()
 
 todo = False
 if todo:
-    print 'siguee'
+    print('siguee')
 elif not todo:
     sys.exit()
 #

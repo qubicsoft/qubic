@@ -329,7 +329,7 @@ def covariance_IQU_subbands(allmaps, stokesjoint=False):
         list of maps for each number of subband
     
     stokesjoint: if True return Stokes parameter together 
-        I0,I1,..., Q0,Q1,..., U0, U1, ... . Otherwise will return
+        I0,I1,..., Q0,Q1,..., U0,U1, ... . Otherwise will return
         I0,Q0,U0,  I1,Q1,U1, ... 
         Default: False
 
@@ -475,6 +475,24 @@ def get_rms_covarmean(nsubvals, seenmap, allmapsout, allmeanmat):
     return meanmap_cov, rmsmap_cov
 
 
+def get_weighted_correlation_average(x, cov):
+    """
+
+    Parameters
+    ----------
+    x
+    cov
+
+    Returns
+    -------
+
+    """
+    inv_cov = np.linalg.inv(cov)
+    sig2 = 1. / np.sum(inv_cov)
+    weighted_mean = sig2 * np.sum(np.dot(inv_cov, x))
+    return weighted_mean, sig2
+
+
 def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
     """
     The reconstructed subbands have different widths.
@@ -523,6 +541,8 @@ def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
             correction_mat[i, j] = Delta / np.sqrt(sum_delta_i * sum_delta_j)
 
     return corrections, correction_mat
+
+def
 
 
 # ============ Functions to get auto and cross spectra from maps ===========#

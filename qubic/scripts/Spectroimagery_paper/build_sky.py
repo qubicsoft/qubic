@@ -13,8 +13,8 @@ dictfilename = './spectroimaging.dict'
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
-nf_sub = [2, 4, 5, 10, 12, 14, 15, 16, 18, 20, 22, 24]
-dirc = './maps/'
+nf_sub = [14,]#[2, 4, 5, 10, 12, 14, 15, 16, 18, 20, 22, 24]
+dirc = './'
 
 try:
     os.makedirs(dirc)
@@ -24,13 +24,14 @@ except:
 for nf in nf_sub:
     print(nf)
     d['nf_sub'] = nf
-    sky_config = {'dust': models('d1', d['nside']), 'cmb': models('c1', d['nside'])}
+    #sky_config = {'dust': models('d1', d['nside']), 'cmb': models('c1', d['nside'])}
+    sky_config = {'cmb': models('c1', d['nside'])}
 
     Qubic_sky = si.Qubic_sky(sky_config, d)
     x0 = Qubic_sky.get_simple_sky_map()
-    dirc2 = dirc + 'nf_sub={}/'.format(nf)
+    dirc2 = dirc
     try:
         os.makedirs(dirc2)
     except:
         pass
-    FitsArray(x0).save(dirc2 + 'nside{}_nfsub{}.fits'.format(d['nside'], nf))
+    FitsArray(x0).save(dirc2 + 'CMB_nside{}_nfsub{}.fits'.format(d['nside'], nf))

@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.1'
-      jupytext_version: 1.2.0
+      jupytext_version: 1.2.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -37,7 +37,8 @@ rc({'cmap', 'viridis'})
 
 ```{python}
 # Simulation date and name
-date_name = '20190815_QU10'
+#date_name = '20190815_QU10'
+date_name = 'TEST/runs/20190816/20190816_low_nep'
 
 # Get the repository where the simulation is
 rep_simu = Qubic_DataDir(datafile=date_name + '.dict') + '/'
@@ -55,7 +56,7 @@ d.read_from_file(rep_simu + date_name + '.dict')
 
 ```{python}
 # Remember: get_patch_many_file do seen_map + read each map
-nfrec=5
+nfrec=3
 files, maps_recon, maps_conv, maps_diff = \
 rmc.get_maps_many_files(rep_simu+ date_name, '*nfrecon{}*False*'.format(nfrec))
 

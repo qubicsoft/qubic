@@ -20,6 +20,12 @@ import datetime as dt
 import sys
 import healpy as hp
 
+
+def beeps(nbeeps):
+	import os
+	beep = lambda x: os.system("echo -n '\a';sleep 0.2;" * x)
+	beep(nbeeps)
+
 def thph2uv(th,ph):
     sth = np.sin(th)
     cth = np.cos(th)
@@ -534,6 +540,9 @@ class SbModelIndepPeaks:
 	- A global distorsion to the position of the peaks is allowed
 	- A small shift of each peak position is allowed around the initial position
 
+	So if common_fwhm=True and no_xy_shift=True and distrotion=True this model is equivalent to SbModelIndepPeaksAmp
+	So if common_fwhm=False and no_xy_shift=True and distortion=True this model is equivalent to SbModelIndepPeaksAmpFWHM
+
 	So Finally parameters are:
 	[0]: Az center of the square [deg]
 	[1]: El center of the square [deg]
@@ -622,8 +631,8 @@ class SbModelIndepPeaks:
 			for i in range(self.npeaks):
 				self.ranges[0,9+4*i] = 0.
 				self.ranges[1,9+4*i] = 1e6
-				self.ranges[0,9+4*i+1] = -2.
-				self.ranges[1,9+4*i+1] = 2.
+				self.ranges[0,9+4*i+1] = -0.5
+				self.ranges[1,9+4*i+1] = 0.5
 				self.ranges[0,9+4*i+2] = -2
 				self.ranges[1,9+4*i+2] = 2
 				self.ranges[0,9+4*i+3] = -2

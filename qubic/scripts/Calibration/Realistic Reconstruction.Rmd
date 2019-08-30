@@ -101,9 +101,9 @@ def select_det(q,id):
     q.detector = detector_i
     return(q)
 
-def do_some_dets(detnums, directory, fittedpeaksfile, custom=False, 
+def do_some_dets(detnums, d, directory, fittedpeaksfile, custom=False, 
                  nside=None, tol=5e-3, refit=False, resample=True, newsize=70, 
-                 doplot=True, verbose=True, sbfitmodel=None, angs=None):
+                 doplot=True, verbose=True, sbfitmodel=None, angs=None, usepeaks=None):
     if nside is not None:
         d['nside']=nside
     s = qubic.QubicScene(d)
@@ -173,7 +173,11 @@ def do_some_dets(detnums, directory, fittedpeaksfile, custom=False,
             allvals_Q[ites,:] = allvals_M[ites,:]/np.max(allvals_M[ites,:])*synthbeam.peak150.solid_angle * (150e9 / nu)**2 / s.solid_angle * len(horn)
         
         ### We nowwrite the temporary file that contains the peaks locations to be used
-        data = np.array([allthetas_Q, allphis_Q, allvals_Q])
+        if usepeaks is None:
+            peaknums = np.arange(9)
+        else:
+            peaknums = usepeaks
+        data = np.array([allthetas_Q[:,peaknums], allphis_Q[:,peaknums], allvals_Q[:,peaknums]])
         file = open('/Users/hamilton/Qubic/RealistcReconstruction/peaks.pk', 'wb')
         pickle.dump(data, file)
         file.close()
@@ -241,17 +245,17 @@ reload(jcinst)
 #detnums = [6, 37, 38, 72, 79, 86, 94, 96, 110, 124, 149, 153, 176, 184, 185, 199, 205, 229, 231, 235, 247]
 detnums = [37, 124, 185, 229]
 nsrec = 256
-tol = 1e-4
+tol = 1e-3
 all_maps_recon_th = np.zeros((len(detnums), 12*nsrec**2))
 all_maps_recon_custom = np.zeros((len(detnums), 12*nsrec**2))
 all_maps_recon_custom_new = np.zeros((len(detnums), 12*nsrec**2))
 for i in range(len(detnums)):
     d['verbose']=False
-    all_maps_recon_th[i,:] = do_some_dets([detnums[i]], directory, fittedpeakfile, 
+    all_maps_recon_th[i,:] = do_some_dets([detnums[i]], d, directory, fittedpeakfile, 
                                           custom=False, nside=nsrec, tol=tol, refit=False)    
-    all_maps_recon_custom[i,:] = do_some_dets([detnums[i]], directory, fittedpeakfile, 
+    all_maps_recon_custom[i,:] = do_some_dets([detnums[i]], d, directory, fittedpeakfile, 
                                               custom=True, nside=nsrec, tol=tol, refit=False)    
-    all_maps_recon_custom_new[i,:] = do_some_dets([detnums[i]], directory, fittedpeakfile, 
+    all_maps_recon_custom_new[i,:] = do_some_dets([detnums[i]], d, directory, fittedpeakfile, 
                                                   custom=True, nside=nsrec, tol=tol, refit=True, 
                                                   verbose=False, doplot=True)
 ```
@@ -274,15 +278,15 @@ d['verbose']=False
 angs = np.radians(np.array([0, 90, 0]))
 
 #### Very slow convergence so put tol to 1e-2 for fast results, anyway result is crap
-maps_recon_th = do_some_dets(detnums, directory, fittedpeakfile, 
+maps_recon_th = do_some_dets(detnums, d, directory, fittedpeakfile, 
                                           custom=False, nside=nsrec, tol=1e-2, refit=False)    
 
 #### Faster so 1e-3 is OK
-maps_recon_custom = do_some_dets(detnums, directory, fittedpeakfile, angs = angs,
+maps_recon_custom = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
                                               custom=True, nside=nsrec, tol=1e-3, refit=False)    
 
 #### faster so 1e-3 is OK
-maps_recon_custom_new = do_some_dets(detnums, directory, fittedpeakfile, angs=angs,
+maps_recon_custom_new = do_some_dets(detnums, d, directory, fittedpeakfile, angs=angs,
                                                   custom=True, nside=nsrec, tol=1e-3, refit=True, 
                                                   verbose=False, doplot=True)
 ```
@@ -298,20 +302,61 @@ hp.gnomview((maps_recon_custom_new), reso=reso/2, rot=center, cmap = 'viridis', 
         title='Custom Refit TES{}'.format(detnums), min=mm-nb*ss, max=mm+nb*ss)
 ```
 
-```{python}
+***
+### Invetigating the tol parameter needed for these maps:
+10-3 is sufficient... We will probably need more when we have more detectors.
 
+```{python}
+# reload(sbfit)
+# ### Investigate tol
+# tols = [1e-2, 1e-3, 1e-4]
+# maps = []
+# for t in tols:
+#     maps.append(do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+#                                               custom=True, nside=nsrec, tol=t, refit=False))  
+# sbfit.beeps(4)
 ```
 
 ```{python}
+# mm, ss = ft.meancut(maps[0][maps[0] != 0], 3)
+# for i in range(len(tols)):
+#     hp.gnomview((maps[i]-maps[2]), reso=reso, rot=center, cmap = 'viridis', sub=(1,len(tols),i+1), 
+#         title='Tol = '.format(tols[i]), min=mm-nb*ss, max=mm+nb*ss)
 
 ```
+
+***
+### Investigating nside
+ns=256 is fine
+
+```{python}
+### Investigate nside. Only when many detectors are available we can go to higher nside.
+
+# maps_128 = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+#                                               custom=True, nside=128, tol=1e-3, refit=False)
+# maps_256 = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+#                                               custom=True, nside=256, tol=1e-3, refit=False)
+# maps_512 = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+#                                               custom=True, nside=512, tol=1e-3, refit=False)
+# hp.gnomview((maps_128), reso=reso/2, rot=center, cmap = 'viridis', sub=(1,3,1), 
+#         title='Nside = 128', min=mm-nb*ss, max=mm+nb*ss)
+# hp.gnomview((maps_256), reso=reso/2, rot=center, cmap = 'viridis', sub=(1,3,2), 
+#         title='Nside = 256', min=mm-nb*ss, max=mm+nb*ss)
+# hp.gnomview((maps_512), reso=reso/2, rot=center, cmap = 'viridis', sub=(1,3,3), 
+#         title='Nside = 512', min=mm-nb*ss, max=mm+nb*ss)
+
+```
+
+***
+### Investigating the rotation we apply in order to nring the measurement in the boresight reference frame
+It appears we need to think a bit more about this rotation as its effect is more complicated than just a shift of the reocnstructed image...
 
 ```{python}
 ############# Trying to play with the rotation applied to put the peaks into the boresight reference frame
 d['verbose']=False
 tol=1e-3
 angs = np.radians(np.array([0, 90, 0]))
-maps_recon_custom_0 = do_some_dets(detnums, directory, fittedpeakfile, angs = angs,
+maps_recon_custom_0 = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
                                               custom=True, nside=nsrec, tol=tol, refit=False)    
 
 mm, ss = ft.meancut(maps_recon_custom_0[maps_recon_custom_0 != 0], 3)
@@ -320,7 +365,7 @@ hp.gnomview((maps_recon_custom_0), reso=reso*0.5, rot=center, cmap = 'viridis', 
         title='Custom OldFit TES{}'.format(detnums), min=mm-nb*ss, max=mm+nb*ss)
 
 angs = np.radians(np.array([3, 88, 2]))
-maps_recon_custom_1 = do_some_dets(detnums, directory, fittedpeakfile, angs = angs,
+maps_recon_custom_1 = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
                                               custom=True, nside=nsrec, tol=tol, refit=False)    
 
 nb = 1.5
@@ -329,11 +374,28 @@ hp.gnomview((maps_recon_custom_1), reso=reso*0.5, rot=center, cmap = 'viridis', 
 
 ```
 
-```{python}
+***
+### Now what happens if we remove systematically one of the peaks from the reconstruction ?
+It trashes everything...
 
-```
-
 ```{python}
+d['verbose']=False
+tol=1e-2
+angs = np.radians(np.array([0, 90, 0]))
+# map_recon = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+#                         custom=True, nside=nsrec, tol=tol, refit=False)    
+
+map_recon_remove = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+                                custom=True, nside=nsrec, tol=tol, refit=False,
+                                usepeaks=[0,2,3,4,5,6,7,8])    
+
+mm, ss = ft.meancut(map_recon[map_recon != 0], 3)
+nb = 1.5
+hp.gnomview((map_recon), reso=reso*0.5, rot=center, cmap = 'viridis', sub=(1,2,1),
+        title='Custom OldFit TES{}'.format(detnums), min=mm-nb*ss, max=mm+nb*ss)
+nb = 1.5
+hp.gnomview((map_recon_remove), reso=reso*0.5, rot=center, cmap = 'viridis', sub=(1,2,2),
+        title='Custom OldFit TES{}'.format(detnums), min=mm-nb*ss, max=mm+nb*ss)
 
 ```
 

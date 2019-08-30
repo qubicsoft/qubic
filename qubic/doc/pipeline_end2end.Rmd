@@ -1,0 +1,213 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+### Changes betwen this notebook and our scripts:
+
+. Using explicit expresions. Not using SpectroImLib and ReadMC 
+
+. Not use Qubic_DataDir() method from qubicpack
+
+. Work with spectroimaging (nfrec = 1 deleted)
+
+```{python}
+##Loading modules. 
+
+# General modules
+from __future__ import division, print_function
+# %matplotlib inline
+from pylab import *
+import os
+import sys
+import time
+import datetime
+import shutil
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+
+# Specific qubic modules
+from pysimulators import FitsArray
+import qubic
+
+rc('figure',figsize=(13,10))
+rc('font',size=15)
+
+#import ReadMC
+#import SpectroImLib as si
+```
+
+```{python}
+## Preparing the run...
+
+#save date
+today = datetime.datetime.now().strftime('%Y%m%d')
+
+# Repository for dictionary and input maps
+#global_dir = Qubic_DataDir(datafile='spectroimaging.dict')
+global_dir = '/home/martin/QUBIC/qubicsoft/qubic/'
+dictfilename = global_dir + 'dicts/pipeline_demo.dict'
+dictmaps = global_dir + 'scripts/'
+
+# Repository for output maps
+out_dir = './output/{}'.format(today)
+try:
+    os.makedirs(out_dir)
+except:
+    pass
+
+name = today + '_' + 'iteda_'
+```
+
+```{python}
+## Start reading files
+
+# Read dictionary choosed
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+
+# Check nf_sub/nf_sub_rec is an integer
+nf_sub = d['nf_sub']
+for nf_sub_rec in d['nf_recon']:
+    if nf_sub % nf_sub_rec != 0:
+        raise ValueError('nf_sub/nf_sub_rec must be an integer.')
+```
+
+### Some words about maps.
+
+In this case we read a map $X_0$ simulated previously which contains temperature fluctuations in temperature and polarization. Because we are using Healpy module (HEALPix implemented in Python) the number of pixels of each map has to be $$n_{pix} = 12 \times nside^2$$, where $nside$ = multiple of two.
+
+
+```{python}
+## ===== Sky Creation or Reading =====
+#CMB map
+CMBmap = True
+if CMBmap:
+    x0 = FitsArray(dictmaps + 'CMB_nside64_nfsub14.fits')
+else:
+    x0 = FitsArray(dictmaps + 'nside64_nfsub14.fits')
+    
+print('Input Map with shape:', np.shape(x0))
+
+# Check size map
+if x0.shape[1] % (12 * d['nside'] ** 2) == 0:
+    print('Good size')
+else:
+    y0 = np.ones((d['nf_sub'], 12 * d['nside'] ** 2, 3))
+    for i in range(d['nf_sub']):
+        for j in range(3):
+            y0[i, :, j] = hp.ud_grade(x0[i, :, j], d['nside'])
+```
+
+```{python}
+istokes = 0
+imap = 8
+for istk in range(3):
+    hp.mollview(x0[imap,:,istk], sub = (3,2,2*istk+1), title = 'Mollview {0} Stokes parameter, map {1}'.format(
+        d['kind'][istk], imap))
+    hp.gnomview(x0[imap,:,istk], sub = (3,2,2*istk+2), rot = (0,60), reso = 10, title = 'Gnomview {0} Stokes parameter, map {1}'.format(
+        d['kind'][istk], imap))
+
+```
+
+### TOD simulation
+Let's now simulate the TOD. We will do so by reading a simulated map. The input map needs to be smoothed to the angular resolution of the instrument (these maps are already smoothed) and we need to know the pixel number for each of the TOD samples. This is easily obtaned in Healpix with the $ang2pix()$ function. 
+
+#### Scanning Strategy
+
+
+
+```{python}
+# ==== Pointing strategy ====
+
+p = qubic.get_pointing(d)
+print('=== Pointing DONE! ===')
+
+# Create acquisition operator to build MultiFreq TOD 
+#(i.e. TOD for several subbands to reproduce a wideband observation)
+# For that we need a model of the scene at that time
+s = qubic.QubicScene(d)
+
+# Create MultibandInstrument. Model of the instrument with a focal plane sensitivity to 
+# multiple frequencies
+q = qubic.QubicMultibandInstrument(d)
+
+# Generate the sub-band limits to be used (later we can see what information are we ignoring with '_')
+_, nus_edge_in, _, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, d['nf_sub'],
+                                                d['filter_relative_bandwidth'])
+
+# Finally create an acquisition multiband operator which combines all relevant information
+#scene, instrument configuration and strategy pointing. 
+a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_in)
+
+# ==== TOD making ====
+TOD, maps_convolved = a.get_observation(x0, noiseless=d['noiseless'], convolution = True)
+
+# See what we have
+print('--------- Noiseless TOD with shape: {} - Done ---------'.format(np.shape(TOD)))
+```
+
+## From observations to maps...
+
+One of the big issues in CMB data analysis is the fabrication of maps from data coming from the detectors. We will try here to understand how this works with basic examples.
+
+The data from the detector is called Time-Ordered-Data (TOD) and consists into arrays af time samples each with the data measured by each detectors as well as the direction in the sky pointed by the detectors at this very time sample. Usually it comes along with a large number of House-Keeping data such as weather information, temperature measurements into the focal plane and
+
+### Map-Making
+The problem of the Map-Making is a major one in CMB data analysis. We will briefly summarize here below. If you want to know more, you may find it useful to read a review JCh wrote a very long time ago: http://arxiv.org/abs/astro-ph/0310787v1.
+
+We assume that we have TOD data in a long vector $\vec{d}$ ($n_{samples}$ dimension), these are pixels on the sky following a given scanning-strategy. The sky $\vec{T}$ is assumed to be pixellized and at the angular resolution of the instrument and is therefore $n_{pix}$ vector. The relation between them is:
+$$\vec{d} = A\cdot \vec{T} +\vec{n}$$
+where $\vec{n}$ is a vector of noise and $A$ is the pointing matrix that contains information on the scanning strategy. Because the input map $T$ is at the angular resolution of the instrument, each column of the pointing matrix contains only zeros and a single 1 that tell which was the pixel seen by the corresponding time sample. This simplification is important is not valid for QUBIC, which explains why we had to developp a specific map-making.
+
+In general, the noise is not white and has a dense covariance matrix:
+$$\left< \vec{n}\cdot\vec{n}^t\right> = N$$
+
+The Maximum-Likelihood solution for the map (which in the case of Gaussian noise corresponds to the minimum $\chi^2$) is given by:
+$$ \hat{T} = \left( A^t \cdot N^{-1}\cdot A\right)^{-1}\cdot A^t \cdot N^{-1} \cdot\vec{d}$$
+We therefore have an easy manner of obtaining the most optimal map that one can achieve. The only small issue is that this involves inverting matrices like $N$ that are $(n_{samples}\times n_{samples}$ and $n_{samples}$ can be of the order of a a few millions and even billions)
+
+```{python}
+# Map-making processes for one sub-band
+nf_sub_rec = d['nf_recon'][0]
+
+print('************* Map-Making on {} sub-map(s) *************'.format(nf_sub_rec))
+
+## Build a MultiAcquisition operator for reconstruction (map-making). As it is the inverse
+# process but seen with 'different' instrument (one with nf_rec channels).  
+# Recompute the edges of sub-bands for 
+_, nus_edge, nus, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, nf_sub_rec, d['filter_relative_bandwidth'])
+  
+# Create MultiBandAcquisition
+arec = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge)
+  
+# See coverage map, i.e. how many times were see each direction of the sky
+cov = arec.get_coverage()
+
+# From TOD create the maps.
+maps_recon, maps_conv_rec = arec.tod2map(TOD, d, cov=cov)
+```
+
+```{python}
+# Look at the coverage of the sky
+cov = np.sum(cov, axis=0)
+maxcov = np.max(cov)
+unseen = cov < maxcov * 0.1
+maps_convolved[:, unseen, :] = hp.UNSEEN
+maps_recon[:, unseen, :] = hp.UNSEEN
+```
+
+```{python}
+
+```

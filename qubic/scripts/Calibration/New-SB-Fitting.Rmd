@@ -1,0 +1,91 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.1
+  kernelspec:
+    display_name: Python 2
+    language: python
+    name: python2
+---
+
+```{python}
+# ##### %matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(12,12))
+rc('font',size=12)
+rc('text',usetex=False)
+rc('image', cmap='viridis')
+
+from qubicpack import qubicpack as qp
+import fibtools as ft
+import plotters as p
+import lin_lib as ll
+import demodulation_lib as dl
+import qubic.io
+import sb_fitting as sbfit
+
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import os
+import healpy as hp
+import pandas as pd
+
+```
+
+```{python}
+dirfreq = '150GHz-2019-04-06/'
+dirallfreqs = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/'
+dirfiles = dirallfreqs+dirfreq
+TESNum = 185
+flatmap, az, el = dl.get_flatmap(TESNum, dirfiles)
+
+reload(sbfit)
+#### Instantiate a model
+sbfitmodel0 = sbfit.SimpleSbModel(nrings=2)
+fit0, xypeaks0 = sbfit.fit_sb(flatmap, az, el, sbfitmodel0, resample=True, verbose=True, doplot=True)
+```
+
+```{python}
+reload(sbfit)
+#### Instantiate a model
+sbfitmodel1 = sbfit.SbModelIndepPeaksAmpFWHM(nrings=2, common_fwhm=True)
+
+fit1, xypeaks1 = sbfit.fit_sb(flatmap, az, el, sbfitmodel1, resample=True, verbose=True, doplot=True)
+```
+
+```{python}
+reload(sbfit)
+#### Instantiate a model
+sbfitmodel2 = sbfit.SbModelIndepPeaksAmpFWHM(nrings=2, common_fwhm=False)
+figure()
+fit, xypeaks = sbfit.fit_sb(flatmap, az, el, sbfitmodel2, resample=True, verbose=True, doplot=True)
+```
+
+```{python}
+reload(sbfit)
+#### Instantiate a model
+sbfitmodel3 = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, no_xy_shift=False,distortion=False)
+figure()
+fit, xypeaks = sbfit.fit_sb(flatmap, az, el, sbfitmodel3, resample=True, verbose=True, doplot=True)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

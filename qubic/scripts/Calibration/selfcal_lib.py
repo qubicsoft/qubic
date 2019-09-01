@@ -1,16 +1,14 @@
 from __future__ import division, print_function
 
 import glob
-import healpy as hp
-from matplotlib.pyplot import *
-import pandas as pd
-import cv2
 
+import cv2
+import healpy as hp
+import pandas as pd
+import qubic
+from matplotlib.pyplot import *
 from qubicpack import qubicpack as qp
 from qubicpack.pix2tes import pix2tes, assign_pix2tes, assign_pix_grid
-from qubicpack.utilities import ASIC_index
-
-import qubic
 
 __all__ = ['SelfCalibration']
 

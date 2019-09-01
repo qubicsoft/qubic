@@ -77,9 +77,13 @@ fit, xypeaks = sbfit.fit_sb(flatmap, az, el, sbfitmodel2, resample=True, verbose
 ```{python}
 reload(sbfit)
 #### Instantiate a model
-sbfitmodel3 = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, no_xy_shift=False,distortion=False)
+sbfitmodel3 = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=False, no_xy_shift=False,distortion=True)
 figure()
 fit, xypeaks = sbfit.fit_sb(flatmap, az, el, sbfitmodel3, resample=True, verbose=True, doplot=True)
+```
+
+```{python}
+
 ```
 
 ```{python}

@@ -8,7 +8,7 @@ import pandas as pd
 import qubic
 from matplotlib.pyplot import *
 from qubicpack import qubicpack as qp
-from qubicpack.pix2tes import pix2tes, assign_pix2tes, assign_pix_grid
+from qubicpack.pix2tes import pix2tes, tes2pix, assign_pix_grid
 
 __all__ = ['SelfCalibration']
 
@@ -399,7 +399,6 @@ class SelfCalibration:
         tes_signal = np.zeros(256)
         pix_grid = assign_pix_grid()
 
-        TES2PIX = assign_pix2tes()
         for l in range(17):
             for c in range(17):
                 pix = pix_grid[l, c]
@@ -432,16 +431,16 @@ class SelfCalibration:
 
         image_fp = np.zeros((17, 17))
 
-        pix_grid = pix2tes.assign_pix_grid()
+        pix_grid = assign_pix_grid()
 
         for i, signal in enumerate(tes_signal):
             tes_index = i + 1  # TES indices start at 1 and not 0
 
             # We split between asic1 and asic2
             if tes_index < 129:
-                pix = pix2tes.tes2pix(tes_index, 1)
+                pix = tes2pix(tes_index, 1)
             else:
-                pix = pix2tes.tes2pix(tes_index - 128, 2)
+                pix = tes2pix(tes_index - 128, 2)
 
             # This condition avoids thermometers
             if pix < 1000:
@@ -468,7 +467,7 @@ class SelfCalibration:
         if np.shape(full_fp) != (34, 34):
             raise ValueError('The complete focal plane must be 34*34')
 
-        pix_grid = pix2tes.assign_pix_grid()
+        pix_grid = assign_pix_grid()
         focal_plan = np.where(pix_grid > 0, 1, pix_grid)
         quart_fp = np.rot90(full_fp[:17, :17], 3) * focal_plan
         quart_fp[quart_fp == 0.] = np.nan

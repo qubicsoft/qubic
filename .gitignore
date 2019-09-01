@@ -2,7 +2,6 @@
 .ipynb_checkpoints
 *.ipynb
 *.pyc
-*.fits
 .idea/
 .coverage
 .f2py_f2cmap

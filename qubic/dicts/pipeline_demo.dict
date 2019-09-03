@@ -1,7 +1,7 @@
 ############################################# Instrument ################################
 debug = False #False/True # Boolean
 
-config = 'TD' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
+config = 'FI' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
 filter_nu = 150*1e9 # 150e9 or 220e9 Hz
 filter_relative_bandwidth = 0.25 
 beam_shape =  'multi_freq' # 'gaussian', 'fitted_beam', 'multi_freq'
@@ -37,7 +37,7 @@ detarray='CalQubic_DetArray_CC.fits'
 hornarray='CalQubic_HornArray_CC.fits'
 
 ############################################# Scene ################################
-nside=64
+nside=128
 kind='IQU'
 absolute=False
 temperature=2.7255 # K for CMB, 300 K for TD in lab # 
@@ -53,10 +53,10 @@ date_obs='2016-01-01 00:00:00'
 latitude= -(24 + 11. / 60)   #ARGENTINA
 longitude= -(66 + 28. / 60)   #ARGENTINA
 
-random_pointing=True   
+random_pointing=False   
 
-repeat_pointing=False
-npointings=1200
+repeat_pointing=True
+npointings=1500
 dtheta=4.
 nhwp_angles=3 # use only for repeat_pointing
 seed=1
@@ -73,7 +73,7 @@ fix_azimuth={'apply':True,'az':50,'el':50,'el_step':1, 'fix_hwp':True, 'fix_pitc
 ############################################# Acquisition ##############################
 block=None
 effective_duration=1 #years
-noiseless=False
+noiseless=True
 photon_noise=False
 max_nbytes=None
 nprocs_instrument=None

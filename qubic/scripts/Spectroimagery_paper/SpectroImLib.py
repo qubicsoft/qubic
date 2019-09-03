@@ -198,12 +198,10 @@ def create_TOD(d, pointing, x0):
 
 
 def create_acquisition_operator_REC(pointing, d, nf_sub_rec):
-    # Polychromatic instrument model
-
+    # scene
+    s = qubic.QubicScene(d)
     if d['nf_sub'] == 1:
         q = qubic.QubicInstrument(d)
-        # scene
-        s = qubic.QubicScene(d)
         # one subfreq for recons
         _, nus_edge, _, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, nf_sub_rec, d['filter_relative_bandwidth'])
         arec = qubic.QubicAcquisition(q, pointing, s, d)
@@ -211,8 +209,6 @@ def create_acquisition_operator_REC(pointing, d, nf_sub_rec):
         return arec
     else:
         q = qubic.QubicMultibandInstrument(d)
-        # scene
-        s = qubic.QubicScene(d)
         # number of sub frequencies for reconstruction
         _, nus_edge, _, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, nf_sub_rec, d['filter_relative_bandwidth'])
         # Operator for Maps Reconstruction

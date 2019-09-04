@@ -25,327 +25,17 @@ rc('text', usetex=False)
 rc('image', cmap='viridis')
 
 import healpy as hp
+import pickle
+
 import qubic.io
 from pysimulators import FitsArray
 import fibtools as ft
 import demodulation_lib as dl
+import sb_fitting as sbfit
+import jchinstrument as jcinst
 
-ns = 256
-```
-
-```{python}
-TESNum = 37
-thecos = np.cos(np.radians(50))
-
-#read xcenter, ycenter, amplitude and fwhm of the desired detector:
-peaks = np.array(FitsArray('/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/fitted_peaks.fits'))
-peaks[:,0,:] = peaks[:,0,:]/np.cos(np.radians(50))
-print(peaks.shape)
-print(peaks[TESNum-1, 0, :])
-print(peaks[TESNum-1, 1, :])
-print(peaks[TESNum-1, 2, :])
-print(peaks[TESNum-1, 3, :])
-
-### In measurement coordinate system
-thetas_measured_M = np.radians(90-(peaks[TESNum-1,1,:]-50))
-phis_measured_M = np.radians(-peaks[TESNum-1,0,:]*thecos)
-amps_measured_M = peaks[TESNum-1,2,:]
-fwhm_measured_M = peaks[TESNum-1,3,:]
-
-
-
-directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/150GHz-2019-04-06/'
-
-filename = directory + 'Flat/imgflat_TESNum_{}.fits'.format(TESNum)
-img = FitsArray(filename)
-az = FitsArray(directory + 'Flat/azimuth.fits')
-el = FitsArray(directory + 'Flat/elevation.fits')
-
-mm, ss = ft.meancut(img[img != 0], 3)
-subplot(1,2,1)
-imshow(img, 
-       extent = [np.min(az)*thecos, np.max(az)*thecos, np.min(el), np.max(el)], 
-       cmap='viridis',
-       vmin = -3*ss, vmax = 10*ss)
-plot(peaks[TESNum-1,0,:]*thecos,peaks[TESNum-1,1,:],'rX', label='Fitted')
-legend()
-
-mymap = qubic.io.read_map(directory+'/Healpix/healpix_TESNum_{}.fits'.format(TESNum))
-hp.gnomview(mymap, reso=10, sub=(1,2,2), min=-3*ss, max=10*ss,cmap='viridis')
-hp.projscatter(-peaks[TESNum-1,0,:]*thecos,peaks[TESNum-1,1,:]-50, lonlat=True, marker='X',color='r', label='Fitted')
-legend()
-```
-
-```{python}
-#### Doing the fit
-# reload(dl)
-# flatmap, az, el, fit, xypeaks = dl.fit_sb(TESNum, directory,doplot=True,vmin=-0.05, vmax=0.05, resample=False)
-```
-
-```{python}
-# print(xypeaks)
-# print('')
-# print(peaks[TESNum-1,:,:])
-```
-
-```{python}
-did_det={'93':180, '94':197, '95':214, '96':231}#180sim == 93real, 197sim == 94 real, 214sim == 95real, 231sim == 96real 
-
-def select_det(q,id):
-    # Select detector number id from a QubicInstrument instance q
-    # Return:
-    #     A QubicInstrument object with only detector id (insted full detector array)
-    id=[id]
-    detector_i = q.detector[id]
-    q.detector = detector_i
-    return(q)
-```
-
-### Findng realistic peaks locations in the right reference frame
-We instantiate a QUBIC instrument, get the synthesized beam for a given detector and plot the synthesized beam in the Qubic System, meaning that it is oriented towards the zenith. We also extract the locations of the peaks from the QUBIC software.
-
-```{python}
-sel_det=True #If you want to select one detector
-TESid = TESNum
-
-# INSTRUMENT
-d = qubic.qubicdict.qubicDict()
-d.read_from_file('../pointsource/global_source_oneDet.dict')
-print(d['kind'])
-d['kind']='I'
-print(d['kind'])
-d['nside']=ns
-
-q = qubic.QubicInstrument(d)
-# plt.title('Detector array')
-# plt.plot(q.detector.center[did_det['93']][0],q.detector.center[did_det['93']][1], 'ko')
-# q.detector.plot()
-
-if sel_det:
-    if str(TESid) not in did_det.keys():
-        q =select_det(q,TESid)
-    else:
-        q=select_det(q,did_det['{}'.format(TESid)])
-        
-s = qubic.QubicScene(d)
-
-nu = q.filter.nu
-detcenter = q.detector.center
-synthbeam = q.synthbeam
-horn = getattr(q, 'horn', None)
-primary_beam = getattr(q, 'primary_beam', None)
-synthbeam.kmax = 2
-thetas, phis, vals  = q._peak_angles(s, nu, detcenter, synthbeam, horn, primary_beam)
-thetas = np.reshape(thetas, thetas.shape[1])
-phis = np.reshape(phis, phis.shape[1])
-vals = np.reshape(vals, vals.shape[1])
-
-sb = q.get_synthbeam(s, 0, detpos=q.detector.center[0])
-xr=0.1*np.max(sb)
-```
-
-Now let's overplot the Synthesized beam and the peak locations in mollweide with no healpix map rotation: peaks appear towards the zenith. We also plot the same bt using healpix rotation of the map in order to have the SB on the equator, and then we plot in gnomonic (with the same rotation of course).
-
-```{python}
-hp.mollview(sb, min=0, max=xr, title='Qubic reference frame: optical center towards z (90,0)', sub=(2,2,1))
-hp.mollview(sb, min=0, max=xr, rot=[0,90], title='Qubic reference frame: optical center towards z (90,0) - Healpix Rotated', sub=(2,2,3))
-hp.gnomview(sb, rot=[0,90],reso=10, min=0, max=xr,cmap='viridis', sub=(1,2,2), title='Qubic reference frame: optical center towards z (90,0) - Healpix Rotated')
-
-#Overplotting (for some reason ot plots on both subplots...)
-hp.projscatter(thetas,phis, marker='X',color='r', label='True Positions', alpha=0.4)
-legend()
 
 ```
-
-Similarly, we plot the measured synthesized beam (that is in another reference frame: towards the x axis instead of z) and overplot the location of the fitted peaks.
-
-```{python}
-hp.mollview(hp.ud_grade(mymap, 128), min=-3*ss, max=10*ss, title='Measurement reference frame: optical center towards x (0,0)', sub=(1,2,1))
-
-hp.gnomview(hp.ud_grade(mymap, 128), reso=10, sub=(1,2,2), min=-3*ss, max=10*ss,cmap='viridis', title='Measurement frame: optical center towards X <=> (0,0)')
-hp.projscatter(thetas_measured_M,phis_measured_M, marker='X',color='r', label='Fitted', alpha=0.4)
-legend()
-```
-
-The exercize is to be able to convert the peaks locations from one reference frame to the other
-
-Let's define some angular transformation functions and try to combine them in order to perform the desired rotation.
-
-```{python}
-def thph2uv(th,ph):
-    sth = np.sin(th)
-    cth = np.cos(th)
-    sph = np.sin(ph)
-    cph = np.cos(ph)
-    return np.array([sth*cph, sth*sph,cth])
-
-def uv2thph(uv):
-    r = np.sum(uv**2, axis=0)
-    th = np.nan_to_num(np.arccos(uv[2]/r))
-    ph = np.arctan2(uv[1],uv[0])
-    return np.array([th,ph])
-
-def rotmatX(th):
-    cth = np.cos(th)
-    sth = np.sin(th)
-    rotmat = np.array([[1, 0, 0],[0, cth, -sth],[0,sth,cth]])
-    return rotmat
-
-def rotmatY(th):
-    cth = np.cos(th)
-    sth = np.sin(th)
-    rotmat = np.array([[cth, 0, sth],[0, 1, 0],[-sth,0,cth]])
-    return rotmat
-
-def rotmatZ(th):
-    cth = np.cos(th)
-    sth = np.sin(th)
-    rotmat = np.array([[cth, -sth, 0], [sth, cth, 0], [0, 0, 1]])
-    return rotmat
-
-### Rotation from QUBIC reference frame to the measurement one
-def rotate_q2m(thin,phin,angs=np.radians(np.array([0., 90., 0.])), inverse=False):
-    #### All Angles in Radians
-    uvecin = thph2uv(thin, phin)
-    ### First rotation: pitch angle around optical axis
-    r0 = rotmatZ(angs[0])
-    ### Second rotation: down to actual elevation
-    r1 = rotmatY(angs[1])
-    ### Third rotation: go to actual azimuth
-    r2 = rotmatZ(angs[2])
-    #uvecout = np.dot(r2, np.dot(r1, np.dot(r0, uvecin)))
-    R = np.dot(r2, np.dot(r1, r0))
-    if inverse:
-        Rinv = np.linalg.inv(R)
-        uvecout = np.dot(Rinv, uvecin)
-    else:
-        uvecout = np.dot(R, uvecin)
-    return uv2thph(uvecout)
-
-##### Test: we draw a cross in initial reference frame (towards z) and rotate it to the new one. 
-##### We also do the reverse transformation to the points we obtained and check that we are back.
-th0 = np.radians([0., 5., 5., 5., 5.])
-ph0 = np.radians([0., 0., 90., 180., 270.])
-
-th1, ph1 = rotate_q2m(th0, ph0)
-hp.mollview(np.zeros(12), title='From Q to M')
-hp.projscatter(th0,ph0, marker='X',color='r', alpha=0.4, label='Initial points')
-hp.projscatter(th1,ph1, marker='+',color='b', alpha=0.4, label='Rotated points')
-
-th2, ph2 = rotate_q2m(th1, ph1, inverse=True)
-hp.projscatter(th2,ph2, marker='+',color='k', alpha=0.4, label='ReRotated-back points')
-legend()
-
-print(th0-th2)
-print((ph0-ph2) % (2*np.pi))
-```
-
-OK ! It's working well apparently !
-
-Now we apply this to the data: we transform the QUBIC theoretical peak locations into the measurement reference frame and overplot them onto the measured synthesized beam.
-
-```{python}
-#angs = np.radians(np.array([-0.5, 88.7, -0.5]))
-angs = np.radians(np.array([0, 90, 0]))
-thetas_new, phis_new = rotate_q2m(thetas, phis, angs=angs)
-
-hp.mollview(hp.ud_grade(mymap, 128), min=-3*ss, max=10*ss, title='Measurement reference frame: optical center towards x (0,0)', sub=(1,2,1))
-
-hp.gnomview(hp.ud_grade(mymap, 128), reso=10,min=-3*ss, max=10*ss, title='Measurement reference frame: optical center towards x (0,0)', sub=(1,2,2), cmap='viridis')
-hp.projscatter(thetas_new,phis_new, marker='X',color='r', s=100,label='Theoretical rotated')
-hp.projscatter(thetas_measured_M,phis_measured_M, marker='*',color='k',s=100, label='Fitted')
-
-legend()
-```
-
-Seems to be working OK !
-
-Let's do the opposite (which is actually what we want): rotate the measured synthesized beam peaks and overplot them onto the theoretical one.
-
-```{python}
-thetas_measured_Q, phis_measured_Q = rotate_q2m(thetas_measured_M, phis_measured_M, angs=angs, inverse=True)
-
-hp.mollview(sb, min=0, max=xr, title='Qubic reference frame: optical center towards z (90,0)', sub=(2,2,1))
-hp.mollview(sb, min=0, max=xr, rot=[0,90], title='Qubic reference frame: optical center towards z (90,0) - Healpix Rotated', sub=(2,2,3))
-
-hp.gnomview(sb, rot=[0,90],reso=10, min=0, max=xr,cmap='viridis', sub=(1,2,2), title='Qubic reference frame: optical center towards z (90,0) - Healpix Rotated')
-hp.projscatter(thetas,phis, marker='X',color='r', label='True Positions',s=100)
-hp.projscatter(thetas_measured_Q,phis_measured_Q, marker='*',color='g',s=300, label='Fitted Positions')
-legend()
-
-```
-
-So the nes values to put in the QUBIC reconstruction software are:
-
-```{python}
-print('Thetas:')
-print(thetas_measured_Q)
-print('Phis:')
-print(phis_measured_Q)
-
-#normalization similar to instrument.py line 920
-### Note: here we use the fitted amplitudes but they are heavily affected by saturation of the TES, 
-### so it may turn out to be a better approximation to use the primary beam shape at these locations...
-### To be revisited later
-amps_measured_Q = amps_measured_M/np.max(amps_measured_M)*synthbeam.peak150.solid_angle * (150e9 / nu)**2 / s.solid_angle * len(horn)
-print('Amps:')
-print(amps_measured_Q)
-```
-
-Now dump them to a file that is going to be read by the QUBIC software
-
-```{python}
-# data = np.array([[thetas_measured_Q], [phis_measured_Q], [amps_measured_Q]])
-
-# import pickle
-# file = open('/Users/hamilton/Qubic/RealistcReconstruction/peaks.pk', 'wb')
-# pickle.dump(data, file)
-# file.close()
-
-# file = open('/Users/hamilton/Qubic/RealistcReconstruction/peaks.pk', 'rb')
-# blo,bla,bli = pickle.load(file)
-# file.close()
-
-# print(data.shape)
-
-```
-
-Now we apply the very same rotation to all TES and store them into a file
-
-```{python}
-allthetas_M = np.radians(90-(peaks[:,1,:]-50))
-allphis_M = np.radians(-peaks[:,0,:]*thecos)
-allvals_M = peaks[:,2,:]
-allthetas_Q = np.zeros((256,9))
-allphis_Q = np.zeros((256,9))
-allvals_Q = np.zeros((256,9))
-for ites in xrange(256):
-    allthetas_Q[ites,:], allphis_Q[ites,:] = rotate_q2m(allthetas_M[ites,:], allphis_M[ites,:], 
-                                                        angs=angs, inverse=True)
-    allvals_Q[ites,:] = allvals_M[ites,:]/np.max(allvals_M[ites,:])*synthbeam.peak150.solid_angle * (150e9 / nu)**2 / s.solid_angle * len(horn)
-
-# data = np.array([allthetas_Q, allphis_Q, allvals_Q])
-
-# import pickle
-# file = open('/Users/hamilton/Qubic/RealistcReconstruction/peaks.pk', 'wb')
-# pickle.dump(data, file)
-# file.close()
-
-# file = open('/Users/hamilton/Qubic/RealistcReconstruction/peaks.pk', 'rb')
-# blo,bla,bli = pickle.load(file)
-# file.close()
-
-# print(data.shape)
-# print(blo.shape)
-```
-
-### QUBIC Simulation
-Now we try to use this in the QUBIC simulation and reconstruction
-
-Let's furst define a pointing and an input sky:
-
-
-First the hall pointing (function by M. Gamboa that converts the az,el of the measured synthesized beam map to qubic pointing object)
 
 ```{python}
 def hall_pointing(az, el, angspeed_psi, maxpsi,
@@ -403,70 +93,7 @@ def hall_pointing(az, el, angspeed_psi, maxpsi,
 
     return pp
     #print(pp.elevation)#, len(pp.elevation))
-    
-    
-    
-### Pointing
-p = hall_pointing(az, el, 0, 0, fix_azimuth=d['fix_azimuth'])
-plt.subplot(3,1,1)
-plt.plot(p.time,p.azimuth)
-plt.ylabel('Azimuth',fontsize=22)
-plt.subplot(3,1,2)
-plt.plot(p.time,p.elevation)
-plt.ylabel('Elevation',fontsize=22)
-plt.subplot(3,1,3)
-plt.plot(p.time,p.angle_hwp)
-plt.ylabel('HWP',fontsize=22)
-plt.show()
 
-```
-
-Input sky is a point source. It should be ponctual but because of the effect of saturation, it seems better to give it a width for now... to be revisited later.
-
-```{python}
-### In put sky: a source in the center of the pointing
-#### Input map
-fix_azimuth=d['fix_azimuth']
-m0=np.zeros(12*d['nside']**2)
-x0=np.zeros((len(m0),3))
-id=hp.pixelfunc.ang2pix(d['nside'], fix_azimuth['az'], fix_azimuth['el'],lonlat=True)
-print(id)
-source=m0*0
-source[id]=1
-
-freq = 150 # GHz
-conv = 61.3474
-component=0
-source = hp.sphtfunc.smoothing(source,fwhm=np.deg2rad(1.))#
-x0[:,component]=source
-
-if p.fix_az:
-    center = (fix_azimuth['az'],fix_azimuth['el'])
-else:
-    center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
-
-hp.gnomview(x0[:,0], rot=center,reso =10,cmap='viridis', title='Input map')
-```
-
-```{python}
-import jchinstrument as jcinst
-reload(jcinst)
-
-# INSTRUMENT
-d = qubic.qubicdict.qubicDict()
-d.read_from_file('../pointsource/global_source_oneDet.dict')
-print(d['kind'])
-d['kind']='I'
-print(d['kind'])
-d['nside']=ns
-
-
-
-
-```
-
-```{python}
-reload(jcinst)
 
 def select_det(q,id):
     #### For now the ids are not matched... so we only take the len(id) first detectors...
@@ -474,157 +101,301 @@ def select_det(q,id):
     q.detector = detector_i
     return(q)
 
-def do_some_dets(detnums, custom=False, nside=None, tol=5e-3):
+def do_some_dets(detnums, d, directory, fittedpeaksfile, custom=False, 
+                 nside=None, tol=5e-3, refit=False, resample=True, newsize=70, 
+                 doplot=True, verbose=True, sbfitmodel=None, angs=None, usepeaks=None):
     if nside is not None:
         d['nside']=nside
     s = qubic.QubicScene(d)
     ids = []
     for n in detnums:
-        if n in did_det.keys():
-            ids.append(did_det['{}'.format(n)])
-        else:
-            ids.append(0)
-    print(ids)
+        ids.append(0)
     
     if not custom:
-        print('Normal')
-        qcut = select_det(qubic.QubicInstrument(d),ids)
-        sima = qubic.QubicAcquisition(qcut, p, s, d)
-        #simTOD, maps_conv = sima.get_observation(source, convolution = True, noiseless=True)
-        print(qcut.detector.index.shape)
-        #print(np.shape(simTOD))
         print('')
+        print('Normal Reconstruction')
+        qcut = select_det(qubic.QubicInstrument(d),ids)
     else:
-        print('Custom')
+        print('')
+        print('Custom Reconstruction')
+        ### Refit or not the locations of the peaks 
+        ### from the synthesized beam images      
+        ### First instantiate a jchinstrument (modified from instrument 
+        ### to be able to read peaks from a file)
         qcut = select_det(jcinst.QubicInstrument(d),ids)
-        print(allthetas_Q.shape)
-        print(allthetas_Q[np.array(detnums)-1,:])
+        nu = qcut.filter.nu
+        synthbeam = qcut.synthbeam
+        horn = getattr(qcut, 'horn', None)
+        primary_beam = getattr(qcut, 'primary_beam', None)
+        thecos = np.cos(np.radians(50))
 
-        data = np.array([allthetas_Q[np.array(detnums)-1,:], 
-                         allphis_Q[np.array(detnums)-1,:], 
-                         allvals_Q[np.array(detnums)-1,:]])
-        print(data.shape)
-        import pickle
+        if refit:
+            print('We refit the peak locations')
+            ### We call the fitting function for the Synthesized beam
+            xypeaks = []
+            for i in range(len(detnums)):
+                flatmap, az, el = dl.get_flatmap(detnums[i], directory)
+                if sbfitmodel is None:
+                    sbfitmodel = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, 
+                                                         no_xy_shift=False, distortion=False)
+                print('Using Fit Model {} for TES #{}'.format(sbfitmodel.name,detnums[i]))
+                fit, thexypeaks = sbfit.fit_sb(flatmap, az, el, sbfitmodel, resample=resample, newsize=newsize,
+                                               verbose=verbose, doplot=doplot)
+                xypeaks.append(thexypeaks)
+                
+            ### Convert to measurement coordinate system
+            xypeaks = np.array(xypeaks)
+            allthetas_M = np.radians(90-(xypeaks[:,1,:]-50))
+            allphis_M = np.radians(-xypeaks[:,0,:])#*thecos)
+            allvals_M = xypeaks[:,2,:]
+        else:           
+            print('No refitting of the peak locations')
+            ### We just read them from the old peak file
+            peaks = np.array(FitsArray(fittedpeakfile))
+            peaks[:,0,:] = peaks[:,0,:]/thecos
+            ### An put them in the expected format
+            mypeaks = peaks[np.array(detnums)-1,:,:]
+            allthetas_M = np.radians(90-(mypeaks[:,1,:]-50))
+            allphis_M = np.radians(-mypeaks[:,0,:]*thecos)
+            allvals_M = mypeaks[:,2,:]
+        
+        ### Now we want to perform the rotation to go to boresight 
+        ### reference frame (used internally by QubicSoft)
+        if angs is None:
+            angs = np.radians(np.array([0, 90, 0]))
+        allthetas_Q = np.zeros_like(allthetas_M)
+        allphis_Q = np.zeros_like(allthetas_M)
+        allvals_Q = np.zeros_like(allthetas_M)
+        for ites in xrange(len(detnums)):
+            allthetas_Q[ites,:], allphis_Q[ites,:] = sbfit.rotate_q2m(allthetas_M[ites,:], 
+                                                                      allphis_M[ites,:], 
+                                                                      angs=angs, inverse=True)
+            allvals_Q[ites,:] = allvals_M[ites,:]/np.max(allvals_M[ites,:])*synthbeam.peak150.solid_angle * (150e9 / nu)**2 / s.solid_angle * len(horn)
+        
+        ### We nowwrite the temporary file that contains the peaks locations to be used
+        if usepeaks is None:
+            peaknums = np.arange(9)
+        else:
+            peaknums = usepeaks
+        data = np.array([allthetas_Q[:,peaknums], allphis_Q[:,peaknums], allvals_Q[:,peaknums]])
         file = open('/Users/hamilton/Qubic/RealistcReconstruction/peaks.pk', 'wb')
         pickle.dump(data, file)
         file.close()
-        sima = qubic.QubicAcquisition(qcut, p, s, d)
-        #simTOD, maps_conv = sima.get_observation(source, convolution = True, noiseless=True)
-        print(qcut.detector.index.shape)
-        #print(np.shape(simTOD))
+    
 
+    ### Make the TODs from the measured synthesized beams
+    # Read azimuth and elevation
+    az = FitsArray(directory + 'Flat/azimuth.fits')
+    el = FitsArray(directory + 'Flat/elevation.fits')
+    # Build pointing from them
+    p = hall_pointing(az, el, 0, 0, fix_azimuth=d['fix_azimuth'])
+    # Read data and fill TOD
     realTOD = np.zeros((len(detnums),len(p)))
     for i in range(len(detnums)):
         filename = directory + 'Flat/imgflat_TESNum_{}.fits'.format(detnums[i])
         print('Reading {}'.format(detnums[i]))
         img = FitsArray(filename)
         realTOD[i,:] = np.ravel(img) * 5e-28
+
+    ### Cut in azimuth and elevation
+    azmin = -15./np.cos(np.radians(50))
+    azmax = 15./np.cos(np.radians(50))
+    elmin = 20.
+    elmax = 80.
+    ok = ((p.azimuth >= azmin) & (p.azimuth <= azmax)) & ((p.elevation >= elmin) & (p.elevation <= elmax))
+    print('AzEl cuts: Keeping only {} samples out of {}'.format(ok.sum(), len(ok)))
         
+    ### And we instantiate the QUBIC isntrument that uses qcut which a 
+    ### jchinstrument (modified to read the above file)
+    sima = qubic.QubicAcquisition(qcut, p[ok], s, d)
+
+    ### Run the mapmaker
     d['tol'] = tol
-    maps_recon = sima.tod2map(realTOD, d, cov=None)
-    print('Mapmaking QUBIC done')
+    maps_recon, niter, error = sima.tod2map(realTOD[:,ok], d, cov=None)
+    print('Mapmaking QUBIC done in {} iterations with error: {}'.format(niter, error))
     return maps_recon
 
-detnums = [6, 37, 38, 72, 79, 86, 94, 96, 110, 124, 149, 153, 176, 184, 185, 199, 205, 229, 231, 235, 247]
-#detnums = [6, 37, 38]
+
+
 
 ```
 
-Doing all detectors indepedentely:
+```{python}
+
+```
 
 ```{python}
+# INSTRUMENT
+ns = 256
+d = qubic.qubicdict.qubicDict()
+d.read_from_file('../pointsource/global_source_oneDet.dict')
+print(d['kind'])
+d['kind']='I'
+print(d['kind'])
+d['nside']=ns
+
+fittedpeakfile = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/fitted_peaks.fits'
+directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/150GHz-2019-04-06/'
+```
+
+```{python}
+reload(dl)
+reload(sbfit)
+reload(jcinst)
+#detnums = [6, 37, 38, 72, 79, 86, 94, 96, 110, 124, 149, 153, 176, 184, 185, 199, 205, 229, 231, 235, 247]
+detnums = [37, 124, 185, 229]
 nsrec = 256
-tol = 1e-4
-all_maps_recon = np.zeros((len(detnums), 12*nsrec**2))
+tol = 1e-3
+all_maps_recon_th = np.zeros((len(detnums), 12*nsrec**2))
+all_maps_recon_custom = np.zeros((len(detnums), 12*nsrec**2))
+all_maps_recon_custom_new = np.zeros((len(detnums), 12*nsrec**2))
 for i in range(len(detnums)):
     d['verbose']=False
-    all_maps_recon[i,:] = do_some_dets([detnums[i]], custom=True, nside=nsrec, tol=tol)
-
-
+    all_maps_recon_th[i,:] = do_some_dets([detnums[i]], d, directory, fittedpeakfile, 
+                                          custom=False, nside=nsrec, tol=tol, refit=False)    
+    all_maps_recon_custom[i,:] = do_some_dets([detnums[i]], d, directory, fittedpeakfile, 
+                                              custom=True, nside=nsrec, tol=tol, refit=False)    
+    all_maps_recon_custom_new[i,:] = do_some_dets([detnums[i]], d, directory, fittedpeakfile, 
+                                                  custom=True, nside=nsrec, tol=tol, refit=True, 
+                                                  verbose=False, doplot=True)
 ```
 
 ```{python}
-okpix = np.product(all_maps_recon, axis=0) != 0
-rms = np.std(all_maps_recon[:,okpix])
-
-rc('figure', figsize=(15,12))
+center = [0,50]
+rc('figure', figsize=(15,20))
 reso = 20
-nnn = int(np.sqrt(len(detnums)))+1
 for i in range(len(detnums)):
-    hp.gnomview((all_maps_recon[i,:]), reso=reso/2, rot=center, cmap = 'viridis', sub=(4,7,i+1), 
-            title='Real Custom TES{}'.format(detnums[i]),min=0, max=0.002)
-#hp.projscatter(np.radians(90-center[1]), np.radians(center[0]), marker='x',color='r',s=300, label='Center')
-
-print(np.shape(all_maps_recon))
+    hp.gnomview((all_maps_recon_th[i,:]), reso=reso/2, rot=center, cmap = 'viridis', sub=(len(detnums),3,3*i+1), 
+            title='Th. TES{}'.format(detnums[i]),min=0, max=0.01)
+    hp.gnomview((all_maps_recon_custom[i,:]), reso=reso/2, rot=center, cmap = 'viridis', sub=(len(detnums),3,3*i+2), 
+            title='Custom OldFit TES{}'.format(detnums[i]),min=0, max=0.01)
+    hp.gnomview((all_maps_recon_custom_new[i,:]), reso=reso/2, rot=center, cmap = 'viridis', sub=(len(detnums),3,3*i+3), 
+            title='Custom Refit TES{}'.format(detnums[i]),min=0, max=0.01)
 ```
 
 ```{python}
-all_maps_recon_norm = np.zeros((len(detnums), 12*nsrec**2))
-for i in range(len(detnums)):
-    all_maps_recon_norm[i,:] = do_some_dets([detnums[i]], custom=False,nside=nsrec, tol=tol)
+d['verbose']=False
+angs = np.radians(np.array([0, 90, 0]))
 
+#### Very slow convergence so put tol to 1e-2 for fast results, anyway result is crap
+maps_recon_th = do_some_dets(detnums, d, directory, fittedpeakfile, 
+                                          custom=False, nside=nsrec, tol=1e-2, refit=False)    
+
+#### Faster so 1e-3 is OK
+maps_recon_custom = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+                                              custom=True, nside=nsrec, tol=1e-3, refit=False)    
+
+#### faster so 1e-3 is OK
+maps_recon_custom_new = do_some_dets(detnums, d, directory, fittedpeakfile, angs=angs,
+                                                  custom=True, nside=nsrec, tol=1e-3, refit=True, 
+                                                  verbose=False, doplot=True)
 ```
 
 ```{python}
-okpix = np.product(all_maps_recon_norm, axis=0) != 0
-rms_norm = np.std(all_maps_recon_norm[:,okpix])
+mm, ss = ft.meancut(maps_recon_custom[maps_recon_custom != 0], 3)
+nb = 1.5
+hp.gnomview((maps_recon_th), reso=reso/2, rot=center, cmap = 'viridis', sub=(1,3,1), 
+        title='Th. TES{}'.format(detnums), min=mm-nb*ss, max=mm+nb*ss)
+hp.gnomview((maps_recon_custom), reso=reso/2, rot=center, cmap = 'viridis', sub=(1,3,2), 
+        title='Custom OldFit TES{}'.format(detnums), min=mm-nb*ss, max=mm+nb*ss)
+hp.gnomview((maps_recon_custom_new), reso=reso/2, rot=center, cmap = 'viridis', sub=(1,3,3), 
+        title='Custom Refit TES{}'.format(detnums), min=mm-nb*ss, max=mm+nb*ss)
+```
 
-rc('figure', figsize=(15,12))
-reso = 20
-nnn = int(np.sqrt(len(detnums)))+1
-for i in range(len(detnums)):
-    hp.gnomview((all_maps_recon_norm[i,:]), reso=reso/2, rot=center, cmap = 'viridis', sub=(4,7,i+1), 
-            title='Real Theo. TES{}'.format(detnums[i]),min=0, max=0.01)
-#hp.projscatter(np.radians(90-center[1]), np.radians(center[0]), marker='x',color='r',s=300, label='Center')
+***
+### Invetigating the tol parameter needed for these maps:
+10-3 is sufficient... We will probably need more when we have more detectors.
 
-
+```{python}
+# reload(sbfit)
+# ### Investigate tol
+# tols = [1e-2, 1e-3, 1e-4]
+# maps = []
+# for t in tols:
+#     maps.append(do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+#                                               custom=True, nside=nsrec, tol=t, refit=False))  
+# sbfit.beeps(4)
 ```
 
 ```{python}
+# mm, ss = ft.meancut(maps[0][maps[0] != 0], 3)
+# for i in range(len(tols)):
+#     hp.gnomview((maps[i]-maps[2]), reso=reso, rot=center, cmap = 'viridis', sub=(1,len(tols),i+1), 
+#         title='Tol = '.format(tols[i]), min=mm-nb*ss, max=mm+nb*ss)
 
 ```
 
+***
+### Investigating nside
+ns=256 is fine
+
 ```{python}
+### Investigate nside. Only when many detectors are available we can go to higher nside.
+
+# maps_128 = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+#                                               custom=True, nside=128, tol=1e-3, refit=False)
+# maps_256 = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+#                                               custom=True, nside=256, tol=1e-3, refit=False)
+# maps_512 = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+#                                               custom=True, nside=512, tol=1e-3, refit=False)
+# hp.gnomview((maps_128), reso=reso/2, rot=center, cmap = 'viridis', sub=(1,3,1), 
+#         title='Nside = 128', min=mm-nb*ss, max=mm+nb*ss)
+# hp.gnomview((maps_256), reso=reso/2, rot=center, cmap = 'viridis', sub=(1,3,2), 
+#         title='Nside = 256', min=mm-nb*ss, max=mm+nb*ss)
+# hp.gnomview((maps_512), reso=reso/2, rot=center, cmap = 'viridis', sub=(1,3,3), 
+#         title='Nside = 512', min=mm-nb*ss, max=mm+nb*ss)
 
 ```
 
+***
+### Investigating the rotation we apply in order to nring the measurement in the boresight reference frame
+It appears we need to think a bit more about this rotation as its effect is more complicated than just a shift of the reocnstructed image...
+
 ```{python}
+############# Trying to play with the rotation applied to put the peaks into the boresight reference frame
+d['verbose']=False
+tol=1e-3
+angs = np.radians(np.array([0, 90, 0]))
+maps_recon_custom_0 = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+                                              custom=True, nside=nsrec, tol=tol, refit=False)    
+
+mm, ss = ft.meancut(maps_recon_custom_0[maps_recon_custom_0 != 0], 3)
+nb = 1.5
+hp.gnomview((maps_recon_custom_0), reso=reso*0.5, rot=center, cmap = 'viridis', sub=(1,2,1),
+        title='Custom OldFit TES{}'.format(detnums), min=mm-nb*ss, max=mm+nb*ss)
+
+angs = np.radians(np.array([3, 88, 2]))
+maps_recon_custom_1 = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+                                              custom=True, nside=nsrec, tol=tol, refit=False)    
+
+nb = 1.5
+hp.gnomview((maps_recon_custom_1), reso=reso*0.5, rot=center, cmap = 'viridis', sub=(1,2,2),
+        title='Custom OldFit TES{}'.format(detnums), min=mm-nb*ss, max=mm+nb*ss)
 
 ```
 
-```{python}
-
-```
-
-Now doing them together
+***
+### Now what happens if we remove systematically one of the peaks from the reconstruction ?
+It trashes everything...
 
 ```{python}
-maps_recon_all = do_some_dets(detnums, custom=True, nside=nsrec, tol=1e-3)
-```
+d['verbose']=False
+tol=1e-2
+angs = np.radians(np.array([0, 90, 0]))
+# map_recon = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+#                         custom=True, nside=nsrec, tol=tol, refit=False)    
 
-```{python}
-reso = 20
-hp.gnomview((maps_recon_all), reso=reso/2, rot=center, cmap = 'viridis', 
-            title='Real TOD Custom TES{}'.format(detnums),min=0, max=0.005)
-#hp.projscatter(np.radians(90-center[1]), np.radians(center[0]), marker='x',color='r',s=300, label='Center')
+map_recon_remove = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+                                custom=True, nside=nsrec, tol=tol, refit=False,
+                                usepeaks=[0,2,3,4,5,6,7,8])    
 
-
-```
-
-```{python}
-maps_recon_all_norm = do_some_dets(detnums, custom=False, nside=nsrec, tol=1e-3)
-```
-
-```{python}
-reso = 20
-hp.gnomview((maps_recon_all_norm), reso=reso/2, rot=center, cmap = 'viridis', 
-            title='Real TOD Normal TES{}'.format(detnums),min=0, max=0.005)
-#hp.projscatter(np.radians(90-center[1]), np.radians(center[0]), marker='x',color='r',s=300, label='Center')
-
-
-```
-
-```{python}
+mm, ss = ft.meancut(map_recon[map_recon != 0], 3)
+nb = 1.5
+hp.gnomview((map_recon), reso=reso*0.5, rot=center, cmap = 'viridis', sub=(1,2,1),
+        title='Custom OldFit TES{}'.format(detnums), min=mm-nb*ss, max=mm+nb*ss)
+nb = 1.5
+hp.gnomview((map_recon_remove), reso=reso*0.5, rot=center, cmap = 'viridis', sub=(1,2,2),
+        title='Custom OldFit TES{}'.format(detnums), min=mm-nb*ss, max=mm+nb*ss)
 
 ```
 

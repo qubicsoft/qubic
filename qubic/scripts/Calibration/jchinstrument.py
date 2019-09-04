@@ -27,7 +27,7 @@ from qubic.calibration import QubicCalibration
 from qubic.utils import _compress_mask
 from qubic.ripples import ConvolutionRippledGaussianOperator, BeamGaussianRippled
 from qubic.beams import (BeamGaussian, BeamFitted, MultiFreqBeam)
-
+import os
 
 __all__ = ['QubicInstrument',
            'QubicMultibandInstrument']
@@ -112,7 +112,7 @@ class QubicInstrument(Instrument):
         else:
             self.FRBW = filter_relative_bandwidth
         if self.debug:
-            print 'FRBW = ', self.FRBW, 'dnu = ', filter_relative_bandwidth
+            print('FRBW = ', self.FRBW, 'dnu = ', filter_relative_bandwidth)
         ## Choose the relevant Optics calibration file  
         self.nu1 = 150e9
         self.nu1_up = 150e9 * (1  + self.FRBW / 1.9)
@@ -169,8 +169,8 @@ class QubicInstrument(Instrument):
             primary_shape = 'multi_freq'
             secondary_shape = 'multi_freq'
         if self.debug:
-            print 'primary_shape', primary_shape
-            print "d['primbeam']",d['primbeam']
+            print('primary_shape', primary_shape)
+            print("d['primbeam']",d['primbeam'])
         calibration = QubicCalibration(d)
         self.config = d['config']
         self.calibration = calibration
@@ -378,17 +378,17 @@ class QubicInstrument(Instrument):
         for i in range(len(cc)):
             names.append(cc[i][0])
         if self.debug:
-            print self.config,', central frequency:', int(nu/1e9),'+-',\
+            print(self.config,', central frequency:', int(nu/1e9),'+-',\
               int(dnu/2e9), 'GHz, subband:', int(self.filter.nu/1e9),\
               'GHz, n_modes =', np.pi * self.horn.radeff**2 * \
               self.primary_beam.solid_angle *\
-              self.filter.nu**2 / c**2
+              self.filter.nu**2 / c**2)
             indf = names.index('ndf')-2
             if cc[indf][2] != 1.0: 
-                print 'Neutral density filter present, trans = ', \
-                  cc[indf][2]
+                print('Neutral density filter present, trans = ', \
+                  cc[indf][2])
             else:
-                print 'No neutral density filter'
+                print('No neutral density filter')
         # compnents before the horn plane
         ib2b = names.index('ba2ba')
         g[:ib2b] = gp[:ib2b, None] * S_horns_eff * omega_det * (nu / c)**2 \
@@ -404,10 +404,10 @@ class QubicInstrument(Instrument):
                                                        (h * nu * g[:ib2b]))
         if self.debug:
             for j in range(ib2b):
-                print names[j], ', T=',temperatures[j],\
+                print(names[j], ', T=',temperatures[j],\
                     'K, P = {0:.2e} W'.format(P_phot[j].max()),\
                     ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[j]).max()) +\
-                    '  W/sqrt(Hz)'
+                    '  W/sqrt(Hz)')
         # bifurcation for the whole 150 GHz
         if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
             nu_up = 168e9
@@ -424,10 +424,10 @@ class QubicInstrument(Instrument):
             P_phot[ib2b] = gp[ib2b] * eta * (k * T)**4 / c**2 / h**3 * K1 * \
                            S_horns * omega_det * sec_beam 
             if self.debug:
-                print names[ib2b], ', T=',temperatures[ib2b], \
+                print(names[ib2b], ', T=',temperatures[ib2b], \
                     'K, P = {0:.2e} W'.format(P_phot[ib2b].max()),\
                     ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ib2b]).max()) +\
-                    '  W/sqrt(Hz)' 
+                    '  W/sqrt(Hz)')
      
             ## Environment NEP
             eff_factor = np.prod(transmissions[(len(names)-4):]) *\
@@ -438,10 +438,10 @@ class QubicInstrument(Instrument):
                             (k * temperatures[ib2b])**5 / c**2 / h**3 *\
                             eff_factor * (I1  + I2 * eff_factor)
             if self.debug:
-                print 'Environment T =',temperatures[ib2b], \
+                print('Environment T =',temperatures[ib2b], \
                     'K, P = {0:.2e} W'.format(P_phot_env.max()),\
                     ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2_env).max()) +\
-                    '  W/sqrt(Hz)' 
+                    '  W/sqrt(Hz)') 
             ## Combiner
             icomb = ib2b+1 # the combiner is the component just after the horns
             T = temperatures[icomb]
@@ -455,10 +455,10 @@ class QubicInstrument(Instrument):
             P_phot[icomb] = gp[icomb] * eta * (k * T)**4 / c**2 / h**3 * L1 * \
                            S_det * omega_comb * sec_beam 
             if self.debug:
-                print names[icomb], ', T=',temperatures[icomb], \
+                print(names[icomb], ', T=',temperatures[icomb], \
                     'K, P = {0:.2e} W'.format(P_phot[icomb].max()),\
                     ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[icomb]).max()) +\
-                    '  W/sqrt(Hz)' 
+                    '  W/sqrt(Hz)')
             #cold stop low pass edge
             ics = icomb+1
             T = temperatures[ics]
@@ -472,10 +472,10 @@ class QubicInstrument(Instrument):
             P_phot[ics] = gp[ics] * eta * (k * T)**4 / c**2 / h**3 * L1 * \
                            S_det * omega_coldstop * sec_beam 
             if self.debug:
-                print names[ics], ', T=',temperatures[ics], \
+                print(names[ics], ', T=',temperatures[ics], \
                     'K, P = {0:.2e} W'.format(P_phot[ics].max()),\
                     ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ics]).max()) +\
-                    '  W/sqrt(Hz)' 
+                    '  W/sqrt(Hz)') 
             ## dicroic 
             if self.config == 'FI':
                 idic = ics +1
@@ -490,10 +490,10 @@ class QubicInstrument(Instrument):
                 P_phot[idic] = gp[idic] * eta * (k * T)**4 / c**2 / h**3 * L1 * \
                                S_det * omega_dichro * sec_beam 
                 if self.debug:
-                    print names[idic], ', T=',temperatures[idic], \
+                    print(names[idic], ', T=',temperatures[idic], \
                         'K, P = {0:.2e} W'.format(P_phot[idic].max()),\
                         ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[idic]).max()) +\
-                        '  W/sqrt(Hz)' 
+                        '  W/sqrt(Hz)') 
                 # Neutral density dilter
                 indf = idic +1
             else:
@@ -513,10 +513,10 @@ class QubicInstrument(Instrument):
                 P_phot[indf] = gp[indf] * eta * (k * T)**4 / c**2 / h**3 * L1 * \
                                S_det * np.pi * sec_beam 
                 if self.debug:
-                    print names[indf], ', T=',temperatures[indf], \
+                    print(names[indf], ', T=',temperatures[indf], \
                         'K, P = {0:.2e} W'.format(P_phot[indf].max()),\
                         ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[indf]).max()) +\
-                        '  W/sqrt(Hz)' 
+                        '  W/sqrt(Hz)') 
             # The two before last low pass Edges
             for i in range(indf+1,indf+3):
                 T = temperatures[i]
@@ -530,10 +530,10 @@ class QubicInstrument(Instrument):
                 P_phot[i] = gp[i] * eta * (k * T)**4 / c**2 / h**3 * L1 * \
                                S_det * np.pi * sec_beam 
                 if self.debug:
-                    print names[i], ', T=',temperatures[i], \
+                    print(names[i], ', T=',temperatures[i], \
                         'K, P = {0:.2e} W'.format(P_phot[i].max()),\
                         ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[i]).max()) +\
-                        '  W/sqrt(Hz)' 
+                        '  W/sqrt(Hz)') 
             
         else: ##220 GHz
             # back to back horns, as seen by the detectors through the combiner   
@@ -549,11 +549,11 @@ class QubicInstrument(Instrument):
             NEP_phot2[ib2b] = NEP_phot2_nobunch[ib2b] * (1 + P_phot[ib2b] / \
                                                          (h * nu * g[ib2b]))
             if self.debug:
-                print names[ib2b], \
+                print(names[ib2b], \
                     ', T=',temperatures[ib2b], \
                     'K, P = {0:.2e} W'.format(P_phot[ib2b].max()),\
                     ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ib2b]).max()) +\
-                    ' W/sqrt(Hz)'
+                    ' W/sqrt(Hz)')
 
             ## Environment NEP
             eff_factor = np.prod(transmissions[len(names)-4:]) *\
@@ -568,10 +568,10 @@ class QubicInstrument(Instrument):
             NEP_phot2_env = NEP_phot2_env_nobunch[ib2b] * (1 + P_phot_env /\
                                                            (h * nu * g_env))
             if self.debug:
-                print 'Environment, T =',temperatures[ib2b], \
+                print('Environment, T =',temperatures[ib2b], \
                     'K, P = {0:.2e} W'.format(P_phot_env.max()),\
                     ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2_env).max())+\
-                    ' W/sqrt(Hz)'
+                    ' W/sqrt(Hz)')
             # combiner
             icomb = ib2b+1
             g[icomb] = gp[icomb] * S_det * omega_comb * (nu / c)**2 * dnu
@@ -584,11 +584,11 @@ class QubicInstrument(Instrument):
             NEP_phot2[icomb] = NEP_phot2_nobunch[icomb] * (1 + P_phot[icomb] /\
                                                            (h * nu * g[icomb]))
             if self.debug:
-                print names[icomb], \
+                print(names[icomb], \
                     ', T=',temperatures[icomb], \
                     'K, P = {0:.2e} W'.format(P_phot[icomb].max()),\
                     ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[icomb]).max())+\
-                    ' W/sqrt(Hz)'
+                    ' W/sqrt(Hz)')
             ## coldstop
             ics = icomb +1 
             g[ics] = gp[ics] * S_det * omega_coldstop * (nu / c)**2 * dnu
@@ -599,11 +599,11 @@ class QubicInstrument(Instrument):
             NEP_phot2[ics] = NEP_phot2_nobunch[ics] * (1 + P_phot[ics] /\
                                                            (h * nu * g[ics]))
             if self.debug:
-                print names[ics], \
+                print(names[ics], \
                     ', T=',temperatures[ics], \
                     'K, P = {0:.2e} W'.format(P_phot[ics].max()),\
                     ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ics]).max())+\
-                    ' W/sqrt(Hz)'
+                    ' W/sqrt(Hz)')
             ## dichroic
             idic = ics +1 
             g[idic] = gp[idic] * S_det * omega_dichro * (nu / c)**2 * dnu
@@ -614,11 +614,11 @@ class QubicInstrument(Instrument):
             NEP_phot2[idic] = NEP_phot2_nobunch[idic] * (1 + P_phot[idic] /\
                                                            (h * nu * g[idic]))
             if self.debug:
-                print names[idic], \
+                print(names[idic], \
                     ', T=',temperatures[idic], \
                     'K, P = {0:.2e} W'.format(P_phot[idic].max()),\
                     ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[idic]).max())+\
-                    ' W/sqrt(Hz)'
+                    ' W/sqrt(Hz)')
             # Last three filters
             for i in range(idic+1,idic+4):
                 if emissivities[i] == 0.0:
@@ -633,11 +633,11 @@ class QubicInstrument(Instrument):
                     NEP_phot2[i] = NEP_phot2_nobunch[i] * (1 + P_phot[i] /\
                                                                    (h * nu * g[i]))
                     if self.debug:
-                        print names[i], \
+                        print(names[i], \
                             ', T=',temperatures[i], \
                             'K, P = {0:.2e} W'.format(P_phot[i].max()),\
                             ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[i]).max())+\
-                            ' W/sqrt(Hz)'
+                            ' W/sqrt(Hz)')
         # 5.6 cm EDGE (150 GHz) or Band Defining Filter (220 GHZ)
         ilast = i+1
         T = temperatures[ilast]
@@ -646,17 +646,17 @@ class QubicInstrument(Instrument):
         NEP_phot2[ilast] = eta * 2 * gp[ilast] * S_det * np.pi * (k*T)**5 \
                           / c**2 / h**3 * (24.9 + eta * 1.1)
         if self.debug:
-            print names[ilast], \
+            print(names[ilast], \
                 ', T=',temperatures[ilast], \
                 'K, P = {0:.2e} W'.format(P_phot[ilast].max()),\
                 ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ilast]).max())+\
-                ' W/sqrt(Hz)'
+                ' W/sqrt(Hz)')
         P_phot_tot = np.sum(P_phot, axis=0)
         NEP_tot = np.sqrt(np.sum(NEP_phot2, axis=0) + NEP_phot2_env)
         if self.debug:
-            print 'Total photon power =  {0:.2e} W'.format(P_phot_tot.max())+\
+            print('Total photon power =  {0:.2e} W'.format(P_phot_tot.max())+\
                 ', Total photon NEP = ' + '{0:.2e}'.format(NEP_tot.max()) +\
-                ' Watt/sqrt(Hz)'
+                ' Watt/sqrt(Hz)')
         return NEP_tot
 
     def get_aperture_integration_operator(self):
@@ -927,7 +927,8 @@ class QubicInstrument(Instrument):
         else:
             print('Custom Values')
             import pickle
-            file = open('/Users/hamilton/Qubic/RealistcReconstruction/peaks.pk', 'rb')
+            #file = open('/Users/hamilton/Qubic/RealistcReconstruction/peaks.pk', 'rb')
+            file = open(os.environ['QUBIC_PEAKS']+'peaks.pk', 'rb')
             theta, phi, val = pickle.load(file)
             file.close()
             print('Theta: ', np.shape(theta))
@@ -1052,8 +1053,7 @@ class QubicInstrument(Instrument):
 
         """
         shape = np.broadcast(theta, phi, spectral_irradiance).shape
-        theta, phi, spectral_irradiance = [np.ravel(_) for _ in theta, phi,
-                                           spectral_irradiance]
+        theta, phi, spectral_irradiance = [np.ravel(_) for _ in [theta, phi, spectral_irradiance]]
         uvec = hp.ang2vec(theta, phi)
         source_E = np.sqrt(spectral_irradiance *
                            primary_beam(theta, phi) * np.pi * horn.radeff**2)

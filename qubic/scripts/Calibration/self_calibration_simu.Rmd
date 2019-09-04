@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.1'
-      jupytext_version: 1.2.0
+      jupytext_version: 1.2.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -21,16 +21,18 @@ I have implemented a class in selfcal_lib.py which allowed to do several simulat
 One remark : I tried to put documentation for each function. On a jupyter notebook, if you want to have acces just press shift+tab when your cursor is on the name of the function. 
 
 ```{python}
+from __future__ import division
+
 # %matplotlib inline
 # %matplotlib notebook
 
-from __future__ import division
-
 import glob
 import healpy as hp
-from matplotlib.pyplot import *
+import matplotlib.pyplot as plt
 import pandas as pd
 import cv2
+
+from qubicpack.utilities import Qubic_DataDir
 
 from qubicpack import qubicpack as qp
 from qubicpack import pix2tes
@@ -49,11 +51,14 @@ plt.rcParams['figure.figsize'] = (8, 8)
 useful for the qubicsoft
 
 ```{python}
-basedir = '/home/louisemousset/QUBIC/MyGitQUBIC'
-dictfilename = basedir + '/qubic/qubic/scripts/global_source.dict'
+from qubicpack.utilities import Qubic_DataDir
+
+basedir = Qubic_DataDir(datadir='../', datafile='global_source.dict', )
+dictfilename = basedir + 'global_source.dict'
 
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
+print(d)
 ```
 
 ## Create an object 

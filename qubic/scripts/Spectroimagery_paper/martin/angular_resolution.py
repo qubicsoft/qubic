@@ -23,7 +23,7 @@ d.read_from_file(sys.argv[1])
 # Parameters
 name = NameRun(d)#'20190311_{}TEST_{}'.format(str(int(d['filter_nu']/1e9)), d['nhwp_angles'])
 name += 'testing'
-print 'Name', name
+print( 'Name', name)
 nsideLow, nsideHigh, reso, size, sigma2fwhm = Parameters(d) #reso = 1.5 size= 200
 
 # Call calibration methods with the same parameters that current run. 
@@ -105,7 +105,7 @@ ax1.plot(nus_in, fwhm_real-fwhm_real, 'k--',alpha =0.4)
 ax1.errorbar(nus_in,input_fwhm_fit - DeltaFitInpCorrect - fwhm_real, yerr = stdFitInput, fmt='rs--')
 mp.subplots_adjust(hspace=0.)
 InputMeasureFit = name+'fit-nf16-input'
-print 'Measure input map (using Fit method) in {}'.format(InputMeasureFit)
+print('Measure input map (using Fit method) in {}'.format(InputMeasureFit))
 mp.savefig(InputMeasureFit)
 
 fig = mp.figure(figsize=(8, 6)) 
@@ -124,7 +124,7 @@ ax1.plot(nus_in, fwhm_real-fwhm_real, 'k--',alpha =0.4)
 ax1.plot(nus_in, (input_fwhm_sigma-DeltaSigInpCorrect) - fwhm_real, 'bs--')
 mp.subplots_adjust(hspace=0.)
 InputMeasureSigma = name+'sigma-nf16-input'
-print 'Measure input map (using Sigma method) in {}'.format(InputMeasureSigma)
+print('Measure input map (using Sigma method) in {}'.format(InputMeasureSigma))
 mp.savefig(InputMeasureSigma)
 
 # recons map
@@ -151,7 +151,7 @@ _deltaFit_PLOTALL = []
 _deltaSigma_PLOTALL = []
 
 for nf_i in sub_band:
-	print 'Working reconstructing = ', nf_i, ' freq.'
+	print('Working reconstructing = ', nf_i, ' freq.')
 	Nbfreq, nus_edge, nus, deltas, Delta, Nbbands = qubic.compute_freq(d['filter_nu']/1e9, 
 	                                                                nf_i, d['filter_relative_bandwidth'])
 	                                                              

@@ -1,0 +1,88 @@
+############################################# Instrument ################################
+debug = False #False/True # Boolean
+
+config = 'FI' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
+filter_nu = 150e9 # 150e9 or 220e9 Hz
+filter_relative_bandwidth = 0.25
+beam_shape =  'gaussian'
+
+
+MultiBand=True
+
+filter_nu = 150*1e9
+filter_relative_bandwidth = 0.25 
+
+# multifreq instrument 
+nf_sub=15
+center_detector=False
+
+detector_fknee=0
+detector_fslope=1
+detector_ncorr=10
+detector_nep=4.7e-17
+detector_ngrids=1
+detector_tau=0.
+polarizer=True
+synthbeam_fraction=0.99
+synthbeam_kmax=8
+synthbeam_peak150_fwhm=0.39268176 # in degree
+ripples=False
+nripples=0
+
+optics='Calqubic_Optics_v3_CC_FFF.txt'
+primbeam='CalQubic_PrimBeam_vX.fits' # X=2 gaussian, 3 fitted, 4 multi frequency splines
+detarray='CalQubic_DetArray_CC.fits'
+hornarray='CalQubic_HornArray_CC.fits'
+
+
+############################################# Scene ################################
+nside=256
+kind='IQU'
+absolute=False
+temperature=2.7255
+summer=False
+############################################# Pointing ##############################
+
+RA_center= 0.
+DEC_center=-57.
+period=0.1 #s
+date_obs='2016-01-01 00:00:00'
+latitude= -(75 + 6. / 60)  #DOME C
+longitude= 123 + 20. / 60  #DOME C
+
+
+#latitude= -(24 + 11. / 60)   #ARGENTINA
+#longitude= -(66 + 28. / 60)   #ARGENTINA
+
+
+random_pointing=False   
+npointings=1000
+dtheta=10.
+nhwp_angles=3
+seed=1
+
+sweeping_pointing=True
+random_hwp=False
+duration=72 #h
+angspeed= 1 #deg/s
+delta_az= 40 #deg
+nsweeps_per_elevation= 7
+angspeed_psi= 0.03 #deg/s
+maxpsi= 10 #deg
+fix_azimuth={'apply':True,'az':90,'el':45,'el_step':0.1, 'fix_hwp':False, 'fix_pitch':True}
+
+############################################# Acquisition ##############################
+
+block=None
+effective_duration=2
+photon_noise=False
+max_nbytes=None
+nprocs_instrument=None
+nprocs_sampling=None
+comm=None
+weights=None
+
+############################################# Map Making ##############################
+tol=1*1e-3
+maxiter=100000
+verbose=True

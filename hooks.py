@@ -141,13 +141,13 @@ def get_cmdclass():
                 if self.debug:
                     flags += F77_COMPILE_DEBUG_GFORTRAN
                 if F77_OPENMP:
-                    flags += ['-qopenmp']
+                    flags += ['-openmp']
                 fcompiler.executables['compiler_f77'] += flags
                 flags = F90_COMPILE_ARGS_GFORTRAN + F90_COMPILE_OPT_GFORTRAN
                 if self.debug:
                     flags += F90_COMPILE_DEBUG_GFORTRAN
                 if F90_OPENMP:
-                    flags += ['-qopenmp']
+                    flags += ['-openmp']
                 fcompiler.executables['compiler_f90'] += flags
                 fcompiler.libraries += [LIBRARY_OPENMP_GFORTRAN]
             elif isinstance(fcompiler,
@@ -159,13 +159,13 @@ def get_cmdclass():
                 if self.debug:
                     flags += F77_COMPILE_DEBUG_IFORT
                 if F77_OPENMP:
-                    flags += ['-qopenmp']
+                    flags += ['-openmp']
                 fcompiler.executables['compiler_f77'] += flags
                 flags = F90_COMPILE_ARGS_IFORT + F90_COMPILE_OPT_IFORT
                 if self.debug:
                     flags += F90_COMPILE_DEBUG_IFORT
                 if F90_OPENMP:
-                    flags += ['-qopenmp']
+                    flags += ['-openmp']
                 fcompiler.executables['compiler_f90'] += flags
                 fcompiler.libraries += [LIBRARY_OPENMP_IFORT]
             else:
@@ -205,13 +205,13 @@ def get_cmdclass():
                     if self.debug:
                         flags += F77_COMPILE_DEBUG_GFORTRAN
                     if F77_OPENMP:
-                        flags += ['-qopenmp']
+                        flags += ['-openmp']
                     fc.executables['compiler_f77'] += flags
                     flags = F90_COMPILE_ARGS_GFORTRAN + F90_COMPILE_OPT_GFORTRAN
                     if self.debug:
                         flags += F90_COMPILE_DEBUG_GFORTRAN
                     if F90_OPENMP:
-                        flags += ['-qopenmp']
+                        flags += ['-openmp']
                     fc.executables['compiler_f90'] += flags
                     fc.libraries += [LIBRARY_OPENMP_GFORTRAN]
                 elif isinstance(fc,
@@ -220,13 +220,13 @@ def get_cmdclass():
                     if self.debug:
                         flags += F77_COMPILE_DEBUG_IFORT
                     if F77_OPENMP:
-                        flags += ['-qopenmp']
+                        flags += ['-openmp']
                     fc.executables['compiler_f77'] += flags
                     flags = F90_COMPILE_ARGS_IFORT + F90_COMPILE_OPT_IFORT
                     if self.debug:
                         flags += F90_COMPILE_DEBUG_IFORT
                     if F90_OPENMP:
-                        flags += ['-qopenmp']
+                        flags += ['-openmp']
                     fc.executables['compiler_f90'] += flags
                     fc.libraries += [LIBRARY_OPENMP_IFORT]
             build_ext.build_extensions(self)

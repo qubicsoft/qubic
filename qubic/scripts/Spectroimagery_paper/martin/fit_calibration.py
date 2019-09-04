@@ -27,7 +27,8 @@ Sensitive parameters for calibration (same in QUBIC pipeline)
 nsideLow, nsideHigh, reso, size, sigma2fwhm = Parameters(d)#, reso = 3.5)# size= 200
 n_subpop, fwhm_ini, fwhm_end, sample, step_fwhm, amplitude = ParametersMC(fwhm_ini = 0.22, fwhm_end = 1.20,
 																			sample = 30)
-outputname = NameCalib(method = 'fit')+'.txt' # Could be 'fit' or 'sigma'
+rename =str(reso).replace('.','-')
+outputname = NameCalib(method = 'fit')+str(rename)+'-{}.txt'.format(d['nside']) # Could be 'fit' or 'sigma'
 
 # Compute the parameter space domain
 fwhm = np.arange(fwhm_ini, fwhm_end, step_fwhm)

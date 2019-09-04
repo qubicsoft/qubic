@@ -29,7 +29,7 @@ n_subpop, fwhm_ini, fwhm_end, sample, step_fwhm, amplitude = ParametersMC(fwhm_i
 																			sample = 30)
 
 rename =str(reso).replace('.','-')
-outputname = NameCalib(method = 'sigma')+str(rename)+'.txt' # Could be 'fit' or 'sigma'
+outputname = NameCalib(method = 'sigma')+str(rename)+'-{}.txt'.format(d['nside']) # Could be 'fit' or 'sigma'
 
 # Compute the parameter space domain
 fwhm = np.arange(fwhm_ini, fwhm_end, step_fwhm)

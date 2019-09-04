@@ -1,0 +1,211 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.1
+  kernelspec:
+    display_name: Python 2
+    language: python
+    name: python2
+---
+
+```{python}
+import os
+import qubic
+import healpy as hp
+import numpy as np
+import pylab as plt
+import matplotlib as mpl
+import sys
+from time import time
+import copy
+```
+
+```{python}
+# Create the directory 'result' if it does not exists yet
+try:
+    os.makedirs('result')
+except:
+    pass
+mpl.style.use('classic')
+name='run_dict'
+```
+
+```{python}
+d = qubic.qubicdict.qubicDict()
+# Choose here your favourite dictionary 
+# d.read_from_file(sys.argv[1])
+d.read_from_file('global_test.dict')
+# You can change the beam shape as follows:
+d['beam_shape'] = 'fitted_beam' # or 'gaussian' or 'fitted_beam' or  'multi_freq' 
+print 'beam shape :', d['beam_shape']
+name += '_' + d['beam_shape']
+```
+
+```{python}
+# construction of the initial multiband instrument, pointing and scene
+q = qubic.QubicMultibandInstrument(d)
+p= qubic.get_pointing(d)
+s = qubic.QubicScene(d)
+```
+
+```{python}
+# Constructing a  reduced instrument with a subset of detectors chosen with their indices
+dets = [231,232] # a list of detctor indices
+ndets = len(dets)
+subq = q.detector_subset(dets)
+```
+
+```{python}
+# Sky map to be read
+m0=hp.fitsfunc.read_map('CMB_test.fits', field=(0,1,2))
+# x0[number of subfrequencies, Healpix map pixel number, 3 Stokes parameters]
+x0=np.zeros((d['nf_sub'],len(m0[0]),len(m0)))
+for j in range(len(m0)):
+    for i in range(d['nf_sub']):
+        x0[i,:,j]=m0[j]
+# field center in galactic coordinates
+center_gal = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+```
+
+```{python}
+# Choosing the subfrequencies for map acquisition
+Nbfreq_in, nus_edge_in, nus_in, deltas_in, Delta_in, Nbbands_in =\
+  qubic.compute_freq(d['filter_nu']/1e9, d['nf_sub'], d['filter_relative_bandwidth']) # Multiband instrument model
+
+# Acquisition with the full multiband instrument
+a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_in)
+# Acquisition with the subset of detectors
+suba = qubic.QubicMultibandAcquisition(subq, p, s, d, nus_edge_in)
+```
+
+```{python}
+t = time()
+# Construction of TODs (Time Ordered Data)
+TOD, maps_convolved = a.get_observation(x0, noiseless=True)
+subTOD, submaps_convolved= suba.get_observation(x0,noiseless=True)
+print 'TOD construction time =', time()-t
+```
+
+```{python}
+# defininng the reconstruction subfrequencies
+nf_sub_rec = 2
+Nbfreq_edge, nus_edge, nus, deltas, Delta, Nbbands = \
+  qubic.compute_freq(d['filter_nu']/1e9, nf_sub_rec,
+                         d['filter_relative_bandwidth']) 
+# For reconstruction with a different set of subfrequencies, a new acquisition instance is required
+arec = qubic.QubicMultibandAcquisition(q, p, s,d, nus_edge)
+subarec = qubic.QubicMultibandAcquisition(subq, p, s,d, nus_edge)
+
+# Map reconstruction from TODs
+t = time()
+maps_recon = arec.tod2map(TOD, tol=1e-3, maxiter=100000)
+submaps_recon = subarec.tod2map(subTOD, tol=1e-3, maxiter=100000)
+print d['beam_shape'], ', maps reconstruction time =', time()-t
+```
+
+```{python}
+# Full multiband instrument
+# Preparing results to be plotted
+TOD_useless, maps_convolved = arec.get_observation(x0)# reference map for comparison
+maps_convolved = np.array(maps_convolved) # reference map for comparison
+diffmap = maps_convolved - maps_recon # map of residues
+# Selecting the relevant map area
+cov = arec.get_coverage()
+cov = np.sum(cov, axis=0)
+maxcov = np.max(cov)
+unseen = cov < maxcov*0.1
+maps_convolved[:,unseen,:] = hp.UNSEEN
+maps_recon[:,unseen,:] = hp.UNSEEN
+diffmap[:,unseen,:] = hp.UNSEEN
+
+# Plotting and saving the results of the full multiband instrument
+stokes = ['I', 'Q', 'U'] 
+for istokes in [0,1,2]:
+    plt.figure(istokes,figsize=(12,12)) 
+    plt.suptitle('Stokes ' + stokes[istokes] + ', all detectors', fontsize=16)
+    if istokes==0:
+        xr=200 
+    else:
+        xr=10
+    for i in xrange(nf_sub_rec):
+        # proxy to get nf_sub_rec maps convolved
+        in_old=hp.gnomview(maps_convolved[i,:,istokes],
+                               rot=center_gal, reso=10, sub=(nf_sub_rec,3,3*i+1), min=-xr,
+                               max=xr,title='Input '+stokes[istokes]+' SubFreq {}'.format(i),
+                               return_projected_map=True)
+        np.savetxt('result/Full_in_%s_%s_subfreq_%d.dat'%(name,stokes[istokes],i),in_old)
+        out_old=hp.gnomview(maps_recon[i,:,istokes], rot=center_gal, reso=10,
+                                sub=(nf_sub_rec,3,3*i+2), min=-xr, max=xr,title='Output '
+                                +stokes[istokes]+' SubFreq {}'.format(i),
+                                return_projected_map=True)
+        np.savetxt('result/Full_out_%s_%s_subfreq_%d.dat'%(name,stokes[istokes],i),out_old)
+        res_old=hp.gnomview(diffmap[i,:,istokes], rot=center_gal, reso=10,
+                                sub=(nf_sub_rec,3,3*i+3), min=-xr, max=xr,title='Residual '
+                                +stokes[istokes]+' SubFreq {}'.format(i),
+                                return_projected_map=True)
+        np.savetxt('result/Full_res_%s_%s_subfreq_%d.dat'%(name,stokes[istokes],i),res_old)
+    plt.savefig('result/Full_%s_map_%s.png'%(name,stokes[istokes]),bbox_inches='tight')
+    plt.clf()
+    plt.close('all')
+
+```
+
+```{python}
+# Subset of detectors
+TOD_useless, submaps_convolved = arec.get_observation(x0)# reference map for comparison
+submaps_convolved = np.array(submaps_convolved) 
+subdiffmap = submaps_convolved - submaps_recon # map of residues
+# Selecting the relevant map area
+subcov = subarec.get_coverage()
+subcov = np.sum(subcov, axis=0)
+maxsubcov = np.max(subcov)
+subunseen = subcov < maxsubcov*0.1
+submaps_convolved[:,subunseen,:] = hp.UNSEEN
+subdiffmap = submaps_convolved - submaps_recon
+submaps_convolved[:,subunseen,:] = hp.UNSEEN
+submaps_recon[:,subunseen,:] = hp.UNSEEN
+subdiffmap[:,subunseen,:] = hp.UNSEEN
+```
+
+```{python}
+stokes = ['I', 'Q', 'U'] 
+for istokes in [0,1,2]:
+    subname = 'result/Sub_' + str(ndets)
+    plt.figure(istokes,figsize=(12,12))
+    plt.suptitle('Stokes ' + stokes[istokes] + ', ' + str(ndets) + ' detectors', fontsize=16)
+    if istokes==0:
+        xr=200 
+    else:
+        xr=10
+    for i in xrange(nf_sub_rec):
+        # proxy to get nf_sub_rec maps convolved
+        in_old=hp.gnomview(submaps_convolved[i,:,istokes],
+                               rot=center_gal, reso=10, sub=(nf_sub_rec,3,3*i+1), min=-xr,
+                               max=xr,title='Input '+stokes[istokes]+' SubFreq {}'.format(i),
+                               return_projected_map=True)
+        np.savetxt(subname + '_in_%s_%s_subfreq_%d.dat'%(name,stokes[istokes],i),in_old)
+        out_old=hp.gnomview(submaps_recon[i,:,istokes], rot=center_gal, reso=10,
+                                sub=(nf_sub_rec,3,3*i+2), min=-xr, max=xr,title='Output '
+                                +stokes[istokes]+' SubFreq {}'.format(i),
+                                return_projected_map=True)
+        np.savetxt(subname + '_out_%s_%s_subfreq_%d.dat'%(name,stokes[istokes],i),out_old)
+        res_old=hp.gnomview(subdiffmap[i,:,istokes], rot=center_gal, reso=10,
+                                sub=(nf_sub_rec,3,3*i+3), min=-xr, max=xr,title='Residual '
+                                +stokes[istokes]+' SubFreq {}'.format(i),
+                                return_projected_map=True)
+        np.savetxt(subname + '_res_%s_%s_subfreq_%d.dat'%(name,stokes[istokes],i),res_old)
+    
+    plt.subplots_adjust(left=0.1, wspace=0.8, top=0.8)
+    plt.savefig(subname + '_%s_map_%s.png'%(name,stokes[istokes]), bbox_inches='tight')
+    plt.clf()
+    plt.close()
+
+```
+
+```{python}
+
+```

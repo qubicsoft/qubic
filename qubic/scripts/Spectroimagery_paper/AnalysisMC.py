@@ -477,14 +477,19 @@ def get_rms_covarmean(nsubvals, seenmap, allmapsout, allmeanmat):
 
 def get_weighted_correlation_average(x, cov):
     """
+    Compute a weighted average taking into account the correlations between the variables.
+    The mean obtained is the one that has the minimal variance possible.
 
     Parameters
     ----------
-    x
-    cov
+    x : 1D array
+        Values you want to average.
+    cov : 2D array
+        Covariance matrix associated to the values in x.
 
     Returns
     -------
+    The weighted mean and the variance on that mean.
 
     """
     inv_cov = np.linalg.inv(cov)

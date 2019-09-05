@@ -165,9 +165,9 @@ def get_covcorr_patch(patch, stokesjoint=False, doplot=False):
     corr = np.zeros((dim, dim, npix))
 
     for ipix in range(npix):
-        mat = get_covcorr1pix(patch, ipix, stokesjoint=stokesjoint)
-        cov[:, :, ipix] = mat[0][:, :]
-        corr[:, :, ipix] = mat[1][:, :]
+        cov1pix, corr1pix = get_covcorr1pix(patch, ipix, stokesjoint=stokesjoint)
+        cov[:, :, ipix] = cov1pix
+        corr[:, :, ipix] = corr1pix
 
     if doplot:
         plt.figure('Mean over pixels')

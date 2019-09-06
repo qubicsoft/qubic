@@ -47,13 +47,19 @@ def save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved,
 
 
 # =============== Read saved maps ==================
-def get_seenmap(file):
+def get_seenmap(file, badval=-1.6375e+30, rtol=1e-05, atol=1e-08):
     """
     Returns an array with the pixels seen or not.
     Parameters
     ----------
     file : str
         A fits file saved from a simulation.
+    badval : float
+        The value of the pixel considered as UNSEEN
+    rtol : float
+        Relative tolerance for badval
+    atol : float
+        Absolute tolerance for badval
 
     Returns
     -------
@@ -63,11 +69,11 @@ def get_seenmap(file):
     """
     simu = fits.open(file)
     map = simu['MAPS_RECON'].data
-    npix = np.shape(map)[1]
-    seenmap = np.full(npix, True, dtype=bool)
-
-    bla = np.mean(map, axis=(0, 2)) != hp.UNSEEN
-    seenmap *= bla
+    map_mean = np.mean(map, axis=(0, 2))
+    seenmap = hp.pixelfunc.mask_good(map_mean,
+                                     badval=badval,
+                                     rtol=rtol,
+                                     atol=atol)
     return seenmap
 
 
@@ -123,7 +129,7 @@ def get_patch(file, seenmap):
     return maps_recon_cut, maps_convo_cut, diff_cut
 
 
-def get_patch_many_files(rep_simu, name):
+def get_patch_many_files(rep_simu, name, badval=-1.6375e+30, rtol=1e-05, atol=1e-08):
     """
     Get all the patches you want to analyze from many fits files.
     Parameters
@@ -132,6 +138,12 @@ def get_patch_many_files(rep_simu, name):
         Repository where the fits files are.
     name : str
         Name of the files you are interested in.
+    badval : float
+        The value of the pixel considered as UNSEEN
+    rtol : float
+        Relative tolerance for badval
+    atol : float
+        Absolute tolerance for badval
     Returns
     -------
     A list with the names of all the files you took.
@@ -143,7 +155,7 @@ def get_patch_many_files(rep_simu, name):
     nfiles = len(all_fits)
     print('{} files have been found.'.format(nfiles))
 
-    seenmap = get_seenmap(all_fits[0])
+    seenmap = get_seenmap(all_fits[0], badval=badval, rtol=rtol, atol=atol)
 
     all_patch_recon = []
     all_patch_convo = []

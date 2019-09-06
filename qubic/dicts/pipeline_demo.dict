@@ -1,10 +1,10 @@
 ############################################# Instrument ################################
 debug = False #False/True # Boolean
 
-config = 'FI' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
-filter_nu = 150*1e9 # 150e9 or 220e9 Hz
+config = 'TD' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
+filter_nu = 150e9 # 150e9 or 220e9 Hz
 filter_relative_bandwidth = 0.25 
-beam_shape =  'multi_freq' # 'gaussian', 'fitted_beam', 'multi_freq'
+beam_shape = 'fitted_beam' # 'gaussian', 'fitted_beam', 'multi_freq'
 
 # multifreq instrument 
 MultiBand=True
@@ -24,7 +24,7 @@ detector_ngrids=1
 detector_tau=0.01
 polarizer=True
 synthbeam_fraction=0.99
-synthbeam_kmax=4
+synthbeam_kmax=8
 synthbeam_peak150_fwhm=0.39268176 # in degree
 ripples=False
 nripples=0
@@ -33,11 +33,12 @@ nripples=0
 
 optics='CalQubic_Optics_v3_CC_FFF.txt'
 primbeam='CalQubic_PrimBeam_v2.fits' # X=2 gaussian, 3 fitted, 4 multi frequency splines
-detarray='CalQubic_DetArray_CC.fits'
+#detarray='CalQubic_DetArray_P87_CC.fits' # this is only for TD.
+detarray='CalQubic_DetArray_CC.fits' # This can be used for TD and FI with the old number array
 hornarray='CalQubic_HornArray_CC.fits'
 
 ############################################# Scene ################################
-nside=64
+nside=128
 kind='IQU'
 absolute=False
 temperature=2.7255 # K for CMB, 300 K for TD in lab # 
@@ -56,7 +57,7 @@ longitude= -(66 + 28. / 60)   #ARGENTINA
 random_pointing=False   
 
 repeat_pointing=True
-npointings=1800
+npointings=300
 dtheta=4.
 nhwp_angles=3 # use only for repeat_pointing
 seed=1
@@ -71,6 +72,7 @@ maxpsi= 10 #deg
 fix_azimuth={'apply':True,'az':50,'el':50,'el_step':1, 'fix_hwp':True, 'fix_pitch':True}
 
 ############################################# Acquisition ##############################
+
 block=None
 effective_duration=1 #years
 noiseless=True

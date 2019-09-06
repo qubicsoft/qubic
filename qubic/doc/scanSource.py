@@ -1,6 +1,7 @@
 from __future__ import division, print_function
 import os
 import qubic
+from qubicpack.utilities import Qubic_DataDir
 import healpy as hp
 import numpy as np
 import pylab as plt
@@ -8,10 +9,21 @@ import matplotlib as mpl
 import sys
 
 
+def select_det(q,id):
+    id=[id]
+    detector_i = q.detector[id]
+    q.detector = detector_i
+    return(q)
+
+
 mpl.style.use('classic')
 name='test_scan_source'
 resultDir='%s'%name
 alaImager=True
+component=1 # Choose the component number to plot 
+sel_det=True #True if you want to use one detector, False if you want to use all detectors in focal plane
+id_det=232 # if sel_det == True, choose detector number
+oneComponent=False # True if you want to study only I component, otherwise False if you study IQU
 
 
 try:
@@ -19,37 +31,32 @@ try:
 except:
     pass
 
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
 # INSTRUMENT
 d = qubic.qubicdict.qubicDict()
-d.read_from_file(sys.argv[1])
+d.read_from_file(global_dir+'dicts/global_source_oneDet.dict')
 
 q = qubic.QubicMultibandInstrument(d)
-p= qubic.get_pointing(d)
+p = qubic.get_pointing(d)
 s = qubic.QubicScene(d)
-
-print('beam_shape =', d['beam_shape'])
 
 fix_azimuth=d['fix_azimuth']
 
+plt.clf()
 plt.figure(figsize=(12,8))
 plt.subplot(4,1,1)
-plt.plot(p.time,p.azimuth)
+plt.plot(p.time,p.azimuth, 'bo')
 plt.ylabel('Azimuth')
 plt.subplot(4,1,2)
-plt.plot(p.time,p.elevation)
+plt.plot(p.time,p.elevation, 'bo')
 plt.ylabel('Elevation')
 plt.subplot(4,1,3)
-plt.plot(p.time,p.pitch)
+plt.plot(p.time,p.pitch, 'bo')
 plt.ylabel('pitch angle')
 plt.subplot(4,1,4)
-plt.plot(p.time,p.angle_hwp)
+plt.plot(p.time,p.angle_hwp, 'bo')
 plt.ylabel('HWP angle')
-plt.savefig(resultDir+'/%s_pointing.png'%name,bbox_inches='tight')
-
-plt.clf()
-plt.close()
-
-
+#plt.savefig(resultDir+'/%s_pointing.png'%name,bbox_inches='tight')
 
 m0=np.zeros(12*d['nside']**2)
 x0=np.zeros((d['nf_sub'],len(m0),3))
@@ -78,7 +85,7 @@ Nbfreq, nus_edge, nus, deltas, Delta, Nbbands = qubic.compute_freq(d['filter_nu'
 arec = qubic.QubicMultibandAcquisition(q, p, s,d, nus_edge)
 out=arec.get_coverage()
 
-hp.mollview(out[0,:])
+hp.gnomview(out[0,:], rot=center, reso = 15)
 
 if alaImager==True:
     
@@ -88,7 +95,7 @@ if alaImager==True:
     s = qubic.QubicScene(d)
     arec = qubic.QubicMultibandAcquisition(q, p, s,d, nus_edge)
 
-maps_recon = arec.tod2map(TOD, tol=1e-3, maxiter=100000)
+maps_recon = arec.tod2map(TOD,d)
 
 TOD_useless, maps_convolved = arec.get_observation(x0)
 maps_convolved = np.array(maps_convolved)

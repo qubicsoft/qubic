@@ -49,7 +49,7 @@ def NameCalib(method, date = None):
 		signame = date + '_sigmacalibration'
 		return signame
 
-def Parameters(d, reso = 2.0, size = 200, which = 'all'):
+def Parameters(d, reso = 2.5, size = 200, which = 'all'):
 	"""
 	Define parameters used several times in the resolution
 

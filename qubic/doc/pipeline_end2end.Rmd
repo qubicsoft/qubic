@@ -22,7 +22,7 @@ Editing by Martin Gamboa, Louise Mousset, 2019/09/02
 
 ```{python}
 from IPython.display import Image
-# Image(filename="/home/martin/QUBIC/observ.jpg", width = 1000, height = 80)
+#Image(filename="/home/martin/QUBIC/observ.jpg", width = 1000, height = 80)
 ```
 
 ```{python}

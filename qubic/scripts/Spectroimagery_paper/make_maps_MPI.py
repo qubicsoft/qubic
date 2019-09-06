@@ -31,16 +31,20 @@ if rank == 0:
 today = datetime.datetime.now().strftime('%Y%m%d')
 
 # Repository for dictionary and input maps
-#global_dir = Qubic_DataDir(datafile='spectroimaging.dict')
-if sys.argv[4].lower() == 'no':
-    global_dir = Qubic_DataDir(datafile='spectroimaging.dict')
-    dictfilename = global_dir + '/spectroimaging.dict'
+if 'QUBIC_DATADIR' in os.environ:
+    pass
 else:
-    global_dir = Qubic_DataDir(datafile=sys.argv[4])
-    dictfilename = global_dir + '/' + sys.argv[4]
-dictmaps = global_dir + '/maps/'
+    raise NameError('You should define an environment variable QUBIC_DATADIR')
 
-# Repository for output maps
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+if sys.argv[4].lower() == 'no':
+    dictfilename = global_dir + '/dicts/spectroimaging.dict'
+else:
+    dictfilename = global_dir + '/dicts/' + sys.argv[4]
+
+dictmaps = global_dir + '/scripts/Spectroimagery_paper/maps/'
+
+# Repository for output files
 out_dir = sys.argv[1]
 if out_dir[-1] != '/':
     out_dir = out_dir + '/'
@@ -49,6 +53,7 @@ try:
 except:
     pass
 
+# Name of the simulation
 name = today + '_' + sys.argv[2]
 
 # Number of noise realisations
@@ -57,9 +62,10 @@ nreals = int(sys.argv[3])
 # Option multFactor x QU 
 multFactor = int(sys.argv[5])
 
+# Get the dictionary
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
-print(d)
+
 # Check nf_sub/nf_sub_rec is an integer
 nf_sub = d['nf_sub']
 for nf_sub_rec in d['nf_recon']:

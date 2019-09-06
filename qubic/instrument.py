@@ -898,9 +898,9 @@ class QubicInstrument(Instrument):
         val = np.array(primary_beam(theta, phi), dtype=float, copy=False)
         val[~np.isfinite(val)] = 0
         index = _argsort_reverse(val)
-        theta = theta[index]
-        phi = phi[index]
-        val = val[index]
+        theta = theta[tuple(index)]
+        phi = phi[tuple(index)]
+        val = val[tuple(index)]
         cumval = np.cumsum(val, axis=-1)
         imaxs = np.argmax(cumval >= synthbeam.fraction * cumval[:, -1, None],
                           axis=-1) + 1

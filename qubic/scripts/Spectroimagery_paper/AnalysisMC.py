@@ -94,7 +94,7 @@ def get_covcorr1pix(maps, ipix, verbose=False, stokesjoint=False):
     if type(ipix) != int:
         raise TypeError('ipix has to be an integer number')
 
-    nfrec = maps[0].shape[0]  # Sub-bands
+    nfrec = maps.shape[1]  # Sub-bands
     nreal = maps.shape[0]  # Sample realizations
 
     if verbose:

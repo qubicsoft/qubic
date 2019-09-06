@@ -94,7 +94,7 @@ def get_covcorr1pix(maps, ipix, verbose=False, stokesjoint=False):
     if type(ipix) != int:
         raise TypeError('ipix has to be an integer number')
 
-    nfrec = maps[0].shape[0]  # Sub-bands
+    nfrec = maps.shape[1]  # Sub-bands
     nreal = maps.shape[0]  # Sample realizations
 
     if verbose:
@@ -165,9 +165,9 @@ def get_covcorr_patch(patch, stokesjoint=False, doplot=False):
     corr = np.zeros((dim, dim, npix))
 
     for ipix in range(npix):
-        mat = get_covcorr1pix(patch, ipix, stokesjoint=stokesjoint)
-        cov[:, :, ipix] = mat[0][:, :]
-        corr[:, :, ipix] = mat[1][:, :]
+        cov1pix, corr1pix = get_covcorr1pix(patch, ipix, stokesjoint=stokesjoint)
+        cov[:, :, ipix] = cov1pix
+        corr[:, :, ipix] = corr1pix
 
     if doplot:
         plt.figure('Mean over pixels')
@@ -477,14 +477,19 @@ def get_rms_covarmean(nsubvals, seenmap, allmapsout, allmeanmat):
 
 def get_weighted_correlation_average(x, cov):
     """
+    Compute a weighted average taking into account the correlations between the variables.
+    The mean obtained is the one that has the minimal variance possible.
 
     Parameters
     ----------
-    x
-    cov
+    x : 1D array
+        Values you want to average.
+    cov : 2D array
+        Covariance matrix associated to the values in x.
 
     Returns
     -------
+    The weighted mean and the variance on that mean.
 
     """
     inv_cov = np.linalg.inv(cov)

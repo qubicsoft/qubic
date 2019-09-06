@@ -19,21 +19,37 @@ import SpectroImLib as si
 today = datetime.datetime.now().strftime('%Y%m%d')
 
 # Repository for dictionary and input maps
-global_dir = Qubic_DataDir(datafile='spectroimaging.dict')
-dictfilename = global_dir + '/spectroimaging.dict'
-dictmaps = global_dir + '/maps/'
+if 'QUBIC_DATADIR' in os.environ:
+    pass
+else:
+    raise NameError('You should define an environment variable QUBIC_DATADIR')
 
-# Repository for output maps
-out_dir = sys.argv[1]+'{}'.format(today)
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+print('global_dir', global_dir)
+if sys.argv[4].lower() == 'no':
+    dictfilename = global_dir + '/dicts/spectroimaging.dict'
+else:
+    dictfilename = global_dir + '/dicts/' + sys.argv[4]
+
+dictmaps = global_dir + '/scripts/Spectroimagery_paper/maps/'
+
+# Repository for output files
+out_dir = sys.argv[1]
+if out_dir[-1] != '/':
+    out_dir = out_dir + '/'
 try:
     os.makedirs(out_dir)
 except:
     pass
 
+# Name of the simulation
 name = today + '_' + sys.argv[2]
 
 # Number of noise realisations
 nreals = int(sys.argv[3])
+
+# Option multFactor x QU
+multFactor = int(sys.argv[5])
 
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
@@ -72,8 +88,8 @@ else:
 # x0[:, :, 0] = 0.
 
 # Multiply Q, U maps
-# x0[:, :, 1] *= 100
-# x0[:, :, 2] *= 100
+x0[:, :, 1] *= multFactor
+x0[:, :, 2] *= multFactor
 
 
 # ==== Pointing strategy ====

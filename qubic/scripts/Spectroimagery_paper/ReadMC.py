@@ -231,7 +231,7 @@ def pix2ang(ns, center, seenmap):
     return np.degrees(np.arccos(np.dot(v0, vpix)))
 
 
-def make_zones(patch, nzones, nside, center, seenmap, angle = False, verbose=True, doplot=True):
+def make_zones(patch, nzones, nside, center, seenmap, angle = False, dtheta=15., verbose=True, doplot=True):
     """
     Mask a path to get different concentric zones.
 
@@ -247,6 +247,11 @@ def make_zones(patch, nzones, nside, center, seenmap, angle = False, verbose=Tru
     seenmap : array
         Array of booleans of shape #pixels,
         True inside the patch and False outside.
+    angle : bool
+        If True, you make only 2 zones, inside and outside dtheta.
+    dtheta : float
+        Size of the patch were the pointing was done (degree),
+        by default it is 15°.
     doplot : bool
         If True, makes a plot with the different zones obtained.
 
@@ -265,7 +270,7 @@ def make_zones(patch, nzones, nside, center, seenmap, angle = False, verbose=Tru
     if not angle:
         angles_zone = np.linspace(0, np.max(ang), nzones + 1)[1:]
     elif angle:
-        angles_zone = np.array([4., np.max(ang)])
+        angles_zone = np.array([dtheta, np.max(ang)])
     
     angles_zone = np.insert(angles_zone, 0, 0.)
 

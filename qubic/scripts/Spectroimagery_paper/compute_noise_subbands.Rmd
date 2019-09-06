@@ -13,6 +13,7 @@ jupyter:
 ---
 
 ```{python}
+from __future__ import division, print_function
 import glob
 import os
 import healpy as hp
@@ -57,14 +58,14 @@ nf_recon = d['nf_recon']
 print('nf_recon', nf_recon)
 
 # This array will contain the sigma2 average over pixels
-sigma2mean = np.empty((len(nf_recon), 3))
-sigma2mean_bis = np.empty((len(nf_recon), 3))
+sigma2mean = np.zeros((len(nf_recon), 3))
+sigma2mean_bis = np.zeros((len(nf_recon), 3))
 ```
 
 ## Choose a number of reconstructed subbands
 
 ```{python}
-nfrec = 5
+nfrec = 3
 index_frec = nf_recon.index(nfrec)
 print('index_frec = ', index_frec)
 ```
@@ -74,12 +75,10 @@ print('index_frec = ', index_frec)
 ```{python}
 # Remember: get_patch_many_file do seen_map + read each map
 files, maps_recon, maps_conv, maps_diff = \
-rmc.get_maps_many_files(rep_simu+ date_name, '*nfrecon{}*False*'.format(nfrec))
+rmc.get_maps_many_files(rep_simu + date_name, '*nfrecon{}*False*'.format(nfrec))
 
 nreals=len(files)
-```
 
-```{python}
 print(maps_recon.shape)
 ```
 
@@ -87,9 +86,7 @@ print(maps_recon.shape)
 
 ```{python}
 _, maps_recon_patch, maps_conv_patch, maps_diff_patch = \
-rmc.get_patch_many_files(rep_simu+date_name, '*nfrecon{}*False*'.format(nfrec))
-
-print(maps_recon_patch.shape)
+rmc.get_patch_many_files(rep_simu + date_name, '*nfrecon{}*False*'.format(nfrec))
 
 npix_patch = maps_recon_patch.shape[2]
 print('npix_patch = ', npix_patch)
@@ -111,6 +108,7 @@ if nfrec==1:
         sigma2mean[index_frec, istokes] = np.sqrt(np.sum(sig2MC_1band[:, istokes])) / npix_patch     
     print(sigma2mean)
     sigma2mean_bis[index_frec, :] = sigma2mean[index_frec, :]
+    print(sigma2mean_bis)
     
     # Covariance matrix npix x npix
     cov_pix_1band = np.empty((npix_patch, npix_patch, 3))
@@ -124,7 +122,7 @@ if nfrec==1:
 
 ```{python}
 # The full one
-covariance, _ = amc.get_covcorr_patch(maps_recon_patch, stokesjoint=True)
+covariance, _ = amc.get_covcorr_patch(maps_recon_patch, stokesjoint=True, doplot=True)
 
 print(covariance.shape)
 
@@ -133,6 +131,13 @@ Cp = np.empty((nfrec, nfrec, 3, npix_patch))
 for istokes in range(3):
     Cp[:, :, istokes, :] = covariance[istokes*nfrec:(istokes+1)*nfrec, istokes*nfrec:(istokes+1)*nfrec, :]
 print(Cp.shape)
+
+# Look at the value in Cp and the determinant
+for ipix in range(10):
+    for istokes in range(3):
+        print(Cp[:, :, istokes, ipix])
+        det = np.linalg.det(Cp[:, :, istokes, ipix])
+        print(det)
 ```
 
 ### Average $C_p$ over pixels to get $C^{'}_p$
@@ -162,10 +167,6 @@ print(Cp_bis.shape)
 ## Weighted average over subbands
 
 
-```{python}
-# Set this True if you want to use Cp average over pixels in the weighted average
-Cp_2_Cpbis = True
-```
 
 ### Using $C_p$
 
@@ -177,7 +178,9 @@ for ireal in range(nreals):
     for ipix in range(npix_patch):
         for istokes in range(3):
             x = maps_recon_patch[ireal, :, ipix, istokes]
-            pr[ireal, ipix, istokes], sig2pr[ipix, istokes] = amc.get_weighted_correlation_average(x, Cp[:, :, istokes, ipix])
+            # Only do it if the matrix is not singular...
+            if np.linalg.det(Cp[:, :, istokes, ipix])!=0.:
+                pr[ireal, ipix, istokes], sig2pr[ipix, istokes] = amc.get_weighted_correlation_average(x, Cp[:, :, istokes, ipix])
 
 print(pr.shape)
 
@@ -191,7 +194,7 @@ for istokes in range(3):
     cov_pix[:, :, istokes] = np.cov(pr[:, :, istokes], rowvar=False)
     plt.subplot(1, 3, istokes+1)
     plt.imshow(cov_pix[:, :, istokes])
-#     plt.colorbar()
+    plt.colorbar()
 ```
 
 ### Using $C^{'}_p$
@@ -224,22 +227,26 @@ for istokes in range(3):
 ## Plots
 
 ```{python}
-print(sigma2mean)
-print(sigma2mean_bis)
+print(sigma2mean[:, :])
+print(sigma2mean_bis[:, :])
 ```
 
 ```{python}
-arrx = np.array(['1 sb','3 sb','5 sb'])
+# arrx = np.array(['1 sb','3 sb','5 sb'])
 stokes = ['I', 'Q', 'U']
 for istokes in range(3):
     plt.subplot(1, 3, istokes+1)
     plt.subplots_adjust(right=2)
     plt.title(stokes[istokes] + ' using Cp av over pix')
     plt.xlabel('nf_recon')
-    plt.ylabel('$\sigma^2$ average over pix')
-    plt.plot(arrx, sigma2mean[:, istokes], label='using Cp')
-    plt.plot(arrx, sigma2mean_bis[:, istokes], label='using Cp av over pix')
+    plt.ylabel('$\sqrt{\sum_p\sigma^2_p}$')
+    plt.plot(nf_recon, sigma2mean[:, istokes], 'r', label='using Cp')
+    plt.plot(nf_recon, sigma2mean_bis[:, istokes], 'b', label='using Cp av over pix')
     plt.legend(loc='best')
+```
+
+```{python}
+
 ```
 
 ```{python}

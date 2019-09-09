@@ -5,9 +5,9 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.1'
-      jupytext_version: 1.2.1
+      jupytext_version: 1.1.0
   kernelspec:
-    display_name: Python 2
+    display_name: Python [default]
     language: python
     name: python2
 ---
@@ -33,6 +33,7 @@ import fibtools as ft
 import demodulation_lib as dl
 import sb_fitting as sbfit
 import jchinstrument as jcinst
+import os
 
 
 ```
@@ -180,7 +181,7 @@ def do_some_dets(detnums, d, directory, fittedpeaksfile, custom=False,
         else:
             peaknums = usepeaks
         data = np.array([allthetas_Q[:,peaknums], allphis_Q[:,peaknums], allvals_Q[:,peaknums]])
-        file = open('/Users/hamilton/Qubic/RealistcReconstruction/peaks.pk', 'wb')
+        file = open(os.environ['QUBIC_PEAKS']+'peaks.pk', 'wb')
         pickle.dump(data, file)
         file.close()
     

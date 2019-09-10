@@ -12,17 +12,6 @@ jupyter:
     name: python3
 ---
 
-```{python}
-from pylab import *
-import numpy as np
-import healpy as hp
-# %matplotlib inline
-from matplotlib import rc
-rc('figure',figsize=(10,10))
-rc('font',size=20)
-rc('text',usetex=False)
-```
-
 # QUBIC Synthesized Beam
 This notebook aims at showing how to obtain the QUBIC Synthesized beam for a given set of horns accounting for various effets (detector size, bandwidth...).
 
@@ -31,14 +20,36 @@ This notebook aims at showing how to obtain the QUBIC Synthesized beam for a giv
 The basic object in QUBIC simulaiton software is called a QubicInstrument, it contains all the description of the instrument that can be easily modified upon creation of the object but for which there are default values so that it can be called with just a few arguments.
 
 ```{python}
-from qubic import QubicInstrument
+from pylab import *
+import numpy as np
+import healpy as hp
+
+# %matplotlib inline
+
+from matplotlib import rc
+rc('figure',figsize=(10,10))
+rc('font',size=20)
+rc('text',usetex=False)
+```
+
+```{python}
+from qubicpack.utilities import Qubic_DataDir
+import qubic
+```
+
+```{python}
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir='../')
+dictfilename = global_dir + 'dicts/pipeline_demo.dict'
+
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
 ```
 
 Note that in the current notebook we will use a slightly modified version of the QubicInstrument that has not yet been commited on the Git repository so we have to import it specifically.
 
 ```{python}
-import myinstrument
-inst = myinstrument.QubicInstrument(filter_nu=150e9)
+# import myinstrument
+inst = QubicInstrument(d)
 ```
 
 ### The QubicScene
@@ -46,8 +57,8 @@ It is also important to create an obkect called QubicScene that descibes the env
 
 ```{python}
 from qubic import QubicScene
-nside = 512
-scene = QubicScene(nside)
+d['nside'] = 512
+scene = QubicScene(d)
 ```
 
 ### Looking at the detector array
@@ -69,7 +80,7 @@ Similarly one can have access to the horn array:
 centers = inst.horn.center[:,0:2]
 col = inst.horn.column
 row = inst.horn.row
-for i in xrange(len(centers)):
+for i in range(len(centers)):
     text(centers[i,0]-0.006, centers[i,1], 'c{0:}'.format(col[i]), color='r',fontsize=6)
     text(centers[i,0]+0.001, centers[i,1], 'r{0:}'.format(row[i]), color='b',fontsize=6)
 inst.horn.plot()
@@ -82,6 +93,7 @@ The inst.horn.open object returns the list of horns that are open or closed. It 
 
 ```{python}
 ### Horns for First Instrument
+d['config'] = 'FI'
 hornsFI = inst.horn.open
 
 ### Horns for TD
@@ -89,10 +101,12 @@ hornsTD = (col >= 8) & (col <= 15) & (row >= 8) & (row <= 15)
 
 
 #### Now create First Instrument and TD monochromatic
-instFI = myinstrument.QubicInstrument(filter_nu=150e9)
+
+instFI = QubicInstrument(d)
 instFI.horn.open[~hornsFI] = False
 
-instTD = myinstrument.QubicInstrument(filter_nu=150e9)
+d['config'] = 'TD'
+instTD = QubicInstrument(d)
 instTD.horn.open[~hornsTD] = False
 ```
 
@@ -104,15 +118,15 @@ The QubicInstrument object has a method that calculates the synthesized beam for
 ```{python}
 # Detector number
 idet = 231
-sbidealFI = instFI[idet].get_synthbeam(scene)[0]
-sbidealTD = instTD[idet].get_synthbeam(scene)[0]
+sbidealFI = inst[idet].get_synthbeam(scene)[0]
+# sbidealTD = instTD[idet].get_synthbeam(scene)[0]
 
 clf()
 mini=-30
 hp.gnomview(np.log10(sbidealFI/np.max(sbidealFI))*10, rot=[0,90], reso=5, 
 	sub=(1,2,1), title='First Instrument', min=mini, max=0)
-hp.gnomview(np.log10(sbidealTD/np.max(sbidealTD))*10, rot=[0,90], reso=5, 
-	sub=(1,2,2), title='Technological Demonstrator', min=mini, max=0)
+# hp.gnomview(np.log10(sbidealTD/np.max(sbidealTD))*10, rot=[0,90], reso=5, 
+# 	sub=(1,2,2), title='Technological Demonstrator', min=mini, max=0)
 ```
 
 ### Integration over the pixel area
@@ -121,16 +135,16 @@ Integration over the pixel area is implemented in the function get_synthbeam(), 
 ```{python}
 nsub = 4
 idet = 231
-sbidealFI = instFI[idet].get_synthbeam(scene, detector_integrate=nsub)[0]
-sbidealTD = instTD[idet].get_synthbeam(scene, detector_integrate=nsub)[0]
+sbidealFI = inst[idet].get_synthbeam(scene, detector_integrate=nsub)[0]
+# sbidealTD = instTD[idet].get_synthbeam(scene, detector_integrate=nsub)[0]
 
 figure()
 clf()
 mini=-30
 hp.gnomview(np.log10(sbidealFI/np.max(sbidealFI))*10, rot=[0,90], reso=5, 
 	sub=(1,2,1), title='First Instrument', min=mini, max=0)
-hp.gnomview(np.log10(sbidealTD/np.max(sbidealTD))*10, rot=[0,90], reso=5, 
-	sub=(1,2,2), title='Technological Demonstrator', min=mini, max=0)
+# hp.gnomview(np.log10(sbidealTD/np.max(sbidealTD))*10, rot=[0,90], reso=5, 
+# 	sub=(1,2,2), title='Technological Demonstrator', min=mini, max=0)
 
 ```
 
@@ -158,8 +172,8 @@ def getsb(hornsOK, nu0, idet, dnu_nu=None, detector_integrate=None, nsubnus = 1,
 
 nsub = 4
 idet = 231
-sbidealFI_150 = getsb(hornsFI, 150., idet, dnu_nu=0.25, nsubnus=10, detector_integrate=nsub, nside=nside)
-sbidealTD_150 = getsb(hornsTD, 150., idet, dnu_nu=0.25, nsubnus=10, detector_integrate=nsub, nside=nside)
+sbidealFI_150 = getsb(hornsFI, 150., idet, dnu_nu=0.25, detector_integrate=nsub, nside=d['nside'])
+# sbidealTD_150 = getsb(hornsTD, 150., idet, dnu_nu=0.25, nsubnus=10, detector_integrate=nsub, nside=d['nside'])
 
 clf()
 reso = 7.
@@ -168,10 +182,10 @@ mapFI = hp.gnomview(np.log10(sbidealFI_150/np.max(sbidealFI_150))*10,
                     rot=[0,90], reso=reso, 
                     sub=(1,2,1), title='FI - 150 GHz - Det + Nu Integ.', 
                     min=mini, max=0, return_projected_map=True)
-mapTD = hp.gnomview(np.log10(sbidealTD_150/np.max(sbidealTD_150))*10, 
-                    rot=[0,90], reso=reso, 
-                    sub=(1,2,2), title='TD - 150 GHz - Det + Nu Integ.', 
-                    min=mini, max=0, return_projected_map=True)
+# mapTD = hp.gnomview(np.log10(sbidealTD_150/np.max(sbidealTD_150))*10, 
+#                     rot=[0,90], reso=reso, 
+#                     sub=(1,2,2), title='TD - 150 GHz - Det + Nu Integ.', 
+#                     min=mini, max=0, return_projected_map=True)
 ```
 
 ## Studying the beam

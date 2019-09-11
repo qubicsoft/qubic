@@ -38,7 +38,7 @@ detarray='CalQubic_DetArray_CC.fits' # This can be used for TD and FI with the o
 hornarray='CalQubic_HornArray_CC.fits'
 
 ############################################# Scene ################################
-nside=128
+nside=64
 kind='IQU'
 absolute=False
 temperature=2.7255 # K for CMB, 300 K for TD in lab # 

@@ -557,7 +557,8 @@ So it may be worth trying to explore these three number and try to see if there 
 ### Can we fit the three parameters using this RMS (or vsariance) as a metric ?
 class mymaskedmap:
     def __init__(self, detnums, d, directory, fittedpeakfile, globalmask, 
-                 custom=True, nside=256, tol=1e-3, refit=False, angdist_large=10, angdist_small=1.5):
+                 custom=True, nside=256, tol=1e-3, refit=False, angdist_large=10, angdist_small=1.5,
+                 scaling=1.):
         self.detnums = detnums
         self.d = d
         self.directory = directory
@@ -570,6 +571,7 @@ class mymaskedmap:
         self.angdist_small = angdist_small
         self.globalmask = globalmask
         self.allvec = hp.pix2vec(self.nside,arange(12*self.nside**2))
+        self.scaling = scaling
         
     def __call__(self, x, angs):
         print('')
@@ -583,6 +585,7 @@ class mymaskedmap:
         cosang = np.degrees(np.arccos(np.dot(vecmaxpix, allvec)))
         newmask = (cosang < self.angdist_large) & (cosang > self.angdist_small)
         maprec *= newmask
+        maprec *= self.scaling
         print('In Function: chisquare = ',np.sum(maprec**2))
         return maprec
 
@@ -610,10 +613,11 @@ hp.gnomview(mm, rot=center, reso=20, min=-0.02, max=0.02)
 
 ```{python}
 essai = mymaskedmap(detnums, d, directory, fittedpeakfile, mask, tol=1e-2)
-nnth=9
-nnph=11
-thvals = np.linspace(87,93,nnth)
-phvals = np.linspace(-3,3,nnph)
+#mm = essai(2,np.array([np.radians(0.), np.radians(90.), np.radians(0.)]))
+nnth=51
+nnph=51
+thvals = np.linspace(85,95,nnth)
+phvals = np.linspace(-5,5,nnph)
 ch2 = np.zeros((nnph,nnth))
 for i in range(nnth):
     print(i)
@@ -628,7 +632,10 @@ for i in range(nnth):
 ```
 
 ```{python}
-imshow(ch2, extent=[np.min(thvals), np.max(thvals), np.min(phvals), np.max(phvals)])
+import scipy.ndimage.filters as scf
+
+imshow(scf.gaussian_filter(ch2,2.), extent=[np.min(thvals), np.max(thvals), np.min(phvals), np.max(phvals)]
+       ,vmin=0.03, vmax=0.04)
 xlabel('theta')
 ylabel('phi0')
 colorbar()
@@ -658,7 +665,7 @@ colorbar()
 reload(jcinst)
 reload(ft)
 delta = 3. # degrees
-mapfct = mymaskedmap(detnums, d, directory, fittedpeakfile, mask, tol=1e-1)
+mapfct = mymaskedmap(detnums, d, directory, fittedpeakfile, mask, tol=1e-2, scaling=1000)
 zeromap = np.zeros(12*256**2)
 guess = np.array([np.radians(0), np.radians(90), np.radians(0)])
 rangepars = np.array([[np.radians(-delta), np.radians(delta)], 

@@ -265,7 +265,7 @@ def make_zones(patch, nzones, nside, center, seenmap, angle = False, verbose=Tru
     if not angle:
         angles_zone = np.linspace(0, np.max(ang), nzones + 1)[1:]
     elif angle:
-        angles_zone = np.array([4., np.max(ang)])
+        angles_zone = np.array([15., np.max(ang)])
     
     angles_zone = np.insert(angles_zone, 0, 0.)
 

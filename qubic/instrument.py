@@ -979,7 +979,7 @@ class QubicInstrument(Instrument):
         if external_A is None:
             uvec = position / np.sqrt(np.sum(position ** 2, axis=-1))[..., None]
             thetaphi = Cartesian2SphericalOperator('zenith,azimuth')(uvec)
-            sr = area / position[..., 2] ** 2 * np.cos(thetaphi[..., 0]) ** 3
+            sr = np.abs(- area / position[..., 2] ** 2 * np.cos(thetaphi[..., 0]) ** 3)
             tr = np.sqrt(secondary_beam(thetaphi[..., 0], thetaphi[..., 1]) *
                          sr / secondary_beam.solid_angle)[..., None]
             const = 2j * np.pi * nu / c

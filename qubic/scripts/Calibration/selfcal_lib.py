@@ -8,6 +8,9 @@ import healpy as hp
 import pandas as pd
 import qubic
 import matplotlib.pyplot as plt
+from astropy.io import fits
+
+from qubicpack.utilities import Qubic_DataDir
 from qubicpack.pixel_translation import make_id_focalplane, tes2index
 
 __all__ = ['SelfCalibration']
@@ -34,6 +37,8 @@ class SelfCalibration:
         self.baseline = baseline
         self.dead_switches = dead_switches
         self.d = d
+        # Replace CC by TD or FI
+        d['detarray'] = d['detarray'].replace(d['detarray'][-7:-5], d['config'])
 
         if len(self.baseline) != 2:
             raise ValueError('The baseline should contain 2 horns.')
@@ -43,6 +48,16 @@ class SelfCalibration:
         for i in self.dead_switches:
             if i < 1 or i > 64:
                 raise ValueError('Horns indices must be in [1, 64].')
+
+    def get_dead_detectors(self):
+        calfile_path = Qubic_DataDir(datafile=self.d['detarray'])
+        calfile = fits.open(calfile_path + '/' + self.d['detarray'])
+        if self.d['detarray'] == 'CalQubic_DetArray_P87_TD.fits':
+            dead_detectors = calfile['removed'].data
+            # dead_detectors = np.where(dead_detectors==1, np.nan, dead_detectors)
+            return dead_detectors
+        else:
+            print('There is no dead detectors in this calfile')
 
     def get_power_combinations(self, q, theta=np.array([0.]), phi=np.array([0.]),
                                spectral_irradiance=1.,
@@ -80,7 +95,7 @@ class SelfCalibration:
         q.horn.open = True
         if self.dead_switches is not None:
             q.horn.open[self.dead_switches] = False
-        S = SelfCalibration.get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
+        S = get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
         if doplot:
             plt.figure()
             plt.subplot(4, 4, 1)
@@ -96,7 +111,7 @@ class SelfCalibration:
         if self.dead_switches is not None:
             q.horn.open[self.dead_switches] = False
         q.horn.open[self.baseline[0] - 1] = False
-        Cminus_i = SelfCalibration.get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
+        Cminus_i = get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
         if doplot:
             plt.subplot(4, 4, 3)
             q.horn.plot()
@@ -111,7 +126,7 @@ class SelfCalibration:
         if self.dead_switches is not None:
             q.horn.open[self.dead_switches] = False
         q.horn.open[self.baseline[1] - 1] = False
-        Cminus_j = SelfCalibration.get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
+        Cminus_j = get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
         if doplot:
             plt.subplot(4, 4, 5)
             q.horn.plot()
@@ -127,7 +142,7 @@ class SelfCalibration:
             q.horn.open[self.dead_switches] = False
         q.horn.open[self.baseline[0] - 1] = False
         q.horn.open[self.baseline[1] - 1] = False
-        Sminus_ij = SelfCalibration.get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
+        Sminus_ij = get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
         if doplot:
             plt.subplot(4, 4, 7)
             q.horn.plot()
@@ -142,7 +157,7 @@ class SelfCalibration:
         if self.dead_switches is not None:
             q.horn.open[self.dead_switches] = False
         q.horn.open[self.baseline[0] - 1] = True
-        Ci = SelfCalibration.get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
+        Ci = get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
         if doplot:
             plt.subplot(4, 4, 9)
             q.horn.plot()
@@ -155,7 +170,7 @@ class SelfCalibration:
         # Only j open (not a realistic observable)
         q.horn.open = False
         q.horn.open[self.baseline[1] - 1] = True
-        Cj = SelfCalibration.get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
+        Cj = get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
         if doplot:
             plt.subplot(4, 4, 11)
             q.horn.plot()
@@ -169,7 +184,7 @@ class SelfCalibration:
         q.horn.open = False
         q.horn.open[self.baseline[0] - 1] = True
         q.horn.open[self.baseline[1] - 1] = True
-        Sij = SelfCalibration.get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
+        Sij = get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
         if doplot:
             plt.subplot(4, 4, 13)
             q.horn.plot()
@@ -435,16 +450,17 @@ def index2TESandASIC(index):
 
     return TES, ASIC
 
+
 def tes_signal2image_fp(tes_signal):
     thermos = [4, 36, 68, 100]
     image_fp = np.empty((34, 34))
     image_fp[:] = np.nan
     for ASIC in range(8):
         for TES in range(128):
-            print(TES+1, ASIC+1)
-            if TES+1 not in thermos:
-                index = tes2index(TES+1, ASIC+1)
-                image_fp[index//34, index%34] = tes_signal[TES, ASIC]
+            print(TES + 1, ASIC + 1)
+            if TES + 1 not in thermos:
+                index = tes2index(TES + 1, ASIC + 1)
+                image_fp[index // 34, index % 34] = tes_signal[TES, ASIC]
     return (image_fp)
 
 
@@ -459,7 +475,7 @@ def image_fp2tes_signal(full_real_fp):
             for j in range(34):
                 TES, ASIC = index2TESandASIC(index)
                 if TES != 0:
-                    tes_signal[TES-1, ASIC-1] = full_real_fp[i, j]
+                    tes_signal[TES - 1, ASIC - 1] = full_real_fp[i, j]
                 index += 1
         return tes_signal
 
@@ -481,7 +497,7 @@ def get_real_fp(full_fp, quadrant=None):
     """
     # Decrease the resolution to the one of the FP
     if np.shape(full_fp) != (34, 34):
-        full_real_fp = cv2.resize(full_fp, (34, 34)) # Not sure this function is the best
+        full_real_fp = cv2.resize(full_fp, (34, 34))  # Not sure this function is the best
     else:
         full_real_fp = np.copy(full_fp)
 

@@ -8,6 +8,8 @@ import pandas as pd
 import qubic
 from matplotlib.pyplot import *
 from qubicpack import qubicpack as qp
+from qubicpack.pixel_translation import make_id_focalplane, plot_id_focalplane
+
 from qubicpack.pix2tes import pix2tes, tes2pix, assign_pix_grid
 
 __all__ = ['SelfCalibration']
@@ -403,12 +405,12 @@ class SelfCalibration:
             for c in range(17):
                 pix = pix_grid[l, c]
                 if pix != 0.:
-                    tes,asic = pix2tes(pix)
-                    if asic==2: # ASIC2 goes from 1-128
+                    tes, asic = pix2tes(pix)
+                    if asic == 2:  # ASIC2 goes from 1-128
                         tes_signal[tes - 1] = image_fp[l, c]
-                    else: # ASIC1 goes from 129-256
+                    else:  # ASIC1 goes from 129-256
                         tes_signal[tes - 1 + 128] = image_fp[l, c]
-                        
+
         return tes_signal
 
     @staticmethod
@@ -448,32 +450,6 @@ class SelfCalibration:
                 image_fp[coord[0], coord[1]] = signal
 
         return image_fp
-
-    @staticmethod
-    def full2quarter(full_fp):
-        """
-        Reduce a complete focal plane to a quarter.
-        We also make a rotation to be coherent with QubicStudio..
-        Parameters
-        ----------
-        full_fp : array of shape (34, 34)
-            Power on the total focal plane for each pointing.
-
-        Returns
-        ----------
-        quart_fp : array of shape (17, 17)
-            The power on a quarter of the focal plane
-
-        """
-        if np.shape(full_fp) != (34, 34):
-            raise ValueError('The complete focal plane must be 34*34')
-
-        pix_grid = assign_pix_grid()
-        focal_plan = np.where(pix_grid > 0, 1, pix_grid)
-        quart_fp = np.rot90(full_fp[:17, :17], 3) * focal_plan
-        quart_fp[quart_fp == 0.] = np.nan
-
-        return quart_fp
 
     @staticmethod
     def get_power_on_array(q, theta=np.array([0.]), phi=np.array([0.]), spectral_irradiance=1.,
@@ -516,3 +492,54 @@ class SelfCalibration:
         power = np.fliplr(power)  # There is a symmetry bug, need to flip it
 
         return power
+
+
+def get_real_fp(full_fp, quadrant=None):
+    """
+    Return the real focal plane.
+    Parameters
+    ----------
+    full_fp : 2D array
+        Image of the focal plane with a resolution.
+    quadrant : int
+        If you only want one quadrant of the focal plane,
+        you can choose one in [1, 2, 3, 4]
+
+    Returns
+    -------
+
+    """
+    # Decrease the resolution to the one of the FP
+    if np.shape(full_fp) != (34, 34):
+        full_real_fp = cv2.resize(full_fp, (34, 34))
+    else:
+        full_real_fp = np.copy(full_fp)
+
+    FPidentity = make_id_focalplane()
+    tes = np.reshape(FPidentity.TES, (34, 34))
+    quad = np.reshape(FPidentity.quadrant, (34, 34))
+
+    if quadrant is None:
+        # Put the pixels that are not TES to NAN
+        full_real_fp = np.where(tes == 0, np.nan, full_real_fp)
+        return full_real_fp
+
+    else:
+        if quadrant not in [1, 2, 3, 4]:
+            raise ValueError('quadrant must be 1, 2, 3 or 4')
+        else:
+            # Put the pixels that are not TES to 0
+            full_real_fp = np.where(tes == 0, 0, full_real_fp)
+
+            # Put the pixels outside the quadrant to NAN
+            full_real_fp = np.where(quad != quadrant, np.nan, full_real_fp)
+
+            # Get only one quadrant
+            quart_fp = full_real_fp[~np.isnan(full_real_fp)]
+            quart_fp = np.reshape(quart_fp, (17, 17))
+
+            # Replace 0 by NAN in the corners
+            full_real_fp = np.where(full_real_fp == 0, np.nan, full_real_fp)
+            quart_fp = np.where(quart_fp == 0, np.nan, quart_fp)
+
+            return full_real_fp, quart_fp

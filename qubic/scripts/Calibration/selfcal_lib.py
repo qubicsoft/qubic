@@ -54,7 +54,8 @@ class SelfCalibration:
         calfile = fits.open(calfile_path + '/' + self.d['detarray'])
         if self.d['detarray'] == 'CalQubic_DetArray_P87_TD.fits':
             dead_detectors = calfile['removed'].data
-            # dead_detectors = np.where(dead_detectors==1, np.nan, dead_detectors)
+            dead_detectors = np.where(dead_detectors == 1, np.nan, dead_detectors)
+            dead_detectors = np.where(dead_detectors == 0, 1, dead_detectors)
             return dead_detectors
         else:
             print('There is no dead detectors in this calfile')
@@ -196,7 +197,18 @@ class SelfCalibration:
 
         return S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij
 
-    def get_fringes_fp_TD(self, quadrant=3, theta=np.array([0.]), phi=np.array([0.]), spectral_irradiance=1.):
+    def compute_fringes(self, theta=np.array([0.]), phi=np.array([0.]), reso=34, spectral_irradiance=1.):
+        q = qubic.QubicMultibandInstrument(self.d)
+
+        S_tot, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = \
+            SelfCalibration.get_power_combinations(self, q[0], theta=theta, phi=phi, reso=reso,
+                                                   spectral_irradiance=spectral_irradiance,
+                                                   doplot=False)
+        fringes = (S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
+        return fringes
+
+
+    def compute_fringesTD(self, quadrant=3, theta=np.array([0.]), phi=np.array([0.]), spectral_irradiance=1.):
         """
         Computes the fringe signals in each TES for point source.
         The sources moves and we compute the fringes for each pointing
@@ -227,8 +239,7 @@ class SelfCalibration:
                                                    spectral_irradiance=spectral_irradiance,
                                                    doplot=False)
         nptg = np.shape(S_tot)[2]
-        fringes = np.empty((17, 17, nptg))
-        tes_fringes_signal = np.empty((128, 8, nptg))
+        fringesTD = np.empty_like(S_tot)
         for ptg in range(nptg):
             S_tot4, _ = get_real_fp(S_tot[:, :, ptg], quadrant=quadrant)
             Cminus_i4, _ = get_real_fp(Cminus_i[:, :, ptg], quadrant=quadrant)
@@ -236,11 +247,9 @@ class SelfCalibration:
             Sminus_ij4, _ = get_real_fp(Sminus_ij[:, :, ptg], quadrant=quadrant)
             Ci4, _ = get_real_fp(Ci[:, :, ptg], quadrant=quadrant)
 
-            fringes[:, :, ptg] = (S_tot4 - Cminus_i4 - Cminus_j4 + Sminus_ij4) / Ci4
+            fringesTD[:, :, ptg] = (S_tot4 - Cminus_i4 - Cminus_j4 + Sminus_ij4) / Ci4
 
-            tes_fringes_signal[:, :, ptg] = image_fp2tes_signal(fringes[:, :, ptg])
-
-        return tes_fringes_signal
+        return fringesTD
 
     def get_power_fp_aberration(self, rep, doplot=True, theta_source=0., freq_source=150., indep_config=None):
         """
@@ -505,27 +514,17 @@ def get_real_fp(full_fp, quadrant=None):
     tes = np.reshape(FPidentity.TES, (34, 34))
     quad = np.reshape(FPidentity.quadrant, (34, 34))
 
+    # Put the pixels that are not TES to NAN
+    full_real_fp = np.where(tes == 0, np.nan, full_real_fp)
     if quadrant is None:
-        # Put the pixels that are not TES to NAN
-        full_real_fp = np.where(tes == 0, np.nan, full_real_fp)
         return full_real_fp
 
     else:
         if quadrant not in [1, 2, 3, 4]:
             raise ValueError('quadrant must be 1, 2, 3 or 4')
         else:
-            # Put the pixels that are not TES to 0
-            full_real_fp = np.where(tes == 0, 0, full_real_fp)
-
-            # Put the pixels outside the quadrant to NAN
-            full_real_fp = np.where(quad != quadrant, np.nan, full_real_fp)
-
             # Get only one quadrant
-            quart_fp = full_real_fp[~np.isnan(full_real_fp)]
-            quart_fp = np.reshape(quart_fp, (17, 17))
-
-            # Replace 0 by NAN in the corners
-            full_real_fp = np.where(full_real_fp == 0, np.nan, full_real_fp)
-            quart_fp = np.where(quart_fp == 0, np.nan, quart_fp)
+            quart = full_real_fp[np.where(quad != 2, 6, full_real_fp) != 6]
+            quart_fp = np.reshape(quart, (17, 17))
 
             return full_real_fp, quart_fp

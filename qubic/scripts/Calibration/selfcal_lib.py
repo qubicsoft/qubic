@@ -8,7 +8,7 @@ import pandas as pd
 import qubic
 from matplotlib.pyplot import *
 from qubicpack import qubicpack as qp
-from qubicpack.pixel_translation import make_id_focalplane, plot_id_focalplane
+from qubicpack.pixel_translation import make_id_focalplane, tes2index, plot_id_focalplane
 
 from qubicpack.pix2tes import pix2tes, tes2pix, assign_pix_grid
 
@@ -183,7 +183,7 @@ class SelfCalibration:
 
         return S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij
 
-    def get_fringes_fp_TD(self, theta=np.array([0.]), phi=np.array([0.]), spectral_irradiance=1.):
+    def get_fringes_fp_TD(self, quadrant=3, theta=np.array([0.]), phi=np.array([0.]), spectral_irradiance=1.):
         """
         Computes the fringe signals in each TES for point source.
         The sources moves and we compute the fringes for each pointing
@@ -191,6 +191,9 @@ class SelfCalibration:
 
         Parameters
         ----------
+        quadrant: int
+            Quadrant of the focal plane in [1, 2, 3, 4].
+            By default it is 3 as for the TD.
         theta : array-like of shape (#pointings,)
             The source zenith angle [rad].
         phi : array-like of shape (#pointings,)
@@ -214,11 +217,11 @@ class SelfCalibration:
         fringes = np.empty((17, 17, nptg))
         tes_fringes_signal = np.empty((256, nptg))
         for ptg in range(nptg):
-            S_tot4 = SelfCalibration.full2quarter(S_tot[:, :, ptg])
-            Cminus_i4 = SelfCalibration.full2quarter(Cminus_i[:, :, ptg])
-            Cminus_j4 = SelfCalibration.full2quarter(Cminus_j[:, :, ptg])
-            Sminus_ij4 = SelfCalibration.full2quarter(Sminus_ij[:, :, ptg])
-            Ci4 = SelfCalibration.full2quarter(Ci[:, :, ptg])
+            S_tot4, _ = get_real_fp(S_tot[:, :, ptg], quadrant=quadrant)
+            Cminus_i4, _ = get_real_fp(Cminus_i[:, :, ptg], quadrant=quadrant)
+            Cminus_j4, _ = get_real_fp(Cminus_j[:, :, ptg], quadrant=quadrant)
+            Sminus_ij4, _ = get_real_fp(Sminus_ij[:, :, ptg], quadrant=quadrant)
+            Ci4, _ = get_real_fp(Ci[:, :, ptg], quadrant=quadrant)
 
             fringes[:, :, ptg] = (S_tot4 - Cminus_i4 - Cminus_j4 + Sminus_ij4) / Ci4
 
@@ -451,48 +454,57 @@ class SelfCalibration:
 
         return image_fp
 
-    @staticmethod
-    def get_power_on_array(q, theta=np.array([0.]), phi=np.array([0.]), spectral_irradiance=1.,
-                           reso=34, xmin=-0.06, xmax=0.06):
-        """
-        Compute power on the focal plane for different positions of the source
-        with respect to the instrument.
+def get_power_on_array(q, theta=np.array([0.]), phi=np.array([0.]), spectral_irradiance=1.,
+                       reso=34, xmin=-0.06, xmax=0.06):
+    """
+    Compute power on the focal plane for different positions of the source
+    with respect to the instrument.
 
-        Parameters
-        ----------
-        q : a qubic monochromatic instrument
-        theta : array-like
-            The source zenith angle [rad].
-        phi : array-like
-            The source azimuthal angle [rad].
-        spectral_irradiance : array-like
-            The source spectral_irradiance [W/m^2/Hz].
-        reso : int
-            Pixel number on one side on the focal plane image
-        xmin : float
-            Position of the border of the focal plane to the center [m]
-        xmax : float
-            Position of the opposite border of the focal plane to the center [m]
+    Parameters
+    ----------
+    q : a qubic monochromatic instrument
+    theta : array-like
+        The source zenith angle [rad].
+    phi : array-like
+        The source azimuthal angle [rad].
+    spectral_irradiance : array-like
+        The source spectral_irradiance [W/m^2/Hz].
+    reso : int
+        Pixel number on one side on the focal plane image
+    xmin : float
+        Position of the border of the focal plane to the center [m]
+    xmax : float
+        Position of the opposite border of the focal plane to the center [m]
 
-        Returns
-        ----------
-        power : array of shape (reso, reso, #pointings)
-            The power on the focal plane for each pointing.
-        """
-        nptg = len(theta)
-        xx, yy = np.meshgrid(np.linspace(xmin, xmax, reso), np.linspace(xmin, xmax, reso))
-        x1d = np.ravel(xx)
-        y1d = np.ravel(yy)
-        z1d = x1d * 0 - 0.3
-        position = np.array([x1d, y1d, z1d]).T
+    Returns
+    ----------
+    power : array of shape (reso, reso, #pointings)
+        The power on the focal plane for each pointing.
+    """
+    nptg = len(theta)
+    xx, yy = np.meshgrid(np.linspace(xmin, xmax, reso), np.linspace(xmin, xmax, reso))
+    x1d = np.ravel(xx)
+    y1d = np.ravel(yy)
+    z1d = x1d * 0 - 0.3
+    position = np.array([x1d, y1d, z1d]).T
 
-        field = q._get_response(theta, phi, spectral_irradiance, position, q.detector.area,
-                                q.filter.nu, q.horn, q.primary_beam, q.secondary_beam)
-        power = np.reshape(np.abs(field) ** 2, (reso, reso, nptg))
-        power = np.fliplr(power)  # There is a symmetry bug, need to flip it
+    field = q._get_response(theta, phi, spectral_irradiance, position, q.detector.area,
+                            q.filter.nu, q.horn, q.primary_beam, q.secondary_beam)
+    power = np.reshape(np.abs(field) ** 2, (reso, reso, nptg))
+    power = np.fliplr(power)  # There is a symmetry bug, need to flip it
 
-        return power
+    return power
 
+
+def index2TESandASIC(index):
+    if index < 0 or index > 1155:
+        raise ValueError('index must be between 0 and 1155')
+    else:
+        FPidentity = make_id_focalplane()
+        TES = FPidentity[index].TES
+        ASIC = FPidentity[index].ASIC
+
+    return TES, ASIC
 
 def get_real_fp(full_fp, quadrant=None):
     """

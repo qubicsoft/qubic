@@ -215,7 +215,7 @@ class SelfCalibration:
                                                    doplot=False)
         nptg = np.shape(S_tot)[2]
         fringes = np.empty((17, 17, nptg))
-        tes_fringes_signal = np.empty((256, nptg))
+        tes_fringes_signal = np.empty((128, 8, nptg))
         for ptg in range(nptg):
             S_tot4, _ = get_real_fp(S_tot[:, :, ptg], quadrant=quadrant)
             Cminus_i4, _ = get_real_fp(Cminus_i[:, :, ptg], quadrant=quadrant)
@@ -225,7 +225,7 @@ class SelfCalibration:
 
             fringes[:, :, ptg] = (S_tot4 - Cminus_i4 - Cminus_j4 + Sminus_ij4) / Ci4
 
-            tes_fringes_signal[:, ptg] = SelfCalibration.image_fp2tes_signal(fringes[:, :, ptg])
+            tes_fringes_signal[:, :, ptg] = image_fp2tes_signal(fringes[:, :, ptg])
 
         return tes_fringes_signal
 
@@ -385,38 +385,6 @@ class SelfCalibration:
         return sb
 
     @staticmethod
-    def image_fp2tes_signal(image_fp):
-        """
-        Go from an image of one quarter of the focal plane to the signal of each TES.
-
-        Parameters
-        ----------
-        image_fp : array of shape (17, 17)
-            Image of one quarter of the focal plane with the signal for each TES.
-
-        Returns
-        -------
-        tes_signal : array of shape (256,)
-            Signals in each TES, the 128 first elements are for asic 1
-            and the 128 next are for asic 2.
-        """
-
-        tes_signal = np.zeros(256)
-        pix_grid = assign_pix_grid()
-
-        for l in range(17):
-            for c in range(17):
-                pix = pix_grid[l, c]
-                if pix != 0.:
-                    tes, asic = pix2tes(pix)
-                    if asic == 2:  # ASIC2 goes from 1-128
-                        tes_signal[tes - 1] = image_fp[l, c]
-                    else:  # ASIC1 goes from 129-256
-                        tes_signal[tes - 1 + 128] = image_fp[l, c]
-
-        return tes_signal
-
-    @staticmethod
     def tes_signal2image_fp(tes_signal):
         """
         Go from the signal of each TES to an image of one quarter of the focal plane.
@@ -505,6 +473,23 @@ def index2TESandASIC(index):
         ASIC = FPidentity[index].ASIC
 
     return TES, ASIC
+
+
+def image_fp2tes_signal(full_real_fp):
+    if np.shape(full_real_fp) != (34, 34):
+        raise ValueError('The focal plane image should have for shape (34, 34).')
+
+    else:
+        tes_signal = np.empty((128, 8))
+        index = 0
+        for i in range(34):
+            for j in range(34):
+                TES, ASIC = index2TESandASIC(index)
+                if TES != 0:
+                    tes_signal[TES-1, ASIC-1] = full_real_fp[i, j]
+                index += 1
+        return tes_signal
+
 
 def get_real_fp(full_fp, quadrant=None):
     """

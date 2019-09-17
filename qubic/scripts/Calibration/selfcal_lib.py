@@ -3,14 +3,12 @@ from __future__ import division, print_function
 import glob
 
 import cv2
+import numpy as np
 import healpy as hp
 import pandas as pd
 import qubic
-from matplotlib.pyplot import *
-from qubicpack import qubicpack as qp
-from qubicpack.pixel_translation import make_id_focalplane, tes2index, plot_id_focalplane
-
-from qubicpack.pix2tes import pix2tes, tes2pix, assign_pix_grid
+import matplotlib.pyplot as plt
+from qubicpack.pixel_translation import make_id_focalplane, tes2index
 
 __all__ = ['SelfCalibration']
 
@@ -84,14 +82,14 @@ class SelfCalibration:
             q.horn.open[self.dead_switches] = False
         S = SelfCalibration.get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
         if doplot:
-            figure()
-            subplot(4, 4, 1)
+            plt.figure()
+            plt.subplot(4, 4, 1)
             q.horn.plot()
-            axis('off')
-            subplot(4, 4, 2)
-            imshow(S[:, :, 0])
-            colorbar()
-            title('$S$')
+            plt.axis('off')
+            plt.subplot(4, 4, 2)
+            plt.imshow(S[:, :, 0])
+            plt.colorbar()
+            plt.title('$S$')
 
         # All open except i
         q.horn.open = True
@@ -100,13 +98,13 @@ class SelfCalibration:
         q.horn.open[self.baseline[0] - 1] = False
         Cminus_i = SelfCalibration.get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
         if doplot:
-            subplot(4, 4, 3)
+            plt.subplot(4, 4, 3)
             q.horn.plot()
-            axis('off')
-            subplot(4, 4, 4)
-            imshow(Cminus_i[:, :, 0])
-            colorbar()
-            title('$C_{-i}$')
+            plt.axis('off')
+            plt.subplot(4, 4, 4)
+            plt.imshow(Cminus_i[:, :, 0])
+            plt.colorbar()
+            plt.title('$C_{-i}$')
 
         # All open except j
         q.horn.open = True
@@ -115,13 +113,13 @@ class SelfCalibration:
         q.horn.open[self.baseline[1] - 1] = False
         Cminus_j = SelfCalibration.get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
         if doplot:
-            subplot(4, 4, 5)
+            plt.subplot(4, 4, 5)
             q.horn.plot()
-            axis('off')
-            subplot(4, 4, 6)
-            imshow(Cminus_j[:, :, 0])
-            colorbar()
-            title('$C_{-j}$')
+            plt.axis('off')
+            plt.subplot(4, 4, 6)
+            plt.imshow(Cminus_j[:, :, 0])
+            plt.colorbar()
+            plt.title('$C_{-j}$')
 
         # All open except baseline [i, j]
         q.horn.open = True
@@ -131,13 +129,13 @@ class SelfCalibration:
         q.horn.open[self.baseline[1] - 1] = False
         Sminus_ij = SelfCalibration.get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
         if doplot:
-            subplot(4, 4, 7)
+            plt.subplot(4, 4, 7)
             q.horn.plot()
-            axis('off')
-            subplot(4, 4, 8)
-            imshow(Sminus_ij[:, :, 0])
-            colorbar()
-            title('$S_{-ij}$')
+            plt.axis('off')
+            plt.subplot(4, 4, 8)
+            plt.imshow(Sminus_ij[:, :, 0])
+            plt.colorbar()
+            plt.title('$S_{-ij}$')
 
         # Only i open (not a realistic observable)
         q.horn.open = False
@@ -146,26 +144,26 @@ class SelfCalibration:
         q.horn.open[self.baseline[0] - 1] = True
         Ci = SelfCalibration.get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
         if doplot:
-            subplot(4, 4, 9)
+            plt.subplot(4, 4, 9)
             q.horn.plot()
-            axis('off')
-            subplot(4, 4, 10)
-            imshow(Ci[:, :, 0])
-            colorbar()
-            title('$C_i$')
+            plt.axis('off')
+            plt.subplot(4, 4, 10)
+            plt.imshow(Ci[:, :, 0])
+            plt.colorbar()
+            plt.title('$C_i$')
 
         # Only j open (not a realistic observable)
         q.horn.open = False
         q.horn.open[self.baseline[1] - 1] = True
         Cj = SelfCalibration.get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
         if doplot:
-            subplot(4, 4, 11)
+            plt.subplot(4, 4, 11)
             q.horn.plot()
-            axis('off')
-            subplot(4, 4, 12)
-            imshow(Cj[:, :, 0])
-            colorbar()
-            title('$C_j$')
+            plt.axis('off')
+            plt.subplot(4, 4, 12)
+            plt.imshow(Cj[:, :, 0])
+            plt.colorbar()
+            plt.title('$C_j$')
 
         # Only baseline [i, j] open (not a realistic observable)
         q.horn.open = False
@@ -173,13 +171,13 @@ class SelfCalibration:
         q.horn.open[self.baseline[1] - 1] = True
         Sij = SelfCalibration.get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
         if doplot:
-            subplot(4, 4, 13)
+            plt.subplot(4, 4, 13)
             q.horn.plot()
-            axis('off')
-            subplot(4, 4, 14)
-            imshow(Sij[:, :, 0])
-            colorbar()
-            title('$S_{ij}$')
+            plt.axis('off')
+            plt.subplot(4, 4, 14)
+            plt.imshow(Sij[:, :, 0])
+            plt.colorbar()
+            plt.title('$S_{ij}$')
 
         return S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij
 
@@ -322,19 +320,19 @@ class SelfCalibration:
         int_fp_reso = cv2.resize(int_sampling_reso, (34, 34))
 
         if doplot:
-            figure()
-            subplot(131)
+            plt.figure()
+            plt.subplot(131)
             q.horn.plot()
-            axis('off')
-            subplot(132)
-            imshow(int_sampling_reso)
-            title('Power at the sampling resolution')
-            colorbar()
+            plt.axis('off')
+            plt.subplot(132)
+            plt.imshow(int_sampling_reso)
+            plt.title('Power at the sampling resolution')
+            plt.colorbar()
 
-            subplot(133)
-            imshow(int_fp_reso)
-            title('Power at the TES resolution')
-            colorbar()
+            plt.subplot(133)
+            plt.imshow(int_fp_reso)
+            plt.title('Power at the TES resolution')
+            plt.colorbar()
 
         return int_sampling_reso, int_fp_reso
 
@@ -376,51 +374,14 @@ class SelfCalibration:
                 q.horn.open[i - 1] = True
         sb = q.get_synthbeam(scene, idet=tes)
 
-        subplot(121)
+        plt.subplot(121)
         q.horn.plot()
-        axis('off')
+        plt.axis('off')
         hp.gnomview(sb, sub=122, rot=(0, 90), reso=5, xsize=350, ysize=350,
                     title='Synthetic beam on the sky for TES {}'.format(tes),
                     cbar=True, notext=True)
         return sb
 
-    @staticmethod
-    def tes_signal2image_fp(tes_signal):
-        """
-        Go from the signal of each TES to an image of one quarter of the focal plane.
-
-        Parameters
-        ----------
-        tes_signal : array of shape (256,)
-            Signals in each TES, the 128 first elements are for asic 1
-            and the 128 next are for asic 2.
-
-        Returns
-        -------
-        image_fp : array of shape (17, 17)
-            Image of one quarter of the focal plane with the signal for each TES.
-
-        """
-
-        image_fp = np.zeros((17, 17))
-
-        pix_grid = assign_pix_grid()
-
-        for i, signal in enumerate(tes_signal):
-            tes_index = i + 1  # TES indices start at 1 and not 0
-
-            # We split between asic1 and asic2
-            if tes_index < 129:
-                pix = tes2pix(tes_index, 1)
-            else:
-                pix = tes2pix(tes_index - 128, 2)
-
-            # This condition avoids thermometers
-            if pix < 1000:
-                coord = np.reshape(np.where(pix_grid == pix), 2)
-                image_fp[coord[0], coord[1]] = signal
-
-        return image_fp
 
 def get_power_on_array(q, theta=np.array([0.]), phi=np.array([0.]), spectral_irradiance=1.,
                        reso=34, xmin=-0.06, xmax=0.06):
@@ -474,6 +435,18 @@ def index2TESandASIC(index):
 
     return TES, ASIC
 
+def tes_signal2image_fp(tes_signal):
+    thermos = [4, 36, 68, 100]
+    image_fp = np.empty((34, 34))
+    image_fp[:] = np.nan
+    for ASIC in range(8):
+        for TES in range(128):
+            print(TES+1, ASIC+1)
+            if TES+1 not in thermos:
+                index = tes2index(TES+1, ASIC+1)
+                image_fp[index//34, index%34] = tes_signal[TES, ASIC]
+    return (image_fp)
+
 
 def image_fp2tes_signal(full_real_fp):
     if np.shape(full_real_fp) != (34, 34):
@@ -508,7 +481,7 @@ def get_real_fp(full_fp, quadrant=None):
     """
     # Decrease the resolution to the one of the FP
     if np.shape(full_fp) != (34, 34):
-        full_real_fp = cv2.resize(full_fp, (34, 34))
+        full_real_fp = cv2.resize(full_fp, (34, 34)) # Not sure this function is the best
     else:
         full_real_fp = np.copy(full_fp)
 

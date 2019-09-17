@@ -612,10 +612,10 @@ hp.gnomview(mm, rot=center, reso=20, min=-0.02, max=0.02)
 ```
 
 ```{python}
-essai = mymaskedmap(detnums, d, directory, fittedpeakfile, mask, tol=1e-2)
+essai = mymaskedmap(detnums, d, directory, fittedpeakfile, mask, tol=1e-3)
 #mm = essai(2,np.array([np.radians(0.), np.radians(90.), np.radians(0.)]))
-nnth=51
-nnph=51
+nnth=11
+nnph=11
 thvals = np.linspace(85,95,nnth)
 phvals = np.linspace(-5,5,nnph)
 ch2 = np.zeros((nnph,nnth))
@@ -634,11 +634,89 @@ for i in range(nnth):
 ```{python}
 import scipy.ndimage.filters as scf
 
-imshow(scf.gaussian_filter(ch2,2.), extent=[np.min(thvals), np.max(thvals), np.min(phvals), np.max(phvals)]
-       ,vmin=0.03, vmax=0.04)
+imshow(scf.gaussian_filter(ch2,0.01), extent=[np.min(thvals), np.max(thvals), np.min(phvals), np.max(phvals)]
+       ,vmin=0.03, vmax=0.06)
 xlabel('theta')
 ylabel('phi0')
 colorbar()
+```
+
+```{python}
+#### Now a 3D exploration
+essai = mymaskedmap(detnums, d, directory, fittedpeakfile, mask, tol=1e-2)
+#mm = essai(2,np.array([np.radians(0.), np.radians(90.), np.radians(0.)]))
+nnth=31
+nnph0=31
+nnph1=31
+thvals = np.linspace(86,94,nnth)
+ph0vals = np.linspace(-4,4,nnph0)
+ph1vals = np.linspace(-4,4,nnph1)
+ch2 = np.zeros((nnph1, nnph0, nnth))
+for i in range(nnth):
+    for j in range(nnph0):
+        for k in range(nnph1):
+            print('')
+            print(i,j,k)
+            guess = np.array([np.radians(ph0vals[j]), np.radians(thvals[i]), np.radians(ph1vals[k])])
+            mm = essai(2,guess)
+            ch2[k,j,i]=np.sum(mm**2)
+
+
+```
+
+```{python}
+def plotminarray(bla,axes,axesnames=None,vmin=None,vmax=None):
+    if vmin is None:
+        vmin = np.min(bla)
+    if vmax is None:
+        vmax = np.max(bla)
+    if axesnames is None:
+        axesnames=['axis0','axis1','axis2']
+    ix,iy,iz = np.unravel_index(np.argmin(bla), np.shape(bla))
+    dx = (axes[0][1]-axes[0][0])
+    dy = (axes[1][1]-axes[1][0])
+    dz = (axes[2][1]-axes[2][0])
+    ndim = len(shape(bla))
+    subplot(2,2,1)
+    imshow(bla[:,:,iz].T, vmin=vmin, vmax = vmax, origin='lower', 
+           extent = [np.min(axes[0])-dx/2, np.max(axes[0])+dx/2, np.min(axes[1])-dy/2, np.max(axes[1])+dy/2])
+    plot(axes[0][ix], axes[1][iy],'r+')
+    title('{0:}={1:5.3f} , {2:}={3:5.3f}'.format(axesnames[0], axes[0][ix], axesnames[1],axes[1][iy]))
+    xlabel(axesnames[0])
+    ylabel(axesnames[1])
+    colorbar()
+    subplot(2,2,3)
+    imshow(bla[:,iy,:].T, vmin=vmin, vmax = vmax, origin='lower', 
+           extent = [np.min(axes[0])-dx/2, np.max(axes[0])+dx/2, np.min(axes[2])-dz/2, np.max(axes[2])+dz/2])
+    plot(axes[0][ix], axes[2][iz],'r+')
+    title('{0:}={1:5.3f} , {2:}={3:5.3f}'.format(axesnames[0], axes[0][ix], axesnames[2],axes[2][iz]))
+    xlabel(axesnames[0])
+    ylabel(axesnames[2])
+    colorbar()
+    subplot(2,2,4)
+    imshow(bla[ix,:,:].T, vmin=vmin, vmax = vmax, origin='lower', 
+           extent = [np.min(axes[1])-dy/2, np.max(axes[1])+dy/2, np.min(axes[2])-dz/2, np.max(axes[2])+dz/2])
+    plot(axes[1][iy], axes[2][iz],'r+')
+    title('{0:}={1:5.3f} , {2:}={3:5.3f}'.format(axesnames[1], axes[1][iy], axesnames[2],axes[2][iz]))
+    xlabel(axesnames[1])
+    ylabel(axesnames[2])
+    colorbar()
+    tight_layout()
+    
+```
+
+```{python}
+rc('figure', figsize=(15,12))
+import scipy.ndimage.filters as scf
+plotminarray(scf.gaussian_filter(ch2,0.5), 
+             [ph1vals, ph0vals, thvals], axesnames=['ph1','ph0','th'],
+             vmin=0.03,vmax=0.06)
+#newch2 = scf.gaussian_filter(ch2,0.5)
+
+```
+
+```{python}
+
 ```
 
 ```{python}

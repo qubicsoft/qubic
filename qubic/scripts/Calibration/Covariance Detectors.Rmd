@@ -1,0 +1,153 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.0
+  kernelspec:
+    display_name: Python [default]
+    language: python
+    name: python2
+---
+
+```{python}
+# %matplotlib inline
+# #%matplotlib notebook
+from matplotlib import rc
+rc('figure', figsize=(15,8))
+rc('font', size=12)
+rc('text', usetex=False)
+rc('image', cmap='viridis')
+
+import healpy as hp
+import pickle
+
+import qubic.io
+from pysimulators import FitsArray
+import fibtools as ft
+import demodulation_lib as dl
+import sb_fitting as sbfit
+import jchinstrument as jcinst
+import os
+
+
+```
+
+```{python}
+fittedpeakfile = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/fitted_peaks.fits'
+directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/150GHz-2019-04-06/'
+```
+
+```{python}
+flatmap, az, el = dl.get_flatmap(93, directory)
+print(flatmap.shape,len(az),len(el))
+c50 = np.cos(np.radians(50))
+
+### Cut on Az
+okaz = (az*c50 > -15) & (az*c50<15)
+az = az[okaz]
+flatmap=flatmap[:,okaz]
+imshow(flatmap, extent=[np.min(az)*c50, np.max(az)*c50, np.min(el), np.max(el)], aspect='equal')
+flatmap.shape
+```
+
+```{python}
+npix = len(np.ravel(flatmap))
+alldata = np.zeros((256, npix))
+for i in range(256):
+    flatmap, az, el = dl.get_flatmap(i+1, directory)
+    az = az[okaz]
+    flatmap=flatmap[:,okaz]
+    alldata[i,:] = np.ravel((flatmap-np.mean(flatmap))/np.std(flatmap))  
+    #alldata[i,:] = np.ravel(flatmap)
+```
+
+```{python}
+med = np.median(alldata,axis=0)
+imshow(np.reshape(med, np.shape(flatmap)),
+       extent=[np.min(az)*c50, np.max(az)*c50, np.min(el), np.max(el)], aspect='equal')
+colorbar()
+```
+
+```{python}
+
+```
+
+```{python}
+subplot(1,2,1)
+imshow(np.corrcoef(alldata-med),vmin=-1,vmax=1)
+plot([127,127],[0,255],'r')
+plot([0,255],[127,127],'r')
+colorbar()
+
+subplot(1,2,2)
+truc = np.log10(np.abs(np.corrcoef(alldata-med)))
+imshow(truc,vmin=-1)
+plot([127,127],[0,255],'r')
+plot([0,255],[127,127],'r')
+colorbar()
+```
+
+```{python}
+med1 = np.median(alldata[0:128,:], axis=0)
+med2 = np.median(alldata[128:,:], axis=0)
+
+alldata1 = alldata[0:128,:]-med1*0
+alldata2 = alldata[128:,:]-med2*0
+
+
+rc('figure', figsize=(15,6))
+subplot(1,2,1)
+imshow(np.corrcoef(alldata1),vmin=-1,vmax=1)
+for i in range(4):
+    plot([32*i, 32*i],[0,127],'r')
+    plot([0,127],[32*i, 32*i],'r')
+
+title('ASIC1')
+xlabel('TES index')
+ylabel('TES index')
+colorbar()
+subplot(1,2,2)
+imshow(np.corrcoef(alldata2),vmin=-1,vmax=1)
+for i in range(4):
+    plot([32*i, 32*i],[0,127],'r')
+    plot([0,127],[32*i, 32*i],'r')
+title('ASIC2')
+xlabel('TES index')
+ylabel('TES index')
+colorbar()
+
+```
+
+```{python}
+rc('figure', figsize=(15,12))
+sh = np.shape(flatmap)
+imaps = np.array([28,29,30,31])
+#imaps = np.array([0,1,2,3])
+for i in range(len(imaps)):
+    subplot(2,2,i+1)
+    imshow(np.reshape(alldata2[imaps[i],:],np.shape(flatmap)),
+          extent = [np.min(az)*c50, np.max(az)*c50, np.min(el), np.max(el)])
+    colorbar()
+    title('ASIC 2 TES #{}'.format(imaps[i]))
+```
+
+```{python}
+plot(alldata2[imaps[1],:], alldata2[imaps[0],:],',')
+xlabel('TES #{}'.format(imaps[1]))
+ylabel('TES #{}'.format(imaps[0]))
+plot(linspace(-2,10,100), linspace(-2,10,100),'k--')
+```
+
+```{python}
+plot(alldata2[imaps[1],:], med2,',')
+xlabel('TES #{}'.format(imaps[1]))
+ylabel('median Asic2')
+plot(linspace(-1,1,100), linspace(-1,1,100),'k--')
+```
+
+```{python}
+
+```

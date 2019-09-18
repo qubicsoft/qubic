@@ -49,14 +49,19 @@ class SelfCalibration:
             if i < 1 or i > 64:
                 raise ValueError('Horns indices must be in [1, 64].')
 
-    def get_dead_detectors(self):
+    def get_dead_detectors_mask(self, quadrant=3):
+        FPidentity = make_id_focalplane()
+        quad = np.reshape(FPidentity.quadrant, (34, 34))
         calfile_path = Qubic_DataDir(datafile=self.d['detarray'])
         calfile = fits.open(calfile_path + '/' + self.d['detarray'])
         if self.d['detarray'] == 'CalQubic_DetArray_P87_TD.fits':
-            dead_detectors = calfile['removed'].data
-            dead_detectors = np.where(dead_detectors == 1, np.nan, dead_detectors)
-            dead_detectors = np.where(dead_detectors == 0, 1, dead_detectors)
-            return dead_detectors
+            full_mask = calfile['removed'].data
+            full_mask = np.where(full_mask == 1, np.nan, full_mask)
+            full_mask = np.where(full_mask == 0, 1, full_mask)
+
+            quart = full_mask[np.where(quad != quadrant, 6, full_mask) != 6]
+            quart_mask = np.reshape(quart, (17, 17))
+            return full_mask, quart_mask
         else:
             print('There is no dead detectors in this calfile')
 
@@ -207,50 +212,6 @@ class SelfCalibration:
         fringes = (S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
         return fringes
 
-
-    def compute_fringesTD(self, quadrant=3, theta=np.array([0.]), phi=np.array([0.]), spectral_irradiance=1.):
-        """
-        Computes the fringe signals in each TES for point source.
-        The sources moves and we compute the fringes for each pointing
-        that corresponds to a position  of the source.
-
-        Parameters
-        ----------
-        quadrant: int
-            Quadrant of the focal plane in [1, 2, 3, 4].
-            By default it is 3 as for the TD.
-        theta : array-like of shape (#pointings,)
-            The source zenith angle [rad].
-        phi : array-like of shape (#pointings,)
-            The source azimuthal angle [rad].
-        spectral_irradiance : array-like
-            The source spectral_irradiance [W/m^2/Hz].
-
-        Returns
-        -------
-        tes_fringes_signal : array of shape (256, #pointings)
-            Fringe signal (power) in each TES.
-
-        """
-        q = qubic.QubicMultibandInstrument(self.d)
-
-        S_tot, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = \
-            SelfCalibration.get_power_combinations(self, q[0], theta=theta, phi=phi,
-                                                   spectral_irradiance=spectral_irradiance,
-                                                   doplot=False)
-        nptg = np.shape(S_tot)[2]
-        fringesTD = np.empty_like(S_tot)
-        for ptg in range(nptg):
-            S_tot4, _ = get_real_fp(S_tot[:, :, ptg], quadrant=quadrant)
-            Cminus_i4, _ = get_real_fp(Cminus_i[:, :, ptg], quadrant=quadrant)
-            Cminus_j4, _ = get_real_fp(Cminus_j[:, :, ptg], quadrant=quadrant)
-            Sminus_ij4, _ = get_real_fp(Sminus_ij[:, :, ptg], quadrant=quadrant)
-            Ci4, _ = get_real_fp(Ci[:, :, ptg], quadrant=quadrant)
-
-            fringesTD[:, :, ptg] = (S_tot4 - Cminus_i4 - Cminus_j4 + Sminus_ij4) / Ci4
-
-        return fringesTD
-
     def get_power_fp_aberration(self, rep, doplot=True, theta_source=0., freq_source=150., indep_config=None):
         """
         Compute power in the focal plane for a given horn configuration taking
@@ -287,7 +248,7 @@ class SelfCalibration:
         q = qubic.QubicInstrument(self.d)
 
         # Get simulation files
-        files = sorted(glob.glob(rep + '*.dat'))
+        files = sorted(glob.glob(rep + '/*.dat'))
 
         nhorns = len(files)
         if nhorns != 64:
@@ -341,24 +302,34 @@ class SelfCalibration:
         # Intensity in the focal plane with high resolution
         # and with the focal plane resolution
         int_sampling_reso = np.abs(sumampx) ** 2 + np.abs(sumampy) ** 2
-        int_fp_reso = cv2.resize(int_sampling_reso, (34, 34))
 
         if doplot:
             plt.figure()
-            plt.subplot(131)
+            plt.subplot(121)
             q.horn.plot()
             plt.axis('off')
-            plt.subplot(132)
+
+            plt.subplot(122)
             plt.imshow(int_sampling_reso)
             plt.title('Power at the sampling resolution')
             plt.colorbar()
 
-            plt.subplot(133)
-            plt.imshow(int_fp_reso)
-            plt.title('Power at the TES resolution')
-            plt.colorbar()
+        return int_sampling_reso
 
-        return int_sampling_reso, int_fp_reso
+    def get_fringes_aberration_combination(self, rep):
+        i = self.baseline[0]
+        j = self.baseline[1]
+        all_open = np.arange(1, 65)
+
+        S_tot_aber = SelfCalibration.get_power_fp_aberration(self, rep, doplot=False, indep_config=all_open)
+        Cminus_i_aber = SelfCalibration.get_power_fp_aberration(self, rep, doplot=False, indep_config=np.delete(all_open, i - 1))
+        Cminus_j_aber = SelfCalibration.get_power_fp_aberration(self, rep, doplot=False, indep_config=np.delete(all_open, j - 1))
+        Sminus_ij_aber = SelfCalibration.get_power_fp_aberration(self, rep, doplot=False, indep_config=np.delete(all_open, [i - 1, j - 1]))
+        Ci_aber = SelfCalibration.get_power_fp_aberration(self, rep, doplot=False, indep_config=[i])
+
+        fringes_aber = (S_tot_aber - Cminus_i_aber - Cminus_j_aber + Sminus_ij_aber) / Ci_aber
+
+        return fringes_aber
 
     def get_synthetic_beam_sky(self, q, scene, tes, default_open=True, with_baseline=True):
         """
@@ -444,7 +415,6 @@ def get_power_on_array(q, theta=np.array([0.]), phi=np.array([0.]), spectral_irr
     field = q._get_response(theta, phi, spectral_irradiance, position, q.detector.area,
                             q.filter.nu, q.horn, q.primary_beam, q.secondary_beam)
     power = np.reshape(np.abs(field) ** 2, (reso, reso, nptg))
-    power = np.fliplr(power)  # There is a symmetry bug, need to flip it
 
     return power
 
@@ -466,11 +436,10 @@ def tes_signal2image_fp(tes_signal):
     image_fp[:] = np.nan
     for ASIC in range(8):
         for TES in range(128):
-            print(TES + 1, ASIC + 1)
             if TES + 1 not in thermos:
                 index = tes2index(TES + 1, ASIC + 1)
                 image_fp[index // 34, index % 34] = tes_signal[TES, ASIC]
-    return (image_fp)
+    return image_fp
 
 
 def image_fp2tes_signal(full_real_fp):
@@ -524,7 +493,7 @@ def get_real_fp(full_fp, quadrant=None):
             raise ValueError('quadrant must be 1, 2, 3 or 4')
         else:
             # Get only one quadrant
-            quart = full_real_fp[np.where(quad != 2, 6, full_real_fp) != 6]
+            quart = full_real_fp[np.where(quad != quadrant, 6, full_real_fp) != 6]
             quart_fp = np.reshape(quart, (17, 17))
 
             return full_real_fp, quart_fp

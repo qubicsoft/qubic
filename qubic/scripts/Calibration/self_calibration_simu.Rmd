@@ -21,12 +21,13 @@ I have implemented a class in selfcal_lib.py which allowed to do several simulat
 One remark : I tried to put documentation for each function. On a jupyter notebook, if you want to have acces just press shift+tab when your cursor is on the name of the function. 
 
 ```{python}
-from __future__ import division
+from __future__ import division, print_function
 
 # %matplotlib inline
 # %matplotlib notebook
 
 import glob
+import numpy as np
 import healpy as hp
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -34,16 +35,10 @@ import cv2
 
 from qubicpack.utilities import Qubic_DataDir
 
-from qubicpack import qubicpack as qp
-from qubicpack import pix2tes
-from qubicpack.utilities import ASIC_index
-
 import qubic
 
-import selfcal_lib
-```
+import selfcal_lib as sc
 
-```{python}
 plt.rcParams['figure.figsize'] = (8, 8)
 ```
 
@@ -51,26 +46,25 @@ plt.rcParams['figure.figsize'] = (8, 8)
 useful for the qubicsoft
 
 ```{python}
-from qubicpack.utilities import Qubic_DataDir
-
-basedir = Qubic_DataDir(datadir='../', datafile='global_source.dict', )
-dictfilename = basedir + 'global_source.dict'
+# Use a tool from qubicpack to get a path
+basedir = Qubic_DataDir(datafile='instrument.py', ) 
+print('basedir : ', basedir)
+dictfilename = basedir + '/dicts/global_source_oneDet.dict'
 
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
-print(d)
+print(d['detarray'])
 ```
 
 ## Create an object 
 
 ```{python}
-ca = selfcal_lib.SelfCalibration([12, 28], [], d)
-```
+baseline = [25, 57]
+ca = sc.SelfCalibration(baseline, [], d)
 
-Look at method that are in this class :
+# Look at methods that are in this class :
+print(dir(ca))
 
-```{python}
-dir(ca)
 ```
 
 ## Get all combinations for one baseline
@@ -80,98 +74,153 @@ This is a simulation that doesn't take into account optical aberrations.
 # You need a qubic instrument for that function
 q = qubic.QubicInstrument(d)
 
-S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = ca.get_power_combinations(q, theta=[0., 0.2], phi=[[0., 0.2]])
+S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = ca.get_power_combinations(q, theta=[0.], phi=[[0.]])
+
+# They are 3D arrays : (reso, reso, #pointings)
+print('shape of each combination :', Cminus_i.shape)
+```
+
+### Fringes by combining the different horn configurations
+
+```{python}
+fringes = ca.compute_fringes()
+print(fringes.shape)
+plt.imshow(fringes[:,:,0])
+```
+
+## Get the focal plane image for the real instrument
+
+```{python}
+real_fringes = sc.get_real_fp(fringes[:,:,0])
+plt.subplot(321)
+plt.imshow(real_fringes)
+
+# Get only one quadrant:
+real_fringes, real_fringes_quad = sc.get_real_fp(fringes[:,:,0], quadrant=3)
+plt.subplot(322)
+plt.imshow(real_fringes_quad)
+
+# Remove dead detectors
+# Build masks
+full_mask, quart_mask = ca.get_dead_detectors_mask()
+plt.subplot(323)
+plt.imshow(full_mask)
+plt.subplot(324)
+plt.imshow(quart_mask)
+
+# Apply the mask on the focal plane
+plt.subplot(325)
+plt.imshow(real_fringes*full_mask)
+plt.subplot(326)
+plt.imshow(real_fringes_quad*quart_mask)
+
+
 ```
 
 ```{python}
-S.shape
+# Make the rotation to compare with what Michel obtained
+Final_image = np.rot90(real_fringes_quad*quart_mask, k=2)
+plt.imshow(Final_image)
+plt.savefig('/home/louisemousset/QUBIC/Qubic_images/plots/Final_image')
 ```
 
-## I want an instrument in a specific horn config
-
-```{python}
-q.horn.open[3]=True
-q.horn
-```
-
-```{python}
-power = ca.get_power_on_array(q)
-power.shape
-```
-
-```{python}
-imshow(power[:,:,0])
-```
-
-## Directly the fringes for each TES
-
-```{python}
-tes_fringes_signal = ca.get_fringes_fp_TD()
-tes_fringes_signal.shape
-
-```
-
-```{python}
-# There are 8 thermometers that are set to 0. and 248 TES
-tes_fringes_signal
-```
-
-### The focal plane image associated
-
-```{python}
-img = ca.tes_signal2image_fp(tes_fringes_signal[:,0])
-imshow(img)
-```
-
-## The power in the focal plane with optical aberrations
+# Power on the focal plane with optical aberrations
 Using Creidhe simulations,
 need to download the files at : https://drive.google.com/drive/folders/1sC7-DrdsTigL0d7Z8KzPQ3uoWSy0Phxh?usp=sharing
 
 ```{python}
 # Path to the simulated files 
-rep = '/home/louisemousset/QUBIC/Qubic_work/Calibration/RF_switch/simu_creidhe_aberrations/new_files/'
+rep = Qubic_DataDir(datafile='detcentres.txt')
+int_aber = ca.get_power_fp_aberration(rep)
 
-int, int_fp = ca.get_power_fp_aberration(rep)
+# Divide by the power for only one horn open (gaussian on the FP)
+# Problem : invalid value encountered in true_divide => some pixels are lost
+# i = baseline[0]
+# Ci_aber = ca.get_power_fp_aberration(rep, indep_config=[i])
+# int_aber /= Ci_aber
 ```
 
 ```{python}
-# If you want a specific configuration (all open for example)
-int_open, int_fp_open = ca.get_power_fp_aberration(rep, indep_config=np.arange(1, 65, 1))
+# real FP with dead detectors
+int_aber_real, int_aber_quart  = sc.get_real_fp(int_aber, quadrant=3)
+
+# Apply the mask on the image with aberations
+plt.subplot(121)
+plt.imshow(int_aber_real*full_mask)
+plt.subplot(122)
+plt.imshow(int_aber_quart*quart_mask)
+
 ```
 
 ```{python}
-int_fp.shape
+# Make the rotation to compare with what Michel obtained
+Final_image_aber = np.rot90(int_aber_quart*quart_mask, k=2)
+plt.imshow(Final_image_aber)
+plt.savefig('/home/louisemousset/QUBIC/Qubic_images/plots/Final_image_aber')
 ```
-
-### I want only a quarter of the focal plane
 
 ```{python}
-int_quarter_fp = ca.full2quarter(int_fp)
-imshow(int_quarter_fp)
-```
+# Other way to get fringes with aberations :
+# Make the combination (S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
+# Problem : Here again, because I divide by Ci, I loose some pixels...
+fringes_aber = ca.get_fringes_aberration_combination(rep)
+fringes_aber.shape
 
-### I want the signal for each TES with the real indices 
+# real FP with dead detectors
+fringes_aber_real, fringes_aber_quart  = sc.get_real_fp(fringes_aber, quadrant=3)
+
+# Apply the mask on the image with aberations
+plt.subplot(121)
+plt.imshow(fringes_aber_real*full_mask)
+plt.subplot(122)
+plt.imshow(fringes_aber_quart*quart_mask)
+```
 
 ```{python}
-signal = ca.image_fp2tes_signal(int_quarter_fp)
-signal.shape
+# Make the rotation to compare with what Michel obtained
+Final_image_aber_comb = np.rot90(fringes_aber_quart*quart_mask, k=2)
+plt.imshow(Final_image_aber_comb)
+plt.savefig('/home/louisemousset/QUBIC/Qubic_images/plots/Final_image_aber_comb')
 ```
 
-## Beam on the sky
+# Change the instrument horn config
+
+```{python}
+q.horn.open=False # All close
+q.horn.open[3]=True # Close one
+q.horn
+```
+
+```{python}
+# Power on the focal plane
+power = sc.get_power_on_array(q, reso=200)
+print('power shape :', power.shape)
+imshow(power[:,:,0])
+```
+
+# Get an array with TES signal
+
+```{python}
+signal = sc.image_fp2tes_signal(real_fringes)
+print('shape : (#TES, #ASICS)', signal.shape)
+```
+
+```{python}
+# Do the inverse
+image_fp = sc.tes_signal2image_fp(signal)
+plt.imshow(image_fp)
+```
+
+# Synthetic Beam on the sky
 
 ```{python}
 # For the function, you need a instrument and a scene
 q = qubic.QubicInstrument(d)
 s = qubic.QubicScene(d)
 
-sb = ca.get_synthetic_beam_sky(q, s, 34, default_open=True)
-```
+sb = ca.get_synthetic_beam_sky(q, s, tes=93, default_open=True)
 
-```{python}
-# The synthetic beam optained has a value for each pixel on the sky. You should use Healpy if you want to plot it.
-sb.shape
-```
-
-```{python}
-
+# The synthetic beam optained has a value for each pixel on the sky. 
+# You should use Healpy if you want to plot it.
+print('sb shape :', sb.shape)
 ```

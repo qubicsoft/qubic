@@ -121,7 +121,6 @@ plt.imshow(real_fringes_quad*quart_mask)
 # Make the rotation to compare with what Michel obtained
 Final_image = np.rot90(real_fringes_quad*quart_mask, k=2)
 plt.imshow(Final_image)
-plt.savefig('/home/louisemousset/QUBIC/Qubic_images/plots/Final_image')
 ```
 
 # Power on the focal plane with optical aberrations
@@ -156,7 +155,6 @@ plt.imshow(int_aber_quart*quart_mask)
 # Make the rotation to compare with what Michel obtained
 Final_image_aber = np.rot90(int_aber_quart*quart_mask, k=2)
 plt.imshow(Final_image_aber)
-plt.savefig('/home/louisemousset/QUBIC/Qubic_images/plots/Final_image_aber')
 ```
 
 ```{python}
@@ -180,7 +178,6 @@ plt.imshow(fringes_aber_quart*quart_mask)
 # Make the rotation to compare with what Michel obtained
 Final_image_aber_comb = np.rot90(fringes_aber_quart*quart_mask, k=2)
 plt.imshow(Final_image_aber_comb)
-plt.savefig('/home/louisemousset/QUBIC/Qubic_images/plots/Final_image_aber_comb')
 ```
 
 # Change the instrument horn config

@@ -74,7 +74,7 @@ This is a simulation that doesn't take into account optical aberrations.
 # You need a qubic instrument for that function
 q = qubic.QubicInstrument(d)
 
-S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = ca.get_power_combinations(q, theta=[0.], phi=[[0.]])
+S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = ca.get_power_combinations(q, theta=[0.], phi=[[0.]], reso=200)
 
 # They are 3D arrays : (reso, reso, #pointings)
 print('shape of each combination :', Cminus_i.shape)
@@ -83,7 +83,7 @@ print('shape of each combination :', Cminus_i.shape)
 ### Fringes by combining the different horn configurations
 
 ```{python}
-fringes = ca.compute_fringes()
+fringes = ca.compute_fringes(reso=200)
 print(fringes.shape)
 plt.imshow(fringes[:,:,0])
 ```
@@ -130,53 +130,55 @@ need to download the files at : https://drive.google.com/open?id=19dPHw_CeuFZ068
 ```{python}
 # Path to the simulated files 
 rep = Qubic_DataDir(datafile='detcentres.txt')
-int_aber = ca.get_power_fp_aberration(rep)
+
+# Finges with aberations 
+fringes_aber = ca.get_power_fp_aberration(rep)
 
 # Divide by the power for only one horn open (gaussian on the FP)
 # Problem : invalid value encountered in true_divide => some pixels are lost
 # i = baseline[0]
 # Ci_aber = ca.get_power_fp_aberration(rep, indep_config=[i])
-# int_aber /= Ci_aber
+# fringes_aber /= Ci_aber
 ```
 
 ```{python}
 # real FP with dead detectors
-int_aber_real, int_aber_quart  = sc.get_real_fp(int_aber, quadrant=3)
+fringes_aber_real, fringes_aber_quad  = sc.get_real_fp(fringes_aber, quadrant=3)
 
-# Apply the mask on the image with aberations
+# Apply the mask on the image with aberrations
 plt.subplot(121)
-plt.imshow(int_aber_real*full_mask)
+plt.imshow(fringes_aber_real * full_mask)
 plt.subplot(122)
-plt.imshow(int_aber_quart*quart_mask)
+plt.imshow(fringes_aber_quad * quart_mask)
 
 ```
 
 ```{python}
 # Make the rotation to compare with what Michel obtained
-Final_image_aber = np.rot90(int_aber_quart*quart_mask, k=2)
+Final_image_aber = np.rot90(fringes_aber_quad * quart_mask, k=2)
 plt.imshow(Final_image_aber)
 ```
 
 ```{python}
-# Other way to get fringes with aberations :
+# Other way to get fringes with aberrations :
 # Make the combination (S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
 # Problem : Here again, because I divide by Ci, I loose some pixels...
-fringes_aber = ca.get_fringes_aberration_combination(rep)
-fringes_aber.shape
+fringes_aber_comb = ca.get_fringes_aberration_combination(rep)
+fringes_aber_comb.shape
 
 # real FP with dead detectors
-fringes_aber_real, fringes_aber_quart  = sc.get_real_fp(fringes_aber, quadrant=3)
+fringes_aber_comb_real, fringes_aber_comb_quad  = sc.get_real_fp(fringes_aber_comb, quadrant=3)
 
 # Apply the mask on the image with aberations
 plt.subplot(121)
-plt.imshow(fringes_aber_real*full_mask)
+plt.imshow(fringes_aber_comb_real * full_mask)
 plt.subplot(122)
-plt.imshow(fringes_aber_quart*quart_mask)
+plt.imshow(fringes_aber_comb_quad * quart_mask)
 ```
 
 ```{python}
 # Make the rotation to compare with what Michel obtained
-Final_image_aber_comb = np.rot90(fringes_aber_quart*quart_mask, k=2)
+Final_image_aber_comb = np.rot90(fringes_aber_comb_quad * quart_mask, k=2)
 plt.imshow(Final_image_aber_comb)
 ```
 
@@ -220,4 +222,8 @@ sb = ca.get_synthetic_beam_sky(q, s, tes=93, default_open=True)
 # The synthetic beam optained has a value for each pixel on the sky. 
 # You should use Healpy if you want to plot it.
 print('sb shape :', sb.shape)
+```
+
+```{python}
+
 ```

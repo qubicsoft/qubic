@@ -26,12 +26,8 @@ from __future__ import division, print_function
 # %matplotlib inline
 # %matplotlib notebook
 
-import glob
 import numpy as np
-import healpy as hp
 import matplotlib.pyplot as plt
-import pandas as pd
-import cv2
 
 from qubicpack.utilities import Qubic_DataDir
 
@@ -164,7 +160,7 @@ plt.imshow(Final_image_aber)
 # Make the combination (S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
 # Problem : Here again, because I divide by Ci, I loose some pixels...
 fringes_aber_comb = ca.get_fringes_aberration_combination(rep)
-fringes_aber_comb.shape
+print('fringes_aber_comb.shape shape :', fringes_aber_comb.shape)
 
 # real FP with dead detectors
 fringes_aber_comb_real, fringes_aber_comb_quad  = sc.get_real_fp(fringes_aber_comb, quadrant=3)
@@ -194,7 +190,7 @@ q.horn
 # Power on the focal plane
 power = sc.get_power_on_array(q, reso=200)
 print('power shape :', power.shape)
-imshow(power[:,:,0])
+plt.imshow(power[:,:,0])
 ```
 
 # Get an array with TES signal

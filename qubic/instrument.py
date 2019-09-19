@@ -156,17 +156,14 @@ class QubicInstrument(Instrument):
 
         # Choose the primary beam calibration file
         if d['beam_shape'] == 'gaussian':
-            aux = d['primbeam']
             d['primbeam'] = d['primbeam'].replace(d['primbeam'][-6], '2')
             primary_shape = 'gaussian'
             secondary_shape = 'gaussian'
         elif d['beam_shape'] == 'fitted_beam':
-            aux = d['primbeam']
             d['primbeam'] = d['primbeam'].replace(d['primbeam'][-6], '3')
             primary_shape = 'fitted_beam'
             secondary_shape = 'fitted_beam'
         else:
-            aux = d['primbeam']
             d['primbeam'] = d['primbeam'].replace(d['primbeam'][-6], '4')
             primary_shape = 'multi_freq'
             secondary_shape = 'multi_freq'
@@ -246,8 +243,8 @@ class QubicInstrument(Instrument):
             SecBeam = BeamFitted(par, omega, backward=True)
         elif secondary == 'multi_freq':
             parth, parfr, parbeam, alpha, xspl = self.calibration.get('primbeam')
-            SecBeam = MultiFreqBeam(parth, parfr, parbeam, alpha, xspl, nu=nu
-                                    , backward=True)
+            SecBeam = MultiFreqBeam(parth, parfr, parbeam, alpha, xspl, nu=nu,
+                                    backward=True)
         self.secondary_beam = SecBeam
 
     def _init_filter(self, nu, relative_bandwidth):
@@ -366,11 +363,11 @@ class QubicInstrument(Instrument):
         sec_beam = self.secondary_beam(self.detector.theta,
                                        self.detector.phi)
         alpha = np.arctan(0.5)  # half oppening angle of the combiner
-        omega_comb = np.pi * (1 - np.cos(alpha) ** 2)  ## to be revisited,
-        ## depends on the detector position
+        omega_comb = np.pi * (1 - np.cos(alpha) ** 2)  # to be revisited,
+        # depends on the detector position
         omega_dichro = omega_comb  # must be improved
         omega_coldstop = 0.09  # average, depends slightly on
-        ## the detector position
+        # the detector position
 
         P_phot = np.zeros((n, ndet))
         NEP_phot2_nobunch = np.zeros_like(P_phot)
@@ -529,7 +526,7 @@ class QubicInstrument(Instrument):
                           'K, P = {0:.2e} W'.format(P_phot[i].max()),
                           ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[i]).max()) + '  W/sqrt(Hz)')
 
-        else:  ##220 GHz
+        else:  # 220 GHz
             # back to back horns, as seen by the detectors through the combiner   
             # Here the physical horn area S_horns must be used
             g[ib2b] = gp[ib2b, None] * S_horns * omega_det * (nu / c) ** 2 * \
@@ -548,7 +545,7 @@ class QubicInstrument(Instrument):
                       'K, P = {0:.2e} W'.format(P_phot[ib2b].max()),
                       ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ib2b]).max()) + ' W/sqrt(Hz)')
 
-            ## Environment NEP
+            # Environment NEP
             eff_factor = np.prod(transmissions[len(names) - 4:]) * \
                          self.detector.efficiency
             g_env = gp[ib2b, None] * S_det * omega_coldstop * (nu / c) ** 2 * \
@@ -567,7 +564,7 @@ class QubicInstrument(Instrument):
             # combiner
             icomb = ib2b + 1
             g[icomb] = gp[icomb] * S_det * omega_comb * (nu / c) ** 2 * dnu
-            # The combiner emmissivity includes the fact that there are 2
+            # The combiner emissivity includes the fact that there are 2
             # mirrors
             P_phot[icomb] = emissivities[icomb] * tr_prod[icomb] * h * nu / \
                             (np.exp(h * nu / k / temperatures[icomb]) - 1) * g[icomb] * \
@@ -580,7 +577,7 @@ class QubicInstrument(Instrument):
                       ', T=', temperatures[icomb],
                       'K, P = {0:.2e} W'.format(P_phot[icomb].max()),
                       ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[icomb]).max()) + ' W/sqrt(Hz)')
-            ## coldstop
+            # coldstop
             ics = icomb + 1
             g[ics] = gp[ics] * S_det * omega_coldstop * (nu / c) ** 2 * dnu
             P_phot[ics] = emissivities[ics] * tr_prod[ics] * h * nu / \
@@ -594,7 +591,7 @@ class QubicInstrument(Instrument):
                       ', T=', temperatures[ics],
                       'K, P = {0:.2e} W'.format(P_phot[ics].max()),
                       ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ics]).max()) + ' W/sqrt(Hz)')
-            ## dichroic
+            # dichroic
             idic = ics + 1
             g[idic] = gp[idic] * S_det * omega_dichro * (nu / c) ** 2 * dnu
             P_phot[idic] = emissivities[idic] * tr_prod[idic] * h * nu / \
@@ -641,8 +638,8 @@ class QubicInstrument(Instrument):
         P_phot_tot = np.sum(P_phot, axis=0)
         NEP_tot = np.sqrt(np.sum(NEP_phot2, axis=0) + NEP_phot2_env)
         if self.debug:
-            print('Total photon power =  {0:.2e} W'.format(P_phot_tot.max()) + \
-                  ', Total photon NEP = ' + '{0:.2e}'.format(NEP_tot.max()) + ' Watt/sqrt(Hz)')
+            print('Total photon power =  {0:.2e} W'.format(P_phot_tot.max()) +
+                  ', Total photon NEP = ' + '{0:.2e}'.format(NEP_tot.max()) + ' W/sqrt(Hz)')
         return NEP_tot
 
     def get_aperture_integration_operator(self):
@@ -980,7 +977,7 @@ class QubicInstrument(Instrument):
             uvec = position / np.sqrt(np.sum(position ** 2, axis=-1))[..., None]
             thetaphi = Cartesian2SphericalOperator('zenith,azimuth')(uvec)
             sr = - area / position[..., 2] ** 2 * np.cos(thetaphi[..., 0]) ** 3
-            sr = np.abs(sr) # This is temporary to fix an issue with new .fits files for detarray
+            sr = np.abs(sr)  # This is temporary to fix an issue with new .fits files for detarray
             tr = np.sqrt(secondary_beam(thetaphi[..., 0], thetaphi[..., 1]) *
                          sr / secondary_beam.solid_angle)[..., None]
             const = 2j * np.pi * nu / c
@@ -1188,7 +1185,7 @@ class QubicInstrument(Instrument):
         else:
             pos = detpos
 
-        if ((idet is not None) and (detpos is None)):
+        if (idet is not None) and (detpos is None):
             return self[idet].get_synthbeam(scene, theta_max=theta_max, external_A=external_A,
                                             detector_integrate=detector_integrate)[0]
         if detector_integrate is None:
@@ -1237,7 +1234,7 @@ def _pack_vector(*args):
     return out
 
 
-class QubicMultibandInstrument():
+class QubicMultibandInstrument:
     """
     The QubicMultibandInstrument class
     Represents the QUBIC multiband features 

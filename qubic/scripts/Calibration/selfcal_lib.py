@@ -87,7 +87,7 @@ class SelfCalibration:
         else:
             print('There is no dead detectors in this calfile')
 
-    def get_power_combinations(self, q, theta=np.array([0.]), phi=np.array([0.]),
+    def get_power_combinations(self, q, theta=np.array([0.]), phi=np.array([0.]), nu=150e9,
                                spectral_irradiance=1.,
                                reso=34, xmin=-0.06, xmax=0.06, doplot=True):
         """
@@ -101,6 +101,8 @@ class SelfCalibration:
             The source zenith angle [rad].
         phi : array-like
             The source azimuthal angle [rad].
+        nu : float
+            Source frequency in Hz.
         spectral_irradiance : array-like
             The source spectral_irradiance [W/m^2/Hz].
         reso : int
@@ -122,8 +124,9 @@ class SelfCalibration:
         # All open
         q.horn.open = True
         if self.dead_switches is not None:
-            q.horn.open[self.dead_switches] = False
-        S = get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
+            for i in self.dead_switches:
+                q.horn.open[i - 1] = False
+        S = get_power_on_array(q, theta, phi, nu, spectral_irradiance, reso, xmin, xmax)
         if doplot:
             plt.figure()
             plt.subplot(4, 4, 1)
@@ -137,9 +140,10 @@ class SelfCalibration:
         # All open except i
         q.horn.open = True
         if self.dead_switches is not None:
-            q.horn.open[self.dead_switches] = False
+            for i in self.dead_switches:
+                q.horn.open[i - 1] = False
         q.horn.open[self.baseline[0] - 1] = False
-        Cminus_i = get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
+        Cminus_i = get_power_on_array(q, theta, phi, nu, spectral_irradiance, reso, xmin, xmax)
         if doplot:
             plt.subplot(4, 4, 3)
             q.horn.plot()
@@ -152,9 +156,10 @@ class SelfCalibration:
         # All open except j
         q.horn.open = True
         if self.dead_switches is not None:
-            q.horn.open[self.dead_switches] = False
+            for i in self.dead_switches:
+                q.horn.open[i - 1] = False
         q.horn.open[self.baseline[1] - 1] = False
-        Cminus_j = get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
+        Cminus_j = get_power_on_array(q, theta, phi, nu, spectral_irradiance, reso, xmin, xmax)
         if doplot:
             plt.subplot(4, 4, 5)
             q.horn.plot()
@@ -167,10 +172,11 @@ class SelfCalibration:
         # All open except baseline [i, j]
         q.horn.open = True
         if self.dead_switches is not None:
-            q.horn.open[self.dead_switches] = False
+            for i in self.dead_switches:
+                q.horn.open[i - 1] = False
         q.horn.open[self.baseline[0] - 1] = False
         q.horn.open[self.baseline[1] - 1] = False
-        Sminus_ij = get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
+        Sminus_ij = get_power_on_array(q, theta, phi, nu, spectral_irradiance, reso, xmin, xmax)
         if doplot:
             plt.subplot(4, 4, 7)
             q.horn.plot()
@@ -183,9 +189,10 @@ class SelfCalibration:
         # Only i open (not a realistic observable)
         q.horn.open = False
         if self.dead_switches is not None:
-            q.horn.open[self.dead_switches] = False
+            for i in self.dead_switches:
+                q.horn.open[i - 1] = False
         q.horn.open[self.baseline[0] - 1] = True
-        Ci = get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
+        Ci = get_power_on_array(q, theta, phi, nu, spectral_irradiance, reso, xmin, xmax)
         if doplot:
             plt.subplot(4, 4, 9)
             q.horn.plot()
@@ -198,7 +205,7 @@ class SelfCalibration:
         # Only j open (not a realistic observable)
         q.horn.open = False
         q.horn.open[self.baseline[1] - 1] = True
-        Cj = get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
+        Cj = get_power_on_array(q, theta, phi, nu, spectral_irradiance, reso, xmin, xmax)
         if doplot:
             plt.subplot(4, 4, 11)
             q.horn.plot()
@@ -212,7 +219,7 @@ class SelfCalibration:
         q.horn.open = False
         q.horn.open[self.baseline[0] - 1] = True
         q.horn.open[self.baseline[1] - 1] = True
-        Sij = get_power_on_array(q, theta, phi, spectral_irradiance, reso, xmin, xmax)
+        Sij = get_power_on_array(q, theta, phi, nu, spectral_irradiance, reso, xmin, xmax)
         if doplot:
             plt.subplot(4, 4, 13)
             q.horn.plot()
@@ -224,7 +231,7 @@ class SelfCalibration:
 
         return S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij
 
-    def compute_fringes(self, theta=np.array([0.]), phi=np.array([0.]), reso=34, spectral_irradiance=1.):
+    def compute_fringes(self, theta=np.array([0.]), phi=np.array([0.]), nu=150e9, spectral_irradiance=1., reso=34,):
         """
         Return the fringes on the FP by making the computation
         fringes =(S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
@@ -232,9 +239,10 @@ class SelfCalibration:
         q = qubic.QubicMultibandInstrument(self.d)
 
         S_tot, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = \
-            SelfCalibration.get_power_combinations(self, q[0], theta=theta, phi=phi, reso=reso,
-                                                   spectral_irradiance=spectral_irradiance,
-                                                   doplot=False)
+            SelfCalibration.get_power_combinations(self, q[0], theta=theta, phi=phi, nu=nu,
+                                                   spectral_irradiance=spectral_irradiance, reso=reso,
+                                                   xmin=-0.06, xmax=0.06, doplot=True)
+
         fringes = (S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
 
         return fringes
@@ -376,8 +384,8 @@ class SelfCalibration:
                                                                  doplot=False,
                                                                  indep_config=np.delete(all_open, [i - 1, j - 1]))
         Ci_aber = SelfCalibration.get_power_fp_aberration(self, rep,
-                                                          doplot=False,
-                                                          indep_config=[i])
+                                                                 doplot=True,
+                                                                 indep_config=[i])
 
         fringes_aber = (S_tot_aber - Cminus_i_aber - Cminus_j_aber + Sminus_ij_aber) / Ci_aber
 
@@ -430,7 +438,7 @@ class SelfCalibration:
         return sb
 
 
-def get_power_on_array(q, theta=np.array([0.]), phi=np.array([0.]), spectral_irradiance=1.,
+def get_power_on_array(q, theta=np.array([0.]), phi=np.array([0.]), nu=150e9, spectral_irradiance=1.,
                        reso=34, xmin=-0.06, xmax=0.06):
     """
     Compute power on the focal plane for different positions of the source
@@ -443,6 +451,8 @@ def get_power_on_array(q, theta=np.array([0.]), phi=np.array([0.]), spectral_irr
         The source zenith angle [rad].
     phi : array-like
         The source azimuthal angle [rad].
+    nu : float
+        Source frequency in Hz.
     spectral_irradiance : array-like
         The source spectral_irradiance [W/m^2/Hz].
     reso : int
@@ -465,7 +475,7 @@ def get_power_on_array(q, theta=np.array([0.]), phi=np.array([0.]), spectral_irr
     position = np.array([x1d, y1d, z1d]).T
 
     field = q._get_response(theta, phi, spectral_irradiance, position, q.detector.area,
-                            q.filter.nu, q.horn, q.primary_beam, q.secondary_beam)
+                            nu, q.horn, q.primary_beam, q.secondary_beam)
     power = np.reshape(np.abs(field) ** 2, (reso, reso, nptg))
 
     return power

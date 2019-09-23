@@ -1,5 +1,5 @@
 # coding: utf-8
-from __future__ import division,print_function
+from __future__ import division, print_function
 
 import healpy as hp
 import numexpr as ne
@@ -21,15 +21,16 @@ from pysimulators.interfaces.healpy import (
 from pysimulators.sparse import (
     FSRMatrix, FSRRotation2dMatrix, FSRRotation3dMatrix)
 from scipy.constants import c, h, k, sigma
-from scipy.integrate import quad 
+from scipy.integrate import quad
 from . import _flib as flib
 from .calibration import QubicCalibration
 from .utils import _compress_mask
 from .ripples import ConvolutionRippledGaussianOperator, BeamGaussianRippled
 from .beams import (BeamGaussian, BeamFitted, MultiFreqBeam)
-                            
+
 __all__ = ['QubicInstrument',
            'QubicMultibandInstrument']
+
 
 class Filter(object):
     def __init__(self, nu, relative_bandwidth):
@@ -45,14 +46,17 @@ class Optics(object):
 class SyntheticBeam(object):
     pass
 
-def funct(x,p,n):
-    return x**p / (np.exp(x)-1)**n
+
+def funct(x, p, n):
+    return x ** p / (np.exp(x) - 1) ** n
+
 
 class QubicInstrument(Instrument):
     """
     The QubicInstrument class. It represents the instrument setup.
 
     """
+
     def __init__(self, d, FRBW=None):
         """
         d : Input dictionary, from which the following Parameters are read
@@ -102,9 +106,9 @@ class QubicInstrument(Instrument):
             'gaussian', 'fitted_beam' or 'multi_freq'
 
         """
-        self.debug = d['debug'] # if True allows debuging prints
-        filter_nu=d['filter_nu']
-        filter_relative_bandwidth=d['filter_relative_bandwidth']
+        self.debug = d['debug']  # if True allows debuging prints
+        filter_nu = d['filter_nu']
+        filter_relative_bandwidth = d['filter_relative_bandwidth']
         if FRBW is not None:
             self.FRBW = FRBW
         else:
@@ -113,62 +117,59 @@ class QubicInstrument(Instrument):
             print('FRBW = ', self.FRBW, 'dnu = ', filter_relative_bandwidth)
         ## Choose the relevant Optics calibration file  
         self.nu1 = 150e9
-        self.nu1_up = 150e9 * (1  + self.FRBW / 1.9)
-        self.nu1_down = 150e9 * (1  - self.FRBW / 1.9)
+        self.nu1_up = 150e9 * (1 + self.FRBW / 1.9)
+        self.nu1_down = 150e9 * (1 - self.FRBW / 1.9)
         self.nu2 = 220e9
-        self.nu2_up = 220e9 * (1  + self.FRBW / 1.9)
-        self.nu2_down = 220e9 * (1  - self.FRBW / 1.9)
+        self.nu2_up = 220e9 * (1 + self.FRBW / 1.9)
+        self.nu2_down = 220e9 * (1 - self.FRBW / 1.9)
         if (filter_nu <= self.nu1_up) and (filter_nu >= self.nu1_down):
-            d['optics'] = d['optics'].replace(d['optics'][-7:-4],'150')
+            d['optics'] = d['optics'].replace(d['optics'][-7:-4], '150')
         elif (filter_nu <= self.nu2_up) and (filter_nu >= self.nu2_down):
-            d['optics'] = d['optics'].replace(d['optics'][-7:-4],'220')
+            d['optics'] = d['optics'].replace(d['optics'][-7:-4], '220')
             if d['config'] == 'TD':
                 raise ValueError("TD Not used at frequency " +
-                                     str(int(d['filter_nu']/1e9)) + ' GHz')
+                                 str(int(d['filter_nu'] / 1e9)) + ' GHz')
         else:
-            raise ValueError("frequency = " + str(int(d['filter_nu']/1e9)) +
-                    " out of bounds" )
-        d['optics'] = d['optics'].replace(d['optics'][-10:-8],d['config'])
-        d['detarray'] = d['detarray'].replace(d['detarray'][-7:-5],d['config'])
-        d['hornarray'] = d['hornarray'].replace(d['hornarray'][-7:-5],d['config'])
-        
-        if d['nf_sub'] is None and d['MultiBand']==True:
-            raise ValueError ("Error: number of subband not specified")
-                
-        detector_fknee=d['detector_fknee']
-        detector_fslope=d['detector_fslope']
-        detector_ncorr=d['detector_ncorr']
-        detector_nep=d['detector_nep']
-        detector_ngrids=d['detector_ngrids']
-        detector_tau=d['detector_tau']
-        
-        polarizer=d['polarizer']
-        synthbeam_dtype=np.float32
-        synthbeam_fraction=d['synthbeam_fraction']
-        synthbeam_kmax=d['synthbeam_kmax']
-        synthbeam_peak150_fwhm=np.radians(d['synthbeam_peak150_fwhm'])
-        ripples=d['ripples']
-        nripples=d['nripples']
+            raise ValueError("frequency = " + str(int(d['filter_nu'] / 1e9)) +
+                             " out of bounds")
+        d['optics'] = d['optics'].replace(d['optics'][-10:-8], d['config'])
+        d['detarray'] = d['detarray'].replace(d['detarray'][-7:-5], d['config'])
+        d['hornarray'] = d['hornarray'].replace(d['hornarray'][-7:-5], d['config'])
+
+        if d['nf_sub'] is None and d['MultiBand'] is True:
+            raise ValueError("Error: number of subband not specified")
+
+        detector_fknee = d['detector_fknee']
+        detector_fslope = d['detector_fslope']
+        detector_ncorr = d['detector_ncorr']
+        detector_nep = d['detector_nep']
+        detector_ngrids = d['detector_ngrids']
+        detector_tau = d['detector_tau']
+
+        polarizer = d['polarizer']
+        synthbeam_dtype = np.float32
+        synthbeam_fraction = d['synthbeam_fraction']
+        synthbeam_kmax = d['synthbeam_kmax']
+        synthbeam_peak150_fwhm = np.radians(d['synthbeam_peak150_fwhm'])
+        ripples = d['ripples']
+        nripples = d['nripples']
 
         # Choose the primary beam calibration file
         if d['beam_shape'] == 'gaussian':
-            aux = d['primbeam']
-            d['primbeam'] = d['primbeam'].replace(d['primbeam'][-6],'2')
-            primary_shape='gaussian'
-            secondary_shape='gaussian'
+            d['primbeam'] = d['primbeam'].replace(d['primbeam'][-6], '2')
+            primary_shape = 'gaussian'
+            secondary_shape = 'gaussian'
         elif d['beam_shape'] == 'fitted_beam':
-            aux = d['primbeam']
-            d['primbeam'] = d['primbeam'].replace(d['primbeam'][-6],'3')
+            d['primbeam'] = d['primbeam'].replace(d['primbeam'][-6], '3')
             primary_shape = 'fitted_beam'
             secondary_shape = 'fitted_beam'
         else:
-            aux = d['primbeam']
-            d['primbeam'] = d['primbeam'].replace(d['primbeam'][-6],'4')
+            d['primbeam'] = d['primbeam'].replace(d['primbeam'][-6], '4')
             primary_shape = 'multi_freq'
             secondary_shape = 'multi_freq'
         if self.debug:
             print('primary_shape', primary_shape)
-            print("d['primbeam']",d['primbeam'])
+            print("d['primbeam']", d['primbeam'])
         calibration = QubicCalibration(d)
         self.config = d['config']
         self.calibration = calibration
@@ -202,7 +203,7 @@ class QubicInstrument(Instrument):
 
         def theta(self):
             return np.arctan2(
-                np.sqrt(np.sum(self.center[..., :2]**2, axis=-1)),
+                np.sqrt(np.sum(self.center[..., :2] ** 2, axis=-1)),
                 self.center[..., 2])
 
         def phi(self):
@@ -229,33 +230,33 @@ class QubicInstrument(Instrument):
             par, omega = self.calibration.get('primbeam')
             PrimBeam = BeamFitted(par, omega)
         elif primary == 'multi_freq':
-            parth,parfr,parbeam,alpha,xspl = self.calibration.get('primbeam')
+            parth, parfr, parbeam, alpha, xspl = self.calibration.get('primbeam')
             PrimBeam = MultiFreqBeam(parth, parfr, parbeam, alpha, xspl,
-                                    nu=nu)
+                                     nu=nu)
         self.primary_beam = PrimBeam
         if secondary is 'gaussian':
             SecBeam = BeamGaussian(
                 np.radians(self.calibration.get('primbeam')), nu=nu,
-                                                backward=True)
+                backward=True)
         elif secondary == 'fitted_beam':
             par, omega = self.calibration.get('primbeam')
             SecBeam = BeamFitted(par, omega, backward=True)
         elif secondary == 'multi_freq':
-            parth,parfr,parbeam,alpha,xspl = self.calibration.get('primbeam')
-            SecBeam = MultiFreqBeam(parth, parfr, parbeam, alpha, xspl, nu=nu
-                                      , backward=True)
+            parth, parfr, parbeam, alpha, xspl = self.calibration.get('primbeam')
+            SecBeam = MultiFreqBeam(parth, parfr, parbeam, alpha, xspl, nu=nu,
+                                    backward=True)
         self.secondary_beam = SecBeam
 
     def _init_filter(self, nu, relative_bandwidth):
         self.filter = Filter(nu, relative_bandwidth)
 
-    def _init_horns(self,filter_nu):
+    def _init_horns(self, filter_nu):
         self.horn = self.calibration.get('hornarray')
         self.horn.radeff = self.horn.radius
         # In the 150 GHz band, horns are one moded 
         if (filter_nu <= self.nu1_up) and (filter_nu >= self.nu1_down):
-            kappa = np.pi * self.horn.radius**2 * self.primary_beam.solid_angle * \
-                filter_nu**2 / c**2
+            kappa = np.pi * self.horn.radius ** 2 * self.primary_beam.solid_angle * \
+                    filter_nu ** 2 / c ** 2
             self.horn.radeff = self.horn.radius / np.sqrt(kappa)
 
     def _init_optics(self, polarizer):
@@ -286,7 +287,7 @@ class QubicInstrument(Instrument):
         return 'Instrument:\n' + \
                '\n'.join(['    ' + a + ': ' + repr(v) for a, v in state]) + \
                '\n\nCalibration:\n' + '\n'. \
-               join('    ' + l for l in str(self.calibration).splitlines())
+                   join('    ' + l for l in str(self.calibration).splitlines())
 
     __repr__ = __str__
 
@@ -342,33 +343,33 @@ class QubicInstrument(Instrument):
         ndet = len(self.detector)
         # tr_prod : product of transmissions of all components lying
         # after the present one        
-        tr_prod = np.r_[[np.prod(transmissions[j+1:]) for j in range(n-1)], 1]
+        tr_prod = np.r_[[np.prod(transmissions[j + 1:]) for j in range(n - 1)], 1]
         # insures that the noise is comuted for the full bandwidth.
         if (self.filter.nu <= self.nu1_up) \
-          and (self.filter.nu >= self.nu1_down):
+                and (self.filter.nu >= self.nu1_down):
             nu = self.nu1
         if (self.filter.nu <= self.nu2_up) \
-          and (self.filter.nu >= self.nu2_down):
+                and (self.filter.nu >= self.nu2_down):
             nu = self.nu2
         dnu = nu * self.FRBW
         S_det = self.detector.area
         omega_det = -self.detector.area / \
-                    self.optics.focal_length**2 * \
-                    np.cos(self.detector.theta)**3
+                    self.optics.focal_length ** 2 * \
+                    np.cos(self.detector.theta) ** 3
         # Physical horn area   
-        S_horns = np.pi * self.horn.radius**2 * len(self.horn)
+        S_horns = np.pi * self.horn.radius ** 2 * len(self.horn)
         # Effective horn area, taking the number of modes into account 
-        S_horns_eff = np.pi * self.horn.radeff**2 * len(self.horn)
+        S_horns_eff = np.pi * self.horn.radeff ** 2 * len(self.horn)
         sec_beam = self.secondary_beam(self.detector.theta,
                                        self.detector.phi)
-        alpha = np.arctan(0.5) # half oppening angle of the combiner
-        omega_comb = np.pi * (1 - np.cos(alpha)**2) ## to be revisited,
-        ## depends on the detector position
-        omega_dichro = omega_comb ## à améliorer     
-        omega_coldstop = 0.09 ## average, depends slightly on
-        ## the detector position
+        alpha = np.arctan(0.5)  # half oppening angle of the combiner
+        omega_comb = np.pi * (1 - np.cos(alpha) ** 2)  # to be revisited,
+        # depends on the detector position
+        omega_dichro = omega_comb  # must be improved
+        omega_coldstop = 0.09  # average, depends slightly on
+        # the detector position
 
-        P_phot = np.zeros((n,ndet))
+        P_phot = np.zeros((n, ndet))
         NEP_phot2_nobunch = np.zeros_like(P_phot)
         NEP_phot2 = np.zeros_like(P_phot)
         g = np.zeros_like(P_phot)
@@ -376,285 +377,269 @@ class QubicInstrument(Instrument):
         for i in range(len(cc)):
             names.append(cc[i][0])
         if self.debug:
-            print(self.config,', central frequency:', int(nu/1e9),'+-',\
-                  int(dnu/2e9), 'GHz, subband:', int(self.filter.nu/1e9),\
-                  'GHz, n_modes =', np.pi * self.horn.radeff**2 * \
-                  self.primary_beam.solid_angle *\
-                  self.filter.nu**2 / c**2)
-            indf = names.index('ndf')-2
-            if cc[indf][2] != 1.0: 
-                print('Neutral density filter present, trans = ', \
-                  cc[indf][2])
+            print(self.config, ', central frequency:', int(nu / 1e9), '+-',
+                  int(dnu / 2e9), 'GHz, subband:', int(self.filter.nu / 1e9),
+                  'GHz, n_modes =', np.pi * self.horn.radeff ** 2 * \
+                  self.primary_beam.solid_angle * \
+                  self.filter.nu ** 2 / c ** 2)
+            indf = names.index('ndf') - 2
+            if cc[indf][2] != 1.0:
+                print('Neutral density filter present, trans = ',
+                      cc[indf][2])
             else:
                 print('No neutral density filter')
         # compnents before the horn plane
         ib2b = names.index('ba2ba')
-        g[:ib2b] = gp[:ib2b, None] * S_horns_eff * omega_det * (nu / c)**2 \
-            * sec_beam * dnu
+        g[:ib2b] = gp[:ib2b, None] * S_horns_eff * omega_det * (nu / c) ** 2 \
+                   * sec_beam * dnu
         P_phot[:ib2b] = (emissivities * tr_prod * h * nu /
-                  (np.exp(h * nu / k / temperatures) - 1))[:ib2b, None] * \
-                  g[:ib2b]
-        
+                         (np.exp(h * nu / k / temperatures) - 1))[:ib2b, None] * \
+                        g[:ib2b]
+
         P_phot[:ib2b] = P_phot[:ib2b] * self.detector.efficiency
         NEP_phot2_nobunch[:ib2b] = h * nu * P_phot[:ib2b] * 2
         # note the factor 2 in the definition of the NEP^2
-        NEP_phot2[:ib2b] = NEP_phot2_nobunch[:ib2b] * (1 + P_phot[:ib2b] / \
+        NEP_phot2[:ib2b] = NEP_phot2_nobunch[:ib2b] * (1 + P_phot[:ib2b] /
                                                        (h * nu * g[:ib2b]))
         if self.debug:
             for j in range(ib2b):
-                print(names[j], ', T=',temperatures[j],\
-                    'K, P = {0:.2e} W'.format(P_phot[j].max()),\
-                    ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[j]).max()) +\
-                    '  W/sqrt(Hz)')
+                print(names[j], ', T=', temperatures[j],
+                      'K, P = {0:.2e} W'.format(P_phot[j].max()),
+                      ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[j]).max()) + '  W/sqrt(Hz)')
         # bifurcation for the whole 150 GHz
         if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
             nu_up = 168e9
             # back to back horns, as seen by the detectors through the combiner
             T = temperatures[ib2b]
             b = h * nu_up / k / T
-            I1 = quad(funct,0,b,(4,1))[0]
-            I2 = quad(funct,0,b,(4,2))[0]
-            K1 = quad(funct,0,b,(3,1))[0]
+            I1 = quad(funct, 0, b, (4, 1))[0]
+            I2 = quad(funct, 0, b, (4, 2))[0]
+            K1 = quad(funct, 0, b, (3, 1))[0]
             eta = (emissivities * tr_prod)[ib2b] * self.detector.efficiency
             # Here the physical horn area S_horns must be used
-            NEP_phot2[ib2b] = 2*gp[ib2b] * eta * (k * T)**5 / c**2 / h**3 * \
+            NEP_phot2[ib2b] = 2 * gp[ib2b] * eta * (k * T) ** 5 / c ** 2 / h ** 3 * \
                               (I1 + eta * I2) * S_horns * omega_det * sec_beam
-            P_phot[ib2b] = gp[ib2b] * eta * (k * T)**4 / c**2 / h**3 * K1 * \
-                           S_horns * omega_det * sec_beam 
+            P_phot[ib2b] = gp[ib2b] * eta * (k * T) ** 4 / c ** 2 / h ** 3 * K1 * \
+                           S_horns * omega_det * sec_beam
             if self.debug:
-                print(names[ib2b], ', T=',temperatures[ib2b], \
-                    'K, P = {0:.2e} W'.format(P_phot[ib2b].max()),\
-                    ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ib2b]).max()) +\
-                    '  W/sqrt(Hz)')
-     
+                print(names[ib2b], ', T=', temperatures[ib2b],
+                      'K, P = {0:.2e} W'.format(P_phot[ib2b].max()),
+                      ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ib2b]).max()) + '  W/sqrt(Hz)')
+
             ## Environment NEP
-            eff_factor = np.prod(transmissions[(len(names)-4):]) *\
+            eff_factor = np.prod(transmissions[(len(names) - 4):]) * \
                          self.detector.efficiency
             P_phot_env = gp[ib2b] * eff_factor * omega_coldstop * S_det * \
-                         (k * temperatures[ib2b])**4 / c**2 / h**3 * K1
+                         (k * temperatures[ib2b]) ** 4 / c ** 2 / h ** 3 * K1
             NEP_phot2_env = 4 * omega_coldstop * S_det * \
-                            (k * temperatures[ib2b])**5 / c**2 / h**3 *\
-                            eff_factor * (I1  + I2 * eff_factor)
+                            (k * temperatures[ib2b]) ** 5 / c ** 2 / h ** 3 * \
+                            eff_factor * (I1 + I2 * eff_factor)
             if self.debug:
-                print('Environment T =',temperatures[ib2b], \
-                    'K, P = {0:.2e} W'.format(P_phot_env.max()),\
-                    ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2_env).max()) +\
-                    '  W/sqrt(Hz)')
+                print('Environment T =', temperatures[ib2b],
+                      'K, P = {0:.2e} W'.format(P_phot_env.max()),
+                      ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2_env).max()) + '  W/sqrt(Hz)')
             ## Combiner
-            icomb = ib2b+1 # the combiner is the component just after the horns
+            icomb = ib2b + 1  # the combiner is the component just after the horns
             T = temperatures[icomb]
             b = h * nu_up / k / T
-            J1 = quad(funct,0,b,(4,1))[0]
-            J2 = quad(funct,0,b,(4,2))[0]
-            L1 = quad(funct,0,b,(3,1))[0]
-            eta = (emissivities * tr_prod)[icomb]* self.detector.efficiency
-            NEP_phot2[icomb] = 2*gp[icomb] * eta * (k * T)**5 / c**2 / h**3 *\
+            J1 = quad(funct, 0, b, (4, 1))[0]
+            J2 = quad(funct, 0, b, (4, 2))[0]
+            L1 = quad(funct, 0, b, (3, 1))[0]
+            eta = (emissivities * tr_prod)[icomb] * self.detector.efficiency
+            NEP_phot2[icomb] = 2 * gp[icomb] * eta * (k * T) ** 5 / c ** 2 / h ** 3 * \
                                (J1 + eta * J2) * S_det * omega_comb * sec_beam
-            P_phot[icomb] = gp[icomb] * eta * (k * T)**4 / c**2 / h**3 * L1 * \
-                           S_det * omega_comb * sec_beam 
+            P_phot[icomb] = gp[icomb] * eta * (k * T) ** 4 / c ** 2 / h ** 3 * L1 * \
+                            S_det * omega_comb * sec_beam
             if self.debug:
-                print(names[icomb], ', T=',temperatures[icomb], \
-                    'K, P = {0:.2e} W'.format(P_phot[icomb].max()),\
-                    ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[icomb]).max()) +\
-                    '  W/sqrt(Hz)')
-            #cold stop low pass edge
-            ics = icomb+1
+                print(names[icomb], ', T=', temperatures[icomb],
+                      'K, P = {0:.2e} W'.format(P_phot[icomb].max()),
+                      ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[icomb]).max()) + '  W/sqrt(Hz)')
+            # cold stop low pass edge
+            ics = icomb + 1
             T = temperatures[ics]
             b = h * nu_up / k / T
-            J1 = quad(funct,0,b,(4,1))[0]
-            J2 = quad(funct,0,b,(4,2))[0]
-            L1 = quad(funct,0,b,(3,1))[0]
-            eta = (emissivities * tr_prod)[ics]* self.detector.efficiency
-            NEP_phot2[ics] = 2*gp[ics] * eta * (k * T)**5 / c**2 / h**3 *\
-                               (J1 + eta * J2) * S_det * omega_coldstop * sec_beam
-            P_phot[ics] = gp[ics] * eta * (k * T)**4 / c**2 / h**3 * L1 * \
-                           S_det * omega_coldstop * sec_beam 
+            J1 = quad(funct, 0, b, (4, 1))[0]
+            J2 = quad(funct, 0, b, (4, 2))[0]
+            L1 = quad(funct, 0, b, (3, 1))[0]
+            eta = (emissivities * tr_prod)[ics] * self.detector.efficiency
+            NEP_phot2[ics] = 2 * gp[ics] * eta * (k * T) ** 5 / c ** 2 / h ** 3 * \
+                             (J1 + eta * J2) * S_det * omega_coldstop * sec_beam
+            P_phot[ics] = gp[ics] * eta * (k * T) ** 4 / c ** 2 / h ** 3 * L1 * \
+                          S_det * omega_coldstop * sec_beam
             if self.debug:
-                print(names[ics], ', T=',temperatures[ics], \
-                    'K, P = {0:.2e} W'.format(P_phot[ics].max()),\
-                    ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ics]).max()) +\
-                    '  W/sqrt(Hz)')
+                print(names[ics], ', T=', temperatures[ics],
+                      'K, P = {0:.2e} W'.format(P_phot[ics].max()),
+                      ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ics]).max()) + '  W/sqrt(Hz)')
             ## dicroic 
             if self.config == 'FI':
-                idic = ics +1
+                idic = ics + 1
                 T = temperatures[idic]
                 b = h * nu_up / k / T
-                J1 = quad(funct,0,b,(4,1))[0]
-                J2 = quad(funct,0,b,(4,2))[0]
-                L1 = quad(funct,0,b,(3,1))[0]
-                eta = (emissivities * tr_prod)[idic]* self.detector.efficiency
-                NEP_phot2[idic] = 2*gp[idic] * eta * (k * T)**5 / c**2 / h**3 *\
-                                   (J1 + eta * J2) * S_det * omega_dichro * sec_beam
-                P_phot[idic] = gp[idic] * eta * (k * T)**4 / c**2 / h**3 * L1 * \
-                               S_det * omega_dichro * sec_beam 
+                J1 = quad(funct, 0, b, (4, 1))[0]
+                J2 = quad(funct, 0, b, (4, 2))[0]
+                L1 = quad(funct, 0, b, (3, 1))[0]
+                eta = (emissivities * tr_prod)[idic] * self.detector.efficiency
+                NEP_phot2[idic] = 2 * gp[idic] * eta * (k * T) ** 5 / c ** 2 / h ** 3 * \
+                                  (J1 + eta * J2) * S_det * omega_dichro * sec_beam
+                P_phot[idic] = gp[idic] * eta * (k * T) ** 4 / c ** 2 / h ** 3 * L1 * \
+                               S_det * omega_dichro * sec_beam
                 if self.debug:
-                    print(names[idic], ', T=',temperatures[idic], \
-                        'K, P = {0:.2e} W'.format(P_phot[idic].max()),\
-                        ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[idic]).max()) +\
-                        '  W/sqrt(Hz)')
-                # Neutral density dilter
-                indf = idic +1
+                    print(names[idic], ', T=', temperatures[idic],
+                          'K, P = {0:.2e} W'.format(P_phot[idic].max()),
+                          ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[idic]).max()) + '  W/sqrt(Hz)')
+                # Neutral density filter
+                indf = idic + 1
             else:
-                indf = ics +1
+                indf = ics + 1
             if emissivities[indf] == 0.0:
                 P_phot[indf] = 0.0
                 NEP_phot2[indf] = 0.0
             else:
                 T = temperatures[indf]
                 b = h * nu_up / k / T
-                J1 = quad(funct,0,b,(4,1))[0]
-                J2 = quad(funct,0,b,(4,2))[0]
-                L1 = quad(funct,0,b,(3,1))[0]
-                eta = (emissivities * tr_prod)[indf]* self.detector.efficiency
-                NEP_phot2[indf] = 2*gp[indf] * eta * (k * T)**5 / c**2 / h**3 *\
-                                   (J1 + eta * J2) * S_det * np.pi * sec_beam
-                P_phot[indf] = gp[indf] * eta * (k * T)**4 / c**2 / h**3 * L1 * \
-                               S_det * np.pi * sec_beam 
+                J1 = quad(funct, 0, b, (4, 1))[0]
+                J2 = quad(funct, 0, b, (4, 2))[0]
+                L1 = quad(funct, 0, b, (3, 1))[0]
+                eta = (emissivities * tr_prod)[indf] * self.detector.efficiency
+                NEP_phot2[indf] = 2 * gp[indf] * eta * (k * T) ** 5 / c ** 2 / h ** 3 * \
+                                  (J1 + eta * J2) * S_det * np.pi * sec_beam
+                P_phot[indf] = gp[indf] * eta * (k * T) ** 4 / c ** 2 / h ** 3 * L1 * \
+                               S_det * np.pi * sec_beam
                 if self.debug:
-                    print(names[indf], ', T=',temperatures[indf], \
-                        'K, P = {0:.2e} W'.format(P_phot[indf].max()),\
-                        ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[indf]).max()) +\
-                        '  W/sqrt(Hz)')
+                    print(names[indf], ', T=', temperatures[indf],
+                          'K, P = {0:.2e} W'.format(P_phot[indf].max()),
+                          ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[indf]).max()) + '  W/sqrt(Hz)')
             # The two before last low pass Edges
-            for i in range(indf+1,indf+3):
+            for i in range(indf + 1, indf + 3):
                 T = temperatures[i]
                 b = h * nu_up / k / T
-                J1 = quad(funct,0,b,(4,1))[0]
-                J2 = quad(funct,0,b,(4,2))[0]
-                L1 = quad(funct,0,b,(3,1))[0]
-                eta = (emissivities * tr_prod)[i]* self.detector.efficiency
-                NEP_phot2[i] = 2*gp[i] * eta * (k * T)**5 / c**2 / h**3 *\
-                                   (J1 + eta * J2) * S_det * np.pi * sec_beam
-                P_phot[i] = gp[i] * eta * (k * T)**4 / c**2 / h**3 * L1 * \
-                               S_det * np.pi * sec_beam 
+                J1 = quad(funct, 0, b, (4, 1))[0]
+                J2 = quad(funct, 0, b, (4, 2))[0]
+                L1 = quad(funct, 0, b, (3, 1))[0]
+                eta = (emissivities * tr_prod)[i] * self.detector.efficiency
+                NEP_phot2[i] = 2 * gp[i] * eta * (k * T) ** 5 / c ** 2 / h ** 3 * \
+                               (J1 + eta * J2) * S_det * np.pi * sec_beam
+                P_phot[i] = gp[i] * eta * (k * T) ** 4 / c ** 2 / h ** 3 * L1 * \
+                            S_det * np.pi * sec_beam
                 if self.debug:
-                    print(names[i], ', T=',temperatures[i], \
-                        'K, P = {0:.2e} W'.format(P_phot[i].max()),\
-                        ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[i]).max()) +\
-                        '  W/sqrt(Hz)')
-            
-        else: ##220 GHz
+                    print(names[i], ', T=', temperatures[i],
+                          'K, P = {0:.2e} W'.format(P_phot[i].max()),
+                          ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[i]).max()) + '  W/sqrt(Hz)')
+
+        else:  # 220 GHz
             # back to back horns, as seen by the detectors through the combiner   
             # Here the physical horn area S_horns must be used
-            g[ib2b] = gp[ib2b, None] * S_horns * omega_det * (nu / c)**2 * \
+            g[ib2b] = gp[ib2b, None] * S_horns * omega_det * (nu / c) ** 2 * \
                       sec_beam * dnu
             P_phot[ib2b] = (emissivities * tr_prod * h * nu /
-                  (np.exp(h * nu / k / temperatures[ib2b]) - 1))[ib2b, None] *\
-                  g[ib2b]
+                            (np.exp(h * nu / k / temperatures[ib2b]) - 1))[ib2b, None] * \
+                           g[ib2b]
             P_phot[ib2b] = P_phot[ib2b] * self.detector.efficiency
             NEP_phot2_nobunch[ib2b] = h * nu * P_phot[ib2b] * 2
             # note the factor 2 in the definition of the NEP^2
-            NEP_phot2[ib2b] = NEP_phot2_nobunch[ib2b] * (1 + P_phot[ib2b] / \
+            NEP_phot2[ib2b] = NEP_phot2_nobunch[ib2b] * (1 + P_phot[ib2b] /
                                                          (h * nu * g[ib2b]))
             if self.debug:
-                print(names[ib2b], \
-                    ', T=',temperatures[ib2b], \
-                    'K, P = {0:.2e} W'.format(P_phot[ib2b].max()),\
-                    ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ib2b]).max()) +\
-                    ' W/sqrt(Hz)')
+                print(names[ib2b],
+                      ', T=', temperatures[ib2b],
+                      'K, P = {0:.2e} W'.format(P_phot[ib2b].max()),
+                      ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ib2b]).max()) + ' W/sqrt(Hz)')
 
-            ## Environment NEP
-            eff_factor = np.prod(transmissions[len(names)-4:]) *\
+            # Environment NEP
+            eff_factor = np.prod(transmissions[len(names) - 4:]) * \
                          self.detector.efficiency
-            g_env = gp[ib2b, None] * S_det * omega_coldstop * (nu / c)**2 *\
+            g_env = gp[ib2b, None] * S_det * omega_coldstop * (nu / c) ** 2 * \
                     sec_beam * dnu
             P_phot_env = (eff_factor * h * nu /
-                  (np.exp(h * nu / k / temperatures[ib2b]) - 1))[ib2b, None] *\
-                  g_env
+                          (np.exp(h * nu / k / temperatures[ib2b]) - 1))[ib2b, None] * \
+                         g_env
             NEP_phot2_env_nobunch = h * nu * P_phot_env * 2
             # note the factor 2 in the definition of the NEP^2
-            NEP_phot2_env = NEP_phot2_env_nobunch[ib2b] * (1 + P_phot_env /\
+            NEP_phot2_env = NEP_phot2_env_nobunch[ib2b] * (1 + P_phot_env /
                                                            (h * nu * g_env))
             if self.debug:
-                print('Environment, T =',temperatures[ib2b], \
-                    'K, P = {0:.2e} W'.format(P_phot_env.max()),\
-                    ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2_env).max())+\
-                    ' W/sqrt(Hz)')
+                print('Environment, T =', temperatures[ib2b],
+                      'K, P = {0:.2e} W'.format(P_phot_env.max()),
+                      ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2_env).max()) + ' W/sqrt(Hz)')
             # combiner
-            icomb = ib2b+1
-            g[icomb] = gp[icomb] * S_det * omega_comb * (nu / c)**2 * dnu
-            # The combiner emmissivity includes the fact that there are 2
+            icomb = ib2b + 1
+            g[icomb] = gp[icomb] * S_det * omega_comb * (nu / c) ** 2 * dnu
+            # The combiner emissivity includes the fact that there are 2
             # mirrors
-            P_phot[icomb] = emissivities[icomb] * tr_prod[icomb] * h * nu /\
-                  (np.exp(h * nu / k / temperatures[icomb]) - 1) * g[icomb] *\
-                  self.detector.efficiency
+            P_phot[icomb] = emissivities[icomb] * tr_prod[icomb] * h * nu / \
+                            (np.exp(h * nu / k / temperatures[icomb]) - 1) * g[icomb] * \
+                            self.detector.efficiency
             NEP_phot2_nobunch[icomb] = h * nu * P_phot[icomb] * 2
-            NEP_phot2[icomb] = NEP_phot2_nobunch[icomb] * (1 + P_phot[icomb] /\
+            NEP_phot2[icomb] = NEP_phot2_nobunch[icomb] * (1 + P_phot[icomb] /
                                                            (h * nu * g[icomb]))
             if self.debug:
-                print(names[icomb], \
-                    ', T=',temperatures[icomb], \
-                    'K, P = {0:.2e} W'.format(P_phot[icomb].max()),\
-                    ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[icomb]).max())+\
-                    ' W/sqrt(Hz)')
-            ## coldstop
-            ics = icomb +1 
-            g[ics] = gp[ics] * S_det * omega_coldstop * (nu / c)**2 * dnu
-            P_phot[ics] = emissivities[ics] * tr_prod[ics] * h * nu /\
-                  (np.exp(h * nu / k / temperatures[ics]) - 1) * g[ics] *\
-                  self.detector.efficiency
+                print(names[icomb],
+                      ', T=', temperatures[icomb],
+                      'K, P = {0:.2e} W'.format(P_phot[icomb].max()),
+                      ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[icomb]).max()) + ' W/sqrt(Hz)')
+            # coldstop
+            ics = icomb + 1
+            g[ics] = gp[ics] * S_det * omega_coldstop * (nu / c) ** 2 * dnu
+            P_phot[ics] = emissivities[ics] * tr_prod[ics] * h * nu / \
+                          (np.exp(h * nu / k / temperatures[ics]) - 1) * g[ics] * \
+                          self.detector.efficiency
             NEP_phot2_nobunch[ics] = h * nu * P_phot[ics] * 2
-            NEP_phot2[ics] = NEP_phot2_nobunch[ics] * (1 + P_phot[ics] /\
-                                                           (h * nu * g[ics]))
+            NEP_phot2[ics] = NEP_phot2_nobunch[ics] * (1 + P_phot[ics] /
+                                                       (h * nu * g[ics]))
             if self.debug:
-                print(names[ics], \
-                    ', T=',temperatures[ics], \
-                    'K, P = {0:.2e} W'.format(P_phot[ics].max()),\
-                    ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ics]).max())+\
-                    ' W/sqrt(Hz)')
-            ## dichroic
-            idic = ics +1 
-            g[idic] = gp[idic] * S_det * omega_dichro * (nu / c)**2 * dnu
-            P_phot[idic] = emissivities[idic] * tr_prod[idic] * h * nu /\
-                  (np.exp(h * nu / k / temperatures[idic]) - 1) * g[idic] *\
-                  self.detector.efficiency
+                print(names[ics],
+                      ', T=', temperatures[ics],
+                      'K, P = {0:.2e} W'.format(P_phot[ics].max()),
+                      ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ics]).max()) + ' W/sqrt(Hz)')
+            # dichroic
+            idic = ics + 1
+            g[idic] = gp[idic] * S_det * omega_dichro * (nu / c) ** 2 * dnu
+            P_phot[idic] = emissivities[idic] * tr_prod[idic] * h * nu / \
+                           (np.exp(h * nu / k / temperatures[idic]) - 1) * g[idic] * \
+                           self.detector.efficiency
             NEP_phot2_nobunch[idic] = h * nu * P_phot[idic] * 2
-            NEP_phot2[idic] = NEP_phot2_nobunch[idic] * (1 + P_phot[idic] /\
-                                                           (h * nu * g[idic]))
+            NEP_phot2[idic] = NEP_phot2_nobunch[idic] * (1 + P_phot[idic] /
+                                                         (h * nu * g[idic]))
             if self.debug:
-                print(names[idic], \
-                    ', T=',temperatures[idic], \
-                    'K, P = {0:.2e} W'.format(P_phot[idic].max()),\
-                    ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[idic]).max())+\
-                    ' W/sqrt(Hz)')
+                print(names[idic],
+                      ', T=', temperatures[idic],
+                      'K, P = {0:.2e} W'.format(P_phot[idic].max()),
+                      ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[idic]).max()) + ' W/sqrt(Hz)')
             # Last three filters
-            for i in range(idic+1,idic+4):
+            for i in range(idic + 1, idic + 4):
                 if emissivities[i] == 0.0:
                     P_phot[i] = 0.0
                     NEP_phot2[i] = 0.0
                 else:
-                    g[i] = gp[i] * S_det * omega_dichro * (nu / c)**2 * dnu
-                    P_phot[i] = emissivities[i] * tr_prod[i] * h * nu /\
-                          (np.exp(h * nu / k / temperatures[i]) - 1) * g[i] *\
-                          self.detector.efficiency
+                    g[i] = gp[i] * S_det * omega_dichro * (nu / c) ** 2 * dnu
+                    P_phot[i] = emissivities[i] * tr_prod[i] * h * nu / \
+                                (np.exp(h * nu / k / temperatures[i]) - 1) * g[i] * \
+                                self.detector.efficiency
                     NEP_phot2_nobunch[i] = h * nu * P_phot[i] * 2
-                    NEP_phot2[i] = NEP_phot2_nobunch[i] * (1 + P_phot[i] /\
-                                                                   (h * nu * g[i]))
+                    NEP_phot2[i] = NEP_phot2_nobunch[i] * (1 + P_phot[i] /
+                                                           (h * nu * g[i]))
                     if self.debug:
-                        print(names[i], \
-                            ', T=',temperatures[i], \
-                            'K, P = {0:.2e} W'.format(P_phot[i].max()),\
-                            ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[i]).max())+\
-                            ' W/sqrt(Hz)')
+                        print(names[i],
+                              ', T=', temperatures[i],
+                              'K, P = {0:.2e} W'.format(P_phot[i].max()),
+                              ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[i]).max()) + ' W/sqrt(Hz)')
         # 5.6 cm EDGE (150 GHz) or Band Defining Filter (220 GHZ)
-        ilast = i+1
+        ilast = i + 1
         T = temperatures[ilast]
         eta = emissivities[ilast] * tr_prod[ilast] * self.detector.efficiency
-        P_phot[ilast]= eta * gp[ilast] * S_det * sigma * T**4 / 2
-        NEP_phot2[ilast] = eta * 2 * gp[ilast] * S_det * np.pi * (k*T)**5 \
-                          / c**2 / h**3 * (24.9 + eta * 1.1)
+        P_phot[ilast] = eta * gp[ilast] * S_det * sigma * T ** 4 / 2
+        NEP_phot2[ilast] = eta * 2 * gp[ilast] * S_det * np.pi * (k * T) ** 5 \
+                           / c ** 2 / h ** 3 * (24.9 + eta * 1.1)
         if self.debug:
-            print(names[ilast], \
-                ', T=',temperatures[ilast], \
-                'K, P = {0:.2e} W'.format(P_phot[ilast].max()),\
-                ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ilast]).max())+\
-                ' W/sqrt(Hz)')
+            print(names[ilast],
+                  ', T=', temperatures[ilast],
+                  'K, P = {0:.2e} W'.format(P_phot[ilast].max()),
+                  ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ilast]).max()) + ' W/sqrt(Hz)')
         P_phot_tot = np.sum(P_phot, axis=0)
         NEP_tot = np.sqrt(np.sum(NEP_phot2, axis=0) + NEP_phot2_env)
         if self.debug:
-            print('Total photon power =  {0:.2e} W'.format(P_phot_tot.max())+\
-                ', Total photon NEP = ' + '{0:.2e}'.format(NEP_tot.max()) +\
-                ' Watt/sqrt(Hz)')
+            print('Total photon power =  {0:.2e} W'.format(P_phot_tot.max()) +
+                  ', Total photon NEP = ' + '{0:.2e}'.format(NEP_tot.max()) + ' W/sqrt(Hz)')
         return NEP_tot
 
     def get_aperture_integration_operator(self):
@@ -664,7 +649,7 @@ class QubicInstrument(Instrument):
 
         """
         nhorns = np.sum(self.horn.open)
-        return HomothetyOperator(nhorns * np.pi * self.horn.radeff**2)
+        return HomothetyOperator(nhorns * np.pi * self.horn.radeff ** 2)
 
     def get_convolution_peak_operator(self, **keywords):
         """
@@ -698,9 +683,9 @@ class QubicInstrument(Instrument):
 
         """
         theta = np.arctan2(
-            np.sqrt(np.sum(position[..., :2]**2, axis=-1)), position[..., 2])
+            np.sqrt(np.sum(position[..., :2] ** 2, axis=-1)), position[..., 2])
         phi = np.arctan2(position[..., 1], position[..., 0])
-        sr_det = -area / position[..., 2]**2 * np.cos(theta)**3
+        sr_det = -area / position[..., 2] ** 2 * np.cos(theta) ** 3
         sr_beam = secondary_beam.solid_angle
         sec = secondary_beam(theta, phi)
         return DiagonalOperator(sr_det / sr_beam * sec, broadcast='rightward')
@@ -779,7 +764,7 @@ class QubicInstrument(Instrument):
         z = np.zeros(nd)
         data = np.array([z + 0.5, 0.5 - grid, z]).T[:, None, None, :]
         return ReshapeOperator((nd, nt, 1), (nd, nt)) * \
-            DenseBlockDiagonalOperator(data, shapein=(nd, nt, 3))
+               DenseBlockDiagonalOperator(data, shapein=(nd, nt, 3))
 
     def get_projection_operator(self, sampling, scene, verbose=True):
         """
@@ -798,12 +783,12 @@ class QubicInstrument(Instrument):
         """
         horn = getattr(self, 'horn', None)
         primary_beam = getattr(self, 'primary_beam', None)
-        
+
         if sampling.fix_az:
             rotation = sampling.cartesian_horizontal2instrument
         else:
             rotation = sampling.cartesian_galactic2instrument
-        
+
         return QubicInstrument._get_projection_operator(
             rotation, scene, self.filter.nu, self.detector.center,
             self.synthbeam, horn, primary_beam, verbose=verbose)
@@ -861,7 +846,7 @@ class QubicInstrument(Instrument):
             shapeout = (ndetectors, ntimes)
         else:
             if str(dtype_index) not in ('int32', 'int64') or \
-               str(synthbeam.dtype) not in ('float32', 'float64'):
+                    str(synthbeam.dtype) not in ('float32', 'float64'):
                 raise TypeError(
                     'The projection matrix cannot be created with types: {0} a'
                     'nd {1}.'.format(dtype_index, synthbeam.dtype))
@@ -894,7 +879,7 @@ class QubicInstrument(Instrument):
 
         """
         theta, phi = QubicInstrument._peak_angles_kmax(
-            synthbeam.kmax, horn.spacing,horn.angle, nu, position)
+            synthbeam.kmax, horn.spacing, horn.angle, nu, position)
         val = np.array(primary_beam(theta, phi), dtype=float, copy=False)
         val[~np.isfinite(val)] = 0
         index = _argsort_reverse(val)
@@ -915,14 +900,14 @@ class QubicInstrument(Instrument):
         # and remove potential NaN in theta, phi
         for idet, imax_ in enumerate(imaxs):
             val[idet, imax_:] = 0
-            theta[idet, imax_:] = np.pi / 2 #XXX 0 fails in polarization.f90.src (en2ephi and en2etheta_ephi)
+            theta[idet, imax_:] = np.pi / 2  # XXX 0 fails in polarization.f90.src (en2ephi and en2etheta_ephi)
             phi[idet, imax_:] = 0
-        solid_angle = synthbeam.peak150.solid_angle * (150e9 / nu)**2
+        solid_angle = synthbeam.peak150.solid_angle * (150e9 / nu) ** 2
         val *= solid_angle / scene.solid_angle * len(horn)
         return theta, phi, val
 
     @staticmethod
-    def _peak_angles_kmax(kmax, horn_spacing,angle, nu, position):
+    def _peak_angles_kmax(kmax, horn_spacing, angle, nu, position):
         """
         Return the spherical coordinates (theta, phi) of the beam peaks,
         in radians up to a maximum diffraction order.
@@ -942,14 +927,14 @@ class QubicInstrument(Instrument):
             peaks are computed.
         """
         lmbda = c / nu
-        position = -position / np.sqrt(np.sum(position**2, axis=-1))[..., None]
-        if angle !=0:
-            _kx, _ky = np.mgrid[-kmax:kmax+1, -kmax:kmax+1]
-            kx= _kx*np.cos(angle*np.pi/180) - _ky*np.sin(angle*np.pi/180)
-            ky= _kx*np.sin(angle*np.pi/180) + _ky*np.cos(angle*np.pi/180)
+        position = -position / np.sqrt(np.sum(position ** 2, axis=-1))[..., None]
+        if angle != 0:
+            _kx, _ky = np.mgrid[-kmax:kmax + 1, -kmax:kmax + 1]
+            kx = _kx * np.cos(angle * np.pi / 180) - _ky * np.sin(angle * np.pi / 180)
+            ky = _kx * np.sin(angle * np.pi / 180) + _ky * np.cos(angle * np.pi / 180)
         else:
-            kx, ky = np.mgrid[-kmax:kmax+1, -kmax:kmax+1]
-        
+            kx, ky = np.mgrid[-kmax:kmax + 1, -kmax:kmax + 1]
+
         nx = position[:, 0, None] - lmbda * kx.ravel() / horn_spacing
         ny = position[:, 1, None] - lmbda * ky.ravel() / horn_spacing
         local_dict = {'nx': nx, 'ny': ny}
@@ -989,23 +974,23 @@ class QubicInstrument(Instrument):
 
         """
         if external_A is None:
-            uvec = position / np.sqrt(np.sum(position**2, axis=-1))[..., None]
+            uvec = position / np.sqrt(np.sum(position ** 2, axis=-1))[..., None]
             thetaphi = Cartesian2SphericalOperator('zenith,azimuth')(uvec)
-            sr = -area / position[..., 2]**2 * np.cos(thetaphi[..., 0])**3
+            sr = - area / position[..., 2] ** 2 * np.cos(thetaphi[..., 0]) ** 3
+            sr = np.abs(sr)  # This is temporary to fix an issue with new .fits files for detarray
             tr = np.sqrt(secondary_beam(thetaphi[..., 0], thetaphi[..., 1]) *
-                     sr / secondary_beam.solid_angle)[..., None]
+                         sr / secondary_beam.solid_angle)[..., None]
             const = 2j * np.pi * nu / c
             product = np.dot(uvec, horn[horn.open].center.T)
             return ne.evaluate('tr * exp(const * product)')
         else:
             xx = external_A[0]
-            yy =external_A[1]
+            yy = external_A[1]
             amp = external_A[2]
             phi = external_A[3]
-            ix = np.argmin(np.abs(xx-position[0,0]))
-            jy = np.argmin(np.abs(yy-position[0,1]))
-            return np.array([amp[:,ix,jy] * (np.cos(phi[:,ix,jy]) + 1j*np.sin(phi[:,ix,jy]))])
-            
+            ix = np.argmin(np.abs(xx - position[0, 0]))
+            jy = np.argmin(np.abs(yy - position[0, 1]))
+            return np.array([amp[:, ix, jy] * (np.cos(phi[:, ix, jy]) + 1j * np.sin(phi[:, ix, jy]))])
 
     @staticmethod
     def _get_response_B(theta, phi, spectral_irradiance, nu, horn,
@@ -1036,10 +1021,10 @@ class QubicInstrument(Instrument):
 
         """
         shape = np.broadcast(theta, phi, spectral_irradiance).shape
-        theta, phi, spectral_irradiance = [np.ravel(_) for _ in [theta, phi,spectral_irradiance]]
+        theta, phi, spectral_irradiance = [np.ravel(_) for _ in [theta, phi, spectral_irradiance]]
         uvec = hp.ang2vec(theta, phi)
         source_E = np.sqrt(spectral_irradiance *
-                           primary_beam(theta, phi) * np.pi * horn.radeff**2)
+                           primary_beam(theta, phi) * np.pi * horn.radeff ** 2)
         const = 2j * np.pi * nu / c
         product = np.dot(horn[horn.open].center, uvec.T)
         out = ne.evaluate('source_E * exp(const * product)')
@@ -1088,7 +1073,7 @@ class QubicInstrument(Instrument):
 
         """
         A = QubicInstrument._get_response_A(
-                position, area, nu, horn, secondary_beam, external_A=external_A)
+            position, area, nu, horn, secondary_beam, external_A=external_A)
         B = QubicInstrument._get_response_B(
             theta, phi, spectral_irradiance, nu, horn, primary_beam)
         E = np.dot(A, B.reshape((B.shape[0], -1))).reshape(
@@ -1200,7 +1185,7 @@ class QubicInstrument(Instrument):
         else:
             pos = detpos
 
-        if ((idet is not None) and (detpos is None)):
+        if (idet is not None) and (detpos is None):
             return self[idet].get_synthbeam(scene, theta_max=theta_max, external_A=external_A,
                                             detector_integrate=detector_integrate)[0]
         if detector_integrate is None:
@@ -1209,29 +1194,31 @@ class QubicInstrument(Instrument):
                 self.filter.bandwidth, self.horn, self.primary_beam,
                 self.secondary_beam, self.synthbeam.dtype, theta_max, external_A=external_A)
         else:
-            xmin = np.min(self.detector.vertex[...,0:1])
-            xmax = np.max(self.detector.vertex[...,0:1])
-            ymin = np.min(self.detector.vertex[...,1:2])
-            ymax = np.max(self.detector.vertex[...,1:2])
+            xmin = np.min(self.detector.vertex[..., 0:1])
+            xmax = np.max(self.detector.vertex[..., 0:1])
+            ymin = np.min(self.detector.vertex[..., 1:2])
+            ymax = np.max(self.detector.vertex[..., 1:2])
             allx = np.linspace(xmin, xmax, detector_integrate)
             ally = np.linspace(ymin, ymax, detector_integrate)
             sb = 0
             for i in range(len(allx)):
-                print(i,len(allx))
+                print(i, len(allx))
                 for j in range(len(ally)):
                     pos = self.detector.center
                     pos[0][0] = allx[i]
                     pos[0][1] = ally[j]
                     sb += QubicInstrument._get_synthbeam(
-                            scene, pos, self.detector.area, self.filter.nu,
-                            self.filter.bandwidth, self.horn, self.primary_beam,
-                            self.secondary_beam, self.synthbeam.dtype, theta_max, external_A=external_A)/detector_integrate**2
-            return sb        
+                        scene, pos, self.detector.area, self.filter.nu,
+                        self.filter.bandwidth, self.horn, self.primary_beam,
+                        self.secondary_beam, self.synthbeam.dtype, theta_max,
+                        external_A=external_A) / detector_integrate ** 2
+            return sb
 
-    def detector_subset(self,dets):
+    def detector_subset(self, dets):
         subset_inst = copy.deepcopy(self)
         subset_inst.detector = self.detector[dets]
         return subset_inst
+
 
 def _argsort_reverse(a, axis=-1):
     i = list(np.ogrid[[slice(x) for x in a.shape]])
@@ -1246,40 +1233,42 @@ def _pack_vector(*args):
         out[..., i] = arg
     return out
 
-class QubicMultibandInstrument():
+
+class QubicMultibandInstrument:
     """
     The QubicMultibandInstrument class
     Represents the QUBIC multiband features 
     as an array of QubicInstrumet objects
     """
+
     def __init__(self, d):
-        '''
+        """
         filter_nus -- base frequencies array
         filter_relative_bandwidths -- array of relative bandwidths 
         center_detector -- bolean, optional
         if True, take only one detector at the centre of the focal plane
             Needed to study the synthesised beam
-        '''
+        """
         Nf, nus_edge, filter_nus, deltas, Delta, Nbbands = \
-            self._compute_freq(d['filter_nu']/1e9,
-                                d['filter_relative_bandwidth'], 
-                                d['nf_sub'])
-        self.FRBW = d['filter_relative_bandwidth'] # initial Full Relative Band Width
-        d1=d.copy()
-        
+            self._compute_freq(d['filter_nu'] / 1e9,
+                               d['filter_relative_bandwidth'],
+                               d['nf_sub'])
+        self.FRBW = d['filter_relative_bandwidth']  # initial Full Relative Band Width
+        d1 = d.copy()
+
         self.nsubbands = len(filter_nus)
         if not d['center_detector']:
             self.subinstruments = []
             for i in range(self.nsubbands):
-                d1['filter_nu']= filter_nus[i]*1e9
-                d1['filter_relative_bandwidth'] = deltas[i]/filter_nus[i]
-                self.subinstruments +=[QubicInstrument(d1,FRBW=self.FRBW)]
+                d1['filter_nu'] = filter_nus[i] * 1e9
+                d1['filter_relative_bandwidth'] = deltas[i] / filter_nus[i]
+                self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
         else:
             self.subinstruments = []
             for i in range(self.nsubbands):
-                d1['filter_nu']= filter_nus[i]*1e9
-                d1['filter_relative_bandwidth']= deltas[i]/filter_nus[i]
-                q = QubicInstrument(d1,FRBW=self.FRBW)[0]
+                d1['filter_nu'] = filter_nus[i] * 1e9
+                d1['filter_relative_bandwidth'] = deltas[i] / filter_nus[i]
+                q = QubicInstrument(d1, FRBW=self.FRBW)[0]
                 q.detector.center = np.array([[0., 0., -0.3]])
                 self.subinstruments.append(q)
 
@@ -1288,10 +1277,10 @@ class QubicMultibandInstrument():
 
     def __len__(self):
         return len(self.subinstruments)
-        
+
     def get_synthbeam(self, scene, idet=None, theta_max=45, detector_integrate=None, detpos=None):
-        sb = map(lambda i: i.get_synthbeam(scene, idet, theta_max, 
-                detector_integrate=detector_integrate, detpos=detpos),
+        sb = map(lambda i: i.get_synthbeam(scene, idet, theta_max,
+                                           detector_integrate=detector_integrate, detpos=detpos),
                  self.subinstruments)
         sb = np.array(sb)
         bw = np.zeros(len(self))
@@ -1301,22 +1290,24 @@ class QubicMultibandInstrument():
         sb = sb.sum(axis=0) / np.sum(bw)
         return sb
 
-    def direct_convolution(self, scene, idet=None, theta_max=45):
+    def direct_convolution(self, scene, idet=None):
         synthbeam = [q.synthbeam for q in self.subinstruments]
         for i in range(len(synthbeam)):
             synthbeam[i].kmax = 4
-        sb_peaks = map(lambda i: QubicInstrument._peak_angles(scene, self[i].filter.nu, 
-                                                        self[i][idet].detector.center, 
-                                                        synthbeam[i], 
-                                                        self[i].horn, 
-                                                        self[i].primary_beam),
+        sb_peaks = map(lambda i: QubicInstrument._peak_angles(scene, self[i].filter.nu,
+                                                              self[i][idet].detector.center,
+                                                              synthbeam[i],
+                                                              self[i].horn,
+                                                              self[i].primary_beam),
                        range(len(self)))
+
         def peaks_to_map(peaks):
             m = np.zeros(hp.nside2npix(scene.nside))
-            m[hp.ang2pix(scene.nside, 
-                peaks[0], 
-                peaks[1])] = peaks[2]
+            m[hp.ang2pix(scene.nside,
+                         peaks[0],
+                         peaks[1])] = peaks[2]
             return m
+
         sb = map(peaks_to_map, sb_peaks)
         C = [i.get_convolution_peak_operator() for i in self.subinstruments]
         sb = [(C[i])(sb[i]) for i in range(len(self))]
@@ -1330,10 +1321,9 @@ class QubicMultibandInstrument():
             subset_inst[i].detector = self[i].detector[dets]
         return subset_inst
 
-
     @staticmethod
     def _compute_freq(band, relative_bandwidth=0.25, Nfreq=None):
-        '''
+        """
             Prepare frequency bands parameters
             band -- int,
             QUBIC frequency band, in GHz.
@@ -1347,21 +1337,19 @@ class QubicMultibandInstrument():
             Number of frequencies within the wide band.
             If not specified, then Nfreq = 15 if band == 150
             and Nfreq = 20 if band = 220
-            '''
+            """
         if Nfreq is None:
             Nfreq = {150: 15, 220: 20}[band]
-        
+
         nu_min = band * (1 - relative_bandwidth / 2)
         nu_max = band * (1 + relative_bandwidth / 2)
-        
+
         Nfreq_edges = Nfreq + 1
         base = (nu_max / nu_min) ** (1. / Nfreq)
-        
+
         nus_edge = nu_min * np.logspace(0, Nfreq, Nfreq_edges, endpoint=True, base=base)
-        nus = np.array([(nus_edge[i] + nus_edge[i-1]) / 2 for i in range(1, Nfreq_edges)])
-        deltas = np.array([(nus_edge[i] - nus_edge[i-1])  for i in range(1, Nfreq_edges)])
+        nus = np.array([(nus_edge[i] + nus_edge[i - 1]) / 2 for i in range(1, Nfreq_edges)])
+        deltas = np.array([(nus_edge[i] - nus_edge[i - 1]) for i in range(1, Nfreq_edges)])
         Delta = nu_max - nu_min
         Nbbands = len(nus)
         return Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands
-
-

@@ -258,7 +258,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 
 
 def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True, log=False, 
-            median=False,cutbad=True,rebin_as_well=None):
+            median=False,cutbad=True,rebin_as_well=None, clip=None,mode=False):
     """
 
     Parameters
@@ -303,9 +303,18 @@ def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True
         others = None
     for i in np.arange(nbins):
         ok = (x > xmin[i]) & (x < xmax[i])
-        nn[i] = np.sum(ok)
+        newy = y[ok]
+        if clip is not None:
+            for k in np.arange(3):
+                newy, mini, maxi = scipy.stats.sigmaclip(newy, low=clip, high=clip)
+        nn[i] = len(newy)
         if median:
             yval[i] = np.median(y[ok])
+        elif mode:
+            mm,ss = meancut(y[ok],3)
+            hh=np.histogram(y[ok], bins=int(np.min([len(y[ok])/30, 100])),range=[mm-5*ss,mm+5*ss])
+            idmax = np.argmax(hh[0])
+            yval[i] = 0.5*(hh[1][idmax+1]+hh[1][idmax])
         else:
             yval[i] = np.mean(y[ok])
         xc[i] = (xmax[i]+xmin[i])/2
@@ -323,7 +332,10 @@ def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True
         errorbar(xc, yval, xerr=dx, yerr=dy, fmt=fmt)
     ok = nn != 0
     if cutbad:
-        return xc[ok], yval[ok], dx[ok], dy[ok], others[ok,:]
+        if others is None:
+            return xc[ok], yval[ok], dx[ok], dy[ok], others
+        else:
+            return xc[ok], yval[ok], dx[ok], dy[ok], others[ok,:]
     else:
         yval[~ok] = 0
         dy[~ok] = 0
@@ -564,7 +576,9 @@ def meancut(data, nsig):
     -------
 
     """
-    dd, mini, maxi = scipy.stats.sigmaclip(data, low=nsig, high=nsig)
+    dd = data.copy()
+    for i in range(10):
+        dd, mini, maxi = scipy.stats.sigmaclip(dd, low=nsig, high=nsig)
     return np.mean(dd), np.std(dd)
 
 

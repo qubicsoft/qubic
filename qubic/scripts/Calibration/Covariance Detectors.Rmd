@@ -1,0 +1,316 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.1
+  kernelspec:
+    display_name: Python 2
+    language: python
+    name: python2
+---
+
+```{python}
+# %matplotlib inline
+# #%matplotlib notebook
+from matplotlib import rc
+rc('figure', figsize=(15,8))
+rc('font', size=12)
+rc('text', usetex=False)
+rc('image', cmap='viridis')
+
+import healpy as hp
+import pickle
+
+import qubic.io
+from pysimulators import FitsArray
+import fibtools as ft
+import demodulation_lib as dl
+import sb_fitting as sbfit
+import jchinstrument as jcinst
+import os
+
+
+```
+
+```{python}
+fittedpeakfile = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/fitted_peaks.fits'
+directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/150GHz-2019-04-06/'
+```
+
+```{python}
+flatmap, az, el = dl.get_flatmap(93, directory)
+print(flatmap.shape,len(az),len(el))
+c50 = np.cos(np.radians(50))
+
+### Cut on Az
+okaz = (az*c50 > -15) & (az*c50<15)
+az = az[okaz]
+flatmap=flatmap[:,okaz]
+imshow(flatmap, extent=[np.min(az)*c50, np.max(az)*c50, np.min(el), np.max(el)], aspect='equal')
+flatmap.shape
+```
+
+```{python}
+npix = len(np.ravel(flatmap))
+alldata_renorm = np.zeros((256, npix))
+alldata = np.zeros((256, npix))
+for i in range(256):
+    flatmap, az, el = dl.get_flatmap(i+1, directory)
+    az = az[okaz]
+    flatmap=flatmap[:,okaz]
+    alldata_renorm[i,:] = np.ravel((flatmap-np.mean(flatmap))/np.std(flatmap))  
+    alldata[i,:] = np.ravel(flatmap)
+```
+
+```{python}
+med = np.median(alldata_renorm,axis=0)
+imshow(np.reshape(med, np.shape(flatmap)),
+       extent=[np.min(az)*c50, np.max(az)*c50, np.min(el), np.max(el)], aspect='equal')
+colorbar()
+```
+
+```{python}
+# ### Remove the median shape... Hoping it contains most of the magnetic signal (but probably not...)
+# import fibtools as ft
+# reload(ft)
+# rc('figure', figsize=(15,10))
+# TESindex = 5
+
+
+# subplot(2,2,1)
+# plot(med, alldata[TESindex,:], ',')
+# mm=np.mean(med)
+# ss = np.std(med)
+# xc, yval, dx, dy, others = ft.profile(med, alldata[TESindex,:], range=[mm-2*ss, mm+2*ss], mode=True,
+#                                       nbins=20, cutbad=True, plot=True, dispersion=False, clip=3)
+# bla = np.polyfit(xc,yval, 1, w=1./dy**2)
+# pp = np.poly1d(bla)
+# plot(xc, pp(xc))
+# xlim(mm-2*ss,mm+2*ss)
+# #ylim(np.min(yval-10*dy), np.max(yval+10*dy))
+
+
+# newdata = alldata[TESindex,:] - pp(med)
+# subplot(2,2,2)
+# plot(med, newdata, ',')
+
+# subplot(2,2,3)
+# imshow(np.reshape(alldata[TESindex,:], np.shape(flatmap)))
+
+# subplot(2,2,4)
+# imshow(np.reshape(newdata, np.shape(flatmap)))
+```
+
+```{python}
+### Remove the median shape... Hoping it contains most of the magnetic signal (but probably not...)
+import fibtools as ft
+reload(ft)
+
+mm=np.mean(med)
+ss = np.std(med)
+newdata = np.zeros_like(alldata)
+for TESindex in range(256):
+    print(TESindex)
+    xc, yval, dx, dy, others = ft.profile(med, alldata[TESindex,:], range=[mm-2*ss, mm+2*ss], mode=True,
+                                      nbins=20, cutbad=True, plot=True, dispersion=False, clip=3)
+    bla = np.polyfit(xc,yval, 1, w=1./dy**2)
+    pp = np.poly1d(bla)
+    newdata[TESindex,:] = alldata[TESindex,:] - pp(med)
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+rc('figure', figsize=(15,7))
+subplot(1,2,1)
+imshow(np.corrcoef(newdata),vmin=-1,vmax=1)
+plot([127,127],[0,255],'r')
+plot([0,255],[127,127],'r')
+colorbar()
+
+subplot(1,2,2)
+truc = np.log10(np.abs(np.corrcoef(newdata)))
+imshow(truc,vmin=-1)
+plot([127,127],[0,255],'r')
+plot([0,255],[127,127],'r')
+colorbar()
+```
+
+```{python}
+med1 = np.median(alldata[0:128,:], axis=0)
+med2 = np.median(alldata[128:,:], axis=0)
+
+alldata1 = alldata[0:128,:]
+alldata2 = alldata[128:,:]
+mm1=np.mean(med1)
+ss1 = np.std(med1)
+mm2=np.mean(med2)
+ss2 = np.std(med2)
+newdata1 = np.zeros_like(alldata1)
+newdata2 = np.zeros_like(alldata2)
+coeffs1 = np.zeros(128)
+coeffs2 = np.zeros(128)
+for TESindex in range(128):
+    print(TESindex)
+    xc, yval, dx, dy, others = ft.profile(med1, alldata1[TESindex,:], range=[mm1-2*ss1, mm1+2*ss1], mode=True,
+                                      nbins=20, cutbad=True, plot=False, dispersion=False, clip=3)
+    bla = np.polyfit(xc,yval, 1, w=1./dy**2)
+    pp = np.poly1d(bla)
+    newdata1[TESindex,:] = alldata1[TESindex,:] - pp(med1)
+    coeffs1[TESindex] = bla[0]
+    
+    xc, yval, dx, dy, others = ft.profile(med2, alldata2[TESindex,:], range=[mm2-2*ss2, mm2+2*ss2], mode=True,
+                                      nbins=20, cutbad=True, plot=False, dispersion=False, clip=3)
+    bla = np.polyfit(xc,yval, 1, w=1./dy**2)
+    pp = np.poly1d(bla)
+    newdata2[TESindex,:] = alldata2[TESindex,:] - pp(med2)
+    coeffs2[TESindex] = bla[0]
+    
+#     subplot(1,2,1)
+#     plot(med2,alldata2[TESindex,:],'k,')
+#     errorbar(xc,yval,yerr=dy,fmt='ro')
+#     plot(med2,pp(med2))
+#     subplot(1,2,2)
+#     plot(med2, newdata2[TESindex,:],'k,')
+#     stop
+
+
+
+```
+
+```{python}
+rc('figure', figsize=(15,6))
+subplot(1,2,1)
+imshow(np.corrcoef(newdata1),vmin=-1,vmax=1)
+for i in range(4):
+    plot([32*i, 32*i],[0,127],'r')
+    plot([0,127],[32*i, 32*i],'r')
+title('ASIC1')
+xlabel('TES index')
+ylabel('TES index')
+colorbar()
+
+subplot(1,2,2)
+imshow(np.corrcoef(newdata2),vmin=-1,vmax=1)
+for i in range(4):
+    plot([32*i, 32*i],[0,127],'r')
+    plot([0,127],[32*i, 32*i],'r')
+title('ASIC2')
+xlabel('TES index')
+ylabel('TES index')
+colorbar()
+
+```
+
+```{python}
+#### Slope w.r.t. median
+subplot(1,2,1)
+imshow(np.reshape(coeffs1,(32,4)))
+title('ASIC1')
+colorbar()
+
+
+subplot(1,2,2)
+imshow(np.reshape(coeffs2,(32,4)))
+title('ASIC2')
+colorbar()
+
+```
+
+```{python}
+rc('figure', figsize=(15,12))
+sh = np.shape(flatmap)
+data = [newdata1, newdata2]
+asic = 2
+imaps = np.array([28,29,30,31])
+for i in range(len(imaps)):
+    subplot(2,2,i+1)
+    imshow(np.reshape(data[asic-1][imaps[i],:],np.shape(flatmap)),
+          extent = [np.min(az)*c50, np.max(az)*c50, np.min(el), np.max(el)])
+    colorbar()
+    title('ASIC {} TES #{}'.format(asic,imaps[i]))
+```
+
+```{python}
+plot(data[asic-1][imaps[1],:], data[asic-1][imaps[0],:],',')
+xlabel('TES #{} After TESMedian removal'.format(imaps[1]))
+ylabel('TES #{} After TESMedian removal'.format(imaps[0]))
+xxx = linspace(np.min(data[asic-1][imaps[1],:]), np.max(data[asic-1][imaps[1],:]),1000)
+plot(xxx,xxx,'k--')
+```
+
+```{python}
+#### Try to see if the ghosts are here...
+rc('figure', figsize=(15,6))
+subplot(1,2,1)
+imshow(np.corrcoef(newdata1)-np.diag(np.ones(128)))
+for i in range(4):
+    plot([32*i, 32*i],[0,127],'r')
+    plot([0,127],[32*i, 32*i],'r')
+title('ASIC1 - Diag removed')
+xlabel('TES index')
+ylabel('TES index')
+colorbar()
+
+subplot(1,2,2)
+imshow(np.corrcoef(newdata1)-np.diag(np.ones(128)))
+for i in range(4):
+    plot([32*i, 32*i],[0,127],'r')
+    plot([0,127],[32*i, 32*i],'r')
+title('ASIC1 - Diag removed')
+xlabel('TES index')
+ylabel('TES index')
+colorbar()
+xlim(70,90)
+ylim(90,70)
+
+```
+
+```{python}
+rc('figure', figsize=(15,6))
+sh = np.shape(flatmap)
+data = [newdata1, newdata2]
+asic = 1
+imaps = np.array([85,72])
+for i in range(len(imaps)):
+    subplot(1,2,i+1)
+    imshow(np.reshape(data[asic-1][imaps[i],:],np.shape(flatmap)),
+          extent = [np.min(az)*c50, np.max(az)*c50, np.min(el), np.max(el)])
+    colorbar()
+    title('ASIC {} TES #{}'.format(asic,imaps[i]))
+```
+
+```{python}
+# What we actually need is to correlate the residuals after fitting the SB with 
+# all the other SB in order who has ghosts where...
+```
+
+```{python}
+
+```

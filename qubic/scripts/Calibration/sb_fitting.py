@@ -19,6 +19,98 @@ from scipy import interpolate
 import datetime as dt
 import sys
 import healpy as hp
+import time
+import numexpr as ne
+import pickle
+
+def get_hpmap(TESNum, directory):
+    return qubic.io.read_map(directory+'/Healpix/healpix_TESNum_{}.fits'.format(TESNum))    
+
+
+def get_lines(lines, directory):
+    nn = len(lines)
+    hpmaps = np.zeros((nn, 4, 12*256**2))
+    nums = np.zeros((nn, 4),dtype=int)
+    for l in range(nn):
+        for i in range(4):
+            if lines[l] < 33:
+                nums[l,i] = int(lines[l]+32*i)
+            else:
+                nums[l,i] = int(lines[l]-32+32*i)+128
+            hpmaps[l,i,:] = get_hpmap(nums[l,i],directory)
+    return hpmaps, nums
+
+
+def show_lines(maps, nums, min=None, max=None):
+    sh = np.shape(maps)
+    nl = sh[0]
+    for l in range(nl):
+        for i in range(4):
+            hp.gnomview(maps[l,i,:], reso=10, min=min, max=max, sub=(nl, 4, l*4+i+1), title=nums[l,i])
+    tight_layout()
+
+
+def get_flatmap(TESNum, directory, azmin=None, azmax=None, elmin=None, elmax=None, remove=None,
+	fitted_directory=None):
+    themap = np.array(FitsArray(directory+'/Flat/imgflat_TESNum_{}.fits'.format(TESNum)))
+    az = np.array(FitsArray(directory+'/Flat/azimuth.fits'.format(TESNum)))    
+    el = np.array(FitsArray(directory+'/Flat/elevation.fits'.format(TESNum)))
+    if azmin is None:
+    	azmin = np.min(az)
+    if azmax is None:
+    	azmax = np.max(az)
+    if elmin is None:
+    	elmin = np.min(el)
+    if elmax is None:
+    	elmax = np.max(el)
+    okaz = (az >= azmin) & (az <= azmax)
+    az = az[okaz]
+    okel = (el >= elmin) & (el <= elmax)
+    el = el[okel]
+    themap = themap[:,okaz][okel,:]
+    if remove is not None:
+		mm=np.mean(remove)
+		ss = np.std(remove)
+		xc, yval, dx, dy, others = ft.profile(remove, themap, range=[mm-2*ss, mm+2*ss], mode=True,
+		                              nbins=20, cutbad=True, plot=False, dispersion=False, clip=3)
+		bla = np.polyfit(xc,yval, 1, w=1./dy**2)
+		pp = np.poly1d(bla)
+		themap -= pp(remove)
+
+    if fitted_directory is None:
+		return themap, az, el
+    else:
+		### Read fitted synthesized beam
+		thefile = open(fitted_directory+'/fit-TES{}.pk'.format(TESNum), 'rb')
+		fitpars = pickle.load(thefile)
+		thefile.close
+		sbfitmodel = SbModelIndepPeaks(nrings=2, common_fwhm=True, no_xy_shift=False,distortion=False)
+		x =  np.meshgrid(az*np.cos(np.radians(50)), np.flip(el))
+		fitmap, newxxyy =sbfitmodel(x,fitpars, return_peaks=True)
+		return themap, az, el, fitmap, newxxyy
+
+
+
+def show_flatmap(directory, TESNum, vmin=None, vmax=None, cbar=False):
+    flatmap, az, el = get_flatmap(TESNum, directory)
+    imshow(flatmap,extent=[np.min(az)*np.cos(np.radians(50)), 
+                    np.max(az)*np.cos(np.radians(50)), 
+                    np.min(el), np.max(el)], vmin=vmin, vmax=vmax)
+    title('TES #{}'.format(TESNum))
+    xlabel('Az angle')
+    ylabel('El')
+    if cbar: colorbar()
+
+
+def show_flatmaps_list(directory, TESNums, vmin=None, vmax=None, cbar=False, nx=5, tight=True):
+    nn = len(TESNums)
+    ny = nn/nx+1
+    ii=1
+    for nn in TESNums:
+        subplot(ny, nx, ii)
+        show_flatmap(directory, nn, vmin=vmin, vmax=vmax, cbar=cbar)
+        ii += 1
+    if tight: tight_layout()
 
 
 def beeps(nbeeps):
@@ -179,11 +271,15 @@ class SimpleSbModel:
 		newxxyy[1,:] += yc
 
 		### Peak amplitudes and resulting map #######################
-		themap = np.zeros_like(x2d)
+		themap = np.zeros(x2d.shape)
 		amps = np.zeros(self.npeaks)
 		for i in range(self.npeaks):
-			amps[i] = ampgauss * np.exp(-0.5 * ((xcgauss-newxxyy[0,i])**2 + (ycgauss-newxxyy[1,i])**2)/(fwhmgauss/2.35)**2)
-			themap += amps[i]*np.exp(-((x2d-newxxyy[0,i])**2 +(y2d-newxxyy[1,i])**2)/(2*(fwhmpeaks/2.35)**2) )
+			amp = ampgauss * np.exp(-0.5 * ((xcgauss-newxxyy[0,i])**2 + (ycgauss-newxxyy[1,i])**2)/(fwhmgauss/2.35)**2)
+			x0 = newxxyy[0,i]
+			y0 = newxxyy[1,i]
+			sig = fwhmpeaks/2.35
+			themap += ne.evaluate("amp * exp(-0.5*((x2d-x0)**2 + (y2d-y0)**2)/sig**2)")
+
 		newxxyy[2,:] = amps
 		newxxyy[3,:] = fwhmpeaks
 
@@ -210,149 +306,6 @@ class SimpleSbModel:
 
 
 
-
-
-
-#######################################################################################################################################
-#######################################################################################################################################
-class SbModelIndepPeaksAmp:
-	"""
-	Class defining the simplest Synthesized Beam model for QUBIC:
-	- A square grid of n Gaussian Peaks with the same symmetric FWHM. 
-	- n is defined by nrings (1=>1 peak, 2=>9 peaks, ...)
-	- The square grid has a rotation angle
-	- The amplitude of the peaks are independent but they all have the same FWHM
-	- A distorsion to the position of the peaks is allowed
-
-	So Finally parameters are:
-	[0]: Az center of the square [deg]
-	[1]: El center of the square [deg]
-	[2]: Interpeak distance [deg]
-	[3]: Orientation angle [deg]
-	[4]: X distorsion magnitude
-	[5]: X distosion power
-	[6]: Y distorsion magnitude
-	[7]: Y distorsion power
-	[8]: FWHM of the peaks [deg]
-	[9...]: Amplitudes of the peaks 
-	"""
-
-	def __init__(self, startpars = None, ranges=None, fixpars=None, nrings=2, extra_args=None, verbose=False):
-		### Preparing the grid of peaks		
-		self.name = 'SbModelIndepPeaksAmp'
-		self.nrings = nrings
-		self.npeaks_line = 2 * nrings - 1
-		self.npeaks = self.npeaks_line**2 
-		x = (np.arange(self.npeaks_line) - (self.nrings-1))
-		xx, yy = np.meshgrid(x,x)
-		self.xxyy = np.array([np.ravel(xx), np.ravel(yy)])
-
-
-		npars = 9 + self.npeaks
-		self.npars = npars
-		### Parameters names
-		self.parnames = np.repeat('              ',npars)
-		firstparnames = ['AzCenter', 'ElCenter', 'PeakDist', 'Angle', 'XDistAmp', 'XDistPow', 'YDistAmp', 'YDistPow', 'FWHMPeaks']
-		for i in range(9):
-			self.parnames[i] = firstparnames[i]
-		for i in range(self.npeaks):
-			self.parnames[9+i] = 'AmpPeak{}'.format(i)
-
-		### Default parameters
-		if startpars is None:
-			self.startpars = np.zeros(npars)*1.
-			self.startpars[0:9] = np.array([0., 50., 8., 45., 0.0, 2., 0.0, 2., 0.9])
-			self.startpars[9:] = 1e5
-		else:
-			self.startpars = startpars
-
-		### Fixed parameters
-		if fixpars is None:
-			self.fixpars = np.zeros(len(self.startpars))
-		else:
-			self.fixpars = fixpars
-
-		### Range allowed for fitting
-		if ranges is None:
-			self.ranges = np.zeros((2,npars))
-			self.ranges[:,0:9] = np.array([[-5., 45., 7., 40., 0.0, 0., 0.0, 0., 0.5],
-										   [ 5., 55., 9., 50., 0.1, 4., 0.1, 4., 1.5]])
-			self.ranges[0,9:] = 0
-			self.ranges[1,9:] = 1e6
-		else:
-			self.ranges = ranges
-
-
-		### Possible extra-arguments
-		self.extra_args = extra_args
-
-		if verbose: self.print_start()
-
-
-	def __call__(self, x, pars, return_peaks=False):
-		x2d = x[0]   ### The Azimuth values of the pixels
-		xmin = np.min(x2d)
-		xmax = np.max(x2d)
-		y2d = x[1]   ### The elevation values of the pixels
-		ymin = np.min(y2d)
-		ymax = np.max(y2d)
-		### The parameters ##########################################
-		xc = pars[0]
-		yc = pars[1]
-		dist = pars[2]
-		angle = pars[3]
-		distx = pars[4]
-		distpowerX = pars[5]
-		disty = pars[6]
-		distpowerY = pars[7]
-		fwhmpeaks = pars[8]
-		amps = pars[9:]
-
-	    ### Peaks positions #########################################
-	    # Rotate initial Grid centered on (0,0)
-		cosang = np.cos(np.radians(angle))
-		sinang = np.sin(np.radians(angle))
-		rotmat = np.array([[cosang, -sinang],[sinang, cosang]])
-		newxxyy = np.zeros((4,self.npeaks))
-		for i in range(self.npeaks): newxxyy[0:2,i] = np.dot(rotmat, self.xxyy[:,i])
-		# Scale it wit interpeak distance
-		newxxyy *= dist
-		# Apply Distorsions
-		undistxxyy = newxxyy.copy()
-		newxxyy[0,:] += distx*np.abs(undistxxyy[1,:])**distpowerX
-		newxxyy[1,:] += disty*np.abs(undistxxyy[0,:])**distpowerY
-		# Move to actual center
-		newxxyy[0,:] += xc
-		newxxyy[1,:] += yc
-
-		### Peak amplitudes and resulting map #######################
-		themap = np.zeros_like(x2d)
-		for i in range(self.npeaks):
-			themap += amps[i]*np.exp(-((x2d-newxxyy[0,i])**2 +(y2d-newxxyy[1,i])**2)/(2*(fwhmpeaks/2.35)**2) )
-			#if (((newxxyy[0,i] < xmin) or (newxxyy[0,i] > xmax)) or ((newxxyy[1,i] < ymin) or (newxxyy[1,i] > ymax))):
-			#	themap += np.abs(amps[i]) 
-		newxxyy[2,:] = amps
-		newxxyy[3,:] = fwhmpeaks
-
-		if return_peaks:
-			return themap, newxxyy
-		else:
-			return np.ravel(themap)
-
-	def print_start(self):
-			print('|---------------------------------------------------------------------|')
-			print('|-------------------- Initial Parameters -----------------------------|')
-			print('|---------------------------------------------------------------------|')
-			print('|Parameter        | init-value | range0      | range1      |  fixed   |')
-			print('|---------------------------------------------------------------------|')
-			for i in range(self.npars):
-				print('|{0:<16} | {1:>10.3f} |{2:>13.3f}|{3:>13.3f}|    {4:^3}   |'.format(self.parnames[i],self.startpars[i], 
-					self.ranges[0,i], self.ranges[1,i], self.fixpars[i]))
-			print('|---------------------------------------------------------------------|')
-
-
-#######################################################################################################################################
-#######################################################################################################################################
 
 
 
@@ -495,11 +448,17 @@ class SbModelIndepPeaksAmpFWHM:
 			stop
 
 		### Peak amplitudes and resulting map #######################
-		themap = np.zeros_like(x2d)
+		# themap = np.zeros(x2d.shape)
+		# for i in range(self.npeaks):
+		# 	themap += amps[i]*np.exp(-((x2d-newxxyy[0,i])**2 +(y2d-newxxyy[1,i])**2)/(2*(fwhmpeaks[i]/2.35)**2) )
+		themap = np.zeros(x2d.shape)
 		for i in range(self.npeaks):
-			themap += amps[i]*np.exp(-((x2d-newxxyy[0,i])**2 +(y2d-newxxyy[1,i])**2)/(2*(fwhmpeaks[i]/2.35)**2) )
-			#if (((newxxyy[0,i] < xmin) or (newxxyy[0,i] > xmax)) or ((newxxyy[1,i] < ymin) or (newxxyy[1,i] > ymax))):
-			#	themap += np.abs(amps[i]) 
+			amp = amps[i]
+			x0 = newxxyy[0,i]
+			y0 = newxxyy[1,i]
+			sig = fwhmpeaks[i]/2.35
+			themap += ne.evaluate("amp * exp(-0.5*((x2d-x0)**2 + (y2d-y0)**2)/sig**2)")
+
 		newxxyy[2,:] = amps
 		newxxyy[3,:] = fwhmpeaks
 
@@ -643,17 +602,19 @@ class SbModelIndepPeaks:
 
 		### Possible extra-arguments
 		self.extra_args = extra_args
+		self.time = time.time()
+		self.ncalls = 1
 
 		if verbose: self.print_start()
 
 
 	def __call__(self, x, pars, return_peaks=False):
-		x2d = x[0]   ### The Azimuth values of the pixels
-		xmin = np.min(x2d)
-		xmax = np.max(x2d)
-		y2d = x[1]   ### The elevation values of the pixels
-		ymin = np.min(y2d)
-		ymax = np.max(y2d)
+		#t0 = time.time()
+		#self.ncalls += 1
+		#print('Call #{0} - {1:5.2f} ms '.format(self.ncalls, 1000*(t0-self.time)))
+		#self.time = t0
+		x2d,y2d = x   ### The Azimuth and elevation values of the pixels
+
 		### The parameters ##########################################
 		xc = pars[0]
 		yc = pars[1]
@@ -696,11 +657,21 @@ class SbModelIndepPeaks:
 			stop
 
 		### Peak amplitudes and resulting map #######################
-		themap = np.zeros_like(x2d)
-		for i in range(self.npeaks):
-			themap += amps[i]*np.exp(-((x2d-newxxyy[0,i])**2 +(y2d-newxxyy[1,i])**2)/(2*(fwhmpeaks[i]/2.35)**2) )
-			#if (((newxxyy[0,i] < xmin) or (newxxyy[0,i] > xmax)) or ((newxxyy[1,i] < ymin) or (newxxyy[1,i] > ymax))):
-			#	themap += np.abs(amps[i]) 
+		# themap = np.zeros(np.shape(x2d))
+		# for i in range(self.npeaks):
+		# 	themap += amps[i]*np.exp(-((x2d-newxxyy[0,i])**2 +(y2d-newxxyy[1,i])**2)/(2*(fwhmpeaks[i]/2.35)**2) )
+
+
+		### Peak amplitudes and resulting map #######################
+		### Much faster version (gain ~3.5)
+		themap = np.zeros(x2d.shape)
+		for i in range(self.npeaks):  
+		    amp = amps[i]
+		    x0 = newxxyy[0,i]
+		    y0 = newxxyy[1,i]
+		    sig = fwhmpeaks[i]/2.35
+		    themap += ne.evaluate("amp * exp(-0.5*((x2d-x0)**2 + (y2d-y0)**2)/sig**2)")
+
 		newxxyy[2,:] = amps
 		newxxyy[3,:] = fwhmpeaks
 
@@ -733,19 +704,18 @@ class SbModelIndepPeaks:
 
 
 def fit_sb(flatmap_init, az_init, el_init, model, scaling=140e3, newsize=70, dmax = 5., az_center=0., el_center=50., doplot=False,
-          vmin=None, vmax=None, resample=True, verbose=False, extra_title=''):
+          resample=False, verbose=False, extra_title='', return_fitted=False, precision=None, nsiglo=1., nsighi=3.,
+          figsave=None):
 	#### If requested, resample the iage in order to speedup the fitting
 	if resample:
 		### Resample input map to have less pixels to deal with for fitting
 		flatmap = scsig.resample(scsig.resample(flatmap_init, newsize, axis=0), newsize, axis=1)
-		delta_az = np.median(az_init-np.roll(az_init,1))
-		delta_el = np.median(el_init-np.roll(el_init,1))
-		az = np.linspace(np.min(az_init)-delta_az/2, np.max(az_init)+delta_az/2, newsize)
-		el = np.linspace(np.min(el_init)-delta_el/2, np.max(el_init)+delta_el/2, newsize)
+		az = np.linspace(np.min(az_init), np.max(az_init), newsize)
+		el = np.linspace(np.min(el_init), np.max(el_init), newsize)
 	else:
 		flatmap = flatmap_init
-		az = az_init
-		el = el_init
+		az = np.array(az_init)
+		el = np.array(el_init)
 	az2d, el2d = np.meshgrid(az*np.cos(np.radians(el_center)), np.flip(el))
 
 	# if verbose:
@@ -792,7 +762,7 @@ def fit_sb(flatmap_init, az_init, el_init, model, scaling=140e3, newsize=70, dma
 		model.print_start()
 	fit = ft.do_minuit(x, np.ravel(flatmap), np.zeros_like(np.ravel(flatmap))+ss, parsinit, 
 						functname=model, chi2=ft.MyChi2_nocov, rangepars=ranges, fixpars = fixpars, 
-						force_chi2_ndf=False, verbose=False)
+						force_chi2_ndf=False, verbose=False, nohesse=True, precision=precision)
 	fitpars = fit[1]
 	fiterrs = fit[2]
 
@@ -847,11 +817,24 @@ def fit_sb(flatmap_init, az_init, el_init, model, scaling=140e3, newsize=70, dma
 	if doplot:
 		rc('figure',figsize=(18,4))
 		sh = np.shape(newxxyy)
-		subplot(1,3,1)
+		mm,ss = ft.meancut(flatmap,3)
+
+		subplot(1,4,1)
+		imshow(themap, extent=[np.min(az)*np.cos(np.radians(50)), 
+		                               np.max(az)*np.cos(np.radians(50)), 
+		                               np.min(el), np.max(el)],
+		      						   vmin=mm-ss, vmax=mm+10*ss)
+		colorbar()
+		title('Fitted Map '+extra_title)
+		xlabel('Angle in Az direction [deg.]')
+		ylabel('Elevation [deg.]')
+
+		mm,ss = ft.meancut(flatmap-themap,3)
+		subplot(1,4,2)
 		imshow(flatmap, extent=[np.min(az)*np.cos(np.radians(50)), 
 		                        np.max(az)*np.cos(np.radians(50)), 
 		                        np.min(el), np.max(el)],
-		      					vmin=vmin, vmax=vmax)
+		      					vmin=mm-nsiglo*ss, vmax=mm+nsighi*ss)
 		xlim(np.min(az)*np.cos(np.radians(50)), np.max(az)*np.cos(np.radians(50)))
 		ylim(np.min(el), np.max(el))
 		colorbar()
@@ -862,29 +845,36 @@ def fit_sb(flatmap_init, az_init, el_init, model, scaling=140e3, newsize=70, dma
 		xlabel('Angle in Az direction [deg.]')
 		ylabel('Elevation [deg.]')
 
-		subplot(1,3,2)
+		subplot(1,4,3)
 		imshow(themap, extent=[np.min(az)*np.cos(np.radians(50)), 
 		                               np.max(az)*np.cos(np.radians(50)), 
 		                               np.min(el), np.max(el)],
-		      						   vmin=vmin, vmax=vmax)
+		      						   vmin=mm-nsiglo*ss, vmax=mm+nsighi*ss)
 		colorbar()
 		title('Fitted Map '+extra_title)
 		xlabel('Angle in Az direction [deg.]')
 		ylabel('Elevation [deg.]')
 		    
-		subplot(1,3,3)
+		subplot(1,4,4)
 		imshow(flatmap-themap, extent=[np.min(az)*np.cos(np.radians(50)), 
 		                               np.max(az)*np.cos(np.radians(50)), 
 		                               np.min(el), np.max(el)],
-		      						   vmin=vmin, vmax=vmax)
+		      						   vmin=mm-nsiglo*ss, vmax=mm+nsighi*ss)
 		colorbar()
 		title('Residual Map '+extra_title)
 		xlabel('Angle in Az direction [deg.]')
 		ylabel('Elevation [deg.]')
-
+		tight_layout()
+	
+		if figsave:
+			savefig(figsave)
 		show()
 
-	return fit, newxxyy
+
+	if return_fitted:
+		return fit, newxxyy, themap
+	else:
+		return fit, newxxyy
 
 
 

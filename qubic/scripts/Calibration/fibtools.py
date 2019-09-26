@@ -136,14 +136,15 @@ class MyChi2_nocov:
 
     def __call__(self, *pars):
         val = self.functname(self.x, pars)
-        chi2 = np.dot(self.y - val, self.y - val)
+        chi2 = np.sum((self.y - val)**2)
+        #chi2 = np.dot(self.y - val, self.y - val)
         return chi2
 
 
 ### Call Minuit
 def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=None, rangepars=None, nohesse=False,
               force_chi2_ndf=False, verbose=True, minos=False, extra_args=None, print_level=0, force_diag=False, 
-              nsplit=1, ncallmax = 10000):
+              nsplit=1, ncallmax = 10000, precision=None):
     """
 
     Parameters
@@ -197,24 +198,30 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
             dfix['fix_' + parnames[i]] = False
     # range for parameters
     drng = {}
+    dstep = {}
     if rangepars is not None:
         for i in range(len(parnames)):
             drng['limit_' + parnames[i]] = rangepars[i]
+            dstep['error_' + parnames[i]] = (rangepars[i][1]-rangepars[i][0])/10
     else:
         for i in range(len(parnames)):
             drng['limit_' + parnames[i]] = False
+            dstep['error_' + parnames[i]] = False
+
 
     # Run Minuit
     if verbose: print('Fitting with Minuit')
-    theargs = dict(theguess.items() + dfix.items())
+    theargs = dict(theguess.items() + dfix.items() + dstep.items())
     if rangepars is not None: theargs.update(dict(theguess.items() + drng.items()))
     m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=1., print_level=print_level, **theargs)
-    m.migrad(ncall=ncallmax*nsplit, nsplit=nsplit)
-    #m.migrad()
+    m.migrad(ncall=ncallmax*nsplit, nsplit=nsplit, precision=precision)
+    #print('Migrad Done')
     if minos:
         m.minos()
+        #print('Minos Done')
     if nohesse is False:
         m.hesse()
+        #print('Hesse Done')
     # build np.array output
     parfit = []
     for i in parnames: parfit.append(m.values[i])

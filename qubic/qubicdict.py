@@ -60,6 +60,7 @@ class qubicDict( dict ):
             val = eval(s[1].strip()) # XXX:make safer
             self[key] = val
         f.close()
+        self.prefix_OutputName()
 
     readFromFile = read_from_file
 
@@ -86,3 +87,37 @@ class qubicDict( dict ):
             except KeyError:
                 diff += [k]
         return otherDict
+
+    def prefix_OutputName(self):
+
+        import datetime
+        if not self['output']:
+            raise ValueError( 'You need to specify the output directory' )
+        elif self[ 'output' ] != '':
+            dir_output = str(self['output'])
+
+        if os.path.isdir( dir_output ):
+            print( 'QUBIC output directory: {}'.format( dir_output ) )  
+        elif not os.path.isdir( dir_output ):
+            print( 'Building output directory' )
+            os.mkdir( dir_output )
+            print( 'Built it. QUBIC output directory: {}'.format( dir_output ) )
+
+        now = datetime.datetime.now()
+        today = now.strftime( "%Y%m%d" )
+
+        files = os.listdir( dir_output )
+        new_v = []
+        last = "00"
+
+        for each in files:
+            each_cut = each[0:8]
+            if today == each_cut:
+                new_v.append(each[9:11])
+                new_v.sort()
+                last = str(int(new_v[-1])+1).zfill(2)
+
+        if dir_output[-1] == "/":
+            self['prefix'] = str(dir_output)+str(today)+"_"+str(last)+"_"
+        else:
+            self['prefix'] = str(dir_output)+"/"+str(today)+"_"+str(last)+"_"

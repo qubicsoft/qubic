@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.1'
-      jupytext_version: 1.2.0
+      jupytext_version: 1.2.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -37,14 +37,14 @@ from qubicpack.utilities import Qubic_DataDir
 
 ```{python}
 rc({'cmap', 'viridis'})
-
+plt.rcParams['figure.figsize'] = (8,8)
 ```
 
 # Get the simulation files
 
 ```{python}
 # Simulation date and name
-date_name = '20190815_QU10'
+date_name = 'NERSC_runs/24334702/20190903_low_nep'
 
 # Get the repository where the simulation is
 rep_simu = Qubic_DataDir(datafile=date_name + '.dict') + '/'
@@ -137,7 +137,7 @@ print('seen map shape', seen_map.shape)
 # Get one full maps
 
 ```{python}
-real = 0
+real = 3
 if real >= nreals:
     raise ValueError('Invalid index of realization')
     
@@ -151,10 +151,10 @@ print('Getting maps with shape : {}'.format(maps_recon_nl.shape))
 ### Look at the noiseless maps
 
 ```{python}
-isub = 3 #could be 0,1,2 because nf_rec = 3 or 0,1 in nf_rec = 2 case.
+isub = 0 #could be 0,1,2 because nf_rec = 3 or 0,1 in nf_rec = 2 case.
 if isub >= nf_recon:
     raise ValueError('Invalid index of subband')
-
+r=12
 plt.figure('Noiseless maps real{}'.format(real), figsize=(10,10))
 for i in range(3):
     if i == 0:
@@ -166,21 +166,27 @@ for i in range(3):
     elif i==2:
         mmin=-3.14
         mmax=2.24
-    hp.gnomview(maps_convo_nl[isub, :, i], rot=center, reso=9, sub=(3, 3, i + 1),cmap='viridis',
+    hp.gnomview(maps_convo_nl[isub, :, i], rot=center, reso=r, sub=(3, 3, i + 1),cmap='viridis',
                 title='conv ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon))#, min=mmin, max=mmax)
-    hp.gnomview(maps_recon_nl[isub, :, i], rot=center, reso=9, sub=(3, 3, 3 + i + 1),cmap='viridis',
+    hp.gnomview(maps_recon_nl[isub, :, i], rot=center, reso=r, sub=(3, 3, 3 + i + 1),cmap='viridis',
                 title='recon ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon))#, min=mmin, max=mmax)
-    hp.gnomview(maps_diff_nl[isub, :, i], rot=center, reso=9, sub=(3, 3, 6 + i + 1),cmap='viridis',
+    hp.gnomview(maps_diff_nl[isub, :, i], rot=center, reso=r, sub=(3, 3, 6 + i + 1),cmap='viridis',
                 title='diff ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon))#, min=mmin, max=mmax)
 if save_plots :
     plt.savefig(rep_simu+'plots/00-'+'noiseless_')
     
 ```
 
+```{python}
+hp.mollview(maps_convo_nl[0, :, 2], rot=center,cmap='viridis',
+                title='conv ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon))#, min=mmin, max=mmax)
+
+```
+
 ### Look at the noise maps
 
 ```{python}
-isub = 0 #could be 0,1,2 because nf_rec = 3 or 0,1 in nf_rec = 2 case.
+isub = 3 #could be 0,1,2 because nf_rec = 3 or 0,1 in nf_rec = 2 case.
 if isub >= nf_recon:
     raise ValueError('Invalid index of subband')
 
@@ -195,11 +201,11 @@ for i in range(3):
     elif i==2:
         mmin=-3.14
         mmax=2.24
-    hp.gnomview(maps_convo[isub, :, i], rot=center, reso=9, sub=(3, 3, i + 1),cmap='viridis',
+    hp.gnomview(maps_convo[isub, :, i], rot=center, reso=r, sub=(3, 3, i + 1),cmap='viridis',
                 title='conv ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon))#, min=mmin, max=mmax)
-    hp.gnomview(maps_recon[isub, :, i], rot=center, reso=9, sub=(3, 3, 3 + i + 1),cmap='viridis',
+    hp.gnomview(maps_recon[isub, :, i], rot=center, reso=r, sub=(3, 3, 3 + i + 1),cmap='viridis',
                 title='recon ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon))#, min=mmin, max=mmax)
-    hp.gnomview(maps_diff[isub, :, i], rot=center, reso=9, sub=(3, 3, 6 + i + 1),cmap='viridis',
+    hp.gnomview(maps_diff[isub, :, i], rot=center, reso=r, sub=(3, 3, 6 + i + 1),cmap='viridis',
                 title='diff ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon))#, min=mmin, max=mmax)
 if save_plots:
     plt.savefig(rep_simu+'plots/00-'+'noise_')
@@ -309,6 +315,7 @@ if save_plots:
 ```
 
 ```{python}
+plt.figure(figsize=(12,12))
 plt.figure('Zones diff')
 for i in range(nzones):
     map_nl = np.zeros((all_patch_diff[0].shape[0], 12 * d['nside'] ** 2, 3))

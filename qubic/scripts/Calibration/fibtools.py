@@ -136,14 +136,15 @@ class MyChi2_nocov:
 
     def __call__(self, *pars):
         val = self.functname(self.x, pars)
-        chi2 = np.dot(self.y - val, self.y - val)
+        chi2 = np.sum((self.y - val)**2)
+        #chi2 = np.dot(self.y - val, self.y - val)
         return chi2
 
 
 ### Call Minuit
 def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=None, rangepars=None, nohesse=False,
               force_chi2_ndf=False, verbose=True, minos=False, extra_args=None, print_level=0, force_diag=False, 
-              nsplit=1, ncallmax = 10000):
+              nsplit=1, ncallmax = 10000, precision=None):
     """
 
     Parameters
@@ -197,24 +198,30 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
             dfix['fix_' + parnames[i]] = False
     # range for parameters
     drng = {}
+    dstep = {}
     if rangepars is not None:
         for i in range(len(parnames)):
             drng['limit_' + parnames[i]] = rangepars[i]
+            dstep['error_' + parnames[i]] = (rangepars[i][1]-rangepars[i][0])/10
     else:
         for i in range(len(parnames)):
             drng['limit_' + parnames[i]] = False
+            dstep['error_' + parnames[i]] = False
+
 
     # Run Minuit
     if verbose: print('Fitting with Minuit')
-    theargs = dict(theguess.items() + dfix.items())
+    theargs = dict(theguess.items() + dfix.items() + dstep.items())
     if rangepars is not None: theargs.update(dict(theguess.items() + drng.items()))
     m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=1., print_level=print_level, **theargs)
-    m.migrad(ncall=ncallmax*nsplit, nsplit=nsplit)
-    #m.migrad()
+    m.migrad(ncall=ncallmax*nsplit, nsplit=nsplit, precision=precision)
+    #print('Migrad Done')
     if minos:
         m.minos()
+        #print('Minos Done')
     if nohesse is False:
         m.hesse()
+        #print('Hesse Done')
     # build np.array output
     parfit = []
     for i in parnames: parfit.append(m.values[i])
@@ -258,7 +265,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 
 
 def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True, log=False, 
-            median=False,cutbad=True,rebin_as_well=None):
+            median=False,cutbad=True,rebin_as_well=None, clip=None,mode=False):
     """
 
     Parameters
@@ -303,9 +310,18 @@ def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True
         others = None
     for i in np.arange(nbins):
         ok = (x > xmin[i]) & (x < xmax[i])
-        nn[i] = np.sum(ok)
+        newy = y[ok]
+        if clip is not None:
+            for k in np.arange(3):
+                newy, mini, maxi = scipy.stats.sigmaclip(newy, low=clip, high=clip)
+        nn[i] = len(newy)
         if median:
             yval[i] = np.median(y[ok])
+        elif mode:
+            mm,ss = meancut(y[ok],3)
+            hh=np.histogram(y[ok], bins=int(np.min([len(y[ok])/30, 100])),range=[mm-5*ss,mm+5*ss])
+            idmax = np.argmax(hh[0])
+            yval[i] = 0.5*(hh[1][idmax+1]+hh[1][idmax])
         else:
             yval[i] = np.mean(y[ok])
         xc[i] = (xmax[i]+xmin[i])/2
@@ -323,7 +339,10 @@ def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True
         errorbar(xc, yval, xerr=dx, yerr=dy, fmt=fmt)
     ok = nn != 0
     if cutbad:
-        return xc[ok], yval[ok], dx[ok], dy[ok], others[ok,:]
+        if others is None:
+            return xc[ok], yval[ok], dx[ok], dy[ok], others
+        else:
+            return xc[ok], yval[ok], dx[ok], dy[ok], others[ok,:]
     else:
         yval[~ok] = 0
         dy[~ok] = 0
@@ -564,7 +583,9 @@ def meancut(data, nsig):
     -------
 
     """
-    dd, mini, maxi = scipy.stats.sigmaclip(data, low=nsig, high=nsig)
+    dd = data.copy()
+    for i in range(10):
+        dd, mini, maxi = scipy.stats.sigmaclip(dd, low=nsig, high=nsig)
     return np.mean(dd), np.std(dd)
 
 

@@ -544,60 +544,6 @@ def make_tod(scans, axis=1):
     return tod
 
 
-def get_hpmap(TESNum, directory):
-    return qubic.io.read_map(directory+'/Healpix/healpix_TESNum_{}.fits'.format(TESNum))    
-
-
-def get_lines(lines, directory):
-    nn = len(lines)
-    hpmaps = np.zeros((nn, 4, 12*256**2))
-    nums = np.zeros((nn, 4),dtype=int)
-    for l in range(nn):
-        for i in range(4):
-            if lines[l] < 33:
-                nums[l,i] = int(lines[l]+32*i)
-            else:
-                nums[l,i] = int(lines[l]-32+32*i)+128
-            hpmaps[l,i,:] = get_hpmap(nums[l,i],directory)
-    return hpmaps, nums
-
-
-def show_lines(maps, nums, min=None, max=None):
-    sh = np.shape(maps)
-    nl = sh[0]
-    for l in range(nl):
-        for i in range(4):
-            hp.gnomview(maps[l,i,:], reso=10, min=min, max=max, sub=(nl, 4, l*4+i+1), title=nums[l,i])
-    tight_layout()
-
-
-def get_flatmap(TESNum, directory):
-    themap = FitsArray(directory+'/Flat/imgflat_TESNum_{}.fits'.format(TESNum))
-    az = FitsArray(directory+'/Flat/azimuth.fits'.format(TESNum))    
-    el = FitsArray(directory+'/Flat/elevation.fits'.format(TESNum))
-    return themap, az, el
-
-
-def show_flatmap(directory, TESNum, vmin=None, vmax=None, cbar=False):
-    flatmap, az, el = get_flatmap(TESNum, directory)
-    imshow(flatmap,extent=[np.min(az)*np.cos(np.radians(50)), 
-                    np.max(az)*np.cos(np.radians(50)), 
-                    np.min(el), np.max(el)], vmin=vmin, vmax=vmax)
-    title('TES #{}'.format(TESNum))
-    xlabel('Az angle')
-    ylabel('El')
-    if cbar: colorbar()
-
-
-def show_flatmaps_list(directory, TESNums, vmin=None, vmax=None, cbar=False, nx=5, tight=True):
-    nn = len(TESNums)
-    ny = nn/nx+1
-    ii=1
-    for nn in TESNums:
-        subplot(ny, nx, ii)
-        show_flatmap(directory, nn, vmin=vmin, vmax=vmax, cbar=cbar)
-        ii += 1
-    if tight: tight_layout()
 
 
 def CalSrcPower_Vs_Nu(freq):

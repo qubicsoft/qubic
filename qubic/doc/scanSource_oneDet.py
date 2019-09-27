@@ -18,10 +18,10 @@ mpl.style.use('classic')
 name='test_scan_source'
 resultDir='%s'%name
 alaImager=True
-component=1
-sel_det=True
-id_det=232
-oneComponent=False
+component=1 # Choose the component number to plot 
+sel_det=True #True if you want to use one detector, False if you want to use all detectors in focal plane
+id_det=232 # if sel_det == True, choose detector number
+oneComponent=False # True if you want to study only I component, otherwise False if you study IQU
 
 try:
     os.makedirs(resultDir)
@@ -29,6 +29,7 @@ except:
     pass
 
 
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
 # INSTRUMENT
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(sys.argv[1])
@@ -61,8 +62,6 @@ xr=0.1*np.max(sb)
 hp.gnomview(sb, rot=[0,90], xsize=500, reso=5, min=-xr, max=xr,title='Input ', return_projected_map=True,hold=True)
 plt.show()
 fix_azimuth=d['fix_azimuth']
-
-
 
 m0=np.zeros(12*d['nside']**2)
 x0=np.zeros((len(m0),3))

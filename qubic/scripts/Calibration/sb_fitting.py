@@ -726,7 +726,9 @@ def fit_sb(flatmap_init, az_init, el_init, model, scaling=140e3, newsize=70, dma
 	### First find the location of the maximum closest to the center
 	distance_max = dmax
 	mask = np.array(np.sqrt((az2d-az_center)**2+(el2d-el_center)**2) < distance_max).astype(int)
-	wmax = np.where((flatmap*mask) == np.max(flatmap*mask))
+	### We use a smoothed version of the map in order to avoid glitches
+	smoothed_flatmap = f.gaussian_filter(flatmap, 2.)
+	wmax = np.where((smoothed_flatmap*mask) == np.max(smoothed_flatmap*mask))
 	maxval = flatmap[wmax][0]
 	#print('Maximum of map is {0:5.2g} and was found at: az={1:5.2f}, el={2:5.2f}'.format(maxval,az2d[wmax][0], el2d[wmax][0]))
 
@@ -751,7 +753,7 @@ def fit_sb(flatmap_init, az_init, el_init, model, scaling=140e3, newsize=70, dma
 	elif (model.name == 'SbModelIndepPeaks'):
 		for i in range(model.npeaks):
 			parsinit[9+4*i] = maxval
-			ranges[9+4*i,1]=maxval*2
+			ranges[9+4*i,1]=np.abs(maxval)*2
 
 
 	### Run the fitting

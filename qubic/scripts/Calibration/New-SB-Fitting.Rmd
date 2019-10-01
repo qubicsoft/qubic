@@ -71,7 +71,8 @@ colorbar()
 alldata_renorm = np.zeros((256, npix))
 for i in range(256):
     flatmap, az, el = sbfit.get_flatmap(i+1, dirfiles, azmin=azmin, azmax=azmax)
-    alldata_renorm[i,:] = np.ravel((flatmap-np.mean(flatmap))/np.std(flatmap))  
+    mm,ss = ft.meancut(flatmap,3)
+    alldata_renorm[i,:] = np.ravel((flatmap-mm)/ss)  
 ```
 
 ```{python}
@@ -88,27 +89,14 @@ title('Median over all S.B. images')
 
 ```{python}
 reload(sbfit)
-TESNum = 37
-flatmap, az, el = sbfit.get_flatmap(TESNum, dirfiles, remove=med, azmin=azmin, azmax=azmax)
-
-subplot(1,2,1)
-imshow(flatmap,
-       extent=[np.min(az)*c50, np.max(az)*c50, np.min(el), np.max(el)], aspect='equal',
-      vmin=-3000, vmax=3000)
-colorbar()
-title('TES #{}'.format(TESNum))
-```
-
-```{python}
-reload(sbfit)
-TESNum = 94
+TESNum = 16
 flatmap, az, el = sbfit.get_flatmap(TESNum, dirfiles, remove=med, azmin=azmin, azmax=azmax)
 #### Instantiate a model
 sbfitmodel3 = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, no_xy_shift=False,distortion=False)
 figure()
 fit, xypeaks = sbfit.fit_sb(flatmap, az, el, sbfitmodel3, verbose=False, 
                             doplot=True, extra_title='TES #{}'.format(TESNum))
-savefig('Fit-TES#{}.png'.format(TESNum))
+#savefig('Fit-TES#{}.png'.format(TESNum))
 ```
 
 ```{python}

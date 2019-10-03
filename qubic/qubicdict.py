@@ -96,9 +96,8 @@ class qubicDict( dict ):
 
         import datetime
         if not self['output']:
-            raise ValueError( 'You need to specify the output directory' )
-        elif self[ 'output' ] != '':
-            dir_output = str(self['output'])
+            self['output']='./'
+        dir_output = str(self['output'])
 
         if os.path.isdir( dir_output ):
             print( 'QUBIC output directory: {}'.format( dir_output ) )  

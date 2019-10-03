@@ -1,0 +1,157 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.0
+  kernelspec:
+    display_name: Python [default]
+    language: python
+    name: python2
+---
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(9,4.5))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack import qubicpack as qp
+import fibtools as ft
+import plotters as p
+import lin_lib as ll
+import demodulation_lib as dl
+import satorchipy as stpy
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import datetime as dt
+import pickle
+from qubic.utils import progress_bar
+
+```
+
+```{python}
+days = ['2019-07-01', '2019-07-02']
+alldirs = []
+for d in days:
+    data_dir = '/qubic/Data/Calib-TD/'+d+'/'
+    alldirs.append(np.sort(glob.glob(data_dir+'*ScanSmallMap_150GHz*')))
+dirs = np.append(alldirs[0], alldirs[1])  
+    
+el = []
+for i in range(len(dirs)):
+    d = dirs[i]
+    #print(d)
+    bla = str.split(d,'_')
+    #print(bla)
+    el.append(float(bla[-1]))
+el = np.array(el)
+delta_el = np.mean((el-np.roll(el,-1))[0:-1])
+print(delta_el)
+
+```
+
+```{python}
+def normalize(x):
+    return (x-np.nanmean(x))/np.nanstd(x)
+```
+
+```{python}
+cth = np.cos(np.radians(50))
+azmin = -25
+azmax = 25
+nbins_az = (int)(np.floor((azmax-azmin)*cth/delta_el))
+print(nbins_az)
+azlims = np.linspace(azmin,azmax, nbins_az+1)
+az = (azlims[:-1]+azlims[1:])/2
+```
+
+```{python}
+rc('figure',figsize=(10,7))
+allslopes = np.zeros((len(dirs), nbins_az, 256))
+allerrslopes = np.zeros((len(dirs), nbins_az, 256))
+
+bar = progress_bar(len(dirs), 'Elevations')
+for ifile in range(len(dirs)):
+    bar.update()
+    theASIC = 1
+    theTESnum = 93
+    for AsicNum in [1,2]:
+        a = qp()
+        a.read_qubicstudio_dataset(dirs[ifile], asic=AsicNum)
+        data=a.azel_etc(TES=None)
+        az_tdata = np.interp(data['t_data'], data['t_azel'], data['az'])
+    #     if AsicNum == theASIC:
+    #         plot(data['t_data'], normalize(data['data'][theTESnum-1,:]), label='Data ASIC {} TESNum {}'.format(theASIC, theTESnum))
+    #         plot(data['t_data'], normalize(az_tdata), label='Azimuth')
+    #         legend()
+        for j in range(nbins_az):
+            good_az = (az_tdata >= azlims[j]) & (az_tdata < azlims[j+1])
+            for i in range(128):    
+                pol, cov = np.polyfit(az_tdata[good_az],data['data'][i,good_az], 1, full=False, cov=True)
+                allslopes[ifile, j,(AsicNum-1)*128+i] = pol[0]
+                allerrslopes[ifile, j, (AsicNum-1)*128+i] = np.sqrt(np.diag(cov))[0]
+
+
+```
+
+```{python}
+normalized_slopes = allslopes / np.mean(allslopes, axis=(0,1))
+print(normalized_slopes.shape)
+mean_normalized_slopes = np.mean(normalized_slopes, axis=2)
+spread_normalized_slopes = np.std(normalized_slopes, axis=2)
+```
+
+```{python}
+import scipy.ndimage.filters as scf
+
+rc('figure',figsize=(15,8))
+m,s = ft.meancut(np.abs(mean_normalized_slopes),3)
+subplot(1,2,1)
+imshow(scf.gaussian_filter(np.abs(mean_normalized_slopes),10),vmin = 0, vmax=m+5*s,
+       extent = [azmin*cth,azmax*cth, np.min(el), np.max(el)], aspect='equal')
+colorbar()
+xlabel('Azimuth Mount')
+ylabel('Elevation Mount')
+title('Average Normalized Slope w.r.t. Az')
+
+subplot(1,2,2)
+imshow(scf.gaussian_filter(np.abs(spread_normalized_slopes/np.sqrt(256)),10),vmin = 0, vmax=m+5*s,
+       extent = [azmin*cth,azmax*cth, np.min(el), np.max(el)], aspect='equal')
+colorbar()
+xlabel('Azimuth Mount')
+ylabel('Elevation Mount')
+title('Error on Average Normalized Slope w.r.t. Az')
+```
+
+```{python}
+rc('figure',figsize=(6,4.5))
+for TESNum in range(1,257):
+    clf()
+    img = np.abs(normalized_slopes[:,:,TESNum-1].T)
+    m,s = ft.meancut(img,3)
+    imshow(img,vmin=m-3*s,vmax=m+3*s,
+           extent = [azmin,azmax, np.min(el), np.max(el)])
+    colorbar()
+    xlabel('Azimuth Mount')
+    ylabel('Elevation Mount')
+    title('TES #{} Normalized Slope w.r.t. Az'.format(TESNum))
+    show()
+    a=raw_input()
+```
+
+```{python}
+
+```

@@ -267,7 +267,8 @@ npix = len(np.ravel(flatmap))
 alldata_renorm = np.zeros((256, npix))
 for i in range(256):
     flatmap, az, el = sbfit.get_flatmap(i+1, directory, azmin=azmin, azmax=azmax)
-    alldata_renorm[i,:] = np.ravel((flatmap-np.mean(flatmap))/np.std(flatmap))  
+    mm,ss = ft.meancut(flatmap,3)
+    alldata_renorm[i,:] = np.ravel((flatmap-mm)/ss)  
 
 med = np.reshape(np.median(alldata_renorm,axis=0),np.shape(flatmap))
 mm=np.mean(med)
@@ -331,8 +332,8 @@ detnums = [60,  101, 215, 220,  225, 229]
 weighted = False
 
 d['verbose']=False
-angs = np.radians(np.array([0, 90, 0]))
-#angs = np.radians(np.array([-1.6, 87.2, -2.]))
+#angs = np.radians(np.array([0, 90, 0]))
+angs = np.radians(np.array([0.4, 87.2, 0.8]))
 
 #### Very slow convergence so put tol to 1e-2 for fast results, anyway result is crap
 # maps_recon_th = do_some_dets(detnums, d, directory, fittedpeakfile, 
@@ -476,9 +477,10 @@ It appears we need to think a bit more about this rotation as its effect is more
 So it may be worth trying to explore these three number and try to see if there is an optimal combinationm. The metric could be the RMS of the map (as a naive start) ???
 
 ```{python}
-# detnums = [37, 124, 185, 229]
+# detnums = [60,  101, 215, 220,  225, 229]
 # nn = 31
 # amp = 5.
+# tol=1e-2
 # angbase = np.radians(np.array([0.25,88.75,-1.25]))
 # #angbase = np.radians(np.array([0.,90.,0.]))
 # dphi0 = np.linspace(-amp,amp,nn)
@@ -492,15 +494,21 @@ So it may be worth trying to explore these three number and try to see if there 
 #     angs = angbase + np.radians(np.array([dphi0[i], 0, 0]))
 #     print(angs)
 #     maps_phi0[i,:] = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
-#                                               custom=True, nside=nsrec, tol=tol, refit=False)    
+#                                               custom=True, nside=nsrec, tol=tol, refit=True,
+#                                          azmin=azmin, azmax=azmax, remove=med, 
+#                                                   fitted_directory=fitted_directory)    
 #     angs = angbase + np.radians(np.array([0, dtheta[i], 0]))
 #     print(angs)
 #     maps_theta[i,:] = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
-#                                               custom=True, nside=nsrec, tol=tol, refit=False)    
+#                                               custom=True, nside=nsrec, tol=tol, refit=True,
+#                                          azmin=azmin, azmax=azmax, remove=med, 
+#                                                   fitted_directory=fitted_directory)    
 #     angs = angbase + np.radians(np.array([0, 0, dphi1[i]]))
 #     print(angs)
 #     maps_phi1[i,:] = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
-#                                               custom=True, nside=nsrec, tol=tol, refit=False)    
+#                                               custom=True, nside=nsrec, tol=tol, refit=True,
+#                                          azmin=azmin, azmax=azmax, remove=med, 
+#                                                   fitted_directory=fitted_directory)    
 
 ```
 
@@ -576,7 +584,8 @@ So it may be worth trying to explore these three number and try to see if there 
 ```
 
 ```{python}
-# def animate_images(images, frame_duration, reso=20, rot=None, healpix=False,vmin=None, vmax=None, cb=True):
+# def animate_images(images, frame_duration, reso=20, rot=None, healpix=False,vmin=None, vmax=None, cb=True, 
+#                    titlevalues=None, thetitle=None):
 #     from matplotlib import animation, rc
 #     from IPython.display import HTML
 #     rc('animation', html='html5')
@@ -596,6 +605,11 @@ So it may be worth trying to explore these three number and try to see if there 
 
 #     def animate_func(i):
 #         im.set_array(allimg[i % sh[0]])
+#         if thetitle:
+#             if titlevalues is None:
+#                 title(thetitle)
+#             else:
+#                 title(thetitle+'{0:7.2f}'.format(titlevalues[i % sh[0]]))
 #         return [im]
         
 #     return fig, animation.FuncAnimation(
@@ -606,21 +620,45 @@ So it may be worth trying to explore these three number and try to see if there 
 ```
 
 ```{python}
-# fig, anim = animate_images(new_maps_phi0, 100, reso=15, rot=center, healpix=True, vmin=-0.02, vmax=0.02)
-# title('Phi 0')
+# rc('figure', figsize=(6,6))
+# fig, anim = animate_images(new_maps_phi0, 100, reso=15, rot=center, healpix=True, 
+#                            vmin=-0.02, vmax=0.02, thetitle='phi0 = ', titlevalues=dphi0)
+# #title('Phi 0')
 # anim
 ```
 
 ```{python}
-# fig, anim = animate_images(new_maps_theta, 100, reso=15, rot=center, healpix=True, vmin=-0.02, vmax=0.02)
-# title('Theta')
+# rc('figure', figsize=(6,6))
+# fig, anim = animate_images(new_maps_theta, 100, reso=15, rot=center, healpix=True, vmin=-0.02, vmax=0.02, 
+#                            thetitle='theta = ', titlevalues=dtheta+90)
 # anim
 ```
 
 ```{python}
-# fig, anim = animate_images(new_maps_phi1, 100, reso=15, rot=center, healpix=True, vmin=-0.02, vmax=0.02)
-# title('Phi 1')
+# rc('figure', figsize=(6,6))
+# fig, anim = animate_images(new_maps_phi1, 100, reso=15, rot=center, healpix=True, vmin=-0.02, vmax=0.02, 
+#                            thetitle='phi1 = ', titlevalues=dphi1)
 # anim
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 ```{python}
@@ -753,11 +791,10 @@ def plotminarray(bla,axes,axesnames=None,vmin=None,vmax=None):
 ```
 
 ```{python}
-rc('figure', figsize=(15,12))
+rc('figure', figsize=(15,10))
 import scipy.ndimage.filters as scf
-plotminarray(scf.gaussian_filter(ch2,0.5), 
-             [ph1vals, ph0vals, thvals], axesnames=['ph1','ph0','th'],
-             vmin=0.03,vmax=0.06)
+plotminarray(scf.gaussian_filter(ch2,0.00005), 
+             [ph1vals, ph0vals, thvals], axesnames=['ph1','ph0','th'])
 #newch2 = scf.gaussian_filter(ch2,0.5)
 
 ```
@@ -787,22 +824,23 @@ plotminarray(scf.gaussian_filter(ch2,0.5),
 ```
 
 ```{python}
-# reload(jcinst)
-# reload(ft)
-# delta = 3. # degrees
-# mapfct = mymaskedmap(detnums, d, directory, fittedpeakfile, mask, tol=1e-2, scaling=1000)
-# zeromap = np.zeros(12*256**2)
-# guess = np.array([np.radians(0), np.radians(90), np.radians(0)])
-# rangepars = np.array([[np.radians(-delta), np.radians(delta)], 
-#                       [np.radians(90.-delta), np.radians(90.+delta)],
-#                       [np.radians(-delta), np.radians(delta)]])
-# fit = ft.do_minuit(2., zeromap, zeromap+1,guess, functname=mapfct, chi2=ft.MyChi2_nocov, rangepars=rangepars)
+reload(jcinst)
+reload(ft)
+delta = 10. # degrees
+mapfct = mymaskedmap(detnums, d, directory, fittedpeakfile, mask, tol=1e-2, scaling=1000,
+                    azmin=azmin, azmax=azmax, remove=med, refit=True, fitted_directory=fitted_directory)
+zeromap = np.zeros(12*256**2)
+guess = np.array([np.radians(0), np.radians(90), np.radians(0)])
+rangepars = np.array([[np.radians(-delta), np.radians(delta)], 
+                      [np.radians(90.-delta), np.radians(90.+delta)],
+                      [np.radians(-delta), np.radians(delta)]])
+fit = ft.do_minuit(2., zeromap, zeromap+1,guess, functname=mapfct, chi2=ft.MyChi2_nocov, rangepars=rangepars)
 
 ```
 
 ```{python}
-# print(np.degrees(fit[1]))
-# print(np.degrees(fit[2]))
+print(np.degrees(fit[1]))
+print(np.degrees(fit[2]))
 ```
 
 ```{python}

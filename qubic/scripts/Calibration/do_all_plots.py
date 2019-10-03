@@ -121,7 +121,7 @@ with PdfPages(dir_img+'/allTES_flat.pdf') as pdf:
 			ylabel('Elevation', fontsize=fs)
 			xlabel('Azimuth x cos(50)', fontsize=fs)    
         tight_layout()        
-        pdf.savefig()
+        
     close()
 
 

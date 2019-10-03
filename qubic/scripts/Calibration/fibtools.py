@@ -4,6 +4,7 @@ import math
 from matplotlib.pyplot import *
 from pysimulators import FitsArray
 import matplotlib.mlab as mlab
+import sys
 
 import scipy.signal as scsig
 import scipy.stats
@@ -211,8 +212,16 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 
     # Run Minuit
     if verbose: print('Fitting with Minuit')
-    theargs = dict(theguess.items() + dfix.items() + dstep.items())
-    if rangepars is not None: theargs.update(dict(theguess.items() + drng.items()))
+    ver = sys.version_info
+    if ver.major < 3:
+        theargs = dict(theguess.items() + dfix.items() + dstep.items())
+        if rangepars is not None: theargs.update(dict(theguess.items() + drng.items()))
+    else:
+        for k in dfix.keys(): theguess[k] = dfix[k]
+        theargs = theguess
+        if rangepars is not None: 
+            for k in drng.keys(): theguess[k] = drng[k]
+        theargs.update(theguess)
     m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=1., print_level=print_level, **theargs)
     m.migrad(ncall=ncallmax*nsplit, nsplit=nsplit, precision=precision)
     #print('Migrad Done')

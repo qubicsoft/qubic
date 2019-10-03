@@ -5,9 +5,9 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.1'
-      jupytext_version: 1.2.1
+      jupytext_version: 1.1.0
   kernelspec:
-    display_name: Python 2
+    display_name: Python [default]
     language: python
     name: python2
 ---
@@ -40,20 +40,21 @@ ns = 256
 TESNum = 37
 thecos = np.cos(np.radians(50))
 
-#read xcenter, ycenter, amplitude and fwhm of the desired detector:
-peaks = np.array(FitsArray('/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/fitted_peaks.fits'))
-peaks[:,0,:] = peaks[:,0,:]/np.cos(np.radians(50))
-print(peaks.shape)
-print(peaks[TESNum-1, 0, :])
-print(peaks[TESNum-1, 1, :])
-print(peaks[TESNum-1, 2, :])
-print(peaks[TESNum-1, 3, :])
+dirallfreqs = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/'
+dirfreq='150GHz-2019-04-06/'
+flatmap, az, el, fitmap, peaks = sbfit.get_flatmap(TESNum, dirallfreqs+dirfreq, 
+                                                     fitted_directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/FitSB/')
+print(peaks[0,:])
+print(peaks[1,:])
+print(peaks[2,:])
+print(peaks[3,:])
+print('')
 
 ### In measurement coordinate system
-thetas_measured_M = np.radians(90-(peaks[TESNum-1,1,:]-50))
-phis_measured_M = np.radians(-peaks[TESNum-1,0,:]*thecos)
-amps_measured_M = peaks[TESNum-1,2,:]
-fwhm_measured_M = peaks[TESNum-1,3,:]
+thetas_measured_M = np.radians(90-(peaks[1,:]-50))
+phis_measured_M = np.radians(-peaks[0,:])
+amps_measured_M = peaks[2,:]
+fwhm_measured_M = peaks[3,:]
 
 
 
@@ -70,12 +71,12 @@ imshow(img,
        extent = [np.min(az)*thecos, np.max(az)*thecos, np.min(el), np.max(el)], 
        cmap='viridis',
        vmin = -3*ss, vmax = 10*ss)
-plot(peaks[TESNum-1,0,:]*thecos,peaks[TESNum-1,1,:],'rX', label='Fitted')
+plot(peaks[0,:],peaks[1,:],'rX', label='Fitted')
 legend()
 
 mymap = qubic.io.read_map(directory+'/Healpix/healpix_TESNum_{}.fits'.format(TESNum))
 hp.gnomview(mymap, reso=10, sub=(1,2,2), min=-3*ss, max=10*ss,cmap='viridis')
-hp.projscatter(-peaks[TESNum-1,0,:]*thecos,peaks[TESNum-1,1,:]-50, lonlat=True, marker='X',color='r', label='Fitted')
+hp.projscatter(-peaks[0,:],peaks[1,:]-50, lonlat=True, marker='X',color='r', label='Fitted')
 legend()
 ```
 
@@ -188,8 +189,10 @@ OK ! It's working well apparently !
 Now we apply this to the data: we transform the QUBIC theoretical peak locations into the measurement reference frame and overplot them onto the measured synthesized beam.
 
 ```{python}
-#angs = np.radians(np.array([-0.5, 88.7, -0.5]))
+#angs = np.radians(np.array([0.4, 87.2, 0.8]))     ### Fitted minimizing the residuals around pt src...
 angs = np.radians(np.array([0, 90, 0]))
+#angs = np.radians(np.array([0.4, 90.5, -2.5]))
+
 thetas_new, phis_new = sbfit.rotate_q2m(thetas, phis, angs=angs)
 
 hp.mollview(hp.ud_grade(mymap, 128), min=-3*ss, max=10*ss, title='Measurement reference frame: optical center towards x (0,0)', sub=(1,2,1))

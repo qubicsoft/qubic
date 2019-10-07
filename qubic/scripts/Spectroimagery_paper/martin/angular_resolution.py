@@ -29,7 +29,7 @@ nsideLow, nsideHigh, reso, size, sigma2fwhm = Parameters(d) #reso = 1.5 size= 20
 # Call calibration methods with the same parameters that current run. 
 # If you use a calibration file with same {reso, nsideHigh, nsideLow and (RA, DEC)} that your run,
 # you should put BoolCal = False
-BoolCal = True
+BoolCal = False
 
 if BoolCal:
 	#Files used to calibrate
@@ -46,8 +46,11 @@ if BoolCal:
 	print('Sigma calibration file used: {}'.format(SigmaCalib))
 
 elif not BoolCal:
-	namefit = '20190326_fitcalibration.txt'
-	namesigma = '20190326_sigmacalibration.txt'
+	rename =str(reso).replace('.','-')
+	namefit = NameCalib(method = 'fit')+str(rename)+'-{}.txt'.format(d['nside'])
+	namesigma = NameCalib(method = 'sigma')+str(rename)+'-{}.txt'.format(d['nside'])
+	#namefit = '20190326_fitcalibration.txt'
+	#namesigma = '20190326_sigmacalibration.txt'
 
 print('Dictionary used: {}'.format(sys.argv[1]))
 print('Fit table for interpolation: {}'.format(namefit))
@@ -58,7 +61,7 @@ interpNusSig, interpDeltaFwhmSig, interpStdSig = np.loadtxt(namesigma, unpack=Tr
 f_fit = interp1d(interpNusFit, interpDeltaFwhmFit, kind = 'cubic')
 f_sig = interp1d(interpNusSig, interpDeltaFwhmSig, kind = 'cubic')
 
-## noitalopretnI
+# # noitalopretnI
 
 # Build input maps 
 center_gal = qubic.equ2gal(d['RA_center'], d['DEC_center'])
@@ -157,13 +160,14 @@ for nf_i in sub_band:
 	                                                              
 	arec = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge) 
 	
-	maps_recon1 = arec.tod2map(TOD1, tol=d['tol'], maxiter=5000)
+	maps_recon1,_,_ = arec.tod2map(TOD1,d)
 	
 	cov = a.get_coverage()
 	cov = np.sum(cov, axis=0)
 	maxcov = np.max(cov)
 	unseen = cov < maxcov*0.1
 	
+
 	if len(maps_recon1.shape) == 2: maps_recon1 = np.reshape(maps_recon1, (1, maps_recon1.shape[0], maps_recon1.shape[1]))
 	
 	for h in maps_recon1:
@@ -218,7 +222,7 @@ ax0.plot(nus_PLOTALL[0],_fwhm_PLOTALL[0],'ko', label = r'FWHM real')
 ax0.plot(nus_PLOTALL[0],_fwhmFit_mPLOTALL[0], frmat, alpha = 0.4, label= r'FWHM Measured')
 ax0.plot(nus_PLOTALL[0],_fwhmFit_mPLOTALL[0] - _deltaFit_PLOTALL[0], frmat, label = r'FWHM Unbiased')
 ax0.legend(loc = 'upper right')
-	
+
 ax1 = mp.subplot(grid[0,1])
 ax1.plot(nus_PLOTALL[1],_fwhm_PLOTALL[1],'ko')
 ax1.plot(nus_PLOTALL[1],_fwhmFit_mPLOTALL[1], frmat, alpha = 0.4)
@@ -286,7 +290,7 @@ ax0.plot(nus_PLOTALL[0],_fwhm_PLOTALL[0],'ko', label = r'FWHM real')
 ax0.plot(nus_PLOTALL[0],_fwhmSigma_mPLOTALL[0], frmat, alpha = 0.4, label= r'FWHM Measured')
 ax0.plot(nus_PLOTALL[0],_fwhmSigma_mPLOTALL[0] - _deltaSigma_PLOTALL[0], frmat, label = r'FWHM Unbiased')
 ax0.legend(loc = 'upper right')
-	
+
 ax1 = mp.subplot(grid[0,1])
 ax1.plot(nus_PLOTALL[1],_fwhm_PLOTALL[1],'ko')
 ax1.plot(nus_PLOTALL[1],_fwhmSigma_mPLOTALL[1], frmat, alpha = 0.4)

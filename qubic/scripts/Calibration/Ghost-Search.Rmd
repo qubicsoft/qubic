@@ -5,11 +5,11 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.1'
-      jupytext_version: 1.2.1
+      jupytext_version: 1.2.4
   kernelspec:
-    display_name: Python 2
+    display_name: Python 3
     language: python
-    name: python2
+    name: python3
 ---
 
 ```{python}
@@ -23,12 +23,13 @@ rc('image', cmap='viridis')
 
 import healpy as hp
 import pickle
+from importlib import reload
 
 import qubic.io
 from pysimulators import FitsArray
-import fibtools as ft
-import demodulation_lib as dl
-import sb_fitting as sbfit
+import qubic.fibtools as ft
+import qubic.demodulation_lib as dl
+import qubic.sb_fitting as sbfit
 import jchinstrument as jcinst
 import os
 
@@ -65,6 +66,7 @@ title('Median over all S.B. images (renormalized)')
 Calculate residuals for all TES
 
 ```{python}
+importlib.reload(sbfit)
 npix = len(np.ravel(med))
 alldata = np.zeros((256, npix))
 allfit = np.zeros((256, npix))
@@ -283,6 +285,10 @@ title('Fit {}'.format(maxi_asic2[0,num]+128+1))
 subplot(2,3,6)
 imshow(np.reshape(allresiduals[maxi_asic2[0,num]+128,:], np.shape(med)))
 title('Res {} cont. by {}'.format(maxi_asic2[0,num]+128+1,maxi_asic2[1,num]+128+1))
+
+```
+
+```{python}
 
 ```
 

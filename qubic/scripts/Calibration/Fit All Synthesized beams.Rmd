@@ -1,0 +1,208 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.0
+  kernelspec:
+    display_name: Python [default]
+    language: python
+    name: python2
+---
+
+```{python}
+# ##### %matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(16,4))
+rc('font',size=12)
+rc('text',usetex=False)
+rc('image', cmap='viridis')
+
+from qubicpack import qubicpack as qp
+import fibtools as ft
+import plotters as p
+import lin_lib as ll
+import demodulation_lib as dl
+import qubic.io
+import sb_fitting as sbfit
+
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import os
+import healpy as hp
+import pandas as pd
+
+```
+
+```{python}
+dirfreq = '150GHz-2019-04-06/'
+dirallfreqs = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/'
+dirfiles = dirallfreqs+dirfreq
+c50 = np.cos(np.radians(50))
+azmin = -15./c50
+azmax = 15./c50
+
+
+TESNum = 37
+reload(sbfit)
+flatmap, az, el = sbfit.get_flatmap(TESNum, dirfiles, azmin = azmin, azmax=azmax)
+npix = len(np.ravel(flatmap))
+
+subplot(1,2,1)
+imshow(flatmap,
+       extent=[np.min(az)*c50, np.max(az)*c50, np.min(el), np.max(el)], aspect='equal',
+      vmin=-3000, vmax=3000)
+colorbar()
+
+```
+
+```{python}
+alldata_renorm = np.zeros((256, npix))
+for i in range(256):
+    flatmap, az, el = sbfit.get_flatmap(i+1, dirfiles, azmin=azmin, azmax=azmax)
+    alldata_renorm[i,:] = np.ravel((flatmap-np.mean(flatmap))/np.std(flatmap))  
+```
+
+```{python}
+##### Estimating the median of all SB images - to be removed - Origin still unexplained...
+med = np.reshape(np.median(alldata_renorm,axis=0),np.shape(flatmap))
+mm=np.mean(med)
+ss = np.std(med)
+
+imshow(np.reshape(med, np.shape(flatmap)),
+       extent=[np.min(az)*c50, np.max(az)*c50, np.min(el), np.max(el)], aspect='equal')
+colorbar()
+title('Median over all S.B. images')
+```
+
+```{python}
+reload(sbfit)
+TESNum = 37
+flatmap, az, el = sbfit.get_flatmap(TESNum, dirfiles, remove=med, azmin=azmin, azmax=azmax)
+
+mm, ss = ft.meancut(flatmap,3)
+subplot(1,2,1)
+imshow(flatmap,
+       extent=[np.min(az)*c50, np.max(az)*c50, np.min(el), np.max(el)], aspect='equal',
+      vmin=mm-ss, vmax=mm+10*ss)
+colorbar()
+title('TES #{}'.format(TESNum))
+```
+
+```{python}
+import pickle
+reload(sbfit)
+for TESNum in range(179,257):
+    print(TESNum)
+    flatmap, az, el = sbfit.get_flatmap(TESNum, dirfiles, remove=med, azmin=azmin, azmax=azmax)
+    #### Instantiate a model
+    sbfitmodel3 = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, no_xy_shift=False,distortion=False)
+    fit, xypeaks = sbfit.fit_sb(flatmap, az, el, sbfitmodel3, verbose=False, resample=False, 
+                            doplot=False, extra_title='TES #{}'.format(TESNum))
+    thefile = open('/Users/hamilton/Google Drive/QUBIC/Calib-TD/FitSB/fit-TES{}.pk'.format(TESNum), 'wb')
+    pickle.dump(fit[1], thefile)
+    thefile.close
+    thefile = open('/Users/hamilton/Google Drive/QUBIC/Calib-TD/FitSB/fiterr-TES{}.pk'.format(TESNum), 'wb')
+    pickle.dump(fit[2], thefile)
+    thefile.close
+    thefile = open('/Users/hamilton/Google Drive/QUBIC/Calib-TD/FitSB/xypeaks-TES{}.pk'.format(TESNum), 'wb')
+    pickle.dump(xypeaks, thefile)
+    thefile.close
+
+```
+
+```{python}
+from matplotlib.backends.backend_pdf import PdfPages
+reload(sbfit)
+nperpage = 7
+nsiglo=1.
+nsighi=3.
+TESmax = 256
+fitted_directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/FitSB/'
+
+with PdfPages('/Users/hamilton/Google Drive/QUBIC/Calib-TD/allFitSB.pdf') as pdf:
+    for TESNum in range(1,TESmax+1):
+        ipage = (TESNum-1) % nperpage
+        print(TESNum, ipage)
+        if ipage  == 0:
+            rc('figure',figsize=(20,28))
+        
+        ### Read map
+        flatmap, az, el, themap, newxxyy = sbfit.get_flatmap(TESNum, dirfiles, 
+                                                             remove=med, azmin=azmin, azmax=azmax,
+                                                             fitted_directory = fitted_directory)
+        mm,ss = ft.meancut(flatmap-themap,3)
+        
+        subplot(nperpage, 4, 1+ipage*4)
+        imshow(flatmap,extent=[np.min(az)*np.cos(np.radians(50)), 
+                               np.max(az)*np.cos(np.radians(50)), 
+                               np.min(el), np.max(el)],
+               vmin=np.min(flatmap)/10, vmax=np.max(flatmap)/2)
+        colorbar()
+        title('Input Map TES# {}'.format(TESNum))
+        xlabel('Angle in Az direction [deg.]')
+        ylabel('Elevation [deg.]')
+        
+        subplot(nperpage, 4, 2+ipage*4)
+        imshow(flatmap,extent=[np.min(az)*np.cos(np.radians(50)), 
+                               np.max(az)*np.cos(np.radians(50)), 
+                               np.min(el), np.max(el)],
+               vmin=mm-nsiglo*ss, vmax=mm+nsighi*ss)
+        sh = newxxyy.shape
+        for i in range(sh[1]):
+            ax=plot(newxxyy[0,i], newxxyy[1,i], 'r.')
+
+        colorbar()
+        title('Input Map TES# {}'.format(TESNum))
+        xlabel('Angle in Az direction [deg.]')
+        ylabel('Elevation [deg.]')
+        
+        subplot(nperpage, 4, 3+ipage*4)
+        imshow(themap,extent=[np.min(az)*np.cos(np.radians(50)), 
+                               np.max(az)*np.cos(np.radians(50)), 
+                               np.min(el), np.max(el)],
+               vmin=mm-nsiglo*ss, vmax=mm+nsighi*ss)
+        colorbar()
+        title('Fitted Map TES# {}'.format(TESNum))
+        xlabel('Angle in Az direction [deg.]')
+        ylabel('Elevation [deg.]')
+        
+        subplot(nperpage, 4, 4+ipage*4)
+        imshow(flatmap-themap,extent=[np.min(az)*np.cos(np.radians(50)), 
+                               np.max(az)*np.cos(np.radians(50)), 
+                               np.min(el), np.max(el)],
+               vmin=mm-nsiglo*ss, vmax=mm+nsighi*ss)
+        colorbar()
+        title('Residuals Map TES# {}'.format(TESNum))
+        xlabel('Angle in Az direction [deg.]')
+        ylabel('Elevation [deg.]')
+        
+        if (ipage == (nperpage-1)) or TESNum==TESmax:
+            tight_layout()
+            pdf.savefig()
+            clf()
+   
+    
+    
+    
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

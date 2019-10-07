@@ -35,40 +35,43 @@ import jchinstrument as jcinst
 import os
 from scipy.stats import norm
 import fibtools as ft
+
 ```
 
 ```{python}
-def hall_pointing(az, el, angspeed_psi, maxpsi,
+def hall_pointing(az, el, angspeed_psi, maxpsi,backandforth = False,
                  date_obs=None, latitude=None, longitude=None,fix_azimuth=None,random_hwp=True):
     #This method will reproduce the pointing that is used in the hall to take the data. Will start from bottom
     #left and will go up at fixed elevation.
     
-    #nsamples = 2*len(az)*len(el) # commented bucause not go and back
-    nsamples = len(az)*len(el)
+    if backandforth: 
+        nsamples = 2*len(az)*len(el)
+    else:
+        nsamples = len(az)*len(el)
     #print('nsamples = ', nsamples)
     pp = qubic.QubicSampling(nsamples,date_obs=date_obs, period=0.1, latitude=latitude,longitude=longitude)
     
     #Comented because we do not go and back in simulations.. 
-    #mult_el = []
-    #for eachEl in el:
-    #    mult_el.append(np.tile(eachEl, 2*len(az)))
-    # Azimuth go and back and same elevation. 
-    #az_back = az[::-1]
-    #az = list(az)
-    #az.extend(az_back)
-    #mult_az = np.tile(az, len(el))
-    #print(i,np.asarray(mult_el).ravel().shape)
-    #pp.elevation = np.asarray(mult_el).ravel()
-    #pp.azimuth = np.asarray(mult_az).ravel()
+    if backandforth:
+        mult_el = []
+        for eachEl in el:
+            mult_el.append(np.tile(eachEl, 2*len(az)))
+        # Azimuth go and back and same elevation. 
+        az_back = az[::-1]
+        az = list(az)
+        az.extend(az_back)
+        mult_az = np.tile(az, len(el))
+        pp.elevation = np.asarray(mult_el).ravel()
+        pp.azimuth = np.asarray(mult_az).ravel()
     
-    mult_el = []
-    for eachEl in el:
-        mult_el.extend(np.tile(eachEl, len(az)))
-    mult_az = []
-    mult_az.append(np.tile(az, len(el)))
-    #print(len(mult_el))
-    pp.elevation = np.asarray(mult_el)#az2d.ravel()
-    pp.azimuth = np.asarray(mult_az[0])#el2d.ravel()
+    else:
+        mult_el = []
+        for eachEl in el:
+            mult_el.extend(np.tile(eachEl, len(az)))
+        mult_az = []
+        mult_az.append(np.tile(az, len(el)))
+        pp.elevation = np.asarray(mult_el)#az2d.ravel()
+        pp.azimuth = np.asarray(mult_az[0])#el2d.ravel()
     
     ### scan psi as well,
     pitch = pp.time * angspeed_psi
@@ -100,7 +103,7 @@ def select_det(q,id):
     detector_i = q.detector[:len(id)]
     q.detector = detector_i
     return(q)
-
+    
 ```
 
 ```{python}
@@ -124,7 +127,7 @@ directory = os.environ['QUBIC_TODDIR']+'150GHz-2019-04-06/'
 #reload(jcinst)
 #detnums = [6, 37, 38, 72, 79, 86, 94, 96, 110, 124, 149, 153, 176, 184, 185, 199, 205, 229, 231, 235, 247]
 #detnums = [37, 124, 185, 229]
-detnums = [6,]
+detnums = [137] #,37,185]
 #detnums = [37, 185, 229]
 nsrec = 256
 tol = 5e-4
@@ -136,16 +139,29 @@ qcut = select_det(qubic.QubicInstrument(d),detnums)
 s = qubic.QubicScene(d)
 
 sb = 0.
-sb = qcut.get_synthbeam(s, 0, detpos=qcut.detector.center[0])
+sb = qcut.get_synthbeam(s, idet=1, detpos=qcut.detector.center[0])
 xr=0.1*np.max(sb)
 
 #Take maps from files
 flatmap = np.zeros((len(detnums),))
-for i in range(len(detnums)):
-    flatmap, az, el = dl.get_flatmap(detnums[i], directory)
+backandforth = False
+
+if backandforth: flatmap = np.empty((144,400)); xsize = 400; ysize = 144; reso = 5
+else: xsize = 200; ysize = 144 ; reso = 10
+    
+for i in range(len(detnums)):    
+    if backandforth:
+        readmap, az, el = sbfit.get_flatmap(detnums[i], directory)
+        for irow, _ in enumerate(readmap):
+            flatmap[irow, :len(az)] = readmap[irow, :]
+            flatmap[irow, len(az):] = readmap[irow, ::-1]
+    else:
+        flatmap, az, el = sbfit.get_flatmap(detnums[i], directory)
+        
+    
 print(flatmap.shape)    
 #We hace to reshape the sb with the az,el shape read it from fits files
-sb_img=hp.gnomview(sb, rot=[0,90], xsize=200,ysize=144, reso=10, min=-xr, max=xr,title='Input ', 
+sb_img=hp.gnomview(sb, rot=[0,90], xsize=xsize,ysize=ysize, reso=reso, min=-xr, max=xr,title='Input ', 
                    return_projected_map=True,hold=False,cmap='viridis')
 
 ```
@@ -155,8 +171,8 @@ Normalization and plot TOD and SB
 
 ```{python}
 flatmapnorm = flatmap/np.max(flatmap)
-sb_img = sb_img/np.max(sb_img)
-print(flatmap.shape)
+sb_imgnorm = sb_img/np.max(sb_img)
+
 plt.subplot(221)
 plt.title('real TOD')
 plt.imshow(flatmapnorm)
@@ -165,39 +181,56 @@ plt.title('real TOD ravel')
 plt.plot(flatmapnorm.ravel())
 plt.subplot(223)
 plt.title('sim SB')
-plt.imshow(sb_img)
+plt.imshow(sb_imgnorm)
 plt.subplot(224)
 plt.title('sim TOD ravel')
-plt.plot(sb_img.ravel())
+plt.plot(sb_imgnorm.ravel())
+```
+
+***
+Rescaling SB to the same as the real flat map. We want SB with the same mean and std than flatmap and noisegen. If $SB_{i}$ has $\mu_{1}$ and $\sigma_{1}$, and flatmap and noisegen has $\mu_{2}$ and $\sigma_{2}$, then we need to do: $$SBnew_{i} = \mu_{2} + (SB_{i} - \mu_{1}) \times \frac{\sigma_{2}}{\sigma_{1}}  $$.
+That new $SBnew_{i}$ has mean $\mu_{2}$ and std $\sigma_{2}$, i.e., SB scaled to flatmap and noise
+
+```{python}
+muSB, stdSB = ft.meancut(sb_imgnorm.ravel(),3)
+muScale, stdScale = ft.meancut(flatmapnorm.ravel(),3)
+
+#now scale mu and std of SB to the data
+SBnew = muScale + (sb_imgnorm - muSB)*stdScale/stdSB
+
+# generate random distributions of noise with scaled mu and std
+noisegen =3.5e2*np.mean(SBnew)*np.random.normal(muSB, stdScale, len(sb_imgnorm.ravel()))
+
+# Should I use something related with S/N ratio? 
+```
+
+***
+check if it's ok mu and std of SBnew.. It works
+
+```{python}
+#print(ft.meancut(SBnew,3), muScale, stdScale)
 ```
 
 ***
 Take noise level
 
 ```{python}
-pts = flatmapnorm.ravel()
-mu, std = np.mean(pts), np.std(pts)
-#Take noise. Because is gaussian noise
-condition = np.abs(pts)<std
-muNoise, stdNoise = np.mean(pts[condition]), np.std(pts[condition])
-
-print('fit gaussian with all points', mu, std)
-print('fit gaussian with smal amount of points ', muNoise, stdNoise)
+#pts = flatmapnorm.ravel()
+#muNoise,stdNoise = ft.meancut(pts,3)
+#print('fit gaussian with smal amount of points ', muNoise, stdNoise)
 
 plt.subplot(211)
-plt.plot(pts, 'b-')
+plt.plot(flatmapnorm.ravel(), 'b-')
 plt.subplot(212)
-count, bins, ignored = plt.hist(pts, color='b', bins=80, density=True,label='hits in map')
-plt.plot(bins, 1/(std * np.sqrt(2 * np.pi)) *
-        np.exp( - (bins - mu)**2 / (2 * std**2) ),
+count, bins, ignored = plt.hist(flatmapnorm.ravel(), color='b', bins=90, density=True,label='hits in map')
+plt.plot(bins, 1/(stdScale * np.sqrt(2 * np.pi)) *np.exp( - (bins - muScale)**2 / (2 * stdScale**2) ),
         linewidth=3, color='r', label= 'gaussian fit')
 plt.legend(loc='best')
-# generate random distributions of noise
-noisegen = np.random.normal(muNoise, stdNoise, len(sb_img.ravel()))
+
 # Add noise to SB
-simSB = sb_img.ravel()
-AMP = 1.0
-noisyTOD = AMP*noisegen+simSB
+simSB = SBnew.ravel()
+noisyTOD = simSB + noisegen
+#print(np.max(SBnew))
 ```
 
 ***
@@ -212,8 +245,8 @@ plt.subplot(132)
 plt.title('SB+noise from det {}'.format(detnums))
 plt.plot(noisyTOD)
 plt.subplot(133)
-plt.title('SB')
-plt.plot(flatmapnorm.ravel(), 'r')
+plt.title('TOD')
+plt.plot(flatmap.ravel(), 'r')
 
 ```
 
@@ -221,26 +254,105 @@ plt.plot(flatmapnorm.ravel(), 'r')
 ### Map-making with no fit locations of SB+realNoise
 
 
+
+***
+Standard pointing $p$
+
 ```{python}
-p = hall_pointing(az, el, 0, 0, fix_azimuth=d['fix_azimuth'])# qubic.QubicSampling(d)
+p = hall_pointing(az, el, 0, 0, backandforth = False, fix_azimuth=d['fix_azimuth'])# qubic.QubicSampling(d)
 
 a = qubic.QubicAcquisition(qcut, p, s, d)
 
 simSBr = simSB.reshape((1,len(simSB)))
 noisyTODr = noisyTOD.reshape((1,len(noisyTOD)))
 
-maps_recon_sb, _,_ = a.tod2map(simSBr,d,cov=None)
-maps_recon_sbPn, niter, error = a.tod2map(noisyTODr, d, cov=None)
+#maps_recon_sb, _,_ = a.tod2map(simSBr,d,cov=None)
+#maps_recon_sbPn, niter, error = a.tod2map(noisyTODr, d, cov=None)
 ```
 
-Check if the recons is fine.... 
+***
+Change pointing. 
+
+bf: back and forth standard pointing
+
+dens: denser one. (not working because elevation problem)
 
 ```{python}
-noisegenr=np.array(noisegen).reshape((144,200))
-hp.gnomview(maps_recon_sb,rot=[0,50], reso=10, title='sb(no refit)',sub=(1,2,1),
-            hold=False,cmap='viridis')
-hp.gnomview(maps_recon_sbPn,rot=[0,50], reso=10, title='sb+noiseTOD (no refit)', sub=(1,2,2),
-            hold=False,cmap='viridis')
+shiftaz = list(set(np.diff(az)/2))[0]
+shiftel = list(set(np.diff(el)/2))[0]
+newaz, newel = [], []
+for i in range(len(az)):
+    newaz.append(az[i])
+    newaz.append(az[i] + shiftaz)
+for j in range(len(el)):
+    newel.append(el[j])
+    newel.append(el[j] + shiftel)
+    
+print('az: ', len(az), len(newaz))
+print('el: ', len(el), len(newel))
+
+dens = hall_pointing(newaz,newel, 0, 0, backandforth=True,fix_azimuth=d['fix_azimuth'])
+bf = hall_pointing(az, el, 0, 0, backandforth=True, fix_azimuth=d['fix_azimuth'])
+```
+
+```{python}
+plt.subplot(211)
+plt.xlim(0,2800)
+plt.ylabel('Azimuth', fontsize=14)
+plt.plot(dens.azimuth, 'b', label='denser')
+plt.plot(bf.azimuth, 'g', label = 'default b&f')
+plt.plot(p.azimuth, 'r', label = 'default')
+plt.grid()
+plt.legend()
+
+plt.subplot(212)
+plt.xlim(0,2800)
+plt.ylim(36,38)
+plt.ylabel('Elevation', fontsize=14)
+plt.plot(dens.elevation, 'b')
+plt.plot(p.elevation, 'r')
+plt.plot(bf.elevation, 'g')
+plt.grid()
+```
+
+```{python}
+print('Maps shapes noisyTOD and simulated SB: ', noisyTODr.shape, simSB.shape)
+print('default pointing', len(p.azimuth), len(p.elevation))
+print('b&f pointing', len(bf.azimuth), len(bf.elevation))
+print('denser pointing', len(dens.azimuth), len(dens.azimuth))
+```
+
+have to fill some map to do b&f and denser pointing...
+
+```{python}
+model = testing # p, bf and dens
+if len(model) == 57600: dim0,dim1, par = 144,400, .5
+elif len(model) == 28800: dim0, dim1, par = 144,200, 1
+elif len(model) == 230400: dim0, dim1, par = 288,800, .125
+    
+# take input dim from SB
+dimSB = np.arange(0,len(simSB))
+# take more point
+newdim=np.arange(0,len(simSB), par)
+# Interpolation to the new points
+interpSB = np.interp(newdim,dimSB,noisyTODr[0])
+
+plt.xlim(13500,13550)
+plt.plot(dimSB,noisyTODr[0], 'ro', label = 'real value')
+plt.plot(newdim, interpSB, 'b*', label = 'interpolated')
+plt.legend()
+#plt.imshow(interpSB.reshape(dim0,dim1), extent=[np.min(model.azimuth),np.max(model.azimuth), 
+#                                              np.min(model.elevation), np.max(model.elevation)])
+```
+
+Check if the recons is fine.... OK!
+
+```{python}
+#noisegenr=np.array(noisegen).reshape((144,200))
+#hp.gnomview(maps_recon_sb,rot=[0,50], reso=10, title='sb(no refit)',sub=(1,2,1),
+#            hold=False,cmap='viridis')
+#hp.gnomview(maps_recon_sbPn,rot=[0,50], reso=10, title='sb+noiseTOD (no refit)', sub=(1,2,2),
+#            hold=False,cmap='viridis')
 ```
 
 ***
@@ -258,7 +370,7 @@ Create sbfitmodel
 sbfitmodel = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, 
                                      no_xy_shift=False, distortion=False)
 print('Using Fit Model {} for TES #{}'.format(sbfitmodel.name,detnums[i]))
-fit, thexypeaks = sbfit.fit_sb(noisyTOD.reshape((144,200)), az, el, sbfitmodel, resample=True, newsize=70,
+fit, thexypeaks = sbfit.fit_sb(noisyTOD.reshape((dim0,dim1)), az, el, sbfitmodel, resample=True, newsize=70,
                                                verbose=False, doplot=True)
 
 # Refitting of the peaks location
@@ -291,35 +403,46 @@ for ites in range(len(detnums)):
     allvals_Q[ites,:] = allvals_M[ites,:]/np.max(allvals_M[ites,:])*synthbeam.peak150.solid_angle * (150e9 / nu)**2 / s.solid_angle * len(horn)
         
 ### We nowwrite the temporary file that contains the peaks locations to be used
-if usepeaks is None:
-    peaknums = np.arange(9)
-else:
-    peaknums = usepeaks
-    data = np.array([allthetas_Q[:,peaknums], allphis_Q[:,peaknums], allvals_Q[:,peaknums]])
-    file = open(os.environ['QUBIC_PEAKS']+'peaks.pk', 'wb')
-    pickle.dump(data, file)
-    file.close()
+#if usepeaks is None:
+#    peaknums = np.arange(9)
+#else:
+peaknums = usepeaks
+data = np.array([allthetas_Q[:,peaknums], allphis_Q[:,peaknums], allvals_Q[:,peaknums]])
+file = open(os.environ['QUBIC_PEAKS']+'peaks.pk', 'wb')
+pickle.dump(data, file)
+file.close()
     
 qfit = select_det(jcinst.QubicInstrument(d),detnums)
 afit = qubic.QubicAcquisition(qfit, p, s, d)
 d['tol'] = tol
-maps_recon_fit, niter, error = afit.tod2map(noisyTODr, d, cov=None)
-maps_recon_fit_noiseless, _, _ = afit.tod2map(simSBr, d, cov=None)
+maps_recon_fit, niter, error = afit.tod2map(noisyTODr*5e-28, d, cov=None)
+maps_recon_fit_noiseless, _, _ = afit.tod2map(simSBr*5e-28, d, cov=None)
 #if verbose: print('Mapmaking QUBIC done in {} iterations with error: {}'.format(niter, error))
 
 ```
 
 ```{python}
-hp.gnomview(maps_recon_fit_noiseless,rot=[0,50], reso=10, title='sb noiseless TES#{}'.format(detnums[0]), sub=(1,3,1),
-            #min=-2e21, max=2e21,
+mindisp = -0.07*max(maps_recon_fit)
+maxdisp =0.07*max(maps_recon_fit)
+
+hp.gnomview(maps_recon_fit_noiseless,rot=[0,50], reso=10, title='Recons. map (sb noiseless) TES#{}'.format(detnums[0]), sub=(1,3,1),
+            min=mindisp, max=maxdisp,
             hold=False,cmap='viridis')
-hp.gnomview(maps_recon_fit,rot=[0,50], reso=10, title='sb+realNoise', sub=(1,3,2),
-            #min=-2e21, max=2e21,
+hp.gnomview(maps_recon_fit,rot=[0,50], reso=10, title='Recons. map (sb+realNoise)', sub=(1,3,2),
+            min=mindisp, max=maxdisp,
             hold=False,cmap='viridis')
 hp.gnomview(maps_recon_fit_noiseless - maps_recon_fit,rot=[0,50], reso=10, title='residual', sub=(1,3,3),
-            #min=-2e21, max=2e21, 
+            min=mindisp, max=maxdisp, 
             hold=False,cmap='viridis')
 
+
+```
+
+```{python}
+
+```
+
+```{python}
 
 ```
 

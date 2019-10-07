@@ -49,7 +49,7 @@ def NameCalib(method, date = None):
 		signame = date + '_sigmacalibration'
 		return signame
 
-def Parameters(d, reso = 2.5, size = 200, which = 'all'):
+def Parameters(d, reso = 1.5, size = 200, which = 'all'):
 	"""
 	Define parameters used several times in the resolution
 
@@ -76,8 +76,8 @@ def Parameters(d, reso = 2.5, size = 200, which = 'all'):
 	#if which == 'HealPar':
 	#	return reso, size
 
-def ParametersMC(nsubpop = 30, fwhm_ini = 0.21, fwhm_end = 0.70,
-					sample=5, amplitude = np.array([1.,])):
+def ParametersMC(nsubpop = 30, fwhm_ini = 0.28, fwhm_end = 0.45,
+					sample=15, amplitude = np.array([1.,])):
 	"""
 	Parameters for the Monte-Carlo simulation to build calibration files
 
@@ -143,7 +143,7 @@ def gaussian2d(x,y, x0, y0, varx, vary):
 	gauss = 1/(2*np.pi*varx*vary)*np.exp(-((x-x0)**2/(2*varx**2)+(y-y0)**2/(2*vary**2)))
 	return gauss.ravel()
 
-def FitMethod(maparray, d, cutlevel = 0.1, mapret = False):
+def FitMethod(maparray, d, cutlevel = 0.01, mapret = False):
 	"""
 	Method who fit a gaussian function given some parameters. 
 	The parameters for the calibration and for the used must be the same.
@@ -181,7 +181,7 @@ def FitMethod(maparray, d, cutlevel = 0.1, mapret = False):
 	else:
 		return input_fwhm_fit
 
-def SigmaMethod(maparray, d, cutlevel = 0.1, mapret=False):
+def SigmaMethod(maparray, d, cutlevel = 0.01, mapret=False):
 	"""
 	Method who compute the fwhm taken a N-map array as a gaussian distribution function. 
 	The parameters for the calibration and for the used must be the same.
@@ -239,12 +239,14 @@ def GenerateMaps(d, nus_in, p=None ):
 
 	if p:
 		if p.fix_az:
-			center_gal = (d['fix_azimuth']['az'],d['fix_azimuth']['el'])
+			center = (d['fix_azimuth']['az'],d['fix_azimuth']['el'])
 		elif not p.fix_az:
-			center_gal = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+			center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+	else:
+		center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 	nsideLow, nsideHigh, reso, size, sigma2fwhm = Parameters(d) 
 	#center_gal = qubic.equ2gal(d['RA_center'], d['DEC_center'])
-	pixel = hp.pixelfunc.ang2pix(nsideHigh, np.deg2rad(90-center_gal[1]), np.deg2rad(center_gal[0]), nest = True)
+	pixel = hp.pixelfunc.ang2pix(nsideHigh, np.deg2rad(90-center[1]), np.deg2rad(center[0]), nest = True)
 	vec_pix = hp.pix2vec(nsideHigh, pixel, nest = True)
 	vec_pixeles = hp.pix2vec(nsideHigh, np.arange(12*nsideHigh**2), nest = True )
 	ang_pixeles = np.arccos(np.dot(vec_pix,vec_pixeles))
@@ -272,7 +274,7 @@ def GenerateMaps(d, nus_in, p=None ):
 	
 	input_maps = np.empty((d['nf_sub'],size,size))
 	for i, mapa in enumerate(m0):
-		input_maps[i] = hp.gnomview(mapa[:,0], rot = center_gal,  
+		input_maps[i] = hp.gnomview(mapa[:,0], rot = center,  
 	                            reso = reso, xsize = size,
 	                            return_projected_map=True)
 	mp.close('all')

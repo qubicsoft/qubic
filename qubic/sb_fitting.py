@@ -1,11 +1,11 @@
 from __future__ import division, print_function
 
 from qubicpack import qubicpack as qp
-import fibtools as ft
-import plotters as p
-import lin_lib as ll
+import qubic.fibtools as ft
+import qubic.plotters as p
+import qubic.lin_lib as ll
 import qubic
-import demodulation_lib as dl
+#import demodulation_lib as dl
 
 from pysimulators import FitsArray
 import numpy as np
@@ -52,23 +52,23 @@ def show_lines(maps, nums, min=None, max=None):
 
 def get_flatmap(TESNum, directory, azmin=None, azmax=None, elmin=None, elmax=None, remove=None,
 	fitted_directory=None):
-    themap = np.array(FitsArray(directory+'/Flat/imgflat_TESNum_{}.fits'.format(TESNum)))
-    az = np.array(FitsArray(directory+'/Flat/azimuth.fits'.format(TESNum)))    
-    el = np.array(FitsArray(directory+'/Flat/elevation.fits'.format(TESNum)))
-    if azmin is None:
-    	azmin = np.min(az)
-    if azmax is None:
-    	azmax = np.max(az)
-    if elmin is None:
-    	elmin = np.min(el)
-    if elmax is None:
-    	elmax = np.max(el)
-    okaz = (az >= azmin) & (az <= azmax)
-    az = az[okaz]
-    okel = (el >= elmin) & (el <= elmax)
-    el = el[okel]
-    themap = themap[:,okaz][okel,:]
-    if remove is not None:
+	themap = np.array(FitsArray(directory+'/Flat/imgflat_TESNum_{}.fits'.format(TESNum)))
+	az = np.array(FitsArray(directory+'/Flat/azimuth.fits'.format(TESNum)))    
+	el = np.array(FitsArray(directory+'/Flat/elevation.fits'.format(TESNum)))
+	if azmin is None:
+		azmin = np.min(az)
+	if azmax is None:
+		azmax = np.max(az)
+	if elmin is None:
+		elmin = np.min(el)
+	if elmax is None:
+		elmax = np.max(el)
+	okaz = (az >= azmin) & (az <= azmax)
+	az = az[okaz]
+	okel = (el >= elmin) & (el <= elmax)
+	el = el[okel]
+	themap = themap[:,okaz][okel,:]
+	if remove is not None:
 		mm=np.mean(remove)
 		ss = np.std(remove)
 		xc, yval, dx, dy, others = ft.profile(remove, themap, range=[mm-2*ss, mm+2*ss], mode=True,
@@ -77,9 +77,9 @@ def get_flatmap(TESNum, directory, azmin=None, azmax=None, elmin=None, elmax=Non
 		pp = np.poly1d(bla)
 		themap -= pp(remove)
 
-    if fitted_directory is None:
+	if fitted_directory is None:
 		return themap, az, el
-    else:
+	else:
 		### Read fitted synthesized beam
 		thefile = open(fitted_directory+'/fit-TES{}.pk'.format(TESNum), 'rb')
 		fitpars = pickle.load(thefile)

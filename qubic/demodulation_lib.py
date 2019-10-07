@@ -1,8 +1,8 @@
 from __future__ import division, print_function
 from qubicpack import qubicpack as qp
-import fibtools as ft
-import plotters as p
-import lin_lib as ll
+import qubic.fibtools as ft
+import qubic.plotters as p
+import qubic.lin_lib as ll
 import qubic
 from pysimulators import FitsArray
 

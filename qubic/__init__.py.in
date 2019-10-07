@@ -13,6 +13,11 @@ from .xpol import *
 from .polyacquisition import *
 from .multiacquisition import *
 from .ripples import *
+from .fibtools import *
+from .demodulation_lib import *
+from .sb_fitting import *
+from .plotters import *
+from .lin_lib import *
 from . import qubicdict 
 
 def full(shape, fill_value, dtype=None, order='C'):

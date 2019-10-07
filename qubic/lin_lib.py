@@ -1,6 +1,6 @@
 from qubicpack import qubicpack as qp
-import fibtools as ft
-import plotters as p
+import qubic.fibtools as ft
+import qubic.plotters as p
 
 import numpy as np
 from matplotlib.pyplot import *

@@ -47,10 +47,10 @@ if BoolCal:
 
 elif not BoolCal:
 	rename =str(reso).replace('.','-')
-	namefit = NameCalib(method = 'fit')+str(rename)+'-{}.txt'.format(d['nside'])
-	namesigma = NameCalib(method = 'sigma')+str(rename)+'-{}.txt'.format(d['nside'])
-	#namefit = '20190326_fitcalibration.txt'
-	#namesigma = '20190326_sigmacalibration.txt'
+	#namefit = NameCalib(method = 'fit')+str(rename)+'-{}.txt'.format(d['nside'])
+	#namesigma = NameCalib(method = 'sigma')+str(rename)+'-{}.txt'.format(d['nside'])
+	namefit = '20191007_fitcalibration1-5-256.txt'
+	namesigma = '20191007_sigmacalibration1-5-256.txt'
 
 print('Dictionary used: {}'.format(sys.argv[1]))
 print('Fit table for interpolation: {}'.format(namefit))

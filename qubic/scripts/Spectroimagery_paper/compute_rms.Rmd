@@ -1,0 +1,533 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.3
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+from __future__ import division, print_function
+import glob
+import os
+import healpy as hp
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import rc
+
+import ReadMC as rmc
+import AnalysisMC as amc
+
+import qubic
+from qubic import equ2gal
+
+from qubicpack.utilities import Qubic_DataDir
+
+# %matplotlib inline
+rc({'cmap', 'viridis'})
+plt.rcParams['figure.figsize'] = (8, 8)
+
+```
+
+***
+### Check if works fine the get_sigma_NoSpIm function
+looks like yes....
+
+```{python}
+#print(sigma2mean[0,:]==get_sigma_NoSpIm(rep_simu, date_name, nf_recon)[0])
+#print(sigma2mean_bis[0,:]==get_sigma_NoSpIm(rep_simu, date_name, nf_recon)[1])
+#print(sigma2mean[0,:],np.sqrt(get_sigma_NoSpIm(rep_simu, date_name, nf_recon)))
+```
+
+***
+# Get the simulation files
+
+```{python}
+# Simulation date and name
+#date_name = '20190815_QU10'
+date_name = 'NERSC_runs/24334789/20190903_low_nep'
+
+# Get the repository where the simulation is
+rep_simu = Qubic_DataDir(datafile=date_name + '.dict') + '/'
+print('rep_simu : ', rep_simu)
+
+# Dictionary saved during the simulation
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(rep_simu + date_name + '.dict')
+```
+
+***
+### Number of subbands used during the simulation
+
+```{python}
+nf_recon = d['nf_recon']
+print('nf_recon', nf_recon)
+```
+
+***
+## Choose a number of reconstructed subbands
+
+```{python}
+nfrec = 4
+index_frec = nf_recon.index(nfrec)
+print('index_frec = ', index_frec)
+```
+
+## Get full maps
+analysis with noise
+
+
+```{python}
+# Remember: get_patch_many_file do seen_map + read each map
+files, maps_recon, maps_conv, maps_diff = \
+rmc.get_maps_many_files(rep_simu + date_name, '*nfrecon{}*False*'.format(nfrec))
+
+nreals=len(files)
+
+print('Shape maps: {}, Tolerance: {}, NEP: {}, pointings: {}'.format(
+    maps_recon.shape, d['tol'], d['detector_nep'], d['npointings'] ))
+
+setpar = {'tol':d['tol'], 'nep':d['detector_nep'], 'npoint':d['npointings']}
+```
+
+## Get patchs
+
+```{python}
+_, maps_recon_patch, maps_conv_patch, maps_diff_patch = \
+rmc.get_patch_many_files(rep_simu + date_name, '*nfrecon{}*False*'.format(nfrec))
+substractnl = False
+if substractnl:
+    _, maps_recon_nl, maps_conv_nl, maps_diff_nl = \
+    rmc.get_patch_many_files(rep_simu + date_name, '*nfrecon{}*True*'.format(nfrec))
+    maps_diff_patch = maps_diff_patch - maps_diff_nl
+    print(maps_diff_nl.shape)
+
+npix_patch = maps_diff_patch.shape[2]
+setpar.update({ 'pixpatch': npix_patch})
+print('npix_patch = ', npix_patch)
+
+```
+
+***
+### Compute for entire map (no split in zones) and with diff maps
+
+
+
+
+Compute the distance. If distance between the two (or more, depends $n_{rec}$ choose it) maps are lt tolerance, we can follow the study of the rms with just one of the maps (and split in zones, etc)
+
+For example, if $n_{rec} = 2$, we want to know if $$|d^{fullmap}_{map1} - d^{fullmap}_{map2}| \le tolerance$$
+
+```{python}
+# Simple average over realizations: 
+maps_diff_av = np.mean(maps_diff_patch, axis=0)
+
+print(np.shape(maps_diff_av))
+
+distance = np.empty((nfrec, len(d['kind']) ) )
+#distance2 = np.empty((nfrec, len(d['kind']) ) )
+
+for i in range(nfrec):
+    for j in range(len(d['kind'])):
+        distance[i,j] = amc.distance_square(maps_diff_av[i,:,j]) 
+        #testing
+        #distance[i,j] = np.sum(np.square(maps_diff_av[i,:,j])) / np.shape(maps_diff_av)[1]**2
+#print(distance)
+```
+
+***
+Make zones for averaged maps
+
+
+```{python}
+
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+seenmap = rmc.get_seenmap(files[0])
+print(seenmap.shape)
+nside = hp.get_nside(maps_recon[0,0,:,0])
+pix_zones, all_maps_zones = rmc.make_zones(maps_diff_av, 2, nside, center, seenmap, 
+                                           angle = False, dtheta=15., verbose=True, doplot=True)
+
+print(all_maps_zones.shape)
+```
+
+***
+Check if the distance between reconstructed maps is accepted (comparisson between maps for all stokes parameters)
+
+```{python}
+tolerance = 1e-3 #arbitrary
+
+if nfrec == 1: print('add that posibility please (not done yet)')
+    
+check = np.empty((nfrec-1,len(d['kind']), ))
+
+for i in range(nfrec-1):
+    check[i,:] = np.abs(distance[i+1,:] - distance[i,:]) < tolerance
+    
+print(check)
+```
+
+Keep the study with a single map (one of the nfrec)
+
+```{python}
+rms_I,rms_Q,rms_U = np.empty((nfrec,)), np.empty((nfrec,)), np.empty((nfrec,))
+maps = maps_diff_av#[0,:,:]
+
+for i in range(nfrec):
+    rms_I[i] = np.sqrt(np.dot(maps[i,:,0],maps[i,:,0])/len(maps[i,:,0]))
+    rms_Q[i] = np.sqrt(np.dot(maps[i,:,1],maps[i,:,1])/len(maps[i,:,1]))
+    rms_U[i] = np.sqrt(np.dot(maps[i,:,2],maps[i,:,2])/len(maps[i,:,2]))
+
+print(rms_I, rms_Q, rms_U)
+```
+
+***
+
+## Make a function with all previous 
+
+```{python}
+def rms_method(name=None, zones = 1, tolerance = 1e-3, substractnl = False):
+    
+    date_name = name#'NERSC_runs/24334789/20190903_low_nep'
+
+    # Get the repository where the simulation is
+    rep_simu = Qubic_DataDir(datafile=date_name + '.dict') + '/'
+    #print('rep_simu : ', rep_simu)
+
+    # Dictionary saved during the simulation
+    d = qubic.qubicdict.qubicDict()
+    d.read_from_file(rep_simu + date_name + '.dict')
+    
+    nf_recon = d['nf_recon']
+    
+    rms_I,rms_Q,rms_U = dict(), dict(),dict()
+    
+    for irec in nf_recon:
+        nfrec = irec
+        index_frec = nf_recon.index(nfrec)
+
+        # Remember: get_patch_many_file do seen_map + read each map
+        files, maps_recon, maps_conv, maps_diff = \
+        rmc.get_maps_many_files(rep_simu + date_name, '*nfrecon{}*False*'.format(nfrec))
+
+        nreals=len(files)
+
+        #print('Shape maps: {}, Tolerance: {}, NEP: {}, pointings: {}'.format(
+        #    maps_recon.shape, d['tol'], d['detector_nep'], d['npointings'] ))
+
+        setpar = {'tol':d['tol'], 'nep':d['detector_nep'], 'npoint':d['npointings']}
+        
+        _, maps_recon_patch, maps_conv_patch, maps_diff_patch = \
+        rmc.get_patch_many_files(rep_simu + date_name, '*nfrecon{}*False*'.format(nfrec))
+
+        if substractnl:
+            _, maps_recon_nl, maps_conv_nl, maps_diff_nl = \
+            rmc.get_patch_many_files(rep_simu + date_name, '*nfrecon{}*True*'.format(nfrec))
+            
+            maps_diff_patch = maps_diff_patch - maps_diff_nl
+            
+        
+        npix_patch = maps_diff_patch.shape[2]
+        setpar.update({ 'pixpatch': npix_patch})
+        #print('npix_patch = ', npix_patch)
+        print(setpar)
+
+        # Simple average over realizations: 
+        maps_diff_av = np.mean(maps_diff_patch, axis=0)
+
+        #print(np.shape(maps_diff_av))
+
+        distance = np.empty((nfrec, len(d['kind']) ) )
+        #distance2 = np.empty((nfrec, len(d['kind']) ) )
+
+        for i in range(nfrec):
+            for j in range(len(d['kind'])):
+                distance[i,j] = amc.distance_square(maps_diff_av[i,:,j]) 
+       
+        tolerance = tolerance#1e-3 #arbitrary
+
+        if nfrec == 1: print('add that posibility please (not done yet)')
+        check = np.empty((nfrec-1,len(d['kind']), ))
+        for i in range(nfrec-1):
+            check[i,:] = np.abs(distance[i+1,:] - distance[i,:]) < tolerance
+    
+        print('Cheking', check)
+
+        if zones == 1:
+            rms_i,rms_q,rms_u = np.empty((nfrec,)), np.empty((nfrec,)), np.empty((nfrec,))
+            maps = maps_diff_av#[0,:,:]
+
+            for i in range(nfrec):
+                rms_i[i] = np.sqrt(np.dot(maps[i,:,0],maps[i,:,0])/len(maps[i,:,0]))
+                rms_q[i] = np.sqrt(np.dot(maps[i,:,1],maps[i,:,1])/len(maps[i,:,1]))
+                rms_u[i] = np.sqrt(np.dot(maps[i,:,2],maps[i,:,2])/len(maps[i,:,2]))
+        
+            rms_I.update({ str(nfrec): rms_i })
+            rms_Q.update({ str(nfrec): rms_q })
+            rms_U.update({ str(nfrec): rms_u })
+            
+        elif zones == 2:
+            
+            center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+            seenmap = rmc.get_seenmap(files[0])
+            print('seenmap shape', seenmap.shape)
+            nside = hp.get_nside(maps_recon[0,0,:,0])
+            print('nside', nside)
+            pix_zones, all_maps_zones = rmc.make_zones(maps_diff_av, zones, nside, center, seenmap, 
+                                           angle = True, dtheta=15., verbose=True, doplot=False)
+            print('all_maps_zones shape', all_maps_zones.shape)
+            rms_i,rms_q,rms_u = np.empty((zones,nfrec,)), np.empty((zones,nfrec,)), np.empty((zones,nfrec,))
+            maps = all_maps_zones#[0,:,:]
+            
+            for izone in range(zones):
+                for i in range(nfrec):
+                    rms_i[izone, i] = np.sqrt(np.dot(maps[izone,i,:,0],maps[izone,i,:,0])/len(maps[izone,i,:,0]))
+                    rms_q[izone, i] = np.sqrt(np.dot(maps[izone,i,:,1],maps[izone,i,:,1])/len(maps[izone,i,:,1]))
+                    rms_u[izone, i] = np.sqrt(np.dot(maps[izone,i,:,2],maps[izone,i,:,2])/len(maps[izone,i,:,2]))
+        
+            rms_I.update({ str(nfrec): rms_i })
+            rms_Q.update({ str(nfrec): rms_q })
+            rms_U.update({ str(nfrec): rms_u })
+
+        elif zones == 3:
+            
+            center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+            seenmap = rmc.get_seenmap(files[0])
+            print('seenmap shape', seenmap.shape)
+            nside = hp.get_nside(maps_recon[0,0,:,0])
+            print('nside', nside)
+            pix_zones, all_maps_zones = rmc.make_zones(maps_diff_av, zones, nside, center, seenmap, 
+                                           angle = False, dtheta=15., verbose=True, doplot=False)
+            print('all_maps_zones shape', all_maps_zones.shape)
+            rms_i,rms_q,rms_u = np.empty((zones,nfrec,)), np.empty((zones,nfrec,)), np.empty((zones,nfrec,))
+            maps = all_maps_zones#[0,:,:]
+            
+            for izone in range(zones):
+                for i in range(nfrec):
+                    rms_i[izone, i] = np.sqrt(np.dot(maps[izone,i,:,0],maps[izone,i,:,0])/len(maps[izone,i,:,0]))
+                    rms_q[izone, i] = np.sqrt(np.dot(maps[izone,i,:,1],maps[izone,i,:,1])/len(maps[izone,i,:,1]))
+                    rms_u[izone, i] = np.sqrt(np.dot(maps[izone,i,:,2],maps[izone,i,:,2])/len(maps[izone,i,:,2]))
+        
+            rms_I.update({ str(nfrec): rms_i })
+            rms_Q.update({ str(nfrec): rms_q })
+            rms_U.update({ str(nfrec): rms_u })
+
+    return rms_I, rms_Q, rms_U, setpar
+
+```
+
+```{python}
+#rms_i0, rms_q0, rms_u0, par0 = rms_method(name='NERSC_runs/24334789/20190903_low_nep')
+simulations = ['NERSC_runs/24817644/20190926_low_nep',
+              'NERSC_runs/24817884/20190926_low_nep',
+              'NERSC_runs/24817902/20190926_low_nep',
+              'NERSC_runs/24817974/20190926_low_nep',
+              'NERSC_runs/24817950/20190926_low_nep',
+              'NERSC_runs/24817987/20190926_low_nep',
+              'NERSC_runs/24817999/20190926_low_nep',
+              'NERSC_runs/24818388/20190926_low_nep',
+              'NERSC_runs/24818399/20190926_low_nep',
+              'NERSC_runs/24818404/20190926_low_nep',
+              'NERSC_runs/24818411/20190926_low_nep',
+              'NERSC_runs/24122605/20190825_low_nep',
+              'NERSC_runs/24870671/20190928_low_nep']
+# nside64
+rms_i, rms_q, rms_u, par = [],[],[],[]
+
+for jsimu in simulations:
+    rms_i1, rms_q1, rms_u1, par1 = rms_method(name=jsimu, tolerance = 1e-2, substractnl = False)
+    rms_i.append(rms_i1)
+    rms_q.append(rms_q1)
+    rms_u.append(rms_u1)
+    par.append(par1)
+    
+# 2 zones
+rms_iZ, rms_qZ, rms_uZ, parZ = [],[],[],[]
+for jsimu in simulations:
+    rms_iaux, rms_qaux, rms_uaux, parz = rms_method(name=jsimu, zones=2, tolerance=1e-2, substractnl = False)
+    rms_iZ.append(rms_iaux)
+    rms_qZ.append(rms_qaux)
+    rms_uZ.append(rms_uaux)
+    parZ.append(parz)
+
+# 3 zones
+rms_i3Z, rms_q3Z, rms_u3Z, par3Z = [],[],[],[]
+for jsimu in simulations:
+    rms_iaux, rms_qaux, rms_uaux, parz = rms_method(name=jsimu, zones=3, tolerance=1e-2, substractnl = False)
+    rms_i3Z.append(rms_iaux)
+    rms_q3Z.append(rms_qaux)
+    rms_u3Z.append(rms_uaux)
+    par3Z.append(parz)
+    
+```
+
+***
+check if is working the store (ok))
+
+```{python}
+for i in range(len(simulations)):
+    #print(rms_i[i]['8'])    
+    print(par[i])
+print(len(simulations))
+```
+
+```{python}
+kfreq = '2' #number of channels for reconstruction
+color = ['b','g','r','c','m','y','b','g','r','c','m','y']
+plt.figure(figsize=(21,8))
+nzones = [1,2,3]
+
+for jsimu in range(len(par)):
+    
+    for ist, istokes in enumerate('IQU'):
+        plt.subplot(1,3,ist+1)
+        plt.title('Stokes {}'.format(istokes), fontsize = 18)
+        plt.xlabel('# zones', fontsize=16)
+        plt.ylabel('rms', fontsize=16)
+        plt.xticks([1,2,3], fontsize= 14)
+        plt.yticks(fontsize = 10)
+        plt.axvline(1.5, color='k', alpha= 0.3, linewidth=3, linestyle='-')
+        plt.axvline(2.5, color='k', alpha= 0.3, linewidth=3, linestyle='-')
+        plt.xlim(0.70,3.6)
+        
+        for izones in nzones:
+            if izones == 1: 
+                if par[jsimu]['nep'] == 1e-18:
+                    if istokes == 'I': 
+                        plt.plot(np.ones_like(rms_i[jsimu]['{}'.format(kfreq)]), 
+                         rms_i[jsimu]['{}'.format(kfreq)], 
+                         label = 'nep,ptg: {:1.0e},{}'.format(par[jsimu]['nep'], par[jsimu]['npoint']),
+                         color=color[jsimu], marker = 'o', linestyle='', mew =3, 
+                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
+                    elif istokes == 'Q': 
+                        plt.plot(np.ones_like(rms_q[jsimu]['{}'.format(kfreq)]), 
+                         rms_q[jsimu]['{}'.format(kfreq)], 
+                         #label = 'ptg: {}'.format(par[jsimu]['npoint']),
+                         color=color[jsimu], marker = '*', linestyle='',mew =3,
+                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
+                    elif istokes == 'U': 
+                        plt.plot(np.ones_like(rms_u[jsimu]['{}'.format(kfreq)]), 
+                         rms_u[jsimu]['{}'.format(kfreq)], 
+                         #label = 'ptg: {}'.format(par[jsimu]['npoint']),
+                        color=color[jsimu], marker = '+', linestyle='', mew =3,
+                        ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
+
+            elif izones == 2:
+                for iizo in range(izones):
+                    if iizo == 0: 
+                        xx = 1.75
+                        xdim = xx*np.ones((int(kfreq),))
+                    else: 
+                        xx = 2.25
+                        xdim = xx*np.ones((int(kfreq),))
+                    if parZ[jsimu]['nep'] == 1e-18:
+                        if istokes == 'I': 
+                            plt.plot(xdim, 
+                             rms_iZ[jsimu]['{}'.format(kfreq)][iizo], 
+                             color=color[jsimu], marker = 'o', linestyle='',mew =3, 
+                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
+                        elif istokes == 'Q': 
+                            plt.plot(xdim, 
+                             rms_qZ[jsimu]['{}'.format(kfreq)][iizo], 
+                             color=color[jsimu], marker = '*', linestyle='',mew =3, 
+                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
+                        elif istokes == 'U': 
+                            plt.plot(xdim, 
+                             rms_uZ[jsimu]['{}'.format(kfreq)][iizo], 
+                             color=color[jsimu], marker = '+', linestyle='',mew =3, 
+                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
+
+            elif izones == 3:
+                for iizo in range(izones):
+                    if iizo == 0: 
+                        xx = 2.67
+                        xdim = xx*np.ones((int(kfreq),))
+                    elif iizo == 1: 
+                        xx = 3.
+                        xdim = xx*np.ones((int(kfreq),))
+                    elif iizo == 2:
+                        xx = 3.33
+                        xdim = xx*np.ones((int(kfreq),))
+                    if par3Z[jsimu]['nep'] == 1e-18:
+                        if istokes == 'I': 
+                            plt.plot(xdim, 
+                             rms_i3Z[jsimu]['{}'.format(kfreq)][iizo], 
+                             color=color[jsimu], marker = 'o', linestyle='',mew =3, 
+                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
+                        elif istokes == 'Q': 
+                            plt.plot(xdim, 
+                             rms_q3Z[jsimu]['{}'.format(kfreq)][iizo], 
+                             color=color[jsimu], marker = '*', linestyle='',mew =3, 
+                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
+                        elif istokes == 'U': 
+                            plt.plot(xdim, 
+                             rms_u3Z[jsimu]['{}'.format(kfreq)][iizo], 
+                             color=color[jsimu], marker = '+', linestyle='',mew =3, 
+                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
+
+        plt.legend(loc='upper center', bbox_to_anchor=(1.75, 1.3),ncol=4,fontsize = 15)
+    plt.text(-1.7,0.04,'map_rec',fontsize=18)
+    
+        #plt.xlim(1.7,1.8)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+#rms_iZ, rms_qZ, rms_uZ, parZ = rms_method(name = 'NERSC_runs/24817644/20190926_low_nep', zones = 2)
+
+kfreq = '8' #number of channels for reconstruction
+color = ['b','g','r','c','m','y']
+plt.figure(figsize=(19,4))
+nzones = [1,2]
+
+for jsimu in range(len(par)):
+    for ist, istokes in enumerate('IQU'):
+        plt.subplot(1,3,ist+1)
+        plt.title('Stokes {}'.format(istokes), fontsize = 18)
+        plt.xlabel('# zones', fontsize=16)
+        plt.ylabel('rms', fontsize=16)
+        plt.xticks([1,], fontsize= 14)
+      
+        if par[jsimu]['nep'] == 1e-18:
+            plt.xticks([1,], fontsize= 14)
+            plt.yticks(fontsize = 10)
+            if istokes == 'I': plt.plot(np.ones_like(rms_i[jsimu]['{}'.format(kfreq)]), 
+                rms_i[jsimu]['{}'.format(kfreq)], 
+                label = 'tol,pointing: {:1.0e},{}'.format(par[jsimu]['tol'], par[jsimu]['npoint']),
+                color=color[jsimu], marker = 'o', linestyle='')
+            elif istokes == 'Q': plt.plot(np.ones_like(rms_q[jsimu]['{}'.format(kfreq)]), 
+                rms_q[jsimu]['{}'.format(kfreq)], 
+                label = 'pointing: {}'.format(par[jsimu]['npoint']),
+                color=color[jsimu], marker = '*', linestyle='')
+            elif istokes == 'U': plt.plot(np.ones_like(rms_u[jsimu]['{}'.format(kfreq)]), 
+                rms_u[jsimu]['{}'.format(kfreq)], 
+                label = 'pointing: {}'.format(par[jsimu]['npoint']),
+                color=color[jsimu], marker = '+', linestyle='')
+            
+        plt.legend(loc=6,fontsize = 12)
+```
+
+```{python}
+rms_iZ['4'][0]
+```
+
+```{python}
+
+```

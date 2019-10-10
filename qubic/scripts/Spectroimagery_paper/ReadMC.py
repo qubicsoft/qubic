@@ -311,7 +311,7 @@ def make_zones(patch, nzones, nside, center, seenmap, angle = False, dtheta=15.,
             map[:, seenmap, :] = allmaps_mask[i]
             map[:, ~seenmap, :] = hp.UNSEEN
             hp.gnomview(map[0, :, istokes], sub=(1, nzones, i+1),
-                        rot=center, reso=10,
+                        rot=center, reso=15,
                         title='Zone {}, npix = {}, istokes = {}'.format(i, pix_per_zone[i], istokes))
     return pix_per_zone, allmaps_mask
 

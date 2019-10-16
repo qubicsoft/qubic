@@ -4,7 +4,7 @@ import os
 from pysm.nominal import models
 
 import qubic
-import SpectroImLib as si
+from qubic import SpectroImLib as si
 
 from pysimulators import FitsArray
 

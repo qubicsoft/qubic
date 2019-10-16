@@ -12,6 +12,7 @@ from .scene import *
 from .xpol import *
 from .polyacquisition import *
 from .multiacquisition import *
+from .SpectroImLib import *
 from .ripples import *
 from .fibtools import *
 from .demodulation_lib import *
@@ -41,4 +42,4 @@ if numpy.__version__ < '1.8':
     numpy.full_like = full_like
 del full, full_like, numpy
 
-__version__ = '4.5.dev841'
+__version__ = '4.5.dev844'

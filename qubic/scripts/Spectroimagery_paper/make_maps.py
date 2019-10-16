@@ -14,7 +14,7 @@ import qubic
 from qubicpack.utilities import Qubic_DataDir
 
 import ReadMC
-import SpectroImLib as si
+from qubic import SpectroImLib as si
 
 today = datetime.datetime.now().strftime('%Y%m%d')
 

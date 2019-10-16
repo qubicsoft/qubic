@@ -12,6 +12,7 @@ from .scene import *
 from .xpol import *
 from .polyacquisition import *
 from .multiacquisition import *
+from .SpectroImLib import *
 from .ripples import *
 from .fibtools import *
 from .demodulation_lib import *

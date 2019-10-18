@@ -231,16 +231,16 @@ class SelfCalibration:
 
         return S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij
 
-    def compute_fringes(self, theta=np.array([0.]), phi=np.array([0.]), nu=150e9, spectral_irradiance=1., reso=34,
+    def compute_fringes(self, q, theta=np.array([0.]), phi=np.array([0.]), nu=150e9, spectral_irradiance=1., reso=34,
                         xmin=-0.06, xmax=0.06):
         """
         Return the fringes on the FP by making the computation
         fringes =(S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
+        q : a qubic monochromatic instrument
         """
-        q = qubic.QubicMultibandInstrument(self.d)
 
         S_tot, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = \
-            SelfCalibration.get_power_combinations(self, q[0], theta=theta, phi=phi, nu=nu,
+            SelfCalibration.get_power_combinations(self, q, theta=theta, phi=phi, nu=nu,
                                                    spectral_irradiance=spectral_irradiance, reso=reso,
                                                    xmin=xmin, xmax=xmax, doplot=True)
 
@@ -385,8 +385,8 @@ class SelfCalibration:
                                                                  doplot=False,
                                                                  indep_config=np.delete(all_open, [i - 1, j - 1]))
         Ci_aber = SelfCalibration.get_power_fp_aberration(self, rep,
-                                                                 doplot=True,
-                                                                 indep_config=[i])
+                                                          doplot=True,
+                                                          indep_config=[i])
 
         fringes_aber = (S_tot_aber - Cminus_i_aber - Cminus_j_aber + Sminus_ij_aber) / Ci_aber
 
@@ -472,7 +472,7 @@ def get_power_on_array(q, theta=np.array([0.]), phi=np.array([0.]), nu=150e9, sp
     xx, yy = np.meshgrid(np.linspace(xmin, xmax, reso), np.linspace(xmin, xmax, reso))
     x1d = np.ravel(xx)
     y1d = np.ravel(yy)
-    z1d = x1d * 0 - 0.3
+    z1d = x1d * 0 - q.optics.focal_length
     position = np.array([x1d, y1d, z1d]).T
 
     field = q._get_response(theta, phi, spectral_irradiance, position, q.detector.area,

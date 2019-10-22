@@ -28,8 +28,8 @@ d.read_from_file(sys.argv[1])
 ###			All 	 in 	plot 		###
 
 methodused = 'sigma'
-name = NameRun(d)
-
+#name = NameRun(d)
+name = '20191011testing'
 bla = np.arange(2,8)
 nu = 150
 if nu == 150:
@@ -64,7 +64,8 @@ if methodused == 'fit':
     calibname = NameCalib(method = 'fit')
     interpNusSig, interpDeltaFwhmSig, interpStdSig = np.loadtxt(calibname, unpack = True)#'20190111_{}Calib.txt'.format(methodused), unpack=True)
 elif methodused == 'sigma':
-    calibname = NameCalib(method = 'sigma')
+    #calibname = NameCalib(method = 'sigma')
+    calibname = '20191007_sigmacalibration1-5-256.txt'
     interpNusSig, interpDeltaFwhmSig, interpStdSig = np.loadtxt(calibname, unpack = True)#'20190111_{}Calib.txt'.format(methodused), unpack=True)
 
 f_fit = interp1d(interpNusSig, interpDeltaFwhmSig, kind = 'cubic')

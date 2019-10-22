@@ -382,14 +382,14 @@ class QubicInstrument(Instrument):
                   'GHz, n_modes =', np.pi * self.horn.radeff ** 2 * \
                   self.primary_beam.solid_angle * \
                   self.filter.nu ** 2 / c ** 2)
-            indf = names.index('ndf') - 2
+            indf = names.index(b'ndf') - 2
             if cc[indf][2] != 1.0:
                 print('Neutral density filter present, trans = ',
                       cc[indf][2])
             else:
                 print('No neutral density filter')
         # compnents before the horn plane
-        ib2b = names.index('ba2ba')
+        ib2b = names.index(b'ba2ba')
         g[:ib2b] = gp[:ib2b, None] * S_horns_eff * omega_det * (nu / c) ** 2 \
                    * sec_beam * dnu
         P_phot[:ib2b] = (emissivities * tr_prod * h * nu /

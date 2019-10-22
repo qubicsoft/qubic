@@ -12,13 +12,16 @@ from .scene import *
 from .xpol import *
 from .polyacquisition import *
 from .multiacquisition import *
+from .SpectroImLib import *
 from .ripples import *
 from .fibtools import *
 from .demodulation_lib import *
+from .selfcal_lib import *
 from .sb_fitting import *
 from .plotters import *
 from .lin_lib import *
 from . import qubicdict 
+
 
 def full(shape, fill_value, dtype=None, order='C'):
     import numpy as np
@@ -39,4 +42,4 @@ if numpy.__version__ < '1.8':
     numpy.full_like = full_like
 del full, full_like, numpy
 
-__version__ = '4.5.dev828'
+__version__ = '4.5.dev844'

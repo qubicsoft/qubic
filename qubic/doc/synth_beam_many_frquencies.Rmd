@@ -1,0 +1,120 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.3
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+## Script to compute SB in different frequencies
+The goal of this script it's to provide the way to compute SB with current qubicsoft
+
+```{python}
+import os
+import qubic
+import healpy as hp
+import numpy as np
+import pylab as plt
+from matplotlib.pyplot import *
+from qubic import QubicInstrument as QI
+
+import sys
+from pysimulators import FitsArray
+
+# %matplotlib inline
+
+def select_det(q,id):
+    id=[id]
+    detector_i = q.detector[id]
+    q.detector = detector_i
+    return(q)
+
+name='test_scan_source'
+resultDir='%s'%name
+
+```
+
+```{python}
+alaImager=False
+component=0
+sel_det=True #If you want to select one detector
+
+# INSTRUMENT
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(os.environ['QUBIC_DICT']+'global_source_oneDet.dict')
+d['nside'] = 512
+num=143
+if sel_det:
+    q = qubic.QubicInstrument(d)
+    q = select_det(q,9)
+    
+
+```
+
+```{python}
+manyfreq = [130e9,140e9,150e9,160e9,170e9,180e9]
+size=200
+maps = np.empty((len(manyfreq), size,size))
+
+ndet = 96
+if sel_det:
+    q = qubic.QubicInstrument(d)
+    q = select_det(q,ndet)
+    
+pos = q.detector.center
+area = q.detector.area
+nu = q.filter.nu
+bw = q.filter.bandwidth
+horns = q.horn
+pbeam = q.primary_beam
+sbeam = q.secondary_beam
+btype = q.synthbeam.dtype    
+
+for i,ifreq in enumerate(manyfreq):
+    
+    s = qubic.QubicScene(d)
+
+    sb = QI._get_synthbeam(s, pos, area, ifreq, bw, horns, pbeam,
+                   sbeam, btype, 45)[0]
+    
+    xr=0.35*np.max(sb)
+
+    sat = np.where(sb>xr)
+    sb2=np.copy(sb)
+    sb2[sat] = xr
+    #sbr = sb2.ravel()[::-1]
+    #sb2 = sbr.reshape(sb.shape)
+    maps[i,:,:] = hp.gnomview(sb2/np.max(sb2), rot=[0,90], xsize=size, ysize=size, reso=10, 
+                              title='{}'.format(str(ifreq)[:3]), sub=(2,3,i+1), min=0, max=1,
+                              cmap='viridis',return_projected_map=True)
+```
+
+```{python}
+full = np.sum(maps, axis= 0)
+print(full.shape)
+plt.imshow(full)
+```
+
+```{python}
+#zoom in to see how secondary peak closer 
+figure(figsize=(12,10))
+
+for i in range(len(maps)):
+    subplot(2,3,i+1)
+    xlim(30,100)
+    ylim(75,125)
+    imshow(maps[i,:,:])
+```
+
+***
+Cut the maps
+
+```{python}
+
+```

@@ -231,7 +231,8 @@ class SelfCalibration:
 
         return S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij
 
-    def compute_fringes(self, theta=np.array([0.]), phi=np.array([0.]), nu=150e9, spectral_irradiance=1., reso=34,):
+    def compute_fringes(self, theta=np.array([0.]), phi=np.array([0.]), nu=150e9, spectral_irradiance=1., reso=34,
+                        xmin=-0.06, xmax=0.06):
         """
         Return the fringes on the FP by making the computation
         fringes =(S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
@@ -241,7 +242,7 @@ class SelfCalibration:
         S_tot, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = \
             SelfCalibration.get_power_combinations(self, q[0], theta=theta, phi=phi, nu=nu,
                                                    spectral_irradiance=spectral_irradiance, reso=reso,
-                                                   xmin=-0.06, xmax=0.06, doplot=True)
+                                                   xmin=xmin, xmax=xmax, doplot=True)
 
         fringes = (S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
 

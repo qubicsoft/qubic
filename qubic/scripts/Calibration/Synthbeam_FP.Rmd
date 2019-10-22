@@ -1,0 +1,134 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Synthetic beam on the focal plane
+Edited by Louise 
+
+Using data from 2019-04-06, scan at 150GHz
+
+```{python}
+import qubic
+```
+
+```{python}
+from __future__ import division, print_function
+
+# %matplotlib inline
+# %matplotlib notebook
+
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from IPython.display import HTML
+
+from qubicpack.utilities import Qubic_DataDir
+import qubicpack as qp
+# from qubicpack.pixel_translation import tes2index
+
+import qubic.fibtools as ft
+import qubic.sb_fitting as sbfit
+import qubic.selfcal_lib as sc
+
+# from matplotlib import animation
+# from IPython.display import HTML
+# from tqdm import tqdm_notebook
+# from IPython.display import Video
+```
+
+```{python}
+# Get the data
+rep = Qubic_DataDir(datafile='allFitSB.pdf')
+print(rep)
+
+all_tes_sig = []
+all_newxxyy = []
+for tes in range(1, 257):
+    themap, az, el, fitmap, newxxyy = sbfit.get_flatmap(tes, rep, fitted_directory=rep+'/FitSB')
+    all_tes_sig.append(np.ravel(themap))
+    all_newxxyy.append(newxxyy)
+    
+
+all_tes_sig = np.array(all_tes_sig)
+all_newxxyy = np.array(all_newxxyy)
+print(all_tes_sig.shape, all_newxxyy.shape)
+```
+
+### Normalize using the fit
+
+```{python}
+all_newxxyy[0, :, :]
+```
+
+```{python}
+for i in range(9):
+    plt.plot(all_newxxyy[100, 0, i], all_newxxyy[100, 1, i], 'o')
+    plt.pause(1)
+
+```
+
+```{python}
+sum_pic = np.sum(all_newxxyy[:, 2, :], axis=1)
+print(sum_pic.shape)
+```
+
+```{python}
+(ntes, nsamples) = np.shape(all_tes_sig)
+print(ntes, nsamples)
+```
+
+```{python}
+# Normalization
+all_tes_sig_norm = np.ones_like(all_tes_sig)
+for i in range(ntes):
+    all_tes_sig_norm[i, :] = all_tes_sig[i, :] / sum_pic[i]
+```
+
+### Normalize using meancut in fibtools
+
+```{python}
+mean, std = zip(*[ft.meancut(all_tes_sig[i, :], nsig=3) for i in range(ntes)])
+```
+
+```{python}
+all_tes_sig_norm = np.ones_like(all_tes_sig)
+for i in range(ntes):
+    all_tes_sig_norm[i, :] = (all_tes_sig[i, :] - mean[i])/ std[i]**2
+```
+
+### Image on the focal plane
+
+```{python}
+signal = np.reshape(all_tes_sig_norm, (128, 2, nsamples))
+
+all_quart_fp = []
+for i in range(14000, 15000):
+    image_fp = sc.tes_signal2image_fp(signal[:, :, i], [1, 2])
+    _, quart_fp = sc.get_real_fp(image_fp, quadrant=3)
+    all_quart_fp.append(quart_fp)
+    
+    plt.subplot(121)
+    plt.imshow(image_fp)
+    
+    plt.subplot(122)
+    plt.imshow(quart_fp)
+    plt.pause(0.1)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

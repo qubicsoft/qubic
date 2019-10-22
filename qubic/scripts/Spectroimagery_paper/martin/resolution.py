@@ -143,7 +143,7 @@ def gaussian2d(x,y, x0, y0, varx, vary):
 	gauss = 1/(2*np.pi*varx*vary)*np.exp(-((x-x0)**2/(2*varx**2)+(y-y0)**2/(2*vary**2)))
 	return gauss.ravel()
 
-def FitMethod(maparray, d, cutlevel = 0.01, mapret = False):
+def FitMethod(maparray, d, reso = 1.5, size = 200, cutlevel = 0.01, mapret = False):
 	"""
 	Method who fit a gaussian function given some parameters. 
 	The parameters for the calibration and for the used must be the same.
@@ -158,20 +158,20 @@ def FitMethod(maparray, d, cutlevel = 0.01, mapret = False):
 		N-array of fwhm fitted for each map (N-map)
 
 	"""
-	_ , _ ,reso, size , _ = Parameters(d, which='all')
+	#_ , _ ,reso, size , _ = Parameters(d, which='all')
 	# Define cartesian coordinates to extract the map (return_projected_map = True)
 	sigma2fwhm = np.sqrt(8*np.log(2))
 	x_map = np.linspace(-size/2,size/2,size)*reso/60.
 	y_map = x_map
 	x_map, y_map = np.meshgrid(x_map, y_map)
 	xdata_map = x_map.ravel()
-	input_fwhm_fit = np.empty((len(maparray)))
+	input_fwhm_fit = np.empty((len(maparray),))
 	popt = []
 
 	for i,mi in enumerate(maparray):
 		maski = mi > np.max(mi)*cutlevel
 		mi[~maski] = 0		
-		norm_fit = normalization(x_map[0],mi)
+		norm_fit = normalization(x_map[0],mi[maski])
 		ydata_map = (norm_fit * mi).ravel()
 		popt_map, pcov_map = curve_fit(gaussian2d, xdata_map, ydata_map, method='trf')
 		input_fwhm_fit[i] = abs((popt_map[2]+popt_map[3])/2*sigma2fwhm)
@@ -181,7 +181,7 @@ def FitMethod(maparray, d, cutlevel = 0.01, mapret = False):
 	else:
 		return input_fwhm_fit
 
-def SigmaMethod(maparray, d, cutlevel = 0.01, mapret=False):
+def SigmaMethod(maparray, d, reso = 1.5, size = 200, cutlevel = 0.01, mapret=False):
 	"""
 	Method who compute the fwhm taken a N-map array as a gaussian distribution function. 
 	The parameters for the calibration and for the used must be the same.
@@ -195,7 +195,7 @@ def SigmaMethod(maparray, d, cutlevel = 0.01, mapret=False):
 		N-array of fwhm computed for each map (N-map)
 
 	"""
-	_ , _ , reso, size, _ = Parameters(d, which='all')
+	#_ , _ , reso, size, _ = Parameters(d, which='all')
 	
 	# Define cartesian coordinates to extract the map (return_projected_map = True)
 	_ , _ , _ , _ , sigma2fwhm = Parameters(d, which = 'all')
@@ -222,11 +222,11 @@ def SigmaMethod(maparray, d, cutlevel = 0.01, mapret=False):
 	else:
 		return input_fwhm_sigma
 
-def GenerateMaps(d, nus_in, p=None ):
+def GenerateMaps(d, nus_in, reso = 1.5, size=200, p=None ):
 
 	"""
 	Compute input maps to use in: calibration (for both methods Fit and Sigma) & QUBIC pipeline. 
-
+	Number of maps == len(nus_in)
 	Input:
 		d: QUBIC dictionary
 		nus_in: frequencies where compute the point source map
@@ -244,7 +244,7 @@ def GenerateMaps(d, nus_in, p=None ):
 			center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 	else:
 		center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
-	nsideLow, nsideHigh, reso, size, sigma2fwhm = Parameters(d) 
+	nsideLow, nsideHigh, _, _, sigma2fwhm = Parameters(d) 
 	#center_gal = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 	pixel = hp.pixelfunc.ang2pix(nsideHigh, np.deg2rad(90-center[1]), np.deg2rad(center[0]), nest = True)
 	vec_pix = hp.pix2vec(nsideHigh, pixel, nest = True)
@@ -253,10 +253,10 @@ def GenerateMaps(d, nus_in, p=None ):
 	
 	#mask
 	mask = np.rad2deg(ang_pixeles) < d['dtheta']
-	
+	print(nus_in)
 	# Generate Gaussian maps - model of point source with FWHM (or Sigma) given by nus_in
-	c0 = np.zeros((d['nf_sub'],12*nsideHigh**2,3))
-	noise = np.zeros((d['nf_sub'], 12*nsideHigh**2,1))
+	c0 = np.zeros((len(nus_in),12*nsideHigh**2,3))
+	noise = np.zeros((len(nus_in), 12*nsideHigh**2,1))
 	
 	T = d['temperature']
 	amplitude = 1e22
@@ -269,10 +269,10 @@ def GenerateMaps(d, nus_in, p=None ):
 				c0[i,j,0] = amplitude*f(each, fwhm_in, sigma2fwhm)
 	c0[:,:,1] = c0[:,:,0]
 	c0[:,:,2] = c0[:,:,0]
-	m0 = np.empty((d['nf_sub'],12*nsideLow**2,3))
+	m0 = np.empty((len(nus_in),12*nsideLow**2,3))
 	m0[:,:,0] = hp.ud_grade(c0[:,:,0], nsideLow, order_in = 'NESTED', order_out = 'RING')
 	
-	input_maps = np.empty((d['nf_sub'],size,size))
+	input_maps = np.empty((len(nus_in),size,size))
 	for i, mapa in enumerate(m0):
 		input_maps[i] = hp.gnomview(mapa[:,0], rot = center,  
 	                            reso = reso, xsize = size,

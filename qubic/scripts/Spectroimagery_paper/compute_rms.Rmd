@@ -240,6 +240,7 @@ def rms_method(name=None, zones = 1, tolerance = 1e-3, substractnl = False):
 
         # Simple average over realizations: 
         maps_diff_av = np.mean(maps_diff_patch, axis=0)
+        #maps_diff_av = maps_diff_patch[0]
 
         #print(np.shape(maps_diff_av))
 
@@ -341,7 +342,7 @@ simulations = ['NERSC_runs/24817644/20190926_low_nep',
 rms_i, rms_q, rms_u, par = [],[],[],[]
 
 for jsimu in simulations:
-    rms_i1, rms_q1, rms_u1, par1 = rms_method(name=jsimu, tolerance = 1e-2, substractnl = False)
+    rms_i1, rms_q1, rms_u1, par1 = rms_method(name=jsimu, tolerance = 1e-2, substractnl = True)
     rms_i.append(rms_i1)
     rms_q.append(rms_q1)
     rms_u.append(rms_u1)
@@ -350,7 +351,7 @@ for jsimu in simulations:
 # 2 zones
 rms_iZ, rms_qZ, rms_uZ, parZ = [],[],[],[]
 for jsimu in simulations:
-    rms_iaux, rms_qaux, rms_uaux, parz = rms_method(name=jsimu, zones=2, tolerance=1e-2, substractnl = False)
+    rms_iaux, rms_qaux, rms_uaux, parz = rms_method(name=jsimu, zones=2, tolerance=1e-2, substractnl = True)
     rms_iZ.append(rms_iaux)
     rms_qZ.append(rms_qaux)
     rms_uZ.append(rms_uaux)
@@ -359,7 +360,7 @@ for jsimu in simulations:
 # 3 zones
 rms_i3Z, rms_q3Z, rms_u3Z, par3Z = [],[],[],[]
 for jsimu in simulations:
-    rms_iaux, rms_qaux, rms_uaux, parz = rms_method(name=jsimu, zones=3, tolerance=1e-2, substractnl = False)
+    rms_iaux, rms_qaux, rms_uaux, parz = rms_method(name=jsimu, zones=3, tolerance=1e-2, substractnl = True)
     rms_i3Z.append(rms_iaux)
     rms_q3Z.append(rms_qaux)
     rms_u3Z.append(rms_uaux)
@@ -380,10 +381,14 @@ print(len(simulations))
 ```{python}
 kfreq = '2' #number of channels for reconstruction
 color = ['b','g','r','c','m','y','b','g','r','c','m','y']
-plt.figure(figsize=(21,8))
+plt.figure(figsize=(21,6))
 nzones = [1,2,3]
 
 for jsimu in range(len(par)):
+    ab = 0 # fix legend warning
+    condition0 = par[jsimu]['nep'] == 1e-18#par[jsimu]['npoint'] == 3000#
+    condition1 = parZ[jsimu]['nep'] == 1e-18 #parZ[jsimu]['npoint'] == 3000#
+    condition2 = par3Z[jsimu]['nep'] == 1e-18#par3Z[jsimu]['npoint'] == 3000#
     
     for ist, istokes in enumerate('IQU'):
         plt.subplot(1,3,ist+1)
@@ -398,8 +403,9 @@ for jsimu in range(len(par)):
         
         for izones in nzones:
             if izones == 1: 
-                if par[jsimu]['nep'] == 1e-18:
-                    if istokes == 'I': 
+                if condition0:
+                    if istokes == 'I':                         
+                        #print(len(rms_i[jsimu]['{}'.format(kfreq)]), len(rms_i[jsimu]['{}'.format(kfreq)]))
                         plt.plot(np.ones_like(rms_i[jsimu]['{}'.format(kfreq)]), 
                          rms_i[jsimu]['{}'.format(kfreq)], 
                          label = 'nep,ptg: {:1.0e},{}'.format(par[jsimu]['nep'], par[jsimu]['npoint']),
@@ -417,7 +423,8 @@ for jsimu in range(len(par)):
                          #label = 'ptg: {}'.format(par[jsimu]['npoint']),
                         color=color[jsimu], marker = '+', linestyle='', mew =3,
                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
-
+                    if ab == 0: plt.legend(loc='upper center', bbox_to_anchor=(1.75, 1.3),ncol=4,fontsize = 15)
+                    ab +=1
             elif izones == 2:
                 for iizo in range(izones):
                     if iizo == 0: 
@@ -426,7 +433,7 @@ for jsimu in range(len(par)):
                     else: 
                         xx = 2.25
                         xdim = xx*np.ones((int(kfreq),))
-                    if parZ[jsimu]['nep'] == 1e-18:
+                    if condition1:
                         if istokes == 'I': 
                             plt.plot(xdim, 
                              rms_iZ[jsimu]['{}'.format(kfreq)][iizo], 
@@ -454,7 +461,7 @@ for jsimu in range(len(par)):
                     elif iizo == 2:
                         xx = 3.33
                         xdim = xx*np.ones((int(kfreq),))
-                    if par3Z[jsimu]['nep'] == 1e-18:
+                    if condition2:
                         if istokes == 'I': 
                             plt.plot(xdim, 
                              rms_i3Z[jsimu]['{}'.format(kfreq)][iizo], 
@@ -471,8 +478,7 @@ for jsimu in range(len(par)):
                              color=color[jsimu], marker = '+', linestyle='',mew =3, 
                          ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
 
-        plt.legend(loc='upper center', bbox_to_anchor=(1.75, 1.3),ncol=4,fontsize = 15)
-    plt.text(-1.7,0.04,'map_rec',fontsize=18)
+    #plt.text(-1.7,0.04,'map_rec',fontsize=18)
     
         #plt.xlim(1.7,1.8)
 ```

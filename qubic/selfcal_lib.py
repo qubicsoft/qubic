@@ -538,18 +538,21 @@ def image_fp2tes_signal(full_real_fp):
         return tes_signal
 
 
-def tes_signal2image_fp(tes_signal):
+def tes_signal2image_fp(tes_signal, asics):
     """
-    Inverse function of image_fp2tes_signal.
+    tes_signal : array of shape (128, #ASICS)
+        Signal on each TES, for each ASIC.
+    asics : list
+        Indices of the asics used between 1 and 8.
     """
     thermos = [4, 36, 68, 100]
     image_fp = np.empty((34, 34))
     image_fp[:] = np.nan
-    for ASIC in range(8):
+    for ASIC in asics:
         for TES in range(128):
             if TES + 1 not in thermos:
-                index = tes2index(TES + 1, ASIC + 1)
-                image_fp[index // 34, index % 34] = tes_signal[TES, ASIC]
+                index = tes2index(TES + 1, ASIC)
+                image_fp[index // 34, index % 34] = tes_signal[TES, ASIC-1]
     return image_fp
 
 

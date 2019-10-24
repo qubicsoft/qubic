@@ -18,14 +18,12 @@ Edited by Louise
 Using data from 2019-04-06, scan at 150GHz
 
 ```{python}
-import qubic
-```
-
-```{python}
 from __future__ import division, print_function
 
 # %matplotlib inline
 # %matplotlib notebook
+# import mpld3
+# mpld3.enable_notebook()
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -34,16 +32,30 @@ from IPython.display import HTML
 
 from qubicpack.utilities import Qubic_DataDir
 import qubicpack as qp
-# from qubicpack.pixel_translation import tes2index
+from qubicpack.pixel_translation import make_id_focalplane, plot_id_focalplane
 
 import qubic.fibtools as ft
 import qubic.sb_fitting as sbfit
 import qubic.selfcal_lib as sc
 
-# from matplotlib import animation
-# from IPython.display import HTML
-# from tqdm import tqdm_notebook
-# from IPython.display import Video
+import matplotlib.animation as animation
+from IPython.display import HTML
+```
+
+```{python}
+# plot style so figures are more readable. Hopefully
+plt.rcParams['figure.figsize'] = (8, 6)
+plt.rcParams['font.size'] = 10
+plt.rcParams['lines.linewidth'] = 3
+plt.rcParams['xtick.labelsize'] = 14
+plt.rcParams['ytick.labelsize'] = 14
+plt.rcParams['axes.labelsize'] = 15
+plt.rcParams['axes.titlesize'] = 15
+plt.rcParams['legend.fontsize'] = 14
+```
+
+```{python}
+
 ```
 
 ```{python}
@@ -52,34 +64,17 @@ rep = Qubic_DataDir(datafile='allFitSB.pdf')
 print(rep)
 
 all_tes_sig = []
-all_newxxyy = []
 for tes in range(1, 257):
     themap, az, el, fitmap, newxxyy = sbfit.get_flatmap(tes, rep, fitted_directory=rep+'/FitSB')
-    all_tes_sig.append(np.ravel(themap))
-    all_newxxyy.append(newxxyy)
+    if tes == 93: 
+        print(themap.shape)
+        plt.imshow(themap)
+        
+    all_tes_sig.append((fitmap[71, :])/np.sum(fitmap))    
+#     all_tes_sig.append(np.ravel(themap))
     
-
 all_tes_sig = np.array(all_tes_sig)
-all_newxxyy = np.array(all_newxxyy)
-print(all_tes_sig.shape, all_newxxyy.shape)
-```
-
-### Normalize using the fit
-
-```{python}
-all_newxxyy[0, :, :]
-```
-
-```{python}
-for i in range(9):
-    plt.plot(all_newxxyy[100, 0, i], all_newxxyy[100, 1, i], 'o')
-    plt.pause(1)
-
-```
-
-```{python}
-sum_pic = np.sum(all_newxxyy[:, 2, :], axis=1)
-print(sum_pic.shape)
+print(all_tes_sig.shape)
 ```
 
 ```{python}
@@ -88,10 +83,49 @@ print(ntes, nsamples)
 ```
 
 ```{python}
-# Normalization
-all_tes_sig_norm = np.ones_like(all_tes_sig)
-for i in range(ntes):
-    all_tes_sig_norm[i, :] = all_tes_sig[i, :] / sum_pic[i]
+j=0
+for i in range(nsamples):
+    if np.all(all_tes_sig[:, i])==0.:
+        j+=1
+        print(i)
+print(j)
+```
+
+```{python}
+# Remove Bad TES
+bad_TES = [1, 2, 3, 4, 8, 11, 14, 15, 20, 21, 25, 29, 30, 33, 35, 39, 40, 47, 48, 53, 55, 56, 63, 
+           70, 78, 84, 85, 89, 91, 92, 97, 102, 103, 112, 116, 119, 121, 126, 128, 132, 139, 143, 
+           144, 145, 146, 147, 148, 155, 156, 174, 178, 179, 187, 190, 202, 211, 217, 221, 227, 228,
+          230, 234, 238, 240, 241, 242, 243, 245, 249, 253, 254]
+print(len(bad_TES))
+for i in bad_TES:
+    all_tes_sig[i-1, :] = np.nan
+    all_newxxyy[i-1, :, :] = np.nan
+```
+
+```{python}
+# TEST to check if TES are at the right place
+all_tes_sig[28+128, :] = 1.e7
+all_tes_sig[62+128, :] = 1.e7
+```
+
+### Image on the focal plane
+
+```{python}
+signal = np.empty((128, 2, nsamples))
+signal[:, 0, :] = all_tes_sig[:128, :]
+signal[:, 1, :] = all_tes_sig[128:, :]
+```
+
+```{python}
+all_quart_fp = []
+for i in range(35, 170):
+    image_fp = sc.tes_signal2image_fp(signal[:, :, i], [1, 2])
+    _, quart_fp = sc.get_real_fp(image_fp, quadrant=3)
+    plt.imshow(quart_fp, vmin=0, vmax=0.003)
+    plt.title(i)
+    #plt.colorbar()
+    plt.pause(0.05)
 ```
 
 ### Normalize using meancut in fibtools
@@ -103,30 +137,36 @@ mean, std = zip(*[ft.meancut(all_tes_sig[i, :], nsig=3) for i in range(ntes)])
 ```{python}
 all_tes_sig_norm = np.ones_like(all_tes_sig)
 for i in range(ntes):
-    all_tes_sig_norm[i, :] = (all_tes_sig[i, :] - mean[i])/ std[i]**2
+    #all_tes_sig_norm[i, :] = (all_tes_sig[i, :] - mean[i])/ std[i]    
+    all_tes_sig_norm[i, :] = all_tes_sig[i, :]
 ```
 
-### Image on the focal plane
+```{python}
+plot(all_tes_sig_norm[36,:])
+```
 
 ```{python}
-signal = np.reshape(all_tes_sig_norm, (128, 2, nsamples))
-
 all_quart_fp = []
-for i in range(14000, 15000):
+fig = plt.figure()
+for i in range(10000, 10200):
     image_fp = sc.tes_signal2image_fp(signal[:, :, i], [1, 2])
     _, quart_fp = sc.get_real_fp(image_fp, quadrant=3)
-    all_quart_fp.append(quart_fp)
     
-    plt.subplot(121)
-    plt.imshow(image_fp)
-    
-    plt.subplot(122)
-    plt.imshow(quart_fp)
-    plt.pause(0.1)
+    im = plt.imshow(quart_fp, animated=True)
+    all_quart_fp.append([im])
+
+
+ani = animation.ArtistAnimation(fig, all_quart_fp, interval=1000, repeat=False)
+
+# Show the animation
+HTML(ani.to_html5_video())
+
+# Save the animation 
+# ani.save('Synthetic_beam_FP.mp4')
 ```
 
 ```{python}
-
+1
 ```
 
 ```{python}

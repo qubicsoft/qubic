@@ -67,7 +67,7 @@ def image_asics(data1=None, data2=None, all1=None):
     """
 
     if all1 is not None:
-        nn = len(all1) / 2
+        nn = int(len(all1) / 2)
         data2 = all1[nn:]
         data1 = all1[0:nn]
 

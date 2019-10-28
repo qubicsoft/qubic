@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.1'
-      jupytext_version: 1.2.3
+      jupytext_version: 1.2.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -325,19 +325,31 @@ def rms_method(name=None, zones = 1, tolerance = 1e-3, substractnl = False):
 
 ```{python}
 #rms_i0, rms_q0, rms_u0, par0 = rms_method(name='NERSC_runs/24334789/20190903_low_nep')
-simulations = ['NERSC_runs/24817644/20190926_low_nep',
-              'NERSC_runs/24817884/20190926_low_nep',
-              'NERSC_runs/24817902/20190926_low_nep',
-              'NERSC_runs/24817974/20190926_low_nep',
-              'NERSC_runs/24817950/20190926_low_nep',
-              'NERSC_runs/24817987/20190926_low_nep',
-              'NERSC_runs/24817999/20190926_low_nep',
-              'NERSC_runs/24818388/20190926_low_nep',
-              'NERSC_runs/24818399/20190926_low_nep',
-              'NERSC_runs/24818404/20190926_low_nep',
-              'NERSC_runs/24818411/20190926_low_nep',
-              'NERSC_runs/24122605/20190825_low_nep',
-              'NERSC_runs/24870671/20190928_low_nep']
+# simulations = ['NERSC_runs/24817644/20190926_low_nep',
+#               'NERSC_runs/24817884/20190926_low_nep',
+#               'NERSC_runs/24817902/20190926_low_nep',
+#               'NERSC_runs/24817974/20190926_low_nep',
+#               'NERSC_runs/24817950/20190926_low_nep',
+#               'NERSC_runs/24817987/20190926_low_nep',
+#               'NERSC_runs/24817999/20190926_low_nep',
+#               'NERSC_runs/24818388/20190926_low_nep',
+#               'NERSC_runs/24818399/20190926_low_nep',
+#               'NERSC_runs/24818404/20190926_low_nep',
+#               'NERSC_runs/24818411/20190926_low_nep',
+#               'NERSC_runs/24122605/20190825_low_nep',
+#               'NERSC_runs/24870671/20190928_low_nep']
+
+# Same ptg, different NEP
+simulations = ['24817644/20190926_low_nep',
+               '24817840/20190926_low_nep',
+               '24817884/20190926_low_nep',
+               '24817902/20190926_low_nep',
+               '24858757/20190927_low_nep',
+               '24870671/20190928_low_nep',
+               '24870759/20190928_low_nep',
+               '24870780/20190928_low_nep'            
+              ]
+
 # nside64
 rms_i, rms_q, rms_u, par = [],[],[],[]
 
@@ -375,24 +387,30 @@ check if is working the store (ok))
 for i in range(len(simulations)):
     #print(rms_i[i]['8'])    
     print(par[i])
-print(len(simulations))
+print('Number of simulations :', len(simulations))
+print(len(par))
 ```
 
 ```{python}
-kfreq = '2' #number of channels for reconstruction
-color = ['b','g','r','c','m','y','b','g','r','c','m','y']
+kfreq = '8' # number of channels for reconstruction
+color = ['k','g','r','c','m','y','b','orange','r','c','m','y']
+plt.clf()
 plt.figure(figsize=(21,6))
-nzones = [1,2,3]
+nzones = [1, 2, 3]
 
 for jsimu in range(len(par)):
     ab = 0 # fix legend warning
-    condition0 = par[jsimu]['nep'] == 1e-18#par[jsimu]['npoint'] == 3000#
-    condition1 = parZ[jsimu]['nep'] == 1e-18 #parZ[jsimu]['npoint'] == 3000#
-    condition2 = par3Z[jsimu]['nep'] == 1e-18#par3Z[jsimu]['npoint'] == 3000#
+#     condition0 = par[jsimu]['nep'] == 1e-18
+#     condition1 = parZ[jsimu]['nep'] == 1e-18
+#     condition2 = par3Z[jsimu]['nep'] == 1e-18
+    
+    condition0 = par[jsimu]['npoint'] == 3000
+    condition1 = parZ[jsimu]['npoint'] == 3000
+    condition2 = par3Z[jsimu]['npoint'] == 3000
     
     for ist, istokes in enumerate('IQU'):
-        plt.subplot(1,3,ist+1)
-        plt.title('Stokes {}'.format(istokes), fontsize = 18)
+        plt.subplot(1, 3, ist+1)
+        plt.title('Stokes {}'.format(istokes), fontsize=18)
         plt.xlabel('# zones', fontsize=16)
         plt.ylabel('rms', fontsize=16)
         plt.xticks([1,2,3], fontsize= 14)
@@ -405,7 +423,7 @@ for jsimu in range(len(par)):
             if izones == 1: 
                 if condition0:
                     if istokes == 'I':                         
-                        #print(len(rms_i[jsimu]['{}'.format(kfreq)]), len(rms_i[jsimu]['{}'.format(kfreq)]))
+#                         print(len(rms_i[jsimu]['{}'.format(kfreq)]))
                         plt.plot(np.ones_like(rms_i[jsimu]['{}'.format(kfreq)]), 
                          rms_i[jsimu]['{}'.format(kfreq)], 
                          label = 'nep,ptg: {:1.0e},{}'.format(par[jsimu]['nep'], par[jsimu]['npoint']),
@@ -484,35 +502,23 @@ for jsimu in range(len(par)):
 ```
 
 ```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
 #rms_iZ, rms_qZ, rms_uZ, parZ = rms_method(name = 'NERSC_runs/24817644/20190926_low_nep', zones = 2)
 
 kfreq = '8' #number of channels for reconstruction
-color = ['b','g','r','c','m','y']
+color = ['k','g','r','c','m','y','b','orange','r','c','m','y']
 plt.figure(figsize=(19,4))
-nzones = [1,2]
+nzones = [1, 2]
 
 for jsimu in range(len(par)):
     for ist, istokes in enumerate('IQU'):
-        plt.subplot(1,3,ist+1)
-        plt.title('Stokes {}'.format(istokes), fontsize = 18)
+        plt.subplot(1, 3, ist+1)
+        plt.title('Stokes {}'.format(istokes), fontsize=18)
         plt.xlabel('# zones', fontsize=16)
         plt.ylabel('rms', fontsize=16)
         plt.xticks([1,], fontsize= 14)
       
         if par[jsimu]['nep'] == 1e-18:
-            plt.xticks([1,], fontsize= 14)
+            plt.xticks([1,], fontsize=14)
             plt.yticks(fontsize = 10)
             if istokes == 'I': plt.plot(np.ones_like(rms_i[jsimu]['{}'.format(kfreq)]), 
                 rms_i[jsimu]['{}'.format(kfreq)], 
@@ -528,10 +534,6 @@ for jsimu in range(len(par)):
                 color=color[jsimu], marker = '+', linestyle='')
             
         plt.legend(loc=6,fontsize = 12)
-```
-
-```{python}
-rms_iZ['4'][0]
 ```
 
 ```{python}

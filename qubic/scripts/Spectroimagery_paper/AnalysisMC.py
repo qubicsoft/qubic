@@ -11,6 +11,7 @@ import qubic
 from qubic import apodize_mask
 from qubic import Xpol
 
+from qubicpack.utilities import Qubic_DataDir
 
 # ============ Functions do statistical tests on maps ===========#
 def std_profile(many_patch, nbins, nside, center, seenmap):
@@ -59,6 +60,91 @@ def std_profile(many_patch, nbins, nside, center, seenmap):
     std_profile = fit(ang)
 
     return bin_centers, ang, std_bin, std_profile
+
+
+def rms_method(name, residuals_way, zones=1, noiseless=False):
+    # Get the repository where the simulation is
+    rep_simu = Qubic_DataDir(datafile=name + '.dict') + '/'
+    # print('rep_simu : ', rep_simu)
+
+    # Dictionary saved during the simulation
+    d = qubic.qubicdict.qubicDict()
+    d.read_from_file(rep_simu + name + '.dict')
+
+    nf_recon = d['nf_recon']
+
+    rms_I, rms_Q, rms_U = dict(), dict(), dict()
+
+    for nfrec in nf_recon:
+        if noiseless:
+            files, maps_recon_patch, maps_conv_patch, maps_diff_patch = \
+                rmc.get_patch_many_files(rep_simu + name, '*nfrecon{}*True*'.format(nfrec), verbose=False)
+
+        else:
+            # Remember: get_patch_many_file do seen_map + read each map
+            files, maps_recon_patch, maps_conv_patch, maps_diff_patch = \
+                rmc.get_patch_many_files(rep_simu + name, '*nfrecon{}*False*'.format(nfrec), verbose=False)
+
+        setpar = {'tol': d['tol'], 'nep': d['detector_nep'], 'npoint': d['npointings']}
+
+        npix_patch = maps_diff_patch.shape[2]
+        setpar.update({'pixpatch': npix_patch})
+        #         print(setpar)
+
+        # Choose way to compute residuals
+        if residuals_way == 'noiseless':
+            _, maps_recon_nl, maps_conv_nl, maps_diff_nl = \
+                rmc.get_patch_many_files(rep_simu + name, '*nfrecon{}*True*'.format(nfrec), verbose=False)
+
+            residuals = maps_recon_patch - maps_recon_nl
+
+        elif residuals_way == 'conv':
+            residuals = maps_diff_patch
+
+        elif residuals_way == 'mean_recon':
+            residuals = maps_recon_patch - np.mean(maps_recon_patch, axis=0)
+
+        else:
+            raise ValueError('The way to compute residuals is not valid.')
+
+        nreals = np.shape(residuals)[0]
+
+        # This if is for the number of zones (1 or more)
+        if zones == 1:
+            rms_i, rms_q, rms_u = np.empty((nfrec,)), np.empty((nfrec,)), np.empty((nfrec,))
+
+            for i in range(nfrec):
+                # STD over pixels and realisations
+                rms_i[i] = np.std(residuals[:, i, :, 0])
+                rms_q[i] = np.std(residuals[:, i, :, 1])
+                rms_u[i] = np.std(residuals[:, i, :, 2])
+        else:
+            angle = False
+            if zones == 2:
+                angle = True
+
+            center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+            seenmap = rmc.get_seenmap(files[0])
+            nside = d['nside']
+
+            residuals_zones = np.empty((nreals, zones, nfrec, npix_patch, 3))
+            for real in range(nreals):
+                pix_zones, residuals_zones[real] = rmc.make_zones(residuals[real], zones, nside, center, seenmap,
+                                                                  angle=angle, dtheta=d['dtheta'], verbose=False,
+                                                                  doplot=False)
+
+            rms_i, rms_q, rms_u = np.empty((zones, nfrec,)), np.empty((zones, nfrec,)), np.empty((zones, nfrec,))
+            for izone in range(zones):
+                for i in range(nfrec):
+                    rms_i[izone, i] = np.std(residuals_zones[:, izone, i, :, 0])
+                    rms_q[izone, i] = np.std(residuals_zones[:, izone, i, :, 1])
+                    rms_u[izone, i] = np.std(residuals_zones[:, izone, i, :, 2])
+
+        rms_I.update({str(nfrec): rms_i})
+        rms_Q.update({str(nfrec): rms_q})
+        rms_U.update({str(nfrec): rms_u})
+
+    return rms_I, rms_Q, rms_U, setpar
 
 
 def get_covcorr1pix(maps, ipix, verbose=False, stokesjoint=False):
@@ -196,7 +282,7 @@ def plot_hist(mat_npix, bins, title_prefix, ymax=0.5, color='b'):
         Cov or corr matrix for each pixel.
     bins : int
         Numbers of bins for the histogram
-    title : str
+    title_prefix : str
         Prefix for the title of the plot.
     ymax : float
         Limit max on the y axis (between 0 and 1)

@@ -22,11 +22,11 @@ from pysimulators.sparse import (
     FSRMatrix, FSRRotation2dMatrix, FSRRotation3dMatrix)
 from scipy.constants import c, h, k, sigma
 from scipy.integrate import quad
-from . import _flib as flib
-from .calibration import QubicCalibration
-from .utils import _compress_mask
-from .ripples import ConvolutionRippledGaussianOperator, BeamGaussianRippled
-from .beams import (BeamGaussian, BeamFitted, MultiFreqBeam)
+from pysimulators import _flib as flib
+from qubic.calibration import QubicCalibration
+from qubic.utils import _compress_mask
+from qubic.ripples import ConvolutionRippledGaussianOperator, BeamGaussianRippled
+from qubic.beams import (BeamGaussian, BeamFitted, MultiFreqBeam)
 
 __all__ = ['QubicInstrument',
            'QubicMultibandInstrument']

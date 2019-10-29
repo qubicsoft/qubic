@@ -129,7 +129,7 @@ def get_patch(file, seenmap):
     return maps_recon_cut, maps_convo_cut, diff_cut
 
 
-def get_patch_many_files(rep_simu, name, badval=-1.6375e+30, rtol=1e-05, atol=1e-08):
+def get_patch_many_files(rep_simu, name, badval=-1.6375e+30, rtol=1e-05, atol=1e-08, verbose=True):
     """
     Get all the patches you want to analyze from many fits files.
     Parameters
@@ -153,7 +153,8 @@ def get_patch_many_files(rep_simu, name, badval=-1.6375e+30, rtol=1e-05, atol=1e
     """
     all_fits = glob.glob(rep_simu + name)
     nfiles = len(all_fits)
-    print('{} files have been found.'.format(nfiles))
+    if verbose:
+        print('{} files have been found.'.format(nfiles))
 
     seenmap = get_seenmap(all_fits[0], badval=badval, rtol=rtol, atol=atol)
 
@@ -176,7 +177,7 @@ def get_patch_many_files(rep_simu, name, badval=-1.6375e+30, rtol=1e-05, atol=1e
            np.asarray(all_patch_convo), np.asarray(all_patch_diff)
 
 
-def get_maps_many_files(rep_simu, name):
+def get_maps_many_files(rep_simu, name, verbose=True):
     """
     Get all the maps you want to analyze from many fits files.
     Parameters
@@ -194,7 +195,8 @@ def get_maps_many_files(rep_simu, name):
     """
     all_fits = glob.glob(rep_simu + name)
     nfiles = len(all_fits)
-    print('{} files have been found.'.format(nfiles))
+    if verbose:
+        print('{} files have been found.'.format(nfiles))
 
     all_maps_recon = []
     all_maps_convo = []

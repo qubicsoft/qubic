@@ -2,7 +2,7 @@ from __future__ import division
 
 import healpy as hp
 import numpy as np
-import qubic._flib as flib
+import pysimulators._flib as flib
 
 __all__ = ['Xpol']
 

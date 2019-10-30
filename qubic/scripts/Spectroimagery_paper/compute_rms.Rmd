@@ -437,136 +437,130 @@ for jsimu in range(len(par)):
 ## Ptg cste, NEP different => Louise 
 
 ```{python}
-simulations = ['24817644/20190926_low_nep',
+simulations3000 = ['24817644/20190926_low_nep',
                '24817840/20190926_low_nep',
                '24817884/20190926_low_nep',
                '24817902/20190926_low_nep',
                '24858757/20190927_low_nep',
                '24870671/20190928_low_nep',
                '24870759/20190928_low_nep',
-               '24870780/20190928_low_nep'            
-              ]
+               '24870780/20190928_low_nep']
 
+simulations9000 = ['24870861/20190929_low_nep',
+                   '24870921/20190929_low_nep',
+                   '24870964/20190929_low_nep',
+                   '24870972/20190929_low_nep',
+                   '24818388/20190926_low_nep',
+                   '24818399/20190926_low_nep',
+                   '24818404/20190926_low_nep',
+                   '24818411/20190926_low_nep']
+
+simulations128 = ['24445883/20190909_low_nep',
+                  '24445922/20190909_low_nep',
+                  '24445999/20190909_low_nep',
+                  '24446008/20190909_low_nep']
+                   
+simu = simulations3000                 
 # 1 zone
-rms_i, rms_q, rms_u, par = rms_method_loop_simu(simulations, residuals_way='noiseless')
+rms_i, rms_q, rms_u, par = rms_method_loop_simu(simu, residuals_way='noiseless')
 
 # 2 zones
-rms_iZ, rms_qZ, rms_uZ, parZ = rms_method_loop_simu(simulations, residuals_way='noiseless', zones=2)
+rms_iZ, rms_qZ, rms_uZ, parZ = rms_method_loop_simu(simu, residuals_way='noiseless', zones=2)
 
 # 3 zones
-rms_i3Z, rms_q3Z, rms_u3Z, par3Z = rms_method_loop_simu(simulations, residuals_way='noiseless', zones=3)
+rms_i3Z, rms_q3Z, rms_u3Z, par3Z = rms_method_loop_simu(simu, residuals_way='noiseless', zones=3)
 ```
 
 ```{python}
-kfreq = '4' # number of channels for reconstruction
+nf_recon = [1, 2, 4, 8] # number of channels for reconstruction
 color = ['k','g','r','c','m','y','b','orange','r','c','m','y']
 
-plt.figure(figsize=(21,6))
+plt.figure(figsize=(20, 26))
 nzones = [1, 2, 3]
 
-for jsimu in range(len(par)):
-    ab = 0 # fix legend warning
-#     condition0 = par[jsimu]['nep'] == 1e-18
-#     condition1 = parZ[jsimu]['nep'] == 1e-18
-#     condition2 = par3Z[jsimu]['nep'] == 1e-18
-    
-    condition0 = par[jsimu]['npoint'] == 3000
-    condition1 = parZ[jsimu]['npoint'] == 3000
-    condition2 = par3Z[jsimu]['npoint'] == 3000
-    
-    for ist, istokes in enumerate('IQU'):
-        plt.subplot(1, 3, ist+1)
-        plt.title('Stokes {}'.format(istokes), fontsize=18)
-        plt.xlabel('# zones', fontsize=16)
-        plt.ylabel('rms', fontsize=16)
-        plt.xticks([1,2,3], fontsize= 14)
-        plt.yticks(fontsize = 10)
-        plt.axvline(1.5, color='k', alpha= 0.3, linewidth=3, linestyle='-')
-        plt.axvline(2.5, color='k', alpha= 0.3, linewidth=3, linestyle='-')
-        plt.xlim(0.70,3.6)
-#         plt.ylim(0.,0.5)
-        
-        for izones in nzones:
-            if izones == 1: 
-                if condition0:
-                    if istokes == 'I':                         
-#                         print(len(rms_i[jsimu]['{}'.format(kfreq)]))
-                        plt.plot(np.ones_like(rms_i[jsimu]['{}'.format(kfreq)]), 
-                         rms_i[jsimu]['{}'.format(kfreq)], 
-                         label = 'nep,ptg: {:1.0e},{}'.format(par[jsimu]['nep'], par[jsimu]['npoint']),
-                         color=color[jsimu], marker = 'o', linestyle='', mew =3, 
-                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
-                    elif istokes == 'Q': 
-                        plt.plot(np.ones_like(rms_q[jsimu]['{}'.format(kfreq)]), 
-                         rms_q[jsimu]['{}'.format(kfreq)], 
-                         #label = 'ptg: {}'.format(par[jsimu]['npoint']),
-                         color=color[jsimu], marker = '*', linestyle='',mew =3,
-                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
-                    elif istokes == 'U': 
-                        plt.plot(np.ones_like(rms_u[jsimu]['{}'.format(kfreq)]), 
-                         rms_u[jsimu]['{}'.format(kfreq)], 
-                         #label = 'ptg: {}'.format(par[jsimu]['npoint']),
-                        color=color[jsimu], marker = '+', linestyle='', mew =3,
-                        ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
-                    if ab == 0: plt.legend(loc='upper center', bbox_to_anchor=(1.75, 1.3),ncol=4,fontsize = 15)
-                    ab +=1
-            elif izones == 2:
-                for iizo in range(izones):
-                    if iizo == 0: 
-                        xx = 1.75
-                        xdim = xx*np.ones((int(kfreq),))
-                    else: 
-                        xx = 2.25
-                        xdim = xx*np.ones((int(kfreq),))
-                    if condition1:
-                        if istokes == 'I': 
-                            plt.plot(xdim, 
-                             rms_iZ[jsimu]['{}'.format(kfreq)][iizo], 
-                             color=color[jsimu], marker = 'o', linestyle='',mew =3, 
-                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
-                        elif istokes == 'Q': 
-                            plt.plot(xdim, 
-                             rms_qZ[jsimu]['{}'.format(kfreq)][iizo], 
-                             color=color[jsimu], marker = '*', linestyle='',mew =3, 
-                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
-                        elif istokes == 'U': 
-                            plt.plot(xdim, 
-                             rms_uZ[jsimu]['{}'.format(kfreq)][iizo], 
-                             color=color[jsimu], marker = '+', linestyle='',mew =3, 
-                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
+for irec, kfreq in enumerate(nf_recon):
+    for jsimu in range(len(par)):
+        ab = 0 # fix legend warning
 
-            elif izones == 3:
-                for iizo in range(izones):
-                    if iizo == 0: 
-                        xx = 2.67
-                        xdim = xx*np.ones((int(kfreq),))
-                    elif iizo == 1: 
-                        xx = 3.
-                        xdim = xx*np.ones((int(kfreq),))
-                    elif iizo == 2:
-                        xx = 3.33
-                        xdim = xx*np.ones((int(kfreq),))
-                    if condition2:
+        for ist, istokes in enumerate('IQU'):
+            plt.subplot(len(nf_recon), 3, 3*irec+ist+1)
+            plt.title('Stokes {} nf_recon {}'.format(istokes, kfreq), fontsize=18)
+            plt.xlabel('# zones', fontsize=16)
+            plt.ylabel('rms', fontsize=16)
+            plt.xticks([1,2,3], fontsize= 14)
+            plt.yticks(fontsize = 10)
+            plt.axvline(1.5, color='k', alpha= 0.3, linewidth=3, linestyle='-')
+            plt.axvline(2.5, color='k', alpha= 0.3, linewidth=3, linestyle='-')
+            plt.xlim(0.70,3.6)
+    #         plt.ylim(0.,0.5)
+
+            for izones in nzones:
+                if izones == 1: 
+                    if istokes == 'I':
+                        rms = rms_i
+                    elif istokes == 'Q': 
+                        rms = rms_q
+                    elif istokes == 'U':
+                        rms = rms_u
+                        
+                    plt.plot(np.ones_like(rms[jsimu]['{}'.format(kfreq)]), 
+                             rms_i[jsimu]['{}'.format(kfreq)], 
+                             label = 'nep,ptg: {:1.0e},{}'.format(par[jsimu]['nep'], par[jsimu]['npoint']),
+                             color=color[jsimu], marker='o', linestyle='', mew=3, 
+                             ms=par[jsimu]['npoint']/1e3*2, alpha=0.4)
+                
+                    if ab == 0 and irec == 0: 
+                        plt.legend(loc='upper center', bbox_to_anchor=(1.75, 1.3), ncol=4, fontsize=15)
+                    ab += 1
+                    
+                elif izones == 2:
+                    for iizo in range(izones):
+                        if iizo == 0: 
+                            xx = 1.75
+                            xdim = xx*np.ones((int(kfreq),))
+                        else: 
+                            xx = 2.25
+                            xdim = xx*np.ones((int(kfreq),))
+
                         if istokes == 'I': 
-                            plt.plot(xdim, 
-                             rms_i3Z[jsimu]['{}'.format(kfreq)][iizo], 
-                             color=color[jsimu], marker = 'o', linestyle='',mew =3, 
-                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
+                            rms = rms_iZ
                         elif istokes == 'Q': 
-                            plt.plot(xdim, 
-                             rms_q3Z[jsimu]['{}'.format(kfreq)][iizo], 
-                             color=color[jsimu], marker = '*', linestyle='',mew =3, 
-                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
+                            rms = rms_qZ
                         elif istokes == 'U': 
-                            plt.plot(xdim, 
-                             rms_u3Z[jsimu]['{}'.format(kfreq)][iizo], 
-                             color=color[jsimu], marker = '+', linestyle='',mew =3, 
-                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
+                            rms = rms_uZ
+                            
+                        plt.plot(xdim, rms[jsimu]['{}'.format(kfreq)][iizo], 
+                                 color=color[jsimu], marker='*', linestyle='', mew=3, 
+                                 ms=par[jsimu]['npoint']/1e3*2, alpha=0.4)
+
+                elif izones == 3:
+                    for iizo in range(izones):
+                        if iizo == 0: 
+                            xx = 2.67
+                            xdim = xx*np.ones((int(kfreq),))
+                        elif iizo == 1: 
+                            xx = 3.
+                            xdim = xx*np.ones((int(kfreq),))
+                        elif iizo == 2:
+                            xx = 3.33
+                            xdim = xx*np.ones((int(kfreq),))
+                        if istokes == 'I': 
+                            rms = rms_i3Z
+                        elif istokes == 'Q': 
+                            rms = rms_q3Z
+                        elif istokes == 'U':
+                            rms = rms_u3Z
+                            
+                        plt.plot(xdim, rms[jsimu]['{}'.format(kfreq)][iizo],
+                                 color=color[jsimu], marker='+', linestyle='', mew=3, 
+                                 ms=par[jsimu]['npoint']/1e3*2, alpha=0.4)
+                            
+
 
 ```
 
 ```{python}
-plot2(simulations, nzones=3, residuals_way='noiseless', noiseless=False)
+plot2(simulations9000, nzones=3, residuals_way='noiseless', noiseless=False)
 ```
 
 ```{python}

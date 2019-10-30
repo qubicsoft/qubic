@@ -36,22 +36,12 @@ plt.rcParams['figure.figsize'] = (8, 8)
 ```
 
 ***
-### Check if works fine the get_sigma_NoSpIm function
-looks like yes....
-
-```{python}
-#print(sigma2mean[0,:]==get_sigma_NoSpIm(rep_simu, date_name, nf_recon)[0])
-#print(sigma2mean_bis[0,:]==get_sigma_NoSpIm(rep_simu, date_name, nf_recon)[1])
-#print(sigma2mean[0,:],np.sqrt(get_sigma_NoSpIm(rep_simu, date_name, nf_recon)))
-```
-
-***
 # Get the simulation files
 
 ```{python}
 # Simulation date and name
-#date_name = '20190815_QU10'
-date_name = 'NERSC_runs/24334789/20190903_low_nep'
+date_name = simulations3000[7]
+# date_name = 'NERSC_runs/24334789/20190903_low_nep'
 
 # Get the repository where the simulation is
 rep_simu = Qubic_DataDir(datafile=date_name + '.dict') + '/'
@@ -63,11 +53,20 @@ d.read_from_file(rep_simu + date_name + '.dict')
 ```
 
 ***
-### Number of subbands used during the simulation
+### Number of subbands, NEP and Ptg
 
 ```{python}
 nf_recon = d['nf_recon']
 print('nf_recon', nf_recon)
+
+nep = d['detector_nep']
+print('NEP = ', nep)
+
+ptg = d['npointings']
+print('ptg = ', ptg)
+
+center = equ2gal(d['RA_center'], d['DEC_center'])
+stokes = ['I', 'Q', 'U']
 ```
 
 ***
@@ -94,6 +93,49 @@ print('Shape maps: {}, Tolerance: {}, NEP: {}, pointings: {}'.format(
     maps_recon.shape, d['tol'], d['detector_nep'], d['npointings'] ))
 
 setpar = {'tol':d['tol'], 'nep':d['detector_nep'], 'npoint':d['npointings']}
+```
+
+```{python}
+# Plot the maps
+isub = 0
+ireal = 0
+
+plt.figure('Noise maps real{}'.format(real))
+for i in range(3):
+    hp.gnomview(maps_conv[ireal, isub, :, i], rot=center, reso=12, sub=(3, 3, i + 1),
+                title='conv ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nfrec))
+    hp.gnomview(maps_recon[ireal, isub, :, i], rot=center, reso=12, sub=(3, 3, 3 + i + 1),
+                title='recon ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nfrec))
+    hp.gnomview(maps_diff[ireal, isub, :, i], rot=center, reso=12, sub=(3, 3, 6 + i + 1),
+                title='diff ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nfrec))
+```
+
+## Compute residuals
+
+```{python}
+# Diff with the noiseless recon
+_, maps_recon_nl, maps_conv_nl, maps_diff_nl = \
+    rmc.get_maps_many_files(rep_simu + date_name, '*nfrecon{}*True*'.format(nfrec), verbose=False)
+
+res1 = maps_recon - maps_recon_nl
+
+# Diff with the convolved map
+res2 = maps_diff
+
+#Diff with the mean of the recon
+res3 = maps_recon - np.mean(maps_recon, axis=0)
+
+ireal = 1
+isub = 0
+
+plt.figure('Noise maps real{}'.format(real))
+for i in range(3):
+    hp.gnomview(res1[ireal, isub, :, i], rot=center, reso=12, sub=(3, 3, i + 1),
+                title='noiseless ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nfrec))
+    hp.gnomview(res2[ireal, isub, :, i], rot=center, reso=12, sub=(3, 3, 3 + i + 1),
+                title='conv ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nfrec))
+    hp.gnomview(res3[ireal, isub, :, i], rot=center, reso=12, sub=(3, 3, 6 + i + 1),
+                title='mean_recon ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nfrec))
 ```
 
 ## Get patchs

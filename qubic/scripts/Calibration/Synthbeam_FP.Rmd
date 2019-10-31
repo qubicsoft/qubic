@@ -22,18 +22,17 @@ from __future__ import division, print_function
 
 # %matplotlib inline
 # %matplotlib notebook
-# import mpld3
-# mpld3.enable_notebook()
 
+import healpy as hp
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from IPython.display import HTML
 
 from qubicpack.utilities import Qubic_DataDir
-import qubicpack as qp
-from qubicpack.pixel_translation import make_id_focalplane, plot_id_focalplane
+from qubicpack.pixel_translation import make_id_focalplane, plot_id_focalplane, tes2index
 
+import qubic
 import qubic.fibtools as ft
 import qubic.sb_fitting as sbfit
 import qubic.selfcal_lib as sc
@@ -43,49 +42,62 @@ from IPython.display import HTML
 ```
 
 ```{python}
-# plot style so figures are more readable. Hopefully
-plt.rcParams['figure.figsize'] = (8, 6)
-plt.rcParams['font.size'] = 10
-plt.rcParams['lines.linewidth'] = 3
-plt.rcParams['xtick.labelsize'] = 14
-plt.rcParams['ytick.labelsize'] = 14
-plt.rcParams['axes.labelsize'] = 15
-plt.rcParams['axes.titlesize'] = 15
-plt.rcParams['legend.fontsize'] = 14
-```
-
-```{python}
-
-```
-
-```{python}
 # Get the data
 rep = Qubic_DataDir(datafile='allFitSB.pdf')
 print(rep)
+```
 
-all_tes_sig = []
+```{python}
+# Look at one map
+c50 = np.cos(np.radians(50))
+azmin = -15./c50
+azmax = 15./c50
+
+TES=93
+flatmap, az, el, fitmap, newxxyy = sbfit.get_flatmap(TES, rep, fitted_directory=rep+'/FitSB', 
+                                                     azmin=azmin, azmax=azmax)
+
+nel, naz = np.shape(flatmap)
+print(nel, naz)
+npix = nel * naz
+
+print('npix = ', npix)
+
+plt.subplot(121)
+plt.imshow(flatmap)
+
+plt.subplot(122)
+plt.imshow(fitmap)
+```
+
+## Measure the focal length
+Using fitted images
+
+```{python}
+all_fit = []
 for tes in range(1, 257):
-    themap, az, el, fitmap, newxxyy = sbfit.get_flatmap(tes, rep, fitted_directory=rep+'/FitSB')
+    themap, az, el, fitmap, newxxyy = sbfit.get_flatmap(tes, rep, fitted_directory=rep+'/FitSB',
+                                                        azmin=azmin, azmax=azmax)
     if tes == 93: 
-        print(themap.shape)
-        plt.imshow(themap)
+        print(fitmap.shape)
+        plt.imshow(fitmap)
         
-    all_tes_sig.append((fitmap[71, :])/np.sum(fitmap))    
-#     all_tes_sig.append(np.ravel(themap))
+    all_fit.append((fitmap[71, :]) / np.sum(fitmap))    
     
-all_tes_sig = np.array(all_tes_sig)
-print(all_tes_sig.shape)
+all_fit = np.array(all_fit)
+print(all_fit.shape) 
 ```
 
 ```{python}
-(ntes, nsamples) = np.shape(all_tes_sig)
-print(ntes, nsamples)
+(ntes, naz) = np.shape(all_fit)
+print(ntes, naz)
 ```
 
 ```{python}
+# Check if for a given az, you have only 0
 j=0
-for i in range(nsamples):
-    if np.all(all_tes_sig[:, i])==0.:
+for i in range(naz):
+    if np.all(all_fit[:, i])==0.:
         j+=1
         print(i)
 print(j)
@@ -98,34 +110,173 @@ bad_TES = [1, 2, 3, 4, 8, 11, 14, 15, 20, 21, 25, 29, 30, 33, 35, 39, 40, 47, 48
            144, 145, 146, 147, 148, 155, 156, 174, 178, 179, 187, 190, 202, 211, 217, 221, 227, 228,
           230, 234, 238, 240, 241, 242, 243, 245, 249, 253, 254]
 print(len(bad_TES))
+
 for i in bad_TES:
-    all_tes_sig[i-1, :] = np.nan
-    all_newxxyy[i-1, :, :] = np.nan
+    all_fit[i-1, :] = np.nan
 ```
 
 ```{python}
 # TEST to check if TES are at the right place
-all_tes_sig[28+128, :] = 1.e7
-all_tes_sig[62+128, :] = 1.e7
+all_fit[28+128, :] = 1.e7
+all_fit[62+128, :] = 1.e7
 ```
 
 ### Image on the focal plane
 
 ```{python}
-signal = np.empty((128, 2, nsamples))
-signal[:, 0, :] = all_tes_sig[:128, :]
-signal[:, 1, :] = all_tes_sig[128:, :]
+signal = np.empty((128, 2, naz))
+signal[:, 0, :] = all_fit[:128, :]
+signal[:, 1, :] = all_fit[128:, :]
+```
+
+```{python}
+for i in range(20, 170):
+    image_fp = sc.tes_signal2image_fp(signal[:, :, i], [1, 2])
+    _, quart_fp = sc.get_real_fp(image_fp, quadrant=3)
+    plt.imshow(quart_fp, vmin=0, vmax=4e-3)
+    plt.title(i)
+    #plt.colorbar()
+    plt.pause(0.07)
 ```
 
 ```{python}
 all_quart_fp = []
-for i in range(35, 170):
+fig = plt.figure()
+for i in range(20, 170):
     image_fp = sc.tes_signal2image_fp(signal[:, :, i], [1, 2])
     _, quart_fp = sc.get_real_fp(image_fp, quadrant=3)
-    plt.imshow(quart_fp, vmin=0, vmax=0.003)
-    plt.title(i)
-    #plt.colorbar()
-    plt.pause(0.05)
+    
+    im = plt.imshow(quart_fp, vmin=0, vmax=4e-3, animated=True)
+    all_quart_fp.append([im])
+
+
+ani = animation.ArtistAnimation(fig, all_quart_fp, interval=1000, repeat=False)
+
+# Show the animation
+HTML(ani.to_html5_video())
+
+# Save the animation 
+ani.save('Synthetic_beam_FP.mp4')
+```
+
+## Using real data
+
+```{python}
+# Estimating the median of all SB images - to be removed - Origin still unexplained...
+alldata_renorm = np.zeros((256, npix))
+for i in range(256):
+    flatmap, az, el = sbfit.get_flatmap(i+1, rep, azmin=azmin, azmax=azmax)
+    mm, ss = ft.meancut(flatmap, 3)
+    alldata_renorm[i, :] = np.ravel((flatmap - mm) / ss) 
+    
+med = np.reshape(np.median(alldata_renorm,axis=0), np.shape(flatmap))
+mm = np.mean(med)
+ss = np.std(med)
+
+imshow(np.reshape(med, np.shape(flatmap)),
+       extent=[np.min(az)*c50, np.max(az)*c50, np.min(el), np.max(el)], aspect='equal')
+colorbar()
+title('Median over all S.B. images')
+```
+
+```{python}
+all_tes_sig = []
+for tes in range(1, 257):
+    themap, az, el, fitmap, newxxyy = sbfit.get_flatmap(tes, rep, fitted_directory=rep+'/FitSB', 
+                                                        remove=med, azmin=azmin, azmax=azmax)
+    if tes == 93: 
+        print(themap.shape)
+        plt.imshow(themap)
+        
+    all_tes_sig.append((fitmap[71, :]) / np.sum(fitmap))    
+#     all_tes_sig.append(np.ravel(themap))
+    
+all_tes_sig = np.array(all_tes_sig)
+print(all_tes_sig.shape) 
+```
+
+### Synth beam on the sky simulation
+
+```{python}
+d = qubic.qubicdict.qubicDict()
+rep_dict = Qubic_DataDir(datafile = 'global_source_oneDet.dict')
+d.read_from_file(rep_dict + '/global_source_oneDet.dict')
+# d['config'] = 'FI'
+d['nside'] = 256
+
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+
+q = qubic.QubicInstrument(d)
+s = qubic.QubicScene(d)
+```
+
+```{python}
+# Test for one TES
+TESNum = 93
+hpmap = sbfit.get_hpmap(TESNum, rep)
+
+if TESNum > 128: 
+    asicnum = 2
+    thetes = TESNum - 128
+else:
+    asicnum = 1
+    thetes = TESNum
+
+def select_det(q, id):
+    #### For now the ids are not matched... so we only take the len(id) first detectors...
+    detector_i = q.detector[id]
+    q.detector = detector_i
+    return(q)
+
+idx = tes2index(thetes, asicnum)
+iii = np.where(q.detector.index == idx)[0]
+
+print(idx, iii)
+q.detector.index.shape
+
+# q = select_det(q, iii)
+sb = q.get_synthbeam(s, iii)
+
+hp.gnomview(hpmap, reso=10, sub=(1,2,1), title='Data TES #{}'.format(TESNum))
+hp.gnomview(sb, rot=[0,90], reso=10,sub=(1,2,2), title='Theory TES #{}'.format(TESNum))
+```
+
+```{python}
+all_tes_sig_norm = np.ones_like(all_tes_sig)
+all_hpmap = []
+all_sb = []
+
+thermos = [4, 36, 68, 100]
+for det in range(1, 257):
+    if det > 128: 
+        asicnum = 2
+        thedet = det - 128
+    else:
+        asicnum = 1
+        thedet = det
+        
+    if thedet not in thermos:
+        hpmap = sbfit.get_hpmap(det, rep)
+        all_hpmap.append(hpmap)
+        
+        index = tes2index(thedet, asicnum)
+        idet = np.where(q.detector.index == index)[0]
+
+        print(index, idet)
+
+        sb = q.get_synthbeam(s, idet)
+        all_sb.append(sb)
+        sum_sb = np.sum(sb)
+#         print(sum_sb)
+
+        all_tes_sig_norm[det-1, :] = all_tes_sig[det-1, :] / sum_sb
+```
+
+```{python}
+print(len(all_hpmap), len(all_sb))
+j = 39
+hp.gnomview(all_hpmap[j], reso=10, sub=(1,2,1), title='Data TES #{}'.format(j))
+hp.gnomview(all_sb[j], rot=[0, 90], reso=10, sub=(1,2,2), title='Theory TES #{}'.format(j))
 ```
 
 ### Normalize using meancut in fibtools
@@ -146,23 +297,7 @@ plot(all_tes_sig_norm[36,:])
 ```
 
 ```{python}
-all_quart_fp = []
-fig = plt.figure()
-for i in range(10000, 10200):
-    image_fp = sc.tes_signal2image_fp(signal[:, :, i], [1, 2])
-    _, quart_fp = sc.get_real_fp(image_fp, quadrant=3)
-    
-    im = plt.imshow(quart_fp, animated=True)
-    all_quart_fp.append([im])
 
-
-ani = animation.ArtistAnimation(fig, all_quart_fp, interval=1000, repeat=False)
-
-# Show the animation
-HTML(ani.to_html5_video())
-
-# Save the animation 
-# ani.save('Synthetic_beam_FP.mp4')
 ```
 
 ```{python}

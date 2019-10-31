@@ -36,6 +36,10 @@ import qubic
 from qubic import selfcal_lib as sc
 
 plt.rcParams['figure.figsize'] = (7, 7)
+
+
+import matplotlib.animation as animation
+from IPython.display import HTML
 ```
 
 ```{python}
@@ -73,8 +77,10 @@ This is a simulation that doesn't take into account optical aberrations.
 ```{python}
 # You need a qubic instrument for that function
 q = qubic.QubicInstrument(d)
-
-S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = ca.get_power_combinations(q, theta=[np.deg2rad(0.)], phi=[[0.]], nu=150e9, reso=102)
+q.optics.focal_length = 0.30
+S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = ca.get_power_combinations(q, theta=list(np.deg2rad(np.arange(0, 12, 2))), 
+                                                                          phi=list(np.zeros(6)), nu=150e9, reso=102,
+                                                                          xmin=-0.051, xmax=0.051)
 
 # They are 3D arrays : (reso, reso, #pointings)
 print('shape of each combination :', Cminus_i.shape)
@@ -85,14 +91,25 @@ print('shape of each combination :', Cminus_i.shape)
 ```{python}
 # Make the combination (S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
 q = qubic.QubicInstrument(d)
-q.optics.focal_length = 0.35
-fringes = ca.compute_fringes(q, theta=[np.deg2rad(0)], phi=[np.deg2rad(0.)], reso=34, nu=150e9, xmin=-0.051, xmax=0.051)
-
+q.optics.focal_length = 0.30
+fringes = ca.compute_fringes(q, theta=list(np.deg2rad(np.arange(0, 4, 0.25))), 
+                                phi=list(np.zeros(16)), reso=34, nu=120e9,
+                             xmin=-0.051, xmax=0.051)
+print(fringes.shape)
 ```
 
 ```{python}
-print(fringes.shape)
-plt.imshow(fringes[:, :, 0])
+nfringes = fringes.shape[2]  
+all_fringes = []
+fig = plt.figure()
+for i in range(nfringes):
+    im = plt.imshow(fringes[:, :, i], animated=True)
+    all_fringes.append([im])
+
+ani = animation.ArtistAnimation(fig, all_fringes, interval=1000, repeat=False)
+
+HTML(ani.to_html5_video())
+# ani.save('fringes_passing.mp4')
 ```
 
 ## Get the focal plane image for the real instrument
@@ -127,8 +144,21 @@ plt.imshow(real_fringes_quad*quart_mask)
 ```{python}
 # Make the rotation to compare with what Michel obtained
 Final_image = np.rot90(real_fringes_quad, k=2)
-plt.imshow(Final_image)
-# plt.savefig('/home/louisemousset/QUBIC/Qubic_images/plots/fringes_no_aber_25_57_focal35')
+plt.imshow(Final_image)#, vmin=0., vmax=0.0001)
+# ax = plt.gca();
+# ax.set_xticks(np.arange(-0.5, 34, 1));
+# ax.set_yticks(np.arange(0.5, 34, 1));
+# ax.grid(color='w', linestyle='-', linewidth=1)
+plt.savefig('/home/louisemousset/QUBIC/Qubic_images/plots/fringes_no_aber_25_57_focal30_120GHz.png')
+```
+
+```{python}
+3*np.sqrt(2)*8.5
+
+```
+
+```{python}
+150e9*14e-3*3*(np.sqrt(2)*8.5e-3)/299792458
 ```
 
 # Power on the focal plane with optical aberrations

@@ -63,6 +63,26 @@ def std_profile(many_patch, nbins, nside, center, seenmap):
 
 
 def rms_method(name, residuals_way, zones=1, noiseless=False):
+    """
+    Get the std of the residuals from one simulation. 
+    STD are computed over realisations and pixels for I, Q, U separately.
+
+    Parameters
+    ----------
+    name : str
+        Simulation file.
+    residuals_way : str
+        Way to compute residuals. 3 keywords : noiseless, conv or mean_recon
+    zones : int
+        Number of zones to divide the patch.
+    noiseless : bool
+        If true, you will look at the noiseless run.
+
+    Returns
+    -------
+    rms_I, rms_Q, rms_U : dictionarys containing RMS for IQU 
+    setpar : a dict with some parameters of the simu.
+    """
     # Get the repository where the simulation is
     rep_simu = Qubic_DataDir(datafile=name + '.dict') + '/'
     # print('rep_simu : ', rep_simu)

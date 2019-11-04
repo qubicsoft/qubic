@@ -5,11 +5,11 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.1'
-      jupytext_version: 1.1.0
+      jupytext_version: 1.2.4
   kernelspec:
-    display_name: Python [default]
+    display_name: Python 3
     language: python
-    name: python2
+    name: python3
 ---
 
 ```{python}

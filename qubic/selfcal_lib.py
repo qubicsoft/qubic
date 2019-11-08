@@ -2,14 +2,17 @@ from __future__ import division, print_function
 
 import glob
 
-import cv2
 import numpy as np
 import healpy as hp
 import pandas as pd
-import qubic
+
 import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
+import matplotlib.ticker as plticker
+
 from astropy.io import fits
 
+import qubic
 from qubicpack.utilities import Qubic_DataDir
 from qubicpack.pixel_translation import make_id_focalplane, tes2index
 
@@ -552,7 +555,7 @@ def tes_signal2image_fp(tes_signal, asics):
         for TES in range(128):
             if TES + 1 not in thermos:
                 index = tes2index(TES + 1, ASIC)
-                image_fp[index // 34, index % 34] = tes_signal[TES, ASIC-1]
+                image_fp[index // 34, index % 34] = tes_signal[TES, ASIC - 1]
     return image_fp
 
 
@@ -561,8 +564,8 @@ def get_real_fp(full_fp, quadrant=None):
     Return the real focal plane, one pixel for each TES.
     Parameters
     ----------
-    full_fp : 2D array
-        Image of the focal plane with a resolution.
+    full_fp : 2D array of shape (34, 34)
+        Image of the focal plane.
     quadrant : int
         If you only want one quadrant of the focal plane,
         you can choose one in [1, 2, 3, 4]
@@ -573,27 +576,71 @@ def get_real_fp(full_fp, quadrant=None):
     quart_fp : one quadrant (17x17)
 
     """
-    # Decrease the resolution to the one of the FP
     if np.shape(full_fp) != (34, 34):
-        full_real_fp = cv2.resize(full_fp, (34, 34))  # Not sure this function is the best
+        raise ValueError('The focal plane shape should be (34, 34).')
     else:
-        full_real_fp = np.copy(full_fp)
+        FPidentity = make_id_focalplane()
+        tes = np.reshape(FPidentity.TES, (34, 34))
+        quad = np.reshape(FPidentity.quadrant, (34, 34))
 
-    FPidentity = make_id_focalplane()
-    tes = np.reshape(FPidentity.TES, (34, 34))
-    quad = np.reshape(FPidentity.quadrant, (34, 34))
+        # Put the pixels that are not TES to NAN
+        full_real_fp = np.where(tes == 0, np.nan, full_fp)
+        if quadrant is None:
+            return full_real_fp
 
-    # Put the pixels that are not TES to NAN
-    full_real_fp = np.where(tes == 0, np.nan, full_real_fp)
-    if quadrant is None:
-        return full_real_fp
-
-    else:
-        if quadrant not in [1, 2, 3, 4]:
-            raise ValueError('quadrant must be 1, 2, 3 or 4')
         else:
-            # Get only one quadrant
-            quart = full_real_fp[np.where(quad != quadrant, 6, full_real_fp) != 6]
-            quart_fp = np.reshape(quart, (17, 17))
+            if quadrant not in [1, 2, 3, 4]:
+                raise ValueError('quadrant must be 1, 2, 3 or 4')
+            else:
+                # Get only one quadrant
+                quart = full_real_fp[np.where(quad != quadrant, 6, full_real_fp) != 6]
+                quart_fp = np.reshape(quart, (17, 17))
 
-            return full_real_fp, quart_fp
+                return full_real_fp, quart_fp
+
+
+def add_fp_simu_aber(image_aber, vmin, vmax, alpha=0.3, diameter_simu=120):
+    """
+    Over plot the real FP on a simulation with aberrations.
+    Parameters
+    ----------
+    image_aber : 2D array
+        Image larger than the real focal plane.
+    vmin, vmax : float
+        Color scale for imshow.
+    alpha : float
+        Transparency for the FP circle.
+    diameter_simu : float
+        Diameter of the simulation image in mm.
+
+    Returns
+    -------
+    fig : the figure
+
+    """
+    nn = np.shape(image_aber)[0]  # Sampling used in the simu
+    fp_radius = 51 * nn / diameter_simu  # Radius in pixels
+    tes_size = 3 * nn / diameter_simu
+    print('TES size in pixels :', tes_size)
+    print('FP radius in pixels :', fp_radius)
+
+    fig, ax = plt.subplots()
+    ax.imshow(image_aber, vmin=vmin, vmax=vmax)
+
+    # Add a circle of the FP size
+    circ = Circle((nn / 2., nn / 2.), fp_radius, alpha=alpha, color='w')
+    ax.add_patch(circ)
+
+    # Add a grid where each square is a TES
+    loc = plticker.MultipleLocator(base=tes_size)
+    ax.xaxis.set_major_locator(loc)
+    ax.yaxis.set_major_locator(loc)
+    ax.grid(color='w', linestyle='-', linewidth=1)
+
+    # Add 2 lines to see the quadrants
+    x = range(nn)
+    y = np.ones(nn) * nn / 2.
+    ax.plot(x, y, '-', linewidth=3, color='w')
+    ax.plot(y, x, '-', linewidth=3, color='w')
+
+    return fig

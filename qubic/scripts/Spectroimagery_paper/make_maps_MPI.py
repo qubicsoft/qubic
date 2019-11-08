@@ -14,7 +14,7 @@ import qubic
 from qubicpack.utilities import Qubic_DataDir
 
 import ReadMC as rmc
-import SpectroImLib as si
+import qubic.SpectroImLib as si
 
 from mpi4py import MPI
 
@@ -98,7 +98,7 @@ if rank == 0:
     # Put I = 0
     # x0[:, :, 0] = 0.
 
-    #Multiply Q, U maps
+    # Multiply Q, U maps
     x0[:, :, 1] *= multFactor
     x0[:, :, 2] *= multFactor
 
@@ -153,12 +153,12 @@ for i, nf_sub_rec in enumerate(d['nf_recon']):
               .format(nf_sub_rec))
 
         name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_nep{5}_nside{6}.fits'.format(d['nf_sub'],
-                                                                                  d['nf_recon'][i],
-                                                                                  d['noiseless'],
-                                                                                  d['npointings'],
-                                                                                  d['tol'],
-                                                                                  d['detector_nep'],
-                                                                                  d['nside'])
+                                                                                                  d['nf_recon'][i],
+                                                                                                  d['noiseless'],
+                                                                                                  d['npointings'],
+                                                                                                  d['tol'],
+                                                                                                  d['detector_nep'],
+                                                                                                  d['nside'])
         rmc.save_simu_fits(maps_recon_noiseless, cov_noiseless, nus, nus_edge, maps_convolved_noiseless,
                            out_dir, name + name_map)
 
@@ -198,13 +198,18 @@ for j in range(nreals):
                   .format(nf_sub_rec, j))
 
             name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_nep{5}_nside{6}_{7}.fits'.format(d['nf_sub'],
-                                                                                          d['nf_recon'][i],
-                                                                                          d['noiseless'],
-                                                                                          d['npointings'],
-                                                                                          d['tol'],
-                                                                                          d['detector_nep'],
-                                                                                          d['nside'],
-                                                                                          str(j).zfill(2))
+                                                                                                          d['nf_recon'][
+                                                                                                              i],
+                                                                                                          d[
+                                                                                                              'noiseless'],
+                                                                                                          d[
+                                                                                                              'npointings'],
+                                                                                                          d['tol'],
+                                                                                                          d[
+                                                                                                              'detector_nep'],
+                                                                                                          d['nside'],
+                                                                                                          str(j).zfill(
+                                                                                                              2))
             rmc.save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved, out_dir, name + name_map)
 
         comm.Barrier()

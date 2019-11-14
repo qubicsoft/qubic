@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.1'
-      jupytext_version: 1.2.4
+      jupytext_version: 1.2.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -22,12 +22,13 @@ rc('text',usetex=False)
 rc('image', cmap='viridis')
 
 from qubicpack import qubicpack as qp
-import fibtools as ft
-import plotters as p
-import lin_lib as ll
-import demodulation_lib as dl
+from qubicpack.utilities import Qubic_DataDir
+import qubic.fibtools as ft
+import qubic.plotters as p
+import qubic.lin_lib as ll
+import qubic.demodulation_lib as dl
 import qubic.io
-import sb_fitting as sbfit
+import qubic.sb_fitting as sbfit
 
 from pysimulators import FitsArray
 
@@ -46,16 +47,21 @@ import pandas as pd
 ```
 
 ```{python}
-dirfreq = '150GHz-2019-04-06/'
-dirallfreqs = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/'
-dirfiles = dirallfreqs+dirfreq
+# Get the data
+dirfiles = Qubic_DataDir(datafile='allTES_flat_130.pdf')
+print(dirfiles)
+
+# dirfreq = '150GHz-2019-04-06/'
+# dirallfreqs = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/'
+# dirfiles = dirallfreqs + dirfreq
+
 c50 = np.cos(np.radians(50))
 azmin = -15./c50
 azmax = 15./c50
 
 
-TESNum = 37
-reload(sbfit)
+TESNum = 93
+# reload(sbfit)
 flatmap, az, el = sbfit.get_flatmap(TESNum, dirfiles, azmin = azmin, azmax=azmax)
 npix = len(np.ravel(flatmap))
 

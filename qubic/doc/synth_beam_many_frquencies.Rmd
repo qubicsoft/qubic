@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.1'
-      jupytext_version: 1.2.3
+      jupytext_version: 1.2.4
   kernelspec:
     display_name: Python 3
     language: python
@@ -49,20 +49,27 @@ sel_det=True #If you want to select one detector
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(os.environ['QUBIC_DICT']+'global_source_oneDet.dict')
 d['nside'] = 512
-num=143
-if sel_det:
-    q = qubic.QubicInstrument(d)
-    q = select_det(q,9)
-    
-
 ```
 
+***
+Check location of the TES
+
+
+q2 = QI(d)
+arrdet = [q2.detector[231],q2.detector[231+248], q2.detector[231+496], q2.detector[231+248+496]]
+plot(arrdet[0].vertex[0][2][0],arrdet[0].vertex[0][2][1], 'r*')
+plot(arrdet[1].vertex[0][2][0],arrdet[1].vertex[0][2][1], 'r*')
+plot(arrdet[2].vertex[0][2][0],arrdet[2].vertex[0][2][1], 'r*')
+plot(arrdet[3].vertex[0][2][0],arrdet[3].vertex[0][2][1], 'r*')
+q2.detector.plot()
+iarrdet = [231,479,727,975]
+
 ```{python}
-manyfreq = [130e9,140e9,150e9,160e9,170e9,180e9]
+manyfreq = [130e9,140e9,155e9,160e9,170e9,180e9]
 size=200
 maps = np.empty((len(manyfreq), size,size))
 
-ndet = 96
+ndet = 12#iarrdet
 if sel_det:
     q = qubic.QubicInstrument(d)
     q = select_det(q,ndet)
@@ -83,7 +90,7 @@ for i,ifreq in enumerate(manyfreq):
     sb = QI._get_synthbeam(s, pos, area, ifreq, bw, horns, pbeam,
                    sbeam, btype, 45)[0]
     
-    xr=0.35*np.max(sb)
+    xr=0.95*np.max(sb)
 
     sat = np.where(sb>xr)
     sb2=np.copy(sb)
@@ -96,7 +103,8 @@ for i,ifreq in enumerate(manyfreq):
 ```
 
 ```{python}
-full = np.sum(maps, axis= 0)
+full = np.sum([maps[0],maps[5]], axis= 0)
+
 print(full.shape)
 plt.imshow(full)
 ```
@@ -113,7 +121,113 @@ for i in range(len(maps)):
 ```
 
 ***
-Cut the maps
+
+Do the same but with one horn open
+
+```{python}
+manyfreq = [130e9,140e9,155e9,160e9,170e9,180e9]
+maps_one = np.empty((len(manyfreq), size,size))
+
+pos = q.detector.center
+area = q.detector.area
+nu = q.filter.nu
+bw = q.filter.bandwidth
+#horns = q.horn
+horns_one = q.horn
+horns_one.open[6] = False
+horns_one.open = ~horns_one.open
+q.horn.open = horns_one.open
+pbeam = q.primary_beam
+sbeam = q.secondary_beam
+btype = q.synthbeam.dtype    
+
+for i,ifreq in enumerate(manyfreq):
+    
+    s = qubic.QubicScene(d)
+
+    sb_one = QI._get_synthbeam(s, pos, area, ifreq, bw, horns_one, pbeam,
+                   sbeam, btype, 45)[0]
+    
+    xr_one=0.98*np.max(sb_one)
+
+    sat_one = np.where(sb_one>xr_one)
+    sb2_one = np.copy(sb_one)
+    sb2_one[sat_one] = xr_one
+    maps_one[i,:,:] = hp.gnomview(sb2_one/np.max(sb2_one), rot=[0,90], xsize=size, ysize=size, reso=10, 
+                              title='{}'.format(str(ifreq)[:3]), sub=(2,3,i+1), min=0, max=1,
+                              cmap='viridis',return_projected_map=True)
+```
+
+***
+
+Cut the beams
+
+```{python}
+maxx = []
+maxy = []
+newmap = []
+
+maxx_0, maxy_0 = np.unravel_index(np.argmax(maps[1]), dims=(size,size))
+newmap.append(np.roll(np.roll(maps[1], half-maxx_0, axis=0), half-maxy_0, axis=1))
+maxx_1, maxy_1 = np.unravel_index(np.argmax(maps[4]), dims=(size,size))
+newmap.append(np.roll(np.roll(maps[4], half-maxx_1, axis=0), half-maxy_1, axis=1))
+maxx_2, maxy_2 = np.unravel_index(np.argmax(maps[2]), dims=(size,size))
+newmap.append(np.roll(np.roll(maps[2], half-maxx_2, axis=0), half-maxy_2, axis=1))
+
+print(maxx_0, maxx_1, maxx_2)
+
+dd=False
+xd = np.linspace(-100,100,200)*reso/60
+if dd: 
+    xd = np.linspace(-100,100,200)*reso/60*np.sqrt(2)
+    x=xd
+plt.figure(figsize=(10,6))
+plt.ylim(0,1.0)
+plt.ylabel('Synthesized beam', fontsize=18)
+plt.xticks(fontsize=16)
+plt.yticks(fontsize=16)
+plt.xlabel(r'$\theta$[deg]', fontsize=18)
+
+plt.plot(x,newmap[0][100,:], 'm-', label = '{} GHz'.format(int(manyfreq[1]/1e9)), linewidth=3, alpha = 0.8)
+plt.plot(x,newmap[2][100,:], 'c-', label = '{} GHz'.format(int(manyfreq[2]/1e9)), linewidth=3, alpha=0.8)
+plt.plot(x,newmap[1][100,:], 'g-', label = '{} GHz'.format(int(manyfreq[4]/1e9)), linewidth=3,alpha=0.7)
+
+plt.plot(x, 1*np.exp(-x**2/(2*13*np.sqrt(8*np.log(2)))), 'k--' )
+plt.text(-8,0.5, r'FWHM $\propto \nu^{-1}$', fontsize=18)
+plt.arrow(-5.,0.48, 3, -0.05,head_width=0.03, head_length= 0.9, fc = 'k' )
+plt.text(2,0.23, r'$r_p \propto \nu^{-1}$', fontsize=18)
+plt.arrow(0.,0.2, 10, 0, head_width=0.03, head_length= 0.4, fc = 'k')
+
+plt.legend(loc='best', fontsize=16)
+
+```
+
+***
+Sum all maps into one
+
+```{python}
+full_ = np.sum(maps, axis= 0)
+print(full_.shape)
+newfull=[]
+maxx_f, maxy_f = np.unravel_index(np.argmax(full), dims=(size,size))
+newfull.append(np.roll(np.roll(full_, half-maxx_f, axis=0), half-maxy_f, axis=1))
+
+dd=True
+xd = np.linspace(-100,100,200)*reso/60
+if dd: 
+    xd = np.linspace(-100,100,200)*reso/60*np.sqrt(2)
+    x=xd
+plt.figure(figsize=(10,6))
+plt.subplot(121)
+plt.imshow(newfull[0])
+plt.subplot(122)
+plt.ylabel('Synthesized beam', fontsize=18)
+plt.xticks(fontsize=16)
+plt.yticks(fontsize=16)
+plt.xlabel(r'$\theta$[deg]', fontsize=18)
+plt.plot(x,np.diag(newfull[0]), 'm-',  linewidth=3)
+
+```
 
 ```{python}
 

@@ -28,6 +28,7 @@ from __future__ import division, print_function
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.ticker as plticker
 
 from qubicpack.utilities import Qubic_DataDir
 
@@ -79,7 +80,7 @@ This is a simulation that doesn't take into account optical aberrations.
 q = qubic.QubicInstrument(d)
 q.optics.focal_length = 0.30
 S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = ca.get_power_combinations(q, theta=list(np.deg2rad(np.arange(0, 12, 2))), 
-                                                                          phi=list(np.zeros(6)), nu=150e9, reso=102,
+                                                                          phi=list(np.zeros(6)), nu=120e9, reso=102,
                                                                           xmin=-0.051, xmax=0.051)
 
 # They are 3D arrays : (reso, reso, #pointings)
@@ -93,7 +94,7 @@ print('shape of each combination :', Cminus_i.shape)
 q = qubic.QubicInstrument(d)
 q.optics.focal_length = 0.30
 fringes = ca.compute_fringes(q, theta=list(np.deg2rad(np.arange(0, 4, 0.25))), 
-                                phi=list(np.zeros(16)), reso=34, nu=120e9,
+                                phi=list(np.zeros(16)), reso=34, nu=150e9,
                              xmin=-0.051, xmax=0.051)
 print(fringes.shape)
 ```
@@ -144,12 +145,17 @@ plt.imshow(real_fringes_quad*quart_mask)
 ```{python}
 # Make the rotation to compare with what Michel obtained
 Final_image = np.rot90(real_fringes_quad, k=2)
-plt.imshow(Final_image)#, vmin=0., vmax=0.0001)
-# ax = plt.gca();
-# ax.set_xticks(np.arange(-0.5, 34, 1));
-# ax.set_yticks(np.arange(0.5, 34, 1));
-# ax.grid(color='w', linestyle='-', linewidth=1)
-plt.savefig('/home/louisemousset/QUBIC/Qubic_images/plots/fringes_no_aber_25_57_focal30_120GHz.png')
+
+# Add a grid 
+fig, ax = plt.subplots()
+ax.imshow(Final_image)#, vmin=0., vmax=0.0001)
+
+loc = plticker.MultipleLocator(base=1)
+ax.xaxis.set_major_locator(loc)
+ax.yaxis.set_major_locator(loc)
+
+ax.grid(color='w', linestyle='-', linewidth=2)
+# plt.savefig('/home/louisemousset/QUBIC/Qubic_images/plots/fringes_no_aber_25_57_focal30_150GHz.png')
 ```
 
 ```{python}
@@ -169,75 +175,31 @@ need to download the files at : https://drive.google.com/open?id=19dPHw_CeuFZ068
 # Path to the simulated files 
 rep = Qubic_DataDir(datafile='detcentres.txt')
 
-# Finges with aberations 
+# Finges with aberations
+# Directly using the 2 horns opened
 fringes_aber = ca.get_power_fp_aberration(rep)
-
-# Divide by the power for only one horn open (gaussian on the FP)
-# Problem : invalid value encountered in true_divide => some pixels are lost
-# i = baseline[0]
-# Ci_aber = ca.get_power_fp_aberration(rep, indep_config=[i])
-# fringes_aber /= Ci_aber
 ```
 
 ```{python}
-from matplotlib.patches import Circle
-fig, ax = plt.subplots(1)
-ax.imshow(fringes_aber)
-circ = Circle((120, 120), 102, alpha=0.5, color='g')
-ax.add_patch(circ)
+# This simulation is larger than the FP 
+# Let's overplot the real FP
+fringes_aber[fringes_aber==0]=['nan']
 
-# circle = plt.Circle((120,120),2)
-rep
-```
-
-```{python}
-# real FP with dead detectors
-fringes_aber_real, fringes_aber_quad  = sc.get_real_fp(fringes_aber, quadrant=3)
-
-# Apply the mask on the image with aberrations
-plt.subplot(121)
-plt.imshow(fringes_aber_real * full_mask)
-plt.subplot(122)
-plt.imshow(fringes_aber_quad * quart_mask)
-
-```
-
-```{python}
-# Make the rotation to compare with what Michel obtained
-Final_image_aber = np.rot90(fringes_aber_quad * quart_mask, k=2)
-plt.imshow(Final_image_aber)
+fig = sc.add_fp_simu_aber(fringes_aber, vmin=0., vmax=0.05)
+# plt.savefig('/home/louisemousset/QUBIC/Qubic_images/plots/fringes_aber_25_57.png')
 ```
 
 ```{python}
 # Other way to get fringes with aberrations :
 # Make the combination (S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
-# Problem : Here again, because I divide by Ci, I loose some pixels...
 fringes_aber_comb = ca.get_fringes_aberration_combination(rep)
 print('fringes_aber_comb.shape shape :', fringes_aber_comb.shape)
 
 ```
 
 ```{python}
-plt.imshow(fringes_aber_comb)
-```
-
-```{python}
-# real FP with dead detectors
-fringes_aber_comb_real, fringes_aber_comb_quad  = sc.get_real_fp(fringes_aber_comb, quadrant=3)
-
-# Apply the mask on the image with aberations
-plt.subplot(121)
-plt.imshow(fringes_aber_comb_real * full_mask)
-plt.subplot(122)
-plt.imshow(fringes_aber_comb_quad * quart_mask)
-plt.colorbar()
-```
-
-```{python}
-# Make the rotation to compare with what Michel obtained
-Final_image_aber_comb = np.rot90(fringes_aber_comb_quad * quart_mask, k=2)
-plt.imshow(Final_image_aber_comb)
-# plt.savefig('/home/louisemousset/QUBIC/Qubic_images/plots/fringes_aber_33_57')
+fig = sc.add_fp_simu_aber(fringes_aber_comb, vmin=0., vmax=2.2, alpha=0.6)
+# plt.savefig('/home/louisemousset/QUBIC/Qubic_images/plots/fringes_aber_comb_25_57.png')
 ```
 
 # Change the instrument horn config

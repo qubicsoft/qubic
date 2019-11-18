@@ -57,12 +57,16 @@ class QubicMultibandAcquisition(QubicPolyAcquisition):
             op_sum.append(op[(self.nus > band[0]) * (self.nus < band[1])].sum(axis=0))
         return BlockRowOperator(op_sum, new_axisin=0)
 
+
     def get_preconditioner(self, cov):
+        print('This is the new preconditionner')
         if cov is not None:
-            cov_inv = np.array([1. / cov[(self.nus > mi) * (self.nus < ma)].mean(axis=0) \
+            cov_av = np.array([cov[(self.nus > mi) * (self.nus < ma)].mean(axis=0) \
                                 for (mi, ma) in self.bands])
-            cov_inv[np.isinf(cov_inv)] = 0.
-            # cov_inv = np.nan_to_num(cov_inv)
+            cov_inv = np.zeros_like(cov_av)
+            seenpix = cov_av !=0
+            cov_inv[seenpix] = 1. / cov_av[seenpix]
+
             return BlockDiagonalOperator( \
                 [DiagonalOperator(ci, broadcast='rightward') for ci in cov_inv],
                 new_axisin=0)

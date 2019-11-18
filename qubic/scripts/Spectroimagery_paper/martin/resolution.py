@@ -169,12 +169,12 @@ def FitMethod(maparray, d, reso = 1.5, size = 200, cutlevel = 0.01, mapret = Fal
 	popt = []
 
 	for i,mi in enumerate(maparray):
-		maski = mi > np.max(mi)*cutlevel
-		mi[~maski] = 0		
-		norm_fit = normalization(x_map[0],mi[maski])
+		#maski = mi > np.max(mi)*cutlevel
+		#mi[~maski] = 0		
+		norm_fit = normalization(x_map[0],mi)
 		ydata_map = (norm_fit * mi).ravel()
 		popt_map, pcov_map = curve_fit(gaussian2d, xdata_map, ydata_map, method='trf')
-		input_fwhm_fit[i] = abs((popt_map[2]+popt_map[3])/2*sigma2fwhm)
+		input_fwhm_fit[i] = (abs(popt_map[2])+abs(popt_map[3]))/2*sigma2fwhm
 
 	if mapret:
 		return input_fwhm_fit, mi

@@ -1037,6 +1037,7 @@ class QubicInstrument(Instrument):
         Return the monochromatic complex field [(W/Hz)^(1/2)] related to
         the electric field over a specified area of the focal plane created
         by sources of specified spectral irradiance [W/m^2/Hz]
+        Frame used : GRF
 
         Parameters
         ----------
@@ -1047,7 +1048,8 @@ class QubicInstrument(Instrument):
         spectral_irradiance : array-like
             The source spectral_irradiance [W/m^2/Hz].
         position : array-like of shape (..., 3)
-            The 3D coordinates where the response is computed, in meters.
+            The 3D coordinates where the response is computed, in meters,
+            in the GRF frame.
         area : array-like
             The integration area, in m^2.
         nu : float
@@ -1087,13 +1089,15 @@ class QubicInstrument(Instrument):
         """
         Return the monochromatic synthetic beam for a specified location
         on the focal plane, multiplied by a given area and bandwidth.
+        Frame used : GRF
 
         Parameters
         ----------
         scene : QubicScene
             The scene.
         position : array-like of shape (..., 3)
-            The 3D coordinates where the response is computed, in meters.
+            The 3D coordinates where the response is computed, in meters,
+            in the GRF frame.
         area : array-like
             The integration area, in m^2.
         nu : float

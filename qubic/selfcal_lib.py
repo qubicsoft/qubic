@@ -9,6 +9,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 import matplotlib.ticker as plticker
+import matplotlib.colors as colors
+import matplotlib.cm as cmx
+import matplotlib.patches as patches
 
 from astropy.io import fits
 
@@ -254,7 +257,7 @@ class SelfCalibration:
 
     def get_power_fp_aberration(self, rep, doplot=True, theta_source=0., freq_source=150., indep_config=None):
         """
-        Compute power in the focal plane for a given horn configuration taking
+        Compute power on the focal plane for a given horn configuration taking
         into account optical aberrations given in Creidhe simulations.
 
         Parameters
@@ -341,6 +344,7 @@ class SelfCalibration:
         # Intensity in the focal plane with high resolution
         # and with the focal plane resolution
         power = np.abs(sumampx) ** 2 + np.abs(sumampy) ** 2
+        power = power.T
 
         if doplot:
             plt.figure()
@@ -354,6 +358,7 @@ class SelfCalibration:
             plt.colorbar()
 
         return power
+
 
     def get_fringes_aberration_combination(self, rep):
         """
@@ -566,6 +571,87 @@ def tes_signal2image_fp(tes_signal, asics):
     return image_fp
 
 
+def averaging_tes_signal(power, rep, power_size):
+    """
+    Get averaged signal in each TES (real FP). Based on Creidhe code.
+
+    Parameters
+    ----------
+    power : array of shape (nn, nn)
+        Power on the focal plane at high resolution, can be larger than the real FP.
+    rep : str
+        Path of the repository for the simulated files, can be download at :
+        https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
+    power_size : float
+        Dimension in m of one side of power.
+
+    Returns
+    -------
+    readv : array of shape(992, 4, 2)
+        Corners positions.
+    det_value : array of shape (992, 3)
+        Total signal, number of points and average in each TES.
+    """
+
+    # Get TES positions of the 4 corners
+    vertices = pd.read_csv(rep + '/vertices.txt', sep='\ ', header=None, engine='python')
+    readv = np.zeros((992, 4, 2))
+    for i in range(4):
+        readv[:, i, :] = vertices.iloc[i::4, :]
+
+    nn = np.shape(power)[0]
+    print('nn: ', nn)
+    xx = np.linspace(- power_size / 2., power_size / 2., nn)
+    yy = np.linspace(- power_size / 2., power_size / 2., nn)
+    XX, YY = np.meshgrid(xx, yy)
+
+    # Average (this is working but it is slow)
+    # 1st will contain total signal, second is number of points, third is average
+    det_value = np.zeros((992, 3))
+    for i in range(nn):  # could do nx/2, ny/2 if just wanted one quadrant. Scan full plane
+        for j in range(nn):
+            for d in range(0, 992):
+                if readv[d, 2, 0] <= XX[i, j] <= readv[d, 3, 0] and \
+                        readv[d, 2, 1] <= YY[i, j] <= readv[d, 1, 1]:
+                    det_value[d, 0] += power[i, j]
+                    det_value[d, 1] += 1
+
+                if det_value[d, 1] != 0:  # so long as there is some signal on the detector
+                    det_value[d, 2] = det_value[d, 0] / det_value[d, 1]  # average calculation
+                else:
+                    det_value[d, 2] = 0.
+
+    return readv, det_value
+
+
+def make_plot_real_fp(readv, det_value):
+    """
+    Plot real FP using TES locations.
+    """
+    # All this to get colormap
+    cm = plt.get_cmap('viridis')
+    # plot scale from average
+    cNorm = colors.Normalize(vmin=np.amin(det_value[:, 2]), vmax=np.amax(det_value[:, 2]))
+    scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=cm)
+    scalarMap.set_array(det_value)
+
+    fig, ax7 = plt.subplots()
+    fig.figsize = (12, 12)
+    for i in range(0, 992):
+        rect = patches.Rectangle((readv[i, 2, 0], readv[i, 2, 1]),
+                                 (readv[i, 0, 0] - readv[i, 1, 0]),
+                                 (readv[i, 0, 1] - readv[i, 3, 1]),
+                                 linewidth=1, edgecolor='none', facecolor=scalarMap.to_rgba(det_value[i, 2]))
+        ax7.add_patch(rect)
+
+    plt.xlim(-.055, .055)  # the focal plane
+    plt.ylim(-.055, .055)
+    ax7.set_aspect('equal')
+    plt.colorbar(scalarMap)
+
+    return fig
+
+
 def get_real_fp(full_fp, quadrant=None):
     """
     Return the real focal plane, one pixel for each TES.
@@ -610,6 +696,7 @@ def get_real_fp(full_fp, quadrant=None):
 def add_fp_simu_aber(image_aber, vmin, vmax, alpha=0.3, diameter_simu=120):
     """
     Over plot the real FP on a simulation with aberrations.
+    Should be improved because space between quadrants is not taken into account.
     Parameters
     ----------
     image_aber : 2D array

@@ -655,6 +655,28 @@ def simsig_nonorm(x, pars):
     return thesim
 
 
+def simsig_asym(x, pars, extra_args=None):
+    dx = x[1] - x[0]
+    cycle = np.nan_to_num(pars[0])
+    ctime_rise = np.nan_to_num(pars[1])
+    ctime_fall = np.nan_to_num(pars[2])
+    t0 = np.nan_to_num(pars[3])
+    amp = np.nan_to_num(pars[4])
+    offset = np.nan_to_num(pars[5])
+    sim_init = np.zeros(len(x))
+    ok = x < (cycle * (np.max(x)))
+    sim_init[ok] = -1+np.exp(-x[ok]/ctime_rise)
+    if ok.sum()>0:
+        endval = sim_init[ok][-1]
+    else:
+        endval = -1.
+    sim_init[~ok] = -np.exp(-(x[~ok]-x[~ok][0])/ctime_fall)+1+endval
+    thesim = np.interp((x - t0) % max(x), x, sim_init)
+    thesim = thesim*amp+offset
+    return np.nan_to_num(thesim)
+
+
+
 def fold_data(time, dd, period, lowcut, highcut, nbins, 
               notch=None, rebin=None, verbose=None,
               return_error=False, silent=False, median=False):
@@ -714,7 +736,7 @@ def power_spectrum(time_in, data_in, rebin=True):
     return spectrum_f, freq_f
 
 
-def filter_data(time_in, data_in, lowcut, highcut, rebin=True, verbose=False, notch=None):
+def filter_data(time_in, data_in, lowcut, highcut, rebin=True, verbose=False, notch=None, order=5):
     sh = np.shape(data_in)
     if rebin:
         if verbose: printnow('Rebinning before Filtering')
@@ -730,7 +752,7 @@ def filter_data(time_in, data_in, lowcut, highcut, rebin=True, verbose=False, no
         data = data_in
 
     FREQ_SAMPLING = 1. / ((np.max(time) - np.min(time)) / len(time))
-    filt = scsig.butter(5, [lowcut / FREQ_SAMPLING, highcut / FREQ_SAMPLING], btype='bandpass', output='sos')
+    filt = scsig.butter(order, [2*lowcut / FREQ_SAMPLING, 2*highcut / FREQ_SAMPLING], btype='bandpass', output='sos')
     if len(sh) == 1:
         dataf = scsig.sosfilt(filt, data)
     else:

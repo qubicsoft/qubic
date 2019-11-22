@@ -56,6 +56,7 @@ class SelfCalibration:
         """
         Build masks for the FP where bad detectors are NAN and good detectors are 1., one of shape (34x34)
         and one of shape (17x17) for one quadrant.
+        We use the ONAFP frame.
 
         Parameters
         ----------
@@ -72,13 +73,13 @@ class SelfCalibration:
 
         """
         FPidentity = make_id_focalplane()
-        quad = np.reshape(FPidentity.quadrant, (34, 34))
+        quad = np.rot90(np.reshape(FPidentity.quadrant, (34, 34)), k=-1, axes=(0, 1))
 
         calfile_path = Qubic_DataDir(datafile=self.d['detarray'])
         calfile = fits.open(calfile_path + '/' + self.d['detarray'])
 
         if self.d['detarray'] == 'CalQubic_DetArray_P87_TD.fits':
-            full_mask = calfile['removed'].data
+            full_mask = np.rot90(calfile['removed'].data, k=-1, axes=(0, 1))
             full_mask = np.where(full_mask == 1, np.nan, full_mask)
             full_mask = np.where(full_mask == 0, 1, full_mask)
 
@@ -136,7 +137,7 @@ class SelfCalibration:
             q.horn.plot()
             plt.axis('off')
             plt.subplot(4, 4, 2)
-            plt.imshow(S[:, :, 0])
+            plt.imshow(S[:, :, 0], origin='lower')
             plt.colorbar()
             plt.title('$S$')
 
@@ -152,7 +153,7 @@ class SelfCalibration:
             q.horn.plot()
             plt.axis('off')
             plt.subplot(4, 4, 4)
-            plt.imshow(Cminus_i[:, :, 0])
+            plt.imshow(Cminus_i[:, :, 0], origin='lower')
             plt.colorbar()
             plt.title('$C_{-i}$')
 
@@ -168,7 +169,7 @@ class SelfCalibration:
             q.horn.plot()
             plt.axis('off')
             plt.subplot(4, 4, 6)
-            plt.imshow(Cminus_j[:, :, 0])
+            plt.imshow(Cminus_j[:, :, 0], origin='lower')
             plt.colorbar()
             plt.title('$C_{-j}$')
 
@@ -185,7 +186,7 @@ class SelfCalibration:
             q.horn.plot()
             plt.axis('off')
             plt.subplot(4, 4, 8)
-            plt.imshow(Sminus_ij[:, :, 0])
+            plt.imshow(Sminus_ij[:, :, 0], origin='lower')
             plt.colorbar()
             plt.title('$S_{-ij}$')
 
@@ -201,7 +202,7 @@ class SelfCalibration:
             q.horn.plot()
             plt.axis('off')
             plt.subplot(4, 4, 10)
-            plt.imshow(Ci[:, :, 0])
+            plt.imshow(Ci[:, :, 0], origin='lower')
             plt.colorbar()
             plt.title('$C_i$')
 
@@ -214,7 +215,7 @@ class SelfCalibration:
             q.horn.plot()
             plt.axis('off')
             plt.subplot(4, 4, 12)
-            plt.imshow(Cj[:, :, 0])
+            plt.imshow(Cj[:, :, 0], origin='lower')
             plt.colorbar()
             plt.title('$C_j$')
 
@@ -228,7 +229,7 @@ class SelfCalibration:
             q.horn.plot()
             plt.axis('off')
             plt.subplot(4, 4, 14)
-            plt.imshow(Sij[:, :, 0])
+            plt.imshow(Sij[:, :, 0], origin='lower')
             plt.colorbar()
             plt.title('$S_{ij}$')
 
@@ -316,6 +317,7 @@ class SelfCalibration:
                 raise ValueError('The switch indices must be between 1 and 64 ')
 
             # Phase calculation
+            # Not sure it is a good idea to do that...
             horn_x = q.horn.center[swi - 1, 0]
             horn_y = q.horn.center[swi - 1, 1]
             d = np.sqrt(horn_x ** 2 + horn_y ** 2)  # distance between the horn and the center
@@ -347,7 +349,7 @@ class SelfCalibration:
             plt.axis('off')
 
             plt.subplot(122)
-            plt.imshow(power)
+            plt.imshow(power, origin='lower')
             plt.title('Power at the sampling resolution')
             plt.colorbar()
 
@@ -445,7 +447,7 @@ class SelfCalibration:
 def get_power_on_array(q, theta=np.array([0.]), phi=np.array([0.]), nu=150e9, spectral_irradiance=1.,
                        reso=34, xmin=-0.06, xmax=0.06):
     """
-    Compute power on the focal plane for different positions of the source
+    Compute power on the focal plane in the ONAFP frame for different positions of the source
     with respect to the instrument.
 
     Parameters
@@ -478,11 +480,15 @@ def get_power_on_array(q, theta=np.array([0.]), phi=np.array([0.]), nu=150e9, sp
     z1d = x1d * 0 - q.optics.focal_length
     position = np.array([x1d, y1d, z1d]).T
 
+    # Electric field on the FP in the GRF frame
     field = q._get_response(theta, phi, spectral_irradiance, position, q.detector.area,
                             nu, q.horn, q.primary_beam, q.secondary_beam)
-    power = np.reshape(np.abs(field) ** 2, (reso, reso, nptg))
+    power_GRF = np.reshape(np.abs(field) ** 2, (reso, reso, nptg))
 
-    return power
+    # Go to the ONAFP frame
+    power_ONAFP = np.rot90(power_GRF, k=-1, axes=(0, 1))
+
+    return power_ONAFP
 
 
 def index2TESandASIC(index):
@@ -515,6 +521,7 @@ def image_fp2tes_signal(full_real_fp):
     """
     Convert an image of the FP to an array with the signal
     of each TES using the TES indices of the real FP.
+    Make sure to use the ONAFP frame.
     Parameters
     ----------
     full_real_fp : array of shape (34, 34)
@@ -581,7 +588,8 @@ def get_real_fp(full_fp, quadrant=None):
     else:
         FPidentity = make_id_focalplane()
         tes = np.reshape(FPidentity.TES, (34, 34))
-        quad = np.reshape(FPidentity.quadrant, (34, 34))
+        # The rotation is needed to be in the ONAFP frame
+        quad = np.rot90(np.reshape(FPidentity.quadrant, (34, 34)), k=-1, axes=(0, 1))
 
         # Put the pixels that are not TES to NAN
         full_real_fp = np.where(tes == 0, np.nan, full_fp)
@@ -625,7 +633,7 @@ def add_fp_simu_aber(image_aber, vmin, vmax, alpha=0.3, diameter_simu=120):
     print('FP radius in pixels :', fp_radius)
 
     fig, ax = plt.subplots()
-    ax.imshow(image_aber, vmin=vmin, vmax=vmax)
+    ax.imshow(image_aber, origin='lower', vmin=vmin, vmax=vmax)
 
     # Add a circle of the FP size
     circ = Circle((nn / 2., nn / 2.), fp_radius, alpha=alpha, color='w')

@@ -8,12 +8,12 @@ from qubic import SpectroImLib as si
 
 from pysimulators import FitsArray
 
-dictfilename = './spectroimaging.dict'
+dictfilename = os.environ['QUBIC_DICT']+'spectroimaging.dict'
 
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
-nf_sub = [14,]#[2, 4, 5, 10, 12, 14, 15, 16, 18, 20, 22, 24]
+nf_sub = [15,]#[2, 4, 5, 10, 12, 14, 15, 16, 18, 20, 22, 24]
 dirc = './'
 
 try:

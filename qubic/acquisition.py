@@ -504,7 +504,7 @@ class QubicAcquisition(Acquisition):
 
         return tod
 
-    def tod2map(self, tod, d, cov):
+    def tod2map(self, tod, d, cov=None):
         """
         Reconstruct map from tod
         """

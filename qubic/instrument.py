@@ -1180,7 +1180,7 @@ class QubicInstrument(Instrument):
             [3] : array of [nhorns, nn, nn] with phase in degrees
         detector_integrate: Optional, number of subpixels in x direction for integration over detectors
             default (None) is no integration => uses the center of the pixel
-        detpos: Optional, position in the focal plane at which the Synthesized Beam is desider as np.array([x,y,z])
+        detpos: Optional, position in the focal plane at which the Synthesized Beam is desired as np.array([x,y,z])
         
 
         """

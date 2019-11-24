@@ -402,51 +402,73 @@ class SelfCalibration:
 
         return fringes_aber
 
-    def get_synthetic_beam_sky(self, q, scene, tes, default_open=True, with_baseline=True):
-        """
-        Return the synthetic beam projected on the sky for a given TES.
-        Plot the horn matrix and the synthetic beam.
 
-        Parameters
-        ----------
-        q : Qubic monochromatic instrument
-        scene : a Qubic scene
-        tes : int
-            TES number for which you reconstruct the synthetic beam.
-        default_open : bool
-            If True, all switches are open except the ones in baseline.
-            If False, all switches are close except the one in baseline.
-            True by default.
-        with_baseline : bool
-            If true, the baseline is closed. If false, it is not close and
-            you can have the full synthetic beam on the sky.
+def make_external_A(rep, open_horns):
+    """
+    Compute external_A from simulated files with aberrations.
+    This can be used in get_synthbeam method that returns the synthetic beam on the sky.
+    Parameters
+    ----------
+    rep : str
+        Path of the repository for the simulated files, can be download at :
+        https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
+    open_horns : list
+        Indices of the open horns between 0 and 63.
 
-        Returns
-        -------
-        The synthetic beam on the sky.
+    Returns
+    -------
+    external_A : list of tables describing the phase and amplitude at each point of the focal
+        plane for each of the horns:
+        [0] : array of nn with x values in meters
+        [1] : array of nn with y values in meters
+        [2] : array of [nhorns, nn, nn] with amplitude
+        [3] : array of [nhorns, nn, nn] with phase in degrees
 
-        """
+    """
+    # Get simulation files
+    files = sorted(glob.glob(rep + '/*.dat'))
 
-        if default_open:
-            q.horn.open = True
-            if with_baseline:
-                for i in self.baseline:
-                    q.horn.open[i - 1] = False
-            for i in self.dead_switches:
-                q.horn.open[i - 1] = False
-        else:
-            q.horn.open = False
-            for i in self.baseline:
-                q.horn.open[i - 1] = True
-        sb = q.get_synthbeam(scene, idet=tes)
+    nhorns = len(files)
+    if nhorns != 64:
+        raise ValueError('You should have 64 .dat files')
 
-        plt.subplot(121)
-        q.horn.plot()
-        plt.axis('off')
-        hp.gnomview(sb, sub=122, rot=(0, 90), reso=5, xsize=350, ysize=350,
-                    title='Synthetic beam on the sky for TES {}'.format(tes),
-                    cbar=True, notext=True)
-        return sb
+    # Get the sample number from the first file
+    data0 = pd.read_csv(files[0], sep='\t', skiprows=0)
+    nn = data0['X_Index'].iloc[-1] + 1
+    print('Sampling number = ', nn)
+
+    xmin = data0['X'].iloc[0] * 1e-3
+    xmax = data0['X'].iloc[-1] * 1e-3
+    ymin = data0['Y'].iloc[0] * 1e-3
+    ymax = data0['Y'].iloc[-1] * 1e-3
+    print('xmin={}m, xmax={}m, ymin={}m, ymax={}m'.format(xmin, xmax, ymin, ymax))
+
+    xx = np.linspace(xmin, xmax, nn)
+    yy = np.linspace(ymin, ymax, nn)
+
+    # Get all amplitudes and phases for each open horn
+    nopen_horns = len(open_horns)
+
+    allampX = np.empty((nopen_horns, nn, nn))
+    allphiX = np.empty((nopen_horns, nn, nn))
+    allampY = np.empty((nopen_horns, nn, nn))
+    allphiY = np.empty((nopen_horns, nn, nn))
+    for i, horn in enumerate(open_horns):
+        print('horn ', horn)
+        if horn < 0 or horn > 63:
+            raise ValueError('The horn indices must be between 0 and 63 ')
+
+        data = pd.read_csv(files[horn], sep='\t', skiprows=0)
+        allampX[i, :, :] = np.reshape(np.asarray(data['MagX']), (nn, nn))
+        allampY[i, :, :] = np.reshape(np.asarray(data['MagY']), (nn, nn))
+
+        allphiX[i, :, :] = np.reshape(np.asarray(data['PhaseX']), (nn, nn))
+        allphiY[i, :, :] = np.reshape(np.asarray(data['PhaseY']), (nn, nn))
+
+    # Why using allampX, allphiX and not allampY, allphiY ??
+    external_A = [-xx, -yy, allampX, allphiX]
+
+    return external_A
 
 
 def get_power_on_array(q, theta=np.array([0.]), phi=np.array([0.]), nu=150e9, spectral_irradiance=1.,

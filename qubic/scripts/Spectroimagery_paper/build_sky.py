@@ -10,14 +10,12 @@ from qubicpack.utilities import Qubic_DataDir
 from pysimulators import FitsArray
 
 # Get a dictionary
-basedir = Qubic_DataDir(datafile='spectroimaging.dict')
-print('basedir : ', basedir)
-dictfilename = basedir + '/spectroimaging.dict'
+dictfilename = os.environ['QUBIC_DICT']+'spectroimaging.dict'
 
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
-nf_sub = [14,]#[2, 4, 5, 10, 12, 14, 15, 16, 18, 20, 22, 24]
+nf_sub = [15,]#[2, 4, 5, 10, 12, 14, 15, 16, 18, 20, 22, 24]
 dirc = './'
 
 os.makedirs(dirc, exist_ok=True)

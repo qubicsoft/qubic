@@ -12,13 +12,10 @@ jupyter:
     name: python3
 ---
 
-# Simulations for self-calibration (fringes)
+# Simulations for calibration (fringes on the FP)
 
 #### Edited by Louise
-I have implemented a class in selfcal_lib.py which allowed to do several simulations concerning the calibration. This notebook gives some examples of what you can do with.
-
-
-One remark : I tried to put documentation for each function. On a jupyter notebook, if you want to have acces just press shift+tab when your cursor is on the name of the function. 
+selfcal_lib.py allows to do several simulations concerning the calibration, especially the simlation of the signal on the focal plane. This notebook gives some examples of what you can do with.
 
 ```{python pycharm={'is_executing': False}}
 from __future__ import division, print_function
@@ -36,19 +33,14 @@ import qubic
 
 from qubic import selfcal_lib as sc
 
-plt.rcParams['figure.figsize'] = (7, 7)
+plt.rcParams['figure.figsize'] = (9, 9)
 
 
 import matplotlib.animation as animation
 from IPython.display import HTML
 ```
 
-```{python}
-plt.plot(np.linspace(1, 10))
-```
-
-## Make a dictionary 
-useful for the qubicsoft
+# Qubic soft simulation (no aberrations)
 
 ```{python pycharm={'is_executing': False}}
 # Use a tool from qubicpack to get a path
@@ -56,32 +48,31 @@ basedir = Qubic_DataDir(datafile='instrument.py', )
 print('basedir : ', basedir)
 dictfilename = basedir + '/dicts/global_source_oneDet.dict'
 
+# Get a dictionary
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
-print(d)
-```
+print(d['detarray'])
 
-## Create an object 
-
-```{python}
+# Create an object
 baseline = [25, 57]
 ca = sc.SelfCalibration(baseline, [], d)
-
-# Look at methods that are in this class :
-print(dir(ca))
-
 ```
 
-## Get all combinations for one baseline
+### Get all combinations for one baseline
 This is a simulation that doesn't take into account optical aberrations.
 
 ```{python}
 # You need a qubic instrument for that function
 q = qubic.QubicInstrument(d)
-q.optics.focal_length = 0.30
+
+# Focal length (if you want to change it)
+# q.optics.focal_length = 0.30
+
+# FP radius
+radius = 0.051
 S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = ca.get_power_combinations(q, theta=list(np.deg2rad(np.arange(0, 12, 2))), 
-                                                                          phi=list(np.zeros(6)), nu=120e9, reso=102,
-                                                                          xmin=-0.051, xmax=0.051)
+                                                                          phi=list(np.zeros(6)), nu=150e9, reso=34,
+                                                                          xmin=-radius, xmax=radius)
 
 # They are 3D arrays : (reso, reso, #pointings)
 print('shape of each combination :', Cminus_i.shape)
@@ -91,8 +82,6 @@ print('shape of each combination :', Cminus_i.shape)
 
 ```{python}
 # Make the combination (S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
-q = qubic.QubicInstrument(d)
-q.optics.focal_length = 0.30
 fringes = ca.compute_fringes(q, theta=list(np.deg2rad(np.arange(0, 4, 0.25))), 
                                 phi=list(np.zeros(16)), reso=34, nu=150e9,
                              xmin=-0.051, xmax=0.051)
@@ -100,6 +89,7 @@ print(fringes.shape)
 ```
 
 ```{python}
+# Make an animation for different source positions
 nfringes = fringes.shape[2]  
 all_fringes = []
 fig = plt.figure()
@@ -113,58 +103,75 @@ HTML(ani.to_html5_video())
 # ani.save('fringes_passing.mp4')
 ```
 
-## Get the focal plane image for the real instrument
+### Get the focal plane image for the real instrument
+#### Without taking into account space between quadrant
 
 ```{python}
-real_fringes = sc.get_real_fp(fringes[:,:,0])
+# The focal plane image must already have 34x34 pixels
+real_fringes = sc.get_real_fp(Sij[:, :, 0])
+
+# Full focal plane
 plt.subplot(321)
-plt.imshow(real_fringes)
+plt.imshow(real_fringes, origin='lower')
 
 # Get only one quadrant:
-real_fringes, real_fringes_quad = sc.get_real_fp(fringes[:,:,0], quadrant=3)
+real_fringes, real_fringes_quad = sc.get_real_fp(Sij[:,:,0], quadrant=3)
 plt.subplot(322)
-plt.imshow(real_fringes_quad)
+plt.imshow(real_fringes_quad, origin='lower')
 
 # Remove dead detectors
 # Build masks
 full_mask, quart_mask = ca.get_dead_detectors_mask()
 plt.subplot(323)
-plt.imshow(full_mask)
+plt.imshow(full_mask, origin='lower')
 plt.subplot(324)
-plt.imshow(quart_mask)
+plt.imshow(quart_mask, origin='lower')
 
 # Apply the mask on the focal plane
 plt.subplot(325)
-plt.imshow(real_fringes*full_mask)
+plt.imshow(real_fringes*full_mask, origin='lower')
 plt.subplot(326)
-plt.imshow(real_fringes_quad*quart_mask)
+plt.imshow(real_fringes_quad*quart_mask, origin='lower')
 
 
 ```
 
 ```{python}
-# Make the rotation to compare with what Michel obtained
-Final_image = np.rot90(real_fringes_quad, k=2)
-
-# Add a grid 
+# Add a grid (quadrant and TES)
 fig, ax = plt.subplots()
-ax.imshow(Final_image)#, vmin=0., vmax=0.0001)
+extent = [-radius, radius, -radius, radius]
+ax.imshow(real_fringes, origin='lower', extent=extent)
 
-loc = plticker.MultipleLocator(base=1)
-ax.xaxis.set_major_locator(loc)
-ax.yaxis.set_major_locator(loc)
+det_size = 0.003
+grid_ticks = np.arange(-radius, radius, det_size)
+quadrant_ticks = np.arange(-radius, radius, radius)
 
-ax.grid(color='w', linestyle='-', linewidth=2)
-# plt.savefig('/home/louisemousset/QUBIC/Qubic_images/plots/fringes_no_aber_25_57_focal30_150GHz.png')
+ax.set_xticks(grid_ticks , minor=True)
+ax.set_yticks(grid_ticks , minor=True)
+
+ax.set_xticks(quadrant_ticks , minor=False)
+ax.set_yticks(quadrant_ticks , minor=False)
+
+ax.grid(which='major', color='w', linewidth=3)
+
+ax.grid(which='minor', color='w', linewidth=0.5)
+```
+
+### Using real TES locations
+
+```{python}
+# Average signal on the real FP (using real TES locations)
+
+# Path to the simulated files 
+rep = Qubic_DataDir(datafile='detcentres.txt')
+print(rep)
+
+readv, det_value = sc.averaging_tes_signal(Sij[:, :, 0], rep, 2*radius)
 ```
 
 ```{python}
-3*np.sqrt(2)*8.5
-
-```
-
-```{python}
-150e9*14e-3*3*(np.sqrt(2)*8.5e-3)/299792458
+# Plot
+fig = sc.make_plot_real_fp(readv, det_value)
 ```
 
 # Power on the focal plane with optical aberrations
@@ -174,19 +181,14 @@ need to download the files at : https://drive.google.com/open?id=19dPHw_CeuFZ068
 ```{python}
 # Path to the simulated files 
 rep = Qubic_DataDir(datafile='detcentres.txt')
+print('rep:', rep)
 
 # Finges with aberations
 # Directly using the 2 horns opened
-fringes_aber = ca.get_power_fp_aberration(rep)
-```
+fringes_aber = ca.get_power_fp_aberration(rep, theta_source=0., doplot=False)
 
-```{python}
-# This simulation is larger than the FP 
-# Let's overplot the real FP
-fringes_aber[fringes_aber==0]=['nan']
+print(fringes_aber.shape)
 
-fig = sc.add_fp_simu_aber(fringes_aber, vmin=0., vmax=0.05)
-# plt.savefig('/home/louisemousset/QUBIC/Qubic_images/plots/fringes_aber_25_57.png')
 ```
 
 ```{python}
@@ -198,11 +200,25 @@ print('fringes_aber_comb.shape shape :', fringes_aber_comb.shape)
 ```
 
 ```{python}
-fig = sc.add_fp_simu_aber(fringes_aber_comb, vmin=0., vmax=2.2, alpha=0.6)
-# plt.savefig('/home/louisemousset/QUBIC/Qubic_images/plots/fringes_aber_comb_25_57.png')
+# This simulation is larger than the FP 
+# Let's overplot the real FP
+# This is not exactly right because the 4 quadrants should be more separated... 
+fringes_aber[fringes_aber==0]=['nan']
+
+fig = sc.add_fp_simu_aber(fringes_aber, vmin=0., vmax=0.05)
+# plt.savefig('/home/louisemousset/QUBIC/Qubic_images/plots/fringes_aber_25_57.png')
 ```
 
-# Change the instrument horn config
+```{python}
+# Get real FP by averaging the signal and using real TES locations.
+readv_aber, det_value_aber = sc.averaging_tes_signal(fringes_aber, rep, 0.12)
+```
+
+```{python}
+fig = sc.make_plot_real_fp(readv_aber, det_value_aber)
+```
+
+# Instrument horn config
 
 ```{python}
 q.horn.open=False # All close
@@ -217,6 +233,26 @@ print('power shape :', power.shape)
 plt.imshow(power[:,:,0])
 ```
 
+```{python}
+# Horn array in the GRF frame
+center = q.horn.center
+center.shape
+x = center[:, 0]
+y = center[:, 1]
+
+fig, ax = plt.subplots()
+
+# instanciate a figure and ax object
+# annotate is a method that belongs to axes
+ax.plot(x, y, 'go', markersize=23, alpha=0.5)
+
+a = 1
+for i,j in zip(x,y):
+    corr = -0.001 # adds a little correction to put annotation in marker's centrum
+    ax.annotate(str(a),  xy=(i + corr, j + corr))
+    a+=1
+```
+
 # Get an array with TES signal
 
 ```{python}
@@ -226,8 +262,8 @@ print('shape : (#TES, #ASICS)', signal.shape)
 
 ```{python}
 # Do the inverse
-image_fp = sc.tes_signal2image_fp(signal)
-plt.imshow(image_fp)
+image_fp = sc.tes_signal2image_fp(signal, asics=np.arange(1, 9))
+plt.imshow(image_fp, origin='lower')
 ```
 
 # Synthetic Beam on the sky
@@ -245,6 +281,8 @@ print('sb shape :', sb.shape)
 ```
 
 # Michel simulation
+Analytical function to fit the fringes measurement.
+Because of aberations, the fitted focal length was 35cm instead of 30cm.
 
 ```{python}
 # The function that Michel used
@@ -299,7 +337,14 @@ def sim_fringe_new(Amp, phase, det_dist=3e-3, focal=0.3,
 
 # Using the parameters that Michel found with the fit
 fringes = sim_fringe_new(1., 0.277, focal=0.35, alpha=-44.4)
-plt.imshow(fringes)
+s = 0.051
+extent = (-s, 0, -s, 0)
+plt.figure()
+plt.imshow(fringes, origin='lower', extent=extent)
+```
+
+```{python}
+
 ```
 
 ```{python}

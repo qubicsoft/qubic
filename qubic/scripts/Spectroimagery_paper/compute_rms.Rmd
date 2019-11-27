@@ -538,6 +538,48 @@ for irec, kfreq in enumerate(nf_recon):
             #plt.xlim(1.7,1.8)
 ```
 
+```{python}
+plot2(simulations, nzones=3, residuals_way='noiseless', noiseless=False)
+```
+
+***
+
+### Std profile
+
+```{python}
+seenmap = rmc.get_seenmap(files[0])
+```
+
+```{python}
+nbins = 30
+isub = 2
+
+plt.figure(figsize=(15, 6))
+for ist in range(3):
+    plt.subplot(131)
+    bin_centers, ang, std_bin, std_profile = amc.std_profile(res_patch1, nbins, d['nside'], center, seenmap)
+    plt.plot(bin_centers, std_bin[:, isub, ist], '.', label=stokes[ist])
+    plt.title('Noiseless subband {}/{}'.format(isub+1, nfrec))
+    plt.xlabel('Angle (°)')
+    plt.ylabel('STD')
+    plt.legend()
+    
+    plt.subplot(132)
+    bin_centers, ang, std_bin, std_profile = amc.std_profile(res_patch2, nbins, d['nside'], center, seenmap)
+    plt.plot(bin_centers, std_bin[:, isub, ist], '.', label=stokes[ist])
+    plt.title('Conv subband {}/{}'.format(isub+1, nfrec))
+    plt.xlabel('Angle (°)')
+    plt.ylabel('STD')
+    
+    plt.subplot(133)
+    bin_centers, ang, std_bin, std_profile = amc.std_profile(res_patch3, nbins, d['nside'], center, seenmap)
+    plt.plot(bin_centers, std_bin[:, isub, ist], '.', label=stokes[ist])
+    plt.title('Mean recon subband {}/{}'.format(isub+1, nfrec))
+    plt.xlabel('Angle (°)')
+    plt.ylabel('STD')
+
+```
+
 ***
 ## Ptg cste, NEP different => Louise 
 

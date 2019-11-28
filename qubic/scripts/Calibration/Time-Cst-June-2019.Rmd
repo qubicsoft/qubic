@@ -5,11 +5,11 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.1'
-      jupytext_version: 1.1.0
+      jupytext_version: 1.2.4
   kernelspec:
-    display_name: Python [default]
+    display_name: Python 3
     language: python
-    name: python2
+    name: python3
 ---
 
 ```{python}
@@ -21,10 +21,10 @@ rc('font',size=12)
 rc('text',usetex=False)
 
 from qubicpack import qubicpack as qp
-import fibtools as ft
-import plotters as p
-import lin_lib as ll
-import demodulation_lib as dl
+import qubic.fibtools as ft
+import qubic.plotters as p
+import qubic.lin_lib as ll
+import qubic.demodulation_lib as dl
 import satorchipy as stpy
 from pysimulators import FitsArray
 
@@ -38,7 +38,7 @@ import scipy.signal as scsig
 from scipy import interpolate
 import datetime as dt
 import pickle
-
+from importlib import reload
 ```
 
 ```{python}

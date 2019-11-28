@@ -20,113 +20,116 @@ This notebook aims at showing how to obtain the QUBIC Synthesized beam for a giv
 The basic object in QUBIC simulaiton software is called a QubicInstrument, it contains all the description of the instrument that can be easily modified upon creation of the object but for which there are default values so that it can be called with just a few arguments.
 
 ```{python}
-from pylab import *
+import glob
+import os 
+
 import numpy as np
 import healpy as hp
+import pandas as pd
+
+import matplotlib.pyplot as plt
 
 # %matplotlib inline
+# %matplotlib notebook
 
 from matplotlib import rc
 rc('figure',figsize=(10,10))
 rc('font',size=20)
 rc('text',usetex=False)
-```
 
-```{python}
 from qubicpack.utilities import Qubic_DataDir
 import qubic
+import qubic.selfcal_lib as sc 
 ```
 
 ```{python}
-global_dir = Qubic_DataDir(datafile='instrument.py', datadir='../')
-dictfilename = global_dir + 'dicts/pipeline_demo.dict'
+# global_dir = Qubic_DataDir(datafile='instrument.py', datadir='../')
+# dictfilename = global_dir + 'dicts/pipeline_demo.dict'
 
 d = qubic.qubicdict.qubicDict()
-d.read_from_file(dictfilename)
+d.read_from_file(os.environ['QUBIC_DICT']+'pipeline_demo.dict')
+
+# d.read_from_file(dictfilename)
 ```
 
-Note that in the current notebook we will use a slightly modified version of the QubicInstrument that has not yet been commited on the Git repository so we have to import it specifically.
-
 ```{python}
-# import myinstrument
-inst = QubicInstrument(d)
+d['config'] = 'FI'
+q = qubic.QubicInstrument(d)
 ```
 
 ### The QubicScene
-It is also important to create an obkect called QubicScene that descibes the environmental parameters (atmosphere model when it will be avilable, pixellization of the sky, ...).
+It is also important to create an object called QubicScene that descibes the environmental parameters (atmosphere model when it will be avilable, pixellization of the sky, ...).
 
 ```{python}
-from qubic import QubicScene
 d['nside'] = 512
-scene = QubicScene(d)
+scene = qubic.QubicScene(d)
 ```
 
 ### Looking at the detector array
 Once the QubicIntrument exists, it contains a lot of informations on the instrument. For instance on can easily look at the detector array:
 
 ```{python}
-plot(inst.detector[231].center[0,0], inst.detector[231].center[0,1],'ro')
-plot(inst.detector[27].center[0,0], inst.detector[27].center[0,1],'ro')
-inst.detector.plot()
+fp_index = 561 # from 0 to 1155
+ii = np.where(q.detector.index == fp_index)[0]
+print('ii = ', ii)
+plot(q.detector[ii].center[0,0], q.detector[ii].center[0,1], 'go')
+q.detector.plot()
 ```
 
-Where we have emphasized in red a detector close to the center (231) and one close to the edge of the array (27).
+Where we have emphasized a detector close to the center.
 
 
 ### Looking at the horn array
 Similarly one can have access to the horn array:
 
 ```{python}
-centers = inst.horn.center[:,0:2]
-col = inst.horn.column
-row = inst.horn.row
+centers = q.horn.center[:, 0:2]
+col = q.horn.column
+row = q.horn.row
 for i in range(len(centers)):
     text(centers[i,0]-0.006, centers[i,1], 'c{0:}'.format(col[i]), color='r',fontsize=6)
     text(centers[i,0]+0.001, centers[i,1], 'r{0:}'.format(row[i]), color='b',fontsize=6)
-inst.horn.plot()
+q.horn.plot()
 ```
 
 ### Closing and opening horns
 
 
-The inst.horn.open object returns the list of horns that are open or closed. It can be easlily modified:
+The q.horn.open object returns the list of horns that are open or closed. It can be easlily modified:
 
 ```{python}
-### Horns for First Instrument
+### Horns for FI
 d['config'] = 'FI'
-hornsFI = inst.horn.open
+instFI = qubic.QubicInstrument(d)
+hornsFI = instFI.horn.open
 
-### Horns for TD
+
 hornsTD = (col >= 8) & (col <= 15) & (row >= 8) & (row <= 15)
+# print(hornsTD)
 
-
-#### Now create First Instrument and TD monochromatic
-
-instFI = QubicInstrument(d)
-instFI.horn.open[~hornsFI] = False
-
-d['config'] = 'TD'
-instTD = QubicInstrument(d)
+### Now create First Instrument and TD monochromatic
+instTD = qubic.QubicInstrument(d)
 instTD.horn.open[~hornsTD] = False
+instTD.horn.plot()
 ```
 
-## Calculating the Synthesized Beam
+# Synthesized Beam projected on the sky
 
 ### Simplest case: monochromatic and point-like detectors
-The QubicInstrument object has a method that calculates the synthesized beam for a given TES in the case of a perfect instrument. This means that it assumes that the amplitude and phses of the electric field from each horn in the focal plane are just the geometrical ones. The calculation is done only at the central frequency and at the center of the detector.
+The QubicInstrument object has a method that calculates the synthesized beam for a given TES in the case of a perfect instrument. This means that it assumes that the amplitude and phases of the electric field from each horn in the focal plane are just the geometrical ones. The calculation is done only at the central frequency and at the center of the detector.
 
 ```{python}
 # Detector number
-idet = 231
-sbidealFI = inst[idet].get_synthbeam(scene)[0]
-# sbidealTD = instTD[idet].get_synthbeam(scene)[0]
+idet = ii
+sbidealFI = instFI[idet].get_synthbeam(scene)[0]
+sbidealTD = instTD[idet].get_synthbeam(scene)[0]
 
 clf()
 mini=-30
 hp.gnomview(np.log10(sbidealFI/np.max(sbidealFI))*10, rot=[0,90], reso=5, 
-	sub=(1,2,1), title='First Instrument', min=mini, max=0)
-# hp.gnomview(np.log10(sbidealTD/np.max(sbidealTD))*10, rot=[0,90], reso=5, 
-# 	sub=(1,2,2), title='Technological Demonstrator', min=mini, max=0)
+            sub=(1,2,1), title='First Instrument', min=mini, max=0)
+hp.gnomview(np.log10(sbidealTD/np.max(sbidealTD))*10, rot=[0,90], reso=5, 
+            sub=(1,2,2), title='Technological Demonstrator', min=mini, max=0)
 ```
 
 ### Integration over the pixel area
@@ -135,174 +138,168 @@ Integration over the pixel area is implemented in the function get_synthbeam(), 
 ```{python}
 nsub = 4
 idet = 231
-sbidealFI = inst[idet].get_synthbeam(scene, detector_integrate=nsub)[0]
-# sbidealTD = instTD[idet].get_synthbeam(scene, detector_integrate=nsub)[0]
+sbidealFI = instFI[idet].get_synthbeam(scene, detector_integrate=nsub)[0]
+sbidealTD = instTD[idet].get_synthbeam(scene, detector_integrate=nsub)[0]
 
-figure()
-clf()
-mini=-30
+plt.figure()
+mini = - 30
 hp.gnomview(np.log10(sbidealFI/np.max(sbidealFI))*10, rot=[0,90], reso=5, 
-	sub=(1,2,1), title='First Instrument', min=mini, max=0)
-# hp.gnomview(np.log10(sbidealTD/np.max(sbidealTD))*10, rot=[0,90], reso=5, 
-# 	sub=(1,2,2), title='Technological Demonstrator', min=mini, max=0)
+            sub=(1,2,1), title='FI Instrument', min=mini, max=0)
+hp.gnomview(np.log10(sbidealTD/np.max(sbidealTD))*10, rot=[0,90], reso=5, 
+            sub=(1,2,2), title='Technological Demonstrator', min=mini, max=0)
 
 ```
 
 ### Integration over bandwith
-Integration over badwidth is not yet implemented in the get_synthbeam() function but can be easily done outside:
+Integration over bandwidth is not yet implemented in the get_synthbeam() function but can be easily done outside:
 
 ```{python}
-def getsb(hornsOK, nu0, idet, dnu_nu=None, detector_integrate=None, nsubnus = 1, nside=256):
-	scene = QubicScene(nside)
-	sb = np.zeros(12*nside**2)
-	if dnu_nu:
-		numin = nu0*(1-dnu_nu/2)
-		numax = nu0*(1+dnu_nu/2)
-		nuvals = linspace(numin, numax, nsubnus)
-		for i in xrange(nsubnus):
-			print('nu={} number {} over {}'.format(nuvals[i], i, nsubnus))
-			theinst = myinstrument.QubicInstrument(filter_nu=nuvals[i]*1e9)
-			theinst.horn.open[~hornsOK] = False
-			sb += theinst[idet].get_synthbeam(scene, detector_integrate=detector_integrate)[0]/nsubnus
-	else:
-		theinst = myinstrument.QubicInstrument(filter_nu=nu0*1e9)
-		theinst.horn.open[~hornsOK] = False
-		sb = theinst[idet].get_synthbeam(scene, detector_integrate=detector_integrate)[0]
-	return sb
+def getsb(scene, q, nu0, idet, OKhorns, dnu_nu=None, detector_integrate=None, nsubnus=1, nside=256):
+    sb = np.zeros(12 * nside**2)
+    if dnu_nu:
+        numin = nu0 * (1 - dnu_nu / 2)
+        numax = nu0 * (1 + dnu_nu / 2)
+        nuvals = linspace(numin, numax, nsubnus)
+        for i in range(nsubnus):
+            print('nu={} number {} over {}'.format(nuvals[i], i, nsubnus))
+            q.horn.open[~OKhorns] = False
+            sb += q[idet].get_synthbeam(scene, detector_integrate=detector_integrate)[0] / nsubnus
+    else:
+        q.horn.open[~OKhorns] = False
+        sb = q[idet].get_synthbeam(scene, detector_integrate=detector_integrate)[0]
+    return sb
 
 nsub = 4
 idet = 231
-sbidealFI_150 = getsb(hornsFI, 150., idet, dnu_nu=0.25, detector_integrate=nsub, nside=d['nside'])
-# sbidealTD_150 = getsb(hornsTD, 150., idet, dnu_nu=0.25, nsubnus=10, detector_integrate=nsub, nside=d['nside'])
+sbidealFI_150 = getsb(scene, instFI, 150., idet, hornsFI, dnu_nu=None, 
+                      detector_integrate=None, nside=d['nside'])
+sbidealTD_150 = getsb(scene, instTD, 150., idet, hornsTD, dnu_nu=None, nsubnus=10, 
+                      detector_integrate=None, nside=d['nside'])
 
-clf()
 reso = 7.
-mini=-30
+mini = -30
 mapFI = hp.gnomview(np.log10(sbidealFI_150/np.max(sbidealFI_150))*10, 
                     rot=[0,90], reso=reso, 
                     sub=(1,2,1), title='FI - 150 GHz - Det + Nu Integ.', 
                     min=mini, max=0, return_projected_map=True)
-# mapTD = hp.gnomview(np.log10(sbidealTD_150/np.max(sbidealTD_150))*10, 
-#                     rot=[0,90], reso=reso, 
-#                     sub=(1,2,2), title='TD - 150 GHz - Det + Nu Integ.', 
-#                     min=mini, max=0, return_projected_map=True)
+
+mapTD = hp.gnomview(np.log10(sbidealTD_150/np.max(sbidealTD_150))*10, 
+                    rot=[0,90], reso=reso, 
+                    sub=(1,2,2), title='TD - 150 GHz - Det + Nu Integ.', 
+                    min=mini, max=0, return_projected_map=True)
 ```
 
-## Studying the beam
+### Studying the beam
 Just for the pleasure one can study the synthesized beam resolution:
 
 ```{python}
 # location of maximum 
-maxx, maxy = np.unravel_index(np.argmax(mapFI), dims=(200,200))
+maxx, maxy = np.unravel_index(np.argmax(mapFI), dims=(200, 200))
+
 # diagonal cut of array shifted so that maximum is at center
 initcutFI = np.diag(np.roll(np.roll(mapFI, 99-maxx, axis=0), 
                             99-maxy, axis=1))
 initcutTD = np.diag(np.roll(np.roll(mapTD, 99-maxx, axis=0), 
                             99-maxy, axis=1))
-## sqrt(2) comes because we take a diagonal cut
-xxinit = linspace(-100,100, 200)*reso*sqrt(2)/60
+
+# sqrt(2) comes because we take a diagonal cut
+xxinit = linspace(-100, 100, 200) * reso * sqrt(2) / 60
 
 # Need more points for next steps: interpolate
-xx = linspace(-100,100, 20000)*reso*sqrt(2)/60
+xx = linspace(-100, 100, 20000) * reso * sqrt(2) / 60
 cutFI = np.interp(xx, xxinit, initcutFI)
 cutTD = np.interp(xx, xxinit, initcutTD)
 
 clf()
 xlabel('Angle (deg)')
 ylabel('Synthesized Beam (dB)')
-plot(xx,cutFI, label = 'FI - 150 GHz - Det + Nu Integ.')
-plot(xx,cutTD, label = 'TD - 150 GHz - Det + Nu Integ.')
+plot(xx, cutFI, label = 'FI - 150 GHz - Det + Nu Integ.')
+plot(xx, cutTD, label = 'TD - 150 GHz - Det + Nu Integ.')
+plt.title('TES {}'.format(fp_index))
 legend(loc='lower right', fontsize=10)
 ```
 
 ```{python}
 #### Angular resolution
-halfmaxFI = cutFI > (np.log10(0.5)*10)
-halfmaxTD = cutTD > (np.log10(0.5)*10)
+halfmaxFI = cutFI > (np.log10(0.5) * 10)
+halfmaxTD = cutTD > (np.log10(0.5) * 10)
 
-fwhmFI = np.max(xx[halfmaxFI]*60) - np.min(xx[halfmaxFI]*60)
-fwhmTD = np.max(xx[halfmaxTD]*60) - np.min(xx[halfmaxTD]*60)
+fwhmFI = np.max(xx[halfmaxFI] * 60) - np.min(xx[halfmaxFI] * 60)
+fwhmTD = np.max(xx[halfmaxTD] * 60) - np.min(xx[halfmaxTD] * 60)
+print(fwhmFI, fwhmTD)
 
 clf()
 xlabel('Angle (arcmin)')
 ylabel('Synthesized Beam (dB)')
-xlim(-60,60)
-ylim(-10,0)
-plot(xx*60,cutFI, label = 'FI - 150 GHz - Det + Nu Integ. - FWHM = {0:5.1f} arcmin'.format(fwhmFI))
-plot(xx*60,cutTD, label = 'TD - 150 GHz - Det + Nu Integ. - FWHM = {0:5.1f} arcmin'.format(fwhmTD))
-plot(xx*60, xx*0+np.log10(0.5)*10, 'k--')
+xlim(-60, 60)
+ylim(-10, 0)
+plot(xx * 60, cutFI, label = 'FI - 150 GHz - Det + Nu Integ. - FWHM = {0:5.1f} arcmin'.format(fwhmFI))
+plot(xx * 60, cutTD, label = 'TD - 150 GHz - Det + Nu Integ. - FWHM = {0:5.1f} arcmin'.format(fwhmTD))
+plot(xx * 60, xx * 0 + np.log10(0.5) * 10, 'k--')
 legend(loc='lower right', fontsize=10)
 ```
-
-The value of 51.3 arcmin for FI is a bit surprising so my definition of xx array should probably be checked... Maybe it's more related to the square top of the beam due to pixel integration... Needs to be somehow investigated (with higher nside for instance)
-
 
 ### Non ideal synthesized beam
 It is also possible to provide the code with an external array for the phase and amplitude of the electric field in the focal plane for each of the horns. This kind of realistic electric field is provided by the Maynooth team.
 
 For instance through the following (assuming that "files" is a variable that contains the filename of the 400 electric field ASCII files). 
 
-An example of such file is given below (the files are available, just ask JCH or Créidhe):
+An example of such files is given below, you can download them at:
+https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
 
 ```{python}
-import glob
-rep = '/Users/hamilton/Qubic/SynthBeam/NewSimsMaynooth/QUBIC Basic/'
-files = glob.glob(rep+'*.dat')
+# Path to the simulated files 
+rep = Qubic_DataDir(datafile='detcentres.txt')
+print('rep:', rep)
+
+files = sorted(glob.glob(rep+'/*.dat'))
+print('#files :', len(files)) # Should be 64 (TD)
+
+# Look at one file
+data = pd.read_csv(files[6], sep='\t', skiprows=0)
+data.head(10)
+print(data.shape)
 ```
 
 ```{python}
-nn = 161
-#nn = 101
-xmin = -60./1000
-xmax = 60./1000
-ymin = -60./1000
-ymax = 60./1000
-xx = np.linspace(-60,60,nn)/1000
-yy = np.linspace(-60,60,nn)/1000
+d['config'] = 'TD'
+q = qubic.QubicInstrument(d)
 
-allampX = np.zeros((400,nn,nn))
-allphiX = np.zeros((400,nn,nn))
-allampY = np.zeros((400,nn,nn))
-allphiY = np.zeros((400,nn,nn))
+# Define the horn configuration
+open_horns=list(np.arange(1, 65)) # between 1 and 64 (real instrument numbers)
+open_horns = [horn - 1 for horn in open_horns]
+q.horn.open = False
+q.horn.open[open_horns] = True
+# q.horn.plot()
 
-#### Read the files
-for i in xrange(len(files)):
-    a='\r Reading files: {0:5.2f}% done'.format(i*100./(len(files)-1))
-    sys.stdout.write(a)
-    sys.stdout.flush()
-    data = np.loadtxt(files[i], skiprows=4)
-    allampX[i,:,:] = np.reshape(data[:,0],(nn,nn))
-    allphiX[i,:,:] = np.reshape(data[:,1],(nn,nn))
-    allampY[i,:,:] = np.reshape(data[:,2],(nn,nn))
-    allphiY[i,:,:] = np.reshape(data[:,3],(nn,nn))
+# Compute the beam projected on the sky for a given TES
+fp_index = 594 # from 0 to 1155 but in the quadrant 3 (TD)
+ii = np.where(q.detector.index == fp_index)[0]
+print('ii = ', ii)
+
+external_A = sc.make_external_A(rep, open_horns=open_horns)
+
+sb_aber = q.get_synthbeam(scene, idet=ii, external_A=external_A)
+sb_ideal = q.get_synthbeam(scene, idet=ii, external_A=None)
 ```
 
-Then the electric fields are formed in the following manner:
-
 ```{python}
-#### Electric field
-Ax = allampX * (cos(allphiX) + 1j*sin(allphiX))
-Ay = allampY * (cos(allphiY) + 1j*sin(allphiY))
-external_A = [-xx, -yy, allampX, allphiX]
+plt.figure()
+plt.subplot(321)
+q.horn.plot()
+plt.axis('off')
+hp.gnomview(sb_aber, rot=[0,90], reso=10, title='Aber', sub=(323))
+hp.gnomview(np.log10(sb_aber / np.max(sb_aber)), rot=[0,90], reso=10, 
+            title='Aber, log10(sb/max(sb))', sub=(324))
+hp.gnomview(sb_ideal, rot=[0,90], reso=10, title='Ideal', sub=(325))
+hp.gnomview(np.log10(sb_ideal / np.max(sb_ideal)), rot=[0,90], reso=10, 
+            title='Ideal, log10(sb/max(sb))', sub=(326))
 ```
 
-and the new synthesized beams would be calculated using:
-
 ```{python}
-idet = 231
-sbnew = inst[idet].get_synthbeam(scene, external_A=external_A)[0]
-sbideal = inst[idet].get_synthbeam(scene)[0]
-```
-
-and compared with the ideal one through:
-
-```{python}
-clf()
-mini=-30
-hp.gnomview(np.log10(sbideal/np.max(sbideal))*10, rot=[0,90], reso=5, 
-	sub=(1,2,1), title='Ideal', min=mini, max=0)
-hp.gnomview(np.log10(sbnew/np.max(sbnew))*10, rot=[0,90], reso=5, 
-	sub=(1,2,2), title='With Diffraction', min=mini, max=0)
+diff = np.log10(sb_ideal / np.max(sb_ideal)) - np.log10(sb_aber / np.max(sb_aber))
+hp.gnomview(diff, rot=[0,90], reso=15, min=-1, max=1,
+            title='Ideal - Aber')
 
 ```
 

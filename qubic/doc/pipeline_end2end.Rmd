@@ -132,6 +132,26 @@ for istk in range(3):
 Let's now simulate the TOD. We will do so by reading a simulated map. The input map needs to be smoothed to the angular resolution of the instrument (these maps are already smoothed) and we need to know the pixel number for each of the TOD samples. This is easily obtained in Healpix with the $ang2pix()$ function. 
 
 ```{python}
+import qubic.selfcal_lib as sc
+from qubicpack.pixel_translation import make_id_focalplane, plot_id_focalplane, tes2index
+
+q = qubic.QubicInstrument(d)
+print(q.detector.index)
+TES_index = 1100 # Index from 0 to 1155 in the Qubic soft
+tes, asic = sc.index2TESandASIC(TES_index) # TES number and Asic on the instrument
+index = tes2index(tes, asic) # Inverse transformation
+print(index)
+
+# Make this plot to see where it is
+plot_id_focalplane()
+
+# Build an instrument with only this detector
+ii = np.where(q.detector.index==TES_index)[0]
+print(ii)
+q.detector = q.detector[ii]
+```
+
+```{python}
 # Pointing strategy
 p = qubic.get_pointing(d)
 print('=== Pointing DONE! ===')

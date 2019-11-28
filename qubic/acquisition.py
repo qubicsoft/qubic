@@ -14,7 +14,6 @@ from pysimulators.interfaces.healpy import (
     HealpixConvolutionGaussianOperator)
 from .data import PATH
 from .instrument import QubicInstrument
-from .scene import QubicScene
 from .calibration import QubicCalibration
 from .samplings import create_random_pointings
 
@@ -29,90 +28,25 @@ class QubicAcquisition(Acquisition):
     scene models.
 
     """
-
     def __init__(self, instrument, sampling, scene, d):
-
-        filter_nu = d['filter_nu']
-        filter_relative_bandwidth = d['filter_relative_bandwidth']
-        detector_fknee = d['detector_fknee']
-        detector_fslope = d['detector_fslope']
-        detector_ncorr = d['detector_ncorr']
-        detector_nep = d['detector_nep']
-        detector_ngrids = d['detector_ngrids']
-        detector_tau = d['detector_tau']
-        polarizer = d['polarizer']
-        synthbeam_dtype = np.float32
-        synthbeam_fraction = d['synthbeam_fraction']
-        synthbeam_kmax = d['synthbeam_kmax']
-        synthbeam_peak150_fwhm = d['synthbeam_peak150_fwhm']
-        ripples = d['ripples']
-        nripples = d['nripples']
-        primary_beam = None
-        secondary_beam = None
-        calibration = QubicCalibration(d)
-        block = d['block']
-        effective_duration = d['effective_duration']
-        photon_noise = d['photon_noise']
-        max_nbytes = d['max_nbytes']
-        nprocs_instrument = d['nprocs_instrument']
-        nprocs_sampling = d['nprocs_sampling']
-        comm = d['comm']
-        psd = d['psd']
-        bandwidth = d['bandwidth']
-        twosided = d['twosided']
-        sigma = d['sigma']
-
         """
-        acq = QubicAcquisition(band, sampling, [scene, nprocs_instrument,
-                               nprocs_sampling, comm])
-        acq = QubicAcquisition(instrument, sampling, [scene, nprocs_instrument,
-                               nprocs_sampling, comm])
+        acq = QubicAcquisition(instrument, sampling, scene, block, max_nbytes,
+                                nprocs_instrument, nprocs_sampling, comm)
 
         Parameters
         ----------
-        band : int
-            The module nominal frequency, in GHz.
-        scene : QubicScene, optional
-            The discretized observed scene (the sky). If not specified,
-            the scene is instantiated using QubicScene().
-        block : tuple of slices, optional
-            Partition of the samplings.
         instrument : QubicInstrument, optional
             The QubicInstrument instance.
-        calibration : QubicCalibration, optional
-            The calibration tree.
-        detector_fknee : array-like, optional
-            The detector 1/f knee frequency in Hertz.
-        detector_fslope : array-like, optional
-            The detector 1/f slope index.
-        detector_ncorr : int, optional
-            The detector 1/f correlation length.
-        detector_nep : array-like, optional
-            The detector NEP [W/sqrt(Hz)].
-        detector_ngrids : 1 or 2, optional
-            Number of detector grids.
-        detector_tau : array-like, optional
-            The detector time constants in seconds.
+        scene : QubicScene, optional
+            The discretized observed scene (the sky).
+        block : tuple of slices, optional
+            Partition of the samplings.
         effective_duration : float, optional
             If not None, the noise properties are rescaled so that this
             acquisition has an effective duration equal to the specified value,
             in years.
-        filter_relative_bandwidth : float, optional
-            The filter relative bandwidth Δν/ν.
-        polarizer : boolean, optional
-            If true, the polarizer grid is present in the optics setup.
         photon_noise : boolean, optional
             If true, the photon noise contribution is included.
-        primary_beam : function f(theta [rad], phi [rad]), optional
-            The primary beam transmission function.
-        secondary_beam : function f(theta [rad], phi [rad]), optional
-            The secondary beam transmission function.
-        synthbeam_dtype : dtype, optional
-            The data type for the synthetic beams (default: float32).
-            It is the dtype used to store the values of the pointing matrix.
-        synthbeam_fraction: float, optional
-            The fraction of significant peaks retained for the computation
-            of the synthetic beam.
         max_nbytes : int or None, optional
             Maximum number of bytes to be allocated for the acquisition's
             operator.
@@ -139,6 +73,17 @@ class QubicAcquisition(Acquisition):
             Standard deviation of the white noise component.
 
         """
+        block = d['block']
+        effective_duration = d['effective_duration']
+        photon_noise = d['photon_noise']
+        max_nbytes = d['max_nbytes']
+        nprocs_instrument = d['nprocs_instrument']
+        nprocs_sampling = d['nprocs_sampling']
+        comm = d['comm']
+        psd = d['psd']
+        bandwidth = d['bandwidth']
+        twosided = d['twosided']
+        sigma = d['sigma']
 
         Acquisition.__init__(
             self, instrument, sampling, scene, block=block,
@@ -150,9 +95,6 @@ class QubicAcquisition(Acquisition):
         self.psd = psd
         self.twosided = twosided
         self.sigma = sigma
-        self.detector_fknee = detector_fknee
-        self.detector_fslope = detector_fslope
-        self.detector_ncorr = detector_ncorr
 
     def get_coverage(self):
         """
@@ -295,14 +237,8 @@ class QubicAcquisition(Acquisition):
             frequencies) or two-sided (positive and negative frequencies).
         sigma : float
             Standard deviation of the white noise component.
-        detector_fknee : float
-            The 1/f noise knee frequency [Hz].
-        detector_fslope : float
-            The 1/f noise slope.
         sampling_frequency : float
             The sampling frequency [Hz].
-        detector_ncorr : int
-            The correlation length of the time-time noise correlation matrix.
         fftw_flag : string, optional
             The flags FFTW_ESTIMATE, FFTW_MEASURE, FFTW_PATIENT and
             FFTW_EXHAUSTIVE can be used to describe the increasing amount of
@@ -334,7 +270,7 @@ class QubicAcquisition(Acquisition):
 
         shapein = (len(self.instrument), len(self.sampling))
 
-        if self.bandwidth is None and self.detector_fknee == 0:
+        if self.bandwidth is None and self.instrument.detector.fknee == 0:
             print('diagonal case')
 
             out = DiagonalOperator(1 / self.sigma ** 2, broadcast='rightward',
@@ -359,10 +295,10 @@ class QubicAcquisition(Acquisition):
             f = np.arange(fftsize // 2 + 1, dtype=float) * new_bandwidth
             p = _unfold_psd(_logloginterp_psd(f, self.bandwidth, self.psd))
         else:
-            p = _gaussian_psd_1f(fftsize, sampling_frequency, self.sigma, self.detector_fknee, self.detector_fslope,
-                                 twosided=True)
+            p = _gaussian_psd_1f(fftsize, sampling_frequency, self.sigma, self.instrument.detector.fknee,
+                                 self.instrument.detector.fslope, twosided=True)
         p[..., 0] = p[..., 1]
-        invntt = _psd2invntt(p, new_bandwidth, self.detector_ncorr, fftw_flag=fftw_flag)
+        invntt = _psd2invntt(p, new_bandwidth, self.instrument.detector.ncorr, fftw_flag=fftw_flag)
 
         print('non diagonal case')
         if self.effective_duration is not None:
@@ -504,7 +440,7 @@ class QubicAcquisition(Acquisition):
 
         return tod
 
-    def tod2map(self, tod, d, cov):
+    def tod2map(self, tod, d, cov=None):
         """
         Reconstruct map from tod
         """

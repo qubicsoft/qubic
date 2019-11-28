@@ -438,7 +438,7 @@ class QubicInstrument(Instrument):
                 print('Environment T =', temperatures[ib2b],
                       'K, P = {0:.2e} W'.format(P_phot_env.max()),
                       ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2_env).max()) + '  W/sqrt(Hz)')
-            ## Combiner
+            # Combiner
             icomb = ib2b + 1  # the combiner is the component just after the horns
             T = temperatures[icomb]
             b = h * nu_up / k / T

@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.1'
-      jupytext_version: 1.2.1
+      jupytext_version: 1.2.4
   kernelspec:
     display_name: Python 3
     language: python
@@ -40,8 +40,8 @@ plt.rcParams['figure.figsize'] = (8, 8)
 
 ```{python}
 # Simulation date and name
-date_name = simu220[0]
-# date_name = 'NERSC_runs/24334789/20190903_low_nep'
+#date_name = simu220[0]
+date_name = 'NERSC_runs/24334789/20190903_low_nep'
 
 # Get the repository where the simulation is
 rep_simu = Qubic_DataDir(datafile=date_name + '.dict') + '/'
@@ -302,7 +302,8 @@ def plot2(simulations, nzones, residuals_way, noiseless):
     for jsimu, simu in enumerate(simulations):
         #     print(jsimu)
         
-        rms_i, rms_q, rms_u, par = amc.rms_method(name=simu, residuals_way=residuals_way, zones=nzones, noiseless=noiseless)
+        rms_i, rms_q, rms_u, par = amc.rms_method(name=simu, residuals_way=residuals_way, 
+                                                  zones=nzones, noiseless=noiseless)
         rms_I.append(rms_i)
         rms_Q.append(rms_q)
         rms_U.append(rms_u)
@@ -374,7 +375,7 @@ simulations = ['NERSC_runs/24817644/20190926_low_nep',
               'NERSC_runs/24818411/20190926_low_nep',
               'NERSC_runs/24122605/20190825_low_nep',
               'NERSC_runs/24870671/20190928_low_nep']
-
+print(len(simulations))
 
 # 1 zone
 rms_i, rms_q, rms_u, par = rms_method_loop_simu(simulations, residuals_way='noiseless')
@@ -397,113 +398,186 @@ print('Number of simulations :', len(simulations))
 ```
 
 ```{python}
-kfreq = '4' # number of channels for reconstruction
-color = ['k','g','r','c','m','y','b','orange','r','c','m','y']
+#help(amc.get_corrections)
+corr,_=amc.get_corrections(d['nf_sub'],d['nf_recon'][2])
+print(corr)
+#help(qubic.compute_freq)
+_,_,banda,_,_,_ = qubic.compute_freq(150,4)
+#print(len(qubic.compute_freq(150,4)))
+print('width, ', banda, '\n',
+      'corre, ', corr, '\n',
+      'band corr ', banda*corr)
+```
+
+```{python}
+#freq = '4' # number of channels for reconstruction
+import matplotlib._color_data as mcd
+keycolor = ['fuchsia','aquamarine','brown','orangered',
+            'crimson',
+           'darkblue','darkgreen','green','indigo',
+           'orange','plum','purple','teal','coral',
+           'tomato','yellowgreen']
+color = []
+for n in keycolor:
+    #n='xkcd:'+n
+    color.append(mcd.CSS4_COLORS[n])
+    
+
+#color = ['k','g','r','c','m','y','b','orange','r','c','m','y','r']
 plt.clf()
-plt.figure(figsize=(21,6))
 nzones = [1, 2, 3]
+marker = ['o','+','*','<']
+#print(nf_recon)
+#nf_recon= [1,2,4,8]
+plt.figure(figsize=(14,6))
+nf_recon= [8,]
+for irec, kfreq in enumerate(nf_recon):
+    print(kfreq)
+    corrections, _ = amc.get_corrections(16, kfreq)
+    for jsimu in range(len(par)):
+        ab = 0 # fix legend warning
+        valval = 7.5e-18
+        condition0 = par[jsimu]['nep'] == valval
+        condition1 = parZ[jsimu]['nep'] == valval
+        condition2 = par3Z[jsimu]['nep'] == valval
 
-for jsimu in range(len(par)):
-    ab = 0 # fix legend warning
-#     condition0 = par[jsimu]['nep'] == 1e-18
-#     condition1 = parZ[jsimu]['nep'] == 1e-18
-#     condition2 = par3Z[jsimu]['nep'] == 1e-18
-    
-    condition0 = par[jsimu]['npoint'] == 3000
-    condition1 = parZ[jsimu]['npoint'] == 3000
-    condition2 = par3Z[jsimu]['npoint'] == 3000
-    
-    for ist, istokes in enumerate('IQU'):
-        plt.subplot(1, 3, ist+1)
-        plt.title('Stokes {}'.format(istokes), fontsize=18)
-        plt.xlabel('# zones', fontsize=16)
-        plt.ylabel('rms', fontsize=16)
-        plt.xticks([1,2,3], fontsize= 14)
-        plt.yticks(fontsize = 10)
-        plt.axvline(1.5, color='k', alpha= 0.3, linewidth=3, linestyle='-')
-        plt.axvline(2.5, color='k', alpha= 0.3, linewidth=3, linestyle='-')
-        plt.xlim(0.70,3.6)
-        
-        for izones in nzones:
-            if izones == 1: 
-                if condition0:
-                    if istokes == 'I':                         
-#                         print(len(rms_i[jsimu]['{}'.format(kfreq)]))
-                        plt.plot(np.ones_like(rms_i[jsimu]['{}'.format(kfreq)]), 
-                         rms_i[jsimu]['{}'.format(kfreq)], 
-                         label = 'nep,ptg: {:1.0e},{}'.format(par[jsimu]['nep'], par[jsimu]['npoint']),
-                         color=color[jsimu], marker = 'o', linestyle='', mew =3, 
-                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
-                    elif istokes == 'Q': 
-                        plt.plot(np.ones_like(rms_q[jsimu]['{}'.format(kfreq)]), 
-                         rms_q[jsimu]['{}'.format(kfreq)], 
-                         #label = 'ptg: {}'.format(par[jsimu]['npoint']),
-                         color=color[jsimu], marker = '*', linestyle='',mew =3,
-                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
-                    elif istokes == 'U': 
-                        plt.plot(np.ones_like(rms_u[jsimu]['{}'.format(kfreq)]), 
-                         rms_u[jsimu]['{}'.format(kfreq)], 
-                         #label = 'ptg: {}'.format(par[jsimu]['npoint']),
-                        color=color[jsimu], marker = '+', linestyle='', mew =3,
-                        ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
-                    if ab == 0: plt.legend(loc='upper center', bbox_to_anchor=(1.75, 1.3),ncol=4,fontsize = 15)
-                    ab +=1
-            elif izones == 2:
-                for iizo in range(izones):
-                    if iizo == 0: 
-                        xx = 1.75
-                        xdim = xx*np.ones((int(kfreq),))
-                    else: 
-                        xx = 2.25
-                        xdim = xx*np.ones((int(kfreq),))
-                    if condition1:
-                        if istokes == 'I': 
-                            plt.plot(xdim, 
-                             rms_iZ[jsimu]['{}'.format(kfreq)][iizo], 
-                             color=color[jsimu], marker = 'o', linestyle='',mew =3, 
-                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
+        #condition0 = par[jsimu]['npoint'] == 3000
+        #condition1 = parZ[jsimu]['npoint'] == 3000
+        #condition2 = par3Z[jsimu]['npoint'] == 3000
+
+        for ist, istokes in enumerate('IQU'):
+            plt.subplot(1, 3, ist+1)
+            plt.title('Stokes {}'.format(istokes), fontsize=18)
+            plt.xlabel('# zones', fontsize=16)
+            plt.ylabel('rms', fontsize=16)
+            plt.xticks([1,2,3], fontsize= 14)
+            plt.yticks(fontsize = 10)
+            plt.axvline(1.5, color='k', alpha= 0.3, linewidth=3, linestyle='-')
+            plt.axvline(2.5, color='k', alpha= 0.3, linewidth=3, linestyle='-')
+            plt.xlim(0.70,3.6)
+
+            for izones in nzones:
+                if izones == 1: 
+                    if condition0:
+                        if istokes == 'I':                         
+    #                         print(len(rms_i[jsimu]['{}'.format(kfreq)]))
+                            plt.plot(np.ones_like(rms_i[jsimu]['{}'.format(kfreq)]), 
+                             rms_i[jsimu]['{}'.format(kfreq)] / np.sqrt(corrections), 
+                             label = 'nep,ptg: {:1.0e},{}'.format(par[jsimu]['nep'], par[jsimu]['npoint']),
+                             color=color[jsimu], marker = marker[irec], linestyle='', mew =3)
+                             #ms=par[jsimu]['npoint']/1e3*2, alpha = 1.)
                         elif istokes == 'Q': 
-                            plt.plot(xdim, 
-                             rms_qZ[jsimu]['{}'.format(kfreq)][iizo], 
-                             color=color[jsimu], marker = '*', linestyle='',mew =3, 
-                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
+                            plt.plot(np.ones_like(rms_q[jsimu]['{}'.format(kfreq)]), 
+                             rms_q[jsimu]['{}'.format(kfreq)] / np.sqrt(corrections), 
+                             #label = 'ptg: {}'.format(par[jsimu]['npoint']),
+                             color=color[jsimu], marker = marker[irec], linestyle='',mew =3)
+                             #ms=par[jsimu]['npoint']/1e3*2, alpha = 1.)
                         elif istokes == 'U': 
-                            plt.plot(xdim, 
-                             rms_uZ[jsimu]['{}'.format(kfreq)][iizo], 
-                             color=color[jsimu], marker = '+', linestyle='',mew =3, 
-                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
+                            plt.plot(np.ones_like(rms_u[jsimu]['{}'.format(kfreq)]), 
+                             rms_u[jsimu]['{}'.format(kfreq)] / np.sqrt(corrections), 
+                             #label = 'ptg: {}'.format(par[jsimu]['npoint']),
+                            color=color[jsimu], marker = marker[irec], linestyle='', mew =3)
+                            #ms=par[jsimu]['npoint']/1e3*2, alpha = 1.)
+                        if ab == 0: plt.legend(loc='upper center', bbox_to_anchor=(1.75, 1.3),ncol=4,fontsize = 15)
+                        ab +=1
+                elif izones == 2:
+                    for iizo in range(izones):
+                        if iizo == 0: 
+                            xx = 1.75
+                            xdim = xx*np.ones((int(kfreq),))
+                        else: 
+                            xx = 2.25
+                            xdim = xx*np.ones((int(kfreq),))
+                        if condition1:
+                            if istokes == 'I': 
+                                plt.plot(xdim, 
+                                 rms_iZ[jsimu]['{}'.format(kfreq)][iizo] / np.sqrt(corrections), 
+                                 color=color[jsimu], marker = marker[irec], linestyle='',mew =3)
+                             #ms=par[jsimu]['npoint']/1e3*2, alpha = 1.)
+                            elif istokes == 'Q': 
+                                plt.plot(xdim, 
+                                 rms_qZ[jsimu]['{}'.format(kfreq)][iizo] / np.sqrt(corrections), 
+                                 color=color[jsimu], marker = marker[irec], linestyle='',mew =3)
+                             #ms=par[jsimu]['npoint']/1e3*2, alpha = 1.)
+                            elif istokes == 'U': 
+                                plt.plot(xdim, 
+                                 rms_uZ[jsimu]['{}'.format(kfreq)][iizo] / np.sqrt(corrections), 
+                                 color=color[jsimu], marker = marker[irec], linestyle='',mew =3)
+                             #ms=par[jsimu]['npoint']/1e3*2, alpha = 1.)
 
-            elif izones == 3:
-                for iizo in range(izones):
-                    if iizo == 0: 
-                        xx = 2.67
-                        xdim = xx*np.ones((int(kfreq),))
-                    elif iizo == 1: 
-                        xx = 3.
-                        xdim = xx*np.ones((int(kfreq),))
-                    elif iizo == 2:
-                        xx = 3.33
-                        xdim = xx*np.ones((int(kfreq),))
-                    if condition2:
-                        if istokes == 'I': 
-                            plt.plot(xdim, 
-                             rms_i3Z[jsimu]['{}'.format(kfreq)][iizo], 
-                             color=color[jsimu], marker = 'o', linestyle='',mew =3, 
-                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
-                        elif istokes == 'Q': 
-                            plt.plot(xdim, 
-                             rms_q3Z[jsimu]['{}'.format(kfreq)][iizo], 
-                             color=color[jsimu], marker = '*', linestyle='',mew =3, 
-                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
-                        elif istokes == 'U': 
-                            plt.plot(xdim, 
-                             rms_u3Z[jsimu]['{}'.format(kfreq)][iizo], 
-                             color=color[jsimu], marker = '+', linestyle='',mew =3, 
-                         ms=par[jsimu]['npoint']/1e3*2, alpha = 0.4)
+                elif izones == 3:
+                    for iizo in range(izones):
+                        if iizo == 0: 
+                            xx = 2.67
+                            xdim = xx*np.ones((int(kfreq),))
+                        elif iizo == 1: 
+                            xx = 3.
+                            xdim = xx*np.ones((int(kfreq),))
+                        elif iizo == 2:
+                            xx = 3.33
+                            xdim = xx*np.ones((int(kfreq),))
+                        if condition2:
+                            if istokes == 'I': 
+                                plt.plot(xdim, 
+                                 rms_i3Z[jsimu]['{}'.format(kfreq)][iizo] / np.sqrt(corrections), 
+                                 color=color[jsimu], marker = marker[irec], linestyle='',mew =3)
+                             #ms=par[jsimu]['npoint']/1e3*2, alpha = 1.)
+                            elif istokes == 'Q': 
+                                plt.plot(xdim, 
+                                 rms_q3Z[jsimu]['{}'.format(kfreq)][iizo] / np.sqrt(corrections), 
+                                 color=color[jsimu], marker = marker[irec], linestyle='',mew =3) 
+                             #ms=par[jsimu]['npoint']/1e3*2, alpha = 1.)
+                            elif istokes == 'U': 
+                                plt.plot(xdim, 
+                                 rms_u3Z[jsimu]['{}'.format(kfreq)][iizo] / np.sqrt(corrections), 
+                                 color=color[jsimu], marker = marker[irec], linestyle='',mew =3)
+                             #ms=par[jsimu]['npoint']/1e3*2, alpha = 1.)
 
-    #plt.text(-1.7,0.04,'map_rec',fontsize=18)
+        #plt.text(-1.7,0.04,'map_rec',fontsize=18)
+
+            #plt.xlim(1.7,1.8)
+```
+
+```{python}
+plot2(simulations, nzones=3, residuals_way='noiseless', noiseless=False)
+```
+
+***
+
+### Std profile
+
+```{python}
+seenmap = rmc.get_seenmap(files[0])
+```
+
+```{python}
+nbins = 30
+isub = 2
+
+plt.figure(figsize=(15, 6))
+for ist in range(3):
+    plt.subplot(131)
+    bin_centers, ang, std_bin, std_profile = amc.std_profile(res_patch1, nbins, d['nside'], center, seenmap)
+    plt.plot(bin_centers, std_bin[:, isub, ist], '.', label=stokes[ist])
+    plt.title('Noiseless subband {}/{}'.format(isub+1, nfrec))
+    plt.xlabel('Angle (°)')
+    plt.ylabel('STD')
+    plt.legend()
     
-        #plt.xlim(1.7,1.8)
+    plt.subplot(132)
+    bin_centers, ang, std_bin, std_profile = amc.std_profile(res_patch2, nbins, d['nside'], center, seenmap)
+    plt.plot(bin_centers, std_bin[:, isub, ist], '.', label=stokes[ist])
+    plt.title('Conv subband {}/{}'.format(isub+1, nfrec))
+    plt.xlabel('Angle (°)')
+    plt.ylabel('STD')
+    
+    plt.subplot(133)
+    bin_centers, ang, std_bin, std_profile = amc.std_profile(res_patch3, nbins, d['nside'], center, seenmap)
+    plt.plot(bin_centers, std_bin[:, isub, ist], '.', label=stokes[ist])
+    plt.title('Mean recon subband {}/{}'.format(isub+1, nfrec))
+    plt.xlabel('Angle (°)')
+    plt.ylabel('STD')
+
 ```
 
 ***

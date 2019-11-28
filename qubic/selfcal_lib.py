@@ -9,6 +9,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 import matplotlib.ticker as plticker
+import matplotlib.colors as colors
+import matplotlib.cm as cmx
+import matplotlib.patches as patches
 
 from astropy.io import fits
 
@@ -56,6 +59,7 @@ class SelfCalibration:
         """
         Build masks for the FP where bad detectors are NAN and good detectors are 1., one of shape (34x34)
         and one of shape (17x17) for one quadrant.
+        We use the ONAFP frame.
 
         Parameters
         ----------
@@ -72,13 +76,13 @@ class SelfCalibration:
 
         """
         FPidentity = make_id_focalplane()
-        quad = np.reshape(FPidentity.quadrant, (34, 34))
+        quad = np.rot90(np.reshape(FPidentity.quadrant, (34, 34)), k=-1, axes=(0, 1))
 
         calfile_path = Qubic_DataDir(datafile=self.d['detarray'])
         calfile = fits.open(calfile_path + '/' + self.d['detarray'])
 
         if self.d['detarray'] == 'CalQubic_DetArray_P87_TD.fits':
-            full_mask = calfile['removed'].data
+            full_mask = np.rot90(calfile['removed'].data, k=-1, axes=(0, 1))
             full_mask = np.where(full_mask == 1, np.nan, full_mask)
             full_mask = np.where(full_mask == 0, 1, full_mask)
 
@@ -136,7 +140,7 @@ class SelfCalibration:
             q.horn.plot()
             plt.axis('off')
             plt.subplot(4, 4, 2)
-            plt.imshow(S[:, :, 0])
+            plt.imshow(S[:, :, 0], origin='lower')
             plt.colorbar()
             plt.title('$S$')
 
@@ -152,7 +156,7 @@ class SelfCalibration:
             q.horn.plot()
             plt.axis('off')
             plt.subplot(4, 4, 4)
-            plt.imshow(Cminus_i[:, :, 0])
+            plt.imshow(Cminus_i[:, :, 0], origin='lower')
             plt.colorbar()
             plt.title('$C_{-i}$')
 
@@ -168,7 +172,7 @@ class SelfCalibration:
             q.horn.plot()
             plt.axis('off')
             plt.subplot(4, 4, 6)
-            plt.imshow(Cminus_j[:, :, 0])
+            plt.imshow(Cminus_j[:, :, 0], origin='lower')
             plt.colorbar()
             plt.title('$C_{-j}$')
 
@@ -185,7 +189,7 @@ class SelfCalibration:
             q.horn.plot()
             plt.axis('off')
             plt.subplot(4, 4, 8)
-            plt.imshow(Sminus_ij[:, :, 0])
+            plt.imshow(Sminus_ij[:, :, 0], origin='lower')
             plt.colorbar()
             plt.title('$S_{-ij}$')
 
@@ -201,7 +205,7 @@ class SelfCalibration:
             q.horn.plot()
             plt.axis('off')
             plt.subplot(4, 4, 10)
-            plt.imshow(Ci[:, :, 0])
+            plt.imshow(Ci[:, :, 0], origin='lower')
             plt.colorbar()
             plt.title('$C_i$')
 
@@ -214,7 +218,7 @@ class SelfCalibration:
             q.horn.plot()
             plt.axis('off')
             plt.subplot(4, 4, 12)
-            plt.imshow(Cj[:, :, 0])
+            plt.imshow(Cj[:, :, 0], origin='lower')
             plt.colorbar()
             plt.title('$C_j$')
 
@@ -228,7 +232,7 @@ class SelfCalibration:
             q.horn.plot()
             plt.axis('off')
             plt.subplot(4, 4, 14)
-            plt.imshow(Sij[:, :, 0])
+            plt.imshow(Sij[:, :, 0], origin='lower')
             plt.colorbar()
             plt.title('$S_{ij}$')
 
@@ -253,7 +257,7 @@ class SelfCalibration:
 
     def get_power_fp_aberration(self, rep, doplot=True, theta_source=0., freq_source=150., indep_config=None):
         """
-        Compute power in the focal plane for a given horn configuration taking
+        Compute power on the focal plane for a given horn configuration taking
         into account optical aberrations given in Creidhe simulations.
 
         Parameters
@@ -316,6 +320,7 @@ class SelfCalibration:
                 raise ValueError('The switch indices must be between 1 and 64 ')
 
             # Phase calculation
+            # Not sure it is a good idea to do that...
             horn_x = q.horn.center[swi - 1, 0]
             horn_y = q.horn.center[swi - 1, 1]
             d = np.sqrt(horn_x ** 2 + horn_y ** 2)  # distance between the horn and the center
@@ -339,6 +344,7 @@ class SelfCalibration:
         # Intensity in the focal plane with high resolution
         # and with the focal plane resolution
         power = np.abs(sumampx) ** 2 + np.abs(sumampy) ** 2
+        power = power.T # this transpose was in the Creidhe code
 
         if doplot:
             plt.figure()
@@ -347,11 +353,12 @@ class SelfCalibration:
             plt.axis('off')
 
             plt.subplot(122)
-            plt.imshow(power)
+            plt.imshow(power, origin='lower')
             plt.title('Power at the sampling resolution')
             plt.colorbar()
 
         return power
+
 
     def get_fringes_aberration_combination(self, rep):
         """
@@ -395,57 +402,79 @@ class SelfCalibration:
 
         return fringes_aber
 
-    def get_synthetic_beam_sky(self, q, scene, tes, default_open=True, with_baseline=True):
-        """
-        Return the synthetic beam projected on the sky for a given TES.
-        Plot the horn matrix and the synthetic beam.
 
-        Parameters
-        ----------
-        q : Qubic monochromatic instrument
-        scene : a Qubic scene
-        tes : int
-            TES number for which you reconstruct the synthetic beam.
-        default_open : bool
-            If True, all switches are open except the ones in baseline.
-            If False, all switches are close except the one in baseline.
-            True by default.
-        with_baseline : bool
-            If true, the baseline is closed. If false, it is not close and
-            you can have the full synthetic beam on the sky.
+def make_external_A(rep, open_horns):
+    """
+    Compute external_A from simulated files with aberrations.
+    This can be used in get_synthbeam method that returns the synthetic beam on the sky.
+    Parameters
+    ----------
+    rep : str
+        Path of the repository for the simulated files, can be download at :
+        https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
+    open_horns : list
+        Indices of the open horns between 0 and 63.
 
-        Returns
-        -------
-        The synthetic beam on the sky.
+    Returns
+    -------
+    external_A : list of tables describing the phase and amplitude at each point of the focal
+        plane for each of the horns:
+        [0] : array of nn with x values in meters
+        [1] : array of nn with y values in meters
+        [2] : array of [nhorns, nn, nn] with amplitude
+        [3] : array of [nhorns, nn, nn] with phase in degrees
 
-        """
+    """
+    # Get simulation files
+    files = sorted(glob.glob(rep + '/*.dat'))
 
-        if default_open:
-            q.horn.open = True
-            if with_baseline:
-                for i in self.baseline:
-                    q.horn.open[i - 1] = False
-            for i in self.dead_switches:
-                q.horn.open[i - 1] = False
-        else:
-            q.horn.open = False
-            for i in self.baseline:
-                q.horn.open[i - 1] = True
-        sb = q.get_synthbeam(scene, idet=tes)
+    nhorns = len(files)
+    if nhorns != 64:
+        raise ValueError('You should have 64 .dat files')
 
-        plt.subplot(121)
-        q.horn.plot()
-        plt.axis('off')
-        hp.gnomview(sb, sub=122, rot=(0, 90), reso=5, xsize=350, ysize=350,
-                    title='Synthetic beam on the sky for TES {}'.format(tes),
-                    cbar=True, notext=True)
-        return sb
+    # Get the sample number from the first file
+    data0 = pd.read_csv(files[0], sep='\t', skiprows=0)
+    nn = data0['X_Index'].iloc[-1] + 1
+    print('Sampling number = ', nn)
+
+    xmin = data0['X'].iloc[0] * 1e-3
+    xmax = data0['X'].iloc[-1] * 1e-3
+    ymin = data0['Y'].iloc[0] * 1e-3
+    ymax = data0['Y'].iloc[-1] * 1e-3
+    print('xmin={}m, xmax={}m, ymin={}m, ymax={}m'.format(xmin, xmax, ymin, ymax))
+
+    xx = np.linspace(xmin, xmax, nn)
+    yy = np.linspace(ymin, ymax, nn)
+
+    # Get all amplitudes and phases for each open horn
+    nopen_horns = len(open_horns)
+
+    allampX = np.empty((nopen_horns, nn, nn))
+    allphiX = np.empty((nopen_horns, nn, nn))
+    allampY = np.empty((nopen_horns, nn, nn))
+    allphiY = np.empty((nopen_horns, nn, nn))
+    for i, horn in enumerate(open_horns):
+        print('horn ', horn)
+        if horn < 0 or horn > 63:
+            raise ValueError('The horn indices must be between 0 and 63 ')
+
+        data = pd.read_csv(files[horn], sep='\t', skiprows=0)
+        allampX[i, :, :] = np.reshape(np.asarray(data['MagX']), (nn, nn))
+        allampY[i, :, :] = np.reshape(np.asarray(data['MagY']), (nn, nn))
+
+        allphiX[i, :, :] = np.reshape(np.asarray(data['PhaseX']), (nn, nn))
+        allphiY[i, :, :] = np.reshape(np.asarray(data['PhaseY']), (nn, nn))
+
+    # Why using allampX, allphiX and not allampY, allphiY ??
+    external_A = [-xx, -yy, allampX, allphiX]
+
+    return external_A
 
 
 def get_power_on_array(q, theta=np.array([0.]), phi=np.array([0.]), nu=150e9, spectral_irradiance=1.,
                        reso=34, xmin=-0.06, xmax=0.06):
     """
-    Compute power on the focal plane for different positions of the source
+    Compute power on the focal plane in the ONAFP frame for different positions of the source
     with respect to the instrument.
 
     Parameters
@@ -478,11 +507,15 @@ def get_power_on_array(q, theta=np.array([0.]), phi=np.array([0.]), nu=150e9, sp
     z1d = x1d * 0 - q.optics.focal_length
     position = np.array([x1d, y1d, z1d]).T
 
+    # Electric field on the FP in the GRF frame
     field = q._get_response(theta, phi, spectral_irradiance, position, q.detector.area,
                             nu, q.horn, q.primary_beam, q.secondary_beam)
-    power = np.reshape(np.abs(field) ** 2, (reso, reso, nptg))
+    power_GRF = np.reshape(np.abs(field) ** 2, (reso, reso, nptg))
 
-    return power
+    # Go to the ONAFP frame
+    power_ONAFP = np.rot90(power_GRF, k=-1, axes=(0, 1))
+
+    return power_ONAFP
 
 
 def index2TESandASIC(index):
@@ -515,6 +548,7 @@ def image_fp2tes_signal(full_real_fp):
     """
     Convert an image of the FP to an array with the signal
     of each TES using the TES indices of the real FP.
+    Make sure to use the ONAFP frame.
     Parameters
     ----------
     full_real_fp : array of shape (34, 34)
@@ -559,6 +593,87 @@ def tes_signal2image_fp(tes_signal, asics):
     return image_fp
 
 
+def averaging_tes_signal(power, rep, power_size):
+    """
+    Get averaged signal in each TES (real FP). Based on Creidhe code.
+
+    Parameters
+    ----------
+    power : array of shape (nn, nn)
+        Power on the focal plane at high resolution, can be larger than the real FP.
+    rep : str
+        Path of the repository for the simulated files, can be download at :
+        https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
+    power_size : float
+        Dimension in m of one side of power.
+
+    Returns
+    -------
+    readv : array of shape(992, 4, 2)
+        Corners positions.
+    det_value : array of shape (992, 3)
+        Total signal, number of points and average in each TES.
+    """
+
+    # Get TES positions of the 4 corners
+    vertices = pd.read_csv(rep + '/vertices.txt', sep='\ ', header=None, engine='python')
+    readv = np.zeros((992, 4, 2))
+    for i in range(4):
+        readv[:, i, :] = vertices.iloc[i::4, :]
+
+    nn = np.shape(power)[0]
+    print('nn: ', nn)
+    xx = np.linspace(- power_size / 2., power_size / 2., nn)
+    yy = np.linspace(- power_size / 2., power_size / 2., nn)
+    XX, YY = np.meshgrid(xx, yy)
+
+    # Average (this is working but it is slow)
+    # 1st will contain total signal, second is number of points, third is average
+    det_value = np.zeros((992, 3))
+    for i in range(nn):  # could do nx/2, ny/2 if just wanted one quadrant. Scan full plane
+        for j in range(nn):
+            for d in range(0, 992):
+                if readv[d, 2, 0] <= XX[i, j] <= readv[d, 3, 0] and \
+                        readv[d, 2, 1] <= YY[i, j] <= readv[d, 1, 1]:
+                    det_value[d, 0] += power[i, j]
+                    det_value[d, 1] += 1
+
+                if det_value[d, 1] != 0:  # so long as there is some signal on the detector
+                    det_value[d, 2] = det_value[d, 0] / det_value[d, 1]  # average calculation
+                else:
+                    det_value[d, 2] = 0.
+
+    return readv, det_value
+
+
+def make_plot_real_fp(readv, det_value):
+    """
+    Plot real FP using TES locations.
+    """
+    # All this to get colormap
+    cm = plt.get_cmap('viridis')
+    # plot scale from average
+    cNorm = colors.Normalize(vmin=np.amin(det_value[:, 2]), vmax=np.amax(det_value[:, 2]))
+    scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=cm)
+    scalarMap.set_array(det_value)
+
+    fig, ax7 = plt.subplots()
+    fig.figsize = (12, 12)
+    for i in range(0, 992):
+        rect = patches.Rectangle((readv[i, 2, 0], readv[i, 2, 1]),
+                                 (readv[i, 0, 0] - readv[i, 1, 0]),
+                                 (readv[i, 0, 1] - readv[i, 3, 1]),
+                                 linewidth=1, edgecolor='none', facecolor=scalarMap.to_rgba(det_value[i, 2]))
+        ax7.add_patch(rect)
+
+    plt.xlim(-.055, .055)  # the focal plane
+    plt.ylim(-.055, .055)
+    ax7.set_aspect('equal')
+    plt.colorbar(scalarMap)
+
+    return fig
+
+
 def get_real_fp(full_fp, quadrant=None):
     """
     Return the real focal plane, one pixel for each TES.
@@ -581,7 +696,8 @@ def get_real_fp(full_fp, quadrant=None):
     else:
         FPidentity = make_id_focalplane()
         tes = np.reshape(FPidentity.TES, (34, 34))
-        quad = np.reshape(FPidentity.quadrant, (34, 34))
+        # The rotation is needed to be in the ONAFP frame
+        quad = np.rot90(np.reshape(FPidentity.quadrant, (34, 34)), k=-1, axes=(0, 1))
 
         # Put the pixels that are not TES to NAN
         full_real_fp = np.where(tes == 0, np.nan, full_fp)
@@ -602,6 +718,7 @@ def get_real_fp(full_fp, quadrant=None):
 def add_fp_simu_aber(image_aber, vmin, vmax, alpha=0.3, diameter_simu=120):
     """
     Over plot the real FP on a simulation with aberrations.
+    Should be improved because space between quadrants is not taken into account.
     Parameters
     ----------
     image_aber : 2D array
@@ -625,7 +742,7 @@ def add_fp_simu_aber(image_aber, vmin, vmax, alpha=0.3, diameter_simu=120):
     print('FP radius in pixels :', fp_radius)
 
     fig, ax = plt.subplots()
-    ax.imshow(image_aber, vmin=vmin, vmax=vmax)
+    ax.imshow(image_aber, origin='lower', vmin=vmin, vmax=vmax)
 
     # Add a circle of the FP size
     circ = Circle((nn / 2., nn / 2.), fp_radius, alpha=alpha, color='w')

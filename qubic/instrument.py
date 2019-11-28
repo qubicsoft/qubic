@@ -438,7 +438,7 @@ class QubicInstrument(Instrument):
                 print('Environment T =', temperatures[ib2b],
                       'K, P = {0:.2e} W'.format(P_phot_env.max()),
                       ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2_env).max()) + '  W/sqrt(Hz)')
-            ## Combiner
+            # Combiner
             icomb = ib2b + 1  # the combiner is the component just after the horns
             T = temperatures[icomb]
             b = h * nu_up / k / T
@@ -1037,6 +1037,7 @@ class QubicInstrument(Instrument):
         Return the monochromatic complex field [(W/Hz)^(1/2)] related to
         the electric field over a specified area of the focal plane created
         by sources of specified spectral irradiance [W/m^2/Hz]
+        Frame used : GRF
 
         Parameters
         ----------
@@ -1047,7 +1048,8 @@ class QubicInstrument(Instrument):
         spectral_irradiance : array-like
             The source spectral_irradiance [W/m^2/Hz].
         position : array-like of shape (..., 3)
-            The 3D coordinates where the response is computed, in meters.
+            The 3D coordinates where the response is computed, in meters,
+            in the GRF frame.
         area : array-like
             The integration area, in m^2.
         nu : float
@@ -1087,13 +1089,15 @@ class QubicInstrument(Instrument):
         """
         Return the monochromatic synthetic beam for a specified location
         on the focal plane, multiplied by a given area and bandwidth.
+        Frame used : GRF
 
         Parameters
         ----------
         scene : QubicScene
             The scene.
         position : array-like of shape (..., 3)
-            The 3D coordinates where the response is computed, in meters.
+            The 3D coordinates where the response is computed, in meters,
+            in the GRF frame.
         area : array-like
             The integration area, in m^2.
         nu : float
@@ -1176,7 +1180,7 @@ class QubicInstrument(Instrument):
             [3] : array of [nhorns, nn, nn] with phase in degrees
         detector_integrate: Optional, number of subpixels in x direction for integration over detectors
             default (None) is no integration => uses the center of the pixel
-        detpos: Optional, position in the focal plane at which the Synthesized Beam is desider as np.array([x,y,z])
+        detpos: Optional, position in the focal plane at which the Synthesized Beam is desired as np.array([x,y,z])
         
 
         """

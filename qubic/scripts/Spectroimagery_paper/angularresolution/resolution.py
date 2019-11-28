@@ -127,7 +127,7 @@ def normalization(x,mapa):
 	ef = np.trapz((np.trapz(mapa,x,axis=0)),x)
 	return 1/ef
 
-def gaussian2d(x,y, x0, y0, varx, vary):
+def gaussian2d(z, x0, y0, varx, vary):
 	"""
 	Function to fit
 
@@ -139,7 +139,8 @@ def gaussian2d(x,y, x0, y0, varx, vary):
 	Return:
 		Gaussian  
 	"""
-
+	x=z[0]
+	y=z[1]
 	gauss = 1/(2*np.pi*varx*vary)*np.exp(-((x-x0)**2/(2*varx**2)+(y-y0)**2/(2*vary**2)))
 	return gauss.ravel()
 
@@ -164,16 +165,18 @@ def FitMethod(maparray, d, reso = 1.5, size = 200, cutlevel = 0.01, mapret = Fal
 	x_map = np.linspace(-size/2,size/2,size)*reso/60.
 	y_map = x_map
 	x_map, y_map = np.meshgrid(x_map, y_map)
-	xdata_map = x_map.ravel()
+	x0data_map = x_map.ravel()
+	x1data_map = y_map.ravel()
+	x = x_map[0]
+	x2 = x * x
+
 	input_fwhm_fit = np.empty((len(maparray),))
 	popt = []
 
 	for i,mi in enumerate(maparray):
-		#maski = mi > np.max(mi)*cutlevel
-		#mi[~maski] = 0		
 		norm_fit = normalization(x_map[0],mi)
 		ydata_map = (norm_fit * mi).ravel()
-		popt_map, pcov_map = curve_fit(gaussian2d, xdata_map, ydata_map, method='trf')
+		popt_map, pcov_map = curve_fit(gaussian2d, [x0data_map,x1data_map], ydata_map, method='trf')
 		input_fwhm_fit[i] = (abs(popt_map[2])+abs(popt_map[3]))/2*sigma2fwhm
 
 	if mapret:

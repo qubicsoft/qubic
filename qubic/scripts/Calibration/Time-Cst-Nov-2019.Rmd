@@ -118,17 +118,23 @@ def analyse_twopasses(tofit, errors, t, fitfunct, doplot=False):
                                                 fixvals = [dutycycle[ifile]/100, 0,0,0,0,0,0],
                                                doplot=False)
     
+    testry = 39-1
+    print('After 1st pass, for TES index {} - TESNum {}'.format(testry, testry+1))
+    print(allpars[testry, 1], allpars[testry, 2], allpars[testry, 4])
     # We get the start time from this first pass
     tstart_median = np.median(allpars[:,3])    
     
     # Second Pass
     ##### Fitting with duty cycle and tstart fixed and the rest free (rise, fall, amplitude, offset)
     print('Second Pass: Fitting with duty cycle and tstart fixed and the rest free (rise, fall, amplitude, offset)')
+    print('dc fixed to: ',dutycycle[ifile]/100)
+    print('Tstart fixed to: ', tstart_median)
     allpars, allerrpars, allchi2_ndf = analyse_loop(tofit, errors, t, ft.simsig_asym, 
                                                 fixpars=[1,0,0,1,0,0], 
                                                 fixvals = [dutycycle[ifile]/100, 0,0,tstart_median,0,0,0],
                                                doplot=doplot)
-    
+    print('After 2nd pass, for TES index {} - TESNum {}'.format(testry, testry+1))
+    print(allpars[testry, 1], allpars[testry, 2], allpars[testry, 4])
     results = np.array([normalize(allpars[:,1]), normalize(allpars[:,2]),
                     normalize(allpars[:,4]), normalize(allpars[:,5]), 
                     normalize(allerrpars[:,1]), normalize(allerrpars[:,2]), 
@@ -138,7 +144,9 @@ def analyse_twopasses(tofit, errors, t, fitfunct, doplot=False):
 
     return allpars, allerrpars, allchi2_ndf, ok
 
-def plot_result_asic(allpars, ok, pngname=None, savefilename=None):
+def plot_result_asic(allpars, allerrpars, ok, pngname=None, savefilename=None):
+    fraction = np.sum(ok)*1./256
+    clf()
     subplot(2,3,1)
     hist(allpars[ok,1], bins=15, range=[0,0.3], label=ft.statstr(allpars[ok,1])+' sec')
     title('Rise Time [sec] - TES OK: {0:4.1f}%'.format(fraction*100))
@@ -157,6 +165,9 @@ def plot_result_asic(allpars, ok, pngname=None, savefilename=None):
     vals_rise = np.zeros(256)
     vals_rise = allpars[:,1].copy()
     vals_rise[~ok] = np.nan
+    err_vals_rise = np.zeros(256)
+    err_vals_rise = allerrpars[:,1].copy()
+    err_vals_rise[~ok] = np.nan
     img = ft.image_asics(all1=vals_rise)
     subplot(2,3,4)
     imshow(img,vmin=0, vmax=0.3)
@@ -166,6 +177,9 @@ def plot_result_asic(allpars, ok, pngname=None, savefilename=None):
     vals_fall = np.zeros(256)
     vals_fall = allpars[:,2].copy()
     vals_fall[~ok] = np.nan
+    err_vals_fall = np.zeros(256)
+    err_vals_fall = allerrpars[:,2].copy()
+    err_vals_fall[~ok] = np.nan
     img = ft.image_asics(all1=vals_fall)
     subplot(2,3,5)
     imshow(img,vmin=0, vmax=0.3)
@@ -175,12 +189,16 @@ def plot_result_asic(allpars, ok, pngname=None, savefilename=None):
     vals_amp = np.zeros(256)
     vals_amp = allpars[:,4].copy()
     vals_amp[~ok] = np.nan
+    err_vals_amp = np.zeros(256)
+    err_vals_amp = allerrpars[:,4].copy()
+    err_vals_amp[~ok] = np.nan
     img = ft.image_asics(all1=vals_amp)
     subplot(2,3,6)
     imshow(img,vmin=0, vmax=120000)
     colorbar()
     title('Amplitude [ADU] - TES OK: {0:4.1f}%'.format(fraction*100))
-
+    show()
+    
     if pngname is not None:
         savefig(pngname)
     
@@ -247,21 +265,7 @@ print(voltage)
 ```
 
 ```{python}
-# ifile = 0
-# thedir = dirs[ifile]
-# print(thedir)
-# AsicNum = 1
-# a = qp()
-# a.verbosity=1
-# a.read_qubicstudio_dataset(thedir, asic=AsicNum)
-# data1=a.azel_etc(TES=None)
-# AsicNum = 2
-# a = qp()
-# a.verbosity=1
-# a.read_qubicstudio_dataset(thedir, asic=AsicNum)
-# data2=a.azel_etc(TES=None)
-
-ifile = 15
+ifile = 1
 thedir = dirs[ifile]
 print(thedir)
 a = qubicfp()
@@ -270,7 +274,12 @@ a.read_qubicstudio_dataset(thedir)
 ```
 
 ```{python}
-data=a.azel_etc(TES=None)
+#data=a.azel_etc(TES=None)
+data1 = a.timeline_array(asic=1)
+data2 = a.timeline_array(asic=2)
+tdata1 = a.timeaxis(asic=1,datatype='sci',axistype='index')
+tdata2 = a.timeaxis(asic=2,datatype='sci',axistype='index')
+data = {'data 1':data1, 'data 2':data2, 't_data 1':tdata1, 't_data 2':tdata2}
 ```
 
 ```{python}
@@ -323,7 +332,7 @@ xlim(xmin, xmax)
 ylim(ymin, ymax)
 title('TES#={}'.format(TESNum))
 
-for i in range(10):
+for i in range(20):
     plot([1./period*i,1./period*i],[ymin,ymax],'k--',alpha=0.3)
 
 plot([lowcut, lowcut],[ymin,ymax],'k')
@@ -331,7 +340,9 @@ plot([highcut, highcut],[ymin,ymax],'k')
 legend()
 
 ########## Folding
-folded, t, folded_nonorm, newdata= ft.fold_data(tt, dd, period, lowcut, highcut, nbins, median=True, rebin=True, verbose=True)
+folded, t, folded_nonorm, newdata, fn, nn= ft.fold_data(tt, dd, period, lowcut, highcut, nbins, 
+                                                median=True, rebin=True, verbose=True,
+                                               return_noise_harmonics=30)
 subplot(2,1,2)
 plot(t, folded_nonorm[0,:])
 plot(t, folded_nonorm[0,:], label='Filtered Data {} < f < {} Hz'.format(lowcut,highcut))
@@ -344,6 +355,8 @@ legend()
 spectrum_f2, freq_f2 = ft.power_spectrum(tt, newdata, rebin=True)
 subplot(2,1,1)
 plot(freq_f2, f.gaussian_filter1d(spectrum_f2,1),label='Filtered data')
+
+plot(fn, nn[0,:]**2,'ro-', label='Noise level between peaks')
 legend()
 
 tight_layout()
@@ -352,20 +365,22 @@ tight_layout()
 ```{python}
 ########## Folding all Asic 1
 reload(ft)
-folded1, t1, folded_nonorm1, dfolded1, dfolded_nonorm1, newdata1= ft.fold_data(data['t_data 1'], data['data 1'], 
+folded1, t1, folded_nonorm1, dfolded1, dfolded_nonorm1, newdata1, fn1, nn1= ft.fold_data(data['t_data 1'], data['data 1'], 
                                                                               period, lowcut, highcut, 
                                                                             nbins, median=True, rebin=True, 
-                                                                               verbose=False, return_error=True)
+                                                                               verbose=False, return_error=True,
+                                                                                      return_noise_harmonics=30)
 
 
 ```
 
 ```{python}
 ########## Folding all Asic 2
-folded2, t2, folded_nonorm2, dfolded2, dfolded_nonorm2,newdata2= ft.fold_data(data['t_data 2'], data['data 2'], 
+folded2, t2, folded_nonorm2, dfolded2, dfolded_nonorm2,newdata2, fn2, nn2= ft.fold_data(data['t_data 2'], data['data 2'], 
                                                                             period, lowcut, highcut, 
                                                                             nbins, median=True, rebin=True, 
-                                                                              verbose=False, return_error=True)
+                                                                              verbose=False, return_error=True,
+                                                                                      return_noise_harmonics=30)
 
 
 ```
@@ -406,7 +421,7 @@ plot(tstart, np.interp(tstart, t, median_fold),'ro')
 
 ```{python}
 reload(ft)
-TESNum = 94
+TESNum = 95
 function = ft.simsig_asym
 
 
@@ -420,7 +435,8 @@ amplitude = np.max(tofit[TESNum-1,:]) - np.min(tofit[TESNum-1,:])
 offset = np.max(tofit[TESNum-1,:])
 
 guess = [dutycycle[ifile]/100, 0.09, 0.15, tstart, amplitude, offset]
-print(guess)
+#guess = [dutycycle[ifile]/100, 0.09, 0.15, 0.3166610466233375, amplitude, offset]
+#print(guess)
 
 #subplot(2,1,1)
 errorbar(t, tofit[TESNum-1,:], yerr=errors[TESNum-1,:], fmt='k.', label='Data TES #{}'.format(TESNum))
@@ -428,12 +444,14 @@ errorbar(t, tofit[TESNum-1,:], yerr=errors[TESNum-1,:], fmt='k.', label='Data TE
 ok = np.isfinite(tofit[TESNum-1,:]) & (errors[TESNum-1,:] != 0)
 bla = ft.do_minuit(t, tofit[TESNum-1,ok], errors[TESNum-1,ok],
 	guess, functname=function,
-	rangepars=[[0.1,0.5], [0., 0.5], [0., 0.5], [0.,4], [-2*amplitude,2*amplitude], [0,offset*2]], fixpars=[1,0,0,0,0,0], 
+	rangepars=[[0.1,0.5], [0., 0.3], [0., 0.3], [0.,period], [-2*amplitude,2*amplitude], [0,offset*2]], 
+                   fixpars=[1,0,0,0,0,0], 
 	force_chi2_ndf=True, verbose=False, print_level=0,nsplit=5)
 params =  bla[1]
 err = bla[2]
 print(params)
-plot(t, function(t, bla[1]), 
+newt = np.linspace(np.min(t), np.max(t),1000)
+plot(newt, function(newt, bla[1]), 
      label='Fitted: \n cycle={0:8.3f}+/-{1:8.3f} \n tau_rise = {2:8.3f}+/-{3:8.3f}s \n tau_fall = {4:8.3f}+/-{5:8.3f}s \n t0 = {6:8.3f}+/-{7:8.3f}s \n amp = {8:8.3f}+/-{9:8.3f}s'.format(params[0], err[0], params[1], err[1], params[2], err[2], params[3], err[3], params[4], err[4]))
 legend()
 ylabel('Current [nA]')
@@ -444,38 +462,45 @@ xlabel('time [s]')
 ```
 
 ```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
+fn = fn1.copy()
+nn = np.append(nn1,nn2,axis=0)
+print(fn.shape)
+print(nn.shape)
+np.savetxt('/Users/hamilton/toto.txt',fn)
+np.savetxt('/Users/hamilton/toto2.txt',nn)
+bla = np.loadtxt('/Users/hamilton/toto2.txt')
 ```
 
 ```{python}
 ###### Function that does the general analysis
-def run_all_anaysis(thedir, period, nbins, lowcut, highcut):
+def run_all_anaysis(thedir, period, nbins, lowcut, highcut, badgps=False):
     print('Running TCst Analysis for: {}'.format(thedir))
     a = qubicfp()
     a.read_qubicstudio_dataset(thedir)
-    data=a.azel_etc(TES=None)
+    if badgps:
+        data1 = a.timeline_array(asic=1)
+        data2 = a.timeline_array(asic=2)
+        tdata1 = a.timeaxis(asic=1,datatype='sci',axistype='index')
+        tdata2 = a.timeaxis(asic=2,datatype='sci',axistype='index')
+        data = {'data 1':data1, 'data 2':data2, 't_data 1':tdata1, 't_data 2':tdata2}
+    else:
+        data=a.azel_etc(TES=None)
 
     ### Folding ASIC 1
     print('Folding ASIC 1')
-    folded1, t1, folded_nonorm1, dfolded1, dfolded_nonorm1, newdata1= ft.fold_data(data['t_data 1'], data['data 1'], 
-                                                                              period, lowcut, highcut, 
-                                                                            nbins, median=True, rebin=True, 
-                                                                               verbose=False, return_error=True)
+    folded1, t1, folded_nonorm1, dfolded1, dfolded_nonorm1, newdata1, fn1, nn1= ft.fold_data(data['t_data 1'], data['data 1'], 
+                                                                                period, lowcut, highcut, 
+                                                                                nbins, median=True, rebin=True, 
+                                                                                verbose=False, return_error=True,
+                                                                                return_noise_harmonics=30)
 
     ### Folding ASIC 2
     print('Folding ASIC 2')
-    folded2, t2, folded_nonorm2, dfolded2, dfolded_nonorm2,newdata2= ft.fold_data(data['t_data 2'], data['data 2'], 
+    folded2, t2, folded_nonorm2, dfolded2, dfolded_nonorm2,newdata2, fn2, nn2= ft.fold_data(data['t_data 2'], data['data 2'], 
                                                                             period, lowcut, highcut, 
                                                                             nbins, median=True, rebin=True, 
-                                                                              verbose=False, return_error=True)
+                                                                            verbose=False, return_error=True,
+                                                                            return_noise_harmonics=30)
 
     ### Putting ASICs together
     t = t1.copy()
@@ -483,6 +508,8 @@ def run_all_anaysis(thedir, period, nbins, lowcut, highcut):
     dfolded = np.append(dfolded1, dfolded2, axis=0)
     folded_nonorm = np.append(folded_nonorm1, folded_nonorm2, axis=0)
     dfolded_nonorm = np.append(dfolded_nonorm1, dfolded_nonorm2, axis=0)
+    nn = np.append(nn1,nn2, axis=0)
+    fn = fn1.copy()
     
     ### Now fitting the folded
     tofit = folded_nonorm
@@ -491,14 +518,22 @@ def run_all_anaysis(thedir, period, nbins, lowcut, highcut):
     
     rc('figure',figsize=(15,8))
     name = 'TimeCst-'+str.split(thedir,'/')[-1]
-    pngname = '/Users/hamilton/Qubic/Calib-TD/TimeConstants/'+name+'_results.png'
+    pngname = '/Users/hamilton/Qubic/Calib-TD/TimeConstants/'+name+'_nbins_{}_locut_{}_hicut_{}_results.png'.format(nbins, lowcut,highcut)
     print('Saving plot in {}'.format(pngname))
-    savefilename = '/Users/hamilton/Qubic/Calib-TD/TimeConstants/'+name+'_data.txt'
+    savefilename = '/Users/hamilton/Qubic/Calib-TD/TimeConstants/'+name+'_nbins_{}_locut_{}_hicut_{}_data.txt'.format(nbins, lowcut,highcut)
     print('Saving data in {}'.format(savefilename))
-    plot_result_asic(allpars, ok, pngname=pngname, savefilename=savefilename)
+    plot_result_asic(allpars, allerrpars, ok, pngname=pngname, savefilename=savefilename)
 
+    #### Save noise between harmonics
+    np.savetxt('/Users/hamilton/Qubic/Calib-TD/TimeConstants/'+name+'_nbins_{}_locut_{}_hicut_{}_freqnoise.txt'.format(nbins, lowcut,highcut),fn)
+    np.savetxt('/Users/hamilton/Qubic/Calib-TD/TimeConstants/'+name+'_nbins_{}_locut_{}_hicut_{}_noise.txt'.format(nbins, lowcut,highcut),nn)
+    
     return allpars, allerrpars, allchi2_ndf, ok
 
+```
+
+```{python}
+print(thedir)
 ```
 
 ```{python}
@@ -507,7 +542,35 @@ nbins = 50
 lowcut = 0.01
 highcut = 50.
 
-allpars, allerrpars, allchi2_ndf, ok= run_all_anaysis(thedir, period, nbins, lowcut, highcut)
+allpars, allerrpars, allchi2_ndf, ok= run_all_anaysis(thedir, period, nbins, lowcut, highcut, badgps=True)
+```
+
+```{python}
+TESNum = 39
+print(TESNum)
+print(allpars[TESNum-1,1],allpars[TESNum-1,2],allpars[TESNum-1,4])
+print('Before')
+print('0.08919      0.17489     3547.80')
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 ```{python}
@@ -522,7 +585,7 @@ lowcut = 0.01
 highcut = 50.
 
 for ifile in range(len(dirs)):
-    allpars, allerrpars, allchi2_ndf, ok= run_all_anaysis(dirs[ifile], period, nbins, lowcut, highcut)
+    allpars, allerrpars, allchi2_ndf, ok= run_all_anaysis(dirs[ifile], period, nbins, lowcut, highcut, badgps=True)
 ```
 
 ```{python}

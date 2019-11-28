@@ -65,67 +65,61 @@ def normalize(x):
 ```
 
 ```{python}
-rc('figure',figsize=(10,7))
+### Uncomment if you want to run it
+
+# rc('figure',figsize=(10,7))
+# allslopes = np.zeros((len(dirs), 256))
+# for ifile in range(len(dirs)):
+#     theASIC = 1
+#     theTESnum = 93
+
+#     slopes = np.zeros(256)
+#     err_slopes = np.zeros(256)
+#     for AsicNum in [1,2]:
+#         a = qp()
+#         a.read_qubicstudio_dataset(dirs[ifile], asic=AsicNum)
+#         data=a.azel_etc(TES=None)
+#         az_tdata = np.interp(data['t_data'], data['t_azel'], data['az'])
+#     #     if AsicNum == theASIC:
+#     #         plot(data['t_data'], normalize(data['data'][theTESnum-1,:]), label='Data ASIC {} TESNum {}'.format(theASIC, theTESnum))
+#     #         plot(data['t_data'], normalize(az_tdata), label='Azimuth')
+#     #         legend()
+#         for i in range(128):
+#             pol, cov = np.polyfit(az_tdata,data['data'][i,:], 1, full=False, cov=True)
+#             slopes[(AsicNum-1)*128+i] = pol[0]
+#             err_slopes[(AsicNum-1)*128+i] = np.sqrt(np.diag(cov))[0]
+
+#     slopes_1 = np.reshape(slopes[:128], (4,32)).T
+#     slopes_2 = np.reshape(slopes[128:], (4,32)).T
+#     clf()
+#     subplot(2,3,1)
+#     img = ft.image_asics(all1=slopes)
+#     imshow(np.abs(img),vmin=0,vmax=40000)
+#     title('Elevation = {0:5.2f} deg.'.format(el[ifile]))
+#     colorbar()
+#     subplot(2,3,4)
+#     hist(np.log10(np.abs(slopes[:128])), range=[0.1,np.log10(np.max(np.abs(slopes)))+1], bins=20, alpha=0.5, label='Asic 1',color='blue')
+#     hist(np.log10(np.abs(slopes[128:])), range=[0.1,np.log10(np.max(np.abs(slopes)))+1], bins=20, alpha=0.5, label='Asic 2', color='red')
+#     legend()
+#     xlabel('Log10(|Slope| [ADU/Deg.])')
+#     subplot(1,3,2)
+#     imshow(np.abs(slopes_1), origin='lower',vmin=0,vmax=40000, extent=[0.5,4.5, 0.5, 32.5])
+#     colorbar()
+#     title('Asic 1')
+#     subplot(1,3,3)
+#     imshow(np.abs(slopes_2), origin='lower',vmin=0,vmax=40000, extent=[0.5,4.5, 0.5, 32.5])
+#     colorbar()
+#     title('Asic 2')
+#     #tight_layout()
+
+#     savefig('/Volumes/Data/Qubic/Calib-TD/MagneticLeak/plotslopes_el_{0:5.2f}.png'.format(el[ifile]))
+#     np.savetxt('/Volumes/Data/Qubic/Calib-TD/MagneticLeak/slopes_el_{0:5.2f}.txt'.format(el[ifile]),slopes)
+
+
+```
+
+```{python}
 allslopes = np.zeros((len(dirs), 256))
-for ifile in range(len(dirs)):
-    theASIC = 1
-    theTESnum = 93
-
-    slopes = np.zeros(256)
-    err_slopes = np.zeros(256)
-    for AsicNum in [1,2]:
-        a = qp()
-        a.read_qubicstudio_dataset(dirs[ifile], asic=AsicNum)
-        data=a.azel_etc(TES=None)
-        az_tdata = np.interp(data['t_data'], data['t_azel'], data['az'])
-    #     if AsicNum == theASIC:
-    #         plot(data['t_data'], normalize(data['data'][theTESnum-1,:]), label='Data ASIC {} TESNum {}'.format(theASIC, theTESnum))
-    #         plot(data['t_data'], normalize(az_tdata), label='Azimuth')
-    #         legend()
-        for i in range(128):
-            pol, cov = np.polyfit(az_tdata,data['data'][i,:], 1, full=False, cov=True)
-            slopes[(AsicNum-1)*128+i] = pol[0]
-            err_slopes[(AsicNum-1)*128+i] = np.sqrt(np.diag(cov))[0]
-
-    slopes_1 = np.reshape(slopes[:128], (4,32)).T
-    slopes_2 = np.reshape(slopes[128:], (4,32)).T
-    clf()
-    subplot(2,3,1)
-    img = ft.image_asics(all1=slopes)
-    imshow(np.abs(img),vmin=0,vmax=40000)
-    title('Elevation = {0:5.2f} deg.'.format(el[ifile]))
-    colorbar()
-    subplot(2,3,4)
-    hist(np.log10(np.abs(slopes[:128])), range=[0.1,np.log10(np.max(np.abs(slopes)))+1], bins=20, alpha=0.5, label='Asic 1',color='blue')
-    hist(np.log10(np.abs(slopes[128:])), range=[0.1,np.log10(np.max(np.abs(slopes)))+1], bins=20, alpha=0.5, label='Asic 2', color='red')
-    legend()
-    xlabel('Log10(|Slope| [ADU/Deg.])')
-    subplot(1,3,2)
-    imshow(np.abs(slopes_1), origin='lower',vmin=0,vmax=40000, extent=[0.5,4.5, 0.5, 32.5])
-    colorbar()
-    title('Asic 1')
-    subplot(1,3,3)
-    imshow(np.abs(slopes_2), origin='lower',vmin=0,vmax=40000, extent=[0.5,4.5, 0.5, 32.5])
-    colorbar()
-    title('Asic 2')
-    #tight_layout()
-
-    savefig('/Volumes/Data/Qubic/Calib-TD/MagneticLeak/plotslopes_el_{0:5.2f}.png'.format(el[ifile]))
-    np.savetxt('/Volumes/Data/Qubic/Calib-TD/MagneticLeak/slopes_el_{0:5.2f}.txt'.format(el[ifile]),slopes)
-
-
-```
-
-```{python}
-# plot(data['t_data']-np.min(data['t_data']), normalize(data['data'][theTESnum-1,:]), label='Data ASIC {} TESNum {}'.format(theASIC, theTESnum))
-# plot(data['t_data']-np.min(data['t_data']), normalize(az_tdata), label='Azimuth')
-# xlabel('Time [sec]')
-# ylabel('Normalized Data')
-# legend()
-
-```
-
-```{python}
 for ifile in range(len(dirs)):
     allslopes[ifile,:] = np.loadtxt('/Volumes/Data/Qubic/Calib-TD/MagneticLeak/slopes_el_{0:5.2f}.txt'.format(el[ifile]))
 ```
@@ -133,10 +127,10 @@ for ifile in range(len(dirs)):
 ```{python}
 imshow(np.log10(np.abs(allslopes)),vmin=1,vmax=5)
 colorbar()
+print(el[75])
 ```
 
 ```{python}
-print(np.shape(allslopes_renorm))
 allslopes_renorm=(allslopes-np.mean(allslopes, axis=0))/np.std(allslopes, axis=0)
 imshow(allslopes_renorm,vmin=0,vmax=2, extent=[0,255,np.min(el),np.max(el)], aspect='auto')
 colorbar()
@@ -182,7 +176,7 @@ colorbar()
 ```
 
 ```{python}
-print(np.min(data['az']),np.max(data['az']))
+
 ```
 
 ```{python}

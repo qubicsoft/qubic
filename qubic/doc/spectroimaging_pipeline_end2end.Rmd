@@ -12,8 +12,7 @@ jupyter:
     name: python3
 ---
 
-# QUBIC pipeline
-
+# QUBIC spectroimaging pipeline
 
 #### Document done using: JCh notebook, Spectroimagery scripts, Thibault notes, ...
 

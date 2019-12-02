@@ -12,14 +12,13 @@ jupyter:
     name: python3
 ---
 
-# QUBIC pipeline
-
+# QUBIC spectroimaging pipeline
 
 #### Document done using: JCh notebook, Spectroimagery scripts, Thibault notes, ...
 
 #### Editing by Martin Gamboa, Louise Mousset, 2019/09/02
 
-This notebook is the typical pipeline used for simulations. There are 2 parts :
+This notebook is the typical pipeline used for spectroimaging simulations. There are 2 parts :
 * From a given sky map, simulate Time Order Data (TOD) 
 * From those TOD, perform Map Making to reconstruct the input sky
 Here, we do spectroimaging, meaning that we reconstruct several sky maps, one for each frequency subband.
@@ -50,6 +49,8 @@ import numpy as np
 from qubicpack.utilities import Qubic_DataDir
 from pysimulators import FitsArray
 import qubic
+from qubic import SpectroImLib as si
+from pysm.nominal import models
 
 rc('figure', figsize=(13, 10))
 rc('font', size=13)
@@ -65,9 +66,7 @@ dictmaps = global_dir + 'doc/'
 ```
 
 ```{python}
-## Start reading files
-
-# Read dictionary choosed
+# Read dictionary chosen
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
@@ -78,9 +77,9 @@ print('beam shape :', d['beam_shape'])
 
 # Check nf_sub/nf_sub_rec is an integer
 nf_sub = d['nf_sub']
-for nf_sub_rec in d['nf_recon']:
-    if nf_sub % nf_sub_rec != 0:
-        raise ValueError('nf_sub/nf_sub_rec must be an integer.')
+# for nf_sub_rec in d['nf_recon']:
+#     if nf_sub % nf_sub_rec != 0:
+#         raise ValueError('nf_sub/nf_sub_rec must be an integer.')
 
 # Center of the patch observed in galactic coordinates
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
@@ -93,8 +92,13 @@ In this case we read a map $X_0$ simulated previously which contains fluctuation
 
 
 ```{python}
+# Make a sky using PYSM
+sky_config = {'cmb': models('c1', d['nside'])}
+Qubic_sky = si.Qubic_sky(sky_config, d)
+x0 = Qubic_sky.get_simple_sky_map()
+
 # Load a CMB map
-x0 = FitsArray(dictmaps + 'CMB_nside64_nfsub14.fits')
+# x0 = FitsArray(dictmaps + 'CMB_nside64_nfsub14.fits')
     
 print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0))
 

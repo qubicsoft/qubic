@@ -41,12 +41,6 @@ class QubicAcquisition(Acquisition):
             The discretized observed scene (the sky).
         block : tuple of slices, optional
             Partition of the samplings.
-        detector_fknee : array-like, optional
-            The detector 1/f knee frequency in Hertz.
-        detector_fslope : array-like, optional
-            The detector 1/f slope index.
-        detector_ncorr : int, optional
-            The detector 1/f correlation length.
         effective_duration : float, optional
             If not None, the noise properties are rescaled so that this
             acquisition has an effective duration equal to the specified value,
@@ -79,9 +73,6 @@ class QubicAcquisition(Acquisition):
             Standard deviation of the white noise component.
 
         """
-        detector_fknee = d['detector_fknee']
-        detector_fslope = d['detector_fslope']
-        detector_ncorr = d['detector_ncorr']
         block = d['block']
         effective_duration = d['effective_duration']
         photon_noise = d['photon_noise']
@@ -104,9 +95,6 @@ class QubicAcquisition(Acquisition):
         self.psd = psd
         self.twosided = twosided
         self.sigma = sigma
-        self.detector.fknee = detector_fknee
-        self.detector.fslope = detector_fslope
-        self.detector.ncorr = detector_ncorr
 
     def get_coverage(self):
         """
@@ -249,14 +237,8 @@ class QubicAcquisition(Acquisition):
             frequencies) or two-sided (positive and negative frequencies).
         sigma : float
             Standard deviation of the white noise component.
-        detector_fknee : float
-            The 1/f noise knee frequency [Hz].
-        detector_fslope : float
-            The 1/f noise slope.
         sampling_frequency : float
             The sampling frequency [Hz].
-        detector_ncorr : int
-            The correlation length of the time-time noise correlation matrix.
         fftw_flag : string, optional
             The flags FFTW_ESTIMATE, FFTW_MEASURE, FFTW_PATIENT and
             FFTW_EXHAUSTIVE can be used to describe the increasing amount of
@@ -288,7 +270,7 @@ class QubicAcquisition(Acquisition):
 
         shapein = (len(self.instrument), len(self.sampling))
 
-        if self.bandwidth is None and self.detector.fknee == 0:
+        if self.bandwidth is None and self.instrument.detector.fknee == 0:
             print('diagonal case')
 
             out = DiagonalOperator(1 / self.sigma ** 2, broadcast='rightward',
@@ -313,10 +295,10 @@ class QubicAcquisition(Acquisition):
             f = np.arange(fftsize // 2 + 1, dtype=float) * new_bandwidth
             p = _unfold_psd(_logloginterp_psd(f, self.bandwidth, self.psd))
         else:
-            p = _gaussian_psd_1f(fftsize, sampling_frequency, self.sigma, self.detector.fknee, self.detector.fslope,
-                                 twosided=True)
+            p = _gaussian_psd_1f(fftsize, sampling_frequency, self.sigma, self.instrument.detector.fknee,
+                                 self.instrument.detector.fslope, twosided=True)
         p[..., 0] = p[..., 1]
-        invntt = _psd2invntt(p, new_bandwidth, self.detector.ncorr, fftw_flag=fftw_flag)
+        invntt = _psd2invntt(p, new_bandwidth, self.instrument.detector.ncorr, fftw_flag=fftw_flag)
 
         print('non diagonal case')
         if self.effective_duration is not None:

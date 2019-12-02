@@ -344,7 +344,7 @@ class SelfCalibration:
         # Intensity in the focal plane with high resolution
         # and with the focal plane resolution
         power = np.abs(sumampx) ** 2 + np.abs(sumampy) ** 2
-        power = power.T
+        power = power.T # this transpose was in the Creidhe code
 
         if doplot:
             plt.figure()

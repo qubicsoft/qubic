@@ -679,7 +679,7 @@ def simsig_asym(x, pars, extra_args=None):
 
 def fold_data(time, dd, period, lowcut, highcut, nbins, 
               notch=None, rebin=None, verbose=None,
-              return_error=False, silent=False, median=False):
+              return_error=False, silent=False, median=False, return_noise_harmonics=None):
     """
 
     Parameters
@@ -701,6 +701,22 @@ def fold_data(time, dd, period, lowcut, highcut, nbins,
     FREQ_SAMPLING = 1. / (time[1] - time[0])
     sh = np.shape(dd)
     ndet = sh[0]
+
+    if return_noise_harmonics is not None:
+        #### We estimate the noise in between the harmonics of the signal between harm=1 and 
+        #### harm=return_noise_harmonics
+        #### First we find the corresponding frequencies, below we measure the nosie
+        nharm = return_noise_harmonics
+        margin = 0.2
+        fmin = np.zeros(nharm)
+        fmax = np.zeros(nharm)
+        fnoise = np.zeros(nharm)
+        noise = np.zeros((ndet,nharm))
+        for i in range(nharm):
+            fmin[i] = 1. / period * (i+1) * (1+margin/(i+1))
+            fmax[i] = 1. / period * (i+2) * (1-margin/(i+1))
+            fnoise[i] = 0.5*(fmin[i]+fmax[i])
+
     folded = np.zeros((ndet, nbins))
     folded_nonorm = np.zeros((ndet, nbins))
     dfolded = np.zeros((ndet, nbins))
@@ -717,10 +733,22 @@ def fold_data(time, dd, period, lowcut, highcut, nbins,
         folded_nonorm[THEPIX, :] = (yy - np.mean(yy))
         dfolded[THEPIX, :] = dy / np.std(yy)
         dfolded_nonorm[THEPIX, :] = dy
+        if return_noise_harmonics is not None:
+            spectrum, freq = power_spectrum(time, newdata, rebin=True)
+            for i in range(nharm):
+                ok = (freq >= fmin[i]) & (freq < fmax[i]) 
+                noise[THEPIX,i] = np.sqrt(np.mean(spectrum[ok]))
+
     if return_error:
-        return folded, t, folded_nonorm, dfolded, dfolded_nonorm, newdata
+        if return_noise_harmonics:
+            return folded, t, folded_nonorm, dfolded, dfolded_nonorm, newdata, fnoise, noise
+        else:
+            return folded, t, folded_nonorm, dfolded, dfolded_nonorm, newdata
     else:
-        return folded, t, folded_nonorm, newdata
+        if return_noise_harmonics:
+            return folded, t, folded_nonorm, newdata, fnoise, noise
+        else:
+            return folded, t, folded_nonorm, newdata
 
 
 def power_spectrum(time_in, data_in, rebin=True):

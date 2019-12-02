@@ -1,0 +1,184 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+<!-- #region -->
+# QUBIC monofrequency pipeline
+
+
+#### Edited by Louise Mousset, 2019/11/29
+
+This notebook is the typical pipeline for data simulation and analysis. There are 2 parts :
+* From a given sky map, simulate Time Order Data (TOD) 
+* From those TOD, perform Map Making to reconstruct the input sky
+
+Here we work with only one frequency band.
+<!-- #endregion -->
+
+```{python}
+##Loading modules. 
+
+# General modules
+from __future__ import division, print_function
+# %matplotlib inline
+from pylab import *
+import os
+import sys
+import time
+import datetime
+import shutil
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import qubic
+from qubic import SpectroImLib as si
+from pysm.nominal import models
+
+rc('figure', figsize=(13, 10))
+rc('font', size=13)
+```
+
+```{python}
+# Repository for dictionary
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir='../')
+dictfilename = global_dir + 'dicts/pipeline_demo.dict'
+
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+
+# Set nf_sub to 1 to be in the monofreq case
+d['nf_sub'] = 1
+
+# Center of the patch observed in galactic coordinates
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+```
+
+# Input sky
+### Some words about maps.
+
+In this case we read a map $X_0$ simulated previously which contains fluctuations in temperature and polarization. Because we are using Healpy module (HEALPix implemented in Python) the number of pixels of each map has to be $$n_{pix} = 12 \times n_{side}^2$$ where $nside = 2\times j, \qquad j = 1,2,... $.
+
+```{python}
+# Make a sky using PYSM
+sky_config = {'cmb': models('c1', d['nside'])}
+Qubic_sky = si.Qubic_sky(sky_config, d)
+x0 = Qubic_sky.get_simple_sky_map()
+print('sky shape: ', x0.shape)
+
+# Look at the input sky maps using Healpy
+istokes = 0 # Stokes parameter (I, Q, U)
+rr = 9 # Resolution in arcmin
+
+plt.figure(figsize=(13,8))
+for istk in range(3):
+    plt.subplots_adjust(wspace=0.9)
+    hp.mollview(x0[:,istk], cmap='jet', sub = (3,2,2*istk+1), 
+                title = 'Mollview {0} Stokes parameter'.format(d['kind'][istk]))
+    hp.gnomview(x0[:,istk], cmap ='jet', sub = (3,2,2*istk+2), rot=center, reso=rr, 
+                title = 'Gnomview {0} Stokes parameter'.format(d['kind'][istk]))
+```
+
+# TOD simulation
+
+```{python}
+# Pointing strategy
+p = qubic.get_pointing(d)
+print('=== Pointing DONE! ===')
+
+# Model of the scene at the time of observation
+s = qubic.QubicScene(d)
+
+# Create a monofrequency Instrument.
+q = qubic.QubicInstrument(d)
+
+# Create an acquisition operator which combines all relevant information
+#scene, instrument configuration and pointing strategy. 
+a = qubic.QubicAcquisition(q, p, s, d)
+
+# Monofreq TOD making
+TOD, maps_convolved = a.get_observation(x0, noiseless=d['noiseless'])#, convolution = True)
+
+print('TOD shape: ', TOD.shape)
+```
+
+```{python}
+# Look at TOD for one TES
+print('--------- TOD with shape (#detectors, #pointings) : {} '.format(np.shape(TOD)))
+
+tes = 6
+plt.plot(TOD[tes, :], label='TES {}'.format(tes))
+plt.xlabel('Pointing index')
+plt.ylabel('TOD')
+```
+
+# Coverage map
+
+```{python}
+# Get coverage map
+# i.e. how many times were seen each pixel of the sky (not trivial because of the synthetic beam)
+cov = a.get_coverage()
+
+hp.mollview(cov)
+```
+
+# Map-making
+
+```{python}
+# From TOD reconstruct sky maps.
+maps_recon, nit, error = a.tod2map(TOD, d, cov=cov)
+
+print('The shape of the reconstructed maps is (#pixels, #stokes) :', maps_recon.shape)
+print('{} iterations were needed to get an error of {}'.format(nit, error))
+```
+
+# Compare input vs output
+
+```{python}
+# Compare with the convolved maps
+diff = maps_recon - maps_convolved
+diff.shape
+```
+
+```{python}
+# Keeping only the sky region which has been significantly observed
+# Pixels not seen enough are replaced by UNSEEN value
+cov = np.sum(cov, axis=0)
+maxcov = np.max(cov)
+unseen = cov < maxcov * 0.1
+
+maps_convolved[:, unseen, :] = hp.UNSEEN
+maps_recon[:, unseen, :] = hp.UNSEEN
+diff[:, unseen, :] = hp.UNSEEN
+```
+
+```{python}
+rr = 9 # Resolution in arcmin
+for istokes in [0,1,2]:
+    plt.figure(istokes,figsize=(12,12)) 
+    hp.gnomview(maps_convolved[:,istokes], cmap='jet', rot=center, sub=(3,3,3*istokes+1), reso=rr,
+                title='Input '+d['kind'][istokes])
+    hp.gnomview(maps_recon[:,istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+2), reso=rr,
+                title='Output '+d['kind'][istokes])
+    hp.gnomview(diff[:,istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+3), reso=rr,
+                title='diff '+d['kind'][istokes])
+```
+
+```{python}
+
+```

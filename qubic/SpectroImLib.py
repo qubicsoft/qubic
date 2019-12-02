@@ -46,7 +46,12 @@ class sky(object):
         band = self.dictionary['filter_nu'] / 1e9
         filter_relative_bandwidth = self.dictionary['filter_relative_bandwidth']
         _, _, nus_in, _, _, Nbbands_in = qubic.compute_freq(band, Nf, filter_relative_bandwidth)
-        return np.rollaxis(sky_signal(nu=nus_in), 2, 1)
+
+        sky = sky_signal(nu=nus_in)
+        if len(sky.shape) < 3:
+            return sky.transpose()
+        else:
+            return np.rollaxis(sky, 2, 1)
 
     def read_sky_map(self):
         """

@@ -7,6 +7,7 @@ from qubic.io import *
 import matplotlib.pyplot as mp
 from scipy.optimize import curve_fit
 import datetime as dt
+from pysimulators import FitsArray
 
 def NameRun(d):
 	"""
@@ -225,7 +226,7 @@ def SigmaMethod(maparray, d, reso = 1.5, size = 200, cutlevel = 0.01, mapret=Fal
 	else:
 		return input_fwhm_sigma
 
-def GenerateMaps(d, nus_in, reso = 1.5, size=200, p=None ):
+def GenerateMaps(d, nus_in, reso = 1.5, size=200, p=None, writemap = False, readmap = False ):
 
 	"""
 	Compute input maps to use in: calibration (for both methods Fit and Sigma) & QUBIC pipeline. 
@@ -254,33 +255,51 @@ def GenerateMaps(d, nus_in, reso = 1.5, size=200, p=None ):
 	vec_pixeles = hp.pix2vec(nsideHigh, np.arange(12*nsideHigh**2), nest = True )
 	ang_pixeles = np.arccos(np.dot(vec_pix,vec_pixeles))
 	
+	if d['config'] == 'FI':
+		CteConfig = 61.347409
+	elif d['config'] == 'TD':
+		CteConfig = 153.36
 	#mask
-	mask = np.rad2deg(ang_pixeles) < d['dtheta']
 	print(nus_in)
-	# Generate Gaussian maps - model of point source with FWHM (or Sigma) given by nus_in
-	c0 = np.zeros((len(nus_in),12*nsideHigh**2,3))
-	noise = np.zeros((len(nus_in), 12*nsideHigh**2,1))
-	
-	T = d['temperature']
-	amplitude = 1e22
-	
-	for i, n_i in enumerate(nus_in):
-		print('Map {}'.format(i))
-		fwhm_in = 61.347409/n_i # nus to fwhm
-		for j,each in enumerate(ang_pixeles):
-			if mask[j] == True:
-				c0[i,j,0] = amplitude*f(each, fwhm_in, sigma2fwhm)
-	c0[:,:,1] = c0[:,:,0]
-	c0[:,:,2] = c0[:,:,0]
-	m0 = np.empty((len(nus_in),12*nsideLow**2,3))
-	m0[:,:,0] = hp.ud_grade(c0[:,:,0], nsideLow, order_in = 'NESTED', order_out = 'RING')
-	
-	input_maps = np.empty((len(nus_in),size,size))
-	for i, mapa in enumerate(m0):
-		input_maps[i] = hp.gnomview(mapa[:,0], rot = center,  
-	                            reso = reso, xsize = size,
-	                            return_projected_map=True)
-	mp.close('all')
+	if not readmap:
+		mask = np.rad2deg(ang_pixeles) < d['dtheta']
+		# Generate Gaussian maps - model of point source with FWHM (or Sigma) given by nus_in
+		c0 = np.zeros((len(nus_in),12*nsideHigh**2,3))
+		noise = np.zeros((len(nus_in), 12*nsideHigh**2,1))
+		
+		T = d['temperature']
+		amplitude = 1e22
+		
+		for i, n_i in enumerate(nus_in):
+			print('Map {}'.format(i))
+			fwhm_in = CteConfig/n_i # nus to fwhm
+			for j,each in enumerate(ang_pixeles):
+				if mask[j] == True:
+					c0[i,j,0] = amplitude*f(each, fwhm_in, sigma2fwhm)
+		c0[:,:,1] = c0[:,:,0]
+		c0[:,:,2] = c0[:,:,0]
+		m0 = np.empty((len(nus_in),12*nsideLow**2,3))
+		m0[:,:,0] = hp.ud_grade(c0[:,:,0], nsideLow, order_in = 'NESTED', order_out = 'RING')
+		
+		input_maps = np.empty((len(nus_in),size,size))
+		for i, mapa in enumerate(m0):
+			input_maps[i] = hp.gnomview(mapa[:,0], rot = center,  
+		                            reso = reso, xsize = size,
+		                            return_projected_map=True)
+		mp.close('all')
 
-	return input_maps, m0
+		if writemap: FitsArray(m0).save('point-source-map-TD-150GHz.fits')
+		
+		return input_maps, m0
+	
+	elif readmap:
+		m0 = FitsArray('point-source-map-TD-150GHz.fits')
+		input_maps = np.empty((len(nus_in),size,size))
+		for i, mapa in enumerate(m0):
+			input_maps[i] = hp.gnomview(mapa[:,0], rot = center,  
+		                            reso = reso, xsize = size,
+		                            return_projected_map=True)
+		mp.close('all')
+
+		return input_maps, m0
 

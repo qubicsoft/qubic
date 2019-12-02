@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.1'
-      jupytext_version: 1.2.1
+      jupytext_version: 1.2.4
   kernelspec:
     display_name: Python 3
     language: python
@@ -32,7 +32,7 @@ d = qubic.qubicdict.qubicDict()
 
 # Choose her your favourite dictionary 
 d.read_from_file('../dicts/pipeline_demo.dict')
-
+d['config'] = 'FI'
 # Number of sub frequencies to be plotted for 'multi_freq' beam
 # can be chosen arbitrarily
 d['nf_sub'] = 3
@@ -41,7 +41,10 @@ theta_max = 30
 theta_deg = (np.arange(101)-50) * 0.6
 theta = abs(np.deg2rad(theta_deg))
 
-nubands = ['150', '220']
+if d['config'] == 'FI': 
+    nubands = ['150', '220']
+elif d['config'] == 'TD':
+    nubands = ['150', ]
 beam_shapes = [ 'gaussian', 'fitted_beam', 'multi_freq']
 
 beam_dict = {'gaussian':  'Gaussian', 'fitted_beam': 'Multi-gaussian fitted',

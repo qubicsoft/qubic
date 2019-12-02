@@ -62,7 +62,56 @@ def std_profile(many_patch, nbins, nside, center, seenmap):
     return bin_centers, ang, std_bin, std_profile
 
 
-def rms_method(name, residuals_way, zones=1, noiseless=False):
+def get_residuals(name, rep_simu, residuals_way, irec):
+    """
+    Compute residuals in a given way.
+
+    Parameters
+    ----------
+    name : str
+        Simulation file.
+    rep_simu : str
+        Path containing the simulations.
+    residuals_way : str
+        Way to compute residuals. 3 keywords : noiseless, conv or mean_recon
+    irec : int
+        Number of reconstructed subbands.
+
+    Returns
+    -------
+        residuals : array of shape (#reals, #bands, #pixels, 3)
+    """
+
+    # Dictionary saved during the simulation
+    d = qubic.qubicdict.qubicDict()
+    d.read_from_file(rep_simu + name + '.dict')
+    nf_recon = d['nf_recon']
+    if irec not in nf_recon:
+        raise ValueError('Invalid number of freq. {0} not in {1}'.format(irec, nf_recon))
+
+    _, maps_recon_patch, _, maps_diff_patch = rmc.get_patch_many_files(rep_simu + name,
+                                                                       '*nfrecon{}*False*'.format(irec),
+                                                                       verbose=False)
+
+    if residuals_way == 'noiseless':
+        _, patch_recon_nl, patch_conv_nl, patch_diff_nl = rmc.get_patch_many_files(rep_simu + name,
+                                                                                   '*nfrecon{}*True*'.format(irec),
+                                                                                   verbose=False)
+        residuals = maps_recon_patch - patch_recon_nl
+
+    elif residuals_way == 'conv':
+        residuals = maps_diff_patch
+
+    elif residuals_way == 'mean_recon':
+        residuals = maps_recon_patch - np.mean(maps_recon_patch, axis=0)
+
+    else:
+        raise ValueError('The way to compute residuals is not valid.')
+
+    return residuals
+
+
+def rms_method(name, residuals_way, zones=1):
     """
     Get the std of the residuals from one simulation. 
     STD are computed over realisations and pixels for I, Q, U separately.
@@ -75,8 +124,6 @@ def rms_method(name, residuals_way, zones=1, noiseless=False):
         Way to compute residuals. 3 keywords : noiseless, conv or mean_recon
     zones : int
         Number of zones to divide the patch.
-    noiseless : bool
-        If true, you will look at the noiseless run.
 
     Returns
     -------
@@ -90,50 +137,28 @@ def rms_method(name, residuals_way, zones=1, noiseless=False):
     # Dictionary saved during the simulation
     d = qubic.qubicdict.qubicDict()
     d.read_from_file(rep_simu + name + '.dict')
+    setpar = {'tol': d['tol'], 'nep': d['detector_nep'], 'npoint': d['npointings']}
 
     nf_recon = d['nf_recon']
 
     rms_I, rms_Q, rms_U = dict(), dict(), dict()
 
-    for nfrec in nf_recon:
-        if noiseless:
-            files, maps_recon_patch, maps_conv_patch, maps_diff_patch = \
-                rmc.get_patch_many_files(rep_simu + name, '*nfrecon{}*True*'.format(nfrec), verbose=False)
-
-        else:
-            # Remember: get_patch_many_file do seen_map + read each map
-            files, maps_recon_patch, maps_conv_patch, maps_diff_patch = \
-                rmc.get_patch_many_files(rep_simu + name, '*nfrecon{}*False*'.format(nfrec), verbose=False)
-
-        setpar = {'tol': d['tol'], 'nep': d['detector_nep'], 'npoint': d['npointings']}
+    for irec in nf_recon:
+        residuals = get_residuals(name, rep_simu, residuals_way, irec)
+        files, maps_recon_patch, maps_conv_patch, maps_diff_patch = \
+            rmc.get_patch_many_files(rep_simu + name, '*nfrecon{}*False*'.format(irec), verbose=False)
 
         npix_patch = maps_diff_patch.shape[2]
         setpar.update({'pixpatch': npix_patch})
         #         print(setpar)
 
-        # Choose way to compute residuals
-        if residuals_way == 'noiseless':
-            _, maps_recon_nl, maps_conv_nl, maps_diff_nl = \
-                rmc.get_patch_many_files(rep_simu + name, '*nfrecon{}*True*'.format(nfrec), verbose=False)
-
-            residuals = maps_recon_patch - maps_recon_nl
-
-        elif residuals_way == 'conv':
-            residuals = maps_diff_patch
-
-        elif residuals_way == 'mean_recon':
-            residuals = maps_recon_patch - np.mean(maps_recon_patch, axis=0)
-
-        else:
-            raise ValueError('The way to compute residuals is not valid.')
-
         nreals = np.shape(residuals)[0]
 
         # This if is for the number of zones (1 or more)
         if zones == 1:
-            rms_i, rms_q, rms_u = np.empty((nfrec,)), np.empty((nfrec,)), np.empty((nfrec,))
+            rms_i, rms_q, rms_u = np.empty((irec,)), np.empty((irec,)), np.empty((irec,))
 
-            for i in range(nfrec):
+            for i in range(irec):
                 # STD over pixels and realisations
                 rms_i[i] = np.std(residuals[:, i, :, 0])
                 rms_q[i] = np.std(residuals[:, i, :, 1])
@@ -147,22 +172,22 @@ def rms_method(name, residuals_way, zones=1, noiseless=False):
             seenmap = rmc.get_seenmap(files[0])
             nside = d['nside']
 
-            residuals_zones = np.empty((nreals, zones, nfrec, npix_patch, 3))
+            residuals_zones = np.empty((nreals, zones, irec, npix_patch, 3))
             for real in range(nreals):
                 pix_zones, residuals_zones[real] = rmc.make_zones(residuals[real], zones, nside, center, seenmap,
                                                                   angle=angle, dtheta=d['dtheta'], verbose=False,
                                                                   doplot=False)
 
-            rms_i, rms_q, rms_u = np.empty((zones, nfrec,)), np.empty((zones, nfrec,)), np.empty((zones, nfrec,))
+            rms_i, rms_q, rms_u = np.empty((zones, irec,)), np.empty((zones, irec,)), np.empty((zones, irec,))
             for izone in range(zones):
-                for i in range(nfrec):
+                for i in range(irec):
                     rms_i[izone, i] = np.std(residuals_zones[:, izone, i, :, 0])
                     rms_q[izone, i] = np.std(residuals_zones[:, izone, i, :, 1])
                     rms_u[izone, i] = np.std(residuals_zones[:, izone, i, :, 2])
 
-        rms_I.update({str(nfrec): rms_i})
-        rms_Q.update({str(nfrec): rms_q})
-        rms_U.update({str(nfrec): rms_u})
+        rms_I.update({str(irec): rms_i})
+        rms_Q.update({str(irec): rms_q})
+        rms_U.update({str(irec): rms_u})
 
     return rms_I, rms_Q, rms_U, setpar
 
@@ -384,8 +409,7 @@ def get_covcorr_between_pix(maps, verbose=False):
     for sub in range(nsub):
         for s in range(nstokes):
             cov_pix[sub, s, :, :] = np.cov(maps[:, sub, :, s], rowvar=False)
-            corr_pix[sub, s, :, :] = np.corrcoef(maps[:, sub, :, s], rowvar=False) \
-                                     - np.identity(npix)
+            corr_pix[sub, s, :, :] = np.corrcoef(maps[:, sub, :, s], rowvar=False) - np.identity(npix)
 
     return cov_pix, corr_pix
 
@@ -652,8 +676,6 @@ def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
             correction_mat[i, j] = Delta / np.sqrt(sum_delta_i * sum_delta_j)
 
     return corrections, correction_mat
-
-
 
 
 # ============ Functions to get auto and cross spectra from maps ===========#

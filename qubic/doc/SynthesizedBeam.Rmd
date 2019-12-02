@@ -21,6 +21,7 @@ The basic object in QUBIC simulaiton software is called a QubicInstrument, it co
 
 ```{python}
 import glob
+import os 
 
 import numpy as np
 import healpy as hp
@@ -42,11 +43,13 @@ import qubic.selfcal_lib as sc
 ```
 
 ```{python}
-global_dir = Qubic_DataDir(datafile='instrument.py', datadir='../')
-dictfilename = global_dir + 'dicts/pipeline_demo.dict'
+# global_dir = Qubic_DataDir(datafile='instrument.py', datadir='../')
+# dictfilename = global_dir + 'dicts/pipeline_demo.dict'
 
 d = qubic.qubicdict.qubicDict()
-d.read_from_file(dictfilename)
+d.read_from_file(os.environ['QUBIC_DICT']+'pipeline_demo.dict')
+
+# d.read_from_file(dictfilename)
 ```
 
 ```{python}
@@ -263,7 +266,7 @@ d['config'] = 'TD'
 q = qubic.QubicInstrument(d)
 
 # Define the horn configuration
-open_horns=list(np.arange(1, 3)) # between 1 and 64 (real instrument numbers)
+open_horns=list(np.arange(1, 65)) # between 1 and 64 (real instrument numbers)
 open_horns = [horn - 1 for horn in open_horns]
 q.horn.open = False
 q.horn.open[open_horns] = True
@@ -286,10 +289,10 @@ plt.subplot(321)
 q.horn.plot()
 plt.axis('off')
 hp.gnomview(sb_aber, rot=[0,90], reso=10, title='Aber', sub=(323))
-hp.gnomview(np.log10(sb_aber / np.max(sb_aber)), rot=[0,90], reso=15, 
+hp.gnomview(np.log10(sb_aber / np.max(sb_aber)), rot=[0,90], reso=10, 
             title='Aber, log10(sb/max(sb))', sub=(324))
 hp.gnomview(sb_ideal, rot=[0,90], reso=10, title='Ideal', sub=(325))
-hp.gnomview(np.log10(sb_ideal / np.max(sb_ideal)), rot=[0,90], reso=15, 
+hp.gnomview(np.log10(sb_ideal / np.max(sb_ideal)), rot=[0,90], reso=10, 
             title='Ideal, log10(sb/max(sb))', sub=(326))
 ```
 

@@ -169,7 +169,7 @@ def Cp2Cp_prime(Cp, verbose=True):
 
 ```{python}
 # Simulation date and name
-date_name = '20190929_low_nep'
+date_name = '20190926_low_nep'
 # date_name = 'NERSC_runs/24334789/20190903_low_nep'
 
 # Get the repository where the simulation is
@@ -181,6 +181,8 @@ d = qubic.qubicdict.qubicDict()
 d.read_from_file(rep_simu + date_name + '.dict')
 
 files = glob.glob(rep_simu + '*')
+
+print(d['detector_nep'])
 ```
 
 ```{python}
@@ -371,7 +373,6 @@ def plot_sigma2profile(ang, thedict, nbins, nf_recon):
 ```
 
 ```{python}
-plt.figure()
 p = plot_sigma2profile(ang, dict_sig2MC, nbins, nf_recon=d['nf_recon'])
 plt.title('sig2 MC')
 ```

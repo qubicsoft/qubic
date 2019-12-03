@@ -86,8 +86,10 @@ plt.rcParams['figure.figsize'] = (8, 8)
 ```
 
 ```{python}
-def get_Cp(rep_simu, date_name, irec, nfrecon, verbose=True, doplot=True):
-
+def get_Cp(patch, nfrecon, verbose=True, doplot=True):
+    
+    irec = np.shape(patch)[1]
+    npix_patch = np.shape(patch)[2]
     if irec == 1:
         raise ValueError('If you already have 1 band, you do not need Cp which is computed to average subbands')
         
@@ -98,25 +100,14 @@ def get_Cp(rep_simu, date_name, irec, nfrecon, verbose=True, doplot=True):
     index_frec = nfrecon.index(irec)
     if verbose: 
         print('==== Computing Cp matrix ====')
+        print('irec = ', irec)
         print('nfrecon = ', nfrecon)
         print('index_frec = ', index_frec)
-
-#     # Remember: get_maps_many_file do seen_map + read each map
-#     files, maps_recon, _, maps_diff = \
-#     rmc.get_maps_many_files(rep_simu + date_name, '*nfrecon{0}*{1}*'.format(irec, noiseless))
-#     nreals = len(files)
-
-    #get patch many files
-    _, maps_recon_patch, _, maps_diff_patch = \
-    rmc.get_patch_many_files(rep_simu + date_name, '*nfrecon{}*False*'.format(irec))
-    npix_patch = maps_recon_patch.shape[2]
-
-    if verbose: 
-        print('maps_recon_patch.shape = ', maps_recon_patch.shape)
+        print('patch.shape = ', patch.shape)
         print('npix_patch = ', npix_patch)
         
     ### The full one
-    covariance, _ = amc.get_covcorr_patch(maps_recon_patch, stokesjoint=True, doplot=doplot)
+    covariance, _ = amc.get_covcorr_patch(patch, stokesjoint=True, doplot=doplot)
 
     if verbose: print('covariance.shape =', covariance.shape)
 
@@ -134,7 +125,7 @@ def get_Cp(rep_simu, date_name, irec, nfrecon, verbose=True, doplot=True):
 
     if verbose: print('==== Done. Cp matrix computed ====')
     
-    return maps_recon_patch, Cp
+    return Cp
 ```
 
 ```{python}
@@ -171,7 +162,8 @@ def make_weighted_av(patch, Cp, verbose=False, doplot=False):
     
     weighted_av = np.empty((nreals, npix_patch, 3))
     sig2 = np.empty((npix_patch, 3))
-
+    
+    nsing = 0
     for ireal in range(nreals):
         for ipix in range(npix_patch):
             for istokes in range(3):
@@ -180,7 +172,10 @@ def make_weighted_av(patch, Cp, verbose=False, doplot=False):
                 if np.linalg.det(Cp[:, :, istokes, ipix])!=0.:
                     weighted_av[ireal, ipix, istokes], sig2[ipix, istokes] = \
                     amc.get_weighted_correlation_average(x, Cp[:, :, istokes, ipix])
-    if verbose: 
+                else:
+                    nsing += 1
+    if verbose:
+        print('# singular matrices:', nsing)
         print('Weigthed mean matrix per pixel, shape:', weighted_av.shape)
         print('Variance in MC simulation, shape: ', sig2.shape)
 
@@ -337,6 +332,40 @@ print('rep_simu : ', rep_simu)
 # Dictionary saved during the simulation
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(rep_simu + date_name + '.dict')
+
+files = glob.glob(rep_simu + '*')
+```
+
+```{python}
+# Coordinates of the zone observed in the sky
+center = equ2gal(d['RA_center'], d['DEC_center'])
+
+seenmap = rmc.get_seenmap(files[0])
+
+# Angle for each pixel in the patch
+ang = rmc.pix2ang(d['nside'], center, seenmap)
+ang
+```
+
+## Get full maps or patchs
+
+```{python}
+irec = 3
+
+files, maps_recon, maps_conv, maps_diff = \
+rmc.get_maps_many_files(rep_simu + date_name, '*nfrecon{}*False*'.format(irec))
+
+nreals=len(files)
+
+print(maps_recon.shape)
+```
+
+```{python}
+_, maps_recon_patch, maps_conv_patch, maps_diff_patch = \
+rmc.get_patch_many_files(rep_simu + date_name, '*nfrecon{}*False*'.format(irec))
+
+npix_patch = maps_recon_patch.shape[2]
+print('npix_patch = ', npix_patch)
 ```
 
 ***
@@ -347,7 +376,7 @@ d.read_from_file(rep_simu + date_name + '.dict')
 looks like yes ;) ...
 
 ```{python}
-map_recon_patch, Cp = get_Cp(rep_simu, date_name, irec=3, nfrecon=d['nf_recon'])
+Cp = get_Cp(maps_recon_patch, nfrecon=d['nf_recon'])
 ```
 
 ***
@@ -398,200 +427,7 @@ sig2MCmean_monofreq
 ```
 
 ***
-### Number of subbands used during the simulation
-
-```{python}
-nf_recon = d['nf_recon']
-print('nf_recon', nf_recon)
-
-# This array will contain the sigma2 average over pixels
-sigma2mean = np.zeros((len(nf_recon), 3))
-sigma2mean_bis = np.zeros((len(nf_recon), 3))
-```
-
-***
-## Choose a number of reconstructed subbands
-
-```{python}
-nfrec = 8
-index_frec = nf_recon.index(nfrec)
-print('index_frec = ', index_frec)
-```
-
-## Get full maps
-
-```{python}
-# Remember: get_patch_many_file do seen_map + read each map
-files, maps_recon, maps_conv, maps_diff = \
-rmc.get_maps_many_files(rep_simu + date_name, '*nfrecon{}*False*'.format(nfrec))
-
-nreals=len(files)
-
-print(maps_recon.shape)
-```
-
-## Get patchs
-
-```{python}
-_, maps_recon_patch, maps_conv_patch, maps_diff_patch = \
-rmc.get_patch_many_files(rep_simu + date_name, '*nfrecon{}*False*'.format(nfrec))
-
-npix_patch = maps_recon_patch.shape[2]
-print('npix_patch = ', npix_patch)
-#print(_)
-```
-
-## Without spectroim case
-
-```{python}
-if nfrec==1:
-    maps_recon_patch = np.reshape(maps_recon_patch, (nreals, npix_patch, 3))
-    print(maps_recon_patch.shape)
-    
-    # Variance over real
-    sig2MC_1band = np.var(maps_recon_patch, axis=0)
-    print(sig2MC_1band.shape)
-    
-    # Average the variance over pixels
-    for istokes in range(3):
-        sigma2mean[index_frec, istokes] = np.sqrt(np.sum(sig2MC_1band[:, istokes])) / npix_patch     
-    print(sigma2mean)
-    sigma2mean_bis[index_frec, :] = sigma2mean[index_frec, :]
-    print(sigma2mean_bis)
-    
-    # Covariance matrix npix x npix
-    cov_pix_1band = np.empty((npix_patch, npix_patch, 3))
-    for istokes in range(3):
-        cov_pix_1band[:, :, istokes] = np.cov(maps_recon_patch[:, :, istokes], rowvar=False)
-        plt.subplot(1, 3, istokes+1)
-        plt.imshow(cov_pix_1band[:, :, istokes])
-```
-
-## Compute the covariance matrix $C_p$
-
-```{python}
-### The full one
-covariance, _ = amc.get_covcorr_patch(maps_recon_patch, stokesjoint=True, doplot=True)
-
-print(covariance.shape)
-
-# Cut the covariance matrix for each Stokes parameter
-Cp = np.empty((nfrec, nfrec, 3, npix_patch))
-for istokes in range(3):
-    Cp[:, :, istokes, :] = covariance[istokes*nfrec:(istokes+1)*nfrec, istokes*nfrec:(istokes+1)*nfrec, :]
-print(Cp.shape)
-
-# Look at the value in Cp and the determinant
-for ipix in range(10):
-    for istokes in range(3):
-        #print(Cp[:, :, istokes, ipix])
-        det = np.linalg.det(Cp[:, :, istokes, ipix])
-        #print(det)
-```
-
-### Average $C_p$ over pixels to get $C^{'}_p$
-
-```{python}
-# Normalize each matrix by the first element
-Np = np.empty_like(Cp)
-Cp00 = np.empty((3, npix_patch))
-for istokes in range(3):
-    for ipix in range(npix_patch):
-        Cp00[istokes, ipix] = Cp[0, 0, istokes, ipix]
-        Np[:, :, istokes, ipix] = Cp[:, :, istokes, ipix] / Cp00[istokes, ipix]
-
-# We can now average the matrices over the pixels
-N = np.mean(Np, axis=3)  
-print(N.shape)
-
-# We re-multiply N by the first term
-Cp_bis = np.empty_like(Cp)
-for istokes in range(3):
-    for ipix in range(npix_patch):
-        Cp_bis[:, :, istokes, ipix] = Cp00[istokes, ipix] * N[:, :, istokes]
-print(Cp_bis.shape)
-
-```
-
-## Weighted average over subbands
-
-
-
-### Using $C_p$
-
-```{python}
-pr = np.empty((nreals, npix_patch, 3))
-sig2pr = np.empty((npix_patch, 3))
-
-for ireal in range(nreals):
-    for ipix in range(npix_patch):
-        for istokes in range(3):
-            x = maps_recon_patch[ireal, :, ipix, istokes]
-            # Only do it if the matrix is not singular...
-            if np.linalg.det(Cp[:, :, istokes, ipix])!=0.:
-                pr[ireal, ipix, istokes], sig2pr[ipix, istokes] = amc.get_weighted_correlation_average(x, Cp[:, :, istokes, ipix])
-
-print(pr.shape)
-
-sig2MC = np.var(pr, axis=0)
-sig2MC.shape
-
-cov_pix = np.empty((npix_patch, npix_patch, 3))
-plt.figure(figsize=(12,12))
-
-#Average over realizations
-for istokes in range(3):
-    sigma2mean[index_frec, istokes] = np.sqrt(np.sum(sig2MC[:, istokes])) / npix_patch
-
-    cov_pix[:, :, istokes] = np.cov(pr[:, :, istokes], rowvar=False)
-    plt.subplot(1, 3, istokes+1)
-    plt.imshow(cov_pix[:, :, istokes])
-    #plt.colorbar()
-```
-
-### Using $C^{'}_p$
-
-```{python}
-pr_bis = np.empty((nreals, npix_patch, 3))
-sig2pr_bis = np.empty((npix_patch, 3))
-
-for ireal in range(nreals):
-    for ipix in range(npix_patch):
-        for istokes in range(3):
-            x = maps_recon_patch[ireal, :, ipix, istokes]
-            pr_bis[ireal, ipix, istokes], sig2pr_bis[ipix, istokes] = amc.get_weighted_correlation_average(x, Cp_bis[:, :, istokes, ipix])
-
-print(pr_bis.shape)
-
-sig2MC_bis = np.var(pr_bis, axis=0)
-sig2MC_bis.shape
-
-cov_pix_bis = np.empty((npix_patch, npix_patch, 3))
-plt.figure(figsize=(12,12))
-for istokes in range(3):
-    sigma2mean_bis[index_frec, istokes] = np.sqrt(np.sum(sig2MC_bis[:, istokes])) / npix_patch
-
-    cov_pix_bis[:, :, istokes] = np.cov(pr_bis[:, :, istokes], rowvar=False)
-    plt.subplot(1, 3, istokes+1)
-    plt.imshow(cov_pix_bis[:, :, istokes])
-    #plt.colorbar()
-```
-
-```{python}
-newsigma = np.empty((len(nf_recon),3))
-newsigma_prime = np.empty((len(nf_recon),3))
-
-for j, irec in enumerate(nf_recon):
-    #print(sigma2WCp(rep_simu, date_name, irec, nf_recon, noiseless = 'False'))
-    newsigma[j,:] = sigma2WCp(rep_simu, date_name, irec, nf_recon, noiseless = 'False')
-    newsigma_prime[j,:] = sigma2WCpPrime(rep_simu, date_name, irec, nf_recon, noiseless = 'False')
-    
-newsigma = np.sqrt(newsigma)
-newsigma_prime = np.sqrt(newsigma_prime)
-```
-
-***
-## Plots
+# Plots
 
 ```{python}
 print(newsigma[:, :])

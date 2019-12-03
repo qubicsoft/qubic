@@ -544,8 +544,8 @@ allstdmat : list of arrays (nsub, nsub, 3)
                     variance_map[isub, i, p] = mat
                 else:
                     variance_map[isub, i, p] = 1. / np.sum(np.linalg.inv(mat))
-                covmat_freqfreq[:, :, p, i] = mat / np.mean(
-                    mat)  # its normalization is irrelevant for the later average
+                covmat_freqfreq[:, :, p, i] = mat / np.mean(mat)
+                # its normalization is irrelevant for the later average
         # Average and std over pixels
         meanmat = np.zeros((nsubvals[isub], nsubvals[isub], 3))
         stdmat = np.zeros((nsubvals[isub], nsubvals[isub], 3))
@@ -556,13 +556,6 @@ allstdmat : list of arrays (nsub, nsub, 3)
         allmeanmat.append(meanmat)
         allstdmat.append(stdmat)
     return np.sqrt(variance_map), allmeanmat, allstdmat
-
-
-def get_mean_cov(vals, invcov):
-    AtNid = np.sum(np.dot(invcov, vals))
-    AtNiA_inv = 1. / np.sum(invcov)
-    mean_cov = AtNid * AtNiA_inv
-    return mean_cov
 
 
 def get_rms_covarmean(nsubvals, seenmap, allmapsout, allmeanmat):
@@ -603,6 +596,16 @@ def get_rms_covarmean(nsubvals, seenmap, allmapsout, allmeanmat):
                 rmsmap_cov[isub, iqu, p] = np.std(mean_cov)
 
     return meanmap_cov, rmsmap_cov
+
+def get_mean_cov(vals, invcov):
+    """
+    This function does the same as the next one:
+    get_weighted_correlation_average
+    """
+    AtNid = np.sum(np.dot(invcov, vals))
+    AtNiA_inv = 1. / np.sum(invcov)
+    mean_cov = AtNid * AtNiA_inv
+    return mean_cov
 
 
 def get_weighted_correlation_average(x, cov):

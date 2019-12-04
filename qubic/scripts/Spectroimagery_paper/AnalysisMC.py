@@ -13,6 +13,7 @@ from qubic import Xpol
 
 from qubicpack.utilities import Qubic_DataDir
 
+
 # ============ Functions do statistical tests on maps ===========#
 def std_profile(many_patch, nbins, nside, center, seenmap):
     """
@@ -352,7 +353,7 @@ def plot_hist(mat_npix, bins, title_prefix, ymax=0.5, color='b'):
             plt.subplot(dim, dim, idx)
             plt.hist(mat_npix[iterm, jterm, :], color=color, density=True,
                      bins=bins, label='m={0:.2f} \n $\sigma$={1:.2f}'.format(mean, std))
-            # no yticks for historgram in middle
+            # no yticks for histogram in middle
             if idx % dim != 1:
                 plt.yticks([])
             # no xticks for histogram in middle
@@ -509,6 +510,207 @@ def covariance_IQU_subbands(allmaps, stokesjoint=False):
     return allmean, allcov
 
 
+def get_Cp(patch, nfrecon, verbose=True, doplot=True):
+    irec = np.shape(patch)[1]
+    npix_patch = np.shape(patch)[2]
+    if irec == 1:
+        raise ValueError('If you already have 1 band, you do not need Cp which is computed to average subbands')
+
+    if irec not in nfrecon:
+        raise ValueError('Invalid number of freq. {0} not in {1}'.format(irec, nfrecon))
+
+    # Prepare to save
+    if verbose:
+        print('==== Computing Cp matrix ====')
+        print('irec = ', irec)
+        print('nfrecon = ', nfrecon)
+        print('patch.shape = ', patch.shape)
+        print('npix_patch = ', npix_patch)
+
+    # The full one
+    covariance, _ = get_covcorr_patch(patch, stokesjoint=True, doplot=doplot)
+
+    if verbose: print('covariance.shape =', covariance.shape)
+
+    # Cut the covariance matrix for each Stokes parameter
+    Cp = np.empty((irec, irec, 3, npix_patch))
+    for istokes in range(3):
+        a = istokes * irec
+        b = (istokes + 1) * irec
+        Cp[:, :, istokes, :] = covariance[a:b, a:b, :]
+    if verbose:
+        print('Cp.shape = ', Cp.shape)
+
+        # Look at the value in Cp and the determinant
+        for ipix in range(10):
+            for istokes in range(3):
+                det = np.linalg.det(Cp[:, :, istokes, ipix])
+                print('det = ', det)
+
+        print('==== Done. Cp matrix computed ====')
+
+    return Cp
+
+
+def make_weighted_av(patch, Cp, ang, ang_threshold, verbose=False):
+    nreals = np.shape(patch)[0]
+    npix_patch = np.shape(Cp)[-1]
+    if verbose:
+        print('Cp.shape = ', Cp.shape)
+        print('# realizations = ', nreals)
+        print('npix_patch = ', npix_patch)
+
+    weighted_av = np.empty((nreals, npix_patch, 3))
+    sig2 = np.empty((npix_patch, 3))
+
+    nsing = 0
+    for ireal in range(nreals):
+        for ipix in range(npix_patch):
+            for istokes in range(3):
+                x = patch[ireal, :, ipix, istokes]
+                # Only do it if the matrix is not singular:
+                if np.linalg.det(Cp[:, :, istokes, ipix]) != 0.:
+                    weighted_av[ireal, ipix, istokes], sig2[ipix, istokes] = \
+                        get_weighted_correlation_average(x, Cp[:, :, istokes, ipix])
+                else:
+                    nsing += 1
+    if verbose:
+        print('# singular matrices: ', nsing)
+        print('Weigthed mean matrix per pixel, shape: ', weighted_av.shape)
+        print('Variance in MC simulation, shape: ', sig2.shape)
+
+    # Average sig2 over pixels in a given angle
+    sigmean = average_pix_sig2(sig2, ang, ang_threshold)
+
+    return weighted_av, sig2, sigmean
+
+
+def average_pix_sig2(sig2, ang, ang_threshold):
+    """
+    Average the variances over pixels in a given angle.
+    Return the sigma: the sqrt of the mean variance.
+    """
+    sigmean = np.empty((3,))
+    npix = np.shape(ang[ang < ang_threshold])
+    print('npix =', npix)
+    for istokes in range(3):
+        sigmean[istokes] = np.sqrt(np.sum(sig2[:, istokes][ang < ang_threshold]) / npix)
+    return sigmean
+
+
+def get_sig2MC(map_monoband, ang, ang_threshold):
+    # Compute a new sigma by Monte-Carlo over realizations
+    sig2MC = np.var(map_monoband, axis=0)
+
+    # Average sig2MC over pixels in a given angle
+    sigMCmean = average_pix_sig2(sig2MC, ang, ang_threshold)
+
+    return sig2MC, sigMCmean
+
+
+def Cp2Cp_prime(Cp, verbose=True):
+    npix_patch = np.shape(Cp)[-1]
+    if verbose: print('npix_patch =', npix_patch)
+
+    # Normalize each matrix by the first element
+    Np = np.empty_like(Cp)
+    Cp00 = np.empty((3, npix_patch))
+    for istokes in range(3):
+        for ipix in range(npix_patch):
+            Cp00[istokes, ipix] = Cp[0, 0, istokes, ipix]
+            Np[:, :, istokes, ipix] = Cp[:, :, istokes, ipix] / Cp00[istokes, ipix]
+
+    # We can now average the matrices over the pixels
+    N = np.mean(Np, axis=3)
+
+    if verbose: print('N shape:', N.shape)
+
+    # We re-multiply N by the first term
+    Cp_prime = np.empty_like(Cp)
+    for istokes in range(3):
+        for ipix in range(npix_patch):
+            Cp_prime[:, :, istokes, ipix] = Cp00[istokes, ipix] * N[:, :, istokes]
+
+    if verbose: print('Cp_prime.shape =', Cp_prime.shape)
+
+    return Cp_prime
+
+
+def get_weighted_correlation_average(x, cov):
+    """
+    Compute a weighted average taking into account the correlations between the variables.
+    The mean obtained is the one that has the minimal variance possible.
+
+    Parameters
+    ----------
+    x : 1D array
+        Values you want to average.
+    cov : 2D array
+        Covariance matrix associated to the values in x.
+
+    Returns
+    -------
+    The weighted mean and the variance on that mean.
+
+    """
+    inv_cov = np.linalg.inv(cov)
+    sig2 = 1. / np.sum(inv_cov)
+    weighted_mean = sig2 * np.sum(np.dot(inv_cov, x))
+    return weighted_mean, sig2
+
+
+def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
+    """
+    The reconstructed subbands have different widths.
+    Here, we compute the corrections you can applied to
+    the variances and covariances to take this into account.
+
+    Parameters
+    ----------
+    nf_sub : int
+        Number of input subbands
+    nf_recon : int
+        Number of reconstructed subbands
+    band : int
+        QUBIC frequency band, in GHz. 150 by default
+        Typical values: 150, 220.
+    relative_bandwidth : float
+        Ratio of the difference between the edges of the
+        frequency band over the average frequency of the band
+        Typical value: 0.25
+
+    Returns
+    ----------
+    corrections : list
+        Correction coefficients for each subband.
+    correction_mat : array of shape (3xnf_recon, 3xnf_recon)
+        Matrix containing the corrections.
+        It can be multiplied term by term to a covariance matrix.
+
+    """
+    nb = nf_sub // nf_recon  # Number of input subbands in each reconstructed subband
+
+    _, nus_edge, nus, deltas, Delta, _ = qubic.compute_freq(band, nf_sub, relative_bandwidth)
+
+    corrections = []
+    for isub in range(nf_recon):
+        # Compute wide of the sub-band
+        sum_delta_i = deltas[isub * nb: isub * nb + nb].sum()
+        corrections.append(Delta / sum_delta_i)
+
+    correction_mat = np.empty((3 * nf_recon, 3 * nf_recon))
+    for i in range(3 * nf_recon):
+        for j in range(3 * nf_recon):
+            freq_i = i // nf_recon
+            freq_j = j // nf_recon
+            sum_delta_i = deltas[freq_i * nb: freq_i * nb + nb].sum()
+            sum_delta_j = deltas[freq_j * nb: freq_j * nb + nb].sum()
+            correction_mat[i, j] = Delta / np.sqrt(sum_delta_i * sum_delta_j)
+
+    return corrections, correction_mat
+
+
+# =================== Old functions ================
 def get_rms_covar(nsubvals, seenmap, allmapsout):
     """Test done by Matthieu Tristram :
 Calculate the variance map in each case accounting for the band-band covariance matrix for each pixel from the MC.
@@ -597,88 +799,15 @@ def get_rms_covarmean(nsubvals, seenmap, allmapsout, allmeanmat):
 
     return meanmap_cov, rmsmap_cov
 
+
 def get_mean_cov(vals, invcov):
     """
-    This function does the same as the next one:
-    get_weighted_correlation_average
+    This function does the same as: get_weighted_correlation_average
     """
     AtNid = np.sum(np.dot(invcov, vals))
     AtNiA_inv = 1. / np.sum(invcov)
     mean_cov = AtNid * AtNiA_inv
     return mean_cov
-
-
-def get_weighted_correlation_average(x, cov):
-    """
-    Compute a weighted average taking into account the correlations between the variables.
-    The mean obtained is the one that has the minimal variance possible.
-
-    Parameters
-    ----------
-    x : 1D array
-        Values you want to average.
-    cov : 2D array
-        Covariance matrix associated to the values in x.
-
-    Returns
-    -------
-    The weighted mean and the variance on that mean.
-
-    """
-    inv_cov = np.linalg.inv(cov)
-    sig2 = 1. / np.sum(inv_cov)
-    weighted_mean = sig2 * np.sum(np.dot(inv_cov, x))
-    return weighted_mean, sig2
-
-
-def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
-    """
-    The reconstructed subbands have different widths.
-    Here, we compute the corrections you can applied to
-    the variances and covariances to take this into account.
-
-    Parameters
-    ----------
-    nf_sub : int
-        Number of input subbands
-    nf_recon : int
-        Number of reconstructed subbands
-    band : int
-        QUBIC frequency band, in GHz. 150 by default
-        Typical values: 150, 220.
-    relative_bandwidth : float
-        Ratio of the difference between the edges of the
-        frequency band over the average frequency of the band
-        Typical value: 0.25
-    Returns
-    corrections : list
-        Correction coefficients for each subband.
-    correction_mat : array of shape (3xnf_recon, 3xnf_recon)
-        Matrix containing the corrections.
-        It can be multiplied term by term to a covariance matrix.
-    -------
-
-    """
-    nb = nf_sub // nf_recon  # Number of input subbands in each reconstructed subband
-
-    _, nus_edge, nus, deltas, Delta, _ = qubic.compute_freq(band, nf_sub, relative_bandwidth)
-
-    corrections = []
-    for isub in range(nf_recon):
-        # Compute wide of the sub-band
-        sum_delta_i = deltas[isub * nb: isub * nb + nb].sum()
-        corrections.append(Delta / sum_delta_i)
-
-    correction_mat = np.empty((3 * nf_recon, 3 * nf_recon))
-    for i in range(3 * nf_recon):
-        for j in range(3 * nf_recon):
-            freq_i = i // nf_recon
-            freq_j = j // nf_recon
-            sum_delta_i = deltas[freq_i * nb: freq_i * nb + nb].sum()
-            sum_delta_j = deltas[freq_j * nb: freq_j * nb + nb].sum()
-            correction_mat[i, j] = Delta / np.sqrt(sum_delta_i * sum_delta_j)
-
-    return corrections, correction_mat
 
 
 # ============ Functions to get auto and cross spectra from maps ===========#

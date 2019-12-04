@@ -112,18 +112,18 @@ def make_weighted_av(patch, Cp, ang, ang_threshold, verbose=False, doplot=False)
 
     
     # Average sig2 over pixels 
-    sig2mean = average_pix_sig2(sig2, ang, ang_threshold)
+    sigmean = average_pix_sig2(sig2, ang, ang_threshold)
                     
-    return weighted_av, sig2, sig2mean
+    return weighted_av, sig2, sigmean
 
 
 def average_pix_sig2(sig2, ang, ang_threshold):
-    sig2mean = np.empty((3,))
+    sigmean = np.empty((3,))
     npix = np.shape(ang[ang < ang_threshold])
     print('npix =', npix)
     for istokes in range(3):
-        sig2mean[istokes] = np.sqrt(np.sum(sig2[:, istokes][ang < ang_threshold])) / npix
-    return sig2mean
+        sigmean[istokes] = np.sqrt(np.sum(sig2[:, istokes][ang < ang_threshold]) / npix)
+    return sigmean
 
 
 def get_sig2MC(map_monoband, ang, ang_threshold):
@@ -131,9 +131,9 @@ def get_sig2MC(map_monoband, ang, ang_threshold):
     sig2MC = np.var(map_monoband, axis=0)
 
     # Average sig2MC over pixels
-    sig2MCmean = average_pix_sig2(sig2MC, ang, ang_threshold)
+    sigMCmean = average_pix_sig2(sig2MC, ang, ang_threshold)
     
-    return sig2MC, sig2MCmean
+    return sig2MC, sigMCmean
 
 def Cp2Cp_prime(Cp, verbose=True):
     
@@ -242,15 +242,15 @@ looks like yes....
 
 ```{python}
 # Using Cp
-weighted_av, sig2, sig2mean = make_weighted_av(maps_recon_patch, Cp, ang, ang_threshold=d['dtheta'], 
+weighted_av, sig2, sigmean = make_weighted_av(maps_recon_patch, Cp, ang, ang_threshold=d['dtheta'], 
                                                verbose=True, doplot=True)
-print(sig2, sig2mean)
+print(sig2, sigmean)
 
 # Using Cp_prime
-weighted_av_prime, sig2_prime, sig2mean_prime = make_weighted_av(maps_recon_patch, Cp_prime, 
+weighted_av_prime, sig2_prime, sigmean_prime = make_weighted_av(maps_recon_patch, Cp_prime, 
                                                                  ang, ang_threshold=d['dtheta'],
                                                                  verbose=True, doplot=True)
-print(sig2_prime, sig2mean_prime)
+print(sig2_prime, sigmean_prime)
 ```
 
 ***
@@ -259,7 +259,7 @@ looks like yes....
 
 ```{python}
 # Using a map that has been averaged over subbands
-sig2MC, sig2MCmean = get_sig2MC(weighted_av_prime, ang, ang_threshold=d['dtheta'])
+sig2MC, sigMCmean = get_sig2MC(weighted_av_prime, ang, ang_threshold=d['dtheta'])
 print(weighted_av.shape)
 
 # Using a map with only one subband
@@ -270,8 +270,8 @@ print(patch_recon_monofreq.shape)
 patch_recon_monofreq = np.squeeze(patch_recon_monofreq)
 print(patch_recon_monofreq.shape)
 
-sig2MC_monofreq, sig2MCmean_monofreq = get_sig2MC(patch_recon_monofreq, ang, ang_threshold=d['dtheta'])
-sig2MCmean_monofreq
+sig2MC_monofreq, sigMCmean_monofreq = get_sig2MC(patch_recon_monofreq, ang, ang_threshold=d['dtheta'])
+sigMCmean_monofreq
 ```
 
 # Compute all sigma
@@ -297,9 +297,9 @@ for irec in d['nf_recon']:
         recon_patch = np.squeeze(recon_patch)
         print(recon_patch.shape)
 
-        sig2MC_monofreq, sig2MCmean_monofreq = get_sig2MC(recon_patch, ang, ang_threshold=d['dtheta'])
+        sig2MC_monofreq, sigMCmean_monofreq = get_sig2MC(recon_patch, ang, ang_threshold=d['dtheta'])
         dict_sig2MC.update({'{}'.format(irec): sig2MC_monofreq})
-        dict_sig2MC.update({'{}mean'.format(irec): sig2MCmean_monofreq})
+        dict_sig2MC.update({'{}mean'.format(irec): sigMCmean_monofreq})
        
     else:
         Cp = get_Cp(recon_patch, nfrecon=d['nf_recon'])
@@ -307,25 +307,25 @@ for irec in d['nf_recon']:
         
         # Compute sig2 and sig2MC 
         # Using Cp
-        weighted_av, sig2, sig2mean = make_weighted_av(recon_patch, Cp, ang, ang_threshold=d['dtheta'],
+        weighted_av, sig2, sigmean = make_weighted_av(recon_patch, Cp, ang, ang_threshold=d['dtheta'],
                                                        verbose=True, doplot=True)
         dict_sig2.update({'{}'.format(irec): sig2})
-        dict_sig2.update({'{}mean'.format(irec): sig2mean})
+        dict_sig2.update({'{}mean'.format(irec): sigmean})
         
-        sig2MC, sig2MCmean = get_sig2MC(weighted_av, ang, ang_threshold=d['dtheta'])
+        sig2MC, sigMCmean = get_sig2MC(weighted_av, ang, ang_threshold=d['dtheta'])
         dict_sig2MC.update({'{}'.format(irec): sig2MC})
-        dict_sig2MC.update({'{}mean'.format(irec): sig2MCmean})
+        dict_sig2MC.update({'{}mean'.format(irec): sigMCmean})
 
         # Using Cp_prime
-        weighted_av_prime, sig2_prime, sig2mean_prime = make_weighted_av(recon_patch, Cp_prime, 
+        weighted_av_prime, sig2_prime, sigmean_prime = make_weighted_av(recon_patch, Cp_prime, 
                                                                          ang, ang_threshold=d['dtheta'],
                                                                          verbose=True, doplot=True)
         dict_sig2_prime.update({'{}'.format(irec): sig2_prime})
-        dict_sig2_prime.update({'{}mean'.format(irec): sig2mean_prime})
+        dict_sig2_prime.update({'{}mean'.format(irec): sigmean_prime})
         
-        sig2MC_prime, sig2MCmean_prime = get_sig2MC(weighted_av_prime, ang, ang_threshold=d['dtheta'])
+        sig2MC_prime, sigMCmean_prime = get_sig2MC(weighted_av_prime, ang, ang_threshold=d['dtheta'])
         dict_sig2MC_prime.update({'{}'.format(irec): sig2MC_prime})
-        dict_sig2MC_prime.update({'{}mean'.format(irec): sig2MCmean_prime})
+        dict_sig2MC_prime.update({'{}mean'.format(irec): sigMCmean_prime})
 
 ```
 
@@ -396,7 +396,7 @@ plt.title('sig2 prime')
 ```
 
 ```{python}
-def plot_sigma2mean(thedict, nf_recon):
+def plot_sig_mean(thedict, nf_recon):
     for s in range(3):
         for irec in nf_recon: 
 
@@ -404,35 +404,39 @@ def plot_sigma2mean(thedict, nf_recon):
             plt.subplots_adjust(right=1.6)
             
             if irec == 1: 
-                sig2_monofreq = dict_sig2MC['{}mean'.format(irec)][s]
-                plt.plot(irec, sig2_monofreq, 'o', label='irec = {}'.format(irec))
-                
+                sig_monofreq = dict_sig2MC['{}mean'.format(irec)][s]    
             else:
-                p = plt.plot(irec, thedict['{}mean'.format(irec)][s], 'o', label='irec ={}'.format(irec))
+                sig = thedict['{}mean'.format(irec)][s] / sig_monofreq
+                p = plt.plot(irec, sig, 'o', label='irec ={}'.format(irec))
                 
-#             plt.plot(nf_recon, (sig2_monofreq*np.sqrt(nf_recon) + sig2_monofreq)/1.5)
+            plt.plot(nf_recon, np.sqrt(nf_recon), 'k')
+            
             plt.title(Stokes[s])
             plt.xlabel('irec')
-            plt.ylabel('sig2')
+            plt.ylabel('sig')
         #         plt.ylim(0, 5)
             plt.legend()
     return p
 ```
 
 ```{python}
-p = plot_sigma2mean(dict_sig2MC, d['nf_recon'])
+p = plot_sig_mean(dict_sig2MC, d['nf_recon'])
 ```
 
 ```{python}
-p = plot_sigma2mean(dict_sig2MC_prime, d['nf_recon'])
+p = plot_sig_mean(dict_sig2MC_prime, d['nf_recon'])
 ```
 
 ```{python}
-p = plot_sigma2mean(dict_sig2, d['nf_recon'])
+p = plot_sig_mean(dict_sig2, d['nf_recon'])
 ```
 
 ```{python}
-p = plot_sigma2mean(dict_sig2_prime, d['nf_recon'])
+p = plot_sig_mean(dict_sig2_prime, d['nf_recon'])
+
+```
+
+```{python}
 
 ```
 

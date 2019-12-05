@@ -21,16 +21,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import rc
 
-from pysm.nominal import models
-
 import ReadMC as rmc
 import AnalysisMC as amc
 
-from qubic import SpectroImLib as si
 import qubic
 from qubic import equ2gal
 
 from qubicpack.utilities import Qubic_DataDir
+
+from scipy.stats import pearsonr
+from scipy.linalg import cholesky
 
 # %matplotlib inline
 rc({'cmap', 'viridis'})
@@ -71,8 +71,8 @@ plt.imshow(Cp_prime[:, :, 1, 2])
 ```
 
 ```{python}
-RA_center= 0. #deg
-DEC_center=-57. #deg
+RA_center = 0. #deg
+DEC_center = -57. #deg
 center = equ2gal(RA_center, DEC_center)
 
 ang = rmc.pix2ang(nside, center)
@@ -96,47 +96,92 @@ plt.plot(sig2MC[:, 2])
 # With correlated noise
 
 ```{python}
-#Generate correlated noise
-corr_mat = np.zeros((npix_patch,npix_patch))
-rho = np.arange(npix_patch)
+# Generate correlated matrix between subbands
+r = np.zeros((nfrec, nfrec))
+rho = np.arange(nfrec)
 
-def noise(rho, npix):
-    return -rho/npix+1
+def noise(rho, nfrec):
+    return 1 - rho / nfrec
 
-for j in range(npix_patch):
-    corr_mat[j,:] = np.roll(noise(rho,npix_patch), j)
+for j in range(nfrec):
+    r[:, j] = np.roll(noise(rho, nfrec), j)
 
-plt.imshow(corr_mat)
+# Here r is not symmetric
 
-from scipy.linalg import cholesky
-upp_mat = cholesky(corr_mat)
-#plt.plot(corr_mat[1000,:])
+# The cov matrix must be symmetric
+for i in range(nfrec):
+    for j in range(nfrec):
+        r[i, j] = r[j, i]
 
+# Construct c, so c*c^T = r
+
+# method = 'cholesky'
+method = 'eigenvectors'
+
+if method == 'cholesky':
+    # Compute the Cholesky decomposition.
+    c = cholesky(r, lower=False)
+else:
+    # Compute the eigenvalues and eigenvectors.
+    evals, evecs = eigh(r)
+    c = np.dot(evecs, np.diag(np.sqrt(evals))).T
+
+# Check that c*c^T = r
+plt.subplot(131)
+plt.imshow(r)
+plt.title('r')
+
+plt.subplot(132)
+plt.imshow(c)
+plt.title('c')
+
+plt.subplot(133)
+plt.imshow(c.T @ c)
+plt.title('c*c^T')
+
+# Check correlation coeff between lines or columns
+corr1 , _ = pearsonr(r[:, 0], r[:, -1])
+corr2 , _ = pearsonr(r[0, :], r[2, :])
+print(corr1, corr2)
 ```
 
 ```{python}
-cov_pix = np.empty((npix_patch, npix_patch, 3))
-plt.figure(figsize=(12,12))
+# Convert the data to correlated random variables. 
+x0_noisy_corr = np.empty_like(x0_noisy)
+for ipix in range(npix):
+    for istokes in range(3):
+        x0_noisy_corr[:, :, ipix, istokes] = x0_noisy[:, :, ipix, istokes] @ c
 
-#Average over realizations
-for istokes in range(3):
-    cov_pix[:, :, istokes] = np.cov(pr[:, :, istokes], rowvar=False)
-    if istokes == 0: 
-        aab= cov_pix[:,:,istokes] 
-        aab = aab @ upp_mat
-        cov_pix[:,:,istokes]=aab
-    plt.subplot(1, 3, istokes+1)
-    plt.imshow(cov_pix[:, :, istokes])
+hp.mollview(x0_noisy_corr[0, 0, :, 0])
+x0_noisy_corr
 ```
 
-***
-
+```{python}
+Cp = amc.get_Cp(x0_noisy_corr, nfrecon=nfrecon)
+plt.figure()
+plt.imshow(Cp[:, :, 1, 0])
+plt.colorbar()
+```
 
 ```{python}
-from scipy.stats import pearsonr
+Cp_prime = amc.Cp2Cp_prime(Cp, verbose=True)
+plt.imshow(Cp_prime[:, :, 0, 0])
+```
 
-corr_0_1 , _ = pearsonr(cov_pix[0,0], cov_pix[0,-1])
-print(corr_0_1)
+```{python}
+weighted_av, sig2, sigmean = amc.make_weighted_av(x0_noisy_corr, Cp, ang, ang_threshold=90, 
+                                               verbose=True)
+print(sig2, sigmean)
+```
+
+```{python}
+hp.mollview(weighted_av[0, :, 0])
+```
+
+```{python}
+sig2MC, sigMCmean = amc.get_sig2MC(weighted_av, ang, ang_threshold=80)
+print(sig2MC, sigMCmean)
+plt.plot(sig2MC[:, 2])
 ```
 
 ```{python}

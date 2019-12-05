@@ -85,7 +85,7 @@ print('NEP = ', d['detector_nep'])
 ## Get full maps or patchs
 
 ```{python}
-irec = 2
+irec = 8
 
 files, maps_recon, maps_conv, maps_diff = \
 rmc.get_maps_many_files(rep_simu + date_name, '*nfrecon{}*False*'.format(irec))

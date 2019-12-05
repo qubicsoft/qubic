@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.1'
-      jupytext_version: 1.2.4
+      jupytext_version: 1.2.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -61,11 +61,9 @@ rc('font', size=13)
 
 # Repository for dictionary and input maps
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir='../')
-dictfilename = global_dir + 'dicts/pipeline_demo.dict'
+dictfilename = global_dir + '/dicts/pipeline_demo.dict'
 dictmaps = global_dir + 'doc/'
-```
 
-```{python}
 # Read dictionary chosen
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)

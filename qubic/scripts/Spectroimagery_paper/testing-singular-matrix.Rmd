@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.1'
-      jupytext_version: 1.2.4
+      jupytext_version: 1.2.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -21,9 +21,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import rc
 
+from pysm.nominal import models
+
 import ReadMC as rmc
 import AnalysisMC as amc
 
+from qubic import SpectroImLib as si
 import qubic
 from qubic import equ2gal
 
@@ -31,111 +34,66 @@ from qubicpack.utilities import Qubic_DataDir
 
 # %matplotlib inline
 rc({'cmap', 'viridis'})
-plt.rcParams['figure.figsize'] = (8, 8)
+plt.rcParams['figure.figsize'] = (5, 5)
 
+```
+
+# Noisy maps with no correlations
+
+```{python}
+nside = 8
+npix = 12 * nside**2
+nfrec = 8
+x0 = np.random.random((nfrec, npix, 3))
+
+x0_mean = np.mean(x0)
+x0_std = np.std(x0)
+
+# Make many realizations with gaussian noise (no correlations)
+nreals = 200
+
+x0_noisy = [x0 + np.random.normal(x0_mean, x0_std, size=x0.shape) for i in range(nreals)]
+x0_noisy = np.array(x0_noisy)
+
+print(x0_noisy.shape)
+hp.mollview(x0[0, :, 0])
+hp.mollview(x0_noisy[2, 0, :, 0])
+```
+
+```{python}
+nfrecon = [1, 2, 4, 8]
+Cp = amc.get_Cp(x0_noisy, nfrecon=nfrecon)
+```
+
+```{python}
+Cp_prime = amc.Cp2Cp_prime(Cp, verbose=True)
+plt.imshow(Cp_prime[:, :, 1, 2])
+```
+
+```{python}
+RA_center= 0. #deg
+DEC_center=-57. #deg
+center = equ2gal(RA_center, DEC_center)
+
+ang = rmc.pix2ang(nside, center)
+# print(ang)
+
+weighted_av, sig2, sigmean = amc.make_weighted_av(x0_noisy, Cp, ang, ang_threshold=80, verbose=True)
+print(sig2, sigmean)
+```
+
+```{python}
+hp.mollview(weighted_av[0, :, 0])
+```
+
+```{python}
+sig2MC, sigMCmean = amc.get_sig2MC(weighted_av, ang, ang_threshold=80)
+print(sig2MC, sigMCmean)
+plt.plot(sig2MC[:, 2])
 ```
 
 ***
-# Get the simulation files
-
-```{python}
-# Simulation date and name
-#date_name = simu220[0]
-date_name = 'NERSC_runs/24334789/20190903_low_nep'
-
-# Get the repository where the simulation is
-rep_simu = Qubic_DataDir(datafile=date_name + '.dict') + '/'
-print('rep_simu : ', rep_simu)
-
-# Dictionary saved during the simulation
-d = qubic.qubicdict.qubicDict()
-d.read_from_file(rep_simu + date_name + '.dict')
-```
-
-***
-### Number of subbands, NEP and Ptg
-
-```{python}
-nf_recon = d['nf_recon']
-print('nf_recon', nf_recon)
-
-nep = d['detector_nep']
-print('NEP = ', nep)
-
-ptg = d['npointings']
-print('ptg = ', ptg)
-
-filter_nu = d['filter_nu']
-print('Freq =', filter_nu)
-
-center = equ2gal(d['RA_center'], d['DEC_center'])
-stokes = ['I', 'Q', 'U']
-
-```
-
-***
-## Choose a number of reconstructed subbands
-
-```{python}
-nfrec = 4
-index_frec = nf_recon.index(nfrec)
-print('index_frec = ', index_frec)
-```
-
-## Get full maps
-analysis with noise
-
-
-```{python}
-# Remember: get_patch_many_file do seen_map + read each map
-files, maps_recon, maps_conv, maps_diff = \
-rmc.get_patch_many_files(rep_simu + date_name, '*nfrecon{}*True*'.format(nfrec))
-
-print('Shape maps: {}, Tolerance: {}, NEP: {}, pointings: {}'.format(
-    maps_recon.shape, d['tol'], d['detector_nep'], d['npointings'] ))
-
-setpar = {'tol':d['tol'], 'nep':d['detector_nep'], 'npoint':d['npointings']}
-```
-
-***
-Make noisereal for maps_diff with a random mean
-
-```{python}
-npix_patch = maps_recon.shape[2]
-nreals = 5
-nfreq = maps_recon.shape[1]
-
-noisereal = np.zeros((nreals,nfreq,npix_patch,3))
-noisereal = np.random.normal(np.mean(maps_diff)*3, np.std(maps_diff), size = noisereal.shape)
-
-maps_real = maps_diff + noisereal
-
-covariance, _ = amc.get_covcorr_patch(maps_real, stokesjoint=True, doplot=True)
-
-full_matrix = np.empty((nfreq, nfreq, 3, npix_patch))
-for istokes in range(3):
-    full_matrix[:, :, istokes, :] = covariance[istokes*nfreq:(istokes+1)*nfreq, istokes*nfreq:(istokes+1)*nfreq, :]
-```
-
-```{python}
-pr = np.empty((nreals, npix_patch, 3))
-sig2pr = np.empty((npix_patch, 3))
-
-for ireal in range(nreals):
-    for ipix in range(npix_patch):
-        for istokes in range(3):
-            x = maps_real[ireal, :, ipix, istokes]
-            # Only do it if the matrix is not singular...
-            if np.linalg.det(full_matrix[:, :, istokes, ipix])!=0.:
-                pr[ireal, ipix, istokes], sig2pr[ipix, istokes] = amc.get_weighted_correlation_average(x, 
-                                                                        full_matrix[:, :, istokes, ipix])
-
-sig2MC = np.var(pr, axis=0)
-sig2MC.shape
-```
-
-***
-#### Generate correlated noise
+# With correlated noise
 
 ```{python}
 #Generate correlated noise
@@ -179,22 +137,6 @@ from scipy.stats import pearsonr
 
 corr_0_1 , _ = pearsonr(cov_pix[0,0], cov_pix[0,-1])
 print(corr_0_1)
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
 ```
 
 ```{python}

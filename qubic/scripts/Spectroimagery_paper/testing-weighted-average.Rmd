@@ -87,7 +87,8 @@ hp.mollview(weighted_av[0, :, 0])
 ```
 
 ```{python}
-sig2MC, sigMCmean = amc.get_sig2MC(weighted_av, ang, ang_threshold=80)
+sig2MC = np.var(weighted_av, axis=0)
+sigMCmean = amc.average_pix_sig2(sig2MC, ang, ang_threshold=80)
 print(sig2MC, sigMCmean)
 plt.plot(sig2MC[:, 2])
 ```
@@ -210,7 +211,8 @@ hp.mollview(weighted_av[0, :, 0])
 ```
 
 ```{python}
-sig2MC, sigMCmean = amc.get_sig2MC(weighted_av, ang, ang_threshold=80)
+sig2MC = np.var(weighted_av, axis=0)
+sigMCmean = amc.average_pix_sig2(sig2MC, ang, ang_threshold=80)
 print(sig2MC, sigMCmean)
 plt.plot(sig2MC[:, 2])
 ```

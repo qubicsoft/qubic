@@ -150,27 +150,6 @@ weighted_av_prime, sig2_prime, sigmean_prime = amc.make_weighted_av(maps_recon_p
 print(sig2_prime, sigmean_prime)
 ```
 
-***
-### Check if get_sig2MC works
-looks like yes....
-
-```{python}
-# Using a map that has been averaged over subbands
-sig2MC, sigMCmean = amc.get_sig2MC(weighted_av_prime, ang, ang_threshold=d['dtheta'])
-print(weighted_av.shape)
-
-# Using a map with only one subband
-_, patch_recon_monofreq, _, _ = \
-rmc.get_patch_many_files(rep_simu + date_name, '*nfrecon1*False*')
-print(patch_recon_monofreq.shape)
-# Remove the single dimension  
-patch_recon_monofreq = np.squeeze(patch_recon_monofreq)
-print(patch_recon_monofreq.shape)
-
-sig2MC_monofreq, sigMCmean_monofreq = amc.get_sig2MC(patch_recon_monofreq, ang, ang_threshold=d['dtheta'])
-sigMCmean_monofreq
-```
-
 # Compute all sigma
 
 ```{python}
@@ -190,7 +169,8 @@ for irec in d['nf_recon']:
         recon_patch = np.squeeze(recon_patch)
         print(recon_patch.shape)
 
-        sig2MC_monofreq, sigMCmean_monofreq = amc.get_sig2MC(recon_patch, ang, ang_threshold=ang_th)
+        sig2MC_monofreq = np.var(recon_patch, axis=0) # Variance over realizations
+        sigMCmean_monofreq = amc.average_pix_sig2(sig2MC_monofreq, ang, ang_threshold=ang_th)
         dict_sig2MC.update({'{}'.format(irec): sig2MC_monofreq})
         dict_sig2MC.update({'{}mean'.format(irec): sigMCmean_monofreq})
        
@@ -205,7 +185,8 @@ for irec in d['nf_recon']:
         dict_sig2.update({'{}'.format(irec): sig2})
         dict_sig2.update({'{}mean'.format(irec): sigmean})
         
-        sig2MC, sigMCmean = amc.get_sig2MC(weighted_av, ang, ang_threshold=ang_th)
+        sig2MC = np.var(weighted_av, axis=0)
+        sigMCmean = amc.average_pix_sig2(sig2MC, ang, ang_threshold=ang_th)
         dict_sig2MC.update({'{}'.format(irec): sig2MC})
         dict_sig2MC.update({'{}mean'.format(irec): sigMCmean})
 
@@ -216,7 +197,8 @@ for irec in d['nf_recon']:
         dict_sig2_prime.update({'{}'.format(irec): sig2_prime})
         dict_sig2_prime.update({'{}mean'.format(irec): sigmean_prime})
         
-        sig2MC_prime, sigMCmean_prime = amc.get_sig2MC(weighted_av_prime, ang, ang_threshold=ang_th)
+        sig2MC_prime = np.var(weighted_av_prime, axis=0)
+        sigMCmean_prime = amc.average_pix_sig2(sig2MC_prime, ang, ang_threshold=ang_th)
         dict_sig2MC_prime.update({'{}'.format(irec): sig2MC_prime})
         dict_sig2MC_prime.update({'{}mean'.format(irec): sigMCmean_prime})
 

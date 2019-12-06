@@ -176,7 +176,8 @@ for irec in d['nf_recon']:
        
     else:
         Cp = amc.get_Cp(recon_patch, nfrecon=d['nf_recon'])
-        Cp_prime = amc.Cp2Cp_prime(Cp, verbose=True)
+        Cp_prime = amc.Cp2Cp_prime_viaCorr(Cp, verbose=True)
+#         Cp_prime = amc.Cp2Cp_prime(Cp, verbose=True)
         
         # Compute sig2 and sig2MC 
         # Using Cp

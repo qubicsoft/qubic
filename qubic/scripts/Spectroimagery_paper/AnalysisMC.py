@@ -441,10 +441,10 @@ def cov2corr(mat):
     """
     Converts a Covariance Matrix in a Correlation Matrix
     """
-    newmat = mat.copy()
-    sh = np.shape(mat)
-    for i in range(sh[0]):
-        for j in range(sh[1]):
+    newmat = np.empty_like(mat)
+    ll, cc = np.shape(mat)
+    for i in range(ll):
+        for j in range(cc):
             newmat[i, j] = mat[i, j] / np.sqrt(mat[i, i] * mat[j, j])
     return newmat
 
@@ -664,8 +664,8 @@ def average_pix_sig2(sig2, ang, ang_threshold):
 
 def Cp2Cp_prime(Cp, verbose=True):
     """
-    Average the covariance matrices over pixels. A normalization is done
-    on pixels before the average.
+    Average the covariance matrices over pixels. A normalization by the 00 element is done
+    before averaging.
     Parameters
     ----------
     Cp: array of shape (#bands, #bands, 3, #pixels)
@@ -683,11 +683,9 @@ def Cp2Cp_prime(Cp, verbose=True):
 
     # Normalize each matrix by the first element
     Np = np.empty_like(Cp)
-    Cp00 = np.empty((3, npix_patch))
     for istokes in range(3):
         for ipix in range(npix_patch):
-            Cp00[istokes, ipix] = Cp[0, 0, istokes, ipix]
-            Np[:, :, istokes, ipix] = Cp[:, :, istokes, ipix] / Cp00[istokes, ipix]
+            Np[:, :, istokes, ipix] = Cp[:, :, istokes, ipix] / Cp[0, 0, istokes, ipix]
 
     # We can now average the matrices over the pixels
     N = np.mean(Np, axis=3)
@@ -698,12 +696,55 @@ def Cp2Cp_prime(Cp, verbose=True):
     Cp_prime = np.empty_like(Cp)
     for istokes in range(3):
         for ipix in range(npix_patch):
-            Cp_prime[:, :, istokes, ipix] = Cp00[istokes, ipix] * N[:, :, istokes]
+            Cp_prime[:, :, istokes, ipix] = Cp[0, 0, istokes, ipix] * N[:, :, istokes]
 
     if verbose: print('Cp_prime.shape =', Cp_prime.shape)
 
     return Cp_prime
 
+def Cp2Cp_prime_viaCorr(Cp, verbose=True):
+    """
+    Average the covariance matrices over pixels. A normalization is done
+    on pixels before the average.
+    Parameters
+    ----------
+    Cp: array of shape (#bands, #bands, 3, #pixels)
+        The covariance matrices for each pixel.
+    verbose: bool
+
+    Returns
+    -------
+    Cp_prime: array of shape (#bands, #bands, 3, #pixels)
+        The covariance matrices for each pixel.
+
+    """
+    nfrec = np.shape(Cp)[0]
+    npix_patch = np.shape(Cp)[-1]
+    if verbose: print('npix_patch =', npix_patch)
+
+    # Convert cov matrices to correlation matrices
+    Np = np.empty_like(Cp)
+    for istokes in range(3):
+        for ipix in range(npix_patch):
+            Np[:, :, istokes, ipix] = cov2corr(Cp[:, :, istokes, ipix])
+
+    # We can now average the correlation matrices over the pixels
+    N = np.mean(Np, axis=3)
+
+    if verbose: print('N shape:', N.shape)
+
+    # We re-multiply N to get back to covariance matrices
+    Cp_prime = np.empty_like(Cp)
+    for istokes in range(3):
+        for ipix in range(npix_patch):
+            for i in range(nfrec):
+                for j in range(nfrec):
+                    coeff = np.sqrt(Cp[i, i, istokes, ipix] * Cp[j, j, istokes, ipix])
+                    Cp_prime[i, j, istokes, ipix] = N[i, j, istokes] * coeff
+
+    if verbose: print('Cp_prime.shape =', Cp_prime.shape)
+
+    return Cp_prime
 
 def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
     """

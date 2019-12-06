@@ -71,6 +71,11 @@ plt.imshow(Cp_prime[:, :, 1, 2])
 ```
 
 ```{python}
+Cp_prime_viaCorr = amc.Cp2Cp_prime_viaCorr(Cp, verbose=True)
+plt.imshow(Cp_prime[:, :, 1, 2])
+```
+
+```{python}
 RA_center = 0. #deg
 DEC_center = -57. #deg
 center = equ2gal(RA_center, DEC_center)
@@ -161,16 +166,30 @@ x0_noisy_corr
 # Check the functions from AnalysisMC
 Cp = amc.get_Cp(x0_noisy_corr, nfrecon=nfrecon, verbose=False)
 Cp_prime = amc.Cp2Cp_prime(Cp, verbose=True)
+Cp_prime_viaCorr = amc.Cp2Cp_prime_viaCorr(Cp, verbose=True)
 
+istokes = 1
+ipix = 100
 plt.figure()
-plt.subplot(121)
-plt.imshow(Cp[:, :, 0, 100])
+plt.subplots_adjust(right=2)
+plt.subplot(141)
+plt.imshow(Cp[:, :, istokes, ipix])
 plt.title('Cp')
 plt.colorbar()
 
-plt.subplot(122)
-plt.imshow(Cp_prime[:, :, 0, 0])
+plt.subplot(142)
+plt.imshow(Cp_prime[:, :, istokes, ipix])
 plt.title('Cp_prime')
+plt.colorbar()
+
+plt.subplot(143)
+plt.imshow(Cp_prime_viaCorr[:, :, istokes, ipix])
+plt.title('Cp_prime via corr')
+plt.colorbar()
+
+plt.subplot(144)
+plt.imshow((Cp-Cp_prime_viaCorr)[:, :, istokes, ipix])
+plt.title('Cp- Cp_prime via corr')
 plt.colorbar()
 ```
 
@@ -215,6 +234,15 @@ sig2MC = np.var(weighted_av, axis=0)
 sigMCmean = amc.average_pix_sig2(sig2MC, ang, ang_threshold=80)
 print(sig2MC, sigMCmean)
 plt.plot(sig2MC[:, 2])
+```
+
+```{python}
+a, b, c = weighted_av.shape
+a
+```
+
+```{python}
+b
 ```
 
 ```{python}

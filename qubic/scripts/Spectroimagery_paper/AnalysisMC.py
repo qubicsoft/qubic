@@ -305,12 +305,12 @@ def get_covcorr_patch(patch, stokesjoint=False, doplot=False):
         plt.figure('Mean over pixels')
         plt.subplot(121)
         plt.imshow(np.mean(cov, axis=2), interpolation=None)
-        plt.title('Mean cov')
+        plt.title('Mean cov over pixels')
         plt.colorbar()
 
         plt.subplot(122)
         plt.imshow(np.mean(corr, axis=2))
-        plt.title('Mean corr')
+        plt.title('Mean corr over pixels')
         plt.colorbar()
 
     return cov, corr
@@ -474,9 +474,9 @@ def covariance_IQU_subbands(allmaps, stokesjoint=False):
     """
     allmean, allcov = [], []
     for isub in range(len(allmaps)):
-        sh = allmaps[isub].shape
         nsub = sh[1]  # Number of subbands
 
+        sh = allmaps[isub].shape
         mean = np.zeros(3 * nsub)
         cov = np.zeros((3 * nsub, 3 * nsub))
 
@@ -510,7 +510,50 @@ def covariance_IQU_subbands(allmaps, stokesjoint=False):
     return allmean, allcov
 
 
+def get_weighted_correlation_average(x, cov):
+    """
+    Compute a weighted average taking into account the correlations between the variables.
+    The mean obtained is the one that has the minimal variance possible.
+
+    Parameters
+    ----------
+    x : 1D array
+        Values you want to average.
+    cov : 2D array
+        Covariance matrix associated to the values in x.
+
+    Returns
+    -------
+    The weighted mean and the variance on that mean.
+
+    """
+    inv_cov = np.linalg.inv(cov)
+    sig2 = 1. / np.sum(inv_cov)
+    weighted_mean = sig2 * np.sum(np.dot(inv_cov, x))
+    return weighted_mean, sig2
+
+
 def get_Cp(patch, nfrecon, verbose=True, doplot=True):
+    """
+    Returns covariance matrices between subbands for each Stokes parameter
+    and each pixel.
+
+    Parameters
+    ----------
+    patch: array of shape (#reals, #bands, #pixels, 3)
+    nfrecon: list
+        Numbers of reconstructed subbands.
+    verbose: Bool
+        If True makes a lot of prints.
+    doplot: Bool
+        If True, plot the mean cov and corr matrices over pixels.
+
+    Returns
+    -------
+    Cp: array of shape (#bands, #bands, 3, #pixels)
+        The covariance matrices.
+
+    """
     irec = np.shape(patch)[1]
     npix_patch = np.shape(patch)[2]
     if irec == 1:
@@ -553,10 +596,31 @@ def get_Cp(patch, nfrecon, verbose=True, doplot=True):
 
 
 def make_weighted_av(patch, Cp, ang, ang_threshold, verbose=False):
+    """
+    Average the maps over subbands using the covariance matrix between subbands.
+    Parameters
+    ----------
+    patch: array of shape (#reals, #bands, #pixels, 3)
+    Cp: array of shape (#bands, #bands, 3, #pixels)
+        The covariance matrices.
+    ang: array
+        Angle associated to each pixel.
+    ang_threshold: float
+        Angle (degree) in which the sigma mean over pixels will be computed.
+    verbose: bool
+
+    Returns
+    -------
+    weighted_av: map averaged over bands
+    sig2: variances over realisations on the map
+    sigmean: variances are averaged over pixels below the angle threshold
+        and the sqrt (sigma) is returned.
+
+    """
     nreals = np.shape(patch)[0]
     npix_patch = np.shape(Cp)[-1]
     if verbose:
-        print('Cp.shape = ', Cp.shape)
+        print('Cp.shape = ', np.shape(Cp))
         print('# realizations = ', nreals)
         print('npix_patch = ', npix_patch)
 
@@ -598,17 +662,22 @@ def average_pix_sig2(sig2, ang, ang_threshold):
     return sigmean
 
 
-def get_sig2MC(map_monoband, ang, ang_threshold):
-    # Compute a new sigma by Monte-Carlo over realizations
-    sig2MC = np.var(map_monoband, axis=0)
-
-    # Average sig2MC over pixels in a given angle
-    sigMCmean = average_pix_sig2(sig2MC, ang, ang_threshold)
-
-    return sig2MC, sigMCmean
-
-
 def Cp2Cp_prime(Cp, verbose=True):
+    """
+    Average the covariance matrices over pixels. A normalization is done
+    on pixels before the average.
+    Parameters
+    ----------
+    Cp: array of shape (#bands, #bands, 3, #pixels)
+        The covariance matrices for each pixel.
+    verbose: bool
+
+    Returns
+    -------
+    Cp_prime: array of shape (#bands, #bands, 3, #pixels)
+        The covariance matrices for each pixel.
+
+    """
     npix_patch = np.shape(Cp)[-1]
     if verbose: print('npix_patch =', npix_patch)
 
@@ -634,29 +703,6 @@ def Cp2Cp_prime(Cp, verbose=True):
     if verbose: print('Cp_prime.shape =', Cp_prime.shape)
 
     return Cp_prime
-
-
-def get_weighted_correlation_average(x, cov):
-    """
-    Compute a weighted average taking into account the correlations between the variables.
-    The mean obtained is the one that has the minimal variance possible.
-
-    Parameters
-    ----------
-    x : 1D array
-        Values you want to average.
-    cov : 2D array
-        Covariance matrix associated to the values in x.
-
-    Returns
-    -------
-    The weighted mean and the variance on that mean.
-
-    """
-    inv_cov = np.linalg.inv(cov)
-    sig2 = 1. / np.sum(inv_cov)
-    weighted_mean = sig2 * np.sum(np.dot(inv_cov, x))
-    return weighted_mean, sig2
 
 
 def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):

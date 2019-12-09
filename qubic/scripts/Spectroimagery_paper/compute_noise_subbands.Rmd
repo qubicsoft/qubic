@@ -158,7 +158,7 @@ dict_sig2MC = {}
 dict_sig2MC_prime = {}
 dict_sig2 = {}
 dict_sig2_prime = {}
-ang_th = 12
+ang_th = 10
 
 for irec in d['nf_recon']:
     print('irec =', irec)   
@@ -176,8 +176,8 @@ for irec in d['nf_recon']:
        
     else:
         Cp = amc.get_Cp(recon_patch, nfrecon=d['nf_recon'])
-        Cp_prime = amc.Cp2Cp_prime_viaCorr(Cp, verbose=True)
-#         Cp_prime = amc.Cp2Cp_prime(Cp, verbose=True)
+#         Cp_prime = amc.Cp2Cp_prime_viaCorr(Cp, verbose=True)
+        Cp_prime = amc.Cp2Cp_prime(Cp, verbose=True)
         
         # Compute sig2 and sig2MC 
         # Using Cp
@@ -206,7 +206,8 @@ for irec in d['nf_recon']:
 ```
 
 ```{python}
-dict_sig2MC_prime
+plt.plot(dict_sig2['8'][:, 0], '.')
+np.min(dict_sig2['8'][:, 0])
 ```
 
 ***
@@ -242,21 +243,10 @@ def plot_sigma2profile(ang, thedict, nbins, nf_recon):
             plt.title(Stokes[s])
             plt.xlabel('angle (°)')
             plt.ylabel('sig2')
-#             plt.ylim(0, 0.0004)
+#             plt.ylim(0, 2)
             plt.legend()
     return p
 
-```
-
-```{python}
-p = plot_sigma2profile(ang, dict_sig2MC, nbins, nf_recon=d['nf_recon'])
-plt.title('sig2 MC')
-```
-
-```{python}
-plt.figure()
-p = plot_sigma2profile(ang, dict_sig2MC_prime, nbins, nf_recon=d['nf_recon'][1:])
-plt.title('sig2 MC prime')
 ```
 
 ```{python}
@@ -266,9 +256,24 @@ plt.title('sig2')
 ```
 
 ```{python}
+p = plot_sigma2profile(ang, dict_sig2MC, nbins, nf_recon=d['nf_recon'])
+plt.title('sig2 MC')
+```
+
+```{python}
 plt.figure()
 p = plot_sigma2profile(ang, dict_sig2_prime, nbins, nf_recon=d['nf_recon'][1:])
 plt.title('sig2 prime')
+
+
+```
+
+```{python}
+
+
+plt.figure()
+p = plot_sigma2profile(ang, dict_sig2MC_prime, nbins, nf_recon=d['nf_recon'][1:])
+plt.title('sig2 MC prime')
 ```
 
 ```{python}
@@ -277,42 +282,39 @@ def plot_sig_mean(thedict, nf_recon, color, signame):
         for irec in nf_recon: 
 
             plt.subplot(1, 3, s+1)
-            plt.subplots_adjust(right=1.6)
+            plt.subplots_adjust(right=1.8)
             
             if irec == 1: 
-                sig_monofreq = dict_sig2MC['{}mean'.format(irec)][s]   
+                sig_monofreq = dict_sig2MC['{}mean'.format(irec)][s]
+                plt.plot(1, 1, 'o', color=color)
                 plt.plot(nf_recon, np.sqrt(nf_recon), 'k', label=r'$y = \sqrt{irec}$')
             else:
                 sig_norm = thedict['{}mean'.format(irec)][s] / sig_monofreq
                 p = plt.plot(irec, sig_norm, 'o', color=color, label=signame)
         
             plt.title(Stokes[s])
-            plt.xlabel('irec')
-            plt.ylabel('sig')
+            plt.xlabel('# of reconstructed bands', fontsize=10)
+            plt.ylabel(r'$\sigma / \sigma_{1band}$', fontsize=20)
+#             plt.ylim(0, 0.002)
             if irec == 2: plt.legend()
             
     return p
 ```
 
 ```{python}
-p = plot_sig_mean(dict_sig2MC, d['nf_recon'], color='g', signame='sigMC')
+p = plot_sig_mean(dict_sig2, d['nf_recon'], color='g', signame='sigMC')
 ```
 
 ```{python}
-p = plot_sig_mean(dict_sig2MC_prime, d['nf_recon'], color='b', signame='sigMC_prime')
+p = plot_sig_mean(dict_sig2MC, d['nf_recon'], color='b', signame='sigMC_prime')
 ```
 
 ```{python}
-p = plot_sig_mean(dict_sig2, d['nf_recon'], color='r', signame='sig')
+p = plot_sig_mean(dict_sig2_prime, d['nf_recon'], color='r', signame='sig')
 ```
 
 ```{python}
-p = plot_sig_mean(dict_sig2_prime, d['nf_recon'], color='orange', signame='sig_prime')
-
-```
-
-```{python}
-
+p = plot_sig_mean(dict_sig2MC_prime, d['nf_recon'], color='orange', signame='sig_prime')
 ```
 
 ```{python}

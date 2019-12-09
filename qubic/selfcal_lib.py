@@ -421,8 +421,10 @@ def make_external_A(rep, open_horns):
         plane for each of the horns:
         [0] : array of nn with x values in meters
         [1] : array of nn with y values in meters
-        [2] : array of [nhorns, nn, nn] with amplitude
-        [3] : array of [nhorns, nn, nn] with phase in degrees
+        [2] : array of [nhorns, nn, nn] with amplitude on X
+        [3] : array of [nhorns, nn, nn] with amplitude on Y
+        [4] : array of [nhorns, nn, nn] with phase on X in degrees
+        [5] : array of [nhorns, nn, nn] with phase on Y in degrees
 
     """
     # Get simulation files
@@ -465,8 +467,7 @@ def make_external_A(rep, open_horns):
         allphiX[i, :, :] = np.reshape(np.asarray(data['PhaseX']), (nn, nn))
         allphiY[i, :, :] = np.reshape(np.asarray(data['PhaseY']), (nn, nn))
 
-    # Why using allampX, allphiX and not allampY, allphiY ??
-    external_A = [-xx, -yy, allampX, allphiX]
+    external_A = [-xx, -yy, allampX, allampY, allphiX, allphiY]
 
     return external_A
 

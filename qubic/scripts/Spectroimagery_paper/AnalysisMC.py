@@ -624,8 +624,8 @@ def make_weighted_av(patch, Cp, ang, ang_threshold, verbose=False):
         print('# realizations = ', nreals)
         print('npix_patch = ', npix_patch)
 
-    weighted_av = np.empty((nreals, npix_patch, 3))
-    sig2 = np.empty((npix_patch, 3))
+    weighted_av = np.zeros((nreals, npix_patch, 3))
+    sig2 = np.zeros((npix_patch, 3))
 
     nsing = 0
     for ireal in range(nreals):
@@ -658,7 +658,8 @@ def average_pix_sig2(sig2, ang, ang_threshold):
     npix = np.shape(ang[ang < ang_threshold])
     print('npix =', npix)
     for istokes in range(3):
-        sigmean[istokes] = np.sqrt(np.sum(sig2[:, istokes][ang < ang_threshold]) / npix)
+        sigmean[istokes] = np.sqrt(np.mean(sig2[:, istokes][ang < ang_threshold])/ npix)
+        # sigmean[istokes] = np.sqrt(np.sum(sig2[:, istokes][ang < ang_threshold]))/ npix
     return sigmean
 
 

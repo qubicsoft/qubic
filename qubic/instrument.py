@@ -1000,7 +1000,6 @@ class QubicInstrument(Instrument):
             Ex = amp_x[:, ix, jy] * (np.cos(phi_x[:, ix, jy]) + 1j * np.sin(phi_x[:, ix, jy]))
             Ey = amp_y[:, ix, jy] * (np.cos(phi_y[:, ix, jy]) + 1j * np.sin(phi_y[:, ix, jy]))
             return Ex * np.cos(2 * phi_hwp[hwp_position]) + Ey * np.sin(2 * phi_hwp[hwp_position])
-            # return np.array([amp[:, ix, jy] * (np.cos(phi[:, ix, jy]) + 1j * np.sin(phi[:, ix, jy]))])
 
     @staticmethod
     def _get_response_B(theta, phi, spectral_irradiance, nu, horn, primary_beam):

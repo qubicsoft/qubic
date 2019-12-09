@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.1'
-      jupytext_version: 1.2.1
+      jupytext_version: 1.2.4
   kernelspec:
     display_name: Python 3
     language: python
@@ -28,14 +28,12 @@ import numpy as np
 
 import qubic.io
 from pysimulators import FitsArray
-import fibtools as ft
-import demodulation_lib as dl
-import sb_fitting as sbfit
+import qubic.fibtools as ft
+import qubic.demodulation_lib as dl
+import qubic.sb_fitting as sbfit
 import jchinstrument as jcinst
 import os
 from scipy.stats import norm
-import fibtools as ft
-
 ```
 
 ```{python}
@@ -110,14 +108,14 @@ def select_det(q,id):
 # INSTRUMENT
 ns = 256
 d = qubic.qubicdict.qubicDict()
-d.read_from_file('../pointsource/global_source_oneDet.dict')
+d.read_from_file(os.environ['QUBIC_DICT']+'/global_source_oneDet.dict')
 print(d['kind'])
 d['kind']='I'
 print(d['kind'])
 d['nside']=ns
 sel_det = True
-fittedpeakfile = os.environ['QUBIC_PEAKS']+'fitted_peaks.fits'
-directory = os.environ['QUBIC_TODDIR']+'150GHz-2019-04-06/'
+fittedpeakfile = os.environ['QUBIC_PEAKS']+'/fitted_peaks.fits'
+directory = os.environ['QUBIC_TODDIR']+'/150GHz-2019-04-06/'
 ```
 
 ```{python}
@@ -306,8 +304,8 @@ plt.grid()
 plt.legend()
 
 plt.subplot(212)
-plt.xlim(0,2800)
-plt.ylim(36,38)
+#plt.xlim(0,2800)
+#plt.ylim(36,38)
 plt.ylabel('Elevation', fontsize=14)
 plt.plot(dens.elevation, 'b')
 plt.plot(p.elevation, 'r')

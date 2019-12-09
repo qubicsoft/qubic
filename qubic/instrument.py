@@ -944,7 +944,7 @@ class QubicInstrument(Instrument):
         return theta, phi
 
     @staticmethod
-    def _get_response_A(position, area, nu, horn, secondary_beam, external_A=None):
+    def _get_response_A(position, area, nu, horn, secondary_beam, external_A=None, hwp_position=0):
         """
         Phase and transmission from the switches to the focal plane.
 
@@ -964,8 +964,12 @@ class QubicInstrument(Instrument):
             plane for each of the horns:
             [0] : array of nn with x values in meters
             [1] : array of nn with y values in meters
-            [2] : array of [nhorns, nn, nn] with amplitude
-            [3] : array of [nhorns, nn, nn] with phase in degrees
+            [2] : array of [nhorns, nn, nn] with amplitude on X
+            [3] : array of [nhorns, nn, nn] with amplitude on Y
+            [4] : array of [nhorns, nn, nn] with phase on X in degrees
+            [5] : array of [nhorns, nn, nn] with phase on Y in degrees
+        hwp_position : int
+            HWP position from 0 to 7.
 
         Returns
         -------
@@ -984,17 +988,22 @@ class QubicInstrument(Instrument):
             product = np.dot(uvec, horn[horn.open].center.T)
             return ne.evaluate('tr * exp(const * product)')
         else:
+            phi_hwp = np.arange(0, 8) * np.pi / 16
             xx = external_A[0]
             yy = external_A[1]
-            amp = external_A[2]
-            phi = external_A[3]
+            amp_x = external_A[2]
+            amp_y = external_A[3]
+            phi_x = external_A[4]
+            phi_y = external_A[5]
             ix = np.argmin(np.abs(xx - position[0, 0]))
             jy = np.argmin(np.abs(yy - position[0, 1]))
-            return np.array([amp[:, ix, jy] * (np.cos(phi[:, ix, jy]) + 1j * np.sin(phi[:, ix, jy]))])
+            Ex = amp_x[:, ix, jy] * (np.cos(phi_x[:, ix, jy]) + 1j * np.sin(phi_x[:, ix, jy]))
+            Ey = amp_y[:, ix, jy] * (np.cos(phi_y[:, ix, jy]) + 1j * np.sin(phi_y[:, ix, jy]))
+            return Ex * np.cos(2 * phi_hwp[hwp_position]) + Ey * np.sin(2 * phi_hwp[hwp_position])
+            # return np.array([amp[:, ix, jy] * (np.cos(phi[:, ix, jy]) + 1j * np.sin(phi[:, ix, jy]))])
 
     @staticmethod
-    def _get_response_B(theta, phi, spectral_irradiance, nu, horn,
-                        primary_beam):
+    def _get_response_B(theta, phi, spectral_irradiance, nu, horn, primary_beam):
         """
         Return the complex electric amplitude and phase [W^(1/2)] from sources
         of specified spectral irradiance [W/m^2/Hz] going through each horn.
@@ -1032,7 +1041,7 @@ class QubicInstrument(Instrument):
 
     @staticmethod
     def _get_response(theta, phi, spectral_irradiance, position, area, nu,
-                      horn, primary_beam, secondary_beam, external_A=None):
+                      horn, primary_beam, secondary_beam, external_A=None, hwp_position=0):
         """
         Return the monochromatic complex field [(W/Hz)^(1/2)] related to
         the electric field over a specified area of the focal plane created
@@ -1064,8 +1073,12 @@ class QubicInstrument(Instrument):
             plane for each of the horns:
             [0] : array of nn with x values in meters
             [1] : array of nn with y values in meters
-            [2] : array of [nhorns, nn, nn] with amplitude
-            [3] : array of [nhorns, nn, nn] with phase in degrees
+            [2] : array of [nhorns, nn, nn] with amplitude on X
+            [3] : array of [nhorns, nn, nn] with amplitude on Y
+            [4] : array of [nhorns, nn, nn] with phase on X in degrees
+            [5] : array of [nhorns, nn, nn] with phase on Y in degrees
+        hwp_position : int
+            HWP position from 0 to 7.
 
         Returns
         -------
@@ -1075,7 +1088,7 @@ class QubicInstrument(Instrument):
 
         """
         A = QubicInstrument._get_response_A(
-            position, area, nu, horn, secondary_beam, external_A=external_A)
+            position, area, nu, horn, secondary_beam, external_A=external_A, hwp_position=hwp_position)
         B = QubicInstrument._get_response_B(
             theta, phi, spectral_irradiance, nu, horn, primary_beam)
         E = np.dot(A, B.reshape((B.shape[0], -1))).reshape(
@@ -1084,8 +1097,8 @@ class QubicInstrument(Instrument):
 
     @staticmethod
     def _get_synthbeam(scene, position, area, nu, bandwidth, horn,
-                       primary_beam, secondary_beam,
-                       synthbeam_dtype=np.float32, theta_max=45, external_A=None):
+                       primary_beam, secondary_beam, synthbeam_dtype=np.float32,
+                       theta_max=45, external_A=None, hwp_position=0):
         """
         Return the monochromatic synthetic beam for a specified location
         on the focal plane, multiplied by a given area and bandwidth.
@@ -1120,8 +1133,12 @@ class QubicInstrument(Instrument):
             plane for each of the horns:
             [0] : array of nn with x values in meters
             [1] : array of nn with y values in meters
-            [2] : array of [nhorns, nn, nn] with amplitude
-            [3] : array of [nhorns, nn, nn] with phase in degrees
+            [2] : array of [nhorns, nn, nn] with amplitude on X
+            [3] : array of [nhorns, nn, nn] with amplitude on Y
+            [4] : array of [nhorns, nn, nn] with phase on X in degrees
+            [5] : array of [nhorns, nn, nn] with phase on Y in degrees
+        hwp_position : int
+            HWP position from 0 to 7.
 
         """
         MAX_MEMORY_B = 1e9
@@ -1137,11 +1154,12 @@ class QubicInstrument(Instrument):
             index_ = index[s]
             sb = QubicInstrument._get_response(
                 theta[index_], phi[index_], bandwidth, position, area, nu,
-                horn, primary_beam, secondary_beam, external_A=external_A)
+                horn, primary_beam, secondary_beam, external_A=external_A, hwp_position=hwp_position)
             out[..., index_] = abs2(sb, dtype=synthbeam_dtype)
         return out
 
-    def get_synthbeam(self, scene, idet=None, theta_max=45, external_A=None, detector_integrate=None, detpos=None):
+    def get_synthbeam(self, scene, idet=None, theta_max=45, external_A=None, hwp_position=0,
+                      detector_integrate=None, detpos=None):
         """
         Return the detector synthetic beams, computed from the superposition
         of the electromagnetic fields.
@@ -1176,8 +1194,12 @@ class QubicInstrument(Instrument):
             plane for each of the horns:
             [0] : array of nn with x values in meters
             [1] : array of nn with y values in meters
-            [2] : array of [nhorns, nn, nn] with amplitude
-            [3] : array of [nhorns, nn, nn] with phase in degrees
+            [2] : array of [nhorns, nn, nn] with amplitude on X
+            [3] : array of [nhorns, nn, nn] with amplitude on Y
+            [4] : array of [nhorns, nn, nn] with phase on X in degrees
+            [5] : array of [nhorns, nn, nn] with phase on Y in degrees
+        hwp_position : int
+            HWP position from 0 to 7.
         detector_integrate: Optional, number of subpixels in x direction for integration over detectors
             default (None) is no integration => uses the center of the pixel
         detpos: Optional, position in the focal plane at which the Synthesized Beam is desired as np.array([x,y,z])
@@ -1191,12 +1213,12 @@ class QubicInstrument(Instrument):
 
         if (idet is not None) and (detpos is None):
             return self[idet].get_synthbeam(scene, theta_max=theta_max, external_A=external_A,
-                                            detector_integrate=detector_integrate)[0]
+                                            hwp_position=hwp_position, detector_integrate=detector_integrate)[0]
         if detector_integrate is None:
             return QubicInstrument._get_synthbeam(
                 scene, pos, self.detector.area, self.filter.nu,
                 self.filter.bandwidth, self.horn, self.primary_beam,
-                self.secondary_beam, self.synthbeam.dtype, theta_max, external_A=external_A)
+                self.secondary_beam, self.synthbeam.dtype, theta_max, external_A=external_A, hwp_position=hwp_position)
         else:
             xmin = np.min(self.detector.vertex[..., 0:1])
             xmax = np.max(self.detector.vertex[..., 0:1])
@@ -1215,7 +1237,7 @@ class QubicInstrument(Instrument):
                         scene, pos, self.detector.area, self.filter.nu,
                         self.filter.bandwidth, self.horn, self.primary_beam,
                         self.secondary_beam, self.synthbeam.dtype, theta_max,
-                        external_A=external_A) / detector_integrate ** 2
+                        external_A=external_A, hwp_position=hwp_position) / detector_integrate ** 2
             return sb
 
     def detector_subset(self, dets):

@@ -261,7 +261,7 @@ plt.title('Baseline {} with aberrations'.format(baseline))
 
 ### Test the "rotation problem"
 
-Clearly, if there is a bug, it comes from the function get_power_fp_aberration that I copied here with some simplifications in order to check it. 
+Clearly, if there is a bug, it comes from the function get_power_fp_aberration fom selfcal_lib that I copied here with some simplifications in order to check it. 
 
 ```{python}
 import glob
@@ -328,7 +328,7 @@ power = get_power_fp_aberration(rep)
 ```{python}
 # In this cell, I check the way I am reading the .dat files and how I project the data on a 2D image. 
 # I do the same as in the previous function but with the columns X and Y
-# I don't see the problem, I think the data are well projected...
+# I don't see the problem, data look well projected...
 
 nn = 241
 files = sorted(glob.glob(rep + '/*.dat'))

@@ -20,7 +20,6 @@ rc('figure',figsize=(9,4.5))
 rc('font',size=12)
 rc('text',usetex=False)
 
-#from qubicpack import qubicpack as qp
 from qubicpack.qubicfp import qubicfp
 import qubic.fibtools as ft
 import qubic.plotters as p
@@ -46,7 +45,6 @@ from importlib import reload
 day = '2019-11-08'
 keyword = '*Test2_RHWP_fromQubicStudio*'
 data_dir = '/qubic/Data/Calib-TD/'+day+'/'
-#dirs = np.sort(glob.glob(data_dir+'*test_sw*'))
 dirs = np.sort(glob.glob(data_dir+keyword))
 print (dirs)
 
@@ -69,6 +67,12 @@ hwp_timestamps = a.timeaxis(datatype='hk',axistype='computertime')
 ```
 
 ```{python}
+print(a.hk.keys())
+print(a.hk['INTERN_HK'].keys())
+print(a.hk['CALSOURCE-CONF'].keys())
+```
+
+```{python}
 data.keys()
 ```
 
@@ -78,10 +82,12 @@ TESNum = 96
 rc('figure',figsize=(12,8))
 hwp_data = np.interp((data['t_data 1']-t0), (hwp_timestamps-hwp_timestamps[0]), hwp)
 
-plot((data['t_data 1']-t0)/3600, dl.renorm(data['data 1'][TESNum-1,:]), label='Data TES #{}'.format(TESNum))
+plot((data['t_data 1']-t0)/3600, dl.renorm(data['data 1'][TESNum-1,:]), 
+     label='Data TES #{}'.format(TESNum))
 xlabel('Hours')
 
 plot((data['t_data 1']-t0)/3600, hwp_data, label='HWP Position')
+legend()
 
 ```
 
@@ -125,7 +131,7 @@ legend()
 
 ########## New Power spectrum
 nharm = 10
-notch = np.array([[1.724, 1, nharm]])
+notch = np.array([[1.724, 0.05, nharm]])
 newdata = ft.filter_data(tt, dd, lowcut, highcut, notch=notch, rebin=True, verbose=True, order=5)
 spectrum_f2, freq_f2 = ft.power_spectrum(tt, newdata, rebin=True)
 plot(freq_f2, f.gaussian_filter1d(spectrum_f2,1),label='Filtered data')
@@ -134,6 +140,10 @@ for i in range(nharm):
 legend()
 
 tight_layout()
+```
+
+```{python}
+plot(tt, newdata)
 ```
 
 ```{python}
@@ -153,7 +163,7 @@ print(np.unique(np.array(hwp_pos_chunk)))
 
 ```{python}
 rc('figure',figsize=(13,8))
-ichunk = 1
+ichunk = 0
 chunk = hwp_chunks[ichunk]
 tt = (data['t_data 1'][chunk[0]:chunk[1]]-t0)
 dd = newdata[chunk[0]:chunk[1]]
@@ -194,21 +204,21 @@ legend()
 
 ```{python}
 #### RMS Method - Not so good as all the noise goes into the HWP modulation signal, so this is just an upper limit
-TESNum = 96
-tt = data['t_data 1']
-t0 = tt[0]
-dd = data['data 1'][TESNum-1,:]
-newdata = ft.filter_data(tt, dd, lowcut, highcut, notch=None, rebin=True, verbose=True)
+# TESNum = 96
+# tt = data['t_data 1']
+# t0 = tt[0]
+# dd = data['data 1'][TESNum-1,:]
+# newdata = ft.filter_data(tt, dd, lowcut, highcut, notch=None, rebin=True, verbose=True)
 
-thvals = np.zeros(len(hwp_chunks))
-ampvals = np.zeros(len(hwp_chunks))
-ampvals_err = np.zeros(len(hwp_chunks))
-for i in range(len(hwp_chunks)):
-    chunk = hwp_chunks[i]
-    thvals[i] = angles[hwp_pos_chunk[i]-1]
-    thedata = newdata[chunk[0]:chunk[1]]
-    ampvals[i] = np.std(thedata)
-    ampvals_err[i] = ampvals[i] / 2. / np.sqrt(len(thedata))
+# thvals = np.zeros(len(hwp_chunks))
+# ampvals = np.zeros(len(hwp_chunks))
+# ampvals_err = np.zeros(len(hwp_chunks))
+# for i in range(len(hwp_chunks)):
+#     chunk = hwp_chunks[i]
+#     thvals[i] = angles[hwp_pos_chunk[i]-1]
+#     thedata = newdata[chunk[0]:chunk[1]]
+#     ampvals[i] = np.std(thedata)
+#     ampvals_err[i] = ampvals[i] / 2. / np.sqrt(len(thedata))
 ```
 
 ```{python}
@@ -262,10 +272,17 @@ def hwp_sin(x, pars, extra_args=None):
     amplitude = pars[0]
     XPol = 1-pars[1]
     phase = pars[2]
-    return(amplitude*0.5*(1+np.abs(XPol)*np.sin(4*np.radians(x+phase))))
+    return(amplitude*0.5*(1-np.abs(XPol)*np.sin(4*np.radians(x+phase))))
+
+# def hwp_sin(x, pars, extra_args=None):
+#     amplitude = pars[0]
+#     XPol = np.abs(pars[1])
+#     fact=(1.0-XPol)#/(1.0+XPol)
+#     phase = pars[2]
+#     return(amplitude*0.5*(1.0 + fact*np.sin(4*np.radians(x+phase))))
 
 okdata = ampvals_err != 0
-guess = np.array([np.max(ampvals)*2, 0., 0.])
+guess = np.array([np.max(ampvals)*2, 0, 0.])
 fithwp = ft.do_minuit(thvals[okdata], np.abs(ampvals[okdata]), ampvals_err[okdata], guess, functname=hwp_sin,
               force_chi2_ndf=True, verbose=False)
 print('Fitted')

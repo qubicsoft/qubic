@@ -33,13 +33,13 @@ if d['config'] == 'FI':
 	CteConf = 61.34
 elif d['config'] == 'TD':
 	CteConf = 153.36
-	
+
 n_subpop, fwhm_ini, fwhm_end, sample, step_fwhm, amplitude = ParametersMC(fwhm_ini = CteConf/nus_edge_in[0], 
 																			fwhm_end = CteConf/nus_edge_in[-1],
 																			sample = 50)
 rename =str(reso).replace('.','-')
 #outputname = NameCalib(method = 'fit')+str(rename)+'-{}-{}.txt'.format(d['nside'], int(d['filter_nu']/1e9)) # Could be 'fit' or 'sigma'
-outputname = sys.argv[2]+'_fitcalibration1-5-256-{}.txt'.format(int(d['filter_nu']/1e9))
+outputname = sys.argv[2]#+'_fitcalibration1-5-256-{}.txt'.format(int(d['filter_nu']/1e9))
 # Compute the parameter space domain
 fwhm = np.arange(fwhm_ini, fwhm_end, step_fwhm)
 

@@ -580,7 +580,7 @@ def notch_filter(data, f0, bw, fs):
     return y
 
 
-def meancut(data, nsig):
+def meancut(data, nsig, med=False, disp=True):
     """
 
     Parameters
@@ -595,7 +595,14 @@ def meancut(data, nsig):
     dd = data.copy()
     for i in range(10):
         dd, mini, maxi = scipy.stats.sigmaclip(dd, low=nsig, high=nsig)
-    return np.mean(dd), np.std(dd)
+    if disp:
+        sc = 1
+    else:
+        sc = np.sqrt(len(dd))
+    if med:
+        return np.median(dd), np.std(dd)/sc
+    else:
+        return np.mean(dd), np.std(dd)/sc
 
 
 def simsig(x, pars, extra_args=None):

@@ -45,10 +45,15 @@ from importlib import reload
 ```{python}
 from sklearn.cluster import DBSCAN
 from qubic.utils import progress_bar
-def analyse_loop(tofit, errors, t, fitfunct, fixpars=None, fixvals=None, doplot=False):
+def analyse_loop(tofit, errors, t, fitfunct, fixpars=None, fixvals=None, doplot=False,guess_tstart=None):
     allpars = np.zeros((256,6))
     allerrpars = np.zeros((256,6))
     allchi2_ndf = np.zeros(256)
+    if guess_tstart is not None:
+        tstart=guess_tstart
+    else:
+        tstart=np.mean(t)
+        
     bar = progress_bar(256, 'Detectors ')
     for i in range(256):
         bar.update()
@@ -63,6 +68,7 @@ def analyse_loop(tofit, errors, t, fitfunct, fixpars=None, fixvals=None, doplot=
                     guess[k]=fixvals[k]
         
         ok = np.isfinite(tofit[TESNum-1,:]) & (errors[TESNum-1,:] != 0)
+        #print('Fitting with Guess Tstart = {} in range {},{}'.format(guess[3], 0, period))
         bla = ft.do_minuit(t, tofit[TESNum-1,ok], errors[TESNum-1,ok],
             guess, functname=fitfunct,
             rangepars=[[0.1,0.5], [0., 0.3], [0., 0.3], [0.,period], [-2*amplitude,2*amplitude], [0,offset*2]], 
@@ -75,6 +81,7 @@ def analyse_loop(tofit, errors, t, fitfunct, fixpars=None, fixvals=None, doplot=
         allchi2_ndf[i] = bla[4]/bla[5]
     if doplot:
         names = ['Duty Cycle', 'Rise Time', 'Fall Time', 'Start Time', 'Amplitude', 'Offset']
+        clf()
         for i in range(6):
             subplot(2,3,1+i)
             errorbar(allchi2_ndf,allpars[:,i], yerr=allerrpars[:,i], fmt='ro')
@@ -82,8 +89,9 @@ def analyse_loop(tofit, errors, t, fitfunct, fixpars=None, fixvals=None, doplot=
             xscale('log')
             xlabel(names[i])
             mm, ss = ft.meancut(allpars[:,i],3)
-            ylim(mm-3*ss, mm+3*ss)
+            ylim(mm-5*ss, mm+5*ss)
         tight_layout()
+        show()
     return allpars, allerrpars, allchi2_ndf
 
 def normalize(x):
@@ -98,6 +106,8 @@ def DBSCAN_cut(results, doplot=False):
               for each in np.linspace(0, 1, len(unique_labels))]
     
     if doplot:
+        clf()
+        subplot(2,2,1)
         for i in range(len(unique_labels)):
             thisone = labels == unique_labels[i]
             scatter(allpars[thisone,1],allerrpars[thisone,1],c=colors[i],
@@ -105,24 +115,35 @@ def DBSCAN_cut(results, doplot=False):
         yscale('log')
         ylim(1e-4, 1e2)
         legend()
+        
+        subplot(2,2,2)
+        plot(allpars[:,1], allpars[:,2],'k.')
+        xlim(0,0.4)
+        ylim(0,0.4)
+        
+        show()
     return (labels == 0)
         
 
 
-def analyse_twopasses(tofit, errors, t, fitfunct, doplot=False):
+def analyse_twopasses(tofit, errors, t, fitfunct, doplot=False, guess_tstart=None):
     # First Pass
     ##### Fitting with duty cycle fixed and the rest free (rise, fall, t0, amplitude, offset)
     print('First Pass: Fitting with duty cycle fixed and the rest free (rise, fall, t0, amplitude, offset)')
     allpars, allerrpars, allchi2_ndf = analyse_loop(tofit, errors, t, ft.simsig_asym, 
                                                 fixpars=[1,0,0,0,0,0], 
                                                 fixvals = [dutycycle[ifile]/100, 0,0,0,0,0,0],
-                                               doplot=False)
+                                               doplot=False, guess_tstart=guess_tstart)
     
     testry = 39-1
     print('After 1st pass, for TES index {} - TESNum {}'.format(testry, testry+1))
     print(allpars[testry, 1], allpars[testry, 2], allpars[testry, 4])
     # We get the start time from this first pass
     tstart_median = np.median(allpars[:,3])    
+    
+    #clf()
+    #subplot(1,2,1)
+    #plot(allpars[:,1], allpars[:,2],'k.')
     
     # Second Pass
     ##### Fitting with duty cycle and tstart fixed and the rest free (rise, fall, amplitude, offset)
@@ -132,7 +153,10 @@ def analyse_twopasses(tofit, errors, t, fitfunct, doplot=False):
     allpars, allerrpars, allchi2_ndf = analyse_loop(tofit, errors, t, ft.simsig_asym, 
                                                 fixpars=[1,0,0,1,0,0], 
                                                 fixvals = [dutycycle[ifile]/100, 0,0,tstart_median,0,0,0],
-                                               doplot=doplot)
+                                               doplot=False)
+#     subplot(1,2,2)
+#     plot(allpars[:,1], allpars[:,2],'k.')
+#     show()
     print('After 2nd pass, for TES index {} - TESNum {}'.format(testry, testry+1))
     print(allpars[testry, 1], allpars[testry, 2], allpars[testry, 4])
     results = np.array([normalize(allpars[:,1]), normalize(allpars[:,2]),
@@ -140,7 +164,7 @@ def analyse_twopasses(tofit, errors, t, fitfunct, doplot=False):
                     normalize(allerrpars[:,1]), normalize(allerrpars[:,2]), 
                     normalize(allerrpars[:,4]), normalize(allerrpars[:,5])]).T
 
-    ok = DBSCAN_cut(results) & (allpars[:,1] < 0.29) & (allpars[:,2] < 0.29)
+    ok = DBSCAN_cut(results, doplot=False) & (allpars[:,1] < 0.29) & (allpars[:,2] < 0.29)
 
     return allpars, allerrpars, allchi2_ndf, ok
 
@@ -265,7 +289,7 @@ print(voltage)
 ```
 
 ```{python}
-ifile = 1
+ifile = 15
 thedir = dirs[ifile]
 print(thedir)
 a = qubicfp()
@@ -303,7 +327,7 @@ xlabel('Hours')
 rc('figure',figsize=(12,8))
 reload(ft)
 
-TESNum=95
+TESNum=94
 tt = data['t_data 1']
 t0 = tt[0]
 dd = data['data 1'][TESNum-1,:].reshape((1,len(tt)))
@@ -422,6 +446,7 @@ plot(tstart, np.interp(tstart, t, median_fold),'ro')
 ```{python}
 reload(ft)
 TESNum = 95
+
 function = ft.simsig_asym
 
 
@@ -435,8 +460,9 @@ amplitude = np.max(tofit[TESNum-1,:]) - np.min(tofit[TESNum-1,:])
 offset = np.max(tofit[TESNum-1,:])
 
 guess = [dutycycle[ifile]/100, 0.09, 0.15, tstart, amplitude, offset]
-#guess = [dutycycle[ifile]/100, 0.09, 0.15, 0.3166610466233375, amplitude, offset]
-#print(guess)
+print('Guess:')
+print(guess)
+
 
 #subplot(2,1,1)
 errorbar(t, tofit[TESNum-1,:], yerr=errors[TESNum-1,:], fmt='k.', label='Data TES #{}'.format(TESNum))
@@ -462,13 +488,13 @@ xlabel('time [s]')
 ```
 
 ```{python}
-fn = fn1.copy()
-nn = np.append(nn1,nn2,axis=0)
-print(fn.shape)
-print(nn.shape)
-np.savetxt('/Users/hamilton/toto.txt',fn)
-np.savetxt('/Users/hamilton/toto2.txt',nn)
-bla = np.loadtxt('/Users/hamilton/toto2.txt')
+# fn = fn1.copy()
+# nn = np.append(nn1,nn2,axis=0)
+# print(fn.shape)
+# print(nn.shape)
+# np.savetxt('/Users/hamilton/toto.txt',fn)
+# np.savetxt('/Users/hamilton/toto2.txt',nn)
+# bla = np.loadtxt('/Users/hamilton/toto2.txt')
 ```
 
 ```{python}
@@ -510,11 +536,43 @@ def run_all_anaysis(thedir, period, nbins, lowcut, highcut, badgps=False):
     dfolded_nonorm = np.append(dfolded_nonorm1, dfolded_nonorm2, axis=0)
     nn = np.append(nn1,nn2, axis=0)
     fn = fn1.copy()
+
+    for i in range(256):
+        plot(t, folded[i,:], 'k-',alpha=0.1)
+    median_fold = np.nanmedian(folded,axis=0)
+    plot(t, median_fold,'r',label='Median')
+    ylim(-3,3)
+    der = np.zeros_like(t)
+    der[1:] = np.diff(median_fold)
+    der[0]=der[1]
+    plot(t,der,'b', label='Median derivative')
+    legend()
+    md, sd = ft.meancut(der,3)
+    thresh = 2.
+    plot(t,t*0+thresh*sd,'g:')
+    plot(t,t*0-thresh*sd,'g:')
+    #tstart = np.min(t[(der-md) < -thresh*sd ])
+    tstart = t[np.argmin(der)]
+    offset = np.max(median_fold)
+    amplitude = np.max(median_fold) - np.min(median_fold)
+    print(tstart, offset, amplitude)
+    plot(tstart, np.interp(tstart, t, median_fold),'ro')
+    show()
     
     ### Now fitting the folded
     tofit = folded_nonorm
     errors = dfolded_nonorm
-    allpars, allerrpars, allchi2_ndf, ok = analyse_twopasses(tofit, errors, t, ft.simsig_asym, doplot=False)
+    allpars, allerrpars, allchi2_ndf, ok = analyse_twopasses(tofit, errors, t, ft.simsig_asym, doplot=True,
+                                                            guess_tstart=tstart)
+    
+    print('OK after DBSCAN Cut: {} over {}'.format(np.sum(ok), len(ok)))
+    
+    for i in range(256):
+        plot(t, folded[i,:], 'k-',alpha=0.1)
+        fitted = ft.simsig_asym(t, allpars[i,:])
+        plot(t, (fitted-np.mean(fitted))/np.std(fitted), 'g', alpha=0.1)
+    show()
+    
     
     rc('figure',figsize=(15,8))
     name = 'TimeCst-'+str.split(thedir,'/')[-1]
@@ -533,10 +591,13 @@ def run_all_anaysis(thedir, period, nbins, lowcut, highcut, badgps=False):
 ```
 
 ```{python}
-print(thedir)
+
 ```
 
 ```{python}
+ifile = 1
+thedir = dirs[ifile]
+print(thedir)
 period = 1./ thefreqmod
 nbins = 50
 lowcut = 0.01
@@ -546,15 +607,7 @@ allpars, allerrpars, allchi2_ndf, ok= run_all_anaysis(thedir, period, nbins, low
 ```
 
 ```{python}
-TESNum = 39
-print(TESNum)
-print(allpars[TESNum-1,1],allpars[TESNum-1,2],allpars[TESNum-1,4])
-print('Before')
-print('0.08919      0.17489     3547.80')
-```
-
-```{python}
-
+allpars.shape
 ```
 
 ```{python}

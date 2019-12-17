@@ -16,6 +16,7 @@ jupyter:
 from __future__ import division, print_function
 import glob
 import os
+import sys
 import healpy as hp
 import numpy as np
 import matplotlib.pyplot as plt
@@ -41,38 +42,73 @@ plt.rcParams['figure.figsize'] = (5, 5)
 # Noisy maps with no correlations
 
 ```{python}
-nside = 8
+nside = 16
 npix = 12 * nside**2
-nfrec = 8
-x0 = np.random.random((nfrec, npix, 3))
+nfrec = 4
+x1_band = np.random.random((1, npix, 3))
+xn_band = np.random.random((nfrec, npix, 3))
 
-x0_mean = np.mean(x0)
-x0_std = np.std(x0)
+x1_mean = np.mean(x1_band)
+x1_std = np.std(x1_band)
+xn_mean = np.mean(xn_band)
+xn_std = np.std(xn_band)
 
 # Make many realizations with gaussian noise (no correlations)
-nreals = 200
+nreals = 100
+std = 1
+#x1_noisy = np.mean([x1_band + np.random.normal(x1_mean, std, 
+#                                               size=x1_band.shape) for i in range(nreals)],axis=0)
 
-x0_noisy = [x0 + np.random.normal(x0_mean, x0_std, size=x0.shape) for i in range(nreals)]
-x0_noisy = np.array(x0_noisy)
+#x1_noisy = x1_band + np.random.normal(x1_mean, std, size=x1_band.shape)
+#x1_noisy = np.array(x1_noisy)
 
-print(x0_noisy.shape)
-hp.mollview(x0[0, :, 0])
-hp.mollview(x0_noisy[2, 0, :, 0])
+x1_noisy = np.zeros((nreals,1,npix,3))
+xn_noisy = np.zeros((nreals,nfrec,npix,3))
+for i in range(nreals):
+    x1_noisy[i,0,:,:] = x1_band[0,:,:] + np.random.normal(x1_mean, std, size=x1_band[0].shape)
+    for j in range(nfrec):
+        xn_noisy[i,j,:,:] = xn_band[j,:,:] + np.random.normal(xn_mean, np.sqrt(nfrec)*std, size=xn_band[j].shape)
+
+#hp.mollview(x1_band[0, :, 0], title='x0 realization std = {:3.2}'.format(x1_std))
+#hp.mollview(xn_noisy[3,0, :, 0], title='x0 realization + noise (one real.)')
+#plt.hist(x1_noisy[50,0,:,0]-x1_band[0,:,0], bins= 60)
+#plt.hist(x1_noisy[50,0,:,0], bins= 60,color='r')
+
+#1st sigma over px (sigma_1r) ALL for Stokes I then average variance
+sigma_1r = np.zeros((nreals,))
+for ire in range(nreals):
+    sigma_1r[ire] = np.var(x1_noisy[ire,0,:,0], ddof=0)
+sigma_1 = (sigma_1r)
 ```
 
 ```{python}
-nfrecon = [1, 2, 4, 8]
-Cp = amc.get_Cp(x0_noisy, nfrecon=nfrecon)
+sigma_1**0.5
+```
+
+***
+Compute mean of std in reals for a given subband... ~4, ok!
+
+
+```{python}
+#aux = []
+#for ire in range(nreals):
+#    aux.append(np.std(xn_noisy[ire,0,:,0]))
+#print(np.mean(aux))
 ```
 
 ```{python}
-Cp_prime = amc.Cp2Cp_prime(Cp, verbose=True)
-plt.imshow(Cp_prime[:, :, 1, 2])
+#nfrecon = [1, 2, 4, 8]
+Cp = amc.get_Cp(xn_noisy, nfrecon=[4,])
 ```
 
 ```{python}
-Cp_prime_viaCorr = amc.Cp2Cp_prime_viaCorr(Cp, verbose=True)
-plt.imshow(Cp_prime[:, :, 1, 2])
+#Cp_prime = amc.Cp2Cp_prime(Cp, verbose=True)
+#plt.imshow(Cp_prime[:, :, 1, 2])
+```
+
+```{python}
+#Cp_prime_viaCorr = amc.Cp2Cp_prime_viaCorr(Cp, verbose=True)
+#plt.imshow(Cp_prime[:, :, 1, 2])
 ```
 
 ```{python}
@@ -81,21 +117,39 @@ DEC_center = -57. #deg
 center = equ2gal(RA_center, DEC_center)
 
 ang = rmc.pix2ang(nside, center)
-# print(ang)
 
-weighted_av, sig2, sigmean = amc.make_weighted_av(x0_noisy, Cp, ang, ang_threshold=80, verbose=True)
-print(sig2, sigmean)
+weighted_av, sig2, sigmean = amc.make_weighted_av(xn_noisy, Cp, ang, ang_threshold=80, verbose=True)
 ```
 
 ```{python}
-hp.mollview(weighted_av[0, :, 0])
+#aa=[]
+#for ire in range(nreals):
+#    aa.append(np.std(weighted_av[ire,:,0]))
+#print(np.mean(aa))
 ```
 
 ```{python}
+weighted_av.shape
+```
+
+```{python}
+#sig2MC = np.std(np.mean(weighted_av, axis=0),axis=0)
 sig2MC = np.var(weighted_av, axis=0)
 sigMCmean = amc.average_pix_sig2(sig2MC, ang, ang_threshold=80)
-print(sig2MC, sigMCmean)
-plt.plot(sig2MC[:, 2])
+print(sig2MC)
+print(sigMCmean)
+```
+
+```{python}
+#s2recomb_map=sig2MC
+#s4recomb_map=sig2MC
+s8recomb_map=sig2MC
+```
+
+```{python}
+ss = [std,s2recomb_map[0],s4recomb_map[0],s8recomb_map[0]]
+ss = np.array(ss)**2
+plt.plot([1,2,4,8],ss/ss[0],'ko')
 ```
 
 ***
@@ -248,6 +302,14 @@ sig2MC = np.var(weighted_av, axis=0)
 sigMCmean = amc.average_pix_sig2(sig2MC, ang, ang_threshold=80)
 print(sig2MC, sigMCmean)
 plt.plot(sig2MC[:, 2])
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 ```{python}

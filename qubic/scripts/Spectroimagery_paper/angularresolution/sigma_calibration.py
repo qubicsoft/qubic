@@ -40,7 +40,7 @@ n_subpop, fwhm_ini, fwhm_end, sample, step_fwhm, amplitude = ParametersMC(fwhm_i
 
 rename =str(reso).replace('.','-')
 #outputname = NameCalib(method = 'sigma')+str(rename)+'-{}-{}.txt'.format(d['nside'], int(d['filter_nu']/1e9)) # Could be 'fit' or 'sigma')
-outputname = sys.argv[2]+'_sigmacalibration1-5-256-{}.txt'.format(int(d['filter_nu']/1e9))
+outputname = sys.argv[2]#+'_sigmacalibration1-5-256-{}.txt'.format(int(d['filter_nu']/1e9))
 # Compute the parameter space domain
 fwhm = np.arange(fwhm_ini, fwhm_end, step_fwhm)
 

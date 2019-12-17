@@ -38,11 +38,14 @@ import scipy.signal as scsig
 from scipy import interpolate
 import datetime as dt
 import pickle
-
+from importlib import reload
 ```
 
 ```{python}
-files = glob.glob('/Users/hamilton/Qubic/Calib-TD/TimeConstants/TimeCst-2019-11-12*_data.txt')
+directory = '/Users/hamilton/Qubic/Calib-TD/TimeConstants/'
+files = glob.glob(directory + '/TimeCst-2019-11-12*_data.txt')
+files_freq = glob.glob(directory + '/TimeCst-2019-11-12*_freqnoise.txt')
+files_noise = glob.glob(directory + '/TimeCst-2019-11-12*_noise.txt')
 label = []
 nu = np.zeros(len(files))
 voltage = np.zeros(len(files))
@@ -72,8 +75,12 @@ print(dutycycle)
 ```{python}
 nv = len(files)
 alldata = np.zeros((nv, 256, 6))
+allfn = np.zeros((nv, 30))
+allnn = np.zeros((nv, 256, 30))
 for i in range(nv):
     alldata[i,:,:] = np.loadtxt(files[i])[:,1:]
+    allfn[i,:] = np.loadtxt(files_freq[i])
+    allnn[i,:] = np.loadtxt(files_noise[i])
 ok = (np.sum(alldata[:,:,0], axis=0) != 0)
 print(ok.sum()*1./256*100)
 ```
@@ -87,6 +94,9 @@ print(alldata.shape)
 ```
 
 ```{python}
+disp = False
+med = True
+reload(ft)
 mean_rise = np.zeros(nv)
 sig_rise = np.zeros(nv)
 mean_fall = np.zeros(nv)
@@ -96,42 +106,57 @@ sig_relative_amp = np.zeros(nv)
 nsig_clip = 3.
 for i in range(nv):
     thisok = alldata[i,:,1] != 0
-    mean_rise[i], sig_rise[i] = ft.meancut(alldata[i,thisok,0],nsig_clip)
-    sig_rise[i] /= np.sqrt(thisok.sum())
-    mean_fall[i], sig_fall[i] = ft.meancut(alldata[i,thisok,2],nsig_clip)
-    sig_fall[i] /= np.sqrt(thisok.sum())
-    #ratio = alldata[i,thisok,4]/np.mean(alldata[0,thisok,4])
+    mean_rise[i], sig_rise[i] = ft.meancut(alldata[i,thisok,0],nsig_clip, disp=disp, med=med)
+    #sig_rise[i] /= np.sqrt(thisok.sum())
+    mean_fall[i], sig_fall[i] = ft.meancut(alldata[i,thisok,2],nsig_clip, disp=disp, med=med)
+    #sig_fall[i] /= np.sqrt(thisok.sum())
     mm, ss = ft.meancut(alldata[0,thisok,4],nsig_clip)
     ratio = alldata[i,thisok,4]/mm
-    mean_relative_amp[i], sig_relative_amp[i] = ft.meancut(ratio[isfinite(ratio)],nsig_clip)
-    sig_relative_amp[i] /= np.sqrt(thisok.sum())
+    mean_relative_amp[i], sig_relative_amp[i] = ft.meancut(ratio[isfinite(ratio)],nsig_clip, disp=disp, med=med)
+    #sig_relative_amp[i] /= np.sqrt(thisok.sum())
 
 ```
 
 ```{python}
-rc('figure',figsize=(15, 8))
-subplot(1,2,1)
+reload(ft)
+rc('figure',figsize=(15, 10))
+subplot(2,2,1)
 errorbar(voltage, mean_rise, yerr=sig_rise,fmt='ro', label='Rise Time')
 errorbar(voltage, mean_fall, yerr=sig_fall,fmt='bo', label='Fall Time')
-# for i in range(256):
-#     if np.product(alldata[:,i,0] != 0):
-#         plot(voltage, alldata[:,i,0], 'r', alpha=0.1)
-#     if np.product(alldata[:,i,2] != 0):
-#         plot(voltage, alldata[:,i,2], 'b', alpha=0.1)
 ylabel('Average Time COnstant [sec]')
 xlabel('TES Bias [V]')
 legend()
-ylim(0,0.25)
+ylim(0,0.15)
 
-subplot(1,2,2)
+subplot(2,2,2)
 errorbar(voltage, mean_relative_amp, yerr=sig_relative_amp,fmt='go', label='Relative Amplitude')
-# for i in range(256):
-#     if np.product(alldata[:,i,4] != 0):
-#         plot(voltage, alldata[:,i,4] / np.mean(alldata[0,:,4]), 'g', alpha=0.1)
 ylabel('Relative Amplitude')
 xlabel('TES Bias [V]')
 legend()
-ylim(0,10)
+ylim(0,6)
+
+inoise = 2
+freqnoise = allfn[0,inoise]
+noise_levels = np.zeros(len(voltage))
+err_noise_levels = np.zeros(len(voltage))
+print(allnn.shape)
+for i in range(len(voltage)):
+    noise_levels[i], err_noise_levels[i] = ft.meancut(allnn[i,:,inoise], 3, med=med, disp=disp)
+
+subplot(2,2,3)
+errorbar(voltage,noise_levels, yerr=err_noise_levels, fmt='ko')
+xlabel('TES Bias [V]')
+title('Noise Level at f={0:5.2f} Hz'.format(freqnoise))
+
+
+subplot(2,2,4)
+ratio = mean_relative_amp / noise_levels
+err_ratio = ratio * np.sqrt((err_noise_levels/noise_levels)**2 + (sig_relative_amp/mean_relative_amp)**2)
+errorbar(voltage,ratio, yerr=err_ratio, fmt= 'mo')
+xlabel('TES Bias [V]')
+title('Signal to Noise at f={0:5.2f} Hz'.format(freqnoise))
+
+tight_layout()
 ```
 
 <!-- #region -->
@@ -264,9 +289,9 @@ $$S = \frac{S_0}{V} \times \frac{\tau-\tau_0}{\tau_0}$$
 So we can try to determine the best $\tau_0$ and $S_0$ using a brute force $\chi^2$
 
 ```{python}
-nns = 80
+nns = 200
 s0vals = np.linspace(3,10,nns)
-nnt = 100
+nnt = 150
 t0vals = np.linspace(0.1,0.5,nnt)
 s2d, t2d = np.meshgrid(s0vals, t0vals)
 

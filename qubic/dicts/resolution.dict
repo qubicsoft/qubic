@@ -1,8 +1,8 @@
 ############################################# Instrument ################################
 debug = False #False/True # Boolean
 
-config = 'FI' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
-filter_nu = 220*1e9 # 150e9 or 220e9 Hz
+config = 'TD' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
+filter_nu = 150*1e9 # 150e9 or 220e9 Hz
 filter_relative_bandwidth = 0.25 
 beam_shape =  'multi_freq' # 'gaussian', 'fitted_beam', 'multi_freq'
 
@@ -19,7 +19,7 @@ detector_fknee=0
 detector_fslope=1
 detector_ncorr=10
 ## Detector nep  + reading noise: sqrt(4.7e-17**2 + 2e-16**2)
-detector_nep=4.7e-17 #2.05e-16 (TD), 4.7e-17(FI)
+detector_nep=2.05e-16 #2.05e-16 (TD), 4.7e-17(FI)
 detector_ngrids=1
 detector_tau=0.01
 polarizer=True
@@ -33,7 +33,8 @@ nripples=0
 
 optics='CalQubic_Optics_v3_CC_FFF.txt'
 primbeam='CalQubic_PrimBeam_vx.fits' # X=2 gaussian, 3 fitted, 4 multi frequency splines
-detarray='CalQubic_DetArray_CC.fits'
+detarray='CalQubic_DetArray_P87_CC.fits' # this is only for TD.
+#detarray='CalQubic_DetArray_CC.fits'
 hornarray='CalQubic_HornArray_CC.fits'
 
 ############################################# Scene ################################

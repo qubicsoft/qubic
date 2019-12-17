@@ -68,7 +68,7 @@ simu220 = ['25591014/20191106_low_nep'] # 1e-18
 
 ```{python}
 # Simulation date and name
-date_name = simu9000[1]
+date_name = simu9000[5]
 # date_name = 'NERSC_runs/24334789/20190903_low_nep'
 
 # Get the repository where the simulation is
@@ -85,7 +85,7 @@ print('NEP = ', d['detector_nep'])
 ## Get full maps or patchs
 
 ```{python}
-irec = 8
+irec = 2
 
 files, maps_recon, maps_conv, maps_diff = \
 rmc.get_maps_many_files(rep_simu + date_name, '*nfrecon{}*False*'.format(irec))
@@ -158,7 +158,7 @@ dict_sig2MC = {}
 dict_sig2MC_prime = {}
 dict_sig2 = {}
 dict_sig2_prime = {}
-ang_th = 10
+ang_th = 8
 
 for irec in d['nf_recon']:
     print('irec =', irec)   
@@ -170,43 +170,43 @@ for irec in d['nf_recon']:
         print(recon_patch.shape)
 
         sig2MC_monofreq = np.var(recon_patch, axis=0) # Variance over realizations
-        sigMCmean_monofreq = amc.average_pix_sig2(sig2MC_monofreq, ang, ang_threshold=ang_th)
+        sig2MCmean_monofreq = amc.average_pix_sig2(sig2MC_monofreq, ang, ang_threshold=ang_th)
         dict_sig2MC.update({'{}'.format(irec): sig2MC_monofreq})
-        dict_sig2MC.update({'{}mean'.format(irec): sigMCmean_monofreq})
+        dict_sig2MC.update({'{}mean'.format(irec): sig2MCmean_monofreq})
        
     else:
         Cp = amc.get_Cp(recon_patch, nfrecon=d['nf_recon'])
-#         Cp_prime = amc.Cp2Cp_prime_viaCorr(Cp, verbose=True)
-        Cp_prime = amc.Cp2Cp_prime(Cp, verbose=True)
+        Cp_prime = amc.Cp2Cp_prime_viaCorr(Cp, verbose=True)
+#         Cp_prime = amc.Cp2Cp_prime(Cp, verbose=True)
         
         # Compute sig2 and sig2MC 
         # Using Cp
-        weighted_av, sig2, sigmean = amc.make_weighted_av(recon_patch, Cp, ang, ang_threshold=ang_th,
+        weighted_av, sig2, sig2mean = amc.make_weighted_av(recon_patch, Cp, ang, ang_threshold=ang_th,
                                                        verbose=True)
         dict_sig2.update({'{}'.format(irec): sig2})
-        dict_sig2.update({'{}mean'.format(irec): sigmean})
+        dict_sig2.update({'{}mean'.format(irec): sig2mean})
         
         sig2MC = np.var(weighted_av, axis=0)
-        sigMCmean = amc.average_pix_sig2(sig2MC, ang, ang_threshold=ang_th)
+        sig2MCmean = amc.average_pix_sig2(sig2MC, ang, ang_threshold=ang_th)
         dict_sig2MC.update({'{}'.format(irec): sig2MC})
-        dict_sig2MC.update({'{}mean'.format(irec): sigMCmean})
+        dict_sig2MC.update({'{}mean'.format(irec): sig2MCmean})
 
         # Using Cp_prime
-        weighted_av_prime, sig2_prime, sigmean_prime = amc.make_weighted_av(recon_patch, Cp_prime, 
+        weighted_av_prime, sig2_prime, sig2mean_prime = amc.make_weighted_av(recon_patch, Cp_prime, 
                                                                          ang, ang_threshold=ang_th,
                                                                          verbose=True)
         dict_sig2_prime.update({'{}'.format(irec): sig2_prime})
-        dict_sig2_prime.update({'{}mean'.format(irec): sigmean_prime})
+        dict_sig2_prime.update({'{}mean'.format(irec): sig2mean_prime})
         
         sig2MC_prime = np.var(weighted_av_prime, axis=0)
-        sigMCmean_prime = amc.average_pix_sig2(sig2MC_prime, ang, ang_threshold=ang_th)
+        sig2MCmean_prime = amc.average_pix_sig2(sig2MC_prime, ang, ang_threshold=ang_th)
         dict_sig2MC_prime.update({'{}'.format(irec): sig2MC_prime})
-        dict_sig2MC_prime.update({'{}mean'.format(irec): sigMCmean_prime})
+        dict_sig2MC_prime.update({'{}mean'.format(irec): sig2MCmean_prime})
 
 ```
 
 ```{python}
-plt.plot(dict_sig2['8'][:, 0], '.')
+plt.plot(dict_sig2['2'][:, 0], '.')
 np.min(dict_sig2['8'][:, 0])
 ```
 
@@ -269,9 +269,6 @@ plt.title('sig2 prime')
 ```
 
 ```{python}
-
-
-plt.figure()
 p = plot_sigma2profile(ang, dict_sig2MC_prime, nbins, nf_recon=d['nf_recon'][1:])
 plt.title('sig2 MC prime')
 ```
@@ -287,14 +284,15 @@ def plot_sig_mean(thedict, nf_recon, color, signame):
             if irec == 1: 
                 sig_monofreq = dict_sig2MC['{}mean'.format(irec)][s]
                 plt.plot(1, 1, 'o', color=color)
-                plt.plot(nf_recon, np.sqrt(nf_recon), 'k', label=r'$y = \sqrt{irec}$')
+                plt.plot(nf_recon, nf_recon, 'k--', label=r'$y = irec$')
+                plt.plot(nf_recon, np.ones(len(nf_recon)), 'b--', label=r'$y = 1$')
             else:
                 sig_norm = thedict['{}mean'.format(irec)][s] / sig_monofreq
                 p = plt.plot(irec, sig_norm, 'o', color=color, label=signame)
         
             plt.title(Stokes[s])
             plt.xlabel('# of reconstructed bands', fontsize=10)
-            plt.ylabel(r'$\sigma / \sigma_{1band}$', fontsize=20)
+            plt.ylabel(r'$\sigma^2 / \sigma^2_{1band}$', fontsize=20)
 #             plt.ylim(0, 0.002)
             if irec == 2: plt.legend()
             
@@ -302,15 +300,15 @@ def plot_sig_mean(thedict, nf_recon, color, signame):
 ```
 
 ```{python}
-p = plot_sig_mean(dict_sig2, d['nf_recon'], color='g', signame='sigMC')
+p = plot_sig_mean(dict_sig2, d['nf_recon'], color='g', signame='sig2MC')
 ```
 
 ```{python}
-p = plot_sig_mean(dict_sig2MC, d['nf_recon'], color='b', signame='sigMC_prime')
+p = plot_sig_mean(dict_sig2MC, d['nf_recon'], color='b', signame='sig2MC_prime')
 ```
 
 ```{python}
-p = plot_sig_mean(dict_sig2_prime, d['nf_recon'], color='r', signame='sig')
+p = plot_sig_mean(dict_sig2_prime, d['nf_recon'], color='r', signame='sig2')
 ```
 
 ```{python}

@@ -613,8 +613,7 @@ def make_weighted_av(patch, Cp, ang, ang_threshold, verbose=False):
     -------
     weighted_av: map averaged over bands
     sig2: variances over realisations on the map
-    sigmean: variances are averaged over pixels below the angle threshold
-        and the sqrt (sigma) is returned.
+    sig2mean: variances are averaged over pixels below the angle threshold
 
     """
     nreals = np.shape(patch)[0]
@@ -644,23 +643,21 @@ def make_weighted_av(patch, Cp, ang, ang_threshold, verbose=False):
         print('Variance in MC simulation, shape: ', sig2.shape)
 
     # Average sig2 over pixels in a given angle
-    sigmean = average_pix_sig2(sig2, ang, ang_threshold)
+    sig2mean = average_pix_sig2(sig2, ang, ang_threshold)
 
-    return weighted_av, sig2, sigmean
+    return weighted_av, sig2, sig2mean
 
 
 def average_pix_sig2(sig2, ang, ang_threshold):
     """
     Average the variances over pixels in a given angle.
-    Return the sigma: the sqrt of the mean variance.
     """
-    sigmean = np.empty((3,))
+    sig2mean = np.empty((3,))
     npix = np.shape(ang[ang < ang_threshold])
     print('npix =', npix)
     for istokes in range(3):
-        sigmean[istokes] = np.sqrt(np.mean(sig2[:, istokes][ang < ang_threshold])/ npix)
-        # sigmean[istokes] = np.sqrt(np.sum(sig2[:, istokes][ang < ang_threshold]))/ npix
-    return sigmean
+        sig2mean[istokes] = np.mean(sig2[:, istokes][ang < ang_threshold])
+    return sig2mean
 
 
 def Cp2Cp_prime(Cp, verbose=True):

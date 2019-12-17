@@ -218,15 +218,20 @@ def get_maps_many_files(rep_simu, name, verbose=True):
 
 
 # ================== Cut a patch in different zones ====================
-def pix2ang(ns, center, seenmap):
+def pix2ang(ns, center, seenmap=None):
     """
-    Return the angles between the vector of the central pixel
-    and the vector of each pixel seen.
+    For each pixel observed, returns the angle between the pixel vector and
+    the central pixel vector.
     """
     # central pixel vector
     v0 = hp.ang2vec(center[0], center[1], lonlat=True)
-    # seen pixel indices
-    ip = np.arange(12 * ns ** 2)[seenmap]
+    if seenmap is not None:
+        # Only pixel seen (in the patch)
+        ip = np.arange(12 * ns ** 2)[seenmap]
+    else:
+        # all pixels
+        ip = np.arange(12 * ns ** 2)
+
     # vectors associated to each pixel seen
     vpix = hp.pix2vec(ns, ip)
 

@@ -327,11 +327,11 @@ class SelfCalibration:
             phi = - 2 * np.pi / 3e8 * freq_source * 1e9 * d * np.sin(np.deg2rad(theta_source))
 
             data = pd.read_csv(files[swi - 1], sep='\t', skiprows=0)
-            allampX[i, :, :] = np.reshape(np.asarray(data['MagX']), (nn, nn))
-            allampY[i, :, :] = np.reshape(np.asarray(data['MagY']), (nn, nn))
+            allampX[i, :, :] = np.reshape(np.asarray(data['MagX']), (nn, nn)).T
+            allampY[i, :, :] = np.reshape(np.asarray(data['MagY']), (nn, nn)).T
 
-            allphiX[i, :, :] = np.reshape(np.asarray(data['PhaseX']), (nn, nn)) + phi
-            allphiY[i, :, :] = np.reshape(np.asarray(data['PhaseY']), (nn, nn)) + phi
+            allphiX[i, :, :] = np.reshape(np.asarray(data['PhaseX']), (nn, nn)).T + phi
+            allphiY[i, :, :] = np.reshape(np.asarray(data['PhaseY']), (nn, nn)).T + phi
 
         # Electric field for each open horn
         Ax = allampX * (np.cos(allphiX) + 1j * np.sin(allphiX))
@@ -341,10 +341,8 @@ class SelfCalibration:
         sumampx = np.sum(Ax, axis=0)
         sumampy = np.sum(Ay, axis=0)
 
-        # Intensity in the focal plane with high resolution
-        # and with the focal plane resolution
+        # Power on the focal plane
         power = np.abs(sumampx) ** 2 + np.abs(sumampy) ** 2
-        power = power.T # this transpose was in the Creidhe code
 
         if doplot:
             plt.figure()
@@ -421,8 +419,10 @@ def make_external_A(rep, open_horns):
         plane for each of the horns:
         [0] : array of nn with x values in meters
         [1] : array of nn with y values in meters
-        [2] : array of [nhorns, nn, nn] with amplitude
-        [3] : array of [nhorns, nn, nn] with phase in degrees
+        [2] : array of [nhorns, nn, nn] with amplitude on X
+        [3] : array of [nhorns, nn, nn] with amplitude on Y
+        [4] : array of [nhorns, nn, nn] with phase on X in degrees
+        [5] : array of [nhorns, nn, nn] with phase on Y in degrees
 
     """
     # Get simulation files
@@ -465,8 +465,7 @@ def make_external_A(rep, open_horns):
         allphiX[i, :, :] = np.reshape(np.asarray(data['PhaseX']), (nn, nn))
         allphiY[i, :, :] = np.reshape(np.asarray(data['PhaseY']), (nn, nn))
 
-    # Why using allampX, allphiX and not allampY, allphiY ??
-    external_A = [-xx, -yy, allampX, allphiX]
+    external_A = [-xx, -yy, allampX, allampY, allphiX, allphiY]
 
     return external_A
 

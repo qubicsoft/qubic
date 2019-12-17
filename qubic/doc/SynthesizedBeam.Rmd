@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.1'
-      jupytext_version: 1.2.1
+      jupytext_version: 1.2.4
   kernelspec:
     display_name: Python 3
     language: python
@@ -72,7 +72,7 @@ Once the QubicIntrument exists, it contains a lot of informations on the instrum
 fp_index = 561 # from 0 to 1155
 ii = np.where(q.detector.index == fp_index)[0]
 print('ii = ', ii)
-plot(q.detector[ii].center[0,0], q.detector[ii].center[0,1], 'go')
+plt.plot(q.detector[ii].center[0,0], q.detector[ii].center[0,1], 'go')
 q.detector.plot()
 ```
 
@@ -87,8 +87,8 @@ centers = q.horn.center[:, 0:2]
 col = q.horn.column
 row = q.horn.row
 for i in range(len(centers)):
-    text(centers[i,0]-0.006, centers[i,1], 'c{0:}'.format(col[i]), color='r',fontsize=6)
-    text(centers[i,0]+0.001, centers[i,1], 'r{0:}'.format(row[i]), color='b',fontsize=6)
+    plt.text(centers[i,0]-0.006, centers[i,1], 'c{0:}'.format(col[i]), color='r',fontsize=6)
+    plt.text(centers[i,0]+0.001, centers[i,1], 'r{0:}'.format(row[i]), color='b',fontsize=6)
 q.horn.plot()
 ```
 
@@ -124,7 +124,7 @@ idet = ii
 sbidealFI = instFI[idet].get_synthbeam(scene)[0]
 sbidealTD = instTD[idet].get_synthbeam(scene)[0]
 
-clf()
+plt.clf()
 mini=-30
 hp.gnomview(np.log10(sbidealFI/np.max(sbidealFI))*10, rot=[0,90], reso=5, 
             sub=(1,2,1), title='First Instrument', min=mini, max=0)
@@ -203,20 +203,20 @@ initcutTD = np.diag(np.roll(np.roll(mapTD, 99-maxx, axis=0),
                             99-maxy, axis=1))
 
 # sqrt(2) comes because we take a diagonal cut
-xxinit = linspace(-100, 100, 200) * reso * sqrt(2) / 60
+xxinit = np.linspace(-100, 100, 200) * reso * np.sqrt(2) / 60
 
 # Need more points for next steps: interpolate
-xx = linspace(-100, 100, 20000) * reso * sqrt(2) / 60
+xx = np.linspace(-100, 100, 20000) * reso * np.sqrt(2) / 60
 cutFI = np.interp(xx, xxinit, initcutFI)
 cutTD = np.interp(xx, xxinit, initcutTD)
 
-clf()
-xlabel('Angle (deg)')
-ylabel('Synthesized Beam (dB)')
-plot(xx, cutFI, label = 'FI - 150 GHz - Det + Nu Integ.')
-plot(xx, cutTD, label = 'TD - 150 GHz - Det + Nu Integ.')
+plt.clf()
+plt.xlabel('Angle (deg)')
+plt.ylabel('Synthesized Beam (dB)')
+plt.plot(xx, cutFI, label = 'FI - 150 GHz - Det + Nu Integ.')
+plt.plot(xx, cutTD, label = 'TD - 150 GHz - Det + Nu Integ.')
 plt.title('TES {}'.format(fp_index))
-legend(loc='lower right', fontsize=10)
+plt.legend(loc='lower right', fontsize=10)
 ```
 
 ```{python}
@@ -228,15 +228,15 @@ fwhmFI = np.max(xx[halfmaxFI] * 60) - np.min(xx[halfmaxFI] * 60)
 fwhmTD = np.max(xx[halfmaxTD] * 60) - np.min(xx[halfmaxTD] * 60)
 print(fwhmFI, fwhmTD)
 
-clf()
-xlabel('Angle (arcmin)')
-ylabel('Synthesized Beam (dB)')
-xlim(-60, 60)
-ylim(-10, 0)
-plot(xx * 60, cutFI, label = 'FI - 150 GHz - Det + Nu Integ. - FWHM = {0:5.1f} arcmin'.format(fwhmFI))
-plot(xx * 60, cutTD, label = 'TD - 150 GHz - Det + Nu Integ. - FWHM = {0:5.1f} arcmin'.format(fwhmTD))
-plot(xx * 60, xx * 0 + np.log10(0.5) * 10, 'k--')
-legend(loc='lower right', fontsize=10)
+plt.clf()
+plt.xlabel('Angle (arcmin)')
+plt.ylabel('Synthesized Beam (dB)')
+plt.xlim(-60, 60)
+plt.ylim(-10, 0)
+plt.plot(xx * 60, cutFI, label = 'FI - 150 GHz - Det + Nu Integ. - FWHM = {0:5.1f} arcmin'.format(fwhmFI))
+plt.plot(xx * 60, cutTD, label = 'TD - 150 GHz - Det + Nu Integ. - FWHM = {0:5.1f} arcmin'.format(fwhmTD))
+plt.plot(xx * 60, xx * 0 + np.log10(0.5) * 10, 'k--')
+plt.legend(loc='lower right', fontsize=10)
 ```
 
 ### Non ideal synthesized beam

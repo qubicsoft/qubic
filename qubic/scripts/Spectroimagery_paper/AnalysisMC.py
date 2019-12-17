@@ -13,6 +13,7 @@ from qubic import Xpol
 
 from qubicpack.utilities import Qubic_DataDir
 
+
 # ============ Functions do statistical tests on maps ===========#
 def std_profile(many_patch, nbins, nside, center, seenmap):
     """
@@ -62,7 +63,56 @@ def std_profile(many_patch, nbins, nside, center, seenmap):
     return bin_centers, ang, std_bin, std_profile
 
 
-def rms_method(name, residuals_way, zones=1, noiseless=False):
+def get_residuals(name, rep_simu, residuals_way, irec):
+    """
+    Compute residuals in a given way.
+
+    Parameters
+    ----------
+    name : str
+        Simulation file.
+    rep_simu : str
+        Path containing the simulations.
+    residuals_way : str
+        Way to compute residuals. 3 keywords : noiseless, conv or mean_recon
+    irec : int
+        Number of reconstructed subbands.
+
+    Returns
+    -------
+        residuals : array of shape (#reals, #bands, #pixels, 3)
+    """
+
+    # Dictionary saved during the simulation
+    d = qubic.qubicdict.qubicDict()
+    d.read_from_file(rep_simu + name + '.dict')
+    nf_recon = d['nf_recon']
+    if irec not in nf_recon:
+        raise ValueError('Invalid number of freq. {0} not in {1}'.format(irec, nf_recon))
+
+    _, maps_recon_patch, _, maps_diff_patch = rmc.get_patch_many_files(rep_simu + name,
+                                                                       '*nfrecon{}*False*'.format(irec),
+                                                                       verbose=False)
+
+    if residuals_way == 'noiseless':
+        _, patch_recon_nl, patch_conv_nl, patch_diff_nl = rmc.get_patch_many_files(rep_simu + name,
+                                                                                   '*nfrecon{}*True*'.format(irec),
+                                                                                   verbose=False)
+        residuals = maps_recon_patch - patch_recon_nl
+
+    elif residuals_way == 'conv':
+        residuals = maps_diff_patch
+
+    elif residuals_way == 'mean_recon':
+        residuals = maps_recon_patch - np.mean(maps_recon_patch, axis=0)
+
+    else:
+        raise ValueError('The way to compute residuals is not valid.')
+
+    return residuals
+
+
+def rms_method(name, residuals_way, zones=1):
     """
     Get the std of the residuals from one simulation. 
     STD are computed over realisations and pixels for I, Q, U separately.
@@ -75,8 +125,6 @@ def rms_method(name, residuals_way, zones=1, noiseless=False):
         Way to compute residuals. 3 keywords : noiseless, conv or mean_recon
     zones : int
         Number of zones to divide the patch.
-    noiseless : bool
-        If true, you will look at the noiseless run.
 
     Returns
     -------
@@ -90,50 +138,28 @@ def rms_method(name, residuals_way, zones=1, noiseless=False):
     # Dictionary saved during the simulation
     d = qubic.qubicdict.qubicDict()
     d.read_from_file(rep_simu + name + '.dict')
+    setpar = {'tol': d['tol'], 'nep': d['detector_nep'], 'npoint': d['npointings']}
 
     nf_recon = d['nf_recon']
 
     rms_I, rms_Q, rms_U = dict(), dict(), dict()
 
-    for nfrec in nf_recon:
-        if noiseless:
-            files, maps_recon_patch, maps_conv_patch, maps_diff_patch = \
-                rmc.get_patch_many_files(rep_simu + name, '*nfrecon{}*True*'.format(nfrec), verbose=False)
-
-        else:
-            # Remember: get_patch_many_file do seen_map + read each map
-            files, maps_recon_patch, maps_conv_patch, maps_diff_patch = \
-                rmc.get_patch_many_files(rep_simu + name, '*nfrecon{}*False*'.format(nfrec), verbose=False)
-
-        setpar = {'tol': d['tol'], 'nep': d['detector_nep'], 'npoint': d['npointings']}
+    for irec in nf_recon:
+        residuals = get_residuals(name, rep_simu, residuals_way, irec)
+        files, maps_recon_patch, maps_conv_patch, maps_diff_patch = \
+            rmc.get_patch_many_files(rep_simu + name, '*nfrecon{}*False*'.format(irec), verbose=False)
 
         npix_patch = maps_diff_patch.shape[2]
         setpar.update({'pixpatch': npix_patch})
         #         print(setpar)
 
-        # Choose way to compute residuals
-        if residuals_way == 'noiseless':
-            _, maps_recon_nl, maps_conv_nl, maps_diff_nl = \
-                rmc.get_patch_many_files(rep_simu + name, '*nfrecon{}*True*'.format(nfrec), verbose=False)
-
-            residuals = maps_recon_patch - maps_recon_nl
-
-        elif residuals_way == 'conv':
-            residuals = maps_diff_patch
-
-        elif residuals_way == 'mean_recon':
-            residuals = maps_recon_patch - np.mean(maps_recon_patch, axis=0)
-
-        else:
-            raise ValueError('The way to compute residuals is not valid.')
-
         nreals = np.shape(residuals)[0]
 
         # This if is for the number of zones (1 or more)
         if zones == 1:
-            rms_i, rms_q, rms_u = np.empty((nfrec,)), np.empty((nfrec,)), np.empty((nfrec,))
+            rms_i, rms_q, rms_u = np.empty((irec,)), np.empty((irec,)), np.empty((irec,))
 
-            for i in range(nfrec):
+            for i in range(irec):
                 # STD over pixels and realisations
                 rms_i[i] = np.std(residuals[:, i, :, 0])
                 rms_q[i] = np.std(residuals[:, i, :, 1])
@@ -147,22 +173,22 @@ def rms_method(name, residuals_way, zones=1, noiseless=False):
             seenmap = rmc.get_seenmap(files[0])
             nside = d['nside']
 
-            residuals_zones = np.empty((nreals, zones, nfrec, npix_patch, 3))
+            residuals_zones = np.empty((nreals, zones, irec, npix_patch, 3))
             for real in range(nreals):
                 pix_zones, residuals_zones[real] = rmc.make_zones(residuals[real], zones, nside, center, seenmap,
                                                                   angle=angle, dtheta=d['dtheta'], verbose=False,
                                                                   doplot=False)
 
-            rms_i, rms_q, rms_u = np.empty((zones, nfrec,)), np.empty((zones, nfrec,)), np.empty((zones, nfrec,))
+            rms_i, rms_q, rms_u = np.empty((zones, irec,)), np.empty((zones, irec,)), np.empty((zones, irec,))
             for izone in range(zones):
-                for i in range(nfrec):
+                for i in range(irec):
                     rms_i[izone, i] = np.std(residuals_zones[:, izone, i, :, 0])
                     rms_q[izone, i] = np.std(residuals_zones[:, izone, i, :, 1])
                     rms_u[izone, i] = np.std(residuals_zones[:, izone, i, :, 2])
 
-        rms_I.update({str(nfrec): rms_i})
-        rms_Q.update({str(nfrec): rms_q})
-        rms_U.update({str(nfrec): rms_u})
+        rms_I.update({str(irec): rms_i})
+        rms_Q.update({str(irec): rms_q})
+        rms_U.update({str(irec): rms_u})
 
     return rms_I, rms_Q, rms_U, setpar
 
@@ -279,12 +305,12 @@ def get_covcorr_patch(patch, stokesjoint=False, doplot=False):
         plt.figure('Mean over pixels')
         plt.subplot(121)
         plt.imshow(np.mean(cov, axis=2), interpolation=None)
-        plt.title('Mean cov')
+        plt.title('Mean cov over pixels')
         plt.colorbar()
 
         plt.subplot(122)
         plt.imshow(np.mean(corr, axis=2))
-        plt.title('Mean corr')
+        plt.title('Mean corr over pixels')
         plt.colorbar()
 
     return cov, corr
@@ -327,7 +353,7 @@ def plot_hist(mat_npix, bins, title_prefix, ymax=0.5, color='b'):
             plt.subplot(dim, dim, idx)
             plt.hist(mat_npix[iterm, jterm, :], color=color, density=True,
                      bins=bins, label='m={0:.2f} \n $\sigma$={1:.2f}'.format(mean, std))
-            # no yticks for historgram in middle
+            # no yticks for histogram in middle
             if idx % dim != 1:
                 plt.yticks([])
             # no xticks for histogram in middle
@@ -384,8 +410,7 @@ def get_covcorr_between_pix(maps, verbose=False):
     for sub in range(nsub):
         for s in range(nstokes):
             cov_pix[sub, s, :, :] = np.cov(maps[:, sub, :, s], rowvar=False)
-            corr_pix[sub, s, :, :] = np.corrcoef(maps[:, sub, :, s], rowvar=False) \
-                                     - np.identity(npix)
+            corr_pix[sub, s, :, :] = np.corrcoef(maps[:, sub, :, s], rowvar=False) - np.identity(npix)
 
     return cov_pix, corr_pix
 
@@ -416,10 +441,10 @@ def cov2corr(mat):
     """
     Converts a Covariance Matrix in a Correlation Matrix
     """
-    newmat = mat.copy()
-    sh = np.shape(mat)
-    for i in range(sh[0]):
-        for j in range(sh[1]):
+    newmat = np.empty_like(mat)
+    ll, cc = np.shape(mat)
+    for i in range(ll):
+        for j in range(cc):
             newmat[i, j] = mat[i, j] / np.sqrt(mat[i, i] * mat[j, j])
     return newmat
 
@@ -449,9 +474,9 @@ def covariance_IQU_subbands(allmaps, stokesjoint=False):
     """
     allmean, allcov = [], []
     for isub in range(len(allmaps)):
-        sh = allmaps[isub].shape
         nsub = sh[1]  # Number of subbands
 
+        sh = allmaps[isub].shape
         mean = np.zeros(3 * nsub)
         cov = np.zeros((3 * nsub, 3 * nsub))
 
@@ -485,6 +510,295 @@ def covariance_IQU_subbands(allmaps, stokesjoint=False):
     return allmean, allcov
 
 
+def get_weighted_correlation_average(x, cov):
+    """
+    Compute a weighted average taking into account the correlations between the variables.
+    The mean obtained is the one that has the minimal variance possible.
+
+    Parameters
+    ----------
+    x : 1D array
+        Values you want to average.
+    cov : 2D array
+        Covariance matrix associated to the values in x.
+
+    Returns
+    -------
+    The weighted mean and the variance on that mean.
+
+    """
+    inv_cov = np.linalg.inv(cov)
+    sig2 = 1. / np.sum(inv_cov)
+    weighted_mean = sig2 * np.sum(np.dot(inv_cov, x))
+    return weighted_mean, sig2
+
+
+def get_Cp(patch, nfrecon, verbose=True, doplot=True):
+    """
+    Returns covariance matrices between subbands for each Stokes parameter
+    and each pixel.
+
+    Parameters
+    ----------
+    patch: array of shape (#reals, #bands, #pixels, 3)
+    nfrecon: list
+        Numbers of reconstructed subbands.
+    verbose: Bool
+        If True makes a lot of prints.
+    doplot: Bool
+        If True, plot the mean cov and corr matrices over pixels.
+
+    Returns
+    -------
+    Cp: array of shape (#bands, #bands, 3, #pixels)
+        The covariance matrices.
+
+    """
+    irec = np.shape(patch)[1]
+    npix_patch = np.shape(patch)[2]
+    if irec == 1:
+        raise ValueError('If you already have 1 band, you do not need Cp which is computed to average subbands')
+
+    if irec not in nfrecon:
+        raise ValueError('Invalid number of freq. {0} not in {1}'.format(irec, nfrecon))
+
+    # Prepare to save
+    if verbose:
+        print('==== Computing Cp matrix ====')
+        print('irec = ', irec)
+        print('nfrecon = ', nfrecon)
+        print('patch.shape = ', patch.shape)
+        print('npix_patch = ', npix_patch)
+
+    # The full one
+    covariance, _ = get_covcorr_patch(patch, stokesjoint=True, doplot=doplot)
+
+    if verbose: print('covariance.shape =', covariance.shape)
+
+    # Cut the covariance matrix for each Stokes parameter
+    Cp = np.empty((irec, irec, 3, npix_patch))
+    for istokes in range(3):
+        a = istokes * irec
+        b = (istokes + 1) * irec
+        Cp[:, :, istokes, :] = covariance[a:b, a:b, :]
+    if verbose:
+        print('Cp.shape = ', Cp.shape)
+
+        # Look at the value in Cp and the determinant
+        for ipix in range(10):
+            for istokes in range(3):
+                det = np.linalg.det(Cp[:, :, istokes, ipix])
+                print('det = ', det)
+
+        print('==== Done. Cp matrix computed ====')
+
+    return Cp
+
+
+def make_weighted_av(patch, Cp, ang, ang_threshold, verbose=False):
+    """
+    Average the maps over subbands using the covariance matrix between subbands.
+    Parameters
+    ----------
+    patch: array of shape (#reals, #bands, #pixels, 3)
+    Cp: array of shape (#bands, #bands, 3, #pixels)
+        The covariance matrices.
+    ang: array
+        Angle associated to each pixel.
+    ang_threshold: float
+        Angle (degree) in which the sigma mean over pixels will be computed.
+    verbose: bool
+
+    Returns
+    -------
+    weighted_av: map averaged over bands
+    sig2: variances over realisations on the map
+    sigmean: variances are averaged over pixels below the angle threshold
+        and the sqrt (sigma) is returned.
+
+    """
+    nreals = np.shape(patch)[0]
+    npix_patch = np.shape(Cp)[-1]
+    if verbose:
+        print('Cp.shape = ', np.shape(Cp))
+        print('# realizations = ', nreals)
+        print('npix_patch = ', npix_patch)
+
+    weighted_av = np.zeros((nreals, npix_patch, 3))
+    sig2 = np.zeros((npix_patch, 3))
+
+    nsing = 0
+    for ireal in range(nreals):
+        for ipix in range(npix_patch):
+            for istokes in range(3):
+                x = patch[ireal, :, ipix, istokes]
+                # Only do it if the matrix is not singular:
+                if np.linalg.det(Cp[:, :, istokes, ipix]) != 0.:
+                    weighted_av[ireal, ipix, istokes], sig2[ipix, istokes] = \
+                        get_weighted_correlation_average(x, Cp[:, :, istokes, ipix])
+                else:
+                    nsing += 1
+    if verbose:
+        print('# singular matrices: ', nsing)
+        print('Weigthed mean matrix per pixel, shape: ', weighted_av.shape)
+        print('Variance in MC simulation, shape: ', sig2.shape)
+
+    # Average sig2 over pixels in a given angle
+    sigmean = average_pix_sig2(sig2, ang, ang_threshold)
+
+    return weighted_av, sig2, sigmean
+
+
+def average_pix_sig2(sig2, ang, ang_threshold):
+    """
+    Average the variances over pixels in a given angle.
+    Return the sigma: the sqrt of the mean variance.
+    """
+    sigmean = np.empty((3,))
+    npix = np.shape(ang[ang < ang_threshold])
+    print('npix =', npix)
+    for istokes in range(3):
+        sigmean[istokes] = np.sqrt(np.mean(sig2[:, istokes][ang < ang_threshold])/ npix)
+        # sigmean[istokes] = np.sqrt(np.sum(sig2[:, istokes][ang < ang_threshold]))/ npix
+    return sigmean
+
+
+def Cp2Cp_prime(Cp, verbose=True):
+    """
+    Average the covariance matrices over pixels. A normalization by the 00 element is done
+    before averaging.
+    Parameters
+    ----------
+    Cp: array of shape (#bands, #bands, 3, #pixels)
+        The covariance matrices for each pixel.
+    verbose: bool
+
+    Returns
+    -------
+    Cp_prime: array of shape (#bands, #bands, 3, #pixels)
+        The covariance matrices for each pixel.
+
+    """
+    npix_patch = np.shape(Cp)[-1]
+    if verbose: print('npix_patch =', npix_patch)
+
+    # Normalize each matrix by the first element
+    Np = np.empty_like(Cp)
+    for istokes in range(3):
+        for ipix in range(npix_patch):
+            Np[:, :, istokes, ipix] = Cp[:, :, istokes, ipix] / Cp[0, 0, istokes, ipix]
+
+    # We can now average the matrices over the pixels
+    N = np.mean(Np, axis=3)
+
+    if verbose: print('N shape:', N.shape)
+
+    # We re-multiply N by the first term
+    Cp_prime = np.empty_like(Cp)
+    for istokes in range(3):
+        for ipix in range(npix_patch):
+            Cp_prime[:, :, istokes, ipix] = Cp[0, 0, istokes, ipix] * N[:, :, istokes]
+
+    if verbose: print('Cp_prime.shape =', Cp_prime.shape)
+
+    return Cp_prime
+
+def Cp2Cp_prime_viaCorr(Cp, verbose=True):
+    """
+    Average the covariance matrices over pixels. A normalization is done
+    on pixels before the average.
+    Parameters
+    ----------
+    Cp: array of shape (#bands, #bands, 3, #pixels)
+        The covariance matrices for each pixel.
+    verbose: bool
+
+    Returns
+    -------
+    Cp_prime: array of shape (#bands, #bands, 3, #pixels)
+        The covariance matrices for each pixel.
+
+    """
+    nfrec = np.shape(Cp)[0]
+    npix_patch = np.shape(Cp)[-1]
+    if verbose: print('npix_patch =', npix_patch)
+
+    # Convert cov matrices to correlation matrices
+    Np = np.empty_like(Cp)
+    for istokes in range(3):
+        for ipix in range(npix_patch):
+            Np[:, :, istokes, ipix] = cov2corr(Cp[:, :, istokes, ipix])
+
+    # We can now average the correlation matrices over the pixels
+    N = np.mean(Np, axis=3)
+
+    if verbose: print('N shape:', N.shape)
+
+    # We re-multiply N to get back to covariance matrices
+    Cp_prime = np.empty_like(Cp)
+    for istokes in range(3):
+        for ipix in range(npix_patch):
+            for i in range(nfrec):
+                for j in range(nfrec):
+                    coeff = np.sqrt(Cp[i, i, istokes, ipix] * Cp[j, j, istokes, ipix])
+                    Cp_prime[i, j, istokes, ipix] = N[i, j, istokes] * coeff
+
+    if verbose: print('Cp_prime.shape =', Cp_prime.shape)
+
+    return Cp_prime
+
+def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
+    """
+    The reconstructed subbands have different widths.
+    Here, we compute the corrections you can applied to
+    the variances and covariances to take this into account.
+
+    Parameters
+    ----------
+    nf_sub : int
+        Number of input subbands
+    nf_recon : int
+        Number of reconstructed subbands
+    band : int
+        QUBIC frequency band, in GHz. 150 by default
+        Typical values: 150, 220.
+    relative_bandwidth : float
+        Ratio of the difference between the edges of the
+        frequency band over the average frequency of the band
+        Typical value: 0.25
+
+    Returns
+    ----------
+    corrections : list
+        Correction coefficients for each subband.
+    correction_mat : array of shape (3xnf_recon, 3xnf_recon)
+        Matrix containing the corrections.
+        It can be multiplied term by term to a covariance matrix.
+
+    """
+    nb = nf_sub // nf_recon  # Number of input subbands in each reconstructed subband
+
+    _, nus_edge, nus, deltas, Delta, _ = qubic.compute_freq(band, nf_sub, relative_bandwidth)
+
+    corrections = []
+    for isub in range(nf_recon):
+        # Compute wide of the sub-band
+        sum_delta_i = deltas[isub * nb: isub * nb + nb].sum()
+        corrections.append(Delta / sum_delta_i)
+
+    correction_mat = np.empty((3 * nf_recon, 3 * nf_recon))
+    for i in range(3 * nf_recon):
+        for j in range(3 * nf_recon):
+            freq_i = i // nf_recon
+            freq_j = j // nf_recon
+            sum_delta_i = deltas[freq_i * nb: freq_i * nb + nb].sum()
+            sum_delta_j = deltas[freq_j * nb: freq_j * nb + nb].sum()
+            correction_mat[i, j] = Delta / np.sqrt(sum_delta_i * sum_delta_j)
+
+    return corrections, correction_mat
+
+
+# =================== Old functions ================
 def get_rms_covar(nsubvals, seenmap, allmapsout):
     """Test done by Matthieu Tristram :
 Calculate the variance map in each case accounting for the band-band covariance matrix for each pixel from the MC.
@@ -520,8 +834,8 @@ allstdmat : list of arrays (nsub, nsub, 3)
                     variance_map[isub, i, p] = mat
                 else:
                     variance_map[isub, i, p] = 1. / np.sum(np.linalg.inv(mat))
-                covmat_freqfreq[:, :, p, i] = mat / np.mean(
-                    mat)  # its normalization is irrelevant for the later average
+                covmat_freqfreq[:, :, p, i] = mat / np.mean(mat)
+                # its normalization is irrelevant for the later average
         # Average and std over pixels
         meanmat = np.zeros((nsubvals[isub], nsubvals[isub], 3))
         stdmat = np.zeros((nsubvals[isub], nsubvals[isub], 3))
@@ -532,13 +846,6 @@ allstdmat : list of arrays (nsub, nsub, 3)
         allmeanmat.append(meanmat)
         allstdmat.append(stdmat)
     return np.sqrt(variance_map), allmeanmat, allstdmat
-
-
-def get_mean_cov(vals, invcov):
-    AtNid = np.sum(np.dot(invcov, vals))
-    AtNiA_inv = 1. / np.sum(invcov)
-    mean_cov = AtNid * AtNiA_inv
-    return mean_cov
 
 
 def get_rms_covarmean(nsubvals, seenmap, allmapsout, allmeanmat):
@@ -581,79 +888,14 @@ def get_rms_covarmean(nsubvals, seenmap, allmapsout, allmeanmat):
     return meanmap_cov, rmsmap_cov
 
 
-def get_weighted_correlation_average(x, cov):
+def get_mean_cov(vals, invcov):
     """
-    Compute a weighted average taking into account the correlations between the variables.
-    The mean obtained is the one that has the minimal variance possible.
-
-    Parameters
-    ----------
-    x : 1D array
-        Values you want to average.
-    cov : 2D array
-        Covariance matrix associated to the values in x.
-
-    Returns
-    -------
-    The weighted mean and the variance on that mean.
-
+    This function does the same as: get_weighted_correlation_average
     """
-    inv_cov = np.linalg.inv(cov)
-    sig2 = 1. / np.sum(inv_cov)
-    weighted_mean = sig2 * np.sum(np.dot(inv_cov, x))
-    return weighted_mean, sig2
-
-
-def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
-    """
-    The reconstructed subbands have different widths.
-    Here, we compute the corrections you can applied to
-    the variances and covariances to take this into account.
-
-    Parameters
-    ----------
-    nf_sub : int
-        Number of input subbands
-    nf_recon : int
-        Number of reconstructed subbands
-    band : int
-        QUBIC frequency band, in GHz. 150 by default
-        Typical values: 150, 220.
-    relative_bandwidth : float
-        Ratio of the difference between the edges of the
-        frequency band over the average frequency of the band
-        Typical value: 0.25
-    Returns
-    corrections : list
-        Correction coefficients for each subband.
-    correction_mat : array of shape (3xnf_recon, 3xnf_recon)
-        Matrix containing the corrections.
-        It can be multiplied term by term to a covariance matrix.
-    -------
-
-    """
-    nb = nf_sub // nf_recon  # Number of input subbands in each reconstructed subband
-
-    _, nus_edge, nus, deltas, Delta, _ = qubic.compute_freq(band, nf_sub, relative_bandwidth)
-
-    corrections = []
-    for isub in range(nf_recon):
-        # Compute wide of the sub-band
-        sum_delta_i = deltas[isub * nb: isub * nb + nb].sum()
-        corrections.append(Delta / sum_delta_i)
-
-    correction_mat = np.empty((3 * nf_recon, 3 * nf_recon))
-    for i in range(3 * nf_recon):
-        for j in range(3 * nf_recon):
-            freq_i = i // nf_recon
-            freq_j = j // nf_recon
-            sum_delta_i = deltas[freq_i * nb: freq_i * nb + nb].sum()
-            sum_delta_j = deltas[freq_j * nb: freq_j * nb + nb].sum()
-            correction_mat[i, j] = Delta / np.sqrt(sum_delta_i * sum_delta_j)
-
-    return corrections, correction_mat
-
-
+    AtNid = np.sum(np.dot(invcov, vals))
+    AtNiA_inv = 1. / np.sum(invcov)
+    mean_cov = AtNid * AtNiA_inv
+    return mean_cov
 
 
 # ============ Functions to get auto and cross spectra from maps ===========#

@@ -31,10 +31,30 @@ from pysimulators import FitsArray
 # %matplotlib inline
 
 def select_det(q,id):
-    id=[id]
+    id=[id,]
     detector_i = q.detector[id]
     q.detector = detector_i
     return(q)
+
+def lamb2nu(var, inverse = False):
+    """[lamb] = mm
+    c = lamb * nu
+    return in GHz
+    
+    if inverse: give nu[GHz] and return lamda[mm] 
+    """
+    c = 3e11 # mm/sec
+    if inverse:
+        return c/var/1e9
+    else:
+        return c/var/1e9
+
+def primary_beam(theta, Lambda=2.):
+    """Gaussian primary beam"""
+    #sig = np.radians(13./2)
+    sig = 13./2
+    B_prim = np.exp(-0.5 * (theta ** 2 / (  Lambda * sig) ** 2))
+    return B_prim
 
 name='test_scan_source'
 resultDir='%s'%name
@@ -52,7 +72,10 @@ d.read_from_file(os.environ['QUBIC_DICT']+'global_source_oneDet.dict')
 d['nside'] = 512
 d['RA'] = 0
 d['DEC'] = 0
-
+d['MultiBand']=False
+d['nf_sub'] =2
+d['beam_shape']='multi_freq'
+print(d['MultiBand'], d['beam_shape'])
 ```
 
 ***
@@ -69,31 +92,33 @@ q2.detector.plot()
 iarrdet = [231,479,727,975]
 
 ```{python}
-manyfreq = [130e9,140e9,155e9,160e9,170e9,180e9]
+q = QI(d)
+manyfreq = [140e9,158e9]
 size=200
 maps = np.empty((len(manyfreq), size,size))
-
 ndet = 12#iarrdet
+
 if sel_det:
-    q = qubic.QubicInstrument(d)
     q = select_det(q[:],ndet)
-    
-pos = q.detector.center
-area = q.detector.area
-nu = q.filter.nu
-bw = q.filter.bandwidth
-horns = q.horn
-pbeam = q.primary_beam
-sbeam = q.secondary_beam
-btype = q.synthbeam.dtype    
+
 
 for i,ifreq in enumerate(manyfreq):
-    
-    s = qubic.QubicScene(d)
 
-    sb = QI._get_synthbeam(s, pos, area, ifreq, bw, horns, pbeam,
-                   sbeam, btype, 45)[0]
+    pos = q.detector.center
+    area = q.detector.area
+    q.filter.nu = ifreq
+    nu = ifreq#q.filter.nu
+    print(nu)
+    bw = q.filter.bandwidth
+    horns = q.horn
+    pbeam = q.primary_beam
+    sbeam = q.secondary_beam
+    btype = q.synthbeam.dtype    
+
+    s = qubic.QubicScene(d)
     
+    sb = q.get_synthbeam(s)
+    print(sb.shape)
     xr=0.95*np.max(sb)
 
     sat = np.where(sb>xr)
@@ -101,9 +126,10 @@ for i,ifreq in enumerate(manyfreq):
     sb2[sat] = xr
     #sbr = sb2.ravel()[::-1]
     #sb2 = sbr.reshape(sb.shape)
-    maps[i,:,:] = hp.gnomview(sb2/np.max(sb2), rot=[0,90], xsize=size, ysize=size, reso=10, 
+    maps[i,:,:] = hp.gnomview(sb2[0]/np.max(sb2[0]), rot=[0,90], xsize=size, ysize=size, reso=10, 
                               title='{}'.format(str(ifreq)[:3]), sub=(2,3,i+1), min=0, max=1,
                               cmap='viridis',return_projected_map=True)
+
 ```
 
 d1=d.copy()
@@ -115,7 +141,7 @@ qnew.horn.plot()
 d['hornarray']
 
 ```{python}
-full = np.sum([maps[0],maps[5]], axis= 0)
+full = np.sum([maps[0],maps[-1]], axis= 0)
 
 print(full.shape)
 plt.imshow(full)
@@ -137,37 +163,37 @@ for i in range(len(maps)):
 Do the same but with one horn open
 
 ```{python}
-manyfreq = [130e9,140e9,155e9,160e9,170e9,180e9]
+q_one = QI(d)
 maps_one = np.empty((len(manyfreq), size,size))
-
-pos = q.detector.center
-area = q.detector.area
-nu = q.filter.nu
-bw = q.filter.bandwidth
-#horns = q.horn
-horns_one = q.horn
-horns_one.open[6] = False
-horns_one.open = ~horns_one.open
-q.horn.open = horns_one.open
-pbeam = q.primary_beam
-sbeam = q.secondary_beam
-btype = q.synthbeam.dtype    
+ndet = 12#iarrdet
+q_one.horn.open[~20] = False 
+q_one.horn.open = ~q_one.horn.open
+if sel_det:
+    q = select_det(q_one,ndet)
 
 for i,ifreq in enumerate(manyfreq):
+
+    q_one.filter.nu = ifreq
+    nu = ifreq
     
+    print(nu)
+    bw = q_one.filter.bandwidth
+    pb = q_one.get_synthbeam(s)
+
     s = qubic.QubicScene(d)
-
-    sb_one = QI._get_synthbeam(s, pos, area, ifreq, bw, horns_one, pbeam,
-                   sbeam, btype, 45)[0]
     
-    xr_one=0.98*np.max(sb_one)
+    print(pb.shape)
+    xr=0.95*np.max(pb)
 
-    sat_one = np.where(sb_one>xr_one)
-    sb2_one = np.copy(sb_one)
-    sb2_one[sat_one] = xr_one
-    maps_one[i,:,:] = hp.gnomview(sb2_one/np.max(sb2_one), rot=[0,90], xsize=size, ysize=size, reso=10, 
+    sat = np.where(pb>xr)
+    pb2=np.copy(pb)
+    pb2[sat] = xr
+    maps_one[i,:,:] = hp.gnomview(pb2[0]/np.max(pb2[0]), rot=[0,90], xsize=size, ysize=size, reso=10, 
                               title='{}'.format(str(ifreq)[:3]), sub=(2,3,i+1), min=0, max=1,
                               cmap='viridis',return_projected_map=True)
+
+    
+
 ```
 
 ***
@@ -178,17 +204,21 @@ Cut the beams
 maxx = []
 maxy = []
 newmap = []
+newmap_one =[]
 half = int(size/2)
 reso=1.5
 
-maxx_0, maxy_0 = np.unravel_index(np.argmax(maps[1]), dims=(size,size))
-newmap.append(np.roll(np.roll(maps[1], half-maxx_0, axis=0), half-maxy_0, axis=1))
-maxx_1, maxy_1 = np.unravel_index(np.argmax(maps[4]), dims=(size,size))
-newmap.append(np.roll(np.roll(maps[4], half-maxx_1, axis=0), half-maxy_1, axis=1))
-maxx_2, maxy_2 = np.unravel_index(np.argmax(maps[2]), dims=(size,size))
-newmap.append(np.roll(np.roll(maps[2], half-maxx_2, axis=0), half-maxy_2, axis=1))
+maxx_0, maxy_0 = np.unravel_index(np.argmax(maps[0]), dims=(size,size))
+newmap.append(np.roll(np.roll(maps[0], half-maxx_0, axis=0), half-maxy_0, axis=1))
+maxx_1, maxy_1 = np.unravel_index(np.argmax(maps[1]), dims=(size,size))
+newmap.append(np.roll(np.roll(maps[1], half-maxx_1, axis=0), half-maxy_1, axis=1))
 
-print(maxx_0, maxx_1, maxx_2)
+maxx_0_one, maxy_0_one = np.unravel_index(np.argmax(maps_one[0]), dims=(size,size))
+newmap_one.append(np.roll(np.roll(maps_one[0], half-maxx_0_one, axis=0), half-maxy_0_one, axis=1))
+maxx_1_one, maxy_1_one = np.unravel_index(np.argmax(maps_one[1]), dims=(size,size))
+newmap_one.append(np.roll(np.roll(maps_one[1], half-maxx_1_one, axis=0), half-maxy_1_one, axis=1))
+
+print(maxx_0, maxx_1)
 
 dd=True
 xd = np.linspace(-100,100,200)*reso/60
@@ -203,17 +233,18 @@ plt.xticks(fontsize=16)
 plt.yticks(fontsize=16)
 plt.xlabel(r'$\theta$[deg]', fontsize=18)
 
-plt.plot(x,newmap[0][100,:], 'm-', label = '{} GHz'.format(int(manyfreq[1]/1e9)), linewidth=3, alpha = 0.8)
-plt.plot(x,newmap[2][100,:], 'c-', label = '{} GHz'.format(int(manyfreq[2]/1e9)), linewidth=3, alpha=0.8)
-plt.plot(x,newmap[1][100,:], 'g-', label = '{} GHz'.format(int(manyfreq[4]/1e9)), linewidth=3,alpha=0.7)
+plt.plot(x,newmap[0][100,:], 'm-', label = '{} GHz'.format(int(manyfreq[0]/1e9)), 
+         linewidth=3, alpha = 0.8)
+plt.plot(x,newmap[1][100,:], 'c-', label = '{} GHz'.format(int(manyfreq[1]/1e9)), 
+         linewidth=3, alpha=0.8)
+plt.plot(x,newmap_one[0][100,:], 'k-', label = 'One horn {} GHz'.format(int(manyfreq[0]/1e9)), 
+         linewidth=3, alpha=0.4)
+plt.plot(x,newmap_one[1][100,:], 'k-', label = 'One horn {} GHz'.format(int(manyfreq[1]/1e9)), 
+         linewidth=3, alpha=0.8)
 
-plt.plot(x, 1*np.exp(-x**2/(2*13*np.sqrt(8*np.log(2)))), 'k--' )
-#plt.text(-8,0.5, r'FWHM $\propto \nu^{-1}$', fontsize=18)
-#plt.arrow(-5.,0.48, 3, -0.05,head_width=0.03, head_length= 0.9, fc = 'k' )
-#plt.text(2,0.23, r'$r_p \propto \nu^{-1}$', fontsize=18)
-#plt.arrow(0.,0.2, 10, 0, head_width=0.03, head_length= 0.4, fc = 'k')
 
 plt.legend(loc='best', fontsize=16)
+
 
 ```
 
@@ -245,13 +276,12 @@ plt.plot(x,np.diag(newfull[0]), 'm-',  linewidth=3)
 ```
 
 ***
-Now MultibandInstrument
+### Now MultibandInstrument
 
 ```{python}
 size=200
 half=size/2
-manyfreq = [130e9,140e9,155e9,160e9,170e9,180e9]
-s = qubic.QubicScene(d)
+
 d['beam_shape'] = 'multi_freq'
 def select_mband_det(q,id):
     id=[id]
@@ -259,101 +289,72 @@ def select_mband_det(q,id):
     q.detector = detector_i
     return(q.detector)
 
-alaImager=False
-component=0
-sel_det=True #If you want to select one detector
-
-# INSTRUMENT
+# MULTIBAND INSTRUMENT
 dmb = qubic.qubicdict.qubicDict()
 dmb.read_from_file(os.environ['QUBIC_DICT']+'global_source_oneDet.dict')
 dmb['nside'] = 512
 dmb['RA'] = 0
 dmb['DEC'] = 0
-
-#manyfreq = [130e9,140e9,155e9,160e9,170e9,180e9]
-#size=200
-mapsmb = np.empty((len(manyfreq), size,size))
+d['nf_sub'] =2
 
 sel_det=True
-ndet = 12#iarrdet
+ndet = 12
 if sel_det:
     qmb = qubic.QubicMultibandInstrument(d)
     for i,qi in enumerate(qmb):
         qmb[i].detector = select_mband_det(qi,ndet)
 
 numb = np.zeros((len(qmb), ) )
-pbeammb = np.zeros((len(qmb), ), dtype=object )
 sbeammb = np.zeros((len(qmb), ) )
-
-print(qmb[0].primary_beam)
 
 posmb = qmb[0].detector.center
 areamb = qmb[0].detector.area
 for i,iq in enumerate(qmb):
     numb[i] = iq.filter.nu
 
-pbeammb = [i.primary_beam for i in qmb]
 sbeammb = [i.secondary_beam for i in qmb]
 
-bwmb = qmb[0].filter.bandwidth
-hornsmb = qmb[0].horn
-btypemb = qmb[0].synthbeam.dtype    
-
-sbmb0 = qmb[0].get_synthbeam(s)[0]
-sbmb = np.zeros((len(sbmb0),))
-
-mapsmb =np.zeros((len(qmb), size,size))#[i,:,:]
-#for i,ifreq in enumerate(manyfreq):
-    
+mapsmb = np.zeros((len(manyfreq), size,size))
+sec_beam= np.zeros((len(manyfreq), size,size))
 s = qubic.QubicScene(dmb)    
 for j,qi in enumerate(qmb):
     sbmb = qmb[j].get_synthbeam(s)[0]
-    #(s, posmb, areamb, ifreq, bwmb, hornsmb, pbeammb[i], sbeammb[i], btypemb, 45)[0]
     
     xr=0.95*np.max(sbmb)
     sat = np.where(sbmb>xr)
     sb2mb=np.copy(sbmb)
     sb2mb[sat] = xr
+    plt.figure(figsize=(10,10))
     mapsmb[j,:,:] = hp.gnomview(sb2mb/np.max(sb2mb), rot=[0,90], xsize=size, ysize=size, reso=10, 
-                              title='{}'.format(str(numb[j])[:3]), sub=(4,3,i+1), min=0, max=1,
+                              title='{}'.format(str(numb[j])[:3]), sub=(4,3,j+1), min=0, max=1,
+                              cmap='viridis',return_projected_map=True)
+    plt.figure(figsize=(10,10))
+    sec_beam[j,:,:] = hp.gnomview(sbeammb[j].healpix(d['nside'])/np.max(sbeammb[j].healpix(d['nside'])), 
+                                  rot=[0,-90], xsize=size, ysize=size, reso=10, 
+                              title='{}'.format(str(numb[j])[:3]), sub=(4,3,j+1), min=0, max=1,
                               cmap='viridis',return_projected_map=True)
 ```
 
 ```{python}
-def lamb2nu(var, inverse = False):
-    """[lamb] = mm
-    c = lamb * nu
-    return in GHz
-    
-    if inverse: give nu[GHz] and return lamda[mm] 
-    """
-    c = 3e11 # mm/sec
-    if inverse:
-        return c/var/1e9
-    else:
-        return c/var/1e9
-
-def primary_beam(theta, Lambda=2.):
-    """Gaussian primary beam"""
-    #sig = np.radians(13./2)
-    sig = 13./2
-    B_prim = np.exp(-0.5 * (theta ** 2 / (  Lambda * sig) ** 2))
-    return B_prim
-
 maxx = []
 maxy = []
 newmap = []
+newmap_mb = []
 half = int(size/2)
 reso=10
 
-maxx_0, maxy_0 = np.unravel_index(np.argmax(mapsmb[1]), dims=(size,size))
-newmap.append(np.diag(np.roll(np.roll(mapsmb[1], half-maxx_0, axis=0), half-maxy_0, axis=1)))
-maxx_1, maxy_1 = np.unravel_index(np.argmax(mapsmb[4]), dims=(size,size))
-newmap.append(np.diag(np.roll(np.roll(mapsmb[4], half-maxx_1, axis=0), half-maxy_1, axis=1)))
-maxx_2, maxy_2 = np.unravel_index(np.argmax(mapsmb[2]), dims=(size,size))
-newmap.append(np.diag(np.roll(np.roll(mapsmb[2], half-maxx_2, axis=0), half-maxy_2, axis=1)))
+maxx_0, maxy_0 = np.unravel_index(np.argmax(mapsmb[0]), dims=(size,size))
+newmap.append(np.diag(np.roll(np.roll(mapsmb[0], half-maxx_0, axis=0), half-maxy_0, axis=1)))
+maxx_1, maxy_1 = np.unravel_index(np.argmax(mapsmb[1]), dims=(size,size))
+newmap.append(np.diag(np.roll(np.roll(mapsmb[1], half-maxx_1, axis=0), half-maxy_1, axis=1)))
 
-print(maxx_0, maxx_1, maxx_2)
+maxx_0_mb, maxy_0_mb = np.unravel_index(np.argmax(sec_beam[0]), dims=(size,size))
+newmap_mb.append(np.diag(np.roll(np.roll(sec_beam[0], half-maxx_0_mb, axis=0), half-maxy_0_mb, axis=1)))
+maxx_1_mb, maxy_1_mb = np.unravel_index(np.argmax(sec_beam[1]), dims=(size,size))
+newmap_mb.append(np.diag(np.roll(np.roll(sec_beam[1], half-maxx_1_mb, axis=0), half-maxy_1_mb, axis=1)))
+
+wlen = lamb2nu(int(numb[0]/1e9), inverse = True)
+wlen2 = lamb2nu(int(numb[1]/1e9), inverse = True)
 
 dd=True
 x = np.linspace(-100,100,200)*reso/60 #deg
@@ -369,14 +370,18 @@ plt.xticks(fontsize=16)
 plt.yticks(fontsize=16)
 plt.xlabel(r'$\theta$[deg]', fontsize=18)
 
-plt.plot(x,newmap[0], 'm-', label = '{} GHz'.format(int(numb[1]/1e9)), linewidth=3, alpha = 0.8)
-plt.plot(x,primary_beam(x, Lambda=2 ))
-plt.plot(x,newmap[1], 'c-', label = '{} GHz'.format(int(numb[4]/1e9)), linewidth=3, alpha=0.8)
-plt.plot(x,newmap[2], 'g-', label = '{} GHz'.format(int(numb[2]/1e9)), linewidth=3,alpha=0.7)
+plt.plot(x,newmap[0], 'm-', label = '{} GHz'.format(int(numb[0]/1e9)), linewidth=3, alpha = 0.8)
+#plt.plot(x,primary_beam(x, Lambda=wlen )**2, 'm--', label='{:3.2}cm ({})'.format(wlen,int(numb[0]/1e9)))
+#plt.plot(x,primary_beam(x, Lambda=wlen2 )**2, 'c--', label='{:3.2}cm ({})'.format(wlen,int(numb[1]/1e9)))
+plt.plot(x,newmap[1], 'c-', label = '{} GHz'.format(int(numb[1]/1e9)), linewidth=3, alpha=0.8)
+plt.plot(x,newmap_mb[0], 'm-', label = '{} GHz'.format(int(numb[1]/1e9)), linewidth=3, alpha=0.3)
+plt.plot(x,newmap_mb[1], 'c-', label = '{} GHz'.format(int(numb[1]/1e9)), linewidth=3, alpha=0.3)
+
 plt.axhline(0.5, c='k', ls='-.')
 plt.axvline(13, c='k', ls='-.',alpha=0.2)
 plt.axvline(-13, c='k', ls='-.',alpha=0.2)
 plt.legend()
+
 
 ```
 

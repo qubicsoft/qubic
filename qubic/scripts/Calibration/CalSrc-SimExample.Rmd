@@ -1,0 +1,70 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.4
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+#### General imports and config
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(20, 8))
+rc('font',size=12)
+rc('text',usetex=False)
+
+#### QUBIC imports
+import qubic.fibtools as ft
+import qubic.plotters as p
+import qubic.lin_lib as ll
+import qubic.demodulation_lib as dl
+
+
+#### TIME SAMPLING
+sampling = 75.   ## Hz
+duration = 5.   ## sec
+time = np.linspace(0,duration, int(duration*sampling))
+
+
+#### Source characteristics
+rf_freq = 150.     # GHz
+amplitude = 1     # Volts
+offset = 1        # volts
+phase = 0.         # radians
+frequency = 0.6    # Hz [Modulation Frequency] 
+
+signal_src = -ll.sim_generator_power(time, amplitude, offset, frequency, phase, rf_freq = rf_freq)
+
+plot(time, signal_src)
+xlabel('Time [Sec]')
+ylabel('Source Power [Arb. Units]')
+```
+
+```{python}
+#### Comparison with real data
+tt, ss = np.loadtxt('/Users/hamilton/Downloads/calsource_20191216T134401.dat').T
+tt = tt - tt[0]
+
+rf_freq = 150.     # GHz
+amplitude = 1     # Volts
+offset = 1        # volts
+phase = -2.1         # radians
+frequency = 1.    # Hz [Modulation Frequency] 
+
+plot(tt, dl.renorm(ss), label='CalSrc Data')
+plot(tt, -dl.renorm(ll.sim_generator_power(tt, amplitude, offset, frequency, phase, rf_freq = rf_freq))-0.1, label='Simulation')
+legend()
+xlabel('Time [Sec]')
+ylabel('Source Power [Arb. Units]')
+```
+
+```{python}
+
+```

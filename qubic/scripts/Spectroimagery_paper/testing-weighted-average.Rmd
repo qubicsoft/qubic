@@ -44,7 +44,7 @@ plt.rcParams['figure.figsize'] = (5, 5)
 ```{python}
 nside = 16
 npix = 12 * nside**2
-nfrec = 4
+nfrec = 8
 x1_band = np.random.random((1, npix, 3))
 xn_band = np.random.random((nfrec, npix, 3))
 
@@ -55,7 +55,7 @@ xn_std = np.std(xn_band)
 
 # Make many realizations with gaussian noise (no correlations)
 nreals = 100
-std = 1
+std = 2
 #x1_noisy = np.mean([x1_band + np.random.normal(x1_mean, std, 
 #                                               size=x1_band.shape) for i in range(nreals)],axis=0)
 
@@ -73,16 +73,31 @@ for i in range(nreals):
 #hp.mollview(xn_noisy[3,0, :, 0], title='x0 realization + noise (one real.)')
 #plt.hist(x1_noisy[50,0,:,0]-x1_band[0,:,0], bins= 60)
 #plt.hist(x1_noisy[50,0,:,0], bins= 60,color='r')
-
-#1st sigma over px (sigma_1r) ALL for Stokes I then average variance
-sigma_1r = np.zeros((nreals,))
-for ire in range(nreals):
-    sigma_1r[ire] = np.var(x1_noisy[ire,0,:,0], ddof=0)
-sigma_1 = (sigma_1r)
 ```
 
+***
+Check noise realizations for 1 and N subbands.. ok..works 
+
 ```{python}
-sigma_1**0.5
+#1st sigma over px (sigma_1r) ALL for Stokes I then average variance
+def method_a1(x1, nr, stokes=0,sb=0):
+    sigma_1r = np.zeros((nr,))
+    for ire in range(nr):
+        sigma_1r[ire] = np.var(x1[ire,sb,:,stokes], ddof=0)
+    sigma_1 = np.mean(sigma_1r)
+    return sigma_1
+def method_b1(x1, nr, stokes=0,sb=0):
+    sigma_1 = np.var(x1[:,sb,:,stokes])
+    return sigma_1
+
+print('Shape single band array: {}'.format(x1_noisy.shape))
+print('Shape nbands band array: {}'.format(xn_noisy.shape))
+
+print('Variance single band method A {}'.format(method_a1(x1_noisy, nreals,stokes=2)))
+print('Variance single band method B {}'.format(method_b1(x1_noisy, nreals,stokes=2)))
+
+print('Variance nbands band method A {}'.format(method_a1(xn_noisy, nreals,stokes=0)))
+print('Variance nbands band method B {}'.format(method_b1(xn_noisy, nreals,stokes=0)))
 ```
 
 ***
@@ -98,7 +113,7 @@ Compute mean of std in reals for a given subband... ~4, ok!
 
 ```{python}
 #nfrecon = [1, 2, 4, 8]
-Cp = amc.get_Cp(xn_noisy, nfrecon=[4,])
+Cp = amc.get_Cp(xn_noisy, nfrecon=[8,])
 ```
 
 ```{python}
@@ -133,7 +148,6 @@ weighted_av.shape
 ```
 
 ```{python}
-#sig2MC = np.std(np.mean(weighted_av, axis=0),axis=0)
 sig2MC = np.var(weighted_av, axis=0)
 sigMCmean = amc.average_pix_sig2(sig2MC, ang, ang_threshold=80)
 print(sig2MC)
@@ -141,15 +155,25 @@ print(sigMCmean)
 ```
 
 ```{python}
-#s2recomb_map=sig2MC
-#s4recomb_map=sig2MC
-s8recomb_map=sig2MC
-```
+freqs = [1,2,4,8]
+std1 = np.array([[1.08, 0.98, 0.96, 0.92],
+                [1.08, 0.98, 0.95, 0.91],
+                [1.08, 0.99, 0.96, 0.93]])
 
-```{python}
-ss = [std,s2recomb_map[0],s4recomb_map[0],s8recomb_map[0]]
-ss = np.array(ss)**2
-plt.plot([1,2,4,8],ss/ss[0],'ko')
+std2 = np.array([[4.08, 3.93, 3.83, 3.70],
+                [4.09, 3.88, 3.82, 3.68],
+                [4.10, 3.93, 3.84, 3.66]])
+
+stdarr = std2
+plt.ylim(0.5,1.5)
+plt.xlabel('nfrec', fontsize=16)
+plt.ylabel(r'$\sigma_{fnrec}^2/\sigma_1^2$', fontsize=16)
+plt.plot(freqs, stdarr[0,:]/stdarr[0,0], 'b*', label='I comp')
+plt.plot(freqs, stdarr[1,:]/stdarr[1,0], 'm*', label='Q ')
+plt.plot(freqs, stdarr[2,:]/stdarr[2,0], 'c*', label='U ')
+plt.text(4,1.4, 'std=2',fontsize=16)
+plt.axhline(1.0, c='k',ls='--',alpha=0.5)
+plt.legend()
 ```
 
 ***

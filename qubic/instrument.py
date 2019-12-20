@@ -228,7 +228,7 @@ class QubicInstrument(Instrument):
                 np.radians(self.calibration.get('primbeam')), nu=nu)
         elif primary == 'fitted_beam':
             par, omega = self.calibration.get('primbeam')
-            PrimBeam = BeamFitted(par, omega)
+            PrimBeam = BeamFitted(par, omega, nu=nu)
         elif primary == 'multi_freq':
             parth, parfr, parbeam, alpha, xspl = self.calibration.get('primbeam')
             PrimBeam = MultiFreqBeam(parth, parfr, parbeam, alpha, xspl,
@@ -240,7 +240,7 @@ class QubicInstrument(Instrument):
                 backward=True)
         elif secondary == 'fitted_beam':
             par, omega = self.calibration.get('primbeam')
-            SecBeam = BeamFitted(par, omega, backward=True)
+            SecBeam = BeamFitted(par, omega, nu=nu, backward=True)
         elif secondary == 'multi_freq':
             parth, parfr, parbeam, alpha, xspl = self.calibration.get('primbeam')
             SecBeam = MultiFreqBeam(parth, parfr, parbeam, alpha, xspl, nu=nu,

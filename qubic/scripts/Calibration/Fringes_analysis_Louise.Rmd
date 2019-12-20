@@ -1,0 +1,720 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# # %matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(9,4.5))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack import qubicpack as qp
+
+from qubicpack.qubicfp import qubicfp
+import qubic.fibtools as ft
+import qubic.plotters as p
+import qubic.lin_lib as ll
+import qubic.demodulation_lib as dl
+import satorchipy as stpy
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import datetime as dt
+import pickle
+from importlib import reload
+
+
+from qubicpack.pix2tes import assign_tes_grid
+tes_grid = assign_tes_grid()
+```
+
+```{python}
+day = '2019-12-19'
+# data_dir = '/qubic/Data/Calib-TD/'+day+'/'
+data_dir = '/home/louisemousset/QUBIC/Qubic_work/Calibration/datas/fringes2019-12-19/'
+
+#dirs = np.sort(glob.glob(data_dir+'*test_sw*'))
+dirs = np.sort(glob.glob(data_dir+'*switch*'))
+print (dirs)
+print (len(dirs))
+
+labels = []
+for d in dirs:
+    bla = str.split(d,'/')
+    labels.append(bla[-1])
+print(labels)
+```
+
+```{python}
+#thedir = '/qubic/Data/Calib-TD/2019-04-18/2019-04-18_16.56.51__RF_switch_cont'
+nf = 9
+thedir = dirs[nf]
+print(thedir)
+AsicNum = 1
+a = qp()
+a.verbosity = 0
+a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+data=a.azel_etc(TES=None)
+```
+
+```{python}
+TESNum = 96 #105#39
+#rc('figure',figsize=(8,4))
+t0 = data['t_data'][0]
+plot(data['t_data']-t0, data['data'][TESNum-1,:])
+#xlim(0,50)
+```
+
+```{python}
+### Withraw first XX seconds (before things operate) and last ponts if needed
+tdeb =  5.33 #5.1 #+6.075*10# 41.7# 5.1
+tfin =  400 #400 #tdeb+6.075*10 
+ok = ((data['t_data']-t0) > tdeb) & ((data['t_data']-t0) < tfin)
+data['t_data'] = data['t_data'][ok]-t0-tdeb
+data['data'] = data['data'][:,ok]
+```
+
+```{python}
+plot(data['t_data'], data['data'][TESNum-1,:])
+#xlim(0,36)
+
+```
+
+```{python}
+period = 6.08 #6.07 #6.069 #14.09
+plot(data['t_data'] % period, data['data'][TESNum-1,:],'.')
+xlim(0, period)
+```
+
+```{python}
+FREQ_SAMPLING = len(data['t_data'])/(data['t_data'][-1] - data['t_data'][0])
+spectrum_f, freq_f = mlab.psd(data['data'][TESNum-1,:], Fs=FREQ_SAMPLING, NFFT=2**int(np.log(len(data['data'][TESNum-1,:]))/np.log(2)), 
+                              window=mlab.window_hanning)
+plot(freq_f, spectrum_f)
+yscale('log')
+xscale('log')
+#xlim(0.001, 1)
+print(FREQ_SAMPLING)
+plot([1./period, 1./period],[10,10**11])
+grid()
+```
+
+```{python}
+#period = 6.066#6.073 #6.07 #14.09 #6.09 #18.1
+lowcut = 0.0001
+highcut = 10.
+nbins = 120
+med = False
+folded, t, folded_nonorm, truc_qui_sert_a_rien_ici= ft.fold_data(data['t_data'], data['data'], period, lowcut, highcut, nbins, median=med)
+```
+
+```{python}
+subplot(2,1,1)
+plot(data['t_data'], data['data'][TESNum-1,:])
+xlim(0, period)
+
+subplot(2,1,2)
+plot(t, folded_nonorm[TESNum-1,:])
+xlim(0, period)
+```
+
+```{python}
+tm1=8
+tm2=2
+ph=0
+w=np.zeros_like(t)
+wcheck=np.zeros_like(t)
+per = 20.
+for i in range(len(w)):
+        if (((i-ph) % per) >= tm1) and (((i-ph) % per) < per-tm2):
+            if ((((i-ph)//per) == 0) | (((i-ph)//per) == 3)) : w[i]=-1.
+            if ((((i-ph)//per) == 1) | (((i-ph)//per) == 2)) : w[i]=1.
+            if (((i-ph)//per) == 2) : wcheck[i]=-1.
+            if (((i-ph)//per) == 4) : wcheck[i]=1.
+npts=np.sum(w!=0.)/4.
+w=w/npts
+wcheck=wcheck/npts
+print(npts)
+print(np.sum(np.abs(w[int(per+ph):int(2*per+ph)])))
+print(np.sum(w))
+```
+
+```{python}
+#TESNum=58
+plot(t, folded_nonorm[TESNum-1,:])
+xlim(0,period)
+plot(t,w*2*np.abs(np.max(folded_nonorm[TESNum-1,:]))*npts,'+')
+plot(t,wcheck*2*np.abs(np.max(folded_nonorm[TESNum-1,:]))*npts,'x')
+grid()
+```
+
+```{python}
+# Analysis for both ASICs
+allres = np.zeros(256)
+allrescheck = np.zeros(256)
+
+for AsicNum in [1,2]:
+    a = qp()
+    a.verbosity = 0 
+    a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+    data=a.azel_etc(TES=None)
+    t0 = data['t_data'][0]
+    
+    ok = ((data['t_data']-t0) > tdeb) & ((data['t_data']-t0) < tfin)
+    data['t_data'] = data['t_data'][ok]-t0-tdeb
+    if (AsicNum == 1): data['data'] = data['data'][:,ok]
+    else: data['data'] = data['data'][:,ok]
+
+    folded, t, folded_nonorm, truc= ft.fold_data(data['t_data'], data['data'], period, lowcut, highcut, nbins, median=med)
+    for TESNum in np.arange(128)+1:
+        TESindex = (TESNum-1) + 128 *(AsicNum -1)
+        allres[TESindex]=np.sum(folded_nonorm[TESNum-1,:]*w)
+        allrescheck[TESindex]=np.sum(folded_nonorm[TESNum-1,:]*wcheck)
+```
+
+```{python}
+# Check demod signal
+TESNum=14
+plot(t, folded_nonorm[TESNum-1,:])
+xlim(0,period)
+plot(t,w*2*np.abs(np.max(folded_nonorm[TESNum-1,:]))*npts,'+')
+plot(t,wcheck*2*np.abs(np.max(folded_nonorm[TESNum-1,:]))*npts,'x')
+grid()
+```
+
+```{python}
+fringe = ft.image_asics(all1=allres)
+fringecheck = ft.image_asics(all1=allrescheck)
+imshow(fringe)
+```
+
+```{python}
+# Mask to remove the 8 ref pixels
+mask=np.ones_like(fringe)
+mask[0,12:]=np.nan
+mask[1:5,16]=np.nan
+# Mask to remove bad pixels
+bad1=np.array([1,2,3,29,30,31,32,33,34,35,61,62,63,64,65,66,67,93,94,95,96,97,98,99,125,126,127,128,108,105,116,7,17,47,102,114,28,25])-1
+bad2=np.array([1,2,3,29,30,31,32,33,34,35,61,62,63,64,65,66,67,93,94,95,96,97,98,99,125,126,127,128,120,122,24,55,123,118,112,114,113,18,28,41,104,102,116,107])+127
+maskres=np.ones_like(allres)
+maskres[bad1]=np.nan
+maskres[bad2]=np.nan
+mask2=ft.image_asics(all1=maskres)*mask
+```
+
+```{python}
+#rcParams["image.cmap"]='viridis'
+#rcParams["image.cmap"]='bwr'
+imshow(fringecheck,vmin=-4e3,vmax=4e3)#,interpolation='bicubic')
+ax = gca()
+ax.set_title(labels[nf])
+colorbar()
+```
+
+```{python}
+# Mask to remove max values from check
+lim = 4000
+maskres4=np.ones_like(allres)
+maskres4[np.abs(allrescheck) > lim]=np.nan
+mask4=ft.image_asics(all1=maskres4)*mask
+```
+
+```{python}
+rcParams["image.cmap"]='viridis'
+#rcParams["image.cmap"]='bwr'
+imshow(fringe*mask*mask4,vmin=-20e3,vmax=20e3)#,interpolation='bicubic')
+ax = gca()
+ax.set_title(labels[nf])
+colorbar()
+```
+
+```{python}
+## Mask to remove max values
+lim = 5000
+maskres4=np.ones_like(allres)
+maskres4[np.abs(allres) > lim]=np.nan
+mask5=ft.image_asics(all1=maskres4)*mask
+```
+
+```{python}
+plot(np.nanmean(fringe*mask4,axis=0),label='Med axis 0 norm')
+plot(np.nanmean(fringe*mask4,axis=1),label='Med axis 1 norm')
+#ylim(-3000,3000)
+grid()
+legend()
+ax = gca()
+ax.set_title(labels[nf])
+```
+
+```{python}
+plot(np.nanmedian(fringe*mask5,axis=0),label='Med axis 0 norm')
+plot(np.nanmedian(fringe*mask5,axis=1),label='Med axis 1 norm')
+#ylim(-1000,1000)
+grid()
+legend()
+ax = gca()
+ax.set_title(labels[nf])
+
+```
+
+```{python}
+# Test fit
+```
+
+```{python}
+def sim_fringe(param):
+    
+    Amp = param[0]
+    f = param[1]
+    phase = param[2]
+    yc = 0. #param[3]
+    xc = 0. #param[4]
+    alpha = param[3]
+    #w = param[4]
+    
+    allres = np.ones(256)
+    mask = ft.image_asics(all1=allres)
+    mask[0,12:]=np.nan
+    mask[1:5,16]=np.nan
+    mask[np.isnan(mask)]=0
+    nu=150e9
+    lam=3e8/nu
+
+    bl=14e-3*4.#baseline
+    #f=300e-3 # focal length
+    fringe=np.zeros_like(mask)
+    i, j = np.mgrid[0:17, 0:17]
+    freq=bl/lam
+    #w=np.sqrt(2*(12.9*np.pi/180*f/2.355)**2)
+    w=40.87e-3 # From Creidhe
+    #alpha = 90.
+    fringe=Amp*np.cos(2.*np.pi*freq*(i*np.cos(alpha*np.pi/180)+j*np.sin(alpha*np.pi/180))*3e-3/f+phase)*mask*np.exp(-((16-i+xc)**2+(j-yc)**2)*3e-3**2/(w**2))
+    return fringe.astype(np.float64)
+```
+
+```{python}
+xx=3
+yy=15
+TESNum=int(tes_grid[xx,yy])
+AsicNum = int(10.*(tes_grid[xx,yy]-TESNum))+1
+TESindex = (TESNum-1) + 128 *(AsicNum -1)
+print(tes_grid[xx,yy], TESNum, AsicNum, TESindex)
+```
+
+```{python}
+def sim_fringe_flat2(param):
+    fff= sim_fringe(param)
+    res = np.zeros(256)
+    for xx in range(17):
+        for yy in range(17):
+            TESNum=int(tes_grid[xx,yy])
+            AsicNum = int(10.*(tes_grid[xx,yy]-TESNum))+1
+            TESindex = (TESNum-1) + 128 *(AsicNum -1)
+            res[TESindex] = fff[xx,yy]
+    return res
+```
+
+```{python}
+def sim_fringe_flat(param):
+    fff= sim_fringe(param)
+    return fff.ravel()
+```
+
+```{python}
+def compute_residuals(param, observation):
+    """
+    Return array: observation - model
+    """
+    model = sim_fringe_flat(param)
+    err = 2000
+    residual = (observation - model)/err
+    #print("Param: ", param)
+    print("residual: ", np.nansum(residual**2))
+    return residual.astype(np.float64)
+```
+
+```{python}
+param = [13e3,300e-3,0.,-45.]#,40.87e-3]#,0.]
+lim = 1e4
+subplot(1,2,1)
+imshow(sim_fringe(param),vmin=-lim,vmax=lim)
+subplot(1,2,2)
+imshow(fringe*mask4,vmin=-lim,vmax=lim)
+```
+
+```{python}
+import scipy.optimize as spo
+param_guess = [13e3,300e-3,0,-50.] #,40.87e-3]#,0.]
+tofit = (fringe*mask4).ravel()
+tofit[np.isnan(tofit)]=0.
+ret_lsq = spo.leastsq(compute_residuals, param_guess, args=(tofit.astype(np.float64)),
+                      full_output=True, maxfev=10000,epsfcn=np.finfo(np.float32).eps)
+#ret_lsq = spo.leastsq(compute_residuals, ret_lsq[0], args=(np.nanmedian(fringe*mask2,axis=1)),
+#                      full_output=True)
+```
+
+```{python}
+param_est, cov_x, infodict, mesg_result, ret_value = ret_lsq
+sigma_param_est = np.sqrt(np.diagonal(cov_x))
+
+print("Return value:", ret_value)
+print("Return message:", mesg_result)
+
+if ret_value not in (1, 2, 3, 4):
+    raise RuntimeError(mesg_result)
+
+print("guess    :", param_guess)
+print("solution :", param_est)
+print("Error :", sigma_param_est)
+print("Precision (%):",sigma_param_est/param_est*100)
+```
+
+```{python}
+#rcParams["image.cmap"]='viridis'
+rcParams["image.cmap"]='bwr'
+subplot(1,2,1)
+imshow(sim_fringe(param_est),vmin=-lim,vmax=lim)
+subplot(1,2,2)
+imshow(fringe*mask4,vmin=-lim,vmax=lim)
+#ax = gca()
+#ax.set_title(labels[nf])
+#colorbar()
+```
+
+```{python}
+imshow(sim_fringe(param_est),vmin=-10e3,vmax=10e3)
+ax = gca()
+ax.set_title(labels[nf])
+colorbar()
+```
+
+```{python}
+maskresp=fringe / sim_fringe(param_est) *mask
+```
+
+```{python}
+#rcParams["image.cmap"]='viridis'
+rcParams["image.cmap"]='bwr'
+imshow(maskresp,vmin=-10,vmax=10)#,interpolation='bicubic')
+ax = gca()
+ax.set_title(labels[nf])
+colorbar()
+```
+
+```{python}
+pickle.dump(maskresp, open('Resp_from_fringes_25_57_20190607-5', 'wb'))
+```
+
+```{python}
+
+```
+
+```{python}
+# try cross-calib
+# Resp from fringes 20190607-4
+maskresp=pickle.load(open('Resp_from_fringes_25_49_20190607-4', 'rb'))
+```
+
+```{python}
+# Resp from fringes 20190607
+maskresp1=pickle.load(open('Resp_from_fringes_25_57_20190607-5', 'rb'))
+maskresp2=pickle.load(open('Resp_from_fringes_25_49_20190607-4', 'rb'))
+maskresp = 2./(1./maskresp1 + 1./maskresp2)
+```
+
+```{python}
+# Resp from IV 20190607
+Resp=pickle.load(open('Resp_20190607-1', 'rb'))
+Resp[Resp < 0] = np.nan
+#Resp[9+127] = np.nan
+maskresp=ft.image_asics(all1=Resp/np.nanmedian(Resp))
+```
+
+```{python}
+# Resp from IV 20190529
+Resp=pickle.load(open('Resp_20190529-2', 'rb'))
+Resp[Resp < 0] = np.nan
+maskresp=ft.image_asics(all1=Resp/np.nanmedian(Resp))
+```
+
+```{python}
+# Resp from IV 20190528
+Resp=pickle.load(open('Resp_20190528-2', 'rb'))
+#Resp[Resp < 0] = np.nan
+maskresp=ft.image_asics(all1=Resp/np.nanmean(Resp))
+```
+
+```{python}
+# Resp from 1K stage T fluct 20190522
+Resp=pickle.load(open('Resp_20190522', 'rb'))
+Resp[Resp < 0] = np.nan
+maskresp=ft.image_asics(all1=Resp)
+```
+
+```{python}
+# Responsivity from max range of 150GHz healpix maps
+f = open('ASIC-150GHz.txt')
+li = [ ln.split() for ln in f ]
+f.close()
+tableau = np.array(li)
+Resp = np.array([np.float(tableau[0,_]) for _ in range(256)])
+Resp[Resp < 5.5e3] = np.nan
+maskresp=ft.image_asics(all1=Resp/np.nanmean(Resp))
+```
+
+```{python}
+# Respo from small maps 20190425
+Resp=pickle.load(open('Resp_Small_Maps_20190425', 'rb'))
+maskresp=ft.image_asics(all1=Resp/np.nanmean(Resp))
+```
+
+```{python}
+# Resp from maps 20190406
+Resp=pickle.load(open('Resp_150GHz-2019-04-06', 'rb'))
+maskresp=ft.image_asics(all1=Resp/np.nanmean(Resp))
+```
+
+```{python}
+fringen=fringe/maskresp
+#fringen=fringe/img_norm
+```
+
+```{python}
+# Mask to remove max values
+lim = 5000
+mask5=np.ones_like(fringe)
+mask5[np.abs(fringen) > lim]=np.nan
+mask5=mask5*mask
+```
+
+```{python}
+rcParams["image.cmap"]='viridis'
+#rcParams["image.cmap"]='bwr'
+vma = 10e3
+subplot(1,3,1)
+imshow(fringe*mask,vmin=-vma,vmax=vma)#,interpolation='gaussian')
+subplot(1,3,2)
+imshow(fringen*mask,vmin=-vma,vmax=vma)#,interpolation='gaussian')
+subplot(1,3,3)
+imshow(sim_fringe(param_est),vmin=-vma,vmax=vma)#,interpolation='gaussian')
+#colorbar()
+```
+
+```{python}
+plot(np.nanmean(fringen*mask,axis=0),label='Mean axis 0 norm')
+plot(np.nanmean(fringen*mask,axis=1),label='Mean axis 1 norm')
+grid()
+legend()
+#ylim(-1000,1000)
+```
+
+```{python}
+plot(np.nanmean(fringe*mask4,axis=0),label='Med axis 0 no norm')
+plot(np.nanmean(fringe*mask4,axis=1),label='Med axis 1 no norm')
+grid()
+legend()
+#ylim(-1000,1000)
+```
+
+```{python}
+#rcParams["image.cmap"]='viridis'
+#rcParams["image.cmap"]='bwr'
+imshow(fringen*mask4,vmin=-5e3,vmax=5e3)#,interpolation='bicubic')
+ax = gca()
+ax.set_title(labels[nf])
+colorbar()
+```
+
+```{python}
+# Comparison with fringes at 90°
+fringe2=pickle.load(open('Fringe_39_53_20190425', 'rb'))
+```
+
+```{python}
+#rcParams["image.cmap"]='jet'
+imshow(fringe2*mask*fringesim/fringe,vmin=-1,vmax=1)
+colorbar()
+```
+
+```{python}
+maskresp[10,:]
+```
+
+```{python}
+#ff=fringen*mask*mask2
+ff=fringe2*mask*fringesim/fringe
+errorbar(np.arange(17),np.nanmean(ff,axis=0),np.nanstd(ff,axis=0)/np.sqrt(np.sum(ff != np.nan,axis=0)),label='med axis 0')
+errorbar(np.arange(17),np.nanmean(ff,axis=1),np.nanstd(ff,axis=1)/np.sqrt(np.sum(ff != np.nan,axis=1)),label='med axis 1')
+legend()
+#ylim(-8000,8000)
+grid()
+
+
+```
+
+```{python}
+np.nanstd(ff,axis=0)
+```
+
+```{python}
+ff[:,2]
+```
+
+```{python}
+# Responsivity from linearity measurements
+img_norm=pickle.load(open('Linearty_20190419_img_norm', 'rb'))
+```
+
+```{python}
+# Comparison
+imshow(maskresp/img_norm,vmin=0,vmax=2)
+colorbar()
+```
+
+```{python}
+# Simulation
+fringesim=pickle.load(open('Simu-fringe1', 'rb'))
+```
+
+```{python}
+# Weighting factor to have just 1 difference
+tm1=5
+tm2=0
+w=np.zeros_like(t)
+per = len(w)/6.
+for i in range(len(w)):
+        if ((i % per) >= tm1) and ((i % per) < per-tm2):
+            if ((i//per) == 1): w[i]=1.
+            if ((i//per) == 0) : w[i]=-1.
+npts=np.sum(w<>0.)
+print(npts)
+print(np.sum(w))
+```
+
+```{python}
+# T stability
+plot(a.hk['MMR_HK']['MMR3_CH2_X'])
+```
+
+```{python}
+spectrum_f, freq_f = mlab.psd(a.hk['MMR_HK']['MMR3_CH1_X'], Fs=1., NFFT=len(a.hk['MMR_HK']['MMR3_CH3_X']), 
+                              window=mlab.window_hanning,detrend='mean')
+plot(freq_f, np.sqrt(spectrum_f))
+yscale('log')
+xscale('log')
+grid()
+#xlim(0.001, 1)
+```
+
+```{python}
+a.max_bias
+```
+
+```{python}
+a.hk['MMR_HK'].keys()
+```
+
+```{python}
+tMMR=a.hk['MMR_HK']['ComputerDate']
+print(tMMR[21]-tMMR[20])
+plot(np.diff(tMMR))
+print(np.median(np.diff(tMMR)))
+```
+
+```{python}
+(64.*63/2)/4
+```
+
+```{python}
+pickle.dump(fringe, open('Fringe_34_61_20190507', 'wb'))
+```
+
+```{python}
+allres.size
+```
+
+```{python}
+print(np.sum(np.abs([w[31:60],w[91:120],w[151:180]])))
+```
+
+```{python}
+import matplotlib.image as mpimg
+import numpy as np
+img = mpimg.imread("46-64.png")
+```
+
+```{python}
+img.shape
+```
+
+```{python}
+fringesim=img[:,:,1]
+#fringesim[fringesim <= 0.0039216] = np.nan
+```
+
+```{python}
+imshow(fringesim)
+colorbar()
+```
+
+```{python}
+plot(np.nanmean(fringesim,axis=0),label='Med axis 0 norm')
+plot(np.nanmean(fringesim,axis=1),label='Med axis 1 norm')
+#ylim(-10000,10000)
+grid()
+legend()
+
+```
+
+```{python}
+fringesim
+```
+
+```{python}
+from qubicpack.qubicfp import qubicfp
+aa=qubicfp()
+```
+
+```{python}
+from qubicpack.pix2tes import assign_pix_grid, assign_pix2tes, tes2pix, pix2tes, TES2PIX
+pix_grid = assign_pix_grid()
+TES2PIX = assign_pix2tes()
+row=4
+col=2
+physpix = pix_grid[row, col]
+print physpix
+print TES2PIX[1]
+print pix2tes(physpix,asic=2)
+
+```
+
+```{python}
+print pix_grid
+```
+
+```{python}
+print allres
+```
+
+```{python}
+
+```

@@ -1,0 +1,149 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.4
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(12,8))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack.qubicfp import qubicfp
+import qubic.fibtools as ft
+import qubic.plotters as p
+import qubic.lin_lib as ll
+import qubic.demodulation_lib as dl
+import satorchipy as stpy
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import datetime as dt
+import pickle
+from importlib import reload
+```
+
+```{python}
+##### Simulation du signal: une gaussienne
+
+# Modulation Source Characteristics
+# #### Source characteristics
+rf_freq = 150    # GHz
+amplitude = 2.   # Volts
+offset = 1.5     # Volts
+phase = 1.       # radians
+frequency = 2  # Hz [Modulation Frequency] 
+
+# Time samples
+tmin = 0.
+tmax = 100.
+samplefreq = 70.
+ttin = np.linspace(tmin, tmax, int((tmax-tmin)*samplefreq))
+
+# Input True Signal
+t0 = 50.
+dt = 10.
+yyin = exp(-0.5*(ttin-t0)**2/dt**2)
+
+# Source Signal
+signal_src = ll.sim_generator_power(ttin, amplitude, offset, frequency, phase, rf_freq = rf_freq)
+signal_src /= np.std(signal_src)
+
+# Measured Signal
+measured = -yyin*signal_src + np.random.randn(len(ttin))/100
+
+
+plot(ttin, yyin, label = 'True Signal')
+plot(ttin, signal_src-1, label = 'Source Signal', alpha=0.3)
+plot(ttin, measured, label = 'Source Signal', alpha=0.5)
+ylabel('Input Signal')
+xlabel('Time [Sec]')
+legend()
+```
+
+```{python}
+reload(dl)
+### Demodulation Methods
+period = 1./frequency
+
+# RMS
+newt_rms, amp_rms, errors_rms = dl.demodulate_methods([ttin, measured], 1./period, method='rms')
+
+# Fit Sin
+newt_sin, amp_sin, errors_sin = dl.demodulate_methods([ttin, measured], 1./period, method='fit')
+
+# Fit True Shape
+xxtemplate = np.linspace(0, period, 20)
+model_src = -ll.sim_generator_power(xxtemplate, amplitude, offset, frequency, phase, rf_freq = rf_freq)
+newt_fit, amp_fit, errors_fit = dl.demodulate_methods([ttin, measured], 1./period, method='fit', 
+                                                    template=[xxtemplate, model_src])
+
+
+subplot(2,1,1)
+plot(ttin, yyin, 'k', label = 'True Signal')
+plot(newt_rms, amp_rms[0,:], label='RMS')
+plot(newt_sin, amp_sin[0,:], label='Fit Sine')
+plot(newt_fit, amp_fit[0,:], label='Fit True')
+legend()
+
+subplot(2,1,2)
+plot(ttin, ttin*0, 'k:', label = 'True Signal')
+plot(newt_rms, amp_rms[0,:]-np.interp(newt_rms, ttin, yyin), label='RMS')
+plot(newt_sin, amp_sin[0,:]-np.interp(newt_sin, ttin, yyin), label='Fit Sine')
+plot(newt_fit, amp_fit[0,:]-np.interp(newt_fit, ttin, yyin), label='Fit True')
+legend()
+ylim(-0.1, 0.1)
+```
+
+```{python}
+#### Now proper demodulation
+
+### Sift signal src by 1/2 period
+signal_src_shift = np.interp(ttin-period/2, ttin, signal_src, period=period)
+
+### Full Demodulated signal (Quadrature Demodulation, see: http://web.mit.edu/6.02/www/s2012/handouts/14.pdf)
+demod_full = np.sqrt((measured*signal_src/np.std(signal_src))**2 + (measured*signal_src_shift/np.std(signal_src))**2)
+
+# Smooth it over a period
+import scipy.signal as scsig
+FREQ_SAMPLING = 1./(ttin[1]-ttin[0])
+size_period = int(FREQ_SAMPLING * period) + 1
+filter_period = np.ones((size_period,)) / size_period
+demodulated = scsig.fftconvolve(demod_full, filter_period, mode='same')
+
+
+subplot(2,1,2)
+plot(ttin, yyin)
+plot(ttin, demodulated)
+
+
+
+
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

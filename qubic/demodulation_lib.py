@@ -36,8 +36,30 @@ def read_cal_src_data(file_list, time_offset=7200):
     data_src = np.concatenate(ddsrc_i)
     return t_src, data_src
 
+def bin_per_period(period, time, invec, verbose=False):
+    ### Bins the vecors in in_list (assumed to be sampled with vector time) per period
+    ### we label each data sample with a period
+    period_index = ((time - time[0]) / period).astype(int)
+    ### We loop on periods to measure their respective amplitude and azimuth
+    allperiods = np.unique(period_index)
+    tper = np.zeros(len(allperiods))
+    nvec = np.shape(invec)[0]
+    nsamples = len(time)
+    newvecs = np.zeros((nvec, len(allperiods)))
+    for i in range(len(allperiods)):
+        ok = (period_index == allperiods[i])
+        tper[i] = np.mean(time[ok])
+        newvecs[:,i] = np.mean(invec[:,ok], axis=1)
+    return tper, newvecs
 
-def return_rms_period(period, time, azimuth, elevation, data, verbose=False):
+
+def return_rms_period(period, time, data, others=None, verbose=False):
+    ### Returbs the RMS in each period - not such a good proxy for demondulation but robust and does not need the 
+    ### modulation signal as an input.
+    ### Main drawback: you end up with a combination of the noise + signal => more an upper-limit to the signal...
+    ### the parameter called others contains a (n,nsamples) array of vectors to be averaged in each new bin (convenient 
+    ### if you also have azimuth, elevation or any other stuff...). 
+
     if verbose:
         printnow('Entering RMS/period')
     if data.ndim == 1:
@@ -50,19 +72,17 @@ def return_rms_period(period, time, azimuth, elevation, data, verbose=False):
     ### We loop on periods to measure their respective amplitude and azimuth
     allperiods = np.unique(period_index)
     tper = np.zeros(len(allperiods))
-    azper = np.zeros(len(allperiods))
-    elper = np.zeros(len(allperiods))
     ampdata = np.zeros((nTES, len(allperiods)))
     err_ampdata = np.zeros((nTES, len(allperiods)))
+    if others is not None:
+        newothers = bin_per_period(period, time, others, verbose=verbose)
     if verbose:
         printnow('Calculating RMS per period for {} periods and {} TES'.format(len(allperiods), nTES))
     for i in range(len(allperiods)):
         ok = (period_index == allperiods[i])
-        azper[i] = np.mean(azimuth[ok])
-        elper[i] = np.mean(elevation[ok])
         tper[i] = np.mean(time[ok])
         if nTES == 1:
-            mm, ss = ft.meancut(data[0,ok], 3)
+            mm, ss = ft.meancut(data[ok], 3)
             ampdata[0, i] = ss
             err_ampdata[0, i] = 1
         else:
@@ -70,7 +90,10 @@ def return_rms_period(period, time, azimuth, elevation, data, verbose=False):
                 mm, ss = ft.meancut(data[j, ok], 3)
                 ampdata[j, i] = ss
                 err_ampdata[j, i] = 1
-    return tper, azper, elper, ampdata, err_ampdata
+    if others is None:
+        return tper, ampdata, err_ampdata
+    else:
+        return tper, ampdata, err_ampdata, newothers
 
 
 def scan2ang_RMS(period, indata, median=True, lowcut=None, highcut=None, verbose=False):
@@ -88,8 +111,11 @@ def scan2ang_RMS(period, indata, median=True, lowcut=None, highcut=None, verbose
     az = np.interp(indata['t_data'], indata['t_azel'], indata['az'])
     if verbose: printnow('Resampling Elevation')
     el = np.interp(indata['t_data'], indata['t_azel'], indata['el'])
-    tper, azper, elper, ampdata, err_ampdata = return_rms_period(period, indata['t_data'], az, el, dataf,
-                                                                 verbose=verbose)
+    others = [az, el]
+    tper, ampdata, err_ampdata, newothers = return_rms_period(period, indata['t_data'], dataf,
+                                                                 verbose=verbose, others=others)
+    azper = newothers[0]
+    elper = newothers[1]
     ### Convert azimuth to angle
     angle = azper * np.cos(np.radians(elper))
     ### Fill the return variable for unbinned
@@ -142,6 +168,140 @@ def scan2ang_demod(period, indata, median=True, lowcut=None, highcut=None, verbo
     unbinned['sb'] = newsb
     unbinned['dsb'] = newdsb
     return unbinned
+
+
+class MySpl:
+    def __init__(self, xin, nbspl):
+        self.xin = xin
+        self.nbspl = nbspl
+        self.xspl = np.linspace(np.min(self.xin), np.max(self.xin), self.nbspl)
+        F = np.zeros((np.size(xin), self.nbspl))
+        self.F = F
+        for i in np.arange(self.nbspl):
+            self.F[:, i] = self.get_spline(self.xin, i)
+
+    def __call__(self, x, pars):
+        theF = np.zeros((np.size(x), self.nbspl))
+        for i in np.arange(self.nbspl): theF[:, i] = self.get_spline(x, i)
+        return (np.dot(theF, pars))
+
+
+
+class interp_template:
+    ### Allows to interpolate a template applying an amplitude, offset and phase
+    ### This si to be used in order to fit this template in each epriod of some pseudo-periodic signal
+    ### For instance for demodulation
+    def __init__(self, xx, yy):
+        self.period = xx[-1]-xx[0]
+        self.xx = xx
+        self.yy = yy
+
+    def __call__(self, x, pars, extra_args=None):
+        amp = pars[0]
+        off = pars[1]
+        dx  = pars[2]
+        return np.interp(x, self.xx-dx, self.yy, period=self.period)*amp+off
+
+def fitperiod(x,y,fct):
+    guess = np.array([np.std(y), np.mean(y), 0.])
+    res = ft.do_minuit(x,y, y*0+1, guess, functname=fct, verbose=False, nohesse=True,
+                       force_chi2_ndf=True)
+    return res
+
+def return_fit_period(period, time, data, others=None, verbose=False, template=None):
+    ### Returns the amplitude, offset and phase of a template fit to the data in each period
+    ### the parameter called others contains a (n,nsamples) array of vectors to be averaged in each new bin (convenient 
+    ### if you also have azimuth, elevation or any other stuff...). 
+    if verbose:
+        printnow('Entering Fit/period')
+    if data.ndim == 1:
+        nTES = 1
+    else:
+        sh = np.shape(data)
+        nTES = sh[0]
+
+    if template is None:
+        xxtemplate = np.linspace(0, period, 100)
+        yytemplate = np.sin(xxtemplate/period*2*np.pi)
+        yytemplate /= np.std(yytemplate)
+    else:
+        xxtemplate = template[0]
+        yytemplate = template[1]
+        yytemplate /= np.std(yytemplate)
+    fct = interp_template(xxtemplate, yytemplate)
+        
+
+    ### we label each data sample with a period
+    period_index = ((time - time[0]) / period).astype(int)
+    ### We loop on periods to measure their respective amplitude and azimuth
+    allperiods = np.unique(period_index)
+    tper = np.zeros(len(allperiods))
+    ampdata = np.zeros((nTES, len(allperiods)))
+    err_ampdata = np.zeros((nTES, len(allperiods)))
+    if others is not None:
+        newothers = bin_per_period(period, time, others, verbose=verbose)
+    if verbose:
+        printnow('Performing fit per period for {} periods and {} TES'.format(len(allperiods), nTES))
+    for i in range(len(allperiods)):
+        ok = (period_index == allperiods[i])
+        tper[i] = 0.5*(np.min(time[ok])+np.max(time[ok]))#np.mean(time[ok])
+        if nTES == 1:
+            res = fitperiod(time[ok],data[ok], fct)
+            ampdata[0, i] = res[1][0]
+            err_ampdata[0, i] = res[2][0]
+        else:
+            for j in range(nTES):
+                res = fitperiod(time[ok], data[j, ok], fct)
+                ampdata[j, i] = res[1][0]
+                err_ampdata[j, i] = res[2][0]
+    if others is None:
+        return tper, ampdata, err_ampdata
+    else:
+        return tper, ampdata, err_ampdata, newothers
+
+
+
+def demodulate_methods(data_in, fmod, fourier_cuts=None, verbose=False, src_data_in=None, method='demod', 
+                        others=None, template=None):
+    ### Various demodulation methods
+    ### Others is a list of other vectors (with similar time sampling as the data to demodulate) that we need to sample
+    ### the same way as the data
+    if fourier_cuts is None:
+        ### Duplicate the input data
+        data = data_in.copy()
+        if src_data_in is None:
+            src_data = None
+        else:
+            src_data = src_data_in.copy()
+    else:
+        ### Filter data and source accordingly
+        lowcut = fourier_cuts[0]
+        highcut = fourier_cut[1]
+        notch =  fourier_cut[2]
+        newtod = ft.filter_data(data_in[0], data_in[1], lowcut, highcut, 
+                                notch=notch, rebin=True, verbose=verbose)
+        data = [data[0], newtod]
+        if src_data_in is None:
+            src_data = None
+        else:
+            new_src_tod = ft.filter_data(src_data_in[0], src_data_in[1], lowcut, highcut, 
+                                        notch=notch, rebin=True, verbose=verbose)
+            src_data  = [src_data_in[0], new_src_tod]       
+
+    #### Now we have the "input" data, we can start demodulation
+    period = 1./fmod
+    if method == 'rms':
+        ### RMS method: calculate the RMS in each period (beware ! it returns noise+signal !)
+        return return_rms_period(period, data[0], data[1], others=others, verbose=verbose)
+    elif method=='fit':
+        return return_fit_period(period, data[0], data[1], others=others, verbose=verbose, template=template)
+
+
+
+
+
+
+
 
 
 def demodulate(indata, fmod, lowcut=None, highcut=None, verbose=False):
@@ -1018,6 +1178,33 @@ def demodulate_directory(thedir, ppp, TESmask=None, srcshift=0.,
     #print sb.shape
     return sb, az_el_azang
 
+
+def hwp_sin(x, pars, extra_args=None):
+    amplitude = pars[0]
+    XPol = 1-pars[1]
+    phase = pars[2]
+    return(amplitude*0.5*(1-np.abs(XPol)*np.sin(4*np.radians(x+phase))))
+
+def hwp_fitpol(thvals, ampvals, ampvals_err, doplot=False, str_title=None):
+    okdata = ampvals_err != 0
+    guess = np.array([np.max(ampvals), 0, 0.])
+    fithwp = ft.do_minuit(thvals[okdata], np.abs(ampvals[okdata]), ampvals_err[okdata], guess, functname=hwp_sin,
+              force_chi2_ndf=True, verbose=False, rangepars=[[0, np.max(ampvals)*10], [0,1], [-180,180]])
+    print(fithwp[1])
+    if doplot:
+        errorbar(thvals[okdata], np.abs(ampvals[okdata])/fithwp[1][0], yerr= ampvals_err[okdata]/fithwp[1][0], fmt='r.')
+        angs = np.linspace(0,90,90)
+        plot(angs, hwp_sin(angs, fithwp[1])/fithwp[1][0], 
+                            label='XPol = {2:5.2f}% +/- {3:5.2f}% '.format(fithwp[1][0], fithwp[2][0], 
+                            fithwp[1][1]*100, fithwp[2][1]*100,
+                            fithwp[1][2], fithwp[2][2]))
+        ylim(0,1)
+        legend(loc='upper left')
+        xlabel('HWP Angle [Deg.]')
+        ylabel('Normalized signal')
+        if str_title:
+            title(str_title)
+    return fithwp
 
 
 

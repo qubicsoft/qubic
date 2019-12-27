@@ -1291,6 +1291,13 @@ def demodulate_directory(thedir, ppp, TESmask=None, srcshift=0.,
     #print sb.shape
     return sb, az_el_azang
 
+def sigmoid_saturation(x, l):
+    ### This si the common sigmoid function modified to have a slope equals to 1 at zero whatever the value
+    ### of the lambda parameter. Then if lambda = 
+    if l==0:
+        return x
+    else:
+        return 4./l*(1./(1+np.exp(-x*l))-0.5)
 
 def hwp_sin(x, pars, extra_args=None):
     amplitude = pars[0]
@@ -1298,16 +1305,38 @@ def hwp_sin(x, pars, extra_args=None):
     phase = pars[2]
     return(amplitude*0.5*(1-np.abs(XPol)*np.sin(4*np.radians(x+phase))))
 
-def hwp_fitpol(thvals, ampvals, ampvals_err, doplot=False, str_title=None):
+def hwp_sin_sat(x, pars, extra_args=None):
+    amplitude = pars[0]
+    XPol = 1-pars[1]
+    phase = pars[2]
+    return amplitude*sigmoid_saturation(0.5*(1-np.abs(XPol)*np.sin(4*np.radians(x+phase))), pars[3])
+
+
+def hwp_fitpol(thvals, ampvals, ampvals_err, doplot=False, str_title=None, saturation=False, myguess=None):
     okdata = ampvals_err != 0
-    guess = np.array([np.max(ampvals), 0, 0.])
-    fithwp = ft.do_minuit(thvals[okdata], np.abs(ampvals[okdata]), ampvals_err[okdata], guess, functname=hwp_sin,
-              force_chi2_ndf=True, verbose=False, rangepars=[[0, np.max(ampvals)*10], [0,1], [-180,180]])
+
+    if saturation==False:
+        print('Using Simple SIN')
+        fct_name = hwp_sin
+        guess = np.array([np.max(ampvals), 0, 0.])
+        rangepars = [[0, np.max(ampvals)*10], [0,1], [-180,180]]
+    else:
+        print('Using Sin with Saturation')
+        fct_name = hwp_sin_sat
+        guess = np.array([np.max(ampvals), 0, 0., 1.])
+        rangepars = [[0, np.max(ampvals)*10], [0,1], [-180,180], [0., 10.]]
+    
+    if myguess is not None:
+        guess = myguess
+
+        print('Guess: ',guess)
+    fithwp = ft.do_minuit(thvals[okdata], np.abs(ampvals[okdata]), ampvals_err[okdata], guess, functname=fct_name,
+              force_chi2_ndf=True, verbose=False, rangepars=rangepars)
     print(fithwp[1])
     if doplot:
         errorbar(thvals[okdata], np.abs(ampvals[okdata])/fithwp[1][0], yerr= ampvals_err[okdata]/fithwp[1][0], fmt='r.')
         angs = np.linspace(0,90,90)
-        plot(angs, hwp_sin(angs, fithwp[1])/fithwp[1][0], 
+        plot(angs, fct_name(angs, fithwp[1])/fithwp[1][0], 
                             label='XPol = {2:5.2f}% +/- {3:5.2f}% '.format(fithwp[1][0], fithwp[2][0], 
                             fithwp[1][1]*100, fithwp[2][1]*100,
                             fithwp[1][2], fithwp[2][2]))

@@ -65,17 +65,29 @@ yyin = exp(-0.5*(ttin-t0)**2/dt**2)
 
 # Source Signal
 signal_src = ll.sim_generator_power(ttin, amplitude, offset, frequency, phase, rf_freq = rf_freq)
-signal_src /= np.std(signal_src)
+signal_src = dl.renorm(signal_src)
+#signal_src = -np.sin(ttin*2*np.pi*frequency)
+
 
 # Measured Signal
-measured = -yyin*signal_src + np.random.randn(len(ttin))/100
+noise_level = 0.1
+measured = yyin*signal_src + np.random.randn(len(ttin))*noise_level
 
-
+subplot(2,1,1)
 plot(ttin, yyin, label = 'True Signal')
 plot(ttin, signal_src-1, label = 'Source Signal', alpha=0.3)
 plot(ttin, measured, label = 'Source Signal', alpha=0.5)
 ylabel('Input Signal')
 xlabel('Time [Sec]')
+legend()
+
+subplot(2,1,2)
+plot(ttin, yyin, label = 'True Signal')
+plot(ttin, signal_src-1, label = 'Source Signal', alpha=0.3)
+plot(ttin, measured, label = 'Source Signal', alpha=0.5)
+ylabel('Input Signal')
+xlabel('Time [Sec]')
+xlim(45,55)
 legend()
 ```
 
@@ -85,63 +97,79 @@ reload(dl)
 period = 1./frequency
 
 # RMS
-newt_rms, amp_rms, errors_rms = dl.demodulate_methods([ttin, measured], 1./period, method='rms')
+newt_rms, amp_rms, errors_rms = dl.demodulate_methods([ttin, measured], 1./period, method='rms', remove_noise=True)
 
 # Fit Sin
 newt_sin, amp_sin, errors_sin = dl.demodulate_methods([ttin, measured], 1./period, method='fit')
 
 # Fit True Shape
 xxtemplate = np.linspace(0, period, 20)
-model_src = -ll.sim_generator_power(xxtemplate, amplitude, offset, frequency, phase, rf_freq = rf_freq)
+model_src = ll.sim_generator_power(xxtemplate, amplitude, offset, frequency, phase, rf_freq = rf_freq)
 newt_fit, amp_fit, errors_fit = dl.demodulate_methods([ttin, measured], 1./period, method='fit', 
                                                     template=[xxtemplate, model_src])
 
+# Demodulation
+newt_demod, amp_demod, errors_demod = dl.demodulate_methods([ttin, measured], 1./period, method='demod',
+                                                           src_data_in = [ttin, signal_src])
 
+# Demodulation quadrature
+newt_demod_quad, amp_demod_quad, errors_demod_quad = dl.demodulate_methods([ttin, measured], 1./period, 
+                                                                           method='demod_quad', remove_noise=True,
+                                                                           src_data_in = [ttin, signal_src])
+
+
+#stop
 subplot(2,1,1)
 plot(ttin, yyin, 'k', label = 'True Signal')
 plot(newt_rms, amp_rms[0,:], label='RMS')
 plot(newt_sin, amp_sin[0,:], label='Fit Sine')
 plot(newt_fit, amp_fit[0,:], label='Fit True')
-legend()
+plot(newt_demod, amp_demod, label='Demodulation')
+plot(newt_demod_quad, amp_demod_quad, label='Demodulation Quadrature')
+legend(loc='upper right', fontsize=8)
 
 subplot(2,1,2)
 plot(ttin, ttin*0, 'k:', label = 'True Signal')
 plot(newt_rms, amp_rms[0,:]-np.interp(newt_rms, ttin, yyin), label='RMS')
 plot(newt_sin, amp_sin[0,:]-np.interp(newt_sin, ttin, yyin), label='Fit Sine')
 plot(newt_fit, amp_fit[0,:]-np.interp(newt_fit, ttin, yyin), label='Fit True')
-legend()
-ylim(-0.1, 0.1)
+plot(newt_demod, amp_demod-np.interp(newt_demod, ttin, yyin), label='Demodulation')
+plot(newt_demod_quad, amp_demod_quad-np.interp(newt_demod_quad, ttin, yyin), label='Demodulation Quadrature')
+legend(loc='upper right', fontsize=8)
+#plot(newt_demod_quad, newt_demod_quad*0+noise_level/sqrt(2))
+ylim(-0.5, 0.5)
 ```
 
 ```{python}
-#### Now proper demodulation
+reload(dl)
+nreal = 100
+noise_level = 0.5
+tmin = 0.
+tmax = 400.
+samplefreq = 40.
+estimate = np.zeros(nreal)
+estimate_code = np.zeros(nreal)
+for k in range(nreal):
+    tt = np.linspace(tmin, tmax, int((tmax-tmin)*samplefreq))
+    yy = np.random.randn(len(tt))*noise_level
+    spectrum_f, freq_f = ft.power_spectrum(tt, yy, rebin=True)
+    mean_level = np.mean(spectrum_f[np.abs(freq_f) > (np.max(freq_f)/2)])
+    estimate[k] = (np.sqrt(mean_level*samplefreq/2))
+    ### Estimate noise HF
+#     subplot(2,1,2)
+#     plot(freq_f, f.gaussian_filter1d(spectrum_f,1),label='Data')
+#     yscale('log')
+#     xscale('log')
+#     plot(freq_f, freq_f*0+mean_level,'--')
+    estimate_code[k] = dl.hf_noise_estimate(tt,yy)
 
-### Sift signal src by 1/2 period
-signal_src_shift = np.interp(ttin-period/2, ttin, signal_src, period=period)
-
-### Full Demodulated signal (Quadrature Demodulation, see: http://web.mit.edu/6.02/www/s2012/handouts/14.pdf)
-demod_full = np.sqrt((measured*signal_src/np.std(signal_src))**2 + (measured*signal_src_shift/np.std(signal_src))**2)
-
-# Smooth it over a period
-import scipy.signal as scsig
-FREQ_SAMPLING = 1./(ttin[1]-ttin[0])
-size_period = int(FREQ_SAMPLING * period) + 1
-filter_period = np.ones((size_period,)) / size_period
-demodulated = scsig.fftconvolve(demod_full, filter_period, mode='same')
-
-
-subplot(2,1,2)
-plot(ttin, yyin)
-plot(ttin, demodulated)
-
-
-
-
-
+print('True: {}'.format(noise_level))
+print(ft.statstr(estimate))
+print(ft.statstr(estimate_code))
 ```
 
 ```{python}
-
+np.sign(-3)
 ```
 
 ```{python}

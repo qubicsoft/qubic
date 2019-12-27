@@ -42,6 +42,10 @@ from importlib import reload
 ```
 
 ```{python}
+
+```
+
+```{python}
 ##### Simulation du signal: une gaussienne
 
 # Modulation Source Characteristics
@@ -141,35 +145,7 @@ ylim(-0.5, 0.5)
 ```
 
 ```{python}
-reload(dl)
-nreal = 100
-noise_level = 0.5
-tmin = 0.
-tmax = 400.
-samplefreq = 40.
-estimate = np.zeros(nreal)
-estimate_code = np.zeros(nreal)
-for k in range(nreal):
-    tt = np.linspace(tmin, tmax, int((tmax-tmin)*samplefreq))
-    yy = np.random.randn(len(tt))*noise_level
-    spectrum_f, freq_f = ft.power_spectrum(tt, yy, rebin=True)
-    mean_level = np.mean(spectrum_f[np.abs(freq_f) > (np.max(freq_f)/2)])
-    estimate[k] = (np.sqrt(mean_level*samplefreq/2))
-    ### Estimate noise HF
-#     subplot(2,1,2)
-#     plot(freq_f, f.gaussian_filter1d(spectrum_f,1),label='Data')
-#     yscale('log')
-#     xscale('log')
-#     plot(freq_f, freq_f*0+mean_level,'--')
-    estimate_code[k] = dl.hf_noise_estimate(tt,yy)
 
-print('True: {}'.format(noise_level))
-print(ft.statstr(estimate))
-print(ft.statstr(estimate_code))
-```
-
-```{python}
-np.sign(-3)
 ```
 
 ```{python}

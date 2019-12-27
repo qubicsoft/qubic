@@ -1318,13 +1318,13 @@ def hwp_fitpol(thvals, ampvals, ampvals_err, doplot=False, str_title=None, satur
     if saturation==False:
         print('Using Simple SIN')
         fct_name = hwp_sin
-        guess = np.array([np.max(ampvals), 0, 0.])
-        rangepars = [[0, np.max(ampvals)*10], [0,1], [-180,180]]
+        guess = np.array([np.max(np.abs(ampvals)), 0, 0.])
+        rangepars = [[0, np.max(np.abs(ampvals))*10], [0,1], [-180,180]]
     else:
         print('Using Sin with Saturation')
         fct_name = hwp_sin_sat
-        guess = np.array([np.max(ampvals), 0, 0., 1.])
-        rangepars = [[0, np.max(ampvals)*10], [0,1], [-180,180], [0., 10.]]
+        guess = np.array([np.max(np.abs(ampvals)), 0, 0., 1.])
+        rangepars = [[0, np.max(np.abs(ampvals))*10], [0,1], [-180,180], [0., 10.]]
     
     if myguess is not None:
         guess = myguess
@@ -1340,7 +1340,9 @@ def hwp_fitpol(thvals, ampvals, ampvals_err, doplot=False, str_title=None, satur
                             label='XPol = {2:5.2f}% +/- {3:5.2f}% '.format(fithwp[1][0], fithwp[2][0], 
                             fithwp[1][1]*100, fithwp[2][1]*100,
                             fithwp[1][2], fithwp[2][2]))
-        ylim(0,1)
+        ylim(-0.1,1.1)
+        plot(angs, angs*0,'k--')
+        plot(angs, angs*0+1,'k--')
         legend(loc='upper left')
         xlabel('HWP Angle [Deg.]')
         ylabel('Normalized signal')

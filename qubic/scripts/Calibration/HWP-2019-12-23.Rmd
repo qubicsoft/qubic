@@ -44,8 +44,8 @@ from importlib import reload
 ```{python}
 day = '2019-12-26'
 keyword = '*HWP_Scanning*'
-#data_dir = '/qubic/Data/Calib-TD/'+day+'/'
-data_dir = '/Users/hamilton/Qubic/Calib-TD/'+day+'/'
+data_dir = '/qubic/Data/Calib-TD/'+day+'/'
+#data_dir = '/Users/hamilton/Qubic/Calib-TD/'+day+'/'
 dirs = np.sort(glob.glob(data_dir+keyword))
 
 print (dirs)
@@ -74,7 +74,7 @@ data.keys()
 
 ```{python}
 rc('figure',figsize=(9,4.5))
-TESNum = 50
+TESNum = 95
 asic = str(2)
 
 
@@ -93,18 +93,6 @@ title(thedir)
 ylim(-10,10)
 #xlim(0,10)
 data_src_interp = np.interp(data['t_data '+asic], data['t_src'], data['data_src'])
-```
-
-```{python}
-plot((data['t_data '+asic]-t0), dl.renorm(data['data '+asic][TESNum-1,:]), 
-     label='Data TES {} ASIC {{}}'.format(TESNum,asic))
-xlabel('Seconds')
-
-plot((data['t_data '+asic]-t0), hwp_data, label='HWP Position')
-plot((data['t_src']-t0), dl.renorm(data['data_src'])-5, label='source')
-
-ylim(-10,10)
-xlim(0,100)
 ```
 
 ```{python}
@@ -158,10 +146,6 @@ tight_layout()
 ```
 
 ```{python}
-hwp_data
-```
-
-```{python}
 hwp_chunks = []
 hwp_pos_chunk = []
 istart = 0
@@ -178,11 +162,6 @@ for i in range(len(hwp_data)):
 
         
 print(np.unique(np.array(hwp_pos_chunk)))
-```
-
-```{python}
-print(a.hk['CALSOURCE-CONF']['Mod_ampl']/1000,a.hk['CALSOURCE-CONF']['Mod_offs']/1000)
-
 ```
 
 ```{python}
@@ -229,48 +208,6 @@ ylabel('Power Spectrum')
 xlim(xmin, xmax)
 ylim(ymin, ymax)
 legend()
-```
-
-```{python}
-len(tt)
-```
-
-```{python}
-# reload(dl)
-
-# #### Various demodulations
-
-# truc = data['data 1'][:,chunk[0]:chunk[1]]
-# time = data['t_data 1'][chunk[0]:chunk[1]]-np.min(data['t_data 1'][chunk[0]:chunk[1]])
-# #truc = data['data 1']
-# #time = data['t_data 1']
-
-# iii = 0
-# plot(time, truc[iii,:]-np.mean(truc[iii,:]))
-
-# #### RMS
-# newt_rms, amp_rms, err_rms = dl.demodulate_methods([time, truc], 1./period, method='rms')
-# plot(newt_rms, amp_rms[iii,:],'--', label='RMS')
-
-# #### sin interp
-# xxtemplate = np.linspace(0, period, 20)
-# yytemplate = np.sin(xxtemplate/period*2*np.pi)
-# mysine = dl.interp_template(xxtemplate, yytemplate)
-# newt_fit, amp_fit, err_fit = dl.demodulate_methods([time, truc], 1./period, method='fit')
-# plot(newt_fit, amp_fit[iii,:],':', label='fit Sine')
-
-# #### Source simulator
-# rf_freq = a.hk['CALSOURCE-CONF']['Cal_freq']     # GHz
-# amplitude = a.hk['CALSOURCE-CONF']['Mod_ampl']     # Volts
-# offset = a.hk['CALSOURCE-CONF']['Mod_offs']        # volts
-# phase = 1         # radians
-# frequency = a.hk['CALSOURCE-CONF']['Mod_freq']    # Hz [Modulation Frequency] 
-# signal_src = -ll.sim_generator_power(xxtemplate, amplitude, offset, frequency, phase, rf_freq = rf_freq)
-# newt_fitSimSrc, amp_fitSimSrc, err_fitSimSrc = dl.demodulate_methods([time, truc], 1./period, method='fit', template=[xxtemplate, signal_src])
-# plot(newt_fitSimSrc, amp_fitSimSrc[iii,:],':', label='fit SimSrc')
-
-
-# legend()
 ```
 
 ```{python}
@@ -427,37 +364,110 @@ for i in range(len(hwp_chunks)):
 ```
 
 ```{python}
+print(thvals)
+reload(dl)
+
+alldata = [ [-vals_demod, err_demod]]
+names = ['Demod']
+
+iii = TESNum-1
+iii = 1
+for i in range(len(names)):
+    ok = alldata[i][0][:,iii] !=0
+    myguess = np.array([np.max(alldata[i][0][ok,iii]), 0., 0., 5.])
+    #errorbar(thvals[ok], alldata[i][0][ok,iii], yerr=alldata[i][1][ok,iii], fmt='o', label=names[i])
+    resfit = dl.hwp_fitpol(thvals[ok], alldata[i][0][ok,iii], alldata[i][1][ok,iii], 
+                           doplot=True, str_title=names[i]+' TES{} ASIC{}'.format(iii+1,asic), 
+                           saturation=True, myguess=myguess)
+tight_layout()
+
+```
+
+```{python}
+def weighted_mean(x,dx, dispersion=True):
+    w = 1./dx**2
+    sumw = np.sum(w)
+    mm = np.sum(w*x)/sumw
+    if dispersion:
+        ss = np.std(x)
+    else:
+        ss = 1./np.sqrt(sumw)
+    return mm, ss
+```
+
+```{python}
+print(thvals)
+reload(dl)
+uniqth = np.unique(np.sort(thvals))
+alldata = [ [-vals_demod, err_demod]]
+names = ['Demod']
+
+iii = TESNum-1
+iii = 1
+for i in range(len(names)):
+    ok = alldata[i][0][:,iii] !=0
+    values = np.zeros(len(uniqth))
+    errors = np.zeros(len(uniqth))
+    tt = thvals[ok]
+    dd = alldata[i][0][ok,iii]
+    ee = alldata[i][1][ok,iii]
+    for k in range(len(uniqth)):
+        thisone = tt == uniqth[k]
+        values[k], errors[k] = weighted_mean(dd[thisone], ee[thisone], dispersion=False)
+    print(values)
+    print(errors)
+    myguess = np.array([np.max(np.abs(values)), 0., 0., 5.])
+    resfit = dl.hwp_fitpol(uniqth, values, errors, 
+                           doplot=True, str_title=names[i]+' TES{} ASIC{}'.format(iii+1,asic), 
+                           saturation=True, myguess=myguess)
+tight_layout()
+
+```
+
+```{python}
+np.unique(np.sort(thvals))
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
 
 ```
 
 ```{python}
 print(thvals)
 reload(dl)
-# alldata = [[vals_rms, err_rms], [vals_fit, err_fit], [vals_fitSimSrc, err_fitSimSrc], [-vals_demod, err_demod*0+1]]
-# names = ['RMS', 'Fit', 'FitSimSrc', 'Demod']
 
-# alldata = [[vals_rms, err_rms], [vals_demod, err_demod*0+1]]
-# names = ['RMS', 'Demod']
-
+uniqth = np.unique(np.sort(thvals))
 alldata = [ [-vals_demod, err_demod]]
 names = ['Demod']
 
-iii = TESNum-1
-for i in range(len(names)):
-    subplot(1,3,i+1)
-    ok = alldata[i][0][:,iii] !=0
-    errorbar(thvals[ok], alldata[i][0][ok,iii], yerr=alldata[i][1][ok,iii], fmt='o', label=names[i])
-    resfit = dl.hwp_fitpol(thvals[ok], alldata[i][0][ok,iii], alldata[i][1][ok,iii], 
-                           doplot=True, str_title=names[i]+' TES{} ASIC{}'.format(iii+1,asic))
-tight_layout()
-
-```
-
-```{python}
-
-```
-
-```{python}
+for iii in range(128):
+    for i in range(len(names)):
+        ok = alldata[i][0][:,iii] !=0
+        values = np.zeros(len(uniqth))
+        errors = np.zeros(len(uniqth))
+        tt = thvals[ok]
+        dd = alldata[i][0][ok,iii]
+        ee = alldata[i][1][ok,iii]
+        for k in range(len(uniqth)):
+            thisone = tt == uniqth[k]
+            values[k], errors[k] = weighted_mean(dd[thisone], ee[thisone], dispersion=True)
+        print(values)
+        print(errors)
+        myguess = np.array([np.max(np.abs(values)), 0., 0., 5.])
+        clf()
+        resfit = dl.hwp_fitpol(uniqth, values, errors, 
+                               doplot=True, str_title=names[i]+' TES{} ASIC{}'.format(iii+1,asic), 
+                               saturation=True, myguess=myguess)
+        tight_layout()
+        show()
 
 ```
 

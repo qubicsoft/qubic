@@ -1,0 +1,504 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.4
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(9,4.5))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack.qubicfp import qubicfp
+import qubic.fibtools as ft
+import qubic.plotters as p
+import qubic.lin_lib as ll
+import qubic.demodulation_lib as dl
+import satorchipy as stpy
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import datetime as dt
+import pickle
+from importlib import reload
+```
+
+```{python}
+day = '2019-12-26'
+keyword = '*HWP_Scanning*'
+data_dir = '/qubic/Data/Calib-TD/'+day+'/'
+#data_dir = '/Users/hamilton/Qubic/Calib-TD/'+day+'/'
+dirs = np.sort(glob.glob(data_dir+keyword))
+
+print (dirs)
+
+```
+
+```{python}
+ifile = 1
+thedir = dirs[ifile]
+print(thedir)
+a = qubicfp()
+a.read_qubicstudio_dataset(thedir)
+a.timeaxis(asic=1,datatype='sci',axistype='index')
+data=a.azel_etc(TES=None)
+t0=data['t_data 2'][0]
+
+hwp = a.hk['INTERN_HK']['HWP-Position']
+hwp_timestamps = a.timeaxis(datatype='hk',axistype='computertime')
+
+print(a.hk.keys())
+print(a.hk['INTERN_HK'].keys())
+print(a.hk['CALSOURCE-CONF'].keys())
+
+data.keys()
+```
+
+```{python}
+rc('figure',figsize=(9,4.5))
+TESNum = 95
+asic = str(2)
+
+
+rc('figure',figsize=(12,8))
+hwp_data = np.interp((data['t_data '+asic]-t0), (hwp_timestamps-hwp_timestamps[0]), hwp)
+
+plot((data['t_data '+asic]-t0), dl.renorm(data['data '+asic][TESNum-1,:]), 
+     label='Data TES {} ASIC {}'.format(TESNum,asic))
+xlabel('Seconds')
+
+plot((data['t_data '+asic]-t0), hwp_data, label='HWP Position')
+plot((data['t_src']-t0), dl.renorm(data['data_src'])-5, label='source')
+
+legend()
+title(thedir)
+ylim(-10,10)
+#xlim(0,10)
+data_src_interp = np.interp(data['t_data '+asic], data['t_src'], data['data_src'])
+```
+
+```{python}
+rc('figure',figsize=(13,8))
+#### Filtering
+reload(ft)
+tt = data['t_data '+asic]
+t0 = tt[0]
+dd = data['data '+asic][TESNum-1,:]
+
+thefreqmod = 1.
+
+period = 1./ thefreqmod
+lowcut = 0.8
+highcut = 70
+
+xmin = 0.01
+xmax = 90.
+ymin = 1e1
+ymax = 1e17
+
+############ Power spectrum
+spectrum_f, freq_f = ft.power_spectrum(tt, dd, rebin=True)
+plot(freq_f, f.gaussian_filter1d(spectrum_f,1),label='Raw Data')
+yscale('log')
+xscale('log')
+xlabel('Frequency [Hz]')
+ylabel('Power Spectrum')
+xlim(xmin, xmax)
+ylim(ymin, ymax)
+title('TES {} ASIC {}'.format(TESNum,asic))
+
+for i in range(10):
+    plot([1./period*i,1./period*i],[ymin,ymax],'k--',alpha=0.3)
+
+plot([lowcut, lowcut],[ymin,ymax],'k')
+plot([highcut, highcut],[ymin,ymax],'k')
+legend()
+
+########## New Power spectrum
+nharm = 10
+notch = np.array([[1.724, 0.005, nharm]])
+newdata = ft.filter_data(tt, dd, lowcut, highcut, notch=notch, rebin=True, verbose=True, order=5)
+spectrum_f2, freq_f2 = ft.power_spectrum(tt, newdata, rebin=True)
+plot(freq_f2, f.gaussian_filter1d(spectrum_f2,1),label='Filtered data')
+for i in range(nharm):
+    plot([notch[0,0]*(i+1),notch[0,0]*(i+1)], [ymin,ymax],'m:')
+legend()
+
+tight_layout()
+```
+
+```{python}
+hwp_chunks = []
+hwp_pos_chunk = []
+istart = 0
+tocut = 2000
+hwp_pos = hwp_data[istart]
+for i in range(len(hwp_data)):
+    if (hwp_data[i] == int(hwp_data[i])):
+        if (hwp_data[i] != hwp_data[istart]):
+            if hwp_data[istart] != 255:
+                hwp_chunks.append([istart+tocut, i-tocut])
+                hwp_pos_chunk.append(int(hwp_data[istart]))
+            istart = i
+            #print(hwp_pos_chunk)
+
+        
+print(np.unique(np.array(hwp_pos_chunk)))
+```
+
+```{python}
+print(a.hk['CALSOURCE-CONF']['Mod_ampl']/1000,a.hk['CALSOURCE-CONF']['Mod_offs']/1000)
+
+
+# #### Source characteristics
+rf_freq = a.hk['CALSOURCE-CONF']['Cal_freq']     # GHz
+amplitude = a.hk['CALSOURCE-CONF']['Mod_ampl']/1000 *0+0.5    # Volts
+offset = a.hk['CALSOURCE-CONF']['Mod_offs']/1000*0+1        # volts
+phase = 0        # radians
+frequency = a.hk['CALSOURCE-CONF']['Mod_freq']#/1000    # Hz [Modulation Frequency] 
+print(amplitude, offset, frequency, phase, rf_freq)
+signal_src = -ll.sim_generator_power(tt, amplitude, offset, frequency, phase, rf_freq = rf_freq)
+print(len(tt), len(signal_src))
+
+rc('figure',figsize=(13,8))
+ichunk = 0
+chunk = hwp_chunks[ichunk]
+newtt = (data['t_data '+asic][chunk[0]:chunk[1]]-t0)
+newdd = newdata[chunk[0]:chunk[1]]
+ddsrc = -data_src_interp[chunk[0]:chunk[1]]
+sig_src = signal_src[chunk[0]:chunk[1]]
+
+subplot(2,1,1)
+plot(newtt-newtt[0],dl.renorm(newdd),label='Data TES {} ASIC {}'.format(TESNum, asic))
+plot(newtt-newtt[0],-dl.renorm(ddsrc),label='CalSrc [time shifted]')
+plot(newtt-newtt[0],-dl.renorm(sig_src),label='Simulated CalSrc [Phase manually set]')
+title('Pos={}'.format(hwp_pos_chunk[ichunk]))
+xlim(0,10)
+legend()
+
+subplot(2,1,2)
+spectrum_f2, freq_f2 = ft.power_spectrum(newtt, newdd, rebin=True)
+plot(freq_f2, f.gaussian_filter1d(spectrum_f2,1),label='Filtered data')
+for i in range(10):
+    plot([1./period*i,1./period*i],[ymin,ymax],'k--',alpha=0.3)
+# for i in range(nharm):
+#     plot([notch[0,0]*(i+1),notch[0,0]*(i+1)], [ymin,ymax],'m:')
+yscale('log')
+xscale('log')
+xlabel('Frequency [Hz]')
+ylabel('Power Spectrum')
+xlim(xmin, xmax)
+ylim(ymin, ymax)
+legend()
+```
+
+```{python}
+rc('figure',figsize=(13,8))
+cols = ['r','b','g','k','m','y','orange']
+angles = np.arange(7)*15
+thvals = np.zeros(len(hwp_chunks))
+for i in range(len(hwp_chunks)):
+    chunk = hwp_chunks[i]
+    plot((data['t_data '+asic][chunk[0]:chunk[1]]-t0)/3600, newdata[chunk[0]:chunk[1]], 
+        color=cols[hwp_pos_chunk[i]-1])
+    thvals[i] = angles[hwp_pos_chunk[i]-1]
+
+print(thvals)    
+
+xlim(0,np.max((data['t_data '+asic]-t0)/3600))
+mm,ss = ft.meancut(newdata,3)
+ylim(mm-2*ss,mm+3*ss)
+for i in arange(1,8):
+    plot(-1,-1, 'o',color=cols[i-1], label='HWP Pos = {} ; Angle = {} deg.'.format(i, angles[i-1]))
+legend()
+title('TES {} ASIC {}'.format(TESNum,asic))
+```
+
+```{python}
+### Try different demodulation techniques:
+reload(dl)
+#### Source simulator
+rf_freq = a.hk['CALSOURCE-CONF']['Cal_freq']     # GHz
+amplitude = a.hk['CALSOURCE-CONF']['Mod_ampl']/1000*0+0.5    # Volts
+offset = a.hk['CALSOURCE-CONF']['Mod_offs']/1000*0+1        # volts
+phase = -0.2         # radians
+frequency = a.hk['CALSOURCE-CONF']['Mod_freq']    # Hz [Modulation Frequency] 
+xxtemplate = np.linspace(0, period, 20)
+signal_src = -ll.sim_generator_power(xxtemplate, amplitude, offset, frequency, phase, rf_freq = rf_freq)
+
+# print(amplitude, offset, frequency, phase, rf_freq)
+# plot(xxtemplate, signal_src)
+# stop
+
+##### Filtering
+lowcut = 0.8
+highcut = 30
+nharm = 10
+notch = np.array([[1.724, 0.005, nharm]])
+fourier_cuts = [lowcut, highcut, notch]
+
+vals_rms = np.zeros((len(hwp_chunks),128))
+vals_fit = np.zeros((len(hwp_chunks),128))
+vals_fitSimSrc = np.zeros((len(hwp_chunks),128))
+vals_demod = np.zeros((len(hwp_chunks),128))
+
+err_rms = np.zeros((len(hwp_chunks),128))
+err_fit = np.zeros((len(hwp_chunks),128))
+err_fitSimSrc = np.zeros((len(hwp_chunks),128))
+err_demod = np.zeros((len(hwp_chunks),128))
+
+for i in range(len(hwp_chunks)):
+    chunk = hwp_chunks[i]
+    if (chunk[0] < chunk[1]):
+        tod = data['data {}'.format(asic)][:,chunk[0]:chunk[1]]
+        #mmm = np.mean(tod,axis=1)
+        #for k in range(128): 
+        #    tod[k,:] = tod[k,:] - mmm[k]
+        
+        ddsrc = -data_src_interp[chunk[0]:chunk[1]]
+        time = data['t_data {}'.format(asic)][chunk[0]:chunk[1]]-np.min(data['t_data {}'.format(asic)][chunk[0]:chunk[1]])
+        deltat = (time[-1]-time[1])
+
+        
+        #### Find best phase for Simulated Source
+        TES_reference = TESNum
+        TES_ref_data = dl.renorm(ft.filter_data(time, tod[TES_reference-1,:], lowcut, highcut, notch=notch, 
+                                                rebin=True, verbose=True, order=5))
+        
+        nphases = 100
+        phases = np.linspace(0, 2*np.pi, nphases)
+        ch2 = np.zeros(nphases)
+        for k in range(nphases):
+            phase = phases[k]
+            ### Minus sign as source responds negatively
+            signal_src_sim = -ll.sim_generator_power(time, amplitude, offset, frequency, phase, rf_freq = rf_freq)
+            signal_src_sim = ft.filter_data(time, signal_src_sim, lowcut, highcut, notch=notch, 
+                                                    rebin=True, verbose=False, order=5)
+            signal_src_sim = dl.renorm(signal_src_sim)
+            ch2[k] = np.sum((TES_ref_data-signal_src_sim)**2)
+            
+        best_phase = phases[np.argmin(ch2)]
+        print(best_phase)
+        ### Minus sign as source responds negatively
+        signal_src_sim = -dl.renorm(ll.sim_generator_power(time, amplitude, offset, frequency, best_phase, rf_freq = rf_freq))
+        
+            
+
+#         subplot(2,1,1)
+#         plot(time-time[0], TES_ref_data, label='TES Ref Data')
+#         plot(time-time[0], -signal_src_sim)
+#         xlim(130, 150)
+#         stop
+        
+        
+        
+        print(i, len(hwp_chunks), deltat)
+        if  (deltat > 5.):
+            print('   - RMS')
+            #### RMS
+#             newt_rms, amp_rms, errors_rms = dl.demodulate_methods([time, tod], 1./period, method='rms')
+#             vals_rms[i,:] = np.median(amp_rms, axis=1)
+#             err_rms[i,:] = np.std(amp_rms, axis=1)/np.sqrt(len(amp_rms))
+            #for k in range(128):
+            #    mm, ss = ft.meancut(amp_rms, 3, disp=False)
+            #    vals_rms[i,:] = mm
+            #    err_rms[i,:] = ss
+        
+            #### demod
+            print('   - Demod {}'.format(i))
+            newt_demod, amp_demod, errors_demod = dl.demodulate_methods([time, tod],
+                                                                        1./period, 
+                                                                        src_data_in=[time, signal_src_sim],
+                                                                        method='demod',
+                                                                       fourier_cuts=fourier_cuts)
+            vals_demod[i,:] = -np.median(amp_demod, axis=1)
+            err_demod[i,:] = np.std(amp_demod, axis=1)/np.sqrt(len(amp_demod))
+            
+
+#             #### sin interp
+#             print('   - FitSine')
+#             newt_fit, amp_fit, errors_fit = dl.demodulate_methods([time, tod], 1./period, method='fit')
+#             vals_fit[i,:] = np.median(amp_fit, axis=1)
+#             err_fit[i,:] = np.std(amp_fit, axis=1)/np.sqrt(len(amp_fit))
+#             #for k in range(128):
+#             #    mm, ss = ft.meancut(amp_fit, 3, disp=False)
+#             #    vals_fit[i,:] = mm
+#             #    err_fit[i,:] = ss
+
+#             #### Source simulator
+#             print('   - FitSrcSim')
+#             newt_fitSimSrc, amp_fitSimSrc, errors_fitSimSrc = dl.demodulate_methods([time, tod], 1./period, method='fit', 
+#                                                                                  template=[xxtemplate, signal_src])
+#             vals_fitSimSrc[i,:] = np.median(amp_fitSimSrc, axis=1)
+#             err_fitSimSrc[i,:] = np.std(amp_fitSimSrc, axis=1)/np.sqrt(len(amp_fitSimSrc))
+#             #for k in range(128):
+#             #    mm, ss = ft.meancut(amp_fitSimSrc, 3, disp=False)
+#             #    vals_fitSimSrc[i,:] = mm
+#             #    err_fitSimSrc[i,:] = ss
+    
+    
+
+    
+
+
+
+
+```
+
+```{python}
+print(thvals)
+reload(dl)
+
+alldata = [ [-vals_demod, err_demod]]
+names = ['Demod']
+
+iii = TESNum-1
+iii = 1
+for i in range(len(names)):
+    ok = alldata[i][0][:,iii] !=0
+    myguess = np.array([np.max(alldata[i][0][ok,iii]), 0., 0., 5.])
+    #errorbar(thvals[ok], alldata[i][0][ok,iii], yerr=alldata[i][1][ok,iii], fmt='o', label=names[i])
+    resfit = dl.hwp_fitpol(thvals[ok], alldata[i][0][ok,iii], alldata[i][1][ok,iii], 
+                           doplot=True, str_title=names[i]+' TES{} ASIC{}'.format(iii+1,asic), 
+                           saturation=True, myguess=myguess)
+tight_layout()
+
+```
+
+```{python}
+def weighted_mean(x,dx, dispersion=True):
+    w = 1./dx**2
+    sumw = np.sum(w)
+    mm = np.sum(w*x)/sumw
+    if dispersion:
+        ss = np.std(x)
+    else:
+        ss = 1./np.sqrt(sumw)
+    return mm, ss
+```
+
+```{python}
+print(thvals)
+reload(dl)
+uniqth = np.unique(np.sort(thvals))
+alldata = [ [-vals_demod, err_demod]]
+names = ['Demod']
+
+iii = TESNum-1
+iii = 1
+for i in range(len(names)):
+    ok = alldata[i][0][:,iii] !=0
+    values = np.zeros(len(uniqth))
+    errors = np.zeros(len(uniqth))
+    tt = thvals[ok]
+    dd = alldata[i][0][ok,iii]
+    ee = alldata[i][1][ok,iii]
+    for k in range(len(uniqth)):
+        thisone = tt == uniqth[k]
+        values[k], errors[k] = weighted_mean(dd[thisone], ee[thisone], dispersion=False)
+    print(values)
+    print(errors)
+    myguess = np.array([np.max(np.abs(values)), 0., 0., 5.])
+    resfit = dl.hwp_fitpol(uniqth, values, errors, 
+                           doplot=True, str_title=names[i]+' TES{} ASIC{}'.format(iii+1,asic), 
+                           saturation=True, myguess=myguess)
+tight_layout()
+
+```
+
+```{python}
+np.unique(np.sort(thvals))
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+print(thvals)
+reload(dl)
+
+uniqth = np.unique(np.sort(thvals))
+alldata = [ [-vals_demod, err_demod]]
+names = ['Demod']
+
+for iii in range(128):
+    for i in range(len(names)):
+        ok = alldata[i][0][:,iii] !=0
+        values = np.zeros(len(uniqth))
+        errors = np.zeros(len(uniqth))
+        tt = thvals[ok]
+        dd = alldata[i][0][ok,iii]
+        ee = alldata[i][1][ok,iii]
+        for k in range(len(uniqth)):
+            thisone = tt == uniqth[k]
+            values[k], errors[k] = weighted_mean(dd[thisone], ee[thisone], dispersion=True)
+        print(values)
+        print(errors)
+        myguess = np.array([np.max(np.abs(values)), 0., 0., 5.])
+        clf()
+        resfit = dl.hwp_fitpol(uniqth, values, errors, 
+                               doplot=True, str_title=names[i]+' TES{} ASIC{}'.format(iii+1,asic), 
+                               saturation=True, myguess=myguess)
+        tight_layout()
+        show()
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

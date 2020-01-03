@@ -18,16 +18,23 @@ Edited by Louise
 Using data from 2019-04-06, scan at 150GHz
 
 ```{python}
+import qubic
+```
+
+```{python}
 from __future__ import division, print_function
 
 # %matplotlib inline
-# %matplotlib notebook
+# # %matplotlib notebook
 
 import healpy as hp
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.ticker as plticker
 import matplotlib.animation as animation
 from IPython.display import HTML
+
+from sklearn.cluster import DBSCAN
 
 from qubicpack.utilities import Qubic_DataDir
 from qubicpack.pixel_translation import make_id_focalplane, plot_id_focalplane, tes2index
@@ -43,7 +50,8 @@ from IPython.display import HTML
 
 ```{python}
 # Get the data
-rep = Qubic_DataDir(datafile='allFitSB.pdf')
+freq_source = 130
+rep = Qubic_DataDir(datafile='allFitSB_{}.pdf'.format(freq_source))
 print(rep)
 ```
 
@@ -74,6 +82,7 @@ plt.imshow(fitmap)
 Using fitted images
 
 ```{python}
+elev = 75
 all_fit = []
 for tes in range(1, 257):
     themap, az, el, fitmap, newxxyy = sbfit.get_flatmap(tes, rep, fitted_directory=rep+'/FitSB',
@@ -82,7 +91,7 @@ for tes in range(1, 257):
         print(fitmap.shape)
         plt.imshow(fitmap)
         
-    all_fit.append((fitmap[71, :]) / np.sum(fitmap))    
+    all_fit.append((fitmap[elev, :]) / np.sum(fitmap))    
     
 all_fit = np.array(all_fit)
 print(all_fit.shape) 
@@ -130,13 +139,113 @@ signal[:, 1, :] = all_fit[128:, :]
 ```
 
 ```{python}
-for i in range(20, 170):
+all_quartfp = []
+for i in range(naz):
     image_fp = sc.tes_signal2image_fp(signal[:, :, i], [1, 2])
     _, quart_fp = sc.get_real_fp(image_fp, quadrant=3)
-    plt.imshow(quart_fp, vmin=0, vmax=4e-3)
+    all_quartfp.append(quart_fp)
+    
+    plt.imshow(quart_fp, vmin=0, vmax=2e-3)
+    loc = plticker.MultipleLocator(base=1)
+    ax = plt.gca();
+    ax.xaxis.set_major_locator(loc)
+    ax.yaxis.set_major_locator(loc)
+
+
+#     ax.set_xticks(np.arange(-0.5, 17, 1));
+#     ax.set_yticks(np.arange(0.5, 17, 1));
+    ax.grid(color='w', linestyle='-', linewidth=1)
     plt.title(i)
     #plt.colorbar()
     plt.pause(0.07)
+```
+
+### Focal length measurement
+
+```{python}
+all_a = []
+for i, quart_fp in enumerate(all_quartfp):
+#     print(quart_fp)
+#     quart_fp = np.nan_to_num(quart_fp)
+#     print(quart_fp[quart_fp != np.nan])
+    x = quart_fp[~numpy.isnan(quart_fp)]
+    mean, std = ft.meancut(x, nsig=7)
+    print(mean, std)
+    print(np.std(x))
+    threshold = 3 * std
+#     threshold = np.nanstd(quart_fp)/2
+#     threshold = np.nanmax(quart_fp) / 1000
+#     print('threshold: ', threshold)
+    bright = quart_fp > threshold 
+    print(bright.shape)
+    brightpixels = np.column_stack(np.where(bright.T))
+
+    # DBSCAN
+    clustering = DBSCAN(eps=1, min_samples=3).fit(brightpixels)
+    labels = clustering.labels_
+    
+    nfound = len(np.unique(np.sort(labels)))
+    print('nfound: ', nfound)
+    
+    if nfound == 3:
+        centers = np.zeros((nfound, 2))
+
+        for k in range(nfound):
+            ok = labels==k
+            centers[k, :] = np.mean(brightpixels[ok, :], axis=0)
+
+    #     centers = centers[~np.isnan(centers).any(axis=1)]
+        print(centers)
+
+        plt.figure()
+        plt.imshow(bright)
+        plt.plot(centers[:,0], centers[:,1], 'ro' )
+        plt.title(i)
+        
+        a = np.sqrt((centers[0, 0] - centers[1, 0])**2 + (centers[0, 1] - centers[1, 1])**2) * 3e-3
+#         nu = freq_source * 1e9
+#         f = nu * 14e-3 * a / 299792458
+        all_a.append(a)
+    
+print('nf = ', len(all_a))
+```
+
+```{python}
+17**2
+```
+
+```{python}
+print(len(all_a))
+all_a = np.array(all_a)
+
+f_theo = 0.30
+all_a_cut = all_a[all_a > 0.02]
+print(len(all_a_cut))
+
+mean = np.mean(all_a_cut)
+std = np.std(all_a_cut)
+
+hist = plt.hist(all_a_cut, bins=8)
+plt.xlabel('Distance a (m)')
+plt.title('Source freq = {}'.format(freq_source))
+
+# plt.axvline(mean, color='r', linestyle='dashed', linewidth=2)
+
+# min_ylim, max_ylim = plt.ylim()
+# plt.text(mean*1.02, max_ylim*0.9, 'Mean: {:.3f} m \n Std: {:.3f} m'.format(mean, std))
+```
+
+```{python}
+plt.plot(hist[0], hist[1])
+```
+
+```{python}
+all_freq = np.arange(140, 180, 10)
+lam = 3e8 / (all_freq * 1e9) 
+a_mean = [0.042, 0.039, 0.038, 0.037]
+plt.plot(lam, a_mean, 'o')
+plt.xlabel('Wavelength (m)')
+plt.ylabel('Distance a (m)')
 ```
 
 ```{python}
@@ -156,7 +265,7 @@ ani = animation.ArtistAnimation(fig, all_quart_fp, interval=1000, repeat=False)
 HTML(ani.to_html5_video())
 
 # Save the animation 
-ani.save('Synthetic_beam_FP.mp4')
+# ani.save('Synthetic_beam_FP.mp4')
 ```
 
 ## Using real data
@@ -211,6 +320,13 @@ s = qubic.QubicScene(d)
 ```
 
 ```{python}
+TESNum = 93
+sb = q.get_synthbeam(s, TESNum)
+sb.shape
+hp.gnomview(sb, rot=[0,90], reso=10)
+```
+
+```{python}
 # Test for one TES
 TESNum = 93
 hpmap = sbfit.get_hpmap(TESNum, rep)
@@ -234,7 +350,7 @@ iii = np.where(q.detector.index == idx)[0]
 print(idx, iii)
 q.detector.index.shape
 
-# q = select_det(q, iii)
+q = select_det(q, iii)
 sb = q.get_synthbeam(s, iii)
 
 hp.gnomview(hpmap, reso=10, sub=(1,2,1), title='Data TES #{}'.format(TESNum))
@@ -279,6 +395,26 @@ hp.gnomview(all_hpmap[j], reso=10, sub=(1,2,1), title='Data TES #{}'.format(j))
 hp.gnomview(all_sb[j], rot=[0, 90], reso=10, sub=(1,2,2), title='Theory TES #{}'.format(j))
 ```
 
+```{python}
+import qubic.selfcal_lib as sc
+from qubicpack.pixel_translation import make_id_focalplane, plot_id_focalplane, tes2index
+
+q = qubic.QubicInstrument(d)
+print(q.detector.index)
+TES_index = 1100 # Index from 0 to 1155 in the Qubic soft
+tes, asic = sc.index2TESandASIC(TES_index) # TES number and Asic on the instrument
+index = tes2index(tes, asic) # Inverse transformation
+print(index)
+
+# Make this plot to see where it is
+plot_id_focalplane()
+
+# Build an instrument with only this detector
+ii = np.where(q.detector.index==TES_index)[0]
+print(ii)
+q.detector = q.detector[ii]
+```
+
 ### Normalize using meancut in fibtools
 
 ```{python}
@@ -294,16 +430,4 @@ for i in range(ntes):
 
 ```{python}
 plot(all_tes_sig_norm[36,:])
-```
-
-```{python}
-
-```
-
-```{python}
-1
-```
-
-```{python}
-
 ```

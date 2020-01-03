@@ -71,7 +71,7 @@ class BeamGaussian(Beam):
     Axisymmetric gaussian beam.
 
     """
-    def __init__(self, fwhm, nu=None, backward=False):
+    def __init__(self, fwhm, nu=150, backward=False):
         """
         Parameters
         ----------
@@ -82,7 +82,7 @@ class BeamGaussian(Beam):
 
         """
         if nu == None or (nu < 170 and nu > 130): 
-            self.fwhm = fwhm
+            self.fwhm = fwhm * 150 / nu
         else: # nu = 220
             self.fwhm = 0.1009 * np.sqrt(8 * np.log(2)) # Omega = 0.064
         self.sigma = self.fwhm / np.sqrt(8 * np.log(2))
@@ -103,7 +103,7 @@ class BeamFitted(Beam):
 
     """
     
-    def __init__(self, par, omega, backward=False):
+    def __init__(self, par, omega, nu=150, backward=False):
         """
         Parameters
         ----------
@@ -114,6 +114,7 @@ class BeamFitted(Beam):
 
         """
         self.par = par
+        self.nu = nu
         self.backward = bool(backward)
         Beam.__init__(self, omega)
 
@@ -121,8 +122,10 @@ class BeamFitted(Beam):
         par = self.par
         if self.backward:
             theta = np.pi - theta
-
-        out  = gauss_plus(theta, par[0], par[1], par[2])
+        theta_eff = theta
+        if self.nu <= 170 and self.nu >= 130:
+            theta_eff = theta * self.nu / 150
+        out  = gauss_plus(theta_eff, par[0], par[1], par[2])
         return reshape_broadcast(out, np.broadcast(theta, phi).shape)
 
 class MultiFreqBeam(Beam):

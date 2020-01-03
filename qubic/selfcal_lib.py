@@ -295,6 +295,11 @@ class SelfCalibration:
         if nhorns != 64:
             raise ValueError('You should have 64 .dat files')
 
+        # This is done to get the right file for each horn
+        horn_transpose = np.arange(64)
+        horn_transpose = np.reshape(horn_transpose, (8, 8))
+        horn_transpose = np.ravel(horn_transpose.T)
+
         # Get the sample number from the first file
         data0 = pd.read_csv(files[0], sep='\t', skiprows=0)
         nn = data0['X_Index'].iloc[-1] + 1
@@ -326,7 +331,10 @@ class SelfCalibration:
             d = np.sqrt(horn_x ** 2 + horn_y ** 2)  # distance between the horn and the center
             phi = - 2 * np.pi / 3e8 * freq_source * 1e9 * d * np.sin(np.deg2rad(theta_source))
 
-            data = pd.read_csv(files[swi - 1], sep='\t', skiprows=0)
+            thefile = files[horn_transpose[swi - 1]]
+            print('Horn ', swi, ': ', thefile[98:104])
+            data = pd.read_csv(thefile, sep='\t', skiprows=0)
+            
             allampX[i, :, :] = np.reshape(np.asarray(data['MagX']), (nn, nn)).T
             allampY[i, :, :] = np.reshape(np.asarray(data['MagY']), (nn, nn)).T
 

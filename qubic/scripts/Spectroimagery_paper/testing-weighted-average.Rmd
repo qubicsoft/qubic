@@ -96,8 +96,8 @@ print('Shape nbands band array: {}'.format(xn_noisy.shape))
 print('Variance single band method A {}'.format(method_a1(x1_noisy, nreals,stokes=2)))
 print('Variance single band method B {}'.format(method_b1(x1_noisy, nreals,stokes=2)))
 
-print('Variance nbands band method A {}'.format(method_a1(xn_noisy, nreals,stokes=0)))
-print('Variance nbands band method B {}'.format(method_b1(xn_noisy, nreals,stokes=0)))
+print('Variance nbands band method A {}'.format(method_a1(xn_noisy, nreals,stokes=0, sb=0)))
+print('Variance nbands band method B {}'.format(method_b1(xn_noisy, nreals,stokes=0, sb=0)))
 ```
 
 ***
@@ -117,16 +117,6 @@ Cp = amc.get_Cp(xn_noisy, nfrecon=[8,])
 ```
 
 ```{python}
-#Cp_prime = amc.Cp2Cp_prime(Cp, verbose=True)
-#plt.imshow(Cp_prime[:, :, 1, 2])
-```
-
-```{python}
-#Cp_prime_viaCorr = amc.Cp2Cp_prime_viaCorr(Cp, verbose=True)
-#plt.imshow(Cp_prime[:, :, 1, 2])
-```
-
-```{python}
 RA_center = 0. #deg
 DEC_center = -57. #deg
 center = equ2gal(RA_center, DEC_center)
@@ -141,10 +131,6 @@ weighted_av, sig2, sigmean = amc.make_weighted_av(xn_noisy, Cp, ang, ang_thresho
 #for ire in range(nreals):
 #    aa.append(np.std(weighted_av[ire,:,0]))
 #print(np.mean(aa))
-```
-
-```{python}
-weighted_av.shape
 ```
 
 ```{python}
@@ -231,60 +217,48 @@ print(corr1, corr2)
 
 ```{python}
 # Apply the correlations to the maps
-x0_noisy_corr = np.empty_like(x0_noisy)
+xn_noisy_corr = np.empty_like(xn_noisy)
 for ipix in range(npix):
     for istokes in range(3):
-        x0_noisy_corr[:, :, ipix, istokes] = x0_noisy[:, :, ipix, istokes] @ c
+        xn_noisy_corr[:, :, ipix, istokes] = xn_noisy[:, :, ipix, istokes] @ c
 
-hp.mollview(x0_noisy_corr[0, 0, :, 0])
-x0_noisy_corr
+hp.mollview(xn_noisy_corr[0, 0, :, 0])
+hp.mollview(xn_noisy_corr[3, 0, :, 0])
+#xn_noisy_corr
 ```
 
 ```{python}
 # Check the functions from AnalysisMC
-Cp = amc.get_Cp(x0_noisy_corr, nfrecon=nfrecon, verbose=False)
-Cp_prime = amc.Cp2Cp_prime(Cp, verbose=True)
-Cp_prime_viaCorr = amc.Cp2Cp_prime_viaCorr(Cp, verbose=True)
+Cp_corr = amc.get_Cp(xn_noisy_corr, nfrecon=[8,], verbose=False)
 
 istokes = 1
 ipix = 100
 plt.figure()
 plt.subplots_adjust(right=2)
 plt.subplot(141)
-plt.imshow(Cp[:, :, istokes, ipix])
-plt.title('Cp')
-plt.colorbar()
-
-plt.subplot(142)
-plt.imshow(Cp_prime[:, :, istokes, ipix])
-plt.title('Cp_prime')
-plt.colorbar()
-
-plt.subplot(143)
-plt.imshow(Cp_prime_viaCorr[:, :, istokes, ipix])
-plt.title('Cp_prime via corr')
-plt.colorbar()
-
-plt.subplot(144)
-plt.imshow((Cp-Cp_prime_viaCorr)[:, :, istokes, ipix])
-plt.title('Cp- Cp_prime via corr')
+plt.imshow(Cp_corr[:, :, istokes, ipix])
+plt.title('Cp cor')
 plt.colorbar()
 ```
 
 ```{python}
+help(np.random.multivariate_normal)
+```
+
+```{python}
 # Other method: using np.random.multivariate_normal
-x0_noisy_corr = np.empty_like(x0_noisy)
+xn_noisy_corr = np.empty_like(xn_noisy)
 for ipix in range(npix):
     for istokes in range(3):
-        x0_noisy_corr[:, :, ipix, istokes] = np.random.multivariate_normal(x0_noisy[0, :, ipix, istokes], r, 
-                                                                           size=200)
+        xn_noisy_corr[:, :, ipix, istokes] = np.random.multivariate_normal(xn_noisy[0, :, ipix, istokes], r, 
+                                                                           size=100)
 
-hp.mollview(x0_noisy_corr[0, 0, :, 0])
+hp.mollview(xn_noisy_corr[40, 0, :, 0])
 
 # Check it is still ok
-Cp = amc.get_Cp(x0_noisy_corr, nfrecon=nfrecon, verbose=False)
-Cp_prime = amc.Cp2Cp_prime(Cp, verbose=True)
-Cp_prime_viaCorr = amc.Cp2Cp_prime_viaCorr(Cp, verbose=True)
+Cp_corr2 = amc.get_Cp(xn_noisy_corr, nfrecon=[8,], verbose=False)
+#Cp_prime = amc.Cp2Cp_prime(Cp, verbose=True)
+#Cp_prime_viaCorr = amc.Cp2Cp_prime_viaCorr(Cp, verbose=True)
 
 istokes = 0
 ipix = 100
@@ -295,20 +269,20 @@ plt.imshow(Cp[:, :, istokes, ipix])#, vmin=-0.2, vmax=1)
 plt.title('Cp')
 plt.colorbar()
 
-plt.subplot(142)
-plt.imshow(Cp_prime[:, :, istokes, ipix])#, vmin=-0.2, vmax=1)
-plt.title('Cp_prime')
-plt.colorbar()
+#plt.subplot(142)
+#plt.imshow(Cp_prime[:, :, istokes, ipix])#, vmin=-0.2, vmax=1)
+#plt.title('Cp_prime')
+#plt.colorbar()
 
-plt.subplot(143)
-plt.imshow(Cp_prime_viaCorr[:, :, istokes, ipix])#, vmin=-0.2, vmax=1)
-plt.title('Cp_prime via corr')
-plt.colorbar()
+#plt.subplot(143)
+#plt.imshow(Cp_prime_viaCorr[:, :, istokes, ipix])#, vmin=-0.2, vmax=1)
+#plt.title('Cp_prime via corr')
+#plt.colorbar()
 
-plt.subplot(144)
-plt.imshow((Cp-Cp_prime_viaCorr)[:, :, istokes, ipix])#, vmin=-0.2, vmax=1)
-plt.title('Cp- Cp_prime via corr')
-plt.colorbar()
+#plt.subplot(144)
+#plt.imshow((Cp-Cp_prime_viaCorr)[:, :, istokes, ipix])#, vmin=-0.2, vmax=1)
+#plt.title('Cp- Cp_prime via corr')
+#plt.colorbar()
 ```
 
 ```{python}

@@ -36,8 +36,52 @@ def read_cal_src_data(file_list, time_offset=7200):
     data_src = np.concatenate(ddsrc_i)
     return t_src, data_src
 
+def bin_per_period(period, time, invec, verbose=False):
+    ### Bins the vecors in in_list (assumed to be sampled with vector time) per period
+    ### we label each data sample with a period
+    period_index = ((time - time[0]) / period).astype(int)
+    ### We loop on periods to measure their respective amplitude and azimuth
+    allperiods = np.unique(period_index)
+    tper = np.zeros(len(allperiods))
+    nvec = np.shape(invec)[0]
+    nsamples = len(time)
+    newvecs = np.zeros((nvec, len(allperiods)))
+    for i in range(len(allperiods)):
+        ok = (period_index == allperiods[i])
+        tper[i] = np.mean(time[ok])
+        newvecs[:,i] = np.mean(invec[:,ok], axis=1)
+    return tper, newvecs
 
-def return_rms_period(period, time, azimuth, elevation, data, verbose=False):
+
+def hf_noise_estimate(tt,dd):
+    sh = np.shape(dd)
+    if len(sh) == 1:
+        dd = np.reshape(dd,(1, len(dd)))
+        ndet = 1
+    else:
+        ndet = sh[0]
+    estimate = np.zeros(ndet)
+    for i in range(ndet):
+        spectrum_f, freq_f = ft.power_spectrum(tt, dd[i,:], rebin=True)
+        mean_level = np.mean(spectrum_f[np.abs(freq_f) > (np.max(freq_f)/2)])
+        samplefreq = 1./(tt[1]-tt[0])
+        estimate[i] = (np.sqrt(mean_level*samplefreq/2))
+
+    return estimate
+
+
+def return_rms_period(period, indata, others=None, verbose=False, remove_noise=False):
+    ### Returbs the RMS in each period - not such a good proxy for demondulation but robust and does not need the 
+    ### modulation signal as an input.
+    ### Main drawback: you end up with a combination of the noise + signal => more an upper-limit to the signal...
+    ### the parameter called others contains a (n,nsamples) array of vectors to be averaged in each new bin (convenient 
+    ### if you also have azimuth, elevation or any other stuff...). 
+    ### The option remove_noise, if true measures the HF noise in the TODs and removes it from the RMS in order to 
+    ### attempt to debias the result from HF noise
+
+    time = indata[0]
+    data = indata[1]
+
     if verbose:
         printnow('Entering RMS/period')
     if data.ndim == 1:
@@ -50,19 +94,17 @@ def return_rms_period(period, time, azimuth, elevation, data, verbose=False):
     ### We loop on periods to measure their respective amplitude and azimuth
     allperiods = np.unique(period_index)
     tper = np.zeros(len(allperiods))
-    azper = np.zeros(len(allperiods))
-    elper = np.zeros(len(allperiods))
     ampdata = np.zeros((nTES, len(allperiods)))
     err_ampdata = np.zeros((nTES, len(allperiods)))
+    if others is not None:
+        newothers = bin_per_period(period, time, others, verbose=verbose)
     if verbose:
         printnow('Calculating RMS per period for {} periods and {} TES'.format(len(allperiods), nTES))
     for i in range(len(allperiods)):
         ok = (period_index == allperiods[i])
-        azper[i] = np.mean(azimuth[ok])
-        elper[i] = np.mean(elevation[ok])
         tper[i] = np.mean(time[ok])
         if nTES == 1:
-            mm, ss = ft.meancut(data[0,ok], 3)
+            mm, ss = ft.meancut(data[ok], 3)
             ampdata[0, i] = ss
             err_ampdata[0, i] = 1
         else:
@@ -70,7 +112,19 @@ def return_rms_period(period, time, azimuth, elevation, data, verbose=False):
                 mm, ss = ft.meancut(data[j, ok], 3)
                 ampdata[j, i] = ss
                 err_ampdata[j, i] = 1
-    return tper, azper, elper, ampdata, err_ampdata
+
+    if remove_noise:
+        hf_noise = hf_noise_estimate(time, data)
+        var_diff = np.zeros((nTES, len(tper)))
+        for k in range(nTES):
+            var_diff[k,:] = ampdata[k,:]**2 - hf_noise[k]**2
+        ampdata = np.sqrt(np.abs(var_diff))*np.sign(var_diff)
+
+
+    if others is None:
+        return tper, ampdata, err_ampdata
+    else:
+        return tper, ampdata, err_ampdata, newothers
 
 
 def scan2ang_RMS(period, indata, median=True, lowcut=None, highcut=None, verbose=False):
@@ -88,8 +142,11 @@ def scan2ang_RMS(period, indata, median=True, lowcut=None, highcut=None, verbose
     az = np.interp(indata['t_data'], indata['t_azel'], indata['az'])
     if verbose: printnow('Resampling Elevation')
     el = np.interp(indata['t_data'], indata['t_azel'], indata['el'])
-    tper, azper, elper, ampdata, err_ampdata = return_rms_period(period, indata['t_data'], az, el, dataf,
-                                                                 verbose=verbose)
+    others = [az, el]
+    tper, ampdata, err_ampdata, newothers = return_rms_period(period, indata['t_data'], dataf,
+                                                                 verbose=verbose, others=others)
+    azper = newothers[0]
+    elper = newothers[1]
     ### Convert azimuth to angle
     angle = azper * np.cos(np.radians(elper))
     ### Fill the return variable for unbinned
@@ -144,7 +201,223 @@ def scan2ang_demod(period, indata, median=True, lowcut=None, highcut=None, verbo
     return unbinned
 
 
-def demodulate(indata, fmod, lowcut=None, highcut=None, verbose=False):
+class MySpl:
+    def __init__(self, xin, nbspl):
+        self.xin = xin
+        self.nbspl = nbspl
+        self.xspl = np.linspace(np.min(self.xin), np.max(self.xin), self.nbspl)
+        F = np.zeros((np.size(xin), self.nbspl))
+        self.F = F
+        for i in np.arange(self.nbspl):
+            self.F[:, i] = self.get_spline(self.xin, i)
+
+    def __call__(self, x, pars):
+        theF = np.zeros((np.size(x), self.nbspl))
+        for i in np.arange(self.nbspl): theF[:, i] = self.get_spline(x, i)
+        return (np.dot(theF, pars))
+
+
+
+class interp_template:
+    ### Allows to interpolate a template applying an amplitude, offset and phase
+    ### This si to be used in order to fit this template in each epriod of some pseudo-periodic signal
+    ### For instance for demodulation
+    def __init__(self, xx, yy):
+        self.period = xx[-1]-xx[0]
+        self.xx = xx
+        self.yy = yy
+
+    def __call__(self, x, pars, extra_args=None):
+        amp = pars[0]
+        off = pars[1]
+        dx  = pars[2]
+        return np.interp(x, self.xx-dx, self.yy, period=self.period)*amp+off
+
+def fitperiod(x,y,fct):
+    guess = np.array([np.std(y), np.mean(y), 0.])
+    res = ft.do_minuit(x,y, y*0+1, guess, functname=fct, verbose=False, nohesse=True,
+                       force_chi2_ndf=True)
+    return res
+
+def return_fit_period(period, indata, others=None, verbose=False, template=None):
+    ### Returns the amplitude, offset and phase of a template fit to the data in each period
+    ### the parameter called others contains a (n,nsamples) array of vectors to be averaged in each new bin (convenient 
+    ### if you also have azimuth, elevation or any other stuff...). 
+
+    time = indata[0]
+    data = indata[1]
+
+    if verbose:
+        printnow('Entering Fit/period')
+    if data.ndim == 1:
+        nTES = 1
+    else:
+        sh = np.shape(data)
+        nTES = sh[0]
+
+    if template is None:
+        xxtemplate = np.linspace(0, period, 100)
+        yytemplate = -np.sin(xxtemplate/period*2*np.pi)
+        yytemplate /= np.std(yytemplate)
+    else:
+        xxtemplate = template[0]
+        yytemplate = template[1]
+        yytemplate /= np.std(yytemplate)
+    fct = interp_template(xxtemplate, yytemplate)
+        
+
+    ### we label each data sample with a period
+    period_index = ((time - time[0]) / period).astype(int)
+    ### We loop on periods to measure their respective amplitude and azimuth
+    allperiods = np.unique(period_index)
+    tper = np.zeros(len(allperiods))
+    ampdata = np.zeros((nTES, len(allperiods)))
+    err_ampdata = np.zeros((nTES, len(allperiods)))
+    if others is not None:
+        newothers = bin_per_period(period, time, others, verbose=verbose)
+    if verbose:
+        printnow('Performing fit per period for {} periods and {} TES'.format(len(allperiods), nTES))
+    for i in range(len(allperiods)):
+        ok = (period_index == allperiods[i])
+        tper[i] = 0.5*(np.min(time[ok])+np.max(time[ok]))#np.mean(time[ok])
+        if nTES == 1:
+            res = fitperiod(time[ok],data[ok], fct)
+            ampdata[0, i] = res[1][0]
+            err_ampdata[0, i] = res[2][0]
+        else:
+            for j in range(nTES):
+                res = fitperiod(time[ok], data[j, ok], fct)
+                ampdata[j, i] = res[1][0]
+                err_ampdata[j, i] = res[2][0]
+    if others is None:
+        return tper, ampdata, err_ampdata
+    else:
+        return tper, ampdata, err_ampdata, newothers
+
+def demodulate_JC(period, indata, indata_src, others=None, verbose=False, template=None, quadrature=False, 
+    remove_noise=False, doplot=False):
+    ### Proper demodulation with quadrature methoid as an option: http://web.mit.edu/6.02/www/s2012/handouts/14.pdf
+    ### In the case of quadrature demodulation, the HF noise RMS/sqrt(2) adds to the demodulated. 
+    ### The option remove_noise=True
+    ### estimates the HF noise in the TODs and removes it from the estimate in order to attempt to debias.
+    time = indata[0]
+    data = indata[1]
+    sh = data.shape
+    if len(sh)==1:
+        data = np.reshape(data, (1,sh[0]))
+    time_src = indata_src[0]
+    data_src = indata_src[1]
+    #print(quadrature)
+    if quadrature==True:
+        ### Shift src data by 1/2 period
+        data_src_shift = np.interp(time_src-period/2, time_src, data_src, period=period)
+        demod = (np.sqrt((data*data_src)**2 + (data*data_src_shift)**2))/np.sqrt(2)
+    else:
+        demod = data*data_src
+
+    ### Now smooth over a period
+    import scipy.signal as scsig
+    FREQ_SAMPLING = 1./(time[1]-time[0])
+    size_period = int(FREQ_SAMPLING * period) + 1
+    filter_period = np.ones((size_period,)) / size_period
+    print(demod.shape, filter_period.shape)
+    demodulated = np.zeros_like(demod)
+    sh=np.shape(demod)
+    for i in range(sh[0]):
+        demodulated[i,:] = scsig.fftconvolve(demod[i,:], filter_period, mode='same')
+
+    # Remove First and last periods
+    nper = 4.
+    nsamples = int(nper * period / (time[1]-time[0]))
+    timereturn = time[nsamples:-nsamples]
+    demodulated = demodulated[:, nsamples:-nsamples]
+
+    if remove_noise:
+        hf_noise = hf_noise_estimate(time, data)/np.sqrt(2)
+        var_diff = np.zeros((sh[0], len(timereturn)))
+        for k in range(sh[0]):
+            var_diff[k,:] = demodulated[k,:]**2 - hf_noise[k]**2
+        demodulated = np.sqrt(np.abs(var_diff))*np.sign(var_diff)
+
+
+    if doplot:
+        sh = np.shape(data)
+        if sh[0] > 1:
+            thetes = 95
+        else:
+            thetes = 0
+
+        clf()
+        subplot(2,1,1)
+        plot(time-time[0], renorm(data[thetes,:]), label='Data TES {}'.format(thetes+1))
+        plot(time-time[0], renorm(data_src),label='Src used for demod')
+        plot(time-time[0], renorm(demod[thetes,:]),label='Demod signal')
+        plot(timereturn-time[0], renorm(demodulated[thetes,:]),label='Demod Low-passed')
+        legend(loc='lower right')
+        subplot(2,1,2)
+        plot(time-time[0], renorm(data[thetes,:])+5, label='Data TES {}'.format(thetes+1))
+        plot(time-time[0], renorm(data_src)+5,label='Src used for demod')
+        plot(time-time[0], renorm(demod[thetes,:]),label='Demod signal')
+        plot(timereturn-time[0], renorm(demodulated[thetes,:]),label='Demod Low-passed')
+        xlim(30,70)
+        legend(loc='lower right')
+        show()
+        # stop
+
+    if sh[0]==1:
+        demodulated = demodulated[0,:]
+    return timereturn, demodulated, demodulated*0+1
+
+
+
+def demodulate_methods(data_in, fmod, fourier_cuts=None, verbose=False, src_data_in=None, method='demod', 
+                        others=None, template=None, remove_noise=False):
+    ### Various demodulation methods
+    ### Others is a list of other vectors (with similar time sampling as the data to demodulate) that we need to sample
+    ### the same way as the data
+    if fourier_cuts is None:
+        ### Duplicate the input data
+        data = data_in.copy()
+        if src_data_in is None:
+            src_data = None
+        else:
+            src_data = src_data_in.copy()
+    else:
+        ### Filter data and source accordingly
+        lowcut = fourier_cuts[0]
+        highcut = fourier_cuts[1]
+        notch =  fourier_cuts[2]
+        newtod = ft.filter_data(data_in[0], data_in[1], lowcut, highcut, 
+                                notch=notch, rebin=True, verbose=verbose)
+        data = [data_in[0], newtod]
+        if src_data_in is None:
+            src_data = None
+        else:
+            new_src_tod = ft.filter_data(src_data_in[0], src_data_in[1], lowcut, highcut, 
+                                        notch=notch, rebin=True, verbose=verbose)
+            src_data  = [src_data_in[0], new_src_tod]       
+
+    #### Now we have the "input" data, we can start demodulation
+    period = 1./fmod
+    if method == 'rms':
+        ### RMS method: calculate the RMS in each period (beware ! it returns noise+signal !)
+        return return_rms_period(period, data, others=others, verbose=verbose, 
+            remove_noise=remove_noise)
+    elif method=='fit':
+        return return_fit_period(period, data, others=others, verbose=verbose, template=template)
+    elif method=='demod':
+        return demodulate_JC(period, data, src_data, others=others, verbose=verbose, template=None)
+    elif method=='demod_quad':
+        return demodulate_JC(period, data, src_data, others=others, verbose=verbose, template=None, 
+            quadrature=True, remove_noise=remove_noise)
+
+
+
+
+
+
+
+def demodulate_old(indata, fmod, lowcut=None, highcut=None, verbose=False):
     printnow('Starting Demodulation')
     if indata['data'].ndim == 1:
         nTES = 1
@@ -1018,6 +1291,64 @@ def demodulate_directory(thedir, ppp, TESmask=None, srcshift=0.,
     #print sb.shape
     return sb, az_el_azang
 
+def sigmoid_saturation(x, l):
+    ### This si the common sigmoid function modified to have a slope equals to 1 at zero whatever the value
+    ### of the lambda parameter. Then if lambda = 
+    if l==0:
+        return x
+    else:
+        return 4./l*(1./(1+np.exp(-x*l))-0.5)
+
+def hwp_sin(x, pars, extra_args=None):
+    amplitude = pars[0]
+    XPol = 1-pars[1]
+    phase = pars[2]
+    return(amplitude*0.5*(1-np.abs(XPol)*np.sin(4*np.radians(x+phase))))
+
+def hwp_sin_sat(x, pars, extra_args=None):
+    amplitude = pars[0]
+    XPol = 1-pars[1]
+    phase = pars[2]
+    return amplitude*sigmoid_saturation(0.5*(1-np.abs(XPol)*np.sin(4*np.radians(x+phase))), pars[3])
+
+
+def hwp_fitpol(thvals, ampvals, ampvals_err, doplot=False, str_title=None, saturation=False, myguess=None):
+    okdata = ampvals_err != 0
+
+    if saturation==False:
+        print('Using Simple SIN')
+        fct_name = hwp_sin
+        guess = np.array([np.max(np.abs(ampvals)), 0, 0.])
+        rangepars = [[0, np.max(np.abs(ampvals))*10], [0,1], [-180,180]]
+    else:
+        print('Using Sin with Saturation')
+        fct_name = hwp_sin_sat
+        guess = np.array([np.max(np.abs(ampvals)), 0, 0., 1.])
+        rangepars = [[0, np.max(np.abs(ampvals))*10], [0,1], [-180,180], [0., 10.]]
+    
+    if myguess is not None:
+        guess = myguess
+
+        print('Guess: ',guess)
+    fithwp = ft.do_minuit(thvals[okdata], np.abs(ampvals[okdata]), ampvals_err[okdata], guess, functname=fct_name,
+              force_chi2_ndf=True, verbose=False, rangepars=rangepars)
+    print(fithwp[1])
+    if doplot:
+        errorbar(thvals[okdata], np.abs(ampvals[okdata])/fithwp[1][0], yerr= ampvals_err[okdata]/fithwp[1][0], fmt='r.')
+        angs = np.linspace(0,90,90)
+        plot(angs, fct_name(angs, fithwp[1])/fithwp[1][0], 
+                            label='XPol = {2:5.2f}% +/- {3:5.2f}% '.format(fithwp[1][0], fithwp[2][0], 
+                            fithwp[1][1]*100, fithwp[2][1]*100,
+                            fithwp[1][2], fithwp[2][2]))
+        ylim(-0.1,1.1)
+        plot(angs, angs*0,'k--')
+        plot(angs, angs*0+1,'k--')
+        legend(loc='upper left')
+        xlabel('HWP Angle [Deg.]')
+        ylabel('Normalized signal')
+        if str_title:
+            title(str_title)
+    return fithwp
 
 
 

@@ -136,20 +136,19 @@ def get_pointing(d):
 
     center = (d['RA_center'], d['DEC_center'])
 
-    if d['random_pointing'] == True:
+    if d['random_pointing'] is True:
         return create_random_pointings(center, d['npointings'], d['dtheta'],
                                        date_obs=d['date_obs'], period=d['period'],
                                        latitude=d['latitude'],
                                        longitude=d['longitude'], seed=d['seed'])
 
-    elif d['repeat_pointing'] == True:
+    elif d['repeat_pointing'] is True:
         return create_repeat_pointings(center, d['npointings'], d['dtheta'], d['nhwp_angles'],
                                        date_obs=d['date_obs'], period=d['period'],
                                        latitude=d['latitude'],
                                        longitude=d['longitude'], seed=d['seed'])
 
-
-    elif d['sweeping_pointing'] == True:
+    elif d['sweeping_pointing'] is True:
         return create_sweeping_pointings(center, d['duration'], d['period'],
                                          d['angspeed'], d['delta_az'],
                                          d['nsweeps_per_elevation'],
@@ -356,7 +355,6 @@ def create_sweeping_pointings(
 
     # elevation is kept constant during nsweeps_per_elevation
     elcst = np.zeros(nsamples)
-    angle_hwp = np.zeros(nsamples)
     ielevations = isweeps // nsweeps_per_elevation
     nelevations = ielevations[-1] + 1
     for i in range(nelevations):
@@ -448,6 +446,10 @@ def equ2hor(ra, dec, time, date_obs=QubicSampling.DEFAULT_DATE_OBS,
 
     Parameters
     ----------
+    ra : float
+        Right ascension in degrees.
+    dec : float
+        Declination in degrees.
     time : array-like
         Elapsed time in seconds since date_obs.
     date_obs : string
@@ -478,6 +480,8 @@ def hor2equ(azimuth, elevation, time, date_obs=QubicSampling.DEFAULT_DATE_OBS,
 
     Parameters
     ----------
+    azimuth : float
+    elevation : float
     time : array-like
         Elapsed time in seconds since date_obs.
     date_obs : string
@@ -540,6 +544,8 @@ def hor2gal(azimuth, elevation, time, date_obs=QubicSampling.DEFAULT_DATE_OBS,
 
     Parameters
     ----------
+    azimuth : float
+    elevation : float
     time : array-like
         Elapsed time in seconds since date_obs.
     date_obs : string

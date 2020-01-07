@@ -137,7 +137,7 @@ def get_pointing(d):
     center = (d['RA_center'], d['DEC_center'])
 
     if d['random_pointing'] is True:
-        return create_random_pointings(center, d['npointings'], d['dtheta'],
+        return create_random_pointings(center, d['npointings'], d['dtheta'], d['hwp_stepsize'],
                                        date_obs=d['date_obs'], period=d['period'],
                                        latitude=d['latitude'],
                                        longitude=d['longitude'], seed=d['seed'])
@@ -152,14 +152,14 @@ def get_pointing(d):
         return create_sweeping_pointings(center, d['duration'], d['period'],
                                          d['angspeed'], d['delta_az'],
                                          d['nsweeps_per_elevation'],
-                                         d['angspeed_psi'], d['maxpsi'],
+                                         d['angspeed_psi'], d['maxpsi'], d['hwp_stepsize'],
                                          date_obs=d['date_obs'],
                                          latitude=d['latitude'],
                                          longitude=d['longitude'],
                                          fix_azimuth=d['fix_azimuth'], random_hwp=d['random_hwp'])
 
 
-def create_random_pointings(center, npointings, dtheta, date_obs=None,
+def create_random_pointings(center, npointings, dtheta, hwp_stepsize, date_obs=None,
                             period=None, latitude=None, longitude=None, seed=None):
     """
     Return pointings randomly and uniformly distributed in a spherical cap.
@@ -172,6 +172,8 @@ def create_random_pointings(center, npointings, dtheta, date_obs=None,
         The number of requested pointings
     dtheta : float
         The maximum angular distance to the center.
+    hwp_stepsize : float
+        Step angle size for the HWP.
     date_obs : str or astropy.time.Time, optional
         The starting date of the observation (UTC).
     period : float, optional
@@ -206,7 +208,7 @@ def create_random_pointings(center, npointings, dtheta, date_obs=None,
     p.elevation = coords[..., 1]
     p.pitch = pitch
     p.fix_az = False
-    p.angle_hwp = r.randint(0, 7, npointings) * 15.
+    p.angle_hwp = r.randint(0, int(90 / hwp_stepsize + 1), npointings) * hwp_stepsize
     return p
 
 
@@ -286,7 +288,7 @@ def create_repeat_pointings(center, npointings, dtheta, nhwp_angles=3, date_obs=
 
 def create_sweeping_pointings(
         center, duration, period, angspeed, delta_az, nsweeps_per_elevation,
-        angspeed_psi, maxpsi, date_obs=None, latitude=None, longitude=None, fix_azimuth=None, random_hwp=True):
+        angspeed_psi, maxpsi, hwp_stepsize, date_obs=None, latitude=None, longitude=None, fix_azimuth=None, random_hwp=True):
     """
     Return pointings according to the sweeping strategy:
     Sweep around the tracked FOV center azimuth at a fixed elevation, and
@@ -315,6 +317,8 @@ def create_sweeping_pointings(
     longitude : float, optional
         The observer's longitude [degrees]. Default is DOMEC's.
     fix_azimuth : bool
+    hwp_stepsize : float
+        Step angle size for the HWP.
     date_obs : str or astropy.time.Time, optional
         The starting date of the observation (UTC).
     random_hwp : bool
@@ -380,18 +384,18 @@ def create_sweeping_pointings(
     out.elevation = elptg
     out.pitch = pitch
     if random_hwp:
-        out.angle_hwp = np.random.randint(0, 7, nsamples) * 15.
+        out.angle_hwp = np.random.randint(0, int(90 / hwp_stepsize + 1), nsamples) * hwp_stepsize
     else:
         out.angle_hwp = np.zeros(nsamples)
         max_sweeps = np.max(isweeps)
         delta = int(nsamples / max_sweeps)
         for i in range(max_sweeps):
-            out.angle_hwp[i * delta:(i + 1) * delta] = 15. * np.mod(i, 7)
+            out.angle_hwp[i * delta:(i + 1) * delta] = hwp_stepsize * np.mod(i, int(90 / hwp_stepsize + 1))
 
     if fix_azimuth['apply']:
         out.fix_az = True
         if fix_azimuth['fix_hwp']:
-            out.angle_hwp = out.pitch * 0 + 15.
+            out.angle_hwp = out.pitch * 0 + hwp_stepsize
         if fix_azimuth['fix_pitch']:
             out.pitch = 0
     else:

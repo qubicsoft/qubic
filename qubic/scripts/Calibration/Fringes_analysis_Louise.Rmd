@@ -15,25 +15,24 @@ jupyter:
 ```{python}
 from __future__ import division, print_function
 
+import glob
+import numpy as np
+import matplotlib.pyplot as plt
+
 # %matplotlib notebook
 # %matplotlib inline
 from matplotlib import rc
-rc('figure',figsize=(9,4.5))
+rc('figure',figsize=(9, 4.5))
 rc('font',size=12)
 rc('text',usetex=False)
 
 from qubicpack import qubicpack as qp
-
 from qubicpack.qubicfp import qubicfp
 import qubic.fibtools as ft
 
 from pysimulators import FitsArray
 
-import numpy as np
-import matplotlib.pyplot as plt
-
 import scipy.optimize as spo
-import glob
 import string
 
 from importlib import reload
@@ -43,12 +42,13 @@ tes_grid = assign_tes_grid()
 ```
 
 ```{python}
-# Get all simulations
-day = '2019-12-19'
-# data_dir = '/qubic/Data/Calib-TD/'+day+'/'
-data_dir = '/home/louisemousset/QUBIC/Qubic_work/Calibration/datas/2019-06-07/'
+global_dir = '/home/louisemousset/QUBIC/Qubic_work/Calibration/datas/'
+# June measurement
+data_dir = global_dir + '2019-06-07/'
 
-# data_dir = '/home/louisemousset/QUBIC/Qubic_work/Calibration/datas/fringes2019-12-19/'
+# December measurement
+# data_dir = global_dir + 'fringes2019-12-19/'
+
 dirs = np.sort(glob.glob(data_dir+'*switch*'))
 print('# simu:', len(dirs))
 
@@ -61,7 +61,7 @@ for i, d in enumerate(dirs):
 
 ```{python slideshow={'slide_type': '-'}}
 # Select a simulation
-nf = 0
+nf = 7
 thedir = dirs[nf]
 print(thedir)
 
@@ -88,14 +88,31 @@ data['t_data'] = data['t_data'][ok] - t0 - tdeb
 data['data'] = data['data'][:, ok]
 
 plt.plot(data['t_data'], data['data'][TESNum-1, :])
-plt.xlim(0, 30)
+# plt.xlim(0, 30)
 ```
 
 ```{python}
-# Fold data in one period by hand
-# Useful to find the right period to use
+# Find the right period
 
-period = 6.08 #6.07 #6.069 #14.09
+ppp = np.linspace(5, 7, 250)
+rms = np.zeros(len(ppp))
+for i in range(len(ppp)):
+    xin = data['t_data'] % ppp[i]
+    yin = data['data'][TESNum-1, :]
+    xx, yy, dx, dy, o = ft.profile(xin, yin, nbins=100, plot=False)
+    rms[i] = np.std(yy)
+
+plt.figure()
+rc('figure',figsize=(9, 4.5))
+plt.subplots_adjust(wspace=2)
+
+plt.subplot(211)
+plot(ppp, rms, '.')
+plt.axvline(x=ppp[np.argmax(rms)], color='orange')
+print('period : ', ppp[np.argmax(rms)])
+
+period = ppp[np.argmax(rms)] #6.07 #6.069 #14.09
+plt.subplot(212)
 plt.plot(data['t_data'] % period, data['data'][TESNum-1, :],'.')
 plt.xlim(0, period)
 ```
@@ -121,27 +138,25 @@ plt.grid()
 ```
 
 ```{python}
-# Fold the data in a better way
+# Fold the data using the period determined before
 lowcut = 0.0001
 highcut = 10.
 nbins = 120
 med = False
-folded, t, folded_nonorm, truc_qui_sert_a_rien_ici= ft.fold_data(data['t_data'], 
-                                                                 data['data'], 
-                                                                 period, 
-                                                                 lowcut, 
-                                                                 highcut, 
-                                                                 nbins, 
-                                                                 median=med)
-```
+folded, t, folded_nonorm, truc = ft.fold_data(data['t_data'], 
+                                              data['data'], 
+                                              period, 
+                                              lowcut, 
+                                              highcut, 
+                                              nbins, 
+                                              median=med)
 
-```{python}
 plt.subplot(211)
 plt.plot(data['t_data'], data['data'][TESNum-1, :])
 plt.xlim(0, period)
 
 plt.subplot(212)
-plt.plot(t, folded_nonorm[TESNum-1,:])
+plt.plot(t, folded_nonorm[TESNum-1, :])
 plt.xlim(0, period)
 ```
 
@@ -167,12 +182,14 @@ npts = np.sum(w!=0.) / 4.
 print(npts)
 print(np.sum(np.abs(w[int(per+ph):int(2*per+ph)])))
 print(np.sum(w))
+
+themax = np.max(folded_nonorm[TESNum-1, :])
 ```
 
 ```{python}
 plt.plot(t, folded_nonorm[TESNum-1, :])
-plt.plot(t, w * np.max(folded_nonorm[TESNum-1, :]), 'o')
-plt.plot(t, wcheck * np.max(folded_nonorm[TESNum-1, :]), 'x')
+plt.plot(t, w * themax, 'o')
+plt.plot(t, wcheck * themax, 'x')
 plt.xlim(0, period)
 plt.grid()
 ```
@@ -182,19 +199,16 @@ plt.grid()
 allres = np.zeros(256)
 allrescheck = np.zeros(256)
 
+a = qp()
+a.verbosity = 0 
 for AsicNum in [1, 2]:
-    a = qp()
-    a.verbosity = 0 
     a.read_qubicstudio_dataset(thedir, asic=AsicNum)
-    data=a.azel_etc(TES=None)
+    data = a.azel_etc(TES=None)
     t0 = data['t_data'][0]
     
     ok = ((data['t_data']-t0) > tdeb) & ((data['t_data']-t0) < tfin)
-    data['t_data'] = data['t_data'][ok]-t0-tdeb
-    if (AsicNum == 1): 
-        data['data'] = data['data'][:, ok]
-    else: 
-        data['data'] = data['data'][:, ok]
+    data['t_data'] = data['t_data'][ok] - t0 - tdeb 
+    data['data'] = data['data'][:, ok]
 
     folded, t, folded_nonorm, truc = ft.fold_data(data['t_data'], 
                                                   data['data'],
@@ -221,17 +235,17 @@ for AsicNum in [1, 2]:
 fringe = ft.image_asics(all1=allres)
 fringecheck = ft.image_asics(all1=allrescheck)
 
+lim = 1e4
 plt.figure()
-plt.subplots_adjust(wspace=1.4)
 
 plt.subplot(121)
-plt.imshow(fringe, vmin=-1e5, vmax=1e5)
-plt.title(labels[nf])
+plt.imshow(fringe, vmin=-lim, vmax=lim)
+plt.title('with w')
 colorbar(orientation ='horizontal')
 
 plt.subplot(122)
-plt.imshow(fringecheck, vmin=-4e3, vmax=4e3)
-plt.title(labels[nf])
+plt.imshow(fringecheck, vmin=-lim, vmax=lim)
+plt.title('with wcheck')
 colorbar(orientation ='horizontal')
 
 
@@ -416,7 +430,7 @@ plt.colorbar()
 from qubic import selfcal_lib as sc
 from qubicpack.utilities import Qubic_DataDir
 import qubic
-
+import pandas as pd
 # Use a tool from qubicpack to get a path
 basedir = Qubic_DataDir(datafile='instrument.py', ) 
 print('basedir : ', basedir)
@@ -434,40 +448,183 @@ ca = sc.SelfCalibration(baseline, [], d)
 # Path to the simulated files 
 rep = Qubic_DataDir(datafile='detcentres.txt')
 print('rep:', rep)
-
-# Finges with aberations
-# Directly using the 2 horns opened
-fringes_aber = ca.get_power_fp_aberration(rep, theta_source=0., doplot=False)
-
-print(fringes_aber.shape)
 ```
 
 ```{python}
-# Get real FP by averaging the signal and using real TES locations.
-readv_aber, det_value_aber = sc.averaging_tes_signal(fringes_aber, rep, 0.12)
+fringes = ca.get_power_fp_aberration(rep, theta_source=0., doplot=False)
+readv, labels = sc.make_labels(rep)
+
+counts_perTES, sum_perTES, mean_perTES = sc.fulldef2tespixels(fringes, labels)
 ```
 
 ```{python}
-quadrant3_mean = det_value_aber[496:744, 2]
-
-q = qubic.QubicInstrument(d)
-indice = -(q.detector.center // 0.003)
-
-img = np.zeros((17, 17))
-img[0, 0]
-for k in range(248):
-    i = int(indice[k, 0])
-    j = int(indice[k, 1])
-#     print(i, j)
-    img[i-1, j-1] = quadrant3_mean[k]
-img[img==0.] = np.nan
-img = np.rot90(img)
-plt.imshow(img)
-```
-
-```{python}
-fig = sc.make_plot_real_fp(readv_aber, det_value_aber)
+print(len(mean_perTES))
+fig = sc.make_plot_real_fp(readv, mean_perTES)
 plt.title('Baseline {} with aberrations'.format(baseline))
+```
+
+```{python}
+q = qubic.QubicInstrument(d)
+
+def get_quadrant3(q, signal_perTES, doplot=False):
+    quadrant3 = signal_perTES[496:744]
+    indice = -(q.detector.center // 0.003)
+
+    img = np.zeros((17, 17))
+    for k in range(248):
+        i = int(indice[k, 0])
+        j = int(indice[k, 1])
+        img[i-1, j-1] = quadrant3[k]
+    img[img==0.] = np.nan
+    img = np.rot90(img)
+    
+    if doplot :
+        plt.imshow(img)
+    
+    return img
+
+img = get_quadrant3(q, mean_perTES, doplot=True)
+```
+
+```{python}
+measure = (fringe * mask) / np.nanmax(fringe * mask)
+simu = img/np.nanmax(img)
+
+plt.subplot(131)
+plt.imshow(measure)
+plt.colorbar()
+
+plt.subplot(132)
+plt.imshow(simu)
+plt.colorbar()
+
+plt.subplot(133)
+plt.imshow(measure-simu)
+plt.colorbar()
+```
+
+```{python}
+def get_simulation(param, baseline, d, rep, labels, doplot=True):
+    
+    theta_source = param[0]
+    freq_source = param[1]
+
+    q = qubic.QubicInstrument(d)
+
+    # Get simulation files
+    files = sorted(glob.glob(rep + '/*.dat'))
+
+    # This is done to get the right file for each horn
+    horn_transpose = np.arange(64)
+    horn_transpose = np.reshape(horn_transpose, (8, 8))
+    horn_transpose = np.ravel(horn_transpose.T)
+
+    # Get the sample number from the first file
+    data0 = pd.read_csv(files[0], sep='\t', skiprows=0)
+    nn = data0['X_Index'].iloc[-1] + 1
+    print('Sampling number = {}'.format(nn))
+
+    q.horn.open = False
+    q.horn.open[np.asarray(baseline) - 1] = True
+
+    allampX = np.empty((2, nn, nn))
+    allphiX = np.empty((2, nn, nn))
+    allampY = np.empty((2, nn, nn))
+    allphiY = np.empty((2, nn, nn))
+    for i, swi in enumerate(baseline):
+        # Phase calculation
+        horn_x = q.horn.center[swi - 1, 0]
+        horn_y = q.horn.center[swi - 1, 1]
+        d = np.sqrt(horn_x ** 2 + horn_y ** 2)  # distance between the horn and the center
+        phi = - 2 * np.pi / 3e8 * freq_source * 1e9 * d * np.sin(np.deg2rad(theta_source))
+
+        thefile = files[horn_transpose[swi - 1]]
+        print('Horn ', swi, ': ', thefile[98:104])
+        data = pd.read_csv(thefile, sep='\t', skiprows=0)
+
+        allampX[i, :, :] = np.reshape(np.asarray(data['MagX']), (nn, nn)).T
+        allampY[i, :, :] = np.reshape(np.asarray(data['MagY']), (nn, nn)).T
+
+        allphiX[i, :, :] = np.reshape(np.asarray(data['PhaseX']), (nn, nn)).T + phi
+        allphiY[i, :, :] = np.reshape(np.asarray(data['PhaseY']), (nn, nn)).T + phi
+
+    # Electric field for each open horn
+    Ax = allampX * (np.cos(allphiX) + 1j * np.sin(allphiX))
+    Ay = allampY * (np.cos(allphiY) + 1j * np.sin(allphiY))
+
+    # Sum of the electric fields
+    sumampx = np.sum(Ax, axis=0)
+    sumampy = np.sum(Ay, axis=0)
+
+    # Power on the focal plane
+    power = np.abs(sumampx) ** 2 + np.abs(sumampy) ** 2
+
+    if doplot:
+        plt.figure()
+        plt.subplot(121)
+        q.horn.plot()
+        plt.axis('off')
+
+        plt.subplot(122)
+        plt.imshow(power, origin='lower')
+        plt.title('Power at the sampling resolution')
+        plt.colorbar()
+    
+    counts_perTES, sum_perTES, mean_perTES = sc.fulldef2tespixels(power, labels)
+    img = get_quadrant3(q, mean_perTES, doplot=doplot)
+
+    return img
+```
+
+```{python}
+img = get_simulation([0., 150.], baseline, d, rep, labels, doplot=True)
+```
+
+```{python}
+def compute_diff(param, baseline, d, rep, labels, observation):
+    """
+    Return array: observation - model
+    """
+    model = get_simulation(param, baseline, d, rep, labels, doplot=False)
+    err = 500000
+    residual = (observation - np.ravel(model)) / err
+    print('param :', param)
+    print("residual: ", np.nansum(residual**2))
+    
+    return residual.astype(np.float64)
+```
+
+```{python}
+residual = compute_diff([0., 150.], baseline, d, rep, labels, np.ravel(fringe))
+```
+
+```{python}
+# Fit the measurement with the analytical model
+param_guess = [30., 150.]
+
+tofit = np.ravel(fringe)
+tofit[np.isnan(tofit)] = 0.
+
+param_est, cov_x, infodict, mesg_result, ret_value = spo.leastsq(compute_diff, 
+                                                                 param_guess, 
+                                                                 args=(baseline, d, rep, labels, tofit.astype(np.float64)),
+                                                                 full_output=True,
+                                                                 factor=2.,
+                                                                 maxfev=10000,
+                                                                 epsfcn=np.finfo(np.float32).eps)
+
+# sigma_param_est = np.sqrt(np.diagonal(cov_x))
+
+print("Return value:", ret_value)
+print("Return message:", mesg_result)
+
+if ret_value not in (1, 2, 3, 4):
+    raise RuntimeError(mesg_result)
+
+print("guess    :", param_guess)
+print("solution :", param_est)
+# print("Error :", sigma_param_est)
+# print("Precision (%):", sigma_param_est / param_est * 100)
 ```
 
 #### truc qui pourraient être utiles

@@ -320,7 +320,6 @@ def demodulate_JC(period, indata, indata_src, others=None, verbose=False, templa
     FREQ_SAMPLING = 1./(time[1]-time[0])
     size_period = int(FREQ_SAMPLING * period) + 1
     filter_period = np.ones((size_period,)) / size_period
-    print(demod.shape, filter_period.shape)
     demodulated = np.zeros_like(demod)
     sh=np.shape(demod)
     for i in range(sh[0]):
@@ -1312,7 +1311,8 @@ def hwp_sin_sat(x, pars, extra_args=None):
     return amplitude*sigmoid_saturation(0.5*(1-np.abs(XPol)*np.sin(4*np.radians(x+phase))), pars[3])
 
 
-def hwp_fitpol(thvals, ampvals, ampvals_err, doplot=False, str_title=None, saturation=False, myguess=None):
+def hwp_fitpol(thvals, ampvals, ampvals_err, doplot=False, str_title=None, saturation=False, myguess=None,
+                force_chi2_ndf=True):
     okdata = ampvals_err != 0
 
     if saturation==False:
@@ -1324,22 +1324,26 @@ def hwp_fitpol(thvals, ampvals, ampvals_err, doplot=False, str_title=None, satur
         print('Using Sin with Saturation')
         fct_name = hwp_sin_sat
         guess = np.array([np.max(np.abs(ampvals)), 0, 0., 1.])
-        rangepars = [[0, np.max(np.abs(ampvals))*10], [0,1], [-180,180], [0., 10.]]
+        rangepars = [[0, np.max(np.abs(ampvals))*10], [0,1], [-180,180], [0., 100.]]
     
     if myguess is not None:
         guess = myguess
 
         print('Guess: ',guess)
+        print('Range: ', rangepars)
     fithwp = ft.do_minuit(thvals[okdata], np.abs(ampvals[okdata]), ampvals_err[okdata], guess, functname=fct_name,
-              force_chi2_ndf=True, verbose=False, rangepars=rangepars)
+              force_chi2_ndf=force_chi2_ndf, verbose=False, rangepars=rangepars)
     print(fithwp[1])
     if doplot:
         errorbar(thvals[okdata], np.abs(ampvals[okdata])/fithwp[1][0], yerr= ampvals_err[okdata]/fithwp[1][0], fmt='r.')
         angs = np.linspace(0,90,90)
+        if saturation is False:
+            lab = 'XPol = {0:5.2f}% +/- {1:5.2f}% '.format(fithwp[1][1]*100, fithwp[2][1]*100)
+        else:
+            lab = 'XPol = {0:5.2f}% +/- {1:5.2f}% \n Saturation = {2:5.2f} +/- {3:5.2f}'.format(fithwp[1][1]*100, fithwp[2][1]*100,fithwp[1][3], fithwp[2][3])
+        
         plot(angs, fct_name(angs, fithwp[1])/fithwp[1][0], 
-                            label='XPol = {2:5.2f}% +/- {3:5.2f}% '.format(fithwp[1][0], fithwp[2][0], 
-                            fithwp[1][1]*100, fithwp[2][1]*100,
-                            fithwp[1][2], fithwp[2][2]))
+                            label=lab)
         ylim(-0.1,1.1)
         plot(angs, angs*0,'k--')
         plot(angs, angs*0+1,'k--')

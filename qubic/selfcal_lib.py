@@ -5,6 +5,7 @@ import glob
 import numpy as np
 import healpy as hp
 import pandas as pd
+from scipy import ndimage
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
@@ -600,69 +601,90 @@ def tes_signal2image_fp(tes_signal, asics):
     return image_fp
 
 
-def averaging_tes_signal(power, rep, power_size):
+def make_labels(rep, nn=241, ndet=992, img_size=0.12, doplot=True):
     """
     Get averaged signal in each TES (real FP). Based on Creidhe code.
 
     Parameters
     ----------
-    power : array of shape (nn, nn)
-        Power on the focal plane at high resolution, can be larger than the real FP.
     rep : str
         Path of the repository for the simulated files, can be download at :
         https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
-    power_size : float
-        Dimension in m of one side of power.
+    nn : int
+        Resolution of the image.
+    ndet : int
+        Number of TES.
+    img_size : float
+        Dimension in m of one side of the image.
+    doplot : bool
 
     Returns
     -------
     readv : array of shape(992, 4, 2)
         Corners positions.
-    det_value : array of shape (992, 3)
-        Total signal, number of points and average in each TES.
+    labels : array_like of ints
+            Assign labels to the values of the img. Has to have the same shape as img.
     """
 
     # Get TES positions of the 4 corners
     vertices = pd.read_csv(rep + '/vertices.txt', sep='\ ', header=None, engine='python')
-    readv = np.zeros((992, 4, 2))
+    readv = np.zeros((ndet, 4, 2))
     for i in range(4):
         readv[:, i, :] = vertices.iloc[i::4, :]
 
-    nn = np.shape(power)[0]
-    print('nn: ', nn)
-    xx = np.linspace(- power_size / 2., power_size / 2., nn)
-    yy = np.linspace(- power_size / 2., power_size / 2., nn)
+    labels = np.zeros((nn, nn))
+
+    xx = np.linspace(- img_size / 2., img_size / 2., nn)
+    yy = np.linspace(- img_size / 2., img_size / 2., nn)
     XX, YY = np.meshgrid(xx, yy)
 
-    # Average (this is working but it is slow)
-    # 1st will contain total signal, second is number of points, third is average
-    det_value = np.zeros((992, 3))
-    for i in range(nn):  # could do nx/2, ny/2 if just wanted one quadrant. Scan full plane
+    for i in range(nn):
         for j in range(nn):
-            for d in range(0, 992):
+            for d in range(0, ndet):
                 if readv[d, 2, 0] <= XX[i, j] <= readv[d, 3, 0] and \
                         readv[d, 2, 1] <= YY[i, j] <= readv[d, 1, 1]:
-                    det_value[d, 0] += power[i, j]
-                    det_value[d, 1] += 1
+                    labels[i, j] = d+1
+    if doplot:
+        plt.imshow(labels)
+        plt.colorbar()
 
-                if det_value[d, 1] != 0:  # so long as there is some signal on the detector
-                    det_value[d, 2] = det_value[d, 0] / det_value[d, 1]  # average calculation
-                else:
-                    det_value[d, 2] = 0.
-
-    return readv, det_value
+    return readv, labels
 
 
-def make_plot_real_fp(readv, det_value):
+def fulldef2tespixels(img, labels, ndet=992):
+    """
+        Get signal in each TES (real FP).
+
+        Parameters
+        ----------
+        img : array of shape (nn, nn)
+            Signal on the focal plane at high resolution, can be larger than the real FP.
+        labels : array_like of ints
+            Assign labels to the values of the img. Has to have the same shape as img.
+        ndet : int
+            Number of TES.
+
+        Returns
+        -------
+        3 lists with the number of points averaged in each TES, the sum of the signal and the mean.
+        """
+    unique, counts_perTES = np.unique(labels, return_counts=True)
+    mean_perTES = ndimage.mean(img, labels, index=np.arange(1, ndet + 1))
+    sum_perTES = ndimage.sum(img, labels, index=np.arange(1, ndet + 1))
+
+    return counts_perTES, sum_perTES, mean_perTES
+
+
+def make_plot_real_fp(readv, sig_perTES):
     """
     Plot real FP using TES locations.
     """
     # All this to get colormap
     cm = plt.get_cmap('viridis')
     # plot scale from average
-    cNorm = colors.Normalize(vmin=np.amin(det_value[:, 2]), vmax=np.amax(det_value[:, 2]))
+    cNorm = colors.Normalize(vmin=np.amin(sig_perTES), vmax=np.amax(sig_perTES))
     scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=cm)
-    scalarMap.set_array(det_value)
+    scalarMap.set_array(sig_perTES)
 
     fig, ax7 = plt.subplots()
     fig.figsize = (12, 12)
@@ -670,10 +692,10 @@ def make_plot_real_fp(readv, det_value):
         rect = patches.Rectangle((readv[i, 2, 0], readv[i, 2, 1]),
                                  (readv[i, 0, 0] - readv[i, 1, 0]),
                                  (readv[i, 0, 1] - readv[i, 3, 1]),
-                                 linewidth=1, edgecolor='none', facecolor=scalarMap.to_rgba(det_value[i, 2]))
+                                 linewidth=1, edgecolor='none', facecolor=scalarMap.to_rgba(sig_perTES[i]))
         ax7.add_patch(rect)
 
-    plt.xlim(-.055, .055)  # the focal plane
+    plt.xlim(-.055, .055)  # to see the focal plane
     plt.ylim(-.055, .055)
     ax7.set_aspect('equal')
     plt.colorbar(scalarMap)

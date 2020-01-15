@@ -57,6 +57,7 @@ date_obs='2016-01-01 00:00:00'
 latitude= -(24 + 11. / 60)   #ARGENTINA
 longitude= -(66 + 28. / 60)   #ARGENTINA
 
+hwp_stepsize=15 # (degrees) used for random and sweeping pointing
 
 random_pointing=True   
 npointings=800

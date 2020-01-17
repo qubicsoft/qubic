@@ -375,10 +375,6 @@ def exponential_filter1d(input, sigma, axis=-1, output=None, mode="reflect", cva
         Truncate the filter at this many standard deviations.
         Default is 4.0.
 
-    Returns
-    -------
-    gaussian_filter1d : ndarray
-
     """
     sd = float(sigma)
     # make the radius of the filter equal to truncate standard deviations
@@ -610,11 +606,13 @@ def simsig(x, pars, extra_args=None):
 
     Parameters
     ----------
-    x
-    pars
+    x : list
+    pars : list
+        List with 4 parameters: cycle, ctime, initial time, amplitude
 
     Returns
     -------
+    A simulated signal.
 
     """
     dx = x[1] - x[0]
@@ -622,31 +620,26 @@ def simsig(x, pars, extra_args=None):
     ctime = np.nan_to_num(pars[1])
     t0 = np.nan_to_num(pars[2])
     amp = np.nan_to_num(pars[3])
-#     cycle = pars[0]
-#     ctime = pars[1]
-#     t0 = pars[2]
-#     amp = pars[3]
     sim_init = np.zeros(len(x))
     ok = x < (cycle * (np.max(x)))
     sim_init[ok] = 1.
+    
+    # Add a phase
     sim_init_shift = np.interp((x - t0) % max(x), x, sim_init)
+    
+    # Convolved by a filter
     # thesim = -1 * gaussian_filter1d(sim_init_shift, ctime, mode='wrap')
     thesim = -1 * exponential_filter1d(sim_init_shift, ctime / dx, mode='wrap')
+    
+    # Normalization
     thesim = (thesim - np.mean(thesim)) / np.std(thesim) * amp
+    
     return np.nan_to_num(thesim)
 
 
 def simsig_nonorm(x, pars):
     """
-
-    Parameters
-    ----------
-    x
-    pars
-
-    Returns
-    -------
-
+    Same as simsig but without normalisation.
     """
     dx = x[1] - x[0]
     cycle = np.nan_to_num(pars[0])
@@ -656,8 +649,14 @@ def simsig_nonorm(x, pars):
     sim_init = np.zeros(len(x))
     ok = x < (cycle * (np.max(x)))
     sim_init[ok] = amp
+    
+    # Add a phase
     sim_init_shift = np.interp((x - t0) % max(x), x, sim_init)
+    
+    # Convolved by a filter
     thesim = -1 * exponential_filter1d(sim_init_shift, ctime / dx, mode='wrap')
+    
+    # Center the signal
     thesim = (thesim - np.mean(thesim))
     return thesim
 
@@ -681,7 +680,6 @@ def simsig_asym(x, pars, extra_args=None):
     thesim = np.interp((x - t0) % max(x), x, sim_init)
     thesim = thesim*amp+offset
     return np.nan_to_num(thesim)
-
 
 
 def fold_data(time, dd, period, lowcut, highcut, nbins, 

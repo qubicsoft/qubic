@@ -37,6 +37,7 @@ import qubic.fibtools as ft
 
 from pysimulators import FitsArray
 
+import scipy.ndimage.filters as f
 import scipy.optimize as spo
 import string
 
@@ -49,10 +50,13 @@ tes_grid = assign_tes_grid()
 ```{python}
 global_dir = '/home/louisemousset/QUBIC/Qubic_work/Calibration/datas/'
 # June measurement
-data_dir = global_dir + '2019-06-07/'
+# data_dir = global_dir + '2019-06-07/'
 
 # December measurement
 # data_dir = global_dir + 'fringes2019-12-19/'
+
+# January measurement
+data_dir = global_dir + '2020-01-13/'
 
 dirs = np.sort(glob.glob(data_dir+'*switch*'))
 print('# simu:', len(dirs))
@@ -65,111 +69,259 @@ for i, d in enumerate(dirs):
 ```
 
 ```{python slideshow={'slide_type': '-'}}
-# Select a simulation
-nf = 7
-thedir = dirs[nf]
-print(thedir)
+def get_data(dirs, nf, asic, tes, doplot=True):
+    asic = str(asic)
+    thedir = dirs[nf]
+    # print(thedir)
 
-# Qubicpack object
-AsicNum = 1
-a = qp()
-a.verbosity = 0
-a.read_qubicstudio_dataset(thedir, asic=AsicNum)
-data = a.azel_etc(TES=None)
+    # Qubicpack object
+    a = qubicfp()
+    a.verbosity = 0
+    a.read_qubicstudio_dataset(thedir)
+    data = a.azel_etc(TES=None)
+    
+    # Signal for one TES
+    t0 = data['t_data ' + asic][0]
+    t_data = data['t_data ' + asic] - t0
+    data = data['data ' + asic]
+    
+    if doplot :
+        fig, axs = plt.subplots(1, 2, figsize=(15,3))
+        plt.subplots_adjust(wspace=0.5)
 
-# Signal for one TES
-TESNum = 95 #105#39
-t0 = data['t_data'][0]
-plt.plot(data['t_data']-t0, data['data'][TESNum-1, :])
-# plt.xlim(0, 40)
+        axs[0].plot(t_data, data[tes-1, :])
+        axs[0].set_title(thedir[-5:])
+
+        axs[1].plot(t_data, data[tes-1, :])
+        axs[1].set_title(thedir[-5:])
+        axs[1].set_xlim(0, 40)  
+    
+    return t_data, data
+
+
+    
 ```
 
 ```{python}
-# Select only good data
-tdeb =  5.3 #5.1 #+6.075*10# 41.7# 5.1
-tfin =  400 #400 #tdeb+6.075*10 
-ok = ((data['t_data']-t0) > tdeb) & ((data['t_data']-t0) < tfin)
-data['t_data'] = data['t_data'][ok] - t0 - tdeb
-data['data'] = data['data'][:, ok]
+# Look at all simulations for one TES
+TESNum = 28 #105#39
+asic = 1
 
-plt.plot(data['t_data'], data['data'][TESNum-1, :])
-# plt.xlim(0, 30)
+for nf in range(6, 28):
+    t_data, data = get_data(dirs, nf, asic, TESNum)
+```
+
+```{python}
+# Select a simulation
+nf = 8
+TESNum = 28 #105#39
+asic = 1
+
+t_data, data = get_data(dirs, nf, asic, TESNum)
+
+```
+
+```{python}
+# Cut the data
+def cut_data(tstart, tend, t_data, data):
+    ok = (t_data > tstart) & (t_data < tend)
+    t_data_cut = t_data[ok] - tstart
+    data_cut = data[:, ok]
+    
+    return t_data_cut, data_cut
+
+tstart =  4 #5.1 #+6.075*10# 41.7# 5.1
+tend =  1750 #400 #tdeb+6.075*10
+
+t_data_cut, data_cut = cut_data(tstart, tend, t_data, data)
+
+plt.plot(t_data_cut, data_cut[TESNum-1, :])
+plt.xlim(0, 30)
+```
+
+```{python}
+def make_spectrum(t_data, data_oneTES, period):
+    # Sampling frequency
+    npoints = len(t_data)
+    t0, tf = t_data[0], t_data[-1]
+    f_sampling = npoints / (tf - t0)
+
+    # Spectrum
+    spectrum_f, freq_f = mlab.psd(data_oneTES, 
+                                  Fs=f_sampling, 
+                                  NFFT=2**int(np.log(len(data_oneTES)) / np.log(2)), 
+                                  window=mlab.window_hanning)
+    plt.plot(freq_f, spectrum_f)
+    plt.loglog()
+    plt.xlim(0.1, 10)
+    for i in range(1, 10):
+        plt.axvline(x=i/period, color='orange')
+    plt.grid()
+    
+    return spectrum_f, freq_f
+
+# Filter the data (just to give an idea because it is done when folding)
+lowcut = 0.001
+highcut = 10.
+nharm = 10
+notch = np.array([[1.724, 0.005, nharm]])
+
+newdata = ft.filter_data(t_data_cut, data_cut[TESNum-1, :], lowcut, highcut, notch=notch, 
+                         rebin=True, verbose=True, order=5)
+
+spectrum_f, freq_f = make_spectrum(t_data_cut, data_cut[TESNum-1, :], period)
+
+spectrum_f2, freq_f2 = make_spectrum(t_data_cut, newdata, period)
+
+# compute spectrum with fibtools
+spectrum_f3, freq_f3 = ft.power_spectrum(t_data_cut, newdata, rebin=True)
+
+plt.subplot(2,1,1)
+plt.plot(freq_f, spectrum_f, label='Original')
+plot(freq_f2, spectrum_f2, label='filtered')
+plot(freq_f3, spectrum_f3, label='filtered2')
+legend()
+plt.loglog()
+ylim(1e1, 1e17)
+
+subplot(2,1,2)
+plot(t_data_cut, data_cut[TESNum-1, :], label='Original')
+plot(t_data_cut, newdata, label='Filtered')
+plt.xlim(200, 1700)
+plt.legend()
 ```
 
 ```{python}
 # Find the right period
+def find_right_period(guess, t_data, data_oneTES):
+    ppp = np.linspace(guess-1.5, guess+1.5, 250)
+    rms = np.zeros(len(ppp))
+    for i in range(len(ppp)):
+        xin = t_data % ppp[i]
+        yin = data_oneTES
+        xx, yy, dx, dy, o = ft.profile(xin, yin, nbins=100, plot=False)
+        rms[i] = np.std(yy)
+    period = ppp[np.argmax(rms)]
+    
+    return ppp, rms, period
 
-ppp = np.linspace(5, 7, 250)
-rms = np.zeros(len(ppp))
-for i in range(len(ppp)):
-    xin = data['t_data'] % ppp[i]
-    yin = data['data'][TESNum-1, :]
-    xx, yy, dx, dy, o = ft.profile(xin, yin, nbins=100, plot=False)
-    rms[i] = np.std(yy)
-
+ppp, rms, period = find_right_period(18, t_data_cut, data_cut[TESNum-1, :])
+print('period : ', ppp[np.argmax(rms)])
+    
 plt.figure()
 rc('figure',figsize=(9, 4.5))
 plt.subplots_adjust(wspace=2)
 
 plt.subplot(211)
 plot(ppp, rms, '.')
-plt.axvline(x=ppp[np.argmax(rms)], color='orange')
-print('period : ', ppp[np.argmax(rms)])
+plt.axvline(x=period, color='orange')
 
-period = ppp[np.argmax(rms)] #6.07 #6.069 #14.09
 plt.subplot(212)
-plt.plot(data['t_data'] % period, data['data'][TESNum-1, :],'.')
+plt.plot(t_data % period, data[TESNum-1, :],'.')
 plt.xlim(0, period)
 ```
 
 ```{python}
-# Sampling frequency
-npoints = len(data['t_data'])
-t0, tf = data['t_data'][0], data['t_data'][-1]
-f_sampling = npoints / (tf - t0)
-print(npoints, t0, tf, f_sampling)
-
-# Spectrum
-spectrum_f, freq_f = mlab.psd(data['data'][TESNum-1, :], 
-                              Fs=f_sampling, 
-                              NFFT=2**int(np.log(len(data['data'][TESNum-1,:]))/np.log(2)), 
-                              window=mlab.window_hanning)
-plt.plot(freq_f, spectrum_f)
-plt.loglog()
-plt.xlim(0.1, 10)
-for i in range(1, 10):
-    plt.axvline(x=i/period, color='orange')
-plt.grid()
-```
-
-```{python}
-# Fold the data using the period determined before
-lowcut = 0.0001
+# Fold and filter the data using the period determined before
+lowcut = 0.001
 highcut = 10.
+nharm = 10
+notch = np.array([[1.724, 0.005, nharm]])
+
 nbins = 120
 med = False
-folded, t, folded_nonorm, truc = ft.fold_data(data['t_data'], 
-                                              data['data'], 
+folded, t, folded_nonorm, truc = ft.fold_data(t_data_cut, 
+                                              data_cut, 
                                               period, 
                                               lowcut, 
-                                              highcut, 
+                                              highcut,
                                               nbins, 
+                                              notch=notch,
                                               median=med)
 
 plt.subplot(211)
-plt.plot(data['t_data'], data['data'][TESNum-1, :])
+plt.plot(t_data_cut, data_cut[TESNum-1, :])
 plt.xlim(0, period)
 
 plt.subplot(212)
-plt.plot(t, folded_nonorm[TESNum-1, :])
-plt.xlim(0, period)
+plt.plot(t, folded[TESNum-1, :])
+plt.xlim(0, period/6)
+```
+
+```{python}
+# x = np.linspace(0., 20, 100)
+# amp = [1, 2, 3, 4, 5]
+# stable_time = 4
+# signal = np.zero_like(x)
+# for i in x:
+#     signal = 
+    
+
+
+
+# pars = [0.001, 5., 20., 2]
+# x = np.linspace(0., 100, 100)
+# print(x)
+# simsig = ft.simsig(x, pars)
+# plot(x, simsig)
+
+# import numpy as np
+# from scipy.signal import lti
+# from scipy.optimize import curve_fit
+
+
+# def model1(x, gain1, tau1):
+#     y = lti(gain1, [tau1, 1]).step(T=x)[1]
+#     return y
+
+# time_interval = np.linspace(1,100,100)
+
+# output1 = model1(time_interval, 10, 4)
+
+# # par1 = curve_fit(model1, t[0:period/6], folded[TESNum-1, 0:period/6])
+
+# plt.plot(output1)
+
+
+from scipy.ndimage.filters import gaussian_filter1d
+
+def simsig(x, pars):
+    dx = x[1] - x[0]
+    npoints = len(x)
+    tf = x[-1]
+    pp = np.nan_to_num(pars[0])
+    ctime = np.nan_to_num(pars[1])
+    x0 = np.nan_to_num(pars[2])
+    amp = pars[3]
+    sim_init = np.zeros(len(x))
+    
+    for i in range(6):
+        a = int(npoints/tf * 3 * i) 
+        b = int((3 * i + 3) * npoints/tf)
+        print(a, b)
+#         ok = ((pp * i * np.max(x)) < x)  and (x < (pp * (i+1) * np.max(i)))
+        sim_init[a : b] = amp[i]
+    
+    # Add a phase
+    sim_init_shift = np.interp((x - x0) % max(x), x, sim_init)
+    
+#     # Convolved by a filter
+    thesim = -1 * gaussian_filter1d(sim_init_shift, ctime, mode='wrap')
+#     thesim = -1 * ft.exponential_filter1d(sim_init_shift, ctime / dx, mode='wrap')
+    
+    return thesim#sim_init_shift#np.nan_to_num(thesim)
+
+pars = [3., 1, 2, [1., 2., 3., 2, 5, 7]]
+x = np.linspace(0., 18., 18 * 10)
+thesim = simsig(x, pars)
+plt.plot(x, thesim, '.')
 ```
 
 ```{python}
 # w is made to make the combination to see fringes
 tm1 = 8
 tm2 = 2
-ph = 0
+ph = 5
 w = np.zeros_like(t)
 wcheck = np.zeros_like(t)
 print(len(w))
@@ -177,10 +329,10 @@ per = len(w) / 6
 for i in range(len(w)):
 #         print(i)
         if (((i-ph) % per) >= tm1) and (((i-ph) % per) < per-tm2):
-            if ((((i-ph)//per) == 0) | (((i-ph)//per) == 3)) : w[i]=1.
-            if ((((i-ph)//per) == 1) | (((i-ph)//per) == 2)) : w[i]=-1.
-            if (((i-ph)//per) == 2) : wcheck[i]=1.
-            if (((i-ph)//per) == 4) : wcheck[i]=-1.
+            if ((((i-ph)//per) == 0) | (((i-ph)//per) == 3)) : w[i]=-1.
+            if ((((i-ph)//per) == 1) | (((i-ph)//per) == 2)) : w[i]=1.
+            if (((i-ph)//per) == 2) : wcheck[i]=-1.
+            if (((i-ph)//per) == 4) : wcheck[i]=1.
                 
 npts = np.sum(w!=0.) / 4.
 # w = w / npts
@@ -189,11 +341,11 @@ print(npts)
 print(np.sum(np.abs(w[int(per+ph):int(2*per+ph)])))
 print(np.sum(w))
 
-themax = np.max(folded_nonorm[TESNum-1, :])
+themax = np.max(folded[TESNum-1, :])
 ```
 
 ```{python}
-plt.plot(t, folded_nonorm[TESNum-1, :])
+plt.plot(t, folded[TESNum-1, :])
 plt.plot(t, w * themax, 'o')
 plt.plot(t, wcheck * themax, 'x')
 plt.xlim(0, period)
@@ -205,35 +357,30 @@ plt.grid()
 allres = np.zeros(256)
 allrescheck = np.zeros(256)
 
-a = qp()
-a.verbosity = 0 
-for AsicNum in [1, 2]:
-    a.read_qubicstudio_dataset(thedir, asic=AsicNum)
-    data = a.azel_etc(TES=None)
-    t0 = data['t_data'][0]
-    
-    ok = ((data['t_data']-t0) > tdeb) & ((data['t_data']-t0) < tfin)
-    data['t_data'] = data['t_data'][ok] - t0 - tdeb 
-    data['data'] = data['data'][:, ok]
+for asic in [1, 2]:
+    t_data, data = get_data(dirs, nf, asic, TESNum, doplot=False)
+    t_data_cut, data_cut = cut_data(tstart, tend, t_data, data)
 
-    folded, t, folded_nonorm, truc = ft.fold_data(data['t_data'], 
-                                                  data['data'],
+    folded, t, folded_nonorm, truc = ft.fold_data(t_data_cut, 
+                                                  data_cut,
                                                   period, 
                                                   lowcut, 
                                                   highcut, 
                                                   nbins, 
                                                   median=med)
     for TESNum in range(1, 129):
-        TESindex = (TESNum - 1) + 128 * (AsicNum - 1)
-        allres[TESindex] = np.sum(folded_nonorm[TESNum-1, :] * w)
-        allrescheck[TESindex] = np.sum(folded_nonorm[TESNum-1, :] * wcheck)
+        TESindex = (TESNum - 1) + 128 * (asic - 1)
+        allres[TESindex] = np.sum(folded[TESNum-1, :] * w)
+        allrescheck[TESindex] = np.sum(folded[TESNum-1, :] * wcheck)
         
-        plt.plot(t, folded_nonorm[TESNum-1, :])
-        plt.xlim(0, period)
-        plt.plot(t, w * np.abs(np.max(folded_nonorm[TESNum-1, :])),'+')
-        plt.plot(t, wcheck * np.abs(np.max(folded_nonorm[TESNum-1, :])),'x')
+        plt.plot(t, folded[TESNum-1, :])
+        plt.plot(t, w, '+')
+        plt.plot(t, wcheck, 'x')
+        plt.plot(t, folded[TESNum-1, :] * w)
+        
         plt.grid()
-        plt.title('ASIC {}, TES {}'.format(AsicNum, TESNum))
+        plt.xlim(0, period)
+        plt.title('ASIC {}, TES {}'.format(asic, TESNum))
         plt.pause(0.1)
 ```
 
@@ -241,7 +388,7 @@ for AsicNum in [1, 2]:
 fringe = ft.image_asics(all1=allres)
 fringecheck = ft.image_asics(all1=allrescheck)
 
-lim = 1e5
+lim = 1.8
 plt.figure()
 
 plt.subplot(121)
@@ -266,10 +413,18 @@ mask[0, 12:] = np.nan
 mask[1:5, 16] = np.nan
 
 # Mask to remove bad pixels
-bad1 = np.array([1,2,3,29,30,31,32,33,34,35,61,62,63,64,65,66,67,93,
-               94,95,96,97,98,99,125,126,127,128,108,105,116,7,17,47,102,114,28,25])-1
-bad2 = np.array([1,2,3,29,30,31,32,33,34,35,61,62,63,64,65,66,67,93,
-               94,95,96,97,98,99,125,126,127,128,120,122,24,55,123,118,112,114,113,18,28,41,104,102,116,107])+127
+# bad1 = np.array([1,2,3,29,30,31,32,33,34,35,61,62,63,64,65,66,67,93,
+#                94,95,96,97,98,99,125,126,127,128,108,105,116,7,17,47,102,114,28,25])-1
+# bad2 = np.array([1,2,3,29,30,31,32,33,34,35,61,62,63,64,65,66,67,93,
+#                94,95,96,97,98,99,125,126,127,128,120,122,24,55,123,118,112,114,113,18,28,41,104,102,116,107])+127
+
+bad1 = np.array([4, 5, 11, 12, 15, 17, 18, 19, 20, 21, 23, 29, 30, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 
+                46, 47, 48, 49, 50, 51, 52, 58, 63, 65, 66, 68, 69, 78, 79, 80, 82, 83, 89, 90, 91, 92, 93, 97, 100,
+                102, 104, 108, 111, 112, 114, 115, 116, 119, 121, 122, 124, 126])-1
+bad2 = np.array([2, 4, 6, 8, 11, 12, 16, 21, 22, 23, 26, 27, 28, 29, 31, 33, 36, 37, 40, 46, 49, 51, 53, 55, 58, 62,
+                63, 64, 68, 69, 74, 76, 78, 80, 83, 89, 92, 94, 95, 98, 99, 100, 101, 102, 103, 104, 107, 108, 
+                109, 110, 117, 119, 120, 121, 125, 126, 127])+127
+
 maskres = np.ones_like(allres)
 maskres[bad1] = np.nan
 maskres[bad2] = np.nan
@@ -277,10 +432,10 @@ maskres[bad2] = np.nan
 mask2 = ft.image_asics(all1 = maskres)
 
 # Mask to remove max values from check
-lim = 4000
+lim = 10000
 mask3 = np.ones_like(fringe) 
 mask3[np.abs(fringe)<lim] = np.nan
-plt.imshow(mask3, vmin=-1e5, vmax=1e5)
+plt.imshow(mask2, vmin=-1e5, vmax=1e5)
 plt.title('mask3')
 colorbar()
 ```
@@ -565,6 +720,7 @@ readv, labels = sc.make_labels(rep)
 ```{python}
 # Example
 fringes = ca.get_power_fp_aberration(rep, theta_source=0., doplot=False)
+
 counts_perTES, sum_perTES, mean_perTES = sc.fulldef2tespixels(fringes, labels)
 
 print(len(mean_perTES))

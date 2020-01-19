@@ -1,0 +1,254 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.4
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(15,8))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack.qubicfp import qubicfp
+import qubic.fibtools as ft
+import qubic.plotters as p
+import qubic.lin_lib as ll
+import qubic.demodulation_lib as dl
+import satorchipy as stpy
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import datetime as dt
+import pickle
+from importlib import reload
+```
+
+We use data from 2020-01-07 taken while the 1K stage was cooling down, so with variable loading on the TES.
+
+```{python}
+day = '2020-01-07'
+keyword = '*Noise*'
+#data_dir = '/qubic/Data/Calib-TD/'+day+'/'
+data_dir = '/Users/hamilton/Qubic/Calib-TD/'+day+'/'
+dirs = np.sort(glob.glob(data_dir+keyword))
+print (dirs)
+
+```
+
+```{python}
+ifile = 0
+thedir = dirs[ifile]
+print(thedir)
+a = qubicfp()
+a.read_qubicstudio_dataset(thedir)
+a.timeaxis(asic=1,datatype='sci',axistype='index')
+data=a.azel_etc(TES=None)
+t0=data['t_data 1'][0]
+```
+
+```{python}
+print('HK Keys:')
+print(a.hk.keys())
+print('')
+print('HK Extern Keys:')
+print(a.hk['EXTERN_HK'].keys())
+print('')
+print('HK Intern Keys:')
+print(a.hk['INTERN_HK'].keys())
+print('')
+print('Data Keys:')
+print(data.keys())
+```
+
+```{python}
+### 1K temperature from '1K stage back'->AVS47_2_CH3 or M2->AVS47_1_CH7
+time_1k = a.hk['EXTERN_HK']['GPSDate']-t0
+temp_1k = a.hk['EXTERN_HK']['AVS47_2_CH3']
+temp_M2 = a.hk['EXTERN_HK']['AVS47_1_CH7']
+
+plot(time_1k, temp_1k)
+plot(time_1k, temp_M2)
+```
+
+Plot some TES
+
+```{python}
+tesnums = [95, 2]
+asicnums = [1, 2]
+
+subplot(1,3,1)
+for i in range(len(tesnums)):
+    plot(data['t_data {}'.format(asicnums[i])]-t0, -dl.renorm(data['data {}'.format(asicnums[i])][tesnums[i],:]),
+        label='Data TES{} ASIC {}'.format(tesnums[i], asicnums[i]))
+plot(time_1k, dl.renorm(temp_1k),label='1K Stage Back')
+plot(time_1k, dl.renorm(temp_M2),label='M2')
+legend()
+
+subplot(1,3,2)
+plot(data['data {}'.format(asicnums[0])][tesnums[0],:], data['data {}'.format(asicnums[1])][tesnums[1],:],',')
+xlabel('TES {} - ASIC {}'.format(tesnums[0], asicnums[0]))
+ylabel('TES {} - ASIC {}'.format(tesnums[0], asicnums[0]))
+tight_layout()
+
+
+```
+
+First thing that appears: does the RMS of the data change with temperature of the 1K stage ?
+
+```{python}
+tesnums = [95]
+asicnums = [1]
+
+i=0
+thett = data['t_data {}'.format(asicnums[i])]-t0
+thedd = data['data {}'.format(asicnums[i])][tesnums[i],:]
+lowcut = 0.1
+highcut = 10.
+newdd = ft.filter_data(thett, thedd, lowcut, highcut, rebin=True, verbose=True, order=5)
+
+newT1K = np.interp(thett, time_1k, temp_1k)
+subplot(2,2,1)
+plot(thett, thedd,label='Data')
+plot(thett, newdd, label='Data Filtered (between {} and {} Hz)'.format(lowcut, highcut))
+legend()
+subplot(2,2,2)
+plot(newT1K,newdd, ',')
+xlabel('T 1K Stage')
+ylabel('Filtered Data')
+temp, ampdata, dtemp, ddata, o = ft.profile(newT1K,newdd, nbins=25, dispersion=True, clip=3)
+#xlim(2.52, 2.53)
+ylim(-10000,10000)
+subplot(2,1,2)
+plot(temp,ddata,label='RMS data per T1K bin')
+plot(temp, ddata*0 + np.mean(ddata),'k:')
+xlabel('T 1K Stage')
+ylabel('RMS Filterd Data')
+ylim(0, np.max(ddata)*1.2)
+legend()
+```
+
+### Study power spectra at various temperatures
+
+```{python}
+nT1Kbins = 3
+lims = np.linspace(np.min(temp_1k), np.max(temp_1k), nT1Kbins+1)
+print(lims)
+
+plot(time_1k, temp_1k)
+for 
+
+
+```
+
+### Analysis of the correlation with 1K
+Work with a reduced time range for a start (a region late in the file where 1K is stable)
+
+```{python}
+### ASIC 1 as a start
+asic = 1
+time_range = [9000,10000]
+print(np.min(data['t_data 1']-t0), np.max(data['t_data 1']-t0))
+ok = ((data['t_data {}'.format(asic)]-t0) >= time_range[0]) & ((data['t_data {}'.format(asic)]-t0) < time_range[1])
+tt = data['t_data {}'.format(asic)][ok]-t0
+dd = data['data {}'.format(asic)][:,ok]
+dd = (dd.T - np.mean(dd, axis=1)).T
+
+T1K = np.interp(tt, time_1k, temp_1k)
+TM2 = np.interp(tt, time_1k, temp_M2)
+
+# Some TES are constant all the way
+notzero = np.sum(dd, axis=1) != 0
+nums = np.arange(128)+1
+dd = dd[notzero,:]
+nums = nums[notzero]
+ndet = len(nums)
+
+ii = where(nums == 95)[0][0]
+print(ii)
+plot(tt, dl.renorm(dd[ii,:]))
+plot(tt, dl.renorm(T1K))
+plot(tt, dl.renorm(TM2))
+```
+
+```{python}
+mm,ss = ft.meancut(dd,3)
+imshow(dd, aspect='auto', vmin=mm-5*ss, vmax=mm+5*ss)
+```
+
+```{python}
+subplot(1,2,1)
+imshow(np.corrcoef(dd))
+colorbar()
+title('Correlation Matrix')
+subplot(1,2,2)
+imshow(np.log1p(np.abs(np.cov(dd))))
+title('Covariance Matrix (Log10)')
+colorbar()
+```
+
+```{python}
+### Correlation with 1K:
+corr_1K = np.zeros(ndet)
+corr_M2 = np.zeros(ndet)
+for i in range(ndet):
+    mat = np.corrcoef(dl.renorm(dd[i,:]), y=dl.renorm(T1K))
+    corr_1K[i] = mat[0,1]
+    mat = np.corrcoef(dl.renorm(dd[i,:]), y=dl.renorm(TM2))
+    corr_M2[i] = mat[0,1]
+
+plot(nums, corr_1K)
+plot(nums, corr_M2)
+```
+
+```{python}
+# from sklearn.decomposition import FastICA, PCA
+
+# # Compute ICA
+# ica = FastICA(n_components=10)
+# S_ = ica.fit_transform(dd.T)  # Reconstruct signals
+# A_ = ica.mixing_  # Get estimated mixing matrix
+
+# sh = S_.shape
+# for i in range(sh[1]):
+#     plot(tt, S_[:,i], label='ICA{}'.format(i))
+
+
+```
+
+```{python}
+from sklearn.decomposition import PCA
+pca = PCA(n_components=10)
+pca.fit(dd.T)
+subplot(1,2,1)
+plot(pca.explained_variance_ratio_)
+subplot(1,2,2)
+plot(pca.singular_values_)
+#sh = H.shape
+#for i in range(sh[1]):
+#    plot(tt, H[:,i], label='PCA{}'.format(i))
+
+
+
+```
+
+```{python}
+
+```

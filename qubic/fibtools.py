@@ -37,15 +37,14 @@ def isfloat(s):
 def statstr(x, divide=False, median=False, cut=None):
     if median:
         m = np.median(x[np.isfinite(x)])
-        nn = len(x[np.isfinite(x)])
         s = np.std(x[np.isfinite(x)])
     elif cut is not None:
-        m, s = meancut(x[np.isfinite(x)], cut)
+        m, s = meancut(x[np.isfinite(x)], cut, disp=False)
     else:
         m = np.mean(x[np.isfinite(x)])
-        nn = len(x[np.isfinite(x)])
         s = np.std(x[np.isfinite(x)])
     if divide:
+        nn = len(x[np.isfinite(x)])
         s /= nn
     return '{0:6.3f} +/- {1:6.3f}'.format(m, s)
 
@@ -609,6 +608,22 @@ def meancut(data, nsig, med=False, disp=True):
         return np.median(dd), np.std(dd)/sc
     else:
         return np.mean(dd), np.std(dd)/sc
+
+
+def weighted_mean(x,dx, dispersion=True):
+    """
+    Calculated the weighted mean of data, errors
+    If dispersion is True (default) the error on the mean comes from the RMS of the data, otherwise
+    the error on the weighted mean is analytically calculated from input errors
+    """
+    w = 1./dx**2
+    sumw = np.sum(w)
+    mm = np.sum(w*x)/sumw
+    if dispersion:
+        ss = np.std(x)
+    else:
+        ss = 1./np.sqrt(sumw)
+    return mm, ss
 
 
 def simsig(x, pars, extra_args=None):

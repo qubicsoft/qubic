@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from __future__ import division, print_function
 import iminuit
 import math
@@ -367,10 +368,19 @@ def exponential_filter1d(input, sigma, axis=-1, output=None, mode="reflect", cva
     input
     sigma : scalar
         Tau of exponential kernel
-    axis
-    output
-    mode
-    cval
+    axis : int, optional
+        The axis of input along which to calculate. 
+        Default is -1.
+
+    output : array or dtype, optional
+        The array in which to place the output, or the dtype of the returned array. 
+        By default an array of the same dtype as input will be created.
+        
+    mode : {‘reflect’, ‘constant’, ‘nearest’, ‘mirror’, ‘wrap’}, optional
+        The mode parameter determines how the input array is extended beyond its boundaries. 
+        Default is ‘reflect’.
+    cval : scalar, optional
+        Value to fill past edges of input if mode is ‘constant’. Default is 0.0.
     truncate : float
         Truncate the filter at this many standard deviations.
         Default is 4.0.

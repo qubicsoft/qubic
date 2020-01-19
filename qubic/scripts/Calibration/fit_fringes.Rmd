@@ -1,0 +1,305 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+## Fit the fringes measurements
+
+```{python}
+### Fit with an analytical function
+
+# Analytical function
+def sim_fringe(param):
+    Amp = param[0]
+    focal = param[1]
+    phase = param[2]
+    alpha = param[3]
+        
+    yc = 0.
+    xc = 0. 
+    
+    nu = 150.e9
+    lam = 3.e8/nu
+    alpha_rad = np.deg2rad(alpha)
+    
+    det_dist = 3e-3
+    baseline = 14.e-3*4.
+    
+    ndet = 17
+    fringe = np.zeros((ndet, ndet))
+    i, j = np.mgrid[0:ndet, 0:ndet]
+    
+    w = 40.87e-3 # From Creidhe
+    #w=np.sqrt(2*(12.9*np.pi/180*f/2.355)**2)
+    
+    gaussian = np.exp(-((16-i+xc)**2 + (j-yc)**2) * det_dist**2 / (w**2))
+    xprime = (i * np.cos(alpha_rad) + j * np.sin(alpha_rad)) * det_dist
+    interfrange = lam * focal / baseline
+    fringe = Amp * np.cos((2. * np.pi / interfrange * xprime) + phase)# * gaussian
+    
+    return fringe
+
+def sim_fringe_flat(param):
+    fff = sim_fringe(param)
+    return fff.ravel()
+
+def sim_fringe_flat2(param):
+    fff = sim_fringe(param)
+    res = np.zeros(256)
+    for xx in range(17):
+        for yy in range(17):
+            TESNum=int(tes_grid[xx,yy])
+            AsicNum = int(10.*(tes_grid[xx,yy]-TESNum))+1
+            TESindex = (TESNum-1) + 128 *(AsicNum -1)
+            res[TESindex] = fff[xx,yy]
+    return res
+
+def compute_residuals(param, observation):
+    """
+    Return array: observation - model
+    """
+    model = sim_fringe_flat(param)
+    err = 2000
+    residual = (observation - model) / err
+    print("residual: ", np.nansum(residual**2))
+    
+    return residual.astype(np.float64)
+
+param = [13e3, 300e-3, 0., -45.]#,40.87e-3]#,0.]
+lim = 1e4
+plt.imshow(sim_fringe(param), vmin=-lim, vmax=lim)
+
+# Fit the measurement with the analytical model
+param_guess = [13e3, 300e-3, 0, -50.]
+
+tofit = (fringe * mask4).ravel()
+tofit[np.isnan(tofit)] = 0.
+
+param_est, cov_x, infodict, mesg_result, ret_value = spo.leastsq(compute_residuals, 
+                                                                 param_guess, 
+                                                                 args=(tofit.astype(np.float64)),
+                                                                 full_output=True, 
+                                                                 maxfev=10000, 
+                                                                 epsfcn=np.finfo(np.float32).eps)
+
+sigma_param_est = np.sqrt(np.diagonal(cov_x))
+
+print("Return value:", ret_value)
+print("Return message:", mesg_result)
+
+if ret_value not in (1, 2, 3, 4):
+    raise RuntimeError(mesg_result)
+
+print("guess    :", param_guess)
+print("solution :", param_est)
+print("Error :", sigma_param_est)
+print("Precision (%):",sigma_param_est/param_est*100)
+
+rcParams["image.cmap"]='viridis'
+# rcParams["image.cmap"]='bwr'
+
+lim = 1e5
+
+subplot(121)
+imshow(sim_fringe(param_est), vmin=-lim,vmax=lim)
+
+subplot(122)
+imshow(fringe * mask * mask4, vmin=-lim, vmax=lim)
+# plt.title(labels[nf])
+# plt.colorbar()
+
+maskresp = fringe / sim_fringe(param_est) * mask3 * mask
+
+rcParams["image.cmap"]='viridis'
+# rcParams["image.cmap"]='bwr'
+imshow(maskresp, vmin=-10, vmax=10)#,interpolation='bicubic')
+plt.title(labels[nf])
+plt.colorbar()
+
+# Fit with the simulation
+
+def get_quadrant3(q, signal_perTES, doplot=False):
+    quadrant3 = signal_perTES[496:744]
+    indice = -(q.detector.center // 0.003)
+
+    img = np.zeros((17, 17))
+    for k in range(248):
+        i = int(indice[k, 0])
+        j = int(indice[k, 1])
+        img[i-1, j-1] = quadrant3[k]
+    img[img==0.] = np.nan
+    img = np.rot90(img)
+    
+    if doplot :
+        plt.figure()
+        plt.imshow(img)
+    
+    return img
+
+def get_simulation(param, q, baseline, horn_transpose, files, labels, nn=241, doplot=True):
+    
+    theta_source = param[0]
+    freq_source = param[1]
+
+    allampX = np.empty((2, nn, nn))
+    allphiX = np.empty((2, nn, nn))
+    allampY = np.empty((2, nn, nn))
+    allphiY = np.empty((2, nn, nn))
+    for i, swi in enumerate(baseline):
+        # Phase calculation
+        horn_x = q.horn.center[swi - 1, 0]
+        horn_y = q.horn.center[swi - 1, 1]
+        dist = np.sqrt(horn_x ** 2 + horn_y ** 2)  # distance between the horn and the center
+        phi = - 2 * np.pi / 3e8 * freq_source * 1e9 * dist * np.sin(np.deg2rad(theta_source))
+
+        thefile = files[horn_transpose[swi - 1]]
+        print('Horn ', swi, ': ', thefile[98:104])
+        data = pd.read_csv(thefile, sep='\t', skiprows=0)
+
+        allampX[i, :, :] = np.reshape(np.asarray(data['MagX']), (nn, nn)).T
+        allampY[i, :, :] = np.reshape(np.asarray(data['MagY']), (nn, nn)).T
+
+        allphiX[i, :, :] = np.reshape(np.asarray(data['PhaseX']), (nn, nn)).T + phi
+        allphiY[i, :, :] = np.reshape(np.asarray(data['PhaseY']), (nn, nn)).T + phi
+
+    # Electric field for each open horn
+    Ax = allampX * (np.cos(allphiX) + 1j * np.sin(allphiX))
+    Ay = allampY * (np.cos(allphiY) + 1j * np.sin(allphiY))
+
+    # Sum of the electric fields
+    sumampx = np.sum(Ax, axis=0)
+    sumampy = np.sum(Ay, axis=0)
+
+    # Power on the focal plane
+    power = np.abs(sumampx) ** 2 + np.abs(sumampy) ** 2
+
+    if doplot:
+        plt.figure()
+        plt.subplot(121)
+        q.horn.plot()
+        plt.axis('off')
+
+        plt.subplot(122)
+        plt.imshow(power, origin='lower')
+        plt.title('Power at the sampling resolution')
+        plt.colorbar()
+    
+    counts_perTES, sum_perTES, mean_perTES = sc.fulldef2tespixels(power, labels)
+    
+    img = get_quadrant3(q, mean_perTES, doplot=doplot)
+
+    return img
+
+def compute_diff(param, q, baseline, horn_transpose, files, labels, observation):
+    """
+    Return array: observation - model
+    """
+    model = get_simulation(param, q, baseline, horn_transpose, files, labels, doplot=False)
+    err = 200
+    residual = (observation - np.ravel(model)) / err
+    residual[np.isnan(residual)] = 0.
+    print('param :', param)
+    print("residual sum: ", np.nansum(residual**2))
+    
+    return residual.astype(np.float64)
+
+
+# Use a tool from qubicpack to get a path
+basedir = Qubic_DataDir(datafile='instrument.py', ) 
+print('basedir : ', basedir)
+dictfilename = basedir + '/dicts/global_source_oneDet.dict'
+
+# Get a dictionary
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+
+# Create an object
+baseline = [25, 57]
+ca = sc.SelfCalibration(baseline, [], d)
+
+# Path to the simulated files 
+rep = Qubic_DataDir(datafile='detcentres.txt')
+print('rep:', rep)
+
+# Get simulation files
+files = sorted(glob.glob(rep + '/*.dat'))
+
+# This is done to get the right file for each horn
+horn_transpose = np.arange(64)
+horn_transpose = np.reshape(horn_transpose, (8, 8))
+horn_transpose = np.ravel(horn_transpose.T)
+
+# Get the sample number from the first file
+data0 = pd.read_csv(files[0], sep='\t', skiprows=0)
+nn = data0['X_Index'].iloc[-1] + 1
+print('Sampling number = {}'.format(nn))
+
+# Make an instrument
+q = qubic.QubicInstrument(d)
+q.horn.open = False
+q.horn.open[np.asarray(baseline) - 1] = True
+
+# Make labels
+readv, labels = sc.make_labels(rep)
+
+# Example
+fringes = ca.get_power_fp_aberration(rep, theta_source=0., doplot=False)
+
+counts_perTES, sum_perTES, mean_perTES = sc.fulldef2tespixels(fringes, labels)
+
+print(len(mean_perTES))
+fig = sc.make_plot_real_fp(readv, mean_perTES)
+plt.title('Baseline {} with aberrations'.format(baseline))
+
+img = get_quadrant3(q, mean_perTES, doplot=True)
+
+param = [0., 150.]
+img = get_simulation(param, q, baseline, horn_transpose, files, labels, doplot=False)
+
+residual = compute_diff(param, q, baseline, horn_transpose, files, labels, np.ravel(fringe))
+
+# Fit
+param_guess = [5., 150.]
+
+tofit = np.ravel(fringe)
+tofit[np.isnan(tofit)] = 0.
+tofit = tofit.astype(np.float64)
+
+# Method 1
+# param_est, cov_x, infodict, mesg, flag  = spo.leastsq(compute_diff, 
+#                      param_guess,
+#                      args=(q, baseline, horn_transpose, files, labels, tofit),
+#                      factor=1.,
+#                      full_output=True,
+#                      epsfcn=np.finfo(np.float32).eps)
+# sigma_param_est = np.sqrt(np.diagonal(cov_x))
+
+# print("Return value:", param_est)
+# print('Flag', flag)
+# print("Return message:", mesg)
+# print("Error :", sigma_param_est)
+# print("Precision (%):", sigma_param_est / param_est * 100)
+
+# Method 2
+myfit = spo.least_squares(compute_diff,
+                         param_guess,
+                         args=(q, baseline, horn_transpose, files, labels, tofit),
+#                          method='lm',
+                         bounds=([-30., 30.], [130., 170.]),
+                         ftol=1e-9)
+print('Estimation:', myfit.x)
+print('Cost:', myfit.cost)
+# print('Residuals:', myfit.fun)
+print('Cost fct gradient:', myfit.grad)
+print('Message:', myfit.message)
+print('Success:', myfit.success)x
+```

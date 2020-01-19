@@ -12,6 +12,8 @@ jupyter:
     name: python3
 ---
 
+# Fringes measurement analysis
+
 ```{python}
 from __future__ import division, print_function
 
@@ -38,6 +40,7 @@ import qubic.fibtools as ft
 from pysimulators import FitsArray
 
 import scipy.ndimage.filters as f
+from scipy.ndimage.filters import gaussian_filter1d
 import scipy.optimize as spo
 import string
 
@@ -245,76 +248,78 @@ plt.xlim(0, period)
 
 plt.subplot(212)
 plt.plot(t, folded[TESNum-1, :])
-plt.xlim(0, period/6)
+plt.xlim(0, period)
+
+t
 ```
 
 ```{python}
-# x = np.linspace(0., 20, 100)
-# amp = [1, 2, 3, 4, 5]
-# stable_time = 4
-# signal = np.zero_like(x)
-# for i in x:
-#     signal = 
-    
-
-
-
-# pars = [0.001, 5., 20., 2]
-# x = np.linspace(0., 100, 100)
-# print(x)
-# simsig = ft.simsig(x, pars)
-# plot(x, simsig)
-
-# import numpy as np
-# from scipy.signal import lti
-# from scipy.optimize import curve_fit
-
-
-# def model1(x, gain1, tau1):
-#     y = lti(gain1, [tau1, 1]).step(T=x)[1]
-#     return y
-
-# time_interval = np.linspace(1,100,100)
-
-# output1 = model1(time_interval, 10, 4)
-
-# # par1 = curve_fit(model1, t[0:period/6], folded[TESNum-1, 0:period/6])
-
-# plt.plot(output1)
-
-
-from scipy.ndimage.filters import gaussian_filter1d
-
-def simsig(x, pars):
+def simsig(x, params):#pp, ctime, x0, amp1, amp2, amp3, amp4, amp5, amp6):
     dx = x[1] - x[0]
     npoints = len(x)
     tf = x[-1]
-    pp = np.nan_to_num(pars[0])
-    ctime = np.nan_to_num(pars[1])
-    x0 = np.nan_to_num(pars[2])
-    amp = pars[3]
+    
+    pp = params[0]
+    ctime = params[1]
+    x0 = params[2]
+    amp = params[3:9]
+#     print(amp)
+    
     sim_init = np.zeros(len(x))
+#     amp = [amp1, amp2, amp3, amp4, amp5, amp6]
     
     for i in range(6):
         a = int(npoints/tf * 3 * i) 
         b = int((3 * i + 3) * npoints/tf)
-        print(a, b)
-#         ok = ((pp * i * np.max(x)) < x)  and (x < (pp * (i+1) * np.max(i)))
+#         print(a, b)
         sim_init[a : b] = amp[i]
     
     # Add a phase
     sim_init_shift = np.interp((x - x0) % max(x), x, sim_init)
+    thesim = sim_init_shift
     
-#     # Convolved by a filter
-    thesim = -1 * gaussian_filter1d(sim_init_shift, ctime, mode='wrap')
+    # Convolved by an exponential filter
+#     thesim = -1 * gaussian_filter1d(sim_init_shift, ctime, mode='wrap')
 #     thesim = -1 * ft.exponential_filter1d(sim_init_shift, ctime / dx, mode='wrap')
     
-    return thesim#sim_init_shift#np.nan_to_num(thesim)
+    return np.array(thesim).astype(np.float64)
 
-pars = [3., 1, 2, [1., 2., 3., 2, 5, 7]]
-x = np.linspace(0., 18., 18 * 10)
-thesim = simsig(x, pars)
-plt.plot(x, thesim, '.')
+def make_diff_sig(params, t, data):
+    thesim = simsig(t, params)
+    diff = data - thesim
+    return diff
+
+param_guess = [3., 0.2, 2, 1, 1, 1, 1, 1, 1]
+
+diff = make_diff_sig(param_guess, t, folded[TESNum-1, :])
+print(diff)
+fit = spo.least_squares(make_diff_sig, 
+                         param_guess, 
+                         args=(t, 
+                               folded[TESNum-1, :]),
+                         bounds= ([0, 0., -2, -2, -2, -2, -2, -2, -2], 
+                                 [10, 1., 2, 2, 2, 2, 2, 2, 2]),
+                         verbose=1
+                              )
+param_est = fit.x
+print('Param_est :', param_est)
+
+x0_est = param_est[2]
+amps_est = param_est[3:9]
+plt.figure()
+plt.plot(t, simsig(t, param_est))
+plt.plot(t,folded[TESNum-1, :] )
+plt.plot(np.arange(0, 18, 3) + x0_est, amps_est, 'ro' )
+plt.grid()
+
+def make_combination(param_est):
+    amps = param_est[3:9]
+    comb = amps[0] + amps[3] - amps[1] - amps[2]
+    print('Check:', amps[2], amps[4])
+    return comb
+
+comb = make_combination(param_est)
+print(comb)    
 ```
 
 ```{python}
@@ -329,10 +334,8 @@ per = len(w) / 6
 for i in range(len(w)):
 #         print(i)
         if (((i-ph) % per) >= tm1) and (((i-ph) % per) < per-tm2):
-            if ((((i-ph)//per) == 0) | (((i-ph)//per) == 3)) : w[i]=-1.
-            if ((((i-ph)//per) == 1) | (((i-ph)//per) == 2)) : w[i]=1.
-            if (((i-ph)//per) == 2) : wcheck[i]=-1.
-            if (((i-ph)//per) == 4) : wcheck[i]=1.
+            if ((((i-ph)//per) == 0) | (((i-ph)//per) == 3)) : w[i]=1.
+            if ((((i-ph)//per) == 1) | (((i-ph)//per) == 2)) : w[i]=-1.
                 
 npts = np.sum(w!=0.) / 4.
 # w = w / npts
@@ -342,9 +345,7 @@ print(np.sum(np.abs(w[int(per+ph):int(2*per+ph)])))
 print(np.sum(w))
 
 themax = np.max(folded[TESNum-1, :])
-```
 
-```{python}
 plt.plot(t, folded[TESNum-1, :])
 plt.plot(t, w * themax, 'o')
 plt.plot(t, wcheck * themax, 'x')
@@ -354,8 +355,8 @@ plt.grid()
 
 ```{python}
 # Analysis for both ASICs
-allres = np.zeros(256)
-allrescheck = np.zeros(256)
+allres_w = np.zeros(256)
+allres_fit = np.zeros(256)
 
 for asic in [1, 2]:
     t_data, data = get_data(dirs, nf, asic, TESNum, doplot=False)
@@ -370,35 +371,47 @@ for asic in [1, 2]:
                                                   median=med)
     for TESNum in range(1, 129):
         TESindex = (TESNum - 1) + 128 * (asic - 1)
-        allres[TESindex] = np.sum(folded[TESNum-1, :] * w)
-        allrescheck[TESindex] = np.sum(folded[TESNum-1, :] * wcheck)
+        allres_w[TESindex] = np.sum(folded[TESNum-1, :] * w)
+
+        fit = spo.least_squares(make_diff_sig, 
+                         param_guess, 
+                         args=(t, 
+                               folded[TESNum-1, :]),
+                         bounds= ([0, 0., -2, -2, -2, -2, -2, -2, -2], 
+                                 [10, 1., 2, 2, 2, 2, 2, 2, 2]),
+                         verbose=1
+                              )
         
+        param_est = fit.x
+        allres_fit[TESindex] = make_combination(param_est)
+        
+        x0_est = param_est[2]
+        amps_est = param_est[3:9]
+        plt.figure()
         plt.plot(t, folded[TESNum-1, :])
-        plt.plot(t, w, '+')
-        plt.plot(t, wcheck, 'x')
-        plt.plot(t, folded[TESNum-1, :] * w)
-        
-        plt.grid()
-        plt.xlim(0, period)
+        plt.plot(t, simsig(t, param_est))
+        plt.plot(t, w, 'g+')
+        plt.plot(np.arange(0, 18, 3) + x0_est, amps_est, 'ro' )
         plt.title('ASIC {}, TES {}'.format(asic, TESNum))
-        plt.pause(0.1)
+        plt.grid()
 ```
 
 ```{python}
-fringe = ft.image_asics(all1=allres)
-fringecheck = ft.image_asics(all1=allrescheck)
+fringe_w = ft.image_asics(all1=allres_w)
+fringe_fit = ft.image_asics(all1=allres_fit)
 
-lim = 1.8
+lim1 = 15.
+lim2 = 1.
 plt.figure()
 
 plt.subplot(121)
-plt.imshow(fringe, vmin=-lim, vmax=lim)
+plt.imshow(fringe_w, vmin=-lim1, vmax=lim1)
 plt.title('with w')
 colorbar(orientation ='horizontal')
 
 plt.subplot(122)
-plt.imshow(fringecheck, vmin=-lim, vmax=lim)
-plt.title('with wcheck')
+plt.imshow(fringe_fit, vmin=-lim2, vmax=lim2)
+plt.title('with fit')
 colorbar(orientation ='horizontal')
 
 
@@ -457,322 +470,6 @@ plt.plot(np.nanmean(fringe*mask4, axis=1), label='Med axis 1 norm')
 plt.grid()
 plt.legend()
 plt.title(labels[nf])
-```
-
-### Fit with an analytical function
-
-```{python}
-# Analytical function
-def sim_fringe(param):
-    Amp = param[0]
-    focal = param[1]
-    phase = param[2]
-    alpha = param[3]
-        
-    yc = 0.
-    xc = 0. 
-    
-    nu = 150.e9
-    lam = 3.e8/nu
-    alpha_rad = np.deg2rad(alpha)
-    
-    det_dist = 3e-3
-    baseline = 14.e-3*4.
-    
-    ndet = 17
-    fringe = np.zeros((ndet, ndet))
-    i, j = np.mgrid[0:ndet, 0:ndet]
-    
-    w = 40.87e-3 # From Creidhe
-    #w=np.sqrt(2*(12.9*np.pi/180*f/2.355)**2)
-    
-    gaussian = np.exp(-((16-i+xc)**2 + (j-yc)**2) * det_dist**2 / (w**2))
-    xprime = (i * np.cos(alpha_rad) + j * np.sin(alpha_rad)) * det_dist
-    interfrange = lam * focal / baseline
-    fringe = Amp * np.cos((2. * np.pi / interfrange * xprime) + phase)# * gaussian
-    
-    return fringe
-```
-
-```{python}
-def sim_fringe_flat(param):
-    fff = sim_fringe(param)
-    return fff.ravel()
-
-def sim_fringe_flat2(param):
-    fff = sim_fringe(param)
-    res = np.zeros(256)
-    for xx in range(17):
-        for yy in range(17):
-            TESNum=int(tes_grid[xx,yy])
-            AsicNum = int(10.*(tes_grid[xx,yy]-TESNum))+1
-            TESindex = (TESNum-1) + 128 *(AsicNum -1)
-            res[TESindex] = fff[xx,yy]
-    return res
-```
-
-```{python}
-def compute_residuals(param, observation):
-    """
-    Return array: observation - model
-    """
-    model = sim_fringe_flat(param)
-    err = 2000
-    residual = (observation - model) / err
-    print("residual: ", np.nansum(residual**2))
-    
-    return residual.astype(np.float64)
-```
-
-```{python}
-param = [13e3, 300e-3, 0., -45.]#,40.87e-3]#,0.]
-lim = 1e4
-plt.imshow(sim_fringe(param), vmin=-lim, vmax=lim)
-```
-
-```{python}
-# Fit the measurement with the analytical model
-param_guess = [13e3, 300e-3, 0, -50.]
-
-tofit = (fringe * mask4).ravel()
-tofit[np.isnan(tofit)] = 0.
-
-param_est, cov_x, infodict, mesg_result, ret_value = spo.leastsq(compute_residuals, 
-                                                                 param_guess, 
-                                                                 args=(tofit.astype(np.float64)),
-                                                                 full_output=True, 
-                                                                 maxfev=10000, 
-                                                                 epsfcn=np.finfo(np.float32).eps)
-
-sigma_param_est = np.sqrt(np.diagonal(cov_x))
-
-print("Return value:", ret_value)
-print("Return message:", mesg_result)
-
-if ret_value not in (1, 2, 3, 4):
-    raise RuntimeError(mesg_result)
-
-print("guess    :", param_guess)
-print("solution :", param_est)
-print("Error :", sigma_param_est)
-print("Precision (%):",sigma_param_est/param_est*100)
-```
-
-```{python}
-rcParams["image.cmap"]='viridis'
-# rcParams["image.cmap"]='bwr'
-
-lim = 1e5
-
-subplot(121)
-imshow(sim_fringe(param_est), vmin=-lim,vmax=lim)
-
-subplot(122)
-imshow(fringe * mask * mask4, vmin=-lim, vmax=lim)
-# plt.title(labels[nf])
-# plt.colorbar()
-```
-
-```{python}
-maskresp = fringe / sim_fringe(param_est) * mask3 * mask
-```
-
-```{python}
-rcParams["image.cmap"]='viridis'
-# rcParams["image.cmap"]='bwr'
-imshow(maskresp, vmin=-10, vmax=10)#,interpolation='bicubic')
-plt.title(labels[nf])
-plt.colorbar()
-```
-
-# Fit with the simulation
-
-```{python}
-def get_quadrant3(q, signal_perTES, doplot=False):
-    quadrant3 = signal_perTES[496:744]
-    indice = -(q.detector.center // 0.003)
-
-    img = np.zeros((17, 17))
-    for k in range(248):
-        i = int(indice[k, 0])
-        j = int(indice[k, 1])
-        img[i-1, j-1] = quadrant3[k]
-    img[img==0.] = np.nan
-    img = np.rot90(img)
-    
-    if doplot :
-        plt.figure()
-        plt.imshow(img)
-    
-    return img
-
-def get_simulation(param, q, baseline, horn_transpose, files, labels, nn=241, doplot=True):
-    
-    theta_source = param[0]
-    freq_source = param[1]
-
-    allampX = np.empty((2, nn, nn))
-    allphiX = np.empty((2, nn, nn))
-    allampY = np.empty((2, nn, nn))
-    allphiY = np.empty((2, nn, nn))
-    for i, swi in enumerate(baseline):
-        # Phase calculation
-        horn_x = q.horn.center[swi - 1, 0]
-        horn_y = q.horn.center[swi - 1, 1]
-        dist = np.sqrt(horn_x ** 2 + horn_y ** 2)  # distance between the horn and the center
-        phi = - 2 * np.pi / 3e8 * freq_source * 1e9 * dist * np.sin(np.deg2rad(theta_source))
-
-        thefile = files[horn_transpose[swi - 1]]
-        print('Horn ', swi, ': ', thefile[98:104])
-        data = pd.read_csv(thefile, sep='\t', skiprows=0)
-
-        allampX[i, :, :] = np.reshape(np.asarray(data['MagX']), (nn, nn)).T
-        allampY[i, :, :] = np.reshape(np.asarray(data['MagY']), (nn, nn)).T
-
-        allphiX[i, :, :] = np.reshape(np.asarray(data['PhaseX']), (nn, nn)).T + phi
-        allphiY[i, :, :] = np.reshape(np.asarray(data['PhaseY']), (nn, nn)).T + phi
-
-    # Electric field for each open horn
-    Ax = allampX * (np.cos(allphiX) + 1j * np.sin(allphiX))
-    Ay = allampY * (np.cos(allphiY) + 1j * np.sin(allphiY))
-
-    # Sum of the electric fields
-    sumampx = np.sum(Ax, axis=0)
-    sumampy = np.sum(Ay, axis=0)
-
-    # Power on the focal plane
-    power = np.abs(sumampx) ** 2 + np.abs(sumampy) ** 2
-
-    if doplot:
-        plt.figure()
-        plt.subplot(121)
-        q.horn.plot()
-        plt.axis('off')
-
-        plt.subplot(122)
-        plt.imshow(power, origin='lower')
-        plt.title('Power at the sampling resolution')
-        plt.colorbar()
-    
-    counts_perTES, sum_perTES, mean_perTES = sc.fulldef2tespixels(power, labels)
-    
-    img = get_quadrant3(q, mean_perTES, doplot=doplot)
-
-    return img
-
-def compute_diff(param, q, baseline, horn_transpose, files, labels, observation):
-    """
-    Return array: observation - model
-    """
-    model = get_simulation(param, q, baseline, horn_transpose, files, labels, doplot=False)
-    err = 200
-    residual = (observation - np.ravel(model)) / err
-    residual[np.isnan(residual)] = 0.
-    print('param :', param)
-    print("residual sum: ", np.nansum(residual**2))
-    
-    return residual.astype(np.float64)
-
-```
-
-```{python}
-# Use a tool from qubicpack to get a path
-basedir = Qubic_DataDir(datafile='instrument.py', ) 
-print('basedir : ', basedir)
-dictfilename = basedir + '/dicts/global_source_oneDet.dict'
-
-# Get a dictionary
-d = qubic.qubicdict.qubicDict()
-d.read_from_file(dictfilename)
-
-# Create an object
-baseline = [25, 57]
-ca = sc.SelfCalibration(baseline, [], d)
-
-# Path to the simulated files 
-rep = Qubic_DataDir(datafile='detcentres.txt')
-print('rep:', rep)
-```
-
-```{python}
-# Get simulation files
-files = sorted(glob.glob(rep + '/*.dat'))
-
-# This is done to get the right file for each horn
-horn_transpose = np.arange(64)
-horn_transpose = np.reshape(horn_transpose, (8, 8))
-horn_transpose = np.ravel(horn_transpose.T)
-
-# Get the sample number from the first file
-data0 = pd.read_csv(files[0], sep='\t', skiprows=0)
-nn = data0['X_Index'].iloc[-1] + 1
-print('Sampling number = {}'.format(nn))
-
-# Make an instrument
-q = qubic.QubicInstrument(d)
-q.horn.open = False
-q.horn.open[np.asarray(baseline) - 1] = True
-
-# Make labels
-readv, labels = sc.make_labels(rep)
-```
-
-```{python}
-# Example
-fringes = ca.get_power_fp_aberration(rep, theta_source=0., doplot=False)
-
-counts_perTES, sum_perTES, mean_perTES = sc.fulldef2tespixels(fringes, labels)
-
-print(len(mean_perTES))
-fig = sc.make_plot_real_fp(readv, mean_perTES)
-plt.title('Baseline {} with aberrations'.format(baseline))
-
-img = get_quadrant3(q, mean_perTES, doplot=True)
-```
-
-```{python}
-param = [0., 150.]
-img = get_simulation(param, q, baseline, horn_transpose, files, labels, doplot=False)
-
-residual = compute_diff(param, q, baseline, horn_transpose, files, labels, np.ravel(fringe))
-```
-
-```{python}
-# Fit
-param_guess = [5., 150.]
-
-tofit = np.ravel(fringe)
-tofit[np.isnan(tofit)] = 0.
-tofit = tofit.astype(np.float64)
-
-# Method 1
-# param_est, cov_x, infodict, mesg, flag  = spo.leastsq(compute_diff, 
-#                      param_guess,
-#                      args=(q, baseline, horn_transpose, files, labels, tofit),
-#                      factor=1.,
-#                      full_output=True,
-#                      epsfcn=np.finfo(np.float32).eps)
-# sigma_param_est = np.sqrt(np.diagonal(cov_x))
-
-# print("Return value:", param_est)
-# print('Flag', flag)
-# print("Return message:", mesg)
-# print("Error :", sigma_param_est)
-# print("Precision (%):", sigma_param_est / param_est * 100)
-
-# Method 2
-myfit = spo.least_squares(compute_diff,
-                         param_guess,
-                         args=(q, baseline, horn_transpose, files, labels, tofit),
-#                          method='lm',
-                         bounds=([-30., 30.], [130., 170.]),
-                         ftol=1e-9)
-print('Estimation:', myfit.x)
-print('Cost:', myfit.cost)
-# print('Residuals:', myfit.fun)
-print('Cost fct gradient:', myfit.grad)
-print('Message:', myfit.message)
-print('Success:', myfit.success)
 ```
 
 #### truc qui pourraient être utiles

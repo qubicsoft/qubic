@@ -714,18 +714,18 @@ def fold_data(time, dd, period, lowcut, highcut, nbins,
 
     Parameters
     ----------
-    time
-    dd
-    period
-    lowcut
-    highcut
+    time : array
+    dd : array
+        Data signal.
+    period : float
+        Data will be folded on this period.
+    lowcut : float
+        Low cut for the band filter.
+    highcut : float
+        High cut for the band filter.
     nbins
     notch
     return_error
-
-    Returns
-    -------
-
     """
     tfold = time % period
     FREQ_SAMPLING = 1. / (time[1] - time[0])

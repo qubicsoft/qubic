@@ -59,6 +59,27 @@ def cut_data(t0, tf, t_data, data):
     return t_data_cut, data_cut
 
 
+def make_spectrum(t_data, data_oneTES, period):
+    # Sampling frequency
+    npoints = len(t_data)
+    t0, tf = t_data[0], t_data[-1]
+    f_sampling = npoints / (tf - t0)
+
+    # Spectrum
+    spectrum_f, freq_f = mlab.psd(data_oneTES,
+                                  Fs=f_sampling,
+                                  NFFT=2 ** int(np.log(len(data_oneTES)) / np.log(2)),
+                                  window=mlab.window_hanning)
+    plt.plot(freq_f, spectrum_f)
+    plt.loglog()
+    plt.xlim(0.1, 10)
+    for i in range(1, 10):
+        plt.axvline(x=i / period, color='orange')
+    plt.grid()
+
+    return spectrum_f, freq_f
+
+
 def find_right_period(guess, t_data, data_oneTES):
     ppp = np.linspace(guess - 1.5, guess + 1.5, 250)
     rms = np.zeros(len(ppp))
@@ -291,12 +312,38 @@ plt.subplot(212)
 plt.plot(t_data % period, data[tes - 1, :], '.')
 plt.xlim(0, period)
 
-# Fold and filter the data
+# Filter the data (just to give an idea because it is done when folding)
 lowcut = 0.001
 highcut = 10.
 nharm = 10
 notch = np.array([[1.724, 0.005, nharm]])
 
+newdata = ft.filter_data(t_data_cut, data_cut[tes-1, :], lowcut, highcut, notch=notch,
+                         rebin=True, verbose=True, order=5)
+
+spectrum_f, freq_f = make_spectrum(t_data_cut, data_cut[tes-1, :], period)
+
+spectrum_f2, freq_f2 = make_spectrum(t_data_cut, newdata, period)
+
+# compute spectrum with fibtools
+spectrum_f3, freq_f3 = ft.power_spectrum(t_data_cut, newdata, rebin=True)
+
+plt.figure()
+plt.subplot(2,1,1)
+plt.plot(freq_f, spectrum_f, label='Original')
+plt.plot(freq_f2, spectrum_f2, label='filtered')
+plt.plot(freq_f3, spectrum_f3, label='filtered2')
+plt.legend()
+plt.loglog()
+plt.ylim(1e1, 1e17)
+
+plt.subplot(2,1,2)
+plt.plot(t_data_cut, data_cut[tes-1, :], label='Original')
+plt.plot(t_data_cut, newdata, label='Filtered')
+plt.xlim(200, 1700)
+plt.legend()
+
+# Fold and filter the data
 nbins = 120
 folded, t, folded_nonorm, newdata = ft.fold_data(t_data_cut,
                                                  data_cut,

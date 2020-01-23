@@ -147,90 +147,12 @@ def analyse_fringes(dirs, m, w, t0=4, tf=400, stable_time=3.,
     return t, folded_bothasics, param_est, res_w, res_fit
 
 
-def get_quadrant3(q, signal_perTES, doplot=False):
-    quadrant3 = signal_perTES[496:744]
-    indice = -(q.detector.center // 0.003)
-
-    img = np.zeros((17, 17))
-    for k in range(248):
-        i = int(indice[k, 0])
-        j = int(indice[k, 1])
-        img[i - 1, j - 1] = quadrant3[k]
-    img[img == 0.] = np.nan
-    img = np.rot90(img)
-
-    if doplot:
-        plt.figure()
-        plt.imshow(img)
-
-    return img
-
-
-def get_simulation(param, q, baseline, horn_transpose, files, labels, nn=241, doplot=True):
-    theta_source = param[0]
-    freq_source = param[1]
-
-    allampX = np.empty((2, nn, nn))
-    allphiX = np.empty((2, nn, nn))
-    allampY = np.empty((2, nn, nn))
-    allphiY = np.empty((2, nn, nn))
-    for i, swi in enumerate(baseline):
-        # Phase calculation
-        horn_x = q.horn.center[swi - 1, 0]
-        horn_y = q.horn.center[swi - 1, 1]
-        dist = np.sqrt(horn_x ** 2 + horn_y ** 2)  # distance between the horn and the center
-        phi = - 2 * np.pi / 3e8 * freq_source * 1e9 * dist * np.sin(np.deg2rad(theta_source))
-
-        thefile = files[horn_transpose[swi - 1]]
-        print('Horn ', swi, ': ', thefile[98:104])
-        data = pd.read_csv(thefile, sep='\t', skiprows=0)
-
-        allampX[i, :, :] = np.reshape(np.asarray(data['MagX']), (nn, nn)).T
-        allampY[i, :, :] = np.reshape(np.asarray(data['MagY']), (nn, nn)).T
-
-        allphiX[i, :, :] = np.reshape(np.asarray(data['PhaseX']), (nn, nn)).T + phi
-        allphiY[i, :, :] = np.reshape(np.asarray(data['PhaseY']), (nn, nn)).T + phi
-
-    # Electric field for each open horn
-    Ax = allampX * (np.cos(allphiX) + 1j * np.sin(allphiX))
-    Ay = allampY * (np.cos(allphiY) + 1j * np.sin(allphiY))
-
-    # Sum of the electric fields
-    sumampx = np.sum(Ax, axis=0)
-    sumampy = np.sum(Ay, axis=0)
-
-    # Power on the focal plane
-    power = np.abs(sumampx) ** 2 + np.abs(sumampy) ** 2
-
-    if doplot:
-        plt.figure()
-        plt.subplot(121)
-        q.horn.plot()
-        plt.axis('off')
-
-        plt.subplot(122)
-        plt.imshow(power, origin='lower')
-        plt.title('Power at the sampling resolution')
-        plt.colorbar()
-
-    counts_perTES, sum_perTES, mean_perTES = sc.fulldef2tespixels(power, labels)
-
-    img = get_quadrant3(q, mean_perTES, doplot=doplot)
-
-    return img
-
-
 # =============== Fringe simulations =================
 rep = Qubic_DataDir(datafile='detcentres.txt')
 print('rep:', rep)
 
 # Get simulation files
 files = sorted(glob.glob(rep + '/*.dat'))
-
-# This is done to get the right file for each horn
-horn_transpose = np.arange(64)
-horn_transpose = np.reshape(horn_transpose, (8, 8))
-horn_transpose = np.ravel(horn_transpose.T)
 
 # Get a dictionary
 basedir = Qubic_DataDir(datafile='instrument.py', )
@@ -253,7 +175,7 @@ for i in range(12):
     baseline = [horn1[i], horn2[i]]
     q.horn.open = False
     q.horn.open[np.asarray(baseline) - 1] = True
-    img = get_simulation(param, q, baseline, horn_transpose, files, lab, doplot=False)
+    img = sc.get_simulation(param, q, baseline, files, lab, doplot=False)
     plt.subplot(4, 3, i + 1)
     plt.title('Baseline {}'.format(baseline))
     plt.imshow(img)
@@ -279,7 +201,7 @@ for i, d in enumerate(dirs):
     print(i, labels[i])
 
 # Select a simulation
-nf = 1
+nf = 2
 tes = 28
 asic = 1
 
@@ -287,7 +209,7 @@ thedir, t_data, data = get_data(dirs, nf, asic, tes)
 
 # Cut the data
 tstart = 4
-tend = 200
+tend = 400
 
 t_data_cut, data_cut = cut_data(tstart, tend, t_data, data)
 
@@ -389,9 +311,9 @@ print(comb)
 
 # ========= Michel's method ===================
 # w is made to make the combination to see fringes
-tm1 = 10
-tm2 = 4
-ph = 11
+tm1 = 12
+tm2 = 2
+ph = 5
 w = np.zeros_like(t)
 wcheck = np.zeros_like(t)
 print(len(w))
@@ -486,7 +408,7 @@ plt.title('Measurement 2020-01-13')
 plt.subplot(122)
 q.horn.open = False
 q.horn.open[np.asarray(baseline) - 1] = True
-img = get_simulation(param, q, baseline, horn_transpose, files, lab, doplot=False)
+img = sc.get_simulation(param, q, baseline, files, lab, doplot=False, verbose=False)
 plt.title('Simulation')
 plt.imshow(img)
 

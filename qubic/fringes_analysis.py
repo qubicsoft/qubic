@@ -15,11 +15,6 @@ from qubicpack import qubicpack as qp
 from qubicpack.qubicfp import qubicfp
 import qubic.fibtools as ft
 
-from pysimulators import FitsArray
-from qubicpack.pix2tes import assign_tes_grid
-
-tes_grid = assign_tes_grid()
-
 
 # ============== Functions ==============
 def get_data(dirs, nf, asic, tes=28, doplot=True):
@@ -329,7 +324,7 @@ spectrum_f2, freq_f2 = make_spectrum(t_data_cut, newdata, period)
 spectrum_f3, freq_f3 = ft.power_spectrum(t_data_cut, newdata, rebin=True)
 
 plt.figure()
-plt.subplot(2,1,1)
+plt.subplot(211)
 plt.plot(freq_f, spectrum_f, label='Original')
 plt.plot(freq_f2, spectrum_f2, label='filtered')
 plt.plot(freq_f3, spectrum_f3, label='filtered2')
@@ -337,10 +332,9 @@ plt.legend()
 plt.loglog()
 plt.ylim(1e1, 1e17)
 
-plt.subplot(2,1,2)
+plt.subplot(212)
 plt.plot(t_data_cut, data_cut[tes-1, :], label='Original')
 plt.plot(t_data_cut, newdata, label='Filtered')
-plt.xlim(200, 1700)
 plt.legend()
 
 # Fold and filter the data

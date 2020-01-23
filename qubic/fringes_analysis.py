@@ -5,11 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.optimize as sop
 import pandas as pd
-
-# from matplotlib import rc
-# rc('figure', figsize=(9, 4.5))
-# rc('font', size=12)
-# rc('text', usetex=False)
+from matplotlib.backends.backend_pdf import PdfPages
 
 import qubic
 from qubic import selfcal_lib as sc
@@ -29,7 +25,6 @@ tes_grid = assign_tes_grid()
 def get_data(dirs, nf, asic, tes=28, doplot=True):
     asic = str(asic)
     thedir = dirs[nf]
-    # print(thedir)
 
     # Qubicpack object
     a = qubicfp()
@@ -56,9 +51,9 @@ def get_data(dirs, nf, asic, tes=28, doplot=True):
     return thedir, t_data, data
 
 
-def cut_data(tstart, tend, t_data, data):
-    ok = (t_data > tstart) & (t_data < tend)
-    t_data_cut = t_data[ok] - tstart
+def cut_data(t0, tf, t_data, data):
+    ok = (t_data > t0) & (t_data < tf)
+    t_data_cut = t_data[ok] - t0
     data_cut = data[:, ok]
 
     return t_data_cut, data_cut
@@ -77,35 +72,8 @@ def find_right_period(guess, t_data, data_oneTES):
     return ppp, rms, period
 
 
-def simsig_fringes(x, stable_time, params):
-    dx = x[1] - x[0]
-    npoints = len(x)
-    tf = x[-1]
-
-    ctime = params[0]
-    x0 = params[1]
-    amp = params[2:8]
-    #     print(amp)
-
-    sim_init = np.zeros(len(x))
-
-    for i in range(6):
-        a = int(npoints / tf * stable_time * i)
-        b = int((stable_time * i + stable_time) * npoints / tf)
-        #         print(a, b)
-        sim_init[a: b] = amp[i]
-
-    # Add a phase
-    sim_init_shift = np.interp((x - x0) % max(x), x, sim_init)
-
-    # Convolved by an exponential filter
-    thesim = ft.exponential_filter1d(sim_init_shift, ctime / dx, mode='wrap')
-
-    return np.array(thesim).astype(np.float64)
-
-
 def make_diff_sig(params, x, stable_time, data):
-    thesim = simsig_fringes(x, stable_time, params)
+    thesim = ft.simsig_fringes(x, stable_time, params)
     diff = data - thesim
     return diff
 
@@ -114,6 +82,53 @@ def make_combination(param_est):
     amps = param_est[2:8]
     print('Check:', amps[2], amps[4])
     return amps[0] + amps[3] - amps[1] - amps[2]
+
+
+def analyse_fringes(dirs, m, w, t0=4, tf=400, stable_time=3.,
+                    lowcut=0.001, highcut=10, nbins=120,
+                    notch=np.array([[1.724, 0.005, 10]]),
+                    tes_check=28, param_guess=[0.1, 0., 1, 1, 1, 1, 1, 1]):
+    res_w = np.zeros(256)
+    res_fit = np.zeros(256)
+    param_est = np.zeros((256, 8))
+    folded_bothasics = np.zeros((256, nbins))
+    for asic in [1, 2]:
+        _, t_data, data = get_data(dirs, m, asic, doplot=False)
+        t_data_cut, data_cut = cut_data(t0, tf, t_data, data)
+        if asic == 1:
+            ppp, rms, period = find_right_period(6 * stable_time, t_data_cut, data_cut[tes_check - 1, :])
+            print('period:', period)
+
+        folded, t, folded_nonorm, newdata = ft.fold_data(t_data_cut,
+                                                         data_cut,
+                                                         period,
+                                                         lowcut,
+                                                         highcut,
+                                                         nbins,
+                                                         notch=notch
+                                                         )
+        if asic == 1:
+            folded_bothasics[:128, :] = folded
+        else:
+            folded_bothasics[128:, :] = folded
+
+        for tes in range(1, 129):
+            TESindex = (tes - 1) + 128 * (asic - 1)
+            res_w[TESindex] = np.sum(folded[tes - 1, :] * w)
+
+            fit = sop.least_squares(make_diff_sig,
+                                    param_guess,
+                                    args=(t,
+                                          stable_time,
+                                          folded[tes - 1, :]),
+                                    bounds=([0., -2, -2, -2, -2, -2, -2, -2],
+                                            [1., 2, 2, 2, 2, 2, 2, 2]),
+                                    verbose=1
+                                    )
+            param_est[TESindex, :] = fit.x
+            res_fit[TESindex] = make_combination(param_est[TESindex, :])
+
+    return t, folded_bothasics, param_est, res_w, res_fit
 
 
 def get_quadrant3(q, signal_perTES, doplot=False):
@@ -189,6 +204,44 @@ def get_simulation(param, q, baseline, horn_transpose, files, labels, nn=241, do
     return img
 
 
+# =============== Fringe simulations =================
+rep = Qubic_DataDir(datafile='detcentres.txt')
+print('rep:', rep)
+
+# Get simulation files
+files = sorted(glob.glob(rep + '/*.dat'))
+
+# This is done to get the right file for each horn
+horn_transpose = np.arange(64)
+horn_transpose = np.reshape(horn_transpose, (8, 8))
+horn_transpose = np.ravel(horn_transpose.T)
+
+# Get a dictionary
+basedir = Qubic_DataDir(datafile='instrument.py', )
+print('basedir : ', basedir)
+dictfilename = basedir + '/dicts/global_source_oneDet.dict'
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+
+# Make an instrument
+q = qubic.QubicInstrument(d)
+
+horn1 = [49, 57, 52, 60, 25, 1, 57, 60, 40, 40, 39, 39]
+horn2 = [25, 25, 28, 28, 28, 4, 43, 63, 64, 63, 64, 63]
+param = [0., 150.]
+readv, lab = sc.make_labels(rep)
+
+plt.figure()
+plt.subplots_adjust(wspace=0.5, hspace=0.5)
+for i in range(12):
+    baseline = [horn1[i], horn2[i]]
+    q.horn.open = False
+    q.horn.open[np.asarray(baseline) - 1] = True
+    img = get_simulation(param, q, baseline, horn_transpose, files, lab, doplot=False)
+    plt.subplot(4, 3, i + 1)
+    plt.title('Baseline {}'.format(baseline))
+    plt.imshow(img)
+
 # ============== Get data ==============
 global_dir = '/home/louisemousset/QUBIC/Qubic_work/Calibration/datas/'
 # June measurement
@@ -211,7 +264,7 @@ for i, d in enumerate(dirs):
 
 # Select a simulation
 nf = 1
-tes = 28  # 105#39
+tes = 28
 asic = 1
 
 thedir, t_data, data = get_data(dirs, nf, asic, tes)
@@ -284,7 +337,7 @@ amps_est = param_est[2:8]
 
 plt.figure()
 plt.plot(t, folded[tes - 1, :], label='folded signal')
-plt.plot(t, simsig_fringes(t, stable_time, param_est), label='fit')
+plt.plot(t, ft.simsig_fringes(t, stable_time, param_est), label='fit')
 plt.plot(np.arange(0, 6 * stable_time, stable_time) + x0_est, amps_est, 'ro', label='amplitudes')
 plt.title('ASIC {}, TES {}'.format(asic, tes))
 plt.legend()
@@ -326,83 +379,77 @@ plt.grid()
 
 
 # ============ Analysis for both ASICs and all measurements ==================
-def analyse_fringes(dirs, m, w, t0=4, tf=400, stable_time=3.,
-                    lowcut=0.001, highcut=10, nbins=120,
-                    notch=np.array([[1.724, 0.005, 10]]),
-                    tes_check=28, param_guess=[0.1, 0., 1, 1, 1, 1, 1, 1]):
-    res_w = np.zeros(256)
-    res_fit = np.zeros(256)
-    param_est = np.zeros((256, 8))
-    folded_bothasics = np.zeros((256, nbins))
-    for asic in [1, 2]:
-        thedir, t_data, data = get_data(dirs, m, asic, doplot=False)
-        t_data_cut, data_cut = cut_data(t0, tf, t_data, data)
-        if asic==1:
-            ppp, rms, period = find_right_period(6*stable_time, t_data_cut, data_cut[tes_check - 1, :])
-        print('period:', period)
-
-        folded, t, folded_nonorm, newdata = ft.fold_data(t_data_cut,
-                                                      data_cut,
-                                                      period,
-                                                      lowcut,
-                                                      highcut,
-                                                      nbins,
-                                                      notch=notch
-                                                      )
-        if asic ==1:
-            folded_bothasics[:128, :] = folded
-        else:
-            folded_bothasics[128:, :] = folded
-
-        for tes in range(1, 129):
-            TESindex = (tes - 1) + 128 * (asic - 1)
-            res_w[TESindex] = np.sum(folded[tes - 1, :] * w)
-
-            fit = sop.least_squares(make_diff_sig,
-                                    param_guess,
-                                    args=(t,
-                                          stable_time,
-                                          folded[tes - 1, :]),
-                                    bounds=([0., -2, -2, -2, -2, -2, -2, -2],
-                                            [1., 2, 2, 2, 2, 2, 2, 2]),
-                                    verbose=1
-                                    )
-            param_est[TESindex, :] = fit.x
-            res_fit[TESindex] = make_combination(param_est[TESindex, :])
-
-    return t, folded_bothasics, param_est, res_w, res_fit
-
 t, folded_bothasics, param_est, res_w, res_fit = analyse_fringes(dirs, nf, w, t0=4, tf=200, stable_time=3.)
+fringe = ft.image_asics(all1=res_w)
 
+# =================== Make a mask ==============
+# Mask to remove the 8 thermometer pixels
+mask = np.ones_like(fringe)
+mask[0, 12:] = np.nan
+mask[1:5, 16] = np.nan
+
+# Mask to remove bad pixels
+# By looking at the signals
+bad1 = np.array([1, 4, 5, 11, 12, 18, 19, 21, 29, 30, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44,
+                 46, 47, 48, 49, 50, 51, 63, 65, 66, 68, 69, 70, 78, 80, 83, 89, 90, 91, 93, 97, 99, 100,
+                 101, 102, 104, 108, 114, 115, 116, 119, 121, 122, 124, 126]) - 1
+bad2 = np.array([2, 4, 8, 11, 12, 16, 21, 23, 26, 27, 28, 29, 36, 37, 40, 46, 49, 51, 55, 57, 58, 62,
+                 63, 64, 68, 69, 71, 74, 76, 78, 79, 83, 89, 92, 94, 95, 96, 98, 99, 100, 101, 102, 103, 104, 106,
+                 107, 108, 109, 110, 111, 112, 115, 117, 119, 121, 126, 127]) + 127
+
+# From Michel
+bad = [4, 7, 11, 12, 19, 35, 36, 37, 41, 42, 43, 45, 47, 48, 53, 55, 65, 68, 70, 89, 92, 97, 100, 102, 104,
+       114, 119, 121, 126, 132, 144, 149, 150, 151, 152, 154,
+       155, 156, 157, 164, 169, 170, 174, 179, 183, 190, 191, 192, 196, 203, 208, 217, 222, 226, 227, 228,
+       229, 230, 231, 233, 235, 236, 237, 238, 240, 241, 243, 244, 245, 246, 247, 248, 249, 253, 254, 256]
+
+bad = np.array(bad)
+maskres = np.ones_like(res_w)
+maskres[bad - 1] = np.nan
+# maskres[bad1] = np.nan
+# maskres[bad2] = np.nan
+
+mask2 = ft.image_asics(all1=maskres)
+
+# Mask to remove max values from check
+lim = 10000
+mask3 = np.ones_like(fringe_fit)
+mask3[np.abs(fringe_fit) < lim] = np.nan
+
+plt.figure()
+plt.imshow(mask3, vmin=-1e5, vmax=1e5)
+plt.title('mask3')
+plt.colorbar()
+
+# ============== Plots =============
+# Look at one fit
 x0_est = param_est[tes - 1, 1]
 amps_est = param_est[tes - 1, 2:8]
 plt.figure()
 plt.plot(t, folded_bothasics[tes - 1, :], label='folded signal')
-plt.plot(t, simsig_fringes(t, stable_time, param_est[tes - 1, :]), label='fit')
-plt.plot(np.arange(0, 6*stable_time, stable_time) + x0_est, amps_est, 'ro', label='amplitudes')
+plt.plot(t, ft.simsig_fringes(t, stable_time, param_est[tes - 1, :]), label='fit')
+plt.plot(np.arange(0, 6 * stable_time, stable_time) + x0_est, amps_est, 'ro', label='amplitudes')
 plt.plot(t, w, 'g+', label='w')
 
-plt.figure()
+# Plot fringes measured and simu
 baseline = [57, 25]
+plt.figure()
 plt.suptitle('Baseline {}'.format(baseline))
+
 plt.subplot(121)
-lim=3
-fringe = ft.image_asics(all1=res_w)
+lim = 3
 plt.imshow(fringe * mask, vmin=-lim, vmax=lim)
 plt.title('Measurement 2020-01-13')
 # plt.colorbar()
-plt.subplot(122)
 
+plt.subplot(122)
 q.horn.open = False
 q.horn.open[np.asarray(baseline) - 1] = True
-
 img = get_simulation(param, q, baseline, horn_transpose, files, lab, doplot=False)
-
 plt.title('Simulation')
 plt.imshow(img)
 
-
-
+# ================ Loop on all set of measurements ===============
 allfolded_bothasics = []
 allparam_est = []
 allres_w = []
@@ -419,7 +466,6 @@ allparam_est = np.array(allparam_est)
 allres_w = np.array(allres_w)
 allres_fit = np.array(allres_fit)
 
-
 # np.save(data_dir + 'allfolded_bothasics_inv', allfolded_bothasics)
 # np.save(data_dir + 'allres_w_inv', allres_w)
 # np.save(data_dir + 'allres_fit_inv', allres_fit)
@@ -429,10 +475,10 @@ allres_fit = np.array(allres_fit)
 plt.figure()
 plt.suptitle('Fit method')
 plt.subplots_adjust(hspace=0.6)
-lim=8
+lim = 8
 for i in range(12):
     fringe = ft.image_asics(all1=allres_w[i])
-    plt.subplot(4, 3, i+1)
+    plt.subplot(4, 3, i + 1)
     plt.imshow(fringe * mask * mask2, vmin=-lim, vmax=lim)
     plt.title('Bl {}'.format(labels[i][-5:]))
     plt.colorbar()
@@ -441,7 +487,8 @@ allres_fit = np.load(data_dir + 'allres_fit_inv.npy')
 allres_w = np.load(data_dir + 'allres_w_inv.npy')
 allfolded_bothasics = np.load(data_dir + 'allfolded_bothasics_inv.npy')
 allparam_est = np.load(data_dir + 'allparam_est_inv.npy')
-from matplotlib.backends.backend_pdf import PdfPages
+
+# Make a PDF with all the TES signals
 with PdfPages(data_dir + '/allTES_fit2.pdf') as pdf:
     for tes in range(1, 257):
         asic = 1
@@ -455,8 +502,8 @@ with PdfPages(data_dir + '/allTES_fit2.pdf') as pdf:
             x0_est = allparam_est[i, tes - 1, 1]
             amps_est = allparam_est[i, tes - 1, 2:8]
             plt.plot(t, allfolded_bothasics[i, tes - 1, :], label='folded signal')
-            plt.plot(t, simsig_fringes(t, stable_time, allparam_est[i, tes - 1, :]), label='fit')
-            plt.plot(np.arange(0, 6*stable_time, stable_time) + x0_est, amps_est, 'ro', label='amplitudes')
+            plt.plot(t, ft.simsig_fringes(t, stable_time, allparam_est[i, tes - 1, :]), label='fit')
+            plt.plot(np.arange(0, 6 * stable_time, stable_time) + x0_est, amps_est, 'ro', label='amplitudes')
             plt.plot(t, w, 'g+', label='w')
             plt.title('Bl {}'.format(labels[i][-5:]), fontsize=15)
             if i == 0:
@@ -465,86 +512,3 @@ with PdfPages(data_dir + '/allTES_fit2.pdf') as pdf:
 
         pdf.savefig()
         plt.close()
-
-
-
-# =================== Make a mask ==============
-# Mask to remove the 8 thermometer pixels
-mask = np.ones_like(fringe)
-mask[0, 12:] = np.nan
-mask[1:5, 16] = np.nan
-
-# Mask to remove bad pixels
-bad1 = np.array([1, 4, 5, 11, 12, 18, 19, 21, 29, 30, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44,
-                 46, 47, 48, 49, 50, 51, 63, 65, 66, 68, 69, 70, 78, 80, 83, 89, 90, 91, 93, 97, 99, 100,
-                 101, 102, 104, 108, 114, 115, 116, 119, 121, 122, 124, 126]) - 1
-bad2 = np.array([2, 4, 8, 11, 12, 16, 21, 23, 26, 27, 28, 29, 36, 37, 40, 46, 49, 51, 55, 57, 58, 62,
-                 63, 64, 68, 69, 71, 74, 76, 78, 79, 83, 89, 92, 94, 95, 96, 98, 99, 100, 101, 102, 103, 104, 106,
-                 107, 108, 109, 110, 111, 112, 115, 117, 119, 121, 126, 127]) + 127
-
-bad = [4, 7, 11, 12, 19, 35, 36, 37, 41, 42, 43, 45, 47, 48, 53, 55, 65, 68, 70, 89, 92, 97, 100, 102, 104,
-       114, 119, 121, 126, 132, 144, 149, 150, 151, 152, 154,
-       155, 156, 157, 164, 169, 170, 174, 179, 183, 190, 191, 192, 196, 203, 208, 217, 222, 226, 227, 228,
- 229, 230, 231, 233, 235, 236, 237, 238, 240, 241, 243, 244, 245, 246, 247, 248, 249, 253, 254, 256]
-bad = np.array(bad)
-maskres = np.ones_like(allres_w[0,:])
-maskres[bad-1] = np.nan
-# maskres[bad1] = np.nan
-# maskres[bad2] = np.nan
-
-mask2 = ft.image_asics(all1=maskres)
-
-# Mask to remove max values from check
-lim = 10000
-mask3 = np.ones_like(fringe_fit)
-mask3[np.abs(fringe_fit) < lim] = np.nan
-plt.imshow(mask3, vmin=-1e5, vmax=1e5)
-plt.title('mask3')
-colorbar()
-
-# Apply masks on fringes
-plt.figure()
-plt.imshow(fringe * mask * mask2, vmin=-0.5, vmax=0.5)
-
-# =============== Fringes simulation =================
-from qubic import selfcal_lib as sc
-from qubicpack.utilities import Qubic_DataDir
-rep = Qubic_DataDir(datafile='detcentres.txt')
-print('rep:', rep)
-
-# Get simulation files
-files = sorted(glob.glob(rep + '/*.dat'))
-
-# This is done to get the right file for each horn
-horn_transpose = np.arange(64)
-horn_transpose = np.reshape(horn_transpose, (8, 8))
-horn_transpose = np.ravel(horn_transpose.T)
-
-
-# Use a tool from qubicpack to get a path
-basedir = Qubic_DataDir(datafile='instrument.py', )
-print('basedir : ', basedir)
-dictfilename = basedir + '/dicts/global_source_oneDet.dict'
-
-# Get a dictionary
-d = qubic.qubicdict.qubicDict()
-d.read_from_file(dictfilename)
-
-# Make an instrument
-horn1 = [49, 57, 52, 60, 25, 1, 57, 60, 40, 40, 39, 39]
-horn2 = [25, 25, 28, 28, 28, 4, 43, 63, 64, 63, 64, 63]
-
-param = [0., 150.]
-readv, lab = sc.make_labels(rep)
-q = qubic.QubicInstrument(d)
-plt.figure()
-plt.subplots_adjust(wspace=0.5, hspace=0.5)
-for i in range(12):
-    baseline = [horn1[i], horn2[i]]
-    q.horn.open = False
-    q.horn.open[np.asarray(baseline) - 1] = True
-
-    img = get_simulation(param, q, baseline, horn_transpose, files, lab, doplot=False)
-    plt.subplot(4, 3, i+1)
-    plt.title('Baseline {}'.format(baseline))
-    plt.imshow(img)

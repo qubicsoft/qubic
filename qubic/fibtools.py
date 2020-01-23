@@ -751,7 +751,7 @@ def simsig_fringes(x, stable_time, params):
     sim_init_shift = np.interp((x - x0) % max(x), x, sim_init)
 
     # Convolved by an exponential filter
-    thesim = ft.exponential_filter1d(sim_init_shift, ctime / dx, mode='wrap')
+    thesim = exponential_filter1d(sim_init_shift, ctime / dx, mode='wrap')
 
     return np.array(thesim).astype(np.float64)
 

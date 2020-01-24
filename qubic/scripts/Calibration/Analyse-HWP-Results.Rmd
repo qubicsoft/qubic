@@ -127,7 +127,7 @@ print(resfit[1])
 Plot for a given TES for all available configurations
 
 ```{python}
-rc('figure',figsize=(15,6))
+rc('figure',figsize=(8,6))
 TESNum = 95
 
 for idir in range(len(subdirs)):
@@ -138,17 +138,17 @@ for idir in range(len(subdirs)):
     dy = data_uniqueth[idir][TESNum-1,2,:]
 
     angs = np.linspace(0,90,100)
-    subplot(1,2,1)
-    p = errorbar(xx, yy, yerr=dy, fmt='o', 
-                 label = 'Off = {} - Amp = {} - Ptg = {}'.format(mod_off[idir], mod_amp[idir], ptg[idir]))
-    plot(angs,dl.hwp_sin_sat(angs, thefit), color=p[0].get_color())
-    title('TES #{}'.format(TESNum))
-    xlabel('Angle [deg.]')
-    ylabel('Signal Amplitude [ADU]')
-    legend(fontsize=8, loc='upper left', framealpha=0.3)
+#     subplot(1,2,1)
+#     p = errorbar(xx, yy, yerr=dy, fmt='o', 
+#                  label = 'Off = {} - Amp = {} - Ptg = {}'.format(mod_off[idir], mod_amp[idir], ptg[idir]))
+#     plot(angs,dl.hwp_sin_sat(angs, thefit), color=p[0].get_color())
+#     title('TES #{}'.format(TESNum))
+#     xlabel('Angle [deg.]')
+#     ylabel('Signal Amplitude [ADU]')
+#     legend(fontsize=8, loc='upper left', framealpha=0.7)
     
-    subplot(1,2,2)
-    errorbar(xx, yy/thefit[0], yerr=dy/thefit[0], fmt='o', color=p[0].get_color(), 
+#     subplot(1,2,2)
+    p=errorbar(xx, yy/thefit[0], yerr=dy/thefit[0], fmt='o', #color=p[0].get_color(), 
                  label = 'Off = {} - Amp = {} - Ptg = {}'.format(mod_off[idir], mod_amp[idir], ptg[idir]))
     plot(angs, dl.hwp_sin_sat(angs, thefit)/thefit[0], color=p[0].get_color())
     plot(angs, angs*0+1, 'k:')
@@ -157,7 +157,7 @@ for idir in range(len(subdirs)):
     title('TES #{}'.format(TESNum))
     xlabel('Angle [deg.]')
     ylabel('Relative Signal Amplitude')
-    legend(fontsize=8, loc='upper left', framealpha=0.3)
+    legend(fontsize=8, loc='upper left', framealpha=0.7)
     
 ```
 
@@ -295,6 +295,32 @@ tight_layout()
 ```
 
 ```{python}
+rc('figure',figsize=(9,7))
+### Now some statistics on XPol: cumulative histograms for XPol
+k=2
+histos = []
+average_error = []
+for i in range(1,len(subdirs)):
+#    subplot(1, len(subdirs), i+1)
+    param = fit_uniqueth[i,:,0,k]
+    if op[k]=='Log10':
+        param = np.log10(param)
+    param[~myok] = np.nan
+    lab = 'off={} amp={}: '.format(mod_off[i], mod_amp[i])+ft.statstr(param[myok], divide=False, cut=3)
+    a=hist(param[myok], bins=20, range=[-20,0], label=lab, density=True, alpha=0.3)
+    xx = 0.5 * (a[1][1:]+a[1][0:-1])
+    #plot(xx,a[0])
+    histos.append([xx,a[0]])
+    average_error.append(np.median(fit_uniqueth[i,:,1,k]))
+    #xlim(-3,0)
+    xlabel('Maximum damping angle (Deg.)')
+    title(op[k]+' '+params[k])
+    legend(loc='upper left')
+savefig('angle_hwp.png')
+# !pwd
+```
+
+```{python}
 rc('figure',figsize=(15,7))
 ### Now some statistics on XPol: cumulative histograms for XPol
 k=1
@@ -352,12 +378,116 @@ for axis in [ax.xaxis]:
 ```
 
 ```{python}
-for i in range(5):
-    print(np.median(fit_uniqueth[i,:,1,1]))
+rc('figure',figsize=(15,7))
+### Now some statistics on XPol: cumulative histograms for XPol
+k=1
+histos_error = []
+average_error_error = []
+for i in range(len(subdirs)):
+#    subplot(1, len(subdirs), i+1)
+    param = fit_uniqueth[i,:,1,k]
+    if op[k]=='Log10':
+        param = np.log10(param)
+    param[~myok] = np.nan
+    lab = 'off={} amp={}'.format(mod_off[i], mod_amp[i])+ft.statstr(param[myok], divide=False, median=True)
+    a=hist(np.log10(param[myok]), bins=30, range=[-5,0], label=lab, cumulative=True, density=True, alpha=0.5)
+    xx = 0.5 * (a[1][1:]+a[1][0:-1])
+    plot(xx,a[0])
+    histos_error.append([xx,a[0]])
+    average_error_error.append(np.median(fit_uniqueth[i,:,1,k]))
+    xlim(-3,0)
+    title(op[k]+' '+params[k])
+    legend(loc='upper right')
+
 ```
 
 ```{python}
-fit_uniqueth.shape
+rc('figure',figsize=(12,7))
+#### The same but only 1st case and nicer plot (in %)
+fig, ax = plt.subplots()
+#for i in range(len(subdirs)):
+for i in [1]:
+    newx = 10**histos[i][0]
+    p=plot(newx*100,histos[i][1],'o-', label='Cal. Src.: Off={}V Amp={}V'.format(mod_off[i], mod_amp[i]))
+    print(average_error[i])
+    plot(newx*100,histos_error[i][1],'o-', label='Uncertainty on XPol')
+    val50 = np.interp(0.5, histos[i][1], newx*100)
+    print(val50)
+    plot([val50,val50],[0,1],':',color=p[0].get_color(), label='Median: {0:3.1f}%'.format(val50))
+    #plot([average_error[i]*100,average_error[i]*100],[0,1],'-.',
+    #     color=p[0].get_color(), label='Median Uncertainty: {0:3.1f} %'.format(average_error[i]*100))
+xscale('log')
+xlim(0.1,100)
+ylim(0,1)
+legend()
+xlabel('Measured Cross Polarization')
+ylabel('Cumulative Distribution')
+plot(linspace(0.01,100,100),np.zeros(100)+0.5,'k:')
+
+
+#### To have xaxis in % with digits
+from matplotlib.ticker import FuncFormatter
+for axis in [ax.xaxis]:
+    formatter = FuncFormatter(lambda y, _: '{:.16g} %'.format(y))
+    axis.set_major_formatter(formatter)
+
+
+
+```
+
+```{python}
+rc('figure',figsize=(15,7))
+### Now some statistics on XPol: cumulative histograms for XPol
+k=1
+histos_ratio = []
+average_ratio = []
+for i in range(len(subdirs)):
+#    subplot(1, len(subdirs), i+1)
+    param = fit_uniqueth[i,:,1,k]/fit_uniqueth[i,:,0,k]
+    if op[k]=='Log10':
+        param = np.log10(param)
+    param[~myok] = np.nan
+    lab = 'off={} amp={}'.format(mod_off[i], mod_amp[i])+ft.statstr(param[myok], divide=False, median=True)
+    a=hist(np.log10(param[myok]), bins=30, range=[-2,1], label=lab, cumulative=True, density=True, alpha=0.5)
+    xx = 0.5 * (a[1][1:]+a[1][0:-1])
+    plot(xx,a[0])
+    histos_ratio.append([xx,a[0]])
+    average_ratio.append(np.median(fit_uniqueth[i,:,1,k]))
+    #xlim(-3,0)
+    title(op[k]+' '+params[k])
+    legend(loc='upper right')
+
+```
+
+```{python}
+rc('figure',figsize=(12,7))
+#### The same but only 1st case and nicer plot (in %)
+fig, ax = plt.subplots()
+#for i in range(len(subdirs)):
+for i in [1]:
+    newx = 10**histos_ratio[i][0]
+    p=plot(newx,histos_ratio[i][1],'o-', label='Cal. Src.: Off={}V Amp={}V'.format(mod_off[i], mod_amp[i]))
+    val50 = np.interp(0.5, histos_ratio[i][1], newx)
+    print(val50)
+    plot([val50,val50],[0,1],':',color=p[0].get_color(), label='Median: {0:3.1f}'.format(val50))
+    #plot([average_error[i]*100,average_error[i]*100],[0,1],'-.',
+    #     color=p[0].get_color(), label='Median Uncertainty: {0:3.1f} %'.format(average_error[i]*100))
+xscale('log')
+xlim(0.1,10)
+ylim(0,1)
+legend()
+xlabel('Measured ratio: Error(Cross Polarization) / Cross Polarization')
+ylabel('Cumulative Distribution')
+plot(linspace(0.01,100,100),np.zeros(100)+0.5,'k:')
+
+
+#### To have xaxis in % with digits
+from matplotlib.ticker import FuncFormatter
+for axis in [ax.xaxis]:
+    formatter = FuncFormatter(lambda y, _: '{:.16g}'.format(y))
+    axis.set_major_formatter(formatter)
+
+
 ```
 
 ```{python}

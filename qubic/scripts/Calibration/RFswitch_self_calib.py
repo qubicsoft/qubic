@@ -1,14 +1,13 @@
 from __future__ import division, print_function
 import glob
 
-import numpy as np
 from matplotlib.pyplot import *
 import matplotlib.mlab as mlab
 
 from qubicpack import qubicpack as qp
-import fibtools as ft
+import qubic.fibtools as ft
 
-import demodulation_lib as dl
+import qubic.demodulation_lib as dl
 from qubic.utils import progress_bar
 
 # ========== Get data ==================

@@ -323,7 +323,7 @@ class SelfCalibration:
                 raise ValueError('The switch indices must be between 1 and 64 ')
 
             thefile = files[horn_transpose[swi - 1]]
-            print('Horn ', swi, ': ', thefile[98:104])
+            # print('Horn ', swi, ': ', thefile[98:104])
             data = pd.read_csv(thefile, sep='\t', skiprows=0)
             
             allampX[i, :, :] = np.reshape(np.asarray(data['MagX']), (nn, nn)).T

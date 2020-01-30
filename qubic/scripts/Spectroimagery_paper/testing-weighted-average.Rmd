@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.1'
-      jupytext_version: 1.2.4
+      jupytext_version: 1.2.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -39,12 +39,19 @@ plt.rcParams['figure.figsize'] = (5, 5)
 
 ```
 
-# Noisy maps with no correlations
-
 ```{python}
 nside = 16
 npix = 12 * nside**2
 nfrec = 8
+
+nreals = 100
+std = 2
+```
+
+# Noisy maps with no correlations
+
+```{python}
+
 x1_band = np.random.random((1, npix, 3))
 xn_band = np.random.random((nfrec, npix, 3))
 
@@ -54,38 +61,37 @@ xn_mean = np.mean(xn_band)
 xn_std = np.std(xn_band)
 
 # Make many realizations with gaussian noise (no correlations)
-nreals = 100
-std = 2
-#x1_noisy = np.mean([x1_band + np.random.normal(x1_mean, std, 
-#                                               size=x1_band.shape) for i in range(nreals)],axis=0)
-
-#x1_noisy = x1_band + np.random.normal(x1_mean, std, size=x1_band.shape)
-#x1_noisy = np.array(x1_noisy)
-
-x1_noisy = np.zeros((nreals,1,npix,3))
-xn_noisy = np.zeros((nreals,nfrec,npix,3))
+x1_noisy = np.zeros((nreals, 1, npix, 3))
+xn_noisy = np.zeros((nreals, nfrec, npix, 3))
 for i in range(nreals):
-    x1_noisy[i,0,:,:] = x1_band[0,:,:] + np.random.normal(x1_mean, std, size=x1_band[0].shape)
+    x1_noisy[i, 0, :, :] = x1_band[0,:,:] + np.random.normal(x1_mean, std, size=x1_band[0].shape)
     for j in range(nfrec):
-        xn_noisy[i,j,:,:] = xn_band[j,:,:] + np.random.normal(xn_mean, np.sqrt(nfrec)*std, size=xn_band[j].shape)
+        xn_noisy[i, j, :, :] = xn_band[j,:,:] + np.random.normal(xn_mean, np.sqrt(nfrec)*std, size=xn_band[j].shape)
 
-#hp.mollview(x1_band[0, :, 0], title='x0 realization std = {:3.2}'.format(x1_std))
-#hp.mollview(xn_noisy[3,0, :, 0], title='x0 realization + noise (one real.)')
-#plt.hist(x1_noisy[50,0,:,0]-x1_band[0,:,0], bins= 60)
-#plt.hist(x1_noisy[50,0,:,0], bins= 60,color='r')
+# hp.mollview(x1_band[0, :, 0], title='x0 realization std = {:3.2}'.format(x1_std))
+# hp.mollview(xn_noisy[3, 0, :, 0], title='x0 realization + noise (one real.)')
+
+# plt.figure()
+# plt.subplot(121)
+# plt.hist(x1_noisy[50,0,:,0]-x1_band[0,:,0], bins= 60)
+
+# plt.subplot(122)
+# plt.hist(x1_noisy[50,0,:,0], bins= 60,color='r')
 ```
 
 ***
 Check noise realizations for 1 and N subbands.. ok..works 
 
 ```{python}
-#1st sigma over px (sigma_1r) ALL for Stokes I then average variance
-def method_a1(x1, nr, stokes=0,sb=0):
+# Variance over px first (sigma_1r) ALL for Stokes I then average variance
+def method_a1(x1, nr, stokes=0, sb=0):
     sigma_1r = np.zeros((nr,))
     for ire in range(nr):
         sigma_1r[ire] = np.var(x1[ire,sb,:,stokes], ddof=0)
     sigma_1 = np.mean(sigma_1r)
     return sigma_1
+
+# Variance over pixels and reals directly
 def method_b1(x1, nr, stokes=0,sb=0):
     sigma_1 = np.var(x1[:,sb,:,stokes])
     return sigma_1
@@ -112,8 +118,8 @@ Compute mean of std in reals for a given subband... ~4, ok!
 ```
 
 ```{python}
-#nfrecon = [1, 2, 4, 8]
-Cp = amc.get_Cp(xn_noisy, nfrecon=[8,])
+Cp = amc.get_Cp(xn_noisy, nfrecon=[nfrec,], verbose=False)
+print(Cp.shape)
 ```
 
 ```{python}
@@ -123,25 +129,25 @@ center = equ2gal(RA_center, DEC_center)
 
 ang = rmc.pix2ang(nside, center)
 
-weighted_av, sig2, sigmean = amc.make_weighted_av(xn_noisy, Cp, ang, ang_threshold=80, verbose=True)
-```
+weighted_av, sig2, sig2mean = amc.make_weighted_av(xn_noisy, Cp, ang, ang_threshold=360, verbose=True)
 
-```{python}
-#aa=[]
-#for ire in range(nreals):
-#    aa.append(np.std(weighted_av[ire,:,0]))
-#print(np.mean(aa))
+print('sig2mean: ', sig2mean)
 ```
 
 ```{python}
 sig2MC = np.var(weighted_av, axis=0)
-sigMCmean = amc.average_pix_sig2(sig2MC, ang, ang_threshold=80)
-print(sig2MC)
+
+
+sigMCmean = amc.average_pix_sig2(sig2MC, ang, ang_threshold=360)
+
+print(np.mean(sig2MC, axis=0))
 print(sigMCmean)
+
+print(np.var(x1_noisy, axis=(0,1, 2)))
 ```
 
 ```{python}
-freqs = [1,2,4,8]
+freqs = [1, 2, 4, 8, 16]
 std1 = np.array([[1.08, 0.98, 0.96, 0.92],
                 [1.08, 0.98, 0.95, 0.91],
                 [1.08, 0.99, 0.96, 0.93]])
@@ -150,16 +156,31 @@ std2 = np.array([[4.08, 3.93, 3.83, 3.70],
                 [4.09, 3.88, 3.82, 3.68],
                 [4.10, 3.93, 3.84, 3.66]])
 
-stdarr = std2
-plt.ylim(0.5,1.5)
+std3 = np.array([[4.08101682, 4.08748354, 4.08883004],
+                 [3.92672926, 3.90532196, 3.9201436 ],
+                 [3.85133933, 3.83494774, 3.84539993],
+                 [3.66006161, 3.69489577, 3.6922878 ],
+                 [3.36394261, 3.3458484,  3.35276497]])
+
+
+stdarr = std3
+plt.ylim(0.7, 1.1)
 plt.xlabel('nfrec', fontsize=16)
 plt.ylabel(r'$\sigma_{fnrec}^2/\sigma_1^2$', fontsize=16)
-plt.plot(freqs, stdarr[0,:]/stdarr[0,0], 'b*', label='I comp')
-plt.plot(freqs, stdarr[1,:]/stdarr[1,0], 'm*', label='Q ')
-plt.plot(freqs, stdarr[2,:]/stdarr[2,0], 'c*', label='U ')
-plt.text(4,1.4, 'std=2',fontsize=16)
-plt.axhline(1.0, c='k',ls='--',alpha=0.5)
+# plt.plot(freqs, stdarr[0,:]/stdarr[0, 0], 'b*', label='I comp')
+# plt.plot(freqs, stdarr[1,:]/stdarr[1, 0], 'm*', label='Q ')
+# plt.plot(freqs, stdarr[2,:]/stdarr[2, 0], 'c*', label='U ')
+
+plt.plot(freqs, stdarr[:, 0]/stdarr[0, 0], 'b*', label='I comp')
+plt.plot(freqs, stdarr[:, 1]/stdarr[0, 1], 'm*', label='Q ')
+plt.plot(freqs, stdarr[:, 2]/stdarr[0, 2], 'c*', label='U ')
+
+plt.text(4, 1.4, 'std=2', fontsize=16)
+plt.axhline(1.0, c='k',ls='--', alpha=0.5)
 plt.legend()
+
+print(stdarr[:, 0]/stdarr[0, 0])
+
 ```
 
 ***
@@ -210,9 +231,9 @@ plt.imshow(c.T @ c)
 plt.title('c*c^T')
 
 # Check correlation coeff between lines or columns
-corr1 , _ = pearsonr(r[:, 0], r[:, -1])
-corr2 , _ = pearsonr(r[0, :], r[2, :])
-print(corr1, corr2)
+# corr1 , _ = pearsonr(r[:, 0], r[:, -1])
+# corr2 , _ = pearsonr(r[0, :], r[2, :])
+# print(corr1, corr2)
 ```
 
 ```{python}
@@ -222,14 +243,14 @@ for ipix in range(npix):
     for istokes in range(3):
         xn_noisy_corr[:, :, ipix, istokes] = xn_noisy[:, :, ipix, istokes] @ c
 
-hp.mollview(xn_noisy_corr[0, 0, :, 0])
-hp.mollview(xn_noisy_corr[3, 0, :, 0])
+# hp.mollview(xn_noisy_corr[0, 0, :, 0])
+# hp.mollview(xn_noisy_corr[3, 0, :, 0])
 #xn_noisy_corr
 ```
 
 ```{python}
 # Check the functions from AnalysisMC
-Cp_corr = amc.get_Cp(xn_noisy_corr, nfrecon=[8,], verbose=False)
+Cp_corr = amc.get_Cp(xn_noisy_corr, nfrecon=[nfrec,], verbose=False)
 
 istokes = 1
 ipix = 100
@@ -239,10 +260,6 @@ plt.subplot(141)
 plt.imshow(Cp_corr[:, :, istokes, ipix])
 plt.title('Cp cor')
 plt.colorbar()
-```
-
-```{python}
-help(np.random.multivariate_normal)
 ```
 
 ```{python}
@@ -256,7 +273,7 @@ for ipix in range(npix):
 hp.mollview(xn_noisy_corr[40, 0, :, 0])
 
 # Check it is still ok
-Cp_corr2 = amc.get_Cp(xn_noisy_corr, nfrecon=[8,], verbose=False)
+Cp_corr2 = amc.get_Cp(xn_noisy_corr, nfrecon=[nfrec,], verbose=False)
 #Cp_prime = amc.Cp2Cp_prime(Cp, verbose=True)
 #Cp_prime_viaCorr = amc.Cp2Cp_prime_viaCorr(Cp, verbose=True)
 
@@ -286,28 +303,50 @@ plt.colorbar()
 ```
 
 ```{python}
-weighted_av, sig2, sigmean = amc.make_weighted_av(x0_noisy_corr, Cp, ang, ang_threshold=90, 
+weighted_av, sig2, sigmean = amc.make_weighted_av(xn_noisy_corr, Cp_corr, ang, ang_threshold=90, 
                                                verbose=True)
 print(sig2, sigmean)
 ```
 
 ```{python}
-hp.mollview(weighted_av[0, :, 0])
-```
-
-```{python}
 sig2MC = np.var(weighted_av, axis=0)
+print(np.mean(sig2MC, axis=0))
+
 sigMCmean = amc.average_pix_sig2(sig2MC, ang, ang_threshold=80)
-print(sig2MC, sigMCmean)
-plt.plot(sig2MC[:, 2])
+print(sigMCmean)
+
+print(np.var(x1_noisy, axis=(0,1, 2)))
+
+# plt.plot(sig2MC[:, 2])
 ```
 
 ```{python}
+freqs = [1, 2, 4, 8]
 
-```
 
-```{python}
+std2_corr = np.array([[4.08364305, 4.07949953, 4.08390436],
+                 [5.86445449, 5.87675453, 5.87504236],
+                 [9.59916943, 9.56667076, 9.60134554],
+                 [16.62277033, 16.52551916, 16.53546909],                 
+                 ])
 
+stdarr = std2_corr
+# plt.ylim(0.7, 1.1)
+plt.xlabel('nfrec', fontsize=16)
+plt.ylabel(r'$\sigma_{fnrec}^2/\sigma_1^2$', fontsize=16)
+
+plt.plot(freqs, stdarr[:, 0]/stdarr[0, 0], 'b*', label='I comp')
+plt.plot(freqs, stdarr[:, 1]/stdarr[0, 1], 'm*', label='Q ')
+plt.plot(freqs, stdarr[:, 2]/stdarr[0, 2], 'c*', label='U ')
+
+plt.plot(freqs, freqs)
+plt.plot(freqs, np.sqrt(freqs))
+
+plt.text(4, 1.4, 'std=2', fontsize=16)
+plt.axhline(1.0, c='k',ls='--', alpha=0.5)
+plt.legend()
+
+print(stdarr[:, 0]/stdarr[0, 0])
 ```
 
 ```{python}

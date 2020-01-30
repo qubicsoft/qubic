@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from __future__ import division, print_function
 import iminuit
 import math
@@ -16,8 +17,10 @@ from qubic.utils import progress_bar
 
 from qubicpack import qubicpack as qp
 from qubicpack.pix2tes import assign_pix_grid, assign_pix2tes, tes2pix, pix2tes, TES2PIX
+
 pix_grid = assign_pix_grid()
 TES2PIX = assign_pix2tes()
+
 
 def printnow(truc):
     print(truc)
@@ -86,10 +89,10 @@ def image_asics(data1=None, data2=None, all1=None):
     for row in range(nrows):
         for col in range(ncols):
             physpix = pix_grid[row, col]
-            TES,asic = pix2tes(physpix)
-            if data1 is not None and asic==1:
+            TES, asic = pix2tes(physpix)
+            if data1 is not None and asic == 1:
                 img[row, col] = data1[TES - 1]
-            if data2 is not None and asic==2:
+            if data2 is not None and asic == 2:
                 img[row, col] = data2[TES - 1]
     return img
 
@@ -98,6 +101,8 @@ def image_asics(data1=None, data2=None, all1=None):
 ################################## Fitting ###################################
 ##############################################################################
 """
+
+
 def thepolynomial(x, pars):
     """
     Generic polynomial function
@@ -112,6 +117,7 @@ class MyChi2:
     """
     Class defining the minimizer and the data
     """
+
     def __init__(self, xin, yin, covarin, functname, extra_args=None):
         self.x = xin
         self.y = yin
@@ -125,10 +131,12 @@ class MyChi2:
         chi2 = np.dot(np.dot(self.y - val, self.invcov), self.y - val)
         return chi2
 
+
 class MyChi2_nocov:
     """
     Class defining the minimizer and the data
     """
+
     def __init__(self, xin, yin, invcovarin, functname):
         self.x = xin
         self.y = yin
@@ -136,15 +144,15 @@ class MyChi2_nocov:
 
     def __call__(self, *pars):
         val = self.functname(self.x, pars)
-        chi2 = np.sum((self.y - val)**2)
-        #chi2 = np.dot(self.y - val, self.y - val)
+        chi2 = np.sum((self.y - val) ** 2)
+        # chi2 = np.dot(self.y - val, self.y - val)
         return chi2
 
 
 ### Call Minuit
 def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=None, rangepars=None, nohesse=False,
-              force_chi2_ndf=False, verbose=True, minos=False, extra_args=None, print_level=0, force_diag=False, 
-              nsplit=1, ncallmax = 10000, precision=None):
+              force_chi2_ndf=False, verbose=True, minos=False, extra_args=None, print_level=0, force_diag=False,
+              nsplit=1, ncallmax=10000, precision=None):
     """
 
     Parameters
@@ -179,7 +187,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
         chi2 = MyChi2(x, y, covar, functname, extra_args=extra_args)
     # nohesse=False
     else:
-        chi2 = chi2(x,y, covar, functname)
+        chi2 = chi2(x, y, covar, functname)
         nohesse = True
     # variables
     ndim = np.size(guess)
@@ -202,12 +210,11 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     if rangepars is not None:
         for i in range(len(parnames)):
             drng['limit_' + parnames[i]] = rangepars[i]
-            dstep['error_' + parnames[i]] = (rangepars[i][1]-rangepars[i][0])/10
+            dstep['error_' + parnames[i]] = (rangepars[i][1] - rangepars[i][0]) / 10
     else:
         for i in range(len(parnames)):
             drng['limit_' + parnames[i]] = False
             dstep['error_' + parnames[i]] = False
-
 
     # Run Minuit
     if verbose: print('Fitting with Minuit')
@@ -218,18 +225,18 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     else:
         for k in dfix.keys(): theguess[k] = dfix[k]
         theargs = theguess
-        if rangepars is not None: 
+        if rangepars is not None:
             for k in drng.keys(): theguess[k] = drng[k]
         theargs.update(theguess)
     m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=1., print_level=print_level, **theargs)
-    m.migrad(ncall=ncallmax*nsplit, nsplit=nsplit, precision=precision)
-    #print('Migrad Done')
+    m.migrad(ncall=ncallmax * nsplit, nsplit=nsplit, precision=precision)
+    # print('Migrad Done')
     if minos:
         m.minos()
-        #print('Minos Done')
+        # print('Minos Done')
     if nohesse is False:
         m.hesse()
-        #print('Hesse Done')
+        # print('Hesse Done')
     # build np.array output
     parfit = []
     for i in parnames: parfit.append(m.values[i])
@@ -272,8 +279,8 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 # ##############################################################################
 
 
-def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True, log=False, 
-            median=False,cutbad=True,rebin_as_well=None, clip=None,mode=False):
+def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True, log=False,
+            median=False, cutbad=True, rebin_as_well=None, clip=None, mode=False):
     """
 
     Parameters
@@ -326,16 +333,16 @@ def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True
         if median:
             yval[i] = np.median(y[ok])
         elif mode:
-            mm,ss = meancut(y[ok],3)
-            hh=np.histogram(y[ok], bins=int(np.min([len(y[ok])/30, 100])),range=[mm-5*ss,mm+5*ss])
+            mm, ss = meancut(y[ok], 3)
+            hh = np.histogram(y[ok], bins=int(np.min([len(y[ok]) / 30, 100])), range=[mm - 5 * ss, mm + 5 * ss])
             idmax = np.argmax(hh[0])
-            yval[i] = 0.5*(hh[1][idmax+1]+hh[1][idmax])
+            yval[i] = 0.5 * (hh[1][idmax + 1] + hh[1][idmax])
         else:
             yval[i] = np.mean(y[ok])
-        xc[i] = (xmax[i]+xmin[i])/2
+        xc[i] = (xmax[i] + xmin[i]) / 2
         if rebin_as_well is not None:
             for o in range(nother):
-                others[i,o] = np.mean(rebin_as_well[o][ok])
+                others[i, o] = np.mean(rebin_as_well[o][ok])
         if dispersion:
             fact = 1
         else:
@@ -350,7 +357,7 @@ def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True
         if others is None:
             return xc[ok], yval[ok], dx[ok], dy[ok], others
         else:
-            return xc[ok], yval[ok], dx[ok], dy[ok], others[ok,:]
+            return xc[ok], yval[ok], dx[ok], dy[ok], others[ok, :]
     else:
         yval[~ok] = 0
         dy[~ok] = 0
@@ -366,17 +373,22 @@ def exponential_filter1d(input, sigma, axis=-1, output=None, mode="reflect", cva
     input
     sigma : scalar
         Tau of exponential kernel
-    axis
-    output
-    mode
-    cval
+    axis : int, optional
+        The axis of input along which to calculate. 
+        Default is -1.
+
+    output : array or dtype, optional
+        The array in which to place the output, or the dtype of the returned array. 
+        By default an array of the same dtype as input will be created.
+        
+    mode : {‘reflect’, ‘constant’, ‘nearest’, ‘mirror’, ‘wrap’}, optional
+        The mode parameter determines how the input array is extended beyond its boundaries. 
+        Default is ‘reflect’.
+    cval : scalar, optional
+        Value to fill past edges of input if mode is ‘constant’. Default is 0.0.
     truncate : float
         Truncate the filter at this many standard deviations.
         Default is 4.0.
-
-    Returns
-    -------
-    gaussian_filter1d : ndarray
 
     """
     sd = float(sigma)
@@ -387,7 +399,7 @@ def exponential_filter1d(input, sigma, axis=-1, output=None, mode="reflect", cva
     sum = 1.0
     # calculate the kernel:
     for ii in range(1, lw + 1):
-        tmp = math.exp(-(float(ii) / sd)**power)
+        tmp = math.exp(-(float(ii) / sd) ** power)
         weights[lw + ii] = tmp * 0
         weights[lw - ii] = tmp
         sum += tmp
@@ -483,7 +495,6 @@ def read_hkintern(basedir, thefieldname=None):
         newdate = np.interp(indices, indices[ppson], gpsdate[ppson] + 1000) * 1e-3
 
         # read the azimuth position
-        fieldname = 'Platform-Azimut'
         fieldno = fields[thefieldname]
         hk = hk[1].data.field(fieldno - 1)
         return newdate, hk
@@ -599,24 +610,24 @@ def meancut(data, nsig, med=False, disp=True):
     else:
         sc = np.sqrt(len(dd))
     if med:
-        return np.median(dd), np.std(dd)/sc
+        return np.median(dd), np.std(dd) / sc
     else:
-        return np.mean(dd), np.std(dd)/sc
+        return np.mean(dd), np.std(dd) / sc
 
 
-def weighted_mean(x,dx, dispersion=True):
+def weighted_mean(x, dx, dispersion=True):
     """
     Calculated the weighted mean of data, errors
     If dispersion is True (default) the error on the mean comes from the RMS of the data, otherwise
     the error on the weighted mean is analytically calculated from input errors
     """
-    w = 1./dx**2
+    w = 1. / dx ** 2
     sumw = np.sum(w)
-    mm = np.sum(w*x)/sumw
+    mm = np.sum(w * x) / sumw
     if dispersion:
         ss = np.std(x)
     else:
-        ss = 1./np.sqrt(sumw)
+        ss = 1. / np.sqrt(sumw)
     return mm, ss
 
 
@@ -625,11 +636,13 @@ def simsig(x, pars, extra_args=None):
 
     Parameters
     ----------
-    x
-    pars
+    x : list
+    pars : list
+        List with 4 parameters: cycle, ctime, initial time, amplitude
 
     Returns
     -------
+    A simulated signal.
 
     """
     dx = x[1] - x[0]
@@ -637,31 +650,26 @@ def simsig(x, pars, extra_args=None):
     ctime = np.nan_to_num(pars[1])
     t0 = np.nan_to_num(pars[2])
     amp = np.nan_to_num(pars[3])
-#     cycle = pars[0]
-#     ctime = pars[1]
-#     t0 = pars[2]
-#     amp = pars[3]
     sim_init = np.zeros(len(x))
     ok = x < (cycle * (np.max(x)))
     sim_init[ok] = 1.
+
+    # Add a phase
     sim_init_shift = np.interp((x - t0) % max(x), x, sim_init)
+
+    # Convolved by a filter
     # thesim = -1 * gaussian_filter1d(sim_init_shift, ctime, mode='wrap')
     thesim = -1 * exponential_filter1d(sim_init_shift, ctime / dx, mode='wrap')
+
+    # Normalization
     thesim = (thesim - np.mean(thesim)) / np.std(thesim) * amp
+
     return np.nan_to_num(thesim)
 
 
 def simsig_nonorm(x, pars):
     """
-
-    Parameters
-    ----------
-    x
-    pars
-
-    Returns
-    -------
-
+    Same as simsig but without normalisation.
     """
     dx = x[1] - x[0]
     cycle = np.nan_to_num(pars[0])
@@ -671,8 +679,14 @@ def simsig_nonorm(x, pars):
     sim_init = np.zeros(len(x))
     ok = x < (cycle * (np.max(x)))
     sim_init[ok] = amp
+
+    # Add a phase
     sim_init_shift = np.interp((x - t0) % max(x), x, sim_init)
+
+    # Convolved by a filter
     thesim = -1 * exponential_filter1d(sim_init_shift, ctime / dx, mode='wrap')
+
+    # Center the signal
     thesim = (thesim - np.mean(thesim))
     return thesim
 
@@ -687,37 +701,80 @@ def simsig_asym(x, pars, extra_args=None):
     offset = np.nan_to_num(pars[5])
     sim_init = np.zeros(len(x))
     ok = x < (cycle * (np.max(x)))
-    sim_init[ok] = -1+np.exp(-x[ok]/ctime_rise)
-    if ok.sum()>0:
+    sim_init[ok] = -1 + np.exp(-x[ok] / ctime_rise)
+    if ok.sum() > 0:
         endval = sim_init[ok][-1]
     else:
         endval = -1.
-    sim_init[~ok] = -np.exp(-(x[~ok]-x[~ok][0])/ctime_fall)+1+endval
+    sim_init[~ok] = -np.exp(-(x[~ok] - x[~ok][0]) / ctime_fall) + 1 + endval
     thesim = np.interp((x - t0) % max(x), x, sim_init)
-    thesim = thesim*amp+offset
+    thesim = thesim * amp + offset
     return np.nan_to_num(thesim)
 
 
+def simsig_fringes(x, stable_time, params):
+    """
+    Simulate a TOD signal obtained during the fringe measurement.
+    This function was done to make a fit.
+    Parameters
+    ----------
+    x : array
+        Time sampling.
+    stable_time : float
+        Number of second the signal keep constant
+    params : list
+        ctime, starting time, the 6 amplitudes.
 
-def fold_data(time, dd, period, lowcut, highcut, nbins, 
+    Returns
+    -------
+    The simulated signal.
+
+    """
+    dx = x[1] - x[0]
+    npoints = len(x)
+    tf = x[-1]
+
+    ctime = params[0]
+    x0 = params[1]
+    amp = params[2:8]
+    #     print(amp)
+
+    sim_init = np.zeros(len(x))
+
+    for i in range(6):
+        a = int(npoints / tf * stable_time * i)
+        b = int((stable_time * i + stable_time) * npoints / tf)
+        #         print(a, b)
+        sim_init[a: b] = amp[i]
+
+    # Add a phase
+    sim_init_shift = np.interp((x - x0) % max(x), x, sim_init)
+
+    # Convolved by an exponential filter
+    thesim = exponential_filter1d(sim_init_shift, ctime / dx, mode='wrap')
+
+    return np.array(thesim).astype(np.float64)
+
+
+def fold_data(time, dd, period, lowcut, highcut, nbins,
               notch=None, rebin=None, verbose=None,
               return_error=False, silent=False, median=False, return_noise_harmonics=None):
     """
 
     Parameters
     ----------
-    time
-    dd
-    period
-    lowcut
-    highcut
+    time : array
+    dd : array
+        Data signal.
+    period : float
+        Data will be folded on this period.
+    lowcut : float
+        Low cut for the band filter.
+    highcut : float
+        High cut for the band filter.
     nbins
     notch
     return_error
-
-    Returns
-    -------
-
     """
     tfold = time % period
     FREQ_SAMPLING = 1. / (time[1] - time[0])
@@ -733,24 +790,26 @@ def fold_data(time, dd, period, lowcut, highcut, nbins,
         fmin = np.zeros(nharm)
         fmax = np.zeros(nharm)
         fnoise = np.zeros(nharm)
-        noise = np.zeros((ndet,nharm))
+        noise = np.zeros((ndet, nharm))
         for i in range(nharm):
-            fmin[i] = 1. / period * (i+1) * (1+margin/(i+1))
-            fmax[i] = 1. / period * (i+2) * (1-margin/(i+1))
-            fnoise[i] = 0.5*(fmin[i]+fmax[i])
+            fmin[i] = 1. / period * (i + 1) * (1 + margin / (i + 1))
+            fmax[i] = 1. / period * (i + 2) * (1 - margin / (i + 1))
+            fnoise[i] = 0.5 * (fmin[i] + fmax[i])
 
     folded = np.zeros((ndet, nbins))
     folded_nonorm = np.zeros((ndet, nbins))
     dfolded = np.zeros((ndet, nbins))
     dfolded_nonorm = np.zeros((ndet, nbins))
-    if not silent: bar = progress_bar(ndet, 'Detectors ')
+    if not silent:
+        bar = progress_bar(ndet, 'Detectors ')
     for THEPIX in range(ndet):
-        if not silent: bar.update()
+        if not silent:
+            bar.update()
         data = dd[THEPIX, :]
         newdata = filter_data(time, data, lowcut, highcut, notch=notch, rebin=rebin, verbose=verbose)
-        t, yy, dx, dy, others = profile(tfold, newdata, range=[0, period], 
-                                        nbins=nbins, dispersion=False, plot=False, 
-                                        cutbad=False, median=median)    
+        t, yy, dx, dy, others = profile(tfold, newdata, range=[0, period],
+                                        nbins=nbins, dispersion=False, plot=False,
+                                        cutbad=False, median=median)
         folded[THEPIX, :] = (yy - np.mean(yy)) / np.std(yy)
         folded_nonorm[THEPIX, :] = (yy - np.mean(yy))
         dfolded[THEPIX, :] = dy / np.std(yy)
@@ -758,8 +817,8 @@ def fold_data(time, dd, period, lowcut, highcut, nbins,
         if return_noise_harmonics is not None:
             spectrum, freq = power_spectrum(time, newdata, rebin=True)
             for i in range(nharm):
-                ok = (freq >= fmin[i]) & (freq < fmax[i]) 
-                noise[THEPIX,i] = np.sqrt(np.mean(spectrum[ok]))
+                ok = (freq >= fmin[i]) & (freq < fmax[i])
+                noise[THEPIX, i] = np.sqrt(np.mean(spectrum[ok]))
 
     if return_error:
         if return_noise_harmonics:
@@ -802,12 +861,13 @@ def filter_data(time_in, data_in, lowcut, highcut, rebin=True, verbose=False, no
         data = data_in
 
     FREQ_SAMPLING = 1. / ((np.max(time) - np.min(time)) / len(time))
-    filt = scsig.butter(order, [2*lowcut / FREQ_SAMPLING, 2*highcut / FREQ_SAMPLING], btype='bandpass', output='sos')
+    filt = scsig.butter(order, [2 * lowcut / FREQ_SAMPLING, 2 * highcut / FREQ_SAMPLING], btype='bandpass',
+                        output='sos')
     if len(sh) == 1:
         dataf = scsig.sosfilt(filt, data)
     else:
         dataf = scsig.sosfilt(filt, data, axis=1)
-    
+
     if notch is not None:
         for i in range(len(notch)):
             ftocut = notch[i][0]
@@ -815,8 +875,8 @@ def filter_data(time_in, data_in, lowcut, highcut, rebin=True, verbose=False, no
             nharmonics = notch[i][2].astype(int)
             if verbose: print('Notching {} Hz with width {} and {} harmonics'.format(ftocut, bw, nharmonics))
             for j in range(nharmonics):
-                dataf = notch_filter(dataf, ftocut*(j+1), bw, FREQ_SAMPLING)
-    
+                dataf = notch_filter(dataf, ftocut * (j + 1), bw, FREQ_SAMPLING)
+
     return dataf
 
 
@@ -914,7 +974,8 @@ def fit_average(t, folded, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 
     return av, params_av, err_av
 
 
-def fit_all(t, folded, av, initpars=None, fixpars=[0, 0, 0, 0], stop_each=False, functname=simsig, rangepars=None):
+def fit_all(t, folded, av, initpars=None, fixpars=[0, 0, 0, 0],
+            stop_each=False, functname=simsig, rangepars=None):
     """
 
     Parameters

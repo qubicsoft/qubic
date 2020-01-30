@@ -118,6 +118,18 @@ for i in range(nv):
 ```
 
 ```{python}
+rc('figure',figsize=(9, 7))
+
+errorbar(voltage, mean_rise, yerr=sig_rise,fmt='ro', label='Rise Time')
+errorbar(voltage, mean_fall, yerr=sig_fall,fmt='bo', label='Fall Time')
+ylabel('Average Time COnstant [sec]')
+xlabel('TES Bias [V]')
+legend()
+ylim(0,0.15)
+
+```
+
+```{python}
 reload(ft)
 rc('figure',figsize=(15, 10))
 subplot(2,2,1)
@@ -210,6 +222,32 @@ ylabel('Cumulative Distribution')
 title('VBias={0:3.1f}$\mu$V '.format(voltage[i]))
 ```
 
+```{python}
+i=20
+thisok = alldata[i,:,1] != 0
+
+rise_times = alldata[i,thisok,0]
+a = hist(rise_times, range=[0,0.3], bins=15, density=True, alpha=0.5)
+yy = a[0]
+xx = 0.5*(a[1][1:]+a[1][0:-1])
+
+fall_times = alldata[i,thisok,2]
+a = hist(fall_times, range=[0,0.3], bins=15, density=True, alpha=0.5)
+yy = a[0]
+xx = 0.5*(a[1][1:]+a[1][0:-1])
+
+```
+
+```{python}
+i=20
+rt =  alldata[i,:,0]
+thisok = alldata[i,:,1] != 0
+rt[~thisok] = np.nan
+img = ft.image_asics(all1=rt)
+imshow(img,vmin=0,vmax=0.2)
+colorbar()
+```
+
 <!-- #region -->
 From https://kicp-workshops.uchicago.edu/CMB-School/resources/depot/benson__2.pdf I find:
 
@@ -242,6 +280,10 @@ because $\mathcal{L}$ is large.
 
 ### NB: Of course, all the above is only true in the ETF mode, which is not quite the case now... So the fitting here is a bit meaningless in reality...###
 <!-- #endregion -->
+
+```{python}
+
+```
 
 ```{python}
 ### Fit them together

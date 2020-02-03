@@ -5,6 +5,7 @@ import qubic.plotters as p
 import qubic.lin_lib as ll
 import qubic
 from pysimulators import FitsArray
+from qubic.utils import progress_bar
 
 import numpy as np
 from matplotlib.pyplot import *
@@ -294,6 +295,81 @@ def return_fit_period(period, indata, others=None, verbose=False, template=None)
     else:
         return tper, ampdata, err_ampdata, newothers
 
+# def demodulate_JC(period, indata, indata_src, others=None, verbose=False, template=None, quadrature=False, 
+#     remove_noise=False, doplot=False):
+#     ### Proper demodulation with quadrature methoid as an option: http://web.mit.edu/6.02/www/s2012/handouts/14.pdf
+#     ### In the case of quadrature demodulation, the HF noise RMS/sqrt(2) adds to the demodulated. 
+#     ### The option remove_noise=True
+#     ### estimates the HF noise in the TODs and removes it from the estimate in order to attempt to debias.
+#     time = indata[0]
+#     data = indata[1]
+#     sh = data.shape
+#     if len(sh)==1:
+#         data = np.reshape(data, (1,sh[0]))
+#     time_src = indata_src[0]
+#     data_src = indata_src[1]
+#     #print(quadrature)
+#     if quadrature==True:
+#         ### Shift src data by 1/2 period
+#         data_src_shift = np.interp(time_src-period/2, time_src, data_src, period=period)
+#         demod = (np.sqrt((data*data_src)**2 + (data*data_src_shift)**2))/np.sqrt(2)
+#     else:
+#         demod = data*data_src
+
+#     ### Now smooth over a period
+#     import scipy.signal as scsig
+#     FREQ_SAMPLING = 1./(time[1]-time[0])
+#     size_period = int(FREQ_SAMPLING * period) + 1
+#     filter_period = np.ones((size_period,)) / size_period
+#     demodulated = np.zeros_like(demod)
+#     sh=np.shape(demod)
+#     bar=progress_bar(sh[0], 'Filtering Detectors: ')
+#     for i in range(sh[0]):
+#         bar.update()
+#         demodulated[i,:] = scsig.fftconvolve(demod[i,:], filter_period, mode='same')
+
+#     # Remove First and last periods
+#     nper = 4.
+#     nsamples = int(nper * period / (time[1]-time[0]))
+#     timereturn = time[nsamples:-nsamples]
+#     demodulated = demodulated[:, nsamples:-nsamples]
+
+#     if remove_noise:
+#         hf_noise = hf_noise_estimate(time, data)/np.sqrt(2)
+#         var_diff = np.zeros((sh[0], len(timereturn)))
+#         for k in range(sh[0]):
+#             var_diff[k,:] = demodulated[k,:]**2 - hf_noise[k]**2
+#         demodulated = np.sqrt(np.abs(var_diff))*np.sign(var_diff)
+
+
+#     if doplot:
+#         sh = np.shape(data)
+#         if sh[0] > 1:
+#             thetes = 95
+#         else:
+#             thetes = 0
+
+#         clf()
+#         subplot(2,1,1)
+#         plot(time-time[0], renorm(data[thetes,:]), label='Data TES {}'.format(thetes+1))
+#         plot(time-time[0], renorm(data_src),label='Src used for demod')
+#         plot(time-time[0], renorm(demod[thetes,:]),label='Demod signal')
+#         plot(timereturn-time[0], renorm(demodulated[thetes,:]),label='Demod Low-passed')
+#         legend(loc='lower right')
+#         subplot(2,1,2)
+#         plot(time-time[0], renorm(data[thetes,:])+5, label='Data TES {}'.format(thetes+1))
+#         plot(time-time[0], renorm(data_src)+5,label='Src used for demod')
+#         plot(time-time[0], renorm(demod[thetes,:]),label='Demod signal')
+#         plot(timereturn-time[0], renorm(demodulated[thetes,:]),label='Demod Low-passed')
+#         xlim(30,70)
+#         legend(loc='lower right')
+#         show()
+#         # stop
+
+#     if sh[0]==1:
+#         demodulated = demodulated[0,:]
+#     return timereturn, demodulated, demodulated*0+1
+
 def demodulate_JC(period, indata, indata_src, others=None, verbose=False, template=None, quadrature=False, 
     remove_noise=False, doplot=False):
     ### Proper demodulation with quadrature methoid as an option: http://web.mit.edu/6.02/www/s2012/handouts/14.pdf
@@ -311,19 +387,23 @@ def demodulate_JC(period, indata, indata_src, others=None, verbose=False, templa
     if quadrature==True:
         ### Shift src data by 1/2 period
         data_src_shift = np.interp(time_src-period/2, time_src, data_src, period=period)
-        demod = (np.sqrt((data*data_src)**2 + (data*data_src_shift)**2))/np.sqrt(2)
-    else:
-        demod = data*data_src
 
     ### Now smooth over a period
     import scipy.signal as scsig
     FREQ_SAMPLING = 1./(time[1]-time[0])
     size_period = int(FREQ_SAMPLING * period) + 1
     filter_period = np.ones((size_period,)) / size_period
-    demodulated = np.zeros_like(demod)
-    sh=np.shape(demod)
+    demodulated = np.zeros_like(data)
+    sh=np.shape(data)
+    #bar=progress_bar(sh[0], 'Filtering Detectors: ')
     for i in range(sh[0]):
-        demodulated[i,:] = scsig.fftconvolve(demod[i,:], filter_period, mode='same')
+        #bar.update()
+        if quadrature == True:
+            demodulated[i,:] = scsig.fftconvolve((np.sqrt((data[i,:]*data_src)**2 + (data[i,:]*data_src_shift)**2))/np.sqrt(2), 
+                                    filter_period, mode='same')
+        else:
+            demodulated[i,:] = scsig.fftconvolve(data[i,:]*data_src, 
+                                    filter_period, mode='same')
 
     # Remove First and last periods
     nper = 4.
@@ -366,7 +446,6 @@ def demodulate_JC(period, indata, indata_src, others=None, verbose=False, templa
     if sh[0]==1:
         demodulated = demodulated[0,:]
     return timereturn, demodulated, demodulated*0+1
-
 
 
 def demodulate_methods(data_in, fmod, fourier_cuts=None, verbose=False, src_data_in=None, method='demod', 
@@ -1355,4 +1434,72 @@ def hwp_fitpol(thvals, ampvals, ampvals_err, doplot=False, str_title=None, satur
     return fithwp
 
 
+def coadd_flatmap(datain, az, el, 
+                      azmin=None, azmax=None, elmin=None, elmax=None, naz=50, nel=50,
+                      filtering=None, silent=False, remove_eltrend=True):
+    if azmin is None:
+        azmin = np.min(az)
+    if azmax is None:
+        azmax = np.max(az)
+    if elmin is None:
+        elmin = np.min(el)
+    if elmax is None:
+        elmax = np.max(el)
+
+    sh = np.shape(datain)
+    if len(sh)==1:
+        nTES = 1
+        nsamples = sh[0]
+        data = np.reshape(datain, (1,len(datain)))
+    else:
+        nTES = sh[0]
+        nsamples = sh[1]
+        data = datain
+        
+    if filtering:
+        if not silent: bar=progress_bar(nTES, 'Filtering Detectors: ')
+        for i in range(nTES):
+            data[i,:] = ft.filter_data(filtering[0], data[i,:], filtering[1], filtering[2], notch=filtering[3], 
+                                  rebin=True, verbose=False, order=5)
+            if not silent: bar.update()
+            
+
+    map_az_lims = np.linspace(azmin, azmax, naz+1)
+    map_az = 0.5 * (map_az_lims[1:]+map_az_lims[0:-1])
+    map_el_lims = np.linspace(elmin, elmax, nel+1)
+    map_el = 0.5 * (map_el_lims[1:]+map_el_lims[0:-1])
+    
+    azindex = (naz*(az-azmin)/(azmax-azmin)).astype(int)
+    elindex = (nel*(el-elmin)/(elmax-elmin)).astype(int)
+
+    ### Keeping only the inner part
+    inside = (azindex >= 0) & (azindex < naz) & (elindex >= 0) & (elindex < nel)
+    data = data[:,inside]
+    azindex = azindex[inside]
+    elindex = elindex[inside]
+    nsamples = inside.sum()
+
+    if not silent:
+        print('Making maps')
+    mapdata = np.zeros((nTES, nel, naz))
+    mapcount = np.zeros((nTES, nel, naz))
+
+
+    for i in range(nsamples):
+        mapdata[:,elindex[i], azindex[i]] += data[:,i]
+        mapcount[:,elindex[i], azindex[i]] += 1
+    
+    themap = np.zeros((nTES, nel, naz))
+    ok = mapcount != 0
+    themap[ok] = mapdata[ok]/mapcount[ok]
+
+    if remove_eltrend:
+        for k in range(nTES):
+            for iel in range(nel):
+                themap[k,iel,:] -= np.median(themap[k,iel,:])
+
+    if nTES==1:
+        return themap[0,:,:], map_az, map_el
+    else:
+        return themap, map_az, map_el
 

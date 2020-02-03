@@ -30,16 +30,16 @@ class SelfCalibration:
 
     """
 
-    def __init__(self, baseline, dead_switches, d):
+    def __init__(self, baseline, d, dead_switches=None):
         """
 
         Parameters
         ----------
         baseline : list
             Baseline formed with 2 horns, index between 1 and 64 as on the instrument.
-        dead_switches : int or list of int
-            Broken switches, always closed.
         d : dictionary
+        dead_switches : list of int
+            Broken switches, always closed between 1 and 64. By default is None. 
         """
         self.baseline = baseline
         self.dead_switches = dead_switches
@@ -52,9 +52,10 @@ class SelfCalibration:
         for i in self.baseline:
             if i < 1 or i > 64:
                 raise ValueError('Horns indices must be in [1, 64].')
-        for i in self.dead_switches:
-            if i < 1 or i > 64:
-                raise ValueError('Horns indices must be in [1, 64].')
+        if self.dead_switches is not None:
+            for i in self.dead_switches:
+                if i < 1 or i > 64:
+                    raise ValueError('Horns indices must be in [1, 64].')
 
     def get_dead_detectors_mask(self, quadrant=3):
         """

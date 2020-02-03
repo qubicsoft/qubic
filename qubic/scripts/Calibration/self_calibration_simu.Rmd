@@ -54,7 +54,7 @@ print(d['detarray'])
 
 # Create an object
 baseline = [1, 8]
-ca = sc.SelfCalibration(baseline, [], d)
+ca = sc.SelfCalibration(baseline, d)
 ```
 
 # Qubic soft simulation (no aberrations)

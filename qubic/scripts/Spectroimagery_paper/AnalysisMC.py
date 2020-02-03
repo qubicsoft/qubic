@@ -595,7 +595,7 @@ def get_Cp(patch, nfrecon, verbose=True, doplot=True):
     return Cp
 
 
-def make_weighted_av(patch, Cp, ang, ang_threshold, verbose=False):
+def make_weighted_av(patch, Cp, verbose=False):
     """
     Average the maps over subbands using the covariance matrix between subbands.
     Parameters
@@ -603,17 +603,12 @@ def make_weighted_av(patch, Cp, ang, ang_threshold, verbose=False):
     patch: array of shape (#reals, #bands, #pixels, 3)
     Cp: array of shape (#bands, #bands, 3, #pixels)
         The covariance matrices.
-    ang: array
-        Angle associated to each pixel.
-    ang_threshold: float
-        Angle (degree) in which the sigma mean over pixels will be computed.
     verbose: bool
 
     Returns
     -------
     weighted_av: map averaged over bands
     sig2: variances over realisations on the map
-    sig2mean: variances are averaged over pixels below the angle threshold
 
     """
     nreals = np.shape(patch)[0]
@@ -642,10 +637,7 @@ def make_weighted_av(patch, Cp, ang, ang_threshold, verbose=False):
         print('Weigthed mean matrix per pixel, shape: ', weighted_av.shape)
         print('Variance in MC simulation, shape: ', sig2.shape)
 
-    # Average sig2 over pixels in a given angle
-    sig2mean = average_pix_sig2(sig2, ang, ang_threshold)
-
-    return weighted_av, sig2, sig2mean
+    return weighted_av, sig2
 
 
 def average_pix_sig2(sig2, ang, ang_threshold):

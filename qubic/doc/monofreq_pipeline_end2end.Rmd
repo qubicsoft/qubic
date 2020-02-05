@@ -67,6 +67,8 @@ d['nf_sub'] = 1
 
 # Center of the patch observed in galactic coordinates
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+
+print(d['nside'])
 ```
 
 # Input sky
@@ -134,7 +136,20 @@ plt.ylabel('TOD')
 # i.e. how many times were seen each pixel of the sky (not trivial because of the synthetic beam)
 cov = a.get_coverage()
 
+print(cov[44642])
 hp.mollview(cov)
+```
+
+```{python}
+# Check the pointing and the coverage coincide
+theta = p.galactic[:, 0]
+phi = p.galactic[:, 1]
+nside = d['nside']
+
+pix = hp.ang2pix(nside, theta, phi, lonlat=True)
+ptg_map = np.zeros(12 * nside**2)
+ptg_map[pix] = 200
+hp.mollview(ptg_map + cov)
 ```
 
 # Map-making

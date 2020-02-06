@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.1'
-      jupytext_version: 1.2.1
+      jupytext_version: 1.2.4
   kernelspec:
     display_name: Python 3
     language: python
@@ -74,6 +74,7 @@ print('beam shape :', d['beam_shape'])
 # d['beam_shape'] = 'multi_freq' # or 'gaussian' or 'fitted_beam' 
 
 # Check nf_sub/nf_sub_rec is an integer
+d['nf_sub'] = 20
 nf_sub = d['nf_sub']
 # for nf_sub_rec in d['nf_recon']:
 #     if nf_sub % nf_sub_rec != 0:
@@ -134,6 +135,7 @@ for istk in range(3):
 Let's now simulate the TOD. We will do so by reading a simulated map. The input map needs to be smoothed to the angular resolution of the instrument (these maps are already smoothed) and we need to know the pixel number for each of the TOD samples. This is easily obtained in Healpix with the $ang2pix()$ function. 
 
 ```{python}
+d['nf_sub'] = 20
 # Pointing strategy
 p = qubic.get_pointing(d)
 print('=== Pointing DONE! ===')
@@ -196,9 +198,17 @@ print('************* Map-Making on {} sub-map(s) *************'.format(nf_sub_re
 # process but seen with 'different' instrument (one with nf_rec channels).  
 # Recompute the edges of sub-bands :
 _, nus_edge, _, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, nf_sub_rec, d['filter_relative_bandwidth'])
-  
+
+## Once we have the simulated TOD, we create a new instrument. This new instrument
+# is for the map-making. We have to simulate an instrument with the number of sub-bands
+# we want to reconstruct. This is done for safety and complete the concept of QUBIC, because the program 
+# does not need to create new instrument because it uses nus_edge limits to compute the sub-bands
+# for reconstruction
+d['nf_sub'] = nf_sub_rec
+qrec = qubic.QubicMultibandInstrument(d)
+
 # Create a MultiBandAcquisition
-arec = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge)
+arec = qubic.QubicMultibandAcquisition(qrec, p, s, d, nus_edge)
 
 # Get coverage map
 # i.e. how many times were seen each pixel of the sky (not trivial because of the synthetic beam)
@@ -247,7 +257,7 @@ diff[:, unseen, :] = hp.UNSEEN
 # Compare input and output maps
 
 ```{python}
-rr=9 # Resolution in arcmin
+rr=15 # Resolution in arcmin
 ifreq=1
 for istokes in [0,1,2]:
     plt.figure(istokes,figsize=(12,12)) 

@@ -556,8 +556,8 @@ def get_Cp(patch, nfrecon, verbose=True, doplot=True):
     """
     irec = np.shape(patch)[1]
     npix_patch = np.shape(patch)[2]
-    if irec == 1:
-        raise ValueError('If you already have 1 band, you do not need Cp which is computed to average subbands')
+    # if irec == 1:
+    #     raise ValueError('If you already have 1 band, you do not need Cp which is computed to average subbands')
 
     if irec not in nfrecon:
         raise ValueError('Invalid number of freq. {0} not in {1}'.format(irec, nfrecon))

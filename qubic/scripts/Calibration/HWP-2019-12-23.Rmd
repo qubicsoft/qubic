@@ -41,19 +41,99 @@ import pickle
 from importlib import reload
 ```
 
+This is the scrpt that analyses the data files corresponding to various HWP datasets. They are each with a different configuration of the calibration source. The two last ones have a slight change in the pointing w.r.t. the first three so this could induce some effect.
+This scripts produces data that are then analyzed by the script called: Analyse-HWP-Results.Rmd
+
+This is still work in progress so some things are still to be done:
+- the anaysis is only done so far with the simulated calibration source, not the actual CalSrc data, this can induce significant effects so should be explored.
+
+
+# Setting the directory containing data
+
+Here are the vailable data:
+
+### 2019-12-23:
+- 0: 2019-12-23_18.16.06__HWP_Scanning_Vtes_2TimePerPos_10: 
+    - TES data is bad, probably bad TES COnfiguration
+- 1: 2019-12-23_18.26.04__HWP_Scanning_Vtes_2TimePerPos_60: 
+    - Same
+- 2: 2019-12-23_18.52.34__HWP_Scanning_Vtes_2TimePerPos_60: 
+    - Same + Interrupted shortly after start
+- 3: 2019-12-23_19.00.20__HWP_Scanning_Vtes_2TimePerPos_60: 
+    - Same + Interrupted shortly after start
+- 4: 2019-12-23_19.04.56__HWP_Scanning_Vtes_2TimePerPos_60: 
+    - Nice data although source data does not have the same shape as TES data, probably the source measurement was not configured correctly. The data can however be exploited using Simulated Cal Src.
+
+### 2019-12-24:
+- 0: 2019-12-24_09.46.19__HWP_Scanning_Vtes_2TimePerPos_180:
+    - Nice data with 180 sec/pos and 3 cycles.
+    - SrcData not there...
+    - Can be used with Simulated Cal Src
+
+### 2019-12-26:
+- 0: 2019-12-26_16.04.14__HWP_Scanning_Vtes_2TimePerPos_60:
+    - Only one cycle but good quality data, The source is ON and seems weell configured
+- 1: 2019-12-26_18.42.46__HWP_Scanning_Vtes_2TimePerPos_900:
+    - Long overnight acquisition - to be looked at closely
+
+### 2019-12-27:
+- 0: 2019-12-27_11.45.33__HWP_Scanning_Vtes_2TimePerPos_60:
+    - too short (interrupted)
+- 1: 2019-12-27_11.50.24__HWP_Scanning_Vtes_2_TimePerPos_60_Cylce_0_over_5:
+    - too short (interrupted)
+- 2: 2019-12-27_11.51.37__HWP_Scanning_Vtes_2_TimePerPos_60_Cycle_0_over_5:
+    - Excellent data
+- 3: 2019-12-27_11.58.51__HWP_Scanning_Vtes_2_TimePerPos_60_Cycle_1_over_5:
+    - HWP axis broken at the end of the previous scan... Not usable...
+- 4: 2019-12-27_12.06.06__HWP_Scanning_Vtes_2_TimePerPos_60_Cycle_2_over_5:
+    - Not usable...
+- 5: 2019-12-27_12.13.23__HWP_Scanning_Vtes_2_TimePerPos_60_Cycle_3_over_5:
+    - Not usable...
+- 6: 2019-12-27_12.20.42__HWP_Scanning_Vtes_2_TimePerPos_60_Cycle_4_over_5:
+    - Not usable...
+- 7: 2019-12-27_12.57.14__HWP_Scanning_Vtes_2_TimePerPos_60_Cycle_0_over_1:
+    - Not usable...
+
+
+## So finally the good data are:
+### 2019-12-23: 4
+- Modulator: Amplitude = 2V. Offset = 1.5 V
+- Nice data although source data does not have the same shape as TES data, probably the source measurement was not configured correctly. The data can however be exploited using Simulated Cal Src.
+
+### 2019-12-24: 0
+- Modulator: Amplitude = 500 mV ; Offest = 250 mV
+- Nice data with 180 sec/pos and 3 cycles.
+- SrcData not there...
+- Can be used with Simulated Cal Src
+
+### 2019-12-26: 0
+- Modulator: Amplitude: 500mV, Offset 2. V
+- Only one cycle but good quality data, The source is ON and seems weell configured
+
+### 2019-12-26: 1
+- Modulator: Amplitude: 500mV, Offset 2.5 V
+- Long overnight acquisition - to be looked at closely
+
+### 2019-12-27: 2
+- Modulator: Amplitude = 500mV ; Offest = 2.5 V
+- Excellent data
+
 ```{python}
-day = '2019-12-26'
+day = '2019-12-24'
 keyword = '*HWP_Scanning*'
-data_dir = '/qubic/Data/Calib-TD/'+day+'/'
-#data_dir = '/Users/hamilton/Qubic/Calib-TD/'+day+'/'
+#data_dir = '/qubic/Data/Calib-TD/'+day+'/'
+data_dir = '/Users/hamilton/Qubic/Calib-TD/'+day+'/'
 dirs = np.sort(glob.glob(data_dir+keyword))
 
 print (dirs)
 
 ```
 
+### Quick Look at the data
+Here we select one of the directories and have alook at the data. We will check the signal and define the modulation frequency, filtering to be applied and so on...
+
 ```{python}
-ifile = 1
+ifile = 0
 thedir = dirs[ifile]
 print(thedir)
 a = qubicfp()
@@ -72,28 +152,49 @@ print(a.hk['CALSOURCE-CONF'].keys())
 data.keys()
 ```
 
+Quick look at the data picking one TES in one asic:
+- Do we see the HWP going through various positions ?
+- Do we see the calibration source ? If so, how well is it synchronized with the data signal (this is why we dispaly a zoom of both)
+    - If the calibration source is present but badly synchrinized, we will need to shift it in time to have it in phase with the data
+    - If it is not present, we will need to use the "Cal Src Simulator" and fit the time shift to have it in phase with the data
+
 ```{python}
-rc('figure',figsize=(9,4.5))
+rc('figure',figsize=(12,12))
 TESNum = 95
-asic = str(2)
+asic = str(1)
 
-
-rc('figure',figsize=(12,8))
+### Interpolating HWP data to the timestamps of the data
 hwp_data = np.interp((data['t_data '+asic]-t0), (hwp_timestamps-hwp_timestamps[0]), hwp)
+### Interpolating source data to the timestamps of the data
+data_src_interp = np.interp(data['t_data '+asic], data['t_src'], data['data_src'])
 
+subplot(2,1,1)
 plot((data['t_data '+asic]-t0), dl.renorm(data['data '+asic][TESNum-1,:]), 
      label='Data TES {} ASIC {}'.format(TESNum,asic))
-xlabel('Seconds')
-
 plot((data['t_data '+asic]-t0), hwp_data, label='HWP Position')
 plot((data['t_src']-t0), dl.renorm(data['data_src'])-5, label='source')
-
+xlabel('Seconds')
 legend()
 title(thedir)
 ylim(-10,10)
-#xlim(0,10)
-data_src_interp = np.interp(data['t_data '+asic], data['t_src'], data['data_src'])
+
+subplot(2,1,2)
+oktime = np.abs((data['t_data '+asic]-t0)-100) < 10
+plot((data['t_data '+asic]-t0)[oktime], dl.renorm(data['data '+asic][TESNum-1,oktime]), 
+     label='Data TES {} ASIC {}'.format(TESNum,asic))
+plot((data['t_data '+asic]-t0)[oktime], hwp_data[oktime], label='HWP Position')
+plot((data['t_data '+asic]-t0)[oktime], dl.renorm(data_src_interp[oktime]), label='SRC (interp on data)')
+#plot((data['t_src']-t0), dl.renorm(data['data_src']), label='source')
+xlabel('Seconds')
+legend()
+title(thedir)
+ylim(-10,10)
+
+
+
 ```
+
+We have a look at the power spectrum of the source signal, and set the filtering and source modulaiton frequency
 
 ```{python}
 rc('figure',figsize=(13,8))
@@ -145,6 +246,8 @@ legend()
 tight_layout()
 ```
 
+From the HWP position measured by QUBIC Studio we defin the various data chunks each corresponding to a given HWP position. We also cut a fraction of the data to let the HWP reach a stable position. We remove situations where the HWP data is 255 which means it has not been read by QUBIC Studio.
+
 ```{python}
 hwp_chunks = []
 hwp_pos_chunk = []
@@ -162,6 +265,33 @@ for i in range(len(hwp_data)):
 
         
 print(np.unique(np.array(hwp_pos_chunk)))
+
+rc('figure',figsize=(13,8))
+cols = ['r','b','g','k','m','y','orange']
+angles = np.arange(7)*15
+thvals = np.zeros(len(hwp_chunks))
+for i in range(len(hwp_chunks)):
+    chunk = hwp_chunks[i]
+    plot((data['t_data '+asic][chunk[0]:chunk[1]]-t0)/3600, newdata[chunk[0]:chunk[1]], 
+        color=cols[hwp_pos_chunk[i]-1])
+    thvals[i] = angles[hwp_pos_chunk[i]-1]
+
+print(thvals)    
+
+xlim(0,np.max((data['t_data '+asic]-t0)/3600))
+mm,ss = ft.meancut(newdata,3)
+ylim(mm-2*ss,mm+3*ss)
+for i in arange(1,8):
+    plot(-1,-1, 'o',color=cols[i-1], label='HWP Pos = {} ; Angle = {} deg.'.format(i, angles[i-1]))
+legend()
+title('TES {} ASIC {}'.format(TESNum,asic))
+```
+
+If the CalSrc data was ot good, we use the CalSrc simulator in the cell below and superinpose it with the data
+
+```{python}
+for k in a.hk['CALSOURCE-CONF'].keys():
+    print(k+': {}'.format(a.hk['CALSOURCE-CONF'][k]))
 ```
 
 ```{python}
@@ -210,284 +340,291 @@ ylim(ymin, ymax)
 legend()
 ```
 
-```{python}
-rc('figure',figsize=(13,8))
-cols = ['r','b','g','k','m','y','orange']
-angles = np.arange(7)*15
-thvals = np.zeros(len(hwp_chunks))
-for i in range(len(hwp_chunks)):
-    chunk = hwp_chunks[i]
-    plot((data['t_data '+asic][chunk[0]:chunk[1]]-t0)/3600, newdata[chunk[0]:chunk[1]], 
-        color=cols[hwp_pos_chunk[i]-1])
-    thvals[i] = angles[hwp_pos_chunk[i]-1]
-
-print(thvals)    
-
-xlim(0,np.max((data['t_data '+asic]-t0)/3600))
-mm,ss = ft.meancut(newdata,3)
-ylim(mm-2*ss,mm+3*ss)
-for i in arange(1,8):
-    plot(-1,-1, 'o',color=cols[i-1], label='HWP Pos = {} ; Angle = {} deg.'.format(i, angles[i-1]))
-legend()
-title('TES {} ASIC {}'.format(TESNum,asic))
-```
+### Proper analysis
+We prepare the data for the source simulator, or for the source itself. Various demodulation techniques are available.
 
 ```{python}
-### Try different demodulation techniques:
-reload(dl)
-#### Source simulator
-rf_freq = a.hk['CALSOURCE-CONF']['Cal_freq']     # GHz
-amplitude = a.hk['CALSOURCE-CONF']['Mod_ampl']/1000*0+0.5    # Volts
-offset = a.hk['CALSOURCE-CONF']['Mod_offs']/1000*0+1        # volts
-phase = -0.2         # radians
-frequency = a.hk['CALSOURCE-CONF']['Mod_freq']    # Hz [Modulation Frequency] 
-xxtemplate = np.linspace(0, period, 20)
-signal_src = -ll.sim_generator_power(xxtemplate, amplitude, offset, frequency, phase, rf_freq = rf_freq)
+reload(dl) 
 
-# print(amplitude, offset, frequency, phase, rf_freq)
-# plot(xxtemplate, signal_src)
-# stop
-
-##### Filtering
+##### Filtering to be used
 lowcut = 0.8
-highcut = 30
+highcut = 70
 nharm = 10
 notch = np.array([[1.724, 0.005, nharm]])
 fourier_cuts = [lowcut, highcut, notch]
 
-vals_rms = np.zeros((len(hwp_chunks),128))
-vals_fit = np.zeros((len(hwp_chunks),128))
-vals_fitSimSrc = np.zeros((len(hwp_chunks),128))
-vals_demod = np.zeros((len(hwp_chunks),128))
 
-err_rms = np.zeros((len(hwp_chunks),128))
-err_fit = np.zeros((len(hwp_chunks),128))
-err_fitSimSrc = np.zeros((len(hwp_chunks),128))
-err_demod = np.zeros((len(hwp_chunks),128))
+vals_demod = np.zeros((len(hwp_chunks),256))
+err_demod = np.zeros((len(hwp_chunks),256))
+vals_demod_quad = np.zeros((len(hwp_chunks),256))
+err_demod_quad = np.zeros((len(hwp_chunks),256))
 
 for i in range(len(hwp_chunks)):
+    print('Doing Chunk {} over {}'.format(i, len(hwp_chunks)))
     chunk = hwp_chunks[i]
     if (chunk[0] < chunk[1]):
-        tod = data['data {}'.format(asic)][:,chunk[0]:chunk[1]]
-        #mmm = np.mean(tod,axis=1)
-        #for k in range(128): 
-        #    tod[k,:] = tod[k,:] - mmm[k]
-        
-        ddsrc = -data_src_interp[chunk[0]:chunk[1]]
-        time = data['t_data {}'.format(asic)][chunk[0]:chunk[1]]-np.min(data['t_data {}'.format(asic)][chunk[0]:chunk[1]])
-        deltat = (time[-1]-time[1])
+        for asic in [1,2]:
+            ### TES data --------------------------------------------------------------------------
+            tod = data['data {}'.format(asic)][:,chunk[0]:chunk[1]]
+            time = data['t_data {}'.format(asic)][chunk[0]:chunk[1]]-np.min(data['t_data {}'.format(asic)][chunk[0]:chunk[1]])
+            deltat = (time[-1]-time[1])   # Chunk duration
+            print('  - Asic {} - Duration {} seconds'.format(asic, deltat))
+            #--------------------------------------------------------------------------------------
 
-        
-        #### Find best phase for Simulated Source
-        TES_reference = TESNum
-        TES_ref_data = dl.renorm(ft.filter_data(time, tod[TES_reference-1,:], lowcut, highcut, notch=notch, 
-                                                rebin=True, verbose=True, order=5))
-        
-        nphases = 100
-        phases = np.linspace(0, 2*np.pi, nphases)
-        ch2 = np.zeros(nphases)
-        for k in range(nphases):
-            phase = phases[k]
-            ### Minus sign as source responds negatively
-            signal_src_sim = -ll.sim_generator_power(time, amplitude, offset, frequency, phase, rf_freq = rf_freq)
-            signal_src_sim = ft.filter_data(time, signal_src_sim, lowcut, highcut, notch=notch, 
-                                                    rebin=True, verbose=False, order=5)
-            signal_src_sim = dl.renorm(signal_src_sim)
-            ch2[k] = np.sum((TES_ref_data-signal_src_sim)**2)
+            ### Only analyse chinks whose duration is larger than a given number of seconds
+            if  (deltat > 5.):
+                ### Source data -----------------------------------------------------------------------
+                #ddsrc = -data_src_interp[chunk[0]:chunk[1]]
+                #--------------------------------------------------------------------------------------
+
             
-        best_phase = phases[np.argmin(ch2)]
-        print(best_phase)
-        ### Minus sign as source responds negatively
-        signal_src_sim = -dl.renorm(ll.sim_generator_power(time, amplitude, offset, frequency, best_phase, rf_freq = rf_freq))
-        
-            
+                ### Source Simulated Data -------------------------------------------------------------
+                # Find best phase for Simulated Source: we use a reference TES and check which phases
+                # leads to the best agreement with TES data (renormalized to mean 0 and RMS 1)
+                print('    Fitting best phase for Calibration Source')
+                TES_reference = TESNum
+                # Filter TES
+                TES_ref_data = dl.renorm(ft.filter_data(time, tod[TES_reference-1,:], lowcut, highcut, notch=notch, 
+                                                        rebin=True, verbose=False, order=5))
+                # Loop over a number of phases, calculate the src sim with a phase and compute chi2 with TES data
+                nphases = 100
+                phases = np.linspace(0, 2*np.pi, nphases)
+                ch2 = np.zeros(nphases)
+                for k in range(nphases):
+                    phase = phases[k]
+                    # Minus sign as source responds negatively
+                    signal_src_sim = -ll.sim_generator_power(time, amplitude, offset, frequency, phase, rf_freq = rf_freq)
+                    # Filter the source the same way as TES data
+                    signal_src_sim = ft.filter_data(time, signal_src_sim, lowcut, highcut, notch=notch, 
+                                                            rebin=True, verbose=False, order=5)
+                    # Renormalize it the same way as the data
+                    signal_src_sim = dl.renorm(signal_src_sim)
+                    # Calculate Ch2
+                    ch2[k] = np.sum((TES_ref_data-signal_src_sim)**2)
+                # Take the smallest chi2 as the source simulation phase
+                best_phase = phases[np.argmin(ch2)]
+                print('    Found that best phase for this chunk is: {}'.format(best_phase))
+                ### Minus sign as source responds negatively
+                signal_src_sim = -dl.renorm(ll.sim_generator_power(time, amplitude, offset, frequency, best_phase, rf_freq = rf_freq))
+                src_data = [time, signal_src_sim]
+                #--------------------------------------------------------------------------------------
 
-#         subplot(2,1,1)
-#         plot(time-time[0], TES_ref_data, label='TES Ref Data')
-#         plot(time-time[0], -signal_src_sim)
-#         xlim(130, 150)
-#         stop
-        
-        
-        
-        print(i, len(hwp_chunks), deltat)
-        if  (deltat > 5.):
-            print('   - RMS')
-            #### RMS
-#             newt_rms, amp_rms, errors_rms = dl.demodulate_methods([time, tod], 1./period, method='rms')
-#             vals_rms[i,:] = np.median(amp_rms, axis=1)
-#             err_rms[i,:] = np.std(amp_rms, axis=1)/np.sqrt(len(amp_rms))
-            #for k in range(128):
-            #    mm, ss = ft.meancut(amp_rms, 3, disp=False)
-            #    vals_rms[i,:] = mm
-            #    err_rms[i,:] = ss
-        
-            #### demod
-            print('   - Demod {}'.format(i))
-            newt_demod, amp_demod, errors_demod = dl.demodulate_methods([time, tod],
-                                                                        1./period, 
-                                                                        src_data_in=[time, signal_src_sim],
-                                                                        method='demod',
-                                                                       fourier_cuts=fourier_cuts)
-            vals_demod[i,:] = -np.median(amp_demod, axis=1)
-            err_demod[i,:] = np.std(amp_demod, axis=1)/np.sqrt(len(amp_demod))
-            
 
-#             #### sin interp
-#             print('   - FitSine')
-#             newt_fit, amp_fit, errors_fit = dl.demodulate_methods([time, tod], 1./period, method='fit')
-#             vals_fit[i,:] = np.median(amp_fit, axis=1)
-#             err_fit[i,:] = np.std(amp_fit, axis=1)/np.sqrt(len(amp_fit))
-#             #for k in range(128):
-#             #    mm, ss = ft.meancut(amp_fit, 3, disp=False)
-#             #    vals_fit[i,:] = mm
-#             #    err_fit[i,:] = ss
+                #### demodulation method
+                print('     - Demodulation Method')
+                newt_demod, amp_demod, errors_demod = dl.demodulate_methods([time, tod],
+                                                                            1./period, 
+                                                                            src_data_in=src_data,
+                                                                            method='demod',
+                                                                           fourier_cuts=fourier_cuts)
+                vals_demod[i,128*(asic-1):128*(asic-1)+128] = -np.median(amp_demod, axis=1)
+                err_demod[i,128*(asic-1):128*(asic-1)+128] = np.std(amp_demod, axis=1)/np.sqrt(len(amp_demod))
 
-#             #### Source simulator
-#             print('   - FitSrcSim')
-#             newt_fitSimSrc, amp_fitSimSrc, errors_fitSimSrc = dl.demodulate_methods([time, tod], 1./period, method='fit', 
-#                                                                                  template=[xxtemplate, signal_src])
-#             vals_fitSimSrc[i,:] = np.median(amp_fitSimSrc, axis=1)
-#             err_fitSimSrc[i,:] = np.std(amp_fitSimSrc, axis=1)/np.sqrt(len(amp_fitSimSrc))
-#             #for k in range(128):
-#             #    mm, ss = ft.meancut(amp_fitSimSrc, 3, disp=False)
-#             #    vals_fitSimSrc[i,:] = mm
-#             #    err_fitSimSrc[i,:] = ss
-    
-    
-
-    
+                #### Quadrature demodulation method
+#                 print('     - Quadrature Demodulation Method')
+#                 newt_demod_quad, amp_demod_quad, errors_demod_quad = dl.demodulate_methods([time, tod],
+#                                                                             1./period, 
+#                                                                             src_data_in=src_data,
+#                                                                             method='demod_quad', remove_noise=True,
+#                                                                            fourier_cuts=fourier_cuts)
+#                 vals_demod_quad[i,128*(asic-1):128*(asic-1)+128] = -np.median(amp_demod_quad, axis=1)
+#                 err_demod_quad[i,128*(asic-1):128*(asic-1)+128] = np.std(amp_demod_quad, axis=1)/np.sqrt(len(amp_demod_quad))
 
 
 
 
 ```
 
-```{python}
-print(thvals)
-reload(dl)
-
-alldata = [ [-vals_demod, err_demod]]
-names = ['Demod']
-
-iii = TESNum-1
-iii = 1
-for i in range(len(names)):
-    ok = alldata[i][0][:,iii] !=0
-    myguess = np.array([np.max(alldata[i][0][ok,iii]), 0., 0., 5.])
-    #errorbar(thvals[ok], alldata[i][0][ok,iii], yerr=alldata[i][1][ok,iii], fmt='o', label=names[i])
-    resfit = dl.hwp_fitpol(thvals[ok], alldata[i][0][ok,iii], alldata[i][1][ok,iii], 
-                           doplot=True, str_title=names[i]+' TES{} ASIC{}'.format(iii+1,asic), 
-                           saturation=True, myguess=myguess)
-tight_layout()
-
-```
+### Regroup identical HWP position together with weighted average
 
 ```{python}
-def weighted_mean(x,dx, dispersion=True):
-    w = 1./dx**2
-    sumw = np.sum(w)
-    mm = np.sum(w*x)/sumw
-    if dispersion:
-        ss = np.std(x)
-    else:
-        ss = 1./np.sqrt(sumw)
-    return mm, ss
-```
-
-```{python}
-print(thvals)
-reload(dl)
 uniqth = np.unique(np.sort(thvals))
-alldata = [ [-vals_demod, err_demod]]
-names = ['Demod']
-
-iii = TESNum-1
-iii = 1
-for i in range(len(names)):
-    ok = alldata[i][0][:,iii] !=0
-    values = np.zeros(len(uniqth))
-    errors = np.zeros(len(uniqth))
+vals_demod_uniq = np.zeros((256, len(uniqth)))
+err_demod_uniq = np.zeros((256, len(uniqth)))
+for i in range(256):
+    ok = -vals_demod[:,i] !=0
     tt = thvals[ok]
-    dd = alldata[i][0][ok,iii]
-    ee = alldata[i][1][ok,iii]
+    dd = -vals_demod[ok,i]
+    ee = err_demod[ok,i]
     for k in range(len(uniqth)):
         thisone = tt == uniqth[k]
-        values[k], errors[k] = weighted_mean(dd[thisone], ee[thisone], dispersion=False)
-    print(values)
-    print(errors)
-    myguess = np.array([np.max(np.abs(values)), 0., 0., 5.])
-    resfit = dl.hwp_fitpol(uniqth, values, errors, 
-                           doplot=True, str_title=names[i]+' TES{} ASIC{}'.format(iii+1,asic), 
-                           saturation=True, myguess=myguess)
-tight_layout()
+        vals_demod_uniq[i,k], err_demod_uniq[i,k] = ft.weighted_mean(dd[thisone], ee[thisone], dispersion=False)
+
+
 
 ```
 
-```{python}
-np.unique(np.sort(thvals))
-```
+### Show result for one TES
 
 ```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-print(thvals)
 reload(dl)
+theTES = 95
+asic = 1
+iii = (asic-1)*128 + (theTES-1)
 
-uniqth = np.unique(np.sort(thvals))
-alldata = [ [-vals_demod, err_demod]]
-names = ['Demod']
+myguess = np.array([np.max(abs(vals_demod_uniq[iii,:])), 0., 0., 5.])
+resfit = dl.hwp_fitpol(uniqth, vals_demod_uniq[iii,:], err_demod_uniq[iii,:], 
+                       doplot=True, str_title='Demodulation TES{} ASIC{}'.format(iii+1,asic), 
+                       saturation=True, myguess=myguess, force_chi2_ndf=True)
+tight_layout()
+print(resfit[1])
+```
 
-for iii in range(128):
-    for i in range(len(names)):
-        ok = alldata[i][0][:,iii] !=0
-        values = np.zeros(len(uniqth))
-        errors = np.zeros(len(uniqth))
-        tt = thvals[ok]
-        dd = alldata[i][0][ok,iii]
-        ee = alldata[i][1][ok,iii]
-        for k in range(len(uniqth)):
-            thisone = tt == uniqth[k]
-            values[k], errors[k] = weighted_mean(dd[thisone], ee[thisone], dispersion=True)
-        print(values)
-        print(errors)
-        myguess = np.array([np.max(np.abs(values)), 0., 0., 5.])
-        clf()
-        resfit = dl.hwp_fitpol(uniqth, values, errors, 
-                               doplot=True, str_title=names[i]+' TES{} ASIC{}'.format(iii+1,asic), 
-                               saturation=True, myguess=myguess)
-        tight_layout()
-        show()
+### Loop on all TES
+
+```{python}
+day+'_Dataset_{}'.format(ifile)
+```
+
+```{python}
+thvals.shape
+vals_demod.shape
+err_demod.shape
+```
+
+```{python}
+rc('figure',figsize=(6,4.5))
+reload(dl)
+dir_pictures = '/Users/hamilton/Qubic/Calib-TD/HWP-Fitting/'+day+'_Dataset_{}'.format(ifile)+'/Pictures/'
+dir_data = '/Users/hamilton/Qubic/Calib-TD/HWP-Fitting/'+day+'_Dataset_{}'.format(ifile)+'/Data/'
+os.makedirs(dir_pictures, exist_ok=True)
+os.makedirs(dir_data, exist_ok=True)
+
+results = np.zeros((4, 256))
+errors = np.zeros((4, 256))
+chi2 = np.zeros(256)
+ndf = np.zeros(256)
+for iii in range(256):
+    clf()
+    myguess = np.array([np.max(abs(vals_demod_uniq[iii,:])), 0., 0., 5.])
+    resfit = dl.hwp_fitpol(uniqth, vals_demod_uniq[iii,:], err_demod_uniq[iii,:], 
+                           doplot=True, str_title='Demodulation TES{} ASIC{}'.format(iii+1,asic), 
+                           saturation=True, myguess=myguess, force_chi2_ndf=True)
+    results[:,iii] = resfit[1]
+    errors[:,iii] = resfit[2]
+    chi2[iii] = resfit[4]
+    ndf[iii] = resfit[5]
+    tight_layout()
+    np.savetxt(dir_data+'/hwp_measurement_UniqueTh_TES_{}.txt'.format(iii+1),
+               np.array([uniqth, vals_demod_uniq[iii,:], err_demod_uniq[iii,:]]).T)
+    np.savetxt(dir_data+'/hwp_measurement_AllTh_TES_{}.txt'.format(iii+1),
+               np.array([thvals, vals_demod[:,iii], err_demod[:,iii]]).T)
+    np.savetxt(dir_data+'/hwp_measurement_Fit_UniqueTh_TES_{}.txt'.format(iii+1),
+               np.array([resfit[1], resfit[2]]).T)
+    savefig(dir_pictures+'/hwp_measurement_TES_{}.png'.format(iii+1))
+    
+```
+
+```{python}
+rc('figure',figsize=(14,8))
+reload(dl)
+allTES = [93, 94, 95, 96]
+i = 0
+for theTES in allTES:
+    subplot(2,2,i+1)
+    asic = 1
+    iii = (asic-1)*128 + (theTES-1)
+    myguess = np.array([np.max(abs(vals_demod_uniq[iii,:])), 0., 0., 5.])
+    resfit = dl.hwp_fitpol(uniqth, vals_demod_uniq[iii,:], err_demod_uniq[iii,:], 
+                       doplot=True, str_title='Demodulation TES{} ASIC{}'.format(iii+1,asic), 
+                       saturation=True, myguess=myguess, force_chi2_ndf=True)
+    tight_layout()
+    i=i+1
+
+    
+    
+    
+```
+
+#### Now show the whole Focal Plane
+
+```{python}
+rc('figure',figsize=(14,8))
+subplot(2,3,1)
+plot(results[0,:])
+xlabel('Amplitude')
+subplot(2,3,2)
+plot(results[1,:])
+xlabel('XPol')
+subplot(2,3,3)
+plot(results[2,:])
+xlabel('Phase')
+subplot(2,3,4)
+plot(results[3,:])
+xlabel('Saturation')
+subplot(2,3,5)
+plot(np.log10(chi2))
+xlabel('Log10(Chi2)')
 
 ```
 
 ```{python}
+pull = (results[2,:]-np.median(results[2,:]))/errors[2,:]
+ok = (np.product(errors, axis=0) != 0) & (np.abs(pull) < 4) & (np.abs(results[2,:]-np.median(results[2,:])) < 50) & (np.abs(np.log10(chi2)-1) < 1 )
+
+rc('figure',figsize=(14,8))
+dens = False
+subplot(2,3,1)
+hist(np.log10(results[0,:]), bins=30, density=dens, alpha=0.5, range=[1,4])
+hist(np.log10(results[0,ok]), bins=30, density=dens, alpha=0.5, range=[1,4])
+xlabel('Amplitude Log10')
+subplot(2,3,2)
+hist(np.log10(results[1,:]*100), bins=30, density=dens, alpha=0.5, range=[-6,3])
+hist(np.log10(results[1,ok]*100), bins=30, density=dens, alpha=0.5, range=[-6,3])
+xlabel('Log(XPol [%]) ')
+subplot(2,3,3)
+hist(results[2,:],bins=30, density=dens, alpha=0.5, range=[-30,30])
+hist(results[2,ok],bins=30, density=dens, alpha=0.5, range=[-30,30])
+xlabel('Phase')
+subplot(2,3,4)
+hist(np.log10(results[3,:]), bins=30, density=dens, alpha=0.5, range=[-4,2])
+hist(np.log10(results[3,ok]), bins=30, density=dens, alpha=0.5, range=[-4,2])
+xlabel('Saturation Log10')
+subplot(2,3,5)
+hist(np.log10(chi2), bins=30, density=dens, alpha=0.5, range=[-2, 4])
+hist(np.log10(chi2[ok]), bins=30, density=dens, alpha=0.5, range=[-2, 4])
+xlabel('Log10(Chi2)')
 
 ```
 
 ```{python}
-
+### Manual selection of OK TES for file 24/12/2019
+TESNUMOK = [1,2,4,6, 8, 10, 11, 12, 13, 14, 17, 21, 24, 26, 29, 30, 31, 33, 35, 38, 42, 44, 46, 48, 49, 53, 56, 60, 61, 62, 63, 64, 65, 66, 67, 69, 71, 72, 73, 74, 75, 76, 77, 78, 79, ]
 ```
 
 ```{python}
+myamplitude = results[0,:].copy()
+myamplitude[~ok] = np.nan
 
-```
+mycrosspol = np.log10(100*results[1,:]).copy()
+mycrosspol[~ok] = np.nan
 
-```{python}
+myphase = results[2,:].copy()
+myphase[~ok] = np.nan
 
-```
+mysat = results[3,:].copy()
+mysat[~ok] = np.nan
 
-```{python}
+subplot(2,2,1)
+img = ft.image_asics(all1=myamplitude)
+imshow(img)
+colorbar()
+title('Amplitude')
+subplot(2,2,2)
+img = ft.image_asics(all1=mycrosspol)
+imshow(img)
+colorbar()
+title('Log(Cross-Pol [%])')
+subplot(2,2,3)
+img = ft.image_asics(all1=myphase)
+imshow(img, vmin=-180, vmax=180)
+colorbar()
+title('Phase')
+subplot(2,2,4)
+img = ft.image_asics(all1=mysat)
+imshow(img)
+colorbar()
+title('Saturation')
 
 ```
 

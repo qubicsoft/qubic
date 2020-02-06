@@ -33,8 +33,8 @@ nripples=0
 
 optics='CalQubic_Optics_v3_CC_FFF.txt'
 primbeam='CalQubic_PrimBeam_vX.fits' # X=2 gaussian, 3 fitted, 4 multi frequency splines
-detarray='CalQubic_DetArray_P87_CC.fits' # this is only for TD.
-#detarray='CalQubic_DetArray_CC.fits' # This can be used for TD and FI with the old number array
+#detarray='CalQubic_DetArray_P87_CC.fits' # this is only for TD.
+detarray='CalQubic_DetArray_CC.fits' # This can be used for TD and FI with the old number array
 hornarray='CalQubic_HornArray_CC.fits'
 
 ############################################# Scene ################################
@@ -50,11 +50,13 @@ RA_center= 0.
 DEC_center=-57.
 # Hall scan: period = 2*delta_az[deg] / (#DataTaken in 1 scan @ fixed elevation)
 # if #DataTaken = 4804 --> period = 0.02
-period=1 #s    				
+period=1 #s
 date_obs='2016-01-01 00:00:00'
 
 latitude= -(24 + 11. / 60)   #ARGENTINA
 longitude= -(66 + 28. / 60)   #ARGENTINA
+
+hwp_stepsize=15 # (degrees) used for random and sweeping pointing
 
 random_pointing=False   
 

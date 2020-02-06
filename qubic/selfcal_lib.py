@@ -5,6 +5,7 @@ import glob
 import numpy as np
 import healpy as hp
 import pandas as pd
+from scipy import ndimage
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
@@ -29,16 +30,16 @@ class SelfCalibration:
 
     """
 
-    def __init__(self, baseline, dead_switches, d):
+    def __init__(self, baseline, d, dead_switches=None):
         """
 
         Parameters
         ----------
         baseline : list
             Baseline formed with 2 horns, index between 1 and 64 as on the instrument.
-        dead_switches : int or list of int
-            Broken switches, always closed.
         d : dictionary
+        dead_switches : list of int
+            Broken switches, always closed between 1 and 64. By default is None. 
         """
         self.baseline = baseline
         self.dead_switches = dead_switches
@@ -51,9 +52,10 @@ class SelfCalibration:
         for i in self.baseline:
             if i < 1 or i > 64:
                 raise ValueError('Horns indices must be in [1, 64].')
-        for i in self.dead_switches:
-            if i < 1 or i > 64:
-                raise ValueError('Horns indices must be in [1, 64].')
+        if self.dead_switches is not None:
+            for i in self.dead_switches:
+                if i < 1 or i > 64:
+                    raise ValueError('Horns indices must be in [1, 64].')
 
     def get_dead_detectors_mask(self, quadrant=3):
         """
@@ -255,10 +257,11 @@ class SelfCalibration:
 
         return fringes
 
-    def get_power_fp_aberration(self, rep, doplot=True, theta_source=0., freq_source=150., indep_config=None):
+    def get_power_fp_aberration(self, rep, doplot=True, indep_config=None):
         """
         Compute power on the focal plane for a given horn configuration taking
-        into account optical aberrations given in Creidhe simulations.
+        into account optical aberrations given by Maynooth simulations. The source
+        is on the optical axis emitting at 150GHz.
 
         Parameters
         ----------
@@ -267,10 +270,6 @@ class SelfCalibration:
             https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
         doplot : bool
             If True, make a plot with the intensity in the focal plane.
-        theta_source : float
-            Angle in degree between the optical axis of Qubic and the source.
-        freq_source : float
-            Frequency of the source in GHz
         indep_config : list of int
             By default it is None and in this case, it will use the baseline
             defined in your object on which you call the method.
@@ -280,7 +279,7 @@ class SelfCalibration:
         Returns
         -------
         power : array of shape (nn, nn)
-            Power in the focal plane at high resolution (sampling used in simulations).
+            Power on the focal plane at high resolution (sampling used in simulations).
 
         """
         if self.d['config'] != 'TD':
@@ -324,22 +323,15 @@ class SelfCalibration:
             if swi < 1 or swi > 64:
                 raise ValueError('The switch indices must be between 1 and 64 ')
 
-            # Phase calculation
-            # Not sure it is a good idea to do that...
-            horn_x = q.horn.center[swi - 1, 0]
-            horn_y = q.horn.center[swi - 1, 1]
-            d = np.sqrt(horn_x ** 2 + horn_y ** 2)  # distance between the horn and the center
-            phi = - 2 * np.pi / 3e8 * freq_source * 1e9 * d * np.sin(np.deg2rad(theta_source))
-
             thefile = files[horn_transpose[swi - 1]]
-            print('Horn ', swi, ': ', thefile[98:104])
+            # print('Horn ', swi, ': ', thefile[98:104])
             data = pd.read_csv(thefile, sep='\t', skiprows=0)
             
             allampX[i, :, :] = np.reshape(np.asarray(data['MagX']), (nn, nn)).T
             allampY[i, :, :] = np.reshape(np.asarray(data['MagY']), (nn, nn)).T
 
-            allphiX[i, :, :] = np.reshape(np.asarray(data['PhaseX']), (nn, nn)).T + phi
-            allphiY[i, :, :] = np.reshape(np.asarray(data['PhaseY']), (nn, nn)).T + phi
+            allphiX[i, :, :] = np.reshape(np.asarray(data['PhaseX']), (nn, nn)).T
+            allphiY[i, :, :] = np.reshape(np.asarray(data['PhaseY']), (nn, nn)).T
 
         # Electric field for each open horn
         Ax = allampX * (np.cos(allphiX) + 1j * np.sin(allphiX))
@@ -600,69 +592,90 @@ def tes_signal2image_fp(tes_signal, asics):
     return image_fp
 
 
-def averaging_tes_signal(power, rep, power_size):
+def make_labels(rep, nn=241, ndet=992, img_size=0.12, doplot=True):
     """
     Get averaged signal in each TES (real FP). Based on Creidhe code.
 
     Parameters
     ----------
-    power : array of shape (nn, nn)
-        Power on the focal plane at high resolution, can be larger than the real FP.
     rep : str
         Path of the repository for the simulated files, can be download at :
         https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
-    power_size : float
-        Dimension in m of one side of power.
+    nn : int
+        Resolution of the image.
+    ndet : int
+        Number of TES.
+    img_size : float
+        Dimension in m of one side of the image.
+    doplot : bool
 
     Returns
     -------
     readv : array of shape(992, 4, 2)
         Corners positions.
-    det_value : array of shape (992, 3)
-        Total signal, number of points and average in each TES.
+    labels : array_like of ints
+            Assign labels to the values of the img. Has to have the same shape as img.
     """
 
     # Get TES positions of the 4 corners
     vertices = pd.read_csv(rep + '/vertices.txt', sep='\ ', header=None, engine='python')
-    readv = np.zeros((992, 4, 2))
+    readv = np.zeros((ndet, 4, 2))
     for i in range(4):
         readv[:, i, :] = vertices.iloc[i::4, :]
 
-    nn = np.shape(power)[0]
-    print('nn: ', nn)
-    xx = np.linspace(- power_size / 2., power_size / 2., nn)
-    yy = np.linspace(- power_size / 2., power_size / 2., nn)
+    labels = np.zeros((nn, nn))
+
+    xx = np.linspace(- img_size / 2., img_size / 2., nn)
+    yy = np.linspace(- img_size / 2., img_size / 2., nn)
     XX, YY = np.meshgrid(xx, yy)
 
-    # Average (this is working but it is slow)
-    # 1st will contain total signal, second is number of points, third is average
-    det_value = np.zeros((992, 3))
-    for i in range(nn):  # could do nx/2, ny/2 if just wanted one quadrant. Scan full plane
+    for i in range(nn):
         for j in range(nn):
-            for d in range(0, 992):
+            for d in range(0, ndet):
                 if readv[d, 2, 0] <= XX[i, j] <= readv[d, 3, 0] and \
                         readv[d, 2, 1] <= YY[i, j] <= readv[d, 1, 1]:
-                    det_value[d, 0] += power[i, j]
-                    det_value[d, 1] += 1
+                    labels[i, j] = d+1
+    if doplot:
+        plt.imshow(labels)
+        plt.colorbar()
 
-                if det_value[d, 1] != 0:  # so long as there is some signal on the detector
-                    det_value[d, 2] = det_value[d, 0] / det_value[d, 1]  # average calculation
-                else:
-                    det_value[d, 2] = 0.
-
-    return readv, det_value
+    return readv, labels
 
 
-def make_plot_real_fp(readv, det_value):
+def fulldef2tespixels(img, labels, ndet=992):
+    """
+        Get signal in each TES (real FP).
+
+        Parameters
+        ----------
+        img : array of shape (nn, nn)
+            Signal on the focal plane at high resolution, can be larger than the real FP.
+        labels : array_like of ints
+            Assign labels to the values of the img. Has to have the same shape as img.
+        ndet : int
+            Number of TES.
+
+        Returns
+        -------
+        3 lists with the number of points averaged in each TES, the sum of the signal and the mean.
+        """
+    unique, counts_perTES = np.unique(labels, return_counts=True)
+    mean_perTES = ndimage.mean(img, labels, index=np.arange(1, ndet + 1))
+    sum_perTES = ndimage.sum(img, labels, index=np.arange(1, ndet + 1))
+
+    return counts_perTES, sum_perTES, mean_perTES
+
+
+def make_plot_real_fp(readv, sig_perTES):
     """
     Plot real FP using TES locations.
     """
     # All this to get colormap
     cm = plt.get_cmap('viridis')
     # plot scale from average
-    cNorm = colors.Normalize(vmin=np.amin(det_value[:, 2]), vmax=np.amax(det_value[:, 2]))
+    cNorm = colors.Normalize(vmin=np.amin(sig_perTES), vmax=np.amax(sig_perTES))
     scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=cm)
-    scalarMap.set_array(det_value)
+    scalarMap.set_array(sig_perTES)
 
     fig, ax7 = plt.subplots()
     fig.figsize = (12, 12)
@@ -670,15 +683,49 @@ def make_plot_real_fp(readv, det_value):
         rect = patches.Rectangle((readv[i, 2, 0], readv[i, 2, 1]),
                                  (readv[i, 0, 0] - readv[i, 1, 0]),
                                  (readv[i, 0, 1] - readv[i, 3, 1]),
-                                 linewidth=1, edgecolor='none', facecolor=scalarMap.to_rgba(det_value[i, 2]))
+                                 linewidth=1, edgecolor='none', facecolor=scalarMap.to_rgba(sig_perTES[i]))
         ax7.add_patch(rect)
 
-    plt.xlim(-.055, .055)  # the focal plane
+    plt.xlim(-.055, .055)  # to see the focal plane
     plt.ylim(-.055, .055)
     ax7.set_aspect('equal')
     plt.colorbar(scalarMap)
 
     return fig
+
+
+def get_quadrant3(q, signal_perTES, doplot=False):
+    """
+
+    Parameters
+    ----------
+    q : a qubic instrument
+    signal_perTES : bytearray
+        Signal in each TES (992 detectors).
+    doplot : bool
+        If True, make a plot.
+
+    Returns
+    -------
+    An image (17x17) of quadrant 3.
+
+    """
+    quadrant3 = signal_perTES[496:744]
+    indice = -(q.detector.center // 0.003)
+
+    img = np.zeros((17, 17))
+    for k in range(248):
+        i = int(indice[k, 0])
+        j = int(indice[k, 1])
+        img[i - 1, j - 1] = quadrant3[k]
+    img[img == 0.] = np.nan
+    img = np.rot90(img)
+
+    if doplot:
+        plt.figure()
+        plt.imshow(img)
+
+    return img
 
 
 def get_real_fp(full_fp, quadrant=None):
@@ -768,3 +815,86 @@ def add_fp_simu_aber(image_aber, vmin, vmax, alpha=0.3, diameter_simu=120):
     ax.plot(y, x, '-', linewidth=3, color='w')
 
     return fig
+
+
+def get_simulation(param, q, baseline, files, labels, nn=241, doplot=True, verbose=True):
+    """
+    Get a simulation from Maynooth on quadrant 3 to fit the fringe measurement.
+    Parameters
+    ----------
+    param : list
+        Calibration source theta angle and frequency. Parameter that you will fit.
+    q : a qubic instrument
+    baseline : list of int
+        The 2 horns open, between 1 and 64.
+    files : list
+         the simulations
+    labels : array_like of ints
+        See function make_labels.
+    nn : int
+        Sampling resolution for the simulations.
+    doplot : bool
+    verbose : bool
+
+    Returns
+    -------
+    img : quadrant 3 with the signal in each TES.
+
+    """
+    theta_source = param[0]
+    freq_source = param[1]
+
+    # This is done to get the right file for each horn
+    horn_transpose = np.arange(64)
+    horn_transpose = np.reshape(horn_transpose, (8, 8))
+    horn_transpose = np.ravel(horn_transpose.T)
+
+    allampX = np.empty((2, nn, nn))
+    allphiX = np.empty((2, nn, nn))
+    allampY = np.empty((2, nn, nn))
+    allphiY = np.empty((2, nn, nn))
+    for i, swi in enumerate(baseline):
+        # Phase calculation
+        horn_x = q.horn.center[swi - 1, 0]
+        horn_y = q.horn.center[swi - 1, 1]
+        dist = np.sqrt(horn_x ** 2 + horn_y ** 2)  # distance between the horn and the center
+        phi = - 2 * np.pi / 3e8 * freq_source * 1e9 * dist * np.sin(np.deg2rad(theta_source))
+
+        thefile = files[horn_transpose[swi - 1]]
+        if verbose:
+            print('Horn ', swi, ': ', thefile[98:104])
+        data = pd.read_csv(thefile, sep='\t', skiprows=0)
+
+        allampX[i, :, :] = np.reshape(np.asarray(data['MagX']), (nn, nn)).T
+        allampY[i, :, :] = np.reshape(np.asarray(data['MagY']), (nn, nn)).T
+
+        allphiX[i, :, :] = np.reshape(np.asarray(data['PhaseX']), (nn, nn)).T + phi
+        allphiY[i, :, :] = np.reshape(np.asarray(data['PhaseY']), (nn, nn)).T + phi
+
+    # Electric field for each open horn
+    Ax = allampX * (np.cos(allphiX) + 1j * np.sin(allphiX))
+    Ay = allampY * (np.cos(allphiY) + 1j * np.sin(allphiY))
+
+    # Sum of the electric fields
+    sumampx = np.sum(Ax, axis=0)
+    sumampy = np.sum(Ay, axis=0)
+
+    # Power on the focal plane
+    power = np.abs(sumampx) ** 2 + np.abs(sumampy) ** 2
+
+    if doplot:
+        plt.figure()
+        plt.subplot(121)
+        q.horn.plot()
+        plt.axis('off')
+
+        plt.subplot(122)
+        plt.imshow(power, origin='lower')
+        plt.title('Power at the sampling resolution')
+        plt.colorbar()
+
+    counts_perTES, sum_perTES, mean_perTES = fulldef2tespixels(power, labels)
+
+    img = get_quadrant3(q, mean_perTES, doplot=doplot)
+
+    return img

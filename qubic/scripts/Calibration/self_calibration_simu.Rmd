@@ -54,7 +54,7 @@ print(d['detarray'])
 
 # Create an object
 baseline = [1, 8]
-ca = sc.SelfCalibration(baseline, [], d)
+ca = sc.SelfCalibration(baseline, d)
 ```
 
 # Qubic soft simulation (no aberrations)
@@ -451,73 +451,6 @@ sb1 = q.get_synthbeam(s, idet=idet, external_A=external_A, hwp_position=7)
 hp.gnomview(sb1, sub=(132), rot=[0, 90], reso=10, title='TES={}, HWP 7'.format(idet), min=0, max=5e4)
 
 hp.gnomview(np.abs(sb1-sb0), sub=(133), rot=[0, 90], reso=10, title='|Difference|', min=0, max=5e4)
-```
-
-# Michel simulation
-Analytical function to fit the fringes measurement.
-Because of aberations, the fitted focal length was 35cm instead of 30cm.
-
-```{python}
-# The function that Michel used
-def sim_fringe(param):
-   Amp = param[0]
-   f = param[1]
-   phase = param[2]
-   yc = 0. #param[3]
-   xc = 0. #param[4]
-   alpha = param[3]
-   #w = param[4]
-   allres = np.ones(256)
-   mask = ft.image_asics(all1=allres)
-   mask[0,12:]=np.nan
-   mask[1:5,16]=np.nan
-   mask[np.isnan(mask)]=0
-   nu=150e9
-   lam=3e8/nu
-   bl=14e-3*4.#baseline
-   #f=300e-3 # focal length
-   fringe=np.zeros_like(mask)
-   i, j = np.mgrid[0:17, 0:17]
-   freq=bl/lam
-   #w=np.sqrt(2*(12.9*np.pi/180*f/2.355)**2)
-   w=40.87e-3 # From Creidhe
-   #alpha = 90.
-   fringe=Amp*np.cos(2.*np.pi*freq*(i*np.cos(alpha*np.pi/180)+j*np.sin(alpha*np.pi/180))*3e-3/f+phase)*mask*np.exp(-((16-i+xc)**2+(j-yc)**2)*3e-3**2/(w**2))
-   return fringe.astype(np.float64)
-```
-
-```{python}
-# Same function as Michel rewritten to understand how it works
-def sim_fringe_new(Amp, phase, det_dist=3e-3, focal=0.3,
-                   baseline=14.e-3*4., nu=150.e9, alpha=-45.,
-                   w=40.87e-3, yc=0., xc=0.):
-
-    lam = 3.e8/nu
-    alpha_rad = np.deg2rad(alpha)
-    
-    ndet = 17
-    fringe = np.zeros((ndet, ndet))
-    i, j = np.mgrid[0:ndet, 0:ndet]
-    
-    #w=np.sqrt(2*(12.9*np.pi/180*f/2.355)**2)
-    
-    gaussian = np.exp(-((16-i+xc)**2 + (j-yc)**2) * det_dist**2 / (w**2))
-    xprime = (i * np.cos(alpha_rad) + j * np.sin(alpha_rad)) * det_dist
-    interfrange = lam * focal / baseline
-    fringe = Amp * np.cos((2. * np.pi / interfrange * xprime) + phase)# * gaussian
-    
-    return fringe
-
-# Using the parameters that Michel found with the fit
-fringes = sim_fringe_new(1., 0.277, focal=0.35, alpha=-44.4)
-s = 0.051
-extent = (-s, 0, -s, 0)
-plt.figure()
-plt.imshow(fringes, origin='lower', extent=extent)
-```
-
-```{python}
-
 ```
 
 ```{python}

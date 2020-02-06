@@ -46,6 +46,7 @@ from importlib import reload
 ```
 
 ```{python}
+reload(dl)
 ##### Simulation du signal: une gaussienne
 
 # Modulation Source Characteristics

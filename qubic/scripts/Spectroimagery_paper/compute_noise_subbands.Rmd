@@ -14,12 +14,16 @@ jupyter:
 
 ```{python}
 from __future__ import division, print_function
+
+# %matplotlib inline
+import matplotlib
+matplotlib.use('nbagg')
+
 import glob
 import os
 import healpy as hp
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib import rc
+
 from scipy import interpolate
 
 import ReadMC as rmc
@@ -29,10 +33,6 @@ import qubic
 from qubic import equ2gal
 
 from qubicpack.utilities import Qubic_DataDir
-
-# %matplotlib inline
-rc({'cmap', 'viridis'})
-plt.rcParams['figure.figsize'] = (8, 8)
 
 ```
 
@@ -68,7 +68,7 @@ simu220 = ['25591014/20191106_low_nep'] # 1e-18
 
 ```{python}
 # Simulation date and name
-date_name = simu9000[5]
+date_name = simu3000[0]
 # date_name = 'NERSC_runs/24334789/20190903_low_nep'
 
 # Get the repository where the simulation is
@@ -79,7 +79,8 @@ print('rep_simu : ', rep_simu)
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(rep_simu + date_name + '.dict')
 
-print('NEP = ', d['detector_nep'])
+print('NEP =', d['detector_nep'])
+print('npointings =', d['npointings'])
 ```
 
 ## Get full maps or patchs
@@ -114,51 +115,13 @@ ang = rmc.pix2ang(d['nside'], center, seenmap)
 ang
 ```
 
-***
-# Test the functions
-
-***
-### Check if works get_Cp
-looks like yes ;) ...
-
-```{python}
-Cp = amc.get_Cp(maps_recon_patch, nfrecon=d['nf_recon'])
-```
-
-***
-### Test if Cp2Cp_prime works
-looooook like that works fine
-
-```{python}
-Cp_prime = amc.Cp2Cp_prime(Cp, verbose=True)
-```
-
-***
-### Check if make_weighted_av works
-looks like yes....
-
-```{python}
-# Using Cp
-weighted_av, sig2, sigmean = amc.make_weighted_av(maps_recon_patch, Cp, ang, ang_threshold=d['dtheta'], 
-                                               verbose=True)
-print(sig2, sigmean)
-
-# Using Cp_prime
-weighted_av_prime, sig2_prime, sigmean_prime = amc.make_weighted_av(maps_recon_patch, Cp_prime, 
-                                                                 ang, ang_threshold=d['dtheta'],
-                                                                 verbose=True)
-print(sig2_prime, sigmean_prime)
-```
-
 # Compute all sigma
 
 ```{python}
 # Make a loop over irec and fill dictionnaries
 dict_sig2MC = {}
-dict_sig2MC_prime = {}
 dict_sig2 = {}
-dict_sig2_prime = {}
-ang_th = 8
+ang_th = 5
 
 for irec in d['nf_recon']:
     print('irec =', irec)   
@@ -173,16 +136,23 @@ for irec in d['nf_recon']:
         sig2MCmean_monofreq = amc.average_pix_sig2(sig2MC_monofreq, ang, ang_threshold=ang_th)
         dict_sig2MC.update({'{}'.format(irec): sig2MC_monofreq})
         dict_sig2MC.update({'{}mean'.format(irec): sig2MCmean_monofreq})
+        
+        print('\n')
        
     else:
-        Cp = amc.get_Cp(recon_patch, nfrecon=d['nf_recon'])
+        if irec == 4:
+            doplot = True
+        else :
+            doplot = False
+        Cp = amc.get_Cp(recon_patch, nfrecon=d['nf_recon'], verbose=False, doplot=doplot)
         Cp_prime = amc.Cp2Cp_prime_viaCorr(Cp, verbose=True)
 #         Cp_prime = amc.Cp2Cp_prime(Cp, verbose=True)
         
         # Compute sig2 and sig2MC 
-        # Using Cp
-        weighted_av, sig2, sig2mean = amc.make_weighted_av(recon_patch, Cp, ang, ang_threshold=ang_th,
-                                                       verbose=True)
+        # Using Cp or Cp_prime
+        weighted_av, sig2 = amc.make_weighted_av(recon_patch, Cp_prime, verbose=False)
+        
+        sig2mean = amc.average_pix_sig2(sig2, ang, ang_threshold=ang_th)
         dict_sig2.update({'{}'.format(irec): sig2})
         dict_sig2.update({'{}mean'.format(irec): sig2mean})
         
@@ -190,24 +160,15 @@ for irec in d['nf_recon']:
         sig2MCmean = amc.average_pix_sig2(sig2MC, ang, ang_threshold=ang_th)
         dict_sig2MC.update({'{}'.format(irec): sig2MC})
         dict_sig2MC.update({'{}mean'.format(irec): sig2MCmean})
-
-        # Using Cp_prime
-        weighted_av_prime, sig2_prime, sig2mean_prime = amc.make_weighted_av(recon_patch, Cp_prime, 
-                                                                         ang, ang_threshold=ang_th,
-                                                                         verbose=True)
-        dict_sig2_prime.update({'{}'.format(irec): sig2_prime})
-        dict_sig2_prime.update({'{}mean'.format(irec): sig2mean_prime})
         
-        sig2MC_prime = np.var(weighted_av_prime, axis=0)
-        sig2MCmean_prime = amc.average_pix_sig2(sig2MC_prime, ang, ang_threshold=ang_th)
-        dict_sig2MC_prime.update({'{}'.format(irec): sig2MC_prime})
-        dict_sig2MC_prime.update({'{}mean'.format(irec): sig2MCmean_prime})
+        print('\n')
 
 ```
 
 ```{python}
 plt.plot(dict_sig2['2'][:, 0], '.')
 np.min(dict_sig2['8'][:, 0])
+dict_sig2MC
 ```
 
 ***
@@ -228,91 +189,94 @@ def make_fit(x, y, nbins):
     fit = interpolate.interp1d(bin_centers, mean_bin, axis=0, kind='linear', fill_value='extrapolate')
     return bin_centers, mean_bin, fit
 
-def plot_sigma2profile(ang, thedict, nbins, nf_recon):
-    for irec in nf_recon:
+def plot_sigma2profile(ang, dict_sig2, dict_sig2MC, nbins, nf_recon):
+    plt.figure(figsize=(12, 7))
+    for nband in nf_recon:
         for s in range(3):
 
             # Interpolation to get a profile
-            bin_centers, mean_bin, fit = make_fit(ang, thedict['{}'.format(irec)][:, s], nbins)
-
+            bin_centers, mean_bin, fit = make_fit(ang, dict_sig2['{}'.format(nband)][:, s], nbins)
+            bin_centersMC, mean_binMC, fitMC = make_fit(ang, dict_sig2MC['{}'.format(nband)][:, s], nbins)
+            
             plt.subplot(1, 3, s+1)
-            plt.subplots_adjust(right=1.6)
+            plt.subplots_adjust(wspace=0.5)
 
-            p = plt.plot(bin_centers, mean_bin, 'o', label='irec ={}'.format(irec))
-            plt.plot(ang, fit(ang), label='irec ={}'.format(irec), color=p[0].get_color())
-            plt.title(Stokes[s])
-            plt.xlabel('angle (°)')
-            plt.ylabel('sig2')
-#             plt.ylim(0, 2)
+            p = plt.plot(bin_centers, mean_bin, 'o', label='sig2 nband ={}'.format(nband))
+            plt.plot(ang, fit(ang), '--', color=p[0].get_color())
+            
+            pMC = plt.plot(bin_centersMC, mean_binMC, 's', color=p[0].get_color(), 
+                           label='sig2MC nband ={}'.format(nband))
+            plt.plot(ang, fitMC(ang), '--', color=p[0].get_color())
+            
+            plt.title(Stokes[s], fontsize=20)
+            plt.xlabel('angle (°)', fontsize=15)
+            plt.ylabel('sig2', fontsize=15)
+            plt.ylim(0, 0.0005)
+            plt.xlim(0, 18)
+            plt.legend()
+    return p, pMC
+
+def plot_sigma2profile_frac(ang, dict_sig2, dict_sig2MC, nbins, nf_recon):
+    plt.figure(figsize=(12, 7))
+    for nband in nf_recon:
+        for s in range(3):
+
+            # Interpolation to get a profile
+            frac = dict_sig2['{}'.format(nband)][:, s] / dict_sig2MC['{}'.format(nband)][:, s]
+            bin_centers, mean_bin, fit = make_fit(ang,frac, nbins)
+            
+            plt.subplot(1, 3, s+1)
+            plt.subplots_adjust(wspace=0.5)
+            
+            p = plt.plot(bin_centers, mean_bin, 'o', label='nband ={}'.format(nband))
+            plt.plot(ang, fit(ang), '--', color=p[0].get_color())
+            
+            plt.title(Stokes[s], fontsize=20)
+            plt.xlabel('angle (°)', fontsize=15)
+            plt.ylabel('$\sigma^2 / \sigma^2_{MC}$', fontsize=15)
+#             plt.ylim(0, 0.0005)
+#             plt.xlim(0, 18)
             plt.legend()
     return p
 
 ```
 
 ```{python}
-plt.figure()
-p = plot_sigma2profile(ang, dict_sig2, nbins, nf_recon=d['nf_recon'][1:])
-plt.title('sig2')
+p, pMC = plot_sigma2profile(ang, dict_sig2, dict_sig2MC, nbins=6, nf_recon=d['nf_recon'][1:])
 ```
 
 ```{python}
-p = plot_sigma2profile(ang, dict_sig2MC, nbins, nf_recon=d['nf_recon'])
-plt.title('sig2 MC')
+p = plot_sigma2profile_frac(ang, dict_sig2, dict_sig2MC, nbins=7, nf_recon=d['nf_recon'][1:])
 ```
 
 ```{python}
-plt.figure()
-p = plot_sigma2profile(ang, dict_sig2_prime, nbins, nf_recon=d['nf_recon'][1:])
-plt.title('sig2 prime')
-
-
-```
-
-```{python}
-p = plot_sigma2profile(ang, dict_sig2MC_prime, nbins, nf_recon=d['nf_recon'][1:])
-plt.title('sig2 MC prime')
-```
-
-```{python}
-def plot_sig_mean(thedict, nf_recon, color, signame):
+def plot_sig_mean(dict_sig2, dict_sig2MC, nf_recon):
+    plt.figure(figsize=(12, 7))
     for s in range(3):
         for irec in nf_recon: 
 
             plt.subplot(1, 3, s+1)
-            plt.subplots_adjust(right=1.8)
+            plt.subplots_adjust(wspace=0.5)
             
             if irec == 1: 
                 sig_monofreq = dict_sig2MC['{}mean'.format(irec)][s]
-                plt.plot(1, 1, 'o', color=color)
-                plt.plot(nf_recon, nf_recon, 'k--', label=r'$y = irec$')
-                plt.plot(nf_recon, np.ones(len(nf_recon)), 'b--', label=r'$y = 1$')
+                plt.plot(irec, sig_monofreq, 'b*')
             else:
-                sig_norm = thedict['{}mean'.format(irec)][s] / sig_monofreq
-                p = plt.plot(irec, sig_norm, 'o', color=color, label=signame)
+                sig2 = dict_sig2['{}mean'.format(irec)][s]
+                sig2MC = dict_sig2MC['{}mean'.format(irec)][s]
+                plt.plot(irec, sig2/sig2MC, 'ro')
         
             plt.title(Stokes[s])
-            plt.xlabel('# of reconstructed bands', fontsize=10)
-            plt.ylabel(r'$\sigma^2 / \sigma^2_{1band}$', fontsize=20)
-#             plt.ylim(0, 0.002)
-            if irec == 2: plt.legend()
+            plt.xlabel('# of bands', fontsize=20)
+            plt.ylabel(r'$\sigma^2 / \sigma^2_{MC}$', fontsize=20)
+            if irec == 2: 
+                plt.legend(loc='lower right')
             
-    return p
+    return 
 ```
 
 ```{python}
-p = plot_sig_mean(dict_sig2, d['nf_recon'], color='g', signame='sig2MC')
-```
-
-```{python}
-p = plot_sig_mean(dict_sig2MC, d['nf_recon'], color='b', signame='sig2MC_prime')
-```
-
-```{python}
-p = plot_sig_mean(dict_sig2_prime, d['nf_recon'], color='r', signame='sig2')
-```
-
-```{python}
-p = plot_sig_mean(dict_sig2MC_prime, d['nf_recon'], color='orange', signame='sig_prime')
+plot_sig_mean(dict_sig2, dict_sig2MC, d['nf_recon'][1:])
 ```
 
 ```{python}

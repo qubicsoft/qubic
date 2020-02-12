@@ -25,6 +25,7 @@ Sensitive parameters for calibration (same in QUBIC pipeline)
 """
 
 nsideLow, nsideHigh, reso, size, sigma2fwhm = Parameters(d)#, reso = 3.5)# size= 200
+reso = 3.2
 
 _, nus_edge_in, _, _, _, _ = qubic.compute_freq(d['filter_nu']/1e9, d['nf_sub'],
     d['filter_relative_bandwidth']) 
@@ -156,7 +157,7 @@ for f_i, fwhm_i in enumerate(fwhm):
 	ave_fwhm = np.zeros((n_subpop,))
 	#position_center_fit[f_i,0] = offset
 	ellip_fit = np.zeros((n_subpop,1))
-	ave_fwhm = FitMethod(maps_subpop, d)
+	ave_fwhm = FitMethod2(maps_subpop, d, reso)
 	
 	ellip[f_i] = np.mean(ellip_fit, axis=0)
 	deltaFwhm_fit[f_i,0] = np.mean(ave_fwhm)-fwhm_i # fwhm_m - fwhm_r

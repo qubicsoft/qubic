@@ -3,12 +3,12 @@ from __future__ import division, print_function
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial.distance import cdist
+from scipy.stats import sigmaclip
 
 from qubicpack.utilities import Qubic_DataDir
 import qubic
 import qubic.sb_fitting as sbfit
 import qubic.selfcal_lib as sc
-import qubic.fibtools as ft
 
 from qubicpack.pixel_translation import tes2index
 
@@ -51,7 +51,7 @@ plt.xlabel('Az (°)')
 plt.ylabel('el (°)')
 plt.legend()
 
-# Get the radial distance for each TES on the FP
+# Get the coordinates and the radial distances of each TES on the FP
 # Get a dictionary
 basedir = Qubic_DataDir(datafile='instrument.py', )
 print('basedir : ', basedir)
@@ -64,7 +64,8 @@ print(d['detarray'])
 d['config'] = 'FI'
 q = qubic.QubicInstrument(d)
 
-tes_coords = np.zeros((256, 5))
+tes_xy = np.zeros((256, 2))
+tes_radial_dist = np.zeros(256)
 for i in range(256):
     if i < 128:
         tes = i + 1
@@ -78,91 +79,74 @@ for i in range(256):
         index_place = np.where(q.detector.index == index)[0][0]
         x = q.detector.center[index_place, 0]
         y = q.detector.center[index_place, 1]
-        r = np.sqrt(x ** 2 + y ** 2)
-        print(tes, index, r)
-        tes_coords[i, :] = ([tes, index, x, y, r])
+        tes_radial_dist[i] = np.sqrt(x ** 2 + y ** 2)
+        print(tes, index, tes_radial_dist[i])
+        tes_xy[i, :] = ([x, y])
 
-# Check we have the right distance
-tes_dist_radial = np.zeros((128, 2))
-tes_dist_radial[:, 0] = tes_coords[:128, 4]
-tes_dist_radial[:, 1] = tes_coords[128:, 4]
+# Check we have the right radial distance by plooting in on the FP
+r = np.zeros((128, 2))
+r[:, 0] = tes_radial_dist[:128]
+r[:, 1] = tes_radial_dist[128:]
 
-dist_on_fp = sc.tes_signal2image_fp(tes_dist_radial, [1, 2])
+dist_on_fp = sc.tes_signal2image_fp(r, [1, 2])
 plt.figure()
 plt.imshow(dist_on_fp)
+plt.title('Radial distances')
 plt.colorbar()
 
-# Focal length
-#
-# dist_testes = np.zeros((256, 256))
-# angular_sep = np.zeros((256, 256))
-# peak = 2
-# for tes1 in range(256):
-#     x1 = tes_coords[tes1, 2]
-#     y1 = tes_coords[tes1, 3]
-#     az1 = tes_newxxyy[tes1, 0, peak]
-#     el1 = tes_newxxyy[tes1, 1, peak]
-#     for tes2 in range(256):
-#         x2 = tes_coords[tes2, 2]
-#         y2 = tes_coords[tes2, 3]
-#         dist_testes[tes1, tes2] = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-#
-#         az2 = tes_newxxyy[tes2, 0, peak]
-#         el2 = tes_newxxyy[tes2, 1, peak]
-#         alpha = np.sqrt((az2 - az1) ** 2 + (el2 - el1) ** 2)
-#         angular_sep[tes1, tes2] = np.deg2rad(alpha)
-
-
-
-tes_xy = tes_coords[:, 2:4]
+# =============Focal length==================
+# Get all distances between TES
 tes_dist = cdist(tes_xy, tes_xy, 'euclidean')
+tes_dist = np.triu(tes_dist)
+print(np.max(tes_dist))
 plt.figure()
 plt.imshow(tes_dist)
 
-all_focal_length = []
-all_mean = []
-all_std = []
+allfl_clip, alltes_dist_cut, alltanalpha_cut = [], [], []
+nsig = 3
 for peak in range(9):
+    # Get all angular distances between peak position
     azel = tes_newxxyy[:, 0:2, peak]
     alpha = np.deg2rad(cdist(azel, azel, 'euclidean'))
+    alpha = np.triu(alpha)
+    tanalpha = np.tan(alpha)
 
-    focal_length = np.ravel(tes_dist / np.tan(alpha))
-
-    # if focal_length is not np.nan and focal_length <1.:
+    focal_length = tes_dist / tanalpha
     fl = focal_length[~np.isnan(focal_length)]
-    fl = fl[fl<2.]
-    # plt.figure()
-    # plt.hist(fl, bins=100)
-    print(np.max(fl))
-    all_focal_length.append(fl)
-    print(fl.shape)
-    mean_fl, std_fl = ft.meancut(fl, 3, disp=False)
-    all_mean.append(mean_fl)
-    all_std.append(std_fl*np.sqrt(2))
+    fl_clip, mini, maxi = sigmaclip(fl, low=nsig, high=nsig)
+    print(mini, maxi)
+    print(fl_clip.shape)
 
-# all_focal_length = np.array(all_focal_length)
-# print(all_focal_length.shape)
+    tes_dist_cut = tes_dist[(focal_length > mini) & (focal_length < maxi)]
+    tanalpha_cut = tanalpha[(focal_length > mini) & (focal_length < maxi)]
+    print(tes_dist_cut.shape, tanalpha_cut.shape)
+
+    allfl_clip.append(fl_clip)
+    alltes_dist_cut.append(tes_dist_cut)
+    alltanalpha_cut.append(tanalpha_cut)
+
+allmean_fl = [np.mean(fl) for fl in allfl_clip]
+allstd_fl = [np.std(fl) / np.sqrt(len(fl)) for fl in allfl_clip]
 
 plt.figure()
 for peak in range(9):
     plt.subplot(3, 3, peak+1)
-    plt.hist(all_focal_length[peak], bins=100,
-             label='Focal length = ${:.5f} \pm {:.5f}$'.format(all_mean[peak], all_std[peak]))
+    plt.hist(allfl_clip[peak], bins=100,
+             label='$FL = {:.5f} \pm {:.5f}$'.format(allmean_fl[peak], allstd_fl[peak]))
+    plt.title('Peak {}'.format(peak))
     plt.legend()
-    plt.xlim(0, 2)
+    plt.xlim(0, 0.9)
+plt.suptitle('Focal length hist cut at {} sigma'.format((nsig)))
 
-
-# mean_fl = np.nanmean(focal_length, axis=0)
-# std_fl = np.nanstd(focal_length, axis=0)
-
-r = tes_coords[:, 4]
-plt.figure()
-plt.hist(fl, bins=30,
-         label='Focal length = ${} \pm {}$'.format(mean_fl, std_fl))
-plt.legend()
 
 plt.figure()
-tanalpha = np.tan(alpha)
-plt.plot(tanalpha, tes_dist, 'o')
-plt.plot(tanalpha, tanalpha * 0.3)
-#
+for peak in range(9):
+    plt.subplot(3, 3, peak+1)
+    plt.plot(alltanalpha_cut[peak], alltes_dist_cut[peak], 'o')
+    plt.plot(alltanalpha_cut[peak], alltanalpha_cut[peak] * 0.3)
+
+finalmean = np.mean(allmean_fl)
+allstd_fl2 = [std**2 for std in allstd_fl]
+finalstd = np.sqrt(np.sum(allstd_fl2) / 9)
+
+print(finalmean, finalstd)

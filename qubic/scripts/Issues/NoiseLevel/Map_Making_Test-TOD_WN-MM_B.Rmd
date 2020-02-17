@@ -1,0 +1,462 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.4
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+Test of simple binner map making with a white noise TOD
+
+<!-- #region {"code_folding": []} -->
+# Imports and functions
+<!-- #endregion -->
+
+```{python code_folding=c("0")}
+#Imports
+import numpy as np
+import pylab as pl #plots
+import healpy as h #maps
+import random #random numb gen
+
+import qubic #qubic soft
+from pysm.nominal import models
+from pysimulators import FitsArray 
+import os #used to call environment variables
+```
+
+```{python code_folding=c("0")}
+def build_qubic_tod(sky_map, inst_dict_fn, detector_index):
+    '''
+    This function builds a TOD observed by QUBIC given a sky map and instrument dictionary and a detector index
+
+    INPUTS
+    sky map - np.array(nf, npix, 3) - nf is the number of frequencies, npix is the number of pixels and 3 is for IQU maps
+    inst_dict_fn - Multy-type
+                STRING - filename of the instrument dictionary
+                DICTIONARY - the instrument dictionary
+    detector_index - INT - FP index of single detector
+
+    OUTPUTS
+    TOD        - NP.ARRAY(nf_rec, len)     - the TOD. nf_rec is the number of reconstructed sub-bands, len is the length of the TOD
+    '''
+
+    # Define sky configuration
+    if type(inst_dict_fn) == str:
+        d = qubic.qubicdict.qubicDict()
+        d.read_from_file(inst_dict_fn)
+    elif type(inst_dict_fn) == qubic.qubicdict.qubicDict:
+        d = inst_dict_fn
+    else:
+        print("Wrong instrument type")
+        return 0
+    
+    # Pointing strategy
+    p = qubic.get_pointing(d)
+    print('=== Pointing DONE! ===')
+
+    # Model of the scene at the time of observation
+    s = qubic.QubicScene(d)
+
+    # Create MultibandInstrument. Model of the instrument with a focal plane sensitivity to 
+    # multiple frequencies
+    q = select_detector(qubic.QubicInstrument(d), detector_index)
+
+    # Generate the sub-band limits to be used (later we can see what information we are ignoring with '_')
+    # _, nus_edge_in, _, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, d['nf_sub'],
+    #                                                 d['filter_relative_bandwidth'])
+    # Finally create an acquisition multiband operator which combines all relevant information
+    #scene, instrument configuration and strategy pointing. 
+    a = qubic.QubicAcquisition(q, p, s, d)
+
+    #TOD
+    # MultiFreq TOD making
+    #(i.e. TOD for several subbands to reproduce a wideband observation)
+    TOD, maps_convolved_useless = a.get_observation(sky_map, noiseless=d['noiseless'])#, convolution = True)
+    del(maps_convolved_useless)
+    
+    return TOD
+```
+
+```{python code_folding=c("0")}
+def build_sky_map(instrument_dict, \
+                  sky_config, \
+                  nf_sub, \
+                  map_filename):
+    '''
+    This function builds a sky map given an instrument dictionary and a sky configuration and writes the map in a fits file
+
+    INPUTS
+    instrument_dict - STRING - the location of the instrument configuration dictionary
+    sky_config      - DICT   - the sky configuration (see https://pysm-public.readthedocs.io/en/latest/models.html for more info)
+    nf_sub          - INT    - Number of sub-bands (main band defined in instrument dictionary). Must be geq 2
+    map_filename    - STRING - the filename of the output map (without the .fits suffix)
+
+    OUTPUTS
+    out_filename    - STRING - the full output filename    
+    '''
+    
+    import os
+
+    from pysm.nominal import models
+
+    import qubic
+    from qubic import SpectroImLib as si
+
+    from pysimulators import FitsArray
+
+    d = qubic.qubicdict.qubicDict()
+    d.read_from_file(instrument_dict)
+
+#    nf_sub = [1,]#[2, 4, 5, 10, 12, 14, 15, 16, 18, 20, 22, 24]
+    dirc = './'
+
+    try:
+        os.makedirs(dirc)
+    except:
+        pass
+
+    out_fname = []
+    for nf in nf_sub:
+        print(nf)
+        d['nf_sub'] = nf
+        #sky_config = {'dust': models('d1', d['nside']), 'cmb': models('c1', d['nside'])}
+        #sky_config = {'cmb': models('c1', d['nside'])}
+
+        Qubic_sky = si.Qubic_sky(sky_config, d)
+        x0 = Qubic_sky.get_simple_sky_map()
+        dirc2 = dirc
+        try:
+            os.makedirs(dirc2)
+        except:
+            pass
+        
+        fname = '%s_Nside_%i_Nfreq_%i.fits' % (map_filename, d['nside'], nf)
+        FitsArray(x0).save(fname)
+        out_fname.append(fname)
+    
+    return out_fname
+
+#usa i detector non selezionati? Nel caso potrebbe creare divergenze -> indagare
+```
+
+```{python code_folding=c("0")}
+def nep2net(nep, freq, bandwidth, temp):
+    h = 6.62607004e-34
+    k = 1.38064852e-23
+    x = h*freq/k/temp
+    dPdT = (2*k*bandwidth) * (x**2*np.exp(x)) /(np.exp(x)-1)**2
+    net = nep / dPdT
+    return net
+    
+```
+
+```{python code_folding=c("0")}
+def select_detector(instrument, FPindex):
+    '''
+    This function allows one to select a single detector for the simulation
+
+    INPUTS
+    instrument - qubic.instrument.QubicMultibandInstrument - the MultiInstrument object
+    FPindex - INT - detector index ("0" is 594)
+
+    OUTPUTS
+    out -qubic.instrument.QubicMultibandInstrument -_The updated MultiInstrument object
+    '''
+
+    a = int(np.where(instrument.detector.index == FPindex)[0])
+    mono_instrument = instrument[a]
+    
+    out = mono_instrument
+    return out
+```
+
+```{python code_folding=c("0")}
+def build_qubic_map(tod, cov, inst_dict_fn, detector_index):
+    '''
+    This function builds a map observed by QUBIC given an instrument dictionary and a detector index
+
+    INPUTS
+    tod        - NP.ARRAY(nf_rec, len)     - the TOD. nf_rec is the number of reconstructed sub-bands, len is the length of the TOD
+    cov        - NP.ARRAY(npix)            - the coverage map
+    inst_dict_fn - Multy-type
+                STRING - filename of the instrument dictionary
+                DICTIONARY - the instrument dictionary
+    detector_index - INT - FP index of detector
+    OUTPUTS
+    maps_recon - NP.ARRAY(nf_rec, npix, 3) - the reconstructed map. nf_rec is the number of reconstracted sub-bands, npix is the number of pixels, 3 is for IQU maps
+    '''
+
+ # Define sky configuration
+    if type(inst_dict_fn) == str:
+        d = qubic.qubicdict.qubicDict()
+        d.read_from_file(inst_dict_fn)
+    elif type(inst_dict_fn) == qubic.qubicdict.qubicDict:
+        d = inst_dict_fn
+    else:
+        print("Wrong instrument type")
+        return 0
+    
+    # Pointing strategy
+    p = qubic.get_pointing(d)
+    print('=== Pointing DONE! ===')
+
+    # Model of the scene at the time of observation
+    s = qubic.QubicScene(d)
+
+    # Create MultibandInstrument. Model of the instrument with a focal plane sensitivity to 
+    # multiple frequencies
+    q = select_detector(qubic.QubicInstrument(d), detector_index)
+
+
+    # Finally create an acquisition operator which combines all relevant information
+    #scene, instrument configuration and strategy pointing. 
+    a = qubic.QubicAcquisition(q, p, s, d)
+
+    #Coverage map
+    # Map-making process for a given number of reconstructed subbands
+    nf_sub_rec = d['nf_recon'][0]
+
+    # print('************* Map-Making on {} sub-map(s) *************'.format(nf_sub_rec))
+
+    ## Build a MultiAcquisition operator for reconstruction (map-making). As it is the inverse
+    # process but seen with 'different' instrument (one with nf_rec channels).  
+    # Recompute the edges of sub-bands :
+    # _, nus_edge, _, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, nf_sub_rec, d['filter_relative_bandwidth'])
+
+    # Create a Acquisition
+    arec = qubic.QubicAcquisition(q, p, s, d)
+        
+    # From TOD reconstruct sky maps.
+    maps_recon, nit, error = arec.tod2map(tod, d, cov=cov)
+
+    print('The shape of the reconstructed maps is (nf_recon, #pixels, #stokes) :', maps_recon.shape)
+    print('{} iterations were needed to get an error of {}'.format(nit, error))    
+    
+    return maps_recon
+```
+
+```{python code_folding=c()}
+def maprmsI(mp_gen, mp_obs, cov, threshold, sigma_map_k):
+    '''
+    This calculates the rms of a map given a certain threshold to exclude boundary pixels
+
+    INPUTS
+    mp_gen  - np.array(npix, 3) - npix is the number of pixels and 3 is for IQU maps, this is the generated map
+    mp_obs  - " observed map 
+    cov - np.array(npix) - npix is the number of pixels
+    threshold - FLOAT - threshold of coverage to keep (selects pixels covered more than threshold * max(coverage))
+    sigma_map_k - FLOAT - map sigma in K
+
+    OUTPUTS
+    rms - FLOAT - the rms of the map
+    '''
+    
+    okpix = cov[:] > (threshold * np.max(cov[:]))
+    # Set the uncovered pixels to UNSEEN and select the intensity map
+    qubic_I = mp_obs[:,0].copy()
+    qubic_I[~okpix] = h.UNSEEN #setting to grey pixels not selected
+    
+    
+    # Now I produce noise-only maps by subtracting the signal maps and define the same mask as the QUBIC one
+    sky_I = mp_gen[:,0].copy()
+    sky_I[~okpix] = h.UNSEEN #setting to grey pixels not selected
+    
+    diffmap = sky_I - qubic_I #subtracting generated map from observed map
+    diffmap[~okpix] = h.UNSEEN
+    
+    rms = np.std(diffmap[okpix])/(sigma_map_k * 1e6)
+    return rms
+
+    #sigma_map = sigma / np.sqrt(tau_m)
+    #sigma_map_k = nep2net(sigma_map, nu0, bw, temp)
+```
+
+```{python code_folding=c()}
+# Define folders
+data_folder = os.environ['DATA_FOLDER']
+maps_folder = os.environ['MAPS_FOLDER']
+
+inst_dict_fn = '%sTD_spectroimaging.dict' % (data_folder)
+
+# Read dictionary
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(inst_dict_fn)
+
+# Read noise
+nep = d['detector_nep']
+print('Detector NEP = %1.2e W/sqrt(Hz)' % nep)
+```
+
+```{python code_folding=c()}
+# Convert to NET
+nu0 = d['filter_nu']
+bw = nu0 * d['filter_relative_bandwidth']
+temp = d['temperature']
+net = nep2net(nep, nu0, bw, temp)
+tau = d['period']
+print('Center frequency = %3.0f GHz' % (nu0 / 1e9))
+print('Bandwidth = %3.0f GHz' % (bw / 1e9))
+print('Integration time = %1.3f s' % tau)
+print('Detector NET = %1.2e K x sqrt(s)' % net)
+```
+
+# Observed Map (not really used)
+
+```{python code_folding=c("0")}
+# Define sky configuration
+sky_config = {'synchrotron': models('s1', d['nside']),'dust': models('d1', d['nside']), 'cmb': models('c1', d['nside'])}
+
+# Define number of sub-bands
+nf_sub = [1,] #[2, 4, 5, 10, 12, 14, 15, 16, 18, 20, 22, 24]
+
+# Define output map filename
+out_map = '%ssyn_dust_cmb_map.fits' % (maps_folder)
+
+# Define center freq, band extremes and sub_bands
+nu_min      = nu0 - bw / 2.
+nu_max      = nu0 + bw / 2.
+delta       = bw / nf_sub[0]
+freq_array  = np.array([nu_min + (j-1/2.) * delta for j in np.arange(1,nf_sub[0]+1)])
+```
+
+```{python}
+outmap = build_sky_map(inst_dict_fn, sky_config, nf_sub, out_map)
+mp = FitsArray(outmap[0])
+```
+
+```{python code_folding=c()}
+#show maps
+#fig = pl.figure(figsize = (26,6))
+#fig.suptitle('Input sky map', fontsize = 'xx-large')
+ind = 0
+fr = freq_array[0]
+
+ind = ind + 1
+#ax = fig.add_subplot(nf_sub[0], 3,ind)
+h.visufunc.mollview(mp[:, 0], title = '%3.1f GHz I' % (fr/1.e9))
+
+#ind = ind + 1
+#ax = fig.add_subplot(nf_sub[0], 3,ind)
+#h.visufunc.mollview(mp[:, 1], hold = True, title = '%3.1f GHz Q' % (fr/1.e9))
+
+#ind = ind + 1
+#ax = fig.add_subplot(nf_sub[0], 3,ind)
+#h.visufunc.mollview(mp[:, 2], hold = True, title = '%3.1f GHz U' % (fr/1.e9))
+
+pl.show()
+#pl.savefig(maps_folder + 'syn_dust_cmb_map.pdf',bbox_inches = 'tight')
+pl.close('all')
+```
+
+# TOD
+
+```{python code_folding=c("0")}
+#TOD parameters
+
+y2sec = 24*365*3600.
+eff_duration = d['npointings'] * d['period']/y2sec
+FPindex = 594
+print('Effective duration: %1.13e years' %eff_duration)
+
+
+#detector = [0] #to be verified -> WRONG!!
+```
+
+```{python code_folding=c("0")}
+#TOD and Pointing building
+tod = build_qubic_tod(mp, d, FPindex) * 0 #same shape as qubic TOD
+
+for count in np.arange(d['npointings']): #White noise
+    tod[0, count] = random.gauss(0, nep/np.sqrt(2)/np.sqrt(tau)) 
+    
+p = qubic.get_pointing(d)
+pl.plot(tod[0,:]);
+pl.xlabel('time (s)');
+pl.ylabel('data (W)');
+pl.title('White Noise TOD');
+```
+
+```{python code_folding=c("0")}
+#sigma measured and theo
+sigma = np.std(tod[0,:])
+print('sigma measured = %1.3e W, sigma theo = %1.3e W' %(sigma, nep/np.sqrt(2)/np.sqrt(tau)))
+```
+
+# Map Making Test
+
+```{python code_folding=c()}
+#Map making parameters
+
+nside = 64
+n_pixels = 12 * (nside ** 2)
+
+pix = h.ang2pix(nside, p[:].galactic[:].T[0], p[:].galactic[:].T[1], lonlat=True)
+mappa = np.array([0.] * n_pixels)
+hits = np.array([0] * n_pixels)
+```
+
+```{python code_folding=c()}
+for count in np.arange(np.size(tod[0])):
+    mappa[pix[count]] += tod[0,count]
+    hits[pix[count]] += 1
+```
+
+```{python}
+mappa = mappa/hits #averaging data in pixel
+```
+
+```{python code_folding=c("0")}
+#hits graph
+pl.plot(hits)
+pl.xlabel('pixel');
+pl.ylabel('n. hits');
+pl.title('hits per pixel')
+print('hits sum = ', sum(hits))
+h.mollview(hits, title = 'hits map')
+```
+
+```{python}
+h.mollview(mappa[:], title = 'data map [W]')
+```
+
+# Test RMS
+
+```{python code_folding=c("0")}
+# Select pixels with good coverage
+threshold = 0.1 
+okpix = hits[:] > (threshold * np.max(hits[:]))
+#area defined by RA_center and DEC_center in Pointing section, dictionary
+print('threshold = ', threshold)
+```
+
+```{python code_folding=c("0")}
+# Set the uncovered pixels to UNSEEN and select the intensity map
+mappa[~okpix] = h.UNSEEN #conventional number for grey background
+mappa_I = mappa[:] #not really needed
+```
+
+```{python}
+Tobs = sum(hits[okpix]) * d['period']
+Npix = len(mappa[okpix])
+tau_m = Tobs/Npix
+sigma_map = sigma / np.sqrt(tau_m)
+print('sigma_map = ',sigma_map, 'W')
+```
+
+```{python code_folding=c()}
+#rms_test = maprmsI(mp, mappa_appo, hits, threshold) diverse unità di misura!!
+   
+rms_test = np.std(mappa_I[okpix])/(sigma_map)
+print('rms = ', rms_test)
+```
+
+```{python}
+
+```

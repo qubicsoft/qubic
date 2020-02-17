@@ -334,8 +334,15 @@ def maprmsI(mp_gen, mp_obs, cov, threshold):
 
 ```{python code_folding=c("0")}
 # Define folders
-data_folder = os.environ['DATA_FOLDER']
-maps_folder = os.environ['MAPS_FOLDER']
+try:
+    data_folder = os.environ['DATA_FOLDER']
+except:
+    data_folder = './'
+
+try:
+    maps_folder = os.environ['MAPS_FOLDER']
+except:
+    maps_folder = './'
 
 inst_dict_fn = '%sTD_spectroimaging.dict' % (data_folder)
 
@@ -508,6 +515,22 @@ print('sigma_map = ',sigma_map, 'W')
    
 rms_test = np.std(mappa_I[okpix])/(sigma_map)
 print('rms = ', rms_test)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 ```{python}

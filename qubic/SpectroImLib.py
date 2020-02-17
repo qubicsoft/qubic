@@ -247,8 +247,8 @@ def reconstruct_maps(TOD, d, pointing, nf_sub_rec, x0=None):
         return maps_recon, cov, nus, nus_edge
     else:
         if d['nf_sub'] == 1:
-            _, maps_convolved = arec.get_observation(x0[0], noiseless = d['noiseless'])
+            _, maps_convolved = arec.get_observation(x0[0], noiseless=d['noiseless'])
         else:
-            _, maps_convolved = arec.get_observation(x0, noiseless = d['noiseless'])
+            _, maps_convolved = arec.get_observation(x0, noiseless=d['noiseless'])
         maps_convolved = np.array(maps_convolved)
         return maps_recon, cov, nus, nus_edge, maps_convolved

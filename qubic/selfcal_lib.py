@@ -30,16 +30,16 @@ class SelfCalibration:
 
     """
 
-    def __init__(self, baseline, dead_switches, d):
+    def __init__(self, baseline, d, dead_switches=None):
         """
 
         Parameters
         ----------
         baseline : list
             Baseline formed with 2 horns, index between 1 and 64 as on the instrument.
-        dead_switches : int or list of int
-            Broken switches, always closed.
         d : dictionary
+        dead_switches : list of int
+            Broken switches, always closed between 1 and 64. By default is None. 
         """
         self.baseline = baseline
         self.dead_switches = dead_switches
@@ -52,9 +52,10 @@ class SelfCalibration:
         for i in self.baseline:
             if i < 1 or i > 64:
                 raise ValueError('Horns indices must be in [1, 64].')
-        for i in self.dead_switches:
-            if i < 1 or i > 64:
-                raise ValueError('Horns indices must be in [1, 64].')
+        if self.dead_switches is not None:
+            for i in self.dead_switches:
+                if i < 1 or i > 64:
+                    raise ValueError('Horns indices must be in [1, 64].')
 
     def get_dead_detectors_mask(self, quadrant=3):
         """
@@ -583,6 +584,7 @@ def tes_signal2image_fp(tes_signal, asics):
     thermos = [4, 36, 68, 100]
     image_fp = np.empty((34, 34))
     image_fp[:] = np.nan
+    FPidentity = make_id_focalplane()
     for ASIC in asics:
         for TES in range(128):
             if TES + 1 not in thermos:
@@ -762,7 +764,7 @@ def get_real_fp(full_fp, quadrant=None):
                 raise ValueError('quadrant must be 1, 2, 3 or 4')
             else:
                 # Get only one quadrant
-                quart = full_real_fp[np.where(quad != quadrant, 6, full_real_fp) != 6]
+                quart = full_real_fp[np.where(quad != quadrant+1, 6, full_real_fp) != 6]
                 quart_fp = np.reshape(quart, (17, 17))
 
                 return full_real_fp, quart_fp

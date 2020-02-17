@@ -48,6 +48,7 @@ date_name = 'NERSC_runs/24334702/20190903_low_nep'
 
 # Get the repository where the simulation is
 rep_simu = Qubic_DataDir(datafile=date_name + '.dict') + '/'
+print(rep_simu)
 
 # Dictionary saved during the simulation
 d = qubic.qubicdict.qubicDict()
@@ -178,7 +179,7 @@ if save_plots :
 ```
 
 ```{python}
-hp.mollview(maps_convo_nl[0, :, 2], rot=center,cmap='viridis',
+hp.mollview(maps_convo_nl[0, :, 2], rot=center, cmap='viridis',
                 title='conv ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon))#, min=mmin, max=mmax)
 
 ```
@@ -202,11 +203,11 @@ for i in range(3):
         mmin=-3.14
         mmax=2.24
     hp.gnomview(maps_convo[isub, :, i], rot=center, reso=r, sub=(3, 3, i + 1),cmap='viridis',
-                title='conv ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon))#, min=mmin, max=mmax)
+                title='conv ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon), min=mmin, max=mmax)
     hp.gnomview(maps_recon[isub, :, i], rot=center, reso=r, sub=(3, 3, 3 + i + 1),cmap='viridis',
-                title='recon ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon))#, min=mmin, max=mmax)
+                title='recon ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon), min=mmin, max=mmax)
     hp.gnomview(maps_diff[isub, :, i], rot=center, reso=r, sub=(3, 3, 6 + i + 1),cmap='viridis',
-                title='diff ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon))#, min=mmin, max=mmax)
+                title='diff ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon), min=mmin, max=mmax)
 if save_plots:
     plt.savefig(rep_simu+'plots/00-'+'noise_')
     
@@ -385,10 +386,10 @@ for i in range(3):
 ```{python}
 bin_centers, ang, std_bin, std_profile = amc.std_profile(residuals, 20, d['nside'], center, seen_map)
 
-if apply_corrections:
-    for isub in range(nf_recon):
-        std_bin[:, isub, :] /= np.sqrt(corrections[isub])
-        std_profile[:, isub, :] /= np.sqrt(corrections[isub])
+# if apply_corrections:
+#     for isub in range(nf_recon):
+#         std_bin[:, isub, :] /= np.sqrt(corrections[isub])
+#         std_profile[:, isub, :] /= np.sqrt(corrections[isub])
 
 isub = 0
 plt.figure('std profile isub{}'.format(isub))
@@ -462,9 +463,9 @@ std_cov = np.std(cov, axis=2)
 std_corr = np.std(corr, axis=2)
 
 # Apply correction (don't know if it is a good idea...)
-if apply_corrections:
-    mean_cov /= correction_mat
-    mean_corr /= correction_mat
+# if apply_corrections:
+#     mean_cov /= correction_mat
+#     mean_corr /= correction_mat
 
 plt.figure('Mean Std cov corr')
 plt.subplot(221)

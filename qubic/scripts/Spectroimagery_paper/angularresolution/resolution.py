@@ -145,7 +145,33 @@ def gaussian2d(z, x0, y0, varx, vary):
 	gauss = 1/(2*np.pi*varx*vary)*np.exp(-((x-x0)**2/(2*varx**2)+(y-y0)**2/(2*vary**2)))
 	return gauss.ravel()
 
-def FitMethod(maparray, d, reso = 1.5, size = 200, cutlevel = 0.01, mapret = False):
+def Gaussian( xdata, x0, y0, varx, vary):
+    (x,y) = xdata
+    gauss = 1/(2*np.pi*varx*vary)*np.exp(-((x-x0)**2/(2*varx**2)+(y-y0)**2/(2*vary**2)))
+    return gauss.ravel()
+
+def FitMethod2(maparray, d, reso, size = 200, cutlevel = 0.01, mapret = False):
+    sigma2fwhm = np.sqrt(8*np.log(2))
+    x_map = np.linspace(-size/2,size/2,size)*reso/60.
+    y_map = x_map
+    x_map, y_map = np.meshgrid(x_map, y_map)
+    #print('shape x_map', x_map.shape)
+    #x0data_map = x_map.ravel()
+    #x1data_map = y_map.ravel()
+    input_fwhm_fit = np.empty((len(maparray),))
+    for i,mi in enumerate(maparray):
+        norm_fit = normalization(x_map[0],mi)
+        ydata_map = (norm_fit * mi)
+        #print('ydata shape' , ydata_map.shape)
+        popt_map, pcov_map = curve_fit(Gaussian, (x_map.ravel(),y_map.ravel()), 
+                                       ydata_map.ravel(), method='trf')
+        input_fwhm_fit[i] = (abs(popt_map[2])+abs(popt_map[3]))/2*sigma2fwhm
+    if mapret:
+        return input_fwhm_fit, mi, popt_map, pcov_map
+    else:
+        return input_fwhm_fit
+
+def FitMethod(maparray, d, reso , size = 200, cutlevel = 0.01, mapret = False):
 	"""
 	Method who fit a gaussian function given some parameters. 
 	The parameters for the calibration and for the used must be the same.
@@ -181,7 +207,7 @@ def FitMethod(maparray, d, reso = 1.5, size = 200, cutlevel = 0.01, mapret = Fal
 		input_fwhm_fit[i] = (abs(popt_map[2])+abs(popt_map[3]))/2*sigma2fwhm
 
 	if mapret:
-		return input_fwhm_fit, mi
+		return input_fwhm_fit, mi,popt_map, pcov_map
 	else:
 		return input_fwhm_fit
 

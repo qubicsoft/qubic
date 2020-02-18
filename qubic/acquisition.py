@@ -37,41 +37,43 @@ class QubicAcquisition(Acquisition):
         ----------
         instrument : QubicInstrument, optional
             The QubicInstrument instance.
+        sampling : pointing
+            Pointing obtained with get_pointing().
         scene : QubicScene, optional
             The discretized observed scene (the sky).
-        block : tuple of slices, optional
-            Partition of the samplings.
-        effective_duration : float, optional
-            If not None, the noise properties are rescaled so that this
-            acquisition has an effective duration equal to the specified value,
-            in years.
-        photon_noise : boolean, optional
-            If true, the photon noise contribution is included.
-        max_nbytes : int or None, optional
-            Maximum number of bytes to be allocated for the acquisition's
-            operator.
-        nprocs_instrument : int, optional
-            For a given sampling slice, number of procs dedicated to
-            the instrument.
-        nprocs_sampling : int, optional
-            For a given detector slice, number of procs dedicated to
-            the sampling.
-        comm : mpi4py.MPI.Comm, optional
-            The acquisition's MPI communicator. Note that it is transformed
-            into a 2d cartesian communicator before being stored as the 'comm'
-            attribute. The following relationship must hold:
-                comm.size = nprocs_instrument * nprocs_sampling
-        psd : array-like, optional
-            The one-sided or two-sided power spectrum density
-            [signal unit/sqrt Hz].
-        bandwidth : float, optional
-            The PSD frequency increment [Hz].
-        twosided : boolean, optional
-            Whether or not the input psd is one-sided (only positive
-            frequencies) or two-sided (positive and negative frequencies).
-        sigma : float
-            Standard deviation of the white noise component.
-
+        d : dictionary with lot of parameters:
+            block : tuple of slices, optional
+                Partition of the samplings.
+            effective_duration : float, optional
+                If not None, the noise properties are rescaled so that this
+                acquisition has an effective duration equal to the specified value,
+                in years.
+            photon_noise : boolean, optional
+                If true, the photon noise contribution is included.
+            max_nbytes : int or None, optional
+                Maximum number of bytes to be allocated for the acquisition's
+                operator.
+            nprocs_instrument : int, optional
+                For a given sampling slice, number of procs dedicated to
+                the instrument.
+            nprocs_sampling : int, optional
+                For a given detector slice, number of procs dedicated to
+                the sampling.
+            comm : mpi4py.MPI.Comm, optional
+                The acquisition's MPI communicator. Note that it is transformed
+                into a 2d cartesian communicator before being stored as the 'comm'
+                attribute. The following relationship must hold:
+                    comm.size = nprocs_instrument * nprocs_sampling
+            psd : array-like, optional
+                The one-sided or two-sided power spectrum density
+                [signal unit/sqrt Hz].
+            bandwidth : float, optional
+                The PSD frequency increment [Hz].
+            twosided : boolean, optional
+                Whether or not the input psd is one-sided (only positive
+                frequencies) or two-sided (positive and negative frequencies).
+            sigma : float
+                Standard deviation of the white noise component.
         """
         block = d['block']
         effective_duration = d['effective_duration']
@@ -254,8 +256,11 @@ class QubicAcquisition(Acquisition):
         fftw_flag = 'FFTW_MEASURE'
         nthreads = None
 
-        if self.bandwidth is None and self.psd is not None or self.bandwidth is not None and self.psd is None:
+        if self.bandwidth is None or self.psd is None:
+        # if self.bandwidth is None and self.psd is not None or self.bandwidth is not None and self.psd is None:
             raise ValueError('The bandwidth or the PSD is not specified.')
+
+        # Get sigma in Watt
         if self.instrument.detector.nep is not None:
             self.sigma = self.instrument.detector.nep / np.sqrt(2 * self.sampling.period)
 
@@ -263,7 +268,8 @@ class QubicAcquisition(Acquisition):
                 sigma_photon = self.instrument._get_noise_photon_nep(self.scene) / np.sqrt(2 * self.sampling.period)
                 self.sigma = np.sqrt(self.sigma ** 2 + sigma_photon ** 2)
             else:
-                sigma_photon = 0
+                pass
+                # sigma_photon = 0
 
         if self.bandwidth is None and self.psd is None and self.sigma is None:
             raise ValueError('The noise model is not specified.')
@@ -275,6 +281,8 @@ class QubicAcquisition(Acquisition):
 
             out = DiagonalOperator(1 / self.sigma ** 2, broadcast='rightward',
                                    shapein=(len(self.instrument), len(self.sampling)))
+            print(out.shape)
+            print(out)
 
             if self.effective_duration is not None:
                 nsamplings = self.comm.allreduce(len(self.sampling))

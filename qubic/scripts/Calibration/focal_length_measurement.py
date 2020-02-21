@@ -74,6 +74,63 @@ def DBSCAN_cut(results, doplot=False):
 def normalize(x):
     return (x - np.nanmean(x)) / np.nanstd(x)
 
+def measure_focal_length(tes_xy, peak_azel, npeaks=9, ntes=256, nsig=3):
+    tes_dist = cdist(tes_xy, tes_xy, 'euclidean')
+
+    fl_mean = np.zeros((npeaks, ntes))
+    fl_std = np.zeros((npeaks, ntes))
+    for peak in range(npeaks):
+        print('Peak ', peak, '\n')
+        alpha = np.deg2rad(cdist(peak_azel[:, :, peak], peak_azel[:, :, peak], 'euclidean'))
+        tanalpha = np.tan(alpha)
+
+        focal_length = tes_dist / tanalpha
+        print(focal_length.shape)
+        for tes in range(ntes):
+            print(tes)
+            fl = focal_length[tes]
+            fl = fl[~np.isnan(fl)]
+            fl_clip, mini, maxi = sigmaclip(fl, low=nsig, high=nsig)
+            print(mini, maxi)
+            print(fl_clip.shape)
+
+            # Mean and STD for each TES
+            fl_mean[peak, tes] = np.mean(fl_clip)
+            fl_std[peak, tes] = np.std(fl_clip) / np.sqrt(len(fl_clip))
+
+    return fl_mean, fl_std
+
+
+def plot_flonfp(fl_mean, fl_std, xy, radial_dist, npeaks=9):
+    # Compute the mean and the global std over TES
+    ntes = np.shape(fl_std)[1]
+    final_mean = np.mean(fl_mean, axis=1)
+    final_std2 = np.sum(fl_std ** 2, axis=1)
+    final_std = np.sqrt(final_std2 / ntes)
+
+    # Plot
+    for peak in range(npeaks):
+        print('Peak {}: {} +- {}'.format(peak, final_mean[peak], final_std[peak]))
+
+        plt.figure(figsize=(13, 5))
+        plt.suptitle('Peak {}'.format(peak))
+        plt.subplot(121)
+        plt.plot(radial_dist, fl_mean[peak], 'o',
+                 label='$FL = {:.5f} \pm {:.5f}$'.format(final_mean[peak], final_std[peak]))
+        plt.xlabel('Radial TES distance (m)')
+        plt.ylabel('TES focal length (m)')
+        plt.legend()
+
+        plt.subplot(122)
+        plt.title('Focal length on the FP')
+        plt.scatter(xy[:, 0], xy[:, 1], marker='s', s=150, c=fl_mean[peak],
+                    vmin=0.2, vmax=0.40)
+        plt.xlim((-0.06, 0.))
+        plt.ylim((-0.06, 0.))
+        plt.colorbar()
+
+    return final_mean, final_std
+
 # =========== Radial TES distances on the FP ================
 # Get a dictionary
 basedir = Qubic_DataDir(datafile='instrument.py', )
@@ -87,19 +144,36 @@ print(d['detarray'])
 d['config'] = 'FI'
 q = qubic.QubicInstrument(d)
 
-tes_xy, tes_radial_dist = get_tes_xycoords_radial_dist(q)
-# Check we have the right radial distance by plooting in on the FP
-r = np.zeros((128, 2))
-r[:, 0] = tes_radial_dist[:128]
-r[:, 1] = tes_radial_dist[128:]
+tes_xy, rdist = get_tes_xycoords_radial_dist(q)
 
-dist_on_fp = sc.tes_signal2image_fp(r, [1, 2])
+# Remove thermometers
+r = rdist[rdist != 0.]
+x = tes_xy[:, 0]
+x = x[x != 0]
+
+y = tes_xy[:, 1]
+y = y[y != 0]
+
+# Check we have the right radial distance by ploting in on the FP
 plt.figure()
-plt.imshow(dist_on_fp)
+plt.scatter(x, y, marker='s', s=150, c=r, vmin=0., vmax=0.06)
 plt.title('Radial distances')
 plt.colorbar()
 
-# ============ Get the fit of the synthesized beams ==============
+# Using a qubic function
+# r = np.zeros((128, 2))
+# r[:, 0] = rdist[:128]
+# r[:, 1] = rdist[128:]
+#
+# dist_on_fp = sc.tes_signal2image_fp(r, [1, 2])
+# plt.figure()
+# plt.imshow(dist_on_fp)
+# plt.title('Radial distances')
+# plt.colorbar()
+
+# ============= Focal length with the 9 peaks ==================
+
+# Get the fit of the synthesized beams
 freq_source = 150
 rep = Qubic_DataDir(datafile='allFitSB_{}.pdf'.format(freq_source))
 print(rep)
@@ -120,9 +194,6 @@ tes_newxxyy, tesfit = get_all_fit(rep)
 # plt.xlabel('Az (°)')
 # plt.ylabel('el (°)')
 # plt.legend()
-
-
-# ============= Focal length with the 9 peaks ==================
 
 # Get all distances between TES
 tes_dist = cdist(tes_xy, tes_xy, 'euclidean')
@@ -180,73 +251,51 @@ for peak in range(9):
 plt.suptitle('Focal length histogram cut at {} sigma, {} GHz \n'
              '$f = {:.5f} \pm {:.5f}$'.format(nsig, freq_source, finalmean, finalstd))
 
+# =============== Get one FL for each TES with the 9 peaks =====================
+azel = tes_newxxyy[:, 0:2, :]
+fl_mean, fl_std = measure_focal_length(tes_xy, azel)
+
+# Remove thermometers (they have a radial distance = 0)
+r_ok = rdist[rdist != 0.]
+xy_ok = tes_xy[rdist != 0.]
+
+fl_mean = fl_mean[:, rdist != 0.]
+fl_std = fl_std[:, rdist != 0.]
+
+final_mean, final_std = plot_flonfp(fl_mean, fl_std, xy_ok, r_ok, npeaks=9)
+
 
 # ============= Focal length with the center of the square ===================
-center_square = np.zeros((256, 2))
+center_square = np.zeros((256, 2, 1))
 for tes in range(1, 257):
-    center_square[tes - 1, :] = get_centersquare_azel(rep, tes)
+    center_square[tes - 1, :, 0] = get_centersquare_azel(rep, tes)
+
+fl_mean, fl_std = measure_focal_length(tes_xy, center_square, npeaks=1)
+
+fl_mean = fl_mean[:, rdist != 0.]
+fl_std = fl_std[:, rdist != 0.]
+
+final_mean, final_std = plot_flonfp(fl_mean, fl_std, xy_ok, r_ok, npeaks=1)
 
 
-# Remove outliers
-results = np.array([normalize(center_square[:, 0]),
-                    normalize(center_square[:, 1])]).T
+# Same but remove outliers
+results = np.array([normalize(center_square[:, 0, 0]),
+                    normalize(center_square[:, 1, 0])]).T
 
 ok = DBSCAN_cut(results, doplot=True)
 
-alpha_center = np.deg2rad(cdist(center_square[ok], center_square[ok], 'euclidean'))
-nok = len(center_square[ok])
+fl_mean, fl_std = measure_focal_length(tes_xy[ok], center_square[ok], ntes=227, npeaks=1)
 
-tanalpha_center = np.tan(alpha_center)
-plt.figure()
-plt.imshow(tanalpha_center)
+fl_mean = fl_mean[:, rdist[ok] != 0.]
+fl_std = fl_std[:, rdist[ok] != 0.]
 
-tes_dist = cdist(tes_xy[ok], tes_xy[ok], 'euclidean')
-print(tes_dist.shape)
+r_ok = rdist[ok][rdist[ok] != 0.]
+xy_ok = tes_xy[ok][rdist[ok] != 0.]
 
-# Compute the focal length for each TES
-focal_length = tes_dist / tanalpha_center
+final_mean, final_std = plot_flonfp(fl_mean, fl_std, xy_ok, r_ok, npeaks=1)
 
-nsig = 2
-p = 0
-fl_mean_alltes = np.zeros(nok)
-fl_std_alltes = np.zeros(nok)
-plt.figure(figsize=(20, 15))
-plt.subplots_adjust(wspace=0.3, hspace=0.3)
-for tes in range(nok):
-    fl = focal_length[tes]
-    fl = fl[~np.isnan(fl)]
-    fl_clip, mini, maxi = sigmaclip(fl, low=nsig, high=nsig)
-    print(mini, maxi)
-    print(fl_clip.shape)
 
-    # Mean and STD for each TES
-    fl_mean_alltes[tes] = np.mean(fl_clip)
-    fl_std_alltes[tes] = np.std(fl_clip) / np.sqrt(len(fl_clip))
 
-    # Histograms
-    if tes % 20 == 1:
-        p += 1
-        plt.subplot(4, 3, p)
-        plt.hist(fl_clip, bins=30,
-                 label='$FL = {:.5f} \pm {:.5f}$'.format(fl_mean_alltes[tes],
-                                                         fl_std_alltes[tes]))
-        plt.legend()
 
-# Remove thermometers (they have a radial distance = 0)
-r_ok = tes_radial_dist[ok]
-fl_mean_alltes = fl_mean_alltes[r_ok != 0.]
-fl_std_alltes = fl_std_alltes[r_ok != 0.]
 
-# Compute the mean and the global std over TES
-final_mean = np.mean(fl_mean_alltes)
-fl_std2_alltes = [std ** 2 for std in fl_std_alltes]
-final_std = np.sqrt(np.sum(fl_std2_alltes) / nok)
 
-print('Final: {} +- {}'.format(final_mean, final_std))
-
-plt.figure()
-plt.plot(r_ok[r_ok != 0.], fl_mean_alltes, 'o',
-         label='$FL = {:.5f} \pm {:.5f}$'.format(final_mean, final_std))
-plt.xlabel('Radial TES distance (m)')
-plt.ylabel('TES focal length (m)')
-plt.legend()

@@ -27,6 +27,7 @@ from qubic.calibration import QubicCalibration
 from qubic.utils import _compress_mask
 from qubic.ripples import ConvolutionRippledGaussianOperator, BeamGaussianRippled
 from qubic.beams import (BeamGaussian, BeamFitted, MultiFreqBeam)
+from qubic import compute_freq
 
 __all__ = ['QubicInstrument',
            'QubicMultibandInstrument']
@@ -1274,10 +1275,9 @@ class QubicMultibandInstrument:
         if True, take only one detector at the centre of the focal plane
             Needed to study the synthesised beam
         """
-        Nf, nus_edge, filter_nus, deltas, Delta, Nbbands = \
-            self._compute_freq(d['filter_nu'] / 1e9,
-                               d['filter_relative_bandwidth'],
-                               d['nf_sub'])
+        Nf, nus_edge, filter_nus, deltas, Delta, Nbbands = compute_freq(d['filter_nu'] / 1e9,
+                                                                        d['filter_relative_bandwidth'],
+                                                                        d['nf_sub'])
         self.FRBW = d['filter_relative_bandwidth']  # initial Full Relative Band Width
         d1 = d.copy()
 

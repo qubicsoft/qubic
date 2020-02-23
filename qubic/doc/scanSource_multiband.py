@@ -12,30 +12,28 @@ from qubicpack.pixel_translation import plot_id_focalplane
 
 plot_id_focalplane()
 
-
 # Make a mono detector instrument
-def make_monodetector_instrument(q, FPindex, multiband=True):
+def make_detector_subset_instrument(q, dets_FPindex, multiband=True):
     '''
-    This function allows one to select a single detector for the simulation
+    This function makes an instrument with just a subset of detectors.
+    Be careful it modifies the input instrument !!
 
     INPUTS
-    instrument - qubic.instrument.QubicMultibandInstrument - the MultiInstrument object
-    FPindex - INT - detector index ("0" is 594)
+    instrument - qubic.QubicMultibandInstrument or qubic.Instrument
+    FPindex - list of int - detector FP index (ex: 594 is the 0 element in q.detector.index)
 
-    OUTPUTS
-    out -qubic.instrument.QubicMultibandInstrument -_The updated MultiInstrument object
     '''
     if multiband:
-        a = int(np.where(q[0].detector.index == FPindex)[0])
-        print(FPindex, a, q[0].detector.index[a])
         for i in range(q.nsubbands):
-            detector_i = q[i].detector[a]
-            q[i].detector = detector_i
+            dets_indices = [int(np.where(q[i].detector.index == FPindex)[0])
+                            for FPindex in dets_FPindex]
+            print(dets_FPindex, dets_indices, q[i].detector.index[dets_indices])
+            q[i].detector = q[i].detector[dets_indices]
     else:
-        a = int(np.where(q.detector.index == FPindex)[0])
-        print(FPindex, a, q.detector.index[a])
-        detector_i = q.detector[a]
-        q.detector = detector_i
+        dets_indices = [int(np.where(q.detector.index == FPindex)[0])
+                        for FPindex in dets_FPindex]
+        print(dets_FPindex, dets_indices, q.detector.index[dets_indices])
+        q.detector = q.detector[dets_indices]
 
     return
 
@@ -50,8 +48,8 @@ os.makedirs(resultDir, exist_ok=True)
 alaImager = False  # if True, the beam will be a simple gaussian
 component = 0  # Choose the component number to plot (IQU)
 oneComponent = False  # True if you want to study only I component, otherwise False if you study IQU
-sel_det = False  # True if you want to use one detector, False if you want to use all detectors in focal plane
-id_det = 594  # if sel_det == True, choose detector number
+sel_det = True  # True if you want to use one detector, False if you want to use all detectors in focal plane
+dets_FPindex = [594] # if sel_det == True, choose detector number
 
 # Dictionnary
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
@@ -66,7 +64,7 @@ s = qubic.QubicScene(d)
 q = qubic.QubicMultibandInstrument(d)
 
 if sel_det:
-    make_monodetector_instrument(q, id_det, multiband=True)
+    make_detector_subset_instrument(q, dets_FPindex, multiband=True)
 
 # Pointing
 p = qubic.get_pointing(d)
@@ -128,7 +126,7 @@ if alaImager:
         d['kind'] = 'I'
     q = qubic.QubicInstrument(d)
     if sel_det:
-        make_monodetector_instrument(q, id_det, multiband=False)
+        make_detector_subset_instrument(q, dets_FPindex, multiband=False)
     arec = qubic.QubicAcquisition(q, p, s, d)
 else:
     nf_sub_rec = 2

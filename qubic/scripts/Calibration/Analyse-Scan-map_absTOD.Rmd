@@ -13,7 +13,6 @@ jupyter:
 ---
 
 ```{python}
-# #%matplotlib notebook
 # %matplotlib inline
 from matplotlib import rc
 rc('figure',figsize=(9,4.5))
@@ -44,10 +43,10 @@ thedir = glob.glob(data_dir + keyword)[0]
 print(thedir)
 
 a = qubicfp()
-a.read_qubicstudio_dataset(thedir)
+a.read_qubicstudio_dataset(thedir, asic=1)
 
-# We need to do that because there is a bug in qubic pack but will be solved soon
-time_azel = a.timeaxis(datatype='hk', axistype='pps')-18532.5
+# There is a shift between the 2 time, this is why I add 1.066s...
+time_azel = a.timeaxis(datatype='hk', axistype='pps') + 1.066
 az = a.azimuth()
 el = a.elevation()
 asic = 1
@@ -56,10 +55,10 @@ tt = a.timeaxis(datatype='sci', axistype='pps', asic=asic)
 ```
 
 ```{python}
+# Check tt and time_azel start together
 print(tt[0], tt[-1])
 print(time_azel[0], time_azel[-1])
 
-print(min((time_azel)/3600), max((time_azel)/3600))
 
 print(min((tt)/3600) - max((tt)/3600))
 print(min((time_azel)/3600)-max((time_azel)/3600))
@@ -74,12 +73,14 @@ TESNum = 62
 tod = a.timeline(TES=TESNum, asic=asic)
 
 todabs = np.abs(tod)
-# todabs = demodulate_methods(tod, 1., method='absolute_value')
+# todabs = dl.demodulate_methods(tod, 1., method='absolute_value')
+print(np.min(todabs))
 ```
 
 ```{python}
 newaz = np.interp(tt, time_azel, az)
 newel = np.interp(tt, time_azel, el)
+
 plt.plot((tt-tt[0])/3600, dl.renorm(todabs))
 plt.plot((tt-tt[0])/3600, dl.renorm(newaz))
 plt.plot((tt-tt[0])/3600, dl.renorm(newel))
@@ -117,17 +118,19 @@ mymap, azmap, elmap = dl.coadd_flatmap(todabs,
                                        elmin=elmin, 
                                        elmax=elmax, 
                                        naz=naz,
-                                       nel=nel)
+                                       nel=nel,
+                                       remove_eltrend=True)
 
 
 ```
 
 ```{python}
+print(np.min(mymap))
 plt.imshow(mymap, 
            aspect='equal',
            extent=[np.cos(np.radians(50))*azmin, np.cos(np.radians(50))*azmax, elmax, elmin],
-           vmin=-20000,
-           vmax=40000)
+           vmin=-20000.,
+           vmax=30000)
 
 plt.title('TES {}'.format(TESNum))
 plt.xlabel('Cos(50) x Az')

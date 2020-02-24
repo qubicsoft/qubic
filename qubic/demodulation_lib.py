@@ -489,6 +489,8 @@ def demodulate_methods(data_in, fmod, fourier_cuts=None, verbose=False, src_data
     elif method == 'demod_quad':
         return demodulate_JC(period, data, src_data, others=others, verbose=verbose, template=None,
                              quadrature=True, remove_noise=remove_noise)
+    elif method == 'absolute_value':
+        return np.abs(data)
 
 
 def demodulate_old(indata, fmod, lowcut=None, highcut=None, verbose=False):

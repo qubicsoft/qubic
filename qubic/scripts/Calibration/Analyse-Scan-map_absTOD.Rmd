@@ -1,0 +1,140 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(9,4.5))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack.qubicfp import qubicfp
+import qubic.demodulation_lib as dl
+
+import glob
+import numpy as np
+import matplotlib.pyplot as plt
+```
+
+# Map the synthetized beam
+
+This is a test for the new software. We want to check that the dupplication of the peaks is not a data analysis bug. 
+
+We make a map for one TES with the absolute value of the raw TOD (no filtering and no demodulation). The only thing done is an average of the time samples in each pixel.
+
+```{python}
+data_dir = '/home/louisemousset/QUBIC/Qubic_work/Calibration/datas/'
+
+keyword = '*ScanFast*'
+
+thedir = glob.glob(data_dir + keyword)[0]
+
+print(thedir)
+
+a = qubicfp()
+a.read_qubicstudio_dataset(thedir)
+
+# We need to do that because there is a bug in qubic pack but will be solved soon
+time_azel = a.timeaxis(datatype='hk', axistype='pps')-18532.5
+az = a.azimuth()
+el = a.elevation()
+asic = 1
+tt = a.timeaxis(datatype='sci', axistype='pps', asic=asic)
+
+```
+
+```{python}
+print(tt[0], tt[-1])
+print(time_azel[0], time_azel[-1])
+
+print(min((time_azel)/3600), max((time_azel)/3600))
+
+print(min((tt)/3600) - max((tt)/3600))
+print(min((time_azel)/3600)-max((time_azel)/3600))
+
+print(min((time_azel))-min((tt)))
+print(max((time_azel))-max((tt)))
+
+```
+
+```{python}
+TESNum = 62
+tod = a.timeline(TES=TESNum, asic=asic)
+
+todabs = np.abs(tod)
+# todabs = demodulate_methods(tod, 1., method='absolute_value')
+```
+
+```{python}
+newaz = np.interp(tt, time_azel, az)
+newel = np.interp(tt, time_azel, el)
+plt.plot((tt-tt[0])/3600, dl.renorm(todabs))
+plt.plot((tt-tt[0])/3600, dl.renorm(newaz))
+plt.plot((tt-tt[0])/3600, dl.renorm(newel))
+#plt.plot((time_azel-time_azel[0])/3600, dl.renorm(az))
+#plt.plot((time_azel-time_azel[0])/3600, dl.renorm(el))
+print(min((tt-tt[0])/3600), max((tt-tt[0])/3600))
+print(min((time_azel-time_azel[0])/3600), max((time_azel-time_azel[0])/3600))
+print(min((tt)/3600), max((tt)/3600))
+print(min((time_azel)/3600), max((time_azel)/3600))
+newaz
+```
+
+```{python}
+azmin = np.round(np.min(az))
+azmax = np.round(np.max(az))
+elmin = np.round(np.min(el))
+elmax = np.round(np.max(el))
+print(azmin, azmax, elmin, elmax)
+naz = 100
+nel = 100
+
+# Parameter for filtering
+lowcut = 0.001
+highcut = 20
+nharm = 10
+notch = np.array([[1.724, 0.005, nharm]])
+filtering = [tt, lowcut, highcut, notch]
+
+mymap, azmap, elmap = dl.coadd_flatmap(todabs,
+                                       newaz, 
+                                       newel, 
+                                       filtering=None,
+                                       azmin=azmin,
+                                       azmax=azmax, 
+                                       elmin=elmin, 
+                                       elmax=elmax, 
+                                       naz=naz,
+                                       nel=nel)
+
+
+```
+
+```{python}
+plt.imshow(mymap, 
+           aspect='equal',
+           extent=[np.cos(np.radians(50))*azmin, np.cos(np.radians(50))*azmax, elmax, elmin],
+           vmin=-20000,
+           vmax=40000)
+
+plt.title('TES {}'.format(TESNum))
+plt.xlabel('Cos(50) x Az')
+plt.ylabel('El')
+plt.colorbar()
+```
+
+```{python}
+
+```

@@ -45,8 +45,7 @@ print(thedir)
 a = qubicfp()
 a.read_qubicstudio_dataset(thedir, asic=1)
 
-# There is a shift between the 2 time, this is why I add 1.066s...
-time_azel = a.timeaxis(datatype='hk', axistype='pps') + 1.066
+time_azel = a.timeaxis(datatype='hk', axistype='pps')
 az = a.azimuth()
 el = a.elevation()
 asic = 1

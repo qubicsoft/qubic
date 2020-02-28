@@ -13,7 +13,6 @@ from pysimulators import Acquisition, FitsArray
 from pysimulators.interfaces.healpy import (
     HealpixConvolutionGaussianOperator)
 from .data import PATH
-from .instrument import QubicInstrument
 from .calibration import QubicCalibration
 from .samplings import create_random_pointings
 

@@ -13,7 +13,6 @@ from pysimulators import Acquisition, FitsArray
 from pysimulators.interfaces.healpy import (
     HealpixConvolutionGaussianOperator)
 from .data import PATH
-from .instrument import QubicInstrument
 from .acquisition import (QubicAcquisition,
                           PlanckAcquisition,
                           QubicPlanckAcquisition)

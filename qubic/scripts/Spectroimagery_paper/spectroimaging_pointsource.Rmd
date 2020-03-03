@@ -1,0 +1,156 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.4
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# QUBIC spectroimaging
+
+#### Editing by Martin Gamboa, Louise Mousset, 2019/09/02
+
+This notebook is part of a set of notebooks with the idea to show spectroimaging capabilities of qubicsoft. There are 2 notebooks:
+* spectroimaging_pointsource.Rmd: Test map-making for two point source emmiting in monochromatic frecuency and superimpose two signals in different frecuency and see how the reconstruction works
+* spectroimaging_dust.Rmd: test map-making using cmb+dust signal
+
+```{python}
+# %matplotlib inline
+from pylab import *
+import os
+import sys
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import qubic
+from qubic import SpectroImLib as si
+from pysm.nominal import models
+
+rc('figure', figsize=(13, 10))
+rc('font', size=15)
+```
+
+```{python}
+# Repository for dictionary and input maps
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+dictfilename = global_dir + '/dicts/spectroimaging_article.dict'
+
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+d['nf_sub'] = 7
+# Center of the patch observed in galactic coordinates
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+```
+
+# Input sky (to change)
+* two point source
+* two superimpose signals
+* cmb+dust
+
+```{python}
+# Make a sky using PYSM
+sky_config = {'cmb': models('c1', d['nside'])}
+Qubic_sky = si.Qubic_sky(sky_config, d)
+x0 = Qubic_sky.get_simple_sky_map()
+
+# Load a CMB map
+# x0 = FitsArray(dictmaps + 'CMB_nside64_nfsub14.fits')
+    
+print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0))
+
+# Check size map
+if hp.get_nside(x0[0,:,0]) == d['nside']:
+    print('Good size')
+    y0=x0
+else:
+    print('Bad size')
+    y0 = np.empty((d['nf_sub'], 12 * d['nside'] ** 2, 3))
+    for i in range(d['nf_sub']):
+        for j in range(3):
+            y0[i, :, j] = hp.ud_grade(x0[i, :, j], d['nside'])
+
+```
+
+```{python}
+# Look at the input sky maps using Healpy
+
+istokes = 0 # Stokes parameter (I, Q, U)
+imap = 4 # Frequency subband, should be smaller than nf_sub
+rr=9 # Resolution in arcmin
+
+plt.figure(figsize=(13,8))
+for istk in range(3):
+    plt.subplots_adjust(wspace=0.9)
+    hp.mollview(y0[imap,:,istk], cmap='jet', sub = (3,2,2*istk+1), 
+                title = 'Mollview {0} Stokes parameter, map {1}'.format(d['kind'][istk], imap))
+    hp.gnomview(y0[imap,:,istk], cmap ='jet', sub = (3,2,2*istk+2), rot=center, reso=rr, 
+                title = 'Gnomview {0} Stokes parameter, map {1}'.format(d['kind'][istk], imap))
+
+```
+
+# TOD simulation
+
+```{python}
+# Pointing strategy
+p = qubic.get_pointing(d)
+print('=== Pointing DONE! ===')
+
+# ==== TOD making ====
+TOD, maps_convolved = si.create_TOD(d, p, x0)
+print('--------- Noiseless TOD with shape: {} - Done ---------'.format(np.shape(TOD)))
+```
+
+# Map-Making
+
+```{python}
+nf_sub_rec = d['nf_recon'][1]
+d['tol']=1e-2
+maps_recon, cov, nus, nus_edge, maps_convolved = si.reconstruct_maps(TOD, d, p,
+                                                                    nf_sub_rec, x0=x0)
+```
+
+```{python}
+# Look at the coverage of the sky
+cov = np.sum(cov, axis=0)
+maxcov = np.max(cov)
+unseen = cov < maxcov * 0.1
+maps_convolved[:, unseen, :] = hp.UNSEEN
+maps_recon[:, unseen, :] = hp.UNSEEN
+  
+```
+
+```{python}
+maps_recon.shape
+```
+
+```{python}
+imr = 1
+plt.figure(figsize=(12,12))
+for istk in range(3):
+    plt.subplots_adjust(wspace=0.9)
+    #hp.mollview(maps_recon[imr,:,istk], cmap='jet', sub = (3,3,3*istk+1), 
+    #            title = 'Mollview {0} Stokes parameter, map {1}'.format(d['kind'][istk], imap))
+    hp.gnomview(maps_recon[imr,:,istk], cmap ='jet', sub = (3,3,3*istk+1), rot=center, reso=rr, 
+                title = 'Gnomview {0} Stokes parameter, rec {1}'.format(d['kind'][istk], imr))
+    hp.gnomview(maps_convolved[imr,:,istk], cmap ='jet', sub = (3,3,3*istk+2), rot=center, reso=rr, 
+                title = 'Gnomview {0} Stokes parameter, conv {1}'.format(d['kind'][istk], imr))
+    hp.gnomview((maps_convolved-maps_recon)[imr,:,istk], cmap ='jet', sub = (3,3,3*istk+3), rot=center, reso=rr, 
+                title = 'Gnomview {0} Stokes parameter, diff {1}'.format(d['kind'][istk], imr))
+
+```
+
+```{python}
+
+```

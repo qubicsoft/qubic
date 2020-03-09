@@ -255,8 +255,8 @@ class QubicAcquisition(Acquisition):
         fftw_flag = 'FFTW_MEASURE'
         nthreads = None
 
-        if self.bandwidth is None or self.psd is None:
-        # if self.bandwidth is None and self.psd is not None or self.bandwidth is not None and self.psd is None:
+        #if self.bandwidth is None or self.psd is None:
+        if self.bandwidth is None and self.psd is not None or self.bandwidth is not None and self.psd is None:
             raise ValueError('The bandwidth or the PSD is not specified.')
 
         # Get sigma in Watt

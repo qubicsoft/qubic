@@ -1276,8 +1276,8 @@ class QubicMultibandInstrument:
             Needed to study the synthesised beam
         """
         Nf, nus_edge, filter_nus, deltas, Delta, Nbbands = compute_freq(d['filter_nu'] / 1e9,
-                                                                        d['filter_relative_bandwidth'],
-                                                                        d['nf_sub'])
+                                                                        d['nf_sub'],
+                                                                        d['filter_relative_bandwidth'])
         self.FRBW = d['filter_relative_bandwidth']  # initial Full Relative Band Width
         d1 = d.copy()
 

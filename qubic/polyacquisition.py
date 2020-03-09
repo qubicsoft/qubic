@@ -12,6 +12,7 @@ from pyoperators.utils.mpi import as_mpi
 from pysimulators import Acquisition, FitsArray
 from pysimulators.interfaces.healpy import (
     HealpixConvolutionGaussianOperator)
+import qubic
 from .data import PATH
 from .acquisition import (QubicAcquisition,
                           PlanckAcquisition,
@@ -144,7 +145,7 @@ class QubicPolyAcquisition(object):
         d1['detector_fknee'] = fknee
         d1['detector_fslope'] = fslope
 
-        q = QubicInstrument(d1, FRBW=self[0].instrument.FRBW)
+        q = qubic.QubicInstrument(d1, FRBW=self[0].instrument.FRBW)
         q.detector = self[0].instrument.detector
         s_ = self[0].sampling
         nsamplings = self[0].comm.allreduce(len(s_))

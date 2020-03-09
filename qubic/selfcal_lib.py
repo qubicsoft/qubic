@@ -637,7 +637,7 @@ def make_labels(rep, nn=241, ndet=992, img_size=0.12, doplot=True):
                         readv[d, 2, 1] <= YY[i, j] <= readv[d, 1, 1]:
                     labels[i, j] = d+1
     if doplot:
-        plt.imshow(labels)
+        plt.imshow(labels, origin='lower')
         plt.colorbar()
 
     return readv, labels

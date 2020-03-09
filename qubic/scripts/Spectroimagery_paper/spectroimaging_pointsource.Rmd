@@ -14,7 +14,7 @@ jupyter:
 
 # QUBIC spectroimaging
 
-#### Editing by Martin Gamboa, Louise Mousset, 2019/09/02
+#### Editing by Martin Gamboa, Louise Mousset, 2020/03/04
 
 This notebook is part of a set of notebooks with the idea to show spectroimaging capabilities of qubicsoft. There are 2 notebooks:
 * spectroimaging_pointsource.Rmd: Test map-making for two point source emmiting in monochromatic frecuency and superimpose two signals in different frecuency and see how the reconstruction works
@@ -49,55 +49,79 @@ dictfilename = global_dir + '/dicts/spectroimaging_article.dict'
 # Read dictionary chosen
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
-d['nf_sub'] = 7
+d['nf_sub'] = int(14)
 # Center of the patch observed in galactic coordinates
-center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+dAng=4
+center_0 = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+center_1 = qubic.equ2gal(d['RA_center']-dAng, d['DEC_center'])
+center_2 = qubic.equ2gal(d['RA_center'], d['DEC_center']-dAng)
+center_3 = qubic.equ2gal(d['RA_center']-dAng, d['DEC_center']-dAng)
+center_4 = qubic.equ2gal(d['RA_center']+dAng, d['DEC_center'])
+center_5 = qubic.equ2gal(d['RA_center'], d['DEC_center']+dAng)
+center_6 = qubic.equ2gal(d['RA_center']+dAng, d['DEC_center']+dAng)
+
+center_A = center_0
+center_B = center_1
+
+#Compute freqs:
+_, nus_edge_in, nus_in, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, d['nf_sub'],
+                                                d['filter_relative_bandwidth'])
 ```
 
 # Input sky (to change)
-* two point source
+* two point source: Model: gaussian. Width depends on frequency.
 * two superimpose signals
 * cmb+dust
 
 ```{python}
-# Make a sky using PYSM
-sky_config = {'cmb': models('c1', d['nside'])}
-Qubic_sky = si.Qubic_sky(sky_config, d)
-x0 = Qubic_sky.get_simple_sky_map()
+nside = d['nside']
+sky_config = np.zeros((d['nf_sub'], 12*nside**2, 3))
 
-# Load a CMB map
-# x0 = FitsArray(dictmaps + 'CMB_nside64_nfsub14.fits')
-    
-print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0))
+psA = hp.pixelfunc.ang2pix(nside, np.deg2rad(90-center_A[1]), np.deg2rad(center_A[0]))
+vecA = hp.pix2vec(nside, psA)
+valsA = hp.pix2vec(nside, np.arange(12*nside**2))
+ang_valsA = np.arccos(np.dot(vecA,valsA))
 
-# Check size map
-if hp.get_nside(x0[0,:,0]) == d['nside']:
-    print('Good size')
-    y0=x0
-else:
-    print('Bad size')
-    y0 = np.empty((d['nf_sub'], 12 * d['nside'] ** 2, 3))
-    for i in range(d['nf_sub']):
-        for j in range(3):
-            y0[i, :, j] = hp.ud_grade(x0[i, :, j], d['nside'])
+psB = hp.pixelfunc.ang2pix(nside, np.deg2rad(90-center_B[1]), np.deg2rad(center_B[0]))
+vecB = hp.pix2vec(nside, psB)
+valsB = hp.pix2vec(nside, np.arange(12*nside**2))
+ang_valsB = np.arccos(np.dot(vecB,valsB))
+
+amplitude = 1e22
+
+def f(val, fwhm, sigma2fwhm):
+    return np.nan_to_num(np.exp(-0.5*val**2/(np.radians(fwhm)/sigma2fwhm)**2))
+
+sigma2fwhm=np.sqrt(8*np.log(2))
+cte=150#61.347409
+nus_in=np.array([nus_in[3],nus_in[11]])
+fwhm_in = cte/nus_in # nus to fwhm
+
+#sky_config[3,:,0] += amplitude*f(ang_valsA, fwhm_in[0], sigma2fwhm)
+#sky_config[11,:,0] += amplitude*f(ang_valsB, fwhm_in[1], sigma2fwhm)
+sky_config[3,psA,0] = 1e22
+sky_config[11,psB,0] = 1e22
+#sky_config[:,:,1] = sky_config[:,:,0]
+#sky_config[:,:,2] = sky_config[:,:,0]
+
+x0 = sky_config
 
 ```
 
+See map...ok..
+
 ```{python}
-# Look at the input sky maps using Healpy
+center = (np.array(center_A) + np.array(center_B)) / 2
 
-istokes = 0 # Stokes parameter (I, Q, U)
-imap = 4 # Frequency subband, should be smaller than nf_sub
-rr=9 # Resolution in arcmin
+print('Distance bewtween peaks: {:3.1f}deg'.format(np.rad2deg(np.arccos(np.dot(vecA,vecB)))) )
+print('FWHM : {} deg'.format(fwhm_in))
 
-plt.figure(figsize=(13,8))
-for istk in range(3):
-    plt.subplots_adjust(wspace=0.9)
-    hp.mollview(y0[imap,:,istk], cmap='jet', sub = (3,2,2*istk+1), 
-                title = 'Mollview {0} Stokes parameter, map {1}'.format(d['kind'][istk], imap))
-    hp.gnomview(y0[imap,:,istk], cmap ='jet', sub = (3,2,2*istk+2), rot=center, reso=rr, 
-                title = 'Gnomview {0} Stokes parameter, map {1}'.format(d['kind'][istk], imap))
-
+hp.gnomview(sky_config[3,:,0], sub=(1,3,1), title='map 1',
+            rot=center, reso=3)
+hp.gnomview(sky_config[11,:,0], sub=(1,3,2), title='map 2',
+            rot=center, reso=3)
+hp.gnomview(sky_config[3,:,0]+sky_config[11,:,0], sub=(1,3,3), title='map 1+2',
+            rot=center, reso=3)
 ```
 
 # TOD simulation
@@ -115,10 +139,18 @@ print('--------- Noiseless TOD with shape: {} - Done ---------'.format(np.shape(
 # Map-Making
 
 ```{python}
-nf_sub_rec = d['nf_recon'][1]
-d['tol']=1e-2
+d['nf_recon'][2]
+```
+
+```{python}
+nf_sub_rec = d['nf_recon'][2]
+d['tol']=1e-1
 maps_recon, cov, nus, nus_edge, maps_convolved = si.reconstruct_maps(TOD, d, p,
                                                                     nf_sub_rec, x0=x0)
+```
+
+```{python}
+nus, nus_in
 ```
 
 ```{python}
@@ -132,22 +164,49 @@ maps_recon[:, unseen, :] = hp.UNSEEN
 ```
 
 ```{python}
-maps_recon.shape
+print(np.shape(maps_recon))
+print(np.shape(maps_convolved))
+print(np.shape(sky_config))
 ```
 
 ```{python}
-imr = 1
+
+imr = 0
+rr=4
 plt.figure(figsize=(12,12))
 for istk in range(3):
     plt.subplots_adjust(wspace=0.9)
-    #hp.mollview(maps_recon[imr,:,istk], cmap='jet', sub = (3,3,3*istk+1), 
-    #            title = 'Mollview {0} Stokes parameter, map {1}'.format(d['kind'][istk], imap))
-    hp.gnomview(maps_recon[imr,:,istk], cmap ='jet', sub = (3,3,3*istk+1), rot=center, reso=rr, 
-                title = 'Gnomview {0} Stokes parameter, rec {1}'.format(d['kind'][istk], imr))
-    hp.gnomview(maps_convolved[imr,:,istk], cmap ='jet', sub = (3,3,3*istk+2), rot=center, reso=rr, 
-                title = 'Gnomview {0} Stokes parameter, conv {1}'.format(d['kind'][istk], imr))
-    hp.gnomview((maps_convolved-maps_recon)[imr,:,istk], cmap ='jet', sub = (3,3,3*istk+3), rot=center, reso=rr, 
-                title = 'Gnomview {0} Stokes parameter, diff {1}'.format(d['kind'][istk], imr))
+    hp.gnomview(maps_recon[imr,:,istk], cmap ='jet', sub = (3,4,4*istk+1), rot=center, reso=rr, 
+                title = '{1:4.1f}GHz {0} Stk, tol: {2}, rec'.format(d['kind'][istk], nus[0], d['tol']))
+    hp.gnomview(maps_convolved[imr,:,istk], cmap ='jet', sub = (3,4,4*istk+2), rot=center, reso=rr, 
+                title = '{0} Stk, conv'.format(d['kind'][istk],))
+    hp.gnomview((sky_config)[3,:,istk], cmap ='jet', sub = (3,4,4*istk+3), rot=center, reso=rr, 
+                title = '{0} Stk, input'.format(d['kind'][istk]))
+    hp.gnomview((maps_convolved-maps_recon)[imr,:,istk], cmap ='jet', sub = (3,4,4*istk+4), 
+                rot=center, reso=rr, 
+                title = '{0} Stk, diff'.format(d['kind'][istk]))
+
+```
+
+```{python}
+imr = 3
+rr=4
+plt.figure(figsize=(12,12))
+for istk in range(3):
+    plt.subplots_adjust(wspace=0.9)
+    hp.gnomview(maps_recon[imr,:,istk], cmap ='jet', sub = (3,4,4*istk+1), rot=center, reso=rr, 
+                title='{1:4.1f}GHz {0} Stk, tol: {2}, rec'.format(d['kind'][istk], nus[imr], d['tol']))
+    hp.gnomview(maps_convolved[imr,:,istk], cmap ='jet', sub = (3,4,4*istk+2), rot=center, reso=rr, 
+                title = '{0} Stk, conv'.format(d['kind'][istk],))
+    hp.gnomview((sky_config)[11,:,istk], cmap ='jet', sub = (3,4,4*istk+3), rot=center, reso=rr, 
+                title = '{0} Stk, input'.format(d['kind'][istk]))
+    hp.gnomview((maps_convolved-maps_recon)[imr,:,istk], cmap ='jet', sub = (3,4,4*istk+4), 
+                rot=center, reso=rr, 
+                title = '{0} Stk, diff'.format(d['kind'][istk]))
+
+```
+
+```{python}
 
 ```
 

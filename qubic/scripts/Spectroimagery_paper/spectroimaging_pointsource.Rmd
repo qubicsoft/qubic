@@ -144,7 +144,7 @@ d['nf_recon'][2]
 
 ```{python}
 nf_sub_rec = d['nf_recon'][2]
-d['tol']=1e-4
+d['tol']=1e-1
 maps_recon, cov, nus, nus_edge, maps_convolved = si.reconstruct_maps(TOD, d, p,
                                                                     nf_sub_rec, x0=x0)
 ```
@@ -170,7 +170,7 @@ print(np.shape(sky_config))
 ```
 
 ```{python}
-center=rotMap
+
 imr = 0
 rr=4
 plt.figure(figsize=(12,12))
@@ -189,13 +189,13 @@ for istk in range(3):
 ```
 
 ```{python}
-imr = 1
+imr = 3
 rr=4
 plt.figure(figsize=(12,12))
 for istk in range(3):
     plt.subplots_adjust(wspace=0.9)
     hp.gnomview(maps_recon[imr,:,istk], cmap ='jet', sub = (3,4,4*istk+1), rot=center, reso=rr, 
-                title='{1:4.1f}GHz {0} Stk, tol: {2}, rec'.format(d['kind'][istk], nus[1], d['tol']))
+                title='{1:4.1f}GHz {0} Stk, tol: {2}, rec'.format(d['kind'][istk], nus[imr], d['tol']))
     hp.gnomview(maps_convolved[imr,:,istk], cmap ='jet', sub = (3,4,4*istk+2), rot=center, reso=rr, 
                 title = '{0} Stk, conv'.format(d['kind'][istk],))
     hp.gnomview((sky_config)[11,:,istk], cmap ='jet', sub = (3,4,4*istk+3), rot=center, reso=rr, 

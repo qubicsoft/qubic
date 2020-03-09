@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.1'
-      jupytext_version: 1.2.4
+      jupytext_version: 1.2.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -49,9 +49,15 @@ dictfilename = global_dir + '/dicts/spectroimaging_article.dict'
 # Read dictionary chosen
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
-d['nf_sub'] = 7
+print(d['nf_sub'])
 # Center of the patch observed in galactic coordinates
+d['DEC_center'] = 0.
+d['latitude'] = 90.
+d['longitude'] = 90.
+d['nside'] = 8
+d['npointings'] = 100
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+print(d)
 ```
 
 # Input sky (to change)
@@ -61,7 +67,7 @@ center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 
 ```{python}
 # Make a sky using PYSM
-sky_config = {'cmb': models('c1', d['nside'])}
+sky_config = {'dust': models('d1', d['nside'])}
 Qubic_sky = si.Qubic_sky(sky_config, d)
 x0 = Qubic_sky.get_simple_sky_map()
 
@@ -87,7 +93,7 @@ else:
 # Look at the input sky maps using Healpy
 
 istokes = 0 # Stokes parameter (I, Q, U)
-imap = 4 # Frequency subband, should be smaller than nf_sub
+imap = 2 # Frequency subband, should be smaller than nf_sub
 rr=9 # Resolution in arcmin
 
 plt.figure(figsize=(13,8))
@@ -97,6 +103,22 @@ for istk in range(3):
                 title = 'Mollview {0} Stokes parameter, map {1}'.format(d['kind'][istk], imap))
     hp.gnomview(y0[imap,:,istk], cmap ='jet', sub = (3,2,2*istk+2), rot=center, reso=rr, 
                 title = 'Gnomview {0} Stokes parameter, map {1}'.format(d['kind'][istk], imap))
+    
+```
+
+```{python}
+istk = 1
+plt.figure(figsize=(13,8))
+for band in range(d['nf_sub']):
+    plt.subplots_adjust(wspace=0.9)
+    hp.gnomview(y0[band, :, istk], 
+                rot=0.,
+                reso=10,
+                cmap='jet', 
+                sub = (4, 4, band+1),
+                min=0.,
+#                 max=1e3,
+                title = '{} Band {}'.format(d['kind'][istk], band))
 
 ```
 
@@ -112,11 +134,26 @@ TOD, maps_convolved = si.create_TOD(d, p, x0)
 print('--------- Noiseless TOD with shape: {} - Done ---------'.format(np.shape(TOD)))
 ```
 
+```{python}
+q = qubic.QubicMultibandInstrument(d)
+s = qubic.QubicScene(d)
+rot_beams = si.get_hitmap(q[0], s, p)
+```
+
+```{python}
+rot_beams.shape
+hp.mollview(np.sum(rot_beams, axis=0))
+```
+
+```{python}
+TOD.shape
+```
+
 # Map-Making
 
 ```{python}
 nf_sub_rec = d['nf_recon'][1]
-d['tol']=1e-2
+d['tol']=1e-5
 maps_recon, cov, nus, nus_edge, maps_convolved = si.reconstruct_maps(TOD, d, p,
                                                                     nf_sub_rec, x0=x0)
 ```
@@ -128,11 +165,13 @@ maxcov = np.max(cov)
 unseen = cov < maxcov * 0.1
 maps_convolved[:, unseen, :] = hp.UNSEEN
 maps_recon[:, unseen, :] = hp.UNSEEN
-  
+
+cov
 ```
 
 ```{python}
 maps_recon.shape
+hp.mollview(maps_recon[1, :, 0])
 ```
 
 ```{python}
@@ -143,11 +182,11 @@ for istk in range(3):
     #hp.mollview(maps_recon[imr,:,istk], cmap='jet', sub = (3,3,3*istk+1), 
     #            title = 'Mollview {0} Stokes parameter, map {1}'.format(d['kind'][istk], imap))
     hp.gnomview(maps_recon[imr,:,istk], cmap ='jet', sub = (3,3,3*istk+1), rot=center, reso=rr, 
-                title = 'Gnomview {0} Stokes parameter, rec {1}'.format(d['kind'][istk], imr))
+                title = '{0} rec {1}'.format(d['kind'][istk], imr))
     hp.gnomview(maps_convolved[imr,:,istk], cmap ='jet', sub = (3,3,3*istk+2), rot=center, reso=rr, 
-                title = 'Gnomview {0} Stokes parameter, conv {1}'.format(d['kind'][istk], imr))
+                title = '{0} conv {1}'.format(d['kind'][istk], imr))
     hp.gnomview((maps_convolved-maps_recon)[imr,:,istk], cmap ='jet', sub = (3,3,3*istk+3), rot=center, reso=rr, 
-                title = 'Gnomview {0} Stokes parameter, diff {1}'.format(d['kind'][istk], imr))
+                title = '{0} diff {1}'.format(d['kind'][istk], imr))
 
 ```
 

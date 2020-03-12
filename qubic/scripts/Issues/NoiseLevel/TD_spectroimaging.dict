@@ -24,7 +24,7 @@ detector_ngrids=1
 detector_tau=0.01
 polarizer=True
 synthbeam_fraction=0.99
-synthbeam_kmax=8
+synthbeam_kmax=0
 synthbeam_peak150_fwhm=1.02 # in degree (1.02 for the TD, 0.39 for the FI)
 ripples=False
 nripples=0
@@ -36,7 +36,7 @@ detarray='CalQubic_DetArray_CC.fits'
 hornarray='CalQubic_HornArray_CC.fits'
 
 ############################################# Scene ################################
-nside=64
+nside=256
 kind='IQU'
 absolute=False
 temperature=2.7255 # K for CMB, 300 K for TD in lab # 
@@ -53,6 +53,7 @@ latitude= -(24 + 11. / 60)   #ARGENTINA
 longitude= -(66 + 28. / 60)   #ARGENTINA
 
 random_pointing=False  
+hwp_stepsize=15
 
 repeat_pointing=True
 npointings=240000

@@ -63,6 +63,8 @@ ca = sc.SelfCalibration(baseline, d)
 ### Get all combinations for one baseline
 This is a simulation that doesn't take into account optical aberrations (only geometrical optics). If the point source is on the optical axis, then you get a symmetrical image.
 
+You can choose the resolution you want.
+
 ```{python}
 # You need a qubic instrument for that function
 q = qubic.QubicInstrument(d)
@@ -70,10 +72,12 @@ q = qubic.QubicInstrument(d)
 # Focal length (if you want to change it)
 # q.optics.focal_length = 0.30
 
+reso = 80
+
 # FP radius
-radius = 0.051
+radius = 0.06
 S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = ca.get_power_combinations(q, theta=[0], 
-                                                                          phi=[0], nu=150e9, reso=34,
+                                                                          phi=[0], nu=150e9, reso=reso,
                                                                           xmin=-radius, xmax=radius)
 
 # They are 3D arrays : (reso, reso, #pointings)
@@ -84,10 +88,15 @@ print('shape of each combination :', Cminus_i.shape)
 
 ```{python}
 # Make the combination (S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
+
 fringes = ca.compute_fringes(q, theta=list(np.deg2rad(np.arange(0, 4, 0.25))), 
-                                phi=list(np.zeros(16)), reso=34, nu=150e9,
+                                phi=list(np.zeros(16)), reso=reso, nu=150e9,
                              xmin=-radius, xmax=radius)
 print(fringes.shape)
+```
+
+```{python}
+plt.imshow(fringes[:, :, 0], origin='lower')
 ```
 
 ```{python}
@@ -106,13 +115,15 @@ HTML(ani.to_html5_video())
 ```
 
 ### Get the focal plane image for the real instrument
-#### Without taking into account space between quadrant
+#### Without taking into account space between the quadrants
 
 ```{python}
 # The focal plane image must already have 34x34 pixels
+# reso must be 34
 real_fringes = sc.get_real_fp(Sij[:, :, 0])
 
 # Full focal plane
+plt.figure()
 plt.subplot(321)
 plt.imshow(real_fringes, origin='lower')
 
@@ -123,22 +134,26 @@ plt.imshow(real_fringes_quad, origin='lower')
 
 # Remove dead detectors
 # Build masks
-full_mask, quart_mask = ca.get_dead_detectors_mask()
-plt.subplot(323)
-plt.imshow(full_mask, origin='lower')
-plt.subplot(324)
-plt.imshow(quart_mask, origin='lower')
+d['detarray'] = 'CalQubic_DetArray_P87_TD.fits'
 
-# Apply the mask on the focal plane
-plt.subplot(325)
-plt.imshow(real_fringes*full_mask, origin='lower')
-plt.subplot(326)
-plt.imshow(real_fringes_quad*quart_mask, origin='lower')
+if d['detarray'] == 'CalQubic_DetArray_P87_TD.fits':
+    full_mask, quart_mask = ca.get_dead_detectors_mask()
+    plt.subplot(323)
+    plt.imshow(full_mask, origin='lower')
+    plt.subplot(324)
+    plt.imshow(quart_mask, origin='lower')
+
+    # Apply the mask on the focal plane
+    plt.subplot(325)
+    plt.imshow(real_fringes*full_mask, origin='lower')
+    plt.subplot(326)
+    plt.imshow(real_fringes_quad*quart_mask, origin='lower')
 
 
 ```
 
 ```{python}
+# This is not very useful
 # Add a grid (quadrant and TES)
 fig, ax = plt.subplots()
 extent = [-radius, radius, -radius, radius]
@@ -159,59 +174,41 @@ ax.grid(which='major', color='w', linewidth=3)
 ax.grid(which='minor', color='w', linewidth=0.5)
 ```
 
-#### Using real TES locations
+#### Plot with real TES locations
 
 ```{python}
-# Average signal on the real FP (using real TES locations)
-
-# Path to the simulated files 
+# Path to the simulated files from Creidhe in order to get the TES coordinates
 rep = Qubic_DataDir(datafile='detcentres.txt')
 print(rep)
 
-readv, det_value = sc.averaging_tes_signal(Sij[:, :, 0], rep, 2*radius)
+# Let's look at the coordinates for the center of each TES
+# Here we use the file given by Creidhe 
+detxy = np.loadtxt(rep + '/detcentres.txt', skiprows=1)
+plt.figure(figsize=(15, 10))
+plt.scatter(detxy[:,0], detxy[:, 1], alpha=0.)
+for i in range(992): 
+    plt.text(detxy[i,0 ], detxy[i, 1], str(i))    
+
+
+
 ```
 
 ```{python}
-# Plot
-fig = sc.make_plot_real_fp(readv, det_value)
-plt.title('Baseline {} No aberrations'.format(baseline))
+# readv will contains the TES vertices coordinates and labels gives one number to each TES
+readv, labels = sc.make_labels(rep, nn=reso, img_size=2*radius)
 ```
 
 ```{python}
-from matplotlib.patches import Circle
-import matplotlib.ticker as plticker
-import matplotlib.colors as colors
-import matplotlib.cm as cmx
-import matplotlib.patches as patches
+print(labels.shape)
+```
 
-def make_plot_real_fp(readv, det_value):
-    """
-    Plot real FP using TES locations.
-    """
-    # All this to get colormap
-    cm = plt.get_cmap('viridis')
-    # plot scale from average
-    cNorm = colors.Normalize(vmin=0., vmax=1.5e-5)
-    scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=cm)
-    scalarMap.set_array(det_value)
+```{python}
+counts_perTES, sum_perTES, mean_perTES = sc.fulldef2tespixels(Sij[:, :, 0], labels)
+```
 
-    fig, ax7 = plt.subplots()
-    fig.figsize = (12, 12)
-    for i in range(0, 992):
-        rect = patches.Rectangle((readv[i, 2, 0], readv[i, 2, 1]),
-                                 (readv[i, 0, 0] - readv[i, 1, 0]),
-                                 (readv[i, 0, 1] - readv[i, 3, 1]),
-                                 linewidth=1, edgecolor='none', facecolor=scalarMap.to_rgba(det_value[i, 2]))
-        ax7.add_patch(rect)
+```{python}
+fig = sc.make_plot_real_fp(readv, mean_perTES)
 
-    plt.xlim(-.055, .055)  # the focal plane
-    plt.ylim(-.055, .055)
-    ax7.set_aspect('equal')
-    plt.colorbar(scalarMap)
-
-    return fig
-
-fig = make_plot_real_fp(readv, det_value)
 ```
 
 # Power on the focal plane with optical aberrations
@@ -225,7 +222,7 @@ print('rep:', rep)
 
 # Finges with aberations
 # Directly using the 2 horns opened
-fringes_aber = ca.get_power_fp_aberration(rep, theta_source=0., doplot=True)
+fringes_aber = ca.get_power_fp_aberration(rep, doplot=True)
 
 print(fringes_aber.shape)
 
@@ -251,125 +248,19 @@ fig = sc.add_fp_simu_aber(fringes_aber, vmin=0., vmax=0.05)
 
 ```{python}
 # Get real FP by averaging the signal and using real TES locations.
-readv_aber, det_value_aber = sc.averaging_tes_signal(fringes_aber, rep, 0.12)
+
+readv_aber, labels_aber = sc.make_labels(rep)
 ```
 
 ```{python}
-fig = sc.make_plot_real_fp(readv_aber, det_value_aber)
+fringes_aber.shape
+```
+
+```{python}
+counts_aber, sum_aber, mean_aber = sc.fulldef2tespixels(fringes_aber, labels_aber)
+
+fig = sc.make_plot_real_fp(readv_aber, mean_aber)
 plt.title('Baseline {} with aberrations'.format(baseline))
-```
-
-### Test the "rotation problem"
-
-Clearly, if there is a bug, it comes from the function get_power_fp_aberration fom selfcal_lib that I copied here with some simplifications in order to check it. 
-
-```{python}
-import glob
-import pandas as pd
-def get_power_fp_aberration(rep, doplot=True, theta_source=0., freq_source=150.):
-    q = qubic.QubicInstrument(d)
-
-    # Get simulation files
-    files = sorted(glob.glob(rep + '/*.dat'))
-#     for f in files:
-#         print(f[98:104])
-
-    # Get the sample number from the first file
-    data0 = pd.read_csv(files[0], sep='\t', skiprows=0)
-    nn = data0['X_Index'].iloc[-1] + 1
-    print('Sampling number = {}'.format(nn))
-
-    # Get all amplitudes and phases for each open horn
-    open_horns = baseline
-    nopen_horns = len(baseline)
-
-    q.horn.open = False
-    q.horn.open[np.asarray(open_horns) - 1] = True
-    
-#     q.horn.open = True
-#     open_horns = np.arange(1, 65)
-#     nopen_horns = 64
-    
-    horn_transpose = np.arange(64)
-    horn_transpose = np.reshape(horn_transpose, (8, 8))
-    horn_transpose = np.ravel(horn_transpose.T)
-    print(horn_transpose)
-    
-    allampX = np.empty((nopen_horns, nn, nn))
-    allphiX = np.empty((nopen_horns, nn, nn))
-    allampY = np.empty((nopen_horns, nn, nn))
-    allphiY = np.empty((nopen_horns, nn, nn))
-    for i, swi in enumerate(open_horns):
-        print('Horn ', swi, ': ', files[horn_transpose[swi-1]][98:104])
-        data = pd.read_csv(files[horn_transpose[swi-1]], sep='\t', skiprows=0)
-
-        allampX[i, :, :] = np.reshape(np.asarray(data['MagX']), (nn, nn)).T
-        allampY[i, :, :] = np.reshape(np.asarray(data['MagY']), (nn, nn)).T
-
-        allphiX[i, :, :] = np.reshape(np.asarray(data['PhaseX']), (nn, nn)).T
-        allphiY[i, :, :] = np.reshape(np.asarray(data['PhaseY']), (nn, nn)).T
-
-    # Electric field for each open horn
-    Ax = allampX * (np.cos(allphiX) + 1j * np.sin(allphiX))
-    Ay = allampY * (np.cos(allphiY) + 1j * np.sin(allphiY))
-
-    # Sum of the electric fields
-    sumampx = np.sum(Ax, axis=0)
-    sumampy = np.sum(Ay, axis=0)
-
-    # Power on the focal plane
-    power = np.abs(sumampx) ** 2 + np.abs(sumampy) ** 2
-
-    if doplot:
-        plt.figure()
-        plt.subplot(121)
-        q.horn.plot()
-        plt.axis('off')
-
-        plt.subplot(122)
-        plt.imshow(power, origin='lower')
-        plt.title('Power at the sampling resolution')
-        plt.colorbar()
-
-    return power
-
-# Using it, we immediatly see that the fringes don't have the right orientation...
-baseline = [1, 57]
-power = get_power_fp_aberration(rep)
-```
-
-```{python}
-# In this cell, I check the way I am reading the .dat files and how I project the data on a 2D image. 
-# I do the same as in the previous function but with the columns X and Y
-# I don't see the problem, data look well projected...
-
-nn = 241
-files = sorted(glob.glob(rep + '/*.dat'))
-print(files[0])
-datfile = pd.read_csv(files[0], sep='\t', skiprows=0)
-
-datfile['MagX'][5036:5045] = 10
-print(datfile[5030:5050])
-
-plt.figure()
-MagX = np.reshape(np.asarray(datfile['MagX']), (nn, nn)).T
-plt.imshow(MagX, origin='lower')
-plt.colorbar()
-plt.title('MagX')
-
-plt.figure()
-X = np.reshape(np.asarray(datfile['X']), (nn, nn)).T
-plt.imshow(X, origin='lower')
-plt.colorbar()
-plt.title('X')
-print('X=',X)
-
-plt.figure()
-Y = np.reshape(np.asarray(datfile['Y']), (nn, nn)).T
-plt.imshow(Y, origin='lower')
-plt.colorbar()
-plt.title('Y')
-print('Y=',Y)
 ```
 
 # Instrument horn config

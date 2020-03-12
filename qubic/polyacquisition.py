@@ -12,8 +12,8 @@ from pyoperators.utils.mpi import as_mpi
 from pysimulators import Acquisition, FitsArray
 from pysimulators.interfaces.healpy import (
     HealpixConvolutionGaussianOperator)
+import qubic
 from .data import PATH
-from .instrument import QubicInstrument
 from .acquisition import (QubicAcquisition,
                           PlanckAcquisition,
                           QubicPlanckAcquisition)
@@ -25,7 +25,7 @@ __all__ = ['compute_freq',
            'QubicPolyPlanckAcquisition']
 
 
-def compute_freq(band, Nfreq, relative_bandwidth=0.25):
+def compute_freq(band, Nfreq=None, relative_bandwidth=0.25):
     """
     Prepare frequency bands parameters
     band -- int,
@@ -38,7 +38,12 @@ def compute_freq(band, Nfreq, relative_bandwidth=0.25):
         Typical value: 0.25
     Nfreq -- int, optional
         Number of frequencies within the wide band.
+        If not specified, then Nfreq = 15 if band == 150
+        and Nfreq = 20 if band = 220
     """
+
+    if Nfreq is None:
+        Nfreq = {150: 15, 220: 20}[band]
 
     nu_min = band * (1 - relative_bandwidth / 2)
     nu_max = band * (1 + relative_bandwidth / 2)
@@ -140,7 +145,7 @@ class QubicPolyAcquisition(object):
         d1['detector_fknee'] = fknee
         d1['detector_fslope'] = fslope
 
-        q = QubicInstrument(d1, FRBW=self[0].instrument.FRBW)
+        q = qubic.QubicInstrument(d1, FRBW=self[0].instrument.FRBW)
         q.detector = self[0].instrument.detector
         s_ = self[0].sampling
         nsamplings = self[0].comm.allreduce(len(s_))

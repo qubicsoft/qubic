@@ -51,12 +51,13 @@ d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 print(d['nf_sub'])
 # Center of the patch observed in galactic coordinates
-d['DEC_center'] = 0.
-d['latitude'] = 90.
-d['longitude'] = 90.
-d['nside'] = 8
-d['npointings'] = 100
+# d['DEC_center'] = 45.
+# d['RA_center'] = 45.
+# d['latitude'] = 0.
+# d['longitude'] = 0.
+# d['npointings'] = 100
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+print(center)
 print(d)
 ```
 
@@ -67,7 +68,8 @@ print(d)
 
 ```{python}
 # Make a sky using PYSM
-sky_config = {'dust': models('d1', d['nside'])}
+sky_config = {'dust': models('d1', d['nside']),
+             'cmb': models('c1', d['nside'])}
 Qubic_sky = si.Qubic_sky(sky_config, d)
 x0 = Qubic_sky.get_simple_sky_map()
 
@@ -75,18 +77,6 @@ x0 = Qubic_sky.get_simple_sky_map()
 # x0 = FitsArray(dictmaps + 'CMB_nside64_nfsub14.fits')
     
 print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0))
-
-# Check size map
-if hp.get_nside(x0[0,:,0]) == d['nside']:
-    print('Good size')
-    y0=x0
-else:
-    print('Bad size')
-    y0 = np.empty((d['nf_sub'], 12 * d['nside'] ** 2, 3))
-    for i in range(d['nf_sub']):
-        for j in range(3):
-            y0[i, :, j] = hp.ud_grade(x0[i, :, j], d['nside'])
-
 ```
 
 ```{python}
@@ -99,9 +89,9 @@ rr=9 # Resolution in arcmin
 plt.figure(figsize=(13,8))
 for istk in range(3):
     plt.subplots_adjust(wspace=0.9)
-    hp.mollview(y0[imap,:,istk], cmap='jet', sub = (3,2,2*istk+1), 
+    hp.mollview(x0[imap,:,istk], cmap='jet', sub = (3,2,2*istk+1), 
                 title = 'Mollview {0} Stokes parameter, map {1}'.format(d['kind'][istk], imap))
-    hp.gnomview(y0[imap,:,istk], cmap ='jet', sub = (3,2,2*istk+2), rot=center, reso=rr, 
+    hp.gnomview(x0[imap,:,istk], cmap ='jet', sub = (3,2,2*istk+2), rot=center, reso=rr, 
                 title = 'Gnomview {0} Stokes parameter, map {1}'.format(d['kind'][istk], imap))
     
 ```
@@ -111,9 +101,9 @@ istk = 1
 plt.figure(figsize=(13,8))
 for band in range(d['nf_sub']):
     plt.subplots_adjust(wspace=0.9)
-    hp.gnomview(y0[band, :, istk], 
-                rot=0.,
-                reso=10,
+    hp.gnomview(x0[band, :, istk], 
+                rot=center,
+                reso=100,
                 cmap='jet', 
                 sub = (4, 4, band+1),
                 min=0.,
@@ -153,9 +143,25 @@ TOD.shape
 
 ```{python}
 nf_sub_rec = d['nf_recon'][1]
+
+Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = qubic.compute_freq(150, nf_sub_rec)
+print('Band center:', nus)
+print('Band edges:', nus_edge)
+print('Band width:', deltas)
+
+len(nus_edge)
+for i in range(len(nus_edge) - 1):
+    print('base =', nus_edge[i+1] / nus_edge[i])
+    
+# plt.plot(nus, [1, 1], 'ro')
+# plt.plot(nus_edge, [1, 1, 1], 'bo')
+```
+
+```{python}
 d['tol']=1e-5
 maps_recon, cov, nus, nus_edge, maps_convolved = si.reconstruct_maps(TOD, d, p,
                                                                     nf_sub_rec, x0=x0)
+print(maps_recon.shape)
 ```
 
 ```{python}
@@ -165,29 +171,181 @@ maxcov = np.max(cov)
 unseen = cov < maxcov * 0.1
 maps_convolved[:, unseen, :] = hp.UNSEEN
 maps_recon[:, unseen, :] = hp.UNSEEN
-
-cov
 ```
 
 ```{python}
-maps_recon.shape
-hp.mollview(maps_recon[1, :, 0])
+maps_diff = maps_convolved - maps_recon
+# np.unique(np.isnan(maps_recon))
+maps_diff[maps_recon == -1.6375e+30] = -1.6375e+30
+hp.mollview(maps_diff[0, :, 0])
+maps_recon
 ```
 
 ```{python}
-imr = 1
-plt.figure(figsize=(12,12))
+# Look at IQU in one band
+band = 1
+plt.figure(figsize=(8,8))
+rr = 15
 for istk in range(3):
     plt.subplots_adjust(wspace=0.9)
-    #hp.mollview(maps_recon[imr,:,istk], cmap='jet', sub = (3,3,3*istk+1), 
-    #            title = 'Mollview {0} Stokes parameter, map {1}'.format(d['kind'][istk], imap))
-    hp.gnomview(maps_recon[imr,:,istk], cmap ='jet', sub = (3,3,3*istk+1), rot=center, reso=rr, 
-                title = '{0} rec {1}'.format(d['kind'][istk], imr))
-    hp.gnomview(maps_convolved[imr,:,istk], cmap ='jet', sub = (3,3,3*istk+2), rot=center, reso=rr, 
-                title = '{0} conv {1}'.format(d['kind'][istk], imr))
-    hp.gnomview((maps_convolved-maps_recon)[imr,:,istk], cmap ='jet', sub = (3,3,3*istk+3), rot=center, reso=rr, 
-                title = '{0} diff {1}'.format(d['kind'][istk], imr))
+    hp.gnomview(maps_recon[band,:,istk], cmap ='jet', sub = (3,3,3*istk+1), rot=center, reso=rr, 
+                title = '{0} rec {1}'.format(d['kind'][istk], band))
+    hp.gnomview(maps_convolved[band,:,istk], cmap ='jet', sub = (3,3,3*istk+2), rot=center, reso=rr, 
+                title = '{0} conv {1}'.format(d['kind'][istk], band))
+    hp.gnomview(maps_diff[band,:,istk], cmap ='jet', sub = (3,3,3*istk+3), rot=center, reso=rr, 
+                title = '{0} diff {1}'.format(d['kind'][istk], band))
 
+```
+
+```{python}
+istk = 0
+plt.figure(figsize=(8,8))
+rr = 15
+min = -150
+max= 150
+for band in range(nf_sub_rec):
+    plt.subplots_adjust(wspace=0.9)
+    hp.gnomview(maps_recon[band,:,istk], cmap ='jet', sub = (nf_sub_rec, 3, 3*band+1), rot=center, reso=rr, 
+                title = '{0} rec {1}'.format(d['kind'][istk], band), min=min, max=max)
+    hp.gnomview(maps_convolved[band,:,istk], cmap ='jet', sub = (nf_sub_rec, 3, 3*band+2), rot=center, reso=rr, 
+                title = '{0} conv {1}'.format(d['kind'][istk], band), min=min, max=max)
+    hp.gnomview(maps_diff[band,:,istk], cmap ='jet', sub = (nf_sub_rec, 3, 3*band+3), rot=center, reso=rr, 
+                title = '{0} diff {1}'.format(d['kind'][istk], band), min=min/15, max=max/15)
+
+```
+
+## Make a fake sky
+
+```{python}
+def scaling_dust(freq1, freq2, sp_index=1.8): 
+    '''
+    Calculate scaling factor for dust contamination
+    Frequencies are in GHz
+    '''
+    freq1 = float(freq1)
+    freq2 = float(freq2)
+    x1 = freq1 / 56.78
+    x2 = freq2 / 56.78
+    S1 = x1**2. * np.exp(x1) / (np.exp(x1) - 1)**2.
+    S2 = x2**2. * np.exp(x2) / (np.exp(x2) - 1)**2.
+    vd = 375.06 / 18. * 19.6
+    scaling_factor_dust = (np.exp(freq1 / vd) - 1) / \
+                          (np.exp(freq2 / vd) - 1) * \
+                          (freq2 / freq1)**(sp_index + 1)
+    scaling_factor_termo = S1 / S2 * scaling_factor_dust
+    return scaling_factor_termo
+
+
+def scaling_synchrotron(freq1, freq2, sp_index=-3): 
+    '''
+    Calculate scaling factor for synchrotron contamination
+    Frequencies are in GHz
+    '''
+    x1 = freq1 / 56.78
+    x2 = freq2 / 56.78
+    S1 = x1**2. * np.exp(x1) / (np.exp(x1) - 1)**2.
+    S2 = x2**2. * np.exp(x2) / (np.exp(x2) - 1)**2.
+    vd = 375.06 / 18. * 19.6
+    scaling_factor_synchrotron = S1 / S2 * (np.exp(freq1 / vd) - 1) / \
+                                 (np.exp(freq2 / vd) - 1) * \
+                                 (freq2 / freq1)**(sp_index + 1)
+    return scaling_factor_synchrotron
+
+
+def cmb_plus_dust_synchrotron(cmb, dust, synchrotron, d):
+    '''
+    Sum up clean CMB map with dust and synchrotron 
+    using proper scaling coefficients
+    '''
+    nf_sub = d['nf_sub']
+    _, _, nus, _, _, _ = qubic.compute_freq(150, nf_sub)
+    print(nus)
+    
+    kind = d['kind']
+    nstokes =  len(kind) #Number of stokes parameters used in the simu
+    
+    npix = 12 * d['nside']**2
+    x0 = np.zeros((nf_sub, npix, 3))
+    
+    # Let's fill the maps:
+    for i in range(nf_sub):
+        for istokes in range(nstokes):
+            if kind == 'QU': #This condition keeps the order IQU in the healpix map
+                x0[i, :, istokes+1] = cmb[i, :, istokes+1] \
+                                    + dust[i, :, istokes+1] * scaling_dust(150, nus[i])\
+                                    + synchrotron[i, :, istokes+1] * scaling_synchrotron(150, nus[i])
+            else:
+                x0[i, :, istokes] = cmb[i, :, istokes] \
+                                    + dust[i, :, istokes] * scaling_dust(150, nus[i], 1.59)\
+                                    + synchrotron[i, :, istokes] * scaling_synchrotron(150, nus[i])
+    return x0
+
+
+def create_input_sky(d, skypars):
+    Nf = int(d['nf_sub'])
+    band = d['filter_nu']/1e9
+    filter_relative_bandwidth = d['filter_relative_bandwidth']
+    _, _, nus_in, _, _, Nbbands_in = qubic.compute_freq(band, filter_relative_bandwidth, Nf)
+    # seed
+    if d['seed']:
+        np.random.seed(d['seed'])
+        
+        # Generate the input CMB map
+        sp = qubic.read_spectra(skypars['r'])
+        cmb = np.array(hp.synfast(sp, d['nside'], new=True, pixwin=True, verbose=False)).T
+        
+        # Generate the dust map
+        coef = skypars['dust_coeff']
+        ell = np.arange(1, 3*d['nside'])
+        fact = (ell * (ell + 1)) / (2 * np.pi)
+        spectra_dust = [np.zeros(len(ell)), 
+                        coef * (ell / 80.)**(-0.42) / (fact * 0.52), 
+                        coef * (ell / 80.)**(-0.42) / fact, 
+                        np.zeros(len(ell))]
+        dust = np.array(hp.synfast(spectra_dust, d['nside'], new=True, pixwin=True, verbose=False)).T
+        
+        # Combine CMB and dust. As output we have N 3-component maps of sky.
+        x0 = cmb_plus_dust(cmb, dust, Nbbands_in, nus_in, d['kind'])
+        return x0
+```
+
+```{python}
+# Create 3 basics sky maps with PySM (cmb, dust, synchrotron)
+Qubic_sky_cmb = si.Qubic_sky({'cmb': models('c1', d['nside'])}, d)
+x0_cmb = Qubic_sky_cmb.get_simple_sky_map()
+
+Qubic_sky_dust = si.Qubic_sky({'dust': models('d1', d['nside'])}, d)
+x0_dust = Qubic_sky_dust.get_simple_sky_map()
+
+Qubic_sky_synchro = si.Qubic_sky({'synchrotron': models('s1', d['nside'])}, d)
+x0_synchro = Qubic_sky_synchro.get_simple_sky_map()
+```
+
+```{python}
+x0new = cmb_plus_dust_synchrotron(x0_cmb, x0_dust, x0_synchro, d)
+```
+
+```{python}
+hp.mollview(x0new[0, :, 0], min=-200, max=500)
+```
+
+```{python}
+x0new = x0_cmb + x0_synchro*60 + x0_dust
+hp.mollview(x0_cmb[1, :, 0], sub=(221), min=-200., max=200)
+hp.mollview(x0_dust[1, :, 0], sub=(222), min=0., max=1000)
+hp.mollview(x0_synchro[1, :, 0], sub=(223), min=0., max=2)
+hp.mollview(x0new[1, :, 0], sub=(224))
+mean = np.std(x0new, axis=(1, 2))
+```
+
+```{python}
+ _, _, nus, _, _, _ = qubic.compute_freq(150, d['nf_sub'])
+# plt.plot(nus, mean)
+plt.plot(nus, np.std(x0_cmb+x0_dust + x0_synchro*60, axis = (1, 2)), label='cmb')
+# plt.plot(nus, np.std(x0_dust, axis = (1, 2)), label='dust')
+# plt.plot(nus, np.std(x0_synchro*60, axis = (1, 2)), label='60synchro')
+plt.xlabel('f [GHz]')
+plt.legend()
 ```
 
 ```{python}

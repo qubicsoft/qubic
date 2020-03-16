@@ -1,0 +1,207 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.4
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+### Namaster - pymaster 
+
+
+https://namaster.readthedocs.io/en/latest/pymaster.html
+
+
+Many of these function accept or return sets of power spectra (arrays with one element per angular multipole) or bandpowers (binned versions of power spectra). In all cases, these are returned and provided as 2D arrays with shape [n_cls][nl], where n_cls is the number of power spectra and nl is either the number of multipoles or bandpowers. In all cases, n_cls should correspond with the spins of the two fields being correlated, and the ordering is as follows:
+
+    Two spin-0 fields: n_cls=1, [C_T1T2]
+    One spin-0 field and one spin-2 field: n_cls=2, [C_TE,C_TB]
+    Two spin-2 fields: n_cls=4, [C_E1E2,C_E1B2,C_E2B1,C_B1B2]
+
+All sky maps accepted and returned by these functions are in the form of HEALPix maps exclusively with RING ordering.
+
+```{python}
+import numpy as np
+import healpy as hp
+import matplotlib.pyplot as plt
+
+# Import the NaMaster python wrapper
+import pymaster as nmt
+
+#  Simple example showcasing the use of NaMaster to compute the pseudo-Cl
+#  estimator of the angular cross-power spectrum of a spin-0 field and a
+#  spin-2 field
+
+# HEALPix resolution parameter used here
+nside = 256
+
+# Read mask and apodize it on a scale of ~1deg
+mask = nmt.mask_apodization(hp.read_map("mask.fits", verbose=False),
+                            1., apotype="Smooth")
+hp.mollview(mask, coord=['G', 'C'], title='Apodized mask')
+plt.show()
+
+# Read healpix maps and initialize a spin-0 and spin-2 field
+f_0 = nmt.NmtField(mask, [hp.read_map("maps.fits", field=0, verbose=False)])
+f_2 = nmt.NmtField(mask, hp.read_map("maps.fits", field=[1, 2], verbose=False))
+
+# Initialize binning scheme with 4 ells per bandpower
+#b = nmt.NmtBin.from_nside_linear(nside, 4)
+
+#nlb: how many ell's in each bin:
+b= nmt.NmtBin(nside,nlb=4)
+
+# Compute MASTER estimator
+# spin-0 x spin-0
+cl_00 = nmt.compute_full_master(f_0, f_0, b)
+# spin-0 x spin-2
+cl_02 = nmt.compute_full_master(f_0, f_2, b)
+# spin-2 x spin-2
+cl_22 = nmt.compute_full_master(f_2, f_2, b)
+
+
+
+
+# Plot results
+ell_arr = b.get_effective_ells()
+plt.plot(ell_arr, cl_00[0], 'r-', label='TT')
+plt.plot(ell_arr, np.fabs(cl_02[0]), 'g-', label='TE')
+plt.plot(ell_arr, cl_22[0], 'b-', label='EE')
+plt.plot(ell_arr, cl_22[3], 'y-', label='BB')
+plt.loglog()
+plt.xlabel('$\\ell$', fontsize=16)
+plt.ylabel('$C_\\ell$', fontsize=16)
+plt.legend(loc='upper right', ncol=2, labelspacing=0.1)
+plt.show()
+
+
+```
+
+Signature: nmt.compute_coupled_cell(f1, f2)
+Docstring:
+Computes the full-sky angular power spectra of two masked fields     (f1 and f2) without aiming to deconvolve the mode-coupling matrix.     Effectively, this is equivalent to calling the usual HEALPix     anafast routine on the masked and contaminant-cleaned maps.
+
+:param NmtField f1,f2: fields to correlate
+:return: array of coupled power spectra
+File:      ~/miniconda3/envs/qubic_env/lib/python3.6/site-packages/pymaster/workspaces.py
+Type:      function
+
+
+```{python}
+def compute_master(f_a, f_b, wsp):
+    cl_coupled = nmt.compute_coupled_cell(f_a, f_b)
+    cl_decoupled = wsp.decouple_cell(cl_coupled)
+    return cl_decoupled
+
+```
+
+nmt.NmtWorkspace.decouple_cell?
+
+Signature: nmt.NmtWorkspace.decouple_cell(self, cl_in, cl_bias=None, cl_noise=None)
+Docstring:
+Decouples a set of pseudo-Cl power spectra into a set of bandpowers         by inverting the binned coupling matrix (se Eq. 4 of the C API         documentation).
+
+:param cl_in: set of input power spectra. The number of power spectra             must correspond to the spins of the two fields that this             NmtWorkspace object was initialized with (i.e. 1 for two spin-0             fields, 2 for one spin-0 and one spin-2 field, 4 for two spin-2             fields and 7 if this NmtWorkspace was created using `is_teb=True`).
+
+:param cl_bias: bias to the power spectrum associated to contaminant             residuals (optional). This can be computed through             :func:`pymaster.deprojection_bias`.
+
+:param cl_noise: noise bias (i.e. angular power spectrum of masked             noise realizations).
+
+:return: set of decoupled bandpowers
+File:      ~/miniconda3/envs/qubic_env/lib/python3.6/site-packages/pymaster/workspaces.py
+Type:      function
+
+
+```{python}
+
+#fth=lth*(lth+1)/(2*np.pi)
+
+
+
+# Plot results
+ell_arr = b.get_effective_ells()
+plt.plot(ell_arr, cl_00[0], 'r-', label='TT')
+plt.plot(ell_arr, np.fabs(cl_02[0]), 'g-', label='TE')
+plt.plot(ell_arr, cl_22[0], 'b-', label='EE')
+plt.plot(ell_arr, cl_22[3], 'y-', label='BB')
+plt.loglog()
+plt.xlabel('$\\ell$', fontsize=16)
+plt.ylabel('$C_\\ell$', fontsize=16)
+plt.legend(loc='upper right', ncol=2, labelspacing=0.1)
+plt.show()
+
+```
+
+```{python}
+
+```
+
+```{python}
+#some testing:
+print(ell_arr)
+print(len(ell_arr))
+print(3*nside-1)
+print((3*nside-1)/4)
+```
+
+```{python}
+import pymaster as nmt
+```
+
+```{python}
+hp.read_map("mask.fits", verbose=True)
+```
+
+```{python}
+hp.read_map("maps.fits", verbose=True)
+```
+
+```{python}
+np.fabs?
+```
+
+Init signature:
+nmt.NmtBin(
+    nside,
+    bpws=None,
+    ells=None,
+    weights=None,
+    nlb=None,
+    lmax=None,
+    is_Dell=False,
+    f_ell=None,
+)
+Docstring:     
+An NmtBin object defines the set of bandpowers used in the     computation of the pseudo-Cl estimator. The definition of     bandpowers is described in Section 3.6 of the scientific     documentation.
+
+:param int nside: HEALPix nside resolution parameter of the         maps you intend to correlate. The maximum multipole         considered for bandpowers will be 3*nside-1, unless         `lmax` is set.
+
+:param array-like ells: array of integers corresponding to         different multipoles
+
+:param array-like bpws: array of integers that assign the         multipoles in ells to different bandpowers
+
+:param array-like weights: array of floats corresponding to         the weights associated to each multipole in ells. The sum         of weights within each bandpower is normalized to 1.
+
+:param int nlb: integer value corresponding to a constant         bandpower width. I.e. the bandpowers will be defined as         consecutive sets of nlb multipoles from l=2 to l=lmax (see         below) with equal weights. If this argument is provided,         the values of ells, bpws and weights are ignored.
+
+:param int lmax: integer value corresponding to the maximum         multipole used by these bandpowers. If None, it will be set         to 3*nside-1. In any case the actual maximum multipole will         be chosen as the minimum of lmax, 3*nside-1 and the maximum         element of ells (e.g. if you are using CAR maps and don't         care about nside, you can pass whatever lmax you want and         e.g. nside=lmax).
+
+:param boolean is_Dell: if True, the output of all pseudo-Cl         computations carried out using this bandpower scheme (e.g.         from 
+
+:py:meth:`pymaster.workspaces.NmtWorkspace.decouple_cell`)         will be multiplied by `ell * (ell + 1) / 2 * PI`, where `ell`         is the multipole order (no prefactor otherwise).
+
+:param array-like f_ell: if present, this is array represents an         `ell-dependent` function that will be multiplied by all         pseudo-Cl computations carried out using this bandpower scheme.         If not `None`, the value of `is_Dell` is ignored.
+
+File:           ~/miniconda3/envs/qubic_env/lib/python3.6/site-packages/pymaster/bins.py
+Type:           type
+Subclasses:     
+
+```{python}
+
+```

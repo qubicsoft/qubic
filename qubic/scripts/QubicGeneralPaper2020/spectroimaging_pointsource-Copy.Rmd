@@ -97,10 +97,10 @@ cte=150#61.347409
 nus_in=np.array([nus_in[3],nus_in[11]])
 fwhm_in = cte/nus_in # nus to fwhm
 
-#sky_config[3,:,0] += amplitude*f(ang_valsA, fwhm_in[0], sigma2fwhm)
-#sky_config[11,:,0] += amplitude*f(ang_valsB, fwhm_in[1], sigma2fwhm)
-sky_config[3,psA,0] = 1e22
-sky_config[11,psB,0] = 1e22
+sky_config[3,:,0] += amplitude*f(ang_valsA, fwhm_in[0], sigma2fwhm)
+sky_config[11,:,0] += amplitude*f(ang_valsB, fwhm_in[1], sigma2fwhm)
+#sky_config[3,psA,0] = 1e22
+#sky_config[11,psB,0] = 1e22
 #sky_config[:,:,1] = sky_config[:,:,0]
 #sky_config[:,:,2] = sky_config[:,:,0]
 
@@ -144,7 +144,7 @@ d['nf_recon'][2]
 
 ```{python}
 nf_sub_rec = d['nf_recon'][2]
-d['tol']=1e-1
+d['tol']=1e-5
 maps_recon, cov, nus, nus_edge, maps_convolved = si.reconstruct_maps(TOD, d, p,
                                                                     nf_sub_rec, x0=x0)
 ```
@@ -203,6 +203,14 @@ for istk in range(3):
     hp.gnomview((maps_convolved-maps_recon)[imr,:,istk], cmap ='jet', sub = (3,4,4*istk+4), 
                 rot=center, reso=rr, 
                 title = '{0} Stk, diff'.format(d['kind'][istk]))
+
+```
+
+```{python}
+nside
+```
+
+```{python}
 
 ```
 

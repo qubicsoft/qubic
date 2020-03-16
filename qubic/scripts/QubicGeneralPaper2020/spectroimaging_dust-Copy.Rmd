@@ -21,6 +21,11 @@ This notebook is part of a set of notebooks with the idea to show spectroimaging
 * spectroimaging_dust.Rmd: test map-making using cmb+dust signal
 
 ```{python}
+import pysm
+pysm?
+```
+
+```{python}
 # %matplotlib inline
 from pylab import *
 import os

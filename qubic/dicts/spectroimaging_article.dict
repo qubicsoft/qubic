@@ -87,7 +87,7 @@ weights=None
 tol=1e-4
 nf_recon = [1,2,4,8]
 maxiter=1e5
-verbose=False
+verbose=True
 
 
 

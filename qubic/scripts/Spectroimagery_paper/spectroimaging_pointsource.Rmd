@@ -29,7 +29,7 @@ import sys
 # Specific science modules
 import healpy as hp
 import numpy as np
-
+import time
 # Specific qubic modules
 from qubicpack.utilities import Qubic_DataDir
 from pysimulators import FitsArray
@@ -49,7 +49,7 @@ dictfilename = global_dir + '/dicts/spectroimaging_article.dict'
 # Read dictionary chosen
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
-d['nf_sub'] = int(14)
+d['nf_sub'] = 16
 # Center of the patch observed in galactic coordinates
 dAng=4
 center_0 = qubic.equ2gal(d['RA_center'], d['DEC_center'])
@@ -66,12 +66,37 @@ center_B = center_1
 #Compute freqs:
 _, nus_edge_in, nus_in, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, d['nf_sub'],
                                                 d['filter_relative_bandwidth'])
+
+# In order to use exactly the same frequency, I construct the map-making sub bands
+print('#sub_rec: {}'.format(d['nf_recon']))
+
+nf_sub_rec = d['nf_recon'][2]
+
+_, _, nus_rec, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, nf_sub_rec,
+                                                d['filter_relative_bandwidth'])
+print(nf_sub_rec)
+
+```
+
+```{python}
+#nus4 = nus_rec
 ```
 
 # Input sky (to change)
 * two point source: Model: gaussian. Width depends on frequency.
-* two superimpose signals
+* two superimposed signals
 * cmb+dust
+
+
+Make input maps (point source @two frequencies).-.. ok
+
+```{python}
+#see indexes to paint the pixels
+print(nus_in, nus_rec)
+idx0 = 4
+idx1 = 12
+print('Painting idx for : {} and {} GHz'.format(nus_in[idx0], nus_in[idx1]))
+```
 
 ```{python}
 nside = d['nside']
@@ -87,20 +112,25 @@ vecB = hp.pix2vec(nside, psB)
 valsB = hp.pix2vec(nside, np.arange(12*nside**2))
 ang_valsB = np.arccos(np.dot(vecB,valsB))
 
-amplitude = 1e22
-
 def f(val, fwhm, sigma2fwhm):
     return np.nan_to_num(np.exp(-0.5*val**2/(np.radians(fwhm)/sigma2fwhm)**2))
 
 sigma2fwhm=np.sqrt(8*np.log(2))
-cte=150#61.347409
-nus_in=np.array([nus_in[3],nus_in[11]])
-fwhm_in = cte/nus_in # nus to fwhm
+cte=61.347409
+nus=np.array([nus_in[idx0],nus_in[idx1]])
+fwhm_in = cte/nus # nus to fwhm
+#fwhm_in = [5,1]
 
-#sky_config[3,:,0] += amplitude*f(ang_valsA, fwhm_in[0], sigma2fwhm)
-#sky_config[11,:,0] += amplitude*f(ang_valsB, fwhm_in[1], sigma2fwhm)
-sky_config[3,psA,0] = 1e22
-sky_config[11,psB,0] = 1e22
+amplitude = 1e10 # because TOD level ~10^-19, we need high level signal
+
+# Not use a single pixel painted because rise rings when smoothing the map
+smooth = True
+if smooth:
+    sky_config[idx0,:,0] += amplitude*f(ang_valsA, fwhm_in[0], sigma2fwhm)
+    sky_config[idx1,:,0] += amplitude*f(ang_valsB, fwhm_in[1], sigma2fwhm)
+elif not smooth:
+    sky_config[idx0,psA,0] = 1e10
+    sky_config[idx1,psB,0] = 1e10
 #sky_config[:,:,1] = sky_config[:,:,0]
 #sky_config[:,:,2] = sky_config[:,:,0]
 
@@ -116,51 +146,47 @@ center = (np.array(center_A) + np.array(center_B)) / 2
 print('Distance bewtween peaks: {:3.1f}deg'.format(np.rad2deg(np.arccos(np.dot(vecA,vecB)))) )
 print('FWHM : {} deg'.format(fwhm_in))
 
-hp.gnomview(sky_config[3,:,0], sub=(1,3,1), title='map 1',
+hp.gnomview(sky_config[idx0,:,0], sub=(1,3,1), title='map 1',
             rot=center, reso=3)
-hp.gnomview(sky_config[11,:,0], sub=(1,3,2), title='map 2',
+hp.gnomview(sky_config[idx1,:,0], sub=(1,3,2), title='map 2',
             rot=center, reso=3)
-hp.gnomview(sky_config[3,:,0]+sky_config[11,:,0], sub=(1,3,3), title='map 1+2',
+hp.gnomview(sky_config[idx0,:,0]+sky_config[idx1,:,0], sub=(1,3,3), title='map 1+2',
             rot=center, reso=3)
 ```
 
 # TOD simulation
 
-```{python}
-# Pointing strategy
-p = qubic.get_pointing(d)
-print('=== Pointing DONE! ===')
-
-# ==== TOD making ====
-TOD, maps_convolved = si.create_TOD(d, p, x0)
-print('--------- Noiseless TOD with shape: {} - Done ---------'.format(np.shape(TOD)))
-```
 
 # Map-Making
 
 ```{python}
-d['nf_recon'][2]
-```
+d['tol']=1e-4
+mapsrec = {}#np.zeros((ifreq,12*d['nside']**2,3))
+mapsconv = {}#np.zeros((ifreq,12*d['nside']**2,3))
 
-```{python}
-nf_sub_rec = d['nf_recon'][2]
-d['tol']=1e-1
-maps_recon, cov, nus, nus_edge, maps_convolved = si.reconstruct_maps(TOD, d, p,
-                                                                    nf_sub_rec, x0=x0)
-```
+for ifreq in d['nf_recon'][1:]:
+    # Pointing strategy
+    p = qubic.get_pointing(d)
+    print('=== Pointing DONE! ===')
 
-```{python}
-nus, nus_in
-```
+    # ==== TOD making ====
+    TOD, maps_convolved = si.create_TOD(d, p, x0)
+    print('--------- Noiseless TOD with shape: {} - Done ---------'.format(np.shape(TOD)))
 
-```{python}
-# Look at the coverage of the sky
-cov = np.sum(cov, axis=0)
-maxcov = np.max(cov)
-unseen = cov < maxcov * 0.1
-maps_convolved[:, unseen, :] = hp.UNSEEN
-maps_recon[:, unseen, :] = hp.UNSEEN
-  
+    t0 = time.time()
+
+    maps_recon, cov, nus, nus_edge, maps_convolved = si.reconstruct_maps(TOD, d, p,
+                                                                        nf_sub_rec, x0=x0)
+    print('Done in {:3.2f} minutes'.format( (time.time() - t0) /60 ) )
+
+    # Look at the coverage of the sky
+    cov = np.sum(cov, axis=0)
+    maxcov = np.max(cov)
+    unseen = cov < maxcov * 0.1
+    maps_convolved[:, unseen, :] = hp.UNSEEN
+    maps_recon[:, unseen, :] = hp.UNSEEN
+    mapsrec.update({'{}'.format(ifreq) : maps_recon})
+    mapsconv.update({'{}'.format(ifreq) : maps_convolved})
 ```
 
 ```{python}
@@ -170,40 +196,70 @@ print(np.shape(sky_config))
 ```
 
 ```{python}
+nus_in
+```
 
-imr = 0
-rr=4
+```{python}
+idx = [idx0,idx1]
+imr = 1
+j = imr
+rr = 4
 plt.figure(figsize=(12,12))
-for istk in range(3):
-    plt.subplots_adjust(wspace=0.9)
-    hp.gnomview(maps_recon[imr,:,istk], cmap ='jet', sub = (3,4,4*istk+1), rot=center, reso=rr, 
-                title = '{1:4.1f}GHz {0} Stk, tol: {2}, rec'.format(d['kind'][istk], nus[0], d['tol']))
-    hp.gnomview(maps_convolved[imr,:,istk], cmap ='jet', sub = (3,4,4*istk+2), rot=center, reso=rr, 
-                title = '{0} Stk, conv'.format(d['kind'][istk],))
-    hp.gnomview((sky_config)[3,:,istk], cmap ='jet', sub = (3,4,4*istk+3), rot=center, reso=rr, 
-                title = '{0} Stk, input'.format(d['kind'][istk]))
-    hp.gnomview((maps_convolved-maps_recon)[imr,:,istk], cmap ='jet', sub = (3,4,4*istk+4), 
-                rot=center, reso=rr, 
-                title = '{0} Stk, diff'.format(d['kind'][istk]))
-
+#for istk in range(3):
+istk=0
+plt.subplots_adjust(wspace=0.9)
+rc('font', size=12)
+for i in range(4):
+    
+    hp.gnomview(mapsrec['4'][i,:,istk]/1e10, cmap ='jet', sub = (3,4,i+1), rot=center, reso=rr, 
+            title = '{1:4.1f}GHz {0} Stk, tol: {2}, rec'.format(d['kind'][istk], nus[imr], d['tol']))
+    hp.gnomview(mapsconv['4'][i,:,istk]/1e10, cmap ='jet', sub = (3,4,i+5), rot=center, reso=rr, 
+            title = '{0} Stk, conv'.format(d['kind'][istk],))
+    hp.gnomview((mapsconv['4']/1e10-mapsrec['4']/1e10)[i,:,istk], cmap ='jet', sub = (3,4,i+9), 
+            rot=center, reso=rr,title = '{0} Stk, diff'.format(d['kind'][istk]))
 ```
 
+See if the sum of the signal for recons and convolved map are equal... looks like yes.. 
+
 ```{python}
-imr = 3
-rr=4
 plt.figure(figsize=(12,12))
-for istk in range(3):
-    plt.subplots_adjust(wspace=0.9)
-    hp.gnomview(maps_recon[imr,:,istk], cmap ='jet', sub = (3,4,4*istk+1), rot=center, reso=rr, 
-                title='{1:4.1f}GHz {0} Stk, tol: {2}, rec'.format(d['kind'][istk], nus[imr], d['tol']))
-    hp.gnomview(maps_convolved[imr,:,istk], cmap ='jet', sub = (3,4,4*istk+2), rot=center, reso=rr, 
-                title = '{0} Stk, conv'.format(d['kind'][istk],))
-    hp.gnomview((sky_config)[11,:,istk], cmap ='jet', sub = (3,4,4*istk+3), rot=center, reso=rr, 
-                title = '{0} Stk, input'.format(d['kind'][istk]))
-    hp.gnomview((maps_convolved-maps_recon)[imr,:,istk], cmap ='jet', sub = (3,4,4*istk+4), 
-                rot=center, reso=rr, 
-                title = '{0} Stk, diff'.format(d['kind'][istk]))
+hp.gnomview(np.sum(maps_recon,axis=0)[:,0]/1e10, cmap ='jet', sub = (1,2,1), 
+            rot=center, reso=rr,) 
+            #title='sum Rec'.format(nusplt[i], norm))
+hp.gnomview(np.sum(maps_convolved,axis=0)[:,0]/1e10, cmap ='jet', sub = (1,2,2), 
+            rot=center, reso=rr, )
+            #title='sum Conv'.format(nusplt[i], norm))
 
+```
+
+Plotting freq vs maximum...
+
+```{python}
+print(nus)
+```
+
+```{python}
+AmpMax4R = []
+for imap in mapsrec['4']:
+    AmpMax4R.append(np.max(imap[:,0])/1e10) 
+AmpMax4C = []
+for imap in mapsconv['4']:
+    AmpMax4C.append(np.max(imap[:,0])/1e10) 
+
+rc('font', size = 15)
+rc('figure', figsize=(12,8))
+
+plt.title('Amplitude')
+plt.xlabel('Freq[GHz]')
+plt.ylabel('Norm. amplitude[1e10]')
+plt.xlim(nus_in[0]-2,nus_in[-1]+2)
+plt.xticks(nus_in[0:-1:2])
+plt.plot(nus, AmpMax4R, 'r*', ms=13,label='recons')
+plt.plot(nus, AmpMax4C, 'b^', ms=13,label='conv')
+plt.plot(nus_in[idx0], 1, 'k+', ms= 10, label='input')
+plt.plot(nus_in[idx1], 1, 'k+', ms=10)
+plt.legend(loc='best')
+plt.grid()
 ```
 
 ```{python}
@@ -212,4 +268,93 @@ for istk in range(3):
 
 ```{python}
 
+```
+
+```{python}
+
+```
+
+Save maps in an array to compare later...
+
+* recon_gauss: point sources smoothed with 0.8 $\times FWHM_{\nu}$
+* recon_px: point sources not smoothed.
+
+```{python}
+#recon_sm4 = maps_recon
+#conv_sm4 = maps_convolved
+#inp_sm4 = x0
+
+#recon_px4 = maps_recon
+#conv_px4 = maps_convolved
+#inp_px4 = x0
+
+#recon_sm2= maps_recon 
+#conv_sm2= maps_convolved 
+#inp_sm2=x0
+
+#recon_px2 = maps_recon
+#conv_px2= maps_convolved
+#inp_px2= x0
+
+tt = [7.16, 7.47, 3.18, 5.13] #minutes [recon_sm4, recon_px4, recon_sm2, reconpx2]
+```
+
+Compare maps recons: px Vs. sm
+
+```{python}
+imr = 1
+rr=4
+mapuse_px = recon_px4
+mapuse_sm = recon_sm4
+mapinp_px = inp_px4
+mapinp_sm = inp_sm4
+mapconv_px = conv_px4
+mapconv_sm = conv_sm4
+
+norm = 1e10
+if len(mapuse_px) == 2: 
+    nusplt = np.array([140.03675562, 158.78675562])
+elif len(mapuse_px) == 4: 
+    nusplt = np.array([135.50540829, 144.29216391, 153.6486907 , 163.61193508])
+
+plt.figure(figsize=(16,14))
+for i in range(len(mapuse_px)):
+    hp.gnomview(mapuse_px[i,:,0]/norm, cmap ='jet', sub = (2,len(mapuse_px),2*i+1), 
+            rot=center, reso=rr, 
+            title='{0:4.1f}GHz Rec. px Norm. {1:1.0e}'.format(nusplt[i], norm))
+    #hp.gnomview(mapinp_px[4*i+2,:,0]/norm, cmap ='jet', sub = (len(mapuse_px),3,3*i+2), 
+    #        rot=center, reso=rr, 
+    #        title='Input'.format(nusplt[i], norm))
+    hp.gnomview(mapconv_px[i,:,0]/norm, cmap ='jet', sub = (2,len(mapuse_px),2*i+2), 
+            rot=center, reso=rr, 
+            title='{0:4.1f}GHz Convolved'.format(nusplt[i], norm))
+#plt.figure(figsize=(10,6))
+#for i in range(len(mapuse_px)):
+#    hp.gnomview(mapuse_sm[i,:,0]/norm, cmap ='jet', sub = (1,len(mapuse_sm),i+1), 
+#            rot=center, reso=rr, 
+#            title='{0:4.1f}GHz Rec. sm Norm {1:1.0e}'.format(nusplt[i],norm))
+```
+
+```{python}
+np.shape(np.sum(mapuse_px, axis=0))
+```
+
+```{python}
+
+```
+
+```{python}
+for i in range(16):
+    plt.clf()
+    hp.gnomview(conv_px4[i,:,0], rot = center, reso = rr, title='{}'.format(i))
+    pause(1)
+```
+
+```{python}
+#mask because hp.UNSEEN
+mask=maps_recon[0,:,0]<1e10
+max_0 = np.max(maps_recon[:,mask,0])
+max_1 = np.max(maps_recon[:,mask,0])
+
+print('{:3.2e}, {:3.2e}'.format(max_0, max_1))
 ```

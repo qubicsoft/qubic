@@ -360,7 +360,7 @@ azmin = -20
 azmax = 20
 elmin = 35
 elmax = 65
-naz = 100
+naz = 51
 nel = 51
 nmaps = 256
 mapdata = np.zeros((256, nel, naz))
@@ -376,6 +376,13 @@ mapdata, azmap, elmap = dl.coadd_flatmap(-amps_demod, newaz, newel,
 ```
 
 ```{python}
+TESNum = 93
+ites = TESNum-1
+mm, ss = ft.meancut(mapdata[ites,:,:],3)
+imshow(-mapdata[ites,:,:], aspect='equal',
+       extent=[np.cos(np.radians(50))*azmin, np.cos(np.radians(50))*azmax, elmin, elmax],
+       vmin=mm-ss, vmax=mm+30*ss)
+title('TES {}'.format(ites+1))
 
 ```
 
@@ -404,11 +411,11 @@ for k in range(nplots):
 ```
 
 ```{python}
-TESNum = 83
+TESNum = 213
 mm, ss = ft.meancut(mapdata[TESNum-1,:,:],3)
 imshow(-mapdata[TESNum-1,:,:], aspect='equal',
        extent=[np.cos(np.radians(50))*azmin, np.cos(np.radians(50))*azmax, elmin, elmax],
-       vmin=mm-ss, vmax=mm+10*ss)
+       vmin=mm-3*ss, vmax=mm+50*ss)
 title('TES {}'.format(TESNum))
 
 ```

@@ -54,8 +54,20 @@ Here are the vailable data:
 - 2020-01-15_21.34.32__ScanFast_Speed_VE10_DeltaAz_40_DeltaEl_30_NScans_151_Cycle_0:
     - Long acquisition overnight. It was intended to be without the modulation of the source but acttually the source was modulating in sine. So it should be analysed with the current cript instead of the one not using modulation.
 
+### 2020-03-16: 
+- 2020-03-16_10.55.31__ScanFast_Speed_VE10_DeltaAz_10_DeltaEl_10_NScans_1_Cycle_0:
+    - Short test
+- 2020-03-16_11.04.58__ScanFast_Speed_VE12_DeltaAz_50_DeltaEl_10_NScans_1_Cycle_0:
+    - short test
+- 2020-03-16_11.14.29__ScanFast_Speed_VE12_DeltaAz_50_DeltaEl_30_NScans_51_Cycle_0:
+    - interrupted
+- 2020-03-16_12.46.27__ScanFast_Speed_VE12_DeltaAz_50_DeltaEl_30_NScans_51_Cycle_0:
+    - Full Cycle
+
+
+
 ```{python}
-day = '2020-01-15'
+day = '2020-03-16'
 keyword = '*ScanFast*'
 data_dir = '/qubic/Data/Calib-TD/'+day+'/'
 #data_dir = '/Users/hamilton/Qubic/Calib-TD/'+day+'/'
@@ -139,8 +151,8 @@ title(thedir)
 ylim(-10,10)
 
 subplot(2,1,2)
-tzoom = 2.1
-dtzoom = 0.003
+tzoom = 1.2940
+dtzoom = 0.005
 oktime_d = np.abs((tt-t0)/3600-tzoom) < dtzoom
 oktime_s = np.abs((t_src-t0)/3600-tzoom) < dtzoom
 plot((tt-t0)[oktime_d]/3600, dl.renorm(tod[oktime_d]), 
@@ -264,6 +276,11 @@ title(thedir)
 ```
 
 ```{python}
+oktime_azel = np.abs((time_azel-t0)/3600-tzoom) < dtzoom
+print(el[oktime_azel])
+```
+
+```{python}
 newaz = np.interp(newt_demod, time_azel, az)
 newel = np.interp(newt_demod, time_azel, el)
 azmin = -20
@@ -271,7 +288,7 @@ azmax = 20
 elmin = 35
 elmax = 65
 naz = 100
-nel = 100
+nel = 51
 mymap, azmap, elmap = dl.coadd_flatmap(amp_demod, newaz, newel, 
                                     filtering=None,
                                     azmin=azmin, azmax=azmax, 
@@ -282,7 +299,7 @@ mymap, azmap, elmap = dl.coadd_flatmap(amp_demod, newaz, newel,
 
 ```{python}
 imshow(mymap, aspect='equal',
-       extent=[np.cos(np.radians(50))*azmin, np.cos(np.radians(50))*azmax, elmin, elmax])
+       extent=[np.cos(np.radians(50))*azmin, np.cos(np.radians(50))*azmax, elmax, elmin])
 title('TES {}'.format(TESNum))
 xlabel('Cos(50) x Az')
 ylabel('El')
@@ -344,7 +361,7 @@ azmax = 20
 elmin = 35
 elmax = 65
 naz = 100
-nel = 100
+nel = 51
 nmaps = 256
 mapdata = np.zeros((256, nel, naz))
 newaz = np.interp(newt_demod, time_azel, az)
@@ -379,14 +396,15 @@ for k in range(nplots):
             mm, ss = ft.meancut(mapdata[ites,:,:],3)
             imshow(-mapdata[ites,:,:], aspect='equal',
                    extent=[np.cos(np.radians(50))*azmin, np.cos(np.radians(50))*azmax, elmin, elmax],
-                   vmin=mm-ss, vmax=mm+10*ss)
+                   vmin=mm-ss, vmax=mm+30*ss)
             title('TES {}'.format(ites+1))
+            savefig('toto{}.png'.format(k))
     tight_layout()
     show()
 ```
 
 ```{python}
-TESNum = 133
+TESNum = 83
 mm, ss = ft.meancut(mapdata[TESNum-1,:,:],3)
 imshow(-mapdata[TESNum-1,:,:], aspect='equal',
        extent=[np.cos(np.radians(50))*azmin, np.cos(np.radians(50))*azmax, elmin, elmax],
@@ -405,6 +423,10 @@ ax = fig.gca(projection='3d')
 surf = ax.plot_surface(az2d, el2d, -mapdata[TESNum-1,:,:], cmap=cm.coolwarm,
                        linewidth=0, antialiased=False)
 
+```
+
+```{python}
+pwd
 ```
 
 ```{python}

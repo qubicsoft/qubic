@@ -11,9 +11,9 @@ from sklearn.cluster import DBSCAN
 from qubicpack.utilities import Qubic_DataDir
 import qubic
 import qubic.sb_fitting as sbfit
-import qubic.selfcal_lib as sc
 
 from qubicpack.pixel_translation import tes2index
+
 
 # ============= Functions =================
 def get_all_fit(rep):
@@ -31,10 +31,30 @@ def get_all_fit(rep):
 
     return np.array(tes_newxxyy), np.array(tes_fit)
 
+def get_alpha_from_fit(newxxyy):
+    az = np.deg2rad(newxxyy[:, 0, :]) / np.cos(np.deg2rad(50.))
+    el = np.deg2rad(newxxyy[:, 1, :])
+
+    # Unit vector in spherical coordinates
+    unit_vector = np.array([np.sin(np.pi / 2 - el) * np.cos(az),
+                            np.sin(np.pi / 2 - el) * np.sin(az),
+                            np.cos(np.pi / 2 - el)]
+                           )
+    # Scalar product to get alpha
+    ntes, npeaks = np.shape(az)
+    cosalpha = np.empty((npeaks, ntes, ntes))
+    for peak in range(npeaks):
+        cosalpha[peak] = np.dot(unit_vector[:, :, peak].T, unit_vector[:, :, peak])
+    alpha = np.arccos(cosalpha)
+
+    return alpha
+
+
 def get_centersquare_azel(rep, tes):
     thefile = open(rep + '/FitSB/fit-TES{}.pk'.format(tes), 'rb')
     fitpars = pk.load(thefile, encoding='latin1')
     return fitpars[:2]
+
 
 def get_tes_xycoords_radial_dist(q):
     tes_xy = np.zeros((256, 2))
@@ -75,17 +95,17 @@ def normalize(x):
     return (x - np.nanmean(x)) / np.nanstd(x)
 
 
-def measure_focal_length(tes_xy, peak_azel, npeaks=9, ntes=256, nsig=3):
+def measure_focal_length(tes_xy, alpha, npeaks=9, ntes=256, nsig=3):
     tes_dist = cdist(tes_xy, tes_xy, 'euclidean')
+    tanalpha = np.tan(alpha)
 
     fl_mean = np.zeros((npeaks, ntes))
     fl_std = np.zeros((npeaks, ntes))
     for peak in range(npeaks):
         print('Peak ', peak, '\n')
-        alpha = np.deg2rad(cdist(peak_azel[:, :, peak], peak_azel[:, :, peak], 'euclidean'))
-        tanalpha = np.tan(alpha)
+        # alpha = np.deg2rad(cdist(peak_azel[:, :, peak], peak_azel[:, :, peak], 'euclidean'))
 
-        focal_length = tes_dist / tanalpha
+        focal_length = tes_dist / tanalpha[peak]
         print(focal_length.shape)
         for tes in range(ntes):
             print(tes)
@@ -101,15 +121,17 @@ def measure_focal_length(tes_xy, peak_azel, npeaks=9, ntes=256, nsig=3):
 
     return fl_mean, fl_std
 
-def measure_focal_lengthnew(tes_xy, rdist, peak_azel, npeaks=9, ntes=256, nsig=3):
+
+def measure_focal_lengthnew(tes_xy, rdist, alpha, npeaks=9, ntes=256, nsig=3):
     tes_dist = cdist(tes_xy, tes_xy, 'euclidean')
+
+    tanalpha = np.tan(alpha)
 
     fl_mean = np.zeros((npeaks, ntes))
     fl_std = np.zeros((npeaks, ntes))
     for peak in range(npeaks):
         print('Peak ', peak, '\n')
-        alpha = np.deg2rad(cdist(peak_azel[:, :, peak], peak_azel[:, :, peak], 'euclidean'))
-        tanalpha = np.tan(alpha)
+        # alpha = np.rad2deg().deg2rad(cdist(peak_azel[:, :, peak], peak_azel[:, :, peak], 'euclidean'))
 
         # Compute k = Drcos(phi)
         for tes in range(ntes):
@@ -118,11 +140,12 @@ def measure_focal_lengthnew(tes_xy, rdist, peak_azel, npeaks=9, ntes=256, nsig=3
                 + (tes_xy[:, 1] - tes_xy[tes, 1]) * tes_xy[:, 1]
 
             D = tes_dist[tes]
-            Delta = D**4 - 4 * tanalpha[tes]**2 * k**2 * (1 + D**2 / k)
-            Xplus = (-2 * k * tanalpha[tes]**2 + D**2 + np.sqrt(Delta)) / (2 * tanalpha[tes]**2)
-            Xmoins = (-2 * k * tanalpha[tes] ** 2 + D ** 2 - np.sqrt(Delta)) / (2 * tanalpha[tes] ** 2)
+            tg = tanalpha[peak, tes, :]
+            Delta = D ** 4 - 4 * tg ** 2 * k ** 2 * (1 + D ** 2 / k)
+            Xplus = (-2 * k * tg ** 2 + D ** 2 + np.sqrt(Delta)) / (2 * tg ** 2)
+            Xmoins = (-2 * k * tg ** 2 + D ** 2 - np.sqrt(Delta)) / (2 * tg ** 2)
 
-            fl = np.sqrt(Xplus - rdist[tes]**2)
+            fl = np.sqrt(Xplus - rdist[tes] ** 2)
             print(fl.shape)
             fl = fl[~np.isnan(fl)]
             fl_clip, mini, maxi = sigmaclip(fl, low=nsig, high=nsig)
@@ -246,10 +269,12 @@ plt.colorbar()
 
 # Get the fit of the synthesized beams
 freq_source = 150
-rep = Qubic_DataDir(datafile='allFitSB_{}.pdf'.format(freq_source))
+rep = Qubic_DataDir(datafile='allFitSB_{}.pdf'.format(freq_source), datadir='/home/lmousset/QUBIC/Qubic_work')
 print(rep)
 
 tes_newxxyy, tesfit = get_all_fit(rep)
+
+alpha = get_alpha_from_fit(tes_newxxyy)
 
 # plt.figure()
 # for i in range(9):
@@ -294,22 +319,22 @@ plt.suptitle('Focal length histogram cut at {} sigma, {} GHz \n'
              '$f = {:.5f} \pm {:.5f}$'.format(nsig, freq_source, finalmean, finalstd))
 
 # =============== Get one FL for each TES with the 9 peaks =====================
-azel = tes_newxxyy[:, 0:2, :]
-fl_mean, fl_std = measure_focal_length(tes_xy, azel)
+xy = tes_xy[rdist != 0.]
 
-fl_meancorr, fl_stdcorr = measure_focal_lengthnew(tes_xy, rdist, azel)
+fl_mean, fl_std = measure_focal_length(tes_xy, alpha)
 # Remove thermometers (they have a radial distance = 0)
-r_ok = rdist[rdist != 0.]
-xy_ok = tes_xy[rdist != 0.]
-
 fl_mean = fl_mean[:, rdist != 0.]
 fl_std = fl_std[:, rdist != 0.]
 
+final_mean, final_std = plot_flonfp(fl_mean, fl_std, xy, r, npeaks=9)
+
+# Adding the small correction
+fl_meancorr, fl_stdcorr = measure_focal_lengthnew(tes_xy, rdist, alpha)
+# Remove thermometers (they have a radial distance = 0)
 fl_meancorr = fl_meancorr[:, rdist != 0.]
 fl_stdcorr = fl_stdcorr[:, rdist != 0.]
 
-final_mean, final_std = plot_flonfp(fl_meancorr , fl_std - fl_stdcorr, xy_ok, r_ok, npeaks=9)
-
+final_meancorr, final_stdcorr = plot_flonfp(fl_meancorr, fl_stdcorr, xy, r, npeaks=9)
 
 # ============= Focal length with the center of the square ===================
 center_square = np.zeros((256, 2, 1))
@@ -321,8 +346,7 @@ fl_mean, fl_std = measure_focal_length(tes_xy, center_square, npeaks=1)
 fl_mean = fl_mean[:, rdist != 0.]
 fl_std = fl_std[:, rdist != 0.]
 
-final_mean, final_std = plot_flonfp(fl_mean, fl_std, xy_ok, r_ok, npeaks=1)
-
+final_mean, final_std = plot_flonfp(fl_mean, fl_std, tes_xy, r, npeaks=1)
 
 # Same but remove outliers
 results = np.array([normalize(center_square[:, 0, 0]),
@@ -339,9 +363,3 @@ r_ok = rdist[ok][rdist[ok] != 0.]
 xy_ok = tes_xy[ok][rdist[ok] != 0.]
 
 final_mean, final_std = plot_flonfp(fl_mean, fl_std, xy_ok, r_ok, npeaks=1)
-
-
-
-
-
-

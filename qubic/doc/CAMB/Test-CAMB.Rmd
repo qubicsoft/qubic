@@ -1,0 +1,73 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.4
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+### Test script for CAMB
+Written by J.-Ch. Hamilton - March 19th 2020
+
+installed with:
+```
+sudo pip install camb
+```
+
+```{python}
+import camb
+from camb import model, initialpower
+from importlib import reload
+rc('figure', figsize=(13, 10))
+rc('font', size=15)
+```
+
+```{python}
+#Set up a new set of parameters for CAMB
+pars = camb.CAMBparams()
+#This function sets up CosmoMC-like settings, with one massive neutrino and helium set using BBN consistency
+pars.set_cosmology(H0=67.5, ombh2=0.022, omch2=0.122, mnu=0.06, omk=0, tau=0.06)
+#print(pars)
+#print(pars.InitPower)
+pars.WantTensors = True
+pars.InitPower.set_params(As=2e-9, ns=0.965, r=0.1)
+pars.set_for_lmax(500, lens_potential_accuracy=1);
+#calculate results for these parameters
+results = camb.get_results(pars)
+
+#get dictionary of CAMB power spectra
+powers =results.get_cmb_power_spectra(pars, CMB_unit='muK')
+for name in powers: print(name)
+
+```
+
+```{python}
+#plot the total lensed CMB power spectra versus unlensed, and fractional difference
+totCL=powers['total']
+unlensedCL=powers['unlensed_total']
+print(totCL.shape)
+#Python CL arrays are all zero based (starting at L=0), Note L=0,1 entries will be zero by default.
+#The different CL are always in the order TT, EE, BB, TE (with BB=0 for unlensed scalar results).
+# ls = np.arange(totCL.shape[0])
+order = ['TT', 'EE', 'BB', 'TE']
+for i in range(4):
+    subplot(2,2,i+1)
+    plot(ls,totCL[:,i], color='k')
+    plot(ls,unlensedCL[:,i], color='r')
+    title(order[i])
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

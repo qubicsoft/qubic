@@ -39,26 +39,16 @@ class Namaster(object):
         fact_binned = 2 * np.pi / (self.ell_binned * (self.ell_binned + 1))
         return np.dot(spectra[..., :self.lmax + 1], self._p.T) * fact_binned
 
-    def get_map(self, d, spectra):
-        mp_i, mp_q, mp_u = hp.synfast(spectra,
-                                      nside=d['nside'],
-                                      fwhm=np.deg2rad(d['synthbeam_peak150_fwhm']),
-                                      pixwin=True,
-                                      new=True,
-                                      verbose=False)
-        return np.array((mp_i, mp_q, mp_u))
-
-    def get_fields(self, map, d):
+    def get_fields(self, map, d, purify_e=False, purify_b=True):
         mp_i, mp_q, mp_u = map
-        mask_apo = nmt.mask_apodization(self.mask, 1, apotype='C1')
-        beam = hp.gauss_beam(np.deg2rad(d['synthbeam_peak150_fwhm']),
-                             self.lmax)
-        f0 = nmt.NmtField(mask_apo, [mp_i], beam=beam)
+        mask_apo = nmt.mask_apodization(self.mask, 10.0, apotype='C1')
+        #beam = hp.gauss_beam(np.deg2rad(d['synthbeam_peak150_fwhm']), self.lmax)
+
+        f0 = nmt.NmtField(mask_apo, [mp_i, mp_i])#, beam=beam)
         # This creates a spin-2 field with both pure E and B.
         # Note that generally it's not a good idea to purify both,
         # since you'll lose sensitivity on E
-        f2 = nmt.NmtField(mask_apo, [mp_q, mp_u], beam=beam, purify_e=False, purify_b=True)
-
+        f2 = nmt.NmtField(mask_apo, [mp_q, mp_u], purify_e=purify_e, purify_b=purify_b)
         return f0, f2
 
     def compute_master(self, field_a, field_b, workspace):
@@ -66,27 +56,29 @@ class Namaster(object):
         cl_decoupled = workspace.decouple_cell(cl_coupled)
         return cl_decoupled
 
-    def get_spectra(self, map, d):
+    def get_spectra(self, map, d, workspace=None, purify_e=False, purify_b=True):
 
         # Select a binning scheme
-        b = nmt.NmtBin(d['nside'], nlb=20, is_Dell=True)
+        b = nmt.NmtBin(d['nside'], nlb=16, is_Dell=True)
         leff = b.get_effective_ells()
 
-        f0, f2 = self.get_fields(map, d)
-        w_tt = nmt.NmtWorkspace()
-        w_tt.compute_coupling_matrix(f0, f0, b)
+        f0, f2 = self.get_fields(map, d, purify_e=purify_e, purify_b=purify_b)
+        if workspace is None:
+            w00= nmt.NmtWorkspace()
+            w00.compute_coupling_matrix(f0, f0, b)
 
-        w_te = nmt.NmtWorkspace()
-        w_te.compute_coupling_matrix(f0, f2, b)
+            w22 = nmt.NmtWorkspace()
+            w22.compute_coupling_matrix(f2, f2, b)
+            w = [w00, w22]
+        else:
+            w = workspace
 
-        w_bbee = nmt.NmtWorkspace()
-        w_bbee.compute_coupling_matrix(f2, f2, b)
+        c00 = self.compute_master(f0, f0, w[0])
+        c22 = self.compute_master(f2, f2, w[1])
 
-        cl_tt = self.compute_master(f0, f0, w_tt)
-        cl_te = self.compute_master(f0, f2, w_te)
-        cl_bbee = self.compute_master(f2, f2, w_bbee)
+        spectra = np.array([c00[0], c22[0], c22[3]])
 
-        return leff, cl_tt, cl_te, cl_bbee
+        return leff, spectra, w
 
     def _bin_ell(self):
         nbins = (self.lmax - self.lmin + 1) // self.delta_ell

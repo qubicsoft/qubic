@@ -1,0 +1,363 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.4
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Test code for QubicSkySim module
+Written by J.-Ch. Hamilton - March 19th 2020
+
+The library for simulating sky in QUBIC is called QubicSkySim.py and is heavily based on PySM3:
+```
+sudo conda install -c conda-forge pysm3
+```
+
+```{python}
+import pysm
+import pysm.units as u
+import healpy as hp
+import numpy as np
+import matplotlib.pyplot as plt
+from importlib import reload
+from qubic import QubicSkySim as qss
+# %matplotlib inline
+rc('font', size=15)
+rc('figure', figsize=(13, 8))
+```
+
+<!-- #region -->
+There are various ways of calling PySM3 that are first tested below and then implemented into QubicSkySim module. This notebook is organized into the following sections:
+
+1. directly using preset models: but in that case it uses TayLens for the lensing and you basically cannot get the lensed power spectra that were used for you map (or there is something I don't get). Apparently you can neither change the cosmology...
+
+2. using the CMBLensed module from PySM3 which takes CAMB power as an input - this does not work for now for un unknown reason
+
+3. using the CMBMap module from PySM3 which takes as an input I, Q, U maps - that work and is implemented in SpectroImLib.py as shown in latest part of this notebook
+
+4. Implementation with QUBIC software
+
+
+## 1) Using PySM3 present CMB model "c1" and also with ["c1", "d1"] and so on...
+It works well but it's a bit useless since one cannot modify easily the cosmology neither retreive the actual power spectra that were used (we can retreive the unlensed power spectrsa but because the lensing is simulated using Taylens algorithm - which is better - we can only have the unlensed spectra => cannot compare with reconstructed.
+<!-- #endregion -->
+
+```{python}
+rc('figure', figsize=(13, 8))
+sky = pysm.Sky(nside=128, preset_strings=["c1"])
+print(sky.components)
+print(sky.components[0].cmb_spectra.shape)
+map_150GHz = sky.get_emission(150 * u.GHz)
+print(map_150GHz[0, :3])
+map_150GHz = map_150GHz.to(u.uK_CMB, equivalencies=u.cmb_equivalencies(150*u.GHz))
+hp.mollview(map_150GHz[0], title="I map", unit=map_150GHz.unit, sub=(1,3,1))
+hp.mollview(map_150GHz[1], title="Q map", unit=map_150GHz.unit, sub=(1,3,2))
+hp.mollview(map_150GHz[2], title="U map", unit=map_150GHz.unit, sub=(1,3,3))
+```
+
+## 2) Now with a camb based Power spectrum using CMBLensed module form PySM3 - Does not work for an unknown reason !
+
+```{python}
+reload(qss)
+ell, totCL, unlensedCL = qss.get_camb_Dl(lmax=2500, r=0.1)
+order = ['TT', 'EE', 'BB', 'TE']
+for i in range(4):
+    subplot(2,2,i+1)
+    plot(ell,totCL[:,i], color='k', label='Total Cl')
+    plot(ell,unlensedCL[:,i], color='r', label='Unlensed Cl')
+    xlabel('$\\ell$')
+    ylabel('$D_\\ell$')
+    title(order[i])
+    legend(loc='upper right')
+tight_layout()
+```
+
+```{python}
+reload(qss)
+import os
+nside = 128
+rndstr = qss.random_string(10)
+np.savetxt('/tmp/'+rndstr, unlensedCL[:,2:].T)
+cmblensed = pysm.CMBLensed(nside,'/tmp/'+rndstr)
+os.remove('/tmp/'+rndstr)
+
+sky = pysm.Sky(nside=nside, preset_strings=[])
+sky.add_component(cmblensed)
+
+print(sky.components)
+map_150GHz = sky.get_emission(150 * u.GHz)
+print(map_150GHz[0, :3])
+map_150GHz = map_150GHz.to(u.uK_CMB, equivalencies=u.cmb_equivalencies(150*u.GHz))
+hp.mollview(map_150GHz[0], title="I map", unit=map_150GHz.unit, sub=(1,3,1))
+hp.mollview(map_150GHz[1], title="Q map", unit=map_150GHz.unit, sub=(1,3,2))
+hp.mollview(map_150GHz[2], title="U map", unit=map_150GHz.unit, sub=(1,3,3))
+
+```
+
+## 3) Now from CAMB Based maps
+
+```{python}
+reload(qss)
+seed = None
+nside = 128
+
+### CAMB call
+ell, totCL, unlensedCL = qss.get_camb_Dl(r=0.1, lmax=3*nside)
+
+### Synfast (NB: we need to go from Dl to Cl due to different conventions between CAMB and synfast)
+mycls = np.zeros_like(totCL)
+for i in range(4):
+    mycls[2:, i] = 2 * np.pi * totCL[2:,i] / (ell[2:] * (ell[2:] + 1))
+if seed is not None: np.random.seed(seed)
+maps=hp.synfast(mycls.T,nside, new=True)
+hp.mollview(maps[0,:], title="I map from synfast", unit=map_150GHz.unit, sub=(2,3,1))
+hp.mollview(maps[1,:], title="Q map from synfast", unit=map_150GHz.unit, sub=(2,3,2))
+hp.mollview(maps[2,:], title="U map from synfast", unit=map_150GHz.unit, sub=(2,3,3))
+
+
+#sky_config = {'cmb':maps, 'dust':'d1'}
+sky_config = {'cmb':maps}
+
+preset_strings = []
+for k in sky_config.keys():
+    if k == 'cmb': 
+        rndstr = qss.random_string(10)
+        hp.write_map('/tmp/'+rndstr, maps)
+        cmbmap = pysm.CMBMap(nside,map_IQU='/tmp/'+rndstr)
+        os.remove('/tmp/'+rndstr)
+    else:
+        preset_strings.append(sky_config[k])
+        
+sky = pysm.Sky(nside=nside, preset_strings=preset_strings)
+sky.add_component(cmbmap)
+
+map_150GHz = sky.get_emission(150 * u.GHz)
+map_150GHz = map_150GHz.to(u.uK_CMB, equivalencies=u.cmb_equivalencies(150*u.GHz))
+hp.mollview(map_150GHz[0,:], title="I map from PySM3", unit=map_150GHz.unit, sub=(2,3,4))
+hp.mollview(map_150GHz[1,:], title="Q map from PySM3", unit=map_150GHz.unit, sub=(2,3,5))
+hp.mollview(map_150GHz[2,:], title="U map from PySM3", unit=map_150GHz.unit, sub=(2,3,6))
+
+tight_layout()
+```
+
+## 4) Implementation in QubicSkySim
+I have implemented a way for easily calling PySM3 from the QUBIC library. 
+
+The first change is that the Sky Simulation related classes and functions are now in a new library to be imported with Python: QubiSkySim.py
+
+The general implementation is heavily inspired from what Federico Incardona implemented in 2018, he was using PySM2 which has a few drawbacks, the main one being that it is no longer supported while PySM3 is now supported.
+
+The way to specify which components you want in your simulated sky is through a dictionary, called "sky_config" in the following which contains a list of components. I separate them here into two categories: CMB and Foregrounds. 
+
+The typical sky_config with CMB and Dust could be like:
+```
+sky_config = {'cmb': some_variable_describing_cmb, 'dust': 'd1'}
+```
+
+Regarding Foregrounds, the way to implement them is directly through putting a list of foreground types and predefined models contained in PySM3 such as the model 'd1' for dust as shown above. 
+
+Regarding CMB I have implemented three different possibilies for replacing the 'some_variable_descibing_cmb' above:
+1. ***Just specifying the seed:*** A variable seed such as 'cmb':seed where seed has been defined before to a number if one wants to reproduce the same maps each time, or to None if a new map is desired at each call. In this case, you have no choice for the input CMB power spectra, they are taken by default with r=0 and contain lensing.
+2. ***Specifying the input power spectra (from CAMB):*** A dictionary should contain the CMB Total CL (including lensing), the ell array and the desired seed (None if one wishes to recalculate everytime). Typically: cmb_dict = {'CAMBSpectra':totCL, 'ell':ell, 'seed':None}. A full example is shown below.
+3. ***Directly SPecifying precomputed CMB maps:*** A dictionary should contain the CMB maps. Typically: cmb_dict = {'IQUMaps':maps}
+
+
+### 4.1 Just specifying the seed
+
+```{python}
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import qubic
+from qubic import QubicSkySim as qss
+from importlib import reload
+reload(qss)
+
+### Directories
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+dictfilename = global_dir + '/dicts/test_QubicSkySim.dict'
+### Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+
+### Pick one of these:
+seed = None
+sky_config = {'cmb': seed}                ### CMB Only
+#sky_config = {'cmb': seed, 'dust':'d1'}   ### CMB + Dust
+
+### Generate the maps at each sub-frequency
+Qubic_sky1 = qss.Qubic_sky(sky_config, d)
+x0 = np.reshape(Qubic_sky1.get_simple_sky_map(),(d['nf_sub'],d['nside']**2*12,3))
+print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0))
+
+### Display all maps
+stn = ['I','Q','U']
+rng = (np.std(x0, axis=(0,1))*3).astype(int)
+rng[1:] = np.max(rng[1:])
+numsub = 4
+for i in range(d['nf_sub']):
+    for istokes in [0,1,2]:
+        hp.mollview(x0[i,:,istokes], min=-rng[istokes], max=rng[istokes],
+                    sub=(d['nf_sub']+1,3,numsub), title=stn[istokes]+' subfreq {}'.format(i))
+        numsub += 1
+```
+
+#### 4.2 Specifying the input power spectra from CAMB
+
+```{python}
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import qubic
+from qubic import QubicSkySim as qss
+from importlib import reload
+reload(qss)
+
+### Directories
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+dictfilename = global_dir + '/dicts/test_QubicSkySim.dict'
+### Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+
+### Calculate CMB spectra with CAMB (through the QubicSkySim wrapper, or any other way)
+ell, totCL, unlensedCL = qss.get_camb_Dl(r=0.1, lmax=3*d['nside'])
+
+### Specify the CMB description in a dictionary
+cmb_dict = {'CAMBSpectra':totCL, 'ell':ell, 'seed':None}
+
+# ### Pick one of these:
+sky_config = {'cmb': cmb_dict}                ### CMB Only
+#sky_config = {'cmb': cmb_dict, 'dust':'d1'}   ### CMB + Dust
+
+### Generate the maps at each sub-frequency
+Qubic_sky2 = qss.Qubic_sky(sky_config, d)
+x0 = np.reshape(Qubic_sky2.get_simple_sky_map(),(d['nf_sub'],d['nside']**2*12,3))
+print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0))
+
+### Display all maps
+stn = ['I','Q','U']
+rng = (np.std(x0, axis=(0,1))*3).astype(int)
+rng[1:] = np.max(rng[1:])
+numsub = 1
+for i in range(d['nf_sub']):
+    for istokes in [0,1,2]:
+        hp.mollview(x0[i,:,istokes], min=-rng[istokes], max=rng[istokes],
+                    sub=(d['nf_sub'],3,numsub), title=stn[istokes]+' subfreq {}'.format(i))
+        numsub += 1
+```
+
+#### 4.3 Specifying precalculated CMB maps
+
+```{python}
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import qubic
+from qubic import QubicSkySim as qss
+from importlib import reload
+reload(qss)
+
+### Directories
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+dictfilename = global_dir + '/dicts/test_QubicSkySim.dict'
+### Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+
+### Calculate CMB spectra with CAMB (through the QubicSkySim wrapper, or any other way)
+ell, totCL, unlensedCL = qss.get_camb_Dl(r=0.1, lmax=3*d['nside'])
+
+### Calculate CMB maps from this spectrum
+### Synfast (NB: we need to go from Dl to Cl due to different conventions between CAMB and synfast)
+mycls = np.zeros_like(totCL)
+for i in range(4):
+    mycls[2:, i] = 2 * np.pi * totCL[2:,i] / (ell[2:] * (ell[2:] + 1))
+seed = None
+if seed is not None: np.random.seed(seed)
+maps=hp.synfast(mycls.T,nside, verbose=False, new=True)
+rng = (np.std(maps, axis=(1))*3).astype(int)
+rng[1:] = np.max(rng[1:])
+figure()
+hp.mollview(maps[0,:], title="I map from synfast", min=-rng[0], max=rng[0], sub=(1,3,1))
+hp.mollview(maps[1,:], title="Q map from synfast", min=-rng[1], max=rng[1], sub=(1,3,2))
+hp.mollview(maps[2,:], title="U map from synfast", min=-rng[2], max=rng[2], sub=(1,3,3))
+
+
+### Specify the CMB description in a dictionary
+cmb_dict = {'IQUMaps':maps}
+
+# ### Pick one of these:
+sky_config = {'cmb': cmb_dict}                ### CMB Only
+#sky_config = {'cmb': cmb_dict, 'dust':'d1'}   ### CMB + Dust
+
+### Generate the maps at each sub-frequency
+Qubic_sky3 = qss.Qubic_sky(sky_config, d)
+x0 = np.reshape(Qubic_sky3.get_simple_sky_map(),(d['nf_sub'],d['nside']**2*12,3))
+print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0))
+
+### Display all maps
+figure()
+stn = ['I','Q','U']
+rng = (np.std(x0, axis=(0,1))*3).astype(int)
+rng[1:] = np.max(rng[1:])
+numsub = 4
+for i in range(d['nf_sub']):
+    for istokes in [0,1,2]:
+        hp.mollview(x0[i,:,istokes], min=-rng[istokes], max=rng[istokes],
+                    sub=(d['nf_sub']+1,3,numsub), title=stn[istokes]+' subfreq {}'.format(i))
+        numsub += 1
+```
+
+### 4.3 Retrieving the input CMB maps and spectra
+In all the above cases, the CMB maps and corresponding spectra can be retrieved according to the following lines. (NB: in the case 3 where a map is directly input to QubicSkySim, there is no knowledge of the input Cl so it will be set to None)
+
+```{python}
+### Choose either of the three follwing cases
+theQubic_sky = Qubic_sky1
+#theQubic_sky = Qubic_sky2
+#theQubic_sky = Qubic_sky3
+
+### Input Maps
+input_maps = theQubic_sky.input_cmb_maps
+rng = (np.std(input_maps, axis=(1))*3).astype(int)
+rng[1:] = np.max(rng[1:])
+figure()
+hp.mollview(input_maps[0,:], title="I input map used", min=-rng[0], max=rng[0], sub=(1,3,1))
+hp.mollview(input_maps[1,:], title="Q input map used", min=-rng[1], max=rng[1], sub=(1,3,2))
+hp.mollview(input_maps[2,:], title="U input map used", min=-rng[2], max=rng[2], sub=(1,3,3))
+
+clsrec = hp.anafast(input_maps)
+ll = np.arange(len(clsrec[0,:]))
+
+### Input Cls
+input_cl = theQubic_sky.input_cmb_spectra
+if input_cl is not None:
+    input_ell = np.arange(np.shape(input_cl)[0])
+    figure()
+    order = ['TT', 'EE', 'BB', 'TE']
+    for i in range(4):
+        subplot(2,2,i+1)
+        plot(input_ell,input_cl[:,i], color='k')
+        plot(ll, ll * (ll+1) / 2 / np.pi * clsrec[i,:],'o', alpha=0.1)
+        title(order[i]+' Used')
+        xlabel('$\\ell$')
+        ylabel('$D_\\ell$')
+
+    tight_layout()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

@@ -46,7 +46,7 @@ print(center)
 
 ```{python}
 # Make a sky using PYSM
-seed = 0
+seed = None
 sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, d)
 x0 = np.reshape(Qubic_sky.get_simple_sky_map(),(d['nf_sub'],d['nside']**2*12,3))
@@ -100,7 +100,7 @@ hp.mollview(cov)
 
 ```{python}
 #### Now mask these maps using QUBIC mask and add noise according to QUBIC coverage
-seenpix = cov > (np.max(cov) >-1) #/ 10)
+seenpix = cov > -1#(np.max(cov)/1000)
 maps_observed = np.zeros_like(x0)
 
 # Noise

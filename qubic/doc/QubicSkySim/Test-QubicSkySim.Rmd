@@ -368,12 +368,8 @@ Input CMB Spectrum: Qubic_sky.input_cmb_spectra
 In the following cell you can choose which case you want to test. 
 
 ```{python}
-## Problem with case 3: input maps show correct spectra but output maps spectra are absurd
-```
-
-```{python}
 ######################## Choose Here ###########################
-case_check = 4
+case_check = 2
 
 ######################## Code to be executed ###################
 if case_check==1:

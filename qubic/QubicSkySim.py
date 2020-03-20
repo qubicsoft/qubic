@@ -8,7 +8,6 @@ import os
 import pysm
 import pysm.units as u
 import camb
-from camb import model, initialpower
 
 import qubic
 
@@ -27,7 +26,7 @@ class sky(object):
         d          : input dictionary, from which the following Parameters are read
         instrument : a `PySM` instrument describing the instrument
         out_dir    : default path where the sky maps will be saved
-        out_prefix : default world for the output files
+        out_prefix : default word for the output files
 
         For more details about `PySM` see the `PySM` documentation at the floowing link: 
         https://pysm-public.readthedocs.io/en/latest/index.html
@@ -40,13 +39,13 @@ class sky(object):
         self.output_prefix = out_prefix
         preset_strings = []
         for k in skyconfig.keys():
-            if k == 'cmb': 
+            if k == 'cmb':
                 keyword = skyconfig[k]
-                if isinstance(keyword,dict):
-                    ### the CMB part is defined via a dictionary
-                    ### This can be either a set of maps, a set of CAMB spectra, or whatever
-                    ### In the second case it might also contain the seed (None means rerun it each time)
-                    ### In the third case we recompute some CAMB spectra and generate the maps
+                if isinstance(keyword, dict):
+                    # the CMB part is defined via a dictionary
+                    # This can be either a set of maps, a set of CAMB spectra, or whatever
+                    # In the second case it might also contain the seed (None means rerun it each time)
+                    # In the third case we recompute some CAMB spectra and generate the maps
                     keys = keyword.keys()
                     if 'IQUMaps' in keys:
                         # this is the case where we have IQU maps
@@ -60,15 +59,15 @@ class sky(object):
                         ell = keyword['ell']
                         mycls = np.zeros_like(totCL)
                         for i in range(4):
-                            mycls[2:, i] = 2 * np.pi * totCL[2:,i] / (ell[2:] * (ell[2:] + 1))
+                            mycls[2:, i] = 2 * np.pi * totCL[2:, i] / (ell[2:] * (ell[2:] + 1))
                         # set the seed if needed
-                        if 'seed' in keys: np.random.seed(keyword['seed'])
-                        mymaps=hp.synfast(mycls.T,self.nside, verbose=False, new=True)
+                        if 'seed' in keys:
+                            np.random.seed(keyword['seed'])
+                        mymaps = hp.synfast(mycls.T, self.nside, verbose=False, new=True)
                         self.input_cmb_maps = mymaps
                         self.input_cmb_spectra = totCL
                     else:
-                        print('Bad Dictionary given for PySM in the CMB part - see QubicSkySim.py for details')
-                        stop
+                        raise ValueError('Bad Dictionary given for PySM in the CMB part - see QubicSkySim.py for details')
                 else:
                     # the CMB part is not defined via a dictionary but only by the seed for synfast
                     # No map nor CAMB spectra was given, so we recompute them
@@ -77,22 +76,21 @@ class sky(object):
                     ell, totCL, unlensedCL = get_camb_Dl(lmax=3 * self.nside)
                     mycls = np.zeros_like(totCL)
                     for i in range(4):
-                        mycls[2:, i] = 2 * np.pi * totCL[2:,i] / (ell[2:] * (ell[2:] + 1))
-                    mymaps=hp.synfast(mycls.T,self.nside, verbose=False, new=True)
+                        mycls[2:, i] = 2 * np.pi * totCL[2:, i] / (ell[2:] * (ell[2:] + 1))
+                    mymaps = hp.synfast(mycls.T, self.nside, verbose=False, new=True)
                     self.input_cmb_maps = mymaps
                     self.input_cmb_spectra = totCL
 
                 # Write a tenporary file with the maps so the PySM can read them
                 rndstr = random_string(10)
-                hp.write_map('/tmp/'+rndstr, mymaps)
-                cmbmap = pysm.CMBMap(self.nside,map_IQU='/tmp/'+rndstr)
-                os.remove('/tmp/'+rndstr)
+                hp.write_map('/tmp/' + rndstr, mymaps)
+                cmbmap = pysm.CMBMap(self.nside, map_IQU='/tmp/' + rndstr)
+                os.remove('/tmp/' + rndstr)
             else:
                 # we add the other predefined components
                 preset_strings.append(skyconfig[k])
         self.sky = pysm.Sky(nside=self.nside, preset_strings=preset_strings)
         self.sky.add_component(cmbmap)
-
 
     def get_simple_sky_map(self):
         """
@@ -100,7 +98,7 @@ class sky(object):
         effects are not considered. For this use the `get_sky_map` method.
         Return a vector of shape (number_of_input_subfrequencies, npix, 3)
         """
-        npix = 12*self.nside**2
+        npix = 12 * self.nside ** 2
         Nf = int(self.dictionary['nf_sub'])
         band = self.dictionary['filter_nu'] / 1e9
         filter_relative_bandwidth = self.dictionary['filter_relative_bandwidth']
@@ -108,8 +106,8 @@ class sky(object):
 
         sky = np.zeros((Nf, npix, 3))
         for i in range(Nf):
-            themaps_iqu = self.sky.get_emission([nus_edge[i], nus_edge[i+1]] * u.GHz)
-            sky[i,:] = np.array(themaps_iqu.to(u.uK_CMB, equivalencies=u.cmb_equivalencies(nus_in[i]*u.GHz))).T
+            themaps_iqu = self.sky.get_emission([nus_edge[i], nus_edge[i + 1]] * u.GHz)
+            sky[i, :] = np.array(themaps_iqu.to(u.uK_CMB, equivalencies=u.cmb_equivalencies(nus_in[i] * u.GHz))).T
         return sky
 
     def read_sky_map(self):
@@ -223,47 +221,46 @@ class Qubic_sky(sky):
         self.qubic_channels_names = ["{:.3s}".format(str(i)) + "_GHz" for i in self.qubic_central_nus]
 
         instrument = {'nside': d['nside'], 'frequencies': central_nus,  # GHz
-                                      'use_smoothing': False, 'beams': np.ones_like(central_nus),  # arcmin
-                                      'add_noise': False,  # If True `sens_I` and `sens_Q` are required
-                                      'noise_seed': 0.,  # Not used if `add_noise` is False
-                                      'sens_I': np.ones_like(central_nus),  # Not used if `add_noise` is False
-                                      'sens_P': np.ones_like(central_nus),  # Not used if `add_noise` is False
-                                      'use_bandpass': False,  # If True pass banpasses  with the key `channels`
-                                      'channel_names': self.qubic_channels_names,  # np.ones_like(central_nus),
-                                      'channels': np.ones_like(central_nus), 'output_units': 'uK_RJ',
-                                      'output_directory': output_directory, 'output_prefix': output_prefix,
-                                      'pixel_indices': None}
+                      'use_smoothing': False, 'beams': np.ones_like(central_nus),  # arcmin
+                      'add_noise': False,  # If True `sens_I` and `sens_Q` are required
+                      'noise_seed': 0.,  # Not used if `add_noise` is False
+                      'sens_I': np.ones_like(central_nus),  # Not used if `add_noise` is False
+                      'sens_P': np.ones_like(central_nus),  # Not used if `add_noise` is False
+                      'use_bandpass': False,  # If True pass banpasses  with the key `channels`
+                      'channel_names': self.qubic_channels_names,  # np.ones_like(central_nus),
+                      'channels': np.ones_like(central_nus), 'output_units': 'uK_RJ',
+                      'output_directory': output_directory, 'output_prefix': output_prefix,
+                      'pixel_indices': None}
 
         sky.__init__(self, skyconfig, d, instrument, output_directory, output_prefix)
 
 
-
-def get_camb_Dl(lmax = 2500, H0=67.5, ombh2=0.022, omch2=0.122, mnu=0.06, omk=0, tau=0.06, As=2e-9, ns=0.965, r=0.):
+def get_camb_Dl(lmax=2500, H0=67.5, ombh2=0.022, omch2=0.122, mnu=0.06, omk=0, tau=0.06, As=2e-9, ns=0.965, r=0.):
     #### Inspired from: https://camb.readthedocs.io/en/latest/CAMBdemo.html
     # NB: this returns l(l+1)Cl/2pi
-    #Python CL arrays are all zero based (starting at L=0), Note L=0,1 entries will be zero by default.
-    #The different CL are always in the order TT, EE, BB, TE (with BB=0 for unlensed scalar results).
+    # Python CL arrays are all zero based (starting at L=0), Note L=0,1 entries will be zero by default.
+    # The different CL are always in the order TT, EE, BB, TE (with BB=0 for unlensed scalar results).
     ####
-    #Set up a new set of parameters for CAMB
+    # Set up a new set of parameters for CAMB
     pars = camb.CAMBparams()
-    #This function sets up CosmoMC-like settings, with one massive neutrino and helium set using BBN consistency
+    # This function sets up CosmoMC-like settings, with one massive neutrino and helium set using BBN consistency
     pars.set_cosmology(H0=H0, ombh2=ombh2, omch2=omch2, mnu=mnu, omk=omk, tau=tau)
     pars.WantTensors = True
     pars.InitPower.set_params(As=As, ns=ns, r=r)
     pars.set_for_lmax(lmax, lens_potential_accuracy=1);
-    #calculate results for these parameters
+    # calculate results for these parameters
     results = camb.get_results(pars)
-    #get dictionary of CAMB power spectra
-    powers =results.get_cmb_power_spectra(pars, CMB_unit='muK')
-    totCL=powers['total']
-    unlensedCL=powers['unlensed_total']
-    #Python CL arrays are all zero based (starting at L=0), Note L=0,1 entries will be zero by default.
-    #The different CL are always in the order TT, EE, BB, TE (with BB=0 for unlensed scalar results).
+    # get dictionary of CAMB power spectra
+    powers = results.get_cmb_power_spectra(pars, CMB_unit='muK')
+    totCL = powers['total']
+    unlensedCL = powers['unlensed_total']
+    # Python CL arrays are all zero based (starting at L=0), Note L=0,1 entries will be zero by default.
+    # The different CL are always in the order TT, EE, BB, TE (with BB=0 for unlensed scalar results).
     ls = np.arange(totCL.shape[0])
-    return ls, totCL, unlensedCL    
+    return ls, totCL, unlensedCL
 
 
 def random_string(nchars):
     lst = [random.choice(string.ascii_letters + string.digits) for n in range(nchars)]
     str = "".join(lst)
-    return(str)
+    return (str)

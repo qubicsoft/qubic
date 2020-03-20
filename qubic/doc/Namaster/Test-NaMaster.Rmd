@@ -4,8 +4,8 @@ jupyter:
     text_representation:
       extension: .Rmd
       format_name: rmarkdown
-      format_version: '1.1'
-      jupytext_version: 1.2.4
+      format_version: '1.2'
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -34,7 +34,9 @@ rc('font', size=15)
 ```{python}
 #### Create sample CMB I,Q,U maps
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+
 dictfilename = global_dir + '/dicts/BmodesNoDustNoSystPaper0_2020.dict'
+# dictfilename = global_dir + '/dicts/test_QubicSkySim.dict'
 
 # Read dictionary chosen
 d = qubic.qubicdict.qubicDict()
@@ -100,7 +102,7 @@ hp.mollview(cov)
 
 ```{python}
 #### Now mask these maps using QUBIC mask and add noise according to QUBIC coverage
-seenpix = cov > -1#(np.max(cov)/1000)
+seenpix = cov > 0.5#(np.max(cov)/1000)
 maps_observed = np.zeros_like(x0)
 
 # Noise
@@ -151,7 +153,7 @@ hp.gnomview(msk_apo, rot=center, reso=res, sub=(2,2,4))
 ```{python}
 # Select a binning scheme
 ##b = nmt.NmtBin.from_nside_linear(nside, 16)
-b= nmt.NmtBin(d['nside'],nlb=16, is_Dell=True)
+b = nmt.NmtBin(d['nside'], nlb=16, is_Dell=True)
 
 leff = b.get_effective_ells()
 
@@ -221,12 +223,38 @@ for i in range(3):
 tight_layout()
 ```
 
-```{python}
+## With the library NamasterLib
 
+```{python}
+from qubic import NamasterLib as nam
 ```
 
 ```{python}
-pwd
+lmax = 3 * d['nside'] - 1
+Namaster = nam.Namaster(msk, lmin=20, lmax=lmax, delta_ell=5)
+```
+
+```{python}
+themaps = np.array((maps_observed[0, :, 0], maps_observed[0, :, 1], maps_observed[0, :, 2]))
+
+leff, cells, w = Namaster.get_spectra(themaps, d, purify_e=True, purify_b=True)
+```
+
+```{python}
+pixwin = np.interp(leff, np.arange(3*d['nside']), hp.pixwin(d['nside']))
+clth = Qubic_sky.input_cmb_spectra
+ellth = np.arange(np.shape(input_cl)[0])
+
+clnames = ['TT','EE','BB']
+
+for i in range(3):
+    subplot(2, 3, i+1)
+    plot(ellth, clth[:, i])
+    plot(leff, cells[i,:],'o')
+    xlabel('$\\ell$')
+    ylabel('$D_\\ell$')
+    title(clnames[i])
+tight_layout()
 ```
 
 ```{python}

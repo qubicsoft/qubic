@@ -1,0 +1,94 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# %matplotlib inline
+
+import healpy as hp
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import qubic
+from qubic import QubicSkySim as qss
+from importlib import reload
+
+rc('figure', figsize=(16, 10))
+rc('font', size=15)
+```
+
+Trying to correct a bug: if d['nf_sub']=1 we don't get the correct spectrum for X0 while it is OK with d['nf_sub'] > 1
+
+```{python}
+reload(qss)
+#### Debugging
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+dictfilename = global_dir + '/dicts/BmodesNoDustNoSystPaper0_2020.dict'
+# dictfilename = global_dir + '/dicts/test_QubicSkySim.dict'
+
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+d['nside']=256
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+print(center)
+
+
+d['nf_sub']=1
+
+#### Case only seed
+seed = None
+sky_config = {'cmb': seed}
+
+#### Case th cl
+# ell, totCL, unlensedCL = qss.get_camb_Dl(r=0.1, lmax=10*d['nside'])
+# cmb_dict = {'CAMBSpectra':totCL, 'ell':ell, 'seed':None}
+# sky_config = {'cmb': cmb_dict}    
+
+
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+x0 = np.reshape(Qubic_sky.get_simple_sky_map(),(d['nf_sub'],d['nside']**2*12,3))
+inmap = Qubic_sky.input_cmb_maps
+clth = Qubic_sky.input_cmb_spectra
+if clth is not None: ellth = np.arange(len(clth[:,0]))
+
+print('x0 Shape:',x0.shape)
+print('input Shape:',inmap.shape)
+
+clsin = hp.anafast(inmap, lmax=2*d['nside'])
+ll = np.arange(len(clsin[0,:]))
+cls = []
+for i in range(d['nf_sub']):
+    cls.append(hp.anafast(x0[i,:,:].T, lmax=2*d['nside']))
+
+    
+order = ['TT', 'EE', 'BB', 'TE']
+for i in range(4):
+    subplot(2,2,i+1)
+    xlim(0, 2*d['nside'])
+    plot(ellth,clth[:,i], 'k', label='Cl Th')
+    plot(ll,ll*(ll+1)*clsin[i,:]/2/np.pi, alpha=0.3, label='Input Map Cl')
+    for k in range(d['nf_sub']):
+        plot(ll, ll*(ll+1)*cls[k][i,:]/2/np.pi, alpha=0.3, label='Cl Sub {}'.format(k))
+legend()
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

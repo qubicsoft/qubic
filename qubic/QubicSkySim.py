@@ -111,7 +111,8 @@ class sky(object):
         sky = np.zeros((Nf, npix, 3))
         for i in range(Nf):
             themaps_iqu = self.sky.get_emission([nus_edge[i], nus_edge[i + 1]] * u.GHz)
-            sky[i, :] = np.array(themaps_iqu.to(u.uK_CMB, equivalencies=u.cmb_equivalencies(nus_in[i] * u.GHz))).T
+            print('Integrating from: {} to {} and converting to muKCMB at {}'.format(nus_edge[i], nus_edge[i + 1],nus_in[i] ))
+            sky[i, :, :] = np.array(themaps_iqu.to(u.uK_CMB, equivalencies=u.cmb_equivalencies(nus_in[i] * u.GHz))).T
         return sky
 
     def read_sky_map(self):

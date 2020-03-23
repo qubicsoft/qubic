@@ -30,58 +30,116 @@ class Namaster(object):
         """
         Average spectra in bins specified by lmin, lmax and delta_ell,
         weighted by `l(l+1)`.
+        spectra: 1D array
+            Input spectrum starting from l=0.
 
         """
         spectra = np.asarray(spectra)
         lmax = spectra.shape[-1] - 1
         if lmax < self.lmax:
             raise ValueError('The input spectra do not have enough l.')
+
         fact_binned = 2 * np.pi / (self.ell_binned * (self.ell_binned + 1))
         return np.dot(spectra[..., :self.lmax + 1], self._p.T) * fact_binned
 
     def get_fields(self, map, d, purify_e=False, purify_b=True):
+        """
+
+        Parameters
+        ----------
+        map: array
+            IQU maps, shape (3, #pixels)
+        d: Qubic dictionary
+        purify_e: bool
+            False by default.
+        purify_b: bool
+            True by default.
+            Note that generally it's not a good idea to purify both,
+            since you'll lose sensitivity on E
+        Returns
+        -------
+        f0, f2: spin-0 and spin-2 Namaster fields.
+
+        """
+
         mp_t, mp_q, mp_u = map
         mask_apo = nmt.mask_apodization(self.mask, aposize=10.0, apotype='C1')
         beam = hp.gauss_beam(np.deg2rad(d['synthbeam_peak150_fwhm']), self.lmax)
 
         f0 = nmt.NmtField(mask_apo, [mp_t])#, beam=beam)
-        # This creates a spin-2 field with both pure E and B.
-        # Note that generally it's not a good idea to purify both,
-        # since you'll lose sensitivity on E
+
         f2 = nmt.NmtField(mask_apo, [mp_q, mp_u], purify_e=purify_e, purify_b=purify_b)
         return f0, f2
 
     def compute_master(self, field_a, field_b, workspace):
+        """
+        Parameters
+        ----------
+        field_a: NmtField
+        field_b: NmtField
+        workspace: NmtWorkspace
+            Contains the coupling matrix
+
+        Returns
+        -------
+            decoupled Cls.
+
+        """
         cl_coupled = nmt.compute_coupled_cell(field_a, field_b)
         cl_decoupled = workspace.decouple_cell(cl_coupled)
         return cl_decoupled
 
-    def get_spectra(self, map, d, nlb=16, workspace=None, purify_e=False, purify_b=True):
+    def get_spectra(self, map, d, nlb=16, purify_e=False, purify_b=True):
+        """
+        Get spectra from IQU maps.
+        Parameters
+        ----------
+        map: array
+            IQU maps, shape (3, #pixels)
+        d: Qubic dictionary
+        nlb: int
+            Constant bandpower width. By default it is 16.
+        purify_e: bool
+            False by default.
+        purify_b: bool
+            True by default.
+            Note that generally it's not a good idea to purify both,
+            since you'll lose sensitivity on E
+
+        Returns
+        -------
+        leff: effective l
+        spectra: TT, EE, BB, TE spectra
+        w: List containing the NmtWorkspaces [w00, w22, w02]
+
+        """
 
         # Select a binning scheme
-        b = nmt.NmtBin(d['nside'], nlb=nlb, is_Dell=True)
+        b = nmt.NmtBin(d['nside'], nlb=nlb, is_Dell=True, lmax=self.lmax)
         leff = b.get_effective_ells()
 
+        # Get fields
         f0, f2 = self.get_fields(map, d, purify_e=purify_e, purify_b=purify_b)
-        if workspace is None:
-            w00 = nmt.NmtWorkspace()
-            w00.compute_coupling_matrix(f0, f0, b)
 
-            w22 = nmt.NmtWorkspace()
-            w22.compute_coupling_matrix(f2, f2, b)
+        # Make workspaces
+        w00 = nmt.NmtWorkspace()
+        w00.compute_coupling_matrix(f0, f0, b)
 
-            w02 = nmt.NmtWorkspace()
-            w02.compute_coupling_matrix(f0, f2, b)
-            w = [w00, w22, w02]
-        else:
-            w = workspace
+        w22 = nmt.NmtWorkspace()
+        w22.compute_coupling_matrix(f2, f2, b)
 
+        w02 = nmt.NmtWorkspace()
+        w02.compute_coupling_matrix(f0, f2, b)
+        w = [w00, w22, w02]
+
+        # Get Cls
         c00 = self.compute_master(f0, f0, w[0])
         c22 = self.compute_master(f2, f2, w[1])
         c02 = self.compute_master(f0, f2, w[2])
-        print(c00.shape, c22.shape, c02.shape)
 
+        # Put the 4 spectra in one array
         spectra = np.array([c00[0], c22[0], c22[3], c02[0]]).T
+        print('Getting TT, EE, BB, TE spectra in that order.')
 
         return leff, spectra, w
 

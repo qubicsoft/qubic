@@ -230,27 +230,50 @@ from qubic import NamasterLib as nam
 ```
 
 ```{python}
+# Create a Namaster object
+lmin = 20
 lmax = 3 * d['nside'] - 1
-Namaster = nam.Namaster(msk, lmin=20, lmax=lmax, delta_ell=5)
+delta_ell = 10
+
+Namaster = nam.Namaster(msk, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
 ```
 
-```{python}
-themaps = np.array((maps_observed[0, :, 0], maps_observed[0, :, 1], maps_observed[0, :, 2]))
+### Test the function that binned a spectra between lmin and lmax
 
-leff, cells, w = Namaster.get_spectra(themaps, d, purify_e=True, purify_b=True)
+```{python}
+cl_binned = Namaster.bin_spectra(input_cl[:, 0])
+print(input_cl.shape, cl_binned.shape)
+
+ell_binned = Namaster.ell_binned
+
+plot(ellth, input_cl[:, 0])
+plot(ell_binned, cl_binned,'o')
+xlabel('$\\ell$')
+ylabel('$D_\\ell$')
+```
+
+### Get spectra from IQU maps
+
+```{python}
+# Make an 2D array containing IQU maps
+maps = np.array((maps_observed[0, :, 0], maps_observed[0, :, 1], maps_observed[0, :, 2]))
+print('maps shape:', maps.shape)
+
+# Get spectra
+leff, cells, w = Namaster.get_spectra(maps, d, nlb=16, purify_e=False, purify_b=False)
+print(leff)
 ```
 
 ```{python}
 pixwin = np.interp(leff, np.arange(3*d['nside']), hp.pixwin(d['nside']))
-clth = Qubic_sky.input_cmb_spectra
 ellth = np.arange(np.shape(input_cl)[0])
 
-clnames = ['TT','EE','BB']
+clnames = ['TT', 'EE', 'BB', 'TE']
 
-for i in range(3):
-    subplot(2, 3, i+1)
-    plot(ellth, clth[:, i])
-    plot(leff, cells[i,:],'o')
+for i in range(4):
+    subplot(2, 2, i+1)
+    plot(ellth, input_cl[:, i])
+    plot(leff, cells[:, i],'o')
     xlabel('$\\ell$')
     ylabel('$D_\\ell$')
     title(clnames[i])

@@ -40,11 +40,11 @@ class Namaster(object):
         return np.dot(spectra[..., :self.lmax + 1], self._p.T) * fact_binned
 
     def get_fields(self, map, d, purify_e=False, purify_b=True):
-        mp_i, mp_q, mp_u = map
-        mask_apo = nmt.mask_apodization(self.mask, 10.0, apotype='C1')
-        #beam = hp.gauss_beam(np.deg2rad(d['synthbeam_peak150_fwhm']), self.lmax)
+        mp_t, mp_q, mp_u = map
+        mask_apo = nmt.mask_apodization(self.mask, aposize=10.0, apotype='C1')
+        beam = hp.gauss_beam(np.deg2rad(d['synthbeam_peak150_fwhm']), self.lmax)
 
-        f0 = nmt.NmtField(mask_apo, [mp_i, mp_i])#, beam=beam)
+        f0 = nmt.NmtField(mask_apo, [mp_t])#, beam=beam)
         # This creates a spin-2 field with both pure E and B.
         # Note that generally it's not a good idea to purify both,
         # since you'll lose sensitivity on E
@@ -56,27 +56,32 @@ class Namaster(object):
         cl_decoupled = workspace.decouple_cell(cl_coupled)
         return cl_decoupled
 
-    def get_spectra(self, map, d, workspace=None, purify_e=False, purify_b=True):
+    def get_spectra(self, map, d, nlb=16, workspace=None, purify_e=False, purify_b=True):
 
         # Select a binning scheme
-        b = nmt.NmtBin(d['nside'], nlb=16, is_Dell=True)
+        b = nmt.NmtBin(d['nside'], nlb=nlb, is_Dell=True)
         leff = b.get_effective_ells()
 
         f0, f2 = self.get_fields(map, d, purify_e=purify_e, purify_b=purify_b)
         if workspace is None:
-            w00= nmt.NmtWorkspace()
+            w00 = nmt.NmtWorkspace()
             w00.compute_coupling_matrix(f0, f0, b)
 
             w22 = nmt.NmtWorkspace()
             w22.compute_coupling_matrix(f2, f2, b)
-            w = [w00, w22]
+
+            w02 = nmt.NmtWorkspace()
+            w02.compute_coupling_matrix(f0, f2, b)
+            w = [w00, w22, w02]
         else:
             w = workspace
 
         c00 = self.compute_master(f0, f0, w[0])
         c22 = self.compute_master(f2, f2, w[1])
+        c02 = self.compute_master(f0, f2, w[2])
+        print(c00.shape, c22.shape, c02.shape)
 
-        spectra = np.array([c00[0], c22[0], c22[3]])
+        spectra = np.array([c00[0], c22[0], c22[3], c02[0]]).T
 
         return leff, spectra, w
 

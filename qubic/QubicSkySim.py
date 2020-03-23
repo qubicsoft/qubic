@@ -37,9 +37,13 @@ class sky(object):
         self.instrument = instrument
         self.output_directory = out_dir
         self.output_prefix = out_prefix
+        self.input_cmb_maps = None
+        self.input_cmb_spectra = None
+        iscmb = False
         preset_strings = []
         for k in skyconfig.keys():
             if k == 'cmb':
+                iscmb = True
                 keyword = skyconfig[k]
                 if isinstance(keyword, dict):
                     # the CMB part is defined via a dictionary
@@ -90,7 +94,7 @@ class sky(object):
                 # we add the other predefined components
                 preset_strings.append(skyconfig[k])
         self.sky = pysm.Sky(nside=self.nside, preset_strings=preset_strings)
-        self.sky.add_component(cmbmap)
+        if iscmb: self.sky.add_component(cmbmap)
 
     def get_simple_sky_map(self):
         """

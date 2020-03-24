@@ -3,11 +3,9 @@ import healpy as hp
 import matplotlib.pyplot as mp
 import pymaster as nmt
 from numpy import pi
-import os
-from qubic import (
-    apodize_mask, equ2gal, plot_spectra, read_spectra, semilogy_spectra, Xpol)
+from qubic import (plot_spectra, read_spectra)
 
-#
+
 nside = 512
 b = nmt.NmtBin(nside, nlb=20, is_Dell=True)
 leff = b.get_effective_ells()

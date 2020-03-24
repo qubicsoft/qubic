@@ -2,10 +2,8 @@ import numpy as np
 import healpy as hp
 import matplotlib.pyplot as mp
 import pymaster as nmt
-import os
 from numpy import pi
-from qubic import (
-    apodize_mask, equ2gal, plot_spectra, read_spectra, semilogy_spectra, Xpol)
+from qubic import (plot_spectra, read_spectra)
 
 nside = 512
 

@@ -59,17 +59,15 @@ class sky(object):
                     elif 'CAMBSpectra' in keys:
                         # this is the case where we have CAMB Spectra
                         # Note that they are in l(l+1) CL/2pi so we have to change that for synfast
-                        totCL = keyword['CAMBSpectra']
+                        totDL = keyword['CAMBSpectra']
                         ell = keyword['ell']
-                        mycls = np.zeros_like(totCL)
-                        for i in range(4):
-                            mycls[2:, i] = 2 * np.pi * totCL[2:, i] / (ell[2:] * (ell[2:] + 1))
+                        mycls = Dl2Cl_without_monopole(ell, totDL)
                         # set the seed if needed
                         if 'seed' in keys:
                             np.random.seed(keyword['seed'])
                         mymaps = hp.synfast(mycls.T, self.nside, verbose=False, new=True)
                         self.input_cmb_maps = mymaps
-                        self.input_cmb_spectra = totCL
+                        self.input_cmb_spectra = totDL
                     else:
                         raise ValueError('Bad Dictionary given for PySM in the CMB part - see QubicSkySim.py for details')
                 else:
@@ -77,13 +75,11 @@ class sky(object):
                     # No map nor CAMB spectra was given, so we recompute them
                     # The assumed cosmology is the default one given in the get_CAMB_Dl() function below
                     if keyword is not None: np.random.seed(keyword)
-                    ell, totCL, unlensedCL = get_camb_Dl(lmax=3 * self.nside)
-                    mycls = np.zeros_like(totCL)
-                    for i in range(4):
-                        mycls[2:, i] = 2 * np.pi * totCL[2:, i] / (ell[2:] * (ell[2:] + 1))
+                    ell, totDL, unlensedCL = get_camb_Dl(lmax=3 * self.nside)
+                    mycls = Dl2Cl_without_monopole(ell, totDL)
                     mymaps = hp.synfast(mycls.T, self.nside, verbose=False, new=True)
                     self.input_cmb_maps = mymaps
-                    self.input_cmb_spectra = totCL
+                    self.input_cmb_spectra = totDL
 
                 # Write a tenporary file with the maps so the PySM can read them
                 rndstr = random_string(10)
@@ -242,9 +238,9 @@ class Qubic_sky(sky):
 
 def get_camb_Dl(lmax=2500, H0=67.5, ombh2=0.022, omch2=0.122, mnu=0.06, omk=0, tau=0.06, As=2e-9, ns=0.965, r=0.):
     #### Inspired from: https://camb.readthedocs.io/en/latest/CAMBdemo.html
-    # NB: this returns l(l+1)Cl/2pi
+    # NB: this returns Dl = l(l+1)Cl/2pi
     # Python CL arrays are all zero based (starting at L=0), Note L=0,1 entries will be zero by default.
-    # The different CL are always in the order TT, EE, BB, TE (with BB=0 for unlensed scalar results).
+    # The different DL are always in the order TT, EE, BB, TE (with BB=0 for unlensed scalar results).
     ####
     # Set up a new set of parameters for CAMB
     pars = camb.CAMBparams()
@@ -252,17 +248,24 @@ def get_camb_Dl(lmax=2500, H0=67.5, ombh2=0.022, omch2=0.122, mnu=0.06, omk=0, t
     pars.set_cosmology(H0=H0, ombh2=ombh2, omch2=omch2, mnu=mnu, omk=omk, tau=tau)
     pars.WantTensors = True
     pars.InitPower.set_params(As=As, ns=ns, r=r)
-    pars.set_for_lmax(lmax, lens_potential_accuracy=1);
+    pars.set_for_lmax(lmax, lens_potential_accuracy=1)
     # calculate results for these parameters
     results = camb.get_results(pars)
     # get dictionary of CAMB power spectra
     powers = results.get_cmb_power_spectra(pars, CMB_unit='muK')
-    totCL = powers['total']
-    unlensedCL = powers['unlensed_total']
+    totDL = powers['total']
+    unlensedDL = powers['unlensed_total']
     # Python CL arrays are all zero based (starting at L=0), Note L=0,1 entries will be zero by default.
     # The different CL are always in the order TT, EE, BB, TE (with BB=0 for unlensed scalar results).
-    ls = np.arange(totCL.shape[0])
-    return ls, totCL, unlensedCL
+    ls = np.arange(totDL.shape[0])
+    return ls, totDL, unlensedDL
+
+
+def Dl2Cl_without_monopole(ls, totDL):
+    cls = np.zeros_like(totDL)
+    for i in range(4):
+        cls[2:, i] = 2 * np.pi * totDL[2:, i] / (ls[2:] * (ls[2:] + 1))
+    return cls
 
 
 def random_string(nchars):

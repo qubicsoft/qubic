@@ -107,7 +107,7 @@ class Namaster(object):
         cl_decoupled = workspace.decouple_cell(cl_coupled)
         return cl_decoupled
 
-    def get_spectra(self, map, d, mask_apo, nlb=16, purify_e=False, purify_b=True):
+    def get_spectra(self, map, d, mask_apo, multipoles_per_bin=16, purify_e=False, purify_b=True):
         """
         Get spectra from IQU maps.
         Parameters
@@ -117,8 +117,8 @@ class Namaster(object):
         d: Qubic dictionary
         mask_apo: array
             Apodized mask.
-        nlb: int
-            Constant bandpower width. By default it is 16.
+        multipoles_per_bin: int
+            Number of multipoles in each bin. By default it is 16.
         purify_e: bool
             False by default.
         purify_b: bool
@@ -129,13 +129,21 @@ class Namaster(object):
         Returns
         -------
         leff: effective l
-        spectra: TT, EE, BB, TE spectra
+        spectra: TT, EE, BB, TE spectra, Dl = ell * (ell + 1) / 2 * PI * Cl
         w: List containing the NmtWorkspaces [w00, w22, w02]
 
         """
 
         # Select a binning scheme
-        b = nmt.NmtBin(d['nside'], nlb=nlb, is_Dell=True, lmax=self.lmax)
+        ells = np.arange(self.lmin, self.lmax + 1, dtype='int32') # Array of multipoles
+        weights = 1. / multipoles_per_bin * np.ones_like(ells)  # Array of weights
+        bpws = -1 + np.zeros_like(ells) # Array of bandpower indices
+        i = 0
+        while multipoles_per_bin * (i + 1) < self.lmax:
+            bpws[multipoles_per_bin * i:multipoles_per_bin * (i + 1)] = i
+            i += 1
+
+        b = nmt.NmtBin(d['nside'], bpws=bpws, ells=ells, weights=weights, is_Dell=True)
         leff = b.get_effective_ells()
 
         # Get fields

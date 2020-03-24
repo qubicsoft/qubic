@@ -3,9 +3,7 @@ from __future__ import division
 import healpy as hp
 import numpy as np
 
-import os
 import qubic
-import pysm
 
 
 def create_acquisition_operator_TOD(pointing, d):

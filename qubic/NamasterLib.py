@@ -1,6 +1,5 @@
 import numpy as np
 import healpy as hp
-import matplotlib.pyplot as plt
 import pymaster as nmt
 
 __all__ = ['Namaster']
@@ -8,9 +7,9 @@ __all__ = ['Namaster']
 
 class Namaster(object):
 
-    def __init__(self, mask, lmin, lmax, delta_ell):
+    def __init__(self, seenpix, lmin, lmax, delta_ell):
 
-        mask = np.asarray(mask)
+        seenpix = np.asarray(seenpix)
         lmin = int(lmin)
         lmax = int(lmax)
         delta_ell = int(delta_ell)
@@ -18,13 +17,12 @@ class Namaster(object):
             raise ValueError('Input lmin is less than 1.')
         if lmax < lmin:
             raise ValueError('Input lmax is less than lmin.')
-        wl = hp.anafast(mask)[:lmax + 1]
-        self.mask = mask
+        self.seenpix = seenpix
         self.lmin = lmin
         self.lmax = lmax
         self.delta_ell = delta_ell
-        self.wl = wl
         self.ell_binned, self._p, self._q = self._bin_ell()
+
 
     def bin_spectra(self, spectra):
         """
@@ -42,7 +40,27 @@ class Namaster(object):
         fact_binned = 2 * np.pi / (self.ell_binned * (self.ell_binned + 1))
         return np.dot(spectra[..., :self.lmax + 1], self._p.T) * fact_binned
 
-    def get_fields(self, map, d, purify_e=False, purify_b=True):
+    def get_apodized_mask(self, aposize=10.0, apotype='C1'):
+        """
+        Make an apodized mask. The pure-B formalism requires the mask to be
+        differentiable along the edges. The 'C1' and 'C2' apodization types
+        supported by mask_apodization achieve this.
+        Parameters
+        ----------
+        aposize: apodization scale in degrees.
+            10.0 by default.
+        apotype: apodization type.
+            Three methods implemented: C1, C2 and Smooth.
+            'C1' by default.
+
+        """
+        msk = np.zeros_like(self.seenpix)
+        msk[self.seenpix] = 1.
+
+        mask_apo = nmt.mask_apodization(msk, aposize=aposize, apotype=apotype)
+        return mask_apo
+
+    def get_fields(self, map, d, mask_apo, purify_e=False, purify_b=True):
         """
 
         Parameters
@@ -50,6 +68,8 @@ class Namaster(object):
         map: array
             IQU maps, shape (3, #pixels)
         d: Qubic dictionary
+        mask_apo: array
+            Apodized mask.
         purify_e: bool
             False by default.
         purify_b: bool
@@ -61,9 +81,7 @@ class Namaster(object):
         f0, f2: spin-0 and spin-2 Namaster fields.
 
         """
-
         mp_t, mp_q, mp_u = map
-        mask_apo = nmt.mask_apodization(self.mask, aposize=10.0, apotype='C1')
         beam = hp.gauss_beam(np.deg2rad(d['synthbeam_peak150_fwhm']), self.lmax)
 
         f0 = nmt.NmtField(mask_apo, [mp_t])#, beam=beam)
@@ -89,7 +107,7 @@ class Namaster(object):
         cl_decoupled = workspace.decouple_cell(cl_coupled)
         return cl_decoupled
 
-    def get_spectra(self, map, d, nlb=16, purify_e=False, purify_b=True):
+    def get_spectra(self, map, d, mask_apo, nlb=16, purify_e=False, purify_b=True):
         """
         Get spectra from IQU maps.
         Parameters
@@ -97,6 +115,8 @@ class Namaster(object):
         map: array
             IQU maps, shape (3, #pixels)
         d: Qubic dictionary
+        mask_apo: array
+            Apodized mask.
         nlb: int
             Constant bandpower width. By default it is 16.
         purify_e: bool
@@ -119,7 +139,7 @@ class Namaster(object):
         leff = b.get_effective_ells()
 
         # Get fields
-        f0, f2 = self.get_fields(map, d, purify_e=purify_e, purify_b=purify_b)
+        f0, f2 = self.get_fields(map, d, mask_apo, purify_e=purify_e, purify_b=purify_b)
 
         # Make workspaces
         w00 = nmt.NmtWorkspace()

@@ -12,6 +12,12 @@ jupyter:
     name: python3
 ---
 
+# Notebook to test Namaster tools to get spectra
+
+Editting by Jean-Christophe and Louise
+
+March 2020
+
 ```{python}
 # %matplotlib inline
 import numpy as np
@@ -35,8 +41,8 @@ rc('font', size=15)
 #### Create sample CMB I,Q,U maps
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
 
-dictfilename = global_dir + '/dicts/BmodesNoDustNoSystPaper0_2020.dict'
-# dictfilename = global_dir + '/dicts/test_QubicSkySim.dict'
+# dictfilename = global_dir + '/dicts/BmodesNoDustNoSystPaper0_2020.dict'
+dictfilename = global_dir + '/dicts/test_QubicSkySim.dict'
 
 # Read dictionary chosen
 d = qubic.qubicdict.qubicDict()
@@ -133,6 +139,10 @@ for i in range(d['nf_sub']):
 ```
 
 ```{python}
+seenpix
+```
+
+```{python}
 ### NaMaster
 # Create the mask
 msk = np.zeros(12*d['nside']**2)
@@ -223,7 +233,7 @@ for i in range(3):
 tight_layout()
 ```
 
-## With the library NamasterLib
+## Testing the library NamasterLib
 
 ```{python}
 from qubic import NamasterLib as nam
@@ -235,7 +245,7 @@ lmin = 20
 lmax = 3 * d['nside'] - 1
 delta_ell = 10
 
-Namaster = nam.Namaster(msk, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+Namaster = nam.Namaster(seenpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
 ```
 
 ### Test the function that binned a spectra between lmin and lmax
@@ -255,29 +265,95 @@ ylabel('$D_\\ell$')
 ### Get spectra from IQU maps
 
 ```{python}
+# Make a mask
+mask_apo = Namaster.get_apodized_mask()
+
+res=15
+hp.mollview(mask_apo, rot=center)
+```
+
+```{python}
 # Make an 2D array containing IQU maps
 maps = np.array((maps_observed[0, :, 0], maps_observed[0, :, 1], maps_observed[0, :, 2]))
 print('maps shape:', maps.shape)
 
 # Get spectra
-leff, cells, w = Namaster.get_spectra(maps, d, nlb=16, purify_e=False, purify_b=False)
+leff, cells, w = Namaster.get_spectra(maps, d, mask_apo, multipoles_per_bin=16, purify_e=False, purify_b=False)
+```
+
+```{python}
 print(leff)
 ```
 
 ```{python}
-pixwin = np.interp(leff, np.arange(3*d['nside']), hp.pixwin(d['nside']))
-ellth = np.arange(np.shape(input_cl)[0])
-
 clnames = ['TT', 'EE', 'BB', 'TE']
 
 for i in range(4):
     subplot(2, 2, i+1)
-    plot(ellth, input_cl[:, i])
+    plot(input_ell, input_cl[:, i])
     plot(leff, cells[:, i],'o')
     xlabel('$\\ell$')
     ylabel('$D_\\ell$')
     title(clnames[i])
 tight_layout()
+```
+
+## Test bug JC
+This section will be removed later (Louise debugging).
+
+```{python}
+d['nf_sub'] = 1
+lmax = 2 * d['nside']
+
+# Create a sky with qss
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+x0 = Qubic_sky.get_simple_sky_map()
+print('x0 Shape:', x0.shape)
+
+# Input map used by qss
+inmap = Qubic_sky.input_cmb_maps
+print('input Shape:', inmap.shape)
+
+# Anafast spectrum from input map
+clsin = hp.anafast(inmap, lmax=lmax)
+ll = np.arange(0, lmax+1)
+print('ll shape', ll.shape)
+# print(ll)
+Dlsin = ll * (ll + 1) * clsin / (2 * np.pi)
+print('Dlsin', Dlsin.shape)
+
+# Spectra used in qss to create the x0 map
+Dlth = Qubic_sky.input_cmb_spectra
+print('Dlth', Dlth.shape)
+llth = np.arange(len(Dlth[:, 0]))
+print('llth shape', llth.shape)
+# print(llth)
+
+# Spectra with Anafast from x0 map
+Dls = []
+for i in range(d['nf_sub']):
+    Cls = hp.anafast(x0[i, :, :].T, lmax=lmax)
+    Dls.append(ll * (ll + 1) * Cls / (2 * np.pi))
+Dls = np.array(Dls)
+print('Dls', Dls.shape)
+   
+    
+order = ['TT', 'EE', 'BB', 'TE']
+for i in range(4):
+    subplot(2, 2, i+1)
+    title(order[i])
+    xlim(0, lmax)
+    plot(llth, Dlth[:, i], 'k', label='Dl Th')
+    plot(ll, Dlsin[i, :], alpha=0.3, label='Dl from Input')
+    for k in range(d['nf_sub']):
+        plot(ll, Dls[k, i, :], alpha=0.3, label='Dl from x0 band {}'.format(k))
+legend()
+```
+
+```{python}
+inmap.shape
 ```
 
 ```{python}

@@ -4,8 +4,8 @@ jupyter:
     text_representation:
       extension: .Rmd
       format_name: rmarkdown
-      format_version: '1.1'
-      jupytext_version: 1.2.1
+      format_version: '1.2'
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -53,7 +53,7 @@ d.read_from_file(dictfilename)
 print(d['detarray'])
 
 # Create an object
-baseline = [1, 8]
+baseline = [25, 57]
 ca = sc.SelfCalibration(baseline, d)
 ```
 
@@ -72,10 +72,10 @@ q = qubic.QubicInstrument(d)
 # Focal length (if you want to change it)
 # q.optics.focal_length = 0.30
 
-reso = 80
+reso = 34
 
 # FP radius
-radius = 0.06
+radius = 0.051
 S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = ca.get_power_combinations(q, theta=[0], 
                                                                           phi=[0], nu=150e9, reso=reso,
                                                                           xmin=-radius, xmax=radius)
@@ -96,22 +96,10 @@ print(fringes.shape)
 ```
 
 ```{python}
-plt.imshow(fringes[:, :, 0], origin='lower')
-```
-
-```{python}
-# Make an animation for different source positions
-nfringes = fringes.shape[2]  
-all_fringes = []
-fig = plt.figure()
-for i in range(nfringes):
-    im = plt.imshow(fringes[:, :, i], animated=True)
-    all_fringes.append([im])
-
-ani = animation.ArtistAnimation(fig, all_fringes, interval=1000, repeat=False)
-
-HTML(ani.to_html5_video())
-# ani.save('fringes_passing.mp4')
+# Look at the difference between fringes for 2 punctual source positions
+plt.figure()
+plt.imshow(fringes[:, :, 0] - fringes[:, :, 1], origin='lower')
+plt.pause(0.5)
 ```
 
 ### Get the focal plane image for the real instrument
@@ -178,7 +166,7 @@ ax.grid(which='minor', color='w', linewidth=0.5)
 
 ```{python}
 # Path to the simulated files from Creidhe in order to get the TES coordinates
-rep = Qubic_DataDir(datafile='detcentres.txt')
+rep = Qubic_DataDir(datafile='detcentres.txt', datadir='/home/lmousset/QUBIC/')
 print(rep)
 
 # Let's look at the coordinates for the center of each TES
@@ -217,7 +205,7 @@ need to download the files at : https://drive.google.com/open?id=19dPHw_CeuFZ068
 
 ```{python}
 # Path to the simulated files 
-rep = Qubic_DataDir(datafile='detcentres.txt')
+rep = Qubic_DataDir(datafile='detcentres.txt', datadir='/home/lmousset/QUBIC/')
 print('rep:', rep)
 
 # Finges with aberations

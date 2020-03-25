@@ -107,7 +107,9 @@ class Namaster(object):
         cl_decoupled = workspace.decouple_cell(cl_coupled)
         return cl_decoupled
 
-    def get_spectra(self, map, d, mask_apo, multipoles_per_bin=16, purify_e=False, purify_b=True):
+    def get_spectra(self, map, d, mask_apo, 
+                    multipoles_per_bin=16, purify_e=False, purify_b=True,
+                    w=None):
         """
         Get spectra from IQU maps.
         Parameters
@@ -150,15 +152,20 @@ class Namaster(object):
         f0, f2 = self.get_fields(map, d, mask_apo, purify_e=purify_e, purify_b=purify_b)
 
         # Make workspaces
-        w00 = nmt.NmtWorkspace()
-        w00.compute_coupling_matrix(f0, f0, b)
+        if w is None:
+            w00 = nmt.NmtWorkspace()
+            w00.compute_coupling_matrix(f0, f0, b)
 
-        w22 = nmt.NmtWorkspace()
-        w22.compute_coupling_matrix(f2, f2, b)
+            w22 = nmt.NmtWorkspace()
+            w22.compute_coupling_matrix(f2, f2, b)
 
-        w02 = nmt.NmtWorkspace()
-        w02.compute_coupling_matrix(f0, f2, b)
-        w = [w00, w22, w02]
+            w02 = nmt.NmtWorkspace()
+            w02.compute_coupling_matrix(f0, f2, b)
+            w = [w00, w22, w02]
+        else:
+            w00 = w[0]
+            w22 = w[1]
+            w02 = w[2]
 
         # Get Cls
         c00 = self.compute_master(f0, f0, w[0])

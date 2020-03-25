@@ -21,24 +21,45 @@ class Namaster(object):
         self.lmin = lmin
         self.lmax = lmax
         self.delta_ell = delta_ell
-        self.ell_binned, self._p, self._q = self._bin_ell()
+        self.ells, self.weights, self.bpws = self._binning()
 
-
-    def bin_spectra(self, spectra):
+    def get_binning(self, d):
         """
-        Average spectra in bins specified by lmin, lmax and delta_ell,
-        weighted by `l(l+1)`.
-        spectra: 1D array
-            Input spectrum starting from l=0.
+        Binning informations.
+        Parameters
+        ----------
+        d: Qubic dictionary
+
+        Returns
+        -------
+        The binned monopoles and the NmtBin object
+        """
+        b = nmt.NmtBin(d['nside'], bpws=self.bpws, ells=self.ells, weights=self.weights, is_Dell=True)
+        ell_binned = b.get_effective_ells()
+
+        return ell_binned, b
+
+    def bin_spectra(self, input_cls, d):
+        """
+        Bin a spectrum.
+        Parameters
+        ----------
+        input_cls: 1D array
+            input Cls spectrum
+        d: Qubic dictionary
+
+        Returns
+        -------
+        The binned power spectrum Dl = l(l+1)*Cl.
 
         """
-        spectra = np.asarray(spectra)
-        lmax = spectra.shape[-1] - 1
-        if lmax < self.lmax:
-            raise ValueError('The input spectra do not have enough l.')
+        ell_binned, b = self.get_binning(d)
+        input_cls_reshape = np.reshape(input_cls[:self.lmax + 1], (1, self.lmax + 1))
+        cls_binned = b.bin_cell(input_cls_reshape)
 
-        fact_binned = 2 * np.pi / (self.ell_binned * (self.ell_binned + 1))
-        return np.dot(spectra[..., :self.lmax + 1], self._p.T) * fact_binned
+        fact = 2 * np.pi / (ell_binned * (ell_binned + 1))
+
+        return fact * cls_binned
 
     def get_apodized_mask(self, aposize=10.0, apotype='C1'):
         """
@@ -84,7 +105,7 @@ class Namaster(object):
         mp_t, mp_q, mp_u = map
         beam = hp.gauss_beam(np.deg2rad(d['synthbeam_peak150_fwhm']), self.lmax)
 
-        f0 = nmt.NmtField(mask_apo, [mp_t])#, beam=beam)
+        f0 = nmt.NmtField(mask_apo, [mp_t]) #, beam=beam)
 
         f2 = nmt.NmtField(mask_apo, [mp_q, mp_u], purify_e=purify_e, purify_b=purify_b)
         return f0, f2
@@ -107,9 +128,7 @@ class Namaster(object):
         cl_decoupled = workspace.decouple_cell(cl_coupled)
         return cl_decoupled
 
-    def get_spectra(self, map, d, mask_apo, 
-                    multipoles_per_bin=16, purify_e=False, purify_b=True,
-                    w=None):
+    def get_spectra(self, map, d, mask_apo, purify_e=False, purify_b=True, w=None):
         """
         Get spectra from IQU maps.
         Parameters
@@ -119,34 +138,24 @@ class Namaster(object):
         d: Qubic dictionary
         mask_apo: array
             Apodized mask.
-        multipoles_per_bin: int
-            Number of multipoles in each bin. By default it is 16.
         purify_e: bool
             False by default.
         purify_b: bool
             True by default.
             Note that generally it's not a good idea to purify both,
             since you'll lose sensitivity on E
+        w: list with Namaster workspace [w00, w22, w02]
+            If None the workspaces will be created.
 
         Returns
         -------
-        leff: effective l
+        ell_binned
         spectra: TT, EE, BB, TE spectra, Dl = ell * (ell + 1) / 2 * PI * Cl
         w: List containing the NmtWorkspaces [w00, w22, w02]
 
         """
 
-        # Select a binning scheme
-        ells = np.arange(self.lmin, self.lmax + 1, dtype='int32') # Array of multipoles
-        weights = 1. / multipoles_per_bin * np.ones_like(ells)  # Array of weights
-        bpws = -1 + np.zeros_like(ells) # Array of bandpower indices
-        i = 0
-        while multipoles_per_bin * (i + 1) < self.lmax:
-            bpws[multipoles_per_bin * i:multipoles_per_bin * (i + 1)] = i
-            i += 1
-
-        b = nmt.NmtBin(d['nside'], bpws=bpws, ells=ells, weights=weights, is_Dell=True)
-        leff = b.get_effective_ells()
+        ell_binned, b = self.get_binning(d)
 
         # Get fields
         f0, f2 = self.get_fields(map, d, mask_apo, purify_e=purify_e, purify_b=purify_b)
@@ -168,29 +177,24 @@ class Namaster(object):
             w02 = w[2]
 
         # Get Cls
-        c00 = self.compute_master(f0, f0, w[0])
-        c22 = self.compute_master(f2, f2, w[1])
-        c02 = self.compute_master(f0, f2, w[2])
+        c00 = self.compute_master(f0, f0, w00)
+        c22 = self.compute_master(f2, f2, w22)
+        c02 = self.compute_master(f0, f2, w02)
 
         # Put the 4 spectra in one array
         spectra = np.array([c00[0], c22[0], c22[3], c02[0]]).T
         print('Getting TT, EE, BB, TE spectra in that order.')
 
-        return leff, spectra, w
+        return ell_binned, spectra, w
 
-    def _bin_ell(self):
-        nbins = (self.lmax - self.lmin + 1) // self.delta_ell
-        start = self.lmin + np.arange(nbins) * self.delta_ell
-        stop = start + self.delta_ell
-        ell_binned = (start + stop - 1) / 2
+    def _binning(self):
+        ells = np.arange(self.lmin, self.lmax, dtype='int32')  # Array of multipoles
+        weights = 1. / self.delta_ell * np.ones_like(ells)  # Array of weights
+        bpws = -1 + np.zeros_like(ells)  # Array of bandpower indices
+        i = 0
+        print(self.lmax - self.delta_ell)
+        while self.delta_ell * (i + 1) < (self.lmax - self.delta_ell):
+            bpws[self.delta_ell * i: self.delta_ell * (i + 1)] = i
+            i += 1
 
-        ell2 = np.arange(self.lmax + 1)
-        ell2 = ell2 * (ell2 + 1) / (2 * np.pi)
-        p = np.zeros((nbins, self.lmax + 1))
-        q = np.zeros((self.lmax + 1, nbins))
-
-        for b, (a, z) in enumerate(zip(start, stop)):
-            p[b, a:z] = ell2[a:z] / (z - a)
-            q[a:z, b] = 1 / ell2[a:z]
-
-        return ell_binned, p, q
+        return ells, weights, bpws

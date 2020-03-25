@@ -24,18 +24,19 @@ import numpy as np
 import healpy as hp
 import matplotlib.pyplot as plt
 
-# Import the NaMaster python wrapper
-import pymaster as nmt
-
 # Specific qubic modules
 from qubicpack.utilities import Qubic_DataDir
 from pysimulators import FitsArray
+import pysm
 import qubic
 from qubic import QubicSkySim as qss
+from qubic import NamasterLib as nam
 
 rc('figure', figsize=(16, 10))
 rc('font', size=15)
 ```
+
+## Build maps with a given spectra
 
 ```{python}
 #### Create sample CMB I,Q,U maps
@@ -47,13 +48,13 @@ dictfilename = global_dir + '/dicts/test_QubicSkySim.dict'
 # Read dictionary chosen
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
-d['nside']=256
+d['nside'] = 256
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 print(center)
 ```
 
 ```{python}
-# Make a sky using PYSM
+# Make a sky using PYSM3
 seed = None
 sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, d)
@@ -85,14 +86,14 @@ hp.mollview(input_maps[1,:], title="Q input map used", min=-rng[1], max=rng[1], 
 hp.mollview(input_maps[2,:], title="U input map used", min=-rng[2], max=rng[2], sub=(1,3,3))
 
 ### Input Cls
-input_cl = Qubic_sky.input_cmb_spectra
-if input_cl is not None:
-    input_ell = np.arange(np.shape(input_cl)[0])
+input_Dl = Qubic_sky.input_cmb_spectra
+if input_Dl is not None:
+    input_ell = np.arange(np.shape(input_Dl)[0])
     figure()
     order = ['TT', 'EE', 'BB', 'TE']
     for i in range(4):
         subplot(2,2,i+1)
-        plot(input_ell,input_cl[:,i], color='k')
+        plot(input_ell,input_Dl[:,i], color='k')
         title(order[i])
         xlabel('$\\ell$')
         ylabel('$D_\\ell$')
@@ -117,13 +118,13 @@ fact_noise = [1., sqrt(2), sqrt(2)]
 
 ### For Now Uniform noise
 for i in range(3):
-    maps_observed[:,seenpix,i] = x0[:,seenpix,i] #+ np.random.randn(seenpix.sum()) * noise_level * fact_noise[i] 
+    maps_observed[:, seenpix, i] = x0[:, seenpix, i] #+ np.random.randn(seenpix.sum()) * noise_level * fact_noise[i] 
 
 figure() 
 numsub = 1
 for i in range(d['nf_sub']):
     for istokes in [0,1,2]:
-        hp.mollview(maps_observed[i,:,istokes], min=-rng[istokes], max=rng[istokes],
+        hp.mollview(maps_observed[i, :, istokes], min=-rng[istokes], max=rng[istokes],
                     sub=(d['nf_sub']+1,3,numsub), title=stn[istokes]+' subfreq {}'.format(i))
         numsub += 1
 
@@ -138,112 +139,106 @@ for i in range(d['nf_sub']):
 
 ```
 
+# This part should be removed, JC ?
+
 ```{python}
-seenpix
+# ### NaMaster
+# # Create the mask
+# msk = np.zeros(12*d['nside']**2)
+# msk[seenpix]=1
+
+# # Now we apodize the mask. The pure-B formalism requires the mask to be
+# # differentiable along the edges. The 'C1' and 'C2' apodization types
+# # supported by mask_apodization achieve this.
+# msk_apo = nmt.mask_apodization(msk, 10.0, apotype='C1')
+
+# res=15
+# hp.mollview(msk, rot=center, sub=(2,2,1))
+# hp.mollview(msk_apo, rot=center, sub=(2,2,2))
+# hp.gnomview(msk, rot=center, reso=res, sub=(2,2,3))
+# hp.gnomview(msk_apo, rot=center, reso=res, sub=(2,2,4))
 ```
 
 ```{python}
-### NaMaster
-# Create the mask
-msk = np.zeros(12*d['nside']**2)
-msk[seenpix]=1
+# # Select a binning scheme
+# ##b = nmt.NmtBin.from_nside_linear(nside, 16)
+# b = nmt.NmtBin(d['nside'], nlb=16, is_Dell=True)
 
-# Now we apodize the mask. The pure-B formalism requires the mask to be
-# differentiable along the edges. The 'C1' and 'C2' apodization types
-# supported by mask_apodization achieve this.
-msk_apo = nmt.mask_apodization(msk, 10.0, apotype='C1')
+# leff = b.get_effective_ells()
 
-res=15
-hp.mollview(msk, rot=center, sub=(2,2,1))
-hp.mollview(msk_apo, rot=center, sub=(2,2,2))
-hp.gnomview(msk, rot=center, reso=res, sub=(2,2,3))
-hp.gnomview(msk_apo, rot=center, reso=res, sub=(2,2,4))
-```
+# def get_fields(mp_t, mp_q, mp_u, msk_apo, purify_e=True, purify_b=True):
+#     # This creates a spin-0 field 
+#     f0 = nmt.NmtField(msk_apo, [mp_t, mp_t])
+#     # This creates a spin-2 field with both pure E and B.
+#     f2 = nmt.NmtField(msk_apo, [mp_q, mp_u], purify_e=purify_e, purify_b=purify_b)
+#     # Note that generally it's not a good idea to purify both,
+#     # since you'll lose sensitivity on E
+#     return f0, f2
 
-```{python}
-# Select a binning scheme
-##b = nmt.NmtBin.from_nside_linear(nside, 16)
-b = nmt.NmtBin(d['nside'], nlb=16, is_Dell=True)
+# def get_spectra(I,Q,U,mask,purify_e=True, purify_b=True, workspace=None):
+#     f0, f2 = get_fields(I, Q, U, mask, purify_e=purify_e, purify_b=purify_b)
+#     if workspace is None:
+#         w0 = nmt.NmtWorkspace()
+#         w0.compute_coupling_matrix(f0, f0, b)
+#         w2 = nmt.NmtWorkspace()
+#         w2.compute_coupling_matrix(f2, f2, b)
+#         w = [w0, w2]
+#     else:
+#         w = workspace
+#     # Spin 0
+#     c00coupled = nmt.compute_coupled_cell(f0, f0)
+#     c00 = w[0].decouple_cell(c00coupled)
+#     # Spin 2
+#     c22coupled = nmt.compute_coupled_cell(f2, f2)
+#     c22 = w[1].decouple_cell(c22coupled)
+#     # spectra
+#     spectra = np.array([c00[0], c22[0], c22[3]])
+#     return spectra, w
 
-leff = b.get_effective_ells()
-
-def get_fields(mp_t, mp_q, mp_u, msk_apo, purify_e=True, purify_b=True):
-    # This creates a spin-0 field 
-    f0 = nmt.NmtField(msk_apo, [mp_t, mp_t])
-    # This creates a spin-2 field with both pure E and B.
-    f2 = nmt.NmtField(msk_apo, [mp_q, mp_u], purify_e=purify_e, purify_b=purify_b)
-    # Note that generally it's not a good idea to purify both,
-    # since you'll lose sensitivity on E
-    return f0, f2
-
-def get_spectra(I,Q,U,mask,purify_e=True, purify_b=True, workspace=None):
-    f0, f2 = get_fields(I, Q, U, mask, purify_e=purify_e, purify_b=purify_b)
-    if workspace is None:
-        w0 = nmt.NmtWorkspace()
-        w0.compute_coupling_matrix(f0, f0, b)
-        w2 = nmt.NmtWorkspace()
-        w2.compute_coupling_matrix(f2, f2, b)
-        w = [w0, w2]
-    else:
-        w = workspace
-    # Spin 0
-    c00coupled = nmt.compute_coupled_cell(f0, f0)
-    c00 = w[0].decouple_cell(c00coupled)
-    # Spin 2
-    c22coupled = nmt.compute_coupled_cell(f2, f2)
-    c22 = w[1].decouple_cell(c22coupled)
-    # spectra
-    spectra = np.array([c00[0], c22[0], c22[3]])
-    return spectra, w
-
-def plot_cells(ell, cells, color=None, label=None):
-    cell_names = ['TT', 'EE', 'BB']
-    for i in range(3):
-        subplot(2,2,i+1)
-        plot(ell, cells[i], color=color, label=label)
-        xlabel('$\\ell$', fontsize=18)
-        ylabel('$D_\\ell$', fontsize=18)
-        if label is not None: legend(loc='upper right', frameon=False)
-        title(cell_names[i])
-    tight_layout()
+# def plot_cells(ell, cells, color=None, label=None):
+#     cell_names = ['TT', 'EE', 'BB']
+#     for i in range(3):
+#         subplot(2,2,i+1)
+#         plot(ell, cells[i], color=color, label=label)
+#         xlabel('$\\ell$', fontsize=18)
+#         ylabel('$D_\\ell$', fontsize=18)
+#         if label is not None: legend(loc='upper right', frameon=False)
+#         title(cell_names[i])
+#     tight_layout()
 
 
-cells, w = get_spectra(maps_observed[0,:,0], maps_observed[0,:,1], maps_observed[0,:,2], msk_apo,
-                       purify_e=True, purify_b=True)
-cellsnp, wnp = get_spectra(maps_observed[0,:,0], maps_observed[0,:,1], maps_observed[0,:,2], msk_apo,
-                           purify_e=False, purify_b=False)
+# cells, w = get_spectra(maps_observed[0,:,0], maps_observed[0,:,1], maps_observed[0,:,2], msk_apo,
+#                        purify_e=True, purify_b=True)
+# cellsnp, wnp = get_spectra(maps_observed[0,:,0], maps_observed[0,:,1], maps_observed[0,:,2], msk_apo,
+#                            purify_e=False, purify_b=False)
 
 
 ```
 
 ```{python}
-pixwin = np.interp(leff, np.arange(3*d['nside']),hp.pixwin(d['nside']))
-clth = Qubic_sky.input_cmb_spectra
-ellth = np.arange(np.shape(input_cl)[0])
-clnames = ['TT','EE','BB']
-for i in range(3):
-    subplot(2,3,i+1)
-    plot(ellth, clth[:,i])
-    plot(leff, cells[i,:],'o',label='Pure')
-    plot(leff, cellsnp[i,:],'o', label='Not Pure')
-    xlabel('$\\ell$')
-    ylabel('$D_\\ell$')
-    title(clnames[i])
-    legend()
-tight_layout()
+# pixwin = np.interp(leff, np.arange(3*d['nside']),hp.pixwin(d['nside']))
+# clth = Qubic_sky.input_cmb_spectra
+# ellth = np.arange(np.shape(input_cl)[0])
+# clnames = ['TT','EE','BB']
+# for i in range(3):
+#     subplot(2,3,i+1)
+#     plot(ellth, clth[:,i])
+#     plot(leff, cells[i,:],'o',label='Pure')
+#     plot(leff, cellsnp[i,:],'o', label='Not Pure')
+#     xlabel('$\\ell$')
+#     ylabel('$D_\\ell$')
+#     title(clnames[i])
+#     legend()
+# tight_layout()
 ```
 
-## Testing the library NamasterLib
-
-```{python}
-from qubic import NamasterLib as nam
-```
+# Testing the library NamasterLib
 
 ```{python}
 # Create a Namaster object
 lmin = 20
 lmax = 3 * d['nside'] - 1
-delta_ell = 10
+delta_ell = 16
 
 Namaster = nam.Namaster(seenpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
 ```
@@ -251,13 +246,15 @@ Namaster = nam.Namaster(seenpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
 ### Test the function that binned a spectra between lmin and lmax
 
 ```{python}
-cl_binned = Namaster.bin_spectra(input_cl[:, 0])
-print(input_cl.shape, cl_binned.shape)
+ell_binned, b = Namaster.get_binning(d)
 
-ell_binned = Namaster.ell_binned
+Dls_binned = Namaster.bin_spectra(input_Dl[:, 0], d)
+print(lmax)
 
-plot(ellth, input_cl[:, 0])
-plot(ell_binned, cl_binned,'o')
+print(ell_binned.shape, Dls_binned.shape)
+
+plot(input_ell, input_Dl[:, 0])
+plot(ell_binned, Dls_binned[0, :],'o')
 xlabel('$\\ell$')
 ylabel('$D_\\ell$')
 ```
@@ -269,7 +266,8 @@ ylabel('$D_\\ell$')
 mask_apo = Namaster.get_apodized_mask()
 
 res=15
-hp.mollview(mask_apo, rot=center)
+hp.mollview(mask_apo, sub=(121))
+hp.gnomview(mask_apo, rot=center, sub=(122), reso=12)
 ```
 
 ```{python}
@@ -278,11 +276,7 @@ maps = np.array((maps_observed[0, :, 0], maps_observed[0, :, 1], maps_observed[0
 print('maps shape:', maps.shape)
 
 # Get spectra
-leff, cells, w = Namaster.get_spectra(maps, d, mask_apo, multipoles_per_bin=16, purify_e=False, purify_b=False)
-```
-
-```{python}
-print(leff)
+leff, cells, w = Namaster.get_spectra(maps, d, mask_apo, purify_e=False, purify_b=False)
 ```
 
 ```{python}
@@ -290,7 +284,7 @@ clnames = ['TT', 'EE', 'BB', 'TE']
 
 for i in range(4):
     subplot(2, 2, i+1)
-    plot(input_ell, input_cl[:, i])
+    plot(input_ell, input_Dl[:, i])
     plot(leff, cells[:, i],'o')
     xlabel('$\\ell$')
     ylabel('$D_\\ell$')
@@ -298,7 +292,7 @@ for i in range(4):
 tight_layout()
 ```
 
-## Test bug JC
+## Test bug PySM 3
 This section will be removed later (Louise debugging).
 
 ```{python}
@@ -350,10 +344,6 @@ for i in range(4):
     for k in range(d['nf_sub']):
         plot(ll, Dls[k, i, :], alpha=0.3, label='Dl from x0 band {}'.format(k))
 legend()
-```
-
-```{python}
-inmap.shape
 ```
 
 ```{python}

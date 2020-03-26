@@ -91,12 +91,14 @@ class Namaster(object):
         d: Qubic dictionary
         mask_apo: array
             Apodized mask.
-        purify_e: bool
+        purify_e: bool, optional
             False by default.
-        purify_b: bool
+        purify_b: bool, optional
             True by default.
             Note that generally it's not a good idea to purify both,
             since you'll lose sensitivity on E
+        beam_correction: bool, optional
+            If True, a correction by the Qubic beam is applied
         Returns
         -------
         f0, f2: spin-0 and spin-2 Namaster fields.
@@ -137,7 +139,8 @@ class Namaster(object):
         cl_decoupled = workspace.decouple_cell(cl_coupled)
         return cl_decoupled
 
-    def get_spectra(self, map, d, mask_apo, purify_e=False, purify_b=True, w=None, beam_correction=False):
+    def get_spectra(self, map, d, mask_apo, purify_e=False, purify_b=True, w=None,
+                    beam_correction=False, pixwin_correction=False):
         """
         Get spectra from IQU maps.
         Parameters
@@ -147,14 +150,18 @@ class Namaster(object):
         d: Qubic dictionary
         mask_apo: array
             Apodized mask.
-        purify_e: bool
+        purify_e: bool, optional
             False by default.
-        purify_b: bool
+        purify_b: bool, optional
             True by default.
             Note that generally it's not a good idea to purify both,
             since you'll lose sensitivity on E
         w: list with Namaster workspace [w00, w22, w02]
             If None the workspaces will be created.
+        beam_correction: bool, optional
+            If True, a correction by the Qubic beam is applied.
+        pixwin_correction: bool, optional
+            If True, a correction for the pixel integration function is applied.
 
         Returns
         -------
@@ -197,7 +204,22 @@ class Namaster(object):
         spectra = np.array([c00[0], c22[0], c22[3], c02[0]]).T
         print('Getting TT, EE, BB, TE spectra in that order.')
 
+        if pixwin_correction:
+            pwb = self.get_pixwin_correction(d)
+            for i in range(4):
+                spectra[:, i] /= (pwb[1] ** 2)
+
         return ell_binned, spectra, w
+
+    def get_pixwin_correction(self, d):
+        nside = d['nside']
+        pw = hp.pixwin(nside, pol=True)
+        pw = [pw[0][: self.lmax + 1], pw[1][: self.lmax + 1]]
+
+        ell_binned, b = self.get_binning(d)
+        pwb = 2 * np.pi / (ell_binned * (ell_binned + 1)) * b.bin_cell(np.array(pw))
+
+        return pwb
 
     def _binning(self):
         ells = np.arange(self.lmin, self.lmax, dtype='int32')  # Array of multipoles

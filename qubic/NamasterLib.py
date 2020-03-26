@@ -81,7 +81,7 @@ class Namaster(object):
         mask_apo = nmt.mask_apodization(msk, aposize=aposize, apotype=apotype)
         return mask_apo
 
-    def get_fields(self, map, d, mask_apo, purify_e=False, purify_b=True):
+    def get_fields(self, map, d, mask_apo, purify_e=False, purify_b=True, beam_correction=False):
         """
 
         Parameters
@@ -103,11 +103,20 @@ class Namaster(object):
 
         """
         mp_t, mp_q, mp_u = map
-        beam = hp.gauss_beam(np.deg2rad(d['synthbeam_peak150_fwhm']), self.lmax)
+        if beam_correction:
+            beam = hp.gauss_beam(np.deg2rad(d['synthbeam_peak150_fwhm']), self.lmax)
+        else:
+            beam = None
 
-        f0 = nmt.NmtField(mask_apo, [mp_t]) #, beam=beam)
+        f0 = nmt.NmtField(mask_apo,
+                          [mp_t],
+                          beam=beam)
 
-        f2 = nmt.NmtField(mask_apo, [mp_q, mp_u], purify_e=purify_e, purify_b=purify_b)
+        f2 = nmt.NmtField(mask_apo,
+                          [mp_q, mp_u],
+                          purify_e=purify_e,
+                          purify_b=purify_b,
+                          beam=beam)
         return f0, f2
 
     def compute_master(self, field_a, field_b, workspace):
@@ -128,7 +137,7 @@ class Namaster(object):
         cl_decoupled = workspace.decouple_cell(cl_coupled)
         return cl_decoupled
 
-    def get_spectra(self, map, d, mask_apo, purify_e=False, purify_b=True, w=None):
+    def get_spectra(self, map, d, mask_apo, purify_e=False, purify_b=True, w=None, beam_correction=False):
         """
         Get spectra from IQU maps.
         Parameters
@@ -158,7 +167,10 @@ class Namaster(object):
         ell_binned, b = self.get_binning(d)
 
         # Get fields
-        f0, f2 = self.get_fields(map, d, mask_apo, purify_e=purify_e, purify_b=purify_b)
+        f0, f2 = self.get_fields(map, d, mask_apo,
+                                 purify_e=purify_e,
+                                 purify_b=purify_b,
+                                 beam_correction=beam_correction)
 
         # Make workspaces
         if w is None:

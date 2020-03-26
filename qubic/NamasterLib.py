@@ -140,7 +140,7 @@ class Namaster(object):
         return cl_decoupled
 
     def get_spectra(self, map, d, mask_apo, purify_e=False, purify_b=True, w=None,
-                    beam_correction=False, pixwin_correction=False):
+                    beam_correction=False, pixwin_correction=False, verbose=True):
         """
         Get spectra from IQU maps.
         Parameters
@@ -170,7 +170,7 @@ class Namaster(object):
         w: List containing the NmtWorkspaces [w00, w22, w02]
 
         """
-
+        
         ell_binned, b = self.get_binning(d)
 
         # Get fields
@@ -202,7 +202,7 @@ class Namaster(object):
 
         # Put the 4 spectra in one array
         spectra = np.array([c00[0], c22[0], c22[3], c02[0]]).T
-        print('Getting TT, EE, BB, TE spectra in that order.')
+        if verbose: print('Getting TT, EE, BB, TE spectra in that order.')
 
         if pixwin_correction:
             pwb = self.get_pixwin_correction(d)

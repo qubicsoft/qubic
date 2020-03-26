@@ -32,7 +32,7 @@ import qubic
 from qubic import QubicSkySim as qss
 from qubic import NamasterLib as nam
 
-rc('figure', figsize=(16, 10))
+rc('figure', figsize=(12, 8))
 rc('font', size=15)
 ```
 
@@ -58,19 +58,19 @@ print(center)
 seed = None
 sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, d)
-x0 = np.reshape(Qubic_sky.get_simple_sky_map(),(d['nf_sub'],d['nside']**2*12,3))
+x0 = np.reshape(Qubic_sky.get_simple_sky_map(), (d['nf_sub'], d['nside']**2*12, 3))
 
 print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0))
 rc('figure', figsize=(16, 10))
 figure()
-stn = ['I','Q','U']
+stn = ['I', 'Q', 'U']
 rng = (np.std(x0, axis=(0,1))*3).astype(int)
 rng[1:] = np.max(rng[1:])
 numsub = 4
 for i in range(d['nf_sub']):
-    for istokes in [0,1,2]:
-        hp.mollview(x0[i,:,istokes], min=-rng[istokes], max=rng[istokes],
-                    sub=(d['nf_sub']+1,3,numsub), title=stn[istokes]+' subfreq {}'.format(i))
+    for istokes in [0, 1, 2]:
+        hp.mollview(x0[i, :, istokes], min=-rng[istokes], max=rng[istokes],
+                    sub=(d['nf_sub']+1, 3, numsub), title=stn[istokes]+' subfreq {}'.format(i))
         numsub += 1
 ```
 
@@ -85,7 +85,7 @@ hp.mollview(input_maps[0,:], title="I input map used", min=-rng[0], max=rng[0], 
 hp.mollview(input_maps[1,:], title="Q input map used", min=-rng[1], max=rng[1], sub=(1,3,2))
 hp.mollview(input_maps[2,:], title="U input map used", min=-rng[2], max=rng[2], sub=(1,3,3))
 
-### Input Cls
+### Input Dls
 input_Dl = Qubic_sky.input_cmb_spectra
 if input_Dl is not None:
     input_ell = np.arange(np.shape(input_Dl)[0])
@@ -93,12 +93,14 @@ if input_Dl is not None:
     order = ['TT', 'EE', 'BB', 'TE']
     for i in range(4):
         subplot(2,2,i+1)
-        plot(input_ell,input_Dl[:,i], color='k')
+        plot(input_ell, input_Dl[:,i], color='k')
         title(order[i])
         xlabel('$\\ell$')
         ylabel('$D_\\ell$')
     tight_layout()
 ```
+
+### Get only the observed patch
 
 ```{python}
 #### Read a sample QUBIC coverage map (made in the RandomPointing approximmation)
@@ -128,108 +130,15 @@ for i in range(d['nf_sub']):
                     sub=(d['nf_sub']+1,3,numsub), title=stn[istokes]+' subfreq {}'.format(i))
         numsub += 1
 
-figure() 
-numsub = 1
-for i in range(d['nf_sub']):
-    for istokes in [0,1,2]:
-        hp.gnomview(maps_observed[i,:,istokes], min=-rng[istokes], max=rng[istokes],
-                    rot=center, reso=15,
-                    sub=(d['nf_sub']+1,3,numsub), title=stn[istokes]+' subfreq {}'.format(i))
-        numsub += 1
+# figure() 
+# numsub = 1
+# for i in range(d['nf_sub']):
+#     for istokes in [0,1,2]:
+#         hp.gnomview(maps_observed[i,:,istokes], min=-rng[istokes], max=rng[istokes],
+#                     rot=center, reso=15,
+#                     sub=(d['nf_sub']+1,3,numsub), title=stn[istokes]+' subfreq {}'.format(i))
+#         numsub += 1
 
-```
-
-# This part should be removed, JC ?
-
-```{python}
-# ### NaMaster
-# # Create the mask
-# msk = np.zeros(12*d['nside']**2)
-# msk[seenpix]=1
-
-# # Now we apodize the mask. The pure-B formalism requires the mask to be
-# # differentiable along the edges. The 'C1' and 'C2' apodization types
-# # supported by mask_apodization achieve this.
-# msk_apo = nmt.mask_apodization(msk, 10.0, apotype='C1')
-
-# res=15
-# hp.mollview(msk, rot=center, sub=(2,2,1))
-# hp.mollview(msk_apo, rot=center, sub=(2,2,2))
-# hp.gnomview(msk, rot=center, reso=res, sub=(2,2,3))
-# hp.gnomview(msk_apo, rot=center, reso=res, sub=(2,2,4))
-```
-
-```{python}
-# # Select a binning scheme
-# ##b = nmt.NmtBin.from_nside_linear(nside, 16)
-# b = nmt.NmtBin(d['nside'], nlb=16, is_Dell=True)
-
-# leff = b.get_effective_ells()
-
-# def get_fields(mp_t, mp_q, mp_u, msk_apo, purify_e=True, purify_b=True):
-#     # This creates a spin-0 field 
-#     f0 = nmt.NmtField(msk_apo, [mp_t, mp_t])
-#     # This creates a spin-2 field with both pure E and B.
-#     f2 = nmt.NmtField(msk_apo, [mp_q, mp_u], purify_e=purify_e, purify_b=purify_b)
-#     # Note that generally it's not a good idea to purify both,
-#     # since you'll lose sensitivity on E
-#     return f0, f2
-
-# def get_spectra(I,Q,U,mask,purify_e=True, purify_b=True, workspace=None):
-#     f0, f2 = get_fields(I, Q, U, mask, purify_e=purify_e, purify_b=purify_b)
-#     if workspace is None:
-#         w0 = nmt.NmtWorkspace()
-#         w0.compute_coupling_matrix(f0, f0, b)
-#         w2 = nmt.NmtWorkspace()
-#         w2.compute_coupling_matrix(f2, f2, b)
-#         w = [w0, w2]
-#     else:
-#         w = workspace
-#     # Spin 0
-#     c00coupled = nmt.compute_coupled_cell(f0, f0)
-#     c00 = w[0].decouple_cell(c00coupled)
-#     # Spin 2
-#     c22coupled = nmt.compute_coupled_cell(f2, f2)
-#     c22 = w[1].decouple_cell(c22coupled)
-#     # spectra
-#     spectra = np.array([c00[0], c22[0], c22[3]])
-#     return spectra, w
-
-# def plot_cells(ell, cells, color=None, label=None):
-#     cell_names = ['TT', 'EE', 'BB']
-#     for i in range(3):
-#         subplot(2,2,i+1)
-#         plot(ell, cells[i], color=color, label=label)
-#         xlabel('$\\ell$', fontsize=18)
-#         ylabel('$D_\\ell$', fontsize=18)
-#         if label is not None: legend(loc='upper right', frameon=False)
-#         title(cell_names[i])
-#     tight_layout()
-
-
-# cells, w = get_spectra(maps_observed[0,:,0], maps_observed[0,:,1], maps_observed[0,:,2], msk_apo,
-#                        purify_e=True, purify_b=True)
-# cellsnp, wnp = get_spectra(maps_observed[0,:,0], maps_observed[0,:,1], maps_observed[0,:,2], msk_apo,
-#                            purify_e=False, purify_b=False)
-
-
-```
-
-```{python}
-# pixwin = np.interp(leff, np.arange(3*d['nside']),hp.pixwin(d['nside']))
-# clth = Qubic_sky.input_cmb_spectra
-# ellth = np.arange(np.shape(input_cl)[0])
-# clnames = ['TT','EE','BB']
-# for i in range(3):
-#     subplot(2,3,i+1)
-#     plot(ellth, clth[:,i])
-#     plot(leff, cells[i,:],'o',label='Pure')
-#     plot(leff, cellsnp[i,:],'o', label='Not Pure')
-#     xlabel('$\\ell$')
-#     ylabel('$D_\\ell$')
-#     title(clnames[i])
-#     legend()
-# tight_layout()
 ```
 
 # Testing the library NamasterLib
@@ -249,14 +158,14 @@ Namaster = nam.Namaster(seenpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
 ell_binned, b = Namaster.get_binning(d)
 
 Dls_binned = Namaster.bin_spectra(input_Dl[:, 0], d)
-print(lmax)
+print('lmax=', lmax)
 
 print(ell_binned.shape, Dls_binned.shape)
 
-plot(input_ell, input_Dl[:, 0])
-plot(ell_binned, Dls_binned[0, :],'o')
-xlabel('$\\ell$')
-ylabel('$D_\\ell$')
+plt.plot(input_ell, input_Dl[:, 0])
+plt.plot(ell_binned, Dls_binned[0, :],'o')
+plt.xlabel('$\\ell$')
+plt.ylabel('$D_\\ell$')
 ```
 
 ### Get spectra from IQU maps
@@ -270,26 +179,145 @@ hp.mollview(mask_apo, sub=(121))
 hp.gnomview(mask_apo, rot=center, sub=(122), reso=12)
 ```
 
+### Make spectra
+
 ```{python}
-# Make an 2D array containing IQU maps
-maps = np.array((maps_observed[0, :, 0], maps_observed[0, :, 1], maps_observed[0, :, 2]))
+# Make an 2D array containing IQU maps, the shape must be (3, #pixels)
+maps = maps_observed[0].T
 print('maps shape:', maps.shape)
 
 # Get spectra
-leff, cells, w = Namaster.get_spectra(maps, d, mask_apo, purify_e=False, purify_b=False)
+leff, cells, w = Namaster.get_spectra(maps, d, mask_apo, 
+                                      purify_e=True, 
+                                      purify_b=False, 
+                                      beam_correction=False,
+                                      pixwin_correction=False)
 ```
 
 ```{python}
 clnames = ['TT', 'EE', 'BB', 'TE']
 
 for i in range(4):
-    subplot(2, 2, i+1)
-    plot(input_ell, input_Dl[:, i])
-    plot(leff, cells[:, i],'o')
-    xlabel('$\\ell$')
-    ylabel('$D_\\ell$')
-    title(clnames[i])
-tight_layout()
+    plt.subplot(2, 2, i+1)
+    plt.plot(input_ell, input_Dl[:, i])
+    plt.plot(leff, cells[:, i],'o')
+    plt.xlabel('$\\ell$')
+    plt.ylabel('$D_\\ell$')
+    plt.title(clnames[i])
+plt.tight_layout()
+```
+
+### Test the beam correction
+
+```{python}
+smooth_maps = hp.sphtfunc.smoothing(maps, fwhm=np.deg2rad(d['synthbeam_peak150_fwhm']))
+                          
+# Get spectra
+leff_nobeam, cells_nobeam, w_nobeam = Namaster.get_spectra(smooth_maps, d, mask_apo, 
+                                                           purify_e=True, 
+                                                           purify_b=False, 
+                                                           beam_correction=False)
+leff_beam, cells_beam, w_beam = Namaster.get_spectra(smooth_maps, d, mask_apo, 
+                                                     purify_e=True, 
+                                                     purify_b=False, 
+                                                     beam_correction=True)
+
+
+```
+
+```{python}
+clnames = ['TT', 'EE', 'BB', 'TE']
+
+for i in range(4):
+    plt.subplot(2, 2, i+1)
+    plt.plot(input_ell, input_Dl[:, i], label='Input spectra')
+    plt.plot(leff_nobeam, cells_nobeam[:, i], 'o', label='No correction')
+    plt.plot(leff_beam, cells_beam[:, i], 'o', label='Beam correction')
+    plt.xlabel('$\\ell$')
+    plt.ylabel('$D_\\ell$')
+    plt.title(clnames[i])
+    plt.legend()
+plt.tight_layout()
+```
+
+### Test the pixwin correction
+
+```{python}
+pwb = Namaster.get_pixwin_correction(d)
+print(pwb.shape)
+
+# Make maps with integration into pixels
+input_Cl = qss.Dl2Cl_without_monopole(input_ell, input_Dl)
+
+pw_maps = hp.synfast(input_Cl.T, d['nside'], pol=True, lmax=Namaster.lmax, pixwin=True, new=True)
+print(pw_maps.shape)
+
+# Get only the observed patch
+pw_seenmaps = np.zeros_like(pw_maps)
+for i in range(3):
+    pw_seenmaps[i, seenpix] = pw_maps[i, seenpix]
+# hp.mollview(pw_seenmaps[0, :])
+
+# Get spectra with and without the pixwin correction
+leff_pw, cells_pw, w_pw = Namaster.get_spectra(pw_seenmaps, d, mask_apo, 
+                                                           purify_e=True, 
+                                                           purify_b=False, 
+                                                           beam_correction=False,
+                                                           pixwin_correction=True)
+
+leff_nopw, cells_nopw, w_nopw = Namaster.get_spectra(pw_seenmaps, d, mask_apo, 
+                                                           purify_e=True, 
+                                                           purify_b=False, 
+                                                           beam_correction=False,
+                                                           pixwin_correction=False)
+```
+
+```{python}
+clnames = ['TT', 'EE', 'BB', 'TE']
+
+for i in range(4):
+    plt.subplot(2, 2, i+1)
+    plt.plot(input_ell, input_Dl[:, i], label='Input spectra')
+    plt.plot(leff_nopw, cells_nopw[:, i], 'o', label='No correction')
+    plt.plot(leff_pw, cells_pw[:, i], 'o', label='Pixwin correction')
+    plt.xlabel('$\\ell$')
+    plt.ylabel('$D_\\ell$')
+    plt.title(clnames[i])
+    plt.legend()
+plt.tight_layout()
+```
+
+### Do many realisations
+Not finished
+
+```{python}
+def make_maps(d, seed=None, noise_level=0.):
+    sky_config = {'cmb': seed}
+    Qubic_sky = qss.Qubic_sky(sky_config, d)
+    x0 = Qubic_sky.get_simple_sky_map()
+
+    maps_observed = np.zeros_like(x0)
+
+    # Noise
+    fact_noise = [1., sqrt(2), sqrt(2)]
+
+    ### For Now Uniform noise
+    for i in range(3):
+        maps_observed[:, seenpix, i] = x0[:, seenpix, i] + np.random.randn(seenpix.sum()) * noise_level * fact_noise[i] 
+
+    maps = maps_observed[0].T
+    print('maps shape:', maps.shape)
+    return maps
+
+# Do many realizations
+nsim = 4
+nsim_leff, nsim_cells = [], []
+for sim in range(nsim):
+    maps = make_maps(d)
+    leff, cells, w = Namaster.get_spectra(maps, d, mask_apo, purify_e=True, purify_b=False, beam_correction=False)
+    nsim_leff.append(leff)
+    nsim_cells.append(nsim_cells)
+print()
 ```
 
 ## Test bug PySM 3

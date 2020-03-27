@@ -111,30 +111,31 @@ class sky(object):
             sky[i, :, :] = np.array(themaps_iqu.to(u.uK_CMB, equivalencies=u.cmb_equivalencies(nus_in[i] * u.GHz))).T
         return sky
 
-    def read_sky_map(self):
-        """
-        Returns the maps saved in the `output_directory` containing the `output_prefix`.
-        """
-        map_list = [s for s in os.listdir(self.output_directory) if self.output_prefix in s]
-        map_list = [m for m in map_list if 'total' in m]
-        if len(map_list) > len(self.instrument.Frequencies):
-            map_list = np.array(
-                [[m for m in map_list if x in m] for x in self.instrument.Channel_Names]).ravel().tolist()
-        maps = np.zeros((len(map_list), hp.nside2npix(self.nside), 3))
-        for i, title in enumerate(map_list):
-            maps[i] = hp.read_map(title, field=(0, 1, 2)).T
-        return map_list, maps
+    #### This is not supported yet....
+    # def read_sky_map(self):
+    #     """
+    #     Returns the maps saved in the `output_directory` containing the `output_prefix`.
+    #     """
+    #     map_list = [s for s in os.listdir(self.output_directory) if self.output_prefix in s]
+    #     map_list = [m for m in map_list if 'total' in m]
+    #     if len(map_list) > len(self.instrument.Frequencies):
+    #         map_list = np.array(
+    #             [[m for m in map_list if x in m] for x in self.instrument.Channel_Names]).ravel().tolist()
+    #     maps = np.zeros((len(map_list), hp.nside2npix(self.nside), 3))
+    #     for i, title in enumerate(map_list):
+    #         maps[i] = hp.read_map(title, field=(0, 1, 2)).T
+    #     return map_list, maps
 
-    def get_sky_map(self):
-        """
-        Returns the maps saved in the `output_directory` containing the `output_prefix`. If
-        there are no maps in the `ouput_directory` they will be created.
-        """
-        sky_map_list, sky_map = self.read_sky_map()
-        if len(sky_map_list) < len(self.instrument.Frequencies):
-            self.instrument.observe(self.sky)
-            sky_map_list, sky_map = self.read_sky_map()
-        return sky_map
+    # def get_sky_map(self):
+    #     """
+    #     Returns the maps saved in the `output_directory` containing the `output_prefix`. If
+    #     there are no maps in the `ouput_directory` they will be created.
+    #     """
+    #     sky_map_list, sky_map = self.read_sky_map()
+    #     if len(sky_map_list) < len(self.instrument.Frequencies):
+    #         self.instrument.observe(self.sky)
+    #         sky_map_list, sky_map = self.read_sky_map()
+    #     return sky_map
 
 
 #### This part has been commented as it is not yet compatible with PySM3
@@ -234,6 +235,103 @@ class Qubic_sky(sky):
                       'pixel_indices': None}
 
         sky.__init__(self, skyconfig, d, instrument, output_directory, output_prefix)
+
+    def get_fullsky_convolved_maps(self, FWHMdeg=None, verbose=None):
+        '''
+        This returns full sky maps at each subfrequency convolved by the beam of  the  isntrument at
+        each frequency or with another beam if FWHMdeg is provided
+        when FWHMdeg is 0, the maps are not convolved
+        '''
+ 
+        # First get the full sky maps
+        fullmaps = self.get_simple_sky_map()
+        Nf = self.dictionary['nf_sub']
+
+        # Now convolve them to the FWHM at each sub-frequency or to a common beam if forcebeam is None
+        fwhms = np.zeros(Nf)
+        if FWHMdeg is not None:
+            fwhms += FWHMdeg
+        else:
+            fwhms = self.dictionary['synthbeam_peak150_fwhm'] * 150. / self.qubic_central_nus
+        for i in range(Nf):
+            if fwhms[i] != 0:
+                fullmaps[i,:,:] = hp.sphtfunc.smoothing(fullmaps[i,:,:].T, fwhm=np.deg2rad(fwhms[i]), verbose=verbose).T
+            self.instrument['beams'][i] = fwhms[i]
+
+        return fullmaps
+
+
+    def get_partial_sky_maps_withnoise(self, coverage, sigma_sec, Nyears=3, verbose=False, FWHMdeg=None, seed=None):
+        '''
+        This returns maps in the same way as with get_simple_sky_map but cut according to the coverage
+        and with noise added according to this coverage and the RMS in muK.sqrt(sec) given by sigma_sec
+        The default integration time is three years but can be modified with optional variable Nyears 
+        Note that the maps are convolved with the instrument beam by default, or with FWHMdeg (can be an array)
+        if provided.
+        If seed is provided, it will be used for the noise realization. If not it will be a new realization at 
+        each call.
+        '''
+
+        # First get the convolved maps
+        maps = self.get_fullsky_convolved_maps(FWHMdeg=FWHMdeg, verbose=verbose)
+
+        # Restrict maps to observed pixels
+        seenpix = coverage > 0
+        maps[:,~seenpix,:] = 0
+
+        # Now pure noise maps
+        self.noisemaps = np.zeros_like(maps)
+        for i in range(self.dictionary['nf_sub']):
+            self.noisemaps[i,:,:] += self.create_noise_maps(sigma_sec, coverage, 
+                                                            Nyears=Nyears, verbose=verbose, seed=seed)
+
+        return maps+self.noisemaps
+
+
+    def create_noise_maps(self, sigma_sec, coverage, Nyears=3, verbose=False, seed=None):
+        '''
+        This returns a realization of noise maps for I, Q and U with no correlation between them, according to a
+        noise RMS map built according to the coverage specified as an attribute to the class
+        '''
+        # The theoretical noise in I for the coverage
+        thnoise = self.theoretical_noise_maps(sigma_sec, coverage, Nyears=Nyears, verbose=verbose)
+        seenpix = coverage > 0
+        npix = seenpix.sum()
+        noise_maps = np.zeros((len(coverage), 3))
+        if seed is not None: np.random.seed(seed)
+        noise_maps[seenpix, 0] =  np.random.randn(npix) * thnoise[seenpix]
+        noise_maps[seenpix, 1] =  np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
+        noise_maps[seenpix, 2] =  np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
+        return noise_maps
+
+
+
+    def theoretical_noise_maps(self, sigma_sec, coverage, Nyears=3, verbose=False):
+        '''
+        This returns a map of the RMS noise (not an actual realization, just the expected RMS - No covariance)
+        '''
+        ####### Noise normalization
+        # We assume we have integrated for a time Ttot in seconds with a sigma per root sec sigma_sec
+        Ttot = Nyears * 365 * 24 * 3600 # in seconds
+        if verbose: print('Total time is {} seconds'.format(Ttot))
+        # Oberved pixels
+        thepix = coverage > 0
+        # Normalized coverage (sum=1)
+        covnorm = coverage/np.sum(coverage)    
+        if verbose: print('Normalized coverage sum: {}'.format(np.sum(covnorm)))
+        
+        # Time per pixel
+        Tpix = np.zeros_like(covnorm)
+        Tpix[thepix] = Ttot * covnorm[thepix]
+        if verbose: print('Sum Tpix: {} s  ; Ttot = {} s'.format(np.sum(Tpix), Ttot))
+
+        # RMS per pixel
+        Sigpix = np.zeros_like(covnorm)
+        Sigpix[thepix] = sigma_sec / np.sqrt(Tpix[thepix])
+        if verbose: print('Total noise (with no averages in pixels): {}'.format(np.sum((Sigpix*Tpix)**2)))
+        return Sigpix
+
+
 
 
 def get_camb_Dl(lmax=2500, H0=67.5, ombh2=0.022, omch2=0.122, mnu=0.06, omk=0, tau=0.06, As=2e-9, ns=0.965, r=0.):

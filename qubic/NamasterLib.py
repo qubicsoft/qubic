@@ -81,7 +81,7 @@ class Namaster(object):
         mask_apo = nmt.mask_apodization(msk, aposize=aposize, apotype=apotype)
         return mask_apo
 
-    def get_fields(self, map, d, mask_apo, purify_e=False, purify_b=True):
+    def get_fields(self, map, d, mask_apo, purify_e=False, purify_b=True, beam_correction=False):
         """
 
         Parameters
@@ -91,23 +91,34 @@ class Namaster(object):
         d: Qubic dictionary
         mask_apo: array
             Apodized mask.
-        purify_e: bool
+        purify_e: bool, optional
             False by default.
-        purify_b: bool
+        purify_b: bool, optional
             True by default.
             Note that generally it's not a good idea to purify both,
             since you'll lose sensitivity on E
+        beam_correction: bool, optional
+            If True, a correction by the Qubic beam is applied
         Returns
         -------
         f0, f2: spin-0 and spin-2 Namaster fields.
 
         """
         mp_t, mp_q, mp_u = map
-        beam = hp.gauss_beam(np.deg2rad(d['synthbeam_peak150_fwhm']), self.lmax)
+        if beam_correction:
+            beam = hp.gauss_beam(np.deg2rad(d['synthbeam_peak150_fwhm']), self.lmax)
+        else:
+            beam = None
 
-        f0 = nmt.NmtField(mask_apo, [mp_t]) #, beam=beam)
+        f0 = nmt.NmtField(mask_apo,
+                          [mp_t],
+                          beam=beam)
 
-        f2 = nmt.NmtField(mask_apo, [mp_q, mp_u], purify_e=purify_e, purify_b=purify_b)
+        f2 = nmt.NmtField(mask_apo,
+                          [mp_q, mp_u],
+                          purify_e=purify_e,
+                          purify_b=purify_b,
+                          beam=beam)
         return f0, f2
 
     def compute_master(self, field_a, field_b, workspace):
@@ -128,7 +139,8 @@ class Namaster(object):
         cl_decoupled = workspace.decouple_cell(cl_coupled)
         return cl_decoupled
 
-    def get_spectra(self, map, d, mask_apo, purify_e=False, purify_b=True, w=None):
+    def get_spectra(self, map, d, mask_apo, purify_e=False, purify_b=True, w=None,
+                    beam_correction=False, pixwin_correction=False, verbose=True):
         """
         Get spectra from IQU maps.
         Parameters
@@ -138,14 +150,18 @@ class Namaster(object):
         d: Qubic dictionary
         mask_apo: array
             Apodized mask.
-        purify_e: bool
+        purify_e: bool, optional
             False by default.
-        purify_b: bool
+        purify_b: bool, optional
             True by default.
             Note that generally it's not a good idea to purify both,
             since you'll lose sensitivity on E
         w: list with Namaster workspace [w00, w22, w02]
             If None the workspaces will be created.
+        beam_correction: bool, optional
+            If True, a correction by the Qubic beam is applied.
+        pixwin_correction: bool, optional
+            If True, a correction for the pixel integration function is applied.
 
         Returns
         -------
@@ -154,11 +170,14 @@ class Namaster(object):
         w: List containing the NmtWorkspaces [w00, w22, w02]
 
         """
-
+        
         ell_binned, b = self.get_binning(d)
 
         # Get fields
-        f0, f2 = self.get_fields(map, d, mask_apo, purify_e=purify_e, purify_b=purify_b)
+        f0, f2 = self.get_fields(map, d, mask_apo,
+                                 purify_e=purify_e,
+                                 purify_b=purify_b,
+                                 beam_correction=beam_correction)
 
         # Make workspaces
         if w is None:
@@ -183,9 +202,24 @@ class Namaster(object):
 
         # Put the 4 spectra in one array
         spectra = np.array([c00[0], c22[0], c22[3], c02[0]]).T
-        print('Getting TT, EE, BB, TE spectra in that order.')
+        if verbose: print('Getting TT, EE, BB, TE spectra in that order.')
+
+        if pixwin_correction:
+            pwb = self.get_pixwin_correction(d)
+            for i in range(4):
+                spectra[:, i] /= (pwb[1] ** 2)
 
         return ell_binned, spectra, w
+
+    def get_pixwin_correction(self, d):
+        nside = d['nside']
+        pw = hp.pixwin(nside, pol=True)
+        pw = [pw[0][: self.lmax + 1], pw[1][: self.lmax + 1]]
+
+        ell_binned, b = self.get_binning(d)
+        pwb = 2 * np.pi / (ell_binned * (ell_binned + 1)) * b.bin_cell(np.array(pw))
+
+        return pwb
 
     def _binning(self):
         ells = np.arange(self.lmin, self.lmax, dtype='int32')  # Array of multipoles

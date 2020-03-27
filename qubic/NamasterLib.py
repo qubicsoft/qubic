@@ -81,7 +81,7 @@ class Namaster(object):
         mask_apo = nmt.mask_apodization(msk, aposize=aposize, apotype=apotype)
         return mask_apo
 
-    def get_fields(self, map, d, mask_apo, purify_e=False, purify_b=True, beam_correction=False):
+    def get_fields(self, map, d, mask_apo, purify_e=False, purify_b=True, beam_correction=None):
         """
 
         Parameters
@@ -105,8 +105,11 @@ class Namaster(object):
 
         """
         mp_t, mp_q, mp_u = map
-        if beam_correction:
-            beam = hp.gauss_beam(np.deg2rad(d['synthbeam_peak150_fwhm']), self.lmax)
+        if beam_correction is not None:
+            if beam_correction == True:
+                beam = hp.gauss_beam(np.deg2rad(d['synthbeam_peak150_fwhm']), self.lmax)
+            else:
+                beam = hp.gauss_beam(np.deg2rad(beam_correction), self.lmax)
         else:
             beam = None
 
@@ -170,7 +173,7 @@ class Namaster(object):
         w: List containing the NmtWorkspaces [w00, w22, w02]
 
         """
-        
+
         ell_binned, b = self.get_binning(d)
 
         # Get fields

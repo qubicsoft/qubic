@@ -80,66 +80,8 @@ Now if we sum that over all pixels:
 &= \sigma^2_{sec} \times \sum_i T_{pix}[i]\\
 &= T_{tot} \times \sigma^2_{sec}
 \end{align}
-Which is what we want to recover.
-
-We define below a function that creates the corresponding noise in a map:
+Which is what we want to recover. This is how it is implented in QubicSkySim.py
 <!-- #endregion -->
-
-```{python}
-## Make a sky using PYSM and pretend these were reconstructed - we will add noise afterwards
-seed = None
-sky_config = {'cmb': seed}
-Qubic_sky = qss.Qubic_sky(sky_config, d)
-x0 = np.reshape(Qubic_sky.get_simple_sky_map(),(d['nf_sub'],d['nside']**2*12,3))
-# Now we restrict only to sub-band 0 for simplicity (others are identical)
-x0 = x0[0,:,:]
-
-hp.mollview(x0[:,0], sub=(1,3,1))
-hp.mollview(x0[:,1], sub=(1,3,2))
-hp.mollview(x0[:,2], sub=(1,3,3))
-```
-
-```{python}
-def theoretical_noise_map(cov, sigma_sec, Nyears=3, verbose=False):
-    '''
-    This returns a map of the RMS noise (not an actual realization, just the expected RMS)
-    '''
-    ####### Noise normalization
-    # We assume we have integrated for a time Ttot in seconds with a sigma per root sec sigma_sec
-    Ttot = Nyears * 365 * 24 * 3600 # in seconds
-    if verbose: print('Total time is {} seconds'.format(Ttot))
-    # Oberved pixels
-    thepix = cov > 0
-    # Normalized coverage (sum=1)
-    covnorm = cov/np.sum(cov)    
-    if verbose: print('Normalized coverage sum: {}'.format(np.sum(covnorm)))
-    
-    # Time per pixel
-    Tpix = np.zeros_like(covnorm)
-    Tpix[thepix] = Ttot * covnorm[thepix]
-    if verbose: print('Sum Tpix: {} s  ; Ttot = {} s'.format(np.sum(Tpix), Ttot))
-
-    # RMS per pixel
-    Sigpix = np.zeros_like(covnorm)
-    Sigpix[thepix] = sigma_sec / np.sqrt(Tpix[thepix])
-    if verbose: print('Total noise (with no averages in pixels): {}'.format(np.sum((Sigpix*Tpix)**2)))
-    return Sigpix
-
-
-def create_noise_maps(cov, sigma_sec, Nyears=3, verbose=False):
-    # The theoretical noise in I for the coverage
-    thnoise = theoretical_noise_map(cov, sigma_sec, Nyears=Nyears, verbose=verbose)
-    
-    seenpix = cov > 0
-    npix = seenpix.sum()
-    noise_maps = np.zeros((len(cov), 3))
-    noise_maps[seenpix, 0] =  np.random.randn(npix) * thnoise[seenpix]
-    noise_maps[seenpix, 1] =  np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
-    noise_maps[seenpix, 2] =  np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
-    
-    return noise_maps
-    
-```
 
 Let's create noisy maps for the three cases we are interested in:
 1. No noise
@@ -147,28 +89,36 @@ Let's create noisy maps for the three cases we are interested in:
 3. Qubic Noise
 
 ```{python}
-# Arbitrary noise
-signoise = 110   ### Gived RMS = [2.3, 3.2, 3.2] for IQU - Similar to what one gets with QUBIC Sim
+reload(qss)
+## Make a sky using PYSM: It will have the expected QUBIC beam, the coverage and noise according to this coverage
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
 
-# Flat Coverage
+## Noise in nuk.sqrt(s)
+sigma_sec = 110.
+
+############### Maps will be restricted to a signle sub-frequency for simplicity
+### Noiseless
+print('Doing Noiseless')
+observed_maps_nonoise = Qubic_sky.get_partial_sky_maps_withnoise(cov, sigma_sec=0.)
+observed_maps_nonoise = observed_maps_nonoise[0,:,:]
+### Flat Coverage
+print('Doing Flat Coverage')
 flatcov = np.zeros_like(cov)
 flatcov[cov > 0] = 1
+observed_maps_flatnoise = Qubic_sky.get_partial_sky_maps_withnoise(flatcov, sigma_sec=sigma_sec)
+observed_maps_flatnoise = observed_maps_flatnoise[0,:,:]
+### Qubic Coverage
+print('Doing QUBIC COverge')
+observed_maps_qubicnoise = Qubic_sky.get_partial_sky_maps_withnoise(cov, sigma_sec=sigma_sec)
+observed_maps_qubicnoise = observed_maps_qubicnoise[0,:,:]
 
-flatnoise  = create_noise_maps(flatcov, signoise)
-qubicnoise = create_noise_maps(cov, signoise)
+### Also restrict the FWHM information
+Qubic_sky.instrument['beams'] = Qubic_sky.instrument['beams'][0]
+```
 
-print(np.std(qubicnoise[cov>(np.max(cov)/10),:],axis=0))
-
-# No Noise
-observed_maps_nonoise = np.zeros_like(x0)
-observed_maps_nonoise[cov>0, :] = x0[cov>0,:]
-
-# Flat Noise
-observed_maps_flatnoise = observed_maps_nonoise + flatnoise
-
-# Qubic Noise
-observed_maps_qubicnoise = observed_maps_nonoise + qubicnoise
-
+```{python}
 im = 1
 res = 30
 stk = ['I', 'Q', 'U']
@@ -183,6 +133,107 @@ for istk in range(3):
     im += 1
 ```
 
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+# ## Make a sky using PYSM: It will have the expected QUBIC beam, the coverage and noise according to this coverage
+# seed = None
+# sky_config = {'cmb': seed}
+# Qubic_sky = qss.Qubic_sky(sky_config, d)
+# x0 = Qubic_sky.get_simple_sky_map()
+# # Now we restrict only to sub-band 0 for simplicity (others are identical)
+# x0 = x0[0,:,:]
+
+# hp.mollview(x0[:,0], sub=(1,3,1))
+# hp.mollview(x0[:,1], sub=(1,3,2))
+# hp.mollview(x0[:,2], sub=(1,3,3))
+```
+
+```{python}
+# def theoretical_noise_map(cov, sigma_sec, Nyears=3, verbose=False):
+#     '''
+#     This returns a map of the RMS noise (not an actual realization, just the expected RMS)
+#     '''
+#     ####### Noise normalization
+#     # We assume we have integrated for a time Ttot in seconds with a sigma per root sec sigma_sec
+#     Ttot = Nyears * 365 * 24 * 3600 # in seconds
+#     if verbose: print('Total time is {} seconds'.format(Ttot))
+#     # Oberved pixels
+#     thepix = cov > 0
+#     # Normalized coverage (sum=1)
+#     covnorm = cov/np.sum(cov)    
+#     if verbose: print('Normalized coverage sum: {}'.format(np.sum(covnorm)))
+    
+#     # Time per pixel
+#     Tpix = np.zeros_like(covnorm)
+#     Tpix[thepix] = Ttot * covnorm[thepix]
+#     if verbose: print('Sum Tpix: {} s  ; Ttot = {} s'.format(np.sum(Tpix), Ttot))
+
+#     # RMS per pixel
+#     Sigpix = np.zeros_like(covnorm)
+#     Sigpix[thepix] = sigma_sec / np.sqrt(Tpix[thepix])
+#     if verbose: print('Total noise (with no averages in pixels): {}'.format(np.sum((Sigpix*Tpix)**2)))
+#     return Sigpix
+
+
+# def create_noise_maps(cov, sigma_sec, Nyears=3, verbose=False):
+#     # The theoretical noise in I for the coverage
+#     thnoise = theoretical_noise_map(cov, sigma_sec, Nyears=Nyears, verbose=verbose)
+    
+#     seenpix = cov > 0
+#     npix = seenpix.sum()
+#     noise_maps = np.zeros((len(cov), 3))
+#     noise_maps[seenpix, 0] =  np.random.randn(npix) * thnoise[seenpix]
+#     noise_maps[seenpix, 1] =  np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
+#     noise_maps[seenpix, 2] =  np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
+    
+#     return noise_maps
+    
+```
+
+```{python}
+# # Arbitrary noise
+# signoise = 110   ### Gived RMS = [2.3, 3.2, 3.2] for IQU - Similar to what one gets with QUBIC Sim
+
+# # Flat Coverage
+# flatcov = np.zeros_like(cov)
+# flatcov[cov > 0] = 1
+
+# flatnoise  = create_noise_maps(flatcov, signoise)
+# qubicnoise = create_noise_maps(cov, signoise)
+
+# print(np.std(qubicnoise[cov>(np.max(cov)/10),:],axis=0))
+
+# # No Noise
+# observed_maps_nonoise = np.zeros_like(x0)
+# observed_maps_nonoise[cov>0, :] = x0[cov>0,:]
+
+# # Flat Noise
+# observed_maps_flatnoise = observed_maps_nonoise + flatnoise
+
+# # Qubic Noise
+# observed_maps_qubicnoise = observed_maps_nonoise + qubicnoise
+
+# im = 1
+# res = 30
+# stk = ['I', 'Q', 'U']
+# rng = [200, 10, 10]
+# for istk in range(3):
+#     hp.gnomview(observed_maps_nonoise[:, istk], rot=center, min=-rng[istk], max=rng[istk], 
+#              reso=res, sub=(3,3,im), title=stk[istk]+' No Noise')
+#     hp.gnomview(observed_maps_flatnoise[:, istk], rot=center, min=-rng[istk], max=rng[istk], 
+#              reso=res, sub=(3,3,im+3), title=stk[istk]+' Flat Noise')
+#     hp.gnomview(observed_maps_qubicnoise[:, istk], rot=center, min=-rng[istk], max=rng[istk], 
+#              reso=res, sub=(3,3,im+6), title=stk[istk]+' Qubic-like Noise')
+#     im += 1
+```
+
 ### Apply Namaster
 
 ```{python}
@@ -192,7 +243,7 @@ reload(nam)
 
 # Create a Namaster object
 lmin = 20
-lmax = 2 * d['nside'] - 1
+lmax = 3 * d['nside'] - 1
 delta_ell = 30
 
 maskpix = cov > np.max(cov) * 0.1
@@ -208,17 +259,20 @@ hp.gnomview(mask_apo, rot=center, reso=20)
 print('   - No noise')
 themaps = observed_maps_nonoise.copy().T
 leff, cells_nonoise, w = Namaster.get_spectra(themaps, d, mask_apo,
-                                      purify_e=False, purify_b=True, verbose=False)
+                                              purify_e=False, purify_b=True, verbose=False,
+                                              beam_correction=Qubic_sky.instrument['beams'])
 
 print('   - Flat noise')
 themaps = observed_maps_flatnoise.copy().T
 leff, cells_flatnoise, w = Namaster.get_spectra(themaps, d, mask_apo,
-                                      purify_e=False, purify_b=True, w=w, verbose=False)
+                                                purify_e=False, purify_b=True, w=w, verbose=False,
+                                                beam_correction=Qubic_sky.instrument['beams'])
 
 print('   - Qubic noise')
 themaps = observed_maps_qubicnoise.copy().T
-leff, cells_qubicnoise, w = Namaster.get_spectra(themaps, d, mask_apo, 
-                                      purify_e=False, purify_b=True, w=w, verbose=False)
+leff, cells_qubicnoise, w = Namaster.get_spectra(themaps, d, mask_apo,
+                                                 purify_e=False, purify_b=True, w=w, verbose=False,
+                                                 beam_correction=Qubic_sky.instrument['beams'])
 
 ```
 
@@ -245,11 +299,11 @@ reload(nam)
 
 # Arbitrary noise
 signoise = 110
-nbmc = 50
+nbmc = 30
 
 # Create a Namaster object
 lmin = 20
-lmax = 2 * d['nside'] - 1
+lmax = 3 * d['nside'] - 1
 delta_ell = 50
 maskpix = cov > np.max(cov)/10
 Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
@@ -268,49 +322,80 @@ cl_noise_qubic = np.zeros((nbmc, len(ell_bins), 4))
 for imc in range(nbmc):
     print('Monte-Carlo: Iteration {} over {}'.format(imc, nbmc))
     
-    ### Prepare Input CMB Map
+    seed = np.random.randint(1,100000)
+    sky_config = {'cmb': seed}
     Qubic_sky = qss.Qubic_sky(sky_config, d)
-    x0 = np.reshape(Qubic_sky.get_simple_sky_map(),(d['nf_sub'],d['nside']**2*12,3))
-    # Now we restrict only to sub-band 0 for simplicity (others are identical)
-    x0 = x0[0,:,:]
+
+    print(' - Doing Maps')
+    observed_maps_nonoise = Qubic_sky.get_partial_sky_maps_withnoise(cov, sigma_sec=0.)
+    observed_maps_nonoise = observed_maps_nonoise[0,:,:]
     
-    ### Prepare Noise maps
-    # Flat Coverage
+    ####### Here in order to gain CPU we do not recalculate the CMB each time but only noise maps
+    ####### Using tools provided in QubicSkySim
+    ### Flat Coverage
     flatcov = np.zeros_like(cov)
     flatcov[cov > 0] = 1
-    flatnoise  = create_noise_maps(flatcov, signoise)
-    qubicnoise = create_noise_maps(cov, signoise)
-    
-    ### Observed maps
-    # No Noise
-    observed_maps_nonoise = np.zeros_like(x0)
-    observed_maps_nonoise[cov>0, :] = x0[cov>0,:]
-    # Flat Noise
+    flatnoise = Qubic_sky.create_noise_maps(sigma_sec, flatcov)
     observed_maps_flatnoise = observed_maps_nonoise + flatnoise
-    # Qubic Noise
+    ### Qubic Coverage
+    qubicnoise = Qubic_sky.create_noise_maps(sigma_sec, cov)
     observed_maps_qubicnoise = observed_maps_nonoise + qubicnoise
+
+    ### Also restrict the FWHM information
+    Qubic_sky.instrument['beams'] = Qubic_sky.instrument['beams'][0]
+    
+    
+    
+     
+#     ### Prepare Input CMB Map
+#     Qubic_sky = qss.Qubic_sky(sky_config, d)
+#     x0 = np.reshape(Qubic_sky.get_simple_sky_map(),(d['nf_sub'],d['nside']**2*12,3))
+#     # Now we restrict only to sub-band 0 for simplicity (others are identical)
+#     x0 = x0[0,:,:]
+    
+#     ### Prepare Noise maps
+#     # Flat Coverage
+#     flatcov = np.zeros_like(cov)
+#     flatcov[cov > 0] = 1
+#     flatnoise  = create_noise_maps(flatcov, signoise)
+#     qubicnoise = create_noise_maps(cov, signoise)
+    
+#     ### Observed maps
+#     # No Noise
+#     observed_maps_nonoise = np.zeros_like(x0)
+#     observed_maps_nonoise[cov>0, :] = x0[cov>0,:]
+#     # Flat Noise
+#     observed_maps_flatnoise = observed_maps_nonoise + flatnoise
+#     # Qubic Noise
+#     observed_maps_qubicnoise = observed_maps_nonoise + qubicnoise
     
     ### Compute Spectra:
     # No Noise
-    print(' - Noiseless maps')
+    print(' - Doing Cls')
+    print('   - Noiseless maps')
     leff, cl_nonoise[imc, :,:], w = Namaster.get_spectra(observed_maps_nonoise.T, d, mask_apo, 
-                                                         purify_e=False, purify_b=True, w=w, verbose=False)
+                                                         purify_e=False, purify_b=True, w=w, verbose=False,
+                                                 beam_correction=Qubic_sky.instrument['beams'])
     # Flat coverage
-    print(' - CMB + Flat Noise maps')
+    print('   - CMB + Flat Noise maps')
     leff, cl_flat[imc, :,:], w = Namaster.get_spectra(observed_maps_flatnoise.T, d, mask_apo, 
-                                                      purify_e=False, purify_b=True, w=w, verbose=False)
+                                                      purify_e=False, purify_b=True, w=w, verbose=False,
+                                                 beam_correction=Qubic_sky.instrument['beams'])
     # QUBIC coverage
-    print(' - CMB + QUBIC Noise maps')
+    print('   - CMB + QUBIC Noise maps')
     leff, cl_qubic[imc, :,:], w = Namaster.get_spectra(observed_maps_qubicnoise.T, d, mask_apo, 
-                                                       purify_e=False, purify_b=True, w=w, verbose=False)
+                                                       purify_e=False, purify_b=True, w=w, verbose=False,
+                                                 beam_correction=Qubic_sky.instrument['beams'])
     # Noise Only - Flat
-    print(' - Flat Noise maps')
+    print('   - Flat Noise maps')
     leff, cl_noise_flat[imc, :,:], w = Namaster.get_spectra(flatnoise.T, d, mask_apo, 
-                                                            purify_e=False, purify_b=True, w=w, verbose=False)
+                                                            purify_e=False, purify_b=True, w=w, verbose=False,
+                                                 beam_correction=Qubic_sky.instrument['beams'])
     # QUBIC coverage
-    print(' - QUBIC Noise maps')
+    print('   - QUBIC Noise maps')
     leff, cl_noise_qubic[imc, :,:], w = Namaster.get_spectra(qubicnoise.T, d, mask_apo, 
-                                                             purify_e=False, purify_b=True, w=w, verbose=False)
+                                                             purify_e=False, purify_b=True, w=w, verbose=False,
+                                                 beam_correction=Qubic_sky.instrument['beams'])
     
 
     

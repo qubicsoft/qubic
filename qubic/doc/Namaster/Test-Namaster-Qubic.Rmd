@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -102,17 +102,17 @@ sigma_sec = 110.
 ### Noiseless
 print('Doing Noiseless')
 observed_maps_nonoise = Qubic_sky.get_partial_sky_maps_withnoise(cov, sigma_sec=0.)
-observed_maps_nonoise = observed_maps_nonoise[0,:,:]
+observed_maps_nonoise = observed_maps_nonoise[0, :, :]
 ### Flat Coverage
 print('Doing Flat Coverage')
 flatcov = np.zeros_like(cov)
 flatcov[cov > 0] = 1
 observed_maps_flatnoise = Qubic_sky.get_partial_sky_maps_withnoise(flatcov, sigma_sec=sigma_sec)
-observed_maps_flatnoise = observed_maps_flatnoise[0,:,:]
+observed_maps_flatnoise = observed_maps_flatnoise[0, :, :]
 ### Qubic Coverage
-print('Doing QUBIC COverge')
+print('Doing QUBIC Coverage')
 observed_maps_qubicnoise = Qubic_sky.get_partial_sky_maps_withnoise(cov, sigma_sec=sigma_sec)
-observed_maps_qubicnoise = observed_maps_qubicnoise[0,:,:]
+observed_maps_qubicnoise = observed_maps_qubicnoise[0, :, :]
 
 ### Also restrict the FWHM information
 Qubic_sky.instrument['beams'] = Qubic_sky.instrument['beams'][0]
@@ -131,14 +131,6 @@ for istk in range(3):
     hp.gnomview(observed_maps_qubicnoise[:, istk], rot=center, min=-rng[istk], max=rng[istk], 
              reso=res, sub=(3,3,im+6), title=stk[istk]+' Qubic-like Noise')
     im += 1
-```
-
-```{python}
-
-```
-
-```{python}
-
 ```
 
 ```{python}

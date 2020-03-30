@@ -130,19 +130,20 @@ rng[1:] = np.max(rng[1:])
 
 figure()
 rc('figure', figsize=(10, 8))
-hp.mollview(input_maps[0,:], title="I input map used", min=-rng[0], max=rng[0], sub=(1,3,1))
-hp.mollview(input_maps[1,:], title="Q input map used", min=-rng[1], max=rng[1], sub=(1,3,2))
-hp.mollview(input_maps[2,:], title="U input map used", min=-rng[2], max=rng[2], sub=(1,3,3))
+hp.mollview(input_maps[0, :], title="I input map used", min=-rng[0], max=rng[0], sub=(1,3,1))
+hp.mollview(input_maps[1, :], title="Q input map used", min=-rng[1], max=rng[1], sub=(1,3,2))
+hp.mollview(input_maps[2, :], title="U input map used", min=-rng[2], max=rng[2], sub=(1,3,3))
 
 ### Input Dls
 input_Dl = Qubic_sky.input_cmb_spectra
 if input_Dl is not None:
     input_ell = np.arange(np.shape(input_Dl)[0])
+    print('input_ell shape = ', input_ell.shape)
     figure()
     order = ['TT', 'EE', 'BB', 'TE']
     for i in range(4):
-        subplot(2,2,i+1)
-        plot(input_ell, input_Dl[:,i], color='k')
+        subplot(2, 2, i+1)
+        plot(input_ell, input_Dl[:, i], color='k')
         title(order[i])
         xlabel('$\\ell$')
         ylabel('$D_\\ell$')
@@ -156,7 +157,7 @@ Now we have the maps with known spectra so we can retrieve spectra with Namaster
 ```{python}
 # Create a Namaster object
 lmin = 20
-lmax = 3 * d['nside'] - 1
+lmax = 2 * d['nside'] + 200
 delta_ell = 16
 
 Namaster = nam.Namaster(seenpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
@@ -202,8 +203,8 @@ print('maps shape:', maps.shape)
 leff, cells, w = Namaster.get_spectra(maps, d, mask_apo, 
                                       purify_e=True, 
                                       purify_b=False, 
-                                      beam_correction=False,
-                                      pixwin_correction=False)
+                                      beam_correction=None,
+                                      pixwin_correction=None)
 ```
 
 ```{python}
@@ -232,7 +233,7 @@ smooth_maps = hp.sphtfunc.smoothing(maps, fwhm=np.deg2rad(d['synthbeam_peak150_f
 leff_nobeam, cells_nobeam, w_nobeam = Namaster.get_spectra(smooth_maps, d, mask_apo, 
                                                            purify_e=True, 
                                                            purify_b=False, 
-                                                           beam_correction=False)
+                                                           beam_correction=None)
 leff_beam, cells_beam, w_beam = Namaster.get_spectra(smooth_maps, d, mask_apo, 
                                                      purify_e=True, 
                                                      purify_b=False, 
@@ -280,14 +281,14 @@ for i in range(3):
 leff_pw, cells_pw, w_pw = Namaster.get_spectra(pw_seenmaps, d, mask_apo, 
                                                            purify_e=True, 
                                                            purify_b=False, 
-                                                           beam_correction=False,
+                                                           beam_correction=None,
                                                            pixwin_correction=True)
 
 leff_nopw, cells_nopw, w_nopw = Namaster.get_spectra(pw_seenmaps, d, mask_apo, 
                                                            purify_e=True, 
                                                            purify_b=False, 
-                                                           beam_correction=False,
-                                                           pixwin_correction=False)
+                                                           beam_correction=None,
+                                                           pixwin_correction=None)
 ```
 
 ```{python}
@@ -316,7 +317,7 @@ nsim_cells = []
 for sim in range(nsim):
     Qubic_sky, x0, maps_observed = make_maps(d, seenpix, noise_level=0.)
     maps = maps_observed[0].T
-    leff, cells, w = Namaster.get_spectra(maps, d, mask_apo, purify_e=True, purify_b=False, beam_correction=False)
+    leff, cells, w = Namaster.get_spectra(maps, d, mask_apo, purify_e=True, purify_b=False, beam_correction=None)
     nsim_cells.append(cells)
 nsim_cells = np.array(nsim_cells)
 print(nsim_cells.shape)

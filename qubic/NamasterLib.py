@@ -34,7 +34,12 @@ class Namaster(object):
         -------
         The binned monopoles and the NmtBin object
         """
-        b = nmt.NmtBin(d['nside'], bpws=self.bpws, ells=self.ells, weights=self.weights, is_Dell=True)
+        b = nmt.NmtBin(d['nside'],
+                       bpws=self.bpws,
+                       ells=self.ells,
+                       weights=self.weights,
+                       lmax=self.lmax,
+                       is_Dell=True)
         ell_binned = b.get_effective_ells()
 
         return ell_binned, b
@@ -98,7 +103,9 @@ class Namaster(object):
             Note that generally it's not a good idea to purify both,
             since you'll lose sensitivity on E
         beam_correction: bool, optional
-            If True, a correction by the Qubic beam is applied
+            None by default.
+            If True, a correction by the Qubic beam at 150GHz is applied.
+            You can also give the beam FWHM you want to correct for.
         Returns
         -------
         f0, f2: spin-0 and spin-2 Namaster fields.
@@ -107,9 +114,11 @@ class Namaster(object):
         mp_t, mp_q, mp_u = map
         if beam_correction is not None:
             if beam_correction == True:
-                beam = hp.gauss_beam(np.deg2rad(d['synthbeam_peak150_fwhm']), self.lmax)
+                beam = hp.gauss_beam(np.deg2rad(d['synthbeam_peak150_fwhm']),
+                                     lmax = 3 * d['nside'] - 1)
             else:
-                beam = hp.gauss_beam(np.deg2rad(beam_correction), self.lmax)
+                beam = hp.gauss_beam(np.deg2rad(beam_correction),
+                                     lmax = 3 * d['nside'] - 1)
         else:
             beam = None
 
@@ -143,7 +152,7 @@ class Namaster(object):
         return cl_decoupled
 
     def get_spectra(self, map, d, mask_apo, purify_e=False, purify_b=True, w=None,
-                    beam_correction=False, pixwin_correction=False, verbose=True):
+                    beam_correction=None, pixwin_correction=None, verbose=True):
         """
         Get spectra from IQU maps.
         Parameters
@@ -162,10 +171,13 @@ class Namaster(object):
         w: list with Namaster workspace [w00, w22, w02]
             If None the workspaces will be created.
         beam_correction: bool, optional
-            If True, a correction by the Qubic beam is applied.
+            None by default.
+            If True, a correction by the Qubic beam at 150GHz is applied.
+            You can also give the beam FWHM you want to correct for.
         pixwin_correction: bool, optional
-            If True, a correction for the pixel integration function is applied.
-
+            If not None, a correction for the pixel integration function is applied.
+        verbose: bool, optional
+            True by default.
         Returns
         -------
         ell_binned
@@ -207,7 +219,7 @@ class Namaster(object):
         spectra = np.array([c00[0], c22[0], c22[3], c02[0]]).T
         if verbose: print('Getting TT, EE, BB, TE spectra in that order.')
 
-        if pixwin_correction:
+        if pixwin_correction is not None:
             pwb = self.get_pixwin_correction(d)
             for i in range(4):
                 spectra[:, i] /= (pwb[1] ** 2)
@@ -216,7 +228,7 @@ class Namaster(object):
 
     def get_pixwin_correction(self, d):
         nside = d['nside']
-        pw = hp.pixwin(nside, pol=True)
+        pw = hp.pixwin(nside, pol=True, lmax=self.lmax)
         pw = [pw[0][: self.lmax + 1], pw[1][: self.lmax + 1]]
 
         ell_binned, b = self.get_binning(d)

@@ -74,13 +74,14 @@ class sky(object):
                         self.input_cmb_maps = mymaps
                         self.input_cmb_spectra = totDL
                     else:
-                        raise ValueError('Bad Dictionary given for PySM in the CMB part - see QubicSkySim.py for details')
+                        raise ValueError(
+                            'Bad Dictionary given for PySM in the CMB part - see QubicSkySim.py for details')
                 else:
-                    # the CMB part is not defined via a dictionary but only by the seed for synfast
-                    # No map nor CAMB spectra was given, so we recompute them
-                    # The assumed cosmology is the default one given in the get_CAMB_Dl() function below
+                    # The CMB part is not defined via a dictionary but only by the seed for synfast
+                    # No map nor CAMB spectra was given, so we recompute them.
+                    # The assumed cosmology is the default one given in the get_CAMB_Dl() function below.
                     if keyword is not None: np.random.seed(keyword)
-                    ell, totDL, unlensedCL = get_camb_Dl(lmax=self.lmax)
+                    ell, totDL, unlensedCL = get_camb_Dl(lmax=3 * self.nside)
                     mycls = Dl2Cl_without_monopole(ell, totDL)
                     mymaps = hp.synfast(mycls.T, self.nside, verbose=False, new=True)
                     self.input_cmb_maps = mymaps
@@ -95,7 +96,8 @@ class sky(object):
                 # we add the other predefined components
                 preset_strings.append(skyconfig[k])
         self.sky = pysm.Sky(nside=self.nside, preset_strings=preset_strings)
-        if iscmb: self.sky.add_component(cmbmap)
+        if iscmb:
+            self.sky.add_component(cmbmap)
 
     def get_simple_sky_map(self):
         """
@@ -112,11 +114,11 @@ class sky(object):
         sky = np.zeros((Nf, npix, 3))
         for i in range(Nf):
             themaps_iqu = self.sky.get_emission([nus_edge[i], nus_edge[i + 1]] * u.GHz)
-            #print('Integrating from: {} to {} and converting to muKCMB at {}'.format(nus_edge[i], nus_edge[i + 1],nus_in[i] ))
+            # print('Integrating from: {} to {} and converting to muKCMB at {}'.format(nus_edge[i], nus_edge[i + 1],nus_in[i] ))
             sky[i, :, :] = np.array(themaps_iqu.to(u.uK_CMB, equivalencies=u.cmb_equivalencies(nus_in[i] * u.GHz))).T
         return sky
 
-    #### This is not supported yet....
+    # ### This is not supported yet....
     # def read_sky_map(self):
     #     """
     #     Returns the maps saved in the `output_directory` containing the `output_prefix`.
@@ -143,8 +145,8 @@ class sky(object):
     #     return sky_map
 
 
-#### This part has been commented as it is not yet compatible with PySM3
-#### it was written by F. Incardona using PySM2
+# ### This part has been commented as it is not yet compatible with PySM3
+# ### it was written by F. Incardona using PySM2
 # class Planck_sky(sky):
 #     """
 #     Define a sky object as seen by Planck.
@@ -242,12 +244,21 @@ class Qubic_sky(sky):
         sky.__init__(self, skyconfig, d, instrument, output_directory, output_prefix)
 
     def get_fullsky_convolved_maps(self, FWHMdeg=None, verbose=None):
-        '''
+        """
         This returns full sky maps at each subfrequency convolved by the beam of  the  isntrument at
-        each frequency or with another beam if FWHMdeg is provided
-        when FWHMdeg is 0, the maps are not convolved
-        '''
- 
+        each frequency or with another beam if FWHMdeg is provided.
+        when FWHMdeg is 0, the maps are not convolved.
+
+        Parameters
+        ----------
+        FWHMdeg
+        verbose
+
+        Returns
+        -------
+
+        """
+
         # First get the full sky maps
         fullmaps = self.get_simple_sky_map()
         Nf = self.dictionary['nf_sub']
@@ -260,91 +271,129 @@ class Qubic_sky(sky):
             fwhms = self.dictionary['synthbeam_peak150_fwhm'] * 150. / self.qubic_central_nus
         for i in range(Nf):
             if fwhms[i] != 0:
-                fullmaps[i,:,:] = hp.sphtfunc.smoothing(fullmaps[i,:,:].T, fwhm=np.deg2rad(fwhms[i]), verbose=verbose).T
+                fullmaps[i, :, :] = hp.sphtfunc.smoothing(fullmaps[i, :, :].T, fwhm=np.deg2rad(fwhms[i]),
+                                                          verbose=verbose).T
             self.instrument['beams'][i] = fwhms[i]
 
         return fullmaps
 
-
     def get_partial_sky_maps_withnoise(self, coverage, sigma_sec, Nyears=3, verbose=False, FWHMdeg=None, seed=None):
-        '''
+        """
         This returns maps in the same way as with get_simple_sky_map but cut according to the coverage
         and with noise added according to this coverage and the RMS in muK.sqrt(sec) given by sigma_sec
-        The default integration time is three years but can be modified with optional variable Nyears 
+        The default integration time is three years but can be modified with optional variable Nyears
         Note that the maps are convolved with the instrument beam by default, or with FWHMdeg (can be an array)
         if provided.
-        If seed is provided, it will be used for the noise realization. If not it will be a new realization at 
+        If seed is provided, it will be used for the noise realization. If not it will be a new realization at
         each call.
-        '''
+        Parameters
+        ----------
+        coverage
+        sigma_sec
+        Nyears
+        verbose
+        FWHMdeg
+        seed
+
+        Returns
+        -------
+
+        """
 
         # First get the convolved maps
         maps = self.get_fullsky_convolved_maps(FWHMdeg=FWHMdeg, verbose=verbose)
 
         # Restrict maps to observed pixels
         seenpix = coverage > 0
-        maps[:,~seenpix,:] = 0
+        maps[:, ~seenpix, :] = 0
 
         # Now pure noise maps
         self.noisemaps = np.zeros_like(maps)
         for i in range(self.dictionary['nf_sub']):
-            self.noisemaps[i,:,:] += self.create_noise_maps(sigma_sec, coverage, 
-                                                            Nyears=Nyears, verbose=verbose, seed=seed)
+            self.noisemaps[i, :, :] += self.create_noise_maps(sigma_sec, coverage,
+                                                              Nyears=Nyears, verbose=verbose, seed=seed)
 
-        return maps+self.noisemaps
-
+        return maps + self.noisemaps
 
     def create_noise_maps(self, sigma_sec, coverage, Nyears=3, verbose=False, seed=None):
-        '''
+        """
         This returns a realization of noise maps for I, Q and U with no correlation between them, according to a
         noise RMS map built according to the coverage specified as an attribute to the class
-        '''
+        Parameters
+        ----------
+        sigma_sec
+        coverage
+        Nyears
+        verbose
+        seed
+
+        Returns
+        -------
+
+        """
         # The theoretical noise in I for the coverage
         thnoise = self.theoretical_noise_maps(sigma_sec, coverage, Nyears=Nyears, verbose=verbose)
         seenpix = coverage > 0
         npix = seenpix.sum()
         noise_maps = np.zeros((len(coverage), 3))
-        if seed is not None: np.random.seed(seed)
-        noise_maps[seenpix, 0] =  np.random.randn(npix) * thnoise[seenpix]
-        noise_maps[seenpix, 1] =  np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
-        noise_maps[seenpix, 2] =  np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
+        if seed is not None:
+            np.random.seed(seed)
+        noise_maps[seenpix, 0] = np.random.randn(npix) * thnoise[seenpix]
+        noise_maps[seenpix, 1] = np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
+        noise_maps[seenpix, 2] = np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
         return noise_maps
 
-
-
     def theoretical_noise_maps(self, sigma_sec, coverage, Nyears=3, verbose=False):
-        '''
+        """
         This returns a map of the RMS noise (not an actual realization, just the expected RMS - No covariance)
-        '''
-        ####### Noise normalization
+
+        Parameters
+        ----------
+        sigma_sec
+        coverage
+        Nyears
+        verbose
+
+        Returns
+        -------
+
+        """
+        # ###### Noise normalization
         # We assume we have integrated for a time Ttot in seconds with a sigma per root sec sigma_sec
-        Ttot = Nyears * 365 * 24 * 3600 # in seconds
-        if verbose: print('Total time is {} seconds'.format(Ttot))
+        Ttot = Nyears * 365 * 24 * 3600  # in seconds
+        if verbose:
+            print('Total time is {} seconds'.format(Ttot))
         # Oberved pixels
         thepix = coverage > 0
         # Normalized coverage (sum=1)
-        covnorm = coverage/np.sum(coverage)    
-        if verbose: print('Normalized coverage sum: {}'.format(np.sum(covnorm)))
-        
+        covnorm = coverage / np.sum(coverage)
+        if verbose:
+            print('Normalized coverage sum: {}'.format(np.sum(covnorm)))
+
         # Time per pixel
         Tpix = np.zeros_like(covnorm)
         Tpix[thepix] = Ttot * covnorm[thepix]
-        if verbose: print('Sum Tpix: {} s  ; Ttot = {} s'.format(np.sum(Tpix), Ttot))
+        if verbose:
+            print('Sum Tpix: {} s  ; Ttot = {} s'.format(np.sum(Tpix), Ttot))
 
         # RMS per pixel
         Sigpix = np.zeros_like(covnorm)
         Sigpix[thepix] = sigma_sec / np.sqrt(Tpix[thepix])
-        if verbose: print('Total noise (with no averages in pixels): {}'.format(np.sum((Sigpix*Tpix)**2)))
+        if verbose:
+            print('Total noise (with no averages in pixels): {}'.format(np.sum((Sigpix * Tpix) ** 2)))
         return Sigpix
 
 
-
-
 def get_camb_Dl(lmax=2500, H0=67.5, ombh2=0.022, omch2=0.122, mnu=0.06, omk=0, tau=0.06, As=2e-9, ns=0.965, r=0.):
-    #### Inspired from: https://camb.readthedocs.io/en/latest/CAMBdemo.html
-    # NB: this returns Dl = l(l+1)Cl/2pi
-    # Python CL arrays are all zero based (starting at L=0), Note L=0,1 entries will be zero by default.
-    # The different DL are always in the order TT, EE, BB, TE (with BB=0 for unlensed scalar results).
-    ####
+    """
+    Inspired from: https://camb.readthedocs.io/en/latest/CAMBdemo.html
+    NB: this returns Dl = l(l+1)Cl/2pi
+    Python CL arrays are all zero based (starting at l=0), Note l=0,1 entries will be zero by default.
+    The different DL are always in the order TT, EE, BB, TE (with BB=0 for unlensed scalar results).
+
+
+    """
+
     # Set up a new set of parameters for CAMB
     pars = camb.CAMBparams()
     # This function sets up CosmoMC-like settings, with one massive neutrino and helium set using BBN consistency

@@ -19,7 +19,7 @@ class sky(object):
     Define a sky object as seen by an instrument.
     """
 
-    def __init__(self, skyconfig, d, instrument, out_dir, out_prefix):
+    def __init__(self, skyconfig, d, instrument, out_dir, out_prefix, lmax=None):
         """
         Parameters:
         skyconfig  : a skyconfig dictionary to pass to (as expected by) `PySM`
@@ -39,6 +39,11 @@ class sky(object):
         self.output_prefix = out_prefix
         self.input_cmb_maps = None
         self.input_cmb_spectra = None
+        if lmax is None:
+            self.lmax = 3*d['nside']
+        else:
+            self.lmax = lmax
+
         iscmb = False
         preset_strings = []
         for k in skyconfig.keys():
@@ -75,7 +80,7 @@ class sky(object):
                     # No map nor CAMB spectra was given, so we recompute them
                     # The assumed cosmology is the default one given in the get_CAMB_Dl() function below
                     if keyword is not None: np.random.seed(keyword)
-                    ell, totDL, unlensedCL = get_camb_Dl(lmax=3 * self.nside)
+                    ell, totDL, unlensedCL = get_camb_Dl(lmax=self.lmax)
                     mycls = Dl2Cl_without_monopole(ell, totDL)
                     mymaps = hp.synfast(mycls.T, self.nside, verbose=False, new=True)
                     self.input_cmb_maps = mymaps

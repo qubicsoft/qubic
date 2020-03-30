@@ -81,7 +81,7 @@ class sky(object):
                     # No map nor CAMB spectra was given, so we recompute them.
                     # The assumed cosmology is the default one given in the get_CAMB_Dl() function below.
                     if keyword is not None: np.random.seed(keyword)
-                    ell, totDL, unlensedCL = get_camb_Dl(lmax=3 * self.nside)
+                    ell, totDL, unlensedCL = get_camb_Dl(lmax=self.lmax)
                     mycls = Dl2Cl_without_monopole(ell, totDL)
                     mymaps = hp.synfast(mycls.T, self.nside, verbose=False, new=True)
                     self.input_cmb_maps = mymaps

@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.0
+      jupytext_version: 1.4.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -133,99 +133,6 @@ for istk in range(3):
     im += 1
 ```
 
-```{python}
-# ## Make a sky using PYSM: It will have the expected QUBIC beam, the coverage and noise according to this coverage
-# seed = None
-# sky_config = {'cmb': seed}
-# Qubic_sky = qss.Qubic_sky(sky_config, d)
-# x0 = Qubic_sky.get_simple_sky_map()
-# # Now we restrict only to sub-band 0 for simplicity (others are identical)
-# x0 = x0[0,:,:]
-
-# hp.mollview(x0[:,0], sub=(1,3,1))
-# hp.mollview(x0[:,1], sub=(1,3,2))
-# hp.mollview(x0[:,2], sub=(1,3,3))
-```
-
-```{python}
-# def theoretical_noise_map(cov, sigma_sec, Nyears=3, verbose=False):
-#     '''
-#     This returns a map of the RMS noise (not an actual realization, just the expected RMS)
-#     '''
-#     ####### Noise normalization
-#     # We assume we have integrated for a time Ttot in seconds with a sigma per root sec sigma_sec
-#     Ttot = Nyears * 365 * 24 * 3600 # in seconds
-#     if verbose: print('Total time is {} seconds'.format(Ttot))
-#     # Oberved pixels
-#     thepix = cov > 0
-#     # Normalized coverage (sum=1)
-#     covnorm = cov/np.sum(cov)    
-#     if verbose: print('Normalized coverage sum: {}'.format(np.sum(covnorm)))
-    
-#     # Time per pixel
-#     Tpix = np.zeros_like(covnorm)
-#     Tpix[thepix] = Ttot * covnorm[thepix]
-#     if verbose: print('Sum Tpix: {} s  ; Ttot = {} s'.format(np.sum(Tpix), Ttot))
-
-#     # RMS per pixel
-#     Sigpix = np.zeros_like(covnorm)
-#     Sigpix[thepix] = sigma_sec / np.sqrt(Tpix[thepix])
-#     if verbose: print('Total noise (with no averages in pixels): {}'.format(np.sum((Sigpix*Tpix)**2)))
-#     return Sigpix
-
-
-# def create_noise_maps(cov, sigma_sec, Nyears=3, verbose=False):
-#     # The theoretical noise in I for the coverage
-#     thnoise = theoretical_noise_map(cov, sigma_sec, Nyears=Nyears, verbose=verbose)
-    
-#     seenpix = cov > 0
-#     npix = seenpix.sum()
-#     noise_maps = np.zeros((len(cov), 3))
-#     noise_maps[seenpix, 0] =  np.random.randn(npix) * thnoise[seenpix]
-#     noise_maps[seenpix, 1] =  np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
-#     noise_maps[seenpix, 2] =  np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
-    
-#     return noise_maps
-    
-```
-
-```{python}
-# # Arbitrary noise
-# signoise = 110   ### Gived RMS = [2.3, 3.2, 3.2] for IQU - Similar to what one gets with QUBIC Sim
-
-# # Flat Coverage
-# flatcov = np.zeros_like(cov)
-# flatcov[cov > 0] = 1
-
-# flatnoise  = create_noise_maps(flatcov, signoise)
-# qubicnoise = create_noise_maps(cov, signoise)
-
-# print(np.std(qubicnoise[cov>(np.max(cov)/10),:],axis=0))
-
-# # No Noise
-# observed_maps_nonoise = np.zeros_like(x0)
-# observed_maps_nonoise[cov>0, :] = x0[cov>0,:]
-
-# # Flat Noise
-# observed_maps_flatnoise = observed_maps_nonoise + flatnoise
-
-# # Qubic Noise
-# observed_maps_qubicnoise = observed_maps_nonoise + qubicnoise
-
-# im = 1
-# res = 30
-# stk = ['I', 'Q', 'U']
-# rng = [200, 10, 10]
-# for istk in range(3):
-#     hp.gnomview(observed_maps_nonoise[:, istk], rot=center, min=-rng[istk], max=rng[istk], 
-#              reso=res, sub=(3,3,im), title=stk[istk]+' No Noise')
-#     hp.gnomview(observed_maps_flatnoise[:, istk], rot=center, min=-rng[istk], max=rng[istk], 
-#              reso=res, sub=(3,3,im+3), title=stk[istk]+' Flat Noise')
-#     hp.gnomview(observed_maps_qubicnoise[:, istk], rot=center, min=-rng[istk], max=rng[istk], 
-#              reso=res, sub=(3,3,im+6), title=stk[istk]+' Qubic-like Noise')
-#     im += 1
-```
-
 ### Apply Namaster
 
 ```{python}
@@ -274,7 +181,7 @@ lth = np.arange(len(input_cell[:,0]))
 
 for i in range(3):
     subplot(2,2,i+1)
-    xlim(0,2*d['nside'])
+    xlim(0,3*d['nside'])
     plot(lth, input_cell[:,i])
     plot(leff, cells_nonoise[:,i],'r', label='No Noise')
     plot(leff+3, cells_flatnoise[:,i],'g', label='Flat Noise')
@@ -291,7 +198,7 @@ reload(nam)
 
 # Arbitrary noise
 signoise = 110
-nbmc = 30
+nbmc = 10
 
 # Create a Namaster object
 lmin = 20
@@ -335,31 +242,6 @@ for imc in range(nbmc):
 
     ### Also restrict the FWHM information
     Qubic_sky.instrument['beams'] = Qubic_sky.instrument['beams'][0]
-    
-    
-    
-     
-#     ### Prepare Input CMB Map
-#     Qubic_sky = qss.Qubic_sky(sky_config, d)
-#     x0 = np.reshape(Qubic_sky.get_simple_sky_map(),(d['nf_sub'],d['nside']**2*12,3))
-#     # Now we restrict only to sub-band 0 for simplicity (others are identical)
-#     x0 = x0[0,:,:]
-    
-#     ### Prepare Noise maps
-#     # Flat Coverage
-#     flatcov = np.zeros_like(cov)
-#     flatcov[cov > 0] = 1
-#     flatnoise  = create_noise_maps(flatcov, signoise)
-#     qubicnoise = create_noise_maps(cov, signoise)
-    
-#     ### Observed maps
-#     # No Noise
-#     observed_maps_nonoise = np.zeros_like(x0)
-#     observed_maps_nonoise[cov>0, :] = x0[cov>0,:]
-#     # Flat Noise
-#     observed_maps_flatnoise = observed_maps_nonoise + flatnoise
-#     # Qubic Noise
-#     observed_maps_qubicnoise = observed_maps_nonoise + qubicnoise
     
     ### Compute Spectra:
     # No Noise
@@ -416,7 +298,7 @@ plnames = ['TT', 'EE', 'BB']
 
 for i in range(3):
     subplot(3,3,i+1)
-    xlim(0,2*d['nside'])
+    xlim(0,3*d['nside'])
     ylim(0,np.max(input_cell[:,i])*1.5)
     plot(lth, input_cell[:,i], 'k')
     errorbar(leff, mcl_nonoise[:,i], yerr=scl_nonoise[:,i], fmt='ro', label='No Noise')
@@ -425,7 +307,7 @@ for i in range(3):
 
 for i in range(3):
     subplot(3,3,3+i+1)
-    xlim(0,2*d['nside'])
+    xlim(0,3*d['nside'])
     ylim(0,np.max(input_cell[:,i])*1.5)
     plot(lth, input_cell[:,i], 'k')
     errorbar(leff, mcl_flat[:,i], yerr=scl_flat[:,i], fmt='go', label='CMB + Noise Flat: Coverage')
@@ -437,7 +319,7 @@ for i in range(3):
 
 for i in range(3):
     subplot(3,3,6+i+1)
-    xlim(0,2*d['nside'])
+    xlim(0,3*d['nside'])
     ylim(0,np.max(input_cell[:,i])*1.5)
     plot(lth, input_cell[:,i], 'k')
     errorbar(leff, mcl_flat[:,i]-mcl_noise_flat[:,i], yerr=scl_flat[:,i], fmt='go', label='Noise debiased: Flat Coverage')
@@ -446,6 +328,14 @@ for i in range(3):
     legend(fontsize=9)
 
 tight_layout()
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 ```{python}

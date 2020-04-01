@@ -151,7 +151,7 @@ class Namaster(object):
         cl_decoupled = workspace.decouple_cell(cl_coupled)
         return cl_decoupled
 
-    def get_spectra(self, map, d, mask_apo, purify_e=False, purify_b=True, w=None,
+    def get_spectra(self, map, d, mask_apo, map2=None, purify_e=False, purify_b=True, w=None,
                     beam_correction=None, pixwin_correction=None, verbose=True):
         """
         Get spectra from IQU maps.
@@ -162,6 +162,8 @@ class Namaster(object):
         d: Qubic dictionary
         mask_apo: array
             Apodized mask.
+        map2: array
+            IQU maps, shape (3, #pixels) for Cross-Spectra
         purify_e: bool, optional
             False by default.
         purify_b: bool, optional
@@ -194,16 +196,27 @@ class Namaster(object):
                                  purify_b=purify_b,
                                  beam_correction=beam_correction)
 
+        # Cross-Spectra case
+        if map2 is not None:
+            f0bis, f2bis = self.get_fields(map2, d, mask_apo,
+                                            purify_e=purify_e,
+                                            purify_b=purify_b,
+                                            beam_correction=beam_correction)
+        else:
+            f0bis = f0
+            f2bis = f2
+
+
         # Make workspaces
         if w is None:
             w00 = nmt.NmtWorkspace()
-            w00.compute_coupling_matrix(f0, f0, b)
+            w00.compute_coupling_matrix(f0, f0bis, b)
 
             w22 = nmt.NmtWorkspace()
-            w22.compute_coupling_matrix(f2, f2, b)
+            w22.compute_coupling_matrix(f2, f2bis, b)
 
             w02 = nmt.NmtWorkspace()
-            w02.compute_coupling_matrix(f0, f2, b)
+            w02.compute_coupling_matrix(f0, f2bis, b)
             w = [w00, w22, w02]
         else:
             w00 = w[0]
@@ -211,9 +224,9 @@ class Namaster(object):
             w02 = w[2]
 
         # Get Cls
-        c00 = self.compute_master(f0, f0, w00)
-        c22 = self.compute_master(f2, f2, w22)
-        c02 = self.compute_master(f0, f2, w02)
+        c00 = self.compute_master(f0, f0bis, w00)
+        c22 = self.compute_master(f2, f2bis, w22)
+        c02 = self.compute_master(f0, f2bis, w02)
 
         # Put the 4 spectra in one array
         spectra = np.array([c00[0], c22[0], c22[3], c02[0]]).T
@@ -241,7 +254,7 @@ class Namaster(object):
         weights = 1. / self.delta_ell * np.ones_like(ells)  # Array of weights
         bpws = -1 + np.zeros_like(ells)  # Array of bandpower indices
         i = 0
-        print(self.lmax - self.delta_ell)
+        #print(self.lmax - self.delta_ell)
         while self.delta_ell * (i + 1) < (self.lmax - self.delta_ell):
             bpws[self.delta_ell * i: self.delta_ell * (i + 1)] = i
             i += 1

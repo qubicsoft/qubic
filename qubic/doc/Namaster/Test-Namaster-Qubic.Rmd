@@ -142,8 +142,8 @@ reload(nam)
 
 # Create a Namaster object
 lmin = 20
-lmax = 3 * d['nside'] - 1
-delta_ell = 30
+lmax = 2 * d['nside'] - 1
+delta_ell = 25
 
 maskpix = cov > np.max(cov) * 0.1
 
@@ -181,7 +181,7 @@ lth = np.arange(len(input_cell[:,0]))
 
 for i in range(3):
     subplot(2,2,i+1)
-    xlim(0,3*d['nside'])
+    xlim(0,2*d['nside'])
     plot(lth, input_cell[:,i])
     plot(leff, cells_nonoise[:,i],'r', label='No Noise')
     plot(leff+3, cells_flatnoise[:,i],'g', label='Flat Noise')
@@ -202,8 +202,8 @@ nbmc = 10
 
 # Create a Namaster object
 lmin = 20
-lmax = 3 * d['nside'] - 1
-delta_ell = 50
+lmax = 2 * d['nside'] - 1
+delta_ell = 25
 maskpix = cov > np.max(cov)/10
 Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
 ell_bins, b = Namaster.get_binning(d)
@@ -298,7 +298,7 @@ plnames = ['TT', 'EE', 'BB']
 
 for i in range(3):
     subplot(3,3,i+1)
-    xlim(0,3*d['nside'])
+    xlim(0,2*d['nside'])
     ylim(0,np.max(input_cell[:,i])*1.5)
     plot(lth, input_cell[:,i], 'k')
     errorbar(leff, mcl_nonoise[:,i], yerr=scl_nonoise[:,i], fmt='ro', label='No Noise')
@@ -307,7 +307,7 @@ for i in range(3):
 
 for i in range(3):
     subplot(3,3,3+i+1)
-    xlim(0,3*d['nside'])
+    xlim(0,2*d['nside'])
     ylim(0,np.max(input_cell[:,i])*1.5)
     plot(lth, input_cell[:,i], 'k')
     errorbar(leff, mcl_flat[:,i], yerr=scl_flat[:,i], fmt='go', label='CMB + Noise Flat: Coverage')
@@ -319,7 +319,7 @@ for i in range(3):
 
 for i in range(3):
     subplot(3,3,6+i+1)
-    xlim(0,3*d['nside'])
+    xlim(0,2*d['nside'])
     ylim(0,np.max(input_cell[:,i])*1.5)
     plot(lth, input_cell[:,i], 'k')
     errorbar(leff, mcl_flat[:,i]-mcl_noise_flat[:,i], yerr=scl_flat[:,i], fmt='go', label='Noise debiased: Flat Coverage')

@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -109,21 +109,22 @@ seed = None
 nside = 128
 
 ### CAMB call
-ell, totCL, unlensedCL = qss.get_camb_Dl(r=0.1, lmax=3*nside)
+ell, totDl, unlensedDl = qss.get_camb_Dl(r=0.1, lmax=3*nside)
 
 ### Synfast (NB: we need to go from Dl to Cl due to different conventions between CAMB and synfast)
-mycls = np.zeros_like(totCL)
-for i in range(4):
-    mycls[2:, i] = 2 * np.pi * totCL[2:,i] / (ell[2:] * (ell[2:] + 1))
-if seed is not None: np.random.seed(seed)
-maps=hp.synfast(mycls.T,nside, new=True)
+mycls = qss.Dl2Cl_without_monopole(ell, totDl)
+
+if seed is not None: 
+    np.random.seed(seed)
+    
+maps = hp.synfast(mycls.T,nside, new=True)
 hp.mollview(maps[0,:], title="I map from synfast", unit=map_150GHz.unit, sub=(2,3,1))
 hp.mollview(maps[1,:], title="Q map from synfast", unit=map_150GHz.unit, sub=(2,3,2))
 hp.mollview(maps[2,:], title="U map from synfast", unit=map_150GHz.unit, sub=(2,3,3))
 
 
 #sky_config = {'cmb':maps, 'dust':'d1'}
-sky_config = {'cmb':maps}
+sky_config = {'cmb': maps}
 
 preset_strings = []
 for k in sky_config.keys():
@@ -228,10 +229,10 @@ d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
 ### Calculate CMB spectra with CAMB (through the QubicSkySim wrapper, or any other way)
-ell, totCL, unlensedCL = qss.get_camb_Dl(r=0.1, lmax=3*d['nside'])
+ell, totDL, unlensedDL = qss.get_camb_Dl(r=0.1, lmax=3*d['nside'])
 
 ### Specify the CMB description in a dictionary
-cmb_dict = {'CAMBSpectra':totCL, 'ell':ell, 'seed':None}
+cmb_dict = {'CAMBSpectra':totDL, 'ell':ell, 'seed':None}
 
 # ### Pick one of these:
 sky_config = {'cmb': cmb_dict}                ### CMB Only
@@ -239,7 +240,7 @@ sky_config = {'cmb': cmb_dict}                ### CMB Only
 
 ### Generate the maps at each sub-frequency
 Qubic_sky2 = qss.Qubic_sky(sky_config, d)
-x0_2 = np.reshape(Qubic_sky2.get_simple_sky_map(),(d['nf_sub'],d['nside']**2*12,3))
+x0_2 = Qubic_sky2.get_simple_sky_map()
 print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0_2))
 
 ### Display all maps
@@ -273,22 +274,21 @@ d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
 ### Calculate CMB spectra with CAMB (through the QubicSkySim wrapper, or any other way)
-ell, totCL, unlensedCL = qss.get_camb_Dl(r=0.1, lmax=3*d['nside'])
+ell, totDL, unlensedDL = qss.get_camb_Dl(r=0.1, lmax=3*d['nside'])
 
 ### Calculate CMB maps from this spectrum
 ### Synfast (NB: we need to go from Dl to Cl due to different conventions between CAMB and synfast)
-mycls = np.zeros_like(totCL)
-for i in range(4):
-    mycls[2:, i] = 2 * np.pi * totCL[2:,i] / (ell[2:] * (ell[2:] + 1))
+mycls = qss.Dl2Cl_without_monopole(ell, totDL)
+
 seed = None
 if seed is not None: np.random.seed(seed)
-maps=hp.synfast(mycls.T,d['nside'], verbose=False, new=True)
+maps = hp.synfast(mycls.T,d['nside'], verbose=False, new=True)
 rng = (np.std(maps, axis=(1))*3).astype(int)
 rng[1:] = np.max(rng[1:])
 figure()
-hp.mollview(maps[0,:], title="I map from synfast", min=-rng[0], max=rng[0], sub=(1,3,1))
-hp.mollview(maps[1,:], title="Q map from synfast", min=-rng[1], max=rng[1], sub=(1,3,2))
-hp.mollview(maps[2,:], title="U map from synfast", min=-rng[2], max=rng[2], sub=(1,3,3))
+hp.mollview(maps[0, :], title="I map from synfast", min=-rng[0], max=rng[0], sub=(1,3,1))
+hp.mollview(maps[1, :], title="Q map from synfast", min=-rng[1], max=rng[1], sub=(1,3,2))
+hp.mollview(maps[2, :], title="U map from synfast", min=-rng[2], max=rng[2], sub=(1,3,3))
 
 
 ### Specify the CMB description in a dictionary
@@ -422,7 +422,7 @@ if theoutmaps is not None:
     llout = np.arange(len(clsout[0][0,:]))
     tight_layout()
   
-figure()
+plt.figure()
 order = ['TT', 'EE', 'BB', 'TE']
 for i in range(4):
     subplot(2,2,i+1)
@@ -439,34 +439,6 @@ for i in range(4):
         for s in range(d['nf_sub']):
             plot(llout,llout*(llout+1)*clsout[s][i,:]/2/np.pi, '-', alpha=0.3, label='Output Map {} Cl'.format(s))
     if i==0: legend(fontsize=10, loc='upper right')
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
 
 ```
 

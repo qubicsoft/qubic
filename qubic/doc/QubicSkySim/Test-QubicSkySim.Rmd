@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.0
+      jupytext_version: 1.4.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -104,37 +104,37 @@ It works well but it's a bit useless since one cannot modify easily the cosmolog
 ## 3) Now from CAMB Based maps
 
 ```{python}
-reload(qss)
-seed = None
-nside = 128
+# reload(qss)
+# seed = None
+# nside = 128
 
-### CAMB call
-ell, totDl, unlensedDl = qss.get_camb_Dl(r=0.1, lmax=3*nside)
+# ### CAMB call
+# ell, totDl, unlensedDl = qss.get_camb_Dl(r=0.1, lmax=3*nside)
 
-### Synfast (NB: we need to go from Dl to Cl due to different conventions between CAMB and synfast)
-mycls = qss.Dl2Cl_without_monopole(ell, totDl)
+# ### Synfast (NB: we need to go from Dl to Cl due to different conventions between CAMB and synfast)
+# mycls = qss.Dl2Cl_without_monopole(ell, totDl)
 
-if seed is not None: 
-    np.random.seed(seed)
+# if seed is not None: 
+#     np.random.seed(seed)
     
-maps = hp.synfast(mycls.T,nside, new=True)
-hp.mollview(maps[0,:], title="I map from synfast", unit=map_150GHz.unit, sub=(2,3,1))
-hp.mollview(maps[1,:], title="Q map from synfast", unit=map_150GHz.unit, sub=(2,3,2))
-hp.mollview(maps[2,:], title="U map from synfast", unit=map_150GHz.unit, sub=(2,3,3))
+# maps = hp.synfast(mycls.T,nside, new=True)
+# hp.mollview(maps[0,:], title="I map from synfast", unit=map_150GHz.unit, sub=(2,3,1))
+# hp.mollview(maps[1,:], title="Q map from synfast", unit=map_150GHz.unit, sub=(2,3,2))
+# hp.mollview(maps[2,:], title="U map from synfast", unit=map_150GHz.unit, sub=(2,3,3))
 
 
-#sky_config = {'cmb':maps, 'dust':'d1'}
-sky_config = {'cmb': maps}
+# #sky_config = {'cmb':maps, 'dust':'d1'}
+# sky_config = {'cmb': maps}
 
-preset_strings = []
-for k in sky_config.keys():
-    if k == 'cmb': 
-        rndstr = qss.random_string(10)
-        hp.write_map('/tmp/'+rndstr, maps)
-        cmbmap = pysm.CMBMap(nside,map_IQU='/tmp/'+rndstr)
-        os.remove('/tmp/'+rndstr)
-    else:
-        preset_strings.append(sky_config[k])
+# preset_strings = []
+# for k in sky_config.keys():
+#     if k == 'cmb': 
+#         rndstr = qss.random_string(10)
+#         hp.write_map('/tmp/'+rndstr, maps)
+#         cmbmap = pysm.CMBMap(nside,map_IQU='/tmp/'+rndstr)
+#         os.remove('/tmp/'+rndstr)
+#     else:
+#         preset_strings.append(sky_config[k])
         
 # sky = pysm.Sky(nside=nside, preset_strings=preset_strings)
 # sky.add_component(cmbmap)
@@ -459,6 +459,14 @@ for i in range(4):
         for s in range(d['nf_sub']):
             plot(llout,llout*(llout+1)*clsout[s][i,:]/2/np.pi, '-', alpha=0.3, label='Output Map {} Cl'.format(s))
     if i==0: legend(fontsize=10, loc='upper right')
+
+```
+
+```{python}
+
+```
+
+```{python}
 
 ```
 

@@ -148,7 +148,7 @@ delta_ell = 25
 maskpix = cov > np.max(cov) * 0.1
 
 Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
-ell_binned, b = Namaster.get_binning(d)
+ell_binned, b = Namaster.get_binning(d['nside'])
 mask_apo = Namaster.get_apodized_mask()
 
 hp.gnomview(mask_apo, rot=center, reso=20)
@@ -157,19 +157,19 @@ hp.gnomview(mask_apo, rot=center, reso=20)
 ```{python}
 print('   - No noise')
 themaps = observed_maps_nonoise.copy().T
-leff, cells_nonoise, w = Namaster.get_spectra(themaps, d, mask_apo,
+leff, cells_nonoise, w = Namaster.get_spectra(themaps, mask_apo,
                                               purify_e=False, purify_b=True, verbose=False,
                                               beam_correction=Qubic_sky.instrument['beams'])
 
 print('   - Flat noise')
 themaps = observed_maps_flatnoise.copy().T
-leff, cells_flatnoise, w = Namaster.get_spectra(themaps, d, mask_apo,
+leff, cells_flatnoise, w = Namaster.get_spectra(themaps, mask_apo,
                                                 purify_e=False, purify_b=True, w=w, verbose=False,
                                                 beam_correction=Qubic_sky.instrument['beams'])
 
 print('   - Qubic noise')
 themaps = observed_maps_qubicnoise.copy().T
-leff, cells_qubicnoise, w = Namaster.get_spectra(themaps, d, mask_apo,
+leff, cells_qubicnoise, w = Namaster.get_spectra(themaps, mask_apo,
                                                  purify_e=False, purify_b=True, w=w, verbose=False,
                                                  beam_correction=Qubic_sky.instrument['beams'])
 
@@ -206,7 +206,7 @@ lmax = 2 * d['nside'] - 1
 delta_ell = 25
 maskpix = cov > np.max(cov)/10
 Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
-ell_bins, b = Namaster.get_binning(d)
+ell_bins, b = Namaster.get_binning(d['nside'])
 mask_apo = Namaster.get_apodized_mask()
 
 
@@ -247,27 +247,27 @@ for imc in range(nbmc):
     # No Noise
     print(' - Doing Cls')
     print('   - Noiseless maps')
-    leff, cl_nonoise[imc, :,:], w = Namaster.get_spectra(observed_maps_nonoise.T, d, mask_apo, 
+    leff, cl_nonoise[imc, :,:], w = Namaster.get_spectra(observed_maps_nonoise.T, mask_apo, 
                                                          purify_e=False, purify_b=True, w=w, verbose=False,
                                                  beam_correction=Qubic_sky.instrument['beams'])
     # Flat coverage
     print('   - CMB + Flat Noise maps')
-    leff, cl_flat[imc, :,:], w = Namaster.get_spectra(observed_maps_flatnoise.T, d, mask_apo, 
+    leff, cl_flat[imc, :,:], w = Namaster.get_spectra(observed_maps_flatnoise.T, mask_apo, 
                                                       purify_e=False, purify_b=True, w=w, verbose=False,
                                                  beam_correction=Qubic_sky.instrument['beams'])
     # QUBIC coverage
     print('   - CMB + QUBIC Noise maps')
-    leff, cl_qubic[imc, :,:], w = Namaster.get_spectra(observed_maps_qubicnoise.T, d, mask_apo, 
+    leff, cl_qubic[imc, :,:], w = Namaster.get_spectra(observed_maps_qubicnoise.T, mask_apo, 
                                                        purify_e=False, purify_b=True, w=w, verbose=False,
                                                  beam_correction=Qubic_sky.instrument['beams'])
     # Noise Only - Flat
     print('   - Flat Noise maps')
-    leff, cl_noise_flat[imc, :,:], w = Namaster.get_spectra(flatnoise.T, d, mask_apo, 
+    leff, cl_noise_flat[imc, :,:], w = Namaster.get_spectra(flatnoise.T, mask_apo, 
                                                             purify_e=False, purify_b=True, w=w, verbose=False,
                                                  beam_correction=Qubic_sky.instrument['beams'])
     # QUBIC coverage
     print('   - QUBIC Noise maps')
-    leff, cl_noise_qubic[imc, :,:], w = Namaster.get_spectra(qubicnoise.T, d, mask_apo, 
+    leff, cl_noise_qubic[imc, :,:], w = Namaster.get_spectra(qubicnoise.T, mask_apo, 
                                                              purify_e=False, purify_b=True, w=w, verbose=False,
                                                  beam_correction=Qubic_sky.instrument['beams'])
     

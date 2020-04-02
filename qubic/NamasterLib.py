@@ -22,19 +22,25 @@ class Namaster(object):
         self.lmax = lmax
         self.delta_ell = delta_ell
         self.ells, self.weights, self.bpws = self._binning()
+        self.f0 = None
+        self.f2 = None
+        self.f0bis = None
+        self.f2bis = None
+        self.w = None
+        self.cw = None
 
-    def get_binning(self, d):
+    def get_binning(self, nside):
         """
         Binning informations.
         Parameters
         ----------
-        d: Qubic dictionary
+        nside: the nside of the maps
 
         Returns
         -------
         The binned monopoles and the NmtBin object
         """
-        b = nmt.NmtBin(d['nside'],
+        b = nmt.NmtBin(nside,
                        bpws=self.bpws,
                        ells=self.ells,
                        weights=self.weights,
@@ -44,21 +50,21 @@ class Namaster(object):
 
         return ell_binned, b
 
-    def bin_spectra(self, input_cls, d):
+    def bin_spectra(self, input_cls, nside):
         """
         Bin a spectrum.
         Parameters
         ----------
         input_cls: 1D array
             input Cls spectrum
-        d: Qubic dictionary
+        nside: the nside of the maps
 
         Returns
         -------
         The binned power spectrum Dl = l(l+1)*Cl.
 
         """
-        ell_binned, b = self.get_binning(d)
+        ell_binned, b = self.get_binning(nside)
         input_cls_reshape = np.reshape(input_cls[:self.lmax + 1], (1, self.lmax + 1))
         cls_binned = b.bin_cell(input_cls_reshape)
 
@@ -86,14 +92,13 @@ class Namaster(object):
         mask_apo = nmt.mask_apodization(msk, aposize=aposize, apotype=apotype)
         return mask_apo
 
-    def get_fields(self, map, d, mask_apo, purify_e=False, purify_b=True, beam_correction=None):
+    def get_fields(self, map, mask_apo, purify_e=False, purify_b=True, beam_correction=None):
         """
 
         Parameters
         ----------
         map: array
             IQU maps, shape (3, #pixels)
-        d: Qubic dictionary
         mask_apo: array
             Apodized mask.
         purify_e: bool, optional
@@ -111,14 +116,21 @@ class Namaster(object):
         f0, f2: spin-0 and spin-2 Namaster fields.
 
         """
+
+        # The maps may contain hp.UNSEEN - They must be replaced with zeros
+        undefpix = map == hp.UNSEEN
+        map[undefpix]=0
         mp_t, mp_q, mp_u = map
+        nside = hp.npix2nside(len(mp_t))
+
         if beam_correction is not None:
             if beam_correction == True:
-                beam = hp.gauss_beam(np.deg2rad(d['synthbeam_peak150_fwhm']),
-                                     lmax = 3 * d['nside'] - 1)
+                ### Defaullt value for QUBIC at 150 GHz
+                beam = hp.gauss_beam(np.deg2rad(0.39268176),   
+                                     lmax = 3 * nside - 1)
             else:
                 beam = hp.gauss_beam(np.deg2rad(beam_correction),
-                                     lmax = 3 * d['nside'] - 1)
+                                     lmax = 3 * nside - 1)
         else:
             beam = None
 
@@ -131,6 +143,10 @@ class Namaster(object):
                           purify_e=purify_e,
                           purify_b=purify_b,
                           beam=beam)
+
+        self.f0 = f0
+        self.f2 = f2
+
         return f0, f2
 
     def compute_master(self, field_a, field_b, workspace):
@@ -151,7 +167,7 @@ class Namaster(object):
         cl_decoupled = workspace.decouple_cell(cl_coupled)
         return cl_decoupled
 
-    def get_spectra(self, map, d, mask_apo, map2=None, purify_e=False, purify_b=True, w=None,
+    def get_spectra(self, map, mask_apo, map2=None, purify_e=False, purify_b=True, w=None,
                     beam_correction=None, pixwin_correction=None, verbose=True):
         """
         Get spectra from IQU maps.
@@ -187,24 +203,29 @@ class Namaster(object):
         w: List containing the NmtWorkspaces [w00, w22, w02]
 
         """
-
-        ell_binned, b = self.get_binning(d)
+        nside = hp.npix2nside(len(map[0]))
+        ell_binned, b = self.get_binning(nside)
 
         # Get fields
-        f0, f2 = self.get_fields(map, d, mask_apo,
+        f0, f2 = self.get_fields(map, mask_apo,
                                  purify_e=purify_e,
                                  purify_b=purify_b,
                                  beam_correction=beam_correction)
 
         # Cross-Spectra case
         if map2 is not None:
-            f0bis, f2bis = self.get_fields(map2, d, mask_apo,
+            f0bis, f2bis = self.get_fields(map2, mask_apo,
                                             purify_e=purify_e,
                                             purify_b=purify_b,
                                             beam_correction=beam_correction)
         else:
             f0bis = f0
             f2bis = f2
+
+        self.f0 = f0
+        self.f0bis = f0bis
+        self.f2 = f2
+        self.f2bis = f2bis
 
 
         # Make workspaces
@@ -218,6 +239,7 @@ class Namaster(object):
             w02 = nmt.NmtWorkspace()
             w02.compute_coupling_matrix(f0, f2bis, b)
             w = [w00, w22, w02]
+            self.w = w
         else:
             w00 = w[0]
             w22 = w[1]
@@ -233,18 +255,17 @@ class Namaster(object):
         if verbose: print('Getting TT, EE, BB, TE spectra in that order.')
 
         if pixwin_correction is not None:
-            pwb = self.get_pixwin_correction(d)
+            pwb = self.get_pixwin_correction(nside)
             for i in range(4):
                 spectra[:, i] /= (pwb[1] ** 2)
 
         return ell_binned, spectra, w
 
-    def get_pixwin_correction(self, d):
-        nside = d['nside']
+    def get_pixwin_correction(self, nside):
         pw = hp.pixwin(nside, pol=True, lmax=self.lmax)
         pw = [pw[0][: self.lmax + 1], pw[1][: self.lmax + 1]]
 
-        ell_binned, b = self.get_binning(d)
+        ell_binned, b = self.get_binning(nside)
         pwb = 2 * np.pi / (ell_binned * (ell_binned + 1)) * b.bin_cell(np.array(pw))
 
         return pwb
@@ -260,3 +281,97 @@ class Namaster(object):
             i += 1
 
         return ells, weights, bpws
+
+    def get_covariance_coeff(self):
+        if self.cw is None:
+            cw = nmt.NmtCovarianceWorkspace()
+            cw.compute_coupling_coefficients(self.f0, self.f0, self.f0, self.f0)
+
+    def get_covariance_TT_TT(self, cl_tt):
+        w00 = self.w[0]
+        n_ell = len(cl_tt)
+        covar_00_00 = nmt.gaussian_covariance(slef.cw,
+                                              0, 0, 0, 0,  # Spins of the 4 fields
+                                              [cl_tt*0],  # TT
+                                              [cl_tt*0],  # TT
+                                              [cl_tt*0],  # TT
+                                              [cl_tt*0],  # TT
+                                              w00, wb=w00).reshape([n_ell, 1,
+                                                                    n_ell, 1])
+        return covar_00_00[:, 0, :, 0]
+
+    def get_covariance_EE_EE(self, cl_ee):
+        w22 = self.w[2]
+        n_ell = len(cl_ee)
+        cl_eb = np.zeros(n_ell)
+        cl_bb = np.zeros(n_ell)
+        covar_22_22 = nmt.gaussian_covariance(self.cw, 2, 2, 2, 2,  # Spins of the 4 fields
+                                              [cl_ee, cl_eb,
+                                               cl_eb, cl_bb],  # EE, EB, BE, BB
+                                              [cl_ee, cl_eb,
+                                               cl_eb, cl_bb],  # EE, EB, BE, BB
+                                              [cl_ee, cl_eb,
+                                               cl_eb, cl_bb],  # EE, EB, BE, BB
+                                              [cl_ee, cl_eb,
+                                               cl_eb, cl_bb],  # EE, EB, BE, BB
+                                              w22, wb=w22).reshape([n_ell, 4,
+                                                            n_ell, 4])
+
+        covar_EE_EE = covar_22_22[:, 0, :, 0]
+        covar_EE_EB = covar_22_22[:, 0, :, 1]
+        covar_EE_BE = covar_22_22[:, 0, :, 2]
+        covar_EE_BB = covar_22_22[:, 0, :, 3]
+        covar_EB_EE = covar_22_22[:, 1, :, 0]
+        covar_EB_EB = covar_22_22[:, 1, :, 1]
+        covar_EB_BE = covar_22_22[:, 1, :, 2]
+        covar_EB_BB = covar_22_22[:, 1, :, 3]
+        covar_BE_EE = covar_22_22[:, 2, :, 0]
+        covar_BE_EB = covar_22_22[:, 2, :, 1]
+        covar_BE_BE = covar_22_22[:, 2, :, 2]
+        covar_BE_BB = covar_22_22[:, 2, :, 3]
+        covar_BB_EE = covar_22_22[:, 3, :, 0]
+        covar_BB_EB = covar_22_22[:, 3, :, 1]
+        covar_BB_BE = covar_22_22[:, 3, :, 2]
+        covar_BB_BB = covar_22_22[:, 3, :, 3]
+
+        return covar_EE_EE
+
+
+    def get_covariance_BB_BB(self, cl_bb):
+        w22 = self.w[2]
+        n_ell = len(cl_ee)
+        cl_eb = np.zeros(n_ell)
+        cl_ee = np.zeros(n_ell)
+        covar_22_22 = nmt.gaussian_covariance(self.cw, 2, 2, 2, 2,  # Spins of the 4 fields
+                                              [cl_ee, cl_eb,
+                                               cl_eb, cl_bb],  # EE, EB, BE, BB
+                                              [cl_ee, cl_eb,
+                                               cl_eb, cl_bb],  # EE, EB, BE, BB
+                                              [cl_ee, cl_eb,
+                                               cl_eb, cl_bb],  # EE, EB, BE, BB
+                                              [cl_ee, cl_eb,
+                                               cl_eb, cl_bb],  # EE, EB, BE, BB
+                                              w22, wb=w22).reshape([n_ell, 4,
+                                                            n_ell, 4])
+
+        covar_EE_EE = covar_22_22[:, 0, :, 0]
+        covar_EE_EB = covar_22_22[:, 0, :, 1]
+        covar_EE_BE = covar_22_22[:, 0, :, 2]
+        covar_EE_BB = covar_22_22[:, 0, :, 3]
+        covar_EB_EE = covar_22_22[:, 1, :, 0]
+        covar_EB_EB = covar_22_22[:, 1, :, 1]
+        covar_EB_BE = covar_22_22[:, 1, :, 2]
+        covar_EB_BB = covar_22_22[:, 1, :, 3]
+        covar_BE_EE = covar_22_22[:, 2, :, 0]
+        covar_BE_EB = covar_22_22[:, 2, :, 1]
+        covar_BE_BE = covar_22_22[:, 2, :, 2]
+        covar_BE_BB = covar_22_22[:, 2, :, 3]
+        covar_BB_EE = covar_22_22[:, 3, :, 0]
+        covar_BB_EB = covar_22_22[:, 3, :, 1]
+        covar_BB_BE = covar_22_22[:, 3, :, 2]
+        covar_BB_BB = covar_22_22[:, 3, :, 3]
+
+        return covar_BB_BB
+
+
+

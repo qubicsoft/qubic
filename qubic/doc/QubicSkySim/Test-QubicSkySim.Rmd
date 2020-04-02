@@ -50,101 +50,101 @@ It works well but it's a bit useless since one cannot modify easily the cosmolog
 <!-- #endregion -->
 
 ```{python}
-rc('figure', figsize=(13, 8))
-sky = pysm.Sky(nside=128, preset_strings=["c1"])
-print(sky.components)
-print(sky.components[0].cmb_spectra.shape)
-map_150GHz = sky.get_emission(150 * u.GHz)
-print(map_150GHz[0, :3])
-map_150GHz = map_150GHz.to(u.uK_CMB, equivalencies=u.cmb_equivalencies(150*u.GHz))
-hp.mollview(map_150GHz[0], title="I map", unit=map_150GHz.unit, sub=(1,3,1))
-hp.mollview(map_150GHz[1], title="Q map", unit=map_150GHz.unit, sub=(1,3,2))
-hp.mollview(map_150GHz[2], title="U map", unit=map_150GHz.unit, sub=(1,3,3))
+# rc('figure', figsize=(13, 8))
+# sky = pysm.Sky(nside=128, preset_strings=["c1"])
+# print(sky.components)
+# print(sky.components[0].cmb_spectra.shape)
+# map_150GHz = sky.get_emission(150 * u.GHz)
+# print(map_150GHz[0, :3])
+# map_150GHz = map_150GHz.to(u.uK_CMB, equivalencies=u.cmb_equivalencies(150*u.GHz))
+# hp.mollview(map_150GHz[0], title="I map", unit=map_150GHz.unit, sub=(1,3,1))
+# hp.mollview(map_150GHz[1], title="Q map", unit=map_150GHz.unit, sub=(1,3,2))
+# hp.mollview(map_150GHz[2], title="U map", unit=map_150GHz.unit, sub=(1,3,3))
 ```
 
 ## 2) Now with a camb based Power spectrum using CMBLensed module form PySM3 - Does not work for an unknown reason !
 
 ```{python}
-reload(qss)
-ell, totCL, unlensedCL = qss.get_camb_Dl(lmax=2500, r=0.1)
-order = ['TT', 'EE', 'BB', 'TE']
-for i in range(4):
-    subplot(2,2,i+1)
-    plot(ell,totCL[:,i], color='k', label='Total Cl')
-    plot(ell,unlensedCL[:,i], color='r', label='Unlensed Cl')
-    xlabel('$\\ell$')
-    ylabel('$D_\\ell$')
-    title(order[i])
-    legend(loc='upper right')
-tight_layout()
+# reload(qss)
+# ell, totCL, unlensedCL = qss.get_camb_Dl(lmax=2500, r=0.1)
+# order = ['TT', 'EE', 'BB', 'TE']
+# for i in range(4):
+#     subplot(2,2,i+1)
+#     plot(ell,totCL[:,i], color='k', label='Total Cl')
+#     plot(ell,unlensedCL[:,i], color='r', label='Unlensed Cl')
+#     xlabel('$\\ell$')
+#     ylabel('$D_\\ell$')
+#     title(order[i])
+#     legend(loc='upper right')
+# tight_layout()
 ```
 
 ```{python}
-reload(qss)
-import os
-nside = 128
-rndstr = qss.random_string(10)
-np.savetxt('/tmp/'+rndstr, unlensedCL[:,2:].T)
-cmblensed = pysm.CMBLensed(nside,'/tmp/'+rndstr)
-os.remove('/tmp/'+rndstr)
+# reload(qss)
+# import os
+# nside = 128
+# rndstr = qss.random_string(10)
+# np.savetxt('/tmp/'+rndstr, unlensedCL[:,2:].T)
+# cmblensed = pysm.CMBLensed(nside,'/tmp/'+rndstr)
+# os.remove('/tmp/'+rndstr)
 
-sky = pysm.Sky(nside=nside, preset_strings=[])
-sky.add_component(cmblensed)
+# sky = pysm.Sky(nside=nside, preset_strings=[])
+# sky.add_component(cmblensed)
 
-print(sky.components)
-map_150GHz = sky.get_emission(150 * u.GHz)
-print(map_150GHz[0, :3])
-map_150GHz = map_150GHz.to(u.uK_CMB, equivalencies=u.cmb_equivalencies(150*u.GHz))
-hp.mollview(map_150GHz[0], title="I map", unit=map_150GHz.unit, sub=(1,3,1))
-hp.mollview(map_150GHz[1], title="Q map", unit=map_150GHz.unit, sub=(1,3,2))
-hp.mollview(map_150GHz[2], title="U map", unit=map_150GHz.unit, sub=(1,3,3))
+# print(sky.components)
+# map_150GHz = sky.get_emission(150 * u.GHz)
+# print(map_150GHz[0, :3])
+# map_150GHz = map_150GHz.to(u.uK_CMB, equivalencies=u.cmb_equivalencies(150*u.GHz))
+# hp.mollview(map_150GHz[0], title="I map", unit=map_150GHz.unit, sub=(1,3,1))
+# hp.mollview(map_150GHz[1], title="Q map", unit=map_150GHz.unit, sub=(1,3,2))
+# hp.mollview(map_150GHz[2], title="U map", unit=map_150GHz.unit, sub=(1,3,3))
 
 ```
 
 ## 3) Now from CAMB Based maps
 
 ```{python}
-reload(qss)
-seed = None
-nside = 128
+# reload(qss)
+# seed = None
+# nside = 128
 
-### CAMB call
-ell, totCL, unlensedCL = qss.get_camb_Dl(r=0.1, lmax=3*nside)
+# ### CAMB call
+# ell, totCL, unlensedCL = qss.get_camb_Dl(r=0.1, lmax=3*nside)
 
-### Synfast (NB: we need to go from Dl to Cl due to different conventions between CAMB and synfast)
-mycls = np.zeros_like(totCL)
-for i in range(4):
-    mycls[2:, i] = 2 * np.pi * totCL[2:,i] / (ell[2:] * (ell[2:] + 1))
-if seed is not None: np.random.seed(seed)
-maps=hp.synfast(mycls.T,nside, new=True)
-hp.mollview(maps[0,:], title="I map from synfast", unit=map_150GHz.unit, sub=(2,3,1))
-hp.mollview(maps[1,:], title="Q map from synfast", unit=map_150GHz.unit, sub=(2,3,2))
-hp.mollview(maps[2,:], title="U map from synfast", unit=map_150GHz.unit, sub=(2,3,3))
+# ### Synfast (NB: we need to go from Dl to Cl due to different conventions between CAMB and synfast)
+# mycls = np.zeros_like(totCL)
+# for i in range(4):
+#     mycls[2:, i] = 2 * np.pi * totCL[2:,i] / (ell[2:] * (ell[2:] + 1))
+# if seed is not None: np.random.seed(seed)
+# maps=hp.synfast(mycls.T,nside, new=True)
+# hp.mollview(maps[0,:], title="I map from synfast", unit=map_150GHz.unit, sub=(2,3,1))
+# hp.mollview(maps[1,:], title="Q map from synfast", unit=map_150GHz.unit, sub=(2,3,2))
+# hp.mollview(maps[2,:], title="U map from synfast", unit=map_150GHz.unit, sub=(2,3,3))
 
 
-#sky_config = {'cmb':maps, 'dust':'d1'}
-sky_config = {'cmb':maps}
+# #sky_config = {'cmb':maps, 'dust':'d1'}
+# sky_config = {'cmb':maps}
 
-preset_strings = []
-for k in sky_config.keys():
-    if k == 'cmb': 
-        rndstr = qss.random_string(10)
-        hp.write_map('/tmp/'+rndstr, maps)
-        cmbmap = pysm.CMBMap(nside,map_IQU='/tmp/'+rndstr)
-        os.remove('/tmp/'+rndstr)
-    else:
-        preset_strings.append(sky_config[k])
+# preset_strings = []
+# for k in sky_config.keys():
+#     if k == 'cmb': 
+#         rndstr = qss.random_string(10)
+#         hp.write_map('/tmp/'+rndstr, maps)
+#         cmbmap = pysm.CMBMap(nside,map_IQU='/tmp/'+rndstr)
+#         os.remove('/tmp/'+rndstr)
+#     else:
+#         preset_strings.append(sky_config[k])
         
-sky = pysm.Sky(nside=nside, preset_strings=preset_strings)
-sky.add_component(cmbmap)
+# sky = pysm.Sky(nside=nside, preset_strings=preset_strings)
+# sky.add_component(cmbmap)
 
-map_150GHz = sky.get_emission(150 * u.GHz)
-map_150GHz = map_150GHz.to(u.uK_CMB, equivalencies=u.cmb_equivalencies(150*u.GHz))
-hp.mollview(map_150GHz[0,:], title="I map from PySM3", unit=map_150GHz.unit, sub=(2,3,4))
-hp.mollview(map_150GHz[1,:], title="Q map from PySM3", unit=map_150GHz.unit, sub=(2,3,5))
-hp.mollview(map_150GHz[2,:], title="U map from PySM3", unit=map_150GHz.unit, sub=(2,3,6))
+# map_150GHz = sky.get_emission(150 * u.GHz)
+# map_150GHz = map_150GHz.to(u.uK_CMB, equivalencies=u.cmb_equivalencies(150*u.GHz))
+# hp.mollview(map_150GHz[0,:], title="I map from PySM3", unit=map_150GHz.unit, sub=(2,3,4))
+# hp.mollview(map_150GHz[1,:], title="Q map from PySM3", unit=map_150GHz.unit, sub=(2,3,5))
+# hp.mollview(map_150GHz[2,:], title="U map from PySM3", unit=map_150GHz.unit, sub=(2,3,6))
 
-tight_layout()
+# tight_layout()
 ```
 
 ## 4) Implementation in QubicSkySim
@@ -197,7 +197,18 @@ Qubic_sky1 = qss.Qubic_sky(sky_config, d)
 x0_1 = np.reshape(Qubic_sky1.get_simple_sky_map(),(d['nf_sub'],d['nside']**2*12,3))
 print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0_1))
 
+### Display input maps
+maps=Qubic_sky1.input_cmb_maps
+rng = (np.std(maps, axis=(1))*3).astype(int)
+rng[1:] = np.max(rng[1:])
+figure()
+hp.mollview(maps[0,:], title="I map from synfast", min=-rng[0], max=rng[0], sub=(1,3,1))
+hp.mollview(maps[1,:], title="Q map from synfast", min=-rng[1], max=rng[1], sub=(1,3,2))
+hp.mollview(maps[2,:], title="U map from synfast", min=-rng[2], max=rng[2], sub=(1,3,3))
+
+
 ### Display all maps
+figure()
 stn = ['I','Q','U']
 rng = (np.std(x0_1, axis=(0,1))*3).astype(int)
 rng[1:] = np.max(rng[1:])
@@ -207,6 +218,15 @@ for i in range(d['nf_sub']):
         hp.mollview(x0_1[i,:,istokes], min=-rng[istokes], max=rng[istokes],
                     sub=(d['nf_sub']+1,3,numsub), title=stn[istokes]+' subfreq {}'.format(i))
         numsub += 1
+```
+
+```{python}
+for i in range(d['nf_sub']):
+    print(np.mean(maps[0,:]/x0_1[i,:,0]))
+    plot(maps[0,:]/x0_1[i,:,0], label=str(i))
+plot(maps[0,:]*0+1,'k--')
+legend()
+ylim(0.95,1.05)
 ```
 
 #### 4.2 Specifying the input power spectra from CAMB
@@ -369,7 +389,7 @@ In the following cell you can choose which case you want to test.
 
 ```{python}
 ######################## Choose Here ###########################
-case_check = 2
+case_check = 1
 
 ######################## Code to be executed ###################
 if case_check==1:

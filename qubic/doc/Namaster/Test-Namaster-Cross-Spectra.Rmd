@@ -101,13 +101,18 @@ reload(nam)
 lmin = 20
 lmax = 2 * d['nside'] - 1
 delta_ell = 25
-maskpix = cov > np.max(cov)/10
+
+okpix = cov > np.max(cov) * 0.1
+
+### Flat weighting
+maskpix = np.zeros(12*d['nside']**2)
+maskpix[okpix] = 1
+
 Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
 ell_bins, b = Namaster.get_binning(d['nside'])
-mask_apo = Namaster.get_apodized_mask()
+mask_apo = Namaster.mask_apo
 
-
-leff, cl_nonoise, wnnonoise = Namaster.get_spectra(input_maps, mask_apo, 
+leff, cl_nonoise, wnnonoise = Namaster.get_spectra(input_maps, 
                                             purify_e=False, purify_b=True, 
                                             verbose=False)
 
@@ -117,7 +122,7 @@ w=None
 for i in range(nmaps):
     for j in range(i,nmaps):
         print(i,j)
-        leff, cls[i,j, :,:], w = Namaster.get_spectra(all_maps[i,:,:].T, mask_apo, 
+        leff, cls[i,j, :,:], w = Namaster.get_spectra(all_maps[i,:,:].T, 
                                                       map2=all_maps[j,:,:].T,
                                                       purify_e=False, purify_b=True, w=w, 
                                                       verbose=False,
@@ -157,7 +162,7 @@ w = None
 for i in range(nbmc):
     print(i)
     qubicnoise = Qubic_sky.create_noise_maps(sigma_sec, cov)
-    leff, cls_noise[i,:,:], w = Namaster.get_spectra(qubicnoise.T, mask_apo, 
+    leff, cls_noise[i,:,:], w = Namaster.get_spectra(qubicnoise.T, 
                                             purify_e=False, purify_b=True, 
                                             verbose=False, w=w,
                                             beam_correction=Qubic_sky.instrument['beams'])
@@ -192,7 +197,7 @@ legend(fontsize=9)
 Now we will use two pure noise maps for cross-spectra anec make a full Monte-Carlo in order to estimate how the RMS of the cross-spectra is related to the final RMS. We can also have alook at the ll cov matrices...
 
 ```{python}
-nbmc = 200
+nbmc = 100
 nmaps = 2
 sigma_sec = 10.
 
@@ -207,10 +212,16 @@ reload(nam)
 lmin = 20
 lmax = 2 * d['nside'] - 1
 delta_ell = 25
-maskpix = cov > np.max(cov)/10
+
+okpix = cov > np.max(cov) * 0.1
+
+### Flat weighting
+maskpix = np.zeros(12*d['nside']**2)
+maskpix[okpix] = 1
+
 Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
 ell_bins, b = Namaster.get_binning(d['nside'])
-mask_apo = Namaster.get_apodized_mask()
+mask_apo = Namaster.mask_apo
 
 w=None
 all_cls_auto = np.zeros((nbmc, nmaps, len(ell_bins), 4))
@@ -232,7 +243,7 @@ for n in arange(nbmc):
     for i in range(nmaps):
         for j in range(i,nmaps):
             print('   - cls for {}x{}'.format(i,j))
-            leff, cls, w = Namaster.get_spectra(all_maps[i,:,:].T, mask_apo, 
+            leff, cls, w = Namaster.get_spectra(all_maps[i,:,:].T, 
                                                 map2 = all_maps[j,:,:].T,
                                             purify_e=False, purify_b=True, 
                                             verbose=False, w=w,
@@ -287,9 +298,9 @@ legend()
 ```
 
 ```{python}
-a=hist(scls_auto[:,s]/scls_cross[:,s], range=[1,2], bins=15, 
+a=hist(scls_auto[:,s]/scls_cross[:,s], range=[0,3], bins=15, 
        label='RMS Auto / RMS Cross ({} realisations)'.format(nbmc))
-maxi = np.max(a[0])*1.2
+maxi = np.max(a[0])*1.5
 plot([np.sqrt(2),np.sqrt(2)], [0, maxi], 'k--', label='sqrt(2)')
 plot([mm,mm],[0, maxi] , 'r', label = 'Mean +/- $\\sigma$(Mean)')
 plot([mm-ss,mm-ss],[0, maxi], 'r:')
@@ -298,6 +309,10 @@ ylim(0, maxi)
 xlabel('$\\sigma[D\\ell_{Auto}] ~/ ~\\sigma[D\\ell_{Cross}]$' )
 ylabel('Counts')
 legend(fontsize=12)
+```
+
+```{python}
+
 ```
 
 ```{python}

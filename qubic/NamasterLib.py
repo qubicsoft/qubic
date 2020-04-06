@@ -7,9 +7,8 @@ __all__ = ['Namaster']
 
 class Namaster(object):
 
-    def __init__(self, seenpix, lmin, lmax, delta_ell):
+    def __init__(self, weight_mask, lmin, lmax, delta_ell, aposize=10.0, apotype='C1'):
 
-        seenpix = np.asarray(seenpix)
         lmin = int(lmin)
         lmax = int(lmax)
         delta_ell = int(delta_ell)
@@ -17,11 +16,15 @@ class Namaster(object):
             raise ValueError('Input lmin is less than 1.')
         if lmax < lmin:
             raise ValueError('Input lmax is less than lmin.')
-        self.seenpix = seenpix
         self.lmin = lmin
         self.lmax = lmax
         self.delta_ell = delta_ell
         self.ells, self.weights, self.bpws = self._binning()
+
+        ### Mask
+        self.weight_mask = np.asarray(weight_mask)
+        self.mask_apo = self.get_apodized_mask(aposize=10.0, apotype='C1')
+        
         self.f0 = None
         self.f2 = None
         self.f0bis = None
@@ -86,20 +89,17 @@ class Namaster(object):
             'C1' by default.
 
         """
-        msk = np.zeros_like(self.seenpix)
-        msk[self.seenpix] = 1.
-
-        mask_apo = nmt.mask_apodization(msk, aposize=aposize, apotype=apotype)
+        mask_apo = nmt.mask_apodization(self.weight_mask, aposize=aposize, apotype=apotype)
         return mask_apo
 
-    def get_fields(self, map, mask_apo, purify_e=False, purify_b=True, beam_correction=None):
+    def get_fields(self, map, mask_apo=None, purify_e=False, purify_b=True, beam_correction=None):
         """
 
         Parameters
         ----------
         map: array
             IQU maps, shape (3, #pixels)
-        mask_apo: array
+        mask_apo: array, optionnal (if not given the one used at the object's instanciation is used)
             Apodized mask.
         purify_e: bool, optional
             False by default.
@@ -122,6 +122,9 @@ class Namaster(object):
         map[undefpix]=0
         mp_t, mp_q, mp_u = map
         nside = hp.npix2nside(len(mp_t))
+
+        if mask_apo is None:
+            mask_apo = self.mask_apo
 
         if beam_correction is not None:
             if beam_correction == True:
@@ -167,7 +170,7 @@ class Namaster(object):
         cl_decoupled = workspace.decouple_cell(cl_coupled)
         return cl_decoupled
 
-    def get_spectra(self, map, mask_apo, map2=None, purify_e=False, purify_b=True, w=None,
+    def get_spectra(self, map, mask_apo=None, map2=None, purify_e=False, purify_b=True, w=None,
                     beam_correction=None, pixwin_correction=None, verbose=True):
         """
         Get spectra from IQU maps.
@@ -176,7 +179,7 @@ class Namaster(object):
         map: array
             IQU maps, shape (3, #pixels)
         d: Qubic dictionary
-        mask_apo: array
+        mask_apo: array, optional (if not given then the maks used at the object's instanciation is used)
             Apodized mask.
         map2: array
             IQU maps, shape (3, #pixels) for Cross-Spectra
@@ -206,15 +209,18 @@ class Namaster(object):
         nside = hp.npix2nside(len(map[0]))
         ell_binned, b = self.get_binning(nside)
 
+        if mask_apo is None:
+            mask_apo = self.mask_apo
+
         # Get fields
-        f0, f2 = self.get_fields(map, mask_apo,
+        f0, f2 = self.get_fields(map, mask_apo=mask_apo,
                                  purify_e=purify_e,
                                  purify_b=purify_b,
                                  beam_correction=beam_correction)
 
         # Cross-Spectra case
         if map2 is not None:
-            f0bis, f2bis = self.get_fields(map2, mask_apo,
+            f0bis, f2bis = self.get_fields(map2, mask_apo=mask_apo,
                                             purify_e=purify_e,
                                             purify_b=purify_b,
                                             beam_correction=beam_correction)

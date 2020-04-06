@@ -1,0 +1,113 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Testing Cross-Spectra Covariance with NaMaster
+JCH - March 2020
+
+```{python}
+# %matplotlib inline
+import numpy as np
+import healpy as hp
+import matplotlib.pyplot as plt
+from importlib import reload
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm
+import qubic
+from qubic import QubicSkySim as qss
+from qubic import NamasterLib as nam
+
+rc('figure', figsize=(12, 8))
+rc('font', size=15)
+rc('text', usetex=False)
+```
+
+Let's generate an underlying CMB (I,Q,U) on a partial coverage, and then add noise according to this coverage.
+
+```{python}
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+dictfilename = global_dir + '/dicts/test_cross-spectra.dict'
+
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+d['nside']=256
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+print(center)
+
+print(d['nf_sub'])
+
+# Restore a QUBIC typical coverage
+cov = hp.ud_grade(hp.read_map('sample_coverage_qubic.fits', verbose=False), d['nside'])
+cov /= np.max(cov)
+hp.mollview(cov)
+```
+
+We perform a Monte-Carlo with CMB + noise and will check the covariance between MC and analytical from Namaster for Cross-Spectra only - The CMB is different each time.
+
+```{python}
+reload(qss)
+reload(nam)
+
+# noise on maps (small here)
+sigma_sec = 10
+
+# Create a Namaster object
+lmin = 20
+lmax = 2 * d['nside'] - 1
+delta_ell = 25
+
+okpix = cov > np.max(cov) * 0.1
+
+### Flat weighting
+maskpix = np.zeros(12*d['nside']**2)
+maskpix[okpix] = 1
+
+Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+ell_bins, b = Namaster.get_binning(d['nside'])
+mask_apo = Namaster.mask_apo
+
+nbmc = 100
+allXcls = np.zeros((nbmc, len(ell_bins), 4))
+w=None
+
+for imc in range(nbmc):
+    print('MC iteration {} over {}'.format(imc, nbmc))
+    ### Create two fake QUBIC observations with same CMB and different noise
+    ### At each MC step the CMB will be different
+    seed = None
+    sky_config = {'cmb': seed}
+    Qubic_sky = qss.Qubic_sky(sky_config, d)
+    nmaps = 2
+    all_maps = np.zeros((nmaps, 12*d['nside']**2, 3))
+
+    ### Noisy maps
+    for i in range(nmaps):
+        all_maps[i,:,:] = Qubic_sky.get_partial_sky_maps_withnoise(cov, sigma_sec=sigma_sec)
+
+    ### Cross-Cls
+    leff, allXcls[imc, :,:], w = Namaster.get_spectra(all_maps[0,:,:].T, mask_apo, 
+                                                      map2=all_maps[1,:,:].T,
+                                                      purify_e=False, purify_b=True, w=w, 
+                                                      verbose=False,
+                                                      beam_correction=Qubic_sky.instrument['beams'])
+        
+
+```
+
+```{python}
+
+```

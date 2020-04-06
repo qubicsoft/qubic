@@ -145,31 +145,35 @@ lmin = 20
 lmax = 2 * d['nside'] - 1
 delta_ell = 25
 
-maskpix = cov > np.max(cov) * 0.1
+okpix = cov > np.max(cov) * 0.1
+
+### Flat weighting
+maskpix = np.zeros(12*d['nside']**2)
+maskpix[okpix] = 1
 
 Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
 ell_binned, b = Namaster.get_binning(d['nside'])
-mask_apo = Namaster.get_apodized_mask()
+#mask_apo = Namaster.get_apodized_mask()
 
-hp.gnomview(mask_apo, rot=center, reso=20)
+hp.gnomview(Namaster.mask_apo, rot=center, reso=20)
 ```
 
 ```{python}
 print('   - No noise')
 themaps = observed_maps_nonoise.copy().T
-leff, cells_nonoise, w = Namaster.get_spectra(themaps, mask_apo,
+leff, cells_nonoise, w = Namaster.get_spectra(themaps,
                                               purify_e=False, purify_b=True, verbose=False,
                                               beam_correction=Qubic_sky.instrument['beams'])
 
 print('   - Flat noise')
 themaps = observed_maps_flatnoise.copy().T
-leff, cells_flatnoise, w = Namaster.get_spectra(themaps, mask_apo,
+leff, cells_flatnoise, w = Namaster.get_spectra(themaps,
                                                 purify_e=False, purify_b=True, w=w, verbose=False,
                                                 beam_correction=Qubic_sky.instrument['beams'])
 
 print('   - Qubic noise')
 themaps = observed_maps_qubicnoise.copy().T
-leff, cells_qubicnoise, w = Namaster.get_spectra(themaps, mask_apo,
+leff, cells_qubicnoise, w = Namaster.get_spectra(themaps,
                                                  purify_e=False, purify_b=True, w=w, verbose=False,
                                                  beam_correction=Qubic_sky.instrument['beams'])
 
@@ -188,10 +192,9 @@ for i in range(3):
     plot(leff-3, cells_qubicnoise[:,i],'b', label='QUBIC-like Noise')
     ylim(0,np.max(input_cell[:,i])*1.5)
     legend()
-        
 ```
 
-# Now make a Monte-Carlo 
+# Now make a Monte-Carlo to test the method 
 
 ```{python}
 reload(nam)
@@ -204,10 +207,16 @@ nbmc = 10
 lmin = 20
 lmax = 2 * d['nside'] - 1
 delta_ell = 25
-maskpix = cov > np.max(cov)/10
+
+okpix = cov > np.max(cov) * 0.1
+
+### Flat weighting
+maskpix = np.zeros(12*d['nside']**2)
+maskpix[okpix] = 1
+
 Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
 ell_bins, b = Namaster.get_binning(d['nside'])
-mask_apo = Namaster.get_apodized_mask()
+mask_apo = Namaster.mask_apo
 
 
 w=None
@@ -247,27 +256,27 @@ for imc in range(nbmc):
     # No Noise
     print(' - Doing Cls')
     print('   - Noiseless maps')
-    leff, cl_nonoise[imc, :,:], w = Namaster.get_spectra(observed_maps_nonoise.T, mask_apo, 
+    leff, cl_nonoise[imc, :,:], w = Namaster.get_spectra(observed_maps_nonoise.T, 
                                                          purify_e=False, purify_b=True, w=w, verbose=False,
                                                  beam_correction=Qubic_sky.instrument['beams'])
     # Flat coverage
     print('   - CMB + Flat Noise maps')
-    leff, cl_flat[imc, :,:], w = Namaster.get_spectra(observed_maps_flatnoise.T, mask_apo, 
+    leff, cl_flat[imc, :,:], w = Namaster.get_spectra(observed_maps_flatnoise.T, 
                                                       purify_e=False, purify_b=True, w=w, verbose=False,
                                                  beam_correction=Qubic_sky.instrument['beams'])
     # QUBIC coverage
     print('   - CMB + QUBIC Noise maps')
-    leff, cl_qubic[imc, :,:], w = Namaster.get_spectra(observed_maps_qubicnoise.T, mask_apo, 
+    leff, cl_qubic[imc, :,:], w = Namaster.get_spectra(observed_maps_qubicnoise.T, 
                                                        purify_e=False, purify_b=True, w=w, verbose=False,
                                                  beam_correction=Qubic_sky.instrument['beams'])
     # Noise Only - Flat
     print('   - Flat Noise maps')
-    leff, cl_noise_flat[imc, :,:], w = Namaster.get_spectra(flatnoise.T, mask_apo, 
+    leff, cl_noise_flat[imc, :,:], w = Namaster.get_spectra(flatnoise.T, 
                                                             purify_e=False, purify_b=True, w=w, verbose=False,
                                                  beam_correction=Qubic_sky.instrument['beams'])
     # QUBIC coverage
     print('   - QUBIC Noise maps')
-    leff, cl_noise_qubic[imc, :,:], w = Namaster.get_spectra(qubicnoise.T, mask_apo, 
+    leff, cl_noise_qubic[imc, :,:], w = Namaster.get_spectra(qubicnoise.T, 
                                                              purify_e=False, purify_b=True, w=w, verbose=False,
                                                  beam_correction=Qubic_sky.instrument['beams'])
     
@@ -328,6 +337,26 @@ for i in range(3):
     legend(fontsize=9)
 
 tight_layout()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 ```{python}

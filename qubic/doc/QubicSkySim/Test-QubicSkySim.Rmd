@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -195,7 +195,7 @@ sky_config = {'cmb': seed}                ### CMB Only
 
 ### Generate the maps at each sub-frequency
 Qubic_sky1 = qss.Qubic_sky(sky_config, d)
-x0_1 = np.reshape(Qubic_sky1.get_simple_sky_map(),(d['nf_sub'],d['nside']**2*12,3))
+x0_1 = Qubic_sky1.get_simple_sky_map()
 print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0_1))
 
 ### Display input maps
@@ -320,7 +320,7 @@ sky_config = {'cmb': cmb_dict}                ### CMB Only
 
 ### Generate the maps at each sub-frequency
 Qubic_sky3 = qss.Qubic_sky(sky_config, d)
-x0_3 = np.reshape(Qubic_sky3.get_simple_sky_map(),(d['nf_sub'],d['nside']**2*12,3))
+x0_3 = Qubic_sky3.get_simple_sky_map()
 print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0_3))
 
 ### Display all maps
@@ -361,7 +361,7 @@ sky_config = {'CMB': 'c1'}                ### CMB Only
 
 ### Generate the maps at each sub-frequency
 Qubic_sky4 = qss.Qubic_sky(sky_config, d)
-x0_4 = np.reshape(Qubic_sky4.get_simple_sky_map(),(d['nf_sub'],d['nside']**2*12,3))
+x0_4 = Qubic_sky4.get_simple_sky_map()
 print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0_4))
 
 ### Display all maps
@@ -459,14 +459,6 @@ for i in range(4):
         for s in range(d['nf_sub']):
             plot(llout,llout*(llout+1)*clsout[s][i,:]/2/np.pi, '-', alpha=0.3, label='Output Map {} Cl'.format(s))
     if i==0: legend(fontsize=10, loc='upper right')
-
-```
-
-```{python}
-
-```
-
-```{python}
 
 ```
 

@@ -22,8 +22,9 @@ class Namaster(object):
         self.ells, self.weights, self.bpws = self._binning()
 
         ### Mask
-        self.weight_mask = np.asarray(weight_mask)
-        self.mask_apo = self.get_apodized_mask(aposize=10.0, apotype='C1')
+        if weight_mask is not None:
+            self.weight_mask = np.asarray(weight_mask)
+            self.mask_apo = self.get_apodized_mask(aposize=10.0, apotype='C1')
         
         self.f0 = None
         self.f2 = None

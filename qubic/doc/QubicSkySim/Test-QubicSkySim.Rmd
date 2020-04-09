@@ -471,5 +471,9 @@ for i in range(4):
 ```
 
 ```{python}
+hp.npix2nside(12*256**2)
+```
+
+```{python}
 
 ```

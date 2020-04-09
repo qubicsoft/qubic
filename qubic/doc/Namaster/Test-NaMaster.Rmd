@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -28,7 +28,6 @@ import matplotlib.pyplot as plt
 from qubicpack.utilities import Qubic_DataDir
 from pysimulators import FitsArray
 
-import pysm
 import qubic
 from qubic import QubicSkySim as qss
 from qubic import NamasterLib as nam
@@ -157,11 +156,11 @@ Now we have the maps with known spectra so we can retrieve spectra with Namaster
 ```{python}
 # Create a Namaster object
 lmin = 20
-lmax = 2 * d['nside'] + 200
+lmax = 2 * d['nside'] - 1
 delta_ell = 16
 
-### Making mask - it will be automaticall apodized when instanciating the obkect with default (tunable) parameters
-mask = np.zeros(12*d['nside']**2)
+### Making mask - it will be automaticall apodized when instanciating the object with default (tunable) parameters
+mask = np.zeros(12 * d['nside']**2)
 mask[seenpix] = 1
 
 Namaster = nam.Namaster(mask, lmin=lmin, lmax=lmax, delta_ell=delta_ell)

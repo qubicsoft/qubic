@@ -27,7 +27,7 @@ else:
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
 print('global_dir', global_dir)
 if sys.argv[4].lower() == 'no':
-    dictfilename = global_dir + '/dicts/spectroimaging.dict'
+    dictfilename = global_dir + '/dicts/spectroimaging_article.dict'
 else:
     dictfilename = global_dir + '/dicts/' + sys.argv[4]
 
@@ -37,10 +37,7 @@ dictmaps = global_dir + '/scripts/Spectroimagery_paper/maps/'
 out_dir = sys.argv[1]
 if out_dir[-1] != '/':
     out_dir = out_dir + '/'
-try:
-    os.makedirs(out_dir)
-except:
-    pass
+os.makedirs(out_dir, exist_ok=True)
 
 # Name of the simulation
 name = today + '_' + sys.argv[2]
@@ -49,7 +46,7 @@ name = today + '_' + sys.argv[2]
 nreals = int(sys.argv[3])
 
 # Option multFactor x QU
-multFactor = int(sys.argv[5])
+#multFactor = int(sys.argv[5])
 
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
@@ -73,7 +70,9 @@ t0 = time.time()
 
 # ===== Sky Creation or Reading =====
 
-x0 = FitsArray(dictmaps + 'nf_sub={}/nside{}_nfsub{}.fits'.format(nf_sub, d['nside'], nf_sub))
+# x0 = FitsArray(dictmaps + 'nf_sub={}/nside{}_nfsub{}.fits'.format(nf_sub, d['nside'], nf_sub))
+
+x0 = FitsArray(dictmaps + 'Dust_d1_nside128_nfsub15.fits')
 print('Input Map with shape:', np.shape(x0))
 
 if x0.shape[1] % (12 * d['nside'] ** 2) == 0:
@@ -88,8 +87,8 @@ else:
 # x0[:, :, 0] = 0.
 
 # Multiply Q, U maps
-x0[:, :, 1] *= multFactor
-x0[:, :, 2] *= multFactor
+#x0[:, :, 1] *= multFactor
+#x0[:, :, 2] *= multFactor
 
 
 # ==== Pointing strategy ====

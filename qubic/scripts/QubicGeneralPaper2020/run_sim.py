@@ -16,6 +16,14 @@ from qubic import SpectroImLib as si
 from qubic import QubicSkySim as qss
 from qubic import NamasterLib as nam
 
+## Instructions:
+## python ./run_sim.py <Dictname> <seed> <generic_string> <npointings> <tol>
+## Exemple:
+## python ./run_sim.py BmodesNoDustNoSystPaper0_2020.dict 42 CMB-Only-12sub_3000_1e-4 3000 1e-4
+##
+## NB: the  ouput files are for now by default in /qubic/Sims/EndToEndMaps/ (see line 121)
+## On a nother machine it  has to be changed before running...
+
 
 print('Number of arguments:', len(sys.argv), 'arguments.')
 print('Argument List:', str(sys.argv))

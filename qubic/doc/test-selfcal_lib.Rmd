@@ -277,13 +277,17 @@ fig, ax = plt.subplots()
 
 # instanciate a figure and ax object
 # annotate is a method that belongs to axes
-ax.plot(x, y, 'go', markersize=23, alpha=0.5)
+ax.plot(x, y, 'go', markersize=40, alpha=0.2)
 
 a = 1
 for i,j in zip(x,y):
-    corr = -0.001 # adds a little correction to put annotation in marker's centrum
-    ax.annotate(str(a),  xy=(i + corr, j + corr))
+    corr = -0.002 # adds a little correction to put annotation in marker's centrum
+    ax.annotate(str(a),  xy=(i + corr, j + corr), fontsize=14)
     a+=1
+plt.xticks(fontsize=14)
+plt.yticks(fontsize=14)
+ax.set_xlabel('$X_{GRF}$ [m]', fontsize=20)
+ax.set_ylabel('$Y_{GRF}$ [m]', fontsize=20)
 ```
 
 # Get an array with TES signal

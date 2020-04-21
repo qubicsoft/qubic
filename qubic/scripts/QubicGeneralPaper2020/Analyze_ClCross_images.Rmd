@@ -1,0 +1,464 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# %matplotlib inline
+from pylab import *
+import os
+import sys
+from importlib import reload
+import glob
+import pickle
+import time
+import scipy
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm
+import qubic
+from qubic import SpectroImLib as si
+from qubic import QubicSkySim as qss
+from qubic import NamasterLib as nam
+from qubic import camb_interface as qc
+from qubic import mcmc
+
+reload(nam)
+
+rc('figure', figsize=(13, 8))
+rc('font', size=12)
+```
+
+```{python}
+### One need to read one coverage for calculating later the sample variance - 
+### It is important to store fsky each time we calculate a Cl !!!!
+cov = np.array(FitsArray('/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB/Maps/CMB-Only-12sub_3000_1e-5_maps_coverage_zR2hSgphTA.fits'))
+hp.mollview(cov)
+```
+
+```{python}
+dirbase = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB/'
+dircls = dirbase+'Cls/'
+listinit = glob.glob(dircls+'cls_output*.pickle')
+
+k_values = []
+ellmin_values = []
+delta_ell_values = []
+covcut_values = []
+for l in listinit:
+    l = l.split('/')[-1].split('_')
+    kloc = np.where(np.array(l)=='k')[0]
+    sloc = np.where(np.array(l)=='s')[0]
+    lminloc = np.where(np.array(l)=='ellmin')[0]
+    dlloc = np.where(np.array(l)=='dl')[0]
+    covcutloc = np.where(np.array(l)=='covcut')[0]
+
+    keyword = l[kloc[0]+1]
+    for i in range(2,4):
+        keyword = keyword + '_'+l[kloc[0]+i]
+
+    seed = l[sloc[0]+1]
+    k_values.append(keyword+'_s_'+seed)
+
+    lmin = l[lminloc[0]+1]
+    ellmin_values.append(lmin)
+
+    dl = l[dlloc[0]+1]
+    delta_ell_values.append(dl)
+
+    covcut = l[covcutloc[0]+1]
+    dotpos = covcut.rfind('.')
+    covcut = covcut[:dotpos]
+    covcut_values.append(covcut)
+
+k_values = unique(k_values)
+ellmin_values = unique(ellmin_values)
+delta_ell_values = unique(delta_ell_values)
+covcut_values = unique(covcut_values)
+
+
+for k in k_values:
+    ff = glob.glob(dircls+'cls_output_k_'+k+'*.pickle')
+    print('Keyword: {} : #files={}'.format(k,len(ff)))
+
+print('Available variations on:')
+print('ell_min: {}'.format(len(ellmin_values)))
+print(ellmin_values)
+print('delta_ell: {}'.format(len(delta_ell_values)))
+print(delta_ell_values)
+print('covcut: {}'.format(len(covcut_values)))
+print(covcut_values)
+print('Possibilities: {}'.format(len(ellmin_values)*len(delta_ell_values)*len(covcut_values)))
+```
+
+Read and average the simulations
+
+```{python}
+# alloutputs = [leff, allclsFlat, allclsCov, allpairs, inputcl, inputl]
+# print('- Writing Cross-Cls in '+cross_cl_filename)
+# with open(cross_cl_filename, 'wb') as handle:
+#     pickle.dump(alloutputs, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+def read_one(k,lm,dl,cc, verbose=False):
+    filename = dircls+'cls_output_k_{0:}_ellmin_{1:}_dl_{2:}_covcut_{3:}.pickle'.format(k,lm, dl, cc)
+    ff = glob.glob(filename)
+    if len(ff)!=1:
+        if verbose: print('Problem with '+filename)
+        return -1
+    else:
+        ### Read file
+        with open(ff[0], 'rb') as handle:
+            leff, allclsFlat, allclsCov, allpairs, inputcl, inputl = pickle.load(handle)
+            mcls_flat = np.mean(allclsFlat,axis=0)
+            scls_flat = np.std(allclsFlat,axis=0)
+            mcls_cov = np.mean(allclsCov,axis=0)
+            scls_cov = np.std(allclsCov,axis=0)
+            mcls_best = np.zeros((len(leff),4))
+            scls_best = np.zeros((len(leff),4))
+            for i in range(len(leff)):
+                for s in range(4):
+                    if scls_flat[i,s] <= scls_cov[i,s]:
+                        mcls_best[i,s] = mcls_flat[i,s]
+                        scls_best[i,s] = scls_flat[i,s]
+                    else:
+                        mcls_best[i,s] = mcls_cov[i,s]
+                        scls_best[i,s] = scls_cov[i,s]
+        return leff, mcls_flat, scls_flat, mcls_cov, scls_cov, mcls_best, scls_best, inputcl, inputl
+    
+allstokes = ['TT','EE', 'BB', 'TE']
+
+                            
+
+```
+
+```{python}
+k = k_values[0]
+lm = ellmin_values[1]
+dl = delta_ell_values[7]
+cc = covcut_values[3]
+leff, mcls_flat, scls_flat, mcls_cov, scls_cov, mcls_best, scls_best, inputcl, inputl = read_one(k,lm,dl,cc)       
+
+stoke=2
+plot(inputl, inputcl[:,stoke]) 
+xlim(0,512)
+ylim(np.min(inputcl[:512,stoke])*1.5,5*np.max(inputcl[:512,stoke]))
+title('{} - $\\ell_m$={} - $\Delta_\\ell$={} - covcut={} \n {}'.format(allstokes[stoke],lm, dl, cc,k))
+xlabel('$\\ell$')
+ylabel('$D_\\ell$')
+plot(leff, scls_flat[:,stoke], label='Cls Flat')               
+plot(leff, scls_cov[:,stoke], label='Cls Cov')               
+plot(leff, scls_best[:,stoke], label='Cls Best')               
+legend(fontsize=8)
+
+
+```
+
+```{python}
+for ik in [1,3]:
+    k = k_values[ik]
+    lm = ellmin_values[1]
+    dl = delta_ell_values[7]
+    cc = covcut_values[3]
+    leff, mcls_flat, scls_flat, mcls_cov, scls_cov, mcls_best, scls_best, inputcl, inputl = read_one(k,lm,dl,cc)       
+
+    stoke=2
+    if ik == 0:
+        plot(inputl, inputcl[:,stoke]) 
+        xlim(0,512)
+        ylim(np.min(inputcl[:512,stoke])*1.5,2*np.max(inputcl[:512,stoke]))
+        title('{} - $\\ell_m$={} - $\Delta_\\ell$={} - covcut={}'.format(allstokes[stoke],lm, dl, cc))
+        xlabel('$\\ell$')
+        ylabel('$D_\\ell$')
+    plot(leff, scls_best[:,stoke], label='Cls Best {}'.format(k))               
+legend(fontsize=8)
+yscale('log')
+xlabel('$\\ell$')
+ylabel('RMS $D_\\ell$')
+
+```
+
+```{python}
+rc('figure', figsize=(15, 10))
+rc('font', size=12)
+reload(qc)
+reload(nam)
+reload(mcmc)
+import scipy
+
+### Read the camb lib from the file - We will not use it directly but it will 
+### be binned according to the. binning scheme for each case
+camblib = qc.read_camblib('../../scripts/QubicGeneralPaper2020/camblib.pickle')    
+    
+def ana_likelihood(rv, leff, fakedata, errors, model, prior, 
+                   mylikelihood=mcmc.LogLikelihood, covariance_model_funct=None):
+    ll = mylikelihood(xvals=leff, yvals=fakedata, errors=errors, 
+                            model = model, flatprior=prior, covariance_model_funct=covariance_model_funct)  
+    like = np.zeros_like(rv)
+    for i in range(len(rv)):
+        like[i] = np.exp(ll([rv[i]]))
+    cumint = scipy.integrate.cumtrapz(like, x=rv)
+    cumint = cumint / np.max(cumint)
+    onesigma = np.interp(0.68, cumint, rv[1:])
+    return like, cumint, onesigma
+
+
+def explore_like(k, lmin, dl, cc, rv, 
+                 cov=None, plotlike=False, plotcls=False, 
+                 verbose=False, sample_variance=True,
+                return_toplot=False):
+    ### Get errors from MC
+    try:
+        leff, mcls_flat, scls_flat, mcls_cov, scls_cov, mcls_best, scls_best, inputcl, inputl = read_one(k,lmin,dl,cc)       
+    except:
+        if verbose: print('not found for {} {} {} {}'.format(k,lmin,dl,cc))
+        return np.zeros(len(rv)), np.zeros(len(rv)), np.nan
+    
+    ### Create Namaster Object
+    # Unfortunately we need to recalculate fsky for calculating sample variance
+    if cov is None:
+        Namaster = nam.Namaster(None, lmin=lmin, lmax=lmax, delta_ell=dl)
+        Namaster.fsky = 0.018
+    else:
+        okpix = cov > (np.max(cov) * float(cc))
+        maskpix = np.zeros(12*nside**2)
+        maskpix[okpix] = 1
+        Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=dl)
+        
+    lbinned, b = Namaster.get_binning(nside)
+
+    ### Bibnning CambLib
+    binned_camblib = qc.bin_camblib(Namaster, '../../scripts/QubicGeneralPaper2020/camblib.pickle', 
+                                    nside, verbose=False)
+
+    ### Redefine the function for getting binned Cls
+    if return_toplot:
+        def myclth(ell,r):
+            clth = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=False)[0]
+            return clth
+        allfakedata = myclth(leff, 0.)
+    
+    ### And we need a fast one for BB only as well
+    def myBBth(ell, r):
+        clBB = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=False, specindex=2)[0]
+        return clBB
+
+    ### Fake data
+    fakedata = myBBth(leff, 0.)        
+    
+    if sample_variance:
+        covariance_model_funct = Namaster.knox_covariance
+    else:
+        covariance_model_funct = None
+    like, cumint, allrlim = ana_likelihood(rv, leff, fakedata, 
+                                            scls_best[:,2], 
+                                            myBBth, [[0,1]],
+                                           covariance_model_funct=covariance_model_funct)
+    
+    if plotcls:
+        if plotlike:
+            subplot(1,2,1)
+        plot(inputl, inputcl[:,2], 'k', label='r=0')
+        plot(leff, scls_best[:,2], label='Errors')
+        xlim(0,lmax)
+        ylim(0,np.max(inputcl[:lmax,2])*1.5)
+        xlabel('$\\ell$')
+        ylabel('$D_\\ell$')
+        legend(loc='upper left')
+    if plotlike:
+        if plotcls:
+            subplot(1,2,2)
+        p=plot(rv, like/np.max(like), 
+               label='$\sigma(r)={0:6.4f}$'.format(allrlim))
+        plot(allrlim+np.zeros(2), [0,1.2], ':', color=p[0].get_color())
+        xlabel('r')
+        ylabel('posterior')
+        legend(fontsize=8, loc='upper right')
+        xlim(0,0.1)
+        ylim(0,1.2)
+    
+    if return_toplot:
+        return like, cumint, allrlim, allfakedata, leff, mcls_flat, scls_flat, mcls_cov, scls_cov, mcls_best, scls_best, inputcl, inputl
+    else:
+        return like, cumint, allrlim
+
+```
+
+```{python}
+
+reload(mcmc)
+thek = k_values[3].copy()
+nside = 256
+lmax = 2 * nside - 1
+rv = np.linspace(0,1.,1000)
+
+rc('figure', figsize=(13, 6))
+lmin=20
+dl = 55
+cc = 0.2
+like, cumint, sigr = explore_like(thek, lmin, dl, cc, rv, cov=cov, 
+                                  plotcls=True, plotlike=True, sample_variance=True)
+
+```
+
+```{python}
+
+#### Choose which simulation set
+thek = k_values[3].copy()
+nside = 256
+lmax = 2 * nside - 1
+rv = np.linspace(0,1.,1000)
+
+allrlim = np.zeros((len(ellmin_values), len(covcut_values), len(delta_ell_values)))
+
+for ilm in range(len(ellmin_values)):
+    print(thek)
+    lmin = ellmin_values[ilm]
+    print('ell_min = {}'.format(lmin))
+    figure()
+    ipl=0
+    for icc in range(len(covcut_values)):
+        for idl in range(len(delta_ell_values)):
+            like, cumint, allrlim[ilm, icc, idl] = explore_like(thek, lmin, delta_ell_values[idl], 
+                                                                covcut_values[icc], rv, cov=cov)
+
+#             subplot(len(covcut_values),len(delta_ell_values),ipl+1)
+#             title('lmin = {} Cut={} $\Delta\\ell$={}'.format(lmin, covcut_values[icc], delta_ell_values[idl]), fontsize=9)
+#             p=plot(rv, like/np.max(like), 
+#                    label='$\sigma(r)={0:5.3f}$'.format(allrlim[ilm, icc,idl]))
+#             plot(allrlim[ilm, icc,idl]+np.zeros(2), [0,1.2], ':', color=p[0].get_color())
+
+#             legend(fontsize=8, loc='upper right')
+#             xlim(0,0.1)
+#             #xscale('log')
+#             ylim(0,1.2)
+
+#             ipl = ipl+1
+      
+    tight_layout()
+
+```
+
+```{python}
+rc('figure', figsize=(15, 6))
+rc('font', size=12)
+
+for ilm in range(len(ellmin_values)):
+    subplot(2,3,ilm+1)
+    myrlim = allrlim[ilm,:,:]
+    #imshow(myrlim, origin='lower',vmin=np.min(myrlim),vmax=np.max(myrlim))
+    imshow(myrlim, origin='lower',vmin=0.01,vmax=0.05)
+    mini = np.argwhere(myrlim == np.nanmin(myrlim))
+    plot(mini[0][1], mini[0][0], 'rx' ,ms=10, markeredgewidth=4,
+         label ='$\sigma(r)={0:6.4f}$'.format(np.nanmin(myrlim)))
+    plt.xticks(range(len(delta_ell_values)), delta_ell_values)
+    plt.yticks(range(len(covcut_values)), covcut_values)
+    xlabel('$\Delta\\ell$')
+    ylabel('Cov. Threshold')
+    title('$\\ell_m$={} - '.format(ellmin_values[ilm])+thek)
+    legend(loc='upper left')
+    colorbar()
+
+tight_layout()
+
+```
+
+```{python}
+
+reload(mcmc)
+
+rc('figure', figsize=(13, 6))
+lmin=15
+dl = 60
+cc = 0.2
+bla = explore_like(thek, lmin, dl, cc, rv, cov=cov, 
+                   plotcls=True, plotlike=True, sample_variance=True, return_toplot=True)
+like, cumint, sigr = bla[:3]
+allfakedata = bla[3]
+leff, mcls_flat, scls_flat, mcls_cov, scls_cov, mcls_best, scls_best, inputcl, inputl = bla[4:]
+
+```
+
+```{python}
+def plot_errors_lines(leff, err, dl, color='r', label=''):
+    for i in range(len(leff)):
+        if i==0:
+            plot([leff[i]-dl/2, leff[i]+dl/2], [err[i,s], err[i,s]],color, label=label)
+        else:
+            plot([leff[i]-dl/2, leff[i]+dl/2], [err[i,s], err[i,s]],color)
+        if i < (len(leff)-1):
+            plot([leff[i]+dl/2,leff[i]+dl/2], [err[i,s], err[i+1,s]], color)
+    
+
+lll = np.arange(512)
+cl0 = qc.get_Dl_fromlib(lll, 0, lib=camblib, unlensed=False)[0]   
+cl0_01 = qc.get_Dl_fromlib(lll, 0.01, lib=camblib, unlensed=False)[0]   
+cl0_06 = qc.get_Dl_fromlib(lll, 0.06, lib=camblib, unlensed=False)[0]   
+    
+rc('figure', figsize=(15, 8))
+rc('font', size=16)
+clname = ['TT', 'EE', 'BB', 'TE']
+
+for s in range(4):
+    subplot(2,2,s+1)
+    plot(lll, np.abs(cl0[:,s]),label='$\Lambda CDM$ r=0')
+    if s==2:
+        plot(lll, np.abs(cl0_01[:,s]),label='$\Lambda CDM$ r=0.01')
+        plot(lll, np.abs(cl0_06[:,s]),label='$\Lambda CDM$ r=0.06')
+    plot_errors_lines(leff, scls_best, dl, 'r', label='QUBIC Noise')
+    xlim(0,512)
+    ylim(np.min(scls_best[:,s])/5,np.max([np.max(inputcl[:512,s]*1.5),1.2*np.max(scls_best[:,s])]))
+    yscale('log')
+    xlabel('$\\ell$')
+    ylabel('$D_\\ell$({})'.format(clname[s]))
+    legend(loc='lower right')
+tight_layout()
+```
+
+```{python}
+rc('figure', figsize=(15, 8))
+rc('font', size=15)
+subplot(1,2,1)
+s=2
+plot(lll, np.abs(cl0[:,s]),label='r=0')
+if s==2:
+    plot(lll, np.abs(cl0_01[:,s]),label='r=0.01')
+    plot(lll, np.abs(cl0_06[:,s]),label='r=0.06')
+plot_errors_lines(leff, scls_best, dl, 'r', label='QUBIC Noise')
+xlim(0,512)
+ylim(np.min(scls_best[:,s])/5,np.max([np.max(inputcl[:512,s]*1.5),1.2*np.max(scls_best[:,s])]))
+yscale('log')
+xlabel('$\\ell$', fontsize=17)
+ylabel('$D_\\ell$({})'.format(clname[s]), fontsize=17)
+legend(loc='lower right')
+
+subplot(1,2,2)
+plot(rv,like, label='QUBIC F.I. - 3 years')
+plot([sigr, sigr],[0,1.1],'k--', label='r < {0:5.3f} at 68% C.L.'.format(sigr))
+annotate("BKP-2018", xy=(0.06, 0.01), xytext=(0.06, 0.2),
+            arrowprops=dict(width=10, headwidth=20), ha='center')
+legend()
+xlabel('r')
+ylabel('Posterior')
+xlim(0,0.07)
+ylim(0,1.1)
+```
+
+```{python}
+
+```

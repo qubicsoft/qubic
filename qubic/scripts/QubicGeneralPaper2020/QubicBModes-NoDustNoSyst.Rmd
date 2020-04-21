@@ -31,6 +31,7 @@ import numpy as np
 # Specific qubic modules
 from qubicpack.utilities import Qubic_DataDir
 from pysimulators import FitsArray
+import pysm
 import qubic
 from qubic import SpectroImLib as si
 from qubic import QubicSkySim as qss
@@ -43,7 +44,7 @@ rc('font', size=15)
 ```{python}
 # Repository for dictionary and input maps
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
-dictfilename = global_dir + '/dicts/BmodesNoDustNoSystPaper0_2020.dict'
+dictfilename = global_dir + '/dicts/Small_BmodesNoDustNoSystPaper0_2020.dict'
 
 # Read dictionary chosen
 d = qubic.qubicdict.qubicDict()
@@ -58,7 +59,7 @@ print(d)
 
 ```{python}
 # Make a sky using QubicSkySim with r=0 (default simple request - the camb spectrum is calculated inside)
-seed = None
+seed = 42
 sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, d)
 x0 = np.reshape(Qubic_sky.get_simple_sky_map(),(d['nf_sub'],d['nside']**2*12,3))
@@ -131,7 +132,6 @@ for i in range(len(nus_edge) - 1):
 ```
 
 ```{python}
-d['tol']=1e-5
 maps_recon, cov, nus, nus_edge, maps_convolved = si.reconstruct_maps(TOD, d, p,
                                                                     nf_sub_rec, x0=x0)
 maps_convolved = np.reshape(maps_convolved,(d['nf_recon'], 12*d['nside']**2, 3))
@@ -140,12 +140,8 @@ print(maps_recon.shape)
 ```
 
 ```{python}
-hp.mollview(cov[3,:])
-```
-
-```{python}
 # Look at the coverage of the sky
-coverage = cov.copy()
+coverage = np.sum(cov.copy(), axis=0)
 maxcov = np.max(coverage)
 unseen = coverage < maxcov * 0.1
 print(maps_convolved.shape)
@@ -154,9 +150,9 @@ maps_recon[:, unseen, :] = hp.UNSEEN
 ```
 
 ```{python}
-print(cov.shape)
-hp.mollview(cov)
-#hp.write_map('sample_coverage_qubic.fits',cov)
+print(coverage.shape)
+hp.mollview(coverage)
+#hp.write_map('sample_coverage_qubic.fits',coverage)
 ```
 
 ```{python}
@@ -180,13 +176,31 @@ for istk in range(3):
                 title = '{0} conv {1}'.format(d['kind'][istk], band), min=-lim[istk], max=lim[istk])
     hp.gnomview(maps_diff[band,:,istk], cmap ='jet', sub = (3,3,3*istk+3), rot=center, reso=rr, 
                 title = '{0} diff {1}'.format(d['kind'][istk], band), min=-lim[istk], max=lim[istk])
-
 ```
 
-### Spectra
-using NaMaster
+```{python}
+okpix = maps_diff[0,:,0] != hp.UNSEEN
+print(np.std(maps_diff[:,okpix,:],axis=1))
+```
 
-first try with more pointings...
+```{python}
+#### Save maps
+rnd_name = qss.random_string(10)
+directory = '/qubic/Sims/EndToEndMaps/'
+FitsArray(maps_recon).save(directory+'maps_recon_seed_'+str(seed)+'_'+rnd_name+'.fits')
+FitsArray(maps_convolved).save(directory+'maps_convolved_seed_'+str(seed)+'_'+rnd_name+'.fits')
+FitsArray(coverage).save(directory+'maps_coverage_'+rnd_name+'.fits')
+   
+import pickle
+with open(directory+'dictionary_'+rnd_name+'.pickle', 'wb') as handle:
+    pickle.dump(d, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+with open(directory+'input_cell_'+rnd_name+'.pickle', 'wb') as handle:
+    pickle.dump(Qubic_sky.input_cmb_spectra, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+
+```
 
 ```{python}
 
@@ -195,6 +209,8 @@ first try with more pointings...
 ```{python}
 
 ```
+
+
 
 ```{python}
 

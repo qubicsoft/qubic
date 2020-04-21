@@ -4,8 +4,8 @@ jupyter:
     text_representation:
       extension: .Rmd
       format_name: rmarkdown
-      format_version: '1.1'
-      jupytext_version: 1.2.1
+      format_version: '1.2'
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -33,188 +33,559 @@ import numpy as np
 # Specific qubic modules
 from qubicpack.utilities import Qubic_DataDir
 from pysimulators import FitsArray
+import pysm
+import pysm.units as u
+
 import qubic
 from qubic import SpectroImLib as si
-from pysm.nominal import models
+from qubic import QubicSkySim as qss
+from qubic import NamasterLib as nam
+
+from qubic import fibtools as ft
+
+import ReadMC as rmc
+import AnalysisMC as amc
 
 rc('figure', figsize=(13, 10))
 rc('font', size=15)
 ```
 
 ```{python}
-# Repository for dictionary and input maps
-global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
-dictfilename = global_dir + '/dicts/spectroimaging_article.dict'
+# Repository for dictionary 
+dictfilename = os.environ['QUBIC_DICT']+'spectroimaging_article.dict'
 
 # Read dictionary chosen
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
-print(d['nf_sub'])
+
+d['nf_sub'] = 16
+
+# d['nside'] = 16
+
 # Center of the patch observed in galactic coordinates
-# d['DEC_center'] = 45.
-# d['RA_center'] = 45.
-# d['latitude'] = 0.
-# d['longitude'] = 0.
-# d['npointings'] = 100
+l_center = 0.
+b_center = 0. 
+center = np.array([l_center, b_center])
+
+# RA DEC coordinates for the center of the patch
+d['RA_center'], d['DEC_center'] = qubic.gal2equ(l_center, b_center)
+print('RADEC center :', d['RA_center'], d['DEC_center'])
+
+# d['noiseless'] = True
+print(d['detector_nep'])
+
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 print(center)
-print(d)
+
+# d['dtheta'] = 8
 ```
 
-# Input sky (to change)
-* two point source
-* two superimpose signals
-* cmb+dust
+# Initial sky maps
+* cmb+dust+synchrotron
+
+I would like to make a sky with a very particular spectra (a V centered at 150GHz).
 
 ```{python}
-# Make a sky using PYSM
-sky_config = {'dust': models('d1', d['nside']),
-             'cmb': models('c1', d['nside'])}
-Qubic_sky = si.Qubic_sky(sky_config, d)
-x0 = Qubic_sky.get_simple_sky_map()
+maps_dir = '/home/lmousset/QUBIC/MyGitQUBIC/qubic/qubic/scripts/Spectroimagery_paper/maps/'
+x0cmb = FitsArray(maps_dir + 'CMB_r=0_nside128_nfsub16.fits')
+x0dust = FitsArray(maps_dir + 'Dust_d1_nside128_nfsub16.fits')
+x0synch = FitsArray(maps_dir + 'Synchrotron_s1_nside128_nfsub16.fits')
 
-# Load a CMB map
-# x0 = FitsArray(dictmaps + 'CMB_nside64_nfsub14.fits')
+print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0dust))
+```
+
+```{python}
+allx0 = [x0synch, x0cmb, x0dust]
+title = ['Synchrotron', 'CMB', 'Dust']
+isub = 10
+for i in range(3):
+    hp.mollview(allx0[i][isub, :, 0], sub=(3, 1, i+1), title=title[i], cbar=None)
+```
+
+```{python}
+# Remember that we can always retrieve the input CMB maps and spectra
+
+ell, totDL, unlensedDL = qss.get_camb_Dl(r=0., lmax=3*d['nside']-1)
+cmb_dict = {'CAMBSpectra':totDL, 'ell':ell, 'seed':None}
+sky_config = {'cmb': cmb_dict}
+Qubic_skycmb = qss.Qubic_sky(sky_config, d)
+
+### Input Maps
+input_maps = Qubic_skycmb.input_cmb_maps
+rng = (np.std(input_maps, axis=(1))*3).astype(int)
+rng[1:] = np.max(rng[1:])
+
+plt.figure()
+hp.mollview(input_maps[0,:], title="I input map used", min=-rng[0], max=rng[0], sub=(1,3,1))
+hp.mollview(input_maps[1,:], title="Q input map used", min=-rng[1], max=rng[1], sub=(1,3,2))
+hp.mollview(input_maps[2,:], title="U input map used", min=-rng[2], max=rng[2], sub=(1,3,3))
+
+### Input Cls
+input_Dl = Qubic_skycmb.input_cmb_spectra
+if input_Dl is not None:
+    input_ell = np.arange(np.shape(input_Dl)[0])
+    plt.figure()
+    order = ['TT', 'EE', 'BB', 'TE']
+    for i in range(4):
+        subplot(2, 2, i+1)
+        plot(input_ell, input_Dl[:, i], color='k')
+        plt.title(order[i])
+        xlabel('$\\ell$')
+        ylabel('$D_\\ell$')
+    tight_layout()
+```
+
+# Get the coverage
+
+```{python}
+p = qubic.get_pointing(d)
+q = qubic.QubicMultibandInstrument(d)
+s = qubic.QubicScene(d)
+
+_, nus_edge, _, _, _, _ = qubic.compute_freq(150, d['nf_sub'])
+
+a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge)
+cov = a.get_coverage()
+```
+
+```{python}
+# Look at the coverage of the sky
+print(cov.shape)
+covsum = np.sum(cov, axis=0)
+hp.mollview(covsum)
+```
+
+```{python}
+seenmap = covsum > 0.1 * np.max(covsum)
+cov[:, np.invert(seenmap)] = hp.UNSEEN
+hp.mollview(cov[1], title='Coverage map')
+```
+
+# Input Sky
+
+```{python}
+# std_x0cmb = np.std(x0cmb[:, seenmap, 0], axis=(1))
+# std_x0dust = np.std(x0dust[:, seenmap, 0], axis=(1))
+# std_x0synch = np.std(x0synch[:, seenmap, 0], axis=(1))
+```
+
+```{python}
+# x0 = np.zeros_like(x0cmb)
+# x0 = x0cmb
+# x0[0] += x0synch[0]
+# x0[-1] += x0dust[-1]
+# x0[:5] = x0synch[:5]      # + x0cmb[:5]
+# x0[5:10] = x0cmb[5:10]         #+ x0synch[5:10] + x0dust[5:10] / 100
+# x0[10:] = x0dust[10:]      # + x0cmb[10:]
+
+x0 = x0dust
+# x0[:, :, 1:] = 0.
+```
+
+```{python}
+x0cmb_3band = FitsArray(maps_dir + 'CMB_r=0_nside128_nfsub3.fits')
+x0dust_3band = FitsArray(maps_dir + 'Dust_d1_nside128_nfsub3.fits')
+x0synch_3band = FitsArray(maps_dir + 'Synchrotron_s1_nside128_nfsub3.fits')
+
+# x0_3band = np.zeros_like(x0cmb_3band)
+# x0_3band = x0cmb_3band
+# x0_3band[0] = x0synch_3band[0]  #+ x0cmb_3band[0]
+# x0_3band[1] = x0cmb_3band[1] #+ x0synch_3band[1] + x0dust_3band[1] / 100
+# x0_3band[2] = x0dust_3band[2] # + x0cmb_3band[2]
+
+# x0_3band[:, :, 1:] = 0.
+
+x0_3band = x0dust_3band 
+print(x0cmb_3band.shape)
+```
+
+```{python}
+stn = ['I', 'Q', 'U']
+isub = 6
+plt.figure()
+for istokes in range(3):
+    hp.mollview(x0[isub, :, istokes], title="{} full map".format(stn[istokes]), sub=(2, 3, istokes+1))
+    hp.gnomview(x0[isub, :, istokes], title="{} full map".format(stn[istokes]), sub=(2, 3, istokes+4), 
+                rot=center, reso=15)
+```
+
+```{python}
+# STD clippé
+nf_sub_rec = 8
+nf_sub = d['nf_sub']
+
+# Width of the bands
+_, _, nus, deltas, Delta, _ = qubic.compute_freq(150, nf_sub)
+
+_, nus_edges_rec, nus_rec, deltas_rec, _, _ = qubic.compute_freq(150, nf_sub_rec)
+
+plt.figure()
+names = ['cmb', 'dust', 'synchrotron', 'x0', 'x0 3band']
+for i, mapa in enumerate([x0cmb, x0dust, x0synch, x0, x0_3band]):
+    nband = np.shape(mapa)[0]
+    print(nband)
+    mean, std = np.array([ft.meancut(mapa[i, seenmap, :], nsig=3) for i in range(nband)]).T
     
-print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0))
-```
+    if i in [3]:
+        if nband == d['nf_sub']:
+            plt.plot(nus, std, 'o', label=names[i])
+        else:
+            plt.plot(nus_rec, std, 'o', markersize=10, label=names[i])
 
-```{python}
-# Look at the input sky maps using Healpy
 
-istokes = 0 # Stokes parameter (I, Q, U)
-imap = 2 # Frequency subband, should be smaller than nf_sub
-rr=9 # Resolution in arcmin
+for n in nus_edges_rec:
+    plt.axvline(n, color='k', linestyle='--')
+for c in nus_rec:
+    plt.axvline(c, color='r', linestyle='--')
+plt.xlabel('Frequency [GHz]')
+plt.ylabel('STD')
 
-plt.figure(figsize=(13,8))
-for istk in range(3):
-    plt.subplots_adjust(wspace=0.9)
-    hp.mollview(x0[imap,:,istk], cmap='jet', sub = (3,2,2*istk+1), 
-                title = 'Mollview {0} Stokes parameter, map {1}'.format(d['kind'][istk], imap))
-    hp.gnomview(x0[imap,:,istk], cmap ='jet', sub = (3,2,2*istk+2), rot=center, reso=rr, 
-                title = 'Gnomview {0} Stokes parameter, map {1}'.format(d['kind'][istk], imap))
-    
-```
-
-```{python}
-istk = 1
-plt.figure(figsize=(13,8))
-for band in range(d['nf_sub']):
-    plt.subplots_adjust(wspace=0.9)
-    hp.gnomview(x0[band, :, istk], 
-                rot=center,
-                reso=100,
-                cmap='jet', 
-                sub = (4, 4, band+1),
-                min=0.,
-#                 max=1e3,
-                title = '{} Band {}'.format(d['kind'][istk], band))
-
+plt.legend()
 ```
 
 # TOD simulation
 
 ```{python}
-# Pointing strategy
-p = qubic.get_pointing(d)
-print('=== Pointing DONE! ===')
-
 # ==== TOD making ====
-TOD, maps_convolved = si.create_TOD(d, p, x0)
+TOD, maps_convolvedx0 = si.create_TOD(d, p, x0)
 print('--------- Noiseless TOD with shape: {} - Done ---------'.format(np.shape(TOD)))
+
+maps_convolvedx0 = np.array(maps_convolvedx0)
 ```
 
 ```{python}
-q = qubic.QubicMultibandInstrument(d)
-s = qubic.QubicScene(d)
-rot_beams = si.get_hitmap(q[0], s, p)
+# This function doesn't work !
+# rot_beams = si.get_hitmap(q[0], s, p)
+# print(rot_beams.shape)
+# hp.mollview(np.sum(rot_beams, axis=0) + x0[0, :, 0])
 ```
 
 ```{python}
-rot_beams.shape
-hp.mollview(np.sum(rot_beams, axis=0))
-```
+# Same plot as before with the x0 convolved
+plt.figure()
+names = ['cmb', 'dust', 'synchrotron', 'x0', 'x0 3band', 'x0 conv']
+for i, mapa in enumerate([x0cmb, x0dust, x0synch, x0, x0_3band, maps_convolvedx0]):
+    nband = np.shape(mapa)[0]
+    print(nband)
+    mean, std = np.array([ft.meancut(mapa[i, seenmap, :], nsig=3) for i in range(nband)]).T
+    
+    if i in [3, 5]:
+        if nband == d['nf_sub']:
+            plt.plot(nus, std, 'o', label=names[i])
+        else:
+            plt.plot(nus_rec, std, 'o', markersize=10, label=names[i])
 
-```{python}
-TOD.shape
+
+for n in nus_edges_rec:
+    plt.axvline(n, color='k', linestyle='--')
+for c in nus_rec:
+    plt.axvline(c, color='r', linestyle='--')
+plt.xlabel('Frequency [GHz]')
+plt.ylabel('STD')
+
+plt.legend()
 ```
 
 # Map-Making
 
 ```{python}
-nf_sub_rec = d['nf_recon'][1]
-
-Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = qubic.compute_freq(150, nf_sub_rec)
-print('Band center:', nus)
-print('Band edges:', nus_edge)
-print('Band width:', deltas)
-
-len(nus_edge)
-for i in range(len(nus_edge) - 1):
-    print('base =', nus_edge[i+1] / nus_edge[i])
-    
-# plt.plot(nus, [1, 1], 'ro')
-# plt.plot(nus_edge, [1, 1, 1], 'bo')
-```
-
-```{python}
-d['tol']=1e-5
+d['tol'] = 1e-4
+d['noiseless'] = False
 maps_recon, cov, nus, nus_edge, maps_convolved = si.reconstruct_maps(TOD, d, p,
-                                                                    nf_sub_rec, x0=x0)
+                                                                    nf_sub_rec, x0)
 print(maps_recon.shape)
 ```
 
 ```{python}
+# Save the simulation
+save_dir = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/'
+simu_name = 'nfsub16_rec8_onlydust01.fits'
+rmc.save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved, save_dir=save_dir, simu_name=simu_name)
+```
+
+# TOD noiseless and Map making
+
+```{python}
+d['noiseless'] = True
+d['tol'] = 1e-4
+TOD_noiseless, maps_convolved_noiseless = si.create_TOD(d, p, x0)
+print('--------- Noiseless TOD with shape: {} - Done ---------'.format(np.shape(TOD_noiseless)))
+
+# Reconstruction noiseless
+print('************* Map-Making on {} sub-map(s) (noiseless) *************'.format(nf_sub_rec))
+
+maps_recon_noiseless, cov_noiseless, nus, nus_edge, maps_convolved_noiseless = si.reconstruct_maps(TOD_noiseless, 
+                                                                                                   d, 
+                                                                                                   p,
+                                                                                                   nf_sub_rec, 
+                                                                                                   x0=x0)
+if nf_sub_rec == 1:
+    print(maps_recon_noiseless.shape, maps_convolved_noiseless.shape)
+    maps_recon_noiseless = np.reshape(maps_recon_noiseless, np.shape(maps_convolved_noiseless))
 # Look at the coverage of the sky
-cov = np.sum(cov, axis=0)
-maxcov = np.max(cov)
-unseen = cov < maxcov * 0.1
-maps_convolved[:, unseen, :] = hp.UNSEEN
-maps_recon[:, unseen, :] = hp.UNSEEN
+cov_noiseless = np.sum(cov_noiseless, axis=0)
+maxcov_noiseless = np.max(cov_noiseless)
+unseen = cov_noiseless < maxcov_noiseless * 0.1
+maps_convolved_noiseless[:, unseen, :] = hp.UNSEEN
+maps_recon_noiseless[:, unseen, :] = hp.UNSEEN
+print('************* Map-Making on {} sub-map(s) (noiseless). Done *************'.format(nf_sub_rec))
+
 ```
 
 ```{python}
-maps_diff = maps_convolved - maps_recon
-# np.unique(np.isnan(maps_recon))
-maps_diff[maps_recon == -1.6375e+30] = -1.6375e+30
-hp.mollview(maps_diff[0, :, 0])
-maps_recon
+rmc.save_simu_fits(maps_recon_noiseless, cov_noiseless, nus, nus_edge, maps_convolved_noiseless,
+                  save_dir=save_dir, simu_name='noiseless_' + simu_name)
+
+```
+
+# Compute residuals
+
+```{python}
+maps_recon, maps_convolved, maps_diff = rmc.get_maps(save_dir + simu_name)
+maps_recon_noiseless, maps_convo_noiseless, maps_diff_noiseless = rmc.get_maps(save_dir + 'noiseless_' + simu_name)
+
+# maps_recon = np.reshape(maps_recon , (1, 196608, 3))
+
+maps_convolved[:, np.invert(seenmap), :] = 0.
+maps_recon[:, np.invert(seenmap), :] = 0.
+maps_diff[:, np.invert(seenmap), :] = 0.
+maps_recon_noiseless[:, np.invert(seenmap), :] = 0.
+
+residuals = maps_recon - maps_recon_noiseless
+```
+
+```{python}
+# maps_recon_noiseless[maps_recon==0.] = hp.UNSEEN
+# maps_convolved[maps_recon==0.] = hp.UNSEEN
+# maps_diff[maps_recon==0.] = hp.UNSEEN
+# residuals[maps_recon==0.] = hp.UNSEEN
+# maps_recon[maps_recon==0.] = hp.UNSEEN
 ```
 
 ```{python}
 # Look at IQU in one band
-band = 1
-plt.figure(figsize=(8,8))
+band = 0
+plt.figure(figsize=(12, 10))
+plt.subplots_adjust(wspace=0.4, hspace=0.7)
 rr = 15
 for istk in range(3):
     plt.subplots_adjust(wspace=0.9)
-    hp.gnomview(maps_recon[band,:,istk], cmap ='jet', sub = (3,3,3*istk+1), rot=center, reso=rr, 
+    hp.gnomview(maps_recon[band,:,istk], cmap ='jet', sub = (3, 5, 5*istk+1), rot=center, reso=rr, 
                 title = '{0} rec {1}'.format(d['kind'][istk], band))
-    hp.gnomview(maps_convolved[band,:,istk], cmap ='jet', sub = (3,3,3*istk+2), rot=center, reso=rr, 
+    hp.gnomview(maps_recon_noiseless[band,:,istk], cmap ='jet', sub = (3, 5, 5*istk+2), rot=center, reso=rr, 
+                title = '{0} rec noiseless{1}'.format(d['kind'][istk], band))
+    hp.gnomview(maps_convolved[band,:,istk], cmap ='jet', sub = (3, 5, 5*istk+3), rot=center, reso=rr, 
                 title = '{0} conv {1}'.format(d['kind'][istk], band))
-    hp.gnomview(maps_diff[band,:,istk], cmap ='jet', sub = (3,3,3*istk+3), rot=center, reso=rr, 
+    hp.gnomview(maps_diff[band,:,istk], cmap ='jet', sub = (3, 5, 5*istk+4), rot=center, reso=rr, 
                 title = '{0} diff {1}'.format(d['kind'][istk], band))
+    hp.gnomview(residuals[band,:,istk], cmap ='jet', sub = (3, 5, 5*istk+5), rot=center, reso=rr, 
+                title = '{0} Residuals {1}'.format(d['kind'][istk], band))
 
 ```
 
 ```{python}
 istk = 0
-plt.figure(figsize=(8,8))
+plt.figure(figsize=(12, 10))
+plt.subplots_adjust(wspace=0.4, hspace=0.7)
 rr = 15
-min = -150
-max= 150
+min = None
+max = None
+
 for band in range(nf_sub_rec):
     plt.subplots_adjust(wspace=0.9)
-    hp.gnomview(maps_recon[band,:,istk], cmap ='jet', sub = (nf_sub_rec, 3, 3*band+1), rot=center, reso=rr, 
+    hp.gnomview(maps_recon[band,:,istk], cmap ='jet', sub = (nf_sub_rec, 5, 5*band+1), rot=center, reso=rr, 
                 title = '{0} rec {1}'.format(d['kind'][istk], band), min=min, max=max)
-    hp.gnomview(maps_convolved[band,:,istk], cmap ='jet', sub = (nf_sub_rec, 3, 3*band+2), rot=center, reso=rr, 
+    hp.gnomview(maps_recon_noiseless[band,:,istk], cmap ='jet', sub = (nf_sub_rec, 5, 5*band+2), rot=center, reso=rr, 
+                title = '{0} rec noiseless {1}'.format(d['kind'][istk], band), min=min, max=max)
+    hp.gnomview(maps_convolved[band,:,istk], cmap ='jet', sub = (nf_sub_rec, 5, 5*band+3), rot=center, reso=rr, 
                 title = '{0} conv {1}'.format(d['kind'][istk], band), min=min, max=max)
-    hp.gnomview(maps_diff[band,:,istk], cmap ='jet', sub = (nf_sub_rec, 3, 3*band+3), rot=center, reso=rr, 
-                title = '{0} diff {1}'.format(d['kind'][istk], band), min=min/15, max=max/15)
+    hp.gnomview(maps_diff[band,:,istk], cmap ='jet', sub = (nf_sub_rec, 5, 5*band+4), rot=center, reso=rr, 
+                title = '{0} diff {1}'.format(d['kind'][istk], band), min=min, max=max)
+    hp.gnomview(residuals[band,:,istk], cmap ='jet', sub = (nf_sub_rec, 5, 5*band+5), rot=center, reso=rr, 
+                title = '{0} Residuals {1}'.format(d['kind'][istk], band), min=min, max=max)
+
 
 ```
 
+# Analysis
+
+```{python}
+_, nus_edges, nus, deltas, _, _ = qubic.compute_freq(150, nf_sub)
+_, nus_edges_rec, nus_rec, deltas_rec, _, _ = qubic.compute_freq(150, nf_sub_rec)
+
+istk = 0
+isub = 0
+
+names = ['x0', 'x0 conv in 15 bands', 'x0 conv in 3 bands', 'recon', 'recon noiseless']
+plt.figure()
+rc('figure', figsize=(22, 8))
+plt.subplots_adjust(wspace=0.2)
+for i, mapa in enumerate([x0, maps_convolvedx0, maps_convolved, maps_recon, maps_recon_noiseless]):
+    nband = np.shape(mapa)[0]
+    print(nband)
+    
+    if i in [2, 3, 4]:
+        # Global STD on IQU
+        mean, std = np.array([ft.meancut(mapa[i, seenmap, :], nsig=3) for i in range(nband)]).T
+#         std = np.std(mapa[:, seenmap, :], axis=(1, 2))
+        
+        plt.subplot(121)
+        if nband == 15:
+            plt.plot(nus, std, 'o', label=names[i])
+        else:
+            plt.plot(nus_rec, std, 'o', label=names[i])
+        plt.xlabel('Frequency [GHz]')
+        plt.ylabel('STD')
+        plt.title('Global STD on IQU')
+        plt.legend()
+        
+        # STD profile
+        bin_centers, ang, std_bin, std_profile = amc.std_profile(np.expand_dims(mapa, axis=0)[:, :, seenmap, :], 
+                                                        40, d['nside'], center, seenmap)
+        plt.subplot(122)
+        plt.plot(ang, std_profile[:, isub, istk], '.', label=names[i])
+        plt.xlabel('Angle [deg]')
+        plt.ylabel('STD')
+        plt.title('{} Band {}'.format(stn[istk], isub))
+        plt.legend()
+
+
+```
+
+```{python}
+_, std_conv_global = ft.meancut(maps_convolved[:, seenmap, :], nsig=3)
+_, std_recon_global = ft.meancut(maps_recon[:, seenmap, :], nsig=3)
+_, std_recon_noiseless_global = ft.meancut(maps_recon_noiseless[:, seenmap, :], nsig=3)
+_, std_x0_global = ft.meancut(x0[:, seenmap, :], nsig=3)
+
+print(std_conv_global, std_recon_global, std_recon_noiseless_global, std_x0_global)
+```
+
+# Power spectrum
+
+```{python}
+# Create a Namaster object
+lmin = 50
+lmax = 2 * d['nside'] - 1
+delta_ell = 15
+
+mask = np.zeros(12 * d['nside']**2)
+mask[seenmap] = 1
+
+Namaster = nam.Namaster(mask, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+
+# Make a mask
+mask_apo = Namaster.get_apodized_mask()
+
+hp.mollview(mask_apo)
+```
+
+```{python}
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+Qubic_sky.instrument['beams'] #= Qubic_sky.instrument['beams'][0]
+```
+
+```{python}
+# fwhm = self.synthbeam.peak150.fwhm * (150e9 / self.filter.nu)
+q[0].synthbeam.peak150.fwhm * (150e9 / q[0].filter.nu)
+q[1].filter.nu
+
+nus_rec
+```
+
+```{python}
+w = None
+allcells_recon, allcells_recon_noiseless, allcells_conv, allcells_x0 = [], [], [], []
+# Get spectra
+for isub in range(nf_sub_rec):
+    bc = 61.34 / nus_rec[isub]
+    print(bc)
+    leff, cells_recon, w = Namaster.get_spectra(maps_recon[isub, :, :].T, mask_apo, w=w,
+                                          purify_e=True, 
+                                          purify_b=False, 
+                                          beam_correction=None,
+                                          pixwin_correction=True)
+    
+    leff, cells_recon_noiseless, w = Namaster.get_spectra(maps_recon_noiseless[isub, :, :].T, mask_apo, w=w,
+                                          purify_e=True, 
+                                          purify_b=False, 
+                                          beam_correction=None,
+                                          pixwin_correction=True)
+
+    leff, cells_conv, w = Namaster.get_spectra(maps_convolved[isub, :, :].T, mask_apo, w=w, 
+                                          purify_e=True, 
+                                          purify_b=False, 
+                                          beam_correction=None,
+                                          pixwin_correction=True)
+
+    leff, cells_x0, w = Namaster.get_spectra(x0[isub, :, :].T, mask_apo, w=w, 
+                                          purify_e=True, 
+                                          purify_b=False, 
+                                          beam_correction=None,
+                                          pixwin_correction=None)
+    allcells_recon.append(cells_recon)
+    allcells_recon_noiseless.append(cells_recon_noiseless)
+    allcells_conv.append(cells_conv)
+    allcells_x0.append(cells_x0)
+
+allcells_recon = np.array(allcells_recon)
+allcells_recon_noiseless = np.array(allcells_recon_noiseless)
+allcells_conv = np.array(allcells_conv)
+allcells_x0 = np.array(allcells_x0)
+```
+
+```{python}
+clnames = ['TT', 'EE', 'BB', 'TE']
+# with plt.xkcd():
+rc('figure', figsize=(12, 8))
+plt.figure()
+color = ['b', 'r', 'g', 'k', 'y', 'orange', 'brown', 'purple']
+for i in range(4):
+    
+    for isub in [0, 1, 2, 3, 4, 5, 6, 7]: 
+        plt.subplot(2, 2, i+1)
+#         plt.plot(input_ell[2:lmax], input_Dl[2:lmax, i], 'k', label='CMB Input')
+        plt.plot(leff[:], allcells_recon[isub, :, i],'o', color=color[isub], 
+                 label='Recon {}'.format(isub))
+        plt.plot(leff[:], allcells_recon_noiseless[isub, :, i],'s', color=color[isub], 
+                 label='Recon Noiseless{}'.format(isub))
+#         plt.plot(leff[2:], allcells_x0[isub, 2:, i], color=color[isub], 
+#                  label='x0{}'.format(isub))
+        plt.plot(leff[:], allcells_conv[isub, :, i], '--', color=color[isub], 
+                 label='Conv{}'.format(isub))
+    plt.xlabel('$\\ell$')
+    plt.ylabel('$D_\\ell$')
+
+    plt.title(clnames[i])
+
+plt.tight_layout()
+plt.legend(fontsize=8, loc='right')
+```
+
+```{python}
+# Cl evolution for one l
+index = 3
+l = leff[index]
+print(l, leff)
+allcells_conv.shape
+
+plt.figure()
+plt.subplots_adjust(hspace=0.4, wspace=0.4)
+for i in range(4): # TT, EE, BB, TE
+    plt.subplot(2, 2, i+1)
+    plt.plot(nus_rec, allcells_conv[:, index, i], 'o', label='conv')
+    plt.plot(nus_rec, allcells_recon[:, index, i], 'o', label='recon')
+    plt.plot(nus_rec, allcells_recon_noiseless[:, index, i], 'o', label='recon noiseless')
+    plt.title(clnames[i])
+    plt.xlabel('Frequency [GHz]')
+    plt.ylabel('$D_\\ell$ at l = {:.0f}'.format(l))
+plt.legend(fontsize=10)
+```
+
 ## Make a fake sky
+Old test
 
 ```{python}
 def scaling_dust(freq1, freq2, sp_index=1.8): 
@@ -307,45 +678,6 @@ def create_input_sky(d, skypars):
         # Combine CMB and dust. As output we have N 3-component maps of sky.
         x0 = cmb_plus_dust(cmb, dust, Nbbands_in, nus_in, d['kind'])
         return x0
-```
-
-```{python}
-# Create 3 basics sky maps with PySM (cmb, dust, synchrotron)
-Qubic_sky_cmb = si.Qubic_sky({'cmb': models('c1', d['nside'])}, d)
-x0_cmb = Qubic_sky_cmb.get_simple_sky_map()
-
-Qubic_sky_dust = si.Qubic_sky({'dust': models('d1', d['nside'])}, d)
-x0_dust = Qubic_sky_dust.get_simple_sky_map()
-
-Qubic_sky_synchro = si.Qubic_sky({'synchrotron': models('s1', d['nside'])}, d)
-x0_synchro = Qubic_sky_synchro.get_simple_sky_map()
-```
-
-```{python}
-x0new = cmb_plus_dust_synchrotron(x0_cmb, x0_dust, x0_synchro, d)
-```
-
-```{python}
-hp.mollview(x0new[0, :, 0], min=-200, max=500)
-```
-
-```{python}
-x0new = x0_cmb + x0_synchro*60 + x0_dust
-hp.mollview(x0_cmb[1, :, 0], sub=(221), min=-200., max=200)
-hp.mollview(x0_dust[1, :, 0], sub=(222), min=0., max=1000)
-hp.mollview(x0_synchro[1, :, 0], sub=(223), min=0., max=2)
-hp.mollview(x0new[1, :, 0], sub=(224))
-mean = np.std(x0new, axis=(1, 2))
-```
-
-```{python}
- _, _, nus, _, _, _ = qubic.compute_freq(150, d['nf_sub'])
-# plt.plot(nus, mean)
-plt.plot(nus, np.std(x0_cmb+x0_dust + x0_synchro*60, axis = (1, 2)), label='cmb')
-# plt.plot(nus, np.std(x0_dust, axis = (1, 2)), label='dust')
-# plt.plot(nus, np.std(x0_synchro*60, axis = (1, 2)), label='60synchro')
-plt.xlabel('f [GHz]')
-plt.legend()
 ```
 
 ```{python}

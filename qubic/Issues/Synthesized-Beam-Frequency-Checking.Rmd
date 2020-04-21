@@ -1,4 +1,10 @@
 ---
+  jupytext_version: 1.4.1
+
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
 jupyter:
   jupytext:
     text_representation:
@@ -12,13 +18,18 @@ jupyter:
     name: python3
 ---
 
+# Issue #10 Problem with Primary Beam at different frequencies
+
 ```{python}
 import matplotlib.pyplot as plt
 plt.rc('figure',figsize=(16,4))
 plt.rc('font',size=12)
 plt.rc('text',usetex=False)
 plt.rc('image', cmap='viridis')
+
 import numpy as np
+import matplotlib.pyplot as plt
+import qubic
 ```
 
 ```{python}
@@ -46,10 +57,10 @@ d['multiband'] = False
 d['beam_shape'] = 'fitted_beam'   # fitted_beam, gaussian, multi_freq
 #print('Beam Shape:',d['beam_shape'])
 
-
+# freqs = np.array([210*1e9, 220*1e9, 230*1e9])
 freqs = np.array([1.32638868e+11, 1.50398340e+11, 1.67001321e+11])
 nn = 1000
-th= np.linspace(-30,30, nn)
+th = np.linspace(-30, 30, nn)
 ph = 0
 
 plt.figure(figsize=(12,10))
@@ -83,49 +94,34 @@ for j, ibeam in enumerate(['fitted_beam', 'gaussian', 'multi_freq']):
 ```
 
 ```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
 # With multiband = True code have to be written differently
-import qubic
 d = qubic.qubicdict.qubicDict()
-d.read_from_file('/Users/hamilton/Python/GitQubicMousset/qubic/qubic/dicts/global_source_oneDet.dict')
+d.read_from_file(os.environ['QUBIC_DICT']+'global_source_oneDet.dict')
 d['multiband'] = True
-d['beam_shape'] = 'multi_freq'   # fitted_beam, gaussian, multi_freq
-print('Beam Shape:',d['beam_shape'])
 
 q = qubic.QubicMultibandInstrument(d)
 nsub = len(q)
 nus = np.zeros(nsub)
-for i in range(nsub): nus[i] = q[i].filter.nu
+for i in range(nsub): 
+    nus[i] = q[i].filter.nu
 
 indices = [0, 6, 11]
 
-for i in range(len(indices)):
-    allbeams[i,:] = q[indices[i]].primary_beam(np.radians(np.abs(th)),ph)
-    subplot(1,2,1)
-    p=plot(th, allbeams[i,:], '--', label='nu={0:6.1f}'.format(nus[i]/1e9))
-    plot(th, allbeams[i,:]*sb_noprim(th, freqs[i]), color=p[0].get_color())
-    subplot(1,2,2)
-    p=plot(th, allbeams[i,:], '--', label='nu={0:6.1f}'.format(nus[i]/1e9))
-    plot(th, allbeams[i,:]*sb_noprim(th, freqs[i]), color=p[0].get_color())
-    yscale('log')
-    ylim(1e-3, 0)
-    title('d[beam_shape]='+d['beam_shape']+' , Multiband='+str(d['multiband']))
-legend()
+for b, beam in enumerate(beams):
+    d['beam_shape'] = beam
+    for i in range(len(indices)):
+        allbeams[i,:] = q[indices[i]].primary_beam(np.radians(np.abs(th)),ph)
+        plt.subplot(3,1,b+1)
+        p = plt.plot(th, allbeams[i,:], '--', label='nu={0:6.1f}'.format(nus[i]/1e9))
+        plt.plot(th, allbeams[i,:] * sb_noprim(th, freqs[i]), color=p[0].get_color())
+
+#         subplot(1,2,2)
+#         p = plot(th, allbeams[i,:], '--', label='nu={0:6.1f}'.format(nus[i]/1e9))
+#         plot(th, allbeams[i,:] * sb_noprim(th, freqs[i]), color=p[0].get_color())
+#         yscale('log')
+#         ylim(1e-3, 0)
+        plt.title('d[beam_shape]=' + beam + ' , Multiband=' + str(d['multiband']))
+    plt.legend()
 
 ```
 

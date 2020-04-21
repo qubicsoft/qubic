@@ -450,7 +450,7 @@ legend(loc='lower right')
 subplot(1,2,2)
 plot(rv,like, label='QUBIC F.I. - 3 years')
 plot([sigr, sigr],[0,1.1],'k--', label='r < {0:5.3f} at 68% C.L.'.format(sigr))
-annotate("BKP-2018", xy=(0.06, 0.01), xytext=(0.06, 0.2),
+annotate("BKP-2018\n 95% C.L.", xy=(0.06, 0.01), xytext=(0.06, 0.2),
             arrowprops=dict(width=10, headwidth=20), ha='center')
 legend()
 xlabel('r')

@@ -73,7 +73,7 @@ print('Choose a keword and a seed index below')
 ```
 
 ```{python}
-kindex = 0
+kindex = 1
 sindex = 0
 
 ### Get corresponding files:
@@ -154,32 +154,33 @@ for s in range(3):
 ```
 
 ```{python}
-# from qubic import fibtools as ft
-# seenpix = cov0 > (0.1*np.max(cov0))
-# nbins = 30
-# xx, yyI, dx, dyI, _ = ft.profile(np.sqrt(1./cov0[seenpix]), m0[0,seenpix,0]-c0[0,seenpix,0], nbins=nbins, plot=False)
-# xx, yyQ, dx, dyQ, _ = ft.profile(np.sqrt(1./cov0[seenpix]), m0[0,seenpix,1]-c0[0,seenpix,1], nbins=nbins, plot=False)
-# xx, yyU, dx, dyU, _ = ft.profile(np.sqrt(1./cov0[seenpix]), m0[0,seenpix,2]-c0[0,seenpix,2], nbins=nbins, plot=False)
-# plot(xx,dyI, label='QUBIC MC I')
-# plot(xx,dyQ/np.sqrt(2), label='QUBIC MC Q/sqrt(2)')
-# plot(xx,dyU/np.sqrt(2), label='QUBIC MC U/sqrt(2)')
-# xlabel('1./sqrt(cov)')
-# ylabel('RMS Noise per pixel')
-# legend()
+from qubic import fibtools as ft
+seenpix = cov0 > (0.1*np.max(cov0))
+nbins = 30
+xx, yyI, dx, dyI, _ = ft.profile(np.sqrt(1./cov0[seenpix]), m0[0,seenpix,0]-c0[0,seenpix,0], nbins=nbins, plot=False)
+xx, yyQ, dx, dyQ, _ = ft.profile(np.sqrt(1./cov0[seenpix]), m0[0,seenpix,1]-c0[0,seenpix,1], nbins=nbins, plot=False)
+xx, yyU, dx, dyU, _ = ft.profile(np.sqrt(1./cov0[seenpix]), m0[0,seenpix,2]-c0[0,seenpix,2], nbins=nbins, plot=False)
+plot(xx,dyI, label='QUBIC MC I')
+plot(xx,dyQ/np.sqrt(2), label='QUBIC MC Q/sqrt(2)')
+plot(xx,dyU/np.sqrt(2), label='QUBIC MC U/sqrt(2)')
+xlabel('1./sqrt(cov)')
+ylabel('RMS Noise per pixel')
 
-# sigma_sec = 70
-# seed = None
-# sky_config = {'cmb': seed}
-# Qubic_sky = qss.Qubic_sky(sky_config, d)
-# fakemaps = Qubic_sky.create_noise_maps(sigma_sec, cov0)
+sigma_sec = 70
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d0)
+fakemaps = Qubic_sky.create_noise_maps(sigma_sec, cov0)
 
-# xx, yyIF, dx, dyIF, _ = ft.profile(np.sqrt(1./cov0[seenpix]), fakemaps[seenpix,0], nbins=nbins, plot=False)
-# xx, yyQF, dx, dyQF, _ = ft.profile(np.sqrt(1./cov0[seenpix]), fakemaps[seenpix,1], nbins=nbins, plot=False)
-# xx, yyUF, dx, dyUF, _ = ft.profile(np.sqrt(1./cov0[seenpix]), fakemaps[seenpix,2], nbins=nbins, plot=False)
-# plot(xx,dyIF, ':', label='Fake I')
-# plot(xx,dyQF/np.sqrt(2), ':', label='Fake Q/sqrt(2)')
-# plot(xx,dyUF/np.sqrt(2), ':', label='Fake U/sqrt(2)')
-
+xx, yyIF, dx, dyIF, _ = ft.profile(np.sqrt(1./cov0[seenpix]), fakemaps[seenpix,0], nbins=nbins, plot=False)
+xx, yyQF, dx, dyQF, _ = ft.profile(np.sqrt(1./cov0[seenpix]), fakemaps[seenpix,1], nbins=nbins, plot=False)
+xx, yyUF, dx, dyUF, _ = ft.profile(np.sqrt(1./cov0[seenpix]), fakemaps[seenpix,2], nbins=nbins, plot=False)
+plot(xx,dyIF, ':', label='I: Expected from coverage')
+plot(xx,dyQF/np.sqrt(2), ':', label='Q/sqrt(2): Expected from coverage')
+plot(xx,dyUF/np.sqrt(2), ':', label='U/sqrt(2): Expected from coverage')
+title(kk)
+ylim(0,10)
+legend()
 
 
 ```

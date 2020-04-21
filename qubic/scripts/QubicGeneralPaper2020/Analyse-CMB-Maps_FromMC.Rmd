@@ -1,0 +1,265 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# %matplotlib inline
+from pylab import *
+import os
+import sys
+from importlib import reload
+import glob
+import pickle
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm
+import qubic
+from qubic import SpectroImLib as si
+from qubic import QubicSkySim as qss
+from qubic import NamasterLib as nam
+from qubic import camb_interface as qc
+reload(nam)
+
+rc('figure', figsize=(13, 10))
+rc('font', size=12)
+```
+
+```{python}
+#dirmaps = '/qubic/Sims/EndToEndMaps/'
+dirbase = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB/'
+dirmaps = dirbase+'Maps/'
+listinit = glob.glob(dirmaps+'*maps_recon*.fits')
+allstr = []
+allkeyword = []
+allseed = []
+for l in listinit:
+    bla= l.split('.')[0].split('_')
+    kk = bla[0].split('/')[-1]+'_'+bla[1]+'_'+bla[2]
+    allkeyword.append(kk)
+    allstr.append(bla[-1])
+    allseed.append(bla[-2])
+
+allstr = unique(np.array(allstr))
+
+mykeywords = np.unique(allkeyword)
+myseeds = np.unique(allseed)
+
+print('Keywords Available:')
+for k in range(len(mykeywords)):
+    print('{}: '.format(k)+mykeywords[k])
+print('')
+print('Seeds Available:')
+for s in range(len(myseeds)):
+    print('{}: '.format(s)+myseeds[s])
+
+print('')
+print('Choose a keword and a seed index below')
+```
+
+```{python}
+kindex = 0
+sindex = 0
+
+### Get corresponding files:
+kk = mykeywords[kindex]
+ss = myseeds[sindex]
+listfiles = glob.glob(dirmaps+kk+'*maps_recon_seed_'+ss+'*.fits')
+### Order files by date and time
+listfiles.sort(key=os.path.getmtime)
+#for f in listfiles: print(f)
+
+
+
+print('For Keyword {} and seed {}:'.format(kk, ss))
+print('There are {} realizations available'.format(len(listfiles)))
+listfiles0 = listfiles[::2]
+listfiles1 = listfiles[1::2]
+npairs = len(listfiles0)
+print('we therefore have {} pairs of simulations'.format(npairs))
+#for i in range(len(listfiles0)): print(listfiles0[i], listfiles1[i])
+```
+
+```{python}
+#### This function reads the maps
+def read_files_mc(dirmaps,reconfile, verbose=False):
+    ##kk = reconfile.split('/')[-1].split('_')[0]
+    bla = reconfile.split('/')[-1].split('_')
+    kk = bla[0]+'_'+bla[1]+'_'+bla[2]
+    print(kk)
+    ss = reconfile.split('/')[-1].split('_')[-2]
+    rr = reconfile.split('/')[-1].split('_')[-1].split('.')[0]
+    m = np.array(FitsArray(dirmaps+kk+'_maps_recon_seed_'+ss+'_'+rr+'.fits'))
+    c = np.array(FitsArray(dirmaps+kk+'_maps_convolved_seed_'+ss+'_'+rr+'.fits'))
+    cov = np.array(FitsArray(dirmaps+kk+'_maps_coverage_'+rr+'.fits'))
+    with open(dirmaps+kk+'_dictionary_'+rr+'.pickle', 'rb') as handle: d = pickle.load(handle)
+    with open(dirmaps+kk+'_input_cell_'+rr+'.pickle', 'rb') as handle: icl = pickle.load(handle)
+    if verbose: print('read k={} s={} r={}'.format(kk, ss, rr))
+    return m, c, cov, d, icl
+    
+
+    
+```
+
+Let's try with a first pair
+
+```{python}
+ipair = 0
+m0, c0, cov0, d0, icl0 = read_files_mc(dirmaps, listfiles0[ipair], verbose=True)
+m1, c1, cov1, d1, icl1 = read_files_mc(dirmaps, listfiles1[ipair], verbose=True)
+
+### Center of the QUBIC Field
+center = qubic.equ2gal(d0['RA_center'], d0['DEC_center'])
+
+### Input Th Spectra
+input_cell = icl0.copy()
+ellth= np.arange(icl0.shape[0])
+
+### Check the coverages
+figure()
+hp.gnomview(cov0, rot=center, reso=15, title='Coverage 0', sub=(1,3,1))
+hp.gnomview(cov1, rot=center, reso=15, title='Coverage 1', sub=(1,3,2))
+hp.gnomview(cov0/cov1, rot=center, reso=15, title='Coverage 0 / coverage 1', sub=(1,3,3))
+
+### Check convolved maps
+figure()
+stn = ['I', 'Q', 'U']
+for s in range(3):
+    hp.gnomview(c0[0,:,s], rot=center, reso=15, title='Convolved '+stn[s]+' 0', sub=(3,3,1+s))    
+    hp.gnomview(c1[0,:,s], rot=center, reso=15, title='Convolved '+stn[s]+' 1', sub=(3,3,4+s))    
+    hp.gnomview(c1[0,:,s]-c0[0,:,s], rot=center, reso=15, title='Convolved '+stn[s]+' 1-0', sub=(3,3,7+s))
+    
+### Check Reconstructed maps
+figure()
+stn = ['I', 'Q', 'U']
+for s in range(3):
+    hp.gnomview(m0[0,:,s], rot=center, reso=15, title='Reconstructed '+stn[s]+' 0', sub=(3,3,1+s))    
+    hp.gnomview(m1[0,:,s], rot=center, reso=15, title='Reconstructed '+stn[s]+' 1', sub=(3,3,4+s))    
+    hp.gnomview(m1[0,:,s]-m0[0,:,s], rot=center, reso=15, title='Reconstructed '+stn[s]+' 1-0', sub=(3,3,7+s))
+```
+
+```{python}
+# from qubic import fibtools as ft
+# seenpix = cov0 > (0.1*np.max(cov0))
+# nbins = 30
+# xx, yyI, dx, dyI, _ = ft.profile(np.sqrt(1./cov0[seenpix]), m0[0,seenpix,0]-c0[0,seenpix,0], nbins=nbins, plot=False)
+# xx, yyQ, dx, dyQ, _ = ft.profile(np.sqrt(1./cov0[seenpix]), m0[0,seenpix,1]-c0[0,seenpix,1], nbins=nbins, plot=False)
+# xx, yyU, dx, dyU, _ = ft.profile(np.sqrt(1./cov0[seenpix]), m0[0,seenpix,2]-c0[0,seenpix,2], nbins=nbins, plot=False)
+# plot(xx,dyI, label='QUBIC MC I')
+# plot(xx,dyQ/np.sqrt(2), label='QUBIC MC Q/sqrt(2)')
+# plot(xx,dyU/np.sqrt(2), label='QUBIC MC U/sqrt(2)')
+# xlabel('1./sqrt(cov)')
+# ylabel('RMS Noise per pixel')
+# legend()
+
+# sigma_sec = 70
+# seed = None
+# sky_config = {'cmb': seed}
+# Qubic_sky = qss.Qubic_sky(sky_config, d)
+# fakemaps = Qubic_sky.create_noise_maps(sigma_sec, cov0)
+
+# xx, yyIF, dx, dyIF, _ = ft.profile(np.sqrt(1./cov0[seenpix]), fakemaps[seenpix,0], nbins=nbins, plot=False)
+# xx, yyQF, dx, dyQF, _ = ft.profile(np.sqrt(1./cov0[seenpix]), fakemaps[seenpix,1], nbins=nbins, plot=False)
+# xx, yyUF, dx, dyUF, _ = ft.profile(np.sqrt(1./cov0[seenpix]), fakemaps[seenpix,2], nbins=nbins, plot=False)
+# plot(xx,dyIF, ':', label='Fake I')
+# plot(xx,dyQF/np.sqrt(2), ':', label='Fake Q/sqrt(2)')
+# plot(xx,dyUF/np.sqrt(2), ':', label='Fake U/sqrt(2)')
+
+
+
+```
+
+```{python}
+# Now we define a NaMaster object - The coverages are identical so we can use just one of the two for the mask
+
+### Namaster Object
+reload(nam)
+
+# Create a Namaster object
+lmin = 30
+lmax = 3 * d0['nside'] - 1
+delta_ell = 25
+
+okpix = cov0 > np.max(cov0) * 0.1
+
+### Flat weighting
+maskpix = np.zeros(12*d0['nside']**2)
+maskpix[okpix] = 1
+
+Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+ell_bins, b = Namaster.get_binning(d0['nside'])
+mask_apo = Namaster.mask_apo
+hp.gnomview(mask_apo, rot=center, reso=15, title='Coverage')
+
+clname = ['TT', 'EE', 'BB', 'TE']
+
+
+
+```
+
+```{python}
+### Now get the autocls of each map and the cross Cls
+print('Auto 0')
+w=None
+leff, Clauto0, w = Namaster.get_spectra(m0[0,:,:].T,
+                                         purify_e=False, purify_b=True, 
+                                         beam_correction=True,
+                                         verbose=False)
+print('Auto 1')
+leff, Clauto1, w = Namaster.get_spectra(m1[0,:,:].T,
+                                         purify_e=False, purify_b=True, 
+                                         beam_correction=True,
+                                         verbose=False)
+print('Cross')
+leff, Clx, w = Namaster.get_spectra(m0[0,:,:].T,
+                                         map2 = m1[0,:,:].T,
+                                         purify_e=False, purify_b=True, 
+                                         beam_correction=True,
+                                         verbose=False)
+
+```
+
+```{python}
+for s in range(4):
+    subplot(2,2,s+1)
+    plot(ellth, input_cell[:, s])
+    plot(leff, Clauto0[:,s], label='Auto 0')
+    plot(leff, Clauto1[:,s], label='Auto 1')
+    plot(leff, Clx[:,s], label='Cross')
+    xlabel('$\\ell$')
+    ylabel('$D_\\ell$')
+    title(clname[s])
+    xlim(0,2*d0['nside'])
+    ylim(1.2*np.min(input_cell[:2*d0['nside'], s]),1.2*np.max(input_cell[:2*d0['nside'], s]))
+    legend()
+tight_layout()
+```
+
+### The loop over all is done in "Loop_ClCross_Images.Rmd" then analysis in "Analyse ClCross_Images.Rmd"
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

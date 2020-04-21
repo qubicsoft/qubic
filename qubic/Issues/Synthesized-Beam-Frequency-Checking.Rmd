@@ -4,8 +4,8 @@ jupyter:
     text_representation:
       extension: .Rmd
       format_name: rmarkdown
-      format_version: '1.1'
-      jupytext_version: 1.2.4
+      format_version: '1.2'
+      jupytext_version: 1.4.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -13,10 +13,11 @@ jupyter:
 ---
 
 ```{python}
-rc('figure',figsize=(16,4))
-rc('font',size=12)
-rc('text',usetex=False)
-rc('image', cmap='viridis')
+import matplotlib.pyplot as plt
+plt.rc('figure',figsize=(16,4))
+plt.rc('font',size=12)
+plt.rc('text',usetex=False)
+plt.rc('image', cmap='viridis')
 import numpy as np
 ```
 
@@ -37,11 +38,13 @@ def sb_noprim(th_deg, nu):
 ```{python}
 ## With Multiband = False  => using a QubicInstrument
 import qubic
+import os
+
 d = qubic.qubicdict.qubicDict()
-d.read_from_file('/Users/hamilton/Python/GitQubicMousset/qubic/qubic/dicts/global_source_oneDet.dict')
+d.read_from_file(os.environ['QUBIC_DICT']+'global_source_oneDet.dict')
 d['multiband'] = False
-d['beam_shape'] = 'multi_freq'   # fitted_beam, gaussian, multi_freq
-print('Beam Shape:',d['beam_shape'])
+d['beam_shape'] = 'fitted_beam'   # fitted_beam, gaussian, multi_freq
+#print('Beam Shape:',d['beam_shape'])
 
 
 freqs = np.array([1.32638868e+11, 1.50398340e+11, 1.67001321e+11])
@@ -49,27 +52,34 @@ nn = 1000
 th= np.linspace(-30,30, nn)
 ph = 0
 
-allbeams = np.zeros((len(freqs), nn))
-for i in range(len(freqs)):
-    d['filter_nu'] = freqs[i]
-    q = qubic.QubicInstrument(d)
-    allbeams[i,:] = q.primary_beam(np.radians(np.abs(th)),ph)
-        
-    subplot(1,2,1)
-    p=plot(th, allbeams[i,:],'--', label='nu={0:6.1f}'.format(freqs[i]/1e9))
-    plot(th, allbeams[i,:]*sb_noprim(th, freqs[i]), color=p[0].get_color())
-#     subplot(1,2,2)
-#     p=plot(th, allbeams[i,:],'--', label='nu={0:6.1f}'.format(freqs[i]/1e9))
-#     plot(th, allbeams[i,:]*sb_noprim(th, freqs[i]), color=p[0].get_color())
-#     yscale('log')
-#     ylim(1e-3,0)
-    title('d[beam_shape]='+d['beam_shape']+' , Multiband='+str(d['multiband']))
-legend()
+plt.figure(figsize=(12,10))
+for j, ibeam in enumerate(['fitted_beam', 'gaussian', 'multi_freq']):
+    print('Computing beam model: {}'.format(ibeam))
+    allbeams = np.zeros((len(freqs), nn))
+    d['beam_shape'] = ibeam
+    for i in range(len(freqs)):
+        plt.subplot(3,2,2*j+1)
+        d['filter_nu'] = freqs[i]
+        q = qubic.QubicInstrument(d)
+        allbeams[i,:] = q.primary_beam(np.radians(np.abs(th)),ph)
 
+        p=plt.plot(th, allbeams[i,:],'--', label='nu={0:6.1f}'.format(freqs[i]/1e9))
+        plt.plot(th, allbeams[i,:]*sb_noprim(th, freqs[i]), color=p[0].get_color())
+        plt.title(ibeam)#'d[beam_shape]='+d['beam_shape']+' , Multiband='+str(d['multiband']))
+        plt.subplot(3,2,2*j+2)
+        plt.xlim(-12,-7)
+        mask=np.where((th<-7) & (th>-9))
+        if i == 2: plt.axhline(np.max(allbeams[i,mask]*sb_noprim(th[mask], freqs[i])), c='g' )
+        p=plt.plot(th, allbeams[i,:],'--', label='nu={0:6.1f}'.format(freqs[i]/1e9))
+        plt.plot(th, allbeams[i,:]*sb_noprim(th, freqs[i]), color=p[0].get_color())
+        plt.title(ibeam)#'d[beam_shape]='+d['beam_shape']+' , Multiband='+str(d['multiband']))
+
+        plt.legend()
+    plt.grid()
 ```
 
 ```{python}
-q.primary_beam??
+# q.primary_beam??
 ```
 
 ```{python}

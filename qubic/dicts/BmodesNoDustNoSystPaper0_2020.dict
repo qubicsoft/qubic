@@ -8,7 +8,7 @@ beam_shape =  'multi_freq' # 'gaussian', 'fitted_beam', 'multi_freq'
 
 # multifreq instrument 
 MultiBand=True
-nf_sub=4
+nf_sub=12
 center_detector=False
 
 psd=None
@@ -84,7 +84,7 @@ comm=None
 weights=None
 
 ####################################### Map making #####################################
-tol=1e-4
+tol=1e-5
 nf_recon = 1
 maxiter=1e5
 verbose=True

@@ -1,0 +1,320 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Testing Cross-Spectra with NaMaster
+JCH - March 2020
+
+```{python}
+# %matplotlib inline
+import numpy as np
+import healpy as hp
+import matplotlib.pyplot as plt
+from importlib import reload
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm
+import qubic
+from qubic import QubicSkySim as qss
+from qubic import NamasterLib as nam
+
+rc('figure', figsize=(12, 8))
+rc('font', size=15)
+rc('text', usetex=False)
+```
+
+Let's generate an underlying CMB (I,Q,U) on a partial coverage, and then add noise according to this coverage.
+
+```{python}
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+dictfilename = global_dir + '/dicts/test_cross-spectra.dict'
+
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+d['nside']=256
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+print(center)
+
+print(d['nf_sub'])
+
+# Restore a QUBIC typical coverage
+cov = hp.ud_grade(hp.read_map('sample_coverage_qubic.fits', verbose=False), d['nside'])
+cov /= np.max(cov)
+hp.mollview(cov)
+```
+
+```{python}
+reload(qss)
+### Create fake QUBIC observations convolved at the same resolution (nf_sub=1) 
+### with noise and coverage
+### They are all with the same CMB (from QubicSky instanciation) but will have different 
+### noise realization
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+
+nmaps = 2
+all_maps = np.zeros((nmaps, 12*d['nside']**2, 3))
+
+figure()
+input_maps = Qubic_sky.input_cmb_maps
+res = 30
+stk = ['I', 'Q', 'U']
+rng = [200, 10, 10]
+for s in range(3):
+    hp.gnomview(input_maps[s,:], sub=(nmaps,3,s+1), reso=res, rot=center,
+                min=-rng[s], max=rng[s], title=stk[s]+' Noiseless')
+
+### This si a very small noise level
+sigma_sec = 10.
+for i in range(nmaps):
+    all_maps[i,:,:] = Qubic_sky.get_partial_sky_maps_withnoise(cov, sigma_sec=sigma_sec)
+
+figure()
+for i in range(nmaps):
+    hp.gnomview(all_maps[i,:,0], sub=(nmaps,3,3*i+1), reso=res, rot=center,
+                min=-rng[0], max=rng[0], title=stk[0]+' Map {}'.format(i))
+    hp.gnomview(all_maps[i,:,1], sub=(nmaps,3,3*i+2), reso=res, rot=center,
+                min=-rng[1], max=rng[1], title=stk[1]+' Map {}'.format(i))
+    hp.gnomview(all_maps[i,:,2], sub=(nmaps,3,3*i+3), reso=res, rot=center,
+                min=-rng[2], max=rng[2], title=stk[2]+' Map {}'.format(i))
+```
+
+Now we'll compute the cross-Cls for all possibilities including auto-Cls
+
+```{python}
+reload(nam)
+# Create a Namaster object
+lmin = 20
+lmax = 2 * d['nside'] - 1
+delta_ell = 25
+
+okpix = cov > np.max(cov) * 0.1
+
+### Flat weighting
+maskpix = np.zeros(12*d['nside']**2)
+maskpix[okpix] = 1
+
+Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+ell_bins, b = Namaster.get_binning(d['nside'])
+mask_apo = Namaster.mask_apo
+
+leff, cl_nonoise, wnnonoise = Namaster.get_spectra(input_maps, 
+                                            purify_e=False, purify_b=True, 
+                                            verbose=False)
+
+
+cls = np.zeros((nmaps, nmaps, len(ell_bins), 4))
+w=None
+for i in range(nmaps):
+    for j in range(i,nmaps):
+        print(i,j)
+        leff, cls[i,j, :,:], w = Namaster.get_spectra(all_maps[i,:,:].T, 
+                                                      map2=all_maps[j,:,:].T,
+                                                      purify_e=False, purify_b=True, w=w, 
+                                                      verbose=False,
+                                                      beam_correction=Qubic_sky.instrument['beams'])
+        cls[j,i, :,:] = cls[i,j, :,:].copy() 
+
+
+```
+
+```{python}
+rc('figure', figsize=(12, 8))
+input_cell = Qubic_sky.input_cmb_spectra
+lth = np.arange(len(input_cell[:,0]))
+
+s=2
+xlim(0,2*d['nside'])
+title('BB')
+ylim(0,np.max(input_cell[:2*d['nside'],s])*1.2)
+plot(lth, input_cell[:,s],'k:',label='Theory')
+plot(leff, cl_nonoise[:,s],'k',label='No Noise')
+for i in range(nmaps):
+    for j in range(i,nmaps):
+        plot(leff, cls[i,j,:,s], label='{}x{}'.format(i,j))
+legend(fontsize=9)
+        
+```
+
+Let's do a MC to get the noise
+
+```{python}
+### Noise only MC
+nbmc = 30
+
+cls_noise = np.zeros((nbmc, len(ell_bins), 4))
+
+w = None
+for i in range(nbmc):
+    print(i)
+    qubicnoise = Qubic_sky.create_noise_maps(sigma_sec, cov)
+    leff, cls_noise[i,:,:], w = Namaster.get_spectra(qubicnoise.T, 
+                                            purify_e=False, purify_b=True, 
+                                            verbose=False, w=w,
+                                            beam_correction=Qubic_sky.instrument['beams'])
+
+```
+
+```{python}
+mcls_noise = np.mean(cls_noise,axis=0)
+scls_noise = np.std(cls_noise,axis=0)
+
+
+rc('figure', figsize=(12, 8))
+s=2
+xlim(0,2*d['nside'])
+title('BB')
+ylim(0,np.max(input_cell[:2*d['nside'],s])*1.2)
+plot(lth, input_cell[:,s],'k',label='Theory', lw=4)
+plot(leff, cl_nonoise[:,s],'ro',label='No Noise')
+plot(leff, mcls_noise[:,s],'k:',label='Noise Average', lw=4)
+for i in range(nmaps):
+    for j in range(i,nmaps):
+        if i == j:
+            noiseav = mcls_noise[:,s]
+            plot(leff, cls[i,j,:,s]-noiseav, ':', label='Auto {}x{} - Noise Bias Removed'.format(i,j))
+        else:
+            plot(leff, cls[i,j,:,s], label='Cross {}x{}'.format(i,j))
+legend(fontsize=9)
+
+```
+
+# Full Monte-Carlo
+Now we will use two pure noise maps for cross-spectra anec make a full Monte-Carlo in order to estimate how the RMS of the cross-spectra is related to the final RMS. We can also have alook at the ll cov matrices...
+
+```{python}
+nbmc = 100
+nmaps = 2
+sigma_sec = 10.
+
+### The input CMB is the same for all but we don;t care as we use pure nosie maps
+seed = 42
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+
+### Namaster
+reload(nam)
+# Create a Namaster object
+lmin = 20
+lmax = 2 * d['nside'] - 1
+delta_ell = 25
+
+okpix = cov > np.max(cov) * 0.1
+
+### Flat weighting
+maskpix = np.zeros(12*d['nside']**2)
+maskpix[okpix] = 1
+
+Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+ell_bins, b = Namaster.get_binning(d['nside'])
+mask_apo = Namaster.mask_apo
+
+w=None
+all_cls_auto = np.zeros((nbmc, nmaps, len(ell_bins), 4))
+all_cls_cross = np.zeros((nbmc, (nmaps*(nmaps-1))//2, len(ell_bins), 4))
+for n in arange(nbmc):
+    print('MC {} over {}'.format(n,nbmc))
+    
+    ### Create nmaps realizations of noise
+    all_maps = np.zeros((nmaps, 12*d['nside']**2, 3))
+    for i in range(nmaps):
+        all_maps[i,:,:] = Qubic_sky.create_noise_maps(sigma_sec, cov)
+    
+    ### Cls part
+    cls_auto = np.zeros((nmaps, len(ell_bins), 4))
+    cls_cross = np.zeros(( (nmaps*(nmaps-1))//2, len(ell_bins), 4))
+    numauto = 0
+    numcross = 0
+    ### X-spectra
+    for i in range(nmaps):
+        for j in range(i,nmaps):
+            print('   - cls for {}x{}'.format(i,j))
+            leff, cls, w = Namaster.get_spectra(all_maps[i,:,:].T, 
+                                                map2 = all_maps[j,:,:].T,
+                                            purify_e=False, purify_b=True, 
+                                            verbose=False, w=w,
+                                            beam_correction=Qubic_sky.instrument['beams'])
+            if i==j: 
+                all_cls_auto[n, numauto, :, :] = cls
+                numauto += 1
+            else:
+                all_cls_cross[n, numcross, :, :] = cls
+                numcross += 1
+```
+
+```{python}
+mcls_auto = np.mean(all_cls_auto, axis=(0,1))
+scls_auto = np.std(all_cls_auto, axis=(0,1))
+mcls_cross = np.mean(all_cls_cross, axis=(0,1))
+scls_cross = np.std(all_cls_cross, axis=(0,1))
+
+subplot(1,2,1)
+plot(leff, mcls_cross[:,s], 'r', lw=2, label = 'Cross')
+plot(leff, mcls_cross[:,s]-scls_cross[:,s], 'r--')
+plot(leff, mcls_cross[:,s]+scls_cross[:,s], 'r--')
+plot(leff, mcls_auto[:,s], 'k', lw=2, label='Auto')
+plot(leff, mcls_auto[:,s]-scls_auto[:,s], 'k--')
+plot(leff, mcls_auto[:,s]+scls_auto[:,s], 'k--')
+xlabel('$\\ell$', fontsize=18)
+ylabel('$D_\\ell$', fontsize=18)
+legend()
+
+subplot(1,2,2)
+plot(leff, scls_cross[:,s],'r', label='Cross')
+plot(leff, scls_cross[:,s]*sqrt(2),'r--', label='Cross x sqrt(2)')
+plot(leff, scls_auto[:,s],'k', label='Auto')
+xlabel('$\\ell$', fontsize=18)
+ylabel('$\\sigma(D_\\ell)$', fontsize=18)
+legend()
+tight_layout()
+```
+
+```{python}
+plot(leff, scls_auto[:,s]/scls_cross[:,s], 
+     label='{} noise realisations'.format(nbmc))
+plot(leff, leff*0+np.sqrt(2),'k--',label='sqrt(2)')
+mm = np.mean(scls_auto[:,s]/scls_cross[:,s])
+ss = np.std(scls_auto[:,s]/scls_cross[:,s])/np.sqrt(len(leff))
+plot(leff, leff*0 + mm, 'r', label = 'Mean +/- $\\sigma$(Mean)')
+plot(leff, leff*0 + mm-ss, 'r:')
+plot(leff, leff*0 + mm+ss, 'r:')
+ylabel('$\\sigma[D\\ell_{Auto}] ~/ ~\\sigma[D\\ell_{Cross}]$' )
+xlabel('$\\ell$')
+legend()
+```
+
+```{python}
+a=hist(scls_auto[:,s]/scls_cross[:,s], range=[0,3], bins=15, 
+       label='RMS Auto / RMS Cross ({} realisations)'.format(nbmc))
+maxi = np.max(a[0])*1.5
+plot([np.sqrt(2),np.sqrt(2)], [0, maxi], 'k--', label='sqrt(2)')
+plot([mm,mm],[0, maxi] , 'r', label = 'Mean +/- $\\sigma$(Mean)')
+plot([mm-ss,mm-ss],[0, maxi], 'r:')
+plot([mm+ss,mm+ss],[0, maxi], 'r:')
+ylim(0, maxi)
+xlabel('$\\sigma[D\\ell_{Auto}] ~/ ~\\sigma[D\\ell_{Cross}]$' )
+ylabel('Counts')
+legend(fontsize=12)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

@@ -70,7 +70,7 @@ def rcamblib(rvalues,lmax=3*256, save=None):
 
 	return camblib
 
-def bin_camblib(Namaster, filename, nside):
+def bin_camblib(Namaster, filename, nside, verbose=True, return_unbinned=False):
 	lll, rvalues, spec, specunlensed = read_camblib(filename)
 	ellb, b = Namaster.get_binning(nside)
 	nbins = len(ellb)
@@ -78,13 +78,16 @@ def bin_camblib(Namaster, filename, nside):
 	binned_spec = np.zeros((nbins, 4, nr))
 	binned_specunlensed = np.zeros((nbins, 4, nr))
 	fact = 2 * np.pi / (ellb * (ellb + 1))
-	bar = progress_bar(nr, 'Binning CAMB Librairy')
+	if  verbose: bar = progress_bar(nr, 'Binning CAMB Librairy')
 	for ir in range(nr):
 		for j in range(4):
 			binned_spec[:, j, ir] = fact * b.bin_cell(np.reshape(spec[:Namaster.lmax + 1,j,ir], (1, Namaster.lmax + 1)))
 			binned_specunlensed[:, j, ir] = fact * b.bin_cell(np.reshape(specunlensed[:Namaster.lmax + 1,j,ir], (1, Namaster.lmax + 1)))
-		bar.update()	
-	return [ellb, rvalues, binned_spec, binned_specunlensed]
+		if verbose: bar.update()	
+	if return_unbinned:
+		return [ellb, rvalues, binned_spec, binned_specunlensed, [lll, rvalues, spec, specunlensed]]
+	else:
+		return [ellb, rvalues, binned_spec, binned_specunlensed]
 
 
 
@@ -92,7 +95,7 @@ def read_camblib(file):
 	with open(file, 'rb') as handle: camblib = pickle.load(handle)
 	return camblib
 
-def get_Dl_fromlib(lvals, r, lib=None):
+def get_Dl_fromlib(lvals, r, lib=None, specindex=None, unlensed=False):
 	if lib is None:
 		### If not library was provided, we recalculated one
 		rmin = 0.001
@@ -109,13 +112,29 @@ def get_Dl_fromlib(lvals, r, lib=None):
 		camblib = lib
 
 	lll = camblib[0]
-	myspec = np.zeros((len(lvals),4)) 
-	myspecunlensed = np.zeros((len(lvals),4)) 
-	for i in range(4):
-		interpolant = interp.RectBivariateSpline(lll,camblib[1],camblib[2][:,i,:])
-		myspec[:,i] = np.ravel(interpolant(lvals, r))
-		interpolant = interp.RectBivariateSpline(lll,camblib[1],camblib[3][:,i,:])
-		myspecunlensed[:,i] = np.ravel(interpolant(lvals, r))
+
+	### If specindex is not specified we do all four of them
+	if specindex is None:
+		myspec = np.zeros((len(lvals),4)) 
+		if unlensed: myspecunlensed = np.zeros((len(lvals),4)) 
+		for i in range(4):
+			interpolant = interp.RectBivariateSpline(lll,camblib[1],camblib[2][:,i,:])
+			myspec[:,i] = np.ravel(interpolant(lvals, r))
+			if unlensed:
+				interpolant = interp.RectBivariateSpline(lll,camblib[1],camblib[3][:,i,:])
+				myspecunlensed[:,i] = np.ravel(interpolant(lvals, r))
+			else:
+				myspecunlensed=None
+	### if an index has been specified (eg. 2 for BB) then we only compute this one (useful to speed-up MCMC)
+	else:
+		interpolant = interp.RectBivariateSpline(lll,camblib[1],camblib[2][:,specindex,:])
+		myspec = np.ravel(interpolant(lvals, r))
+		if unlensed: 
+			interpolant = interp.RectBivariateSpline(lll,camblib[1],camblib[3][:,specindex,:])
+			myspecunlensed = np.ravel(interpolant(lvals, r))
+		else:
+			myspecunlensed = None
+
 
 	return myspec, myspecunlensed
 

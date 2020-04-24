@@ -61,8 +61,7 @@ nn = 1000
 th = np.linspace(-30, 30, nn)
 ph = 0
 
-# plt.figure(figsize=(12,10))
-fig, axs = plt.subplots(3, 2, figsize=(12, 15))
+fig, axs = plt.subplots(3, 1, figsize=(20, 15))
 axs = np.ravel(axs)
 
 beams = ['gaussian', 'fitted_beam', 'multi_freq']
@@ -71,8 +70,9 @@ for j, ibeam in enumerate(beams):
     print('\n Computing beam model: {}'.format(ibeam))
     allbeams = np.zeros((len(freqs), nn))
     d['beam_shape'] = ibeam
-    ax1 = axs[2*j]
-    ax2 = axs[2*j+1]
+    ax1 = axs[j]
+#     ax1 = axs[2*j]
+#     ax2 = axs[2*j+1]
     for i in range(len(freqs)):
         d['filter_nu'] = freqs[i]
         q = qubic.QubicInstrument(d)
@@ -81,17 +81,17 @@ for j, ibeam in enumerate(beams):
         p = ax1.plot(th, allbeams[i,:],'--', label='nu={0:6.1f}'.format(freqs[i]/1e9))
         ax1.plot(th, allbeams[i,:]*sb_noprim(th, freqs[i]), color=p[0].get_color())
         ax1.set_title(ibeam)#'d[beam_shape]='+d['beam_shape']+' , Multiband='+str(d['multiband']))
-#         ax1.set_xlim(-10, 0)
+        ax1.set_xlim(-20, 20)
         ax1.legend()
         
-        mask = np.where((th<-7) & (th>-9))
-        if i == 2: 
-            ax2.axhline(np.max(allbeams[i,mask]*sb_noprim(th[mask], freqs[i])), c='g' )
-        p = ax2.plot(th, allbeams[i,:],'--', label='nu={0:6.1f}'.format(freqs[i]/1e9))
-        ax2.plot(th, allbeams[i, :]*sb_noprim(th, freqs[i]), color=p[0].get_color())
-        ax2.set_xlim(-12, -7)
-        ax2.set_title(ibeam)#'d[beam_shape]='+d['beam_shape']+' , Multiband='+str(d['multiband']))
-        ax2.grid()
+#         mask = np.where((th<-7) & (th>-9))
+#         if i == 2: 
+#             ax2.axhline(np.max(allbeams[i,mask]*sb_noprim(th[mask], freqs[i])), c='g' )
+#         p = ax2.plot(th, allbeams[i,:],'--', label='nu={0:6.1f}'.format(freqs[i]/1e9))
+#         ax2.plot(th, allbeams[i, :]*sb_noprim(th, freqs[i]), color=p[0].get_color())
+#         ax2.set_xlim(-12, -7)
+#         ax2.set_title(ibeam)#'d[beam_shape]='+d['beam_shape']+' , Multiband='+str(d['multiband']))
+#         ax2.grid()
 ```
 
 ```{python}

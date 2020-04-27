@@ -3,16 +3,15 @@ from qubicpack import qubicpack as qp
 import qubic.fibtools as ft
 import qubic.plotters as p
 import qubic.lin_lib as ll
+import qubic.sb_fitting as sbfit
 import qubic
 from pysimulators import FitsArray
 from qubic.utils import progress_bar
 
 import numpy as np
 from matplotlib.pyplot import *
-import matplotlib.mlab as mlab
 import scipy.ndimage.filters as f
 import glob
-import string
 import scipy.signal as scsig
 from scipy import interpolate
 import datetime as dt
@@ -73,13 +72,15 @@ def hf_noise_estimate(tt, dd):
 
 
 def return_rms_period(period, indata, others=None, verbose=False, remove_noise=False):
-    ### Returns the RMS in each period - not such a good proxy for demondulation but robust and does not need the
-    ### modulation signal as an input.
-    ### Main drawback: you end up with a combination of the noise + signal => more an upper-limit to the signal...
-    ### the parameter called others contains a (n, nsamples) array of vectors to be averaged in each new bin (convenient
-    ### if you also have azimuth, elevation or any other stuff...). 
-    ### The option remove_noise, if true measures the HF noise in the TODs and removes it from the RMS in order to 
-    ### attempt to debias the result from HF noise
+    """
+    Returns the RMS in each period - not such a good proxy for demondulation but robust and does not need the
+    modulation signal as an input.
+    Main drawback: you end up with a combination of the noise + signal => more an upper-limit to the signal...
+    the parameter called others contains a (n, nsamples) array of vectors to be averaged in each new bin (convenient
+    if you also have azimuth, elevation or any other stuff...).
+    The option remove_noise, if true measures the HF noise in the TODs and removes it from the RMS in order to
+    attempt to debias the result from HF noise
+    """
 
     time = indata[0]
     data = indata[1]
@@ -91,15 +92,15 @@ def return_rms_period(period, indata, others=None, verbose=False, remove_noise=F
     else:
         sh = np.shape(data)
         nTES = sh[0]
-    ### we label each data sample with a period
+    # We label each data sample with a period
     period_index = ((time - time[0]) / period).astype(int)
-    ### We loop on periods to measure their respective amplitude and azimuth
+    # We loop on periods to measure their respective amplitude and azimuth
     allperiods = np.unique(period_index)
     tper = np.zeros(len(allperiods))
     ampdata = np.zeros((nTES, len(allperiods)))
     err_ampdata = np.zeros((nTES, len(allperiods)))
     if others is not None:
-        newothers = bin_per_period(period, time, others, verbose=verbose)
+        newothers = bin_per_period(period, time, others)
     if verbose:
         printnow('Calculating RMS per period for {} periods and {} TES'.format(len(allperiods), nTES))
     for i in range(len(allperiods)):
@@ -131,26 +132,29 @@ def return_rms_period(period, indata, others=None, verbose=False, remove_noise=F
 def scan2ang_RMS(period, indata, median=True, lowcut=None, highcut=None, verbose=False):
     new_az = np.interp(indata['t_data'], indata['t_azel'], indata['az'])
 
-    ### Check if filtering is requested
+    # ## Check if filtering is requested
     if (lowcut is None) & (highcut is None):
         dataf = indata['data'].copy()
     else:
-        if verbose: printnow('Filtering data')
+        if verbose:
+            printnow('Filtering data')
         dataf = ft.filter_data(indata['t_data'], indata['data'], lowcut, highcut)
 
-    ### First get the RMS per period
-    if verbose: printnow('Resampling Azimuth')
+    # ## First get the RMS per period
+    if verbose:
+        printnow('Resampling Azimuth')
     az = np.interp(indata['t_data'], indata['t_azel'], indata['az'])
-    if verbose: printnow('Resampling Elevation')
+    if verbose:
+        printnow('Resampling Elevation')
     el = np.interp(indata['t_data'], indata['t_azel'], indata['el'])
     others = [az, el]
     tper, ampdata, err_ampdata, newothers = return_rms_period(period, indata['t_data'], dataf,
                                                               verbose=verbose, others=others)
     azper = newothers[0]
     elper = newothers[1]
-    ### Convert azimuth to angle
+    # ## Convert azimuth to angle
     angle = azper * np.cos(np.radians(elper))
-    ### Fill the return variable for unbinned
+    # ## Fill the return variable for unbinned
     unbinned = {}
     unbinned['t'] = tper
     unbinned['az'] = azper
@@ -161,22 +165,23 @@ def scan2ang_RMS(period, indata, median=True, lowcut=None, highcut=None, verbose
     return unbinned
 
 
-def scan2ang_demod(period, indata, median=True, lowcut=None, highcut=None, verbose=False):
+def scan2ang_demod(period, indata, lowcut=None, highcut=None, verbose=False):
     if indata['data'].ndim == 1:
         nTES = 1
     else:
         sh = np.shape(indata['data'])
         nTES = sh[0]
 
-    ### First demodulate
+    # ## First demodulate
     demodulated = demodulate(indata, 1. / period, verbose=verbose, lowcut=lowcut, highcut=highcut)
 
-    ### Resample az and el similarly as data
+    # ## Resample az and el similarly as data
     azd = np.interp(indata['t_data'], indata['t_azel'], indata['az'])
     eld = np.interp(indata['t_data'], indata['t_azel'], indata['el'])
 
-    ### Resample to one value per modulation period
-    if verbose: printnow('Resampling to one value per modulation period')
+    # ## Resample to one value per modulation period
+    if verbose:
+        printnow('Resampling to one value per modulation period')
     period_index = ((indata['t_data'] - indata['t_data'][0]) / period).astype(int)
     allperiods = np.unique(period_index)
     newt = np.zeros(len(allperiods))
@@ -214,14 +219,17 @@ class MySpl:
 
     def __call__(self, x, pars):
         theF = np.zeros((np.size(x), self.nbspl))
-        for i in np.arange(self.nbspl): theF[:, i] = self.get_spline(x, i)
-        return (np.dot(theF, pars))
+        for i in np.arange(self.nbspl):
+            theF[:, i] = self.get_spline(x, i)
+        return np.dot(theF, pars)
 
 
 class interp_template:
-    ### Allows to interpolate a template applying an amplitude, offset and phase
-    ### This si to be used in order to fit this template in each epriod of some pseudo-periodic signal
-    ### For instance for demodulation
+    """
+    Allows to interpolate a template applying an amplitude, offset and phase
+    This si to be used in order to fit this template in each epriod of some pseudo-periodic signal
+    For instance for demodulation
+    """
     def __init__(self, xx, yy):
         self.period = xx[-1] - xx[0]
         self.xx = xx
@@ -242,9 +250,11 @@ def fitperiod(x, y, fct):
 
 
 def return_fit_period(period, indata, others=None, verbose=False, template=None):
-    ### Returns the amplitude, offset and phase of a template fit to the data in each period
-    ### the parameter called others contains a (n,nsamples) array of vectors to be averaged in each new bin (convenient 
-    ### if you also have azimuth, elevation or any other stuff...). 
+    """
+    Returns the amplitude, offset and phase of a template fit to the data in each period
+    the parameter called others contains a (n,nsamples) array of vectors to be averaged in each new bin (convenient
+    if you also have azimuth, elevation or any other stuff...).
+    """
 
     time = indata[0]
     data = indata[1]
@@ -267,15 +277,15 @@ def return_fit_period(period, indata, others=None, verbose=False, template=None)
         yytemplate /= np.std(yytemplate)
     fct = interp_template(xxtemplate, yytemplate)
 
-    ### we label each data sample with a period
+    # ## we label each data sample with a period
     period_index = ((time - time[0]) / period).astype(int)
-    ### We loop on periods to measure their respective amplitude and azimuth
+    # ## We loop on periods to measure their respective amplitude and azimuth
     allperiods = np.unique(period_index)
     tper = np.zeros(len(allperiods))
     ampdata = np.zeros((nTES, len(allperiods)))
     err_ampdata = np.zeros((nTES, len(allperiods)))
     if others is not None:
-        newothers = bin_per_period(period, time, others, verbose=verbose)
+        newothers = bin_per_period(period, time, others)
     if verbose:
         printnow('Performing fit per period for {} periods and {} TES'.format(len(allperiods), nTES))
     for i in range(len(allperiods)):
@@ -373,10 +383,12 @@ def return_fit_period(period, indata, others=None, verbose=False, template=None)
 
 def demodulate_JC(period, indata, indata_src, others=None, verbose=False, template=None, quadrature=False,
                   remove_noise=False, doplot=False):
-    ### Proper demodulation with quadrature method as an option: http://web.mit.edu/6.02/www/s2012/handouts/14.pdf
-    ### In the case of quadrature demodulation, the HF noise RMS/sqrt(2) adds to the demodulated. 
-    ### The option remove_noise=True
-    ### estimates the HF noise in the TODs and removes it from the estimate in order to attempt to debias.
+    """
+    Proper demodulation with quadrature method as an option: http://web.mit.edu/6.02/www/s2012/handouts/14.pdf
+    In the case of quadrature demodulation, the HF noise RMS/sqrt(2) adds to the demodulated.
+    The option remove_noise=True
+    estimates the HF noise in the TODs and removes it from the estimate in order to attempt to debias.
+    """
     time = indata[0]
     data = indata[1]
     sh = data.shape
@@ -386,10 +398,10 @@ def demodulate_JC(period, indata, indata_src, others=None, verbose=False, templa
     data_src = indata_src[1]
     # print(quadrature)
     if quadrature:
-        ### Shift src data by 1/2 period
+        # ## Shift src data by 1/2 period
         data_src_shift = np.interp(time_src - period / 2, time_src, data_src, period=period)
 
-    ### Now smooth over a period
+    # ## Now smooth over a period
     import scipy.signal as scsig
     FREQ_SAMPLING = 1. / (time[1] - time[0])
     size_period = int(FREQ_SAMPLING * period) + 1
@@ -505,7 +517,7 @@ def demodulate_old(indata, fmod, lowcut=None, highcut=None, verbose=False):
         printnow('Source Data is not there: output is zero')
         demodulated = np.zeros((nTES, len(indata['t_data'])))
     else:
-        ### Check if filtering is requested
+        # Check if filtering is requested
         if (lowcut is None) & (highcut is None):
             dataf = indata['data'].copy()
             new_src = np.interp(indata['t_data'], indata['t_src'], indata['data_src'])
@@ -515,7 +527,8 @@ def demodulate_old(indata, fmod, lowcut=None, highcut=None, verbose=False):
             new_src = ft.filter_data(indata['t_data'], np.interp(indata['t_data'], indata['t_src'], indata['data_src']),
                                      lowcut, highcut)
 
-        if nTES == 1: dataf = np.reshape(dataf, (1, len(indata['data'])))
+        if nTES == 1:
+            dataf = np.reshape(dataf, (1, len(indata['data'])))
 
         # Make the product for demodulation with changing sign for data
         product = -dataf * new_src
@@ -597,7 +610,7 @@ class MySpl:
         yspl[index] = 1.
         tck = interpolate.splrep(self.xspl, yspl)
         yy = interpolate.splev(xx, tck, der=0)
-        return (yy)
+        return yy
 
 
 class SimSrcTOD:
@@ -621,19 +634,19 @@ class SimSrcTOD:
         self.pars_src = pars_src
 
     def amplitude(self, x, pars):
-        ### Amplitude function
+        # ## Amplitude function
         pars_amp = pars[0:self.nbspl_amp]
         amp = self.spl_amp(x, pars_amp)
         return amp
 
     def offset(self, x, pars):
-        ### Offset function
+        # ## Offset function
         pars_offset = pars[self.nbspl_amp:self.nbspl_amp + self.nbspl_offset]
         offset = self.spl_offset(x, pars_offset)
         return offset
 
     def phase(self, x, pars):
-        ### Phase function
+        # ## Phase function
         pars_phase = pars[self.nbspl_amp + self.nbspl_offset:self.nbspl_amp + self.nbspl_offset + self.nbspl_phase]
         phase = self.spl_phase(x, pars_phase)
         return phase
@@ -651,12 +664,12 @@ class SimSrcTOD:
 
 def scan2ang_splfit(period, time, data, t_src, src, t_az, az, lowcut, highcut, elevation, nbins=150, superbinning=1.,
                     doplot=False):
-    ### Filter Data and Source Signal the same way + change sign of data
+    # ## Filter Data and Source Signal the same way + change sign of data
     new_data = -ft.filter_data(time, data, lowcut, highcut)
     new_src = ft.filter_data(time, np.interp(time, t_src, src), lowcut, highcut)
 
-    ### Now resample data into bins such that the modulation period is well sampled
-    ### We want bins with size < period/4
+    # ## Now resample data into bins such that the modulation period is well sampled
+    # ## We want bins with size < period/4
     approx_binsize = period / 4 / superbinning
     nbins_new = int((time[-1] - time[0]) / approx_binsize)
     print('Number of initial bins in data: {}'.format(len(data)))
@@ -664,7 +677,7 @@ def scan2ang_splfit(period, time, data, t_src, src, t_az, az, lowcut, highcut, e
     x_data, newdata, dx, dy = ft.profile(time, new_data, nbins=nbins_new, plot=False)
     new_az = np.interp(x_data, t_az, az)
 
-    #### Source parameters
+    # ### Source parameters
     src_amp = 5.  # Volts
     src_period = period  # seconds
     src_phase = 0  # Radians
@@ -689,7 +702,7 @@ def scan2ang_splfit(period, time, data, t_src, src, t_az, az, lowcut, highcut, e
     res = ft.do_minuit(x_data, newdata, np.ones(len(newdata)), guess, functname=simsrc, verbose=False, nohesse=True,
                        force_chi2_ndf=False)
 
-    if doplot == True:
+    if doplot:
         subplot(4, 1, 1)
         plot(new_az * np.cos(np.radians(elevation)), newdata, label='Data')
         plot(new_az * np.cos(np.radians(elevation)), simsrc(x_data, res[1]), label='Fit')
@@ -719,12 +732,14 @@ def scan2ang_splfit(period, time, data, t_src, src, t_az, az, lowcut, highcut, e
 
 def general_demodulate(period, indata, lowcut, highcut, nbins=150, median=True, method='demod', verbose=False,
                        doplot=True, rebin=False, cut=None, label=None, renormalize_plot=True):
-    ### Call one of the methods
+    # Call one of the methods
     if method == 'demod':
-        if verbose: printnow('Demodulation Method')
-        unbinned = scan2ang_demod(period, indata, verbose=verbose, median=median, lowcut=lowcut, highcut=highcut)
+        if verbose:
+            printnow('Demodulation Method')
+        unbinned = scan2ang_demod(period, indata, verbose=verbose, lowcut=lowcut, highcut=highcut)
     elif method == 'rms':
-        if verbose: printnow('RMS Method')
+        if verbose:
+            printnow('RMS Method')
         unbinned = scan2ang_RMS(period, indata, verbose=verbose, median=median, lowcut=lowcut, highcut=highcut)
     # elif method == 'splfit':
     #     azbins, elbins, angle, sb, dsb = scan2ang_splfit(period, time, data, t_src, src, 
@@ -732,8 +747,9 @@ def general_demodulate(period, indata, lowcut, highcut, nbins=150, median=True, 
     #                                     nbins=nbins, superbinning=1., doplot=False)
 
     if rebin:
-        ### Now rebin the data
-        if verbose: printnow('Now rebin the data')
+        # Now rebin the data
+        if verbose:
+            printnow('Now rebin the data')
         if indata['data'].ndim == 1:
             sh = [1, len(indata['data'])]
         else:
@@ -760,12 +776,14 @@ def general_demodulate(period, indata, lowcut, highcut, nbins=150, median=True, 
     else:
         binned = None
 
-    ### If requested plot the result
-    if doplot == True:
-        if verbose: printnow('Plot')
+    # If requested plot the result
+    if doplot:
+        if verbose:
+            printnow('Plot')
         toplot = unbinned
-        if rebin: toplot = binned
-        if label == None:
+        if rebin:
+            toplot = binned
+        if label is None:
             label = method
         if indata['data'].ndim == 1:
             sh = [1, len(indata['data'])]
@@ -792,37 +810,39 @@ def array_info(ar):
 def read_data_azel_src(dirfile, AsicNum, TESNum=None, calsource_dir='/qubic/Data/Calib-TD/calsource/', verbose=False):
     a = qp()
     a.read_qubicstudio_dataset(dirfile, asic=AsicNum)
-    ############################### TES DATA ###################################
-    #### Get TES data: if TESNum is None, will return the whole ASIC array (128)
+    # ############################## TES DATA ###################################
+    # Get TES data: if TESNum is None, will return the whole ASIC array (128)
     if TESNum:
         data = a.timeline(TES=TESNum)
     else:
         data = a.timeline_array()
-    #### Get TES timestamps
+    # Get TES timestamps
     t_data = a.timeline_timeaxis(axistype='pps')
-    ############################################################################
+    # ###########################################################################
 
-    ############################### Az and El data #############################
+    # ############################## Az and El data #############################
     az = a.azimuth()
     el = a.elevation()
     t_azel = a.timeaxis(datatype='hk', axistype='pps')
-    ############################################################################
+    # ###########################################################################
 
-    ############################### Cal Src Data ###############################
-    #### First need to check wether there is a calsrouce data file or not
-    #### and then read the file if it exists
+    # ############################## Cal Src Data ###############################
+    # ### First need to check wether there is a calsrouce data file or not
+    # ### and then read the file if it exists
     data_time = dt.datetime.utcfromtimestamp(a.hk['ASIC_SUMS']['ComputerDate'][0])
     glob_pattern = data_time.strftime('calsource_%Y%m%dT%H%M*.dat')
     bla = glob.glob(calsource_dir + glob_pattern)
     if bla == []:
-        if verbose: print('No CalSource file found corresponding to this dataset: ' + dirfile)
+        if verbose:
+            print('No CalSource file found corresponding to this dataset: ' + dirfile)
         t_src = -1
         data_src = -1
     else:
-        if verbose: print('Found Calibration Source date in: ' + bla[0])
+        if verbose:
+            print('Found Calibration Source date in: ' + bla[0])
         t_src, data_src = read_cal_src_data(bla)
 
-    #### Now return everything
+    # ### Now return everything
     if verbose:
         print('Returning:')
         print('   t_data  : ', array_info(t_data))
@@ -894,7 +914,7 @@ def make_tod(scans, axis=1):
 
 
 def CalSrcPower_Vs_Nu(freq):
-    ### Taken from Tx 263 130-170GHz User Guide available on Atrium
+    # ## Taken from Tx 263 130-170GHz User Guide available on Atrium
     ff = np.array([129.93109059, 130.93364949, 131.93662559, 132.93897589,
                    133.94132618, 134.94430228, 135.94686118, 136.95004589,
                    137.90587712, 138.90927044, 139.91203794, 140.91501405,
@@ -919,8 +939,8 @@ def CalSrcPower_Vs_Nu(freq):
 
 
 def CalSrcPowerMeterResponse_Vs_Nu(freq):
-    ### Taken from Tx 263 130-170GHz User Guide available on Atrium
-    ### It ic=ncludes both output response and power meter response
+    # ## Taken from Tx 263 130-170GHz User Guide available on Atrium
+    # ## It ic=ncludes both output response and power meter response
     ff = np.array([129.96075353, 130.90266876, 131.89167975, 133.02197802,
                    133.96389325, 134.90580848, 135.89481947, 136.97802198,
                    137.96703297, 139.00313972, 139.89795918, 141.02825746,
@@ -953,26 +973,26 @@ def dB(y):
 
 def get_spectral_response(name, freqs, allmm, allss, nsig=3, method='demod', TESNum=None,
                           directory='/Users/hamilton/Qubic/Calib-TD/SpectralResponse/'):
-    #### Restore the data already treated
+    # Restore the data already treated
     allmm = FitsArray(directory + '/allmm_' + method + '_' + name + '.fits')
     allss = FitsArray(directory + '/allss_' + method + '_' + name + '.fits')
     freqs = FitsArray(directory + '/freqs_' + method + '_' + name + '.fits')
 
-    #### Correct for Source Characteristics
+    # Correct for Source Characteristics
     if method == 'rms':
-        ### Then the analysis does not use the power meter data and we only need to correct for the output power
+        # Then the analysis does not use the power meter data and we only need to correct for the output power
         allmm /= (CalSrcPower_Vs_Nu(freqs))
         allss /= (CalSrcPower_Vs_Nu(freqs))
     else:
-        ### In the case of demod we need to correct for both the power_meter response and the output power
-        ### This is done using the function below
+        # In the case of demod we need to correct for both the power_meter response and the output power
+        # This is done using the function below
         allmm /= (CalSrcPowerMeterResponse_Vs_Nu(freqs))
         allss /= (CalSrcPowerMeterResponse_Vs_Nu(freqs))
 
     sh = np.shape(allmm)
     nTES = sh[0]
 
-    #### Normalize all TES to the same integral
+    # Normalize all TES to the same integral
     allfnorm = np.zeros((256, len(freqs)))
     allsnorm = np.zeros((256, len(freqs)))
     infilter = (freqs >= 124) & (freqs <= 182)
@@ -983,13 +1003,13 @@ def get_spectral_response(name, freqs, allmm, allss, nsig=3, method='demod', TES
         allfnorm[tesindex, :] = (allmm[tesindex, :] - baseline) / integ
         allsnorm[tesindex, :] = allss[tesindex, :] / integ
 
-    ### If only one TES is requested we return it. Otherwise we need to do an average over nicely
-    ### Behaving TES...
+    # If only one TES is requested we return it. Otherwise we need to do an average over nicely
+    # Behaving TES...
     if TESNum is not None:
         return freqs, allfnorm[TESNum - 1, :] - np.min(allfnorm[TESNum - 1, :]), allsnorm[TESNum - 1, :]
     else:
-        ### Discriminant Variable: a chi2 we want it to be bad in the sense that 
-        ### we want the spectrum to be inconsistent with a straight line inside the QUBIC band
+        # Discriminant Variable: a chi2 we want it to be bad in the sense that
+        # we want the spectrum to be inconsistent with a straight line inside the QUBIC band
         discrim = np.nansum(allfnorm[:, infilter] ** 2 / allsnorm[:, infilter] ** 2, axis=1)
         mr, sr = ft.meancut(discrim, 3)
         threshold = mr + nsig * sr
@@ -1067,11 +1087,11 @@ def flattened_qubic_sb_model(x, pars):
 
 def fit_sb(TESNum, dirfiles, scaling=140e3, newsize=70, dmax=5., az_center=0., el_center=50., doplot=False,
            vmin=None, vmax=None, resample=True):
-    ### Read flat maps
-    flatmap_init, az_init, el_init = get_flatmap(TESNum, dirfiles)
+    # Read flat maps
+    flatmap_init, az_init, el_init = sbfit.get_flatmap(TESNum, dirfiles)
 
     if resample:
-        ### Resample input map to have less pixels to deal with for fitting
+        # Resample input map to have less pixels to deal with for fitting
         flatmap = scsig.resample(scsig.resample(flatmap_init, newsize, axis=0), newsize, axis=1)
         delta_az = np.median(az_init - np.roll(az_init, 1))
         delta_el = np.median(el_init - np.roll(el_init, 1))
@@ -1083,7 +1103,7 @@ def fit_sb(TESNum, dirfiles, scaling=140e3, newsize=70, dmax=5., az_center=0., e
         el = el_init
     az2d, el2d = np.meshgrid(az * np.cos(np.radians(50)), np.flip(el))
 
-    ### First find the location of the maximum close to the center
+    # ## First find the location of the maximum close to the center
     distance_max = dmax
     mask = (np.sqrt((az2d - az_center) ** 2 + (el2d - el_center) ** 2) < distance_max).astype(int)
     wmax = np.where((flatmap * mask) == np.max(flatmap * mask))
@@ -1091,7 +1111,7 @@ def fit_sb(TESNum, dirfiles, scaling=140e3, newsize=70, dmax=5., az_center=0., e
     print('Maximum of map is {0:5.2g} and was found at: az={1:5.2f}, el={2:5.2f}'.format(maxval,
                                                                                          az2d[wmax][0], el2d[wmax][0]))
 
-    ### Now fit all parameters
+    # ## Now fit all parameters
     x = [az2d, el2d]
     parsinit = np.array([az2d[wmax][0], el2d[wmax][0], 8.3, 44., 0., 0.009, maxval / scaling, 0., 50., 13., 1.])
     rng = [[az2d[wmax][0] - 1., az2d[wmax][0] + 1.],
@@ -1212,10 +1232,10 @@ def flattened_qubic_sb_model_asym(x, pars):
 
 
 def fit_sb_asym(TESNum, dirfiles, scaling=140e3, newsize=70, dmax=5., az_center=0., el_center=50., doplot=False):
-    ### Read flat maps
-    flatmap_init, az_init, el_init = get_flatmap(TESNum, dirfiles)
+    # Read flat maps
+    flatmap_init, az_init, el_init = sbfit.get_flatmap(TESNum, dirfiles)
 
-    ### Resample input map to have less pixels to deal with for fitting
+    # ## Resample input map to have less pixels to deal with for fitting
     flatmap = scsig.resample(scsig.resample(flatmap_init, newsize, axis=0), newsize, axis=1)
     delta_az = np.median(az_init - np.roll(az_init, 1))
     delta_el = np.median(el_init - np.roll(el_init, 1))
@@ -1223,7 +1243,7 @@ def fit_sb_asym(TESNum, dirfiles, scaling=140e3, newsize=70, dmax=5., az_center=
     el = np.linspace(np.min(el_init) - delta_el / 2, np.max(el_init) + delta_el / 2, newsize)
     az2d, el2d = np.meshgrid(az * np.cos(np.radians(50)), np.flip(el))
 
-    ### First find the location of the maximum close to the center
+    # ## First find the location of the maximum close to the center
     distance_max = dmax
     mask = (np.sqrt((az2d - az_center) ** 2 + (el2d - el_center) ** 2) < distance_max).astype(int)
     wmax = np.where((flatmap * mask) == np.max(flatmap * mask))
@@ -1231,7 +1251,7 @@ def fit_sb_asym(TESNum, dirfiles, scaling=140e3, newsize=70, dmax=5., az_center=
     print('Maximum of map is {0:5.2g} and was found at: az={1:5.2f}, el={2:5.2f}'.format(maxval,
                                                                                          az2d[wmax][0], el2d[wmax][0]))
 
-    ### Now fit all parameters
+    # ## Now fit all parameters
     x = [az2d, el2d]
     parsinit = np.array([az2d[wmax][0], el2d[wmax][0], 8.3, 44., 0., 0.01, maxval / scaling, 0., 50., 13.])
     fwhmxinit = np.zeros(9) + 1
@@ -1248,9 +1268,12 @@ def fit_sb_asym(TESNum, dirfiles, scaling=140e3, newsize=70, dmax=5., az_center=
            [-3, 3],
            [47., 53],
            [10., 16.]]
-    for i in range(9): rng.append([0.5, 1.5])
-    for i in range(9): rng.append([0.5, 1.5])
-    for i in range(9): rng.append([-1, 1])
+    for i in range(9):
+        rng.append([0.5, 1.5])
+    for i in range(9):
+        rng.append([0.5, 1.5])
+    for i in range(9):
+        rng.append([-1, 1])
 
     fit = ft.do_minuit(x, np.ravel(flatmap / scaling), np.ones_like(np.ravel(flatmap)), parsinit,
                        functname=flattened_qubic_sb_model_asym, chi2=ft.MyChi2_nocov, rangepars=rng,
@@ -1342,7 +1365,7 @@ def demodulate_directory(thedir, ppp, TESmask=None, srcshift=0.,
         data['t_src'] -= srcshift
         # data['t_src'] += 7200
         datas.append(data)
-    ### Concatenate the data from the two asics in a single one
+    # Concatenate the data from the two asics in a single one
     data = datas[0].copy()
     data['data'] = np.concatenate((datas[0]['data'], datas[1]['data']), axis=0)
     # for k in data.keys(): print(k, data[k].shape)
@@ -1462,11 +1485,13 @@ def coadd_flatmap(datain, az, el,
         data = datain
 
     if filtering:
-        if not silent: bar = progress_bar(nTES, 'Filtering Detectors: ')
+        if not silent:
+            bar = progress_bar(nTES, 'Filtering Detectors: ')
         for i in range(nTES):
             data[i, :] = ft.filter_data(filtering[0], data[i, :], filtering[1], filtering[2], notch=filtering[3],
                                         rebin=True, verbose=False, order=5)
-            if not silent: bar.update()
+            if not silent:
+                bar.update()
 
     map_az_lims = np.linspace(azmin, azmax, naz + 1)
     map_az = 0.5 * (map_az_lims[1:] + map_az_lims[0:-1])
@@ -1476,7 +1501,7 @@ def coadd_flatmap(datain, az, el,
     azindex = (naz * (az - azmin) / (azmax - azmin)).astype(int)
     elindex = (nel * (el - elmin) / (elmax - elmin)).astype(int)
 
-    ### Keeping only the inner part
+    # ## Keeping only the inner part
     inside = (azindex >= 0) & (azindex < naz) & (elindex >= 0) & (elindex < nel)
     data = data[:, inside]
     azindex = azindex[inside]

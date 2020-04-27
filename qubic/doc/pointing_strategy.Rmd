@@ -1,0 +1,105 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Test pointing strategy
+
+Edited by Louise, 27/04/2020
+
+This notebook shows the different pointing strategies. It should be completed with the sweeping srategy.
+
+```{python}
+# General modules
+from __future__ import division, print_function
+# %matplotlib inline
+
+import os
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Specific qubic modules
+import pysm
+import qubic
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+
+from pysm import models
+from qubic import QubicSkySim as qss
+
+rc('figure', figsize=(13, 10))
+rc('font', size=13)
+```
+
+```{python}
+# Repository for dictionary
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir='../')
+dictfilename = global_dir + 'dicts/pipeline_demo.dict'
+
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+
+# Center of the patch observed in galactic coordinates
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+
+```
+
+```{python}
+# Make a sky using PYSM
+seed = None
+sky_config = {'cmb': seed}                
+
+# Generate the maps at each sub-frequency
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+x0 = Qubic_sky.get_simple_sky_map()
+
+print('sky shape: ', x0.shape)
+
+# Look at the input sky maps using Healpy
+istokes = 0 # Stokes parameter (I, Q, U)
+rr = 9 # Resolution in arcmin
+
+plt.figure(figsize=(15, 6))
+for istk in range(3):
+    plt.subplots_adjust(wspace=0.9)
+    hp.mollview(x0[0, :, istk], cmap='jet', sub = (1, 3, istk+1), 
+                title = '{0} Stokes parameter'.format(d['kind'][istk]))
+```
+
+```{python}
+# Pointing strategy
+d['random_pointing'] = False
+d['repeat_pointing'] = True
+d['sweeping_pointing'] = False
+
+# Number of pointings
+d['npointings'] = 200
+
+p = qubic.get_pointing(d)
+```
+
+```{python}
+# Look at the pointing parameters
+print('Index', p.index)
+print('HWP angle', p.angle_hwp)
+print('Azimuth', p.azimuth)
+print('Elevation', p.elevation)
+print('Pitch', p.pitch)
+```
+
+```{python}
+
+```

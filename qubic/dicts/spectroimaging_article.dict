@@ -4,7 +4,7 @@ debug = False #False/True # Boolean
 config = 'FI' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
 filter_nu = 150*1e9 # 150e9 or 220e9 Hz
 filter_relative_bandwidth = 0.25 
-beam_shape =  'multi_freq' # 'gaussian', 'fitted_beam', 'multi_freq'
+beam_shape =  'gaussian' # 'gaussian', 'fitted_beam', 'multi_freq'
 
 # multifreq instrument 
 MultiBand=True

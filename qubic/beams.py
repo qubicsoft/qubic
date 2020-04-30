@@ -88,9 +88,6 @@ class BeamGaussian(Beam):
             If True, the maximum of the beam is at theta=pi.
         """
         self.nu = nu
-        if 250 > self.nu > 190:
-            print('Warning: The nu dependency of the gausian beam FWHM '
-                  'is not a good approximation in the 220 GHz band.')
         if 170 > self.nu > 130:
             self.fwhm = fwhm * 150 / self.nu
         else:  # nu = 220
@@ -128,10 +125,6 @@ class BeamFitted(Beam):
         """
         self.par = par
         self.nu = nu
-        if 250 >= self.nu >= 190:
-            print('Warning! beam and solid angle frequency dependence implementation '
-                  'in the 220 GHz band for the fitted beam does not correctly describe '
-                  'the true behavior')
         if 170 >= self.nu >= 130:
             omega *= (150 / nu) ** 2
         else:

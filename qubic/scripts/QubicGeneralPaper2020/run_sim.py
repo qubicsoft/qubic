@@ -86,6 +86,7 @@ maps_convolved = np.array(maps_convolved)
 print('--------- Noiseless TOD with shape: {} - Done ---------'.format(np.shape(TOD)))
 print('-------- Maps Convolved with shape: {} - Done ---------'.format(np.shape(maps_convolved)))
 
+
 q = qubic.QubicMultibandInstrument(d)
 s = qubic.QubicScene(d)
 

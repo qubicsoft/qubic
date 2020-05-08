@@ -1,0 +1,325 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Test kmax impact
+
+kmax has a large impact on the memory so we want to test if we can set it to 1 without problem.
+
+
+### Memory stored
+The shape of the TOD is (Nsamples, Ntes).
+
+And you have say 9 peaks in the synthesized beam model (corresponding to kmax=1) so the size of the operators is indeed: (Ntod, Npeaks)
+
+Note it is **independent of Nside**. This is because you don't need to store the H operator which is in the map space. You just want to store the location of each peak at each time sample.
+
+So what is stored is the pixel number of each peak for each time sample and each TES.
+
+**Example:** 999 ptgs, 992 TES (FI), kmax=2 meaning 25 peaks
+
+        992 * 999 = 991008
+        
+        then if you take 16 bits for each case (index of the pixel in the healpix map)
+        
+        that makes 992 * 999 * 25 * 16 = 396403200
+        
+        then divid this by 1024^3 to get GiB
+        
+        992*999*25*16/(1024^3)= 0,369179249 GiB
+
+which matches what the code says:
+
+Info moussetDell: Allocating (991008,25) elements = 378.03955078125 MiB in FSRRotation3dMatrix.__init__.
+
+```{python}
+# %matplotlib inline
+from pylab import *
+import os
+import sys
+import glob
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm
+import pysm.units as u
+
+import qubic
+from qubic import SpectroImLib as si
+from qubic import QubicSkySim as qss
+
+import ReadMC as rmc
+import AnalysisMC as amc
+
+rc('figure', figsize=(13, 10))
+rc('font', size=15)
+```
+
+```{python}
+# Repository for dictionary 
+dictfilename = os.environ['QUBIC_DICT']+'spectroimaging_article.dict'
+
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+print(center)
+
+d['nf_sub'] = 1
+d['Multiband'] = False
+d['nf_recon'] = [1]
+```
+
+```{python}
+maps_dir = '/home/lmousset/QUBIC/MyGitQUBIC/qubic/qubic/scripts/Spectroimagery_paper/maps/'
+x0cmb = FitsArray(maps_dir + 'CMB_r=0_nside128_nfsub16.fits')
+
+x0zero = np.zeros_like(x0cmb)
+x0ones = np.ones_like(x0cmb)
+```
+
+```{python}
+save_dir = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/Test_kmax/'
+
+# Pointing strategy
+p = qubic.get_pointing(d)
+
+seed = 42
+d['noiseless'] = True
+
+d['synthbeam_kmax'] = 8
+
+d['tol'] = 1e-5
+nf_sub_rec = 1
+
+allTOD = []
+npix = 12 * d['nside']**2 
+maps_recon = np.zeros((10, npix, 3))
+maps_conv = np.zeros((10, npix, 3))
+cov = np.zeros((10, npix))
+
+for i in range(10):
+    sbfrac = (i + 1) / 10
+    print('\n Synthbeam_fraction = ', sbfrac)
+    d['synthbeam_fraction'] = sbfrac
+    
+    np.random.seed(seed) 
+    TOD, _ = si.create_TOD(d, p, x0ones, verbose=True)
+    allTOD.append(TOD)
+
+#     maps_recon[i], cov[i], nus, nus_edge, maps_conv[i] = si.reconstruct_maps(TOD, d, p, nf_sub_rec, x0cmb)
+    
+#     simu_name = 'skycmb_tol=1e-5_kmax=8_sbfrac={}'.format(sbfrac)
+#     rmc.save_simu_fits(maps_recon[i], cov[i], nus, nus_edge, maps_conv[i],
+#                        save_dir=save_dir, simu_name=simu_name)
+```
+
+```{python}
+allTOD = np.array(allTOD)
+allTOD.shape
+
+plt.figure()
+for i in range(10):
+    sbfrac = (i + 1) / 10
+    std_rapport = np.max(allTOD[i, :, :]) / np.max(allTOD[9, :, :])
+    plt.plot(sbfrac, std_rapport, 'o')
+    plt.xlabel('SynthBeam fraction')
+    plt.ylabel('TOD Mean for a given f / TOD Mean for f=1 ')
+    plt.plot([0, 1], [0, 1], 'k')
+```
+
+```{python}
+from astropy.io import fits
+
+f = fits.open(save_dir + simu_name)
+f['COVERAGE'].data.shape
+```
+
+```{python}
+plt.figure()
+for i in range(9):
+    sbfrac = (i + 1) / 10
+    simu_name = 'skycmb_tol=1e-5_kmax=8_sbfrac={}'.format(sbfrac)
+
+    f = fits.open(save_dir + simu_name)
+    cov = f['COVERAGE'].data
+    seenmap = cov > 0.15 * np.max(cov)
+    
+    maps_recon, maps_conv, maps_diff = rmc.get_maps(save_dir + simu_name)
+    
+    bin_centers, ang, std_bin, std_profile = amc.std_profile(np.expand_dims(maps_diff, axis=(0, 1))[:, :, seenmap, :], 
+                                                        10, d['nside'], center, seenmap)
+    
+    plt.plot(ang, std_profile[:, 0, 0], '.', label=simu_name[-10:])
+# plt.xlim(0, 7)
+# plt.ylim(0.3, 0.8)
+plt.xlabel('Angle [deg]')
+plt.ylabel('STD')
+plt.title('STD in the residuals = recon - conv')
+plt.legend()
+```
+
+```{python}
+plt.figure()
+plt.plot(TOD1[0], 'ro', label='kmax=1')
+plt.plot(TOD2[0], 'bo', label='kmax=2')
+plt.plot(TOD3[0], 'go', label='kmax=8')
+plt.legend()
+plt.show()
+```
+
+```{python}
+print(TOD1[0, :10])
+print(TOD2[0, :10])
+print(TOD3[0, :10])
+```
+
+```{python}
+d['tol'] = 1e-5
+d['noiseless'] = False
+nf_sub_rec = 1
+# d['synthbeam_kmax'] = 1
+# maps_recon1, cov1, nus, nus_edge, maps_conv1 = si.reconstruct_maps(TOD1, d, p, nf_sub_rec, x0)
+
+# d['synthbeam_kmax'] = 2
+# maps_recon2, cov2, _, _, maps_conv2 = si.reconstruct_maps(TOD2, d, p, nf_sub_rec, x0)
+
+d['synthbeam_kmax'] = 8
+maps_recon3, cov3, _, _, maps_conv3 = si.reconstruct_maps(TOD3, d, p, nf_sub_rec, x0)
+print(maps_recon.shape)
+```
+
+```{python}
+
+# rmc.save_simu_fits(maps_recon1, cov1, nus, nus_edge, maps_conv1,
+#                   save_dir=save_dir, simu_name=simu_name + '_kmax1')
+
+# rmc.save_simu_fits(maps_recon2, cov2, nus, nus_edge, maps_conv2,
+#                   save_dir=save_dir, simu_name=simu_name + '_kmax2')
+
+
+rmc.save_simu_fits(maps_recon3, cov3, nus, nus_edge, maps_conv3,
+                  save_dir=save_dir, simu_name=simu_name + '_kmax8')
+
+```
+
+# Noiseless Simu
+
+```{python}
+# ==== TOD making ====
+d['noiseless'] = True
+# d['synthbeam_kmax'] = 1
+# np.random.seed(seed) 
+# TOD1_nl, _ = si.create_TOD(d, p, x0, verbose=True)
+
+# d['synthbeam_kmax'] = 2
+# np.random.seed(seed) 
+# TOD2_nl, _ = si.create_TOD(d, p, x0, verbose=True)
+
+d['synthbeam_kmax'] = 8
+np.random.seed(seed) 
+TOD3_nl, _ = si.create_TOD(d, p, x0, verbose=True)
+```
+
+```{python}
+d['tol'] = 1e-5
+nf_sub_rec = 1
+# d['synthbeam_kmax'] = 1
+# maps_recon1_nl, cov1_nl, nus_nl, nus_edge_nl, maps_conv1_nl = si.reconstruct_maps(TOD1_nl, d, p, nf_sub_rec, x0)
+
+# d['synthbeam_kmax'] = 2
+# maps_recon2_nl, cov2_nl, _, _, maps_conv2_nl = si.reconstruct_maps(TOD2_nl, d, p, nf_sub_rec, x0)
+
+d['synthbeam_kmax'] = 3
+maps_recon3_nl, cov3_nl, _, _, maps_conv3_nl = si.reconstruct_maps(TOD3_nl, d, p, nf_sub_rec, x0)
+```
+
+```{python}
+# rmc.save_simu_fits(maps_recon1_nl, cov1_nl, nus_nl, nus_edge_nl, maps_conv1_nl,
+#                   save_dir=save_dir, simu_name=simu_name + '_nlTrue_kmax1')
+
+# rmc.save_simu_fits(maps_recon2_nl, cov2_nl, nus_nl, nus_edge_nl, maps_conv2_nl,
+#                   save_dir=save_dir, simu_name=simu_name + '_nlTrue_kmax2')
+
+rmc.save_simu_fits(maps_recon3_nl, cov3_nl, nus_nl, nus_edge_nl, maps_conv3_nl,
+                  save_dir=save_dir, simu_name=simu_name + '_nlTrue_kmax8')
+```
+
+# Analysis
+
+```{python}
+plt.figure()
+coverage = [cov1, cov2, cov3]
+for c, cov in enumerate(coverage) :
+    hp.gnomview(cov, sub=(1, 3, c+1), rot=center, reso=14, title='Coverage kmax={}'.format(kmax[c]))
+
+```
+
+```{python}
+kmax = [1, 2, 8]
+plt.figure()
+for c, cov in enumerate([cov1, cov2, cov3]):
+    k = kmax[c]
+    seenmap = cov > 0.15 * np.max(cov)
+    maps_recon, maps_conv, maps_diff = rmc.get_maps(save_dir + simu_name + '_kmax{}'.format(k))
+    
+    bin_centers, ang, std_bin, std_profile = amc.std_profile(np.expand_dims(maps_diff, axis=(0, 1))[:, :, seenmap, :], 
+                                                        10, d['nside'], center, seenmap)
+    
+    plt.plot(ang, std_profile[:, 0, 0], '.', label='kmax={}'.format(k))
+
+plt.xlabel('Angle [deg]')
+plt.ylabel('STD')
+plt.title('STD in the residuals = recon - conv')
+plt.legend()
+```
+
+```{python}
+# Trying with the noiseless 
+residuals1 = maps_recon1 - maps_recon1_nl
+residuals2 = maps_recon2 - maps_recon2_nl
+residuals3 = maps_recon3 - maps_recon3_nl
+residuals = [residuals1, residuals2, residuals3]
+
+plt.figure()
+for c, cov in enumerate([cov1, cov2, cov3]):
+    seenmap = cov > 0.15 * np.max(cov)
+    bin_centers, ang, std_bin, std_profile = amc.std_profile(np.expand_dims(residuals[c], 
+                                                                            axis=(0, 1))[:, :, seenmap, :], 
+                                                        10, d['nside'], center, seenmap)
+
+
+
+
+    plt.plot(ang, std_profile[:, 0, 0], '.', label='kmax={}'.format(kmax[c]))
+
+plt.xlabel('Angle [deg]')
+plt.ylabel('STD')
+plt.title('STD in the residuals = recon - noiseless')
+plt.legend()
+```
+
+```{python}
+hp.gnomview(residuals1[:, 0], sub=(121), rot=center, reso=18, min=-2, max=2)
+hp.gnomview(residuals2[:, 0], sub=(122), rot=center, reso=30)
+```
+
+```{python}
+
+```

@@ -31,7 +31,6 @@ Here we work with only one frequency band.
 # General modules
 from __future__ import division, print_function
 # %matplotlib inline
-from pylab import *
 import os
 import sys
 import time
@@ -41,6 +40,7 @@ import shutil
 # Specific science modules
 import healpy as hp
 import numpy as np
+import matplotlib.pyplot as plt
 
 # Specific qubic modules
 import pysm
@@ -91,9 +91,6 @@ sky_config = {'cmb': seed}                ### CMB Only
 Qubic_sky = qss.Qubic_sky(sky_config, d)
 x0 = Qubic_sky.get_simple_sky_map()
 
-# sky_config = {'cmb': models('c1', d['nside'])}
-# Qubic_sky = si.Qubic_sky(sky_config, d)
-# x0 = Qubic_sky.get_simple_sky_map()
 print('sky shape: ', x0.shape)
 
 # Look at the input sky maps using Healpy

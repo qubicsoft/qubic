@@ -32,7 +32,7 @@ def gauss_plus(x, a, s, z):
     a, s, z : six components vectors
     s and z are in radians, a has no dimension.
     x : one dimensional vector of any size, in radian
-    
+
     """
     x = x[..., None]
     out = (np.exp(-(x - z) ** 2 / 2 / s ** 2) + np.exp(-(x + z) ** 2 / 2 / s ** 2)) * a
@@ -78,18 +78,20 @@ class BeamGaussian(Beam):
 
     def __init__(self, fwhm, nu=150, backward=False):
         """
+        Warning: The nu dependence of the fwhm is not a good approximation in the 220 GHz band.
+
         Parameters
         ----------
         fwhm : float
             The Full-Width-Half-Maximum of the beam, in radians.
         backward : boolean, optional
-            If true, the maximum of the beam is at theta=pi.
-
+            If True, the maximum of the beam is at theta=pi.
         """
-        if nu is None or (170 > nu > 130):
-            self.fwhm = fwhm * 150 / nu
+        self.nu = nu
+        if 170 > self.nu > 130:
+            self.fwhm = fwhm * 150 / self.nu
         else:  # nu = 220
-            self.fwhm = 0.1009 * np.sqrt(8 * np.log(2))  # Omega = 0.064
+            self.fwhm = 0.1009 * np.sqrt(8 * np.log(2)) * 220 / self.nu
         self.sigma = self.fwhm / np.sqrt(8 * np.log(2))
         self.backward = bool(backward)
         Beam.__init__(self, 2 * np.pi * self.sigma ** 2)
@@ -105,27 +107,28 @@ class BeamGaussian(Beam):
 class BeamFitted(Beam):
     """
     Axisymmetric fitted beam.
+        Warning: The nu dependence of the beam and the solid angle are not well approximated in the 220 GHz band
 
     """
 
     def __init__(self, par, omega, nu=150, backward=False):
         """
+        Warning! beam and solid angle frequency dependence implementation
+        in the 220 GHz band does not correctly describe the true behavior
+
         Parameters
         ----------
-        par : the parameters of the fit
+        par: the parameters of the fit
         omega : beam total solid angle
         backward : boolean, optional
             If true, the maximum of the beam is at theta=pi.
-
-        Warning! beam and solid angle frequency dependence are not implemented
-        in the 220 GHz band
-
-
         """
         self.par = par
         self.nu = nu
         if 170 >= self.nu >= 130:
             omega *= (150 / nu) ** 2
+        else:
+            omega *= (220 / nu) ** 2
         self.backward = bool(backward)
         Beam.__init__(self, omega)
 
@@ -136,6 +139,8 @@ class BeamFitted(Beam):
         theta_eff = theta
         if 170 >= self.nu >= 130:
             theta_eff = theta * self.nu / 150
+        else:
+            theta_eff = theta * self.nu / 220
         out = gauss_plus(theta_eff, par[0], par[1], par[2])
         return reshape_broadcast(out, np.broadcast(theta, phi).shape)
 
@@ -151,10 +156,10 @@ class MultiFreqBeam(Beam):
         """
         Parameters
         ----------
-        parth, parfr, parbeam: angles, frequencies and beam values to be 
-        extrapolated
-        alpha, xspl: spline parameters to evaluate the solid angle 
-        at frequency nu
+        parth, parfr, parbeam: angles, frequencies and beam values to be
+            extrapolated
+        alpha, xspl: spline parameters to evaluate the solid angle
+            at frequency nu
 
         """
         self.nu = nu

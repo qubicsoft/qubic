@@ -3,6 +3,7 @@ from __future__ import division
 
 import healpy as hp
 import numpy as np
+import warnings
 from pyoperators import (
     BlockColumnOperator, BlockDiagonalOperator, BlockRowOperator,
     CompositionOperator, DiagonalOperator, I, IdentityOperator,
@@ -78,6 +79,9 @@ class QubicPolyAcquisition(object):
         """
 
         weights = d['weights']
+
+        self.warnings(d)
+
         if d['MultiBand'] and d['nf_sub']>1:
             self.subacqs = [QubicAcquisition(multiinstrument[i],
                                              sampling, scene, d)
@@ -100,6 +104,25 @@ class QubicPolyAcquisition(object):
 
     def __len__(self):
         return len(self.subacqs)
+
+    def warnings(self, d):
+
+        """
+            This method prevent to you that beam is not a good 
+            approximation in the 220 GHz band.
+            Also can be used to add new warnings when acquisition is created in 
+            specific configuration.
+        """
+        
+        if d['filter_nu'] == 220e9:
+            if d['beam_shape'] == 'gaussian':
+                warnings.warn('The nu dependency of the gausian beam FWHM '
+                        'is not a good approximation in the 220 GHz band.')  
+            elif d['beam_shape'] == 'fitted_beam':
+                warnings.warn('Beam and solid angle frequency dependence implementation '
+                        'in the 220 GHz band for the fitted beam does not correctly describe '
+                        'the true behavior')
+
 
     def get_coverage(self):
         """

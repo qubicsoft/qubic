@@ -212,7 +212,7 @@ def create_random_pointings(center, npointings, dtheta, hwp_stepsize, date_obs=N
     return p
 
 
-def create_repeat_pointings(center, npointings, dtheta, nhwp_angles=3, date_obs=None,
+def create_repeat_pointings(center, npointings, dtheta, nhwp_angles, date_obs=None,
                             period=None, latitude=None, longitude=None, seed=None):
     """
     Return pointings randomly and uniformly distributed in a spherical cap. 
@@ -243,6 +243,8 @@ def create_repeat_pointings(center, npointings, dtheta, nhwp_angles=3, date_obs=
 
     r = np.random.RandomState(seed)
     nrandom = np.int(npointings / nhwp_angles)  # number of real random pointings
+    print('You asked {0} pointings with repeat strategy so I will provide {1} pointings '
+          'repeated {2} times.'.format(npointings, nrandom, nhwp_angles))
 
     # Creation of nrandom pointing 
     cosdtheta = np.cos(np.radians(dtheta))

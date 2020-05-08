@@ -4,6 +4,7 @@ import pymaster as nmt
 
 __all__ = ['Namaster']
 
+
 class Namaster(object):
 
     def __init__(self, weight_mask, lmin, lmax, delta_ell, aposize=10.0, apotype='C1'):
@@ -28,7 +29,7 @@ class Namaster(object):
         if weight_mask is not None:
             self.weight_mask = np.asarray(weight_mask)
             self.mask_apo = self.get_apodized_mask()
-            self.fsky = np.sum(self.mask_apo/np.max(self.mask_apo))/len(self.mask_apo)
+            self.fsky = np.sum(self.mask_apo / np.max(self.mask_apo)) / len(self.mask_apo)
 
         self.f0 = None
         self.f2 = None
@@ -295,26 +296,23 @@ class Namaster(object):
 
         return ells, weights, bpws
 
-    def knox_errors(self,clth):
-        dcl = np.sqrt(2./(2*self.ell_binned+1)/self.fsky/self.delta_ell)*clth
+    def knox_errors(self, clth):
+        dcl = np.sqrt(2. / (2 * self.ell_binned + 1) / self.fsky / self.delta_ell) * clth
         return dcl
 
-
-    def knox_covariance(self,clth):
+    def knox_covariance(self, clth):
         dcl = self.knox_errors(clth)
-        return np.diag(dcl**2)
-
+        return np.diag(dcl ** 2)
 
     def get_covariance_coeff(self):
-         if self.cw is None:
+        if self.cw is None:
             cw = nmt.NmtCovarianceWorkspace()
-            cw.compute_coupling_coefficients(self.f0, self.f0, self.f0, self.f0,lmax=self.lmax)
+            cw.compute_coupling_coefficients(self.f0, self.f0, self.f0, self.f0, lmax=self.lmax)
             self.cw = cw
 
     def get_covariance_TT_TT(self, cl_tt):
         self.get_covariance_coeff()
         w00 = self.w[0]
-        n_ell = len(cl_tt)
         covar_00_00 = nmt.gaussian_covariance(self.cw,
                                               0, 0, 0, 0,  # Spins of the 4 fields
                                               [cl_tt * 0],  # TT
@@ -323,7 +321,8 @@ class Namaster(object):
                                               [cl_tt * 0],  # TT
                                               w00, wb=w00).reshape([len(self.ell_binned), 1,
                                                                     len(self.ell_binned), 1])
-        return covar_00_00[:, 0, :, 0]
+        covar_TT_TT = covar_00_00[:, 0, :, 0]
+        return covar_TT_TT
 
     def get_covariance_EE_EE(self, cl_ee):
         self.get_covariance_coeff()
@@ -378,7 +377,7 @@ class Namaster(object):
                                                cl_eb, cl_bb],  # EE, EB, BE, BB
                                               w22, wb=w22)
 
-        covar_22_22 = np.reshape(covar_22_22,(len(self.ell_binned), 4, len(self.ell_binned), 4))
+        covar_22_22 = np.reshape(covar_22_22, (len(self.ell_binned), 4, len(self.ell_binned), 4))
 
         covar_EE_EE = covar_22_22[:, 0, :, 0]
         covar_EE_EB = covar_22_22[:, 0, :, 1]

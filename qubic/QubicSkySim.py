@@ -2,16 +2,18 @@ from __future__ import division
 
 import healpy as hp
 import numpy as np
-import random
+import random as rd
 import string
 import os
 import pysm
 import pysm.units as u
 from pysm import utils
-
+from pylab import *
+from scipy.optimize import curve_fit
 
 import qubic
 from qubic import camb_interface as qc
+from qubic import fibtools as ft
 
 
 __all__ = ['sky', 'Qubic_sky']
@@ -307,7 +309,9 @@ class Qubic_sky(sky):
 
         return fullmaps
 
-    def get_partial_sky_maps_withnoise(self, coverage, sigma_sec, Nyears=3, verbose=False, FWHMdeg=None, seed=None):
+    def get_partial_sky_maps_withnoise(self, coverage, sigma_sec, 
+                                        Nyears=3, verbose=False, FWHMdeg=None, seed=None,
+                                        effective_variance_invcov=None):
         """
         This returns maps in the same way as with get_simple_sky_map but cut according to the coverage
         and with noise added according to this coverage and the RMS in muK.sqrt(sec) given by sigma_sec
@@ -316,6 +320,10 @@ class Qubic_sky(sky):
         if provided.
         If seed is provided, it will be used for the noise realization. If not it will be a new realization at
         each call.
+        The optional effective_variance_invcov keyword is a modification law to be applied to the coverage in order to obtain
+        more realistic noise profile. It is a law for effective RMS as a function of inverse coverage and is 2D array
+        with the first one being (nx samples) inverse coverage and the second being the corresponding effective variance to be
+        used through interpolation when generating the noise.
         Parameters
         ----------
         coverage
@@ -324,6 +332,7 @@ class Qubic_sky(sky):
         verbose
         FWHMdeg
         seed
+        effective_variance_invcov
 
         Returns
         -------
@@ -341,14 +350,20 @@ class Qubic_sky(sky):
         self.noisemaps = np.zeros_like(maps)
         for i in range(self.dictionary['nf_sub']):
             self.noisemaps[i, :, :] += self.create_noise_maps(sigma_sec, coverage,
-                                                              Nyears=Nyears, verbose=verbose, seed=seed)
+                                                              Nyears=Nyears, verbose=verbose, seed=seed,
+                                                              effective_variance_invcov=effective_variance_invcov)
 
         return maps + self.noisemaps
 
-    def create_noise_maps(self, sigma_sec, coverage, Nyears=3, verbose=False, seed=None):
+    def create_noise_maps(self, sigma_sec, coverage, covcut =0.1,
+                            Nyears=3, verbose=False, seed=None, effective_variance_invcov=None):
         """
         This returns a realization of noise maps for I, Q and U with no correlation between them, according to a
         noise RMS map built according to the coverage specified as an attribute to the class
+        The optional effective_variance_invcov keyword is a modification law to be applied to the coverage in order to obtain
+        more realistic noise profile. It is a law for effective RMS as a function of inverse coverage and is 2D array
+        with the first one being (nx samples) inverse coverage and the second being the corresponding effective variance to be
+        used through interpolation when generating the noise.
         Parameters
         ----------
         sigma_sec
@@ -356,15 +371,26 @@ class Qubic_sky(sky):
         Nyears
         verbose
         seed
+        effective_variance_invcov
 
         Returns
         -------
 
         """
-        # The theoretical noise in I for the coverage
-        thnoise = self.theoretical_noise_maps(sigma_sec, coverage, Nyears=Nyears, verbose=verbose)
-        seenpix = coverage > 0
+        # Seen pixels
+        seenpix = (coverage/np.max(coverage)) > covcut
         npix = seenpix.sum()
+        # The theoretical noise in I for the coverage
+        ideal_noise = self.theoretical_noise_maps(sigma_sec, coverage, Nyears=Nyears, verbose=verbose)
+        if effective_variance_invcov is None:
+            thnoise = ideal_noise
+        else:
+            thnoise = np.zeros_like(ideal_noise)
+            correction = np.interp(np.max(coverage[seenpix])/coverage[seenpix], 
+                effective_variance_invcov[0,:], effective_variance_invcov[1,:])
+            thnoise[seenpix] = ideal_noise[seenpix] * np.sqrt(correction)
+
+
         noise_maps = np.zeros((len(coverage), 3))
         if seed is not None:
             np.random.seed(seed)
@@ -423,6 +449,74 @@ def Dl2Cl_without_monopole(ls, totDL):
 
 
 def random_string(nchars):
-    lst = [random.choice(string.ascii_letters + string.digits) for n in range(nchars)]
+    lst = [rd.choice(string.ascii_letters + string.digits) for n in range(nchars)]
     str = "".join(lst)
     return (str)
+
+def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='', norm=False, allstokes=False):
+    seenpix = cov > (covcut*np.max(cov))
+    covnorm = cov / np.max(cov)
+   
+    xx, yyI, dx, dyI, _ = ft.profile(np.sqrt(1./covnorm[seenpix]), maps[seenpix,0], nbins=nbins, plot=False)
+    xx, yyQ, dx, dyQ, _ = ft.profile(np.sqrt(1./covnorm[seenpix]), maps[seenpix,1], nbins=nbins, plot=False)
+    xx, yyU, dx, dyU, _ = ft.profile(np.sqrt(1./covnorm[seenpix]), maps[seenpix,2], nbins=nbins, plot=False)
+    avg = np.sqrt((dyI**2+dyQ**2/2+dyU**2/2)/3)
+    if norm:
+        fact = xx[0]/avg[0]
+    else:
+        fact = 1.
+    myY = (avg/xx) * fact
+
+    p=plot(xx**2,myY, 'o', label=label)
+    if allstokes:
+        plot(xx**2, dyI/xx*fact, label=label+' I', alpha=0.3)
+        plot(xx**2, dyQ/xx*fact/np.sqrt(2), label=label+' Q/sqrt(2)', alpha=0.3)
+        plot(xx**2, dyU/xx*fact/np.sqrt(2), label=label+' U/sqrt(2)', alpha=0.3)
+
+    if fit:
+        mymodel = lambda x, a, b, c, d, e: (a + b*x + c*np.exp(-d*(x-e)))#/(a+b+c*np.exp(-d*(1-e)))
+        ok = isfinite(myY)
+        myfit = curve_fit(mymodel, xx[ok]**2, myY[ok], p0=[0.5,0.16, 0.3,2,1],maxfev=100000, ftol=1e-7)
+        plot(xx**2, mymodel(xx**2, *myfit[0]),  label=label+' Fit', color=p[0].get_color())
+        invcov_samples = np.linspace(1, 15, 1000)
+        eff_v = mymodel(invcov_samples, *myfit[0])**2
+        effective_variance_invcov = np.array([invcov_samples, eff_v])
+
+
+    xlabel('1./cov normed')
+    if norm:
+        add_yl = ' (Normalized to 1 at 1)'
+    else:
+        add_yl=''
+    ylabel('RMS Ratio w.r.t linear scaling'+add_yl)
+
+    if fit:
+        return xx, myY, effective_variance_invcov
+    else:
+        return xx, myY, None
+
+
+def get_angular_profile(maps, thmax=25, nbins=20, label='', center=np.array([316.44761929,-58.75808063]), allstokes=False, fontsize=None):
+    vec0 = hp.ang2vec(center[0], center[1], lonlat=True)
+    vecpix = hp.pix2vec(256, np.arange(12*256**2))
+    angs = np.degrees(np.arccos(np.dot(vec0,vecpix)))
+    rng = np.array([0, thmax])
+    xx, yyI, dx, dyI, _ = ft.profile(angs, maps[:,0], nbins=nbins, plot=False, rng=rng)
+    xx, yyQ, dx, dyQ, _ = ft.profile(angs, maps[:,1], nbins=nbins, plot=False, rng=rng)
+    xx, yyU, dx, dyU, _ = ft.profile(angs, maps[:,2], nbins=nbins, plot=False, rng=rng)
+    avg = np.sqrt((dyI**2+dyQ**2/2+dyU**2/2)/3)
+    plot(xx, avg, 'o', label=label)
+    if allstokes:
+        plot(xx, dyI, label=label+' I', alpha=0.3)
+        plot(xx, dyQ/np.sqrt(2), label=label+' Q/sqrt(2)', alpha=0.3)
+        plot(xx, dyU/np.sqrt(2), label=label+' U/sqrt(2)', alpha=0.3)
+    xlabel('Angle [deg.]')
+    ylabel('RMS')
+    legend(fontsize=fontsize)
+    return xx, avg
+
+
+
+
+
+

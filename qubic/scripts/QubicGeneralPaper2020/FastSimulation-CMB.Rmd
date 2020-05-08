@@ -419,6 +419,18 @@ for lmin in alllmin:
             with open('/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoise/res_{}_{}_{}.pickle'.format(lmin, delta_ell, covcut), 'wb') as handle:
                                 pickle.dump(alloutputs, handle)
 
+            ### We use Flat weighting
+            maskpix = np.zeros(12*d['nside']**2)
+            maskpix[okpix] = cov[okpix]
+            NamasterCov = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+
+            alloutputs_cov = run_mc(nbmc, NamasterCov, d, signoise, cov, 
+                                                            effective_variance_invcov)
+            
+            with open('/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoise/rescov_{}_{}_{}.pickle'.format(lmin, delta_ell, covcut), 'wb') as handle:
+                                pickle.dump(alloutputs, handle)
+            
+
 ```
 
 ```{python}

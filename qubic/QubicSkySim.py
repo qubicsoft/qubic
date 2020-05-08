@@ -119,21 +119,9 @@ class sky(object):
         sky = np.zeros((Nf, npix, 3))
         #ww = (np.ones(Nf+1) * u.uK_CMB).to_value(u.uK_RJ,equivalencies=u.cmb_equivalencies(nus_edge*u.GHz))
         for i in range(Nf):
-
-            ###### Marche pas mal mais je ne comprends pas pkoi
-            nfreqinteg = 5
-            nus = np.linspace(nus_edge[i], nus_edge[i + 1], nfreqinteg)
-            #print('Nus: ',nus)
-            ### Filter in one in uK_CMB
-            filter_uK_CMB = np.ones(len(nus), dtype=np.double)
-            #print('Filter CMB:',filter_uK_CMB)
-            filter_uK_CMB_normalized = utils.normalize_weights(nus * u.GHz, filter_uK_CMB)
-            #print('Filter CMB Normalized:',filter_uK_CMB_normalized)
-            #print('Inverse Filter CMB Normalized:',1./filter_uK_CMB_normalized)
-            weights = 1./filter_uK_CMB_normalized
- 
-
-
+            ###################### This is puzzling part here: ############################
+            # See Issue on PySM Git: https://github.com/healpy/pysm/issues/49
+            ###############################################################################
             # #### THIS IS WHAT WOULD MAKE SENSE BUT DOES NOT WORK ~ 5% on maps w.r.t. input
             # nfreqinteg = 5
             # nus = np.linspace(nus_edge[i], nus_edge[i + 1], nfreqinteg)
@@ -142,6 +130,16 @@ class sky(object):
             # u.uK_RJ, equivalencies=u.cmb_equivalencies(freqs))
             # #print('Convert_to_uK_RJ :',convert_to_uK_RJ)
             # weights = np.ones(nfreqinteg) * convert_to_uK_RJ
+            ###############################################################################
+            ###### Works OK but not clear why...
+            ###############################################################################
+            nfreqinteg = 5
+            nus = np.linspace(nus_edge[i], nus_edge[i + 1], nfreqinteg)
+            filter_uK_CMB = np.ones(len(nus), dtype=np.double)
+            filter_uK_CMB_normalized = utils.normalize_weights(nus, filter_uK_CMB)
+            weights = 1./filter_uK_CMB_normalized
+            ###############################################################################
+
 
             ### Integrate through band using filter shape defined in weights
             themaps_iqu = self.sky.get_emission(nus * u.GHz, weights=weights)

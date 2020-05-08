@@ -6,14 +6,18 @@ import numpy as np
 import qubic
 
 
-def create_acquisition_operator_TOD(pointing, d):
+def create_acquisition_operator_TOD(pointing, d, verbose=False):
     # scene
     s = qubic.QubicScene(d)
     if d['nf_sub'] == 1:
+        if verbose :
+            print('Making a QubicInstrument.')
         q = qubic.QubicInstrument(d)
         return qubic.QubicAcquisition(q, pointing, s, d)
     else:
         # Polychromatic instrument model
+        if verbose :
+            print('Making a QubicMultibandInstrument.')
         q = qubic.QubicMultibandInstrument(d)
         # number of sub frequencies to build the TOD
         _, nus_edge_in, _, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, d['nf_sub'],  # Multiband instrument model
@@ -22,8 +26,8 @@ def create_acquisition_operator_TOD(pointing, d):
         return qubic.QubicMultibandAcquisition(q, pointing, s, d, nus_edge_in)
 
 
-def create_TOD(d, pointing, x0):
-    atod = create_acquisition_operator_TOD(pointing, d)
+def create_TOD(d, pointing, x0, verbose=False):
+    atod = create_acquisition_operator_TOD(pointing, d, verbose=verbose)
 
     if d['nf_sub'] == 1:
         TOD, maps_convolved = atod.get_observation(x0[0], noiseless=d['noiseless'])

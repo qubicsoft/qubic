@@ -1,0 +1,665 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# %matplotlib inline
+
+import healpy as hp
+import glob
+from scipy.optimize import curve_fit
+import pickle
+from importlib import reload
+import time
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm
+import qubic
+from qubic import QubicSkySim as qss
+from qubic import fibtools as ft
+from qubic import camb_interface as qc
+from qubic import SpectroImLib as si
+from qubic import NamasterLib as nam
+from qubic import mcmc
+
+reload(qss)
+reload(ft)
+
+rc('figure', figsize=(16, 10))
+rc('font', size=15)
+```
+
+```{python}
+### Initialize
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+
+dictfilename = global_dir + '/dicts/BmodesNoDustNoSystPaper0_2020.dict'
+
+
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+d['nside']=256
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+print(center)
+```
+
+```{python}
+#### This function reads the maps
+def read_files_mc(dirmap,file_rnd_string, verbose=False):
+    m = np.array(FitsArray(glob.glob(dirmap+'*_maps_recon_*'+file_rnd_string+'.fits')[0]))
+    c = np.array(FitsArray(glob.glob(dirmap+'*_maps_convolved_*'+file_rnd_string+'.fits')[0]))
+    cov = np.array(FitsArray(glob.glob(dirmap+'*_maps_coverage_*'+file_rnd_string+'.fits')[0]))
+    with open(glob.glob(dirmap+'*_dictionary_'+file_rnd_string+'.pickle')[0], 'rb') as handle: d = pickle.load(handle)
+    with open(glob.glob(dirmap+'*_input_cell_'+file_rnd_string+'.pickle')[0], 'rb') as handle: icl = pickle.load(handle)
+    filetype = glob.glob(dirmap+'*_maps_recon_*'+file_rnd_string+'.fits')[0].split('/')[-1]
+    if verbose: print('read {}'.format(filetype))
+    return m, c, cov, d, icl, filetype
+
+### Get reconstructed maps from a simulation made on NERSC with 200000 pointings and tol=1e-5
+### First Instrument
+### detector_nep=4.7e-17
+### effecgtive_duration = 3 years
+nptg = 200000
+dirmaps='/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_NERSC/Maps/'
+file_rnd_string='H990hwzaGn'
+tol=1e-5
+
+m, c, cov, d, icl, ftype = read_files_mc(dirmaps, file_rnd_string, verbose=True)
+
+nbins = 100   
+reload(qss)
+xx, myY, effective_variance_invcov = qss.get_noise_invcov_profile(m[0,:,:]-c[0,:,:], 
+                                                                  cov, 0.1, nbins=nbins, 
+                                                                  fit=True, norm=True, allstokes=True,
+                                                                 label='QUBIC MC Average IQU Nptg={}  Tol={}'.format(nptg,tol))
+plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[1,:]),'--')
+legend()
+```
+
+```{python}
+### Now do a realization of QUBIC sky
+reload(qss)
+## Make a sky using PYSM: It will have the expected QUBIC beam, the coverage and noise according to this coverage
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+
+signoise = 75
+qubicnoise = Qubic_sky.create_noise_maps(signoise, cov, effective_variance_invcov=effective_variance_invcov)
+
+bla = qss.get_noise_invcov_profile(qubicnoise, cov, label='FastSim', fit=False, allstokes=True)
+blo = qss.get_noise_invcov_profile(m[0,:,:]-c[0,:,:], cov, 
+                                   label='QUBIC MC Average IQU Nptg={}  Tol={}'.format(nptg,tol), fit=False)
+plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[1,:])*avg[0],'--',label='Qubic Law')
+xlim(0,12)
+ylim(0,2.5)
+legend()
+```
+
+```{python}
+reload(qss)
+qubicnoise = Qubic_sky.create_noise_maps(signoise, cov, effective_variance_invcov=effective_variance_invcov)
+
+dirmapsold = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB/Maps/'
+rndstr = 'nXR0M957gz'
+mold = np.array(FitsArray(dirmapsold + 'CMB-Only-12sub_3000_1e-5_maps_recon_seed_None_'+rndstr+'.fits'))
+covold = np.array(FitsArray(dirmapsold + 'CMB-Only-12sub_3000_1e-5_maps_coverage_'+rndstr+'.fits'))
+cold = np.array(FitsArray(dirmapsold + 'CMB-Only-12sub_3000_1e-5_maps_convolved_seed_None_'+rndstr+'.fits'))
+
+rc('figure', figsize=(16, 10))
+dofit=True
+nbins = 30
+xx, yy, fit_fs = qss.get_noise_invcov_profile(qubicnoise, cov, nbins=nbins,
+                                              label='FastSim from NERSC 200000',fit=dofit)
+xx, yy, fit_n200k = qss.get_noise_invcov_profile(m[0,:,:]-c[0,:,:], cov, nbins=nbins,
+                                              label='NERSC 200000',fit=dofit)
+xx, yy, fit_n3k = qss.get_noise_invcov_profile(mold[0,:,:]-cold[0,:,:], covold, nbins=nbins,
+                                              label='MacQUBIC 3000',fit=dofit)
+legend()
+
+print(qubicnoise.shape)
+rc('figure', figsize=(16, 10))
+res = 15
+figure()
+st = ['I', 'Q', 'U']
+rng = [5, 5, 5]
+for s in range(3):
+    hp.gnomview(qubicnoise[:,s], rot=center, reso=res, sub=(3,3,3*s+1), title='FastSim '+st[s],
+               min=-rng[s], max=rng[s])
+    hp.gnomview(m[0,:,s]-c[0,:,s], rot=center, reso=res, sub=(3,3,3*s+2), title='NERSC 200000 '+st[s],
+               min=-rng[s], max=rng[s])
+    hp.gnomview(mold[0,:,s]-cold[0,:,s], rot=center, reso=res, sub=(3,3,3*s+3), title='NERSC 3000 '+st[s],
+               min=-rng[s], max=rng[s])
+tight_layout()
+
+
+rc('figure', figsize=(16, 7))
+figure()
+st = ['I', 'Q', 'U']
+diff = m[0,:,:]-c[0,:,:]
+diffold = mold[0,:,:]-cold[0,:,:]
+bins=50
+lims = 25
+for s in range(3):
+    subplot(1,3,s+1)
+    okpix = (qubicnoise[:,s] != 0) & (diff[:,s] != 0) & (diffold[:,s] != 0)
+    hist(diffold[okpix,s], range=[-lims,lims], bins=bins, histtype='step', 
+         label = 'NERSC 3000 '+st[s]+': '+ft.statstr(diffold[okpix,s]))
+    hist(qubicnoise[okpix,s], range=[-lims,lims], bins=bins, histtype='step',
+         label = 'FastSim '+st[s]+': '+ft.statstr(qubicnoise[okpix,s]))
+    hist(diff[okpix,s], range=[-lims,lims], bins=bins, histtype='step', 
+         label = 'NERSC 200000 '+st[s]+': '+ft.statstr(diff[okpix,s]))
+    yscale('log')
+    legend(fontsize=10, loc='lower right')
+tight_layout()
+```
+
+```{python}
+#### Let's look at covariances between I,Q,U...
+reload(qss)
+reload(ft)
+def corrmapsrms(maps, cov, effective_variance_invcov):
+    okpix = cov > 0
+    newmaps = maps*0
+    correction = np.interp(np.max(cov)/cov[okpix], effective_variance_invcov[0,:], effective_variance_invcov[1,:])
+    for s in range(3):
+        newmaps[okpix,s] = maps[okpix,s] / np.sqrt(correction) * np.sqrt(cov[okpix]/np.max(cov))
+    return newmaps
+
+# 1) Correct maps for RMS vs 1/cov
+new_qubicnoise = corrmapsrms(qubicnoise, cov, effective_variance_invcov)
+new_diff = corrmapsrms(diff, cov, effective_variance_invcov)
+new_diffold = corrmapsrms(diffold, covold, fit_n3k)
+
+
+#### Check that it's flat coverage...
+subplot(1,3,1)
+bla = qss.get_angular_profile(new_qubicnoise, label='Fastsim corrected',
+                              allstokes=True,nbins=100,thmax=22, fontsize=10)
+subplot(1,3,2)
+bla = qss.get_angular_profile(new_diff, label='Nersc 200k corrected',
+                              allstokes=True,nbins=100,thmax=22, fontsize=10)
+subplot(1,3,3)
+bla = qss.get_angular_profile(new_diffold, label='Nersc 3k corrected',
+                              allstokes=True,nbins=100,thmax=22, fontsize=10)
+
+# 2) Calculate covariance matrix averaging over pixels
+okpix = new_qubicnoise[:,0] > 0
+cc_fs = np.corrcoef(new_qubicnoise[okpix,:].T)
+
+okpix = new_diff[:,0] > 0
+cc_diff = np.corrcoef(new_diff[okpix,:].T)
+
+okpix = new_diffold[:,0] > 0
+cc_diffold = np.corrcoef(new_diffold[okpix,:].T)
+
+figure()
+rc('figure', figsize=(16, 4))
+vv = 0.05
+subplot(1,3,1)
+imshow(np.abs(cc_fs-np.diag([1,1,1])), vmin=0, vmax=vv)
+plt.xticks(range(3), ['I','Q','U'])
+plt.yticks(range(3), ['I','Q','U'])
+title('FastSim')
+colorbar()
+subplot(1,3,2)
+imshow(np.abs(cc_diff-np.diag([1,1,1])), vmin=0, vmax=vv)
+plt.xticks(range(3), ['I','Q','U'])
+plt.yticks(range(3), ['I','Q','U'])
+title('Nersc 200k')
+colorbar()
+subplot(1,3,3)
+imshow(np.abs(cc_diffold-np.diag([1,1,1])), vmin=0, vmax=vv)
+plt.xticks(range(3), ['I','Q','U'])
+plt.yticks(range(3), ['I','Q','U'])
+title('Nersc 3k')
+colorbar()
+tight_layout()
+
+print(cc_fs)
+print('')
+print(cc_diff)
+print('')
+print(cc_diffold)
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+myfile = 'scls_macqubic30000_lm_10_dl_60_cc_02.pickle'
+with open(myfile, 'rb') as handle:
+    leff_3k, scls_flat_3k, scls_cov_3k,scls_best_3k = pickle.load(handle)
+
+title(myfile)
+plot(leff_3k, scls_flat_3k[:,2],'r', label='Flat')
+plot(leff_3k, scls_cov_3k[:,2],'g',label='Cov')
+plot(leff_3k, scls_best_3k[:,2],'b--', label='Best')
+legend()
+ylim(0,0.2)
+```
+
+So now we can perform many simulations of the same...
+
+```{python}
+#### Now in a function to loop over ell binning, lmin, coverage
+def run_mc(nbmc, Namaster, d, signoise, cov, effective_variance_invcov, verbose=False):
+    ell_bins, b = Namaster.get_binning(d['nside'])
+    mask_apo = Namaster.mask_apo
+    okpix = cov > (np.max(cov)*0.1)
+
+    myd = d.copy()
+    myd['nf_sub']=1
+    seed = np.random.randint(1,100000)
+    sky_config = {'cmb': seed}
+    Qubic_sky = qss.Qubic_sky(sky_config, myd)
+
+    w=None
+    cl_noise_qubic = np.zeros((nbmc, len(ell_bins), 4))
+    print('        Starting MC')
+    for imc in range(nbmc):
+        t0 = time.time()
+        qubicnoiseA = Qubic_sky.create_noise_maps(signoise, cov, effective_variance_invcov=effective_variance_invcov)
+        #qubicnoiseA[~okpix] = 0
+        qubicnoiseB = Qubic_sky.create_noise_maps(signoise, cov, effective_variance_invcov=effective_variance_invcov)
+        #qubicnoiseB[~okpix] = 0
+        
+        ### Compute Spectra:
+        # Noise Only
+        if verbose: print('   - QUBIC Noise maps')
+        leff, cl_noise_qubic[imc, :,:], w = Namaster.get_spectra(qubicnoiseA.T, 
+                                                                 map2 = qubicnoiseB.T,
+                                                                 purify_e=False, purify_b=True, w=w, verbose=False,
+                                                                 beam_correction=True)
+        t1 = time.time()
+        print('             Monte-Carlo: Iteration {0:} over {1:} done in {2:5.2f} sec'.format(imc, nbmc,t1-t0))
+        
+    
+    # average MC results
+    mcl_noise_qubic = np.mean(cl_noise_qubic, axis=0)
+    scl_noise_qubic = np.std(cl_noise_qubic, axis=0)
+    return leff, mcl_noise_qubic, scl_noise_qubic
+    
+
+
+```
+
+```{python}
+
+```
+
+```{python}
+from qubic import NamasterLib as nam
+nbmc = 10
+signoise = 75.
+
+# Create a Namaster object
+lmin = 10
+lmax = 2 * d['nside'] - 1
+delta_ell = 45
+
+okpix = cov > np.max(cov) * 0.2
+
+### We use Flat weighting
+maskpix = np.zeros(12*d['nside']**2)
+maskpix[okpix] = 1
+Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+
+leff, mcl_noise_qubic, scl_noise_qubic = run_mc(nbmc, Namaster, d, signoise, cov, effective_variance_invcov)
+```
+
+```{python}
+### Analyse MC
+rc('figure', figsize=(16, 6))
+input_cell = Qubic_sky.input_cmb_spectra
+lth = np.arange(len(input_cell[:,0]))
+plnames = ['TT', 'EE', 'BB']
+
+for i in range(3):
+    subplot(1,3,i+1)
+    xlim(0,2*d['nside'])
+    ylim(0,np.max(input_cell[:,i])*1.5)
+    plot(lth, input_cell[:,i], 'k')
+    #errorbar(leff, mcl_noise_qubic[:,i], yerr=scl_noise_qubic[:,i], fmt='bo', label='Noise: QUBIC Coverage')
+    plot(leff, scl_noise_qubic[:,i],'b', label='FastSim')
+    plot(leff_3k, scls_flat_3k[:,i], 'r', label='From MacQUbic FullSim 3000')
+    title(plnames[i])
+    yscale('log')
+    ylim(1e-4,1e4)
+    legend(fontsize=9)
+    
+
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+signoise = 75.
+nbmc = 50
+alllmin = [10, 15, 20, 25]
+alldelta_ell = [40, 45, 50, 55, 60, 65, 70]
+allcovcut = [0.1, 0.15, 0.2, 0.25, 0.3]
+print(6*len(alllmin)*len(alldelta_ell)*len(allcovcut)*nbmc/3600)
+
+
+```
+
+```{python}
+for lmin in alllmin:
+    for delta_ell in alldelta_ell:
+        for covcut in allcovcut:
+            print(lmin, delta_ell, covcut)
+
+            # Create a Namaster object
+            lmax = 2 * d['nside'] - 1
+            okpix = cov > np.max(cov) * covcut
+
+            ### We use Flat weighting
+            maskpix = np.zeros(12*d['nside']**2)
+            maskpix[okpix] = 1
+            Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+
+            alloutputs = run_mc(nbmc, Namaster, d, signoise, cov, 
+                                                            effective_variance_invcov)
+            
+            with open('/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoise/res_{}_{}_{}.pickle'.format(lmin, delta_ell, covcut), 'wb') as handle:
+                                pickle.dump(alloutputs, handle)
+
+```
+
+```{python}
+### Analyse results (similarly as in Analyze_ClCross_images)
+def read_one(dircls,lm,dl,cc, verbose=False):
+    filename = dircls+'res_{0:}_{1:}_{2:}.pickle'.format(lm, dl, cc)
+    ff = glob.glob(filename)
+    if len(ff)!=1:
+        if verbose: print('Problem with '+filename)
+        return -1
+    else:
+        ### Read file
+        with open(ff[0], 'rb') as handle:
+            leff, mcl,scl = pickle.load(handle)
+        return leff,mcl,scl
+    
+leff,mcl,scl = read_one('/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoise/', 10, 40, 0.2)
+
+### Analyse MC
+rc('figure', figsize=(16, 6))
+input_cell = Qubic_sky.input_cmb_spectra
+lth = np.arange(len(input_cell[:,0]))
+plnames = ['TT', 'EE', 'BB']
+
+for i in range(3):
+    subplot(1,3,i+1)
+    xlim(0,2*d['nside'])
+    ylim(0,np.max(input_cell[:,i])*1.5)
+    plot(lth, input_cell[:,i], 'k')
+    errorbar(leff, mcl[:,i], yerr=scl[:,i], fmt='bo', label='Noise: QUBIC Coverage')
+    plot(leff, scl[:,i],'b')
+    title(plnames[i])
+    legend(fontsize=9)
+    
+subplot(1,3,3)
+plot(leff_3k, scls_cov_3k[:,2], 'm')
+plot(leff_3k, scls_flat_3k[:,2], 'g')
+plot(leff_3k, scls_best_3k[:,2], 'r')
+
+```
+
+```{python}
+rc('figure', figsize=(15, 10))
+rc('font', size=12)
+reload(qc)
+reload(nam)
+reload(mcmc)
+import scipy
+
+### Read the camb lib from the file - We will not use it directly but it will 
+### be binned according to the. binning scheme for each case
+camblib = qc.read_camblib('../../scripts/QubicGeneralPaper2020/camblib.pickle')    
+    
+def read_one(dircls,lm,dl,cc, verbose=False):
+    filename = dircls+'res_{0:}_{1:}_{2:}.pickle'.format(lm, dl, cc)
+    ff = glob.glob(filename)
+    if len(ff)!=1:
+        if verbose: print('Problem with '+filename)
+        return -1
+    else:
+        ### Read file
+        with open(ff[0], 'rb') as handle:
+            leff, mcl,scl = pickle.load(handle)
+        return leff,mcl,scl
+
+def ana_likelihood(rv, leff, fakedata, errors, model, prior, 
+                   mylikelihood=mcmc.LogLikelihood, covariance_model_funct=None):
+    ll = mylikelihood(xvals=leff, yvals=fakedata, errors=errors, 
+                            model = model, flatprior=prior, covariance_model_funct=covariance_model_funct)  
+    like = np.zeros_like(rv)
+    for i in range(len(rv)):
+        like[i] = np.exp(ll([rv[i]]))
+    cumint = scipy.integrate.cumtrapz(like, x=rv)
+    cumint = cumint / np.max(cumint)
+    onesigma = np.interp(0.68, cumint, rv[1:])
+    return like, cumint, onesigma
+
+
+def explore_like(leff, mcl_noise, scl_noise, lmin, dl, cc, rv,
+                 cov=None, plotlike=False, plotcls=False, 
+                 verbose=False, sample_variance=True):
+    
+    ### Create Namaster Object
+    # Unfortunately we need to recalculate fsky for calculating sample variance
+    nside=256
+    if cov is None:
+        Namaster = nam.Namaster(None, lmin=lmin, lmax=lmax, delta_ell=dl)
+        Namaster.fsky = 0.018
+    else:
+        okpix = cov > (np.max(cov) * float(cc))
+        maskpix = np.zeros(12*nside**2)
+        maskpix[okpix] = 1
+        Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=dl)
+        
+    lbinned, b = Namaster.get_binning(nside)
+
+    ### Bibnning CambLib
+    binned_camblib = qc.bin_camblib(Namaster, '../../scripts/QubicGeneralPaper2020/camblib.pickle', 
+                                    nside, verbose=False)
+
+    ### Redefine the function for getting binned Cls
+    def myclth(ell,r):
+        clth = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=False)[0]
+        return clth
+    allfakedata = myclth(leff, 0.)
+    
+    ### And we need a fast one for BB only as well
+    def myBBth(ell, r):
+        clBB = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=False, specindex=2)[0]
+        return clBB
+
+    ### Fake data
+    fakedata = myBBth(leff, 0.)        
+    
+    if sample_variance:
+        covariance_model_funct = Namaster.knox_covariance
+    else:
+        covariance_model_funct = None
+    like, cumint, allrlim = ana_likelihood(rv, leff, fakedata, 
+                                            scl_noise[:,2], 
+                                            myBBth, [[0,1]],
+                                           covariance_model_funct=covariance_model_funct)
+    
+    if plotcls:
+        if plotlike:
+            subplot(1,2,1)
+        #plot(inputl, inputcl[:,2], 'k', label='r=0')
+        plot(leff, scl_noise[:,2], label='Errors')
+        xlim(0,lmax)
+        #ylim(0,np.max(inputcl[:lmax,2])*1.5)
+        xlabel('$\\ell$')
+        ylabel('$D_\\ell$')
+        legend(loc='upper left')
+    if plotlike:
+        if plotcls:
+            subplot(1,2,2)
+        p=plot(rv, like/np.max(like), 
+               label='$\sigma(r)={0:6.4f}$'.format(allrlim))
+        plot(allrlim+np.zeros(2), [0,1.2], ':', color=p[0].get_color())
+        xlabel('r')
+        ylabel('posterior')
+        legend(fontsize=8, loc='upper right')
+        xlim(0,0.1)
+        ylim(0,1.2)
+    
+    return like, cumint, allrlim
+
+lm = 10
+dl = 60
+cc = 0.2
+leff,mcl,scl = read_one('/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoise/', 
+                        lm, dl, cc)
+rv = np.linspace(0,1.,1000)
+
+print(len(leff), np.shape(scl), len(leff_3k), np.shape(scls_best_3k))
+print(leff)
+print(leff_3k)
+bla = explore_like(leff, scl*0, scl, lm, dl, cc, rv,
+                 cov=cov, plotlike=True, plotcls=True, 
+                 verbose=True, sample_variance=True)
+# bla = explore_like(leff_3k, scls_best_3k*0, scls_best_3k, lm, dl, cc, rv,
+#                  cov=cov, plotlike=True, plotcls=True, 
+#                  verbose=True, sample_variance=True)
+
+subplot(1,2,1)
+plot(leff_3k, scls_cov_3k[:,2], 'm')
+plot(leff_3k, scls_flat_3k[:,2], 'g')
+plot(leff_3k, scls_best_3k[:,2], 'r')
+ylim(0,0.03)
+
+figure()
+for i in range(3):
+    subplot(1,3,i+1)
+    xlim(0,2*d['nside'])
+    ylim(0,np.max(input_cell[:,i])*1.5)
+    plot(lth, input_cell[:,i], 'k')
+    plot(leff, mcl[:,i])
+    plot(leff, scl[:,i])
+    #yscale('log')
+```
+
+```{python}
+signoise = 75.
+nbmc = 50
+alllmin = [10, 15, 20, 25]
+alldelta_ell = [40, 45, 50, 55, 60, 65, 70]
+allcovcut = [0.1, 0.15, 0.2, 0.25, 0.3]
+
+#### Choose which simulation set
+nside = 256
+lmax = 2 * nside - 1
+rv = np.linspace(0,1.,1000)
+
+allrlim = np.zeros((len(alllmin), len(allcovcut), len(alldelta_ell)))
+
+for ilm in range(len(alllmin)):
+    lmin = alllmin[ilm]
+    print('ell_min = {}'.format(lmin))
+    figure()
+    ipl=0
+    for icc in range(len(allcovcut)):
+        for idl in range(len(alldelta_ell)):
+            leff,mcl,scl = read_one('/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoise/', 
+                        alllmin[ilm], alldelta_ell[idl], allcovcut[icc])
+            #print(leff, scl[:,2])
+            like, cumint, allrlim[ilm, icc, idl] = explore_like(leff, mcl, scl, alllmin[ilm], alldelta_ell[idl], 
+                                                                allcovcut[icc], 
+                                                                rv, cov=cov, sample_variance=True)
+      
+    tight_layout()
+
+```
+
+```{python}
+rc('figure', figsize=(15, 6))
+rc('font', size=12)
+
+for ilm in range(len(alllmin)):
+    subplot(2,2,ilm+1)
+    myrlim = allrlim[ilm,:,:]
+    #imshow(myrlim, origin='lower',vmin=np.min(myrlim),vmax=np.max(myrlim))
+    imshow(myrlim, origin='lower',vmin=0.01,vmax=0.05)
+    mini = np.argwhere(myrlim == np.nanmin(myrlim))
+    plot(mini[0][1], mini[0][0], 'rx' ,ms=10, markeredgewidth=4,
+         label ='$\sigma(r)={0:6.4f}$'.format(np.nanmin(myrlim)))
+    plt.xticks(range(len(alldelta_ell)), alldelta_ell)
+    plt.yticks(range(len(allcovcut)), allcovcut)
+    xlabel('$\Delta\\ell$')
+    ylabel('Cov. Threshold')
+    title('$\\ell_m$={} - '.format(alllmin[ilm]))
+    legend(loc='upper left')
+    colorbar()
+
+tight_layout()
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

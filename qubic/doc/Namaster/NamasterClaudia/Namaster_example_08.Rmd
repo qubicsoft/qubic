@@ -4,8 +4,8 @@ jupyter:
     text_representation:
       extension: .Rmd
       format_name: rmarkdown
-      format_version: '1.1'
-      jupytext_version: 1.2.4
+      format_version: '1.2'
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -180,6 +180,10 @@ covar_BB_EB = covar_22_22[:, 3, :, 1]
 covar_BB_BE = covar_22_22[:, 3, :, 2]
 covar_BB_BB = covar_22_22[:, 3, :, 3]
 
+
+```
+
+```{python}
 # Let's now compute the sample covariance
 # (we'll only do this for spin-0 for simplicity
 print("Sample covariance")
@@ -196,14 +200,28 @@ mean_sample /= nsamp
 covar_sample = covar_sample / nsamp
 covar_sample -= mean_sample[None, :] * mean_sample[:, None]
 
+
+```
+
+```{python}
 # Let's plot them:
 plt.figure()
+plt.subplot(131)
 plt.imshow(covar_TT_TT, origin='lower', interpolation='nearest')
-plt.figure()
+plt.title('covar_TT_TT')
+plt.colorbar()
+
+plt.subplot(132)
 plt.imshow(covar_sample, origin='lower', interpolation='nearest')
-plt.figure()
+plt.title('covar_sample')
+plt.colorbar()
+
+plt.subplot(133)
 plt.imshow(covar_TT_TT-covar_sample, origin='lower', interpolation='nearest')
-plt.show();
+plt.title('diff')
+plt.colorbar()
+
+plt.show()
 ```
 
 ```{python}

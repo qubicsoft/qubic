@@ -100,10 +100,10 @@ Qubic_sky = qss.Qubic_sky(sky_config, d)
 signoise = 75
 qubicnoise = Qubic_sky.create_noise_maps(signoise, cov, effective_variance_invcov=effective_variance_invcov)
 
-bla = qss.get_noise_invcov_profile(qubicnoise, cov, label='FastSim', fit=False, allstokes=True)
-blo = qss.get_noise_invcov_profile(m[0,:,:]-c[0,:,:], cov, 
+xx, yyfs, bla = qss.get_noise_invcov_profile(qubicnoise, cov, label='FastSim', fit=False, allstokes=True)
+xx, yysim, bla = qss.get_noise_invcov_profile(m[0,:,:]-c[0,:,:], cov, 
                                    label='QUBIC MC Average IQU Nptg={}  Tol={}'.format(nptg,tol), fit=False)
-plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[1,:])*avg[0],'--',label='Qubic Law')
+plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[1,:])*yysim[0],'--',label='Qubic Law')
 xlim(0,12)
 ylim(0,2.5)
 legend()
@@ -304,7 +304,7 @@ def run_mc(nbmc, Namaster, d, signoise, cov, effective_variance_invcov, verbose=
 ```
 
 ```{python}
-
+plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[1,:]))
 ```
 
 ```{python}
@@ -390,15 +390,17 @@ for i in range(3):
 ```{python}
 signoise = 75.
 nbmc = 50
-alllmin = [10, 15, 20, 25]
-alldelta_ell = [40, 45, 50, 55, 60, 65, 70]
+alllmin = [10, 15, 20, 25, 30]
+alldelta_ell = [20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70]
 allcovcut = [0.1, 0.15, 0.2, 0.25, 0.3]
-print(6*len(alllmin)*len(alldelta_ell)*len(allcovcut)*nbmc/3600)
+print(2*4*len(alllmin)*len(alldelta_ell)*len(allcovcut)*nbmc/3600)
 
 
 ```
 
 ```{python}
+directory = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoise/'
+
 for lmin in alllmin:
     for delta_ell in alldelta_ell:
         for covcut in allcovcut:
@@ -408,35 +410,41 @@ for lmin in alllmin:
             lmax = 2 * d['nside'] - 1
             okpix = cov > np.max(cov) * covcut
 
-            ### We use Flat weighting
-            maskpix = np.zeros(12*d['nside']**2)
-            maskpix[okpix] = 1
-            Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
-
-            alloutputs = run_mc(nbmc, Namaster, d, signoise, cov, 
-                                                            effective_variance_invcov)
+            ff = glob.glob(directory+'res_{}_{}_{}.pickle'.format(lmin, delta_ell, covcut))
+            if len(ff) < 1:
+                ### We use Flat weighting
+                maskpix = np.zeros(12*d['nside']**2)
+                maskpix[okpix] = 1
+                Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+                alloutputs = run_mc(nbmc, Namaster, d, signoise, cov, 
+                                                                effective_variance_invcov)
+                with open(directory+'res_{}_{}_{}.pickle'.format(lmin, delta_ell, covcut), 'wb') as handle:
+                                    pickle.dump(alloutputs, handle)
+            else:
+                print('Already Done fpr Flat Weighting')
+                
             
-            with open('/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoise/res_{}_{}_{}.pickle'.format(lmin, delta_ell, covcut), 'wb') as handle:
-                                pickle.dump(alloutputs, handle)
 
-            ### We use Flat weighting
-            maskpix = np.zeros(12*d['nside']**2)
-            maskpix[okpix] = cov[okpix]
-            NamasterCov = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
-
-            alloutputs_cov = run_mc(nbmc, NamasterCov, d, signoise, cov, 
-                                                            effective_variance_invcov)
-            
-            with open('/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoise/rescov_{}_{}_{}.pickle'.format(lmin, delta_ell, covcut), 'wb') as handle:
-                                pickle.dump(alloutputs, handle)
+            ff = glob.glob(directory+'rescov_{}_{}_{}.pickle'.format(lmin, delta_ell, covcut))
+            if len(ff) < 1:
+                ### We use Flat weighting
+                maskpix = np.zeros(12*d['nside']**2)
+                maskpix[okpix] = cov[okpix]
+                NamasterCov = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+                alloutputs_cov = run_mc(nbmc, NamasterCov, d, signoise, cov, 
+                                                                effective_variance_invcov)           
+                with open(directory+'rescov_{}_{}_{}.pickle'.format(lmin, delta_ell, covcut), 'wb') as handle:
+                                    pickle.dump(alloutputs, handle)
+            else:
+                print('Already Done for Cov Weighting')
             
 
 ```
 
 ```{python}
 ### Analyse results (similarly as in Analyze_ClCross_images)
-def read_one(dircls,lm,dl,cc, verbose=False):
-    filename = dircls+'res_{0:}_{1:}_{2:}.pickle'.format(lm, dl, cc)
+def read_one(dircls,lm,dl,cc, verbose=False, name='res'):
+    filename = dircls+name+'_{0:}_{1:}_{2:}.pickle'.format(lm, dl, cc)
     ff = glob.glob(filename)
     if len(ff)!=1:
         if verbose: print('Problem with '+filename)
@@ -446,8 +454,29 @@ def read_one(dircls,lm,dl,cc, verbose=False):
         with open(ff[0], 'rb') as handle:
             leff, mcl,scl = pickle.load(handle)
         return leff,mcl,scl
+
+def read_sims(dircls,lm,dl,cc, verbose=False, type='best'):
+    if type=='flat':
+        leff, mcl, scl = read_one(dircls, lm, dl, cc, verbose=verbose, name='res')
+    elif type=='cov':
+        leff, mcl, scl = read_one(dircls, lm, dl, cc, verbose=verbose, name='rescov')
+    elif type=='best':
+        leff, mcl_flat, scl_flat = read_one(dircls, lm, dl, cc, verbose=verbose, name='res')
+        leff, mcl_cov, scl_cov = read_one(dircls, lm, dl, cc, verbose=verbose, name='rescov')
+    mcl = np.zeros_like(mcl_flat)
+    scl = np.zeros_like(scl_flat)
+    for i in range(len(leff)):
+        for s in range(4):
+            if scl_flat[i,s] <= scl_cov[i,s]:
+                mcl[i,s] = mcl_flat[i,s]
+                scl[i,s] = scl_flat[i,s]
+            else:
+                mcl[i,s] = mcl_cov[i,s]
+                scl[i,s] = scl_cov[i,s]
+    return leff, mcl, scl
+        
     
-leff,mcl,scl = read_one('/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoise/', 10, 40, 0.2)
+leff,mcl,scl = read_sims('/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoise/', 10, 40, 0.2)
 
 ### Analyse MC
 rc('figure', figsize=(16, 6))
@@ -484,8 +513,8 @@ import scipy
 ### be binned according to the. binning scheme for each case
 camblib = qc.read_camblib('../../scripts/QubicGeneralPaper2020/camblib.pickle')    
     
-def read_one(dircls,lm,dl,cc, verbose=False):
-    filename = dircls+'res_{0:}_{1:}_{2:}.pickle'.format(lm, dl, cc)
+def read_one(dircls,lm,dl,cc, verbose=False, name='res'):
+    filename = dircls+name+'_{0:}_{1:}_{2:}.pickle'.format(lm, dl, cc)
     ff = glob.glob(filename)
     if len(ff)!=1:
         if verbose: print('Problem with '+filename)
@@ -495,6 +524,18 @@ def read_one(dircls,lm,dl,cc, verbose=False):
         with open(ff[0], 'rb') as handle:
             leff, mcl,scl = pickle.load(handle)
         return leff,mcl,scl
+
+# def read_one(dircls,lm,dl,cc, verbose=False):
+#     filename = dircls+'res_{0:}_{1:}_{2:}.pickle'.format(lm, dl, cc)
+#     ff = glob.glob(filename)
+#     if len(ff)!=1:
+#         if verbose: print('Problem with '+filename)
+#         return -1
+#     else:
+#         ### Read file
+#         with open(ff[0], 'rb') as handle:
+#             leff, mcl,scl = pickle.load(handle)
+#         return leff,mcl,scl
 
 def ana_likelihood(rv, leff, fakedata, errors, model, prior, 
                    mylikelihood=mcmc.LogLikelihood, covariance_model_funct=None):
@@ -578,17 +619,17 @@ def explore_like(leff, mcl_noise, scl_noise, lmin, dl, cc, rv,
     
     return like, cumint, allrlim
 
-lm = 10
+lm = 15
 dl = 60
 cc = 0.2
-leff,mcl,scl = read_one('/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoise/', 
+leff,mcl,scl = read_sims('/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoise/', 
                         lm, dl, cc)
 rv = np.linspace(0,1.,1000)
 
 print(len(leff), np.shape(scl), len(leff_3k), np.shape(scls_best_3k))
 print(leff)
 print(leff_3k)
-bla = explore_like(leff, scl*0, scl, lm, dl, cc, rv,
+bla = explore_like(leff, scl*0, scls_best_3k, lm, dl, cc, rv,
                  cov=cov, plotlike=True, plotcls=True, 
                  verbose=True, sample_variance=True)
 # bla = explore_like(leff_3k, scls_best_3k*0, scls_best_3k, lm, dl, cc, rv,
@@ -615,9 +656,10 @@ for i in range(3):
 ```{python}
 signoise = 75.
 nbmc = 50
-alllmin = [10, 15, 20, 25]
-alldelta_ell = [40, 45, 50, 55, 60, 65, 70]
+alllmin = [10, 15, 20, 25, 30]
+alldelta_ell = [20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70]
 allcovcut = [0.1, 0.15, 0.2, 0.25, 0.3]
+
 
 #### Choose which simulation set
 nside = 256
@@ -649,7 +691,7 @@ rc('figure', figsize=(15, 6))
 rc('font', size=12)
 
 for ilm in range(len(alllmin)):
-    subplot(2,2,ilm+1)
+    subplot(2,3,ilm+1)
     myrlim = allrlim[ilm,:,:]
     #imshow(myrlim, origin='lower',vmin=np.min(myrlim),vmax=np.max(myrlim))
     imshow(myrlim, origin='lower',vmin=0.01,vmax=0.05)

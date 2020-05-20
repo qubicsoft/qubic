@@ -4,8 +4,8 @@ jupyter:
     text_representation:
       extension: .Rmd
       format_name: rmarkdown
-      format_version: '1.1'
-      jupytext_version: 1.2.1
+      format_version: '1.2'
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -235,7 +235,7 @@ plt.title('c*c^T')
 
 ```{python}
 # Small test using np.random.multivariate_normal
-nreals = 1000
+nreals = 100
 std = 2
 maxfrec = 10
 allsig2MC = []
@@ -254,6 +254,7 @@ for nfrec in range(2, maxfrec):
     Cp = np.cov(xn_noisy_corr, rowvar=False)
     print('Cp shape:', Cp.shape)
     plt.figure()
+    plt.plot([-20, 30], [-20, 30] )
     plt.plot(np.ravel(Cp), np.ravel(r), '.')
 
     plt.figure()
@@ -271,6 +272,8 @@ for nfrec in range(2, maxfrec):
     weighted_av = np.zeros((nreals))
     sig2 = np.zeros((nreals))
     for k in range(nreals):
+#         weighted_av[k] = np.mean(xn_noisy_corr[k, :])
+#         sig2[k] = np.std(xn_noisy_corr[k, :])
         weighted_av[k], sig2[k] = amc.get_weighted_correlation_average(xn_noisy_corr[k, :], Cp)
     
     allsig2.append(sig2[0])
@@ -290,9 +293,9 @@ print(allsig2)
 nsub = np.arange(2, maxfrec)
 
 plt.figure()
-plt.plot(nsub, allsig2MC, 'o')
-plt.plot(nsub, allsig2)
-plt.plot(nsub, nsub*0 + std**2, 'k.', label='No correlations')
+plt.plot(nsub, allsig2MC, 'o', label='sig2 MC')
+plt.plot(nsub, allsig2, label='sig2')
+plt.plot(nsub, nsub*0 + std**2, 'k--', label='No correlations')
 # plt.ylim(0.8, 1.2)
 plt.legend()
 ```
@@ -442,11 +445,12 @@ ax = plt.gca()
 
 for p in range(npix):
     color = next(ax._get_lines.prop_cycler)['color']
-    plt.plot(nsub, allsig2MC[:, p], 'o', color=color, label='pix {}'.format(p))
+    plt.plot(nsub, allsig2MC[:, p], 'o', color=color, label='sig2 MC')
     plt.plot(nsub, allsig2[:, p], color=color, label='sig2')
     
 plt.plot(nsub, nsub * 0 + std**2, 'k--', label='std^2')
 plt.legend(loc='best') 
+plt.xlabel('# of bands')
 # plt.ylim(std**2 - 1, std**2 +1)
 
 ```

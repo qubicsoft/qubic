@@ -43,78 +43,41 @@ rc('font', size=12)
 
 ```{python}
 #### This function reads the maps
-def read_files_mc(dirmaps,reconfile, verbose=False):
-    ##kk = reconfile.split('/')[-1].split('_')[0]
-    bla = reconfile.split('/')[-1].split('_')
-    kk = bla[0]+'_'+bla[1]+'_'+bla[2]
-    print(kk)
-    ss = reconfile.split('/')[-1].split('_')[-2]
-    rr = reconfile.split('/')[-1].split('_')[-1].split('.')[0]
-    m = np.array(FitsArray(dirmaps+kk+'_maps_recon_seed_'+ss+'_'+rr+'.fits'))
-    c = np.array(FitsArray(dirmaps+kk+'_maps_convolved_seed_'+ss+'_'+rr+'.fits'))
-    cov = np.array(FitsArray(dirmaps+kk+'_maps_coverage_'+rr+'.fits'))
-    with open(dirmaps+kk+'_dictionary_'+rr+'.pickle', 'rb') as handle: d = pickle.load(handle)
-    with open(dirmaps+kk+'_input_cell_'+rr+'.pickle', 'rb') as handle: icl = pickle.load(handle)
-    if verbose: print('read k={} s={} r={}'.format(kk, ss, rr))
-    return m, c, cov, d, icl
+def read_files_mc(dirmap,file_rnd_string, verbose=False):
+    m = np.array(FitsArray(glob.glob(dirmap+'*_maps_recon_*'+file_rnd_string+'.fits')[0]))
+    c = np.array(FitsArray(glob.glob(dirmap+'*_maps_convolved_*'+file_rnd_string+'.fits')[0]))
+    cov = np.array(FitsArray(glob.glob(dirmap+'*_maps_coverage_*'+file_rnd_string+'.fits')[0]))
+    with open(glob.glob(dirmap+'*_dictionary_'+file_rnd_string+'.pickle')[0], 'rb') as handle: d = pickle.load(handle)
+    with open(glob.glob(dirmap+'*_input_cell_'+file_rnd_string+'.pickle')[0], 'rb') as handle: icl = pickle.load(handle)
+    filetype = glob.glob(dirmap+'*_maps_recon_*'+file_rnd_string+'.fits')[0].split('/')[-1]
+    if verbose: print('read {}'.format(filetype))
+    return m, c, cov, d, icl, filetype
     
 
 ```
 
 ```{python}
-dirbase = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB/'
-dirmaps = dirbase+'Maps/'
-listinit = glob.glob(dirmaps+'*maps_recon*.fits')
-allstr = []
-allkeyword = []
-allseed = []
-for l in listinit:
-    bla= l.split('.')[0].split('_')
-    kk = bla[0].split('/')[-1]+'_'+bla[1]+'_'+bla[2]
-    allkeyword.append(kk)
-    allstr.append(bla[-1])
-    allseed.append(bla[-2])
+# #### nptg=1000 - tol = 1e-5 rom MacQUBIC
+# nptg = 1000
+# dirmaps = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB/Maps/'
+# file_rnd_string = 'zqGAikhUO0'
 
-allstr = unique(np.array(allstr))
+# #### nptg=3000 - tol = 1e-5 rom MacQUBIC
+# nptg = 3000
+# dirmaps = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB/Maps/'
+# file_rnd_string = 'zR2hSgphTA'
 
-mykeywords = np.unique(allkeyword)
-myseeds = np.unique(allseed)
+#### nptg=3000 - tol = 1e-5 rom NERSC
+# nptg = 3000
+# dirmaps = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_NERSC/Maps/'
+# file_rnd_string = 'UDrLEmD7gc'
 
-print('Keywords Available:')
-for k in range(len(mykeywords)):
-    print('{}: '.format(k)+mykeywords[k])
-print('')
-print('Seeds Available:')
-for s in range(len(myseeds)):
-    print('{}: '.format(s)+myseeds[s])
+# #### nptg=10000 - tol = 1e-5 rom NERSC
+nptg = 10000
+dirmaps = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_NERSC/Maps/'
+file_rnd_string = 'PFdeS3NvBg'
 
-print('')
-print('Choose a keword and a seed index below')
-```
-
-```{python}
-kindex = 3
-sindex = 0
-
-### Get corresponding files:
-kk = mykeywords[kindex]
-ss = myseeds[sindex]
-listfiles = glob.glob(dirmaps+kk+'*maps_recon_seed_'+ss+'*.fits')
-### Order files by date and time
-listfiles.sort(key=os.path.getmtime)
-#for f in listfiles: print(f)
-
-
-
-print('For Keyword {} and seed {}:'.format(kk, ss))
-print('There are {} realizations available'.format(len(listfiles)))
-print('Choose below which realization you want to look')
-```
-
-```{python}
-numsim = 0
-
-m, c, cov, d, icl = read_files_mc(dirmaps, listfiles[numsim], verbose=True)
+m, c, cov, d, icl, ftype = read_files_mc(dirmaps, file_rnd_string, verbose=True)
 
 ### Center of the QUBIC Field
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
@@ -150,28 +113,74 @@ nbins = 30
 xx, yyI, dx, dyI, _ = ft.profile(np.sqrt(1./covnorm[seenpix]), m[0,seenpix,0]-c[0,seenpix,0], nbins=nbins, plot=False)
 xx, yyQ, dx, dyQ, _ = ft.profile(np.sqrt(1./covnorm[seenpix]), m[0,seenpix,1]-c[0,seenpix,1], nbins=nbins, plot=False)
 xx, yyU, dx, dyU, _ = ft.profile(np.sqrt(1./covnorm[seenpix]), m[0,seenpix,2]-c[0,seenpix,2], nbins=nbins, plot=False)
-plot(xx,dyI, label='QUBIC MC I')
-plot(xx,dyQ/np.sqrt(2), label='QUBIC MC Q/sqrt(2)')
-plot(xx,dyU/np.sqrt(2), label='QUBIC MC U/sqrt(2)')
+avg = (dyI+dyQ/np.sqrt(2)+dyU/np.sqrt(2))/3
+plot(xx,avg, label='QUBIC MC Average IQU')
 xlabel('1./sqrt(cov normed)')
 ylabel('RMS Noise per pixel')
 
-sigma_sec = 70
-seed = None
-sky_config = {'cmb': seed}
-Qubic_sky = qss.Qubic_sky(sky_config, d)
-fakemaps = Qubic_sky.create_noise_maps(sigma_sec, cov)
+plot(xx,xx/xx[0]*avg[0])
 
-xx, yyIF, dx, dyIF, _ = ft.profile(np.sqrt(1./covnorm[seenpix]), fakemaps[seenpix,0], nbins=nbins, plot=False)
-xx, yyQF, dx, dyQF, _ = ft.profile(np.sqrt(1./covnorm[seenpix]), fakemaps[seenpix,1], nbins=nbins, plot=False)
-xx, yyUF, dx, dyUF, _ = ft.profile(np.sqrt(1./covnorm[seenpix]), fakemaps[seenpix,2], nbins=nbins, plot=False)
-plot(xx,dyIF, ':', label='I: Expected from coverage')
-plot(xx,dyQF/np.sqrt(2), ':', label='Q/sqrt(2): Expected from coverage')
-plot(xx,dyUF/np.sqrt(2), ':', label='U/sqrt(2): Expected from coverage')
-title(kk)
-ylim(0,10)
+title('NPTG={} File='.format(nptg)+ftype)
+ylim(0.1,10)
+grid()
 legend()
 
+
+```
+
+```{python}
+### All together
+all_nptg = []
+all_dirmaps = []
+all_file_rnd_string = []
+
+# #### nptg=1000 - tol = 1e-5 rom MacQUBIC
+all_nptg.append(1000)
+all_dirmaps.append('/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB/Maps/')
+all_file_rnd_string.append('zqGAikhUO0')
+
+# #### nptg=3000 - tol = 1e-5 rom MacQUBIC
+all_nptg.append(3000)
+all_dirmaps.append('/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB/Maps/')
+all_file_rnd_string.append('zR2hSgphTA')
+
+#### nptg=3000 - tol = 1e-5 rom NERSC
+all_nptg.append(3000)
+all_dirmaps.append('/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_NERSC/Maps/')
+all_file_rnd_string.append('UDrLEmD7gc')
+
+# #### nptg=10000 - tol = 1e-5 rom NERSC
+all_nptg.append(10000)
+all_dirmaps.append('/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_NERSC/Maps/')
+all_file_rnd_string.append('PFdeS3NvBg')
+
+
+
+
+
+for i in range(len(all_nptg)):
+    m, c, cov, d, icl, ftype = read_files_mc(all_dirmaps[i], all_file_rnd_string[i], verbose=True)
+
+    seenpix = cov > (0.1*np.max(cov))
+    covnorm = cov / np.max(cov)
+
+    nbins = 30
+    xx, yyI, dx, dyI, _ = ft.profile(np.sqrt(1./covnorm[seenpix]), m[0,seenpix,0]-c[0,seenpix,0], nbins=nbins, plot=False)
+    xx, yyQ, dx, dyQ, _ = ft.profile(np.sqrt(1./covnorm[seenpix]), m[0,seenpix,1]-c[0,seenpix,1], nbins=nbins, plot=False)
+    xx, yyU, dx, dyU, _ = ft.profile(np.sqrt(1./covnorm[seenpix]), m[0,seenpix,2]-c[0,seenpix,2], nbins=nbins, plot=False)
+    avg = (dyI+dyQ/np.sqrt(2)+dyU/np.sqrt(2))/3
+    plot(xx,avg, label='QUBIC MC Average IQU Nptg={}'.format(all_nptg[i]))
+
+xlabel('1./sqrt(cov normed)')
+ylabel('RMS Noise per pixel')
+
+plot(xx,xx*avg[0]/xx[0],'k--',label='ideal')
+ylim(0,8)
+#yscale('log')
+grid()
+legend()
+                   
+                   
 
 ```
 

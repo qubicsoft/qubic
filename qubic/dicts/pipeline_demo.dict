@@ -1,14 +1,14 @@
 ############################################# Instrument ################################
 debug = False #False/True # Boolean
 
-config = 'TD' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
+config = 'FI' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
 filter_nu = 150e9 # 150e9 or 220e9 Hz
 filter_relative_bandwidth = 0.25 
-beam_shape = 'fitted_beam' # 'gaussian', 'fitted_beam', 'multi_freq'
+beam_shape = 'gaussian' # 'gaussian', 'fitted_beam', 'multi_freq'
 
 # multifreq instrument 
-MultiBand=True
-nf_sub=10
+MultiBand=False
+nf_sub=1
 center_detector=False
 
 psd=None
@@ -23,8 +23,8 @@ detector_ncorr=10
 detector_ngrids=1
 detector_tau=0.01
 polarizer=True
-synthbeam_fraction=0.99
-synthbeam_kmax=8
+synthbeam_fraction=1.
+synthbeam_kmax=1
 synthbeam_peak150_fwhm=0.39268176 # in degree
 ripples=False
 nripples=0
@@ -38,7 +38,7 @@ detarray='CalQubic_DetArray_CC.fits' # This can be used for TD and FI with the o
 hornarray='CalQubic_HornArray_CC.fits'
 
 ############################################# Scene ################################
-nside=64
+nside=256
 kind='IQU'
 absolute=False
 temperature=2.7255 # K for CMB, 300 K for TD in lab # 
@@ -59,8 +59,8 @@ hwp_stepsize=15 # (degrees) used for random and sweeping pointing
 random_pointing=False   
 
 repeat_pointing=True
-npointings=300
-dtheta=4.
+npointings=3000
+dtheta=15.
 nhwp_angles=3 # use only for repeat_pointing
 seed=1
 
@@ -76,8 +76,8 @@ fix_azimuth={'apply':False,'az':50,'el':50,'el_step':1, 'fix_hwp':True, 'fix_pit
 ############################################# Acquisition ##############################
 
 block=None
-effective_duration=1 #years
-noiseless=True
+effective_duration=10 #years
+noiseless=False
 photon_noise=False
 max_nbytes=None
 nprocs_instrument=None
@@ -86,7 +86,7 @@ comm=None
 weights=None
 
 ####################################### Map making #####################################
-tol=1e-3
+tol=1e-5
 nf_recon = [2,]
 maxiter=1e5
 verbose=True

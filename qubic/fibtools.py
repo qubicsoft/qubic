@@ -279,7 +279,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 # ##############################################################################
 
 
-def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True, log=False,
+def profile(xin, yin, rng=None, nbins=10, fmt=None, plot=True, dispersion=True, log=False,
             median=False, cutbad=True, rebin_as_well=None, clip=None, mode=False):
     """
 
@@ -301,12 +301,12 @@ def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True
     ok = np.isfinite(xin) * np.isfinite(yin)
     x = xin[ok]
     y = yin[ok]
-    if range is None:
+    if rng is None:
         mini = np.min(x)
         maxi = np.max(x)
     else:
-        mini = range[0]
-        maxi = range[1]
+        mini = rng[0]
+        maxi = rng[1]
     if log is False:
         xx = np.linspace(mini, maxi, nbins + 1)
     else:

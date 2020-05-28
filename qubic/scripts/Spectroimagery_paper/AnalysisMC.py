@@ -474,35 +474,28 @@ def covariance_IQU_subbands(allmaps, stokesjoint=False):
     """
     allmean, allcov = [], []
     for isub in range(len(allmaps)):
-        nsub = sh[1]  # Number of subbands
 
         sh = allmaps[isub].shape
+        nsub = sh[1]  # Number of subbands
         mean = np.zeros(3 * nsub)
         cov = np.zeros((3 * nsub, 3 * nsub))
 
-        if not stokesjoint:
-            for iqu in range(3):
-                for band in range(nsub):
-                    i = 3 * band + iqu
-                    map_i = allmaps[:, band, :, iqu]
-                    mean[i] = np.mean(map_i)
-                    for iqu2 in range(3):
-                        for band2 in range(nsub):
-                            j = 3 * band2 + iqu2
-                            map_j = allmaps[:, band2, :, iqu2]
-                            cov[i, j] = np.mean((map_i - np.mean(map_i)) * (map_j - np.mean(map_j)))
-
-        elif stokesjoint:
-            for iqu in range(3):
-                for band in range(nsub):
+        for iqu in range(3):
+            for band in range(nsub):
+                if stokesjoint:
                     i = 3 * iqu + band
-                    map_i = allmaps[:, band, :, iqu]
-                    mean[i] = np.mean(map_i)
-                    for iqu2 in range(3):
-                        for band2 in range(nsub):
+                else:
+                    i = 3 * band + iqu
+                map_i = allmaps[:, band, :, iqu]
+                mean[i] = np.mean(map_i)
+                for iqu2 in range(3):
+                    for band2 in range(nsub):
+                        if stokesjoint:
                             j = 3 * iqu2 + band2
-                            map_j = allmaps[:, band2, :, iqu2]
-                            cov[i, j] = np.mean((map_i - np.mean(map_i)) * (map_j - np.mean(map_j)))
+                        else:
+                            j = 3 * band2 + iqu2
+                        map_j = allmaps[:, band2, :, iqu2]
+                        cov[i, j] = np.mean((map_i - np.mean(map_i)) * (map_j - np.mean(map_j)))
 
         allmean.append(mean)
         allcov.append(cov)
@@ -573,7 +566,8 @@ def get_Cp(patch, nfrecon, verbose=True, doplot=True):
     # The full one
     covariance, _ = get_covcorr_patch(patch, stokesjoint=True, doplot=doplot)
 
-    if verbose: print('covariance.shape =', covariance.shape)
+    if verbose:
+        print('covariance.shape =', covariance.shape)
 
     # Cut the covariance matrix for each Stokes parameter
     Cp = np.empty((irec, irec, 3, npix_patch))
@@ -680,7 +674,8 @@ def Cp2Cp_prime(Cp, verbose=True):
     # We can now average the matrices over the pixels
     N = np.mean(Np, axis=3)
 
-    if verbose: print('N shape:', N.shape)
+    if verbose:
+        print('N shape:', N.shape)
 
     # We re-multiply N by the first term
     Cp_prime = np.empty_like(Cp)
@@ -688,9 +683,11 @@ def Cp2Cp_prime(Cp, verbose=True):
         for ipix in range(npix_patch):
             Cp_prime[:, :, istokes, ipix] = Cp[0, 0, istokes, ipix] * N[:, :, istokes]
 
-    if verbose: print('Cp_prime.shape =', Cp_prime.shape)
+    if verbose:
+        print('Cp_prime.shape =', Cp_prime.shape)
 
     return Cp_prime
+
 
 def Cp2Cp_prime_viaCorr(Cp, verbose=True):
     """
@@ -721,7 +718,8 @@ def Cp2Cp_prime_viaCorr(Cp, verbose=True):
     # We can now average the correlation matrices over the pixels
     N = np.mean(Np, axis=3)
 
-    if verbose: print('N shape:', N.shape)
+    if verbose:
+        print('N shape:', N.shape)
 
     # We re-multiply N to get back to covariance matrices
     Cp_prime = np.empty_like(Cp)
@@ -732,9 +730,11 @@ def Cp2Cp_prime_viaCorr(Cp, verbose=True):
                     coeff = np.sqrt(Cp[i, i, istokes, ipix] * Cp[j, j, istokes, ipix])
                     Cp_prime[i, j, istokes, ipix] = N[i, j, istokes] * coeff
 
-    if verbose: print('Cp_prime.shape =', Cp_prime.shape)
+    if verbose:
+        print('Cp_prime.shape =', Cp_prime.shape)
 
     return Cp_prime
+
 
 def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
     """

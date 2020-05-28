@@ -48,7 +48,7 @@ def statstr(x, divide=False, median=False, cut=None):
     if divide:
         nn = len(x[np.isfinite(x)])
         s /= nn
-    return '{0:6.3f} +/- {1:6.3f}'.format(m, s)
+    return '{0:6.5f} +/- {1:6.5f}'.format(m, s)
 
 
 def image_asics(data1=None, data2=None, all1=None):

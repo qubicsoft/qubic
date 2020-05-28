@@ -1,5 +1,4 @@
 from __future__ import division, print_function
-import sys
 import healpy as hp
 import numpy as np
 from scipy import interpolate
@@ -8,8 +7,6 @@ import matplotlib.pyplot as plt
 import ReadMC as rmc
 
 import qubic
-from qubic import apodize_mask
-from qubic import Xpol
 
 from qubicpack.utilities import Qubic_DataDir
 
@@ -885,103 +882,3 @@ def get_mean_cov(vals, invcov):
     AtNiA_inv = 1. / np.sum(invcov)
     mean_cov = AtNid * AtNiA_inv
     return mean_cov
-
-
-# ============ Functions to get auto and cross spectra from maps ===========#
-def get_xpol(seenmap, ns, lmin=20, delta_ell=20, apodization_degrees=5.):
-    """
-    Returns a Xpoll object to get spectra, the bin used and the pixel window function.
-    """
-    # Create a mask
-    mymask = apodize_mask(seenmap, apodization_degrees)
-
-    # Create XPol object
-    lmax = 2 * ns
-    xpol = Xpol(mymask, lmin, lmax, delta_ell)
-    ell_binned = xpol.ell_binned
-    # Pixel window function
-    pw = hp.pixwin(ns)
-    pwb = xpol.bin_spectra(pw[:lmax + 1])
-
-    return xpol, ell_binned, pwb
-
-
-def allcross_par(xpol, allmaps, silent=False, verbose=1):
-    num_cores = multiprocessing.cpu_count()
-    nmaps = len(allmaps)
-    nbl = len(xpol.ell_binned)
-    autos = np.zeros((nmaps, 6, nbl))
-    ncross = nmaps * (nmaps - 1) / 2
-    cross = np.zeros((ncross, 6, nbl))
-    jcross = 0
-    if not silent:
-        print('Computing spectra:')
-
-    # Auto spectra ran in //
-    if not silent:
-        print('  Doing All Autos ({}):'.format(nmaps))
-    results_auto = Parallel(n_jobs=num_cores, verbose=verbose)(
-        delayed(xpol.get_spectra)(allmaps[i]) for i in range(nmaps))
-    for i in range(nmaps):
-        autos[i, :, :] = results_auto[i][1]
-
-    # Cross Spectra ran in // - need to prepare indices in a global variable
-    if not silent:
-        print('  Doing All Cross ({}):'.format(ncross))
-    global cross_indices
-    cross_indices = np.zeros((2, ncross), dtype=int)
-    for i in range(nmaps):
-        for j in range(i + 1, nmaps):
-            cross_indices[:, jcross] = np.array([i, j])
-            jcross += 1
-    results_cross = Parallel(n_jobs=num_cores, verbose=verbose)(
-        delayed(xpol.get_spectra)(allmaps[cross_indices[0, i]], allmaps[cross_indices[1, i]]) for i in range(ncross))
-    for i in range(ncross):
-        cross[i, :, :] = results_cross[i][1]
-
-    if not silent:
-        sys.stdout.write(' Done \n')
-        sys.stdout.flush()
-
-    # The error-bars are absolutely incorrect if calculated as the following...
-    # There is an analytical estimate in Xpol paper.
-    # See if implemented in the gitlab xpol from Tristram instead of in qubic.xpol...
-    m_autos = np.mean(autos, axis=0)
-    s_autos = np.std(autos, axis=0) / np.sqrt(nmaps)
-    m_cross = np.mean(cross, axis=0)
-    s_cross = np.std(cross, axis=0) / np.sqrt(ncross)
-    return m_autos, s_autos, m_cross, s_cross
-
-
-def get_maps_cl(frec, fconv=None, lmin=20, delta_ell=40, apodization_degrees=5.):
-    mrec, resid, seenmap = get_maps_residuals(frec, fconv=fconv)
-    sh = np.shape(mrec)
-    print(sh, np.shape(resid))
-    nbsub = sh[1]
-    ns = hp.npix2nside(sh[2])
-
-    from qubic import apodize_mask
-    mymask = apodize_mask(seenmap, apodization_degrees)
-
-    # Create XPol object
-    from qubic import Xpol
-    lmax = 2 * ns
-    xpol = Xpol(mymask, lmin, lmax, delta_ell)
-    ell_binned = xpol.ell_binned
-    nbins = len(ell_binned)
-    # Pixel window function
-    pw = hp.pixwin(ns)
-    pwb = xpol.bin_spectra(pw[:lmax + 1])
-
-    # Calculate all crosses and auto
-    m_autos = np.zeros((nbsub, 6, nbins))
-    s_autos = np.zeros((nbsub, 6, nbins))
-    m_cross = np.zeros((nbsub, 6, nbins))
-    s_cross = np.zeros((nbsub, 6, nbins))
-    fact = ell_binned * (ell_binned + 1) / 2. / np.pi
-    for isub in range(nbsub):
-        m_autos[isub, :, :], s_autos[isub, :, :], m_cross[isub, :, :], s_cross[isub, :, :] = \
-            allcross_par(xpol, mrec[:, isub, :, :], silent=False, verbose=0)
-
-    return mrec, resid, seenmap, ell_binned, m_autos * fact / pwb ** 2, \
-           s_autos * fact / pwb ** 2, m_cross * fact / pwb ** 2, s_cross * fact / pwb ** 2

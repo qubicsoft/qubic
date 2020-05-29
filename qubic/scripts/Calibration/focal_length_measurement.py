@@ -1,11 +1,13 @@
 from __future__ import division, print_function
 
+import glob
 import numpy as np
+from astropy.io import fits
 import matplotlib.pyplot as plt
 import pickle as pk
 from scipy.spatial.distance import cdist
 from scipy.stats import sigmaclip
-
+import pandas as pd
 from sklearn.cluster import DBSCAN
 
 from qubicpack.utilities import Qubic_DataDir
@@ -31,22 +33,21 @@ def get_all_fit(rep):
 
     return np.array(tes_newxxyy), np.array(tes_fit)
 
-def get_alpha_from_fit(newxxyy):
-    az = np.deg2rad(newxxyy[:, 0, :]) / np.cos(np.deg2rad(50.))
-    el = np.deg2rad(newxxyy[:, 1, :])
 
+def get_alpha_from_fit(az, el):
     # Unit vector in spherical coordinates
     unit_vector = np.array([np.sin(np.pi / 2 - el) * np.cos(az),
                             np.sin(np.pi / 2 - el) * np.sin(az),
-                            np.cos(np.pi / 2 - el)]
-                           )
+                            np.cos(np.pi / 2 - el)])
+
     # Scalar product to get alpha
     ntes, npeaks = np.shape(az)
     cosalpha = np.empty((npeaks, ntes, ntes))
     for peak in range(npeaks):
         cosalpha[peak] = np.dot(unit_vector[:, :, peak].T, unit_vector[:, :, peak])
+        # print(cosalpha)
     alpha = np.arccos(cosalpha)
-
+    # print(alpha)
     return alpha
 
 
@@ -88,6 +89,7 @@ def DBSCAN_cut(results, doplot=False):
         plt.figure()
         plt.scatter(results[:, 0], results[:, 1])
         plt.scatter(results[:, 0][ok], results[:, 1][ok])
+        plt.show()
     return ok
 
 
@@ -95,9 +97,39 @@ def normalize(x):
     return (x - np.nanmean(x)) / np.nanstd(x)
 
 
-def measure_focal_length(tes_xy, alpha, npeaks=9, ntes=256, nsig=3):
+def measure_focal_length(tes_xy, alpha, npeaks=9, ntes=256, nsig=3, goodtes=None):
+    """
+
+    Parameters
+    ----------
+    tes_xy
+    alpha
+    npeaks
+    ntes
+    nsig
+    goodtes: list
+        List containing FP indices of good TES.
+
+    Returns
+    -------
+
+    """
     tes_dist = cdist(tes_xy, tes_xy, 'euclidean')
     tanalpha = np.tan(alpha)
+
+    if goodtes is not None:
+        for i in range(ntes):
+            if i < 128:
+                tes = i + 1
+                asic = 1
+            else:
+                tes = i - 128 + 1
+                asic = 2
+            index = tes2index(tes, asic)
+            if index not in goodtes:
+                print(i, index)
+                tes_dist[i, :] = np.nan
+                tes_dist[:, i] = np.nan
 
     fl_mean = np.zeros((npeaks, ntes))
     fl_std = np.zeros((npeaks, ntes))
@@ -111,9 +143,10 @@ def measure_focal_length(tes_xy, alpha, npeaks=9, ntes=256, nsig=3):
             print(tes)
             fl = focal_length[tes]
             fl = fl[~np.isnan(fl)]
+            print('fl', fl.shape)
             fl_clip, mini, maxi = sigmaclip(fl, low=nsig, high=nsig)
             print(mini, maxi)
-            print(fl_clip.shape)
+            print('fl_clip', fl_clip.shape)
 
             # Mean and STD for each TES
             fl_mean[peak, tes] = np.mean(fl_clip)
@@ -122,10 +155,41 @@ def measure_focal_length(tes_xy, alpha, npeaks=9, ntes=256, nsig=3):
     return fl_mean, fl_std
 
 
-def measure_focal_lengthnew(tes_xy, rdist, alpha, npeaks=9, ntes=256, nsig=3):
-    tes_dist = cdist(tes_xy, tes_xy, 'euclidean')
+def measure_focal_lengthnew(tes_xy, rdist, alpha, npeaks=9, ntes=256, nsig=3, goodtes=None):
+    """
 
+    Parameters
+    ----------
+    tes_xy
+    rdist
+    alpha
+    npeaks
+    ntes
+    nsig
+    goodtes: list
+        List containing FP indices of good TES.
+
+    Returns
+    -------
+
+    """
+
+    tes_dist = cdist(tes_xy, tes_xy, 'euclidean')
     tanalpha = np.tan(alpha)
+
+    if goodtes is not None:
+        for i in range(ntes):
+            if i < 128:
+                tes = i + 1
+                asic = 1
+            else:
+                tes = i - 128 + 1
+                asic = 2
+            index = tes2index(tes, asic)
+            if index not in goodtes:
+                print(i, index)
+                tes_dist[i, :] = np.nan
+                tes_dist[:, i] = np.nan
 
     fl_mean = np.zeros((npeaks, ntes))
     fl_std = np.zeros((npeaks, ntes))
@@ -135,7 +199,7 @@ def measure_focal_lengthnew(tes_xy, rdist, alpha, npeaks=9, ntes=256, nsig=3):
 
         # Compute k = Drcos(phi)
         for tes in range(ntes):
-            print(tes)
+            print('tes', tes)
             k = (tes_xy[:, 0] - tes_xy[tes, 0]) * tes_xy[:, 0] \
                 + (tes_xy[:, 1] - tes_xy[tes, 1]) * tes_xy[:, 1]
 
@@ -143,14 +207,13 @@ def measure_focal_lengthnew(tes_xy, rdist, alpha, npeaks=9, ntes=256, nsig=3):
             tg = tanalpha[peak, tes, :]
             Delta = D ** 4 - 4 * tg ** 2 * k ** 2 * (1 + D ** 2 / k)
             Xplus = (-2 * k * tg ** 2 + D ** 2 + np.sqrt(Delta)) / (2 * tg ** 2)
-            Xmoins = (-2 * k * tg ** 2 + D ** 2 - np.sqrt(Delta)) / (2 * tg ** 2)
 
             fl = np.sqrt(Xplus - rdist[tes] ** 2)
-            print(fl.shape)
+            print('fl', fl.shape)
             fl = fl[~np.isnan(fl)]
             fl_clip, mini, maxi = sigmaclip(fl, low=nsig, high=nsig)
             print(mini, maxi)
-            print(fl_clip.shape)
+            print('fl_clip', fl_clip.shape)
 
             # Mean and STD for each TES
             fl_mean[peak, tes] = np.mean(fl_clip)
@@ -162,30 +225,45 @@ def measure_focal_lengthnew(tes_xy, rdist, alpha, npeaks=9, ntes=256, nsig=3):
 def plot_flonfp(fl_mean, fl_std, xy, radial_dist, npeaks=9):
     # Compute the mean and the global std over TES
     ntes = np.shape(fl_std)[1]
-    final_mean = np.mean(fl_mean, axis=1)
-    final_std2 = np.sum(fl_std ** 2, axis=1)
+    final_mean = np.nanmean(fl_mean, axis=1)
+    final_std2 = np.nansum(fl_std ** 2, axis=1)
     final_std = np.sqrt(final_std2 / ntes)
 
     # Plot
     for peak in range(npeaks):
         print('Peak {}: {} +- {}'.format(peak, final_mean[peak], final_std[peak]))
 
-        plt.figure(figsize=(13, 5))
+        plt.figure(figsize=(15, 4))
         plt.suptitle('Peak {}'.format(peak))
-        plt.subplot(121)
-        plt.plot(radial_dist, fl_mean[peak], 'o',
-                 label='$FL = {:.5f} \pm {:.5f}$'.format(final_mean[peak], final_std[peak]))
+
+        plt.subplot(131)
+        plt.errorbar(radial_dist, fl_mean[peak], yerr=fl_std[peak],
+                     marker='o', linestyle='none',
+                     label='$FL = {:.5f} \pm {:.5f}$'.format(final_mean[peak], final_std[peak]))
         plt.xlabel('Radial TES distance (m)')
         plt.ylabel('TES focal length (m)')
         plt.legend()
 
-        plt.subplot(122)
-        plt.title('Focal length on the FP')
+
+        plt.subplot(132)
+        plt.title('Mean focal length on the FP')
         plt.scatter(xy[:, 0], xy[:, 1], marker='s', s=150, c=fl_mean[peak],
                     vmin=0.2, vmax=0.45)
-        plt.xlim((-0.06, 0.))
-        plt.ylim((-0.06, 0.))
+        plt.xlim((-0.055, 0.))
+        plt.ylim((-0.055, 0.))
+        plt.gca().set_aspect('equal')
         plt.colorbar()
+
+        plt.subplot(133)
+        plt.title('STD focal length on the FP')
+        plt.scatter(xy[:, 0], xy[:, 1], marker='s', s=150, c=fl_std[peak],
+                    vmin=0.01, vmax=0.02)
+        plt.xlim((-0.055, 0.))
+        plt.ylim((-0.055, 0.))
+        plt.gca().set_aspect('equal')
+        plt.colorbar()
+
+        plt.show()
 
     return final_mean, final_std
 
@@ -252,7 +330,12 @@ y = y[y != 0]
 plt.figure()
 plt.scatter(x, y, marker='s', s=150, c=r, vmin=0., vmax=0.06)
 plt.title('Radial distances')
+plt.xlabel('m')
+plt.ylabel('m')
+plt.xlim(-0.06, 0.06)
+plt.ylim(-0.06, 0.06)
 plt.colorbar()
+plt.show()
 
 # Using a qubic function
 # r = np.zeros((128, 2))
@@ -265,6 +348,24 @@ plt.colorbar()
 # plt.title('Radial distances')
 # plt.colorbar()
 
+# ============= Bad TES ==================
+calfile = fits.open(basedir + 'calfiles/CalQubic_DetArray_P87_TD.fits')
+fp_image = calfile['removed'].data
+plt.imshow(fp_image)
+plt.show()
+
+number_goodtes = len(np.where( fp_image == 0))
+
+goodtes = []
+nside = 34
+for i in range(nside):
+    for j in range(nside):
+        FP_index = j % (nside) + i * (nside)
+
+        if fp_image[i, j] == 0:
+            goodtes.append(FP_index)
+            print(FP_index)
+
 # ============= Focal length with the 9 peaks ==================
 
 # Get the fit of the synthesized beams
@@ -274,31 +375,28 @@ print(rep)
 
 tes_newxxyy, tesfit = get_all_fit(rep)
 
-alpha = get_alpha_from_fit(tes_newxxyy)
+az = np.deg2rad(tes_newxxyy[:, 0, :]) / np.cos(np.deg2rad(50.))
+el = np.deg2rad(tes_newxxyy[:, 1, :])
+alpha = get_alpha_from_fit(az, el)
 
-# plt.figure()
-# for i in range(9):
-#     plt.plot(tes_newxxyy[93, 0, i], tes_newxxyy[93, 1, i], 'o')
-#     plt.pause(0.4)
-#
-# plt.figure()
-# for peak in range(9):
-#     az_coord = tes_newxxyy[:, 0, peak]
-#     el_coord = tes_newxxyy[:, 1, peak]
-#
-#     plt.plot(az_coord, el_coord, '.', label='peak {}'.format(peak))
-# plt.xlabel('Az (°)')
-# plt.ylabel('el (°)')
-# plt.legend()
+plt.figure()
+for i in range(9):
+    plt.plot(tes_newxxyy[93, 0, i], tes_newxxyy[93, 1, i], 'o')
+    plt.pause(1)
+
+plt.figure()
+for peak in range(9):
+    az_coord = tes_newxxyy[:, 0, peak] #- tes_newxxyy[:, 0, 4]
+    el_coord = tes_newxxyy[:, 1, peak] #- tes_newxxyy[:, 1, 4]
+    plt.plot(az_coord, el_coord, '.', label='peak {}'.format(peak))
+plt.xlabel('Az (°)')
+plt.ylabel('el (°)')
+plt.legend()
+plt.show()
 
 # Get all distances between TES
 azel = tes_newxxyy[:, 0:2, :]
 allfl_clip, fl_mean, fl_std = measure_global_focal_length(tes_xy, azel, npeaks=9, nsig=3)
-# plt.figure()
-# for peak in range(9):
-#     plt.subplot(3, 3, peak+1)
-#     plt.plot(alltanalpha_cut[peak], alltes_dist_cut[peak], 'o')
-#     plt.plot(alltanalpha_cut[peak], alltanalpha_cut[peak] * 0.3)
 
 finalmean = np.mean(fl_mean)
 allstd_fl2 = [std ** 2 for std in fl_std]
@@ -317,49 +415,154 @@ for peak in range(9):
     plt.xlim(0, 0.9)
 plt.suptitle('Focal length histogram cut at {} sigma, {} GHz \n'
              '$f = {:.5f} \pm {:.5f}$'.format(nsig, freq_source, finalmean, finalstd))
+plt.show()
 
 # =============== Get one FL for each TES with the 9 peaks =====================
 xy = tes_xy[rdist != 0.]
 
-fl_mean, fl_std = measure_focal_length(tes_xy, alpha)
+fl_mean, fl_std = measure_focal_length(tes_xy, alpha, goodtes=goodtes)
 # Remove thermometers (they have a radial distance = 0)
 fl_mean = fl_mean[:, rdist != 0.]
 fl_std = fl_std[:, rdist != 0.]
 
-final_mean, final_std = plot_flonfp(fl_mean, fl_std, xy, r, npeaks=9)
+final_mean, final_std = plot_flonfp(fl_mean, fl_std, xy, r, npeaks=1)
 
 # Adding the small correction
-fl_meancorr, fl_stdcorr = measure_focal_lengthnew(tes_xy, rdist, alpha)
+fl_meancorr, fl_stdcorr = measure_focal_lengthnew(tes_xy, rdist, alpha, goodtes=goodtes)
 # Remove thermometers (they have a radial distance = 0)
 fl_meancorr = fl_meancorr[:, rdist != 0.]
 fl_stdcorr = fl_stdcorr[:, rdist != 0.]
 
-final_meancorr, final_stdcorr = plot_flonfp(fl_meancorr, fl_stdcorr, xy, r, npeaks=9)
+final_meancorr, final_stdcorr = plot_flonfp(fl_meancorr, fl_stdcorr, xy, r, npeaks=1)
 
 # ============= Focal length with the center of the square ===================
 center_square = np.zeros((256, 2, 1))
 for tes in range(1, 257):
     center_square[tes - 1, :, 0] = get_centersquare_azel(rep, tes)
 
-fl_mean, fl_std = measure_focal_length(tes_xy, center_square, npeaks=1)
+az_center = np.deg2rad(center_square[:, 0, :]) / np.cos(np.deg2rad(50.))
+el_center = np.deg2rad(center_square[:, 1, :])
+alpha_cs = get_alpha_from_fit(az_center, el_center)
+fl_mean_cs, fl_std_cs = measure_focal_length(tes_xy, alpha_cs, npeaks=1)
 
-fl_mean = fl_mean[:, rdist != 0.]
-fl_std = fl_std[:, rdist != 0.]
+fl_mean_cs = fl_mean_cs[:, rdist != 0.]
+fl_std_cs = fl_std_cs[:, rdist != 0.]
 
-final_mean, final_std = plot_flonfp(fl_mean, fl_std, tes_xy, r, npeaks=1)
+final_mean_cs, final_std_cs = plot_flonfp(fl_mean_cs, fl_std_cs, xy, r, npeaks=1)
 
-# Same but remove outliers
+# Same but remove outliers (not working, should be updated)
 results = np.array([normalize(center_square[:, 0, 0]),
                     normalize(center_square[:, 1, 0])]).T
 
 ok = DBSCAN_cut(results, doplot=True)
+ntes = np.sum(ok)
 
-fl_mean, fl_std = measure_focal_length(tes_xy[ok], center_square[ok], ntes=227, npeaks=1)
+fl_mean, fl_std = measure_focal_length(tes_xy[ok], alpha_cs[:, ok, ok], npeaks=1, ntes=ntes)
 
 fl_mean = fl_mean[:, rdist[ok] != 0.]
 fl_std = fl_std[:, rdist[ok] != 0.]
 
 r_ok = rdist[ok][rdist[ok] != 0.]
-xy_ok = tes_xy[ok][rdist[ok] != 0.]
 
-final_mean, final_std = plot_flonfp(fl_mean, fl_std, xy_ok, r_ok, npeaks=1)
+final_mean, final_std = plot_flonfp(fl_mean, fl_std, xy[ok], r_ok, npeaks=1)
+
+# ============= Compare with David synthetic beam simulations ===================
+freq_source = 170
+rep_david = '/home/lmousset/QUBIC/Qubic_work/Calibration/focal_length_measurement/David_simu/'
+# Get the fit of the synthesized beams
+rep = Qubic_DataDir(datafile='allFitSB_{}.pdf'.format(freq_source), datadir='/home/lmousset/QUBIC/Qubic_work')
+print(rep)
+tes_newxxyy, tesfit = get_all_fit(rep)
+
+fig, axs = plt.subplots(2, 3, figsize=(10, 8))
+axs = np.ravel(axs)
+plt.suptitle('Frequency: {} GHz'.format(freq_source))
+for t, tes in enumerate([6, 37, 50, 58, 76, 93]):
+
+    # Get the file from David
+    file = glob.glob(rep_david + '*{}*/*_{}_*/*'.format(freq_source, tes))
+    data = pd.read_csv(file[0], sep='\t', skiprows=0)
+
+    x = data['x position (deg)'].iloc[::10]
+    y = data['y position (deg)'].iloc[::10]
+
+    nn = int(np.sqrt(len(x)))
+    print(nn)
+    a = data['amplitude'].iloc[::10]
+    # amp = np.reshape(np.asarray(a), (nn, nn))
+
+    dx = (x.iloc[1] - x.iloc[0]) / 2.
+    dy = (y.iloc[1] - y.iloc[0]) / 2.
+    extent = [x.iloc[0] - dx, x.iloc[-1] + dx, y.iloc[0] - dy, y.iloc[-1] + dy]
+
+    azel_tes = tes_newxxyy[tes-1, 0:2, :]
+    azel_tes[1, :] -= 50 # substract 50 to the elevation
+
+    # Plot the fit measurement on the David simulation
+    ax = axs[t]
+    # ax.imshow(np.rot90(amp), extent=extent)
+    ax.scatter(x, y, c=a, marker='s')
+    ax.scatter(azel_tes[0, :], azel_tes[1, :], color='r', s=10)
+    ax.set_title('TES {}'.format(tes))
+    ax.axis('equal')
+plt.show()
+
+# ================== Test with simulated beams from Qubic soft ==================
+import healpy as hp
+from scipy import ndimage
+d['config'] = 'TD'
+d['nside'] = 256
+q = qubic.QubicInstrument(d)
+s = qubic.QubicScene(d)
+
+sb = q.get_synthbeam(s, idet=None, external_A=None, hwp_position=0)
+print(sb.shape)
+
+azel_peak = np.zeros((248, 2))
+for m in range(248):
+    print('\n m =', m)
+    if m == 0:
+        map_proj = hp.gnomview(sb[m, :], rot=(0, 90), reso=10, return_projected_map=True, no_plot=False)
+        plt.show()
+    else:
+        map_proj = hp.gnomview(sb[m, :], rot=(0, 90), reso=10, return_projected_map=True, no_plot=True)
+
+    # labeled_image, number_of_objects = ndimage.label(map_proj / np.mean(map_proj))
+    # print(number_of_objects)
+    # maxi = ndimage.measurements.center_of_mass(map_proj, labeled_image, np.arange(1, number_of_objects + 1))
+
+    # maxi = ndimage.measurements.maximum_position(map_proj)
+    maxi = np.where(map_proj==np.max(map_proj))
+    maxi_bis = np.where(sb[m, :] == np.max(sb[m, :]))[0]
+    print('Maxi bis:', maxi_bis)
+    # maxi = np.array(maxi)
+    if m == 0:
+        plt.figure()
+        plt.imshow(map_proj)
+        plt.scatter(maxi[1], maxi[0], color='r')
+        plt.show()
+
+    # print(maxi)
+    # azel_peak[m, 0] = np.mean(maxi[0])
+    # azel_peak[m, 1] = np.mean(maxi[1])
+
+    azel_peak[m, :] = hp.pix2ang(d['nside'], maxi_bis[0], lonlat=True)
+    print(azel_peak[m, :])
+
+# azel_peak[:, 0] = np.deg2rad((azel_peak[:, 0] - 100)  * 10 / 60)
+# azel_peak[:, 1] = np.deg2rad((azel_peak[:, 1] - 100)  * 10 / 60 + 50)
+azel_peak = np.deg2rad(azel_peak)
+
+az_simu = np.expand_dims(azel_peak[:, 0], axis=1)
+el_simu = np.expand_dims(azel_peak[:, 1], axis=1)
+
+alpha_simu = get_alpha_from_fit(az_simu, el_simu)
+
+tes_xy_qubicsoft = q.detector.center[:, :2]
+
+fl_mean, fl_std = measure_focal_length(tes_xy_qubicsoft, alpha_simu, npeaks=1, ntes=248, nsig=3, goodtes=None)
+
+plt.figure()
+plt.scatter(tes_xy_qubicsoft[:, 0], tes_xy_qubicsoft[:, 1], c=fl_mean[0], marker='s', s=150)
+plt.colorbar()
+plt.show()

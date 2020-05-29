@@ -48,7 +48,7 @@ def statstr(x, divide=False, median=False, cut=None):
     if divide:
         nn = len(x[np.isfinite(x)])
         s /= nn
-    return '{0:6.3f} +/- {1:6.3f}'.format(m, s)
+    return '{0:6.5f} +/- {1:6.5f}'.format(m, s)
 
 
 def image_asics(data1=None, data2=None, all1=None):
@@ -149,30 +149,11 @@ class MyChi2_nocov:
         return chi2
 
 
-### Call Minuit
+# ## Call Minuit
 def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=None, rangepars=None, nohesse=False,
               force_chi2_ndf=False, verbose=True, minos=False, extra_args=None, print_level=0, force_diag=False,
               nsplit=1, ncallmax=10000, precision=None):
-    """
 
-    Parameters
-    ----------
-    x
-    y
-    covarin
-    guess
-    functname
-    fixpars
-    chi2
-    rangepars
-    nohesse
-    force_chi2_ndf
-    verbose
-
-    Returns
-    -------
-
-    """
     # check if covariance or error bars were given
     covar = covarin.copy()
     if np.size(np.shape(covarin)) == 1:
@@ -223,10 +204,12 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
         theargs = dict(theguess.items() + dfix.items() + dstep.items())
         if rangepars is not None: theargs.update(dict(theguess.items() + drng.items()))
     else:
-        for k in dfix.keys(): theguess[k] = dfix[k]
+        for k in dfix.keys():
+            theguess[k] = dfix[k]
         theargs = theguess
         if rangepars is not None:
-            for k in drng.keys(): theguess[k] = drng[k]
+            for k in drng.keys():
+                theguess[k] = drng[k]
         theargs.update(theguess)
     m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=1., print_level=print_level, **theargs)
     m.migrad(ncall=ncallmax * nsplit, nsplit=nsplit, precision=precision)
@@ -279,34 +262,19 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 # ##############################################################################
 
 
-def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True, log=False,
+def profile(xin, yin, rng=None, nbins=10, fmt=None, plot=True, dispersion=True, log=False,
             median=False, cutbad=True, rebin_as_well=None, clip=None, mode=False):
     """
-
-    Parameters
-    ----------
-    xin
-    yin
-    range
-    nbins
-    fmt
-    plot
-    dispersion
-    log
-
-    Returns
-    -------
-
     """
     ok = np.isfinite(xin) * np.isfinite(yin)
     x = xin[ok]
     y = yin[ok]
-    if range is None:
+    if rng is None:
         mini = np.min(x)
         maxi = np.max(x)
     else:
-        mini = range[0]
-        maxi = range[1]
+        mini = rng[0]
+        maxi = rng[1]
     if log is False:
         xx = np.linspace(mini, maxi, nbins + 1)
     else:
@@ -350,7 +318,8 @@ def profile(xin, yin, range=None, nbins=10, fmt=None, plot=True, dispersion=True
         dy[i] = np.std(y[ok]) / fact
         dx[i] = np.std(x[ok]) / fact
     if plot:
-        if fmt is None: fmt = 'ro'
+        if fmt is None:
+            fmt = 'ro'
         errorbar(xc, yval, xerr=dx, yerr=dy, fmt=fmt)
     ok = nn != 0
     if cutbad:

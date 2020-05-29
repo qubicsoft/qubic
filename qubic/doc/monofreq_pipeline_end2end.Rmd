@@ -31,7 +31,6 @@ Here we work with only one frequency band.
 # General modules
 from __future__ import division, print_function
 # %matplotlib inline
-from pylab import *
 import os
 import sys
 import time
@@ -41,6 +40,7 @@ import shutil
 # Specific science modules
 import healpy as hp
 import numpy as np
+import matplotlib.pyplot as plt
 
 # Specific qubic modules
 import pysm
@@ -68,11 +68,14 @@ d.read_from_file(dictfilename)
 # Set nf_sub to 1 to be in the monofreq case
 d['nf_sub'] = 1
 
+# No spectroimaging
+d['nf_recon'] = 1
+
 # Center of the patch observed in galactic coordinates
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 print(center)
 
-print(d['nside'])
+d['npointings'] = 3000
 ```
 
 # Input sky
@@ -91,9 +94,6 @@ sky_config = {'cmb': seed}                ### CMB Only
 Qubic_sky = qss.Qubic_sky(sky_config, d)
 x0 = Qubic_sky.get_simple_sky_map()
 
-# sky_config = {'cmb': models('c1', d['nside'])}
-# Qubic_sky = si.Qubic_sky(sky_config, d)
-# x0 = Qubic_sky.get_simple_sky_map()
 print('sky shape: ', x0.shape)
 
 # Look at the input sky maps using Healpy
@@ -150,7 +150,7 @@ plt.ylabel('TOD')
 # i.e. how many times were seen each pixel of the sky (not trivial because of the synthetic beam)
 cov = a.get_coverage()
 
-print(cov[44642])
+print(cov.shape)
 hp.mollview(cov)
 ```
 
@@ -186,31 +186,71 @@ print('{} iterations were needed to get an error of {}'.format(nit, error))
 ```{python}
 # Compare with the convolved maps
 diff = maps_recon - maps_convolved
-diff.shape
+print(diff.shape)
+print(maps_recon.shape)
 ```
 
 ```{python}
 # Keeping only the sky region which has been significantly observed
 # Pixels not seen enough are replaced by UNSEEN value
-cov = np.sum(cov, axis=0)
 maxcov = np.max(cov)
-unseen = cov < maxcov * 0.1
+unseen = cov < maxcov * 0.15
 
-maps_convolved[:, unseen, :] = hp.UNSEEN
-maps_recon[:, unseen, :] = hp.UNSEEN
-diff[:, unseen, :] = hp.UNSEEN
+maps_convolved[unseen, :] = hp.UNSEEN
+maps_recon[unseen, :] = hp.UNSEEN
+diff[unseen, :] = hp.UNSEEN
 ```
 
 ```{python}
-rr = 9 # Resolution in arcmin
-for istokes in [0,1,2]:
-    plt.figure(istokes,figsize=(12,12)) 
-    hp.gnomview(maps_convolved[:,istokes], cmap='jet', rot=center, sub=(3,3,3*istokes+1), reso=rr,
-                title='Input '+d['kind'][istokes])
-    hp.gnomview(maps_recon[:,istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+2), reso=rr,
-                title='Output '+d['kind'][istokes])
-    hp.gnomview(diff[:,istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+3), reso=rr,
-                title='diff '+d['kind'][istokes])
+rr = 14 # Resolution in arcmin
+stokes = ['I', 'Q', 'U']
+for istokes in range(3):
+    if istokes == 0:
+        min = -200
+        max = 200
+    else:
+        min = -4
+        max = 4
+    hp.gnomview(maps_convolved[:, istokes], cmap='jet', rot=center, sub=(3,3,3*istokes+1), reso=rr,
+                title='Input ' + stokes[istokes], notext=True, min=min, max=max)
+    hp.gnomview(maps_recon[:, istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+2), reso=rr,
+                title='Output ' + stokes[istokes], notext=True, min=min, max=max)
+    hp.gnomview(diff[:, istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+3), reso=rr,
+                title='Difference ' + stokes[istokes], notext=True, min=-2, max=2)
+```
+
+```{python}
+seenpix = cov > maxcov * 0.7
+print(np.std(diff[seenpix, 2]))
+
+map_convcenter = np.copy(maps_convolved)
+map_reconcenter = np.copy(maps_recon)
+diffcenter = np.copy(diff)
+
+map_convcenter[~seenpix, :] = hp.UNSEEN
+map_reconcenter[~seenpix, :] = hp.UNSEEN
+diffcenter[~seenpix, :] = hp.UNSEEN
+for istokes in range(3):
+    if istokes == 0:
+        min = None
+        max = None
+    else:
+        min = None
+        max = None
+    hp.gnomview(map_convcenter[:, istokes], cmap='jet', rot=center, sub=(3,3,3*istokes+1), reso=rr,
+                title='Input ' + stokes[istokes], notext=True, min=min, max=max)
+    hp.gnomview(map_reconcenter[:, istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+2), reso=rr,
+                title='Output ' + stokes[istokes], notext=True, min=min, max=max)
+    hp.gnomview(diffcenter[:, istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+3), reso=rr,
+                title='Difference ' + stokes[istokes], notext=True, min=None, max=None)
+```
+
+```{python}
+diffcenter.shape
+```
+
+```{python}
+unseen
 ```
 
 ```{python}

@@ -25,6 +25,7 @@ This notebook is part of a set of notebooks with the idea to show spectroimaging
 from pylab import *
 import os
 import sys
+import glob
 
 # Specific science modules
 import healpy as hp
@@ -156,7 +157,7 @@ hp.mollview(covsum)
 ```
 
 ```{python}
-seenmap = covsum > 0.1 * np.max(covsum)
+seenmap = covsum > 0.15 * np.max(covsum)
 cov[:, np.invert(seenmap)] = hp.UNSEEN
 hp.mollview(cov[1], title='Coverage map')
 ```
@@ -465,9 +466,9 @@ print(std_conv_global, std_recon_global, std_recon_noiseless_global, std_x0_glob
 
 ```{python}
 # Create a Namaster object
-lmin = 50
+lmin = 20
 lmax = 2 * d['nside'] - 1
-delta_ell = 15
+delta_ell = 55
 
 mask = np.zeros(12 * d['nside']**2)
 mask[seenmap] = 1
@@ -584,100 +585,568 @@ for i in range(4): # TT, EE, BB, TE
 plt.legend(fontsize=10)
 ```
 
-## Make a fake sky
-Old test
+# Look at MC simulations
 
 ```{python}
-def scaling_dust(freq1, freq2, sp_index=1.8): 
-    '''
-    Calculate scaling factor for dust contamination
-    Frequencies are in GHz
-    '''
-    freq1 = float(freq1)
-    freq2 = float(freq2)
-    x1 = freq1 / 56.78
-    x2 = freq2 / 56.78
-    S1 = x1**2. * np.exp(x1) / (np.exp(x1) - 1)**2.
-    S2 = x2**2. * np.exp(x2) / (np.exp(x2) - 1)**2.
-    vd = 375.06 / 18. * 19.6
-    scaling_factor_dust = (np.exp(freq1 / vd) - 1) / \
-                          (np.exp(freq2 / vd) - 1) * \
-                          (freq2 / freq1)**(sp_index + 1)
-    scaling_factor_termo = S1 / S2 * scaling_factor_dust
-    return scaling_factor_termo
+date_name = '20200415_galaxydust'
+
+# Get the repository where the simulation is
+rep_simu = Qubic_DataDir(datafile=date_name + '.dict'
+                         , datadir='/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/') + '/'
+print(rep_simu)
+
+# Dictionary saved during the simulation
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(rep_simu + date_name + '.dict')
+
+# Coordinates of the zone observed in the sky
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+
+# Number of subbands used during the simulation
+nf_sub_rec = 5
+nf_sub = d['nf_sub']
+print('nf_sub = {}, nf_recon = {}'.format(nf_sub, nf_sub_rec))
+
+# Get fits files names in a list
+fits_noise = np.sort(glob.glob(rep_simu + date_name + '*nfrecon{}_noiselessFalse*.fits'.format(nf_sub_rec)))
+fits_noiseless = glob.glob(rep_simu + date_name + '*nfrecon{}_*noiselessTrue*.fits'.format(nf_sub_rec))
+
+print(fits_noiseless)
+```
+
+```{python}
+# Number of noise realisations
+nreals = len(fits_noise)
+print('nreals = ', nreals)
+
+# Get seen map (observed pixels)
+seenmap = rmc.get_seenmap(fits_noiseless[0])
+print(seenmap.shape)
+
+# Number of pixels and nside
+npix = len(seenmap)
+ns = d['nside']
+
+```
+
+### Look at the maps
+
+```{python}
+# Get the noiseless map
+noiseless, _, _ = rmc.get_maps(fits_noiseless[0])
+# noiseless = np.expand_dims(noiseless, axis=0)
+print(noiseless.shape)
+
+# Get the noise maps
+maps_recon = np.empty((nreals, nf_sub_rec, npix, 3))
+maps_conv = np.empty((nreals, nf_sub_rec, npix, 3))
+for real in range(nreals):
+    recon, conv, _ = rmc.get_maps(fits_noise[real])
+    maps_recon[real] = recon
+    maps_conv[real] = conv
+
+```
+
+```{python}
+# Compute residuals in a given way
+residuals = amc.get_residuals(date_name, rep_simu, 'noiseless', nf_sub_rec)
+print(residuals.shape)
+
+# There is only the patch so you need to put them in a full map to plot with healpy
+maps_residuals = np.zeros_like(maps_conv)
+maps_residuals[:, :, seenmap, :] = residuals
+```
+
+```{python}
+istk = 0
+real = 1
+plt.figure(figsize=(12, 12))
+plt.subplots_adjust(wspace=0.2, hspace=0.5)
+rr = 15
+min = None
+max = None
+
+for band in range(nf_sub_rec):
+    hp.gnomview(maps_conv[real, band, :, istk], cmap='jet', sub=(nf_sub_rec, 3, 3*band+1), rot=center, reso=rr, 
+                title = '{0} conv {1}'.format(d['kind'][istk], band), min=min, max=max)
+    hp.gnomview(maps_recon[real, band, :, istk], cmap='jet', sub=(nf_sub_rec, 3, 3*band+2), rot=center, reso=rr, 
+                title = '{0} rec {1}'.format(d['kind'][istk], band), min=min, max=max)
+    hp.gnomview(maps_residuals[real, band, :, istk], cmap='jet', sub=(nf_sub_rec, 3, 3*band+3), rot=center, reso=rr, 
+                title = '{0} Residuals {1}'.format(d['kind'][istk], band), min=min, max=max)
+plt.tight_layout()
+
+```
+
+```{python}
+# Get the coverage
+from astropy.io import fits
+a = fits.open(fits_noise[0])
+coverage = a['COVERAGE'].data
+hp.mollview(coverage)
+
+coverage_patch = coverage[seenmap]
+coverage_patch.shape
+```
+
+### Power spectrum
+
+```{python}
+# Create a Namaster object
+lmin = 20
+lmax = 2 * d['nside'] - 1
+delta_ell = 20
+
+mask = np.zeros(12 * d['nside']**2)
+mask[seenmap] = 1
+
+Namaster = nam.Namaster(mask, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+
+# Make a mask
+mask_apo = Namaster.get_apodized_mask()
+
+# hp.mollview(mask_apo)
 
 
-def scaling_synchrotron(freq1, freq2, sp_index=-3): 
-    '''
-    Calculate scaling factor for synchrotron contamination
-    Frequencies are in GHz
-    '''
-    x1 = freq1 / 56.78
-    x2 = freq2 / 56.78
-    S1 = x1**2. * np.exp(x1) / (np.exp(x1) - 1)**2.
-    S2 = x2**2. * np.exp(x2) / (np.exp(x2) - 1)**2.
-    vd = 375.06 / 18. * 19.6
-    scaling_factor_synchrotron = S1 / S2 * (np.exp(freq1 / vd) - 1) / \
-                                 (np.exp(freq2 / vd) - 1) * \
-                                 (freq2 / freq1)**(sp_index + 1)
-    return scaling_factor_synchrotron
+```
 
+```{python}
+# Auto spectrum
+w = None
+allcells_recon, allcells_recon_noiseless, allcells_conv, allcells_x0 = [], [], [], []
+real = 0
 
-def cmb_plus_dust_synchrotron(cmb, dust, synchrotron, d):
-    '''
-    Sum up clean CMB map with dust and synchrotron 
-    using proper scaling coefficients
-    '''
-    nf_sub = d['nf_sub']
-    _, _, nus, _, _, _ = qubic.compute_freq(150, nf_sub)
-    print(nus)
+# Get spectra
+for isub in range(nf_sub_rec):
+    leff, cells_recon, w = Namaster.get_spectra(maps_recon[real, isub, :, :].T, mask_apo, w=w,
+                                          purify_e=True, 
+                                          purify_b=False, 
+                                          beam_correction=None,
+                                          pixwin_correction=True)
     
-    kind = d['kind']
-    nstokes =  len(kind) #Number of stokes parameters used in the simu
+    leff, cells_recon_noiseless, w = Namaster.get_spectra(noiseless[isub, :, :].T, mask_apo, w=w,
+                                          purify_e=True, 
+                                          purify_b=False, 
+                                          beam_correction=None,
+                                          pixwin_correction=True)
+
+    leff, cells_conv, w = Namaster.get_spectra(maps_conv[real, isub, :, :].T, mask_apo, w=w, 
+                                          purify_e=True, 
+                                          purify_b=False, 
+                                          beam_correction=None,
+                                          pixwin_correction=True)
+
+    allcells_recon.append(cells_recon)
+    allcells_recon_noiseless.append(cells_recon_noiseless)
+    allcells_conv.append(cells_conv)
+
+allcells_recon = np.array(allcells_recon)
+allcells_recon_noiseless = np.array(allcells_recon_noiseless)
+allcells_conv = np.array(allcells_conv)
+```
+
+```{python}
+clnames = ['TT', 'EE', 'BB', 'TE']
+# with plt.xkcd():
+rc('figure', figsize=(12, 8))
+
+fig, axs = plt.subplots(2, 2)
+axs = axs.ravel()
+
+color = ['b', 'r', 'g', 'k', 'y', 'orange', 'brown', 'purple']
+for i in range(4):
+    ax = axs[i]
+    for isub in [0, 1, 2, 3, 4]:#, 5, 6, 7]: 
+        c = color[isub]
+#         ax.plot(input_ell[2:lmax], input_Dl[2:lmax, i], 'k', label='CMB Input')
+        ax.plot(leff[:], allcells_recon[isub, :, i],'o', color=c, 
+                 label='Recon {}'.format(isub))
+        ax.plot(leff[:], allcells_recon_noiseless[isub, :, i],'--', color=c, 
+                 label='Recon Noiseless{}'.format(isub))
+#         ax.plot(leff[2:], allcells_x0[isub, 2:, i], color=c, 
+#                  label='x0{}'.format(isub))
+#         ax.plot(leff[:], allcells_conv[isub, :, i], '--', color=c, 
+#                  label='Conv{}'.format(isub))
+    ax.set_xlabel('$\\ell$')
+    ax.set_ylabel('$D_\\ell$')
+
+    ax.set_title(clnames[i])
+
+plt.tight_layout()
+ax.legend(fontsize=8, loc='right')
+```
+
+```{python}
+from itertools import combinations
+# Cross spectrum
+
+nbins = (lmax - lmin) // delta_ell
+ncross = nreals * (nreals - 1) // 2
+print(nbins, ncross)
+cells_cross = np.zeros((ncross, nf_sub_rec, nbins, 4))
+cells_conv = np.zeros((ncross, nf_sub_rec, nbins, 4))
+
+# Get spectra
+w = None
+for isub in range(nf_sub_rec):
+    print('isub:', isub)
+    cross = 0
+    for c in combinations(np.arange(nreals), 2):
+        print(c)
+        leff, cells_cross[cross, isub, :, :], w = Namaster.get_spectra(maps_recon[c[0], isub, :, :].T, 
+                                              mask_apo, 
+                                              maps_recon[c[1], isub, :, :].T,
+                                              w=w,
+                                              purify_e=True, 
+                                              purify_b=False, 
+                                              beam_correction=None,
+                                              pixwin_correction=True)
+        leff, cells_conv[cross, isub, :, :], w = Namaster.get_spectra(maps_conv[c[0], isub, :, :].T, 
+                                              mask_apo,
+                                              maps_conv[c[1], isub, :, :].T,
+                                              w=w,
+                                              purify_e=True, 
+                                              purify_b=False, 
+                                              beam_correction=None,
+                                              pixwin_correction=True)
+        
+        cross += 1
     
-    npix = 12 * d['nside']**2
-    x0 = np.zeros((nf_sub, npix, 3))
-    
-    # Let's fill the maps:
-    for i in range(nf_sub):
-        for istokes in range(nstokes):
-            if kind == 'QU': #This condition keeps the order IQU in the healpix map
-                x0[i, :, istokes+1] = cmb[i, :, istokes+1] \
-                                    + dust[i, :, istokes+1] * scaling_dust(150, nus[i])\
-                                    + synchrotron[i, :, istokes+1] * scaling_synchrotron(150, nus[i])
-            else:
-                x0[i, :, istokes] = cmb[i, :, istokes] \
-                                    + dust[i, :, istokes] * scaling_dust(150, nus[i], 1.59)\
-                                    + synchrotron[i, :, istokes] * scaling_synchrotron(150, nus[i])
-    return x0
+#     for real in range(nreals):
+#         leff, cells_conv[real, isub, :, :], w = Namaster.get_spectra(maps_conv[real, isub, :, :].T, 
+#                                               mask_apo,
+#                                               w=w,
+#                                               purify_e=True, 
+#                                               purify_b=False, 
+#                                               beam_correction=None,
+#                                               pixwin_correction=True)
+        
+```
+
+```{python}
+# average over the cross_spectrum
+cross_mean = np.mean(cells_cross, axis=0)
+cross_std = np.std(cells_cross, axis=0)
+print(cross_mean.shape)
 
 
-def create_input_sky(d, skypars):
-    Nf = int(d['nf_sub'])
-    band = d['filter_nu']/1e9
-    filter_relative_bandwidth = d['filter_relative_bandwidth']
-    _, _, nus_in, _, _, Nbbands_in = qubic.compute_freq(band, filter_relative_bandwidth, Nf)
-    # seed
-    if d['seed']:
-        np.random.seed(d['seed'])
+mean_conv = np.mean(cells_conv, axis=0)
+```
+
+```{python}
+clnames = ['TT', 'EE', 'BB', 'TE']
+# with plt.xkcd():
+rc('figure', figsize=(12, 8))
+
+fig, axs = plt.subplots(2, 2)
+axs = axs.ravel()
+
+color = ['b', 'r', 'g', 'k', 'y', 'orange', 'brown', 'purple']
+for i in range(4):
+    ax = axs[i]
+    for isub in [0, 1, 2, 3, 4]:
+        c = color[isub]
+        ax.errorbar(leff[:], cross_mean[isub, :, i],
+                    yerr=cross_std[isub, :, i] * np.sqrt(2),
+                    marker='o', color=c, linestyle='none', 
+                    label='Recon cross {}'.format(isub))
         
-        # Generate the input CMB map
-        sp = qubic.read_spectra(skypars['r'])
-        cmb = np.array(hp.synfast(sp, d['nside'], new=True, pixwin=True, verbose=False)).T
+        ax.plot(leff[:], allcells_recon_noiseless[isub, :, i],'--', 
+                color=c,
+                 label='Recon Noiseless{}'.format(isub))
+
+#         ax.plot(leff[:], mean_conv[isub, :, i], '--', color=c, 
+#                  label='Conv{}'.format(isub))
+    ax.set_xlabel('$\\ell$')
+    ax.set_ylabel('$D_\\ell$')
+#     ax.set_yscale('log')
+    ax.set_title(clnames[i])
+
+plt.tight_layout()
+ax.legend(fontsize=8, loc='right')
+```
+
+##### Correlations between bands
+
+```{python}
+# Make a loop over irec and fill dictionnaries
+dict_sig2MC = {}
+dict_sig2 = {}
+ang_th = 15
+ang = rmc.pix2ang(d['nside'], center, seenmap)
+
+for irec in [1, 3]:
+    print('irec =', irec)   
+#     _, recon_patch, _, _ = rmc.get_patch_many_files(rep_simu + date_name, '*nfrecon{}*False*'.format(irec))
+    residuals = amc.get_residuals(date_name, rep_simu, 'noiseless', irec)
+    
+    if irec == 1:
+        # Remove the single dimension  
+        residuals = np.squeeze(residuals)
+        print('Residuals shape:', residuals.shape)
+
+        sig2MC_monofreq = np.var(residuals, axis=0) # Variance over realizations
+        sig2MCmean_monofreq = amc.average_pix_sig2(sig2MC_monofreq, ang, ang_threshold=ang_th) # Mean over pixels
+        dict_sig2MC.update({'{}'.format(irec): sig2MC_monofreq})
+        dict_sig2MC.update({'{}mean'.format(irec): sig2MCmean_monofreq})
         
-        # Generate the dust map
-        coef = skypars['dust_coeff']
-        ell = np.arange(1, 3*d['nside'])
-        fact = (ell * (ell + 1)) / (2 * np.pi)
-        spectra_dust = [np.zeros(len(ell)), 
-                        coef * (ell / 80.)**(-0.42) / (fact * 0.52), 
-                        coef * (ell / 80.)**(-0.42) / fact, 
-                        np.zeros(len(ell))]
-        dust = np.array(hp.synfast(spectra_dust, d['nside'], new=True, pixwin=True, verbose=False)).T
+        print('\n')
+       
+    else:
+        if irec == 5:
+            doplot = True
+        else :
+            doplot = False
+        Cp = amc.get_Cp(residuals, nfrecon=d['nf_recon'], verbose=False, doplot=doplot)
+        Cp_prime = amc.Cp2Cp_prime_viaCorr(Cp, verbose=True) # Average Cp over pixels
+#         Cp_prime = amc.Cp2Cp_prime(Cp, verbose=True)
         
-        # Combine CMB and dust. As output we have N 3-component maps of sky.
-        x0 = cmb_plus_dust(cmb, dust, Nbbands_in, nus_in, d['kind'])
-        return x0
+        # Compute sig2 and sig2MC 
+        # Using Cp or Cp_prime
+        weighted_av, sig2 = amc.make_weighted_av(residuals, Cp_prime, verbose=False)
+        
+        sig2mean = amc.average_pix_sig2(sig2, ang, ang_threshold=ang_th)
+        dict_sig2.update({'{}'.format(irec): sig2})
+        dict_sig2.update({'{}mean'.format(irec): sig2mean})
+        
+        sig2MC = np.var(weighted_av, axis=0) # Variance over realisations
+        sig2MCmean = amc.average_pix_sig2(sig2MC, ang, ang_threshold=ang_th) # Mean over pixels
+        dict_sig2MC.update({'{}'.format(irec): sig2MC})
+        dict_sig2MC.update({'{}mean'.format(irec): sig2MCmean})
+        
+        print('\n')
+```
+
+```{python}
+print(Cp_prime.shape)
+plt.imshow(Cp_prime[:, :, 0, 10])
+plt.colorbar()
+```
+
+```{python}
+coverage_norm = coverage_patch / np.max(coverage_patch)
+inverse_coverage = 1. / (np.sqrt(coverage_norm))
+
+plt.plot(ang, coverage_norm, '.', label='coverage')
+plt.plot(ang, np.sqrt(coverage_norm), '.', label='$\sqrt{coverage}$')
+plt.xlabel('Angle [deg]')
+# plt.ylabel('Coverage normalized')
+plt.title('Coverage normalized to the maximum as function of the angle in the patch.')
+plt.legend()
+```
+
+```{python}
+# from scipy import interpolate
+
+# Stokes = ['I', 'Q', 'U']
+# nbins = 6
+
+# def make_fit(x, y, nbins):
+#     bin_edges = np.linspace(0, np.max(x), nbins + 1)
+#     bin_centers = 0.5 * (bin_edges[0:nbins] + bin_edges[1:])
+
+#     mean_bin = np.zeros(nbins)
+#     for b in range(nbins):
+#         ok = (x > bin_edges[b]) & (x < bin_edges[b + 1])
+#         mean_bin[b] = np.mean(y[ok], axis=0)
+#     fit = interpolate.interp1d(bin_centers, mean_bin, axis=0, kind='linear', fill_value='extrapolate')
+#     return bin_centers, mean_bin, fit
+
+# def plot_sigma2profile(x, dict_sig2, dict_sig2MC, nbins, nf_recon, xlabel):
+    
+#     fig, axs = plt.subplots(1, 3)
+#     plt.subplots_adjust(wspace=0.5)
+#     axs = axs.ravel()
+#     colors = ['b', 'g', 'r']
+#     i = 0
+#     for nband in nf_recon:
+#         for s in range(3):
+#             ax = axs[s]
+            
+#             bin_centersMC, mean_binMC, fitMC = make_fit(x, dict_sig2MC['{}'.format(nband)][:, s], nbins)
+# #             ax.plot(bin_centersMC, mean_binMC, 's', color=colors[i],
+# #                            label='sig2MC nband = {}'.format(nband))
+# #             ax.plot(x, fitMC(x), '--', color=colors[i])
+
+#             if nband != 1:
+#                 # Interpolation to get a profile
+#                 bin_centers, mean_bin, fit = make_fit(x, dict_sig2['{}'.format(nband)][:, s], nbins)
+#                 ax.plot(bin_centers, mean_bin/mean_binMC, 'o', label='nband = {}'.format(nband), color=colors[i])
+# #                 ax.plot(x, fit(x)/fitMC(x), '--', color=colors[i])
+                
+            
+#             ax.set_title(Stokes[s], fontsize=20)
+#             ax.set_xlabel(xlabel, fontsize=15)
+#             ax.set_ylabel('$\sigma^2 / \sigma_{MC}^2$', fontsize=15)
+# #             ax.set_yscale('log')
+# #             ax.set_ylim(0, 10)
+# #             ax.setxlim(0, 18)
+#             ax.legend(fontsize=10, loc='upper left')
+#         i += 1 
+#     return
+
+```
+
+```{python}
+plt.plot(np.sqrt(coverage_norm), dict_sig2MC['3'][:, 0], '.')
+plt.xlabel('$\sqrt{coverage}$')
+plt.ylabel('$\sigma^2$')
+limit = (coverage_patch / np.max(coverage_patch)) > 0.6
+# plt.plot(dict_sig2['3'][limit, 0], dict_sig2MC['3'][limit, 0], '.')
+
+plt.title('Variance for each pixel (I component)')
+```
+
+```{python}
+import qubic.fibtools as ft
+
+x = 1 / np.sqrt(coverage_norm)
+
+xc, yc, dx, dy, _ = ft.profile(x, dict_sig2['3'][:, 0], 
+                               nbins=30, 
+                               plot=False,
+                               clip=True)
+
+
+xcMC, ycMC, dxMC, dyMC, _ = ft.profile(x, dict_sig2MC['3'][:, 0], 
+                                       nbins=30, 
+                                       plot=False,
+                                       clip=True)
+
+plt.errorbar(xc, yc, xerr=dx, yerr=dy, fmt='bo', label='$\sigma^2$')
+plt.errorbar(xcMC, ycMC, xerr=dxMC, yerr=dyMC, fmt='ro', label='$\sigma^2 MC$')
+# plt.plot(x, dict_sig2['3'][:, 1] , 'b,')
+# plt.plot(x, dict_sig2MC['3'][:, 1] , 'r,')
+plt.ylim(0, 100)
+
+plt.xlabel('$1 / \sqrt{coverage}$', fontsize=15)
+plt.ylabel('$\sigma^2$', fontsize=15)
+plt.legend()
+```
+
+```{python}
+plt.plot(xc, yc / ycMC)
+plt.xlabel('$1 / \sqrt{coverage}$', fontsize=15)
+plt.ylabel('$\sigma^2 / \sigma_{MC}^2$', fontsize=15)
+```
+
+```{python}
+# def plot_sig_mean(dict_sig2, dict_sig2MC, nf_recon):
+    
+#     fig, axs = plt.subplots(1, 3)
+#     plt.subplots_adjust(wspace=0.5)
+#     axs = axs.ravel()
+
+#     for s in range(3):
+#         ax = axs[s]
+#         for irec in nf_recon: 
+            
+#             if irec == 1: 
+#                 sig_monofreq = dict_sig2MC['{}mean'.format(irec)][s]
+# #                 ax.plot(irec, sig_monofreq/sig_monofreq, 'bo', label='sig2 MC')
+#             else:
+#                 sig2 = dict_sig2['{}mean'.format(irec)][s]
+#                 sig2MC = dict_sig2MC['{}mean'.format(irec)][s]
+#                 ax.plot(irec, sig2/sig2MC, 'ro', label='sig2')
+            
+#             ax.set_title(Stokes[s])
+#             ax.set_xlabel('# of bands', fontsize=20)
+#             ax.set_ylabel(r'$\sigma^2 / \sigma^2_{MC}$', fontsize=20)
+# #             ax.legend(loc='lower right', fontsize=10)
+            
+#     return 
+```
+
+```{python}
+cov, corr = amc.get_covcorr_patch(residuals, stokesjoint=True, doplot=True)
+```
+
+```{python}
+cov.shape
+```
+
+```{python}
+plt.imshow(np.mean(corr, axis=2))#, vmin=-200, vmax=200)
+plt.colorbar()
+```
+
+### Matrix Cp_prime in coverage bins
+
+```{python}
+residuals.shape
+```
+
+```{python}
+Cp.shape
+```
+
+```{python}
+np.max(coverage_norm)
+```
+
+```{python}
+npix_patch = coverage_norm.shape[0]
+
+step = 0.300001
+for b in np.arange(0.1, 1, step):
+    print(b, b + step)
+    mybin = (coverage_norm > b) & (coverage_norm < b+step)
+    npix_bin = np.sum(mybin)
+    print('Npix in the bin:', npix_bin)
+
+    Cp_primebin = amc.Cp2Cp_prime_viaCorr(Cp[:, :, :, mybin])
+    
+    plt.figure()
+    plt.imshow(np.mean(Cp_primebin[:, :, 0, :], axis=2))
+    plt.colorbar()
+    plt.title('Cp_prime I bin coverage {} to {}'.format(b, b+step))
+
+    weighted_avbin, sig2 = amc.make_weighted_av(residuals[:, :, mybin, :], Cp_primebin, verbose=False)
+    print('sig2', sig2.shape)
+    sig2MC = np.var(weighted_avbin, axis=0)
+    if b == 0.1:
+        sig2_bin = sig2
+        sig2MC_bin = sig2MC
+    else:
+        sig2_bin = np.concatenate((sig2_bin, sig2))
+        sig2MC_bin = np.concatenate((sig2MC_bin, sig2MC))
+
+```
+
+```{python}
+x = 1 / np.sqrt(coverage_norm)
+
+xc_bin, yc_bin, dx_bin, dy_bin, _ = ft.profile(x, sig2_bin[:, 0], 
+                               nbins=15, 
+                               plot=False,
+                               clip=True)
+
+
+xcMC_bin, ycMC_bin, dxMC_bin, dyMC_bin, _ = ft.profile(x, sig2MC_bin[:, 0], 
+                                       nbins=15, 
+                                       plot=False,
+                                       clip=True)
+
+plt.errorbar(xc_bin, yc_bin, xerr=dx_bin, yerr=dy_bin, fmt='bo', label='$\sigma^2$')
+plt.errorbar(xcMC_bin, ycMC_bin, xerr=dxMC_bin, yerr=dyMC_bin, fmt='ro', label='$\sigma^2 MC$')
+# plt.plot(x, dict_sig2['3'][:, 1] , 'b,')
+# plt.plot(x, dict_sig2MC['3'][:, 1] , 'r,')
+# plt.ylim(0, 100)
+
+plt.xlabel('$1 / \sqrt{coverage}$', fontsize=15)
+plt.ylabel('$\sigma^2$', fontsize=15)
+plt.legend()
+plt.title('Profile, Weighted average done in 9 coverage bins')
+```
+
+```{python}
+plt.plot(xc_bin, yc_bin / ycMC_bin)
+plt.xlabel('$1 / \sqrt{coverage}$', fontsize=15)
+plt.ylabel('$\sigma^2 / \sigma_{MC}^2$', fontsize=15)
+plt.title('Ratio, Weighted average done in 9 coverage bins')
+```
+
+```{python}
+np.mean(yc_bin / ycMC_bin)
 ```
 
 ```{python}

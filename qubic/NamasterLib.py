@@ -8,6 +8,23 @@ __all__ = ['Namaster']
 class Namaster(object):
 
     def __init__(self, weight_mask, lmin, lmax, delta_ell, aposize=10.0, apotype='C1'):
+        """
+
+        Parameters
+        ----------
+        weight_mask: array
+        lmin: int
+            Minimal l for power spectrum.
+        lmax: int
+            Maximal l for power spectrum.
+        delta_ell: int
+
+        aposize: apodization scale in degrees.
+            10.0 by default.
+        apotype: apodization type.
+            Three methods implemented: C1, C2 and Smooth.
+            'C1' by default.
+        """
 
         lmin = int(lmin)
         lmax = int(lmax)
@@ -22,11 +39,14 @@ class Namaster(object):
         self.ells, self.weights, self.bpws = self._binning()
         self.aposize = aposize
         self.apotype = apotype
+        self.ell_binned = None
+        self.fsky = None
 
-        ### Mask
+        # ## Mask
         if weight_mask is not None:
             self.weight_mask = np.asarray(weight_mask)
-            self.mask_apo = self.get_apodized_mask(aposize=10.0, apotype='C1')
+            self.mask_apo = self.get_apodized_mask()
+            self.fsky = np.sum(self.mask_apo / np.max(self.mask_apo)) / len(self.mask_apo)
 
         self.f0 = None
         self.f2 = None
@@ -53,6 +73,7 @@ class Namaster(object):
                        lmax=self.lmax,
                        is_Dell=True)
         ell_binned = b.get_effective_ells()
+        self.ell_binned = ell_binned
 
         return ell_binned, b
 
@@ -83,14 +104,6 @@ class Namaster(object):
         Make an apodized mask. The pure-B formalism requires the mask to be
         differentiable along the edges. The 'C1' and 'C2' apodization types
         supported by mask_apodization achieve this.
-        Parameters
-        ----------
-        aposize: apodization scale in degrees.
-            10.0 by default.
-        apotype: apodization type.
-            Three methods implemented: C1, C2 and Smooth.
-            'C1' by default.
-
         """
         mask_apo = nmt.mask_apodization(self.weight_mask,
                                         aposize=self.aposize,
@@ -211,7 +224,7 @@ class Namaster(object):
 
         """
         nside = hp.npix2nside(len(map[0]))
-        ell_binned, b = self.get_binning(nside)
+        self.ell_binned, b = self.get_binning(nside)
 
         if mask_apo is None:
             mask_apo = self.mask_apo
@@ -269,7 +282,7 @@ class Namaster(object):
             for i in range(4):
                 spectra[:, i] /= (pwb[1] ** 2)
 
-        return ell_binned, spectra, w
+        return self.ell_binned, spectra, w
 
     def get_pixwin_correction(self, nside):
         pw = hp.pixwin(nside, pol=True, lmax=self.lmax)
@@ -292,26 +305,37 @@ class Namaster(object):
 
         return ells, weights, bpws
 
+    def knox_errors(self, clth):
+        dcl = np.sqrt(2. / (2 * self.ell_binned + 1) / self.fsky / self.delta_ell) * clth
+        return dcl
+
+    def knox_covariance(self, clth):
+        dcl = self.knox_errors(clth)
+        return np.diag(dcl ** 2)
+
     def get_covariance_coeff(self):
         if self.cw is None:
             cw = nmt.NmtCovarianceWorkspace()
-            cw.compute_coupling_coefficients(self.f0, self.f0, self.f0, self.f0)
+            cw.compute_coupling_coefficients(self.f0, self.f0, self.f0, self.f0, lmax=self.lmax)
+            self.cw = cw
 
     def get_covariance_TT_TT(self, cl_tt):
+        self.get_covariance_coeff()
         w00 = self.w[0]
-        n_ell = len(cl_tt)
         covar_00_00 = nmt.gaussian_covariance(self.cw,
                                               0, 0, 0, 0,  # Spins of the 4 fields
                                               [cl_tt * 0],  # TT
                                               [cl_tt * 0],  # TT
                                               [cl_tt * 0],  # TT
                                               [cl_tt * 0],  # TT
-                                              w00, wb=w00).reshape([n_ell, 1,
-                                                                    n_ell, 1])
-        return covar_00_00[:, 0, :, 0]
+                                              w00, wb=w00).reshape([len(self.ell_binned), 1,
+                                                                    len(self.ell_binned), 1])
+        covar_TT_TT = covar_00_00[:, 0, :, 0]
+        return covar_TT_TT
 
     def get_covariance_EE_EE(self, cl_ee):
-        w22 = self.w[2]
+        self.get_covariance_coeff()
+        w22 = self.w[1]
         n_ell = len(cl_ee)
         cl_eb = np.zeros(n_ell)
         cl_bb = np.zeros(n_ell)
@@ -324,30 +348,30 @@ class Namaster(object):
                                                cl_eb, cl_bb],  # EE, EB, BE, BB
                                               [cl_ee, cl_eb,
                                                cl_eb, cl_bb],  # EE, EB, BE, BB
-                                              w22, wb=w22).reshape([n_ell, 4,
-                                                                    n_ell, 4])
+                                              w22, wb=w22).reshape([len(self.ell_binned), 4,
+                                                                    len(self.ell_binned), 4])
 
         covar_EE_EE = covar_22_22[:, 0, :, 0]
-        covar_EE_EB = covar_22_22[:, 0, :, 1]
-        covar_EE_BE = covar_22_22[:, 0, :, 2]
-        covar_EE_BB = covar_22_22[:, 0, :, 3]
-        covar_EB_EE = covar_22_22[:, 1, :, 0]
-        covar_EB_EB = covar_22_22[:, 1, :, 1]
-        covar_EB_BE = covar_22_22[:, 1, :, 2]
-        covar_EB_BB = covar_22_22[:, 1, :, 3]
-        covar_BE_EE = covar_22_22[:, 2, :, 0]
-        covar_BE_EB = covar_22_22[:, 2, :, 1]
-        covar_BE_BE = covar_22_22[:, 2, :, 2]
-        covar_BE_BB = covar_22_22[:, 2, :, 3]
-        covar_BB_EE = covar_22_22[:, 3, :, 0]
-        covar_BB_EB = covar_22_22[:, 3, :, 1]
-        covar_BB_BE = covar_22_22[:, 3, :, 2]
-        covar_BB_BB = covar_22_22[:, 3, :, 3]
+        # covar_EE_EB = covar_22_22[:, 0, :, 1]
+        # covar_EE_BE = covar_22_22[:, 0, :, 2]
+        # covar_EE_BB = covar_22_22[:, 0, :, 3]
+        # covar_EB_EE = covar_22_22[:, 1, :, 0]
+        # covar_EB_EB = covar_22_22[:, 1, :, 1]
+        # covar_EB_BE = covar_22_22[:, 1, :, 2]
+        # covar_EB_BB = covar_22_22[:, 1, :, 3]
+        # covar_BE_EE = covar_22_22[:, 2, :, 0]
+        # covar_BE_EB = covar_22_22[:, 2, :, 1]
+        # covar_BE_BE = covar_22_22[:, 2, :, 2]
+        # covar_BE_BB = covar_22_22[:, 2, :, 3]
+        # covar_BB_EE = covar_22_22[:, 3, :, 0]
+        # covar_BB_EB = covar_22_22[:, 3, :, 1]
+        # covar_BB_BE = covar_22_22[:, 3, :, 2]
+        # covar_BB_BB = covar_22_22[:, 3, :, 3]
 
         return covar_EE_EE
 
     def get_covariance_BB_BB(self, cl_bb):
-        w22 = self.w[2]
+        w22 = self.w[1]
         n_ell = len(cl_bb)
         cl_eb = np.zeros(n_ell)
         cl_ee = np.zeros(n_ell)
@@ -360,23 +384,49 @@ class Namaster(object):
                                                cl_eb, cl_bb],  # EE, EB, BE, BB
                                               [cl_ee, cl_eb,
                                                cl_eb, cl_bb],  # EE, EB, BE, BB
-                                              w22, wb=w22).reshape([n_ell, 4, n_ell, 4])
+                                              w22, wb=w22)
 
-        covar_EE_EE = covar_22_22[:, 0, :, 0]
-        covar_EE_EB = covar_22_22[:, 0, :, 1]
-        covar_EE_BE = covar_22_22[:, 0, :, 2]
-        covar_EE_BB = covar_22_22[:, 0, :, 3]
-        covar_EB_EE = covar_22_22[:, 1, :, 0]
-        covar_EB_EB = covar_22_22[:, 1, :, 1]
-        covar_EB_BE = covar_22_22[:, 1, :, 2]
-        covar_EB_BB = covar_22_22[:, 1, :, 3]
-        covar_BE_EE = covar_22_22[:, 2, :, 0]
-        covar_BE_EB = covar_22_22[:, 2, :, 1]
-        covar_BE_BE = covar_22_22[:, 2, :, 2]
-        covar_BE_BB = covar_22_22[:, 2, :, 3]
-        covar_BB_EE = covar_22_22[:, 3, :, 0]
-        covar_BB_EB = covar_22_22[:, 3, :, 1]
-        covar_BB_BE = covar_22_22[:, 3, :, 2]
+        covar_22_22 = np.reshape(covar_22_22, (len(self.ell_binned), 4, len(self.ell_binned), 4))
+
+        # covar_EE_EE = covar_22_22[:, 0, :, 0]
+        # covar_EE_EB = covar_22_22[:, 0, :, 1]
+        # covar_EE_BE = covar_22_22[:, 0, :, 2]
+        # covar_EE_BB = covar_22_22[:, 0, :, 3]
+        # covar_EB_EE = covar_22_22[:, 1, :, 0]
+        # covar_EB_EB = covar_22_22[:, 1, :, 1]
+        # covar_EB_BE = covar_22_22[:, 1, :, 2]
+        # covar_EB_BB = covar_22_22[:, 1, :, 3]
+        # covar_BE_EE = covar_22_22[:, 2, :, 0]
+        # covar_BE_EB = covar_22_22[:, 2, :, 1]
+        # covar_BE_BE = covar_22_22[:, 2, :, 2]
+        # covar_BE_BB = covar_22_22[:, 2, :, 3]
+        # covar_BB_EE = covar_22_22[:, 3, :, 0]
+        # covar_BB_EB = covar_22_22[:, 3, :, 1]
+        # covar_BB_BE = covar_22_22[:, 3, :, 2]
         covar_BB_BB = covar_22_22[:, 3, :, 3]
 
         return covar_BB_BB
+
+    def get_covariance_TE_TE(self, cl_te):
+        self.get_covariance_coeff()
+        w02 = self.w[2]
+        n_ell = len(cl_te)
+        cl_tt = np.zeros(n_ell)
+        cl_bb = np.zeros(n_ell)
+        cl_ee = np.zeros(n_ell)
+        cl_eb = np.zeros(n_ell)
+        cl_tb = np.zeros(n_ell)
+        covar_02_02 = nmt.gaussian_covariance(self.cw, 0, 2, 0, 2,  # Spins of the 4 fields
+                                              [cl_tt],  # TT
+                                              [cl_te, cl_tb],  # TE, TB
+                                              [cl_te, cl_tb],  # ET, BT
+                                              [cl_ee, cl_eb,
+                                               cl_eb, cl_bb],  # EE, EB, BE, BB
+                                              w02, wb=w02)
+        covar_02_02 = np.reshape(covar_02_02, (len(self.ell_binned), 2, len(self.ell_binned), 2))
+        covar_TE_TE = covar_02_02[:, 0, :, 0]
+        # covar_TE_TB = covar_02_02[:, 0, :, 1]
+        # covar_TB_TE = covar_02_02[:, 1, :, 0]
+        # covar_TB_TB = covar_02_02[:, 1, :, 1]
+
+        return covar_TE_TE

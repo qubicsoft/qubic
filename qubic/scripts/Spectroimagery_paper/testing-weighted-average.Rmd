@@ -45,8 +45,8 @@ plt.rcParams['figure.figsize'] = (5, 5)
 ## With a uniform coverage
 
 ```{python}
-npix = 500
-nreals = 10
+npix = 2
+nreals = 10000
 std = 2
 maxfrec = 10
 
@@ -65,8 +65,7 @@ for nfrec in range(1, maxfrec):
     plt.title('Cp')
     
     # Average subbands   
-#     weighted_av = np.mean(xn_noisy, axis=1)
-    weighted_av, sig2 = amc.make_weighted_av(xn_noisy, Cp_prime, verbose=False)
+    weighted_av, sig2 = amc.make_weighted_av(xn_noisy, Cp, verbose=False)
     print(weighted_av.shape)
     print(sig2.shape)
     
@@ -90,7 +89,7 @@ nsub = np.arange(1, maxfrec)
 plt.figure(figsize=(12, 8))
 ax = plt.gca()
 
-for p in range(npix):
+for p in range(2):
     color = next(ax._get_lines.prop_cycler)['color']
     plt.plot(nsub, allsig2MC[:, p], 'o', color=color, label='pix {}'.format(p))
     plt.plot(nsub, allsig2[:, p], color=color, label='sig2')
@@ -124,7 +123,7 @@ for nfrec in range(1, maxfrec):
     Cp_prime = amc.Cp2Cp_prime(Cp, verbose=False)
     
     # Average subbands   
-    weighted_av, sig2 = amc.make_weighted_av(xn_noisy, Cp, verbose=False)
+    weighted_av, sig2 = amc.make_weighted_av(xn_noisy, Cp_prime, verbose=False)
     print(weighted_av.shape)
     print(sig2)
     

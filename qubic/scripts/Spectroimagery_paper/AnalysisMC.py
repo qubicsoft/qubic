@@ -1,5 +1,4 @@
 from __future__ import division, print_function
-import sys
 import healpy as hp
 import numpy as np
 from scipy import interpolate
@@ -8,8 +7,6 @@ import matplotlib.pyplot as plt
 import ReadMC as rmc
 
 import qubic
-from qubic import apodize_mask
-from qubic import Xpol
 
 from qubicpack.utilities import Qubic_DataDir
 
@@ -474,35 +471,28 @@ def covariance_IQU_subbands(allmaps, stokesjoint=False):
     """
     allmean, allcov = [], []
     for isub in range(len(allmaps)):
-        nsub = sh[1]  # Number of subbands
 
         sh = allmaps[isub].shape
+        nsub = sh[1]  # Number of subbands
         mean = np.zeros(3 * nsub)
         cov = np.zeros((3 * nsub, 3 * nsub))
 
-        if not stokesjoint:
-            for iqu in range(3):
-                for band in range(nsub):
-                    i = 3 * band + iqu
-                    map_i = allmaps[:, band, :, iqu]
-                    mean[i] = np.mean(map_i)
-                    for iqu2 in range(3):
-                        for band2 in range(nsub):
-                            j = 3 * band2 + iqu2
-                            map_j = allmaps[:, band2, :, iqu2]
-                            cov[i, j] = np.mean((map_i - np.mean(map_i)) * (map_j - np.mean(map_j)))
-
-        elif stokesjoint:
-            for iqu in range(3):
-                for band in range(nsub):
+        for iqu in range(3):
+            for band in range(nsub):
+                if stokesjoint:
                     i = 3 * iqu + band
-                    map_i = allmaps[:, band, :, iqu]
-                    mean[i] = np.mean(map_i)
-                    for iqu2 in range(3):
-                        for band2 in range(nsub):
+                else:
+                    i = 3 * band + iqu
+                map_i = allmaps[:, band, :, iqu]
+                mean[i] = np.mean(map_i)
+                for iqu2 in range(3):
+                    for band2 in range(nsub):
+                        if stokesjoint:
                             j = 3 * iqu2 + band2
-                            map_j = allmaps[:, band2, :, iqu2]
-                            cov[i, j] = np.mean((map_i - np.mean(map_i)) * (map_j - np.mean(map_j)))
+                        else:
+                            j = 3 * band2 + iqu2
+                        map_j = allmaps[:, band2, :, iqu2]
+                        cov[i, j] = np.mean((map_i - np.mean(map_i)) * (map_j - np.mean(map_j)))
 
         allmean.append(mean)
         allcov.append(cov)
@@ -573,7 +563,8 @@ def get_Cp(patch, nfrecon, verbose=True, doplot=True):
     # The full one
     covariance, _ = get_covcorr_patch(patch, stokesjoint=True, doplot=doplot)
 
-    if verbose: print('covariance.shape =', covariance.shape)
+    if verbose:
+        print('covariance.shape =', covariance.shape)
 
     # Cut the covariance matrix for each Stokes parameter
     Cp = np.empty((irec, irec, 3, npix_patch))
@@ -680,7 +671,8 @@ def Cp2Cp_prime(Cp, verbose=True):
     # We can now average the matrices over the pixels
     N = np.mean(Np, axis=3)
 
-    if verbose: print('N shape:', N.shape)
+    if verbose:
+        print('N shape:', N.shape)
 
     # We re-multiply N by the first term
     Cp_prime = np.empty_like(Cp)
@@ -688,9 +680,11 @@ def Cp2Cp_prime(Cp, verbose=True):
         for ipix in range(npix_patch):
             Cp_prime[:, :, istokes, ipix] = Cp[0, 0, istokes, ipix] * N[:, :, istokes]
 
-    if verbose: print('Cp_prime.shape =', Cp_prime.shape)
+    if verbose:
+        print('Cp_prime.shape =', Cp_prime.shape)
 
     return Cp_prime
+
 
 def Cp2Cp_prime_viaCorr(Cp, verbose=True):
     """
@@ -721,7 +715,8 @@ def Cp2Cp_prime_viaCorr(Cp, verbose=True):
     # We can now average the correlation matrices over the pixels
     N = np.mean(Np, axis=3)
 
-    if verbose: print('N shape:', N.shape)
+    if verbose:
+        print('N shape:', N.shape)
 
     # We re-multiply N to get back to covariance matrices
     Cp_prime = np.empty_like(Cp)
@@ -732,9 +727,11 @@ def Cp2Cp_prime_viaCorr(Cp, verbose=True):
                     coeff = np.sqrt(Cp[i, i, istokes, ipix] * Cp[j, j, istokes, ipix])
                     Cp_prime[i, j, istokes, ipix] = N[i, j, istokes] * coeff
 
-    if verbose: print('Cp_prime.shape =', Cp_prime.shape)
+    if verbose:
+        print('Cp_prime.shape =', Cp_prime.shape)
 
     return Cp_prime
+
 
 def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
     """
@@ -885,103 +882,3 @@ def get_mean_cov(vals, invcov):
     AtNiA_inv = 1. / np.sum(invcov)
     mean_cov = AtNid * AtNiA_inv
     return mean_cov
-
-
-# ============ Functions to get auto and cross spectra from maps ===========#
-def get_xpol(seenmap, ns, lmin=20, delta_ell=20, apodization_degrees=5.):
-    """
-    Returns a Xpoll object to get spectra, the bin used and the pixel window function.
-    """
-    # Create a mask
-    mymask = apodize_mask(seenmap, apodization_degrees)
-
-    # Create XPol object
-    lmax = 2 * ns
-    xpol = Xpol(mymask, lmin, lmax, delta_ell)
-    ell_binned = xpol.ell_binned
-    # Pixel window function
-    pw = hp.pixwin(ns)
-    pwb = xpol.bin_spectra(pw[:lmax + 1])
-
-    return xpol, ell_binned, pwb
-
-
-def allcross_par(xpol, allmaps, silent=False, verbose=1):
-    num_cores = multiprocessing.cpu_count()
-    nmaps = len(allmaps)
-    nbl = len(xpol.ell_binned)
-    autos = np.zeros((nmaps, 6, nbl))
-    ncross = nmaps * (nmaps - 1) / 2
-    cross = np.zeros((ncross, 6, nbl))
-    jcross = 0
-    if not silent:
-        print('Computing spectra:')
-
-    # Auto spectra ran in //
-    if not silent:
-        print('  Doing All Autos ({}):'.format(nmaps))
-    results_auto = Parallel(n_jobs=num_cores, verbose=verbose)(
-        delayed(xpol.get_spectra)(allmaps[i]) for i in range(nmaps))
-    for i in range(nmaps):
-        autos[i, :, :] = results_auto[i][1]
-
-    # Cross Spectra ran in // - need to prepare indices in a global variable
-    if not silent:
-        print('  Doing All Cross ({}):'.format(ncross))
-    global cross_indices
-    cross_indices = np.zeros((2, ncross), dtype=int)
-    for i in range(nmaps):
-        for j in range(i + 1, nmaps):
-            cross_indices[:, jcross] = np.array([i, j])
-            jcross += 1
-    results_cross = Parallel(n_jobs=num_cores, verbose=verbose)(
-        delayed(xpol.get_spectra)(allmaps[cross_indices[0, i]], allmaps[cross_indices[1, i]]) for i in range(ncross))
-    for i in range(ncross):
-        cross[i, :, :] = results_cross[i][1]
-
-    if not silent:
-        sys.stdout.write(' Done \n')
-        sys.stdout.flush()
-
-    # The error-bars are absolutely incorrect if calculated as the following...
-    # There is an analytical estimate in Xpol paper.
-    # See if implemented in the gitlab xpol from Tristram instead of in qubic.xpol...
-    m_autos = np.mean(autos, axis=0)
-    s_autos = np.std(autos, axis=0) / np.sqrt(nmaps)
-    m_cross = np.mean(cross, axis=0)
-    s_cross = np.std(cross, axis=0) / np.sqrt(ncross)
-    return m_autos, s_autos, m_cross, s_cross
-
-
-def get_maps_cl(frec, fconv=None, lmin=20, delta_ell=40, apodization_degrees=5.):
-    mrec, resid, seenmap = get_maps_residuals(frec, fconv=fconv)
-    sh = np.shape(mrec)
-    print(sh, np.shape(resid))
-    nbsub = sh[1]
-    ns = hp.npix2nside(sh[2])
-
-    from qubic import apodize_mask
-    mymask = apodize_mask(seenmap, apodization_degrees)
-
-    # Create XPol object
-    from qubic import Xpol
-    lmax = 2 * ns
-    xpol = Xpol(mymask, lmin, lmax, delta_ell)
-    ell_binned = xpol.ell_binned
-    nbins = len(ell_binned)
-    # Pixel window function
-    pw = hp.pixwin(ns)
-    pwb = xpol.bin_spectra(pw[:lmax + 1])
-
-    # Calculate all crosses and auto
-    m_autos = np.zeros((nbsub, 6, nbins))
-    s_autos = np.zeros((nbsub, 6, nbins))
-    m_cross = np.zeros((nbsub, 6, nbins))
-    s_cross = np.zeros((nbsub, 6, nbins))
-    fact = ell_binned * (ell_binned + 1) / 2. / np.pi
-    for isub in range(nbsub):
-        m_autos[isub, :, :], s_autos[isub, :, :], m_cross[isub, :, :], s_cross[isub, :, :] = \
-            allcross_par(xpol, mrec[:, isub, :, :], silent=False, verbose=0)
-
-    return mrec, resid, seenmap, ell_binned, m_autos * fact / pwb ** 2, \
-           s_autos * fact / pwb ** 2, m_cross * fact / pwb ** 2, s_cross * fact / pwb ** 2

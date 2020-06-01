@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -48,6 +48,8 @@ d['nside']=256
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 print(center)
 
+d['nf_sub'] = 1
+d['Multiband'] = False
 print(d['nf_sub'])
 
 # Restore a QUBIC typical coverage
@@ -72,40 +74,107 @@ delta_ell = 25
 
 okpix = cov > np.max(cov) * 0.1
 
-### Flat weighting
-maskpix = np.zeros(12*d['nside']**2)
+# Mask using flat weighting
+npix = 12 * d['nside']**2
+maskpix = np.zeros(npix)
 maskpix[okpix] = 1
 
 Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
 ell_bins, b = Namaster.get_binning(d['nside'])
 mask_apo = Namaster.mask_apo
 
-nbmc = 100
+nbmc = 10
 allXcls = np.zeros((nbmc, len(ell_bins), 4))
-w=None
+w = None
 
 for imc in range(nbmc):
     print('MC iteration {} over {}'.format(imc, nbmc))
-    ### Create two fake QUBIC observations with same CMB and different noise
-    ### At each MC step the CMB will be different
+    # Create two fake QUBIC observations with same CMB and different noise
+    # At each MC step the CMB will be different
     seed = None
     sky_config = {'cmb': seed}
     Qubic_sky = qss.Qubic_sky(sky_config, d)
+    
     nmaps = 2
-    all_maps = np.zeros((nmaps, 12*d['nside']**2, 3))
+    all_maps = np.zeros((nmaps, npix, 3))
 
-    ### Noisy maps
+    # Noisy maps
     for i in range(nmaps):
-        all_maps[i,:,:] = Qubic_sky.get_partial_sky_maps_withnoise(cov, sigma_sec=sigma_sec)
+        all_maps[i, :, :] = Qubic_sky.get_partial_sky_maps_withnoise(cov, sigma_sec=sigma_sec)
 
-    ### Cross-Cls
-    leff, allXcls[imc, :,:], w = Namaster.get_spectra(all_maps[0,:,:].T, mask_apo, 
-                                                      map2=all_maps[1,:,:].T,
-                                                      purify_e=False, purify_b=True, w=w, 
+    # Cross-Cls
+    leff, allXcls[imc, :, :], w = Namaster.get_spectra(all_maps[0, :, :].T, mask_apo, 
+                                                      map2=all_maps[1, :, :].T,
+                                                      purify_e=False, 
+                                                      purify_b=True, 
+                                                      w=w, 
                                                       verbose=False,
                                                       beam_correction=Qubic_sky.instrument['beams'])
         
 
+```
+
+### Averaging the Cross-spectra
+
+```{python}
+# Doing a simple mean 
+mean_XCls = np.mean(allXcls, axis=0)
+std_XCls = np.std(allXcls, axis=0)
+
+clnames = ['TT', 'EE', 'BB', 'TE']
+
+rc('figure', figsize=(12, 8))
+plt.figure()
+for i in range(4):
+    plt.subplot(2, 2, i+1)
+    plt.errorbar(leff, mean_XCls[:, i], yerr=std_XCls[:, i] * np.sqrt(2),
+                    marker='o', linestyle='none')
+    plt.xlabel('$\\ell$')
+    plt.ylabel('$D_\\ell$')
+    plt.title(clnames[i])
+plt.tight_layout()
+```
+
+```{python}
+# Doing a mean that accounts for correlations
+
+input_Dl = Qubic_sky.input_cmb_spectra
+
+cl_tt = input_Dl[:lmax+1, 0]
+cl_ee = input_Dl[:lmax+1, 1]
+cl_bb = input_Dl[:lmax+1, 2]
+cl_te = input_Dl[:lmax+1, 3]
+
+covar_TT_TT = Namaster.get_covariance_TT_TT(cl_tt)
+covar_EE_EE = Namaster.get_covariance_EE_EE(cl_ee)
+covar_BB_BB = Namaster.get_covariance_BB_BB(cl_bb)
+covar_TE_TE = Namaster.get_covariance_TE_TE(cl_te)
+
+plt.figure()
+plt.subplot(141)
+plt.imshow(covar_TT_TT)
+plt.title('TT TT')
+plt.subplot(142)
+plt.imshow(covar_EE_EE)
+plt.title('EE EE')
+plt.subplot(143)
+plt.imshow(covar_BB_BB)
+plt.title('BB BB')
+plt.subplot(144)
+plt.imshow(covar_TE_TE)
+plt.title('TE TE')
+
+```
+
+```{python}
+len(Namaster.ell_binned)
+```
+
+### Knox formula
+
+```{python}
+knox_dcls = Namaster.knox_errors(mean_XCls[:, 0])
+knox_dcls.shape
 ```
 
 ```{python}

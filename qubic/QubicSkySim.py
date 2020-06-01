@@ -11,6 +11,8 @@ from pysm import utils
 from pylab import *
 from scipy.optimize import curve_fit
 
+import camb.correlations as cc
+
 import qubic
 from qubic import camb_interface as qc
 from qubic import fibtools as ft
@@ -355,6 +357,24 @@ class Qubic_sky(sky):
 
         return maps + self.noisemaps
 
+    def cth_funct(self, x, pars):
+        return pars[0] * np.sin(x/pars[1]) * exp(-x/pars[2])
+
+    def random_fullsky_correlated(self, npix, white=False):
+        if white:
+            return np.random.randn(npix)
+
+        params_fitted_on_200k_NERSC_sim = [0.46492736, 2.14506569, 4.94262576]
+
+        lmax = 1024
+        x, w = np.polynomial.legendre.leggauss(lmax+1)
+        xdeg = np.degrees(np.arccos(x))
+        cth = self.cth_funct(xdeg, params_fitted_on_200k_NERSC_sim)
+        allcth = np.zeros((len(x), 4))
+        allcth[:,0] = cth
+        cl = cc.corr2cl(allcth, x,  w, lmax)[:,0]/2/np.pi + 1
+        return hp.smoothing(np.random.randn(npix), beam_window=cl, verbose=False)
+
     def create_noise_maps(self, sigma_sec, coverage, covcut =0.1,
                             Nyears=3, verbose=False, seed=None, effective_variance_invcov=None):
         """
@@ -394,9 +414,12 @@ class Qubic_sky(sky):
         noise_maps = np.zeros((len(coverage), 3))
         if seed is not None:
             np.random.seed(seed)
-        noise_maps[seenpix, 0] = np.random.randn(npix) * thnoise[seenpix]
-        noise_maps[seenpix, 1] = np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
-        noise_maps[seenpix, 2] = np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
+        # noise_maps[seenpix, 0] = np.random.randn(npix) * thnoise[seenpix]
+        # noise_maps[seenpix, 1] = np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
+        # noise_maps[seenpix, 2] = np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
+        noise_maps[seenpix, 0] = self.random_fullsky_correlated(12*self.nside**2)[seenpix] * thnoise[seenpix]
+        noise_maps[seenpix, 1] = self.random_fullsky_correlated(12*self.nside**2)[seenpix] * thnoise[seenpix] * np.sqrt(2)
+        noise_maps[seenpix, 2] = self.random_fullsky_correlated(12*self.nside**2)[seenpix] * thnoise[seenpix] * np.sqrt(2)
         return noise_maps
 
     def theoretical_noise_maps(self, sigma_sec, coverage, Nyears=3, verbose=False):
@@ -453,7 +476,7 @@ def random_string(nchars):
     str = "".join(lst)
     return (str)
 
-def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='', norm=False, allstokes=False):
+def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='', norm=False, allstokes=False, fitlim=None):
     seenpix = cov > (covcut*np.max(cov))
     covnorm = cov / np.max(cov)
    
@@ -476,6 +499,9 @@ def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='
     if fit:
         mymodel = lambda x, a, b, c, d, e: (a + b*x + c*np.exp(-d*(x-e)))#/(a+b+c*np.exp(-d*(1-e)))
         ok = isfinite(myY)
+        if fitlim is not None:
+            print('Clipping fit from {} to {}'.format(fitlim[0], fitlim[1]))
+            ok = ok & (xx >= fitlim[0]) & (xx <= fitlim[1])
         myfit = curve_fit(mymodel, xx[ok]**2, myY[ok], p0=[0.5,0.16, 0.3,2,1],maxfev=100000, ftol=1e-7)
         plot(xx**2, mymodel(xx**2, *myfit[0]),  label=label+' Fit', color=p[0].get_color())
         invcov_samples = np.linspace(1, 15, 1000)

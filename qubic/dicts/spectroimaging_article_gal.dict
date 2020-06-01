@@ -46,11 +46,11 @@ summer=False
 ############################################# Pointing ##############################
 
 # QUBIC field
-RA_center= 0. #deg
-DEC_center=-57. #deg
+#RA_center= 0. #deg
+#DEC_center=-57. #deg
 # Galactic center
-#RA_center = 266.41 #deg
-#DEC_center = -28.94 #deg
+RA_center = 266.41 #deg
+DEC_center = -28.94 #deg
 
 period=1. #s
 date_obs='2016-01-01 00:00:00'

@@ -7,9 +7,13 @@ import shutil
 
 import healpy as hp
 import numpy as np
+import pylab as plt
 
 from pysimulators import FitsArray
+from qubic import QubicSkySim as qss
 import qubic
+import pysm
+import pysm.units as u
 
 from qubicpack.utilities import Qubic_DataDir
 
@@ -36,12 +40,13 @@ if 'QUBIC_DATADIR' in os.environ:
 else:
     raise NameError('You should define an environment variable QUBIC_DATADIR')
 
-global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+#global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+global_dir = '/global/homes/m/mmgamboa/qubicsoft/qubic'
 if sys.argv[4].lower() == 'no':
     dictfilename = global_dir + '/dicts/spectroimaging.dict'
 else:
-    dictfilename = global_dir + '/dicts/' + sys.argv[4]
-
+    #dictfilename = global_dir + 'dicts' + sys.argv[4]
+    dictfilename = sys.argv[4]
 dictmaps = global_dir + '/scripts/Spectroimagery_paper/maps/'
 
 # Repository for output files
@@ -59,9 +64,6 @@ name = today + '_' + sys.argv[2]
 # Number of noise realisations
 nreals = int(sys.argv[3])
 
-# Option multFactor x QU 
-multFactor = int(sys.argv[5])
-
 # Get the dictionary
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
@@ -72,6 +74,8 @@ for nf_sub_rec in d['nf_recon']:
     if nf_sub % nf_sub_rec != 0:
         raise ValueError('nf_sub/nf_sub_rec must be an integer.')
 
+# Center
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 # Check that we do one simulation with only one reconstructed subband
 if d['nf_recon'][0] != 1:
     raise ValueError('You should do one simulation without spectroimaging as a reference.')
@@ -84,9 +88,14 @@ if rank == 0:
 # Done only on rank0 and shared after between all ranks
 if rank == 0:
     t0 = time.time()
-    x0 = FitsArray(dictmaps + 'nf_sub={}/nside{}_nfsub{}.fits'.format(nf_sub, d['nside'], nf_sub))
-    print('Input Map with shape:', np.shape(x0))
-
+    # Make a sky using PYSM
+    seed = 42
+    sky_config = {'cmb': seed, 'dust': 'd1'}
+    Qubic_sky = qss.Qubic_sky(sky_config, d)
+    x0 = Qubic_sky.get_simple_sky_map()
+    print('Input map with shape:', x0.shape)
+    hp.mollview(x0[2,:,0], rot=center)
+    plt.savefig('test-cmbdust')
     if x0.shape[1] % (12 * d['nside'] ** 2) == 0:
         print('Good size')
     else:
@@ -94,14 +103,6 @@ if rank == 0:
         for i in range(d['nf_sub']):
             for j in range(3):
                 y0[i, :, j] = hp.ud_grade(x0[i, :, j], d['nside'])
-
-    # Put I = 0
-    # x0[:, :, 0] = 0.
-
-    # Multiply Q, U maps
-    x0[:, :, 1] *= multFactor
-    x0[:, :, 2] *= multFactor
-
 else:
     t0 = time.time()
     x0 = None
@@ -120,6 +121,7 @@ if rank == 0:
 # =============== Noiseless ===================== #
 
 d['noiseless'] = True
+
 t1 = time.time()
 TOD_noiseless, maps_convolved_noiseless = si.create_TOD(d, p, x0)
 
@@ -152,13 +154,10 @@ for i, nf_sub_rec in enumerate(d['nf_recon']):
         print('************* Map-Making on {} sub-map(s) (noiseless). DONE *************'
               .format(nf_sub_rec))
 
-        name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_nep{5}_nside{6}.fits'.format(d['nf_sub'],
-                                                                                                  d['nf_recon'][i],
-                                                                                                  d['noiseless'],
-                                                                                                  d['npointings'],
-                                                                                                  d['tol'],
-                                                                                                  d['detector_nep'],
-                                                                                                  d['nside'])
+        name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}.fits'.format(d['nf_sub'],
+                                                                        d['nf_recon'][i],
+                                                                        d['noiseless'],
+                                                                        d['npointings'])
         rmc.save_simu_fits(maps_recon_noiseless, cov_noiseless, nus, nus_edge, maps_convolved_noiseless,
                            out_dir, name + name_map)
 
@@ -197,19 +196,11 @@ for j in range(nreals):
             print('************* Map-Making on {} sub-map(s) - Realisation {} - DONE *************'
                   .format(nf_sub_rec, j))
 
-            name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_tol{4}_nep{5}_nside{6}_{7}.fits'.format(d['nf_sub'],
-                                                                                                          d['nf_recon'][
-                                                                                                              i],
-                                                                                                          d[
-                                                                                                              'noiseless'],
-                                                                                                          d[
-                                                                                                              'npointings'],
-                                                                                                          d['tol'],
-                                                                                                          d[
-                                                                                                              'detector_nep'],
-                                                                                                          d['nside'],
-                                                                                                          str(j).zfill(
-                                                                                                              2))
+            name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}_{4}.fits'.format(d['nf_sub'],
+                                                                                   d['nf_recon'][i],
+                                                                                   d['noiseless'],
+                                                                                   d['npointings'],
+                                                                                   str(j).zfill(2) )
             rmc.save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved, out_dir, name + name_map)
 
         comm.Barrier()

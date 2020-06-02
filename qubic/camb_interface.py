@@ -12,6 +12,7 @@ import pysm
 import pysm.units as u
 from pysm import utils
 import camb
+import camb.correlations as cc
 import pickle
 
 import qubic
@@ -137,4 +138,47 @@ def get_Dl_fromlib(lvals, r, lib=None, specindex=None, unlensed=False):
 
 
 	return myspec, myspecunlensed
+
+def ctheta_2_cell(theta_deg, ctheta, lmax, pol=False):
+	x, w = np.polynomial.legendre.leggauss(lmax+1)
+	xdeg = np.degrees(np.arccos(x))
+
+	myctheta = ctheta.copy()
+	myctheta[0] = 0
+	allctheta = np.zeros((len(x), 4))
+	allctheta[:,0] = np.interp(xdeg, theta_deg, myctheta)
+	clth = cc.corr2cl(allctheta, x,  w, lmax)
+	lll = np.arange(lmax+1)
+
+	return lll, clth[:,0]+ctheta[0]*2*np.pi
+
+
+
+def cell_2_ctheta(cell, theta_deg=None, pol=False):
+	lmax = len(cell)-1
+	x, w = np.polynomial.legendre.leggauss(lmax+1)
+
+	allcell = np.zeros((len(cell), 4))
+	allcell[:,0] = cell-cell[0]
+	ctheta = cc.cl2corr(allcell, x, lmax=lmax)[:,0]
+
+	### Case x = 1
+	x = np.append(x,1)
+	ell = np.arange(lmax+1)
+	ctheta = np.append(ctheta, cell[0]/(2*np.pi))
+	xdeg = np.degrees(np.arccos(x))
+
+
+	if theta_deg is None:
+		#### put x and ctheta in reverse order to have increasing theta
+		return xdeg[::-1], ctheta[::-1]
+	else:
+		return theta_deg, np.interp(theta_deg, xdeg[::-1], ctheta[::-1])
+
+
+
+
+
+
+
 

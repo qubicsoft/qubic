@@ -681,11 +681,11 @@ legend()
 ```{python}
 from qubic import NamasterLib as nam
 reload(qss)
-nbmc = 100
+nbmc = 10
 signoise = 75.   # initial was 75.
 
 # Create a Namaster object
-lmin = 15
+lmin = 10
 lmax = 2 * d['nside'] - 1
 delta_ell = 60
 covcut = 0.2
@@ -720,46 +720,6 @@ legend()
 subplot(1,2,2)
 plot(leff, scl_noise_qubic[:,2] / scl_b3k[:,2])
 plot(leff, leff*0+1,'k:')
-
-```
-
-```{python}
-
-```
-
-```{python}
-# qubicnoiseA = Qubic_sky.create_noise_maps(signoise, cov, effective_variance_invcov=fit_n200k)
-# print(np.shape(qubicnoiseA))
-# hp.mollview(qubicnoiseA[:,0], sub=(2,3,1), min=-10, max=10)
-# hp.mollview(qubicnoiseA[:,1], sub=(2,3,2), min=-10, max=10)
-# hp.mollview(qubicnoiseA[:,2], sub=(2,3,3), min=-10, max=10)
-# hp.gnomview(qubicnoiseA[:,0], sub=(2,3,4), min=-10, max=10, rot=center, reso=15)
-# hp.gnomview(qubicnoiseA[:,1], sub=(2,3,5), min=-10, max=10, rot=center, reso=15)
-# hp.gnomview(qubicnoiseA[:,2], sub=(2,3,6), min=-10, max=10, rot=center, reso=15)
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
 
 ```
 
@@ -899,7 +859,7 @@ for lmin in alllmin:
                 NamasterCov = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
                 alloutputs_cov = run_mc(nbmc, NamasterCov, d, signoise, cov, fit_n200k)           
                 with open(directory+'rescov_{}_{}_{}.pickle'.format(lmin, delta_ell, covcut), 'wb') as handle:
-                                    pickle.dump(alloutputs, handle)
+                                    pickle.dump(alloutputs_cov, handle)
             else:
                 print('Already Done for Cov Weighting')
             

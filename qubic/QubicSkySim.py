@@ -16,6 +16,7 @@ import camb.correlations as cc
 import qubic
 from qubic import camb_interface as qc
 from qubic import fibtools as ft
+from qubic.utils import progress_bar
 
 
 __all__ = ['sky', 'Qubic_sky']
@@ -541,7 +542,76 @@ def get_angular_profile(maps, thmax=25, nbins=20, label='', center=np.array([316
     legend(fontsize=fontsize)
     return xx, avg
 
+def correct_maps_rms(maps, cov, effective_variance_invcov):
+    okpix = cov > 0
+    newmaps = maps*0
+    correction = np.interp(np.max(cov)/cov[okpix], effective_variance_invcov[0,:], effective_variance_invcov[1,:])
+    for s in range(3):
+        newmaps[okpix,s] = maps[okpix,s] / np.sqrt(correction) * np.sqrt(cov[okpix]/np.max(cov))
+    return newmaps
 
+def map_corr_neighbtheta(themap_in, ipok_in, thetamin, thetamax, nbins, degrade=None, verbose=True):
+    if degrade is None:
+        themap = themap_in.copy()
+        ipok = ipok_in.copy()
+    else:
+        themap = hp.ud_grade(themap_in, degrade)
+        mapbool = themap_in < -1e30
+        mapbool[ipok_in] = True
+        mapbool = hp.ud_grade(mapbool, degrade)
+        ip = np.arange(12*degrade**2)
+        ipok = ip[mapbool]
+    rthmin = np.radians(thetamin)
+    rthmax = np.radians(thetamax)
+    thvals = np.linspace(rthmin, rthmax, nbins+1)
+    ns = hp.npix2nside(len(themap))
+    thesum = np.zeros(nbins)
+    thecount = np.zeros(nbins)
+    if verbose: bar = progress_bar(len(ipok),'Pixels')
+    for i in range(len(ipok)):
+        if verbose: bar.update()
+        valthis = themap[ipok[i]]
+        v = hp.pix2vec(ns, ipok[i])
+        #ipneighb_inner = []
+        ipneighb_inner = list(hp.query_disc(ns, v, np.radians(thetamin)))
+        for k in range(nbins): 
+            thmin = thvals[k]
+            thmax = thvals[k+1]
+            ipneighb_outer = list(hp.query_disc(ns, v, thmax))
+            ipneighb = ipneighb_outer.copy()
+            for l in ipneighb_inner: ipneighb.remove(l)
+            valneighb = themap[ipneighb]
+            thesum[k] += np.sum(valthis * valneighb)
+            thecount[k] += len(valneighb)
+            ipneighb_inner = ipneighb_outer.copy()
+            
+    corrfct = thesum / thecount
+    return np.degrees(thvals[:-1]+thvals[1:])/2, corrfct
+
+
+def ctheta_parts(themap, ipok, thetamin, thetamax, nbinstot, nsplit=4, degrade_init=None, verbose=True):
+    allthetalims = np.linspace(thetamin, thetamax, nbinstot+1)
+    thmin = allthetalims[:-1]
+    thmax = allthetalims[1:]
+    idx = np.arange(nbinstot)//(nbinstot//nsplit)
+    if degrade_init is None:
+        nside_init = hp.npix2nside(len(themap))
+    else:
+        nside_init = degrade_init
+    nside_part = nside_init // (2**idx)
+    thall = (thmin+thmax)/2
+    cthall = np.zeros(nbinstot)
+    for k in range(nsplit):
+        thispart = idx==k
+        mythmin = np.min(thmin[thispart])
+        mythmax = np.max(thmax[thispart])
+        mynbins = nbinstot//nsplit
+        mynside = nside_init // (2**k)
+        if verbose: print('Doing {0:3.0f} bins between {1:5.2f} and {2:5.2f} deg at nside={3:4.0f}'.format(mynbins, mythmin, mythmax, mynside))
+        myth, mycth = map_corr_neighbtheta(themap, ipok, mythmin, mythmax, mynbins, degrade=mynside, verbose=verbose)
+        cthall[thispart] = mycth 
+    return thall, cthall
+        
 
 
 

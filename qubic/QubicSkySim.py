@@ -11,9 +11,12 @@ from pysm import utils
 from pylab import *
 from scipy.optimize import curve_fit
 
+import camb.correlations as cc
+
 import qubic
 from qubic import camb_interface as qc
 from qubic import fibtools as ft
+from qubic.utils import progress_bar
 
 
 __all__ = ['sky', 'Qubic_sky']
@@ -355,6 +358,24 @@ class Qubic_sky(sky):
 
         return maps + self.noisemaps
 
+    def cth_funct(self, x, pars):
+        return pars[0] * np.sin(x/pars[1]) * exp(-x/pars[2])
+
+    def random_fullsky_correlated(self, npix, white=False):
+        if white:
+            return np.random.randn(npix)
+
+        params_fitted_on_200k_NERSC_sim = [0.46492736, 2.14506569, 4.94262576]
+
+        lmax = 1024
+        x, w = np.polynomial.legendre.leggauss(lmax+1)
+        xdeg = np.degrees(np.arccos(x))
+        cth = self.cth_funct(xdeg, params_fitted_on_200k_NERSC_sim)
+        allcth = np.zeros((len(x), 4))
+        allcth[:,0] = cth
+        cl = cc.corr2cl(allcth, x,  w, lmax)[:,0]/2/np.pi + 1
+        return hp.smoothing(np.random.randn(npix), beam_window=cl, verbose=False)
+
     def create_noise_maps(self, sigma_sec, coverage, covcut =0.1,
                             Nyears=3, verbose=False, seed=None, effective_variance_invcov=None):
         """
@@ -394,9 +415,12 @@ class Qubic_sky(sky):
         noise_maps = np.zeros((len(coverage), 3))
         if seed is not None:
             np.random.seed(seed)
-        noise_maps[seenpix, 0] = np.random.randn(npix) * thnoise[seenpix]
-        noise_maps[seenpix, 1] = np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
-        noise_maps[seenpix, 2] = np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
+        # noise_maps[seenpix, 0] = np.random.randn(npix) * thnoise[seenpix]
+        # noise_maps[seenpix, 1] = np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
+        # noise_maps[seenpix, 2] = np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
+        noise_maps[seenpix, 0] = self.random_fullsky_correlated(12*self.nside**2)[seenpix] * thnoise[seenpix]
+        noise_maps[seenpix, 1] = self.random_fullsky_correlated(12*self.nside**2)[seenpix] * thnoise[seenpix] * np.sqrt(2)
+        noise_maps[seenpix, 2] = self.random_fullsky_correlated(12*self.nside**2)[seenpix] * thnoise[seenpix] * np.sqrt(2)
         return noise_maps
 
     def theoretical_noise_maps(self, sigma_sec, coverage, Nyears=3, verbose=False):
@@ -453,7 +477,7 @@ def random_string(nchars):
     str = "".join(lst)
     return (str)
 
-def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='', norm=False, allstokes=False):
+def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='', norm=False, allstokes=False, fitlim=None):
     seenpix = cov > (covcut*np.max(cov))
     covnorm = cov / np.max(cov)
    
@@ -476,6 +500,9 @@ def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='
     if fit:
         mymodel = lambda x, a, b, c, d, e: (a + b*x + c*np.exp(-d*(x-e)))#/(a+b+c*np.exp(-d*(1-e)))
         ok = isfinite(myY)
+        if fitlim is not None:
+            print('Clipping fit from {} to {}'.format(fitlim[0], fitlim[1]))
+            ok = ok & (xx >= fitlim[0]) & (xx <= fitlim[1])
         myfit = curve_fit(mymodel, xx[ok]**2, myY[ok], p0=[0.5,0.16, 0.3,2,1],maxfev=100000, ftol=1e-7)
         plot(xx**2, mymodel(xx**2, *myfit[0]),  label=label+' Fit', color=p[0].get_color())
         invcov_samples = np.linspace(1, 15, 1000)
@@ -515,7 +542,76 @@ def get_angular_profile(maps, thmax=25, nbins=20, label='', center=np.array([316
     legend(fontsize=fontsize)
     return xx, avg
 
+def correct_maps_rms(maps, cov, effective_variance_invcov):
+    okpix = cov > 0
+    newmaps = maps*0
+    correction = np.interp(np.max(cov)/cov[okpix], effective_variance_invcov[0,:], effective_variance_invcov[1,:])
+    for s in range(3):
+        newmaps[okpix,s] = maps[okpix,s] / np.sqrt(correction) * np.sqrt(cov[okpix]/np.max(cov))
+    return newmaps
 
+def map_corr_neighbtheta(themap_in, ipok_in, thetamin, thetamax, nbins, degrade=None, verbose=True):
+    if degrade is None:
+        themap = themap_in.copy()
+        ipok = ipok_in.copy()
+    else:
+        themap = hp.ud_grade(themap_in, degrade)
+        mapbool = themap_in < -1e30
+        mapbool[ipok_in] = True
+        mapbool = hp.ud_grade(mapbool, degrade)
+        ip = np.arange(12*degrade**2)
+        ipok = ip[mapbool]
+    rthmin = np.radians(thetamin)
+    rthmax = np.radians(thetamax)
+    thvals = np.linspace(rthmin, rthmax, nbins+1)
+    ns = hp.npix2nside(len(themap))
+    thesum = np.zeros(nbins)
+    thecount = np.zeros(nbins)
+    if verbose: bar = progress_bar(len(ipok),'Pixels')
+    for i in range(len(ipok)):
+        if verbose: bar.update()
+        valthis = themap[ipok[i]]
+        v = hp.pix2vec(ns, ipok[i])
+        #ipneighb_inner = []
+        ipneighb_inner = list(hp.query_disc(ns, v, np.radians(thetamin)))
+        for k in range(nbins): 
+            thmin = thvals[k]
+            thmax = thvals[k+1]
+            ipneighb_outer = list(hp.query_disc(ns, v, thmax))
+            ipneighb = ipneighb_outer.copy()
+            for l in ipneighb_inner: ipneighb.remove(l)
+            valneighb = themap[ipneighb]
+            thesum[k] += np.sum(valthis * valneighb)
+            thecount[k] += len(valneighb)
+            ipneighb_inner = ipneighb_outer.copy()
+            
+    corrfct = thesum / thecount
+    return np.degrees(thvals[:-1]+thvals[1:])/2, corrfct
+
+
+def ctheta_parts(themap, ipok, thetamin, thetamax, nbinstot, nsplit=4, degrade_init=None, verbose=True):
+    allthetalims = np.linspace(thetamin, thetamax, nbinstot+1)
+    thmin = allthetalims[:-1]
+    thmax = allthetalims[1:]
+    idx = np.arange(nbinstot)//(nbinstot//nsplit)
+    if degrade_init is None:
+        nside_init = hp.npix2nside(len(themap))
+    else:
+        nside_init = degrade_init
+    nside_part = nside_init // (2**idx)
+    thall = (thmin+thmax)/2
+    cthall = np.zeros(nbinstot)
+    for k in range(nsplit):
+        thispart = idx==k
+        mythmin = np.min(thmin[thispart])
+        mythmax = np.max(thmax[thispart])
+        mynbins = nbinstot//nsplit
+        mynside = nside_init // (2**k)
+        if verbose: print('Doing {0:3.0f} bins between {1:5.2f} and {2:5.2f} deg at nside={3:4.0f}'.format(mynbins, mythmin, mythmax, mynside))
+        myth, mycth = map_corr_neighbtheta(themap, ipok, mythmin, mythmax, mynbins, degrade=mynside, verbose=verbose)
+        cthall[thispart] = mycth 
+    return thall, cthall
+        
 
 
 

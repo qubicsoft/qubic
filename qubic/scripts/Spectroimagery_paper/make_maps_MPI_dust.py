@@ -74,12 +74,12 @@ for nf_sub_rec in d['nf_recon']:
     if nf_sub % nf_sub_rec != 0:
         raise ValueError('nf_sub/nf_sub_rec must be an integer.')
 
-# Center
-center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 # Check that we do one simulation with only one reconstructed subband
 if d['nf_recon'][0] != 1:
     raise ValueError('You should do one simulation without spectroimaging as a reference.')
 
+# Center
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 # Save the dictionary
 if rank == 0:
     shutil.copyfile(dictfilename, out_dir + name + '.dict')
@@ -90,12 +90,12 @@ if rank == 0:
     t0 = time.time()
     # Make a sky using PYSM
     seed = 42
-    sky_config = {'cmb': seed, 'dust': 'd1'}
+    sky_config = {'dust': 'd1'}
     Qubic_sky = qss.Qubic_sky(sky_config, d)
     x0 = Qubic_sky.get_simple_sky_map()
     print('Input map with shape:', x0.shape)
-    hp.mollview(x0[2,:,0], rot=center)
-    plt.savefig('test-cmbdust')
+    hp.mollview(x0[2,:,0],rot=center)
+    plt.savefig('test-dust')
     if x0.shape[1] % (12 * d['nside'] ** 2) == 0:
         print('Good size')
     else:
@@ -121,7 +121,6 @@ if rank == 0:
 # =============== Noiseless ===================== #
 
 d['noiseless'] = True
-
 t1 = time.time()
 TOD_noiseless, maps_convolved_noiseless = si.create_TOD(d, p, x0)
 
@@ -155,9 +154,9 @@ for i, nf_sub_rec in enumerate(d['nf_recon']):
               .format(nf_sub_rec))
 
         name_map = '_nfsub{0}_nfrecon{1}_noiseless{2}_nptg{3}.fits'.format(d['nf_sub'],
-                                                                        d['nf_recon'][i],
-                                                                        d['noiseless'],
-                                                                        d['npointings'])
+                                                                           d['nf_recon'][i],
+                                                                           d['noiseless'],
+                                                                           d['npointings'])
         rmc.save_simu_fits(maps_recon_noiseless, cov_noiseless, nus, nus_edge, maps_convolved_noiseless,
                            out_dir, name + name_map)
 

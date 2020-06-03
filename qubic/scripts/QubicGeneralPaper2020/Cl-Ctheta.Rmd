@@ -1,0 +1,440 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+from pylab import *
+import camb.correlations as cc
+import healpy as hp
+rc('figure', figsize=(16, 7))
+rc('font', size=15)
+mpl.rcParams['image.cmap'] = 'jet'
+```
+
+I am trying to simulate data on a healpix map with a spatial correlation given by a known C(theta). In order to do so, I simulate white noise in a full sky map, then smooth it with the Cl corresponding to the C(theta) and then go back to map-space.
+
+I have made dseveral functions to play with that. They are mostly based on camb.correlations functions that are precisely designed for that, although they have. issues with theta=0 (as explained in the doc: https://camb.readthedocs.io/en/latest/correlations.html?highlight=correlations#module-camb.correlations). This is why I have. tried to extend them to be general.
+
+Starting from the well known:
+$$C(\theta) = \frac{1}{4\pi} \sum_\ell (2\ell+1)C_\ell P_\ell(\cos(\theta))$$
+one can easily demonstrate that:
+$$C_\ell = 2\pi \int_{-1}^{1}P_\ell(x)C(x)dx$$ where $x=\cos\theta$
+
+As a consequence the special case $\theta=0$ can be calculated using $C(x)=\delta(x-1)$ in the above formula leading to:
+$$\begin{eqnarray}
+C_\ell &=& 2\pi\int_{-1}{1}P_\ell(x)C(x)dx\\
+&=& 2\pi P_\ell(1)\\
+&=& 2\pi
+\end{eqnarray}
+$$
+as $P_\ell(1)=1$ whatever $\ell$.
+
+**However it seems to me that this should be equal to 1 instead of $2\pi$ so I have implemented it with 1. It is easy to change it back to $2\pi$ in the function below and to test it again in the Monte-Carlo at the end and show that it does not solve the problem.**
+
+This is what is implemented in the function below for calculating the $C_\ell$ for a given $C(\theta)$ and tested with two case:
+- the trivial white noise case
+- my correlation function
+
+```{python}
+def ctheta_2_cell(theta_deg, ctheta, lmax, pol=False, normalization=2*np.pi):
+    ### this is how camb recommends to prepare the x = cos(theta) values for integration
+    ### These x values do not contain x=1 so we have. to do this case separately
+	x, w = np.polynomial.legendre.leggauss(lmax+1)
+	xdeg = np.degrees(np.arccos(x))
+
+    ### We first replace theta=0 by 0 and do that case separately
+	myctheta = ctheta.copy()
+	myctheta[0] = 0
+    ### And now we fill the array that should include polarization (we put zeros there)
+    ### with the values of our imput c(theta) interpolated at the x locations
+	allctheta = np.zeros((len(x), 4))
+	allctheta[:,0] = np.interp(xdeg, theta_deg, myctheta)
+    
+    ### Here we call the camb function that does the transform to Cl
+	clth = cc.corr2cl(allctheta, x,  w, lmax)
+	lll = np.arange(lmax+1)
+    
+    ### the special case x=1 corresponds to theta=0 and add 2pi times c(theta=0) to the Cell
+	return lll, clth[:,0]+ctheta[0]*normalization
+
+
+#### Normalization of c(theta=0) ###################################
+normalization = 2*np.pi
+####################################################################
+
+### Test 1 - white noise
+nth = 1000
+theta = np.linspace(0,90,nth)
+ctheta = np.zeros(nth)
+ctheta[0] = 1.
+
+lll, cell = ctheta_2_cell(theta, ctheta, 1024, normalization=2*np.pi)
+
+subplot(1,2,1)
+plot(theta, ctheta)
+plot(theta, theta*0, 'k:')
+xlabel(r'$\theta$ [deg]')
+ylabel(r'$C(\theta)$')
+title('test 1')
+
+subplot(1,2,2)
+plot(lll, cell)
+plot(lll, lll*0+normalization, 'k:')
+xlabel(r'$\ell$')
+ylabel(r'$C_\ell$')
+title('test 1: C(0) normalization={0:5.3f}'.format(normalization))
+
+
+figure()
+### Test 2 - My noise
+fct = lambda x, a, b, c: a * np.sin(x/b) * exp(-x/c)
+a = 0.48
+b = 2.14
+c = 4.27
+
+myctheta = fct(theta, a,b,c)
+myctheta[0] = 1.
+mylll, mycell = ctheta_2_cell(theta, myctheta, 1024, normalization=normalizatio)
+
+
+
+subplot(1,2,1)
+plot(theta, myctheta)
+plot(theta, theta*0, 'k:')
+xlabel(r'$\theta$ [deg]')
+ylabel(r'$C(\theta)$')
+title('test 2')
+
+subplot(1,2,2)
+plot(mylll, mycell)
+plot(mylll, mylll*0+normalization, 'k:')
+xlabel(r'$\ell$')
+ylabel(r'$C_\ell$')
+title('test 2: C(0) normalization={0:5.3f}'.format(normalization))
+
+```
+
+Now we want to test this with a Monte-Carlo simulation. We will need a function to calculate the C(theta) from a healpix map. This is usually very slow if done without tricks. Here I degrade the map to different nside to have less pixels to deal with when going to large angles.
+
+```{python}
+def map_corr_neighbtheta(themap_in, ipok_in, thetamin, thetamax, nbins, degrade=None, verbose=True):
+    if degrade is None:
+        themap = themap_in.copy()
+        ipok = ipok_in.copy()
+    else:
+        themap = hp.ud_grade(themap_in, degrade)
+        mapbool = themap_in < -1e30
+        mapbool[ipok_in] = True
+        mapbool = hp.ud_grade(mapbool, degrade)
+        ip = np.arange(12*degrade**2)
+        ipok = ip[mapbool]
+    rthmin = np.radians(thetamin)
+    rthmax = np.radians(thetamax)
+    thvals = np.linspace(rthmin, rthmax, nbins+1)
+    ns = hp.npix2nside(len(themap))
+    thesum = np.zeros(nbins)
+    thecount = np.zeros(nbins)
+    for i in range(len(ipok)):
+        valthis = themap[ipok[i]]
+        v = hp.pix2vec(ns, ipok[i])
+        #ipneighb_inner = []
+        ipneighb_inner = list(hp.query_disc(ns, v, np.radians(thetamin)))
+        for k in range(nbins): 
+            thmin = thvals[k]
+            thmax = thvals[k+1]
+            ipneighb_outer = list(hp.query_disc(ns, v, thmax))
+            ipneighb = ipneighb_outer.copy()
+            for l in ipneighb_inner: ipneighb.remove(l)
+            valneighb = themap[ipneighb]
+            thesum[k] += np.sum(valthis * valneighb)
+            thecount[k] += len(valneighb)
+            ipneighb_inner = ipneighb_outer.copy()
+            
+    corrfct = thesum / thecount
+    return np.degrees(thvals[:-1]+thvals[1:])/2, corrfct
+
+
+def ctheta_parts(themap, ipok, thetamin, thetamax, nbinstot, nsplit=4, degrade_init=None, verbose=True):
+    allthetalims = np.linspace(thetamin, thetamax, nbinstot+1)
+    thmin = allthetalims[:-1]
+    thmax = allthetalims[1:]
+    idx = np.arange(nbinstot)//(nbinstot//nsplit)
+    if degrade_init is None:
+        nside_init = hp.npix2nside(len(themap))
+    else:
+        nside_init = degrade_init
+    nside_part = nside_init // (2**idx)
+    thall = (thmin+thmax)/2
+    cthall = np.zeros(nbinstot)
+    for k in range(nsplit):
+        thispart = idx==k
+        mythmin = np.min(thmin[thispart])
+        mythmax = np.max(thmax[thispart])
+        mynbins = nbinstot//nsplit
+        mynside = nside_init // (2**k)
+        if verbose: print('Doing {0:3.0f} bins between {1:5.2f} and {2:5.2f} deg at nside={3:4.0f}'.format(mynbins, mythmin, mythmax, mynside))
+        myth, mycth = map_corr_neighbtheta(themap, ipok, mythmin, mythmax, mynbins, degrade=mynside, verbose=verbose)
+        cthall[thispart] = mycth 
+    return thall, cthall
+
+```
+
+Let's take the example of a white noise map and check if it's fine:
+
+```{python}
+nside = 128
+thetamin = 0.
+thetamax = 20.
+nbins = 40
+ipok = np.arange(12*nside**2)  ## we take all pixels
+signoise = 1.
+
+nbmc = 10
+all_cthmes = np.zeros((nbmc, nbins))
+
+for i in range(nbmc):
+    print(i, nbmc)
+    mymap = np.random.randn(12*nside**2) * signoise
+    thmes, all_cthmes[i,:] = ctheta_parts(mymap, np.arange(12*nside), thetamin, thetamax, nbins, nsplit=5, 
+                                         degrade_init=128, verbose=False)
+
+m_cthmes = np.mean(all_cthmes, axis=0)
+s_cthmes = np.std(all_cthmes, axis=0)
+errorbar(thmes, m_cthmes, yerr=s_cthmes, fmt='ro')
+plot(linspace(thetamin, thetamax,100), np.zeros(100), 'k:')
+xlabel(r'$\theta$ [deg]')
+ylabel(r'$C(\theta)$')
+xlim(thetamin, thetamax)
+
+```
+
+Now we have the tools and we can test the spatial-correlation simulation.
+
+We take some model for the input correlation function $C(\theta)$ and calculate the corresponding $C_\ell$ using the 
+functions tested above. There are two case below (selected by commenting one or the other):
+- uncorrelated data
+- correlated data
+
+```{python}
+nth = 1000
+theta = np.linspace(0,90,nth)
+
+#### First Case : uncorrelated data
+# myctheta = np.zeros(nth)
+# myctheta[0] = 1.
+
+
+#### Second case: correlated data following the model above
+fct = lambda x, a, b, c: a * np.sin(x/b) * exp(-x/c)
+a = 0.48
+b = 2.14
+c = 4.27
+myctheta = fct(theta, a,b,c)
+myctheta[0] = 1.
+
+
+#### Calculation of the corresponding Cell
+myell, mycell = ctheta_2_cell(theta, myctheta, 1024, normalization=normalization)
+
+subplot(1,2,1)
+plot(theta, myctheta)
+plot(theta, theta*0, 'k:')
+xlabel(r'$\theta$ [deg]')
+ylabel(r'$C(\theta)$')
+
+subplot(1,2,2)
+plot(myell, mycell)
+plot(myell, myell*0+normalization, 'k:')
+xlabel(r'$\ell$')
+ylabel(r'$C_\ell$')
+title('normalization={0:5.3f}'.format(normalization))
+```
+
+We now take this as an input and perform a Monte carlo in the following manner:
+- generate a white noise map
+- smooth it using Healpy with the kernel calculated above
+- Calculate the C(theta) of the recovered map
+
+When averaging over MC realizations, one should recover the input $C(\theta)$ and $C_\ell$...
+
+```{python}
+### Let's try an MC
+nside = 128
+nbmc = 100
+nbins = 20
+thmax = 20.
+signoise = 1.
+lmax = 2*nside
+allip = np.arange(12*nside**2)
+
+allclout = np.zeros((nbmc, lmax+1))
+all_cthout = np.zeros((nbmc, nbins))
+for i in range(nbmc):
+    print(i,nbmc)
+    #if ((i//10)*10)==i: print(i,nbmc)
+    ### Input uniform map
+    inmap = np.random.randn(12*nside**2)*signoise
+    ### Output correlated map
+    outmap = hp.smoothing(inmap, beam_window=(mycell), verbose=False)
+
+    ### Calculate the Cells from the correlated map
+    allclout[i,:]=hp.anafast(outmap, lmax=lmax)
+    
+    ### Calculate the C(theta) from our map
+    th, all_cthout[i,:] = ctheta_parts(outmap, allip, 0, thmax, nbins, 
+                                        nsplit=5, degrade_init=64, verbose=False)
+
+
+
+```
+
+```{python}
+#### We calculate the average of the MC Cells
+npix = 12*nside**2
+mcl_corr = np.mean(allclout, axis=0) / (4*np.pi/npix)
+ell = np.arange(lmax+1)
+
+#### And now we plot them as well as the expected ones
+subplot(1,2,1)
+plot(myell, mycell**2, label=r'Predicted $C_\ell$')
+plot(ell, mcl_corr , label=r'MC $C_\ell$')
+plot(myell, myell*0+1 , 'k:')
+legend()
+xlim(0.1,np.max(ell)*1.5)
+xlabel(r'$\ell$')
+ylabel(r'$C_\ell$')
+xscale('log')
+
+#### We calculate the average of the MC C(theta)
+mcthout = np.mean(all_cthout, axis=0)
+scthout = np.std(all_cthout, axis=0)
+
+#### And now we plot them as well as the expected one
+factormult = 25
+subplot(1,2,2)
+errorbar(th, (mcthout/mcthout[0]*factormult), yerr=scthout/mcthout[0]*factormult, fmt='ro', label=r'MC $C(\theta) \times${}'.format(factormult))
+plot(theta,myctheta,label=r'Input $C(\theta)$')
+plot(theta,theta*0,'k:')
+xlim(0,20)
+ylim(-0.1,1)
+legend()
+print(mcthout)
+```
+
+So the conclusions are:
+- we get consistent $C_\ell$ between the smoothed map and the expected ones.
+- For $C(\theta)$ we get very small results, only multiplying them by factormult~7 above (which is close to $2\pi$...) starts to show that they have a shape that is broadly similar to the expected one, but not exactly (slightly shifted toward small angles)
+
+Why is that so ? There are probbably many wrong normalizations everywhere, but I can't find them...
+
+Changing the casse $x=1$ back to $2\pi$ insgtead of ! in the function ctheta_2_cell() at the beginning doess not solve the problem - it becomes actually even a larger factor (about 30)
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+Maybe we can try a more direct approach with a larger correlation finction in order to have high S/N without making many sims
+
+```{python}
+normalization = 2*np.pi
+
+fct = lambda x, a, b, c: a * np.sin(x/b) * exp(-x/c)
+newa = 0.48*100
+newb = 2.14
+newc = 4.27
+
+newctheta = fct(theta, newa,newb,newc)
+newctheta[0] = 1.
+newlll, newcell = ctheta_2_cell(theta, newctheta, 1024, normalization=normalization)
+
+subplot(1,2,1)
+plot(theta, newctheta)
+plot(theta, theta*0, 'k:')
+xlabel(r'$\theta$ [deg]')
+ylabel(r'$C(\theta)$')
+
+subplot(1,2,2)
+plot(newlll, newcell)
+plot(newlll, newlll*0+normalization, 'k:')
+xlabel(r'$\ell$')
+ylabel(r'$C_\ell$')
+title('normalization={0:5.3f}'.format(normalization))
+
+### Let's try an MC
+nside = 128
+nbins = 20
+thmax = 20.
+signoise = 1.
+lmax = 2*nside
+allip = np.arange(12*nside**2)
+
+### Input uniform map
+inmap = np.random.randn(12*nside**2)*signoise
+### Output correlated map
+outmap = hp.smoothing(inmap, beam_window=(mycell), verbose=False)
+
+### Calculate the Cells from the correlated map
+clout=hp.anafast(outmap, lmax=lmax)
+
+### Calculate the C(theta) from our map
+th, cthout = ctheta_parts(outmap, allip, 0, thmax, nbins, 
+                          nsplit=5, degrade_init=64, verbose=False)
+
+figure()
+npix = 12*nside**2
+cl_corr = clout / (4*np.pi/npix)
+ell = np.arange(lmax+1)
+
+#### And now we plot them as well as the expected ones
+subplot(1,2,1)
+plot(newlll, newcell**2, label=r'Predicted $C_\ell$')
+plot(ell, cl_corr , label=r'MC $C_\ell$')
+plot(newlll, newlll*0+1 , 'k:')
+legend()
+xlim(0.1,np.max(ell)*1.5)
+xlabel(r'$\ell$')
+ylabel(r'$C_\ell$')
+xscale('log')
+
+
+#### And now we plot them as well as the expected one
+factormult = 25
+subplot(1,2,2)
+plot(th, (cthout/cthout[0]*factormult), 'ro', label=r'MC $C(\theta) \times${}'.format(factormult))
+plot(theta,newctheta,label=r'Input $C(\theta)$')
+plot(theta,theta*0,'k:')
+xlim(0,20)
+ylim(-0.1,1)
+legend()
+
+```
+
+```{python}
+
+```

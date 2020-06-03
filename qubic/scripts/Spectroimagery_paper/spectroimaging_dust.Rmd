@@ -603,7 +603,7 @@ d.read_from_file(rep_simu + date_name + '.dict')
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 
 # Number of subbands used during the simulation
-nf_sub_rec = 3
+nf_sub_rec = 5
 nf_sub = d['nf_sub']
 print('nf_sub = {}, nf_recon = {}'.format(nf_sub, nf_sub_rec))
 
@@ -649,10 +649,10 @@ for real in range(nreals):
 
 ```{python}
 # Compute residuals in a given way
-residuals = amc.get_residuals(date_name, rep_simu, 'mean_recon', nf_sub_rec)
+residuals = amc.get_residuals(date_name, rep_simu, 'noiseless', nf_sub_rec)
 print(residuals.shape)
 
-# They is only the patch so you need to put them in a full map to plot with healpy
+# There is only the patch so you need to put them in a full map to plot with healpy
 maps_residuals = np.zeros_like(maps_conv)
 maps_residuals[:, :, seenmap, :] = residuals
 ```
@@ -675,6 +675,17 @@ for band in range(nf_sub_rec):
                 title = '{0} Residuals {1}'.format(d['kind'][istk], band), min=min, max=max)
 plt.tight_layout()
 
+```
+
+```{python}
+# Get the coverage
+from astropy.io import fits
+a = fits.open(fits_noise[0])
+coverage = a['COVERAGE'].data
+hp.mollview(coverage)
+
+coverage_patch = coverage[seenmap]
+coverage_patch.shape
 ```
 
 ### Power spectrum
@@ -744,7 +755,7 @@ axs = axs.ravel()
 color = ['b', 'r', 'g', 'k', 'y', 'orange', 'brown', 'purple']
 for i in range(4):
     ax = axs[i]
-    for isub in [0, 1, 2]:#, 3, 4]:#, 5, 6, 7]: 
+    for isub in [0, 1, 2, 3, 4]:#, 5, 6, 7]: 
         c = color[isub]
 #         ax.plot(input_ell[2:lmax], input_Dl[2:lmax, i], 'k', label='CMB Input')
         ax.plot(leff[:], allcells_recon[isub, :, i],'o', color=c, 
@@ -832,7 +843,7 @@ axs = axs.ravel()
 color = ['b', 'r', 'g', 'k', 'y', 'orange', 'brown', 'purple']
 for i in range(4):
     ax = axs[i]
-    for isub in [0, 1, 2]:#, 3, 4]:
+    for isub in [0, 1, 2, 3, 4]:
         c = color[isub]
         ax.errorbar(leff[:], cross_mean[isub, :, i],
                     yerr=cross_std[isub, :, i] * np.sqrt(2),
@@ -860,10 +871,10 @@ ax.legend(fontsize=8, loc='right')
 # Make a loop over irec and fill dictionnaries
 dict_sig2MC = {}
 dict_sig2 = {}
-ang_th = 10
+ang_th = 15
 ang = rmc.pix2ang(d['nside'], center, seenmap)
 
-for irec in d['nf_recon']:
+for irec in [1, 3]:
     print('irec =', irec)   
 #     _, recon_patch, _, _ = rmc.get_patch_many_files(rep_simu + date_name, '*nfrecon{}*False*'.format(irec))
     residuals = amc.get_residuals(date_name, rep_simu, 'noiseless', irec)
@@ -906,100 +917,236 @@ for irec in d['nf_recon']:
 ```
 
 ```{python}
-Cp_prime.shape
+print(Cp_prime.shape)
 plt.imshow(Cp_prime[:, :, 0, 10])
 plt.colorbar()
 ```
 
 ```{python}
-dict_sig2MC['3mean']
+coverage_norm = coverage_patch / np.max(coverage_patch)
+inverse_coverage = 1. / (np.sqrt(coverage_norm))
+
+plt.plot(ang, coverage_norm, '.', label='coverage')
+plt.plot(ang, np.sqrt(coverage_norm), '.', label='$\sqrt{coverage}$')
+plt.xlabel('Angle [deg]')
+# plt.ylabel('Coverage normalized')
+plt.title('Coverage normalized to the maximum as function of the angle in the patch.')
+plt.legend()
 ```
 
 ```{python}
-from scipy import interpolate
+# from scipy import interpolate
 
-Stokes = ['I', 'Q', 'U']
-nbins = 6
+# Stokes = ['I', 'Q', 'U']
+# nbins = 6
 
-def make_fit(x, y, nbins):
-    bin_edges = np.linspace(0, np.max(x), nbins + 1)
-    bin_centers = 0.5 * (bin_edges[0:nbins] + bin_edges[1:])
+# def make_fit(x, y, nbins):
+#     bin_edges = np.linspace(0, np.max(x), nbins + 1)
+#     bin_centers = 0.5 * (bin_edges[0:nbins] + bin_edges[1:])
 
-    mean_bin = np.zeros(nbins)
-    for b in range(nbins):
-        ok = (x > bin_edges[b]) & (x < bin_edges[b + 1])
-        mean_bin[b] = np.mean(y[ok], axis=0)
-    fit = interpolate.interp1d(bin_centers, mean_bin, axis=0, kind='linear', fill_value='extrapolate')
-    return bin_centers, mean_bin, fit
+#     mean_bin = np.zeros(nbins)
+#     for b in range(nbins):
+#         ok = (x > bin_edges[b]) & (x < bin_edges[b + 1])
+#         mean_bin[b] = np.mean(y[ok], axis=0)
+#     fit = interpolate.interp1d(bin_centers, mean_bin, axis=0, kind='linear', fill_value='extrapolate')
+#     return bin_centers, mean_bin, fit
 
-def plot_sigma2profile(ang, dict_sig2, dict_sig2MC, nbins, nf_recon):
+# def plot_sigma2profile(x, dict_sig2, dict_sig2MC, nbins, nf_recon, xlabel):
     
-    fig, axs = plt.subplots(1, 3)
-    plt.subplots_adjust(wspace=0.5)
-    axs = axs.ravel()
-    colors = ['b', 'g', 'r']
-    i = 0
-    for nband in nf_recon:
-        for s in range(3):
-            ax = axs[s]
+#     fig, axs = plt.subplots(1, 3)
+#     plt.subplots_adjust(wspace=0.5)
+#     axs = axs.ravel()
+#     colors = ['b', 'g', 'r']
+#     i = 0
+#     for nband in nf_recon:
+#         for s in range(3):
+#             ax = axs[s]
             
-            bin_centersMC, mean_binMC, fitMC = make_fit(ang, dict_sig2MC['{}'.format(nband)][:, s], nbins)
-#             ax.plot(bin_centersMC, mean_binMC, 's', color=colors[i],
-#                            label='sig2MC nband = {}'.format(nband))
-#             ax.plot(ang, fitMC(ang), '--', color=colors[i])
+#             bin_centersMC, mean_binMC, fitMC = make_fit(x, dict_sig2MC['{}'.format(nband)][:, s], nbins)
+# #             ax.plot(bin_centersMC, mean_binMC, 's', color=colors[i],
+# #                            label='sig2MC nband = {}'.format(nband))
+# #             ax.plot(x, fitMC(x), '--', color=colors[i])
 
-            if nband != 1:
-                # Interpolation to get a profile
-                bin_centers, mean_bin, fit = make_fit(ang, dict_sig2['{}'.format(nband)][:, s], nbins)
-                ax.plot(bin_centers, mean_bin/mean_binMC, 'o', label='nband = {}'.format(nband), color=colors[i])
-                ax.plot(ang, fit(ang)/fitMC(ang), '--', color=colors[i])
+#             if nband != 1:
+#                 # Interpolation to get a profile
+#                 bin_centers, mean_bin, fit = make_fit(x, dict_sig2['{}'.format(nband)][:, s], nbins)
+#                 ax.plot(bin_centers, mean_bin/mean_binMC, 'o', label='nband = {}'.format(nband), color=colors[i])
+# #                 ax.plot(x, fit(x)/fitMC(x), '--', color=colors[i])
                 
             
-            ax.set_title(Stokes[s], fontsize=20)
-            ax.set_xlabel('angle (°)', fontsize=15)
-            ax.set_ylabel('$\sigma^2$', fontsize=15)
-#             ax.set_yscale('log')
-#             ax.set_ylim(0, 10)
-#             ax.set_xlim(0, 18)
-            ax.legend(fontsize=10, loc='upper left')
-        i += 1 
-    return
+#             ax.set_title(Stokes[s], fontsize=20)
+#             ax.set_xlabel(xlabel, fontsize=15)
+#             ax.set_ylabel('$\sigma^2 / \sigma_{MC}^2$', fontsize=15)
+# #             ax.set_yscale('log')
+# #             ax.set_ylim(0, 10)
+# #             ax.setxlim(0, 18)
+#             ax.legend(fontsize=10, loc='upper left')
+#         i += 1 
+#     return
 
 ```
 
 ```{python}
-plot_sigma2profile(ang, dict_sig2, dict_sig2MC, nbins=12, nf_recon=d['nf_recon'][:])
+plt.plot(np.sqrt(coverage_norm), dict_sig2MC['3'][:, 0], '.')
+plt.xlabel('$\sqrt{coverage}$')
+plt.ylabel('$\sigma^2$')
+limit = (coverage_patch / np.max(coverage_patch)) > 0.6
+# plt.plot(dict_sig2['3'][limit, 0], dict_sig2MC['3'][limit, 0], '.')
+
+plt.title('Variance for each pixel (I component)')
 ```
 
 ```{python}
-def plot_sig_mean(dict_sig2, dict_sig2MC, nf_recon):
+import qubic.fibtools as ft
+
+x = 1 / np.sqrt(coverage_norm)
+
+xc, yc, dx, dy, _ = ft.profile(x, dict_sig2['3'][:, 0], 
+                               nbins=30, 
+                               plot=False,
+                               clip=True)
+
+
+xcMC, ycMC, dxMC, dyMC, _ = ft.profile(x, dict_sig2MC['3'][:, 0], 
+                                       nbins=30, 
+                                       plot=False,
+                                       clip=True)
+
+plt.errorbar(xc, yc, xerr=dx, yerr=dy, fmt='bo', label='$\sigma^2$')
+plt.errorbar(xcMC, ycMC, xerr=dxMC, yerr=dyMC, fmt='ro', label='$\sigma^2 MC$')
+# plt.plot(x, dict_sig2['3'][:, 1] , 'b,')
+# plt.plot(x, dict_sig2MC['3'][:, 1] , 'r,')
+plt.ylim(0, 100)
+
+plt.xlabel('$1 / \sqrt{coverage}$', fontsize=15)
+plt.ylabel('$\sigma^2$', fontsize=15)
+plt.legend()
+```
+
+```{python}
+plt.plot(xc, yc / ycMC)
+plt.xlabel('$1 / \sqrt{coverage}$', fontsize=15)
+plt.ylabel('$\sigma^2 / \sigma_{MC}^2$', fontsize=15)
+```
+
+```{python}
+# def plot_sig_mean(dict_sig2, dict_sig2MC, nf_recon):
     
-    fig, axs = plt.subplots(1, 3)
-    plt.subplots_adjust(wspace=0.5)
-    axs = axs.ravel()
+#     fig, axs = plt.subplots(1, 3)
+#     plt.subplots_adjust(wspace=0.5)
+#     axs = axs.ravel()
 
-    for s in range(3):
-        ax = axs[s]
-        for irec in nf_recon: 
+#     for s in range(3):
+#         ax = axs[s]
+#         for irec in nf_recon: 
             
-            if irec == 1: 
-                sig_monofreq = dict_sig2MC['{}mean'.format(irec)][s]
-#                 ax.plot(irec, sig_monofreq/sig_monofreq, 'bo', label='sig2 MC')
-            else:
-                sig2 = dict_sig2['{}mean'.format(irec)][s]
-                sig2MC = dict_sig2MC['{}mean'.format(irec)][s]
-                ax.plot(irec, sig2MC/sig2, 'ro', label='sig2')
+#             if irec == 1: 
+#                 sig_monofreq = dict_sig2MC['{}mean'.format(irec)][s]
+# #                 ax.plot(irec, sig_monofreq/sig_monofreq, 'bo', label='sig2 MC')
+#             else:
+#                 sig2 = dict_sig2['{}mean'.format(irec)][s]
+#                 sig2MC = dict_sig2MC['{}mean'.format(irec)][s]
+#                 ax.plot(irec, sig2/sig2MC, 'ro', label='sig2')
             
-            ax.set_title(Stokes[s])
-            ax.set_xlabel('# of bands', fontsize=20)
-            ax.set_ylabel(r'$\sigma^2_{MC} / \sigma^2$', fontsize=20)
-#             ax.legend(loc='lower right', fontsize=10)
+#             ax.set_title(Stokes[s])
+#             ax.set_xlabel('# of bands', fontsize=20)
+#             ax.set_ylabel(r'$\sigma^2 / \sigma^2_{MC}$', fontsize=20)
+# #             ax.legend(loc='lower right', fontsize=10)
             
-    return 
+#     return 
 ```
 
 ```{python}
-plot_sig_mean(dict_sig2, dict_sig2MC, d['nf_recon'][:])
+cov, corr = amc.get_covcorr_patch(residuals, stokesjoint=True, doplot=True)
+```
+
+```{python}
+cov.shape
+```
+
+```{python}
+plt.imshow(np.mean(corr, axis=2))#, vmin=-200, vmax=200)
+plt.colorbar()
+```
+
+### Matrix Cp_prime in coverage bins
+
+```{python}
+residuals.shape
+```
+
+```{python}
+Cp.shape
+```
+
+```{python}
+np.max(coverage_norm)
+```
+
+```{python}
+npix_patch = coverage_norm.shape[0]
+
+step = 0.300001
+for b in np.arange(0.1, 1, step):
+    print(b, b + step)
+    mybin = (coverage_norm > b) & (coverage_norm < b+step)
+    npix_bin = np.sum(mybin)
+    print('Npix in the bin:', npix_bin)
+
+    Cp_primebin = amc.Cp2Cp_prime_viaCorr(Cp[:, :, :, mybin])
+    
+    plt.figure()
+    plt.imshow(np.mean(Cp_primebin[:, :, 0, :], axis=2))
+    plt.colorbar()
+    plt.title('Cp_prime I bin coverage {} to {}'.format(b, b+step))
+
+    weighted_avbin, sig2 = amc.make_weighted_av(residuals[:, :, mybin, :], Cp_primebin, verbose=False)
+    print('sig2', sig2.shape)
+    sig2MC = np.var(weighted_avbin, axis=0)
+    if b == 0.1:
+        sig2_bin = sig2
+        sig2MC_bin = sig2MC
+    else:
+        sig2_bin = np.concatenate((sig2_bin, sig2))
+        sig2MC_bin = np.concatenate((sig2MC_bin, sig2MC))
+
+```
+
+```{python}
+x = 1 / np.sqrt(coverage_norm)
+
+xc_bin, yc_bin, dx_bin, dy_bin, _ = ft.profile(x, sig2_bin[:, 0], 
+                               nbins=15, 
+                               plot=False,
+                               clip=True)
+
+
+xcMC_bin, ycMC_bin, dxMC_bin, dyMC_bin, _ = ft.profile(x, sig2MC_bin[:, 0], 
+                                       nbins=15, 
+                                       plot=False,
+                                       clip=True)
+
+plt.errorbar(xc_bin, yc_bin, xerr=dx_bin, yerr=dy_bin, fmt='bo', label='$\sigma^2$')
+plt.errorbar(xcMC_bin, ycMC_bin, xerr=dxMC_bin, yerr=dyMC_bin, fmt='ro', label='$\sigma^2 MC$')
+# plt.plot(x, dict_sig2['3'][:, 1] , 'b,')
+# plt.plot(x, dict_sig2MC['3'][:, 1] , 'r,')
+# plt.ylim(0, 100)
+
+plt.xlabel('$1 / \sqrt{coverage}$', fontsize=15)
+plt.ylabel('$\sigma^2$', fontsize=15)
+plt.legend()
+plt.title('Profile, Weighted average done in 9 coverage bins')
+```
+
+```{python}
+plt.plot(xc_bin, yc_bin / ycMC_bin)
+plt.xlabel('$1 / \sqrt{coverage}$', fontsize=15)
+plt.ylabel('$\sigma^2 / \sigma_{MC}^2$', fontsize=15)
+plt.title('Ratio, Weighted average done in 9 coverage bins')
+```
+
+```{python}
+np.mean(yc_bin / ycMC_bin)
 ```
 
 ```{python}

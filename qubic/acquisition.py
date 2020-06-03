@@ -29,8 +29,7 @@ class QubicAcquisition(Acquisition):
     """
     def __init__(self, instrument, sampling, scene, d):
         """
-        acq = QubicAcquisition(instrument, sampling, scene, block, max_nbytes,
-                                nprocs_instrument, nprocs_sampling, comm)
+        acq = QubicAcquisition(instrument, sampling, scene, d)
 
         Parameters
         ----------

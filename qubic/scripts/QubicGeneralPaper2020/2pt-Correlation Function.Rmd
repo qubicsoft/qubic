@@ -157,59 +157,6 @@ ylabel(r'$C(\theta)$')
 print(np.var(new_diff[ipok,0]))
 ```
 
-## Below is the old data made with the slow (no nside change) version
-
-```{python}
-# # Let try insted to get the model of C(theta) fitted (in FastSimualtion-CMB.rmd part is commented for now)
-# bla = np.array([[     0.5, 0.018287, 0.019976, 0.018632],
-# [     1.5, -9.0326e-05, 0.0035598, 0.0043391],
-# [     2.5, -0.00021836, 0.004124, 0.0047473],
-# [     3.5, 9.1021e-05, 0.0028072, 0.0044944],
-# [     4.5, -0.00031725, 0.0022648, 0.0026134],
-# [     5.5, -0.00022796, 0.0013357, 0.0009274],
-# [     6.5, -0.00010186, -0.00032785, -0.0002764],
-# [     7.5, -0.00026437, -0.00024274, 0.0002201],
-# [     8.5, 9.2564e-05, -0.0018016, -0.0019774],
-# [     9.5, 9.8859e-07, -0.00092729, -0.00090763],
-# [    10.5, 0.00012424, -0.0011862, -0.0011546],
-# [    11.5, -0.00037499, -0.0009624, -0.0013026],
-# [    12.5, 0.0002686, -0.0011199, -0.0009401],
-# [    13.5, 3.6237e-05, -0.00035421, -0.00045922],
-# [    14.5, -0.0001091, 0.00019228, -0.00027504]])
-
-# th = bla[:,0]
-# cth_qn = bla[:,1]
-# cth_3k = bla[:,2]
-# cth_200k = bla[:,3]
-
-# from scipy.optimize import curve_fit
-
-# fct = lambda x, a, b, c: a * np.sin(x/b) * exp(-x/c)
-# results_qn = curve_fit(fct, th[1:], (cth_qn[1:]/cth_qn[0]))
-# results_3k = curve_fit(fct, th[1:], (cth_3k[1:]/cth_3k[0]))
-# results_200k = curve_fit(fct, th[1:], (cth_200k[1:]/cth_200k[0]))
-
-# thth = np.linspace(0,15,100)
-# p=plot(th,(cth_qn/cth_qn[0]),'o', label='FastSim')
-# plot(thth, fct(thth, *results_qn[0]), color=p[0].get_color(),
-#      label=r'$a\times\sin(\theta/b)\times\exp(\theta/c)$'+'\n a={0:4.2f} b={1:4.2f} c={2:4.2f}'.format(*results_qn[0]))
-# p=plot(th,(cth_3k/cth_3k[0]),'o', label ='3k')
-# plot(thth, fct(thth, *results_3k[0]), color=p[0].get_color(),
-#      label=r'$a\times\sin(\theta/b)\times\exp(\theta/c)$'+'\n a={0:4.2f} b={1:4.2f} c={2:4.2f}'.format(*results_3k[0]))
-
-# p=plot(th,(cth_200k/cth_200k[0]),'o', label='200k')
-# plot(thth, fct(thth, *results_200k[0]), color=p[0].get_color(),
-#      label=r'$a\times\sin(\theta/b)\times\exp(\theta/c)$'+'\n a={0:4.2f} b={1:4.2f} c={2:4.2f}'.format(*results_200k[0]))
-
-# print(results_200k[0])
-
-# legend()
-# xlabel(r'$\theta$ [deg]')
-# ylabel(r'$C(\theta)$ [Normalized]')
-
-
-```
-
 # Now we want to check our FastSimulation
 The fast simulation is based on:
 - making uniform noise in map-space
@@ -266,13 +213,20 @@ legend()
 ### Let's try an MC
 reload(qss)
 reload(qc)
-nside = 128
+
+## Make a sky using PYSM: It will have the expected QUBIC beam, the coverage and noise according to this coverage
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+
+nside = 256
 covar_deg = hp.ud_grade(covar, nside)
 okpix = covar_deg > (np.max(covar_deg)*0.1)
 ip = np.arange(12*nside**2).astype(int)
 ipok = ip[okpix]
 
-nbmc = 10
+
+nbmc = 100
 nbins = 20
 thmax = 20.
 from qubic.utils import progress_bar
@@ -281,51 +235,35 @@ signoise = 1.
 lmax = 2*nside
 
 
-print(clth[0])
-
-allclout = np.zeros((nbmc, lmax+1))
 all_cthout = np.zeros((nbmc, nbins))
 bar = progress_bar(nbmc)
 for i in range(nbmc):
-    ### Input uniform map
-    inmap = np.random.randn(12*nside**2)*signoise
-    ### Output correlated map
-    outmap = hp.smoothing(inmap, beam_window=(clth)**0.5, verbose=False)
-    print('Comparing STD: {} {}'.format(np.std(inmap), np.std(outmap)))
-    # Renormalize sigma to signoise => induces a bias on the cls...
-    #outmap = outmap / np.std(outmap) * signoise
-    allclout[i,:]=hp.anafast(outmap, lmax=lmax)
-    #outmap[~okpix] = 0
-    allip = np.arange(12*nside**2)
-    th, all_cthout[i,:] = qss.ctheta_parts(outmap, allip, 0, thmax, nbins, 
-                                          nsplit=5, degrade_init=nside//2, verbose=False)
+    
+    outmapIQU = Qubic_sky.create_noise_maps(signoise, covar, 
+                                            effective_variance_invcov=fit_n200k, 
+                                            clnoise=clth)
+    corrected_outmapIQU = qss.correct_maps_rms(outmapIQU, covar, fit_n200k)
+    bla = qss.get_angular_profile(corrected_outmapIQU, label='Nersc 200k corrected',
+                              allstokes=True,nbins=50,thmax=22, fontsize=10)
+    
+    outmap = corrected_outmapIQU[:,0]
+    ip = np.arange(12*nside**2).astype(int)
+    ipok = ip[okpix]
+    th, all_cthout[i,:] = qss.ctheta_parts(outmap, ipok, 0, thmax, nbins, 
+                                          nsplit=5, degrade_init=128, verbose=False)
 
     bar.update()
 
 ```
 
 ```{python}
-npix = 12*nside**2
-mcl_corr = np.mean(allclout, axis=0) / (4*np.pi/npix)
-ell = np.arange(lmax+1)
+factor = 2*np.pi
+ff=1.2
 
-print(clth[0], mcl_corr[0])
-subplot(1,2,1)
-plot(lll, clth, label='Cl Th Corr')
-plot(ell, mcl_corr , label='Cl MC Corr')
-plot(lll, lll*0+1 , 'k:')
-legend()
-xlim(0,np.max(ell)*1.5)
-xlabel(r'$\ell$')
-ylabel(r'$C_\ell$')
-
-
-
-subplot(1,2,2)
 mcthout = np.mean(all_cthout, axis=0)
 scthout = np.std(all_cthout, axis=0)
-errorbar(th, mcthout/mcthout[0], yerr=scthout/mcthout[0], fmt='ro')
-plot(theta,ctheta,label='Input C(theta)')
+errorbar(th*ff, mcthout/mcthout[0]*factor, yerr=scthout/mcthout[0], fmt='ro',label='C(theta*{}) x {}'.format(ff,factor))
+plot(theta,ctheta/ctheta[0],label='Input C(theta)')
 plot(theta,theta*0,'k:')
 xlim(0,20)
 ylim(-0.1,1)
@@ -334,138 +272,19 @@ print(th)
 print(mcthout/mcthout[0]*10)
 ```
 
-```{python}
+**Preliminary Conclusion**:
+It's difficult to check for the validity of this operation at the c(theta) level as the C(theta) seems completely weirdly normalized... It's much safer to check at the Cl level. But this requires Namaster and comparison with some NERSC 200k spectra.
 
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
+**Not Understood**
+- the factor ~ 2pi in amplitude
+- the factor ~ 1.2 in stretch...
 
 ```{python}
 
 ```
 
 ```{python}
-### Let's try a MC
-nside = 64
-nbmc = 1000
-from qubic.utils import progress_bar
 
-signoise = 1.
-lmax = 2*nside
-
-mycl = clth + 2*np.pi
-allclin = np.zeros((nbmc, lmax+1))
-allclout = np.zeros((nbmc, lmax+1))
-bar = progress_bar(nbmc)
-for i in range(nbmc):
-    inmap = np.random.randn(12*nside**2)*signoise
-    outmap = hp.smoothing(inmap, beam_window=mycl/mycl[0], verbose=False)
-    allclin[i,:]= hp.anafast(inmap, lmax=lmax)
-    allclout[i,:]=hp.anafast(outmap, lmax=lmax)
-    bar.update()
-
-
-```
-
-```{python}
-import scipy.ndimage as scf
-lmax=2*nside
-npix = 12*nside**2
-reload(qc)
-
-ctheta_corr_th = fct(theta, *results_200k[0])*signoise**2
-ctheta_corr_th[0] = signoise**2
-
-lll, cl_corr_th = qc.ctheta_2_cell(theta, ctheta_corr_th, lmax=1024)
-
-
-subplot(1,2,1)
-plot(theta, ctheta_corr_th, label='Th Corr')
-xlabel(r'$\theta$ [deg]')
-ylabel(r'$C(\theta)$')
-xlim(0,20)
-legend()
-
-mcl_corr = np.mean(allclout, axis=0)/ (4*np.pi/npix)
-scl_corr = np.std(allclout, axis=0)/ (4*np.pi/npix)
-ell = np.arange(lmax+1)
-
-
-subplot(1,2,2)
-plot(lll, cl_corr_th, label='Th Corr')
-plot(ell, mcl_corr , label='MC Corr')
-legend()
-xlim(0,np.max(ell)*1.5)
-xlabel(r'$\ell$')
-ylabel(r'$C_\ell$')
-
-```
-
-```{python}
-npix = 12*nside**2
-
-
-clth_white = ell*0+signoise**2*4*np.pi/npix
-clth_corr = clth/np.pi*4*np.pi/npix + signoise**2*4*np.pi/npix
-
-
-
-
-
-subplot(1,2,1)
-ell = np.arange(2*nside+1)
-plot(ell, np.mean(allclin, axis=0), label='Gaussian White Noise')
-plot(ell, clth_white, label='Th White')
-plot(ell, np.mean(allclout, axis=0), label=r'Filtered with QUBIC C($\theta$)')
-plot(lll, clth_corr, label='Th corr')
-xlim(0,np.max(ell))
-legend()
-
-
-```
-
-```{python}
-##### Converseley: calculation of C(theta) in harmonic space
-# One must calculate the c_map(theta) and c_win(theta) and then the c(theta) is c_map(theta)/c_win(theta)
-
-## let's start with Full Sky
-nside=256
-lmax = 4*nside
-
-nbmc = 3
-nx = 15
-xdeg = np.linspace(0,20,nx)
-x = np.cos(np.radians(xdeg))
-allcthmap = np.zeros((nbmc, nx))
-
-for i in range(nbmc):
-    print(i)
-    inmap = hp.smoothing(np.random.randn(12*nside**2), beam_window=mycl/mycl[0], verbose=False)
-
-    clin = hp.anafast(inmap, lmax=lmax)
-    ell = np.arange(lmax+1)
-
-    cth0=np.sum((2*ell+1)*clin/2/np.pi)
-    
-    allcl = np.zeros((lmax+1, 4))
-    allcl[:,0] = clin
-    cthmap = camb.correlations.cl2corr(allcl, x[1:], lmax=lmax)
-    #cthmap[0,0]=cth0
-    allcthmap[i,1:] = cthmap[:,0]
-    
-# print(xdeg)
-# print(cthmap[:,0])
-```
-
-```{python}
-errorbar(xdeg, np.mean(allcthmap, axis=0), yerr= np.std(allcthmap, axis=0), fmt='ro')
-plot(xdeg, fct(xdeg, *results_200k[0]))
 ```
 
 ```{python}

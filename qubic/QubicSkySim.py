@@ -361,8 +361,8 @@ class Qubic_sky(sky):
     def cth_funct(self, x, pars):
         return pars[0] * np.sin(x/pars[1]) * exp(-x/pars[2])
 
-    def random_fullsky_correlated(self, npix, white=False):
-        if white:
+    def random_fullsky_correlated(self, npix, clnoise=None):
+        if clnoise is None:
             return np.random.randn(npix)
 
         params_fitted_on_200k_NERSC_sim = [0.46492736, 2.14506569, 4.94262576]
@@ -373,11 +373,11 @@ class Qubic_sky(sky):
         cth = self.cth_funct(xdeg, params_fitted_on_200k_NERSC_sim)
         allcth = np.zeros((len(x), 4))
         allcth[:,0] = cth
-        cl = cc.corr2cl(allcth, x,  w, lmax)[:,0]/2/np.pi + 1
+        cl = cc.corr2cl(allcth*0.5, x,  w, lmax)[:,0]/2/np.pi + 1
         return hp.smoothing(np.random.randn(npix), beam_window=cl, verbose=False)
 
     def create_noise_maps(self, sigma_sec, coverage, covcut =0.1,
-                            Nyears=3, verbose=False, seed=None, effective_variance_invcov=None):
+                            Nyears=3, verbose=False, seed=None, effective_variance_invcov=None, clnoise=None, old=False):
         """
         This returns a realization of noise maps for I, Q and U with no correlation between them, according to a
         noise RMS map built according to the coverage specified as an attribute to the class
@@ -385,6 +385,11 @@ class Qubic_sky(sky):
         more realistic noise profile. It is a law for effective RMS as a function of inverse coverage and is 2D array
         with the first one being (nx samples) inverse coverage and the second being the corresponding effective variance to be
         used through interpolation when generating the noise.
+        The clnoise option is used to apply a convolution to the noise to obtain spatially correlated noise. This cl should be 
+        calculated from the c(theta) of the noise that can be measured using the function ctheta_parts() below. The transformation
+        of this C9theta) into Cl has to be done using wrappers on camb function found in camb_interface.py of the QUBIC software:
+        the functions to back and forth from ctheta to cl are: cl_2_ctheta and ctheta_2_cell. The simulation of the noise itself
+        calls a function of camb_interface called simulate_correlated_map().
         Parameters
         ----------
         sigma_sec
@@ -415,12 +420,23 @@ class Qubic_sky(sky):
         noise_maps = np.zeros((len(coverage), 3))
         if seed is not None:
             np.random.seed(seed)
-        # noise_maps[seenpix, 0] = np.random.randn(npix) * thnoise[seenpix]
-        # noise_maps[seenpix, 1] = np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
-        # noise_maps[seenpix, 2] = np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
-        noise_maps[seenpix, 0] = self.random_fullsky_correlated(12*self.nside**2)[seenpix] * thnoise[seenpix]
-        noise_maps[seenpix, 1] = self.random_fullsky_correlated(12*self.nside**2)[seenpix] * thnoise[seenpix] * np.sqrt(2)
-        noise_maps[seenpix, 2] = self.random_fullsky_correlated(12*self.nside**2)[seenpix] * thnoise[seenpix] * np.sqrt(2)
+        if clnoise is None:
+            IrndFull = np.random.randn(12*self.nside**2)
+            QrndFull = np.random.randn(12*self.nside**2)
+            UrndFull = np.random.randn(12*self.nside**2)
+        else:
+            if old:
+                IrndFull = self.random_fullsky_correlated(12*self.nside**2, clnoise=clnoise)
+                QrndFull = self.random_fullsky_correlated(12*self.nside**2, clnoise=clnoise)
+                UrndFull = self.random_fullsky_correlated(12*self.nside**2, clnoise=clnoise)
+            else:
+                IrndFull = qc.simulate_correlated_map(self.nside, 1., clin = clnoise, verbose=False)
+                QrndFull = qc.simulate_correlated_map(self.nside, 1., clin = clnoise, verbose=False)
+                UrndFull = qc.simulate_correlated_map(self.nside, 1., clin = clnoise, verbose=False)
+
+        noise_maps[seenpix, 0] = IrndFull[seenpix] * thnoise[seenpix]
+        noise_maps[seenpix, 1] = QrndFull[seenpix] * thnoise[seenpix] * np.sqrt(2)
+        noise_maps[seenpix, 2] = UrndFull[seenpix] * thnoise[seenpix] * np.sqrt(2)
         return noise_maps
 
     def theoretical_noise_maps(self, sigma_sec, coverage, Nyears=3, verbose=False):
@@ -523,7 +539,8 @@ def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='
         return xx, myY, None
 
 
-def get_angular_profile(maps, thmax=25, nbins=20, label='', center=np.array([316.44761929,-58.75808063]), allstokes=False, fontsize=None):
+def get_angular_profile(maps, thmax=25, nbins=20, label='', center=np.array([316.44761929,-58.75808063]), 
+                        allstokes=False, fontsize=None, doplot=False):
     vec0 = hp.ang2vec(center[0], center[1], lonlat=True)
     vecpix = hp.pix2vec(256, np.arange(12*256**2))
     angs = np.degrees(np.arccos(np.dot(vec0,vecpix)))
@@ -532,14 +549,15 @@ def get_angular_profile(maps, thmax=25, nbins=20, label='', center=np.array([316
     xx, yyQ, dx, dyQ, _ = ft.profile(angs, maps[:,1], nbins=nbins, plot=False, rng=rng)
     xx, yyU, dx, dyU, _ = ft.profile(angs, maps[:,2], nbins=nbins, plot=False, rng=rng)
     avg = np.sqrt((dyI**2+dyQ**2/2+dyU**2/2)/3)
-    plot(xx, avg, 'o', label=label)
-    if allstokes:
-        plot(xx, dyI, label=label+' I', alpha=0.3)
-        plot(xx, dyQ/np.sqrt(2), label=label+' Q/sqrt(2)', alpha=0.3)
-        plot(xx, dyU/np.sqrt(2), label=label+' U/sqrt(2)', alpha=0.3)
-    xlabel('Angle [deg.]')
-    ylabel('RMS')
-    legend(fontsize=fontsize)
+    if doplot:
+        plot(xx, avg, 'o', label=label)
+        if allstokes:
+            plot(xx, dyI, label=label+' I', alpha=0.3)
+            plot(xx, dyQ/np.sqrt(2), label=label+' Q/sqrt(2)', alpha=0.3)
+            plot(xx, dyU/np.sqrt(2), label=label+' U/sqrt(2)', alpha=0.3)
+        xlabel('Angle [deg.]')
+        ylabel('RMS')
+        legend(fontsize=fontsize)
     return xx, avg
 
 def correct_maps_rms(maps, cov, effective_variance_invcov):
@@ -586,10 +604,17 @@ def map_corr_neighbtheta(themap_in, ipok_in, thetamin, thetamax, nbins, degrade=
             ipneighb_inner = ipneighb_outer.copy()
             
     corrfct = thesum / thecount
-    return np.degrees(thvals[:-1]+thvals[1:])/2, corrfct
+    mythetas = np.degrees(thvals[:-1]+thvals[1:])/2
+    return mythetas, corrfct
 
+def get_angles(ip0, ips, ns):
+    v = np.array(hp.pix2vec(ns, ip0))
+    vecs = np.array(hp.pix2vec(ns, ips))
+    th = np.degrees(np.arccos(np.dot(v.T, vecs)))
+    return th
 
-def ctheta_parts(themap, ipok, thetamin, thetamax, nbinstot, nsplit=4, degrade_init=None, verbose=True):
+def ctheta_parts(themap, ipok, thetamin, thetamax, nbinstot, nsplit=4, degrade_init=None, 
+                verbose=True):
     allthetalims = np.linspace(thetamin, thetamax, nbinstot+1)
     thmin = allthetalims[:-1]
     thmax = allthetalims[1:]
@@ -599,7 +624,7 @@ def ctheta_parts(themap, ipok, thetamin, thetamax, nbinstot, nsplit=4, degrade_i
     else:
         nside_init = degrade_init
     nside_part = nside_init // (2**idx)
-    thall = (thmin+thmax)/2
+    thall = np.zeros(nbinstot)
     cthall = np.zeros(nbinstot)
     for k in range(nsplit):
         thispart = idx==k
@@ -608,8 +633,15 @@ def ctheta_parts(themap, ipok, thetamin, thetamax, nbinstot, nsplit=4, degrade_i
         mynbins = nbinstot//nsplit
         mynside = nside_init // (2**k)
         if verbose: print('Doing {0:3.0f} bins between {1:5.2f} and {2:5.2f} deg at nside={3:4.0f}'.format(mynbins, mythmin, mythmax, mynside))
-        myth, mycth = map_corr_neighbtheta(themap, ipok, mythmin, mythmax, mynbins, degrade=mynside, verbose=verbose)
-        cthall[thispart] = mycth 
+        myth, mycth = map_corr_neighbtheta(themap, ipok, mythmin, mythmax, mynbins, degrade=mynside, 
+            verbose=verbose)
+        cthall[thispart] = mycth
+        thall[thispart] = myth 
+
+    ### One could also calculate the average of the distribution of pixels within the ring instead of the simplistic thetas
+    dtheta = allthetalims[1]-allthetalims[0]
+    thall = 2./3 * ((thmin+dtheta)**3 - thmin**3) / ((thmin+dtheta)**2 - thmin**2)
+    ### But it actually changes very little
     return thall, cthall
         
 

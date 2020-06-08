@@ -95,6 +95,7 @@ legend()
 ```{python}
 ### Now do a realization of QUBIC sky
 reload(qss)
+reload(qc)
 ## Make a sky using PYSM: It will have the expected QUBIC beam, the coverage and noise according to this coverage
 seed = None
 sky_config = {'cmb': seed}
@@ -124,7 +125,7 @@ cold = np.array(FitsArray(dirmapsold + 'CMB-Only-12sub_3000_1e-5_maps_convolved_
 
 rc('figure', figsize=(16, 10))
 dofit=True
-nbins = 25
+nbins = 80
 xx, yy, fit_fs = qss.get_noise_invcov_profile(qubicnoise, cov, nbins=nbins,
                                               label='FastSim from NERSC 200000',fit=dofit)
 xx, yy, fit_n200k = qss.get_noise_invcov_profile(m[0,:,:]-c[0,:,:], cov, nbins=nbins,
@@ -244,138 +245,52 @@ tight_layout()
 ### Let's try to look at covariance between nearby pixels
 reload(qss)
 reload(ft)
-def corrmapsrms(maps, cov, effective_variance_invcov):
-    okpix = cov > 0
-    newmaps = maps*0
-    correction = np.interp(np.max(cov)/cov[okpix], effective_variance_invcov[0,:], effective_variance_invcov[1,:])
-    for s in range(3):
-        newmaps[okpix,s] = maps[okpix,s] / np.sqrt(correction) * np.sqrt(cov[okpix]/np.max(cov))
-    return newmaps
 
-# 1) Correct maps for RMS vs 1/cov
-new_qubicnoise = corrmapsrms(qubicnoise, cov, fit_n200k)
-new_diff = corrmapsrms(diff, cov, fit_n200k)
-new_diff3k = corrmapsrms(diffold, covold, fit_n3k)
+new_qubicnoise = qss.correct_maps_rms(qubicnoise, cov, fit_n200k)
+new_diff = qss.correct_maps_rms(diff, cov, fit_n200k)
+new_diff3k = qss.correct_maps_rms(diffold, covold, fit_n3k)
 
-#### Check that it's flat coverage...
+
 subplot(1,3,1)
 bla = qss.get_angular_profile(new_qubicnoise, label='Fastsim corrected',
-                              allstokes=True,nbins=50,thmax=22, fontsize=10)
+                              allstokes=True,nbins=50,thmax=22, fontsize=10, doplot=True)
+ylim(0,1.2)
+xlim(0,22)
 title('FastSim')
+
 subplot(1,3,2)
 bla = qss.get_angular_profile(new_diff, label='Nersc 200k corrected',
-                              allstokes=True,nbins=50,thmax=22, fontsize=10)
+                              allstokes=True,nbins=50,thmax=22, fontsize=10, doplot=True)
+ylim(0,1.2)
+xlim(0,22)
 title('200k')
+
 subplot(1,3,3)
 bla = qss.get_angular_profile(new_diff3k, label='Nersc 3k corrected',
-                              allstokes=True,nbins=50,thmax=22, fontsize=10)
+                              allstokes=True,nbins=50,thmax=22, fontsize=10, doplot=True)
+ylim(0,1.2)
+xlim(0,22)
 title('3k')
 
-### Now I want to calculate the correlation with neighbouring pixels...
-
-
 ```
 
 ```{python}
-new_qubicnoise.shape
-```
-
-```{python}
-def map_corr_8neighb(themap, ipok):
-    ns = hp.npix2nside(len(themap))
-    newmap = np.zeros(12*ns**2)
-    for i in range(len(ipok)):
-        ipneighb = hp.get_all_neighbours(ns, ipok[i])
-        valthis = themap[ipok[i],istk]
-        valneighb = themap[ipneighb,istk]
-        valprod = valthis * valneighb
-        newmap[ipok[i]] = np.mean(valprod[valprod != 0])
-    rms_okpix = np.std(themap[themap != 0])
-    return newmap/rms_okpix
-
-
 ns = d['nside']
-okpix = cov > np.max(cov)*0.15
+okpix = cov > (np.max(cov)*0.1)
 ip = np.arange(12*ns**2).astype(int)
 ipok = ip[okpix]
 
-new_qubicnoise = corrmapsrms(qubicnoise, cov, fit_n200k)
-new_diff = corrmapsrms(diff, cov, fit_n200k)
-new_diff3k = corrmapsrms(diffold, covold, fit_n3k)
-
-istk = 0
-mapxy_qubicnoise = map_corr_8neighb(new_qubicnoise, ipok) 
-mapxy_diff = map_corr_8neighb(new_diff, ipok)    
-mapxy_diff3k = map_corr_8neighb(new_diff3k, ipok)    
-```
-
-```{python}
-reload(ft)
-lim = 1.
-hp.gnomview(mapxy_qubicnoise, rot=center, reso=15, sub=(1,3,1),min=-lim, max=lim)
-hp.gnomview(mapxy_diff, rot=center, reso=15, sub=(1,3,2),min=-lim, max=lim)
-hp.gnomview(mapxy_diff3k, rot=center, reso=15, sub=(1,3,3),min=-lim, max=lim)
-
-figure()
-nb = 301
-a=hist(mapxy_qubicnoise[ipok], bins=nb, range=[-1,1], label='FastSim: '+ft.statstr(mapxy_qubicnoise[ipok], divide=True), histtype='step')
-a=hist(mapxy_diff[ipok], bins=nb, range=[-1,1], label='200k:'+ft.statstr(mapxy_diff[ipok], divide=True), histtype='step')
-a=hist(mapxy_diff3k[ipok], bins=nb, range=[-1,1], label='3k:'+ft.statstr(mapxy_diff3k[ipok], divide=True), histtype='step')
-yscale('log')
-legend()
-```
-
-```{python}
-
-from qubic.utils import progress_bar
-
-def map_corr_neighbtheta(themap, ipok, thetamin, thetamax, nbins):
-    rthmin = np.radians(thetamin)
-    rthmax = np.radians(thetamax)
-    thvals = np.linspace(rthmin, rthmax, nbins+1)
-    ns = hp.npix2nside(len(themap))
-    thesum = np.zeros(nbins)
-    thecount = np.zeros(nbins)
-    bar = progress_bar(len(ipok),'Pixels')
-    for i in range(len(ipok)):
-        bar.update()
-        valthis = themap[ipok[i]]
-        v = hp.pix2vec(ns, ipok[i])
-        ipneighb_inner = []
-        for k in range(nbins): 
-            thmin = thvals[k]
-            thmax = thvals[k+1]
-            #print('   Inner: {}'.format(len(ipneighb_inner)))
-            ipneighb_outer = list(hp.query_disc(ns, v, thmax))
-            ipneighb = ipneighb_outer.copy()
-            #print('   Outer: {}'.format(len(ipneighb)))
-            for l in ipneighb_inner: ipneighb.remove(l)
-            #print('   Final: {}'.format(len(ipneighb)))
-            #print('  ',ipok[i], ipneighb)
-            #print()
-            valneighb = themap[ipneighb]
-            thesum[k] += np.sum(valthis * valneighb)
-            thecount[k] += len(valneighb)
-            ipneighb_inner = ipneighb_outer.copy()
-            
-    corrfct = thesum / thecount
-    return np.degrees(thvals[:-1]+thvals[1:])/2, corrfct
-
-th, cth_qn2 = map_corr_neighbtheta(new_qubicnoise[:,0], ipok, 0., 15., 15)
-th, cth_200k2 = map_corr_neighbtheta(new_diff[:,0], ipok, 0., 15, 15)
-th, cth_3k2 = map_corr_neighbtheta(new_diff3k[:,0], ipok, 0., 15, 15)
-
-
+th, cth_qn = qss.ctheta_parts(new_qubicnoise[:,0], ipok, 0, 20, 20, nsplit=5, degrade_init=128, verbose=False)
+th, cth_200k = qss.ctheta_parts(new_diff[:,0], ipok, 0, 20, 20, nsplit=5, degrade_init=128, verbose=False)
+th, cth_3k = qss.ctheta_parts(new_diff3k[:,0], ipok, 0, 20, 20, nsplit=5, degrade_init=128, verbose=False)
 
 ```
 
 ```{python}
-
-
-mult = th**2*0+1
-plot(th,(cth_qn2)*mult,'o-', label='FastSim')
-plot(th,(cth_3k2)*mult,'o-', label ='3k')
-plot(th,(cth_200k2)*mult,'o-', label='200k')
+plot(th,(cth_qn),'o', label='FastSim')
+plot(th,(cth_3k),'o', label ='3k')
+plot(th,(cth_200k),'o', label='200k')
+plot(th,th*0,'k:')
 legend()
 xlabel(r'$\theta$ [deg]')
 ylabel(r'$C(\theta)$')
@@ -383,47 +298,89 @@ ylabel(r'$C(\theta)$')
 ```
 
 ```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
 from scipy.optimize import curve_fit
 
 fct = lambda x, a, b, c: a * np.sin(x/b) * exp(-x/c)
-results_qn2 = curve_fit(fct, th[1:], (cth_qn2[1:]/cth_qn2[0]),maxfev=100000, ftol=1e-7)
-results_3k2 = curve_fit(fct, th[1:], (cth_3k2[1:]/cth_3k2[0]),maxfev=100000, ftol=1e-7)
-results_200k2 = curve_fit(fct, th[1:], (cth_200k2[1:]/cth_200k2[0]),maxfev=100000, ftol=1e-7)
+results_qn = curve_fit(fct, th[1:], (cth_qn[1:]/cth_qn[0]),maxfev=100000, ftol=1e-7, p0=[0,1,1])
+results_3k = curve_fit(fct, th[1:], (cth_3k[1:]/cth_3k[0]),maxfev=100000, ftol=1e-7, p0=[0,1,1])
+results_200k = curve_fit(fct, th[1:], (cth_200k[1:]/cth_200k[0]),maxfev=100000, ftol=1e-7, p0=[0,1,1])
 
-thth = np.linspace(0,15,100)
-p=plot(th,(cth_qn2/cth_qn2[0]),'o', label='FastSim')
-plot(thth, fct(thth, *results_qn2[0]), color=p[0].get_color(),
-     label=r'$a\times\sin(\theta/b)\times\exp(\theta/c)$'+'\n a={0:4.2f} b={1:4.2f} c={2:4.2f}'.format(*results_qn2[0]))
-p=plot(th,(cth_3k2/cth_3k2[0]),'o', label ='3k')
-plot(thth, fct(thth, *results_3k2[0]), color=p[0].get_color(),
-     label=r'$a\times\sin(\theta/b)\times\exp(\theta/c)$'+'\n a={0:4.2f} b={1:4.2f} c={2:4.2f}'.format(*results_3k2[0]))
+thth = np.linspace(0,20,100)
+p=plot(th,(cth_qn/cth_qn[0]),'o', label='FastSim')
+plot(thth, fct(thth, *results_qn[0]), color=p[0].get_color(),
+     label=r'$a\times\sin(\theta/b)\times\exp(\theta/c)$'+'\n a={0:4.2f} b={1:4.2f} c={2:4.2f}'.format(*results_qn[0]))
+p=plot(th,(cth_3k/cth_3k[0]),'o', label ='3k')
+plot(thth, fct(thth, *results_3k[0]), color=p[0].get_color(),
+     label=r'$a\times\sin(\theta/b)\times\exp(\theta/c)$'+'\n a={0:4.2f} b={1:4.2f} c={2:4.2f}'.format(*results_3k[0]))
 
-p=plot(th,(cth_200k2/cth_200k2[0]),'o', label='200k')
-plot(thth, fct(thth, *results_200k2[0]), color=p[0].get_color(),
-     label=r'$a\times\sin(\theta/b)\times\exp(\theta/c)$'+'\n a={0:4.2f} b={1:4.2f} c={2:4.2f}'.format(*results_200k2[0]))
-
-print(results_200k2[0])
+p=plot(th,(cth_200k/cth_200k[0]),'o', label='200k')
+plot(thth, fct(thth, *results_200k[0]), color=p[0].get_color(),
+     label=r'$a\times\sin(\theta/b)\times\exp(\theta/c)$'+'\n a={0:4.2f} b={1:4.2f} c={2:4.2f}'.format(*results_200k[0]))
 
 legend()
 xlabel(r'$\theta$ [deg]')
 ylabel(r'$C(\theta)$ [Normalized]')
+ylim(-0.1,1)
 
 ```
 
-```{python}
-for i in range(len(th)):
-    print('[{0:8.5g}, {1:8.5g}, {2:8.5g}, {3:8.5g}]'.format(th[i], cth_qn2[i], cth_3k2[i],cth_200k2[i]))
-```
+Now go to Cl space
 
 ```{python}
-np.sum((cov/np.max(cov))>0.1)
-```
+rc('figure', figsize=(15, 6))
+reload(qc)
+reload(qss)
 
-```{python}
+mylmax = 1024
+theta = np.linspace(0,180,1000)
+ctheta = fct(theta, *results_200k[0])
+ctheta[0] = 1
+#ctheta[1:] = 0
 
-```
+#### Disply input C(theta)
+subplot(1,2,1)
+plot(theta,ctheta,label='Input C(theta)')
+xlabel(r'$\theta$ [deg]')
+ylabel(r'$C(\theta)$')
+xlim(0,25)
 
-```{python}
+#### COnvert to Cl and display
+lll, clth = qc.ctheta_2_cell(theta, ctheta, lmax=mylmax)
+
+#### Go back to c(theta)
+thback, ctheta_back = qc.cell_2_ctheta(clth, theta_deg=theta)
+plot(theta, ctheta_back, '--',label='C(theta) back from Cell')
+plot(theta, theta*0,'k:')
+legend()
+
+
+subplot(1,2,2)
+plot(lll, clth, label='Output Cell / cl[0]')
+plot(lll, lll*0+1,'k:')
+xlabel(r'$\ell$')
+ylabel(r'$C_\ell$')
+xlim(0,np.max(lll))
+legend()
 
 ```
 
@@ -608,7 +565,7 @@ So now we can perform many simulations of the same...
 
 ```{python}
 #### Now in a function to loop over ell binning, lmin, coverage
-def run_mc(nbmc, Namaster, d, signoise, cov, effective_variance_invcov, verbose=False):
+def run_mc(nbmc, Namaster, d, signoise, cov, effective_variance_invcov, verbose=False, clnoise=None):
     ell_bins, b = Namaster.get_binning(d['nside'])
     mask_apo = Namaster.mask_apo
     okpix = cov > (np.max(cov)*0.1)
@@ -624,10 +581,14 @@ def run_mc(nbmc, Namaster, d, signoise, cov, effective_variance_invcov, verbose=
     print('        Starting MC')
     for imc in range(nbmc):
         t0 = time.time()
-        qubicnoiseA = Qubic_sky.create_noise_maps(signoise, cov, effective_variance_invcov=effective_variance_invcov)
+        qubicnoiseA = Qubic_sky.create_noise_maps(signoise, cov, 
+                                                  effective_variance_invcov=effective_variance_invcov,
+                                                 clnoise=clnoise)
 #         qubicnoiseA[~okpix] = 0
 #         qubicnoiseA[okpix] -= np.mean(qubicnoiseA[okpix])
-        qubicnoiseB = Qubic_sky.create_noise_maps(signoise, cov, effective_variance_invcov=effective_variance_invcov)
+        qubicnoiseB = Qubic_sky.create_noise_maps(signoise, cov, 
+                                                  effective_variance_invcov=effective_variance_invcov,
+                                                 clnoise=clnoise)
 #         qubicnoiseB[~okpix] = 0
 #         qubicnoiseB[okpix] -= np.mean(qubicnoiseB[okpix])
         
@@ -681,7 +642,7 @@ legend()
 ```{python}
 from qubic import NamasterLib as nam
 reload(qss)
-nbmc = 10
+nbmc = 100
 signoise = 75.   # initial was 75.
 
 # Create a Namaster object
@@ -697,11 +658,7 @@ maskpix = np.zeros(12*d['nside']**2)
 maskpix[okpix] = 1
 Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
 
-# Initial
-# leff, mcl_noise_qubic, scl_noise_qubic = run_mc(nbmc, Namaster, d, signoise, cov, effective_variance_invcov)
-
-#leff, mcl_noise_qubic, scl_noise_qubic = run_mc(nbmc, Namaster, d, signoise, cov, fit_n3k) #=> mieux
-leff, mcl_noise_qubic, scl_noise_qubic = run_mc(nbmc, Namaster, d, signoise, cov, fit_n200k) #=> pareil
+leff, mcl_noise_qubic, scl_noise_qubic = run_mc(nbmc, Namaster, d, signoise, cov, fit_n200k, clnoise=clth)
 ```
 
 ```{python}

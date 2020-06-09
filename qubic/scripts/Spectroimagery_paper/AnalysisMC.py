@@ -60,14 +60,12 @@ def std_profile(many_patch, nbins, nside, center, seenmap):
     return bin_centers, ang, std_bin, std_profile
 
 
-def get_residuals(name, rep_simu, residuals_way, irec):
+def get_residuals(rep_simu, residuals_way, irec):
     """
     Compute residuals in a given way.
 
     Parameters
     ----------
-    name : str
-        Simulation file.
     rep_simu : str
         Path containing the simulations.
     residuals_way : str
@@ -79,23 +77,14 @@ def get_residuals(name, rep_simu, residuals_way, irec):
     -------
         residuals : array of shape (#reals, #bands, #pixels, 3)
     """
-
-    # Dictionary saved during the simulation
-    d = qubic.qubicdict.qubicDict()
-    d.read_from_file(rep_simu + name + '.dict')
-    nf_recon = d['nf_recon']
-    if irec not in nf_recon:
-        raise ValueError('Invalid number of freq. {0} not in {1}'.format(irec, nf_recon))
-
-    _, maps_recon_patch, _, maps_diff_patch = rmc.get_patch_many_files(rep_simu + name,
+    _, maps_recon_patch, _, maps_diff_patch = rmc.get_patch_many_files(rep_simu,
                                                                        '*nfrecon{}*False*'.format(irec),
                                                                        verbose=False)
-
     if residuals_way == 'noiseless':
-        _, patch_recon_nl, patch_conv_nl, patch_diff_nl = rmc.get_patch_many_files(rep_simu + name,
+        _, patch_recon_nl, patch_conv_nl, patch_diff_nl = rmc.get_patch_many_files(rep_simu,
                                                                                    '*nfrecon{}*True*'.format(irec),
                                                                                    verbose=False)
-        residuals = maps_recon_patch - patch_recon_nl
+        residuals = maps_recon_patch - patch_recon_nl[0]
 
     elif residuals_way == 'conv':
         residuals = maps_diff_patch

@@ -93,6 +93,10 @@ legend()
 ```
 
 ```{python}
+
+```
+
+```{python}
 ### Now do a realization of QUBIC sky
 reload(qss)
 reload(qc)
@@ -584,18 +588,9 @@ def run_mc(nbmc, Namaster, d, signoise, cov, effective_variance_invcov, verbose=
         qubicnoiseA = Qubic_sky.create_noise_maps(signoise, cov, 
                                                   effective_variance_invcov=effective_variance_invcov,
                                                  clnoise=clnoise)
-#         qubicnoiseA[~okpix] = 0
-#         qubicnoiseA[okpix] -= np.mean(qubicnoiseA[okpix])
         qubicnoiseB = Qubic_sky.create_noise_maps(signoise, cov, 
                                                   effective_variance_invcov=effective_variance_invcov,
                                                  clnoise=clnoise)
-#         qubicnoiseB[~okpix] = 0
-#         qubicnoiseB[okpix] -= np.mean(qubicnoiseB[okpix])
-        
-#         figure()
-#         plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[1,:]), label='Norm Profile')
-#         bla = qss.get_noise_invcov_profile(qubicnoiseA, cov, label='A not norm',fit=False)
-#         bla = qss.get_noise_invcov_profile(qubicnoiseB, cov, label='B not norm',fit=False)
         
         ### Compute Spectra:
         # Noise Only
@@ -640,9 +635,13 @@ legend()
 ```
 
 ```{python}
+
+```
+
+```{python}
 from qubic import NamasterLib as nam
 reload(qss)
-nbmc = 100
+nbmc = 10
 signoise = 75.   # initial was 75.
 
 # Create a Namaster object
@@ -732,7 +731,10 @@ legend()
 ```
 
 ```{python}
-
+#### save for Lyon
+# pickle.dump(clth, open('cl_corr_noise_nersc200k.pk', "wb"))
+# FitsArray(cov).save('Coverage_Nersc200k.fits')
+# pickle.dump(clth, open('cl_corr_noise_nersc200k.pk', "wb"))
 ```
 
 ```{python}
@@ -773,9 +775,12 @@ legend()
 
 ```{python}
 signoise = 75.
-nbmc = 20
-alllmin = [10, 15, 20, 25, 30]
-alldelta_ell = [20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70]
+nbmc = 100
+# alllmin = [10, 15, 20, 25, 30]
+# alldelta_ell = [20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70]
+# allcovcut = [0.1, 0.15, 0.2, 0.25, 0.3]
+alllmin = [10, 20, 30]
+alldelta_ell = [40, 45, 50, 55, 60, 65, 70]
 allcovcut = [0.1, 0.15, 0.2, 0.25, 0.3]
 print(2*4*len(alllmin)*len(alldelta_ell)*len(allcovcut)*nbmc/3600)
 
@@ -800,7 +805,7 @@ for lmin in alllmin:
                 maskpix = np.zeros(12*d['nside']**2)
                 maskpix[okpix] = 1
                 Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
-                alloutputs = run_mc(nbmc, Namaster, d, signoise, cov, fit_n200k)
+                alloutputs = run_mc(nbmc, Namaster, d, signoise, cov, fit_n200k, clnoise=clth)
                 with open(directory+'res_{}_{}_{}.pickle'.format(lmin, delta_ell, covcut), 'wb') as handle:
                                     pickle.dump(alloutputs, handle)
             else:
@@ -912,11 +917,14 @@ print(scl[0,2])
 
 ```{python}
 signoise = 75.
-nbmc = 50
-alllmin = [10, 15, 20, 25, 30]
-alldelta_ell = [20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70]
-allcovcut = [0.1, 0.15, 0.2, 0.25, 0.3]
+nbmc = 100
+# alllmin = [10, 15, 20, 25, 30]
+# alldelta_ell = [20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70]
+# allcovcut = [0.1, 0.15, 0.2, 0.25, 0.3]
 
+alllmin = [10, 20, 30]
+alldelta_ell = [40, 45, 50, 55, 60, 65, 70]
+allcovcut = [0.1, 0.15, 0.2, 0.25, 0.3]
 
 #### Choose which simulation set
 nside = 256

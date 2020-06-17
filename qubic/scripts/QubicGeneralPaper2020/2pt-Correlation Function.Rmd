@@ -1,0 +1,491 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# %matplotlib inline
+from pylab import *
+import os
+import sys
+from importlib import reload
+import glob
+import pickle
+import time
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm
+import qubic
+from qubic import SpectroImLib as si
+from qubic import QubicSkySim as qss
+from qubic import NamasterLib as nam
+from qubic import camb_interface as qc
+from qubic import fibtools as ft
+from qubic.utils import progress_bar
+
+rc('figure', figsize=(13, 6))
+rc('font', size=12)
+```
+
+#### In this Notebook we try to measure the 2pt-correlation function of the noise in QUBIC simulations performed at NERSC
+
+```{python}
+### Initialize
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+
+dictfilename = global_dir + '/dicts/BmodesNoDustNoSystPaper0_2020.dict'
+
+
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+d['nside']=256
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+print(center)
+```
+
+```{python}
+#### This function reads the maps
+def read_files_mc(dirmap,file_rnd_string, verbose=False):
+    m = np.array(FitsArray(glob.glob(dirmap+'*_maps_recon_*'+file_rnd_string+'.fits')[0]))
+    c = np.array(FitsArray(glob.glob(dirmap+'*_maps_convolved_*'+file_rnd_string+'.fits')[0]))
+    cov = np.array(FitsArray(glob.glob(dirmap+'*_maps_coverage_*'+file_rnd_string+'.fits')[0]))
+    with open(glob.glob(dirmap+'*_dictionary_'+file_rnd_string+'.pickle')[0], 'rb') as handle: d = pickle.load(handle)
+    with open(glob.glob(dirmap+'*_input_cell_'+file_rnd_string+'.pickle')[0], 'rb') as handle: icl = pickle.load(handle)
+    filetype = glob.glob(dirmap+'*_maps_recon_*'+file_rnd_string+'.fits')[0].split('/')[-1]
+    if verbose: print('read {}'.format(filetype))
+    return m, c, cov, d, icl, filetype
+
+### Get reconstructed maps from a simulation made on NERSC with 200000 pointings and tol=1e-5
+### First Instrument
+### detector_nep=4.7e-17
+### effecgtive_duration = 3 years
+nptg = 200000
+dirmaps='/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_NERSC/Maps/'
+file_rnd_string='H990hwzaGn'
+tol=1e-5
+
+m, c, covar, d, icl, ftype = read_files_mc(dirmaps, file_rnd_string, verbose=True)
+print(np.shape(m))
+residuals_maps = m[0,:,:]-c[0,:,:]
+
+rc('figure', figsize=(16, 10))
+res = 15
+figure()
+st = ['I', 'Q', 'U']
+rng = [5, 5, 5]
+for s in range(3):
+    hp.gnomview(residuals_maps[:,s], rot=center, reso=res, sub=(1,3,s+1), title='NERSC 200000 '+st[s],
+               min=-rng[s], max=rng[s])
+tight_layout()
+
+
+
+
+```
+
+### Calculation of the 2-pt Correlation Function in pixel-space
+
+```{python}
+reload(qss)
+reload(ft)
+
+# 1) Fit RMS Vs 1/cov
+dofit=True
+nbins = 25
+subplot(2,2,1)
+xx, yy, fit_n200k = qss.get_noise_invcov_profile(residuals_maps, covar, nbins=nbins,
+                                              label='NERSC 200000',fit=dofit)
+title('200k')
+
+
+# 2) Correct maps for RMS vs 1/cov
+new_diff = qss.correct_maps_rms(residuals_maps, covar, fit_n200k)
+subplot(2,2,2)
+bla = qss.get_angular_profile(new_diff, label='Nersc 200k corrected',
+                              allstokes=True,nbins=50,thmax=22, fontsize=10)
+title('200k')
+
+# 3) Calculate 2Pt Correlation function
+
+```
+
+```{python}
+
+ns = d['nside']
+okpix = covar > (np.max(covar)*0.1)
+ip = np.arange(12*ns**2).astype(int)
+ipok = ip[okpix]
+
+th, cth_200k = qss.ctheta_parts(new_diff[:,0], ipok, 0, 20, 20, nsplit=5, degrade_init=128, verbose=False)
+
+
+
+```
+
+```{python}
+rc('figure', figsize=(13, 6))
+from scipy.optimize import curve_fit
+
+fct = lambda x, a, b, c: a * np.sin(x/b) * exp(-x/c)
+results_200k = curve_fit(fct, th[1:], cth_200k[1:]/cth_200k[0])
+
+thetas = np.linspace(0,20,100)
+p=plot(th,cth_200k/cth_200k[0],'o', label='200k')
+plot(thetas, fct(thetas, *results_200k[0]), color=p[0].get_color(),
+         label=r'$a\times\sin(\theta/b)\times\exp(\theta/c)$'+'\n a={0:4.2f} b={1:4.2f} c={2:4.2f}'.format(*results_200k[0]))
+plot(th,th*0,'k:')
+legend()
+xlabel(r'$\theta$ [deg]')
+ylabel(r'$C(\theta)$')
+
+print(np.var(new_diff[ipok,0]))
+```
+
+# Now we want to check our FastSimulation
+The fast simulation is based on:
+- making uniform noise in map-space
+- convolving with the C(theta) through multiplication in harmonic-space by the harmonic transform of C(theta)
+- going back to initial pixel space
+- multiplying pixels by expected RMS Vs 1/cov behaviour
+
+We need to check this operation with a Monte-Carlo
+
+## 1st point: Harmonic transform of theoretical C(theta)
+Below we start fron the fitted C(theta) in Pixel space, transform it to Cl and back to C(theta) to check if the transform is fine. It's OK if lmax is chosen high enough.
+
+```{python}
+rc('figure', figsize=(15, 6))
+reload(qc)
+reload(qss)
+
+mylmax = 1024
+theta = np.linspace(0,180,1000)
+ctheta = fct(theta, *results_200k[0])
+ctheta[0] = 1
+#ctheta[1:] = 0
+
+#### Disply input C(theta)
+subplot(1,2,1)
+plot(theta,ctheta,label='Input C(theta)')
+xlabel(r'$\theta$ [deg]')
+ylabel(r'$C(\theta)$')
+xlim(0,25)
+
+#### COnvert to Cl and display
+lll, clth = qc.ctheta_2_cell(theta, ctheta, lmax=mylmax)
+
+#### Go back to c(theta)
+thback, ctheta_back = qc.cell_2_ctheta(clth, theta_deg=theta)
+plot(theta, ctheta_back, '--',label='C(theta) back from Cell')
+plot(theta, theta*0,'k:')
+legend()
+
+
+subplot(1,2,2)
+plot(lll, clth, label='Output Cell / cl[0]')
+plot(lll, lll*0+1,'k:')
+xlabel(r'$\ell$')
+ylabel(r'$C_\ell$')
+xlim(0,np.max(lll))
+legend()
+
+
+
+```
+
+```{python}
+### Let's try an MC
+reload(qss)
+reload(qc)
+
+## Make a sky using PYSM: It will have the expected QUBIC beam, the coverage and noise according to this coverage
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+
+nside = 256
+covar_deg = hp.ud_grade(covar, nside)
+okpix = covar_deg > (np.max(covar_deg)*0.1)
+ip = np.arange(12*nside**2).astype(int)
+ipok = ip[okpix]
+
+
+nbmc = 100
+nbins = 20
+thmax = 20.
+from qubic.utils import progress_bar
+
+signoise = 1.
+lmax = 2*nside
+
+
+all_cthout = np.zeros((nbmc, nbins))
+bar = progress_bar(nbmc)
+for i in range(nbmc):
+    
+    outmapIQU = Qubic_sky.create_noise_maps(signoise, covar, 
+                                            effective_variance_invcov=fit_n200k, 
+                                            clnoise=clth)
+    corrected_outmapIQU = qss.correct_maps_rms(outmapIQU, covar, fit_n200k)
+    bla = qss.get_angular_profile(corrected_outmapIQU, label='Nersc 200k corrected',
+                              allstokes=True,nbins=50,thmax=22, fontsize=10)
+    
+    outmap = corrected_outmapIQU[:,0]
+    ip = np.arange(12*nside**2).astype(int)
+    ipok = ip[okpix]
+    th, all_cthout[i,:] = qss.ctheta_parts(outmap, ipok, 0, thmax, nbins, 
+                                          nsplit=5, degrade_init=128, verbose=False)
+
+    bar.update()
+
+```
+
+```{python}
+factor = 7
+ff=1.
+
+mcthout = np.mean(all_cthout, axis=0)
+scthout = np.std(all_cthout, axis=0)/np.sqrt(nbmc)
+errorbar(th*ff, mcthout/mcthout[0]*factor, yerr=scthout/mcthout[0]*factor, fmt='ro',label='C(theta*{}) x {}'.format(ff,factor))
+plot(theta,ctheta/ctheta[0],label='Input C(theta)')
+plot(theta,theta*0,'k:')
+xlim(0,20)
+ylim(-0.1,1)
+legend()
+print(th)
+print(mcthout/mcthout[0]*10)
+```
+
+<!-- #region -->
+**Preliminary Conclusion**:
+It's difficult to check for the validity of this operation at the c(theta) level as the C(theta) seems completely weirdly normalized... It's much safer to check at the Cl level. But this requires Namaster and comparison with some NERSC 200k spectra.
+
+**Not Understood**
+- the factor ~ 2pi in amplitude
+- the factor ~ 1.2 in stretch...
+
+
+Anyway, after making a big MC with these it seems that the effect is not strong enough. SO I suspect there is some normalization issue. Let's try to renormalize the contrast of the Cl filter
+<!-- #endregion -->
+
+```{python}
+newclth = (clth-1)*2*np.pi+1
+
+subplot(1,2,2)
+plot(lll, clth, label='Output Cell / cl[0]')
+plot(lll, newclth, label='Output Cell / cl[0] Normalized')
+plot(lll, lll*0+1,'k:')
+xlabel(r'$\ell$')
+ylabel(r'$C_\ell$')
+xlim(0,np.max(lll))
+legend()
+
+```
+
+Let's make a MC in order to estimate what would be the factor that would sort this out.
+
+```{python}
+### Let's try an MC
+reload(qss)
+reload(qc)
+
+## Make a sky using PYSM: It will have the expected QUBIC beam, the coverage and noise according to this coverage
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+
+nside = 256
+covar_deg = hp.ud_grade(covar, nside)
+okpix = covar_deg > (np.max(covar_deg)*0.1)
+ip = np.arange(12*nside**2).astype(int)
+ipok = ip[okpix]
+
+nalpha = 10
+alphavals = np.linspace(1,8, nalpha)
+allcth = []
+
+for k in range(nalpha):
+    print(k,nalpha)
+    newclth = (clth-1)*alphavals[k]+1
+
+    nbmc2 = 10
+    nbins = 20
+    thmax = 20.
+    from qubic.utils import progress_bar
+
+    signoise = 1.
+    lmax = 2*nside
+
+
+    all_cthout_renorm = np.zeros((nbmc2, nbins))
+    bar = progress_bar(nbmc2)
+    for i in range(nbmc2):
+
+        outmapIQU = Qubic_sky.create_noise_maps(signoise, covar, 
+                                                effective_variance_invcov=fit_n200k, 
+                                                clnoise=newclth)
+        corrected_outmapIQU = qss.correct_maps_rms(outmapIQU, covar, fit_n200k)
+        bla = qss.get_angular_profile(corrected_outmapIQU, label='Nersc 200k corrected',
+                                  allstokes=True,nbins=50,thmax=22, fontsize=10)
+
+        outmap = corrected_outmapIQU[:,0]
+        ip = np.arange(12*nside**2).astype(int)
+        ipok = ip[okpix]
+        th, all_cthout_renorm[i,:] = qss.ctheta_parts(outmap, ipok, 0, thmax, nbins, 
+                                              nsplit=5, degrade_init=128, verbose=False)
+
+        bar.update()
+    allcth.append(all_cthout_renorm)
+    
+
+```
+
+```{python}
+# factor_r = 1
+# ff_r=1.
+
+# thecthout_renorm = allcth[0]
+
+# mcthout_renorm = np.mean(thecthout_renorm, axis=0)
+# scthout_renorm = np.std(thecthout_renorm, axis=0)/np.sqrt(nbmc2)
+# errorbar(th*ff_r, mcthout_renorm/mcthout_renorm[0]*factor_r, yerr=scthout_renorm/mcthout_renorm[0]*factor_r, fmt='bo',label='Renorm C(theta*{}) x {}'.format(ff_r,factor_r))
+# plot(theta,ctheta/ctheta[0],label='Input C(theta)')
+# plot(theta,theta*0,'k:')
+# xlim(0,20)
+# ylim(-0.1,1)
+# legend()
+# print(th)
+# print(mcthout/mcthout[0]*10)
+
+
+```
+
+```{python}
+factor_r = 1
+ff_r=1.
+
+ch2 = np.zeros(nalpha)
+
+plot(theta,ctheta/ctheta[0],label='Input C(theta)')
+plot(theta,theta*0,'k:')
+for k in range(nalpha):
+    thecthout_renorm = allcth[k]
+
+    mcthout_renorm = np.mean(thecthout_renorm, axis=0)
+    scthout_renorm = np.std(thecthout_renorm, axis=0)/np.sqrt(nbmc2)
+    errorbar(th, mcthout_renorm/mcthout_renorm[0], yerr=scthout_renorm/mcthout_renorm[0], fmt='o',label='C(theta) Renorm={0:5.2f}'.format(alphavals[k]))
+
+    ch2[k] = np.sum(((mcthout_renorm/mcthout_renorm[0] - np.interp(th, theta,ctheta/ctheta[0])))**2)
+    
+xlim(0,20)
+ylim(-0.1,1)
+legend()
+
+figure()
+plot(alphavals, ch2)
+
+
+```
+
+a value of 4.5 seems reasonnable
+
+```{python}
+alpha = 4.5
+
+newclth = (clth-1)*alpha+1
+
+subplot(1,2,2)
+plot(lll, clth, label='Output Cell / cl[0]')
+plot(lll, newclth, label='Output Cell / cl[0] Normalized')
+plot(lll, lll*0+1,'k:')
+xlabel(r'$\ell$')
+ylabel(r'$C_\ell$')
+xlim(0,np.max(lll))
+legend()
+
+```
+
+```{python}
+### Let's try an MC
+reload(qss)
+reload(qc)
+
+## Make a sky using PYSM: It will have the expected QUBIC beam, the coverage and noise according to this coverage
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+
+nside = 256
+covar_deg = hp.ud_grade(covar, nside)
+okpix = covar_deg > (np.max(covar_deg)*0.1)
+ip = np.arange(12*nside**2).astype(int)
+ipok = ip[okpix]
+
+
+nbmc = 100
+nbins = 20
+thmax = 20.
+from qubic.utils import progress_bar
+
+signoise = 1.
+lmax = 2*nside
+
+
+all_cthout = np.zeros((nbmc, nbins))
+bar = progress_bar(nbmc)
+for i in range(nbmc):
+    
+    outmapIQU = Qubic_sky.create_noise_maps(signoise, covar, 
+                                            effective_variance_invcov=fit_n200k, 
+                                            clnoise=newclth)
+    corrected_outmapIQU = qss.correct_maps_rms(outmapIQU, covar, fit_n200k)
+    bla = qss.get_angular_profile(corrected_outmapIQU, label='Nersc 200k corrected',
+                              allstokes=True,nbins=50,thmax=22, fontsize=10)
+    
+    outmap = corrected_outmapIQU[:,0]
+    ip = np.arange(12*nside**2).astype(int)
+    ipok = ip[okpix]
+    th, all_cthout[i,:] = qss.ctheta_parts(outmap, ipok, 0, thmax, nbins, 
+                                          nsplit=5, degrade_init=128, verbose=False)
+
+    bar.update()
+
+```
+
+```{python}
+factor = 1.
+ff=1.
+
+mcthout = np.mean(all_cthout, axis=0)
+scthout = np.std(all_cthout, axis=0)/np.sqrt(nbmc)
+errorbar(th*ff, mcthout/mcthout[0]*factor, yerr=scthout/mcthout[0]*factor, fmt='ro',label='C(theta) Renorm={0:4.1f}'.format(alpha))
+plot(theta,ctheta/ctheta[0],label='Input C(theta)')
+plot(theta,theta*0,'k:')
+xlim(0,20)
+ylim(-0.1,1)
+legend()
+
+```
+
+OK !
+So we don;t understand where this factor comes from but it seems to do a good job !
+
+```{python}
+
+```

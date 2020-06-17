@@ -52,6 +52,7 @@ import glob
 # Specific science modules
 import healpy as hp
 import numpy as np
+from astropy.io import fits
 
 # Specific qubic modules
 from qubicpack.utilities import Qubic_DataDir
@@ -66,7 +67,7 @@ from qubic import QubicSkySim as qss
 import ReadMC as rmc
 import AnalysisMC as amc
 
-rc('figure', figsize=(13, 10))
+rc('figure', figsize=(13, 12))
 rc('font', size=15)
 ```
 
@@ -96,38 +97,82 @@ x0ones = np.ones_like(x0cmb)
 
 ```{python}
 save_dir = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/Test_kmax/'
+```
+
+# At TOD level
+### Vary SynthBeam fraction 
+
+```{python}
+x0cmb.shape
+```
+
+```{python}
+d['noiseless'] = True
+d['synthbeam_kmax'] = 3
+d['npointings'] = 300
 
 # Pointing strategy
+
 p = qubic.get_pointing(d)
-
+p.pitch = p.pitch[0]
 seed = 42
-d['noiseless'] = True
 
-d['synthbeam_kmax'] = 8
-
-d['tol'] = 1e-5
-nf_sub_rec = 1
+x0 = x0ones
 
 allTOD = []
-npix = 12 * d['nside']**2 
-maps_recon = np.zeros((10, npix, 3))
-maps_conv = np.zeros((10, npix, 3))
-cov = np.zeros((10, npix))
-
 for i in range(10):
     sbfrac = (i + 1) / 10
     print('\n Synthbeam_fraction = ', sbfrac)
     d['synthbeam_fraction'] = sbfrac
     
     np.random.seed(seed) 
-    TOD, _ = si.create_TOD(d, p, x0ones, verbose=True)
+    TOD, _ = si.create_TOD(d, p, x0, verbose=True)
+    allTOD.append(TOD)
+```
+
+```{python}
+allTOD = np.array(allTOD)
+print(allTOD.shape)
+
+plt.figure()
+plt.plot(allTOD[0, 0, :], 'o')
+
+plt.figure()
+for i in range(10):
+    print(i)
+    sbfrac = (i + 1) / 10
+    print(sbfrac)
+    std_rapport = np.mean(allTOD[i, :, :]) / np.mean(allTOD[9, :, :])
+    plt.plot(sbfrac, std_rapport, 'o')
+plt.xlabel('SynthBeam fraction')
+plt.ylabel('<TOD> / (<TOD> for sb_frac=1) ')
+plt.plot([0, 1], [0, 1], 'k')
+plt.title('kmax=3, Noiseless=True, x0cmb')
+plt.grid()
+```
+
+### Vary kmax
+
+```{python}
+# Pointing strategy
+p = qubic.get_pointing(d)
+
+seed = 42
+d['noiseless'] = True
+
+d['synthbeam_fraction'] = 1
+
+x0 = x0cmb
+
+allTOD = []
+for i in range(6):
+    d['synthbeam_kmax'] = i
+    print('\n kmax =', i)  
+    
+    np.random.seed(seed) 
+    TOD, _ = si.create_TOD(d, p, x0, verbose=True)
     allTOD.append(TOD)
 
-#     maps_recon[i], cov[i], nus, nus_edge, maps_conv[i] = si.reconstruct_maps(TOD, d, p, nf_sub_rec, x0cmb)
-    
-#     simu_name = 'skycmb_tol=1e-5_kmax=8_sbfrac={}'.format(sbfrac)
-#     rmc.save_simu_fits(maps_recon[i], cov[i], nus, nus_edge, maps_conv[i],
-#                        save_dir=save_dir, simu_name=simu_name)
 ```
 
 ```{python}
@@ -135,27 +180,84 @@ allTOD = np.array(allTOD)
 allTOD.shape
 
 plt.figure()
+for i in range(0, 6):
+    plt.plot(np.mean(allTOD[i, :, :], axis=0), 'o', label='kmax = {}'.format(i))
+
+plt.xlabel('Pointing index')
+plt.ylabel('TOD averaged over TES')
+plt.xlim(0, 600)
+plt.title('sb_frac=1, Noiseless=True, x0cmb')
+plt.grid()
+plt.legend()
+
+
+# Mean and STD
+all_TODmean = np.mean(allTOD, axis=(1,2))
+all_TODstd = np.std(allTOD, axis=(1,2))
+
+plt.figure()
+plt.subplot(121)
+plt.plot(all_TODmean, 'o')
+plt.xlabel('kmax')
+plt.ylabel('TOD mean')
+plt.grid()
+
+plt.subplot(122)
+plt.plot(all_TODstd, 'o')
+plt.xlabel('kmax')
+plt.ylabel('TOD std')
+plt.grid()
+
+plt.suptitle('sb_frac=1, Noiseless=True, x0cmb')
+
+
+```
+
+# After map making
+
+```{python}
+# Pointing strategy
+p = qubic.get_pointing(d)
+
+seed = 42
+d['noiseless'] = False
+
+d['synthbeam_kmax'] = 1
+
+x0 = x0cmb
+
+npix = 12 * d['nside']**2 
+maps_recon = np.zeros((10, npix, 3))
+maps_conv = np.zeros((10, npix, 3))
+cov = np.zeros((10, npix))
+
+nf_sub_rec = 1
+d['tol'] = 1e-5
+
+allTOD = []
 for i in range(10):
     sbfrac = (i + 1) / 10
-    std_rapport = np.max(allTOD[i, :, :]) / np.max(allTOD[9, :, :])
-    plt.plot(sbfrac, std_rapport, 'o')
-    plt.xlabel('SynthBeam fraction')
-    plt.ylabel('TOD Mean for a given f / TOD Mean for f=1 ')
-    plt.plot([0, 1], [0, 1], 'k')
+    print('\n Synthbeam_fraction = ', sbfrac)
+    d['synthbeam_fraction'] = sbfrac
+    
+    np.random.seed(seed) 
+    TOD, _ = si.create_TOD(d, p, x0, verbose=True)
+    allTOD.append(TOD)
+    
+    
+    maps_recon[i], cov[i], nus, nus_edge, maps_conv[i] = si.reconstruct_maps(TOD, d, p, nf_sub_rec, x0)
+    
+    simu_name = 'skycmb_tol=1e-5_kmax=1_sbfrac={}'.format(sbfrac)
+    rmc.save_simu_fits(maps_recon[i], cov[i], nus, nus_edge, maps_conv[i],
+                       save_dir=save_dir, simu_name=simu_name)
 ```
 
 ```{python}
-from astropy.io import fits
-
-f = fits.open(save_dir + simu_name)
-f['COVERAGE'].data.shape
-```
-
-```{python}
+# Plot simulations varying kmax
 plt.figure()
-for i in range(9):
-    sbfrac = (i + 1) / 10
-    simu_name = 'skycmb_tol=1e-5_kmax=8_sbfrac={}'.format(sbfrac)
+for i in range(0, 9):
+    kmax = i
+    simu_name = 'skyzero_tol=1e-5_kmax={}_sbfrac=0.99'.format(i)
 
     f = fits.open(save_dir + simu_name)
     cov = f['COVERAGE'].data
@@ -166,158 +268,161 @@ for i in range(9):
     bin_centers, ang, std_bin, std_profile = amc.std_profile(np.expand_dims(maps_diff, axis=(0, 1))[:, :, seenmap, :], 
                                                         10, d['nside'], center, seenmap)
     
-    plt.plot(ang, std_profile[:, 0, 0], '.', label=simu_name[-10:])
+    plt.plot(bin_centers, std_bin[:, 0, 0], label='kmax = {}'.format(i))#simu_name[-10:])
 # plt.xlim(0, 7)
-# plt.ylim(0.3, 0.8)
+# plt.ylim(0.1, 0.2)
 plt.xlabel('Angle [deg]')
 plt.ylabel('STD')
-plt.title('STD in the residuals = recon - conv')
+plt.title('x0zero - sbfrac=0.99 - STD residual profile')
 plt.legend()
 ```
 
 ```{python}
+# Plot simulations varying sb_frac
 plt.figure()
-plt.plot(TOD1[0], 'ro', label='kmax=1')
-plt.plot(TOD2[0], 'bo', label='kmax=2')
-plt.plot(TOD3[0], 'go', label='kmax=8')
-plt.legend()
-plt.show()
-```
+for i in range(9):
+    sbfrac = (i + 1) / 10
+    simu_name = 'skycmb_tol=1e-5_kmax=1_sbfrac={}'.format(sbfrac)
 
-```{python}
-print(TOD1[0, :10])
-print(TOD2[0, :10])
-print(TOD3[0, :10])
-```
-
-```{python}
-d['tol'] = 1e-5
-d['noiseless'] = False
-nf_sub_rec = 1
-# d['synthbeam_kmax'] = 1
-# maps_recon1, cov1, nus, nus_edge, maps_conv1 = si.reconstruct_maps(TOD1, d, p, nf_sub_rec, x0)
-
-# d['synthbeam_kmax'] = 2
-# maps_recon2, cov2, _, _, maps_conv2 = si.reconstruct_maps(TOD2, d, p, nf_sub_rec, x0)
-
-d['synthbeam_kmax'] = 8
-maps_recon3, cov3, _, _, maps_conv3 = si.reconstruct_maps(TOD3, d, p, nf_sub_rec, x0)
-print(maps_recon.shape)
-```
-
-```{python}
-
-# rmc.save_simu_fits(maps_recon1, cov1, nus, nus_edge, maps_conv1,
-#                   save_dir=save_dir, simu_name=simu_name + '_kmax1')
-
-# rmc.save_simu_fits(maps_recon2, cov2, nus, nus_edge, maps_conv2,
-#                   save_dir=save_dir, simu_name=simu_name + '_kmax2')
-
-
-rmc.save_simu_fits(maps_recon3, cov3, nus, nus_edge, maps_conv3,
-                  save_dir=save_dir, simu_name=simu_name + '_kmax8')
-
-```
-
-# Noiseless Simu
-
-```{python}
-# ==== TOD making ====
-d['noiseless'] = True
-# d['synthbeam_kmax'] = 1
-# np.random.seed(seed) 
-# TOD1_nl, _ = si.create_TOD(d, p, x0, verbose=True)
-
-# d['synthbeam_kmax'] = 2
-# np.random.seed(seed) 
-# TOD2_nl, _ = si.create_TOD(d, p, x0, verbose=True)
-
-d['synthbeam_kmax'] = 8
-np.random.seed(seed) 
-TOD3_nl, _ = si.create_TOD(d, p, x0, verbose=True)
-```
-
-```{python}
-d['tol'] = 1e-5
-nf_sub_rec = 1
-# d['synthbeam_kmax'] = 1
-# maps_recon1_nl, cov1_nl, nus_nl, nus_edge_nl, maps_conv1_nl = si.reconstruct_maps(TOD1_nl, d, p, nf_sub_rec, x0)
-
-# d['synthbeam_kmax'] = 2
-# maps_recon2_nl, cov2_nl, _, _, maps_conv2_nl = si.reconstruct_maps(TOD2_nl, d, p, nf_sub_rec, x0)
-
-d['synthbeam_kmax'] = 3
-maps_recon3_nl, cov3_nl, _, _, maps_conv3_nl = si.reconstruct_maps(TOD3_nl, d, p, nf_sub_rec, x0)
-```
-
-```{python}
-# rmc.save_simu_fits(maps_recon1_nl, cov1_nl, nus_nl, nus_edge_nl, maps_conv1_nl,
-#                   save_dir=save_dir, simu_name=simu_name + '_nlTrue_kmax1')
-
-# rmc.save_simu_fits(maps_recon2_nl, cov2_nl, nus_nl, nus_edge_nl, maps_conv2_nl,
-#                   save_dir=save_dir, simu_name=simu_name + '_nlTrue_kmax2')
-
-rmc.save_simu_fits(maps_recon3_nl, cov3_nl, nus_nl, nus_edge_nl, maps_conv3_nl,
-                  save_dir=save_dir, simu_name=simu_name + '_nlTrue_kmax8')
-```
-
-# Analysis
-
-```{python}
-plt.figure()
-coverage = [cov1, cov2, cov3]
-for c, cov in enumerate(coverage) :
-    hp.gnomview(cov, sub=(1, 3, c+1), rot=center, reso=14, title='Coverage kmax={}'.format(kmax[c]))
-
-```
-
-```{python}
-kmax = [1, 2, 8]
-plt.figure()
-for c, cov in enumerate([cov1, cov2, cov3]):
-    k = kmax[c]
+    f = fits.open(save_dir + simu_name)
+    cov = f['COVERAGE'].data
     seenmap = cov > 0.15 * np.max(cov)
-    maps_recon, maps_conv, maps_diff = rmc.get_maps(save_dir + simu_name + '_kmax{}'.format(k))
+    
+    maps_recon, maps_conv, maps_diff = rmc.get_maps(save_dir + simu_name)
     
     bin_centers, ang, std_bin, std_profile = amc.std_profile(np.expand_dims(maps_diff, axis=(0, 1))[:, :, seenmap, :], 
                                                         10, d['nside'], center, seenmap)
     
-    plt.plot(ang, std_profile[:, 0, 0], '.', label='kmax={}'.format(k))
+    plt.plot(bin_centers, std_bin[:, 0, 0], label='sb_frac = {}'.format(sbfrac))
 
 plt.xlabel('Angle [deg]')
 plt.ylabel('STD')
-plt.title('STD in the residuals = recon - conv')
-plt.legend()
+plt.title('x0cmb - kmax=1 - STD residual profile')
+plt.legend(fontsize=10)
+```
+
+## TOD making and map-making with a different kmax
+
+```{python}
+kmax = 1
+kmaxnew = 2
+d['noiseless'] = True
+d['synthbeam_fraction'] = 1
+d['npointings'] = 1000
+d['nside'] = 128
+
+# Pointing strategy
+p = qubic.get_pointing(d)
+
+# Input sky
+x0 = x0cmb
+
+# Make TOD
+d['synthbeam_kmax'] = kmax
+seed = 42
+np.random.seed(seed) 
+TOD, _ = si.create_TOD(d, p, x0, verbose=True)
+
+# Map-making
+nf_sub_rec = 1
+d['tol'] = 1e-4
+# With the same kmax
+rec, cov, nus, nus_edge, conv = si.reconstruct_maps(TOD, d, p, nf_sub_rec, x0)
+# With a different kmax
+d['synthbeam_kmax'] = kmaxnew
+recnew, covnew, _, _, convnew = si.reconstruct_maps(TOD, d, p, nf_sub_rec, x0)
+    
+
 ```
 
 ```{python}
-# Trying with the noiseless 
-residuals1 = maps_recon1 - maps_recon1_nl
-residuals2 = maps_recon2 - maps_recon2_nl
-residuals3 = maps_recon3 - maps_recon3_nl
-residuals = [residuals1, residuals2, residuals3]
+# Save the simu
+simu_name = 'diffkmax_kmax={}-{}_skycmb_noiselessTrue_ptgs1000_tole-4'.format(kmax, kmax)
+# rmc.save_simu_fits(rec, cov, nus, nus_edge, conv, save_dir=save_dir, simu_name=simu_name)
 
-plt.figure()
-for c, cov in enumerate([cov1, cov2, cov3]):
-    seenmap = cov > 0.15 * np.max(cov)
-    bin_centers, ang, std_bin, std_profile = amc.std_profile(np.expand_dims(residuals[c], 
-                                                                            axis=(0, 1))[:, :, seenmap, :], 
-                                                        10, d['nside'], center, seenmap)
+simu_namenew = 'diffkmax_kmax={}-{}_skycmb_noiselessTrue_ptgs1000_tole-4'.format(kmax, kmaxnew)
+rmc.save_simu_fits(recnew, covnew, nus, nus_edge, convnew, save_dir=save_dir, simu_name=simu_namenew)
 
-
-
-
-    plt.plot(ang, std_profile[:, 0, 0], '.', label='kmax={}'.format(kmax[c]))
-
-plt.xlabel('Angle [deg]')
-plt.ylabel('STD')
-plt.title('STD in the residuals = recon - noiseless')
-plt.legend()
 ```
 
 ```{python}
-hp.gnomview(residuals1[:, 0], sub=(121), rot=center, reso=18, min=-2, max=2)
-hp.gnomview(residuals2[:, 0], sub=(122), rot=center, reso=30)
+# Open simu already done
+kmax = 2
+kmaxnew = 1
+simu_name = 'diffkmax_kmax={}-{}_skycmb_noiselessTrue_ptgs1000_tole-4'.format(kmax, kmax)
+f = fits.open(save_dir + simu_name)
+cov = f['COVERAGE'].data
+
+simu_namenew = 'diffkmax_kmax={}-{}_skycmb_noiselessTrue_ptgs1000_tole-4'.format(kmax, kmaxnew)
+fnew = fits.open(save_dir + simu_namenew)
+covnew = f['COVERAGE'].data
+    
+rec, conv, diff = rmc.get_maps(save_dir + simu_name)
+recnew, convnew, diffnew = rmc.get_maps(save_dir + simu_namenew)
+```
+
+```{python}
+# seenmap = cov > 0.1 * np.max(cov)
+# seenmapnew = covnew > 0.1 * np.max(covnew)
+
+# diff = rec - conv
+# diffnew = recnew - convnew
+
+Stokes = ['I', 'Q', 'U']
+for i in range(3):
+    if i == 0:
+        min = -10
+        max = 10
+    else:
+        min = -0.1
+        max = 0.1
+    hp.gnomview(conv[:, i] * seenmap, rot=center, reso=15, sub=(3, 6, 6*i+1),
+                min=min*20, max=max*20,
+                notext=True, title='Conv, kmax {}'.format(kmax))
+    plt.text(-0.6, 0, Stokes[i], fontsize=30)
+    hp.gnomview(convnew[:, i] * seenmapnew, rot=center, reso=15, sub=(3, 6, 6*i+2),
+                min=min*20, max=max*20,
+                notext=True, title='Conv, kmax {}'.format(kmaxnew))
+    hp.gnomview(rec[:, i] * seenmap, rot=center, reso=15, sub=(3, 6, 6*i+3),
+                min=min*20, max=max*20,
+                notext=True, title='Rec, kmax {}'.format(kmax))
+    hp.gnomview(recnew[:, i] * seenmapnew, rot=center, reso=15, sub=(3, 6, 6*i+4),
+                min=min*20, max=max*20,
+                notext=True, title='Rec, kmax {}'.format(kmaxnew))
+    hp.gnomview(diff[:, i] * seenmap, rot=center, reso=15, sub=(3, 6, 6*i+5),
+                min=min/10, max=max/10,
+                notext=True, title='Diff, kmax {}'.format(kmax))
+    hp.gnomview(diffnew[:, i] * seenmapnew, rot=center, reso=15, sub=(3, 6, 6*i+6),
+                min=min/10, max=max/10,
+                notext=True, title='Diff, kmax {}'.format(kmaxnew))
+    
+```
+
+```{python}
+# Difference between reconstructed maps and difference between convolved masp
+for i in range(3):
+    if i == 0:
+        min = -20
+        max = 20
+    else:
+        min = -0.1
+        max = 0.1
+    hp.gnomview(conv[:, i] * seenmap - convnew[:, i] * seenmapnew, rot=center, reso=15, sub=(3, 2, 2*i+1),
+                min=min, max=max, notext=True, title='Conv {} - Conv {}'.format(kmax, kmaxnew))
+    plt.text(-0.55, 0, Stokes[i], fontsize=30)
+    
+    hp.gnomview(rec[:, i] * seenmap - recnew[:, i] * seenmapnew, rot=center, reso=15, sub=(3, 2, 2*i+2),
+                min=min, max=max, notext=True, title='Rec {} - Rec {}'.format(kmax, kmaxnew))
+    
+```
+
+```{python}
+std = np.zeros(3)
+stdnew = np.zeros(3)
+for i in range(3):
+    std[i] = np.std(diff[seenmap, i])
+    stdnew[i] = np.std(diffnew[seenmapnew, i])
+print(std, stdnew)
 ```
 
 ```{python}

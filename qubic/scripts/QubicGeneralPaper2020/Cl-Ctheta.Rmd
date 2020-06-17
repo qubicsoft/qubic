@@ -1,0 +1,1244 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+from pylab import *
+import camb.correlations as cc
+import healpy as hp
+rc('figure', figsize=(16, 7))
+rc('font', size=15)
+mpl.rcParams['image.cmap'] = 'jet'
+```
+
+I am trying to simulate data on a healpix map with a spatial correlation given by a known C(theta). In order to do so, I simulate white noise in a full sky map, then smooth it with the Cl corresponding to the C(theta) and then go back to map-space.
+
+I have made dseveral functions to play with that. They are mostly based on camb.correlations functions that are precisely designed for that, although they have. issues with theta=0 (as explained in the doc: https://camb.readthedocs.io/en/latest/correlations.html?highlight=correlations#module-camb.correlations). This is why I have. tried to extend them to be general.
+
+Starting from the well known:
+$$C(\theta) = \frac{1}{4\pi} \sum_\ell (2\ell+1)C_\ell P_\ell(\cos(\theta))$$
+one can easily demonstrate that:
+$$C_\ell = 2\pi \int_{-1}^{1}P_\ell(x)C(x)dx$$ where $x=\cos\theta$
+
+As a consequence the special case $\theta=0$ can be calculated using $C(x)=\delta(x-1)$ in the above formula leading to:
+$$\begin{eqnarray}
+C_\ell &=& 2\pi\int_{-1}{1}P_\ell(x)C(x)dx\\
+&=& 2\pi P_\ell(1)\\
+&=& 2\pi
+\end{eqnarray}
+$$
+as $P_\ell(1)=1$ whatever $\ell$.
+
+**However it seems to me that this should be equal to 1 instead of $2\pi$ so I have implemented it with 1. It is easy to change it back to $2\pi$ in the function below and to test it again in the Monte-Carlo at the end and show that it does not solve the problem.**
+
+This is what is implemented in the function below for calculating the $C_\ell$ for a given $C(\theta)$ and tested with two case:
+- the trivial white noise case
+- my correlation function
+
+```{python}
+def ctheta_2_cell(theta_deg, ctheta, lmax, pol=False, normalization=1.):
+    ### this is how camb recommends to prepare the x = cos(theta) values for integration
+    ### These x values do not contain x=1 so we have. to do this case separately
+    x, w = np.polynomial.legendre.leggauss(lmax+1)
+    xdeg = np.degrees(np.arccos(x))
+
+    ### We first replace theta=0 by 0 and do that case separately
+    myctheta = ctheta.copy()
+    myctheta[0] = 0
+    ### And now we fill the array that should include polarization (we put zeros there)
+    ### with the values of our imput c(theta) interpolated at the x locations
+    allctheta = np.zeros((len(x), 4))
+    allctheta[:,0] = np.interp(xdeg, theta_deg, myctheta)
+
+    ### Here we call the camb function that does the transform to Cl
+    clth = cc.corr2cl(allctheta, x,  w, lmax)
+    lll = np.arange(lmax+1)
+
+    ### the special case x=1 corresponds to theta=0 and add 2pi times c(theta=0) to the Cell
+    return lll, clth[:,0]+ctheta[0]*normalization
+
+
+#### Normalization of c(theta=0) ###################################
+normalization = 1.#2*np.pi
+####################################################################
+
+### Test 1 - white noise
+nth = 1000
+theta = np.linspace(0,90,nth)
+ctheta = np.zeros(nth)
+ctheta[0] = 1.
+
+lll, cell = ctheta_2_cell(theta, ctheta, 1024, normalization=normalization)
+
+subplot(1,2,1)
+plot(theta, ctheta)
+plot(theta, theta*0, 'k:')
+xlabel(r'$\theta$ [deg]')
+ylabel(r'$C(\theta)$')
+title('test 1')
+
+subplot(1,2,2)
+plot(lll, cell)
+plot(lll, lll*0+normalization, 'k:')
+xlabel(r'$\ell$')
+ylabel(r'$C_\ell$')
+title('test 1: C(0) normalization={0:5.3f}'.format(normalization))
+
+
+figure()
+### Test 2 - My noise
+fct = lambda x, a, b, c: a * np.sin(x/b) * exp(-x/c)
+a = 0.48
+b = 2.14
+c = 4.27
+
+myctheta = fct(theta, a,b,c)
+myctheta[0] = 1.
+mylll, mycell = ctheta_2_cell(theta, myctheta, 1024, normalization=normalization)
+
+
+
+subplot(1,2,1)
+plot(theta, myctheta)
+plot(theta, theta*0, 'k:')
+xlabel(r'$\theta$ [deg]')
+ylabel(r'$C(\theta)$')
+title('test 2')
+
+subplot(1,2,2)
+plot(mylll, mycell)
+plot(mylll, mylll*0+normalization, 'k:')
+xlabel(r'$\ell$')
+ylabel(r'$C_\ell$')
+title('test 2: C(0) normalization={0:5.3f}'.format(normalization))
+
+```
+
+So we can go from smooth C(theta) to smooth Cl and vice-versa. We now need to investigate how to take a map and apply the convolution by C(theta) in harmonic space. We can do that through three manners that should be equivalent:
+1. using hp.smoothing() on a uniform uncorrelated map
+2. calculating alms from a uniform, uncorrelated map and doing the smoothing directly on alms
+3. directly simulating with synfast() according to the expected Cl
+
+Differences between these manners could arise form various normalizations, ell cutoff in the different functions. The difficulty mainly lies in the fact that our Cl kernel does not have a compact support (does not go to zero beyond somw ell), so that ell-space cutoff might have a rather strong impact.
+
+
+## Method 1: hp.smoothing() on uncorrelated map
+In principle this should be very straightforward.
+
+Let's first build an uncorrelated map and calculate its power spectrum, check that normalizations are clear, especially when changing nside and signoise:
+
+```{python}
+### General parameters
+nside = 128
+lmax = 2*nside
+ell = np.arange(lmax+1)
+npix = 12 * nside**2
+signoise = 10.
+
+### Map realization
+map_uncorr = np.random.randn(npix) * signoise
+rms_uncorr = np.std(map_uncorr)
+
+### Power spectrum from map
+cl_uncorr = hp.anafast(map_uncorr, lmax=lmax)
+
+### Theoretical power spectrum
+clth_uncorr = ell*0+signoise**2 * 4*np.pi / npix
+print(len(cl_uncorr), len(ell))
+
+### Plotting Unocorrelated
+p=plot(ell, cl_uncorr, label='Input Uncorrelated map')
+plot(ell, clth_uncorr, ':', color=p[0].get_color(), label='Theoretical Uncorrelated Cl')
+legend()
+xlabel(r'$\ell$')
+ylabel(r'$C_\ell$')
+title('Nside = {0:} - RMS={1:5.1f} - Expected:{2:5.1f}'.format(nside, signoise, rms_uncorr))
+
+```
+
+Now we can try to smooth the very same map with a constant kernel and see the result. We should get exactly the input map... To check this we look at the RMS and power spectrum.
+
+```{python}
+### General parameters
+nside = 128
+lmax = 2*nside
+ell = np.arange(lmax+1)
+npix = 12 * nside**2
+signoise = 10.
+myiter = 3
+use_weights = False
+
+### Map realization
+map_uncorr = np.random.randn(npix) * signoise
+rms_uncorr = np.std(map_uncorr)
+
+### Smoothing input map with a constant kernel with some random normalization and too wide ell range
+kernel = np.ones(2*nside)*np.random.rand(1)*3
+# normalize kernel and reduce to convenient ell range
+#mykernel = kernel[0:lmax+1]/kernel[0]
+mykernel = np.ones(lmax+1)
+# beware it should be the square root of the Cell kernel 
+map_smooth = hp.smoothing(map_uncorr, beam_window=np.sqrt(mykernel), iter=myiter, use_weights=use_weights)
+rms_smooth = np.std(map_smooth)
+
+subplot(1,2,1)
+#plot(kernel, label='Unnormalized Kernel')
+plot(ell, mykernel, label = 'Normalized and ell-restricted kernel')
+plot(ell, ell*0+1,'k:')
+ylim(0,3)
+legend()
+
+### Power spectrum from maps
+cl_uncorr = hp.anafast(map_uncorr, lmax=lmax, iter=myiter, use_weights=use_weights)
+cl_smooth = hp.anafast(map_smooth, lmax=lmax, iter=myiter, use_weights=use_weights)
+
+### Theoretical power spectrum
+clth_uncorr = ell*0+signoise**2 * 4*np.pi / npix
+print(len(cl_uncorr), len(ell))
+
+### Plotting Unocorrelated
+subplot(1,2,2)
+p=plot(ell, cl_uncorr, lw=3, label='In Uncorr. RMS={0:5.1f} - Exp:{1:5.1f}'.format(signoise, rms_uncorr))
+plot(ell, clth_uncorr, 'k--', label='Theoretical Uncorrelated Cl')
+p1=plot(ell, cl_smooth, ':', lw=3, label='Smoothed map RMS={0:5.1f} - Exp:{1:5.1f} - Ratio={2:5.2f}'.format(signoise, rms_smooth, rms_smooth/signoise))
+legend(loc='upper right', fontsize=10)
+xlabel(r'$\ell$')
+ylabel(r'$C_\ell$')
+title('Nside = {0:}'.format(nside))
+
+figure()
+hp.mollview(map_uncorr, min=-3*signoise, max=3*signoise, 
+            title='Map Uncorr - RMS={0:5.1f}'.format(rms_uncorr), sub=(1,2,1))
+hp.mollview(map_smooth, min=-3*signoise, max=3*signoise, 
+            title='Map Smoothed - RMS={0:5.1f}'.format(rms_smooth), sub=(1,2,2))
+figure()
+title('Comparing Cells - nside = {}'.format(nside))
+plot(ell, np.abs((cl_uncorr-cl_smooth))/cl_smooth*100)
+xlabel(r'$\ell$')
+ylabel('Difference in %')
+yscale('log')
+print(cl_uncorr[0:10])
+print(cl_smooth[0:10])
+```
+
+So there is already a problem here as although the Cls of the smoothed map are the same as the input it does not have the same RMS by a quite large amount...!!!
+
+This is likely to be caused by missing modes in the kernel that is cut beyond 2*nside. This is confirmed when extending the ell range beyond 2*nside:
+- for lmax = 2 x nside the RMS ratio is 0.58
+- for lmax = 3 x nside the RMS ratio is 0.86 with a few very bad bins at large ell
+- for lmax = 4 x nside the RMS ratio is 0.86 and the Cell difference becomes very large beyond 3x nside. the smoothed ones are at zero while the input ones are not... 
+
+Notes:
+- the above ratios are independent of the nside
+- that the RMS ratio is constant independently of the realization.
+- playing with the "iter" keyword for hp.anafast() and hp.smoothing() does not change anything.
+- putting use_weights=True in hp.anafast() and hp.smoothing() does not change anything
+
+So apparently there is significant truncation at large ells that has this undersirable effect. We need to find a way to avoid this.
+
+Maybe the right way is to directly get the alms and build my own function...
+
+
+## Method 2: smooth the alms by myself
+Let's first try to go bak and forth between map and alm and see if the map is distorted in the process. We see the exact same issues:
+- RMS ratio same at above
+- independent from nside, realization, iter or use_weights
+
+We define a function here in order to be. able to try different casses easily
+
+```{python}
+### General parameters
+nside = 128
+lmax = 4*nside
+ell = np.arange(lmax+1)
+npix = 12 * nside**2
+signoise = 10.
+myiter = 4
+use_weights=False
+
+def doit(nside, signoise, lmax_nside = 2., myiter=3, use_weights=False, seed=42):
+    if seed is not None:
+        np.random.seed(42)
+        
+    lmax = int(lmax_nside*nside)
+    ell = np.arange(lmax+1)
+    npix = 12 * nside**2
+
+    ### Theoretical power spectrum
+    clth_uncorr = ell*0+signoise**2 * 4*np.pi / npix
+
+    ### Map realization
+    map_uncorr = np.random.randn(npix) * signoise
+    rms_uncorr = np.std(map_uncorr)
+
+    ### Getting alms:
+    alms = hp.map2alm(map_uncorr, lmax=lmax, iter=myiter, use_weights=use_weights)
+    map_back = hp.alm2map(alms, nside, lmax=lmax)
+    rms_back = np.std(map_back)
+
+    ### Calculate Cells:
+    cls_uncorr = hp.anafast(map_uncorr, lmax=lmax, iter=myiter, use_weights=use_weights)
+    cls_fromalm = hp.alm2cl(alms, lmax=lmax)
+    cls_back = hp.anafast(map_back, lmax=lmax, iter=myiter, use_weights=use_weights)
+
+    subplot(1,2,1)
+    plot(ell, cls_uncorr, label='Cls Uncorr')
+    plot(ell, cls_fromalm, '--',label='Cls From alms')
+    plot(ell, cls_back, label='Cls from anafast(alm2map(map2alm(uncorr)))')
+    plot(ell, clth_uncorr, 'k--', label='Theoretical Uncorrelated Cl')
+    axvline(1*nside, ls=':')
+    axvline(2*nside, ls=':')
+    axvline(3*nside, ls=':')
+    ylim(0, 2*clth_uncorr[0])
+    legend()
+    title('nside={} lmax/nside={} iter={} weights={}'.format(nside, lmax_nside, myiter, use_weights))
+
+
+    hp.mollview(map_uncorr, min=-3*signoise, max=3*signoise, 
+                title='Map Uncorr - RMS={0:5.1f}'.format(rms_uncorr), sub=(2,2,2))
+    hp.mollview(map_back, min=-3*signoise, max=3*signoise, 
+                title='Map Back - RMS={0:5.1f}'.format(rms_back), sub=(2,2,4))
+
+    tight_layout()
+
+```
+
+We see below that weights do not change anything while the number of iterations plays a role:
+- when iter is odd we see a significant distorsion starting at ell=2*nside
+- when iter is even the distorstion reallys tarts at 3.5 x nside
+This is is very strange...
+
+We also note that:
+- Cls from anafast(map) are equal to calculating them from the alms of the map (logical)
+- Cls from the map reconstructed from the alms are more or less in agreement with initial ones and theorey up to 2 x nside when iter is odd while only up to 1 x nside when iter is even...
+
+```{python}
+nside = 128
+lmax_nside = 2.
+ell = np.arange(lmax+1)
+npix = 12 * nside**2
+signoise = 10.
+myiter = 4
+use_weights=False
+
+doit(nside, signoise, lmax_nside=4)
+
+figure()
+doit(nside, signoise, lmax_nside=4, myiter=4)
+
+```
+
+One thing to try is to use ud_grade to artificially work with higher nside ?
+
+```{python}
+### General parameters
+nside = 128
+signoise = 10.
+
+def doit_shift_nside(nside, signoise, nside_fact = 2, lmax_nside = 2., myiter=3, use_weights=False, seed=42):
+    if seed is not None:
+        np.random.seed(42)
+        
+    # normal maps
+    lmax = int(lmax_nside*nside)
+    ell = np.arange(lmax+1)
+    npix = 12 * nside**2
+    
+    # higher resolution maps
+    nside_big = nside_fact * nside
+    lmax_big = int(2*nside_big)
+    ell_big = np.arange(lmax_big+1)
+    npix_big = 12 * nside_big**2
+
+    ### Theoretical power spectrum
+    clth_uncorr = ell*0+signoise**2 * 4*np.pi / npix
+
+    ### Map realization with large nside
+    map_uncorr_big = np.random.randn(npix_big) * signoise * nside_fact
+    rms_uncorr_big = np.std(map_uncorr_big)
+
+    ### THis is the degraded version of the map
+    map_uncorr = hp.ud_grade(map_uncorr_big, nside)
+    rms_uncorr = np.std(map_uncorr)
+    print('RMS uncorr Big:',rms_uncorr_big)
+    print('RMS uncorr:',rms_uncorr)
+    
+    ### Let's look at cls
+    cl_uncorr = hp.anafast(map_uncorr, lmax=lmax)
+    cl_uncorr_big = hp.anafast(map_uncorr_big, lmax=lmax_big)
+
+    ### Theoretical power spectrum
+    clth_uncorr = ell*0+signoise**2 * 4*np.pi / npix
+    
+    ### Now alms
+    alms = hp.map2alm(map_uncorr_big, lmax=lmax_big, iter=myiter, use_weights=use_weights)
+    map_back = hp.ud_grade(hp.alm2map(alms, nside_big, lmax=lmax_big), nside)
+    cl_back = hp.anafast(map_back, lmax=lmax)
+    rms_back = np.std(map_back)
+    print('RMS back:',rms_back)
+    
+
+    ### Plotting Unocorrelated
+    plot(ell_big, cl_uncorr_big, label='Input Uncorrelated map Big')
+    plot(ell, cl_uncorr, label='Uncorrelated map')
+    plot(ell, cl_back, label='Back')
+    plot(ell, clth_uncorr, 'r:', label='Theoretical Uncorrelated Cl')
+    legend()
+    xlim(0,4*nside)
+    xlabel(r'$\ell$')
+    ylabel(r'$C_\ell$')
+    title('Nside = {0:} - RMS Back={1:5.2f} - Expected:{2:5.2f}'.format(nside, rms_back, signoise))
+    
+    
+    
+doit_shift_nside(64, 2., nside_fact=4, seed=None)
+```
+
+OK so going to higher nside seems to be working as expected: the effect of lmax truncation is much less. Let's now try to directly simulate the alms in harmonic space without a prior uncor map.
+
+```{python}
+def doit_shift_nside(nside, signoise, nside_fact = 2, lmax_nside = 2., 
+                     generate_alm=True, doplot=True, verbose=True, 
+                     myiter=3, use_weights=False, seed=42):
+    if seed is not None:
+        np.random.seed(42)
+        
+    # normal maps
+    lmax = int(lmax_nside*nside)
+    ell = np.arange(lmax+1)
+    npix = 12 * nside**2
+    
+    ### Theoretical power spectrum
+    clth_uncorr = ell*0+signoise**2 * 4*np.pi / npix
+
+    ### higher resolution maps
+    nside_big = nside_fact * nside
+    lmax_big = int(lmax_nside*nside_big)
+    ell_big = np.arange(lmax_big+1)
+    npix_big = 12 * nside_big**2
+
+    ### Genereate the alms be it in harmonic space or pixel-space
+    if generate_alm:
+        if verbose: print('simulate alms in harmonic space')
+        alm_size = hp.sphtfunc.Alm.getsize(lmax_big)
+        alm_rms = 1./np.sqrt(2) * signoise * nside_fact * np.sqrt(4 * np.pi/npix_big)
+        alms = (np.random.randn(alm_size) + np.random.randn(alm_size) * 1.0j) * alm_rms
+    else:
+        if verbose: print('Simulate in pixel-space an uncorrelated map')
+        ### Map realization with large nside
+        map_uncorr_big = np.random.randn(npix_big) * signoise * nside_fact
+        rms_uncorr_big = np.std(map_uncorr_big)    
+        ### Now alms
+        alms = hp.map2alm(map_uncorr_big, lmax=lmax_big, iter=myiter, use_weights=use_weights)
+
+    ### Now go back to pixel-space
+    map_back = hp.ud_grade(hp.alm2map(alms, nside_big, lmax=lmax_big, verbose=verbose), nside)
+    cl_back = hp.anafast(map_back, lmax=lmax)
+    rms_back = np.std(map_back)
+    
+    ### Plotting Unocorrelated
+    if doplot:
+        plot(ell, cl_back, label='Back')
+        plot(ell, clth_uncorr, 'r:', label='Theoretical Uncorrelated Cl')
+        legend()
+        xlim(0,lmax_nside*nside)
+        ylim(0,2*clth_uncorr[0])
+        xlabel(r'$\ell$')
+        ylabel(r'$C_\ell$')
+        title('Nside = {0:} -  AlmSpace={3:} \n RMS Back={1:5.2f} - Expected:{2:5.2f}'.format(nside, rms_back, signoise, generate_alm))
+    
+### General parameters
+nside = 64
+signoise = 1.
+nside_fact = 8
+
+subplot(1,2,1)
+doit_shift_nside(nside, signoise, seed=None, nside_fact=nside_fact,generate_alm=False, doplot=True, verbose=False)
+print()
+subplot(1,2,2)
+doit_shift_nside(nside, signoise, seed=None, nside_fact=nside_fact,generate_alm=True, doplot=True, verbose=False)
+tight_layout()
+```
+
+OK this is getting much better:
+- we can approach much better the RMS for the maps
+- the power spectrum is fine
+
+Note that directly generating the alms is much faster (factor 5) than generating in pixel space first
+
+Let's now try to apply a spectrum
+
+```{python}
+def doit_shift_nside_cell(nside, signoise, clin = None, 
+                          nside_fact = 2, lmax_nside = 2., 
+                          generate_alm=True, doplot=True, verbose=True, 
+                          myiter=3, use_weights=False, seed=42):
+    if seed is not None:
+        np.random.seed(42)
+        
+    # normal maps
+    lmax = int(lmax_nside*nside)
+    ell = np.arange(lmax+1)
+    npix = 12 * nside**2
+    
+    ### higher resolution maps
+    nside_big = nside_fact * nside
+    lmax_big = int(lmax_nside*nside_big)
+    ell_big = np.arange(lmax_big+1)
+    npix_big = 12 * nside_big**2
+    
+        ### Theoretical power spectrum
+    clth_uncorr = ell*0+signoise**2 * 4*np.pi / npix
+    
+    if clin is None:
+        clth = 1
+    else:
+        clth = clin[0:lmax_big+1]/clin[0] 
+
+
+    ### Genereate the alms be it in harmonic space or pixel-space
+    if generate_alm:
+        if verbose: print('simulate alms in harmonic space')
+        alm_size = hp.sphtfunc.Alm.getsize(lmax_big)
+        alm_rms = 1./np.sqrt(2) * signoise * nside_fact * np.sqrt(4 * np.pi/npix_big)
+        alms = (np.random.randn(alm_size) + np.random.randn(alm_size) * 1.0j) * alm_rms
+    else:
+        if verbose: print('Simulate in pixel-space an uncorrelated map')
+        ### Map realization with large nside
+        map_uncorr_big = np.random.randn(npix_big) * signoise * nside_fact
+        rms_uncorr_big = np.std(map_uncorr_big)    
+        ### Now alms
+        alms = hp.map2alm(map_uncorr_big, lmax=lmax_big, iter=myiter, use_weights=use_weights)
+        
+    ### Apply filter:
+    alms = hp.almxfl(alms, np.sqrt(clth))
+    
+    ### Now go back to pixel-space
+    map_back = hp.ud_grade(hp.alm2map(alms, nside_big, lmax=lmax_big, verbose=verbose), nside)
+    cl_back = hp.anafast(map_back, lmax=lmax)
+    rms_back = np.std(map_back)
+    
+    ### Plotting Unocorrelated
+    if doplot:
+        plot(ell, cl_back, label='Back')
+        plot(ell, clth_uncorr, 'r:', label='Theoretical Uncorrelated Cl')
+        if clin is not None:
+            plot(ell, clin[0:lmax+1]/clin[0] * clth_uncorr, 'r--', label='Theoretical Correlated Cl')
+        legend()
+        xlim(0,lmax_nside*nside)
+        ylim(0,2*clth_uncorr[0])
+        xlabel(r'$\ell$')
+        ylabel(r'$C_\ell$')
+        title('Nside = {0:} -  AlmSpace={3:} \n RMS Back={1:5.2f} - Expected:{2:5.2f}'.format(nside, rms_back, signoise, generate_alm))
+    
+### General parameters
+nside = 64
+signoise = 1.
+nside_fact = 8
+
+subplot(1,2,1)
+doit_shift_nside_cell(nside, signoise, seed=None, clin = mycell,  
+                 nside_fact=nside_fact,generate_alm=False, 
+                 doplot=True, verbose=False)
+print()
+subplot(1,2,2)
+doit_shift_nside_cell(nside, signoise, seed=None, clin= mycell, 
+                 nside_fact=nside_fact,generate_alm=True, 
+                 doplot=True, verbose=False)
+tight_layout()
+```
+
+That looks very nice ! Let's build a function to do that
+
+```{python}
+def simulate_correlated_map(nside, signoise, clin = None, 
+                            nside_fact = 1, lmax_nside = 2., 
+                            generate_alm=True, verbose=True, 
+                            myiter=3, use_weights=False, seed=None, synfast=False):
+    
+    #### Define the seed
+    if seed is not None:
+        np.random.seed(42)
+        
+    #### We can work at the planned nside
+    # normal maps
+    lmax = int(lmax_nside*nside)
+    ell = np.arange(lmax+1)
+    npix = 12 * nside**2
+    
+    #### Or with higher resolution maps in order to reduce the effect of aliasing on the RMS of the maps
+    #### However this does not change the Cl spectrum so is likely to be worthless
+    ### higher resolution maps
+    nside_big = nside_fact * nside
+    lmax_big = int(lmax_nside*nside_big)
+    ell_big = np.arange(lmax_big+1)
+    npix_big = 12 * nside_big**2
+    
+    #### We also need to account for the pixel window function
+    pixwin = hp.pixwin(nside_big)[:lmax_big+1]*0+1
+    if clin is None:
+        clth = 1./pixwin**2
+    else:
+        clth = clin[0:lmax_big+1]/clin[0]/pixwin**2
+
+        
+    #### There are three options here
+    # 1. use ssynfast to directly generate the map with the correct spectrum (fastest)
+    # 2. generate alms by hand and go back to map-sapce (essentially equivalent to the previous)
+    # 3. generate a map in pixel space, smooth it with hp.smoothing() => slower by ~ factor 5
+
+    if synfast:
+        ### Case 1.
+        fact = signoise*np.sqrt(4 * np.pi/npix_big)* nside_fact
+        map_back = hp.synfast(clth, nside_big,lmax=lmax_big, verbose=False)*fact
+    else:
+        ### Cases 2 and 3 Genereate the alms be it in harmonic space or pixel-space
+        if generate_alm:
+            ### Case 2
+            if verbose: print('simulate alms in harmonic space')
+            alm_size = hp.sphtfunc.Alm.getsize(lmax_big)
+            alm_rms = 1./np.sqrt(2) * signoise * nside_fact * np.sqrt(4 * np.pi/npix_big)
+            alms = (np.random.randn(alm_size) + np.random.randn(alm_size) * 1.0j) * alm_rms
+        else:
+            ### Case 3
+            if verbose: print('Simulate in pixel-space an uncorrelated map')
+            ### Map realization with large nside
+            map_uncorr_big = np.random.randn(npix_big) * signoise * nside_fact
+            rms_uncorr_big = np.std(map_uncorr_big)    
+            ### Now alms
+            alms = hp.map2alm(map_uncorr_big, lmax=lmax_big, iter=myiter, use_weights=use_weights)
+
+        ### Apply filter:
+        alms = hp.almxfl(alms, np.sqrt(clth))
+
+        ### Now go back to pixel-space
+        map_back = hp.alm2map(alms, nside_big, lmax=lmax_big, verbose=verbose)
+           
+    if nside_fact==1:
+        return map_back
+    else: 
+        return hp.ud_grade(map_back, nside)
+
+
+
+nside = 64
+signoise = 1.
+nside_fact = 8
+lmax = 2*nside
+npix = 12*nside**2
+
+mymap = simulate_correlated_map(nside, signoise, seed=None, clin= mycell, 
+                                 nside_fact=nside_fact,generate_alm=True, verbose=False)
+
+print('RMS = {0:5.2f}'.format(np.std(mymap)))
+cls = hp.anafast(mymap, lmax=lmax)
+ell = np.arange(lmax+1)
+
+plot(ell, cls)
+plot(mycell[:lmax+1]/mycell[0] * signoise**2 * 4*np.pi / npix)
+
+```
+
+```{python}
+from qubic.utils import progress_bar
+# Monte-carlo
+nbmc = 100
+nside = 64
+signoise = 1.
+nside_fact = 1
+lmax = 2*nside
+npix = 12*nside**2
+
+
+allcl = np.zeros((nbmc, lmax+1))
+allrms = np.zeros(nbmc)
+bar = progress_bar(nbmc)
+for i in range(nbmc):
+    mymap = simulate_correlated_map(nside, signoise, seed=None, clin= mycell, synfast=True, 
+                                 nside_fact=nside_fact,generate_alm=True, verbose=False)
+
+    allrms[i] = np.std(mymap)
+    allcl[i,:] = hp.anafast(mymap, lmax=lmax)
+    bar.update()
+
+
+
+```
+
+```{python}
+import qubic.fibtools as ft
+clth = mycell[:lmax+1]/mycell[0] * signoise**2 * 4*np.pi / npix
+lth = np.arange(lmax+1)
+
+ell = np.arange(lmax+1)
+subplot(1,2,1)
+errorbar(ell, np.mean(allcl, axis=0), yerr=np.std(allcl, axis=0)/np.sqrt(nbmc), fmt='ro', label='MC')
+plot(lth, clth, label='Expected')
+xlabel(r'$\ell$')
+ylabel(r'$C_\ell$')
+legend()
+
+pull = (np.mean(allcl, axis=0) - np.interp(ell, lth, clth))/(np.std(allcl, axis=0)/np.sqrt(nbmc))
+subplot(2,2,2)
+a = hist(pull, label=ft.statstr(pull))
+xlabel(r'$C_\ell$ Pull')
+legend()
+
+subplot(2,2,4)
+a = hist(allrms, range=[np.mean(allrms)-4*np.std(allrms), np.mean(allrms)+4*np.std(allrms)], bins=15,
+        label=ft.statstr(allrms)+'\n expexcted: {}'.format(signoise))
+xlabel('Map RMS')
+legend()
+
+tight_layout()
+```
+
+So we now have a rather well understood code:
+- we can still use synfast with excellent agreement with the expected power spectrum, however aliasing indicess a disagreement on the. map RMS which may not at all be an issue at the end of the day as this comes from modes outside the relevant bandwidth...
+- If having a good agreement on the RMS as well, it is possible to achieve a much better (although not oerfect) agreement by going up to higher nside (by a factor 4 or 8) using synfast or alm production.
+- It is also possible to generate and random map in pixel space and convolve it but it's much slower (factor 5)
+
+Now we want to check the C(theta) function... that was the initial point... But maybe it's not going to be very. satisfactory because of the RMS issue...
+
+```{python}
+def map_corr_neighbtheta(themap_in, ipok_in, thetamin, thetamax, nbins, degrade=None, verbose=True):
+    if degrade is None:
+        themap = themap_in.copy()
+        ipok = ipok_in.copy()
+    else:
+        themap = hp.ud_grade(themap_in, degrade)
+        mapbool = themap_in < -1e30
+        mapbool[ipok_in] = True
+        mapbool = hp.ud_grade(mapbool, degrade)
+        ip = np.arange(12*degrade**2)
+        ipok = ip[mapbool]
+    rthmin = np.radians(thetamin)
+    rthmax = np.radians(thetamax)
+    thvals = np.linspace(rthmin, rthmax, nbins+1)
+    ns = hp.npix2nside(len(themap))
+    thesum = np.zeros(nbins)
+    thecount = np.zeros(nbins)
+    for i in range(len(ipok)):
+        valthis = themap[ipok[i]]
+        v = hp.pix2vec(ns, ipok[i])
+        #ipneighb_inner = []
+        ipneighb_inner = list(hp.query_disc(ns, v, np.radians(thetamin)))
+        for k in range(nbins): 
+            thmin = thvals[k]
+            thmax = thvals[k+1]
+            ipneighb_outer = list(hp.query_disc(ns, v, thmax))
+            ipneighb = ipneighb_outer.copy()
+            for l in ipneighb_inner: ipneighb.remove(l)
+            valneighb = themap[ipneighb]
+            thesum[k] += np.sum(valthis * valneighb)
+            thecount[k] += len(valneighb)
+            ipneighb_inner = ipneighb_outer.copy()
+            
+    corrfct = thesum / thecount
+    return np.degrees(thvals[:-1]+thvals[1:])/2, corrfct
+
+
+def ctheta_parts(themap, ipok, thetamin, thetamax, nbinstot, nsplit=4, degrade_init=None, verbose=True):
+    allthetalims = np.linspace(thetamin, thetamax, nbinstot+1)
+    thmin = allthetalims[:-1]
+    thmax = allthetalims[1:]
+    idx = np.arange(nbinstot)//(nbinstot//nsplit)
+    if degrade_init is None:
+        nside_init = hp.npix2nside(len(themap))
+    else:
+        nside_init = degrade_init
+    nside_part = nside_init // (2**idx)
+    thall = (thmin+thmax)/2
+    cthall = np.zeros(nbinstot)
+    for k in range(nsplit):
+        thispart = idx==k
+        mythmin = np.min(thmin[thispart])
+        mythmax = np.max(thmax[thispart])
+        mynbins = nbinstot//nsplit
+        mynside = nside_init // (2**k)
+        if verbose: print('Doing {0:3.0f} bins between {1:5.2f} and {2:5.2f} deg at nside={3:4.0f}'.format(mynbins, mythmin, mythmax, mynside))
+        myth, mycth = map_corr_neighbtheta(themap, ipok, mythmin, mythmax, mynbins, degrade=mynside, verbose=verbose)
+        cthall[thispart] = mycth 
+    return thall, cthall
+
+```
+
+Let's take the example of a white noise map and check if it's fine:
+
+```{python}
+nside = 128
+thetamin = 0.
+thetamax = 20.
+nbins = 40
+ipok = np.arange(12*nside**2)  ## we take all pixels
+signoise = 1.
+
+nbmc = 10
+all_cthmes = np.zeros((nbmc, nbins))
+
+for i in range(nbmc):
+    print(i, nbmc)
+    mymap = np.random.randn(12*nside**2) * signoise
+    thmes, all_cthmes[i,:] = ctheta_parts(mymap, np.arange(12*nside), thetamin, thetamax, nbins, nsplit=5, 
+                                         degrade_init=128, verbose=False)
+
+m_cthmes = np.mean(all_cthmes, axis=0)
+s_cthmes = np.std(all_cthmes, axis=0)
+errorbar(thmes, m_cthmes, yerr=s_cthmes, fmt='ro')
+plot(linspace(thetamin, thetamax,100), np.zeros(100), 'k:')
+xlabel(r'$\theta$ [deg]')
+ylabel(r'$C(\theta)$')
+xlim(thetamin, thetamax)
+
+```
+
+Now we have the tools and we can test the spatial-correlation simulation.
+
+We take some model for the input correlation function $C(\theta)$ and calculate the corresponding $C_\ell$ using the 
+functions tested above.
+
+```{python}
+nth = 1000
+theta = np.linspace(0,90,nth)
+
+#### Normalization of c(theta=0) ###################################
+normalization = 1.#2 * np.pi
+####################################################################
+
+fct = lambda x, a, b, c: a * np.sin(x/b) * exp(-x/c)
+a = 0.48
+b = 2.14
+c = 4.27
+myctheta = fct(theta, a,b,c)
+myctheta[0] = 1.
+
+
+#### Calculation of the corresponding Cell
+myell, mycell = ctheta_2_cell(theta, myctheta, 2048, normalization=normalization)
+
+subplot(1,2,1)
+plot(theta, myctheta)
+plot(theta, theta*0, 'k:')
+xlabel(r'$\theta$ [deg]')
+ylabel(r'$C(\theta)$')
+
+subplot(1,2,2)
+plot(myell, mycell)
+plot(myell, myell*0+normalization, 'k:')
+xlabel(r'$\ell$')
+ylabel(r'$C_\ell$')
+title('normalization={0:5.3f}'.format(normalization))
+```
+
+We now take this as an input and perform a Monte carlo in the following manner:
+- generate a correlated noise image according to the method developped above
+- Calculate the C(theta) of the recovered map
+
+When averaging over MC realizations, one should recover the input $C(\theta)$ and $C_\ell$...
+
+```{python}
+from qubic.utils import progress_bar
+## Let's try an MC
+nside = 128
+nbmc = 100
+nbins = 20
+thmax = 20.
+signoise = 1.
+nside_fact = 1
+lmax = 2*nside
+allip = np.arange(12*nside**2)
+
+allclout = np.zeros((nbmc, lmax+1))
+all_cthout = np.zeros((nbmc, nbins))
+all_rms = np.zeros(nbmc)
+bar = progress_bar(nbmc)
+for i in range(nbmc):
+    outmap = simulate_correlated_map(nside, signoise, seed=None, clin= mycell, synfast=True, 
+                                     nside_fact=nside_fact,generate_alm=False, verbose=False)
+    all_rms[i] = np.std(outmap)
+    
+    ### Calculate the Cells from the correlated map
+    allclout[i,:]=hp.anafast(outmap, lmax=lmax)
+    
+    ### Calculate the C(theta) from our map
+    th, all_cthout[i,:] = ctheta_parts(outmap, allip, 0, thmax, nbins, 
+                                        nsplit=4, degrade_init=nside//2, verbose=False)
+    bar.update()
+```
+
+```{python}
+#### We calculate the average of the MC Cells
+mcl_corr = np.mean(allclout, axis=0) 
+ell = np.arange(lmax+1)
+
+npix = 12*nside**2
+clth = mycell[:lmax+1]/mycell[0] * signoise**2 * 4*np.pi / npix
+lth = np.arange(lmax+1)
+
+#### We calculate the average of the MC C(theta)
+mcthout = np.mean(all_cthout, axis=0)
+scthout = np.std(all_cthout, axis=0)/np.sqrt(nbmc)
+
+#### And now we plot them as well as the expected ones
+subplot(1,2,1)
+plot(lth, clth, label=r'Predicted $C_\ell$')
+plot(ell, mcl_corr , label=r'MC $C_\ell$')
+plot(lth, clth*0+clth[0] , 'k:')
+legend()
+xlim(0.1,np.max(ell))
+xlabel(r'$\ell$')
+ylabel(r'$C_\ell$')
+
+#### And now we plot them as well as the expected one
+factormult = 7
+stretchth = 1.
+subplot(1,2,2)
+errorbar(th*stretchth, (mcthout/mcthout[0]*factormult), yerr=scthout/mcthout[0]*factormult, fmt='ro', label=r'MC $C(\theta) \times${}'.format(factormult))
+plot(theta,myctheta/myctheta[0],'o',label=r'Input $C(\theta)$')
+plot(theta,theta*0,'k:')
+xlim(0,20)
+ylim(-0.1,1.5)
+legend()
+print(mcthout/mcthout[0])
+print(np.mean(all_rms))
+
+
+```
+
+### Avec normalisation C(theta) = 2*np.pi
+- on a des Cl avec bcp moins d'amplitude
+- le C(theta) aussi
+
+### Verifier ça
+avec fact_nside = 8 on se retrouve bcp plus bas que x7
+
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+Now we want to test this with a Monte-Carlo simulation. We will need a function to calculate the C(theta) from a healpix map. This is usually very slow if done without tricks. Here I degrade the map to different nside to have less pixels to deal with when going to large angles.
+
+```{python}
+def map_corr_neighbtheta(themap_in, ipok_in, thetamin, thetamax, nbins, degrade=None, verbose=True):
+    if degrade is None:
+        themap = themap_in.copy()
+        ipok = ipok_in.copy()
+    else:
+        themap = hp.ud_grade(themap_in, degrade)
+        mapbool = themap_in < -1e30
+        mapbool[ipok_in] = True
+        mapbool = hp.ud_grade(mapbool, degrade)
+        ip = np.arange(12*degrade**2)
+        ipok = ip[mapbool]
+    rthmin = np.radians(thetamin)
+    rthmax = np.radians(thetamax)
+    thvals = np.linspace(rthmin, rthmax, nbins+1)
+    ns = hp.npix2nside(len(themap))
+    thesum = np.zeros(nbins)
+    thecount = np.zeros(nbins)
+    for i in range(len(ipok)):
+        valthis = themap[ipok[i]]
+        v = hp.pix2vec(ns, ipok[i])
+        #ipneighb_inner = []
+        ipneighb_inner = list(hp.query_disc(ns, v, np.radians(thetamin)))
+        for k in range(nbins): 
+            thmin = thvals[k]
+            thmax = thvals[k+1]
+            ipneighb_outer = list(hp.query_disc(ns, v, thmax))
+            ipneighb = ipneighb_outer.copy()
+            for l in ipneighb_inner: ipneighb.remove(l)
+            valneighb = themap[ipneighb]
+            thesum[k] += np.sum(valthis * valneighb)
+            thecount[k] += len(valneighb)
+            ipneighb_inner = ipneighb_outer.copy()
+            
+    corrfct = thesum / thecount
+    return np.degrees(thvals[:-1]+thvals[1:])/2, corrfct
+
+
+def ctheta_parts(themap, ipok, thetamin, thetamax, nbinstot, nsplit=4, degrade_init=None, verbose=True):
+    allthetalims = np.linspace(thetamin, thetamax, nbinstot+1)
+    thmin = allthetalims[:-1]
+    thmax = allthetalims[1:]
+    idx = np.arange(nbinstot)//(nbinstot//nsplit)
+    if degrade_init is None:
+        nside_init = hp.npix2nside(len(themap))
+    else:
+        nside_init = degrade_init
+    nside_part = nside_init // (2**idx)
+    thall = (thmin+thmax)/2
+    cthall = np.zeros(nbinstot)
+    for k in range(nsplit):
+        thispart = idx==k
+        mythmin = np.min(thmin[thispart])
+        mythmax = np.max(thmax[thispart])
+        mynbins = nbinstot//nsplit
+        mynside = nside_init // (2**k)
+        if verbose: print('Doing {0:3.0f} bins between {1:5.2f} and {2:5.2f} deg at nside={3:4.0f}'.format(mynbins, mythmin, mythmax, mynside))
+        myth, mycth = map_corr_neighbtheta(themap, ipok, mythmin, mythmax, mynbins, degrade=mynside, verbose=verbose)
+        cthall[thispart] = mycth 
+    return thall, cthall
+
+```
+
+Let's take the example of a white noise map and check if it's fine:
+
+```{python}
+nside = 128
+thetamin = 0.
+thetamax = 20.
+nbins = 40
+ipok = np.arange(12*nside**2)  ## we take all pixels
+signoise = 1.
+
+nbmc = 10
+all_cthmes = np.zeros((nbmc, nbins))
+
+for i in range(nbmc):
+    print(i, nbmc)
+    mymap = np.random.randn(12*nside**2) * signoise
+    thmes, all_cthmes[i,:] = ctheta_parts(mymap, np.arange(12*nside), thetamin, thetamax, nbins, nsplit=5, 
+                                         degrade_init=128, verbose=False)
+
+m_cthmes = np.mean(all_cthmes, axis=0)
+s_cthmes = np.std(all_cthmes, axis=0)
+errorbar(thmes, m_cthmes, yerr=s_cthmes, fmt='ro')
+plot(linspace(thetamin, thetamax,100), np.zeros(100), 'k:')
+xlabel(r'$\theta$ [deg]')
+ylabel(r'$C(\theta)$')
+xlim(thetamin, thetamax)
+
+```
+
+Now we have the tools and we can test the spatial-correlation simulation.
+
+We take some model for the input correlation function $C(\theta)$ and calculate the corresponding $C_\ell$ using the 
+functions tested above. There are two case below (selected by commenting one or the other):
+- uncorrelated data
+- correlated data
+
+```{python}
+nth = 1000
+theta = np.linspace(0,90,nth)
+
+#### Normalization of c(theta=0) ###################################
+normalization = 1.#2 * np.pi
+####################################################################
+
+
+#### First Case : uncorrelated data
+# myctheta = np.zeros(nth)
+# myctheta[0] = 1.
+
+
+#### Second case: correlated data following the model above
+fct = lambda x, a, b, c: a * np.sin(x/b) * exp(-x/c)
+a = 0.48
+b = 2.14
+c = 4.27
+myctheta = fct(theta, a,b,c)
+myctheta[0] = 1.
+
+
+#### Calculation of the corresponding Cell
+myell, mycell = ctheta_2_cell(theta, myctheta, 1024, normalization=normalization)
+
+subplot(1,2,1)
+plot(theta, myctheta)
+plot(theta, theta*0, 'k:')
+xlabel(r'$\theta$ [deg]')
+ylabel(r'$C(\theta)$')
+
+subplot(1,2,2)
+plot(myell, mycell)
+plot(myell, myell*0+normalization, 'k:')
+xlabel(r'$\ell$')
+ylabel(r'$C_\ell$')
+title('normalization={0:5.3f}'.format(normalization))
+```
+
+We now take this as an input and perform a Monte carlo in the following manner:
+- generate a white noise map
+- smooth it using Healpy with the kernel calculated above
+- Calculate the C(theta) of the recovered map
+
+When averaging over MC realizations, one should recover the input $C(\theta)$ and $C_\ell$...
+
+```{python}
+#### This is to have an outmap that has RMS independent from nside
+#### This comes from the. fact that the cell we use here does not have a compact support...
+for ns in [32, 64, 128, 256, 512, 1024]:
+    lmax = 2*ns
+    norm = np.sum(mycell[:lmax+1])
+    outmap2 = hp.synfast(mycell[:lmax+1], ns, verbose=False, lmax=lmax)/norm*np.pi*np.sqrt(mycell[0])
+    print(ns, np.std(outmap2))
+```
+
+```{python}
+## Let's try an MC
+nside = 256
+nbmc = 100
+nbins = 20
+thmax = 20.
+signoise = 1.
+lmax = 2*nside
+allip = np.arange(12*nside**2)
+
+allclout = np.zeros((nbmc, lmax+1))
+all_cthout = np.zeros((nbmc, nbins))
+allclout2 = np.zeros((nbmc, lmax+1))
+all_cthout2 = np.zeros((nbmc, nbins))
+for i in range(nbmc):
+    print(i,nbmc)
+    #if ((i//10)*10)==i: print(i,nbmc)
+    ### Input uniform map
+    inmap = np.random.randn(12*nside**2)*signoise
+    ### Output correlated map
+    outmap = hp.smoothing(inmap, beam_window=(mycell[0:lmax+1]/mycell[0])**0.5 , verbose=False, lmax=lmax)
+    #outmap = outmap / np.std(outmap)
+
+    ### Calculate the Cells from the correlated map
+    allclout[i,:]=hp.anafast(outmap, lmax=lmax)
+    
+    ### Calculate the C(theta) from our map
+    th, all_cthout[i,:] = ctheta_parts(outmap, allip, 0, thmax, nbins, 
+                                        nsplit=5, degrade_init=64, verbose=False)
+
+#     #ken's suggestion: use synfast : Because the Cell does not drop to zero at high ell
+#     norm = np.sum(mycell[:lmax+1])
+#     outmap2 = hp.synfast(mycell[:lmax+1], nside, verbose=False, lmax=lmax)/norm*np.pi*np.sqrt(mycell[0])
+#     allclout2[i,:]=hp.anafast(outmap2, lmax=lmax)
+#     th, all_cthout2[i,:] = ctheta_parts(outmap2, allip, 0, thmax, nbins, 
+#                                         nsplit=3, degrade_init=nside//4, verbose=False)
+#     print('RMS maps',np.std(inmap),np.std(outmap), np.std(outmap2))
+    print('RMS maps',np.std(inmap),np.std(outmap))
+
+```
+
+```{python}
+#### We calculate the average of the MC Cells
+npix = 12*nside**2
+mcl_corr = np.mean(allclout, axis=0) / (4 * np.pi / npix)
+ell = np.arange(lmax+1)
+
+# mcl_corr2 = np.mean(allclout2, axis=0) / (4 * np.pi / npix)
+
+
+#### And now we plot them as well as the expected ones
+subplot(1,2,1)
+plot(myell, mycell*signoise**2, label=r'Predicted $C_\ell$')
+plot(ell, mcl_corr , label=r'MC $C_\ell$')
+# plot(ell, mcl_corr2 , label=r'MC $C_\ell$ Synfast')
+plot(myell, myell*0+signoise**2 , 'k:')
+legend()
+xlim(0.1,np.max(ell)*1.5)
+xlabel(r'$\ell$')
+ylabel(r'$C_\ell$')
+xscale('log')
+
+#### We calculate the average of the MC C(theta)
+mcthout = np.mean(all_cthout, axis=0)
+scthout = np.std(all_cthout, axis=0)/np.sqrt(nbmc)
+# mcthout2 = np.mean(all_cthout2, axis=0)
+# scthout2 = np.std(all_cthout2, axis=0)/np.sqrt(nbmc)
+
+#### And now we plot them as well as the expected one
+factormult = 900
+stretchth = 1.
+subplot(1,2,2)
+errorbar(th*stretchth, (mcthout*factormult), yerr=scthout*factormult, fmt='ro', label=r'MC $C(\theta) \times${}'.format(factormult))
+# errorbar(th*stretchth, (mcthout2*factormult), yerr=scthout2*factormult, fmt='bo', label=r'MC $C(\theta) \times${} Synfast'.format(factormult))
+plot(theta,myctheta*signoise**2/np.std(outmap),label=r'Input $C(\theta)$')
+plot(theta,theta*0,'k:')
+xlim(0,20)
+ylim(-0.1,0.5)
+legend()
+print(mcthout)
+
+
+
+```
+
+
+So the conclusions are:
+- we get consistent $C_\ell$ between the smoothed map and the expected ones.
+- For $C(\theta)$ we get very small results, only multiplying them by factormult~7 above (which is close to $2\pi$...) starts to show that they have a shape that is broadly similar to the expected one, but not exactly (slightly shifted toward small angles)
+
+Why is that so ? There are probbably many wrong normalizations everywhere, but I can't find them...
+
+Changing the casse $x=1$ back to $2\pi$ insgtead of ! in the function ctheta_2_cell() at the beginning doess not solve the problem - it becomes actually even a larger factor (about 30)
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

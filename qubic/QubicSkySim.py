@@ -2,16 +2,21 @@ from __future__ import division
 
 import healpy as hp
 import numpy as np
-import random
+import random as rd
 import string
 import os
 import pysm
 import pysm.units as u
 from pysm import utils
+from pylab import *
+from scipy.optimize import curve_fit
 
+import camb.correlations as cc
 
 import qubic
 from qubic import camb_interface as qc
+from qubic import fibtools as ft
+from qubic.utils import progress_bar
 
 
 __all__ = ['sky', 'Qubic_sky']
@@ -307,7 +312,9 @@ class Qubic_sky(sky):
 
         return fullmaps
 
-    def get_partial_sky_maps_withnoise(self, coverage, sigma_sec, Nyears=3, verbose=False, FWHMdeg=None, seed=None):
+    def get_partial_sky_maps_withnoise(self, coverage, sigma_sec, 
+                                        Nyears=3, verbose=False, FWHMdeg=None, seed=None,
+                                        effective_variance_invcov=None):
         """
         This returns maps in the same way as with get_simple_sky_map but cut according to the coverage
         and with noise added according to this coverage and the RMS in muK.sqrt(sec) given by sigma_sec
@@ -316,6 +323,10 @@ class Qubic_sky(sky):
         if provided.
         If seed is provided, it will be used for the noise realization. If not it will be a new realization at
         each call.
+        The optional effective_variance_invcov keyword is a modification law to be applied to the coverage in order to obtain
+        more realistic noise profile. It is a law for effective RMS as a function of inverse coverage and is 2D array
+        with the first one being (nx samples) inverse coverage and the second being the corresponding effective variance to be
+        used through interpolation when generating the noise.
         Parameters
         ----------
         coverage
@@ -324,6 +335,7 @@ class Qubic_sky(sky):
         verbose
         FWHMdeg
         seed
+        effective_variance_invcov
 
         Returns
         -------
@@ -341,14 +353,43 @@ class Qubic_sky(sky):
         self.noisemaps = np.zeros_like(maps)
         for i in range(self.dictionary['nf_sub']):
             self.noisemaps[i, :, :] += self.create_noise_maps(sigma_sec, coverage,
-                                                              Nyears=Nyears, verbose=verbose, seed=seed)
+                                                              Nyears=Nyears, verbose=verbose, seed=seed,
+                                                              effective_variance_invcov=effective_variance_invcov)
 
         return maps + self.noisemaps
 
-    def create_noise_maps(self, sigma_sec, coverage, Nyears=3, verbose=False, seed=None):
+    def cth_funct(self, x, pars):
+        return pars[0] * np.sin(x/pars[1]) * exp(-x/pars[2])
+
+    def random_fullsky_correlated(self, npix, clnoise=None):
+        if clnoise is None:
+            return np.random.randn(npix)
+
+        params_fitted_on_200k_NERSC_sim = [0.46492736, 2.14506569, 4.94262576]
+
+        lmax = 1024
+        x, w = np.polynomial.legendre.leggauss(lmax+1)
+        xdeg = np.degrees(np.arccos(x))
+        cth = self.cth_funct(xdeg, params_fitted_on_200k_NERSC_sim)
+        allcth = np.zeros((len(x), 4))
+        allcth[:,0] = cth
+        cl = cc.corr2cl(allcth*0.5, x,  w, lmax)[:,0]/2/np.pi + 1
+        return hp.smoothing(np.random.randn(npix), beam_window=cl, verbose=False)
+
+    def create_noise_maps(self, sigma_sec, coverage, covcut =0.1,
+                            Nyears=3, verbose=False, seed=None, effective_variance_invcov=None, clnoise=None, old=False):
         """
         This returns a realization of noise maps for I, Q and U with no correlation between them, according to a
         noise RMS map built according to the coverage specified as an attribute to the class
+        The optional effective_variance_invcov keyword is a modification law to be applied to the coverage in order to obtain
+        more realistic noise profile. It is a law for effective RMS as a function of inverse coverage and is 2D array
+        with the first one being (nx samples) inverse coverage and the second being the corresponding effective variance to be
+        used through interpolation when generating the noise.
+        The clnoise option is used to apply a convolution to the noise to obtain spatially correlated noise. This cl should be 
+        calculated from the c(theta) of the noise that can be measured using the function ctheta_parts() below. The transformation
+        of this C9theta) into Cl has to be done using wrappers on camb function found in camb_interface.py of the QUBIC software:
+        the functions to back and forth from ctheta to cl are: cl_2_ctheta and ctheta_2_cell. The simulation of the noise itself
+        calls a function of camb_interface called simulate_correlated_map().
         Parameters
         ----------
         sigma_sec
@@ -356,21 +397,46 @@ class Qubic_sky(sky):
         Nyears
         verbose
         seed
+        effective_variance_invcov
 
         Returns
         -------
 
         """
-        # The theoretical noise in I for the coverage
-        thnoise = self.theoretical_noise_maps(sigma_sec, coverage, Nyears=Nyears, verbose=verbose)
-        seenpix = coverage > 0
+        # Seen pixels
+        seenpix = (coverage/np.max(coverage)) > covcut
         npix = seenpix.sum()
+        # The theoretical noise in I for the coverage
+        ideal_noise = self.theoretical_noise_maps(sigma_sec, coverage, Nyears=Nyears, verbose=verbose)
+        if effective_variance_invcov is None:
+            thnoise = ideal_noise
+        else:
+            thnoise = np.zeros_like(ideal_noise)
+            correction = np.interp(np.max(coverage[seenpix])/coverage[seenpix], 
+                effective_variance_invcov[0,:], effective_variance_invcov[1,:])
+            thnoise[seenpix] = ideal_noise[seenpix] * np.sqrt(correction)
+
+
         noise_maps = np.zeros((len(coverage), 3))
         if seed is not None:
             np.random.seed(seed)
-        noise_maps[seenpix, 0] = np.random.randn(npix) * thnoise[seenpix]
-        noise_maps[seenpix, 1] = np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
-        noise_maps[seenpix, 2] = np.random.randn(npix) * thnoise[seenpix] * np.sqrt(2)
+        if clnoise is None:
+            IrndFull = np.random.randn(12*self.nside**2)
+            QrndFull = np.random.randn(12*self.nside**2)
+            UrndFull = np.random.randn(12*self.nside**2)
+        else:
+            if old:
+                IrndFull = self.random_fullsky_correlated(12*self.nside**2, clnoise=clnoise)
+                QrndFull = self.random_fullsky_correlated(12*self.nside**2, clnoise=clnoise)
+                UrndFull = self.random_fullsky_correlated(12*self.nside**2, clnoise=clnoise)
+            else:
+                IrndFull = qc.simulate_correlated_map(self.nside, 1., clin = clnoise, verbose=False)
+                QrndFull = qc.simulate_correlated_map(self.nside, 1., clin = clnoise, verbose=False)
+                UrndFull = qc.simulate_correlated_map(self.nside, 1., clin = clnoise, verbose=False)
+
+        noise_maps[seenpix, 0] = IrndFull[seenpix] * thnoise[seenpix]
+        noise_maps[seenpix, 1] = QrndFull[seenpix] * thnoise[seenpix] * np.sqrt(2)
+        noise_maps[seenpix, 2] = UrndFull[seenpix] * thnoise[seenpix] * np.sqrt(2)
         return noise_maps
 
     def theoretical_noise_maps(self, sigma_sec, coverage, Nyears=3, verbose=False):
@@ -423,6 +489,162 @@ def Dl2Cl_without_monopole(ls, totDL):
 
 
 def random_string(nchars):
-    lst = [random.choice(string.ascii_letters + string.digits) for n in range(nchars)]
+    lst = [rd.choice(string.ascii_letters + string.digits) for n in range(nchars)]
     str = "".join(lst)
     return (str)
+
+def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='', norm=False, allstokes=False, fitlim=None):
+    seenpix = cov > (covcut*np.max(cov))
+    covnorm = cov / np.max(cov)
+   
+    xx, yyI, dx, dyI, _ = ft.profile(np.sqrt(1./covnorm[seenpix]), maps[seenpix,0], nbins=nbins, plot=False)
+    xx, yyQ, dx, dyQ, _ = ft.profile(np.sqrt(1./covnorm[seenpix]), maps[seenpix,1], nbins=nbins, plot=False)
+    xx, yyU, dx, dyU, _ = ft.profile(np.sqrt(1./covnorm[seenpix]), maps[seenpix,2], nbins=nbins, plot=False)
+    avg = np.sqrt((dyI**2+dyQ**2/2+dyU**2/2)/3)
+    if norm:
+        fact = xx[0]/avg[0]
+    else:
+        fact = 1.
+    myY = (avg/xx) * fact
+
+    p=plot(xx**2,myY, 'o', label=label)
+    if allstokes:
+        plot(xx**2, dyI/xx*fact, label=label+' I', alpha=0.3)
+        plot(xx**2, dyQ/xx*fact/np.sqrt(2), label=label+' Q/sqrt(2)', alpha=0.3)
+        plot(xx**2, dyU/xx*fact/np.sqrt(2), label=label+' U/sqrt(2)', alpha=0.3)
+
+    if fit:
+        mymodel = lambda x, a, b, c, d, e: (a + b*x + c*np.exp(-d*(x-e)))#/(a+b+c*np.exp(-d*(1-e)))
+        ok = isfinite(myY)
+        if fitlim is not None:
+            print('Clipping fit from {} to {}'.format(fitlim[0], fitlim[1]))
+            ok = ok & (xx >= fitlim[0]) & (xx <= fitlim[1])
+        myfit = curve_fit(mymodel, xx[ok]**2, myY[ok], p0=[0.5,0.16, 0.3,2,1],maxfev=100000, ftol=1e-7)
+        plot(xx**2, mymodel(xx**2, *myfit[0]),  label=label+' Fit', color=p[0].get_color())
+        invcov_samples = np.linspace(1, 15, 1000)
+        eff_v = mymodel(invcov_samples, *myfit[0])**2
+        effective_variance_invcov = np.array([invcov_samples, eff_v])
+
+
+    xlabel('1./cov normed')
+    if norm:
+        add_yl = ' (Normalized to 1 at 1)'
+    else:
+        add_yl=''
+    ylabel('RMS Ratio w.r.t linear scaling'+add_yl)
+
+    if fit:
+        return xx, myY, effective_variance_invcov
+    else:
+        return xx, myY, None
+
+
+def get_angular_profile(maps, thmax=25, nbins=20, label='', center=np.array([316.44761929,-58.75808063]), 
+                        allstokes=False, fontsize=None, doplot=False):
+    vec0 = hp.ang2vec(center[0], center[1], lonlat=True)
+    vecpix = hp.pix2vec(256, np.arange(12*256**2))
+    angs = np.degrees(np.arccos(np.dot(vec0,vecpix)))
+    rng = np.array([0, thmax])
+    xx, yyI, dx, dyI, _ = ft.profile(angs, maps[:,0], nbins=nbins, plot=False, rng=rng)
+    xx, yyQ, dx, dyQ, _ = ft.profile(angs, maps[:,1], nbins=nbins, plot=False, rng=rng)
+    xx, yyU, dx, dyU, _ = ft.profile(angs, maps[:,2], nbins=nbins, plot=False, rng=rng)
+    avg = np.sqrt((dyI**2+dyQ**2/2+dyU**2/2)/3)
+    if doplot:
+        plot(xx, avg, 'o', label=label)
+        if allstokes:
+            plot(xx, dyI, label=label+' I', alpha=0.3)
+            plot(xx, dyQ/np.sqrt(2), label=label+' Q/sqrt(2)', alpha=0.3)
+            plot(xx, dyU/np.sqrt(2), label=label+' U/sqrt(2)', alpha=0.3)
+        xlabel('Angle [deg.]')
+        ylabel('RMS')
+        legend(fontsize=fontsize)
+    return xx, avg
+
+def correct_maps_rms(maps, cov, effective_variance_invcov):
+    okpix = cov > 0
+    newmaps = maps*0
+    correction = np.interp(np.max(cov)/cov[okpix], effective_variance_invcov[0,:], effective_variance_invcov[1,:])
+    for s in range(3):
+        newmaps[okpix,s] = maps[okpix,s] / np.sqrt(correction) * np.sqrt(cov[okpix]/np.max(cov))
+    return newmaps
+
+def map_corr_neighbtheta(themap_in, ipok_in, thetamin, thetamax, nbins, degrade=None, verbose=True):
+    if degrade is None:
+        themap = themap_in.copy()
+        ipok = ipok_in.copy()
+    else:
+        themap = hp.ud_grade(themap_in, degrade)
+        mapbool = themap_in < -1e30
+        mapbool[ipok_in] = True
+        mapbool = hp.ud_grade(mapbool, degrade)
+        ip = np.arange(12*degrade**2)
+        ipok = ip[mapbool]
+    rthmin = np.radians(thetamin)
+    rthmax = np.radians(thetamax)
+    thvals = np.linspace(rthmin, rthmax, nbins+1)
+    ns = hp.npix2nside(len(themap))
+    thesum = np.zeros(nbins)
+    thecount = np.zeros(nbins)
+    if verbose: bar = progress_bar(len(ipok),'Pixels')
+    for i in range(len(ipok)):
+        if verbose: bar.update()
+        valthis = themap[ipok[i]]
+        v = hp.pix2vec(ns, ipok[i])
+        #ipneighb_inner = []
+        ipneighb_inner = list(hp.query_disc(ns, v, np.radians(thetamin)))
+        for k in range(nbins): 
+            thmin = thvals[k]
+            thmax = thvals[k+1]
+            ipneighb_outer = list(hp.query_disc(ns, v, thmax))
+            ipneighb = ipneighb_outer.copy()
+            for l in ipneighb_inner: ipneighb.remove(l)
+            valneighb = themap[ipneighb]
+            thesum[k] += np.sum(valthis * valneighb)
+            thecount[k] += len(valneighb)
+            ipneighb_inner = ipneighb_outer.copy()
+            
+    corrfct = thesum / thecount
+    mythetas = np.degrees(thvals[:-1]+thvals[1:])/2
+    return mythetas, corrfct
+
+def get_angles(ip0, ips, ns):
+    v = np.array(hp.pix2vec(ns, ip0))
+    vecs = np.array(hp.pix2vec(ns, ips))
+    th = np.degrees(np.arccos(np.dot(v.T, vecs)))
+    return th
+
+def ctheta_parts(themap, ipok, thetamin, thetamax, nbinstot, nsplit=4, degrade_init=None, 
+                verbose=True):
+    allthetalims = np.linspace(thetamin, thetamax, nbinstot+1)
+    thmin = allthetalims[:-1]
+    thmax = allthetalims[1:]
+    idx = np.arange(nbinstot)//(nbinstot//nsplit)
+    if degrade_init is None:
+        nside_init = hp.npix2nside(len(themap))
+    else:
+        nside_init = degrade_init
+    nside_part = nside_init // (2**idx)
+    thall = np.zeros(nbinstot)
+    cthall = np.zeros(nbinstot)
+    for k in range(nsplit):
+        thispart = idx==k
+        mythmin = np.min(thmin[thispart])
+        mythmax = np.max(thmax[thispart])
+        mynbins = nbinstot//nsplit
+        mynside = nside_init // (2**k)
+        if verbose: print('Doing {0:3.0f} bins between {1:5.2f} and {2:5.2f} deg at nside={3:4.0f}'.format(mynbins, mythmin, mythmax, mynside))
+        myth, mycth = map_corr_neighbtheta(themap, ipok, mythmin, mythmax, mynbins, degrade=mynside, 
+            verbose=verbose)
+        cthall[thispart] = mycth
+        thall[thispart] = myth 
+
+    ### One could also calculate the average of the distribution of pixels within the ring instead of the simplistic thetas
+    dtheta = allthetalims[1]-allthetalims[0]
+    thall = 2./3 * ((thmin+dtheta)**3 - thmin**3) / ((thmin+dtheta)**2 - thmin**2)
+    ### But it actually changes very little
+    return thall, cthall
+        
+
+
+
+

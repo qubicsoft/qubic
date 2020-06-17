@@ -34,11 +34,11 @@ import qubic
 
 from qubic import selfcal_lib as sc
 
-plt.rcParams['figure.figsize'] = (9, 9)
+plt.rcParams['figure.figsize'] = (8, 8)
 
 
-import matplotlib.animation as animation
-from IPython.display import HTML
+# import matplotlib.animation as animation
+# from IPython.display import HTML
 ```
 
 ```{python}
@@ -301,39 +301,6 @@ print('shape : (#TES, #ASICS)', signal.shape)
 # Do the inverse
 image_fp = sc.tes_signal2image_fp(signal, asics=np.arange(1, 9))
 plt.imshow(image_fp, origin='lower')
-```
-
-# Synthetic Beam on the sky
-
-```{python}
-# For the function, you need a instrument and a scene
-q = qubic.QubicInstrument(d)
-d['nside'] = 512
-s = qubic.QubicScene(d)
-
-q.horn.open = False
-open_horns = [1, 5]
-for i in open_horns:
-    q.horn.open[i] = True
-    
-external_A = sc.make_external_A(rep, open_horns=np.where(q.horn.open==True)[0])
-
-sb = q.get_synthbeam(s, idet=93, external_A=external_A, hwp_position=0)
-
-# The synthetic beam optained has a value for each pixel on the sky. 
-# You should use Healpy if you want to plot it.
-print('sb shape :', sb.shape)
-```
-
-```{python}
-idet = 93
-sb0 = q.get_synthbeam(s, idet=idet, external_A=external_A, hwp_position=0)
-hp.gnomview(sb0, sub=(131), rot=[0, 90], reso=10, title='TES={}, HWP 0'.format(idet), min=0, max=5e4)
-
-sb1 = q.get_synthbeam(s, idet=idet, external_A=external_A, hwp_position=7)
-hp.gnomview(sb1, sub=(132), rot=[0, 90], reso=10, title='TES={}, HWP 7'.format(idet), min=0, max=5e4)
-
-hp.gnomview(np.abs(sb1-sb0), sub=(133), rot=[0, 90], reso=10, title='|Difference|', min=0, max=5e4)
 ```
 
 ```{python}

@@ -38,6 +38,8 @@ if rank == 0:
     print('Master rank {} is speaking:'.format(rank))
     print('mpi is in')
     print('There are {} ranks'.format(size))
+    print('You are using the sys version:')
+    print(sys.version)
     print('**************************')
     print('')
 
@@ -217,7 +219,6 @@ if rank == 0:
         print('************************** All Done in {} minutes'.format((t1 - t0) / 60))
 
 print('Finished Job {} for rank {}  !!!'.format(namesim, rank))
-exit(1)
 #MPI.COMM_WORLD.Barrier()
 #MPI.Finalize()
 

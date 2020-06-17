@@ -1,0 +1,404 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# ##### %matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(16,4))
+rc('font',size=12)
+rc('text',usetex=False)
+rc('image', cmap='viridis')
+
+from qubicpack import qubicpack as qp
+from qubicpack.utilities import Qubic_DataDir
+import qubic.fibtools as ft
+import qubic.plotters as p
+import qubic.lin_lib as ll
+import qubic.demodulation_lib as dl
+import qubic.io
+import qubic.sb_fitting as sbfit
+
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import pickle
+import scipy.signal as scsig
+from scipy import interpolate
+import os
+import healpy as hp
+import pandas as pd
+import time
+import scipy.ndimage.filters as f
+
+```
+
+```{python}
+def npp(ipix):
+    #neighboring pixel of the peak
+    # map in nest
+    return np.array(hp.get_all_neighbours(256, ipix,nest=True))
+
+def selectcenter(hpmap,center,delta=3, nside=256,nest=True,
+                threshold=3, displaycenters=False, plot=False):
+    #return the pixel of the central peak
+    npix=12*nside**2
+    centerarr = [center,
+                center-delta*np.array([1,0]),
+                center-2*delta*np.array([1,0]),
+                center+delta*np.array([1,0]),
+                center+2*delta*np.array([1,0])]
+
+    fullvec=hp.pix2vec(nside, range(0,npix), nest=nest)
+    relmaxpx=np.zeros((len(centerarr),))
+    px=np.zeros((len(centerarr),),dtype=int)
+
+    for j,icenter in enumerate(centerarr):
+        ivec = hp.ang2vec(np.deg2rad(icenter[0]), np.deg2rad(icenter[1]))
+        imaskpx = np.rad2deg(np.arccos(np.dot(ivec,fullvec))) < threshold
+        imaskidx = np.where(imaskpx == True)[0]
+        #print(imaskidx)
+        relmaxpx[j] = np.max(hpmap[imaskpx])
+        px[j] = imaskidx[np.argmax(hpmap[imaskpx])]
+
+    indxmax = np.argmax(relmaxpx)
+    pixmax, newcenter = px[indxmax], centerarr[indxmax]
+    if plot:
+        hp.gnomview(hpnest, reso=12, rot=np.array([90,0])-newcenter, nest=nest)
+        if displaycenters:
+            for each in centerarr:
+                hp.projscatter(np.deg2rad(each), marker='+', color='r')
+        #print('crux', np.rad2deg(hp.pix2ang(256, pixmax, nest=nest)))
+        hp.projscatter(hp.pix2ang(256, pixmax, nest=nest), marker='+', color='r')
+
+    return pixmax, newcenter
+```
+
+```{python}
+def fit_hpmap(TESNum, dirfiles, az_center, el_center, 
+              nside = 256, nest = True, filterbeam = 3,
+             threshold = 3,threshold0=4, plotcenter = False,
+             plotnine=False, plotneig=False, refilter=False ):
+    t0=time.time()
+    npix=12*nside**2
+
+    hpmap = sbfit.get_hpmap(TESNum, dirfiles)
+
+    if nest:
+        hpnest= hp.reorder(hpmap, r2n=nest, )
+    else:
+        hpnest= hpmap
+    hpnest_filt= f.gaussian_filter(hpnest, filterbeam)
+
+    centerini = [90-az_center,el_center]
+    px, center = selectcenter(hpnest_filt,centerini+np.array([90,0]))
+    vli = [px,]
+    thetaphi=hp.pix2ang(nside,px,nest=nest)
+    xlo = px-100
+    xhi = px+100
+    if plotcenter:
+        fig,ax=subplots(nrows=1,ncols=2,figsize=(12,4))
+        ax[0].set_xlim(xlo,xhi)
+        ax[0].plot(hpnest, 'bo--', label='raw')
+        ax[0].plot(hpnest_filt, 'bo--', alpha=0.4, label='filtered')
+        ax[0].legend()
+        for i in vli:
+            ax[0].axvline(i, c='k',alpha=0.4,ls='--')
+            neig=npp(i)
+        hp.gnomview(hpnest, reso=12, rot=center, nest=True)
+        hp.projscatter(np.deg2rad(az_center), np.deg2rad(el_center), marker='+', color='r')
+
+    pxvec=hp.pix2vec(nside, px, nest=nest)
+    fullvec=hp.pix2vec(nside, range(0,npix), nest=nest)
+    fullpx = np.linspace(0,npix,npix,dtype=int)
+
+    aberr= np.deg2rad(np.array([0,1.]))
+    delta = np.deg2rad(12.5)
+    #Old peaksordering
+    #thphpeaks = [thetaphi,
+    #             thetaphi-delta*np.array([1,0]),                 
+    #            thetaphi+delta*np.array([1,0]), 
+    #            thetaphi-delta*np.array([0,1]+aberr),
+    #            thetaphi+delta*np.array([0,1]+aberr),
+    #            thetaphi-delta*0.5*np.array([1,1]),
+    #            thetaphi+delta*0.5*np.array([1,1]),
+    #            thetaphi-delta*0.5*np.array([-1,1]),
+    #            thetaphi+delta*0.5*np.array([-1,1]),
+    #             ]
+    
+    #peaks ordering according JCh and instrument module
+    thphpeaks = [thetaphi+delta*np.array([1,0]),
+                 thetaphi-delta*0.5*np.array([-1,1]),
+                 thetaphi-delta*np.array([0,1]+aberr), 
+                 thetaphi+delta*0.5*np.array([1,1]),
+                 thetaphi,
+                 thetaphi-delta*0.5*np.array([1,1]),
+                 thetaphi+delta*np.array([0,1]+aberr),
+                 thetaphi+delta*0.5*np.array([-1,1]),
+                 thetaphi-delta*np.array([1,0])
+                 ]
+
+    fullvec=hp.pix2vec(nside, range(0,npix), nest=nest)
+    realmaxpx=np.zeros((9,),dtype=int)
+    absmaxpx=np.zeros((9,),dtype=int)
+
+    if plotnine: fig, ax = subplots(nrows=9,ncols=1,figsize=(8,8),)#sharex=True, )
+    thphpeaksnew = np.zeros((9,2))
+    for j,ithphpx in enumerate(thphpeaks):
+        c='b'
+        if j == 4: 
+            threshold = threshold0
+        else:
+            threshold =threshold
+        ivec = hp.ang2vec(ithphpx[0],ithphpx[1], )
+        ifullpx = np.linspace(0,npix,npix,dtype=int)
+        maskipx = np.rad2deg(np.arccos(np.dot(ivec,fullvec))) < threshold
+        if refilter:
+            mean, std = np.mean(hpnest_filt[maskipx]),np.std(hpnest_filt[maskipx])
+            maskipx2 = hpnest_filt[maskipx] < mean+3*std
+            maskipx3 = hpnest_filt[maskipx] > mean-3*std
+            maskipx[maskipx]=maskipx2*maskipx3
+        maskidx = np.where(maskipx == True)[0]
+        #useless max (just to plot in 1d not healpix)
+        realmaxpx[j]=np.where(hpnest_filt[maskipx] == np.max(hpnest_filt[maskipx]))[0][0]
+        #usefull max (healpix)
+        absmaxpx[j]=maskidx[realmaxpx[j]]
+        thphpeaksnew[j] = hp.pix2ang(nside,absmaxpx[j],nest=nest)
+        print()
+        #ax[j].set_title('masked values at {}deg from px'.format(threshold))
+
+        if plotnine:
+            if j==3: c='r'
+            ax[j].axvline(realmaxpx[j], c='k',alpha=0.4,ls='--')
+            ax[j].plot(hpnest_filt[maskipx], 'o--',color=c, alpha=0.4, label='filtered')
+            ax[j].legend()        
+
+    return hpnest, thphpeaksnew, absmaxpx#, thphpeaksnew
+```
+
+```{python}
+# Get the data
+freq_source = 150
+dirfiles = os.environ['QUBIC_TODDIR']+'150GHz-2019-04-06/'
+print('dirfiles :', dirfiles)
+
+c50 = np.cos(np.radians(50))
+azmin = -15./c50
+azmax = 15./c50
+
+TESNum = 93
+# reload(sbfit)
+flatmap, az, el = sbfit.get_flatmap(TESNum, dirfiles, azmin = azmin, azmax=azmax)
+npix = len(np.ravel(flatmap))
+
+subplot(1,2,1)
+imshow(flatmap,
+       extent=[np.min(az)*c50, np.max(az)*c50, np.min(el), np.max(el)], aspect='equal',
+      vmin=-3000, vmax=3000)
+# colorbar()
+
+```
+
+```{python}
+alldata_renorm = np.zeros((256, npix))
+for i in range(256):
+    flatmap, az, el = sbfit.get_flatmap(i+1, dirfiles, azmin=azmin, azmax=azmax)
+    alldata_renorm[i, :] = np.ravel((flatmap - np.mean(flatmap)) / np.std(flatmap))  
+
+##### Estimating the median of all SB images - to be removed - Origin still unexplained...
+med = np.reshape(np.median(alldata_renorm,axis=0),np.shape(flatmap))
+mm = np.mean(med)
+ss = np.std(med)
+
+```
+
+```{python}
+az_center = 90
+el_center = 0
+```
+
+Test for one TES... it works fine!
+
+```{python}
+nside=256
+npix=12*nside**2
+nest=True
+ites=93
+fullvec=hp.pix2vec(nside, range(0,npix), nest=nest)
+
+t00=time.time()
+for ites in range(90,91):
+    
+    t0=time.time()
+    hpnest, thphpeaksnew, absmaxpx = fit_hpmap(ites, dirfiles, az_center, el_center,
+                                           filterbeam=2,threshold=2,threshold0=2,)
+
+    fig, ax1 = subplots(nrows=1,ncols=2, figsize=(10,8))
+    axes(ax1[0])
+    hp.gnomview(hpnest, reso=10, nest=nest, title= 'Healpy projection (TES#{})'.format(ites),
+                      hold=True, cbar=False)
+    hp.graticule(dpar=5,dmer=5,color='w')
+    
+    for ip in range(9):
+        #loc = hp.pix2ang(nside,absmaxpx[jp], nest=nest)
+        hp.projscatter(thphpeaksnew[ip], marker='+', color='r')
+        hp.projtext(thphpeaksnew[ip,0],thphpeaksnew[ip,1], s='{}'.format(ip),color='w')
+    print('Done Healpy in {:.2f} minutes'.format((time.time()-t0)/60))
+
+    #Flat fit
+    t1=time.time()
+    flatmap, az, el = sbfit.get_flatmap(ites, dirfiles, remove=med, azmin=azmin, azmax=azmax)
+
+    #### Instantiate a model
+    sbfitmodel3 = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, no_xy_shift=False, distortion=False)
+
+    fit, xypeaks = sbfit.fit_sb(flatmap, az, el, sbfitmodel3, verbose=False, resample=False, 
+                            doplot=False, extra_title='TES #{}'.format(TESNum))
+
+    axes(ax1[1])
+    title('Flat projection (TES#{})'.format(ites))
+    imshow(flatmap, extent=[np.min(az)*np.cos(np.radians(50)), 
+                                   np.max(az)*np.cos(np.radians(50)), 
+                                   np.min(el), np.max(el)])
+    scatter(xypeaks[0,:],xypeaks[1,:], marker='+', color='r')
+    for ir in range(9):
+        text(xypeaks[0,ir],xypeaks[1,ir], s='{}'.format(ir)  , color='w')
+    grid(color='w', ls='--', fillstyle='full')
+    xlabel('Az[deg]*cos(50)')
+    ylabel('El[deg]')
+    print('Done Flat in {:.2f} minutes'.format((time.time()-t1)/60))
+
+    
+print('All done in {} minutes'.format((t00-time.time())/60) )
+```
+
+Saving peaks locations
+
+```{python}
+for TESNum in range(1,2):
+    _, thphpeaks, _  = fit_hpmap(ites, dirfiles, az_center, el_center,
+                                           filterbeam=2,threshold=2,threshold0=2,)
+    print(thphpeaks)
+```
+
+```{python}
+dirsave = dirfiles+'/fit_HPpeaks/'
+try:
+    os.mkdir(dirsave)
+    print('Fit saved in {}'.format(dirsave))    
+except:
+    print('Fit saved in {}'.format(dirsave))    
+    print(' ')
+TEXMax = 3
+for TESNum in range(1,TESMax+1):
+    _, thphpeaks, _ = fit_hpmap(ites, dirfiles, az_center, el_center,
+                                           filterbeam=2,threshold=2,threshold0=2,)
+    print(thphpeaks)
+```
+
+Make pdf file with all TES... not working
+
+.
+
+.
+
+.
+
+.
+
+.
+
+```{python}
+nside=256
+npix=12*nside**2
+nest=True
+nperpage=7
+TESMax=9
+
+fullvec=hp.pix2vec(nside, range(0,npix), nest=nest)
+from matplotlib.backends.backend_pdf import PdfPages
+t00=time.time()
+with PdfPages('00prueba-hp.pdf') as pdf:
+    for TESNum in range(1,TESMax+1):
+        ipage = (TESNum-1) % nperpage
+        print('ipage', ipage)
+        if ipage  == 0:
+            rc('figure', figsize=(20,28))
+            #if (TESNum)%nperpage == 0: 
+            fig, ax1  = subplots(nrows=7,ncols=2)
+            print(np.shape(ax1))
+        
+        #t0=time.time()
+        hpnest, thphpeaks, absmaxpx = fit_hpmap(TESNum, dirfiles, az_center, el_center,
+                                               filterbeam=2,threshold=2,threshold0=2,)
+        j = TESNum%7        
+        axes(ax1[j,0])
+        cla()
+        hp.gnomview(hpnest, reso=10, nest=nest, title= 'Healpy projection (TES#{})'.format(TESNum),
+                          hold=True, cbar=False)
+        hp.graticule(color='w')
+        for jp in range(9):
+            loc = hp.pix2ang(nside,absmaxpx[jp], nest=nest)
+            hp.projscatter(loc, marker='+', color='r')
+            hp.projtext(loc[0],loc[1], s='{}'.format(jp),color='w')
+        #print('Done Healpy in {:.2f} minutes'.format((time.time()-t0)/60))
+
+        #Flat fit
+        #t1=time.time()
+        flatmap, az, el = sbfit.get_flatmap(TESNum, dirfiles, remove=med, azmin=azmin, azmax=azmax)
+
+        #### Instantiate a model
+        sbfitmodel3 = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, no_xy_shift=False, distortion=False)#
+
+        _, xypeaks = sbfit.fit_sb(flatmap, az, el, sbfitmodel3, verbose=False, resample=False, 
+                                doplot=False, extra_title='TES #{}'.format(TESNum))
+
+        axes(ax1[j,1])
+        cla()
+        title('Flat projection (TES#{})'.format(TESNum))
+        imshow(flatmap, extent=[np.min(az)*np.cos(np.radians(50)), 
+                                       np.max(az)*np.cos(np.radians(50)), 
+                                       np.min(el), np.max(el)])
+        scatter(xypeaks[0,:],xypeaks[1,:], marker='+', color='r')
+        for ir in range(9):
+            text(xypeaks[0,ir],xypeaks[1,ir], s='{}'.format(ir)  , color='w')
+        grid(color='w', ls='--', fillstyle='full')
+        xlabel('Az[deg]*cos(50)')
+        ylabel('El[deg]')
+        
+        #print('Done Healpy in {:.2f} minutes'.format((time.time()-t0)/60))
+        if (ipage == (nperpage-1)) or TESNum==TESMax:
+            #tight_layout()
+            pdf.savefig()
+            clf()
+
+    print('All done in {} minutes'.format((time.time()-t00)/60) )
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

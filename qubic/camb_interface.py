@@ -224,6 +224,7 @@ def simulate_correlated_map(nside, signoise, clin = None,
         ### Case 1.
         fact = signoise*np.sqrt(4 * np.pi/npix_big)* nside_fact
         map_back = hp.synfast(clth, nside_big,lmax=lmax_big, verbose=False)*fact
+        #print('Simulated a correlated map')
     else:
         ### Cases 2 and 3 Genereate the alms be it in harmonic space or pixel-space
         if generate_alm:

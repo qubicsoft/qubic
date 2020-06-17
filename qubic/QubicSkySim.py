@@ -493,7 +493,8 @@ def random_string(nchars):
     str = "".join(lst)
     return (str)
 
-def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='', norm=False, allstokes=False, fitlim=None):
+def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='', 
+    norm=False, allstokes=False, fitlim=None, doplot=False):
     seenpix = cov > (covcut*np.max(cov))
     covnorm = cov / np.max(cov)
    
@@ -507,11 +508,12 @@ def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='
         fact = 1.
     myY = (avg/xx) * fact
 
-    p=plot(xx**2,myY, 'o', label=label)
-    if allstokes:
-        plot(xx**2, dyI/xx*fact, label=label+' I', alpha=0.3)
-        plot(xx**2, dyQ/xx*fact/np.sqrt(2), label=label+' Q/sqrt(2)', alpha=0.3)
-        plot(xx**2, dyU/xx*fact/np.sqrt(2), label=label+' U/sqrt(2)', alpha=0.3)
+    if doplot:
+        p=plot(xx**2,myY, 'o', label=label)
+        if allstokes:
+            plot(xx**2, dyI/xx*fact, label=label+' I', alpha=0.3)
+            plot(xx**2, dyQ/xx*fact/np.sqrt(2), label=label+' Q/sqrt(2)', alpha=0.3)
+            plot(xx**2, dyU/xx*fact/np.sqrt(2), label=label+' U/sqrt(2)', alpha=0.3)
 
     if fit:
         mymodel = lambda x, a, b, c, d, e: (a + b*x + c*np.exp(-d*(x-e)))#/(a+b+c*np.exp(-d*(1-e)))
@@ -519,19 +521,21 @@ def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='
         if fitlim is not None:
             print('Clipping fit from {} to {}'.format(fitlim[0], fitlim[1]))
             ok = ok & (xx >= fitlim[0]) & (xx <= fitlim[1])
-        myfit = curve_fit(mymodel, xx[ok]**2, myY[ok], p0=[0.5,0.16, 0.3,2,1],maxfev=100000, ftol=1e-7)
-        plot(xx**2, mymodel(xx**2, *myfit[0]),  label=label+' Fit', color=p[0].get_color())
+        myfit = curve_fit(mymodel, xx[ok]**2, myY[ok], p0=[np.min(myY[ok]),0.4, 0,2,1.5],maxfev=100000, ftol=1e-7)
+        if doplot: 
+            plot(xx**2, mymodel(xx**2, *myfit[0]),  label=label+' Fit', color=p[0].get_color())
+            print(myfit[0])
         invcov_samples = np.linspace(1, 15, 1000)
         eff_v = mymodel(invcov_samples, *myfit[0])**2
         effective_variance_invcov = np.array([invcov_samples, eff_v])
 
-
-    xlabel('1./cov normed')
-    if norm:
-        add_yl = ' (Normalized to 1 at 1)'
-    else:
-        add_yl=''
-    ylabel('RMS Ratio w.r.t linear scaling'+add_yl)
+    if doplot:
+        xlabel('1./cov normed')
+        if norm:
+            add_yl = ' (Normalized to 1 at 1)'
+        else:
+            add_yl=''
+        ylabel('RMS Ratio w.r.t linear scaling'+add_yl)
 
     if fit:
         return xx, myY, effective_variance_invcov
@@ -567,6 +571,30 @@ def correct_maps_rms(maps, cov, effective_variance_invcov):
     for s in range(3):
         newmaps[okpix,s] = maps[okpix,s] / np.sqrt(correction) * np.sqrt(cov[okpix]/np.max(cov))
     return newmaps
+
+def flatten_noise(maps, cov, thmax=25, nbins=20, center=np.array([316.44761929,-58.75808063]), doplot=False):
+    sh = np.shape(maps)
+    if len(sh)==2:
+        maps = np.reshape(maps,(1,sh[0], sh[1]))
+
+    out_maps = np.zeros_like(maps)
+    newsh = np.shape(maps)
+    all_fitcov = []
+    for isub in range(newsh[0]):
+        if doplot:
+            subplot(newsh[0], 1, isub+1)
+        xx, yy, fitcov = get_noise_invcov_profile(maps[isub,:,:], cov, nbins=nbins,
+                                                        label='FastSim',fit=True, doplot=doplot)
+        all_fitcov.append(fitcov)
+        out_maps[isub, :,:] = correct_maps_rms(maps[isub,:,:], cov, fitcov)
+
+    if len(sh)==2:
+        return out_maps[0,:,:], all_fitcov
+    else:
+        return out_maps, all_fitcov
+
+
+
 
 def map_corr_neighbtheta(themap_in, ipok_in, thetamin, thetamax, nbins, degrade=None, verbose=True):
     if degrade is None:
@@ -644,6 +672,21 @@ def ctheta_parts(themap, ipok, thetamin, thetamax, nbinstot, nsplit=4, degrade_i
     ### But it actually changes very little
     return thall, cthall
         
+def get_cov_nunu(maps, cov, nbins=20):
+    # This function returns the sub-frequency, sub_frequency covariance matrix for each stoke parameter
+    # it does not attemps to check for covariance between Stokes parameters (this should be icorporated later)
+    # it returns the three covariance matrices as well as the fitted function of coverage that was used to
+    # flatten the noise RMS in the maps before covariance calculation (this is for subsequent possible use)
+
+    ### First normalize by coverage
+    new_sub_maps, all_fitcov = flatten_noise(maps, cov, nbins=nbins)
+    print(new_sub_maps.shape)
+    ### Now calculate the covariance matrix for each sub map
+    cov_I = np.cov(new_sub_maps[:,:,0])
+    cov_Q = np.cov(new_sub_maps[:,:,1])
+    cov_U = np.cov(new_sub_maps[:,:,2])
+
+    return cov_I, cov_Q, cov_U, all_fitcov
 
 
 

@@ -22,6 +22,7 @@ from .plotters import *
 from .lin_lib import *
 from . import qubicdict 
 
+import pysm
 
 def full(shape, fill_value, dtype=None, order='C'):
     import numpy as np
@@ -42,4 +43,4 @@ if numpy.__version__ < '1.8':
     numpy.full_like = full_like
 del full, full_like, numpy
 
-__version__ = '4.5.dev1009'
+__version__ = '4.5.dev1226'

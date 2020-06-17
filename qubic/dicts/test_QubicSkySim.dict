@@ -8,7 +8,7 @@ beam_shape =  'multi_freq' # 'gaussian', 'fitted_beam', 'multi_freq'
 
 # multifreq instrument 
 MultiBand=False
-nf_sub=2
+nf_sub=1
 center_detector=False
 
 psd=None

@@ -7,9 +7,12 @@ import string
 import os
 import pysm
 import pysm.units as u
-import camb
+from pysm import utils
+
 
 import qubic
+from qubic import camb_interface as qc
+
 
 __all__ = ['sky', 'Qubic_sky']
 
@@ -112,14 +115,36 @@ class sky(object):
         _, nus_edge, nus_in, _, _, Nbbands_in = qubic.compute_freq(band, Nf, filter_relative_bandwidth)
 
         sky = np.zeros((Nf, npix, 3))
+        #ww = (np.ones(Nf+1) * u.uK_CMB).to_value(u.uK_RJ,equivalencies=u.cmb_equivalencies(nus_edge*u.GHz))
         for i in range(Nf):
-            # themaps_iqu = self.sky.get_emission([nus_edge[i], nus_edge[i + 1]] * u.GHz)
-            # print('Integrating from: {} to {} and converting to muKCMB at {}'.format(nus_edge[i], nus_edge[i + 1],nus_in[i] ))
-            # sky[i, :, :] = np.array(themaps_iqu.to(u.uK_CMB, equivalencies=u.cmb_equivalencies(nus_in[i] * u.GHz))).T
-            themaps_iqu = self.sky.get_emission(nus_in[i] * u.GHz)
-            print('Getting map at {} and converting to muKCMB at {}'.format(nus_in[i],nus_in[i] ))
-            sky[i, :, :] = np.array(themaps_iqu.to(u.uK_CMB, 
-                equivalencies=u.cmb_equivalencies(nus_in[i] * u.GHz))).T
+            ###################### This is puzzling part here: ############################
+            # See Issue on PySM Git: https://github.com/healpy/pysm/issues/49
+            ###############################################################################
+            # #### THIS IS WHAT WOULD MAKE SENSE BUT DOES NOT WORK ~ 5% on maps w.r.t. input
+            # nfreqinteg = 5
+            # nus = np.linspace(nus_edge[i], nus_edge[i + 1], nfreqinteg)
+            # freqs = utils.check_freq_input(nus)
+            # convert_to_uK_RJ = (np.ones(len(freqs), dtype=np.double) * u.uK_CMB).to_value(
+            # u.uK_RJ, equivalencies=u.cmb_equivalencies(freqs))
+            # #print('Convert_to_uK_RJ :',convert_to_uK_RJ)
+            # weights = np.ones(nfreqinteg) * convert_to_uK_RJ
+            ###############################################################################
+            ###### Works OK but not clear why...
+            ###############################################################################
+            nfreqinteg = 5
+            nus = np.linspace(nus_edge[i], nus_edge[i + 1], nfreqinteg)
+            filter_uK_CMB = np.ones(len(nus), dtype=np.double)
+            filter_uK_CMB_normalized = utils.normalize_weights(nus, filter_uK_CMB)
+            weights = 1./filter_uK_CMB_normalized
+            ###############################################################################
+
+
+            ### Integrate through band using filter shape defined in weights
+            themaps_iqu = self.sky.get_emission(nus * u.GHz, weights=weights)
+            sky[i, :, :] = np.array(themaps_iqu.to(u.uK_CMB, equivalencies=u.cmb_equivalencies(nus_in[i] * u.GHz))).T
+            # ratio = np.mean(self.input_cmb_maps[0,:]/sky[i,:,0])
+            # print('Ratio to initial: ',ratio)
+
 
         return sky
 
@@ -390,39 +415,11 @@ class Qubic_sky(sky):
 
 
 def get_camb_Dl(lmax=2500, H0=67.5, ombh2=0.022, omch2=0.122, mnu=0.06, omk=0, tau=0.06, As=2e-9, ns=0.965, r=0.):
-    """
-    Inspired from: https://camb.readthedocs.io/en/latest/CAMBdemo.html
-    NB: this returns Dl = l(l+1)Cl/2pi
-    Python CL arrays are all zero based (starting at l=0), Note l=0,1 entries will be zero by default.
-    The different DL are always in the order TT, EE, BB, TE (with BB=0 for unlensed scalar results).
-
-
-    """
-
-    # Set up a new set of parameters for CAMB
-    pars = camb.CAMBparams()
-    # This function sets up CosmoMC-like settings, with one massive neutrino and helium set using BBN consistency
-    pars.set_cosmology(H0=H0, ombh2=ombh2, omch2=omch2, mnu=mnu, omk=omk, tau=tau)
-    pars.WantTensors = True
-    pars.InitPower.set_params(As=As, ns=ns, r=r)
-    pars.set_for_lmax(lmax, lens_potential_accuracy=1)
-    # calculate results for these parameters
-    results = camb.get_results(pars)
-    # get dictionary of CAMB power spectra
-    powers = results.get_cmb_power_spectra(pars, CMB_unit='muK')
-    totDL = powers['total']
-    unlensedDL = powers['unlensed_total']
-    # Python CL arrays are all zero based (starting at L=0), Note L=0,1 entries will be zero by default.
-    # The different CL are always in the order TT, EE, BB, TE (with BB=0 for unlensed scalar results).
-    ls = np.arange(totDL.shape[0])
-    return ls, totDL, unlensedDL
+    return qc.get_camb_Dl(lmax=2500, H0=67.5, ombh2=0.022, omch2=0.122, mnu=0.06, omk=0, tau=0.06, As=2e-9, ns=0.965, r=0.)
 
 
 def Dl2Cl_without_monopole(ls, totDL):
-    cls = np.zeros_like(totDL)
-    for i in range(4):
-        cls[2:, i] = 2 * np.pi * totDL[2:, i] / (ls[2:] * (ls[2:] + 1))
-    return cls
+    return qc.Dl2Cl_without_monopole(ls, totDL)
 
 
 def random_string(nchars):

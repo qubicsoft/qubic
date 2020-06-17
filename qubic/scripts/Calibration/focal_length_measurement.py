@@ -1,11 +1,12 @@
 from __future__ import division, print_function
 
+import glob
 import numpy as np
 import matplotlib.pyplot as plt
 import pickle as pk
 from scipy.spatial.distance import cdist
 from scipy.stats import sigmaclip
-
+import pandas as pd
 from sklearn.cluster import DBSCAN
 
 from qubicpack.utilities import Qubic_DataDir
@@ -31,6 +32,7 @@ def get_all_fit(rep):
 
     return np.array(tes_newxxyy), np.array(tes_fit)
 
+
 def get_alpha_from_fit(newxxyy):
     az = np.deg2rad(newxxyy[:, 0, :]) / np.cos(np.deg2rad(50.))
     el = np.deg2rad(newxxyy[:, 1, :])
@@ -38,15 +40,16 @@ def get_alpha_from_fit(newxxyy):
     # Unit vector in spherical coordinates
     unit_vector = np.array([np.sin(np.pi / 2 - el) * np.cos(az),
                             np.sin(np.pi / 2 - el) * np.sin(az),
-                            np.cos(np.pi / 2 - el)]
-                           )
+                            np.cos(np.pi / 2 - el)])
+
     # Scalar product to get alpha
     ntes, npeaks = np.shape(az)
     cosalpha = np.empty((npeaks, ntes, ntes))
     for peak in range(npeaks):
         cosalpha[peak] = np.dot(unit_vector[:, :, peak].T, unit_vector[:, :, peak])
+        # print(cosalpha)
     alpha = np.arccos(cosalpha)
-
+    # print(alpha)
     return alpha
 
 
@@ -274,7 +277,7 @@ print(rep)
 
 tes_newxxyy, tesfit = get_all_fit(rep)
 
-alpha = get_alpha_from_fit(tes_newxxyy)
+alpha = get_alpha_from_fit(tes_newxxyy, rdist)
 
 # plt.figure()
 # for i in range(9):
@@ -363,3 +366,44 @@ r_ok = rdist[ok][rdist[ok] != 0.]
 xy_ok = tes_xy[ok][rdist[ok] != 0.]
 
 final_mean, final_std = plot_flonfp(fl_mean, fl_std, xy_ok, r_ok, npeaks=1)
+
+# ============= Compare with David synthetic beam simulations ===================
+freq_source = 170
+rep_david = '/home/lmousset/QUBIC/Qubic_work/Calibration/focal_length_measurement/David_simu/'
+# Get the fit of the synthesized beams
+rep = Qubic_DataDir(datafile='allFitSB_{}.pdf'.format(freq_source), datadir='/home/lmousset/QUBIC/Qubic_work')
+print(rep)
+tes_newxxyy, tesfit = get_all_fit(rep)
+
+fig, axs = plt.subplots(2, 3, figsize=(10, 8))
+axs = np.ravel(axs)
+plt.suptitle('Frequency: {} GHz'.format(freq_source))
+for t, tes in enumerate([6, 37, 50, 58, 76, 93]):
+
+    # Get the file from David
+    file = glob.glob(rep_david + '*{}*/*_{}_*/*'.format(freq_source, tes))
+    data = pd.read_csv(file[0], sep='\t', skiprows=0)
+
+    x = data['x position (deg)'].iloc[::10]
+    y = data['y position (deg)'].iloc[::10]
+
+    nn = int(np.sqrt(len(x)))
+    print(nn)
+    a = data['amplitude'].iloc[::10]
+    # amp = np.reshape(np.asarray(a), (nn, nn))
+
+    dx = (x.iloc[1] - x.iloc[0]) / 2.
+    dy = (y.iloc[1] - y.iloc[0]) / 2.
+    extent = [x.iloc[0] - dx, x.iloc[-1] + dx, y.iloc[0] - dy, y.iloc[-1] + dy]
+
+    azel_tes = tes_newxxyy[tes-1, 0:2, :]
+    azel_tes[1, :] -= 50 # substract 50 to the elevation
+
+    # Plot the fit measurement on the David simulation
+    ax = axs[t]
+    # ax.imshow(np.rot90(amp), extent=extent)
+    ax.scatter(x, y, c=a, marker='s')
+    ax.scatter(azel_tes[0, :], azel_tes[1, :], color='r', s=10)
+    ax.set_title('TES {}'.format(tes))
+    ax.axis('equal')
+plt.show()

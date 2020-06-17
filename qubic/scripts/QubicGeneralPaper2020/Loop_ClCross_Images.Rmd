@@ -1,0 +1,217 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# %matplotlib inline
+from pylab import *
+import os
+import sys
+from importlib import reload
+import glob
+import pickle
+import time
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm
+import qubic
+from qubic import SpectroImLib as si
+from qubic import QubicSkySim as qss
+from qubic import NamasterLib as nam
+from qubic import camb_interface as qc
+reload(nam)
+
+rc('figure', figsize=(13, 10))
+rc('font', size=12)
+```
+
+```{python}
+def read_files_mc(dirmaps,reconfile, verbose=False):
+    bla = reconfile.split('/')[-1].split('_')
+    kk = bla[0]+'_'+bla[1]+'_'+bla[2]
+    ss = reconfile.split('/')[-1].split('_')[-2]
+    rr = reconfile.split('/')[-1].split('_')[-1].split('.')[0]
+    m = np.array(FitsArray(dirmaps+kk+'_maps_recon_seed_'+ss+'_'+rr+'.fits'))
+    c = np.array(FitsArray(dirmaps+kk+'_maps_convolved_seed_'+ss+'_'+rr+'.fits'))
+    cov = np.array(FitsArray(dirmaps+kk+'_maps_coverage_'+rr+'.fits'))
+    with open(dirmaps+kk+'_dictionary_'+rr+'.pickle', 'rb') as handle: d = pickle.load(handle)
+    with open(dirmaps+kk+'_input_cell_'+rr+'.pickle', 'rb') as handle: icl = pickle.load(handle)
+    if verbose: print('read k={} s={} r={}'.format(kk, ss, rr))
+    return m, c, cov, d, icl
+    
+def do_a_pair(f0, f1, lmin=1, lmax=None, delta_ell=20, covcut=0.1, namObject = None, flat=True):
+    # read files
+    m0, c0, cov0, d0, icl0 = read_files_mc(dirmaps, f0, verbose=False)
+    m1, c1, cov1, d1, icl1 = read_files_mc(dirmaps, f1, verbose=False)
+    
+    # Input spectra
+    input_cell = icl0.copy()
+    ellth= np.arange(icl0.shape[0])
+
+    if lmax is None:
+        lmax = 2*d0['nside']
+    
+    if namObject is None:
+        # Get Mask
+        okpix = cov0 > (np.max(cov0) * covcut)
+        maskpix = np.zeros(12*d0['nside']**2)
+        if flat:
+            maskpix[okpix] = 1
+        else:
+            maskpix[okpix] = cov0[okpix]
+        
+        # Create Namaster Object
+        namObject = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+
+    # Calculate the Cls
+    leff, thecls, w = namObject.get_spectra(m0[0,:,:].T,
+                                            map2=m1[0,:,:].T,
+                                            purify_e=False, purify_b=True, 
+                                            beam_correction=True,
+                                            verbose=False, w=namObject.w)    
+    return leff, thecls, input_cell, ellth, namObject
+
+
+```
+
+```{python}
+np.sum(namFlat.mask_apo)/len(namFlat.mask_apo)
+```
+
+```{python}
+#dirmaps = '/qubic/Sims/EndToEndMaps/'
+dirbase = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB/'
+dirmaps = dirbase+'Maps/'
+listinit = glob.glob(dirmaps+'*maps_recon*.fits')
+allstr = []
+allkeyword = []
+allseed = []
+for l in listinit:
+    bla= l.split('.')[0].split('_')
+    kk = bla[0].split('/')[-1]+'_'+bla[1]+'_'+bla[2]
+    allkeyword.append(kk)
+    allstr.append(bla[-1])
+    allseed.append(bla[-2])
+
+allstr = unique(np.array(allstr))
+
+mykeywords = np.unique(allkeyword)
+mykeywords = mykeywords[2:]
+
+myseeds = np.unique(allseed)
+myseeds = [myseeds[0]]
+
+
+print('Keywords Available:')
+for k in range(len(mykeywords)):
+    print('{}: '.format(k)+mykeywords[k])
+print('')
+print('Seeds Available:')
+for s in range(len(myseeds)):
+    print('{}: '.format(s)+myseeds[s])
+
+print('')
+print('So we have the following number of files:')
+for k in range(len(mykeywords)):
+    for s in range(len(myseeds)):
+        listfiles = glob.glob(dirmaps+mykeywords[k]+'*maps_recon_seed_'+myseeds[s]+'*.fits')
+        ### Order files by date and time
+        listfiles.sort(key=os.path.getmtime)
+        listfiles0 = listfiles[::2]
+        listfiles1 = listfiles[1::2]
+        npairs = np.min([len(listfiles0), len(listfiles1)])
+        print('k={0:20s} s={1:4s} : {2:} files => {3:} Cross-Spectra'.format(mykeywords[k],
+                                                                             myseeds[s],len(listfiles),npairs))
+
+print('---------------------------------------')    
+print('---------- Now Lets Work this out -----')    
+print('---------------------------------------')    
+    
+all_covcut = [0.5, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15, 0.1, 0.05]
+all_lmin = [30, 25, 20, 15, 10, 1]
+#all_lmin = [1]
+all_delta_ell = [70, 65, 60, 55, 50, 45, 40, 35, 30, 25, 20, 15, 10]
+
+for icc in range(len(all_covcut)):
+    for ilm in range(len(all_lmin)):
+        for idl in range(len(all_delta_ell)):
+            covcut = all_covcut[icc]
+            lmin = all_lmin[ilm]
+            delta_ell = all_delta_ell[idl]
+            print('')
+            print('')
+            print('')
+            print('==========================================================================================')
+            print('CovCut: {} ({}/{}) - lmin: {} ({}/{}) - DeltaEll: {} ({}/{})'.format(covcut, icc, len(all_covcut),
+                                                                                        lmin,ilm, len(all_lmin),
+                                                                                        delta_ell, idl, len(all_delta_ell)))
+            print('==========================================================================================')
+            for k in range(len(mykeywords)):
+                for s in range(len(myseeds)):
+                    print('')
+                    listfiles = glob.glob(dirmaps+mykeywords[k]+'*maps_recon_seed_'+myseeds[s]+'*.fits')
+                    ### Order files by date and time
+                    listfiles.sort(key=os.path.getmtime)
+                    listfiles0 = listfiles[::2]
+                    listfiles1 = listfiles[1::2]
+                    npairs = np.min([len(listfiles0), len(listfiles1)])
+                    print('k={0:20s} s={1:4s} : {2:} files => {3:} Cross-Spectra'.format(mykeywords[k],
+                                                                                         myseeds[s],len(listfiles),npairs))
+
+                    if npairs > 0:
+                        cross_cl_filename = dirbase+'/Cls/cls_output_k_{0:}_s_{1:}_ellmin_{2:}_dl_{3:}_covcut_{4:}.pickle'.format(mykeywords[k],myseeds[s], lmin, delta_ell, covcut)
+                        file_exist = glob.glob(cross_cl_filename)
+                        if len(file_exist) != 0:
+                            print('The Cls were already calculated and saved in file: ')
+                            print(cross_cl_filename)
+                        else:
+                            namFlat = None
+                            namCov = None
+                            allpairs = []
+                            allclsFlat = []
+                            allclsCov = []
+                            print('- Looping on pairs with: lmin={0:}, delta_ell={1:}, covcut={2:4.2f}'.format(lmin, 
+                                                                                                               delta_ell, covcut))
+                            for ip in range(npairs):
+                                t0 = time.time()
+                                leff, clsFlat, inputcl, inputl, namFlat = do_a_pair(listfiles0[ip], listfiles1[ip], 
+                                                                            lmin = lmin, covcut=covcut, delta_ell=delta_ell,
+                                                                            namObject = namFlat, flat=True)
+                                leff, clsCov, inputcl, inputl, namCov = do_a_pair(listfiles0[ip], listfiles1[ip], 
+                                                                            lmin = lmin, covcut=covcut, delta_ell=delta_ell,
+                                                                          namObject = namCov, flat=False)
+                                t1 = time.time()
+                                allclsFlat.append(clsFlat)
+                                allclsCov.append(clsCov)
+                                allpairs.append([listfiles0[ip], listfiles1[ip]])
+                                print('  - Done pair {0:} over {1:} in {2:6.1f} seconds'.format(ip, npairs,t1-t0))
+                            #alloutputs = [leff, allclsFlat, allclsCov, allpairs, inputcl, inputl, namFlat.fsky, namCov.fsky]
+                            alloutputs = [leff, allclsFlat, allclsCov, allpairs, inputcl, inputl]
+                            print('- Writing Cross-Cls in '+cross_cl_filename)
+                            with open(cross_cl_filename, 'wb') as handle:
+                                pickle.dump(alloutputs, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+            
+                
+        
+```
+
+```{python}
+
+```

@@ -22,6 +22,7 @@ from .plotters import *
 from .lin_lib import *
 from . import qubicdict 
 
+import pysm
 
 def full(shape, fill_value, dtype=None, order='C'):
     import numpy as np

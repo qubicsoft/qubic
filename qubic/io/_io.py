@@ -221,4 +221,4 @@ def write_map(filename, map, mask=None, nest=False, dtype=np.float32,
         hdu.header.set('name', extname)
         hdus.append(hdu)
 
-    fits.HDUList(hdus).writeto(filename, clobber=True)
+    fits.HDUList(hdus).writeto(filename, overwrite=True)

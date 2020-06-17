@@ -28,7 +28,6 @@ import matplotlib.pyplot as plt
 from qubicpack.utilities import Qubic_DataDir
 from pysimulators import FitsArray
 
-import pysm
 import qubic
 from qubic import QubicSkySim as qss
 from qubic import NamasterLib as nam
@@ -157,18 +156,22 @@ Now we have the maps with known spectra so we can retrieve spectra with Namaster
 ```{python}
 # Create a Namaster object
 lmin = 20
-lmax = 2 * d['nside'] + 200
+lmax = 2 * d['nside'] - 1
 delta_ell = 16
 
-Namaster = nam.Namaster(seenpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+### Making mask - it will be automaticall apodized when instanciating the object with default (tunable) parameters
+mask = np.zeros(12 * d['nside']**2)
+mask[seenpix] = 1
+
+Namaster = nam.Namaster(mask, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
 ```
 
 ### Test the function that binned a spectra between lmin and lmax
 
 ```{python}
-ell_binned, b = Namaster.get_binning(d)
+ell_binned, b = Namaster.get_binning(d['nside'])
 
-Dls_binned = Namaster.bin_spectra(input_Dl[:, 0], d)
+Dls_binned = Namaster.bin_spectra(input_Dl[:, 0], d['nside'])
 print('lmax=', lmax)
 
 print(ell_binned.shape, Dls_binned.shape)
@@ -184,8 +187,8 @@ plt.ylabel('$D_\\ell$')
 ### Get spectra from IQU maps
 
 ```{python}
-# Make a mask
-mask_apo = Namaster.get_apodized_mask()
+# the apodized mask has been generated when instanciating the object
+mask_apo = Namaster.mask_apo
 
 plt.figure()
 hp.mollview(mask_apo, sub=(121))
@@ -200,7 +203,7 @@ maps = maps_observed[0].T
 print('maps shape:', maps.shape)
 
 # Get spectra
-leff, cells, w = Namaster.get_spectra(maps, d, mask_apo, 
+leff, cells, w = Namaster.get_spectra(maps, 
                                       purify_e=True, 
                                       purify_b=False, 
                                       beam_correction=None,
@@ -230,11 +233,11 @@ smooth_maps = hp.sphtfunc.smoothing(maps, fwhm=np.deg2rad(d['synthbeam_peak150_f
                           
 # Get spectra
 # We compute 2 spectra, one with the beam correction and the other no. 
-leff_nobeam, cells_nobeam, w_nobeam = Namaster.get_spectra(smooth_maps, d, mask_apo, 
+leff_nobeam, cells_nobeam, w_nobeam = Namaster.get_spectra(smooth_maps, 
                                                            purify_e=True, 
                                                            purify_b=False, 
                                                            beam_correction=None)
-leff_beam, cells_beam, w_beam = Namaster.get_spectra(smooth_maps, d, mask_apo, 
+leff_beam, cells_beam, w_beam = Namaster.get_spectra(smooth_maps, 
                                                      purify_e=True, 
                                                      purify_b=False, 
                                                      beam_correction=True)
@@ -262,7 +265,7 @@ plt.tight_layout()
 
 ```{python}
 # This function gives you the pixel window correction
-pwb = Namaster.get_pixwin_correction(d)
+pwb = Namaster.get_pixwin_correction(d['nside'])
 print(pwb.shape)
 
 # Make maps with integration into pixels
@@ -278,13 +281,13 @@ for i in range(3):
 # hp.mollview(pw_seenmaps[0, :])
 
 # Get spectra with and without the pixwin correction
-leff_pw, cells_pw, w_pw = Namaster.get_spectra(pw_seenmaps, d, mask_apo, 
+leff_pw, cells_pw, w_pw = Namaster.get_spectra(pw_seenmaps, 
                                                            purify_e=True, 
                                                            purify_b=False, 
                                                            beam_correction=None,
                                                            pixwin_correction=True)
 
-leff_nopw, cells_nopw, w_nopw = Namaster.get_spectra(pw_seenmaps, d, mask_apo, 
+leff_nopw, cells_nopw, w_nopw = Namaster.get_spectra(pw_seenmaps, 
                                                            purify_e=True, 
                                                            purify_b=False, 
                                                            beam_correction=None,
@@ -317,7 +320,7 @@ nsim_cells = []
 for sim in range(nsim):
     Qubic_sky, x0, maps_observed = make_maps(d, seenpix, noise_level=0.)
     maps = maps_observed[0].T
-    leff, cells, w = Namaster.get_spectra(maps, d, mask_apo, purify_e=True, purify_b=False, beam_correction=None)
+    leff, cells, w = Namaster.get_spectra(maps, purify_e=True, purify_b=False, beam_correction=None)
     nsim_cells.append(cells)
 nsim_cells = np.array(nsim_cells)
 print(nsim_cells.shape)

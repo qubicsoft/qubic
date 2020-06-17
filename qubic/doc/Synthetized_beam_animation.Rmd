@@ -1,0 +1,148 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Synthetized beam on the sky
+
+```{python}
+import glob
+import os 
+
+import numpy as np
+import healpy as hp
+
+import matplotlib.pyplot as plt
+
+# %matplotlib inline
+# %matplotlib notebook
+
+from matplotlib import rc
+rc('figure',figsize=(10,10))
+rc('font',size=20)
+rc('text',usetex=False)
+
+from qubicpack.utilities import Qubic_DataDir
+import qubic 
+import qubic.sb_fitting as sbfit
+
+from qubicpack.pixel_translation import make_id_focalplane, tes2index
+from qubic.selfcal_lib import index2TESandASIC
+```
+
+```{python}
+# Dictionary
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(os.environ['QUBIC_DICT']+'pipeline_demo.dict')
+
+# d.read_from_file(dictfilename)
+d['config'] = 'TD'
+```
+
+```{python}
+# Instrument and scene
+
+q = qubic.QubicInstrument(d)
+s = qubic.QubicScene(d)
+
+print(q.detector.index)
+# Synthetic beams on the sky for all TES
+sb = q.get_synthbeam(s, idet=None, external_A=None, hwp_position=0)
+print(sb.shape)
+```
+
+```{python}
+# Maximum of the synthetic beam
+lonlat_center = np.zeros((248, 2))
+for tes in range(248):
+    maxi = np.where(sb[tes, :] == np.max(sb[tes, :]))[0]
+    lonlat_center[tes, :] = hp.pix2ang(d['nside'], maxi[0], lonlat=True) 
+```
+
+```{python}
+# Coordinates of the TES
+tes_index = q.detector.index
+tes_coord = q.detector.center[:, :2]
+print(tes_coord.shape)
+
+```
+
+```{python}
+# Measured beam
+path = '/home/lmousset/QUBIC/Qubic_work/Calibration/datas/synth_beam_150'
+FPidentity = make_id_focalplane()
+sb_measured = np.zeros_like(sb)
+
+for i, index in enumerate(q.detector.index):
+    tes = FPidentity[index].TES
+    print(i, index, tes)
+
+    sb_measured[i, :] = sbfit.get_hpmap(tes, path)
+    if index == 1103:
+        hp.gnomview(sb_measured[i, :], reso=9)
+```
+
+```{python}
+from matplotlib.animation import FuncAnimation
+
+
+def animate(det):
+    index = tes_index[det]
+    tes = tes = FPidentity[index].TES
+    x = tes_coord[det, 0]
+    y = tes_coord[det, 1]
+    
+    # Fcal plane
+#     ax1.annotate(str(tes_index[tes]),  xy=(x, y), fontsize=10, color='r')
+    ax1.scatter(x, y, color='r')
+    ax1.set_title('TES {}'.format(index))
+    
+    # Simulation
+    lon, lat = lonlat_center[det, :]
+    hp.gnomview(sb[det], rot=(180, 90), min=0, max=1e6, reso=12, sub=(223), title=None)
+    hp.graticule()
+    hp.visufunc.projscatter(lon, lat, lonlat=True, color='r')
+    hp.visufunc.projtext(lon, lat, '({:.3}, {:.3})'.format(lon, lat), lonlat=True, color='r', fontsize=12)
+    ax3.set_title('Synthetic beam, TES index {}'.format(index), pad=10)
+    
+    # Measurement
+    hp.gnomview(sb_measured[det], rot=(0, 0, 180), reso=10, sub=(224), title=None, cbar='hist')
+    hp.graticule()
+    ax4.set_title('Measurement, TES {}'.format(tes), pad=10)
+
+
+def init():
+    ax1.set_title('Synthetic beam on the sky')
+    
+    ax1.set_xlim(-0.055, 0.005)
+    ax1.set_ylim(-0.055, 0.005)
+    ax3.axis('off')
+    ax4.axis('off')
+    
+
+fig, axs = plt.subplots(2, 2, figsize=(12, 12))
+axs = np.ravel(axs)
+ax1, ax2, ax3, ax4 = axs
+
+ax1.scatter(tes_coord[:, 0], tes_coord[:, 1], marker='s', s=200, alpha=0.3)
+
+
+steps = np.arange(112, 250, 17)
+ani = FuncAnimation(fig, animate, steps, init_func=init, interval=1000, blit=True, repeat=False)
+
+    
+
+```
+
+```{python}
+
+```

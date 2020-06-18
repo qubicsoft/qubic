@@ -1,0 +1,311 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# %matplotlib inline
+
+import healpy as hp
+import glob
+from scipy.optimize import curve_fit
+import pickle
+from importlib import reload
+import time
+import scipy
+
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm
+import qubic
+from qubic import QubicSkySim as qss
+from qubic import fibtools as ft
+from qubic import camb_interface as qc
+from qubic import SpectroImLib as si
+from qubic import NamasterLib as nam
+from qubic import mcmc
+
+reload(qss)
+reload(ft)
+
+rc('figure', figsize=(16, 10))
+rc('font', size=15)
+mpl.rcParams['image.cmap'] = 'jet'
+```
+
+This notebook aims at doing the same study as in FastSimulation-CMB bt turning ON the spectro-imaging. This means that on top of using a modeling of the RMS Vs. coverage and noise spatial correlation, we need to include sub-bands covariance matrices that are to be provided by Louise Mousset.
+
+As a first attempt we will make the following assumptions (to be checked on End-To-End data):
+- the coverage shape remains the same
+- the evolution of noise w.r.t. coverage remains the same
+- the spatial correlations remain the same
+- we do not have I,Q,U correlations.
+
+So we will just include some sub-bands intercoorelations in this forst work.
+
+```{python}
+### Initialize
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+
+dictfilename = global_dir + '/dicts/BmodesNoDustNoSystPaper0_2020.dict'
+
+
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+d['nside']=256
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+print(center)
+```
+
+```{python}
+#### This function reads the maps
+def read_files_mc(dirmap,file_rnd_string, verbose=False):
+    m = np.array(FitsArray(glob.glob(dirmap+'*_maps_recon_*'+file_rnd_string+'.fits')[0]))
+    c = np.array(FitsArray(glob.glob(dirmap+'*_maps_convolved_*'+file_rnd_string+'.fits')[0]))
+    cov = np.array(FitsArray(glob.glob(dirmap+'*_maps_coverage_*'+file_rnd_string+'.fits')[0]))
+    with open(glob.glob(dirmap+'*_dictionary_'+file_rnd_string+'.pickle')[0], 'rb') as handle: d = pickle.load(handle)
+    with open(glob.glob(dirmap+'*_input_cell_'+file_rnd_string+'.pickle')[0], 'rb') as handle: icl = pickle.load(handle)
+    filetype = glob.glob(dirmap+'*_maps_recon_*'+file_rnd_string+'.fits')[0].split('/')[-1]
+    if verbose: print('read {}'.format(filetype))
+    return m, c, cov, d, icl, filetype
+
+### Get reconstructed maps from a simulation made on NERSC with 200000 pointings and tol=1e-5
+### First Instrument
+### detector_nep=4.7e-17
+### effecgtive_duration = 3 years
+nptg = 200000
+dirmaps='/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_NERSC/Maps/'
+file_rnd_string='H990hwzaGn'
+tol=1e-5
+
+m, c, cov, d, icl, ftype = read_files_mc(dirmaps, file_rnd_string, verbose=True)
+```
+
+## Make a Fast Realization including Spatial Correlations
+
+Note: one should not be worried by the fact that the RMS is so different in the Fast SImualtions, this is once again related to missing modes that are discussed in "2pt_Correlation Function.Rmd". They do have the right power spectrum in the range we are interested in, it's just that becasue they are simulated in ell sapce, there is some aliasing effect that is different for noise simualted in map space and ell space...
+
+```{python}
+### Now do a realization of QUBIC sky
+reload(qss)
+reload(qc)
+## Make a sky using PYSM: It will have the expected QUBIC beam, the coverage and noise according to this coverage
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+
+## Read Spatial Noise Correlation file
+clnoise = pickle.load( open( global_dir+'scripts/QubicGeneralPaper2020/cl_corr_noise_nersc200k.pk', "rb" ) )
+alpha = 4.5 ### See notebook called "2pt-Correlation Function" for an empirical explanation of alpha
+clnoise = (clnoise -1 ) * alpha + 1
+
+subplot(1,2,1)
+plot(clnoise)
+
+signoise = 75
+qubicnoise = Qubic_sky.create_noise_maps(signoise, cov, 
+                                         effective_variance_invcov=effective_variance_invcov,clnoise=clnoise)
+
+subplot(1,2,2)
+xx, yyfs, bla = qss.get_noise_invcov_profile(qubicnoise, cov, label='FastSim', fit=False, allstokes=True)
+xx, yysim, bla = qss.get_noise_invcov_profile(m[0,:,:]-c[0,:,:], cov, 
+                                   label='QUBIC MC Average IQU Nptg={}  Tol={}'.format(nptg,tol), fit=False)
+plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[1,:])*yysim[0],'--',label='Qubic Law')
+xlim(0,12)
+ylim(0,2.5)
+legend(loc='upper left', fontsize=10)
+```
+
+Now we need to assume a shape for the sub-freqeuncies covariance matrices...
+
+For now we assume an optimistic scaling of sqrt(nsub) for the overall RMS (which is currently not verified in the simulations, where there apparently is something more like nsub scaling (irk !). Maybe the negative correlation with neaby bad that is obbserved mitigates this...
+
+Below is the first model we try along with useful functions:
+
+```{python}
+# this is the scaling for the C00 element in nu,nu covariance matrix
+def scaling_c00(nsub):
+    return np.arange(nsub)+1
+
+# this si the correlation matrix for nsub sub-bands
+def corr_nunu(nsub):
+    mycorr = np.diag(np.ones(nsub))
+    for i in range(nsub-1):
+        mycorr[i,i+1] = -0.1
+        mycorr[i+1,i] = -0.1
+    return mycorr
+
+def cov2cor(mat):
+    sh = np.shape(mat)
+    outmat = np.zeros_like(mat)
+    for i in range(sh[0]):
+        for j in range(sh[1]):
+            outmat[i,j] = mat[i,j]/np.sqrt(mat[i,i]*mat[j,j])
+    return outmat
+
+def cor2cov(mat, diagvals):
+    sh = np.shape(mat)
+    outmat = np.zeros_like(mat)
+    for i in range(sh[0]):
+        for j in range(sh[1]):
+            outmat[i,j] = mat[i,j]*np.sqrt(diagvals[i]*diagvals[j])
+    return outmat
+
+def cov_nunu(nsub):
+    test_corr = corr_nunu(nsub)
+    fact_c00 = scaling_c00(nsub)
+    return cor2cov(test_corr, fact_c00)
+
+
+nsub = 4
+test_corr = corr_nunu(nsub)
+fact_c00 = scaling_c00(nsub)
+subs = np.arange(nsub)
+
+rc('figure', figsize=(16, 6))
+subplot(1,2,1)
+plot(subs, fact_c00,'ro')
+xlabel('Sub-Frequency')
+ylabel(r'$C_{00}$')
+
+subplot(1,2,2)
+imshow(test_corr)
+xlabel('Sub-Frequency')
+ylabel('Sub-Frequency')
+title('Correlation Matrix')
+plt.xticks(subs)
+plt.yticks(subs)
+colorbar()
+
+figure()
+test_cov = cov_nunu(nsub)
+back_corr = cov2cor(test_cov)
+
+subplot(1,3,1)
+imshow(test_cov)
+xlabel('Sub-Frequency')
+ylabel('Sub-Frequency')
+title('Covariance Matrix (normalized)')
+plt.xticks(subs)
+plt.yticks(subs)
+colorbar()
+
+subplot(1,3,2)
+imshow(back_corr)
+title('Back to Cor Matrix')
+xlabel('Sub-Frequency')
+ylabel('Sub-Frequency')
+plt.xticks(subs)
+plt.yticks(subs)
+colorbar()
+subplot(1,3,3)
+imshow(back_corr-test_corr)
+title('DIfference')
+xlabel('Sub-Frequency')
+ylabel('Sub-Frequency')
+plt.xticks(subs)
+plt.yticks(subs)
+colorbar()
+
+tight_layout()
+```
+
+# Measurement of the nu,nu covariance and correlation from maps
+We first try with uncorrelated simulated maps obtained with QubicSkySim()
+
+```{python}
+signoise_global = 75
+nsub = 4
+signoise_each = signoise_global/np.sqrt(nsub)
+
+sub_maps = np.zeros((nsub, 12*d['nside']**2, 3))
+for i in range(nsub):
+    sub_maps[i,:,:] = Qubic_sky.create_noise_maps(signoise_each, cov, 
+                                                 effective_variance_invcov=effective_variance_invcov,
+                                                 clnoise=clnoise)
+rc('figure', figsize=(16, 12))
+sn = ['I', 'Q', 'U']
+res=15
+for i in range(nsub):
+    for s in range(3):
+        hp.gnomview(sub_maps[i, :, s], rot=center, reso=res, sub=(nsub, 3, s+3*i+1), 
+                    min = -3, max=3, 
+                    title='{} sub{}'.format(sn[s],i))
+tight_layout()
+```
+
+This is done with the function qss.get_cov_nunu()
+
+```{python}
+reload(qss)
+cov_I, cov_Q, cov_U, allfitcov = qss.get_cov_nunu(sub_maps, cov)
+
+allcov = [cov_I, cov_Q, cov_U]
+
+for s in range(3):
+    subplot(2,3,s+1)
+    imshow(allcov[s])
+    colorbar()
+    title('Cov '+sn[s])
+    subplot(2,3,s+4)
+    imshow(cov2cor(allcov[s]))
+    colorbar()
+    title('Corr '+sn[s])
+    
+tight_layout()
+```
+
+## Now we need to simulate according to some covariance matrix
+
+```{python}
+test_cov = cov_nunu(nsub)
+
+subplot(3,3,1)
+imshow(test_cov)
+xlabel('Sub-Frequency')
+ylabel('Sub-Frequency')
+title('Covariance Matrix (normalized)')
+plt.xticks(subs)
+plt.yticks(subs)
+colorbar()
+
+subplot(3,3,2)
+imshow(cov2cor(test_cov))
+xlabel('Sub-Frequency')
+ylabel('Sub-Frequency')
+title('Correlation Matrix')
+plt.xticks(subs)
+plt.yticks(subs)
+colorbar()
+
+tight_layout()
+```
+
+```{python}
+### Eigenvectors
+w, v = numpy.linalg.eig(test_cov)
+print('Eigenvalues')
+print(w)
+print()
+print('Eigenvectors')
+print(v)
+print()
+print('Diagonalized with eigenvectors')
+print(np.dot(np.dot(v.T,test_cov),v))
+```
+
+```{python}
+
+```

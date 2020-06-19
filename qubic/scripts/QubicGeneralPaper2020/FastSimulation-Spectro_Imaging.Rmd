@@ -91,6 +91,15 @@ file_rnd_string='H990hwzaGn'
 tol=1e-5
 
 m, c, cov, d, icl, ftype = read_files_mc(dirmaps, file_rnd_string, verbose=True)
+
+nbins = 100   
+reload(qss)
+xx, myY, effective_variance_invcov = qss.get_noise_invcov_profile(m[0,:,:]-c[0,:,:], 
+                                                                  cov, 0.1, nbins=nbins, doplot=True,
+                                                                  fit=True, norm=True, allstokes=True,
+                                                                 label='QUBIC MC Average IQU Nptg={}  Tol={}'.format(nptg,tol))
+plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[1,:]),'--')
+legend()
 ```
 
 ## Make a Fast Realization including Spatial Correlations
@@ -119,9 +128,9 @@ qubicnoise = Qubic_sky.create_noise_maps(signoise, cov,
                                          effective_variance_invcov=effective_variance_invcov,clnoise=clnoise)
 
 subplot(1,2,2)
-xx, yyfs, bla = qss.get_noise_invcov_profile(qubicnoise, cov, label='FastSim', fit=False, allstokes=True)
+xx, yyfs, bla = qss.get_noise_invcov_profile(qubicnoise, cov, label='FastSim', fit=False, allstokes=True, doplot=True)
 xx, yysim, bla = qss.get_noise_invcov_profile(m[0,:,:]-c[0,:,:], cov, 
-                                   label='QUBIC MC Average IQU Nptg={}  Tol={}'.format(nptg,tol), fit=False)
+                                   label='QUBIC MC Average IQU Nptg={}  Tol={}'.format(nptg,tol), fit=False, doplot=True)
 plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[1,:])*yysim[0],'--',label='Qubic Law')
 xlim(0,12)
 ylim(0,2.5)
@@ -136,8 +145,6 @@ Below is the first model we try along with useful functions:
 
 ```{python}
 # this is the scaling for the C00 element in nu,nu covariance matrix
-def scaling_c00(nsub):
-    return np.arange(nsub)+1
 
 # this si the correlation matrix for nsub sub-bands
 def corr_nunu(nsub):
@@ -147,36 +154,20 @@ def corr_nunu(nsub):
         mycorr[i+1,i] = -0.1
     return mycorr
 
-def cov2cor(mat):
-    sh = np.shape(mat)
-    outmat = np.zeros_like(mat)
-    for i in range(sh[0]):
-        for j in range(sh[1]):
-            outmat[i,j] = mat[i,j]/np.sqrt(mat[i,i]*mat[j,j])
-    return outmat
-
-def cor2cov(mat, diagvals):
-    sh = np.shape(mat)
-    outmat = np.zeros_like(mat)
-    for i in range(sh[0]):
-        for j in range(sh[1]):
-            outmat[i,j] = mat[i,j]*np.sqrt(diagvals[i]*diagvals[j])
-    return outmat
-
-def cov_nunu(nsub):
+def cov_nunu(nsubm, diagvals):
     test_corr = corr_nunu(nsub)
-    fact_c00 = scaling_c00(nsub)
-    return cor2cov(test_corr, fact_c00)
+    return qss.corr2cov(test_corr, diagvals)
 
 
 nsub = 4
 test_corr = corr_nunu(nsub)
-fact_c00 = scaling_c00(nsub)
+diagvals = 1+(np.random.rand(nsub)-0.5)*0.5
+#diagvals = np.ones(nsub)
 subs = np.arange(nsub)
 
 rc('figure', figsize=(16, 6))
 subplot(1,2,1)
-plot(subs, fact_c00,'ro')
+plot(subs, diagvals,'ro')
 xlabel('Sub-Frequency')
 ylabel(r'$C_{00}$')
 
@@ -190,8 +181,8 @@ plt.yticks(subs)
 colorbar()
 
 figure()
-test_cov = cov_nunu(nsub)
-back_corr = cov2cor(test_cov)
+test_cov = cov_nunu(nsub, diagvals)
+back_corr = qss.cov2corr(test_cov)
 
 subplot(1,3,1)
 imshow(test_cov)
@@ -222,80 +213,18 @@ colorbar()
 tight_layout()
 ```
 
-# Measurement of the nu,nu covariance and correlation from maps
-We first try with uncorrelated simulated maps obtained with QubicSkySim()
+## Now we need to simulate according to this covariance matrix
 
 ```{python}
-signoise_global = 75
-nsub = 4
-signoise_each = signoise_global/np.sqrt(nsub)
+diagvals = 1+(np.random.rand(nsub)-0.5)*0.5
+test_cov = cov_nunu(nsub, diagvals)
 
-sub_maps = np.zeros((nsub, 12*d['nside']**2, 3))
-for i in range(nsub):
-    sub_maps[i,:,:] = Qubic_sky.create_noise_maps(signoise_each, cov, 
-                                                 effective_variance_invcov=effective_variance_invcov,
-                                                 clnoise=clnoise)
-rc('figure', figsize=(16, 12))
-sn = ['I', 'Q', 'U']
-res=15
-for i in range(nsub):
-    for s in range(3):
-        hp.gnomview(sub_maps[i, :, s], rot=center, reso=res, sub=(nsub, 3, s+3*i+1), 
-                    min = -3, max=3, 
-                    title='{} sub{}'.format(sn[s],i))
-tight_layout()
-```
-
-This is done with the function qss.get_cov_nunu()
-
-```{python}
-reload(qss)
-cov_I, cov_Q, cov_U, allfitcov = qss.get_cov_nunu(sub_maps, cov)
-
-allcov = [cov_I, cov_Q, cov_U]
-
-for s in range(3):
-    subplot(2,3,s+1)
-    imshow(allcov[s])
-    colorbar()
-    title('Cov '+sn[s])
-    subplot(2,3,s+4)
-    imshow(cov2cor(allcov[s]))
-    colorbar()
-    title('Corr '+sn[s])
-    
-tight_layout()
-```
-
-## Now we need to simulate according to some covariance matrix
-
-```{python}
-test_cov = cov_nunu(nsub)
-
-subplot(3,3,1)
-imshow(test_cov)
-xlabel('Sub-Frequency')
-ylabel('Sub-Frequency')
-title('Covariance Matrix (normalized)')
-plt.xticks(subs)
-plt.yticks(subs)
-colorbar()
-
-subplot(3,3,2)
-imshow(cov2cor(test_cov))
-xlabel('Sub-Frequency')
-ylabel('Sub-Frequency')
-title('Correlation Matrix')
-plt.xticks(subs)
-plt.yticks(subs)
-colorbar()
-
-tight_layout()
-```
-
-```{python}
-### Eigenvectors
-w, v = numpy.linalg.eig(test_cov)
+### Eigenvectors of the correlation matrix
+mymatrix = test_cov
+w, v = numpy.linalg.eig(mymatrix)
+print('initial matrix:')
+print(mymatrix)
+print()
 print('Eigenvalues')
 print(w)
 print()
@@ -303,7 +232,200 @@ print('Eigenvectors')
 print(v)
 print()
 print('Diagonalized with eigenvectors')
-print(np.dot(np.dot(v.T,test_cov),v))
+diagmatrix = np.dot(np.dot(v.T,mymatrix),v)
+print(diagmatrix)
+print()
+print('Now back again to inital space')
+backmatrix = np.dot(np.dot(v,diagmatrix),v.T)
+print(backmatrix)
+
+subplot(2,3,1)
+imshow(mymatrix)
+title('Initial Matrix')
+
+subplot(2,3,2)
+imshow(diagmatrix)
+title('Diagonalized Matrix')
+
+subplot(2,3,3)
+imshow(backmatrix)
+title('Back Matrix')
+
+subplot(2,1,2)
+plot(np.ravel(mymatrix), np.ravel(backmatrix),'ro')
+plot(np.linspace(np.min(mymatrix),np.max(mymatrix),10), np.linspace(np.min(mymatrix),np.max(mymatrix),10),'k:')
+xlabel('Initial Matrix')
+ylabel('Back Matrix')
+```
+
+So in principle the method is as follows:
+1. One simulates unocorrelated maps in the space where the correlation matrix is diagonal, withe the scaling given by its eigenvalues.
+2. These maps are then rotated in the initial space
+3. they should have the right covariance matrix...
+
+
+Let's first try with a map with normal distributed pixels in the coverage
+
+```{python}
+def plotall(cov_out, cov_th, corr_out, corr_th, tit=''):
+    rc('figure', figsize=(16, 6))
+
+    subplot(2,4,1)
+    imshow(cov_out, vmin=np.min(cov_th), vmax = np.max(cov_th))
+    title('Output Cov '+tit)
+    colorbar()
+
+    subplot(2,4,2)
+    imshow(cov_th, vmin=np.min(cov_th), vmax = np.max(cov_th))
+    title('Th Cov '+tit)
+    colorbar()
+
+    subplot(2,4,3)
+    imshow(cov_out-cov_th,vmin=np.min(corr_th), vmax = np.max(corr_th))
+    title('Diff Cov '+tit)
+    colorbar()
+
+    subplot(2,4,4)
+    plot(np.ravel(cov_out), np.ravel(cov_th), 'ro')
+    plot(np.linspace(-0.5,1,100), np.linspace(-0.5,1,100),'k:')
+    xlabel('Th Cov '+tit)
+    ylabel('Output Cov '+tit)
+
+    subplot(2,4,5)
+    imshow(corr_out, vmin=np.min(corr_th), vmax = np.max(corr_th))
+    title('Output Corr '+tit)
+    colorbar()
+
+
+    subplot(2,4,6)
+    imshow(corr_th, vmin=np.min(corr_th), vmax = np.max(corr_th))
+    title('Th Corr '+tit)
+    colorbar()
+
+    subplot(2,4,7)
+    imshow(corr_out-corr_th,vmin=np.min(corr_th), vmax = np.max(corr_th))
+    title('Diff Corr '+tit)
+    colorbar()
+
+    subplot(2,4,8)
+    plot(np.ravel(corr_out), np.ravel(corr_th), 'ro')
+    plot(np.linspace(-0.5,1,100), np.linspace(-0.5,1,100),'k:')
+    xlabel('Th Corr '+tit)
+    ylabel('Output Corr '+tit)
+
+    tight_layout()    
+```
+
+```{python}
+### With a partial map but with flat coverage
+sub_maps = np.zeros((nsub, 12*d['nside']**2, 3))
+new_maps = np.zeros((nsub, 12*d['nside']**2, 3))
+okpix = cov > 0
+
+all_cov_in = []
+all_cov_out = []
+for s in range(3):
+    for i in range(nsub):
+        sub_maps[i,okpix,s] = np.random.randn(okpix.sum()) * np.sqrt(w[i])
+
+    all_cov_in.append(np.cov(sub_maps[:,okpix,s]))
+    new_maps[:, okpix, s] = np.dot(v, sub_maps[:,okpix, s])
+    all_cov_out.append(np.cov(new_maps[:, okpix,s]))
+
+plotall(all_cov_out[0], mymatrix, qss.cov2corr(all_cov_out[0]), qss.cov2corr(mymatrix), tit='I')
+figure()
+plotall(all_cov_out[1], mymatrix, qss.cov2corr(all_cov_out[1]), qss.cov2corr(mymatrix), tit='Q')
+figure()
+plotall(all_cov_out[2], mymatrix, qss.cov2corr(all_cov_out[2]), qss.cov2corr(mymatrix), tit='U')
+
+```
+
+OK this is fine ! Now next step: into map simulator...
+
+```{python}
+### Now do a realization of QUBIC sky
+reload(qss)
+reload(qc)
+## Make a sky using PYSM: It will have the expected QUBIC beam, the coverage and noise according to this coverage
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+
+signoise_global = 75
+nsub = 4
+signoise_each = signoise_global/np.sqrt(nsub)
+allpix = cov > 0
+
+##### None case
+# my_cov = None
+
+##### Indentity Case
+# my_cov = np.diag(np.ones(nsub))
+
+##### Geberal case
+diagvals = 1+(np.random.rand(nsub)-0.5)*0.5
+test_cov = cov_nunu(nsub, diagvals)
+my_cov = test_cov / test_cov[0,0]
+
+sub_maps = Qubic_sky.create_noise_maps(signoise_each, cov, nsub=nsub,
+                                                 effective_variance_invcov=effective_variance_invcov,
+                                                 clnoise=clnoise, sub_bands_cov=my_cov, verbose=True)
+
+
+
+print('Variance Sub maps')
+print(np.var(sub_maps,axis=1))
+
+print()
+print('Target Cov I:')
+print(my_cov)
+print()
+print('Target Cov Q,U:')
+if my_cov is not None: print(my_cov*2)
+
+np.set_printoptions(precision=2)
+reload(qss)
+cov_I, cov_Q, cov_U, allfitcov = qss.get_cov_nunu(sub_maps, cov)
+
+print()
+print('Cov_I')
+print(cov_I)
+print()
+print('Cov_Q')
+print(cov_Q)
+print()
+print('Cov_U')
+print(cov_U)
+
+
+allcov = [cov_I, cov_Q, cov_U]
+
+
+rc('figure', figsize=(16, 8))
+for s in range(3):
+    subplot(3,3,s+1)
+    imshow(allcov[s], vmin=-0.1, vmax=2)
+    colorbar()
+    title('Cov '+sn[s])
+    if my_cov is not None:
+        subplot(3,3,s+4)
+        if s==0:
+            p=1
+        else:
+            p=2.
+        imshow(my_cov*p, vmin=-0.1, vmax=2)
+        colorbar()
+        title('Cov Th '+sn[s])
+        subplot(3,3,s+7)
+        imshow(allcov[s]-my_cov*p, vmin=-0.1, vmax=2)
+        colorbar()
+        title('Diff '+sn[s])
+    
+tight_layout()
+```
+
+```{python}
+
 ```
 
 ```{python}

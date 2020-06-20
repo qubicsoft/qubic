@@ -147,15 +147,15 @@ Below is the first model we try along with useful functions:
 # this is the scaling for the C00 element in nu,nu covariance matrix
 
 # this si the correlation matrix for nsub sub-bands
-def corr_nunu(nsub):
+def corr_nunu(nsub, nearest=-0.5):
     mycorr = np.diag(np.ones(nsub))
     for i in range(nsub-1):
-        mycorr[i,i+1] = -0.1
-        mycorr[i+1,i] = -0.1
+        mycorr[i,i+1] = nearest
+        mycorr[i+1,i] = nearest
     return mycorr
 
-def cov_nunu(nsubm, diagvals):
-    test_corr = corr_nunu(nsub)
+def cov_nunu(nsubm, diagvals, nearest=-0.5):
+    test_corr = corr_nunu(nsub, nearest=nearest)
     return qss.corr2cov(test_corr, diagvals)
 
 
@@ -356,6 +356,8 @@ nsub = 4
 signoise_each = signoise_global/np.sqrt(nsub)
 allpix = cov > 0
 
+nsub = 4
+
 ##### None case
 # my_cov = None
 
@@ -363,7 +365,7 @@ allpix = cov > 0
 # my_cov = np.diag(np.ones(nsub))
 
 ##### Geberal case
-diagvals = 1+(np.random.rand(nsub)-0.5)*0.5
+diagvals = np.ones(nsub)#+(np.random.rand(nsub)-0.5)*0.5
 test_cov = cov_nunu(nsub, diagvals)
 my_cov = test_cov / test_cov[0,0]
 

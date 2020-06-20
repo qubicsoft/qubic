@@ -356,7 +356,7 @@ nsub = 4
 signoise_each = signoise_global/np.sqrt(nsub)
 allpix = cov > 0
 
-nsub = 4
+nsub = 1
 
 ##### None case
 # my_cov = None
@@ -402,32 +402,28 @@ print(cov_U)
 
 allcov = [cov_I, cov_Q, cov_U]
 
-
-rc('figure', figsize=(16, 8))
-for s in range(3):
-    subplot(3,3,s+1)
-    imshow(allcov[s], vmin=-0.1, vmax=2)
-    colorbar()
-    title('Cov '+sn[s])
-    if my_cov is not None:
-        subplot(3,3,s+4)
-        if s==0:
-            p=1
-        else:
-            p=2.
-        imshow(my_cov*p, vmin=-0.1, vmax=2)
+if nsub > 1:
+    rc('figure', figsize=(16, 8))
+    for s in range(3):
+        subplot(3,3,s+1)
+        imshow(allcov[s], vmin=-0.1, vmax=2)
         colorbar()
-        title('Cov Th '+sn[s])
-        subplot(3,3,s+7)
-        imshow(allcov[s]-my_cov*p, vmin=-0.1, vmax=2)
-        colorbar()
-        title('Diff '+sn[s])
-    
-tight_layout()
-```
+        title('Cov '+sn[s])
+        if my_cov is not None:
+            subplot(3,3,s+4)
+            if s==0:
+                p=1
+            else:
+                p=2.
+            imshow(my_cov*p, vmin=-0.1, vmax=2)
+            colorbar()
+            title('Cov Th '+sn[s])
+            subplot(3,3,s+7)
+            imshow(allcov[s]-my_cov*p, vmin=-0.1, vmax=2)
+            colorbar()
+            title('Diff '+sn[s])
 
-```{python}
-
+    tight_layout()
 ```
 
 ```{python}

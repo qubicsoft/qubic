@@ -451,57 +451,21 @@ class Qubic_sky(sky):
             noise_maps[isub, seenpix, 2] = UrndFull[seenpix]
 
         ### If there is non-diagonal noise covariance between sub-bands (spectro-imaging case)
-        if sub_bands_cov is not None:
-            if verbose: print('Simulating noise maps sub-bands covariance')
-            ### We get the eigenvalues and eigenvectors of the sub-band covariance matrix divided by its 0,0 element
-            ### The reason for this si that the overall  noise is given by the input parameter sigma_sec which we do not
-            ### want to override
-            w, v = np.linalg.eig(sub_bands_cov/sub_bands_cov[0,0])
-            ### Multiply the maps by the sqrt(eigenvalues)
-            for isub in range(nsub):
-                noise_maps[isub, seenpix, :] *= np.sqrt(w[isub])
-            ### Apply the rotation to each Stokes Parameter separately
-            noise_maps[:, seenpix, 0] = np.dot(v, noise_maps[:,seenpix, 0])
-            noise_maps[:, seenpix, 1] = np.dot(v, noise_maps[:,seenpix, 1])
-            noise_maps[:, seenpix, 2] = np.dot(v, noise_maps[:,seenpix, 2])
+        if nsub > 1:
+            if sub_bands_cov is not None:
+                if verbose: print('Simulating noise maps sub-bands covariance')
+                ### We get the eigenvalues and eigenvectors of the sub-band covariance matrix divided by its 0,0 element
+                ### The reason for this si that the overall  noise is given by the input parameter sigma_sec which we do not
+                ### want to override
+                w, v = np.linalg.eig(sub_bands_cov/sub_bands_cov[0,0])
+                ### Multiply the maps by the sqrt(eigenvalues)
+                for isub in range(nsub):
+                    noise_maps[isub, seenpix, :] *= np.sqrt(w[isub])
+                ### Apply the rotation to each Stokes Parameter separately
+                noise_maps[:, seenpix, 0] = np.dot(v, noise_maps[:,seenpix, 0])
+                noise_maps[:, seenpix, 1] = np.dot(v, noise_maps[:,seenpix, 1])
+                noise_maps[:, seenpix, 2] = np.dot(v, noise_maps[:,seenpix, 2])
 
-            # ### Check covariance matrices
-            # cov_I = np.cov(noise_maps[:,seenpix,0])
-            # cov_Q = np.cov(noise_maps[:,seenpix,1])
-            # cov_U = np.cov(noise_maps[:,seenpix,2])
-            # cov_I = cov_I / cov_I[0,0]
-            # cov_Q = cov_Q / cov_I[0,0]
-            # cov_U = cov_U / cov_I[0,0]
-            # subplot(2,3,1)
-            # imshow(cov_I, vmin=-0.1, vmax=2)
-            # colorbar()
-            # title('Cov I')
-            # subplot(2,3,2)
-            # imshow(cov_Q, vmin=-0.1, vmax=2)
-            # colorbar()
-            # title('Cov Q')
-            # subplot(2,3,3)
-            # imshow(cov_U, vmin=-0.1, vmax=2)
-            # colorbar()
-            # title('Cov U')
-            # subplot(2,3,4)
-            # imshow(cov2corr(cov_I), vmin=-0.1, vmax=1)
-            # colorbar()
-            # title('Corr I')
-            # subplot(2,3,5)
-            # imshow(cov2corr(cov_Q), vmin=-0.1, vmax=1)
-            # colorbar()
-            # title('Corr Q')
-            # subplot(2,3,6)
-            # imshow(cov2corr(cov_U), vmin=-0.1, vmax=1)
-            # colorbar()
-            # title('Corr U')
-            # print()
-            # print(cov_I)
-            # print()
-            # print(cov_Q)
-            # print()
-            # print(cov_U)
 
 
         # Now normalize the maps with the coverage behaviour and the sqrt(2) for Q and U
@@ -763,21 +727,19 @@ def get_cov_nunu(maps, cov, nbins=20):
 
     ### First normalize by coverage
     new_sub_maps, all_fitcov = flatten_noise(maps, cov, nbins=nbins, doplot=False)
+
     ### Now calculate the covariance matrix for each sub map
-    okpix = new_sub_maps[0,:,0] != 0
-    cov_I = np.cov(new_sub_maps[:,okpix,0])
-    cov_Q = np.cov(new_sub_maps[:,okpix,1])
-    cov_U = np.cov(new_sub_maps[:,okpix,2])
-
- 
-    # figure()
-    # for s in range(3):
-    #     for isub in range(4):
-    #         hp.gnomview(new_sub_maps[isub,:,s], sub=(3,4,4*s+isub+1), 
-    #             rot=np.array([316.44761929,-58.75808063]), reso=15,
-    #             title='{0:8.4f}'.format(np.var(new_sub_maps[isub,okpix,s])))
-    # tight_layout()
-
+    sh = np.shape(maps)
+    if len(sh)==2:
+        okpix = new_sub_maps[:,0] != 0
+        cov_I = np.cov(new_sub_maps[okpix,0])
+        cov_Q = np.cov(new_sub_maps[okpix,1])
+        cov_U = np.cov(new_sub_maps[okpix,2])
+    else:
+        okpix = new_sub_maps[0,:,0] != 0
+        cov_I = np.cov(new_sub_maps[:,okpix,0])
+        cov_Q = np.cov(new_sub_maps[:,okpix,1])
+        cov_U = np.cov(new_sub_maps[:,okpix,2])
 
     return cov_I, cov_Q, cov_U, all_fitcov
 

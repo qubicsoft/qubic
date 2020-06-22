@@ -356,7 +356,7 @@ nsub = 4
 signoise_each = signoise_global/np.sqrt(nsub)
 allpix = cov > 0
 
-nsub = 1
+nsub = 6
 
 ##### None case
 # my_cov = None
@@ -364,7 +364,7 @@ nsub = 1
 ##### Indentity Case
 # my_cov = np.diag(np.ones(nsub))
 
-##### Geberal case
+##### General case
 diagvals = np.ones(nsub)#+(np.random.rand(nsub)-0.5)*0.5
 test_cov = cov_nunu(nsub, diagvals)
 my_cov = test_cov / test_cov[0,0]
@@ -426,6 +426,126 @@ if nsub > 1:
     tight_layout()
 ```
 
-```{python}
+## Now we need to have it more realistic
+We need:
+- a general rule for the variance or RMS as a function of number of sub-bands
+- a general rule for the correlation matrix elements
 
+```{python}
+### First the RMS a function of number of sub-bands
+###### From Louise simulations we have that it goes as N to some power
+def rms_sub_bands_evolution(Nsub, power=0.5, return_mean=False):
+    vals = np.ones(Nsub)*Nsub**power
+    if return_mean:
+        return np.mean(vals)
+    else:
+        return vals 
+
+
+print(rms_sub_bands_evolution(3))
+
+all_nsub = np.arange(7)+1
+all_pows = np.linspace(0,1,5)
+
+for p in all_pows:
+    all_rms = np.zeros(len(all_nsub))
+    for isub in range(len(all_nsub)):
+        all_rms[isub] = rms_sub_bands_evolution(all_nsub[isub], power=p, return_mean=True)
+    plot(all_nsub, all_rms,'o-', label='Power = {}'.format(p))
+    xlabel('Number of Sub-Bands')
+    ylabel('Maps RMS Evolution')
+legend()
+
+
+
+```
+
+```{python}
+### Second the shape of the correlation matrices
+
+```
+
+```{python}
+### Now do a realization of QUBIC sky
+reload(qss)
+reload(qc)
+## Make a sky using PYSM: It will have the expected QUBIC beam, the coverage and noise according to this coverage
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+
+### We need a good model of the RMS as a function of sub-bands
+signoise_global = 75
+nsub = 4
+signoise_each = signoise_global/np.sqrt(nsub)
+allpix = cov > 0
+
+nsub = 6
+
+##### None case
+# my_cov = None
+
+##### Indentity Case
+# my_cov = np.diag(np.ones(nsub))
+
+##### General case
+diagvals = np.ones(nsub)#+(np.random.rand(nsub)-0.5)*0.5
+test_cov = cov_nunu(nsub, diagvals)
+my_cov = test_cov / test_cov[0,0]
+
+sub_maps = Qubic_sky.create_noise_maps(signoise_each, cov, nsub=nsub,
+                                                 effective_variance_invcov=effective_variance_invcov,
+                                                 clnoise=clnoise, sub_bands_cov=my_cov, verbose=True)
+
+
+
+print('Variance Sub maps')
+print(np.var(sub_maps,axis=1))
+
+print()
+print('Target Cov I:')
+print(my_cov)
+print()
+print('Target Cov Q,U:')
+if my_cov is not None: print(my_cov*2)
+
+np.set_printoptions(precision=2)
+reload(qss)
+cov_I, cov_Q, cov_U, allfitcov = qss.get_cov_nunu(sub_maps, cov)
+
+print()
+print('Cov_I')
+print(cov_I)
+print()
+print('Cov_Q')
+print(cov_Q)
+print()
+print('Cov_U')
+print(cov_U)
+
+
+allcov = [cov_I, cov_Q, cov_U]
+
+if nsub > 1:
+    rc('figure', figsize=(16, 8))
+    for s in range(3):
+        subplot(3,3,s+1)
+        imshow(allcov[s], vmin=-0.1, vmax=2)
+        colorbar()
+        title('Cov '+sn[s])
+        if my_cov is not None:
+            subplot(3,3,s+4)
+            if s==0:
+                p=1
+            else:
+                p=2.
+            imshow(my_cov*p, vmin=-0.1, vmax=2)
+            colorbar()
+            title('Cov Th '+sn[s])
+            subplot(3,3,s+7)
+            imshow(allcov[s]-my_cov*p, vmin=-0.1, vmax=2)
+            colorbar()
+            title('Diff '+sn[s])
+
+    tight_layout()
 ```

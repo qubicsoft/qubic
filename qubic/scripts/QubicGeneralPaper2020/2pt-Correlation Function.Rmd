@@ -257,12 +257,12 @@ for i in range(nbmc):
 ```
 
 ```{python}
-factor = 2*np.pi
-ff=1.2
+factor = 7
+ff=1.
 
 mcthout = np.mean(all_cthout, axis=0)
-scthout = np.std(all_cthout, axis=0)
-errorbar(th*ff, mcthout/mcthout[0]*factor, yerr=scthout/mcthout[0], fmt='ro',label='C(theta*{}) x {}'.format(ff,factor))
+scthout = np.std(all_cthout, axis=0)/np.sqrt(nbmc)
+errorbar(th*ff, mcthout/mcthout[0]*factor, yerr=scthout/mcthout[0]*factor, fmt='ro',label='C(theta*{}) x {}'.format(ff,factor))
 plot(theta,ctheta/ctheta[0],label='Input C(theta)')
 plot(theta,theta*0,'k:')
 xlim(0,20)
@@ -272,6 +272,7 @@ print(th)
 print(mcthout/mcthout[0]*10)
 ```
 
+<!-- #region -->
 **Preliminary Conclusion**:
 It's difficult to check for the validity of this operation at the c(theta) level as the C(theta) seems completely weirdly normalized... It's much safer to check at the Cl level. But this requires Namaster and comparison with some NERSC 200k spectra.
 
@@ -279,13 +280,211 @@ It's difficult to check for the validity of this operation at the c(theta) level
 - the factor ~ 2pi in amplitude
 - the factor ~ 1.2 in stretch...
 
+
+Anyway, after making a big MC with these it seems that the effect is not strong enough. SO I suspect there is some normalization issue. Let's try to renormalize the contrast of the Cl filter
+<!-- #endregion -->
+
 ```{python}
+newclth = (clth-1)*2*np.pi+1
+
+subplot(1,2,2)
+plot(lll, clth, label='Output Cell / cl[0]')
+plot(lll, newclth, label='Output Cell / cl[0] Normalized')
+plot(lll, lll*0+1,'k:')
+xlabel(r'$\ell$')
+ylabel(r'$C_\ell$')
+xlim(0,np.max(lll))
+legend()
+
+```
+
+Let's make a MC in order to estimate what would be the factor that would sort this out.
+
+```{python}
+### Let's try an MC
+reload(qss)
+reload(qc)
+
+## Make a sky using PYSM: It will have the expected QUBIC beam, the coverage and noise according to this coverage
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+
+nside = 256
+covar_deg = hp.ud_grade(covar, nside)
+okpix = covar_deg > (np.max(covar_deg)*0.1)
+ip = np.arange(12*nside**2).astype(int)
+ipok = ip[okpix]
+
+nalpha = 10
+alphavals = np.linspace(1,8, nalpha)
+allcth = []
+
+for k in range(nalpha):
+    print(k,nalpha)
+    newclth = (clth-1)*alphavals[k]+1
+
+    nbmc2 = 10
+    nbins = 20
+    thmax = 20.
+    from qubic.utils import progress_bar
+
+    signoise = 1.
+    lmax = 2*nside
+
+
+    all_cthout_renorm = np.zeros((nbmc2, nbins))
+    bar = progress_bar(nbmc2)
+    for i in range(nbmc2):
+
+        outmapIQU = Qubic_sky.create_noise_maps(signoise, covar, 
+                                                effective_variance_invcov=fit_n200k, 
+                                                clnoise=newclth)
+        corrected_outmapIQU = qss.correct_maps_rms(outmapIQU, covar, fit_n200k)
+        bla = qss.get_angular_profile(corrected_outmapIQU, label='Nersc 200k corrected',
+                                  allstokes=True,nbins=50,thmax=22, fontsize=10)
+
+        outmap = corrected_outmapIQU[:,0]
+        ip = np.arange(12*nside**2).astype(int)
+        ipok = ip[okpix]
+        th, all_cthout_renorm[i,:] = qss.ctheta_parts(outmap, ipok, 0, thmax, nbins, 
+                                              nsplit=5, degrade_init=128, verbose=False)
+
+        bar.update()
+    allcth.append(all_cthout_renorm)
+    
 
 ```
 
 ```{python}
+# factor_r = 1
+# ff_r=1.
+
+# thecthout_renorm = allcth[0]
+
+# mcthout_renorm = np.mean(thecthout_renorm, axis=0)
+# scthout_renorm = np.std(thecthout_renorm, axis=0)/np.sqrt(nbmc2)
+# errorbar(th*ff_r, mcthout_renorm/mcthout_renorm[0]*factor_r, yerr=scthout_renorm/mcthout_renorm[0]*factor_r, fmt='bo',label='Renorm C(theta*{}) x {}'.format(ff_r,factor_r))
+# plot(theta,ctheta/ctheta[0],label='Input C(theta)')
+# plot(theta,theta*0,'k:')
+# xlim(0,20)
+# ylim(-0.1,1)
+# legend()
+# print(th)
+# print(mcthout/mcthout[0]*10)
+
 
 ```
+
+```{python}
+factor_r = 1
+ff_r=1.
+
+ch2 = np.zeros(nalpha)
+
+plot(theta,ctheta/ctheta[0],label='Input C(theta)')
+plot(theta,theta*0,'k:')
+for k in range(nalpha):
+    thecthout_renorm = allcth[k]
+
+    mcthout_renorm = np.mean(thecthout_renorm, axis=0)
+    scthout_renorm = np.std(thecthout_renorm, axis=0)/np.sqrt(nbmc2)
+    errorbar(th, mcthout_renorm/mcthout_renorm[0], yerr=scthout_renorm/mcthout_renorm[0], fmt='o',label='C(theta) Renorm={0:5.2f}'.format(alphavals[k]))
+
+    ch2[k] = np.sum(((mcthout_renorm/mcthout_renorm[0] - np.interp(th, theta,ctheta/ctheta[0])))**2)
+    
+xlim(0,20)
+ylim(-0.1,1)
+legend()
+
+figure()
+plot(alphavals, ch2)
+
+
+```
+
+a value of 4.5 seems reasonnable
+
+```{python}
+alpha = 4.5
+
+newclth = (clth-1)*alpha+1
+
+subplot(1,2,2)
+plot(lll, clth, label='Output Cell / cl[0]')
+plot(lll, newclth, label='Output Cell / cl[0] Normalized')
+plot(lll, lll*0+1,'k:')
+xlabel(r'$\ell$')
+ylabel(r'$C_\ell$')
+xlim(0,np.max(lll))
+legend()
+
+```
+
+```{python}
+### Let's try an MC
+reload(qss)
+reload(qc)
+
+## Make a sky using PYSM: It will have the expected QUBIC beam, the coverage and noise according to this coverage
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+
+nside = 256
+covar_deg = hp.ud_grade(covar, nside)
+okpix = covar_deg > (np.max(covar_deg)*0.1)
+ip = np.arange(12*nside**2).astype(int)
+ipok = ip[okpix]
+
+
+nbmc = 100
+nbins = 20
+thmax = 20.
+from qubic.utils import progress_bar
+
+signoise = 1.
+lmax = 2*nside
+
+
+all_cthout = np.zeros((nbmc, nbins))
+bar = progress_bar(nbmc)
+for i in range(nbmc):
+    
+    outmapIQU = Qubic_sky.create_noise_maps(signoise, covar, 
+                                            effective_variance_invcov=fit_n200k, 
+                                            clnoise=newclth)
+    corrected_outmapIQU = qss.correct_maps_rms(outmapIQU, covar, fit_n200k)
+    bla = qss.get_angular_profile(corrected_outmapIQU, label='Nersc 200k corrected',
+                              allstokes=True,nbins=50,thmax=22, fontsize=10)
+    
+    outmap = corrected_outmapIQU[:,0]
+    ip = np.arange(12*nside**2).astype(int)
+    ipok = ip[okpix]
+    th, all_cthout[i,:] = qss.ctheta_parts(outmap, ipok, 0, thmax, nbins, 
+                                          nsplit=5, degrade_init=128, verbose=False)
+
+    bar.update()
+
+```
+
+```{python}
+factor = 1.
+ff=1.
+
+mcthout = np.mean(all_cthout, axis=0)
+scthout = np.std(all_cthout, axis=0)/np.sqrt(nbmc)
+errorbar(th*ff, mcthout/mcthout[0]*factor, yerr=scthout/mcthout[0]*factor, fmt='ro',label='C(theta) Renorm={0:4.1f}'.format(alpha))
+plot(theta,ctheta/ctheta[0],label='Input C(theta)')
+plot(theta,theta*0,'k:')
+xlim(0,20)
+ylim(-0.1,1)
+legend()
+
+```
+
+OK !
+So we don;t understand where this factor comes from but it seems to do a good job !
 
 ```{python}
 

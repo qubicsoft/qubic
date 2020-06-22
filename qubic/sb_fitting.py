@@ -72,7 +72,7 @@ def get_flatmap(TESNum, directory, azmin=None, azmax=None, elmin=None, elmax=Non
     if remove is not None:
         mm = np.mean(remove)
         ss = np.std(remove)
-        xc, yval, dx, dy, others = ft.profile(remove, themap, range=[mm - 2 * ss, mm + 2 * ss], mode=True,
+        xc, yval, dx, dy, others = ft.profile(remove, themap, rng=[mm - 2 * ss, mm + 2 * ss], mode=True,
                                               nbins=20, cutbad=True, plot=False, dispersion=False, clip=3)
         bla = np.polyfit(xc, yval, 1, w=1. / dy ** 2)
         pp = np.poly1d(bla)
@@ -84,7 +84,7 @@ def get_flatmap(TESNum, directory, azmin=None, azmax=None, elmin=None, elmax=Non
         ### Read fitted synthesized beam
         thefile = open(fitted_directory + '/fit-TES{}.pk'.format(TESNum), 'rb')
         fitpars = pickle.load(thefile, encoding='latin1')
-        thefile.close
+        thefile.close()
         sbfitmodel = SbModelIndepPeaks(nrings=2, common_fwhm=True, no_xy_shift=False, distortion=False)
         x = np.meshgrid(az * np.cos(np.radians(50)), np.flip(el))
         fitmap, newxxyy = sbfitmodel(x, fitpars, return_peaks=True)

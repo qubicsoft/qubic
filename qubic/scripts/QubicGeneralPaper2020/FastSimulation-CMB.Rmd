@@ -933,8 +933,7 @@ ylim(5e-4, 0.2)
 
 ```{python}
 signoise = 75.
-nbmc = 50
-alllmin = [10, 15, 20, 25, 30]
+alllmin = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60]
 alldelta_ell = [20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80]
 allcovcut = [0.1, 0.15, 0.2, 0.25, 0.3]
 # alllmin = [10, 15, 20, 25, 30]
@@ -992,14 +991,38 @@ for ilm in range(len(alllmin)):
 ```
 
 ```{python}
-rc('figure', figsize=(15, 6))
+rc('figure', figsize=(15, 10))
 rc('font', size=12)
 
 for ilm in range(len(alllmin)):
-    subplot(2,3,ilm+1)
+    subplot(4,3,ilm+1)
     myrlim = allrlim[ilm,:,:]
     #imshow(myrlim, origin='lower',vmin=np.min(myrlim),vmax=np.max(myrlim))
-    imshow(myrlim, origin='lower',vmin=0.0,vmax=0.04)
+    imshow(myrlim, origin='lower',vmin=0.0,vmax=0.04, aspect='auto')
+    #contourf(myrlim, levels=linspace(0.008, 0.02, 10))
+    mini = np.argwhere(myrlim == np.nanmin(myrlim))
+    plot(mini[0][1], mini[0][0], 'rx' ,ms=10, markeredgewidth=4,
+         label ='$\sigma(r)={0:6.4f}$'.format(np.nanmin(myrlim)))
+    plt.xticks(range(len(alldelta_ell)), alldelta_ell)
+    plt.yticks(range(len(allcovcut)), allcovcut)
+    xlabel('$\Delta\\ell$')
+    ylabel('Cov. Threshold')
+    title('$\\ell_m$={} - '.format(alllmin[ilm])+tit)
+    legend(loc='upper left')
+    colorbar()
+
+tight_layout()
+
+```
+
+```{python}
+rc('figure', figsize=(15, 8))
+rc('font', size=10)
+
+for ilm in range(len(alllmin)):
+    subplot(3,4,ilm+1)
+    myrlim = allrlim[ilm,:,:]
+    imshow(myrlim, origin='lower',vmin=0.008,vmax=0.02, interpolation='lanczos', aspect='auto')
     mini = np.argwhere(myrlim == np.nanmin(myrlim))
     plot(mini[0][1], mini[0][0], 'rx' ,ms=10, markeredgewidth=4,
          label ='$\sigma(r)={0:6.4f}$'.format(np.nanmin(myrlim)))
@@ -1020,9 +1043,9 @@ tight_layout()
 
 ```{python}
     
-lm = 30
-dl = 50
-cc = 0.15
+lm = 40
+dl = 30
+cc = 0.1
 
 #### Simus avec Alpha = 4.5
 dirsims = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoiseLyon/FastSimAlpha_4.5/'

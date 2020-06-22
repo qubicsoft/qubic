@@ -1,0 +1,447 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# %matplotlib inline
+
+import healpy as hp
+import glob
+from scipy.optimize import curve_fit
+import pickle
+from importlib import reload
+import time
+import scipy
+
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm
+import qubic
+from qubic import QubicSkySim as qss
+from qubic import fibtools as ft
+from qubic import camb_interface as qc
+from qubic import SpectroImLib as si
+from qubic import NamasterLib as nam
+from qubic import mcmc
+
+reload(qss)
+reload(ft)
+
+rc('figure', figsize=(16, 10))
+rc('font', size=15)
+mpl.rcParams['image.cmap'] = 'jet'
+
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+
+```
+
+```{python}
+def ana_likelihood(rv, leff, fakedata, errors, model, prior, 
+                   mylikelihood=mcmc.LogLikelihood, covariance_model_funct=None, otherp=None):
+    ll = mylikelihood(xvals=leff, yvals=fakedata, errors=errors, 
+                            model = model, flatprior=prior, covariance_model_funct=covariance_model_funct)  
+    like = np.zeros_like(rv)
+    for i in range(len(rv)):
+        like[i] = np.exp(ll([rv[i]]))
+    cumint = scipy.integrate.cumtrapz(like, x=rv)
+    cumint = cumint / np.max(cumint)
+    onesigma = np.interp(0.68, cumint, rv[1:])
+    if otherp:
+        other = np.interp(otherp, cumint, rv[1:])
+        return like, cumint, onesigma, other
+    else:
+        return like, cumint, onesigma
+
+
+def explore_like(leff, mcl_noise, scl_noise, lmin, dl, cc, rv, otherp=None,
+                 cov=None, plotlike=False, plotcls=False, 
+                 verbose=False, sample_variance=True, mytitle='', color=None, mylabel='',my_ylim=None):
+    
+#     print(lmin, dl, cc)
+#     print(leff)
+#     print(scl_noise[:,2])
+    ### Create Namaster Object
+    # Unfortunately we need to recalculate fsky for calculating sample variance
+    nside=256
+    lmax = 2*nside-1
+    if cov is None:
+        Namaster = nam.Namaster(None, lmin=lmin, lmax=lmax, delta_ell=dl)
+        Namaster.fsky = 0.018
+    else:
+        okpix = cov > (np.max(cov) * float(cc))
+        maskpix = np.zeros(12*nside**2)
+        maskpix[okpix] = 1
+        Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=dl)
+    
+#     print('Fsky: {}'.format(Namaster.fsky))
+    lbinned, b = Namaster.get_binning(nside)
+
+    ### Bibnning CambLib
+    binned_camblib = qc.bin_camblib(Namaster, '../../scripts/QubicGeneralPaper2020/camblib.pickle', 
+                                    nside, verbose=False)
+
+    ### Redefine the function for getting binned Cls
+    def myclth(ell,r):
+        clth = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=False)[0]
+        return clth
+    allfakedata = myclth(leff, 0.)
+    
+    ### And we need a fast one for BB only as well
+    def myBBth(ell, r):
+        clBB = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=False, specindex=2)[0]
+        return clBB
+
+    ### Fake data
+    fakedata = myBBth(leff, 0.)        
+    
+    if sample_variance:
+        covariance_model_funct = Namaster.knox_covariance
+    else:
+        covariance_model_funct = None
+    if otherp is None:
+        like, cumint, allrlim = ana_likelihood(rv, leff, fakedata, 
+                                            scl_noise[:,2], 
+                                            myBBth, [[0,1]],
+                                           covariance_model_funct=covariance_model_funct)
+    else:
+        like, cumint, allrlim, other = ana_likelihood(rv, leff, fakedata, 
+                                            scl_noise[:,2], 
+                                            myBBth, [[0,1]],
+                                           covariance_model_funct=covariance_model_funct, otherp=otherp)
+    
+    if plotcls:
+        if plotlike:
+            subplot(1,2,1)
+        #plot(inputl, inputcl[:,2], 'k', label='r=0')
+        plot(leff, scl_noise[:,2], label=mylabel+' Errors', color=color)
+        xlim(0,lmax)
+        if my_ylim is None:
+            ylim(1e-4,1e0)
+        else:
+            ylim(my_ylim[0], my_ylim[1])
+        yscale('log')
+        xlabel('$\\ell$')
+        ylabel('$D_\\ell$')
+        legend(loc='upper left')
+    if plotlike:
+        if plotcls:
+            subplot(1,2,2)
+        p=plot(rv, like/np.max(like), 
+               label=mylabel+' $\sigma(r)={0:6.4f}$'.format(allrlim), color=color)
+        plot(allrlim+np.zeros(2), [0,1.2], ':', color=p[0].get_color())
+        xlabel('r')
+        ylabel('posterior')
+        legend(fontsize=8, loc='upper right')
+        xlim(0,0.1)
+        ylim(0,1.2)
+        title(mytitle)
+    
+    if otherp is None:
+        return like, cumint, allrlim
+    else:
+        return like, cumint, allrlim, other
+
+#### Reading sims from Lyon
+### Analyse results (similarly as in Analyze_ClCross_images)
+def read_one_lyon(dircls,prefix, lm,dl,cc, verbose=False, name='_Flat'):
+    filename = dircls+prefix+'_lmin_{0:}_dl_{1:}_cc_{2:}'.format(lm, dl, cc)+name+'.pk'
+    ff = glob.glob(filename)
+    if len(ff)!=1:
+        print('Problem with '+filename)
+        return -1,-1,-1
+    else:
+        ### Read file
+        with open(ff[0], 'rb') as handle:
+            leff, mcl,scl, _ = pickle.load(handle)
+        return leff,mcl,scl
+
+def read_sims_lyon(dircls,prefix,lm,dl,cc, verbose=False, type='best'):
+    print(lm,dl,cc)
+    if type=='flat':
+        leff, mcl, scl = read_one_lyon(dircls, prefix, lm, dl, cc, verbose=verbose, name='_Flat')
+        return leff, mcl, scl
+    elif type=='cov':
+        leff, mcl, scl = read_one_lyon(dircls, prefix, lm, dl, cc, verbose=verbose, name='_Cov')
+        return leff, mcl, scl
+    elif type=='best':
+        leff, mcl_flat, scl_flat = read_one_lyon(dircls, prefix, lm, dl, cc, verbose=verbose, name='_Flat')
+        leff, mcl_cov, scl_cov = read_one_lyon(dircls, prefix, lm, dl, cc, verbose=verbose, name='_Cov')
+    mcl = np.zeros_like(mcl_flat)
+    scl = np.zeros_like(scl_flat)
+    for i in range(len(leff)):
+        for s in range(4):
+            if scl_flat[i,s] <= scl_cov[i,s]:
+                mcl[i,s] = mcl_flat[i,s]
+                scl[i,s] = scl_flat[i,s]
+            else:
+                mcl[i,s] = mcl_cov[i,s]
+                scl[i,s] = scl_cov[i,s]
+    return leff, mcl, scl
+
+
+```
+
+### Explore all cases
+
+```{python}
+rc('figure', figsize=(15, 6))
+rc('font', size=12)
+reload(qc)
+reload(nam)
+reload(mcmc)
+import scipy
+
+```
+
+```{python}
+#### For the TD case we need a much looser Camb Library
+## Build CAMB library with only r varying
+# rmin = 0.001
+# rmax = 1
+# nb =100
+# lmaxcamb = 3*256
+# rvalues = np.concatenate((np.zeros(1),np.logspace(np.log10(rmin),np.log10(rmax),nb)))
+# camblib = qc.rcamblib(rvalues, lmaxcamb,save='camblib.pickle')
+
+```
+
+```{python}
+camblib
+```
+
+Select which simulation set you want below:
+
+```{python}
+# #### FI Simus avec Alpha = 4.5 #####################################################################
+# dirsims = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoiseLyon/FastSimAlpha_4.5/'
+# prefix = 'MC_MCFastNoise_n_1000_sig_75.0'
+# tit = tit='alpha=4.5'
+# alllmin = [10, 15, 20, 25, 30]
+# alldelta_ell = [20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80]
+# allcovcut = [0.1, 0.15, 0.2, 0.25, 0.3]
+# ### Dictionnary
+# dictfilename = global_dir + '/dicts/BmodesNoDustNoSystPaper0_2020.dict'
+# # Read dictionary chosen
+# d = qubic.qubicdict.qubicDict()
+# d.read_from_file(dictfilename)
+# d['nside']=256
+# center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+# ### Now do a realization of QUBIC sky
+# reload(qss)
+# reload(qc)
+# ## Make a sky using PYSM: It will have the expected QUBIC beam, the coverage and noise according to this coverage
+# seed = None
+# sky_config = {'cmb': seed}
+# Qubic_sky = qss.Qubic_sky(sky_config, d)
+# inputcl = Qubic_sky.input_cmb_spectra
+# lth = np.arange(len(inputcl[:,0]))
+# plnames = ['TT', 'EE', 'BB']
+# #### Below is the best case
+# lm = 30
+# dl = 50
+# cc = 0.15
+# ### Read the camb lib from the file - We will not use it directly but it will 
+# ### be binned according to the. binning scheme for each case
+# camblib = qc.read_camblib(global_dir+'scripts/QubicGeneralPaper2020/camblib.pickle')    
+# rv = np.linspace(0,1.,1000)
+# ### We need the coverage map that was used
+# cov = np.array(FitsArray(global_dir+'scripts/QubicGeneralPaper2020/Coverage_Nersc200k.fits'))
+# #####################################################################################################
+
+
+
+#### TD Simus avec Alpha = 4.5 #####################################################################
+####### These ones were just obtained normalizing the noise according to FI Vs TD:
+####### Noise Increase on maps : Sqrt[(2.05e-16/4.7e-17) * (400/64) * (2048/256)] = 14.8
+dirsims = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoiseLyon/FastSimAlpha_TD_Brute/'
+prefix = 'MC_MCFastNoise_n_1000_sig_1110.0'
+tit = tit='alpha=4.5'
+alllmin = [10, 15, 20, 25, 30]
+alldelta_ell = [20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80]
+allcovcut = [0.1, 0.15, 0.2, 0.25, 0.3]
+### Dictionnary
+dictfilename = global_dir + '/dicts/BmodesNoDustNoSystPaper0_2020_TD.dict'
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+d['nside']=256
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+### Now do a realization of QUBIC sky
+reload(qss)
+reload(qc)
+## Make a sky using PYSM: It will have the expected QUBIC beam, the coverage and noise according to this coverage
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+inputcl = Qubic_sky.input_cmb_spectra
+lth = np.arange(len(inputcl[:,0]))
+plnames = ['TT', 'EE', 'BB']
+#### Below is the best case
+lm = 30
+dl = 50
+cc = 0.2
+### Read the camb lib from the file - We will not use it directly but it will 
+### be binned according to the. binning scheme for each case
+camblib = qc.read_camblib(global_dir+'scripts/QubicGeneralPaper2020/camblib_TD.pickle')    
+rv = np.linspace(0,3,1000)
+### We need the coverage map that was used
+cov = np.array(FitsArray(global_dir+'scripts/QubicGeneralPaper2020/Coverage_Nersc200k.fits'))
+#####################################################################################################
+
+
+
+
+```
+
+```{python}
+allrlim = np.zeros((len(alllmin), len(allcovcut), len(alldelta_ell)))
+
+
+ratio=[]
+lm = []
+cc = []
+dl = []
+lv = []
+
+for ilm in range(len(alllmin)):
+    lmin = alllmin[ilm]
+    print('ell_min = {}'.format(lmin))
+    figure()
+    ipl=0
+    for icc in range(len(allcovcut)):
+        for idl in range(len(alldelta_ell)):
+            #### Fast Simu
+            leff,mcl,scl = read_one_lyon(dirsims, prefix, 
+                        alllmin[ilm], alldelta_ell[idl], allcovcut[icc], name='_Flat')
+            if leff is -1:
+                allrlim[ilm, icc, idl] = np.nan
+            else:
+                like, cumint, allrlim[ilm, icc, idl] = explore_like(leff, mcl, scl, alllmin[ilm], alldelta_ell[idl], 
+                                                                    allcovcut[icc], 
+                                                                    rv, cov=cov, sample_variance=True)            
+    
+
+
+```
+
+```{python}
+rc('figure', figsize=(15, 6))
+rc('font', size=12)
+
+for ilm in range(len(alllmin)):
+    subplot(2,3,ilm+1)
+    myrlim = allrlim[ilm,:,:]
+    #imshow(myrlim, origin='lower',vmin=np.min(myrlim),vmax=np.max(myrlim))
+    imshow(myrlim, origin='lower',vmin=0.6,vmax=0.7)
+    mini = np.argwhere(myrlim == np.nanmin(myrlim))
+    plot(mini[0][1], mini[0][0], 'rx' ,ms=10, markeredgewidth=4,
+         label ='$\sigma(r)={0:6.4f}$'.format(np.nanmin(myrlim)))
+    plt.xticks(range(len(alldelta_ell)), alldelta_ell)
+    plt.yticks(range(len(allcovcut)), allcovcut)
+    xlabel('$\Delta\\ell$')
+    ylabel('Cov. Threshold')
+    title('$\\ell_m$={} - '.format(alllmin[ilm])+tit)
+    legend(loc='upper left')
+    colorbar()
+
+tight_layout()
+
+```
+
+#### The Best Case
+
+```{python}
+
+leff,mcl,scl = read_sims_lyon(dirsims, prefix, 
+                                lm, dl, cc, type='flat')
+like, cumint, rlim68, rlim95 = explore_like(leff, scl*0, scl, lm, dl, cc, rv,
+                                 cov=cov, plotlike=True, plotcls=True, 
+                                 verbose=True, sample_variance=True, mylabel=all_titles[i], otherp=0.95)
+xlim(0,3)
+
+```
+
+```{python}
+def plot_errors_lines(leff, err, dl, color='r', label=''):
+    for i in range(len(leff)):
+        if i==0:
+            plot([leff[i]-dl/2, leff[i]+dl/2], [err[i,s], err[i,s]],color, label=label)
+        else:
+            plot([leff[i]-dl/2, leff[i]+dl/2], [err[i,s], err[i,s]],color)
+        if i < (len(leff)-1):
+            plot([leff[i]+dl/2,leff[i]+dl/2], [err[i,s], err[i+1,s]], color)
+    
+
+lll = np.arange(512)
+cl0 = qc.get_Dl_fromlib(lll, 0, lib=camblib, unlensed=False)[0]   
+cl0_01 = qc.get_Dl_fromlib(lll, 0.01, lib=camblib, unlensed=False)[0]   
+cl0_06 = qc.get_Dl_fromlib(lll, 0.06, lib=camblib, unlensed=False)[0]   
+    
+rc('figure', figsize=(15, 8))
+rc('font', size=16)
+clname = ['TT', 'EE', 'BB', 'TE']
+
+for s in range(4):
+    subplot(2,2,s+1)
+    plot(lll, np.abs(cl0[:,s]),label='$\Lambda CDM$ r=0')
+    if s==2:
+        plot(lll, np.abs(cl0_01[:,s]),label='$\Lambda CDM$ r=0.01')
+        plot(lll, np.abs(cl0_06[:,s]),label='$\Lambda CDM$ r=0.06')
+    plot_errors_lines(leff, scl, dl, 'r', label='QUBIC Noise')
+    xlim(0,512)
+    ylim(np.min([np.min(scl[:,s])/5,1e-4]) ,np.max([np.max(inputcl[:512,s]*1.5),1.2*np.max(scl[:,s])]))
+    yscale('log')
+    xlabel('$\\ell$')
+    ylabel('$D_\\ell$({})'.format(clname[s]))
+    legend(loc='lower right')
+    title('QUBIC {} - {} years'.format(d['config'], d['effective_duration']))
+tight_layout()
+```
+
+```{python}
+rc('figure', figsize=(15, 8))
+rc('font', size=15)
+subplot(1,2,1)
+s=2
+plot(lll, np.abs(cl0[:,s]),label='r=0')
+if s==2:
+    plot(lll, np.abs(cl0_01[:,s]),label='r=0.01')
+    plot(lll, np.abs(cl0_06[:,s]),label='r=0.06')
+plot_errors_lines(leff, scl, dl, 'r', label='QUBIC {} - {} years'.format(d['config'], d['effective_duration']))
+title(r'$\ell_m = {} \;-\; \Delta_\ell = {} \;-\; Cov_c = {}$'.format(lm, dl, cc))
+xlim(0,512)
+ylim(np.min([np.min(scl[:,s])/5, 1e-4]),np.max([np.max(inputcl[:512,s]*1.5),1.2*np.max(scl[:,s])]))
+yscale('log')
+xlabel('$\\ell$', fontsize=17)
+ylabel('$D_\\ell$({})'.format(clname[s]), fontsize=17)
+legend(loc='lower right')
+
+subplot(1,2,2)
+plot(rv,like, label='QUBIC {} - {} years'.format(d['config'], d['effective_duration']))
+plot([rlim68, rlim68],[0,1.1],'k--', label='r < {0:5.3f} at 68% C.L.'.format(rlim68))
+plot([rlim95, rlim95],[0,1.1],'k:', label='r < {0:5.3f} at 95% C.L.'.format(rlim95))
+annotate("BKP-2018\n 95% C.L.", xy=(0.06, 0.01), xytext=(0.06, 0.2),
+            arrowprops=dict(width=10, headwidth=20), ha='center')
+title(r'$\ell_m = {} \;-\; \Delta_\ell = {} \;-\; Cov_c = {}$'.format(lm, dl, cc))
+legend()
+xlabel('r')
+ylabel('Posterior')
+xlim(0,0.07)
+ylim(0,1.1)
+```
+
+```{python}
+
+```

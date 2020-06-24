@@ -377,21 +377,13 @@ class Qubic_sky(sky):
 
         return maps + self.noisemaps
 
-<<<<<<< HEAD
-    def create_noise_maps(self, sigma_sec, coverage, covcut=0.1, nsub=1,
-                          Nyears=3, verbose=False, seed=None,
-                          effective_variance_invcov=None,
-                          clnoise=None,
-                          sub_bands_cov=None):
-=======
-
 
     def create_noise_maps(self, sigma_sec_in, coverage, covcut =0.1, nsub=1, 
                             Nyears=3, verbose=False, seed=None, 
                             effective_variance_invcov=None, 
                             clnoise=None,
                             sub_bands_cov = None):
->>>>>>> 10c7fd6c951c2b37152d17734d6efad60b3e3008
+
         """
         This returns a realization of noise maps for I, Q and U with no correlation between them, according to a
         noise RMS map built according to the coverage specified as an attribute to the class
@@ -420,19 +412,12 @@ class Qubic_sky(sky):
         # Seen pixels
         seenpix = (coverage / np.max(coverage)) > covcut
         npix = seenpix.sum()
-<<<<<<< HEAD
-        # The theoretical noise in I for the coverage
-        ideal_noise = self.theoretical_noise_maps(sigma_sec, coverage, Nyears=Nyears, verbose=verbose)
-        sh = np.shape(ideal_noise)
-
-        thnoise = np.zeros((nsub, sh[0]))
-=======
 
         sigma_sec = np.zeros(nsub)+sigma_sec_in
 
 
         thnoise = np.zeros((nsub, len(seenpix)))
->>>>>>> 10c7fd6c951c2b37152d17734d6efad60b3e3008
+
         for isub in range(nsub):
             # The theoretical noise in I for the coverage
             ideal_noise = self.theoretical_noise_maps(sigma_sec[isub], coverage, Nyears=Nyears, verbose=verbose)
@@ -486,30 +471,21 @@ class Qubic_sky(sky):
                 ### We get the eigenvalues and eigenvectors of the sub-band covariance matrix divided by its 0,0 element
                 ### The reason for this si that the overall  noise is given by the input parameter sigma_sec which we do not
                 ### want to override
-<<<<<<< HEAD
-                w, v = np.linalg.eig(sub_bands_cov / sub_bands_cov[0, 0])
-=======
+
                 wI, vI = np.linalg.eig(sub_bands_cov[0]/sub_bands_cov[0][0,0])
                 wQ, vQ = np.linalg.eig(sub_bands_cov[1]/sub_bands_cov[1][0,0])
                 wU, vU = np.linalg.eig(sub_bands_cov[2]/sub_bands_cov[2][0,0])
->>>>>>> 10c7fd6c951c2b37152d17734d6efad60b3e3008
+
                 ### Multiply the maps by the sqrt(eigenvalues)
                 for isub in range(nsub):
                     noise_maps[isub, seenpix, 0] *= np.sqrt(wI[isub])
                     noise_maps[isub, seenpix, 1] *= np.sqrt(wQ[isub])
                     noise_maps[isub, seenpix, 2] *= np.sqrt(wU[isub])
                 ### Apply the rotation to each Stokes Parameter separately
-<<<<<<< HEAD
-                noise_maps[:, seenpix, 0] = np.dot(v, noise_maps[:, seenpix, 0])
-                noise_maps[:, seenpix, 1] = np.dot(v, noise_maps[:, seenpix, 1])
-                noise_maps[:, seenpix, 2] = np.dot(v, noise_maps[:, seenpix, 2])
-=======
+
                 noise_maps[:, seenpix, 0] = np.dot(vI, noise_maps[:,seenpix, 0])
                 noise_maps[:, seenpix, 1] = np.dot(vQ, noise_maps[:,seenpix, 1])
                 noise_maps[:, seenpix, 2] = np.dot(vU, noise_maps[:,seenpix, 2])
-
-
->>>>>>> 10c7fd6c951c2b37152d17734d6efad60b3e3008
 
         # Now normalize the maps with the coverage behaviour and the sqrt(2) for Q and U
         noise_maps[:, seenpix, 0] *= thnoise[:, seenpix]
@@ -786,18 +762,7 @@ def get_cov_nunu(maps, cov, nbins=20):
 
     ### Now calculate the covariance matrix for each sub map
     sh = np.shape(maps)
-<<<<<<< HEAD
-    if len(sh) == 2:
-        okpix = new_sub_maps[:, 0] != 0
-        cov_I = np.cov(new_sub_maps[okpix, 0])
-        cov_Q = np.cov(new_sub_maps[okpix, 1])
-        cov_U = np.cov(new_sub_maps[okpix, 2])
-    else:
-        okpix = new_sub_maps[0, :, 0] != 0
-        cov_I = np.cov(new_sub_maps[:, okpix, 0])
-        cov_Q = np.cov(new_sub_maps[:, okpix, 1])
-        cov_U = np.cov(new_sub_maps[:, okpix, 2])
-=======
+
     if len(sh)==2:
         okpix = new_sub_maps[:,0] != 0
         cov_I = np.array([[np.cov(new_sub_maps[okpix,0])]])
@@ -812,6 +777,5 @@ def get_cov_nunu(maps, cov, nbins=20):
             cov_I = np.array([[cov_I]])
             cov_Q = np.array([[cov_Q]])
             cov_U = np.array([[cov_U]])
->>>>>>> 10c7fd6c951c2b37152d17734d6efad60b3e3008
 
     return cov_I, cov_Q, cov_U, all_fitcov, all_norm_noise

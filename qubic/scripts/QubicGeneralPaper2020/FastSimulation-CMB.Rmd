@@ -889,11 +889,11 @@ all_prefix.append(prefix)
 all_titles.append('No Space Correlation')
 
 #### Simus avec alpha = 1
-dirsims = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoiseLyon/FastSimAlpha_1/'
-prefix = 'MC_MCFastNoise_n_1000_sig_75.0'
-all_dirsims.append(dirsims)
-all_prefix.append(prefix)
-all_titles.append('alpha=1')
+# dirsims = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoiseLyon/FastSimAlpha_1/'
+# prefix = 'MC_MCFastNoise_n_1000_sig_75.0'
+# all_dirsims.append(dirsims)
+# all_prefix.append(prefix)
+# all_titles.append('alpha=1')
 
 #### Simus avec Alpha = 4.5
 dirsims = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoiseLyon/FastSimAlpha_4.5/'

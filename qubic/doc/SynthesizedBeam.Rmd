@@ -4,8 +4,8 @@ jupyter:
     text_representation:
       extension: .Rmd
       format_name: rmarkdown
-      format_version: '1.1'
-      jupytext_version: 1.2.4
+      format_version: '1.2'
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -72,6 +72,8 @@ Once the QubicIntrument exists, it contains a lot of informations on the instrum
 fp_index = 561 # from 0 to 1155
 ii = np.where(q.detector.index == fp_index)[0]
 print('ii = ', ii)
+
+plt.figure()
 plt.plot(q.detector[ii].center[0,0], q.detector[ii].center[0,1], 'go')
 q.detector.plot()
 ```
@@ -89,6 +91,8 @@ row = q.horn.row
 for i in range(len(centers)):
     plt.text(centers[i,0]-0.006, centers[i,1], 'c{0:}'.format(col[i]), color='r',fontsize=6)
     plt.text(centers[i,0]+0.001, centers[i,1], 'r{0:}'.format(row[i]), color='b',fontsize=6)
+
+plt.figure()
 q.horn.plot()
 ```
 
@@ -110,6 +114,8 @@ hornsTD = (col >= 8) & (col <= 15) & (row >= 8) & (row <= 15)
 ### Now create First Instrument and TD monochromatic
 instTD = qubic.QubicInstrument(d)
 instTD.horn.open[~hornsTD] = False
+
+plt.figure()
 instTD.horn.plot()
 ```
 
@@ -124,8 +130,8 @@ idet = ii
 sbidealFI = instFI[idet].get_synthbeam(scene)[0]
 sbidealTD = instTD[idet].get_synthbeam(scene)[0]
 
-plt.clf()
-mini=-30
+plt.figure()
+mini = - 30
 hp.gnomview(np.log10(sbidealFI/np.max(sbidealFI))*10, rot=[0,90], reso=5, 
             sub=(1,2,1), title='First Instrument', min=mini, max=0)
 hp.gnomview(np.log10(sbidealTD/np.max(sbidealTD))*10, rot=[0,90], reso=5, 
@@ -178,6 +184,7 @@ sbidealTD_150 = getsb(scene, instTD, 150., idet, hornsTD, dnu_nu=None, nsubnus=1
 
 reso = 7.
 mini = -30
+plt.figure()
 mapFI = hp.gnomview(np.log10(sbidealFI_150/np.max(sbidealFI_150))*10, 
                     rot=[0,90], reso=reso, 
                     sub=(1,2,1), title='FI - 150 GHz - Det + Nu Integ.', 
@@ -210,11 +217,11 @@ xx = np.linspace(-100, 100, 20000) * reso * np.sqrt(2) / 60
 cutFI = np.interp(xx, xxinit, initcutFI)
 cutTD = np.interp(xx, xxinit, initcutTD)
 
-plt.clf()
+plt.figure()
 plt.xlabel('Angle (deg)')
 plt.ylabel('Synthesized Beam (dB)')
 plt.plot(xx, cutFI, label = 'FI - 150 GHz - Det + Nu Integ.')
-plt.plot(xx, cutTD, label = 'TD - 150 GHz - Det + Nu Integ.')
+# plt.plot(xx, cutTD, label = 'TD - 150 GHz - Det + Nu Integ.')
 plt.title('TES {}'.format(fp_index))
 plt.legend(loc='lower right', fontsize=10)
 ```
@@ -301,6 +308,79 @@ diff = np.log10(sb_ideal / np.max(sb_ideal)) - np.log10(sb_aber / np.max(sb_aber
 hp.gnomview(diff, rot=[0,90], reso=15, min=-1, max=1,
             title='Ideal - Aber')
 
+```
+
+## Beam from an analytical formula
+
+```{python}
+# This is the analytical synthesized for a pixel at the focal plane center 
+# without accounting for the primary beam (just the mukltple peaks)
+def sb_noprim(th_deg, nu):
+    th = np.radians(th_deg)
+    lam = 3e8/nu
+    P = 20
+    deltax = 0.013
+    df = 300.
+    abscissa = np.pi * deltax/lam * th
+    sb = np.sin(P*abscissa)**2 / np.sin(abscissa)**2
+    return sb/np.max(sb)
+
+# For a detector not at the center
+def sb_noprim(th_deg, nu, rx):
+    th = np.radians(th_deg)
+    nx = np.sin(th)
+    lam = 3e8 / nu
+    P = 20
+    deltah = 0.014
+    f = 300.
+    a = np.pi * deltah / lam
+    sb = (np.sin(P * a * (rx / f - nx)))**2 / (np.sin(a * (rx / f - nx)))**2
+    return sb / np.max(sb)
+
+
+def envelope(th_deg, ph, rx):
+    f = 300.
+    th = np.radians(th_deg)
+    primary_beam = q.primary_beam(th, ph)
+    th_off = np.arctan(rx / f)
+    factor_offaxis = q.primary_beam(th_off, ph)
+#     if rx != 0:
+#         factor_offaxis = 0.8985**2
+    env = factor_offaxis * primary_beam
+    print('factor =', factor_offaxis)
+    return env 
+
+
+def beam_total(th_deg, ph, nu, rx):
+    env = envelope(th_deg, ph, rx)
+    sb = env * sb_noprim(th_deg, nu, rx)
+    return env, sb
+    
+nu = 150e9   
+nn = 10000
+th_deg = np.linspace(-12, 12, nn)
+ph = 0
+d['config'] = 'FI'
+d['beam_shape'] = 'gaussian'
+q = qubic.QubicInstrument(d)
+
+sbb = sb_noprim(th_deg, nu, 10)
+
+e1, sb1 = beam_total(th_deg, ph, nu, 0)
+e2, sb2 = beam_total(th_deg, ph, nu, 12)
+
+fig, ax = plt.subplots()
+# ax.plot(th_deg, q.primary_beam(np.deg2rad(th_deg), ph),'b--')
+ax.plot(th_deg, e1,'b--', label=r'$B_{prim}$')
+ax.plot(th_deg, e2,'g--', label=r'$B_{prim} \times B(\theta_{off})$')
+ax.plot(th_deg, sb1, 'b', label='r = 0')
+ax.plot(th_deg, sb2, 'g', label='r = 12mm')
+# ax.axvline(np.rad2deg(np.arctan(12 / 300)), ymin=0, ymax=1.2, color='r')
+ax.set_xlabel('theta [deg]')
+ax.set_ylabel('Intensity (relative)')
+ax.legend(fontsize=10)
+
+# B(\theta_{off})
 ```
 
 ```{python}

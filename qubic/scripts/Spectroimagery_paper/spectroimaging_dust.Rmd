@@ -53,34 +53,25 @@ rc('font', size=15)
 
 ```{python}
 # Repository for dictionary 
-dictfilename = os.environ['QUBIC_DICT']+'spectroimaging_article.dict'
+dictfilename = os.environ['QUBIC_DICT']+'spectroimaging_article_gal.dict'
 
 # Read dictionary chosen
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
-d['nf_sub'] = 16
-
-d['nside'] = 128
 
 # Center of the patch observed in galactic coordinates
-l_center = 0.
-b_center = 0. 
-center = np.array([l_center, b_center])
+# l_center = 0.
+# b_center = 0. 
+# center = np.array([l_center, b_center])
 
 # RA DEC coordinates for the center of the patch
-d['RA_center'], d['DEC_center'] = qubic.gal2equ(l_center, b_center)
-print('RADEC center :', d['RA_center'], d['DEC_center'])
+# d['RA_center'], d['DEC_center'] = qubic.gal2equ(l_center, b_center)
+# print('RADEC center :', d['RA_center'], d['DEC_center'])
 
-# d['noiseless'] = True
-print(d['detector_nep'])
 
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 print(center)
-
-# d['dtheta'] = 8
-
-d['npointings'] = 300
 ```
 
 # Initial sky maps
@@ -89,12 +80,16 @@ d['npointings'] = 300
 I would like to make a sky with a very particular spectra (a V centered at 150GHz).
 
 ```{python}
-maps_dir = '/home/lmousset/QUBIC/MyGitQUBIC/qubic/qubic/scripts/Spectroimagery_paper/maps/'
-x0cmb = FitsArray(maps_dir + 'CMB_r=0_nside128_nfsub16.fits')
-x0dust = FitsArray(maps_dir + 'Dust_d1_nside128_nfsub16.fits')
-x0synch = FitsArray(maps_dir + 'Synchrotron_s1_nside128_nfsub16.fits')
+# maps_dir = '/home/lmousset/QUBIC/MyGitQUBIC/qubic/qubic/scripts/Spectroimagery_paper/maps/'
+# x0cmb = FitsArray(maps_dir + 'CMB_r=0_nside128_nfsub16.fits')
+# x0dust = FitsArray(maps_dir + 'Dust_d1_nside128_nfsub16.fits')
+# x0synch = FitsArray(maps_dir + 'Synchrotron_s1_nside128_nfsub16.fits')
 
-print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0dust))
+seed = 42
+sky_config = {'dust': 'd1'}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+x0 = Qubic_sky.get_simple_sky_map()
+print('Input map with shape:', x0.shape)
 ```
 
 ```{python}
@@ -159,7 +154,7 @@ hp.mollview(covsum)
 ```
 
 ```{python}
-seenmap = covsum > 0.15 * np.max(covsum)
+seenmap = covsum > 0.1 * np.max(covsum)
 cov[:, np.invert(seenmap)] = hp.UNSEEN
 hp.mollview(cov[1], title='Coverage map')
 ```
@@ -214,7 +209,7 @@ for istokes in range(3):
 
 ```{python}
 # STD clippé
-nf_sub_rec = 8
+nf_sub_rec = 5
 nf_sub = d['nf_sub']
 
 # Width of the bands
@@ -292,7 +287,8 @@ plt.legend()
 # Map-Making
 
 ```{python}
-d['tol'] = 1e-4
+nf_sub_rec = 5
+d['tol'] = 1e-6
 d['noiseless'] = False
 maps_recon, cov, nus, nus_edge, maps_convolved = si.reconstruct_maps(TOD, d, p,
                                                                     nf_sub_rec, x0)
@@ -300,17 +296,17 @@ print(maps_recon.shape)
 ```
 
 ```{python}
-# Save the simulation
-save_dir = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/'
-simu_name = 'nfsub16_rec8_onlydust01.fits'
-rmc.save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved, save_dir=save_dir, simu_name=simu_name)
+# # Save the simulation
+# save_dir = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/'
+# simu_name = 'likenew_1000ptgs_noiselessFalse.fits'
+# rmc.save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved, save_dir=save_dir, simu_name=simu_name)
 ```
 
 # TOD noiseless and Map making
 
 ```{python}
 d['noiseless'] = True
-d['tol'] = 1e-4
+d['tol'] = 1e-6
 TOD_noiseless, maps_convolved_noiseless = si.create_TOD(d, p, x0)
 print('--------- Noiseless TOD with shape: {} - Done ---------'.format(np.shape(TOD_noiseless)))
 
@@ -331,21 +327,24 @@ maxcov_noiseless = np.max(cov_noiseless)
 unseen = cov_noiseless < maxcov_noiseless * 0.1
 maps_convolved_noiseless[:, unseen, :] = hp.UNSEEN
 maps_recon_noiseless[:, unseen, :] = hp.UNSEEN
+
 print('************* Map-Making on {} sub-map(s) (noiseless). Done *************'.format(nf_sub_rec))
 
 ```
 
 ```{python}
-rmc.save_simu_fits(maps_recon_noiseless, cov_noiseless, nus, nus_edge, maps_convolved_noiseless,
-                  save_dir=save_dir, simu_name='noiseless_' + simu_name)
+# rmc.save_simu_fits(maps_recon_noiseless, cov_noiseless, nus, nus_edge, maps_convolved_noiseless,
+#                   save_dir=save_dir, simu_name='noiseless_' + simu_name)
 
 ```
 
 # Compute residuals
 
 ```{python}
-maps_recon, maps_convolved, maps_diff = rmc.get_maps(save_dir + simu_name)
-maps_recon_noiseless, maps_convo_noiseless, maps_diff_noiseless = rmc.get_maps(save_dir + 'noiseless_' + simu_name)
+# maps_recon, maps_convolved, maps_diff = rmc.get_maps(save_dir + simu_name)
+# maps_recon_noiseless, maps_convo_noiseless, maps_diff_noiseless = rmc.get_maps(save_dir + 'noiseless_' + simu_name)
+
+maps_diff = maps_recon - maps_convolved
 
 # maps_recon = np.reshape(maps_recon , (1, 196608, 3))
 
@@ -368,7 +367,7 @@ residuals = maps_recon - maps_recon_noiseless
 ```{python}
 # Look at IQU in one band
 band = 0
-plt.figure(figsize=(12, 10))
+plt.figure(figsize=(12, 15))
 plt.subplots_adjust(wspace=0.4, hspace=0.7)
 rr = 15
 for istk in range(3):
@@ -380,15 +379,15 @@ for istk in range(3):
     hp.gnomview(maps_convolved[band,:,istk], cmap ='jet', sub = (3, 5, 5*istk+3), rot=center, reso=rr, 
                 title = '{0} conv {1}'.format(d['kind'][istk], band))
     hp.gnomview(maps_diff[band,:,istk], cmap ='jet', sub = (3, 5, 5*istk+4), rot=center, reso=rr, 
-                title = '{0} diff {1}'.format(d['kind'][istk], band))
+                title = '{0} diff {1}'.format(d['kind'][istk], band), min=-70, max=70)
     hp.gnomview(residuals[band,:,istk], cmap ='jet', sub = (3, 5, 5*istk+5), rot=center, reso=rr, 
-                title = '{0} Residuals {1}'.format(d['kind'][istk], band))
+                title = '{0} Residuals {1}'.format(d['kind'][istk], band), min=-70, max=70)
 
 ```
 
 ```{python}
 istk = 0
-plt.figure(figsize=(12, 10))
+plt.figure(figsize=(12, 20))
 plt.subplots_adjust(wspace=0.4, hspace=0.7)
 rr = 15
 min = None
@@ -403,9 +402,9 @@ for band in range(nf_sub_rec):
     hp.gnomview(maps_convolved[band,:,istk], cmap ='jet', sub = (nf_sub_rec, 5, 5*band+3), rot=center, reso=rr, 
                 title = '{0} conv {1}'.format(d['kind'][istk], band), min=min, max=max)
     hp.gnomview(maps_diff[band,:,istk], cmap ='jet', sub = (nf_sub_rec, 5, 5*band+4), rot=center, reso=rr, 
-                title = '{0} diff {1}'.format(d['kind'][istk], band), min=min, max=max)
+                title = '{0} diff {1}'.format(d['kind'][istk], band), min=-70, max=70)
     hp.gnomview(residuals[band,:,istk], cmap ='jet', sub = (nf_sub_rec, 5, 5*band+5), rot=center, reso=rr, 
-                title = '{0} Residuals {1}'.format(d['kind'][istk], band), min=min, max=max)
+                title = '{0} Residuals {1}'.format(d['kind'][istk], band), min=-70, max=70)
 
 
 ```

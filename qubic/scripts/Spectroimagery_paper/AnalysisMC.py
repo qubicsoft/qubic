@@ -66,12 +66,12 @@ def get_residuals(fits_noise, fits_noiseless, residuals_way):
 
     Parameters
     ----------
-    rep_simu : str
-        Path containing the simulations.
+    fits_noise: list
+        List containing the reconstructed noisy maps (fits files)
+    fits_noiseless: str
+        Fits file containing the noiseless reconstruction
     residuals_way : str
         Way to compute residuals. 3 keywords : noiseless, conv or mean_recon
-    irec : int
-        Number of reconstructed subbands.
 
     Returns
     -------
@@ -107,7 +107,7 @@ def get_residuals(fits_noise, fits_noiseless, residuals_way):
         else:
             raise ValueError('The way to compute residuals is not valid.')
 
-    return residuals
+    return np.asarray(residuals)
 
 
 def rms_method(name, residuals_way, zones=1):

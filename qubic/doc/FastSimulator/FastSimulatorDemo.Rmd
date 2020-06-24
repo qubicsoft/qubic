@@ -220,6 +220,8 @@ For reasons that are yet to be understood, this Cl needs to be renormalized by a
 
 An other important point here is that due to aliasing when simualting the nosie in harmonic space (ellmax cutoff) the RMS of the maps obtained this way has nothing to do with the intended RMS. THis is however not a problem as the CL of this noise are correct within the [0, ellmax] useful badwidth. As a consequence, when trying to adjust the noise level (signoise) in the FastSimulator, one needs to adjust the RMS at first without spatial correlations and then turn on spatial correlation, and not use the resulting maps RMS anywhere in the analysis as it is not correct.
 
+NB: if the simualtions you intend to perform are not be tansformed into Cl but rather for working in map-space, it is probably very sufficient to neglect the spatial correlation of the noise and use clnoise=None qss.create_noise_maps()... This will have the important advantage of producing maps with a meaningful RMS.
+
 ```{python}
 clth = pickle.load( open( global_dir + '/doc/FastSimulator/Data/cl_corr_noise_nersc200k.pk', "rb" ) )
 alpha = 4.5 ### See notebook called "2pt-Correlation Function" for an empirical explanation of alpha
@@ -265,7 +267,265 @@ OK so we find a good approximation of the End-To-End spatial correlation. Howeve
 
 
 # Simulating Sub-Bands correlations
-Here we need to construct the subband-subband correlations that were found by Louise form spectro-imaging End-To-End simualtions. These simualtions can be found in the doc/FastSimulator/Data/
+Here we need to construct the subband-subband correlations that were found by Louise form spectro-imaging End-To-End simulations. These simualtions can be found in Lyon in /sps/hep/qubic/Data/Sims/Spectro-Imaging-Louise/|
+
+```{python}
+import glob
+def get_maps_from_louise(directory, nfsub):
+    mappatchfile = glob.glob(directory+'residualspatch_*_nfrecon{}.pkl'.format(nfsub))[0]
+    covfile = glob.glob(directory+'coverage_*_nfrecon{}.pkl'.format(nfsub))[0]
+    seenfile = glob.glob(directory+'seenmap_*_nfrecon{}.pkl'.format(nfsub))[0]
+    
+    residualspatch = pickle.load( open( mappatchfile, "rb" ) )
+    seenpix = pickle.load( open( seenfile, "rb" ) )
+    covpix = pickle.load( open( covfile, "rb" ) )
+    
+    nside = 256
+    residuals_map = np.zeros((nfsub, 12*256**2, 3))
+    for i in range(nfsub):
+        residuals_map[i,seenpix,:] = residualspatch[i][:,:]
+    
+    return residuals_map, covpix
+```
+
+```{python}
+dirmaps = global_dir + '/doc/FastSimulator/Data/Spectro-Imaging-Louise/'
+nfsub = 2
+
+maps, cov = get_maps_from_louise(dirmaps,nfsub)
+
+hp.mollview(cov, title='Coverage nfsub={}'.format(nfsub))
+figure()
+stn = ['I','Q','U']
+for i in range(nfsub):
+    for s in range(3):
+        hp.mollview(maps[i,:,s], sub=(nfsub,3,i*3+s+1), title='Residuals {} {}/{}'.format(stn[s],i+1,nfsub))
+tight_layout()
+```
+
+The first step is once more to fit the noise profile:
+
+```{python}
+reload(qss)
+dirmaps = global_dir + '/doc/FastSimulator/Data/Spectro-Imaging-Louise/'
+
+all_nfsub = [1,2,3,4,5,8]
+
+for i in range(len(all_nfsub)):
+    figure()
+    nfsub = all_nfsub[i]
+
+    maps, cov = get_maps_from_louise(dirmaps,nfsub)
+
+    for isub in range(nfsub):
+        xx, yyfs, fitcov = qss.get_noise_invcov_profile(maps[isub,:,:], cov, 
+                                                     label='Input Map {}'.format(i+1), fit=True, norm=False,
+                                                     allstokes=True, doplot=True)
+    xlim(0.9,10.1)
+    title('nfsub={}'.format(nfsub))
+    legend(fontsize=8)
+    tight_layout()
+
+```
+
+We can see here that we should probably use a different fitting for I on one heand and Q,U on the other hand, this is not necessary for low nsub  but becomes quite clear from 3 and above. This will be treated later...
+
+Now we can calculate to nunu covariance matrix for each case
+
+```{python}
+reload(qss)
+for i in range(len(all_nfsub)):
+    nfsub = all_nfsub[i]
+    maps, cov = get_maps_from_louise(dirmaps,nfsub)
+    cI, cQ, cU, fitcov, noise_norm = qss.get_cov_nunu(maps, cov)
+    mini = np.min(np.array([cI, cQ/2, cU/2]))
+    maxi = np.max(np.array([cI, cQ/2, cU/2]))
+    figure()
+    subplot(1,3,1)
+    imshow(cI, vmin=mini, vmax=maxi)
+    colorbar(orientation='horizontal')
+    title('Cov I nsub={}'.format(nfsub))
+    subplot(1,3,2)
+    imshow(cQ/2, vmin=mini, vmax=maxi)
+    colorbar(orientation='horizontal')
+    title('Cov Q / 2 nsub={}'.format(nfsub))
+    subplot(1,3,3)
+    imshow(cU/2, vmin=mini, vmax=maxi)
+    colorbar(orientation='horizontal')
+    title('Cov U / 2 nsub={}'.format(nfsub))
+
+
+
+```
+
+We can equivalently plot the correlation matrices
+
+```{python}
+reload(qss)
+for i in range(len(all_nfsub)):
+    nfsub = all_nfsub[i]
+    maps, cov = get_maps_from_louise(dirmaps,nfsub)
+    cI, cQ, cU, fitcov, noise_norm = qss.get_cov_nunu(maps, cov)
+    corrI = qss.cov2corr(cI)
+    corrQ = qss.cov2corr(cQ)
+    corrU = qss.cov2corr(cU)
+    mini = np.min(np.array([corrI, corrQ, corrU]))
+    maxi = np.max(np.array([corrI, corrQ, corrU]))
+    figure()
+    subplot(1,3,1)
+    imshow(corrI, vmin=mini, vmax=maxi)
+    colorbar(orientation='horizontal')
+    title('Corr I nsub={}'.format(nfsub))
+    subplot(1,3,2)
+    imshow(corrQ, vmin=mini, vmax=maxi)
+    colorbar(orientation='horizontal')
+    title('Corr Q nsub={}'.format(nfsub))
+    subplot(1,3,3)
+    imshow(corrU, vmin=mini, vmax=maxi)
+    colorbar(orientation='horizontal')
+    title('Corr U nsub={}'.format(nfsub))
+
+
+```
+
+Let's now generate nosie maps following this statistics
+
+First in the case of **NO Correlation** beween sub-bands (sub_bands_cov=None in Qubic_sky.create_noise_maps())
+
+```{python}
+reload(qss)
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+
+allsignoise = [[88.],
+                [88., 88.],
+                [88., 88., 88.],
+                [88., 88., 88., 88.],
+                [88., 88., 88., 88., 88.],
+                [88., 88., 88., 88., 88., 88., 88., 88.]]
+               
+
+i=2
+
+signoise = allsignoise[i]
+nfsub = all_nfsub[i]
+maps, cov = get_maps_from_louise(dirmaps,nfsub)
+cI, cQ, cU, fitcov, noise_norm = qss.get_cov_nunu(maps, cov)
+corr_mats = [cI, cQ, cU]
+
+myfitcovs = []
+for isub in range(nfsub):
+    xx, yyfs, fitcov = qss.get_noise_invcov_profile(maps[isub,:,:], cov, 
+                                                 label='Input Map {}'.format(i+1), fit=True, norm=False,
+                                                 allstokes=True, doplot=False)
+    myfitcovs.append(fitcov)
+    
+new_sub_maps = Qubic_sky.create_noise_maps(signoise, cov, nsub=nfsub,
+                                            effective_variance_invcov=myfitcovs,
+                                            clnoise=None, sub_bands_cov=None, verbose=False)
+print(np.shape(new_sub_maps))
+if nfsub == 1:
+    new_sub_maps = np.reshape(new_sub_maps, (1,12*d['nside']**2,3))
+print(np.shape(new_sub_maps))
+
+for isub in range(nfsub):
+    xx, yyfs, fitcov = qss.get_noise_invcov_profile(new_sub_maps[isub,:,:], cov, 
+                                                 label='FastSim sub={}/{}'.format(isub+1,nfsub), fit=False, norm=False,
+                                                 allstokes=True, doplot=True)
+    plot(myfitcovs[isub][0,:], np.sqrt(myfitcovs[isub][1,:]), label='End-To-End Fit sub={}/{}'.format(isub+1,nfsub))
+    legend(fontsize=9)
+
+cInew, cQnew, cUnew, fitcov, noise_norm = qss.get_cov_nunu(new_sub_maps, cov)
+new_corr_mats = [cInew, cQnew, cUnew]
+
+figure()
+stn = ['I','Q', 'U']
+mini = np.min(np.array(corr_mats))
+maxi = np.max(np.array(corr_mats))
+for s in range(3):
+    subplot(2,3,1+s)
+    imshow(corr_mats[s], vmin=mini, vmax=maxi)
+    colorbar(orientation='horizontal')
+    title('End-To-End Cov {} nsub={}'.format(stn[s],nfsub))
+    subplot(2,3,4+s)
+    imshow(new_corr_mats[s], vmin=mini, vmax=maxi)
+    colorbar(orientation='horizontal')
+    title('FastSim Cov {} nsub={}'.format(stn[s],nfsub))
+
+
+
+```
+
+OK it shows zero correlation ! and the profiles are in good agreement !
+
+Now th real case with correlation from End-To-End simulations.
+
+```{python}
+reload(qss)
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+
+allsignoise = [[88.],
+                [88., 95.],
+                [88., 81., 98.],
+                [88., 66., 64., 95.],
+                [88., 62., 61., 64., 99.],
+                [88., 62., 59., 59., 61., 63., 65., 95.]]
+               
+
+i=5
+
+signoise = allsignoise[i]
+nfsub = all_nfsub[i]
+maps, cov = get_maps_from_louise(dirmaps,nfsub)
+cI, cQ, cU, fitcov, noise_norm = qss.get_cov_nunu(maps, cov)
+corr_mats = [cI, cQ/2, cU/2]
+
+myfitcovs = []
+for isub in range(nfsub):
+    xx, yyfs, fitcov = qss.get_noise_invcov_profile(maps[isub,:,:], cov, 
+                                                 label='Input Map {}'.format(i+1), fit=True, norm=False,
+                                                 allstokes=True, doplot=False)
+    myfitcovs.append(fitcov)
+    
+new_sub_maps = Qubic_sky.create_noise_maps(signoise, cov, nsub=nfsub,
+                                            effective_variance_invcov=myfitcovs,
+                                            clnoise=None, sub_bands_cov=[cI, cQ, cU], verbose=False)
+print(np.shape(new_sub_maps))
+if nfsub == 1:
+    new_sub_maps = np.reshape(new_sub_maps, (1,12*d['nside']**2,3))
+print(np.shape(new_sub_maps))
+
+for isub in range(nfsub):
+    figure()
+    xx, yyfs, fitcov = qss.get_noise_invcov_profile(new_sub_maps[isub,:,:], cov, 
+                                                 label='FastSim sub={}/{}'.format(isub+1,nfsub), fit=False, norm=False,
+                                                 allstokes=False, doplot=True)
+    plot(myfitcovs[isub][0,:], np.sqrt(myfitcovs[isub][1,:]), label='End-To-End Fit sub={}/{}'.format(isub+1,nfsub))
+    legend(fontsize=9)
+
+cInew, cQnew, cUnew, fitcov, noise_norm = qss.get_cov_nunu(new_sub_maps, cov)
+new_corr_mats = [cInew, cQnew/2, cUnew/2]
+
+figure()
+stn = ['I','Q/2', 'U/2']
+mini = np.min(np.array(corr_mats))
+maxi = np.max(np.array(corr_mats))
+for s in range(3):
+    subplot(2,3,1+s)
+    imshow(corr_mats[s], vmin=mini, vmax=maxi)
+    colorbar(orientation='horizontal')
+    title('End-To-End Cov {} nsub={}'.format(stn[s],nfsub))
+    subplot(2,3,4+s)
+    imshow(new_corr_mats[s], vmin=mini, vmax=maxi)
+    colorbar(orientation='horizontal')
+    title('FastSim Cov {} nsub={}'.format(stn[s],nfsub))
+
+
+
+```
 
 ```{python}
 

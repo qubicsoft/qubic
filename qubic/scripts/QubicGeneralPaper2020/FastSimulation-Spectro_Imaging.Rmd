@@ -94,7 +94,7 @@ m, c, cov, d, icl, ftype = read_files_mc(dirmaps, file_rnd_string, verbose=True)
 
 nbins = 100   
 reload(qss)
-xx, myY, effective_variance_invcov = qss.get_noise_invcov_profile(m[0,:,:]-c[0,:,:], 
+xx, myY, effective_variance_invcov = qss.get_noise_invcov_profile((m[0,:,:]-c[0,:,:]), 
                                                                   cov, 0.1, nbins=nbins, doplot=True,
                                                                   fit=True, norm=True, allstokes=True,
                                                                  label='QUBIC MC Average IQU Nptg={}  Tol={}'.format(nptg,tol))
@@ -125,7 +125,7 @@ plot(clnoise)
 
 signoise = 75
 qubicnoise = Qubic_sky.create_noise_maps(signoise, cov, 
-                                         effective_variance_invcov=effective_variance_invcov,clnoise=clnoise)
+                                         effective_variance_invcov=effective_variance_invcov,clnoise=None)
 
 subplot(1,2,2)
 xx, yyfs, bla = qss.get_noise_invcov_profile(qubicnoise, cov, label='FastSim', fit=False, allstokes=True, doplot=True)
@@ -356,7 +356,7 @@ nsub = 4
 signoise_each = signoise_global/np.sqrt(nsub)
 allpix = cov > 0
 
-nsub = 6
+nsub = 5
 
 ##### None case
 # my_cov = None
@@ -387,7 +387,7 @@ if my_cov is not None: print(my_cov*2)
 
 np.set_printoptions(precision=2)
 reload(qss)
-cov_I, cov_Q, cov_U, allfitcov = qss.get_cov_nunu(sub_maps, cov)
+cov_I, cov_Q, cov_U, allfitcov, allnormnoise = qss.get_cov_nunu(sub_maps, cov)
 
 print()
 print('Cov_I')
@@ -426,47 +426,9 @@ if nsub > 1:
     tight_layout()
 ```
 
-## Now we need to have it more realistic
-We need:
-- a general rule for the variance or RMS as a function of number of sub-bands
-- a general rule for the correlation matrix elements
+Let's try to simulate a map from its cov and fitcov function
 
 ```{python}
-### First the RMS a function of number of sub-bands
-###### From Louise simulations we have that it goes as N to some power
-def rms_sub_bands_evolution(Nsub, power=0.5, return_mean=False):
-    vals = np.ones(Nsub)*Nsub**power
-    if return_mean:
-        return np.mean(vals)
-    else:
-        return vals 
-
-
-print(rms_sub_bands_evolution(3))
-
-all_nsub = np.arange(7)+1
-all_pows = np.linspace(0,1,5)
-
-for p in all_pows:
-    all_rms = np.zeros(len(all_nsub))
-    for isub in range(len(all_nsub)):
-        all_rms[isub] = rms_sub_bands_evolution(all_nsub[isub], power=p, return_mean=True)
-    plot(all_nsub, all_rms,'o-', label='Power = {}'.format(p))
-    xlabel('Number of Sub-Bands')
-    ylabel('Maps RMS Evolution')
-legend()
-
-
-
-```
-
-```{python}
-### Second the shape of the correlation matrices
-
-```
-
-```{python}
-### Now do a realization of QUBIC sky
 reload(qss)
 reload(qc)
 ## Make a sky using PYSM: It will have the expected QUBIC beam, the coverage and noise according to this coverage
@@ -474,78 +436,294 @@ seed = None
 sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, d)
 
-### We need a good model of the RMS as a function of sub-bands
-signoise_global = 75
+#### First simulate as usual
 nsub = 4
-signoise_each = signoise_global/np.sqrt(nsub)
-allpix = cov > 0
-
-nsub = 6
-
-##### None case
-# my_cov = None
-
-##### Indentity Case
-# my_cov = np.diag(np.ones(nsub))
-
-##### General case
-diagvals = np.ones(nsub)#+(np.random.rand(nsub)-0.5)*0.5
+signoise_global = 75.
+signoise_each = signoise_global*np.sqrt(nsub)
+diagvals = np.ones(nsub)
 test_cov = cov_nunu(nsub, diagvals)
 my_cov = test_cov / test_cov[0,0]
 
+print(effective_variance_invcov[1,:10])
+
 sub_maps = Qubic_sky.create_noise_maps(signoise_each, cov, nsub=nsub,
                                                  effective_variance_invcov=effective_variance_invcov,
-                                                 clnoise=clnoise, sub_bands_cov=my_cov, verbose=True)
+                                                 clnoise=None, sub_bands_cov=my_cov, verbose=True)
 
 
 
-print('Variance Sub maps')
-print(np.var(sub_maps,axis=1))
+for i in range(nsub):
+    xx, yyfs, bla = qss.get_noise_invcov_profile(sub_maps[i,:,:], cov, 
+                                                 label='Input Map {}'.format(i+1), fit=False,
+                                                 allstokes=False, doplot=True)
+plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[1,:])*yyfs[0],'r--', label='Input Profile Cov')
+legend(fontsize=9)
+xlim(0.9,10.1)
+title('Un-Normalized')
+```
 
-print()
-print('Target Cov I:')
-print(my_cov)
-print()
-print('Target Cov Q,U:')
-if my_cov is not None: print(my_cov*2)
-
-np.set_printoptions(precision=2)
+```{python}
 reload(qss)
-cov_I, cov_Q, cov_U, allfitcov = qss.get_cov_nunu(sub_maps, cov)
-
-print()
-print('Cov_I')
-print(cov_I)
-print()
-print('Cov_Q')
-print(cov_Q)
-print()
-print('Cov_U')
-print(cov_U)
+reload(qc)
 
 
-allcov = [cov_I, cov_Q, cov_U]
+### We take these maps as an input and try to reproduce them again (as one would do with real data)
+# calculate covariance
+cI, cQ, cU, fitcov, noise_norm = qss.get_cov_nunu(sub_maps, cov)
 
-if nsub > 1:
-    rc('figure', figsize=(16, 8))
-    for s in range(3):
-        subplot(3,3,s+1)
-        imshow(allcov[s], vmin=-0.1, vmax=2)
-        colorbar()
-        title('Cov '+sn[s])
-        if my_cov is not None:
-            subplot(3,3,s+4)
-            if s==0:
-                p=1
-            else:
-                p=2.
-            imshow(my_cov*p, vmin=-0.1, vmax=2)
-            colorbar()
-            title('Cov Th '+sn[s])
-            subplot(3,3,s+7)
-            imshow(allcov[s]-my_cov*p, vmin=-0.1, vmax=2)
-            colorbar()
-            title('Diff '+sn[s])
+figure()
+subplot(1,2,1)
+for i in range(nsub):
+    xx, yyfs, bla = qss.get_noise_invcov_profile(sub_maps[i,:,:], cov, 
+                                                 label='Input Map {}'.format(i+1), fit=False, norm=True,
+                                                 allstokes=False, doplot=True)
+    plot(fitcov[i][0,:], np.sqrt(fitcov[i][1,:]/fitcov[i][1,0]), label='fit on {}'.format(i))
+plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[1,:]),'r--', label='Input Profile Cov')
+xlim(0.9,10.1)
+title('Input maps profile - Normalized')
+legend()
 
-    tight_layout()
+subplot(1,2,2)
+for i in range(nsub):
+    xx, yyfs, bla = qss.get_noise_invcov_profile(sub_maps[i,:,:], cov, 
+                                                 label='Input Map {}'.format(i+1), fit=False, norm=False,
+                                                 allstokes=False, doplot=True)
+    plot(fitcov[i][0,:], np.sqrt(fitcov[i][1,:]), label='fit on {}'.format(i))
+#plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[1,:]),'r--', label='Input Profile Cov')
+xlim(0.9,10.1)
+title('Input maps profile - Un-Normalized')
+legend()
+
+
+
+figure()
+subplot(1,4,1)
+imshow(my_cov, vmin=-1, vmax=1)
+colorbar(orientation='horizontal')
+title('Input')
+subplot(1,4,2)
+imshow(cI, vmin=-1, vmax=1)
+colorbar(orientation='horizontal')
+title('Map I')
+subplot(1,4,3)
+imshow(cQ/2, vmin=-1, vmax=1)
+colorbar(orientation='horizontal')
+title('Map Q / 2')
+subplot(1,4,4)
+imshow(cU/2, vmin=-1, vmax=1)
+colorbar(orientation='horizontal')
+title('Map U / 2')
+
+# ### Now reproduce maps from this
+# ### Note: the second should not be scaled with signoise_each as we should deduce its normalization 
+# ### from the other variables, siilarly it should not depend on nsub for the same reason
+# ### However there remains a normalization here that is not clear...
+# ### There is always a factor 84 lower for the new wrt to inital (if new has signoise=1)
+
+fitcov_norm = []
+for i in range(nsub):
+    bla = fitcov[i].copy()
+    bla[1,:] = fitcov[i][1,:] / fitcov[i][1,0]
+    fitcov_norm.append(bla)
+
+
+#### This works OK but we should not know signoise_each...
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+print('Normalization sigma_sec = {}'.format(signoise_each))
+new_sub_maps = Qubic_sky.create_noise_maps(signoise_each, cov, nsub=nsub,
+                                            effective_variance_invcov=fitcov_norm,
+                                            clnoise=None, sub_bands_cov=my_cov, verbose=True)
+
+
+
+
+
+figure()
+subplot(1,2,1)
+for i in range(nsub):
+    xx, yyfs, bla = qss.get_noise_invcov_profile(new_sub_maps[i,:,:], cov, 
+                                                 label='Input Map {}'.format(i+1), fit=False, norm=True,
+                                                 allstokes=False, doplot=True)
+    plot(fitcov[i][0,:], np.sqrt(fitcov[i][1,:]/fitcov[i][1,0]), label='fit on {}'.format(i))
+plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[1,:]),'r--', label='Input Profile Cov')
+xlim(0.9,10.1)
+title('New maps profile - Normalized')
+legend()
+
+subplot(1,2,2)
+for i in range(nsub):
+    xx, yyfs, bla = qss.get_noise_invcov_profile(new_sub_maps[i,:,:], cov, 
+                                                 label='Input Map {}'.format(i+1), fit=False, norm=False,
+                                                 allstokes=False, doplot=True)
+    plot(fitcov[i][0,:], np.sqrt(fitcov[i][1,:]), label='fit on {}'.format(i))
+#plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[1,:]),'r--', label='Input Profile Cov')
+xlim(0.9,10.1)
+title('New maps profile - Un-Normalized')
+legend()
+
+
+
+
+# print()
+# print(np.std(sub_maps[:,okpix,0]))
+# print(np.std(new_sub_maps[:,okpix,0]))
+# print(np.std(sub_maps[:,okpix,0])/np.std(new_sub_maps[:,okpix,0]))
+
+newcI, newcQ, newcU, newfitcov, norm_noise = qss.get_cov_nunu(new_sub_maps, cov)
+figure()
+subplot(1,4,1)
+imshow(my_cov, vmin=-1, vmax=1)
+title('Input')
+colorbar(orientation='horizontal')
+subplot(1,4,2)
+imshow(newcI, vmin=-1, vmax=1)
+title('New Map I')
+colorbar(orientation='horizontal')
+subplot(1,4,3)
+imshow(newcQ/2, vmin=-1, vmax=1)
+title('New Map Q / 2')
+colorbar(orientation='horizontal')
+subplot(1,4,4)
+imshow(newcU/2, vmin=-1, vmax=1)
+title('New  Map U / 2')
+colorbar(orientation='horizontal')
+
+figure()
+for i in range(nsub):
+    subplot(2,nsub, i+1)
+    xx, yyfs, bla = qss.get_noise_invcov_profile(sub_maps[i,:,:], cov, label='Innput Map {}'.format(i+1), fit=False, allstokes=False, doplot=True)
+    xx, yyfs, bla = qss.get_noise_invcov_profile(new_sub_maps[i,:,:], cov, label='Output Map {}'.format(i+1), fit=False, allstokes=False, doplot=True)
+    legend(fontsize=9)
+    plot(fitcov[i][0,:], np.sqrt(fitcov[i][1,:]), label='fit on {}'.format(i))
+tight_layout()
+
+
+```
+
+OK this works fine ! SO we can go for a script to run at Lyon
+
+
+# Script for Lyon
+
+```{python}
+#### Testing the script
+########################################################################################################
+#### Now in a function to loop over ell binning, lmin, coverage
+def run_mc_spectroim(nsub, nbmc, Namaster, d, signoise, cov, effective_variance_invcov, verbose=False, clnoise=None):
+    ell_bins, b = Namaster.get_binning(d['nside'])
+    mask_apo = Namaster.mask_apo
+    okpix = cov > (np.max(cov)*0.1)
+
+    myd = d.copy()
+    myd['nf_sub']=nsub
+    seed = np.random.randint(1,100000)
+    sky_config = {'cmb': seed}
+    Qubic_sky = qss.Qubic_sky(sky_config, myd)
+
+    w=None
+    cl_noise_qubic = np.zeros((nbmc, nsub, len(ell_bins), 4))
+    print('        Starting MC')
+    for imc in range(nbmc):
+        t0 = time.time()
+        qubicnoiseA = Qubic_sky.create_noise_maps(signoise, cov, nsub=nsub,
+                                                  effective_variance_invcov=effective_variance_invcov,
+                                                 clnoise=clnoise)
+        qubicnoiseB = Qubic_sky.create_noise_maps(signoise, cov, nsub=nsub,
+                                                  effective_variance_invcov=effective_variance_invcov,
+                                                 clnoise=clnoise)
+        
+
+        for isub in range(nsub):
+            ### Compute Spectra:
+            # Noise Only
+            print('   - QUBIC Noise maps sub {}'.format(isub))
+            leff, cl_noise_qubic[imc, isub, :,:], w = Namaster.get_spectra(qubicnoiseA[isub,:,:].T, 
+                                                                     map2 = qubicnoiseB[isub,:,:].T,
+                                                                     purify_e=False, purify_b=True, w=w, verbose=False,
+                                                                     beam_correction=True)
+        t1 = time.time()
+        print('             Monte-Carlo: Iteration {0:} over {1:} done in {2:5.2f} sec'.format(imc, nbmc,t1-t0))
+        
+    
+    # average MC results
+    return leff, cl_noise_qubic
+
+```
+
+```{python}
+dirdata = '/Users/hamilton/Qubic/QubicGeneralPaper2020/'
+cov_file = dirdata + 'Coverage_Nersc200k.fits'
+file_noise_profile = dirdata + 'fit_noise_profile_nersc200k.pk'
+clnoise_file = dirdata + 'cl_corr_noise_nersc200k.pk'
+outname = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SpectroIm/FastSim/'
+
+is_spatial_corr = 0
+covcut = 0.1
+lmin = 40
+delta_ell = 30
+nbmc = 3
+nsub = 4
+```
+
+```{python}
+### Initialize
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+dictfilename = global_dir + '/dicts/BmodesNoDustNoSystPaper0_2020.dict'
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+d['nside'] = 256
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+
+### Open Coverage File
+cov = np.array(FitsArray(cov_file))
+
+### Open Noise Profile
+fit_n200k = pickle.load( open( file_noise_profile, "rb" ) )
+
+### Open Cl for spatially  correlated noise
+if is_spatial_corr == 0:
+    print('No Spatial Correlations')
+    clth = None
+else:
+    print('Spatial correlations from '+clnoise_file)
+    clth = pickle.load( open( clnoise_file, "rb" ) )
+    alpha = 4.5 ### See notebook called "2pt-Correlation Function" for an empirical explanation of alpha
+    clth = (clth -1 ) * alpha + 1
+
+print('Spatial correlations:')
+print(clth)
+
+
+
+################################### Flat Weighting #################################################################
+### Create a Namaster object
+lmax = 2 * d['nside'] - 1
+okpix = cov > np.max(cov) * covcut
+
+### We use Flat weighting
+maskpix = np.zeros(12*d['nside']**2)
+maskpix[okpix] = 1
+Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+
+### Run the MC
+leff, cl_noise_qubic = run_mc_spectroim(nsub, nbmc, Namaster, d, signoise, cov, 
+                                        fit_n200k, clnoise=clth)
+### Save Output
+rndstr = qss.random_string(10)
+outfile = outname + 'MCFastNoiseSpectroIm_nsub_{}_n_{}_sig_{}_lmin_{}_dl_{}_cc_{}_str_{}_Flat.pk'.format(nsub, nbmc, signoise, lmin, delta_ell, covcut, rndstr)
+#pickle.dump([leff, cl_noise_qubic, sys.argv], open(outfile, "wb"))
+pickle.dump([leff, cl_noise_qubic], open(outfile, "wb"))
+####################################################################################################################
+
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```

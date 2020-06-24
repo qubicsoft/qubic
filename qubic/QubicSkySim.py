@@ -557,6 +557,7 @@ def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='
             plot(xx ** 2, dyI / xx * fact, label=label + ' I', alpha=0.3)
             plot(xx ** 2, dyQ / xx * fact / np.sqrt(2), label=label + ' Q/sqrt(2)', alpha=0.3)
             plot(xx ** 2, dyU / xx * fact / np.sqrt(2), label=label + ' U/sqrt(2)', alpha=0.3)
+        legend()
 
     if fit:
         mymodel = lambda x, a, b, c, d, e: (a + b * x + c * np.exp(-d * (x - e)))  # /(a+b+c*np.exp(-d*(1-e)))

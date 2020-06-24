@@ -60,7 +60,7 @@ def std_profile(many_patch, nbins, nside, center, seenmap):
     return bin_centers, ang, std_bin, std_profile
 
 
-def get_residuals(rep_simu, residuals_way, irec):
+def get_residuals(fits_noise, fits_noiseless, residuals_way):
     """
     Compute residuals in a given way.
 
@@ -77,23 +77,35 @@ def get_residuals(rep_simu, residuals_way, irec):
     -------
         residuals : array of shape (#reals, #bands, #pixels, 3)
     """
-    _, maps_recon_patch, _, maps_diff_patch = rmc.get_patch_many_files(rep_simu,
-                                                                       '*nfrecon{}*False*'.format(irec),
-                                                                       verbose=False)
-    if residuals_way == 'noiseless':
-        _, patch_recon_nl, patch_conv_nl, patch_diff_nl = rmc.get_patch_many_files(rep_simu,
-                                                                                   '*nfrecon{}*True*'.format(irec),
-                                                                                   verbose=False)
-        residuals = maps_recon_patch - patch_recon_nl[0]
+    nreals = len(fits_noise)
+    residuals = []
 
-    elif residuals_way == 'conv':
-        residuals = maps_diff_patch
+    if residuals_way == 'mean_recon':
+        seenmap = rmc.get_seenmap(fits_noise[0])
+        recon, conv, diff = rmc.get_patch(fits_noise[0], seenmap)
+        nbands, npix, nstk = recon.shape
+        rec = np.zeros((nreals, nbands, npix, nstk))
+        for j in range(nreals):
+            seenmap = rmc.get_seenmap(fits_noise[j])
+            rec[j], _, _ = rmc.get_patch(fits_noise[j], seenmap)
 
-    elif residuals_way == 'mean_recon':
-        residuals = maps_recon_patch - np.mean(maps_recon_patch, axis=0)
+    for i in range(nreals):
+        seenmap = rmc.get_seenmap(fits_noise[i])
+        recon, conv, diff = rmc.get_patch(fits_noise[i], seenmap)
 
-    else:
-        raise ValueError('The way to compute residuals is not valid.')
+
+        if residuals_way == 'noiseless':
+            recon_nl, conv_nl, diff_nl = rmc.get_patch(fits_noiseless, seenmap)
+            residuals.append(recon - recon_nl)
+
+        elif residuals_way == 'conv':
+            residuals.append(diff)
+
+        elif residuals_way == 'mean_recon':
+            residuals.append(recon - np.mean(rec, axis=0))
+
+        else:
+            raise ValueError('The way to compute residuals is not valid.')
 
     return residuals
 
@@ -672,7 +684,7 @@ def Cp2Cp_prime(Cp, verbose=True):
     if verbose:
         print('Cp_prime.shape =', Cp_prime.shape)
 
-    return Cp_prime
+    return N, Cp_prime
 
 
 def Cp2Cp_prime_viaCorr(Cp, verbose=True):
@@ -719,7 +731,7 @@ def Cp2Cp_prime_viaCorr(Cp, verbose=True):
     if verbose:
         print('Cp_prime.shape =', Cp_prime.shape)
 
-    return Cp_prime
+    return N, Cp_prime
 
 
 def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):

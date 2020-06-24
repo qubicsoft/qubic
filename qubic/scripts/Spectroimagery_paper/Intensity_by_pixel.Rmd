@@ -1,0 +1,195 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Spectroimaging pixel by pixel
+
+Edited by Louise, 18/06/2020
+
+In this notebook, I try to reproduce what Gabriele has done. Spectroimaging on the galaxy center, compare the reconstruction to the input sky pixel by pixel
+
+```{python}
+# %matplotlib inline
+
+import os
+import sys
+import glob
+
+# Specific science modules
+import healpy as hp
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Specific qubic modules
+import qubic
+from qubic import QubicSkySim as qss
+from qubic.polyacquisition import compute_freq
+import ReadMC as rmc
+
+```
+
+```{python}
+rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/galaxy_center_d1/nfsub15/'
+dictionary = glob.glob(rep + '/*.dict')[0]
+print(dictionary)
+
+# Dictionary saved during the simulation
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictionary)
+
+# Coordinates of the zone observed in the sky
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+
+# Number of subbands used during the simulation
+nf_sub_rec = 5
+nf_sub = d['nf_sub']
+print('nf_sub = {}, nf_recon = {}'.format(nf_sub, nf_sub_rec))
+
+# Get fits files names in a list
+fits_noise = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessFalse*.fits'.format(nf_sub, nf_sub_rec), 
+                              recursive=True))
+fits_noiseless = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessTrue*.fits'.format(nf_sub, nf_sub_rec), 
+                              recursive=True))
+
+print(fits_noiseless)
+```
+
+```{python}
+# Input sky
+seed = 42
+sky_config = {'dust': 'd1'}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+x0 = Qubic_sky.get_simple_sky_map()
+print('Input map with shape:', x0.shape)
+hp.mollview(x0[2,:,0],rot=center)
+
+Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(150, nf_sub)
+```
+
+```{python}
+# Number of noise realisations
+nreals = len(fits_noise)
+print('nreals = ', nreals)
+
+# Get seen map (observed pixels)
+seenmap = rmc.get_seenmap(fits_noiseless[0])
+print(seenmap.shape)
+thepix_old = np.where(seenmap)[0]
+
+# Number of pixels and nside
+npix = len(seenmap)
+ns = d['nside']
+
+```
+
+```{python}
+np.where(seenmap)
+```
+
+```{python}
+# Get maps
+_, _, nus_rec, _, _, _ = compute_freq(150, nf_sub_rec)
+
+maps_recon = np.empty((nreals, nf_sub_rec, npix, 3))
+maps_conv = np.empty((nreals, nf_sub_rec, npix, 3))
+for i, real in enumerate(fits_noise):
+    maps_recon[i], maps_conv[i], _ = rmc.get_maps(real)
+
+```
+
+```{python}
+# Decrease NSIDE
+nside_new = 8
+seenmap_dgrad = hp.ud_grade(seenmap, nside_new)
+thepix = np.where(seenmap_dgrad)[0]
+print(thepix)
+
+x0_dgrad = np.zeros((len(nus), 12*nside_new**2, 3))
+for nu in range(len(nus)):
+    for istk in range(3):
+        x0_dgrad[nu, :, istk] = hp.ud_grade(x0[nu, :, istk], nside_new)
+
+hp.mollview(x0_dgrad[0, :, 0]*seenmap_dgrad)
+
+maps_recon_dgrad = np.zeros((nreals, len(nus_rec), 12*nside_new**2, 3))
+for real in range(nreals):
+    for nu in range(len(nus_rec)):
+        for istk in range(3):
+            maps_recon_dgrad[real, nu, :, istk] = hp.ud_grade(maps_recon[real, nu, :, istk], nside_new)
+
+maps_conv_dgrad = np.zeros((nreals, len(nus_rec), 12*nside_new**2, 3))
+for real in range(nreals):
+    for nu in range(len(nus_rec)):
+        for istk in range(3):
+            maps_conv_dgrad[real, nu, :, istk] = hp.ud_grade(maps_conv[real, nu, :, istk], nside_new)
+
+
+```
+
+```{python}
+len(thepix_old)
+```
+
+```{python}
+istk = 0
+for pix in range(2000, 2020):
+    pix = thepix_old[pix]
+    plt.figure()
+
+    plt.plot(nus, x0[:, pix, istk], 'go', label='Input sky')
+    plt.plot(nus_rec, np.mean(maps_conv[:, :, pix, istk], axis=0), 'bo', label='convolved sky')
+    plt.errorbar(nus_rec, np.mean(maps_recon[:, :, pix, istk], axis=0),
+                 yerr=np.std(maps_recon[:, :, pix, istk], axis=0), 
+                 fmt='o', color='r',
+                 label='recon sky')
+    plt.legend()
+    plt.title('Pixel {}, NSIDE=256'.format(pix))
+    plt.xlabel('Frequency [GHz]')
+    plt.ylabel('I (µK)')
+#     plt.close()
+```
+
+```{python}
+len(thepix)
+```
+
+```{python}
+istk = 1
+Stokes = ['I', 'Q', 'U']
+for i in range(20):
+    pix = thepix[i]
+    plt.figure(figsize=(15, 4))
+    plt.subplot(121)
+    plt.plot(nus, x0_dgrad[:, pix, istk], 'go', label='Input sky')
+    plt.plot(nus_rec, np.mean(maps_conv_dgrad[:, :, pix, istk], axis=0), 'bo', label='convolved sky')
+
+    plt.errorbar(nus_rec, np.mean(maps_recon_dgrad[:, :, pix, istk], axis=0),
+                 yerr=np.std(maps_recon_dgrad[:, :, pix, istk], axis=0), 
+                 fmt='o', color='r',
+                 label='recon sky')
+    plt.legend()
+    plt.title('Pixel {}, NSIDE=8, {}'.format(pix, Stokes[istk]))
+    plt.xlabel('Frequency [GHz]')
+    plt.ylabel('I [µK]')
+
+    x0copie = x0_dgrad[0, :, istk].copy()
+    x0copie[pix] = -10
+    hp.mollview(x0copie*seenmap_dgrad, sub=(122), title='Pixel {}'.format(pix))
+
+
+    
+```
+
+```{python}
+
+```

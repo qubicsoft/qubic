@@ -411,14 +411,20 @@ class Qubic_sky(sky):
         npix = seenpix.sum()
         # The theoretical noise in I for the coverage
         ideal_noise = self.theoretical_noise_maps(sigma_sec, coverage, Nyears=Nyears, verbose=verbose)
-        if effective_variance_invcov is None:
-            thnoise = ideal_noise
-        else:
-            thnoise = np.zeros_like(ideal_noise)
-            correction = np.interp(np.max(coverage[seenpix])/coverage[seenpix], 
-                effective_variance_invcov[0,:], effective_variance_invcov[1,:])
-            thnoise[seenpix] = ideal_noise[seenpix] * np.sqrt(correction)
-
+        sh = np.shape(ideal_noise)
+        
+        thnoise = np.zeros((nsub, sh[0]))
+        for isub in range(nsub):
+            if effective_variance_invcov is None:
+                thnoise[isub,:] = ideal_noise
+            else:
+                if isinstance(effective_variance_invcov, list):
+                    my_effective_variance_invcov = effective_variance_invcov[isub]
+                else:
+                    my_effective_variance_invcov = effective_variance_invcov
+                correction = np.interp(np.max(coverage[seenpix])/coverage[seenpix], 
+                    my_effective_variance_invcov[0,:], my_effective_variance_invcov[1,:])
+                thnoise[isub,seenpix] = ideal_noise[seenpix] * np.sqrt(correction)
 
         noise_maps = np.zeros((nsub, len(coverage), 3))
         if seed is not None:
@@ -469,9 +475,9 @@ class Qubic_sky(sky):
 
 
         # Now normalize the maps with the coverage behaviour and the sqrt(2) for Q and U
-        noise_maps[:, seenpix, 0] *= thnoise[seenpix]
-        noise_maps[:, seenpix, 1] *= thnoise[seenpix]
-        noise_maps[:, seenpix, 2] *= thnoise[seenpix]
+        noise_maps[:, seenpix, 0] *= thnoise[:,seenpix]
+        noise_maps[:, seenpix, 1] *= thnoise[:,seenpix]
+        noise_maps[:, seenpix, 2] *= thnoise[:,seenpix]
 
         if nsub==1:
             return noise_maps[0,:,:]
@@ -620,11 +626,13 @@ def flatten_noise(maps, cov, thmax=25, nbins=20, center=np.array([316.44761929,-
     out_maps = np.zeros_like(maps)
     newsh = np.shape(maps)
     all_fitcov = []
+    all_norm_noise = []
     if doplot:
         figure()
     for isub in range(newsh[0]):
-        xx, yy, fitcov = get_noise_invcov_profile(maps[isub,:,:], cov, nbins=nbins,
+        xx, yy, fitcov = get_noise_invcov_profile(maps[isub,:,:], cov, nbins=nbins, norm=False,
                                                         label='sub-band: {}'.format(isub),fit=True, doplot=doplot, allstokes=True)
+        all_norm_noise.append(yy[0])
         if doplot:
             legend(fontsize=10)
         all_fitcov.append(fitcov)
@@ -636,7 +644,7 @@ def flatten_noise(maps, cov, thmax=25, nbins=20, center=np.array([316.44761929,-
     if len(sh)==2:
         return out_maps[0,:,:], all_fitcov
     else:
-        return out_maps, all_fitcov
+        return out_maps, all_fitcov, all_norm_noise
 
 
 
@@ -726,7 +734,7 @@ def get_cov_nunu(maps, cov, nbins=20):
     # so this covariance absorbes the  overall maps variances
 
     ### First normalize by coverage
-    new_sub_maps, all_fitcov = flatten_noise(maps, cov, nbins=nbins, doplot=False)
+    new_sub_maps, all_fitcov, all_norm_noise = flatten_noise(maps, cov, nbins=nbins, doplot=False)
 
     ### Now calculate the covariance matrix for each sub map
     sh = np.shape(maps)
@@ -741,7 +749,7 @@ def get_cov_nunu(maps, cov, nbins=20):
         cov_Q = np.cov(new_sub_maps[:,okpix,1])
         cov_U = np.cov(new_sub_maps[:,okpix,2])
 
-    return cov_I, cov_Q, cov_U, all_fitcov
+    return cov_I, cov_Q, cov_U, all_fitcov, all_norm_noise
 
 
 

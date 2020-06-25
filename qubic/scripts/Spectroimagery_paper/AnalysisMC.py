@@ -592,9 +592,11 @@ def make_weighted_av(patch, Cp, verbose=False):
     Average the maps over subbands using the covariance matrix between subbands.
     Parameters
     ----------
-    patch: array of shape (#reals, #bands, #pixels, 3)
-    Cp: array of shape (#bands, #bands, 3, #pixels)
+    patch: array
+        Shape (#reals, #bands, #pixels, #nstks)
+    Cp: array
         The covariance matrices.
+        Shape (#bands, #bands, #nstks, #pixels)
     verbose: bool
 
     Returns
@@ -603,20 +605,22 @@ def make_weighted_av(patch, Cp, verbose=False):
     sig2: variances over realisations on the map
 
     """
-    nreals = np.shape(patch)[0]
-    npix_patch = np.shape(Cp)[-1]
+    nreals, nbands, npix_patch, nstks = np.shape(patch)
+
     if verbose:
         print('Cp.shape = ', np.shape(Cp))
         print('# realizations = ', nreals)
-        print('npix_patch = ', npix_patch)
+        print('# bands = ', nbands)
+        print('# pixels = ', npix_patch)
+        print('# stokes = ', nstks)
 
-    weighted_av = np.zeros((nreals, npix_patch, 3))
-    sig2 = np.zeros((npix_patch, 3))
+    weighted_av = np.zeros((nreals, npix_patch, nstks))
+    sig2 = np.zeros((npix_patch, nstks))
 
     nsing = 0
     for ireal in range(nreals):
         for ipix in range(npix_patch):
-            for istokes in range(3):
+            for istokes in range(nstks):
                 x = patch[ireal, :, ipix, istokes]
                 # Only do it if the matrix is not singular:
                 if np.linalg.det(Cp[:, :, istokes, ipix]) != 0.:
@@ -650,22 +654,26 @@ def Cp2Cp_prime(Cp, verbose=True):
     before averaging.
     Parameters
     ----------
-    Cp: array of shape (#bands, #bands, 3, #pixels)
+    Cp: array
         The covariance matrices for each pixel.
+        Shape (#bands, #bands, #stokes, #pixels)
     verbose: bool
 
     Returns
     -------
-    Cp_prime: array of shape (#bands, #bands, 3, #pixels)
+    Cp_prime: array of shape (#bands, #bands, #Stokes, #pixels)
         The covariance matrices for each pixel.
 
     """
-    npix_patch = np.shape(Cp)[-1]
-    if verbose: print('npix_patch =', npix_patch)
+    nfrec, _, nstk, npix_patch = np.shape(Cp)
+    if verbose:
+        print('nfrec =', nfrec)
+        print('nstk =', nstk)
+        print('npix_patch =', npix_patch)
 
     # Normalize each matrix by the first element
     Np = np.empty_like(Cp)
-    for istokes in range(3):
+    for istokes in range(nstk):
         for ipix in range(npix_patch):
             Np[:, :, istokes, ipix] = Cp[:, :, istokes, ipix] / Cp[0, 0, istokes, ipix]
 
@@ -677,7 +685,7 @@ def Cp2Cp_prime(Cp, verbose=True):
 
     # We re-multiply N by the first term
     Cp_prime = np.empty_like(Cp)
-    for istokes in range(3):
+    for istokes in range(nstk):
         for ipix in range(npix_patch):
             Cp_prime[:, :, istokes, ipix] = Cp[0, 0, istokes, ipix] * N[:, :, istokes]
 
@@ -693,23 +701,26 @@ def Cp2Cp_prime_viaCorr(Cp, verbose=True):
     on pixels before the average.
     Parameters
     ----------
-    Cp: array of shape (#bands, #bands, 3, #pixels)
+    Cp: array
         The covariance matrices for each pixel.
+        Shape: (#bands, #bands, #Stokes, #pixels)
     verbose: bool
 
     Returns
     -------
-    Cp_prime: array of shape (#bands, #bands, 3, #pixels)
+    Cp_prime: array of shape (#bands, #bands, #Stokes, #pixels)
         The covariance matrices for each pixel.
 
     """
-    nfrec = np.shape(Cp)[0]
-    npix_patch = np.shape(Cp)[-1]
-    if verbose: print('npix_patch =', npix_patch)
+    nfrec, _, nstk, npix_patch = np.shape(Cp)
+    if verbose:
+        print('nfrec =', nfrec)
+        print('nstk =', nstk)
+        print('npix_patch =', npix_patch)
 
     # Convert cov matrices to correlation matrices
     Np = np.empty_like(Cp)
-    for istokes in range(3):
+    for istokes in range(nstk):
         for ipix in range(npix_patch):
             Np[:, :, istokes, ipix] = cov2corr(Cp[:, :, istokes, ipix])
 
@@ -721,7 +732,7 @@ def Cp2Cp_prime_viaCorr(Cp, verbose=True):
 
     # We re-multiply N to get back to covariance matrices
     Cp_prime = np.empty_like(Cp)
-    for istokes in range(3):
+    for istokes in range(nstk):
         for ipix in range(npix_patch):
             for i in range(nfrec):
                 for j in range(nfrec):

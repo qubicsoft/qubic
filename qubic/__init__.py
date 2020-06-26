@@ -43,4 +43,4 @@ if numpy.__version__ < '1.8':
     numpy.full_like = full_like
 del full, full_like, numpy
 
-__version__ = '4.5.dev1226'
+__version__ = '4.5.dev1364'

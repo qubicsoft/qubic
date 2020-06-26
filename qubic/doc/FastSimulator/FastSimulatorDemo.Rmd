@@ -320,17 +320,22 @@ all_nfsub = [1,2,3,4,5,8]
 for i in range(len(all_nfsub)):
     figure()
     nfsub = all_nfsub[i]
-
     maps, cov = get_maps_from_louise(dirmaps,nfsub)
 
     for isub in range(nfsub):
+        
+        sqn = np.int(np.sqrt(nfsub))
+        if (sqn**2) != nfsub:
+            sqn += 1
+        subplot(sqn,sqn,isub+1)
+
         xx, yyfs, fitcov = qss.get_noise_invcov_profile(maps[isub,:,:], cov, QUsep=True, nbins=50,
                                                      label='Input Map {}'.format(i+1), fit=True, norm=False,
                                                      allstokes=True, doplot=True)
-    xlim(0.9,10.1)
-    title('nfsub={}'.format(nfsub))
-    legend(fontsize=8)
-    tight_layout()
+        xlim(0.9,10.1)
+        title('nfsub={}'.format(nfsub))
+        legend(fontsize=8)
+        tight_layout()
 
 ```
 
@@ -404,7 +409,7 @@ Qubic_sky = qss.Qubic_sky(sky_config, d)
 
 signoise = 88.
                
-i=5
+i=4
 
 nfsub = all_nfsub[i]
 maps, cov = get_maps_from_louise(dirmaps,nfsub)
@@ -427,7 +432,9 @@ if nfsub == 1:
 print(np.shape(new_sub_maps))
 
 for isub in range(nfsub):
-    sqn = np.int(np.sqrt(nfsub)+1)
+    sqn = np.int(np.sqrt(nfsub))
+    if (sqn**2) != nfsub:
+        sqn += 1
     subplot(sqn,sqn,isub+1)
     xx, yyfs, fitcov = qss.get_noise_invcov_profile(new_sub_maps[isub,:,:], cov, QUsep=True,
                                                  label='FastSim sub={}/{}'.format(isub+1,nfsub), fit=False, norm=False,
@@ -500,7 +507,9 @@ if nfsub == 1:
 print(np.shape(new_sub_maps))
 
 for isub in range(nfsub):
-    sqn = np.int(np.sqrt(nfsub)+1)
+    sqn = np.int(np.sqrt(nfsub))
+    if (sqn**2) != nfsub:
+        sqn += 1
     subplot(sqn,sqn,isub+1)
     xx, yyfs, fitcov = qss.get_noise_invcov_profile(new_sub_maps[isub,:,:], cov, QUsep=True, nbins=nbins,
                                                  label='FastSim sub={}/{}'.format(isub+1,nfsub), fit=False, norm=False,
@@ -597,7 +606,9 @@ if nfsub == 1:
 print(np.shape(new_sub_maps))
 
 for isub in range(nfsub):
-    sqn = np.int(np.sqrt(nfsub)+1)
+    sqn = np.int(np.sqrt(nfsub))
+    if (sqn**2) != nfsub:
+        sqn += 1
     subplot(sqn,sqn,isub+1)
     xx, yyfs, fitcov = qss.get_noise_invcov_profile(new_sub_maps[isub,:,:], cov, QUsep=True, nbins=nbins,
                                                  label='FastSim sub={}/{}'.format(isub+1,nfsub), fit=False, norm=False,

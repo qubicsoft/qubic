@@ -12,7 +12,7 @@ class Namaster(object):
 
         Parameters
         ----------
-        weight_mask: array
+        weight_mask: ndarray
         lmin: int
             Minimal l for power spectrum.
         lmax: int

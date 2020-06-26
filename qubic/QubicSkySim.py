@@ -583,7 +583,7 @@ def random_string(nchars):
     return (str)
 
 def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='', 
-    norm=False, allstokes=False, fitlim=None, doplot=False,QUsep=False):
+    norm=False, allstokes=False, fitlim=None, doplot=False,QUsep=True):
     seenpix = cov > (covcut*np.max(cov))
     covnorm = cov / np.max(cov)
    
@@ -695,7 +695,7 @@ def correct_maps_rms(maps, cov, effective_variance_invcov):
     return newmaps
 
 def flatten_noise(maps, cov, thmax=25, nbins=20, center=np.array([316.44761929,-58.75808063]), 
-    doplot=False, normalize_all=False, QUsep=False):
+    doplot=False, normalize_all=False, QUsep=True):
     sh = np.shape(maps)
     if len(sh) == 2:
         maps = np.reshape(maps, (1, sh[0], sh[1]))
@@ -805,7 +805,7 @@ def ctheta_parts(themap, ipok, thetamin, thetamax, nbinstot, nsplit=4, degrade_i
     ### But it actually changes very little
     return thall, cthall
         
-def get_cov_nunu(maps, cov, nbins=20, QUsep=False):
+def get_cov_nunu(maps, cov, nbins=20, QUsep=True):
     # This function returns the sub-frequency, sub_frequency covariance matrix for each stoke parameter
     # it does not attemps to check for covariance between Stokes parameters (this should be icorporated later)
     # it returns the three covariance matrices as well as the fitted function of coverage that was used to

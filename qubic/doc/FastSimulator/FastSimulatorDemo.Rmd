@@ -413,7 +413,7 @@ i=4
 
 nfsub = all_nfsub[i]
 maps, cov = get_maps_from_louise(dirmaps,nfsub)
-cI, cQ, cU, fitcov, noise_norm = qss.get_cov_nunu(maps, cov)
+cI, cQ, cU, fitcov, noise_norm = qss.get_cov_nunu(maps, cov, QUsep=True)
 corr_mats = [cI, cQ, cU]
 
 myfitcovs = []
@@ -483,7 +483,7 @@ i=5
 nbins = 30
 nfsub = all_nfsub[i]
 maps, cov = get_maps_from_louise(dirmaps,nfsub)
-cI, cQ, cU, fitcov, noise_norm = qss.get_cov_nunu(maps, cov)
+cI, cQ, cU, fitcov, noise_norm = qss.get_cov_nunu(maps, cov, QUsep=True)
 corr_mats = [cI, cQ/2, cU/2]
 
 
@@ -521,7 +521,7 @@ for isub in range(nfsub):
     ylim(np.min(yyfs)/1.5,np.max(yyfs)*1.5)
 tight_layout()
 
-cInew, cQnew, cUnew, fitcov, noise_norm = qss.get_cov_nunu(new_sub_maps, cov, QUsep=False)
+cInew, cQnew, cUnew, fitcov, noise_norm = qss.get_cov_nunu(new_sub_maps, cov, QUsep=True)
 new_corr_mats = [cInew, cQnew/2, cUnew/2]
 
 figure()
@@ -582,7 +582,7 @@ i=5
 nbins = 30
 nfsub = all_nfsub[i]
 maps, cov = get_maps_from_louise(dirmaps,nfsub)
-cI, cQ, cU, fitcov, noise_norm = qss.get_cov_nunu(maps, cov)
+cI, cQ, cU, fitcov, noise_norm = qss.get_cov_nunu(maps, cov, QUsep=True)
 corr_mats = [cI, cQ/2, cU/2]
 
 
@@ -620,7 +620,7 @@ for isub in range(nfsub):
     ylim(np.min(yyfs)/1.5,np.max(yyfs)*1.5)
 tight_layout()
 
-cInew, cQnew, cUnew, fitcov, noise_norm = qss.get_cov_nunu(new_sub_maps, cov, QUsep=False)
+cInew, cQnew, cUnew, fitcov, noise_norm = qss.get_cov_nunu(new_sub_maps, cov, QUsep=True)
 new_corr_mats = [cInew, cQnew/2, cUnew/2]
 
 figure()

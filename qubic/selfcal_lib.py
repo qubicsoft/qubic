@@ -667,14 +667,14 @@ def fulldef2tespixels(img, labels, ndet=992):
     return counts_perTES, sum_perTES, mean_perTES
 
 
-def make_plot_real_fp(readv, sig_perTES):
+def make_plot_real_fp(readv, sig_perTES, vmin=0., vmax=1.):
     """
     Plot real FP using TES locations.
     """
     # All this to get colormap
     cm = plt.get_cmap('viridis')
     # plot scale from average
-    cNorm = colors.Normalize(vmin=np.amin(sig_perTES), vmax=np.amax(sig_perTES))
+    cNorm = colors.Normalize(vmin=vmin, vmax=vmax)
     scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=cm)
     scalarMap.set_array(sig_perTES)
 
@@ -684,13 +684,17 @@ def make_plot_real_fp(readv, sig_perTES):
         rect = patches.Rectangle((readv[i, 2, 0], readv[i, 2, 1]),
                                  (readv[i, 0, 0] - readv[i, 1, 0]),
                                  (readv[i, 0, 1] - readv[i, 3, 1]),
-                                 linewidth=1, edgecolor='none', facecolor=scalarMap.to_rgba(sig_perTES[i]))
+                                 linewidth=1,
+                                 edgecolor='none',
+                                 facecolor=scalarMap.to_rgba(sig_perTES[i]))
         ax7.add_patch(rect)
 
     plt.xlim(-.055, .055)  # to see the focal plane
     plt.ylim(-.055, .055)
+    plt.xlabel('X [m]')
+    plt.ylabel('Y [m]')
     ax7.set_aspect('equal')
-    plt.colorbar(scalarMap)
+    plt.colorbar(scalarMap, shrink=0.8)
 
     return fig
 

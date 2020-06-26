@@ -493,7 +493,7 @@ def explore_like(leff, mcl_noise, scl_noise, lmin, dl, cc, rv, otherp=None,
         maskpix[okpix] = 1
         Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=dl)
     
-#     print('Fsky: {}'.format(Namaster.fsky))
+    print('Fsky: {}'.format(Namaster.fsky))
     lbinned, b = Namaster.get_binning(nside)
 
     ### Bibnning CambLib

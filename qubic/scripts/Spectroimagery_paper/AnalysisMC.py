@@ -224,26 +224,26 @@ def get_covcorr1pix(maps, ipix, verbose=False, stokesjoint=False):
     if type(ipix) != int:
         raise TypeError('ipix has to be an integer number')
 
-    nfrec = maps.shape[1]  # Sub-bands
-    nreal = maps.shape[0]  # Sample realizations
+    nreal, nfrec, npix, nstk = np.shape(maps)
 
     if verbose:
         print('The shape of the input map has to be: (nsample, nfrecons, npix, 3): {}'.format(maps.shape))
         print('Number of reconstructed sub-bands to analyze: {}'.format(nfrec))
         print('Number of realizations: {}'.format(nreal))
+        print('Number of Stokes: {}'.format(nstk))
         print('Computing covariance matrix in pixel {}'.format(ipix))
 
-    data = np.reshape(maps[:, :, ipix, :], (nreal, nfrec * 3))
+    data = np.reshape(maps[:, :, ipix, :], (nreal, nfrec * nstk))
 
     if stokesjoint:
         if nfrec == 1:
             pass
         elif nfrec > 1:
             permutation = []
-            for istk in range(3):
+            for istk in range(nstk):
                 for isub in range(nfrec):
-                    permutation.append(3 * isub + istk)
-            data = np.reshape(maps[:, :, ipix, :], (nreal, nfrec * 3))
+                    permutation.append(nstk * isub + istk)
+            data = np.reshape(maps[:, :, ipix, :], (nreal, nfrec * nstk))
             data = data[:, permutation]
 
     cov1pix = np.cov(data, rowvar=False)
@@ -300,15 +300,15 @@ def get_covcorr_patch(patch, stokesjoint=False, doplot=False):
         corr[:, :, ipix] = corr1pix
 
     if doplot:
-        plt.figure('Mean over pixels')
+        plt.figure()
         plt.subplot(121)
-        plt.imshow(np.mean(cov, axis=2), interpolation=None)
-        plt.title('Mean cov over pixels')
+        plt.imshow(cov[:, :, 0])
+        plt.title('Covariance pixel 0')
         plt.colorbar()
 
         plt.subplot(122)
-        plt.imshow(np.mean(corr, axis=2))
-        plt.title('Mean corr over pixels')
+        plt.imshow(corr[:, :, 0])
+        plt.title('Correlation pixel 0')
         plt.colorbar()
 
     return cov, corr

@@ -50,13 +50,15 @@ rc('figure', figsize=(13, 10))
 rc('font', size=15)
 ```
 
-# Look at one MC simulation
+# Try with only one simulation
 
 ```{python}
 # Get the files
 # rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/galaxy_center_d1/test_residuals/31613089/'
 # rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/29712494/'
-rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/galaxy_center_d1/nfsub15/'
+
+nfrecon = 3
+rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/galaxy_center_d1/nfrecon{}/'.format(nfrecon)
 dictionary = glob.glob(rep + '/*.dict')[0]
 print(dictionary)
 
@@ -68,14 +70,14 @@ d.read_from_file(dictionary)
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 
 # Number of subbands used during the simulation
-nf_sub_rec = 3
-nf_sub = d['nf_sub']
-print('nf_sub = {}, nf_recon = {}'.format(nf_sub, nf_sub_rec))
+
+nfsub = d['nf_sub']
+print('nf_sub = {}, nf_recon = {}'.format(nfsub, nfrecon))
 
 # Get fits files names in a list
-fits_noise = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessFalse*.fits'.format(nf_sub, nf_sub_rec), 
+fits_noise = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessFalse*.fits'.format(nfsub, nfrecon), 
                               recursive=True))
-fits_noiseless = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessTrue*.fits'.format(nf_sub, nf_sub_rec), 
+fits_noiseless = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessTrue*.fits'.format(nfsub, nfrecon), 
                               recursive=True))
 
 print(fits_noiseless)
@@ -83,7 +85,7 @@ print(fits_noiseless)
 
 ```{python}
 # Frequencies of the reconstructed subbands
-Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(150, nf_sub_rec)
+Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(150, nfrecon)
 print(nus)
 ```
 
@@ -351,6 +353,7 @@ mylist_N00, mylist_Cp_prime_00 = [], []
 mylist_covI, mylist_covQ, mylist_covU = [], [], []
 mylist_covI_brut, mylist_covQ_brut, mylist_covU_brut = [], [], []
 mylist_fitcov = []
+mylist_residuals = []
 mylist_std_residual = []
 mylist_seenmap = []
 
@@ -377,8 +380,8 @@ for nfrec in [0, 1, 2, 3, 4, 5, 8]:
 
     # Seen map
     seenmap = rmc.get_seenmap(fits_noiseless[0])
-    with open(rep_save + 'seenmap_nfsub{}_nfrecon{}.pkl'.format(nfsub, nfrec), 'wb') as f:
-        pickle.dump(seenmap, f)
+#     with open(rep_save + 'seenmap_nfsub{}_nfrecon{}.pkl'.format(nfsub, nfrec), 'wb') as f:
+#         pickle.dump(seenmap, f)
 
     mylist_seenmap.append(seenmap)
     print('# pixel in the patch:', seenmap.sum())
@@ -396,34 +399,36 @@ for nfrec in [0, 1, 2, 3, 4, 5, 8]:
     # Residuals
     residuals = amc.get_residuals(fits_noise, fits_noiseless[0], 'mean_recon')
     residuals = np.asarray(residuals)
+    mylist_residuals.append(residuals)
     
-    residuals_fullmap = np.zeros((nreals, nfrec, 12*d['nside']**2, 3))
-    residuals_fullmap[:, :, seenmap, :] = residuals
+#     residuals_fullmap = np.zeros((nreals, nfrec, 12*d['nside']**2, 3))
+#     residuals_fullmap[:, :, seenmap, :] = residuals
     
     print('Residual shape:', residuals.shape)
-    print('Residual full map shape:', residuals_fullmap.shape)
+#     print('Residual full map shape:', residuals_fullmap.shape)
 
-    with open(rep_save + 'residualspatch_nfsub{}_nfrecon{}.pkl'.format(nfsub, nfrec), 'wb') as f:
-        pickle.dump(residuals[0], f)
+    with open(rep_save + 'residualspatch_allreals_nfsub{}_nfrecon{}.pkl'.format(nfsub, nfrec), 'wb') as f:
+        pickle.dump(residuals, f)
 
     # Std of the residuals
-    std_residual = np.std(residuals, axis=(0, 2))
-    print(std_residual)
-    mylist_std_residual.append(std_residual)
+#     std_residual = np.std(residuals, axis=(0, 2))
+#     print(std_residual)
+#     mylist_std_residual.append(std_residual)
     
 #     # JC function: covariance over pixels after normalizing the map by np.sqrt(coverage)
 #     covI = np.zeros((nreals, nfrec, nfrec))
 #     covQ = np.zeros((nreals, nfrec, nfrec))
 #     covU = np.zeros((nreals, nfrec, nfrec))
 #     for i in range(nreals):
-#         covI[i], covQ[i], covU[i],  fitcov = qss.get_cov_nunu(residuals[i], coverage_norm)
+#         covI[i], covQ[i], covU[i],  fitcov, _ = qss.get_cov_nunu(residuals[i], coverage_norm)
 #     mylist_covI.append(covI)
 #     mylist_covQ.append(covQ)
 #     mylist_covU.append(covU)
 #     mylist_fitcov.append(fitcov)
     
-    # Same as JC function but without the correction for the normalization
+# #     Same as JC function but without the correction for the normalization
 #     residual_norm = np.zeros_like(residuals[0])
+# #     residual_norm, _, _ = qss.flatten_noise(residuals[0], coverage_norm, nbins=20, doplot=False)
     
 #     print(residual_norm.shape)
 #     for istk in range(3):
@@ -434,7 +439,7 @@ for nfrec in [0, 1, 2, 3, 4, 5, 8]:
 #     covQ_brut = np.cov(residual_norm[:, :, 1])
 #     covU_brut = np.cov(residual_norm[:, :, 2])
 
-#     print(covI_brut.shape)
+#     print('covI_brut', covI_brut.shape)
 #     mylist_covI_brut.append(covI_brut)
 #     mylist_covQ_brut.append(covQ_brut)
 #     mylist_covU_brut.append(covU_brut)
@@ -457,21 +462,25 @@ for nfrec in [0, 1, 2, 3, 4, 5, 8]:
 ```
 
 ```{python}
-mylist_covI[4].shape
+d['effective_duration']
 ```
 
 ```{python}
 # Save some matrices
 import pickle
-rep_save = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/corr_matrices/'
-with open(rep_save + 'coverage_norm.pkl', 'wb') as f:
-    pickle.dump(mylist_coverage_norm, f)
+rep_save = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/corr_matrices/pourJC/'
+# with open(rep_save + 'coverage_norm.pkl', 'wb') as f:
+#     pickle.dump(mylist_coverage_norm, f)
 
 ```
 
 ```{python}
-with open(rep_save + 'Cp.pkl', 'rb') as f:
+with open(rep_save + 'coverage_nfsub15_nfrecon3.pkl', 'rb') as f:
     mynewlist = pickle.load(f)
+```
+
+```{python}
+mynewlist.shape
 ```
 
 #### Plot the different matrices
@@ -601,6 +610,33 @@ for i in range(7):
 ```
 
 ```{python}
+# Correlation matrices Cp prime averaged over pixels
+
+# Normalize by the coverage
+mylist_Cp_primenorm = [mylist_Cp_prime[i] * mylist_coverage_norm[i] for i in range(7)]
+
+# Average over pixels
+mylist_Cp_primenorm_avg = [np.mean(mylist_Cp_primenorm[i], axis=3) for i in range(7)]
+
+Stokes = ['I', 'Q', 'U']
+
+plt.figure(figsize=(20, 15))
+plt.subplots_adjust(wspace=0.6)
+for i in range(7):
+    for istk in range(3):
+        plt.subplot(3, 7, 7*istk+i+1)
+        plt.imshow(mylist_Cp_primenorm_avg[i][:, :, istk])
+        plt.title(Stokes[istk])
+        if istk == 0:
+            print('\n Correlation Matrices Cp_prime - {} bands:'.format(nbands[i]))
+            
+        print('\n {}:\n'.format(Stokes[istk]), mylist_Cpnorm_avg[i][:, :, istk])
+        plt.colorbar(fraction=0.05, orientation='horizontal')
+```
+
+#### Normalisation factor per pixel for maps or covariance matrices 
+
+```{python}
 # Check the normalization by the coverage on some pixels
 for i in [100, 2000, 5000, 10000, 20000]:
     plt.figure()
@@ -632,29 +668,128 @@ plt.xlabel('1 / Coverage')
 plt.ylabel('Cp_{}{}'.format(diag_term, diag_term))
 ```
 
+The RMS on the maps is not proportional to sqrt(coverage) maybe because of border effect with the beam. The normalisation is more complex. Here we compute the normalisation factor, from a fit of the RMS per bin of the coverage.
+
 ```{python}
-# Correlation matrices Cp prime averaged over pixels
+residuals.shape
+```
 
-# Normalize by the coverage
-mylist_Cp_primenorm = [mylist_Cp_prime[i] * mylist_coverage_norm[i] for i in range(7)]
+```{python}
+isub = 0
+xx, yy, fitcov = qss.get_noise_invcov_profile(residuals[0, isub, :, :], 
+                                              coverage_norm, 
+                                              nbins=20, 
+                                              norm=False,
+                                              label='sub-band: {}'.format(isub), 
+                                              fit=True, 
+                                              doplot=True,
+                                              allstokes=True)
+print(fitcov.shape)
+```
 
-# Average over pixels
-mylist_Cp_primenorm_avg = [np.mean(mylist_Cp_primenorm[i], axis=3) for i in range(7)]
+```{python}
+correction = np.interp(1. / coverage_norm, fitcov[0, :], fitcov[1, :])
+print(correction.shape)
+
+norm_factor = coverage_norm / correction
+print(norm_factor.shape)
+
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+ang = rmc.pix2ang(d['nside'], center, seenmap)
+
+plt.figure(figsize=(15, 5))
+plt.subplot(121)
+plt.plot(1 / coverage_norm, correction, '.')
+plt.xlabel('1 / (Coverage / MAX(Coverage))')
+plt.ylabel('Correction')
+
+plt.subplot(122)
+plt.plot(ang, norm_factor, '.')
+plt.ylabel('Coverage / correction')
+plt.xlabel('Angle [deg]')
+plt.title('Normalisation factor')
+```
+
+```{python}
+# Try with one matrix
+mylist_Cp_corrected_avg = []
+for i in range(7):
+    Cp = mylist_Cp[i]
+    print('Cp shape:', Cp.shape)
+
+    nbands = Cp.shape[0]
+    print('nbands:', nbands)
+
+    coverage_norm = mylist_coverage_norm[i]
+
+    residu = mylist_residuals[i]
+    print('Residuals:', residu.shape)
+
+    Cp_corrected = np.zeros_like(Cp)
+
+    for isub1 in range(nbands):
+        plt.figure()
+        _, _, fitcov1 = qss.get_noise_invcov_profile(residu[0, isub1, :, :], 
+                                                      coverage_norm, 
+                                                      nbins=20, 
+                                                      norm=False,
+                                                      label='Nband{}, sub-band: {}'.format(nbands, isub1), 
+                                                      fit=True, 
+                                                      doplot=True,
+                                                      allstokes=True)
+        plt.legend()
+        correction1 = np.interp(1. / coverage_norm, fitcov1[0, :], fitcov1[1, :])
+        print(np.mean(correction1))
+        norm_factor1 = coverage_norm / correction1
+
+        for isub2 in range(nbands):
+            _, _, fitcov2 = qss.get_noise_invcov_profile(residu[0, isub2, :, :], 
+                                                      coverage_norm, 
+                                                      nbins=20, 
+                                                      norm=False,
+                                                      label='sub-band: {}'.format(isub), 
+                                                      fit=True, 
+                                                      doplot=False,
+                                                      allstokes=True)
+            correction2 = np.interp(1. / coverage_norm, fitcov2[0, :], fitcov2[1, :])
+            norm_factor2 = coverage_norm / correction2
+    #         print(correction2.shape)
+
+            for istk in range(3):
+                Cp_corrected[isub1, isub2, istk, :] = Cp[isub1, isub2, istk, :] * np.sqrt(norm_factor1 * norm_factor2)
+
+    Cp_corrected_avg = np.mean(Cp_corrected, axis=3)
+    mylist_Cp_corrected_avg.append(Cp_corrected_avg)
+    print(Cp_corrected_avg.shape)
+```
+
+```{python}
+# Correlation matrices Cp averaged over pixels after correction
 
 Stokes = ['I', 'Q', 'U']
-
+nbands = [1, 1, 2, 3, 4, 5, 8]
 plt.figure(figsize=(20, 15))
 plt.subplots_adjust(wspace=0.6)
 for i in range(7):
     for istk in range(3):
         plt.subplot(3, 7, 7*istk+i+1)
-        plt.imshow(mylist_Cp_primenorm_avg[i][:, :, istk])
+        plt.imshow(mylist_Cp_corrected_avg[i][:, :, istk])
         plt.title(Stokes[istk])
         if istk == 0:
             print('\n Correlation Matrices Cp_prime - {} bands:'.format(nbands[i]))
             
-        print('\n {}:\n'.format(Stokes[istk]), mylist_Cpnorm_avg[i][:, :, istk])
+        print('\n {}:\n'.format(Stokes[istk]), mylist_Cp_corrected_avg[i][:, :, istk])
         plt.colorbar(fraction=0.05, orientation='horizontal')
+```
+
+```{python}
+i = 4
+print('\nCp avg after correction \n')
+for istk in range(3):
+    print(mylist_Cp_corrected_avg[i][:, :, istk])
+print('\nCovI\n', mylist_covI[i][0])
+print('\nCovQ\n', mylist_covQ[i][0])
+print('\nCovU\n', mylist_covU[i][0])
 ```
 
 #### Try to find a model for the evolution of sigma2
@@ -682,16 +817,16 @@ for istk in range(3):
              label='{}: ${:2.3}x^2 {:2.3}x + {:2.3}$'.format(Stokes[istk], a, b, c))
 
 plt.xlabel('# Bands')
-plt.ylabel('$(Cp)_{00}$')
+plt.ylabel('$(Cp)^{\prime}_{00}$')
 plt.legend()
 ```
 
 ```{python}
 diag_term = 0
-
+nbands = [1, 1, 2, 3, 4, 5, 8]
 plt.figure()
 for istk in range(3):
-    myterms = [mylist_Cp_primenorm_avg[i][diag_term, diag_term, istk] for i in range(7)]
+    myterms = [mylist_Cp_corrected_avg[i][diag_term, diag_term, istk] for i in range(7)]
     plt.plot(nbands, myterms, 'o', color=colorlist[istk])
 
     a, b, c = np.polyfit(nbands, myterms, deg=2, rcond=None, full=False, w=None, cov=False)
@@ -700,7 +835,25 @@ for istk in range(3):
              label='{}: ${:2.3}x^2 {:2.3}x + {:2.3}$'.format(Stokes[istk], a, b, c))
 
 plt.xlabel('# Bands')
-plt.ylabel('$(Cp)^\prime_{00}$')
+plt.ylabel('$Cp_{00}$ corrected and averaged')
+plt.legend()
+```
+
+```{python}
+diag_term = 0
+nbands = [1, 1, 2, 3, 4, 5, 8]
+plt.figure()
+for istk in range(3):
+    myterms = [mylist_Cp_corrected_avg[i][diag_term, diag_term, istk] for i in range(7)]
+    plt.plot(nbands, myterms, 'o', color=colorlist[istk])
+
+    a, b, c = np.polyfit(nbands, myterms, deg=2, rcond=None, full=False, w=None, cov=False)
+    x = np.arange(1, 9, 0.1)
+    plt.plot(x, a*x**2 + b*x + c, color=colorlist[istk], 
+             label='{}: ${:2.3}x^2 {:2.3}x + {:2.3}$'.format(Stokes[istk], a, b, c))
+
+plt.xlabel('# Bands')
+plt.ylabel('$Cp_{00}$ corrected and averaged')
 plt.legend()
 ```
 

@@ -50,13 +50,15 @@ rc('figure', figsize=(13, 10))
 rc('font', size=15)
 ```
 
-# Look at one MC simulation
+## Choose a simulation
 
 ```{python}
 # Get the files
 # rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/galaxy_center_d1/test_residuals/31613089/'
 # rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/29712494/'
-rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/galaxy_center_d1/nfsub15/'
+nfrecon = 3
+
+rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/galaxy_center_d1/nfrecon{}/'.format(nfrecon)
 dictionary = glob.glob(rep + '/*.dict')[0]
 print(dictionary)
 
@@ -68,14 +70,14 @@ d.read_from_file(dictionary)
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 
 # Number of subbands used during the simulation
-nf_sub_rec = 3
-nf_sub = d['nf_sub']
-print('nf_sub = {}, nf_recon = {}'.format(nf_sub, nf_sub_rec))
+
+nfsub = d['nf_sub']
+print('nf_sub = {}, nf_recon = {}'.format(nfsub, nfrecon))
 
 # Get fits files names in a list
-fits_noise = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessFalse*.fits'.format(nf_sub, nf_sub_rec), 
+fits_noise = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessFalse*.fits'.format(nfsub, nfrecon), 
                               recursive=True))
-fits_noiseless = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessTrue*.fits'.format(nf_sub, nf_sub_rec), 
+fits_noiseless = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessTrue*.fits'.format(nfsub, nfrecon), 
                               recursive=True))
 
 print(fits_noiseless)
@@ -83,7 +85,7 @@ print(fits_noiseless)
 
 ```{python}
 # Frequencies of the reconstructed subbands
-Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(150, nf_sub_rec)
+Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(150, nfrecon)
 print(nus)
 ```
 
@@ -111,8 +113,8 @@ noiseless, _, _ = rmc.get_maps(fits_noiseless[0])
 print(noiseless.shape)
 
 # Get the noise maps
-maps_recon = np.empty((nreals, nf_sub_rec, npix, 3))
-maps_conv = np.empty((nreals, nf_sub_rec, npix, 3))
+maps_recon = np.empty((nreals, nfrecon, npix, 3))
+maps_conv = np.empty((nreals, nfrecon, npix, 3))
 for i, real in enumerate(fits_noise):
     maps_recon[i], maps_conv[i], _ = rmc.get_maps(real)
 
@@ -120,7 +122,7 @@ for i, real in enumerate(fits_noise):
 
 ```{python}
 # Compute residuals in a given way
-residuals = amc.get_residuals(rep, 'noiseless', nf_sub_rec)
+residuals = amc.get_residuals(fits_noise, fits_noiseless[0], 'noiseless')
 print(residuals.shape)
 
 # There is only the patch so you need to put them in a full map to plot with healpy
@@ -139,15 +141,15 @@ rr = 15
 min = 0
 max = 5000
 
-for band in range(nf_sub_rec):
-    hp.gnomview(maps_conv[real, band, :, istk], cmap='jet', sub=(nf_sub_rec, 3, 3*band+1), 
+for band in range(nfrecon):
+    hp.gnomview(maps_conv[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+1), 
                 rot=center, reso=rr, notext=True,
                 title = '{} conv'.format(d['kind'][istk]), min=min, max=max)
     plt.text(-0.8,0, '{:3.0f} GHz'.format(nus[band]))
-    hp.gnomview(maps_recon[real, band, :, istk], cmap='jet', sub=(nf_sub_rec, 3, 3*band+2), 
+    hp.gnomview(maps_recon[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+2), 
                 rot=center, reso=rr, notext=True,
                 title = '{0} rec'.format(d['kind'][istk]), min=min, max=max)
-    hp.gnomview(maps_residuals[real, band, :, istk], cmap='jet', sub=(nf_sub_rec, 3, 3*band+3), 
+    hp.gnomview(maps_residuals[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+3), 
                 rot=center, reso=rr, notext=True,
                 title = '{0} Residuals'.format(d['kind'][istk]), min=-70, max=70)
 plt.tight_layout()
@@ -166,7 +168,7 @@ hp.gnomview(noiseless[band, :, istk], cmap='jet', sub=(132),
                 rot=center, reso=rr, notext=True, min=0, max=5000,
                 title = 'Noiseless')
 hp.gnomview(toto[band, :, istk], cmap='jet', sub=(133), 
-                rot=center, reso=rr, notext=True, min=-10, max=10,
+                rot=center, reso=rr, notext=True, min=-20, max=20,
                 title = 'Mean_recon - Noiseless')
 ```
 

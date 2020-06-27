@@ -1,0 +1,379 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Covariances at Cls level
+
+First we compute the covariances matrices. Then we recombined the subbands the same way as we do at the map level
+
+```{python}
+# %matplotlib inline
+
+import glob
+import pickle
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Specific qubic modules
+import qubic
+from qubic.polyacquisition import compute_freq
+import AnalysisMC as amc
+
+```
+
+```{python}
+# Convert all pickles to one .npy
+rep_spectrumCC = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/cls_spectrum_fromCC/'
+for nfrecon in [1, 2, 3, 4, 5, 8]:
+    list_files = glob.glob(rep_spectrumCC + 'cross*nfrecon{}*.pkl'.format(nfrecon))
+    nfiles = len(list_files)
+    print('# Files:', nfiles)
+    for i in range(nfiles):
+        with open(list_files[i], 'rb') as f:
+            cross = pickle.load(f)
+            if i == 0:
+                allcross = cross
+            else:
+                allcross = np.concatenate((allcross, cross), axis=0)
+    print('All cross shape:', allcross.shape)
+#     np.save(rep_spectrumCC + 'cross_nfrecon{}.npy'.format(nfrecon), allcross)
+```
+
+```{python}
+clnames = ['TT', 'EE', 'BB', 'TE']
+nfrecon = 3
+cls_cross = np.load(rep_spectrumCC + 'cross_nfrecon{}.npy'.format(nfrecon))
+print(cls_cross.shape)
+
+nreals = cls_cross.shape[0]
+nbins = cls_cross.shape[2]
+
+print('# realisations:', nreals)
+print('# bins:', nbins)
+```
+
+```{python}
+Cp = amc.get_Cp(cls_cross, verbose=False)
+print(Cp.shape)
+
+Cpcorr = np.zeros_like(Cp)
+for b in range(nbins):
+    for s in range(4):
+        Cpcorr[:, :, s, b] = amc.cov2corr(Cp[:, :, s, b])
+```
+
+```{python}
+plt.figure(figsize=(20, 100))
+for b in range(nbins):
+    for s in range(4):
+        plt.subplot(nbins, 4, 4*b + s + 1)
+        plt.imshow(Cp[:, :, s, b])
+        plt.title(clnames[s] + ' - bin {}'.format(b))
+        plt.colorbar(orientation='horizontal', fraction=0.2)
+        
+```
+
+```{python}
+plt.figure(figsize=(20, 100))
+for b in range(nbins):
+    for s in range(4):
+        plt.subplot(nbins, 4, 4*b + s + 1)
+        plt.imshow(Cpcorr[:, :, s, b])
+        plt.title(clnames[s] + ' - bin {}'.format(b))
+        plt.colorbar(orientation='horizontal', fraction=0.2)
+  
+```
+
+```{python}
+Cpcorr.shape
+```
+
+```{python}
+Cpcorr_avg = np.mean(Cp_corr, axis=3)
+plt.figure(figsize=(20, 10))
+
+for s in range(4):
+    plt.subplot(1, 4, s + 1)
+    plt.imshow(Cpcorr_avg[:, :, s])
+    plt.title(clnames[s] + ' Avg')
+    plt.colorbar(orientation='horizontal', fraction=0.2)
+
+```
+
+### Go to Cp_prime
+
+Not sure it is useful because if we have many realisations (easy with Fast Simulator), we can use directly Cp to average the subbands. 
+
+```{python}
+# Cp_prime over bins (normalisation by the first term)
+N00, Cp_prime00 = amc.Cp2Cp_prime(Cp, verbose=True)
+
+plt.figure(figsize=(15, 10))
+for s in range(4):
+    plt.subplot(1, 4, s+1)
+    plt.imshow(Cp_prime00[:, :, s, 0])
+    plt.title(clnames[s] + ' Avg')
+    plt.colorbar(orientation='horizontal', fraction=0.1)
+ 
+```
+
+```{python}
+# Cp_prime over bins (normalisation by the diagonal)
+N, Cp_prime = amc.Cp2Cp_prime_viaCorr(Cp, verbose=True)
+
+plt.figure(figsize=(15, 10))
+for s in range(4):
+    plt.subplot(1, 4, s+1)
+    plt.imshow(Cp_prime[:, :, s, 0])
+    plt.title(clnames[s] + ' Avg')
+    plt.colorbar(orientation='horizontal', fraction=0.1)
+ 
+```
+
+### Big covariance matrix mixing TT, EE, BB, TE 
+
+Instead of looking at correlations in TT, EE, BB, TE separetely, we also compute correlations between the 4 spectra. 
+
+But we see that they are very small.
+
+```{python}
+bigcov, bigcorr = amc.get_covcorr_patch(cls_cross, stokesjoint=True, doplot=False)
+print(bigcov.shape)
+```
+
+```{python}
+plt.figure(figsize=(20, 200))
+for b in range(nbins):
+    
+    plt.subplot(nbins, 2, b*2 +1)
+    plt.imshow(bigcov[:, :, b])
+    plt.title('Covariance - bin {}'.format(b))
+    plt.colorbar()
+    
+    plt.subplot(nbins, 2, b*2 +2)
+    plt.imshow(bigcorr[:, :, b])
+    plt.title('Correlation - bin {}'.format(b))
+    plt.colorbar()
+```
+
+```{python}
+labs = []
+for s in range(4):
+    for i in range(nfrecon):
+        labs.append(clnames[s]+'{}'.format(i))
+        
+print(labs)
+
+plt.figure(figsize=(10, 10))
+plt.imshow(np.mean(bigcorr, axis=2))
+plt.title('Correlation matrices averaged over bins')
+plt.colorbar()
+
+plt.xticks(np.arange(len(labs)), labs)
+plt.yticks(np.arange(len(labs)), labs)
+
+for s in range(nfrecon):
+    plt.axhline(y=(s+1)*nfrecon-0.5, lw=3, color='r')
+    plt.axvline(x=(s+1)*nfrecon-0.5, lw=3, color='r')
+
+```
+
+## Covariance matrix between bins
+
+Now for each spectrum TT, EE, BB and TE, we compute the covariance matric between bins and subbands. 
+
+This matrix has a shape of (nbins x nfrecon) x (nbins x nfrecon)
+
+```{python}
+# We have to reshape cls_cross as (nreals, nbins, 4, nfrecon)
+print('Old shape:', cls_cross.shape)
+cls_cross_reshape = np.moveaxis(cls_cross, [1, 2, 3], [3, 1, 2])
+print('New shape:', cls_cross_reshape.shape)
+```
+
+```{python}
+covbinband, corrbinband = amc.get_covcorr_patch(cls_cross_reshape, stokesjoint=True, doplot=False)
+
+print(nbins)
+print(covbinband.shape)
+```
+
+```{python}
+ispectre = 2
+labsx,labsy = [], []
+for f in range(nfrecon):
+    labsx.append('f{}b0'.format(f))
+    for s in range(nbins):
+        labsy.append('f{}b{}'.format(f,s))
+        
+print(labsy)
+plt.figure(figsize=(12, 12))
+plt.yticks(np.arange(len(labsy)), labsy)
+plt.xticks(np.arange(0, nbins*nfrecon, nbins), labsx)
+
+for s in range(nfrecon-1):
+    plt.axhline(y=(s+1)*nbins-0.5, lw=3, color='r')
+    plt.axvline(x=(s+1)*nbins-0.5, lw=3, color='r')
+
+plt.imshow(covbinband[:, :, ispectre], vmax=0.3)
+plt.title('Covariance matrix (nfreq*nbins)x(nfreq*nbins) for {} spectrum'.format(clnames[ispectre]))
+plt.colorbar()
+```
+
+```{python}
+ispectre = 2
+labsx,labsy = [], []
+for f in range(nfrecon):
+    labsx.append('f{}b0'.format(f))
+    for s in range(nbins):
+        labsy.append('f{}b{}'.format(f,s))
+        
+plt.figure(figsize=(30, 30))
+plt.yticks(np.arange(len(labsy)), labsy)
+plt.xticks(np.arange(0, nbins*nfrecon, nbins), labsx)
+
+for s in range(nfrecon-1):
+    plt.axhline(y=(s+1)*nbins-0.5, lw=3, color='r')
+    plt.axvline(x=(s+1)*nbins-0.5, lw=3, color='r')
+
+plt.imshow(corrbinband[:, :, ispectre])
+plt.title('Correlation matrix (nfreq*nbins)x(nfreq*nbins) for {} spectrum'.format(clnames[ispectre]))
+plt.colorbar()
+```
+
+## Weighted average of the subbands
+
+The 3 methods (directly with Cp, with Cp_prime00 or with Cp_prime) give the same.
+
+However, I don't get why the average band has this behaviour with bin...
+
+```{python}
+cls_cross.shape
+```
+
+```{python}
+# Using Cp directly
+avg, sig2 = amc.make_weighted_av(cls_cross, Cp, verbose=False)
+sig2MC = np.var(avg, axis=0)
+
+# Using Cp_prime 00
+avg00, sig200 = amc.make_weighted_av(cls_cross, Cp_prime00, verbose=False)
+sig2MC00 = np.var(avg00, axis=0)
+
+# Using Cp_prime
+avg_prime, sig2_prime = amc.make_weighted_av(cls_cross, Cp_prime, verbose=False)
+sig2MC_prime = np.var(avg_prime, axis=0)
+```
+
+```{python}
+import matplotlib.colors as mcolors
+mcolors.TABLEAU_COLORS.keys()
+
+colorlist = list(mcolors.TABLEAU_COLORS.keys())
+```
+
+```{python}
+avg.shape
+sig2.shape
+```
+
+```{python}
+plt.figure(figsize=(10, 10))
+for s in range(4):
+    plt.plot(sig2[:, s], color=colorlist[s], label='sig2 {}'.format(clnames[s]))
+    plt.plot(sig200[:, s], color=colorlist[s], label='sig2 00{}'.format(clnames[s]))
+    plt.plot(sig2_prime[:, s], color=colorlist[s], label='sig2 prime{}'.format(clnames[s]))
+    
+    plt.plot(sig2MC[:, s], 'o',color=colorlist[s], label='sig2MC{}'.format(clnames[s]))
+    plt.plot(sig2MC00[:, s], 'o', color=colorlist[s], label='sig2MC 00{}'.format(clnames[s]))
+    plt.plot(sig2MC_prime[:, s], 'o', color=colorlist[s], label='sig2MC prime{}'.format(clnames[s]))
+plt.legend()
+plt.xlabel('bin')
+plt.ylabel('Avg')
+```
+
+```{python}
+sig2
+```
+
+### Loop over nfrecon to get the recombined spectrum in each case
+
+We will only do with Cp.
+
+```{python}
+allsig2, allsig2MC = [], []
+for nfrecon in [1, 2, 3, 4, 5, 8]:
+    print('\n nfrecon:', nfrecon)
+    cls_cross = np.load(rep_spectrumCC + 'cross_nfrecon{}.npy'.format(nfrecon))
+    print(cls_cross.shape)
+
+    nreals = cls_cross.shape[0]
+    nbins = cls_cross.shape[2]
+
+    print('# realisations:', nreals)
+    print('# bins:', nbins)
+    
+    Cp = amc.get_Cp(cls_cross, verbose=False)
+    
+    avg, sig2 = amc.make_weighted_av(cls_cross, Cp, verbose=False)
+    sig2MC = np.var(avg, axis=0)
+    
+    allsig2.append(sig2)
+    allsig2MC.append(sig2MC)
+    
+    
+```
+
+```{python}
+allrecon = [1, 2, 3, 4, 5, 8]
+plt.figure(figsize=(10, 10))
+for i in range(6):
+    plt.plot(allsig2[i][:, 0], label='nfrecon = {}'.format(allrecon[i]))
+
+plt.xlabel('bin')
+plt.ylabel('sig2')
+plt.legend()
+```
+
+```{python}
+allrecon = [1, 2, 3, 4, 5, 8]
+allsig2 = np.asarray(allsig2)
+
+plt.figure(figsize=(10, 10))
+for b in range(0, nbins, 3):
+    sig2norm = allsig2[:, b, 0] / allsig2[0, b, 0]
+    plt.plot(allrecon, np.sqrt(sig2norm / allrecon), label='bin = {}'.format(b))
+
+plt.xlabel('nfrecon')
+plt.ylabel('sig')
+plt.legend()
+```
+
+```{python}
+allrecon = [1, 2, 3, 4, 5, 8]
+allsig2 = np.asarray(allsig2)
+
+allsig2mean = np.mean(allsig2, axis=1)
+print(allsig2mean.shape)
+
+plt.figure(figsize=(10, 10))
+sig2norm = allsig2mean[:, 0] / allsig2mean[0, 0]
+plt.plot(allrecon, np.sqrt(sig2norm / allrecon))
+
+plt.xlabel('nfrecon')
+plt.ylabel('sig')
+```
+
+```{python}
+
+```

@@ -255,10 +255,9 @@ def get_covcorr1pix(maps, ipix, verbose=False, stokesjoint=False):
 def get_covcorr_patch(patch, stokesjoint=False, doplot=False):
     """
     This function computes the covariance matrix and the correlation matrix for a given patch in the sky.
-    It uses get_covcorr1pix() to compute the covariance and correlation matrix for each pixel (ipix)
-    and then computes a histogram for each term (I_0I_0,I_0Q_0,I_0U_0, etc) (patch).
+    It uses get_covcorr1pix() to compute the covariance and correlation matrix for each pixel (ipix).
 
-    Asumptions: patch.shape = (nsamples, nrecons, npix_patch, 3) --> to be able to use get_covcorr1pix
+    Asumptions: patch.shape = (nreals, nbands, npix_patch, nstokes) --> to be able to use get_covcorr1pix
 
     Parameters:
     -----------
@@ -524,16 +523,15 @@ def get_weighted_correlation_average(x, cov):
     return weighted_mean, sig2
 
 
-def get_Cp(patch, nfrecon, verbose=True, doplot=True):
+def get_Cp(patch, verbose=True, doplot=True):
     """
     Returns covariance matrices between subbands for each Stokes parameter
     and each pixel.
 
     Parameters
     ----------
-    patch: array of shape (#reals, #bands, #pixels, 3)
-    nfrecon: list
-        Numbers of reconstructed subbands.
+    patch: ndarray
+        Shape (#reals, #bands, #pixels, 3)
     verbose: Bool
         If True makes a lot of prints.
     doplot: Bool
@@ -545,19 +543,13 @@ def get_Cp(patch, nfrecon, verbose=True, doplot=True):
         The covariance matrices.
 
     """
-    irec = np.shape(patch)[1]
-    npix_patch = np.shape(patch)[2]
-    # if irec == 1:
-    #     raise ValueError('If you already have 1 band, you do not need Cp which is computed to average subbands')
-
-    if irec not in nfrecon:
-        raise ValueError('Invalid number of freq. {0} not in {1}'.format(irec, nfrecon))
+    nreals, nfrecon, npix_patch, nstk = patch.shape
 
     # Prepare to save
     if verbose:
         print('==== Computing Cp matrix ====')
-        print('irec = ', irec)
-        print('nfrecon = ', nfrecon)
+        print('# realisations ', nreals)
+        print('# bands ', nfrecon)
         print('patch.shape = ', patch.shape)
         print('npix_patch = ', npix_patch)
 
@@ -568,17 +560,17 @@ def get_Cp(patch, nfrecon, verbose=True, doplot=True):
         print('covariance.shape =', covariance.shape)
 
     # Cut the covariance matrix for each Stokes parameter
-    Cp = np.empty((irec, irec, 3, npix_patch))
-    for istokes in range(3):
-        a = istokes * irec
-        b = (istokes + 1) * irec
+    Cp = np.empty((nfrecon, nfrecon, nstk, npix_patch))
+    for istokes in range(nstk):
+        a = istokes * nfrecon
+        b = (istokes + 1) * nfrecon
         Cp[:, :, istokes, :] = covariance[a:b, a:b, :]
     if verbose:
         print('Cp.shape = ', Cp.shape)
 
         # Look at the value in Cp and the determinant
         for ipix in range(10):
-            for istokes in range(3):
+            for istokes in range(nstk):
                 det = np.linalg.det(Cp[:, :, istokes, ipix])
                 print('det = ', det)
 

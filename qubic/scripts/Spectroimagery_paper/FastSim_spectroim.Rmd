@@ -96,100 +96,22 @@ x0.shape
 
 ```
 
+### Correlation matrices between bands
+
 ```{python}
 # With 1 realisation only
 all_nfrecon = [1, 2, 3, 4, 5, 8]
-allsignoise = [[88.],
-                [88., 95.],
-                [88., 81., 98.],
-                [88., 66., 64., 95.],
-                [88., 62., 61., 64., 99.],
-                [88., 62., 59., 59., 61., 63., 65., 95.]]
-               
 nfrecon = 5
-
-index = [i for i, x in enumerate(all_nfrecon) if x == nfrecon][0]
-
-signoise = allsignoise[index]
-
 maps, coverage, seenmap = get_maps_from_louise(dirmaps, nfrecon)
 
-cI, cQ, cU, fitcov, noise_norm = qss.get_cov_nunu(maps, coverage)
-corr_mats = [cI, cQ/2, cU/2]
-
-# Create maps with the noise corelation we want
-myfitcovs = []
-for isub in range(nfrecon):
-    xx, yyfs, fitcov = qss.get_noise_invcov_profile(maps[isub, :, :], coverage, 
-                                                 label='Input Map {}'.format(index+1), fit=True, norm=False,
-                                                 allstokes=True, doplot=False)
-    myfitcovs.append(fitcov)
-
-# Good Cls
-clth = pickle.load(open( global_dir + '/doc/FastSimulator/Data/cl_corr_noise_nersc200k.pk', "rb" ) )
-alpha = 4.5 # See notebook called "2pt-Correlation Function" for an empirical explanation of alpha
-clth = (clth -1 ) * alpha + 1
-    
-new_sub_maps = Qubic_sky.create_noise_maps(signoise, coverage, nsub=nfrecon,
-                                            effective_variance_invcov=myfitcovs,
-                                            clnoise=clth, sub_bands_cov=[cI, cQ, cU], verbose=False)
-print(np.shape(new_sub_maps))
-
-# Reshape in case just 1 band
-if nfrecon == 1:
-    new_sub_maps = np.reshape(new_sub_maps, (1, 12*d['nside']**2, 3))
-print(np.shape(new_sub_maps))
-
-# Check we have the good correlations
-for isub in range(nfrecon):
-    figure()
-    xx, yyfs, fitcov = qss.get_noise_invcov_profile(new_sub_maps[isub, :, :], 
-                                                    coverage, 
-                                                     label='FastSim sub={}/{}'.format(isub+1, nfrecon), 
-                                                    fit=False, norm=False,
-                                                 allstokes=False, doplot=True)
-    plt.plot(myfitcovs[isub][0,:], 
-         np.sqrt(myfitcovs[isub][1,:]), 
-         label='End-To-End Fit sub={}/{}'.format(isub+1, nfrecon))
-    plt.legend(fontsize=9)
-
-cInew, cQnew, cUnew, fitcov, noise_norm = qss.get_cov_nunu(new_sub_maps, coverage)
-new_corr_mats = [cInew, cQnew/2, cUnew/2]
-
-figure()
-stn = ['I','Q/2', 'U/2']
-mini = np.min(np.array(corr_mats))
-maxi = np.max(np.array(corr_mats))
-for s in range(3):
-    subplot(2,3,1+s)
-    imshow(corr_mats[s], vmin=mini, vmax=maxi)
-    colorbar(orientation='horizontal')
-    title('End-To-End Cov {} nsub={}'.format(stn[s], nfrecon))
-    
-    subplot(2,3,4+s)
-    imshow(new_corr_mats[s], vmin=mini, vmax=maxi)
-    colorbar(orientation='horizontal')
-    title('FastSim Cov {} nsub={}'.format(stn[s],nfrecon))
-
-
+cI, cQ, cU, _, _ = qss.get_cov_nunu(maps, coverage, QUsep=True)
 ```
 
 ```{python}
-# With all realisations
+# Using all realisations
 all_nfrecon = [1, 2, 3, 4, 5, 8]
-allsignoise = [[88.],
-                [88., 95.],
-                [88., 81., 98.],
-                [88., 66., 64., 95.],
-                [88., 62., 61., 64., 99.],
-                [88., 62., 59., 59., 61., 63., 65., 95.]]
-               
+
 nfrecon = 5
-
-index = [i for i, x in enumerate(all_nfrecon) if x == nfrecon][0]
-
-signoise = allsignoise[index]
-
 
 maps, coverage, seenmap = get_maps_from_louise(dirmaps, nfrecon, allreals=True)
 print(maps.shape)
@@ -201,28 +123,42 @@ allcU = np.zeros_like(allcI)
 allcQ = np.zeros_like(allcI)
 
 for r in range(nreals):
-    allcI[r], allcQ[r], allcU[r], _, _ = qss.get_cov_nunu(maps[r], coverage)
+    allcI[r], allcQ[r], allcU[r], _, _ = qss.get_cov_nunu(maps[r], coverage, QUsep=True)
 
 cI = np.mean(allcI, axis=0)
 cQ = np.mean(allcQ, axis=0)
 cU = np.mean(allcU, axis=0)
 
-# Get fitcov for each subband (from 1st realisation)
+```
+
+```{python}
+signoise = 88
+
+# Get the noise profile in each subband
 myfitcovs = []
 for isub in range(nfrecon):
-    xx, yyfs, fitcov = qss.get_noise_invcov_profile(maps[0, isub, :, :], coverage, 
-                                                 label='Input Map {}'.format(index+1), fit=True, norm=False,
-                                                 allstokes=True, doplot=False)
+    xx, yyfs, fitcov = qss.get_noise_invcov_profile(maps[0, isub, :, :], 
+                                                    coverage, 
+                                                    QUsep=True,
+                                                    label='Input Map {}'.format(nfrecon), 
+                                                    fit=True, 
+                                                    norm=False,
+                                                    allstokes=True, 
+                                                    doplot=False)
     myfitcovs.append(fitcov)
 
-# # Good Cls
-# clth = pickle.load(open( global_dir + '/doc/FastSimulator/Data/cl_corr_noise_nersc200k.pk', "rb" ) )
-# alpha = 4.5 # See notebook called "2pt-Correlation Function" for an empirical explanation of alpha
-# clth = (clth -1 ) * alpha + 1
-
-new_sub_maps = Qubic_sky.create_noise_maps(signoise, coverage, nsub=nfrecon,
-                                            effective_variance_invcov=myfitcovs,
-                                            clnoise=None, sub_bands_cov=[cI, cQ, cU], verbose=False)
+# Good spatial correlation for noise
+clth = pickle.load(open( global_dir + '/doc/FastSimulator/Data/cl_corr_noise_nersc200k.pk', "rb" ) )
+alpha = 4.5 # See notebook called "2pt-Correlation Function" for an empirical explanation of alpha
+clth = (clth -1 ) * alpha + 1
+    
+new_sub_maps = Qubic_sky.create_noise_maps(signoise, 
+                                           coverage, 
+                                           nsub=nfrecon,
+                                           effective_variance_invcov=myfitcovs,
+                                           clnoise=None, 
+                                           sub_bands_cov=[cI, cQ, cU], 
+                                           verbose=False)
 print(np.shape(new_sub_maps))
 
 # Reshape in case just 1 band
@@ -235,19 +171,21 @@ for isub in range(nfrecon):
     figure()
     xx, yyfs, fitcov = qss.get_noise_invcov_profile(new_sub_maps[isub, :, :], 
                                                     coverage, 
-                                                     label='FastSim sub={}/{}'.format(isub+1, nfrecon), 
-                                                    fit=False, norm=False,
-                                                 allstokes=False, doplot=True)
+                                                    QUsep=True,
+                                                    label='FastSim sub={}/{}'.format(isub+1, nfrecon), 
+                                                    fit=False, 
+                                                    norm=False,
+                                                    allstokes=False, 
+                                                    doplot=True)
     plt.plot(myfitcovs[isub][0,:], 
              np.sqrt(myfitcovs[isub][1,:]), 
              label='End-To-End Fit sub={}/{}'.format(isub+1, nfrecon))
     plt.legend(fontsize=9)
 
-cInew, cQnew, cUnew, fitcov, noise_norm = qss.get_cov_nunu(new_sub_maps, coverage)
+cInew, cQnew, cUnew, fitcov, noise_norm = qss.get_cov_nunu(new_sub_maps, coverage, QUsep=True)
 
 # For the plot
 corr_mats = [cI, cQ/2, cU/2]
-
 new_corr_mats = [cInew, cQnew/2, cUnew/2]
 
 figure()
@@ -265,11 +203,12 @@ for s in range(3):
     colorbar(orientation='horizontal')
     title('FastSim Cov {} nsub={}'.format(stn[s],nfrecon))
 
+
 ```
 
 ```{python}
 # Make many realisations
-nreals = 50
+nreals = 2
 npix = 12 * d['nside']**2
 
 maps_recon = np.zeros((nreals, nfrecon, npix, 3))
@@ -287,10 +226,6 @@ hp.mollview(maps_recon[0, 0, :, 0])
 ```
 
 ### Power spectrum with Namaster
-
-```{python}
-2*256-1
-```
 
 ```{python}
 # Create a Namaster object
@@ -436,209 +371,6 @@ for i in range(4):
 
 plt.tight_layout()
     
-```
-
-### Covariance between bands per bin in the spectrum
-
-```{python}
-cov = np.zeros((nfrecon, nfrecon, 4, nbins))
-corr = np.zeros_like(cov)
-for b in range(nbins):
-    for s in range(4):
-        c = np.cov(cells_cross[:, :, b, s].T)
-        cov[:, :, s, b] = c
-        corr[:, :, s, b] = amc.cov2corr(c)
-        
-```
-
-```{python}
-plt.figure(figsize=(20, 200))
-for b in range(nbins):
-    for s in range(4):
-        plt.subplot(nbins, 4, b*4 + s+1)
-        plt.imshow(cov[:, :, s, b])
-        plt.title(clnames[s] + ' - bin {}'.format(b))
-        plt.colorbar(orientation='horizontal', fraction=0.1)
-        
-```
-
-```{python}
-plt.figure(figsize=(20, 200))
-for b in range(nbins):
-    for s in range(4):
-        plt.subplot(nbins, 4, b*4 + s+1)
-        plt.imshow(corr[:, :, s, b])
-        plt.title(clnames[s] + ' - bin {}'.format(b))
-        plt.colorbar(orientation='horizontal', fraction=0.1)
-        
-```
-
-```{python}
-# Average correlation matrices over bins
-corr_avg = np.mean(corr, axis=3)
-for s in range(4):
-    plt.subplot(1, 4, s+1)
-    plt.imshow(corr_avg[:, :, s])
-    plt.title(clnames[s] + ' Avg')
-    plt.colorbar(orientation='horizontal', fraction=0.1)
-        
-```
-
-### Go to Cp_prime
-
-Not sure it is useful because if we have many realisations (easy with Fast Simulator), we can use directly Cp to average the subbands. 
-
-```{python}
-# Cp_prime over bins (normalisation by the first term)
-N00, cov_prime00 = amc.Cp2Cp_prime(cov, verbose=True)
-
-for s in range(4):
-    plt.subplot(1, 4, s+1)
-    plt.imshow(cov_prime00[:, :, s, 0])
-    plt.title(clnames[s] + ' Avg')
-    plt.colorbar(orientation='horizontal', fraction=0.1)
- 
-```
-
-```{python}
-# Cp_prime over bins (normalisation by the diagonal)
-N, cov_prime = amc.Cp2Cp_prime_viaCorr(cov, verbose=True)
-
-for s in range(4):
-    plt.subplot(1, 4, s+1)
-    plt.imshow(cov_prime[:, :, s, 0])
-    plt.title(clnames[s] + ' Avg')
-    plt.colorbar(orientation='horizontal', fraction=0.1)
- 
-```
-
-### Weighted average of the subbands
-
-I don't know if it is interesting to do that.
-
-```{python}
-# Using directly cov
-weighted_av, sig2 = amc.make_weighted_av(cells_cross, cov, verbose=True)
-
-# Using directly cov_prime00
-weighted_av00, sig200 = amc.make_weighted_av(cells_cross, cov_prime00, verbose=True)
-
-# Using directly cov_prime
-weighted_avprime, sig2prime = amc.make_weighted_av(cells_cross, cov_prime, verbose=True)
-```
-
-```{python}
-weighted_av.shape
-```
-
-### Big covariance matrix mixing TT, EE, BB, TE 
-
-```{python}
-# nreal, nfrec, npix, nstk
-
-cells_cross.shape
-```
-
-```{python}
-bigcov, bigcorr = amc.get_covcorr_patch(cells_cross, stokesjoint=True, doplot=False)
-```
-
-```{python}
-plt.figure(figsize=(20, 200))
-for b in range(nbins):
-    
-    plt.subplot(nbins, 2, b*2 +1)
-    plt.imshow(bigcov[:, :, b])
-    plt.title('Covariance - bin {}'.format(b))
-    plt.colorbar()
-    
-    plt.subplot(nbins, 2, b*2 +2)
-    plt.imshow(bigcorr[:, :, b])
-    plt.title('Correlation - bin {}'.format(b))
-    plt.colorbar()
-```
-
-```{python}
-labs = []
-for s in range(4):
-    for i in range(nfrecon):
-        labs.append(clnames[s]+'{}'.format(i))
-        
-print(labs)
-
-plt.xticks(np.arange(len(labs)), labs)
-plt.yticks(np.arange(len(labs)), labs)
-
-for s in range(nfrecon):
-    plt.axhline(y=(s+1)*nfrecon-0.5, lw=3, color='r')
-    plt.axvline(x=(s+1)*nfrecon-0.5, lw=3, color='r')
-
-plt.imshow(np.mean(bigcorr, axis=2))
-plt.title('Correlation averaged over bin')
-plt.colorbar()
-```
-
-### Covariance matrix between bins
-
-```{python}
-# We have to swith bins and (TT, EE, BB, TE)
-print(cells_cross.shape)
-cells_cross_reshape = np.moveaxis(cells_cross, [1, 2, 3], [3, 1, 2])
-cells_cross_reshape.shape
-```
-
-```{python}
-covbinband, corrbinband = amc.get_covcorr_patch(cells_cross_reshape, stokesjoint=True, doplot=False)
-
-print(covbinband.shape)
-```
-
-```{python}
-ispectre = 2
-labsx,labsy = [], []
-for f in range(nfrecon):
-    labsx.append('f{}b0'.format(f))
-    for s in range(nbins):
-        labsy.append('f{}b{}'.format(f,s))
-        
-print(labs)
-plt.figure(figsize=(30, 30))
-plt.yticks(np.arange(len(labs)), labsy)
-plt.xticks(np.arange(0, nbins*nfrecon, nbins), labsx)
-
-for s in range(nfrecon-1):
-    plt.axhline(y=(s+1)*nbins-0.5, lw=3, color='r')
-    plt.axvline(x=(s+1)*nbins-0.5, lw=3, color='r')
-
-plt.imshow(covbinband[:, :, ispectre])
-plt.title('Covariance matrix (nfreq*nbins)x(nfreq*nbins) for {} spectrum'.format(clnames[ispectre]))
-plt.colorbar()
-```
-
-```{python}
-ispectre = 2
-labsx,labsy = [], []
-for f in range(nfrecon):
-    labsx.append('f{}b0'.format(f))
-    for s in range(nbins):
-        labsy.append('f{}b{}'.format(f,s))
-        
-print(labs)
-plt.figure(figsize=(30, 30))
-plt.yticks(np.arange(len(labs)), labsy)
-plt.xticks(np.arange(0, nbins*nfrecon, nbins), labsx)
-
-for s in range(nfrecon-1):
-    plt.axhline(y=(s+1)*nbins-0.5, lw=3, color='r')
-    plt.axvline(x=(s+1)*nbins-0.5, lw=3, color='r')
-
-plt.imshow(corrbinband[:, :, ispectre])
-plt.title('Correlation matrix (nfreq*nbins)x(nfreq*nbins) for {} spectrum'.format(clnames[ispectre]))
-plt.colorbar()
-```
-
-```{python}
-qss.random_string(10)
 ```
 
 ```{python}

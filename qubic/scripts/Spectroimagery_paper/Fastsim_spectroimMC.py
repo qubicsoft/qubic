@@ -32,15 +32,16 @@ else:
     raise NameError('You should define an environment variable QUBIC_DATADIR')
 
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+print('global directory:', global_dir)
 
 # Repository where maps and spectra will be saved
 rep_save = sys.argv[1]
 
 # Repository with maps obtained with the full pipeline
-dirmaps = global_dir + 'scripts/Spectroimagery_paper/maps/'
+dirmaps = global_dir + '/scripts/Spectroimagery_paper/maps/'
 
 # Get a dictionary
-dictionary = global_dir + 'dicts/spectroimaging_article.dict'
+dictionary = global_dir + '/dicts/spectroimaging_article.dict'
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictionary)
 

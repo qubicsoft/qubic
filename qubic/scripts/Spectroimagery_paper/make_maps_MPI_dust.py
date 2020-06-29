@@ -40,23 +40,16 @@ if 'QUBIC_DATADIR' in os.environ:
 else:
     raise NameError('You should define an environment variable QUBIC_DATADIR')
 
-#global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
-global_dir = '/global/homes/m/mmgamboa/qubicsoft/qubic'
-if sys.argv[4].lower() == 'no':
-    dictfilename = global_dir + '/dicts/spectroimaging.dict'
-else:
-    #dictfilename = global_dir + 'dicts' + sys.argv[4]
-    dictfilename = sys.argv[4]
-dictmaps = global_dir + '/scripts/Spectroimagery_paper/maps/'
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+# global_dir = '/global/homes/m/mmgamboa/qubicsoft/qubic'
+dictfilename = global_dir + '/dicts/' + sys.argv[4]
 
 # Repository for output files
 out_dir = sys.argv[1]
 if out_dir[-1] != '/':
     out_dir = out_dir + '/'
-try:
-    os.makedirs(out_dir)
-except:
-    pass
+
+os.makedirs(out_dir, exist_ok=True)
 
 # Name of the simulation
 name = today + '_' + sys.argv[2]
@@ -94,8 +87,8 @@ if rank == 0:
     Qubic_sky = qss.Qubic_sky(sky_config, d)
     x0 = Qubic_sky.get_simple_sky_map()
     print('Input map with shape:', x0.shape)
-    hp.mollview(x0[2,:,0],rot=center)
-    plt.savefig('test-dust')
+    # hp.mollview(x0[2,:,0],rot=center)
+    # plt.savefig('test-dust')
     if x0.shape[1] % (12 * d['nside'] ** 2) == 0:
         print('Good size')
     else:

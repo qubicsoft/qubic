@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -195,7 +195,8 @@ def fit_hpmap(TESNum, dirfiles, az_center, el_center,
 ```{python}
 # Get the data
 freq_source = 150
-dirfiles = os.environ['QUBIC_TODDIR']+'150GHz-2019-04-06/'
+dirfiles = '/home/lmousset/QUBIC/Qubic_work/Calibration/datas/synth_beam_150'
+# dirfiles = os.environ['QUBIC_TODDIR']+'150GHz-2019-04-06/'
 print('dirfiles :', dirfiles)
 
 c50 = np.cos(np.radians(50))
@@ -236,10 +237,10 @@ el_center = 0
 Test for one TES... it works fine!
 
 ```{python}
-nside=256
-npix=12*nside**2
-nest=True
-ites=93
+nside = 256
+npix = 12*nside**2
+nest = True
+ites = 96
 fullvec=hp.pix2vec(nside, range(0,npix), nest=nest)
 
 t00=time.time()
@@ -249,7 +250,7 @@ for ites in range(90,91):
     hpnest, thphpeaksnew, absmaxpx = fit_hpmap(ites, dirfiles, az_center, el_center,
                                            filterbeam=2,threshold=2,threshold0=2,)
 
-    fig, ax1 = subplots(nrows=1,ncols=2, figsize=(10,8))
+    fig, ax1 = subplots(nrows=1, ncols=2, figsize=(10,8))
     axes(ax1[0])
     hp.gnomview(hpnest, reso=10, nest=nest, title= 'Healpy projection (TES#{})'.format(ites),
                       hold=True, cbar=False)

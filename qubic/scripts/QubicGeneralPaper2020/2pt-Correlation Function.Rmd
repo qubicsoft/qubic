@@ -110,7 +110,7 @@ dofit=True
 nbins = 25
 subplot(2,2,1)
 xx, yy, fit_n200k = qss.get_noise_invcov_profile(residuals_maps, covar, nbins=nbins,
-                                              label='NERSC 200000',fit=dofit)
+                                              label='NERSC 200000',fit=dofit, doplot=True)
 title('200k')
 
 
@@ -118,7 +118,7 @@ title('200k')
 new_diff = qss.correct_maps_rms(residuals_maps, covar, fit_n200k)
 subplot(2,2,2)
 bla = qss.get_angular_profile(new_diff, label='Nersc 200k corrected',
-                              allstokes=True,nbins=50,thmax=22, fontsize=10)
+                              allstokes=True,nbins=50,thmax=22, fontsize=10, doplot=True)
 title('200k')
 
 # 3) Calculate 2Pt Correlation function

@@ -177,18 +177,11 @@ tight_layout()
 # ### Let's look at covariances between I,Q,U...
 reload(qss)
 reload(ft)
-def corrmapsrms(maps, cov, effective_variance_invcov):
-    okpix = cov > 0
-    newmaps = maps*0
-    correction = np.interp(np.max(cov)/cov[okpix], effective_variance_invcov[0,:], effective_variance_invcov[1,:])
-    for s in range(3):
-        newmaps[okpix,s] = maps[okpix,s] / np.sqrt(correction) * np.sqrt(cov[okpix]/np.max(cov))
-    return newmaps
 
 # 1) Correct maps for RMS vs 1/cov
-new_qubicnoise = corrmapsrms(qubicnoise, cov, effective_variance_invcov)
-new_diff = corrmapsrms(diff, cov, effective_variance_invcov)
-new_diffold = corrmapsrms(diffold, covold, fit_n3k)
+new_qubicnoise = qss.correct_maps_rms(qubicnoise, cov, effective_variance_invcov)
+new_diff = qss.correct_maps_rms(diff, cov, effective_variance_invcov)
+new_diffold = qss.correct_maps_rms(diffold, covold, fit_n3k)
 
 
 #### Check that it's flat coverage...
@@ -500,7 +493,7 @@ def explore_like(leff, mcl_noise, scl_noise, lmin, dl, cc, rv, otherp=None,
         maskpix[okpix] = 1
         Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=dl)
     
-#     print('Fsky: {}'.format(Namaster.fsky))
+    print('Fsky: {}'.format(Namaster.fsky))
     lbinned, b = Namaster.get_binning(nside)
 
     ### Bibnning CambLib
@@ -827,43 +820,6 @@ legend()
 ```
 
 ```{python}
-#### Reading sims from Lyon
-### Analyse results (similarly as in Analyze_ClCross_images)
-def read_one_lyon(dircls,prefix, lm,dl,cc, verbose=False, name='_Flat'):
-    filename = dircls+prefix+'_lmin_{0:}_dl_{1:}_cc_{2:}'.format(lm, dl, cc)+name+'.pk'
-    ff = glob.glob(filename)
-    if len(ff)!=1:
-        print('Problem with '+filename)
-        return -1,-1,-1
-    else:
-        ### Read file
-        with open(ff[0], 'rb') as handle:
-            leff, mcl,scl, _ = pickle.load(handle)
-        return leff,mcl,scl
-
-def read_sims_lyon(dircls,prefix,lm,dl,cc, verbose=False, type='best'):
-    print(lm,dl,cc)
-    if type=='flat':
-        leff, mcl, scl = read_one_lyon(dircls, prefix, lm, dl, cc, verbose=verbose, name='_Flat')
-        return leff, mcl, scl
-    elif type=='cov':
-        leff, mcl, scl = read_one_lyon(dircls, prefix, lm, dl, cc, verbose=verbose, name='_Cov')
-        return leff, mcl, scl
-    elif type=='best':
-        leff, mcl_flat, scl_flat = read_one_lyon(dircls, prefix, lm, dl, cc, verbose=verbose, name='_Flat')
-        leff, mcl_cov, scl_cov = read_one_lyon(dircls, prefix, lm, dl, cc, verbose=verbose, name='_Cov')
-    mcl = np.zeros_like(mcl_flat)
-    scl = np.zeros_like(scl_flat)
-    for i in range(len(leff)):
-        for s in range(4):
-            if scl_flat[i,s] <= scl_cov[i,s]:
-                mcl[i,s] = mcl_flat[i,s]
-                scl[i,s] = scl_flat[i,s]
-            else:
-                mcl[i,s] = mcl_cov[i,s]
-                scl[i,s] = scl_cov[i,s]
-    return leff, mcl, scl
-
 
 ```
 
@@ -933,11 +889,11 @@ all_prefix.append(prefix)
 all_titles.append('No Space Correlation')
 
 #### Simus avec alpha = 1
-dirsims = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoiseLyon/FastSimAlpha_1/'
-prefix = 'MC_MCFastNoise_n_1000_sig_75.0'
-all_dirsims.append(dirsims)
-all_prefix.append(prefix)
-all_titles.append('alpha=1')
+# dirsims = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoiseLyon/FastSimAlpha_1/'
+# prefix = 'MC_MCFastNoise_n_1000_sig_75.0'
+# all_dirsims.append(dirsims)
+# all_prefix.append(prefix)
+# all_titles.append('alpha=1')
 
 #### Simus avec Alpha = 4.5
 dirsims = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoiseLyon/FastSimAlpha_4.5/'
@@ -977,8 +933,7 @@ ylim(5e-4, 0.2)
 
 ```{python}
 signoise = 75.
-nbmc = 50
-alllmin = [10, 15, 20, 25, 30]
+alllmin = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60]
 alldelta_ell = [20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80]
 allcovcut = [0.1, 0.15, 0.2, 0.25, 0.3]
 # alllmin = [10, 15, 20, 25, 30]
@@ -1036,14 +991,38 @@ for ilm in range(len(alllmin)):
 ```
 
 ```{python}
-rc('figure', figsize=(15, 6))
+rc('figure', figsize=(15, 10))
 rc('font', size=12)
 
 for ilm in range(len(alllmin)):
-    subplot(2,3,ilm+1)
+    subplot(4,3,ilm+1)
     myrlim = allrlim[ilm,:,:]
     #imshow(myrlim, origin='lower',vmin=np.min(myrlim),vmax=np.max(myrlim))
-    imshow(myrlim, origin='lower',vmin=0.0,vmax=0.04)
+    imshow(myrlim, origin='lower',vmin=0.0,vmax=0.04, aspect='auto')
+    #contourf(myrlim, levels=linspace(0.008, 0.02, 10))
+    mini = np.argwhere(myrlim == np.nanmin(myrlim))
+    plot(mini[0][1], mini[0][0], 'rx' ,ms=10, markeredgewidth=4,
+         label ='$\sigma(r)={0:6.4f}$'.format(np.nanmin(myrlim)))
+    plt.xticks(range(len(alldelta_ell)), alldelta_ell)
+    plt.yticks(range(len(allcovcut)), allcovcut)
+    xlabel('$\Delta\\ell$')
+    ylabel('Cov. Threshold')
+    title('$\\ell_m$={} - '.format(alllmin[ilm])+tit)
+    legend(loc='upper left')
+    colorbar()
+
+tight_layout()
+
+```
+
+```{python}
+rc('figure', figsize=(15, 8))
+rc('font', size=10)
+
+for ilm in range(len(alllmin)):
+    subplot(3,4,ilm+1)
+    myrlim = allrlim[ilm,:,:]
+    imshow(myrlim, origin='lower',vmin=0.008,vmax=0.02, interpolation='lanczos', aspect='auto')
     mini = np.argwhere(myrlim == np.nanmin(myrlim))
     plot(mini[0][1], mini[0][0], 'rx' ,ms=10, markeredgewidth=4,
          label ='$\sigma(r)={0:6.4f}$'.format(np.nanmin(myrlim)))
@@ -1064,9 +1043,9 @@ tight_layout()
 
 ```{python}
     
-lm = 30
-dl = 50
-cc = 0.15
+lm = 40
+dl = 30
+cc = 0.1
 
 #### Simus avec Alpha = 4.5
 dirsims = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoiseLyon/FastSimAlpha_4.5/'

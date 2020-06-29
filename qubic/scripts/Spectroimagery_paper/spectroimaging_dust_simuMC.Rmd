@@ -27,6 +27,7 @@ import glob
 # Specific science modules
 import healpy as hp
 import numpy as np
+from astropy.io import fits
 
 # Specific qubic modules
 from qubicpack.utilities import Qubic_DataDir
@@ -38,6 +39,7 @@ import qubic
 from qubic import SpectroImLib as si
 from qubic import QubicSkySim as qss
 from qubic import NamasterLib as nam
+from qubic.polyacquisition import compute_freq
 
 from qubic import fibtools as ft
 
@@ -48,20 +50,15 @@ rc('figure', figsize=(13, 10))
 rc('font', size=15)
 ```
 
-# Look at MC simulations
+## Choose a simulation
 
 ```{python}
-# date_name = '20200415_galaxydust'
-# date_name = '*_gal'
-
-# # Get the repository where the simulation is
-# rep_simu = Qubic_DataDir(datafile='*nfsub*'
-#                          , datadir='/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/galaxy_center_d1') + '/'
-# print(rep_simu)
-
-rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/galaxy_center_d1/test_residuals/31347782/'
+# Get the files
+# rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/galaxy_center_d1/test_residuals/31613089/'
 # rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/29712494/'
-# rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/galaxy_center_d1/nfsub15/'
+nfrecon = 3
+
+rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/galaxy_center_d1/nfrecon{}/'.format(nfrecon)
 dictionary = glob.glob(rep + '/*.dict')[0]
 print(dictionary)
 
@@ -69,25 +66,27 @@ print(dictionary)
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictionary)
 
-# # Coordinates of the zone observed in the sky
+# Coordinates of the zone observed in the sky
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 
-# # Number of subbands used during the simulation
-nf_sub_rec = 5
-nf_sub = d['nf_sub']
-print('nf_sub = {}, nf_recon = {}'.format(nf_sub, nf_sub_rec))
+# Number of subbands used during the simulation
+
+nfsub = d['nf_sub']
+print('nf_sub = {}, nf_recon = {}'.format(nfsub, nfrecon))
 
 # Get fits files names in a list
-fits_noise = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessFalse*.fits'.format(nf_sub, nf_sub_rec), 
+fits_noise = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessFalse*.fits'.format(nfsub, nfrecon), 
                               recursive=True))
-fits_noiseless = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessTrue*.fits'.format(nf_sub, nf_sub_rec), 
+fits_noiseless = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessTrue*.fits'.format(nfsub, nfrecon), 
                               recursive=True))
 
-print(len(fits_noise))
+print(fits_noiseless)
 ```
 
 ```{python}
-d['synthbeam_kmax']
+# Frequencies of the reconstructed subbands
+Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(150, nfrecon)
+print(nus)
 ```
 
 ```{python}
@@ -114,52 +113,70 @@ noiseless, _, _ = rmc.get_maps(fits_noiseless[0])
 print(noiseless.shape)
 
 # Get the noise maps
-maps_recon = np.empty((nreals, nf_sub_rec, npix, 3))
-maps_conv = np.empty((nreals, nf_sub_rec, npix, 3))
-for real in range(nreals):
-    recon, conv, _ = rmc.get_maps(fits_noise[real])
-    maps_recon[real] = recon
-    maps_conv[real] = conv
+maps_recon = np.empty((nreals, nfrecon, npix, 3))
+maps_conv = np.empty((nreals, nfrecon, npix, 3))
+for i, real in enumerate(fits_noise):
+    maps_recon[i], maps_conv[i], _ = rmc.get_maps(real)
 
 ```
 
 ```{python}
 # Compute residuals in a given way
-date_name = 'gal'
-residuals = amc.get_residuals(rep, 'noiseless', nf_sub_rec)
+residuals = amc.get_residuals(fits_noise, fits_noiseless[0], 'noiseless')
 print(residuals.shape)
 
 # There is only the patch so you need to put them in a full map to plot with healpy
-maps_residuals = np.zeros_like(maps_conv)
+maps_residuals = np.ones_like(maps_conv) * hp.UNSEEN
 maps_residuals[:, :, seenmap, :] = residuals
+
 ```
 
 ```{python}
 istk = 0
-real = 0
-plt.figure(figsize=(12, 4))
+real = 4
+plt.figure(figsize=(12, 20))
 plt.subplots_adjust(wspace=0.2, hspace=0.5)
-plt.suptitle('JobID: ' + rep[-9: -1])
+# plt.suptitle('JobID: ' + rep[-9: -1])
 rr = 15
-min = None
-max = None
+min = 0
+max = 5000
 
-for band in range(nf_sub_rec):
-#     hp.gnomview(maps_conv[real, band, :, istk], cmap='jet', sub=(nf_sub_rec, 3, 3*band+1), rot=center, reso=rr, 
-#                 title = '{0} conv {1}'.format(d['kind'][istk], band), min=min, max=max)
-#     hp.gnomview(maps_recon[real, band, :, istk], cmap='jet', sub=(nf_sub_rec, 3, 3*band+2), rot=center, reso=rr, 
-#                 title = '{0} rec {1}'.format(d['kind'][istk], band), min=min, max=max)
-    hp.gnomview(maps_residuals[real, band, :, istk], cmap='jet', sub=(1, nf_sub_rec, band+1), rot=center, reso=rr, 
-                title = '{0} Residuals {1}'.format(d['kind'][istk], band), min=-70, max=70)
+for band in range(nfrecon):
+    hp.gnomview(maps_conv[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+1), 
+                rot=center, reso=rr, notext=True,
+                title = '{} conv'.format(d['kind'][istk]), min=min, max=max)
+    plt.text(-0.8,0, '{:3.0f} GHz'.format(nus[band]))
+    hp.gnomview(maps_recon[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+2), 
+                rot=center, reso=rr, notext=True,
+                title = '{0} rec'.format(d['kind'][istk]), min=min, max=max)
+    hp.gnomview(maps_residuals[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+3), 
+                rot=center, reso=rr, notext=True,
+                title = '{0} Residuals'.format(d['kind'][istk]), min=-70, max=70)
 plt.tight_layout()
 
 ```
 
 ```{python}
-# Get the coverage
-from astropy.io import fits
-a = fits.open(fits_noise[0])
-coverage = a['COVERAGE'].data
+band = 0
+istk = 0
+toto = np.zeros_like(noiseless)
+toto[:, seenmap, :] = np.mean(maps_recon[:, :, seenmap, :], axis=0) - noiseless[:, seenmap, :]
+hp.gnomview(np.mean(maps_recon, axis=0)[band, :, istk], cmap='jet', sub=(131), 
+                rot=center, reso=rr, notext=True, min=0, max=5000,
+                title = 'Mean_recon')
+hp.gnomview(noiseless[band, :, istk], cmap='jet', sub=(132), 
+                rot=center, reso=rr, notext=True, min=0, max=5000,
+                title = 'Noiseless')
+hp.gnomview(toto[band, :, istk], cmap='jet', sub=(133), 
+                rot=center, reso=rr, notext=True, min=-20, max=20,
+                title = 'Mean_recon - Noiseless')
+```
+
+## Coverage
+
+```{python}
+fitsfile = fits.open(fits_noise[0])
+coverage = fitsfile['COVERAGE'].data
 hp.mollview(coverage)
 
 coverage_patch = coverage[seenmap]
@@ -350,191 +367,4 @@ for i in range(4):
 
 plt.tight_layout()
 # ax.legend(fontsize=8, loc='right')
-```
-
-## Correlations between bands
-
-```{python}
-# Make a loop over irec and fill dictionnaries
-dict_sig2MC = {}
-dict_sig2 = {}
-ang_th = 15
-ang = rmc.pix2ang(d['nside'], center, seenmap)
-
-for irec in [1, 3, 5]:
-    print('irec =', irec)   
-#     _, recon_patch, _, _ = rmc.get_patch_many_files(rep_simu + date_name, '*nfrecon{}*False*'.format(irec))
-    residuals = amc.get_residuals(rep, 'noiseless', irec)
-    
-    if irec == 1:
-        # Remove the single dimension  
-        residuals = np.squeeze(residuals)
-        print('Residuals shape:', residuals.shape)
-
-        sig2MC_monofreq = np.var(residuals, axis=0) # Variance over realizations
-        sig2MCmean_monofreq = amc.average_pix_sig2(sig2MC_monofreq, ang, ang_threshold=ang_th) # Mean over pixels
-        dict_sig2MC.update({'{}'.format(irec): sig2MC_monofreq})
-        dict_sig2MC.update({'{}mean'.format(irec): sig2MCmean_monofreq})
-        
-        print('\n')
-       
-    else:
-        if irec == 8:
-            doplot = True
-        else :
-            doplot = False
-        Cp = amc.get_Cp(residuals, nfrecon=d['nf_recon'], verbose=False, doplot=doplot)
-        Cp_prime = amc.Cp2Cp_prime_viaCorr(Cp, verbose=True) # Average Cp over pixels
-#         Cp_prime = amc.Cp2Cp_prime(Cp, verbose=True)
-        
-        # Compute sig2 and sig2MC 
-        # Using Cp or Cp_prime
-        weighted_av, sig2 = amc.make_weighted_av(residuals, Cp_prime, verbose=False)
-        
-        sig2mean = amc.average_pix_sig2(sig2, ang, ang_threshold=ang_th)
-        dict_sig2.update({'{}'.format(irec): sig2})
-        dict_sig2.update({'{}mean'.format(irec): sig2mean})
-        
-        sig2MC = np.var(weighted_av, axis=0) # Variance over realisations
-        sig2MCmean = amc.average_pix_sig2(sig2MC, ang, ang_threshold=ang_th) # Mean over pixels
-        dict_sig2MC.update({'{}'.format(irec): sig2MC})
-        dict_sig2MC.update({'{}mean'.format(irec): sig2MCmean})
-        
-        print('\n')
-```
-
-```{python}
-print(Cp_prime.shape)
-plt.imshow(Cp_prime[:, :, 0, 10])
-plt.colorbar()
-```
-
-```{python}
-plt.plot(np.sqrt(coverage_norm), dict_sig2MC['5'][:, 0], '.')
-plt.xlabel('$\sqrt{coverage}$')
-plt.ylabel('$\sigma^2$')
-limit = (coverage_patch / np.max(coverage_patch)) > 0.6
-# plt.plot(dict_sig2['3'][limit, 0], dict_sig2MC['3'][limit, 0], '.')
-
-plt.title('Variance for each pixel (I component)')
-```
-
-```{python}
-import qubic.fibtools as ft
-
-x = 1 / np.sqrt(coverage_norm)
-
-xc, yc, dx, dy, _ = ft.profile(x, dict_sig2['8'][:, 0], 
-                               nbins=30, 
-                               plot=False,
-                               clip=True)
-
-
-xcMC, ycMC, dxMC, dyMC, _ = ft.profile(x, dict_sig2MC['8'][:, 0], 
-                                       nbins=30, 
-                                       plot=False,
-                                       clip=True)
-
-plt.errorbar(xc, yc, xerr=dx, yerr=dy, fmt='bo', label='$\sigma^2$')
-plt.errorbar(xcMC, ycMC, xerr=dxMC, yerr=dyMC, fmt='ro', label='$\sigma^2 MC$')
-# plt.plot(x, dict_sig2['3'][:, 1] , 'b,')
-# plt.plot(x, dict_sig2MC['3'][:, 1] , 'r,')
-plt.ylim(0, 100)
-
-plt.xlabel('$1 / \sqrt{coverage}$', fontsize=15)
-plt.ylabel('$\sigma^2$', fontsize=15)
-plt.legend()
-```
-
-```{python}
-plt.plot(xc, yc / ycMC)
-plt.xlabel('$1 / \sqrt{coverage}$', fontsize=15)
-plt.ylabel('$\sigma^2 / \sigma_{MC}^2$', fontsize=15)
-```
-
-```{python}
-cov, corr = amc.get_covcorr_patch(residuals, stokesjoint=True, doplot=True)
-```
-
-```{python}
-plt.imshow(cov[:, :, 5000])
-plt.title('Covariance matrix for one pixel')
-```
-
-### Matrix Cp_prime in coverage bins
-
-```{python}
-irec = 8
-residuals = amc.get_residuals(rep, 'noiseless', irec)
-Cp = amc.get_Cp(residuals, nfrecon=d['nf_recon'], verbose=True, doplot=True)
-```
-
-```{python}
-npix_patch = coverage_norm.shape[0]
-
-step = 0.100001
-for b in np.arange(0.1, 1, step):
-    print(b, b + step)
-    mybin = (coverage_norm > b) & (coverage_norm < b+step)
-    npix_bin = np.sum(mybin)
-    print('Npix in the bin:', npix_bin)
-
-    Cp_primebin = amc.Cp2Cp_prime_viaCorr(Cp[:, :, :, mybin])
-    
-    plt.figure()
-    plt.imshow(np.mean(Cp_primebin[:, :, 0, :], axis=2))
-    plt.colorbar()
-    plt.title('Cp_prime I bin coverage {} to {}'.format(b, b+step))
-
-    weighted_avbin, sig2 = amc.make_weighted_av(residuals[:, :, mybin, :], Cp_primebin, verbose=False)
-    print('sig2', sig2.shape)
-    sig2MC = np.var(weighted_avbin, axis=0)
-    if b == 0.1:
-        sig2_bin = sig2
-        sig2MC_bin = sig2MC
-    else:
-        sig2_bin = np.concatenate((sig2_bin, sig2))
-        sig2MC_bin = np.concatenate((sig2MC_bin, sig2MC))
-
-```
-
-```{python}
-x = 1 / np.sqrt(coverage_norm)
-
-xc_bin, yc_bin, dx_bin, dy_bin, _ = ft.profile(x, sig2_bin[:, 0], 
-                               nbins=30, 
-                               plot=False,
-                               clip=True)
-
-
-xcMC_bin, ycMC_bin, dxMC_bin, dyMC_bin, _ = ft.profile(x, sig2MC_bin[:, 0], 
-                                       nbins=30, 
-                                       plot=False,
-                                       clip=True)
-
-plt.errorbar(xc_bin, yc_bin, xerr=dx_bin, yerr=dy_bin, fmt='bo', label='$\sigma^2$')
-plt.errorbar(xcMC_bin, ycMC_bin, xerr=dxMC_bin, yerr=dyMC_bin, fmt='ro', label='$\sigma^2 MC$')
-# plt.plot(x, dict_sig2['3'][:, 1] , 'b,')
-# plt.plot(x, dict_sig2MC['3'][:, 1] , 'r,')
-# plt.ylim(0, 100)
-
-plt.xlabel('$1 / \sqrt{coverage}$', fontsize=15)
-plt.ylabel('$\sigma^2$', fontsize=15)
-plt.legend()
-plt.title('Profile, Weighted average done in 9 coverage bins')
-```
-
-```{python}
-plt.plot(xc_bin, yc_bin / ycMC_bin)
-plt.xlabel('$1 / \sqrt{coverage}$', fontsize=15)
-plt.ylabel('$\sigma^2 / \sigma_{MC}^2$', fontsize=15)
-plt.title('Ratio, Weighted average done in 9 coverage bins')
-```
-
-```{python}
-np.mean(yc_bin / ycMC_bin)
-```
-
-```{python}
-
 ```

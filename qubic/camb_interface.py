@@ -66,7 +66,7 @@ def rcamblib(rvalues,lmax=3*256, save=None):
 
 	camblib = [lll, rvalues, spec, specunlensed]
 	if save:
-		with open('./camblib.pickle', 'wb') as handle:
+		with open(save, 'wb') as handle:
 			pickle.dump(camblib, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 	return camblib

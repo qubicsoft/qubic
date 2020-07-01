@@ -334,7 +334,7 @@ class Qubic_sky(sky):
         return fullmaps
 
     def get_partial_sky_maps_withnoise(self, coverage=None, sigma_sec=None,
-                                        Nyears=None, verbose=False, FWHMdeg=None, seed=None,
+                                        Nyears=3., verbose=False, FWHMdeg=None, seed=None,
                                         noise_profile=True, 
                                         spatial_noise=True,
                                         nunu_correlation = True,
@@ -369,8 +369,7 @@ class Qubic_sky(sky):
         nf_sub = self.dictionary['nf_recon']
         # Beware, all nf_sub are not yet available...
         if nf_sub not in [1,2,3,4,5,8]:
-            print('nf_sub needs to be in [1,2,3,4,5,8] for FastSimulation (currently...)')
-            return -1,-1,-1
+            raise NameError('nf_sub needs to be in [1,2,3,4,5,8] for FastSimulation (currently...)')
 
         # First get the convolved maps
         if noise_only is False:
@@ -402,19 +401,28 @@ class Qubic_sky(sky):
         ##############################################################################################################
         # files loacation
         global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
-        DataFastSim = pickle.load( open( global_dir + '/doc/FastSimulator/Data/DataFastSimulator_{}_Duration_3_nfsub_{}.pkl'.format(self.dictionary['config'], nf_sub), "rb" ) )
+
+        DataFastSim = pickle.load( open( global_dir +
+                                         '/doc/FastSimulator/Data/DataFastSimulator_{}-{}_nfsub_{}.pkl'.format(self.dictionary['config'],
+                                        str(int(self.dictionary['filter_nu']/1e9)), nf_sub), "rb" ) )
+
+        # DataFastSim = pickle.load( open( global_dir +
+        #                                  '/doc/FastSimulator/Data/DataFastSimulator_FI_Duration_3_nfsub_{}.pkl'.format(nf_sub), "rb" ) )
 
         # Read Coverage map
         if coverage is None:
-            coverage = DataFastSim['coverage']
+            DataFastSimCoverage = pickle.load( open( global_dir +
+                                         '/doc/FastSimulator/Data/DataFastSimulator_{}-{}_coverage.pkl'.format(self.dictionary['config'],
+                                        str(int(self.dictionary['filter_nu']/1e9))), "rb" ) )
+            coverage = DataFastSimCoverage['coverage']
 
         # Read noise normalization
         if sigma_sec is None:
             sigma_sec = DataFastSim['signoise']
 
-        # Read Nyears
-        if Nyears is None:
-            Nyears = DataFastSim['years']       
+        # # Read Nyears
+        # if Nyears is None:
+        #     Nyears = DataFastSim['years']
 
         # Read Noise Profile
         if noise_profile is True:
@@ -447,7 +455,8 @@ class Qubic_sky(sky):
                                             effective_variance_invcov=effective_variance_invcov,
                                             clnoise=clnoise,
                                             sub_bands_cov=sub_bands_cov)
-
+        if nf_sub == 1:
+            noisemaps = np.reshape(noisemaps, (1, len(coverage), 3))
         seenpix = noisemaps[0, :, 0] != 0
         coverage[~seenpix] = 0
 
@@ -734,9 +743,11 @@ def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='
 
 
 def get_angular_profile(maps, thmax=25, nbins=20, label='', center=np.array([316.44761929, -58.75808063]),
-                        allstokes=False, fontsize=None, doplot=False):
+                        allstokes=False, fontsize=None, doplot=False, separate=False):
     vec0 = hp.ang2vec(center[0], center[1], lonlat=True)
-    vecpix = hp.pix2vec(256, np.arange(12 * 256 ** 2))
+    sh = np.shape(maps)
+    ns = hp.npix2nside(sh[0])
+    vecpix = hp.pix2vec(ns, np.arange(12 * ns ** 2))
     angs = np.degrees(np.arccos(np.dot(vec0, vecpix)))
     rng = np.array([0, thmax])
     xx, yyI, dx, dyI, _ = ft.profile(angs, maps[:, 0], nbins=nbins, plot=False, rng=rng)
@@ -752,7 +763,10 @@ def get_angular_profile(maps, thmax=25, nbins=20, label='', center=np.array([316
         xlabel('Angle [deg.]')
         ylabel('RMS')
         legend(fontsize=fontsize)
-    return xx, avg
+    if separate:
+        return xx, dyI, dyQ, dyU
+    else:
+        return xx, avg
 
 
 def correct_maps_rms(maps, cov, effective_variance_invcov):

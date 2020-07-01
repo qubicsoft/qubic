@@ -899,7 +899,7 @@ def ctheta_parts(themap, ipok, thetamin, thetamax, nbinstot, nsplit=4, degrade_i
     ### But it actually changes very little
     return thall, cthall
         
-def get_cov_nunu(maps, cov, nbins=20, QUsep=True):
+def get_cov_nunu(maps, cov, nbins=20, QUsep=True, return_flat_maps=False):
     # This function returns the sub-frequency, sub_frequency covariance matrix for each stoke parameter
     # it does not attemps to check for covariance between Stokes parameters (this should be icorporated later)
     # it returns the three covariance matrices as well as the fitted function of coverage that was used to
@@ -928,4 +928,7 @@ def get_cov_nunu(maps, cov, nbins=20, QUsep=True):
             cov_Q = np.array([[cov_Q]])
             cov_U = np.array([[cov_U]])
 
-    return cov_I, cov_Q, cov_U, all_fitcov, all_norm_noise
+    if return_flat_maps:
+        return cov_I, cov_Q, cov_U, all_fitcov, all_norm_noise, new_sub_maps
+    else:
+        return cov_I, cov_Q, cov_U, all_fitcov, all_norm_noise

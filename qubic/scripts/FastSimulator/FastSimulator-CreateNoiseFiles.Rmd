@@ -199,8 +199,7 @@ for nfsub in all_nf:
         allresults.append(results)
         subplot(1,2,1)
         p=plot(th, allcth[i]/allcth[i][0],'o', label='End-To-End Sub {}'.format(i+1))
-        plot(thth, fct(thth, *allresults[i][0]), color=p[0].get_color(),
-             label=r'$a\times\sin(\theta/b)\times\exp(\theta/c)$'+'\n a={0:4.2f} b={1:4.2f} c={2:4.2f}'.format(*allresults[i][0]))
+        plot(thth, fct(thth, *allresults[i][0]), color=p[0].get_color())
         axhline(y=0,color='k', ls=':')
         xlim(0,20)
         legend(fontsize=9)
@@ -208,25 +207,50 @@ for nfsub in all_nf:
         ylabel(r'$C(\theta$)')
 
         #### Convert to Cl and display
-        lll, clth = qc.ctheta_2_cell(thth, fct(thth, *allresults[i][0]), lmax=1024)
+        ctheta = fct(thth, *allresults[i][0])
+        ctheta[0] =1
+        lll, clth = qc.ctheta_2_cell(thth, ctheta, lmax=1024)
+        alpha = 4.5 ### See notebook called "2pt-Correlation Function" for an empirical explanation of alpha
+        clth = (clth -1 ) * alpha + 1
+
         allclth.append(clth)
         subplot(1,2,2)
         plot(lll, clth, label='End-To-End Sub {}'.format(i+1), color=p[0].get_color())
-        axhline(y=0,color='k', ls=':')
-        legend(fontsize=9)
+        axhline(y=1,color='k', ls=':')
         xlabel(r'$\ell$')
         ylabel(r'$C_\ell$')
+    
+    #### The option below will save the average over sub-bands of the Clth
+    #### However significant residuals exist on the end-to-end simulations as of today, and
+    #### they would nbe reproduced here, while they are likely to be caused by some issue
+    #clth_tosave = np.mean(np.array(allclth), axis=0)
+    #### As a result we will instead save the nsub=1 correlation function
+    if nfsub == 1:
+        clth_tosave = clth
+        
+    # Plot the saved one
+    plot(lll, clth_tosave, lw=3,color='k', label='saved')
+    legend(fontsize=9)
+    
     show()    
     
     #### Save informations for running simulations in Lyon:
-    data = {'nfsub':nfsub, 'coverage':cov, 'CovI':cI, 'CovQ':cQ, 'CovU':cU, 'signoise':signoise,
-            'effective_variance_invcov':myfitcovs, 'clnoise':allclth}
+    data = {'nfsub':nfsub, 'CovI':cI, 'CovQ':cQ, 'CovU':cU, 'signoise':75.,
+            'effective_variance_invcov':myfitcovs, 'clnoise':clth_tosave}
     name = 'DataFastSimulator_'+config+'_nfsub_{}.pkl'.format(nfsub)
     pickle.dump(data , open( global_dir + "doc/FastSimulator/Data/"+name, "wb" ) )
+
+datacov = {'coverage':cov}
+name = 'DataFastSimulator_'+config+'_coverage.pkl'
+pickle.dump(datacov , open( global_dir + "doc/FastSimulator/Data/"+name, "wb" ) )
 
 
 
  
+
+```
+
+```{python}
 
 ```
 

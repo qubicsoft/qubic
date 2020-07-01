@@ -22,8 +22,6 @@ import pickle
 from importlib import reload
 import time
 import scipy
-import glob
-
 
 
 # Specific qubic modules
@@ -45,7 +43,7 @@ rc('figure', figsize=(16, 10))
 rc('font', size=15)
 mpl.rcParams['image.cmap'] = 'jet'
 
-### Some initializations
+### Initialize
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
 ```
 
@@ -103,6 +101,7 @@ def get_maps_e2e(config, nsub):
         else:
             print('Not an available number of sub-frequencies: {} for config: {}'.format(nsub, config))
             stop
+            
     elif config == 'FI-150-JC':
         # Simulations from JC - 3 years
         # FI-150: Nptg=200000 tol = 1e-5 - NERSC - Kmax=8 - synthbeam_frac = 0.99 - nsub = [1] :-(
@@ -115,6 +114,7 @@ def get_maps_e2e(config, nsub):
         else:
             print('Not an available number of sub-frequencies: {} for config: {}'.format(nsub, config))
             stop
+            
     elif config == 'TD-150-JC':
         # Simulations from JC - 3 years
         # TD-150: Nptg=10000 tol = 1e-5 - MacQUBIC - Kmax=8 - synthbeam_frac = 0.99 - nsub = [1] :-(
@@ -127,12 +127,26 @@ def get_maps_e2e(config, nsub):
         else:
             print('Not an available number of sub-frequencies: {} for config: {}'.format(nsub, config))
             stop
+            
     elif config == 'TD-150-ST':
         # Simulations from Steve - 3 years
         # TD-150: Nptg=10000 tol = 1e-5 - Johannes - Kmax=8 - synthbeam_frac = 0.99 - nsub = [1] :-(
         nptg = 10000
         dirmaps='/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_TD/FromSteve/EndToEndMaps/'
         file_rnd_string='20200626T103718'   #this is just one of them....
+        oksub = [1]
+        if nsub in oksub:
+            return read_files_mc(dirmaps, file_rnd_string, verbose=True)
+        else:
+            print('Not an available number of sub-frequencies: {} for config: {}'.format(nsub, config))
+            stop
+
+    elif config == 'FI-220-JC':
+        # Simulations from JC - 3 years
+        # FI-220: Nptg=3000 tol = 1e-5 - MacQubic - Kmax=8 - synthbeam_frac = 0.99 - nsub = [1] :-(
+        nptg = 10000
+        dirmaps='/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_FI_220/Maps/'
+        file_rnd_string='djAnWQQD8q'   #this is just one of them....
         oksub = [1]
         if nsub in oksub:
             return read_files_mc(dirmaps, file_rnd_string, verbose=True)
@@ -154,10 +168,15 @@ We need to decide which Configuration we're analyzing and we will plot the corre
 # center = np.array([0,0])
 # nptg = 10000
 #################################
-config = 'FI-150-JC' 
+# config = 'FI-150-JC' 
+# all_nf = [1]
+# center=np.array([316.44761929, -58.75808063])
+# nptg = 200000
+#################################
+config = 'FI-220-JC' 
 all_nf = [1]
 center=np.array([316.44761929, -58.75808063])
-nptg = 200000
+nptg = 3000
 #################################
 # config = 'TD-150-JC' 
 # all_nf = [1]
@@ -172,12 +191,31 @@ nptg = 200000
 
 nfsub = 1
 maps, cov = get_maps_e2e(config,nfsub)
-hp.mollview(cov, title='Coverage nfsub={}'.format(nfsub))
+
+okpix = (cov/np.max(cov)) > 0.1
+myrmsI = np.std(maps[0,okpix,0])
+nn = 3
+
+hp.mollview(cov, title=config+' Coverage nfsub={}'.format(nfsub))
 figure()
 stn = ['I','Q','U']
 for i in range(nfsub):
     for s in range(3):
-        hp.mollview(maps[i,:,s], sub=(nfsub,3,i*3+s+1), title='Residuals {} {}/{}'.format(stn[s],i+1,nfsub))
+        hp.mollview(maps[i,:,s], min = -nn*myrmsI, max = nn*myrmsI,
+                    sub=(nfsub,3,i*3+s+1), title=config + ' Residuals {} {}/{}'.format(stn[s],i+1,nfsub))
+tight_layout()
+
+
+figure()
+nfsub = 1
+maps, cov = get_maps_e2e(config,nfsub)
+hp.gnomview(cov/np.max(cov), title=config+' Coverage nfsub={}'.format(nfsub), rot=center, reso=20)
+figure()
+stn = ['I','Q','U']
+for i in range(nfsub):
+    for s in range(3):
+        hp.gnomview(maps[i,:,s], rot=center, reso=20, min = -nn*myrmsI, max = nn*myrmsI, 
+                    sub=(nfsub,3,i*3+s+1), title=config + ' Residuals {} {}/{}'.format(stn[s],i+1,nfsub))
 tight_layout()
 
 
@@ -206,14 +244,34 @@ print((meanvalQU/meanvalI)**2)
 #savefig('noiseprofile_mukarcmin.pdf')
 ```
 
+There is something very strange on the RMS on the TD which appears way to high... by a factor 10... Is that related to what Daniele and Gabriel saw ? what was the reason at the end of the day ? I remember we figured out their too high ratio was fine, but I can't remember why...
+
 ```{python}
-tdrms = 4241.
-firms = 
+### With 10000 ptg
+TDrms = 4211.
+FIrms = 13.9 
+
+TD_NEP = 2.05e-16
+FI_NEP = 4.7e-17
+
+TD_TES = 248
+FI_TES = 1984
+
+TD_NH = 64
+FI_NH = 400
+
+print('Ratio from maps: {}'.format(TDrms / FIrms))
+
+ratio_cl = FI_NH/TD_NH * FI_TES/TD_TES * (TD_NEP/FI_NEP)**2
+
+print('Expected ratio on Cl: {}'.format(ratio_cl))
+print('Expected ratio on maps: {}'.format(np.sqrt(ratio_cl)))
 ```
 
 Now the following cell does the job to do all the fitting and creating files in the relevant directory (this section is at the end and may be commented if not willing to create the files thios very time...)
 
 ```{python}
+reload(qss)
 nbins = 30
 
 

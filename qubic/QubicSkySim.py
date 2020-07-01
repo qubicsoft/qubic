@@ -697,7 +697,7 @@ def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='
                 plot(xx**2, myYQU, label=label+' Average Q, U /sqrt(2)', alpha=0.3)
         else:
             pi = plot(xx**2,myYI, 'o', label=label+' I')
-            pqu = plot(xx**2,myYQU, 'o', label=label+' QU')
+            pqu = plot(xx**2,myYQU, 'o', label=label+' QU / sqrt(2)')
 
     if fit:
         mymodel = lambda x, a, b, c, d, e: (a + b * x + c * np.exp(-d * (x - e)))  # /(a+b+c*np.exp(-d*(1-e)))
@@ -716,7 +716,7 @@ def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='
                 plot(xx**2, mymodel(xx**2, *myfit[0]),  label=label+' Fit', color=p[0].get_color())
             else:
                 plot(xx**2, mymodel(xx**2, *myfitI[0]),  label=label+' Fit I', color=pi[0].get_color())
-                plot(xx**2, mymodel(xx**2, *myfitQU[0]),  label=label+' Fit QU', color=pqu[0].get_color())
+                plot(xx**2, mymodel(xx**2, *myfitQU[0]),  label=label+' Fit QU / sqrt(2)', color=pqu[0].get_color())
 
             #print(myfit[0])
         invcov_samples = np.linspace(1, 15, 1000)

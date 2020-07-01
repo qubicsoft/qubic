@@ -1,0 +1,235 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# %matplotlib inline
+
+import healpy as hp
+import glob
+from scipy.optimize import curve_fit
+import pickle
+from importlib import reload
+import time
+import scipy
+import glob
+
+
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm
+import qubic
+from qubic import QubicSkySim as qss
+from qubic import fibtools as ft
+from qubic import camb_interface as qc
+from qubic import SpectroImLib as si
+from qubic import NamasterLib as nam
+from qubic import mcmc
+
+reload(qss)
+reload(ft)
+
+rc('figure', figsize=(16, 10))
+rc('font', size=15)
+mpl.rcParams['image.cmap'] = 'jet'
+
+### Some initializations
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+```
+
+# Fast Simulator - Noise Files Creation
+This notebook is aimed as a kind semi-automated script designed to create the files that are needed by the FastSimulator to produce QUBIC noise realizations with realitic noise properties fitted on the end-to-end simulations performed on. supercomputers. So we read these end-to-end simulations and fit the noise properties in different configurations, then write them on disk in the FastSimulator doc/FastSimulator/data directory (this may be moved to another location later if better).
+
+Currently (July 1st 2020) there are three configurations that are needed:
+1. FI at 150 GHZ with a random pointing and specctro-imaging covering 1,2,3,4,5 and 8 sub-bands
+2. FI at 220 GHZ with a random pointing and specctro-imaging covering 1,2,3,4,5 and 8 sub-bands
+3. TD at 150 GHZ with a random pointing and specctro-imaging covering 1,2,3,4,5 and 8 sub-bands
+
+Only the first one is currrently fully available and also right now the parameters are onluy fitted on a single realization while many have been produced. It would be very useful to produce these files based on averges over similar realizations as well as explore more configurations (such as kmax parameter).
+
+Let's read files first
+
+```{python}
+#### These functions reads the maps - the last one is intended as a common wrapper
+
+def read_files_mc(dirmap,file_rnd_string, verbose=False):
+    m = np.array(FitsArray(glob.glob(dirmap+'*_maps_recon_*'+file_rnd_string+'.fits')[0]))
+    c = np.array(FitsArray(glob.glob(dirmap+'*_maps_convolved_*'+file_rnd_string+'.fits')[0]))
+    cov = np.array(FitsArray(glob.glob(dirmap+'*_maps_coverage_*'+file_rnd_string+'.fits')[0]))
+    with open(glob.glob(dirmap+'*_dictionary_'+file_rnd_string+'.pickle')[0], 'rb') as handle: d = pickle.load(handle)
+    with open(glob.glob(dirmap+'*_input_cell_'+file_rnd_string+'.pickle')[0], 'rb') as handle: icl = pickle.load(handle)
+    filetype = glob.glob(dirmap+'*_maps_recon_*'+file_rnd_string+'.fits')[0].split('/')[-1]
+    if verbose: print('read {}'.format(filetype))
+    return m-c, cov
+
+
+def get_maps_from_louise(directory, nfsub):
+    mappatchfile = glob.glob(directory+'residualspatch_*_nfrecon{}.pkl'.format(nfsub))[0]
+    covfile = glob.glob(directory+'coverage_*_nfrecon{}.pkl'.format(nfsub))[0]
+    seenfile = glob.glob(directory+'seenmap_*_nfrecon{}.pkl'.format(nfsub))[0]
+    
+    residualspatch = pickle.load( open( mappatchfile, "rb" ) )
+    seenpix = pickle.load( open( seenfile, "rb" ) )
+    covpix = pickle.load( open( covfile, "rb" ) )
+    
+    nside = 256
+    residuals_map = np.zeros((nfsub, 12*256**2, 3))
+    for i in range(nfsub):
+        residuals_map[i,seenpix,:] = residualspatch[i][:,:]
+    
+    return residuals_map, covpix
+
+
+def get_maps_e2e(config, nsub):
+    if config == 'FI-150':
+        # Simulations from Louise
+        # FI-150: Nptg=10000 tol=1e-5 - NERSC - Kmax=8 - synthbeam_frac = 0.99 - nsub = [1,2,3,4,5,8]
+        oksub = [1,2,3,4,5,8]
+        dirmaps = global_dir + '/doc/FastSimulator/Data/Spectro-Imaging-Louise/'
+        if nsub in oksub:
+            return get_maps_from_louise(dirmaps,nfsub)
+        else:
+            print('Not an available number of sub-frequencies: {} for config: {}'.format(nsub, config))
+            stop
+    elif config == 'FI-150-JC':
+        # Simulations from JC - 3 years
+        # FI-150: Nptg=200000 tol = 1e-5 - NERSC - Kmax=8 - synthbeam_frac = 0.99 - nsub = [1] :-(
+        nptg = 200000
+        dirmaps=global_dir + '/doc/FastSimulator/Data/'
+        file_rnd_string='H990hwzaGn'   #this is just one of them....
+        oksub = [1]
+        if nsub in oksub:
+            return read_files_mc(dirmaps, file_rnd_string, verbose=True)
+        else:
+            print('Not an available number of sub-frequencies: {} for config: {}'.format(nsub, config))
+            stop
+    else:
+        print('Not yet there !')
+        stop
+```
+
+We need to decide which Configuration we're analyzing and we will plot the corresponding maps
+
+```{python}
+#### Configuration choice #######
+config = 'FI-150'    # can be 'FI-150-JC', 'FI-150-LM'
+all_nf = [1,2,3,4,5,8]
+#################################
+
+nfsub = 1
+maps, cov = get_maps_e2e(config,nfsub)
+hp.mollview(cov, title='Coverage nfsub={}'.format(nfsub))
+figure()
+stn = ['I','Q','U']
+for i in range(nfsub):
+    for s in range(3):
+        hp.mollview(maps[i,:,s], sub=(nfsub,3,i*3+s+1), title='Residuals {} {}/{}'.format(stn[s],i+1,nfsub))
+tight_layout()
+
+
+```
+
+```{python}
+nbins = 30
+
+
+for nfsub in all_nf:
+    maps, cov = get_maps_e2e(config,nfsub)
+    #### Noise Profile Fitting ###########################################################################
+    rc('figure', figsize=(16, 10))
+    figure()
+    myfitcovs = []
+    for isub in range(nfsub):
+        sqn = np.int(np.sqrt(nfsub))
+        if (sqn**2) != nfsub:
+            sqn += 1
+        subplot(sqn,sqn,isub+1)
+
+        xx, yyfs, fitcov = qss.get_noise_invcov_profile(maps[isub,:,:], cov, QUsep=True, nbins=nbins,
+                                                        label='End-To-End sub={}/{}'.format(isub+1,nfsub), 
+                                                        fit=True, norm=False,
+                                                        allstokes=True, doplot=True)
+        legend(fontsize=9)
+        myfitcovs.append(fitcov)
+    show()
+
+    #### nunu Covariance #################################################################################
+    cI, cQ, cU, fitcov, noise_norm = qss.get_cov_nunu(maps, cov, QUsep=True)
+    corr_mats = [cI, cQ/2, cU/2]
+    rc('figure', figsize=(16, 6))
+    figure()
+    stn = ['I','Q/2', 'U/2']
+    mini = np.min(np.array(corr_mats))
+    maxi = np.max(np.array(corr_mats))
+    for s in range(3):
+        subplot(1,3,1+s)
+        imshow(corr_mats[s], vmin=mini, vmax=maxi)
+        colorbar(orientation='horizontal')
+        title('End-To-End Cov {} nsub={}'.format(stn[s],nfsub))
+    show()
+
+    #### C(theta) Measurement ############################################################################
+    rc('figure', figsize=(16, 6))
+    figure()
+    fct = lambda x, a, b, c: a * np.sin(x/b) * exp(-x/c)
+    thth = np.linspace(0,180,1000)
+    allcth = []
+    allclth = []
+    allresults = []
+    pixgood = (cov/np.max(cov)) > 0.1 
+    for i in range(nfsub):
+        corrected_qubicnoise = qss.correct_maps_rms(maps[i,:,:], cov, myfitcovs[i])
+        th, thecth = qss.ctheta_parts(corrected_qubicnoise[:,0], pixgood, 0, 20, 20, nsplit=5, degrade_init=128, verbose=False)
+        okfit = isfinite(thecth)
+
+        results = curve_fit(fct, th[okfit][1:], (thecth[okfit][1:]/thecth[0]),maxfev=100000, ftol=1e-7, p0=[0,1,1])
+        allcth.append(thecth)
+        allresults.append(results)
+        subplot(1,2,1)
+        p=plot(th, allcth[i]/allcth[i][0],'o', label='End-To-End Sub {}'.format(i+1))
+        plot(thth, fct(thth, *allresults[i][0]), color=p[0].get_color(),
+             label=r'$a\times\sin(\theta/b)\times\exp(\theta/c)$'+'\n a={0:4.2f} b={1:4.2f} c={2:4.2f}'.format(*allresults[i][0]))
+        axhline(y=0,color='k', ls=':')
+        xlim(0,20)
+        legend(fontsize=9)
+        xlabel(r'$\theta$ [deg]')
+        ylabel(r'$C(\theta$)')
+
+        #### Convert to Cl and display
+        lll, clth = qc.ctheta_2_cell(thth, fct(thth, *allresults[i][0]), lmax=1024)
+        allclth.append(clth)
+        subplot(1,2,2)
+        plot(lll, clth, label='End-To-End Sub {}'.format(i+1), color=p[0].get_color())
+        axhline(y=0,color='k', ls=':')
+        legend(fontsize=9)
+        xlabel(r'$\ell$')
+        ylabel(r'$C_\ell$')
+    show()    
+    
+    #### Save informations for running simulations in Lyon:
+    data = {'nfsub':nfsub, 'coverage':cov, 'CovI':cI, 'CovQ':cQ, 'CovU':cU, 'signoise':signoise,
+            'effective_variance_invcov':myfitcovs, 'clnoise':allclth}
+    name = 'DataFastSimulator_'+config+'_nfsub_{}.pkl'.format(nfsub)
+    pickle.dump(data , open( global_dir + "doc/FastSimulator/Data/"+name, "wb" ) )
+
+
+
+ 
+
+```
+
+```{python}
+
+```

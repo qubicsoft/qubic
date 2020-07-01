@@ -103,6 +103,18 @@ def get_maps_e2e(config, nsub):
         else:
             print('Not an available number of sub-frequencies: {} for config: {}'.format(nsub, config))
             stop
+    elif config == 'FI-150-JC':
+        # Simulations from JC - 3 years
+        # FI-150: Nptg=200000 tol = 1e-5 - NERSC - Kmax=8 - synthbeam_frac = 0.99 - nsub = [1] :-(
+        nptg = 200000
+        dirmaps='//Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_NERSC/Maps/'
+        file_rnd_string='H990hwzaGn'   #this is just one of them....
+        oksub = [1]
+        if nsub in oksub:
+            return read_files_mc(dirmaps, file_rnd_string, verbose=True)
+        else:
+            print('Not an available number of sub-frequencies: {} for config: {}'.format(nsub, config))
+            stop
     elif config == 'TD-150-JC':
         # Simulations from JC - 3 years
         # TD-150: Nptg=10000 tol = 1e-5 - MacQUBIC - Kmax=8 - synthbeam_frac = 0.99 - nsub = [1] :-(
@@ -139,12 +151,23 @@ We need to decide which Configuration we're analyzing and we will plot the corre
 #### Configuration choice #######
 # config = 'FI-150' 
 # all_nf = [1,2,3,4,5,8]
+# center = np.array([0,0])
+# nptg = 10000
+#################################
+config = 'FI-150-JC' 
+all_nf = [1]
+center=np.array([316.44761929, -58.75808063])
+nptg = 200000
 #################################
 # config = 'TD-150-JC' 
 # all_nf = [1]
+# center=np.array([316.44761929, -58.75808063])
+# nptg = 10000
 #################################
-config = 'TD-150-ST' 
-all_nf = [1]
+# config = 'TD-150-ST' 
+# all_nf = [1]
+# center=np.array([316.44761929, -58.75808063])
+# nptg = 10000
 #################################
 
 nfsub = 1
@@ -158,6 +181,34 @@ for i in range(nfsub):
 tight_layout()
 
 
+```
+
+```{python}
+reload(qss)
+rc('figure', figsize=(12, 6))
+xx, yyI, yyQ, yyU = qss.get_angular_profile(maps[0,:,:], nbins=30, separate=True, center=center)
+pix_size = hp.nside2resol(256, arcmin=True)
+plot(xx, yyI * pix_size, 'o',label='I')
+plot(xx, yyQ * pix_size , 'o',label='Q')
+plot(xx, yyU * pix_size, 'o',label='U')
+meanvalI = np.mean(yyI[xx<10]) * pix_size
+meanvalQU = np.mean((yyQ[xx<10]+yyQ[xx<10])/2) * pix_size
+axhline(y=meanvalI, label=r'I RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalI), color='r', ls=':')
+axhline(y=meanvalQU, label=r'QU RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalQU), color='m', ls=':')
+xlim(0,20)
+xlabel('Degrees from center of the field')
+ylabel(r'Noise RMS $[\mu K.arcmin]$')
+title('QUBIC End-To-End - '+config+' - Nptg = {}'.format(nptg))
+legend(fontsize=11)
+ylim(0,meanvalQU*2)
+
+print((meanvalQU/meanvalI)**2)
+#savefig('noiseprofile_mukarcmin.pdf')
+```
+
+```{python}
+tdrms = 4241.
+firms = 
 ```
 
 Now the following cell does the job to do all the fitting and creating files in the relevant directory (this section is at the end and may be commented if not willing to create the files thios very time...)

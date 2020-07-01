@@ -171,75 +171,133 @@ for s in range(3):
 tight_layout()
 ```
 
+## Exploration of IQU Correlations
+
 ```{python}
 # ### Let's look at covariances between I,Q,U...
-# reload(qss)
-# reload(ft)
-# def corrmapsrms(maps, cov, effective_variance_invcov):
-#     okpix = cov > 0
-#     newmaps = maps*0
-#     correction = np.interp(np.max(cov)/cov[okpix], effective_variance_invcov[0,:], effective_variance_invcov[1,:])
-#     for s in range(3):
-#         newmaps[okpix,s] = maps[okpix,s] / np.sqrt(correction) * np.sqrt(cov[okpix]/np.max(cov))
-#     return newmaps
+reload(qss)
+reload(ft)
 
-# # 1) Correct maps for RMS vs 1/cov
-# new_qubicnoise = corrmapsrms(qubicnoise, cov, effective_variance_invcov)
-# new_diff = corrmapsrms(diff, cov, effective_variance_invcov)
-# new_diffold = corrmapsrms(diffold, covold, fit_n3k)
+# 1) Correct maps for RMS vs 1/cov
+new_qubicnoise = qss.correct_maps_rms(qubicnoise, cov, effective_variance_invcov)
+new_diff = qss.correct_maps_rms(diff, cov, effective_variance_invcov)
+new_diffold = qss.correct_maps_rms(diffold, covold, fit_n3k)
 
 
-# #### Check that it's flat coverage...
-# subplot(1,3,1)
-# bla = qss.get_angular_profile(new_qubicnoise, label='Fastsim corrected',
-#                               allstokes=True,nbins=100,thmax=22, fontsize=10)
-# subplot(1,3,2)
-# bla = qss.get_angular_profile(new_diff, label='Nersc 200k corrected',
-#                               allstokes=True,nbins=100,thmax=22, fontsize=10)
-# subplot(1,3,3)
-# bla = qss.get_angular_profile(new_diffold, label='Nersc 3k corrected',
-#                               allstokes=True,nbins=100,thmax=22, fontsize=10)
+#### Check that it's flat coverage...
+subplot(1,3,1)
+bla = qss.get_angular_profile(new_qubicnoise, label='Fastsim corrected',
+                              allstokes=True,nbins=100,thmax=22, fontsize=10, doplot=True)
+subplot(1,3,2)
+bla = qss.get_angular_profile(new_diff, label='Nersc 200k corrected',
+                              allstokes=True,nbins=100,thmax=22, fontsize=10, doplot=True)
+subplot(1,3,3)
+bla = qss.get_angular_profile(new_diffold, label='Nersc 3k corrected',
+                              allstokes=True,nbins=100,thmax=22, fontsize=10, doplot=True)
 
-# # 2) Calculate covariance matrix averaging over pixels
-# okpix = new_qubicnoise[:,0] > 0
-# cc_fs = np.corrcoef(new_qubicnoise[okpix,:].T)
+# 2) Calculate covariance matrix averaging over pixels
+okpix = new_qubicnoise[:,0] > 0
+cc_fs = np.corrcoef(new_qubicnoise[okpix,:].T)
 
-# okpix = new_diff[:,0] > 0
-# cc_diff = np.corrcoef(new_diff[okpix,:].T)
+okpix = new_diff[:,0] > 0
+cc_diff = np.corrcoef(new_diff[okpix,:].T)
 
-# okpix = new_diffold[:,0] > 0
-# cc_diffold = np.corrcoef(new_diffold[okpix,:].T)
+okpix = new_diffold[:,0] > 0
+cc_diffold = np.corrcoef(new_diffold[okpix,:].T)
 
-# figure()
-# rc('figure', figsize=(16, 4))
-# vv = 0.05
-# subplot(1,3,1)
-# imshow(np.abs(cc_fs-np.diag([1,1,1])), vmin=0, vmax=vv)
-# plt.xticks(range(3), ['I','Q','U'])
-# plt.yticks(range(3), ['I','Q','U'])
-# title('FastSim')
-# colorbar()
-# subplot(1,3,2)
-# imshow(np.abs(cc_diff-np.diag([1,1,1])), vmin=0, vmax=vv)
-# plt.xticks(range(3), ['I','Q','U'])
-# plt.yticks(range(3), ['I','Q','U'])
-# title('Nersc 200k')
-# colorbar()
-# subplot(1,3,3)
-# imshow(np.abs(cc_diffold-np.diag([1,1,1])), vmin=0, vmax=vv)
-# plt.xticks(range(3), ['I','Q','U'])
-# plt.yticks(range(3), ['I','Q','U'])
-# title('Nersc 3k')
-# colorbar()
-# tight_layout()
+figure()
+rc('figure', figsize=(16, 4))
+vv = 0.05
+subplot(1,3,1)
+imshow(np.abs(cc_fs-np.diag([1,1,1])), vmin=0, vmax=vv)
+plt.xticks(range(3), ['I','Q','U'])
+plt.yticks(range(3), ['I','Q','U'])
+title('FastSim')
+colorbar()
+subplot(1,3,2)
+imshow(np.abs(cc_diff-np.diag([1,1,1])), vmin=0, vmax=vv)
+plt.xticks(range(3), ['I','Q','U'])
+plt.yticks(range(3), ['I','Q','U'])
+title('Nersc 200k')
+colorbar()
+subplot(1,3,3)
+imshow(np.abs(cc_diffold-np.diag([1,1,1])), vmin=0, vmax=vv)
+plt.xticks(range(3), ['I','Q','U'])
+plt.yticks(range(3), ['I','Q','U'])
+title('Nersc 3k')
+colorbar()
+tight_layout()
 
-# print(cc_fs)
-# print('')
-# print(cc_diff)
-# print('')
-# print(cc_diffold)
+print('Fast Simulation')
+print(cc_fs)
+print('Nersc 200k')
+print(cc_diff)
+print('3K')
+print(cc_diffold)
 
 ```
+
+It is better to have MC for FastNoise so that we have an. expected dispersion to compare with:
+
+```{python}
+nbmc = 100
+
+all_cc_fs = np.zeros((nbmc, 3,3))
+
+for i in range(nbmc):
+    qubicnoise = Qubic_sky.create_noise_maps(signoise, cov, effective_variance_invcov=effective_variance_invcov)
+    new_qubicnoise = corrmapsrms(qubicnoise, cov, effective_variance_invcov)
+    okpix = new_qubicnoise[:,0] > 0
+    all_cc_fs[i,:,:] = np.corrcoef(new_qubicnoise[okpix,:].T)
+
+```
+
+```{python}
+m_cc_fs = np.mean(all_cc_fs, axis=0)
+s_cc_fs = np.std(all_cc_fs, axis=0)
+print('MC Average')
+print(m_cc_fs)
+print('MC STD')
+print(s_cc_fs)
+print('Nersc 200k')
+print(cc_diff)
+
+figure()
+subplot(1,2,1)
+imshow(np.log10(np.abs(cc_diff)), vmin=-3, vmax=0)
+plt.xticks(range(3), ['I','Q','U'])
+plt.yticks(range(3), ['I','Q','U'])
+title('Nersc 200k')
+colorbar()
+
+subplot(1,2,2)
+imshow(np.log10(np.abs(s_cc_fs)), vmin=-3, vmax=0)
+plt.xticks(range(3), ['I','Q','U'])
+plt.yticks(range(3), ['I','Q','U'])
+title('RMS Monte-Carlo')
+colorbar()
+
+figure()
+subplot(1,2,1)
+imshow(np.log10(np.abs(cc_diffold)), vmin=-3, vmax=0)
+plt.xticks(range(3), ['I','Q','U'])
+plt.yticks(range(3), ['I','Q','U'])
+title('3K')
+colorbar()
+
+subplot(1,2,2)
+imshow(np.log10(np.abs(s_cc_fs)), vmin=-3, vmax=0)
+plt.xticks(range(3), ['I','Q','U'])
+plt.yticks(range(3), ['I','Q','U'])
+title('RMS Monte-Carlo')
+colorbar()
+
+```
+
+There is a marginally significant correlation between Q and U that is currently neglected. Note that this is done with a single realization and would therefore require to have a look at a number of realizations.
+
+
+## Exploration of spatial Correlations within a map
 
 ```{python}
 ### Let's try to look at covariance between nearby pixels
@@ -435,7 +493,7 @@ def explore_like(leff, mcl_noise, scl_noise, lmin, dl, cc, rv, otherp=None,
         maskpix[okpix] = 1
         Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=dl)
     
-#     print('Fsky: {}'.format(Namaster.fsky))
+    print('Fsky: {}'.format(Namaster.fsky))
     lbinned, b = Namaster.get_binning(nside)
 
     ### Bibnning CambLib
@@ -762,43 +820,6 @@ legend()
 ```
 
 ```{python}
-#### Reading sims from Lyon
-### Analyse results (similarly as in Analyze_ClCross_images)
-def read_one_lyon(dircls,prefix, lm,dl,cc, verbose=False, name='_Flat'):
-    filename = dircls+prefix+'_lmin_{0:}_dl_{1:}_cc_{2:}'.format(lm, dl, cc)+name+'.pk'
-    ff = glob.glob(filename)
-    if len(ff)!=1:
-        print('Problem with '+filename)
-        return -1,-1,-1
-    else:
-        ### Read file
-        with open(ff[0], 'rb') as handle:
-            leff, mcl,scl, _ = pickle.load(handle)
-        return leff,mcl,scl
-
-def read_sims_lyon(dircls,prefix,lm,dl,cc, verbose=False, type='best'):
-    print(lm,dl,cc)
-    if type=='flat':
-        leff, mcl, scl = read_one_lyon(dircls, prefix, lm, dl, cc, verbose=verbose, name='_Flat')
-        return leff, mcl, scl
-    elif type=='cov':
-        leff, mcl, scl = read_one_lyon(dircls, prefix, lm, dl, cc, verbose=verbose, name='_Cov')
-        return leff, mcl, scl
-    elif type=='best':
-        leff, mcl_flat, scl_flat = read_one_lyon(dircls, prefix, lm, dl, cc, verbose=verbose, name='_Flat')
-        leff, mcl_cov, scl_cov = read_one_lyon(dircls, prefix, lm, dl, cc, verbose=verbose, name='_Cov')
-    mcl = np.zeros_like(mcl_flat)
-    scl = np.zeros_like(scl_flat)
-    for i in range(len(leff)):
-        for s in range(4):
-            if scl_flat[i,s] <= scl_cov[i,s]:
-                mcl[i,s] = mcl_flat[i,s]
-                scl[i,s] = scl_flat[i,s]
-            else:
-                mcl[i,s] = mcl_cov[i,s]
-                scl[i,s] = scl_cov[i,s]
-    return leff, mcl, scl
-
 
 ```
 
@@ -868,11 +889,11 @@ all_prefix.append(prefix)
 all_titles.append('No Space Correlation')
 
 #### Simus avec alpha = 1
-dirsims = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoiseLyon/FastSim/'
-prefix = 'MC_June_9thMCFastNoise_n_1000_sig_75.0'
-all_dirsims.append(dirsims)
-all_prefix.append(prefix)
-all_titles.append('alpha=1')
+# dirsims = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoiseLyon/FastSimAlpha_1/'
+# prefix = 'MC_MCFastNoise_n_1000_sig_75.0'
+# all_dirsims.append(dirsims)
+# all_prefix.append(prefix)
+# all_titles.append('alpha=1')
 
 #### Simus avec Alpha = 4.5
 dirsims = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoiseLyon/FastSimAlpha_4.5/'
@@ -912,8 +933,7 @@ ylim(5e-4, 0.2)
 
 ```{python}
 signoise = 75.
-nbmc = 50
-alllmin = [10, 15, 20, 25, 30]
+alllmin = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60]
 alldelta_ell = [20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80]
 allcovcut = [0.1, 0.15, 0.2, 0.25, 0.3]
 # alllmin = [10, 15, 20, 25, 30]
@@ -926,11 +946,11 @@ allcovcut = [0.1, 0.15, 0.2, 0.25, 0.3]
 # tit='No Space Correlation'
 
 # #### Simus avec alpha = 1
-# dirsims = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoiseLyon/FastSim/'
-# prefix = 'MC_June_9thMCFastNoise_n_1000_sig_75.0'
+# dirsims = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoiseLyon/FastSimAlpha_1/'
+# prefix = 'MC_MCFastNoise_n_1000_sig_75.0'
 # tit='alpha=1'
 
-### Simus avec Alpha = 4.5
+#### Simus avec Alpha = 4.5
 dirsims = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoiseLyon/FastSimAlpha_4.5/'
 prefix = 'MC_MCFastNoise_n_1000_sig_75.0'
 tit='alpha=4.5'
@@ -971,14 +991,38 @@ for ilm in range(len(alllmin)):
 ```
 
 ```{python}
-rc('figure', figsize=(15, 6))
+rc('figure', figsize=(15, 10))
 rc('font', size=12)
 
 for ilm in range(len(alllmin)):
-    subplot(2,3,ilm+1)
+    subplot(4,3,ilm+1)
     myrlim = allrlim[ilm,:,:]
     #imshow(myrlim, origin='lower',vmin=np.min(myrlim),vmax=np.max(myrlim))
-    imshow(myrlim, origin='lower',vmin=0.0,vmax=0.04)
+    imshow(myrlim, origin='lower',vmin=0.0,vmax=0.04, aspect='auto')
+    #contourf(myrlim, levels=linspace(0.008, 0.02, 10))
+    mini = np.argwhere(myrlim == np.nanmin(myrlim))
+    plot(mini[0][1], mini[0][0], 'rx' ,ms=10, markeredgewidth=4,
+         label ='$\sigma(r)={0:6.4f}$'.format(np.nanmin(myrlim)))
+    plt.xticks(range(len(alldelta_ell)), alldelta_ell)
+    plt.yticks(range(len(allcovcut)), allcovcut)
+    xlabel('$\Delta\\ell$')
+    ylabel('Cov. Threshold')
+    title('$\\ell_m$={} - '.format(alllmin[ilm])+tit)
+    legend(loc='upper left')
+    colorbar()
+
+tight_layout()
+
+```
+
+```{python}
+rc('figure', figsize=(15, 8))
+rc('font', size=10)
+
+for ilm in range(len(alllmin)):
+    subplot(3,4,ilm+1)
+    myrlim = allrlim[ilm,:,:]
+    imshow(myrlim, origin='lower',vmin=0.008,vmax=0.02, interpolation='lanczos', aspect='auto')
     mini = np.argwhere(myrlim == np.nanmin(myrlim))
     plot(mini[0][1], mini[0][0], 'rx' ,ms=10, markeredgewidth=4,
          label ='$\sigma(r)={0:6.4f}$'.format(np.nanmin(myrlim)))
@@ -999,9 +1043,9 @@ tight_layout()
 
 ```{python}
     
-lm = 30
-dl = 50
-cc = 0.15
+lm = 40
+dl = 30
+cc = 0.1
 
 #### Simus avec Alpha = 4.5
 dirsims = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/FastSimsNoiseLyon/FastSimAlpha_4.5/'
@@ -1062,6 +1106,7 @@ if s==2:
     plot(lll, np.abs(cl0_01[:,s]),label='r=0.01')
     plot(lll, np.abs(cl0_06[:,s]),label='r=0.06')
 plot_errors_lines(leff, scl, dl, 'r', label='QUBIC {} - {} years'.format(d['config'], d['effective_duration']))
+title(r'$\ell_m = {} \;-\; \Delta_\ell = {} \;-\; Cov_c = {}$'.format(lm, dl, cc))
 xlim(0,512)
 ylim(np.min(scl[:,s])/5,np.max([np.max(inputcl[:512,s]*1.5),1.2*np.max(scl[:,s])]))
 yscale('log')
@@ -1075,11 +1120,16 @@ plot([rlim68, rlim68],[0,1.1],'k--', label='r < {0:5.3f} at 68% C.L.'.format(rli
 plot([rlim95, rlim95],[0,1.1],'k:', label='r < {0:5.3f} at 95% C.L.'.format(rlim95))
 annotate("BKP-2018\n 95% C.L.", xy=(0.06, 0.01), xytext=(0.06, 0.2),
             arrowprops=dict(width=10, headwidth=20), ha='center')
+title(r'$\ell_m = {} \;-\; \Delta_\ell = {} \;-\; Cov_c = {}$'.format(lm, dl, cc))
 legend()
 xlabel('r')
 ylabel('Posterior')
 xlim(0,0.07)
 ylim(0,1.1)
+```
+
+```{python}
+
 ```
 
 ```{python}

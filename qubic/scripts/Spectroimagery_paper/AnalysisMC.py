@@ -60,42 +60,54 @@ def std_profile(many_patch, nbins, nside, center, seenmap):
     return bin_centers, ang, std_bin, std_profile
 
 
-def get_residuals(rep_simu, residuals_way, irec):
+def get_residuals(fits_noise, fits_noiseless, residuals_way):
     """
     Compute residuals in a given way.
 
     Parameters
     ----------
-    rep_simu : str
-        Path containing the simulations.
+    fits_noise: list
+        List containing the reconstructed noisy maps (fits files)
+    fits_noiseless: str
+        Fits file containing the noiseless reconstruction
     residuals_way : str
         Way to compute residuals. 3 keywords : noiseless, conv or mean_recon
-    irec : int
-        Number of reconstructed subbands.
 
     Returns
     -------
         residuals : array of shape (#reals, #bands, #pixels, 3)
     """
-    _, maps_recon_patch, _, maps_diff_patch = rmc.get_patch_many_files(rep_simu,
-                                                                       '*nfrecon{}*False*'.format(irec),
-                                                                       verbose=False)
-    if residuals_way == 'noiseless':
-        _, patch_recon_nl, patch_conv_nl, patch_diff_nl = rmc.get_patch_many_files(rep_simu,
-                                                                                   '*nfrecon{}*True*'.format(irec),
-                                                                                   verbose=False)
-        residuals = maps_recon_patch - patch_recon_nl[0]
+    nreals = len(fits_noise)
+    residuals = []
 
-    elif residuals_way == 'conv':
-        residuals = maps_diff_patch
+    if residuals_way == 'mean_recon':
+        seenmap = rmc.get_seenmap(fits_noise[0])
+        recon, conv, diff = rmc.get_patch(fits_noise[0], seenmap)
+        nbands, npix, nstk = recon.shape
+        rec = np.zeros((nreals, nbands, npix, nstk))
+        for j in range(nreals):
+            seenmap = rmc.get_seenmap(fits_noise[j])
+            rec[j], _, _ = rmc.get_patch(fits_noise[j], seenmap)
 
-    elif residuals_way == 'mean_recon':
-        residuals = maps_recon_patch - np.mean(maps_recon_patch, axis=0)
+    for i in range(nreals):
+        seenmap = rmc.get_seenmap(fits_noise[i])
+        recon, conv, diff = rmc.get_patch(fits_noise[i], seenmap)
 
-    else:
-        raise ValueError('The way to compute residuals is not valid.')
 
-    return residuals
+        if residuals_way == 'noiseless':
+            recon_nl, conv_nl, diff_nl = rmc.get_patch(fits_noiseless, seenmap)
+            residuals.append(recon - recon_nl)
+
+        elif residuals_way == 'conv':
+            residuals.append(diff)
+
+        elif residuals_way == 'mean_recon':
+            residuals.append(recon - np.mean(rec, axis=0))
+
+        else:
+            raise ValueError('The way to compute residuals is not valid.')
+
+    return np.asarray(residuals)
 
 
 def rms_method(name, residuals_way, zones=1):
@@ -212,26 +224,26 @@ def get_covcorr1pix(maps, ipix, verbose=False, stokesjoint=False):
     if type(ipix) != int:
         raise TypeError('ipix has to be an integer number')
 
-    nfrec = maps.shape[1]  # Sub-bands
-    nreal = maps.shape[0]  # Sample realizations
+    nreal, nfrec, npix, nstk = np.shape(maps)
 
     if verbose:
         print('The shape of the input map has to be: (nsample, nfrecons, npix, 3): {}'.format(maps.shape))
         print('Number of reconstructed sub-bands to analyze: {}'.format(nfrec))
         print('Number of realizations: {}'.format(nreal))
+        print('Number of Stokes: {}'.format(nstk))
         print('Computing covariance matrix in pixel {}'.format(ipix))
 
-    data = np.reshape(maps[:, :, ipix, :], (nreal, nfrec * 3))
+    data = np.reshape(maps[:, :, ipix, :], (nreal, nfrec * nstk))
 
     if stokesjoint:
         if nfrec == 1:
             pass
         elif nfrec > 1:
             permutation = []
-            for istk in range(3):
+            for istk in range(nstk):
                 for isub in range(nfrec):
-                    permutation.append(3 * isub + istk)
-            data = np.reshape(maps[:, :, ipix, :], (nreal, nfrec * 3))
+                    permutation.append(nstk * isub + istk)
+            data = np.reshape(maps[:, :, ipix, :], (nreal, nfrec * nstk))
             data = data[:, permutation]
 
     cov1pix = np.cov(data, rowvar=False)
@@ -243,10 +255,9 @@ def get_covcorr1pix(maps, ipix, verbose=False, stokesjoint=False):
 def get_covcorr_patch(patch, stokesjoint=False, doplot=False):
     """
     This function computes the covariance matrix and the correlation matrix for a given patch in the sky.
-    It uses get_covcorr1pix() to compute the covariance and correlation matrix for each pixel (ipix)
-    and then computes a histogram for each term (I_0I_0,I_0Q_0,I_0U_0, etc) (patch).
+    It uses get_covcorr1pix() to compute the covariance and correlation matrix for each pixel (ipix).
 
-    Asumptions: patch.shape = (nsamples, nrecons, npix_patch, 3) --> to be able to use get_covcorr1pix
+    Asumptions: patch.shape = (nreals, nbands, npix_patch, nstokes) --> to be able to use get_covcorr1pix
 
     Parameters:
     -----------
@@ -288,15 +299,15 @@ def get_covcorr_patch(patch, stokesjoint=False, doplot=False):
         corr[:, :, ipix] = corr1pix
 
     if doplot:
-        plt.figure('Mean over pixels')
+        plt.figure()
         plt.subplot(121)
-        plt.imshow(np.mean(cov, axis=2), interpolation=None)
-        plt.title('Mean cov over pixels')
+        plt.imshow(cov[:, :, 0])
+        plt.title('Covariance pixel 0')
         plt.colorbar()
 
         plt.subplot(122)
-        plt.imshow(np.mean(corr, axis=2))
-        plt.title('Mean corr over pixels')
+        plt.imshow(corr[:, :, 0])
+        plt.title('Correlation pixel 0')
         plt.colorbar()
 
     return cov, corr
@@ -512,16 +523,15 @@ def get_weighted_correlation_average(x, cov):
     return weighted_mean, sig2
 
 
-def get_Cp(patch, nfrecon, verbose=True, doplot=True):
+def get_Cp(patch, verbose=True, doplot=True):
     """
     Returns covariance matrices between subbands for each Stokes parameter
     and each pixel.
 
     Parameters
     ----------
-    patch: array of shape (#reals, #bands, #pixels, 3)
-    nfrecon: list
-        Numbers of reconstructed subbands.
+    patch: ndarray
+        Shape (#reals, #bands, #pixels, 3)
     verbose: Bool
         If True makes a lot of prints.
     doplot: Bool
@@ -533,19 +543,13 @@ def get_Cp(patch, nfrecon, verbose=True, doplot=True):
         The covariance matrices.
 
     """
-    irec = np.shape(patch)[1]
-    npix_patch = np.shape(patch)[2]
-    # if irec == 1:
-    #     raise ValueError('If you already have 1 band, you do not need Cp which is computed to average subbands')
-
-    if irec not in nfrecon:
-        raise ValueError('Invalid number of freq. {0} not in {1}'.format(irec, nfrecon))
+    nreals, nfrecon, npix_patch, nstk = patch.shape
 
     # Prepare to save
     if verbose:
         print('==== Computing Cp matrix ====')
-        print('irec = ', irec)
-        print('nfrecon = ', nfrecon)
+        print('# realisations ', nreals)
+        print('# bands ', nfrecon)
         print('patch.shape = ', patch.shape)
         print('npix_patch = ', npix_patch)
 
@@ -556,17 +560,17 @@ def get_Cp(patch, nfrecon, verbose=True, doplot=True):
         print('covariance.shape =', covariance.shape)
 
     # Cut the covariance matrix for each Stokes parameter
-    Cp = np.empty((irec, irec, 3, npix_patch))
-    for istokes in range(3):
-        a = istokes * irec
-        b = (istokes + 1) * irec
+    Cp = np.empty((nfrecon, nfrecon, nstk, npix_patch))
+    for istokes in range(nstk):
+        a = istokes * nfrecon
+        b = (istokes + 1) * nfrecon
         Cp[:, :, istokes, :] = covariance[a:b, a:b, :]
     if verbose:
         print('Cp.shape = ', Cp.shape)
 
         # Look at the value in Cp and the determinant
         for ipix in range(10):
-            for istokes in range(3):
+            for istokes in range(nstk):
                 det = np.linalg.det(Cp[:, :, istokes, ipix])
                 print('det = ', det)
 
@@ -580,9 +584,11 @@ def make_weighted_av(patch, Cp, verbose=False):
     Average the maps over subbands using the covariance matrix between subbands.
     Parameters
     ----------
-    patch: array of shape (#reals, #bands, #pixels, 3)
-    Cp: array of shape (#bands, #bands, 3, #pixels)
+    patch: array
+        Shape (#reals, #bands, #pixels, #nstks)
+    Cp: array
         The covariance matrices.
+        Shape (#bands, #bands, #nstks, #pixels)
     verbose: bool
 
     Returns
@@ -591,20 +597,22 @@ def make_weighted_av(patch, Cp, verbose=False):
     sig2: variances over realisations on the map
 
     """
-    nreals = np.shape(patch)[0]
-    npix_patch = np.shape(Cp)[-1]
+    nreals, nbands, npix_patch, nstks = np.shape(patch)
+
     if verbose:
         print('Cp.shape = ', np.shape(Cp))
         print('# realizations = ', nreals)
-        print('npix_patch = ', npix_patch)
+        print('# bands = ', nbands)
+        print('# pixels = ', npix_patch)
+        print('# stokes = ', nstks)
 
-    weighted_av = np.zeros((nreals, npix_patch, 3))
-    sig2 = np.zeros((npix_patch, 3))
+    weighted_av = np.zeros((nreals, npix_patch, nstks))
+    sig2 = np.zeros((npix_patch, nstks))
 
     nsing = 0
     for ireal in range(nreals):
         for ipix in range(npix_patch):
-            for istokes in range(3):
+            for istokes in range(nstks):
                 x = patch[ireal, :, ipix, istokes]
                 # Only do it if the matrix is not singular:
                 if np.linalg.det(Cp[:, :, istokes, ipix]) != 0.:
@@ -638,22 +646,26 @@ def Cp2Cp_prime(Cp, verbose=True):
     before averaging.
     Parameters
     ----------
-    Cp: array of shape (#bands, #bands, 3, #pixels)
+    Cp: array
         The covariance matrices for each pixel.
+        Shape (#bands, #bands, #stokes, #pixels)
     verbose: bool
 
     Returns
     -------
-    Cp_prime: array of shape (#bands, #bands, 3, #pixels)
+    Cp_prime: array of shape (#bands, #bands, #Stokes, #pixels)
         The covariance matrices for each pixel.
 
     """
-    npix_patch = np.shape(Cp)[-1]
-    if verbose: print('npix_patch =', npix_patch)
+    nfrec, _, nstk, npix_patch = np.shape(Cp)
+    if verbose:
+        print('nfrec =', nfrec)
+        print('nstk =', nstk)
+        print('npix_patch =', npix_patch)
 
     # Normalize each matrix by the first element
     Np = np.empty_like(Cp)
-    for istokes in range(3):
+    for istokes in range(nstk):
         for ipix in range(npix_patch):
             Np[:, :, istokes, ipix] = Cp[:, :, istokes, ipix] / Cp[0, 0, istokes, ipix]
 
@@ -665,14 +677,14 @@ def Cp2Cp_prime(Cp, verbose=True):
 
     # We re-multiply N by the first term
     Cp_prime = np.empty_like(Cp)
-    for istokes in range(3):
+    for istokes in range(nstk):
         for ipix in range(npix_patch):
             Cp_prime[:, :, istokes, ipix] = Cp[0, 0, istokes, ipix] * N[:, :, istokes]
 
     if verbose:
         print('Cp_prime.shape =', Cp_prime.shape)
 
-    return Cp_prime
+    return N, Cp_prime
 
 
 def Cp2Cp_prime_viaCorr(Cp, verbose=True):
@@ -681,23 +693,26 @@ def Cp2Cp_prime_viaCorr(Cp, verbose=True):
     on pixels before the average.
     Parameters
     ----------
-    Cp: array of shape (#bands, #bands, 3, #pixels)
+    Cp: array
         The covariance matrices for each pixel.
+        Shape: (#bands, #bands, #Stokes, #pixels)
     verbose: bool
 
     Returns
     -------
-    Cp_prime: array of shape (#bands, #bands, 3, #pixels)
+    Cp_prime: array of shape (#bands, #bands, #Stokes, #pixels)
         The covariance matrices for each pixel.
 
     """
-    nfrec = np.shape(Cp)[0]
-    npix_patch = np.shape(Cp)[-1]
-    if verbose: print('npix_patch =', npix_patch)
+    nfrec, _, nstk, npix_patch = np.shape(Cp)
+    if verbose:
+        print('nfrec =', nfrec)
+        print('nstk =', nstk)
+        print('npix_patch =', npix_patch)
 
     # Convert cov matrices to correlation matrices
     Np = np.empty_like(Cp)
-    for istokes in range(3):
+    for istokes in range(nstk):
         for ipix in range(npix_patch):
             Np[:, :, istokes, ipix] = cov2corr(Cp[:, :, istokes, ipix])
 
@@ -709,7 +724,7 @@ def Cp2Cp_prime_viaCorr(Cp, verbose=True):
 
     # We re-multiply N to get back to covariance matrices
     Cp_prime = np.empty_like(Cp)
-    for istokes in range(3):
+    for istokes in range(nstk):
         for ipix in range(npix_patch):
             for i in range(nfrec):
                 for j in range(nfrec):
@@ -719,7 +734,7 @@ def Cp2Cp_prime_viaCorr(Cp, verbose=True):
     if verbose:
         print('Cp_prime.shape =', Cp_prime.shape)
 
-    return Cp_prime
+    return N, Cp_prime
 
 
 def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):

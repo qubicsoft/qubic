@@ -103,18 +103,31 @@ def get_maps_e2e(config, nsub):
         else:
             print('Not an available number of sub-frequencies: {} for config: {}'.format(nsub, config))
             stop
-    elif config == 'FI-150-JC':
+    elif config == 'TD-150-JC':
         # Simulations from JC - 3 years
-        # FI-150: Nptg=200000 tol = 1e-5 - NERSC - Kmax=8 - synthbeam_frac = 0.99 - nsub = [1] :-(
-        nptg = 200000
-        dirmaps=global_dir + '/doc/FastSimulator/Data/'
-        file_rnd_string='H990hwzaGn'   #this is just one of them....
+        # TD-150: Nptg=10000 tol = 1e-5 - MacQUBIC - Kmax=8 - synthbeam_frac = 0.99 - nsub = [1] :-(
+        nptg = 10000
+        dirmaps='/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_TD/Maps/'
+        file_rnd_string='ehPGWqIdex'   #this is just one of them....
         oksub = [1]
         if nsub in oksub:
             return read_files_mc(dirmaps, file_rnd_string, verbose=True)
         else:
             print('Not an available number of sub-frequencies: {} for config: {}'.format(nsub, config))
             stop
+    elif config == 'TD-150-ST':
+        # Simulations from Steve - 3 years
+        # TD-150: Nptg=10000 tol = 1e-5 - Johannes - Kmax=8 - synthbeam_frac = 0.99 - nsub = [1] :-(
+        nptg = 10000
+        dirmaps='/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_TD/FromSteve/EndToEndMaps/'
+        file_rnd_string='20200626T103718'   #this is just one of them....
+        oksub = [1]
+        if nsub in oksub:
+            return read_files_mc(dirmaps, file_rnd_string, verbose=True)
+        else:
+            print('Not an available number of sub-frequencies: {} for config: {}'.format(nsub, config))
+            stop
+
     else:
         print('Not yet there !')
         stop
@@ -124,8 +137,14 @@ We need to decide which Configuration we're analyzing and we will plot the corre
 
 ```{python}
 #### Configuration choice #######
-config = 'FI-150'    # can be 'FI-150-JC', 'FI-150-LM'
-all_nf = [1,2,3,4,5,8]
+# config = 'FI-150' 
+# all_nf = [1,2,3,4,5,8]
+#################################
+# config = 'TD-150-JC' 
+# all_nf = [1]
+#################################
+config = 'TD-150-ST' 
+all_nf = [1]
 #################################
 
 nfsub = 1
@@ -140,6 +159,8 @@ tight_layout()
 
 
 ```
+
+Now the following cell does the job to do all the fitting and creating files in the relevant directory (this section is at the end and may be commented if not willing to create the files thios very time...)
 
 ```{python}
 nbins = 30
@@ -234,15 +255,18 @@ for nfsub in all_nf:
     
     show()    
     
-    #### Save informations for running simulations in Lyon:
-    data = {'nfsub':nfsub, 'CovI':cI, 'CovQ':cQ, 'CovU':cU, 'signoise':75.,
-            'effective_variance_invcov':myfitcovs, 'clnoise':clth_tosave}
-    name = 'DataFastSimulator_'+config+'_nfsub_{}.pkl'.format(nfsub)
-    pickle.dump(data , open( global_dir + "doc/FastSimulator/Data/"+name, "wb" ) )
+    ######################################################################################
+    #### Save informations for the Fast SImulator ########################################
+    ######## Comment this is you don't want to overwrite files ! #########################
+    ######################################################################################
+#     data = {'nfsub':nfsub, 'CovI':cI, 'CovQ':cQ, 'CovU':cU, 'signoise':75.,
+#             'effective_variance_invcov':myfitcovs, 'clnoise':clth_tosave}
+#     name = 'DataFastSimulator_'+config+'_nfsub_{}.pkl'.format(nfsub)
+#     pickle.dump(data , open( global_dir + "doc/FastSimulator/Data/"+name, "wb" ) )
 
-datacov = {'coverage':cov}
-name = 'DataFastSimulator_'+config+'_coverage.pkl'
-pickle.dump(datacov , open( global_dir + "doc/FastSimulator/Data/"+name, "wb" ) )
+# datacov = {'coverage':cov}
+# name = 'DataFastSimulator_'+config+'_coverage.pkl'
+# pickle.dump(datacov , open( global_dir + "doc/FastSimulator/Data/"+name, "wb" ) )
 
 
 

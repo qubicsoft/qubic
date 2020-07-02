@@ -144,7 +144,7 @@ def get_maps_e2e(config, nsub):
     elif config == 'FI-220-JC':
         # Simulations from JC - 3 years
         # FI-220: Nptg=3000 tol = 1e-5 - MacQubic - Kmax=8 - synthbeam_frac = 0.99 - nsub = [1] :-(
-        nptg = 10000
+        nptg = 3000
         dirmaps='/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_FI_220/Maps/'
         file_rnd_string='djAnWQQD8q'   #this is just one of them....
         oksub = [1]
@@ -163,20 +163,20 @@ We need to decide which Configuration we're analyzing and we will plot the corre
 
 ```{python}
 #### Configuration choice #######
-# config = 'FI-150' 
-# all_nf = [1,2,3,4,5,8]
-# center = np.array([0,0])
-# nptg = 10000
+config = 'FI-150' 
+all_nf = [1,2,3,4,5,8]
+center = np.array([0,0])
+nptg = 10000
 #################################
 # config = 'FI-150-JC' 
 # all_nf = [1]
 # center=np.array([316.44761929, -58.75808063])
 # nptg = 200000
 #################################
-config = 'FI-220-JC' 
-all_nf = [1]
-center=np.array([316.44761929, -58.75808063])
-nptg = 3000
+# config = 'FI-220-JC' 
+# all_nf = [1]
+# center=np.array([316.44761929, -58.75808063])
+# nptg = 3000
 #################################
 # config = 'TD-150-JC' 
 # all_nf = [1]
@@ -301,11 +301,12 @@ for nfsub in all_nf:
     rc('figure', figsize=(16, 6))
     figure()
     stn = ['I','Q/2', 'U/2']
-    mini = np.min(np.array(corr_mats))
-    maxi = np.max(np.array(corr_mats))
+    bla = np.max([np.abs(np.min(np.array(corr_mats))), np.max(np.array(corr_mats))])
+    mini = -bla
+    maxi = bla
     for s in range(3):
         subplot(1,3,1+s)
-        imshow(corr_mats[s], vmin=mini, vmax=maxi)
+        imshow(corr_mats[s], vmin=mini, vmax=maxi, cmap='bwr')
         colorbar(orientation='horizontal')
         title('End-To-End Cov {} nsub={}'.format(stn[s],nfsub))
     show()
@@ -368,18 +369,22 @@ for nfsub in all_nf:
     #### Save informations for the Fast SImulator ########################################
     ######## Comment this is you don't want to overwrite files ! #########################
     ######################################################################################
-#     data = {'nfsub':nfsub, 'CovI':cI, 'CovQ':cQ, 'CovU':cU, 'signoise':75.,
-#             'effective_variance_invcov':myfitcovs, 'clnoise':clth_tosave}
-#     name = 'DataFastSimulator_'+config+'_nfsub_{}.pkl'.format(nfsub)
-#     pickle.dump(data , open( global_dir + "doc/FastSimulator/Data/"+name, "wb" ) )
+    data = {'nfsub':nfsub, 'CovI':cI, 'CovQ':cQ, 'CovU':cU, 'signoise':88.,
+            'effective_variance_invcov':myfitcovs, 'clnoise':clth_tosave}
+    name = 'DataFastSimulator_'+config+'_nfsub_{}.pkl'.format(nfsub)
+    pickle.dump(data , open( global_dir + "doc/FastSimulator/Data/"+name, "wb" ) )
 
-# datacov = {'coverage':cov}
-# name = 'DataFastSimulator_'+config+'_coverage.pkl'
-# pickle.dump(datacov , open( global_dir + "doc/FastSimulator/Data/"+name, "wb" ) )
+datacov = {'coverage':cov}
+name = 'DataFastSimulator_'+config+'_coverage.pkl'
+pickle.dump(datacov , open( global_dir + "doc/FastSimulator/Data/"+name, "wb" ) )
 
 
 
  
+
+```
+
+```{python}
 
 ```
 

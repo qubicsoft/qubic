@@ -201,7 +201,7 @@ Because in the above mode, most of the CPU time is spent on convolving the input
 reload(qss)
 
 newd = d.copy()
-newd['nf_recon'] = 2
+newd['nf_recon'] = 3
 
 ##### QubicSkySim instanciation
 seed = None
@@ -283,15 +283,16 @@ corr_mats = [DataFastSim['CovI'], DataFastSim['CovQ']/2, DataFastSim['CovU']/2]
 
 figure()
 stn = ['I','Q/2', 'U/2']
-mini = np.min(np.array([corr_mats, new_corr_mats]))
-maxi = np.max(np.array([corr_mats, new_corr_mats]))
+bla = np.max([np.abs(np.array([corr_mats, new_corr_mats])), np.array([corr_mats, new_corr_mats])])
+mini = -bla
+maxi = bla
 for s in range(3):
     subplot(2,3,1+s)
-    imshow(corr_mats[s], vmin=mini, vmax=maxi)
+    imshow(corr_mats[s], vmin=mini, vmax=maxi, cmap='bwr')
     colorbar(orientation='horizontal')
     title('End-To-End Cov {} nsub={}'.format(stn[s],newd['nf_recon']))
     subplot(2,3,4+s)
-    imshow(new_corr_mats[s], vmin=mini, vmax=maxi)
+    imshow(new_corr_mats[s], vmin=mini, vmax=maxi, cmap='bwr')
     colorbar(orientation='horizontal')
     title('FastSim Cov {} nsub={}'.format(stn[s],newd['nf_recon']))
 

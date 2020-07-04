@@ -10,6 +10,7 @@ import pysm.units as u
 from pysm import utils
 from pylab import *
 from scipy.optimize import curve_fit
+import pickle
 
 import camb.correlations as cc
 
@@ -17,6 +18,7 @@ import qubic
 from qubic import camb_interface as qc
 from qubic import fibtools as ft
 from qubic.utils import progress_bar
+from qubicpack.utilities import Qubic_DataDir
 
 __all__ = ['sky', 'Qubic_sky']
 
@@ -331,9 +333,12 @@ class Qubic_sky(sky):
 
         return fullmaps
 
-    def get_partial_sky_maps_withnoise(self, coverage, sigma_sec,
-                                       Nyears=3, verbose=False, FWHMdeg=None, seed=None,
-                                       effective_variance_invcov=None):
+    def get_partial_sky_maps_withnoise(self, coverage=None, sigma_sec=None,
+                                        Nyears=3., verbose=False, FWHMdeg=None, seed=None,
+                                        noise_profile=True, 
+                                        spatial_noise=True,
+                                        nunu_correlation = True,
+                                        noise_only=False):
         """
         This returns maps in the same way as with get_simple_sky_map but cut according to the coverage
         and with noise added according to this coverage and the RMS in muK.sqrt(sec) given by sigma_sec
@@ -361,21 +366,105 @@ class Qubic_sky(sky):
 
         """
 
-        # First get the convolved maps
-        maps = self.get_fullsky_convolved_maps(FWHMdeg=FWHMdeg, verbose=verbose)
+        nf_sub = self.dictionary['nf_recon']
+        # Beware, all nf_sub are not yet available...
+        if nf_sub not in [1,2,3,4,5,8]:
+            raise NameError('nf_sub needs to be in [1,2,3,4,5,8] for FastSimulation (currently...)')
 
-        # Restrict maps to observed pixels
-        seenpix = coverage > 0
-        maps[:, ~seenpix, :] = 0
+        # First get the convolved maps
+        if noise_only is False:
+            if verbose:
+                print('Convolving each input frequency map')
+            maps_all = self.get_fullsky_convolved_maps(FWHMdeg=FWHMdeg, verbose=verbose)
+
+            band = self.dictionary['filter_nu'] / 1e9
+            filter_relative_bandwidth = self.dictionary['filter_relative_bandwidth']
+            ### Input bands
+            Nfin = int(self.dictionary['nf_sub'])
+            Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = qubic.compute_freq(band, Nfin, filter_relative_bandwidth)
+            ### Output bands
+            Nfout = nf_sub
+            Nfreq_edges_out, nus_edge_out, nus_out, deltas_out, Delta_out, Nbbands_out = qubic.compute_freq(band, Nfout, filter_relative_bandwidth)
+
+            # Now averaging maps into reconstruction sub-bands maps
+            if verbose:
+                print('Averaging input maps from input sub-bands into reconstruction sub-bands:')
+            maps = np.zeros((nf_sub, 12*self.dictionary['nside']**2, 3))
+            for i in range(nf_sub):
+                print('doing band {} {} {}'.format(i, nus_edge_out[i], nus_edge_out[i+1]))
+                inband = (nus > nus_edge_out[i]) & (nus < nus_edge_out[i+1])
+                maps[i,:,:] = np.mean(maps_all[inband,:,:], axis=0)
+
+
+        ##############################################################################################################
+        # Restore data for FastSimulation ############################################################################
+        ##############################################################################################################
+        # files loacation
+        global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+
+        DataFastSim = pickle.load( open( global_dir +
+                                         '/doc/FastSimulator/Data/DataFastSimulator_{}-{}_nfsub_{}.pkl'.format(self.dictionary['config'],
+                                        str(int(self.dictionary['filter_nu']/1e9)), nf_sub), "rb" ) )
+
+        # DataFastSim = pickle.load( open( global_dir +
+        #                                  '/doc/FastSimulator/Data/DataFastSimulator_FI_Duration_3_nfsub_{}.pkl'.format(nf_sub), "rb" ) )
+
+        # Read Coverage map
+        if coverage is None:
+            DataFastSimCoverage = pickle.load( open( global_dir +
+                                         '/doc/FastSimulator/Data/DataFastSimulator_{}-{}_coverage.pkl'.format(self.dictionary['config'],
+                                        str(int(self.dictionary['filter_nu']/1e9))), "rb" ) )
+            coverage = DataFastSimCoverage['coverage']
+
+        # Read noise normalization
+        if sigma_sec is None:
+            sigma_sec = DataFastSim['signoise']
+
+        # # Read Nyears
+        # if Nyears is None:
+        #     Nyears = DataFastSim['years']
+
+        # Read Noise Profile
+        if noise_profile is True:
+            effective_variance_invcov = DataFastSim['effective_variance_invcov']
+        else:
+            effective_variance_invcov = None
+
+        # Read Spatial noise correlation
+        if spatial_noise is True:
+            clnoise = DataFastSim['clnoise']
+        else:
+            clnoise = None
+
+        # Read Noise Profile
+        if nunu_correlation is True:
+            covI = DataFastSim['CovI']
+            covQ = DataFastSim['CovQ']
+            covU = DataFastSim['CovU']
+            sub_bands_cov = [covI, covQ, covU]
+        else:
+            sub_bands_cov = None
+        ##############################################################################################################
 
         # Now pure noise maps
-        self.noisemaps = np.zeros_like(maps)
-        for i in range(self.dictionary['nf_sub']):
-            self.noisemaps[i, :, :] += self.create_noise_maps(sigma_sec, coverage,
-                                                              Nyears=Nyears, verbose=verbose, seed=seed,
-                                                              effective_variance_invcov=effective_variance_invcov)
+        if verbose:
+            print('Making noise realizations')
+        noisemaps = np.zeros((nf_sub, 12*self.dictionary['nside']**2, 3))
+        noisemaps = self.create_noise_maps(sigma_sec, coverage, nsub=nf_sub,
+                                            Nyears=Nyears, verbose=verbose, seed=seed,
+                                            effective_variance_invcov=effective_variance_invcov,
+                                            clnoise=clnoise,
+                                            sub_bands_cov=sub_bands_cov)
+        if nf_sub == 1:
+            noisemaps = np.reshape(noisemaps, (1, len(coverage), 3))
+        seenpix = noisemaps[0, :, 0] != 0
+        coverage[~seenpix] = 0
 
-        return maps + self.noisemaps
+        if noise_only:
+            return noisemaps, coverage
+        else:
+            maps[:,~seenpix,:] = 0
+            return maps + noisemaps, maps, noisemaps, coverage
 
 
     def create_noise_maps(self, sigma_sec, coverage, covcut =0.1, nsub=1, 
@@ -608,7 +697,7 @@ def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='
                 plot(xx**2, myYQU, label=label+' Average Q, U /sqrt(2)', alpha=0.3)
         else:
             pi = plot(xx**2,myYI, 'o', label=label+' I')
-            pqu = plot(xx**2,myYQU, 'o', label=label+' QU')
+            pqu = plot(xx**2,myYQU, 'o', label=label+' QU / sqrt(2)')
 
     if fit:
         mymodel = lambda x, a, b, c, d, e: (a + b * x + c * np.exp(-d * (x - e)))  # /(a+b+c*np.exp(-d*(1-e)))
@@ -627,7 +716,7 @@ def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='
                 plot(xx**2, mymodel(xx**2, *myfit[0]),  label=label+' Fit', color=p[0].get_color())
             else:
                 plot(xx**2, mymodel(xx**2, *myfitI[0]),  label=label+' Fit I', color=pi[0].get_color())
-                plot(xx**2, mymodel(xx**2, *myfitQU[0]),  label=label+' Fit QU', color=pqu[0].get_color())
+                plot(xx**2, mymodel(xx**2, *myfitQU[0]),  label=label+' Fit QU / sqrt(2)', color=pqu[0].get_color())
 
             #print(myfit[0])
         invcov_samples = np.linspace(1, 15, 1000)
@@ -654,9 +743,11 @@ def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='
 
 
 def get_angular_profile(maps, thmax=25, nbins=20, label='', center=np.array([316.44761929, -58.75808063]),
-                        allstokes=False, fontsize=None, doplot=False):
+                        allstokes=False, fontsize=None, doplot=False, separate=False):
     vec0 = hp.ang2vec(center[0], center[1], lonlat=True)
-    vecpix = hp.pix2vec(256, np.arange(12 * 256 ** 2))
+    sh = np.shape(maps)
+    ns = hp.npix2nside(sh[0])
+    vecpix = hp.pix2vec(ns, np.arange(12 * ns ** 2))
     angs = np.degrees(np.arccos(np.dot(vec0, vecpix)))
     rng = np.array([0, thmax])
     xx, yyI, dx, dyI, _ = ft.profile(angs, maps[:, 0], nbins=nbins, plot=False, rng=rng)
@@ -672,7 +763,10 @@ def get_angular_profile(maps, thmax=25, nbins=20, label='', center=np.array([316
         xlabel('Angle [deg.]')
         ylabel('RMS')
         legend(fontsize=fontsize)
-    return xx, avg
+    if separate:
+        return xx, dyI, dyQ, dyU
+    else:
+        return xx, avg
 
 
 def correct_maps_rms(maps, cov, effective_variance_invcov):
@@ -805,7 +899,7 @@ def ctheta_parts(themap, ipok, thetamin, thetamax, nbinstot, nsplit=4, degrade_i
     ### But it actually changes very little
     return thall, cthall
         
-def get_cov_nunu(maps, cov, nbins=20, QUsep=True):
+def get_cov_nunu(maps, cov, nbins=20, QUsep=True, return_flat_maps=False):
     # This function returns the sub-frequency, sub_frequency covariance matrix for each stoke parameter
     # it does not attemps to check for covariance between Stokes parameters (this should be icorporated later)
     # it returns the three covariance matrices as well as the fitted function of coverage that was used to
@@ -834,4 +928,7 @@ def get_cov_nunu(maps, cov, nbins=20, QUsep=True):
             cov_Q = np.array([[cov_Q]])
             cov_U = np.array([[cov_U]])
 
-    return cov_I, cov_Q, cov_U, all_fitcov, all_norm_noise
+    if return_flat_maps:
+        return cov_I, cov_Q, cov_U, all_fitcov, all_norm_noise, new_sub_maps
+    else:
+        return cov_I, cov_Q, cov_U, all_fitcov, all_norm_noise

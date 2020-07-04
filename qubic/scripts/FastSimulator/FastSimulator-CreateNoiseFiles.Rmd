@@ -1,0 +1,397 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# %matplotlib inline
+
+import healpy as hp
+import glob
+from scipy.optimize import curve_fit
+import pickle
+from importlib import reload
+import time
+import scipy
+
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm
+import qubic
+from qubic import QubicSkySim as qss
+from qubic import fibtools as ft
+from qubic import camb_interface as qc
+from qubic import SpectroImLib as si
+from qubic import NamasterLib as nam
+from qubic import mcmc
+
+reload(qss)
+reload(ft)
+
+rc('figure', figsize=(16, 10))
+rc('font', size=15)
+mpl.rcParams['image.cmap'] = 'jet'
+
+### Initialize
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+```
+
+# Fast Simulator - Noise Files Creation
+This notebook is aimed as a kind semi-automated script designed to create the files that are needed by the FastSimulator to produce QUBIC noise realizations with realitic noise properties fitted on the end-to-end simulations performed on. supercomputers. So we read these end-to-end simulations and fit the noise properties in different configurations, then write them on disk in the FastSimulator doc/FastSimulator/data directory (this may be moved to another location later if better).
+
+Currently (July 1st 2020) there are three configurations that are needed:
+1. FI at 150 GHZ with a random pointing and specctro-imaging covering 1,2,3,4,5 and 8 sub-bands
+2. FI at 220 GHZ with a random pointing and specctro-imaging covering 1,2,3,4,5 and 8 sub-bands
+3. TD at 150 GHZ with a random pointing and specctro-imaging covering 1,2,3,4,5 and 8 sub-bands
+
+Only the first one is currrently fully available and also right now the parameters are onluy fitted on a single realization while many have been produced. It would be very useful to produce these files based on averges over similar realizations as well as explore more configurations (such as kmax parameter).
+
+Let's read files first
+
+```{python}
+#### These functions reads the maps - the last one is intended as a common wrapper
+
+def read_files_mc(dirmap,file_rnd_string, verbose=False):
+    m = np.array(FitsArray(glob.glob(dirmap+'*_maps_recon_*'+file_rnd_string+'.fits')[0]))
+    c = np.array(FitsArray(glob.glob(dirmap+'*_maps_convolved_*'+file_rnd_string+'.fits')[0]))
+    cov = np.array(FitsArray(glob.glob(dirmap+'*_maps_coverage_*'+file_rnd_string+'.fits')[0]))
+    with open(glob.glob(dirmap+'*_dictionary_'+file_rnd_string+'.pickle')[0], 'rb') as handle: d = pickle.load(handle)
+    with open(glob.glob(dirmap+'*_input_cell_'+file_rnd_string+'.pickle')[0], 'rb') as handle: icl = pickle.load(handle)
+    filetype = glob.glob(dirmap+'*_maps_recon_*'+file_rnd_string+'.fits')[0].split('/')[-1]
+    if verbose: print('read {}'.format(filetype))
+    return m-c, cov
+
+
+def get_maps_from_louise(directory, nfsub):
+    mappatchfile = glob.glob(directory+'residualspatch_*_nfrecon{}.pkl'.format(nfsub))[0]
+    covfile = glob.glob(directory+'coverage_*_nfrecon{}.pkl'.format(nfsub))[0]
+    seenfile = glob.glob(directory+'seenmap_*_nfrecon{}.pkl'.format(nfsub))[0]
+    
+    residualspatch = pickle.load( open( mappatchfile, "rb" ) )
+    seenpix = pickle.load( open( seenfile, "rb" ) )
+    covpix = pickle.load( open( covfile, "rb" ) )
+    
+    nside = 256
+    residuals_map = np.zeros((nfsub, 12*256**2, 3))
+    for i in range(nfsub):
+        residuals_map[i,seenpix,:] = residualspatch[i][:,:]
+    
+    return residuals_map, covpix
+
+
+def get_maps_e2e(config, nsub):
+    if config == 'FI-150':
+        # Simulations from Louise
+        # FI-150: Nptg=10000 tol=1e-5 - NERSC - Kmax=8 - synthbeam_frac = 0.99 - nsub = [1,2,3,4,5,8]
+        oksub = [1,2,3,4,5,8]
+        dirmaps = global_dir + '/doc/FastSimulator/Data/Spectro-Imaging-Louise/'
+        if nsub in oksub:
+            return get_maps_from_louise(dirmaps,nfsub)
+        else:
+            print('Not an available number of sub-frequencies: {} for config: {}'.format(nsub, config))
+            stop
+            
+    elif config == 'FI-150-JC':
+        # Simulations from JC - 3 years
+        # FI-150: Nptg=200000 tol = 1e-5 - NERSC - Kmax=8 - synthbeam_frac = 0.99 - nsub = [1] :-(
+        nptg = 200000
+        dirmaps='//Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_NERSC/Maps/'
+        file_rnd_string='H990hwzaGn'   #this is just one of them....
+        oksub = [1]
+        if nsub in oksub:
+            return read_files_mc(dirmaps, file_rnd_string, verbose=True)
+        else:
+            print('Not an available number of sub-frequencies: {} for config: {}'.format(nsub, config))
+            stop
+            
+    elif config == 'TD-150-JC':
+        # Simulations from JC - 3 years
+        # TD-150: Nptg=10000 tol = 1e-5 - MacQUBIC - Kmax=8 - synthbeam_frac = 0.99 - nsub = [1] :-(
+        nptg = 10000
+        dirmaps='/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_TD/Maps/'
+        file_rnd_string='ehPGWqIdex'   #this is just one of them....
+        oksub = [1]
+        if nsub in oksub:
+            return read_files_mc(dirmaps, file_rnd_string, verbose=True)
+        else:
+            print('Not an available number of sub-frequencies: {} for config: {}'.format(nsub, config))
+            stop
+            
+    elif config == 'TD-150-ST':
+        # Simulations from Steve - 3 years
+        # TD-150: Nptg=10000 tol = 1e-5 - Johannes - Kmax=8 - synthbeam_frac = 0.99 - nsub = [1] :-(
+        nptg = 10000
+        dirmaps='/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_TD/FromSteve/EndToEndMaps/'
+        file_rnd_string='20200626T103718'   #this is just one of them....
+        oksub = [1]
+        if nsub in oksub:
+            return read_files_mc(dirmaps, file_rnd_string, verbose=True)
+        else:
+            print('Not an available number of sub-frequencies: {} for config: {}'.format(nsub, config))
+            stop
+
+    elif config == 'FI-220-JC':
+        # Simulations from JC - 3 years
+        # FI-220: Nptg=3000 tol = 1e-5 - MacQubic - Kmax=8 - synthbeam_frac = 0.99 - nsub = [1] :-(
+        nptg = 3000
+        dirmaps='/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_FI_220/Maps/'
+        file_rnd_string='djAnWQQD8q'   #this is just one of them....
+        oksub = [1]
+        if nsub in oksub:
+            return read_files_mc(dirmaps, file_rnd_string, verbose=True)
+        else:
+            print('Not an available number of sub-frequencies: {} for config: {}'.format(nsub, config))
+            stop
+
+    else:
+        print('Not yet there !')
+        stop
+```
+
+We need to decide which Configuration we're analyzing and we will plot the corresponding maps
+
+```{python}
+#### Configuration choice #######
+config = 'FI-150' 
+all_nf = [1,2,3,4,5,8]
+center = np.array([0,0])
+nptg = 10000
+#################################
+# config = 'FI-150-JC' 
+# all_nf = [1]
+# center=np.array([316.44761929, -58.75808063])
+# nptg = 200000
+#################################
+# config = 'FI-220-JC' 
+# all_nf = [1]
+# center=np.array([316.44761929, -58.75808063])
+# nptg = 3000
+#################################
+# config = 'TD-150-JC' 
+# all_nf = [1]
+# center=np.array([316.44761929, -58.75808063])
+# nptg = 10000
+#################################
+# config = 'TD-150-ST' 
+# all_nf = [1]
+# center=np.array([316.44761929, -58.75808063])
+# nptg = 10000
+#################################
+
+nfsub = 1
+maps, cov = get_maps_e2e(config,nfsub)
+
+okpix = (cov/np.max(cov)) > 0.1
+myrmsI = np.std(maps[0,okpix,0])
+nn = 3
+
+hp.mollview(cov, title=config+' Coverage nfsub={}'.format(nfsub))
+figure()
+stn = ['I','Q','U']
+for i in range(nfsub):
+    for s in range(3):
+        hp.mollview(maps[i,:,s], min = -nn*myrmsI, max = nn*myrmsI,
+                    sub=(nfsub,3,i*3+s+1), title=config + ' Residuals {} {}/{}'.format(stn[s],i+1,nfsub))
+tight_layout()
+
+
+figure()
+nfsub = 1
+maps, cov = get_maps_e2e(config,nfsub)
+hp.gnomview(cov/np.max(cov), title=config+' Coverage nfsub={}'.format(nfsub), rot=center, reso=20)
+figure()
+stn = ['I','Q','U']
+for i in range(nfsub):
+    for s in range(3):
+        hp.gnomview(maps[i,:,s], rot=center, reso=20, min = -nn*myrmsI, max = nn*myrmsI, 
+                    sub=(nfsub,3,i*3+s+1), title=config + ' Residuals {} {}/{}'.format(stn[s],i+1,nfsub))
+tight_layout()
+
+
+```
+
+```{python}
+reload(qss)
+rc('figure', figsize=(12, 6))
+xx, yyI, yyQ, yyU = qss.get_angular_profile(maps[0,:,:], nbins=30, separate=True, center=center)
+pix_size = hp.nside2resol(256, arcmin=True)
+plot(xx, yyI * pix_size, 'o',label='I')
+plot(xx, yyQ * pix_size , 'o',label='Q')
+plot(xx, yyU * pix_size, 'o',label='U')
+meanvalI = np.mean(yyI[xx<10]) * pix_size
+meanvalQU = np.mean((yyQ[xx<10]+yyQ[xx<10])/2) * pix_size
+axhline(y=meanvalI, label=r'I RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalI), color='r', ls=':')
+axhline(y=meanvalQU, label=r'QU RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalQU), color='m', ls=':')
+xlim(0,20)
+xlabel('Degrees from center of the field')
+ylabel(r'Noise RMS $[\mu K.arcmin]$')
+title('QUBIC End-To-End - '+config+' - Nptg = {}'.format(nptg))
+legend(fontsize=11)
+ylim(0,meanvalQU*2)
+
+print((meanvalQU/meanvalI)**2)
+#savefig('noiseprofile_mukarcmin.pdf')
+```
+
+There is something very strange on the RMS on the TD which appears way to high... by a factor 10... Is that related to what Daniele and Gabriel saw ? what was the reason at the end of the day ? I remember we figured out their too high ratio was fine, but I can't remember why...
+
+```{python}
+### With 10000 ptg
+TDrms = 4211.
+FIrms = 13.9 
+
+TD_NEP = 2.05e-16
+FI_NEP = 4.7e-17
+
+TD_TES = 248
+FI_TES = 1984
+
+TD_NH = 64
+FI_NH = 400
+
+print('Ratio from maps: {}'.format(TDrms / FIrms))
+
+ratio_cl = FI_NH/TD_NH * FI_TES/TD_TES * (TD_NEP/FI_NEP)**2
+
+print('Expected ratio on Cl: {}'.format(ratio_cl))
+print('Expected ratio on maps: {}'.format(np.sqrt(ratio_cl)))
+```
+
+Now the following cell does the job to do all the fitting and creating files in the relevant directory (this section is at the end and may be commented if not willing to create the files thios very time...)
+
+```{python}
+reload(qss)
+nbins = 30
+
+
+for nfsub in all_nf:
+    maps, cov = get_maps_e2e(config,nfsub)
+    #### Noise Profile Fitting ###########################################################################
+    rc('figure', figsize=(16, 10))
+    figure()
+    myfitcovs = []
+    for isub in range(nfsub):
+        sqn = np.int(np.sqrt(nfsub))
+        if (sqn**2) != nfsub:
+            sqn += 1
+        subplot(sqn,sqn,isub+1)
+
+        xx, yyfs, fitcov = qss.get_noise_invcov_profile(maps[isub,:,:], cov, QUsep=True, nbins=nbins,
+                                                        label='End-To-End sub={}/{}'.format(isub+1,nfsub), 
+                                                        fit=True, norm=False,
+                                                        allstokes=True, doplot=True)
+        legend(fontsize=9)
+        myfitcovs.append(fitcov)
+    show()
+
+    #### nunu Covariance #################################################################################
+    cI, cQ, cU, fitcov, noise_norm = qss.get_cov_nunu(maps, cov, QUsep=True)
+    corr_mats = [cI, cQ/2, cU/2]
+    rc('figure', figsize=(16, 6))
+    figure()
+    stn = ['I','Q/2', 'U/2']
+    bla = np.max([np.abs(np.min(np.array(corr_mats))), np.max(np.array(corr_mats))])
+    mini = -bla
+    maxi = bla
+    for s in range(3):
+        subplot(1,3,1+s)
+        imshow(corr_mats[s], vmin=mini, vmax=maxi, cmap='bwr')
+        colorbar(orientation='horizontal')
+        title('End-To-End Cov {} nsub={}'.format(stn[s],nfsub))
+    show()
+
+    #### C(theta) Measurement ############################################################################
+    rc('figure', figsize=(16, 6))
+    figure()
+    fct = lambda x, a, b, c: a * np.sin(x/b) * exp(-x/c)
+    thth = np.linspace(0,180,1000)
+    allcth = []
+    allclth = []
+    allresults = []
+    pixgood = (cov/np.max(cov)) > 0.1 
+    for i in range(nfsub):
+        corrected_qubicnoise = qss.correct_maps_rms(maps[i,:,:], cov, myfitcovs[i])
+        th, thecth = qss.ctheta_parts(corrected_qubicnoise[:,0], pixgood, 0, 20, 20, nsplit=5, degrade_init=128, verbose=False)
+        okfit = isfinite(thecth)
+
+        results = curve_fit(fct, th[okfit][1:], (thecth[okfit][1:]/thecth[0]),maxfev=100000, ftol=1e-7, p0=[0,1,1])
+        allcth.append(thecth)
+        allresults.append(results)
+        subplot(1,2,1)
+        p=plot(th, allcth[i]/allcth[i][0],'o', label='End-To-End Sub {}'.format(i+1))
+        plot(thth, fct(thth, *allresults[i][0]), color=p[0].get_color())
+        axhline(y=0,color='k', ls=':')
+        xlim(0,20)
+        legend(fontsize=9)
+        xlabel(r'$\theta$ [deg]')
+        ylabel(r'$C(\theta$)')
+
+        #### Convert to Cl and display
+        ctheta = fct(thth, *allresults[i][0])
+        ctheta[0] =1
+        lll, clth = qc.ctheta_2_cell(thth, ctheta, lmax=1024)
+        alpha = 4.5 ### See notebook called "2pt-Correlation Function" for an empirical explanation of alpha
+        clth = (clth -1 ) * alpha + 1
+
+        allclth.append(clth)
+        subplot(1,2,2)
+        plot(lll, clth, label='End-To-End Sub {}'.format(i+1), color=p[0].get_color())
+        axhline(y=1,color='k', ls=':')
+        xlabel(r'$\ell$')
+        ylabel(r'$C_\ell$')
+    
+    #### The option below will save the average over sub-bands of the Clth
+    #### However significant residuals exist on the end-to-end simulations as of today, and
+    #### they would nbe reproduced here, while they are likely to be caused by some issue
+    #clth_tosave = np.mean(np.array(allclth), axis=0)
+    #### As a result we will instead save the nsub=1 correlation function
+    if nfsub == 1:
+        clth_tosave = clth
+        
+    # Plot the saved one
+    plot(lll, clth_tosave, lw=3,color='k', label='saved')
+    legend(fontsize=9)
+    
+    show()    
+    
+    ######################################################################################
+    #### Save informations for the Fast SImulator ########################################
+    ######## Comment this is you don't want to overwrite files ! #########################
+    ######################################################################################
+    data = {'nfsub':nfsub, 'CovI':cI, 'CovQ':cQ, 'CovU':cU, 'signoise':88.,
+            'effective_variance_invcov':myfitcovs, 'clnoise':clth_tosave}
+    name = 'DataFastSimulator_'+config+'_nfsub_{}.pkl'.format(nfsub)
+    pickle.dump(data , open( global_dir + "doc/FastSimulator/Data/"+name, "wb" ) )
+
+datacov = {'coverage':cov}
+name = 'DataFastSimulator_'+config+'_coverage.pkl'
+pickle.dump(datacov , open( global_dir + "doc/FastSimulator/Data/"+name, "wb" ) )
+
+
+
+ 
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

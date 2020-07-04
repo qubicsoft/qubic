@@ -43,6 +43,13 @@ rc('font', size=15)
 ```
 
 ```{python}
+import matplotlib.colors as mcolors
+mcolors.TABLEAU_COLORS.keys()
+
+colorlist = list(mcolors.TABLEAU_COLORS.keys())
+```
+
+```{python}
 # Maps obtained with the full pipeline
 dirmaps = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/corr_matrices/pourJC/'
 
@@ -101,10 +108,14 @@ x0.shape
 ```{python}
 # With 1 realisation only
 all_nfrecon = [1, 2, 3, 4, 5, 8]
-nfrecon = 5
+nfrecon = 3
 maps, coverage, seenmap = get_maps_from_louise(dirmaps, nfrecon)
 
 cI, cQ, cU, _, _ = qss.get_cov_nunu(maps, coverage, QUsep=True)
+```
+
+```{python}
+plt.imshow(cI)
 ```
 
 ```{python}
@@ -137,7 +148,7 @@ signoise = 88
 # Get the noise profile in each subband
 myfitcovs = []
 for isub in range(nfrecon):
-    xx, yyfs, fitcov = qss.get_noise_invcov_profile(maps[0, isub, :, :], 
+    xx, yyfs, fitcov = qss.get_noise_invcov_profile(maps[isub, :, :], 
                                                     coverage, 
                                                     QUsep=True,
                                                     label='Input Map {}'.format(nfrecon), 
@@ -173,7 +184,7 @@ for isub in range(nfrecon):
                                                     coverage, 
                                                     QUsep=True,
                                                     label='FastSim sub={}/{}'.format(isub+1, nfrecon), 
-                                                    fit=False, 
+                                                    fit=True, 
                                                     norm=False,
                                                     allstokes=False, 
                                                     doplot=True)
@@ -182,33 +193,33 @@ for isub in range(nfrecon):
              label='End-To-End Fit sub={}/{}'.format(isub+1, nfrecon))
     plt.legend(fontsize=9)
 
-cInew, cQnew, cUnew, fitcov, noise_norm = qss.get_cov_nunu(new_sub_maps, coverage, QUsep=True)
+# cInew, cQnew, cUnew, fitcov, noise_norm = qss.get_cov_nunu(new_sub_maps, coverage, QUsep=True)
 
-# For the plot
-corr_mats = [cI, cQ/2, cU/2]
-new_corr_mats = [cInew, cQnew/2, cUnew/2]
+# # For the plot
+# corr_mats = [cI, cQ/2, cU/2]
+# new_corr_mats = [cInew, cQnew/2, cUnew/2]
 
-figure()
-stn = ['I','Q/2', 'U/2']
-mini = np.min(np.array(corr_mats))
-maxi = np.max(np.array(corr_mats))
-for s in range(3):
-    subplot(2,3,1+s)
-    imshow(corr_mats[s], vmin=mini, vmax=maxi)
-    colorbar(orientation='horizontal')
-    title('End-To-End Cov {} nsub={}'.format(stn[s], nfrecon))
+# figure()
+# stn = ['I','Q/2', 'U/2']
+# mini = np.min(np.array(corr_mats))
+# maxi = np.max(np.array(corr_mats))
+# for s in range(3):
+#     subplot(2,3,1+s)
+#     imshow(corr_mats[s], vmin=mini, vmax=maxi)
+#     colorbar(orientation='horizontal')
+#     title('End-To-End Cov {} nsub={}'.format(stn[s], nfrecon))
     
-    subplot(2,3,4+s)
-    imshow(new_corr_mats[s], vmin=mini, vmax=maxi)
-    colorbar(orientation='horizontal')
-    title('FastSim Cov {} nsub={}'.format(stn[s],nfrecon))
+#     subplot(2,3,4+s)
+#     imshow(new_corr_mats[s], vmin=mini, vmax=maxi)
+#     colorbar(orientation='horizontal')
+#     title('FastSim Cov {} nsub={}'.format(stn[s],nfrecon))
 
 
 ```
 
 ```{python}
 # Make many realisations
-nreals = 2
+nreals = 100
 npix = 12 * d['nside']**2
 
 maps_recon = np.zeros((nreals, nfrecon, npix, 3))
@@ -251,6 +262,7 @@ nbins = len(ell_binned)
 print('nbins:', nbins)
 print('ell binned:', ell_binned)
 
+
 ```
 
 ### Auto spectrum
@@ -259,39 +271,44 @@ print('ell binned:', ell_binned)
 # Auto spectrum
 w = None
 
-real = 0
-cells_recon = np.zeros((nfrecon, nbins, 4))
+# real = 0
+cells_recon = np.zeros((nreals, nfrecon, nbins, 4))
 # Get spectra
-for isub in range(nfrecon):
-    maps = maps_recon[real, isub, :, :] #+ x0[isub, :, :]
-    leff, cells_recon[isub, :, :], w = Namaster.get_spectra(maps.T, mask_apo, w=w,
-                                          purify_e=True, 
-                                          purify_b=False, 
-                                          beam_correction=None,
-                                          pixwin_correction=True)
-  
+for real in range(nreals):
+    for isub in range(nfrecon):
+        maps = maps_recon[real, isub, :, :] #+ x0[isub, :, :]
+        leff, cells_recon[real, isub, :, :], w = Namaster.get_spectra(maps.T, mask_apo, w=w,
+                                                                  purify_e=True, 
+                                                                  purify_b=False, 
+                                                                  beam_correction=None,
+                                                                  pixwin_correction=True)
+
 ```
 
 ```{python}
-import matplotlib.colors as mcolors
-mcolors.TABLEAU_COLORS.keys()
-
-colorlist = list(mcolors.TABLEAU_COLORS.keys())
+for nbin in range(16):
+    plt.scatter(cells_recon[:, 0, nbin, 1], cells_recon[:, 1, nbin, 1])
+    pval = np.polyfit(cells_recon[:, 0, nbin, 0], cells_recon[:, 1, nbin, 0], deg=1)
+    print(pval)
+    x = np.linspace(np.min(cells_recon[:, 0, nbin, 1]), np.max(cells_recon[:, 0, nbin, 1]), 10)
+    plt.plot(x, np.polyval(pval, x))
+    plt.title(f'{nbin}')
+    plt.grid()
+    plt.show()
+    
 ```
 
 ```{python}
 clnames = ['TT', 'EE', 'BB', 'TE']
-# with plt.xkcd():
 rc('figure', figsize=(12, 8))
 
 fig, axs = plt.subplots(2, 2)
 axs = axs.ravel()
 
-color = ['b', 'r', 'g', 'k', 'y', 'orange', 'brown', 'purple']
 for i in range(4):
     ax = axs[i]
     for isub in range(nfrecon): 
-        ax.plot(leff[:], cells_recon[isub, :, i],'o', color=colorlist[isub], 
+        ax.plot(leff[:], cells_recon[0, isub, :, i],'o', color=colorlist[isub], 
                  label='Recon {}'.format(isub))
     ax.set_xlabel('$\\ell$')
     ax.set_ylabel('$D_\\ell$')
@@ -311,20 +328,17 @@ ax.legend(fontsize=8, loc='right')
 ncross = nreals // 2
 print(nbins, ncross)
 cells_cross = np.zeros((ncross, nfrecon, nbins, 4))
-cells_conv = np.zeros((ncross, nfrecon, nbins, 4))
 
 # Get spectra
 w = None
 for isub in range(nfrecon):
     print('isub:', isub)
     cross = 0
-#     for c in combinations(np.arange(5), 2):
     for c1 in range(0, nreals-1, 2): # do not mix pairs to avoid correlation 
         c2 = c1 + 1 
         c = (c1, c2)
-        print(c)
-        map1 = maps_recon[c[0], isub, :, :] #+ x0[isub, :, :]
-        map2 = maps_recon[c[1], isub, :, :] #+ x0[isub, :, :]
+        map1 = maps_recon[c1, isub, :, :] #+ x0[isub, :, :]
+        map2 = maps_recon[c2, isub, :, :] #+ x0[isub, :, :]
         leff, cells_cross[cross, isub, :, :], w = Namaster.get_spectra(map1.T, 
                                                                       mask_apo, 
                                                                       map2.T,

@@ -12,13 +12,15 @@ jupyter:
     name: python3
 ---
 
-# QUBIC spectroimaging
+# QUBIC spectroimaging dust
 
 #### Editing by Martin Gamboa, Louise Mousset, 2019/09/02
 
 This notebook is part of a set of notebooks with the idea to show spectroimaging capabilities of qubicsoft. There are 2 notebooks:
 * spectroimaging_pointsource.Rmd: Test map-making for two point source emmiting in monochromatic frecuency and superimpose two signals in different frecuency and see how the reconstruction works
 * spectroimaging_dust.Rmd: test map-making using cmb+dust signal
+
+In this notebook, we make a full simulation and to end and the analysis. It is usefull to make small tests on your own computer.
 
 ```{python}
 # %matplotlib inline

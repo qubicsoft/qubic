@@ -39,7 +39,8 @@ import ReadMC as rmc
 ```
 
 ```{python}
-rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/galaxy_center_d1/nfsub15/'
+nfrecon = 3
+rep = f'/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/galaxy_center_d1/nfrecon{nfrecon}/'
 dictionary = glob.glob(rep + '/*.dict')[0]
 print(dictionary)
 
@@ -51,14 +52,14 @@ d.read_from_file(dictionary)
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 
 # Number of subbands used during the simulation
-nf_sub_rec = 5
-nf_sub = d['nf_sub']
-print('nf_sub = {}, nf_recon = {}'.format(nf_sub, nf_sub_rec))
+
+nfsub = d['nf_sub']
+print('nf_sub = {}, nf_recon = {}'.format(nfsub, nfrecon))
 
 # Get fits files names in a list
-fits_noise = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessFalse*.fits'.format(nf_sub, nf_sub_rec), 
+fits_noise = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessFalse*.fits'.format(nfsub, nfrecon), 
                               recursive=True))
-fits_noiseless = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessTrue*.fits'.format(nf_sub, nf_sub_rec), 
+fits_noiseless = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessTrue*.fits'.format(nfsub, nfrecon), 
                               recursive=True))
 
 print(fits_noiseless)
@@ -98,10 +99,10 @@ np.where(seenmap)
 
 ```{python}
 # Get maps
-_, _, nus_rec, _, _, _ = compute_freq(150, nf_sub_rec)
+_, _, nus_rec, _, _, _ = compute_freq(150, nfrecon)
 
-maps_recon = np.empty((nreals, nf_sub_rec, npix, 3))
-maps_conv = np.empty((nreals, nf_sub_rec, npix, 3))
+maps_recon = np.empty((nreals, nfrecon, npix, 3))
+maps_conv = np.empty((nreals, nfrecon, npix, 3))
 for i, real in enumerate(fits_noise):
     maps_recon[i], maps_conv[i], _ = rmc.get_maps(real)
 
@@ -188,6 +189,96 @@ for i in range(20):
 
 
     
+```
+
+# Compare input sky and convolution
+
+
+### Try just with Healpy
+
+```{python}
+# Make a sky with dust
+nfrecon = 5
+d['nside'] = 2
+d['nf_sub'] = nfrecon
+q = qubic.QubicMultibandInstrument(d)
+_, _, nus_rec, _, _, _ = compute_freq(150, nfrecon)
+
+sky_config = {'dust': 'd1'}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+sky = Qubic_sky.get_simple_sky_map()
+
+# Smooth the sky with 
+sky_conv = np.zeros_like(sky)
+for i in range(nfrecon):
+    freq = q[i].filter.nu
+    print('freq:', freq)
+    fwhm = q[i].synthbeam.peak150.fwhm * (150e9 / freq)
+    print('FWHM:', fwhm)
+    for istk in range(3):
+        sky_conv[i, :, istk] = hp.sphtfunc.smoothing(sky[i, :, istk], fwhm)
+
+```
+
+```{python}
+# Decrease seenmap NSIDE to get pixels seen 
+nside_new = 2
+seenmap_dgrad = hp.ud_grade(seenmap, nside_new)
+thepix = np.where(seenmap_dgrad)[0]
+print(thepix)
+
+```
+
+### Add the qubic convolution
+
+```{python}
+# Input sky
+seed = 42
+d['nside'] = 2
+d['nf_sub'] = 15
+d['npointings'] = 1000
+sky_config = {'dust': 'd1'}#, 'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+skyqubic = Qubic_sky.get_simple_sky_map()
+print('Input map with shape:', skyqubic.shape)
+hp.mollview(skyqubic[2,:,0], rot=center)
+```
+
+```{python}
+# Get the convolved sky using qubic soft
+_, nus_edge_rec, nus_rec, _, _, _ = compute_freq(150, nfrecon)
+q = qubic.QubicMultibandInstrument(d)
+p = qubic.get_pointing(d)
+s = qubic.QubicScene(d)
+a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_rec)
+tod, skyqubic_conv = a.get_observation(sky) 
+
+skyqubic_conv = np.array(skyqubic_conv)
+```
+
+```{python}
+istk = 0
+Stokes = ['I', 'Q', 'U']
+for i in range(4):
+    pix = thepix[i]
+    plt.figure(figsize=(15, 4))
+    plt.subplot(121)
+    plt.plot(nus_rec, sky[:, pix, istk], 'ro', alpha=0.5, label=f'Input sky')
+    plt.plot(nus_rec, sky_conv[:, pix, istk], 'bo', alpha=0.5, label=f'Convolution with Healpix')
+    plt.plot(nus_rec, skyqubic_conv[:, pix, istk], 'go', alpha=0.5, label='Covolution with qubic soft')
+    
+    plt.legend()
+    plt.title('Pixel {}, NSIDE=2, {}'.format(pix, Stokes[istk]))
+    plt.xlabel('Frequency [GHz]')
+    plt.ylabel('I [µK]')
+
+    theta, phi = hp.pix2ang(d['nside'], pix)
+    print(theta, phi)
+    
+    hp.mollview(sky[0, :, 0]*seenmap_dgrad, sub=(122), title='Pixel {}'.format(pix))
+    hp.visufunc.projtext(theta, phi, 'PIX', color='r', fontsize=15)
+
+
 ```
 
 ```{python}

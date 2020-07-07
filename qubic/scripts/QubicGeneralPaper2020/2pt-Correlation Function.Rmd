@@ -103,8 +103,7 @@ tight_layout()
 ```{python}
 reload(qss)
 rc('figure', figsize=(12, 6))
-xx, yyI, yyQ, yyU = qss.get_angular_profile(new_maps, nbins=30,
-                                              label='{}'.format(newns), separate=True)
+xx, yyI, yyQ, yyU = qss.get_angular_profile(residuals_maps, nbins=30, separate=True)
 pix_size = hp.nside2resol(d['nside'], arcmin=True)
 plot(xx, yyI * pix_size, 'o',label='I')
 plot(xx, yyQ * pix_size , 'o',label='Q')
@@ -120,7 +119,7 @@ title('QUBIC End-To-End - 3 years')
 legend()
 ylim(0,50)
 
-savefig('noiseprofile_mukarcmin.pdf')
+#savefig('noiseprofile_mukarcmin.pdf')
 ```
 
 ### Calculation of the 2-pt Correlation Function in pixel-space

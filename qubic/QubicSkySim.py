@@ -697,7 +697,7 @@ def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='
                 plot(xx**2, myYQU, label=label+' Average Q, U /sqrt(2)', alpha=0.3)
         else:
             pi = plot(xx**2,myYI, 'o', label=label+' I')
-            pqu = plot(xx**2,myYQU, 'o', label=label+' QU')
+            pqu = plot(xx**2,myYQU, 'o', label=label+' QU / sqrt(2)')
 
     if fit:
         mymodel = lambda x, a, b, c, d, e: (a + b * x + c * np.exp(-d * (x - e)))  # /(a+b+c*np.exp(-d*(1-e)))
@@ -716,7 +716,7 @@ def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='
                 plot(xx**2, mymodel(xx**2, *myfit[0]),  label=label+' Fit', color=p[0].get_color())
             else:
                 plot(xx**2, mymodel(xx**2, *myfitI[0]),  label=label+' Fit I', color=pi[0].get_color())
-                plot(xx**2, mymodel(xx**2, *myfitQU[0]),  label=label+' Fit QU', color=pqu[0].get_color())
+                plot(xx**2, mymodel(xx**2, *myfitQU[0]),  label=label+' Fit QU / sqrt(2)', color=pqu[0].get_color())
 
             #print(myfit[0])
         invcov_samples = np.linspace(1, 15, 1000)
@@ -899,7 +899,7 @@ def ctheta_parts(themap, ipok, thetamin, thetamax, nbinstot, nsplit=4, degrade_i
     ### But it actually changes very little
     return thall, cthall
         
-def get_cov_nunu(maps, cov, nbins=20, QUsep=True):
+def get_cov_nunu(maps, cov, nbins=20, QUsep=True, return_flat_maps=False):
     # This function returns the sub-frequency, sub_frequency covariance matrix for each stoke parameter
     # it does not attemps to check for covariance between Stokes parameters (this should be icorporated later)
     # it returns the three covariance matrices as well as the fitted function of coverage that was used to
@@ -928,4 +928,7 @@ def get_cov_nunu(maps, cov, nbins=20, QUsep=True):
             cov_Q = np.array([[cov_Q]])
             cov_U = np.array([[cov_U]])
 
-    return cov_I, cov_Q, cov_U, all_fitcov, all_norm_noise
+    if return_flat_maps:
+        return cov_I, cov_Q, cov_U, all_fitcov, all_norm_noise, new_sub_maps
+    else:
+        return cov_I, cov_Q, cov_U, all_fitcov, all_norm_noise

@@ -93,7 +93,6 @@ def get_residuals(fits_noise, fits_noiseless, residuals_way):
         seenmap = rmc.get_seenmap(fits_noise[i])
         recon, conv, diff = rmc.get_patch(fits_noise[i], seenmap)
 
-
         if residuals_way == 'noiseless':
             recon_nl, conv_nl, diff_nl = rmc.get_patch(fits_noiseless, seenmap)
             residuals.append(recon - recon_nl)
@@ -453,8 +452,9 @@ def covariance_IQU_subbands(allmaps, stokesjoint=False):
 
     Parameters
     ----------
-    allmaps : list of arrays of shape (nreals, nsub, npix, 3)
-        list of maps for each number of subband
+    allmaps : list
+        List of arrays of shape (nreals, nsub, npix, 3)
+        List of maps for each number of sub-bands.
     
     stokesjoint: if True return Stokes parameter together 
         I0,I1,..., Q0,Q1,..., U0,U1, ... . Otherwise will return
@@ -517,9 +517,15 @@ def get_weighted_correlation_average(x, cov):
     The weighted mean and the variance on that mean.
 
     """
-    inv_cov = np.linalg.inv(cov)
+    try:
+        # Try with Cholesky method (faster)
+        L = np.linalg.inv(np.linalg.cholesky(cov))
+        inv_cov = L.T @ L
+    except np.linalg.LinAlgError:
+        # If singular matrix because of numerical precision do it with np.inv
+        inv_cov = np.linalg.inv(cov)
     sig2 = 1. / np.sum(inv_cov)
-    weighted_mean = sig2 * np.sum(np.dot(inv_cov, x))
+    weighted_mean = sig2 * np.sum(inv_cov @ x)
     return weighted_mean, sig2
 
 

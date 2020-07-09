@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -22,6 +22,7 @@ import pickle
 from importlib import reload
 import time
 import scipy
+import matplotlib.pyplot as plt
 
 
 # Specific qubic modules
@@ -41,7 +42,7 @@ reload(ft)
 
 rc('figure', figsize=(16, 10))
 rc('font', size=15)
-mpl.rcParams['image.cmap'] = 'jet'
+plt.rcParams['image.cmap'] = 'jet'
 ```
 
 ```{python}

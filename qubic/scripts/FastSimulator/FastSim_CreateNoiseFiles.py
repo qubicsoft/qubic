@@ -30,8 +30,7 @@ def plot_maps(residuals, seenmap, center, nfsub, config, dirsave=None):
     stn = ['I', 'Q', 'U']
     myrmsI = np.std(residuals[0, seenmap, 0])
     nn = 3
-    mpl.rcParams.update({'font.size': 120})
-    plt.figure(figsize=(100, 100))
+    plt.figure(figsize=(20, 40))
     for i in range(nfsub):
         for s in range(3):
 
@@ -188,7 +187,7 @@ def ctheta_measurement(residuals, coverage, myfitcovs, nfsub, config, dirsave=No
 all_nf = [1, 2, 3, 4, 5, 8]
 center = np.array([0, 0])
 nptg = 10000
-config = 'TD150'
+config = 'FI220' # ou TD150
 nbins = 30
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
 datadir = os.environ['DATA_SPECTROIM'] + 'Data_for_FastSimulator/'

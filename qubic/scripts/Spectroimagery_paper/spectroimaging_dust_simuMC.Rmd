@@ -64,9 +64,10 @@ colorlist = list(mcolors.TABLEAU_COLORS.keys())
 # Get the files
 datadir = os.environ['DATA_SPECTROIM']
 # rep = datadir + 'simu_TD/'
-rep = datadir + 'simu_FI220/'
+# rep = datadir + 'simu_FI220/'
+rep = datadir + 'simu_FI150/'
 
-nfrecon = 5
+nfrecon = 8
 # rep = datadir + f'/nfrecon{nfrecon}/'
 
 dictionary = glob.glob(rep + '/*.dict')[0]
@@ -90,7 +91,7 @@ print(fits_noise, fits_noiseless)
 
 ```{python}
 # Frequencies of the reconstructed subbands
-Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(220, nfrecon)
+Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(150, nfrecon)
 print(nus)
 ```
 
@@ -139,12 +140,12 @@ maps_residuals[:, :, seenmap, :] = residuals
 ```{python}
 istk = 0
 real = 0
-plt.figure(figsize=(20, 40))
+plt.figure(figsize=(20, 30))
 plt.subplots_adjust(wspace=0.2, hspace=0.5)
 # plt.suptitle('JobID: ' + rep[-9: -1])
 rr = 15
 min = 0
-max = 10000
+max = 1e4
 
 for band in range(nfrecon):
     hp.gnomview(maps_conv[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+1), 
@@ -156,36 +157,30 @@ for band in range(nfrecon):
                 title = '{0} - Reconstruction'.format(d['kind'][istk]), min=min, max=max)
     hp.gnomview(maps_residuals[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+3), 
                 rot=center, reso=rr, notext=True,
-                title = '{0} - Residuals with noiseless'.format(d['kind'][istk]), min=-20, max=20)
+                title = '{0} - Residuals with noiseless'.format(d['kind'][istk]), min=-70, max=70)
 plt.tight_layout()
 
 ```
 
 #### Difference between mean_recon and noiseless
 
-We expect they are equal but in some simulation they are not. Maybe because of a convergence issue.
+We expect they are equal but in some simulation they are not. Maybe because of a convergence issue. 
+
+Of course this makes sens only if you have many realisations.
 
 ```{python}
-noiseless.shape
-maps_recon.shape
-maps_recon[0, :, seenmap, :].shape
-```
-
-```{python}
-band = 4
+band = 2
 istk = 0
-toto = np.zeros_like(noiseless)
-toto[:, seenmap, :] = maps_recon[0][:, seenmap, :] - noiseless[:, seenmap, :]
-toto = maps_recon[0] - noiseless
-hp.gnomview(maps_recon[0, band, :, istk], cmap='jet', sub=(131), 
+diff = np.mean(maps_recon, axis=0) - noiseless
+hp.gnomview(np.mean(maps_recon, axis=0)[band, :, istk], cmap='jet', sub=(131), 
                 rot=center, reso=rr, notext=True, min=0, max=10000,
-                title = 'Recon')
+                title = 'Recon mean')
 hp.gnomview(noiseless[band, :, istk], cmap='jet', sub=(132), 
                 rot=center, reso=rr, notext=True, min=0, max=10000,
                 title = 'Noiseless')
-hp.gnomview(toto[band, :, istk], cmap='jet', sub=(133), 
+hp.gnomview(diff[band, :, istk], cmap='jet', sub=(133), 
                 rot=center, reso=rr, notext=True, min=-70, max=70,
-                title = 'Recon - Noiseless')
+                title = 'Recon mean - Noiseless')
 ```
 
 ## Coverage
@@ -217,9 +212,11 @@ plt.legend()
 Here we save the files that will be used to create data for FastSimulator
 
 ```{python}
-# rep_save = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/Data_for_FastSimulator/'
-# rep = datadir + 'simu_TD/'
+# rep_save = datadir + 'Data_for_FastSimulator/'
+# # rep = datadir + 'simu_TD/'
 # # rep = datadir + 'simu_FI220/'
+# rep = datadir + 'simu_FI150/'
+
 
 # for nfrecon in [1, 2, 3, 4, 5, 8]:
 
@@ -233,32 +230,32 @@ Here we save the files that will be used to create data for FastSimulator
 #     # Get seen map (observed pixels)
 #     seenmap = rmc.get_seenmap(fits_noiseless[0])
 #     print('seenmap shape:', seenmap.shape)
-#     np.save(rep_save + f'seenmap_{nfrecon}bands_TD150.npy', seenmap)
+#     np.save(rep_save + f'seenmap_{nfrecon}bands_FI150.npy', seenmap)
     
 #     # Get the coverage
 #     fitsfile = fits.open(fits_noise[0])
 #     coverage = fitsfile['COVERAGE'].data
 #     coverage_patch = coverage[seenmap]
 #     coverage_norm = coverage_patch / np.max(coverage_patch)
-#     np.save(rep_save + f'coverage_{nfrecon}bands_TD150.npy', coverage_norm)
+#     np.save(rep_save + f'coverage_{nfrecon}bands_FI150.npy', coverage_norm)
 
    
 #     # Compute residuals in a given way
 #     residuals = amc.get_residuals(fits_noise, fits_noiseless[0], 'noiseless')
-#     np.save(rep_save + f'residuals_{nfrecon}bands_TD150.npy', residuals[0])
+#     np.save(rep_save + f'residuals_{nfrecon}bands_FI150.npy', residuals[0])
 #     print(residuals.shape)
 
 ```
 
 ```{python}
-sm = np.load(rep_save + f'seenmap_{nfrecon}bands_FI220.npy')
-sm.shape
+sm = np.load(rep_save + f'seenmap_{nfrecon}bands_FI150.npy')
+print(sm.shape)
 
-cov = np.load(rep_save + f'coverage_{nfrecon}bands_FI220.npy')
-cov
+cov = np.load(rep_save + f'coverage_{nfrecon}bands_FI150.npy')
+print(cov.shape)
 
-res = np.load(rep_save + f'residuals_{nfrecon}bands_FI220.npy')
-res.shape
+res = np.load(rep_save + f'residuals_{nfrecon}bands_FI150.npy')
+print(res.shape)
 ```
 
 ## Power spectrum

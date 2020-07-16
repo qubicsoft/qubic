@@ -18,7 +18,7 @@ First we compute the covariances matrices. Then we recombined the subbands the s
 
 ```{python}
 # %matplotlib inline
-
+import os
 import glob
 import pickle
 import numpy as np
@@ -52,8 +52,13 @@ In both cases, they are cross spectra on residuals so they should be 0.
 
 
 ```{python}
-rep_fullpipe = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/cls_spectrum_fullpipelinesimu/'
-rep_spectrumCC = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/cls_spectrum_fromCC/'
+datadir = os.environ['DATA_SPECTROIM']
+```
+
+```{python}
+rep_fullpipe = datadir + '/cls_spectrum_fullpipelinesimu/'
+
+rep_spectrumCC = datadir + '/FastSimulator/cls_spectrum_fromCC/'
 ```
 
 ```{python}
@@ -81,7 +86,7 @@ clnames = ['TT', 'EE', 'BB', 'TE']
 nfrecon = 3
 # cls_cross = np.load(rep_spectrumCC + 'cross_nfrecon{}.npy'.format(nfrecon))
 # cls_cross = np.load(rep_fullpipe + 'cross_residuals_nfrecon{}.npy'.format(nfrecon))
-cls_cross = np.load(rep_spectrumCC + f'spectrum_mixreal_nfrecon{nfrecon}.npy')
+cls_cross = np.load(rep_spectrumCC + f'spectrum_samereal_nfrecon{nfrecon}.npy')
 print(cls_cross.shape)
 
 nreals = cls_cross.shape[0]
@@ -98,6 +103,21 @@ combi = combi1 + combi2
 
 print(combi)
 ncombi = len(combi)
+
+newcombi = list(combinations_with_replacement(np.arange(nfrecon), 2))
+print(newcombi)
+
+# Reorder cross spectra, from 00 11 22 01 02 12 to 00 01 02 11 12 22
+permutation = []
+for i in newcombi:
+    permutation.append(combi.index(i))
+print(permutation)
+
+print(cls_cross[0, :, :2, 0])
+cls_cross = cls_cross[:, permutation, :, :]
+
+
+print(cls_cross[0, :, :2, 0])
 ```
 
 ```{python}
@@ -159,7 +179,7 @@ for i in range(4):
                 cross_mean_residuals[cross, :, i],
                 yerr=cross_std_residuals[cross, :, i] * np.sqrt(2),
                 marker='o', color=colorlist[cross], linestyle='none', 
-                label='band {}'.format(combi[cross]))
+                label='band {}'.format(newcombi[cross]))
 
     ax.set_xlabel('$\\ell$')
     ax.set_ylabel('$D_\\ell$')
@@ -170,10 +190,6 @@ for i in range(4):
 plt.tight_layout()
 
 
-```
-
-```{python}
-cls_cross.shape
 ```
 
 ```{python}
@@ -206,7 +222,7 @@ for b in range(nbins):
 ```{python}
 labs = []
 for i in range(ncombi):
-    labs.append(f'{combi[i][0]}{combi[i][1]}')
+    labs.append(f'{newcombi[i][0]}{newcombi[i][1]}')
 print(labs)
 
 plt.figure(figsize=(20, 100))
@@ -308,7 +324,7 @@ print(bigcov.shape)
 labs = []
 for s in range(4):
     for i in range(ncombi):
-        labs.append(clnames[s] + f'{combi[i][0]}{combi[i][1]}')
+        labs.append(clnames[s] + f'{newcombi[i][0]}{newcombi[i][1]}')
         
 print(labs)
 ```
@@ -375,41 +391,57 @@ print(covbinband.shape)
 ```
 
 ```{python}
-rep_spectrumCC
-```
-
-```{python}
 # Get matrices and save them for all nfrecon
-# allnfrecon = [1, 2, 3, 4, 5, 8]
-# for nf in allnfrecon:
-#     cls_cross = np.load(rep_spectrumCC + 'spectrum_mixreal_nfrecon{}.npy'.format(nf))
-#     print(cls_cross.shape)
-#     cls_cross_reshape = np.moveaxis(cls_cross, [1, 2, 3], [3, 1, 2])
-#     covbinband, corrbinband = amc.get_covcorr_patch(cls_cross_reshape, stokesjoint=True, doplot=False)
-#     print(covbinband[:, :, 2].shape)
-#     np.save(rep_spectrumCC + 'BBcovariance_bincross_nfrecon{}_mixreal.npy'.format(nf), covbinband[:, :, 2])
-#     np.save(rep_spectrumCC + 'BBcorrelation_bincross_nfrecon{}_mixreal.npy'.format(nf), corrbinband[:, :, 2])
+allnfrecon = [1, 2, 3, 4, 5, 8]
+for nfrecon in allnfrecon:
+    cls_cross = np.load(rep_spectrumCC + 'spectrum_samereal_nfrecon{}.npy'.format(nfrecon))
+    print(cls_cross.shape)
+    
+    # Reorder cross spectra
+    combi1 = [(i, i) for i in range(nfrecon)]
+    combi2 = list(combinations(np.arange(nfrecon), 2))
+    combi = combi1 + combi2
+    print(combi)
+
+    newcombi = list(combinations_with_replacement(np.arange(nfrecon), 2))
+    print(newcombi)
+
+    permutation = []
+    for i in newcombi:
+        permutation.append(combi.index(i))
+    print(permutation)
+
+    cls_cross = cls_cross[:, permutation, :, :]
+
+
+    cls_cross_reshape = np.moveaxis(cls_cross, [1, 2, 3], [3, 1, 2])
+    covbinband, corrbinband = amc.get_covcorr_patch(cls_cross_reshape, stokesjoint=True, doplot=False)
+    print(covbinband[:, :, 2].shape)
+    np.save(rep_spectrumCC + 'BBcovariance_bincross_nfrecon{}_samereal.npy'.format(nfrecon), covbinband[:, :, 2])
+    np.save(rep_spectrumCC + 'BBcorrelation_bincross_nfrecon{}_samereal.npy'.format(nfrecon), corrbinband[:, :, 2])
 ```
 
 ```{python}
 # Load matrice already saved
-# nfrecon = 3
-# covbinband = np.load(rep_spectrumCC + 'covariance_binfrec_nfrecon{}.npy'.format(nfrecon))
-# corrbinband = np.load(rep_spectrumCC + 'correlation_binfrec_nfrecon{}.npy'.format(nfrecon))
+nfrecon = 3
+covbinbandBB = np.load('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/'
+                       + 'BBcovariance_bincross_nfrecon{}_samereal.npy'.format(nfrecon))
+# covbinbandBB = np.load(rep_spectrumCC + 'BBcovariance_bincross_nfrecon{}_mixreal.npy'.format(nfrecon))
+# corrbinbandBB = np.load(rep_spectrumCC + 'BBcorrelation_bincross_nfrecon{}_mixreal.npy'.format(nfrecon))
 ```
 
 ```{python}
 labsx,labsy = [], []
 for i in range(ncombi):
-    labsx.append(f'{combi[i][0]}{combi[i][1]}b0')
+    labsx.append(f'{newcombi[i][0]}{newcombi[i][1]}b0')
     for s in range(nbins):
-        labsy.append(f'{combi[i][0]}{combi[i][1]}b{s}')
+        labsy.append(f'{newcombi[i][0]}{newcombi[i][1]}b{s}')
         
 print(labsy)
 
 labs = []
 for i in range(ncombi):
-    labs.append(f'Cross {combi[i][0]}{combi[i][1]}')
+    labs.append(f'Cross {newcombi[i][0]}{newcombi[i][1]}')
 ```
 
 ```{python}
@@ -422,8 +454,10 @@ plt.xticks(np.arange(8, nbins*ncombi, nbins), labs, fontsize=20)
 for s in range(ncombi-1):
     plt.axhline(y=(s+1)*nbins-0.5, lw=3, color='k')
     plt.axvline(x=(s+1)*nbins-0.5, lw=3, color='k')
-vmax = np.max(np.abs(covbinband[:, :, ispectre]))
-plt.imshow(covbinband[:, :, ispectre], vmin=-vmax, vmax=vmax, cmap='bwr')
+# vmax = np.max(np.abs(covbinband[:, :, ispectre]))
+# plt.imshow(covbinband[:, :, ispectre], vmin=-vmax, vmax=vmax, cmap='bwr')
+vmax = np.max(np.abs(covbinbandBB))
+plt.imshow(covbinbandBB, vmin=-vmax, vmax=vmax, cmap='bwr')
 plt.title('Covariance matrix (nfreq*nbins)x(nfreq*nbins) for {} spectrum'.format(clnames[ispectre]), 
          fontsize=20)
 plt.colorbar()
@@ -448,13 +482,14 @@ plt.colorbar()
 ```{python}
 # Plot the max of the covariance matrix vs nfrecon
 # Not sure it makes sens
+allrecon = [1, 2, 3, 4, 5, 8]
 covmax = np.zeros((len(allrecon), 4))
-for i, nfrecon in enumerate(allrecon):
+for i, nfrecon in enumerate(allrecon[:-1]):
     print(i, nfrecon)
-    covbinband = np.load(rep_spectrumCC + 'covariance_binfrec_nfrecon{}.npy'.format(nfrecon))
+    covbinband = np.load('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/BBcovariance_bincross_nfrecon{}_mixreal.npy'.format(nfrecon))
     print(covbinband.shape)
     print(np.max(covbinband))
-    covmax[i, :] = np.max(covbinband, axis=(0, 1))
+    covmax[i, :] = np.max(np.diag(covbinband))
 #     covmax[i, :] = covbinband[0, 0, :]
 
 plt.figure(figsize=(12, 12))    
@@ -505,7 +540,7 @@ plt.plot(sig2MC[:, s], 'o',color=colorlist[s], label='$\sigma^2$ MC {}'.format(c
 plt.plot(sig2MC00[:, s], 'o', color=colorlist[s+1], label='$\sigma^2$ MC 00 {}'.format(clnames[s]))
 plt.plot(sig2MC_prime[:, s], 'o', color=colorlist[s+2], label='$\sigma^2$ MC prime {}'.format(clnames[s]))
 plt.legend()
-plt.title('{} bands map recombined in 1 band for {}'.format(nfrecon, clnames[s]))
+plt.title('{} bands recombined in 1 band for {}'.format(nfrecon, clnames[s]))
 plt.xlabel('bin')
 plt.ylabel('$\sigma^2$')
 ```
@@ -522,7 +557,7 @@ plt.plot(ell_binned, np.sqrt(sig2MC[:, s]), 'o',color=colorlist[s], label='$\sig
 plt.plot(ell_binned, np.sqrt(sig2MC00[:, s]), 'o', color=colorlist[s+1], label='$\sigma$ MC 00 {}'.format(clnames[s]))
 plt.plot(ell_binned, np.sqrt(sig2MC_prime[:, s]), 'o', color=colorlist[s+2], label='$\sigma$ MC prime {}'.format(clnames[s]))
 plt.legend()
-plt.title('{} bands map recombined in 1 band for {}'.format(nfrecon, clnames[s]))
+plt.title('{} bands recombined in 1 band for {}'.format(nfrecon, clnames[s]))
 plt.xlabel('$l$')
 plt.ylabel('$\sigma$')
 ```

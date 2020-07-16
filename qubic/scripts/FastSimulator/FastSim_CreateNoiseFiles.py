@@ -1,6 +1,5 @@
 import healpy as hp
 import matplotlib.pyplot as plt
-import matplotlib as mpl
 import os
 import numpy as np
 from scipy.optimize import curve_fit
@@ -184,14 +183,18 @@ def ctheta_measurement(residuals, coverage, myfitcovs, nfsub, config, dirsave=No
     return allresults, allcth, allclth, lll, clth
 
 
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+# Repository with full pipeline simulations
+datadir = os.environ['DATA_SPECTROIM'] + 'Data_for_FastSimulator/'
+
+# Repository where plots will be saved
+dirsave = os.environ['DATA_SPECTROIM'] + 'Data_for_FastSimulator/plots/'
+
 all_nf = [1, 2, 3, 4, 5, 8]
 center = np.array([0, 0])
 nptg = 10000
-config = 'FI220' # ou TD150
+config = 'FI150' # or TD150 or FI150
 nbins = 30
-global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
-datadir = os.environ['DATA_SPECTROIM'] + 'Data_for_FastSimulator/'
-dirsave = os.environ['DATA_SPECTROIM'] + 'Data_for_FastSimulator/plots/'
 
 for nfsub in all_nf:
     print(f'\n STARTING nfsub = {nfsub}')

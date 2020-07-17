@@ -39,7 +39,14 @@ import ReadMC as rmc
 ```
 
 ```{python}
-rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/galaxy_center_d1/nfsub15/'
+np.rad2deg(4*np.pi/(12*4**2))
+```
+
+```{python}
+nfrecon = 3
+datadir = os.environ['DATA_SPECTROIM']
+rep = datadir + f'simu_nersc_dust_fullpipeline/nfrecon{nfrecon}/'
+print(rep)
 dictionary = glob.glob(rep + '/*.dict')[0]
 print(dictionary)
 
@@ -51,14 +58,14 @@ d.read_from_file(dictionary)
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 
 # Number of subbands used during the simulation
-nf_sub_rec = 5
-nf_sub = d['nf_sub']
-print('nf_sub = {}, nf_recon = {}'.format(nf_sub, nf_sub_rec))
+
+nfsub = d['nf_sub']
+print('nf_sub = {}, nf_recon = {}'.format(nfsub, nfrecon))
 
 # Get fits files names in a list
-fits_noise = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessFalse*.fits'.format(nf_sub, nf_sub_rec), 
+fits_noise = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessFalse*.fits'.format(nfsub, nfrecon), 
                               recursive=True))
-fits_noiseless = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessTrue*.fits'.format(nf_sub, nf_sub_rec), 
+fits_noiseless = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessTrue*.fits'.format(nfsub, nfrecon), 
                               recursive=True))
 
 print(fits_noiseless)
@@ -73,7 +80,7 @@ x0 = Qubic_sky.get_simple_sky_map()
 print('Input map with shape:', x0.shape)
 hp.mollview(x0[2,:,0],rot=center)
 
-Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(150, nf_sub)
+Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(150, nfsub)
 ```
 
 ```{python}
@@ -98,10 +105,10 @@ np.where(seenmap)
 
 ```{python}
 # Get maps
-_, _, nus_rec, _, _, _ = compute_freq(150, nf_sub_rec)
+_, _, nus_rec, _, _, _ = compute_freq(150, nfrecon)
 
-maps_recon = np.empty((nreals, nf_sub_rec, npix, 3))
-maps_conv = np.empty((nreals, nf_sub_rec, npix, 3))
+maps_recon = np.empty((nreals, nfrecon, npix, 3))
+maps_conv = np.empty((nreals, nfrecon, npix, 3))
 for i, real in enumerate(fits_noise):
     maps_recon[i], maps_conv[i], _ = rmc.get_maps(real)
 
@@ -188,6 +195,113 @@ for i in range(20):
 
 
     
+```
+
+# Compare input sky and convolution
+
+
+### Try just with Healpy
+
+```{python}
+# Make a sky with dust
+nfrecon = 5
+d['nside'] = 4
+d['nf_sub'] = nfrecon
+q = qubic.QubicMultibandInstrument(d)
+_, _, nus_rec, _, _, _ = compute_freq(150, nfrecon)
+
+
+sky_config = {'dust': 'd1'}#, 'cmb': seed} 
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+sky = Qubic_sky.get_simple_sky_map()
+
+hp.mollview(sky[0, :, 0])
+
+# Go to NSIDE=128
+sky128 = np.zeros((nfrecon, 12*128**2, 3))
+for i in range(nfrecon):
+    for istk in range(3):
+        sky128[i, :, istk] = hp.ud_grade(sky[i, :, istk], 128)
+    
+# Smooth the sky with 
+sky_conv = np.zeros_like(sky128)
+for i in range(nfrecon):
+    freq = q[i].filter.nu
+    print('freq:', freq)
+    fwhm = q[i].synthbeam.peak150.fwhm * (150e9 / freq)
+    print('\n FWHM:', fwhm * 60)
+    for istk in range(3):
+        sky_conv[i, :, istk] = hp.sphtfunc.smoothing(sky128[i, :, istk], fwhm)
+
+```
+
+```{python}
+q[i].synthbeam.peak150.fwhm * 60
+```
+
+```{python}
+# Decrease seenmap NSIDE to get pixels seen 
+nside_new = 128
+seenmap_dgrad = hp.ud_grade(seenmap, nside_new)
+thepix = np.where(seenmap_dgrad)[0]
+print(len(thepix))
+
+```
+
+### Add the qubic convolution
+
+```{python}
+# Get the convolved sky using qubic soft
+_, nus_edge_rec, nus_rec, _, _, _ = compute_freq(150, nfrecon)
+q = qubic.QubicMultibandInstrument(d)
+p = qubic.get_pointing(d)
+s = qubic.QubicScene(d)
+a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_rec)
+tod, skyqubic_conv = a.get_observation(sky) 
+
+skyqubic_conv = np.array(skyqubic_conv)
+```
+
+```{python}
+np.max(sky128)
+```
+
+```{python}
+# istk = 0
+Stokes = ['I', 'Q', 'U']
+for i in range(6000):
+    pix = thepix[i]
+    cond1 = np.abs(sky128[4, pix, istk] - sky128[0, pix, istk]) < 50
+    cond2 = np.abs(sky128[0, pix, istk] - sky_conv[0, pix, istk]) > np.abs(sky128[4, pix, istk] - sky_conv[4, pix, istk])
+    if cond2:
+        plt.figure(figsize=(15, 4))
+
+        plt.subplot(131)
+        plt.plot(nus_rec, sky128[:, pix, istk], 'ro', alpha=0.5, label=f'Input sky')
+        plt.plot(nus_rec, sky_conv[:, pix, istk], 'bo', alpha=0.5, label=f'Convolution with Healpix')
+    #     plt.plot(nus_rec, skyqubic_conv[:, pix, istk], 'go', alpha=0.5, label='Covolution with qubic soft')
+
+        plt.legend()
+        plt.title('Pixel {}, NSIDE=2, {}'.format(pix, Stokes[istk]))
+        plt.xlabel('Frequency [GHz]')
+        plt.ylabel('I [µK]')
+
+        theta, phi = hp.pix2ang(128, pix)
+    #     print(theta, phi)
+
+        hp.gnomview(sky128[0, :, 0]*seenmap_dgrad, sub=(132), title='Pixel {} input'.format(pix), 
+                    rot=center, reso=30)
+        hp.visufunc.projscatter(theta, phi, color='r')
+        print(sky128[0, pix, 0], sky128[3, pix, 0])
+    #     hp.visufunc.projtext(theta, phi, sky[0, pix, 0], color='r')
+
+        hp.gnomview(sky_conv[3, :, 0]*seenmap_dgrad, sub=(133), title='Pixel {} conv'.format(pix), 
+                    rot=center, reso=30)
+        hp.visufunc.projscatter(theta, phi, color='r')
+    #     hp.visufunc.projtext(theta, phi, sky[3, pix, 0], color='r')
+
+
+
 ```
 
 ```{python}

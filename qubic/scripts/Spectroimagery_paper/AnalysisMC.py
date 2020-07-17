@@ -300,12 +300,13 @@ def get_covcorr_patch(patch, stokesjoint=False, doplot=False):
     if doplot:
         plt.figure()
         plt.subplot(121)
-        plt.imshow(cov[:, :, 0])
+        vmax = np.max(np.abs(cov[:, :, 0]))
+        plt.imshow(cov[:, :, 0], vmin=-vmax, vmax=vmax, cmap='bwr')
         plt.title('Covariance pixel 0')
         plt.colorbar()
 
         plt.subplot(122)
-        plt.imshow(corr[:, :, 0])
+        plt.imshow(corr[:, :, 0], vmin=-1, vmax=1, cmap='bwr')
         plt.title('Correlation pixel 0')
         plt.colorbar()
 

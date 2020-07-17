@@ -1,22 +1,14 @@
 from __future__ import division
 
 import numpy as np
-import random
-import string
-import os
 import scipy.interpolate as interp
 
 import healpy as hp
-import pysm
-import pysm.units as u
-from pysm import utils
 import camb
 import camb.correlations as cc
 import pickle
 
-import qubic
 from qubic.utils import progress_bar
-from qubic import NamasterLib as nam
 
 
 def get_camb_Dl(lmax=2500, H0=67.5, ombh2=0.022, omch2=0.122, mnu=0.06, omk=0, tau=0.06, As=2e-9, ns=0.965, r=0.):
@@ -47,14 +39,19 @@ def get_camb_Dl(lmax=2500, H0=67.5, ombh2=0.022, omch2=0.122, mnu=0.06, omk=0, t
 
 
 def Dl2Cl_without_monopole(ls, totDL):
+    """
+    Go from Dls to Cls.
+    """
     cls = np.zeros_like(totDL)
     for i in range(4):
         cls[2:, i] = 2 * np.pi * totDL[2:, i] / (ls[2:] * (ls[2:] + 1))
     return cls
 
 
-######### Make CAMB library
 def rcamblib(rvalues, lmax=3 * 256, save=None):
+    """
+    Make CAMB library
+    """
     lll, totDL, unlensedDL = get_camb_Dl(lmax=lmax, r=0)
     spec = np.zeros((len(lll), 4, len(rvalues)))
     specunlensed = np.zeros((len(lll), 4, len(rvalues)))
@@ -74,6 +71,20 @@ def rcamblib(rvalues, lmax=3 * 256, save=None):
 
 
 def bin_camblib(Namaster, filename, nside, verbose=True, return_unbinned=False):
+    """
+    Bin the spectra using Namaster.
+    Parameters
+    ----------
+    Namaster
+    filename
+    nside
+    verbose
+    return_unbinned
+
+    Returns
+    -------
+
+    """
     lll, rvalues, spec, specunlensed = read_camblib(filename)
     ellb, b = Namaster.get_binning(nside)
     nbins = len(ellb)
@@ -81,14 +92,16 @@ def bin_camblib(Namaster, filename, nside, verbose=True, return_unbinned=False):
     binned_spec = np.zeros((nbins, 4, nr))
     binned_specunlensed = np.zeros((nbins, 4, nr))
     fact = 2 * np.pi / (ellb * (ellb + 1))
-    if verbose: bar = progress_bar(nr, 'Binning CAMB Librairy')
+    if verbose:
+        bar = progress_bar(nr, 'Binning CAMB Librairy')
     for ir in range(nr):
         for j in range(4):
             binned_spec[:, j, ir] = fact * b.bin_cell(
                 np.reshape(spec[:Namaster.lmax + 1, j, ir], (1, Namaster.lmax + 1)))
             binned_specunlensed[:, j, ir] = fact * b.bin_cell(
                 np.reshape(specunlensed[:Namaster.lmax + 1, j, ir], (1, Namaster.lmax + 1)))
-        if verbose: bar.update()
+        if verbose:
+            bar.update()
     if return_unbinned:
         return [ellb, rvalues, binned_spec, binned_specunlensed, [lll, rvalues, spec, specunlensed]]
     else:
@@ -96,7 +109,8 @@ def bin_camblib(Namaster, filename, nside, verbose=True, return_unbinned=False):
 
 
 def read_camblib(file):
-    with open(file, 'rb') as handle: camblib = pickle.load(handle)
+    with open(file, 'rb') as handle:
+        camblib = pickle.load(handle)
     return camblib
 
 
@@ -121,7 +135,8 @@ def get_Dl_fromlib(lvals, r, lib=None, specindex=None, unlensed=False):
     ### If specindex is not specified we do all four of them
     if specindex is None:
         myspec = np.zeros((len(lvals), 4))
-        if unlensed: myspecunlensed = np.zeros((len(lvals), 4))
+        if unlensed:
+            myspecunlensed = np.zeros((len(lvals), 4))
         for i in range(4):
             interpolant = interp.RectBivariateSpline(lll, camblib[1], camblib[2][:, i, :])
             myspec[:, i] = np.ravel(interpolant(lvals, r))
@@ -143,7 +158,7 @@ def get_Dl_fromlib(lvals, r, lib=None, specindex=None, unlensed=False):
     return myspec, myspecunlensed
 
 
-def ctheta_2_cell(theta_deg, ctheta, lmax, pol=False, normalization=1.):
+def ctheta_2_cell(theta_deg, ctheta, lmax, normalization=1.):
     ### this is how camb recommends to prepare the x = cos(theta) values for integration
     ### These x values do not contain x=1 so we have. to do this case separately
     x, w = np.polynomial.legendre.leggauss(lmax + 1)
@@ -165,7 +180,7 @@ def ctheta_2_cell(theta_deg, ctheta, lmax, pol=False, normalization=1.):
     return lll, clth[:, 0] + ctheta[0] * normalization
 
 
-def cell_2_ctheta(cell, theta_deg=None, pol=False, normalization=1.):
+def cell_2_ctheta(cell, theta_deg=None, normalization=1.):
     lmax = len(cell) - 1
     x, w = np.polynomial.legendre.leggauss(lmax + 1)
 
@@ -175,7 +190,6 @@ def cell_2_ctheta(cell, theta_deg=None, pol=False, normalization=1.):
 
     ### Case x = 1
     x = np.append(x, 1)
-    ell = np.arange(lmax + 1)
     ctheta = np.append(ctheta, cell[0] / normalization)
     xdeg = np.degrees(np.arccos(x))
 
@@ -230,13 +244,15 @@ def simulate_correlated_map(nside, signoise, clin=None,
         ### Cases 2 and 3 Genereate the alms be it in harmonic space or pixel-space
         if generate_alm:
             ### Case 2
-            if verbose: print('simulate alms in harmonic space')
+            if verbose:
+                print('simulate alms in harmonic space')
             alm_size = hp.sphtfunc.Alm.getsize(lmax_big)
             alm_rms = 1. / np.sqrt(2) * signoise * nside_fact * np.sqrt(4 * np.pi / npix_big)
             alms = (np.random.randn(alm_size) + np.random.randn(alm_size) * 1.0j) * alm_rms
         else:
             ### Case 3
-            if verbose: print('Simulate in pixel-space an uncorrelated map')
+            if verbose:
+                print('Simulate in pixel-space an uncorrelated map')
             ### Map realization with large nside
             map_uncorr_big = np.random.randn(npix_big) * signoise * nside_fact
             rms_uncorr_big = np.std(map_uncorr_big)

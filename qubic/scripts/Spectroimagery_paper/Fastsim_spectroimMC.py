@@ -3,7 +3,7 @@ import os
 import sys
 import numpy as np
 import pickle
-from itertools import combinations
+from itertools import combinations, combinations_with_replacement
 
 import qubic
 from qubicpack.utilities import Qubic_DataDir
@@ -156,9 +156,13 @@ print('nbins:', nbins)
 print('ell binned:', ell_binned)
 
 # Possible combinations between bands
-combi1 = [(i, i) for i in range(nfrecon)]
-combi2 = list(combinations(np.arange(nfrecon), 2))
-combi = combi1 + combi2
+combi = list(combinations_with_replacement(np.arange(nfrecon), 2))
+print(combi)
+
+# combi1 = [(i, i) for i in range(nfrecon)]
+# combi2 = list(combinations(np.arange(nfrecon), 2))
+# combi = combi1 + combi2
+
 ncombi = len(combi)
 print('combi:', combi)
 print('ncombi:', ncombi)
@@ -194,10 +198,10 @@ print('ncross:', ncross)
 cross_mixreals = np.zeros((ncross, ncombi, nbins, 4))
 
 w = None
+cross = 0
 for c1 in range(0, nreals - 1, 2):  # do not mix pairs to avoid correlation
     c2 = c1 + 1
     print(f'\n Reals {c1} {c2}')
-    cross = 0
     for i, (band1, band2) in enumerate(combi):
         print(f'Bands {band1} {band2}')
         map1 = maps_clth[c1, band1, :, :]

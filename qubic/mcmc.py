@@ -14,9 +14,9 @@ class LogLikelihood:
         self.nsigprior = nsigprior
         self.covariance_model_funct = covariance_model_funct
 
-        if np.size(np.shape(errors)) == 1:
+        if np.ndim(errors) == 1:
             self.covar = np.zeros((np.size(errors), np.size(errors)))
-            self.covar[np.arange(np.size(errors)), np.arange(np.size(errors))] = errors ** 2
+            np.fill_diagonal(self.covar, np.array(errors) ** 2)
         else:
             self.covar = errors
 

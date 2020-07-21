@@ -63,6 +63,7 @@ d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
 d['nside'] = 256
+d['filter_nu'] = 150e9
 
 # Number of bands
 nbands = 1
@@ -70,11 +71,9 @@ d['nf_recon'] = nbands
 d['nf_sub'] = nbands
 
 # Make a sky with CMB
-# seed = 42
-# sky_config = {'cmb': seed}
-
 # Calculate CMB spectra with CAMB
-ell, totDL, unlensedDL = qss.get_camb_Dl(r=0., lmax=2*d['nside']-1)
+lmax = 2 * d['nside'] - 1
+ell, totDL, unlensedDL = qc.get_camb_Dl(r=0., lmax=lmax)
 
 # Specify the CMB description in a dictionary
 cmb_dict = {'CAMBSpectra':totDL, 'ell':ell}
@@ -93,12 +92,8 @@ input_ell = np.arange(np.shape(input_Dl)[0])
 ```
 
 ```{python}
-hp.mollview(cmb_map[0, :, 0])
-```
-
-```{python}
 # Getting noise realisations with FastSimulator
-nreals = 300
+nreals = 40
 npix = 12 * d['nside']**2
 noisemaps = np.zeros((nreals, nbands, npix, 3))
 
@@ -168,6 +163,7 @@ print('ncombi:', ncombi)
 ```
 
 #### Cross spectrum between bands but same real
+We keep the noise bias (we clearly see it on the BB spectrum)
 
 ```{python}
 cross_samereal = np.zeros((nreals, ncombi, nbins, 4))
@@ -188,7 +184,12 @@ for real in range(nreals):
                                                                       beam_correction=None,
                                                                       pixwin_correction=None)
 
-BBsamereal = cross_samereal[:, :, :, 2]
+```
+
+```{python}
+# Save the spectra
+rep_save = os.environ['DATA_SPECTROIM'] + 'cross_spectra_likelihood/'
+# np.save(rep_save + f'/cross_samereal_40real_{nbands}bands.npy', cross_samereal)
 ```
 
 ```{python}
@@ -214,7 +215,8 @@ for s in range(4):
                     avg_cross_samereal[cross, :, s],
                     yerr=error_cross_samereal[cross, :, s],
                     fmt='o',
-                    color=c)
+                    color=c,
+                    label='cross {}'.format(combi[cross]))
 #         ax.plot(leff, 
 #                 cross_samereal[0, cross, :, s],
 #                     'o',
@@ -225,12 +227,14 @@ for s in range(4):
     ax.set_ylabel('$D_\\ell$')
 
     ax.set_title(clnames[s])
-#     ax.legend(fontsize=12, loc='upper right')
+    ax.legend(fontsize=12, loc='upper left')
 plt.tight_layout()
 
 ```
 
 #### Cross spectrum between bands with different real
+
+Noise bias is removed
 
 ```{python}
 ncross = nreals // 2
@@ -247,8 +251,6 @@ for c1 in range(0, nreals - 1, 2):  # do not mix pairs to avoid correlation
         print(f'Bands {band1} {band2}')
         map1 = qubicmaps[c1, band1, :, :]
         map2 = qubicmaps[c2, band2, :, :]
-#         map1 = cmb_map[band1, :, :]
-#         map2 = cmb_map[band2, :, :]
         leff, cross_mixreal[cross, i, :, :], w = Namaster.get_spectra(map1.T,
                                                                        mask_apo,
                                                                        map2.T,
@@ -260,6 +262,11 @@ for c1 in range(0, nreals - 1, 2):  # do not mix pairs to avoid correlation
     cross += 1
 
 BBmixreal = cross_mixreal[:, :, :, 2]
+```
+
+```{python}
+# Save the spectra
+# np.save(rep_save + f'/cross_mixreal_40real_{nbands}bands.npy', cross_mixreal)
 ```
 
 ```{python}
@@ -283,7 +290,8 @@ for s in range(4):
                     avg_cross_mixreal[co, :, s],
                     yerr=error_cross_mixreal[co, :, s],
                     fmt='o',
-                    color=c)
+                    color=c,
+                    label='cross {}'.format(combi[co]))
     ax.plot(np.arange(lmin, lmax), input_Dl[lmin:lmax, s], 'r', label='input')
 
     ax.set_xlabel('$\\ell$')
@@ -302,18 +310,19 @@ print('Old shape:', cross_mixreal.shape)
 cross_mixreal_reshape = np.moveaxis(cross_mixreal, [1, 2, 3], [3, 1, 2])
 print('New shape:', cross_mixreal_reshape.shape)
 
-# print('Old shape:', cross_samereal.shape)
-# cross_samereal_reshape = np.moveaxis(cross_samereal, [1, 2, 3], [3, 1, 2])
-# print('New shape:', cross_samereal_reshape.shape)
+print('Old shape:', cross_samereal.shape)
+cross_samereal_reshape = np.moveaxis(cross_samereal, [1, 2, 3], [3, 1, 2])
+print('New shape:', cross_samereal_reshape.shape)
 ```
 
 ```{python}
-covbinband, corrbinband = amc.get_covcorr_patch(cross_mixreal_reshape, stokesjoint=True, doplot=False)
+covbinband, corrbinband = amc.get_covcorr_patch(cross_samereal_reshape, stokesjoint=True, doplot=False)
 
 print(nbins)
 print(covbinband.shape)
 
 BBcov = covbinband[:, :, 2]
+print(BBcov.shape)
 ```
 
 ```{python}
@@ -341,9 +350,9 @@ plt.colorbar()
 
 ```{python}
 # Make a Camb library
-rvalues = np.arange(0., 0.0805, 0.0005)
-print(rvalues)
-# camblib = qc.rcamblib(rvalues, lmax=lmax, save=global_dir + '/doc/CAMB/camblib.pkl')
+# rvalues = np.arange(0., 0.02001, 0.0001)
+# print(rvalues)
+# camblib = qc.rcamblib(rvalues, lmax=lmax, save=global_dir + '/doc/CAMB/camblibnew.pkl')
 ```
 
 ```{python}
@@ -371,46 +380,43 @@ binned_camblib = qc.bin_camblib(Namaster, global_dir + '/doc/CAMB/camblib.pkl', 
 ```
 
 ```{python}
-lmax
-```
-
-```{python}
 clnames = ['TT', 'EE', 'BB', 'TE']
-r_idx = 0
+r_idx = 120
 
 fig, axs = plt.subplots(2, 2)
 axs = axs.ravel()
 
 for s in range(4):
     ax = axs[s]
+    
+    ax.plot(input_ell[lmin:lmax], 
+            input_Dl[lmin:lmax, s],
+            color='g',
+            label='Input r = 0')
+    ax.plot(lll[lmin:], 
+            spec[lmin:, s, r_idx],
+            color='b',
+            label=f'Theory with r = {rvalues[r_idx]}')
+    ax.plot(lll_b, 
+            spec_b[:, s, r_idx],
+            'o',
+            color='b',
+            label=f'Theory binnedwith r = {rvalues[r_idx]}')
     for cross in range(ncombi): 
         c = colorlist[cross]
-        ax.plot(input_ell[lmin:lmax], 
-                input_Dl[lmin:lmax, s],
-                color='g',
-                label='Input')
-        ax.plot(lll[lmin:lmax], 
-                spec[lmin:lmax, s, r_idx],
-                color=c, 
-                label=f'Theory with r = {rvalues[r_idx]}')
-#         ax.plot(lll_b, 
-#                 spec_b[:, s, r_idx],
-#                 'o',
-#                 color=c,
-#                 label=f'Theory with r = {rvalues[r_idx]}')
         ax.errorbar(leff, 
                     avg_cross_mixreal[cross, :, s],
                     yerr=error_cross_mixreal[cross, :, s],
                     fmt='o',
-                    color='r',
-                    label='Measure')
+                    color=c,
+                    label='Measure cross {}'.format(combi[cross]))
 
 
     ax.set_xlabel('$\\ell$')
     ax.set_ylabel('$D_\\ell$')
 
     ax.set_title(clnames[s])
-    ax.legend(fontsize=12, loc='upper right')
+    ax.legend(fontsize=12, loc='upper left')
 plt.tight_layout()
 
 ```
@@ -425,15 +431,11 @@ for cross in range(ncombi):
     plt.plot(lll, 
             specunlensed[:, 2, r_idx],
             color=c, 
-            label='Theory')
+            label=f'Theory with r = {rvalues[r_idx]}')
     plt.plot(lll_b, 
             specunlensed_b[:, 2, r_idx],
             'o',
             color=c)
-#     plt.plot(lll_b, 
-#             clBB,
-#             'o',
-#             color='g')
     plt.errorbar(leff, 
                 BBavg_same[cross, :],
                 yerr=BBerror_same[cross, :],
@@ -445,7 +447,7 @@ plt.xlabel('$\\ell$')
 plt.ylabel('$D_\\ell$')
 
 plt.title(clnames[2] + f' unlensed with r = {rvalues[r_idx]}')
-plt.legend(fontsize=12, loc='upper right')
+plt.legend(fontsize=12, loc='upper left')
 
 ```
 
@@ -455,26 +457,126 @@ plt.legend(fontsize=12, loc='upper right')
 ### And we need a fast one for BB only as well
 def myBBth(ell, r):
     clBB = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=False, specindex=2)[0]
+#     print(clBB.shape)
     return clBB
-
-clBB = myBBth(lll_b, r=0.)
-print(clBB.shape)
 
 ```
 
 ## Likelihood on r
 
 ```{python}
-data = BBavg_mix[0, :]
-fakedata = clBB
-error = BBcov #BBerror_mix[0, :]
+from scipy.optimize import curve_fit
 
-loglikelihood = mcmc.LogLikelihood(xvals=lll_b, 
-                                   yvals=data, 
-                                   errors=error, 
-                                   model=myBBth, 
-                                   flatprior=[[0,1]], 
-                                   covariance_model_funct=Namaster.knox_covariance)
+
+class LogLikelihood:
+    def __init__(self, xvals=None, yvals=None, errors=None, model=None, nbins=16, ncross=1,
+                 nsiginit=10, nsigprior=20, flatprior=None, covariance_model_funct=None, p0=None):
+        self.prior = None
+        self.model = model
+        self.xvals = xvals
+        self.yvals = yvals
+        self.nbins = nbins
+        self.ncross = ncross
+        self.nsiginit = nsiginit
+        self.nsigprior = nsigprior
+        self.covariance_model_funct = covariance_model_funct
+
+        if np.ndim(errors) == 1:
+            self.covar = np.zeros((np.size(errors), np.size(errors)))
+            np.fill_diagonal(self.covar, np.array(errors) ** 2)
+        else:
+            self.covar = errors
+
+        self.invcov = np.linalg.inv(self.covar)
+
+        self.flatprior = flatprior
+        if not flatprior:
+            self.fitresult = curve_fit(model, self.xvals, self.yvals, sigma=np.sqrt(np.diag(self.covar)),
+                                       maxfev=1000000, ftol=1e-5, p0=p0)
+            print('Initial Fit: ', self.fitresult)
+
+    def __call__(self, theta):
+        val = self.model(self.xvals[:self.nbins], *theta)
+        val_ncross = np.array(list(val) * self.ncross)
+        if self.covariance_model_funct is None:
+            invcov = self.invcov
+        else:
+            cov = self.covariance_model_funct(val)
+            cov_repeat = np.zeros_like(self.covar)
+            for i in range(0, len(self.xvals), nbins):
+                for j in range(0, len(self.xvals), nbins):
+                    cov_repeat[i:i+nbins, j:j+nbins] = cov
+
+            invcov = np.linalg.inv(cov_repeat + self.covar)
+#             plt.imshow(cov_repeat)
+#             plt.colorbar()
+
+        lp = self.log_priors(theta)
+        toreturn = lp - 0.5 * np.dot(np.dot(self.yvals - val_ncross, invcov), self.yvals - val_ncross)
+        if not np.isfinite(toreturn):
+            return -np.inf
+        else:
+            return toreturn
+        
+    def log_priors(self, theta):
+        ok = 1
+        for i in range(len(theta)):
+            if self.flatprior:
+                if (theta[i] < self.flatprior[i][0]) or (theta[i] > self.flatprior[i][1]):
+                    ok *= 0
+            else:
+                if np.abs(theta[i] - self.fitresult[0][i]) > (self.nsigprior * np.sqrt(self.fitresult[1][i, i])):
+                    ok *= 0
+        if ok == 1:
+            return 0
+        else:
+            return -np.inf
+
+    def run(self, nbmc, nwalkers=32):
+        if self.flatprior:
+            ndim = len(self.flatprior)
+            pos = np.zeros((nwalkers, ndim))
+            for d in range(ndim):
+                pos[:, d] = np.random.rand(nwalkers) * (self.flatprior[d][1] - self.flatprior[d][0]) + \
+                            self.flatprior[d][0]
+        else:
+            nsigmas = self.nsiginit
+            ndim = len(self.fitresult[0])
+            pos = np.zeros((nwalkers, ndim))
+            for d in range(ndim):
+                pos[:, d] = np.random.randn(nwalkers) * np.sqrt(self.fitresult[1][d, d]) * nsigmas + self.fitresult[0][
+                    d]
+
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, self.__call__)
+        sampler.run_mcmc(pos, nbmc, progress=True)
+        return sampler
+```
+
+```{python}
+data = np.ravel(BBavg_mix)
+
+# xvals = lll_b
+xvals = list(lll_b) * ncombi
+print(len(xvals))
+
+# With the real data we get a bias this is why for the mean values, we use the theoretical model.
+# fakedata = myBBth(lll_b, r=0.) 
+fakedata = list(myBBth(lll_b, r=0.)) * ncombi
+print(len(fakedata))
+
+error = BBcov #np.ravel(BBerror_mix)
+print(error.shape)
+
+# plt.plot(fakedata, 'o')
+
+loglikelihood = LogLikelihood(xvals=xvals, 
+                              yvals=fakedata, 
+                              errors=error,
+                              nbins=16,
+                              ncross=ncombi,
+                              model=myBBth, 
+                              flatprior=[[0,1]], 
+                              covariance_model_funct=Namaster.knox_covariance)
 
 ```
 
@@ -487,17 +589,70 @@ sigma68 = np.interp(0.68, cumint, rvalues[1:])
 sigma95 = np.interp(0.95, cumint, rvalues[1:])
 
 max_index = np.where(likelihood == np.max(likelihood))[0][0]
-print(max_index)
-print(rvalues[max_index])
 ```
 
 ```{python}
-plt.plot(rvalues, likelihood / np.max(likelihood), 'o', label='QUBIC FI-150')
+plt.figure(figsize=(10, 10))
+plt.plot(rvalues, likelihood / np.max(likelihood), 'o',label='QUBIC FI220')
+
 plt.axvline(x=sigma68, linestyle='--', color='k', label=' $\sigma(r)={0:6.4f}$ at 68% C. L.'.format(sigma68))
 plt.axvline(x=sigma95, linestyle='--', color='r', label=' $\sigma(r)={0:6.4f}$ at 95% C. L.'.format(sigma95))
-plt.axvline(x=rvalues[max_index], linestyle='-', color='g', label='Max at r = {0:6.4f}'.format(rvalues[max_index]))
+# plt.axvline(x=rvalues[max_index], linestyle='-', color='g', label='Max at r = {0:6.4f}'.format(rvalues[max_index]))
 
-plt.xlim(0, 0.08)
+plt.xlim(0, 0.06)
+plt.xlabel('r')
+plt.ylabel('Posterior')
+
+plt.legend()
+```
+
+## Fisher Analysis
+
+```{python}
+invcovBB = np.linalg.inv(BBcov)
+
+delta_r = 1e-7
+ell, DL_r0, _ = qc.get_camb_Dl(r=0., lmax=lmax)
+ell, DL_deltar , _ = qc.get_camb_Dl(r=delta_r, lmax=lmax)
+
+# Bin the spectra
+DL_r0_binned = Namaster.bin_spectra(DL_r0[:, 2], d['nside'])[0, :]
+DL_deltar_binned = Namaster.bin_spectra(DL_deltar[:, 2], d['nside'])[0, :]
+print(DL_r0_binned.shape)
+
+# Jacobian, Numerical derivative
+J = (DL_deltar_binned - DL_r0_binned) / delta_r
+print(J)
+
+invcovBB_r = J.T @ invcovBB @ J
+print(invcovBB_r)
+
+Cov_r = 1 / (J.T @ invcovBB @ J)
+print(Cov_r)
+
+r_sigma68_Fisher = np.sqrt(Cov_r)
+print(r_sigma68_Fisher)
+```
+
+```{python}
+plt.plot(Namaster.ell_binned, DL_r0_binned, 'o')
+plt.plot(ell, DL_r0[:, 2])
+```
+
+```{python}
+x = np.linspace(0., 0.1, 1000)
+fisher_gaussian = np.exp(-0.5 * (x/r_sigma68_Fisher)**2)
+
+plt.figure(figsize=(10, 10))
+plt.plot(x, fisher_gaussian, 'r', label='Fisher gaussian')
+plt.axvline(x=r_sigma68_Fisher, linestyle='--', color='r', 
+            label=' $\sigma(r)={0:6.4f}$ at 68% C. L. Fisher'.format(r_sigma68_Fisher))
+
+plt.plot(rvalues, likelihood / np.max(likelihood), 'b', label='Likelihood')
+plt.axvline(x=sigma68, linestyle='--', color='b', 
+            label=' $\sigma(r)={0:6.4f}$ at 68% C. L.'.format(sigma68))
+
+plt.xlim(0, 0.06)
 plt.xlabel('r')
 plt.ylabel('Posterior')
 

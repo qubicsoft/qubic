@@ -60,7 +60,7 @@ def rcamblib(rvalues, lmax=3 * 256, save=None):
     for r in rvalues:
         bar.update()
         ls, spec[:, :, i], specunlensed[:, :, i] = get_camb_Dl(lmax=lmax, r=r)
-        i = i + 1
+        i += 1
 
     camblib = [lll, rvalues, spec, specunlensed]
     if save:

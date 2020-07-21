@@ -25,7 +25,7 @@ __all__ = ['sky', 'Qubic_sky']
 
 def cov2corr(mat):
     sh = np.shape(mat)
-    if sh[0]==1:
+    if sh[0] == 1:
         return mat
     outmat = np.zeros_like(mat)
     for i in range(sh[0]):
@@ -36,7 +36,7 @@ def cov2corr(mat):
 
 def corr2cov(mat, diagvals):
     sh = np.shape(mat)
-    if sh[0]==1:
+    if sh[0] == 1:
         return mat
     outmat = np.zeros_like(mat)
     for i in range(sh[0]):
@@ -334,11 +334,11 @@ class Qubic_sky(sky):
         return fullmaps
 
     def get_partial_sky_maps_withnoise(self, coverage=None, sigma_sec=None,
-                                        Nyears=None, verbose=False, FWHMdeg=None, seed=None,
-                                        noise_profile=True, 
-                                        spatial_noise=True,
-                                        nunu_correlation = True,
-                                        noise_only=False):
+                                       Nyears=3., verbose=False, FWHMdeg=None, seed=None,
+                                       noise_profile=True,
+                                       spatial_noise=True,
+                                       nunu_correlation=True,
+                                       noise_only=False):
         """
         This returns maps in the same way as with get_simple_sky_map but cut according to the coverage
         and with noise added according to this coverage and the RMS in muK.sqrt(sec) given by sigma_sec
@@ -368,9 +368,8 @@ class Qubic_sky(sky):
 
         nf_sub = self.dictionary['nf_recon']
         # Beware, all nf_sub are not yet available...
-        if nf_sub not in [1,2,3,4,5,8]:
-            print('nf_sub needs to be in [1,2,3,4,5,8] for FastSimulation (currently...)')
-            return -1,-1,-1
+        if nf_sub not in [1, 2, 3, 4, 5, 8]:
+            raise NameError('nf_sub needs to be in [1,2,3,4,5,8] for FastSimulation (currently...)')
 
         # First get the convolved maps
         if noise_only is False:
@@ -382,39 +381,51 @@ class Qubic_sky(sky):
             filter_relative_bandwidth = self.dictionary['filter_relative_bandwidth']
             ### Input bands
             Nfin = int(self.dictionary['nf_sub'])
-            Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = qubic.compute_freq(band, Nfin, filter_relative_bandwidth)
+            Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = qubic.compute_freq(band, Nfin,
+                                                                                    filter_relative_bandwidth)
             ### Output bands
             Nfout = nf_sub
-            Nfreq_edges_out, nus_edge_out, nus_out, deltas_out, Delta_out, Nbbands_out = qubic.compute_freq(band, Nfout, filter_relative_bandwidth)
+            Nfreq_edges_out, nus_edge_out, nus_out, deltas_out, Delta_out, Nbbands_out = qubic.compute_freq(band, Nfout,
+                                                                                                            filter_relative_bandwidth)
 
             # Now averaging maps into reconstruction sub-bands maps
             if verbose:
                 print('Averaging input maps from input sub-bands into reconstruction sub-bands:')
-            maps = np.zeros((nf_sub, 12*self.dictionary['nside']**2, 3))
+            maps = np.zeros((nf_sub, 12 * self.dictionary['nside'] ** 2, 3))
             for i in range(nf_sub):
-                print('doing band {} {} {}'.format(i, nus_edge_out[i], nus_edge_out[i+1]))
-                inband = (nus > nus_edge_out[i]) & (nus < nus_edge_out[i+1])
-                maps[i,:,:] = np.mean(maps_all[inband,:,:], axis=0)
-
+                print('doing band {} {} {}'.format(i, nus_edge_out[i], nus_edge_out[i + 1]))
+                inband = (nus > nus_edge_out[i]) & (nus < nus_edge_out[i + 1])
+                maps[i, :, :] = np.mean(maps_all[inband, :, :], axis=0)
 
         ##############################################################################################################
         # Restore data for FastSimulation ############################################################################
         ##############################################################################################################
         # files loacation
         global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
-        DataFastSim = pickle.load( open( global_dir + '/doc/FastSimulator/Data/DataFastSimulator_{}_Duration_3_nfsub_{}.pkl'.format(self.dictionary['config'], nf_sub), "rb" ) )
+
+        DataFastSim = pickle.load(open(global_dir +
+                                       '/doc/FastSimulator/Data/DataFastSimulator_{}-{}_nfsub_{}.pkl'.format(
+                                           self.dictionary['config'],
+                                           str(int(self.dictionary['filter_nu'] / 1e9)), nf_sub), "rb"))
+
+        # DataFastSim = pickle.load( open( global_dir +
+        #                                  '/doc/FastSimulator/Data/DataFastSimulator_FI_Duration_3_nfsub_{}.pkl'.format(nf_sub), "rb" ) )
 
         # Read Coverage map
         if coverage is None:
-            coverage = DataFastSim['coverage']
+            DataFastSimCoverage = pickle.load(open(global_dir +
+                                                   '/doc/FastSimulator/Data/DataFastSimulator_{}-{}_coverage.pkl'.format(
+                                                       self.dictionary['config'],
+                                                       str(int(self.dictionary['filter_nu'] / 1e9))), "rb"))
+            coverage = DataFastSimCoverage['coverage']
 
         # Read noise normalization
         if sigma_sec is None:
             sigma_sec = DataFastSim['signoise']
 
-        # Read Nyears
-        if Nyears is None:
-            Nyears = DataFastSim['years']       
+        # # Read Nyears
+        # if Nyears is None:
+        #     Nyears = DataFastSim['years']
 
         # Read Noise Profile
         if noise_profile is True:
@@ -441,28 +452,28 @@ class Qubic_sky(sky):
         # Now pure noise maps
         if verbose:
             print('Making noise realizations')
-        noisemaps = np.zeros((nf_sub, 12*self.dictionary['nside']**2, 3))
+        noisemaps = np.zeros((nf_sub, 12 * self.dictionary['nside'] ** 2, 3))
         noisemaps = self.create_noise_maps(sigma_sec, coverage, nsub=nf_sub,
-                                            Nyears=Nyears, verbose=verbose, seed=seed,
-                                            effective_variance_invcov=effective_variance_invcov,
-                                            clnoise=clnoise,
-                                            sub_bands_cov=sub_bands_cov)
-
+                                           Nyears=Nyears, verbose=verbose, seed=seed,
+                                           effective_variance_invcov=effective_variance_invcov,
+                                           clnoise=clnoise,
+                                           sub_bands_cov=sub_bands_cov)
+        if nf_sub == 1:
+            noisemaps = np.reshape(noisemaps, (1, len(coverage), 3))
         seenpix = noisemaps[0, :, 0] != 0
         coverage[~seenpix] = 0
 
         if noise_only:
             return noisemaps, coverage
         else:
-            maps[:,~seenpix,:] = 0
+            maps[:, ~seenpix, :] = 0
             return maps + noisemaps, maps, noisemaps, coverage
 
-
-    def create_noise_maps(self, sigma_sec, coverage, covcut =0.1, nsub=1, 
-                            Nyears=3, verbose=False, seed=None, 
-                            effective_variance_invcov=None, 
-                            clnoise=None,
-                            sub_bands_cov = None):
+    def create_noise_maps(self, sigma_sec, coverage, covcut=0.1, nsub=1,
+                          Nyears=3, verbose=False, seed=None,
+                          effective_variance_invcov=None,
+                          clnoise=None,
+                          sub_bands_cov=None):
 
         """
         This returns a realization of noise maps for I, Q and U with no correlation between them, according to a
@@ -499,9 +510,9 @@ class Qubic_sky(sky):
             fact_Q = np.ones(nsub)
             fact_U = np.ones(nsub)
         else:
-            fact_I = 1./np.sqrt(np.diag(sub_bands_cov[0]/sub_bands_cov[0][0,0]))
-            fact_Q = 1./np.sqrt(np.diag(sub_bands_cov[1]/sub_bands_cov[1][0,0]))
-            fact_U = 1./np.sqrt(np.diag(sub_bands_cov[2]/sub_bands_cov[2][0,0]))
+            fact_I = 1. / np.sqrt(np.diag(sub_bands_cov[0] / sub_bands_cov[0][0, 0]))
+            fact_Q = 1. / np.sqrt(np.diag(sub_bands_cov[1] / sub_bands_cov[1][0, 0]))
+            fact_U = 1. / np.sqrt(np.diag(sub_bands_cov[2] / sub_bands_cov[2][0, 0]))
 
         all_sigma_sec_I = fact_I * sigma_sec
         all_sigma_sec_Q = fact_Q * sigma_sec
@@ -517,9 +528,9 @@ class Qubic_sky(sky):
             ideal_noise_U = self.theoretical_noise_maps(all_sigma_sec_U[isub], coverage, Nyears=Nyears, verbose=verbose)
             sh = np.shape(ideal_noise_I)
             if effective_variance_invcov is None:
-                thnoiseI[isub,:] = ideal_noise_I
-                thnoiseQ[isub,:] = ideal_noise_Q
-                thnoiseU[isub,:] = ideal_noise_U
+                thnoiseI[isub, :] = ideal_noise_I
+                thnoiseQ[isub, :] = ideal_noise_Q
+                thnoiseU[isub, :] = ideal_noise_U
             else:
                 if isinstance(effective_variance_invcov, list):
                     my_effective_variance_invcov = effective_variance_invcov[isub]
@@ -528,20 +539,20 @@ class Qubic_sky(sky):
                 sh = np.shape(my_effective_variance_invcov)
                 if sh[0] == 2:
                     ### We have the same correction for I, Q and U
-                    correction = np.interp(np.max(coverage[seenpix])/coverage[seenpix], 
-                        my_effective_variance_invcov[0,:], my_effective_variance_invcov[1,:])
-                    thnoiseI[isub,seenpix] = ideal_noise_I[seenpix] * np.sqrt(correction)
-                    thnoiseQ[isub,seenpix] = ideal_noise_Q[seenpix] * np.sqrt(correction)
-                    thnoiseU[isub,seenpix] = ideal_noise_U[seenpix] * np.sqrt(correction)
+                    correction = np.interp(np.max(coverage[seenpix]) / coverage[seenpix],
+                                           my_effective_variance_invcov[0, :], my_effective_variance_invcov[1, :])
+                    thnoiseI[isub, seenpix] = ideal_noise_I[seenpix] * np.sqrt(correction)
+                    thnoiseQ[isub, seenpix] = ideal_noise_Q[seenpix] * np.sqrt(correction)
+                    thnoiseU[isub, seenpix] = ideal_noise_U[seenpix] * np.sqrt(correction)
                 else:
                     ### We have distinct correction for I and QU
-                    correctionI = np.interp(np.max(coverage[seenpix])/coverage[seenpix], 
-                        my_effective_variance_invcov[0,:], my_effective_variance_invcov[1,:])
-                    correctionQU = np.interp(np.max(coverage[seenpix])/coverage[seenpix], 
-                        my_effective_variance_invcov[0,:], my_effective_variance_invcov[2,:])
-                    thnoiseI[isub,seenpix] = ideal_noise_I[seenpix] * np.sqrt(correctionI)
-                    thnoiseQ[isub,seenpix] = ideal_noise_Q[seenpix] * np.sqrt(correctionQU)
-                    thnoiseU[isub,seenpix] = ideal_noise_U[seenpix] * np.sqrt(correctionQU)
+                    correctionI = np.interp(np.max(coverage[seenpix]) / coverage[seenpix],
+                                            my_effective_variance_invcov[0, :], my_effective_variance_invcov[1, :])
+                    correctionQU = np.interp(np.max(coverage[seenpix]) / coverage[seenpix],
+                                             my_effective_variance_invcov[0, :], my_effective_variance_invcov[2, :])
+                    thnoiseI[isub, seenpix] = ideal_noise_I[seenpix] * np.sqrt(correctionI)
+                    thnoiseQ[isub, seenpix] = ideal_noise_Q[seenpix] * np.sqrt(correctionQU)
+                    thnoiseU[isub, seenpix] = ideal_noise_U[seenpix] * np.sqrt(correctionQU)
 
         noise_maps = np.zeros((nsub, len(coverage), 3))
         if seed is not None:
@@ -582,9 +593,9 @@ class Qubic_sky(sky):
                 ### The reason for this si that the overall  noise is given by the input parameter sigma_sec which we do not
                 ### want to override
 
-                wI, vI = np.linalg.eig(sub_bands_cov[0]/sub_bands_cov[0][0,0])
-                wQ, vQ = np.linalg.eig(sub_bands_cov[1]/sub_bands_cov[1][0,0])
-                wU, vU = np.linalg.eig(sub_bands_cov[2]/sub_bands_cov[2][0,0])
+                wI, vI = np.linalg.eig(sub_bands_cov[0] / sub_bands_cov[0][0, 0])
+                wQ, vQ = np.linalg.eig(sub_bands_cov[1] / sub_bands_cov[1][0, 0])
+                wU, vU = np.linalg.eig(sub_bands_cov[2] / sub_bands_cov[2][0, 0])
 
                 ### Multiply the maps by the sqrt(eigenvalues)
                 for isub in range(nsub):
@@ -593,14 +604,14 @@ class Qubic_sky(sky):
                     noise_maps[isub, seenpix, 2] *= np.sqrt(wU[isub])
                 ### Apply the rotation to each Stokes Parameter separately
 
-                noise_maps[:, seenpix, 0] = np.dot(vI, noise_maps[:,seenpix, 0])
-                noise_maps[:, seenpix, 1] = np.dot(vQ, noise_maps[:,seenpix, 1])
-                noise_maps[:, seenpix, 2] = np.dot(vU, noise_maps[:,seenpix, 2])
+                noise_maps[:, seenpix, 0] = np.dot(vI, noise_maps[:, seenpix, 0])
+                noise_maps[:, seenpix, 1] = np.dot(vQ, noise_maps[:, seenpix, 1])
+                noise_maps[:, seenpix, 2] = np.dot(vU, noise_maps[:, seenpix, 2])
 
         # Now normalize the maps with the coverage behaviour and the sqrt(2) for Q and U
-        noise_maps[:, seenpix, 0] *= thnoiseI[:,seenpix]
-        noise_maps[:, seenpix, 1] *= thnoiseQ[:,seenpix]
-        noise_maps[:, seenpix, 2] *= thnoiseU[:,seenpix]
+        noise_maps[:, seenpix, 0] *= thnoiseI[:, seenpix]
+        noise_maps[:, seenpix, 1] *= thnoiseQ[:, seenpix]
+        noise_maps[:, seenpix, 2] *= thnoiseU[:, seenpix]
 
         if nsub == 1:
             return noise_maps[0, :, :]
@@ -662,33 +673,34 @@ def random_string(nchars):
     str = "".join(lst)
     return (str)
 
-def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='', 
-    norm=False, allstokes=False, fitlim=None, doplot=False,QUsep=True):
-    seenpix = cov > (covcut*np.max(cov))
+
+def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='',
+                             norm=False, allstokes=False, fitlim=None, doplot=False, QUsep=True):
+    seenpix = cov > (covcut * np.max(cov))
     covnorm = cov / np.max(cov)
-   
-    xx, yyI, dx, dyI, _ = ft.profile(np.sqrt(1./covnorm[seenpix]), maps[seenpix,0], nbins=nbins, plot=False)
-    xx, yyQ, dx, dyQ, _ = ft.profile(np.sqrt(1./covnorm[seenpix]), maps[seenpix,1], nbins=nbins, plot=False)
-    xx, yyU, dx, dyU, _ = ft.profile(np.sqrt(1./covnorm[seenpix]), maps[seenpix,2], nbins=nbins, plot=False)
-    avg = np.sqrt((dyI**2+dyQ**2/2+dyU**2/2)/3)
-    avgQU = np.sqrt((dyQ**2/2+dyU**2/2)/2)
+
+    xx, yyI, dx, dyI, _ = ft.profile(np.sqrt(1. / covnorm[seenpix]), maps[seenpix, 0], nbins=nbins, plot=False)
+    xx, yyQ, dx, dyQ, _ = ft.profile(np.sqrt(1. / covnorm[seenpix]), maps[seenpix, 1], nbins=nbins, plot=False)
+    xx, yyU, dx, dyU, _ = ft.profile(np.sqrt(1. / covnorm[seenpix]), maps[seenpix, 2], nbins=nbins, plot=False)
+    avg = np.sqrt((dyI ** 2 + dyQ ** 2 / 2 + dyU ** 2 / 2) / 3)
+    avgQU = np.sqrt((dyQ ** 2 / 2 + dyU ** 2 / 2) / 2)
     if norm:
         fact = xx[0] / avg[0]
     else:
         fact = 1.
-    myY = (avg/xx) * fact
-    myYI = (dyI/xx) * fact
-    myYQU = (avgQU/xx) * fact
+    myY = (avg / xx) * fact
+    myYI = (dyI / xx) * fact
+    myYQU = (avgQU / xx) * fact
 
     if doplot:
         if QUsep is False:
-            p=plot(xx**2,myY, 'o', label=label+' IQU')
+            p = plot(xx ** 2, myY, 'o', label=label + ' IQU')
             if allstokes:
-                plot(xx**2, myYI, label=label+' I', alpha=0.3)
-                plot(xx**2, myYQU, label=label+' Average Q, U /sqrt(2)', alpha=0.3)
+                plot(xx ** 2, myYI, label=label + ' I', alpha=0.3)
+                plot(xx ** 2, myYQU, label=label + ' Average Q, U /sqrt(2)', alpha=0.3)
         else:
-            pi = plot(xx**2,myYI, 'o', label=label+' I')
-            pqu = plot(xx**2,myYQU, 'o', label=label+' QU')
+            pi = plot(xx ** 2, myYI, 'o', label=label + ' I')
+            pqu = plot(xx ** 2, myYQU, 'o', label=label + ' QU / sqrt(2)')
 
     if fit:
         mymodel = lambda x, a, b, c, d, e: (a + b * x + c * np.exp(-d * (x - e)))  # /(a+b+c*np.exp(-d*(1-e)))
@@ -697,26 +709,31 @@ def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='
             print('Clipping fit from {} to {}'.format(fitlim[0], fitlim[1]))
             ok = ok & (xx >= fitlim[0]) & (xx <= fitlim[1])
         if QUsep is False:
-            myfit = curve_fit(mymodel, xx[ok]**2, myY[ok], p0=[np.min(myY[ok]),0.4, 0,2,1.5],maxfev=100000, ftol=1e-7)
+            myfit = curve_fit(mymodel, xx[ok] ** 2, myY[ok], p0=[np.min(myY[ok]), 0.4, 0, 2, 1.5], maxfev=100000,
+                              ftol=1e-7)
         else:
-            mymodel = lambda x, a, b, c, d, e, f, g: (a + b*x + f*x**2 + g*x**3 + c*np.exp(-d*(x-e)))#/(a+b+c*np.exp(-d*(1-e)))
-            myfitI = curve_fit(mymodel, xx[ok]**2, myYI[ok], p0=[np.min(myY[ok]),0.4, 0,2,1.5, 0., 0.],maxfev=100000, ftol=1e-7)
-            myfitQU = curve_fit(mymodel, xx[ok]**2, myYQU[ok], p0=[np.min(myY[ok]),0.4, 0,2,1.5, 0., 0.],maxfev=100000, ftol=1e-7)
-        if doplot: 
+            mymodel = lambda x, a, b, c, d, e, f, g: (
+                    a + b * x + f * x ** 2 + g * x ** 3 + c * np.exp(-d * (x - e)))  # /(a+b+c*np.exp(-d*(1-e)))
+            myfitI = curve_fit(mymodel, xx[ok] ** 2, myYI[ok], p0=[np.min(myY[ok]), 0.4, 0, 2, 1.5, 0., 0.],
+                               maxfev=100000, ftol=1e-7)
+            myfitQU = curve_fit(mymodel, xx[ok] ** 2, myYQU[ok], p0=[np.min(myY[ok]), 0.4, 0, 2, 1.5, 0., 0.],
+                                maxfev=100000, ftol=1e-7)
+        if doplot:
             if QUsep is False:
-                plot(xx**2, mymodel(xx**2, *myfit[0]),  label=label+' Fit', color=p[0].get_color())
+                plot(xx ** 2, mymodel(xx ** 2, *myfit[0]), label=label + ' Fit', color=p[0].get_color())
             else:
-                plot(xx**2, mymodel(xx**2, *myfitI[0]),  label=label+' Fit I', color=pi[0].get_color())
-                plot(xx**2, mymodel(xx**2, *myfitQU[0]),  label=label+' Fit QU', color=pqu[0].get_color())
+                plot(xx ** 2, mymodel(xx ** 2, *myfitI[0]), label=label + ' Fit I', color=pi[0].get_color())
+                plot(xx ** 2, mymodel(xx ** 2, *myfitQU[0]), label=label + ' Fit QU / sqrt(2)',
+                     color=pqu[0].get_color())
 
-            #print(myfit[0])
+            # print(myfit[0])
         invcov_samples = np.linspace(1, 15, 1000)
         if QUsep is False:
-            eff_v = mymodel(invcov_samples, *myfit[0])**2
+            eff_v = mymodel(invcov_samples, *myfit[0]) ** 2
             effective_variance_invcov = np.array([invcov_samples, eff_v])
         else:
-            eff_vI = mymodel(invcov_samples, *myfitI[0])**2
-            eff_vQU = mymodel(invcov_samples, *myfitQU[0])**2
+            eff_vI = mymodel(invcov_samples, *myfitI[0]) ** 2
+            eff_vQU = mymodel(invcov_samples, *myfitQU[0]) ** 2
             effective_variance_invcov = np.array([invcov_samples, eff_vI, eff_vQU])
 
     if doplot:
@@ -734,9 +751,11 @@ def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='
 
 
 def get_angular_profile(maps, thmax=25, nbins=20, label='', center=np.array([316.44761929, -58.75808063]),
-                        allstokes=False, fontsize=None, doplot=False):
+                        allstokes=False, fontsize=None, doplot=False, separate=False):
     vec0 = hp.ang2vec(center[0], center[1], lonlat=True)
-    vecpix = hp.pix2vec(256, np.arange(12 * 256 ** 2))
+    sh = np.shape(maps)
+    ns = hp.npix2nside(sh[0])
+    vecpix = hp.pix2vec(ns, np.arange(12 * ns ** 2))
     angs = np.degrees(np.arccos(np.dot(vec0, vecpix)))
     rng = np.array([0, thmax])
     xx, yyI, dx, dyI, _ = ft.profile(angs, maps[:, 0], nbins=nbins, plot=False, rng=rng)
@@ -752,30 +771,35 @@ def get_angular_profile(maps, thmax=25, nbins=20, label='', center=np.array([316
         xlabel('Angle [deg.]')
         ylabel('RMS')
         legend(fontsize=fontsize)
-    return xx, avg
+    if separate:
+        return xx, dyI, dyQ, dyU
+    else:
+        return xx, avg
 
 
 def correct_maps_rms(maps, cov, effective_variance_invcov):
     okpix = cov > 0
-    newmaps = maps*0
+    newmaps = maps * 0
     sh = np.shape(effective_variance_invcov)
-    if sh[0]==2:
-        correction = np.interp(np.max(cov)/cov[okpix], effective_variance_invcov[0,:], effective_variance_invcov[1,:])
+    if sh[0] == 2:
+        correction = np.interp(np.max(cov) / cov[okpix], effective_variance_invcov[0, :],
+                               effective_variance_invcov[1, :])
         for s in range(3):
-            newmaps[okpix,s] = maps[okpix,s] / np.sqrt(correction) * np.sqrt(cov[okpix]/np.max(cov))
+            newmaps[okpix, s] = maps[okpix, s] / np.sqrt(correction) * np.sqrt(cov[okpix] / np.max(cov))
     else:
-        correctionI = np.interp(np.max(cov)/cov[okpix], effective_variance_invcov[0,:], effective_variance_invcov[1,:])
-        correctionQU = np.interp(np.max(cov)/cov[okpix], effective_variance_invcov[0,:], effective_variance_invcov[2,:])
-        newmaps[okpix,0] = maps[okpix,0] / np.sqrt(correctionI) * np.sqrt(cov[okpix]/np.max(cov))
-        newmaps[okpix,1] = maps[okpix,1] / np.sqrt(correctionQU) * np.sqrt(cov[okpix]/np.max(cov))
-        newmaps[okpix,2] = maps[okpix,2] / np.sqrt(correctionQU) * np.sqrt(cov[okpix]/np.max(cov))
-
-
+        correctionI = np.interp(np.max(cov) / cov[okpix], effective_variance_invcov[0, :],
+                                effective_variance_invcov[1, :])
+        correctionQU = np.interp(np.max(cov) / cov[okpix], effective_variance_invcov[0, :],
+                                 effective_variance_invcov[2, :])
+        newmaps[okpix, 0] = maps[okpix, 0] / np.sqrt(correctionI) * np.sqrt(cov[okpix] / np.max(cov))
+        newmaps[okpix, 1] = maps[okpix, 1] / np.sqrt(correctionQU) * np.sqrt(cov[okpix] / np.max(cov))
+        newmaps[okpix, 2] = maps[okpix, 2] / np.sqrt(correctionQU) * np.sqrt(cov[okpix] / np.max(cov))
 
     return newmaps
 
-def flatten_noise(maps, cov, thmax=25, nbins=20, center=np.array([316.44761929,-58.75808063]), 
-    doplot=False, normalize_all=False, QUsep=True):
+
+def flatten_noise(maps, cov, thmax=25, nbins=20, center=np.array([316.44761929, -58.75808063]),
+                  doplot=False, normalize_all=False, QUsep=True):
     sh = np.shape(maps)
     if len(sh) == 2:
         maps = np.reshape(maps, (1, sh[0], sh[1]))
@@ -787,9 +811,9 @@ def flatten_noise(maps, cov, thmax=25, nbins=20, center=np.array([316.44761929,-
     if doplot:
         figure()
     for isub in range(newsh[0]):
-        xx, yy, fitcov = get_noise_invcov_profile(maps[isub,:,:], cov, nbins=nbins, norm=False,
-                                                        label='sub-band: {}'.format(isub),fit=True, 
-                                                        doplot=doplot, allstokes=True, QUsep=QUsep)
+        xx, yy, fitcov = get_noise_invcov_profile(maps[isub, :, :], cov, nbins=nbins, norm=False,
+                                                  label='sub-band: {}'.format(isub), fit=True,
+                                                  doplot=doplot, allstokes=True, QUsep=QUsep)
         all_norm_noise.append(yy[0])
         if doplot:
             legend(fontsize=10)
@@ -884,8 +908,9 @@ def ctheta_parts(themap, ipok, thetamin, thetamax, nbinstot, nsplit=4, degrade_i
     thall = 2. / 3 * ((thmin + dtheta) ** 3 - thmin ** 3) / ((thmin + dtheta) ** 2 - thmin ** 2)
     ### But it actually changes very little
     return thall, cthall
-        
-def get_cov_nunu(maps, cov, nbins=20, QUsep=True):
+
+
+def get_cov_nunu(maps, cov, nbins=20, QUsep=True, return_flat_maps=False):
     # This function returns the sub-frequency, sub_frequency covariance matrix for each stoke parameter
     # it does not attemps to check for covariance between Stokes parameters (this should be icorporated later)
     # it returns the three covariance matrices as well as the fitted function of coverage that was used to
@@ -899,19 +924,22 @@ def get_cov_nunu(maps, cov, nbins=20, QUsep=True):
     ### Now calculate the covariance matrix for each sub map
     sh = np.shape(maps)
 
-    if len(sh)==2:
-        okpix = new_sub_maps[:,0] != 0
-        cov_I = np.array([[np.cov(new_sub_maps[okpix,0])]])
-        cov_Q = np.array([[np.cov(new_sub_maps[okpix,1])]])
-        cov_U = np.array([[np.cov(new_sub_maps[okpix,2])]])
+    if len(sh) == 2:
+        okpix = new_sub_maps[:, 0] != 0
+        cov_I = np.array([[np.cov(new_sub_maps[okpix, 0])]])
+        cov_Q = np.array([[np.cov(new_sub_maps[okpix, 1])]])
+        cov_U = np.array([[np.cov(new_sub_maps[okpix, 2])]])
     else:
-        okpix = new_sub_maps[0,:,0] != 0
-        cov_I = np.cov(new_sub_maps[:,okpix,0])
-        cov_Q = np.cov(new_sub_maps[:,okpix,1])
-        cov_U = np.cov(new_sub_maps[:,okpix,2])
-        if sh[0]==1:
+        okpix = new_sub_maps[0, :, 0] != 0
+        cov_I = np.cov(new_sub_maps[:, okpix, 0])
+        cov_Q = np.cov(new_sub_maps[:, okpix, 1])
+        cov_U = np.cov(new_sub_maps[:, okpix, 2])
+        if sh[0] == 1:
             cov_I = np.array([[cov_I]])
             cov_Q = np.array([[cov_Q]])
             cov_U = np.array([[cov_U]])
 
-    return cov_I, cov_Q, cov_U, all_fitcov, all_norm_noise
+    if return_flat_maps:
+        return cov_I, cov_Q, cov_U, all_fitcov, all_norm_noise, new_sub_maps
+    else:
+        return cov_I, cov_Q, cov_U, all_fitcov, all_norm_noise

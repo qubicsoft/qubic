@@ -16,6 +16,7 @@ jupyter:
 
 #### Louise Mousset, 2020/06/05
 
+This notebook look at maps produced by a full pipeline simulations with severals noise realisations and make the Cls power spectra. 
 
 ```{python}
 # %matplotlib inline
@@ -50,15 +51,25 @@ rc('figure', figsize=(13, 10))
 rc('font', size=15)
 ```
 
+```{python}
+import matplotlib.colors as mcolors
+mcolors.TABLEAU_COLORS.keys()
+
+colorlist = list(mcolors.TABLEAU_COLORS.keys())
+```
+
 ## Choose a simulation
 
 ```{python}
 # Get the files
-# rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/galaxy_center_d1/test_residuals/31613089/'
-# rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/29712494/'
-nfrecon = 3
+datadir = os.environ['DATA_SPECTROIM']
+# rep = datadir + 'simu_TD/'
+# rep = datadir + 'simu_FI220/'
+rep = datadir + 'simu_FI150/'
 
-rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/galaxy_center_d1/nfrecon{}/'.format(nfrecon)
+nfrecon = 8
+# rep = datadir + f'/nfrecon{nfrecon}/'
+
 dictionary = glob.glob(rep + '/*.dict')[0]
 print(dictionary)
 
@@ -69,18 +80,13 @@ d.read_from_file(dictionary)
 # Coordinates of the zone observed in the sky
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 
-# Number of subbands used during the simulation
-
-nfsub = d['nf_sub']
-print('nf_sub = {}, nf_recon = {}'.format(nfsub, nfrecon))
-
 # Get fits files names in a list
-fits_noise = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessFalse*.fits'.format(nfsub, nfrecon), 
+fits_noise = np.sort(glob.glob(rep + '*nfrecon{}_noiselessFalse*.fits'.format(nfrecon), 
                               recursive=True))
-fits_noiseless = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessTrue*.fits'.format(nfsub, nfrecon), 
+fits_noiseless = np.sort(glob.glob(rep + '*nfrecon{}_noiselessTrue*.fits'.format(nfrecon), 
                               recursive=True))
 
-print(fits_noiseless)
+print(fits_noise, fits_noiseless)
 ```
 
 ```{python}
@@ -96,7 +102,7 @@ print('nreals = ', nreals)
 
 # Get seen map (observed pixels)
 seenmap = rmc.get_seenmap(fits_noiseless[0])
-print(seenmap.shape)
+print('seenmap shape:', seenmap.shape)
 
 # Number of pixels and nside
 npix = len(seenmap)
@@ -133,43 +139,48 @@ maps_residuals[:, :, seenmap, :] = residuals
 
 ```{python}
 istk = 0
-real = 4
-plt.figure(figsize=(12, 20))
+real = 0
+plt.figure(figsize=(20, 30))
 plt.subplots_adjust(wspace=0.2, hspace=0.5)
 # plt.suptitle('JobID: ' + rep[-9: -1])
 rr = 15
 min = 0
-max = 5000
+max = 1e4
 
 for band in range(nfrecon):
     hp.gnomview(maps_conv[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+1), 
                 rot=center, reso=rr, notext=True,
-                title = '{} conv'.format(d['kind'][istk]), min=min, max=max)
+                title = '{} - Convolved'.format(d['kind'][istk]), min=min, max=max)
     plt.text(-0.8,0, '{:3.0f} GHz'.format(nus[band]))
     hp.gnomview(maps_recon[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+2), 
                 rot=center, reso=rr, notext=True,
-                title = '{0} rec'.format(d['kind'][istk]), min=min, max=max)
+                title = '{0} - Reconstruction'.format(d['kind'][istk]), min=min, max=max)
     hp.gnomview(maps_residuals[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+3), 
                 rot=center, reso=rr, notext=True,
-                title = '{0} Residuals'.format(d['kind'][istk]), min=-70, max=70)
+                title = '{0} - Residuals with noiseless'.format(d['kind'][istk]), min=-70, max=70)
 plt.tight_layout()
 
 ```
 
+#### Difference between mean_recon and noiseless
+
+We expect they are equal but in some simulation they are not. Maybe because of a convergence issue. 
+
+Of course this makes sens only if you have many realisations.
+
 ```{python}
-band = 0
+band = 2
 istk = 0
-toto = np.zeros_like(noiseless)
-toto[:, seenmap, :] = np.mean(maps_recon[:, :, seenmap, :], axis=0) - noiseless[:, seenmap, :]
+diff = np.mean(maps_recon, axis=0) - noiseless
 hp.gnomview(np.mean(maps_recon, axis=0)[band, :, istk], cmap='jet', sub=(131), 
-                rot=center, reso=rr, notext=True, min=0, max=5000,
-                title = 'Mean_recon')
+                rot=center, reso=rr, notext=True, min=0, max=10000,
+                title = 'Recon mean')
 hp.gnomview(noiseless[band, :, istk], cmap='jet', sub=(132), 
-                rot=center, reso=rr, notext=True, min=0, max=5000,
+                rot=center, reso=rr, notext=True, min=0, max=10000,
                 title = 'Noiseless')
-hp.gnomview(toto[band, :, istk], cmap='jet', sub=(133), 
-                rot=center, reso=rr, notext=True, min=-20, max=20,
-                title = 'Mean_recon - Noiseless')
+hp.gnomview(diff[band, :, istk], cmap='jet', sub=(133), 
+                rot=center, reso=rr, notext=True, min=-70, max=70,
+                title = 'Recon mean - Noiseless')
 ```
 
 ## Coverage
@@ -196,13 +207,67 @@ plt.title('Coverage normalized to the maximum as function of the angle in the pa
 plt.legend()
 ```
 
-### Power spectrum
+## Save residuals, coverage and seenmap
+
+Here we save the files that will be used to create data for FastSimulator
+
+```{python}
+# rep_save = datadir + 'Data_for_FastSimulator/'
+# # rep = datadir + 'simu_TD/'
+# # rep = datadir + 'simu_FI220/'
+# rep = datadir + 'simu_FI150/'
+
+
+# for nfrecon in [1, 2, 3, 4, 5, 8]:
+
+#     # Get fits files names in a list
+#     fits_noise = np.sort(glob.glob(rep + '*nfrecon{}_noiselessFalse*.fits'.format(nfrecon), 
+#                                   recursive=True))
+#     fits_noiseless = np.sort(glob.glob(rep + '*nfrecon{}_noiselessTrue*.fits'.format(nfrecon), 
+#                                   recursive=True))
+#     print(fits_noise)
+
+#     # Get seen map (observed pixels)
+#     seenmap = rmc.get_seenmap(fits_noiseless[0])
+#     print('seenmap shape:', seenmap.shape)
+#     np.save(rep_save + f'seenmap_{nfrecon}bands_FI150.npy', seenmap)
+    
+#     # Get the coverage
+#     fitsfile = fits.open(fits_noise[0])
+#     coverage = fitsfile['COVERAGE'].data
+#     coverage_patch = coverage[seenmap]
+#     coverage_norm = coverage_patch / np.max(coverage_patch)
+#     np.save(rep_save + f'coverage_{nfrecon}bands_FI150.npy', coverage_norm)
+
+   
+#     # Compute residuals in a given way
+#     residuals = amc.get_residuals(fits_noise, fits_noiseless[0], 'noiseless')
+#     np.save(rep_save + f'residuals_{nfrecon}bands_FI150.npy', residuals[0])
+#     print(residuals.shape)
+
+```
+
+```{python}
+sm = np.load(rep_save + f'seenmap_{nfrecon}bands_FI150.npy')
+print(sm.shape)
+
+cov = np.load(rep_save + f'coverage_{nfrecon}bands_FI150.npy')
+print(cov.shape)
+
+res = np.load(rep_save + f'residuals_{nfrecon}bands_FI150.npy')
+print(res.shape)
+```
+
+## Power spectrum
 
 ```{python}
 # Create a Namaster object
-lmin = 20
+lmin = 40
 lmax = 2 * d['nside'] - 1
-delta_ell = 20
+delta_ell = 30
+print('lmin', lmin)
+print('lmax', lmax)
+print('delta ell', delta_ell)
 
 mask = np.zeros(12 * d['nside']**2)
 mask[seenmap] = 1
@@ -211,69 +276,77 @@ Namaster = nam.Namaster(mask, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
 
 # Make a mask
 mask_apo = Namaster.get_apodized_mask()
-
 # hp.mollview(mask_apo)
+
+# Binning
+ell_binned, b = Namaster.get_binning(d['nside'])
+nbins = len(ell_binned)
+print('nbins:', nbins)
+print('ell binned:', ell_binned)
 
 
 ```
 
+### Auto spectrum
+
 ```{python}
-# Auto spectrum
+toto = [True, False]
+np.invert(toto)
+```
+
+```{python}
 w = None
-allcells_recon, allcells_recon_noiseless, allcells_conv, allcells_x0 = [], [], [], []
 real = 0
 
+cls_recon = np.zeros((nfrecon, nbins, 4))
+cls_recon_nl = np.zeros_like(cls_recon)
+cls_conv = np.zeros_like(cls_recon)
 # Get spectra
-for isub in range(nf_sub_rec):
-    leff, cells_recon, w = Namaster.get_spectra(maps_recon[real, isub, :, :].T, mask_apo, w=w,
+for isub in range(nfrecon):
+    leff, cls_recon[isub, :, :], w = Namaster.get_spectra(maps_recon[real, isub, :, :].T, mask_apo, w=w,
                                           purify_e=True, 
                                           purify_b=False, 
                                           beam_correction=None,
                                           pixwin_correction=True)
     
-    leff, cells_recon_noiseless, w = Namaster.get_spectra(noiseless[isub, :, :].T, mask_apo, w=w,
+    leff, cls_recon_nl[isub, :, :], w = Namaster.get_spectra(noiseless[isub, :, :].T, mask_apo, w=w,
                                           purify_e=True, 
                                           purify_b=False, 
                                           beam_correction=None,
                                           pixwin_correction=True)
 
-    leff, cells_conv, w = Namaster.get_spectra(maps_conv[real, isub, :, :].T, mask_apo, w=w, 
+    leff, cls_conv[isub, :, :], w = Namaster.get_spectra(maps_conv[real, isub, :, :].T, mask_apo, w=w, 
                                           purify_e=True, 
                                           purify_b=False, 
                                           beam_correction=None,
                                           pixwin_correction=True)
 
-    allcells_recon.append(cells_recon)
-    allcells_recon_noiseless.append(cells_recon_noiseless)
-    allcells_conv.append(cells_conv)
-
-allcells_recon = np.array(allcells_recon)
-allcells_recon_noiseless = np.array(allcells_recon_noiseless)
-allcells_conv = np.array(allcells_conv)
 ```
 
 ```{python}
 clnames = ['TT', 'EE', 'BB', 'TE']
-# with plt.xkcd():
+nfrecon=5
 rc('figure', figsize=(12, 8))
 
 fig, axs = plt.subplots(2, 2)
 axs = axs.ravel()
 
-color = ['b', 'r', 'g', 'k', 'y', 'orange', 'brown', 'purple']
 for i in range(4):
     ax = axs[i]
-    for isub in range(nf_sub_rec): 
-        c = color[isub]
-#         ax.plot(input_ell[2:lmax], input_Dl[2:lmax, i], 'k', label='CMB Input')
-        ax.plot(leff[:], allcells_recon[isub, :, i],'o', color=c, 
-                 label='Recon {}'.format(isub))
-        ax.plot(leff[:], allcells_recon_noiseless[isub, :, i],'--', color=c, 
-                 label='Recon Noiseless{}'.format(isub))
-#         ax.plot(leff[2:], allcells_x0[isub, 2:, i], color=c, 
-#                  label='x0{}'.format(isub))
-#         ax.plot(leff[:], allcells_conv[isub, :, i], '--', color=c, 
-#                  label='Conv{}'.format(isub))
+    for isub in range(nfrecon): 
+        c = colorlist[isub]
+        ax.plot(leff[:], 
+                cls_recon[isub, :, i],
+                'o', 
+                color=c, 
+                label='Recon {}'.format(isub))
+        ax.plot(leff[:], 
+                cls_recon_nl[isub, :, i],
+                '--', 
+                color=c, 
+                label='Recon Noiseless {}'.format(isub))
+        ax.plot(leff[:], cls_conv[isub, :, i], color=c, 
+                 label='Conv {}'.format(isub))
     ax.set_xlabel('$\\ell$')
     ax.set_ylabel('$D_\\ell$')
 
@@ -283,28 +356,31 @@ plt.tight_layout()
 ax.legend(fontsize=8, loc='right')
 ```
 
-```{python}
-from itertools import combinations
-# Cross spectrum
+### Cross spectrum
 
-nbins = (lmax - lmin) // delta_ell
+This will remove the noise bias. We only do cross spectrum between independant pairs in order to avoid corelations. So we only have nreals/2 cross spectra.
+
+```{python}
+# from itertools import combinations
 # ncross = nreals * (nreals - 1) // 2
+
 ncross = nreals // 2
-print(nbins, ncross)
-cells_cross = np.zeros((ncross, nf_sub_rec, nbins, 4))
-cells_conv = np.zeros((ncross, nf_sub_rec, nbins, 4))
+print('ncross:', ncross)
+print('nbins:', nbins)
+
+cls_cross_recon = np.zeros((ncross, nfrecon, nbins, 4))
+cls_cross_conv = np.zeros_like(cls_cross_recon)
 
 # Get spectra
 w = None
-for isub in range(nf_sub_rec):
+for isub in range(nfrecon):
     print('isub:', isub)
     cross = 0
-#     for c in combinations(np.arange(5), 2):
-    for c1 in range(0, nreals-1, 2): # do not mix pairs to avoid correlation 
+    for c1 in range(0, nreals-1, 2):
         c2 = c1 + 1 
         c = (c1, c2)
         print(c)
-        leff, cells_cross[cross, isub, :, :], w = Namaster.get_spectra(maps_recon[c[0], isub, :, :].T, 
+        leff, cls_cross_recon[cross, isub, :, :], w = Namaster.get_spectra(maps_recon[c[0], isub, :, :].T, 
                                               mask_apo, 
                                               maps_recon[c[1], isub, :, :].T,
                                               w=w,
@@ -312,7 +388,7 @@ for isub in range(nf_sub_rec):
                                               purify_b=False, 
                                               beam_correction=None,
                                               pixwin_correction=True)
-        leff, cells_conv[cross, isub, :, :], w = Namaster.get_spectra(maps_conv[c[0], isub, :, :].T, 
+        leff, cls_cross_conv[cross, isub, :, :], w = Namaster.get_spectra(maps_conv[c[0], isub, :, :].T, 
                                               mask_apo,
                                               maps_conv[c[1], isub, :, :].T,
                                               w=w,
@@ -326,45 +402,127 @@ for isub in range(nf_sub_rec):
 
 ```{python}
 # average over the cross_spectrum
-cross_mean = np.mean(cells_cross, axis=0)
-cross_std = np.std(cells_cross, axis=0)
-print(cross_mean.shape)
+cross_mean_recon = np.mean(cls_cross_recon, axis=0)
+cross_std_recon = np.std(cls_cross_recon, axis=0)
 
-
-mean_conv = np.mean(cells_conv, axis=0)
+cross_mean_conv = np.mean(cls_cross_conv, axis=0)
 
 print(cells_cross[:, 0, 0, 0])
 ```
 
 ```{python}
 clnames = ['TT', 'EE', 'BB', 'TE']
-# with plt.xkcd():
 rc('figure', figsize=(12, 8))
 
 fig, axs = plt.subplots(2, 2)
 axs = axs.ravel()
 
-color = ['b', 'r', 'g', 'k', 'y', 'orange', 'brown', 'purple']
 for i in range(4):
     ax = axs[i]
-    for isub in range(0, 7, 2):
-        c = color[isub]
-        ax.errorbar(leff[:], cross_mean[isub, :, i],
-                    yerr=cross_std[isub, :, i] * np.sqrt(2),
+    for isub in range(nfrecon):
+        c = colorlist[isub]
+        ax.errorbar(leff[:], cross_mean_recon[isub, :, i],
+                    yerr=cross_std_recon[isub, :, i] * np.sqrt(2),
                     marker='o', color=c, linestyle='none', 
                     label='Recon cross {}'.format(isub))
         
-        ax.plot(leff[:], allcells_recon_noiseless[isub, :, i],'--', 
+        ax.plot(leff[:], cls_recon_nl[isub, :, i],'--', 
                 color=c,
-                 label='Recon Noiseless{}'.format(isub))
+                label='Recon Noiseless {}'.format(isub))
 
-#         ax.plot(leff[:], mean_conv[isub, :, i], '--', color=c, 
-#                  label='Conv{}'.format(isub))
+        ax.plot(leff[:], cross_mean_conv[isub, :, i], '--', color=c, 
+                 label='Conv {}'.format(isub))
     ax.set_xlabel('$\\ell$')
     ax.set_ylabel('$D_\\ell$')
 #     ax.set_yscale('log')
     ax.set_title(clnames[i])
+    ax.legend(fontsize=8, loc='right')
 
 plt.tight_layout()
-# ax.legend(fontsize=8, loc='right')
+
+```
+
+### Cross spectrum on the residuals
+
+We expect them to be 0.
+
+```{python}
+ncross = nreals // 2
+print('ncross:', ncross)
+print('nbins:', nbins)
+cls_cross_residuals = np.zeros((ncross, nfrecon, nbins, 4))
+
+# Get spectra
+w = None
+for isub in range(nfrecon):
+    print('isub:', isub)
+    cross = 0
+    for c1 in range(0, nreals-1, 2): # do not mix pairs to avoid correlation 
+        c2 = c1 + 1 
+        c = (c1, c2)
+        print(c)
+        map1 = maps_residuals[c[0], isub, :, :]
+        map2 = maps_residuals[c[1], isub, :, :]
+        leff, cls_cross_residuals[cross, isub, :, :], w = Namaster.get_spectra(map1.T, 
+                                              mask_apo, 
+                                              map2.T,
+                                              w=w,
+                                              purify_e=True, 
+                                              purify_b=False, 
+                                              beam_correction=None,
+                                              pixwin_correction=True)
+       
+        cross += 1     
+```
+
+```{python}
+# Save cross spectres
+cls_cross_residuals.shape
+rep_save = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/cls_spectrum_fullpipelinesimu/'
+
+np.save(rep_save + 'cross_residuals_nfrecon{}.npy'.format(nfrecon), cls_cross_residuals)
+```
+
+```{python}
+# Load cross spectres
+# nfrecon = 1
+# cls_cross_residuals = np.load(rep_save + 'cross_residuals_nfrecon{}.npy'.format(nfrecon))
+```
+
+```{python}
+# average over the cross_spectrum
+cross_mean_residuals = np.mean(cls_cross_residuals, axis=0)
+cross_std_residuals = np.std(cls_cross_residuals, axis=0)
+```
+
+```{python}
+clnames = ['TT', 'EE', 'BB', 'TE']
+rc('figure', figsize=(12, 8))
+
+fig, axs = plt.subplots(2, 2)
+axs = axs.ravel()
+
+for i in range(4):
+    ax = axs[i]
+    for isub in range(nfrecon):
+        c = color[isub]
+        ax.errorbar(leff[:], 
+                cross_mean_residuals[isub, :, i],
+                yerr=cross_std_residuals[isub, :, i] * np.sqrt(2),
+                marker='o', color=colorlist[isub], linestyle='none', 
+                label='Recon cross {}'.format(isub))
+
+
+    ax.set_xlabel('$\\ell$')
+    ax.set_ylabel('$D_\\ell$')
+#     ax.set_yscale('log')
+    ax.set_title(clnames[i])
+    ax.legend(fontsize=8, loc='best')
+
+plt.tight_layout()
+
+```
+
+```{python}
+
 ```

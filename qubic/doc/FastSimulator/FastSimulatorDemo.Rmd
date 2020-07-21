@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -22,6 +22,7 @@ import pickle
 from importlib import reload
 import time
 import scipy
+import matplotlib.pyplot as plt
 
 
 # Specific qubic modules
@@ -41,7 +42,7 @@ reload(ft)
 
 rc('figure', figsize=(16, 10))
 rc('font', size=15)
-mpl.rcParams['image.cmap'] = 'jet'
+plt.rcParams['image.cmap'] = 'jet'
 ```
 
 ```{python}
@@ -64,7 +65,7 @@ The FastSimulator reproduces the noise structure that has been measured so far i
 
 ```{python}
 ### This is for the FI
-config = 'FI'
+config = 'FI-150'
 
 ### This is for the TD
 # Not yet available - stay tuned...
@@ -104,8 +105,8 @@ The sky map is first constructed with infinite resolution at ech of the "input s
 #### Very important remark:
 When simulating with Spatial noise correlations, the RMS of the noise maps that are returned is **not at all** the expected one, the map however has the correct noise Cl power spectrum and should be used as it is (no renormalization of the noise to match the intended RMS) for Power Spectrum studies. If one is rather interested in map-space studies, and therefore is likely to need to rely on the RMS of the pixels at some point for statistical putposes, it is then important to set the keyword 'spatial_noise' to False in the call to the method get_partial_sky_maps_withnoise() of QubicSkySim.
 
-### First Example: CMB Only, a single noise realization, no options
-In this case the code returns the number of sub-bands from the input dictionary. The maps are centered on the Galactic Center. Provide your own coverage map centered elsewhere (optional argument) for another target...
+### First Example: CMB Only, a single noise realization, no spatial_noise
+In this case the code returns the number of sub-bands from the input dictionary (here 1). The maps are centered on the Galactic Center. Provide your own coverage map centered elsewhere (optional argument) for another target...
 
 ```{python}
 reload(qss)
@@ -116,7 +117,7 @@ sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, d)
 
 ##### Getting FastSimulator output maps
-maps_qubic, maps_noiseless, maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise()
+maps_qubic, maps_noiseless, maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(spatial_noise=False)
 
 
 ################################# Displaying Results ##########################################
@@ -152,18 +153,18 @@ for i in range(d['nf_recon']):
 One can easily change the number of sub-bands by updating the dictionary:
 
 ```{python}
+reload(qss)
+
 newd = d.copy()
-newd['nf_recon'] = 4
+newd['nf_recon'] = 2
 
 ##### QubicSkySim instanciation
-
 seed = None
-reload(qss)
 sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
 ##### Getting FastSimulator output maps
-maps_qubic, maps_noiseless, maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise()
+maps_qubic, maps_noiseless, maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(spatial_noise=False)
 
 ################################# Displaying Results ##########################################
 ### Coverage map
@@ -198,8 +199,18 @@ for i in range(newd['nf_recon']):
 Because in the above mode, most of the CPU time is spent on convolving the input sky to the relevant resolutions, once one has made one sky realization, it is faster to make many noise only realizations that can be added to the input CMB afterwards:
 
 ```{python}
+reload(qss)
+
+newd = d.copy()
+newd['nf_recon'] = 3
+
+##### QubicSkySim instanciation
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, newd)
+
 ##### Getting FastSimulator output maps
-new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True)
+new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, spatial_noise=False)
 for i in range(newd['nf_recon']):
     for s in range(3):
         hp.gnomview(new_maps_noise[i,:,s], reso=25, sub=(newd['nf_recon'],3,3*i+s+1), 
@@ -216,7 +227,7 @@ Of course we focus here on the noise_only results of the FastSimulator.
 ### Let's read the input noise properties from the file that is used in the simulator 
 ### (these are fitted to end-to=-end simualtions)
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
-DataFastSim = pickle.load( open( global_dir + '/doc/FastSimulator/Data/DataFastSimulator_{}_Duration_3_nfsub_{}.pkl'.format(config, newd['nf_recon']), "rb" ) )
+DataFastSim = pickle.load( open( global_dir + '/doc/FastSimulator/Data/DataFastSimulator_{}_nfsub_{}.pkl'.format(config, newd['nf_recon']), "rb" ) )
 
 ```
 
@@ -273,15 +284,16 @@ corr_mats = [DataFastSim['CovI'], DataFastSim['CovQ']/2, DataFastSim['CovU']/2]
 
 figure()
 stn = ['I','Q/2', 'U/2']
-mini = np.min(np.array([corr_mats, new_corr_mats]))
-maxi = np.max(np.array([corr_mats, new_corr_mats]))
+bla = np.max([np.abs(np.array([corr_mats, new_corr_mats])), np.array([corr_mats, new_corr_mats])])
+mini = -bla
+maxi = bla
 for s in range(3):
     subplot(2,3,1+s)
-    imshow(corr_mats[s], vmin=mini, vmax=maxi)
+    imshow(corr_mats[s], vmin=mini, vmax=maxi, cmap='bwr')
     colorbar(orientation='horizontal')
     title('End-To-End Cov {} nsub={}'.format(stn[s],newd['nf_recon']))
     subplot(2,3,4+s)
-    imshow(new_corr_mats[s], vmin=mini, vmax=maxi)
+    imshow(new_corr_mats[s], vmin=mini, vmax=maxi, cmap='bwr')
     colorbar(orientation='horizontal')
     title('FastSim Cov {} nsub={}'.format(stn[s],newd['nf_recon']))
 
@@ -305,6 +317,7 @@ new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(sigma_sec=88
 ```
 
 ```{python}
+reload(qss)
 ### Get the C(theta)
 allcthI = []
 allcthQ = []

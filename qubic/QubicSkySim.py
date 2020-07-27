@@ -334,7 +334,7 @@ class Qubic_sky(sky):
         return fullmaps
 
     def get_partial_sky_maps_withnoise(self, coverage=None, sigma_sec=None,
-                                       Nyears=3., verbose=False, FWHMdeg=None, seed=None,
+                                       Nyears=4., verbose=False, FWHMdeg=None, seed=None,
                                        noise_profile=True,
                                        spatial_noise=True,
                                        nunu_correlation=True,
@@ -400,13 +400,15 @@ class Qubic_sky(sky):
         ##############################################################################################################
         # Restore data for FastSimulation ############################################################################
         ##############################################################################################################
-        # files loacation
+        # files location
         global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
 
-        DataFastSim = pickle.load(open(global_dir +
-                                       '/doc/FastSimulator/Data/DataFastSimulator_{}-{}_nfsub_{}.pkl'.format(
-                                           self.dictionary['config'],
-                                           str(int(self.dictionary['filter_nu'] / 1e9)), nf_sub), "rb"))
+        with open(global_dir +
+                  '/doc/FastSimulator/Data/DataFastSimulator_{}{}_nfsub_{}.pkl'.format(self.dictionary['config'],
+                                                                                       str(int(self.dictionary['filter_nu'] / 1e9)),
+                                                                                       nf_sub),
+                  "rb") as file:
+            DataFastSim = pickle.load(file)
 
         # DataFastSim = pickle.load( open( global_dir +
         #                                  '/doc/FastSimulator/Data/DataFastSimulator_FI_Duration_3_nfsub_{}.pkl'.format(nf_sub), "rb" ) )
@@ -414,7 +416,7 @@ class Qubic_sky(sky):
         # Read Coverage map
         if coverage is None:
             DataFastSimCoverage = pickle.load(open(global_dir +
-                                                   '/doc/FastSimulator/Data/DataFastSimulator_{}-{}_coverage.pkl'.format(
+                                                   '/doc/FastSimulator/Data/DataFastSimulator_{}{}_coverage.pkl'.format(
                                                        self.dictionary['config'],
                                                        str(int(self.dictionary['filter_nu'] / 1e9))), "rb"))
             coverage = DataFastSimCoverage['coverage']
@@ -470,7 +472,7 @@ class Qubic_sky(sky):
             return maps + noisemaps, maps, noisemaps, coverage
 
     def create_noise_maps(self, sigma_sec, coverage, covcut=0.1, nsub=1,
-                          Nyears=3, verbose=False, seed=None,
+                          Nyears=4, verbose=False, seed=None,
                           effective_variance_invcov=None,
                           clnoise=None,
                           sub_bands_cov=None):
@@ -618,7 +620,7 @@ class Qubic_sky(sky):
         else:
             return noise_maps
 
-    def theoretical_noise_maps(self, sigma_sec, coverage, Nyears=3, verbose=False):
+    def theoretical_noise_maps(self, sigma_sec, coverage, Nyears=4, verbose=False):
         """
         This returns a map of the RMS noise (not an actual realization, just the expected RMS - No covariance)
 

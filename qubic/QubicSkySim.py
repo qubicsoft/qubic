@@ -800,8 +800,7 @@ def correct_maps_rms(maps, cov, effective_variance_invcov):
     return newmaps
 
 
-def flatten_noise(maps, cov, thmax=25, nbins=20, center=np.array([316.44761929, -58.75808063]),
-                  doplot=False, normalize_all=False, QUsep=True):
+def flatten_noise(maps, cov, nbins=20, doplot=False, normalize_all=False, QUsep=True):
     sh = np.shape(maps)
     if len(sh) == 2:
         maps = np.reshape(maps, (1, sh[0], sh[1]))

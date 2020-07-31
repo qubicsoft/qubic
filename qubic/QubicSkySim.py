@@ -705,12 +705,12 @@ def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='
             pqu = plot(xx ** 2, myYQU, 'o', label=label + ' QU / sqrt(2)')
 
     if fit:
-        mymodel = lambda x, a, b, c, d, e: (a + b * x + c * np.exp(-d * (x - e)))  # /(a+b+c*np.exp(-d*(1-e)))
         ok = isfinite(myY)
         if fitlim is not None:
             print('Clipping fit from {} to {}'.format(fitlim[0], fitlim[1]))
             ok = ok & (xx >= fitlim[0]) & (xx <= fitlim[1])
         if QUsep is False:
+            mymodel = lambda x, a, b, c, d, e: (a + b * x + c * np.exp(-d * (x - e)))  # /(a+b+c*np.exp(-d*(1-e)))
             myfit = curve_fit(mymodel, xx[ok] ** 2, myY[ok], p0=[np.min(myY[ok]), 0.4, 0, 2, 1.5], maxfev=100000,
                               ftol=1e-7)
         else:
@@ -729,13 +729,22 @@ def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='
                      color=pqu[0].get_color())
 
             # print(myfit[0])
+        # Interpolation of the fit from invcov = 1 to 15
         invcov_samples = np.linspace(1, 15, 1000)
         if QUsep is False:
             eff_v = mymodel(invcov_samples, *myfit[0]) ** 2
+            # Avoid extrapolation problem for pixels before the first bin or after the last one.
+            eff_v[invcov_samples < xx[0]**2] = mymodel(xx[0] **2, *myfit[0]) ** 2
+            eff_v[invcov_samples > xx[-1] ** 2] = mymodel(xx[-1] ** 2, *myfit[0]) ** 2
+
             effective_variance_invcov = np.array([invcov_samples, eff_v])
         else:
             eff_vI = mymodel(invcov_samples, *myfitI[0]) ** 2
             eff_vQU = mymodel(invcov_samples, *myfitQU[0]) ** 2
+            # Avoid extrapolation problem for pixels before the first bin or after the last one.
+            eff_vI[invcov_samples < xx[0] ** 2] = mymodel(xx[0] ** 2, *myfitI[0]) ** 2
+            eff_vQU[invcov_samples > xx[-1] ** 2] = mymodel(xx[-1] ** 2, *myfitQU[0]) ** 2
+
             effective_variance_invcov = np.array([invcov_samples, eff_vI, eff_vQU])
 
     if doplot:

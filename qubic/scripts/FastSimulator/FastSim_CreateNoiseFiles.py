@@ -193,8 +193,8 @@ dirsave = os.environ['DATA_SPECTROIM'] + 'Data_for_FastSimulator/plots/'
 all_nf = [1, 2, 3, 4, 5, 8]
 center = np.array([0, 0])
 nptg = 10000
-config = 'FI150' # or TD150 or FI150
-nbins = 30
+config = 'FI220' # TD150 or FI150 or FI220
+nbins = 50
 
 for nfsub in all_nf:
     print(f'\n STARTING nfsub = {nfsub}')
@@ -216,8 +216,8 @@ for nfsub in all_nf:
                                                                 nfsub, config, dirsave=dirsave)
 
     # ### The option below will save the average over sub-bands of the Clth
-    # ### However significant residuals exist on the end-to-end simulations as of today, and
-    # ### they would nbe reproduced here, while they are likely to be caused by some issue
+    ### However significant residuals exist on the end-to-end simulations as of today, and
+    ### they would nbe reproduced here, while they are likely to be caused by some issue
     clth_tosave = np.mean(np.array(allclth), axis=0)
     # ### As a result we will instead save the nsub=1 correlation function
     if nfsub == 1:
@@ -238,7 +238,7 @@ for nfsub in all_nf:
             'CovI': cI,
             'CovQ': cQ,
             'CovU': cU,
-            'signoise': 88.,
+            'signoise': 100.,
             'effective_variance_invcov': myfitcovs,
             'clnoise': clth_tosave}
     name = 'DataFastSimulator_' + config + '_nfsub_{}.pkl'.format(nfsub)

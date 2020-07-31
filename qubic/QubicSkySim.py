@@ -334,7 +334,7 @@ class Qubic_sky(sky):
         return fullmaps
 
     def get_partial_sky_maps_withnoise(self, coverage=None, sigma_sec=None,
-                                       Nyears=3., verbose=False, FWHMdeg=None, seed=None,
+                                       Nyears=4., verbose=False, FWHMdeg=None, seed=None,
                                        noise_profile=True,
                                        spatial_noise=True,
                                        nunu_correlation=True,
@@ -400,13 +400,15 @@ class Qubic_sky(sky):
         ##############################################################################################################
         # Restore data for FastSimulation ############################################################################
         ##############################################################################################################
-        # files loacation
+        # files location
         global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
 
-        DataFastSim = pickle.load(open(global_dir +
-                                       '/doc/FastSimulator/Data/DataFastSimulator_{}-{}_nfsub_{}.pkl'.format(
-                                           self.dictionary['config'],
-                                           str(int(self.dictionary['filter_nu'] / 1e9)), nf_sub), "rb"))
+        with open(global_dir +
+                  '/doc/FastSimulator/Data/DataFastSimulator_{}{}_nfsub_{}.pkl'.format(self.dictionary['config'],
+                                                                                       str(int(self.dictionary['filter_nu'] / 1e9)),
+                                                                                       nf_sub),
+                  "rb") as file:
+            DataFastSim = pickle.load(file)
 
         # DataFastSim = pickle.load( open( global_dir +
         #                                  '/doc/FastSimulator/Data/DataFastSimulator_FI_Duration_3_nfsub_{}.pkl'.format(nf_sub), "rb" ) )
@@ -414,7 +416,7 @@ class Qubic_sky(sky):
         # Read Coverage map
         if coverage is None:
             DataFastSimCoverage = pickle.load(open(global_dir +
-                                                   '/doc/FastSimulator/Data/DataFastSimulator_{}-{}_coverage.pkl'.format(
+                                                   '/doc/FastSimulator/Data/DataFastSimulator_{}{}_coverage.pkl'.format(
                                                        self.dictionary['config'],
                                                        str(int(self.dictionary['filter_nu'] / 1e9))), "rb"))
             coverage = DataFastSimCoverage['coverage']
@@ -470,7 +472,7 @@ class Qubic_sky(sky):
             return maps + noisemaps, maps, noisemaps, coverage
 
     def create_noise_maps(self, sigma_sec, coverage, covcut=0.1, nsub=1,
-                          Nyears=3, verbose=False, seed=None,
+                          Nyears=4, verbose=False, seed=None,
                           effective_variance_invcov=None,
                           clnoise=None,
                           sub_bands_cov=None):
@@ -618,7 +620,7 @@ class Qubic_sky(sky):
         else:
             return noise_maps
 
-    def theoretical_noise_maps(self, sigma_sec, coverage, Nyears=3, verbose=False):
+    def theoretical_noise_maps(self, sigma_sec, coverage, Nyears=4, verbose=False):
         """
         This returns a map of the RMS noise (not an actual realization, just the expected RMS - No covariance)
 
@@ -703,12 +705,12 @@ def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='
             pqu = plot(xx ** 2, myYQU, 'o', label=label + ' QU / sqrt(2)')
 
     if fit:
-        mymodel = lambda x, a, b, c, d, e: (a + b * x + c * np.exp(-d * (x - e)))  # /(a+b+c*np.exp(-d*(1-e)))
         ok = isfinite(myY)
         if fitlim is not None:
             print('Clipping fit from {} to {}'.format(fitlim[0], fitlim[1]))
             ok = ok & (xx >= fitlim[0]) & (xx <= fitlim[1])
         if QUsep is False:
+            mymodel = lambda x, a, b, c, d, e: (a + b * x + c * np.exp(-d * (x - e)))  # /(a+b+c*np.exp(-d*(1-e)))
             myfit = curve_fit(mymodel, xx[ok] ** 2, myY[ok], p0=[np.min(myY[ok]), 0.4, 0, 2, 1.5], maxfev=100000,
                               ftol=1e-7)
         else:
@@ -727,13 +729,22 @@ def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='
                      color=pqu[0].get_color())
 
             # print(myfit[0])
+        # Interpolation of the fit from invcov = 1 to 15
         invcov_samples = np.linspace(1, 15, 1000)
         if QUsep is False:
             eff_v = mymodel(invcov_samples, *myfit[0]) ** 2
+            # Avoid extrapolation problem for pixels before the first bin or after the last one.
+            eff_v[invcov_samples < xx[0]**2] = mymodel(xx[0] **2, *myfit[0]) ** 2
+            eff_v[invcov_samples > xx[-1] ** 2] = mymodel(xx[-1] ** 2, *myfit[0]) ** 2
+
             effective_variance_invcov = np.array([invcov_samples, eff_v])
         else:
             eff_vI = mymodel(invcov_samples, *myfitI[0]) ** 2
             eff_vQU = mymodel(invcov_samples, *myfitQU[0]) ** 2
+            # Avoid extrapolation problem for pixels before the first bin or after the last one.
+            eff_vI[invcov_samples < xx[0] ** 2] = mymodel(xx[0] ** 2, *myfitI[0]) ** 2
+            eff_vQU[invcov_samples > xx[-1] ** 2] = mymodel(xx[-1] ** 2, *myfitQU[0]) ** 2
+
             effective_variance_invcov = np.array([invcov_samples, eff_vI, eff_vQU])
 
     if doplot:
@@ -798,8 +809,7 @@ def correct_maps_rms(maps, cov, effective_variance_invcov):
     return newmaps
 
 
-def flatten_noise(maps, cov, thmax=25, nbins=20, center=np.array([316.44761929, -58.75808063]),
-                  doplot=False, normalize_all=False, QUsep=True):
+def flatten_noise(maps, cov, nbins=20, doplot=False, normalize_all=False, QUsep=True):
     sh = np.shape(maps)
     if len(sh) == 2:
         maps = np.reshape(maps, (1, sh[0], sh[1]))

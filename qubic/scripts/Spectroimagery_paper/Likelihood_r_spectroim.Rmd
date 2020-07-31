@@ -386,44 +386,6 @@ with open(global_dir + '/doc/CAMB/camblib.pkl', "rb") as file:
 
 ```
 
-#### Diference between same and mix
-
-```{python}
-nbands = 3
-BBcovmix = np.load('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/'
-                           + 'BBcovariance_bincross_nfrecon{}_mixreal_FI-150.npy'.format(nbands))
-BBcovsame = np.load('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/'
-                           + 'BBcovariance_bincross_nfrecon{}_samereal_FI-150.npy'.format(nbands))
-
-combi = list(combinations_with_replacement(np.arange(nbands), 2))
-ncombi = len(combi)
-labs = []
-for i in range(ncombi):
-    labs.append(f'{combi[i][0]}{combi[i][1]}')
-    
-plt.figure(figsize=(15, 20))
-plt.subplot(311)
-plt.yticks(np.arange(8, nbins*ncombi, nbins), labs, fontsize=20)
-plt.xticks(np.arange(8, nbins*ncombi, nbins), labs, fontsize=20)
-plt.imshow(2 * BBcovmix - BBcovsame)
-plt.colorbar()
-
-plt.subplot(312)
-plt.yticks(np.arange(8, nbins*ncombi, nbins), labs, fontsize=20)
-plt.xticks(np.arange(8, nbins*ncombi, nbins), labs, fontsize=20)
-plt.imshow(BBcovsame)
-plt.colorbar()
-
-plt.subplot(313)
-plt.yticks(np.arange(8, nbins*ncombi, nbins), labs, fontsize=20)
-plt.xticks(np.arange(8, nbins*ncombi, nbins), labs, fontsize=20)
-
-plt.imshow(BBcovmix * 2)
-plt.colorbar()
-
-plt.tight_layout()
-```
-
 ### Bin the spectra
 
 ```{python}

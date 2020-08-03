@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.0
+      jupytext_version: 1.4.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -381,6 +381,27 @@ ax.set_ylabel('Intensity (relative)')
 ax.legend(fontsize=10)
 
 # B(\theta_{off})
+```
+
+```{python}
+nn = 10000
+th_deg = np.linspace(-12, 12, nn)
+ph = 0
+d['config'] = 'FI'
+d['beam_shape'] = 'gaussian'
+q = qubic.QubicInstrument(d)
+
+sbb = sb_noprim(th_deg, nu, 10)
+
+e1, sb1 = beam_total(th_deg, ph, 140e9, 0)
+e2, sb2 = beam_total(th_deg, ph, 160e9, 0)
+
+fig, ax = plt.subplots()
+ax.plot(th_deg, sb1+1.5*sb2, 'k', label='amplitudes\n1.0@140GHz\n1.5@160GHz')
+ax.set_xlabel('theta [deg]')
+ax.set_ylabel('Intensity (relative)')
+ax.legend(fontsize=13)
+ax.grid()
 ```
 
 ```{python}

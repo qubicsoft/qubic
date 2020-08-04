@@ -193,7 +193,7 @@ dirsave = os.environ['DATA_SPECTROIM'] + 'Data_for_FastSimulator/plots/'
 all_nf = [1, 2, 3, 4, 5, 8]
 center = np.array([0, 0])
 nptg = 10000
-config = 'FI220' # TD150 or FI150 or FI220
+config = 'FI150' # TD150 or FI150 or FI220
 nbins = 50
 
 for nfsub in all_nf:
@@ -215,10 +215,10 @@ for nfsub in all_nf:
     allresults, allcth, allclth, lll, clth = ctheta_measurement(residuals, coverage, myfitcovs,
                                                                 nfsub, config, dirsave=dirsave)
 
-    # ### The option below will save the average over sub-bands of the Clth
+    ### The option below will save the average over sub-bands of the Clth
     ### However significant residuals exist on the end-to-end simulations as of today, and
-    ### they would nbe reproduced here, while they are likely to be caused by some issue
-    clth_tosave = np.mean(np.array(allclth), axis=0)
+    ### they would be reproduced here, while they are likely to be caused by some issue
+    # clth_tosave = np.mean(np.array(allclth), axis=0)
     # ### As a result we will instead save the nsub=1 correlation function
     if nfsub == 1:
         clth_tosave = clth

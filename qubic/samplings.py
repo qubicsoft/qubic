@@ -32,8 +32,8 @@ __all__ = ['QubicSampling',
            'hor2equ',
            'hor2gal']
 
-DOMECLAT = -(75 + 6 / 60)
-DOMECLON = 123 + 20 / 60
+DOMECLAT = -(24 + 11. / 60) 
+DOMECLON = -(66 + 28. / 60)
 
 
 class QubicSampling(SamplingHorizontal):

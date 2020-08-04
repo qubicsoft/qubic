@@ -376,11 +376,13 @@ ax.plot(th_deg, e2,'g--', label=r'$B_{prim} \times B(\theta_{off})$')
 ax.plot(th_deg, sb1, 'b', label='r = 0')
 ax.plot(th_deg, sb2, 'g', label='r = 12mm')
 # ax.axvline(np.rad2deg(np.arctan(12 / 300)), ymin=0, ymax=1.2, color='r')
-ax.set_xlabel('theta [deg]')
+ax.set_xlabel(r'$\theta$ [deg]')
 ax.set_ylabel('Intensity (relative)')
-ax.legend(fontsize=10)
+ax.legend(fontsize=14)
+ax.grid()
 
 # B(\theta_{off})
+plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/beam_cut_2TES.pdf')
 ```
 
 ```{python}

@@ -39,7 +39,7 @@ from astropy.io import fits
 
 from scipy.optimize import curve_fit
 from importlib import reload
-import AnalysisPSF as anpsf
+#import AnalysisPSF as anpsf
 from scipy.interpolate import interp1d
 from matplotlib.pyplot import cm
 from matplotlib.patches import Ellipse
@@ -212,8 +212,7 @@ for INU in ['1','2','3','4','6']:
 ```{python}
 pixel = hp.pixelfunc.ang2pix(d['nside'], np.deg2rad(90-center[1]), np.deg2rad(center[0]),)#
 pixel=pixel
-lbr = iter(['recon-4','recon-3','recon-2','recon-1',
-            'recon0','recon+1','recon+2','recon+3'])
+
 fig,ax=plt.subplots(nrows=2,ncols=d['nf_recon'][-1]//2,
                    figsize=(20,14))
 ax=ax.ravel()
@@ -330,6 +329,50 @@ for NUS in ['2','4','6']:#NUS='6'
         print(NUS, ifrec, nusfull[NUS][ifrec])
         ax[j].axvline(nusfull[NUS][ifrec],ls='-.',c='k')
         
+```
+
+```{python}
+fig,ax=plt.subplots(nrows=1,ncols=3,figsize=(16,4))
+ax=ax.ravel()
+for ifreq, NUS in enumerate(['2','4','6']):#NUS='6'
+    print('NUS = {}'.format(NUS))
+    NormFact2=48/int(NUS)
+    yvals=[]
+    color2=iter(cm.jet(np.linspace(0,1,10)))
+
+    for jk,irec in enumerate(allrecon):
+        if len(irec[NUS])==0:
+            yvals.append(None)
+        else:
+            yvals.append(irec[NUS][nreal,ifreq,pixel,0]/1e5*NormFact2)
+
+    ax[ifreq].set_title(r'rec{} - I(px) - band {:.0f}-{:.0f}GHz'.format(NUS,
+                                                                        nusfulledge[NUS][ifreq],
+                                                                       nusfulledge[NUS][ifreq+1]))
+    ax[ifreq].set_xlabel(r'$\nu$[GHz]')
+    #secax.set_xlabel(r'$d_\nu$[GHz](dist to the $\nu_{c}$ of the band)')
+    ax[ifreq].set_ylabel(r'$\frac{I_\nu}{\Delta\nu}$' if ifreq ==0 else None, rotation=0,fontsize=20)
+    ax[ifreq].set_xlim(nus_in[innu][0]*0.98,nus_in[innu][-1]*1.02)
+
+    xvals=nus_in[innu]-nusfull[NUS][ifreq]
+    #secax = ax[j].twiny()
+
+    for i in range(len(innu)):
+        c2=next(color2)
+        if yvals[i] == None:
+            pass
+        else:
+            ax[ifreq].plot(nus_in[innu][i],yvals[i]/(nusfulledge[NUS][ifreq+1]-nusfulledge[NUS][ifreq]),'o--',c='b',alpha=0.4,ms=10)
+            #secax.plot(xvals[i],yvals[i],'o',c=c2,ms=6)
+    xlim=ax[ifreq].get_xlim()
+    for iedge in nusfulledge[NUS]:
+        if (iedge > np.array(xlim)[0]) and (iedge < np.array(xlim)[1]):
+            ax[ifreq].axvline(iedge, color='k', ls='--')
+    ax[ifreq].grid()
+    ax[ifreq].axvspan(nusfulledge[NUS][ifreq],nusfulledge[NUS][ifreq+1], color='k', alpha=0.20)
+    print(NUS, ifreq, nusfull[NUS][ifreq])
+    ax[ifreq].axvline(nusfull[NUS][ifreq],ls='-.',c='k')
+
 ```
 
 ```{python}
@@ -823,6 +866,14 @@ for i in range(nsub):
                 title = 'Conv. {:d}GHz'.format(int(nus_rec[i])), sub=(2,nsub,i+nsub+1), 
                 min=-0.04,max=1e5)
 
+```
+
+```{python}
+_,nustestedge,nustest,deltanus,_,_=qubic.compute_freq(150,48,0.25)
+```
+
+```{python}
+np.mean(deltanus)
 ```
 
 ```{python}

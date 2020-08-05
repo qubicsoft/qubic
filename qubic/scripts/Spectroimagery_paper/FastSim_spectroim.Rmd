@@ -32,6 +32,7 @@ from qubicpack.utilities import Qubic_DataDir
 from pysimulators import FitsArray
 import pysm
 import qubic
+from qubic import camb_interface as qc
 from qubic import QubicSkySim as qss
 
 from qubic import NamasterLib as nam
@@ -51,239 +52,321 @@ colorlist = list(mcolors.TABLEAU_COLORS.keys())
 ```
 
 ```{python}
-# Maps obtained with the full pipeline
-dirmaps = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/corr_matrices/pourJC/'
-
+### Initialize
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+print(global_dir)
+```
 
-dictionary = global_dir + 'dicts/spectroimaging_article.dict'
-
-print(dictionary)
-# Dictionary saved during the simulation
+```{python}
+# Dictionary
+config = 'FI-150'
+dictfilename = global_dir + '/doc/FastSimulator/FastSimDemo_{}.dict'.format(config)
 d = qubic.qubicdict.qubicDict()
-d.read_from_file(dictionary)
+d.read_from_file(dictfilename)
 
-```
+d['nside'] = 256
+d['filter_nu'] = 220e9
 
-```{python}
-def get_maps_from_louise(directory, nfsub, allreals=False):
-    if allreals:
-        mappatchfile = glob.glob(directory+'residualspatch_allreals*_nfrecon{}.pkl'.format(nfsub))[0]
-    else:
-        mappatchfile = glob.glob(directory+'residualspatch*_nfrecon{}.pkl'.format(nfsub))[0]
-    
-    covfile = glob.glob(directory+'coverage_*_nfrecon{}.pkl'.format(nfsub))[0]
-    seenfile = glob.glob(directory+'seenmap_*_nfrecon{}.pkl'.format(nfsub))[0]
-    
-    residualspatch = pickle.load( open( mappatchfile, "rb" ) )
-    seenpix = pickle.load( open( seenfile, "rb" ) )
-    covpix = pickle.load( open( covfile, "rb" ) )
-    
-    nside = 256
-    
-    if allreals:
-        nreals = residualspatch.shape[0]
-        residuals_map = np.zeros((nreals, nfsub, 12*nside**2, 3))
-        residuals_map[:, :, seenpix, :] = residualspatch
-    
-    else:
-        residuals_map = np.zeros((nfsub, 12*nside**2, 3))
-        residuals_map[:, seenpix, :] = residualspatch
+# Number of bands
+nbands = 3
+d['nf_recon'] = nbands
+d['nf_sub'] = nbands
 
-    return residuals_map, covpix, seenpix
-```
+# Make a sky with CMB
+# Calculate CMB spectra with CAMB
+lmax = 2 * d['nside'] - 1
+ell, totDL, unlensedDL = qc.get_camb_Dl(r=0., lmax=lmax)
 
-```{python}
-# Input sky
-seed = None
-sky_config = {'cmb': seed}
+# Specify the CMB description in a dictionary
+cmb_dict = {'CAMBSpectra':totDL, 'ell':ell}
+
+# sky_config = {'cmb': cmb_dict}
+sky_config = {'dust': 'd1', 'cmb': cmb_dict}
+
 Qubic_sky = qss.Qubic_sky(sky_config, d)
+# maps are not convolved at the QUBIC resolution => Beam_correction=None when you make Cls
+# cmb_map = Qubic_sky.get_simple_sky_map()
 
-x0 = Qubic_sky.get_simple_sky_map()
-x0.shape
-
-```
-
-### Correlation matrices between bands
-
-```{python}
-# With 1 realisation only
-all_nfrecon = [1, 2, 3, 4, 5, 8]
-nfrecon = 3
-maps, coverage, seenmap = get_maps_from_louise(dirmaps, nfrecon)
-
-cI, cQ, cU, _, _ = qss.get_cov_nunu(maps, coverage, QUsep=True)
-```
-
-```{python}
-# Using all realisations
-all_nfrecon = [1, 2, 3, 4, 5, 8]
-
-nfrecon = 5
-
-maps, coverage, seenmap = get_maps_from_louise(dirmaps, nfrecon, allreals=True)
-print(maps.shape)
-nreals = maps.shape[0]
-
-# Compute the covariance matrices from maps
-allcI = np.zeros((nreals, nfrecon, nfrecon))
-allcU = np.zeros_like(allcI)
-allcQ = np.zeros_like(allcI)
-
-for r in range(nreals):
-    allcI[r], allcQ[r], allcU[r], _, _ = qss.get_cov_nunu(maps[r], coverage, QUsep=True)
-
-cI = np.mean(allcI, axis=0)
-cQ = np.mean(allcQ, axis=0)
-cU = np.mean(allcU, axis=0)
+# Maps are convolved at the QUBIC resolution in the band => Beam_correction=True when you make Cls
+dust_map = Qubic_sky.get_fullsky_convolved_maps(FWHMdeg=None, verbose=True)
 
 ```
 
 ```{python}
-signoise = 88
-
-# Get the noise profile in each subband
-myfitcovs = []
-for isub in range(nfrecon):
-    xx, yyfs, fitcov = qss.get_noise_invcov_profile(maps[isub, :, :], 
-                                                    coverage, 
-                                                    QUsep=True,
-                                                    label='Input Map {}'.format(nfrecon), 
-                                                    fit=True, 
-                                                    norm=False,
-                                                    allstokes=True, 
-                                                    doplot=False)
-    myfitcovs.append(fitcov)
-
-# Good spatial correlation for noise
-clth = pickle.load(open( global_dir + '/doc/FastSimulator/Data/cl_corr_noise_nersc200k.pk', "rb" ) )
-alpha = 4.5 # See notebook called "2pt-Correlation Function" for an empirical explanation of alpha
-clth = (clth -1 ) * alpha + 1
-    
-new_sub_maps = Qubic_sky.create_noise_maps(signoise, 
-                                           coverage, 
-                                           nsub=nfrecon,
-                                           effective_variance_invcov=myfitcovs,
-                                           clnoise=None, 
-                                           sub_bands_cov=[cI, cQ, cU], 
-                                           verbose=False)
-print(np.shape(new_sub_maps))
-
-# Reshape in case just 1 band
-if nfrecon == 1:
-    new_sub_maps = np.reshape(new_sub_maps, (1, 12*d['nside']**2, 3))
-print(np.shape(new_sub_maps))
-
-# Check we have the good correlations
-for isub in range(nfrecon):
-    figure()
-    xx, yyfs, fitcov = qss.get_noise_invcov_profile(new_sub_maps[isub, :, :], 
-                                                    coverage, 
-                                                    QUsep=True,
-                                                    label='FastSim sub={}/{}'.format(isub+1, nfrecon), 
-                                                    fit=True, 
-                                                    norm=False,
-                                                    allstokes=False, 
-                                                    doplot=True)
-    plt.plot(myfitcovs[isub][0,:], 
-             np.sqrt(myfitcovs[isub][1,:]), 
-             label='End-To-End Fit sub={}/{}'.format(isub+1, nfrecon))
-    plt.legend(fontsize=9)
-
-# cInew, cQnew, cUnew, fitcov, noise_norm = qss.get_cov_nunu(new_sub_maps, coverage, QUsep=True)
-
-# # For the plot
-# corr_mats = [cI, cQ/2, cU/2]
-# new_corr_mats = [cInew, cQnew/2, cUnew/2]
-
-# figure()
-# stn = ['I','Q/2', 'U/2']
-# mini = np.min(np.array(corr_mats))
-# maxi = np.max(np.array(corr_mats))
-# for s in range(3):
-#     subplot(2,3,1+s)
-#     imshow(corr_mats[s], vmin=mini, vmax=maxi)
-#     colorbar(orientation='horizontal')
-#     title('End-To-End Cov {} nsub={}'.format(stn[s], nfrecon))
-    
-#     subplot(2,3,4+s)
-#     imshow(new_corr_mats[s], vmin=mini, vmax=maxi)
-#     colorbar(orientation='horizontal')
-#     title('FastSim Cov {} nsub={}'.format(stn[s],nfrecon))
-
-
+dust_map.shape
 ```
 
 ```{python}
-# Make many realisations
+# input_Dl = Qubic_sky.input_cmb_spectra
+# input_ell = np.arange(np.shape(input_Dl)[0])
+```
+
+```{python}
+# Number of bands for TOD making (instrument resolution)
+d['nf_sub'] = 15
+
+# Pointing
+# Fix the same number of pointings, like the full pipeline simulation used for Fast simulator
+d['npointings'] = 10000 
+# You can also put it directly in the dictionary 
+p = qubic.get_pointing(d)
+
+# Scene
+# Make sure the center of the patch is well define in the dictionary:
+# RA_center= 0. #deg
+# DEC_center=-57. #deg
+s = qubic.QubicScene(d)
+
+# Qubic Instrument
+q = qubic.QubicMultibandInstrument(d)
+
+# number of sub frequencies for reconstruction
+_, nus_edge, _, _, _, _ = qubic.compute_freq(150, d['nf_sub'])
+
+# Operator for Maps Reconstruction
+a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge)
+
+# Coverage
+qubic_coveragee = a.get_coverage()
+qubic_coverage = np.sum(qubic_coverage, axis=0)# Sum the bands
+qubic_coverage /= np.max(qubic_coverage)# Normalize by the max
+
+hp.mollview(qubic_coverage)
+```
+
+```{python}
+# import pickle
+# DataFastSimCoverage = pickle.load(open(global_dir + '/doc/FastSimulator/Data/DataFastSimulator_FI150_coverage.pkl', "rb"))
+# qubic_coverage = DataFastSimCoverage['coverage']
+# hp.mollview(qubic_coverage)
+```
+
+```{python}
+# Getting noise realisations with FastSimulator
 nreals = 10
 npix = 12 * d['nside']**2
+noisemaps = np.zeros((nreals, nbands, npix, 3))
 
-maps_noise = np.zeros((nreals, nfrecon, npix, 3))
-for i in range(nreals):
-    maps_noise[i] = Qubic_sky.create_noise_maps(signoise, 
-                                          coverage, 
-                                          nsub=nfrecon,
-                                          effective_variance_invcov=myfitcovs,
-                                          clnoise=None, 
-                                          sub_bands_cov=[cI, cQ, cU], 
-                                          verbose=False)
+for r in range(nreals):
+    noisemaps[r, ...], coverage = Qubic_sky.get_partial_sky_maps_withnoise(coverage=None,
+                                                                           noise_only=True, spatial_noise=True)
 
-print(maps_noise[0, 0, seenmap, 0])
-print(maps_noise[1, 0, seenmap, 0])
+# Make maps QUBIC = noise + CMB
+qubicmaps = np.zeros_like(noisemaps)
+for r in range(nreals):
+    qubicmaps[r, ...] = noisemaps[r, ...] + dust_map
+
+unseen = coverage < np.max(coverage) * 0.1
+qubicmaps[:, :, unseen, :] = 0.
+noisemaps[:, :, unseen, :] = 0.
+dust_map[:, unseen, :] = 0.
+
 ```
 
 ```{python}
-hp.mollview(maps_noise[0, 0, :, 0])
+Stokes = ['I', 'Q', 'U']
+real = 0
+band = 0
+
+for s in range(3):
+    hp.gnomview(noisemaps[real, band,:,s], reso=20, sub=(3, 3, s+1), 
+                title='Noise ' + Stokes[s] + f' Sub {band}')   
+    hp.gnomview(dust_map[band,:,s], reso=20, sub=(3, 3, s+3+1), 
+                title='CMB ' + Stokes[s] + f' Sub {band}')        
+    hp.gnomview(qubicmaps[real, band,:,s], reso=20, sub=(3, 3, s+6+1), 
+                title='QUBIC map ' + Stokes[s] + f' Sub {band}')        
+
 ```
 
 ### Power spectrum with Namaster
 
 ```{python}
-# Create a Namaster object
+# Make a Namaster object
 lmin = 40
 lmax = 2 * d['nside'] - 1
 delta_ell = 30
-print('lmin', lmin)
-print('lmax', lmax)
-print('delta ell', delta_ell)
 
-mask = np.zeros(12 * d['nside']**2)
+mask = np.zeros(12 * d['nside'] ** 2)
+seenmap = np.invert(unseen)
 mask[seenmap] = 1
-
 Namaster = nam.Namaster(mask, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
-
-# Make a mask
 mask_apo = Namaster.get_apodized_mask()
-hp.mollview(mask_apo)
+hp.gnomview(mask_apo, reso=20, title='Mask')
 
-# Binning
 ell_binned, b = Namaster.get_binning(d['nside'])
 nbins = len(ell_binned)
+print('lmin:', lmin)
+print('lmax:', lmax)
+print('delta_ell:', delta_ell)
 print('nbins:', nbins)
 print('ell binned:', ell_binned)
+print('Fsky: {}'.format(Namaster.fsky))
+
+
+# Possible combinations between bands
+combi = list(combinations_with_replacement(np.arange(nbands), 2))
+ncombi = len(combi)
+print('combi:', combi)
+print('ncombi:', ncombi)
 
 
 ```
 
-### Auto spectrum in each band
+```{python}
+cross_th = np.zeros((ncombi, nbins, 4))
+w = None
+for i, (band1, band2) in enumerate(combi):
+        print(f'Bands {band1} {band2}')
+        map1 = dust_map[band1, :, :]
+        map2 = dust_map[band2, :, :]
+        leff, cross_th[i, :, :], w = Namaster.get_spectra(map1.T,
+                                                                      mask_apo,
+                                                                      map2.T,
+                                                                      w=w,
+                                                                      purify_e=True,
+                                                                      purify_b=False,
+                                                                      beam_correction=True,
+                                                                      pixwin_correction=None)
 
-For each realisation, each sub-band, we compute the auto-spectrum.
+```
+
+### Cross sprectum for each realisation
+
+For each band, we make a cross spectrum between 2 realisations. This will remove the noise bias. 
 
 ```{python}
-# Auto spectrum
-w = None
+cross_samereal = np.zeros((nreals, ncombi, nbins, 4))
 
-cls_auto = np.zeros((nreals, nfrecon, nbins, 4))
-# Get spectra
+w = None
 for real in range(nreals):
-    for isub in range(nfrecon):
-        maps = maps_noise[real, isub, :, :] #+ x0[isub, :, :]
-        leff, cls_auto[real, isub, :, :], w = Namaster.get_spectra(maps.T, mask_apo, w=w,
-                                                                  purify_e=True, 
-                                                                  purify_b=False, 
-                                                                  beam_correction=None,
-                                                                  pixwin_correction=True)
+    print(f'\n Real {real}')
+    for i, (band1, band2) in enumerate(combi):
+        print(f'Bands {band1} {band2}')
+        map1 = qubicmaps[real, band1, :, :]
+        map2 = qubicmaps[real, band2, :, :]
+        leff, cross_samereal[real, i, :, :], w = Namaster.get_spectra(map1.T,
+                                                                      mask_apo,
+                                                                      map2.T,
+                                                                      w=w,
+                                                                      purify_e=True,
+                                                                      purify_b=False,
+                                                                      beam_correction=True,
+                                                                      pixwin_correction=None)
+
+```
+
+```{python}
+avg_cross_samereal = np.mean(cross_samereal, axis=0)
+error_cross_samereal = np.std(cross_samereal, axis=0) * np.sqrt(2)
+
+
+BBavg_same = avg_cross_samereal[:, :, 2]
+BBerror_same = error_cross_samereal[:, :, 2]
+```
+
+```{python}
+plt.plot(cross_th[0, :, 0])
+cross_th.shape
+leff
+```
+
+```{python}
+clnames = ['TT', 'EE', 'BB', 'TE']
+
+fig, axs = plt.subplots(2, 2)
+axs = axs.ravel()
+
+for s in range(4):
+    ax = axs[s]
+    for cross in range(ncombi): 
+        c = colorlist[cross]
+        ax.errorbar(leff, 
+                    avg_cross_samereal[cross, :, s],
+                    yerr=error_cross_samereal[cross, :, s],
+                    fmt='o',
+                    color=c,
+                    label='cross {}'.format(combi[cross]))
+        ax.plot(leff, cross_th[cross, :, s], '--', color=c, label='Input')
+
+    ax.set_xlabel('$\\ell$')
+    ax.set_ylabel('$D_\\ell$')
+
+    ax.set_title(clnames[s])
+    ax.legend(fontsize=12, loc='upper left')
+plt.tight_layout()
+```
+
+### Cross sprectum between realisations
+
+For each band, we make a cross spectrum between 2 realisations. This will remove the noise bias. 
+
+```{python}
+ncross = nreals // 2
+print('ncross:', ncross)
+cross_mixreal = np.zeros((ncross, ncombi, nbins, 4))
+
+w = None
+cross = 0
+for c1 in range(0, nreals - 1, 2):  # do not mix pairs to avoid correlation
+    c2 = c1 + 1
+    print(f'\n Reals {c1} {c2}')
+    
+    for i, (band1, band2) in enumerate(combi):
+        print(f'Bands {band1} {band2}')
+        map1 = qubicmaps[c1, band1, :, :]
+        map2 = qubicmaps[c2, band2, :, :]
+        leff, cross_mixreal[cross, i, :, :], w = Namaster.get_spectra(map1.T,
+                                                                       mask_apo,
+                                                                       map2.T,
+                                                                       w=w,
+                                                                       purify_e=True,
+                                                                       purify_b=False,
+                                                                       beam_correction=True,
+                                                                       pixwin_correction=None)
+        
+    cross += 1
+
+BBmixreal = cross_mixreal[:, :, :, 2]
+```
+
+```{python}
+avg_cross_mixreal = np.mean(cross_mixreal, axis=0)
+error_cross_mixreal = np.std(cross_mixreal, axis=0) * np.sqrt(2)
+
+BBavg_mix = avg_cross_mixreal[:, :, 2]
+BBerror_mix = error_cross_mixreal[:, :, 2]
+```
+
+```{python}
+clnames = ['TT', 'EE', 'BB', 'TE']
+fig, axs = plt.subplots(2, 2)
+axs = axs.ravel()
+
+for s in range(4):
+    ax = axs[s]
+    for co in range(ncombi): 
+        c = colorlist[co]
+        ax.errorbar(leff, 
+                    avg_cross_mixreal[co, :, s],
+                    yerr=error_cross_mixreal[co, :, s],
+                    fmt='o',
+                    color=c,
+                    label='cross {}'.format(combi[co]))
+        ax.plot(leff, cross_th[co, :, s], '--', color=c)
+    
+    ax.set_xlabel('$\\ell$')
+    ax.set_ylabel('$D_\\ell$')
+
+    ax.set_title(clnames[s])
+    ax.legend(fontsize=12, loc='best')
+plt.tight_layout()
+```
+
+```{python}
+
+```
+
+```{python}
 
 ```
 
@@ -301,259 +384,6 @@ for nbin in range(nbins):
     plt.xlabel('freq 0')
     plt.ylabel('freq 1')
     
-```
-
-```{python}
-# Average over the spectrum
-auto_mean = np.mean(cls_auto, axis=0)
-auto_std = np.std(cls_auto, axis=0)
-print(auto_mean.shape)
-```
-
-```{python}
-clnames = ['TT', 'EE', 'BB', 'TE']
-rc('figure', figsize=(12, 8))
-
-fig, axs = plt.subplots(2, 2)
-axs = axs.ravel()
-
-real = 0
-for i in range(4):
-    ax = axs[i]
-    for isub in range(nfrecon): 
-        ax.errorbar(leff[:], 
-                auto_mean[isub, :, i],
-                yerr=auto_std[isub, :, i]*np.sqrt(2),
-                marker='o', 
-                linestyle=None,
-                color=colorlist[isub], 
-                label=f'Band {isub}')
-    ax.set_xlabel('$\\ell$')
-    ax.set_ylabel('$D_\\ell$')
-
-    ax.set_title(clnames[i])
-    ax.legend(fontsize=8, loc='upper left')
-
-plt.tight_layout()
-
-```
-
-### Cross sprectum between realisations
-
-For each band, we make a cross spectrum between 2 realisations. This will remove the noise bias. 
-
-```{python}
-ncross = nreals // 2
-print(nbins, ncross)
-cls_cross = np.zeros((ncross, nfrecon, nbins, 4))
-
-# Get spectra
-w = None
-for isub in range(nfrecon):
-    print('isub:', isub)
-    cross = 0
-    for c1 in range(0, nreals-1, 2): # do not mix pairs to avoid correlation 
-        c2 = c1 + 1 
-        print(c1, c2)
-        map1 = maps_noise[c1, isub, :, :] #+ x0[isub, :, :]
-        map2 = maps_noise[c2, isub, :, :] #+ x0[isub, :, :]
-        leff, cls_cross[cross, isub, :, :], w = Namaster.get_spectra(map1.T, 
-                                                                     mask_apo, 
-                                                                     map2.T,
-                                                                     w=w,
-                                                                     purify_e=True, 
-                                                                     purify_b=False, 
-                                                                     beam_correction=None,
-                                                                     pixwin_correction=True)
-        cross += 1     
-```
-
-```{python}
-# Average over the cross_spectrum
-cross_mean = np.mean(cls_cross, axis=0)
-cross_std = np.std(cls_cross, axis=0)
-print(cross_mean.shape)
-```
-
-```{python}
-clnames = ['TT', 'EE', 'BB', 'TE']
-
-rc('figure', figsize=(12, 8))
-
-fig, axs = plt.subplots(2, 2)
-axs = axs.ravel()
-
-for i in range(4):
-    ax = axs[i]
-    for isub in range(nfrecon):
-        ax.errorbar(leff[:], 
-                    cross_mean[isub, :, i],
-                    yerr=cross_std[isub, :, i] * np.sqrt(2),
-                    marker='o', 
-                    color=colorlist[isub], 
-                    linestyle='none', 
-                    label='Band {}'.format(isub))
-    
-    ax.axhline(y=0, color='k', ls='--')
-    ax.set_xlabel('$\\ell$')
-    ax.set_ylabel('$D_\\ell$')
-#     ax.set_yscale('log')
-    ax.set_title(clnames[i])
-    ax.legend(fontsize=8, loc='upper left')
-
-plt.tight_layout()
-    
-```
-
-### Cross spectrum between bands
-
-Now we want to make cross spectra between 2 bands.
-
-
-#### Using the same realisation
-
-For each realisation, we do a cross spectra for each pair of sub-bands. Auto spectra are also computed. For example, if we have 3 sub-bands (0, 1, 2), for each realisation we make 6 cross spectra 0-0, 1-1, 2-2, 0-1, 0-2, 1-2.
-
-```{python}
-combi1 = [(i, i) for i in range(nfrecon)]
-combi2 = list(combinations(np.arange(nfrecon), 2))
-combi = combi1 + combi2
-
-print(combi1, combi2, combi)
-ncombi = len(combi)
-
-print('nbins:', nbins)
-print('ncombi:', ncombi)
-
-cls_cross_mixband = np.zeros((nreals, ncombi, nbins, 4))
-
-# Get spectra
-w = None
-for real in range(nreals):
-    print(f'\n Real {real}')
-    for i, (band1, band2) in enumerate(combi):
-        print(band1, band2)
-        map1 = maps_noise[real, band1, :, :]
-        map2 = maps_noise[real, band2, :, :]
-        leff, cls_cross_mixband[real, i, :, :], w = Namaster.get_spectra(map1.T, 
-                                                                     mask_apo, 
-                                                                     map2.T,
-                                                                     w=w,
-                                                                     purify_e=True, 
-                                                                     purify_b=False, 
-                                                                     beam_correction=None,
-                                                                     pixwin_correction=True)    
-```
-
-```{python}
-# Average over the cross_spectrum
-cross_mean_mixband = np.mean(cls_cross_mixband, axis=0)
-cross_std_mixband = np.std(cls_cross_mixband, axis=0)
-print(cross_mean_mixband.shape)
-```
-
-```{python}
-clnames = ['TT', 'EE', 'BB', 'TE']
-
-rc('figure', figsize=(12, 8))
-
-fig, axs = plt.subplots(2, 2)
-axs = axs.ravel()
-
-for i in range(4):
-    ax = axs[i]
-    for c in range(ncombi):
-        ax.errorbar(leff[:], 
-                    cross_mean_mixband[c, :, i],
-                    yerr=cross_std_mixband[c, :, i]*np.sqrt(2),
-                    marker='o', 
-                    color=colorlist[c], 
-                    linestyle='none', 
-                    label='Cross {}'.format(combi[c]))
-    
-    ax.axhline(y=0, color='k', ls='--')
-    ax.set_xlabel('$\\ell$')
-    ax.set_ylabel('$D_\\ell$')
-#     ax.set_yscale('log')
-    ax.set_title(clnames[i])
-    ax.legend(fontsize=8, loc='lower left')
-
-plt.tight_layout()
-   
-```
-
-#### Using different realisations to remove bias
-
-The same cross spectra are computed, for example with 3 subbands it is 0-0, 1-1, 2-2, 0-1, 0-2, 1-2. But we also wix the noise realisations to remove bias.
-
-```{python}
-combi1 = [(i, i) for i in range(nfrecon)]
-combi2 = list(combinations(np.arange(nfrecon), 2))
-combi = combi1 + combi2
-
-print(combi)
-ncombi = len(combi)
-
-ncross = nreals // 2
-
-print('nbins:', nbins)
-print('ncross:', ncross)
-print('ncombi:', ncombi)
-
-cls_cross_mixband_nobias = np.zeros((ncross, ncombi, nbins, 4))
-
-# Get spectra
-w = None
-for c1 in range(0, nreals-1, 2): # do not mix pairs to avoid correlation 
-    c2 = c1 + 1 
-    print(f'\n Reals {c1} {c2}')
-    cross = 0
-    for i, (band1, band2) in enumerate(combi):
-        print(f'bands {band1} {band2}')
-        map1 = maps_noise[c1, band1, :, :]
-        map2 = maps_noise[c2, band2, :, :]
-        leff, cls_cross_mixband_nobias[cross, i, :, :], w = Namaster.get_spectra(map1.T, 
-                                                                     mask_apo, 
-                                                                     map2.T,
-                                                                     w=w,
-                                                                     purify_e=True, 
-                                                                     purify_b=False, 
-                                                                     beam_correction=None,
-                                                                     pixwin_correction=True)  
-    cross += 1
-```
-
-```{python}
-# Average over the cross_spectrum
-cross_mean_mixband_nobias = np.mean(cls_cross_mixband_nobias, axis=0)
-cross_std_mixband_nobias = np.std(cls_cross_mixband_nobias, axis=0)
-print(cross_mean_mixband_nobias.shape)
-```
-
-```{python}
-fig, axs = plt.subplots(2, 2)
-axs = axs.ravel()
-
-for i in range(4):
-    ax = axs[i]
-    for c in range(ncombi):
-        ax.errorbar(leff[:], 
-                    cross_mean_mixband_nobias[c, :, i],
-                    yerr=cross_std_mixband_nobias[c, :, i]*np.sqrt(2),
-                    marker='o', 
-                    color=colorlist[c], 
-                    linestyle='none', 
-                    label='Cross {}'.format(combi[c]))
-    
-    ax.axhline(y=0, color='k', ls='--')
-    ax.set_xlabel('$\\ell$')
-    ax.set_ylabel('$D_\\ell$')
-#     ax.set_yscale('log')
-    ax.set_title(clnames[i])
-    ax.legend(fontsize=8, loc='lower left')
-
-plt.tight_layout()
-   
 ```
 
 ```{python}

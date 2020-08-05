@@ -1,0 +1,710 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Likelihood on r
+
+```{python}
+# %matplotlib inline
+
+import healpy as hp
+import numpy as np
+import matplotlib.pyplot as plt
+import scipy
+import pickle
+from itertools import combinations, combinations_with_replacement
+from importlib import reload
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+import pysm
+import qubic
+from qubic import QubicSkySim as qss
+from qubic import camb_interface as qc
+from qubic import NamasterLib as nam
+from qubic import mcmc
+import AnalysisMC as amc
+
+rc('figure', figsize=(16, 10))
+rc('font', size=15)
+plt.rcParams['image.cmap'] = 'jet'
+```
+
+```{python}
+import matplotlib.colors as mcolors
+mcolors.TABLEAU_COLORS.keys()
+
+colorlist = list(mcolors.TABLEAU_COLORS.keys())
+```
+
+```{python}
+### Initialize
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+print(global_dir)
+
+reload(qss)
+```
+
+## Make maps with Fast Simulator
+
+```{python}
+# Dictionary
+config = 'FI-150'
+dictfilename = global_dir + '/doc/FastSimulator/FastSimDemo_{}.dict'.format(config)
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+
+d['nside'] = 256
+d['filter_nu'] = 150e9
+
+# Number of bands
+nbands = 3
+d['nf_recon'] = nbands
+d['nf_sub'] = nbands
+
+# Make a sky with CMB
+# Calculate CMB spectra with CAMB
+lmax = 2 * d['nside'] - 1
+ell, totDL, unlensedDL = qc.get_camb_Dl(r=0., lmax=lmax)
+
+# Specify the CMB description in a dictionary
+cmb_dict = {'CAMBSpectra':totDL, 'ell':ell}
+
+sky_config = {'cmb': cmb_dict}
+
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+# maps are not convolved at the QUBIC resolution => Beam_correction=None when you make Cls
+# cmb_map = Qubic_sky.get_simple_sky_map()
+
+# Maps are convolved at the QUBIC resolution in the band => Beam_correction=True when you make Cls
+cmb_map = Qubic_sky.get_fullsky_convolved_maps(FWHMdeg=None, verbose=True)
+
+```
+
+```{python}
+# hp.mollview(cmb_map[0, :, 0])
+# hp.mollview(cmb_map[1, :, 0])
+# hp.mollview(cmb_map[0, :, 0] - cmb_map[1, :, 0])
+```
+
+```{python}
+input_Dl = Qubic_sky.input_cmb_spectra
+input_ell = np.arange(np.shape(input_Dl)[0])
+```
+
+```{python}
+# Getting noise realisations with FastSimulator
+nreals = 2
+npix = 12 * d['nside']**2
+noisemaps = np.zeros((nreals, nbands, npix, 3))
+
+for r in range(nreals):
+    noisemaps[r, ...], coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, spatial_noise=True)
+
+# Make maps QUBIC = noise + CMB
+qubicmaps = np.zeros_like(noisemaps)
+for r in range(nreals):
+    qubicmaps[r, ...] = noisemaps[r, ...] + cmb_map
+
+unseen = coverage < np.max(coverage) * 0.1
+qubicmaps[:, :, unseen, :] = 0.
+noisemaps[:, :, unseen, :] = 0.
+cmb_map[:, unseen, :] = 0.
+
+```
+
+```{python}
+Stokes = ['I', 'Q', 'U']
+real = 0
+band = 0
+
+for s in range(3):
+    hp.gnomview(noisemaps[real, band,:,s], reso=20, sub=(3, 3, s+1), 
+                title='Noise ' + Stokes[s] + f' Sub {band}')   
+    hp.gnomview(cmb_map[band,:,s], reso=20, sub=(3, 3, s+3+1), 
+                title='CMB ' + Stokes[s] + f' Sub {band}')        
+    hp.gnomview(qubicmaps[real, band,:,s], reso=20, sub=(3, 3, s+6+1), 
+                title='QUBIC map ' + Stokes[s] + f' Sub {band}')        
+
+        
+```
+
+## Make spectra using Namaster
+
+```{python}
+# Make a Namaster object
+lmin = 40
+lmax = 2 * d['nside'] - 1
+delta_ell = 30
+
+mask = np.zeros(12 * d['nside'] ** 2)
+seenmap = np.invert(unseen)
+mask[seenmap] = 1
+Namaster = nam.Namaster(mask, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+mask_apo = Namaster.get_apodized_mask()
+hp.gnomview(mask_apo, reso=20, title='Mask')
+
+ell_binned, b = Namaster.get_binning(d['nside'])
+nbins = len(ell_binned)
+print('lmin:', lmin)
+print('lmax:', lmax)
+print('delta_ell:', delta_ell)
+print('nbins:', nbins)
+print('ell binned:', ell_binned)
+print('Fsky: {}'.format(Namaster.fsky))
+
+
+# Possible combinations between bands
+combi = list(combinations_with_replacement(np.arange(nbands), 2))
+ncombi = len(combi)
+print('combi:', combi)
+print('ncombi:', ncombi)
+
+
+```
+
+#### Cross spectrum between bands but same real
+We keep the noise bias (we clearly see it on the BB spectrum)
+
+```{python}
+cross_samereal = np.zeros((nreals, ncombi, nbins, 4))
+
+w = None
+for real in range(nreals):
+    print(f'\n Real {real}')
+    for i, (band1, band2) in enumerate(combi):
+        print(f'Bands {band1} {band2}')
+        map1 = qubicmaps[real, band1, :, :]
+        map2 = qubicmaps[real, band2, :, :]
+        leff, cross_samereal[real, i, :, :], w = Namaster.get_spectra(map1.T,
+                                                                      mask_apo,
+                                                                      map2.T,
+                                                                      w=w,
+                                                                      purify_e=True,
+                                                                      purify_b=False,
+                                                                      beam_correction=True,
+                                                                      pixwin_correction=None)
+
+```
+
+```{python}
+# Save the spectra
+rep_save = os.environ['DATA_SPECTROIM'] + 'cross_spectra_likelihood/'
+# np.save(rep_save + f'/cross_samereal_40real_{nbands}bands.npy', cross_samereal)
+```
+
+```{python}
+avg_cross_samereal = np.mean(cross_samereal, axis=0)
+error_cross_samereal = np.std(cross_samereal, axis=0) * np.sqrt(2)
+
+
+BBavg_same = avg_cross_samereal[:, :, 2]
+BBerror_same = error_cross_samereal[:, :, 2]
+```
+
+```{python}
+clnames = ['TT', 'EE', 'BB', 'TE']
+
+fig, axs = plt.subplots(2, 2)
+axs = axs.ravel()
+
+for s in range(4):
+    ax = axs[s]
+    for cross in range(ncombi): 
+        c = colorlist[cross]
+        ax.errorbar(leff, 
+                    avg_cross_samereal[cross, :, s],
+                    yerr=error_cross_samereal[cross, :, s],
+                    fmt='o',
+                    color=c,
+                    label='cross {}'.format(combi[cross]))
+#         ax.plot(leff, 
+#                 cross_samereal[0, cross, :, s],
+#                     'o',
+#                     color=c)
+    ax.plot(input_ell[lmin:lmax], input_Dl[lmin:lmax, s], 'r', label='Input')
+
+    ax.set_xlabel('$\\ell$')
+    ax.set_ylabel('$D_\\ell$')
+
+    ax.set_title(clnames[s])
+    ax.legend(fontsize=12, loc='upper left')
+plt.tight_layout()
+
+```
+
+#### Cross spectrum between bands with different real
+
+Noise bias is removed
+
+```{python}
+ncross = nreals // 2
+print('ncross:', ncross)
+cross_mixreal = np.zeros((ncross, ncombi, nbins, 4))
+
+w = None
+cross = 0
+for c1 in range(0, nreals - 1, 2):  # do not mix pairs to avoid correlation
+    c2 = c1 + 1
+    print(f'\n Reals {c1} {c2}')
+    
+    for i, (band1, band2) in enumerate(combi):
+        print(f'Bands {band1} {band2}')
+        map1 = qubicmaps[c1, band1, :, :]
+        map2 = qubicmaps[c2, band2, :, :]
+        leff, cross_mixreal[cross, i, :, :], w = Namaster.get_spectra(map1.T,
+                                                                       mask_apo,
+                                                                       map2.T,
+                                                                       w=w,
+                                                                       purify_e=True,
+                                                                       purify_b=False,
+                                                                       beam_correction=True,
+                                                                       pixwin_correction=None)
+    cross += 1
+
+BBmixreal = cross_mixreal[:, :, :, 2]
+```
+
+```{python}
+# Save the spectra
+# np.save(rep_save + f'/cross_mixreal_40real_{nbands}bands.npy', cross_mixreal)
+```
+
+```{python}
+avg_cross_mixreal = np.mean(cross_mixreal, axis=0)
+error_cross_mixreal = np.std(cross_mixreal, axis=0) * np.sqrt(2)
+
+BBavg_mix = avg_cross_mixreal[:, :, 2]
+BBerror_mix = error_cross_mixreal[:, :, 2]
+```
+
+```{python}
+clnames = ['TT', 'EE', 'BB', 'TE']
+fig, axs = plt.subplots(2, 2)
+axs = axs.ravel()
+
+for s in range(4):
+    ax = axs[s]
+    for co in range(ncombi): 
+        c = colorlist[co]
+        ax.errorbar(leff, 
+                    avg_cross_mixreal[co, :, s],
+                    yerr=error_cross_mixreal[co, :, s],
+                    fmt='o',
+                    color=c,
+                    label='cross {}'.format(combi[co]))
+    ax.plot(np.arange(lmin, lmax), input_Dl[lmin:lmax, s], 'r', label='input')
+
+    ax.set_xlabel('$\\ell$')
+    ax.set_ylabel('$D_\\ell$')
+
+    ax.set_title(clnames[s])
+    ax.legend(fontsize=12, loc='upper right')
+plt.tight_layout()
+```
+
+## Make Covariance matrix between bins and bands
+
+
+#### Matrix already saved for Claudia
+
+```{python}
+BBcov = np.load('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/'
+                       + 'BBcovariance_bincross_nfrecon{}_samereal_FI-150.npy'.format(nbands))
+```
+
+#### Compute a new one
+
+```{python}
+# We have to reshape cls_cross as (nreals, nbins, 4, nfrecon)
+print('Old shape:', cross_mixreal.shape)
+cross_mixreal_reshape = np.moveaxis(cross_mixreal, [1, 2, 3], [3, 1, 2])
+print('New shape:', cross_mixreal_reshape.shape)
+
+print('Old shape:', cross_samereal.shape)
+cross_samereal_reshape = np.moveaxis(cross_samereal, [1, 2, 3], [3, 1, 2])
+print('New shape:', cross_samereal_reshape.shape)
+```
+
+```{python}
+covbinband, corrbinband = amc.get_covcorr_patch(cross_mixreal_reshape, stokesjoint=True, doplot=False)
+
+print(nbins)
+print(covbinband.shape)
+
+BBcov = covbinband[:, :, 2]
+print(BBcov.shape)
+```
+
+#### Plot BBcov
+
+```{python}
+labs = []
+for i in range(ncombi):
+    labs.append(f'Cross {combi[i][0]}{combi[i][1]}')
+
+plt.figure(figsize=(20, 20))
+
+plt.yticks(np.arange(8, nbins*ncombi, nbins), labs, fontsize=20)
+plt.xticks(np.arange(8, nbins*ncombi, nbins), labs, fontsize=20)
+
+for s in range(ncombi-1):
+    plt.axhline(y=(s+1)*nbins-0.5, lw=3, color='k')
+    plt.axvline(x=(s+1)*nbins-0.5, lw=3, color='k')
+    
+vmax = np.max(np.abs(BBcov))
+plt.imshow(BBcov, vmin=-vmax, vmax=vmax, cmap='bwr')
+plt.title('Covariance matrix (nfreq*nbins)x(nfreq*nbins) for BB spectrum', 
+         fontsize=20)
+plt.colorbar()
+```
+
+## Make theoretical spectra with CAMB
+
+```{python}
+# Make a Camb library
+# rvalues = np.arange(0., 0.02001, 0.0001)
+# print(rvalues)
+# camblib = qc.rcamblib(rvalues, lmax=lmax, save=global_dir + '/doc/CAMB/camblibnew.pkl')
+```
+
+```{python}
+# Load the CAMB library already saved
+with open(global_dir + '/doc/CAMB/camblib.pkl', "rb") as file:
+    camblib = pickle.load(file)
+[lll, rvalues, spec, specunlensed] = camblib
+
+```
+
+### Bin the spectra
+
+```{python}
+binned_camblib = qc.bin_camblib(Namaster, global_dir + '/doc/CAMB/camblib.pkl', d['nside'], verbose=True)
+
+[lll_b, rvalues_b, spec_b, specunlensed_b] = binned_camblib
+```
+
+```{python}
+clnames = ['TT', 'EE', 'BB', 'TE']
+r_idx = 120
+
+fig, axs = plt.subplots(2, 2)
+axs = axs.ravel()
+
+for s in range(4):
+    ax = axs[s]
+    
+    ax.plot(input_ell[lmin:lmax], 
+            input_Dl[lmin:lmax, s],
+            color='g',
+            label='Input r = 0')
+    ax.plot(lll[lmin:], 
+            spec[lmin:, s, r_idx],
+            color='b',
+            label=f'Theory with r = {rvalues[r_idx]}')
+    ax.plot(lll_b, 
+            spec_b[:, s, r_idx],
+            'o',
+            color='b',
+            label=f'Theory binnedwith r = {rvalues[r_idx]}')
+    for cross in range(ncombi): 
+        c = colorlist[cross]
+        ax.errorbar(leff, 
+                    avg_cross_mixreal[cross, :, s],
+                    yerr=error_cross_mixreal[cross, :, s],
+                    fmt='o',
+                    color=c,
+                    label='Measure cross {}'.format(combi[cross]))
+
+
+    ax.set_xlabel('$\\ell$')
+    ax.set_ylabel('$D_\\ell$')
+
+    ax.set_title(clnames[s])
+    ax.legend(fontsize=12, loc='upper left')
+plt.tight_layout()
+
+```
+
+## Bias modelisation 
+
+```{python}
+# Dls from noise simulation (one realisation)
+datadir = os.environ['DATA_SPECTROIM']
+rep_spectrumCC = datadir + '/FastSimulator/cls_spectrum_fromCC/'
+BBDls_noiseonly = np.load(rep_spectrumCC + 'spectrum_samereal_FI-150_nfrecon{}.npy'.format(nbands))[:, :, :, 0]
+
+maps = np.load(datadir + '/FastSimulator/maps_FastSim/patch_clth_nfrecon{}.npy'.format(nbands))
+print(maps.shape, BBDls_noiseonly.shape)
+
+for i in range(ncombi):
+    plt.plot(BBDls_noiseonly[0, i, :])
+
+bias = np.ravel(BBDls_noiseonly[0])
+plt.figure()
+plt.plot(bias, 'o')
+```
+
+```{python}
+# nreals = BBDls_noiseonly.shape[0]
+
+# BBcls = np.zeros_like(BBDls_noiseonly)
+# for i in range(nreals):
+#     for n in range(ncombi):
+#         BBcls[i, n, :] = 2 * np.pi * BBDls_noiseonly[i, n, :] / (ell_binned * (ell_binned + 1))
+
+# print(np.mean(BBDls_noiseonly))
+# print(np.mean(BBDls_noiseonly[0]))
+
+# print(np.mean(BBcls[0]))
+# print(np.mean(BBcls))
+
+# print(np.mean(maps[0, :, :, 0])**2)
+
+# for i in range(903):
+# #     plt.plot(BBDls[i, 0, :]) 
+#     plt.plot(BBcls[i, 0, :])
+# plt.show()
+
+# bias = np.zeros((ncombi, nbins))
+# for n in range(ncombi):
+#     print(n)
+# #     c = colorlist[n]
+#     bias[n, :] = ell_binned * (ell_binned + 1) / (2 * np.pi) * np.mean(BBcls[0, n, :]) 
+    
+# #     plt.errorbar(ell_binned, np.mean(BBDls_noiseonly[:, n, :], axis=0), np.std(BBDls_noiseonly[:, n, :], axis=0),
+# #                  fmt='o', color=c,  label=combi[n])
+# #     plt.plot(ell_binned, bias1[n], color=c, label=combi[n])
+
+# plt.legend()
+# plt.show()
+```
+
+## Likelihood on r
+
+
+#### Make a model
+
+```{python}
+def myBBth(ell, r):
+    clBB = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=False, specindex=2)[0]
+    clBB = np.array(list(clBB) * ncombi)
+    return clBB
+
+def myBBth_bias(ell, r):
+    clBB = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=False, specindex=2)[0]
+    clBB = np.array(list(clBB) * ncombi) + bias
+    return clBB
+
+
+```
+
+```{python}
+# data = np.ravel(BBavg_mix)
+
+xvals = list(ell_binned) * ncombi
+print(len(xvals))
+
+# With the real data we get a bias this is why for the mean values, we use the theoretical model.
+fakedata = myBBth(ell_binned, r=0.)
+print(len(fakedata))
+# plt.plot(fakedata)
+
+error = BBcov#np.diag(BBcov)#np.ravel(BBerror_mix)
+print(error.shape)
+
+# plt.plot(fakedata, 'o')
+
+logLLH = mcmc.LogLikelihood(xvals=xvals, 
+                              yvals=fakedata, 
+                              errors=error,
+                              nbins=16,
+                              model=myBBth, 
+                              flatprior=[[0,1]], 
+                              covariance_model_funct=Namaster.knox_covariance)
+
+logLLH([rvalues_b[10]])
+```
+
+```{python}
+cov_repeat = logLLH.make_covariance_matrix()
+plt.imshow(cov_repeat)
+plt.colorbar()
+```
+
+```{python}
+plt.imshow(logLLH.covar)
+plt.colorbar()
+```
+
+```{python}
+LLH, sigma68 = logLLH.compute_sigma68(logLLH, rvalues)
+
+x = np.linspace(0., 0.1, 1000)
+gaussian = np.exp(-0.5 * (x / sigma68)**2)
+```
+
+## Fisher Analysis
+
+```{python}
+sigma68_Fisher = logLLH.fisher_analysis()
+
+x = np.linspace(0., 0.1, 1000)
+fisher_gaussian = np.exp(-0.5 * (x / sigma68_Fisher)**2)
+```
+
+```{python}
+plt.figure(figsize=(10, 10))
+plt.plot(x, fisher_gaussian, 'r', label='Fisher gaussian')
+plt.axvline(x=sigma68_Fisher, linestyle='--', color='r', 
+            label=' $\sigma(r)={0:6.4f}$ at 68% C. L. Fisher'.format(sigma68_Fisher))
+
+plt.plot(rvalues, LLH / np.max(LLH), 'bo', label='Likelihood')
+plt.plot(x, gaussian, 'b', label='Gaussian')
+plt.axvline(x=sigma68, linestyle='--', color='b', 
+            label=' $\sigma(r)={0:6.4f}$ at 68% C. L.'.format(sigma68))
+
+plt.xlim(0, 0.06)
+plt.xlabel('r')
+plt.ylabel('Posterior')
+
+plt.legend()
+```
+
+# Loop over the number of bands
+
+```{python}
+allLLH = []
+allsigma68, allsigma68_Fisher = [], []
+for nbands in [1, 2, 3, 4, 5, 8]:
+
+    # Possible combinations between bands
+    combi = list(combinations_with_replacement(np.arange(nbands), 2))
+    ncombi = len(combi)
+    print('combi:', combi)
+    print('ncombi:', ncombi)
+    
+    # Covariance noise matrix
+    BBcov = np.load('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/'
+                           + 'BBcovariance_bincross_nfrecon{}_mixreal_FI-150.npy'.format(nbands))
+    
+    # Bias if using "same real"
+    BBDls_noiseonly = np.load(rep_spectrumCC + 'spectrum_samereal_FI-150_nfrecon{}.npy'.format(nbands))[0, :, :, 0]
+    bias = np.ravel(BBDls_noiseonly)
+
+    
+    # =================== Likelihood ========================
+    xvals = list(lll_b) * ncombi
+
+    fakedata = myBBth(lll_b, r=0.)
+
+    error = BBcov#np.diag(BBcov)#np.ravel(BBerror_mix)
+    print(error.shape)
+
+    logLLH = mcmc.LogLikelihood(xvals=xvals, 
+                           yvals=fakedata, 
+                           errors=error,
+                           nbins=nbins,
+                           model=myBBth, 
+                           flatprior=[[0,1]], 
+                           covariance_model_funct=Namaster.knox_covariance)
+
+    LLH, sigma68 = logLLH.compute_sigma68(logLLH, rvalues)
+    allLLH.append(LLH)
+    allsigma68.append(sigma68)
+
+    # ====================== Fisher Analysis =======================
+    sigma68_Fisher = logLLH.fisher_analysis()
+    allsigma68_Fisher.append(sigma68_Fisher)
+    
+
+```
+
+```{python}
+x = np.linspace(0., 0.8, 1000)
+```
+
+```{python}
+plt.figure(figsize=(20, 20))
+plt.suptitle('Mix reals - With sample variance - Config FI-150')
+# plt.suptitle('Do not mix reals - No Bias model - With sample variance - Config FI-150')
+for i, nbands in enumerate([1, 2, 3, 4, 5, 8]):
+    plt.subplot(3, 2, i+1)
+    plt.title(f'{nbands} bands - config FI-150')
+    plt.plot(x, np.exp(-0.5*(x/allsigma68_Fisher[i])**2), color='r', label=f'Fisher gaussian')
+    plt.axvline(x=allsigma68_Fisher[i], linestyle='--', color='r', 
+                label=' $\sigma_(r)={0:6.4f}$ at 68% C. L. with Fisher'.format(allsigma68_Fisher[i]))
+
+    plt.plot(rvalues, allLLH[i] / np.max(allLLH[i]), 'o', color='b', label='Likelihood')
+    plt.plot(x, np.exp(-0.5*(x/allsigma68[i])**2), color='b', label='Gaussian $\mu = 0, \sigma = \sigma(r)$')
+    plt.axvline(x=allsigma68[i], linestyle='--', color='b', 
+                label=' $\sigma(r)={0:6.4f}$ at 68% C. L. with likelihood'.format(allsigma68[i]))
+
+    plt.xlim(0, 0.1)
+    plt.xlabel('r')
+    plt.ylabel('Posterior')
+
+    plt.legend(fontsize=12)
+```
+
+```{python}
+fig, axs = plt.subplots(1, 2, figsize=(20, 10))
+
+ax0, ax1 = axs
+fig.suptitle('Mix reals - With sample variance - Config FI-150')
+# fig.suptitle('Do not mix reals - No Bias model - With sample variance - Config FI-150')
+for i, nbands in enumerate([1, 2, 3, 4, 5, 8]):
+    
+    c = colorlist[i]
+    ax0.set_title('Likelihood')
+    ax0.plot(rvalues, allLLH[i] / np.max(allLLH[i]), color=c, label=f'Likelihood {nbands} bands')
+    
+    ax0.axvline(x=allsigma68[i], linestyle='--', color=c, 
+                label=' $\sigma(r)={0:6.4f}$ at 68% C.L.'.format(allsigma68[i]))
+
+    ax0.set_xlim(0, 0.08)
+    ax0.set_xlabel('r')
+    ax0.set_ylabel('Posterior')
+    ax0.legend(fontsize=12)
+    
+    
+    ax1.set_title('Fisher')
+    ax1.plot(x, np.exp(-0.5*(x/allsigma68_Fisher[i])**2), color=c, label=f'Fisher gaussian {nbands} bands')
+    ax1.axvline(x=allsigma68_Fisher[i], linestyle='--', color=c, 
+                label=' $\sigma_(r)={0:6.4f}$ at 68% C. L.'.format(allsigma68_Fisher[i]))
+
+    ax1.set_xlim(0, 0.08)
+    ax1.set_xlabel('r')
+    ax1.set_ylabel('Posterior')
+
+    ax1.legend(fontsize=12)
+```
+
+```{python}
+allbands = [1, 2, 3, 4, 5, 8]
+
+plt.figure()
+plt.title('Mix reals - With sample variance - Config FI-150')
+# plt.title('Do not mix reals - No Bias model - With sample variance - Config FI-150')
+plt.plot(allbands, allsigma68, label='Likelihood')
+plt.plot(allbands, allsigma68_Fisher, label='Fisher')
+# plt.plot(allbands, np.sqrt(allbands)*allsigma68_Fisher[0], 'k--', label='$\sqrt{N}$')
+# plt.axhline(y=1, linestyle='--', color='k', label='$y = 1$')
+plt.legend()
+plt.xlabel('# of bands')
+plt.ylabel('$\sigma$')
+```
+
+```{python}
+
+```

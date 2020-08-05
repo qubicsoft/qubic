@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -16,6 +16,7 @@ jupyter:
 # %matplotlib inline
 
 import healpy as hp
+import matplotlib.pyplot as plt
 import glob
 from scipy.optimize import curve_fit
 import pickle
@@ -41,7 +42,7 @@ reload(ft)
 
 rc('figure', figsize=(16, 10))
 rc('font', size=15)
-mpl.rcParams['image.cmap'] = 'jet'
+plt.rcParams['image.cmap'] = 'jet'
 
 ### Initialize
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
@@ -55,7 +56,7 @@ Currently (July 1st 2020) there are three configurations that are needed:
 2. FI at 220 GHZ with a random pointing and specctro-imaging covering 1,2,3,4,5 and 8 sub-bands
 3. TD at 150 GHZ with a random pointing and specctro-imaging covering 1,2,3,4,5 and 8 sub-bands
 
-Only the first one is currrently fully available and also right now the parameters are onluy fitted on a single realization while many have been produced. It would be very useful to produce these files based on averges over similar realizations as well as explore more configurations (such as kmax parameter).
+Only the first one is currrently fully available and also right now the parameters are only fitted on a single realization while many have been produced. It would be very useful to produce these files based on averges over similar realizations as well as explore more configurations (such as kmax parameter).
 
 Let's read files first
 
@@ -240,8 +241,8 @@ title('QUBIC End-To-End - '+config+' - Nptg = {}'.format(nptg))
 legend(fontsize=11)
 ylim(0,meanvalQU*2)
 
-print((meanvalQU/meanvalI)**2)
-#savefig('noiseprofile_mukarcmin.pdf')
+print((meanvalQU / meanvalI)**2)
+# savefig('noiseprofile_mukarcmin.pdf')
 ```
 
 There is something very strange on the RMS on the TD which appears way to high... by a factor 10... Is that related to what Daniele and Gabriel saw ? what was the reason at the end of the day ? I remember we figured out their too high ratio was fine, but I can't remember why...
@@ -381,14 +382,6 @@ pickle.dump(datacov , open( global_dir + "doc/FastSimulator/Data/"+name, "wb" ) 
 
 
  
-
-```
-
-```{python}
-
-```
-
-```{python}
 
 ```
 

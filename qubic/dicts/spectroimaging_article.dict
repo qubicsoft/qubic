@@ -23,8 +23,8 @@ detector_ncorr=10
 detector_ngrids=1
 detector_tau=0.01
 polarizer=True
-synthbeam_fraction=1
-synthbeam_kmax=1
+synthbeam_fraction=0.99
+synthbeam_kmax=8
 synthbeam_peak150_fwhm=0.39268176 # in degree
 ripples=False
 nripples=0
@@ -63,7 +63,7 @@ hwp_stepsize=15 # (degrees) used for random and sweeping pointing
 random_pointing=False   
 
 repeat_pointing=True
-npointings=10000
+npointings=1000
 dtheta=15.
 nhwp_angles=3 # use only for repeat_pointing
 seed=1
@@ -75,6 +75,7 @@ delta_az= 20 #deg
 nsweeps_per_elevation= 1
 angspeed_psi= 0.1 #deg/s
 maxpsi= 10 #deg
+random_hwp = True
 fix_azimuth={'apply':True,'az':50,'el':50,'el_step':1, 'fix_hwp':True, 'fix_pitch':True}
 
 ############################################# Acquisition ##############################

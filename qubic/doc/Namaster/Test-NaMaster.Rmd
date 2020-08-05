@@ -31,6 +31,7 @@ from pysimulators import FitsArray
 import qubic
 from qubic import QubicSkySim as qss
 from qubic import NamasterLib as nam
+from qubic import camb_interface as qc
 
 rc('font', size=15)
 ```
@@ -64,6 +65,7 @@ def make_maps(d, seenpix, seed=None, noise_level=0.):
     fact_noise = [1., sqrt(2), sqrt(2)]
 
     ### For Now Uniform noise
+    np.random.seed()
     maps_observed = np.zeros_like(x0)
     for i in range(3):
         maps_observed[:, seenpix, i] = x0[:, seenpix, i] + np.random.randn(seenpix.sum()) * noise_level * fact_noise[i] 
@@ -81,7 +83,7 @@ hp.mollview(cov)
 
 
 # Define the seen pixels
-seenpix = cov > 0.5#(np.max(cov)/1000)
+seenpix = cov > 0.1#(np.max(cov)/1000)
 
 Qubic_sky, x0, maps_observed = make_maps(d, seenpix)
 print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0))
@@ -178,7 +180,7 @@ print(ell_binned.shape, Dls_binned.shape)
 
 rc('figure', figsize=(8, 6))
 plt.figure()
-plt.plot(input_ell, input_Dl[:, 0])
+plt.plot(input_ell[:lmax], input_Dl[:lmax, 0])
 plt.plot(ell_binned, Dls_binned[0, :],'o')
 plt.xlabel('$\\ell$')
 plt.ylabel('$D_\\ell$')
@@ -217,8 +219,8 @@ rc('figure', figsize=(12, 8))
 plt.figure()
 for i in range(4):
     plt.subplot(2, 2, i+1)
-    plt.plot(input_ell, input_Dl[:, i])
-    plt.plot(leff, cells[:, i],'o')
+    plt.plot(input_ell[:lmax], input_Dl[:lmax, i])
+    plt.plot(leff[:lmax], cells[:lmax, i],'o')
     plt.xlabel('$\\ell$')
     plt.ylabel('$D_\\ell$')
     plt.title(clnames[i])
@@ -251,9 +253,9 @@ clnames = ['TT', 'EE', 'BB', 'TE']
 plt.figure()
 for i in range(4):
     plt.subplot(2, 2, i+1)
-    plt.plot(input_ell, input_Dl[:, i], label='Input spectra')
-    plt.plot(leff_nobeam, cells_nobeam[:, i], 'o', label='No correction')
-    plt.plot(leff_beam, cells_beam[:, i], 'o', label='Beam correction')
+    plt.plot(input_ell[:lmax], input_Dl[:lmax, i], label='Input spectra')
+    plt.plot(leff_nobeam[:lmax], cells_nobeam[:lmax, i], 'o', label='No correction')
+    plt.plot(leff_beam[:lmax], cells_beam[:lmax, i], 'o', label='Beam correction')
     plt.xlabel('$\\ell$')
     plt.ylabel('$D_\\ell$')
     plt.title(clnames[i])
@@ -270,7 +272,7 @@ print(pwb.shape)
 
 # Make maps with integration into pixels
 # To use synfast, we need to convert Dls to Cls
-input_Cl = qss.Dl2Cl_without_monopole(input_ell, input_Dl)
+input_Cl = qc.Dl2Cl_without_monopole(input_ell, input_Dl)
 pw_maps = hp.synfast(input_Cl.T, d['nside'], pol=True, lmax=Namaster.lmax, pixwin=True, new=True)
 print(pw_maps.shape)
 
@@ -300,9 +302,9 @@ clnames = ['TT', 'EE', 'BB', 'TE']
 plt.figure()
 for i in range(4):
     plt.subplot(2, 2, i+1)
-    plt.plot(input_ell, input_Dl[:, i], label='Input spectra')
-    plt.plot(leff_nopw, cells_nopw[:, i], 'o', label='No correction')
-    plt.plot(leff_pw, cells_pw[:, i], 'o', label='Pixwin correction')
+    plt.plot(input_ell[:lmax], input_Dl[:lmax, i], label='Input spectra')
+    plt.plot(leff_nopw[:lmax], cells_nopw[:lmax, i], 'o', label='No correction')
+    plt.plot(leff_pw[:lmax], cells_pw[:lmax, i], 'o', label='Pixwin correction')
     plt.xlabel('$\\ell$')
     plt.ylabel('$D_\\ell$')
     plt.title(clnames[i])
@@ -314,11 +316,11 @@ plt.tight_layout()
 
 
 ```{python}
-# Do many realizations
+# Do many realizations, same CMB (seed=42) but random noise realisations
 nsim = 4
 nsim_cells = []
 for sim in range(nsim):
-    Qubic_sky, x0, maps_observed = make_maps(d, seenpix, noise_level=0.)
+    Qubic_sky, x0, maps_observed = make_maps(d, seenpix, seed=42, noise_level=2.)
     maps = maps_observed[0].T
     leff, cells, w = Namaster.get_spectra(maps, purify_e=True, purify_b=False, beam_correction=None)
     nsim_cells.append(cells)
@@ -335,8 +337,8 @@ clnames = ['TT', 'EE', 'BB', 'TE']
 
 for i in range(4):
     plt.subplot(2, 2, i+1)
-    plt.plot(input_ell, input_Dl[:, i], label='Input spectra')
-    plt.errorbar(leff, mean_cells[:, i], std_cells[:, i], fmt='m.', label='Reconstructed Dls')
+    plt.plot(input_ell[:lmax], input_Dl[:lmax, i], label='Input spectra')
+    plt.errorbar(leff[:lmax], mean_cells[:lmax, i], std_cells[:, i], fmt='m.', label='Reconstructed Dls')
 #     plt.plot(leff, mean_cells[:, i], 'o', label='No correction')
     plt.xlabel('$\\ell$')
     plt.ylabel('$D_\\ell$')

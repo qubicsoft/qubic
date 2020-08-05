@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -22,6 +22,7 @@ import pickle
 from importlib import reload
 import time
 import scipy
+import matplotlib.pyplot as plt
 
 
 # Specific qubic modules
@@ -41,7 +42,7 @@ reload(ft)
 
 rc('figure', figsize=(16, 10))
 rc('font', size=15)
-mpl.rcParams['image.cmap'] = 'jet'
+plt.rcParams['image.cmap'] = 'jet'
 ```
 
 ```{python}
@@ -57,26 +58,31 @@ The FastSimulator reproduces the noise structure that has been measured so far i
 - Noise spatial correlation that is responsible for lower $\Delta C_\ell$ at low $\ell$ and is a key aspect of the QUBIC nosie structure, originating from noise anticorrelation at the scale of the distance between two synthesized beam peaks.
 - Noise correlation (mostly anticorrelation) sub-bands reconstructed when performing spectro-imaging.
 
-# Choose between TD and FI
+# Choose between TD and FI, 150 and 220GHz 
 
 
 
 
 ```{python}
 ### This is for the FI
-config = 'FI-150'
+config = 'FI150' #FI220 or FI150 or FI-150 (old files)
 
 ### This is for the TD
 # Not yet available - stay tuned...
 
 ### Read some stuff
 # Read dictionary chosen
-dictfilename = global_dir + '/doc/FastSimulator/FastSimDemo_{}.dict'.format(config)
+dictfilename = global_dir + '/dicts/pipeline_demo.dict'
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
-d['nside']=256
+
+d['nside'] = 256
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 print(center)
+
+# Frequency band
+d['filter_nu'] = int(config[-3:]) * 1e9
+print(d['filter_nu'])
 ```
 
 One needs to instanciate an QubicSkySim (qss) object where the PYSM3 model can be specified (see doc/QubicSkySim/ notebooks for documentation and examples)
@@ -110,13 +116,17 @@ In this case the code returns the number of sub-bands from the input dictionary 
 ```{python}
 reload(qss)
 
+nbands = 1
+d['nf_recon'] = nbands
+d['nf_sub'] = nbands
 ##### QubicSkySim instanciation
 seed = None
 sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, d)
 
 ##### Getting FastSimulator output maps
-maps_qubic, maps_noiseless, maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(spatial_noise=False)
+maps_qubic, maps_noiseless, maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(spatial_noise=False,
+                                                                                           old_config=True)
 
 
 ################################# Displaying Results ##########################################
@@ -155,7 +165,9 @@ One can easily change the number of sub-bands by updating the dictionary:
 reload(qss)
 
 newd = d.copy()
-newd['nf_recon'] = 2
+nbands = 2
+newd['nf_recon'] = nbands
+newd['nf_sub'] = nbands
 
 ##### QubicSkySim instanciation
 seed = None
@@ -163,7 +175,8 @@ sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
 ##### Getting FastSimulator output maps
-maps_qubic, maps_noiseless, maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(spatial_noise=False)
+maps_qubic, maps_noiseless, maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(spatial_noise=False,
+                                                                                           old_config=True)
 
 ################################# Displaying Results ##########################################
 ### Coverage map
@@ -209,7 +222,10 @@ sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
 ##### Getting FastSimulator output maps
-new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, spatial_noise=False)
+new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, 
+                                                                    sigma_sec=100, 
+                                                                    spatial_noise=False,
+                                                                    old_config=True)
 for i in range(newd['nf_recon']):
     for s in range(3):
         hp.gnomview(new_maps_noise[i,:,s], reso=25, sub=(newd['nf_recon'],3,3*i+s+1), 
@@ -226,8 +242,10 @@ Of course we focus here on the noise_only results of the FastSimulator.
 ### Let's read the input noise properties from the file that is used in the simulator 
 ### (these are fitted to end-to=-end simualtions)
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
-DataFastSim = pickle.load( open( global_dir + '/doc/FastSimulator/Data/DataFastSimulator_{}_nfsub_{}.pkl'.format(config, newd['nf_recon']), "rb" ) )
-
+DataFastSim = pickle.load(open( global_dir + 
+                               '/doc/FastSimulator/Data/DataFastSimulator_{}_nfsub_{}.pkl'.format(config, newd['nf_recon']), "rb" ) )
+print(DataFastSim.keys())
+print(DataFastSim['signoise'])
 ```
 
 ### 1) Noise Profile
@@ -240,9 +258,9 @@ seed = None
 sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
-new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(sigma_sec=88., 
-                                                                    noise_only=True, 
-                                                                    spatial_noise=False)
+new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True,
+                                                                    spatial_noise=False,
+                                                                   old_config=True)
 
 for isub in range(newd['nf_recon']):
     sqn = np.int(np.sqrt(newd['nf_recon']))
@@ -257,7 +275,7 @@ for isub in range(newd['nf_recon']):
     plot(fitcov[isub][0,:], np.sqrt(fitcov[isub][2,:]), label='QU from End-to-End')
     legend()
     xlim(0.9, 10.1)
-    ylim(0, np.max(yyfs)*1.1)
+#     ylim(0, np.max(yyfs)*1.1)
     
 ```
 
@@ -271,9 +289,9 @@ seed = None
 sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
-new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(sigma_sec=88., 
-                                                                    noise_only=True, 
-                                                                    spatial_noise=False)
+new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, 
+                                                                    spatial_noise=False,
+                                                                   old_config=True)
 
 
 cInew, cQnew, cUnew, fitcov, noise_norm = qss.get_cov_nunu(new_maps_noise, coverage, QUsep=True)
@@ -299,7 +317,7 @@ for s in range(3):
 ```
 
 ### 3) Spatial correlation
-One needs to turn spatial_correlation to True obviously...
+One needs to turn spatial_noise to True obviously...
 
 ```{python}
 reload(qss)
@@ -308,8 +326,9 @@ seed = None
 sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
-new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(sigma_sec=88., 
-                                                                    noise_only=True)
+new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, 
+                                                                    spatial_noise=True,
+                                                                   old_config=True)
 
 
 
@@ -323,7 +342,9 @@ allcthQ = []
 allcthU = []
 pixgood = (coverage/np.max(coverage)) > 0.1 
 for i in range(newd['nf_recon']):
-    corrected_qubicnoise = qss.correct_maps_rms(new_maps_noise[i,:,:], coverage, DataFastSim['effective_variance_invcov'][i])
+    corrected_qubicnoise = qss.correct_maps_rms(new_maps_noise[i,:,:], 
+                                                coverage, 
+                                                DataFastSim['effective_variance_invcov'][i])
     th, thecthI = qss.ctheta_parts(corrected_qubicnoise[:,0], pixgood, 0, 20, 20, nsplit=5, degrade_init=128, verbose=False)
     allcthI.append(thecthI)
     th, thecthQ = qss.ctheta_parts(corrected_qubicnoise[:,1], pixgood, 0, 20, 20, nsplit=5, degrade_init=128, verbose=False)

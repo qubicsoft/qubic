@@ -5,6 +5,7 @@ import sys
 import pysm
 import qubic
 from qubic import QubicSkySim as qss
+from qubic import camb_interface as qc
 
 from qubicpack.utilities import Qubic_DataDir
 from pysimulators import FitsArray
@@ -37,7 +38,7 @@ nf_sub = [3]#[2, 4, 5, 10, 12, 14, 15, 16, 18, 20, 22, 24]
 
 # ============= Sky config =====================
 # CMB map
-# ell, totDL, unlensedDL = qss.get_camb_Dl(r=0., lmax=3*d['nside']-1)
+# ell, totDL, unlensedDL = qc.get_camb_Dl(r=0., lmax=3*d['nside']-1)
 # cmb_dict = {'CAMBSpectra':totDL, 'ell':ell, 'seed':None}
 # sky_config = {'cmb': cmb_dict}
 

@@ -28,6 +28,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from importlib import reload
 from qubic import QubicSkySim as qss
+from qubic import camb_interface as qc
 # %matplotlib inline
 rc('font', size=12)
 rc('figure', figsize=(13, 8))
@@ -66,7 +67,7 @@ It works well but it's a bit useless since one cannot modify easily the cosmolog
 
 ```{python}
 # reload(qss)
-# ell, totCL, unlensedCL = qss.get_camb_Dl(lmax=2500, r=0.1)
+# ell, totCL, unlensedCL = qc.get_camb_Dl(lmax=2500, r=0.1)
 # order = ['TT', 'EE', 'BB', 'TE']
 # for i in range(4):
 #     subplot(2,2,i+1)
@@ -109,10 +110,10 @@ It works well but it's a bit useless since one cannot modify easily the cosmolog
 # nside = 128
 
 # ### CAMB call
-# ell, totDl, unlensedDl = qss.get_camb_Dl(r=0.1, lmax=3*nside)
+# ell, totDl, unlensedDl = qc.get_camb_Dl(r=0.1, lmax=3*nside)
 
 # ### Synfast (NB: we need to go from Dl to Cl due to different conventions between CAMB and synfast)
-# mycls = qss.Dl2Cl_without_monopole(ell, totDl)
+# mycls = qc.Dl2Cl_without_monopole(ell, totDl)
 
 # if seed is not None: 
 #     np.random.seed(seed)
@@ -249,7 +250,7 @@ d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
 ### Calculate CMB spectra with CAMB (through the QubicSkySim wrapper, or any other way)
-ell, totDL, unlensedDL = qss.get_camb_Dl(r=0.1, lmax=3*d['nside'])
+ell, totDL, unlensedDL = qc.get_camb_Dl(r=0.1, lmax=3*d['nside'])
 
 ### Specify the CMB description in a dictionary
 cmb_dict = {'CAMBSpectra':totDL, 'ell':ell, 'seed':None}
@@ -283,6 +284,7 @@ from qubicpack.utilities import Qubic_DataDir
 from pysimulators import FitsArray
 import qubic
 from qubic import QubicSkySim as qss
+from qubic import camb_interface as qc
 from importlib import reload
 reload(qss)
 
@@ -294,11 +296,11 @@ d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
 ### Calculate CMB spectra with CAMB (through the QubicSkySim wrapper, or any other way)
-ell, totDL, unlensedDL = qss.get_camb_Dl(r=0.1, lmax=3*d['nside'])
+ell, totDL, unlensedDL = qc.get_camb_Dl(r=0.1, lmax=3*d['nside'])
 
 ### Calculate CMB maps from this spectrum
 ### Synfast (NB: we need to go from Dl to Cl due to different conventions between CAMB and synfast)
-mycls = qss.Dl2Cl_without_monopole(ell, totDL)
+mycls = qc.Dl2Cl_without_monopole(ell, totDL)
 
 seed = None
 if seed is not None: np.random.seed(seed)

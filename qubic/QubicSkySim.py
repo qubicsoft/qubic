@@ -339,7 +339,8 @@ class Qubic_sky(sky):
                                        noise_profile=True,
                                        spatial_noise=True,
                                        nunu_correlation=True,
-                                       noise_only=False):
+                                       noise_only=False,
+                                       old_config=False):
         """
         This returns maps in the same way as with get_simple_sky_map but cut according to the coverage
         and with noise added according to this coverage and the RMS in muK.sqrt(sec) given by sigma_sec
@@ -403,25 +404,39 @@ class Qubic_sky(sky):
         ##############################################################################################################
         # files location
         global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
-
-        with open(global_dir +
-                  '/doc/FastSimulator/Data/DataFastSimulator_{}{}_nfsub_{}.pkl'.format(self.dictionary['config'],
-                                                                                       str(int(self.dictionary['filter_nu'] / 1e9)),
-                                                                                       nf_sub),
-                  "rb") as file:
-            DataFastSim = pickle.load(file)
-        # print(file)
-
-        # DataFastSim = pickle.load( open( global_dir +
-        #                                  '/doc/FastSimulator/Data/DataFastSimulator_FI_Duration_3_nfsub_{}.pkl'.format(nf_sub), "rb" ) )
-
-        # Read Coverage map
-        if coverage is None:
-            DataFastSimCoverage = pickle.load(open(global_dir +
-                                                   '/doc/FastSimulator/Data/DataFastSimulator_{}{}_coverage.pkl'.format(
-                                                       self.dictionary['config'],
-                                                       str(int(self.dictionary['filter_nu'] / 1e9))), "rb"))
-            coverage = DataFastSimCoverage['coverage']
+        filter_nu = int(self.dictionary['filter_nu'] / 1e9)
+        if old_config:
+            if filter_nu == 220:
+                raise ValueError('The old config is not available at 220 GHz.')
+            with open(global_dir +
+                      '/doc/FastSimulator/Data/DataFastSimulator_{}-{}_nfsub_{}.pkl'.format(self.dictionary['config'],
+                                                                                           str(filter_nu),
+                                                                                           nf_sub),
+                      "rb") as file:
+                DataFastSim = pickle.load(file)
+                print(file)
+            # Read Coverage map
+            if coverage is None:
+                DataFastSimCoverage = pickle.load(open(global_dir +
+                                                       '/doc/FastSimulator/Data/DataFastSimulator_{}-{}_coverage.pkl'.format(
+                                                           self.dictionary['config'],
+                                                           str(filter_nu)), "rb"))
+                coverage = DataFastSimCoverage['coverage']
+        else:
+            with open(global_dir +
+                      '/doc/FastSimulator/Data/DataFastSimulator_{}{}_nfsub_{}.pkl'.format(self.dictionary['config'],
+                                                                                           str(filter_nu),
+                                                                                           nf_sub),
+                      "rb") as file:
+                DataFastSim = pickle.load(file)
+                print(file)
+            # Read Coverage map
+            if coverage is None:
+                DataFastSimCoverage = pickle.load(open(global_dir +
+                                                       '/doc/FastSimulator/Data/DataFastSimulator_{}{}_coverage.pkl'.format(
+                                                           self.dictionary['config'],
+                                                           str(filter_nu)), "rb"))
+                coverage = DataFastSimCoverage['coverage']
 
         # Read noise normalization
         if sigma_sec is None:

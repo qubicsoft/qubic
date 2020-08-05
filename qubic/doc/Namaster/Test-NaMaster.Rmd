@@ -31,6 +31,7 @@ from pysimulators import FitsArray
 import qubic
 from qubic import QubicSkySim as qss
 from qubic import NamasterLib as nam
+from qubic import camb_interface as qc
 
 rc('font', size=15)
 ```
@@ -271,7 +272,7 @@ print(pwb.shape)
 
 # Make maps with integration into pixels
 # To use synfast, we need to convert Dls to Cls
-input_Cl = qss.Dl2Cl_without_monopole(input_ell, input_Dl)
+input_Cl = qc.Dl2Cl_without_monopole(input_ell, input_Dl)
 pw_maps = hp.synfast(input_Cl.T, d['nside'], pol=True, lmax=Namaster.lmax, pixwin=True, new=True)
 print(pw_maps.shape)
 

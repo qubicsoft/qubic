@@ -65,7 +65,7 @@ The FastSimulator reproduces the noise structure that has been measured so far i
 
 ```{python}
 ### This is for the FI
-config = 'FI150' #FI220 or FI150
+config = 'FI150' #FI220 or FI150 or FI-150 (old files)
 
 ### This is for the TD
 # Not yet available - stay tuned...
@@ -81,7 +81,7 @@ center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 print(center)
 
 # Frequency band
-d['filter_nu'] = int(config[2:]) * 1e9
+d['filter_nu'] = int(config[-3:]) * 1e9
 print(d['filter_nu'])
 ```
 
@@ -125,7 +125,8 @@ sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, d)
 
 ##### Getting FastSimulator output maps
-maps_qubic, maps_noiseless, maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(spatial_noise=False)
+maps_qubic, maps_noiseless, maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(spatial_noise=False,
+                                                                                           old_config=True)
 
 
 ################################# Displaying Results ##########################################
@@ -174,7 +175,8 @@ sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
 ##### Getting FastSimulator output maps
-maps_qubic, maps_noiseless, maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(spatial_noise=False)
+maps_qubic, maps_noiseless, maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(spatial_noise=False,
+                                                                                           old_config=True)
 
 ################################# Displaying Results ##########################################
 ### Coverage map
@@ -212,7 +214,7 @@ Because in the above mode, most of the CPU time is spent on convolving the input
 reload(qss)
 
 newd = d.copy()
-newd['nf_recon'] = 4
+newd['nf_recon'] = 3
 
 ##### QubicSkySim instanciation
 seed = None
@@ -220,7 +222,10 @@ sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
 ##### Getting FastSimulator output maps
-new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, sigma_sec=100, spatial_noise=False)
+new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, 
+                                                                    sigma_sec=100, 
+                                                                    spatial_noise=False,
+                                                                    old_config=True)
 for i in range(newd['nf_recon']):
     for s in range(3):
         hp.gnomview(new_maps_noise[i,:,s], reso=25, sub=(newd['nf_recon'],3,3*i+s+1), 
@@ -239,7 +244,8 @@ Of course we focus here on the noise_only results of the FastSimulator.
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
 DataFastSim = pickle.load(open( global_dir + 
                                '/doc/FastSimulator/Data/DataFastSimulator_{}_nfsub_{}.pkl'.format(config, newd['nf_recon']), "rb" ) )
-
+print(DataFastSim.keys())
+print(DataFastSim['signoise'])
 ```
 
 ### 1) Noise Profile
@@ -252,8 +258,9 @@ seed = None
 sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
-new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, 
-                                                                    spatial_noise=False)
+new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True,
+                                                                    spatial_noise=False,
+                                                                   old_config=True)
 
 for isub in range(newd['nf_recon']):
     sqn = np.int(np.sqrt(newd['nf_recon']))
@@ -283,7 +290,8 @@ sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
 new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, 
-                                                                    spatial_noise=False)
+                                                                    spatial_noise=False,
+                                                                   old_config=True)
 
 
 cInew, cQnew, cUnew, fitcov, noise_norm = qss.get_cov_nunu(new_maps_noise, coverage, QUsep=True)
@@ -319,7 +327,8 @@ sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
 new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, 
-                                                                    spatial_noise=True)
+                                                                    spatial_noise=True,
+                                                                   old_config=True)
 
 
 

@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.0
+      jupytext_version: 1.4.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -373,11 +373,11 @@ for nfsub in all_nf:
     data = {'nfsub':nfsub, 'CovI':cI, 'CovQ':cQ, 'CovU':cU, 'signoise':88.,
             'effective_variance_invcov':myfitcovs, 'clnoise':clth_tosave}
     name = 'DataFastSimulator_'+config+'_nfsub_{}.pkl'.format(nfsub)
-    pickle.dump(data , open( global_dir + "doc/FastSimulator/Data/"+name, "wb" ) )
+    #pickle.dump(data , open( global_dir + "doc/FastSimulator/Data/"+name, "wb" ) )
 
 datacov = {'coverage':cov}
 name = 'DataFastSimulator_'+config+'_coverage.pkl'
-pickle.dump(datacov , open( global_dir + "doc/FastSimulator/Data/"+name, "wb" ) )
+#pickle.dump(datacov , open( global_dir + "doc/FastSimulator/Data/"+name, "wb" ) )
 
 
 

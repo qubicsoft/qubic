@@ -97,7 +97,7 @@ class sky(object):
                         # Note that they are in l(l+1) CL/2pi so we have to change that for synfast
                         totDL = keyword['CAMBSpectra']
                         ell = keyword['ell']
-                        mycls = Dl2Cl_without_monopole(ell, totDL)
+                        mycls = qc.Dl2Cl_without_monopole(ell, totDL)
                         # set the seed if needed
                         if 'seed' in keys:
                             np.random.seed(keyword['seed'])
@@ -110,10 +110,11 @@ class sky(object):
                 else:
                     # The CMB part is not defined via a dictionary but only by the seed for synfast
                     # No map nor CAMB spectra was given, so we recompute them.
-                    # The assumed cosmology is the default one given in the get_CAMB_Dl() function below.
+                    # The assumed cosmology is the default one given in the get_CAMB_Dl() function
+                    # from camb_interface library.
                     if keyword is not None: np.random.seed(keyword)
-                    ell, totDL, unlensedCL = get_camb_Dl(lmax=self.lmax)
-                    mycls = Dl2Cl_without_monopole(ell, totDL)
+                    ell, totDL, unlensedCL = qc.get_camb_Dl(lmax=self.lmax)
+                    mycls = qc.Dl2Cl_without_monopole(ell, totDL)
                     mymaps = hp.synfast(mycls.T, self.nside, verbose=False, new=True)
                     self.input_cmb_maps = mymaps
                     self.input_cmb_spectra = totDL
@@ -338,7 +339,8 @@ class Qubic_sky(sky):
                                        noise_profile=True,
                                        spatial_noise=True,
                                        nunu_correlation=True,
-                                       noise_only=False):
+                                       noise_only=False,
+                                       old_config=False):
         """
         This returns maps in the same way as with get_simple_sky_map but cut according to the coverage
         and with noise added according to this coverage and the RMS in muK.sqrt(sec) given by sigma_sec
@@ -402,24 +404,39 @@ class Qubic_sky(sky):
         ##############################################################################################################
         # files location
         global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
-
-        with open(global_dir +
-                  '/doc/FastSimulator/Data/DataFastSimulator_{}{}_nfsub_{}.pkl'.format(self.dictionary['config'],
-                                                                                       str(int(self.dictionary['filter_nu'] / 1e9)),
-                                                                                       nf_sub),
-                  "rb") as file:
-            DataFastSim = pickle.load(file)
-
-        # DataFastSim = pickle.load( open( global_dir +
-        #                                  '/doc/FastSimulator/Data/DataFastSimulator_FI_Duration_3_nfsub_{}.pkl'.format(nf_sub), "rb" ) )
-
-        # Read Coverage map
-        if coverage is None:
-            DataFastSimCoverage = pickle.load(open(global_dir +
-                                                   '/doc/FastSimulator/Data/DataFastSimulator_{}{}_coverage.pkl'.format(
-                                                       self.dictionary['config'],
-                                                       str(int(self.dictionary['filter_nu'] / 1e9))), "rb"))
-            coverage = DataFastSimCoverage['coverage']
+        filter_nu = int(self.dictionary['filter_nu'] / 1e9)
+        if old_config:
+            if filter_nu == 220:
+                raise ValueError('The old config is not available at 220 GHz.')
+            with open(global_dir +
+                      '/doc/FastSimulator/Data/DataFastSimulator_{}-{}_nfsub_{}.pkl'.format(self.dictionary['config'],
+                                                                                           str(filter_nu),
+                                                                                           nf_sub),
+                      "rb") as file:
+                DataFastSim = pickle.load(file)
+                print(file)
+            # Read Coverage map
+            if coverage is None:
+                DataFastSimCoverage = pickle.load(open(global_dir +
+                                                       '/doc/FastSimulator/Data/DataFastSimulator_{}-{}_coverage.pkl'.format(
+                                                           self.dictionary['config'],
+                                                           str(filter_nu)), "rb"))
+                coverage = DataFastSimCoverage['coverage']
+        else:
+            with open(global_dir +
+                      '/doc/FastSimulator/Data/DataFastSimulator_{}{}_nfsub_{}.pkl'.format(self.dictionary['config'],
+                                                                                           str(filter_nu),
+                                                                                           nf_sub),
+                      "rb") as file:
+                DataFastSim = pickle.load(file)
+                print(file)
+            # Read Coverage map
+            if coverage is None:
+                DataFastSimCoverage = pickle.load(open(global_dir +
+                                                       '/doc/FastSimulator/Data/DataFastSimulator_{}{}_coverage.pkl'.format(
+                                                           self.dictionary['config'],
+                                                           str(filter_nu)), "rb"))
+                coverage = DataFastSimCoverage['coverage']
 
         # Read noise normalization
         if sigma_sec is None:
@@ -659,15 +676,6 @@ class Qubic_sky(sky):
         if verbose:
             print('Total noise (with no averages in pixels): {}'.format(np.sum((Sigpix * Tpix) ** 2)))
         return Sigpix
-
-
-def get_camb_Dl(lmax=2500, H0=67.5, ombh2=0.022, omch2=0.122, mnu=0.06, omk=0, tau=0.06, As=2e-9, ns=0.965, r=0.):
-    return qc.get_camb_Dl(lmax=2500, H0=67.5, ombh2=0.022, omch2=0.122, mnu=0.06, omk=0, tau=0.06, As=2e-9, ns=0.965,
-                          r=0.)
-
-
-def Dl2Cl_without_monopole(ls, totDL):
-    return qc.Dl2Cl_without_monopole(ls, totDL)
 
 
 def random_string(nchars):

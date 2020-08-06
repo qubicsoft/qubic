@@ -42,12 +42,13 @@ import pysm.units as u
 import qubic
 from qubic import SpectroImLib as si
 from qubic import QubicSkySim as qss
+from qubic import camb_interface as qc
 from qubic import NamasterLib as nam
 
 from qubic import fibtools as ft
 
-import ReadMC as rmc
-import AnalysisMC as amc
+from qubic import ReadMC as rmc
+from qubic import AnalysisMC as amc
 
 rc('figure', figsize=(13, 10))
 rc('font', size=15)
@@ -105,7 +106,7 @@ for i in range(3):
 ```{python}
 # Remember that we can always retrieve the input CMB maps and spectra
 
-ell, totDL, unlensedDL = qss.get_camb_Dl(r=0., lmax=3*d['nside']-1)
+ell, totDL, unlensedDL = qc.get_camb_Dl(r=0., lmax=3*d['nside']-1)
 cmb_dict = {'CAMBSpectra':totDL, 'ell':ell, 'seed':None}
 sky_config = {'cmb': cmb_dict}
 Qubic_skycmb = qss.Qubic_sky(sky_config, d)

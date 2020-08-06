@@ -4,10 +4,8 @@ import numpy as np
 from scipy import interpolate
 import matplotlib.pyplot as plt
 
-import ReadMC as rmc
-
 import qubic
-
+from qubic import ReadMC as rmc
 from qubicpack.utilities import Qubic_DataDir
 
 

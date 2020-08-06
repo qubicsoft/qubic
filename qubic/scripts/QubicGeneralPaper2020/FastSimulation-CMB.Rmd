@@ -85,7 +85,7 @@ m, c, cov, d, icl, ftype = read_files_mc(dirmaps, file_rnd_string, verbose=True)
 nbins = 100   
 reload(qss)
 xx, myY, effective_variance_invcov = qss.get_noise_invcov_profile(m[0,:,:]-c[0,:,:], 
-                                                                  cov, 0.1, nbins=nbins, 
+                                                                  cov, 0.1, nbins=nbins, doplot=True,
                                                                   fit=True, norm=True, allstokes=True,
                                                                  label='QUBIC MC Average IQU Nptg={}  Tol={}'.format(nptg,tol))
 plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[1,:]),'--')
@@ -104,9 +104,9 @@ Qubic_sky = qss.Qubic_sky(sky_config, d)
 signoise = 75
 qubicnoise = Qubic_sky.create_noise_maps(signoise, cov, effective_variance_invcov=effective_variance_invcov)
 
-xx, yyfs, bla = qss.get_noise_invcov_profile(qubicnoise, cov, label='FastSim', fit=False, allstokes=True)
+xx, yyfs, bla = qss.get_noise_invcov_profile(qubicnoise, cov, label='FastSim', fit=False, allstokes=True,doplot=True)
 xx, yysim, bla = qss.get_noise_invcov_profile(m[0,:,:]-c[0,:,:], cov, 
-                                   label='QUBIC MC Average IQU Nptg={}  Tol={}'.format(nptg,tol), fit=False)
+                                   label='QUBIC MC Average IQU Nptg={}  Tol={}'.format(nptg,tol), fit=False, doplot=True)
 plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[1,:])*yysim[0],'--',label='Qubic Law')
 xlim(0,12)
 ylim(0,2.5)
@@ -127,11 +127,11 @@ rc('figure', figsize=(16, 10))
 dofit=True
 nbins = 80
 xx, yy, fit_fs = qss.get_noise_invcov_profile(qubicnoise, cov, nbins=nbins,
-                                              label='FastSim from NERSC 200000',fit=dofit)
+                                              label='FastSim from NERSC 200000',fit=dofit, doplot=True)
 xx, yy, fit_n200k = qss.get_noise_invcov_profile(m[0,:,:]-c[0,:,:], cov, nbins=nbins,
-                                              label='NERSC 200000',fit=dofit)
+                                              label='NERSC 200000',fit=dofit, doplot=True)
 xx, yy, fit_n3k = qss.get_noise_invcov_profile(mold[0,:,:]-cold[0,:,:], covold, nbins=nbins,
-                                              label='MacQUBIC 3000',fit=dofit)
+                                              label='MacQUBIC 3000',fit=dofit, doplot=True)
 legend()
 
 print(qubicnoise.shape)
@@ -246,7 +246,7 @@ all_cc_fs = np.zeros((nbmc, 3,3))
 
 for i in range(nbmc):
     qubicnoise = Qubic_sky.create_noise_maps(signoise, cov, effective_variance_invcov=effective_variance_invcov)
-    new_qubicnoise = corrmapsrms(qubicnoise, cov, effective_variance_invcov)
+    new_qubicnoise = qss.correct_maps_rms(qubicnoise, cov, effective_variance_invcov)
     okpix = new_qubicnoise[:,0] > 0
     all_cc_fs[i,:,:] = np.corrcoef(new_qubicnoise[okpix,:].T)
 
@@ -375,7 +375,7 @@ p=plot(th,(cth_200k/cth_200k[0]),'o', label='200k')
 plot(thth, fct(thth, *results_200k[0]), color=p[0].get_color(),
      label=r'$a\times\sin(\theta/b)\times\exp(\theta/c)$'+'\n a={0:4.2f} b={1:4.2f} c={2:4.2f}'.format(*results_200k[0]))
 
-legend()
+legend(loc='upper right',fontsize=10)
 xlabel(r'$\theta$ [deg]')
 ylabel(r'$C(\theta)$ [Normalized]')
 ylim(-0.1,1)
@@ -638,12 +638,12 @@ def run_mc(nbmc, Namaster, d, signoise, cov, effective_variance_invcov, verbose=
         t0 = time.time()
         qubicnoiseA = Qubic_sky.create_noise_maps(signoise, cov, 
                                                   effective_variance_invcov=effective_variance_invcov,
-                                                 clnoise=clnoise)
+                                                 clnoise=clnoise, Nyears=3)
 #         qubicnoiseA[~okpix] = 0
 #         qubicnoiseA[okpix] -= np.mean(qubicnoiseA[okpix])
         qubicnoiseB = Qubic_sky.create_noise_maps(signoise, cov, 
                                                   effective_variance_invcov=effective_variance_invcov,
-                                                 clnoise=clnoise)
+                                                 clnoise=clnoise, Nyears=3)
 #         qubicnoiseB[~okpix] = 0
 #         qubicnoiseB[okpix] -= np.mean(qubicnoiseB[okpix])
         
@@ -675,15 +675,17 @@ def run_mc(nbmc, Namaster, d, signoise, cov, effective_variance_invcov, verbose=
 ```{python}
 reload(qss)
 dofit=True
-nbins = 300
+nbins = 20
 xx, yy, fit_n200k = qss.get_noise_invcov_profile(m[0,:,:]-c[0,:,:], cov, nbins=nbins,
-                                              label='NERSC 200000',fit=dofit, covcut=0.1)
+                                              label='NERSC 200000',fit=dofit, covcut=0.1, doplot=True)
 xx, yy, fit_n3k = qss.get_noise_invcov_profile(mold[0,:,:]-cold[0,:,:], covold, nbins=nbins,
-                                              label='MacQUBIC 3000',fit=dofit, covcut=0.1)
+                                              label='MacQUBIC 3000',fit=dofit, covcut=0.1, doplot=True)
 
 plot(fit_n3k[0,:], np.sqrt(fit_n3k[1,:]), label='3k')
 plot(fit_n200k[0,:], np.sqrt(fit_n200k[1,:]), label='200k')
-legend()
+xlim(0,11)
+ylim(0,3)
+legend(loc='upper left', fontsize=8)
 ```
 
 ```{python}

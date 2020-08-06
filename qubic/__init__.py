@@ -20,6 +20,8 @@ from .selfcal_lib import *
 from .sb_fitting import *
 from .plotters import *
 from .lin_lib import *
+from .AnalysisMC import *
+from .ReadMC import *
 from . import qubicdict 
 
 import pysm
@@ -43,4 +45,4 @@ if numpy.__version__ < '1.8':
     numpy.full_like = full_like
 del full, full_like, numpy
 
-__version__ = '4.5.dev1372'
+__version__ = '4.5.dev1465'

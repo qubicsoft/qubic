@@ -4,8 +4,8 @@ jupyter:
     text_representation:
       extension: .Rmd
       format_name: rmarkdown
-      format_version: '1.1'
-      jupytext_version: 1.2.4
+      format_version: '1.2'
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -21,8 +21,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import rc
 
-import ReadMC as rmc
-import AnalysisMC as amc
+from qubic import ReadMC as rmc
+from qubic import AnalysisMC as amc
 
 import qubic
 from qubic import equ2gal

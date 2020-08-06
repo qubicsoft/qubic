@@ -1,5 +1,6 @@
 import healpy as hp
 import matplotlib.pyplot as plt
+import sys
 import os
 import numpy as np
 from scipy.optimize import curve_fit
@@ -9,6 +10,8 @@ import pickle
 from qubicpack.utilities import Qubic_DataDir
 from qubic import QubicSkySim as qss
 from qubic import camb_interface as qc
+
+# ### To run that script: $ python FastSim_CreateNoiseFiles.py config alpha signoise
 
 def get_maps_from_louise(directory, nfsub, config):
     residuals_patch = np.load(directory + f'residuals_{nfsub}bands_{config}.npy')
@@ -135,7 +138,7 @@ def get_nunu_covariance(residuals, coverage, nfsub, config, dirsave=None):
     return cI, cQ, cU
 
 
-def ctheta_measurement(residuals, coverage, myfitcovs, nfsub, config, dirsave=None):
+def ctheta_measurement(residuals, coverage, myfitcovs, nfsub, config, alpha, dirsave=None):
     plt.figure(figsize=(16, 6))
     fct = lambda x, a, b, c: a * np.sin(x / b) * np.exp(-x / c)
     thth = np.linspace(0, 180, 1000)
@@ -165,7 +168,6 @@ def ctheta_measurement(residuals, coverage, myfitcovs, nfsub, config, dirsave=No
         ctheta = fct(thth, *allresults[i][0])
         ctheta[0] = 1
         lll, clth = qc.ctheta_2_cell(thth, ctheta, lmax=1024)
-        alpha = 4.5  # See notebook called "2pt-Correlation Function" for an empirical explanation of alpha
         clth = (clth - 1) * alpha + 1
         allclth.append(clth)
 
@@ -193,7 +195,7 @@ dirsave = os.environ['DATA_SPECTROIM'] + 'Data_for_FastSimulator/plots/'
 all_nf = [1, 2, 3, 4, 5, 8]
 center = np.array([0, 0])
 nptg = 10000
-config = 'FI150' # TD150 or FI150 or FI220
+config = sys.argv[1] # TD150 or FI150 or FI220
 nbins = 50
 
 for nfsub in all_nf:
@@ -212,8 +214,10 @@ for nfsub in all_nf:
     cI, cQ, cU = get_nunu_covariance(residuals, coverage, nfsub, config, dirsave=dirsave)
 
     # C(theta) Measurement
+    # See notebook called "2pt-Correlation Function" for an empirical explanation of alpha
+    alpha = np.float(sys.argv[2])
     allresults, allcth, allclth, lll, clth = ctheta_measurement(residuals, coverage, myfitcovs,
-                                                                nfsub, config, dirsave=dirsave)
+                                                                nfsub, config, alpha, dirsave=dirsave)
 
     ### The option below will save the average over sub-bands of the Clth
     ### However significant residuals exist on the end-to-end simulations as of today, and
@@ -238,7 +242,7 @@ for nfsub in all_nf:
             'CovI': cI,
             'CovQ': cQ,
             'CovU': cU,
-            'signoise': 100.,
+            'signoise': np.float(sys.argv[3]),
             'effective_variance_invcov': myfitcovs,
             'clnoise': clth_tosave}
     name = 'DataFastSimulator_' + config + '_nfsub_{}.pkl'.format(nfsub)

@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.0
+      jupytext_version: 1.4.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -66,6 +66,12 @@ The FastSimulator reproduces the noise structure that has been measured so far i
 ```{python}
 ### This is for the FI
 config = 'FI150' #FI220 or FI150 or FI-150 (old files)
+old_config = False
+
+### Old COnfig
+# config = 'FI-150' 
+# old_config = True
+
 
 ### This is for the TD
 # Not yet available - stay tuned...
@@ -126,7 +132,7 @@ Qubic_sky = qss.Qubic_sky(sky_config, d)
 
 ##### Getting FastSimulator output maps
 maps_qubic, maps_noiseless, maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(spatial_noise=False,
-                                                                                           old_config=True)
+                                                                                           old_config=old_config)
 
 
 ################################# Displaying Results ##########################################
@@ -176,7 +182,7 @@ Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
 ##### Getting FastSimulator output maps
 maps_qubic, maps_noiseless, maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(spatial_noise=False,
-                                                                                           old_config=True)
+                                                                                           old_config=old_config)
 
 ################################# Displaying Results ##########################################
 ### Coverage map
@@ -214,7 +220,7 @@ Because in the above mode, most of the CPU time is spent on convolving the input
 reload(qss)
 
 newd = d.copy()
-newd['nf_recon'] = 3
+newd['nf_recon'] = 1
 
 ##### QubicSkySim instanciation
 seed = None
@@ -225,7 +231,7 @@ Qubic_sky = qss.Qubic_sky(sky_config, newd)
 new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, 
                                                                     sigma_sec=100, 
                                                                     spatial_noise=False,
-                                                                    old_config=True)
+                                                                    old_config=old_config)
 for i in range(newd['nf_recon']):
     for s in range(3):
         hp.gnomview(new_maps_noise[i,:,s], reso=25, sub=(newd['nf_recon'],3,3*i+s+1), 
@@ -254,13 +260,16 @@ This one cannot be checked if the keyword 'spatial_noise' is True in the call, w
 ```{python}
 reload(qss)
 
+newd = d.copy()
+newd['nf_recon'] = 1
+
 seed = None
 sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
 new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True,
                                                                     spatial_noise=False,
-                                                                   old_config=True)
+                                                                   old_config=old_config)
 
 for isub in range(newd['nf_recon']):
     sqn = np.int(np.sqrt(newd['nf_recon']))
@@ -291,7 +300,7 @@ Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
 new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, 
                                                                     spatial_noise=False,
-                                                                   old_config=True)
+                                                                   old_config=old_config)
 
 
 cInew, cQnew, cUnew, fitcov, noise_norm = qss.get_cov_nunu(new_maps_noise, coverage, QUsep=True)
@@ -328,7 +337,7 @@ Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
 new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, 
                                                                     spatial_noise=True,
-                                                                   old_config=True)
+                                                                   old_config=old_config)
 
 
 
@@ -363,6 +372,14 @@ for i in range(newd['nf_recon']):
 legend()
 xlabel(r'$\theta$ [deg]')
 ylabel(r'$C(\theta$)')
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 ```{python}

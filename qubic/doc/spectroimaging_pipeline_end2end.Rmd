@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -71,15 +71,19 @@ d.read_from_file(dictfilename)
 
 # Print a parameter from the dictionary. 
 print('beam shape :', d['beam_shape'])
+d['nside'] = 8
+
 # You can change it  as follows:
 # d['beam_shape'] = 'multi_freq' # or 'gaussian' or 'fitted_beam' 
 
 # Check nf_sub/nf_sub_rec is an integer
-d['nf_sub'] = 20
+d['nf_sub'] = 15
 nf_sub = d['nf_sub']
 # for nf_sub_rec in d['nf_recon']:
 #     if nf_sub % nf_sub_rec != 0:
 #         raise ValueError('nf_sub/nf_sub_rec must be an integer.')
+
+d['MultiBand'] = True
 
 # Center of the patch observed in galactic coordinates
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
@@ -94,7 +98,7 @@ In this case we read a map $X_0$ simulated previously which contains fluctuation
 ```{python}
 # Make a sky using PYSM
 seed = None
-sky_config = {'cmb': seed}
+sky_config = {'cmb': seed, 'dust': 'd1'}
 Qubic_sky = qss.Qubic_sky(sky_config, d)
 x0 = Qubic_sky.get_simple_sky_map()
 
@@ -137,7 +141,6 @@ for istk in range(3):
 Let's now simulate the TOD. We will do so by reading a simulated map. The input map needs to be smoothed to the angular resolution of the instrument (these maps are already smoothed) and we need to know the pixel number for each of the TOD samples. This is easily obtained in Healpix with the $ang2pix()$ function. 
 
 ```{python}
-d['nf_sub'] = 20
 # Pointing strategy
 p = qubic.get_pointing(d)
 print('=== Pointing DONE! ===')
@@ -192,7 +195,7 @@ We therefore have an easy manner of obtaining the most optimal map that one can 
 
 ```{python}
 # Map-making process for a given number of reconstructed subbands
-nf_sub_rec = d['nf_recon'][0]
+nf_sub_rec = 3
 
 print('************* Map-Making on {} sub-map(s) *************'.format(nf_sub_rec))
 
@@ -270,6 +273,36 @@ for istokes in [0,1,2]:
     hp.gnomview(diff[ifreq,:,istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+3), reso=rr,
                 title='diff '+d['kind'][istokes]+' SubFreq {}'.format(ifreq))
 plt.show()
+```
+
+## Intensity pixel by pixel
+
+```{python}
+_, _, nus_rec, _, _, _ = qubic.compute_freq(150, nf_sub_rec)
+_, _, nus, _, _, _ = qubic.compute_freq(150, nf_sub)
+```
+
+```{python}
+pix_indices = np.where(np.invert(unseen))[0]
+```
+
+```{python}
+istk = 0
+for pix in pix_indices:
+    plt.figure()
+
+    plt.plot(nus, x0[:, pix, istk], 'go', label='Input sky')
+    plt.plot(nus_rec, maps_recon[:, pix, istk], 'ro', label='Recon')
+    plt.plot(nus_rec, maps_convolved[:, pix, istk], 'bo', label='Convolved')
+
+    plt.legend()
+    plt.title('Pixel {}, NSIDE=256'.format(pix))
+    plt.xlabel('Frequency [GHz]')
+    plt.ylabel('I (µK)')
+```
+
+```{python}
+d['beam_shape']
 ```
 
 ```{python}

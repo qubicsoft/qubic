@@ -48,10 +48,6 @@ plt.rcParams['image.cmap'] = 'jet'
 ```
 
 ```{python}
-from qubic import AnalysisMC as amc
-```
-
-```{python}
 # ### Decode arguments
 # outname = str(sys.argv[1])
 # file_noise_profile = str(sys.argv[2])
@@ -84,13 +80,13 @@ global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_D
 
 ### This is for the FI
 #####eff_dur = 4
-# old_config = False
+old_config = False
 # configs = ['FI150', 'FI150'] #FI220 or FI150
 # configs = ['FI220', 'FI220'] #FI220 or FI150
-# configs = ['FI150', 'FI220'] #FI220 or FI150
+configs = ['FI150', 'FI220'] #FI220 or FI150
 
-old_config=True
-configs = ['FI-150', 'FI-150'] #FI220 or FI150
+# old_config=True
+# configs = ['FI-150', 'FI-150'] #FI220 or FI150
 #####eff_dur = 30
 
 ### Read some stuff

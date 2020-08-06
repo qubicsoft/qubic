@@ -48,7 +48,8 @@ else:
 d['filter_nu'] = int(config[2:]) * 1e9
 
 # Input sky
-seed = None
+# seed = 42
+# sky_config = {'dust': 'd1', 'cmb':seed, 'synchrotron':'s1'}
 sky_config = {'dust': 'd1'}
 Qubic_sky = qss.Qubic_sky(sky_config, d)
 inputmaps = Qubic_sky.get_fullsky_convolved_maps(FWHMdeg=None, verbose=True)
@@ -57,9 +58,12 @@ rnd_name = qss.random_string(10)
 
 # ================== Make maps =============================
 # Getting noise realisations with FastSimulator
-nreals = 10
+nreals = 6
 npix = 12 * d['nside'] ** 2
 noisemaps = np.zeros((nreals, nbands, npix, 3))
+
+# qubic_coverage = np.load('/pbs/home/l/lmousset/libs/qubic/qubic/scripts/Spectroimagery_paper/maps/'
+#                          'coverage_nfsub15_nptgs10000_qubicpatch.npy')
 
 for r in range(nreals):
     noisemaps[r, ...], coverage = Qubic_sky.get_partial_sky_maps_withnoise(coverage=None,
@@ -78,10 +82,8 @@ noisemaps[:, :, unseen, :] = 0.
 inputmaps[:, unseen, :] = 0.
 
 # Save maps
-np.save(rep_save + f'/noisemaps_nbands{nbands}_' + config + '_galaxycenter_' + rnd_name + '.npy',
+np.save(rep_save + f'/noisemaps_nbands{nbands}_' + config + '_v1_galaxycenter_' + rnd_name + '.npy',
         noisemaps)
-np.save(rep_save + f'/inputmaps_nbands{nbands}_' + config + '_galaxycenter_' + rnd_name + '.npy',
-        inputmaps)
 
 # ================== Load maps already done =============================
 # imap = int(sys.argv[3])
@@ -145,19 +147,19 @@ for real in range(nreals):
 
         map1noise = noisemaps[real, band1, :, :]
         map2noise = noisemaps[real, band2, :, :]
-        leff, cross_samereal_qubicmaps[real, i, :, :], w = Namaster.get_spectra(map1noise.T,
+        leff, cross_samereal_noisemaps[real, i, :, :], w = Namaster.get_spectra(map1noise.T,
                                                                                 mask_apo,
                                                                                 map2noise.T,
                                                                                 w=w,
                                                                                 purify_e=True,
                                                                                 purify_b=False,
-                                                                                beam_correction=None,
+                                                                                beam_correction=beam_corr,
                                                                                 pixwin_correction=True)
 np.save(
-    rep_save + f'/cross_interband_samereal_nfrecon{nbands}_qubicmaps_' + config + '_galaxycenter_' + rnd_name + '.npy',
+    rep_save + f'/cross_interband_samereal_nfrecon{nbands}_qubicmaps_' + config + '_v1_galaxycenter_' + rnd_name + '.npy',
     cross_samereal_qubicmaps)
 np.save(
-    rep_save + f'/cross_interband_samereal_nfrecon{nbands}_noisemaps_' + config + '_galaxycenter_' + rnd_name + '.npy',
+    rep_save + f'/cross_interband_samereal_nfrecon{nbands}_noisemaps_' + config + '_v1_galaxycenter_' + rnd_name + '.npy',
     cross_samereal_noisemaps)
 
 # Cross spectrum between bands with different real
@@ -188,20 +190,20 @@ for c1 in range(0, nreals - 1, 2):  # do not mix pairs to avoid correlation
 
         map1noise = noisemaps[c1, band1, :, :]
         map2noise = noisemaps[c2, band2, :, :]
-        leff, cross_mixreals_qubicmaps[cross, i, :, :], w = Namaster.get_spectra(map1noise.T,
+        leff, cross_mixreals_noisemaps[cross, i, :, :], w = Namaster.get_spectra(map1noise.T,
                                                                                  mask_apo,
                                                                                  map2noise.T,
                                                                                  w=w,
                                                                                  purify_e=True,
                                                                                  purify_b=False,
-                                                                                 beam_correction=None,
+                                                                                 beam_correction=beam_corr,
                                                                                  pixwin_correction=True)
     cross += 1
 
 np.save(
-    rep_save + f'/cross_interband_mixreal_nfrecon{nbands}_qubicmaps_' + config + '_galaxycenter_' + rnd_name + '.npy',
+    rep_save + f'/cross_interband_mixreal_nfrecon{nbands}_qubicmaps_' + config + '_v1_galaxycenter_' + rnd_name + '.npy',
     cross_mixreals_qubicmaps)
 
 np.save(
-    rep_save + f'/cross_interband_mixreal_nfrecon{nbands}_noisemaps_' + config + '_galaxycenter_' + rnd_name + '.npy',
+    rep_save + f'/cross_interband_mixreal_nfrecon{nbands}_noisemaps_' + config + '_v1_galaxycenter_' + rnd_name + '.npy',
     cross_mixreals_noisemaps)

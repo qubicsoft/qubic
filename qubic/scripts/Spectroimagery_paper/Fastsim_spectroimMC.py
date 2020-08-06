@@ -8,6 +8,8 @@ from qubicpack.utilities import Qubic_DataDir
 from qubic import QubicSkySim as qss
 from qubic import NamasterLib as nam
 
+# To run the script: $ python Fastsim_spectroimMC.py rep_save nbands config
+
 # Repository for dictionary and input maps
 if 'QUBIC_DATADIR' in os.environ:
     pass
@@ -45,7 +47,7 @@ elif config == 'FI220':
 else:
     raise ValueError('The config should be FI150 or FI220')
 
-d['filter_nu'] = int(config[2:]) * 1e9
+d['filter_nu'] = int(config[-3:]) * 1e9
 
 # Input sky
 # seed = 42

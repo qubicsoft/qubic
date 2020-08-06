@@ -64,8 +64,8 @@ import qubic
 from qubic import SpectroImLib as si
 from qubic import QubicSkySim as qss
 
-import ReadMC as rmc
-import AnalysisMC as amc
+from qubic import ReadMC as rmc
+from qubic import AnalysisMC as amc
 
 rc('figure', figsize=(13, 12))
 rc('font', size=15)

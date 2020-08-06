@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 import itertools as it 
 
 
-import AnalysisMC as amc
-import ReadMC as rmc
+from qubic import ReadMC as rmc
+from qubic import AnalysisMC as amc
 
 import qubic
 from qubic import gal2equ, equ2gal
@@ -100,7 +100,7 @@ print('  Doing All Cross Spectra ({}):'.format(ncross))
 for c in range(ncross):
     print(c, comb[c])
     cross[c,:,:] = xpol.get_spectra(mrec[comb[c][0],comb[c][1],:,:], mrec[comb[c][2],comb[c][3],:,:])[1] * fact / pwb**2
-             
+
 plt.figure('Cross spectra')
 for s in range(3):
     for c in range(ncross):

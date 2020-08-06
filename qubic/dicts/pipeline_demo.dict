@@ -76,7 +76,7 @@ fix_azimuth={'apply':False,'az':50,'el':50,'el_step':1, 'fix_hwp':True, 'fix_pit
 ############################################# Acquisition ##############################
 
 block=None
-effective_duration=10 #years
+effective_duration=4 #years
 noiseless=False
 photon_noise=False
 max_nbytes=None

@@ -240,11 +240,11 @@ Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
 ```{python}
 #######################################################################################################
 #### Now in a function to loop over ell binning, lmin, coverage
-def run_mc(nbmc, Namaster, cov, d, configs, verbose=False, clnoise=None):
+def run_mc(nbmc, Namaster, cov, d, configs, myduration=4, verbose=False, clnoise=None):
     
     #### Dictionnary for 150 GHz
     dA = d.copy()
-    dA['effective_duration'] = 4
+    dA['effective_duration'] = myduration
     dA['nside'] = 256
     dA['nf_sub']=1
     dA['filter_nu'] = int(configs[0][-3:]) * 1e9
@@ -252,7 +252,7 @@ def run_mc(nbmc, Namaster, cov, d, configs, verbose=False, clnoise=None):
     
     dB = d.copy()
     dB['nside'] = 256
-    dB['effective_duration'] = 4
+    dB['effective_duration'] = myduration
     dB['nf_sub']=1
     dB['filter_nu'] = int(configs[1][-3:]) * 1e9
     print(configs[1], dB['filter_nu']/1e9, dB['effective_duration'])    
@@ -316,8 +316,9 @@ def run_mc(nbmc, Namaster, cov, d, configs, verbose=False, clnoise=None):
 
 ```{python}
 ### Run the MC
-nbmc = 30
-leff, mcl_noise_qubic, scl_noise_qubic, covbin = run_mc(nbmc, Namaster, cov, d, configs)
+nbmc = 50
+myduration = 4
+leff, mcl_noise_qubic, scl_noise_qubic, covbin = run_mc(nbmc, Namaster, cov, d, configs, myduration=myduration)
 
 ```
 
@@ -470,7 +471,7 @@ print(sclBB.shape)
 BBcov = covbin[:, :, 2]
 print(BBcov.shape)
 
-like, cumint, rlim68, rlim95 = explore_like(leff, scl*0, BBcov, lmin, delta_ell, covcut, rv,
+like, cumint, rlim68, rlim95 = explore_like(leff, scl*0, sclBB, lmin, delta_ell, covcut, rv,
                                  cov=cov, plotlike=False, plotcls=False, 
                                  verbose=True, sample_variance=True, otherp=0.95)
 
@@ -494,7 +495,7 @@ for s in range(4):
     xlabel('$\\ell$')
     ylabel('$D_\\ell$({})'.format(clname[s]))
     legend(loc='lower right')
-    title('QUBIC {}x{} - {} years'.format(configs[0],configs[1], dA['effective_duration']))
+    title('QUBIC {}x{} - {} years'.format(configs[0],configs[1], myduration))
 tight_layout()
 
 
@@ -510,7 +511,7 @@ plot(lll, np.abs(cl0[:,s]),label='r=0')
 if s==2:
     plot(lll, np.abs(cl0_01[:,s]),label='r=0.01')
     plot(lll, np.abs(cl0_06[:,s]),label='r=0.06')
-plot_errors_lines(leff, scl, delta_ell, 'r', label='QUBIC {} - {} years'.format(d['config'], dA['effective_duration']))
+plot_errors_lines(leff, scl, delta_ell, 'r', label='QUBIC {} - {} years'.format(d['config'], myduration))
 title(r'$\ell_m = {} \;-\; \Delta_\ell = {} \;-\; Cov_c = {}$'.format(lmin, delta_ell, covcut))
 xlim(0,512)
 ylim(np.min([np.min(scl[:,s])/5, 1e-4]),np.max([np.max(cl0[:512,s]*1.5),1.2*np.max(scl[:,s])]))
@@ -520,7 +521,7 @@ ylabel('$D_\\ell$({})'.format(clname[s]), fontsize=17)
 legend(loc='lower right')
 
 subplot(1,2,2)
-plot(rv,like, label='QUBIC {} - {} years'.format(d['config'], dA['effective_duration']))
+plot(rv,like, label='QUBIC {} - {} years'.format(d['config'], myduration))
 plot([rlim68, rlim68],[0,1.1],'k--', label='r < {0:5.3f} at 68% C.L.'.format(rlim68))
 plot([rlim95, rlim95],[0,1.1],'k:', label='r < {0:5.3f} at 95% C.L.'.format(rlim95))
 annotate("BKP-2018\n 95% C.L.", xy=(0.06, 0.01), xytext=(0.06, 0.2),

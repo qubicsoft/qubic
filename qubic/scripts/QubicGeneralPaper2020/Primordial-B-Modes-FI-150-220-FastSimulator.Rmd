@@ -20,6 +20,8 @@ import os
 import sys
 import time
 import pickle
+from importlib import reload
+
 
 # Specific science modules
 import healpy as hp
@@ -43,6 +45,10 @@ rc('figure', figsize=(16, 10))
 rc('font', size=15)
 plt.rcParams['image.cmap'] = 'jet'
 
+```
+
+```{python}
+from qubic import AnalysisMC as amc
 ```
 
 ```{python}
@@ -77,14 +83,15 @@ is_spatial_corr = 1
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
 
 ### This is for the FI
-old_config = False
-configs = ['FI150', 'FI150'] #FI220 or FI150
-#configs = ['FI220', 'FI220'] #FI220 or FI150
-#configs = ['FI150', 'FI220'] #FI220 or FI150
+#####eff_dur = 4
+# old_config = False
+# configs = ['FI150', 'FI150'] #FI220 or FI150
+# configs = ['FI220', 'FI220'] #FI220 or FI150
+# configs = ['FI150', 'FI220'] #FI220 or FI150
 
-#old_config=True
-#configs = ['FI-150', 'FI-150'] #FI220 or FI150
-
+old_config=True
+configs = ['FI-150', 'FI-150'] #FI220 or FI150
+#####eff_dur = 30
 
 ### Read some stuff
 # Read dictionary chosen
@@ -97,16 +104,26 @@ print(center)
 nbands = 1
 d['nf_recon'] = nbands
 d['nf_sub'] = nbands
+print(d['effective_duration'])
+####d['effective_duration'] = eff_dur
+####print(d['effective_duration'])
 
+my_duration = 4.
 
 # Frequency band
 dA = d.copy()
 dA['filter_nu'] = int(configs[0][-3:]) * 1e9
+dA['effective_duration'] = my_duration
 print(dA['filter_nu']/1e9)
 
 dB = d.copy()
 dB['filter_nu'] = int(configs[1][-3:]) * 1e9
+dB['effective_duration'] = my_duration
 print(dB['filter_nu']/1e9)
+
+print(dA['effective_duration'])
+print(dB['effective_duration'])
+
 ```
 
 ```{python}
@@ -120,8 +137,12 @@ Qubic_sky_A = qss.Qubic_sky(sky_config, dA)
 Qubic_sky_B = qss.Qubic_sky(sky_config, dB)
 
 ##### Getting FastSimulator output maps
-maps_qubicA, maps_noiselessA, maps_noiseA, coverageA = Qubic_sky_A.get_partial_sky_maps_withnoise(spatial_noise=False, old_config=old_config)
-maps_qubicB, maps_noiselessB, maps_noiseB, coverageB = Qubic_sky_B.get_partial_sky_maps_withnoise(spatial_noise=False, old_config=old_config)
+maps_qubicA, maps_noiselessA, maps_noiseA, coverageA = Qubic_sky_A.get_partial_sky_maps_withnoise(spatial_noise=False, 
+                                                                                                  old_config=old_config,
+                                                                                                 Nyears=dA['effective_duration'])
+maps_qubicB, maps_noiselessB, maps_noiseB, coverageB = Qubic_sky_B.get_partial_sky_maps_withnoise(spatial_noise=False, 
+                                                                                                  old_config=old_config,
+                                                                                                 Nyears=dB['effective_duration'])
 
 ```
 
@@ -143,23 +164,65 @@ stn = ['I', 'Q', 'U']
 figure()
 for s in range(3):
     hp.gnomview(maps_noiselessA[0,:,s], reso=25, sub=(2,3,s+1), 
-                title='Noiseless '+stn[s]+' - '+configs[0])
+                title='Noiseless '+stn[s]+' - '+configs[0] + ' - '+str(dA['effective_duration'])+'y')
     hp.gnomview(maps_noiselessB[0,:,s], reso=25, sub=(2,3,3+s+1), 
-                title='Noiseless '+stn[s]+' - '+configs[1])
+                title='Noiseless '+stn[s]+' - '+configs[1] + ' - '+str(dB['effective_duration'])+'y')
         
 figure()
 for s in range(3):
     hp.gnomview(maps_qubicA[0,:,s], reso=25, sub=(2,3,s+1), 
-                title='QUBIC '+stn[s]+' - '+configs[0])
+                title='QUBIC '+stn[s]+' - '+configs[0] + ' - '+str(dA['effective_duration'])+'y')
     hp.gnomview(maps_qubicB[0,:,s], reso=25, sub=(2,3,3+s+1), 
-                title='QUBIC '+stn[s]+' - '+configs[1])
+                title='QUBIC '+stn[s]+' - '+configs[1] + ' - '+str(dB['effective_duration'])+'y')
 figure()   
 for s in range(3):
     hp.gnomview(maps_noiseA[0,:,s], reso=25, sub=(2,3,s+1), 
-                title='Noise '+stn[s]+' - '+configs[0])
+                title='Noise '+stn[s]+' - '+configs[0] + ' - '+str(dA['effective_duration'])+'y')
     hp.gnomview(maps_noiseB[0,:,s], reso=25, sub=(2,3,3+s+1), 
-                title='Noise '+stn[s]+' - '+configs[1])
+                title='Noise '+stn[s]+' - '+configs[1] + ' - '+str(dB['effective_duration'])+'y')
 
+
+```
+
+```{python}
+reload(qss)
+rc('figure', figsize=(12, 10))
+
+subplot(2,1,1)
+xx, yyI, yyQ, yyU = qss.get_angular_profile(maps_noiseA[0,:,:], nbins=30, separate=True, center=[0,0])
+pix_size = hp.nside2resol(256, arcmin=True)
+plot(xx, yyI * pix_size, 'o',label='I')
+plot(xx, yyQ * pix_size , 'o',label='Q')
+plot(xx, yyU * pix_size, 'o',label='U')
+meanvalI = np.mean(yyI[xx<10]) * pix_size
+meanvalQU = np.mean((yyQ[xx<10]+yyQ[xx<10])/2) * pix_size
+axhline(y=meanvalI, label=r'I RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalI), color='r', ls=':')
+axhline(y=meanvalQU, label=r'QU RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalQU), color='m', ls=':')
+xlim(0,20)
+xlabel('Degrees from center of the field')
+ylabel(r'Noise RMS $[\mu K.arcmin]$')
+legend(fontsize=11)
+ylim(0,meanvalQU*2)
+title(configs[0] + ' - '+str(dA['effective_duration'])+'y')
+
+subplot(2,1,2)
+xx, yyI, yyQ, yyU = qss.get_angular_profile(maps_noiseB[0,:,:], nbins=30, separate=True, center=[0,0])
+pix_size = hp.nside2resol(256, arcmin=True)
+plot(xx, yyI * pix_size, 'o',label='I')
+plot(xx, yyQ * pix_size , 'o',label='Q')
+plot(xx, yyU * pix_size, 'o',label='U')
+meanvalI = np.mean(yyI[xx<10]) * pix_size
+meanvalQU = np.mean((yyQ[xx<10]+yyQ[xx<10])/2) * pix_size
+axhline(y=meanvalI, label=r'I RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalI), color='r', ls=':')
+axhline(y=meanvalQU, label=r'QU RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalQU), color='m', ls=':')
+xlim(0,20)
+xlabel('Degrees from center of the field')
+ylabel(r'Noise RMS $[\mu K.arcmin]$')
+legend(fontsize=11)
+ylim(0,meanvalQU*2)
+title(configs[1] + ' - '+str(dB['effective_duration'])+'y')
+
+tight_layout()
 
 ```
 
@@ -187,13 +250,13 @@ def run_mc(nbmc, Namaster, cov, d, configs, verbose=False, clnoise=None):
     dA['nside'] = 256
     dA['nf_sub']=1
     dA['filter_nu'] = int(configs[0][-3:]) * 1e9
-    print(configs[0], dA['filter_nu']/1e9)
+    print(configs[0], dA['filter_nu']/1e9, dA['effective_duration'])
     
     dB = d.copy()
     dB['nside'] = 256
     dB['nf_sub']=1
     dB['filter_nu'] = int(configs[1][-3:]) * 1e9
-    print(configs[1], dB['filter_nu']/1e9)    
+    print(configs[1], dB['filter_nu']/1e9, dB['effective_duration'])    
     
     ell_bins, b = Namaster.get_binning(d['nside'])
     mask_apo = Namaster.mask_apo
@@ -210,8 +273,14 @@ def run_mc(nbmc, Namaster, cov, d, configs, verbose=False, clnoise=None):
     print('        Starting MC')
     for imc in range(nbmc):
         t0 = time.time()
-        qubicnoiseA = Qubic_sky_A.get_partial_sky_maps_withnoise(spatial_noise=True, noise_only=True, old_config=old_config)[0][0,:,:]
-        qubicnoiseB = Qubic_sky_B.get_partial_sky_maps_withnoise(spatial_noise=True, noise_only=True, old_config=old_config)[0][0,:,:]
+        qubicnoiseA = Qubic_sky_A.get_partial_sky_maps_withnoise(spatial_noise=True, 
+                                                                 noise_only=True, 
+                                                                 Nyears=dA['effective_duration'],
+                                                                 old_config=old_config)[0][0,:,:]
+        qubicnoiseB = Qubic_sky_B.get_partial_sky_maps_withnoise(spatial_noise=True, 
+                                                                 noise_only=True, 
+                                                                 Nyears=dB['effective_duration'],
+                                                                 old_config=old_config)[0][0,:,:]
         
         ### Compute Spectra:
         # Noise Only
@@ -399,6 +468,7 @@ for s in range(4):
     xlabel('$\\ell$')
     ylabel('$D_\\ell$({})'.format(clname[s]))
     legend(loc='lower right')
+    title('QUBIC {}x{} - {} years'.format(configs[0],configs[1], dA['effective_duration']))
 tight_layout()
 
 
@@ -417,7 +487,7 @@ plot(lll, np.abs(cl0[:,s]),label='r=0')
 if s==2:
     plot(lll, np.abs(cl0_01[:,s]),label='r=0.01')
     plot(lll, np.abs(cl0_06[:,s]),label='r=0.06')
-plot_errors_lines(leff, scl, delta_ell, 'r', label='QUBIC {} - {} years'.format(d['config'], d['effective_duration']))
+plot_errors_lines(leff, scl, delta_ell, 'r', label='QUBIC {} - {} years'.format(d['config'], dA['effective_duration']))
 title(r'$\ell_m = {} \;-\; \Delta_\ell = {} \;-\; Cov_c = {}$'.format(lmin, delta_ell, covcut))
 xlim(0,512)
 ylim(np.min([np.min(scl[:,s])/5, 1e-4]),np.max([np.max(cl0[:512,s]*1.5),1.2*np.max(scl[:,s])]))

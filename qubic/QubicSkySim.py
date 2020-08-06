@@ -344,7 +344,7 @@ class Qubic_sky(sky):
         """
         This returns maps in the same way as with get_simple_sky_map but cut according to the coverage
         and with noise added according to this coverage and the RMS in muK.sqrt(sec) given by sigma_sec
-        The default integration time is three years but can be modified with optional variable Nyears
+        The default integration time is 4 years but can be modified with optional variable Nyears
         Note that the maps are convolved with the instrument beam by default, or with FWHMdeg (can be an array)
         if provided.
         If seed is provided, it will be used for the noise realization. If not it will be a new realization at

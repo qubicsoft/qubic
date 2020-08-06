@@ -148,17 +148,19 @@ dictshift = {'32832344':-7, '32759969':-4,'32759907':-3, '32574156':-2, '3257417
              '32574170':0, '32759934': 1, '32574174': 2, '32759973':3, '32832346':7 }
 jobids=list(dictshift.keys())
 allrecon = []
+allconv = []
 jobid = np.zeros((len(jobids)))
 for ijob in range(len(jobids)):
     print('Reading job {} ({}/{})'.format(jobids[ijob],ijob+1,len(jobids)))
     if ijob == 0:
         maprec, mapsconv, nusfull,nusfulledge,nus_in,center,d = read_run(jobids[ijob])
     else: 
-        maprec,_,_,_,_,_,_ = read_run(jobids[ijob])
+        maprec,mapsconv,_,_,_,_,_ = read_run(jobids[ijob])
         
     allrecon.append(maprec)
+    allconv.append(mapsconv)
 allrecon = np.array(allrecon)
-
+allconv = np.array(allconv)
 #Index where the point source was placed
 NU0=150
 
@@ -332,46 +334,20 @@ for NUS in ['2','4','6']:#NUS='6'
 ```
 
 ```{python}
-fig,ax=plt.subplots(nrows=1,ncols=3,figsize=(16,4))
-ax=ax.ravel()
-for ifreq, NUS in enumerate(['2','4','6']):#NUS='6'
-    print('NUS = {}'.format(NUS))
-    NormFact2=48/int(NUS)
-    yvals=[]
-    color2=iter(cm.jet(np.linspace(0,1,10)))
+sisi = np.array([1653,3343,2770,5085,8652])
+sisi2=np.array([1604,3507,2723,4976,9036])
+sisi3=np.array([1524,3384,2860,4575,8518])
+sisi4=np.array([1536,3766,2737,5415,8993])
+nsisi= sisi/np.sum(sisi)
+nsisi2= sisi2/np.sum(sisi2)
+nsisi3= sisi3/np.sum(sisi3)
+nsisi4= sisi4/np.sum(sisi4)
 
-    for jk,irec in enumerate(allrecon):
-        if len(irec[NUS])==0:
-            yvals.append(None)
-        else:
-            yvals.append(irec[NUS][nreal,ifreq,pixel,0]/1e5*NormFact2)
-
-    ax[ifreq].set_title(r'rec{} - I(px) - band {:.0f}-{:.0f}GHz'.format(NUS,
-                                                                        nusfulledge[NUS][ifreq],
-                                                                       nusfulledge[NUS][ifreq+1]))
-    ax[ifreq].set_xlabel(r'$\nu$[GHz]')
-    #secax.set_xlabel(r'$d_\nu$[GHz](dist to the $\nu_{c}$ of the band)')
-    ax[ifreq].set_ylabel(r'$\frac{I_\nu}{\Delta\nu}$' if ifreq ==0 else None, rotation=0,fontsize=20)
-    ax[ifreq].set_xlim(nus_in[innu][0]*0.98,nus_in[innu][-1]*1.02)
-
-    xvals=nus_in[innu]-nusfull[NUS][ifreq]
-    #secax = ax[j].twiny()
-
-    for i in range(len(innu)):
-        c2=next(color2)
-        if yvals[i] == None:
-            pass
-        else:
-            ax[ifreq].plot(nus_in[innu][i],yvals[i]/(nusfulledge[NUS][ifreq+1]-nusfulledge[NUS][ifreq]),'o--',c='b',alpha=0.4,ms=10)
-            #secax.plot(xvals[i],yvals[i],'o',c=c2,ms=6)
-    xlim=ax[ifreq].get_xlim()
-    for iedge in nusfulledge[NUS]:
-        if (iedge > np.array(xlim)[0]) and (iedge < np.array(xlim)[1]):
-            ax[ifreq].axvline(iedge, color='k', ls='--')
-    ax[ifreq].grid()
-    ax[ifreq].axvspan(nusfulledge[NUS][ifreq],nusfulledge[NUS][ifreq+1], color='k', alpha=0.20)
-    print(NUS, ifreq, nusfull[NUS][ifreq])
-    ax[ifreq].axvline(nusfull[NUS][ifreq],ls='-.',c='k')
+t0,t2,t3,t4 = 2571.95*nsisi/60, 2794.24*nsisi2/60, 2495.46*nsisi3/60,2666.2*nsisi4/60
+print('{:.2f}hs'.format(t0[-1]), 2571/60)
+print('{:.2f}hs'.format(t2[-1]), 2794/60)
+print('{:.2f}hs'.format(t3[-1]), 2495/60)
+print('{:.2f}hs'.format(t4[-1]), 2666/60)
 
 ```
 
@@ -420,6 +396,72 @@ for NUS in ['1','3']:
         ax[j].axvline(nusfull[NUS][ifrec],ls='-.',c='k')
         
         ax[j].grid()
+```
+
+```{python}
+fig,ax=plt.subplots(nrows=2,ncols=3,figsize=(16,8),sharex=True)
+fig.subplots_adjust(hspace=0.1)
+ax=ax.ravel()
+for ifreq, NUS in enumerate(['1','2','3','4','6']):#NUS='6'
+    if NUS == '1':
+        ifreqdata=0
+    elif NUS == '2' or NUS == '3':
+        ifreqdata = 1
+    else:
+        ifreqdata=2
+        
+    #print('NUS = {}'.format(NUS))
+    NormFact2=1.#48/int(NUS)
+    yvals=[]
+    yconv=[]
+    color2=iter(cm.jet(np.linspace(0,1,10)))
+
+    for jk,irec in enumerate(allrecon):
+        if len(irec[NUS])==0:
+            yvals.append(None)
+            yconv.append(None)
+        else:
+            yvals.append(irec[NUS][nreal,ifreqdata,pixel,0]/1e5*NormFact2)
+            yconv.append(allconv[jk][NUS][nreal,ifreqdata,pixel,0]/1e5*NormFact2)
+
+    #ax[ifreq].set_title(r'rec{} - I(px) - band {:.0f}-{:.0f}GHz'.format(NUS,
+    #                                                                    nusfulledge[NUS][ifreq],
+    #                                                                   nusfulledge[NUS][ifreq+1]))
+    ax[ifreq].set_xlabel(r'$\nu$[GHz]' if ifreq > 1 else ' ')
+    #secax.set_xlabel(r'$d_\nu$[GHz](dist to the $\nu_{c}$ of the band)')
+    ax[ifreq].set_ylabel(r'${I_\nu}$' if ifreq ==0 else None, rotation=0,fontsize=20)
+    #ax[ifreq].set_xlim(nus_in[innu][0]*0.98,nus_in[innu][-1]*1.02)
+    ax[ifreq].set_xlim(nus_in[0],nus_in[-1])
+
+    xvals=nus_in[innu]-nusfull[NUS][ifreq]
+    #secax = ax[j].twiny()
+
+    #c2=next(color2)
+    xx,yy,yc=[],[],[]
+    for i,yh in enumerate(yvals):
+        if yh!=None:
+            xx.append(nus_in[innu][i])
+            yy.append(yh)
+            yc.append(yconv[i])
+    xx,yy,yc=np.array(xx), np.array(yy), np.array(yc)
+    ax[ifreq].plot(xx,yy, 
+                   'o-',c='b',alpha=0.7,ms=6)
+    #ax[ifreq].plot(xx,2*yc, 
+    #               'o-',c='b',alpha=0.4,ms=6)
+    xlim=ax[ifreq].get_xlim()
+    for iedge in nusfulledge[NUS]:
+        if (iedge > np.array(xlim)[0]) and (iedge < np.array(xlim)[1]):
+            ax[ifreq].axvline(iedge, color='k', ls='--',alpha=0.6)
+    #ax[ifreq].grid()
+    ax[ifreq].axvspan(nusfulledge[NUS][ifreqdata],nusfulledge[NUS][ifreqdata+1], color='k', alpha=0.20)
+    #print(NUS, ifreq, nusfull[NUS][ifreq])
+    ax[ifreq].axvline(nusfull[NUS][ifreqdata],ls='-.',c='k', alpha=0.5)
+    ax[ifreq].text(nusfull[NUS][ifreqdata], min(yy) , 
+                   r'{:.0f}-{:.0f}GHz'.format(nusfulledge[NUS][ifreqdata],
+                    nusfulledge[NUS][ifreqdata+1]),fontsize=12,rotation=-90, alpha=0.7)
+ax[5].spines['top'].set_visible(False)
+ax[5].set_axis_off()
+ax[5].axis("off")
 ```
 
 Fit gaussian to profiles

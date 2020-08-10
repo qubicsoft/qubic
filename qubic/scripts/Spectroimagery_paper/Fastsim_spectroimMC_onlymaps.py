@@ -62,10 +62,10 @@ for r in range(nreals):
                                                                            noise_only=True,
                                                                            spatial_noise=False)
 
-unseen = coverage < np.max(coverage) * 0.1
-seenmap = np.invert(unseen)
-noisemaps[:, :, unseen, :] = 0.
+# Reduce it to a patch
+seenmap = coverage > np.max(coverage) * 0.1
+noisepatch = noisemaps[:, :, seenmap, :]
 
-# Save noise maps
-np.save(rep_save + f'/noisemaps_NOspatialcorr_nbands{nbands}_' + config + '_' + rnd_name + '.npy',
-        noisemaps)
+# Save the noisy patch
+np.save(rep_save + f'/noisepatch_NOspatialcorr_nbands{nbands}_' + config + '_' + rnd_name + '.npy',
+        noisepatch)

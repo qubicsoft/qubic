@@ -4,6 +4,7 @@ import numpy as np
 from itertools import combinations_with_replacement
 
 import qubic
+from qubic.polyacquisition import compute_freq
 from qubicpack.utilities import Qubic_DataDir
 from qubic import QubicSkySim as qss
 from qubic import NamasterLib as nam
@@ -39,15 +40,16 @@ print('\n nbands:', nbands)
 
 # Config and frequency
 config = sys.argv[3]
-# Beam correction for Namaster
-if config == 'FI150':
-    beam_corr = True
-elif config == 'FI220':
-    beam_corr = 0.279
-else:
-    raise ValueError('The config should be FI150 or FI220')
+if config not in ['FI150', 'FI220']:
+    raise ValueError('The config should be FI150 or FI220.')
 
 d['filter_nu'] = int(config[-3:]) * 1e9
+
+# Central frequencies and FWHM of each band
+_, _, nus, _, _, _ = compute_freq(int(config[-3:]), nbands)
+print('nus:', nus)
+fwhms = [d['synthbeam_peak150_fwhm'] * 150 / nu for nu in nus]
+print('fwhms', fwhms)
 
 # Input sky
 # seed = 42
@@ -60,7 +62,7 @@ rnd_name = qss.random_string(10)
 
 # ================== Make maps =============================
 # Getting noise realisations with FastSimulator
-nreals = 6
+nreals = 4
 npix = 12 * d['nside'] ** 2
 noisemaps = np.zeros((nreals, nbands, npix, 3))
 
@@ -87,7 +89,7 @@ inputmaps[:, unseen, :] = 0.
 noisepatch = noisemaps[:, :, seenmap, :]
 
 # Save the noisy patch
-np.save(rep_save + f'/noisepatch_nbands{nbands}_' + config + '_v1_galaxycenter_' + rnd_name + '.npy',
+np.save(rep_save + f'/noisepatch_nbands{nbands}_' + config + '_v2_galaxycenter_' + rnd_name + '.npy',
         noisepatch)
 
 # ================== Load maps already done =============================
@@ -134,17 +136,19 @@ print('\n =============== Cross spectrum same real starting ================')
 cross_samereal_qubicmaps = np.zeros((nreals, ncombi, nbins, 4))
 cross_samereal_noisemaps = np.zeros((nreals, ncombi, nbins, 4))
 
-w = None
 for real in range(nreals):
     print(f'\n Real {real}')
     for i, (band1, band2) in enumerate(combi):
         print(f'Bands {band1} {band2}')
+        beam_corr = np.sqrt(fwhms[band1] * fwhms[band2])
+        print('Beam correction:', beam_corr)
+
         map1 = qubicmaps[real, band1, :, :]
         map2 = qubicmaps[real, band2, :, :]
         leff, cross_samereal_qubicmaps[real, i, :, :], w = Namaster.get_spectra(map1.T,
                                                                                 mask_apo,
                                                                                 map2.T,
-                                                                                w=w,
+                                                                                w=None,
                                                                                 purify_e=True,
                                                                                 purify_b=False,
                                                                                 beam_correction=beam_corr,
@@ -155,16 +159,16 @@ for real in range(nreals):
         leff, cross_samereal_noisemaps[real, i, :, :], w = Namaster.get_spectra(map1noise.T,
                                                                                 mask_apo,
                                                                                 map2noise.T,
-                                                                                w=w,
+                                                                                w=None,
                                                                                 purify_e=True,
                                                                                 purify_b=False,
                                                                                 beam_correction=beam_corr,
                                                                                 pixwin_correction=True)
 np.save(
-    rep_save + f'/cross_interband_samereal_nfrecon{nbands}_qubicmaps_' + config + '_v1_galaxycenter_' + rnd_name + '.npy',
+    rep_save + f'/cross_interband_samereal_nfrecon{nbands}_qubicmaps_' + config + '_v2_galaxycenter_' + rnd_name + '.npy',
     cross_samereal_qubicmaps)
 np.save(
-    rep_save + f'/cross_interband_samereal_nfrecon{nbands}_noisemaps_' + config + '_v1_galaxycenter_' + rnd_name + '.npy',
+    rep_save + f'/cross_interband_samereal_nfrecon{nbands}_noisemaps_' + config + '_v2_galaxycenter_' + rnd_name + '.npy',
     cross_samereal_noisemaps)
 
 # Cross spectrum between bands with different real
@@ -175,19 +179,21 @@ print('ncross:', ncross)
 cross_mixreals_qubicmaps = np.zeros((ncross, ncombi, nbins, 4))
 cross_mixreals_noisemaps = np.zeros((ncross, ncombi, nbins, 4))
 
-w = None
 cross = 0
 for c1 in range(0, nreals - 1, 2):  # do not mix pairs to avoid correlation
     c2 = c1 + 1
     print(f'\n Reals {c1} {c2}')
     for i, (band1, band2) in enumerate(combi):
         print(f'Bands {band1} {band2}')
+        beam_corr = np.sqrt(fwhms[band1] * fwhms[band2])
+        print('Beam correction:', beam_corr)
+
         map1 = qubicmaps[c1, band1, :, :]
         map2 = qubicmaps[c2, band2, :, :]
         leff, cross_mixreals_qubicmaps[cross, i, :, :], w = Namaster.get_spectra(map1.T,
                                                                                  mask_apo,
                                                                                  map2.T,
-                                                                                 w=w,
+                                                                                 w=None,
                                                                                  purify_e=True,
                                                                                  purify_b=False,
                                                                                  beam_correction=beam_corr,
@@ -198,7 +204,7 @@ for c1 in range(0, nreals - 1, 2):  # do not mix pairs to avoid correlation
         leff, cross_mixreals_noisemaps[cross, i, :, :], w = Namaster.get_spectra(map1noise.T,
                                                                                  mask_apo,
                                                                                  map2noise.T,
-                                                                                 w=w,
+                                                                                 w=None,
                                                                                  purify_e=True,
                                                                                  purify_b=False,
                                                                                  beam_correction=beam_corr,
@@ -206,9 +212,9 @@ for c1 in range(0, nreals - 1, 2):  # do not mix pairs to avoid correlation
     cross += 1
 
 np.save(
-    rep_save + f'/cross_interband_mixreal_nfrecon{nbands}_qubicmaps_' + config + '_v1_galaxycenter_' + rnd_name + '.npy',
+    rep_save + f'/cross_interband_mixreal_nfrecon{nbands}_qubicmaps_' + config + '_v2_galaxycenter_' + rnd_name + '.npy',
     cross_mixreals_qubicmaps)
 
 np.save(
-    rep_save + f'/cross_interband_mixreal_nfrecon{nbands}_noisemaps_' + config + '_v1_galaxycenter_' + rnd_name + '.npy',
+    rep_save + f'/cross_interband_mixreal_nfrecon{nbands}_noisemaps_' + config + '_v2_galaxycenter_' + rnd_name + '.npy',
     cross_mixreals_noisemaps)

@@ -83,9 +83,12 @@ qubicmaps[:, :, unseen, :] = 0.
 noisemaps[:, :, unseen, :] = 0.
 inputmaps[:, unseen, :] = 0.
 
-# Save maps
-np.save(rep_save + f'/noisemaps_nbands{nbands}_' + config + '_v1_galaxycenter_' + rnd_name + '.npy',
-        noisemaps)
+# Reduce it to a patch
+noisepatch = noisemaps[:, :, seenmap, :]
+
+# Save the noisy patch
+np.save(rep_save + f'/noisepatch_nbands{nbands}_' + config + '_v1_galaxycenter_' + rnd_name + '.npy',
+        noisepatch)
 
 # ================== Load maps already done =============================
 # imap = int(sys.argv[3])

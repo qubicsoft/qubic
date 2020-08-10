@@ -75,7 +75,18 @@ d['nf_recon'] = 1
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 print(center)
 
+# Adjust some parameters in the dictionary
 d['npointings'] = 3000
+
+d['filter_nu'] = 220e9
+d['photon_noise'] = False
+d['noiseless'] = True
+
+print(d['filter_nu'])
+print(d['detector_nep'])
+print(d['photon_noise'])
+print(d['config'])
+
 ```
 
 # Input sky
@@ -86,8 +97,8 @@ In this case we read a map $X_0$ simulated previously which contains fluctuation
 ```{python}
 # Make a sky using PYSM
 ### Pick one of these:
-seed = None
-sky_config = {'cmb': seed}                ### CMB Only
+seed = 42
+sky_config = {'cmb': 42}                ### CMB Only
 #sky_config = {'cmb': seed, 'dust':'d1'}   ### CMB + Dust
 
 ### Generate the maps at each sub-frequency
@@ -140,7 +151,8 @@ print('--------- TOD with shape (#detectors, #pointings) : {} '.format(np.shape(
 tes = 6
 plt.plot(TOD[tes, :], label='TES {}'.format(tes))
 plt.xlabel('Pointing index')
-plt.ylabel('TOD')
+plt.ylabel(f'TOD from TES {tes} [W]')
+plt.title('FI - 220GHz - Noiseless={} CMB - STD = {:.4} W'.format( d['noiseless'], np.std(TOD)))
 ```
 
 # Coverage map

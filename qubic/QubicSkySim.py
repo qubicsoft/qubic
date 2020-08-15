@@ -283,7 +283,15 @@ class Qubic_sky(sky):
                                                                        # Multiband instrument model
                                                                        d['filter_relative_bandwidth'])
         self.qubic_central_nus = central_nus
-        self.qubic_resolution_nus = 61.347409 / self.qubic_central_nus
+        #THESE LINES HAVE TO BE CONFIRMED/IMPROVED in future since fwhm = lambda / (P Delta_x) is an approximation for the resolution 
+        if d['config'] == 'FI':
+            self.fi2td = 1
+        elif d['config'] == 'TD':
+            P_FI = 22   #horns in the largest baseline in the FI
+            P_TD = 8    #horns in the largest baseline in the TD
+            self.fi2td = (P_FI-1)/(P_TD-1)
+        #
+        self.qubic_resolution_nus = d['synthbeam_peak150_fwhm'] *150 / self.qubic_central_nus * self.fi2td
         self.qubic_channels_names = ["{:.3s}".format(str(i)) + "_GHz" for i in self.qubic_central_nus]
 
         instrument = {'nside': d['nside'], 'frequencies': central_nus,  # GHz
@@ -325,7 +333,7 @@ class Qubic_sky(sky):
         if FWHMdeg is not None:
             fwhms += FWHMdeg
         else:
-            fwhms = self.dictionary['synthbeam_peak150_fwhm'] * 150. / self.qubic_central_nus
+            fwhms = self.dictionary['synthbeam_peak150_fwhm'] * 150. / self.qubic_central_nus * self.fi2td
         for i in range(Nf):
             if fwhms[i] != 0:
                 fullmaps[i, :, :] = hp.sphtfunc.smoothing(fullmaps[i, :, :].T, fwhm=np.deg2rad(fwhms[i]),
@@ -353,6 +361,7 @@ class Qubic_sky(sky):
         more realistic noise profile. It is a law for effective RMS as a function of inverse coverage and is 2D array
         with the first one being (nx samples) inverse coverage and the second being the corresponding effective variance to be
         used through interpolation when generating the noise.
+        
         Parameters
         ----------
         coverage

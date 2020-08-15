@@ -33,11 +33,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pickle
 # Specific qubic modules
+from astropy.io import fits
 import qubic
 from qubicpack.utilities import Qubic_DataDir
 from qubic import QubicSkySim as qss
 from qubic.polyacquisition import compute_freq
-import ReadMC as rmc
+from qubic import ReadMC as rmc
 plt.rc('text',usetex=False)
 plt.rc('font', size=16)
 ```
@@ -58,14 +59,24 @@ center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 ```
 
 ```{python}
-QUBICField=True
-if QUBICField:
-    coverage = np.load(global_dir+'doc/FastSimulator/Data/coverage_nfsub15_nptgs10000_qubicpatch.pk')
-    #coverage = DataFastSimCoverage['coverage']
-    center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
-else:
-    coverage = None
-    center = None
+QUBICField=False
+#if QUBICField:
+coverage150Q = np.load(global_dir+'doc/FastSimulator/Data/coverage_nfsub15_nptgs10000_qubicpatch.pk')
+simu = fits.open(global_dir+'doc/FastSimulator/Data/coverage_220_nfsub15_nptgs10000_qubicpatch.pk')
+#simu = fits.open(global_dir+'doc/FastSimulator/Data/DataFastSimulator_FI220_coverage.pkl')
+#simu = fits.open(global_dir+'doc/FastSimulator/Data/DataFastSimulator_FI220_coverage.pkl')
+coverage220Q = simu['coverage'].data
+centerQ = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+#else:
+#With no specification between 150 or 220 because is loaded from qss
+coverageG = None
+centerG = None
+```
+
+```{python}
+lala=np.where(coverage150Q>0.5*np.max(coverage150Q))
+hp.gnomview(coverage150Q,rot=centerQ,reso=15)
+hp.projscatter(hp.pix2ang(256,lala),alpha=0.01,color='r')
 ```
 
 ##### QubicSkySim instanciation
@@ -81,62 +92,87 @@ auxmaps220, noiseless220, _, _ = Qubic_sky_220.get_partial_sky_maps_withnoise(sp
 ```{python}
 d['nf_recon']=5
 d['photon_noise']=True
-d220=d.copy()
-d220['filter_nu']=220*1e9
+d220Q=d.copy()
+d220Q['filter_nu']=220e9
+
+dG=d.copy()
+dG['RA_center'], dG['DEC_center'] = 0,0
+d220G = dG.copy()
+d220G['filter_nu']=220*1e9
+
 ##### QubicSkySim instanciation
-seed = None
-sky_config_dust = {'dust': 'd1'}
-Qubic_sky_dust = qss.Qubic_sky(sky_config_dust, d)
-sky_config_cmb = {'cmb': seed}
-Qubic_sky_cmb = qss.Qubic_sky(sky_config_cmb, d)
-sky_config_220_dust = {'dust': 'd1'}
-Qubic_sky_220_dust = qss.Qubic_sky(sky_config_220_dust, d220)
-sky_config_220_cmb = {'cmb': seed}
-Qubic_sky_220_cmb = qss.Qubic_sky(sky_config_220_cmb, d220)
-auxmaps220, noiseless220, _, _ = Qubic_sky_220.get_partial_sky_maps_withnoise(spatial_noise=False, 
-                                                                              coverage=coverage)
+seed = 42#None
+#sky_config_dust = {'dust': 'd1'}
+#Qubic_sky_dust = qss.Qubic_sky(sky_config_dust, d)
+#sky_config_cmb = {'cmb': seed}
+#Qubic_sky_cmb = qss.Qubic_sky(sky_config_cmb, d)
+#sky_config_220_dust = {'dust': 'd1'}
+#Qubic_sky_220_dust = qss.Qubic_sky(sky_config_220_dust, d220)
+#sky_config_220_cmb = {'cmb': seed}
+#Qubic_sky_220_cmb = qss.Qubic_sky(sky_config_220_cmb, d220)
+
+sky_config_150Q = {'dust': 'd1'}
+Qubic_sky_150Q = qss.Qubic_sky(sky_config_150Q, d)
+sky_config_220Q = {'dust': 'd1'}
+Qubic_sky_220Q = qss.Qubic_sky(sky_config_220Q, d220Q)
+sky_config_150G = {'dust': 'd1'}
+Qubic_sky_150G = qss.Qubic_sky(sky_config_150G, dG)
+sky_config_220G = {'dust': 'd1'}
+Qubic_sky_220G = qss.Qubic_sky(sky_config_220G, d220G)
 
 ##### Getting FastSimulator output maps
 mctest = True
 if mctest:
-    mcmcmaps = []
-    mcmcmapscmb = []
-    mcmcmaps220=[]
-    mcmcmapscmb220=[]
-    mcmcnoise=[]
-    mcmcnoisecmb=[]
-    mcmcnoise220=[]
-    mcmcnoisecmb220=[]
-    for i in range(10):
-        auxmaps, maps_noiseless, auxnoise, coverage = \
-            Qubic_sky_dust.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=coverage)
-        print('=== Done (dust 150) interation #{} ===='.format(i+1))
-        auxmapscmb, maps_noiseless_cmb, auxnoisecmb, coverage_cmb = \
-            Qubic_sky_cmb.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=coverage)        
-        print('=== Done (cmb 150) interation #{} ===='.format(i+1))
-        auxmaps220, maps_noiseless220, auxnoise220, coverage220 = \
-            Qubic_sky_220_dust.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=coverage)
-        print('=== Done (dust 220) interation #{} ===='.format(i+1))
-        auxmaps220cmb, maps_noiseless_220cmb, auxnoise220cmb, coverage_220cmb = \
-            Qubic_sky_220_cmb.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=coverage)        
-        print('=== Done (cmb 220) interation #{} ===='.format(i+1))
+    #mcmcmaps = []
+    #mcmcmapscmb = []
+    #mcmcmaps220=[]
+    #mcmcmapscmb220=[]
+    mcmc150Q=[]
+    mcmc220Q=[]
+    mcmc150G=[]
+    mcmc220G=[]
+    for i in range(15):
+        #auxmaps, maps_noiseless, _, coverage = \
+        #    Qubic_sky_dust.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=coverage)
+        #print('=== Done (dust 150) interation #{} ===='.format(i+1))
+        #auxmapscmb, maps_noiseless_cmb, _, coverage_cmb = \
+        #    Qubic_sky_cmb.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=coverage)        
+        #print('=== Done (cmb 150) interation #{} ===='.format(i+1))
+        #auxmaps220, maps_noiseless220, _, coverage220 = \
+        #    Qubic_sky_220_dust.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=coverage)
+        #print('=== Done (dust 220) interation #{} ===='.format(i+1))
+        #auxmaps220cmb, maps_noiseless_220cmb, _, coverage_220cmb = \
+        #    Qubic_sky_220_cmb.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=coverage)        
+        #print('=== Done (cmb 220) interation #{} ===='.format(i+1))
+        auxmaps150Q, maps_noiseless150Q, _, coverage150Q = \
+                Qubic_sky_150Q.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=coverage150Q)
+        print('=== Done (dust QUBIC 150) interation #{} ===='.format(i+1))
+        auxmaps220Q, maps_noiseless220Q, _, coverage220Q = \
+                Qubic_sky_220Q.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=coverage220Q)
+        print('=== Done (dust QUBIC 220) interation #{} ===='.format(i+1))
+        auxmaps150G, maps_noiseless150G, _, coverage150G = \
+                Qubic_sky_150G.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=coverageG)
+        print('=== Done (dust Galaxy filed 150) interation #{} ===='.format(i+1))
+        auxmaps220G, maps_noiseless220G, _, coverage220G = \
+                Qubic_sky_220G.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=coverageG)
+        print('=== Done (dust Galaxy field 220) interation #{} ===='.format(i+1))
         
-        mcmcmaps.append(auxmaps)
-        mcmcnoise.append(auxnoise)
-        mcmcmapscmb.append(auxmapscmb)
-        mcmcnoisecmb.append(auxnoisecmb)
-        
-        mcmcmaps220.append(auxmaps220)
-        mcmcnoise220.append(auxnoise220)
-        mcmcmapscmb220.append(auxmaps220cmb)
-        mcmcnoisecmb220.append(auxnoise220cmb)
-    maps_qubic, std_qubic=np.mean(mcmcmaps,axis=0), np.std(mcmcmaps,axis=0)
-    maps_qubic_cmb, std_qubic_cmb = np.mean(mcmcmapscmb,axis=0), np.std(mcmcmapscmb, axis=0)
-    maps_qubic220, std_qubic220=np.mean(mcmcmaps220,axis=0), np.std(mcmcmaps220,axis=0)
-    maps_qubic_cmb220, std_qubic_cmb220 = np.mean(mcmcmapscmb220,axis=0), np.std(mcmcmapscmb220, axis=0)
-    maps_noise=np.mean(mcmcnoise,axis=0)
-    maps_noise220=np.mean(mcmcnoise220,axis=0)
-    maps_noise_cmb220=np.mean(mcmcnoisecmb220,axis=0)
+        #mcmcmaps.append(auxmaps)
+        #mcmcmapscmb.append(auxmapscmb)        
+        #mcmcmaps220.append(auxmaps220)
+        #mcmcmapscmb220.append(auxmaps220cmb)
+        mcmc150Q.append(auxmaps150Q)
+        mcmc220Q.append(auxmaps220Q)
+        mcmc150G.append(auxmaps150G)
+        mcmc220G.append(auxmaps220G)
+    #maps_qubic, std_qubic=np.mean(mcmcmaps,axis=0), np.std(mcmcmaps,axis=0)
+    #maps_qubic_cmb, std_qubic_cmb = np.mean(mcmcmapscmb,axis=0), np.std(mcmcmapscmb, axis=0)
+    #maps_qubic220, std_qubic220=np.mean(mcmcmaps220,axis=0), np.std(mcmcmaps220,axis=0)
+    #maps_qubic_cmb220, std_qubic_cmb220 = np.mean(mcmcmapscmb220,axis=0), np.std(mcmcmapscmb220, axis=0)
+    maps_qubic150Q, std_qubic150Q = np.mean(mcmc150Q,axis=0), np.std(mcmc150Q, axis=0)
+    maps_qubic220Q, std_qubic220Q = np.mean(mcmc220Q,axis=0), np.std(mcmc220Q, axis=0)
+    maps_qubic150G, std_qubic150G = np.mean(mcmc150G,axis=0), np.std(mcmc150G, axis=0)
+    maps_qubic220G, std_qubic220G = np.mean(mcmc220G,axis=0), np.std(mcmc220G, axis=0)
 else: 
     maps_qubic, maps_noiseless, maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(spatial_noise=False)
     
@@ -148,145 +184,124 @@ Look at the maps... okk..
 
 ```{python}
 #print(np.shape(maps_qubic), np.shape(maps_noiseless), np.shape(maps_noise), np.shape(coverage))
-cov=np.zeros_like(coverage,dtype=bool)
-covmsk=np.where(coverage > 0.01*np.max(coverage))
-cov[covmsk] = 1
+cov150Q=np.zeros_like(coverage150Q,dtype=bool)
+covmsk150Q=np.where(coverage150Q > 0.01*np.max(coverage150Q))
+cov150Q[covmsk150Q] = 1
+cov220Q=np.zeros_like(coverage220Q,dtype=bool)
+covmsk220Q=np.where(coverage220Q > 0.01*np.max(coverage220Q))
+cov220Q[covmsk220Q] = 1
+
+cov150G=np.zeros_like(coverage150G,dtype=bool)
+covmsk150G=np.where(coverage150G > 0.01*np.max(coverage150G))
+cov150G[covmsk150G] = 1
+cov220G=np.zeros_like(coverage220G,dtype=bool)
+covmsk220G=np.where(coverage220G > 0.01*np.max(coverage220G))
+cov220G[covmsk220G] = 1
+
 NU = 0
 STK = 0
 RESO = 15
 plt.figure(figsize=(12,8))
-hp.gnomview(maps_qubic[NU,:,STK], sub=(2,4,1), 
-            max=0.1*np.max(maps_qubic[NU,cov,STK]), title='reconstructed', reso=RESO, rot=center)
-hp.gnomview(maps_noiseless[NU,:,STK], sub=(2,4,2), 
-            max=0.1*np.max(maps_noiseless[NU,:,STK]), title='noiseless', reso=RESO, rot=center)
-hp.gnomview(maps_noise[NU,:,STK], sub=(2,4,3), title='noise', reso=RESO, rot=center)
-hp.gnomview(cov, sub=(2,4,4), title='covmsk', reso=RESO, rot=center)
+hp.gnomview(cov150Q,rot=centerQ,reso=RESO,title='150Q',sub=(141))
+hp.gnomview(cov220Q,rot=centerQ,reso=RESO,title='220Q',sub=(142))
+hp.gnomview(cov150G,rot=centerG,reso=RESO,title='150G',sub=(143))
+hp.gnomview(cov220G,rot=centerG,reso=RESO,title='220G',sub=(144))
 
-hp.gnomview(maps_qubic_cmb[NU,:,STK], sub=(2,4,5), title='input', reso=RESO, rot=center)
-hp.gnomview(maps_noiseless_cmb[NU,:,STK], sub=(2,4,6), title='noiseless', reso=RESO, rot=center)
-hp.gnomview(maps_noise_cmb[NU,:,STK], sub=(2,4,7), title='noise', reso=RESO, rot=center)
-hp.gnomview(cov, sub=(2,4,8), title='covmsk', reso=RESO, rot=center)
+hp.gnomview(np.array(cov150Q,dtype=int)-np.array(cov220Q,dtype=int),reso=RESO,title='diff150-220Q',sub=(121))
+hp.gnomview(np.array(cov150G,dtype=int)-np.array(cov220G,dtype=int),reso=RESO,title='diff150-220G',sub=(122))
+#hp.gnomview(maps_qubic150Q[NU,:,STK], sub=(2,3,1), 
+#            max=0.1*np.max(maps_qubic150Q[NU,:,STK]), title='150 rec QUBIC patch', reso=RESO, rot=center)
+#hp.gnomview(maps_noiseless150Q[NU,:,STK], sub=(2,3,2), 
+#            max=0.1*np.max(maps_noiseless150Q[NU,:,STK]), title='150 nl', reso=RESO, rot=center)
+#hp.gnomview(cov150Q, sub=(2,3,3), title='covmsk', reso=RESO, rot=center)##
+
+#hp.gnomview(maps_qubic220Q[NU,:,STK], sub=(2,3,4), title='220 rec QUBIC patch', reso=RESO, rot=center)
+#hp.gnomview(maps_noiseless220Q[NU,:,STK], sub=(2,3,5), title='220 nl', reso=RESO, rot=center)
+#hp.gnomview(cov150G, sub=(2,3,6), title='covmsk', reso=RESO, rot=centerG)
 
 ```
 
 ```{python}
 _,nus_edge,nus,_,_,_=qubic.compute_freq(d['filter_nu']/1e9, d['nf_recon'], d['filter_relative_bandwidth'] )
-_,nus_edge_220,nus_220,_,_,_=qubic.compute_freq(d220['filter_nu']/1e9, d220['nf_recon'], 
-                                                d220['filter_relative_bandwidth'] )
+_,nus_edge_220,nus_220,_,_,_=qubic.compute_freq(d220Q['filter_nu']/1e9, d220Q['nf_recon'], 
+                                                d220Q['filter_relative_bandwidth'] )
 _,nus_edge_in,nus_in,_,_,_=qubic.compute_freq(d['filter_nu']/1e9, d['nf_sub'], 
                                               d['filter_relative_bandwidth'] )
 ```
 
 ```{python}
-#inputmaps = Qubic_sky_dust.get_simple_sky_map()
-#inputmaps_cmb = Qubic_sky_cmb.get_simple_sky_map()
-#inputmaps = Qubic_sky_dust.get_fullsky_convolved_maps()
+testdust=Qubic_sky_150Q.get_simple_sky_map()
 ```
 
-meanrec=[]
-meaninp=[]
-stdrec=[]
-stdinp=[]
-meanfreqcmb=[]
-stdfreqcmb=[]
-meanconv=[]
-stdconv=[]
-for i in range(3):
-    meanrec.append(np.mean(maps_qubic[i,covmsk,0]))
-    meanconv.append(np.mean(maps_noiseless[i,covmsk,0]))
-    stdrec.append(np.std(maps_qubic[i,covmsk,0]))
-    stdconv.append(np.std(maps_noiseless[i,covmsk,0]))
-    meanfreqcmb.append(np.mean(maps_qubic_cmb[i,covmsk,0]))
-    stdfreqcmb.append(np.std(maps_qubic_cmb[i,covmsk,0]))
+tema=hp.gnomview(maps_qubic150G[-1,:,0], reso=15,notext=True,title=' ',return_projected_map=True,
+                max=5e3, rot=centerG,cbar=False, no_plot=True)
+fultema=hp.mollview(testdust[8,:,0], max = 5e3, coord='C',notext=True, title=' ',
+                    return_projected_map=True,)
+plt.clf()
+fig, axmap = plt.subplots(nrows=1,ncols=1, figsize=(12,12))
+#plt.axes(axmap)
+axmap.imshow(fultema,vmax=5e3)
+axins = axmap.inset_axes([0.3, 0.65, 0.2, 0.3])
+axins.imshow(tema, interpolation="nearest",
+          origin="lower",vmax=5e3)
+axins.set_xticklabels('')
+axins.set_yticklabels('')
+#print(axmap.get_ylim())
+#axins.set_xlim(0.4,0.6)
+#axins.set_ylim(0.4,0.6)
+#axins.indicate_inset_zoom([0.4,0.6,0.4,0.6])
 
-for i in range(len(nus_in)):
-    meaninp.append(np.mean(inputmaps[i,covmsk,0]))
-    stdinp.append(np.std(inputmaps[i,covmsk,0] ))
-    
-#plt.yscale('log')
-#plt.xscale('log')
-#plt.plot(nus, stdrec)
-#plt.plot(nus,stdfreqcmb)
 
 ```{python}
-
-print(len(covmsk[0]))
-IPIX = covmsk[0][11500] #almost center
-#IPIX = covmsk[0][3100] #dark region
-#IPIX = covmsk[0][23100] #dark region
-
 mctest=True
-
-for j,ipx in enumerate(range(0,24000,3500)):
+capsize=3
+plt.rc('font', size=15)
+for j,ipx in enumerate(range(600,12000,500)):
     fig,ax=plt.subplots(nrows=1,ncols=4,figsize=(16,4),)
     ax=ax.ravel()
-    IPIX = covmsk[0][ipx]
+    IPIXQ = covmsk150Q[0][ipx]
+    IPIXG = covmsk220G[0][ipx]
     if mctest:
-        ax[0].errorbar(nus, maps_qubic[:,IPIX,0],yerr=std_qubic[:,IPIX,0], 
-               fmt='o-', color='r',label='recon', alpha=0.5)
-        ax[0].plot(nus, maps_noiseless[:,IPIX,0],#yerr=stdconv, 
-               'bo-',label='conv', alpha=0.5)
-        ax[0].errorbar(nus_220, maps_qubic220[:,IPIX,0],yerr=std_qubic220[:,IPIX,0], 
-               fmt='o-',color='r', alpha=0.5)
-        ax[0].plot(nus_220, maps_noiseless220[:,IPIX,0],#yerr=stdconv, 
-               'bo-', alpha=0.5)
-        #ax[0].plot(nus_in, inputmaps[:,IPIX,0],#yerr=np.array(stdinp), 
-        #       'go-',label='input', alpha=1)
-        ax[0].set_title('Dust - pix {}'.format(IPIX))
+        ax[0].errorbar(nus, maps_qubic150G[:,IPIXG,0],yerr=std_qubic150G[:,IPIXG,0], capsize=capsize,
+               fmt='o-', color='r',label='reconstructed', alpha=0.8)
+        ax[0].errorbar(nus_220, maps_qubic220G[:,IPIXG,0],yerr=std_qubic220G[:,IPIXG,0], capsize=capsize,
+               fmt='o-', color='r', alpha=0.8)
+        ax[0].plot(nus, maps_noiseless150G[:,IPIXG,0],
+               'bo-',label='convolved', alpha=0.7)
+        ax[0].plot(nus_220, maps_noiseless220G[:,IPIXG,0],
+               'bo-', alpha=0.7)
         ax[0].axvspan(nus[-1],nus_220[0],color='k',alpha=0.2)
-        ax[2].errorbar(nus, maps_qubic_cmb[:,IPIX,0],yerr=std_qubic_cmb[:,IPIX,0], 
-               fmt='o-', color='r',label='recon', alpha=0.5)
-        ax[2].plot(nus, maps_noiseless_cmb[:,IPIX,0],#yerr=stdconv, 
-               'bo-',label='conv', alpha=0.5)
-        ax[2].errorbar(nus_220, maps_qubic_cmb220[:,IPIX,0],yerr=std_qubic_cmb220[:,IPIX,0], 
-               fmt='o-',color='r', alpha=0.5)
-        ax[2].plot(nus_220, maps_noiseless_220cmb[:,IPIX,0],#yerr=stdconv, 
+        
+        ax[2].errorbar(nus, maps_qubic150Q[:,IPIXQ,0],yerr=std_qubic150Q[:,IPIXQ,0], capsize=capsize,
+               fmt='o-', color='r',label='reconstructed', alpha=0.8)
+        ax[2].errorbar(nus_220, maps_qubic220Q[:,IPIXQ,0],yerr=std_qubic220Q[:,IPIXQ,0], capsize=capsize,
+               fmt='o-', color='r',alpha=0.8)
+        ax[2].plot(nus, maps_noiseless150Q[:,IPIXQ,0],
+               'bo-',label='input', alpha=0.7)
+        ax[2].plot(nus_220, maps_noiseless220Q[:,IPIXQ,0],
                'bo-', alpha=0.5)
-        #ax[2].plot(nus_in, inputmaps_cmb[:,IPIX,0],#yerr=np.array(stdinp), 
-        #       'go-',label='input', alpha=1)
-        ax[2].set_title('CMB - pix {}'.format(IPIX))
-        ax[2].set_ylabel(r'$I_\nu$ [$\mu$K]',)
-        ax[2].set_xlabel(r'$\nu$[GHz]',)
-        #ax[2].legend(bbox_to_anchor=(0.83, 0.5, 0.5, 0.5),fontsize=12)
-        ax[2].grid()
+        
+        ax[2].grid(which='both')
         ax[2].axvspan(nus[-1],nus_220[0],color='k',alpha=0.2)
         
-    else:
-        ax[0].set_title('Dust. pix {}'.format(IPIX))
-        ax[0].plot(nus, maps_qubic[:,IPIX,0],'r-o', label='recon', alpha=0.6)
-        #ax[0].plot(nus, maps_qubic[:,IPIX,0]*5,'m-o', alpha=0.6)
-        ax[0].plot(nus, maps_noiseless[:,IPIX,0], 'b-o', alpha=0.6,label='convolved')
-        ax[0].plot(nus_in, inputmaps[:,IPIX,0], 'go-', label='input')
-    ax[0].set_ylabel(r'$I_\nu$ [$\mu$K]',)
-    ax[0].set_xlabel(r'$\nu$[GHz]',)
-    #ax[0].legend(bbox_to_anchor=(0.83, 0.5, 0.5, 0.5),fontsize=12)
-    ax[0].legend(loc='best',fontsize=10)
+    ax[0].set_title('GC patch',fontsize=17)
+    ax[0].set_ylabel(r'$I_\nu$ [$\mu$K]',fontsize=18)
+    ax[0].set_xlabel(r'$\nu$[GHz]',fontsize=18)
+    ax[2].set_title('QUBIC patch',fontsize=17)
+    #ax[2].set_ylabel(r'$I_\nu$ [$\mu$K]',fontsize=18)
+    ax[2].set_xlabel(r'$\nu$[GHz]',fontsize=18)
+    ax[0].legend(loc='best',fontsize=12)
     ax[0].grid()
     ax[1].cla()
     plt.axes(ax[1])
-    hp.gnomview(maps_qubic[0,:,0], reso=15,hold=True,notext=True,title='{:.1f}GHz'.format(nus[0]),
-                max=0.1*np.max(maps_qubic[0,:,0]), rot=center)
-    hp.projscatter(hp.pix2ang(d['nside'],IPIX),marker='+',color='r',)
-    
-    #CMB map
-    #ax[2].plot(nus, maps_qubic_cmb[:,IPIX,0],#yerr=std_qubic_[:,IPIX,0], 
-    #       'ro-',label='recon', alpha=0.5)
-    #ax[2].plot(nus, maps_noiseless_cmb[:,IPIX,0],#yerr=stdconv, 
-    #       'bo-',label='conv', alpha=0.5)
-    #ax[2].plot(nus_in, inputmaps_cmb[:,IPIX,0],#yerr=np.array(stdinp), 
-    #       'go-',label='input', alpha=1)
-    #ax[2].set_title('CMB')
-    #ax[2].set_ylabel(r'$I_\nu$ [$\mu$K]',)
-    #ax[2].set_xlabel(r'$\nu$[GHz]',)
-    #ax[2].legend(bbox_to_anchor=(0.83, 0.5, 0.5, 0.5),fontsize=12)
-    #ax[2].grid()
+    hp.gnomview(maps_qubic150G[-1,:,0], reso=15,hold=True,notext=True,title=' ',#'{:.1f}GHz'.format(nus[0]),
+                max=0.3*np.max(maps_qubic150G[0,:,0]), rot=centerG)
+    hp.projscatter(hp.pix2ang(d['nside'],IPIXG),marker='+',color='r',)
     ax[3].cla()
     plt.axes(ax[3])
-    hp.gnomview(maps_qubic_cmb[0,:,0], reso=15,hold=True,notext=True,title='{:.1f}GHz'.format(nus[0]),
-                min=0.8*np.min(maps_qubic_cmb[0,:,0]),
-                max=0.8*np.max(maps_qubic_cmb[0,:,0]),
-               rot=center)
-    hp.projscatter(hp.pix2ang(d['nside'],IPIX),marker='+',color='r',)
+    hp.gnomview(maps_qubic150Q[-1,:,0], reso=15,hold=True,notext=True,title=' ',#'{:.1f}GHz'.format(nus[0]),
+                max=np.max(maps_qubic150Q[0,:,0]), rot=centerQ)
+    hp.projscatter(hp.pix2ang(d['nside'],IPIXQ),marker='+',color='r',)
 
 plt.show()
 

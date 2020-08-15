@@ -1,0 +1,570 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# %matplotlib inline
+
+import healpy as hp
+import numpy as np
+import matplotlib.pyplot as plt
+import scipy
+import pickle
+from itertools import combinations, combinations_with_replacement
+from importlib import reload
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+import pysm
+import qubic
+from qubic.polyacquisition import compute_freq
+from qubic import QubicSkySim as qss
+from qubic import camb_interface as qc
+from qubic import NamasterLib as nam
+from qubic import mcmc
+
+rc('figure', figsize=(16, 10))
+rc('font', size=15)
+plt.rcParams['image.cmap'] = 'jet'
+rc('font', size=18)
+```
+
+```{python}
+import matplotlib.colors as mcolors
+mcolors.TABLEAU_COLORS.keys()
+
+colorlist = list(mcolors.TABLEAU_COLORS.keys())
+```
+
+```{python}
+### Initialize
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+print(global_dir)
+
+```
+
+```{python}
+config = 'FI220'
+```
+
+## Qubic sky object with dust
+
+```{python}
+dictfilename = global_dir + '/dicts/pipeline_demo.dict'
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+
+d['nside'] = 256
+d['filter_nu'] = 150e9
+
+# Number of bands
+nbands = 4
+d['nf_recon'] = nbands
+d['nf_sub'] = nbands
+
+# Possible combinations between bands
+combi = list(combinations_with_replacement(np.arange(nbands), 2))
+ncombi = len(combi)
+print('combi:', combi)
+print('ncombi:', ncombi)
+    
+
+# Make a sky with dust
+sky_config_dust = {'dust': 'd1'}
+Qubic_sky = qss.Qubic_sky(sky_config_dust, d)
+
+# sky_config_dust1 = {'dust': 'd1'}
+# sky_config_dust2 = {'dust': 'd2'}
+
+# Qubic_sky1 = qss.Qubic_sky(sky_config_dust1, d)
+# Qubic_sky2 = qss.Qubic_sky(sky_config_dust2, d)
+
+# dust_map1 = Qubic_sky1.get_fullsky_convolved_maps(FWHMdeg=None, verbose=False)
+# dust_map2 = Qubic_sky2.get_fullsky_convolved_maps(FWHMdeg=None, verbose=False)
+# dust_map = (dust_map2 - dust_map1)/10
+# print(dust_map.shape)
+```
+
+```{python}
+Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(int(config[-3:]), nbands)
+print(nus)
+
+fwhms = [d['synthbeam_peak150_fwhm'] * 150 / nu for nu in nus]
+print(fwhms)
+
+nus_eff = []
+for i, (band1, band2) in enumerate(combi):
+    print(f'Bands {band1} {band2}')
+    nus_eff.append(np.sqrt(nus[band1] * nus[band2]))
+print(nus_eff)
+```
+
+## Coverage and seenmap
+
+```{python}
+DataFastSimCoverage = pickle.load(open(global_dir +
+                                       '/doc/FastSimulator/Data/DataFastSimulator_' + config +'_coverage.pkl',
+                                       "rb"))
+coverage = DataFastSimCoverage['coverage']
+seenmap = coverage > np.max(coverage) * 0.1
+
+# hp.gnomview(coverage, reso=15, title='Coverage')
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/coverage_10000ptgs_galaxycenter_150GHz.pdf')
+```
+
+## BBcov matrix
+
+```{python}
+# Covariance noise matrices
+# Factor 2 to rescale it for 2 years
+BBcov = 2 * np.load('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/'
+                       + f'BBcovariance_bincross_nfrecon{nbands}_samereal_' + config + '_v2.npy')
+
+```
+
+# Theoretical spectra
+
+```{python}
+# Make a Namaster object (needed to bin the Camblib)
+nside = d['nside']
+lmin = 40
+lmax = 2 * nside - 1
+delta_ell = 30
+
+
+mask = np.zeros(12 * nside ** 2)
+mask[seenmap] = 1
+Namaster = nam.Namaster(mask, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+mask_apo = Namaster.get_apodized_mask()
+# hp.gnomview(mask_apo, reso=20, title='Mask')
+
+ell_binned, b = Namaster.get_binning(nside)
+nbins = len(ell_binned)
+print('lmin:', lmin)
+print('lmax:', lmax)
+print('delta_ell:', delta_ell)
+print('nbins:', nbins)
+print('ell binned:', ell_binned)
+print('Fsky: {}'.format(Namaster.fsky))
+```
+
+```{python}
+# Load the CAMB library already saved
+with open(global_dir + '/doc/CAMB/camblib_0to02_step0001.pkl', "rb") as file:
+    camblib = pickle.load(file)
+[lll, rvalues, spec, specunlensed] = camblib
+
+```
+
+```{python}
+binned_camblib = qc.bin_camblib(Namaster, global_dir + '/doc/CAMB/camblib_0to02_step0001.pkl', nside, verbose=True)
+
+[lll_b, rvalues_b, spec_b, specunlensed_b] = binned_camblib
+```
+
+## Loop over the residual dust fraction
+
+```{python}
+# Compute BB cross spectra for dust once 
+# dust_fraction = [0.03]
+dust_fraction = [0., 0.005, 0.01, 0.015, 0.02, 0.025]
+# dust_fraction = [0., 0.01, 0.02, 0.03, 0.04, 0.05]
+# BBcross_dust = np.zeros((len(dust_fraction), ncombi, nbins))
+
+# for f, frac in enumerate(dust_fraction):
+#     print('\n dust fraction:', frac)
+#     dust_map = Qubic_sky.get_fullsky_convolved_maps(FWHMdeg=None, verbose=False) * frac
+    
+#     cross_dust = np.zeros((ncombi, nbins, 4))
+#     for i, (band1, band2) in enumerate(combi):
+#         print(f'Bands {band1} {band2}')
+        
+#         beam_corr = np.sqrt(fwhms[band1] * fwhms[band2])
+#         print(beam_corr)
+        
+#         map1 = dust_map[band1, :, :]
+#         map2 = dust_map[band2, :, :]
+#         leff, cross_dust[i, :, :], w = Namaster.get_spectra(map1.T,
+#                                                               mask_apo,
+#                                                               map2.T,
+#                                                               w=None,
+#                                                               purify_e=True,
+#                                                               purify_b=False,
+#                                                               beam_correction=beam_corr,
+#                                                               pixwin_correction=True)
+#     BBcross_dust[f, :, :] = cross_dust[:, :, 2]
+
+```
+
+```{python}
+# np.save('./BBcross_dust_d1_' + config[-3:] + f'_{nbands}bands.npy', BBcross_dust)
+```
+
+```{python}
+BBcross_dust = np.load('./BBcross_dust_d1_' + config[-3:] + f'_{nbands}bands.npy')[:6, :, :]
+print(BBcross_dust.shape)
+```
+
+```{python}
+# hp.mollview(dust_map[0, :, 0], title='Dust residuals d1')
+```
+
+```{python}
+import seaborn as sns
+palet = sns.cubehelix_palette(len(dust_fraction), start=3, hue=1, light=0.75)
+sns.palplot(palet)
+```
+
+```{python}
+# for f, frac in enumerate(dust_fraction):
+#     c = palet[f]
+#     plt.plot(ell_binned, BBcross_dust[f, 0, :], color=c, label=r'$f_{dust}$' +f' = {frac}')
+# plt.title('BB dust')
+# plt.ylabel('$D_\ell$')
+# plt.xlabel('$\ell$')
+# plt.grid()
+# plt.legend()
+```
+
+```{python}
+# for i in range(3):
+#     plt.plot(ell_binned, BBcross_dust[f, 0, :], label=f'IBCS {i}')
+# plt.title('BB dust d2-d1')
+# plt.ylabel('$D_\ell$')
+# plt.xlabel('$\ell$')
+# plt.grid()
+# plt.legend()
+```
+
+## Global likelihood for each dust fraction
+
+```{python}
+def myBBth(ell, r):
+    clBB = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=False, specindex=2)[0]
+    clBB = np.array(list(clBB) * ncombi)
+    return clBB
+
+
+# clBB = myBBth(ell_binned, r=0)
+# print(clBB.shape)
+# plt.plot(ell_binned, clBB[:nbins], color='r')
+# plt.title('CMB r = 0')
+# plt.ylabel('$D_\ell$')
+# plt.xlabel('$\ell$')
+# plt.grid()
+# plt.legend()
+```
+
+```{python}
+xvals = list(ell_binned) * ncombi
+print(len(xvals))
+error = BBcov
+print(error.shape)
+
+x = np.linspace(0., 0.2, 10000)
+
+allLLH, allLLH_interp = [], []
+allr_dust = []
+allsigma68 = []
+for f, frac in enumerate(dust_fraction):
+    print('\n dust fraction:', frac)
+    fakedata = myBBth(ell_binned, r=0.) + np.ravel(BBcross_dust[f, :, :])
+#     plt.plot(np.ravel(BBcross_dust[f, :, :]), label=frac)
+#     plt.legend()
+    print(len(fakedata))
+
+    logLLH = mcmc.LogLikelihood(xvals=xvals, 
+                              yvals=fakedata, 
+                              errors=error,
+                              nbins=16,
+                              model=myBBth, 
+                              flatprior=[[0,1]], 
+                              covariance_model_funct=Namaster.knox_covariance)
+    logLLH([rvalues_b[10]])
+
+    LLH, sigma68 = logLLH.compute_sigma68(logLLH, rvalues)
+    allLLH.append(LLH)
+    print(sigma68)
+    allsigma68.append(sigma68)
+    
+    LLH_interp = np.interp(x, rvalues, LLH)
+    allLLH_interp.append(LLH_interp)
+    
+    r_dust = x[np.argmax(LLH_interp)]
+    print(r_dust)
+    allr_dust.append(r_dust)
+```
+
+```{python}
+fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(20, 6))
+fig.suptitle(config[-3:] + f' GHz - {nbands} bands')
+x = np.linspace(0., 0.2, 10000)
+for f, frac in enumerate(dust_fraction[:]):
+    c = palet[f]
+#     ax0.plot(rvalues, allLLH[f] / np.max(allLLH[f]), 'o', color=c, label=f'Likelihood frac {frac}')
+    ax0.plot(x, allLLH_interp[f]/ np.max(allLLH_interp[f]),
+                 color=c, label='{:1.1f} % dust residuals'.format(dust_fraction[f]*100))
+
+    ax0.axvline(x=allr_dust[f], color=c)
+    ax0.axvline(x=allsigma68[f], linestyle='--', color=c)
+
+ax0.legend(loc='best', fontsize=12)
+ax0.set_xlim(0, 0.12)
+ax0.set_xlabel('$r_{dust}$')
+ax0.set_ylabel('Posterior')
+
+
+
+for f, frac in enumerate(dust_fraction):
+    c = palet[f]
+    ax1.errorbar(dust_fraction[f], allr_dust[f],
+             yerr=allsigma68[f] - allr_dust[f], 
+             fmt='o', color=c)
+ax1.set_xlabel('$f_{dust}$')
+ax1.set_ylabel('$r_{dust}$')
+ax1.grid()
+
+plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/'+
+            f'Likelihood_dust_rdust_{config}_2y_{nbands}bands.pdf', 
+            bbox_inches='tight')
+```
+
+## Likelihood of each IBCS
+
+```{python}
+# Cut BBcov for each IBCS
+nIBCS = int(BBcov.shape[0] / nbins)
+BBcovsep = np.array([BBcov[i*nbins:(i+1)*nbins, i*nbins:(i+1)*nbins] for i in range(nIBCS)])
+print(BBcovsep.shape)
+```
+
+```{python}
+def myBBth_simple(ell, r):
+    clBB = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=False, specindex=2)[0]
+    return clBB
+```
+
+```{python}
+xvals = list(ell_binned)
+print(len(xvals))
+
+nx = 1000
+x = np.linspace(0., 1, nx)
+
+LLH = np.zeros((len(dust_fraction), ncombi, rvalues.shape[0]))
+LLH_interp = np.zeros((len(dust_fraction), ncombi, nx))
+r_dust = np.zeros((len(dust_fraction), ncombi))
+sigma68 = np.zeros((len(dust_fraction), ncombi))
+
+for f, frac in enumerate(dust_fraction):
+    print('\n dust fraction:', frac)
+    # Loop over each IBCS
+    for i in range(ncombi):
+        error = BBcovsep[i, :, :]
+
+        fakedata = myBBth_simple(ell_binned, r=0.) + BBcross_dust[f, i, :]
+        print(len(fakedata))
+
+        logLLH = mcmc.LogLikelihood(xvals=xvals, 
+                                  yvals=fakedata, 
+                                  errors=error,
+                                  nbins=nbins,
+                                  model=myBBth_simple, 
+                                  flatprior=[[0,1]], 
+                                  covariance_model_funct=Namaster.knox_covariance)
+        logLLH([rvalues_b[10]])
+
+        LLH[f, i, :], sigma68[f, i] = logLLH.compute_sigma68(logLLH, rvalues)
+
+        LLH_interp[f, i, :] = np.interp(x, rvalues, LLH[f, i, :])
+        
+        r_dust[f, i] = x[np.argmax(LLH_interp[f, i, :])]
+        print(r_dust[f, i])
+
+```
+
+```{python}
+plt.figure(figsize=(10, 10))
+
+
+x = np.linspace(0., 1, nx)
+for f, frac in enumerate(dust_fraction):
+    print('\n dust fraction:', frac)
+    c = palet[f]
+    for i in range(ncombi): 
+        
+#         plt.plot(rvalues, LLH[f, i, :] / np.max(LLH[f, i, :]), 
+#                  'o', color=c, label='frac = {} - nu = {:3.2f}, '.format(dust_fraction[f], nus_eff[i]))
+        plt.plot(x, LLH_interp[f, i, :]/ np.max(LLH_interp[f, i, :]), 
+                 color=c,
+                 label='fdust = {} - nu = {:3.2f} - r_dust = {:1.4f}, '.format(dust_fraction[f], nus_eff[i], r_dust[f, i]))
+                 
+        plt.axvline(x=r_dust[f, i], linestyle='--', color=c, )
+
+plt.xlim(0, 0.2)
+plt.xlabel('r')
+plt.ylabel('Posterior')
+plt.grid()
+
+# plt.legend(loc='upper right', fontsize=12)
+```
+
+```{python}
+from scipy.optimize import curve_fit
+def func(x, a, b):
+    return a * x + b
+
+popt = np.zeros((len(dust_fraction[:]), 2))
+perr = np.zeros((len(dust_fraction[:]), 2))
+for f in range(len(dust_fraction[:])):
+    popt[f, :], pcov = curve_fit(func, nus_eff, r_dust[f, :], sigma=sigma68[f, :] - r_dust[f, :], absolute_sigma=True)
+    print(popt[f, :])
+    perr[f, :] = np.sqrt(np.diag(pcov))
+    print(perr[f, :])
+    
+significance_a = popt[:, 0] / perr[:, 0]  
+significance_b = popt[:, 1] / perr[:, 1]  
+```
+
+```{python}
+rvalues
+```
+
+```{python}
+# x = np.linspace(135, 165, 10)
+x = np.linspace(195, 245, 10)
+
+fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(20, 6))
+fig.suptitle(config[-3:] + f' GHz - {nbands} bands')
+for f in range(len(dust_fraction[:])):
+    print(f)
+    c = palet[f]
+    ax0.errorbar(nus_eff, 
+                 r_dust[f, :],
+                 yerr=sigma68[f, :]- r_dust[f, :], 
+                 fmt='o',
+                 color=c, 
+                 label='{:1.1f} % dust residuals'.format(dust_fraction[f]*100) )   
+
+    ax0.plot(x, np.polyval(popt[f, :], x),
+             color=c)
+ax0.set_xlabel(r'$\nu$ [GHz]')
+ax0.set_ylabel(r'$r_{dust}$')
+ax0.legend(fontsize=12)
+ax0.grid()
+
+for f in range(1, 6):
+    c = palet[f]
+    ax1.plot(dust_fraction[f], significance_a[f], 'o', color=c)#, label='Linear fit: a = {:1.4f} $\pm$ {:1.4f}'.
+#                  format(popt[f, 0], perr[f, 0]))
+ax1.set_xlabel(r'$f_{dust}$')
+ax1.set_ylabel('$a / \sigma_a$')
+# ax1.legend(loc='best', fontsize=12)
+ax1.grid()
+ax1.set_xticks(np.arange(0.005, 0.03, 0.005))
+ax1.set_title('Slope significance')
+
+plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/'+f'Likelihood_dust_rdustbyfreq_{config}_2y_{nbands}bands.pdf', 
+            bbox_inches='tight')
+```
+
+## CMB with r not 0
+
+```{python}
+xvals = list(ell_binned)
+print(len(xvals))
+
+nx = 1000
+x = np.linspace(0., 1, nx)
+
+LLH_CMBwithr = np.zeros((ncombi, rvalues.shape[0]))
+LLH_interp_CMBwithr = np.zeros((ncombi, nx))
+r_dust_CMBwithr = np.zeros(ncombi)
+sigma68_CMBwithr = np.zeros(ncombi)
+
+smallr = r_dust[0, nbands-1]
+print('smallr', smallr)
+# Loop over each IBCS
+for i in range(ncombi):
+    error = BBcovsep[i, :, :]
+
+    fakedata = myBBth_simple(ell_binned, r=smallr)
+    print(len(fakedata))
+
+    logLLH = mcmc.LogLikelihood(xvals=xvals, 
+                              yvals=fakedata, 
+                              errors=error,
+                              nbins=nbins,
+                              model=myBBth_simple, 
+                              flatprior=[[0,1]], 
+                              covariance_model_funct=Namaster.knox_covariance)
+    logLLH([rvalues_b[10]])
+
+    LLH_CMBwithr[i, :], sigma68_CMBwithr[i] = logLLH.compute_sigma68(logLLH, rvalues)
+
+    LLH_interp_CMBwithr[i, :] = np.interp(x, rvalues, LLH_CMBwithr[i, :])
+
+    r_dust_CMBwithr[i] = x[np.argmax(LLH_interp_CMBwithr[i, :])]
+    print(r_dust_CMBwithr[i])
+
+```
+
+```{python}
+popt_CMBwithr, pcov = curve_fit(func, nus_eff, r_dust_CMBwithr, sigma=sigma68_CMBwithr - r_dust_CMBwithr,
+                                absolute_sigma=True)
+
+perr_CMBwithr = np.sqrt(np.diag(pcov))
+
+```
+
+```{python}
+x = np.linspace(130, 170, 10)
+# x = np.linspace(195, 245, 10)
+
+plt.figure(figsize=(8, 6))
+
+for f in range(len(dust_fraction[:])):
+
+    plt.errorbar(nus_eff, 
+                 r_dust[f, :],
+                 yerr=sigma68[f, :]- r_dust[f, :], 
+                 fmt='o',
+                 color='b', 
+                 label=r'CMB$(r = 0)$' + ' + {:1.1f} % dust residuals'.format(dust_fraction[f]*100) + 
+                         '\nSlope significance: {:1.2f} $\sigma$'.format(significance_a[0]))   
+
+    plt.plot(x, np.polyval(popt[f, :], x),
+             color='b')
+
+plt.errorbar(np.array(nus_eff)+0.5, 
+                 r_dust_CMBwithr,
+                 yerr=sigma68_CMBwithr- r_dust_CMBwithr, 
+                 fmt='o',
+                 color='r', 
+                 label='CMB$(r = {:1.2f})$'.format(smallr))  
+plt.plot(x, np.polyval(popt_CMBwithr, x), color='r')
+
+
+plt.xlabel(r'$\nu$ [GHz]')
+plt.ylabel(r'$r_{dust}$')
+plt.legend(fontsize=16, loc='upper left')
+plt.grid()
+plt.title(config[-3:] + f' GHz - {nbands} bands')
+plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/'+
+            f'Likelihood_dust_CMBwithr_{config}_2y_{nbands}bands.pdf', 
+            bbox_inches='tight')
+```
+
+```{python}
+
+```

@@ -32,13 +32,14 @@ from qubic import NamasterLib as nam
 from qubic import mcmc
 
 rc('figure', figsize=(16, 10))
-rc('font', size=15)
+rc('font', size=18)
 plt.rcParams['image.cmap'] = 'jet'
 ```
 
 ```{python}
-import matplotlib.colors as mcolors
-colorlist = list(mcolors.TABLEAU_COLORS.keys())
+import seaborn as sns
+palet = sns.cubehelix_palette(6, start=2, hue=1, light=0.75)
+sns.palplot(palet)
 ```
 
 ```{python}
@@ -48,7 +49,7 @@ print(global_dir)
 ```
 
 ```{python}
-config = 'FI220'
+config = 'FI150'
 nside = 256 # Define here to avoid loading a diccionary
 ```
 
@@ -89,9 +90,9 @@ print('Fsky: {}'.format(Namaster.fsky))
 
 ```{python}
 # Make a Camb library
-rvalues = np.arange(0., 0.15001, 0.0001)
-print(rvalues)
-camblib = qc.rcamblib(rvalues, lmax=lmax, save=global_dir + '/doc/CAMB/camblib_0to02_step0001.pkl')
+# rvalues = np.arange(0., 0.15001, 0.0001)
+# print(rvalues)
+# camblib = qc.rcamblib(rvalues, lmax=lmax, save=global_dir + '/doc/CAMB/camblib_0to02_step0001.pkl')
 ```
 
 ```{python}
@@ -129,8 +130,8 @@ for nbands in [1, 2, 3, 4, 5, 8]:
     print('ncombi:', ncombi)
     
     # Covariance noise matrices
-    BBcov = np.load('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/'
-                           + f'BBcovariance_bincross_nfrecon{nbands}_samereal_' + config + '_v2.npy')
+    BBcov = 4 * np.load('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/'
+                           + f'BBcovariance_bincross_nfrecon{nbands}_mixreal_' + config + '_v2_clean.npy')
     
     
     # =================== Likelihood ========================
@@ -166,6 +167,64 @@ xlim = 0.4
 ```
 
 ```{python}
+fig, axs = plt.subplots(1, 2, figsize=(20, 10))
+ax0, ax1 = axs
+
+fig.suptitle(config + ' - Clean Same $\sqrt{diag}$')
+
+for i, nbands in enumerate([1, 2, 3, 4, 5, 8]):
+    
+    c = palet[i]
+    ax0.set_title('Likelihood')
+#     ax0.plot(rvalues, allLLH[i] / np.max(allLLH[i]), 'o', color=c, label=f'Likelihood {nbands} bands')
+    ax0.plot(x, np.exp(-0.5*(x/allsigma68[i])**2), color=c, label='Gaussian $\mu = 0, \sigma = \sigma(r)$')
+    ax0.axvline(x=allsigma68[i], linestyle='--', color=c, 
+                label=' $\sigma(r)={0:6.4f}$ at 68% C.L.'.format(allsigma68[i]))
+
+    ax0.set_xlim(0, xlim)
+    ax0.set_xlabel('r')
+    ax0.set_ylabel('Posterior')
+    ax0.legend(fontsize=14)
+    
+    
+    ax1.set_title('Fisher')
+    ax1.plot(x, np.exp(-0.5*(x/allsigma68_Fisher[i])**2), color=c, label=f'Fisher gaussian {nbands} bands')
+    ax1.axvline(x=allsigma68_Fisher[i], linestyle='--', color=c, 
+                label=' $\sigma_(r)={0:6.4f}$ at 68% C. L.'.format(allsigma68_Fisher[i]))
+
+    ax1.set_xlim(0, xlim)
+    ax1.set_xlabel('r')
+    ax1.set_ylabel('Posterior')
+
+    ax1.legend(fontsize=14)
+```
+
+```{python}
+### Figure Spectroim paper
+fig = plt.figure(figsize=(12, 10))
+ax = plt.gca()
+ax0, ax1 = axs
+for i, nbands in enumerate([1, 2, 3, 4, 5, 8]):
+    if i == 0:
+        bandword = 'band'
+    else:
+        bandword = 'bands'
+    c = palet[i]
+    ax.set_title('QUBIC - ' + config[-3:] +' GHz')
+    ax.plot(x, np.exp(-0.5*(x/allsigma68[i])**2), color=c, label=f'{nbands} sub-{bandword}')
+    ax.axvline(x=allsigma68[i], linestyle='--', color=c, 
+                label=' $\sigma(r)={0:6.3f}$ at 68% C.L.'.format(allsigma68[i]))
+
+    ax.set_xlim(0, xlim)
+    ax.set_xlabel('r')
+    ax.set_ylabel('Posterior')
+    ax.legend(fontsize=14)
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/'+
+#             f'Likelihood_CMBonly_{config}_2y_4xMix.pdf', 
+#             bbox_inches='tight') 
+```
+
+```{python}
 plt.figure(figsize=(20, 20))
 plt.suptitle(f'Mix reals - With sample variance - Config {config}')
 # plt.suptitle('Do not mix reals - No Bias model - With sample variance - Config FI-150')
@@ -186,40 +245,6 @@ for i, nbands in enumerate([1, 2, 3, 4, 5, 8]):
     plt.ylabel('Posterior')
 
     plt.legend(fontsize=12)
-```
-
-```{python}
-fig, axs = plt.subplots(1, 2, figsize=(20, 10))
-
-ax0, ax1 = axs
-# fig.suptitle('Mix reals - With sample variance - Config FI-150')
-plt.title('Do not mix reals - Debiased - With sample variance - Config FI-150')
-# fig.suptitle('Do not mix reals - No Bias model - With sample variance - Config FI-150')
-for i, nbands in enumerate([1, 2, 3, 4, 5, 8]):
-    
-    c = colorlist[i]
-    ax0.set_title('Likelihood')
-    ax0.plot(rvalues, allLLH[i] / np.max(allLLH[i]), 'o', color=c, label=f'Likelihood {nbands} bands')
-    ax0.plot(x, np.exp(-0.5*(x/allsigma68[i])**2), color=c, label='Gaussian $\mu = 0, \sigma = \sigma(r)$')
-    ax0.axvline(x=allsigma68[i], linestyle='--', color=c, 
-                label=' $\sigma(r)={0:6.4f}$ at 68% C.L.'.format(allsigma68[i]))
-
-    ax0.set_xlim(0, xlim)
-    ax0.set_xlabel('r')
-    ax0.set_ylabel('Posterior')
-    ax0.legend(fontsize=12)
-    
-    
-    ax1.set_title('Fisher')
-    ax1.plot(x, np.exp(-0.5*(x/allsigma68_Fisher[i])**2), color=c, label=f'Fisher gaussian {nbands} bands')
-    ax1.axvline(x=allsigma68_Fisher[i], linestyle='--', color=c, 
-                label=' $\sigma_(r)={0:6.4f}$ at 68% C. L.'.format(allsigma68_Fisher[i]))
-
-    ax1.set_xlim(0, xlim)
-    ax1.set_xlabel('r')
-    ax1.set_ylabel('Posterior')
-
-    ax1.legend(fontsize=12)
 ```
 
 ```{python}

@@ -56,8 +56,6 @@ rc('font', size=15)
 
 ```{python}
 import matplotlib.colors as mcolors
-mcolors.TABLEAU_COLORS.keys()
-
 colorlist = list(mcolors.TABLEAU_COLORS.keys())
 ```
 
@@ -81,49 +79,49 @@ rep_mapCC = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/Simu_spectroim/Fast
 
 ```{python}
 # For full pipeline simulations
-dictionary = glob.glob(rep + '/*.dict')[0]
-print(dictionary)
+# dictionary = glob.glob(rep + '/*.dict')[0]
+# print(dictionary)
 
-# Dictionary saved during the simulation
-d = qubic.qubicdict.qubicDict()
-d.read_from_file(dictionary)
+# # Dictionary saved during the simulation
+# d = qubic.qubicdict.qubicDict()
+# d.read_from_file(dictionary)
 
-# Coordinates of the zone observed in the sky
-center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+# # Coordinates of the zone observed in the sky
+# center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 
 # Number of subbands used during the simulation
 
-nfsub = d['nf_sub']
-print('nf_sub = {}, nf_recon = {}'.format(nfsub, nfrecon))
+# nfsub = d['nf_sub']
+# print('nf_sub = {}, nf_recon = {}'.format(nfsub, nfrecon))
 
 # Get fits files names in a list
-fits_noise = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessFalse*.fits'.format(nfsub, nfrecon), 
-                              recursive=True))
-fits_noiseless = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessTrue*.fits'.format(nfsub, nfrecon), 
-                              recursive=True))
+# fits_noise = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessFalse*.fits'.format(nfsub, nfrecon), 
+#                               recursive=True))
+# fits_noiseless = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessTrue*.fits'.format(nfsub, nfrecon), 
+#                               recursive=True))
 
-print(fits_noiseless)
+# print(fits_noiseless)
 
 # Number of noise realisations
-nreals = len(fits_noise)
-print('nreals = ', nreals)
+# nreals = len(fits_noise)
+# print('nreals = ', nreals)
 
-# Get seen map (observed pixels)
-seenmap = rmc.get_seenmap(fits_noiseless[0])
-print(seenmap.shape)
+# # Get seen map (observed pixels)
+# seenmap = rmc.get_seenmap(fits_noiseless[0])
+# print(seenmap.shape)
 
-# Number of pixels and nside
-npix = seenmap.sum()
-print('npix:', npix)
+# # Number of pixels and nside
+# npix = seenmap.sum()
+# print('npix:', npix)
 
-patch = amc.get_residuals(fits_noise, fits_noiseless[0], 'noiseless')
+# patch = amc.get_residuals(fits_noise, fits_noiseless[0], 'noiseless')
 ```
 
 ```{python}
 stokes = ['I', 'Q', 'U']
 allrecon = [1, 2, 3, 4, 5, 8]
 nfrecon = 2
-config = 'FI150'
+config = 'FI220'
 ```
 
 ```{python}
@@ -217,23 +215,12 @@ coverage_patch.shape
 ang = rmc.pix2ang(d['nside'], center, seenmap)
 coverage_norm = coverage_patch / np.max(coverage_patch)
 inverse_coverage = 1. / (np.sqrt(coverage_norm))
-
-plt.plot(ang, coverage_norm, '.', label='coverage')
-plt.plot(ang, np.sqrt(coverage_norm), '.', label='$\sqrt{coverage}$')
-plt.xlabel('Angle [deg]')
-# plt.ylabel('Coverage normalized')
-plt.title('Coverage normalized to the maximum as function of the angle in the patch.')
-plt.legend()
 ```
 
 # Covariances matrices
 
 
 ### Cp matrices
-
-```{python}
-patch.shape
-```
 
 ```{python}
 p = 10
@@ -670,353 +657,6 @@ for istk in range(3):
 plt.xlabel('# Bands')
 plt.ylabel('$Cov JC$')
 plt.legend()
-```
-
-# Recombined sub-bands at map level
-
-
-#### Check that we get the same using Cp, Cp_prime00 or Cp_prime
-
-```{python}
-# Using Cp directly
-avg, sig2 = amc.make_weighted_av(patch[:20, ...], Cp, verbose=True)
-sig2MC = np.var(avg, axis=0)
-```
-
-```{python}
-# Using Cp_prime 00
-avg00, sig200 = amc.make_weighted_av(patch[:20, ...], Cp_prime00, verbose=True)
-sig2MC00 = np.var(avg00, axis=0)
-
-```
-
-```{python}
-# Using Cp_prime
-avg_prime, sig2_prime = amc.make_weighted_av(patch[:20, ...], Cp_prime, verbose=True)
-sig2MC_prime = np.var(avg_prime, axis=0)
-```
-
-```{python}
-x = 1 / coverage_norm[seenmap]
-
-xc, yc, dx, dy, _ = ft.profile(x, sig2[:, 0], 
-                               nbins=30, 
-                               plot=False,
-                               clip=True)
-
-
-xcMC, ycMC, dxMC, dyMC, _ = ft.profile(x, sig2MC[:, 0], 
-                                       nbins=30, 
-                                       plot=False,
-                                       clip=True)
-
-xc00, yc00, dx00, dy00, _ = ft.profile(x, sig200[:, 0], 
-                               nbins=30, 
-                               plot=False,
-                               clip=True)
-
-
-xcMC00, ycMC00, dxMC00, dyMC00, _ = ft.profile(x, sig2MC00[:, 0], 
-                                       nbins=30, 
-                                       plot=False,
-                                       clip=True)
-
-xcprime, ycprime, dxprime, dyprime, _ = ft.profile(x, sig2_prime[:, 0], 
-                               nbins=30, 
-                               plot=False,
-                               clip=True)
-
-
-xcMCprime, ycMCprime, dxMCprime, dyMCprime, _ = ft.profile(x, sig2MC_prime[:, 0], 
-                                       nbins=30, 
-                                       plot=False,
-                                       clip=True)
-
-
-plt.errorbar(xc, yc, xerr=dx, yerr=dy, 
-             color=colorlist[0], fmt='x', label='$\sigma^2$')
-plt.errorbar(xcMC, ycMC, xerr=dxMC, yerr=dyMC, 
-             color=colorlist[0], fmt='+', label='$\sigma^2 MC$')
-
-plt.errorbar(xc00, yc00, xerr=dx00, yerr=dy00, 
-             color=colorlist[1], fmt='x', label='$\sigma^2$ 00')
-plt.errorbar(xcMC00, ycMC00, xerr=dxMC00, yerr=dyMC00, 
-             color=colorlist[1], fmt='+', label='$\sigma^2 MC$ 00')
-
-plt.errorbar(xcprime, ycprime, xerr=dxprime, yerr=dyprime, 
-             color=colorlist[2], fmt='x', label='$\sigma^2$ prime')
-plt.errorbar(xcMCprime, ycMCprime, xerr=dxMCprime, yerr=dyMCprime, 
-             color=colorlist[2], fmt='+', label='$\sigma^2 MC$ prime')
-
-# plt.ylim(0, 10)
-
-plt.xlabel('$1 / coverage$', fontsize=15)
-plt.ylabel('$\sigma^2$', fontsize=15)
-plt.legend()
-```
-
-#### Recombine the sub-bands using Cp
-
-```{python}
-coveragecut = 0.9
-condition = coverage_norm[seenmap] > coveragecut
-mylist_sig2, mylist_sig2MC = [], []
-mylist_Cp, mylist_Cp_prime = [], []
-for i in range(6):
-    nfrecon = allrecon[i]
-    print('\n nfrecon:', nfrecon)
-    
-#     coverage_norm = coverage_normlist[i]
-    
-    patch = np.load(rep_mapCC + f'noisepatch_NOspatialcorr_nbands{nfrecon}_' + config + '_500reals.npy')
-    
-    patch = patch[:, :, condition, :]
-    print('patch shape:', patch.shape)
-
-    nreals, _, npix, _ = patch.shape
-    print('npix:', npix)
-    print('# realisations:', nreals)
-    
-    Cp = amc.get_Cp(patch, verbose=False)
-    print('Cp shape:', Cp.shape)
-    mylist_Cp.append(Cp)
-    print(Cp[:, :, 0, 0])
-    
-    N, Cp_prime = amc.Cp2Cp_prime_viaCorr(Cp)
-    mylist_Cp_prime.append(Cp_prime)
-    print('Cp_prime shape:', Cp_prime.shape)
-    
-    avg, sig2 = amc.make_weighted_av(patch[:100, ...], Cp, verbose=True)
-    sig2MC = np.var(avg, axis=0)
-    mylist_sig2.append(sig2)
-    mylist_sig2MC.append(sig2MC)    
-```
-
-```{python}
-len(mylist_sig2MC)
-```
-
-```{python}
-nbins = 15
-x = np.zeros((6, nbins, 3))
-y = np.zeros_like(x)
-dx = np.zeros_like(x)
-dy = np.zeros_like(x)
-xMC = np.zeros_like(x)
-yMC = np.zeros_like(x)
-dxMC = np.zeros_like(x)
-dyMC = np.zeros_like(x)
-
-plt.figure()
-for i in range(6):
-#     coverage_norm = coverage_normlist[i]
-#     plt.figure()
-    # Noise profile to normalize the pixels
-#     xx, yy, fitcov = qss.get_noise_invcov_profile(mylist_sig2MC[i], 
-#                                                   coverage_norm[seenmap][condition],
-#                                                   covcut=coveragecut,
-#                                                   QUsep=True,  
-#                                                   norm=False,
-#                                                   nbins=20, 
-#                                                   label='', 
-#                                                   fit=True, 
-#                                                   doplot=True,
-#                                                   allstokes=False)
-    
-#     plt.legend()
-#     plt.grid()
-    
-#     correctionI = np.interp(1. / coverage_norm[seenmap][condition], fitcov[0, :], fitcov[1, :])
-#     correctionQU = np.interp(1. / coverage_norm[seenmap][condition], fitcov[0, :], fitcov[2, :])
-#     print(correctionI.shape)
-    
-    # Apply the correction to sigma theo and sigma MC and compute the profile over pixels 
-    for istk in range(3):
-        sig = np.sqrt(mylist_sig2[i]) 
-        sigMC = np.sqrt(mylist_sig2MC[i])
-        print('sigma',sig.shape)
-#         if istk == 0:
-#             factor = np.sqrt(correctionI * coverage_norm[seenmap][condition]) 
-#         else:
-#             factor = np.sqrt(correctionQU * coverage_norm[seenmap][condition]) 
-#         npix = sig.shape[0]
-#         a = np.arange(npix)
-        a = ang[condition]
-        x[i, :, istk], y[i, :, istk], dx[i, :, istk], dy[i, :, istk], _ = ft.profile(a, 
-                                                                                     sig[:, istk], 
-                                                                                     nbins=nbins, 
-                                                                                     dispersion=False,
-                                                                                     plot=False,
-                                                                                     clip=True)
-
-
-        xMC[i, :, istk], yMC[i, :, istk], dxMC[i, :, istk], dyMC[i, :, istk], _ = ft.profile(a, 
-                                                                                             sigMC[:, istk],
-                                                                                             nbins=nbins, 
-                                                                                             dispersion=False,
-                                                                                             plot=False,
-                                                                                             clip=True)
-
-```
-
-```{python}
-plt.figure(figsize=(20, 10))
-for istk in range(3):
-    plt.subplot(1, 3, istk+1)
-    for i in range(6):
-        plt.errorbar(x[i, :, istk], y[i, :, istk]/y[0, :, istk], xerr=dx[i, :, istk], yerr=dy[i, :, istk], 
-                     color=colorlist[i], label='theo - {} bands'.format(allrecon[i]))
-        plt.errorbar(xMC[i, :, istk], yMC[i, :, istk]/yMC[0, :, istk], xerr=dxMC[i, :, istk], yerr=dyMC[i, :, istk], 
-                     fmt='o', color=colorlist[i], label='MC - {} bands'.format(allrecon[i]))
-
-    plt.ylim(0.9, 2.2)
-    plt.ylabel('$\sigma/ \sigma_{1band}$', fontsize=15)
-    plt.xlabel('Angle [deg]', fontsize=15)
-    plt.legend(loc='best', fontsize=10)
-    plt.title('{} component'.format(stokes[istk]))
-```
-
-```{python}
-ang.shape
-```
-
-```{python}
-ymean = np.zeros((6, 3))
-yMCmean = np.zeros((6, 3))
-for i in range(6):
-    for istk in range(3):
-        ymean[i, istk] = np.mean(y[i, :, istk] / y[0, :, istk])
-        yMCmean[i, istk] = np.mean(yMC[i, :, istk] / yMC[0, :, istk])
-```
-
-```{python}
-for s in range(3):
-    plt.plot(allrecon, ymean[:, s], 'o', label=stokes[s])
-# plt.plot(allrecon, np.sqrt(allrecon), 'k', label='$\sqrt{N}$')
-plt.xlabel('# bands')
-plt.ylabel('$\sigma / \sigma_{1band}$ ')
-plt.legend()
-```
-
-```{python}
-istk = 0
-for b in range(nbins):
-    plt.plot(allrecon, y[:, b, istk]/y[0, b, istk], label='bin {}'.format(b))
-# plt.plot(allrecon, np.sqrt(allrecon), 'k', label='$\sqrt{N}$')
-plt.legend()
-plt.xlabel('# bands')
-plt.ylabel('$\sigma$ ')
-
-```
-
-## Recombine with JC method
-
-```{python}
-npix = 25000
-sig2 = np.zeros((6, 3))
-avg = np.zeros((npix, 6, 3))
-
-for i in range(6):
-    nfrecon = allrecon[i]
-    print('\n nfrecon:', nfrecon)
-    
-#     coverage_norm = coverage_normlist[i] 
-    patch = np.load(rep_mapCC + f'noisepatch_NOspatialcorr_nbands{nfrecon}_' + config + '_500reals.npy')[0]
-    
-#     rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/Simu_spectroim/simu_nersc_dust_fullpipeline/nfrecon{}/'.format(nfrecon)
-#     dictionary = glob.glob(rep + '/*.dict')[0]
-#     d = qubic.qubicdict.qubicDict()
-#     d.read_from_file(dictionary)
-
-#     # Get fits files names in a list
-#     fits_noise = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessFalse*.fits'.format(d['nf_sub'], nfrecon), 
-#                                   recursive=True))
-#     fits_noiseless = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessTrue*.fits'.format(d['nf_sub'], nfrecon), 
-#                                   recursive=True))
-
-#     # Get seen map (observed pixels)
-#     seenmap = rmc.get_seenmap(fits_noiseless[0])
-#     patch = amc.get_residuals(fits_noise, fits_noiseless[0], 'noiseless')[0]
-    
-#     fitsfile = fits.open(fits_noise[0])
-#     coverage = fitsfile['COVERAGE'].data
-#     coverage_patch = coverage[seenmap]
-#     coverage_norm = coverage_patch / np.max(coverage_patch)
-    
-    
-    covI, covQ, covU, all_fitcov, all_norm_noise, flatten_patch = qss.get_cov_nunu(patch, 
-                                                         coverage_norm[seenmap], 
-                                                         nbins=20, 
-                                                         QUsep=True, 
-                                                         return_flat_maps=True)
-    print(len(all_fitcov), np.mean(all_fitcov[0], axis=1))
-    print(len(all_norm_noise), all_norm_noise)
-    factor_back = all_norm_noise[0]**2
-    covI *= factor_back
-    covQ *= factor_back
-    covU *= factor_back
-#     covI = np.diag(covI) * np.identity(nfrecon)
-#     covQ = np.diag(covQ) * np.identity(nfrecon)
-#     covU = np.diag(covU) * np.identity(nfrecon)
-    print('covI:', covI)
-    covJC = np.asarray([covI, covQ, covU])
-    
-    for pix in range(npix):
-        for istk in range(3):
-            avg[pix, i, istk], sig2[i, istk] = amc.get_weighted_correlation_average(patch[:, pix, istk], 
-                                                                                     covJC[istk, :, :])
-    # Plot
-    labs = []
-    for nf in range(nfrecon):
-        labs.append('f{}'.format(nf))
-
-    plt.figure(figsize=(15, 5))
-    for s in range(3):
-        plt.subplot(1, 3, s+1)
-        vmax = np.max(np.abs(covJC[s, :, :]))
-        plt.imshow(covJC[s, :, :], vmin=-vmax, vmax=vmax, cmap='bwr')
-        plt.title(stokes[s] + ' - Cov JC')
-        plt.colorbar(orientation='horizontal')
-        plt.xticks(np.arange(len(labs)), labs)
-        plt.yticks(np.arange(len(labs)), labs)
-
-sig2MC = np.var(avg, axis=0)
-
-    
-```
-
-```{python}
-for i in range(3):
-    plt.plot(allrecon, sig2[:, i]/sig2[0, i], color=colorlist[i], label=stokes[i] + ' th')
-#     plt.plot(allrecon, sig2MC[:, i]/sig2MC[0, i], 'o', color=colorlist[i], label=stokes[i] + ' MC')
-
-plt.legend()
-plt.xlabel('# bands')
-plt.ylabel('$\sigma^2/ \sigma^2_{1band}$')
-```
-
-```{python}
-nbands = 2
-nreals = 1000
-
-mean = [0, 0]
-
-# Covariance matrix
-mycov = np.identity(nbands) #* nbands
-
-mycov += [[0, -0.7],[-0.7, 0.]]
-# mycov += [[0., -0.5, 0.],[-0.5, 0., -0.5],[0., -0.5, 0.]]
-print(mycov)
-
-x = np.random.multivariate_normal(mean, mycov, size=nreals)
-print(x.shape)
-
-avg = np.zeros(nreals)
-for r in range(nreals):
-    avg[r], sig2 = amc.get_weighted_correlation_average(x[r, :], mycov)
-
-sig2MC = np.var(avg)
-print(sig2, sig2MC)
 ```
 
 ```{python}

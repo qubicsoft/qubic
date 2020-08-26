@@ -40,16 +40,8 @@ from qubic import NamasterLib as nam
 from qubic.polyacquisition import compute_freq
 from qubic import AnalysisMC as amc
 
-
-
 rc('figure', figsize=(16, 10))
 rc('font', size=15)
-```
-
-```{python}
-# import matplotlib.colors as mcolors
-# colorlist = list(mcolors.TABLEAU_COLORS.keys())*3
-
 ```
 
 ```{python}
@@ -60,7 +52,7 @@ print(global_dir)
 
 ```{python}
 ### This is for the FI
-config = 'FI220' #FI220 or FI150
+config = 'FI150' #FI220 or FI150
 old_config = False
 
 ### Read some stuff
@@ -98,13 +90,11 @@ x0 = Qubic_sky.get_simple_sky_map()
 ```{python}
 Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(int(config[-3:]), nbands)
 print(nus)
-nus_cut = [round(nu) for nu in nus]
-print(nus_cut)
-combi_nus = list(combinations_with_replacement(nus_cut, 2))
-print(combi_nus)
-```
 
-```{python}
+# just for name in the plots 
+combi_nus = list(combinations_with_replacement(nus, 2))
+print(combi_nus)
+
 fwhms = [d['synthbeam_peak150_fwhm'] * 150 / nu for nu in nus]
 print(fwhms)
 ```
@@ -204,14 +194,11 @@ sns.palplot(palet)
 ```
 
 ```{python}
-fwhms
-```
-
-```{python}
-cross_thconv1 = np.zeros((ncombi, nbins, 4))
-cross_thconv2 = np.zeros((ncombi, nbins, 4))
+cross_thconv = np.zeros((ncombi, nbins, 4))
 cross_x0 = np.zeros((ncombi, nbins, 4))
-w = None
+
+# Map convolved => Beam correction
+# As the beam correction is different for each spectrum, we need to calculate the workspace w each time
 for i, (band1, band2) in enumerate(combi):
     print(f'Bands {band1} {band2}')
 
@@ -219,7 +206,7 @@ for i, (band1, band2) in enumerate(combi):
     print(beam_corr)
     map1 = dust_map[band1, :, :]
     map2 = dust_map[band2, :, :]
-    leff, cross_thconv1[i, :, :], w = Namaster.get_spectra(map1.T,
+    leff, cross_thconv[i, :, :], w = Namaster.get_spectra(map1.T,
                                                       mask_apo,
                                                       map2.T,
                                                       w=None,
@@ -228,7 +215,8 @@ for i, (band1, band2) in enumerate(combi):
                                                       beam_correction=beam_corr,
                                                       pixwin_correction=True)
 
-        
+# Map not convolved => No Beam correction
+# Beam correction is None so we can compute w only once        
 w = None
 for i, (band1, band2) in enumerate(combi):
     print(f'Bands {band1} {band2}')
@@ -237,7 +225,7 @@ for i, (band1, band2) in enumerate(combi):
     leff, cross_x0[i, :, :], w = Namaster.get_spectra(map1x0.T,
                                                       mask_apo,
                                                       map2x0.T,
-                                                      w=None,
+                                                      w=w,
                                                       purify_e=True,
                                                       purify_b=False,
                                                       beam_correction=None,
@@ -247,6 +235,8 @@ for i, (band1, band2) in enumerate(combi):
 ```
 
 ```{python}
+# Check that both give the same
+
 clnames = ['TT', 'EE', 'BB', 'TE']
 
 fig, axs = plt.subplots(2, 2)
@@ -255,16 +245,12 @@ axs = axs.ravel()
 for s in range(4):
     ax = axs[s]
     for cross in range(ncombi): 
-        c = palet[cross]
-#         ax.plot(input_Dl[:, s], 'g')
-#         ax.plot(np.arange(3*nside), Bl2, 'b', label='Bl²')
-#         ax.plot(leff, cross_thconv[cross, :, s]/cross_x0[cross, :, s], color='r', label='Ratio conv/(Not conv)')
-       
-        ax.plot(leff, cross_thconv1[cross, :, s], 'o', color=c, label='Sky convolved - beam corr adapted')        
+        c = palet[cross]       
+        ax.plot(leff, cross_thconv[cross, :, s], 'o', color=c, label='Sky convolved - beam corr adapted')        
         ax.plot(leff, cross_x0[cross, :, s], color=c, label='Sky not convolved - no beam corr')
 
-#         ax.plot(leff, cross_thconv[cross, :, s]* 2 * np.pi / (leff * (leff+1)), '--', color=c)
-#         ax.plot(leff, cross_x0[cross, :, s] * 2 * np.pi / (leff * (leff+1)), color=c)
+#         ax.plot(leff[1:], cross_thconv[cross, 1:, s]* 2 * np.pi / (leff[1:] * (leff[1:] + 1)), '--', color=c)
+#         ax.plot(leff[1:], cross_x0[cross, 1:, s] * 2 * np.pi / (leff[1:] * (leff[1:] + 1)), color=c)
 
         if cross == 0:
             ax.legend()
@@ -279,32 +265,17 @@ for s in range(4):
 plt.tight_layout()
 ```
 
-### Cross sprectum for each realisation
+### IBCS for each realisation
 
-For each noise realisation, we make a cross spectra inter bands. This will keep the noise bias. 
+For each noise realisation, we make a Inter-Bands Cross Spectra. This will keep the noise bias. 
 
 ```{python}
 # Load spectra already done at CC
 datadir = os.environ['DATA_SPECTROIM']
 rep_spectrumCC = datadir + '/FastSimulator/cls_spectrum_fromCC/'
 
-# Convert all files from CC to one .npy
-# Do it just once
-# for nfrecon in [1, 2, 3, 4, 5, 8]:
-#     list_files = glob.glob(rep_spectrumCC + 'cross_interband_*same*nfrecon{}*qubic*FI150*.npy'.format(nfrecon))
-#     nfiles = len(list_files)
-#     print('# Files:', nfiles)
-#     for i in range(nfiles):
-#         cross = np.load(list_files[i])
-
-#         if i == 0:
-#             allcross = cross
-#         else:
-#             allcross = np.concatenate((allcross, cross), axis=0)
-#     print('All cross shape:', allcross.shape)
-#     np.save(rep_spectrumCC + 'cross_interband_samereal_nfrecon{}_qubicmaps_FI150_galaxycenter.npy'.format(nfrecon), allcross)
 nbands = 3
-name = f'cross_interband_samereal_nfrecon{nbands}_qubicmaps_FI150_v1_galaxycenter'
+name = f'cross_interband_samereal_nfrecon{nbands}_qubicmaps_' + config + '_v2_galaxycenter'
 cross_samereal = np.load(rep_spectrumCC + name + '.npy')
 
 print(cross_samereal.shape)
@@ -355,30 +326,30 @@ for s in range(4):
                     yerr=error_cross_samereal[cross, :, s],
                     fmt='o',
                     color=c,
-                    label='cross {}'.format(combi[cross]))
+                    label='{:3.0f} x {:3.0f}'.format(combi_nus[cross][0], combi_nus[cross][1]))
         ax.plot(leff, cross_thconv[cross, :, s], '--', color=c)
-        ax.plot(leff, cross_x0[cross, :, s], color=c)
+#         ax.plot(leff, cross_x0[cross, :, s], color=c)
 
-    ax.set_xlabel('$\\ell$')
-    ax.set_ylabel('$D_\\ell$')
+    ax.set_xlabel('$\\ell$', fontsize=18)
+    ax.set_ylabel('$D_\\ell$', fontsize=18)
     ax.grid()
 
-    ax.set_title(clnames[s])
-ax.legend(fontsize=12, loc='best')
+    ax.set_title(clnames[s], fontsize=18)
+    ax.legend(fontsize=10, loc='best')
 plt.tight_layout()
 # plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/' + name + '.pdf')
 ```
 
-### Cross sprectum between realisations
+### IBCS mixing noise realisations
 
-For each band, we make a cross spectrum between 2 realisations. This will remove the noise bias. 
+We make Inter Band Cross Spectra (IBCS) mixing 2 independant noise realisations. This will remove the noise bias. 
 
 ```{python}
 datadir = os.environ['DATA_SPECTROIM']
 rep_spectrumCC = datadir + '/FastSimulator/cls_spectrum_fromCC/'
 
 
-name = f'cross_interband_mixreal_nfrecon{nbands}_qubicmaps_FI220_v1_galaxycenter'
+name = f'cross_interband_mixreal_nfrecon{nbands}_qubicmaps_' + config + '_v2_galaxycenter'
 cross_mixreal = np.load(rep_spectrumCC + name + '.npy')
 
 print(cross_mixreal.shape)
@@ -419,8 +390,7 @@ error_cross_mixreal = np.std(cross_mixreal, axis=0) * np.sqrt(2)
 ```
 
 ```{python}
-for i in range(20):
-    plt.plot(leff, cross_mixreal[i, 0, :, 2])
+name
 ```
 
 ```{python}
@@ -437,148 +407,135 @@ for s in range(4):
                     yerr=error_cross_mixreal[co, :, s],
                     fmt='o',
                     color=c,
-                    label='{} x {}'.format(combi_nus[co][0], combi_nus[co][1]))
-        ax.plot(leff, cross_thconv[co, :, s], '--', color=c)
-#         ax.plot(leff, cross_x0[co, :, s], color=c)
+                    label='{:3.0f} x {:3.0f}'.format(combi_nus[co][0], combi_nus[co][1]))
+#         ax.plot(leff, cross_thconv[co, :, s], color=c)
+        ax.plot(leff, cross_x0[co, :, s], '--', color=c)
     
-    ax.set_xlabel('$\\ell$')
-    ax.set_ylabel('$D_\\ell$')
+    ax.set_xlabel('$\\ell$', fontsize=18)
+    ax.set_ylabel('$D_\\ell$', fontsize=18)
     ax.grid()
 
-    ax.set_title(clnames[s])
+    ax.set_title(clnames[s], fontsize=18)
 # handles, labels = ax.get_legend_handles_labels()
 # fig.legend(handles, labels, loc='lower center', orientation='horizontal')
     ax.legend(fontsize=10, loc='upper center')
 plt.tight_layout()
-plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/' + name + '.pdf')
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/' + name + '.pdf')
 ```
 
-## Covariance matrices
+## Plot for the paper: BB at 150 and 220
 
 ```{python}
-combi1 = [(i, i) for i in range(nbands)]
-combi2 = list(combinations(np.arange(nbands), 2))
-oldcombi = combi1 + combi2
-print(oldcombi)
+
+nbands = 3
+name150 = f'cross_interband_mixreal_nfrecon{nbands}_qubicmaps_FI150_v2_galaxycenter'
+BBmix150 = np.load(rep_spectrumCC + name150 + '.npy')[:, :, :, 2]
+
+avg_BBmix150 = np.mean(BBmix150, axis=0)
+error_BBmix150 = np.std(BBmix150, axis=0) * np.sqrt(2)
 
 
+name220 = f'cross_interband_mixreal_nfrecon{nbands}_qubicmaps_FI220_v2_galaxycenter'
+BBmix220 = np.load(rep_spectrumCC + name220 + '.npy')[:, :, :, 2]
 
-# permutation = []
-# for i in oldcombi:
-#     permutation.append(combi.index(i))
-# print(permutation)
+avg_BBmix220 = np.mean(BBmix220, axis=0)
+error_BBmix220 = np.std(BBmix220, axis=0) * np.sqrt(2)
 
-# print(cross_mixreal[0, :, :2, 0])
-# cross_mixreal = cross_mixreal[:, permutation, :, :]
-
-```
-
-```{python}
-# We have to reshape cls_cross as (nreals, nbins, 4, nfrecon)
-print('Old shape:', cross_samereal.shape)
-cross_samereal_reshape = np.moveaxis(cross_samereal, [1, 2, 3], [3, 1, 2])
-print('New shape:', cross_samereal_reshape.shape)
-
-covbinband, corrbinband = amc.get_covcorr_patch(cross_samereal_reshape, stokesjoint=True, doplot=False)
-
-print(nbins)
-print(covbinband.shape)
-```
-
-```{python}
-labs = []
-for i in range(ncombi):
-    labs.append(f'Cross {combi[i][0]}{combi[i][1]}')
-```
-
-```{python}
-ispectre = 2
-
-plt.figure(figsize=(20, 20))
-plt.yticks(np.arange(8, nbins*ncombi, nbins), labs, fontsize=20)
-plt.xticks(np.arange(8, nbins*ncombi, nbins), labs, fontsize=20)
-
-for s in range(ncombi-1):
-    plt.axhline(y=(s+1)*nbins-0.5, lw=3, color='k')
-    plt.axvline(x=(s+1)*nbins-0.5, lw=3, color='k')
-vmax = np.max(np.abs(covbinband[:, :, ispectre]))
-plt.imshow(covbinband[:, :, ispectre], vmin=-vmax, vmax=vmax, cmap='bwr')
-# vmax = np.max(np.abs(covbinbandBB))
-# plt.imshow(covbinbandBB, vmin=-vmax, vmax=vmax, cmap='bwr')
-plt.title('Covariance matrix (nfreq*nbins)x(nfreq*nbins) for {} spectrum'.format(clnames[ispectre]), 
-         fontsize=20)
-plt.colorbar()
-```
-
-```{python}
-plt.figure(figsize=(20, 20))
-plt.yticks(np.arange(8, nbins*ncombi, nbins), labs, fontsize=20)
-plt.xticks(np.arange(8, nbins*ncombi, nbins), labs, fontsize=20)
+_, _, nus150, _, _, _ = compute_freq(150, nbands) 
+combi_nus150 = list(combinations_with_replacement(nus150, 2))
+_, _, nus220, _, _, _ = compute_freq(220, nbands) 
+combi_nus220 = list(combinations_with_replacement(nus220, 2))
 
 
-for s in range(ncombi-1):
-    plt.axhline(y=(s+1)*nbins-0.5, lw=3, color='k')
-    plt.axvline(x=(s+1)*nbins-0.5, lw=3, color='k')
+# Sky
+sky_config = {'dust': 'd1'}
 
-plt.imshow(corrbinband[:, :, ispectre], vmin=-1, vmax=1, cmap='bwr')
-plt.title('Correlation matrix (nfreq*nbins)x(nfreq*nbins) for {} spectrum'.format(clnames[ispectre]),
-         fontsize=20)
-plt.colorbar()
-```
+d['filter_nu'] = 150 * 1e9
+Qubic_sky150 = qss.Qubic_sky(sky_config, d)
+x0150 = Qubic_sky150.get_simple_sky_map()
 
-```{python}
-Cp = amc.get_Cp(cross_mixreal, verbose=False)
-print('Cp shape:', Cp.shape)
+d['filter_nu'] = 220 * 1e9
+Qubic_sky220 = qss.Qubic_sky(sky_config, d)
+x0220 = Qubic_sky220.get_simple_sky_map()
 
-labs = []
-for i in range(ncombi):
-    labs.append(f'{oldcombi[i][0]}{oldcombi[i][1]}')
-print(labs)
 
-plt.figure(figsize=(20, 100))
-for b in range(nbins):
-    for s in range(4):
-        plt.subplot(nbins, 4, 4*b + s + 1)
-        vmax = np.max(np.abs(Cp[:, :, s, b]))
-        plt.imshow(Cp[:, :, s, b], vmin=-vmax, vmax=vmax, cmap='bwr')
-        plt.title('Cov - ' + clnames[s] + ' - bin {}'.format(b))
-        plt.colorbar(orientation='horizontal', fraction=0.2)
-        plt.xticks(np.arange(len(labs)), labs)
-        plt.yticks(np.arange(len(labs)), labs)
+cross_x0150 = np.zeros((ncombi, nbins, 4))
+cross_x0220 = np.zeros((ncombi, nbins, 4))
 
+# Map not convolved => No Beam correction
+# Beam correction is None so we can compute w only once        
+w = None
+for i, (band1, band2) in enumerate(combi):
+    print(f'Bands {band1} {band2}')
+    map1x0 = x0150[band1, :, :]
+    map2x0 = x0150[band2, :, :]
+    leff, cross_x0150[i, :, :], w = Namaster.get_spectra(map1x0.T,
+                                                      mask_apo,
+                                                      map2x0.T,
+                                                      w=w,
+                                                      purify_e=True,
+                                                      purify_b=False,
+                                                      beam_correction=None,
+                                                      pixwin_correction=True)
+
+w = None
+for i, (band1, band2) in enumerate(combi):
+    print(f'Bands {band1} {band2}')
+    map1x0 = x0220[band1, :, :]
+    map2x0 = x0220[band2, :, :]
+    leff, cross_x0220[i, :, :], w = Namaster.get_spectra(map1x0.T,
+                                                      mask_apo,
+                                                      map2x0.T,
+                                                      w=w,
+                                                      purify_e=True,
+                                                      purify_b=False,
+                                                      beam_correction=None,
+                                                      pixwin_correction=True)
+
+    
 
 ```
 
 ```{python}
-Cpcorr = np.zeros_like(Cp)
-for b in range(nbins):
-    for s in range(4):
-        Cpcorr[:, :, s, b] = amc.cov2corr(Cp[:, :, s, b])
+fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(15, 5))
+# 150
+for co in range(ncombi): 
+    c = palet[co]
+    ax0.errorbar(leff, 
+                avg_BBmix150[co, :],
+                yerr=error_BBmix150[co, :],
+                fmt='o',
+                color=c,
+                label='{:3.0f} x {:3.0f}'.format(combi_nus150[co][0], combi_nus150[co][1]))
+    ax0.plot(leff, cross_x0150[co, :, 2], '--', color=c)
 
-plt.figure(figsize=(20, 100))
-for b in range(nbins):
-    for s in range(4):
-        plt.subplot(nbins, 4, 4*b + s + 1)
-        plt.imshow(Cpcorr[:, :, s, b], vmin=-1, vmax=1, cmap='bwr')
-        plt.title('Corr - ' + clnames[s] + ' - bin {}'.format(b))
-        plt.colorbar(orientation='horizontal', fraction=0.2)
-        plt.xticks(np.arange(len(labs)), labs)
-        plt.yticks(np.arange(len(labs)), labs)
-  
-```
+ax0.set_xlabel('$\\ell$', fontsize=18)
+ax0.set_ylabel('$D_\\ell$', fontsize=18)
+ax0.grid()
+ax0.set_title(clnames[2] + ' - 150 GHz', fontsize=18)
+ax0.legend(fontsize=10, loc='upper center')
 
-```{python}
-Cpcorr_avg = np.mean(Cpcorr, axis=3)
-plt.figure(figsize=(15, 5))
+# 220
+for co in range(ncombi): 
+    c = palet[co]
+    ax1.errorbar(leff, 
+                avg_BBmix220[co, :],
+                yerr=error_BBmix220[co, :],
+                fmt='o',
+                color=c,
+                label='{:3.0f} x {:3.0f}'.format(combi_nus220[co][0], combi_nus220[co][1]))
+    ax1.plot(leff, cross_x0220[co, :, 2], '--', color=c)
 
-for s in range(4):
-    plt.subplot(1, 4, s + 1)
-    plt.imshow(Cpcorr_avg[:, :, s], vmin=-1, vmax=1, cmap='bwr')
-    plt.title(' Corr avg - ' + clnames[s])
-    plt.colorbar(orientation='horizontal', fraction=0.2)
-    plt.xticks(np.arange(len(labs)), labs)
-    plt.yticks(np.arange(len(labs)), labs)
+ax1.set_xlabel('$\\ell$', fontsize=18)
+ax1.set_ylabel('$D_\\ell$', fontsize=18)
+ax1.grid()
+ax1.set_title(clnames[2] + ' - 220 GHz', fontsize=18)
+ax1.legend(fontsize=10, loc='best')
 
+
+plt.tight_layout(pad=1.3)
+
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/BB_IBCS_3bands_150_220_dust.pdf')
 ```
 
 ```{python}

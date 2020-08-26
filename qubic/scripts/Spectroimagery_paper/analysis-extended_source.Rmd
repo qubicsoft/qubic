@@ -138,7 +138,7 @@ import matplotlib as mp
 ```{python}
 plt.figure(figsize=(10,10))
 plt.rc('font', size=8)
-hp.gnomview(maprec[0,:,0],reso=13,rot=center,min=-1e3,max=1e5,)
+hp.gnomview(maprec[0,:,0],reso=13,rot=center,min=-1e5,max=1e5,cmap='jet')
 ```
 
 ```{python}
@@ -147,12 +147,13 @@ hp.gnomview(maprec[0,:,0],reso=13,rot=center,min=-1e3,max=1e5,)
 
 ```{python}
 plt.figure(figsize=(8,8))
-vmin=-1e3
+vmin=-1e5
 vmax=1e5
 plt.rc('font', size=16)
 reso=12
 fig,ax=plt.subplots(nrows=3,ncols=3,figsize=(16,16), sharex=True,
                     gridspec_kw={'hspace': 0.01,'wspace': 0.0})
+cmap='jet'
 ax=ax.ravel()
 for i in range(3):
     ax[3*i].cla()
@@ -160,6 +161,7 @@ for i in range(3):
     hp.gnomview(mapconv[i,:,0],  rot= center,reso=12,notext=True,hold=True,
                 max=vmax,
                 min=vmin,
+                cmap=cmap,
                 cbar= True if i ==3 else False,
                title='Convolved' if i == 0 else ' ')
     ax[3*i+1].cla()
@@ -167,6 +169,7 @@ for i in range(3):
     hp.gnomview(maprec[i,:,0], rot= center,reso=12,notext=True,hold=True,
                 max= vmax,
                 min =vmin,
+                cmap=cmap,
                 cbar= True if i ==3 else False,
                title = 'Reconstructed' if i == 0 else ' ')
     ax[3*i+2].cla()
@@ -176,6 +179,7 @@ for i in range(3):
     hp.gnomview(auxmap, rot= center,reso=12,notext=True,hold=True,
                 max= vmax,
                 min =vmin,
+                cmap=cmap,
                 cbar= True if i ==3 else False,
                title = 'Difference' if i == 0 else ' ')
     if i == 0:

@@ -40,13 +40,6 @@ rc('font', size=18)
 ```
 
 ```{python}
-import matplotlib.colors as mcolors
-mcolors.TABLEAU_COLORS.keys()
-
-colorlist = list(mcolors.TABLEAU_COLORS.keys())
-```
-
-```{python}
 ### Initialize
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
 print(global_dir)

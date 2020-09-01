@@ -4,8 +4,8 @@ jupyter:
     text_representation:
       extension: .Rmd
       format_name: rmarkdown
-      format_version: '1.1'
-      jupytext_version: 1.2.4
+      format_version: '1.2'
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -20,13 +20,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from importlib import reload
 from qubic import QubicSkySim as qss
+from qubic import camb_interface as qc
 # %matplotlib inline
 rc('font', size=15)
 rc('figure', figsize=(13, 8))
 ```
 
 ```{python}
-ell, totCL, unlensedCL = qss.get_camb_Dl(lmax=2500, r=0.1)
+ell, totCL, unlensedCL = qc.get_camb_Dl(lmax=2500, r=0.1)
 ```
 
 ```{python}

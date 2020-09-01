@@ -75,7 +75,18 @@ d['nf_recon'] = 1
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 print(center)
 
+# Adjust some parameters in the dictionary
 d['npointings'] = 3000
+
+d['filter_nu'] = 220e9
+d['photon_noise'] = True
+d['noiseless'] = False
+
+print(d['filter_nu'])
+print(d['detector_nep'])
+print(d['photon_noise'])
+print(d['config'])
+d['effective_duration']
 ```
 
 # Input sky
@@ -86,8 +97,8 @@ In this case we read a map $X_0$ simulated previously which contains fluctuation
 ```{python}
 # Make a sky using PYSM
 ### Pick one of these:
-seed = None
-sky_config = {'cmb': seed}                ### CMB Only
+seed = 42
+sky_config = {'cmb': 42}                ### CMB Only
 #sky_config = {'cmb': seed, 'dust':'d1'}   ### CMB + Dust
 
 ### Generate the maps at each sub-frequency
@@ -140,7 +151,8 @@ print('--------- TOD with shape (#detectors, #pointings) : {} '.format(np.shape(
 tes = 6
 plt.plot(TOD[tes, :], label='TES {}'.format(tes))
 plt.xlabel('Pointing index')
-plt.ylabel('TOD')
+plt.ylabel(f'TOD from TES {tes} [W]')
+plt.title('FI - 220GHz - Noiseless={} CMB - STD = {:.4} W'.format( d['noiseless'], np.std(TOD)))
 ```
 
 # Coverage map
@@ -204,19 +216,21 @@ diff[unseen, :] = hp.UNSEEN
 ```{python}
 rr = 14 # Resolution in arcmin
 stokes = ['I', 'Q', 'U']
+plt.figure(figsize=(15, 15))
 for istokes in range(3):
     if istokes == 0:
         min = -200
         max = 200
     else:
-        min = -4
-        max = 4
+        min = -8
+        max = 8
     hp.gnomview(maps_convolved[:, istokes], cmap='jet', rot=center, sub=(3,3,3*istokes+1), reso=rr,
-                title='Input ' + stokes[istokes], notext=True, min=min, max=max)
+                title='Input ' + stokes[istokes], unit='$\mu K$', format='%g',  min=min, max=max)
     hp.gnomview(maps_recon[:, istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+2), reso=rr,
-                title='Output ' + stokes[istokes], notext=True, min=min, max=max)
+                title='Output ' + stokes[istokes], unit='$\mu K$', min=min, max=max)
     hp.gnomview(diff[:, istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+3), reso=rr,
-                title='Difference ' + stokes[istokes], notext=True, min=-2, max=2)
+                title='Difference ' + stokes[istokes], unit='$\mu K$', min=-2, max=2)
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/maps_1bands_4years.pdf')
 ```
 
 ```{python}
@@ -243,14 +257,6 @@ for istokes in range(3):
                 title='Output ' + stokes[istokes], notext=True, min=min, max=max)
     hp.gnomview(diffcenter[:, istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+3), reso=rr,
                 title='Difference ' + stokes[istokes], notext=True, min=None, max=None)
-```
-
-```{python}
-diffcenter.shape
-```
-
-```{python}
-unseen
 ```
 
 ```{python}

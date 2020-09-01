@@ -12,18 +12,20 @@ jupyter:
     name: python3
 ---
 
-# Fast simulation spectroimaging MC
+# Fast simulation with spectroimaging
 
-Make a MC with FastSim and get covariance matrices for the power spectrum.
+Make a MC with FastSim and get power spectra.
 
 ```{python}
 # %matplotlib inline
 
 import glob
+import seaborn as sns
 import healpy as hp
 import numpy as np
 import matplotlib.pyplot as plt
 import pickle
+from itertools import combinations, combinations_with_replacement
 
 
 # Specific qubic modules
@@ -31,614 +33,509 @@ from qubicpack.utilities import Qubic_DataDir
 from pysimulators import FitsArray
 import pysm
 import qubic
+from qubic import camb_interface as qc
 from qubic import QubicSkySim as qss
 
 from qubic import NamasterLib as nam
 from qubic.polyacquisition import compute_freq
-import AnalysisMC as amc
-
+from qubic import AnalysisMC as amc
 
 rc('figure', figsize=(16, 10))
 rc('font', size=15)
 ```
 
 ```{python}
-# Maps obtained with the full pipeline
-dirmaps = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/corr_matrices/pourJC/'
-
+### Initialize
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+print(global_dir)
+```
 
-dictionary = global_dir + 'dicts/spectroimaging_article.dict'
+```{python}
+### This is for the FI
+config = 'FI150' #FI220 or FI150
+old_config = False
 
-print(dictionary)
-# Dictionary saved during the simulation
+### Read some stuff
+# Read dictionary chosen
+dictfilename = global_dir + '/dicts/spectroimaging_article.dict'
 d = qubic.qubicdict.qubicDict()
-d.read_from_file(dictionary)
+d.read_from_file(dictfilename)
 
-```
+d['nside'] = 256
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+print(center)
 
-```{python}
-def get_maps_from_louise(directory, nfsub, allreals=False):
-    if allreals:
-        mappatchfile = glob.glob(directory+'residualspatch_allreals*_nfrecon{}.pkl'.format(nfsub))[0]
-    else:
-        mappatchfile = glob.glob(directory+'residualspatch*_nfrecon{}.pkl'.format(nfsub))[0]
-    
-    covfile = glob.glob(directory+'coverage_*_nfrecon{}.pkl'.format(nfsub))[0]
-    seenfile = glob.glob(directory+'seenmap_*_nfrecon{}.pkl'.format(nfsub))[0]
-    
-    residualspatch = pickle.load( open( mappatchfile, "rb" ) )
-    seenpix = pickle.load( open( seenfile, "rb" ) )
-    covpix = pickle.load( open( covfile, "rb" ) )
-    
-    nside = 256
-    
-    if allreals:
-        nreals = residualspatch.shape[0]
-        residuals_map = np.zeros((nreals, nfsub, 12*nside**2, 3))
-        residuals_map[:, :, seenpix, :] = residualspatch
-    
-    else:
-        residuals_map = np.zeros((nfsub, 12*nside**2, 3))
-        residuals_map[:, seenpix, :] = residualspatch
+# Frequency band
+d['filter_nu'] = int(config[-3:]) * 1e9
+print(d['filter_nu'])
 
-    return residuals_map, covpix, seenpix
-```
+# Number of bands
+nbands = 3
+d['nf_recon'] = nbands
+d['nf_sub'] = nbands
 
-```{python}
-# Input sky
-seed = None
-sky_config = {'cmb': seed}
+# Sky
+sky_config = {'dust': 'd1'}
+# seed=42
+# sky_config = {'cmb': seed}
+
 Qubic_sky = qss.Qubic_sky(sky_config, d)
-
+# Maps are convolved at the QUBIC resolution in the band => Beam_correction=True when you make Cls
+dust_map = Qubic_sky.get_fullsky_convolved_maps(FWHMdeg=None, verbose=True)
+# x0 = Qubic_sky.get_fullsky_convolved_maps(FWHMdeg=0, verbose=True)
 x0 = Qubic_sky.get_simple_sky_map()
-x0.shape
 
 ```
 
 ```{python}
-# With 1 realisation only
-all_nfrecon = [1, 2, 3, 4, 5, 8]
-allsignoise = [[88.],
-                [88., 95.],
-                [88., 81., 98.],
-                [88., 66., 64., 95.],
-                [88., 62., 61., 64., 99.],
-                [88., 62., 59., 59., 61., 63., 65., 95.]]
-               
-nfrecon = 5
+Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(int(config[-3:]), nbands)
+print(nus)
 
-index = [i for i, x in enumerate(all_nfrecon) if x == nfrecon][0]
+# just for name in the plots 
+combi_nus = list(combinations_with_replacement(nus, 2))
+print(combi_nus)
 
-signoise = allsignoise[index]
+fwhms = [d['synthbeam_peak150_fwhm'] * 150 / nu for nu in nus]
+print(fwhms)
+```
 
-maps, coverage, seenmap = get_maps_from_louise(dirmaps, nfrecon)
+```{python}
+# input_Dl = Qubic_sky.input_cmb_spectra
+# input_ell = np.arange(np.shape(input_Dl)[0])
+```
 
-cI, cQ, cU, fitcov, noise_norm = qss.get_cov_nunu(maps, coverage)
-corr_mats = [cI, cQ/2, cU/2]
+```{python}
+RA_center= 0. #deg
+DEC_center=-57. #deg
+center = qubic.equ2gal(RA_center, DEC_center)
 
-# Create maps with the noise corelation we want
-myfitcovs = []
-for isub in range(nfrecon):
-    xx, yyfs, fitcov = qss.get_noise_invcov_profile(maps[isub, :, :], coverage, 
-                                                 label='Input Map {}'.format(index+1), fit=True, norm=False,
-                                                 allstokes=True, doplot=False)
-    myfitcovs.append(fitcov)
-
-# Good Cls
-clth = pickle.load(open( global_dir + '/doc/FastSimulator/Data/cl_corr_noise_nersc200k.pk', "rb" ) )
-alpha = 4.5 # See notebook called "2pt-Correlation Function" for an empirical explanation of alpha
-clth = (clth -1 ) * alpha + 1
-    
-new_sub_maps = Qubic_sky.create_noise_maps(signoise, coverage, nsub=nfrecon,
-                                            effective_variance_invcov=myfitcovs,
-                                            clnoise=clth, sub_bands_cov=[cI, cQ, cU], verbose=False)
-print(np.shape(new_sub_maps))
-
-# Reshape in case just 1 band
-if nfrecon == 1:
-    new_sub_maps = np.reshape(new_sub_maps, (1, 12*d['nside']**2, 3))
-print(np.shape(new_sub_maps))
-
-# Check we have the good correlations
-for isub in range(nfrecon):
-    figure()
-    xx, yyfs, fitcov = qss.get_noise_invcov_profile(new_sub_maps[isub, :, :], 
-                                                    coverage, 
-                                                     label='FastSim sub={}/{}'.format(isub+1, nfrecon), 
-                                                    fit=False, norm=False,
-                                                 allstokes=False, doplot=True)
-    plt.plot(myfitcovs[isub][0,:], 
-         np.sqrt(myfitcovs[isub][1,:]), 
-         label='End-To-End Fit sub={}/{}'.format(isub+1, nfrecon))
-    plt.legend(fontsize=9)
-
-cInew, cQnew, cUnew, fitcov, noise_norm = qss.get_cov_nunu(new_sub_maps, coverage)
-new_corr_mats = [cInew, cQnew/2, cUnew/2]
-
-figure()
-stn = ['I','Q/2', 'U/2']
-mini = np.min(np.array(corr_mats))
-maxi = np.max(np.array(corr_mats))
-for s in range(3):
-    subplot(2,3,1+s)
-    imshow(corr_mats[s], vmin=mini, vmax=maxi)
-    colorbar(orientation='horizontal')
-    title('End-To-End Cov {} nsub={}'.format(stn[s], nfrecon))
-    
-    subplot(2,3,4+s)
-    imshow(new_corr_mats[s], vmin=mini, vmax=maxi)
-    colorbar(orientation='horizontal')
-    title('FastSim Cov {} nsub={}'.format(stn[s],nfrecon))
-
+qubic_coverage = np.load('/home/lmousset/QUBIC/MyGitQUBIC/qubic/qubic/doc/FastSimulator/Data/coverage_nfsub15_nptgs10000_qubicpatch.npy')
+hp.mollview(qubic_coverage)
 
 ```
 
 ```{python}
-# With all realisations
-all_nfrecon = [1, 2, 3, 4, 5, 8]
-allsignoise = [[88.],
-                [88., 95.],
-                [88., 81., 98.],
-                [88., 66., 64., 95.],
-                [88., 62., 61., 64., 99.],
-                [88., 62., 59., 59., 61., 63., 65., 95.]]
-               
-nfrecon = 5
-
-index = [i for i, x in enumerate(all_nfrecon) if x == nfrecon][0]
-
-signoise = allsignoise[index]
-
-
-maps, coverage, seenmap = get_maps_from_louise(dirmaps, nfrecon, allreals=True)
-print(maps.shape)
-nreals = maps.shape[0]
-
-# Compute the covariance matrices from maps
-allcI = np.zeros((nreals, nfrecon, nfrecon))
-allcU = np.zeros_like(allcI)
-allcQ = np.zeros_like(allcI)
+# Getting noise realisations with FastSimulator
+nreals = 2
+npix = 12 * d['nside']**2
+noisemaps = np.zeros((nreals, nbands, npix, 3))
 
 for r in range(nreals):
-    allcI[r], allcQ[r], allcU[r], _, _ = qss.get_cov_nunu(maps[r], coverage)
+    noisemaps[r, ...], coverage = Qubic_sky.get_partial_sky_maps_withnoise(coverage=None,
+                                                                           noise_only=True, 
+                                                                           spatial_noise=True,
+                                                                           old_config=old_config)
+hp.mollview(coverage)
 
-cI = np.mean(allcI, axis=0)
-cQ = np.mean(allcQ, axis=0)
-cU = np.mean(allcU, axis=0)
+# Make maps QUBIC = noise + CMB
+qubicmaps = np.zeros_like(noisemaps)
+for r in range(nreals):
+    qubicmaps[r, ...] = noisemaps[r, ...] + dust_map
 
-# Get fitcov for each subband (from 1st realisation)
-myfitcovs = []
-for isub in range(nfrecon):
-    xx, yyfs, fitcov = qss.get_noise_invcov_profile(maps[0, isub, :, :], coverage, 
-                                                 label='Input Map {}'.format(index+1), fit=True, norm=False,
-                                                 allstokes=True, doplot=False)
-    myfitcovs.append(fitcov)
+unseen = coverage < np.max(coverage) * 0.1
+qubicmaps[:, :, unseen, :] = 0.
+noisemaps[:, :, unseen, :] = 0.
+dust_map[:, unseen, :] = 0.
+x0[:, unseen, :] = 0.
+```
 
-# # Good Cls
-# clth = pickle.load(open( global_dir + '/doc/FastSimulator/Data/cl_corr_noise_nersc200k.pk', "rb" ) )
-# alpha = 4.5 # See notebook called "2pt-Correlation Function" for an empirical explanation of alpha
-# clth = (clth -1 ) * alpha + 1
+```{python}
+Stokes = ['I', 'Q', 'U']
+real = 0
+band = 0
 
-new_sub_maps = Qubic_sky.create_noise_maps(signoise, coverage, nsub=nfrecon,
-                                            effective_variance_invcov=myfitcovs,
-                                            clnoise=None, sub_bands_cov=[cI, cQ, cU], verbose=False)
-print(np.shape(new_sub_maps))
-
-# Reshape in case just 1 band
-if nfrecon == 1:
-    new_sub_maps = np.reshape(new_sub_maps, (1, 12*d['nside']**2, 3))
-print(np.shape(new_sub_maps))
-
-# Check we have the good correlations
-for isub in range(nfrecon):
-    figure()
-    xx, yyfs, fitcov = qss.get_noise_invcov_profile(new_sub_maps[isub, :, :], 
-                                                    coverage, 
-                                                     label='FastSim sub={}/{}'.format(isub+1, nfrecon), 
-                                                    fit=False, norm=False,
-                                                 allstokes=False, doplot=True)
-    plt.plot(myfitcovs[isub][0,:], 
-             np.sqrt(myfitcovs[isub][1,:]), 
-             label='End-To-End Fit sub={}/{}'.format(isub+1, nfrecon))
-    plt.legend(fontsize=9)
-
-cInew, cQnew, cUnew, fitcov, noise_norm = qss.get_cov_nunu(new_sub_maps, coverage)
-
-# For the plot
-corr_mats = [cI, cQ/2, cU/2]
-
-new_corr_mats = [cInew, cQnew/2, cUnew/2]
-
-figure()
-stn = ['I','Q/2', 'U/2']
-mini = np.min(np.array(corr_mats))
-maxi = np.max(np.array(corr_mats))
 for s in range(3):
-    subplot(2,3,1+s)
-    imshow(corr_mats[s], vmin=mini, vmax=maxi)
-    colorbar(orientation='horizontal')
-    title('End-To-End Cov {} nsub={}'.format(stn[s], nfrecon))
-    
-    subplot(2,3,4+s)
-    imshow(new_corr_mats[s], vmin=mini, vmax=maxi)
-    colorbar(orientation='horizontal')
-    title('FastSim Cov {} nsub={}'.format(stn[s],nfrecon))
+    hp.gnomview(noisemaps[real, band,:,s], reso=20, sub=(3, 3, s+1), 
+                title='Noise ' + Stokes[s] + f' Sub {band}')   
+    hp.gnomview(dust_map[band,:,s], reso=20, sub=(3, 3, s+3+1), 
+                title='CMB ' + Stokes[s] + f' Sub {band}')        
+    hp.gnomview(qubicmaps[real, band,:,s], reso=20, sub=(3, 3, s+6+1), 
+                title='QUBIC map ' + Stokes[s] + f' Sub {band}')        
 
-```
-
-```{python}
-# Make many realisations
-nreals = 50
-npix = 12 * d['nside']**2
-
-maps_recon = np.zeros((nreals, nfrecon, npix, 3))
-for i in range(nreals):
-    maps_recon[i] = Qubic_sky.create_noise_maps(signoise, coverage, nsub=nfrecon,
-                                            effective_variance_invcov=myfitcovs,
-                                            clnoise=None, sub_bands_cov=[cI, cQ, cU], verbose=False)
-
-print(maps_recon[0, 0, seenmap, 0])
-print(maps_recon[1, 0, seenmap, 0])
-```
-
-```{python}
-hp.mollview(maps_recon[0, 0, :, 0])
 ```
 
 ### Power spectrum with Namaster
 
 ```{python}
-2*256-1
-```
-
-```{python}
-# Create a Namaster object
+# Make a Namaster object
 lmin = 40
 lmax = 2 * d['nside'] - 1
 delta_ell = 30
-print('lmin', lmin)
-print('lmax', lmax)
-print('delta ell', delta_ell)
 
-mask = np.zeros(12 * d['nside']**2)
+mask = np.zeros(12 * d['nside'] ** 2)
+seenmap = np.invert(unseen)
 mask[seenmap] = 1
-
 Namaster = nam.Namaster(mask, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
-
-# Make a mask
 mask_apo = Namaster.get_apodized_mask()
-hp.mollview(mask_apo)
+# hp.gnomview(mask_apo, reso=20, title='Mask')
 
-# Binning
 ell_binned, b = Namaster.get_binning(d['nside'])
 nbins = len(ell_binned)
+print('lmin:', lmin)
+print('lmax:', lmax)
+print('delta_ell:', delta_ell)
 print('nbins:', nbins)
 print('ell binned:', ell_binned)
+print('Fsky: {}'.format(Namaster.fsky))
+
+
+# Possible combinations between bands
+combi = list(combinations_with_replacement(np.arange(nbands), 2))
+ncombi = len(combi)
+print('combi:', combi)
+print('ncombi:', ncombi)
+
+# palet = sns.husl_palette(n_colors=ncombi, h=0.01, s=0.9, l=0.65)
+palet = sns.cubehelix_palette(ncombi, start=3, hue=1, light=0.75)
+# palet = sns.color_palette("cubehelix", ncombi)
+sns.palplot(palet)
+
 
 ```
 
-### Auto spectrum
-
 ```{python}
-# Auto spectrum
+cross_thconv = np.zeros((ncombi, nbins, 4))
+cross_x0 = np.zeros((ncombi, nbins, 4))
+
+# Map convolved => Beam correction
+# As the beam correction is different for each spectrum, we need to calculate the workspace w each time
+for i, (band1, band2) in enumerate(combi):
+    print(f'Bands {band1} {band2}')
+
+    beam_corr = np.sqrt(fwhms[band1] * fwhms[band2])
+    print(beam_corr)
+    map1 = dust_map[band1, :, :]
+    map2 = dust_map[band2, :, :]
+    leff, cross_thconv[i, :, :], w = Namaster.get_spectra(map1.T,
+                                                      mask_apo,
+                                                      map2.T,
+                                                      w=None,
+                                                      purify_e=True,
+                                                      purify_b=False,
+                                                      beam_correction=beam_corr,
+                                                      pixwin_correction=True)
+
+# Map not convolved => No Beam correction
+# Beam correction is None so we can compute w only once        
 w = None
+for i, (band1, band2) in enumerate(combi):
+    print(f'Bands {band1} {band2}')
+    map1x0 = x0[band1, :, :]
+    map2x0 = x0[band2, :, :]
+    leff, cross_x0[i, :, :], w = Namaster.get_spectra(map1x0.T,
+                                                      mask_apo,
+                                                      map2x0.T,
+                                                      w=w,
+                                                      purify_e=True,
+                                                      purify_b=False,
+                                                      beam_correction=None,
+                                                      pixwin_correction=True)
 
-real = 0
-cells_recon = np.zeros((nfrecon, nbins, 4))
-# Get spectra
-for isub in range(nfrecon):
-    maps = maps_recon[real, isub, :, :] #+ x0[isub, :, :]
-    leff, cells_recon[isub, :, :], w = Namaster.get_spectra(maps.T, mask_apo, w=w,
-                                          purify_e=True, 
-                                          purify_b=False, 
-                                          beam_correction=None,
-                                          pixwin_correction=True)
-  
+
 ```
 
 ```{python}
-import matplotlib.colors as mcolors
-mcolors.TABLEAU_COLORS.keys()
+# Check that both give the same
 
-colorlist = list(mcolors.TABLEAU_COLORS.keys())
-```
-
-```{python}
 clnames = ['TT', 'EE', 'BB', 'TE']
-# with plt.xkcd():
-rc('figure', figsize=(12, 8))
 
 fig, axs = plt.subplots(2, 2)
 axs = axs.ravel()
 
-color = ['b', 'r', 'g', 'k', 'y', 'orange', 'brown', 'purple']
-for i in range(4):
-    ax = axs[i]
-    for isub in range(nfrecon): 
-        ax.plot(leff[:], cells_recon[isub, :, i],'o', color=colorlist[isub], 
-                 label='Recon {}'.format(isub))
+for s in range(4):
+    ax = axs[s]
+    for cross in range(ncombi): 
+        c = palet[cross]       
+        ax.plot(leff, cross_thconv[cross, :, s], 'o', color=c, label='Sky convolved - beam corr adapted')        
+        ax.plot(leff, cross_x0[cross, :, s], color=c, label='Sky not convolved - no beam corr')
+
+#         ax.plot(leff[1:], cross_thconv[cross, 1:, s]* 2 * np.pi / (leff[1:] * (leff[1:] + 1)), '--', color=c)
+#         ax.plot(leff[1:], cross_x0[cross, 1:, s] * 2 * np.pi / (leff[1:] * (leff[1:] + 1)), color=c)
+
+        if cross == 0:
+            ax.legend()
+
     ax.set_xlabel('$\\ell$')
     ax.set_ylabel('$D_\\ell$')
-
-    ax.set_title(clnames[i])
-
+#     ax.set_ylabel('$C_\\ell$')
+    ax.grid()
+       
+    ax.set_title(clnames[s])
+    
 plt.tight_layout()
-ax.legend(fontsize=8, loc='right')
 ```
 
-### Cross sprectum
+### IBCS for each realisation
+
+For each noise realisation, we make a Inter-Bands Cross Spectra. This will keep the noise bias. 
 
 ```{python}
-# from itertools import combinations
+# Load spectra already done at CC
+datadir = os.environ['DATA_SPECTROIM']
+rep_spectrumCC = datadir + '/FastSimulator/cls_spectrum_fromCC/'
 
-# ncross = nreals * (nreals - 1) // 2
-ncross = nreals // 2
-print(nbins, ncross)
-cells_cross = np.zeros((ncross, nfrecon, nbins, 4))
-cells_conv = np.zeros((ncross, nfrecon, nbins, 4))
+nbands = 3
+name = f'cross_interband_samereal_nfrecon{nbands}_qubicmaps_' + config + '_v2_galaxycenter'
+cross_samereal = np.load(rep_spectrumCC + name + '.npy')
 
-# Get spectra
-w = None
-for isub in range(nfrecon):
-    print('isub:', isub)
-    cross = 0
-#     for c in combinations(np.arange(5), 2):
-    for c1 in range(0, nreals-1, 2): # do not mix pairs to avoid correlation 
-        c2 = c1 + 1 
-        c = (c1, c2)
-        print(c)
-        map1 = maps_recon[c[0], isub, :, :] #+ x0[isub, :, :]
-        map2 = maps_recon[c[1], isub, :, :] #+ x0[isub, :, :]
-        leff, cells_cross[cross, isub, :, :], w = Namaster.get_spectra(map1.T, 
-                                                                      mask_apo, 
-                                                                      map2.T,
-                                                                      w=w,
-                                                                      purify_e=True, 
-                                                                      purify_b=False, 
-                                                                      beam_correction=None,
-                                                                      pixwin_correction=True)
-        cross += 1     
+print(cross_samereal.shape)
 ```
 
 ```{python}
-# Average over the cross_spectrum
-cross_mean = np.mean(cells_cross, axis=0)
-cross_std = np.std(cells_cross, axis=0)
-print(cross_mean.shape)
+# cross_samereal = np.zeros((nreals, ncombi, nbins, 4))
+
+# w = None
+# for real in range(nreals):
+#     print(f'\n Real {real}')
+#     for i, (band1, band2) in enumerate(combi):
+#         print(f'Bands {band1} {band2}')
+#         map1 = noisemaps[real, band1, :, :]
+#         map2 = noisemaps[real, band2, :, :]
+#         leff, cross_samereal[real, i, :, :], w = Namaster.get_spectra(map1.T,
+#                                                                       mask_apo,
+#                                                                       map2.T,
+#                                                                       w=w,
+#                                                                       purify_e=True,
+#                                                                       purify_b=False,
+#                                                                       beam_correction=True,
+#                                                                       pixwin_correction=True)
+
+```
+
+```{python}
+avg_cross_samereal = np.mean(cross_samereal, axis=0)
+error_cross_samereal = np.std(cross_samereal, axis=0)
 
 
-print(cells_cross[:, 0, 0, 0])
+BBavg_same = avg_cross_samereal[:, :, 2]
+BBerror_same = error_cross_samereal[:, :, 2]
 ```
 
 ```{python}
 clnames = ['TT', 'EE', 'BB', 'TE']
 
-rc('figure', figsize=(12, 8))
-
 fig, axs = plt.subplots(2, 2)
 axs = axs.ravel()
 
-for i in range(4):
-    ax = axs[i]
-    for isub in range(nfrecon):
-        ax.errorbar(leff[:], cross_mean[isub, :, i],
-                    yerr=cross_std[isub, :, i] * np.sqrt(2),
-                    marker='o', color=colorlist[isub], linestyle='none', 
-                    label='Recon cross {}'.format(isub))
-    
-    ax.axhline(y=0, color='k', ls='--')
-    ax.set_xlabel('$\\ell$')
-    ax.set_ylabel('$D_\\ell$')
-#     ax.set_yscale('log')
-    ax.set_title(clnames[i])
-    ax.legend(fontsize=8, loc='upper left')
+for s in range(4):
+    ax = axs[s]
+    for cross in range(ncombi): 
+        c = palet[cross]
+        ax.errorbar(leff, 
+                    avg_cross_samereal[cross, :, s],
+                    yerr=error_cross_samereal[cross, :, s],
+                    fmt='o',
+                    color=c,
+                    label='{:3.0f} x {:3.0f}'.format(combi_nus[cross][0], combi_nus[cross][1]))
+        ax.plot(leff, cross_thconv[cross, :, s], '--', color=c)
+#         ax.plot(leff, cross_x0[cross, :, s], color=c)
 
+    ax.set_xlabel('$\\ell$', fontsize=18)
+    ax.set_ylabel('$D_\\ell$', fontsize=18)
+    ax.grid()
+
+    ax.set_title(clnames[s], fontsize=18)
+    ax.legend(fontsize=10, loc='best')
 plt.tight_layout()
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/' + name + '.pdf')
+```
+
+### IBCS mixing noise realisations
+
+We make Inter Band Cross Spectra (IBCS) mixing 2 independant noise realisations. This will remove the noise bias. 
+
+```{python}
+datadir = os.environ['DATA_SPECTROIM']
+rep_spectrumCC = datadir + '/FastSimulator/cls_spectrum_fromCC/'
+
+
+name = f'cross_interband_mixreal_nfrecon{nbands}_qubicmaps_' + config + '_v2_galaxycenter'
+cross_mixreal = np.load(rep_spectrumCC + name + '.npy')
+
+print(cross_mixreal.shape)
+```
+
+```{python}
+# ncross = nreals // 2
+# print('ncross:', ncross)
+# cross_mixreal = np.zeros((ncross, ncombi, nbins, 4))
+
+# w = None
+# cross = 0
+# for c1 in range(0, nreals - 1, 2):  # do not mix pairs to avoid correlation
+#     c2 = c1 + 1
+#     print(f'\n Reals {c1} {c2}')
     
-```
-
-### Covariance between bands per bin in the spectrum
-
-```{python}
-cov = np.zeros((nfrecon, nfrecon, 4, nbins))
-corr = np.zeros_like(cov)
-for b in range(nbins):
-    for s in range(4):
-        c = np.cov(cells_cross[:, :, b, s].T)
-        cov[:, :, s, b] = c
-        corr[:, :, s, b] = amc.cov2corr(c)
+#     for i, (band1, band2) in enumerate(combi):
+#         print(f'Bands {band1} {band2}')
+#         map1 = noisemaps[c1, band1, :, :]
+#         map2 = noisemaps[c2, band2, :, :]
+#         leff, cross_mixreal[cross, i, :, :], w = Namaster.get_spectra(map1.T,
+#                                                                        mask_apo,
+#                                                                        map2.T,
+#                                                                        w=w,
+#                                                                        purify_e=True,
+#                                                                        purify_b=False,
+#                                                                        beam_correction=None,
+#                                                                        pixwin_correction=True)
         
+#     cross += 1
+
 ```
 
 ```{python}
-plt.figure(figsize=(20, 200))
-for b in range(nbins):
-    for s in range(4):
-        plt.subplot(nbins, 4, b*4 + s+1)
-        plt.imshow(cov[:, :, s, b])
-        plt.title(clnames[s] + ' - bin {}'.format(b))
-        plt.colorbar(orientation='horizontal', fraction=0.1)
-        
+avg_cross_mixreal = np.mean(cross_mixreal, axis=0)
+error_cross_mixreal = np.std(cross_mixreal, axis=0) * np.sqrt(2)
+
 ```
 
 ```{python}
-plt.figure(figsize=(20, 200))
-for b in range(nbins):
-    for s in range(4):
-        plt.subplot(nbins, 4, b*4 + s+1)
-        plt.imshow(corr[:, :, s, b])
-        plt.title(clnames[s] + ' - bin {}'.format(b))
-        plt.colorbar(orientation='horizontal', fraction=0.1)
-        
+name
 ```
 
 ```{python}
-# Average correlation matrices over bins
-corr_avg = np.mean(corr, axis=3)
-for s in range(4):
-    plt.subplot(1, 4, s+1)
-    plt.imshow(corr_avg[:, :, s])
-    plt.title(clnames[s] + ' Avg')
-    plt.colorbar(orientation='horizontal', fraction=0.1)
-        
-```
-
-### Go to Cp_prime
-
-Not sure it is useful because if we have many realisations (easy with Fast Simulator), we can use directly Cp to average the subbands. 
-
-```{python}
-# Cp_prime over bins (normalisation by the first term)
-N00, cov_prime00 = amc.Cp2Cp_prime(cov, verbose=True)
+clnames = ['TT', 'EE', 'BB', 'TE']
+fig, axs = plt.subplots(2, 2)
+axs = axs.ravel()
 
 for s in range(4):
-    plt.subplot(1, 4, s+1)
-    plt.imshow(cov_prime00[:, :, s, 0])
-    plt.title(clnames[s] + ' Avg')
-    plt.colorbar(orientation='horizontal', fraction=0.1)
- 
-```
-
-```{python}
-# Cp_prime over bins (normalisation by the diagonal)
-N, cov_prime = amc.Cp2Cp_prime_viaCorr(cov, verbose=True)
-
-for s in range(4):
-    plt.subplot(1, 4, s+1)
-    plt.imshow(cov_prime[:, :, s, 0])
-    plt.title(clnames[s] + ' Avg')
-    plt.colorbar(orientation='horizontal', fraction=0.1)
- 
-```
-
-### Weighted average of the subbands
-
-I don't know if it is interesting to do that.
-
-```{python}
-# Using directly cov
-weighted_av, sig2 = amc.make_weighted_av(cells_cross, cov, verbose=True)
-
-# Using directly cov_prime00
-weighted_av00, sig200 = amc.make_weighted_av(cells_cross, cov_prime00, verbose=True)
-
-# Using directly cov_prime
-weighted_avprime, sig2prime = amc.make_weighted_av(cells_cross, cov_prime, verbose=True)
-```
-
-```{python}
-weighted_av.shape
-```
-
-### Big covariance matrix mixing TT, EE, BB, TE 
-
-```{python}
-# nreal, nfrec, npix, nstk
-
-cells_cross.shape
-```
-
-```{python}
-bigcov, bigcorr = amc.get_covcorr_patch(cells_cross, stokesjoint=True, doplot=False)
-```
-
-```{python}
-plt.figure(figsize=(20, 200))
-for b in range(nbins):
+    ax = axs[s]
+    for co in range(ncombi): 
+        c = palet[co]
+        ax.errorbar(leff, 
+                    avg_cross_mixreal[co, :, s],
+                    yerr=error_cross_mixreal[co, :, s],
+                    fmt='o',
+                    color=c,
+                    label='{:3.0f} x {:3.0f}'.format(combi_nus[co][0], combi_nus[co][1]))
+#         ax.plot(leff, cross_thconv[co, :, s], color=c)
+        ax.plot(leff, cross_x0[co, :, s], '--', color=c)
     
-    plt.subplot(nbins, 2, b*2 +1)
-    plt.imshow(bigcov[:, :, b])
-    plt.title('Covariance - bin {}'.format(b))
-    plt.colorbar()
+    ax.set_xlabel('$\\ell$', fontsize=18)
+    ax.set_ylabel('$D_\\ell$', fontsize=18)
+    ax.grid()
+
+    ax.set_title(clnames[s], fontsize=18)
+# handles, labels = ax.get_legend_handles_labels()
+# fig.legend(handles, labels, loc='lower center', orientation='horizontal')
+    ax.legend(fontsize=10, loc='upper center')
+plt.tight_layout()
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/' + name + '.pdf')
+```
+
+## Plot for the paper: BB at 150 and 220
+
+```{python}
+
+nbands = 3
+name150 = f'cross_interband_mixreal_nfrecon{nbands}_qubicmaps_FI150_v2_galaxycenter'
+BBmix150 = np.load(rep_spectrumCC + name150 + '.npy')[:, :, :, 2]
+
+avg_BBmix150 = np.mean(BBmix150, axis=0)
+error_BBmix150 = np.std(BBmix150, axis=0) * np.sqrt(2)
+
+
+name220 = f'cross_interband_mixreal_nfrecon{nbands}_qubicmaps_FI220_v2_galaxycenter'
+BBmix220 = np.load(rep_spectrumCC + name220 + '.npy')[:, :, :, 2]
+
+avg_BBmix220 = np.mean(BBmix220, axis=0)
+error_BBmix220 = np.std(BBmix220, axis=0) * np.sqrt(2)
+
+_, _, nus150, _, _, _ = compute_freq(150, nbands) 
+combi_nus150 = list(combinations_with_replacement(nus150, 2))
+_, _, nus220, _, _, _ = compute_freq(220, nbands) 
+combi_nus220 = list(combinations_with_replacement(nus220, 2))
+
+
+# Sky
+sky_config = {'dust': 'd1'}
+
+d['filter_nu'] = 150 * 1e9
+Qubic_sky150 = qss.Qubic_sky(sky_config, d)
+x0150 = Qubic_sky150.get_simple_sky_map()
+
+d['filter_nu'] = 220 * 1e9
+Qubic_sky220 = qss.Qubic_sky(sky_config, d)
+x0220 = Qubic_sky220.get_simple_sky_map()
+
+
+cross_x0150 = np.zeros((ncombi, nbins, 4))
+cross_x0220 = np.zeros((ncombi, nbins, 4))
+
+# Map not convolved => No Beam correction
+# Beam correction is None so we can compute w only once        
+w = None
+for i, (band1, band2) in enumerate(combi):
+    print(f'Bands {band1} {band2}')
+    map1x0 = x0150[band1, :, :]
+    map2x0 = x0150[band2, :, :]
+    leff, cross_x0150[i, :, :], w = Namaster.get_spectra(map1x0.T,
+                                                      mask_apo,
+                                                      map2x0.T,
+                                                      w=w,
+                                                      purify_e=True,
+                                                      purify_b=False,
+                                                      beam_correction=None,
+                                                      pixwin_correction=True)
+
+w = None
+for i, (band1, band2) in enumerate(combi):
+    print(f'Bands {band1} {band2}')
+    map1x0 = x0220[band1, :, :]
+    map2x0 = x0220[band2, :, :]
+    leff, cross_x0220[i, :, :], w = Namaster.get_spectra(map1x0.T,
+                                                      mask_apo,
+                                                      map2x0.T,
+                                                      w=w,
+                                                      purify_e=True,
+                                                      purify_b=False,
+                                                      beam_correction=None,
+                                                      pixwin_correction=True)
+
     
-    plt.subplot(nbins, 2, b*2 +2)
-    plt.imshow(bigcorr[:, :, b])
-    plt.title('Correlation - bin {}'.format(b))
-    plt.colorbar()
+
 ```
 
 ```{python}
-labs = []
-for s in range(4):
-    for i in range(nfrecon):
-        labs.append(clnames[s]+'{}'.format(i))
-        
-print(labs)
+fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(15, 5))
+# 150
+for co in range(ncombi): 
+    c = palet[co]
+    ax0.errorbar(leff, 
+                avg_BBmix150[co, :],
+                yerr=error_BBmix150[co, :],
+                fmt='o',
+                color=c,
+                label='{:3.0f} x {:3.0f}'.format(combi_nus150[co][0], combi_nus150[co][1]))
+    ax0.plot(leff, cross_x0150[co, :, 2], '--', color=c)
 
-plt.xticks(np.arange(len(labs)), labs)
-plt.yticks(np.arange(len(labs)), labs)
+ax0.set_xlabel('$\\ell$', fontsize=18)
+ax0.set_ylabel('$D_\\ell$', fontsize=18)
+ax0.grid()
+ax0.set_title(clnames[2] + ' - 150 GHz', fontsize=18)
+ax0.legend(fontsize=10, loc='upper center')
 
-for s in range(nfrecon):
-    plt.axhline(y=(s+1)*nfrecon-0.5, lw=3, color='r')
-    plt.axvline(x=(s+1)*nfrecon-0.5, lw=3, color='r')
+# 220
+for co in range(ncombi): 
+    c = palet[co]
+    ax1.errorbar(leff, 
+                avg_BBmix220[co, :],
+                yerr=error_BBmix220[co, :],
+                fmt='o',
+                color=c,
+                label='{:3.0f} x {:3.0f}'.format(combi_nus220[co][0], combi_nus220[co][1]))
+    ax1.plot(leff, cross_x0220[co, :, 2], '--', color=c)
 
-plt.imshow(np.mean(bigcorr, axis=2))
-plt.title('Correlation averaged over bin')
-plt.colorbar()
-```
+ax1.set_xlabel('$\\ell$', fontsize=18)
+ax1.set_ylabel('$D_\\ell$', fontsize=18)
+ax1.grid()
+ax1.set_title(clnames[2] + ' - 220 GHz', fontsize=18)
+ax1.legend(fontsize=10, loc='best')
 
-### Covariance matrix between bins
 
-```{python}
-# We have to swith bins and (TT, EE, BB, TE)
-print(cells_cross.shape)
-cells_cross_reshape = np.moveaxis(cells_cross, [1, 2, 3], [3, 1, 2])
-cells_cross_reshape.shape
-```
+plt.tight_layout(pad=1.3)
 
-```{python}
-covbinband, corrbinband = amc.get_covcorr_patch(cells_cross_reshape, stokesjoint=True, doplot=False)
-
-print(covbinband.shape)
-```
-
-```{python}
-ispectre = 2
-labsx,labsy = [], []
-for f in range(nfrecon):
-    labsx.append('f{}b0'.format(f))
-    for s in range(nbins):
-        labsy.append('f{}b{}'.format(f,s))
-        
-print(labs)
-plt.figure(figsize=(30, 30))
-plt.yticks(np.arange(len(labs)), labsy)
-plt.xticks(np.arange(0, nbins*nfrecon, nbins), labsx)
-
-for s in range(nfrecon-1):
-    plt.axhline(y=(s+1)*nbins-0.5, lw=3, color='r')
-    plt.axvline(x=(s+1)*nbins-0.5, lw=3, color='r')
-
-plt.imshow(covbinband[:, :, ispectre])
-plt.title('Covariance matrix (nfreq*nbins)x(nfreq*nbins) for {} spectrum'.format(clnames[ispectre]))
-plt.colorbar()
-```
-
-```{python}
-ispectre = 2
-labsx,labsy = [], []
-for f in range(nfrecon):
-    labsx.append('f{}b0'.format(f))
-    for s in range(nbins):
-        labsy.append('f{}b{}'.format(f,s))
-        
-print(labs)
-plt.figure(figsize=(30, 30))
-plt.yticks(np.arange(len(labs)), labsy)
-plt.xticks(np.arange(0, nbins*nfrecon, nbins), labsx)
-
-for s in range(nfrecon-1):
-    plt.axhline(y=(s+1)*nbins-0.5, lw=3, color='r')
-    plt.axvline(x=(s+1)*nbins-0.5, lw=3, color='r')
-
-plt.imshow(corrbinband[:, :, ispectre])
-plt.title('Correlation matrix (nfreq*nbins)x(nfreq*nbins) for {} spectrum'.format(clnames[ispectre]))
-plt.colorbar()
-```
-
-```{python}
-qss.random_string(10)
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/BB_IBCS_3bands_150_220_dust.pdf')
 ```
 
 ```{python}

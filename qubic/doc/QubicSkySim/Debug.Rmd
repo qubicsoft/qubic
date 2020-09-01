@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -22,6 +22,7 @@ from qubicpack.utilities import Qubic_DataDir
 from pysimulators import FitsArray
 import qubic
 from qubic import QubicSkySim as qss
+from qubic import camb_interface as qc
 from importlib import reload
 
 rc('figure', figsize=(16, 10))
@@ -52,7 +53,7 @@ seed = None
 sky_config = {'cmb': seed}
 
 #### Case th cl
-# ell, totCL, unlensedCL = qss.get_camb_Dl(r=0.1, lmax=10*d['nside'])
+# ell, totCL, unlensedCL = qc.get_camb_Dl(r=0.1, lmax=10*d['nside'])
 # cmb_dict = {'CAMBSpectra':totCL, 'ell':ell, 'seed':None}
 # sky_config = {'cmb': cmb_dict}    
 

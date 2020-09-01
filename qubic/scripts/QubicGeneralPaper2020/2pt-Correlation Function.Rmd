@@ -55,34 +55,80 @@ dictfilename = global_dir + '/dicts/BmodesNoDustNoSystPaper0_2020.dict'
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 d['nside']=256
-center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
-print(center)
+
 ```
 
 ```{python}
-#### This function reads the maps
-def read_files_mc(dirmap,file_rnd_string, verbose=False):
-    m = np.array(FitsArray(glob.glob(dirmap+'*_maps_recon_*'+file_rnd_string+'.fits')[0]))
-    c = np.array(FitsArray(glob.glob(dirmap+'*_maps_convolved_*'+file_rnd_string+'.fits')[0]))
-    cov = np.array(FitsArray(glob.glob(dirmap+'*_maps_coverage_*'+file_rnd_string+'.fits')[0]))
-    with open(glob.glob(dirmap+'*_dictionary_'+file_rnd_string+'.pickle')[0], 'rb') as handle: d = pickle.load(handle)
-    with open(glob.glob(dirmap+'*_input_cell_'+file_rnd_string+'.pickle')[0], 'rb') as handle: icl = pickle.load(handle)
-    filetype = glob.glob(dirmap+'*_maps_recon_*'+file_rnd_string+'.fits')[0].split('/')[-1]
-    if verbose: print('read {}'.format(filetype))
-    return m, c, cov, d, icl, filetype
+# #### This function reads the maps from JC NERS End-To-End Simulations
+# def read_files_mc(dirmap,file_rnd_string, verbose=False):
+#     m = np.array(FitsArray(glob.glob(dirmap+'*_maps_recon_*'+file_rnd_string+'.fits')[0]))
+#     c = np.array(FitsArray(glob.glob(dirmap+'*_maps_convolved_*'+file_rnd_string+'.fits')[0]))
+#     cov = np.array(FitsArray(glob.glob(dirmap+'*_maps_coverage_*'+file_rnd_string+'.fits')[0]))
+#     with open(glob.glob(dirmap+'*_dictionary_'+file_rnd_string+'.pickle')[0], 'rb') as handle: d = pickle.load(handle)
+#     with open(glob.glob(dirmap+'*_input_cell_'+file_rnd_string+'.pickle')[0], 'rb') as handle: icl = pickle.load(handle)
+#     filetype = glob.glob(dirmap+'*_maps_recon_*'+file_rnd_string+'.fits')[0].split('/')[-1]
+#     if verbose: print('read {}'.format(filetype))
+#     return m, c, cov, d, icl, filetype
 
-### Get reconstructed maps from a simulation made on NERSC with 200000 pointings and tol=1e-5
-### First Instrument
-### detector_nep=4.7e-17
-### effecgtive_duration = 3 years
-nptg = 200000
-dirmaps='/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_NERSC/Maps/'
-file_rnd_string='H990hwzaGn'
-tol=1e-5
+# ### Get reconstructed maps from a simulation made on NERSC with 200000 pointings and tol=1e-5
+# ### First Instrument
+# ### detector_nep=4.7e-17
+# ### effecgtive_duration = 3 years
+# nptg = 200000
+# dirmaps='/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_NERSC/Maps/'
+# file_rnd_string='H990hwzaGn'
+# tol=1e-5
 
-m, c, covar, d, icl, ftype = read_files_mc(dirmaps, file_rnd_string, verbose=True)
-print(np.shape(m))
-residuals_maps = m[0,:,:]-c[0,:,:]
+# center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+# print(center)
+
+# simname = 'JCH-NERSC-200k-3Years'
+
+# m, c, covar, d, icl, ftype = read_files_mc(dirmaps, file_rnd_string, verbose=True)
+# print(np.shape(m))
+# residuals_maps = m[0,:,:]-c[0,:,:]
+# #residuals_maps[residuals_maps==0] = hp.UNSEEN
+
+# rc('figure', figsize=(16, 10))
+# res = 15
+# figure()
+# st = ['I', 'Q', 'U']
+# rng = [5, 5, 5]
+# for s in range(3):
+#     hp.gnomview(residuals_maps[:,s], rot=center, reso=res, sub=(1,3,s+1), title=simname+' '+st[s],
+#                min=-rng[s], max=rng[s], unit=r'$\mu K$')
+# tight_layout()
+
+# figure()
+# hp.mollview(covar)
+
+```
+
+```{python}
+# #### This reads the maps from Louise - Old files - with kmax =1 and ssome ugly residuals
+def get_maps_from_louise_old(nfsub):
+    directory = global_dir + 'doc/FastSimulator/Data/Spectro-Imaging-Louise/'
+    mappatchfile = glob.glob(directory+'residualspatch_*_nfrecon{}.pkl'.format(nfsub))[0]
+    covfile = glob.glob(directory+'coverage_*_nfrecon{}.pkl'.format(nfsub))[0]
+    seenfile = glob.glob(directory+'seenmap_*_nfrecon{}.pkl'.format(nfsub))[0]
+    
+    residualspatch = pickle.load( open( mappatchfile, "rb" ) )
+    seenpix = pickle.load( open( seenfile, "rb" ) )
+    covpix = pickle.load( open( covfile, "rb" ) )
+    
+    nside = 256
+    residuals_map = np.zeros((nfsub, 12*256**2, 3))
+    for i in range(nfsub):
+        residuals_map[i,seenpix,:] = residualspatch[i][:,:]
+    covmap = np.zeros(12*256**2)
+    
+    return residuals_map[0,:,:], covpix
+
+simname = 'Louise-NERSC-4Years-kmax=1'
+
+residuals_maps, covar = get_maps_from_louise_old(1)
+print(np.shape(residuals_maps))
+center = [0,0]
 
 rc('figure', figsize=(16, 10))
 res = 15
@@ -90,13 +136,75 @@ figure()
 st = ['I', 'Q', 'U']
 rng = [5, 5, 5]
 for s in range(3):
-    hp.gnomview(residuals_maps[:,s], rot=center, reso=res, sub=(1,3,s+1), title='NERSC 200000 '+st[s],
-               min=-rng[s], max=rng[s])
+    hp.gnomview(residuals_maps[:,s], rot=center, reso=res, sub=(1,3,s+1), title=simname+' '+st[s],
+               min=-rng[s], max=rng[s], unit=r'$\mu K$')
 tight_layout()
 
+figure()
+hp.mollview(covar)
+```
 
+```{python}
+#### This reads the maps from Louise - New files - with kmax =8
+# def get_maps_from_louise_new(nfsub, typesim):
+#     directory = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_NERSC/MapsLouiseFromGoogleDrive_4Years_kmax8/'
+#     mappatchfile = glob.glob(directory+'residuals_{}bands_{}.npy'.format(nfsub, typesim))
+#     covfile = glob.glob(directory+'coverage_{}bands_{}.npy'.format(nfsub, typesim))
+#     seenfile = glob.glob(directory+'seenmap_{}bands_{}.npy'.format(nfsub, typesim))
+        
+#     residualspatch = np.load(mappatchfile[0])
+#     seenpix = np.load(seenfile[0])
+#     covpix = np.load(covfile[0])
 
+#     nside = 256
+#     residuals_map = np.zeros((nfsub, 12*256**2, 3))
+#     for i in range(nfsub):
+#         residuals_map[i,seenpix,:] = residualspatch[i][:,:]
+#     covmap = np.zeros(12*256**2)
+#     covmap[seenpix] = covpix
+    
+#     return residuals_map[0,:,:], covmap
 
+# simname = 'Louise-NERSC-4Years-kmax=8'
+
+# residuals_maps, covar = get_maps_from_louise_new(1,'FI150')
+# print(np.shape(residuals_maps))
+# center = [0,0]
+
+# rc('figure', figsize=(16, 10))
+# res = 15
+# figure()
+# st = ['I', 'Q', 'U']
+# rng = [5, 5, 5]
+# for s in range(3):
+#     hp.gnomview(residuals_maps[:,s], rot=center, reso=res, sub=(1,3,s+1), title=simname+' '+st[s],
+#                min=-rng[s], max=rng[s], unit=r'$\mu K$')
+# tight_layout()
+
+# figure()
+# hp.mollview(covar)
+```
+
+```{python}
+reload(qss)
+rc('figure', figsize=(12, 6))
+xx, yyI, yyQ, yyU = qss.get_angular_profile(residuals_maps, nbins=30, separate=True, center=center)
+pix_size = hp.nside2resol(d['nside'], arcmin=True)
+plot(xx, yyI * pix_size, 'o',label='I')
+plot(xx, yyQ * pix_size , 'o',label='Q')
+plot(xx, yyU * pix_size, 'o',label='U')
+meanvalI = np.mean(yyI[xx<10]) * pix_size
+meanvalQU = np.mean((yyQ[xx<10]+yyQ[xx<10])/2) * pix_size
+axhline(y=meanvalI, label=r'I RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalI), color='r', ls=':')
+axhline(y=meanvalQU, label=r'QU RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalQU), color='m', ls=':')
+xlim(0,20)
+xlabel('Degrees from center of the field')
+ylabel(r'Noise RMS $[\mu K.arcmin]$')
+title(simname)
+legend()
+ylim(0,50)
+
+#savefig('noiseprofile_mukarcmin.pdf')
 ```
 
 ### Calculation of the 2-pt Correlation Function in pixel-space
@@ -108,18 +216,15 @@ reload(ft)
 # 1) Fit RMS Vs 1/cov
 dofit=True
 nbins = 25
-subplot(2,2,1)
+subplot(1,2,1)
 xx, yy, fit_n200k = qss.get_noise_invcov_profile(residuals_maps, covar, nbins=nbins,
-                                              label='NERSC 200000',fit=dofit)
-title('200k')
-
+                                              label=simname,fit=dofit, doplot=True)
 
 # 2) Correct maps for RMS vs 1/cov
 new_diff = qss.correct_maps_rms(residuals_maps, covar, fit_n200k)
-subplot(2,2,2)
-bla = qss.get_angular_profile(new_diff, label='Nersc 200k corrected',
-                              allstokes=True,nbins=50,thmax=22, fontsize=10)
-title('200k')
+subplot(1,2,2)
+bla = qss.get_angular_profile(new_diff, label=simname+' corrected', center=center,
+                              allstokes=True,nbins=50,thmax=22, fontsize=10, doplot=True)
 
 # 3) Calculate 2Pt Correlation function
 
@@ -133,7 +238,8 @@ ip = np.arange(12*ns**2).astype(int)
 ipok = ip[okpix]
 
 th, cth_200k = qss.ctheta_parts(new_diff[:,0], ipok, 0, 20, 20, nsplit=5, degrade_init=128, verbose=False)
-
+th = th[isfinite(cth_200k)]
+cth_200k = cth_200k[isfinite(cth_200k)]
 
 
 ```
@@ -146,10 +252,11 @@ fct = lambda x, a, b, c: a * np.sin(x/b) * exp(-x/c)
 results_200k = curve_fit(fct, th[1:], cth_200k[1:]/cth_200k[0])
 
 thetas = np.linspace(0,20,100)
-p=plot(th,cth_200k/cth_200k[0],'o', label='200k')
+p=plot(th[1:],cth_200k[1:]/cth_200k[0],'o', label=simname)
+plot(0,1,'o', color=p[0].get_color())
 plot(thetas, fct(thetas, *results_200k[0]), color=p[0].get_color(),
          label=r'$a\times\sin(\theta/b)\times\exp(\theta/c)$'+'\n a={0:4.2f} b={1:4.2f} c={2:4.2f}'.format(*results_200k[0]))
-plot(th,th*0,'k:')
+axhline(y=0, color='k', ls=':')
 legend()
 xlabel(r'$\theta$ [deg]')
 ylabel(r'$C(\theta)$')
@@ -186,6 +293,7 @@ plot(theta,ctheta,label='Input C(theta)')
 xlabel(r'$\theta$ [deg]')
 ylabel(r'$C(\theta)$')
 xlim(0,25)
+title(simname)
 
 #### COnvert to Cl and display
 lll, clth = qc.ctheta_2_cell(theta, ctheta, lmax=mylmax)
@@ -204,6 +312,7 @@ xlabel(r'$\ell$')
 ylabel(r'$C_\ell$')
 xlim(0,np.max(lll))
 legend()
+title(simname)
 
 
 
@@ -226,7 +335,7 @@ ip = np.arange(12*nside**2).astype(int)
 ipok = ip[okpix]
 
 
-nbmc = 100
+nbmc = 20
 nbins = 20
 thmax = 20.
 from qubic.utils import progress_bar
@@ -270,6 +379,7 @@ ylim(-0.1,1)
 legend()
 print(th)
 print(mcthout/mcthout[0]*10)
+title(simname)
 ```
 
 <!-- #region -->
@@ -295,7 +405,7 @@ xlabel(r'$\ell$')
 ylabel(r'$C_\ell$')
 xlim(0,np.max(lll))
 legend()
-
+title(simname)
 ```
 
 Let's make a MC in order to estimate what would be the factor that would sort this out.
@@ -357,49 +467,40 @@ for k in range(nalpha):
 ```
 
 ```{python}
-# factor_r = 1
-# ff_r=1.
-
-# thecthout_renorm = allcth[0]
-
-# mcthout_renorm = np.mean(thecthout_renorm, axis=0)
-# scthout_renorm = np.std(thecthout_renorm, axis=0)/np.sqrt(nbmc2)
-# errorbar(th*ff_r, mcthout_renorm/mcthout_renorm[0]*factor_r, yerr=scthout_renorm/mcthout_renorm[0]*factor_r, fmt='bo',label='Renorm C(theta*{}) x {}'.format(ff_r,factor_r))
-# plot(theta,ctheta/ctheta[0],label='Input C(theta)')
-# plot(theta,theta*0,'k:')
-# xlim(0,20)
-# ylim(-0.1,1)
-# legend()
-# print(th)
-# print(mcthout/mcthout[0]*10)
-
-
-```
-
-```{python}
 factor_r = 1
 ff_r=1.
 
 ch2 = np.zeros(nalpha)
 
+subplot(1,2,1)
 plot(theta,ctheta/ctheta[0],label='Input C(theta)')
 plot(theta,theta*0,'k:')
+title(simname)
 for k in range(nalpha):
+    ok = isfinite(allcth[k])
     thecthout_renorm = allcth[k]
-
+    
+    
     mcthout_renorm = np.mean(thecthout_renorm, axis=0)
     scthout_renorm = np.std(thecthout_renorm, axis=0)/np.sqrt(nbmc2)
-    errorbar(th, mcthout_renorm/mcthout_renorm[0], yerr=scthout_renorm/mcthout_renorm[0], fmt='o',label='C(theta) Renorm={0:5.2f}'.format(alphavals[k]))
+    
+    ok = isfinite(mcthout_renorm)
+        
+    errorbar(th[ok], mcthout_renorm[ok]/mcthout_renorm[0], yerr=scthout_renorm[ok]/mcthout_renorm[0], fmt='o',label='C(theta) Renorm={0:5.2f}'.format(alphavals[k]))
 
-    ch2[k] = np.sum(((mcthout_renorm/mcthout_renorm[0] - np.interp(th, theta,ctheta/ctheta[0])))**2)
+    ch2[k] = np.sum(((mcthout_renorm[ok]/mcthout_renorm[0] - np.interp(th[ok], theta,ctheta/ctheta[0])))**2)
     
 xlim(0,20)
-ylim(-0.1,1)
-legend()
+ylim(-0.5,1)
+legend(loc='upper right', fontsize=8)
+xlabel('theta')
+ylabel('C(theta)')
 
-figure()
+subplot(1,2,2)
 plot(alphavals, ch2)
-
+xlabel('alpha')
+ylabel('chi2')
+title(simname)
 
 ```
 
@@ -418,6 +519,7 @@ xlabel(r'$\ell$')
 ylabel(r'$C_\ell$')
 xlim(0,np.max(lll))
 legend()
+title(simname)
 
 ```
 
@@ -438,7 +540,7 @@ ip = np.arange(12*nside**2).astype(int)
 ipok = ip[okpix]
 
 
-nbmc = 100
+nbmc = 10
 nbins = 20
 thmax = 20.
 from qubic.utils import progress_bar
@@ -480,11 +582,20 @@ plot(theta,theta*0,'k:')
 xlim(0,20)
 ylim(-0.1,1)
 legend()
+tiutle(simname)
 
 ```
 
 OK !
 So we don;t understand where this factor comes from but it seems to do a good job !
+
+```{python}
+
+```
+
+```{python}
+
+```
 
 ```{python}
 

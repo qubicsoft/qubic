@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.0
+      jupytext_version: 1.4.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -180,7 +180,7 @@ idet = 231
 sbidealFI_150 = getsb(scene, instFI, 150., idet, hornsFI, dnu_nu=None, 
                       detector_integrate=None, nside=d['nside'])
 sbidealTD_150 = getsb(scene, instTD, 150., idet, hornsTD, dnu_nu=None, nsubnus=10, 
-                      detector_integrate=None, nside=d['nside'])
+                      detector_integrate=True, nside=d['nside'])
 
 reso = 7.
 mini = -30
@@ -221,7 +221,7 @@ plt.figure()
 plt.xlabel('Angle (deg)')
 plt.ylabel('Synthesized Beam (dB)')
 plt.plot(xx, cutFI, label = 'FI - 150 GHz - Det + Nu Integ.')
-# plt.plot(xx, cutTD, label = 'TD - 150 GHz - Det + Nu Integ.')
+plt.plot(xx, cutTD, label = 'TD - 150 GHz - Det + Nu Integ.')
 plt.title('TES {}'.format(fp_index))
 plt.legend(loc='lower right', fontsize=10)
 ```
@@ -347,16 +347,115 @@ def envelope(th_deg, ph, rx):
 #     if rx != 0:
 #         factor_offaxis = 0.8985**2
     env = factor_offaxis * primary_beam
-    print('factor =', factor_offaxis)
+    #print('factor =', factor_offaxis)
     return env 
-
 
 def beam_total(th_deg, ph, nu, rx):
     env = envelope(th_deg, ph, rx)
     sb = env * sb_noprim(th_deg, nu, rx)
     return env, sb
-    
+
 nu = 150e9   
+nn = 10000
+th_deg = np.linspace(-12, 12, nn)
+ph = 0
+d['config'] = 'FI'
+d['beam_shape'] = 'gaussian'
+q = qubic.QubicInstrument(d)
+
+e1, sb1 = beam_total(th_deg, ph, nu, 0)
+e2, sb2 = beam_total(th_deg, ph, nu, 12)
+
+fig, ax = plt.subplots(figsize=(10,6))
+plt.rc('font',size=15)
+#ax=ax.ravel()
+# ax.plot(th_deg, q.primary_beam(np.deg2rad(th_deg), ph),'b--')
+ax.plot(th_deg, e1,'b--', label=r'$B_{prim}$')
+ax.plot(th_deg, e2,'c--', label=r'$B_{prim} \times B(\theta_{off})$')
+ax.plot(th_deg, sb1, 'b', label='r = 0', lw=2)
+ax.plot(th_deg, sb2, 'c', label='r = 12mm',alpha=0.6,lw=2)
+
+# axvline(np.rad2deg(np.arctan(12 / 300)), ymin=0, ymax=1.2, color='r')
+ax.set_xlabel(r'$\theta$ [deg]', fontsize=15)
+ax.set_ylabel('Relative intensity', fontsize=15)
+ax.legend(fontsize=14, loc=1)
+ax.grid()
+ax.tick_params(axis='both',bottom=True, top=True, left=True, right=True,direction='in')
+ax.annotate(r"FWHM($\nu_i$)",xytext=(-7.5,0.6),xy=(0,0.5),
+            arrowprops=dict(arrowstyle="fancy",fc="b", ec="b"),bbox=dict(boxstyle="round", fc="w"),
+            fontsize=15 )
+ax.annotate(r"$\theta(\nu_i)$",xy=(8.3,0.33),xytext=(-1.1,0.33),ha="center",va="center",
+            arrowprops=dict(arrowstyle="|-|",), bbox=dict(boxstyle="round", fc="w"),
+            fontsize=15 )
+# B(\theta_{off})
+plt.savefig('/home/martin/QUBIC/qubic/qubic/scripts/Spectroimagery_paper/beam_cut_2TESb.pdf')
+```
+
+```{python}
+color=iter(plt.cm.jet(np.linspace(0,1,6))[::-1] )
+sum_b = np.zeros((9,len(th_deg),) )
+NUNU=np.linspace(131e9,169e9,9)#[131e9,135e9,140e9,145e9,150e9,155e9,160e9,165e9,169e9]
+for j,inu in enumerate(NUNU):
+    d['filter_nu'] = NUNU[j]
+    q = qubic.QubicInstrument(d)
+    beam=q.primary_beam(np.radians(np.abs(th_deg)), ph)
+    sum_b[j]= beam*sb_noprim(th_deg, NUNU[j], 0)
+    #_, sum_b[j] = beam_total(th_deg, ph, inu*1e9, 0)
+sum_b_15 = np.zeros((15,len(th_deg),) )
+NUNU15=np.linspace(131e9,169e9,15)
+for j,inu in enumerate(NUNU15):
+    d['filter_nu'] = inu
+    q = qubic.QubicInstrument(d)
+    beam=q.primary_beam(np.radians(np.abs(th_deg)), ph)
+    sum_b_15[j]= beam*sb_noprim(th_deg, inu, 0)
+    
+allbeams=np.zeros((2,nn))
+freqs=[140e9,160e9]
+for i in range(2):
+    d['filter_nu'] = freqs[i]
+    q = qubic.QubicInstrument(d)
+    allbeams[i, :] = q.primary_beam(np.radians(np.abs(th_deg)), ph)
+#e2, sb2 = beam_total(th_deg, ph, nu, 0)
+#e1, sb1 = beam_total(th_deg, ph, nu=140e9, rx=0)
+#e2, sb2 = beam_total(th_deg, ph, nu=160e9, rx=0)
+
+fig, ax = plt.subplots(nrows=1,ncols=2,figsize=(13,6),gridspec_kw={'wspace':0.03},sharey=True)
+plt.rc('font',size=15)
+ax=ax.ravel()
+ax[0].plot(th_deg, allbeams[0],'b--', alpha=0.6, label=r'$140~\mathrm{GHz}$')
+ax[0].plot(th_deg, allbeams[1],'g--', alpha=0.6, label=r'$160~\mathrm{GHz}$')
+ax[0].plot(th_deg, allbeams[0]*sb_noprim(th_deg, freqs[0],0), 'b', label=None, lw=2)
+ax[0].plot(th_deg, allbeams[1]*sb_noprim(th_deg, freqs[1],0), 'g', label=None, lw=2)
+ax[0].grid()
+ax[0].legend(loc='best',fontsize=12)
+ax[0].set_xlabel(r'$\theta$ [deg]', fontsize=15)
+ax[0].set_ylabel('Synthesized beam', fontsize=15)
+ax[0].tick_params(axis='both',bottom=True, top=True, left=True, right=True,direction='in')
+
+sumleg=ax[1].plot(th_deg, np.sum(sum_b,axis=0)/max(np.sum(sum_b,axis=0)), 'k', lw=2)
+#sumleg15=ax[1].plot(th_deg, np.sum(sum_b_15,axis=0)/max(np.sum(sum_b_15,axis=0)), 'k', lw=2)
+blo=[]
+for i in range(0,len(NUNU),2):
+    blo+=ax[1].plot(th_deg, sum_b[i]/max(np.sum(sum_b,axis=0)), c=next(color), )
+
+# axvline(np.rad2deg(np.arctan(12 / 300)), ymin=0, ymax=1.2, color='r')
+ax[1].set_xlabel(r'$\theta$ [deg]', fontsize=15)
+#ax[1].set_ylabel('Arbitrary units', fontsize=15)
+ax[1].legend(sumleg, [r'PolySB'], fontsize=12, loc='upper left', )
+# Create the second legend and add the artist manually.
+from matplotlib.legend import Legend
+leg = Legend(ax[1], blo[:], [r'MonoSB @$130~$GHz','\t \t $140~$GHz',
+                          '\t \t $150~$GHz','\t \t $160~$GHz','\t \t $170~$GHz'],
+             fontsize=12,loc='upper right', )
+leg._legend_box.align = "right"
+ax[1].add_artist(leg);
+ax[1].grid()
+ax[1].tick_params(axis='both',bottom=True, top=True, left=True, right=True,direction='in')
+# B(\theta_{off})
+plt.savefig('/home/martin/QUBIC/qubic/qubic/scripts/Spectroimagery_paper/synth_beam_many_freq.pdf')
+```
+
+```{python}
 nn = 10000
 th_deg = np.linspace(-12, 12, nn)
 ph = 0
@@ -366,21 +465,98 @@ q = qubic.QubicInstrument(d)
 
 sbb = sb_noprim(th_deg, nu, 10)
 
-e1, sb1 = beam_total(th_deg, ph, nu, 0)
-e2, sb2 = beam_total(th_deg, ph, nu, 12)
+e1, sb1 = beam_total(th_deg, ph, 140e9, 0)
+e2, sb2 = beam_total(th_deg, ph, 160e9, 0)
 
 fig, ax = plt.subplots()
-# ax.plot(th_deg, q.primary_beam(np.deg2rad(th_deg), ph),'b--')
-ax.plot(th_deg, e1,'b--', label=r'$B_{prim}$')
-ax.plot(th_deg, e2,'g--', label=r'$B_{prim} \times B(\theta_{off})$')
-ax.plot(th_deg, sb1, 'b', label='r = 0')
-ax.plot(th_deg, sb2, 'g', label='r = 12mm')
-# ax.axvline(np.rad2deg(np.arctan(12 / 300)), ymin=0, ymax=1.2, color='r')
+ax.plot(th_deg, sb1+1.5*sb2, 'k', label='amplitudes\n1.0@140GHz\n1.5@160GHz')
 ax.set_xlabel('theta [deg]')
 ax.set_ylabel('Intensity (relative)')
-ax.legend(fontsize=10)
+ax.legend(fontsize=13)
+ax.grid()
+```
 
-# B(\theta_{off})
+```{python}
+
+```
+
+```{python}
+
+```
+
+#### Working on fit
+
+```{python}
+ndat=1e4
+angles=np.linspace(6,14,ndat)
+data_peaks=np.zeros((2,int(ndat)))
+central_freq=140e9
+freq_iter=np.linspace(138e9,142e9,80)
+
+d['filter_nu'] = central_freq
+q = qubic.QubicInstrument(d)
+central_data=q.primary_beam(np.radians(np.abs(angles)), ph)*sb_noprim(angles, central_freq,0)
+plt.plot(angles, central_data  )
+
+```
+
+```{python}
+from lmfit import Model
+def gaussian(x, amp, x0, varx):
+    gauss = amp*np.exp(-0.5*( (x-x0)**2/varx**2 ))
+    return gauss
+def gaussian_add(x, amp0,x0, varx0, amp1, x1, varx1):
+    gauss = amp0*np.exp(-0.5*( (x-x0)**2/varx0**2 ))+amp1*np.exp(-0.5*( (x-x1)**2/varx1**2 ))
+    return gauss
+
+angles=np.linspace(1,10,ndat)
+
+gmodel = Model(gaussian, independent_vars=['x',], )
+params = gmodel.make_params(amp=0.3,x0=8.9, varx=0.1 )
+
+gmodel_2g = Model(gaussian_add, independent_vars=['x',], )
+params_2g = gmodel_2g.make_params(amp0=0.3, x0=8.9, varx0=0.1, amp1=0.3, x1=8.9, varx1=0.1, )
+
+Chi=[]
+Chi_2g=[]
+central_freq=140
+d['filter_nu'] = central_freq*1e9
+q = qubic.QubicInstrument(d)
+central_data=q.primary_beam(np.radians(np.abs(angles)), ph)*sb_noprim(angles, central_freq*1e9,30)
+for ifreq in np.linspace(central_freq,
+                         central_freq+5*d['synthbeam_peak150_fwhm']*150/central_freq,20):
+    #print('doing {:.4f}'.format(ifreq))
+    d['filter_nu'] = ifreq*1e9
+    q = qubic.QubicInstrument(d)
+    idata=q.primary_beam(np.radians(np.abs(angles)), ph)*sb_noprim(angles, ifreq*1e9,0)
+    
+    result = gmodel.fit(central_data+idata, params, x=angles)
+    result_2g = gmodel_2g.fit(central_data+idata, params_2g, x=angles)
+    
+    Chi.append(result.chisqr)    
+    Chi_2g.append(result_2g.chisqr)
+```
+
+```{python}
+plt.plot(Chi, 'o', label='1G')
+plt.plot(Chi_2g, 'o', label='2G')
+plt.legend()
+```
+
+```{python}
+print(Chi, Chi_2g, result.fit_report(), result_2g.fit_report())
+#result.chisqr, result.best_values
+```
+
+```{python}
+plt.plot(angles,result.best_fit, label='g')
+plt.plot(angles,result_2g.best_fit,label='2g')
+plt.plot(angles, central_data+idata,label='data')
+plt.legend()
+```
+
+```{python}
+
 ```
 
 ```{python}

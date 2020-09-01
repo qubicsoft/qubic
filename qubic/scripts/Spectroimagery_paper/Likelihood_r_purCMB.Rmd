@@ -1,0 +1,271 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# %matplotlib inline
+
+import healpy as hp
+import numpy as np
+import matplotlib.pyplot as plt
+import scipy
+import pickle
+from itertools import combinations, combinations_with_replacement
+from importlib import reload
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+import pysm
+import qubic
+from qubic import camb_interface as qc
+from qubic import NamasterLib as nam
+from qubic import mcmc
+
+rc('figure', figsize=(16, 10))
+rc('font', size=18)
+plt.rcParams['image.cmap'] = 'jet'
+```
+
+```{python}
+import seaborn as sns
+palet = sns.cubehelix_palette(6, start=2, hue=1, light=0.75)
+sns.palplot(palet)
+```
+
+```{python}
+### Initialize
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+print(global_dir)
+```
+
+```{python}
+config = 'FI150'
+nside = 256 # Define here to avoid loading a diccionary
+```
+
+## Coverage and seenmap
+
+```{python}
+DataFastSimCoverage = pickle.load(open(global_dir +
+                                       '/doc/FastSimulator/Data/DataFastSimulator_' + config +'_coverage.pkl',
+                                       "rb"))
+coverage = DataFastSimCoverage['coverage']
+seenmap = coverage > np.max(coverage) * 0.1
+```
+
+## Theoretical spectra with Camb
+
+```{python}
+# Make a Namaster object (needed to bin the Camblib)
+lmin = 40
+lmax = 2 * nside - 1
+delta_ell = 30
+
+
+mask = np.zeros(12 * nside ** 2)
+mask[seenmap] = 1
+Namaster = nam.Namaster(mask, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+mask_apo = Namaster.get_apodized_mask()
+# hp.gnomview(mask_apo, reso=20, title='Mask')
+
+ell_binned, b = Namaster.get_binning(nside)
+nbins = len(ell_binned)
+print('lmin:', lmin)
+print('lmax:', lmax)
+print('delta_ell:', delta_ell)
+print('nbins:', nbins)
+print('ell binned:', ell_binned)
+print('Fsky: {}'.format(Namaster.fsky))
+```
+
+```{python}
+# Make a Camb library
+# rvalues = np.arange(0., 0.15001, 0.0001)
+# print(rvalues)
+# camblib = qc.rcamblib(rvalues, lmax=lmax, save=global_dir + '/doc/CAMB/camblib_0to02_step0001.pkl')
+```
+
+```{python}
+# Load the CAMB library already saved
+with open(global_dir + '/doc/CAMB/camblib_0to1_step001.pkl', "rb") as file:
+    camblib = pickle.load(file)
+[lll, rvalues, spec, specunlensed] = camblib
+print(rvalues)
+```
+
+```{python}
+binned_camblib = qc.bin_camblib(Namaster, global_dir + '/doc/CAMB/camblib_0to1_step001.pkl', nside, verbose=True)
+
+[lll_b, rvalues_b, spec_b, specunlensed_b] = binned_camblib
+```
+
+## Likelihood on r
+
+```{python}
+def myBBth(ell, r):
+    clBB = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=False, specindex=2)[0]
+    clBB = np.array(list(clBB) * ncombi)
+    return clBB
+```
+
+```{python}
+allLLH = []
+allsigma68, allsigma68_Fisher = [], []
+for nbands in [1, 2, 3, 4, 5, 8]:
+    print('\n nbands:', nbands)
+    # Possible combinations between bands
+    combi = list(combinations_with_replacement(np.arange(nbands), 2))
+    ncombi = len(combi)
+    print('combi:', combi)
+    print('ncombi:', ncombi)
+    
+    # Covariance noise matrices
+    BBcov = 4 * np.load('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/'
+                           + f'BBcovariance_bincross_nfrecon{nbands}_mixreal_' + config + '_v2_clean.npy')
+    
+    
+    # =================== Likelihood ========================
+    xvals = list(lll_b) * ncombi
+
+    fakedata = myBBth(lll_b, r=0.)
+
+    error = BBcov#np.sqrt(np.diag(BBcov))
+    print(error.shape)
+
+    logLLH = mcmc.LogLikelihood(xvals=xvals, 
+                               yvals=fakedata, 
+                               errors=error,
+                               nbins=nbins,
+                               model=myBBth, 
+                               flatprior=[[0,1]], 
+                               covariance_model_funct=Namaster.knox_covariance)
+
+    LLH, sigma68 = logLLH.compute_sigma68(logLLH, rvalues)
+    allLLH.append(LLH)
+    allsigma68.append(sigma68)
+
+    # ====================== Fisher Analysis =======================
+    sigma68_Fisher = logLLH.fisher_analysis()
+    allsigma68_Fisher.append(sigma68_Fisher)
+    
+
+```
+
+```{python}
+x = np.linspace(0., 1, 10000)
+xlim = 0.4
+```
+
+```{python}
+fig, axs = plt.subplots(1, 2, figsize=(20, 10))
+ax0, ax1 = axs
+
+fig.suptitle(config + ' - Clean Same $\sqrt{diag}$')
+
+for i, nbands in enumerate([1, 2, 3, 4, 5, 8]):
+    
+    c = palet[i]
+    ax0.set_title('Likelihood')
+#     ax0.plot(rvalues, allLLH[i] / np.max(allLLH[i]), 'o', color=c, label=f'Likelihood {nbands} bands')
+    ax0.plot(x, np.exp(-0.5*(x/allsigma68[i])**2), color=c, label='Gaussian $\mu = 0, \sigma = \sigma(r)$')
+    ax0.axvline(x=allsigma68[i], linestyle='--', color=c, 
+                label=' $\sigma(r)={0:6.4f}$ at 68% C.L.'.format(allsigma68[i]))
+
+    ax0.set_xlim(0, xlim)
+    ax0.set_xlabel('r')
+    ax0.set_ylabel('Posterior')
+    ax0.legend(fontsize=14)
+    
+    
+    ax1.set_title('Fisher')
+    ax1.plot(x, np.exp(-0.5*(x/allsigma68_Fisher[i])**2), color=c, label=f'Fisher gaussian {nbands} bands')
+    ax1.axvline(x=allsigma68_Fisher[i], linestyle='--', color=c, 
+                label=' $\sigma_(r)={0:6.4f}$ at 68% C. L.'.format(allsigma68_Fisher[i]))
+
+    ax1.set_xlim(0, xlim)
+    ax1.set_xlabel('r')
+    ax1.set_ylabel('Posterior')
+
+    ax1.legend(fontsize=14)
+```
+
+```{python}
+### Figure Spectroim paper
+fig = plt.figure(figsize=(12, 10))
+ax = plt.gca()
+ax0, ax1 = axs
+for i, nbands in enumerate([1, 2, 3, 4, 5, 8]):
+    if i == 0:
+        bandword = 'band'
+    else:
+        bandword = 'bands'
+    c = palet[i]
+    ax.set_title('QUBIC - ' + config[-3:] +' GHz')
+    ax.plot(x, np.exp(-0.5*(x/allsigma68[i])**2), color=c, label=f'{nbands} sub-{bandword}')
+    ax.axvline(x=allsigma68[i], linestyle='--', color=c, 
+                label=' $\sigma(r)={0:6.3f}$ at 68% C.L.'.format(allsigma68[i]))
+
+    ax.set_xlim(0, xlim)
+    ax.set_xlabel('r')
+    ax.set_ylabel('Posterior')
+    ax.legend(fontsize=14)
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/'+
+#             f'Likelihood_CMBonly_{config}_2y_4xMix.pdf', 
+#             bbox_inches='tight') 
+```
+
+```{python}
+plt.figure(figsize=(20, 20))
+plt.suptitle(f'Mix reals - With sample variance - Config {config}')
+# plt.suptitle('Do not mix reals - No Bias model - With sample variance - Config FI-150')
+for i, nbands in enumerate([1, 2, 3, 4, 5, 8]):
+    plt.subplot(3, 2, i+1)
+    plt.title(f'{nbands} bands - {config}')
+    plt.plot(x, np.exp(-0.5*(x/allsigma68_Fisher[i])**2), color='r', label=f'Fisher gaussian')
+    plt.axvline(x=allsigma68_Fisher[i], linestyle='--', color='r', 
+                label=' $\sigma_(r)={0:6.4f}$ at 68% C. L. with Fisher'.format(allsigma68_Fisher[i]))
+
+    plt.plot(rvalues, allLLH[i] / np.max(allLLH[i]), 'o', color='b', label='Likelihood')
+    plt.plot(x, np.exp(-0.5*(x/allsigma68[i])**2), color='b', label='Gaussian $\mu = 0, \sigma = \sigma(r)$')
+    plt.axvline(x=allsigma68[i], linestyle='--', color='b', 
+                label=' $\sigma(r)={0:6.4f}$ at 68% C. L. with likelihood'.format(allsigma68[i]))
+
+    plt.xlim(0, xlim)
+    plt.xlabel('r')
+    plt.ylabel('Posterior')
+
+    plt.legend(fontsize=12)
+```
+
+```{python}
+allbands = [1, 2, 3, 4, 5, 8]
+
+plt.figure()
+# plt.title('Mix reals - With sample variance - Config FI-150')
+# plt.title('Do not mix reals - Debiased - With sample variance - Config FI-150')
+plt.plot(allbands, allsigma68, 'o', label='Likelihood')
+plt.plot(allbands, allsigma68_Fisher, 'o', label='Fisher')
+# plt.plot(allbands, np.sqrt(allbands)*allsigma68_Fisher[0], 'k--', label='$\sqrt{N}$')
+# plt.axhline(y=1, linestyle='--', color='k', label='$y = 1$')
+plt.legend()
+plt.xlabel('# of bands')
+plt.ylabel('$\sigma$')
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

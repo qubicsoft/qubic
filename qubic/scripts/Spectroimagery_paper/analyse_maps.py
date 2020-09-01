@@ -4,8 +4,8 @@ import healpy as hp
 import numpy as np
 import matplotlib.pyplot as plt
 
-import ReadMC as rmc
-import AnalysisMC as amc
+from qubic import ReadMC as rmc
+from qubic import AnalysisMC as amc
 
 import qubic
 from qubic import equ2gal

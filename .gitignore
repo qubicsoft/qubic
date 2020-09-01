@@ -10,5 +10,6 @@ build
 dist
 htmlcov
 __init__.py
+qubic/--init__.py
 qubic/_flib.so
 src/polarization.f90

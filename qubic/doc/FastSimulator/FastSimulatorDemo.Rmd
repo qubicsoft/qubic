@@ -66,6 +66,12 @@ The FastSimulator reproduces the noise structure that has been measured so far i
 ```{python}
 ### This is for the FI
 config = 'FI150' #FI220 or FI150 or FI-150 (old files)
+old_config = False
+
+### Old COnfig
+# config = 'FI-150' 
+# old_config = True
+
 
 ### This is for the TD
 # Not yet available - stay tuned...
@@ -126,7 +132,7 @@ Qubic_sky = qss.Qubic_sky(sky_config, d)
 
 ##### Getting FastSimulator output maps
 maps_qubic, maps_noiseless, maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(spatial_noise=False,
-                                                                                           old_config=True)
+                                                                                           old_config=old_config)
 
 
 ################################# Displaying Results ##########################################
@@ -176,7 +182,7 @@ Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
 ##### Getting FastSimulator output maps
 maps_qubic, maps_noiseless, maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(spatial_noise=False,
-                                                                                           old_config=True)
+                                                                                           old_config=old_config)
 
 ################################# Displaying Results ##########################################
 ### Coverage map
@@ -214,7 +220,7 @@ Because in the above mode, most of the CPU time is spent on convolving the input
 reload(qss)
 
 newd = d.copy()
-newd['nf_recon'] = 3
+newd['nf_recon'] = 1
 
 ##### QubicSkySim instanciation
 seed = None
@@ -223,9 +229,8 @@ Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
 ##### Getting FastSimulator output maps
 new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, 
-                                                                    sigma_sec=100, 
                                                                     spatial_noise=False,
-                                                                    old_config=True)
+                                                                    old_config=old_config)
 for i in range(newd['nf_recon']):
     for s in range(3):
         hp.gnomview(new_maps_noise[i,:,s], reso=25, sub=(newd['nf_recon'],3,3*i+s+1), 
@@ -254,13 +259,16 @@ This one cannot be checked if the keyword 'spatial_noise' is True in the call, w
 ```{python}
 reload(qss)
 
+newd = d.copy()
+newd['nf_recon'] = 1
+
 seed = None
 sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
 new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True,
                                                                     spatial_noise=False,
-                                                                   old_config=True)
+                                                                   old_config=old_config)
 
 for isub in range(newd['nf_recon']):
     sqn = np.int(np.sqrt(newd['nf_recon']))
@@ -291,7 +299,7 @@ Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
 new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, 
                                                                     spatial_noise=False,
-                                                                   old_config=True)
+                                                                   old_config=old_config)
 
 
 cInew, cQnew, cUnew, fitcov, noise_norm = qss.get_cov_nunu(new_maps_noise, coverage, QUsep=True)
@@ -328,7 +336,7 @@ Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
 new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, 
                                                                     spatial_noise=True,
-                                                                   old_config=True)
+                                                                   old_config=old_config)
 
 
 
@@ -363,6 +371,54 @@ for i in range(newd['nf_recon']):
 legend()
 xlabel(r'$\theta$ [deg]')
 ylabel(r'$C(\theta$)')
+```
+
+### 4) RMS profile
+
+```{python}
+reload(qss)
+
+newd = d.copy()
+newd['nf_recon'] = 1
+
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, newd)
+
+new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True,
+                                                                    spatial_noise=False,
+                                                                   old_config=old_config)
+
+xx, yyI, yyQ, yyU = qss.get_angular_profile(new_maps_noise[0, :, :],
+                                                nbins=30,
+                                                separate=True,
+                                                center=[0, 0])
+pix_size = hp.nside2resol(256, arcmin=True)
+meanvalI = np.mean(yyI[xx < 10]) * pix_size
+meanvalQU = np.mean((yyQ[xx < 10] + yyQ[xx < 10]) / 2) * pix_size
+
+plt.figure()
+plt.plot(xx, yyI * pix_size, 'o', label='I')
+plt.plot(xx, yyQ * pix_size, 'o', label='Q')
+plt.plot(xx, yyU * pix_size, 'o', label='U')
+
+plt.axhline(y=meanvalI,
+            label=r'I RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalI),
+            color='r', ls=':')
+plt.axhline(y=meanvalQU,
+            label=r'QU RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalQU),
+            color='m', ls=':')
+
+plt.xlabel('Degrees from center of the field')
+plt.ylabel(r'Noise RMS $[\mu K.arcmin]$')
+plt.title('QUBIC FastSim - ' + config + ' - Nptg = 10000')
+plt.legend(fontsize=11)
+plt.xlim(0, 20)
+plt.ylim(0, meanvalQU * 2)
+```
+
+```{python}
+
 ```
 
 ```{python}

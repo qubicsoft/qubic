@@ -1,0 +1,805 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Spectroimaging pixel by pixel
+
+Edited by Louise, 18/06/2020
+
+Edited by Martin, 21/06/2020 (implement FastSimulator)
+
+In this notebook, I try to reproduce what Gabriele has done. Spectroimaging on the galaxy center, compare the reconstruction to the input sky pixel by pixel
+
+```{python}
+# %matplotlib inline
+
+import os
+import sys
+import glob
+from importlib import reload
+
+# Specific science modules
+import healpy as hp
+import matplotlib.pyplot as plt
+import numpy as np
+import pickle 
+import astropy.io as fits
+
+# Specific qubic modules
+import qubic
+from qubicpack.utilities import Qubic_DataDir
+from qubic import QubicSkySim as qss
+from qubic.polyacquisition import compute_freq
+from qubic import ReadMC as rmc
+from qubic import create_acquisition_operator_REC
+plt.rc('text',usetex=False)
+plt.rc('font', size=16)
+```
+
+Implementing FastSimulator
+
+```{python}
+# Dictionary saved during the simulation
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+#dictfilename = global_dir + '/doc/FastSimulator/FastSimDemo_{}.dict'.format(config)
+dictfilename = global_dir + '/dicts/spectroimaging_article.dict'
+dFI = qubic.qubicdict.qubicDict()
+dFI.read_from_file(dictfilename)
+dFI['nf_recon']=5
+dFI['photon_noise']=True
+dTD=dFI.copy()
+dTD['config']='TD'
+#dTD['detector_nep']=2.05e-16
+dTD['npointings']=10000
+```
+
+```{python}
+def make_covTD(d):
+    pointing = qubic.get_pointing(d)
+    q= qubic.QubicMultibandInstrument(d)
+    s= qubic.QubicScene(d)
+    nf_sub_rec = d['nf_recon']
+    _, nus_edge, nus, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, 
+                                                   nf_sub_rec, d['filter_relative_bandwidth'])
+    arec = qubic.QubicMultibandAcquisition(q, pointing, s, d, nus_edge)
+    cov = arec.get_coverage()
+    return cov
+def save_covTD(cov, savedir=os.environ['QUBIC_DATADIR']+'doc/'):
+    hdu_primary = fits.PrimaryHDU()
+    hdu_cov = fits.ImageHDU(data=cov, name='coverage')
+    
+    thefile = fits.HDUList([hdu_primary, hdu_cov])
+    thefile.writeto('')
+```
+
+```{python}
+QUBICField=False
+
+# Coordinates of the zone observed in the sky
+if QUBICField:
+    center = qubic.equ2gal(dTD['RA_center'], dTD['DEC_center'])
+else:
+    center = np.array([0,0]) #galaxy center
+    dTD['RA_center'],dTD['DEC_center'] = qubic.gal2equ(center[0],center[1])
+    dFI['RA_center'],dFI['DEC_center'] = dTD['RA_center'],dTD['DEC_center'] 
+```
+
+```{python}
+dTD['RA_center'], dTD['DEC_center']
+```
+
+```{python}
+makeCovTD=False
+if makeCovTD:
+    covTD = make_covTD(dTD)
+    coverageTD = np.sum(covTD, axis=0)# Sum the bands
+    coverageTD /= np.max(coverageTD)# Normalize by the max
+else:
+    fileTD=pickle.load(open(global_dir+'doc/FastSimulator/Data/DataFastSimulator_TD150_coverage.pkl', 'rb') )
+    coverageTD=fileTD['coverage']
+    coverageTD /= np.max(coverageTD)# Normalize by the max
+```
+
+```{python}
+#just used to compare, after is defined coverageFI. Depends if cengal is T or F
+covFI = np.load(global_dir+'doc/FastSimulator/Data/coverage_nfsub15_nptgs10000_qubicpatch.pk')
+```
+
+```{python}
+lacarte=hp.gnomview(coverageTD,rot=center,reso=13,return_projected_map=True, no_plot=True)
+lacarteFI=hp.gnomview(covFI,rot=qubic.equ2gal(0,-57),
+                      reso=13,return_projected_map=True, no_plot=True)
+X,Y=np.meshgrid(range(200), range(200))
+
+fig = plt.figure(figsize=(18,6))
+ax = fig.add_subplot(1, 3, 1, projection='3d')
+ax.set_title('covTD in galaxy center', fontsize=16)
+ax.plot_surface(X,Y, lacarte, cmap=plt.cm.viridis, linewidth=0.2)
+
+ax = fig.add_subplot(1, 3, 2, projection='3d')
+ax.set_title('covFI in QUBIC field', fontsize=16)
+ax.plot_surface(X,Y, lacarteFI, cmap=plt.cm.viridis, linewidth=0.2)
+
+ax = fig.add_subplot(1, 3, 3, projection='3d')
+ax.set_title('Diff = covTD-covFI', fontsize=16)
+ax.plot_surface(X,Y, lacarte-lacarteFI, cmap=plt.cm.viridis, linewidth=0.2)
+```
+
+```{python}
+if QUBICField:
+    coverageFI = np.load(global_dir+'doc/FastSimulator/Data/coverage_nfsub15_nptgs10000_qubicpatch.pk')
+    center = qubic.equ2gal(dTD['RA_center'], dTD['DEC_center'])
+else:
+    coverageFI = None
+    center = None
+```
+
+##### QubicSkySim instanciation
+seed = None
+sky_config_220 = {'dust': 'd1'}
+d220=d.copy()
+d220['filter_nu']=220*1e9
+d220['nf_recon']=5
+Qubic_sky_220 = qss.Qubic_sky(sky_config_220, d220)
+auxmaps220, noiseless220, _, _ = Qubic_sky_220.get_partial_sky_maps_withnoise(spatial_noise=False, 
+                                                                              coverage=coverage)
+
+```{python}
+##### QubicSkySim instanciation
+seed = 42#None
+sky_config_TD = {'dust': 'd1'}
+Qubic_sky_TD = qss.Qubic_sky(sky_config_TD, dTD)
+sky_config_FI = {'dust': 'd1'}
+Qubic_sky_FI = qss.Qubic_sky(sky_config_FI, dFI)
+
+##### Getting FastSimulator output maps
+mcmcmapsTD = []
+mcmcmapsTD_FI = []
+mcmcmapsTD_FI_nc = []
+mcmcmapsFI = []
+mcmcnoiseFI=[]
+for i in range(20):
+    auxmapsTD, maps_noiselessTD, _, coverageTD = \
+        Qubic_sky_TD.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=coverageTD)
+    print('=== Done (TD) interation #{} ===='.format(i+1))
+
+    auxmapsFI, maps_noiselessFI, noiseFI, coverageFI = \
+        Qubic_sky_FI.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=coverageFI)        
+    print('=== Done (cmb 220) interation #{} ===='.format(i+1))
+
+    mcmcmapsTD.append(auxmapsTD)
+    mcmcmapsFI.append(auxmapsFI)
+    #mcmcmapsTD_FI_nc.append(maps_noiselessTD+noiseFI*31)
+    #for ifreq in range(len(noiseFI)):
+    #    fwhmTD = dFI['synthbeam_peak150_fwhm']*150/nus[ifreq]*3 # 3: ratio betwen FI and TD
+    #    noiseFI[ifreq] = hp.smoothing(noiseFI[ifreq].T,fwhm=np.deg2rad(fwhmTD)).T
+    mcmcmapsTD_FI.append(maps_noiselessTD+noiseFI*31)
+    mcmcnoiseFI.append(noiseFI)
+
+mapsTD, stdTD=np.mean(mcmcmapsTD,axis=0), np.std(mcmcmapsTD,axis=0)
+mapsTD_noiseFI,stdTD_nFI = np.mean(mcmcmapsTD_FI,axis=0), np.std(mcmcmapsTD_FI,axis=0)
+#mapsTD_noiseFI_nc,stdTD_nFI_nc = np.mean(mcmcmapsTD_FI_nc,axis=0), np.std(mcmcmapsTD_FI_nc,axis=0)
+mapsFI, stdFI = np.mean(mcmcmapsFI,axis=0), np.std(mcmcmapsFI, axis=0)
+noiseFI= np.mean(mcmcnoiseFI,axis=0)
+```
+
+### Look at the maps... okk..
+
+```{python}
+#print(np.shape(maps_qubic), np.shape(maps_noiseless), np.shape(maps_noise), np.shape(coverage))
+cov=np.zeros_like(coverageTD,dtype=bool)
+covmsk=np.where(coverageTD > 0.01*np.max(coverageTD))
+cov[covmsk] = 1
+NU = 0
+STK = 1
+RESO = 15
+plt.figure(figsize=(12,8))
+hp.gnomview(mapsTD_noiseFI[NU,:,STK], sub=(2,2,1), max=1e2,
+            #max=0.1*np.max(mapsTD_noiseFI[NU,cov,STK]), 
+            title='FastSim TD(noiseFI conv)', reso=RESO, rot=center)
+hp.gnomview(mapsFI[NU,:,STK], sub=(2,2,2), 
+            #max=0.1*np.max(maps_noiselessTD[NU,:,STK]), 
+            title='FastSim FI', reso=RESO, rot=center)
+#hp.gnomview(cov, sub=(2,3,3), title='covmsk', reso=RESO, rot=center)
+
+hp.gnomview(mapsFI[NU,:,STK], sub=(2,2,3), title='FastSim FI', reso=RESO, rot=center)
+hp.gnomview(maps_noiselessFI[NU,:,STK], sub=(2,2,4), title='noiseless FI', reso=RESO, rot=center)
+#hp.gnomview(cov, sub=(2,3,6), title='covmsk', reso=RESO, rot=center)
+
+```
+
+```{python}
+_,nus_edge,nus,_,_,_=qubic.compute_freq(dTD['filter_nu']/1e9, dTD['nf_recon'], dTD['filter_relative_bandwidth'] )
+#_,nus_edge_in,nus_in,_,_,_=qubic.compute_freq(d['filter_nu']/1e9, d['nf_sub'], 
+#                                              d['filter_relative_bandwidth'] )
+```
+
+```{python}
+IPIX = covmsk[0][11500] #almost center
+mctest=True
+maps_noiselessTD[0,~cov,0]=hp.UNSEEN
+mapsTD_noiseFI[0,~cov,0]=hp.UNSEEN
+plt.rc('font', size=15)
+#for j,ipx in enumerate(range(0,24000,2000)):
+for j,IPIX in enumerate([384526,]):#enumerate(range(401919,401930)):
+    fig,ax=plt.subplots(nrows=1,ncols=3,figsize=(16,7),)
+    ax=ax.ravel()
+    #IPIX = covmsk[0][ipx]
+    #gs = ax[0].get_gridspec()
+    # remove the underlying axes
+    #for iax in ax[0:2]:
+    #    iax.remove()
+    #axbig = fig.add_subplot(gs[0:2])
+    if mctest:
+        ax[0].errorbar(nus, maps_noiselessTD[:,IPIX,0],lw=3,
+               fmt='o-',color='b',label='convolved', alpha=0.7)
+        ax[0].errorbar(nus, mapsTD_noiseFI[:,IPIX,0],yerr=stdTD_nFI[:,IPIX,0],capsize=3 ,lw=3,
+               fmt='o-',color='r',label='reconstructed', alpha=0.7)
+        #ax[0].errorbar(nus, maps_noiselessFI[:,IPIX,0],yerr=stdTD_nFI_nc[:,IPIX,0], 
+        #       fmt='o-', color='r',label='noiseless FI', alpha=0.7)
+        #ax[0].plot(nus, maps_noiselessTD[:,IPIX,0],
+        #       'ro-',label='TD noiseless', alpha=0.8)
+        #ax[0].plot(nus, maps_noiselessFI[:,IPIX,0],
+        #       'bo-',label='FI noiseless', alpha=0.5)
+        ax[0].set_title('Dust - TD/FI pix {}'.format(IPIX),fontsize=15)
+    ax[0].set_ylabel(r'$I_\nu~[\mu$K]',fontsize=15)
+    ax[0].set_xlabel(r'$\nu~[GHz]$',fontsize=15)
+    ax[0].legend(loc='upper left',fontsize=14)
+    ax[0].grid()
+    plt.axes(ax[1])
+    hp.gnomview(maps_noiselessTD[0,:,0], reso=15,hold=True,notext=True,title='Convolved',
+                max=0.7*np.max(mapsTD_noiseFI[0,:,0]),
+                cbar=True,
+                unit=r'$\mu$K',
+                rot=center)
+    hp.projscatter(hp.pix2ang(dTD['nside'],IPIX),marker='+',color='r',)
+    plt.axes(ax[2])
+    hp.gnomview(mapsTD_noiseFI[0,:,0], reso=15,hold=True,notext=True,title='Reconstructed',
+                max=0.7*np.max(mapsTD_noiseFI[0,:,0]), 
+                cbar=True,
+                unit=r'$\mu$K',
+                rot=center)
+    hp.projscatter(hp.pix2ang(dTD['nside'],IPIX),marker='+',color='r',)
+    plt.savefig('FastSim-TD-Figs/{}.svg'.format(IPIX),format='svg')
+plt.show()
+#367111,384526,401915
+#436782, 349666
+```
+
+Do same plots averaging and/or computing rms in maps
+
+```{python}
+mqTD = mapsTD_noiseFI.copy()
+mqFI=mapsFI.copy()
+```
+
+```{python}
+mqTD_FI = mapsTD_noiseFI.copy()
+mqTD = maps_noiselessTD.copy()
+
+dvalsTD=[]
+dvalsFI=[]
+#mq = maps_qubic
+threshold=0.2
+fig,ax=plt.subplots(nrows=3,ncols=dTD['nf_recon'],figsize=(12,10),)
+for ifreq in range(dTD['nf_recon']):
+    #TD(noiseFI)
+    auxmap = mqTD_FI[ifreq,:,0]
+    auxmap[~cov]=hp.UNSEEN
+    auxmap[auxmap>threshold*max(auxmap)] = hp.UNSEEN
+    maskTD=np.where(auxmap!=hp.UNSEEN)
+    dvalsTD.append(np.sqrt(np.sum(mapsTD_noiseFI[ifreq,maskTD[0],0]**2)/len(maskTD[0]) ))
+    ax[0,ifreq].cla()
+    plt.axes(ax[0,ifreq])
+    hp.gnomview(auxmap, reso=15,hold=True,notext=True,title='{:.1f}GHz'.format(nus[ifreq]),
+               min=-10, max=0.2*np.max(mapsTD[ifreq,cov,0]), 
+                rot=center )
+
+for ifreq in range(dTD['nf_recon']):
+    auxmap = mqTD[ifreq,:,0]
+    auxmap[~cov]=hp.UNSEEN
+    auxmap[auxmap>threshold*max(auxmap)] = hp.UNSEEN
+    maskFI=np.where(auxmap!=hp.UNSEEN)
+    dvalsFI.append(np.sqrt(np.sum(maps_noiselessTD[ifreq,maskFI[0],0]**2)/len(maskFI[0]) ))
+    ax[2,ifreq].cla()
+    plt.axes(ax[2,ifreq])
+    hp.gnomview(auxmap, reso=15,hold=True,notext=True,title='{:.1f}GHz'.format(nus[ifreq]),
+               min=-10, max=0.2*np.max(mapsFI[ifreq,cov,0]), 
+                rot=center )
+
+gs = ax[1,1].get_gridspec()
+# remove the underlying axes
+for iax in ax[1,0:]:
+    iax.remove()
+axbig = fig.add_subplot(gs[1,1:-1])
+#axbig.set_yscale('log')
+axbig.plot(nus, dvalsTD,
+       'r-', lw=4,label='TD(FI noise)', alpha=1)
+axbig.plot(nus, dvalsFI,
+        'g-',lw=4,label='TD (noiseless)' , alpha=1)
+axbig.set_ylabel(r'$rms$ [$\mu$K]',)
+axbig.set_xlabel(r'$\nu$[GHz]',)
+axbig.set_title(r'mask {:.1f}% I$_{{\rm max}}$'.format(threshold*100))
+axbig.legend(bbox_to_anchor=(0.83, 0.5, 0.5, 0.5),fontsize=12)
+axbig.grid()
+
+```
+
+Plot pixel profile accros frequencies. 3D plots
+
+```{python}
+plt.figure(figsize=(10,8),)
+hp.gnomview(mapsTD_noiseFI[0,:,0],rot=center,sub=(231),title='TD(FI) - I Stokes', 
+            notext=True,reso=15)
+hp.gnomview(mapsTD_noiseFI[0,:,1],rot=center,sub=(232),title='Q Stokes', 
+            notext=True,reso=15)
+hp.gnomview(mapsTD_noiseFI[0,:,2],rot=center,sub=(233),title='U Stokes', 
+            notext=True,reso=15)
+hp.gnomview(mapsFI[0,:,0],rot=center,sub=(234),title='FI - I Stokes', 
+            notext=True,reso=15)
+hp.gnomview(mapsFI[0,:,1],rot=center,sub=(235),title='Q Stokes', 
+            notext=True,reso=15)
+hp.gnomview(mapsFI[0,:,2],rot=center,sub=(236),title='U Stokes', 
+            notext=True,reso=15)
+#plt.savefig('FastSim-TD-Figs/NoiseFI_adapted2TD')
+```
+
+```{python}
+ipix = covmsk[0][10000]
+dth=5
+mapsTD_noiseFI[0,~cov,:]=hp.UNSEEN
+hp.gnomview(mapsTD_noiseFI[0,:,0],rot=center, reso=15,title=None,
+           cbar=None, notext=True, max=0.7*np.max(mapsTD_noiseFI[0,:,0]))
+deltab=np.deg2rad(12)
+for i in np.arange(np.pi/2-deltab,np.pi/2+deltab,0.002):
+    #print(i)
+    hp.projscatter(np.array([i,0]),marker='+',c='r',s=2)
+plt.savefig('FastSim-TD-Figs/overview-region.pdf',format='pdf')
+```
+
+```{python}
+from mpl_toolkits.mplot3d import Axes3D
+#make pixel profile perpendicular to galaxy center
+#Histogram not surface plot
+deltab=np.deg2rad(10)
+
+count=0
+lala=[]
+for i in np.arange(np.pi/2-deltab,np.pi/2+deltab,1.3*hp.nside2resol(dTD['nside']) ) :
+    lala.append(hp.ang2pix(dTD['nside'],i,0))
+    count+=1
+#print('has to be the same number. Then we know er are not repeating pixels',count, len(set(lala)))
+
+cutGal = np.zeros((len(nus),count))
+#print('should be the same number', 2*deltab/count, hp.nside2resol(256)*1.3)
+yaxis = []
+for inu in range(len(nus)):
+    for j,ip in enumerate(np.arange(np.pi/2-deltab,np.pi/2+deltab,1.3*hp.nside2resol(dTD['nside']) )) :
+        if inu==0:
+            yaxis.append(ip)
+        ipix=hp.ang2pix(dTD['nside'],ip,0)
+        cutGal[inu,j] = mapsTD_noiseFI[inu,ipix,0]
+#
+
+x = np.rad2deg(yaxis)-90 #np.linspace(0, 1)
+y = cutGal[0] #np.sin(4 * np.pi * x) * np.exp(-5 * x) * 120
+
+fig, ax = plt.subplots()
+# plot only the outline of the polygon, and capture the result
+poly, = ax.fill(x, y, facecolor='none')
+#print(np.shape(x),y.shape,y)
+
+# get the extent of the axes
+xmin, xmax = ax.get_xlim()
+ymin, ymax = ax.get_ylim()
+
+# create a dummy image
+img_data = np.arange(ymin,ymax,(ymax-ymin)/100.)
+img_data = img_data.reshape(img_data.size,1)
+
+# plot and clip the image
+im = ax.imshow(img_data, aspect='auto', origin='lower', 
+               cmap=plt.cm.viridis, extent=[xmin,xmax,ymin,ymax], 
+               vmin=y.min(), vmax=y.max()*0.98)
+
+print(type(im))
+im.set_clip_path(poly)
+
+#fig = plt.figure()
+#ax2 = fig.add_subplot(111, projection='3d')
+
+#ax2.add_collection3d(plt.fill_between(x,y,-0.1, cmap='viridis', alpha=0.3,label="filled plot"),1, zdir='x')
+
+#ax2.plot(x,y,1,zdir="x",label="line plot")
+```
+
+```{python}
+from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection # New import
+from matplotlib.pyplot import cm
+
+#x,y = genfromtxt("data.dat",unpack=True)
+# Generated some random data
+fig = plt.figure(figsize=(12,9))#plt.figaspect(2.))
+
+ax = fig.add_subplot(111, projection='3d')
+
+color=iter(cm.viridis(np.linspace(0,1,5)))
+for i in range(5):
+    y,z = np.rad2deg(np.array(yaxis))-90, cutGal[i,:]
+    x = nus[i]*np.ones(y.shape)
+
+    verts = [(x[i],y[i],z[i]) for i in range(len(y))] #+ [(x[0],y.min(),z.min()),(x[0],y.max(),z.min())]
+    ax.add_collection3d(Poly3DCollection([verts],color=next(color)),) # Add a polygon instead of fill_between
+    #ax.set_xlim(nus[0],nus[-1])
+    ax.set_ylim(y.min(),y.max())
+    ax.plot(x,y,z,color='k')
+#
+
+#ax.scatter(x[0] , y[0]+stdTD/2, z[0] , marker='_')
+#x.plot([ ([x[j],x[j]] , [y[j]+stdTD/2,y[j]-stdTD/2], [z[j],z[j]]) j for  in range(len(y))])
+#for i in np.arange(0, len(fx)):
+#ax.plot([fx[i], fx[i]], [fy[i]+yerror[i], fy[i]-yerror[i]], [fz[i], fz[i]], marker="_")
+#ax.plot([fx[i], fx[i]], [fy[i], fy[i]], [fz[i]+zerror[i], fz[i]-zerror[i]], marker="_")
+    
+#ax.legend()
+#ax.set_title('iso-longitude cut through galaxy center (TD - 150GHz)')
+ax.set_xlim(170,130)
+ax.set_xticks([135,145,155,165],)
+ax.xaxis.set_rotate_label(False)
+ax.xaxis.set_tick_params(labelsize=15, pad=10)
+ax.set_xlabel(r'$\nu~[GHz]$',fontsize=17, labelpad=25,rotation=0)
+
+ax.set_yticks([-5,0,5],)
+ax.yaxis.set_rotate_label(False)
+ax.yaxis.set_tick_params(labelsize=15, pad=10)
+ax.set_ylabel(r'$b~[deg]$',fontsize=17,labelpad=25,rotation=0)
+
+ax.set_zticks([0,3e3,6e3,9e3],)
+ax.zaxis.set_rotate_label(False)
+ax.zaxis.set_tick_params(labelsize=15, pad=10)
+ax.set_zlabel(r'$I_{\nu}~[\mu K]$',fontsize=17, labelpad=25, rotation=0,)
+
+ax.view_init(30, 20)
+
+plt.savefig('FastSim-TD-Figs/overview2-TD-region.pdf',format='pdf')
+```
+
+```{python}
+
+```
+
+```{python}
+help(ax.plot_trisurf)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+from importlib import reload
+reload(qss)
+noiseTD, _ = Qubic_sky_TD.get_partial_sky_maps_withnoise(coverage=coverageTD, Nyears=4., verbose=False, 
+                                       spatial_noise=False,noise_only=True)
+noiseFI, _ = Qubic_sky_FI.get_partial_sky_maps_withnoise(coverage=coverageFI, Nyears=4., verbose=False, 
+                                       spatial_noise=False,noise_only=True)
+        
+
+
+hp.gnomview(noiseTD[0,:,0],rot=center, sub=(121),reso=13)
+hp.gnomview(noiseFI[0,:,0],rot=center, sub=(122),reso=13)
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+### Without FastSimulator
+
+```{python}
+nfrecon = 3
+datadir = os.environ['DATA_SPECTROIM']
+rep = datadir + f'simu_nersc_dust_fullpipeline/nfrecon{nfrecon}/'
+print(rep)
+dictionary = glob.glob(rep + '/*.dict')[0]
+print(dictionary)
+
+# Dictionary saved during the simulation
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictionary)
+
+# Coordinates of the zone observed in the sky
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+
+# Number of subbands used during the simulation
+
+nfsub = d['nf_sub']
+print('nf_sub = {}, nf_recon = {}'.format(nfsub, nfrecon))
+
+# Get fits files names in a list
+fits_noise = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessFalse*.fits'.format(nfsub, nfrecon), 
+                              recursive=True))
+fits_noiseless = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessTrue*.fits'.format(nfsub, nfrecon), 
+                              recursive=True))
+
+print(fits_noiseless)
+```
+
+```{python}
+# Input sky
+seed = 42
+sky_config = {'dust': 'd1'}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+x0 = Qubic_sky.get_simple_sky_map()
+print('Input map with shape:', x0.shape)
+hp.mollview(x0[2,:,0],rot=center)
+
+Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(150, nfsub)
+```
+
+```{python}
+# Number of noise realisations
+nreals = len(fits_noise)
+print('nreals = ', nreals)
+
+# Get seen map (observed pixels)
+seenmap = rmc.get_seenmap(fits_noiseless[0])
+print(seenmap.shape)
+thepix_old = np.where(seenmap)[0]
+
+# Number of pixels and nside
+npix = len(seenmap)
+ns = d['nside']
+
+```
+
+```{python}
+np.where(seenmap)
+```
+
+```{python}
+# Get maps
+_, _, nus_rec, _, _, _ = compute_freq(150, nfrecon)
+
+maps_recon = np.empty((nreals, nfrecon, npix, 3))
+maps_conv = np.empty((nreals, nfrecon, npix, 3))
+for i, real in enumerate(fits_noise):
+    maps_recon[i], maps_conv[i], _ = rmc.get_maps(real)
+
+```
+
+```{python}
+# Decrease NSIDE
+nside_new = 8
+seenmap_dgrad = hp.ud_grade(seenmap, nside_new)
+thepix = np.where(seenmap_dgrad)[0]
+print(thepix)
+
+x0_dgrad = np.zeros((len(nus), 12*nside_new**2, 3))
+for nu in range(len(nus)):
+    for istk in range(3):
+        x0_dgrad[nu, :, istk] = hp.ud_grade(x0[nu, :, istk], nside_new)
+
+hp.mollview(x0_dgrad[0, :, 0]*seenmap_dgrad)
+
+maps_recon_dgrad = np.zeros((nreals, len(nus_rec), 12*nside_new**2, 3))
+for real in range(nreals):
+    for nu in range(len(nus_rec)):
+        for istk in range(3):
+            maps_recon_dgrad[real, nu, :, istk] = hp.ud_grade(maps_recon[real, nu, :, istk], nside_new)
+
+maps_conv_dgrad = np.zeros((nreals, len(nus_rec), 12*nside_new**2, 3))
+for real in range(nreals):
+    for nu in range(len(nus_rec)):
+        for istk in range(3):
+            maps_conv_dgrad[real, nu, :, istk] = hp.ud_grade(maps_conv[real, nu, :, istk], nside_new)
+
+
+```
+
+```{python}
+len(thepix_old)
+```
+
+```{python}
+istk = 0
+for pix in range(2000, 2020):
+    pix = thepix_old[pix]
+    plt.figure()
+
+    plt.plot(nus, x0[:, pix, istk], 'go', label='Input sky')
+    plt.plot(nus_rec, np.mean(maps_conv[:, :, pix, istk], axis=0), 'bo', label='convolved sky')
+    plt.errorbar(nus_rec, np.mean(maps_recon[:, :, pix, istk], axis=0),
+                 yerr=np.std(maps_recon[:, :, pix, istk], axis=0), 
+                 fmt='o', color='r',
+                 label='recon sky')
+    plt.legend()
+    plt.title('Pixel {}, NSIDE=256'.format(pix))
+    plt.xlabel('Frequency [GHz]')
+    plt.ylabel('I (µK)')
+#     plt.close()
+```
+
+```{python}
+len(thepix)
+```
+
+```{python}
+istk = 1
+Stokes = ['I', 'Q', 'U']
+for i in range(20):
+    pix = thepix[i]
+    plt.figure(figsize=(15, 4))
+    plt.subplot(121)
+    plt.plot(nus, x0_dgrad[:, pix, istk], 'go', label='Input sky')
+    plt.plot(nus_rec, np.mean(maps_conv_dgrad[:, :, pix, istk], axis=0), 'bo', label='convolved sky')
+
+    plt.errorbar(nus_rec, np.mean(maps_recon_dgrad[:, :, pix, istk], axis=0),
+                 yerr=np.std(maps_recon_dgrad[:, :, pix, istk], axis=0), 
+                 fmt='o', color='r',
+                 label='recon sky')
+    plt.legend()
+    plt.title('Pixel {}, NSIDE=8, {}'.format(pix, Stokes[istk]))
+    plt.xlabel('Frequency [GHz]')
+    plt.ylabel('I [µK]')
+
+    x0copie = x0_dgrad[0, :, istk].copy()
+    x0copie[pix] = -10
+    hp.mollview(x0copie*seenmap_dgrad, sub=(122), title='Pixel {}'.format(pix))
+
+
+    
+```
+
+# Compare input sky and convolution
+
+
+### Try just with Healpy
+
+```{python}
+# Make a sky with dust
+nfrecon = 5
+d['nside'] = 4
+d['nf_sub'] = nfrecon
+q = qubic.QubicMultibandInstrument(d)
+_, _, nus_rec, _, _, _ = compute_freq(150, nfrecon)
+
+
+sky_config = {'dust': 'd1'}#, 'cmb': seed} 
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+sky = Qubic_sky.get_simple_sky_map()
+
+hp.mollview(sky[0, :, 0])
+
+# Go to NSIDE=128
+sky128 = np.zeros((nfrecon, 12*128**2, 3))
+for i in range(nfrecon):
+    for istk in range(3):
+        sky128[i, :, istk] = hp.ud_grade(sky[i, :, istk], 128)
+    
+# Smooth the sky with 
+sky_conv = np.zeros_like(sky128)
+for i in range(nfrecon):
+    freq = q[i].filter.nu
+    print('freq:', freq)
+    fwhm = q[i].synthbeam.peak150.fwhm * (150e9 / freq)
+    print('\n FWHM:', fwhm * 60)
+    for istk in range(3):
+        sky_conv[i, :, istk] = hp.sphtfunc.smoothing(sky128[i, :, istk], fwhm)
+
+```
+
+```{python}
+q[i].synthbeam.peak150.fwhm * 60
+```
+
+```{python}
+# Decrease seenmap NSIDE to get pixels seen 
+nside_new = 128
+seenmap_dgrad = hp.ud_grade(seenmap, nside_new)
+thepix = np.where(seenmap_dgrad)[0]
+print(len(thepix))
+
+```
+
+### Add the qubic convolution
+
+```{python}
+# Get the convolved sky using qubic soft
+_, nus_edge_rec, nus_rec, _, _, _ = compute_freq(150, nfrecon)
+q = qubic.QubicMultibandInstrument(d)
+p = qubic.get_pointing(d)
+s = qubic.QubicScene(d)
+a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_rec)
+tod, skyqubic_conv = a.get_observation(sky) 
+
+skyqubic_conv = np.array(skyqubic_conv)
+```
+
+```{python}
+np.max(sky128)
+```
+
+```{python}
+IPIXnew = hp.ang2pix(8, hp.pix2ang(d['nside'],IPIX)[0],hp.pix2ang(d['nside'],IPIX)[1])
+print(IPIXnew)
+```
+
+```{python}
+# istk = 0
+Stokes = ['I', 'Q', 'U']
+for i in range(6000):
+    pix = thepix[i]
+    cond1 = np.abs(sky128[4, pix, istk] - sky128[0, pix, istk]) < 50
+    cond2 = np.abs(sky128[0, pix, istk] - sky_conv[0, pix, istk]) > np.abs(sky128[4, pix, istk] - sky_conv[4, pix, istk])
+    if cond2:
+        plt.figure(figsize=(15, 4))
+
+        plt.subplot(131)
+        plt.plot(nus_rec, sky128[:, pix, istk], 'ro', alpha=0.5, label=f'Input sky')
+        plt.plot(nus_rec, sky_conv[:, pix, istk], 'bo', alpha=0.5, label=f'Convolution with Healpix')
+    #     plt.plot(nus_rec, skyqubic_conv[:, pix, istk], 'go', alpha=0.5, label='Covolution with qubic soft')
+
+        plt.legend()
+        plt.title('Pixel {}, NSIDE=2, {}'.format(pix, Stokes[istk]))
+        plt.xlabel('Frequency [GHz]')
+        plt.ylabel('I [µK]')
+
+        theta, phi = hp.pix2ang(128, pix)
+    #     print(theta, phi)
+
+        hp.gnomview(sky128[0, :, 0]*seenmap_dgrad, sub=(132), title='Pixel {} input'.format(pix), 
+                    rot=center, reso=30)
+        hp.visufunc.projscatter(theta, phi, color='r')
+        print(sky128[0, pix, 0], sky128[3, pix, 0])
+    #     hp.visufunc.projtext(theta, phi, sky[0, pix, 0], color='r')
+
+        hp.gnomview(sky_conv[3, :, 0]*seenmap_dgrad, sub=(133), title='Pixel {} conv'.format(pix), 
+                    rot=center, reso=30)
+        hp.visufunc.projscatter(theta, phi, color='r')
+    #     hp.visufunc.projtext(theta, phi, sky[3, pix, 0], color='r')
+
+
+
+```
+
+```{python}
+
+```

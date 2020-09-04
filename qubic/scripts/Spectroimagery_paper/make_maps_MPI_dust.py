@@ -17,7 +17,7 @@ import pysm.units as u
 
 from qubicpack.utilities import Qubic_DataDir
 
-import ReadMC as rmc
+import qubic.ReadMC as rmc
 import qubic.SpectroImLib as si
 
 from mpi4py import MPI

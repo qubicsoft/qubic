@@ -414,42 +414,40 @@ class Qubic_sky(sky):
         # files location
         global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
         filter_nu = int(self.dictionary['filter_nu'] / 1e9)
+
+        #### Directory for fast simulations
+        dir_fast = '/doc/FastSimulator/Data/'
+        #### Integartion time assumed in Fast Sim Files
+        fastsimfile_effective_duration = 2.
         if old_config:
-            if filter_nu == 220:
-                raise ValueError('The old config is not available at 220 GHz.')
-            with open(global_dir +
-                      '/doc/FastSimulator/Data/DataFastSimulator_{}-{}_nfsub_{}.pkl'.format(self.dictionary['config'],
-                                                                                           str(filter_nu),
-                                                                                           nf_sub),
-                      "rb") as file:
-                DataFastSim = pickle.load(file)
-                print(file)
-            # Read Coverage map
-            if coverage is None:
-                DataFastSimCoverage = pickle.load(open(global_dir +
-                                                       '/doc/FastSimulator/Data/DataFastSimulator_{}-{}_coverage.pkl'.format(
-                                                           self.dictionary['config'],
-                                                           str(filter_nu)), "rb"))
-                coverage = DataFastSimCoverage['coverage']
-        else:
-            with open(global_dir +
-                      '/doc/FastSimulator/Data/DataFastSimulator_{}{}_nfsub_{}.pkl'.format(self.dictionary['config'],
-                                                                                           str(filter_nu),
-                                                                                           nf_sub),
-                      "rb") as file:
-                DataFastSim = pickle.load(file)
-                print(file)
-            # Read Coverage map
-            if coverage is None:
-                DataFastSimCoverage = pickle.load(open(global_dir +
-                                                       '/doc/FastSimulator/Data/DataFastSimulator_{}{}_coverage.pkl'.format(
-                                                           self.dictionary['config'],
-                                                           str(filter_nu)), "rb"))
-                coverage = DataFastSimCoverage['coverage']
+            #### Directory for fast simulations
+            dir_fast = '/doc/FastSimulator/Data/OldData_bad_photon_noise/'
+            #### Integartion time assumed in Fast Sim Files
+            fastsimfile_effective_duration = 4.
+
+
+
+        with open(global_dir + dir_fast +
+                  'DataFastSimulator_{}{}_nfsub_{}.pkl'.format(self.dictionary['config'],
+                                                                                       str(filter_nu),
+                                                                                       nf_sub),
+                  "rb") as file:
+            DataFastSim = pickle.load(file)
+            print(file)
+        # Read Coverage map
+        if coverage is None:
+            DataFastSimCoverage = pickle.load(open(global_dir + dir_fast +
+                                                   '/DataFastSimulator_{}{}_coverage.pkl'.format(
+                                                       self.dictionary['config'],
+                                                       str(filter_nu)), "rb"))
+            coverage = DataFastSimCoverage['coverage']
 
         # Read noise normalization
         if sigma_sec is None:
-            sigma_sec = DataFastSim['signoise']
+            #### Beware ! Initial End-To-End simulations that produced the first FastSImulator were done with
+            #### Effective_duration = 4 years and this is the meaning of signoise
+            #### New files were done with 2 years and as result the signoise needs to be multiplied by sqrt(effective_duration/4)
+            sigma_sec = DataFastSim['signoise'] * np.sqrt(fastsimfile_effective_duration / 4.)
 
         # # Read Nyears
         # if Nyears is None:

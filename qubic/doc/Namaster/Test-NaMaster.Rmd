@@ -266,7 +266,7 @@ plt.tight_layout()
 ### Test the pixwin correction
 
 ```{python}
-# This function gives you the pixel window correction
+# This function gives you the pixel window correction binned
 pwb = Namaster.get_pixwin_correction(d['nside'])
 print(pwb.shape)
 
@@ -284,16 +284,16 @@ for i in range(3):
 
 # Get spectra with and without the pixwin correction
 leff_pw, cells_pw, w_pw = Namaster.get_spectra(pw_seenmaps, 
-                                                           purify_e=True, 
-                                                           purify_b=False, 
-                                                           beam_correction=None,
-                                                           pixwin_correction=True)
+                                               purify_e=True, 
+                                               purify_b=False, 
+                                               beam_correction=None,
+                                               pixwin_correction=True)
 
 leff_nopw, cells_nopw, w_nopw = Namaster.get_spectra(pw_seenmaps, 
-                                                           purify_e=True, 
-                                                           purify_b=False, 
-                                                           beam_correction=None,
-                                                           pixwin_correction=None)
+                                                     purify_e=True, 
+                                                     purify_b=False, 
+                                                     beam_correction=None,
+                                                     pixwin_correction=None)
 ```
 
 ```{python}

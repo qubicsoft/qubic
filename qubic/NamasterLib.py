@@ -279,14 +279,17 @@ class Namaster(object):
 
         if pixwin_correction is not None:
             pwb = self.get_pixwin_correction(nside)
-            for i in range(4):
-                spectra[:, i] /= (pwb[1] ** 2)
+            spectra[:, 0] /= (pwb[0] ** 2) # TT
+            spectra[:, 1] /= (pwb[1] ** 2) # EE
+            spectra[:, 2] /= (pwb[1] ** 2) # BB
+            spectra[:, 3] /= (pwb[0] * pwb[1]) # TE
 
         return self.ell_binned, spectra, w
 
     def get_pixwin_correction(self, nside):
-        pw = hp.pixwin(nside, pol=True, lmax=self.lmax)
-        pw = [pw[0][: self.lmax + 1], pw[1][: self.lmax + 1]]
+        """Return the binned pixel window function multiplied by 2pi/(l(l+1))
+        for temperature and polarization """
+        pw = list(hp.pixwin(nside, pol=True, lmax=self.lmax))
 
         ell_binned, b = self.get_binning(nside)
         pwb = 2 * np.pi / (ell_binned * (ell_binned + 1)) * b.bin_cell(np.array(pw))

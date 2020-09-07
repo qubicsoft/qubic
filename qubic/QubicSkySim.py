@@ -283,7 +283,15 @@ class Qubic_sky(sky):
                                                                        # Multiband instrument model
                                                                        d['filter_relative_bandwidth'])
         self.qubic_central_nus = central_nus
-        self.qubic_resolution_nus = 61.347409 / self.qubic_central_nus
+        #THESE LINES HAVE TO BE CONFIRMED/IMPROVED in future since fwhm = lambda / (P Delta_x) is an approximation for the resolution 
+        if d['config'] == 'FI':
+            self.fi2td = 1
+        elif d['config'] == 'TD':
+            P_FI = 22   #horns in the largest baseline in the FI
+            P_TD = 8    #horns in the largest baseline in the TD
+            self.fi2td = (P_FI-1)/(P_TD-1)
+        #
+        self.qubic_resolution_nus = d['synthbeam_peak150_fwhm'] *150 / self.qubic_central_nus * self.fi2td
         self.qubic_channels_names = ["{:.3s}".format(str(i)) + "_GHz" for i in self.qubic_central_nus]
 
         instrument = {'nside': d['nside'], 'frequencies': central_nus,  # GHz
@@ -325,7 +333,7 @@ class Qubic_sky(sky):
         if FWHMdeg is not None:
             fwhms += FWHMdeg
         else:
-            fwhms = self.dictionary['synthbeam_peak150_fwhm'] * 150. / self.qubic_central_nus
+            fwhms = self.dictionary['synthbeam_peak150_fwhm'] * 150. / self.qubic_central_nus * self.fi2td
         for i in range(Nf):
             if fwhms[i] != 0:
                 fullmaps[i, :, :] = hp.sphtfunc.smoothing(fullmaps[i, :, :].T, fwhm=np.deg2rad(fwhms[i]),
@@ -353,6 +361,7 @@ class Qubic_sky(sky):
         more realistic noise profile. It is a law for effective RMS as a function of inverse coverage and is 2D array
         with the first one being (nx samples) inverse coverage and the second being the corresponding effective variance to be
         used through interpolation when generating the noise.
+        
         Parameters
         ----------
         coverage
@@ -643,10 +652,12 @@ class Qubic_sky(sky):
 
         Parameters
         ----------
-        sigma_sec
-        coverage
-        Nyears
-        verbose
+        sigma_sec: float
+            Noise level.
+        coverage: array
+            The coverage map.
+        Nyears: int
+        verbose: bool
 
         Returns
         -------
@@ -684,10 +695,10 @@ def random_string(nchars):
     return (str)
 
 
-def get_noise_invcov_profile(maps, cov, covcut=0.1, nbins=100, fit=True, label='',
+def get_noise_invcov_profile(maps, coverage, covcut=0.1, nbins=100, fit=True, label='',
                              norm=False, allstokes=False, fitlim=None, doplot=False, QUsep=True):
-    seenpix = cov > (covcut * np.max(cov))
-    covnorm = cov / np.max(cov)
+    seenpix = coverage > (covcut * np.max(coverage))
+    covnorm = coverage / np.max(coverage)
 
     xx, yyI, dx, dyI, _ = ft.profile(np.sqrt(1. / covnorm[seenpix]), maps[seenpix, 0], nbins=nbins, plot=False)
     xx, yyQ, dx, dyQ, _ = ft.profile(np.sqrt(1. / covnorm[seenpix]), maps[seenpix, 1], nbins=nbins, plot=False)
@@ -817,7 +828,7 @@ def correct_maps_rms(maps, cov, effective_variance_invcov):
     return newmaps
 
 
-def flatten_noise(maps, cov, nbins=20, doplot=False, normalize_all=False, QUsep=True):
+def flatten_noise(maps, coverage, nbins=20, doplot=False, normalize_all=False, QUsep=True):
     sh = np.shape(maps)
     if len(sh) == 2:
         maps = np.reshape(maps, (1, sh[0], sh[1]))
@@ -829,7 +840,7 @@ def flatten_noise(maps, cov, nbins=20, doplot=False, normalize_all=False, QUsep=
     if doplot:
         figure()
     for isub in range(newsh[0]):
-        xx, yy, fitcov = get_noise_invcov_profile(maps[isub, :, :], cov, nbins=nbins, norm=False,
+        xx, yy, fitcov = get_noise_invcov_profile(maps[isub, :, :], coverage, nbins=nbins, norm=False,
                                                   label='sub-band: {}'.format(isub), fit=True,
                                                   doplot=doplot, allstokes=True, QUsep=QUsep)
         all_norm_noise.append(yy[0])
@@ -837,9 +848,9 @@ def flatten_noise(maps, cov, nbins=20, doplot=False, normalize_all=False, QUsep=
             legend(fontsize=10)
         all_fitcov.append(fitcov)
         if normalize_all:
-            out_maps[isub, :, :] = correct_maps_rms(maps[isub, :, :], cov, fitcov)
+            out_maps[isub, :, :] = correct_maps_rms(maps[isub, :, :], coverage, fitcov)
         else:
-            out_maps[isub, :, :] = correct_maps_rms(maps[isub, :, :], cov, all_fitcov[0])
+            out_maps[isub, :, :] = correct_maps_rms(maps[isub, :, :], coverage, all_fitcov[0])
 
     if len(sh) == 2:
         return out_maps[0, :, :], all_fitcov
@@ -928,7 +939,7 @@ def ctheta_parts(themap, ipok, thetamin, thetamax, nbinstot, nsplit=4, degrade_i
     return thall, cthall
 
 
-def get_cov_nunu(maps, cov, nbins=20, QUsep=True, return_flat_maps=False):
+def get_cov_nunu(maps, coverage, nbins=20, QUsep=True, return_flat_maps=False):
     # This function returns the sub-frequency, sub_frequency covariance matrix for each stoke parameter
     # it does not attemps to check for covariance between Stokes parameters (this should be icorporated later)
     # it returns the three covariance matrices as well as the fitted function of coverage that was used to
@@ -937,7 +948,7 @@ def get_cov_nunu(maps, cov, nbins=20, QUsep=True, return_flat_maps=False):
     # so this covariance absorbes the  overall maps variances
 
     ### First normalize by coverage
-    new_sub_maps, all_fitcov, all_norm_noise = flatten_noise(maps, cov, nbins=nbins, doplot=False, QUsep=QUsep)
+    new_sub_maps, all_fitcov, all_norm_noise = flatten_noise(maps, coverage, nbins=nbins, doplot=False, QUsep=QUsep)
 
     ### Now calculate the covariance matrix for each sub map
     sh = np.shape(maps)

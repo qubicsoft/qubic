@@ -30,7 +30,7 @@ from qubic import AnalysisMC as amc
 ########################################################################################################
 #### Now in a function to loop over ell binning, lmin, coverage
 def run_mc(nbmc, Namaster, cov, d, configs, verbose=False, clnoise=None, duration=4, beam=0.39268176):
-    
+
     #### Dictionnary for 150 GHz
     dA = d.copy()
     dA['effective_duration'] = duration
@@ -228,7 +228,7 @@ covcut = float(sys.argv[7])
 method = str(sys.argv[8])
 outdir = str(sys.argv[9])
 
-outnameCl = outdir + '/MC_Cls_{}_{}_nbmc_{}_dur_{}_lmin_{}_dl_{}_cc_{}_meth_{}.pkl'.format(instA, instB, nbmc, 
+outnameCl = outdir + '/MC_Cls_{}_{}_nbmc_{}_dur_{}_lmin_{}_dl_{}_cc_{}_meth_{}.pkl'.format(instA, instB, nbmc,
     duration, lmin, delta_ell, covcut, method)
 outnameLike = outdir + '/MC_Like_{}_{}_nbmc_{}_dur_{}_lmin_{}_dl_{}_cc_{}_meth_{}.pkl'.format(instA, instB, nbmc, 
     duration, lmin, delta_ell, covcut, method)

@@ -36,13 +36,16 @@ import pickle as pk
 import numpy as np
 import glob
 from astropy.io import fits
+import gc
 
 from scipy.optimize import curve_fit
 from importlib import reload
-#import AnalysisPSF as anpsf
+import AnalysisPSF as anpsf
 from scipy.interpolate import interp1d
 from matplotlib.pyplot import cm
 from matplotlib.patches import Ellipse
+import AnalysisPSF as anpsf
+from importlib import reload
 ```
 
 ```{python}
@@ -109,13 +112,13 @@ def read_run(jobid, repo=None, fixpar=True):
     center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
     if fixpar:
         d['nf_sub']=48
-        d['nf_recon'] = [1,2,3,4,6] 
+        d['nf_recon'] = [2,3,4,]#6] 
     #nsub = d['nf_recon'][-1]
     
     _,_,nus_in,_,_,_=qubic.compute_freq(150,d['nf_sub'],0.25)
     sigma2fwhm = np.sqrt(8*np.log(2))
     # constant angular resolution using P = 19 and deltaX = 1.4cm
-    CteConf = 61.57622 #2.998e10/20/1.4/1e9/np.pi*180
+    CteConf = d['synthbeam_peak150_fwhm']*150#61.57622 #2.998e10/20/1.4/1e9/np.pi*180
     size=200
     reso = 3
     nside=d['nside']
@@ -144,8 +147,11 @@ def read_run(jobid, repo=None, fixpar=True):
 #jobids = ['32139830', '32140318','32139772', '32140658'] #[12,15,20,25]
 #jobids= ['32759969','32759907',#'32574156','32574178', 
 #          '32574170','32759934',]#'32574174','32759973'] #[48,48]|[1,2,3,4,6]
-dictshift = {'32832344':-7, '32759969':-4,'32759907':-3, '32574156':-2, '32574178':-1, 
-             '32574170':0, '32759934': 1, '32574174': 2, '32759973':3, '32832346':7 }
+dictshift = {'33409471':-15,'33409418':-13,'33130322':-11,'33130175':-9,
+             '32832344':-7, '33130311':-5, '32759969':-4,'32759907':-3, 
+             '32574156':-2, '32574178':-1,'32574170':0, '32759934': 1,
+             '32574174': 2, '32759973':3, '33130307':5, '32832346':7, 
+             '33130149':9,'33130316':11,'33409459':13,'33409482':15}
 jobids=list(dictshift.keys())
 allrecon = []
 allconv = []
@@ -155,7 +161,7 @@ for ijob in range(len(jobids)):
     if ijob == 0:
         maprec, mapsconv, nusfull,nusfulledge,nus_in,center,d = read_run(jobids[ijob])
     else: 
-        maprec,mapsconv,_,_,_,_,_ = read_run(jobids[ijob])
+        maprec, mapsconv, _, _, _, _, _ = read_run(jobids[ijob])
         
     allrecon.append(maprec)
     allconv.append(mapsconv)
@@ -183,48 +189,40 @@ def ring4snr(center,d,lth=6,hth=8, doplot=False):
     if doplot: hp.mollview(seenring,rot=center)
     return seenring
 
-#def multiring(center,d,minth,maxth,step=0.5):
-#    
-#    for i in np.arange(minth,maxth,0.5):
-#        ringmask.append(ring4snr(center,d,lth=i,hth=i+1,doplot=False))
-#    
-#testmap = allrecon[0]['2'][0,0,:,0]
-#print(3*np.sqrt(np.sum((testmap[ringmask])**2))*48/int(inu))
-
+pixel = hp.pixelfunc.ang2pix(d['nside'], np.deg2rad(90-center[1]), np.deg2rad(center[0]),)
+pixel=pixel
+nreal=0
 ```
 
 See at the profile of the amplitude relative to amplitude in the input_maps (1e5)... okk
 
-```{python}
-pixel = hp.pixelfunc.ang2pix(d['nside'], np.deg2rad(90-center[1]), np.deg2rad(center[0]),)
-pixel=pixel
-nreal=0
-#INU='4'
-for INU in ['1','2','3','4','6']:
+
+for INU in ['1','2','3','4',]:
     plt.figure(figsize=(14,4))
     for i in range(int(INU)):
-        hp.gnomview(allrecon[1][INU][0,i,:,0], rot=center, reso=1.5, 
+        hp.gnomview(allrecon[2][INU][0,i,:,0], rot=center, reso=1.5, 
                     title = 'Rec. {:d}GHz'.format(int(nusfull[INU][i])), sub=(1,int(INU),i+1), 
                     min=-0.04,max=0.5e4)
         neigpix = hp.get_all_neighbours(d['nside'],pixel)
         hp.projscatter(hp.pix2ang(d['nside'],pixel),marker='+',color='r',)
     plt.show()
-```
 
 ```{python}
 pixel = hp.pixelfunc.ang2pix(d['nside'], np.deg2rad(90-center[1]), np.deg2rad(center[0]),)#
 pixel=pixel
 
-fig,ax=plt.subplots(nrows=2,ncols=d['nf_recon'][-1]//2,
-                   figsize=(20,14))
+#fig,ax=plt.subplots(nrows=2,ncols=d['nf_recon'][-1]//2,
+#                   figsize=(20,14))
+fig,ax=plt.subplots(nrows=1,ncols=4,
+                   figsize=(20,6))
 ax=ax.ravel()
 snr = {}
 nreal=0
-color=iter(cm.rainbow(np.linspace(0,1,16)))
+color=iter(cm.rainbow(np.linspace(0,1,len(dictshift)+1 )))
 plt.rc('text',usetex=False)
 plt.rc('font', size=15)
 
-for j,isub in enumerate(d['nf_recon']):
+for j,isub in enumerate([2,3,4]):
     idx='{}'.format(isub)
     ax[j].set_title(r'Rel. intensity nfrec={}'.format(isub))
     ax[j].set_xlabel(r'$\nu[GHz]$')
@@ -233,11 +231,11 @@ for j,isub in enumerate(d['nf_recon']):
     for k in range(isub):
         NormFact = 1#48/isub
         
-        markers = iter(['h','o','+','^','<','>','s','p','*','x'])
+        markers = iter(['h','o','+','^','<','>','s','p','*','x','|','_','d','D','1','2','3','4','P','H','x'])
         c=next(color)
         #if k == 0: 
         #else:labelc=None;labelr_2=None;labelr_1=None;labelr00=None;labelr02=None;
-        color2=iter(cm.jet(np.linspace(0,1,10)))
+        color2=iter(cm.jet(np.linspace(0,1,len(dictshift)+1)))
         #c2=next(color2)
         for inu,irecon in enumerate(allrecon):
             if len(irecon[idx])==0:
@@ -248,31 +246,34 @@ for j,isub in enumerate(d['nf_recon']):
                 c2=next(color2)
                 ax[j].plot(nusfull[idx][k], irecon[idx][nreal,k,pixel,0]*NormFact/1e5, 
                            marker=m, color=c2, ms=8 )
-                if (j ==3)&(k+1==isub):
+                if (j ==2)&(k+1==isub):
                     ax[j].axvline(nus_in[innu[inu]], color=c2,alpha=0.4,ls='--',lw=3,
                                           label='{:.2f}'.format(nus_in[innu[inu]]))
-                    ax[j].legend(bbox_to_anchor=(2.3, 0.5, 0.5, 0.5))
+                    #ax[j].legend(bbox_to_anchor=(2.3, 0.5, 0.5, 0.5))
+                    ax[j].legend(bbox_to_anchor=(1.6, 0.5, 0.5, 0.5))
                 else:
                     ax[j].axvline(nus_in[innu[inu]], color=c2,alpha=0.4,ls='--',lw=3,)
-        
-        ringmask=ring4snr(center,d,lth=2,hth=6,doplot=False)
-        testmap = irecon[idx][0,k,:,0]
-        temean = np.mean(testmap[ringmask])*NormFact/1e5
-        #testd = np.sqrt(np.sum((testmap[ringmask])**2)/len(ringmask))*NormFact/1e5
-        testd = np.std(testmap[ringmask])*NormFact/1e5
-        deltanu = nusfulledge[idx][-1]-nusfulledge[idx][0]
-        #print('{} {} {:.6f} {:.4f}'.format(idx, k, temean, testd))
-        ax[j].axhspan(ymin=temean-3*testd,ymax=temean+3*testd, 
-                      xmin=(nusfulledge[idx][k]-nusfulledge[idx][0])/deltanu,
-                      xmax=(nusfulledge[idx][k+1]-nusfulledge[idx][0])/deltanu,
-                      color='k', alpha=0.8)
-        ax[j].axvspan(nusfulledge[idx][k],nusfulledge[idx][k+1], color=c, alpha=0.35)
+        if len(irecon[idx])==0:
+            pass
+        else:
+            ringmask=ring4snr(center,d,lth=2,hth=6,doplot=False)
+            testmap = irecon[idx][0,k,:,0]
+            temean = np.mean(testmap[ringmask])*NormFact/1e5
+            #testd = np.sqrt(np.sum((testmap[ringmask])**2)/len(ringmask))*NormFact/1e5
+            testd = np.std(testmap[ringmask])*NormFact/1e5
+            deltanu = nusfulledge[idx][-1]-nusfulledge[idx][0]
+            #print('{} {} {:.6f} {:.4f}'.format(idx, k, temean, testd))
+            ax[j].axhspan(ymin=temean-3*testd,ymax=temean+3*testd, 
+                          xmin=(nusfulledge[idx][k]-nusfulledge[idx][0])/deltanu,
+                          xmax=(nusfulledge[idx][k+1]-nusfulledge[idx][0])/deltanu,
+                          color='k', alpha=0.8)
+            ax[j].axvspan(nusfulledge[idx][k],nusfulledge[idx][k+1], color=c, alpha=0.35)
     ax[j].grid()
     ax[j].set_xlim(132,168)
 
-ax[5].spines['top'].set_visible(False)
-ax[5].set_axis_off()
-ax[5].axis("off")
+ax[-1].spines['top'].set_visible(False)
+ax[-1].set_axis_off()
+ax[-1].axis("off")
 #ax[j].autoscale(False)
 
 ```
@@ -281,7 +282,7 @@ See the profile of the reconstructed maps for each frequency....
 See the distance to the edge (freq where was placed the ps - the edge closest to that frequency) vs. intensity 
 
 ```{python}
-for NUS in ['2','4','6']:#NUS='6'
+for NUS in ['2','4',]:#'6']:#NUS='6'
     #print('NUS = {}'.format(NUS))
     NormFact2=1#48/int(NUS)
     fig,ax=plt.subplots(nrows=1,ncols=2,figsize=(12,4))
@@ -296,7 +297,7 @@ for NUS in ['2','4','6']:#NUS='6'
     for j,ifrec in enumerate(use):
         #print(NUS, ifrec, nusfull[NUS][ifrec])
         yvals=[]
-        color2=iter(cm.jet(np.linspace(0,1,10)))
+        color2=iter(cm.jet(np.linspace(0,1,len(dictshift)+1)))
         
         for jk,irec in enumerate(allrecon):
             if len(irec[NUS])==0:
@@ -344,15 +345,16 @@ nsisi3= sisi3/np.sum(sisi3)
 nsisi4= sisi4/np.sum(sisi4)
 
 t0,t2,t3,t4 = 2571.95*nsisi/60, 2794.24*nsisi2/60, 2495.46*nsisi3/60,2666.2*nsisi4/60
-print('{:.2f}hs'.format(t0[-1]), 2571/60)
-print('{:.2f}hs'.format(t2[-1]), 2794/60)
-print('{:.2f}hs'.format(t3[-1]), 2495/60)
-print('{:.2f}hs'.format(t4[-1]), 2666/60)
+print(t0[1:-1])
+print('average recon 2,3,4 sub-freqs {:.2f}hs'.format(np.sum(t0[1:-1])), 2571/60)
+print('{:.2f}hs'.format(np.sum(t2[1:-1])), 2794/60)
+print('{:.2f}hs'.format(np.sum(t3[1:-1])), 2495/60)
+print('{:.2f}hs'.format(np.sum(t4[1:-1])), 2666/60)
 
 ```
 
 ```{python}
-for NUS in ['1','3']:
+for NUS in ['3']:
     NormFact2=1#48/int(NUS)
     fig,ax=plt.subplots(nrows=1,ncols=1,figsize=(6,4))
     ax=[ax,]
@@ -361,9 +363,9 @@ for NUS in ['1','3']:
     elif NUS=='3':
         use = [1,]
     for j,ifrec in enumerate(use):
-        #print('ifrec, {}'.format(ifrec))
+        print('ifrec, {},{}'.format(NUS,ifrec))
         yvals=[]
-        color2=iter(cm.jet(np.linspace(0,1,10)))
+        color2=iter(cm.jet(np.linspace(0,1,len(dictshift)+1 )))
         #secax = ax[j].twiny()
         
         for jk,irec in enumerate(allrecon):
@@ -371,7 +373,8 @@ for NUS in ['1','3']:
                 yvals.append(None)
             else:
                 yvals.append(irec[NUS][nreal,ifrec,pixel,0]/1e5*NormFact2)
-        xvals=nus_in[innu]-nusfull[NUS][ifrec]
+                
+        xvals=(nus_in[innu]-nusfull[NUS][ifrec])/np.diff(nusfulledge[NUS])[ifrec]
         ax[j].set_title(r'Nfrec={} - ps entering to band {:.0f}-{:.0f}GHz'.format(NUS,
                                                                             nusfulledge[NUS][ifrec],
                                                                            nusfulledge[NUS][ifrec+1]))
@@ -399,144 +402,350 @@ for NUS in ['1','3']:
 ```
 
 ```{python}
-fig,ax=plt.subplots(nrows=2,ncols=3,figsize=(16,8),sharex=True)
-fig.subplots_adjust(hspace=0.1)
+fig,ax=plt.subplots(nrows=1,ncols=3,figsize=(16,5),sharey=True,gridspec_kw={'wspace': 0.03})
+#fig.subplots_adjust(hspace=0.1,wspace=0.4)
+searchmin=[]
 ax=ax.ravel()
-for ifreq, NUS in enumerate(['1','2','3','4','6']):#NUS='6'
+for ifreq, NUS in enumerate(['2','3','4']):#NUS='6'
     if NUS == '1':
-        ifreqdata=0
-    elif NUS == '2' or NUS == '3':
-        ifreqdata = 1
+        freqdata=range(1)
+    elif NUS == '2':
+        freqdata = range(2)
+    elif NUS == '3':
+        freqdata= range(3)
     else:
-        ifreqdata=2
+        freqdata=range(4)
         
     #print('NUS = {}'.format(NUS))
-    NormFact2=1.#48/int(NUS)
-    yvals=[]
-    yconv=[]
-    color2=iter(cm.jet(np.linspace(0,1,10)))
-
-    for jk,irec in enumerate(allrecon):
-        if len(irec[NUS])==0:
-            yvals.append(None)
-            yconv.append(None)
-        else:
-            yvals.append(irec[NUS][nreal,ifreqdata,pixel,0]/1e5*NormFact2)
-            yconv.append(allconv[jk][NUS][nreal,ifreqdata,pixel,0]/1e5*NormFact2)
-
-    #ax[ifreq].set_title(r'rec{} - I(px) - band {:.0f}-{:.0f}GHz'.format(NUS,
-    #                                                                    nusfulledge[NUS][ifreq],
-    #                                                                   nusfulledge[NUS][ifreq+1]))
-    ax[ifreq].set_xlabel(r'$\nu$[GHz]' if ifreq > 1 else ' ')
-    #secax.set_xlabel(r'$d_\nu$[GHz](dist to the $\nu_{c}$ of the band)')
-    ax[ifreq].set_ylabel(r'${I_\nu}$' if ifreq ==0 else None, rotation=0,fontsize=20)
-    #ax[ifreq].set_xlim(nus_in[innu][0]*0.98,nus_in[innu][-1]*1.02)
-    ax[ifreq].set_xlim(nus_in[0],nus_in[-1])
-
-    xvals=nus_in[innu]-nusfull[NUS][ifreq]
-    #secax = ax[j].twiny()
-
-    #c2=next(color2)
-    xx,yy,yc=[],[],[]
-    for i,yh in enumerate(yvals):
-        if yh!=None:
-            xx.append(nus_in[innu][i])
-            yy.append(yh)
-            yc.append(yconv[i])
-    xx,yy,yc=np.array(xx), np.array(yy), np.array(yc)
-    ax[ifreq].plot(xx,yy, 
-                   'o-',c='b',alpha=0.7,ms=6)
-    #ax[ifreq].plot(xx,2*yc, 
-    #               'o-',c='b',alpha=0.4,ms=6)
-    xlim=ax[ifreq].get_xlim()
-    for iedge in nusfulledge[NUS]:
-        if (iedge > np.array(xlim)[0]) and (iedge < np.array(xlim)[1]):
-            ax[ifreq].axvline(iedge, color='k', ls='--',alpha=0.6)
-    #ax[ifreq].grid()
-    ax[ifreq].axvspan(nusfulledge[NUS][ifreqdata],nusfulledge[NUS][ifreqdata+1], color='k', alpha=0.20)
-    #print(NUS, ifreq, nusfull[NUS][ifreq])
-    ax[ifreq].axvline(nusfull[NUS][ifreqdata],ls='-.',c='k', alpha=0.5)
-    ax[ifreq].text(nusfull[NUS][ifreqdata], min(yy) , 
-                   r'{:.0f}-{:.0f}GHz'.format(nusfulledge[NUS][ifreqdata],
-                    nusfulledge[NUS][ifreqdata+1]),fontsize=12,rotation=-90, alpha=0.7)
-ax[5].spines['top'].set_visible(False)
-ax[5].set_axis_off()
-ax[5].axis("off")
-```
-
-Fit gaussian to profiles
-
-```{python}
-def fgauss(x,amp,nu0,var0):
-    return amp*np.exp(-0.5*(x-nu0)**2/var0**2 )
-nunu=nus_in[innu]
-fig,ax=plt.subplots(nrows=2,ncols=2,figsize=(16,12))
-ax=ax.ravel()
-for jj,NUS in enumerate(['2','3','4','6']):
-    if NUS=='2':
-        usefreq=[0,1]
-    elif NUS=='3':
-        usefreq=[1,]
-    elif NUS=='4':
-        usefreq=[1,2]
-    elif NUS=='6':
-        usefreq=[2,3]
-    for inu in usefreq:
-        nunu=nus_in[innu]
-        psfvals=[]
-        idx=[]
-        for ii,i in enumerate(allrecon):
-            if len(i[NUS])==0:
-                psfvals.append(None)
-                idx.append(ii)
+    NormFact2=48/int(NUS)
+    markers=iter(['o','*','+','^'])
+    color2=iter(['b','r','g','m'])
+    for ifreqdata in freqdata:
+        imark=next(markers)
+        yvals=[]
+        yconv=[]
+        for jk,irec in enumerate(allrecon):
+            if len(irec[NUS])==0:
+                yvals.append(None)
+                yconv.append(None)
+                searchmin.append(None)
             else:
-                psfvals.append(i[NUS][nreal,inu,pixel,0]/1e5)
-        psfvals=np.array(psfvals)
-        nunu=np.delete(nunu,idx)
-        psfvals=np.delete(psfvals,idx)
-        pgauss,vgauss=curve_fit(fgauss, nunu, psfvals,p0=[0.2,nusfull[NUS][inu],8])
+                neig=False
+                if neig:
+                    pixs=hp.get_all_neighbours(d['nside'],pixel)
+                    pixs=list(pixs)
+                    pixs.append(pixel)
+                    yvals.append(np.mean(irec[NUS][nreal,ifreqdata,pixs,0])/1e5*NormFact2)
+                    searchmin.append(np.mean(irec[NUS][nreal,ifreqdata,pixs,0])/1e5*NormFact2)
+                else:
+                    yvals.append(irec[NUS][nreal,ifreqdata,pixel,0]/1e5*NormFact2)
+                    yconv.append(allconv[jk][NUS][nreal,ifreqdata,pixel,0]/1e5*NormFact2)
+                    searchmin.append(np.mean(irec[NUS][nreal,ifreqdata,pixel,0])/1e5*NormFact2)
 
-        ax[jj].set_title(fr'$N_r$ = {int(NUS)}, $\nu_0$ = {nusfull[NUS][usefreq]} ')
-        color2=iter(cm.jet(np.linspace(0,1,10)))
-        for j in range(len(nunu)):
-            c2=next(color2)
-            ax[jj].plot(nunu[j], psfvals[j],'o', color=c2)
-        x=np.linspace(nunu[0],nunu[-1],200)
-        ax[jj].plot(x, fgauss(x, *pgauss),'g-', 
-                    label=r'$\nu = ${:.2f}, $\sigma = ${:.2f}'.format(pgauss[1],pgauss[2]))
-        ax[jj].legend(loc='best')
-        
-        xlim=ax[jj].get_xlim()
+        #ax[ifreq].set_title(r'rec{} - I(px) - band {:.0f}-{:.0f}GHz'.format(NUS,
+        #                                                                    nusfulledge[NUS][ifreq],
+        #                                                                   nusfulledge[NUS][ifreq+1]))
+        ax[ifreq].set_xlabel(r'${\rm d}_{\nu_c}$ / $\Delta \nu$' ,fontsize=20)
+        ax[ifreq].set_ylabel(r'${i_\nu}$[$\mu K$]' if ifreq ==0 else None, fontsize=20, labelpad=10)
+        ax[ifreq].axhline(0,c='k')
+        xvals=nus_in[innu]-nusfull[NUS][ifreq]
+
+        xx,yy,yc=[],[],[]
+        cenfreq=nusfull[NUS][ifreqdata]
+        for i,yh in enumerate(yvals):
+            if yh!=None:
+                xx.append((nus_in[innu][i]-cenfreq)/(nusfulledge[NUS][ifreqdata+1]-nusfulledge[NUS][ifreqdata]))
+                yy.append(yh)
+                yc.append(yconv[i])
+        xx,yy,yc=np.array(xx), np.array(yy), np.array(yc)
+        c2=next(color2)
+        ax[ifreq].plot(xx,yy, 
+                       marker='o',#None,#imark,
+                       ls='-',lw=3, c=c2,alpha=0.7,ms=6)
+        #ax[ifreq].plot(xx,2*yc, 
+        #               'o-',c='b',alpha=0.4,ms=6)
+        ax[ifreq].set_xlim(-2.1,2.1)
+        xlim=ax[ifreq].get_xlim()
         for iedge in nusfulledge[NUS]:
             if (iedge > np.array(xlim)[0]) and (iedge < np.array(xlim)[1]):
-                ax[jj].axvline(iedge, color='k', ls='--')
-        print(NUS,'fWhm {:.1f}'.format(pgauss[2]*2.35))            
-    ax[jj].grid()
+                ax[ifreq].axvline(iedge-cenfreq, color='k', ls='--',alpha=0.9)
+        #ax[ifreq].grid()
+        ax[ifreq].axvspan((nusfulledge[NUS][ifreqdata]-cenfreq)/(nusfulledge[NUS][ifreqdata+1]-nusfulledge[NUS][ifreqdata]),
+            (nusfulledge[NUS][ifreqdata+1]-cenfreq)/(nusfulledge[NUS][ifreqdata+1]-nusfulledge[NUS][ifreqdata]), 
+                          color='k' , alpha=0.40) if ifreqdata == 0 else None
+        #print(NUS, ifreq, nusfull[NUS][ifreq])
+        ax[ifreq].axvline(nusfull[NUS][ifreqdata]-cenfreq,ls='-.',c='k' , alpha=0.2)
+        #ax[ifreq].text(nusfull[NUS][ifreqdata]-cenfreq, 0.05 , 
+        #               r'{:.0f}-{:.0f}GHz'.format(nusfulledge[NUS][ifreqdata],
+        #                nusfulledge[NUS][ifreqdata+1]),weight="bold",fontsize=12,rotation=-90, alpha=0.7)
+        ax[ifreq].tick_params(axis='both',bottom=True, top=True, left=True, right=True,direction='in')
+    ax[ifreq].grid()
+    #print(searchmin)
+    #print(np.argmin(yvals))
+    #ax[ifreq].axvline(np.min(searchmin),ymin=0,ymax=1)
+plt.savefig('BFR-unbinned-intensity.pdf',format='pdf')
+```
+
+Fit gaussian to profiles.
+
+I will fit the FWHM in the maps where the point source is cleary located in the band. For that I can plot manually and see the SNR level in the edge between band and take those maps where SNR are high and almost constant in the value
+
+```{python}
+from lmfit import Model
+def gaussian2d_b(x, amp,x0, y0, varx, vary):
+    gauss = np.zeros((len(x),len(x)))
+    #amp=1 / (2 * np.pi * varx * vary)
+    for i in range(200):
+        for j in range(200):
+            gauss[i,j] = amp*np.exp(-0.5*( (x[i]-x0)**2/varx**2+(x[j]-y0)**2/vary**2) )
+            
+    return gauss.ravel()
+def fixnside(ns):
+    if ns == 1024:
+        return 900
+    elif ns==256:
+        return 250
+    elif ns==512:
+        return 700
+```
+
+```{python}
+for NUS in [2,3,4]:#NUS=4
+    print('============================')
+    print(' NUS ', NUS)
+    NUSt=str(NUS)
+    if NUS==2:
+        coso2=np.zeros((NUS,len(allrecon)))
+    elif NUS==3:
+        coso3=np.zeros((NUS,len(allrecon)))
+    elif NUS==4:
+        coso4=np.zeros((NUS,len(allrecon)))
+    coso=np.zeros((NUS,len(allrecon)))
+    size=200
+    reso=2.5
+    xscale=np.linspace(-size/2,size/2,size)*reso/60
+    xgrid,ygrid = np.meshgrid(xscale,xscale)[0].ravel(),np.meshgrid(xscale,xscale)[1].ravel()
+    best_fit_full=np.zeros((NUS,20,3))
+    indx=[]
+    for isub in range(NUS):
+        best_fit_res=np.zeros((20,3))
+        Fact=48/NUS
+        print("Band | pos-nu-array | FWHMmeasured  | FWHM6134 | FWHMdictionary | Error sqrt(varx**2+vary**2) ")
+        print("============================================================================================")
+        for ipos in range(len(allrecon)):
+            if len(allrecon[ipos][NUSt])==0:
+                pass
+            else:
+                newnside=1024
+                
+                cut=800
+                if NUS==3:
+                    if ipos==1:
+                        cut = 900 #if NUS==2 else 280
+                
+                if newnside!=d['nside']:
+                    print('udgrading map')
+                    newmap=hp.ud_grade(allrecon[ipos][NUSt][nreal,isub].T, newnside).T
+                else:
+                    print('no udgrading map')
+                    newmap=allrecon[ipos][NUSt][nreal,isub]
+
+                fitmap=hp.gnomview(newmap[:,0]/1e5*Fact,rot=center, reso=reso,
+                                   return_projected_map=True,xsize=200,
+                                   no_plot=True)
+
+                snr=anpsf.computeSNR_maps(newmap/1e5*Fact,d,center,nside=newnside,threshold=4)
+                coso[isub,ipos] = snr
+                if snr > cut:
+                    gmodel = Model(gaussian2d_b, independent_vars=['x',], )
+                    #Set initial guess 
+                    fwhmTemplate=d['synthbeam_peak150_fwhm']*150/nusfull[NUSt][isub]
+                    #fwhmTemplate=d['synthbeam_peak150_fwhm']*150/nus_in[innu[ipos]]*np.sqrt(8*np.log(2))
+                    #fwhmTemplate=61.3474/nusfull[NUSt][isub]*np.sqrt(8*np.log(2))
+                    params = gmodel.make_params(amp=1.,x0=0, y0=0, varx=fwhmTemplate*np.sqrt(8*np.log(2)), 
+                                                vary=fwhmTemplate*np.sqrt(8*np.log(2)))
+
+                    result = gmodel.fit(fitmap.ravel(), params, x=xscale)
+                    #print(result.fit_report())
+                    fwhm=np.sqrt(result.best_values['varx']*result.best_values['vary'])*np.sqrt(8*np.log(2))
+                    print("{}    |     {:.2f} \t   |   {:.3f} \t| {:.3f}\t|{:.3f}\t|{:.5f}".format(isub+1, 
+                                                            snr, fwhm, 
+                                                            61.34/nus_in[innu[ipos]], 
+                                                            d['synthbeam_peak150_fwhm']*150/nus_in[innu[ipos]],
+                                                            np.sqrt(result.covar[-1,-1]+result.covar[-2,-2])))
+                    best_fit_res[ipos] = np.array([fwhm, 61.34/nusfull[NUSt][isub], 
+                                        d['synthbeam_peak150_fwhm']*150/nusfull[NUSt][isub]] )
+                else:
+                    fwhm=np.NaN
+                    best_fit_res[ipos] = np.array([fwhm, 61.34/nusfull[NUSt][isub], 
+                                        d['synthbeam_peak150_fwhm']*150/nusfull[NUSt][isub]] )
+        best_fit_full[isub] = best_fit_res
+        #np.nanmean(each,axis=0)[0]-
+    if NUS==2:
+        results_2 = best_fit_full
+        coso2=coso
+    elif NUS==3:
+        results_3 = best_fit_full
+        coso3=coso
+    elif NUS==4:
+        results_4 = best_fit_full
+        coso4=coso
+#allTodo.append[best_fit_full]
+```
+
+```{python}
+best_fit_full
+```
+
+```{python}
+from scipy.stats import median_absolute_deviation as mad
+import scipy.stats as sc
+```
+
+```{python}
+print('NUS \t NU    Mean FWHMthAv FWHMth Std MAD')
+for j,each in enumerate(results_2):
+    print('NUS = 2 {:.2f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f}'.format(nusfull['2'][j], np.nanmean(each,axis=0)[0],
+                                                    np.nanmean(each,axis=0)[2],
+                                                   61.34/nusfull['2'][j],
+                                                 np.nanstd(each ,axis=0)[0],
+                                                mad(each,axis=0,nan_policy='omit') ) )
+#
+print('========')
+for j,each in enumerate(results_3):
+    print('NUS = 3 \t {:.2f} {:.3f} {:.3f} {:.3f} {:.3f}'.format(nusfull['3'][j], np.nanmean(each,axis=0)[0],
+                                                   61.34/nusfull['3'][j],
+                                                 np.nanstd(each ,axis=0)[0],
+                                                         mad(each,axis=0,nan_policy='omit') ))
+#
+print('========')
+for j,each in enumerate(results_4[1:]):
+    j+=1
+    print('NUS = 4 \t {:.2f} {:.3f} {:.3f} {:.3f} {:.3f}'.format(nusfull['4'][j], np.nanmean(each[2:],axis=0)[0],
+                                                   61.34/nusfull['4'][j],
+                                                                 np.nanstd(each[2:] ,axis=0)[0],
+                                                mad(each[2:],axis=0,nan_policy='omit'),
+                                                                  ))
+    
+```
+
+```{python}
+fig,ax=plt.subplots(nrows=1,ncols=3,figsize=(15,5),sharey=True, gridspec_kw={'hspace': 0.03})
+ax=ax.ravel()
+#fwhmTh = lambda nu: 61.3474/nu
+fwhmTh = lambda nu: d['synthbeam_peak150_fwhm']*150/nu
+fig.suptitle(r'FWHM for maps with high SNR in each sub-band. ud={} -cut$_{{SNR}}$={}'.format(newnside,cut))
+ax[0].set_xlabel(r'$\nu~$[GHz]')
+ax[1].set_xlabel(r'$\nu~$[GHz]')
+ax[2].set_xlabel(r'$\nu~$[GHz]')
+ax[0].set_ylabel(r'$FWHM~$[deg]')
+for j,each in enumerate(results_2):
+    ax[0].errorbar(nusfull['2'][j],np.nanmean(each,axis=0)[0],
+                   yerr=np.nanstd(each ,axis=0)[0],
+                   fmt='o',c='b')
+    #ax[0].errorbar(nusfull['2'][j]*1.001,np.nanmean(each,axis=0)[0],
+    #               yerr=mad(each,axis=0,nan_policy='omit'),
+    #               fmt='o',c='r')
+    ax[0].text(nusfull['2'][j], (np.nanmean(each,axis=0)[0]+fwhmTh(nusfull['2'][j]) )/2 , 
+               '{:.3f}'.format((np.nanmean(each,axis=0)[0]-fwhmTh(nusfull['2'][j]) )) )
+    ax[0].plot(nusfull['2'][j],fwhmTh(nusfull['2'][j]), 'ko')
+for j,each in enumerate(results_3):
+    
+    ax[1].errorbar(nusfull['3'][j],np.nanmean(each,axis=0)[0],
+                   yerr=np.nanstd(each ,axis=0)[0],
+                   fmt='o',c='b', label='Averaged FWHM' if j==0 else None)
+    #ax[1].errorbar(nusfull['3'][j]*1.001,np.nanmean(each,axis=0)[0],
+    #               yerr=mad(each,axis=0,nan_policy='omit'),
+    #               fmt='o',c='r', label='MAD' if j==0 else None)
+    ax[1].text(nusfull['3'][j], (np.nanmean(each,axis=0)[0]+fwhmTh(nusfull['3'][j]) )/2 , 
+               '{:.3f}'.format((np.nanmean(each,axis=0)[0]-fwhmTh(nusfull['3'][j]) )) )
+    ax[1].plot(nusfull['3'][j],fwhmTh(nusfull['3'][j]), 'ko', label='Theoretical FWHM' if j==0 else None)
+for j,each in enumerate(results_4[1:]):
+    j+=1
+    ax[2].errorbar(nusfull['4'][j],np.nanmean(each[2:],axis=0)[0],
+                   yerr=np.nanstd(each[2:] ,axis=0)[0],
+                   fmt='o',c='b')
+    #ax[2].errorbar(nusfull['4'][j]*1.001,np.nanmean(each[2:],axis=0)[0],
+    #               yerr=mad(each[2:],axis=0,nan_policy='omit'),
+    #               fmt='o',c='r')
+    ax[2].text(nusfull['4'][j], (np.nanmean(each[2:],axis=0)[0] + fwhmTh(nusfull['4'][j]) )/2 , 
+               '{:.3f}'.format((np.nanmean(each[2:],axis=0)[0]-fwhmTh(nusfull['4'][j]) )) )
+    ax[2].plot(nusfull['4'][j], fwhmTh(nusfull['4'][j]), 'ko')
+#
+ax[1].legend(bbox_to_anchor=(0., 1.08), fontsize=10,loc='upper left',ncol=3)
+for i in range(3):
+    ax[i].tick_params(axis='both',bottom=True, top=True, left=True, right=True,direction='in')
+    ax[i].grid()
+#
+plt.tight_layout() #makes subplots nicely fit in the figure.
+```
+
+```{python}
+fig,ax=plt.subplots(nrows=1,ncols=3,figsize=(14,6), sharey=True, gridspec_kw={'hspace': 0.03})
+ax[0].set_ylabel(r'SNR')
+color=iter(cm.jet_r(np.linspace(0,1,5)))
+for i in range(2):
+    ax[0].plot(coso2[i],'o-',c=next(color))
+    ax[0].axhline(cut, ls='--',c='k')
+#
+color=iter(cm.jet_r(np.linspace(0,1,5)))
+for i in range(3):
+    c=next(color)
+    ax[1].plot(coso3[i],'o-',c=c)
+    ax[1].axhline(cut, ls='--',c='k')
+    if i ==1:
+        ax[1].axhline(900, ls='--',c=c)
+#
+color=iter(cm.jet_r(np.linspace(0,1,5)))
+for i in range(4):
+    ax[2].plot(coso4[i],'o-',c=next(color))
+    ax[2].axhline(cut, ls='--',c='k')
+#
+```
+
+```{python}
+plt.imshow(fitmap.reshape(200,200),extent=[xscale[0],xscale[-1],xscale[0],xscale[-1],])
+#plt.axvline(0,ls='--', c='w',alpha=0.4)
+plt.axvline(-0.4,ls='--', c='w',alpha=0.4)
+plt.axvline(0.4,ls='--', c='w',alpha=0.4)
+#plt.axhline(0,ls='--', c='w',alpha=0.4)
+plt.axhline(-0.4,ls='--', c='w',alpha=0.4)
+plt.axhline(0.4,ls='--', c='w',alpha=0.4)
 
 ```
 
 ```{python}
-
+np.max(fitmap)
 ```
 
 ```{python}
+from lmfit import Model
+def gaussian2d_b(x, amp,x0, y0, varx, vary):
+    gauss = np.zeros((len(x),len(x)))
+    #amp=1 / (2 * np.pi * varx * vary)
+    for i in range(200):
+        for j in range(200):
+            gauss[i,j] = amp*np.exp(-0.5*( (x[i]-x0)**2/varx**2+(x[j]-y0)**2/vary**2) )
+            
+    return gauss.ravel()
 
+
+gmodel = Model(gaussian2d_b, independent_vars=['x',])
+print('parameter names: {}'.format(gmodel.param_names))
+print('independent variables: {}'.format(gmodel.independent_vars))
+
+#Set initial guess 
+params = gmodel.make_params(amp=4e3,x0=0, y0=0, varx=0.4/2.35, vary=0.35/2.35)
+#testeval=gmodel.eval(params, x=xscale).reshape(200,200)
+#plt.imshow(testeval)
+#plt.show()
+result = gmodel.fit(fitmap.ravel(), params, x=xscale)
+fwhm=np.sqrt(result.best_values['varx']*result.best_values['vary'])*np.sqrt(8*np.log(2))
 ```
 
 ```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
+plt.imshow(result.best_fit.reshape(200,200))
+print(result.fit_report())
 ```
 
 ### Old way... not use
@@ -544,93 +753,46 @@ for jj,NUS in enumerate(['2','3','4','6']):
 
 Choose the maps with higher SNR to fit point sources reconstruction
 
+
+np.shape(allrecon[0]['2'][1:])
+
 ```{python}
-d1=d.copy()
-d1['nf_sub']=48
-d1['nf_recon'] = 4
-p = qubic.get_pointing(d1)
-s =qubic.QubicScene(d1)
-q = qubic.QubicMultibandInstrument(d1)
-a = qubic.QubicMultibandAcquisition(q,p,s,d1,nusfulledge['4'])
+
 ```
 
 ```{python}
-map4fit = {}#np.zeros((len(d['nf_recon']),3,12*d['nside']**2))
-nus4fit = {}
-nusedge4fit = {}
-ind=[]
-for i,ikey in enumerate(snr.keys()):
-    ind.append(np.argmax(snr[ikey]))
-    map4fit.update({ikey: mapsrec[ikey][:,ind[-1],:,0] })
-    nus4fit.update({ikey: nusfull[ikey][ind[-1]]})
-    nusedge4fit.update({ikey: nusfulledge[ikey][ind[-1]]})
-print(nus4fit,'\n',nusedge4fit)
+if len(irec[NUS])==0:
+            yvals.append(None)
+```
+
+```{python}
+reload(anpsf)
+infofit={}
+for NUS in ['1','2','3','4','6']:
+    if NUS == '1':
+        ifreqdata=0
+    elif NUS == '2' or NUS == '3':
+        ifreqdata = 1
+    else:
+        ifreqdata=2
+    data =[ifreqdata]
+    snraux=[]
+    for irec in range(len(allrecon)):
+        if len(allrecon[irec][NUS])==0:
+            pass
+        else:
+            snraux.append(anpsf.computeSNR_maps(allrecon[irec][NUS][nreal,ifreqdata], 
+                                                d, center, threshold =5))
+    data.append(np.argmax(snraux))
+    infofit.update({NUS:data})
+```
+
+```{python}
+infofit
 ```
 
 Look at the amplitude of the point sources for reconstructed maps...
 
-```{python}
-nreal=2
-fig,ax=plt.subplots(nrows=1,ncols=2, figsize=(14,4))
-ax=ax.ravel()
-NUSPSF = []
-VALPSF=[]
-ax[0].set_title('Reconstructed map')
-ax[1].set_title('Convolved map')
-for i in range(len(ax)):
-    ax[i].set_xlabel(r'$\nu[GHz]$')
-    ax[i].set_ylabel(r'$A_{\rm A0=1e5}$')
-    ax[i].grid()
-    ax[i].axvline(nus_in[10], color='k',alpha=0.4,ls='--')
-    ax[i].set_xlim(134,166)
-    
-for j,isub in enumerate(d['nf_recon']):
-    idx='{}'.format(isub)
-    elrec = Ellipse((nusfull[idx][ind[j]], mapsrec[idx][nreal,:,pixel,0][ind[j]]/1e5), 
-                    2, 0.01, color='b', fill=False)
-    NUSPSF.append(nusfull[idx][:])
-    VALPSF.append(mapsrec[idx][nreal,:,pixel,0]/1e5)
-    ax[0].plot(nusfull[idx][:], mapsrec[idx][nreal,:,pixel,0]/1e5, 'o', label='{:d}'.format(isub))
-    ax[0].add_artist(elrec)
-    elconv = Ellipse((nusfull[idx][ind[j]], mapsconv[idx][nreal,:,pixel,0][ind[j]]/1e5), 
-                    2, 0.01, color='b', fill=False)
-    ax[1].plot(nusfull[idx][:], mapsconv[idx][nreal,:,pixel,0]/1e5, 'o', label='{:d}'.format(isub))
-    ax[1].add_artist(elconv)
-ax[0].legend(loc='best')
-```
-
-```{python}
-nuspsf = []
-valpsf = []
-for i in range(len(NUSPSF)):
-    nuspsf.extend(NUSPSF[i][:])
-    valpsf.extend(VALPSF[i][:])
-nuspsf=np.array(nuspsf)
-valpsf=np.array(valpsf)
-iindice=nuspsf.argsort()
-nuspsf = nuspsf[iindice]
-valpsf = valpsf[iindice]
-jd=np.where(nuspsf==150.0)
-
-def fgauss(x,amp,nu0,var0):
-    return amp*np.exp(-0.5*(x-nu0)**2/var0**2 )
-
-pgauss,vgauss=curve_fit(fgauss, np.delete(nuspsf, jd), np.delete(valpsf, jd),p0=[0.2,150,10])
-#pgauss,vgauss=curve_fit(fgauss, nuspsf, valpsf,p0=[0.2,150,10])
-print(vgauss[-1,-1])
-plt.title(r'$N_s$ = {}, $\nu_0$ = {:d}'.format(d['nf_sub'],int(nus_in[10])))
-plt.plot(nuspsf, valpsf,'ko')
-plt.plot(nuspsf[jd], valpsf[jd],'rx',ms=12)
-x=np.linspace(nuspsf[0],nuspsf[-1],200)
-plt.plot(x, fgauss(x, *pgauss),'g-', label=r'$\nu = ${:.2f}, $\sigma = ${:.2f}'.format(pgauss[1],pgauss[2]))
-plt.legend()
-plt.grid()
-print('fWhm {:.1f}'.format(pgauss[2]*sigma2fwhm))
-```
-
-```{python}
-
-```
 
 ### Fit angular resolution
 
@@ -638,15 +800,18 @@ print('fWhm {:.1f}'.format(pgauss[2]*sigma2fwhm))
 Make the fit calibration
 
 ```{python}
+CteConf=d['synthbeam_peak150_fwhm'] * 150
 nuscal = np.linspace(128,172,20)
 fwhmcal = CteConf/nuscal
 sample = 20
-amplitude = 1e5 #initial amplitude
+amplitude = 1#e5 #initial amplitude
 
-vec_pix = hp.pix2vec(nside, pixel)
-vec_pixeles = hp.pix2vec(nside, np.arange(12*nside**2))
+reso=5
+size=200
+vec_pix = hp.pix2vec(d['nside'], pixel)
+vec_pixeles = hp.pix2vec(d['nside'], np.arange(12*d['nside']**2))
 ang_pixeles = np.arccos(np.dot(vec_pix,vec_pixeles))
-angmask = 10
+angmask = d['dtheta']
 mask = np.rad2deg(ang_pixeles) < angmask
 
 x_map = np.linspace(-size/2,size/2,size)*reso/60
@@ -667,16 +832,9 @@ deltaFwhm_cal = np.zeros( (len(fwhmcal), 1) )
 ```
 
 ```{python}
-f0 = np.zeros((sample, 12*nside**2,))
+f0 = np.zeros((sample, 12*d['nside']**2,))
 f0[:,pixel] = 1
 f0 = [hp.smoothing(f0[i], fwhm = np.radians(fwhmcal[i]), verbose=False) for i in range(len(f0))]
-
-#Mannually guassian
-#for i,each in enumerate(ang_pixeles):
-#    if mask[i] == True:
-#        for jfreq in range(sample):
-#            f0[jfreq,i] = f(each, fwhm = fwhm[jfreq]) 
-
 ```
 
 ```{python}
@@ -684,7 +842,7 @@ f0 = [hp.smoothing(f0[i], fwhm = np.radians(fwhmcal[i]), verbose=False) for i in
 fwhmmeasured = np.empty((sample,))
 diffwhm = np.zeros_like(fwhmmeasured)
 maparray=np.zeros((sample, size,size))
-
+sigma2fwhm=2.35
 for i,mi in enumerate(f0):
     maparray[i] = hp.gnomview(mi, rot=center, reso=reso, xsize=size, 
                               return_projected_map=True, no_plot=True)
@@ -718,10 +876,22 @@ plt.legend(loc='best', fontsize=14)
 Start fitting maps...
 
 ```{python}
+infofit
+```
+
+```{python}
+plt.figure(figsize=(12,4))
+for i,NUS in enumerate(['1','2','3','4','6']):
+    dt=infofit[NUS]
+    print(dt, i, np.shape(allrecon[dt[1]][NUS]))#,dt[0],:,0])
+    hp.gnomview(allrecon[dt[1]][NUS][nreal,dt[0],:,0],sub=(1,5,i+1), rot=center,reso=2)
+```
+
+```{python}
 fwhm_maps = {}
 ellp_maps = {}
 #diffwhm2=np.zeros((nsub,))
-mpy=np.zeros((len(d['nf_recon']),3,size,size))
+mpy=np.zeros((,size,size))
 for i,ikey in enumerate(map4fit.keys()):
     for ireal in range(3):
         mpy[i,ireal] = hp.gnomview(map4fit[ikey][ireal], rot=center, reso=reso, xsize=size, 
@@ -756,6 +926,13 @@ plt.xlabel(r'x')
 plt.xlabel(r'y')
 plt.contourf(concon, extent=[x_map.min(),x_map.max(),y_map.min(),y_map.max()] )  
 
+```{python}
+
+```
+
+```{python}
+
+```
 
 Plot resulting measure vs real values. (compare against freq edges too)...
 
@@ -774,7 +951,6 @@ for j,ikey in enumerate(nus4fit.keys()):
     plt.plot(nus4fit[ikey],CteConf/nusedge4fit[ikey],'bo', label=labele)
     FWHMs.update({ikey:[CteConf/nus4fit[ikey],
                                       fwhm_maps[ikey]-FuncInt(nus4fit[ikey]),
-   http://localhost:8888/notebooks/output_paper/psf_analysis.Rmd#                                   fwhm_maps[ikey]-FuncInt(nus4fit[ikey]) - CteConf/nus4fit[ikey]]}) 
     plt.legend(loc='best')
     difff.append(fwhm_maps[ikey]-FuncInt(nus4fit[ikey]) - CteConf/nus4fit[ikey])
 plt.grid()
@@ -785,11 +961,32 @@ The green dots, at which frequency corresponds? Is it to the worst resolution wi
 
 
 ```{python}
-for each in f12.keys():
-    print(each, np.array(f12[each])*60)
-#f12
-#f20
-#f25
+nuspsf = []
+valpsf = []
+for i in range(len(NUSPSF)):
+    nuspsf.extend(NUSPSF[i][:])
+    valpsf.extend(VALPSF[i][:])
+nuspsf=np.array(nuspsf)
+valpsf=np.array(valpsf)
+iindice=nuspsf.argsort()
+nuspsf = nuspsf[iindice]
+valpsf = valpsf[iindice]
+jd=np.where(nuspsf==150.0)
+
+def fgauss(x,amp,nu0,var0):
+    return amp*np.exp(-0.5*(x-nu0)**2/var0**2 )
+
+pgauss,vgauss=curve_fit(fgauss, np.delete(nuspsf, jd), np.delete(valpsf, jd),p0=[0.2,150,10])
+#pgauss,vgauss=curve_fit(fgauss, nuspsf, valpsf,p0=[0.2,150,10])
+print(vgauss[-1,-1])
+plt.title(r'$N_s$ = {}, $\nu_0$ = {:d}'.format(d['nf_sub'],int(nus_in[10])))
+plt.plot(nuspsf, valpsf,'ko')
+plt.plot(nuspsf[jd], valpsf[jd],'rx',ms=12)
+x=np.linspace(nuspsf[0],nuspsf[-1],200)
+plt.plot(x, fgauss(x, *pgauss),'g-', label=r'$\nu = ${:.2f}, $\sigma = ${:.2f}'.format(pgauss[1],pgauss[2]))
+plt.legend()
+plt.grid()
+print('fWhm {:.1f}'.format(pgauss[2]*sigma2fwhm))
 ```
 
 ```{python}
@@ -816,108 +1013,4 @@ for ikey in nus4fit.keys():
 ```{python}
 optcf,covcf=anpsf.fitGauss_one(dirc = 'nersc', simu =['31901895','31901911', '31982984','31983445'],
                    plotraw=False, plotfit=True)
-```
-
-```{python}
-reload(anpsf)
-bestvals=anpsf.lmfitGauss(dirc = 'nersc', simu =['31901895','31901911', '31982984','31983445'],
-                          doplot=True) #'31901895', 
-```
-
-```{python}
-bestvals
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-jobids = ['32139830', '32140318','32139772', '32140658'] #[12,15,20,25]
-jobids2= ['32574170', '32574156'] #[48,48]|[1,2,3,4,6]
-indxjob=0
-jobid = jobids2[indxjob]
-repo = os.environ['QUBIC_DATADIR']+'scripts/Spectroimagery_paper/output_paper/nersc/{}/'.format(jobid)
-repodict = glob.glob(repo+'*.dict')[0]
-
-d = qubic.qubicdict.qubicDict()
-d.read_from_file(repodict)
-center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
-d['nf_sub']=48
-d['nf_recon'] = [1,2,3,4,6] 
-nsub = d['nf_recon'][-1]
-
-_,_,nus_in,_,_,_=qubic.compute_freq(150,d['nf_sub'],0.25)
-sigma2fwhm = np.sqrt(8*np.log(2))
-# constant angular resolution using P = 19 and deltaX = 1.4cm
-CteConf = 61.57622 #2.998e10/20/1.4/1e9/np.pi*180
-size=200
-reso = 3
-nside=d['nside']
-
-#Look at the maps...ok...
-
-if nsub not in d['nf_recon']: raise ValueError('Invalid number of sub-bands for {} nus_in'.format(d['nf_sub']))
-_,_,nus_rec,_,_,_=qubic.compute_freq(150,nsub,0.25)
-print("Working with nf_sub = {} and nfrec = {}".format(d['nf_sub'], d['nf_recon']))
-mapsrec={}
-mapsconv={}
-nusfull = {}
-nusfulledge = {}
-for isub in d['nf_recon']:
-    _, maprec, mapconv, mapdif = get_maps_many_files(repo,'*recon{}*.fits'.format(isub))
-    _,inusedge,inus,_,_,_=qubic.compute_freq(150,isub,0.25)
-    mapsrec.update({'{}'.format(isub): maprec})
-    mapsconv.update({'{}'.format(isub): mapconv})
-    nusfull.update({'{}'.format(isub):inus})    
-    nusfulledge.update({'{}'.format(isub):inusedge})    
-#print(np.shape(maprec))
-
-mapsrec,mapsconv,nusfull,nusfulledge = read_run(jobid)
-plt.figure(figsize=(8,6))
-nreal=0
-for i in range(nsub):
-    hp.gnomview(mapsrec['4'][0,i,:,0], rot=center, reso=reso, 
-                title = 'Rec. {:d}GHz'.format(int(nus_rec[i])), sub=(2,nsub,i+1), 
-                min=-0.04,max=1e5)
-    hp.gnomview(mapsconv['4'][0,i,:,0], rot=center, reso=reso,
-                title = 'Conv. {:d}GHz'.format(int(nus_rec[i])), sub=(2,nsub,i+nsub+1), 
-                min=-0.04,max=1e5)
-
-```
-
-```{python}
-_,nustestedge,nustest,deltanus,_,_=qubic.compute_freq(150,48,0.25)
-```
-
-```{python}
-np.mean(deltanus)
-```
-
-```{python}
-
 ```

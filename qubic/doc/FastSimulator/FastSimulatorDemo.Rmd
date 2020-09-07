@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -229,7 +229,6 @@ Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
 ##### Getting FastSimulator output maps
 new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, 
-                                                                    sigma_sec=100, 
                                                                     spatial_noise=False,
                                                                     old_config=old_config)
 for i in range(newd['nf_recon']):
@@ -374,8 +373,48 @@ xlabel(r'$\theta$ [deg]')
 ylabel(r'$C(\theta$)')
 ```
 
-```{python}
+### 4) RMS profile
 
+```{python}
+reload(qss)
+
+newd = d.copy()
+newd['nf_recon'] = 1
+
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, newd)
+
+new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True,
+                                                                    spatial_noise=False,
+                                                                   old_config=old_config)
+
+xx, yyI, yyQ, yyU = qss.get_angular_profile(new_maps_noise[0, :, :],
+                                                nbins=30,
+                                                separate=True,
+                                                center=[0, 0])
+pix_size = hp.nside2resol(256, arcmin=True)
+meanvalI = np.mean(yyI[xx < 10]) * pix_size
+meanvalQU = np.mean((yyQ[xx < 10] + yyQ[xx < 10]) / 2) * pix_size
+
+plt.figure()
+plt.plot(xx, yyI * pix_size, 'o', label='I')
+plt.plot(xx, yyQ * pix_size, 'o', label='Q')
+plt.plot(xx, yyU * pix_size, 'o', label='U')
+
+plt.axhline(y=meanvalI,
+            label=r'I RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalI),
+            color='r', ls=':')
+plt.axhline(y=meanvalQU,
+            label=r'QU RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalQU),
+            color='m', ls=':')
+
+plt.xlabel('Degrees from center of the field')
+plt.ylabel(r'Noise RMS $[\mu K.arcmin]$')
+plt.title('QUBIC FastSim - ' + config + ' - Nptg = 10000')
+plt.legend(fontsize=11)
+plt.xlim(0, 20)
+plt.ylim(0, meanvalQU * 2)
 ```
 
 ```{python}

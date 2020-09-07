@@ -17,7 +17,7 @@ import pysm.units as u
 
 from qubicpack.utilities import Qubic_DataDir
 
-import ReadMC as rmc
+import qubic.ReadMC as rmc
 import qubic.SpectroImLib as si
 
 from mpi4py import MPI
@@ -68,8 +68,8 @@ for nf_sub_rec in d['nf_recon']:
         raise ValueError('nf_sub/nf_sub_rec must be an integer.')
 
 # Check that we do one simulation with only one reconstructed subband
-if d['nf_recon'][0] != 1:
-    raise ValueError('You should do one simulation without spectroimaging as a reference.')
+# if d['nf_recon'][0] != 1:
+#     raise ValueError('You should do one simulation without spectroimaging as a reference.')
 
 # Center
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])

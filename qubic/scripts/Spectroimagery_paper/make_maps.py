@@ -13,7 +13,7 @@ import qubic
 
 from qubicpack.utilities import Qubic_DataDir
 
-import ReadMC
+import qubic.ReadMC as rmc
 from qubic import SpectroImLib as si
 
 today = datetime.datetime.now().strftime('%Y%m%d')
@@ -128,7 +128,7 @@ for i, nf_sub_rec in enumerate(d['nf_recon']):
                                                                                      d['tol'],
                                                                                      d['detector_nep'],
                                                                                      d['nside'])
-    ReadMC.save_simu_fits(maps_recon_noiseless, cov_noiseless, nus, nus_edge, maps_convolved_noiseless,
+    rmc.save_simu_fits(maps_recon_noiseless, cov_noiseless, nus, nus_edge, maps_convolved_noiseless,
                           out_dir, name + name_map)
 
 # =============== With noise ===================== #
@@ -160,7 +160,7 @@ for j in range(nreals):
                                                                                              d['detector_nep'],
                                                                                              d['nside'],
                                                                                              str(j).zfill(2))
-        ReadMC.save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved, out_dir, name + name_map)
+        rmc.save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved, out_dir, name + name_map)
 
 t1 = time.time()
 print('**************** All Done in {} minutes ******************'.format((t1 - t0) / 60))

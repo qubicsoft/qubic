@@ -46,6 +46,7 @@ from matplotlib.pyplot import cm
 from matplotlib.patches import Ellipse
 import AnalysisPSF as anpsf
 from importlib import reload
+from lmfit import Model
 ```
 
 ```{python}
@@ -112,7 +113,7 @@ def read_run(jobid, repo=None, fixpar=True):
     center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
     if fixpar:
         d['nf_sub']=48
-        d['nf_recon'] = [2,3,4,]#6] 
+        d['nf_recon'] = [6,]#6] 
     #nsub = d['nf_recon'][-1]
     
     _,_,nus_in,_,_,_=qubic.compute_freq(150,d['nf_sub'],0.25)
@@ -213,16 +214,17 @@ pixel=pixel
 
 #fig,ax=plt.subplots(nrows=2,ncols=d['nf_recon'][-1]//2,
 #                   figsize=(20,14))
-fig,ax=plt.subplots(nrows=1,ncols=4,
+fig,ax=plt.subplots(nrows=1,ncols=1,
                    figsize=(20,6))
-ax=ax.ravel()
+#ax=ax.ravel()
+ax = [ax,]
 snr = {}
 nreal=0
 color=iter(cm.rainbow(np.linspace(0,1,len(dictshift)+1 )))
 plt.rc('text',usetex=False)
 plt.rc('font', size=15)
 
-for j,isub in enumerate([2,3,4]):
+for j,isub in enumerate([6,]):
     idx='{}'.format(isub)
     ax[j].set_title(r'Rel. intensity nfrec={}'.format(isub))
     ax[j].set_xlabel(r'$\nu[GHz]$')
@@ -271,9 +273,9 @@ for j,isub in enumerate([2,3,4]):
     ax[j].grid()
     ax[j].set_xlim(132,168)
 
-ax[-1].spines['top'].set_visible(False)
-ax[-1].set_axis_off()
-ax[-1].axis("off")
+#ax[-1].spines['top'].set_visible(False)
+#ax[-1].set_axis_off()
+#ax[-1].axis("off")
 #ax[j].autoscale(False)
 
 ```
@@ -282,7 +284,7 @@ See the profile of the reconstructed maps for each frequency....
 See the distance to the edge (freq where was placed the ps - the edge closest to that frequency) vs. intensity 
 
 ```{python}
-for NUS in ['2','4',]:#'6']:#NUS='6'
+for NUS in ['6',]:#'6']:#NUS='6'
     #print('NUS = {}'.format(NUS))
     NormFact2=1#48/int(NUS)
     fig,ax=plt.subplots(nrows=1,ncols=2,figsize=(12,4))
@@ -401,25 +403,58 @@ for NUS in ['3']:
         ax[j].grid()
 ```
 
+NEWX=[all_toFitX[3][0],all_toFitX[3][1],all_toFitX[3][2],all_toFitX[3][3],all_toFitX[3][4],all_toFitX[3][5],all_toFitX[3][6],all_toFitX[3][7],all_toFitX[3][8],
+      all_toFitX[3][9],all_toFitX[3][10],all_toFitX[3][11],all_toFitX[3][12],all_toFitX[3][13],#all_toFitX[2][1:4],
+all_toFitX[2][4],all_toFitX[2][5], all_toFitX[2][6],all_toFitX[2][7],all_toFitX[2][8],
+      all_toFitX[2][9], all_toFitX[2][10],all_toFitX[2][11],
+      
+all_toFitX[1][2],all_toFitX[1][3],all_toFitX[1][4], all_toFitX[1][5],all_toFitX[1][6],
+all_toFitX[1][7],all_toFitX[1][8],all_toFitX[1][9],all_toFitX[1][10],all_toFitX[1][11],
+
+      all_toFitX[0][2],all_toFitX[0][3],all_toFitX[0][4],all_toFitX[0][5],all_toFitX[0][6],all_toFitX[0][7],all_toFitX[0][8],all_toFitX[0][9], all_toFitX[0][10],
+all_toFitX[0][11],all_toFitX[0][12],all_toFitX[0][13],all_toFitX[0][14],all_toFitX[0][15],all_toFitX[0][16],all_toFitX[0][17]
+     ]
+
+NEWY=[all_toFitY[3][0],all_toFitY[3][1],all_toFitY[3][2],all_toFitY[3][3],all_toFitY[3][4],all_toFitY[3][5],all_toFitY[3][6],all_toFitY[3][7],all_toFitY[3][8],
+      np.mean([all_toFitY[3][9],all_toFitY[2][0]]),all_toFitY[3][10], np.mean([all_toFitY[3][11],all_toFitY[2][1]]),np.mean([all_toFitY[3][12],all_toFitY[2][2]]),np.mean([all_toFitY[3][13],all_toFitY[2][3]]),
+      all_toFitY[2][4], 
+np.mean([all_toFitY[2][5],all_toFitY[3][14]]), all_toFitY[2][6], np.mean([all_toFitY[2][7],all_toFitY[3][15]]),
+all_toFitY[2][8],
+      np.mean([all_toFitY[2][9],all_toFitY[3][16],all_toFitY[1][0]]),all_toFitY[2][10],np.mean([all_toFitY[2][11],all_toFitY[3][17],all_toFitY[1][1]]),
+
+      np.mean([all_toFitY[1][2],all_toFitY[2][12]]),np.mean([all_toFitY[1][3],all_toFitY[2][13]]), all_toFitY[1][4],np.mean([all_toFitY[1][5],all_toFitY[2][14]]),all_toFitY[1][6],
+np.mean([all_toFitY[1][7],all_toFitY[2][15]]), all_toFitY[1][8],np.mean([all_toFitY[2][16],all_toFitY[1][9],all_toFitY[0][0]]),all_toFitY[1][10], np.mean([all_toFitY[2][17],all_toFitY[1][11],all_toFitY[0][1]]),
+
+      np.mean([all_toFitY[0][2],all_toFitY[1][12]]),np.mean([all_toFitY[0][3],all_toFitY[1][13]]),all_toFitY[0][4],np.mean([all_toFitY[0][5],all_toFitY[1][14]]),all_toFitY[0][6],np.mean([all_toFitY[0][7],all_toFitY[1][15]]),all_toFitY[0][8], np.mean([all_toFitY[0][9],all_toFitY[1][16]]),all_toFitY[0][10],np.mean([all_toFitY[0][11],all_toFitY[1][17]]),
+all_toFitY[0][11],all_toFitY[0][12],all_toFitY[0][13],all_toFitY[0][14],all_toFitY[0][15],all_toFitY[0][16],all_toFitY[0][17]]
+print(len(NEWX), len(NEWY))
+
 ```{python}
-fig,ax=plt.subplots(nrows=1,ncols=3,figsize=(16,5),sharey=True,gridspec_kw={'wspace': 0.03})
+fig,ax=plt.subplots(nrows=1,ncols=1,figsize=(16,5),sharey=True,gridspec_kw={'wspace': 0.03})
 #fig.subplots_adjust(hspace=0.1,wspace=0.4)
 searchmin=[]
-ax=ax.ravel()
-for ifreq, NUS in enumerate(['2','3','4']):#NUS='6'
+all_toFitX = []
+all_toFitY = []
+#all_toFit[:] = np.nan
+#ax=ax.ravel()
+ax=[ax]
+Data=[]
+newnewx=[]
+for ifreq, NUS in enumerate(['6']):#NUS='6'
     if NUS == '1':
-        freqdata=range(1)
+        freqdata = range(1)
     elif NUS == '2':
         freqdata = range(2)
     elif NUS == '3':
-        freqdata= range(3)
+        freqdata = range(3)
+    elif NUS == '4':
+        freqdata = range(4)
     else:
-        freqdata=range(4)
-        
+        freqdata = range(6)
     #print('NUS = {}'.format(NUS))
     NormFact2=48/int(NUS)
-    markers=iter(['o','*','+','^'])
-    color2=iter(['b','r','g','m'])
+    markers=iter(['o','*','+','^','d','p'])
+    color2=iter(['b','r','g','m','c','k'])
     for ifreqdata in freqdata:
         imark=next(markers)
         yvals=[]
@@ -438,10 +473,11 @@ for ifreq, NUS in enumerate(['2','3','4']):#NUS='6'
                     yvals.append(np.mean(irec[NUS][nreal,ifreqdata,pixs,0])/1e5*NormFact2)
                     searchmin.append(np.mean(irec[NUS][nreal,ifreqdata,pixs,0])/1e5*NormFact2)
                 else:
-                    yvals.append(irec[NUS][nreal,ifreqdata,pixel,0]/1e5*NormFact2)
+                    auxval = irec[NUS][nreal,ifreqdata,pixel,0]/1e5*NormFact2
+                    yvals.append(auxval)
                     yconv.append(allconv[jk][NUS][nreal,ifreqdata,pixel,0]/1e5*NormFact2)
-                    searchmin.append(np.mean(irec[NUS][nreal,ifreqdata,pixel,0])/1e5*NormFact2)
-
+                    searchmin.append(np.mean(auxval))
+                    
         #ax[ifreq].set_title(r'rec{} - I(px) - band {:.0f}-{:.0f}GHz'.format(NUS,
         #                                                                    nusfulledge[NUS][ifreq],
         #                                                                   nusfulledge[NUS][ifreq+1]))
@@ -454,36 +490,153 @@ for ifreq, NUS in enumerate(['2','3','4']):#NUS='6'
         cenfreq=nusfull[NUS][ifreqdata]
         for i,yh in enumerate(yvals):
             if yh!=None:
-                xx.append((nus_in[innu][i]-cenfreq)/(nusfulledge[NUS][ifreqdata+1]-nusfulledge[NUS][ifreqdata]))
+                auxx=(nus_in[innu][i]-cenfreq)/(nusfulledge[NUS][ifreqdata+1]-nusfulledge[NUS][ifreqdata])
+                xx.append(auxx)
+                newnewx.append(auxx)
                 yy.append(yh)
                 yc.append(yconv[i])
         xx,yy,yc=np.array(xx), np.array(yy), np.array(yc)
         c2=next(color2)
-        ax[ifreq].plot(xx,yy, 
-                       marker='o',#None,#imark,
+
+        #Do plot points
+        data=ax[ifreq].plot(xx,yy, 
+                       marker='o',label='{}'.format(ifreqdata),#None,#imark,
                        ls='-',lw=3, c=c2,alpha=0.7,ms=6)
-        #ax[ifreq].plot(xx,2*yc, 
-        #               'o-',c='b',alpha=0.4,ms=6)
-        ax[ifreq].set_xlim(-2.1,2.1)
+        
+        Data.append(data[0].get_data())
+        ax[ifreq].legend()
+        if NUS == '4': 
+            all_toFitX.append(xx)
+            all_toFitY.append(yy)
+        
+        ax[ifreq].set_xlim(-3.2,3.2)
         xlim=ax[ifreq].get_xlim()
         for iedge in nusfulledge[NUS]:
             if (iedge > np.array(xlim)[0]) and (iedge < np.array(xlim)[1]):
                 ax[ifreq].axvline(iedge-cenfreq, color='k', ls='--',alpha=0.9)
-        #ax[ifreq].grid()
+
         ax[ifreq].axvspan((nusfulledge[NUS][ifreqdata]-cenfreq)/(nusfulledge[NUS][ifreqdata+1]-nusfulledge[NUS][ifreqdata]),
             (nusfulledge[NUS][ifreqdata+1]-cenfreq)/(nusfulledge[NUS][ifreqdata+1]-nusfulledge[NUS][ifreqdata]), 
                           color='k' , alpha=0.40) if ifreqdata == 0 else None
-        #print(NUS, ifreq, nusfull[NUS][ifreq])
+        
         ax[ifreq].axvline(nusfull[NUS][ifreqdata]-cenfreq,ls='-.',c='k' , alpha=0.2)
-        #ax[ifreq].text(nusfull[NUS][ifreqdata]-cenfreq, 0.05 , 
-        #               r'{:.0f}-{:.0f}GHz'.format(nusfulledge[NUS][ifreqdata],
-        #                nusfulledge[NUS][ifreqdata+1]),weight="bold",fontsize=12,rotation=-90, alpha=0.7)
+        
         ax[ifreq].tick_params(axis='both',bottom=True, top=True, left=True, right=True,direction='in')
     ax[ifreq].grid()
-    #print(searchmin)
-    #print(np.argmin(yvals))
-    #ax[ifreq].axvline(np.min(searchmin),ymin=0,ymax=1)
-plt.savefig('BFR-unbinned-intensity.pdf',format='pdf')
+#ax[ifreq].plot(NEWX[:46],NEWY[:46],'k-')
+#plt.savefig('BFR-unbinned-intensity.pdf',format='pdf')
+```
+
+```{python}
+print(np.shape(Data))
+xData = []#[Data[i][0] for i in range(4)]
+yData = []
+for i in range(np.shape(Data)[0]):
+    for ielement in range(np.shape(Data)[2]):
+        xData.append(Data[i][0][ielement])
+        yData.append(Data[i][1][ielement])
+#
+xData, yData = np.array(xData),np.array(yData)
+permutation = xData.argsort()
+xData = xData[permutation]
+yData = yData[permutation]
+plt.plot(xData,yData,'bo')
+```
+
+Editing xaxis...It shopuld be ~47 values 
+
+### Fit
+$\fbox{} \quad \mathrm{Sinusoidal} \quad y_{sin}(x) = \frac{\sin{x}}{x}$ (Model 1)
+
+$\fbox{} \quad \mathrm{Bessel} \quad y_{bes}(x) = 1 - \frac{x^2}{2^2} + \frac{x^4}{2^2~4^2} - \frac{x^6}{2^2~4^2 ~6^2}$ ... (Model 2)
+
+$\fbox{} \quad \mathrm{Polyn} \quad y_{pol}(x) = a+b~x + c~x^2/2+e~x^3/3 +$ ... (Model 3)
+
+
+#Data to use for model
+xFPSF = NEWX[:47]#all_toFitX[2]
+yFPSF = NEWY[:47]#all_toFitY[2]
+plt.plot(xFPSF, yFPSF)
+
+
+Generate models...
+
+```{python}
+from scipy.special import j0,j1,jn
+#Model 1
+def model_sin(x,a,b):#c,e,ph):
+    return a*np.sin(b*x)/(b*x)#+ e*np.exp(-c*x-ph)
+
+def model_bes(x,a,b):#,e):
+    return a*j0(b*x)#+e*np.exp(-c*(x-x0))
+
+def model_pol(x,a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12):
+    return a0+a1*x+a2*x**2/2+a3*x**3/3+a4*x**4/4+a5*x**5/5+a6*x**6/6 + \
+            a7*x**7/7+a8*x**8/8+a9*x**9/9+a10*x**10/10+a11*x**11/11+a12*x**12/12
+```
+
+Preparing and fitting models...
+
+```{python}
+xFPSF = xData
+yFPSF = yData
+
+#sinusoidal
+gmodel_sin = Model(model_sin, independent_vars=['x',], )
+params_sin = gmodel_sin.make_params(a=0.3,b=1)#c=1, e=0.4,ph=0.4)
+result_sin = gmodel_sin.fit(yFPSF, params_sin, x=xFPSF)
+parssin = list(result_sin.best_values.values())
+print('Sin. Chi2 {:.3f}'.format(result_sin.chisqr ))
+
+#bessel
+gmodel_bes = Model(model_bes, independent_vars=['x',], )
+params_bes = gmodel_bes.make_params(a=0.3,b=0.1,)#c=0.3, e=0.5,x0=0.5 )
+result_bes = gmodel_bes.fit(yFPSF, params_bes, x=xFPSF)
+parsbes = list(result_bes.best_values.values())
+print('Bes. Chi2 {:.3f}'.format(result_bes.chisqr) )
+
+#polynomial
+gmodel_pol = Model(model_pol, independent_vars=['x',], )
+params_pol = gmodel_pol.make_params(a0=1,a1=1,a2=1,a3=1,a4=1,a5=1,a6=1,a7=1,a8=1,a9=1,a10=1,a11=1,a12=1 )
+result_pol = gmodel_pol.fit(yFPSF, params_pol, x=xFPSF)
+parspol = list(result_pol.best_values.values())
+print('Pol. Chi2 {:.3f}'.format(result_pol.chisqr) )
+
+```
+
+See results...
+
+```{python}
+#fig,ax=plt.subplots(nrows=1,ncols=3)
+result_pol.plot()
+#result_sin.plot()
+#result_bes.plot()
+dely = result_pol.eval_uncertainty(sigma=3)
+plt.axvspan(-0.5,0.5,color='k',alpha=0.4)
+plt.axvspan(-1.5,-0.5,color='k',alpha=0.2)
+plt.axvspan(0.5,1.5,color='k',alpha=0.2)
+
+plt.fill_between(xData, result_pol.best_fit-dely, result_pol.best_fit+dely, color='cyan',#"#ABABAB",
+                 alpha=0.6, label='3-$\sigma$ uncertainty band')
+
+```
+
+```{python}
+xfake=np.linspace(-2,2.5)
+plt.xlabel(r'${\rm d}_{\nu_c}$ / $\Delta \nu$')
+plt.ylabel(r'${i_\nu}$[$\mu K$]')
+plt.plot(xFPSF, yFPSF, 'bo', label='Data')
+plt.plot(xfake,model_sin(xfake, *parssin),'r-',label='Sinusoidal')
+plt.plot(xfake,model_bes(xfake, *parsbes),'g-',label='Bessel')
+plt.plot(xfake,model_pol(xfake, *parspol),'c-',label='Polynom')
+plt.legend(fontsize=10)
+```
+
+Save model...
+
+```{python}
+from lmfit.model import save_modelresult
+save_modelresult(result_pol, 'polynomial_modelresult_nrec{}.sav'.format(np.shape(Data)[0]))
 ```
 
 Fit gaussian to profiles.
@@ -491,7 +644,6 @@ Fit gaussian to profiles.
 I will fit the FWHM in the maps where the point source is cleary located in the band. For that I can plot manually and see the SNR level in the edge between band and take those maps where SNR are high and almost constant in the value
 
 ```{python}
-from lmfit import Model
 def gaussian2d_b(x, amp,x0, y0, varx, vary):
     gauss = np.zeros((len(x),len(x)))
     #amp=1 / (2 * np.pi * varx * vary)
@@ -598,7 +750,7 @@ best_fit_full
 ```
 
 ```{python}
-from scipy.stats import median_absolute_deviation as mad
+from scipy.stats import median_abs_deviation as mad
 import scipy.stats as sc
 ```
 
@@ -682,24 +834,29 @@ plt.tight_layout() #makes subplots nicely fit in the figure.
 
 ```{python}
 fig,ax=plt.subplots(nrows=1,ncols=3,figsize=(14,6), sharey=True, gridspec_kw={'hspace': 0.03})
-ax[0].set_ylabel(r'SNR')
+ax[0].set_ylabel(r'SNR in rec maps for each simulation')
 color=iter(cm.jet_r(np.linspace(0,1,5)))
 for i in range(2):
-    ax[0].plot(coso2[i],'o-',c=next(color))
-    ax[0].axhline(cut, ls='--',c='k')
+    ax[0].plot(coso2[i],'o-',c=next(color), label='sub-band {}'.format(i+1))
+    ax[0].axhline(cut, ls='--',c='k')#
+    ax[0].legend(fontsize=12)
 #
+
 color=iter(cm.jet_r(np.linspace(0,1,5)))
 for i in range(3):
     c=next(color)
-    ax[1].plot(coso3[i],'o-',c=c)
+    ax[1].plot(coso3[i],'o-',c=c, label='sub-band {}'.format(i+1))
     ax[1].axhline(cut, ls='--',c='k')
-    if i ==1:
-        ax[1].axhline(900, ls='--',c=c)
+    #if i ==1:
+    #    ax[1].axhline(900, ls='--',c=c)
+    ax[1].set_xlabel('simulation')
+    ax[1].legend(fontsize=12)
 #
 color=iter(cm.jet_r(np.linspace(0,1,5)))
 for i in range(4):
-    ax[2].plot(coso4[i],'o-',c=next(color))
+    ax[2].plot(coso4[i],'o-',c=next(color),label='sub-band {}'.format(i+1))
     ax[2].axhline(cut, ls='--',c='k')
+    ax[2].legend(fontsize=12)
 #
 ```
 

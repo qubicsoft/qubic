@@ -41,6 +41,12 @@ nside=256
 kind='IQU'
 absolute=False
 temperature=2.7255 # K for CMB, 300 K for TD in lab # 
+# New scene parameters
+TemperatureAtmosphere150= None
+TemperatureAtmosphere220= None
+EmissivityAtmosphere150= None
+EmissivityAtmosphere220= None
+
 summer=False
 
 ############################################# Pointing ##############################

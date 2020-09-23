@@ -29,8 +29,8 @@ from qubic import AnalysisMC as amc
 
 ########################################################################################################
 #### Now in a function to loop over ell binning, lmin, coverage
-def run_mc(nbmc, Namaster, cov, d, configs, verbose=False, clnoise=None, duration=4):
-    
+def run_mc(nbmc, Namaster, cov, d, configs, verbose=False, clnoise=None, duration=4, beam=0.39268176):
+
     #### Dictionnary for 150 GHz
     dA = d.copy()
     dA['effective_duration'] = duration
@@ -74,13 +74,13 @@ def run_mc(nbmc, Namaster, cov, d, configs, verbose=False, clnoise=None, duratio
         ### Compute Spectra:
         # Noise Only
         if verbose: print('   - QUBIC Noise maps')
-        leff, cl_noise_qubic[imc, 0, :,:], w = Namaster.get_spectra(qubicnoiseA.T, 
-                                                                 map2 = qubicnoiseB.T,
-                                                                 purify_e=True, 
-                                                                 purify_b=False, 
+        leff, cl_noise_qubic[imc, 0, :,:], w = Namaster.get_spectra(qubicnoiseA.T * np.sqrt(2),
+                                                                 map2 = qubicnoiseB.T * np.sqrt(2),
+                                                                 purify_e=False,
+                                                                 purify_b=True,
                                                                  w=w, 
                                                                  verbose=False,
-                                                                 beam_correction=True,
+                                                                 beam_correction=beam,
                                                                  pixwin_correction=True)
         t1 = time.time()
         print('             Monte-Carlo: Iteration {0:} over {1:} done in {2:5.2f} sec'.format(imc, nbmc,t1-t0))
@@ -228,8 +228,10 @@ covcut = float(sys.argv[7])
 method = str(sys.argv[8])
 outdir = str(sys.argv[9])
 
-outnameCl = outdir + '/MC_Cls_{}_{}_nbmc_{}_dur_{}_lmin_{}_dl_{}_cc_{}_meth_{}.pkl'
-outnameLike = outdir + '/MC_Like_{}_{}_nbmc_{}_dur_{}_lmin_{}_dl_{}_cc_{}_meth_{}.pkl'
+outnameCl = outdir + '/MC_Cls_{}_{}_nbmc_{}_dur_{}_lmin_{}_dl_{}_cc_{}_meth_{}.pkl'.format(instA, instB, nbmc,
+    duration, lmin, delta_ell, covcut, method)
+outnameLike = outdir + '/MC_Like_{}_{}_nbmc_{}_dur_{}_lmin_{}_dl_{}_cc_{}_meth_{}.pkl'.format(instA, instB, nbmc, 
+    duration, lmin, delta_ell, covcut, method)
 
 ### Instrument Configuration
 old_config = False
@@ -295,7 +297,10 @@ Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
 
 
 ### Run the MC
-leff, mcl_noise_qubic, scl_noise_qubic, covbin = run_mc(nbmc, Namaster, cov, d, configs, duration=duration)
+beam = 0.39268176 * 150. / (dA['filter_nu']/1e9)
+print('beam is {}'.format(beam))
+leff, mcl_noise_qubic, scl_noise_qubic, covbin = run_mc(nbmc, Namaster, cov, d, configs, duration=duration,
+                                                        beam=beam)
 
 ### BB Covariance
 BBcov = covbin[:, :, 2]
@@ -316,12 +321,15 @@ like, cumint, rlim68, rlim95 = explore_like(leff, sclBB, to_use, lmin, delta_ell
                                  verbose=True, sample_variance=True, otherp=0.95)
 
 ### Save Output
-pickle.dump([leff, mcl_noise_qubic, scl_noise_qubic, sys.argv], open(outnameCl, "wb"))
+pickle.dump([leff, mcl_noise_qubic, scl_noise_qubic, covbin, cov, sys.argv], open(outnameCl, "wb"))
 print('Leff:')
 print(leff)
 print('Errors BB:')
 print(scl_noise_qubic[:,2])
+
 pickle.dump([rv, like, cumint, rlim68, rlim95, sys.argv], open(outnameLike, "wb"))
+print('Likelihood: 1sig = {} - 2sig = {}'.format(rlim68, rlim95))
+
 ####################################################################################################################
 
 

@@ -182,7 +182,7 @@ else:
 
 Look at the maps... okk..
 
-```{python}
+
 #print(np.shape(maps_qubic), np.shape(maps_noiseless), np.shape(maps_noise), np.shape(coverage))
 cov150Q=np.zeros_like(coverage150Q,dtype=bool)
 covmsk150Q=np.where(coverage150Q > 0.01*np.max(coverage150Q))
@@ -219,7 +219,6 @@ hp.gnomview(np.array(cov150G,dtype=int)-np.array(cov220G,dtype=int),reso=RESO,ti
 #hp.gnomview(maps_noiseless220Q[NU,:,STK], sub=(2,3,5), title='220 nl', reso=RESO, rot=center)
 #hp.gnomview(cov150G, sub=(2,3,6), title='covmsk', reso=RESO, rot=centerG)
 
-```
 
 ```{python}
 _,nus_edge,nus,_,_,_=qubic.compute_freq(d['filter_nu']/1e9, d['nf_recon'], d['filter_relative_bandwidth'] )
@@ -253,36 +252,46 @@ axins.set_yticklabels('')
 
 
 ```{python}
+centerG = np.array([0,0])
+print(centerG,centerQ)
+pixG = hp.ang2pix(256, np.pi/2-np.radians(centerG[1]), np.radians(centerG[0]))
+pixQ = hp.ang2pix(256, np.pi/2-np.radians(centerQ[1]), np.radians(centerQ[0]))
+print(pixQ,pixG)
+```
+
+```{python}
 mctest=True
 capsize=3
 plt.rc('font', size=15)
-for j,ipx in enumerate(range(600,12000,500)):
-    fig,ax=plt.subplots(nrows=1,ncols=4,figsize=(16,4),)
+
+for j,ipx in enumerate([10000,]):#enumerate(range(600,12000,500)):
+    fig,ax=plt.subplots(nrows=2,ncols=4,figsize=(16,14),)
     ax=ax.ravel()
     IPIXQ = covmsk150Q[0][ipx]
     IPIXG = covmsk220G[0][ipx]
-    if mctest:
-        ax[0].errorbar(nus, maps_qubic150G[:,IPIXG,0],yerr=std_qubic150G[:,IPIXG,0], capsize=capsize,
-               fmt='o-', color='r',label='reconstructed', alpha=0.8)
-        ax[0].errorbar(nus_220, maps_qubic220G[:,IPIXG,0],yerr=std_qubic220G[:,IPIXG,0], capsize=capsize,
-               fmt='o-', color='r', alpha=0.8)
-        ax[0].plot(nus, maps_noiseless150G[:,IPIXG,0],
-               'bo-',label='convolved', alpha=0.7)
-        ax[0].plot(nus_220, maps_noiseless220G[:,IPIXG,0],
-               'bo-', alpha=0.7)
-        ax[0].axvspan(nus[-1],nus_220[0],color='k',alpha=0.2)
-        
-        ax[2].errorbar(nus, maps_qubic150Q[:,IPIXQ,0],yerr=std_qubic150Q[:,IPIXQ,0], capsize=capsize,
-               fmt='o-', color='r',label='reconstructed', alpha=0.8)
-        ax[2].errorbar(nus_220, maps_qubic220Q[:,IPIXQ,0],yerr=std_qubic220Q[:,IPIXQ,0], capsize=capsize,
-               fmt='o-', color='r',alpha=0.8)
-        ax[2].plot(nus, maps_noiseless150Q[:,IPIXQ,0],
-               'bo-',label='input', alpha=0.7)
-        ax[2].plot(nus_220, maps_noiseless220Q[:,IPIXQ,0],
-               'bo-', alpha=0.5)
-        
-        ax[2].grid(which='both')
-        ax[2].axvspan(nus[-1],nus_220[0],color='k',alpha=0.2)
+    IPIXQ = pixQ
+    IPIXG = pixG
+    ax[0].errorbar(nus, maps_qubic150G[:,IPIXG,0],yerr=std_qubic150G[:,IPIXG,0], capsize=capsize,
+           fmt='o-', color='r',label='reconstructed', alpha=0.8)
+    ax[0].errorbar(nus_220, maps_qubic220G[:,IPIXG,0],yerr=std_qubic220G[:,IPIXG,0], capsize=capsize,
+           fmt='o-', color='r', alpha=0.8)
+    ax[0].plot(nus, maps_noiseless150G[:,IPIXG,0],
+           'bo-',label='convolved', alpha=0.7)
+    ax[0].plot(nus_220, maps_noiseless220G[:,IPIXG,0],
+           'bo-', alpha=0.7)
+    ax[0].axvspan(nus[-1],nus_220[0],color='k',alpha=0.2)
+
+    ax[2].errorbar(nus, maps_qubic150Q[:,IPIXQ,0],yerr=std_qubic150Q[:,IPIXQ,0], capsize=capsize,
+           fmt='o-', color='r',label='reconstructed', alpha=0.8)
+    ax[2].errorbar(nus_220, maps_qubic220Q[:,IPIXQ,0],yerr=std_qubic220Q[:,IPIXQ,0], capsize=capsize,
+           fmt='o-', color='r',alpha=0.8)
+    ax[2].plot(nus, maps_noiseless150Q[:,IPIXQ,0],
+           'bo-',label='input', alpha=0.7)
+    ax[2].plot(nus_220, maps_noiseless220Q[:,IPIXQ,0],
+           'bo-', alpha=0.5)
+
+    ax[2].grid(which='both')
+    ax[2].axvspan(nus[-1],nus_220[0],color='k',alpha=0.2)
         
     ax[0].set_title('GC patch',fontsize=17)
     ax[0].set_ylabel(r'$I_\nu$ [$\mu$K]',fontsize=18)
@@ -295,12 +304,65 @@ for j,ipx in enumerate(range(600,12000,500)):
     ax[1].cla()
     plt.axes(ax[1])
     hp.gnomview(maps_qubic150G[-1,:,0], reso=15,hold=True,notext=True,title=' ',#'{:.1f}GHz'.format(nus[0]),
-                max=0.3*np.max(maps_qubic150G[0,:,0]), rot=centerG)
+                max=0.3*np.max(maps_qubic150G[0,:,0]), rot=None)
     hp.projscatter(hp.pix2ang(d['nside'],IPIXG),marker='+',color='r',)
     ax[3].cla()
     plt.axes(ax[3])
     hp.gnomview(maps_qubic150Q[-1,:,0], reso=15,hold=True,notext=True,title=' ',#'{:.1f}GHz'.format(nus[0]),
                 max=np.max(maps_qubic150Q[0,:,0]), rot=centerQ)
+    hp.projscatter(hp.pix2ang(d['nside'],IPIXQ),marker='+',color='r',)
+
+    
+    ax[4].errorbar(nus, np.sqrt(maps_qubic150G[:,IPIXG,1]**2+maps_qubic150G[:,IPIXG,2]**2),
+                   #yerr=std_qubic150G[:,IPIXG,0], 
+                   capsize=capsize,
+           fmt='o-', color='r',label='reconstructed', alpha=0.8)
+    ax[4].errorbar(nus_220, np.sqrt(maps_qubic220G[:,IPIXG,1]**2+maps_qubic220G[:,IPIXG,2]**2),
+                   #yerr=std_qubic220G[:,IPIXG,0], 
+                   capsize=capsize,
+           fmt='o-', color='r', alpha=0.8)
+    ax[4].plot(nus, np.sqrt(maps_noiseless150G[:,IPIXG,1]**2+maps_noiseless150G[:,IPIXG,2]**2),
+           'bo-',label='convolved', alpha=0.7)
+    ax[4].plot(nus_220, np.sqrt(maps_noiseless220G[:,IPIXG,1]**2+maps_noiseless220G[:,IPIXG,2]**2),
+           'bo-', alpha=0.7)
+    ax[4].axvspan(nus[-1],nus_220[0],color='k',alpha=0.2)
+
+    ax[6].errorbar(nus, np.sqrt(maps_qubic150Q[:,IPIXQ,1]**2+maps_qubic150Q[:,IPIXQ,2]**2),
+                   #yerr=std_qubic150Q[:,IPIXQ,0], 
+                   capsize=capsize,
+           fmt='o-', color='r',label='reconstructed', alpha=0.8)
+    ax[6].errorbar(nus_220, np.sqrt(maps_qubic220Q[:,IPIXQ,1]**2+maps_qubic220Q[:,IPIXQ,2]**2),
+                   #yerr=std_qubic220Q[:,IPIXQ,0], capsize=capsize,
+           fmt='o-', color='r',alpha=0.8)
+    ax[6].plot(nus, np.sqrt(maps_noiseless150Q[:,IPIXQ,1]**2+maps_noiseless150Q[:,IPIXQ,2]**2),
+           'bo-',label='input', alpha=0.7)
+    ax[6].plot(nus_220, np.sqrt(maps_noiseless220Q[:,IPIXQ,1]**2+maps_noiseless220Q[:,IPIXQ,2]**2),
+           'bo-', alpha=0.5)
+
+    ax[6].grid(which='both')
+    ax[6].axvspan(nus[-1],nus_220[0],color='k',alpha=0.2)
+        
+    ax[4].set_title('GC patch',fontsize=17)
+    ax[4].set_ylabel(r'$I_{P} = \sqrt{Q^2+U^2}$ [$\mu$K]',fontsize=18)
+    ax[4].set_xlabel(r'$\nu$[GHz]',fontsize=18)
+    ax[6].set_title('QUBIC patch',fontsize=17)
+    #ax[2].set_ylabel(r'$I_\nu$ [$\mu$K]',fontsize=18)
+    ax[6].set_xlabel(r'$\nu$[GHz]',fontsize=18)
+    ax[4].legend(loc='best',fontsize=12)
+    ax[4].grid()
+    ax[5].cla()
+    plt.axes(ax[5])
+    hp.gnomview(np.sqrt(maps_qubic220G[-1,:,1]**2+maps_qubic220G[-1,:,2]**2), 
+                reso=15,hold=True,notext=True,title='220GHz band ',#'{:.1f}GHz'.format(nus[0]),
+                #max=0.3*np.max(maps_qubic150G[0,:,0]), 
+                rot=None)
+    hp.projscatter(hp.pix2ang(d['nside'],IPIXG),marker='+',color='r',)
+    ax[7].cla()
+    plt.axes(ax[7])
+    hp.gnomview(np.sqrt(maps_qubic220Q[-1,:,1]**2+maps_qubic220Q[-1,:,2]**2), 
+                reso=15,hold=True,notext=True,title='220GHz band ',#'{:.1f}GHz'.format(nus[0]),
+                #max=np.max(maps_qubic150Q[0,:,0]), 
+                rot=centerQ)
     hp.projscatter(hp.pix2ang(d['nside'],IPIXQ),marker='+',color='r',)
 
 plt.show()

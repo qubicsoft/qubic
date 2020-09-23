@@ -98,7 +98,8 @@ In this case we read a map $X_0$ simulated previously which contains fluctuation
 # Make a sky using PYSM
 ### Pick one of these:
 seed = 42
-sky_config = {'cmb': 42}                ### CMB Only
+sky_config = {'CMB': 'c1'} 
+# sky_config = {'cmb': 42}                ### CMB Only
 #sky_config = {'cmb': seed, 'dust':'d1'}   ### CMB + Dust
 
 ### Generate the maps at each sub-frequency

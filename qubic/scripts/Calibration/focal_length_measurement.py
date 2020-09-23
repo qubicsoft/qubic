@@ -34,7 +34,10 @@ def get_all_fit(rep):
     return np.array(tes_newxxyy), np.array(tes_fit)
 
 
-def get_alpha_from_fit(az, el):
+def get_alpha(az, el, deg=False):
+    if deg == True:
+        az = np.deg2rad(az)
+        el = np.deg2rad(el)
     # Unit vector in spherical coordinates
     unit_vector = np.array([np.sin(np.pi / 2 - el) * np.cos(az),
                             np.sin(np.pi / 2 - el) * np.sin(az),
@@ -97,62 +100,6 @@ def normalize(x):
     return (x - np.nanmean(x)) / np.nanstd(x)
 
 
-def measure_focal_length(tes_xy, alpha, npeaks=9, ntes=256, nsig=3, goodtes=None):
-    """
-
-    Parameters
-    ----------
-    tes_xy
-    alpha
-    npeaks
-    ntes
-    nsig
-    goodtes: list
-        List containing FP indices of good TES.
-
-    Returns
-    -------
-
-    """
-    tes_dist = cdist(tes_xy, tes_xy, 'euclidean')
-    tanalpha = np.tan(alpha)
-
-    if goodtes is not None:
-        for i in range(ntes):
-            if i < 128:
-                tes = i + 1
-                asic = 1
-            else:
-                tes = i - 128 + 1
-                asic = 2
-            index = tes2index(tes, asic)
-            if index not in goodtes:
-                print(i, index)
-                tes_dist[i, :] = np.nan
-                tes_dist[:, i] = np.nan
-
-    fl_mean = np.zeros((npeaks, ntes))
-    fl_std = np.zeros((npeaks, ntes))
-    for peak in range(npeaks):
-        print('Peak ', peak, '\n')
-        # alpha = np.deg2rad(cdist(peak_azel[:, :, peak], peak_azel[:, :, peak], 'euclidean'))
-
-        focal_length = tes_dist / tanalpha[peak]
-        print(focal_length.shape)
-        for tes in range(ntes):
-            print(tes)
-            fl = focal_length[tes]
-            fl = fl[~np.isnan(fl)]
-            print('fl', fl.shape)
-            fl_clip, mini, maxi = sigmaclip(fl, low=nsig, high=nsig)
-            print(mini, maxi)
-            print('fl_clip', fl_clip.shape)
-
-            # Mean and STD for each TES
-            fl_mean[peak, tes] = np.mean(fl_clip)
-            fl_std[peak, tes] = np.std(fl_clip) / np.sqrt(len(fl_clip))
-
-    return fl_mean, fl_std
 
 
 def measure_focal_lengthnew(tes_xy, rdist, alpha, npeaks=9, ntes=256, nsig=3, goodtes=None):
@@ -209,7 +156,7 @@ def measure_focal_lengthnew(tes_xy, rdist, alpha, npeaks=9, ntes=256, nsig=3, go
             Xplus = (-2 * k * tg ** 2 + D ** 2 + np.sqrt(Delta)) / (2 * tg ** 2)
 
             fl = np.sqrt(Xplus - rdist[tes] ** 2)
-            print('fl', fl.shape)
+            print('fl', fl)
             fl = fl[~np.isnan(fl)]
             fl_clip, mini, maxi = sigmaclip(fl, low=nsig, high=nsig)
             print(mini, maxi)
@@ -377,7 +324,7 @@ tes_newxxyy, tesfit = get_all_fit(rep)
 
 az = np.deg2rad(tes_newxxyy[:, 0, :]) / np.cos(np.deg2rad(50.))
 el = np.deg2rad(tes_newxxyy[:, 1, :])
-alpha = get_alpha_from_fit(az, el)
+alpha = get_alpha(az, el)
 
 plt.figure()
 for i in range(9):
@@ -442,7 +389,7 @@ for tes in range(1, 257):
 
 az_center = np.deg2rad(center_square[:, 0, :]) / np.cos(np.deg2rad(50.))
 el_center = np.deg2rad(center_square[:, 1, :])
-alpha_cs = get_alpha_from_fit(az_center, el_center)
+alpha_cs = get_alpha(az_center, el_center)
 fl_mean_cs, fl_std_cs = measure_focal_length(tes_xy, alpha_cs, npeaks=1)
 
 fl_mean_cs = fl_mean_cs[:, rdist != 0.]
@@ -477,6 +424,8 @@ tes_newxxyy, tesfit = get_all_fit(rep)
 fig, axs = plt.subplots(2, 3, figsize=(10, 8))
 axs = np.ravel(axs)
 plt.suptitle('Frequency: {} GHz'.format(freq_source))
+
+azel_tes = np.zeros((6, 2, 9))
 for t, tes in enumerate([6, 37, 50, 58, 76, 93]):
 
     # Get the file from David
@@ -495,29 +444,48 @@ for t, tes in enumerate([6, 37, 50, 58, 76, 93]):
     dy = (y.iloc[1] - y.iloc[0]) / 2.
     extent = [x.iloc[0] - dx, x.iloc[-1] + dx, y.iloc[0] - dy, y.iloc[-1] + dy]
 
-    azel_tes = tes_newxxyy[tes-1, 0:2, :]
-    azel_tes[1, :] -= 50 # substract 50 to the elevation
+    azel_tes[t] = tes_newxxyy[tes-1, 0:2, :]
+    azel_tes[t, 1, :] -= 50 # substract 50 to the elevation
+    print(azel_tes[t])
 
     # Plot the fit measurement on the David simulation
     ax = axs[t]
     # ax.imshow(np.rot90(amp), extent=extent)
     ax.scatter(x, y, c=a, marker='s')
-    ax.scatter(azel_tes[0, :], azel_tes[1, :], color='r', s=10)
+    ax.scatter(azel_tes[t, 0, :], azel_tes[t, 1, :], color='r', s=10)
     ax.set_title('TES {}'.format(tes))
     ax.axis('equal')
+
+#     with open(rep_david + 'fit_peak_positions{}.txt'.format(freq_source), 'a') as f:
+#         np.savetxt(f, azel_tes[t], fmt='%06.8f', header='TES {}'.format(tes))
+# f.close()
 plt.show()
 
 # ================== Test with simulated beams from Qubic soft ==================
 import healpy as hp
 from scipy import ndimage
 d['config'] = 'TD'
-d['nside'] = 256
+d['nside'] = 512
 q = qubic.QubicInstrument(d)
 s = qubic.QubicScene(d)
 
 sb = q.get_synthbeam(s, idet=None, external_A=None, hwp_position=0)
 print(sb.shape)
 
+from pyoperators import Cartesian2SphericalOperator
+delta = 14
+sb_mask = sb.copy()
+lonlat_center = np.zeros((248, 2))
+vec_center = np.zeros((248, 3))
+for tes in range(248):
+    position = q.detector.center[tes]
+    uvec = position / np.sqrt(np.sum(position ** 2, axis=-1))[..., None]
+    lon, lat = Cartesian2SphericalOperator('azimuth,elevation', degrees=True)(uvec)
+
+    lonlat_center[tes, :] = lon, lat + 180
+    vec_center[tes, :] = hp.ang2vec(lon, lat, lonlat=True)
+
+# Using the projected map
 azel_peak = np.zeros((248, 2))
 for m in range(248):
     print('\n m =', m)
@@ -533,36 +501,109 @@ for m in range(248):
 
     # maxi = ndimage.measurements.maximum_position(map_proj)
     maxi = np.where(map_proj==np.max(map_proj))
-    maxi_bis = np.where(sb[m, :] == np.max(sb[m, :]))[0]
-    print('Maxi bis:', maxi_bis)
-    # maxi = np.array(maxi)
+    maxi = np.array(maxi)
     if m == 0:
         plt.figure()
         plt.imshow(map_proj)
         plt.scatter(maxi[1], maxi[0], color='r')
         plt.show()
 
-    # print(maxi)
-    # azel_peak[m, 0] = np.mean(maxi[0])
-    # azel_peak[m, 1] = np.mean(maxi[1])
+    print(maxi)
+    azel_peak[m, 0] = np.mean(maxi[0])
+    azel_peak[m, 1] = np.mean(maxi[1])
 
-    azel_peak[m, :] = hp.pix2ang(d['nside'], maxi_bis[0], lonlat=True)
     print(azel_peak[m, :])
 
-# azel_peak[:, 0] = np.deg2rad((azel_peak[:, 0] - 100)  * 10 / 60)
-# azel_peak[:, 1] = np.deg2rad((azel_peak[:, 1] - 100)  * 10 / 60 + 50)
-azel_peak = np.deg2rad(azel_peak)
+azel_peak[:, 0] = (azel_peak[:, 0] - 100)  * 10 / 60
+azel_peak[:, 1] = (azel_peak[:, 1] - 100)  * 10 / 60 + 50
 
 az_simu = np.expand_dims(azel_peak[:, 0], axis=1)
 el_simu = np.expand_dims(azel_peak[:, 1], axis=1)
 
-alpha_simu = get_alpha_from_fit(az_simu, el_simu)
+alpha_simu = get_alpha(az_simu, el_simu, deg=True)
 
+
+# Using the healpix map
+vec_peak = np.zeros((248, 3))
+for m in range(248):
+    print('\n m =', m)
+    maxi_bis = np.where(sb[m, :] == np.max(sb[m, :]))[0]
+    print('Maxi bis:', maxi_bis)
+    # sb[m, maxi_bis[0]] = hp.UNSEEN
+    # hp.mollview(sb[m, :], rot=(0, 90), cbar='hist')
+    # plt.show()
+
+
+    vec_peak[m, :] = hp.pix2vec(d['nside'], maxi_bis[0])
+    print(vec_peak[m, :])
+
+alpha_simu = np.arccos(np.dot(vec_center, vec_center.T))
+alpha_simu = np.expand_dims(alpha_simu, axis=0)
+
+# --------------------------------------------------
 tes_xy_qubicsoft = q.detector.center[:, :2]
 
-fl_mean, fl_std = measure_focal_length(tes_xy_qubicsoft, alpha_simu, npeaks=1, ntes=248, nsig=3, goodtes=None)
+rdist_qubicsoft = np.sqrt(tes_xy_qubicsoft[:, 0]**2 + tes_xy_qubicsoft[:, 1]**2)
 
-plt.figure()
-plt.scatter(tes_xy_qubicsoft[:, 0], tes_xy_qubicsoft[:, 1], c=fl_mean[0], marker='s', s=150)
+fl_mean, fl_std = measure_focal_length(tes_xy_qubicsoft, alpha_simu, npeaks=1, ntes=248,
+                                       nsig=1, goodtes=None)
+fl_meannew, fl_stdnew = measure_focal_lengthnew(tes_xy_qubicsoft, rdist_qubicsoft, alpha_simu,
+                                                npeaks=1, ntes=248, nsig=2, goodtes=None)
+plt.figure(figsize=(12, 6))
+plt.subplot(121)
+plt.scatter(tes_xy_qubicsoft[:, 0], tes_xy_qubicsoft[:, 1], c=fl_meannew[0], marker='s', s=150)
+plt.xlim((-0.055, 0.))
+plt.ylim((-0.055, 0.))
+plt.gca().set_aspect('equal')
 plt.colorbar()
+
+plt.subplot(122)
+plt.scatter(tes_xy_qubicsoft[:, 0], tes_xy_qubicsoft[:, 1], c=fl_stdnew[0], marker='s', s=150)
+plt.xlim((-0.055, 0.))
+plt.ylim((-0.055, 0.))
+plt.gca().set_aspect('equal')
+plt.colorbar()
+
 plt.show()
+
+
+def measure_focal_length(tes_xy, alpha, npeaks=9, ntes=256, nsig=3, goodtes=None):
+    tes_dist = cdist(tes_xy, tes_xy, 'euclidean')
+    tanalpha = np.tan(alpha)
+
+    if goodtes is not None:
+        for i in range(ntes):
+            if i < 128:
+                tes = i + 1
+                asic = 1
+            else:
+                tes = i - 128 + 1
+                asic = 2
+            index = tes2index(tes, asic)
+            if index not in goodtes:
+                print(i, index)
+                tes_dist[i, :] = np.nan
+                tes_dist[:, i] = np.nan
+
+    fl_mean = np.zeros((npeaks, ntes))
+    fl_std = np.zeros((npeaks, ntes))
+    for peak in range(npeaks):
+        print('Peak ', peak, '\n')
+        focal_length = tes_dist / tanalpha[peak]
+        print(focal_length)
+        print(())
+        print(focal_length.shape)
+        for tes in range(ntes):
+            print(tes)
+            fl = focal_length[tes]
+            fl = fl[~np.isnan(fl)]
+            print('fl', fl.shape)
+            fl_clip, mini, maxi = sigmaclip(fl, low=nsig, high=nsig)
+            print(mini, maxi)
+            print('fl_clip', fl_clip.shape)
+
+            # Mean and STD for each TES
+            fl_mean[peak, tes] = np.mean(fl_clip)
+            fl_std[peak, tes] = np.std(fl_clip) / np.sqrt(len(fl_clip))
+
+    return fl_mean, fl_std

@@ -1,0 +1,270 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# %matplotlib inline
+
+import os
+import sys
+import glob
+
+# Specific science modules
+import healpy as hp
+import matplotlib.pyplot as plt
+import numpy as np
+import pickle
+# Specific qubic modules
+from astropy.io import fits
+import qubic
+from qubicpack.utilities import Qubic_DataDir
+from qubic import QubicSkySim as qss
+from qubic.polyacquisition import compute_freq
+from qubic import ReadMC as rmc
+from qubic import AnalysisMC as amc
+plt.rc('text',usetex=False)
+plt.rc('font', size=16)
+```
+
+```{python}
+# Dictionary saved during the simulation
+config = 'FI150'
+
+dictfilename = os.environ['QUBIC_DICT']+'spectroimaging_article_gal.dict'
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+
+# Coordinates of the zone observed in the sky
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+
+nbands = 5
+d['nf_recon'] = nbands
+d['nf_sub'] = nbands
+```
+
+```{python}
+_, _, nus, _, _, _ = compute_freq(int(config[-3:]), nbands)
+print(nus)
+```
+
+```{python}
+sky_config = {'dust': 'd1'}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+inputmaps = Qubic_sky.get_fullsky_convolved_maps(FWHMdeg=None, verbose=True)
+
+# Getting noise realisations with FastSimulator
+nreals = 50
+npix = 12 * d['nside'] ** 2
+noisemaps = np.zeros((nreals, nbands, npix, 3))
+
+for r in range(nreals):
+    noisemaps[r, ...], coverage = Qubic_sky.get_partial_sky_maps_withnoise(coverage=None,
+                                                                           noise_only=True,
+                                                                           spatial_noise=False,
+                                                                           Nyears=3.)
+
+# Make maps QUBIC = noise + dust
+qubicmaps = np.zeros_like(noisemaps)
+for r in range(nreals):
+    qubicmaps[r, ...] = noisemaps[r, ...] + inputmaps
+
+unseen = coverage < np.max(coverage) * 0.1
+seenmap = np.invert(unseen)
+qubicmaps[:, :, unseen, :] = hp.UNSEEN
+noisemaps[:, :, unseen, :] = hp.UNSEEN
+inputmaps[:, unseen, :] = hp.UNSEEN
+```
+
+```{python}
+# look at the maps
+real = 0
+iband = 0
+istk = 0
+
+plt.figure(figsize=(15,7))
+hp.gnomview(inputmaps[iband, :, istk], reso=15, rot=(0,0), sub=(131), title='Input map convolved')
+hp.gnomview(noisemaps[real, iband, :, istk], reso=15, rot=(0,0), sub=(132), title='Noise map')
+hp.gnomview(qubicmaps[real, iband, :, istk], reso=15, rot=(0,0), sub=(133), title='QUBIC map')
+```
+
+```{python}
+# Decrease NSIDE
+nside_new = 32
+seenmap_dgrad = hp.ud_grade(seenmap, nside_new)
+thepix = np.where(seenmap_dgrad)[0]
+print(thepix)
+
+qubicmaps_dgrad = np.zeros((nreals, nbands, 12*nside_new**2, 3))
+noisemaps_dgrad = np.zeros((nreals, nbands, 12*nside_new**2, 3))
+for real in range(nreals):
+    for nu in range(nbands):
+        for istk in range(3):
+            qubicmaps_dgrad[real, nu, :, istk] = hp.ud_grade(qubicmaps[real, nu, :, istk], nside_new)
+            noisemaps_dgrad[real, nu, :, istk] = hp.ud_grade(noisemaps[real, nu, :, istk], nside_new)
+            
+inputmaps_dgrad = np.zeros((nbands, 12*nside_new**2, 3))
+
+for nu in range(nbands):
+    for istk in range(3):
+        inputmaps_dgrad[nu, :, istk] = hp.ud_grade(inputmaps[nu, :, istk], nside_new)
+
+
+plt.figure(figsize=(15,7))
+hp.gnomview(inputmaps_dgrad[iband, :, istk], reso=15, rot=(0,0), sub=(121), title='Input map dgrad')
+hp.gnomview(qubicmaps_dgrad[real, iband, :, istk], reso=15, rot=(0,0), sub=(122), title='QUBIC map dgrad')
+```
+
+```{python}
+Cp = amc.get_Cp(noisemaps_dgrad[:, :, seenmap_dgrad, :])
+print(Cp.shape)
+
+N, Cp_prime = amc.Cp2Cp_prime_viaCorr(Cp)
+print(Cp_prime.shape)
+
+plt.figure()
+plt.imshow(Cp_prime[:, :, 0, 0])
+plt.colorbar()
+```
+
+```{python}
+istk = 0
+indexPIX = 8
+pix = thepix[indexPIX] # pixel in the full map
+print(pix)
+
+themean = np.mean(qubicmaps_dgrad[:, :, pix, istk], axis=0)
+thestd = np.std(qubicmaps_dgrad[:, :, pix, istk], axis=0)
+```
+
+```{python}
+plt.figure()
+plt.plot(nus, inputmaps_dgrad[:, pix, istk], 'bo', label='Input sky')
+plt.errorbar(nus, themean,
+             yerr=thestd, 
+             fmt='o', 
+             color='r',
+             label='recon sky')
+plt.legend()
+plt.title(f'Pixel {thepix[pix_index]}')
+plt.xlabel('Frequency [GHz]')
+plt.ylabel('I (µK)')
+plt.grid()
+```
+
+## FIT
+
+```{python}
+from scipy.optimize import curve_fit
+def func(x, a, b):
+    return a + x**b
+
+popt, pcov = curve_fit(func, nus, themean, sigma=Cp_prime[:, :, istk, indexPIX], absolute_sigma=True)
+
+perr = np.sqrt(np.diag(pcov))
+
+print("a =", popt[0], "+/-", perr[0])
+print("b =", popt[1], "+/-", perr[1])
+ 
+print(pcov)
+```
+
+```{python}
+x = np.linspace(nus[0]-5, nus[-1]+5, 100)
+plt.figure()
+
+# plt.plot(nus, inputmaps_dgrad[:, pix, istk], 'bo', label='Input sky')
+
+plt.errorbar(nus, 
+             themean,
+             yerr=thestd, 
+             fmt='o', 
+             color='r',
+             label='recon sky')
+
+popt_up = popt + perr
+popt_down = popt - perr
+
+y  = func(x, *popt)
+y1 = func(x, *popt_up)
+y2 = func(x, *popt_down)
+
+plt.plot(x, y, 'g-', label='fit')
+plt.plot(x, y1, 'g--')
+plt.plot(x, y2, 'g--')
+plt.fill_between(x, y1, y2, facecolor='g', alpha=0.15)
+
+plt.legend()
+plt.title('Pixel {}'.format(pix))
+plt.xlabel('Frequency [GHz]')
+plt.ylabel('I (µK)')
+plt.grid()
+```
+
+```{python}
+# realisations of fit parameters that have the correlations pcov we found
+nsamples = 1000
+psamples = np.random.multivariate_normal(popt, pcov, nsamples)
+print(psamples.shape)
+
+plt.errorbar(nus, 
+             themean,
+             yerr=thestd, 
+             fmt='o', 
+             color='r',
+             label='recon sky')
+for i in range(1000):
+    plt.plot(x, func(x, *psamples[i, :]), alpha=0.01)
+    
+plt.legend()
+plt.title('Pixel {}'.format(pix))
+plt.xlabel('Frequency [GHz]')
+plt.ylabel('I (µK)')
+plt.grid()
+```
+
+```{python}
+vals = np.zeros((len(x), nsamples))
+for i in range(len(x)):
+    for j in range(nsamples):
+        vals[i, j] = func(x[i], *psamples[j, :])
+
+mvals = np.mean(vals, axis=1)
+svals = np.std(vals, axis=1)
+
+```
+
+```{python}
+plt.errorbar(nus, 
+             themean,
+             yerr=thestd, 
+             fmt='o', 
+             color='r',
+             label='recon sky')
+
+plt.plot(x, mvals, 'g', label='fit')
+plt.plot(x, mvals + svals, 'g--', label='1 sigma')
+plt.plot(x, mvals - svals, 'g--')
+plt.plot(x, mvals + 3*svals, 'g:')
+plt.plot(x, mvals - 3*svals, 'g:')
+
+plt.legend()
+plt.title('Pixel {}'.format(pix))
+plt.xlabel('Frequency [GHz]')
+plt.ylabel('I (µK)')
+plt.grid()
+
+```
+
+```{python}
+
+```

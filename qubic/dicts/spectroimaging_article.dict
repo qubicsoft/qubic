@@ -69,7 +69,7 @@ hwp_stepsize=15 # (degrees) used for random and sweeping pointing
 random_pointing=False   
 
 repeat_pointing=True
-npointings=1000
+npointings=500
 dtheta=15.
 nhwp_angles=3 # use only for repeat_pointing
 seed=1
@@ -96,7 +96,7 @@ comm=None
 weights=None
 
 ####################################### Map making #####################################
-tol=1e-5
+tol=1e-2
 nf_recon = [1,3,5]
 maxiter=1e5
 verbose=True

@@ -75,10 +75,10 @@ def make_covTD(d):
     cov = arec.get_coverage()
     return cov
 def save_covTD(cov, savedir=os.environ['QUBIC_DATADIR']+'doc/'):
-    hdu_primary = fits.PrimaryHDU()
+    #hdu_primary = fits.PrimaryHDU()
     hdu_cov = fits.ImageHDU(data=cov, name='coverage')
     
-    thefile = fits.HDUList([hdu_primary, hdu_cov])
+    thefile = fits.HDUList([hdu_cov])
     thefile.writeto('')
 ```
 
@@ -107,8 +107,17 @@ else:
 ```
 
 ```{python}
+cov=np.zeros_like(coverageTD,dtype=bool)
+covmsk=coverageTD > 0.1*np.max(coverageTD)
+coverageTD[~covmsk] = 0
+```
+
+```{python}
 #just used to compare, after is defined coverageFI. Depends if cengal is T or F
 covFI = np.load(global_dir+'doc/FastSimulator/Data/coverage_nfsub15_nptgs10000_qubicpatch.pk')
+cov=np.zeros_like(covFI,dtype=bool)
+covmskFI=covFI > 0.1*np.max(covFI)
+covFI[~covmskFI] = 0
 ```
 
 ```{python}
@@ -119,16 +128,17 @@ X,Y=np.meshgrid(range(200), range(200))
 
 fig = plt.figure(figsize=(18,6))
 ax = fig.add_subplot(1, 3, 1, projection='3d')
-ax.set_title('covTD in galaxy center', fontsize=16)
+ax.set_title('coverage TD ({})'.format(dTD['npointings']), fontsize=16)
 ax.plot_surface(X,Y, lacarte, cmap=plt.cm.viridis, linewidth=0.2)
 
 ax = fig.add_subplot(1, 3, 2, projection='3d')
-ax.set_title('covFI in QUBIC field', fontsize=16)
+ax.set_title('coverage FI (10000)', fontsize=16)
 ax.plot_surface(X,Y, lacarteFI, cmap=plt.cm.viridis, linewidth=0.2)
 
 ax = fig.add_subplot(1, 3, 3, projection='3d')
 ax.set_title('Diff = covTD-covFI', fontsize=16)
 ax.plot_surface(X,Y, lacarte-lacarteFI, cmap=plt.cm.viridis, linewidth=0.2)
+#plt.savefig('coverage_TD1e4-FI1e4_cut.pdf',format='pdf')
 ```
 
 ```{python}
@@ -192,40 +202,25 @@ for i in range(dTD['nf_recon']):
 ##### Getting FastSimulator output maps
 nreals=30
 noiseFI = np.zeros((nreals,dTD['nf_recon'], 12*dTD['nside']**2,3))
-#noiseTD = np.zeros_like(noiseTD)
 
 for i in range(nreals):
-    #noiseTD[i, ...], coverageTD = \
-    #    Qubic_sky_TD.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=coverageTD, 
-    #                                                only_noise = True, Nyears=1)
-    #print('=== Done (TD) interation #{} ===='.format(i+1))
-
     noiseFI[i, ...], coverageFI = \
         Qubic_sky_FI.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=coverageFI, 
                                                     noise_only = True, Nyears=1)        
     print('=== Done interation #{} ===='.format(i+1))
-    gc.collect()
     
 noisymapsTD = np.zeros_like(noiseFI)
 noisymapsFI = np.zeros_like(noiseFI)
 
 for i in range(nreals):
-    noisymapsTD[i, ...] = 31*noiseFI[i, ...] + dust_map_TD
-    noisymapsFI[i, ...] = noiseFI[i, ...] + dust_map_FI
+    for j in range(dTD['nf_recon']):
+        noisymapsTD[i, j, ...] = 31*noiseFI[i, j, ...] + dust_map_TD[j]
+        noisymapsFI[i, j, ...] = noiseFI[i, j, ...] + dust_map_FI[j]
 #
-#mapsTD, stdTD=np.mean(noisymapsTD,axis=0), np.std(noisymapsTD,axis=0)
-mapsTD_noiseFI,stdTD_nFI = np.mean(noisymapsTD,axis=0), np.std(noisymapsTD,axis=0)
-#mapsTD_noiseFI_nc,stdTD_nFI_nc = np.mean(mcmcmapsTD_FI_nc,axis=0), np.std(mcmcmapsTD_FI_nc,axis=0)
-mapsFI, stdFI = np.mean(noisymapsFI,axis=0), np.std(noisymapsFI, axis=0)
+mapsTD_noiseFI,stdTD_nFI = np.mean(noisymapsTD, axis = 0), np.std(noisymapsTD, axis = 0)
 
-```
+mapsFI, stdFI = np.mean(noisymapsFI, axis = 0), np.std(noisymapsFI, axis = 0)
 
-```{python}
-gc.collect()
-```
-
-```{python}
-80*5*12*256**2*3*16/1024/1024/1024
 ```
 
 ### Look at the maps... okk..
@@ -245,13 +240,10 @@ mapsFI[NU,~cov,0] = hp.UNSEEN
 pol=False
 if pol:
     plt.figure(figsize=(12,8))
-    hp.gnomview(np.sqrt(mapsTD_noiseFI[NU,:,1]**2+mapsTD_noiseFI[NU,:,2]**2), sub=(2,2,1), #max=1e2,
-                #max=0.1*np.max(mapsTD_noiseFI[NU,cov,STK]), 
+    hp.gnomview(np.sqrt(mapsTD_noiseFI[NU,:,1]**2+mapsTD_noiseFI[NU,:,2]**2), sub=(2,2,1), 
                 title='FastSim TD(noiseFI conv) I_P', reso=RESO, rot=center)
     hp.gnomview(np.sqrt(mapsFI[NU,:,1]**2+mapsFI[NU,:,2]**2), sub=(2,2,2), 
-                #max=0.1*np.max(maps_noiselessTD[NU,:,STK]), 
                 title='FastSim FI', reso=RESO, rot=center)
-    #hp.gnomview(cov, sub=(2,3,3), title='covmsk', reso=RESO, rot=center)
 
     hp.gnomview(np.sqrt(dust_map_TD[NU,:,1]**2+dust_map_TD[NU,:,2]**2), 
                 sub=(2,2,3), title='noiseless TD', reso=RESO, rot=center)
@@ -259,13 +251,12 @@ if pol:
                 sub=(2,2,4), title='noiseless FI', reso=RESO, rot=center)
 elif not pol:
     plt.figure(figsize=(12,8))
-    hp.gnomview(mapsTD_noiseFI[NU,:,0], sub=(2,2,1), #max=1e2,
+    hp.gnomview(mapsTD_noiseFI[NU,:,0], sub=(2,2,1), 
                 max=0.4*np.max(mapsTD_noiseFI[NU,cov,0]), 
                 title='FastSim TD I', reso=RESO, rot=center)
     hp.gnomview(mapsFI[NU,:,0], sub=(2,2,2), 
                 max=0.4*np.max(mapsFI[NU,:,0]), 
                 title='FastSim FI', reso=RESO, rot=center)
-    #hp.gnomview(cov, sub=(2,3,3), title='covmsk', reso=RESO, rot=center)
 
     hp.gnomview(dust_map_TD[NU,:,0], sub=(2,2,3), title='noiseless TD', reso=RESO, rot=center)
     hp.gnomview(dust_map_FI[NU,:,0], sub=(2,2,4), title='noiseless FI', reso=RESO, rot=center)
@@ -279,6 +270,11 @@ _,nus_edge,nus,_,_,_=qubic.compute_freq(dTD['filter_nu']/1e9, dTD['nf_recon'], d
 ```
 
 ```{python}
+IPIX = covmsk[0][-400]
+print(IPIX)
+```
+
+```{python}
 IPIX = covmsk[0][11500] #almost center
 mctest=True
 STK=0
@@ -286,27 +282,16 @@ dust_map_TD[0,~cov,0]=hp.UNSEEN
 mapsTD_noiseFI[0,~cov,0]=hp.UNSEEN
 plt.rc('font', size=15)
 factor=0.5
-#for j,ipx in enumerate(range(0,24000,2000)):
-for j,IPIX in enumerate([384526,]):#enumerate(range(401919,401930)):
+#for j,ipx in enumerate(range(0,24000,2000)):384526, 401928,401922
+for j,IPIX in enumerate([384526, 401928,520725]):
     fig,ax=plt.subplots(nrows=1,ncols=3,figsize=(16,7),)
     ax=ax.ravel()
-    #IPIX = covmsk[0][ipx]
-    #gs = ax[0].get_gridspec()
-    # remove the underlying axes
-    #for iax in ax[0:2]:
-    #    iax.remove()
-    #axbig = fig.add_subplot(gs[0:2])
+
     if mctest:
         ax[0].errorbar(nus, dust_map_TD[:,IPIX,STK],lw=3,
                fmt='o-',color='b',label='convolved', alpha=0.7)
         ax[0].errorbar(nus, mapsTD_noiseFI[:,IPIX,STK],yerr=stdTD_nFI[:,IPIX,0],capsize=3 ,lw=3,
                fmt='o-',color='r',label='reconstructed', alpha=0.7)
-        #ax[0].errorbar(nus, maps_noiselessFI[:,IPIX,0],yerr=stdTD_nFI_nc[:,IPIX,0], 
-        #       fmt='o-', color='r',label='noiseless FI', alpha=0.7)
-        #ax[0].plot(nus, maps_noiselessTD[:,IPIX,0],
-        #       'ro-',label='TD noiseless', alpha=0.8)
-        #ax[0].plot(nus, maps_noiselessFI[:,IPIX,0],
-        #       'bo-',label='FI noiseless', alpha=0.5)
         ax[0].set_title('Dust - TD/FI pix {}'.format(IPIX),fontsize=15)
     ax[0].set_ylabel(r'$I_\nu~[\mu$K]',fontsize=15)
     ax[0].set_xlabel(r'$\nu~[GHz]$',fontsize=15)
@@ -326,10 +311,8 @@ for j,IPIX in enumerate([384526,]):#enumerate(range(401919,401930)):
                 unit=r'$\mu$K',
                 rot=center)
     hp.projscatter(hp.pix2ang(dTD['nside'],IPIX),marker='+',color='r',)
-    #plt.savefig('FastSim-TD-Figs/{}.svg'.format(IPIX),format='svg')
+    #plt.savefig('FastSim-TD-Figs/new{}.svg'.format(IPIX),format='svg')
 plt.show()
-#367111,384526,401915
-#436782, 349666
 ```
 
 Do same plots averaging and/or computing rms in maps
@@ -420,7 +403,7 @@ deltab=np.deg2rad(12)
 for i in np.arange(np.pi/2-deltab,np.pi/2+deltab,0.002):
     #print(i)
     hp.projscatter(np.array([i,0]),marker='+',c='r',s=2)
-plt.savefig('FastSim-TD-Figs/overview-region.pdf',format='pdf')
+#plt.savefig('FastSim-TD-Figs/overview-region.pdf',format='pdf')
 ```
 
 ```{python}
@@ -528,7 +511,135 @@ ax.set_zlabel(r'$I_{\nu}~[\mu K]$',fontsize=17, labelpad=25, rotation=0,)
 
 ax.view_init(30, 20)
 
-plt.savefig('FastSim-TD-Figs/overview2-TD-region.pdf',format='pdf')
+#plt.savefig('FastSim-TD-Figs/overview2-TD-region.pdf',format='pdf')
+```
+
+## Udgrading maps
+
+```{python}
+aux_map = np.copy(mapsTD_noiseFI)
+print(aux_map.shape)
+_,_,nus_rec,_,_,_ = qubic.compute_freq(150,5,0.25)
+```
+
+```{python}
+nside_new = 8
+noiseFI_ud = np.zeros((nreals, len(nus_out), 12 * nside_new ** 2, 3))
+#noisymapsFI_ud = np.zeros_like(noisymapsTD_ud)
+
+for ireal in range(nreals):
+    for irec in range(len(nus_out)):
+        noiseFI_ud[ireal, irec] = hp.ud_grade(noiseFI[ireal, irec].T, nside_new).T
+        #noisymapsFI_ud = hp.ud_grade(noisymapsFI[ireal, irec].T, nside_new).T
+#
+dust_map_TD_ud = np.zeros((len(nus_out), 12 * nside_new ** 2, 3))
+dust_map_FI_ud = np.zeros_like(dust_map_TD_ud)
+for irec in range(len(nus_out)):
+    dust_map_TD_ud[irec] = hp.ud_grade(dust_map_TD[irec].T, nside_new).T
+    dust_map_FI_ud[irec] = hp.ud_grade(dust_map_FI[irec].T, nside_new).T
+#
+coverageFI_ud = hp.ud_grade(coverageFI, nside_new)
+
+noisymapsTD_ud, noisymapsFI_ud = np.zeros_like(noiseFI_ud), np.zeros_like(noiseFI_ud) 
+
+print(np.shape(noiseFI_ud), np.shape(dust_map_FI_ud), np.shape(dust_map_TD_ud))
+
+for i in range(nreals):
+    for j in range(len(nus_out)):
+        noisymapsTD_ud[i,j,...] = 31*noiseFI_ud[i,j,...] + dust_map_TD_ud[j]
+        noisymapsFI_ud[i,j,...] = noiseFI_ud[i,j,...] + dust_map_FI_ud[j]
+#
+mapsTD_noiseFI_ud, stdTD_nFI_ud = np.mean(noisymapsTD_ud, axis = 0), np.std(noisymapsTD_ud, axis = 0)
+
+mapsFI_ud, stdFI_ud = np.mean(noisymapsFI_ud, axis = 0), np.std(noisymapsFI_ud, axis = 0)
+
+```
+
+```{python}
+# Decrease NSIDE
+nside_new = 8
+
+#maps_recon_dgrad = np.zeros((len(nus_rec), 12*nside_new**2, 3))
+#for nu in range(len(nus_rec)):
+#    for istk in range(3):
+#        maps_recon_dgrad[nu, :, istk] = hp.ud_grade(aux_map[nu, :, istk], nside_new)
+#
+#maps_conv_dgrad = np.zeros((len(nus_rec), 12*nside_new**2, 3))
+#for nu in range(len(nus_rec)):
+#    for istk in range(3):
+#        maps_conv_dgrad[nu, :, istk] = hp.ud_grade(dust_map_TD[nu, :, istk], nside_new)
+#
+plt.figure(figsize = (14,6))
+hp.gnomview(mapsTD_noiseFI_ud[0, :, 0], sub = (221), 
+            reso = 10, title = 'Recon. Ud')
+hp.gnomview(mapsTD_noiseFI[0, :, 0], sub = (222), 
+            reso = 10, title = 'Recon. No_ud')
+hp.gnomview(dust_map_TD_ud[0, :, 0], sub = (223), 
+            reso = 10, title = 'Conv. Ud')
+hp.gnomview(dust_map_TD[0, :, 0], sub = (224), 
+            reso = 10, title = 'Conv. No_ud')
+
+
+```
+
+```{python}
+PixPix = lambda p: hp.ang2pix(nside_new, hp.pix2ang(dTD['nside'], p)[0], hp.pix2ang(dTD['nside'], p)[1] )
+```
+
+```{python}
+for j,IPIX in enumerate([PixPix(384526), PixPix(401922), PixPix(520725)]):
+    fig,ax=plt.subplots(nrows=1,ncols=3,figsize=(16,7),)
+    ax=ax.ravel()
+
+    if mctest:
+        ax[0].errorbar(nus, dust_map_TD_ud[:,IPIX,STK],lw = 3,
+               fmt = 'o-', color = 'b', label='convolved', alpha = 0.7)
+        ax[0].errorbar(nus, mapsTD_noiseFI_ud[:,IPIX,STK],yerr = stdTD_nFI_ud[:,IPIX,0],
+                       capsize = 3 ,lw = 3, fmt = 'o-', color = 'r',
+                       label = 'reconstructed', alpha = 0.7)
+        ax[0].set_title('Dust - TD/FI pix {}'.format(IPIX), fontsize = 15)
+    ax[0].set_ylabel(r'$I_\nu~[\mu$K]', fontsize = 15)
+    ax[0].set_xlabel(r'$\nu~[GHz]$', fontsize = 15)
+    ax[0].legend(loc = 'upper left', fontsize = 14)
+    ax[0].grid()
+    plt.axes(ax[1])
+    hp.gnomview(dust_map_TD_ud[0,:,STK], reso = 15, hold = True, notext = True,
+                title = 'Convolved',
+                max = factor*np.max(mapsTD_noiseFI_ud[0,:,STK]),
+                cbar = True,
+                unit = r'$\mu$K',
+                rot = center)
+    hp.projscatter(hp.pix2ang(nside_new, IPIX), marker = '+', color = 'r',)
+    plt.axes(ax[2])
+    hp.gnomview(mapsTD_noiseFI_ud[0,:,STK], reso = 15, hold = True, notext = True, 
+                title = 'Reconstructed',
+                max = factor * np.max(mapsTD_noiseFI_ud[0,:,STK]), 
+                cbar = True,
+                unit = r'$\mu$K',
+                rot = center)
+    hp.projscatter(hp.pix2ang(nside_new,IPIX),marker='+',color='r',)
+    plt.savefig('FastSim-TD-Figs/ud_new{}.pdf'.format(IPIX),format='pdf')
+plt.show()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 ```{python}

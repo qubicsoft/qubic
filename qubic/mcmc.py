@@ -57,7 +57,7 @@ class LogLikelihood:
     def compute_sigma68(self, logLLH, rvalues):
         LLH = [np.exp(logLLH([rvalues[i]])) for i in range(len(rvalues))]
 
-        cumint = cumtrapz(LLH, x=rvalues)
+        cumint = cumtrapz(LLH, x=rvalues) # Cumulative integral
         cumint /= np.max(cumint)
         sigma68 = np.interp(0.68, cumint, rvalues[1:])
 

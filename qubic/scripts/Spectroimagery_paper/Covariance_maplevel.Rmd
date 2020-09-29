@@ -64,64 +64,67 @@ colorlist = list(mcolors.TABLEAU_COLORS.keys())
 ```{python}
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
 print(global_dir)
+
+datadir = os.environ['DATA_SPECTROIM']
+
 ```
 
 ```{python}
-rep_mapCC = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/Simu_spectroim/FastSimulator/maps_FastSim/'
+# rep_mapCC = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/Simu_spectroim/FastSimulator/maps_FastSim/'
 
 # rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/galaxy_center_d1/test_residuals/31613089/'
 # rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/29712494/'
 
-# nfrecon = 3
-# rep = f'/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/Simu_spectroim/simu_nersc_dust_fullpipeline/nfrecon{nfrecon}/'
-
+nfrecon = 3
+freq = 150
+rep = datadir + f'/NERSC_simuEnd2End/Good_photon_noise2020/simu_NERSC_MC/FI{freq}/galaxycenter_3bandes/'
 ```
 
 ```{python}
 # For full pipeline simulations
-# dictionary = glob.glob(rep + '/*.dict')[0]
-# print(dictionary)
+dictionary = glob.glob(rep + '/*.dict')[0]
+print(dictionary)
 
-# # Dictionary saved during the simulation
-# d = qubic.qubicdict.qubicDict()
-# d.read_from_file(dictionary)
+# Dictionary saved during the simulation
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictionary)
 
-# # Coordinates of the zone observed in the sky
-# center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+# Coordinates of the zone observed in the sky
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 
 # Number of subbands used during the simulation
 
-# nfsub = d['nf_sub']
-# print('nf_sub = {}, nf_recon = {}'.format(nfsub, nfrecon))
+nfsub = d['nf_sub']
+print('nf_sub = {}, nf_recon = {}'.format(nfsub, nfrecon))
 
 # Get fits files names in a list
-# fits_noise = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessFalse*.fits'.format(nfsub, nfrecon), 
-#                               recursive=True))
-# fits_noiseless = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessTrue*.fits'.format(nfsub, nfrecon), 
-#                               recursive=True))
+fits_noise = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessFalse*.fits'.format(nfsub, nfrecon), 
+                              recursive=True))
+fits_noiseless = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessTrue*.fits'.format(nfsub, nfrecon), 
+                              recursive=True))
 
-# print(fits_noiseless)
+print(fits_noiseless)
 
 # Number of noise realisations
-# nreals = len(fits_noise)
-# print('nreals = ', nreals)
+nreals = len(fits_noise)
+print('nreals = ', nreals)
 
-# # Get seen map (observed pixels)
-# seenmap = rmc.get_seenmap(fits_noiseless[0])
-# print(seenmap.shape)
+# Get seen map (observed pixels)
+seenmap = rmc.get_seenmap(fits_noiseless[0])
+print(seenmap.shape)
 
-# # Number of pixels and nside
-# npix = seenmap.sum()
-# print('npix:', npix)
+# Number of pixels and nside
+npix = seenmap.sum()
+print('npix:', npix)
 
-# patch = amc.get_residuals(fits_noise, fits_noiseless[0], 'noiseless')
+patch = amc.get_residuals(fits_noise, fits_noiseless[0], 'noiseless')
 ```
 
 ```{python}
 stokes = ['I', 'Q', 'U']
 allrecon = [1, 2, 3, 4, 5, 8]
-nfrecon = 2
-config = 'FI220'
+nfrecon = 3
+config = 'FI150'
 ```
 
 ```{python}
@@ -248,7 +251,7 @@ for p in range(npix):
 ```{python}
 labs = []
 for i in range(nfrecon):
-    labs.append('f{}'.format(i))
+    labs.append(r'$\nu_{}$'.format(i))
 
 plt.figure(figsize=(20, 100))
 for p in range(1, 10):
@@ -352,7 +355,8 @@ bigcov, bigcorr = amc.get_covcorr_patch(patch, stokesjoint=True, doplot=True)
 labs = []
 for s in range(3):
     for i in range(nfrecon):
-        labs.append(stokes[s]+' f{}'.format(i))
+#         r'$\nu_{}$'.format(i)
+        labs.append(stokes[s] + r' $\nu_{}$'.format(i))
         
 print(labs)
 ```
@@ -387,8 +391,10 @@ for p in range(0, 10):
 plt.figure(figsize=(10, 10))
 ax = plt.gca()
 im = plt.imshow(np.mean(bigcorr, axis=2), vmin=-1, vmax=1, cmap='bwr')
-# im = plt.imshow(bigcorr[:, :, 8], vmin=-1, vmax=1, cmap='bwr')
 plt.title('Averaged over pixels')
+# im = plt.imshow(bigcorr[:, :, 7], vmin=-1, vmax=1, cmap='bwr')
+# plt.title('Pixel 7')
+
 
 # create an axes on the right side of ax. The width of cax will be 5%
 # of ax and the padding between cax and ax will be fixed at 0.05 inch.
@@ -403,8 +409,8 @@ for s in range(nfrecon):
     ax.axvline(x=(s+1)*nfrecon-0.5, lw=3, color='k')
     
     
-plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/corr_matrix_IQUmaplevel_avg_overpix.pdf')
-# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/corr_matrix_IQUmaplevel_pixel8.pdf')
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/corr_matrix_IQUmaplevel_avg_overpix_GoodPhotonNoise.pdf')
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/corr_matrix_IQUmaplevel_pixel7_GoodPhotonNoise.pdf')
 ```
 
 ### Covariances between pixels

@@ -8,7 +8,7 @@ beam_shape =  'gaussian' # 'gaussian', 'fitted_beam', 'multi_freq'
 
 # multifreq instrument 
 MultiBand=True
-nf_sub=15
+nf_sub=16
 center_detector=False
 
 psd=None
@@ -86,7 +86,7 @@ fix_azimuth={'apply':True,'az':50,'el':50,'el_step':1, 'fix_hwp':True, 'fix_pitc
 
 ############################################# Acquisition ##############################
 block=None
-effective_duration=4 #years
+effective_duration=2 #years
 noiseless=False
 photon_noise=True
 max_nbytes=None
@@ -96,8 +96,8 @@ comm=None
 weights=None
 
 ####################################### Map making #####################################
-tol=1e-2
-nf_recon = [1,3,5]
+tol=1e-5
+nf_recon = [4,]
 maxiter=1e5
 verbose=True
 

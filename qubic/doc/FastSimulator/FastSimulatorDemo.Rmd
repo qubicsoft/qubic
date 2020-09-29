@@ -65,7 +65,7 @@ The FastSimulator reproduces the noise structure that has been measured so far i
 
 ```{python}
 ### This is for the FI
-config = 'FI150' #FI220 or FI150 or FI-150 (old files)
+config = 'FI220' #FI220 or FI150 or FI-150 (old files)
 old_config = False
 
 ### Old COnfig
@@ -122,7 +122,7 @@ In this case the code returns the number of sub-bands from the input dictionary 
 ```{python}
 reload(qss)
 
-nbands = 1
+nbands = 3
 d['nf_recon'] = nbands
 d['nf_sub'] = nbands
 ##### QubicSkySim instanciation
@@ -220,7 +220,7 @@ Because in the above mode, most of the CPU time is spent on convolving the input
 reload(qss)
 
 newd = d.copy()
-newd['nf_recon'] = 1
+newd['nf_recon'] = 4
 
 ##### QubicSkySim instanciation
 seed = None
@@ -260,7 +260,7 @@ This one cannot be checked if the keyword 'spatial_noise' is True in the call, w
 reload(qss)
 
 newd = d.copy()
-newd['nf_recon'] = 1
+newd['nf_recon'] = 4
 
 seed = None
 sky_config = {'cmb': seed}
@@ -268,7 +268,8 @@ Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
 new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True,
                                                                     spatial_noise=False,
-                                                                   old_config=old_config)
+                                                                   old_config=old_config,
+                                                                   sigma_sec=None)
 
 for isub in range(newd['nf_recon']):
     sqn = np.int(np.sqrt(newd['nf_recon']))
@@ -276,7 +277,8 @@ for isub in range(newd['nf_recon']):
         sqn += 1
     subplot(sqn,sqn,isub+1)
     xx, yyfs, fitcov = qss.get_noise_invcov_profile(new_maps_noise[isub,:,:], coverage, QUsep=True, nbins=30,
-                                                 label='FastSim sub={}/{}'.format(isub+1,newd['nf_recon']), fit=False, norm=False,
+                                                 label='FastSim sub={}/{}'.format(isub+1,newd['nf_recon']), 
+                                                    fit=False, norm=False,
                                                  allstokes=False, doplot=True)
     fitcov = DataFastSim['effective_variance_invcov']
     plot(fitcov[isub][0,:], np.sqrt(fitcov[isub][1,:]), label='I from End-to-End')

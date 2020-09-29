@@ -56,45 +56,46 @@ fwhms = [d['synthbeam_peak150_fwhm'] * 150 / nu for nu in nus]
 print('fwhms', fwhms)
 
 # Input sky
-# seed = 42
+seed = 42
 # sky_config = {'dust': 'd1', 'cmb':seed, 'synchrotron':'s1'}
-# sky_config = {'dust': 'd1'}
-# Qubic_sky = qss.Qubic_sky(sky_config, d)
-# inputmaps = Qubic_sky.get_fullsky_convolved_maps(FWHMdeg=None, verbose=True)
-#
-# rnd_name = qss.random_string(10)
+sky_config = {'dust': 'd1'}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+inputmaps = Qubic_sky.get_fullsky_convolved_maps(FWHMdeg=None, verbose=True)
+
+rnd_name = qss.random_string(10)
 
 # ================== Make maps =============================
 # Getting noise realisations with FastSimulator
-# nreals = 4
-# npix = 12 * d['nside'] ** 2
-# noisemaps = np.zeros((nreals, nbands, npix, 3))
-#
-# # qubic_coverage = np.load('/pbs/home/l/lmousset/libs/qubic/qubic/scripts/Spectroimagery_paper/maps/'
-# #                          'coverage_nfsub15_nptgs10000_qubicpatch.npy')
-#
-# for r in range(nreals):
-#     noisemaps[r, ...], coverage = Qubic_sky.get_partial_sky_maps_withnoise(coverage=None,
-#                                                                            noise_only=True,
-#                                                                            spatial_noise=True)
-#
-# # Make maps QUBIC = noise + CMB
-# qubicmaps = np.zeros_like(noisemaps)
-# for r in range(nreals):
-#     qubicmaps[r, ...] = noisemaps[r, ...] + inputmaps
-#
-# unseen = coverage < np.max(coverage) * 0.1
-# seenmap = np.invert(unseen)
-# qubicmaps[:, :, unseen, :] = 0.
-# noisemaps[:, :, unseen, :] = 0.
-# inputmaps[:, unseen, :] = 0.
-#
-# # Reduce it to a patch
-# noisepatch = noisemaps[:, :, seenmap, :]
-#
-# # Save the noisy patch
-# np.save(rep_save + f'/noisepatch_nbands{nbands}_' + config + '_v2_galaxycenter_' + rnd_name + '.npy',
-#         noisepatch)
+nreals = 4
+npix = 12 * d['nside'] ** 2
+noisemaps = np.zeros((nreals, nbands, npix, 3))
+
+# qubic_coverage = np.load('/pbs/home/l/lmousset/libs/qubic/qubic/scripts/Spectroimagery_paper/maps/'
+#                          'coverage_nfsub15_nptgs10000_qubicpatch.npy')
+
+for r in range(nreals):
+    noisemaps[r, ...], coverage = Qubic_sky.get_partial_sky_maps_withnoise(coverage=None,
+                                                                           noise_only=True,
+                                                                           spatial_noise=True,
+                                                                           Nyears=3.)
+
+# Make maps QUBIC = noise + CMB
+qubicmaps = np.zeros_like(noisemaps)
+for r in range(nreals):
+    qubicmaps[r, ...] = noisemaps[r, ...] + inputmaps
+
+unseen = coverage < np.max(coverage) * 0.1
+seenmap = np.invert(unseen)
+qubicmaps[:, :, unseen, :] = 0.
+noisemaps[:, :, unseen, :] = 0.
+inputmaps[:, unseen, :] = 0.
+
+# Reduce it to a patch
+noisepatch = noisemaps[:, :, seenmap, :]
+
+# Save the noisy patch
+np.save(rep_save + f'/noisepatch_nbands{nbands}_' + config + '_v3_galaxycenter_' + rnd_name + '.npy',
+        noisepatch)
 
 # ================== Load maps already done =============================
 # imap = int(sys.argv[3])
@@ -108,35 +109,35 @@ print('fwhms', fwhms)
 # maps_clth[:, :, seenmap, :] = patch_clth
 
 # ------------ Maps from NERSC --------------------
-rep_mapNERSC = f'/sps/hep/qubic/Users/lmousset/SpectroImaging/mapsfromNERSC/nfrecon{nbands}/'
-fits_noise = np.sort(glob.glob(rep_mapNERSC + f'*nfrecon{nbands}_noiselessFalse*.fits',
-                              recursive=True))
-fits_noiseless = np.sort(glob.glob(rep_mapNERSC + f'*nfrecon{nbands}_noiselessTrue*.fits',
-                              recursive=True))
-nreals = len(fits_noise)
-print('nreals = ', nreals)
-
-# Get seen map (observed pixels)
-seenmap = rmc.get_seenmap(fits_noiseless[0])
-print('seenmap shape:', seenmap.shape)
-
-# Number of pixels and nside
-npix = seenmap.sum()
-
-# Get reconstructed maps
-qubicmaps = np.zeros((nreals, nbands, npix, 3))
-for i, real in enumerate(fits_noise):
-    qubicmaps[i], _, _ = rmc.get_maps(real)
-
-qubicmaps[qubicmaps == hp.UNSEEN] = 0.
-
-# Compute residuals in a given way
-residuals = amc.get_residuals(fits_noise, fits_noiseless[0], 'noiseless')
-print(residuals.shape)
-
-# There is only the patch so you need to put them in a full map to plot with healpy
-noisemaps = np.zeros_like(qubicmaps)
-noisemaps[:, :, seenmap, :] = residuals
+# rep_mapNERSC = f'/sps/hep/qubic/Users/lmousset/SpectroImaging/mapsfromNERSC/nfrecon{nbands}/'
+# fits_noise = np.sort(glob.glob(rep_mapNERSC + f'*nfrecon{nbands}_noiselessFalse*.fits',
+#                               recursive=True))
+# fits_noiseless = np.sort(glob.glob(rep_mapNERSC + f'*nfrecon{nbands}_noiselessTrue*.fits',
+#                               recursive=True))
+# nreals = len(fits_noise)
+# print('nreals = ', nreals)
+#
+# # Get seen map (observed pixels)
+# seenmap = rmc.get_seenmap(fits_noiseless[0])
+# print('seenmap shape:', seenmap.shape)
+#
+# # Number of pixels and nside
+# npix = len(seenmap)
+#
+# # Get reconstructed maps
+# qubicmaps = np.zeros((nreals, nbands, npix, 3))
+# for i, real in enumerate(fits_noise):
+#     qubicmaps[i], _, _ = rmc.get_maps(real)
+#
+# qubicmaps[qubicmaps == hp.UNSEEN] = 0.
+#
+# # Compute residuals in a given way
+# residuals = amc.get_residuals(fits_noise, fits_noiseless[0], 'noiseless')
+# print(residuals.shape)
+#
+# # There is only the patch so you need to put them in a full map to plot with healpy
+# noisemaps = np.zeros_like(qubicmaps)
+# noisemaps[:, :, seenmap, :] = residuals
 
 
 # ================== Power spectrum =============================
@@ -164,7 +165,6 @@ combi = list(combinations_with_replacement(np.arange(nbands), 2))
 ncombi = len(combi)
 print('combi:', combi)
 print('ncombi:', ncombi)
-
 
 # Cross spectrum between bands but same real
 print('\n =============== Cross spectrum same real starting ================')
@@ -200,19 +200,18 @@ for real in range(nreals):
                                                                                 purify_b=False,
                                                                                 beam_correction=beam_corr,
                                                                                 pixwin_correction=True)
-# np.save(
-#     rep_save + f'/cross_interband_samereal_nfrecon{nbands}_qubicmaps_' + config + '_v2_galaxycenter_' + rnd_name + '.npy',
-#     cross_samereal_qubicmaps)
-# np.save(
-#     rep_save + f'/cross_interband_samereal_nfrecon{nbands}_noisemaps_' + config + '_v2_galaxycenter_' + rnd_name + '.npy',
-#     cross_samereal_noisemaps)
-
 np.save(
-    rep_save + f'/IBCSsame_recon_{nbands}bands_150fullpipeline.npy',
+    rep_save + f'/IBCSsame_nfrecon{nbands}_qubicmaps_' + config + '_v3_galaxycenter_' + rnd_name + '.npy',
     cross_samereal_qubicmaps)
 np.save(
-    rep_save + f'IBCSsame_residu_{nbands}bands_150fullpipeline.npy',
+    rep_save + f'/IBCSsame_nfrecon{nbands}_noisemaps_' + config + '_v3_galaxycenter_' + rnd_name + '.npy',
     cross_samereal_noisemaps)
+
+# np.save(
+#     rep_save + f'/IBCSsame_recon_{nbands}bands_150fullpipeline.npy',
+#     cross_samereal_qubicmaps)
+# np.save(rep_save + f'/IBCSsame_residu_{nbands}bands_150fullpipeline.npy',
+#         cross_samereal_noisemaps)
 
 # Cross spectrum between bands with different real
 print('\n =============== Cross spectrum mixing reals starting ================')
@@ -254,17 +253,15 @@ for c1 in range(0, nreals - 1, 2):  # do not mix pairs to avoid correlation
                                                                                  pixwin_correction=True)
     cross += 1
 
-# np.save(
-#     rep_save + f'/cross_interband_mixreal_nfrecon{nbands}_qubicmaps_' + config + '_v2_galaxycenter_' + rnd_name + '.npy',
-#     cross_mixreals_qubicmaps)
-#
-# np.save(
-#     rep_save + f'/cross_interband_mixreal_nfrecon{nbands}_noisemaps_' + config + '_v2_galaxycenter_' + rnd_name + '.npy',
-#     cross_mixreals_noisemaps)
+np.save(
+    rep_save + f'/IBCSmix_nfrecon{nbands}_qubicmaps_' + config + '_v3_galaxycenter_' + rnd_name + '.npy',
+    cross_mixreals_qubicmaps)
 
 np.save(
-    rep_save + f'/IBCSmix_recon_{nbands}bands_150fullpipeline.npy',
-    cross_mixreals_qubicmaps)
-np.save(
-    rep_save + f'IBCSmix_residu_{nbands}bands_150fullpipeline.npy',
+    rep_save + f'/IBCSmix_nfrecon{nbands}_noisemaps_' + config + '_v3_galaxycenter_' + rnd_name + '.npy',
     cross_mixreals_noisemaps)
+
+# np.save(rep_save + f'/IBCSmix_recon_{nbands}bands_150fullpipeline.npy',
+#         cross_mixreals_qubicmaps)
+# np.save(rep_save + f'/IBCSmix_residu_{nbands}bands_150fullpipeline.npy',
+#         cross_mixreals_noisemaps)

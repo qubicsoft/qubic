@@ -49,7 +49,7 @@ print(global_dir)
 ```
 
 ```{python}
-config = 'FI150'
+config = 'FI220'
 nside = 256 # Define here to avoid loading a diccionary
 ```
 
@@ -100,7 +100,7 @@ print('Fsky: {}'.format(Namaster.fsky))
 with open(global_dir + '/doc/CAMB/camblib_0to1_step001.pkl', "rb") as file:
     camblib = pickle.load(file)
 [lll, rvalues, spec, specunlensed] = camblib
-print(rvalues)
+# print(rvalues)
 ```
 
 ```{python}
@@ -119,51 +119,135 @@ def myBBth(ell, r):
 ```
 
 ```{python}
-allLLH = []
-allsigma68, allsigma68_Fisher = [], []
-for nbands in [1, 2, 3, 4, 5, 8]:
-    print('\n nbands:', nbands)
-    # Possible combinations between bands
-    combi = list(combinations_with_replacement(np.arange(nbands), 2))
-    ncombi = len(combi)
-    print('combi:', combi)
-    print('ncombi:', ncombi)
-    
-    # Covariance noise matrices
-    BBcov = 4 * np.load('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/'
-                           + f'BBcovariance_bincross_nfrecon{nbands}_mixreal_' + config + '_v2_clean.npy')
-    
-    
-    # =================== Likelihood ========================
-    xvals = list(lll_b) * ncombi
+config
+```
 
-    fakedata = myBBth(lll_b, r=0.)
+```{python}
+nrun = 1
+LLH = np.zeros((nrun, 6, len(rvalues)))
+sigma68 = np.zeros((nrun, 6))
+sigma68_Fisher = np.zeros((nrun, 6))
 
-    error = BBcov#np.sqrt(np.diag(BBcov))
-    print(error.shape)
+factor = 10
+for r in range(nrun):
+    print(f'\n *************Run {r+1}/{nrun}*****************' )
+    for index, nbands in enumerate([1, 2, 3, 4, 5, 8]):
+        print('\n nbands:', nbands)
+        # Possible combinations between bands
+        combi = list(combinations_with_replacement(np.arange(nbands), 2))
+        ncombi = len(combi)
+        print('combi:', combi)
+        print('ncombi:', ncombi)
 
-    logLLH = mcmc.LogLikelihood(xvals=xvals, 
-                               yvals=fakedata, 
-                               errors=error,
-                               nbins=nbins,
-                               model=myBBth, 
-                               flatprior=[[0,1]], 
-                               covariance_model_funct=Namaster.knox_covariance)
+        # Covariance noise matrices
+    #     BBcov = 2 * np.load('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/'
+    #                            + f'BBcovariance_bincross_nfrecon{nbands}_samereal_' + config + '_v2_clean.npy')
+        BBcov = np.load('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/'
+                               + f'BBcovariance_bincross_nfrecon{nbands}_samereal_' + config + '_v4_clean.npy')
 
-    LLH, sigma68 = logLLH.compute_sigma68(logLLH, rvalues)
-    allLLH.append(LLH)
-    allsigma68.append(sigma68)
+        print(BBcov.shape)
 
-    # ====================== Fisher Analysis =======================
-    sigma68_Fisher = logLLH.fisher_analysis()
-    allsigma68_Fisher.append(sigma68_Fisher)
-    
+        # =================== Likelihood ========================
+        xvals = list(lll_b) * ncombi
 
+        fakedata = myBBth(lll_b, r=0.)
+        
+        
+#         for i in range(fakedata.shape[0]):
+# #             print(fakedata[i])
+#             fakedata[i] = np.random.normal(loc=fakedata[i], scale=np.sqrt(BBcov[i, i])/factor, size=None)
+# #             print(fakedata[i])
+
+        error = BBcov#np.sqrt(np.diag(BBcov))
+        print(error.shape)
+
+        logLLH = mcmc.LogLikelihood(xvals=xvals, 
+                                   yvals=fakedata, 
+                                   errors=error,
+                                   nbins=nbins,
+                                   model=myBBth, 
+                                   flatprior=[[0,1]], 
+                                   covariance_model_funct=Namaster.knox_covariance)
+
+        LLH[r, index, :] , sigma68[r, index] = logLLH.compute_sigma68(logLLH, rvalues)
+        
+
+        # ====================== Fisher Analysis =======================
+#         sigma68_Fisher[r, index] = logLLH.fisher_analysis()
+    print(sigma68[r, :])
+        
+        
+```
+
+```{python}
+datadir = os.environ['DATA_SPECTROIM']
+print(datadir)
+np.save(datadir + '/FastSimulator/sigma68pureCMB_samev4clean_theo_' + config + '.npy', sigma68[0, :])
+```
+
+```{python}
+sigma68_FI220_factor10 = np.load(datadir + '/FastSimulator/sigma68pureCMB_samev4clean_SigmaOver10_FI220.npy')
+sigma68_FI220_factor5 = np.load(datadir + '/FastSimulator/sigma68pureCMB_samev4clean_SigmaOver5_FI220.npy')
+
+sigma68_FI150_factor10 = np.load(datadir + '/FastSimulator/sigma68pureCMB_samev4clean_SigmaOver10_FI150.npy')
+```
+
+```{python}
+sigma68_FI220_factor10_avg = np.load(datadir + '/FastSimulator/sigma68pureCMB_samev4clean_theo_FI220.npy')
+sigma68_FI220_factor10_std = np.nanstd(sigma68_FI220_factor10, axis=0)
+
+sigma68_FI220_factor5_avg = np.load(datadir + '/FastSimulator/sigma68pureCMB_samev4clean_theo_FI220.npy')
+sigma68_FI220_factor5_std = np.nanstd(sigma68_FI220_factor5, axis=0)
+
+sigma68_FI150_factor10_avg = np.load(datadir + '/FastSimulator/sigma68pureCMB_samev4clean_theo_FI150.npy')
+sigma68_FI150_factor10_std = np.nanstd(sigma68_FI150_factor10, axis=0)
+```
+
+```{python}
+sigma68_FI150_factor10_std
+```
+
+```{python}
+allbands = [1, 2, 3, 4, 5, 8]
+
+plt.figure()
+# plt.title(config +  'BBcov')#$\sqrt{diag}$')
+plt.errorbar(allbands, 
+            sigma68_FI220_factor10_avg / sigma68_FI220_factor10_avg[0],
+            yerr=sigma68_FI220_factor10_std * 10,
+            fmt='bo',
+            ls="",
+            label='220 GHz')
+
+# plt.errorbar(allbands, 
+#             sigma68_FI220_factor5_avg / sigma68_FI220_factor5_avg[0],
+#             sigma68_FI220_factor5_std * 5,
+#             fmt='go',
+#             label='FI220 - factor5')
+
+
+plt.errorbar(np.array(allbands) + 0.01, 
+            sigma68_FI150_factor10_avg / sigma68_FI150_factor10_avg[0],
+            sigma68_FI150_factor10_std * 10,
+            fmt='ro',
+            label='150 GHz')
+
+
+plt.xlabel('Number of bands', fontsize=18)
+plt.ylabel(r'$\sigma (r)$ / $\sigma_{1band}(r)$ at 68% C.L.', fontsize=18)
+# plt.ylim(0.8, 1.4)
+plt.axhline(y=1, c='k', ls='--')
+plt.grid()
+plt.legend(loc='upper left', fontsize=18)
+
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/'+
+#             f'Likelihood_CMBonly_suboptimal_SameCleanv4.png', 
+#             bbox_inches='tight') 
 ```
 
 ```{python}
 x = np.linspace(0., 1, 10000)
-xlim = 0.4
+xlim = 0.2
 ```
 
 ```{python}
@@ -245,21 +329,6 @@ for i, nbands in enumerate([1, 2, 3, 4, 5, 8]):
     plt.ylabel('Posterior')
 
     plt.legend(fontsize=12)
-```
-
-```{python}
-allbands = [1, 2, 3, 4, 5, 8]
-
-plt.figure()
-# plt.title('Mix reals - With sample variance - Config FI-150')
-# plt.title('Do not mix reals - Debiased - With sample variance - Config FI-150')
-plt.plot(allbands, allsigma68, 'o', label='Likelihood')
-plt.plot(allbands, allsigma68_Fisher, 'o', label='Fisher')
-# plt.plot(allbands, np.sqrt(allbands)*allsigma68_Fisher[0], 'k--', label='$\sqrt{N}$')
-# plt.axhline(y=1, linestyle='--', color='k', label='$y = 1$')
-plt.legend()
-plt.xlabel('# of bands')
-plt.ylabel('$\sigma$')
 ```
 
 ```{python}

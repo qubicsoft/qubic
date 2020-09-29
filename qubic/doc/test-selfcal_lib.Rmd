@@ -51,6 +51,13 @@ dictfilename = basedir + '/dicts/global_source_oneDet.dict'
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 print(d['detarray'])
+print(d['MultiBand'])
+print(d['nf_sub'])
+
+d['MultiBand'] = False
+d['nf_sub'] = 1
+d['config'] = 'FI'
+d['beam_shape'] = 'gaussian'
 
 # Create an object
 baseline = [25, 57]
@@ -188,15 +195,16 @@ readv, labels = sc.make_labels(rep, nn=reso, img_size=2*radius)
 
 ```{python}
 print(labels.shape)
+plt.figure()
+plt.imshow(labels)
 ```
 
 ```{python}
-counts_perTES, sum_perTES, mean_perTES = sc.fulldef2tespixels(Sij[:, :, 0], labels)
+counts_perTES, sum_perTES, mean_perTES = sc.fulldef2tespixels(S[:, :, 0], labels)
 ```
 
 ```{python}
-fig = sc.make_plot_real_fp(readv, mean_perTES)
-
+fig = sc.make_plot_real_fp(readv, mean_perTES/np.max(mean_perTES), vmin=0, vmax=0.05)
 ```
 
 # Power on the focal plane with optical aberrations

@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -24,7 +24,7 @@ from importlib import reload
 # Specific science modules
 import healpy as hp
 import numpy as np
-import scipy
+from scipy import interpolate
 
 rc('figure', figsize=(16, 10))
 rc('font', size=15)
@@ -122,7 +122,7 @@ nn = np.linspace(130, 250, 1000)
 p1 = (em_chorillos[1]-em_chorillos[0])/(nus[1]-nus[0])
 p0 = em_chorillos[0]-p1*nus[0]
 
-f = scipy.interpolate.interp1d(nus, em_chorillos, fill_value="extrapolate")
+f = interpolate.interp1d(nus, em_chorillos, fill_value="extrapolate")
 
 print(p0,p1)
 plot(nus, em_chorillos, 'ro', label = 'from LLAMA Tipper')
@@ -133,7 +133,7 @@ legend()
 ```
 
 ```{python}
-
+scipy.__version__
 ```
 
 <!-- #region -->
@@ -227,6 +227,10 @@ for cc in configs:
 
     
 
+```
+
+```{python}
+s = qubic.QubicScene(d)
 ```
 
 ```{python}

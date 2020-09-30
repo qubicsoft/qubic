@@ -96,11 +96,8 @@ dFI['RA_center'],dFI['DEC_center'] = dTD['RA_center'],dTD['DEC_center']
 ```
 
 ```{python}
-<<<<<<< HEAD
 makeCovTD = False
-=======
-makeCovTD=False
->>>>>>> 9128a0b325b9bd5ca3c8a04e4205c5ccc94b174b
+
 if makeCovTD:
     covTD = make_covTD(dTD)
     coverageTD = np.sum(covTD, axis=0)# Sum the bands
@@ -188,77 +185,36 @@ dust_map_FI = np.zeros((dTD['nf_recon'], 12 * dTD['nside'] ** 2, 3))
 for i in range(dTD['nf_recon']):
     print('doing band {} {} {}'.format(i, nus_edge_out[i], nus_edge_out[i + 1]))
     inband = (nus > nus_edge_out[i]) & (nus < nus_edge_out[i + 1])
-<<<<<<< HEAD
-    #print(inband)
-=======
->>>>>>> 9128a0b325b9bd5ca3c8a04e4205c5ccc94b174b
     dust_map_TD[i, :, :] = np.mean(dust_map_TD_in[inband, :, :], axis=0)    
     dust_map_FI[i, :, :] = np.mean(dust_map_FI_in[inband, :, :], axis=0)
 ```
 
 ```{python}
 ##### Getting FastSimulator output maps
-<<<<<<< HEAD
 nreals=100
 noiseFI = np.zeros((nreals,dTD['nf_recon'], 12*dTD['nside']**2,3))
 
 for i in range(nreals):
     noiseFI[i, ...], coverageFI = \
         Qubic_sky_FI.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=coverageFI, 
-                                                    noise_only = True, Nyears=3)        
+                                                    noise_only = True, Nyears=1)        
     print('=== Done interation #{} ===='.format(i+1))
     gc.collect()
     
 ```
 
 ```{python}
-=======
-nreals=30
-noiseFI = np.zeros((nreals,dTD['nf_recon'], 12*dTD['nside']**2,3))
-#noiseTD = np.zeros_like(noiseTD)
-
-for i in range(nreals):
-    #noiseTD[i, ...], coverageTD = \
-    #    Qubic_sky_TD.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=coverageTD, 
-    #                                                only_noise = True, Nyears=1)
-    #print('=== Done (TD) interation #{} ===='.format(i+1))
-
-    noiseFI[i, ...], coverageFI = \
-        Qubic_sky_FI.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=coverageFI, 
-                                                    noise_only = True, Nyears=1)        
-    print('=== Done interation #{} ===='.format(i+1))
-    gc.collect()
-    
->>>>>>> 9128a0b325b9bd5ca3c8a04e4205c5ccc94b174b
 noisymapsTD = np.zeros_like(noiseFI)
 noisymapsFI = np.zeros_like(noiseFI)
 
 for i in range(nreals):
-<<<<<<< HEAD
     for j in range(dTD['nf_recon']):
         noisymapsTD[i, j, ...] = 31*noiseFI[i, j, ...] + dust_map_TD[j]
         noisymapsFI[i, j, ...] = noiseFI[i, j, ...] + dust_map_FI[j]
 #
 mapsTD_noiseFI, stdTD_nFI = np.mean(noisymapsTD, axis = 0), np.std(noisymapsTD, axis = 0)
 mapsFI, stdFI = np.mean(noisymapsFI, axis = 0), np.std(noisymapsFI, axis = 0)
-=======
-    noisymapsTD[i, ...] = 31*noiseFI[i, ...] + dust_map_TD
-    noisymapsFI[i, ...] = noiseFI[i, ...] + dust_map_FI
-#
-#mapsTD, stdTD=np.mean(noisymapsTD,axis=0), np.std(noisymapsTD,axis=0)
-mapsTD_noiseFI,stdTD_nFI = np.mean(noisymapsTD,axis=0), np.std(noisymapsTD,axis=0)
-#mapsTD_noiseFI_nc,stdTD_nFI_nc = np.mean(mcmcmapsTD_FI_nc,axis=0), np.std(mcmcmapsTD_FI_nc,axis=0)
-mapsFI, stdFI = np.mean(noisymapsFI,axis=0), np.std(noisymapsFI, axis=0)
 
-```
-
-```{python}
-gc.collect()
-```
-
-```{python}
-80*5*12*256**2*3*16/1024/1024/1024
->>>>>>> 9128a0b325b9bd5ca3c8a04e4205c5ccc94b174b
 ```
 
 noisyP = np.zeros((nreals, dTD['nf_recon'], 12 * dTD['nside'] ** 2))
@@ -288,27 +244,14 @@ RESO = 15
 mapsTD_noiseFI[NU,~cov,0] = hp.UNSEEN
 mapsFI[NU,~cov,0] = hp.UNSEEN
 
-<<<<<<< HEAD
 pol = True
 if pol:
     plt.figure(figsize = (12,8))
     #hp.gnomview(mapsP[NU], sub = (2,2,1), 
-    hp.gnomview(mapsTD_noiseFI[NU, : , STK], sub = (2,2,1), 
+    hp.gnomview(np.sqrt(mapsTD_noiseFI[NU, : , 1] ** 2 + mapsTD_noiseFI[NU, : , 2] ** 2), sub = (2,2,1), 
                 title = 'I_P', reso = RESO, rot = center)
     hp.gnomview(np.sqrt(mapsFI[NU,:,1]**2+mapsFI[NU,:,2]**2), sub=(2,2,2), 
                 title='FastSim FI', reso=RESO, rot=center)
-=======
-pol=False
-if pol:
-    plt.figure(figsize=(12,8))
-    hp.gnomview(np.sqrt(mapsTD_noiseFI[NU,:,1]**2+mapsTD_noiseFI[NU,:,2]**2), sub=(2,2,1), #max=1e2,
-                #max=0.1*np.max(mapsTD_noiseFI[NU,cov,STK]), 
-                title='FastSim TD(noiseFI conv) I_P', reso=RESO, rot=center)
-    hp.gnomview(np.sqrt(mapsFI[NU,:,1]**2+mapsFI[NU,:,2]**2), sub=(2,2,2), 
-                #max=0.1*np.max(maps_noiselessTD[NU,:,STK]), 
-                title='FastSim FI', reso=RESO, rot=center)
-    #hp.gnomview(cov, sub=(2,3,3), title='covmsk', reso=RESO, rot=center)
->>>>>>> 9128a0b325b9bd5ca3c8a04e4205c5ccc94b174b
 
     hp.gnomview(np.sqrt(dust_map_TD[NU,:,1]**2+dust_map_TD[NU,:,2]**2), 
                 sub=(2,2,3), title='noiseless TD', reso=RESO, rot=center)
@@ -316,20 +259,12 @@ if pol:
                 sub=(2,2,4), title='noiseless FI', reso=RESO, rot=center)
 elif not pol:
     plt.figure(figsize=(12,8))
-<<<<<<< HEAD
     hp.gnomview(mapsTD_noiseFI[NU,:,0], sub=(2,2,1), 
-=======
-    hp.gnomview(mapsTD_noiseFI[NU,:,0], sub=(2,2,1), #max=1e2,
->>>>>>> 9128a0b325b9bd5ca3c8a04e4205c5ccc94b174b
                 max=0.4*np.max(mapsTD_noiseFI[NU,cov,0]), 
                 title='FastSim TD I', reso=RESO, rot=center)
     hp.gnomview(mapsFI[NU,:,0], sub=(2,2,2), 
                 max=0.4*np.max(mapsFI[NU,:,0]), 
                 title='FastSim FI', reso=RESO, rot=center)
-<<<<<<< HEAD
-=======
-    #hp.gnomview(cov, sub=(2,3,3), title='covmsk', reso=RESO, rot=center)
->>>>>>> 9128a0b325b9bd5ca3c8a04e4205c5ccc94b174b
 
     hp.gnomview(dust_map_TD[NU,:,0], sub=(2,2,3), title='noiseless TD', reso=RESO, rot=center)
     hp.gnomview(dust_map_FI[NU,:,0], sub=(2,2,4), title='noiseless FI', reso=RESO, rot=center)
@@ -344,7 +279,6 @@ _,nus_edge,nus,_,_,_=qubic.compute_freq(dTD['filter_nu']/1e9, dTD['nf_recon'], d
 
 ```{python}
 IPIX = covmsk[0][11500] #almost center
-<<<<<<< HEAD
 mctest = True
 STK = 0
 dust_map_TD[0,~cov,0] = hp.UNSEEN
@@ -385,55 +319,6 @@ for j,IPIX in enumerate([384526, 401928,520725]):
                 rot = center)
     hp.projscatter(hp.pix2ang(dTD['nside'],IPIX), marker = '+', color = 'r',)
     #plt.savefig('FastSim-TD-Figs/new{}_1e4pntg'.format(IPIX),)#format='pdf')
-=======
-mctest=True
-STK=0
-dust_map_TD[0,~cov,0]=hp.UNSEEN
-mapsTD_noiseFI[0,~cov,0]=hp.UNSEEN
-plt.rc('font', size=15)
-factor=0.5
-#for j,ipx in enumerate(range(0,24000,2000)):
-for j,IPIX in enumerate([384526,]):#enumerate(range(401919,401930)):
-    fig,ax=plt.subplots(nrows=1,ncols=3,figsize=(16,7),)
-    ax=ax.ravel()
-    #IPIX = covmsk[0][ipx]
-    #gs = ax[0].get_gridspec()
-    # remove the underlying axes
-    #for iax in ax[0:2]:
-    #    iax.remove()
-    #axbig = fig.add_subplot(gs[0:2])
-    if mctest:
-        ax[0].errorbar(nus, dust_map_TD[:,IPIX,STK],lw=3,
-               fmt='o-',color='b',label='convolved', alpha=0.7)
-        ax[0].errorbar(nus, mapsTD_noiseFI[:,IPIX,STK],yerr=stdTD_nFI[:,IPIX,0],capsize=3 ,lw=3,
-               fmt='o-',color='r',label='reconstructed', alpha=0.7)
-        #ax[0].errorbar(nus, maps_noiselessFI[:,IPIX,0],yerr=stdTD_nFI_nc[:,IPIX,0], 
-        #       fmt='o-', color='r',label='noiseless FI', alpha=0.7)
-        #ax[0].plot(nus, maps_noiselessTD[:,IPIX,0],
-        #       'ro-',label='TD noiseless', alpha=0.8)
-        #ax[0].plot(nus, maps_noiselessFI[:,IPIX,0],
-        #       'bo-',label='FI noiseless', alpha=0.5)
-        ax[0].set_title('Dust - TD/FI pix {}'.format(IPIX),fontsize=15)
-    ax[0].set_ylabel(r'$I_\nu~[\mu$K]',fontsize=15)
-    ax[0].set_xlabel(r'$\nu~[GHz]$',fontsize=15)
-    ax[0].legend(loc='upper left',fontsize=14)
-    ax[0].grid()
-    plt.axes(ax[1])
-    hp.gnomview(dust_map_TD[0,:,STK], reso=15,hold=True,notext=True,title='Convolved',
-                max=factor*np.max(mapsTD_noiseFI[0,:,STK]),
-                cbar=True,
-                unit=r'$\mu$K',
-                rot=center)
-    hp.projscatter(hp.pix2ang(dTD['nside'],IPIX),marker='+',color='r',)
-    plt.axes(ax[2])
-    hp.gnomview(mapsTD_noiseFI[0,:,STK], reso=15,hold=True,notext=True,title='Reconstructed',
-                max=factor*np.max(mapsTD_noiseFI[0,:,STK]), 
-                cbar=True,
-                unit=r'$\mu$K',
-                rot=center)
-    hp.projscatter(hp.pix2ang(dTD['nside'],IPIX),marker='+',color='r',)
-    #plt.savefig('FastSim-TD-Figs/{}.svg'.format(IPIX),format='svg')
->>>>>>> 9128a0b325b9bd5ca3c8a04e4205c5ccc94b174b
 plt.show()
 #367111,384526,401915
 #436782, 349666
@@ -643,8 +528,8 @@ ax.view_init(30, 20)
 ## Udgrading maps
 
 ```{python}
-aux_map = np.copy(mapsTD_noiseFI)
-print(aux_map.shape)
+#aux_map = np.copy(mapsTD_noiseFI)
+#print(aux_map.shape)
 _,_,nus_rec,_,_,_ = qubic.compute_freq(150,5,0.25)
 ```
 
@@ -682,6 +567,16 @@ mapsFI_ud, stdFI_ud = np.mean(noisymapsFI_ud, axis = 0), np.std(noisymapsFI_ud, 
 ```
 
 ```{python}
+noisyP_ud = np.zeros((nreals, dTD['nf_recon'], 12 * nside_new ** 2))
+for i in range(nreals):
+    for j in range(dTD['nf_recon']):
+        noisyP_ud[i, j] = np.sqrt( (31 * noiseFI_ud[i, j, :, 1] + dust_map_TD_ud[j, :, 1])** 2 + \
+                                   (31 * noiseFI_ud[i, j, :, 2] + dust_map_TD_ud[j, :, 2])** 2 ) 
+mapsP_ud, stdP_ud =  np.mean(noisyP_ud, axis = 0), np.std(noisyP_ud, axis = 0)
+
+```
+
+```{python}
 #
 plt.figure(figsize = (14,6))
 hp.gnomview(mapsTD_noiseFI_ud[0, :, 0], sub = (221), 
@@ -705,14 +600,14 @@ for j,IPIX in enumerate([PixPix(384526), PixPix(401922), PixPix(520725)]):
     ax=ax.ravel()
 
     if mctest:
-        #ax[0].errorbar(nus, dust_map_TD_ud[:,IPIX,STK],lw = 3,
-        #       fmt = 'o-', color = 'b', label='convolved', alpha = 0.7)
-        #ax[0].errorbar(nus, mapsTD_noiseFI_ud[:,IPIX,STK],yerr = stdTD_nFI_ud[:,IPIX,0],
-        #               capsize = 3 ,lw = 3, fmt = 'o-', color = 'r',
-        #               label = 'reconstructed', alpha = 0.7)
-        ax[0].errorbar(nus, dust_map_TD_ud[:,IPIX,STK],yerr = stdTD_nFI_ud[:,IPIX,0],
+        ax[0].errorbar(nus, dust_map_TD_ud[:,IPIX,STK],lw = 3,
+               fmt = 'o-', color = 'b', label='convolved', alpha = 0.7)
+        ax[0].errorbar(nus, mapsTD_noiseFI_ud[:,IPIX,STK],yerr = stdTD_nFI_ud[:,IPIX,0],
                        capsize = 3 ,lw = 3, fmt = 'o-', color = 'r',
                        label = 'reconstructed', alpha = 0.7)
+        #ax[0].errorbar(nus, dust_map_TD_ud[:,IPIX,STK],yerr = stdTD_nFI_ud[:,IPIX,0],
+        #               capsize = 3 ,lw = 3, fmt = 'o-', color = 'r',
+        #               label = 'reconstructed', alpha = 0.7)
         ax[0].set_title('Dust - TD/FI pix {}'.format(IPIX), fontsize = 15)
     ax[0].set_ylabel(r'$I_\nu~[\mu$K]', fontsize = 15)
     ax[0].set_xlabel(r'$\nu~[GHz]$', fontsize = 15)

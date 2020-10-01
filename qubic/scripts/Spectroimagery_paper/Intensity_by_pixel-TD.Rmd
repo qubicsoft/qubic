@@ -79,10 +79,10 @@ def make_covTD(d):
     cov = arec.get_coverage()
     return cov
 def save_covTD(cov, savedir=os.environ['QUBIC_DATADIR']+'doc/'):
-    hdu_primary = fits.PrimaryHDU()
+    #hdu_primary = fits.PrimaryHDU()
     hdu_cov = fits.ImageHDU(data=cov, name='coverage')
     
-    thefile = fits.HDUList([hdu_primary, hdu_cov])
+    thefile = fits.HDUList([hdu_cov])
     thefile.writeto('')
 ```
 
@@ -109,8 +109,17 @@ else:
 ```
 
 ```{python}
+cov=np.zeros_like(coverageTD,dtype=bool)
+covmsk=coverageTD > 0.1*np.max(coverageTD)
+coverageTD[~covmsk] = 0
+```
+
+```{python}
 #just used to compare, after is defined coverageFI. Depends if cengal is T or F
-covFI = np.load(global_dir+'/doc/FastSimulator/Data/coverage_nfsub15_nptgs10000_qubicpatch.pk')
+covFI = np.load(global_dir+'doc/FastSimulator/Data/coverage_nfsub15_nptgs10000_qubicpatch.pk')
+cov=np.zeros_like(covFI,dtype=bool)
+covmskFI=covFI > 0.1*np.max(covFI)
+covFI[~covmskFI] = 0
 ```
 
 ```{python}
@@ -121,16 +130,17 @@ X,Y=np.meshgrid(range(200), range(200))
 
 fig = plt.figure(figsize=(18,6))
 ax = fig.add_subplot(1, 3, 1, projection='3d')
-ax.set_title('covTD {}pntgs'.format(dTD['npointings']), fontsize=16)
+ax.set_title('coverage TD ({})'.format(dTD['npointings']), fontsize=16)
 ax.plot_surface(X,Y, lacarte, cmap=plt.cm.viridis, linewidth=0.2)
 
 ax = fig.add_subplot(1, 3, 2, projection='3d')
-ax.set_title('covFI 10000pntgs', fontsize=16)
+ax.set_title('coverage FI (10000)', fontsize=16)
 ax.plot_surface(X,Y, lacarteFI, cmap=plt.cm.viridis, linewidth=0.2)
 
 ax = fig.add_subplot(1, 3, 3, projection='3d')
 ax.set_title('Diff = covTD-covFI', fontsize=16)
 ax.plot_surface(X,Y, lacarte-lacarteFI, cmap=plt.cm.viridis, linewidth=0.2)
+#plt.savefig('coverage_TD1e4-FI1e4_cut.pdf',format='pdf')
 ```
 
 ```{python}
@@ -185,6 +195,7 @@ dust_map_FI = np.zeros((dTD['nf_recon'], 12 * dTD['nside'] ** 2, 3))
 for i in range(dTD['nf_recon']):
     print('doing band {} {} {}'.format(i, nus_edge_out[i], nus_edge_out[i + 1]))
     inband = (nus > nus_edge_out[i]) & (nus < nus_edge_out[i + 1])
+
     dust_map_TD[i, :, :] = np.mean(dust_map_TD_in[inband, :, :], axis=0)    
     dust_map_FI[i, :, :] = np.mean(dust_map_FI_in[inband, :, :], axis=0)
 ```
@@ -214,7 +225,6 @@ for i in range(nreals):
 #
 mapsTD_noiseFI, stdTD_nFI = np.mean(noisymapsTD, axis = 0), np.std(noisymapsTD, axis = 0)
 mapsFI, stdFI = np.mean(noisymapsFI, axis = 0), np.std(noisymapsFI, axis = 0)
-
 ```
 
 noisyP = np.zeros((nreals, dTD['nf_recon'], 12 * dTD['nside'] ** 2))
@@ -268,13 +278,17 @@ elif not pol:
 
     hp.gnomview(dust_map_TD[NU,:,0], sub=(2,2,3), title='noiseless TD', reso=RESO, rot=center)
     hp.gnomview(dust_map_FI[NU,:,0], sub=(2,2,4), title='noiseless FI', reso=RESO, rot=center)
-
 ```
 
 ```{python}
 _,nus_edge,nus,_,_,_=qubic.compute_freq(dTD['filter_nu']/1e9, dTD['nf_recon'], dTD['filter_relative_bandwidth'] )
 #_,nus_edge_in,nus_in,_,_,_=qubic.compute_freq(d['filter_nu']/1e9, d['nf_sub'], 
 #                                              d['filter_relative_bandwidth'] )
+```
+
+```{python}
+IPIX = covmsk[0][-400]
+print(IPIX)
 ```
 
 ```{python}
@@ -319,9 +333,8 @@ for j,IPIX in enumerate([384526, 401928,520725]):
                 rot = center)
     hp.projscatter(hp.pix2ang(dTD['nside'],IPIX), marker = '+', color = 'r',)
     #plt.savefig('FastSim-TD-Figs/new{}_1e4pntg'.format(IPIX),)#format='pdf')
+
 plt.show()
-#367111,384526,401915
-#436782, 349666
 ```
 
 #### Do same plots averaging and/or computing rms in maps
@@ -412,7 +425,7 @@ deltab=np.deg2rad(12)
 for i in np.arange(np.pi/2-deltab,np.pi/2+deltab,0.002):
     #print(i)
     hp.projscatter(np.array([i,0]),marker='+',c='r',s=2)
-#plt.savefig('FastSim-TD-Figs/Cut_region_100real_1e4pntg.svg',format='svg')
+#plt.savefig('FastSim-TD-Figs/overview-region.pdf',format='pdf')
 ```
 
 ```{python}
@@ -518,7 +531,187 @@ ax.set_zlabel(r'$I_{\nu}~[\mu K]$',fontsize=17, labelpad=25, rotation=0,)
 
 ax.view_init(30, 20)
 
-#plt.savefig('FastSim-TD-Figs/TD-region_100real_1e4.svg',format='svg')
+#plt.savefig('FastSim-TD-Figs/overview2-TD-region.pdf',format='pdf')
+```
+
+## Udgrading maps
+
+```{python}
+aux_map = np.copy(mapsTD_noiseFI)
+print(aux_map.shape)
+_,_,nus_rec,_,_,_ = qubic.compute_freq(150,5,0.25)
+```
+
+```{python}
+nside_new = 8
+noiseFI_ud = np.zeros((nreals, len(nus_out), 12 * nside_new ** 2, 3))
+#noisymapsFI_ud = np.zeros_like(noisymapsTD_ud)
+
+for ireal in range(nreals):
+    for irec in range(len(nus_out)):
+        noiseFI_ud[ireal, irec] = hp.ud_grade(noiseFI[ireal, irec].T, nside_new).T
+        #noisymapsFI_ud = hp.ud_grade(noisymapsFI[ireal, irec].T, nside_new).T
+#
+dust_map_TD_ud = np.zeros((len(nus_out), 12 * nside_new ** 2, 3))
+dust_map_FI_ud = np.zeros_like(dust_map_TD_ud)
+for irec in range(len(nus_out)):
+    dust_map_TD_ud[irec] = hp.ud_grade(dust_map_TD[irec].T, nside_new).T
+    dust_map_FI_ud[irec] = hp.ud_grade(dust_map_FI[irec].T, nside_new).T
+#
+coverageFI_ud = hp.ud_grade(coverageFI, nside_new)
+
+noisymapsTD_ud, noisymapsFI_ud = np.zeros_like(noiseFI_ud), np.zeros_like(noiseFI_ud) 
+
+print(np.shape(noiseFI_ud), np.shape(dust_map_FI_ud), np.shape(dust_map_TD_ud))
+
+for i in range(nreals):
+    for j in range(len(nus_out)):
+        noisymapsTD_ud[i,j,...] = 31*noiseFI_ud[i,j,...] + dust_map_TD_ud[j]
+        noisymapsFI_ud[i,j,...] = noiseFI_ud[i,j,...] + dust_map_FI_ud[j]
+#
+mapsTD_noiseFI_ud, stdTD_nFI_ud = np.mean(noisymapsTD_ud, axis = 0), np.std(noisymapsTD_ud, axis = 0)
+
+mapsFI_ud, stdFI_ud = np.mean(noisymapsFI_ud, axis = 0), np.std(noisymapsFI_ud, axis = 0)
+
+```
+
+```{python}
+# Decrease NSIDE
+nside_new = 8
+
+#maps_recon_dgrad = np.zeros((len(nus_rec), 12*nside_new**2, 3))
+#for nu in range(len(nus_rec)):
+#    for istk in range(3):
+#        maps_recon_dgrad[nu, :, istk] = hp.ud_grade(aux_map[nu, :, istk], nside_new)
+#
+#maps_conv_dgrad = np.zeros((len(nus_rec), 12*nside_new**2, 3))
+#for nu in range(len(nus_rec)):
+#    for istk in range(3):
+#        maps_conv_dgrad[nu, :, istk] = hp.ud_grade(dust_map_TD[nu, :, istk], nside_new)
+#
+plt.figure(figsize = (14,6))
+hp.gnomview(mapsTD_noiseFI_ud[0, :, 0], sub = (221), 
+            reso = 10, title = 'Recon. Ud')
+hp.gnomview(mapsTD_noiseFI[0, :, 0], sub = (222), 
+            reso = 10, title = 'Recon. No_ud')
+hp.gnomview(dust_map_TD_ud[0, :, 0], sub = (223), 
+            reso = 10, title = 'Conv. Ud')
+hp.gnomview(dust_map_TD[0, :, 0], sub = (224), 
+            reso = 10, title = 'Conv. No_ud')
+
+
+```
+
+```{python}
+PixPix = lambda p: hp.ang2pix(nside_new, hp.pix2ang(dTD['nside'], p)[0], hp.pix2ang(dTD['nside'], p)[1] )
+```
+
+```{python}
+for j,IPIX in enumerate([PixPix(384526), PixPix(401922), PixPix(520725)]):
+    fig,ax=plt.subplots(nrows=1,ncols=3,figsize=(16,7),)
+    ax=ax.ravel()
+
+    if mctest:
+        ax[0].errorbar(nus, dust_map_TD_ud[:,IPIX,STK],lw = 3,
+               fmt = 'o-', color = 'b', label='convolved', alpha = 0.7)
+        ax[0].errorbar(nus, mapsTD_noiseFI_ud[:,IPIX,STK],yerr = stdTD_nFI_ud[:,IPIX,0],
+                       capsize = 3 ,lw = 3, fmt = 'o-', color = 'r',
+                       label = 'reconstructed', alpha = 0.7)
+        ax[0].set_title('Dust - TD/FI pix {}'.format(IPIX), fontsize = 15)
+    ax[0].set_ylabel(r'$I_\nu~[\mu$K]', fontsize = 15)
+    ax[0].set_xlabel(r'$\nu~[GHz]$', fontsize = 15)
+    ax[0].legend(loc = 'upper left', fontsize = 14)
+    ax[0].grid()
+    plt.axes(ax[1])
+    hp.gnomview(dust_map_TD_ud[0,:,STK], reso = 15, hold = True, notext = True,
+                title = 'Convolved',
+                max = factor*np.max(mapsTD_noiseFI_ud[0,:,STK]),
+                cbar = True,
+                unit = r'$\mu$K',
+                rot = center)
+    hp.projscatter(hp.pix2ang(nside_new, IPIX), marker = '+', color = 'r',)
+    plt.axes(ax[2])
+    hp.gnomview(mapsTD_noiseFI_ud[0,:,STK], reso = 15, hold = True, notext = True, 
+                title = 'Reconstructed',
+                max = factor * np.max(mapsTD_noiseFI_ud[0,:,STK]), 
+                cbar = True,
+                unit = r'$\mu$K',
+                rot = center)
+    hp.projscatter(hp.pix2ang(nside_new,IPIX),marker='+',color='r',)
+    plt.savefig('FastSim-TD-Figs/ud_new{}.pdf'.format(IPIX),format='pdf')
+plt.show()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+help(ax.plot_trisurf)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+from importlib import reload
+reload(qss)
+noiseTD, _ = Qubic_sky_TD.get_partial_sky_maps_withnoise(coverage=coverageTD, Nyears=4., verbose=False, 
+                                       spatial_noise=False,noise_only=True)
+noiseFI, _ = Qubic_sky_FI.get_partial_sky_maps_withnoise(coverage=coverageFI, Nyears=4., verbose=False, 
+                                       spatial_noise=False,noise_only=True)
+        
+
+
+hp.gnomview(noiseTD[0,:,0],rot=center, sub=(121),reso=13)
+hp.gnomview(noiseFI[0,:,0],rot=center, sub=(122),reso=13)
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 ```{python}

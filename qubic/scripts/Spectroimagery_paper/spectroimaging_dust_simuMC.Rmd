@@ -58,14 +58,15 @@ rc('font', size=20)
 ```{python}
 # Get the files
 datadir = os.environ['DATA_SPECTROIM']
-# rep = datadir + 'simu_TD/'
-# rep = datadir + 'simu_FI220/'
-# rep = datadir + 'simu_FI150/'
 
-nfrecon = 3
-rep = datadir + '/simu_nersc_dust_fullpipeline' + f'/nfrecon{nfrecon}/'
 
-dictionary = glob.glob(rep + '/*.dict')[0]
+nfrecon = 5
+freq = 220 # GHz
+rep = datadir + f'/NERSC_simuEnd2End/Good_photon_noise2020/simu_FI{freq}/'
+# rep = datadir + f'/NERSC_simuEnd2End/Good_photon_noise2020/simu_NERSC_MC/FI{freq}/galaxycenter_3bandes/'
+# rep = datadir + f'/NERSC_simuEnd2End/Good_photon_noise2020/simu_NERSC_MC/FI{freq}/qubicpatch/'
+
+dictionary = glob.glob(rep + '*.dict')[0]
 print(dictionary)
 
 # Dictionary saved during the simulation
@@ -81,14 +82,7 @@ fits_noise = np.sort(glob.glob(rep + '*nfrecon{}_noiselessFalse*.fits'.format(nf
 fits_noiseless = np.sort(glob.glob(rep + '*nfrecon{}_noiselessTrue*.fits'.format(nfrecon), 
                               recursive=True))
 
-# print(fits_noise, fits_noiseless)
-```
-
-```{python}
-# Frequencies of the reconstructed subbands
-Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(150, nfrecon)
-print(nus)
-print(nus_edge)
+print(fits_noise, fits_noiseless)
 ```
 
 ```{python}
@@ -106,7 +100,7 @@ print(npix)
 ns = d['nside']
 
 # Central frequencies and FWHM of each band
-_, _, nus, _, _, _ = compute_freq(150, nfrecon)
+_, _, nus, _, _, _ = compute_freq(freq, nfrecon)
 print('nus:', nus)
 fwhms = [d['synthbeam_peak150_fwhm'] * 150 / nu for nu in nus]
 print('fwhms', fwhms)
@@ -146,27 +140,55 @@ maps_residu[:, :, seenmap, :] = residuals
 ```
 
 ```{python}
+stokes = ['I', 'Q', 'U']
+istk = 1
+real = 0
+plt.figure(figsize=(22, 30))
+rr = 15
+min = -50
+max = 150
+
+center = (0, 0)
+# Plot for spectroim paper
+for band in range(nfrecon):
+    hp.gnomview(maps_conv[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+1), 
+                rot=center, reso=rr,
+                title = 'Input - {}'.format(d['kind'][istk]), unit='$\mu K$', min=min, max=max)
+    plt.text(-1, 0., '{:3.0f} GHz'.format(nus[band]), fontsize=30)
+    hp.gnomview(maps_recon[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+2), 
+                rot=center, reso=rr,
+                title = 'Output - {0}'.format(d['kind'][istk]), unit='$\mu K$', min=min, max=max)
+    hp.gnomview(maps_residu[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+3), 
+                rot=center, reso=rr,
+                title = 'Residuals - {0}'.format(d['kind'][istk]), unit='$\mu K$', min=-90, max=90)
+# plt.tight_layout()
+plt.savefig(f'/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/maps{stokes[istk]}_FI220_{nfrecon}bands_GoodPhotonNoise.pdf',
+           bbox_inches='tight')
+```
+
+```{python}
 istk = 0
 real = 0
-plt.figure(figsize=(25, 25))
+plt.figure(figsize=(30, 10))
+
 rr = 15
 min = 0
 max = 1e4
 
 # Plot for spectroim paper
-for band in range(nfrecon):
-    hp.gnomview(maps_conv[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+1), 
+for band in range(1):
+    hp.gnomview(maps_conv[real, band, :, istk], cmap='jet', sub=(1, 3, band+1), 
                 rot=(0, 0), reso=rr,
                 title = 'Input - {}'.format(d['kind'][istk]), unit='$\mu K$', min=min, max=max)
-    plt.text(-0.9,0., '{:3.0f} GHz'.format(nus[band]), fontsize=30)
-    hp.gnomview(maps_recon[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+2), 
+    plt.text(-1,0., '{:3.0f} GHz'.format(nus[band]), fontsize=30)
+    hp.gnomview(maps_recon[real, band, :, istk], cmap='jet', sub=(1, 3, band+2), 
                 rot=(0, 0), reso=rr,
                 title = 'Output - {0}'.format(d['kind'][istk]), unit='$\mu K$', min=min, max=max)
-    hp.gnomview(maps_residu[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+3), 
+    hp.gnomview(maps_residu[real, band, :, istk], cmap='jet', sub=(1, 3, band+3), 
                 rot=(0, 0), reso=rr,
-                title = 'Residuals - {0}'.format(d['kind'][istk]), unit='$\mu K$', min=-40, max=40)
+                title = 'Residuals - {0}'.format(d['kind'][istk]), unit='$\mu K$', min=-50, max=50)
 plt.tight_layout()
-# plt.savefig(f'/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/mapsI_FI220_{nfrecon}bands.pdf')
+# plt.savefig(f'/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/mapsQ_FI220_{nfrecon}bands_firstband.pdf')
 ```
 
 #### Difference between mean_recon and noiseless
@@ -219,10 +241,8 @@ Here we save the files that will be used to create data for FastSimulator
 
 ```{python}
 # rep_save = datadir + 'Data_for_FastSimulator/'
-# # rep = datadir + 'simu_TD/'
-# # rep = datadir + 'simu_FI220/'
-# rep = datadir + 'simu_FI150/'
 
+# rep = datadir + '/NERSC_simuEnd2End/Good_photon_noise2020/simu_FI220/'
 
 # for nfrecon in [1, 2, 3, 4, 5, 8]:
 
@@ -236,19 +256,19 @@ Here we save the files that will be used to create data for FastSimulator
 #     # Get seen map (observed pixels)
 #     seenmap = rmc.get_seenmap(fits_noiseless[0])
 #     print('seenmap shape:', seenmap.shape)
-#     np.save(rep_save + f'seenmap_{nfrecon}bands_FI150.npy', seenmap)
+#     np.save(rep_save + f'seenmap_{nfrecon}bands_FI220.npy', seenmap)
     
 #     # Get the coverage
 #     fitsfile = fits.open(fits_noise[0])
 #     coverage = fitsfile['COVERAGE'].data
 #     coverage_patch = coverage[seenmap]
 #     coverage_norm = coverage_patch / np.max(coverage_patch)
-#     np.save(rep_save + f'coverage_{nfrecon}bands_FI150.npy', coverage_norm)
+#     np.save(rep_save + f'coverage_{nfrecon}bands_FI220.npy', coverage_norm)
 
    
 #     # Compute residuals in a given way
 #     residuals = amc.get_residuals(fits_noise, fits_noiseless[0], 'noiseless')
-#     np.save(rep_save + f'residuals_{nfrecon}bands_FI150.npy', residuals[0])
+#     np.save(rep_save + f'residuals_{nfrecon}bands_FI220.npy', residuals[0])
 #     print(residuals.shape)
 
 ```
@@ -297,7 +317,7 @@ print('combi:', combi)
 print('ncombi:', ncombi)
 
 # Frequency combinations for the plot labels
-Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(150, nfrecon)
+Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(freq, nfrecon)
 print(nus) 
 combi_nus = list(combinations_with_replacement(nus, 2))
 print(combi_nus)
@@ -381,8 +401,13 @@ for real in range(nreals):
 # Save IBCS
 rep_save = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/Simu_spectroim/simu_nersc_dust_fullpipeline/IBCS_fullpipeline/'
 
-np.save(rep_save + f'IBCSsame_recon_{nfrecon}bands_150fullpipeline.npy', IBCSsame_recon)
-np.save(rep_save + f'IBCSsame_residu_{nfrecon}bands_150fullpipeline.npy', IBCSsame_residu)
+# np.save(rep_save + f'IBCSsame_recon_{nfrecon}bands_150fullpipeline.npy', IBCSsame_recon)
+# np.save(rep_save + f'IBCSsame_residu_{nfrecon}bands_150fullpipeline.npy', IBCSsame_residu)
+```
+
+```{python}
+IBCSsame_recon = np.load(rep_save + f'IBCSsame_recon_{nfrecon}bands_150fullpipeline.npy')
+IBCSsame_residu = np.load(rep_save + f'IBCSsame_residu_{nfrecon}bands_150fullpipeline.npy')
 ```
 
 ```{python}
@@ -477,8 +502,16 @@ for c1 in range(0, nreals - 1, 2):  # do not mix pairs to avoid correlation
 
 ```{python}
 # Save IBCS
-np.save(rep_save + f'IBCSmix_recon_{nfrecon}bands_150fullpipeline.npy', IBCSmix_recon)
-np.save(rep_save + f'IBCSmix_residu_{nfrecon}bands_150fullpipeline.npy', IBCSmix_residu)
+np.save(rep + f'IBCSmix_recon_{nfrecon}bands_220fullpipeline_galaxycenter_2years.npy', IBCSmix_recon)
+np.save(rep + f'IBCSmix_residu_{nfrecon}bands_220fullpipeline_galaxycenter_2years.npy', IBCSmix_residu)
+```
+
+```{python}
+# IBCSmix_recon = np.load(rep_save + f'IBCSmix_recon_{nfrecon}bands_150fullpipeline.npy')
+# IBCSmix_residu = np.load(rep_save + f'IBCSmix_residu_{nfrecon}bands_150fullpipeline.npy')
+
+IBCSmix_recon = np.load(rep + f'IBCSmix_recon_{nfrecon}bands_{freq}fullpipeline_galaxycenter_2years.npy')
+IBCSmix_residu = np.load(rep + f'IBCSmix_residu_{nfrecon}bands_{freq}fullpipeline_galaxycenter_2years.npy')
 ```
 
 ```{python}
@@ -522,9 +555,9 @@ for i in range(4):
     ax.grid()
 
 plt.tight_layout()
-plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/'+
-            'IBCSmix_{}bands_recon_galaxydustFullpipeline.pdf'.format(nfrecon),
-            bbox_inches='tight')
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/'+
+#             'IBCSmix_{}bands_recon_galaxydustFullpipeline.pdf'.format(nfrecon),
+#             bbox_inches='tight')
 ```
 
 ```{python}
@@ -547,13 +580,14 @@ for cross in range(ncombi):
 ax.set_xlabel('$\\ell$')
 ax.set_ylabel('$D_\\ell$')
 ax.legend(fontsize=12, loc='upper center')
-ax.set_title(clnames[2])
+ax.set_title(clnames[2] + f' - {freq} GHz')
 ax.grid()
+# ax.set_ylim(-10, 25)
 
 plt.tight_layout()
-plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/'+
-            'IBCSmixBB_{}bands_recon_galaxydustFullpipeline.pdf'.format(nfrecon),
-            bbox_inches='tight')
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/'+
+#             f'IBCSmixBB_{nfrecon}bands_recon_galaxydustFullpipeline{freq}_goodPhotonNoise.pdf',
+#             bbox_inches='tight')
 ```
 
 ```{python}

@@ -32,12 +32,15 @@ from qubicpack.utilities import Qubic_DataDir
 import qubic
 import os
 import sys
+import time
+
 import pickle as pk
 import numpy as np
 import glob
 from astropy.io import fits
 import gc
 
+from lmfit.model import save_modelresult
 from scipy.optimize import curve_fit
 from importlib import reload
 import AnalysisPSF as anpsf
@@ -47,6 +50,8 @@ from matplotlib.patches import Ellipse
 import AnalysisPSF as anpsf
 from importlib import reload
 from lmfit import Model
+#from scipy.stats import median_abs_deviation as mad
+import scipy.stats as sc
 ```
 
 ```{python}
@@ -113,7 +118,7 @@ def read_run(jobid, repo=None, fixpar=True):
     center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
     if fixpar:
         d['nf_sub']=48
-        d['nf_recon'] = [6,]#6] 
+        d['nf_recon'] = [2,3,4,]#6] 
     #nsub = d['nf_recon'][-1]
     
     _,_,nus_in,_,_,_=qubic.compute_freq(150,d['nf_sub'],0.25)
@@ -148,7 +153,8 @@ def read_run(jobid, repo=None, fixpar=True):
 #jobids = ['32139830', '32140318','32139772', '32140658'] #[12,15,20,25]
 #jobids= ['32759969','32759907',#'32574156','32574178', 
 #          '32574170','32759934',]#'32574174','32759973'] #[48,48]|[1,2,3,4,6]
-dictshift = {'33409471':-15,'33409418':-13,'33130322':-11,'33130175':-9,
+dictshift = {'34245779': -23, '34245774': -21,'34145323':-19,'34145299':-17, 
+             '33409471':-15,'33409418':-13, '33130322':-11,'33130175':-9,
              '32832344':-7, '33130311':-5, '32759969':-4,'32759907':-3, 
              '32574156':-2, '32574178':-1,'32574170':0, '32759934': 1,
              '32574174': 2, '32759973':3, '33130307':5, '32832346':7, 
@@ -214,17 +220,17 @@ pixel=pixel
 
 #fig,ax=plt.subplots(nrows=2,ncols=d['nf_recon'][-1]//2,
 #                   figsize=(20,14))
-fig,ax=plt.subplots(nrows=1,ncols=1,
+fig,ax=plt.subplots(nrows=1,ncols=3,
                    figsize=(20,6))
-#ax=ax.ravel()
-ax = [ax,]
+ax=ax.ravel()
+#ax = [ax,]
 snr = {}
 nreal=0
 color=iter(cm.rainbow(np.linspace(0,1,len(dictshift)+1 )))
 plt.rc('text',usetex=False)
 plt.rc('font', size=15)
 
-for j,isub in enumerate([6,]):
+for j,isub in enumerate([2,3,4,]):
     idx='{}'.format(isub)
     ax[j].set_title(r'Rel. intensity nfrec={}'.format(isub))
     ax[j].set_xlabel(r'$\nu[GHz]$')
@@ -244,7 +250,7 @@ for j,isub in enumerate([6,]):
                 c2=next(color2)
                 pass
             else:
-                m=next(markers)
+                m='o'#next(markers)
                 c2=next(color2)
                 ax[j].plot(nusfull[idx][k], irecon[idx][nreal,k,pixel,0]*NormFact/1e5, 
                            marker=m, color=c2, ms=8 )
@@ -284,7 +290,7 @@ See the profile of the reconstructed maps for each frequency....
 See the distance to the edge (freq where was placed the ps - the edge closest to that frequency) vs. intensity 
 
 ```{python}
-for NUS in ['6',]:#'6']:#NUS='6'
+for NUS in ['2','4']:#'6']:#NUS='6'
     #print('NUS = {}'.format(NUS))
     NormFact2=1#48/int(NUS)
     fig,ax=plt.subplots(nrows=1,ncols=2,figsize=(12,4))
@@ -356,11 +362,13 @@ print('{:.2f}hs'.format(np.sum(t4[1:-1])), 2666/60)
 ```
 
 ```{python}
-for NUS in ['3']:
+for NUS in ['2']:
     NormFact2=1#48/int(NUS)
     fig,ax=plt.subplots(nrows=1,ncols=1,figsize=(6,4))
     ax=[ax,]
     if NUS=='1':
+        use = [0,]
+    elif NUS == '2':
         use = [0,]
     elif NUS=='3':
         use = [1,]
@@ -403,32 +411,6 @@ for NUS in ['3']:
         ax[j].grid()
 ```
 
-NEWX=[all_toFitX[3][0],all_toFitX[3][1],all_toFitX[3][2],all_toFitX[3][3],all_toFitX[3][4],all_toFitX[3][5],all_toFitX[3][6],all_toFitX[3][7],all_toFitX[3][8],
-      all_toFitX[3][9],all_toFitX[3][10],all_toFitX[3][11],all_toFitX[3][12],all_toFitX[3][13],#all_toFitX[2][1:4],
-all_toFitX[2][4],all_toFitX[2][5], all_toFitX[2][6],all_toFitX[2][7],all_toFitX[2][8],
-      all_toFitX[2][9], all_toFitX[2][10],all_toFitX[2][11],
-      
-all_toFitX[1][2],all_toFitX[1][3],all_toFitX[1][4], all_toFitX[1][5],all_toFitX[1][6],
-all_toFitX[1][7],all_toFitX[1][8],all_toFitX[1][9],all_toFitX[1][10],all_toFitX[1][11],
-
-      all_toFitX[0][2],all_toFitX[0][3],all_toFitX[0][4],all_toFitX[0][5],all_toFitX[0][6],all_toFitX[0][7],all_toFitX[0][8],all_toFitX[0][9], all_toFitX[0][10],
-all_toFitX[0][11],all_toFitX[0][12],all_toFitX[0][13],all_toFitX[0][14],all_toFitX[0][15],all_toFitX[0][16],all_toFitX[0][17]
-     ]
-
-NEWY=[all_toFitY[3][0],all_toFitY[3][1],all_toFitY[3][2],all_toFitY[3][3],all_toFitY[3][4],all_toFitY[3][5],all_toFitY[3][6],all_toFitY[3][7],all_toFitY[3][8],
-      np.mean([all_toFitY[3][9],all_toFitY[2][0]]),all_toFitY[3][10], np.mean([all_toFitY[3][11],all_toFitY[2][1]]),np.mean([all_toFitY[3][12],all_toFitY[2][2]]),np.mean([all_toFitY[3][13],all_toFitY[2][3]]),
-      all_toFitY[2][4], 
-np.mean([all_toFitY[2][5],all_toFitY[3][14]]), all_toFitY[2][6], np.mean([all_toFitY[2][7],all_toFitY[3][15]]),
-all_toFitY[2][8],
-      np.mean([all_toFitY[2][9],all_toFitY[3][16],all_toFitY[1][0]]),all_toFitY[2][10],np.mean([all_toFitY[2][11],all_toFitY[3][17],all_toFitY[1][1]]),
-
-      np.mean([all_toFitY[1][2],all_toFitY[2][12]]),np.mean([all_toFitY[1][3],all_toFitY[2][13]]), all_toFitY[1][4],np.mean([all_toFitY[1][5],all_toFitY[2][14]]),all_toFitY[1][6],
-np.mean([all_toFitY[1][7],all_toFitY[2][15]]), all_toFitY[1][8],np.mean([all_toFitY[2][16],all_toFitY[1][9],all_toFitY[0][0]]),all_toFitY[1][10], np.mean([all_toFitY[2][17],all_toFitY[1][11],all_toFitY[0][1]]),
-
-      np.mean([all_toFitY[0][2],all_toFitY[1][12]]),np.mean([all_toFitY[0][3],all_toFitY[1][13]]),all_toFitY[0][4],np.mean([all_toFitY[0][5],all_toFitY[1][14]]),all_toFitY[0][6],np.mean([all_toFitY[0][7],all_toFitY[1][15]]),all_toFitY[0][8], np.mean([all_toFitY[0][9],all_toFitY[1][16]]),all_toFitY[0][10],np.mean([all_toFitY[0][11],all_toFitY[1][17]]),
-all_toFitY[0][11],all_toFitY[0][12],all_toFitY[0][13],all_toFitY[0][14],all_toFitY[0][15],all_toFitY[0][16],all_toFitY[0][17]]
-print(len(NEWX), len(NEWY))
-
 ```{python}
 fig,ax=plt.subplots(nrows=1,ncols=1,figsize=(16,5),sharey=True,gridspec_kw={'wspace': 0.03})
 #fig.subplots_adjust(hspace=0.1,wspace=0.4)
@@ -440,7 +422,7 @@ all_toFitY = []
 ax=[ax]
 Data=[]
 newnewx=[]
-for ifreq, NUS in enumerate(['6']):#NUS='6'
+for ifreq, NUS in enumerate(['4',]):#NUS='6'
     if NUS == '1':
         freqdata = range(1)
     elif NUS == '2':
@@ -472,6 +454,7 @@ for ifreq, NUS in enumerate(['6']):#NUS='6'
                     pixs.append(pixel)
                     yvals.append(np.mean(irec[NUS][nreal,ifreqdata,pixs,0])/1e5*NormFact2)
                     searchmin.append(np.mean(irec[NUS][nreal,ifreqdata,pixs,0])/1e5*NormFact2)
+                    yconv.append(np.mean(irec[NUS][nreal,ifreqdata,pixs,0])/1e5*NormFact2)
                 else:
                     auxval = irec[NUS][nreal,ifreqdata,pixel,0]/1e5*NormFact2
                     yvals.append(auxval)
@@ -606,23 +589,39 @@ print('Pol. Chi2 {:.3f}'.format(result_pol.chisqr) )
 
 See results...
 
+
+#plt.plot(-result_pol.residual, 'bo')
+#plt.axhline(0, c='r')
+result_pol.residual = - result_pol.residual
+result_pol.result.residual
+
 ```{python}
-#fig,ax=plt.subplots(nrows=1,ncols=3)
-result_pol.plot()
+fig = plt.figure(figsize = (10,6))
+plt.rc('font', size=14)
+result_pol.plot(fig=fig,fit_kws = {'color':'r', },
+               data_kws = {'color': 'b', 'alpha':1,  },
+               fig_kws = {'figsize': (8,5), },)
+               #ax_res_kws = {'labels': ' '})
 #result_sin.plot()
 #result_bes.plot()
-dely = result_pol.eval_uncertainty(sigma=3)
-plt.axvspan(-0.5,0.5,color='k',alpha=0.4)
-plt.axvspan(-1.5,-0.5,color='k',alpha=0.2)
-plt.axvspan(0.5,1.5,color='k',alpha=0.2)
-
-plt.fill_between(xData, result_pol.best_fit-dely, result_pol.best_fit+dely, color='cyan',#"#ABABAB",
-                 alpha=0.6, label='3-$\sigma$ uncertainty band')
-
+result = result_pol
+#result_pol.plot()
+dely = result.eval_uncertainty(sigma=3,)
+plt.axvspan(-0.5,0.5,color='k',alpha=0.2)
+plt.axvspan(-1.5,-0.5,color='k',alpha=0.1)
+plt.axvspan(0.5,1.5,color='k',alpha=0.1)
+plt.xlim(-2.1,2.1)
+plt.fill_between(xData, result.best_fit-dely, result.best_fit+dely, color='red',#"#ABABAB",
+                 alpha=0.3, label='3-$\sigma$ uncertainty band')
+plt.xlabel(r'${\rm d}_{\nu_c}(\nu)$ ', fontsize = 14)
+plt.ylabel(r'FPSF', fontsize = 14)
+#plt.savefig('fpsf_nrec{}.pdf'.format(np.shape(Data)[0]), format='pdf' )
 ```
 
 ```{python}
-xfake=np.linspace(-2,2.5)
+if np.shape(Data)[0] == 2: xfake=np.linspace(-1.3,1.3)
+if np.shape(Data)[0] == 3: xfake=np.linspace(-2.2,2.2)
+if np.shape(Data)[0] == 4: xfake=np.linspace(-3,3)
 plt.xlabel(r'${\rm d}_{\nu_c}$ / $\Delta \nu$')
 plt.ylabel(r'${i_\nu}$[$\mu K$]')
 plt.plot(xFPSF, yFPSF, 'bo', label='Data')
@@ -635,104 +634,207 @@ plt.legend(fontsize=10)
 Save model...
 
 ```{python}
-from lmfit.model import save_modelresult
-save_modelresult(result_pol, 'polynomial_modelresult_nrec{}.sav'.format(np.shape(Data)[0]))
+#save_modelresult(result_pol, 'polynomial_modelresult_nrec{}.sav'.format(np.shape(Data)[0]))
 ```
+
+### Angular resolution
+
 
 Fit gaussian to profiles.
 
 I will fit the FWHM in the maps where the point source is cleary located in the band. For that I can plot manually and see the SNR level in the edge between band and take those maps where SNR are high and almost constant in the value
 
 ```{python}
-def gaussian2d_b(x, amp,x0, y0, varx, vary):
+def gaussian2d_b(x, amp, x0, y0, varx, vary):
     gauss = np.zeros((len(x),len(x)))
-    #amp=1 / (2 * np.pi * varx * vary)
-    for i in range(200):
-        for j in range(200):
+    #amp = 1 / (2 * np.pi * varx * vary)
+    for i in range(len(x)):
+        for j in range(len(x)):
             gauss[i,j] = amp*np.exp(-0.5*( (x[i]-x0)**2/varx**2+(x[j]-y0)**2/vary**2) )
             
     return gauss.ravel()
-def fixnside(ns):
-    if ns == 1024:
-        return 900
-    elif ns==256:
-        return 250
-    elif ns==512:
-        return 700
+
+def gaussian2d_1sig(x, amp, x0, y0, var):
+    gauss = np.zeros((len(x),len(x)))
+    #amp = 1 / (2 * np.pi * varx * vary)
+    for i in range(len(x)):
+        for j in range(len(x)):
+            gauss[i,j] = amp*np.exp(-0.5*( ((x[i]-x0)**2 + (x[j]-y0)**2) /varx**2) )
+            
+    return gauss.ravel()
 ```
 
 ```{python}
+def normalization(x,mapa):
+    '''integral para normalizar la distribucion f(x,y)
+    np.trapz(data,x,axis=[])'''    
+
+    ef = np.trapz((np.trapz(mapa,x,axis=0)),x)
+    return 1/ef
+
+```
+
+```{python}
+size = 200
+reso = 1.5
+newnside = 512
+if newnside == 256:
+    cut=200
+elif newnside == 512:
+    cut=500
+else:
+    cut=870
+
+curvefit = False
+for NUS in [4]:#NUS=4
+    print('============================')
+    print(' NUS ', NUS)
+    NUSt = str(NUS)
+    coso = np.zeros((NUS,len(allrecon)))
+    
+    xscale = np.linspace(- size / 2, size / 2, size) * reso / 60
+    best_fit_full = np.zeros((NUS,24,3))
+    indx = []
+    newfwhm = []
+    newStdfwhm = []
+    for isub in range(NUS):
+        best_fit_res = np.zeros((24,3))
+        Fact = 48 / NUS
+        print("Band | pos-nu-array | FWHMmeasured  | FWHM6134 | FWHMdictionary | Error sqrt(varx**2+vary**2) ")
+        print("============================================================================================")
+        mapstoaverage = []
+        for ipos in range(len(allrecon)):
+            if len(allrecon[ipos][NUSt]) == 0:
+                best_fit_res[ipos] = np.array([np.NaN, np.NaN, np.NaN])
+            else:
+                if newnside != d['nside']:
+                    print('udgrading map', ipos)
+                    newmap = hp.ud_grade(allrecon[ipos][NUSt][nreal,isub].T, newnside).T
+                else:
+                    print('no udgrading map', ipos)
+                    newmap = allrecon[ipos][NUSt][nreal,isub]
+                fitmap = hp.gnomview(newmap[:,0] / 1e5 * Fact, rot = center, reso = reso,
+                                   return_projected_map = True, xsize = size,
+                                   no_plot = True)
+
+                snr = anpsf.computeSNR_maps(newmap / 1e5 * Fact, d, center,
+                                            nside = newnside, threshold = 4)
+                coso[isub,ipos] = snr
+                if snr > cut:
+                    mapstoaverage.append(fitmap)
+            
+        fitmap = np.nanmean(mapstoaverage, axis = 0)
+        newStdfwhm.append(np.std(mapstoaverage, axis = 0))
+
+        if not curvefit:
+            gmodel = Model(gaussian2d_b, independent_vars=['x',], )
+            #Set initial guess 
+            fwhmTemplate = d['synthbeam_peak150_fwhm']*150/nusfull[NUSt][isub]
+            params = gmodel.make_params(amp = 1e5, x0 = 0, y0 = 0, 
+                                        varx = fwhmTemplate / np.sqrt(8 * np.log(2)), 
+                                        vary = fwhmTemplate / np.sqrt(8 * np.log(2)))
+
+            result = gmodel.fit(fitmap.ravel(), params, x = xscale)
+            fwhm = np.sqrt(result.best_values['varx'] * result.best_values['vary']) *\
+                        np.sqrt(8 * np.log(2))
+
+
+            newfwhm.append(fwhm)
+        else: 
+            popt_map, pcov_map = curve_fit(gaussian2d_b, xscale, fitmap.ravel(), method='trf')
+            fwhm = np.sqrt(abs(popt_map[2])*abs(popt_map[3]))*np.sqrt(8 * np.log(2))
+            newfwhm.append(fwhm)
+            
+
+```
+
+```{python}
+size = 200
+if newnside == 256:
+    cut=200
+elif newnside == 512:
+    cut=500
+else:
+    cut=870
 for NUS in [2,3,4]:#NUS=4
     print('============================')
     print(' NUS ', NUS)
-    NUSt=str(NUS)
-    if NUS==2:
-        coso2=np.zeros((NUS,len(allrecon)))
-    elif NUS==3:
-        coso3=np.zeros((NUS,len(allrecon)))
-    elif NUS==4:
-        coso4=np.zeros((NUS,len(allrecon)))
-    coso=np.zeros((NUS,len(allrecon)))
-    size=200
-    reso=2.5
-    xscale=np.linspace(-size/2,size/2,size)*reso/60
+    NUSt = str(NUS)
+    if NUS == 2:
+        coso2 = np.zeros((NUS,len(allrecon)))
+    elif NUS == 3:
+        coso3 = np.zeros((NUS,len(allrecon)))
+    elif NUS == 4:
+        coso4 = np.zeros((NUS,len(allrecon)))
+    coso = np.zeros((NUS,len(allrecon)))
+    
+    xscale = np.linspace(- size / 2, size / 2, size) * reso / 60
     xgrid,ygrid = np.meshgrid(xscale,xscale)[0].ravel(),np.meshgrid(xscale,xscale)[1].ravel()
-    best_fit_full=np.zeros((NUS,20,3))
-    indx=[]
+    best_fit_full = np.zeros((NUS,24,3))
+    indx = []
     for isub in range(NUS):
-        best_fit_res=np.zeros((20,3))
-        Fact=48/NUS
+        best_fit_res = np.zeros((24,3))
+        Fact = 48 / NUS
         print("Band | pos-nu-array | FWHMmeasured  | FWHM6134 | FWHMdictionary | Error sqrt(varx**2+vary**2) ")
         print("============================================================================================")
+        mapstoaverage = []
         for ipos in range(len(allrecon)):
-            if len(allrecon[ipos][NUSt])==0:
-                pass
+            if len(allrecon[ipos][NUSt]) == 0:
+                best_fit_res[ipos] = np.array([np.NaN, np.NaN, np.NaN])
             else:
-                newnside=1024
+                #if NUS==3:
+                #    if ipos==1:
+                #        cut = 900 #if NUS==2 else 280
                 
-                cut=800
-                if NUS==3:
-                    if ipos==1:
-                        cut = 900 #if NUS==2 else 280
-                
-                if newnside!=d['nside']:
-                    print('udgrading map')
-                    newmap=hp.ud_grade(allrecon[ipos][NUSt][nreal,isub].T, newnside).T
+                if newnside != d['nside']:
+                    print('udgrading map', ipos)
+                    newmap = hp.ud_grade(allrecon[ipos][NUSt][nreal,isub].T, newnside).T
+                    #print(newmap.shape)
                 else:
-                    print('no udgrading map')
-                    newmap=allrecon[ipos][NUSt][nreal,isub]
+                    print('no udgrading map', ipos)
+                    newmap = allrecon[ipos][NUSt][nreal,isub]
+                fitmap = hp.gnomview(newmap[:,0] / 1e5 * Fact, rot = center, reso = reso,
+                                   return_projected_map = True, xsize = size,
+                                   no_plot = True)
 
-                fitmap=hp.gnomview(newmap[:,0]/1e5*Fact,rot=center, reso=reso,
-                                   return_projected_map=True,xsize=200,
-                                   no_plot=True)
-
-                snr=anpsf.computeSNR_maps(newmap/1e5*Fact,d,center,nside=newnside,threshold=4)
+                snr = anpsf.computeSNR_maps(newmap / 1e5 * Fact, d, center,
+                                            nside = newnside, threshold = 4)
                 coso[isub,ipos] = snr
                 if snr > cut:
-                    gmodel = Model(gaussian2d_b, independent_vars=['x',], )
-                    #Set initial guess 
-                    fwhmTemplate=d['synthbeam_peak150_fwhm']*150/nusfull[NUSt][isub]
-                    #fwhmTemplate=d['synthbeam_peak150_fwhm']*150/nus_in[innu[ipos]]*np.sqrt(8*np.log(2))
-                    #fwhmTemplate=61.3474/nusfull[NUSt][isub]*np.sqrt(8*np.log(2))
-                    params = gmodel.make_params(amp=1.,x0=0, y0=0, varx=fwhmTemplate*np.sqrt(8*np.log(2)), 
-                                                vary=fwhmTemplate*np.sqrt(8*np.log(2)))
+                    if not curvefit:
+                        gmodel = Model(gaussian2d_b, independent_vars=['x',], )
+                        #Set initial guess 
+                        fwhmTemplate = d['synthbeam_peak150_fwhm']*150/nusfull[NUSt][isub]
+                        params = gmodel.make_params(amp = 1e5, x0 = 0, y0 = 0, 
+                                                    varx = fwhmTemplate / np.sqrt(8 * np.log(2)), 
+                                                    vary = fwhmTemplate / np.sqrt(8 * np.log(2)))
 
-                    result = gmodel.fit(fitmap.ravel(), params, x=xscale)
-                    #print(result.fit_report())
-                    fwhm=np.sqrt(result.best_values['varx']*result.best_values['vary'])*np.sqrt(8*np.log(2))
-                    print("{}    |     {:.2f} \t   |   {:.3f} \t| {:.3f}\t|{:.3f}\t|{:.5f}".format(isub+1, 
+                        result = gmodel.fit(fitmap.ravel(), params, x = xscale)
+
+                        fwhm = np.sqrt(result.best_values['varx'] * result.best_values['vary']) *\
+                                    np.sqrt(8 * np.log(2))
+
+                    else:
+                        popt_map, pcov_map = curve_fit(gaussian2d_b, xscale, fitmap.ravel(), method='trf')
+                        fwhm = np.sqrt(abs(popt_map[2])*abs(popt_map[3]))*np.sqrt(8 * np.log(2))
+                        #best_fit_res[ipos] = np.array([fwhm, 61.34 / nusfull[NUSt][isub], 
+                        #                    d['synthbeam_peak150_fwhm'] * 150 / nusfull[NUSt][isub]] )
+
+                        
+                    print("{}    |     {:.2f} \t   |   {:.3f} \t| {:.3f}\t|{:.3f}\t|{:.5f}".format(isub + 1, 
                                                             snr, fwhm, 
                                                             61.34/nus_in[innu[ipos]], 
-                                                            d['synthbeam_peak150_fwhm']*150/nus_in[innu[ipos]],
-                                                            np.sqrt(result.covar[-1,-1]+result.covar[-2,-2])))
-                    best_fit_res[ipos] = np.array([fwhm, 61.34/nusfull[NUSt][isub], 
-                                        d['synthbeam_peak150_fwhm']*150/nusfull[NUSt][isub]] )
+                                                            d['synthbeam_peak150_fwhm'] * 150 / nus_in[innu[ipos]],
+                                                            np.sqrt(result.covar[-1,-1]+ \
+                                                                    result.covar[-2,-2])/(8*np.log(2))**2) )
+                    best_fit_res[ipos] = np.array([fwhm, 61.34 / nusfull[NUSt][isub], 
+                                        d['synthbeam_peak150_fwhm'] * 150 / nusfull[NUSt][isub]] )
                 else:
                     fwhm=np.NaN
                     best_fit_res[ipos] = np.array([fwhm, 61.34/nusfull[NUSt][isub], 
-                                        d['synthbeam_peak150_fwhm']*150/nusfull[NUSt][isub]] )
+                                           d['synthbeam_peak150_fwhm']*150/nusfull[NUSt][isub]] )
+                    #newfwhm.append(fwhm)
         best_fit_full[isub] = best_fit_res
-        #np.nanmean(each,axis=0)[0]-
     if NUS==2:
         results_2 = best_fit_full
         coso2=coso
@@ -745,91 +847,370 @@ for NUS in [2,3,4]:#NUS=4
 #allTodo.append[best_fit_full]
 ```
 
-```{python}
-best_fit_full
-```
+#### Reading new simulation of point source
 
 ```{python}
-from scipy.stats import median_abs_deviation as mad
-import scipy.stats as sc
+#fileloc_0 = 'angularresolution/new-PS_sim_nfsub16-nfrec4-pntg8000_0.fits'
+#fileloc_1 = 'angularresolution/new-PS_sim_nfsub16-nfrec4-pntg8000_1.fits'
+
+##tol=1e-4 nrec = 4
+#fileloc_2 = 'angularresolution/new-PS_sim_nfsub16-nfrec4-pntg4000_3.fits'
+
+##tol = 1e-5 nrec = 4
+#fileloc_3 = 'angularresolution/new-PS_sim_nfsub16-nfrec4-pntg4000-tol1e-05_4.fits'
+#fileloc_4 = 'angularresolution/new-PS_sim_nfsub16-nfrec4-pntg4000-tol1e-05_5.fits'
+
+## tol = 1e-5 nrec = 4 nside = 512
+fileloc_4 = 'angularresolution/new-PS_sim_nfsub16-nfrec4-pntg4000-tol1e-05_6.fits'
+fileloc_5 = 'angularresolution/new-PS_sim_nfsub16-nfrec4-pntg3000-tol1e-05_8.fits'
+
+## tol = 1e-5 nrec = 4 nside = 1024
+#fileloc_4 = 'angularresolution/new-PS_sim_nfsub16-nfrec4-pntg3000-tol1e-05_7.fits'
+
+simu_1 = fits.open(fileloc_4)
+simu_2 = fits.open(fileloc_5)
+
+maps_recon_1 = simu_1['MAPS_RECON'].data
+maps_convo_1 = simu_1['MAPS_CONVOLVED'].data
+maps_recon_2 = simu_2['MAPS_RECON'].data
+maps_convo_2 = simu_2['MAPS_CONVOLVED'].data
 ```
 
-```{python}
-print('NUS \t NU    Mean FWHMthAv FWHMth Std MAD')
-for j,each in enumerate(results_2):
-    print('NUS = 2 {:.2f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f}'.format(nusfull['2'][j], np.nanmean(each,axis=0)[0],
-                                                    np.nanmean(each,axis=0)[2],
-                                                   61.34/nusfull['2'][j],
-                                                 np.nanstd(each ,axis=0)[0],
-                                                mad(each,axis=0,nan_policy='omit') ) )
-#
-print('========')
-for j,each in enumerate(results_3):
-    print('NUS = 3 \t {:.2f} {:.3f} {:.3f} {:.3f} {:.3f}'.format(nusfull['3'][j], np.nanmean(each,axis=0)[0],
-                                                   61.34/nusfull['3'][j],
-                                                 np.nanstd(each ,axis=0)[0],
-                                                         mad(each,axis=0,nan_policy='omit') ))
-#
-print('========')
-for j,each in enumerate(results_4[1:]):
-    j+=1
-    print('NUS = 4 \t {:.2f} {:.3f} {:.3f} {:.3f} {:.3f}'.format(nusfull['4'][j], np.nanmean(each[2:],axis=0)[0],
-                                                   61.34/nusfull['4'][j],
-                                                                 np.nanstd(each[2:] ,axis=0)[0],
-                                                mad(each[2:],axis=0,nan_policy='omit'),
-                                                                  ))
+See maps... ok
+
+
+plt.figure(figsize=(10,4))
+for i in range(4):
+    hp.gnomview(maps_recon_0_ud[i,:,0], reso= 2, rot = center, 
+                title = ' ', sub = (2,4,i+1))
+    hp.gnomview(maps_recon_1[i,:,0], reso= 2, rot = center, 
+                title = ' ', sub = (2,4,4+i+1))
     
+
+
+Calibrating method
+
+```{python}
+def f(val, fwhm = None):
+    return np.nan_to_num(np.exp(- 0.5 * val ** 2 / (fwhm / np.sqrt(8 * np.log(2)) ) ** 2))
+
+nsidecal = 512
+pixel = hp.pixelfunc.ang2pix(nsidecal, np.deg2rad(90-center[1]), 
+                             np.deg2rad(center[0]), nest = False)
+vec_pix = hp.pix2vec(nsidecal, pixel)
+vec_pixeles = hp.pix2vec(nsidecal, np.arange(12*nsidecal**2))
+ang_pixeles = np.arccos(np.dot(vec_pix,vec_pixeles))
 ```
 
 ```{python}
-fig,ax=plt.subplots(nrows=1,ncols=3,figsize=(15,5),sharey=True, gridspec_kw={'hspace': 0.03})
-ax=ax.ravel()
+nsamp = 4
+fwhm = d['synthbeam_peak150_fwhm'] * 150 / nusfull['4']
+#fwhm = 61.3474 / nusfull['4']
+xscalecal=np.copy(xscale)
+
+hpx = True
+smooth = True
+g0_ud = np.zeros((nsamp, 12*nsidecal**2,))
+for j,fwhm_i in enumerate(fwhm):
+    print('Doing {}/{} sample, nu = {:.1f} FWHM = {:.3f} sigma = {:.3f}'.format(j+1,nsamp, 61.34/fwhm_i,
+                                                                    fwhm_i,fwhm_i/np.sqrt(8*np.log(2)) ) )
+    if hpx:
+        if not smooth:
+            g0_ud[j,:] = 1e5*f(ang_pixeles, fwhm = np.deg2rad(1.*fwhm_i) )
+        else:
+            g0_ud[j, pixel] = 1
+            g0_ud[j, :] = 1e5*hp.smoothing(g0_ud[j, :], 
+                                        fwhm = np.deg2rad(fwhm[j]),
+                                        verbose = False )
+    else:
+        g0_ud[j] = np.reshape(gaussian2d_b(xscalecal, 1e4, 0., 0., 
+                                               fwhm_i/np.sqrt(8*np.log(2)), fwhm_i/np.sqrt(8*np.log(2))),
+                                   (len(xscalecal), len(xscalecal)))
+        
+            
+#
+
+```
+
+```{python}
+delta_fwhm_g = np.zeros((nsamp))
+fwhm_measured_g = []
+gmodel_calb_g = Model(gaussian2d_b, independent_vars = ['x',], )
+t0 = time.time()
+print("reso ", reso)
+xscalecal = np.linspace(-size / 2, size / 2, size) * reso / 60
+
+for j,fwhm_i in enumerate(fwhm):
+    print('Doing {}/{} sample'.format(j+1,nsamp))
+    
+    if hpx:
+        g0map = hp.gnomview(g0_ud[j,:],rot=center, reso=reso,
+                                   return_projected_map=True,xsize=size,
+                                   no_plot=True)
+    else:
+        g0map = g0_ud[j]
+    #
+    g0map *= normalization(xscalecal, g0map)
+    gmodel_calb_g.set_param_hint('amp', value = 1e5, min= 1e3, max = 1e6)
+    gmodel_calb_g.set_param_hint('x0', value = 0, min = -0.2, max = 0.2)
+    gmodel_calb_g.set_param_hint('y0', value = 0, min = -0.2, max = 0.2)
+    gmodel_calb_g.set_param_hint('varx', value = np.deg2rad(fwhm_i), 
+                               min = np.deg2rad(fwhm_i)*0.4, max = np.deg2rad(fwhm_i)*1.3)
+    gmodel_calb_g.set_param_hint('vary', value = np.deg2rad(fwhm_i), 
+                               min = np.deg2rad(fwhm_i)*0.4, max = np.deg2rad(fwhm_i)*1.3)
+    
+    params_calb_g = gmodel_calb_g.make_params()
+    
+    result_calb_g = gmodel_calb_g.fit(g0map.ravel(), params, x = xscalecal )
+    
+    print('varx {:.2f} vary {:.2f}'.format(result_calb_g.best_values['varx'], 
+                                           result_calb_g.best_values['vary']))
+    
+    fwhm_measured_i = np.sqrt(abs(result_calb_g.best_values['varx'])*abs(result_calb_g.best_values['vary'])) *\
+                            np.sqrt(8*np.log(2))
+
+    fwhm_measured_g.append(fwhm_measured_i)
+    delta_fwhm_g[j] = fwhm_measured_i - fwhm_i
+    
+    print("Chi2 {:.2f} {:.2f} FWHM {:.2f} th {:.2f}".format(result_calb_g.redchi, nusfull['4'][j],
+                                                            fwhm_measured_i, fwhm_i) )
+    
+    if j+1 == nsamp: print('Done in {:.2f} min'.format( (time.time()-t0)/60 ) )
+    
+    print('Delta(FWHM) {:.5f}'.format(delta_fwhm_g[j]))
+
+fwhm_measured_g = np.array(fwhm_measured_g)
+parsfwhm_g = list(result_calb_g.best_values.values())
+```
+
+#### Nueva calibracion 
+
+```{python}
+hpx = True
+smooth = True
+
+mapscal = []
+for j in range(4):
+    print(j)
+    nuscal = (nus_in > nusfulledge['4'][j]) * (nus_in < nusfulledge['4'][j+1])
+    imap = []
+    for jj, inuscal in enumerate(nuscal):
+        f0_ud = np.zeros((12 * nsidecal ** 2,))
+        if inuscal:
+            idx = jj
+            print(inuscal, idx, nus_in[idx])
+            f0_ud[pixel] = 1
+            f0_ud[:] = 1e5*hp.smoothing(f0_ud[:], 
+                                        fwhm = np.deg2rad(d['synthbeam_peak150_fwhm']) * 150 / nus_in[idx],
+                                        #fwhm = np.deg2rad(61.3474 / nus_in[idx]),
+                                        verbose=False )
+            imap.append(f0_ud)
+    mapscal.append(imap)
+```
+
+```{python}
+delta_fwhm_f = np.zeros((nsamp))
+fwhm_measured_f = []
+gmodel_calb_f = Model(gaussian2d_b, independent_vars = ['x',], )
+t0 = time.time()
+xscalecal = np.linspace(-size / 2, size / 2, size) * reso / 60
+
+for j, ifreq in enumerate(mapscal):
+    auxfwhm = []
+    for imap in ifreq:
+        print('Doing {}/{} sample'.format(j+1,len(mapscal)))
+
+        f0map = hp.gnomview(imap,rot=center, reso=reso,
+                            return_projected_map=True,xsize=size,
+                            no_plot=True)
+        #
+        f0map *= normalization(xscalecal, f0map)
+        gmodel_calb_f.set_param_hint('amp', value = 1e5, min= 1e3, max = 1e6)
+        gmodel_calb_f.set_param_hint('x0', value = 0, min = -0.2, max = 0.2)
+        gmodel_calb_f.set_param_hint('y0', value = 0, min = -0.2, max = 0.2)
+        gmodel_calb_f.set_param_hint('varx', value = np.deg2rad(fwhm_i), 
+                                   min = np.deg2rad(fwhm_i)*0.4, max = np.deg2rad(fwhm_i)*1.3)
+        gmodel_calb_f.set_param_hint('vary', value = np.deg2rad(fwhm_i), 
+                                   min = np.deg2rad(fwhm_i)*0.4, max = np.deg2rad(fwhm_i)*1.3)
+
+        params_calb_f = gmodel_calb_f.make_params()
+
+        result_calb_f = gmodel_calb_f.fit(f0map.ravel(), params, x=xscalecal )
+
+        print('varx {:.2f} vary {:.2f}'.format(result_calb_f.best_values['varx'], 
+                                               result_calb_f.best_values['vary']))
+
+        fwhm_measured_i = np.sqrt(abs(result_calb_f.best_values['varx'])*abs(result_calb_f.best_values['vary'])) *\
+                                np.sqrt(8*np.log(2))
+        
+        print('varx {:.2f} vary {:.2f} fwhm {:.4f}'.format(result_calb_f.best_values['varx'], 
+                                               result_calb_f.best_values['vary'],
+                                                          fwhm_measured_i))
+
+        auxfwhm.append(fwhm_measured_i)
+    delta_fwhm_f[j] = np.mean(auxfwhm) - fwhm[j]
+
+    print("Chi2 {:.2f} FWHM {:.2f}".format(result_calb_f.redchi, fwhm_measured_i) )
+
+    if j+1 == nsamp: print('Done in {:.2f} min'.format( (time.time()-t0)/60 ) )
+
+    print('Delta(FWHM) {:.5f}'.format(delta_fwhm_f[j]))
+
+fwhm_measured_f = np.array(fwhm_measured_f)
+parsfwhm_f = list(result_calb_f.best_values.values())
+```
+
+#model_pol(xfake, *parsfwhm)
+#result_calb_f
+
+
+plt.plot(61.3474/fwhm, delta_fwhm)
+plt.plot(61.3474/fwhm, fwhm_measured, 'ro')
+plt.plot(61.3474/fwhm, fwhm, 'ko')
+
+```{python}
+def model_fwhm(x,a,b):#,e):
+    return a*x+b
+#xSPSF = fwhmTh(np.array([130,140,150,160,170]))
+#xSPSF = 61.3474/fwhm
+xSPSF = d['synthbeam_peak150_fwhm'] * 150 / fwhm#_measured
+ySPSF_f = delta_fwhm_f
+ySPSF_g = delta_fwhm_g
+
+#Model 1 or f
+gmodel_fwhm_f = Model(model_fwhm, independent_vars=['x',], )
+params_fwhm_f = gmodel_fwhm_f.make_params(a=1,b=1)
+result_fwhm_f = gmodel_fwhm_f.fit(ySPSF_f, params_fwhm_f, x=xSPSF)
+parsfwhm_f = list(result_fwhm_f.best_values.values())
+# Model 2 or g
+gmodel_fwhm_g = Model(model_fwhm, independent_vars=['x',], )
+params_fwhm_g = gmodel_fwhm_g.make_params(a=1,b=1)
+result_fwhm_g = gmodel_fwhm_g.fit(ySPSF_g, params_fwhm_g, x=xSPSF)
+parsfwhm_g = list(result_fwhm_g.best_values.values())
+print('Sin. Chi2 {:.3f}'.format(result_fwhm_g.chisqr ))
+result_fwhm_f.plot()
+result_fwhm_g.plot()
+```
+
+Measuring the FWHM in the simulation done in Shaka: PS in continuos emission across frequencies
+
+```{python}
+t1 = time.time()
+#fwhm_arrs2 = np.zeros((len(maps_recon_2)))
+#fwhm_arrs1 = np.zeros((len(maps_recon_1)))
+arrMapsRec = np.array([maps_recon_1, maps_recon_2])
+fwhmMeasured = np.zeros((len(arrMapsRec),4)) 
+for j_c, maps_recon_i in enumerate(arrMapsRec):
+    for j, imap in enumerate(maps_recon_i):
+        s0map = hp.gnomview(imap.T[0] / 1e5, rot = center, reso = reso,
+                                       return_projected_map = True, xsize = size,
+                                       no_plot = True)
+
+        #s0map *= normalization(xscale, s0map)
+
+        gmodel = Model(gaussian2d_b, independent_vars=['x',], )
+        #Set initial guess 
+        fwhm_s0init = d['synthbeam_peak150_fwhm'] * 150 / nusfull['4'][j]
+        #fwhm_s0init = 61.3474 / nusfull['4'][j]
+
+        params = gmodel.make_params(amp = 1, x0 = 0, y0 = 0, 
+                                    varx = fwhm_s0init / np.sqrt(8 * np.log(2)), 
+                                    vary = fwhm_s0init / np.sqrt(8 * np.log(2)))
+
+        result_s0 = gmodel.fit(s0map.ravel(), params, x = xscale)
+
+        fwhm_s0 = np.sqrt(result_s0.best_values['varx'] * result_s0.best_values['vary']) * np.sqrt(8 * np.log(2))
+
+        fwhmMeasured[j_c, j] = fwhm_s0
+        print('Done {}/{}, fwhm = {}'.format(j + 1, len(maps_recon_1), fwhm_s0))
+print('All done in {} seconds'.format((time.time() - t1) ) )
+```
+
+fwhm_arrs1, fwhm_arrs0
+
+```{python}
+fig,ax=plt.subplots(nrows = 1, ncols = 1, figsize = (8, 4),
+                    sharey = True, gridspec_kw = {'hspace': 0.03})
+ax=[ax,]#ax.ravel()
 #fwhmTh = lambda nu: 61.3474/nu
-fwhmTh = lambda nu: d['synthbeam_peak150_fwhm']*150/nu
+plt.rc('font', size = 12)
+fwhmTh = lambda nu: d['synthbeam_peak150_fwhm'] * 150 / nu
+fig.suptitle(r'Angular resolution nside = {} -cut$_{{SNR}}$={}'.format(newnside,cut))
+ax[0].set_xlabel(r'$\nu~$[GHz]')
+ax[0].set_ylabel(r'$FWHM~$[deg]')
+
+for j in range(4):
+    ax[0].errorbar(nusfull['4'][j], np.mean(fwhmMeasured, axis=0)[j] - model_fwhm(nusfull['4'][j], 
+                                                                              *parsfwhm_f) ,
+                   yerr = np.std(fwhmMeasured, axis=0)[j], color = 'r', marker = '*',
+              label = 'FWHM measured' if j == 0 else None)
+    ax[0].plot(nusfull['4'][j], fwhmTh(nusfull['4'][j]), 'bo', alpha = 0.5, 
+               label = 'FWHM theoretical' if j == 0 else None)
+    plt.legend(fontsize = 14)
+ax[0].tick_params(axis = 'both', bottom = True, top = True, 
+                  left = True, right = True, direction = 'in')
+ax[0].grid()
+#
+plt.tight_layout() #makes subplots nicely fit in the figure.
+#plt.savefig('Angular-Resolution_reso{}_nside{}.pdf'.format(reso, newnside), format = 'pdf')
+```
+
+```{python}
+for j in range(4):
+    deltaPorc = fwhm_arrs0[j] - model_fwhm(nusfull['4'][j], *parsfwhm_f) - fwhmTh(nusfull['4'][j])
+    print('{:.3f}'.format(deltaPorc/fwhmTh(nusfull['4'][j] *100) ))
+```
+
+```{python}
+fig,ax = plt.subplots(nrows = 1, ncols = 3, figsize = (15,5),
+                      sharey = True, gridspec_kw = {'hspace': 0.03})
+ax = ax.ravel()
+#fwhmTh = lambda nu: 61.3474/nu
+fwhmTh = lambda nu: d['synthbeam_peak150_fwhm'] * 150 / nu
 fig.suptitle(r'FWHM for maps with high SNR in each sub-band. ud={} -cut$_{{SNR}}$={}'.format(newnside,cut))
 ax[0].set_xlabel(r'$\nu~$[GHz]')
 ax[1].set_xlabel(r'$\nu~$[GHz]')
 ax[2].set_xlabel(r'$\nu~$[GHz]')
 ax[0].set_ylabel(r'$FWHM~$[deg]')
+
 for j,each in enumerate(results_2):
-    ax[0].errorbar(nusfull['2'][j],np.nanmean(each,axis=0)[0],
-                   yerr=np.nanstd(each ,axis=0)[0],
-                   fmt='o',c='b')
-    #ax[0].errorbar(nusfull['2'][j]*1.001,np.nanmean(each,axis=0)[0],
-    #               yerr=mad(each,axis=0,nan_policy='omit'),
-    #               fmt='o',c='r')
-    ax[0].text(nusfull['2'][j], (np.nanmean(each,axis=0)[0]+fwhmTh(nusfull['2'][j]) )/2 , 
-               '{:.3f}'.format((np.nanmean(each,axis=0)[0]-fwhmTh(nusfull['2'][j]) )) )
+    ax[0].errorbar(nusfull['2'][j],np.nanmean(each,axis = 0)[0] - model_fwhm(nusfull['2'][j], *parsfwhm_f),
+                   yerr = np.nanstd(each ,axis=0)[0],
+                   fmt = 'o', c = 'b')
+    ax[0].errorbar(nusfull['2'][j],np.nanmean(each,axis = 0)[0] ,
+                   yerr = np.nanstd(each ,axis=0)[0],
+                   fmt = 'o', c = 'b', alpha = 0.4)
     ax[0].plot(nusfull['2'][j],fwhmTh(nusfull['2'][j]), 'ko')
 for j,each in enumerate(results_3):
     
-    ax[1].errorbar(nusfull['3'][j],np.nanmean(each,axis=0)[0],
-                   yerr=np.nanstd(each ,axis=0)[0],
-                   fmt='o',c='b', label='Averaged FWHM' if j==0 else None)
-    #ax[1].errorbar(nusfull['3'][j]*1.001,np.nanmean(each,axis=0)[0],
-    #               yerr=mad(each,axis=0,nan_policy='omit'),
-    #               fmt='o',c='r', label='MAD' if j==0 else None)
-    ax[1].text(nusfull['3'][j], (np.nanmean(each,axis=0)[0]+fwhmTh(nusfull['3'][j]) )/2 , 
-               '{:.3f}'.format((np.nanmean(each,axis=0)[0]-fwhmTh(nusfull['3'][j]) )) )
-    ax[1].plot(nusfull['3'][j],fwhmTh(nusfull['3'][j]), 'ko', label='Theoretical FWHM' if j==0 else None)
-for j,each in enumerate(results_4[1:]):
-    j+=1
-    ax[2].errorbar(nusfull['4'][j],np.nanmean(each[2:],axis=0)[0],
-                   yerr=np.nanstd(each[2:] ,axis=0)[0],
-                   fmt='o',c='b')
-    #ax[2].errorbar(nusfull['4'][j]*1.001,np.nanmean(each[2:],axis=0)[0],
-    #               yerr=mad(each[2:],axis=0,nan_policy='omit'),
-    #               fmt='o',c='r')
-    ax[2].text(nusfull['4'][j], (np.nanmean(each[2:],axis=0)[0] + fwhmTh(nusfull['4'][j]) )/2 , 
-               '{:.3f}'.format((np.nanmean(each[2:],axis=0)[0]-fwhmTh(nusfull['4'][j]) )) )
+    ax[1].errorbar(nusfull['3'][j],np.nanmean(each,axis = 0)[0] - model_fwhm(nusfull['3'][j], *parsfwhm_f),
+                   yerr = np.nanstd(each ,axis = 0)[0],
+                   fmt = 'o', c = 'b', label='no calb FWHM' if j == 0 else None)
+    ax[1].errorbar(nusfull['3'][j],np.nanmean(each,axis = 0)[0] ,
+                   yerr = np.nanstd(each ,axis = 0)[0], alpha = 0.4,
+                   fmt = 'o', c = 'b', label='calb FWHM' if j == 0 else None)
+    ax[1].plot(nusfull['3'][j],fwhmTh(nusfull['3'][j]), 'ko', label='Theoretical FWHM' if j == 0 else None)
+for j,each in enumerate(results_4):
+    ax[2].errorbar(nusfull['4'][j],np.nanmean(each,axis = 0)[0] - model_fwhm(nusfull['4'][j], *parsfwhm_f),
+                   yerr = np.nanstd(each[2:] ,axis = 0)[0],
+                   fmt = 'o', c = 'b')
+    ax[2].errorbar(nusfull['4'][j],np.nanmean(each,axis = 0)[0] ,
+                   yerr = np.nanstd(each[2:] ,axis = 0)[0], alpha = 0.4,
+                   fmt = 'o', c = 'b')
     ax[2].plot(nusfull['4'][j], fwhmTh(nusfull['4'][j]), 'ko')
 #
-ax[1].legend(bbox_to_anchor=(0., 1.08), fontsize=10,loc='upper left',ncol=3)
+ax[1].legend(bbox_to_anchor = (0., 1.08), fontsize = 10 , loc = 'upper left', ncol = 3)
 for i in range(3):
-    ax[i].tick_params(axis='both',bottom=True, top=True, left=True, right=True,direction='in')
+    ax[i].tick_params(axis = 'both', bottom = True, top = True, 
+                      left = True, right = True, direction = 'in')
+    #           '{:.3f}'.format((np.nanmean(each,axis=0)[0]-fwhmTh(nusfull['4'][j]) )) )
     ax[i].grid()
 #
 plt.tight_layout() #makes subplots nicely fit in the figure.
+```
+
+```{python}
+fwhm_measured/hp.nside2resol(nsidecal, arcmin=True)*60
 ```
 
 ```{python}
@@ -861,6 +1242,58 @@ for i in range(4):
 ```
 
 ```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
 plt.imshow(fitmap.reshape(200,200),extent=[xscale[0],xscale[-1],xscale[0],xscale[-1],])
 #plt.axvline(0,ls='--', c='w',alpha=0.4)
 plt.axvline(-0.4,ls='--', c='w',alpha=0.4)
@@ -871,303 +1304,22 @@ plt.axhline(0.4,ls='--', c='w',alpha=0.4)
 
 ```
 
-```{python}
-np.max(fitmap)
-```
-
-```{python}
-from lmfit import Model
-def gaussian2d_b(x, amp,x0, y0, varx, vary):
-    gauss = np.zeros((len(x),len(x)))
-    #amp=1 / (2 * np.pi * varx * vary)
-    for i in range(200):
-        for j in range(200):
-            gauss[i,j] = amp*np.exp(-0.5*( (x[i]-x0)**2/varx**2+(x[j]-y0)**2/vary**2) )
-            
-    return gauss.ravel()
-
-
-gmodel = Model(gaussian2d_b, independent_vars=['x',])
-print('parameter names: {}'.format(gmodel.param_names))
-print('independent variables: {}'.format(gmodel.independent_vars))
-
-#Set initial guess 
-params = gmodel.make_params(amp=4e3,x0=0, y0=0, varx=0.4/2.35, vary=0.35/2.35)
-#testeval=gmodel.eval(params, x=xscale).reshape(200,200)
-#plt.imshow(testeval)
-#plt.show()
-result = gmodel.fit(fitmap.ravel(), params, x=xscale)
-fwhm=np.sqrt(result.best_values['varx']*result.best_values['vary'])*np.sqrt(8*np.log(2))
-```
-
-```{python}
-plt.imshow(result.best_fit.reshape(200,200))
-print(result.fit_report())
-```
-
 ### Old way... not use
 
-
-Choose the maps with higher SNR to fit point sources reconstruction
-
-
-np.shape(allrecon[0]['2'][1:])
-
 ```{python}
-
+(np.deg2rad(1)**2+np.deg2rad(1.5)**2)/(np.deg2rad(1)**2*np.deg2rad(1.5)**2)
 ```
 
 ```{python}
-if len(irec[NUS])==0:
-            yvals.append(None)
-```
-
-```{python}
-reload(anpsf)
-infofit={}
-for NUS in ['1','2','3','4','6']:
-    if NUS == '1':
-        ifreqdata=0
-    elif NUS == '2' or NUS == '3':
-        ifreqdata = 1
-    else:
-        ifreqdata=2
-    data =[ifreqdata]
-    snraux=[]
-    for irec in range(len(allrecon)):
-        if len(allrecon[irec][NUS])==0:
-            pass
-        else:
-            snraux.append(anpsf.computeSNR_maps(allrecon[irec][NUS][nreal,ifreqdata], 
-                                                d, center, threshold =5))
-    data.append(np.argmax(snraux))
-    infofit.update({NUS:data})
-```
-
-```{python}
-infofit
-```
-
-Look at the amplitude of the point sources for reconstructed maps...
-
-
-### Fit angular resolution
-
-
-Make the fit calibration
-
-```{python}
-CteConf=d['synthbeam_peak150_fwhm'] * 150
-nuscal = np.linspace(128,172,20)
-fwhmcal = CteConf/nuscal
-sample = 20
-amplitude = 1#e5 #initial amplitude
-
-reso=5
-size=200
-vec_pix = hp.pix2vec(d['nside'], pixel)
-vec_pixeles = hp.pix2vec(d['nside'], np.arange(12*d['nside']**2))
-ang_pixeles = np.arccos(np.dot(vec_pix,vec_pixeles))
-angmask = d['dtheta']
-mask = np.rad2deg(ang_pixeles) < angmask
-
-x_map = np.linspace(-size/2,size/2,size)*reso/60
-y_map = x_map
-x_map, y_map = np.meshgrid(x_map, y_map)
-
-x0data_map = x_map.ravel()
-x1data_map = y_map.ravel()
-
-"""
-ellip:  (NOT IMPLEMENTED)ellipticity of the fitted gaussian. 
-        Following BICEP2/keck definition (arXiv:0906.4069)
-       e = (sigma_a - sigma_b) / (sigma_a + sigma_b)
-"""
-
-deltaFwhm_cal = np.zeros( (len(fwhmcal), 1) )
-#position_center_fit = np.zeros((n_subpop,1))
-```
-
-```{python}
-f0 = np.zeros((sample, 12*d['nside']**2,))
-f0[:,pixel] = 1
-f0 = [hp.smoothing(f0[i], fwhm = np.radians(fwhmcal[i]), verbose=False) for i in range(len(f0))]
-```
-
-```{python}
-# Fit Method
-fwhmmeasured = np.empty((sample,))
-diffwhm = np.zeros_like(fwhmmeasured)
-maparray=np.zeros((sample, size,size))
-sigma2fwhm=2.35
-for i,mi in enumerate(f0):
-    maparray[i] = hp.gnomview(mi, rot=center, reso=reso, xsize=size, 
-                              return_projected_map=True, no_plot=True)
-    norm_fit = normalization(x_map[0],maparray[i])
-    ydata_map = (norm_fit * maparray[i]).ravel()
-    
-    popt_map, pcov_map = curve_fit(gaussian2d, np.array([x0data_map,x1data_map]), ydata_map, method='trf')
-    fwhmmeasured[i] = (abs(popt_map[3])+abs(popt_map[4]))/2*sigma2fwhm
-    diffwhm[i] = (fwhmmeasured-fwhmcal)[i]
-#Save interpolation 
-FuncInt = interp1d(nuscal, diffwhm)
-```
-
-```{python}
-#for i in range(len(fwhm)):
-#    print('{:.2f} \t {:.2f} \n'.format(input_fwhm_fit[i], fwhm[i] ))
-plt.figure(figsize=(8,6))
-plt.ylim(0.35,0.63)
-plt.plot(nuscal, fwhmcal, 'ko', label='real')
-plt.plot(nuscal, fwhmmeasured, 'rs', label='measured')
-plt.vlines(x=nuscal,ymin=fwhmcal, ymax=fwhmmeasured, colors='r', alpha= 0.2, ls='--' )
-plt.grid()
-#plt.text(132,0.58,r'$\Delta$FWHM', fontsize=16)
-plt.xlabel(r'$\nu$[GHz]', fontsize=15)
-plt.ylabel(r'FWHM[deg]', fontsize=15)
-plt.legend(loc='best', fontsize=14)
-```
-
-# Calibration DONE.- 
-
-Start fitting maps...
-
-```{python}
-infofit
-```
-
-```{python}
-plt.figure(figsize=(12,4))
-for i,NUS in enumerate(['1','2','3','4','6']):
-    dt=infofit[NUS]
-    print(dt, i, np.shape(allrecon[dt[1]][NUS]))#,dt[0],:,0])
-    hp.gnomview(allrecon[dt[1]][NUS][nreal,dt[0],:,0],sub=(1,5,i+1), rot=center,reso=2)
-```
-
-```{python}
-fwhm_maps = {}
-ellp_maps = {}
-#diffwhm2=np.zeros((nsub,))
-mpy=np.zeros((,size,size))
-for i,ikey in enumerate(map4fit.keys()):
-    for ireal in range(3):
-        mpy[i,ireal] = hp.gnomview(map4fit[ikey][ireal], rot=center, reso=reso, xsize=size, 
-                                  return_projected_map=True, no_plot=True)
-        plt.clf()
-        norm_fit = normalization(x_map[0],mpy[i,ireal])
-        ydata_map = (norm_fit * mpy[i,ireal]).ravel()
-
-        popt_map, pcov_map = curve_fit(gaussian2d, np.array([x0data_map,x1data_map]), 
-                                       ydata_map, method='trf')
-        ellp_maps.update({ikey:popt_map[3]/popt_map[4]})
-        fwhm_maps.update({ikey:(abs(popt_map[3])+abs(popt_map[4]))/2*sigma2fwhm})
-        #diffwhm2[i] = (input_fwhm_fit2-fwhm2)[i]
-
-#npsf.plotting(dirc = 'nersc', simu = ['32091820'], 
-#               date = '20200620', reso = 2, savefig=False, 
-#               filename='../psf_20-25nus-smFOV-Fix', setlim=False)
-```
-
-```{python}
-print('== Covariance matrix ==')
-[print(pcov_map[i]) for i in range(len(pcov_map))]
-print('== Ellipticity ==')
-print(ellp_maps)
-print('== FWHM(nu) / hp.resolution ==')
-print(np.array(list(fwhm_maps.values()))*60/hp.nside2resol(d['nside'],arcmin=True))
-```
-
-concon=gaussian2d(np.array([x_map.ravel(),y_map.ravel()]),
-                  *popt_map  ).reshape((200,200))
-plt.xlabel(r'x')
-plt.xlabel(r'y')
-plt.contourf(concon, extent=[x_map.min(),x_map.max(),y_map.min(),y_map.max()] )  
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-Plot resulting measure vs real values. (compare against freq edges too)...
-
-```{python}
-#nreals, nrec,4
-#allfwhm=[]
-FWHMs = {}#np.zeros((4,6,4))
-difff = []
-for j,ikey in enumerate(nus4fit.keys()):
-    if j==0: labelm = 'measured'; labelr='real'; labelu='unbised';labele='edge freq(shifted)'
-    else: labelm=None; labelr=None; labelu=None; labele=None
-    plt.title(r'N_s = {}'.format(d['nf_sub']))
-    plt.plot(nus4fit[ikey],fwhm_maps[ikey], 'rs',label=labelm)
-    plt.plot(nus4fit[ikey],CteConf/nus4fit[ikey],'ks',label=labelr)
-    plt.plot(nus4fit[ikey],fwhm_maps[ikey]-FuncInt(nus4fit[ikey]), 'gs', label=labelu)
-    plt.plot(nus4fit[ikey],CteConf/nusedge4fit[ikey],'bo', label=labele)
-    FWHMs.update({ikey:[CteConf/nus4fit[ikey],
-                                      fwhm_maps[ikey]-FuncInt(nus4fit[ikey]),
-    plt.legend(loc='best')
-    difff.append(fwhm_maps[ikey]-FuncInt(nus4fit[ikey]) - CteConf/nus4fit[ikey])
-plt.grid()
-print('diff = real - unbiased {}'.format(difff))
-```
-
-The green dots, at which frequency corresponds? Is it to the worst resolution within the band where it belongs?...
-
-
-```{python}
-nuspsf = []
-valpsf = []
-for i in range(len(NUSPSF)):
-    nuspsf.extend(NUSPSF[i][:])
-    valpsf.extend(VALPSF[i][:])
-nuspsf=np.array(nuspsf)
-valpsf=np.array(valpsf)
-iindice=nuspsf.argsort()
-nuspsf = nuspsf[iindice]
-valpsf = valpsf[iindice]
-jd=np.where(nuspsf==150.0)
-
-def fgauss(x,amp,nu0,var0):
-    return amp*np.exp(-0.5*(x-nu0)**2/var0**2 )
-
-pgauss,vgauss=curve_fit(fgauss, np.delete(nuspsf, jd), np.delete(valpsf, jd),p0=[0.2,150,10])
-#pgauss,vgauss=curve_fit(fgauss, nuspsf, valpsf,p0=[0.2,150,10])
-print(vgauss[-1,-1])
-plt.title(r'$N_s$ = {}, $\nu_0$ = {:d}'.format(d['nf_sub'],int(nus_in[10])))
-plt.plot(nuspsf, valpsf,'ko')
-plt.plot(nuspsf[jd], valpsf[jd],'rx',ms=12)
-x=np.linspace(nuspsf[0],nuspsf[-1],200)
-plt.plot(x, fgauss(x, *pgauss),'g-', label=r'$\nu = ${:.2f}, $\sigma = ${:.2f}'.format(pgauss[1],pgauss[2]))
-plt.legend()
-plt.grid()
-print('fWhm {:.1f}'.format(pgauss[2]*sigma2fwhm))
-```
-
-```{python}
-
-```
-
-```{python}
-c1,c2,c3,c4,c5,c6 = [],[],[],[],[],[]
-print('nu \t real \t unbiased \t unbised-real')
-for each in [f12,f15,f20,f25]:
-    
-```
-
-```{python}
-#search the border of the band
-print(ind)
-bind=[]#np.zeros((len(ind)))
-for ikey in nus4fit.keys():
-    bind.append = nusfulledge[ikey][i]
-        print('{} \t {} \n'.format(bind[j], ind[j]))
-
-```
-
-```{python}
-optcf,covcf=anpsf.fitGauss_one(dirc = 'nersc', simu =['31901895','31901911', '31982984','31983445'],
-                   plotraw=False, plotfit=True)
+pruebax = np.zeros((12*256**2))
+pruebax[0] = 1 
+plt.figure(figsize=(8,4))
+hp.gnomview(hp.smoothing(pruebax, fwhm=np.deg2rad(1), verbose = False), 
+            rot = (0,90),reso = 2, sub = (131),max=0.0524)
+hp.gnomview(hp.smoothing(hp.smoothing(pruebax, fwhm=np.deg2rad(1),verbose=False), 
+                         verbose=False, fwhm = np.deg2rad(1.5)), 
+            rot = (0,90),reso = 2, sub = (132),max=0.0524)
+hp.gnomview(hp.smoothing(hp.smoothing(hp.smoothing(pruebax, fwhm=np.deg2rad(1),verbose=False), 
+                         verbose=False, fwhm = np.deg2rad(1.5)), fwhm = np.deg2rad(1/(1+1.5))), 
+            rot = (0,90),reso = 2, sub = (133), max=0.0524)
 ```

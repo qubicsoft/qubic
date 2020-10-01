@@ -49,9 +49,10 @@ In both cases, they are cross spectra on residuals so they should be 0.
 ```{python}
 datadir = os.environ['DATA_SPECTROIM']
 print(datadir)
-rep_fullpipe = datadir + 'simu_nersc_dust_fullpipeline/IBCS_fullpipeline/'
+rep_fullpipe = datadir + '/NERSC_simuEnd2End/Bad_photon_noise2020/simu_NERSC_MC/IBCS_fullpipeline/'
 
 rep_spectrumCC = datadir + 'FastSimulator/cls_spectrum_fromCC/'
+print(rep_spectrumCC)
 ```
 
 ```{python}
@@ -59,7 +60,7 @@ rep_spectrumCC = datadir + 'FastSimulator/cls_spectrum_fromCC/'
 # Do it just once
 
 # for nfrecon in [1, 2, 3, 4, 5, 8]:
-#     list_files = glob.glob(rep_spectrumCC + 'cross_interband*same*nfrecon{}*_qubicmaps_*FI220*_v2_gal*.npy'.format(nfrecon))
+#     list_files = glob.glob(rep_spectrumCC + f'IBCSsame*nfrecon{nfrecon}*_qubicmaps_*FI150*_v4_gal*.npy')
 #     nfiles = len(list_files)
 #     print('# Files:', nfiles)
 #     for i in range(nfiles):
@@ -73,7 +74,7 @@ rep_spectrumCC = datadir + 'FastSimulator/cls_spectrum_fromCC/'
 #             allcross = np.concatenate((allcross, cross), axis=0)
 #     print('All cross shape:', allcross.shape)
 #     np.save(rep_spectrumCC + 
-#             'cross_interband_samereal_nfrecon{}_qubicmaps_FI220_v2_galaxycenter.npy'.format(nfrecon), allcross)
+#             f'IBCSsame_nfrecon{nfrecon}_qubicmaps_FI150_v4_galaxycenter.npy', allcross)
 ```
 
 ```{python}
@@ -81,11 +82,14 @@ clnames = ['TT', 'EE', 'BB', 'TE']
 nfrecon = 3
 
 # Full pipeline
-cls_cross = np.load(rep_fullpipe + 'IBCSmix_recon_{}bands_150fullpipeline.npy'.format(nfrecon))
+# cls_cross = np.load(rep_fullpipe + 'IBCSsame_recon_{}bands_150fullpipeline.npy'.format(nfrecon))
 
 # Fast Simulator
 # cls_cross = np.load(rep_spectrumCC + 
 #                     'cross_interband_samereal_nfrecon{}_noisemaps_FI150_v2_galaxycenter.npy'.format(nfrecon))
+cls_cross = np.load(rep_spectrumCC + 
+                    'IBCSsame_nfrecon{}_noisemaps_FI150_v4_galaxycenter.npy'.format(nfrecon))
+
 
 print(cls_cross.shape)
 
@@ -199,10 +203,10 @@ sns.palplot(palet2)
 
 ```{python}
 cls_cross_same = np.load(rep_spectrumCC + 
-                    'cross_interband_samereal_nfrecon{}_noisemaps_FI150_v2_galaxycenter.npy'.format(nfrecon))
+                    'IBCSsame_nfrecon{}_noisemaps_FI150_v4_galaxycenter.npy'.format(nfrecon))
 
 cls_cross_mix = np.load(rep_spectrumCC + 
-                    'cross_interband_mixreal_nfrecon{}_noisemaps_FI150_v2_galaxycenter.npy'.format(nfrecon))
+                    'IBCSmix_nfrecon{}_noisemaps_FI150_v4_galaxycenter.npy'.format(nfrecon))
 
 # Reorder cross spectra
 permutation = []
@@ -290,7 +294,7 @@ plt.ylabel('$D_\\ell$')
 plt.title(clnames[2])
 plt.grid()
 plt.legend(fontsize=16, loc='upper left')
-# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/IBCS_noiseBBsame.pdf')
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/IBCS_noiseBBsame150_GoodPhotonNoise_v4.pdf')
 ```
 
 ```{python}
@@ -313,9 +317,9 @@ combi = list(combinations_with_replacement(np.arange(nfrecon), 2))
 ncombi = len(combi)
 
 cls_cross150 = np.load(rep_spectrumCC + 
-                    'cross_interband_mixreal_nfrecon{}_noisemaps_FI150_v2_galaxycenter.npy'.format(nfrecon))
+                    'IBCSmix_nfrecon{}_noisemaps_FI150_v4_galaxycenter.npy'.format(nfrecon))
 cls_cross220 = np.load(rep_spectrumCC + 
-                    'cross_interband_mixreal_nfrecon{}_noisemaps_FI220_v2_galaxycenter.npy'.format(nfrecon))
+                    'IBCSmix_nfrecon{}_noisemaps_FI220_v4_galaxycenter.npy'.format(nfrecon))
 print(cls_cross150.shape)
 
 # STD for each
@@ -405,7 +409,7 @@ for s in range(4):
     plt.xticks(np.arange(len(labs)), labs)
     plt.yticks(np.arange(len(labs)), labs)
 # plt.suptitle('Correlation Avg')
-# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/IBCS_CorrMatrices_AvgOverBins.pdf')
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/IBCS_CorrMatrices_FI150_AvgOverBins_GoodPhotonNoise_v4.pdf')
 ```
 
 ### Go to Cp_prime
@@ -550,39 +554,60 @@ BBcov = covbinband[:, :, 2]
 BBcorr = corrbinband[:, :, 2]
 
 
-clean_BBcorr = clean_matrices(BBcorr, ncombi)
-clean_BBcov = clean_matrices(BBcov, ncombi)
+# clean_BBcorr = clean_matrices(BBcorr, ncombi)
+# clean_BBcov = clean_matrices(BBcov, ncombi)
 ```
 
 ```{python}
 # Get matrices and save them for all nfrecon for Claudia
-# allnfrecon = [1, 2, 3, 4, 5, 8]
-# for nfrecon in allnfrecon:
+freq = 150
+tipo = 'mix'
+allnfrecon = [1, 2, 3, 4, 5, 8]
+for nfrecon in allnfrecon:
     
-#     combi = list(combinations_with_replacement(np.arange(nfrecon), 2))
-#     ncombi = len(combi)
+    combi = list(combinations_with_replacement(np.arange(nfrecon), 2))
+    ncombi = len(combi)
 
-#     cls_cross = np.load(rep_spectrumCC + 
-#                     'cross_interband_mixreal_nfrecon{}_noisemaps_FI220_v2_galaxycenter.npy'.format(nfrecon))
+    cls_cross = np.load(rep_spectrumCC + 
+                    f'IBCS{tipo}_nfrecon{nfrecon}_noisemaps_FI{freq}_v4_galaxycenter.npy')
 
-#     print(cls_cross.shape)
+    print(cls_cross.shape)
     
-#     cls_cross_reshape = np.moveaxis(cls_cross, [1, 2, 3], [3, 1, 2])
-#     covbinband, corrbinband = amc.get_covcorr_patch(cls_cross_reshape, stokesjoint=True, doplot=False)
+    cls_cross_reshape = np.moveaxis(cls_cross, [1, 2, 3], [3, 1, 2])
+    covbinband, corrbinband = amc.get_covcorr_patch(cls_cross_reshape, stokesjoint=True, doplot=False)
 
        
-#     BBcov = covbinband[:, :, 2]
-#     BBcorr = corrbinband[:, :, 2]
-#     print(BBcov.shape)
+    BBcov = covbinband[:, :, 2]
+    BBcorr = corrbinband[:, :, 2]
+    print(BBcov.shape)
+
+    # Clean the matrix
+#     threshold = 0.01
+#     clean_BBcov = np.where(np.abs(BBcorr)<threshold, BBcov*0, BBcov)
+#     clean_BBcorr = np.where(np.abs(BBcorr)<threshold, BBcorr*0, BBcorr)
+     
+    clean_BBcorr = clean_matrices(BBcorr, ncombi)
+    clean_BBcov = clean_matrices(BBcov, ncombi)
     
-#     # Clean the matrix
-#     clean_BBcorr = clean_matrices(BBcorr, ncombi)
-#     clean_BBcov = clean_matrices(BBcov, ncombi)
-          
-#     np.save(rep_spectrumCC + 'BBcovariance_bincross_nfrecon{}_mixreal_FI220_v2_clean.npy'.format(nfrecon), 
+    np.save(rep_spectrumCC + 
+            f'BBcovariance_bincross_nfrecon{nfrecon}_{tipo}real_FI{freq}_v4.npy', 
+            BBcov)
+    np.save(rep_spectrumCC + 
+            f'BBcorrelation_bincross_nfrecon{nfrecon}_{tipo}real_FI{freq}_v4.npy', 
+            BBcorr)
+    
+#     np.save(rep_spectrumCC + 
+#             f'BBcovariance_bincross_nfrecon{nfrecon}_{tipo}real_FI{freq}_v3_cleanbelow{threshold}.npy', 
 #             clean_BBcov)
-#     np.save(rep_spectrumCC + 'BBcorrelation_bincross_nfrecon{}_mixreal_FI220_v2_clean.npy'.format(nfrecon), 
+#     np.save(rep_spectrumCC + 
+#             f'BBcorrelation_bincross_nfrecon{nfrecon}_{tipo}real_FI{freq}_v3_cleanbelow{threshold}.npy', 
 #             clean_BBcorr)
+    np.save(rep_spectrumCC + 
+            f'BBcovariance_bincross_nfrecon{nfrecon}_{tipo}real_FI{freq}_v4_clean.npy', 
+            clean_BBcov)
+    np.save(rep_spectrumCC + 
+            f'BBcorrelation_bincross_nfrecon{nfrecon}_{tipo}real_FI{freq}_v4_clean.npy', 
+            clean_BBcorr)
 ```
 
 ```{python}
@@ -635,8 +660,8 @@ for s in range(ncombi-1):
     plt.axvline(x=(s+1)*nbins-0.5, lw=3, color='k')
 vmax = np.max(np.abs(covbinband[:, :, ispectre]))
 # plt.imshow(covbinband[:, :, ispectre], vmin=-vmax, vmax=vmax, cmap='bwr')
-vmax = np.max(np.abs(clean_BBcov))
-plt.imshow(clean_BBcov, vmin=-vmax, vmax=vmax, cmap='bwr')
+vmax = np.max(np.abs(BBcov))
+plt.imshow(BBcov, vmin=-vmax, vmax=vmax, cmap='bwr')
 # plt.title('Covariance matrix (nfreq*nbins)x(nfreq*nbins) for {} spectrum'.format(clnames[ispectre]), 
 #          fontsize=20)
 plt.colorbar()
@@ -656,7 +681,7 @@ for s in range(ncombi-1):
     plt.axvline(x=(s+1)*nbins-0.5, lw=3, color='k')
 
 # im = ax.imshow(corrbinband[:, :, ispectre], vmin=-1, vmax=1, cmap='bwr')
-plt.imshow(clean_BBcorr, vmin=-1, vmax=1, cmap='bwr')
+im = ax.imshow(BBcorr, vmin=-1, vmax=1, cmap='bwr')
 plt.title('Correlation matrix (nfreq*nbins)x(nfreq*nbins) for {} spectrum'.format(clnames[ispectre]),
          fontsize=20)
 plt.title(clnames[ispectre])
@@ -665,7 +690,7 @@ divider = make_axes_locatable(ax)
 cax = divider.append_axes("right", size="5%", pad=0.05)
 plt.colorbar(im, cax=cax)
 
-plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/IBCS_CorrMatrix_binfreq.pdf')
+plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/IBCS_CorrMatrix_binfreq_FI150_GoodPhotonNoise_v4.pdf')
 ```
 
 ### Diference between same and mix

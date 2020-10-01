@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.6.0rc0
   kernelspec:
     display_name: Python 3
     language: python
@@ -136,10 +136,10 @@ if makeCov:
     coverage220G = np.sum(cov220G, axis=0)# Sum the bands
     coverage220G /= np.max(coverage220G)# Normalize by the max
 else:
-    coverage150Q = np.load(global_dir+'doc/FastSimulator/Data/DataFastSimulator_FI150Q_coverage.npy')
-    coverage220Q = np.load(global_dir+'doc/FastSimulator/Data/DataFastSimulator_FI220Q_coverage.npy')
-    coverage150G = np.load(global_dir+'doc/FastSimulator/Data/DataFastSimulator_FI150G_coverage.npy')
-    coverage220G = np.load(global_dir+'doc/FastSimulator/Data/DataFastSimulator_FI220G_coverage.npy')
+    coverage150Q = np.load(global_dir+'/doc/FastSimulator/Data/DataFastSimulator_FI150Q_coverage.npy')
+    coverage220Q = np.load(global_dir+'/doc/FastSimulator/Data/DataFastSimulator_FI220Q_coverage.npy')
+    coverage150G = np.load(global_dir+'/doc/FastSimulator/Data/DataFastSimulator_FI150G_coverage.npy')
+    coverage220G = np.load(global_dir+'/doc/FastSimulator/Data/DataFastSimulator_FI220G_coverage.npy')
 ```
 
 See at the coeverages...
@@ -272,7 +272,7 @@ for i in range(d220Q['nf_recon']):
 
 ```{python}
 ##### Getting FastSimulator output maps
-nreals=2
+nreals=30
 npix = 12 * d150Q['nside'] ** 2
 noise150Q = np.zeros((nreals, d150Q['nf_recon'], npix, 3))
 noise220Q = np.zeros((nreals, d220Q['nf_recon'], npix, 3))
@@ -541,12 +541,8 @@ pixG_red = np.where(np.where(cov150G_ud == True)[0] == pixG_ud)[0][0]
 ```
 
 ```{python}
-Cp150Q_prime[:, :, istk, pixQ_red].shape, maps150Q_ud.shape
-```
-
-```{python}
 from scipy.optimize import curve_fit
-from lmfit import Model
+#from lmfit import Model
 
 def func(x, a, b):
     return a + x**b
@@ -646,33 +642,34 @@ for j in range(1):#enumerate(range(600,12000,500)):
     #       fmt='o-', color='r', alpha=0.8)
     
     #ax[0].plot(x150, mvals150G, 'ro-', label='reconstructed')
-    ax[0].plot(nus_out150, maps150G_ud[:,IPIXG,0], 'ro-', label='reconstructed')
-    ax[0].fill_between(x150, y1 = mvals150G - svals150G, y2 = mvals150G + svals150G, 
-                       color = 'r', alpha = 0.5)
-    #ax[0].plot(x220, mvals220G , 'ro-')
-    ax[0].plot(nus_out220, maps220G_ud[:,IPIXG,0] , 'ro-')
-    ax[0].fill_between(x220, y1 = mvals220G - svals220G, y2 = mvals220G + svals220G, 
-                       color = 'r', alpha = 0.5)
     ax[0].plot(nus_out150, dust_map_150G_ud[:,IPIXG,0],
            'bo-',label='convolved')
     ax[0].plot(nus_out220, dust_map_220G_ud[:,IPIXG,0],
            'bo-', alpha=0.7)
+    ax[0].plot(nus_out150, maps150G_ud[:,IPIXG,0], 'r-', label='reconstructed')
+    ax[0].fill_between(x150, y1 = mvals150G - svals150G, y2 = mvals150G + svals150G, 
+                       color = 'r', alpha = 0.3)
+    #ax[0].plot(x220, mvals220G , 'ro-')
+    ax[0].plot(nus_out220, maps220G_ud[:,IPIXG,0] , 'r-')
+    ax[0].fill_between(x220, y1 = mvals220G - svals220G, y2 = mvals220G + svals220G, 
+                       color = 'r', alpha = 0.3)
+    
     ax[0].axvspan(nus_edge150[-1], nus_edge220[0],color='k',alpha=0.2)
 
     #ax[2].errorbar(nus_out150, maps150Q_ud[:,IPIXQ,0],yerr=std150Q_ud[:,IPIXQ,0], capsize=capsize,
     #       fmt='o-', color='r',label='reconstructed', alpha=0.8)
     #ax[2].errorbar(nus_out220, maps220Q_ud[:,IPIXQ,0],yerr=std220Q_ud[:,IPIXQ,0], capsize=capsize,
     #       fmt='o-', color='r',alpha=0.8)
-    ax[2].plot(nus_out150, maps150Q_ud[:,IPIXQ,0], 'ro', label='reconstructed')
-    ax[2].fill_between(x150, y1 = mvals150Q - svals150Q, y2 = mvals150Q + svals150Q, 
-                       color = 'r', alpha = 0.5)
-    ax[2].plot(nus_out220, maps220Q_ud[:,IPIXQ,0], 'ro')
-    ax[2].fill_between(x220, y1 = mvals220Q - svals220Q, y2 = mvals220Q + svals220Q, 
-                       color = 'r', alpha = 0.5)
     ax[2].plot(nus_out150, dust_map_150Q_ud[:,IPIXQ,0],
            'bo-',label='convolved', )
     ax[2].plot(nus_out220, dust_map_220Q_ud[:,IPIXQ,0],
            'bo-', alpha=0.5)
+    ax[2].plot(nus_out150, maps150Q_ud[:,IPIXQ,0], 'r', label='reconstructed')
+    ax[2].fill_between(x150, y1 = mvals150Q - svals150Q, y2 = mvals150Q + svals150Q, 
+                       color = 'r', alpha = 0.3)
+    ax[2].plot(nus_out220, maps220Q_ud[:,IPIXQ,0], 'r')
+    ax[2].fill_between(x220, y1 = mvals220Q - svals220Q, y2 = mvals220Q + svals220Q, 
+                       color = 'r', alpha = 0.3)
 
     ax[2].grid(which='both')
     ax[2].axvspan(nus_edge150[-1],nus_edge220[0],color='k',alpha=0.2)
@@ -869,7 +866,7 @@ for j in range(1):
     #Error bar 220 Q
     Perr220Q = ErrBar2(Qsvals220Q, Usvals220Q)
     ax[2].fill_between(x220, y1 = Pmean220Q - Perr220Q, y2 = Pmean220Q + Perr220Q, 
-                       color = 'r', alpha = 0.5)
+                       color = 'r', alpha = 0.3)
 
     
     

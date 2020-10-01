@@ -181,6 +181,10 @@ input_editted = np.copy(inputmap)
 Generate convolution manually as it is in polyacquisition.py, i.e., considering spectral intensity...
 
 ```{python}
+sum(width_out) , nus_edge_out
+```
+
+```{python}
 input_editted = np.copy(inputmap)
 #Averaging manually the maps into a band
 band = d['filter_nu'] / 1e9
@@ -201,43 +205,43 @@ conv_manual = np.zeros((d['nf_recon'][0], 12 * d['nside'] ** 2, 3))
 for i in range(d['nf_recon'][0]):
     rel_dist = lambda nui: (nui - nus_out[i])/width_out[i]
     print('doing band {} {} {}'.format(i, nus_edge_out[i], nus_edge_out[i + 1]))
-    inband = (nus > nus_edge_out[i]) & (nus < nus_edge_out[i + 1])
-    
-    #PSF into sub-band
-    for iel,jband in enumerate(inband):
-        if jband: 
-            #print(i,iel,jband)
-            input_editted[jband, :, :]*=model_pol(rel_dist(nus[iel]), *parspol)
+            
     #PSF neigbohur bands
     #option A: conv each map with PSF - average and add it to nu0
     #option B: average - conv with central nu1 and add it to nu0 (this is the chosen one)
     optA=True
     if i == 0:
+        inband = (nus > nus_edge_out[i]) & (nus < nus_edge_out[i + 1])
         inbandaux = (nus > nus_edge_out[i + 1]) & (nus < nus_edge_out[i + 2])
         InterBandConv = np.zeros((12 * d['nside']**2, 3))
         if optA:
-            InterBandConv=np.mean([input_editted[iterband, :, :]*model_pol(rel_dist(nus[iterband]),
+            #PSF into sub-band
+            inmapaux = np.mean([input_editted[jband, :, :] * model_pol(rel_dist(nus[jband]), *parspol) \
+                               for jband in np.where(inband)[0]], axis = 0)
+            #PSF neigbohur bands
+            InterBandConv = np.mean([input_editted[iterband, :, :] * model_pol(rel_dist(nus[iterband]),
                                                              *parspol) for iterband in np.where(inbandaux)[0]],
                    axis=0)
             #hp.gnomview(input_editted[4, :, 0] \
             #            *model_pol(rel_dist(nus[4]),*parspol ), rot=center, reso=12)
         else:
+            #PSF into sub-band
+            inmapaux = np.mean(input_editted[inband, :, :], axis = 0) * \
+                                model_pol(rel_dist(nus[inband]), *parspol),
+            #PSF neigbohur bands
             InterBandConv=np.mean(input_editted[inbandaux, :, :], 
                                   axis=0)*model_pol(rel_dist(nus_out[i+1]), *parspol)
         
     elif (i != 0) & (i != d['nf_recon'][0]-1):
-        #print(i)
+        inband = (nus > nus_edge_out[i]) & (nus < nus_edge_out[i + 1])
         InterBandConv = np.zeros((12 * d['nside']**2, 3))
         inband_prev = (nus > nus_edge_out[i - 1]) & (nus < nus_edge_out[i])
         inband_post = (nus > nus_edge_out[i + 1]) & (nus < nus_edge_out[i + 2])
         if optA:
-            #print(inband_prev)
-            #print(inband_post)
-            #print(np.max(input_editted[inband_prev, :, :]),
-            #      model_pol(rel_dist(nus[inband_prev]), *parspol ))
-            #print(np.max(input_editted[inband_post, :, :]),
-            #      model_pol(rel_dist(nus[inband_post]), *parspol) )
-            #print(model_pol(rel_dist(nus[inband_post]), *parspol ))
+            #PSF into sub-band
+            inmapaux = np.mean([input_editted[jband, :, :] * model_pol(rel_dist(nus[jband]), *parspol) \
+                               for jband in np.where(inband)[0]], axis = 0)
+            #PSF neigbohur bands
             auxmap_prev=np.mean([input_editted[interband_prev, :, :]*model_pol(rel_dist(nus[interband_prev]), 
                                                                             *parspol ) \
                                  for interband_prev in np.where(inband_prev)[0]] ,
@@ -247,6 +251,10 @@ for i in range(d['nf_recon'][0]):
                                  for interband_post in np.where(inband_post)[0]] ,
                                 axis=0)
         else:
+            #PSF into sub-band
+            inmapaux = np.mean(input_editted[inband, :, :], axis = 0) * \
+                                model_pol(rel_dist(nus[inband]), *parspol),
+            #PSF neigbohur bands
             auxmap_prev=np.mean(input_editted[inband_prev, :, :], axis=0)*model_pol(rel_dist(nus_out[i-1]), 
                                                                                     *parspol)
             auxmap_post=np.mean(input_editted[inband_post, :, :], axis=0)*model_pol(rel_dist(nus_out[i+1]), 
@@ -255,17 +263,27 @@ for i in range(d['nf_recon'][0]):
             
         del auxmap_prev, auxmap_post
     elif i == d['nf_recon'][0]-1:
+        inband = (nus > nus_edge_out[i]) & (nus < nus_edge_out[i + 1])
         InterBandConv = np.zeros((12 * d['nside']**2, 3))
         inbandaux = (nus > nus_edge_out[i - 1]) & (nus < nus_edge_out[i])
         if optA:
+            #PSF into sub-band
+            inmapaux = np.mean([input_editted[jband, :, :] * model_pol(rel_dist(nus[jband]), *parspol) \
+                               for jband in np.where(inband)[0]], axis = 0)
+            #PSF neigbohur bands
             InterBandConv=np.mean([input_editted[iterband, :, :]*model_pol(rel_dist(nus[iterband]),
                                                              *parspol) for iterband in np.where(inbandaux)[0]],
                    axis=0)
         else:
+            #PSF into sub-band
+            inmapaux = np.mean(input_editted[inband, :, :], axis = 0) * \
+                                model_pol(rel_dist(nus[inband]), *parspol),
+            #PSF neigbohur bands
             InterBandConv=np.mean(input_editted[inbandaux, :, :], 
                                   axis=0)*model_pol(rel_dist(nus_out[i - 1]), *parspol)
         
-    conv_psf[i, :, :] = np.mean(input_editted[inband, :, :], axis=0) + InterBandConv
+    #conv_psf[i, :, :] = np.mean(input_editted[inband, :, :], axis=0) + InterBandConv
+    conv_psf[i, :, :] = inmapaux + InterBandConv
     del InterBandConv
     conv_manual[i, :, :] = np.mean(inputmap[inband, :, :], axis=0)
 for i in range(d['nf_recon'][0]):
@@ -414,7 +432,7 @@ for i in range(d['nf_recon'][0]):
                 np.mean([input_editted[inb,:,:]*model_pol(rel_dist(nus[inb]), *parspol) \
                 for inb in np.where(jointband)[0]], axis=0)
         
-    print(jointband)
+    #print(jointband)
     conv_manual_new[i, :, :] = np.mean(inputmap[inband, :, :], axis=0)
 for i in range(d['nf_recon'][0]):
     conv_psf_new[i,~mask,0] = hp.UNSEEN
@@ -424,66 +442,45 @@ for i in range(d['nf_recon'][0]):
 
 ```{python}
 plt.figure(figsize=(8,8))
-vmin=-1e4
-vmax=1e4
-nrec=d['nf_recon'][0]
+vmin=-2e4
+vmax=2e4
+nrec=2
 coln=5
 plt.rc('font', size=16)
 reso=12
-fig,ax=plt.subplots(nrows=nrec,ncols=coln,figsize=(12,16), sharex=True,
-                    gridspec_kw={'hspace': 0.01,'wspace': 0.0})
-cmap='jet'
-ax=ax.ravel()
-for i in range(nrec):
-    ax[coln*i].cla()
-    plt.axes(ax[coln*i])
+fig,ax=plt.subplots(nrows=nrec,ncols=coln,figsize=(16,6), sharex=True,
+                    gridspec_kw={'hspace': 0.01,'wspace': 0.01})
+cmap='coolwarm'
+#cmap='jet'
+#ax=ax.ravel()
+for i in range(5):
+    ax[0,i].cla()
+    plt.axes(ax[0,i])
     hp.gnomview(mapconv[i,:,0],  rot= center,reso=12,notext=True,hold=True,
                 max=vmax,
                 min=vmin,
                 cmap=cmap,
                 cbar= True if i == 5 else False,
-               title='Convolved' if i == 0 else ' ')
-    ax[coln*i+1].cla()
-    plt.axes(ax[coln*i+1])
-    hp.gnomview(conv_psf_new[i,:,0],  rot= center,reso=12,notext=True,hold=True,
-                max=vmax,
-                min=vmin,
-                cmap=cmap,
-                cbar= True if i == 5 else False,
-               title='Convolved (PSF)' if i == 0 else ' ')
-    ax[coln*i+2].cla()
-    plt.axes(ax[coln*i+2])
+               title=r'{:.1f} GHz'.format(nusrec[i]))
+    ax[1,i].cla()
+    plt.axes(ax[1,i])
     hp.gnomview(maprec[i,:,0], rot= center,reso=12,notext=True,hold=True,
                 max= vmax,
                 min =vmin,
-                cmap=cmap,
-                cbar= True if i == 5 else False,
-               title = 'Recons.' if i == 0 else ' ')
-    ax[coln*i+3].cla()
-    plt.axes(ax[coln*i+3])
-    auxmapconv=(mapconv-maprec)[i,:,0]
-    auxmapconv[~mask]=hp.UNSEEN
-    hp.gnomview(auxmapconv, rot= center,reso=12,notext=True,hold=True,
-                max= vmax,
-                min =vmin,
-                cmap=cmap,
-                cbar= True if i == 5 else False,
-               title = 'Dif.Conv' if i == 0 else ' ')
-    ax[coln*i+4].cla()
-    plt.axes(ax[coln*i+4])
-    auxmap=(conv_psf_new-maprec)[i,:,0]
-    auxmap[~mask]=hp.UNSEEN
-    hp.gnomview(auxmap, rot= center,reso=12,notext=True,hold=True,
-                max= vmax,
-                min =vmin,
-                cmap=cmap,
-                cbar= True if i == 5 else False,
-               title = 'Dif.FPSF' if i == 0 else ' ')
-    #if i == 0:
-    #    ax[coln*i].text(-100,100, 'lala',)
+                cmap=cmap, title = None,
+                cbar= True if i == 4 else False)
 
+plt.text(-4.,0.66,'Convolved',fontsize=16)
+plt.text(-4.,0.,'Reconstructed',fontsize=16)
+#plt.savefig('extsource_bar_5rec')
+#plt.text(-1.5,0,'{:.0f}GHz'.format(nusrec[2]),fontsize=16)
 ```
 
 ```{python}
+hp.gnomview(maprec[0,:,0], rot= center,reso=12,notext=True,
+                max= vmax,
+                min =vmin,
+                cmap=cmap, title = None,
+                cbar= True if i == 4 else False)
 
 ```

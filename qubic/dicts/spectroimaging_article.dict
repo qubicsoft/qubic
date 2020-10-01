@@ -69,7 +69,7 @@ hwp_stepsize=15 # (degrees) used for random and sweeping pointing
 random_pointing=False   
 
 repeat_pointing=True
-npointings=8000
+npointings=500
 dtheta=15.
 nhwp_angles=3 # use only for repeat_pointing
 seed=1

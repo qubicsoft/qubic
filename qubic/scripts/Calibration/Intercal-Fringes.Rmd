@@ -1,0 +1,373 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+from __future__ import division, print_function
+import numpy as np
+import matplotlib.pyplot as plt
+from qubicpack.utilities import Qubic_DataDir
+import qubic
+import qubic.fibtools as ft
+import qubic.sb_fitting as sbfit
+import qubic.selfcal_lib as sc
+import qubic.demodulation_lib as dl
+
+rc('figure', figsize=(16, 10))
+rc('font', size=15)
+
+```
+
+```{python}
+# Use a tool from qubicpack to get a path
+basedir = Qubic_DataDir(datafile='instrument.py', )
+print('basedir : ', basedir)
+dictfilename = basedir + '/dicts/global_source_oneDet.dict'
+
+# Get a dictionary
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+print(d['detarray'])
+```
+
+### Theoretical fringe pattern
+Below is the code to get the theoretical fringe from a pair of horns:
+
+```{python}
+# Create an object
+baseline = [25, 49]
+q = qubic.QubicInstrument(d)
+ca = sc.SelfCalibration(baseline, d)
+S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = ca.get_power_combinations(q, doplot=False)
+
+#### Theoretical Response
+full_real_fp, quart_fp = sc.get_real_fp(Sij[:, :, 0], quadrant=3)
+subplot(2,2,1)
+imshow(quart_fp, origin='lower')
+title('Theory : {}+{}'.format(baseline[0], baseline[1]))
+colorbar()
+
+OK_TES = ~isnan(quart_fp)
+```
+
+### Model for data
+Now we need a model for the measured fringes. What we measure is the input power, for which the detector responds in a non linear manner, and then converts to ADU using an unknown intercalibration. Then our measurement has noise:
+$$m_i(h_0,h_1) = L\left[f_i(h_0, h_1), \lambda_i\right] * c_i + n_i$$
+where:
+- $m_i(h_0, h_1)$ is the measured fringe for detector $i$ and baselines $(h_0,h_1)$
+- $f_i(h_0, h_1)$ is the theoretical fringe for detector $i$ and baselines $(h_0,h_1)$
+- $L(x,\lambda)$ is the non-linear response for a detector whose NL parameter is $\lambda$. We will use at first a sigmoid defined in demodulation_lib.py as "sigmoid_saturation(x,$\lambda$)" whose saturation limit is 2/$\lambda$.
+- $c_i$ is the intercalibration for detector $i$
+- $n_i$ is the noise for this measurement on detector $i$
+
+```{python}
+lls = [0.0001, 0.01, 0.1, 0.5, 1.]
+x=np.linspace(0,10, 1000)
+plot(x,x, lw=5,label='Linear')
+for ll in lls:
+    plot(x, dl.sigmoid_saturation(x, ll), '--', lw=5, label='Non Linear {} - Sat = {}'.format(ll,2./ll))
+legend()
+```
+
+Testing Intercals
+
+```{python}
+rc('figure', figsize=(16, 6))
+
+### We simulate values for lambda and caliobration for each TES:
+max_intercal = 10
+max_lambda = 5
+intercals = np.random.random((17, 17))*max_intercal * OK_TES
+lambdas = np.random.random((17, 17))* max_lambda * OK_TES
+
+subplot(1,2,1)
+imshow(intercals, origin='lower', vmin=0, vmax=max_intercal)
+title('Intercalibration')
+colorbar()
+
+subplot(1,2,2)
+imshow(lambdas, origin='lower', vmin=0, vmax=max_lambda)
+title('Saturation $\lambda$')
+colorbar()
+
+```
+
+Some Useful functions
+
+```{python}
+def sigmoid_saturation(x, l):
+    '''
+    This si the common sigmoid function modified to have a slope equals to 1 at zero whatever the value
+    of the lambda parameter. Then if lambda =
+    '''
+    result = x.copy()
+    saturated = l != 0
+    result[saturated] = 4. / l[saturated] * (1. / (1 + np.exp(-x[saturated] * l[saturated])) - 0.5)
+    return result
+    
+def inverse_sigmoid_saturation(s, l):
+    result = s.copy()
+    saturated = l != 0
+    result[saturated] = -1./l[saturated] * np.log(1./(l[saturated]*s[saturated]/4+0.5) - 1.)
+    return result
+    
+
+def distort_signal(init, lambdas, intercals):
+    new = sigmoid_saturation(init, lambdas) 
+    return new * intercals
+
+def un_distort_signal(dist, lambdas, intercals):
+    new = inverse_sigmoid_saturation(dist / intercals, lambdas)
+    return new
+
+def return_fringes(true, lambdas, intercals, add_noise=None):
+    sh = np.shape(true)
+    all_distorted = np.zeros_like(true)
+    for i in range(sh[0]):
+        all_distorted[i,:,:] = distort_signal(true[i,:,:], lambdas, intercals)
+    return all_distorted
+
+def simulate_data(d, baselines, lambdas = None, intercals=None, 
+                  noise_RMS=1., max_intercal = 10, max_lambda = 0.1, min_lambda=0):
+    true = np.zeros((len(baselines), 17,17))
+    for i in range(len(baselines)):
+        q = qubic.QubicInstrument(d)
+        ca = sc.SelfCalibration(baselines[i], d)
+        S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = ca.get_power_combinations(q, doplot=False)
+        full_real_fp, quart_fp = sc.get_real_fp(Sij[:, :, 0], quadrant=3)
+        true[i,:,:] = quart_fp/np.max(np.nan_to_num(quart_fp))
+        OK_TES = ~isnan(quart_fp)
+    
+    ### If needed draw vslues for intercalibration and saturation
+    if lambdas is None:
+        lambdas = (np.random.random((17, 17))* (max_lambda-min_lambda) + min_lambda) * OK_TES
+    if intercals is None:
+        intercals = (np.random.random((17, 17))+0.5)*2*max_intercal * OK_TES
+
+    distorted = return_fringes(true, lambdas, intercals)
+    
+    distorted_noise = np.zeros((len(baselines), 17,17))
+    for i in range(len(baselines)):
+        distorted_noise[i,:,:] = distorted[i,:,:] + np.random.randn(17, 17) * noise_RMS * OK_TES
+    
+    return true, distorted, distorted_noise, lambdas, intercals
+        
+
+```
+
+Now test for a few baselines
+
+```{python}
+rc('figure', figsize=(16, 16))
+horn1 = [49, 57, 52, 60, 25, 1, 57, 60, 40, 40, 39, 39]
+horn2 = [25, 25, 28, 28, 28, 4, 43, 63, 64, 63, 64, 63]
+all_baselines = list(np.array([horn1, horn2]).T)
+
+noise_RMS = 0.001
+max_intercal = 0.5
+min_lambda = 4
+max_lambda = 10
+
+true, distorted, distorted_noise, lambdas, intercals = simulate_data(d, all_baselines, 
+                                                                    max_intercal = max_intercal,
+                                                                    max_lambda = max_lambda,
+                                                                    noise_RMS=noise_RMS)
+
+rc('figure', figsize=(16, 16))
+subplot(len(all_baselines)+1, 2, 1)
+imshow(lambdas)
+colorbar()
+title('Lambda')
+subplot(len(all_baselines)+1, 2, 2)
+imshow(intercals)
+colorbar()
+title('Intercals')
+for i in range(len(all_baselines)):
+    subplot(len(all_baselines)+1, 3, 3+3*i+1)
+    imshow(true[i,:,:])
+    colorbar()
+    title('True {} {}'.format(all_baselines[i][0], all_baselines[i][1]))
+    subplot(len(all_baselines)+1, 3, 3+3*i+2)
+    imshow(distorted[i,:,:])
+    colorbar()
+    title('Distorted {} {}'.format(all_baselines[i][0], all_baselines[i][1]))
+    subplot(len(all_baselines)+1, 3, 3+3*i+3)
+    imshow(distorted_noise[i,:,:])
+    colorbar()
+    title('Distorted+Noise {} {}'.format(all_baselines[i][0], all_baselines[i][1]))
+    
+
+tight_layout()
+
+OK_TES = ~isnan(distorted[0,:,:])
+
+```
+
+Now a function for the global fitting. For doe it does not converge to the right values...
+
+```{python}
+def tofit(x, *pars):
+    ### Filling lambda and intercal
+    sub_lambdas = pars[:int(len(pars)/2)]
+    sub_intercals = pars[int(len(pars)/2):]
+    my_lambdas = np.zeros((17,17))
+    my_lambdas[OK_TES] = sub_lambdas
+    my_intercals = np.zeros((17,17))
+    my_intercals[OK_TES] = sub_intercals
+    
+    mydistorted = return_fringes(true, my_lambdas, my_intercals)
+    sh = np.shape(true)
+    dist = []
+    for i in range(sh[0]):
+        dist.append(mydistorted[i,OK_TES])
+    vals = np.ravel(np.array(dist))
+    #print(sub_lambdas[0], sub_intercals[0], np.sum((vals-data_tofit)**2))
+    return vals
+
+    
+data_tofit = []
+for i in range(len(all_baselines)):
+    data_tofit.append(distorted_noise[i, OK_TES])
+data_tofit = np.ravel(np.array(data_tofit))
+xvalues = np.zeros(len(data_tofit))
+
+    
+guess_lambdas = np.ones(np.sum(OK_TES))*25
+guess_intercals = np.ones(np.sum(OK_TES))
+#guess_lambdas = lambdas[OK_TES]
+#guess_intercals = intercals[OK_TES]
+guess = np.ravel(np.array([guess_lambdas, guess_intercals]))
+data_guess = tofit(0, *guess)
+
+
+from scipy.optimize import curve_fit
+f = curve_fit(tofit, xvalues, data_tofit, p0=guess,maxfev=10000000, bounds = (0, inf))
+#f = curve_fit(tofit, xvalues, data_tofit, p0=guess,method='lm',maxfev=10000000)#, bounds = (0, inf))
+
+fitted_lambdas = f[0][:int(len(f[0])/2)]
+fitted_intercals = f[0][int(len(f[0])/2):]
+
+print(guess_lambdas[0:10])
+print(fitted_lambdas[0:10])
+print(lambdas[OK_TES][0:10])
+print()
+print(guess_intercals[0:10])
+print(fitted_intercals[0:10])
+print(intercals[OK_TES][0:10])
+
+chi2 = np.sum((fitted_lambdas-lambdas[OK_TES])**2 + (fitted_intercals-intercals[OK_TES])**2)
+print('Chi2: {}'.format(chi2))
+
+new_lambdas = np.zeros((17,17))
+new_lambdas[OK_TES] = fitted_lambdas
+new_intercals = np.zeros((17,17))
+new_intercals[OK_TES] = fitted_intercals
+
+```
+
+```{python}
+rc('figure', figsize=(16, 6))
+subplot(1,2,1)
+plot(lambdas[OK_TES], fitted_lambdas,'.')
+xlim(0,max_lambda)
+ylim(0,max_lambda)
+title('Lambda')
+xlabel('Input')
+ylabel('Recovered')
+
+subplot(1,2,2)
+plot(intercals[OK_TES], fitted_intercals,'.')
+xlim(0,1+2*max_intercal)
+ylim(0,1+2*max_intercal)
+title('Intercal')
+xlabel('Input')
+ylabel('Recovered')
+
+```
+
+```{python}
+rc('figure', figsize=(16, 6))
+subplot(2,3,1)
+imshow(lambdas, vmin=0, vmax=max_lambda)
+title('Init Lambdas')
+colorbar()
+
+subplot(2,3,2)
+title('New Lambdas')
+imshow(new_lambdas, vmin=0, vmax=max_lambda)
+colorbar()
+
+subplot(2,3,3)
+resid = new_lambdas - lambdas
+mm, ss = ft.meancut(resid[OK_TES],3)
+imshow(resid, vmin=mm-3*ss, vmax=mm+3*ss)
+title('Resid Lambdas')
+colorbar()
+
+subplot(2,3,4)
+imshow(intercals, vmin=1-max_intercal, vmax=1+max_intercal)
+title('Init Intercals')
+colorbar()
+
+subplot(2,3,5)
+title('New Intercals')
+imshow(new_intercals, vmin=1-max_intercal, vmax=1+max_intercal)
+colorbar()
+
+subplot(2,3,6)
+resid = new_intercals - intercals
+mm, ss = ft.meancut(resid[OK_TES],3)
+imshow(resid, vmin=mm-3*ss, vmax=mm+3*ss)
+title('Resid Intercals')
+colorbar()
+
+
+rc('figure', figsize=(16, 20))
+figure()
+for i in range(len(all_baselines)):
+    subplot(len(all_baselines), 4, 4*i+1)
+    imshow(true[i,:,:])
+    colorbar()
+    title('True {} {}'.format(all_baselines[i][0], all_baselines[i][1]))
+
+    subplot(len(all_baselines), 4, 4*i+2)
+    imshow(distorted_noise[i,:,:])
+    colorbar()
+    title('Distorted+Noise {} {}'.format(all_baselines[i][0], all_baselines[i][1]))
+
+    subplot(len(all_baselines), 4, 4*i+3)
+    undist = un_distort_signal(distorted_noise[i,:,:], new_lambdas, new_intercals)
+    imshow(undist)
+    colorbar()
+    title('Un Distorted Fit {} {}'.format(all_baselines[i][0], all_baselines[i][1]))
+    
+
+    subplot(len(all_baselines), 4, 4*i+4)
+    resid = undist-true[i,:,:]
+    mm, ss = ft.meancut(resid[isfinite(resid)],3)
+    imshow(resid, vmin=-3*ss, vmax=3*ss)
+    colorbar()
+    title('Residuals {} {}'.format(all_baselines[i][0], all_baselines[i][1]))
+    
+    
+    
+tight_layout()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

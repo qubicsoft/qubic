@@ -60,10 +60,10 @@ rc('font', size=20)
 datadir = os.environ['DATA_SPECTROIM']
 
 
-nfrecon = 5
+nfrecon = 3
 freq = 220 # GHz
-rep = datadir + f'/NERSC_simuEnd2End/Good_photon_noise2020/simu_FI{freq}/'
-# rep = datadir + f'/NERSC_simuEnd2End/Good_photon_noise2020/simu_NERSC_MC/FI{freq}/galaxycenter_3bandes/'
+# rep = datadir + f'/NERSC_simuEnd2End/Good_photon_noise2020/simu_FI{freq}/'
+rep = datadir + f'/NERSC_simuEnd2End/Good_photon_noise2020/simu_NERSC_MC/FI{freq}/galaxycenter_3bandes/'
 # rep = datadir + f'/NERSC_simuEnd2End/Good_photon_noise2020/simu_NERSC_MC/FI{freq}/qubicpatch/'
 
 dictionary = glob.glob(rep + '*.dict')[0]
@@ -141,12 +141,12 @@ maps_residu[:, :, seenmap, :] = residuals
 
 ```{python}
 stokes = ['I', 'Q', 'U']
-istk = 1
+istk = 0
 real = 0
 plt.figure(figsize=(22, 30))
 rr = 15
-min = -50
-max = 150
+min = None
+max = None
 
 center = (0, 0)
 # Plot for spectroim paper
@@ -162,8 +162,8 @@ for band in range(nfrecon):
                 rot=center, reso=rr,
                 title = 'Residuals - {0}'.format(d['kind'][istk]), unit='$\mu K$', min=-90, max=90)
 # plt.tight_layout()
-plt.savefig(f'/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/maps{stokes[istk]}_FI220_{nfrecon}bands_GoodPhotonNoise.pdf',
-           bbox_inches='tight')
+# plt.savefig(f'/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/maps{stokes[istk]}_FI220_{nfrecon}bands_GoodPhotonNoise.pdf',
+#            bbox_inches='tight')
 ```
 
 ```{python}
@@ -577,8 +577,8 @@ for cross in range(ncombi):
                 color=c, 
                 label='{:3.0f} x {:3.0f}'.format(combi_nus[cross][0], combi_nus[cross][1]))
     ax.plot(leff, cross_x0[cross, :, 2], '--', color=c)
-ax.set_xlabel('$\\ell$')
-ax.set_ylabel('$D_\\ell$')
+ax.set_xlabel('Multipole moment, $\\ell$')
+ax.set_ylabel('$D_\\ell \,[\mu \mathrm{K}^2]$')
 ax.legend(fontsize=12, loc='upper center')
 ax.set_title(clnames[2] + f' - {freq} GHz')
 ax.grid()

@@ -62,7 +62,8 @@ dictfilename = os.environ['QUBIC_DICT']+'spectroimaging_article_gal.dict'
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
-
+d['npointings'] = 3000
+d['nf_sub'] = 16
 # Center of the patch observed in galactic coordinates
 # l_center = 0.
 # b_center = 0. 
@@ -75,6 +76,11 @@ d.read_from_file(dictfilename)
 
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 print(center)
+```
+
+```{python}
+from qubic.polyacquisition import compute_freq
+compute_freq(150, 4)
 ```
 
 # Initial sky maps
@@ -96,44 +102,44 @@ print('Input map with shape:', x0.shape)
 ```
 
 ```{python}
-allx0 = [x0synch, x0cmb, x0dust]
-title = ['Synchrotron', 'CMB', 'Dust']
-isub = 10
-for i in range(3):
-    hp.mollview(allx0[i][isub, :, 0], sub=(3, 1, i+1), title=title[i], cbar=None)
+# allx0 = [x0synch, x0cmb, x0dust]
+# title = ['Synchrotron', 'CMB', 'Dust']
+# isub = 10
+# for i in range(3):
+#     hp.mollview(allx0[i][isub, :, 0], sub=(3, 1, i+1), title=title[i], cbar=None)
 ```
 
 ```{python}
-# Remember that we can always retrieve the input CMB maps and spectra
+# # Remember that we can always retrieve the input CMB maps and spectra
 
-ell, totDL, unlensedDL = qc.get_camb_Dl(r=0., lmax=3*d['nside']-1)
-cmb_dict = {'CAMBSpectra':totDL, 'ell':ell, 'seed':None}
-sky_config = {'cmb': cmb_dict}
-Qubic_skycmb = qss.Qubic_sky(sky_config, d)
+# ell, totDL, unlensedDL = qc.get_camb_Dl(r=0., lmax=3*d['nside']-1)
+# cmb_dict = {'CAMBSpectra':totDL, 'ell':ell, 'seed':None}
+# sky_config = {'cmb': cmb_dict}
+# Qubic_skycmb = qss.Qubic_sky(sky_config, d)
 
-### Input Maps
-input_maps = Qubic_skycmb.input_cmb_maps
-rng = (np.std(input_maps, axis=(1))*3).astype(int)
-rng[1:] = np.max(rng[1:])
+# ### Input Maps
+# input_maps = Qubic_skycmb.input_cmb_maps
+# rng = (np.std(input_maps, axis=(1))*3).astype(int)
+# rng[1:] = np.max(rng[1:])
 
-plt.figure()
-hp.mollview(input_maps[0,:], title="I input map used", min=-rng[0], max=rng[0], sub=(1,3,1))
-hp.mollview(input_maps[1,:], title="Q input map used", min=-rng[1], max=rng[1], sub=(1,3,2))
-hp.mollview(input_maps[2,:], title="U input map used", min=-rng[2], max=rng[2], sub=(1,3,3))
+# plt.figure()
+# hp.mollview(input_maps[0,:], title="I input map used", min=-rng[0], max=rng[0], sub=(1,3,1))
+# hp.mollview(input_maps[1,:], title="Q input map used", min=-rng[1], max=rng[1], sub=(1,3,2))
+# hp.mollview(input_maps[2,:], title="U input map used", min=-rng[2], max=rng[2], sub=(1,3,3))
 
-### Input Cls
-input_Dl = Qubic_skycmb.input_cmb_spectra
-if input_Dl is not None:
-    input_ell = np.arange(np.shape(input_Dl)[0])
-    plt.figure()
-    order = ['TT', 'EE', 'BB', 'TE']
-    for i in range(4):
-        subplot(2, 2, i+1)
-        plot(input_ell, input_Dl[:, i], color='k')
-        plt.title(order[i])
-        xlabel('$\\ell$')
-        ylabel('$D_\\ell$')
-    tight_layout()
+# ### Input Cls
+# input_Dl = Qubic_skycmb.input_cmb_spectra
+# if input_Dl is not None:
+#     input_ell = np.arange(np.shape(input_Dl)[0])
+#     plt.figure()
+#     order = ['TT', 'EE', 'BB', 'TE']
+#     for i in range(4):
+#         subplot(2, 2, i+1)
+#         plot(input_ell, input_Dl[:, i], color='k')
+#         plt.title(order[i])
+#         xlabel('$\\ell$')
+#         ylabel('$D_\\ell$')
+#     tight_layout()
 ```
 
 # Get the coverage
@@ -143,10 +149,10 @@ p = qubic.get_pointing(d)
 q = qubic.QubicMultibandInstrument(d)
 s = qubic.QubicScene(d)
 
-_, nus_edge, _, _, _, _ = qubic.compute_freq(150, d['nf_sub'])
+# _, nus_edge, _, _, _, _ = qubic.compute_freq(150, d['nf_sub'])
 
-a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge)
-cov = a.get_coverage()
+# a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge)
+# cov = a.get_coverage()
 ```
 
 ```{python}
@@ -290,8 +296,8 @@ plt.legend()
 # Map-Making
 
 ```{python}
-nf_sub_rec = 5
-d['tol'] = 1e-6
+nf_sub_rec = 2
+d['tol'] = 1e-5
 d['noiseless'] = False
 maps_recon, cov, nus, nus_edge, maps_convolved = si.reconstruct_maps(TOD, d, p,
                                                                     nf_sub_rec, x0)
@@ -300,16 +306,16 @@ print(maps_recon.shape)
 
 ```{python}
 # # Save the simulation
-# save_dir = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/'
-# simu_name = 'likenew_1000ptgs_noiselessFalse.fits'
-# rmc.save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved, save_dir=save_dir, simu_name=simu_name)
+save_dir = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/Simu_spectroim/simu_dust_monordi/'
+simu_name = 'GalaxyDustd1_150GHz_tol1e-5_3000ptgs_nfsub16_nrec2_noiselessFalse.fits'
+rmc.save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved, save_dir=save_dir, simu_name=simu_name)
 ```
 
 # TOD noiseless and Map making
 
 ```{python}
 d['noiseless'] = True
-d['tol'] = 1e-6
+d['tol'] = 1e-5
 TOD_noiseless, maps_convolved_noiseless = si.create_TOD(d, p, x0)
 print('--------- Noiseless TOD with shape: {} - Done ---------'.format(np.shape(TOD_noiseless)))
 
@@ -328,16 +334,17 @@ if nf_sub_rec == 1:
 cov_noiseless = np.sum(cov_noiseless, axis=0)
 maxcov_noiseless = np.max(cov_noiseless)
 unseen = cov_noiseless < maxcov_noiseless * 0.1
-maps_convolved_noiseless[:, unseen, :] = hp.UNSEEN
-maps_recon_noiseless[:, unseen, :] = hp.UNSEEN
+maps_convolved_noiseless[:, unseen, :] = 0.
+maps_recon_noiseless[:, unseen, :] = 0.
 
 print('************* Map-Making on {} sub-map(s) (noiseless). Done *************'.format(nf_sub_rec))
 
 ```
 
 ```{python}
-# rmc.save_simu_fits(maps_recon_noiseless, cov_noiseless, nus, nus_edge, maps_convolved_noiseless,
-#                   save_dir=save_dir, simu_name='noiseless_' + simu_name)
+simu_name = 'GalaxyDustd1_150GHz_tol1e-5_3000ptgs_nfsub16_nrec2_noiselessTrue.fits'
+rmc.save_simu_fits(maps_recon_noiseless, cov_noiseless, nus, nus_edge, maps_convolved_noiseless,
+                  save_dir=save_dir, simu_name=simu_name)
 
 ```
 
@@ -351,10 +358,10 @@ maps_diff = maps_recon - maps_convolved
 
 # maps_recon = np.reshape(maps_recon , (1, 196608, 3))
 
-maps_convolved[:, np.invert(seenmap), :] = 0.
-maps_recon[:, np.invert(seenmap), :] = 0.
-maps_diff[:, np.invert(seenmap), :] = 0.
-maps_recon_noiseless[:, np.invert(seenmap), :] = 0.
+maps_convolved[:, unseen, :] = 0.
+maps_recon[:, unseen, :] = 0.
+maps_diff[:, unseen, :] = 0.
+maps_recon_noiseless[:, unseen, :] = 0.
 
 residuals = maps_recon - maps_recon_noiseless
 ```
@@ -390,7 +397,7 @@ for istk in range(3):
 
 ```{python}
 istk = 0
-plt.figure(figsize=(12, 20))
+plt.figure(figsize=(12, 15))
 plt.subplots_adjust(wspace=0.4, hspace=0.7)
 rr = 15
 min = None

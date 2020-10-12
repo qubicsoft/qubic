@@ -452,7 +452,7 @@ plt.show()
 ### Udgrade
 
 ```{python}
-nside_new = 32
+nside_new = 64
 npix_ud = 12 * nside_new **2 
 noise150Q_ud = np.zeros((nreals, len(nus_out150), npix_ud, 3))
 noise220Q_ud = np.zeros((nreals, len(nus_out150), npix_ud, 3))
@@ -482,13 +482,11 @@ for irec in range(len(nus_out150)):
 ```
 
 ```{python}
-#coverageFI_ud = hp.ud_grade(coverageFI, nside_new)
 maps150Q_ud_i = np.zeros_like(noise150Q_ud)
 maps220Q_ud_i = np.zeros_like(noise220Q_ud)
 maps150G_ud_i = np.zeros_like(noise150G_ud)
 maps220G_ud_i = np.zeros_like(noise220G_ud)
 
-#print(np.shape(noiseFI_ud), np.shape(dust_map_FI_ud), np.shape(dust_map_TD_ud))
 for i in range(nreals):
     maps150Q_ud_i[i, ...] = noise150Q_ud[i, ...] + dust_map_150Q_ud
     maps220Q_ud_i[i, ...] = noise220Q_ud[i, ...] + dust_map_220Q_ud
@@ -500,10 +498,6 @@ maps150Q_ud, std150Q_ud = np.mean(maps150Q_ud_i, axis = 0), np.std(maps150Q_ud_i
 maps220Q_ud, std220Q_ud = np.mean(maps220Q_ud_i, axis = 0), np.std(maps220Q_ud_i, axis = 0)
 maps150G_ud, std150G_ud = np.mean(maps150G_ud_i, axis = 0), np.std(maps150G_ud_i, axis = 0)
 maps220G_ud, std220G_ud = np.mean(maps220G_ud_i, axis = 0), np.std(maps220G_ud_i, axis = 0)
-#maps150Q_ud = np.mean(maps150Q_ud_i, axis = 0)
-#maps220Q_ud = np.mean(maps220Q_ud_i, axis = 0)
-#maps150G_ud = np.mean(maps150G_ud_i, axis = 0)
-#maps220G_ud = np.mean(maps220G_ud_i, axis = 0)
 ```
 
 ```{python}
@@ -545,8 +539,8 @@ for iNU in range(d150Q['nf_recon']):
 ### FIT
 
 ```{python}
-pixQ = [hp.ang2pix(d150Q['nside'], np.pi / 2 - np.deg2rad(centerQ[1] + 15), np.deg2rad(centerQ[0] - 14  ) ), ]
-pixG = [hp.ang2pix(d150G['nside'], np.pi / 2 - np.deg2rad(centerG[1] + 7), np.deg2rad(centerG[0] + 12 ) ), ]
+pixQ = [hp.ang2pix(d150Q['nside'], np.pi / 2 - np.deg2rad(centerQ[1] + 12), np.deg2rad(centerQ[0] - 10  ) ), ]
+pixG = [hp.ang2pix(d150G['nside'], np.pi / 2 - np.deg2rad(centerG[1] - 8), np.deg2rad(centerG[0] + 0 ) ), ]
 pixQ_ud = PixPix(pixQ[0])
 pixG_ud = PixPix(pixG[0])
 
@@ -559,11 +553,11 @@ hp.gnomview(maps150G_ud[-1,:,0], reso = 15,#hold = True,
             max = 0.4*np.max(maps150G_ud[-1,:,0]), 
             unit = r'$\mu$K',
             rot = centerG)
-hp.projscatter(hp.pix2ang(nside_new, pixG_ud), marker = '+', color = 'r',)
+hp.projscatter(hp.pix2ang(nside_new, pixG_ud), marker = '*', color = 'r', s = 200)
 hp.gnomview(maps220Q_ud[-1,:,0], reso = 15, title = 'Q patch ',
             unit = r'$\mu$K', sub = (122),
             rot = centerQ)
-hp.projscatter(hp.pix2ang(nside_new, pixQ_ud), marker = '+', color = 'r',)
+hp.projscatter(hp.pix2ang(nside_new, pixQ_ud), marker = '*', color = 'r', s = 200)
 ```
 
 ```{python}
@@ -618,122 +612,151 @@ def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 ```
 
 ```{python}
+import time
+t0 = time.time()
 FuncModel = func353
 istk = 0
-Imvals150Q, Isvals150Q, x150 = PixSED_Xstk(nus_out150, maps150Q_ud, FuncModel, pixQ_ud, pixQ_red, 
+Imvals150Q, Isvals150Q, x150 = PixSED_Xstk(nus_out150, dust_map_150Q_ud, FuncModel, pixQ_ud, pixQ_red, 
                                istk, Cp150Q_prime, nus_edge150)
-Imvals150G, Isvals150G, _ = PixSED_Xstk(nus_out150, maps150G_ud, FuncModel, pixG_ud, pixG_red, 
+Imvals150G, Isvals150G, _ = PixSED_Xstk(nus_out150, dust_map_150G_ud, FuncModel, pixG_ud, pixG_red, 
                                istk, Cp150G_prime, nus_edge150)
 
-Imvals220Q, Isvals220Q, x220 = PixSED_Xstk(nus_out220, maps220Q_ud, FuncModel, pixQ_ud, pixQ_red, 
+Imvals220Q, Isvals220Q, x220 = PixSED_Xstk(nus_out220, dust_map_220Q_ud, FuncModel, pixQ_ud, pixQ_red, 
                                istk, Cp220Q_prime, nus_edge220)
-Imvals220G, Isvals220G, _ = PixSED_Xstk(nus_out220, maps220G_ud, FuncModel, pixG_ud, pixG_red, 
+Imvals220G, Isvals220G, _ = PixSED_Xstk(nus_out220, dust_map_220G_ud, FuncModel, pixG_ud, pixG_red, 
                                istk, Cp220G_prime, nus_edge220)
+print('Done in {:.2f} min'.format((time.time()-t0)/60 ))
 ```
 
 ```{python}
+t1 = time.time()
 istk = 1
 print("===============  Doing {} stokes  ====================".format(d150Q['kind'][istk]))
-Qmvals150Q, Qsvals150Q, _ = PixSED_Xstk(nus_out150, maps150Q_ud, FuncModel, pixQ_ud, pixQ_red, 
+Qmvals150Q, Qsvals150Q, _ = PixSED_Xstk(nus_out150, dust_map_150Q_ud, FuncModel, pixQ_ud, pixQ_red, 
                                istk, Cp150Q_prime, nus_edge150)
-Qmvals150G, Qsvals150G, _ = PixSED_Xstk(nus_out150, maps150G_ud, FuncModel, pixG_ud, pixG_red, 
+Qmvals150G, Qsvals150G, _ = PixSED_Xstk(nus_out150, dust_map_150G_ud, FuncModel, pixG_ud, pixG_red, 
                                istk, Cp150G_prime, nus_edge150)
 
-Qmvals220Q, Qsvals220Q, _ = PixSED_Xstk(nus_out220, maps220Q_ud, FuncModel, pixQ_ud, pixQ_red, 
+Qmvals220Q, Qsvals220Q, _ = PixSED_Xstk(nus_out220, dust_map_220Q_ud, FuncModel, pixQ_ud, pixQ_red, 
                                istk, Cp220Q_prime, nus_edge220)
-Qmvals220G, Qsvals220G, _ = PixSED_Xstk(nus_out220, maps220G_ud, FuncModel, pixG_ud, pixG_red, 
+Qmvals220G, Qsvals220G, _ = PixSED_Xstk(nus_out220, dust_map_220G_ud, FuncModel, pixG_ud, pixG_red, 
                                istk, Cp220G_prime, nus_edge220)
 istk = 2
 print("===============  Doing {} stokes  =====================".format(d150Q['kind'][istk]))
-Umvals150Q, Usvals150Q, _ = PixSED_Xstk(nus_out150, maps150Q_ud, FuncModel, pixQ_ud, pixQ_red, 
+Umvals150Q, Usvals150Q, _ = PixSED_Xstk(nus_out150, dust_map_150Q_ud, FuncModel, pixQ_ud, pixQ_red, 
                                istk, Cp150Q_prime, nus_edge150)
-Umvals150G, Usvals150G, _ = PixSED_Xstk(nus_out150, maps150G_ud, FuncModel, pixG_ud, pixG_red, 
+Umvals150G, Usvals150G, _ = PixSED_Xstk(nus_out150, dust_map_150G_ud, FuncModel, pixG_ud, pixG_red, 
                                istk, Cp150G_prime, nus_edge150)
 
-Umvals220Q, Usvals220Q, _ = PixSED_Xstk(nus_out220, maps220Q_ud, FuncModel, pixQ_ud, pixQ_red, 
+Umvals220Q, Usvals220Q, _ = PixSED_Xstk(nus_out220, dust_map_220Q_ud, FuncModel, pixQ_ud, pixQ_red, 
                                istk, Cp220Q_prime, nus_edge220)
-Umvals220G, Usvals220G, _ = PixSED_Xstk(nus_out220, maps220G_ud, FuncModel, pixG_ud, pixG_red, 
+Umvals220G, Usvals220G, _ = PixSED_Xstk(nus_out220, dust_map_220G_ud, FuncModel, pixG_ud, pixG_red, 
                                istk, Cp220G_prime, nus_edge220)
+print('Done in {:.2f} min'.format((time.time()-t1)/60 ))
 ```
 
 Average realizations and compute std of realizations
 
 ```{python}
-RESO = 17
+# Modeling fit to map values
+xSED150 = nus_out150
+xSED220 = nus_out220
+ySED150Q = dust_map_150Q_ud[:,pixQ_ud,0]
+ySED220Q = dust_map_220Q_ud[:,pixQ_ud,0]
+ySED150G = dust_map_150G_ud[:,pixG_ud,0]
+ySED220G = dust_map_220G_ud[:,pixG_ud,0]
+
+p_opt150Q, p_cov150Q = curve_fit(quad, xSED150, ySED150Q)
+p_opt220Q, p_cov220Q = curve_fit(quad, xSED220, ySED220Q)
+p_opt150G, p_cov150G = curve_fit(quad, xSED150, ySED150G)
+p_opt220G, p_cov220G = curve_fit(quad, xSED220, ySED220G)
+```
+
+```{python}
+xnew1 = np.linspace(130,170,1000)
+xnew2 = np.linspace(190,240,1000)
+plt.subplot(121)
+plt.plot(xnew1, quad(xnew1, *p_opt150Q),'r-',label='150Q')
+plt.plot(xnew1, quad(xnew1, *p_opt150G),'b-',label='150G')
+plt.plot(xSED150, ySED150Q, 'ro')
+plt.plot(xSED150, ySED150G, 'bo')
+plt.legend()
+plt.subplot(122)
+plt.plot(xnew2, quad(xnew2, *p_opt220Q),'r-',label='220Q')
+plt.plot(xnew2, quad(xnew2, *p_opt220G),'b-',label='220G')
+plt.plot(xSED220, ySED220Q, 'ro')
+plt.plot(xSED220, ySED220G, 'bo')
+plt.legend()
+```
+
+```{python}
+RESO = 15
 capsize=3
 plt.rc('font', size=14)
 
-for j in range(1):#enumerate(range(600,12000,500)):
-    fig,ax=plt.subplots(nrows=1,ncols=4,figsize=(19,4.5),)
-    ax=ax.ravel()
-    # Plotting
-    ax[0].errorbar(nus_out150, maps150G_ud[:,pixG_ud,0],yerr = std150G_ud[:,pixG_ud,0], capsize=capsize,
-           fmt = 'o-', color = 'r',label = 'MC reconstructed')
-    ax[0].errorbar(nus_out220, maps220G_ud[:,pixG_ud,0],yerr = std220G_ud[:,pixG_ud,0], capsize=capsize,
-           fmt = 'o-', color = 'r')
-    
-    ax[0].plot(nus_out150, dust_map_150G_ud[:,pixG_ud,0], 'bo-', label = 'convolved')
-    ax[0].plot(nus_out220, dust_map_220G_ud[:,pixG_ud,0], 'bo-')
-    ax[0].plot(x150, Imvals150G, 'g-', label = 'MCMC reconstructed')
-    ax[0].fill_between(x150, y1 = Imvals150G - Isvals150G, y2 = Imvals150G + Isvals150G, 
-                       color = 'g', alpha = 0.3)
-    ax[0].plot(x220, Imvals220G , 'g-')
-    ax[0].fill_between(x220, y1 = Imvals220G - Isvals220G, y2 = Imvals220G + Isvals220G, 
-                       color = 'g', alpha = 0.3)
-    
-    ax[0].axvspan(nus_edge150[-1], nus_edge220[0],color='k',alpha=0.2)
+ySED150Q_fit = quad(x150, *p_opt150Q)
+ySED220Q_fit = quad(x220, *p_opt220Q)
+ySED150G_fit = quad(x150, *p_opt150G)
+ySED220G_fit = quad(x220, *p_opt220G)
 
-    ax[2].errorbar(nus_out150, maps150Q_ud[:,pixQ_ud,0],yerr=std150Q_ud[:,pixQ_ud,0], capsize=capsize,
-           fmt='o-', color='r', alpha=0.8)
-    ax[2].errorbar(nus_out220, maps220Q_ud[:,pixQ_ud,0],yerr=std220Q_ud[:,pixQ_ud,0], capsize=capsize,
-           fmt='o-', color='r',alpha=0.8)
-    ax[2].plot(nus_out150, dust_map_150Q_ud[:,pixQ_ud,0], 'bo-')
-    ax[2].plot(nus_out220, dust_map_220Q_ud[:,pixQ_ud,0], 'bo-')
-    ax[2].plot(x150, Imvals150Q, 'g')
-    ax[2].fill_between(x150, y1 = Imvals150Q - Isvals150Q, y2 = Imvals150Q + Isvals150Q, 
-                       color = 'g', alpha = 0.3)
-    ax[2].plot(x220, Imvals220Q, 'g')
-    ax[2].fill_between(x220, y1 = Imvals220Q - Isvals220Q, y2 = Imvals220Q + Isvals220Q, 
-                       color = 'g', alpha = 0.3)
-    ax[2].axvspan(nus_edge150[-1],nus_edge220[0],color='k',alpha=0.2)
+fig,ax=plt.subplots(nrows=1,ncols=4,figsize=(19,4.5),)
+ax=ax.ravel()
+# Plotting
+ax[0].plot(nus_out150, dust_map_150G_ud[:,pixG_ud,0], 'ro', label = 'Input sky')
+ax[0].plot(nus_out220, dust_map_220G_ud[:,pixG_ud,0], 'ro')
+ax[0].fill_between(x150, y1 = ySED150G_fit - Isvals150G, y2 = ySED150G_fit + Isvals150G, 
+                   color = 'g', alpha = 0.3, label = '68% C.L.')
+ax[0].fill_between(x220, y1 = ySED220G_fit - Isvals220G, y2 = ySED220G_fit + Isvals220G, 
+                   color = 'g', alpha = 0.3)
 
-    # Settings
-    ax[2].grid(which='both')
-    ax[0].legend(loc='best',fontsize=12)
-    ax[0].grid()
-    ax[0].set_title('GC patch - {} year'.format(d150G['effective_duration']),fontsize=14)
-    ax[0].set_ylabel(r'$I(\nu)$ [$\mu$K]',fontsize=14)
-    ax[0].set_xlabel(r'$\nu$[GHz]',fontsize=14)
-    
-    ax[2].set_title('QUBIC patch - {} years'.format(d150Q['effective_duration']),fontsize=14)
-    ax[2].set_ylabel(r'$I(\nu)$ [$\mu$K]',fontsize=14)
-    ax[2].set_xlabel(r'$\nu$[GHz]',fontsize=14)
-    
-    # Displaying maps
-    ax[1].cla()
-    plt.axes(ax[1])
-    hp.gnomview(maps150G_ud[-1,:,0], reso = 15,hold = True, 
-                notext = True, title = ' ',
-                max = 0.4*np.max(maps150G_ud[-1,:,0]), 
-                unit = r'$\mu$K',
-                rot = centerG)
-    hp.projscatter(hp.pix2ang(nside_new, pixG_ud), marker = '+', color = 'r',)
-    ax[3].cla()
-    plt.axes(ax[3])
-    hp.gnomview(maps220Q_ud[-1,:,0], reso = 15, hold = True, 
-                notext = True, title = ' ',
-                unit = r'$\mu$K',
-                rot = centerQ)
-    hp.projscatter(hp.pix2ang(nside_new, pixQ_ud),marker = '+', color = 'r',)
-    #plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Intensity.svg'.format(d150Q['nf_recon'],nside_new,
-    #                                                           pixQ_ud, pixG_ud), 
-    #            format = 'svg')
-    #plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Intensity.pdf'.format(d150Q['nf_recon'],nside_new,
-    #                                                           pixQ_ud, pixG_ud), 
-    #            format = 'pdf')
-    plt.savefig('Figs-FI-SED/{}_nrec{}_nside{}_pixQ{}_pixG{}_Intensity'.format(FuncModel.__name__, 
-                                                                               d150Q['nf_recon'],
-                                                                               nside_new,pixQ_ud, pixG_ud))
+ax[0].axvspan(nus_edge150[-1], nus_edge220[0],color='k',alpha=0.2)
+
+ax[2].plot(nus_out150, dust_map_150Q_ud[:,pixQ_ud,0], 'ro')
+ax[2].plot(nus_out220, dust_map_220Q_ud[:,pixQ_ud,0], 'ro')
+ax[2].fill_between(x150, y1 = ySED150Q_fit - Isvals150Q, y2 = ySED150Q_fit + Isvals150Q, 
+                   color = 'g', alpha = 0.3)
+ax[2].fill_between(x220, y1 = ySED220Q_fit - Isvals220Q, y2 = ySED220Q_fit + Isvals220Q, 
+                   color = 'g', alpha = 0.3)
+ax[2].axvspan(nus_edge150[-1],nus_edge220[0],color='k',alpha=0.2)
+
+# Settings
+ax[2].grid(which='both')
+ax[0].legend(loc=2,fontsize=12)
+ax[0].grid()
+ax[0].set_title('GC patch - {} year'.format(d150G['effective_duration']),fontsize=14)
+ax[0].set_ylabel(r'$I(\nu)$ [$\mu$K]',fontsize=14)
+ax[0].set_xlabel(r'$\nu$[GHz]',fontsize=14)
+
+ax[2].set_title('QUBIC patch - {} years'.format(d150Q['effective_duration']),fontsize=14)
+ax[2].set_ylabel(r'$I(\nu)$ [$\mu$K]',fontsize=14)
+ax[2].set_xlabel(r'$\nu$[GHz]',fontsize=14)
+
+# Displaying maps
+ax[1].cla()
+plt.axes(ax[1])
+hp.gnomview(maps150G_ud[-1,:,0], reso = 15,hold = True, 
+            notext = True, title = ' ',
+            max = 0.4*np.max(maps150G_ud[-1,:,0]), 
+            unit = r'$\mu$K',
+            rot = centerG)
+hp.projscatter(hp.pix2ang(nside_new, pixG_ud), marker = '*', color = 'r', s = 180)
+ax[3].cla()
+plt.axes(ax[3])
+hp.gnomview(maps220Q_ud[-1,:,0], reso = 15, hold = True, 
+            notext = True, title = ' ',
+            unit = r'$\mu$K',
+            rot = centerQ)
+hp.projscatter(hp.pix2ang(nside_new, pixQ_ud),marker = '*', color = 'r', s = 180)
+#plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Intensity.svg'.format(d150Q['nf_recon'],nside_new,
+#                                                           pixQ_ud, pixG_ud), 
+#            format = 'svg')
+plt.savefig('Figs-FI-SED/{}_nrec{}_nside{}_pixQ{}_pixG{}_Intensity.pdf'.format(FuncModel.__name__,
+                                                                               d150Q['nf_recon'],nside_new,
+                                                           pixQ_ud, pixG_ud), 
+            format = 'pdf')
+plt.savefig('Figs-FI-SED/{}_nrec{}_nside{}_pixQ{}_pixG{}_Intensity'.format(FuncModel.__name__, 
+                                                                           d150Q['nf_recon'],
+                                                                           nside_new,pixQ_ud, pixG_ud))
 plt.show()
 ```
 
@@ -773,15 +796,28 @@ plt.legend(loc='best',fontsize=12)
 ### Polarization
 
 Average realizations and compute std of realizations
+```{python}
+# Modeling fit to map values
+ySED150G_pol = np.sqrt(dust_map_150G_ud[:,pixG_ud,1] ** 2 + dust_map_150G_ud[:,pixG_ud,2] ** 2)
+ySED220G_pol = np.sqrt(dust_map_220G_ud[:,pixG_ud,1] ** 2 + dust_map_220G_ud[:,pixG_ud,2] ** 2)
+ySED150Q_pol = np.sqrt(dust_map_150Q_ud[:,pixQ_ud,1] ** 2 + dust_map_150Q_ud[:,pixQ_ud,2] ** 2)
+ySED220Q_pol = np.sqrt(dust_map_220Q_ud[:,pixQ_ud,1] ** 2 + dust_map_220Q_ud[:,pixQ_ud,2] ** 2)
+
+p_opt150Q_pol, p_cov150Q_pol = curve_fit(quad, xSED150, ySED150Q_pol)
+p_opt220Q_pol, p_cov220Q_pol = curve_fit(quad, xSED220, ySED220Q_pol)
+p_opt150G_pol, p_cov150G_pol = curve_fit(quad, xSED150, ySED150G_pol)
+p_opt220G_pol, p_cov220G_pol = curve_fit(quad, xSED220, ySED220G_pol)
+```
 
 ```{python}
-ErrBar = lambda xmean, xstd, px: 1 / np.sqrt(2) * np.sqrt( xstd[:,px,1] ** 2 + xstd[:,px,2])** 2 / \
+ErrBar = lambda xmean, xstd, px: np.sqrt( xmean[:,px,1] ** 2 *xstd[:,px,1] ** 2 + \
+                                         xmean[:,px,2] ** 2 * xstd[:,px,2] ** 2) / \
                                            np.sqrt( xmean[:,px,1] ** 2 + xmean[:,px,2] ** 2)
 ```
 
 ```{python}
-ErrBar2 = lambda Q, U, Qerr, Uerr: 1 / np.sqrt(2) * np.sqrt( Qerr ** 2 + Uerr)** 2 / \
-                                           np.sqrt( Q ** 2 + U ** 2)
+ErrBar2 = lambda Q, U, Qerr, Uerr: np.sqrt( Q ** 2 * Qerr ** 2 + U ** 2 * Uerr ** 2) / \
+                np.sqrt( Q ** 2 + U ** 2)
 ```
 
 ```{python}
@@ -798,101 +834,120 @@ Perr150Q = ErrBar2(Qmvals150Q, Umvals150Q, Qsvals150Q, Usvals150Q)
 #Error bar 220 Q
 Perr220Q = ErrBar2(Qmvals220Q, Umvals220Q, Qsvals220Q, Usvals220Q)
 
+ySED150Q_fit_pol = quad(x150, *p_opt150Q_pol)
+ySED220Q_fit_pol = quad(x220, *p_opt220Q_pol)
+ySED150G_fit_pol = quad(x150, *p_opt150G_pol)
+ySED220G_fit_pol = quad(x220, *p_opt220G_pol)
 
-for j in range(1):
-    fig,ax = plt.subplots(nrows = 1,ncols = 4, figsize = (19,4.5),)
-    ax = ax.ravel()
-    
-    # Plotting
-    ax[0].plot(nus_out150, 
-                   np.sqrt(dust_map_150G_ud[:,pixG_ud,1] ** 2 + dust_map_150G_ud[:,pixG_ud,2] ** 2),
-                   'bo', lw = 3, label = 'convolved')
-    ax[0].plot(nus_out220, 
-                   np.sqrt(dust_map_220G_ud[:,pixG_ud,1] ** 2 + dust_map_220G_ud[:,pixG_ud,2] ** 2),
-                   'bo', lw = 3)
-    
-    ax[0].errorbar(nus_out150, 
-                   np.sqrt(maps150G_ud[:,pixG_ud,1] ** 2 + maps150G_ud[:,pixG_ud,2] ** 2),
-                   yerr = ErrBar(maps150G_ud, std150G_ud, pixG_ud), label = 'MC reconstructed', 
-                    capsize = 3 ,lw = 3, fmt = 'o-', color = 'r')
-    ax[0].errorbar(nus_out220, 
-                   np.sqrt(maps220G_ud[:,pixG_ud,1] ** 2 + maps220G_ud[:,pixG_ud,2] ** 2),
-                   yerr = ErrBar(maps220G_ud, std220G_ud, pixG_ud),
-                    capsize = 3 ,lw = 3, fmt = 'o-', color = 'r')
-    
-    ax[0].plot(x150, Pmean150G, 'g-', label = 'MCMC reconstructed')
-    ax[0].plot(x220, Pmean220G, 'g-')
-    ax[0].fill_between(x150, y1 = Pmean150G - Perr150G, y2 = Pmean150G + Perr150G, 
-                       color = 'g', alpha = 0.3)
-    ax[0].fill_between(x220, y1 = Pmean220G - Perr220G, y2 = Pmean220G + Perr220G, 
-                       color = 'g', alpha = 0.3)
-    ax[0].axvspan(nus_edge150[-1], nus_edge220[0], color = 'k', alpha = 0.2)
-    ax[2].plot(nus_out150, 
-                   np.sqrt(dust_map_150Q_ud[:,pixQ_ud,1] ** 2 + dust_map_150Q_ud[:,pixQ_ud,2] ** 2),
-                   'bo', lw = 3)
-    ax[2].plot(nus_out220, 
-                   np.sqrt(dust_map_220Q_ud[:,pixQ_ud,1] ** 2 + dust_map_220Q_ud[:,pixQ_ud,2] ** 2),
-                   'bo', lw = 3)
-    ax[2].plot(x150, Pmean150Q, 'g-')
-    ax[2].plot(x220, Pmean220Q, 'g-')
-    ax[2].errorbar(nus_out150, 
-                   np.sqrt(maps150Q_ud[:,pixQ_ud,1] ** 2 + maps150Q_ud[:,pixQ_ud,2] ** 2),
-                   yerr = ErrBar(maps150Q_ud, std150Q_ud, pixQ_ud), 
-                    capsize = 3 ,lw = 3, fmt = 'o-', color = 'r')
-    ax[2].errorbar(nus_out220, 
-                   np.sqrt(maps220Q_ud[:,pixQ_ud,1] ** 2 + maps220Q_ud[:,pixQ_ud,2] ** 2),
-                   yerr = ErrBar(maps220Q_ud, std220Q_ud, pixQ_ud),
-                    capsize = 3 ,lw = 3, fmt = 'o-', color = 'r')
-    ax[2].fill_between(x150, y1 = Pmean150Q - Perr150Q, y2 = Pmean150Q + Perr150Q, 
-                       color = 'g', alpha = 0.3)
-    ax[2].fill_between(x220, y1 = Pmean220Q - Perr220Q, y2 = Pmean220Q + Perr220Q, 
-                       color = 'g', alpha = 0.3)
+fig,ax = plt.subplots(nrows = 1,ncols = 4, figsize = (19,4.5),)
+ax = ax.ravel()
 
-    # Setting
-    ax[0].set_title('GC patch - {} year'.format(d150G['effective_duration']),fontsize=14)
-    ax[0].set_ylabel(r'$I_{P}(\nu)~[\mu$K]', fontsize = 14)
-    ax[0].set_xlabel(r'$\nu~[GHz]$', fontsize = 14)
-    ax[0].legend(loc = 'upper left', fontsize = 12)
-    ax[0].grid()
-    ax[2].set_xlabel(r'$\nu~[GHz]$', fontsize = 14)
-    ax[2].axvspan(nus_edge150[-1], nus_edge220[0], color = 'k', alpha = 0.2)
-    ax[2].set_ylabel(r'$I_{P}(\nu)~[\mu$K]', fontsize = 14)
-    ax[2].set_title('QUBIC patch - {} years'.format(d150Q['effective_duration']),fontsize=14)
-    ax[2].grid()
-    
-    # Displaying maps    
-    plt.axes(ax[1])
-    auxmapG = np.sqrt(maps150G_ud[0,:,1] ** 2 + maps150G_ud[0,:,2] ** 2)
-    auxmapG[~cov150G_ud] = hp.UNSEEN
-    hp.gnomview(auxmapG,
-                reso = 15, hold = True, notext = True, 
-                title = ' ',
-                cbar = True,
-                unit = r'$\mu$K',
-                rot = centerG)
-    hp.projscatter(hp.pix2ang(nside_new,pixG_ud),marker='+',color='r',)
-    
-    plt.axes(ax[3])
-    auxmapQ = np.sqrt(maps150Q_ud[0,:,1] ** 2 + maps150Q_ud[0,:,2] ** 2)
-    auxmapQ[~cov150Q_ud] = hp.UNSEEN
-    hp.gnomview(auxmapQ,
-                reso = 15, hold = True, notext = True, 
-                #max = 1e2,
-                title = ' ',
-                cbar = True,
-                unit = r'$\mu$K',
-                rot = centerQ)
-    hp.projscatter(hp.pix2ang(nside_new,pixQ_ud),marker='+',color='r',)
-    #plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Polarization.svg'.format(d150Q['nf_recon'], nside_new,
-    #                                                           pixQ_ud, pixG_ud), 
-    #            format = 'svg')
-    #plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Polarization.pdf'.format(d150Q['nf_recon'], nside_new,
-    #                                                           pixQ_ud, pixG_ud), 
-    #            format = 'pdf')
-    plt.savefig('Figs-FI-SED/{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization'.format(FuncModel.__name__,
-                                                                               d150Q['nf_recon'], 
-                                                                               nside_new,pixQ_ud, pixG_ud))
+# Plotting
+ax[0].plot(nus_out150, 
+               np.sqrt(dust_map_150G_ud[:,pixG_ud,1] ** 2 + dust_map_150G_ud[:,pixG_ud,2] ** 2),
+               'ro', lw = 3, label = 'Input sky')
+ax[0].plot(nus_out220, 
+               np.sqrt(dust_map_220G_ud[:,pixG_ud,1] ** 2 + dust_map_220G_ud[:,pixG_ud,2] ** 2),
+               'ro', lw = 3)
+
+ax[0].fill_between(x150, y1 = ySED150G_fit_pol - Perr150G, y2 = ySED150G_fit_pol + Perr150G, 
+                   color = 'g', alpha = 0.3, label = '68% C.L. ')
+ax[0].fill_between(x220, y1 = ySED220G_fit_pol - Perr220G, y2 = ySED220G_fit_pol + Perr220G, 
+                   color = 'g', alpha = 0.3)
+ax[0].axvspan(nus_edge150[-1], nus_edge220[0], color = 'k', alpha = 0.2)
+ax[2].plot(nus_out150, 
+               np.sqrt(dust_map_150Q_ud[:,pixQ_ud,1] ** 2 + dust_map_150Q_ud[:,pixQ_ud,2] ** 2),
+               'ro', lw = 3)
+ax[2].plot(nus_out220, 
+               np.sqrt(dust_map_220Q_ud[:,pixQ_ud,1] ** 2 + dust_map_220Q_ud[:,pixQ_ud,2] ** 2),
+               'ro', lw = 3)
+ax[2].fill_between(x150, y1 = ySED150Q_fit_pol - Perr150Q, y2 = ySED150Q_fit_pol + Perr150Q, 
+                   color = 'g', alpha = 0.3)
+ax[2].fill_between(x220, y1 = ySED220Q_fit_pol - Perr220Q, y2 = ySED220Q_fit_pol + Perr220Q, 
+                   color = 'g', alpha = 0.3)
+
+# Setting
+ax[0].set_title('GC patch - {} year'.format(d150G['effective_duration']),fontsize=14)
+ax[0].set_ylabel(r'$P(\nu)~[\mu$K]', fontsize = 14)
+ax[0].set_xlabel(r'$\nu~[GHz]$', fontsize = 14)
+ax[0].legend(loc = 2, fontsize = 12)
+ax[0].grid()
+ax[2].set_xlabel(r'$\nu~[GHz]$', fontsize = 14)
+ax[2].axvspan(nus_edge150[-1], nus_edge220[0], color = 'k', alpha = 0.2)
+ax[2].set_ylabel(r'$P(\nu)~[\mu$K]', fontsize = 14)
+ax[2].set_title('QUBIC patch - {} years'.format(d150Q['effective_duration']),fontsize=14)
+ax[2].grid()
+
+# Displaying maps    
+plt.axes(ax[1])
+auxmapG = np.sqrt(maps150G_ud[0,:,1] ** 2 + maps150G_ud[0,:,2] ** 2)
+auxmapG[~cov150G_ud] = hp.UNSEEN
+hp.gnomview(auxmapG,
+            reso = 15, hold = True, notext = True, 
+            title = ' ',
+            cbar = True,
+            unit = r'$\mu$K',
+            rot = centerG)
+hp.projscatter(hp.pix2ang(nside_new,pixG_ud),marker = '*',color = 'r', s = 200)
+
+plt.axes(ax[3])
+auxmapQ = np.sqrt(maps150Q_ud[0,:,1] ** 2 + maps150Q_ud[0,:,2] ** 2)
+auxmapQ[~cov150Q_ud] = hp.UNSEEN
+hp.gnomview(auxmapQ,
+            reso = 15, hold = True, notext = True, 
+            #max = 1e2,
+            title = ' ',
+            cbar = True,
+            unit = r'$\mu$K',
+            rot = centerQ)
+hp.projscatter(hp.pix2ang(nside_new,pixQ_ud),marker='*',color='r', s = 200)
+#plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Polarization.svg'.format(d150Q['nf_recon'], nside_new,
+#                                                           pixQ_ud, pixG_ud), 
+#            format = 'svg')
+plt.savefig('Figs-FI-SED/{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization.pdf'.format(FuncModel.__name__,
+                                                                                  d150Q['nf_recon'], nside_new,
+                                                           pixQ_ud, pixG_ud), 
+            format = 'pdf')
+plt.savefig('Figs-FI-SED/{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization'.format(FuncModel.__name__,
+                                                                           d150Q['nf_recon'], 
+                                                                           nside_new,pixQ_ud, pixG_ud))
 plt.show()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 Look at one component of polarization
@@ -907,15 +962,15 @@ plt.rc('font', size=14)
 fig,ax=plt.subplots(nrows=1,ncols=4,figsize=(19,4.5),)
 ax=ax.ravel()
 # Plotting
-ax[0].errorbar(nus_out150, maps150G_ud[:,pixG_ud,stkP],yerr = std150G_ud[:,pixG_ud,stkP], capsize=capsize,
-       fmt = 'o-', color = 'r',label = 'MC reconstructed')
-ax[0].errorbar(nus_out220, maps220G_ud[:,pixG_ud,stkP],yerr = std220G_ud[:,pixG_ud,stkP], capsize=capsize,
-       fmt = 'o-', color = 'r')
+ax[0].errorbar(nus_out150, dust_map_150G_ud[:,pixG_ud,stkP],yerr = std150G_ud[:,pixG_ud,stkP], capsize=capsize,
+       fmt = 'o', color = 'r',label = 'MC')
+ax[0].errorbar(nus_out220, dust_map_220G_ud[:,pixG_ud,stkP],yerr = std220G_ud[:,pixG_ud,stkP], capsize=capsize,
+       fmt = 'o', color = 'r')
 
-ax[0].plot(nus_out150, dust_map_150G_ud[:,pixG_ud,stkP], 'bo-', label = 'convolved')
-ax[0].plot(nus_out220, dust_map_220G_ud[:,pixG_ud,stkP], 'bo-')
+#ax[0].plot(nus_out150, dust_map_150G_ud[:,pixG_ud,stkP], 'bo-', label = 'convolved')
+#ax[0].plot(nus_out220, dust_map_220G_ud[:,pixG_ud,stkP], 'bo-')
 
-ax[0].plot(x150, Qmvals150G, 'g-', label = 'MCMC reconstructed')
+ax[0].plot(x150, Qmvals150G, 'g-', label = '68% C.L.')
 ax[0].fill_between(x150, y1 = Qmvals150G - Qsvals150G, y2 = Qmvals150G + Qsvals150G, 
                    color = 'g', alpha = 0.3)
 ax[0].plot(x220, Qmvals220G , 'g-')
@@ -924,12 +979,12 @@ ax[0].fill_between(x220, y1 = Qmvals220G - Qsvals220G, y2 = Qmvals220G + Qsvals2
 
 ax[0].axvspan(nus_edge150[-1], nus_edge220[0],color='k',alpha=0.2)
 
-ax[2].errorbar(nus_out150, maps150Q_ud[:,pixQ_ud,stkP],yerr=std150Q_ud[:,pixQ_ud,stkP], capsize=capsize,
-       fmt='o-', color='r', alpha=0.8)
-ax[2].errorbar(nus_out220, maps220Q_ud[:,pixQ_ud,stkP],yerr=std220Q_ud[:,pixQ_ud,stkP], capsize=capsize,
-       fmt='o-', color='r',alpha=0.8)
-ax[2].plot(nus_out150, dust_map_150Q_ud[:,pixQ_ud,stkP], 'bo-')
-ax[2].plot(nus_out220, dust_map_220Q_ud[:,pixQ_ud,stkP], 'bo-')
+ax[2].errorbar(nus_out150, dust_map_150Q_ud[:,pixQ_ud,stkP],yerr=std150Q_ud[:,pixQ_ud,stkP], capsize=capsize,
+       fmt='o', color='r', alpha=0.8)
+ax[2].errorbar(nus_out220, dust_map_220Q_ud[:,pixQ_ud,stkP],yerr=std220Q_ud[:,pixQ_ud,stkP], capsize=capsize,
+       fmt='o', color='r',alpha=0.8)
+#ax[2].plot(nus_out150, dust_map_150Q_ud[:,pixQ_ud,stkP], 'bo-')
+#ax[2].plot(nus_out220, dust_map_220Q_ud[:,pixQ_ud,stkP], 'bo-')
 ax[2].plot(x150, Qmvals150Q, 'g')
 ax[2].fill_between(x150, y1 = Qmvals150Q - Qsvals150Q, y2 = Qmvals150Q + Qsvals150Q, 
                    color = 'g', alpha = 0.3)
@@ -939,8 +994,8 @@ ax[2].fill_between(x220, y1 = Qmvals220Q - Qsvals220Q, y2 = Qmvals220Q + Qsvals2
 ax[2].axvspan(nus_edge150[-1],nus_edge220[0],color='k',alpha=0.2)
 
 # Settings
-ax[2].grid(which='both')
-ax[0].legend(loc='best',fontsize=12)
+ax[2].grid(which = 'both')
+ax[0].legend(loc = 2,fontsize = 12)
 ax[0].grid()
 ax[0].set_title('GC patch - {} year'.format(d150G['effective_duration']),fontsize=14)
 ax[0].set_ylabel(r'$Q(\nu)$ [$\mu$K]',fontsize=14)
@@ -980,29 +1035,29 @@ plt.rc('font', size=14)
 fig,ax=plt.subplots(nrows=1,ncols=4,figsize=(19,4.5),)
 ax=ax.ravel()
 # Plotting
-ax[0].errorbar(nus_out150, maps150G_ud[:,pixG_ud,stkP],yerr = std150G_ud[:,pixG_ud,stkP], capsize=capsize,
-       fmt = 'o-', color = 'r',label = 'MC reconstructed')
-ax[0].errorbar(nus_out220, maps220G_ud[:,pixG_ud,stkP],yerr = std220G_ud[:,pixG_ud,stkP], capsize=capsize,
-       fmt = 'o-', color = 'r')
+ax[0].errorbar(nus_out150, dust_map_150G_ud[:,pixG_ud,stkP],yerr = std150G_ud[:,pixG_ud,stkP], capsize=capsize,
+       fmt = 'o', color = 'r',label = 'MC')
+ax[0].errorbar(nus_out220, dust_map_220G_ud[:,pixG_ud,stkP],yerr = std220G_ud[:,pixG_ud,stkP], capsize=capsize,
+       fmt = 'o', color = 'r')
 
-ax[0].plot(nus_out150, dust_map_150G_ud[:,pixG_ud,stkP], 'bo-', label = 'convolved')
-ax[0].plot(nus_out220, dust_map_220G_ud[:,pixG_ud,stkP], 'bo-')
+#ax[0].plot(nus_out150, dust_map_150G_ud[:,pixG_ud,stkP], 'bo-', label = 'convolved')
+#ax[0].plot(nus_out220, dust_map_220G_ud[:,pixG_ud,stkP], 'bo-')
 
-ax[0].plot(x150, Umvals150G, 'g-', label = 'MCMC reconstructed')
+ax[0].plot(x150, Umvals150G, 'g-', label = '68% C.L.')
 ax[0].fill_between(x150, y1 = Umvals150G - Usvals150G, y2 = Umvals150G + Usvals150G, 
                    color = 'g', alpha = 0.3)
 ax[0].plot(x220, Umvals220G , 'g-')
 ax[0].fill_between(x220, y1 = Umvals220G - Usvals220G, y2 = Umvals220G + Usvals220G, 
                    color = 'g', alpha = 0.3)
 
-ax[0].axvspan(nus_edge150[-1], nus_edge220[0],color='k',alpha=0.2)
+ax[0].axvspan(nus_edge150[-1], nus_edge220[0],color = 'k',alpha = 0.2)
 
-ax[2].errorbar(nus_out150, maps150Q_ud[:,pixQ_ud,stkP],yerr=std150Q_ud[:,pixQ_ud,stkP], capsize=capsize,
-       fmt='o-', color='r', alpha=0.8)
-ax[2].errorbar(nus_out220, maps220Q_ud[:,pixQ_ud,stkP],yerr=std220Q_ud[:,pixQ_ud,stkP], capsize=capsize,
-       fmt='o-', color='r',alpha=0.8)
-ax[2].plot(nus_out150, dust_map_150Q_ud[:,pixQ_ud,stkP], 'bo-')
-ax[2].plot(nus_out220, dust_map_220Q_ud[:,pixQ_ud,stkP], 'bo-')
+ax[2].errorbar(nus_out150, dust_map_150Q_ud[:,pixQ_ud,stkP], yerr = std150Q_ud[:,pixQ_ud,stkP], 
+               capsize = capsize, fmt = 'o', color = 'r', alpha = 0.8)
+ax[2].errorbar(nus_out220, dust_map_220Q_ud[:,pixQ_ud,stkP], yerr = std220Q_ud[:,pixQ_ud,stkP], 
+               capsize = capsize, fmt='o', color = 'r', alpha = 0.8)
+#ax[2].plot(nus_out150, dust_map_150Q_ud[:,pixQ_ud,stkP], 'bo-')
+#ax[2].plot(nus_out220, dust_map_220Q_ud[:,pixQ_ud,stkP], 'bo-')
 ax[2].plot(x150, Umvals150Q, 'g')
 ax[2].fill_between(x150, y1 = Umvals150Q - Usvals150Q, y2 = Umvals150Q + Usvals150Q, 
                    color = 'g', alpha = 0.3)
@@ -1012,8 +1067,8 @@ ax[2].fill_between(x220, y1 = Umvals220Q - Usvals220Q, y2 = Umvals220Q + Usvals2
 ax[2].axvspan(nus_edge150[-1],nus_edge220[0],color='k',alpha=0.2)
 
 # Settings
-ax[2].grid(which='both')
-ax[0].legend(loc='best',fontsize=12)
+ax[2].grid(which = 'both')
+ax[0].legend(loc = 2,fontsize = 12)
 ax[0].grid()
 ax[0].set_title('GC patch - {} year'.format(d150G['effective_duration']),fontsize=14)
 ax[0].set_ylabel(r'$U(\nu)$ [$\mu$K]',fontsize=14)
@@ -1225,95 +1280,6 @@ Usvals150G, Usvals220G = np.std(Uvals150G, axis=1), np.std(Uvals220G, axis=1)
 ```
 
 ```{python}
-=======
-NU = 0
-STK = 0
-RESO = 15
-capsize=3
-plt.rc('font', size=14)
-
-for j in range(1):#enumerate(range(600,12000,500)):
-    fig,ax=plt.subplots(nrows=1,ncols=4,figsize=(16,4.5),)
-    ax=ax.ravel()
-    IPIXQ = pixQ_ud
-    IPIXG = pixG_ud
-    
-    print(IPIXQ, IPIXG)
-    #ax[0].errorbar(nus_out150, maps150G_ud[:,IPIXG,0],yerr = std150G_ud[:,IPIXG,0], capsize=capsize,
-    #       fmt='o-', color='r',label='reconstructed', alpha=0.8)
-    #ax[0].errorbar(nus_out220, maps220G_ud[:,IPIXG,0],yerr = std220G_ud[:,IPIXG,0], capsize=capsize,
-    #       fmt='o-', color='r', alpha=0.8)
-    
-    #ax[0].plot(x150, mvals150G, 'ro-', label='reconstructed')
-    ax[0].plot(nus_out150, dust_map_150G_ud[:,IPIXG,0],
-           'bo-',label='convolved')
-    ax[0].plot(nus_out220, dust_map_220G_ud[:,IPIXG,0],
-           'bo-', alpha=0.7)
-    ax[0].plot(nus_out150, maps150G_ud[:,IPIXG,0], 'r-', label='reconstructed')
-    ax[0].fill_between(x150, y1 = mvals150G - svals150G, y2 = mvals150G + svals150G, 
-                       color = 'r', alpha = 0.3)
-    #ax[0].plot(x220, mvals220G , 'ro-')
-    ax[0].plot(nus_out220, maps220G_ud[:,IPIXG,0] , 'r-')
-    ax[0].fill_between(x220, y1 = mvals220G - svals220G, y2 = mvals220G + svals220G, 
-                       color = 'r', alpha = 0.3)
-    
-    ax[0].axvspan(nus_edge150[-1], nus_edge220[0],color='k',alpha=0.2)
-
-    #ax[2].errorbar(nus_out150, maps150Q_ud[:,IPIXQ,0],yerr=std150Q_ud[:,IPIXQ,0], capsize=capsize,
-    #       fmt='o-', color='r',label='reconstructed', alpha=0.8)
-    #ax[2].errorbar(nus_out220, maps220Q_ud[:,IPIXQ,0],yerr=std220Q_ud[:,IPIXQ,0], capsize=capsize,
-    #       fmt='o-', color='r',alpha=0.8)
-    ax[2].plot(nus_out150, dust_map_150Q_ud[:,IPIXQ,0],
-           'bo-',label='convolved', )
-    ax[2].plot(nus_out220, dust_map_220Q_ud[:,IPIXQ,0],
-           'bo-', alpha=0.5)
-    ax[2].plot(nus_out150, maps150Q_ud[:,IPIXQ,0], 'r', label='reconstructed')
-    ax[2].fill_between(x150, y1 = mvals150Q - svals150Q, y2 = mvals150Q + svals150Q, 
-                       color = 'r', alpha = 0.3)
-    ax[2].plot(nus_out220, maps220Q_ud[:,IPIXQ,0], 'r')
-    ax[2].fill_between(x220, y1 = mvals220Q - svals220Q, y2 = mvals220Q + svals220Q, 
-                       color = 'r', alpha = 0.3)
-
-    ax[2].grid(which='both')
-    ax[2].axvspan(nus_edge150[-1],nus_edge220[0],color='k',alpha=0.2)
-        
-    ax[0].set_title('GC patch',fontsize=14)
-    ax[0].set_ylabel(r'$I_\nu$ [$\mu$K]',fontsize=14)
-    ax[0].set_xlabel(r'$\nu$[GHz]',fontsize=14)
-    ax[2].set_title('QUBIC patch',fontsize=14)
-    #ax[2].set_ylabel(r'$I_\nu$ [$\mu$K]',fontsize=18)
-    ax[2].set_xlabel(r'$\nu$[GHz]',fontsize=14)
-    ax[0].legend(loc='best',fontsize=12)
-    ax[0].grid()
-    ax[1].cla()
-    plt.axes(ax[1])
-    hp.gnomview(maps150G_ud[-1,:,0], reso = 15,hold = True, 
-                notext = True, title = ' ',
-                max = 0.4*np.max(maps150G_ud[-1,:,0]), 
-                unit = r'$\mu$K',
-                rot = centerG)
-    hp.projscatter(hp.pix2ang(nside_new, IPIXG), marker = '+', color = 'r',)
-    ax[3].cla()
-    plt.axes(ax[3])
-    hp.gnomview(maps220Q_ud[-1,:,0], reso = 15, hold = True, 
-                notext = True, title = ' ',
-                #max = 0.2 * np.max(maps150Q_ud[-1,:,0]),
-                unit = r'$\mu$K',
-                rot = centerQ)
-    hp.projscatter(hp.pix2ang(nside_new, IPIXQ),marker = '+', color = 'r',)
-    #plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Intensity.svg'.format(d150Q['nf_recon'],nside_new,
-    #                                                           IPIXQ, IPIXG), 
-    #            format = 'svg')
-    #plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Intensity.pdf'.format(d150Q['nf_recon'],nside_new,
-    #               x                                            IPIXQ, IPIXG), 
-    #            format = 'pdf')
-    #plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Intensity'.format(d150Q['nf_recon'],nside_new,IPIXQ, IPIXG))
-plt.show()
-```
-
-### Polarization
-
-```{python}
 istk = 1
 
 Qpopt150Q, Qpcov150Q = curve_fit(FuncModel, nus_out150, maps150Q_ud[:, pixQ_ud, istk], 
@@ -1408,547 +1374,4 @@ Usvals150G, Usvals220G = np.std(Uvals150G, axis=1), np.std(Uvals220G, axis=1)
 ```{python}
 ErrBar2 = lambda Qerr, Uerr: 1 / np.sqrt(2) * np.sqrt( Qerr ** 2 + Uerr)** 2 / \
                                            np.sqrt( Qerr ** 2 + Uerr ** 2)
-```
-
-```{python}
-for j in range(1):
-    fig,ax=plt.subplots(nrows=1,ncols=4,figsize=(16,4.5),)
-    ax=ax.ravel()
-    IPIXQ = pixQ_ud
-    IPIXG = pixG_ud
-    ax[0].plot(nus_out150, 
-                   np.sqrt(dust_map_150G_ud[:,IPIXG,1]**2 + dust_map_150G_ud[:,IPIXG,2]**2),
-                   'bo', lw = 3,label='convolved')
-    ax[0].plot(nus_out220, 
-                   np.sqrt(dust_map_220G_ud[:,IPIXG,1]**2 + dust_map_220G_ud[:,IPIXG,2]**2),
-                   'bo', lw = 3)
-    Pmean150G = np.sqrt(Qmvals150G ** 2 + Umvals150G ** 2)
-    Pmean220G = np.sqrt(Qmvals220G ** 2 + Umvals220G ** 2)
-    ax[0].plot(x150, Pmean150G, 'r-', label='reconstructed')
-    ax[0].plot(x220, Pmean220G, 'r-')
-    #Error bar 150 G
-    Perr150G = ErrBar2(Qsvals150G, Usvals150G)
-    ax[0].fill_between(x150, y1 = Pmean150G - Perr150G, y2 = Pmean150G + Perr150G, 
-                       color = 'r', alpha = 0.3)
-    #Error bar 220 G
-    Perr220G = ErrBar2(Qsvals220G, Usvals220G)
-    ax[0].fill_between(x220, y1 = Pmean220G - Perr220G, y2 = Pmean220G + Perr220G, 
-                       color = 'r', alpha = 0.3)
-    ax[0].set_title('GC patch',fontsize=14)
-    ax[0].set_ylabel(r'$I_{P} (\nu)~[\mu$K]', fontsize = 14)
-    ax[0].set_xlabel(r'$\nu~[GHz]$', fontsize = 14)
-    ax[0].axvspan(nus_edge150[-1], nus_edge220[0], color = 'k', alpha = 0.2)
-    ax[0].legend(loc = 'upper left', fontsize = 12)
-    ax[0].grid()
-    plt.axes(ax[1])
-    auxmapG = np.sqrt(maps150G_ud[0,:,1] ** 2 + maps150G_ud[0,:,2] ** 2)
-    auxmapG[~cov150G_ud] = hp.UNSEEN
-    hp.gnomview(auxmapG,#np.sqrt(maps150G_ud[2,:,1] ** 2 + maps150G_ud[2,:,2] ** 2), 
-                reso = 15, hold = True, notext = True, 
-                title = ' ',
-                cbar = True,
-                unit = r'$\mu$K',
-                rot = centerG)
-    hp.projscatter(hp.pix2ang(nside_new,IPIXG),marker='+',color='r',)
-    
-    ax[2].plot(nus_out150, 
-                   np.sqrt(dust_map_150Q_ud[:,IPIXQ,1]**2 + dust_map_150Q_ud[:,IPIXQ,2]**2),
-                   'bo', lw = 3,alpha = 0.7)
-    ax[2].plot(nus_out220, 
-                   np.sqrt(dust_map_220Q_ud[:,IPIXQ,1]**2 + dust_map_220Q_ud[:,IPIXQ,2]**2),
-                   'bo', lw = 3, alpha = 0.7)
-    Pmean150Q = np.sqrt(Qmvals150Q ** 2 + Umvals150Q ** 2)
-    Pmean220Q = np.sqrt(Qmvals220Q ** 2 + Umvals220Q ** 2)
-    
-    ax[2].plot(x150, Pmean150Q, 'r-')
-    ax[2].plot(x220, Pmean220Q, 'r-')
-    #Error bar 150 Q
-    Perr150Q = ErrBar2(Qsvals150Q, Usvals150Q)
-    ax[2].fill_between(x150, y1 = Pmean150Q - Perr150Q, y2 = Pmean150Q + Perr150Q, 
-                       color = 'r', alpha = 0.3)
-    #Error bar 220 Q
-    Perr220Q = ErrBar2(Qsvals220Q, Usvals220Q)
-    ax[2].fill_between(x220, y1 = Pmean220Q - Perr220Q, y2 = Pmean220Q + Perr220Q, 
-                       color = 'r', alpha = 0.3)
->>>>>>> 1ab0e331493557dbe691193fa8ae96856f84c30c
-
-    
-    
-    ax[2].set_xlabel(r'$\nu~[GHz]$', fontsize = 14)
-    ax[2].axvspan(nus_edge150[-1], nus_edge220[0], color = 'k', alpha = 0.2)
-    ax[2].set_title('QUBIC patch',fontsize=14)
-    ax[2].grid()
-    plt.axes(ax[3])
-    auxmapQ = np.sqrt(maps150Q_ud[0,:,1] ** 2 + maps150Q_ud[0,:,2] ** 2)
-    auxmapQ[~cov150Q_ud] = hp.UNSEEN
-    hp.gnomview(auxmapQ,#np.sqrt(maps150Q_ud[2,:,1] ** 2 + maps150Q_ud[2,:,2] ** 2), 
-                reso = 15, hold = True, notext = True, 
-                #max = 1e2,
-                title = ' ',
-                cbar = True,
-                unit = r'$\mu$K',
-                rot = centerQ)
-    hp.projscatter(hp.pix2ang(nside_new,IPIXQ),marker='+',color='r',)
-    #plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Polarization.svg'.format(d150Q['nf_recon'], nside_new,
-    #                                                           IPIXQ, IPIXG), 
-    #            format = 'svg')
-    #plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Polarization.pdf'.format(d150Q['nf_recon'], nside_new,
-    #                                                           IPIXQ, IPIXG), 
-    #            format = 'pdf')
-    #plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Polarization'.format(d150Q['nf_recon'], 
-    #                                                                           nside_new,IPIXQ, IPIXG))
-plt.show()
-```
-
-Old way.................................
-
-```{python}
-<<<<<<< HEAD
-
-```
-
-```{python}
-
-```
-
-Old way.................................
-
-```{python}
-for j in range(1):
-    fig,ax=plt.subplots(nrows=1,ncols=4,figsize=(16,4.5),)
-    ax=ax.ravel()
-    IPIXQ = pixQ_ud
-    IPIXG = pixG_ud
-    ax[0].plot(nus_out150, 
-                   np.sqrt(dust_map_150G_ud[:,IPIXG,1]**2 + dust_map_150G_ud[:,IPIXG,2]**2),
-                   'bo', lw = 3,label='convolved', alpha = 0.7)
-    ax[0].plot(nus_out220, 
-                   np.sqrt(dust_map_220G_ud[:,IPIXG,1]**2 + dust_map_220G_ud[:,IPIXG,2]**2),
-                   'bo', lw = 3, alpha = 0.7)
-    ax[0].errorbar(nus_out150, 
-                   np.sqrt(maps150G_ud[:,IPIXG,1] ** 2 + maps150G_ud[:,IPIXG,2] ** 2),
-                   yerr = ErrBar(maps150G_ud, std150G_ud, IPIXG),  label='reconstructed', 
-                    capsize = 3 ,lw = 3, fmt = 'o-', color = 'r',
-                   alpha = 0.7 )
-    ax[0].errorbar(nus_out220, 
-                   np.sqrt(maps220G_ud[:,IPIXG,1] ** 2 + maps220G_ud[:,IPIXG,2] ** 2),
-                   yerr = ErrBar(maps220G_ud, std220G_ud, IPIXG),
-                    capsize = 3 ,lw = 3, fmt = 'o-', color = 'r',
-                   alpha = 0.7 )
-    #ax[0].set_title(' ', fontsize = 15)
-    ax[0].set_title('GC patch',fontsize=14)
-    ax[0].set_ylabel(r'$I_{P} (\nu)~[\mu$K]', fontsize = 14)
-    ax[0].set_xlabel(r'$\nu~[GHz]$', fontsize = 14)
-    ax[0].axvspan(nus_edge150[-1], nus_edge220[0], color = 'k', alpha = 0.2)
-    ax[0].legend(loc = 'upper left', fontsize = 12)
-    ax[0].grid()
-    plt.axes(ax[1])
-    auxmapG = np.sqrt(maps150G_ud[0,:,1] ** 2 + maps150G_ud[0,:,2] ** 2)
-    auxmapG[~cov150G_ud] = hp.UNSEEN
-    hp.gnomview(auxmapG,#np.sqrt(maps150G_ud[2,:,1] ** 2 + maps150G_ud[2,:,2] ** 2), 
-                reso = 15, hold = True, notext = True, 
-                title = ' ',
-                cbar = True,
-                unit = r'$\mu$K',
-                rot = centerG)
-    hp.projscatter(hp.pix2ang(nside_new,IPIXG),marker='+',color='r',)
-    
-    ax[2].plot(nus_out150, 
-                   np.sqrt(dust_map_150Q_ud[:,pixQ_ud,1]**2 + dust_map_150Q_ud[:,pixQ_ud,2]**2),
-                   'bo', lw = 3,alpha = 0.7)
-    ax[2].plot(nus_out220, 
-                   np.sqrt(dust_map_220Q_ud[:,pixQ_ud,1]**2 + dust_map_220Q_ud[:,pixQ_ud,2]**2),
-                   'bo', lw = 3, alpha = 0.7)
-    ax[2].errorbar(nus_out150, 
-                   np.sqrt(maps150Q_ud[:,pixQ_ud,1] ** 2 + maps150Q_ud[:,pixQ_ud,2] ** 2),
-                   yerr = ErrBar(maps150Q_ud, std150Q_ud, pixQ_ud),
-                    capsize = 3 ,lw = 3, fmt = 'o-', color = 'r',
-                   alpha = 0.7 )
-    ax[2].errorbar(nus_out220, 
-                   np.sqrt(maps220Q_ud[:,pixQ_ud,1] ** 2 + maps220Q_ud[:,pixQ_ud,2] ** 2),
-                   yerr = ErrBar(maps220Q_ud, std220Q_ud, pixQ_ud),
-                    capsize = 3 ,lw = 3, fmt = 'o-', color = 'r',
-                   alpha = 0.7 )
-    #ax[0].set_title(' ', fontsize = 15)
-    #ax[2].set_ylabel(r'$I_{P} (\nu)~[\mu$K]', fontsize = 14)
-    ax[2].set_xlabel(r'$\nu~[GHz]$', fontsize = 14)
-    ax[2].axvspan(nus_edge150[-1], nus_edge220[0], color = 'k', alpha = 0.2)
-    ax[2].set_title('QUBIC patch',fontsize=14)
-    ax[2].grid()
-    plt.axes(ax[3])
-    auxmapQ = np.sqrt(maps150Q_ud[0,:,1] ** 2 + maps150Q_ud[0,:,2] ** 2)
-    auxmapQ[~cov150Q_ud] = hp.UNSEEN
-    hp.gnomview(auxmapQ,#np.sqrt(maps150Q_ud[2,:,1] ** 2 + maps150Q_ud[2,:,2] ** 2), 
-                reso = 15, hold = True, notext = True, 
-                #max = 1e2,
-                title = ' ',
-                cbar = True,
-                unit = r'$\mu$K',
-                rot = centerQ)
-    hp.projscatter(hp.pix2ang(nside_new,pixQ_ud),marker='+',color='r',)
-    #plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Polarization.svg'.format(d150Q['nf_recon'], nside_new,
-    #                                                           pixQ_ud, IPIXG), 
-    #            format = 'svg')
-    #plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Polarization.pdf'.format(d150Q['nf_recon'], nside_new,
-    #                                                           pixQ_ud, IPIXG), 
-    #            format = 'pdf')
-    #plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Polarization'.format(d150Q['nf_recon'], 
-    #                                                                           nside_new,pixQ_ud, IPIXG))
-plt.show()
-=======
-ErrBar = lambda xmean, xstd, px: 1 / np.sqrt(2) * np.sqrt( xstd[:,px,1] ** 2 + xstd[:,px,2])** 2 / \
-                                           np.sqrt( xmean[:,px,1] ** 2 + xmean[:,px,2] ** 2)
-```
-
-```{python}
-for j in range(1):
-    fig,ax=plt.subplots(nrows=1,ncols=4,figsize=(16,4.5),)
-    ax=ax.ravel()
-    IPIXQ = pixQ_ud
-    IPIXG = pixG_ud
-    ax[0].plot(nus_out150, 
-                   np.sqrt(dust_map_150G_ud[:,IPIXG,1]**2 + dust_map_150G_ud[:,IPIXG,2]**2),
-                   'bo', lw = 3,label='convolved', alpha = 0.7)
-    ax[0].plot(nus_out220, 
-                   np.sqrt(dust_map_220G_ud[:,IPIXG,1]**2 + dust_map_220G_ud[:,IPIXG,2]**2),
-                   'bo', lw = 3, alpha = 0.7)
-    ax[0].errorbar(nus_out150, 
-                   np.sqrt(maps150G_ud[:,IPIXG,1] ** 2 + maps150G_ud[:,IPIXG,2] ** 2),
-                   yerr = ErrBar(maps150G_ud, std150G_ud, IPIXG),  label='reconstructed', 
-                    capsize = 3 ,lw = 3, fmt = 'o-', color = 'r',
-                   alpha = 0.7 )
-    ax[0].errorbar(nus_out220, 
-                   np.sqrt(maps220G_ud[:,IPIXG,1] ** 2 + maps220G_ud[:,IPIXG,2] ** 2),
-                   yerr = ErrBar(maps220G_ud, std220G_ud, IPIXG),
-                    capsize = 3 ,lw = 3, fmt = 'o-', color = 'r',
-                   alpha = 0.7 )
-    #ax[0].set_title(' ', fontsize = 15)
-    ax[0].set_title('GC patch',fontsize=14)
-    ax[0].set_ylabel(r'$I_{P} (\nu)~[\mu$K]', fontsize = 14)
-    ax[0].set_xlabel(r'$\nu~[GHz]$', fontsize = 14)
-    ax[0].axvspan(nus_edge150[-1], nus_edge220[0], color = 'k', alpha = 0.2)
-    ax[0].legend(loc = 'upper left', fontsize = 12)
-    ax[0].grid()
-    plt.axes(ax[1])
-    auxmapG = np.sqrt(maps150G_ud[0,:,1] ** 2 + maps150G_ud[0,:,2] ** 2)
-    auxmapG[~cov150G_ud] = hp.UNSEEN
-    hp.gnomview(auxmapG,#np.sqrt(maps150G_ud[2,:,1] ** 2 + maps150G_ud[2,:,2] ** 2), 
-                reso = 15, hold = True, notext = True, 
-                title = ' ',
-                cbar = True,
-                unit = r'$\mu$K',
-                rot = centerG)
-    hp.projscatter(hp.pix2ang(nside_new,IPIXG),marker='+',color='r',)
-    
-    ax[2].plot(nus_out150, 
-                   np.sqrt(dust_map_150Q_ud[:,IPIXQ,1]**2 + dust_map_150Q_ud[:,IPIXQ,2]**2),
-                   'bo', lw = 3,alpha = 0.7)
-    ax[2].plot(nus_out220, 
-                   np.sqrt(dust_map_220Q_ud[:,IPIXQ,1]**2 + dust_map_220Q_ud[:,IPIXQ,2]**2),
-                   'bo', lw = 3, alpha = 0.7)
-    ax[2].errorbar(nus_out150, 
-                   np.sqrt(maps150Q_ud[:,IPIXQ,1] ** 2 + maps150Q_ud[:,IPIXQ,2] ** 2),
-                   yerr = ErrBar(maps150Q_ud, std150Q_ud, IPIXQ),
-                    capsize = 3 ,lw = 3, fmt = 'o-', color = 'r',
-                   alpha = 0.7 )
-    ax[2].errorbar(nus_out220, 
-                   np.sqrt(maps220Q_ud[:,IPIXQ,1] ** 2 + maps220Q_ud[:,IPIXQ,2] ** 2),
-                   yerr = ErrBar(maps220Q_ud, std220Q_ud, IPIXQ),
-                    capsize = 3 ,lw = 3, fmt = 'o-', color = 'r',
-                   alpha = 0.7 )
-    #ax[0].set_title(' ', fontsize = 15)
-    #ax[2].set_ylabel(r'$I_{P} (\nu)~[\mu$K]', fontsize = 14)
-    ax[2].set_xlabel(r'$\nu~[GHz]$', fontsize = 14)
-    ax[2].axvspan(nus_edge150[-1], nus_edge220[0], color = 'k', alpha = 0.2)
-    ax[2].set_title('QUBIC patch',fontsize=14)
-    ax[2].grid()
-    plt.axes(ax[3])
-    auxmapQ = np.sqrt(maps150Q_ud[0,:,1] ** 2 + maps150Q_ud[0,:,2] ** 2)
-    auxmapQ[~cov150Q_ud] = hp.UNSEEN
-    hp.gnomview(auxmapQ,#np.sqrt(maps150Q_ud[2,:,1] ** 2 + maps150Q_ud[2,:,2] ** 2), 
-                reso = 15, hold = True, notext = True, 
-                #max = 1e2,
-                title = ' ',
-                cbar = True,
-                unit = r'$\mu$K',
-                rot = centerQ)
-    hp.projscatter(hp.pix2ang(nside_new,IPIXQ),marker='+',color='r',)
-    #plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Polarization.svg'.format(d150Q['nf_recon'], nside_new,
-    #                                                           IPIXQ, IPIXG), 
-    #            format = 'svg')
-    #plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Polarization.pdf'.format(d150Q['nf_recon'], nside_new,
-    #                                                           IPIXQ, IPIXG), 
-    #            format = 'pdf')
-    #plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Polarization'.format(d150Q['nf_recon'], 
-    #                                                                           nside_new,IPIXQ, IPIXG))
-plt.show()
-```
-
-### 3D plots
-
-```{python}
-copia_maps150G = maps150G.copy()
-copia_maps220G = maps220G.copy()
->>>>>>> 1ab0e331493557dbe691193fa8ae96856f84c30c
-```
-
-### 3D plots
-
-```{python}
-<<<<<<< HEAD
-copia_maps150G = maps150G.copy()
-copia_maps220G = maps220G.copy()
-```
-
-```{python}
-dth=5
-copia_maps150G[0,~cov150G,:]=hp.UNSEEN
-copia_maps220G[0,~cov220G,:]=hp.UNSEEN
-hp.gnomview(copia_maps150G[0,:,0],rot=centerG, reso=15,title=None,
-           cbar=None, notext=True, max=0.7*np.max(copia_maps150G[0,:,0]))
-deltab=np.deg2rad(12)
-for i in np.arange(np.pi/2-deltab,np.pi/2+deltab,0.002):
-    #print(i)
-    hp.projscatter(np.array([i,0]),marker='+',c='r',s=2)
-#plt.savefig('Figs-FI-SED/3d-cut_GalCent.pdf', format = 'pdf')
-plt.savefig('Figs-FI-SED/3d-cut_GalCent')
-```
-
-```{python}
-deltab=np.deg2rad(8)
-
-count=0
-lala=[]
-for i in np.arange(np.pi / 2 - deltab,
-                   np.pi / 2 + deltab,
-                   1.3 * hp.nside2resol(d150Q['nside']) ) :
-    lala.append(hp.ang2pix(d150Q['nside'],i,0))
-    count+=1
-
-cutGal = np.zeros((2*len(nus_out150),count))
-yaxis = []
-for inu in range(len(nus_out150)):
-    for j,ip in enumerate(np.arange(np.pi / 2 - deltab,
-                                    np.pi / 2 + deltab,
-                                    1.3 * hp.nside2resol(d150Q['nside']) )) :
-        if inu == 0:
-            yaxis.append(ip)
-        ipix = hp.ang2pix(d150Q['nside'],ip,0)
-        cutGal[inu,j] = copia_maps150G[inu,ipix,0]
-        cutGal[5+inu,j] = copia_maps220G[inu,ipix,0]
-#
-
-x = np.rad2deg(yaxis) - 90
-y = cutGal[0] 
-
-fig, ax = plt.subplots()
-# plot only the outline of the polygon, and capture the result
-poly, = ax.fill(x, y, facecolor='none')
-
-# get the extent of the axes
-xmin, xmax = ax.get_xlim()
-ymin, ymax = ax.get_ylim()
-
-# create a dummy image
-img_data = np.arange(ymin, ymax, (ymax - ymin) / 100.)
-img_data = img_data.reshape(img_data.size, 1)
-
-# plot and clip the image
-im = ax.imshow(img_data, aspect = 'auto', origin = 'lower', 
-               cmap = plt.cm.viridis, extent = [xmin, xmax, ymin, ymax], 
-               vmin = y.min(), vmax = y.max() * 0.98)
-
-print(type(im))
-im.set_clip_path(poly)
-```
-
-```{python}
-=======
-dth=5
-copia_maps150G[0,~cov150G,:]=hp.UNSEEN
-copia_maps220G[0,~cov220G,:]=hp.UNSEEN
-hp.gnomview(copia_maps150G[0,:,0],rot=centerG, reso=15,title=None,
-           cbar=None, notext=True, max=0.7*np.max(copia_maps150G[0,:,0]))
-deltab=np.deg2rad(12)
-for i in np.arange(np.pi/2-deltab,np.pi/2+deltab,0.002):
-    #print(i)
-    hp.projscatter(np.array([i,0]),marker='+',c='r',s=2)
-#plt.savefig('Figs-FI-SED/3d-cut_GalCent.pdf', format = 'pdf')
-plt.savefig('Figs-FI-SED/3d-cut_GalCent')
-```
-
-```{python}
-deltab=np.deg2rad(8)
-
-count=0
-lala=[]
-for i in np.arange(np.pi / 2 - deltab,
-                   np.pi / 2 + deltab,
-                   1.3 * hp.nside2resol(d150Q['nside']) ) :
-    lala.append(hp.ang2pix(d150Q['nside'],i,0))
-    count+=1
-
-cutGal = np.zeros((2*len(nus_out150),count))
-yaxis = []
-for inu in range(len(nus_out150)):
-    for j,ip in enumerate(np.arange(np.pi / 2 - deltab,
-                                    np.pi / 2 + deltab,
-                                    1.3 * hp.nside2resol(d150Q['nside']) )) :
-        if inu == 0:
-            yaxis.append(ip)
-        ipix = hp.ang2pix(d150Q['nside'],ip,0)
-        cutGal[inu,j] = copia_maps150G[inu,ipix,0]
-        cutGal[5+inu,j] = copia_maps220G[inu,ipix,0]
-#
-
-x = np.rad2deg(yaxis) - 90
-y = cutGal[0] 
-
-fig, ax = plt.subplots()
-# plot only the outline of the polygon, and capture the result
-poly, = ax.fill(x, y, facecolor='none')
-
-# get the extent of the axes
-xmin, xmax = ax.get_xlim()
-ymin, ymax = ax.get_ylim()
-
-# create a dummy image
-img_data = np.arange(ymin, ymax, (ymax - ymin) / 100.)
-img_data = img_data.reshape(img_data.size, 1)
-
-# plot and clip the image
-im = ax.imshow(img_data, aspect = 'auto', origin = 'lower', 
-               cmap = plt.cm.viridis, extent = [xmin, xmax, ymin, ymax], 
-               vmin = y.min(), vmax = y.max() * 0.98)
-
-print(type(im))
-im.set_clip_path(poly)
-```
-
-```{python}
->>>>>>> 1ab0e331493557dbe691193fa8ae96856f84c30c
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection # New import
-from matplotlib.pyplot import cm
-
-# Generated some random data
-fig = plt.figure(figsize=(12,9))
-
-ax = fig.add_subplot(111, projection='3d')
-
-color=iter(cm.viridis(np.linspace(0,1,5)))
-for i in range(5):
-    y,z = np.rad2deg(np.array(yaxis))-90, cutGal[i,:]
-    #if i < 5:
-    #    x = nus_out150[i]*np.ones(y.shape)
-    #else: 
-    #    x = nus_out220[i-5]*np.ones(y.shape)
-    x = nus_out150[i]*np.ones(y.shape)
-    verts = [(x[i],y[i],z[i]) for i in range(len(y))] #+ [(x[0],y.min(),z.min()),(x[0],y.max(),z.min())]
-    ax.add_collection3d(Poly3DCollection([verts],color=next(color)),) # Add a polygon instead of fill_between
-    ax.set_ylim(y.min(),y.max())
-    ax.plot(x,y,z,color='k')
-#
-
-ax.set_xlim(170,130)
-ax.set_xticks([135,145,155,165],)
-ax.xaxis.set_rotate_label(False)
-ax.xaxis.set_tick_params(labelsize=15, pad=10)
-ax.set_xlabel(r'$\nu~[GHz]$',fontsize=17, labelpad=25,rotation=0)
-
-ax.set_yticks([-5,0,5],)
-ax.yaxis.set_rotate_label(False)
-ax.yaxis.set_tick_params(labelsize=15, pad=10)
-ax.set_ylabel(r'$b~[deg]$',fontsize=17,labelpad=25,rotation=0)
-
-ax.set_zticks([0,4e3,8e3,12e3,16e3,20e3],)
-ax.zaxis.set_rotate_label(False)
-ax.zaxis.set_tick_params(labelsize=15, pad=10)
-ax.set_zlabel(r'$I_{\nu}~[\mu K]$',fontsize=17, labelpad=25, rotation=0,)
-
-ax.view_init(30, 20)
-#lt.savefig('Figs-FI-SED/3d-150G.pdf', format = 'pdf')
-plt.savefig('Figs-FI-SED/3d-150G')
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-mq = maps_qubic.copy()
-mq220=maps_qubic220.copy()
-```
-
-```{python}
-mq = maps_qubic.copy()
-mq220 = maps_qubic220.copy()
-#import gc
-#gc.collect()
-dvals=[]
-dvals220=[]
-cvals=[]
-cvals220=[]
-#mq = maps_qubic
-threshold=0.08
-fig,ax=plt.subplots(nrows=3,ncols=d['nf_recon'],figsize=(12,10),)
-for ifreq in range(d['nf_recon']):
-    auxmap = mq[ifreq,:,0]
-    auxmap[~cov]=hp.UNSEEN
-    auxmap[auxmap>threshold*max(auxmap)] = hp.UNSEEN
-    mask=np.where(auxmap!=hp.UNSEEN)
-    dvals.append(np.sqrt(np.sum(maps_qubic[ifreq,mask[0],0]**2)/len(mask[0]) ))
-    cvals.append(np.sqrt(np.sum(maps_qubic_cmb[ifreq,mask[0],0]**2)/len(mask[0]) ))
-    ax[0,ifreq].cla()
-    plt.axes(ax[0,ifreq])
-    hp.gnomview(auxmap, reso=15,hold=True,notext=True,title='{:.1f}GHz'.format(nus[ifreq]),
-               min=-10, max=0.2*np.max(maps_qubic[ifreq,cov,0]), rot=center )
-
-for ifreq in range(d['nf_recon']):
-    auxmap = mq220[ifreq,:,0]
-    auxmap[~cov]=hp.UNSEEN
-    auxmap[auxmap>threshold*max(auxmap)] = hp.UNSEEN
-    mask220=np.where(auxmap!=hp.UNSEEN)
-    dvals220.append(np.sqrt(np.sum(maps_qubic220[ifreq,mask220[0],0]**2)/len(mask220[0]) ))
-    cvals220.append(np.sqrt(np.sum(maps_qubic_cmb220[ifreq,mask220[0],0]**2)/len(mask220[0]) ))
-    ax[2,ifreq].cla()
-    plt.axes(ax[2,ifreq])
-    hp.gnomview(auxmap, reso=15,hold=True,notext=True,title='{:.1f}GHz'.format(nus_220[ifreq]),
-               min=-10, max=0.2*np.max(maps_qubic220[ifreq,cov,0]), rot=center )
-
-    
-#ax=ax.ravel()
-gs = ax[1,1].get_gridspec()
-# remove the underlying axes
-for iax in ax[1,0:]:
-    iax.remove()
-axbig = fig.add_subplot(gs[1,1:-1])
-#axbig.set_yscale('log')
-axbig.plot(nus, dvals,
-       'r-', lw=4,label='Dust', alpha=1)
-axbig.plot(nus_220, dvals220,
-       'r-', lw=4,label=None, alpha=1)
-axbig.plot(nus, cvals,
-        'g-',lw=4,label='CMB' , alpha=1)
-axbig.plot(nus_220, cvals220,
-        'g-',lw=4,label=None , alpha=1)
-axbig.axvspan(nus[-1],nus_220[0],color='k',alpha=0.2)
-axbig.set_ylabel(r'$rms$ [$\mu$K]',)
-axbig.set_xlabel(r'$\nu$[GHz]',)
-axbig.set_title(r'R2 - mask {:.1f}% I$_{{\rm max}}$'.format(threshold*100))
-axbig.legend(bbox_to_anchor=(0.83, 0.5, 0.5, 0.5),fontsize=12)
-axbig.grid()
-#for iax in range(d['nf_recon']):
-#    ax[0,iax].cla()
-#    plt.axes(ax[0,iax])
-#    hp.gnomview(auxmap, reso=15,hold=True,notext=True,title='{:.1f}GHz'.format(nus[0]),
-#               max=np.max(auxmap))
-    
 ```

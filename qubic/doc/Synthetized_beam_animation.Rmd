@@ -22,6 +22,7 @@ import numpy as np
 import healpy as hp
 
 import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
 # %matplotlib inline
 # %matplotlib notebook
@@ -46,6 +47,8 @@ d.read_from_file(os.environ['QUBIC_DICT']+'pipeline_demo.dict')
 
 # d.read_from_file(dictfilename)
 d['config'] = 'TD'
+
+d['synthbeam_kmax'] = 1
 ```
 
 ```{python}
@@ -61,11 +64,50 @@ print(sb.shape)
 ```
 
 ```{python}
-# Maximum of the synthetic beam
-lonlat_center = np.zeros((248, 2))
-for tes in range(248):
-    maxi = np.where(sb[tes, :] == np.max(sb[tes, :]))[0]
-    lonlat_center[tes, :] = hp.pix2ang(d['nside'], maxi[0], lonlat=True) 
+# Coordinates of the peaks (spherical coordinates in radian) for each TES
+
+kmax = d['synthbeam_kmax']
+npeaks = (2 * kmax + 1)**2
+delta_horn = q.horn.spacing
+angle_horn = q.horn.angle
+nu = d['filter_nu']
+position_TES = q.detector.center
+theta, phi = q._peak_angles_kmax(kmax, delta_horn, angle_horn, nu, position_TES)
+
+print(theta.shape)
+```
+
+```{python}
+npeaks//2
+```
+
+```{python}
+for TES in range(20):
+
+    hp.gnomview(sb[TES], min=0, max=1000, rot=(180, 90), reso=25, title=None)
+    for p in range(npeaks):
+        if p == npeaks // 2:
+            color = 'w'
+        else:
+            color = 'r'
+        th = theta[TES, p]
+        ph = phi[TES, p]
+        hp.visufunc.projscatter(th, ph, color=color, marker='+')
+        hp.visufunc.projtext(th, ph, str(p), color=color, fontsize=10)
+
+```
+
+```{python}
+hp.gnomview(sb[200], min=0, max=1e6, rot=(180, 90), reso=8, title=None)
+for TES in range(248):
+    p = npeaks//2
+    color = 'w'
+
+    th = theta[TES, p]
+    ph = phi[TES, p]
+    hp.visufunc.projscatter(th, ph, color=color, marker='.')
+#     hp.visufunc.projtext(th, ph, str(TES), color=color, fontsize=10)
+
 ```
 
 ```{python}
@@ -92,51 +134,59 @@ for i, index in enumerate(q.detector.index):
 ```
 
 ```{python}
-from matplotlib.animation import FuncAnimation
-
-
 def animate(det):
     index = tes_index[det]
-    tes = tes = FPidentity[index].TES
+    tes = FPidentity[index].TES
+    
+    # Focal plane
+#     ax1.annotate(str(tes_index[tes]),  xy=(x, y), fontsize=10, color='r')
+    
     x = tes_coord[det, 0]
     y = tes_coord[det, 1]
-    
-    # Fcal plane
-#     ax1.annotate(str(tes_index[tes]),  xy=(x, y), fontsize=10, color='r')
-    ax1.scatter(x, y, color='r')
+    point.set_data(x, y)
     ax1.set_title('TES {}'.format(index))
     
+    
     # Simulation
-    lon, lat = lonlat_center[det, :]
-    hp.gnomview(sb[det], rot=(180, 90), min=0, max=1e6, reso=12, sub=(223), title=None)
-    hp.graticule()
-    hp.visufunc.projscatter(lon, lat, lonlat=True, color='r')
-    hp.visufunc.projtext(lon, lat, '({:.3}, {:.3})'.format(lon, lat), lonlat=True, color='r', fontsize=12)
-    ax3.set_title('Synthetic beam, TES index {}'.format(index), pad=10)
+    hp.gnomview(sb[det], min=0, max=1e6, rot=(180, 90), reso=25, sub=(222), 
+                title='Simulation', cbar=False)
+    for p in range(npeaks):
+        if p == npeaks//2:
+            color = 'w'
+        else:
+            color = 'r'
+        th = theta[det, p]
+        ph = phi[det, p]
+#         hp.visufunc.projscatter(th, ph, color=color, marker='+')
+        hp.visufunc.projtext(th, ph, str(p), color=color, fontsize=12) 
     
     # Measurement
-    hp.gnomview(sb_measured[det], rot=(0, 0, 180), reso=10, sub=(224), title=None, cbar='hist')
-    hp.graticule()
-    ax4.set_title('Measurement, TES {}'.format(tes), pad=10)
+#     hp.gnomview(sb_measured[det], rot=(0, 0, 180), reso=15, sub=(223), 
+#                 title='Measurement', cbar=False)
+#     hp.graticule()
 
 
 def init():
-    ax1.set_title('Synthetic beam on the sky')
+#     ax1.set_title('Synthetic beam on the sky')
     
     ax1.set_xlim(-0.055, 0.005)
     ax1.set_ylim(-0.055, 0.005)
+    ax2.axis('off')
     ax3.axis('off')
     ax4.axis('off')
     
+    
 
 fig, axs = plt.subplots(2, 2, figsize=(12, 12))
-axs = np.ravel(axs)
-ax1, ax2, ax3, ax4 = axs
-
+ax1, ax2, ax3, ax4 = np.ravel(axs)
 ax1.scatter(tes_coord[:, 0], tes_coord[:, 1], marker='s', s=200, alpha=0.3)
+det0 = 100
+x0 = tes_coord[det0, 0]
+y0 = tes_coord[det0, 1]
+   
+point, = ax1.plot(x0, y0, 'go')
 
-
-steps = np.arange(112, 250, 17)
+steps = np.arange(det0, det0+5, 2)
 ani = FuncAnimation(fig, animate, steps, init_func=init, interval=1000, blit=True, repeat=False)
 
     

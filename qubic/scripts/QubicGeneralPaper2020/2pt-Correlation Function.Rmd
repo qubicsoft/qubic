@@ -102,6 +102,21 @@ d['nside']=256
 # figure()
 # hp.mollview(covar)
 
+
+
+def get_maps_from_louise(directory, nfsub, config):
+    residuals_patch = np.load(directory + f'residuals_{nfsub}bands_{config}.npy')
+    seenmap = np.load(directory + f'seenmap_{nfsub}bands_{config}.npy')
+    coverage_patch = np.load(directory + f'coverage_{nfsub}bands_{config}.npy')
+    nside = 256
+    residuals = np.zeros((nfsub, 12 * nside ** 2, 3))
+    residuals[:, seenmap, :] = residuals_patch
+    coverage = np.zeros(12 * nside ** 2)
+    coverage[seenmap] = coverage_patch
+    return residuals, coverage, seenmap
+
+
+
 ```
 
 ```{python}
@@ -231,16 +246,16 @@ bla = qss.get_angular_profile(new_diff, label=simname+' corrected', center=cente
 ```
 
 ```{python}
-
+reload(qss)
 ns = d['nside']
 okpix = covar > (np.max(covar)*0.1)
 ip = np.arange(12*ns**2).astype(int)
 ipok = ip[okpix]
 
-th, cth_200k = qss.ctheta_parts(new_diff[:,0], ipok, 0, 20, 20, nsplit=5, degrade_init=128, verbose=False)
+th, cth_200k, errs = qss.ctheta_parts(new_diff[:,0], ipok, 0, 20, 40, nsplit=5, degrade_init=128, verbose=False)
 th = th[isfinite(cth_200k)]
+errs = errs[isfinite(cth_200k)]
 cth_200k = cth_200k[isfinite(cth_200k)]
-
 
 ```
 
@@ -252,7 +267,96 @@ fct = lambda x, a, b, c: a * np.sin(x/b) * exp(-x/c)
 results_200k = curve_fit(fct, th[1:], cth_200k[1:]/cth_200k[0])
 
 thetas = np.linspace(0,20,100)
-p=plot(th[1:],cth_200k[1:]/cth_200k[0],'o', label=simname)
+p=errorbar(th[1:],cth_200k[1:]/cth_200k[0], yerr=errs[1:]/cth_200k[0],fmt='o', label=simname)
+plot(0,1,'o', color=p[0].get_color())
+plot(thetas, fct(thetas, *results_200k[0]), color=p[0].get_color(),
+         label=r'$a\times\sin(\theta/b)\times\exp(\theta/c)$'+'\n a={0:4.2f} b={1:4.2f} c={2:4.2f}'.format(*results_200k[0]))
+axhline(y=0, color='k', ls=':')
+legend()
+xlabel(r'$\theta$ [deg]')
+ylabel(r'$C(\theta)$')
+
+print(np.var(new_diff[ipok,0]))
+
+```
+
+```{python}
+reload(qss)
+reload(ft)
+center = [0,0]
+directory = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_NERSC/MapsLouiseAtmosphereOK_Sept7_2020/'
+
+nbins = 20
+
+configs = ['FI150', 'FI220']
+allcth = []
+allctherrs = []
+for i in range(len(configs)):
+    residuals_maps, covar, seen = get_maps_from_louise(directory, 1, configs[i])
+    residuals_maps = residuals_maps[0,:,:]
+    # 1) Fit RMS Vs 1/cov
+    dofit=True
+    xx, yy, fit_n200k = qss.get_noise_invcov_profile(residuals_maps, covar, nbins=nbins,
+                                                      label=simname,fit=dofit, doplot=False)
+    # 2) Correct maps for RMS vs 1/cov
+    new_diff = qss.correct_maps_rms(residuals_maps, covar, fit_n200k)
+    th, cth_200k, errs = qss.ctheta_parts(new_diff[:,0], ipok, 0, 20, nbins, nsplit=5, degrade_init=128, verbose=False)
+    th = th[isfinite(cth_200k)]
+    errs = errs[isfinite(cth_200k)]
+    cth_200k = cth_200k[isfinite(cth_200k)]
+    allcth.append(cth_200k)
+    allctherrs.append(errs)
+    print(cth_200k.shape)
+
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+rc('figure', figsize=(13, 6))
+from scipy.optimize import curve_fit
+
+fct = lambda x, a, b, c: a * np.sin(x/b) * exp(-x/c)
+results_200k = curve_fit(fct, th[1:], cth_200k[1:]/cth_200k[0])
+
+thetas = np.linspace(0,20,100)
+#p=plot(th[1:],cth_200k[1:]/cth_200k[0],'o', label=simname)
+p = errorbar(th[1:],cth_200k[1:]/cth_200k[0], yerr=err_200k[1:]/cth_200k[0])
 plot(0,1,'o', color=p[0].get_color())
 plot(thetas, fct(thetas, *results_200k[0]), color=p[0].get_color(),
          label=r'$a\times\sin(\theta/b)\times\exp(\theta/c)$'+'\n a={0:4.2f} b={1:4.2f} c={2:4.2f}'.format(*results_200k[0]))
@@ -358,7 +462,7 @@ for i in range(nbmc):
     outmap = corrected_outmapIQU[:,0]
     ip = np.arange(12*nside**2).astype(int)
     ipok = ip[okpix]
-    th, all_cthout[i,:] = qss.ctheta_parts(outmap, ipok, 0, thmax, nbins, 
+    th, all_cthout[i,:], err = qss.ctheta_parts(outmap, ipok, 0, thmax, nbins, 
                                           nsplit=5, degrade_init=128, verbose=False)
 
     bar.update()

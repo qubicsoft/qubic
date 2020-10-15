@@ -381,12 +381,12 @@ ax.set_ylabel('Relative intensity', fontsize=15)
 ax.legend(fontsize=14, loc=1)
 ax.grid()
 ax.tick_params(axis='both',bottom=True, top=True, left=True, right=True,direction='in')
-ax.annotate(r"FWHM($\lambda_i$)", xytext=(-4,0.6), xy=(0,0.5),
+ax.annotate(r"FWHM($\lambda$)", xytext=(-4,0.6), xy=(0,0.5),
             arrowprops=dict(arrowstyle="fancy",fc="b", ec="b"),bbox=dict(boxstyle="round", fc="w"),
             fontsize=15 )
 ax.annotate(' ', xy=(8.3,0.33), xytext=(-0.3,0.33), ha="center", va="center",
             arrowprops=dict(arrowstyle="<->",), rotation=0)
-ax.text(4, 0.37, r"$\theta(\lambda_i)$", ha="center", va="center",
+ax.text(4, 0.37, r"$\theta(\lambda)$", ha="center", va="center",
             fontsize=15,
             bbox=dict(boxstyle="round", fc="w"))
 # B(\theta_{off})

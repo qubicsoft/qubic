@@ -180,7 +180,7 @@ for r in range(nrun):
 ```
 
 ```{python}
-# datadir = os.environ['DATA_SPECTROIM']
+datadir = os.environ['DATA_SPECTROIM']
 # print(datadir)
 # np.save(datadir + '/FastSimulator/sigma68pureCMB_samev4clean_theo_' + config + '.npy', sigma68[0, :])
 ```
@@ -241,7 +241,7 @@ plt.grid()
 plt.legend(loc='upper left', fontsize=18)
 
 plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/'+
-            f'Likelihood_CMBonly_suboptimal_SameCleanv4.pdf', 
+            f'Likelihood_CMBonly_suboptimal_SameCleanv4_start0.pdf', 
             bbox_inches='tight') 
 ```
 

@@ -25,9 +25,12 @@ import matplotlib.pyplot as plt
 # %matplotlib notebook
 
 from matplotlib import rc
-rc('figure', figsize=(8, 8))
+rc('figure', figsize=(12, 12))
 rc('font', size=20)
-rc('text', usetex=False)
+# rc('text', usetex=False)
+
+import emcee
+import corner
 
 from qubicpack.utilities import Qubic_DataDir
 import qubic 
@@ -42,51 +45,60 @@ d.read_from_file(os.environ['QUBIC_DICT']+'pipeline_demo.dict')
 
 d['config'] = 'TD'
 d['synthbeam_kmax'] = 3
-d['nside'] = 64
+d['nside'] = 128
 NSIDE = d['nside']
 npix = 12 * NSIDE**2
 
-# Instrument and scene
-q = qubic.QubicInstrument(d)
+kmax = d['synthbeam_kmax']
+npeaks = (2 * kmax + 1)**2
+
+# Scene
 s = qubic.QubicScene(d)
 ```
 
 ```{python}
-# Coordinates of the peaks (spherical coordinates in radian) for each TES
-kmax = d['synthbeam_kmax']
-npeaks = (2 * kmax + 1)**2
-
-
-nu = d['filter_nu']
-
-
+# def model(theta, idet, d, s, radius=20, doplot=False):
+#     fl, lon, lat, phi = theta
+#     print('theta:', theta)
+        
     
-for fl in [0.1, 0.3]:
-    d['focal_length'] = fl
-    q = qubic.QubicInstrument(d)
-    print(q.optics.focal_length)
-    angle_horn = q.horn.angle
-    position_TES = q.detector.center
-    delta_horn = q.horn.spacing
+#     # Change the focal length
+#     d['focal_length'] = fl
+#     q = qubic.QubicInstrument(d)
+#     print('Focal length = ', q.optics.focal_length)
     
-    theta_peak, phi_peak = q._peak_angles_kmax(kmax, delta_horn, angle_horn, nu, position_TES)
-    print(theta_peak[0, :10], '\n')
-    print(phi_peak[0, :10], '\n')
+#     # Synthetic beams on the sky for the TES
+#     sb = q.get_synthbeam(s, idet=idet, external_A=None, hwp_position=0)
     
-    sb = q.get_synthbeam(s, idet=0, external_A=None, hwp_position=0)
-#     hp.mollview(sb, rot=(0, 90))
-```
+#     # Rotate
+#     Rotator = hp.Rotator(rot=(lon, lat, phi))
+#     sb_rot = Rotator.rotate_map_alms(sb)
+    
+#     # Make a patch
+#     vec = hp.ang2vec(0, 0, lonlat=True)
+#     radius = np.deg2rad(radius)
+#     ipix_patch = hp.query_disc(d['nside'], vec, radius)
 
-```{python}
-position_TES
-```
+#     sb_rot_patch = np.zeros(12 * d['nside']**2) + hp.UNSEEN
+#     sb_rot_patch[ipix_patch] = sb_rot[ipix_patch]
+    
+#     if doplot:
+#         hp.mollview(sb)
+#         hp.mollview(sb_rot)
+#         hp.mollview(sb_rot_patch)
+    
+#     return sb_rot_patch[ipix_patch]
 
-```{python}
-def model(theta, idet, nside, radius=20, doplot=False):
+def model(theta, idet, d, s, radius=20, doplot=False):
     fl, phi = theta
+    print('theta:', theta)
+    
+    nside = d['nside']
     
     # Change the focal length
-    q.optics.focal_length = fl
+    d['focal_length'] = fl
+    q = qubic.QubicInstrument(d)
+    print('Focal length = ', q.optics.focal_length)
     
     # Synthetic beams on the sky for the TES
     sb = q.get_synthbeam(s, idet=idet, external_A=None, hwp_position=0)
@@ -114,13 +126,21 @@ def model(theta, idet, nside, radius=20, doplot=False):
 ### Make fake data
 
 ```{python}
-theta_data = (0.27, 3)
+theta_data = (0.3, 4)
 
-ndet = 10
+ndet = 1
 data = []
+gains_data = np.zeros(ndet)
 for idet in range(ndet):
-    M = model(theta_data, idet, NSIDE, radius=20, doplot=True)
-    data.append(M)
+    M = model(theta_data, idet, d, s, radius=20, doplot=True)
+    gains_data[idet] = np.random.rand(1) * 5
+    noise = np.random.normal(0., 10., M.shape)
+    data.append((gains_data[idet] * M) + noise)
+print(gains_data)
+```
+
+```{python}
+np.min(data[0])
 ```
 
 ### Covariance matrix of the noise
@@ -129,12 +149,16 @@ for idet in range(ndet):
 # Covariance matrix (npix x npix)
 npix_patch = np.shape(data[0])[0]
 print('#pix in the patch:', npix_patch)
-cov = np.identity(npix_patch)
 
-# Inverse covariance: Cholesky method
-L = np.linalg.inv(np.linalg.cholesky(cov))
-invcov = L.T @ L
+invcov = np.zeros((ndet, npix_patch, npix_patch))
+for idet in range(ndet):
+#     cov = 100 * np.identity(npix_patch)
+    cov = np.diag(np.abs(data[idet]))
 
+    # Inverse covariance: Cholesky method
+    L = np.linalg.inv(np.linalg.cholesky(cov))
+    invcov[idet, :, :] = L.T @ L
+    
 # plt.figure()
 # plt.imshow(invcov)
 # plt.colorbar()
@@ -144,39 +168,211 @@ invcov = L.T @ L
 
 ```{python}
 # Chi2
-def get_chi2(theta, nside, invcov, data, radius=20, doplot=False):
+def get_chi2(theta, data, invcov, d, s, radius=20, verbose=False):
     ndet = len(data)
     chi2 = 0.
     for idet in range(ndet):
-        M = model(theta, idet, nside, radius=radius, doplot=doplot)
-
+        M = model(theta, idet, d, s, radius=radius, doplot=False)
+        
         # Amplitude factor (linear so we can compute it analitically)
-        sigma_A = 1 / (M.T @ invcov @ M)
-        A = sigma_A * M.T @ invcov @ data[idet]
-    
+        sigma_A = 1. / (M.T @ invcov[idet] @ M)
+        A = sigma_A * M.T @ invcov[idet] @ data[idet]
+        
         R = A * M - data[idet]
-        chi2 += R.T @ invcov @ R
+        chi2 += R.T @ invcov[idet] @ R
+        
+        if verbose:
+            print(f'Det {idet+1}/{ndet}')
+            print('M =', M)
+            print('A =', A)
+            print('R =', R)
+            
+    print('Chi2 =', chi2)
     return chi2
+
+```
+
+```{python}
+# Explore the chi2
+nval = 15
+phi_min, phi_max = 0., 11
+fl_min, fl_max = 0.2, 0.42
+chi2_grid = np.zeros((nval, nval))
+all_phi = np.linspace(phi_min, phi_max, nval)
+all_fl = np.linspace(fl_min, fl_max, nval)
+for f, fl in enumerate(all_fl):
+    for p, phi in enumerate(all_phi):
+        theta = (fl, phi)
+        chi2_grid[f, p] = get_chi2(theta, data, invcov, d, s, radius=20)
+        
+
+```
+
+```{python}
+plt.figure()
+plt.imshow(chi2_grid)
+plt.colorbar()
+plt.xlabel('phi')
+plt.ylabel('Focal length')
+plt.xticks(np.arange(nval), np.round(all_phi, 1), fontsize=10)
+plt.yticks(np.arange(nval), np.round(all_fl, 2), fontsize=10)
+```
+
+```{python}
+# Find the min on the grid => guess values for the MCMC or the minimizer
+print(np.min(chi2_grid))
+min_indices = np.unravel_index(np.argmin(chi2_grid), (nval, nval))
+print(min_indices)
+
+fl_guess = all_fl[min_indices[0]]
+phi_guess = all_phi[min_indices[1]]
+theta_guess = np.array((fl_guess, phi_guess))
+
+print(fl_guess, phi_guess)
+print(theta_data)
 ```
 
 ### Minimize the Chi2
 
 ```{python}
-result = op.minimize(get_chi2, x0=[0.3, 0], args=(NSIDE, invcov, data), method="CG", tol=None)
+bds = ((0, 10), (None, None))
+result = op.minimize(get_chi2, 
+                     x0=[fl_guess, phi_guess], 
+                     args=(data, invcov, d, s), 
+                     bounds=None,
+                     method='Nelder-Mead')
 ```
 
 ```{python}
-print(result)
+print('Data:', theta_data)
+print('\nMinimization result:\n', result)
 ```
 
 ```{python}
-print(theta_data)
+# Compute analitically gains for each TES
+def get_gains(theta, data, invcov, d, s, radius=20, verbose=False):
+    ndet = len(data)
+    gains = np.zeros(ndet)
+    for idet in range(ndet):
+        M = model(theta, idet, d, s, radius=radius, doplot=False)
+
+        # Amplitude factor (linear so we can compute it analitically)
+        sigma_A = 1. / (M.T @ invcov @ M)
+        gains[idet] = sigma_A * M.T @ invcov @ data[idet]
+        
+        if verbose:
+            print(f'Det {idet+1}/{ndet}')
+            print('M =', M)
+            print('A =', gains[idet])
+            
+    return gains
+
+gains = get_gains(result['x'], data, invcov, d, s, radius=20)
+print('Gains:', gains)
+print('Gains Data:', gains_data)
 ```
 
 ### MCMC
 
 ```{python}
+def lnlike(theta, data, invcov, d, s, radius=20, verbose=False):
+    LnLike = -0.5 * get_chi2(theta, data, invcov, d, s, radius=radius, verbose=verbose)
+    return LnLike
+```
 
+```{python}
+def lnprior(theta):
+    fl, phi = theta
+    if fl > 0 and phi > 0:
+        return 0.0
+    else:
+        return -np.inf
+```
+
+```{python}
+# Log of the posterior (Posterior = prior x likelihood)
+def lnprob(theta, data, invcov, d, s, radius=20, verbose=False):
+    lp = lnprior(theta)
+    if not np.isfinite(lp):
+        return -np.inf
+    return lp + lnlike(theta, data, invcov, d, s, radius=radius, verbose=verbose)
+```
+
+```{python}
+def run(p0, nwalkers, niter, ndim, lnprob, args):
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=args)
+
+    print("\n =========== Running burn-in... ===============")
+    p0, _, _ = sampler.run_mcmc(p0, 10, progress=True)
+    sampler.reset()
+
+    print("\n =========== Running production... ===========")
+    pos, prob, state = sampler.run_mcmc(p0, niter, progress=True)
+
+    return sampler, pos, prob, state
+
+```
+
+```{python}
+ndim = 2
+nwalkers = 8
+
+# Initial guess
+p0 = [theta_guess + 1e-4 * np.random.rand(ndim) for i in range(nwalkers)]
+
+niter = 1000
+args = (data, invcov, d, s)
+sampler, pos, prob, state = run(p0, nwalkers, niter, ndim, lnprob, args)
+```
+
+```{python}
+flat_samples = sampler.get_chain(discard=100, thin=15, flat=True)
+print(flat_samples.shape)
+
+plt.subplots(1, 2, figsize=(14, 6))
+plt.subplot(121)
+plt.hist(flat_samples[:, 0], 100, color="k", histtype="step")
+plt.xlabel(r"$\theta_1$")
+plt.ylabel(r"$p(\theta_1)$")
+# plt.gca().set_yticks([]);
+
+plt.subplot(122)
+plt.hist(flat_samples[:, 1], 100, color="k", histtype="step")
+plt.xlabel(r"$\theta_2$")
+plt.ylabel(r"$p(\theta_2)$")
+# plt.gca().set_yticks([]);
+
+
+```
+
+```{python}
+print("Mean acceptance fraction: {0:.3f}".format(np.mean(sampler.acceptance_fraction)))
+
+print("Mean autocorrelation time: {0:.3f} steps".format(
+        np.mean(sampler.get_autocorr_time())))
+
+```
+
+```{python}
+theta_data
+```
+
+```{python}
+labels = ['FL', 'phi']
+rc('font', size=12)
+rc('figure', figsize=(20, 20))
+fig = corner.corner(
+    flat_samples, labels=labels, truths=theta_data)
+```
+
+```{python}
+from IPython.display import display, Math
+for i in range(ndim):
+    mcmc = np.percentile(flat_samples[:, i], [16, 50, 84])
+    q = np.diff(mcmc)
+    txt = "\mathrm{{{3}}} = {0:.5f}_{{-{1:.5f}}}^{{{2:.5f}}}"
+    txt = txt.format(mcmc[1], q[0], q[1], labels[i])
+    display(Math(txt))
 ```
 
 ```{python}

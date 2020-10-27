@@ -776,7 +776,7 @@ def fold_data(time, dd, period, lowcut, highcut, nbins,
             bar.update()
         data = dd[THEPIX, :]
         newdata = filter_data(time, data, lowcut, highcut, notch=notch, rebin=rebin, verbose=verbose)
-        t, yy, dx, dy, others = profile(tfold, newdata, range=[0, period],
+        t, yy, dx, dy, others = profile(tfold, newdata,
                                         nbins=nbins, dispersion=False, plot=False,
                                         cutbad=False, median=median)
         folded[THEPIX, :] = (yy - np.mean(yy)) / np.std(yy)

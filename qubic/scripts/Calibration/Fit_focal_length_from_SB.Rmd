@@ -1,0 +1,184 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Fit focal length from the Beam measurements
+
+```{python}
+import numpy as np
+import healpy as hp
+import scipy.optimize as op
+
+import matplotlib.pyplot as plt
+
+# %matplotlib inline
+# %matplotlib notebook
+
+from matplotlib import rc
+rc('figure', figsize=(8, 8))
+rc('font', size=20)
+rc('text', usetex=False)
+
+from qubicpack.utilities import Qubic_DataDir
+import qubic 
+```
+
+### Model: Simulated beam
+
+```{python}
+# Dictionary
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(os.environ['QUBIC_DICT']+'pipeline_demo.dict')
+
+d['config'] = 'TD'
+d['synthbeam_kmax'] = 3
+d['nside'] = 64
+NSIDE = d['nside']
+npix = 12 * NSIDE**2
+
+# Instrument and scene
+q = qubic.QubicInstrument(d)
+s = qubic.QubicScene(d)
+```
+
+```{python}
+# Coordinates of the peaks (spherical coordinates in radian) for each TES
+kmax = d['synthbeam_kmax']
+npeaks = (2 * kmax + 1)**2
+
+
+nu = d['filter_nu']
+
+
+    
+for fl in [0.1, 0.3]:
+    d['focal_length'] = fl
+    q = qubic.QubicInstrument(d)
+    print(q.optics.focal_length)
+    angle_horn = q.horn.angle
+    position_TES = q.detector.center
+    delta_horn = q.horn.spacing
+    
+    theta_peak, phi_peak = q._peak_angles_kmax(kmax, delta_horn, angle_horn, nu, position_TES)
+    print(theta_peak[0, :10], '\n')
+    print(phi_peak[0, :10], '\n')
+    
+    sb = q.get_synthbeam(s, idet=0, external_A=None, hwp_position=0)
+#     hp.mollview(sb, rot=(0, 90))
+```
+
+```{python}
+position_TES
+```
+
+```{python}
+def model(theta, idet, nside, radius=20, doplot=False):
+    fl, phi = theta
+    
+    # Change the focal length
+    q.optics.focal_length = fl
+    
+    # Synthetic beams on the sky for the TES
+    sb = q.get_synthbeam(s, idet=idet, external_A=None, hwp_position=0)
+    
+    # Rotate
+    Rotator = hp.Rotator(rot=(0, 0, phi))
+    sb_rot = Rotator.rotate_map_alms(sb)
+    
+    # Make a patch
+    vec = hp.ang2vec(0, 90, lonlat=True)
+    radius = np.deg2rad(radius)
+    ipix_patch = hp.query_disc(nside, vec, radius)
+
+    sb_rot_patch = np.zeros(12 * nside**2) + hp.UNSEEN
+    sb_rot_patch[ipix_patch] = sb_rot[ipix_patch]
+    
+    if doplot:
+        hp.mollview(sb, rot=(0, 90))
+        hp.mollview(sb_rot, rot=(0, 90))
+        hp.mollview(sb_rot_patch, rot=(0, 90))
+    
+    return sb_rot_patch[ipix_patch]
+```
+
+### Make fake data
+
+```{python}
+theta_data = (0.27, 3)
+
+ndet = 10
+data = []
+for idet in range(ndet):
+    M = model(theta_data, idet, NSIDE, radius=20, doplot=True)
+    data.append(M)
+```
+
+### Covariance matrix of the noise
+
+```{python}
+# Covariance matrix (npix x npix)
+npix_patch = np.shape(data[0])[0]
+print('#pix in the patch:', npix_patch)
+cov = np.identity(npix_patch)
+
+# Inverse covariance: Cholesky method
+L = np.linalg.inv(np.linalg.cholesky(cov))
+invcov = L.T @ L
+
+# plt.figure()
+# plt.imshow(invcov)
+# plt.colorbar()
+```
+
+### Define the Chi2
+
+```{python}
+# Chi2
+def get_chi2(theta, nside, invcov, data, radius=20, doplot=False):
+    ndet = len(data)
+    chi2 = 0.
+    for idet in range(ndet):
+        M = model(theta, idet, nside, radius=radius, doplot=doplot)
+
+        # Amplitude factor (linear so we can compute it analitically)
+        sigma_A = 1 / (M.T @ invcov @ M)
+        A = sigma_A * M.T @ invcov @ data[idet]
+    
+        R = A * M - data[idet]
+        chi2 += R.T @ invcov @ R
+    return chi2
+```
+
+### Minimize the Chi2
+
+```{python}
+result = op.minimize(get_chi2, x0=[0.3, 0], args=(NSIDE, invcov, data), method="CG", tol=None)
+```
+
+```{python}
+print(result)
+```
+
+```{python}
+print(theta_data)
+```
+
+### MCMC
+
+```{python}
+
+```
+
+```{python}
+
+```

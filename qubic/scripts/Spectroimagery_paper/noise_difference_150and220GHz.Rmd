@@ -1,0 +1,139 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+## Noise level at 150 and 220 GHz
+
+
+
+```{python}
+from __future__ import division, print_function
+# %matplotlib inline
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Specific qubic modules
+import pysm
+import qubic
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+
+from qubic import SpectroImLib as si
+from pysm import models
+from qubic import QubicSkySim as qss
+
+rc('figure', figsize=(13, 10))
+rc('font', size=13)
+```
+
+```{python}
+# Repository for dictionary
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir='../')
+dictfilename = global_dir + 'dicts/pipeline_demo.dict'
+
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+
+# Center of the patch observed in galactic coordinates
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+print(center)
+
+# Adjust some parameters in the dictionary
+d['nf_sub'] = 1
+d['nf_recon'] = 1
+d['npointings'] = 3000
+d['photon_noise'] = False
+d['noiseless'] = True
+
+
+print(d['detector_nep'])
+print(d['photon_noise'])
+print(d['config'])
+d['effective_duration']
+```
+
+```{python}
+# Make a sky using PYSM
+sky_config = {'CMB': 'c1'} 
+# sky_config = {'dust': 'd0'} 
+
+def makeTOD(sky_freq, beam_freq):
+    
+    # Make a sky
+    d['filter_nu'] = sky_freq * 1e9
+    Qubic_sky = qss.Qubic_sky(sky_config, d)
+    x0 = Qubic_sky.get_simple_sky_map()
+    print('sky shape: ', x0.shape)
+    
+    # Make TOD
+    d['filter_nu'] = beam_freq * 1e9
+    p = qubic.get_pointing(d)
+    print('=== Pointing DONE! ===')
+    s = qubic.QubicScene(d)
+    q = qubic.QubicInstrument(d)
+    a = qubic.QubicAcquisition(q, p, s, d)
+    TOD, maps_convolved = a.get_observation(x0[0], noiseless=d['noiseless'])#, convolution = True)
+
+    print('TOD shape: ', TOD.shape)
+    print('maps conv shape: ', maps_convolved.shape)
+    
+    std = np.std(TOD, axis=1)
+    print('STD shape', std.shape)
+    
+    return TOD, std
+```
+
+```{python}
+TOD_s150_b150, std_s150_b150 = makeTOD(150, 150)
+TOD_s220_b220, std_s220_b220 = makeTOD(220, 220)
+TOD_s150_b220, std_s150_b220 = makeTOD(150, 220)
+TOD_s220_b150, std_s220_b150 = makeTOD(220, 150)
+```
+
+```{python}
+TES = 0
+plt.plot(TOD_s150_b150[TES, :], label='sky 150 - beam150 - std={}'.format(std_s150_b150[TES]), alpha=0.7)
+plt.plot(TOD_s220_b220[TES, :], label='sky 220 - beam220 - std={}'.format(std_s220_b220[TES]), alpha=0.7)
+plt.plot(TOD_s150_b220[TES, :], label='sky 150 - beam220 - std={}'.format(std_s150_b220[TES]), alpha=0.7)
+plt.plot(TOD_s220_b150[TES, :], label='sky 220 - beam150 - std={}'.format(std_s220_b150[TES]), alpha=0.7)
+plt.title(f'TES {TES}')
+plt.legend()
+```
+
+```{python}
+full_STD_s150_b150 = np.std(TOD_s150_b150)
+full_STD_s220_b220 = np.std(TOD_s220_b220)
+full_STD_s150_b220 = np.std(TOD_s150_b220)
+full_STD_s220_b150 = np.std(TOD_s220_b150)
+print('STD sky150 - beam150:', full_STD_s150_b150)
+print('STD sky220 - beam220:', full_STD_s220_b220)
+print('STD sky150 - beam220:', full_STD_s150_b220)
+print('STD sky220 - beam150:', full_STD_s220_b150)
+```
+
+```{python}
+1.6e-18/2.17e-19
+
+```
+
+```{python}
+2.5*3
+```
+
+```{python}
+
+```

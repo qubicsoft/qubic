@@ -40,6 +40,11 @@ rc('font', size=18)
 ```
 
 ```{python}
+datadir = os.environ['DATA_SPECTROIM']
+print(datadir)
+```
+
+```{python}
 ### Initialize
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
 print(global_dir)
@@ -207,13 +212,14 @@ for f, frac in enumerate(dust_fraction):
 ```
 
 ```{python}
-np.save('./BBcross_dust_d1_' + config[-3:] + f'_{nbands}bands_dustfrac0-0.01-step0.001.npy', BBcross_dust)
+dir_save = datadir + 'FastSimulator'
+# np.save(dir_save + '/BBcross_dust_d1_' + config[-3:] + f'_{nbands}bands_dustfrac0-0.01-step0.001.npy', BBcross_dust)
 ```
 
 ```{python}
-BBcross_dust = np.load('./BBcross_dust_d1_' + config[-3:] + f'_{nbands}bands_dustfrac0-0.01-step0.001.npy')
-# BBcross_dust = np.load('./BBcross_dust_d1_' + config[-3:] + f'_{nbands}bands_dustfrac0-0.05-step0.005.npy')
-# BBcross_dust = np.load('./BBcross_dust_d1_' + config[-3:] + f'_{nbands}bands_dustfrac0-0.05-step0.01.npy')
+BBcross_dust = np.load(dir_save + '/BBcross_dust_d1_' + config[-3:] + f'_{nbands}bands_dustfrac0-0.01-step0.001.npy')
+# BBcross_dust = np.load(dir_save + '/BBcross_dust_d1_' + config[-3:] + f'_{nbands}bands_dustfrac0-0.05-step0.005.npy')
+# BBcross_dust = np.load(dir_save + '/BBcross_dust_d1_' + config[-3:] + f'_{nbands}bands_dustfrac0-0.05-step0.01.npy')
 print(BBcross_dust.shape)
 ```
 

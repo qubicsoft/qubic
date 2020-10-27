@@ -28,9 +28,9 @@ from matplotlib.animation import FuncAnimation
 # %matplotlib notebook
 
 from matplotlib import rc
-rc('figure',figsize=(10,10))
+rc('figure',figsize=(15,15))
 rc('font',size=20)
-rc('text',usetex=False)
+#rc('text',usetex=False)
 
 from qubicpack.utilities import Qubic_DataDir
 import qubic 
@@ -48,7 +48,7 @@ d.read_from_file(os.environ['QUBIC_DICT']+'pipeline_demo.dict')
 # d.read_from_file(dictfilename)
 d['config'] = 'TD'
 
-d['synthbeam_kmax'] = 1
+d['synthbeam_kmax'] = 3
 ```
 
 ```{python}
@@ -74,39 +74,68 @@ nu = d['filter_nu']
 position_TES = q.detector.center
 theta, phi = q._peak_angles_kmax(kmax, delta_horn, angle_horn, nu, position_TES)
 
+theta2, phi2, val = q._peak_angles(s, nu, q.detector.center, q.synthbeam, q.horn, q.primary_beam)
+
 print(theta.shape)
 ```
 
 ```{python}
-npeaks//2
+index_theta = np.zeros((248, npeaks))
+for tes in range(248):
+    print('TES', tes)
+    for i, th in enumerate(theta[tes, :]):
+        print(th)
+        index_theta[tes, i] = np.where(theta2[tes, :] == th)[0]
+print(index_theta)
 ```
 
 ```{python}
-for TES in range(20):
+index = qubic.instrument._argsort_reverse(val)
+print(index)
+```
 
-    hp.gnomview(sb[TES], min=0, max=1000, rot=(180, 90), reso=25, title=None)
+```{python}
+# index_9peaks = np.argsort(val, axis=1)[:, -9:]
+# print(index_9peaks.shape)
+
+# theta9 = np.take(theta, index_9peaks)
+# phi9 = np.take(phi, index_9peaks)
+# theta9.shape
+```
+
+```{python}
+for TES in range(100, 130):
+#     plt.figure(figsize=(15, 15))
+    hp.gnomview(sb[TES], min=0, max=1e6, rot=(180, 90), reso=25, title=None)
     for p in range(npeaks):
-        if p == npeaks // 2:
-            color = 'w'
-        else:
-            color = 'r'
         th = theta[TES, p]
         ph = phi[TES, p]
-        hp.visufunc.projscatter(th, ph, color=color, marker='+')
-        hp.visufunc.projtext(th, ph, str(p), color=color, fontsize=10)
+        th2 = theta2[TES, p]
+        ph2 = phi2[TES, p]
+#         hp.visufunc.projscatter(th, ph, color='w', marker='+')
+        hp.visufunc.projtext(th2-0.02, ph2, str(p), color='r', fontsize=12)
+        hp.visufunc.projtext(th+0.02, ph, str(p), color='w', fontsize=12)
+#     for pp in range(9):
+#         color = 'w'
+#         th9 = theta9[TES, pp]
+#         ph9 = phi9[TES, pp]
+#         hp.visufunc.projscatter(th9, ph9, color=color, marker='+')
+#         hp.visufunc.projtext(th9, ph9, str(pp), color=color, fontsize=15)
+#     plt.legend()
 
 ```
 
 ```{python}
-hp.gnomview(sb[200], min=0, max=1e6, rot=(180, 90), reso=8, title=None)
-for TES in range(248):
-    p = npeaks//2
-    color = 'w'
+# Choose a peak
 
-    th = theta[TES, p]
-    ph = phi[TES, p]
-    hp.visufunc.projscatter(th, ph, color=color, marker='.')
-#     hp.visufunc.projtext(th, ph, str(TES), color=color, fontsize=10)
+hp.gnomview(sb[200], min=0, max=1e6, rot=(180, 90), reso=12, title=None)
+for TES in range(248):
+    for p in range(npeaks):
+        color = 'w'
+        th = theta[TES, p]
+        ph = phi[TES, p]
+        hp.visufunc.projscatter(th, ph, color=color, marker='.')
+    #     hp.visufunc.projtext(th, ph, str(TES), color=color, fontsize=10)
 
 ```
 
@@ -180,7 +209,7 @@ def init():
 fig, axs = plt.subplots(2, 2, figsize=(12, 12))
 ax1, ax2, ax3, ax4 = np.ravel(axs)
 ax1.scatter(tes_coord[:, 0], tes_coord[:, 1], marker='s', s=200, alpha=0.3)
-det0 = 100
+det0 = 130
 x0 = tes_coord[det0, 0]
 y0 = tes_coord[det0, 1]
    
@@ -189,7 +218,6 @@ point, = ax1.plot(x0, y0, 'go')
 steps = np.arange(det0, det0+20, 2)
 ani = FuncAnimation(fig, animate, steps, init_func=init, interval=1000, blit=True, repeat=False)
 
-    
 
 ```
 

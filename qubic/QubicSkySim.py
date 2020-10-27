@@ -941,7 +941,6 @@ def ctheta_parts(themap, ipok, thetamin, thetamax, nbinstot, nsplit=4, degrade_i
     thall = 2. / 3 * ((thmin + dtheta) ** 3 - thmin ** 3) / ((thmin + dtheta) ** 2 - thmin ** 2)
     ### But it actually changes very little
     # print('coucou')
-    print(len(thall), len(cthall), len(errcthall))
     return thall, cthall, errcthall
 
 

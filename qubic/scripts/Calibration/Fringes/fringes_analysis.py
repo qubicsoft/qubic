@@ -3,6 +3,7 @@ from __future__ import division, print_function
 import glob
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.mlab as mlab
 import scipy.optimize as sop
 import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
@@ -42,6 +43,7 @@ def get_data(dirs, nf, asic, tes=28, doplot=True):
         axs[1].plot(t_data, data[tes - 1, :])
         axs[1].set_title(thedir[-5:])
         axs[1].set_xlim(0, 40)
+        plt.show()
 
     return thedir, t_data, data
 
@@ -181,15 +183,15 @@ for i in range(12):
     plt.imshow(img)
 
 # ============== Get data ==============
-global_dir = '/home/louisemousset/QUBIC/Qubic_work/Calibration/datas/'
+global_dir = '/home/lmousset/QUBIC/Qubic_work/Calibration/datas/'
 # June measurement
-# data_dir = global_dir + '2019-06-07/'
+# data_dir = global_dir + '2019-06-07-fringes/'
 
 # December measurement
 # data_dir = global_dir + 'fringes2019-12-19/'
 
 # January measurement
-data_dir = global_dir + '2020-01-13/'
+data_dir = global_dir + '2020-01-13-fringes/'
 
 dirs = np.sort(glob.glob(data_dir + '*switch*'))
 print('# simu:', len(dirs))
@@ -217,12 +219,11 @@ t_data_cut, data_cut = cut_data(tstart, tend, t_data, data)
 ppp, rms, period = find_right_period(18, t_data_cut, data_cut[tes - 1, :])
 print('period : ', ppp[np.argmax(rms)])
 
-plt.figure()
-rc('figure', figsize=(9, 4.5))
+plt.figure(figsize=(9, 4.5))
 plt.subplots_adjust(wspace=2)
 
 plt.subplot(211)
-plot(ppp, rms, '.')
+plt.plot(ppp, rms, '.')
 plt.axvline(x=period, color='orange')
 
 plt.subplot(212)
@@ -258,6 +259,7 @@ plt.subplot(212)
 plt.plot(t_data_cut, data_cut[tes-1, :], label='Original')
 plt.plot(t_data_cut, newdata, label='Filtered')
 plt.legend()
+plt.show()
 
 # Fold and filter the data
 nbins = 120
@@ -279,6 +281,7 @@ plt.subplot(212)
 plt.plot(t, folded[tes - 1, :])
 plt.title('Folded data')
 plt.xlim(0, period)
+plt.show()
 
 # ========== Fit folded signal ================
 param_guess = [0.1, 0., 1, 1, 1, 1, 1, 1]
@@ -339,6 +342,7 @@ plt.plot(t, w * themax, 'o')
 plt.plot(t, wcheck * themax, 'x')
 plt.xlim(0, period)
 plt.grid()
+plt.show()
 
 
 # ============ Analysis for both ASICs and all measurements ==================

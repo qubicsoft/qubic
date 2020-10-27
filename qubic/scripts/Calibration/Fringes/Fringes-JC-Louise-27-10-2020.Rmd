@@ -1,0 +1,359 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Analysis of fringes taken on October 27 2020
+## Louise + JC
+### Inspired from Louise "fringes_analaysis.py"
+
+```{python}
+from pylab import *
+import os
+import sys
+import time
+import pickle
+from importlib import reload
+
+
+# Specific science modules
+import healpy as hp
+import scipy
+import glob
+import numpy as np
+import matplotlib.pyplot as plt
+import scipy.optimize as sop
+import pandas as pd
+
+from matplotlib.backends.backend_pdf import PdfPages
+import qubic
+from qubic import selfcal_lib as sc
+from qubicpack.utilities import Qubic_DataDir
+from qubicpack import qubicpack as qp
+from qubicpack.qubicfp import qubicfp
+import qubic.fibtools as ft
+from qubic import fringes_lib as fl
+```
+
+```{python}
+# ============== Get data ==============
+# global_dir = '/home/lmousset/QUBIC/Qubic_work/Calibration/datas/'
+global_dir = '/Users/hamilton/Qubic/Calib-TD/Fringes/'
+
+datasets = glob.glob(global_dir+'/*RF_switch*')
+
+horns = []
+ncycles = []
+wt = []
+for ds in datasets:
+    strs = ds.split('_')
+    ncycles.append(float(strs[strs.index('ncycles')+1]))
+    wt.append(float(strs[strs.index('wt')+1]))
+    horns.append([int(strs[-1]), int(strs[-2])])
+
+print('Ncycles')
+print(ncycles)
+print('WT')
+print(wt)
+print('Horns')
+print(horns)
+```
+
+```{python}
+ids = 0
+mywt = wt[ids]
+mync = ncycles[ids]
+tes1 = 94
+tes2 = 38
+doplot = True
+_, t_data1, data1 = fl.get_data(datasets, ids, 1, doplot=doplot, tes=tes1)
+figure()
+_, t_data2, data2 = fl.get_data(datasets, ids, 2, doplot=doplot, tes=tes2)
+```
+
+```{python}
+asic = 1
+if asic==1:
+    t_data = t_data1
+    data = data1
+    tes = tes1
+else:
+    t_data = t_data2
+    data = data2
+    tes = tes2
+    
+
+# Find the right period
+ppp, rms, period = fl.find_right_period(6*mywt/1000, t_data, data[tes - 1, :])
+print('period : ', ppp[np.argmax(rms)])
+print('Expected : ', 6*mywt/1000)
+
+plt.subplot(211)
+plt.plot(ppp, rms, '.')
+plt.axvline(x=period, color='orange')
+
+
+myperiod = period.copy()
+plt.subplot(212)
+plt.plot(t_data % (myperiod), data[tes - 1, :], '.')
+plt.xlim(0, myperiod)
+```
+
+```{python}
+# Filter the data (just to give an idea because it is done when folding)
+lowcut = 0.00001
+highcut = 4.
+nharm = 10
+notch = np.array([[1.724, 0.005, nharm]])
+
+newdata = ft.filter_data(t_data, data[tes-1, :], lowcut, highcut, notch=notch,
+                         rebin=True, verbose=True, order=5)
+
+spectrum_f, freq_f = ft.power_spectrum(t_data, data[tes-1, :], rebin=True)
+spectrum_f2, freq_f2 = ft.power_spectrum(t_data, newdata, rebin=True)
+
+rc('figure', figsize=(16, 10))
+plt.figure()
+plt.subplot(211)
+plt.plot(freq_f, spectrum_f, label='Original')
+plt.plot(freq_f2, spectrum_f2, label='filtered')
+plt.legend()
+plt.loglog()
+plt.ylim(1e0, 1e13)
+
+plt.subplot(212)
+plt.plot(t_data, data[tes-1, :], label='Original')
+plt.plot(t_data, newdata, label='Filtered')
+plt.legend()
+plt.show()
+```
+
+```{python}
+# Fold and filter the data
+nbins = 120
+folded, t, folded_nonorm, newdata = ft.fold_data(t_data,
+                                                 data,
+                                                 period,
+                                                 lowcut,
+                                                 highcut,
+                                                 nbins,
+                                                 notch=notch,
+                                                 )
+plt.figure()
+plt.subplot(211)
+plt.plot(t_data, data[tes - 1, :])
+plt.title('Data cut')
+plt.xlim(0, period)
+
+plt.subplot(212)
+plt.plot(t, folded[tes - 1, :])
+plt.title('Folded data')
+plt.xlim(0, period)
+plt.show()
+```
+
+```{python}
+# ========== Fit folded signal ================
+param_guess = [0.1, 0., 1, 1, 1, 1, 1, 1]
+stable_time = period/6
+fit = sop.least_squares(fl.make_diff_sig,
+                        param_guess,
+                        args=(t,
+                              stable_time,
+                              folded[tes1 - 1, :]),
+                        bounds=([0., -2, -2, -2, -2, -2, -2, -2],
+                                [1., 2, 2, 2, 2, 2, 2, 2]),
+                        verbose=1
+                        )
+param_est = fit.x
+print('Param_est :', param_est)
+
+x0_est = param_est[1]
+amps_est = param_est[2:8]
+
+plt.figure()
+plt.plot(t, folded[tes - 1, :], label='folded signal')
+plt.plot(t, ft.simsig_fringes(t, stable_time, param_est), label='fit')
+plt.plot(np.arange(0, 6 * stable_time, stable_time) + x0_est, amps_est, 'ro', label='amplitudes')
+plt.title('ASIC {}, TES {}'.format(asic, tes1))
+plt.legend()
+plt.grid()
+```
+
+```{python}
+comb = fl.make_combination(param_est)
+print(comb)
+```
+
+```{python}
+# ========= Michel's method ===================
+# w is made to make the combination to see fringes
+tm1 = 12
+tm2 = 2
+ph = 5
+w = np.zeros_like(t)
+wcheck = np.zeros_like(t)
+print(len(w))
+per = len(w) / 6
+for i in range(len(w)):
+    if (((i - ph) % per) >= tm1) and (((i - ph) % per) < per - tm2):
+        if (((i - ph) // per) == 0) | (((i - ph) // per) == 3):
+            w[i] = 1.
+        if (((i - ph) // per) == 1) | (((i - ph) // per) == 2):
+            w[i] = -1.
+
+npts = np.sum(w != 0.) / 4.
+
+print(npts)
+print(np.sum(np.abs(w[int(per + ph):int(2 * per + ph)])))
+print(np.sum(w))
+
+themax = np.max(folded[tes - 1, :])
+
+plt.figure()
+plt.plot(t, folded[tes - 1, :])
+plt.plot(t, w * themax, 'o')
+plt.plot(t, wcheck * themax, 'x')
+plt.xlim(0, period)
+plt.grid()
+plt.show()
+```
+
+# Now the same looping over TES and Datasets
+
+```{python}
+# ============== Get data ==============
+# global_dir = '/home/lmousset/QUBIC/Qubic_work/Calibration/datas/'
+global_dir = '/Users/hamilton/Qubic/Calib-TD/Fringes/'
+
+datasets = glob.glob(global_dir+'/*RF_switch*')
+
+horns = []
+ncycles = []
+wt = []
+for ds in datasets:
+    strs = ds.split('_')
+    ncycles.append(float(strs[strs.index('ncycles')+1]))
+    wt.append(float(strs[strs.index('wt')+1]))
+    horns.append([int(strs[-2]), int(strs[-1])])
+
+print('Ncycles')
+print(ncycles)
+print('WT')
+print(wt)
+print('Horns')
+print(horns)
+
+```
+
+```{python}
+equiv = [0,0,1,2,1,2]    
+all_equiv = np.unique(equiv)
+
+print('equivalency of baselines')
+print(equiv)
+print()
+print()
+print()
+print('Found {} equivalency classes:'.format(len(all_equiv)))
+for i in range(len(all_equiv)):
+    dsequiv = where(np.array(equiv)==all_equiv[i])[0]
+    print(' - Type {}'.format(all_equiv[i]))
+    for j in range(len(dsequiv)):
+        print('     * dsnum={} [{},{}]'.format(dsequiv[j], horns[dsequiv[j]][0], horns[dsequiv[j]][1]))
+   
+
+
+# print(all_equiv)
+# print(equiv)
+
+```
+
+```{python}
+# ============ Analysis for both ASICs and all measurements ==================
+reload(fl)
+
+myequiv = 2
+mydsequiv = where(np.array(equiv)==myequiv)[0]
+print(mydsequiv)
+
+print('=============================================================================================')
+print('Type {}'.format(myequiv))
+for j in range(len(mydsequiv)):
+        print('     * dsnum={} [{},{}]'.format(mydsequiv[j], horns[mydsequiv[j]][0], horns[mydsequiv[j]][1]))
+print('=============================================================================================')
+
+# =================== Make a mask ==============
+# Mask to remove the 8 thermometer pixels
+mask = np.ones((17,17))
+mask[0, 12:] = np.nan
+mask[1:5, 16] = np.nan
+
+myw = None
+stable_time = period/6
+
+all_folded = []
+all_params = []
+all_res_louise = []
+
+for ids in mydsequiv:
+    print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+    print("++ Doing: "+datasets[ids])
+    print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+    t, folded_bothasics, param_est, res_mich, res_louise = fl.analyse_fringes(datasets, ids, myw, 
+                                                                        lowcut=lowcut, highcut=highcut, notch=notch,
+                                                                        t0=None, tf=None, 
+                                                                        stable_time=period/6)
+    all_folded.append(folded_bothasics)
+    all_params.append(param_est)
+    all_res_louise.append(res_louise)
+
+```
+
+```{python}
+
+neq = len(mydsequiv)
+
+rc('figure', figsize=(16, 10))
+for i in range(len(mydsequiv)):
+    ids = mydsequiv[i]
+    param_est = all_params[i]
+    folded_bothasics = all_folded[i]
+    res_louise = all_res_louise[i]
+    baselines = "[{},{}]".format(horns[ids][0], horns[ids][1])
+    
+    # ============== Plots =============
+    # Look at one fit
+    x0_est = param_est[tes - 1, 1]
+    amps_est = param_est[tes - 1, 2:8]
+    
+    subplot(2,neq,i+1)
+    plt.plot(t, folded_bothasics[tes - 1, :], label='folded signal')
+    plt.plot(t, ft.simsig_fringes(t, stable_time, param_est[tes - 1, :]), label='fit')
+    plt.plot(np.arange(0, 6 * stable_time, stable_time) + x0_est, amps_est, 'ro', label='amplitudes')
+    title('Baseline {}'.format(horns[ids]))
+
+    subplot(2, neq,i+neq+1)
+    fringe_louise = ft.image_asics(all1=res_louise)
+    fringe_louise /= np.nanstd(fringe_louise)
+
+    lim = 2
+    plt.imshow(fringe_louise * mask, vmin=-lim, vmax=lim, cmap='bwr', interpolation='gaussian')
+    plt.title('{} - Method: Louise'.format(horns[ids]))
+    plt.colorbar()
+
+tight_layout()
+```
+
+```{python}
+
+```

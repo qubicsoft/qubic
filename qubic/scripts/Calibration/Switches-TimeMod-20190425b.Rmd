@@ -1,0 +1,741 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# %matplotlib notebook
+# #%matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(9,4.5))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack import qubicpack as qp
+import fibtools as ft
+import plotters as p
+import lin_lib as ll
+import demodulation_lib as dl
+import satorchipy as stpy
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import datetime as dt
+import pickle
+
+```
+
+```{python}
+day = '2019-04-25'
+data_dir = '/qubic/Data/Calib-TD/'+day+'/'
+#dirs = np.sort(glob.glob(data_dir+'*test_sw*'))
+dirs = np.sort(glob.glob(data_dir+'*switch*'))
+print (dirs)
+print (len(dirs))
+
+labels = []
+for d in dirs:
+    bla = str.split(d,'__')
+    labels.append(bla[1])
+print labels
+```
+
+```{python}
+#thedir = '/qubic/Data/Calib-TD/2019-04-18/2019-04-18_16.56.51__RF_switch_cont'
+thedir = dirs[11]
+print(thedir)
+AsicNum = 1
+a = qp()
+a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+data=a.azel_etc(TES=None)
+print(a.max_bias)
+```
+
+```{python}
+TESNum = 70
+#rc('figure',figsize=(8,4))
+t0 = data['t_data'][0]
+plot(data['t_data']-t0, data['data'][TESNum-1,:])
+#xlim(0,50)
+```
+
+```{python}
+### Withraw first XX seconds (before things operate) and last ponts if needed
+tdeb = 5.1
+tfin = 100
+ok = ((data['t_data']-t0) > tdeb) & ((data['t_data']-t0) < tfin)
+data['t_data'] = data['t_data'][ok]-t0-tdeb
+data['data'] = data['data'][:,ok]
+```
+
+```{python}
+plot(data['t_data'], data['data'][TESNum-1,:])
+#xlim(0,36)
+
+```
+
+```{python}
+period_sampling = data['t_data'][1] - data['t_data'][0]
+FREQ_SAMPLING = 1. / period_sampling
+spectrum_f, freq_f = mlab.psd(data['data'][TESNum-1,:], Fs=FREQ_SAMPLING, NFFT=2**int(np.log(len(data['data'][TESNum-1,:]))/np.log(2)), 
+                              window=mlab.window_hanning)
+plot(freq_f, spectrum_f)
+yscale('log')
+xscale('log')
+#xlim(0.001, 1)
+print FREQ_SAMPLING
+plot([1./18.1, 1./18.1],[10,10**11])
+```
+
+```{python}
+period = 18.1
+lowcut = 0.001
+highcut = 10.
+nbins = 180
+folded, t, folded_nonorm= ft.fold_data(data['t_data'], data['data'], period, lowcut, highcut, nbins)
+```
+
+```{python}
+#TESNum = 58
+subplot(2,1,1)
+plot(data['t_data'], data['data'][TESNum-1,:])
+xlim(0,period)
+subplot(2,1,2)
+plot(t, folded_nonorm[TESNum-1,:])
+xlim(0,period)
+```
+
+```{python}
+period=18.1
+plot(data['t_data'] % period, data['data'][TESNum-1,:])
+xlim(0,period)
+
+```
+
+```{python}
+tm1=0.3
+tm2=0.3
+per=period/6.
+w=np.zeros_like(t)
+for i in range(len(w)):
+        if ((t[i] % per) > tm1) and ((t[i] % per) < per-tm2):
+            if (((t[i]//per) % 2) == 1): w[i]=1./3
+            elif (((t[i]//per) % 6) == 4) : w[i]=1.
+            else: w[i]=-1.
+ind = np.where(w <> 0.)
+temp = np.zeros_like(w)
+temp[ind]=1.
+npts=np.sum(temp)
+npts
+```
+
+```{python}
+np.sum(w)
+```
+
+```{python}
+#TESNum=58
+plot(t, folded_nonorm[TESNum-1,:])
+xlim(0,period)
+plot(t,w*100000.,'+')
+```
+
+```{python}
+# Analysis for both ASICs
+allres = np.zeros(256)
+#period = 18.1
+#tdeb = 258.5
+#tfin = 296
+lowcut = 0.001
+highcut = 10.
+nbins = 180
+tmax=1000
+
+for AsicNum in [1,2]:
+    a = qp()
+    a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+    data=a.azel_etc(TES=None)
+    t0 = data['t_data'][0]
+    ok = ((data['t_data']-t0) > tdeb) & ((data['t_data']-t0) < tfin)
+    data['t_data'] = data['t_data'][ok]-t0-tdeb
+    data['data'] = data['data'][:,ok]
+    ok = (data['t_data'] < tmax) 
+    data['t_data'] = data['t_data'][ok]
+    data['data'] = data['data'][:,ok]
+    folded, t, folded_nonorm= ft.fold_data(data['t_data'], data['data'], period, lowcut, highcut, nbins)
+    for TESNum in np.arange(128)+1:
+        TESindex = (TESNum-1) + 128 *(AsicNum -1)
+        allres[TESindex]=np.sum(folded_nonorm[TESNum-1,:]*w)/npts
+```
+
+```{python}
+# Check demod signal
+TESNum=58
+plot(t, folded_nonorm[TESNum-1,:])
+xlim(0,period)
+plot(t,w*10000.,'+')
+```
+
+```{python}
+fringe = ft.image_asics(all1=allres)
+imshow(fringe,vmin=-3e3,vmax=3e3)
+colorbar()
+```
+
+```{python}
+intercal=array([              nan,               nan,               nan,
+                     nan,               nan,  3756516.32874732,
+                     nan,               nan,  4324426.82308633,
+                     nan,               nan,               nan,
+                     nan,               nan,               nan,
+        4199319.79855224,               nan, 27948003.93697466,
+                     nan,               nan,               nan,
+        4386138.08263202,               nan,  4562055.29944225,
+                     nan,  1922144.62218649,  9257745.94460161,
+        4092219.28769395,               nan,               nan,
+                     nan,               nan,               nan,
+                     nan,               nan,               nan,
+        1039756.4297414 ,   842825.35323397,               nan,
+                     nan,               nan,               nan,
+                     nan,  1336519.59254463,  4362408.75000775,
+        2038516.60085449,               nan,               nan,
+         955375.32144017, 43405253.78636663,  7487440.29036504,
+                     nan,               nan,   944287.40581007,
+                     nan,               nan,  1816886.71400112,
+       81165941.21168634,  2304047.08751202,   264833.70542944,
+                     nan,               nan,  2043080.95569693,
+       23627839.03311189,               nan,               nan,
+                     nan,               nan,               nan,
+                     nan,               nan,   744664.70637487,
+        2979070.54921478,  5466616.64848401,  3387189.77805213,
+        4675714.16473412,  1160164.86875154,  1261728.75883455,
+        1419284.64650026, 33420970.95778618,  2628486.09334166,
+        1322109.79981949,  7500325.28459446,               nan,
+                     nan,               nan,  3910550.03306765,
+        1798869.82909859,               nan,   502281.80753792,
+                     nan,               nan, 35529920.18904863,
+        2715294.25302842,  2739752.20750913,  2711714.95335516,
+                     nan,               nan, 15240266.16506861,
+                     nan,   416572.15751505,               nan,
+                     nan,               nan,               nan,
+                     nan,  7948997.61336653,               nan,
+        3696976.71549511,  1903038.35603601,               nan,
+                     nan,               nan,               nan,
+                     nan,               nan,   876661.07126208,
+        2528874.6625329 ,  2331462.8118209 , 45572416.75245366,
+                     nan,   893022.98249283,  2512434.92423654,
+        1567265.23301556,               nan,               nan,
+         564574.35427909,               nan,  1535840.71743949,
+        2625598.15252569,  2531389.80567746,               nan,
+         511828.49994563, 17643525.77927609,  4209480.69882371,
+       15476638.86374939,  1007896.69987857,               nan,
+                     nan,  2379130.05856821, 27330779.13115629,
+        1755034.40287495,               nan,               nan,
+                     nan,               nan,               nan,
+                     nan,  2491920.33227193, 75974728.32301582,
+                     nan,  2411937.92481115,               nan,
+                     nan,               nan,               nan,
+         725338.50719985,               nan,               nan,
+                     nan,               nan,               nan,
+        2331455.84968783,               nan, 47033060.6203033 ,
+        4373214.76972836,               nan, 35597822.35442027,
+        1920364.47809285,  8989429.89907642,  2771156.77730114,
+        2366137.13659833,  1854515.68619982,               nan,
+        1765541.89142939,  1203333.89341859,  4307632.06239068,
+        1910591.29806109,               nan,   804352.44814279,
+        5053628.43656786,               nan, 14493983.82510887,
+        1370198.0401658 ,   960104.04495456, 14485036.04198473,
+                     nan,               nan,  5113027.86053435,
+                     nan, 26390410.18689758,  1131749.03979249,
+        1617213.96685688,               nan, 28899330.40537374,
+                     nan,  3690107.87439743,  2024186.57506375,
+        1951412.26701228,  1705352.14032169,  3623894.36492262,
+                     nan,               nan,               nan,
+        2311480.05313472, 11783661.77331793,               nan,
+        5769083.92669821,               nan,  4992213.97585892,
+                     nan, 14704978.01119558, 37409293.75621312,
+        1241225.81614789,               nan,  1926407.51135998,
+                     nan,  2162894.29580697,  1956668.81321565,
+         329768.61600974,   837385.56288894,               nan,
+        9260885.46845245, 11783700.14293095,               nan,
+       23876227.75833941,  1919559.93367914,               nan,
+        1313816.41391297,  4176509.93374429,  1044522.75699002,
+                     nan,               nan,               nan,
+        2827003.01608449,  5458770.3489204 ,  2551835.6973714 ,
+                     nan,  1519088.65012722,               nan,
+                     nan,               nan,               nan,
+         641169.77673346,               nan,               nan,
+        1660046.82146439,               nan,               nan,
+                     nan,               nan,               nan,
+                     nan,               nan,               nan,
+                     nan])
+
+intercal = intercal / np.nanmean(intercal)
+print intercal
+```
+
+```{python}
+fringe = ft.image_asics(all1=(allres/intercal))
+factor_recal = ft.image_asics(all1=1./intercal)
+fringe_nointercal = ft.image_asics(all1=allres)
+good = isfinite(fringe)
+fringe_nointercal[~good] = np.nan
+
+rc('figure',figsize=(16,5))
+subplot(1,3,1)
+imshow(factor_recal,vmin=0,vmax=10)
+title('Factor Intercal')
+colorbar()
+subplot(1,3,2)
+imshow(fringe,vmin=-5e3,vmax=5e3)
+title('Intercalibrated Fringe')
+colorbar()
+subplot(1,3,3)
+imshow(fringe_nointercal,vmin=-5e3,vmax=5e3)
+colorbar()
+title('Raw Fringe')
+
+```
+
+```{python}
+
+```
+
+```{python}
+reload(ft)
+import selfcal_lib as sl
+reload(sl)
+
+# def tes2imgpix(tesnum, extra_args=None):
+#     if extra_args is None:
+#         a1 = qp()
+#         a1.assign_asic(1)
+#         a2 = qp()
+#         a2.assign_asic(2)
+#     else:
+#         a1 = extra_args[0]
+#         a2 = extra_args[1]
+        
+#     ij = np.zeros((len(tesnum),2))
+#     for i in xrange(len(tesnum)):
+#         if i < 128:
+#             pixnum = a1.tes2pix(tesnum[i])
+#             ww = where(a1.pix_grid == pixnum)
+#         else:
+#             pixnum = a2.tes2pix(tesnum[i]-128)
+#             ww = where(a2.pix_grid == pixnum)
+#         if len(ww[0])>0:
+#             ij[i,:] = ww
+#         else:
+#             ij[i,:] = [17,17]
+#     return ij
+
+# def fringe_focalplane(x, pars, extra_args=None):    
+#     baseline = pars[0]
+#     alpha = pars[1]
+#     phase = pars[2]
+#     amplitude = pars[3]
+#     nu = 150e9
+#     lam = 3e8/nu
+#     f = 300e-3 # Focal Length in mm
+#     freq_fringe = baseline / lam
+#     TESsize = 3.e-3
+
+#     ijtes = tes2imgpix(np.arange(256)+1, extra_args=extra_args)
+    
+#     fringe=amplitude*np.cos(2.*np.pi*freq_fringe*(ijtes[:,0]*np.cos(alpha*np.pi/180)+ijtes[:,1]*np.sin(alpha*np.pi/180))*TESsize/f+phase*np.pi/180)
+#     thermos = [4-1,36-1, 68-1, 100-1, 4-1+128, 36-1+128, 68-1+128, 100-1+128]
+#     fringe[thermos] = 0
+#     mask = x > 0
+#     fringe[~mask] = 0
+#     return fringe
+    
+bl=14e-3*np.sqrt(5.) #baseline
+alpha=-18.4
+phase=np.degrees(-1.5)+60
+amplitude = 5e3
+parnames = ['Baseline [mm]', 'Angle [deg]', 'Phase [deg]', 'Amplitude [ADU]']
+pars = np.array([bl, alpha, phase, amplitude])
+
+
+fringe = (allres/intercal)
+#fringe = (allres)
+maskok = np.isfinite(fringe)
+imgfringe = ft.image_asics(all1=fringe)
+
+tes_index = np.arange(256)
+tes_index[~isfinite(fringe)] = -1
+fringe_th = sl.fringe_focalplane(tes_index, pars)
+fringe_th[~maskok] = np.nan
+imgfringe_th = ft.image_asics(all1=fringe_th)
+
+a1 = qp()
+a1.assign_asic(1)
+a2 = qp()
+a2.assign_asic(2)
+
+res = ft.do_minuit(tes_index, np.nan_to_num(fringe), np.ones(256), pars, functname=fringe_focalplane, 
+                fixpars=[1,1,0,0], nohesse=True,
+              force_chi2_ndf=True, extra_args=[a1, a2])
+
+
+```
+
+```{python}
+subplot(1,3,1)
+imshow(imgfringe, vmin = -5e3, vmax = 5e3)
+colorbar()
+title('Data')
+
+subplot(1,3 ,2)
+imshow(imgfringe_th)
+colorbar()
+title('Input Guess')
+
+fringe_fit = sl.fringe_focalplane(tes_index, res[1])
+fringe_fit[~maskok] = np.nan
+imgfringe_fit = ft.image_asics(all1=fringe_fit)
+subplot(1,3,3)
+imshow(imgfringe_fit)
+colorbar()
+title('Fit')
+
+print 'Input guess:'
+for i in range(len(res[1])):
+    print parnames[i],': {}'.format(pars[i])
+
+print 'Fit:'
+for i in range(len(res[1])):
+    print parnames[i],': {} +/- {}'.format(res[1][i], res[2][i])
+
+```
+
+```{python}
+import selfcal_lib as sl
+reload(sl)
+
+
+#baseline = [63,46]
+baseline = [46,61] ## for 90deg rotation
+aa = sl.get_fringes_TD(baseline, phi=np.array([np.radians(-3.11)]), theta=np.array([np.radians(88.)]))
+```
+
+```{python}
+subplot(1,3,1)
+imshow(ft.image_asics(all1=aa))
+colorbar()
+title('Sim Louise')
+subplot(1,3,2)
+aacut = aa.copy()
+aacut[~maskok]=np.nan
+imshow(ft.image_asics(all1=aacut))
+colorbar()
+title('Sim Louise Cut')
+subplot(1,3,3)
+imshow(imgfringe, vmin = -5e3, vmax = 5e3)
+colorbar()
+title('Data')
+
+```
+
+```{python}
+plot(aacut,fringe,'o')
+ylim(-10000,30000)
+```
+
+```{python}
+np.corrcoef(aacut[maskok,0], fringe[maskok])[0,1]
+```
+
+```{python}
+xx = np.linspace(-3,3,11)
+yy = np.linspace(0,10,10)
+coeff = np.zeros((len(xx), len(yy)))
+for i in xrange(len(xx)):
+    for j in xrange(len(yy)):
+        aa = sl.get_fringes_TD(baseline, phi=np.array([np.radians(xx[i])]), 
+                               theta=np.array([np.radians(yy[j])]))
+        coeff[i,j] = np.corrcoef(aa[maskok,0], fringe[maskok])[0,1]
+```
+
+```{python}
+imshow(coeff, extent=[np.min(yy), np.max(yy), np.min(xx), np.max(xx)], aspect='equal')
+xlabel('Theta')
+ylabel('Phi')
+colorbar()
+```
+
+```{python}
+aa = sl.get_fringes_TD(baseline, phi=np.array([np.radians(0)]), 
+                       theta=np.array([np.radians(9)]))
+subplot(1,3,1)
+imshow(ft.image_asics(all1=aa))
+colorbar()
+title('Sim Louise')
+subplot(1,3,2)
+aacut = aa.copy()
+aacut[~maskok]=np.nan
+imshow(ft.image_asics(all1=aacut))
+colorbar()
+title('Sim Louise Cut')
+subplot(1,3,3)
+imshow(imgfringe, vmin = -5e3, vmax = 5e3)
+colorbar()
+title('Data')
+
+```
+
+```{python}
+coeff0 = np.corrcoef(aa[maskok,0], fringe[maskok])[0,1]
+
+nn = 10000
+allcoeffs = np.zeros(nn)
+for i in xrange(nn):
+    rndorder = argsort(np.random.rand(256))
+    aarnd = aa[rndorder].copy()
+    aarnd[~maskok]=np.nan
+    allcoeffs[i] = np.corrcoef(aarnd[maskok,0], fringe[maskok])[0,1]
+```
+
+```{python}
+h=hist(allcoeffs,range=[-2,2], bins=100)
+plot(coeff0,0,'ro')
+print coeff0
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+tes_index = np.arange(256)
+tes_index[0:128] *= np.nan
+print tes_index[0:10]
+print np.nan
+```
+
+```{python}
+thefringe = fringe.copy()
+print(thefringe[0,:])
+profiley = np.nanmedian(thefringe, axis=1)
+err_profiley = np.nanstd(thefringe, axis=1)/np.sqrt(np.sum(np.isfinite(thefringe),axis=1))
+profilex = np.nanmedian(thefringe, axis=0)
+err_profilex = np.nanstd(thefringe, axis=0)/np.sqrt(np.sum(np.isfinite(thefringe),axis=0))
+errorbar(arange(17),profiley, yerr=err_profiley,fmt='ro-',label='Y')
+errorbar(arange(17),profilex, yerr=err_profilex,fmt='bo-',label='X')
+legend()
+ylim(-10000,10000)
+```
+
+```{python}
+print(fringe[0,:])
+profiley = np.nanmedian(fringe, axis=1)
+err_profiley = np.nanstd(fringe, axis=1)/np.sqrt(np.sum(np.isfinite(fringe),axis=1))
+profilex = np.nanmedian(fringe, axis=0)
+err_profilex = np.nanstd(fringe, axis=0)/np.sqrt(np.sum(np.isfinite(fringe),axis=0))
+errorbar(arange(17),profiley, yerr=err_profiley,fmt='ro-',label='Y')
+errorbar(arange(17),profilex, yerr=err_profilex,fmt='bo-',label='X')
+legend()
+ylim(-10000,10000)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+# Responsivity from max range of 150GHz healpix maps
+f = open('ASIC-150GHz.txt')
+li = [ ln.split() for ln in f ]
+f.close()
+tableau = np.array(li)
+Resp = np.array([np.float(tableau[0,_]) for _ in range(256)])
+Resp[Resp < 5.5e3] = np.nan
+maskresp=ft.image_asics(all1=Resp/np.nanmean(Resp))
+```
+
+```{python}
+# Respo from small maps 20190425
+Resp=pickle.load(open('Resp_Small_Maps_20190425', 'rb'))
+maskresp=ft.image_asics(all1=Resp/np.nanmean(Resp))
+```
+
+```{python}
+# Resp from maps 20190406
+Resp=pickle.load(open('Resp_150GHz-2019-04-06', 'rb'))
+maskresp=ft.image_asics(all1=Resp/np.nanmean(Resp))
+```
+
+```{python}
+fringen=fringe/maskresp
+#fringen=fringe/img_norm
+```
+
+```{python}
+# Mask to remove the 8 ref pixels
+mask=np.ones_like(fringe)
+mask[0,12:]=np.nan
+mask[1:5,16]=np.nan
+# Mask to remove bad pixels
+bad1=np.array([1,2,3,29,30,31,32,33,34,35,61,62,63,64,65,66,67,93,94,95,96,97,98,99,125,126,127,128,108,105,116,7,17,47,102,114,28,25])-1
+bad2=np.array([1,2,3,29,30,31,32,33,34,35,61,62,63,64,65,66,67,93,94,95,96,97,98,99,125,126,127,128,120,122,24,55,123,118,112,114,113,18,28,41,104,102,116,107])+127
+maskres=np.ones_like(allres)
+maskres[bad1]=np.nan
+maskres[bad2]=np.nan
+mask2=ft.image_asics(all1=maskres)
+```
+
+```{python}
+imshow(fringen*mask,vmin=-10e3,vmax=10e3,interpolation='gaussian')
+colorbar()
+```
+
+```{python}
+plot(np.nanmedian(fringen*mask*mask2,axis=0),label='Med axis 0 norm')
+plot(np.nanmedian(fringen*mask*mask2,axis=1),label='Med axis 1 norm')
+grid()
+legend()
+```
+
+```{python}
+plot(np.nanmedian(fringe*mask*mask2,axis=0),label='Med axis 0 no norm')
+plot(np.nanmedian(fringe*mask*mask2,axis=1),label='Med axis 1 no norm')
+grid()
+legend()
+#ylim(-100000,100000)
+```
+
+```{python}
+# Comparison with fringes at 90°
+fringe2=pickle.load(open('Fringe_39_53_20190425', 'rb'))
+```
+
+```{python}
+rcParams["image.cmap"]='jet'
+imshow((fringe2/fringe)*mask*mask2,vmin=-10,vmax=10)
+colorbar()
+```
+
+```{python}
+maskresp[10,:]
+```
+
+```{python}
+ff=fringen*mask*mask2
+errorbar(np.arange(17),np.nanmean(ff,axis=0),np.nanstd(ff,axis=0)/np.sqrt(np.sum(ff != np.nan,axis=0)),label='med axis 0')
+errorbar(np.arange(17),np.nanmean(ff,axis=1),np.nanstd(ff,axis=1)/np.sqrt(np.sum(ff != np.nan,axis=1)),label='med axis 1')
+legend()
+ylim(-8000,8000)
+grid()
+
+
+```
+
+```{python}
+np.nanstd(ff,axis=0)
+```
+
+```{python}
+ff[:,2]
+```
+
+```{python}
+# Responsivity from linearity measurements
+img_norm=pickle.load(open('Linearty_20190419_img_norm', 'rb'))
+```
+
+```{python}
+# Comparison
+imshow(maskresp/img_norm,vmin=0,vmax=2)
+colorbar()
+```
+
+```{python}
+# T stability
+plot(a.hk['MMR_HK']['MMR3_CH2_X'])
+```
+
+```{python}
+spectrum_f, freq_f = mlab.psd(a.hk['MMR_HK']['MMR3_CH2_X'], Fs=1., NFFT=len(a.hk['MMR_HK']['MMR3_CH2_X']), 
+                              window=mlab.window_hanning,detrend='mean')
+plot(freq_f, np.sqrt(spectrum_f))
+yscale('log')
+xscale('log')
+grid()
+#xlim(0.001, 1)
+```
+
+```{python}
+a.max_bias
+```
+
+```{python}
+a.hk['MMR_HK'].keys()
+```
+
+```{python}
+tMMR=a.hk['MMR_HK']['ComputerDate']
+print(tMMR[21]-tMMR[20])
+plot(np.diff(tMMR))
+print(np.median(np.diff(tMMR)))
+```
+
+```{python}
+(64.*63/2)/4
+```
+
+```{python}
+
+```

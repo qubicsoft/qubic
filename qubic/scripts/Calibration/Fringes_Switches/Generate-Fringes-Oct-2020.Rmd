@@ -327,6 +327,8 @@ for myequiv in range(len(all_equiv)):
 
 ```{python}
 reload(fl)
+reload(sc)
+reload(ft)
 #### 27/10/2020
 #### Vtes = 5
 global_dir = '/Volumes/LaCie/QubicData/Calib-TD/Fringes/2020-10-27/'
@@ -349,9 +351,9 @@ print(tmin, tmax, delta_t)
 ```
 
 ```{python}
-def doit(myds, read_data, lowcut, highcut, notch, t0, tf):
+def doit(myds, read_data, lowcut, highcut, notch, t0, tf, doplot=True):
     myw=None
-    t, folded_bothasics, param_est, res_mich, res_louise = fl.analyse_fringes(myds, 0, myw, 
+    t, folded_bothasics, param_est, res_mich, res_louise, myperiod = fl.analyse_fringes(myds, 0, myw, 
                                                                         lowcut=lowcut, highcut=highcut, notch=notch,
                                                                         t0=t0, tf=tf, 
                                                                         stable_time=period/6, read_data=read_data)
@@ -413,6 +415,7 @@ def doit(myds, read_data, lowcut, highcut, notch, t0, tf):
 #         colorbar()
         
         tight_layout()
+        plt.show()
         
     return fringe_louise, ft.image_asics(all1=std_resid), m_std, s_std, amp_est_TES
     

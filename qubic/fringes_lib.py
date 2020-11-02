@@ -128,8 +128,8 @@ def analyse_fringes(dirs, m, w=None, t0=None, tf=None, stable_time=3.,
         if asic == 1:
             ppp, rms, period = find_right_period(6 * stable_time, t_data_cut, data_cut[tes_check - 1, :])
             if verbose:
-	            print('period:', period)
-    	        print('Expected : ', 6 * stable_time)
+                print('period:', period)
+                print('Expected : ', 6 * stable_time)
 
         # Fold and filter the data
         folded, t, folded_nonorm, newdata = ft.fold_data(t_data_cut,

@@ -336,7 +336,9 @@ datasets = np.sort(glob.glob(global_dir+'/*RF_switch*'))
 equiv = [0,0,1,1,2,2,3,3,3,3,3,3,3,3]    
 
 #### Read data for a given baseline
-myds = [datasets[0]]
+ids = 0
+myds = [datasets[ids]]
+stable_time = wt[ids]/1000
 print(myds)
 
 read_data = []
@@ -351,27 +353,29 @@ print(tmin, tmax, delta_t)
 ```
 
 ```{python}
-def doit(myds, read_data, lowcut, highcut, notch, t0, tf, doplot=True):
+def doit(myds, read_data, lowcut, highcut, notch, t0, tf, stable_time, doplot=True, tes=95):
     myw=None
     t, folded_bothasics, param_est, res_mich, res_louise, myperiod = fl.analyse_fringes(myds, 0, myw, 
                                                                         lowcut=lowcut, highcut=highcut, notch=notch,
                                                                         t0=t0, tf=tf, 
-                                                                        stable_time=period/6, read_data=read_data)
+                                                                        stable_time=stable_time, read_data=read_data)
 
     ### Residuals
     resid = np.zeros_like(folded_bothasics)
     amp_est_TES = np.zeros((256, 6))
+    x0_est_TES = np.zeros(256)
     for ites in range(256):
-        x0_est = param_est[tes - 1, 1]
-        amps_est = param_est[tes - 1, 2:8]
+        x0_est = param_est[ites, 1]
+        x0_est_TES[ites] = x0_est
+        amps_est = param_est[ites, 2:8]
         amp_est_TES[ites,:] = amps_est
-        resid[ites,:] = folded_bothasics[ites - 1, :]-ft.simsig_fringes(t, stable_time, param_est[ites - 1, :])
+        resid[ites,:] = folded_bothasics[ites, :]-ft.simsig_fringes(t, myperiod/6, param_est[ites, :])
 
     ### RMS residuals for each TES with clipping
     std_resid = np.zeros(256)
-    for i in range(256):
-        mm, ss = ft.meancut(resid[i,:],3)
-        std_resid[i] = ss
+    for ites in range(256):
+        mm, ss = ft.meancut(resid[ites,:],3)
+        std_resid[ites] = ss
     m_std = np.mean(std_resid)
     s_std = np.std(std_resid)
     ###############
@@ -386,16 +390,26 @@ def doit(myds, read_data, lowcut, highcut, notch, t0, tf, doplot=True):
         figure()
         subplot(2,2,1)
         plt.plot(t, folded_bothasics[tes - 1, :], label='folded signal')
-        plt.plot(t, ft.simsig_fringes(t, stable_time, param_est[tes - 1, :]), label='fit')
-        plt.plot(np.arange(0, 6 * stable_time, stable_time) + x0_est, amps_est, 'ro', label='amplitudes')
-        plt.plot(t, resid[tes-1,:], label='Residuals (clipped): RMS={0:6.4f}'.format(std_resid[tes-1]))
+        plt.plot(t, ft.simsig_fringes(t, myperiod/6, param_est[tes - 1, :]), label='fit')
+        plt.plot(np.arange(0, myperiod, myperiod/6) + x0_est_TES[tes-1], amp_est_TES[tes-1,:], 'ro', label='amplitudes')
+        plt.plot(t, resid[tes-1,:], label='Residuals 1 (clipped): RMS={0:6.4f}'.format(std_resid[tes-1]))
+        residuals = folded_bothasics[tes - 1, :] - ft.simsig_fringes(t, myperiod/6, param_est[tes - 1, :])
         plt.plot(t, t*0+std_resid[tes-1],'k--', alpha=0.3)
         plt.plot(t, t*0,'k:', alpha=0.3)
         plt.plot(t, t*0-std_resid[tes-1],'k--', alpha=0.3)
+        plt.plot(t, t*0+res_louise[tes-1],'r:', label='Fringe value: {0:6.4f}'.format(res_louise[tes-1]))
+        
+        replot_data = [t, 
+                       folded_bothasics[tes - 1, :], 
+                       ft.simsig_fringes(t, myperiod/6, param_est[tes - 1, :]), 
+                       resid[tes-1,:],
+                       amp_est_TES[tes-1,:], 
+                       x0_est_TES[tes-1],
+                      res_louise[tes-1], myperiod, fringe_louise]
         
         legend(loc='upper right')
         title('TES #{}'.format(tes))
-        ylim(-1,2.5)
+        ylim(-3,3)
 
         subplot(2,2,2)
         lim = 2
@@ -417,7 +431,7 @@ def doit(myds, read_data, lowcut, highcut, notch, t0, tf, doplot=True):
         tight_layout()
         plt.show()
         
-    return fringe_louise, ft.image_asics(all1=std_resid), m_std, s_std, amp_est_TES
+    return fringe_louise, ft.image_asics(all1=std_resid), m_std, s_std, amp_est_TES, x0_est_TES, myperiod, replot_data
     
 
 ```
@@ -425,20 +439,48 @@ def doit(myds, read_data, lowcut, highcut, notch, t0, tf, doplot=True):
 ```{python}
 reload(fl)
 
-rc('figure', figsize=(16,7))
-tes = 95
+rc('figure', figsize=(16,10))
+mytes = 93
 
 t0 = None
 tf = None
-full_fringe, full_std_resid, full_m_std, full_s_std, amp_est_TES = doit(myds, read_data, lowcut, highcut, notch, t0, tf)
+full_fringe, full_std_resid, full_m_std, full_s_std, amp_est_TES, x0_est_TES,period, replot = doit(myds, read_data, 
+                                                                                lowcut, highcut, notch, 
+                                                                                t0, tf, stable_time, tes=mytes)
+```
 
-figure()
-lim = 2
-plt.imshow(nan_to_num(full_fringe * mask), vmin=-lim, vmax=lim, cmap='bwr', interpolation='Gaussian')
-ft.qgrid()
-colorbar()
-title('Fringe')
+```{python}
+### One can replot the above from outside the fct
+def replot_one_tod(replot):
+    plt.plot(replot[0], replot[1], label='folded signal')
+    plt.plot(replot[0], replot[2], label='fit')
+    mm, ss = ft.meancut(replot[3], 3)
+    plt.plot(replot[0], replot[3], label='Residuals 1 (clipped): RMS={0:6.4f}'.format(ss))
+    plt.plot(np.arange(0, replot[7], replot[7]/6) + replot[5], replot[4], 'ro', label='amps')
+    plt.plot(replot[0], replot[0]*0+replot[6],'r:', label='Fringe value: {0:6.4f}'.format(replot[6]))
+    plt.plot(replot[0], replot[0]*0,'k:', alpha=0.3)
+    ylim(-3,3)
+    xlim(-replot[7]/6, replot[7]+replot[7]/6)
+    axvline(x=0,color='k', ls=':', alpha=0.3)
+    axvline(x=replot[7],color='k', ls=':', alpha=0.3)
+    legend(loc='upper right')
+    title('TES #{}'.format(mytes))
 
+def replot_one_asic(replot, mask):
+    lim = 2
+    plt.imshow(nan_to_num(replot[8] * mask), vmin=-lim, vmax=lim, cmap='bwr', interpolation='Gaussian')
+    ft.qgrid()
+    colorbar()
+    title('Fringe')
+
+    
+    
+rc('figure', figsize=(16,7))
+subplot(1,2,1)
+replot_one_tod(replot)
+subplot(1,2,2)
+replot_one_asic(replot, mask)
+tight_layout()
 ```
 
 ```{python}
@@ -456,40 +498,55 @@ all_std_resid = []
 all_m_std = []
 all_s_std = []
 all_amp_est_TES = []
+all_x0_est_TES = []
+all_periods = []
+all_replot = []
 for js in range(split):
     #js=2
     print('Doing',all_tmin[js], all_tmax[js])
-    fringe, std_resid, m_std, s_std, amp_est_TES = doit(myds, read_data, lowcut, highcut, notch, all_tmin[js], all_tmax[js])
+    fringe, std_resid, m_std, s_std, amp_est_TES, x0_est_TES,theperiod, replot = doit(myds, read_data, 
+                                                        lowcut, highcut, notch, 
+                                                        all_tmin[js], all_tmax[js], stable_time, tes=mytes)
     all_fringe.append(fringe)
     all_std_resid.append(std_resid)
     all_m_std.append(m_std)
     all_s_std.append(s_std)
     all_amp_est_TES.append(amp_est_TES)
-
+    all_x0_est_TES.append(x0_est_TES)
+    all_periods.append(theperiod)
+    all_replot.append(replot)
 ```
 
 ```{python}
 ### Available
-# all_fringe = []
-# all_std_resid = []
-# all_m_std = []
-# all_s_std = []
-# all_amp_est_TES = []
-
+all_tmin = np.array(all_tmin)
+all_tmax = np.array(all_tmax)
 all_fringe = np.array(all_fringe)
 all_std_resid = np.array(all_std_resid)
 all_m_std = np.array(all_m_std)
 all_s_std = np.array(all_s_std)
 all_amp_est_TES = np.array(all_amp_est_TES)
+all_x0_est_TES = np.array(all_x0_est_TES)
+all_periods = np.array(all_periods)
 
 print(all_fringe.shape)
 print(all_std_resid.shape)
 print(all_m_std.shape)
 print(all_s_std.shape)
 print(all_amp_est_TES.shape)
+print(all_x0_est_TES.shape)
+print(all_periods.shape)
 
-# plot(all_m_std)
-# plot(all_s_std)
+subplot(1,2,1)
+plot(all_tmin, all_periods)
+ylabel('Period')
+xlabel('Time')
+
+subplot(1,2,2)
+plot(all_tmin,all_x0_est_TES[:,mytes-1])
+ylabel('X0_est')
+xlabel('Time')
+
 ```
 
 ```{python}
@@ -615,12 +672,29 @@ matplotlib.animation.FuncAnimation(fig, animate, frames=nframes)
 ```
 
 ```{python}
+plt.rcParams["animation.html"] = "jshtml"
+plt.rcParams['figure.dpi'] = 150  
+plt.ion()
+fig, ax = plt.subplots()
+
+nframes = len(all_m_std)
+
+def animate(t):
+    plt.cla()
+    findex = t/nframes*(len(all_m_std)-1)
+    index = int(floor(findex))
+    replot_one_tod(all_replot[index])
+
+matplotlib.animation.FuncAnimation(fig, animate, frames=nframes)
+```
+
+```{python}
 rc('figure', figsize=(16,7))
 tes = 95
 
 t0 = None
 tf = 180
-fringe_cut, _,_,_,_ = doit(myds, read_data, lowcut, highcut, notch, t0, tf)
+fringe_cut, _,_,_,_,_,_,_ = doit(myds, read_data, lowcut, highcut, notch, t0, tf, stable_time, tes=mytes)
 
 figure()
 subplot(1,2,1)

@@ -114,8 +114,8 @@ def read_my_fringe(bs, files, all_bs):
     myfile = files[all_bs.index(bs)]
     return np.load(myfile)
 
-#index_fringe = all_bs.index([49, 53])
-index_fringe = all_bs.index([9, 11])
+index_fringe = all_bs.index([49, 53])
+#index_fringe = all_bs.index([9, 11])
 
 myfringe = read_my_fringe(all_bs[index_fringe], all_files, all_bs)
 imshow(np.nan_to_num(myfringe * mask), cmap='bwr', interpolation='Gaussian',vmin=-2, vmax=2)

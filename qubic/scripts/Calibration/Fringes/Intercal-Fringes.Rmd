@@ -22,6 +22,7 @@ import qubic.fibtools as ft
 import qubic.sb_fitting as sbfit
 import qubic.selfcal_lib as sc
 import qubic.demodulation_lib as dl
+from importlib import reload
 
 rc('figure', figsize=(16, 10))
 rc('font', size=15)
@@ -69,6 +70,10 @@ where:
 - $L(x,\lambda)$ is the non-linear response for a detector whose NL parameter is $\lambda$. We will use at first a sigmoid defined in demodulation_lib.py as "sigmoid_saturation(x,$\lambda$)" whose saturation limit is 2/$\lambda$.
 - $c_i$ is the intercalibration for detector $i$
 - $n_i$ is the noise for this measurement on detector $i$
+
+```{python}
+
+```
 
 ```{python}
 lls = [0.0001, 0.01, 0.1, 0.5, 1.]

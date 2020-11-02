@@ -102,17 +102,22 @@ def make_combination(param_est, verbose=0):
 def analyse_fringes(dirs, m, w=None, t0=None, tf=None, stable_time=3.,
                     lowcut=0.001, highcut=10, nbins=120,
                     notch=np.array([[1.724, 0.005, 10]]),
-                    tes_check=28, param_guess=[0.1, 0., 1, 1, 1, 1, 1, 1], verbose=0):
+                    tes_check=28, param_guess=[0.1, 0., 1, 1, 1, 1, 1, 1], 
+                    verbose=0, median=False, read_data = None, silent=False):
     res_w = np.zeros(256)
     res_fit = np.zeros(256)
     param_est = np.zeros((256, 8))
     folded_bothasics = np.zeros((256, nbins))
     for asic in [1, 2]:
-        _, t_data, data = get_data(dirs, m, asic, doplot=False)
-        if t0 is None:
-        	myt0 = 0
+        if read_data is None:
+            #print('Reading data')
+            _, t_data, data = get_data(dirs, m, asic, doplot=False)
         else:
-        	myt0 = t0
+            t_data, data = read_data[asic-1]
+        if t0 is None:
+            myt0 = 0
+        else:
+            myt0 = t0
         
         if tf is None:
         	mytf = np.max(t_data)
@@ -122,7 +127,7 @@ def analyse_fringes(dirs, m, w=None, t0=None, tf=None, stable_time=3.,
         t_data_cut, data_cut = cut_data(myt0, mytf, t_data, data)
         if asic == 1:
             ppp, rms, period = find_right_period(6 * stable_time, t_data_cut, data_cut[tes_check - 1, :])
-            print('period:', period)
+            if verbose: print('period:', period)
 
         folded, t, folded_nonorm, newdata = ft.fold_data(t_data_cut,
                                                          data_cut,
@@ -130,7 +135,9 @@ def analyse_fringes(dirs, m, w=None, t0=None, tf=None, stable_time=3.,
                                                          lowcut,
                                                          highcut,
                                                          nbins,
-                                                         notch=notch
+                                                         notch=notch,
+                                                         median=median,
+                                                         silent=silent
                                                          )
         if asic == 1:
             folded_bothasics[:128, :] = folded
@@ -154,5 +161,5 @@ def analyse_fringes(dirs, m, w=None, t0=None, tf=None, stable_time=3.,
             param_est[TESindex, :] = fit.x
             res_fit[TESindex] = make_combination(param_est[TESindex, :])
 
-    return t, folded_bothasics, param_est, res_w, res_fit
+    return t, folded_bothasics, param_est, res_w, res_fit, period
 

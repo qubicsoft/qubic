@@ -1,0 +1,197 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Analysis of fringes taken in October 2020
+In this notebook we analyse the fringes taken in October 2020
+* Fringes are produced by the script : Generate-Fringes-Oct-2020.Rmd
+* This produces npy files for each fringe with names of the form: fringes_bs_17_21_2020-10-27_11.34.04.npy
+
+
+```{python}
+from pylab import *
+import os
+import sys
+import time
+import pickle
+from importlib import reload
+
+
+# Specific science modules
+import healpy as hp
+import scipy
+import glob
+import numpy as np
+import matplotlib.pyplot as plt
+import scipy.optimize as sop
+import pandas as pd
+
+from matplotlib.backends.backend_pdf import PdfPages
+import qubic
+from qubic import selfcal_lib as sc
+from qubicpack.utilities import Qubic_DataDir
+from qubicpack import qubicpack as qp
+from qubicpack.qubicfp import qubicfp
+import qubic.fibtools as ft
+from qubic import fringes_lib as fl
+
+rc('figure', figsize=(16,7))
+
+# Use a tool from qubicpack to get a path
+basedir = Qubic_DataDir(datafile='instrument.py', )
+print('basedir : ', basedir)
+dictfilename = basedir + '/dicts/global_source_oneDet.dict'
+
+# Get a dictionary and an instrument
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+q = qubic.QubicInstrument(d)
+```
+
+```{python}
+reload(sc)
+reload(fl)
+### Get the list of available fringes
+directories = ['/Users/hamilton/Qubic/Calib-TD/Fringes/Fringes_2020-10-27_Vtes_5_Eco_1/']
+
+all_files = []
+all_dates = []
+all_cycles = []
+all_bs = []
+all_tension = []
+all_eco = []
+all_Vtes = []
+all_id = []
+all_wt = []
+for dd in directories:
+    ff = np.sort(glob.glob(dd+'/fringes*.npy'))
+    for f in ff:
+        fn = f.split('/')[-1]
+        spl = fn.split('_')
+        all_files.append(f)
+        all_bs.append([int(spl[spl.index('bs')+1]), int(spl[spl.index('bs')+2])])
+        all_cycles.append(float(spl[spl.index('NCycles')+1]))
+        all_wt.append(float(spl[spl.index('WT')+1]))
+        all_Vtes.append(float(spl[spl.index('Vtes')+1]))
+        all_eco.append(float(spl[spl.index('Eco')+1]))
+        all_dates.append(spl[spl.index('Eco')+2])
+        all_id.append(spl[spl.index('Eco')+3])
+
+bseqindex = sc.find_equivalent_baselines(all_bs, q)
+
+for i in range(len(bseqindex)):
+    ax=subplot(1,len(bseqindex), i+1)
+    ax.set_aspect('equal')
+    print('Type {}:'.format(i))
+    sc.plot_horns(q)
+    title('Type {}'.format(i))
+    for j in range(len(bseqindex[i])):
+        print('  - {}'.format(all_bs[bseqindex[i][j]]))
+        sc.plot_baseline(q,all_bs[bseqindex[i][j]])
+    legend()
+```
+
+### All fringes in data
+
+```{python}
+# =================== Make a mask ==============
+# Mask to remove the 8 thermometer pixels
+mask = np.ones((17,17))
+mask[0, 12:] = np.nan
+mask[1:5, 16] = np.nan
+
+def read_my_fringe(bs, files, all_bs):
+    myfile = files[all_bs.index(bs)]
+    return np.load(myfile)
+
+#index_fringe = all_bs.index([49, 53])
+index_fringe = all_bs.index([9, 11])
+
+myfringe = read_my_fringe(all_bs[index_fringe], all_files, all_bs)
+imshow(np.nan_to_num(myfringe * mask), cmap='bwr', interpolation='Gaussian',vmin=-2, vmax=2)
+ft.qgrid()
+colorbar()
+title(all_bs[index_fringe])
+```
+
+# Theoretical Fringes (for fitting)
+
+```{python}
+class model_fringe2d:
+    def __init__(self, baseline, d):
+        self.baseline = baseline
+        self.dict = d
+        self.selfcal = sc.SelfCalibration(baseline, d)
+        self.pixels = np.arange(17)+0.5
+        self.xx, self.yy = np.meshgrid(self.pixels, self.pixels)
+        
+    def __call__(self, theta, amp, fwhmprim):
+        fringestot = self.selfcal.compute_fringes(q, doplot=False, theta=[theta], phi=0)
+        
+        _, quart_fp = sc.get_real_fp(fringestot[:, :, 0], quadrant=2)
+        mygaussian = amp * np.exp(-0.5*(self.xx**2 + (self.yy-17)**2)/(fwhmprim/2.35)**2)
+        return mygaussian * np.flip(quart_fp, axis=1)
+    
+    def flat_data(self, x, theta, amp, fwhmprim):
+        return np.nan_to_num(np.ravel(self(theta, amp, fwhmprim)))
+
+        
+fr = model_fringe2d(all_bs[index_fringe], d) 
+
+pix2deg = np.degrees(3./300)
+
+imshow(np.nan_to_num(fr(0.03,1,13./pix2deg)), cmap='bwr', interpolation='Gaussian', vmin=-2, vmax=2)
+colorbar()
+ft.qgrid()
+```
+
+```{python}
+from scipy.optimize import curve_fit
+coeffs, coeffs_cov = curve_fit(fr.flat_data, 0, np.nan_to_num(np.ravel(myfringe)), 
+                               p0=np.array([0.03, 0.5, 30]),
+                              bounds=(0, [np.pi/10, 2, 100]))
+print(coeffs)
+print(coeffs_cov)
+```
+
+```{python}
+#coeffs = [0.03,0.5,100./pix2deg]
+interp = 'Gaussian'
+
+subplot(1,3,1)
+imshow(np.nan_to_num(myfringe * mask), cmap='bwr', interpolation=interp,vmin=-2, vmax=2)
+colorbar()
+ft.qgrid()
+title('Data')
+
+subplot(1,3,2)
+imshow(np.nan_to_num(fr(*coeffs) * mask), cmap='bwr', interpolation=interp,vmin=-2, vmax=2)
+colorbar()
+ft.qgrid()
+title('Fit')
+
+subplot(1,3,3)
+imshow(np.nan_to_num(myfringe * mask) - np.nan_to_num(fr(*coeffs) * mask), cmap='bwr', interpolation=interp,vmin=-2, vmax=2)
+colorbar()
+ft.qgrid()
+title('Residuals')
+
+```
+
+```{python}
+3./300
+```
+
+```{python}
+
+```

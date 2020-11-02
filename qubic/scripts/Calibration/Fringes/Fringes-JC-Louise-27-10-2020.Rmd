@@ -16,6 +16,10 @@ jupyter:
 ## Louise + JC
 ### Inspired from Louise "fringes_analaysis.py"
 
+This is an old code see the two nore recent ones called:
+* Generate-Fringes-Oct-2020.Rmd for produciton of the fringes
+* Analayse- Fringes-Oct-2020.Rmd for analysis of the fringes
+
 ```{python}
 from pylab import *
 import os
@@ -49,7 +53,7 @@ from qubic import fringes_lib as fl
 # global_dir = '/home/lmousset/QUBIC/Qubic_work/Calibration/datas/'
 global_dir = '/Users/hamilton/Qubic/Calib-TD/Fringes/'
 
-datasets = glob.glob(global_dir+'/*RF_switch*')
+datasets = np.sort(glob.glob(global_dir+'/*RF_switch*'))
 
 horns = []
 ncycles = []
@@ -138,6 +142,8 @@ plt.show()
 ```
 
 ```{python}
+reload(ft)
+reload(fl)
 # Fold and filter the data
 nbins = 120
 folded, t, folded_nonorm, newdata = ft.fold_data(t_data,
@@ -147,21 +153,10 @@ folded, t, folded_nonorm, newdata = ft.fold_data(t_data,
                                                  highcut,
                                                  nbins,
                                                  notch=notch,
-                                                 )
-plt.figure()
-plt.subplot(211)
-plt.plot(t_data, data[tes - 1, :])
-plt.title('Data cut')
-plt.xlim(0, period)
+                                                 median=False,
+                                                )
 
-plt.subplot(212)
-plt.plot(t, folded[tes - 1, :])
-plt.title('Folded data')
-plt.xlim(0, period)
-plt.show()
-```
 
-```{python}
 # ========== Fit folded signal ================
 param_guess = [0.1, 0., 1, 1, 1, 1, 1, 1]
 stable_time = period/6
@@ -176,22 +171,35 @@ fit = sop.least_squares(fl.make_diff_sig,
                         )
 param_est = fit.x
 print('Param_est :', param_est)
-
 x0_est = param_est[1]
 amps_est = param_est[2:8]
+residuals = folded[tes - 1, :]-ft.simsig_fringes(t, stable_time, param_est)
+rms_residuals = np.std(residuals)
 
-plt.figure()
-plt.plot(t, folded[tes - 1, :], label='folded signal')
-plt.plot(t, ft.simsig_fringes(t, stable_time, param_est), label='fit')
-plt.plot(np.arange(0, 6 * stable_time, stable_time) + x0_est, amps_est, 'ro', label='amplitudes')
-plt.title('ASIC {}, TES {}'.format(asic, tes1))
-plt.legend()
-plt.grid()
-```
-
-```{python}
+#### Make the combbination
 comb = fl.make_combination(param_est)
 print(comb)
+#===============================================
+
+
+plt.figure()
+plt.subplot(211)
+plt.plot(t_data % period, data[tes - 1, :],',', alpha=0.1)
+plt.title('Data cut')
+plt.xlim(0, period)
+
+plt.subplot(212)
+plt.plot(t, folded[tes - 1, :],label='Average')
+plt.plot(t, ft.simsig_fringes(t, stable_time, param_est), label='fit')
+plt.plot(np.arange(0, 6 * stable_time, stable_time) + x0_est, amps_est, 'o', label='amplitudes')
+plt.title('ASIC {}, TES {}'.format(asic, tes1))
+plt.plot(t, residuals, 
+         label='Residuals '+' {0:5.3f}'.format(rms_residuals))
+
+plt.title('Folded data')
+plt.xlim(0, period)
+plt.legend()
+plt.show()
 ```
 
 ```{python}
@@ -228,14 +236,56 @@ plt.grid()
 plt.show()
 ```
 
+```{python}
+# Get a dictionary
+basedir = Qubic_DataDir(datafile='instrument.py', )
+print('basedir : ', basedir)
+dictfilename = basedir + '/dicts/global_source_oneDet.dict'
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+q = qubic.QubicInstrument(d)
+
+rc('figure', figsize=(16,3))
+def plot_horns(q):
+    hcenters = q.horn.center[:,0:2]
+    fig1, ax1 = plt.subplots()
+    ax1.set_aspect('equal')
+    plot(hcenters[:,0], hcenters[:,1], 'ro')
+#     for i in range(64):
+#         text(hcenters[i,0], hcenters[i,1], i+1)
+    
+def plot_baseline(q,bs):
+    hcenters = q.horn.center[:,0:2]
+    plot(hcenters[np.array(bs)-1,0], hcenters[np.array(bs)-1,1], lw=4, label=bs)
+    
+plot_horns(q)
+plot_baseline(q, [1,2])
+legend()
+```
+
 # Now the same looping over TES and Datasets
 
 ```{python}
 # ============== Get data ==============
-# global_dir = '/home/lmousset/QUBIC/Qubic_work/Calibration/datas/'
-global_dir = '/Users/hamilton/Qubic/Calib-TD/Fringes/'
 
-datasets = glob.glob(global_dir+'/*RF_switch*')
+#### 27/10/2020
+#### Vtes = 5
+global_dir = '/Volumes/LaCie/QubicData/Calib-TD/Fringes/2020-10-27/'
+datasets = np.sort(glob.glob(global_dir+'/*RF_switch*'))
+equiv = [0,0,1,1,2,2,3,3,3,3,3,3,3,3]    
+
+#### 28/10/2020
+# global_dir = '/Volumes/LaCie/QubicData/Calib-TD/Fringes/2020-10-28/'
+#### Vtes=4
+# datasets = np.sort(glob.glob(global_dir+'/*RF_switch_Vtes_4_*'))
+# equiv = [0,0,1,1,2,2,3,3]    
+#### Vtes=3.5
+# datasets = np.sort(glob.glob(global_dir+'/*RF_switch_Vtes_3.5_*'))
+# equiv = [0,0,1,1,2,2,3,3]    
+#### Vtes=4 & No Eccosorb
+# datasets = np.sort(glob.glob(global_dir+'/*RF_switch_NoEco_Vtes_4_*'))
+# equiv = [0,0,1,1,2,2,3,3]    
+
 
 horns = []
 ncycles = []
@@ -253,10 +303,7 @@ print(wt)
 print('Horns')
 print(horns)
 
-```
-
-```{python}
-equiv = [0,0,1,2,1,2]    
+print()
 all_equiv = np.unique(equiv)
 
 print('equivalency of baselines')
@@ -272,9 +319,25 @@ for i in range(len(all_equiv)):
         print('     * dsnum={} [{},{}]'.format(dsequiv[j], horns[dsequiv[j]][0], horns[dsequiv[j]][1]))
    
 
+```
 
-# print(all_equiv)
-# print(equiv)
+```{python}
+for i in range(len(all_equiv)):
+    dsequiv = where(np.array(equiv)==all_equiv[i])[0]
+    figure()
+    plot_horns(q)
+    print(' - Type {}'.format(all_equiv[i]))
+    for j in range(len(dsequiv)):
+        print('     * dsnum={} [{},{}]'.format(dsequiv[j], horns[dsequiv[j]][0], horns[dsequiv[j]][1]))
+        plot_baseline(q,[horns[dsequiv[j]][0], horns[dsequiv[j]][1]])
+    legend(fontsize=5)
+```
+
+```{python}
+plot_horns(q)
+plot_baseline(q,[2,6])
+plot_baseline(q,[10,14])
+legend(fontsize=5)
 
 ```
 
@@ -282,9 +345,12 @@ for i in range(len(all_equiv)):
 # ============ Analysis for both ASICs and all measurements ==================
 reload(fl)
 
-myequiv = 2
+myequiv = 0
 mydsequiv = where(np.array(equiv)==myequiv)[0]
 print(mydsequiv)
+
+
+#mydsequiv = [mydsequiv[1], mydsequiv[5]]
 
 print('=============================================================================================')
 print('Type {}'.format(myequiv))
@@ -292,11 +358,6 @@ for j in range(len(mydsequiv)):
         print('     * dsnum={} [{},{}]'.format(mydsequiv[j], horns[mydsequiv[j]][0], horns[mydsequiv[j]][1]))
 print('=============================================================================================')
 
-# =================== Make a mask ==============
-# Mask to remove the 8 thermometer pixels
-mask = np.ones((17,17))
-mask[0, 12:] = np.nan
-mask[1:5, 16] = np.nan
 
 myw = None
 stable_time = period/6
@@ -320,10 +381,32 @@ for ids in mydsequiv:
 ```
 
 ```{python}
+# =================== Make a mask ==============
+# Mask to remove the 8 thermometer pixels
+mask = np.ones((17,17))
+mask[0, 12:] = np.nan
+mask[1:5, 16] = np.nan
+
+def qgrid():
+    for i in range(17):
+        axvline(x=i-0.5, alpha=0.3, color='k')
+        axhline(y=i-0.5, alpha=0.3, color='k')
+
 
 neq = len(mydsequiv)
 
-rc('figure', figsize=(16, 10))
+tes = 95
+
+ny=1
+if neq>4:
+    ny = 2
+nx = neq/ny
+
+all_fringes = []
+all_pairs = []
+
+rc('figure', figsize=(16,7))
+
 for i in range(len(mydsequiv)):
     ids = mydsequiv[i]
     param_est = all_params[i]
@@ -336,22 +419,127 @@ for i in range(len(mydsequiv)):
     x0_est = param_est[tes - 1, 1]
     amps_est = param_est[tes - 1, 2:8]
     
-    subplot(2,neq,i+1)
+    subplot(ny,nx,i+1)
     plt.plot(t, folded_bothasics[tes - 1, :], label='folded signal')
     plt.plot(t, ft.simsig_fringes(t, stable_time, param_est[tes - 1, :]), label='fit')
     plt.plot(np.arange(0, 6 * stable_time, stable_time) + x0_est, amps_est, 'ro', label='amplitudes')
-    title('Baseline {}'.format(horns[ids]))
-
-    subplot(2, neq,i+neq+1)
+    resid = folded_bothasics[tes - 1, :]-ft.simsig_fringes(t, stable_time, param_est[tes - 1, :])
+    plt.plot(t, resid, label='Residuals: RMS={0:6.4f}'.format(np.std(resid)))
+    name = datasets[mydsequiv[i]].split('/')[-1].split('_')
+    title('Baseline {}'.format(horns[ids])+'\n'+name[0]+' '+name[1])
+    legend(loc='upper right')
+    ylim(-1,2.5)
+    
     fringe_louise = ft.image_asics(all1=res_louise)
     fringe_louise /= np.nanstd(fringe_louise)
 
+    all_fringes.append(fringe_louise)
+    all_pairs.append(horns[ids])
+
+all_names = ''
+figure()
+for i in range(len(all_fringes)):
+    subplot(ny,nx,i+1)
     lim = 2
-    plt.imshow(fringe_louise * mask, vmin=-lim, vmax=lim, cmap='bwr', interpolation='gaussian')
-    plt.title('{} - Method: Louise'.format(horns[ids]))
+    plt.imshow(nan_to_num(all_fringes[i] * mask), vmin=-lim, vmax=lim, cmap='bwr', interpolation='Gaussian')
+    qgrid()
+    name = datasets[mydsequiv[i]].split('/')[-1].split('_')
+    myname = name[0]+' '+name[1]+' ; '
+    all_names = all_names + myname
+    plt.title('{} - Method: Louise'.format(all_pairs[i])+'\n'+myname)
     plt.colorbar()
 
+sgns = np.ones_like(np.array(all_fringes))
+for i in range(neq):
+    sgns[i,:,:] *= (-1)**i
+
 tight_layout()
+```
+
+```{python}
+rc('figure', figsize=(16,7))
+sgns = np.ones_like(np.array(all_fringes))
+for i in range(neq):
+    sgns[i,:,:] *= (-1)**i
+
+av_fringe = np.sum(np.array(all_fringes), axis=0)/2
+diff_fringe = np.sum(np.array(all_fringes)*sgns, axis=0)/2
+lim = 2
+subplot(1,2,1)
+plt.imshow(nan_to_num(av_fringe * mask), vmin=-lim, vmax=lim, cmap='bwr', interpolation='Gaussian')
+qgrid()
+plt.title('Sum / {}'.format(neq)+'\n'+all_names)
+plt.colorbar()
+subplot(1,2,2)
+plt.imshow(nan_to_num(diff_fringe * mask), vmin=-lim, vmax=lim, cmap='bwr', interpolation='Gaussian')
+qgrid()
+plt.title('diff / {}'.format(neq)+'\n'+all_names)
+plt.colorbar()
+tight_layout()
+```
+
+# Theoretical Fringes (for fitting)
+
+```{python}
+import qubic.selfcal_lib as sc
+# Use a tool from qubicpack to get a path
+basedir = Qubic_DataDir(datafile='instrument.py', )
+print('basedir : ', basedir)
+dictfilename = basedir + '/dicts/global_source_oneDet.dict'
+
+# Get a dictionary and an instrument
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+q = qubic.QubicInstrument(d)
+
+```
+
+```{python}
+reload(sc)
+
+# Create an object
+baseline = [49, 53]
+ca = sc.SelfCalibration(baseline, d)
+fringestot = ca.compute_fringes(q, doplot=False, theta=np.array([np.pi/25]))
+_, quart_fp = sc.get_real_fp(fringestot[:, :, 0], quadrant=2)
+quart_fp = np.flip(quart_fp, axis=1)
+
+rc('figure', figsize=(16,7))
+subplot(1,2,1)
+imshow(np.nan_to_num(quart_fp[:,:] * mask), cmap='bwr', interpolation='Gaussian')
+colorbar()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 ```{python}

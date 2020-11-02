@@ -50,6 +50,11 @@ def statstr(x, divide=False, median=False, cut=None):
         s /= nn
     return '{0:6.5f} +/- {1:6.5f}'.format(m, s)
 
+def qgrid():
+    for i in range(17):
+        axvline(x=i-0.5, alpha=0.3, color='k')
+        axhline(y=i-0.5, alpha=0.3, color='k')
+
 
 def image_asics(data1=None, data2=None, all1=None):
     """
@@ -727,7 +732,8 @@ def simsig_fringes(x, stable_time, params):
 
 def fold_data(time, dd, period, lowcut, highcut, nbins,
               notch=None, rebin=None, verbose=None,
-              return_error=False, silent=False, median=False, return_noise_harmonics=None):
+              return_error=False, silent=False, median=False, mode=False, clip=None,
+              return_noise_harmonics=None):
     """
 
     Parameters
@@ -778,7 +784,7 @@ def fold_data(time, dd, period, lowcut, highcut, nbins,
         newdata = filter_data(time, data, lowcut, highcut, notch=notch, rebin=rebin, verbose=verbose)
         t, yy, dx, dy, others = profile(tfold, newdata,
                                         nbins=nbins, dispersion=False, plot=False,
-                                        cutbad=False, median=median)
+                                        cutbad=False, median=median, mode=mode, clip=clip)
         folded[THEPIX, :] = (yy - np.mean(yy)) / np.std(yy)
         folded_nonorm[THEPIX, :] = (yy - np.mean(yy))
         dfolded[THEPIX, :] = dy / np.std(yy)

@@ -241,7 +241,7 @@ class SelfCalibration:
         return S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij
 
     def compute_fringes(self, q, theta=np.array([0.]), phi=np.array([0.]), nu=150e9, spectral_irradiance=1., reso=34,
-                        xmin=-0.06, xmax=0.06):
+                        xmin=-0.06, xmax=0.06, doplot=False):
         """
         Return the fringes on the FP by making the computation
         fringes =(S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
@@ -251,7 +251,7 @@ class SelfCalibration:
         S_tot, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = \
             SelfCalibration.get_power_combinations(self, q, theta=theta, phi=phi, nu=nu,
                                                    spectral_irradiance=spectral_irradiance, reso=reso,
-                                                   xmin=xmin, xmax=xmax, doplot=True)
+                                                   xmin=xmin, xmax=xmax, doplot=doplot)
 
         fringes = (S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
 
@@ -903,3 +903,68 @@ def get_simulation(param, q, baseline, files, labels, nn=241, doplot=True, verbo
     img = get_quadrant3(q, mean_perTES, doplot=doplot)
 
     return img
+
+def plot_horns(q):
+    hcenters = q.horn.center[:,0:2]
+    plt.plot(hcenters[:,0], hcenters[:,1], 'ro')
+    
+def plot_baseline(q,bs):
+    hcenters = q.horn.center[:,0:2]
+    plt.plot(hcenters[np.array(bs)-1,0], hcenters[np.array(bs)-1,1], lw=4, label=bs)
+
+def check_equiv(vecbs1, vecbs2, tol=1e-5):
+    norm1 = np.dot(vecbs1, vecbs1)
+    norm2 = np.dot(vecbs2, vecbs2)
+    cross12 = np.cross(vecbs1, vecbs2)
+    if (np.abs(norm1-norm2) < tol) & (np.abs(cross12) < tol):
+        return True
+    else:
+        return False
+    
+def find_equivalent_baselines(all_bs, q):
+    ### Convert to array
+    all_bs = np.array(all_bs)
+    ### centers
+    hcenters = q.horn.center[:,0:2]
+    ### Baselines vectors
+    all_vecs = np.zeros((len(all_bs), 2))
+    for ib in range(len(all_bs)):
+        coordsA = hcenters[all_bs[ib][0],:]
+        coordsB = hcenters[all_bs[ib][1],:]
+        all_vecs[ib,:] = coordsB-coordsA
+
+    ### List of types of equivalence for each baseline: initially = -1
+    all_eqtype = np.zeros(len(all_bs))-1
+
+    ### First type is zero and is associated to first baseline
+    eqnum = 0
+    all_eqtype[0] = eqnum
+    
+    ### Indices of baselines
+    index_bs = np.arange(len(all_bs))
+    
+    ### Loop over baselines
+    for ib in range(0, len(all_bs)):
+        ### Identify those that have no type
+        wnotype = all_eqtype==-1
+        bsnotype = all_bs[wnotype]
+        vecsnotype = all_vecs[wnotype,:]
+        indexnotype = index_bs[wnotype]
+        ### Loop over those with no type
+        for jb in range(len(bsnotype)):
+            ### Check if equivalent
+            status = check_equiv(all_vecs[ib,:], vecsnotype[jb,:])
+            ### If so: give it the current type
+            if status:
+                all_eqtype[indexnotype[jb]] = eqnum
+        ### We have gone through all possibilities for this type so we increment the type by 1
+        eqnum = np.max(all_eqtype)+1
+    
+    alltypes = np.unique(all_eqtype)
+    bseq = []
+    for i in range(len(alltypes)):
+        bseq.append(index_bs[all_eqtype==i])
+    return bseq
+
+
+

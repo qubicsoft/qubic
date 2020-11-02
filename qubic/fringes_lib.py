@@ -49,6 +49,12 @@ def get_data(dirs, nf, asic, tes=28, doplot=True):
     return thedir, t_data, data
 
 def cut_data(t0, tf, t_data, data):
+    if t0 is None:
+        t0 = 0
+
+    if tf is None:
+        tf = np.max(t_data)
+
     ok = (t_data > t0) & (t_data < tf)
     t_data_cut = t_data[ok] - t0
     data_cut = data[:, ok]
@@ -95,7 +101,7 @@ def make_diff_sig(params, x, stable_time, data):
 def make_combination(param_est, verbose=0):
     amps = param_est[2:8]
     if verbose>0:
-    	print('Check:', amps[2], amps[4])
+        print('Check:', amps[2], amps[4])
     #return amps[0] + amps[3] - amps[1] - amps[2]
     return (amps[0]+amps[3]+amps[5])/3 + amps[2] - amps[1] - amps[4]
 
@@ -114,21 +120,18 @@ def analyse_fringes(dirs, m, w=None, t0=None, tf=None, stable_time=3.,
             _, t_data, data = get_data(dirs, m, asic, doplot=False)
         else:
             t_data, data = read_data[asic-1]
-        if t0 is None:
-            myt0 = 0
-        else:
-            myt0 = t0
-        
-        if tf is None:
-        	mytf = np.max(t_data)
-        else:
-        	mytf = tf
 
-        t_data_cut, data_cut = cut_data(myt0, mytf, t_data, data)
+        # Cut the data
+        t_data_cut, data_cut = cut_data(t0, tf, t_data, data)
+
+        # Find the true period
         if asic == 1:
             ppp, rms, period = find_right_period(6 * stable_time, t_data_cut, data_cut[tes_check - 1, :])
-            if verbose: print('period:', period)
+            if verbose:
+	            print('period:', period)
+    	        print('Expected : ', 6 * stable_time)
 
+        # Fold and filter the data
         folded, t, folded_nonorm, newdata = ft.fold_data(t_data_cut,
                                                          data_cut,
                                                          period,
@@ -144,6 +147,7 @@ def analyse_fringes(dirs, m, w=None, t0=None, tf=None, stable_time=3.,
         else:
             folded_bothasics[128:, :] = folded
 
+        # Fit (Louise method) and Michel method
         for tes in range(1, 129):
             TESindex = (tes - 1) + 128 * (asic - 1)
             if w is not None:
@@ -152,7 +156,7 @@ def analyse_fringes(dirs, m, w=None, t0=None, tf=None, stable_time=3.,
             fit = sop.least_squares(make_diff_sig,
                                     param_guess,
                                     args=(t,
-                                          stable_time,
+                                          period / 6.,
                                           folded[tes - 1, :]),
                                     bounds=([0., -2, -2, -2, -2, -2, -2, -2],
                                             [1., 2, 2, 2, 2, 2, 2, 2]),

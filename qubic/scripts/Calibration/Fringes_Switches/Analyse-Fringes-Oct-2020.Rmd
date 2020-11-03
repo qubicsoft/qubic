@@ -135,22 +135,22 @@ class model_fringe2d:
         self.pixels = np.arange(17)+0.5
         self.xx, self.yy = np.meshgrid(self.pixels, self.pixels)
         
-    def __call__(self, theta, amp, fwhmprim):
-        fringestot = self.selfcal.compute_fringes(q, doplot=False, theta=[theta], phi=0)
+    def __call__(self, theta, phi, amp, fwhmprim):
+        fringestot = self.selfcal.compute_fringes(q, doplot=False, theta=[theta], phi=[phi])
         
         _, quart_fp = sc.get_real_fp(fringestot[:, :, 0], quadrant=2)
         mygaussian = amp * np.exp(-0.5*(self.xx**2 + (self.yy-17)**2)/(fwhmprim/2.35)**2)
         return mygaussian * np.flip(quart_fp, axis=1)
     
-    def flat_data(self, x, theta, amp, fwhmprim):
-        return np.nan_to_num(np.ravel(self(theta, amp, fwhmprim)))
+    def flat_data(self, x, theta, phi, amp, fwhmprim):
+        return np.nan_to_num(np.ravel(self(theta, phi, amp, fwhmprim)))
 
         
 fr = model_fringe2d(all_bs[index_fringe], d) 
 
 pix2deg = np.degrees(3./300)
 
-imshow(np.nan_to_num(fr(0.03,1,13./pix2deg)), cmap='bwr', interpolation='Gaussian', vmin=-2, vmax=2)
+imshow(np.nan_to_num(fr(0.03,0.,1,13./pix2deg)), cmap='bwr', interpolation='Gaussian', vmin=-2, vmax=2)
 colorbar()
 ft.qgrid()
 ```
@@ -158,8 +158,8 @@ ft.qgrid()
 ```{python}
 from scipy.optimize import curve_fit
 coeffs, coeffs_cov = curve_fit(fr.flat_data, 0, np.nan_to_num(np.ravel(myfringe)), 
-                               p0=np.array([0.03, 0.5, 30]),
-                              bounds=(0, [np.pi/10, 2, 100]))
+                               p0=np.array([0.03, 0., 0.5, 30]),
+                              bounds=(0, [np.pi/10, np.pi/10, 2, 100]))
 print(coeffs)
 print(coeffs_cov)
 ```

@@ -68,12 +68,12 @@ reload(sc)
 
 #### 27/10/2020
 #### Vtes = 5
-global_dir = '/Volumes/LaCie/QubicData/Calib-TD/Fringes/2020-10-27/'
-vtes = 5
-eco = 1
-out_dir = '/Users/hamilton/Qubic/Calib-TD/Fringes/Fringes_2020-10-27_Vtes_5_Eco_1'
-datasets = np.sort(glob.glob(global_dir+'/*RF_switch*'))
-equiv = [0,0,1,1,2,2,3,3,3,3,3,3,3,3]    
+# global_dir = '/Volumes/LaCie/QubicData/Calib-TD/Fringes/2020-10-27/'
+# vtes = 5
+# eco = 1
+# out_dir = '/Users/hamilton/Qubic/Calib-TD/Fringes/Fringes_2020-10-27_Vtes_5_Eco_1'
+# datasets = np.sort(glob.glob(global_dir+'/*RF_switch*'))
+# equiv = [0,0,1,1,2,2,3,3,3,3,3,3,3,3]    
 
 #### 28/10/2020
 # global_dir = '/Volumes/LaCie/QubicData/Calib-TD/Fringes/2020-10-28/'
@@ -89,12 +89,12 @@ equiv = [0,0,1,1,2,2,3,3,3,3,3,3,3,3]
 # eco = 1
 # equiv = [0,0,1,1,2,2,3,3]    
 # out_dir = '/Users/hamilton/Qubic/Calib-TD/Fringes/Fringes_2020-10-28_Vtes_3.5_Eco_1'
-# ### Vtes=4 & No Eccosorb
-# datasets = np.sort(glob.glob(global_dir+'/*RF_switch_NoEco_Vtes_4_*'))
-# vtes = 4
-# eco = 0
-# equiv = [0,0,1,1,2,2,3,3]    
-# out_dir = '/Users/hamilton/Qubic/Calib-TD/Fringes/Fringes_2020-10-28_Vtes_4_Eco_0'
+### Vtes=4 & No Eccosorb
+datasets = np.sort(glob.glob(global_dir+'/*RF_switch_NoEco_Vtes_4_*'))
+vtes = 4
+eco = 0
+equiv = [0,0,1,1,2,2,3,3]    
+out_dir = '/Users/hamilton/Qubic/Calib-TD/Fringes/Fringes_2020-10-28_Vtes_4_Eco_0'
 
 
 horns = []
@@ -165,7 +165,7 @@ tes = 95
 
 # Filter the data (just to give an idea because it is done when folding)
 lowcut = 0.00001
-highcut = 4.
+highcut = 2.
 nharm = 10
 notch = np.array([[1.724, 0.005, nharm]])
 
@@ -440,7 +440,14 @@ def doit(myds, read_data, lowcut, highcut, notch, t0, tf, stable_time, doplot=Tr
 reload(fl)
 
 rc('figure', figsize=(16,10))
+
 mytes = 93
+
+lowcut = 0.00001
+highcut = 2.
+nharm = 10
+notch = np.array([[1.724, 0.005, nharm]])
+
 
 t0 = None
 tf = None

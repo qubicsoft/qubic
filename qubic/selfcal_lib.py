@@ -912,6 +912,17 @@ def plot_baseline(q,bs):
     hcenters = q.horn.center[:,0:2]
     plt.plot(hcenters[np.array(bs)-1,0], hcenters[np.array(bs)-1,1], lw=4, label=bs)
 
+def give_bs_pars(q,bs):
+    hc = q.horn.center[:,0:2]
+    hc0 = hc[np.array(bs[0])-1,:]
+    hc1 = hc[np.array(bs[1])-1,:]
+    bsxy = hc1-hc0
+    theta = np.degrees(np.arctan2(bsxy[1], bsxy[0]))
+    length = np.sqrt(np.sum(bsxy**2))
+    return theta, length
+
+
+
 def check_equiv(vecbs1, vecbs2, tol=1e-5):
     norm1 = np.dot(vecbs1, vecbs1)
     norm2 = np.dot(vecbs2, vecbs2)
@@ -934,7 +945,7 @@ def find_equivalent_baselines(all_bs, q):
         all_vecs[ib,:] = coordsB-coordsA
 
     ### List of types of equivalence for each baseline: initially = -1
-    all_eqtype = np.zeros(len(all_bs))-1
+    all_eqtype = np.zeros(len(all_bs), dtype=int)-1
 
     ### First type is zero and is associated to first baseline
     eqnum = 0
@@ -964,7 +975,8 @@ def find_equivalent_baselines(all_bs, q):
     bseq = []
     for i in range(len(alltypes)):
         bseq.append(index_bs[all_eqtype==i])
-    return bseq
+
+    return bseq, all_eqtype
 
 
 

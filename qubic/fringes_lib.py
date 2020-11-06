@@ -61,26 +61,6 @@ def cut_data(t0, tf, t_data, data):
 
     return t_data_cut, data_cut
 
-def make_spectrum(t_data, data_oneTES, period):
-    # Sampling frequency
-    npoints = len(t_data)
-    t0, tf = t_data[0], t_data[-1]
-    f_sampling = npoints / (tf - t0)
-
-    # Spectrum
-    spectrum_f, freq_f = mlab.psd(data_oneTES,
-                                  Fs=f_sampling,
-                                  NFFT=2 ** int(np.log(len(data_oneTES)) / np.log(2)),
-                                  window=mlab.window_hanning)
-    plt.plot(freq_f, spectrum_f)
-    plt.loglog()
-    plt.xlim(0.1, 10)
-    for i in range(1, 10):
-        plt.axvline(x=i / period, color='orange')
-    plt.grid()
-
-    return spectrum_f, freq_f
-
 def find_right_period(guess, t_data, data_oneTES):
     ppp = np.linspace(guess - 1.5, guess + 1.5, 250)
     rms = np.zeros(len(ppp))

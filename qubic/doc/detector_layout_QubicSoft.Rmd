@@ -1,0 +1,272 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Detector layout
+
+Edited by Louise, 09-11-2020
+
+This notebook explains how the QUBIC detector layout is defined in QUBIC soft. 
+
+```{python}
+from __future__ import division, print_function
+
+# %matplotlib inline
+# %matplotlib notebook
+
+import numpy as np
+from astropy.io import fits
+import matplotlib.pyplot as plt
+
+from qubicpack.utilities import Qubic_DataDir
+import qubic
+
+plt.rcParams['figure.figsize'] = (12, 6)
+```
+
+```{python}
+# Use a tool from qubicpack to get a path
+basedir = Qubic_DataDir(datafile='instrument.py', ) 
+print('basedir : ', basedir)
+
+# Get a dictionary
+dictfilename = basedir + '/dicts/global_source_oneDet.dict'
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+print(d['detarray'])
+
+d['MultiBand'] = False
+d['nf_sub'] = 1
+
+# Choose TD or FI
+config = 'FI'
+d['config'] = config
+```
+
+## Look at the DetArray calibration file
+
+It is a .fits. There is one for the TD and one for the FI. 
+
+```{python}
+hdu = fits.open(basedir + 'calfiles/CalQubic_DetArray_' + config + '.fits')
+print(hdu.info())
+
+hdu[0].header
+```
+
+```{python}
+# Center of each bolometer
+center = hdu['center'].data
+x = center[:, :, 0]
+y = center[:, :, 1]
+
+# Corners of each bolo
+corner = hdu['corner'].data
+
+quadrant = hdu['quadrant'].data
+ordering = hdu['index'].data
+removed = hdu['removed'].data
+efficiency = hdu['efficiency'].data
+
+plt.subplots(2, 2, figsize=(12, 10))
+plt.suptitle('CalQubic_DetArray_TD.fits')
+plt.subplot(221)
+plt.pcolor(x, y, quadrant)
+plt.title('Quadrant')
+plt.colorbar()
+
+plt.subplot(222)
+plt.pcolor(x, y, ordering)
+plt.title('Ordering')
+plt.colorbar()
+
+plt.subplot(223)
+plt.pcolor(x, y, removed)
+plt.title('Removed')
+plt.colorbar()
+
+plt.subplot(224)
+plt.pcolor(x, y, efficiency)
+plt.title('Efficiency')
+plt.colorbar()
+```
+
+## A simple example using `PackedTable` from `pysimulators`
+
+The instanciation of the detector layout in the Qubic soft is done with a `PackedTable` object.
+
+The documentation is very well written in `core.py`. I just reproduce it here.
+
+The PackedTable class gathers information from a set of elements which can have a multi-dimensional layout. This information can transparently be accessed as packed or unpacked arrays.
+
+Example
+-------
+Let's consider a 3x3 array of detectors, in which the top-left detector
+is not working. We will define a mask to flag this detector.
+
+```{python}
+from pysimulators import PackedTable
+selection = [[True, True, False],
+             [True, True, True],
+             [True, True, True]]
+gain = [[1.0, 1.2, 1.5],
+        [0.9, 1.0, 1.0],
+        [0.8, 1.0, 1.0]]
+
+table = PackedTable((3, 3), selection=selection, gain=gain)
+```
+
+Only the values for the selected detectors are stored, in 1-dimensional arrays:
+
+```{python}
+table.gain
+```
+
+But the 2-dimensional table can be recovered:
+
+```{python}
+table.all.gain
+```
+
+The number of selected detectors is:
+
+```{python}
+len(table)
+```
+
+and the number of all detectors is:
+
+```{python}
+len(table.all)
+```
+
+Now, let's have a more complex example: an array of detectors made of 4 identical 3x3 subarrays in which one corner detector is blind and for which we will define an indexing scheme. The first subarray is placed on the upper right quadrant and the position of the other arrays is obtained by rotating the first array by 90, 180 and 270 degrees.
+
+A natural indexing, the one used in the Calfiles for the QUBIC focal plane, would be given by:
+
+```{python}
+ordering = [[-1, 14, 17,  0,  1, -1],
+            [10, 13, 16,  3,  4,  5],
+            [ 9, 12, 15,  6,  7,  8],
+            [26, 25, 24, 33, 30, 27],
+            [23, 22, 21, 34, 31, 28],
+            [-1, 19, 18, 35, 32, -1]]
+```
+
+The following mask only keeps the 2 subarrays on the left:
+
+```{python}
+selection = [[ True,  True,  True, False, False, False],
+             [ True,  True,  True, False, False, False],
+             [ True,  True,  True, False, False, False],
+             [ True,  True,  True, False, False, False],
+             [ True,  True,  True, False, False, False],
+             [ True,  True,  True, False, False, False]]
+
+table = PackedTable((6, 6), selection=selection, ordering=ordering)
+```
+
+Then, the numbering of the table fields follows the list of selected indices stored in:
+
+```{python}
+print(table.index)
+```
+
+which are the 1d-collapsed indices of the following array coordinates:
+
+```{python}
+print([(i // 6, i % 6) for i in table.index])
+```
+
+```{python}
+plt.subplots(1, 3)
+plt.subplot(131)
+plt.imshow(ordering)
+plt.title('Ordering')
+plt.colorbar()
+
+plt.subplot(132)
+plt.imshow(selection)
+plt.title('Selection')
+plt.colorbar()
+
+plt.subplot(133)
+plt.imshow(table.all.index)
+plt.title('Index')
+plt.colorbar()
+```
+
+## Get the same from a Qubic Instrument
+
+The same information (center, efficiency, vertex=corners, removed...) and more are accessible with ```q.detector.``` which is a `Layout` object.
+
+When you initialize a QubicInstrument, the detector layout is built with `_get_detector_layout()` from `instrument.py`. This function reads the calibration fits file with:
+
+`shape, vertex, removed, index, quadrant, efficiency = self.calibration.get('detarray')` which is a method from `calibration.py`.
+
+Then it instanciates a `Layout()` object of `pysimulators` (see `layouts.py`) which is actually a class that inherites from the `PackedTable()` we studied above.
+
+```{python}
+# Make a QUBIC intrument
+q = qubic.QubicInstrument(d)
+
+from pprint import pprint
+pprint(vars(q.detector))
+```
+
+The `Layout()` class provides a method to plot the detector array:
+
+```{python}
+plt.figure(figsize=(6,4))
+q.detector.plot(fill=True)
+plt.title('q.detector.plot()')
+```
+
+#### Difference between ```q.detector.all.``` and `q.detector.`
+
+`q.detector.` is always a 1D array where only the selected detectors are saved. For example, for the TD, you will have only 248 elements.
+
+`q.detector.all` is a 2D array (34x34) with all the detectors.
+
+So you can plot the same using `plt.scatter` or `plt.pcolor`. Here is an example for the TES indices.
+
+
+```{python}
+xx = q.detector.center[:, 0]
+yy = q.detector.center[:, 1]
+ii = q.detector.index
+print(ii.shape)
+
+xxx = q.detector.all.center[:, :, 0]
+yyy = q.detector.all.center[:, :, 1]
+iii = q.detector.all.index
+print(iii.shape)
+```
+
+```{python}
+plt.subplots(1, 2, figsize=(10, 4))
+
+plt.subplot(121)
+plt.scatter(xx, yy, c=ii, s=100, marker='s', vmin=0, vmax=np.max(ii))
+plt.title('Index q.detector')
+plt.colorbar()
+
+plt.subplot(122)
+plt.pcolor(xxx, yyy, iii, vmin=0, vmax=np.max(ii))
+plt.title('Index q.detector.all')
+plt.colorbar()
+```
+
+```{python}
+
+```

@@ -2,12 +2,12 @@
 from __future__ import division, print_function
 from astropy.io import fits
 import sys
+import glob
 if sys.version_info.major==2:
     from ConfigParser import ConfigParser
 else:
     from configparser import ConfigParser
 
-from glob import glob
 from os.path import join
 from pysimulators import Layout, LayoutGrid
 from .calfiles import PATH
@@ -81,20 +81,11 @@ class QubicCalibration(object):
             version = hdus[0].header['format version']
             corner = hdus[2].data
             shape = corner.shape[:-2]
-            n = shape[0] * shape[1]
-            if version == '1.0':
-                removed = np.zeros(shape, bool)
-                index = np.arange(n, dtype=np.int32).reshape(shape)
-                quadrant = np.zeros(shape, np.int8)
-                efficiency = np.ones(shape)
-            else:
-                removed = hdus[3].data.view(bool)
-                index = hdus[4].data
-                quadrant = hdus[5].data
-                if version > '2.0':
-                    efficiency = hdus[6].data
-                else:
-                    efficiency = np.ones(shape)
+            removed = hdus[3].data.view(bool)
+            index = hdus[4].data
+            quadrant = hdus[5].data
+            efficiency = hdus[6].data
+
             return shape, corner, removed, index, quadrant, efficiency
 
         elif name == 'hornarray':

@@ -46,10 +46,10 @@ class QubicCalibration(object):
 
         """
         self.path = os.path.abspath(path)
-        self.detarray =   os.path.abspath(join(self.path, d['detarray']))
+        self.detarray = os.path.abspath(join(self.path, d['detarray']))
         self.hornarray = os.path.abspath(join(self.path, d['hornarray']))
         self.optics = os.path.abspath(join(self.path, d['optics'])) 
-        self.primbeam =  os.path.abspath(join(self.path, d['primbeam'])) 
+        self.primbeam = os.path.abspath(join(self.path, d['primbeam']))
         self.nu = int(d['filter_nu']/1e9)
 
     def __str__(self):

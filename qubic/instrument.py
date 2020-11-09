@@ -189,13 +189,13 @@ class QubicInstrument(Instrument):
         self.synthbeam.kmax = synthbeam_kmax
 
     def _get_detector_layout(self, ngrids, nep, fknee, fslope, ncorr, tau):
-        shape, vertex, removed, index, quadrant, efficiency = \
+        shape, vertex, removed, ordering, quadrant, efficiency = \
             self.calibration.get('detarray')
         if ngrids == 2:
             shape = (2,) + shape
             vertex = np.array([vertex, vertex])
             removed = np.array([removed, removed])
-            index = np.array([index, index + np.max(index) + 1], index.dtype)
+            ordering = np.array([ordering, ordering + np.max(ordering) + 1], ordering.dtype)
             quadrant = np.array([quadrant, quadrant + 4], quadrant.dtype)
             efficiency = np.array([efficiency, efficiency])
         focal_length = self.calibration.get('optics')['focal length']
@@ -211,7 +211,7 @@ class QubicInstrument(Instrument):
             return np.arctan2(self.center[..., 1], self.center[..., 0])
 
         layout = Layout(
-            shape, vertex=vertex, selection=~removed, ordering=index,
+            shape, vertex=vertex, selection=~removed, ordering=ordering,
             quadrant=quadrant, nep=nep, fknee=fknee, fslope=fslope,
             tau=tau, theta=theta, phi=phi, efficiency=efficiency)
 

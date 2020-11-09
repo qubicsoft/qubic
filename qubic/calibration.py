@@ -82,11 +82,11 @@ class QubicCalibration(object):
             corner = hdus[2].data
             shape = corner.shape[:-2]
             removed = hdus[3].data.view(bool)
-            index = hdus[4].data
+            ordering = hdus[4].data
             quadrant = hdus[5].data
             efficiency = hdus[6].data
 
-            return shape, corner, removed, index, quadrant, efficiency
+            return shape, corner, removed, ordering, quadrant, efficiency
 
         elif name == 'hornarray':
             hdus = fits.open(self.hornarray)

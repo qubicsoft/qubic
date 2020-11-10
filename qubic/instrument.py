@@ -749,7 +749,7 @@ class QubicInstrument(Instrument):
         """
         nd = len(self)
         nt = len(sampling)
-        grid = self.detector.quadrant // 4
+        grid = (self.detector.quadrant - 1) // 4
 
         if scene.kind == 'I':
             if self.optics.polarizer:

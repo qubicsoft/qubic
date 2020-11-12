@@ -1,7 +1,6 @@
 from __future__ import division, print_function
 
 import glob
-import copy
 import numpy as np
 import pandas as pd
 from scipy import ndimage
@@ -14,26 +13,142 @@ import matplotlib.cm as cmx
 import matplotlib.patches as patches
 from matplotlib.colors import SymLogNorm
 
-from astropy.io import fits
-
 import qubic
-from qubicpack.utilities import Qubic_DataDir
 from qubicpack.pixel_translation import make_id_focalplane, tes2index
 
-__all__ = ['Fringes', 'SelfCalibration']
+__all__ = ['Fringes']
 
 
-def make_position(xmin, xmax, reso, focal_length):
-    xx, yy = np.meshgrid(np.linspace(xmin, xmax, reso), np.linspace(xmin, xmax, reso))
-    x1d = np.ravel(xx)
-    y1d = np.ravel(yy)
-    z1d = x1d * 0 - focal_length
-    position = np.array([x1d, y1d, z1d]).T
-
-    return position
+def plot_horns(q):
+    xhorns = q.horn.center[:, 0]
+    yhorns = q.horn.center[:, 1]
+    plt.plot(xhorns, yhorns, 'ro')
 
 
-def get_response_power(q, theta, phi, spectral_irradiance, position, nu, frame='ONAFP', verbose=False):
+def plot_baseline(q, bs):
+    hcenters = q.horn.center[:, 0:2]
+    plt.plot(hcenters[np.array(bs) - 1, 0], hcenters[np.array(bs) - 1, 1], lw=4, label=bs)
+
+def scatter_plot_FP(q, x, y, FP_signal, frame, title=None):
+    if q.config=='TD':
+        s = 180
+    else:
+        s = 40
+    plt.scatter(x, y, c=FP_signal, norm=SymLogNorm(1e-7), marker='s', s=s)
+    plt.colorbar()
+    plt.xlabel(f'X_{frame}')
+    plt.ylabel(f'Y_{frame}')
+    plt.axis('equal')
+    plt.title(title)
+
+
+def pcolor_plot_FP(q, x, y, FP_signal, frame, title=None):
+    x2D = q.detector.unpack(x)
+    y2D = q.detector.unpack(y)
+    FP_signal2D = q.detector.unpack(FP_signal)
+
+    plt.pcolor(x2D, y2D, FP_signal2D, norm=SymLogNorm(1e-7))
+    plt.colorbar()
+    plt.xlabel(f'X_{frame}')
+    plt.ylabel(f'Y_{frame}')
+    plt.axis('equal')
+    plt.title(title)
+
+
+def plot_horn_and_FP(q, x, y, FP_signal, frame, title=None):
+    plt.subplots(1, 2)
+    plt.suptitle(title, fontsize=18)
+
+    plt.subplot(121)
+    q.horn.plot()
+    plt.axis('on')
+    plt.xlabel('X_GRF')
+    plt.ylabel('Y_GRF')
+
+    plt.subplot(122)
+    if q.config=='TD':
+        s = 180
+    else:
+        s = 40
+    plt.scatter(x, y, c=FP_signal, norm=SymLogNorm(1e-7), marker='s', s=s)
+    plt.colorbar()
+    plt.xlabel(f'X_{frame}')
+    plt.ylabel(f'Y_{frame}')
+    plt.axis('equal')
+
+
+def close_switches(q, switches):
+    for i in switches:
+        q.horn.open[i - 1] = False
+
+
+def give_bs_pars(q, bs):
+    hc = q.horn.center[:, 0:2]
+    hc0 = hc[np.array(bs[0]) - 1, :]
+    hc1 = hc[np.array(bs[1]) - 1, :]
+    bsxy = hc1 - hc0
+    theta = np.degrees(np.arctan2(bsxy[1], bsxy[0]))
+    length = np.sqrt(np.sum(bsxy ** 2))
+    return theta, length
+
+
+def check_equiv(vecbs1, vecbs2, tol=1e-5):
+    norm1 = np.dot(vecbs1, vecbs1)
+    norm2 = np.dot(vecbs2, vecbs2)
+    cross12 = np.cross(vecbs1, vecbs2)
+    if (np.abs(norm1 - norm2) < tol) & (np.abs(cross12) < tol):
+        return True
+    else:
+        return False
+
+
+def find_equivalent_baselines(all_bs, q):
+    ### Convert to array
+    all_bs = np.array(all_bs)
+    ### centers
+    hcenters = q.horn.center[:, 0:2]
+    ### Baselines vectors
+    all_vecs = np.zeros((len(all_bs), 2))
+    for ib in range(len(all_bs)):
+        coordsA = hcenters[all_bs[ib][0], :]
+        coordsB = hcenters[all_bs[ib][1], :]
+        all_vecs[ib, :] = coordsB - coordsA
+
+    ### List of types of equivalence for each baseline: initially = -1
+    all_eqtype = np.zeros(len(all_bs), dtype=int) - 1
+
+    ### First type is zero and is associated to first baseline
+    eqnum = 0
+    all_eqtype[0] = eqnum
+
+    ### Indices of baselines
+    index_bs = np.arange(len(all_bs))
+
+    ### Loop over baselines
+    for ib in range(0, len(all_bs)):
+        ### Identify those that have no type
+        wnotype = all_eqtype == -1
+        bsnotype = all_bs[wnotype]
+        vecsnotype = all_vecs[wnotype, :]
+        indexnotype = index_bs[wnotype]
+        ### Loop over those with no type
+        for jb in range(len(bsnotype)):
+            ### Check if equivalent
+            status = check_equiv(all_vecs[ib, :], vecsnotype[jb, :])
+            ### If so: give it the current type
+            if status:
+                all_eqtype[indexnotype[jb]] = eqnum
+        ### We have gone through all possibilities for this type so we increment the type by 1
+        eqnum = np.max(all_eqtype) + 1
+
+    alltypes = np.unique(all_eqtype)
+    bseq = []
+    for i in range(len(alltypes)):
+        bseq.append(index_bs[all_eqtype == i])
+    return bseq, all_eqtype
+
+
+def get_response_power(q, theta, phi, spectral_irradiance, nu, frame='ONAFP', verbose=False):
     """
     Compute power on the focal plane in the ONAFP frame for different positions of the source
     with respect to the instrument.
@@ -62,83 +177,34 @@ def get_response_power(q, theta, phi, spectral_irradiance, position, nu, frame='
         The power on the focal plane for each pointing.
     """
     nptg = len(theta)
-    reso = int(np.sqrt(np.shape(position)[0]))
-    if verbose:
-        print(f'# pointings = {nptg}')
-        print(f'Focal plane resolution = ({reso} x {reso})')
 
     # Electric field on the FP in the GRF frame
+    position = q.detector.center  # GRF frame
     field = q._get_response(theta, phi, spectral_irradiance, position, q.detector.area,
                             nu, q.horn, q.primary_beam, q.secondary_beam)
-    power_GRF = np.reshape(np.abs(field) ** 2, (reso, reso, nptg))
+    power = np.abs(field) ** 2
+    # power2D = q.detector.unpack(power)
+    xGRF = position[:, 0]
+    yGRF = position[:, 1]
+
+    if verbose:
+        print(f'# pointings = {nptg}')
+        print(position.shape)
+        print(field.shape)
+        print(xGRF.shape)
 
     if frame == 'GRF':
-        return power_GRF
+        return xGRF, yGRF, power
 
     elif frame == 'ONAFP':
-        # Go to the ONAFP frame
-        power_ONAFP = np.rot90(power_GRF, k=-1, axes=(0, 1))
-        return power_ONAFP
+        # Make a pi/2 rotation from GRF -> ONAFP referential frame
+        xONAFP = - yGRF
+        yONAFP = xGRF
+        return xONAFP, yONAFP, power
 
     else:
-        raise ValueError('The frame is not valid.')
+        raise ValueError('The frame is not valid. It must be GRF or ONAFP.')
 
-def plot_horn_and_FP(q, FP_signal, title=None):
-    plt.subplots(1, 2)
-    plt.suptitle(title)
-    plt.subplot(121)
-    q.horn.plot()
-    plt.axis('off')
-
-    plt.subplot(122)
-    plt.imshow(FP_signal, norm=SymLogNorm(1e-7), origin='lower')
-    plt.colorbar()
-
-def close_dead_switches(q, dead_switches=None):
-    if dead_switches is not None:
-        for i in dead_switches:
-            q.horn.open[i - 1] = False
-
-
-def kill_pixel_outside_FP(FP_full):
-    if np.shape(FP_full) != (34, 34):
-        raise ValueError('The focal plane shape should be (34, 34).')
-
-    else:
-        FPidentity = make_id_focalplane()
-        tes = np.reshape(FPidentity.TES, (34, 34))
-        # Set the pixels that are not TES to NAN
-        FP_real = np.where(tes == 0, np.nan, FP_full)
-
-    return FP_real
-
-
-def get_quadrant_for_ONAFP_image(FP_full_ONAFP, iquad):
-    if np.shape(FP_full_ONAFP) != (34, 34):
-        raise ValueError('The focal plane shape should be (34, 34).')
-
-    FPidentity = make_id_focalplane()
-    if iquad in [1, 2, 3, 4]:
-        quadrant = np.reshape(FPidentity.quadrant, (34, 34))
-        plt.figure()
-        plt.imshow(quadrant, origin='lower')
-        FP_quad = FP_full_ONAFP[np.where(quadrant != iquad, 6, FP_full_ONAFP) != 6]
-        FP_quad = np.reshape(FP_quad, (17, 17))
-
-    return FP_quad
-
-
-def get_quadrant_for_GRF_image(FP_full_GRF, iquad):
-    if np.shape(FP_full_GRF) != (34, 34):
-        raise ValueError('The focal plane shape should be (34, 34).')
-
-    FPidentity = make_id_focalplane()
-    if iquad in [1, 2, 3, 4]:
-        quadrant = np.rot90(np.reshape(FPidentity.quadrant, (34, 34)), k=1)
-        FP_quad = FP_full_GRF[np.where(quadrant != iquad, 6, FP_full_GRF) != 6]
-        FP_quad = np.reshape(FP_quad, (17, 17))
-
-    return FP_quad
 
 class Fringes:
     def __init__(self, baseline, d):
@@ -152,8 +218,8 @@ class Fringes:
         if len(baseline) != 2:
             raise ValueError('The baseline should contain 2 horns.')
         for i in baseline:
-            if i < 1 or i > 64:
-                raise ValueError('Horns indices must be in [1, 64].')
+            if i < 1 or i > 400:
+                raise ValueError('Horns indices must be in [1, 400].')
 
         self.baseline = baseline
         self.d = d
@@ -161,55 +227,28 @@ class Fringes:
     def get_fringes(self, q,
                     theta=np.array([0.]), phi=np.array([0.]),
                     nu=150e9, spectral_irradiance=1.,
-                    xmin=-0.06, xmax=0.06, reso=34,
-                    frame='ONAFP', dead_switches=None,
+                    frame='ONAFP',
                     doplot=True, verbose=True):
-
-        nptg = np.shape(theta)[0]
-        position = make_position(xmin, xmax, reso, q.optics.focal_length)
 
         q.horn.open = False
         q.horn.open[self.baseline[0] - 1] = True
         q.horn.open[self.baseline[1] - 1] = True
-        close_dead_switches(q, dead_switches)
-        fringes = get_response_power(q, theta, phi, spectral_irradiance, position, nu, frame=frame, verbose=verbose)
+        x, y, fringes = get_response_power(q, theta, phi, spectral_irradiance, nu,
+                                           frame=frame, verbose=verbose)
 
-        fringesTD = np.zeros((17, 17, nptg))
-        for i in range(nptg):
-            fringes[:, :, i] = kill_pixel_outside_FP(fringes[:, :, i])
-
-            if doplot:
-                plot_horn_and_FP(q, fringes[:, :, i],
-                                 'Full FP - Baseline {} - Theta={}deg - Phi={}deg'.format(self.baseline,
-                                                                              np.rad2deg(theta[i]),
-                                                                              np.rad2deg(phi[i])))
-            if q.config == 'TD':
-                if frame == 'ONAFP':
-                    fringesTD[:, :, i] = get_quadrant_for_ONAFP_image(fringes[:, :, i], iquad=3)
-                elif frame == 'GRF':
-                    fringesTD[:, :, i] = get_quadrant_for_GRF_image(fringes[:, :, i], iquad=3)
-
-                if doplot:
-                    plot_horn_and_FP(q, fringesTD[:, :, i],
-                                     'Quadrant3 - Baseline {} - Theta={}deg - Phi={}deg'.format(self.baseline,
-                                                                                    np.rad2deg(theta[i]),
-                                                                                    np.rad2deg(phi[i])))
-
-                fringesTD[:, :, i] = np.rot90(fringesTD[:, :, i], k=2)
-                fringes = fringesTD
-
-            if doplot:
-                plot_horn_and_FP(q, fringes[:, :, i],
-                                 'Rotation - Baseline {} - Theta={}deg - Phi={}deg'.format(self.baseline,
-                                                                              np.rad2deg(theta[i]),
-                                                                              np.rad2deg(phi[i])))
-        return fringes
+        if doplot:
+            nptg = np.shape(theta)[0]
+            for i in range(nptg):
+                plot_horn_and_FP(q, x, y, fringes[:, i], frame=frame,
+                                 title='Baseline {} - Theta={}deg - Phi={}deg'.format(self.baseline,
+                                                                                      np.rad2deg(theta[i]),
+                                                                                      np.rad2deg(phi[i])))
+        return x, y, fringes
 
     def get_all_combinations_power(self, q,
                                    theta=np.array([0.]), phi=np.array([0.]),
                                    nu=150e9, spectral_irradiance=1.,
-                                   xmin=-0.06, xmax=0.06, reso=34,
-                                   frame='ONAFP', dead_switches=None,
+                                   frame='ONAFP',
                                    doplot=True, verbose=True):
         """
             Returns the power on the focal plane for each pointing, for different configurations
@@ -241,327 +280,231 @@ class Fringes:
             Power on the focal plane for each configuration, for each pointing.
 
         """
-        nptg = np.shape(theta)[0]
-        position = make_position(xmin, xmax, reso, q.optics.focal_length)
 
         q.horn.open = True
-        close_dead_switches(q, dead_switches)
 
         # All open
-        S = get_response_power(q, theta, phi, spectral_irradiance, position, nu, frame=frame, verbose=verbose)
+        x, y, S = get_response_power(q, theta, phi, spectral_irradiance, nu, frame=frame, verbose=verbose)
         if doplot:
-            plot_horn_and_FP(q, kill_pixel_outside_FP(S[:, :, 0]), '$S$')
+            plot_horn_and_FP(q, x, y, S[:, 0], frame=frame, title='$S$ - All open')
 
         # All open except i
         q.horn.open[self.baseline[0] - 1] = False
-        Cminus_i = get_response_power(q, theta, phi, spectral_irradiance, position, nu, frame=frame, verbose=verbose)
+        _, _, Cminus_i = get_response_power(q, theta, phi, spectral_irradiance, nu, frame=frame, verbose=verbose)
         if doplot:
-            plot_horn_and_FP(q, kill_pixel_outside_FP(Cminus_i[:, :, 0]), '$C_{-i}$')
+            plot_horn_and_FP(q, x, y, Cminus_i[:, 0], frame=frame,
+                             title='$C_{-i}$' + f' - Horn {self.baseline[0]} close')
 
         # All open except baseline [i, j]
         q.horn.open[self.baseline[1] - 1] = False
-        Sminus_ij = get_response_power(q, theta, phi, spectral_irradiance, position, nu, frame=frame, verbose=verbose)
+        _, _, Sminus_ij = get_response_power(q, theta, phi, spectral_irradiance, nu, frame=frame, verbose=verbose)
         if doplot:
-            plot_horn_and_FP(q, kill_pixel_outside_FP(Sminus_ij[:, :, 0]), '$S_{-ij}$')
+            plot_horn_and_FP(q, x, y, Sminus_ij[:, 0], frame=frame,
+                             title='$S_{-ij}$' + f' - Baseline {self.baseline} close')
 
         # All open except j
         q.horn.open[self.baseline[0] - 1] = True
-        Cminus_j = get_response_power(q, theta, phi, spectral_irradiance, position, nu, frame=frame, verbose=verbose)
+        _, _, Cminus_j = get_response_power(q, theta, phi, spectral_irradiance, nu, frame=frame, verbose=verbose)
         if doplot:
-            plot_horn_and_FP(q, kill_pixel_outside_FP(Cminus_j[:, :, 0]), '$C_{-j}$')
+            plot_horn_and_FP(q, x, y, Cminus_j[:, 0], frame=frame,
+                             title='$C_{-j}$' + f' - Horn {self.baseline[1]} close')
 
         # Only i open (not a realistic observable)
         q.horn.open = False
         q.horn.open[self.baseline[0] - 1] = True
-        Ci = get_response_power(q, theta, phi, spectral_irradiance, position, nu, frame=frame, verbose=verbose)
+        _, _, Ci = get_response_power(q, theta, phi, spectral_irradiance, nu, frame=frame, verbose=verbose)
         if doplot:
-            plot_horn_and_FP(q, kill_pixel_outside_FP(Ci[:, :, 0]), '$C_i$')
+            plot_horn_and_FP(q, x, y, Ci[:, 0], frame=frame,
+                             title='$C_i$' + f' - Only horn {self.baseline[0]} open')
 
         # Only j open (not a realistic observable)
         q.horn.open[self.baseline[0] - 1] = False
         q.horn.open[self.baseline[1] - 1] = True
-        Cj = get_response_power(q, theta, phi, spectral_irradiance, position, nu, frame=frame, verbose=verbose)
+        _, _, Cj = get_response_power(q, theta, phi, spectral_irradiance, nu, frame=frame, verbose=verbose)
         if doplot:
-            plot_horn_and_FP(q, kill_pixel_outside_FP(Cj[:, :, 0]), '$C_j$')
+            plot_horn_and_FP(q, x, y, Cj[:, 0], frame=frame,
+                             title='$C_j$' + f' - Only horn {self.baseline[1]} open')
 
         # Only baseline [i, j] open (not a realistic observable)
         q.horn.open[self.baseline[0] - 1] = True
-        Sij = get_response_power(q, theta, phi, spectral_irradiance, position, nu, frame=frame, verbose=verbose)
+        _, _, Sij = get_response_power(q, theta, phi, spectral_irradiance, nu, frame=frame, verbose=verbose)
         if doplot:
-            plot_horn_and_FP(q, kill_pixel_outside_FP(Sij[:, :, 0]), '$S_{ij}$')
+            plot_horn_and_FP(q, x, y, Sij[:, 0], frame=frame,
+                             title='$S_{ij}$' + f' - Only baseline {self.baseline} open')
 
-        for i in range(nptg):
-            S[:, :, i] = kill_pixel_outside_FP(S[:, :, i])
-            Cminus_i[:, :, i] = kill_pixel_outside_FP(Cminus_i[:, :, i])
-            Sminus_ij[:, :, i] = kill_pixel_outside_FP(Sminus_ij[:, :, i])
-            Cminus_j[:, :, i] = kill_pixel_outside_FP(Cminus_j[:, :, i])
-            Ci[:, :, i] = kill_pixel_outside_FP(Ci[:, :, i])
-            Cj[:, :, i] = kill_pixel_outside_FP(Cj[:, :, i])
-            Sij[:, :, i] = kill_pixel_outside_FP(Sij[:, :, i])
-
-        return S, Cminus_i, Sminus_ij, Cminus_j, Ci, Cj, Sij
+        return x, y, S, Cminus_i, Sminus_ij, Cminus_j, Ci, Cj, Sij
 
     def get_fringes_from_combination(self, q,
                                      theta=np.array([0.]), phi=np.array([0.]),
                                      nu=150e9, spectral_irradiance=1.,
-                                     xmin=-0.06, xmax=0.06, reso=34,
-                                     frame='ONAFP', dead_switches=None,
+                                     frame='ONAFP',
                                      doplot=True, verbose=True):
         """
         Return the fringes on the FP by making the computation
         fringes =(S_tot - Cminus_i - Cminus_j + Sminus_ij)
         q : a qubic monochromatic instrument
         """
-        nptg = np.shape(theta)[0]
 
-        S_tot, Cminus_i, Cminus_j, Sminus_ij, _, _, _ = \
+        x, y, S_tot, Cminus_i, Sminus_ij, Cminus_j, Ci, Cj, Sij = \
             Fringes.get_all_combinations_power(self, q,
                                                theta=theta, phi=phi,
                                                nu=nu, spectral_irradiance=spectral_irradiance,
-                                               xmin=xmin, xmax=xmax, reso=reso,
-                                               frame=frame, dead_switches=dead_switches,
+                                               frame=frame,
                                                doplot=False, verbose=verbose)
 
-        fringes = S_tot - Cminus_i - Cminus_j + Sminus_ij
-
-        fringesTD = np.zeros((17, 17, nptg))
-        for i in range(nptg):
-            fringes[:, :, i] = kill_pixel_outside_FP(fringes[:, :, i])
-
-            if q.config == 'TD':
-                if frame == 'ONAFP':
-                    fringesTD[:, :, i] = get_quadrant_for_ONAFP_image(fringes[:, :, i], iquad=3)
-                elif frame == 'GRF':
-                    fringesTD[:, :, i] = get_quadrant_for_GRF_image(fringes[:, :, i], iquad=3)
-                fringesTD[:, :, i] = np.rot90(fringesTD[:, :, i], k=2)
-                fringes = fringesTD
-
-            if doplot:
-                plot_horn_and_FP(q, fringes[:, :, i],
-                                 'Fringes combined - Baseline {} - Theta={}deg - Phi={}deg'.format(self.baseline,
-                                                                                np.rad2deg(theta[i]),
-                                                                                np.rad2deg(phi[i])))
-        return fringes
-
-class SelfCalibration:
-    """
-    Get power on the focal plane with or without optical aberrations
-    and on the sky for a given horn configuration.
-
-    """
-
-    def __init__(self, baseline, d, dead_switches=None):
-        """
-
-        Parameters
-        ----------
-        baseline : list
-            Baseline formed with 2 horns, index between 1 and 64 as on the instrument.
-        d : dictionary
-        dead_switches : list of int
-            Broken switches, always closed between 1 and 64. By default is None. 
-        """
-        self.baseline = baseline
-        self.dead_switches = dead_switches
-        self.d = d
-        # Replace CC by TD or FI
-        d['detarray'] = d['detarray'].replace(d['detarray'][-7:-5], d['config'])
-
-        if len(self.baseline) != 2:
-            raise ValueError('The baseline should contain 2 horns.')
-        for i in self.baseline:
-            if i < 1 or i > 64:
-                raise ValueError('Horns indices must be in [1, 64].')
-        if self.dead_switches is not None:
-            for i in self.dead_switches:
-                if i < 1 or i > 64:
-                    raise ValueError('Horns indices must be in [1, 64].')
-
-    def get_dead_detectors_mask(self, quadrant=3):
-        """
-        Build masks for the FP where bad detectors are NAN and good detectors are 1., one of shape (34x34)
-        and one of shape (17x17) for one quadrant.
-        We use the ONAFP frame.
-
-        Parameters
-        ----------
-        quadrant : int
-            Quadrant of the focal plane in [1, 2, 3, 4]
-            By default is 3 for the TD
-
-        Returns
-        -------
-        full_mask : array of shape (34x34)
-            mask for the full FP.
-        quart_mask = array of shape (17x17)
-            mask for one quadrant
-
-        """
-        FPidentity = make_id_focalplane()
-        quad = np.rot90(np.reshape(FPidentity.quadrant, (34, 34)), k=-1, axes=(0, 1))
-
-        calfile_path = Qubic_DataDir(datafile=self.d['detarray'])
-        calfile = fits.open(calfile_path + '/' + self.d['detarray'])
-
-        if self.d['detarray'] == 'CalQubic_DetArray_P87_TD.fits':
-            full_mask = np.rot90(calfile['removed'].data, k=-1, axes=(0, 1))
-            full_mask = np.where(full_mask == 1, np.nan, full_mask)
-            full_mask = np.where(full_mask == 0, 1, full_mask)
-
-            quart = full_mask[np.where(quad != quadrant, 6, full_mask) != 6]
-            quart_mask = np.reshape(quart, (17, 17))
-
-            return full_mask, quart_mask
-
-        else:
-            print('There is no dead detectors in this calfile')
-
-
-
-
-
-    def get_power_fp_aberration(self, rep, doplot=True, indep_config=None):
-        """
-        Compute power on the focal plane for a given horn configuration taking
-        into account optical aberrations given by Maynooth simulations. The source
-        is on the optical axis emitting at 150GHz.
-
-        Parameters
-        ----------
-        rep : str
-            Path of the repository for the simulated files, can be download at :
-            https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
-        doplot : bool
-            If True, make a plot with the intensity in the focal plane.
-        indep_config : list of int
-            By default it is None and in this case, it will use the baseline
-            defined in your object on which you call the method.
-            If you want an other configuration (all open for example), you can
-            put here a list with the horns you want to open.
-
-        Returns
-        -------
-        power : array of shape (nn, nn)
-            Power on the focal plane at high resolution (sampling used in simulations).
-
-        """
-        if self.d['config'] != 'TD':
-            raise ValueError('The instrument in the dictionary must be the TD')
-
-        q = qubic.QubicInstrument(self.d)
-
-        # Get simulation files
-        files = sorted(glob.glob(rep + '/*.dat'))
-
-        nhorns = len(files)
-        if nhorns != 64:
-            raise ValueError('You should have 64 .dat files')
-
-        # This is done to get the right file for each horn
-        horn_transpose = np.arange(64)
-        horn_transpose = np.reshape(horn_transpose, (8, 8))
-        horn_transpose = np.ravel(horn_transpose.T)
-
-        # Get the sample number from the first file
-        data0 = pd.read_csv(files[0], sep='\t', skiprows=0)
-        nn = data0['X_Index'].iloc[-1] + 1
-        print('Sampling number = {}'.format(nn))
-
-        # Get all amplitudes and phases for each open horn
-        if indep_config is None:
-            open_horns = self.baseline
-            nopen_horns = len(self.baseline)
-        else:
-            open_horns = indep_config
-            nopen_horns = len(indep_config)
-
-        q.horn.open = False
-        q.horn.open[np.asarray(open_horns) - 1] = True
-
-        allampX = np.empty((nopen_horns, nn, nn))
-        allphiX = np.empty((nopen_horns, nn, nn))
-        allampY = np.empty((nopen_horns, nn, nn))
-        allphiY = np.empty((nopen_horns, nn, nn))
-        for i, swi in enumerate(open_horns):
-            if swi < 1 or swi > 64:
-                raise ValueError('The switch indices must be between 1 and 64 ')
-
-            thefile = files[horn_transpose[swi - 1]]
-            # print('Horn ', swi, ': ', thefile[98:104])
-            data = pd.read_csv(thefile, sep='\t', skiprows=0)
-
-            allampX[i, :, :] = np.reshape(np.asarray(data['MagX']), (nn, nn)).T
-            allampY[i, :, :] = np.reshape(np.asarray(data['MagY']), (nn, nn)).T
-
-            allphiX[i, :, :] = np.reshape(np.asarray(data['PhaseX']), (nn, nn)).T
-            allphiY[i, :, :] = np.reshape(np.asarray(data['PhaseY']), (nn, nn)).T
-
-        # Electric field for each open horn
-        Ax = allampX * (np.cos(allphiX) + 1j * np.sin(allphiX))
-        Ay = allampY * (np.cos(allphiY) + 1j * np.sin(allphiY))
-
-        # Sum of the electric fields
-        sumampx = np.sum(Ax, axis=0)
-        sumampy = np.sum(Ay, axis=0)
-
-        # Power on the focal plane
-        power = np.abs(sumampx) ** 2 + np.abs(sumampy) ** 2
+        fringes = S_tot - Cminus_i - Cminus_j + Sminus_ij + Ci + Cj
 
         if doplot:
-            plt.figure()
-            plt.subplot(121)
-            q.horn.plot()
-            plt.axis('off')
+            nptg = np.shape(theta)[0]
+            for i in range(nptg):
+                plot_horn_and_FP(q, x, y, fringes[:, 0], frame=frame,
+                                 title='Baseline {} - Theta={}deg - Phi={}deg'.format(self.baseline,
+                                                                                      np.rad2deg(theta[i]),
+                                                                                      np.rad2deg(phi[i])))
+        return x, y, fringes
 
-            plt.subplot(122)
-            plt.imshow(power, origin='lower')
-            plt.title('Power at the sampling resolution')
-            plt.colorbar()
 
-        return power
+def get_power_fp_aberration(self, rep, doplot=True, indep_config=None):
+    """
+    Compute power on the focal plane for a given horn configuration taking
+    into account optical aberrations given by Maynooth simulations. The source
+    is on the optical axis emitting at 150GHz.
 
-    def get_fringes_aberration_combination(self, rep):
-        """
-        Return the fringes on the FP (power) with aberrations using Creidhe files
-        by doing the computation :
-        fringes = (S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
+    Parameters
+    ----------
+    rep : str
+        Path of the repository for the simulated files, can be download at :
+        https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
+    doplot : bool
+        If True, make a plot with the intensity in the focal plane.
+    indep_config : list of int
+        By default it is None and in this case, it will use the baseline
+        defined in your object on which you call the method.
+        If you want an other configuration (all open for example), you can
+        put here a list with the horns you want to open.
 
-        Parameters
-        ----------
-        rep : str
-            Path of the repository for the simulated files, can be download at :
-            https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
+    Returns
+    -------
+    power : array of shape (nn, nn)
+        Power on the focal plane at high resolution (sampling used in simulations).
 
-        Returns
-        -------
-        fringes_aber : array of shape (nn, nn)
-            Fringes in the focal plane at high resolution (sampling used in simulations).
+    """
+    if self.d['config'] != 'TD':
+        raise ValueError('The instrument in the dictionary must be the TD')
 
-        """
-        i = self.baseline[0]
-        j = self.baseline[1]
-        all_open = np.arange(1, 65)
+    q = qubic.QubicInstrument(self.d)
 
-        S_tot_aber = SelfCalibration.get_power_fp_aberration(self, rep,
+    # Get simulation files
+    files = sorted(glob.glob(rep + '/*.dat'))
+
+    nhorns = len(files)
+    if nhorns != 64:
+        raise ValueError('You should have 64 .dat files')
+
+    # This is done to get the right file for each horn
+    horn_transpose = np.arange(64)
+    horn_transpose = np.reshape(horn_transpose, (8, 8))
+    horn_transpose = np.ravel(horn_transpose.T)
+
+    # Get the sample number from the first file
+    data0 = pd.read_csv(files[0], sep='\t', skiprows=0)
+    nn = data0['X_Index'].iloc[-1] + 1
+    print('Sampling number = {}'.format(nn))
+
+    # Get all amplitudes and phases for each open horn
+    if indep_config is None:
+        open_horns = self.baseline
+        nopen_horns = len(self.baseline)
+    else:
+        open_horns = indep_config
+        nopen_horns = len(indep_config)
+
+    q.horn.open = False
+    q.horn.open[np.asarray(open_horns) - 1] = True
+
+    allampX = np.empty((nopen_horns, nn, nn))
+    allphiX = np.empty((nopen_horns, nn, nn))
+    allampY = np.empty((nopen_horns, nn, nn))
+    allphiY = np.empty((nopen_horns, nn, nn))
+    for i, swi in enumerate(open_horns):
+        if swi < 1 or swi > 64:
+            raise ValueError('The switch indices must be between 1 and 64 ')
+
+        thefile = files[horn_transpose[swi - 1]]
+        # print('Horn ', swi, ': ', thefile[98:104])
+        data = pd.read_csv(thefile, sep='\t', skiprows=0)
+
+        allampX[i, :, :] = np.reshape(np.asarray(data['MagX']), (nn, nn)).T
+        allampY[i, :, :] = np.reshape(np.asarray(data['MagY']), (nn, nn)).T
+
+        allphiX[i, :, :] = np.reshape(np.asarray(data['PhaseX']), (nn, nn)).T
+        allphiY[i, :, :] = np.reshape(np.asarray(data['PhaseY']), (nn, nn)).T
+
+    # Electric field for each open horn
+    Ax = allampX * (np.cos(allphiX) + 1j * np.sin(allphiX))
+    Ay = allampY * (np.cos(allphiY) + 1j * np.sin(allphiY))
+
+    # Sum of the electric fields
+    sumampx = np.sum(Ax, axis=0)
+    sumampy = np.sum(Ay, axis=0)
+
+    # Power on the focal plane
+    power = np.abs(sumampx) ** 2 + np.abs(sumampy) ** 2
+
+    if doplot:
+        plt.figure()
+        plt.subplot(121)
+        q.horn.plot()
+        plt.axis('off')
+
+        plt.subplot(122)
+        plt.imshow(power, origin='lower')
+        plt.title('Power at the sampling resolution')
+        plt.colorbar()
+
+    return power
+
+def get_fringes_aberration_combination(self, rep):
+    """
+    Return the fringes on the FP (power) with aberrations using Creidhe files
+    by doing the computation :
+    fringes = (S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
+
+    Parameters
+    ----------
+    rep : str
+        Path of the repository for the simulated files, can be download at :
+        https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
+
+    Returns
+    -------
+    fringes_aber : array of shape (nn, nn)
+        Fringes in the focal plane at high resolution (sampling used in simulations).
+
+    """
+    i = self.baseline[0]
+    j = self.baseline[1]
+    all_open = np.arange(1, 65)
+
+    S_tot_aber = SelfCalibration.get_power_fp_aberration(self, rep,
+                                                         doplot=False,
+                                                         indep_config=all_open)
+    Cminus_i_aber = SelfCalibration.get_power_fp_aberration(self, rep,
+                                                            doplot=False,
+                                                            indep_config=np.delete(all_open, i - 1))
+    Cminus_j_aber = SelfCalibration.get_power_fp_aberration(self, rep,
+                                                            doplot=False,
+                                                            indep_config=np.delete(all_open, j - 1))
+    Sminus_ij_aber = SelfCalibration.get_power_fp_aberration(self, rep,
                                                              doplot=False,
-                                                             indep_config=all_open)
-        Cminus_i_aber = SelfCalibration.get_power_fp_aberration(self, rep,
-                                                                doplot=False,
-                                                                indep_config=np.delete(all_open, i - 1))
-        Cminus_j_aber = SelfCalibration.get_power_fp_aberration(self, rep,
-                                                                doplot=False,
-                                                                indep_config=np.delete(all_open, j - 1))
-        Sminus_ij_aber = SelfCalibration.get_power_fp_aberration(self, rep,
-                                                                 doplot=False,
-                                                                 indep_config=np.delete(all_open, [i - 1, j - 1]))
-        Ci_aber = SelfCalibration.get_power_fp_aberration(self, rep,
-                                                          doplot=True,
-                                                          indep_config=[i])
+                                                             indep_config=np.delete(all_open, [i - 1, j - 1]))
+    Ci_aber = SelfCalibration.get_power_fp_aberration(self, rep,
+                                                      doplot=True,
+                                                      indep_config=[i])
 
-        fringes_aber = (S_tot_aber - Cminus_i_aber - Cminus_j_aber + Sminus_ij_aber) / Ci_aber
+    fringes_aber = (S_tot_aber - Cminus_i_aber - Cminus_j_aber + Sminus_ij_aber) / Ci_aber
 
-        return fringes_aber
-
+    return fringes_aber
 
 def make_external_A(rep, open_horns):
     """
@@ -630,6 +573,7 @@ def make_external_A(rep, open_horns):
     external_A = [-xx, -yy, allampX, allampY, allphiX, allphiY]
 
     return external_A
+
 
 def index2TESandASIC(index):
     """
@@ -810,7 +754,7 @@ def fullreso2TESpixels(img, TESimg, q, ndet=992):
 
     # Take only quadrant 3 and rotate it
     if q.config == 'TD':
-        counts_perTES = np.rot90(counts_perTES [17:, :17], k=2)
+        counts_perTES = np.rot90(counts_perTES[17:, :17], k=2)
         mean_perTES = np.rot90(mean_perTES[17:, :17], k=2)
         sum_perTES = np.rot90(sum_perTES[17:, :17], k=2)
 
@@ -847,43 +791,6 @@ def make_plot_real_fp(TESvertices, sig_perTES, vmin=0., vmax=1.):
     plt.colorbar(scalarMap, shrink=0.8)
 
     return fig
-
-
-# def get_quadrant3(q, signal_perTES, doplot=False):
-#     """
-#
-#     Parameters
-#     ----------
-#     q : a qubic instrument
-#     signal_perTES : bytearray
-#         Signal in each TES (992 detectors).
-#     doplot : bool
-#         If True, make a plot.
-#
-#     Returns
-#     -------
-#     An image (17x17) of quadrant 3.
-#
-#     """
-#     quadrant3 = signal_perTES[496:744]
-#     indice = -(q.detector.center // 0.003)
-#     print(indice.shape)
-#     print(indice[0, :])
-#
-#     img = np.zeros((17, 17))
-#     for k in range(248):
-#         i = int(indice[k, 0])
-#         j = int(indice[k, 1])
-#         img[i - 1, j - 1] = quadrant3[k]
-#     img[img == 0.] = np.nan
-#     # img = np.rot90(img)
-#
-#     if doplot:
-#         plt.figure()
-#         plt.imshow(img)
-#
-#     return img
-
 
 
 def add_fp_simu_aber(image_aber, vmin, vmax, alpha=0.3, diameter_simu=120):
@@ -1005,79 +912,91 @@ def get_fringes_with_aberrations(param, q, baseline, files, nn=241, doplot=True,
 
     return power
 
+# def make_position(xmin, xmax, reso, focal_length):
+#     """Position on the focal plane in the GRF frame."""
+#     xx, yy = np.meshgrid(np.linspace(xmin, xmax, reso), np.linspace(xmin, xmax, reso))
+#     x1d = np.ravel(xx)
+#     y1d = np.ravel(yy)
+#     z1d = x1d * 0 - focal_length
+#     position = np.array([x1d, y1d, z1d]).T
+#
+#     return position
 
-def plot_horns(q):
-    hcenters = q.horn.center[:, 0:2]
-    plt.plot(hcenters[:, 0], hcenters[:, 1], 'ro')
-
-
-def plot_baseline(q, bs):
-    hcenters = q.horn.center[:, 0:2]
-    plt.plot(hcenters[np.array(bs) - 1, 0], hcenters[np.array(bs) - 1, 1], lw=4, label=bs)
-
-
-def give_bs_pars(q,bs):
-    hc = q.horn.center[:,0:2]
-    hc0 = hc[np.array(bs[0])-1,:]
-    hc1 = hc[np.array(bs[1])-1,:]
-    bsxy = hc1-hc0
-    theta = np.degrees(np.arctan2(bsxy[1], bsxy[0]))
-    length = np.sqrt(np.sum(bsxy**2))
-    return theta, length
-
-
-
-def check_equiv(vecbs1, vecbs2, tol=1e-5):
-    norm1 = np.dot(vecbs1, vecbs1)
-    norm2 = np.dot(vecbs2, vecbs2)
-    cross12 = np.cross(vecbs1, vecbs2)
-    if (np.abs(norm1 - norm2) < tol) & (np.abs(cross12) < tol):
-        return True
-    else:
-        return False
+# def kill_pixel_outside_FP(FP_full):
+#     if np.shape(FP_full) != (34, 34):
+#         raise ValueError('The focal plane shape should be (34, 34).')
+#
+#     else:
+#         FPidentity = make_id_focalplane()
+#         tes = np.reshape(FPidentity.TES, (34, 34))
+#         # Set the pixels that are not TES to NAN
+#         FP_real = np.where(tes == 0, np.nan, FP_full)
+#
+#     return FP_real
 
 
-def find_equivalent_baselines(all_bs, q):
-    ### Convert to array
-    all_bs = np.array(all_bs)
-    ### centers
-    hcenters = q.horn.center[:, 0:2]
-    ### Baselines vectors
-    all_vecs = np.zeros((len(all_bs), 2))
-    for ib in range(len(all_bs)):
-        coordsA = hcenters[all_bs[ib][0], :]
-        coordsB = hcenters[all_bs[ib][1], :]
-        all_vecs[ib, :] = coordsB - coordsA
+# def get_one_quadrant(q, FP_full, iquad):
+#     if np.shape(FP_full) != (34, 34):
+#         raise ValueError('The focal plane shape should be (34, 34).')
+#     if iquad in [1, 2, 3, 4]:
+#         quadrant = q.detector.all.quadrant
+#         xGRF_2D = q.detector.all.center[:, :, 0]
+#         yGRF_2D = q.detector.all.center[:, :, 1]
+#         plt.figure()
+#         plt.pcolor(xGRF_2D, yGRF_2D, quadrant)
+#         plt.xlabel('X_GRF')
+#         plt.ylabel('Y_GRF')
+#         plt.colorbar()
+#
+#         FP_quad = FP_full[quadrant == iquad]
+#
+#         # FP_quad = FP_full[np.where(quadrant != iquad, 6, FP_full) != 6]
+#         # FP_quad = np.reshape(FP_quad, (17, 17))
+#         return FP_quad
+#
+#     else:
+#         raise ValueError('Wrong quadrant index.')
 
-    ### List of types of equivalence for each baseline: initially = -1
-    all_eqtype = np.zeros(len(all_bs), dtype=int) - 1
+# FPidentity = make_id_focalplane()
+# if iquad in [1, 2, 3, 4]:
+#     quadrant = np.reshape(FPidentity.quadrant, (34, 34))
+#     plt.figure()
+#     plt.imshow(quadrant)
+#     plt.colorbar()
+#     FP_quad = FP_full[np.where(quadrant != iquad, 6, FP_full) != 6]
+#     FP_quad = np.reshape(FP_quad, (17, 17))
 
-    ### First type is zero and is associated to first baseline
-    eqnum = 0
-    all_eqtype[0] = eqnum
-
-    ### Indices of baselines
-    index_bs = np.arange(len(all_bs))
-
-    ### Loop over baselines
-    for ib in range(0, len(all_bs)):
-        ### Identify those that have no type
-        wnotype = all_eqtype == -1
-        bsnotype = all_bs[wnotype]
-        vecsnotype = all_vecs[wnotype, :]
-        indexnotype = index_bs[wnotype]
-        ### Loop over those with no type
-        for jb in range(len(bsnotype)):
-            ### Check if equivalent
-            status = check_equiv(all_vecs[ib, :], vecsnotype[jb, :])
-            ### If so: give it the current type
-            if status:
-                all_eqtype[indexnotype[jb]] = eqnum
-        ### We have gone through all possibilities for this type so we increment the type by 1
-        eqnum = np.max(all_eqtype) + 1
-
-    alltypes = np.unique(all_eqtype)
-    bseq = []
-    for i in range(len(alltypes)):
-        bseq.append(index_bs[all_eqtype == i])
-    return bseq, all_eqtype
+# def get_quadrant3(q, signal_perTES, doplot=False):
+#     """
+#
+#     Parameters
+#     ----------
+#     q : a qubic instrument
+#     signal_perTES : bytearray
+#         Signal in each TES (992 detectors).
+#     doplot : bool
+#         If True, make a plot.
+#
+#     Returns
+#     -------
+#     An image (17x17) of quadrant 3.
+#
+#     """
+#     quadrant3 = signal_perTES[496:744]
+#     indice = -(q.detector.center // 0.003)
+#     print(indice.shape)
+#     print(indice[0, :])
+#
+#     img = np.zeros((17, 17))
+#     for k in range(248):
+#         i = int(indice[k, 0])
+#         j = int(indice[k, 1])
+#         img[i - 1, j - 1] = quadrant3[k]
+#     img[img == 0.] = np.nan
+#     # img = np.rot90(img)
+#
+#     if doplot:
+#         plt.figure()
+#         plt.imshow(img)
+#
+#     return img

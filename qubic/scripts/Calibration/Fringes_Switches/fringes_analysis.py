@@ -3,15 +3,12 @@ from __future__ import division, print_function
 import glob
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.mlab as mlab
 import scipy.optimize as sop
-import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
-
 import qubic
 from qubic import selfcal_lib as sc
 from qubicpack.utilities import Qubic_DataDir
-
-from qubicpack import qubicpack as qp
 from qubicpack.qubicfp import qubicfp
 import qubic.fibtools as ft
 
@@ -42,6 +39,7 @@ def get_data(dirs, nf, asic, tes=28, doplot=True):
         axs[1].plot(t_data, data[tes - 1, :])
         axs[1].set_title(thedir[-5:])
         axs[1].set_xlim(0, 40)
+        plt.show()
 
     return thedir, t_data, data
 
@@ -97,7 +95,8 @@ def make_diff_sig(params, x, stable_time, data):
 def make_combination(param_est):
     amps = param_est[2:8]
     print('Check:', amps[2], amps[4])
-    return amps[0] + amps[3] - amps[1] - amps[2]
+    # return amps[0] + amps[3] - amps[1] - amps[2]
+    return amps[1] + amps[2] - amps[0] - amps[3]
 
 
 def analyse_fringes(dirs, m, w, t0=4, tf=400, stable_time=3.,
@@ -179,17 +178,18 @@ for i in range(12):
     plt.subplot(4, 3, i + 1)
     plt.title('Baseline {}'.format(baseline))
     plt.imshow(img)
+plt.show()
 
 # ============== Get data ==============
-global_dir = '/home/louisemousset/QUBIC/Qubic_work/Calibration/datas/'
+global_dir = '/home/lmousset/QUBIC/Qubic_work/Calibration/datas/'
 # June measurement
-# data_dir = global_dir + '2019-06-07/'
+# data_dir = global_dir + '2019-06-07-fringes/'
 
 # December measurement
 # data_dir = global_dir + 'fringes2019-12-19/'
 
 # January measurement
-data_dir = global_dir + '2020-01-13/'
+data_dir = global_dir + '2020-01-13-fringes/'
 
 dirs = np.sort(glob.glob(data_dir + '*switch*'))
 print('# simu:', len(dirs))
@@ -217,12 +217,11 @@ t_data_cut, data_cut = cut_data(tstart, tend, t_data, data)
 ppp, rms, period = find_right_period(18, t_data_cut, data_cut[tes - 1, :])
 print('period : ', ppp[np.argmax(rms)])
 
-plt.figure()
-rc('figure', figsize=(9, 4.5))
+plt.figure(figsize=(9, 4.5))
 plt.subplots_adjust(wspace=2)
 
 plt.subplot(211)
-plot(ppp, rms, '.')
+plt.plot(ppp, rms, '.')
 plt.axvline(x=period, color='orange')
 
 plt.subplot(212)
@@ -230,8 +229,8 @@ plt.plot(t_data % period, data[tes - 1, :], '.')
 plt.xlim(0, period)
 
 # Filter the data (just to give an idea because it is done when folding)
-lowcut = 0.001
-highcut = 10.
+lowcut = 0.00001
+highcut = 4.
 nharm = 10
 notch = np.array([[1.724, 0.005, nharm]])
 
@@ -258,6 +257,7 @@ plt.subplot(212)
 plt.plot(t_data_cut, data_cut[tes-1, :], label='Original')
 plt.plot(t_data_cut, newdata, label='Filtered')
 plt.legend()
+plt.show()
 
 # Fold and filter the data
 nbins = 120
@@ -279,6 +279,7 @@ plt.subplot(212)
 plt.plot(t, folded[tes - 1, :])
 plt.title('Folded data')
 plt.xlim(0, period)
+plt.show()
 
 # ========== Fit folded signal ================
 param_guess = [0.1, 0., 1, 1, 1, 1, 1, 1]
@@ -305,9 +306,10 @@ plt.plot(np.arange(0, 6 * stable_time, stable_time) + x0_est, amps_est, 'ro', la
 plt.title('ASIC {}, TES {}'.format(asic, tes))
 plt.legend()
 plt.grid()
+plt.show()
 
 comb = make_combination(param_est)
-print(comb)
+print('Comb:', comb)
 
 # ========= Michel's method ===================
 # w is made to make the combination to see fringes
@@ -339,11 +341,13 @@ plt.plot(t, w * themax, 'o')
 plt.plot(t, wcheck * themax, 'x')
 plt.xlim(0, period)
 plt.grid()
+plt.show()
 
 
 # ============ Analysis for both ASICs and all measurements ==================
 t, folded_bothasics, param_est, res_w, res_fit = analyse_fringes(dirs, nf, w, t0=4, tf=200, stable_time=3.)
 fringe = ft.image_asics(all1=res_w)
+fringe = ft.image_asics(all1=res_fit)
 
 # =================== Make a mask ==============
 # Mask to remove the 8 thermometer pixels
@@ -400,7 +404,7 @@ plt.figure()
 plt.suptitle('Baseline {}'.format(baseline))
 
 plt.subplot(121)
-lim = 3
+lim = 1
 plt.imshow(fringe * mask, vmin=-lim, vmax=lim)
 plt.title('Measurement 2020-01-13')
 # plt.colorbar()
@@ -411,6 +415,7 @@ q.horn.open[np.asarray(baseline) - 1] = True
 img = sc.get_simulation(param, q, baseline, files, lab, doplot=False, verbose=False)
 plt.title('Simulation')
 plt.imshow(img)
+plt.show()
 
 # ================ Loop on all set of measurements ===============
 allfolded_bothasics = []
@@ -445,6 +450,7 @@ for i in range(12):
     plt.imshow(fringe * mask * mask2, vmin=-lim, vmax=lim)
     plt.title('Bl {}'.format(labels[i][-5:]))
     plt.colorbar()
+plt.show()
 
 allres_fit = np.load(data_dir + 'allres_fit_inv.npy')
 allres_w = np.load(data_dir + 'allres_w_inv.npy')

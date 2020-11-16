@@ -60,11 +60,11 @@ rc('font', size=20)
 datadir = os.environ['DATA_SPECTROIM']
 
 
-nfrecon = 5
+nfrecon = 1
 freq = 220 # GHz
-rep = datadir + f'/NERSC_simuEnd2End/Good_photon_noise2020/simu_FI{freq}/'
-# rep = datadir + f'/NERSC_simuEnd2End/Good_photon_noise2020/simu_NERSC_MC/FI{freq}/galaxycenter_3bandes/'
-# rep = datadir + f'/NERSC_simuEnd2End/Good_photon_noise2020/simu_NERSC_MC/FI{freq}/qubicpatch/'
+# rep = datadir + f'NERSC_simuEnd2End/Good_photon_noise2020/simu_FI{freq}/'
+# rep = datadir + f'NERSC_simuEnd2End/Good_photon_noise2020/simu_NERSC_MC/FI{freq}/galaxycenter_3bandes/'
+rep = datadir + f'NERSC_simuEnd2End/Good_photon_noise2020/simu_NERSC_MC/FI{freq}/qubicpatch/'
 
 dictionary = glob.glob(rep + '*.dict')[0]
 print(dictionary)
@@ -75,6 +75,7 @@ d.read_from_file(dictionary)
 
 # Coordinates of the zone observed in the sky
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+print(center)
 
 # Get fits files names in a list
 fits_noise = np.sort(glob.glob(rep + '*nfrecon{}_noiselessFalse*.fits'.format(nfrecon), 
@@ -82,7 +83,11 @@ fits_noise = np.sort(glob.glob(rep + '*nfrecon{}_noiselessFalse*.fits'.format(nf
 fits_noiseless = np.sort(glob.glob(rep + '*nfrecon{}_noiselessTrue*.fits'.format(nfrecon), 
                               recursive=True))
 
-print(fits_noise, fits_noiseless)
+# print(fits_noise, fits_noiseless)
+```
+
+```{python}
+print(dictionary)
 ```
 
 ```{python}
@@ -141,14 +146,14 @@ maps_residu[:, :, seenmap, :] = residuals
 
 ```{python}
 stokes = ['I', 'Q', 'U']
-istk = 1
+istk = 0
 real = 0
 plt.figure(figsize=(22, 30))
 rr = 15
-min = -50
-max = 150
+min = None
+max = None
 
-center = (0, 0)
+# center = (0, 0)
 # Plot for spectroim paper
 for band in range(nfrecon):
     hp.gnomview(maps_conv[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+1), 
@@ -160,56 +165,10 @@ for band in range(nfrecon):
                 title = 'Output - {0}'.format(d['kind'][istk]), unit='$\mu K$', min=min, max=max)
     hp.gnomview(maps_residu[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+3), 
                 rot=center, reso=rr,
-                title = 'Residuals - {0}'.format(d['kind'][istk]), unit='$\mu K$', min=-90, max=90)
+                title = 'Residuals - {0}'.format(d['kind'][istk]), unit='$\mu K$', min=-10, max=10)
 # plt.tight_layout()
-plt.savefig(f'/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/maps{stokes[istk]}_FI220_{nfrecon}bands_GoodPhotonNoise.pdf',
-           bbox_inches='tight')
-```
-
-```{python}
-istk = 0
-real = 0
-plt.figure(figsize=(30, 10))
-
-rr = 15
-min = 0
-max = 1e4
-
-# Plot for spectroim paper
-for band in range(1):
-    hp.gnomview(maps_conv[real, band, :, istk], cmap='jet', sub=(1, 3, band+1), 
-                rot=(0, 0), reso=rr,
-                title = 'Input - {}'.format(d['kind'][istk]), unit='$\mu K$', min=min, max=max)
-    plt.text(-1,0., '{:3.0f} GHz'.format(nus[band]), fontsize=30)
-    hp.gnomview(maps_recon[real, band, :, istk], cmap='jet', sub=(1, 3, band+2), 
-                rot=(0, 0), reso=rr,
-                title = 'Output - {0}'.format(d['kind'][istk]), unit='$\mu K$', min=min, max=max)
-    hp.gnomview(maps_residu[real, band, :, istk], cmap='jet', sub=(1, 3, band+3), 
-                rot=(0, 0), reso=rr,
-                title = 'Residuals - {0}'.format(d['kind'][istk]), unit='$\mu K$', min=-50, max=50)
-plt.tight_layout()
-# plt.savefig(f'/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/mapsQ_FI220_{nfrecon}bands_firstband.pdf')
-```
-
-#### Difference between mean_recon and noiseless
-
-We expect they are equal but in some simulation they are not. Maybe because of a convergence issue. 
-
-Of course this makes sens only if you have many realisations.
-
-```{python}
-# band = 0
-# istk = 0
-# diff = np.mean(maps_recon, axis=0) - noiseless
-# hp.gnomview(np.mean(maps_recon, axis=0)[band, :, istk], cmap='jet', sub=(131), 
-#                 rot=center, reso=rr, notext=True, min=0, max=10000,
-#                 title = 'Recon mean')
-# hp.gnomview(noiseless[band, :, istk], cmap='jet', sub=(132), 
-#                 rot=center, reso=rr, notext=True, min=0, max=10000,
-#                 title = 'Noiseless')
-# hp.gnomview(diff[band, :, istk], cmap='jet', sub=(133), 
-#                 rot=center, reso=rr, notext=True, min=-70, max=70,
-#                 title = 'Recon mean - Noiseless')
+# plt.savefig(f'/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/maps{stokes[istk]}_FI220_{nfrecon}bands_GoodPhotonNoise.pdf',
+#            bbox_inches='tight')
 ```
 
 ## Coverage
@@ -241,35 +200,35 @@ Here we save the files that will be used to create data for FastSimulator
 
 ```{python}
 # rep_save = datadir + 'Data_for_FastSimulator/'
+# rep = datadir + f'/NERSC_simuEnd2End/Good_photon_noise2020/simu_FI{freq}/'
+rep_save = rep + 'filesJC/'
 
-# rep = datadir + '/NERSC_simuEnd2End/Good_photon_noise2020/simu_FI220/'
+for nfrecon in [1]:#, 2, 3, 4, 5, 8]:
 
-# for nfrecon in [1, 2, 3, 4, 5, 8]:
+    # Get fits files names in a list
+    fits_noise = np.sort(glob.glob(rep + '*nfrecon{}_noiselessFalse*.fits'.format(nfrecon), 
+                                  recursive=True))
+    fits_noiseless = np.sort(glob.glob(rep + '*nfrecon{}_noiselessTrue*.fits'.format(nfrecon), 
+                                  recursive=True))
+    print(fits_noise)
 
-#     # Get fits files names in a list
-#     fits_noise = np.sort(glob.glob(rep + '*nfrecon{}_noiselessFalse*.fits'.format(nfrecon), 
-#                                   recursive=True))
-#     fits_noiseless = np.sort(glob.glob(rep + '*nfrecon{}_noiselessTrue*.fits'.format(nfrecon), 
-#                                   recursive=True))
-#     print(fits_noise)
-
-#     # Get seen map (observed pixels)
-#     seenmap = rmc.get_seenmap(fits_noiseless[0])
-#     print('seenmap shape:', seenmap.shape)
-#     np.save(rep_save + f'seenmap_{nfrecon}bands_FI220.npy', seenmap)
+    # Get seen map (observed pixels)
+    seenmap = rmc.get_seenmap(fits_noiseless[0])
+    print('seenmap shape:', seenmap.shape)
+    np.save(rep_save + f'seenmap_{nfrecon}bands_FI{freq}.npy', seenmap)
     
-#     # Get the coverage
-#     fitsfile = fits.open(fits_noise[0])
-#     coverage = fitsfile['COVERAGE'].data
-#     coverage_patch = coverage[seenmap]
-#     coverage_norm = coverage_patch / np.max(coverage_patch)
-#     np.save(rep_save + f'coverage_{nfrecon}bands_FI220.npy', coverage_norm)
+    # Get the coverage
+    fitsfile = fits.open(fits_noise[0])
+    coverage = fitsfile['COVERAGE'].data
+    coverage_patch = coverage[seenmap]
+    coverage_norm = coverage_patch / np.max(coverage_patch)
+    np.save(rep_save + f'coverage_{nfrecon}bands_FI{freq}.npy', coverage_norm)
 
    
-#     # Compute residuals in a given way
-#     residuals = amc.get_residuals(fits_noise, fits_noiseless[0], 'noiseless')
-#     np.save(rep_save + f'residuals_{nfrecon}bands_FI220.npy', residuals[0])
-#     print(residuals.shape)
+    # Compute residuals in a given way
+    residuals = amc.get_residuals(fits_noise, fits_noiseless[0], 'noiseless')
+    np.save(rep_save + f'residuals_{nfrecon}bands_FI{freq}.npy', residuals)
+    print(residuals.shape)
 
 ```
 
@@ -577,8 +536,8 @@ for cross in range(ncombi):
                 color=c, 
                 label='{:3.0f} x {:3.0f}'.format(combi_nus[cross][0], combi_nus[cross][1]))
     ax.plot(leff, cross_x0[cross, :, 2], '--', color=c)
-ax.set_xlabel('$\\ell$')
-ax.set_ylabel('$D_\\ell$')
+ax.set_xlabel('Multipole moment, $\\ell$')
+ax.set_ylabel('$D_\\ell \,[\mu \mathrm{K}^2]$')
 ax.legend(fontsize=12, loc='upper center')
 ax.set_title(clnames[2] + f' - {freq} GHz')
 ax.grid()

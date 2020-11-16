@@ -4,12 +4,12 @@ jupyter:
     text_representation:
       extension: .Rmd
       format_name: rmarkdown
-      format_version: '1.1'
-      jupytext_version: 1.2.1
+      format_version: '1.2'
+      jupytext_version: 1.4.0
   kernelspec:
-    display_name: Python 2
+    display_name: Python 3
     language: python
-    name: python2
+    name: python3
 ---
 
 ```{python}
@@ -29,8 +29,13 @@ from pysimulators import FitsArray
 import fibtools as ft
 import demodulation_lib as dl
 import sb_fitting as sbfit
+
+# Import jchinstrument from ../
+import os,sys,inspect
+current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parent_dir = os.path.dirname(current_dir)
+sys.path.insert(0, parent_dir) 
 import jchinstrument as jcinst
-import os
 
 
 ```

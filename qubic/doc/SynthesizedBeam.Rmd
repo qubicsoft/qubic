@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.0
+      jupytext_version: 1.4.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -315,15 +315,15 @@ hp.gnomview(diff, rot=[0,90], reso=15, min=-1, max=1,
 ```{python}
 # This is the analytical synthesized for a pixel at the focal plane center 
 # without accounting for the primary beam (just the mukltple peaks)
-def sb_noprim(th_deg, nu):
-    th = np.radians(th_deg)
-    lam = 3e8/nu
-    P = 20
-    deltax = 0.013
-    df = 300.
-    abscissa = np.pi * deltax/lam * th
-    sb = np.sin(P*abscissa)**2 / np.sin(abscissa)**2
-    return sb/np.max(sb)
+#def sb_noprim(th_deg, nu):
+#    th = np.radians(th_deg)
+#    lam = 3e8/nu
+#    P = 20
+#    deltax = 0.013
+#    df = 300.
+#    abscissa = np.pi * deltax/lam * th
+#    sb = np.sin(P*abscissa)**2 / np.sin(abscissa)**2
+#    return sb/np.max(sb)
 
 # For a detector not at the center
 def sb_noprim(th_deg, nu, rx):
@@ -354,7 +354,9 @@ def beam_total(th_deg, ph, nu, rx):
     env = envelope(th_deg, ph, rx)
     sb = env * sb_noprim(th_deg, nu, rx)
     return env, sb
+```
 
+```{python}
 nu = 150e9   
 nn = 10000
 th_deg = np.linspace(-12, 12, nn)
@@ -402,45 +404,41 @@ NUNU=np.linspace(131e9,169e9,9)#[131e9,135e9,140e9,145e9,150e9,155e9,160e9,165e9
 for j,inu in enumerate(NUNU):
     d['filter_nu'] = NUNU[j]
     q = qubic.QubicInstrument(d)
-    beam=q.primary_beam(np.radians(np.abs(th_deg)), ph)
+    beam=q.primary_beam(np.radians(th_deg), ph)
     sum_b[j]= beam*sb_noprim(th_deg, NUNU[j], 0)
     #_, sum_b[j] = beam_total(th_deg, ph, inu*1e9, 0)
-sum_b_15 = np.zeros((15,len(th_deg),) )
-NUNU15=np.linspace(131e9,169e9,15)
-for j,inu in enumerate(NUNU15):
-    d['filter_nu'] = inu
-    q = qubic.QubicInstrument(d)
-    beam=q.primary_beam(np.radians(np.abs(th_deg)), ph)
-    sum_b_15[j]= beam*sb_noprim(th_deg, inu, 0)
     
 allbeams=np.zeros((2,nn))
-freqs=[140e9,160e9]
+freqs=[NUNU[0],NUNU[8]]
 for i in range(2):
     d['filter_nu'] = freqs[i]
     q = qubic.QubicInstrument(d)
-    allbeams[i, :] = q.primary_beam(np.radians(np.abs(th_deg)), ph)
-#e2, sb2 = beam_total(th_deg, ph, nu, 0)
-#e1, sb1 = beam_total(th_deg, ph, nu=140e9, rx=0)
-#e2, sb2 = beam_total(th_deg, ph, nu=160e9, rx=0)
+    allbeams[i, :] = q.primary_beam(np.radians(th_deg), ph)
 
-fig, ax = plt.subplots(nrows=1,ncols=2,figsize=(13,6),gridspec_kw={'wspace':0.03},sharey=True)
+fig, ax = plt.subplots(nrows=1,ncols=2,figsize=(15,6),gridspec_kw={'wspace':0.06},)
 plt.rc('font',size=15)
 ax=ax.ravel()
-ax[0].plot(th_deg, allbeams[0],'b--', alpha=0.6, label=r'$140~\mathrm{GHz}$')
-ax[0].plot(th_deg, allbeams[1],'g--', alpha=0.6, label=r'$160~\mathrm{GHz}$')
-ax[0].plot(th_deg, allbeams[0]*sb_noprim(th_deg, freqs[0],0), 'b', label=None, lw=2)
-ax[0].plot(th_deg, allbeams[1]*sb_noprim(th_deg, freqs[1],0), 'g', label=None, lw=2)
+ax[0].plot(th_deg, allbeams[0],'--', c = plt.cm.jet(np.linspace(0,1,6))[::-1][0],
+           label=r'${:.2f}~$GHz'.format(freqs[0]/1e9))
+ax[0].plot(th_deg, allbeams[1],'--', c = plt.cm.jet(np.linspace(0,1,6))[::-1][4],
+           label=r'${:.2f}~$GHz'.format(freqs[1]/1e9))
+ax[0].plot(th_deg, allbeams[0]*sb_noprim(th_deg, freqs[0],0), 
+           c = plt.cm.jet(np.linspace(0,1,6))[::-1][0],
+           label=None, lw=2)
+ax[0].plot(th_deg, allbeams[1]*sb_noprim(th_deg, freqs[1],0),
+           c = plt.cm.jet(np.linspace(0,1,6))[::-1][4],
+           label=None, lw=2)
 ax[0].grid()
 ax[0].legend(loc='best',fontsize=12)
 ax[0].set_xlabel(r'$\theta$ [deg]', fontsize=15)
 ax[0].set_ylabel('Synthesized beam', fontsize=15)
 ax[0].tick_params(axis='both',bottom=True, top=True, left=True, right=True,direction='in')
 
-sumleg=ax[1].plot(th_deg, np.sum(sum_b,axis=0)/max(np.sum(sum_b,axis=0)), 'k', lw=2)
+sumleg=ax[1].plot(th_deg, np.sum(sum_b,axis=0), 'k', lw=2)
 #sumleg15=ax[1].plot(th_deg, np.sum(sum_b_15,axis=0)/max(np.sum(sum_b_15,axis=0)), 'k', lw=2)
 blo=[]
 for i in range(0,len(NUNU),2):
-    blo+=ax[1].plot(th_deg, sum_b[i]/max(np.sum(sum_b,axis=0)), c=next(color), )
+    blo+=ax[1].plot(th_deg, sum_b[i], c=next(color), )
 
 # axvline(np.rad2deg(np.arctan(12 / 300)), ymin=0, ymax=1.2, color='r')
 ax[1].set_xlabel(r'$\theta$ [deg]', fontsize=15)
@@ -448,8 +446,11 @@ ax[1].set_xlabel(r'$\theta$ [deg]', fontsize=15)
 ax[1].legend(sumleg, [r'PolySB'], fontsize=12, loc='upper left', )
 # Create the second legend and add the artist manually.
 from matplotlib.legend import Legend
-leg = Legend(ax[1], blo[:], [r'MonoSB @$130~$GHz','\t \t $140~$GHz',
-                          '\t \t $150~$GHz','\t \t $160~$GHz','\t \t $170~$GHz'],
+leg = Legend(ax[1], blo[:], [r'MonoSB @${:.2f}~$GHz'.format(NUNU[0]/1e9),
+                             '\t \t ${:.2f}~$GHz'.format(NUNU[2]/1e9),
+                          '\t \t ${:.2f}~$GHz'.format(NUNU[4]/1e9),
+                             '\t \t ${:.2f}~$GHz'.format(NUNU[6]/1e9),
+                             '\t \t ${:.2f}~$GHz'.format(NUNU[8]/1e9)],
              fontsize=12,loc='upper right', )
 leg._legend_box.align = "right"
 ax[1].add_artist(leg);

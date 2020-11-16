@@ -441,7 +441,6 @@ class Qubic_sky(sky):
                                                        self.dictionary['config'],
                                                        str(filter_nu)), "rb"))
             coverage = DataFastSimCoverage['coverage']
-
         # Read noise normalization
         if sigma_sec is None:
             #### Beware ! Initial End-To-End simulations that produced the first FastSImulator were done with
@@ -872,6 +871,7 @@ def map_corr_neighbtheta(themap_in, ipok_in, thetamin, thetamax, nbins, degrade=
     thvals = np.linspace(rthmin, rthmax, nbins + 1)
     ns = hp.npix2nside(len(themap))
     thesum = np.zeros(nbins)
+    thesum2 = np.zeros(nbins)
     thecount = np.zeros(nbins)
     if verbose: bar = progress_bar(len(ipok), 'Pixels')
     for i in range(len(ipok)):
@@ -888,12 +888,16 @@ def map_corr_neighbtheta(themap_in, ipok_in, thetamin, thetamax, nbins, degrade=
             for l in ipneighb_inner: ipneighb.remove(l)
             valneighb = themap[ipneighb]
             thesum[k] += np.sum(valthis * valneighb)
+            thesum2[k] += np.sum((valthis * valneighb)**2)
             thecount[k] += len(valneighb)
             ipneighb_inner = ipneighb_outer.copy()
 
+    mm = thesum / thecount
+    mm2 = thesum2 / thecount
+    errs = np.sqrt(mm2 - mm**2)/np.sqrt(np.sqrt(thecount))
     corrfct = thesum / thecount
     mythetas = np.degrees(thvals[:-1] + thvals[1:]) / 2
-    return mythetas, corrfct
+    return mythetas, corrfct, errs
 
 
 def get_angles(ip0, ips, ns):
@@ -916,6 +920,7 @@ def ctheta_parts(themap, ipok, thetamin, thetamax, nbinstot, nsplit=4, degrade_i
     nside_part = nside_init // (2 ** idx)
     thall = np.zeros(nbinstot)
     cthall = np.zeros(nbinstot)
+    errcthall = np.zeros(nbinstot)
     for k in range(nsplit):
         thispart = idx == k
         mythmin = np.min(thmin[thispart])
@@ -925,16 +930,18 @@ def ctheta_parts(themap, ipok, thetamin, thetamax, nbinstot, nsplit=4, degrade_i
         if verbose: print(
             'Doing {0:3.0f} bins between {1:5.2f} and {2:5.2f} deg at nside={3:4.0f}'.format(mynbins, mythmin, mythmax,
                                                                                              mynside))
-        myth, mycth = map_corr_neighbtheta(themap, ipok, mythmin, mythmax, mynbins, degrade=mynside,
+        myth, mycth, errs = map_corr_neighbtheta(themap, ipok, mythmin, mythmax, mynbins, degrade=mynside,
                                            verbose=verbose)
         cthall[thispart] = mycth
+        errcthall[thispart] = errs
         thall[thispart] = myth
 
         ### One could also calculate the average of the distribution of pixels within the ring instead of the simplistic thetas
     dtheta = allthetalims[1] - allthetalims[0]
     thall = 2. / 3 * ((thmin + dtheta) ** 3 - thmin ** 3) / ((thmin + dtheta) ** 2 - thmin ** 2)
     ### But it actually changes very little
-    return thall, cthall
+    # print('coucou')
+    return thall, cthall, errcthall
 
 
 def get_cov_nunu(maps, coverage, nbins=20, QUsep=True, return_flat_maps=False):

@@ -88,8 +88,7 @@ if rank==0:
     print('Mapmaking Tolerance: {}'.format(tol))
     print('**************************')
     print('')
-########################################################################
-
+""
 
 ############# Reading Dictionary #######################################
 # Repository for dictionary and input maps
@@ -102,8 +101,7 @@ d.read_from_file(dictfilename)
 d['npointings'] = nptg
 d['tol'] = tol
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
-#########################################################################
-
+""
 
 
 

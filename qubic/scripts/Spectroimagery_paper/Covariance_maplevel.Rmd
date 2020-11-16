@@ -388,12 +388,18 @@ for p in range(0, 10):
 ```
 
 ```{python}
+rc('font', size=20)
 plt.figure(figsize=(10, 10))
 ax = plt.gca()
-im = plt.imshow(np.mean(bigcorr, axis=2), vmin=-1, vmax=1, cmap='bwr')
-plt.title('Averaged over pixels')
-# im = plt.imshow(bigcorr[:, :, 7], vmin=-1, vmax=1, cmap='bwr')
-# plt.title('Pixel 7')
+# im = plt.imshow(np.mean(bigcorr, axis=2), vmin=-1, vmax=1, cmap='bwr')
+# plt.title('Averaged over pixels')
+# ax.xaxis.set_ticks(np.arange(1, 9, 3))
+# ax.xaxis.set_ticklabels(['x=0', 'x=1', 'x=2'], 
+#                           rotation = 90, 
+#                           color = 'k', 
+#                         fontsize = 30, style = 'italic', verticalalignment = 'center') 
+im = plt.imshow(bigcorr[:, :, 7], vmin=-1, vmax=1, cmap='bwr')
+plt.title('Pixel 7')
 
 
 # create an axes on the right side of ax. The width of cax will be 5%

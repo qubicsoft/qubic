@@ -1,0 +1,689 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Analysis of fringes taken in October 2020
+In this notebook we analyse the fringes taken in October 2020
+* Fringes are produced by the script : Generate-Fringes-Oct-2020.Rmd
+* This produces npy files for each fringe with names of the form: fringes_bs_17_21_2020-10-27_11.34.04.npy
+
+
+```{python}
+from pylab import *
+import os
+import sys
+import time
+import pickle
+from importlib import reload
+
+
+# Specific science modules
+import healpy as hp
+import scipy
+import glob
+import numpy as np
+import matplotlib.pyplot as plt
+import scipy.optimize as sop
+import pandas as pd
+
+from matplotlib.backends.backend_pdf import PdfPages
+import qubic
+from qubic import selfcal_lib as sc
+from qubicpack.utilities import Qubic_DataDir
+from qubicpack import qubicpack as qp
+from qubicpack.qubicfp import qubicfp
+import qubic.fibtools as ft
+from qubic import fringes_lib as fl
+
+rc('figure', figsize=(16,7))
+
+# Use a tool from qubicpack to get a path
+basedir = Qubic_DataDir(datafile='instrument.py', )
+print('basedir : ', basedir)
+dictfilename = basedir + '/dicts/global_source_oneDet.dict'
+
+# Get a dictionary and an instrument
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+q = qubic.QubicInstrument(d)
+```
+
+```{python}
+reload(sc)
+reload(fl)
+### Get the list of available fringes
+directories = ['/Users/hamilton/Qubic/Calib-TD/Fringes/Fringes_2020-10-27_Vtes_5_Eco_1/']
+
+all_files = []
+all_dates = []
+all_cycles = []
+all_bs = []
+all_tension = []
+all_eco = []
+all_Vtes = []
+all_id = []
+all_wt = []
+for dd in directories:
+    ff = np.sort(glob.glob(dd+'/fringes*.npy'))
+    for f in ff:
+        fn = f.split('/')[-1]
+        spl = fn.split('_')
+        all_files.append(f)
+        all_bs.append([int(spl[spl.index('bs')+1]), int(spl[spl.index('bs')+2])])
+        all_cycles.append(float(spl[spl.index('NCycles')+1]))
+        all_wt.append(float(spl[spl.index('WT')+1]))
+        all_Vtes.append(float(spl[spl.index('Vtes')+1]))
+        all_eco.append(float(spl[spl.index('Eco')+1]))
+        all_dates.append(spl[spl.index('Eco')+2])
+        all_id.append(spl[spl.index('Eco')+3])
+
+bseqindex, all_bs_eqidx = sc.find_equivalent_baselines(all_bs, q)
+
+for i in range(len(bseqindex)):
+    ax=subplot(1,len(bseqindex), i+1)
+    ax.set_aspect('equal')
+    print('Type {}:'.format(i))
+    sc.plot_horns(q)
+    title('Type {}'.format(i))
+    for j in range(len(bseqindex[i])):
+        print('  - {}'.format(all_bs[bseqindex[i][j]]))
+        sc.plot_baseline(q,all_bs[bseqindex[i][j]])
+    legend()
+
+print()
+print(bseqindex)
+print()
+for i in range(len(all_bs)):
+    print(i, all_bs[i], all_bs_eqidx[i])
+```
+
+```{python}
+print(bseqindex)
+print()
+print(all_bs_eqidx)
+```
+
+# Masking Bad Pixels
+
+```{python}
+mask = np.array([[ True,  True,  True,  True,  True,  True,  True,  True, False,
+        False, False, False, False, False, False, False, False],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+        False, False, False, False, False, False, False, False],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True, False, False, False, False, False, False],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True, False, False, False, False, False],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True, False, False, False, False, False],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True, False, False, False],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True, False, False],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True, False, False],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True, False],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True,  True],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True,  True],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True,  True],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True,  True],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True,  True],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True,  True],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True,  True],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True,  True]])
+
+imshow(mask)
+```
+
+# Fringes Modeling
+
+
+## Fringes from QUBIC Software (no aberrations yet)
+
+```{python}
+class model_fringe_th:
+    def __init__(self, baseline, d, mask):
+        self.baseline = baseline
+        self.dict = d
+        self.selfcal = sc.SelfCalibration(baseline, d)
+        self.pixels = np.arange(17)+0.5
+        self.xx, self.yy = np.meshgrid(self.pixels, self.pixels)       
+        self.mask = mask
+     
+    def __call__(self, theta, phi, amp, fwhmprim):
+        fringestot = self.selfcal.compute_fringes(q, doplot=False, theta=[theta], phi=[phi])
+        
+        _, quart_fp = sc.get_real_fp(fringestot[:, :, 0], quadrant=2)
+        mygaussian = amp * np.exp(-0.5*(self.xx**2 + (self.yy-17)**2)/(fwhmprim/2.35)**2)
+        return mygaussian * np.flip(quart_fp, axis=1) * self.mask
+    
+    def flat_data(self, x, theta, phi, amp, fwhmprim):
+        return np.nan_to_num(np.ravel(self(theta, phi, amp, fwhmprim)))
+
+        
+index_fringe = all_bs.index([49, 53])
+fr = model_fringe_th(all_bs[index_fringe], d, mask) 
+
+pix2deg = np.degrees(3./300)
+
+imshow(np.nan_to_num(fr(0.03,0.,1,13./pix2deg)), cmap='bwr', interpolation='Gaussian', vmin=-2, vmax=2)
+colorbar()
+ft.qgrid()
+```
+
+## Sine Modulated by a Gaussian (analytical)
+
+```{python}
+class model_fringe_ana:
+    def __init__(self, mask, focal=0.3, nu=150.e9):
+        self.focal = focal
+        self.xc = 0
+        self.yc = 0
+        self.det_dist = 3.e-3
+        self.nu = nu
+        self.lam = 3.e8/nu
+        self.ndet = 17
+        self.fringe = np.zeros((self.ndet, self.ndet))
+        self.pixels = np.arange(self.ndet)+0.5
+        self.xx, self.yy = np.meshgrid(self.pixels, self.pixels)
+        self.yy = 17-self.yy        
+        self.mask = mask
+
+    def __call__(self, fwhm, angle, baseline, amp, phase):
+        sigma = np.radians(fwhm/2.355*self.focal)
+        gaussian = np.exp(-0.5*((self.xx-self.xc)**2 + (self.yy-self.yc)**2) * self.det_dist**2 / sigma**2)
+        xprime = (self.xx * np.cos(np.radians(angle+90)) + self.yy * np.sin(np.radians(angle+90))) * self.det_dist
+        interfrange = self.lam * self.focal / baseline
+        self.fringe = amp * np.cos((2. * np.pi / interfrange * xprime) + np.radians(phase)) * gaussian
+        return self.fringe * self.mask
+    
+    def flat_data(self, x, fwhm, angle, baseline, amp, phase):
+        return np.nan_to_num(np.ravel(self(fwhm, angle, baseline, amp, phase)))
+
+    def flat_data_mn(self, x, pars, extra_args=None):
+        return np.nan_to_num(np.ravel(self(pars[0], pars[1], pars[2], pars[3], pars[4])))
+
+
+fr_ana = model_fringe_ana(mask)
+
+subplot(1,2,1)
+mybsdet = 10.
+imshow(fr_ana(12.9, 45., mybsdet*3e-3, 1., 0.), cmap='bwr', interpolation='Gaussian')
+colorbar()
+```
+
+# fringes in data
+
+```{python}
+def read_my_fringe(bs, files, all_bs):
+    myfile = files[all_bs.index(bs)]
+    return np.load(myfile)
+
+index_fringe = all_bs.index([49, 53])
+#index_fringe = all_bs.index([9, 11])
+
+myfringe = read_my_fringe(all_bs[index_fringe], all_files, all_bs)
+imshow(np.nan_to_num(myfringe*mask), cmap='bwr', interpolation='Gaussian',vmin=-2, vmax=2)
+ft.qgrid()
+colorbar()
+title(all_bs[index_fringe])
+
+```
+
+# Fitting Fringes
+
+```{python}
+# ### Fitting with Qubic Software fringes
+# from scipy.optimize import curve_fit
+
+# index_fringe = all_bs.index([49, 53])
+# myfringe = read_my_fringe(all_bs[index_fringe], all_files, all_bs)
+
+
+# theta_init = 0.03
+# phi_init = 0.
+# amp_init = 0.5
+# fwhm_init = 30
+# p0 = np.array([theta_init, phi_init, amp_init, fwhm_init])
+# coeffs, coeffs_cov = curve_fit(fr.flat_data, 0, np.nan_to_num(np.ravel(myfringe)), 
+#                                p0=p0,
+#                               bounds=(0, [np.pi/10, np.pi/10, 2, 100]))
+# print(coeffs)
+# print(coeffs_cov)
+
+# #coeffs = [0.03,0.5,100./pix2deg]
+# interp = 'Gaussian'
+
+# subplot(2,4,1)
+# imshow(np.nan_to_num(myfringe * mask), cmap='bwr', interpolation=interp,vmin=-2, vmax=2)
+# colorbar()
+# ft.qgrid()
+# title('Data')
+
+# subplot(2,4,2)
+# imshow(np.nan_to_num(fr(*p0) * mask), cmap='bwr', interpolation=interp,vmin=-2, vmax=2)
+# colorbar()
+# ft.qgrid()
+# title('Initial Guess')
+
+# subplot(2,4,3)
+# imshow(np.nan_to_num(fr(*coeffs) * mask), cmap='bwr', interpolation=interp,vmin=-2, vmax=2)
+# colorbar()
+# ft.qgrid()
+# title('Fit')
+
+# subplot(2,4,4)
+# imshow(np.nan_to_num(myfringe * mask) - np.nan_to_num(fr(*coeffs) * mask), cmap='bwr', interpolation=interp,vmin=-2, vmax=2)
+# colorbar()
+# ft.qgrid()
+# title('Residuals')
+
+```
+
+```{python}
+reload(sc)
+#### Let's try to predict the analytical parameters of a given baseline
+thebs = [49, 53]
+#thebs = [17, 49]
+index_fringe = all_bs.index(thebs)
+myfringe = read_my_fringe(all_bs[index_fringe], all_files, all_bs)
+
+subplot(2,2,1)
+imshow(np.nan_to_num(myfringe * mask), cmap='bwr', interpolation='Gaussian',vmin=-2, vmax=2)
+colorbar()
+ft.qgrid()
+title('Data {}'.format(thebs))
+
+mythinit, mylengthinit = sc.give_bs_pars(q, all_bs[index_fringe])
+
+subplot(2,2,2)
+fr = model_fringe_th(all_bs[index_fringe], d, mask) 
+imshow(np.nan_to_num(fr(0,0.,1.,30)), cmap='bwr', interpolation='Gaussian', vmin=-2, vmax=2)
+colorbar()
+title(r'Theory: $\theta$={0:5.2f} - L={1:5.3f}'.format(mythinit, mylengthinit))
+```
+
+```{python}
+#### Fitting with analytical shape and Minuit
+from scipy.optimize import curve_fit
+
+#thebs = [49, 53]
+#thebs = [9, 11]
+thebs = [17, 49]
+index_fringe = all_bs.index(thebs)
+myfringe = read_my_fringe(all_bs[index_fringe], all_files, all_bs)
+mythinit, mylengthinit = sc.give_bs_pars(q, all_bs[index_fringe])
+
+
+figure()
+# fwhm, angle, baseline, amp, phase
+fwhm_init = 23.9
+#angle_init = 35.
+angle_init = mythinit
+baseline_init = mylengthinit
+amp_init = 1.
+phase_init = 0.
+p0 = np.array([fwhm_init, angle_init, baseline_init, amp_init, phase_init])
+print('Initial Guess: {}'.format(p0))
+
+my_y = np.nan_to_num(np.ravel(myfringe))
+resfit = ft.do_minuit(np.zeros(len(my_y)), my_y, my_y*0+1,p0, 
+                      rangepars=[[0,30], [-90,90], [0,1], [0,2], [0,360]],
+                      fixpars = [1,0,0,0,0],
+                      functname=fr_ana.flat_data_mn, verbose=False)
+coeffs = resfit[1]
+
+
+
+print('Result Fit: {}'.format(coeffs))
+
+interp = 'Gaussian'
+
+subplot(2,4,1)
+imshow(np.nan_to_num(myfringe * mask), cmap='bwr', interpolation=interp,vmin=-2, vmax=2)
+colorbar()
+ft.qgrid()
+title('Data {}'.format(thebs))
+
+subplot(2,4,2)
+imshow(np.nan_to_num(fr_ana(*p0) * mask), cmap='bwr', interpolation=interp,vmin=-2, vmax=2)
+colorbar()
+ft.qgrid()
+title('Initial Guess')
+
+subplot(2,4,3)
+imshow(np.nan_to_num(fr_ana(*coeffs) * mask), cmap='bwr', interpolation=interp,vmin=-2, vmax=2)
+colorbar()
+ft.qgrid()
+title('Fit')
+
+subplot(2,4,4)
+imshow(np.nan_to_num(myfringe * mask) - np.nan_to_num(fr_ana(*coeffs) * mask), cmap='bwr', interpolation=interp,vmin=-2, vmax=2)
+colorbar()
+ft.qgrid()
+title('Residuals')
+
+```
+
+### Fit a few of them
+
+```{python}
+print()
+for i in range(len(all_bs)):
+    print(i, all_bs[i], all_bs_eqidx[i])
+```
+
+```{python}
+num_fringes = [2,9, 10]
+
+rc('figure', figsize=(16,10))
+for i in range(len(num_fringes)):
+    nn = num_fringes[i]
+    myfringe = read_my_fringe(all_bs[nn], all_files, all_bs)
+    mythinit, mylengthinit = sc.give_bs_pars(q, all_bs[nn])
+
+    
+    p0 = [100, mythinit, mylengthinit, 0.5, 180]
+    my_y = np.nan_to_num(np.ravel(myfringe))
+    resfit = ft.do_minuit(np.zeros(len(my_y)), my_y, my_y*0+1,p0, 
+                          rangepars=[[0,30], [-90,90], [0,1], [0,2], [0,360]],
+                          fixpars = [1,0,0,0,0],
+                          functname=fr_ana.flat_data_mn, verbose=False)
+    coeffs = resfit[1]
+    print('FWHM={0:6.3f} - Th={1:5.3f} - L={2:5.3f} - Amp={3:5.3f} = Phase={4:5.3f}'.format(*coeffs))
+
+    
+    fit_fringe = fr_ana(*coeffs)
+    
+    subplot(4,len(num_fringes),i+1)
+    imshow(np.nan_to_num(myfringe*mask), cmap='bwr', interpolation='Gaussian',vmin=-2, vmax=2)
+    title('BS:{} Type: {}'.format(all_bs[nn], all_bs_eqidx[nn]))
+    ft.qgrid()
+    colorbar()
+    
+    subplot(4,len(num_fringes),i+1+len(num_fringes))
+    imshow(np.nan_to_num(fr_ana(*p0)*mask), cmap='bwr', interpolation='Gaussian',vmin=-2, vmax=2)
+    title('P0')
+    ft.qgrid()
+    colorbar()
+
+    subplot(4,len(num_fringes),i+1+len(num_fringes)*2)
+    imshow(np.nan_to_num(fit_fringe*mask), cmap='bwr', interpolation='Gaussian',vmin=-2, vmax=2)
+    title('Fit')
+    ft.qgrid()
+    colorbar()
+
+    subplot(4,len(num_fringes),i+1+len(num_fringes)*3)
+    imshow(np.nan_to_num((myfringe-fit_fringe)*mask), cmap='bwr', interpolation='Gaussian',vmin=-2, vmax=2)
+    title('Residuals')
+    ft.qgrid()
+    colorbar()
+
+tight_layout()
+```
+
+## Trying to fit simultaneously equivalent baselines
+
+```{python}
+class model_multi_fringe_ana:
+    def __init__(self, eqtypes, mask, focal=0.3, nu=150.e9, verbose=False):
+        self.focal = focal
+        self.xc = 0
+        self.yc = 0
+        self.det_dist = 3.e-3
+        self.nu = nu
+        self.lam = 3.e8/nu
+        self.ndet = 17
+        self.pixels = np.arange(self.ndet)+0.5
+        self.xx, self.yy = np.meshgrid(self.pixels, self.pixels)
+        self.yy = 17-self.yy        
+        self.mask = mask
+        self.nbfringes = len(eqtypes)
+        
+        
+        
+        #### Equivalent baselines:
+        # Each baseline corresponds to a given equivalency type
+        # for each unique equvalency type, there is a equivalency index
+        # so each baseline has an equivalency type and an equivalency index used
+        # later
+        self.eqtypes = np.array(eqtypes)
+        self.eqs = np.unique(self.eqtypes)
+        self.neq = len(self.eqs)
+        self.eqindex = np.zeros(self.nbfringes,dtype=int)
+        for i in range(self.nbfringes):
+            self.eqindex[i] = list(self.eqs).index(self.eqtypes[i])
+        if verbose:
+            print('Object multi_fringes_ana: ')
+            print('  - Number of fringes: {}'.format(self.nbfringes))
+            print('  - Eqtypes: {}'.format(self.eqtypes))
+            print('    - Neq: {}'.format(self.neq))
+            print('    - Equivalents: {}'.format(self.eqs))
+            print('    - EqIndex: {}'.format(self.eqindex))
+            
+        #### List of fringes
+        #self.fringes = []
+        #for i in range(self.nbfringes):
+        #    self.fringes.append(np.zeros((self.ndet, self.ndet)))
+
+    def __call__(self, params):
+        #### Transform input parameters into relevant arrays
+        self.fwhm, self.angles, self.baselines, self.amps, self.phases = self.pars_array_2_list(params, verbose=False)
+        #### Common gaussian envelope
+        sigma = np.radians(self.fwhm/2.355*self.focal)
+        gaussian = np.exp(-0.5*((self.xx-self.xc)**2 + (self.yy-self.yc)**2) * self.det_dist**2 / sigma**2)
+        #### Now each fringe
+        fringes = []
+        for i in range(self.nbfringes):
+            idx = self.eqindex[i]
+            xprime = (self.xx * np.cos(np.radians(self.angles[idx]+90)) + 
+                      self.yy * np.sin(np.radians(self.angles[idx]+90))) * self.det_dist
+            interfrange = self.lam * self.focal / self.baselines[idx]
+            fringes.append(self.amps[idx] * np.cos((2. * np.pi / interfrange * xprime) + np.radians(self.phases[idx])) * gaussian * self.mask)
+        return fringes
+    
+    def flat_data(self, x, params, extra_args=None):
+        return np.nan_to_num(np.ravel(np.array(self(params))))
+    
+#     def flat_data_mn(self, x, pars, extra_args=None):
+#         return np.nan_to_num(np.ravel(self(pars)))
+
+    
+    def pars_list_2_array(self, fwhm, angles, baselines, amps, phases, verbose=False):
+        myarray = np.append(fwhm, np.array([angles, baselines, amps, phases]).ravel())
+        if verbose:
+            print('FWHM       = {}'.format(fwhm))
+            print('Angles     = {}'.format(angles))
+            print('Baselines  = {}'.format(baselines))
+            print('Amplitudes = {}'.format(amps))
+            print('Phases     = {}'.format(phases))
+            print('Output array: {}'.format(myarray))
+        return myarray
+    
+    def pars_array_2_list(self, pars, verbose=False):
+        fwhm = pars[0]
+        otherpars = np.reshape(pars[1:], (4, self.neq))
+        angles = otherpars[0,:]
+        baselines = otherpars[1,:]
+        amps = otherpars[2,:]
+        phases = otherpars[3,:]
+        if verbose:
+            print('Input Array: {}'.format(pars))
+            print('FWHM       = {}'.format(fwhm))
+            print('Angles     = {}'.format(angles))
+            print('Baselines  = {}'.format(baselines))
+            print('Amplitudes = {}'.format(amps))
+            print('Phases     = {}'.format(phases))
+        return fwhm, angles, baselines, amps, phases
+        
+##### Testing
+# nbfringes = 4
+# eqtypes = [0,2,2,1]
+# fr_multi_ana = model_multi_fringe_ana(eqtypes, mask, verbose=True)
+
+# fwhm = 12.9
+# angles = [45, 0, 10]
+# baselines = [10.*3e-3, 15.*3e-3, 20.*3e-3]
+# amps = [1., 2., 0.5]
+# phases = [0., 10., 30.]
+# allpars = fr_multi_ana.pars_list_2_array(fwhm, angles, baselines, amps, phases, verbose=True)
+
+
+# myfringes = fr_multi_ana(allpars)
+# for i in range(nbfringes):
+#     subplot(2, nbfringes,i+1)
+#     imshow(myfringes[i], cmap='bwr', interpolation='None', vmin=-2, vmax=2)
+#     title('Finge {} - Eqtype {}'.format(i, fr_multi_ana.eqtypes[i]))
+#     colorbar()
+
+# myfringesflat = fr_multi_ana.flat_data(0,allpars)
+# subplot(2,1,2)
+# plot(myfringesflat)
+# title('All Flat')
+```
+
+```{python}
+for i in range(len(all_bs)):
+    print(i, all_bs[i], all_bs_eqidx[i])
+```
+
+```{python}
+reload(ft)
+
+# num_fringes = [2]
+# num_fringes = [2,5,9]
+# num_fringes = [2,4,5,9,10]
+num_fringes = list(np.arange(len(all_bs)))
+
+data_fringes = []
+for i in range(len(num_fringes)):
+    nn = num_fringes[i]
+    myfringe = read_my_fringe(all_bs[nn], all_files, all_bs)
+    data_fringes.append(myfringe)
+
+
+### Determine corresponding fringes and equivalency types
+mybs = []
+eqtypes = []
+print('Selected fringes:')
+for i in range(len(num_fringes)): 
+    mybs.append(all_bs[num_fringes[i]])
+    eqtypes.append(all_bs_eqidx[num_fringes[i]])
+    print(' {}: type={}'.format(mybs[i], eqtypes[i]))
+
+### Instanciate multifringe object
+fr_multi_ana = model_multi_fringe_ana(eqtypes, mask, verbose=False)
+
+### Prepare initialization for gues, fit-range and fixed parameters
+fwhm_init = 100.
+angles_init = np.zeros(fr_multi_ana.neq)
+baselines_init = np.zeros(fr_multi_ana.neq)
+amps_init = np.zeros(fr_multi_ana.neq)
+phases_init = np.zeros(fr_multi_ana.neq)
+### Initialize guess parameters for each equivalency type
+print()
+for i in range(fr_multi_ana.neq):
+    print('Eq Type = {}'.format(fr_multi_ana.eqs[i]))
+    possible_fringes = mybs[eqtypes.index(fr_multi_ana.eqs[i])]
+    print('    Example fringe: {}'.format(possible_fringes))
+    mythinit, mylengthinit = sc.give_bs_pars(q, possible_fringes)
+    angles_init[i] = mythinit
+    baselines_init[i] = mylengthinit
+    amps_init[i] = 0.5
+    phases_init[i] = 180.
+    print('    Initialized with theta={0:6.2f} - L={1:6.3f} - A={2:6.2f} - Ph={3:6.2f}'.format(angles_init[i], 
+                                                                                             baselines_init[i],
+                                                                                             amps_init[i],
+                                                                                             phases_init[i]))
+
+### Get all parameters in an array
+print()
+print('Initial Guess parameters:')
+allpars = fr_multi_ana.pars_list_2_array(fwhm_init, angles_init, baselines_init, amps_init, phases_init, verbose=True)
+guess_fringes = fr_multi_ana(allpars).copy()
+
+### Fix some parameters
+fixpars = np.zeros(len(allpars))
+fixpars[0] = 1
+
+### Do the fit
+my_y = np.nan_to_num(np.ravel(data_fringes))
+resfit = ft.do_minuit(np.zeros(len(my_y)), my_y, my_y*0+1, allpars.copy(),
+                      fixpars=fixpars,
+                      functname=fr_multi_ana.flat_data, verbose=False)
+### Fitted Fringes
+coeffs = resfit[1]
+fitted_fringes = fr_multi_ana(coeffs)
+print()
+print('Fitted Parameters')
+fitpars = fr_multi_ana.pars_array_2_list(coeffs, verbose=True)
+
+
+rc('figure', figsize=(16,3 * len(num_fringes)))
+
+for i in range(len(num_fringes)):
+    nn = num_fringes[i]
+
+    subplot(len(num_fringes),4,i*4+1)
+    imshow(np.nan_to_num(data_fringes[i]*mask), cmap='bwr', interpolation='Gaussian',vmin=-2, vmax=2)
+    title('BS:{} EqType: {}'.format(all_bs[nn], fr_multi_ana.eqtypes[i]))
+    ft.qgrid()
+    colorbar()
+    
+    subplot(len(num_fringes), 4, i*4+2)
+    imshow(np.nan_to_num(guess_fringes[i]*mask), cmap='bwr', interpolation='Gaussian', vmin=-2, vmax=2)
+    title('Guess: {} - EqType {}'.format(all_bs[nn], fr_multi_ana.eqtypes[i]))
+    ft.qgrid()
+    colorbar()
+
+    subplot(len(num_fringes), 4, i*4+3)
+    imshow(np.nan_to_num(fitted_fringes[i]*mask), cmap='bwr', interpolation='Gaussian',vmin=-2, vmax=2)
+    title('Fitted {} - EqType {}'.format(all_bs[nn], fr_multi_ana.eqtypes[i]))
+    ft.qgrid()
+    colorbar()
+        
+    subplot(len(num_fringes), 4, i*4+4)
+    imshow(np.nan_to_num((data_fringes[i]-fitted_fringes[i])*mask), cmap='bwr', interpolation='Gaussian', vmin=-2, vmax=2)
+    title('Residuals {} - EqType {}'.format(all_bs[nn], fr_multi_ana.eqtypes[i]))
+    ft.qgrid()
+    colorbar()
+
+    
+tight_layout()
+
+
+```
+
+We need one phase per fringe, also one amplitude per fringe...
+We also need to be able to fix parameters
+
+```{python}
+fitpars
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

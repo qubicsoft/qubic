@@ -289,8 +289,8 @@ for cross in range(ncombi):
             linestyle='none', 
             label='{:3.0f} x {:3.0f}'.format(combi_nus[cross][0], combi_nus[cross][1]))
 
-plt.xlabel('$\\ell$')
-plt.ylabel('$D_\\ell$')
+plt.xlabel('Multipole moment, $\\ell$')
+plt.ylabel('$D_\\ell \,[\mu \mathrm{K}^2]$')
 plt.title(clnames[2])
 plt.grid()
 plt.legend(fontsize=16, loc='upper left')
@@ -640,12 +640,13 @@ for i in range(ncombi):
     labsx.append(f'{oldcombi[i][0]}{oldcombi[i][1]}b0')
     for s in range(nbins):
         labsy.append(f'{oldcombi[i][0]}{oldcombi[i][1]}b{s}')
-        
-print(labsy)
+
 
 labs = []
 for i in range(ncombi):
-    labs.append(f'{oldcombi[i][0]}{oldcombi[i][1]}')
+    labs.append(r'$\nu_{}\nu_{}$'.format(oldcombi[i][0], oldcombi[i][1]))
+        
+print(labs)
 ```
 
 ```{python}
@@ -690,7 +691,7 @@ divider = make_axes_locatable(ax)
 cax = divider.append_axes("right", size="5%", pad=0.05)
 plt.colorbar(im, cax=cax)
 
-plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/IBCS_CorrMatrix_binfreq_FI150_GoodPhotonNoise_v4.pdf')
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/IBCS_CorrMatrix_binfreq_FI150_GoodPhotonNoise_v4.pdf')
 ```
 
 ### Diference between same and mix

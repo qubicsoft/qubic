@@ -3,22 +3,18 @@ from __future__ import division, print_function
 import glob
 import numpy as np
 import pandas as pd
-from scipy import ndimage
+
+from scipy.interpolate import RegularGridInterpolator
+from scipy.integrate import dblquad
 
 import matplotlib.pyplot as plt
-from matplotlib.patches import Circle
-import matplotlib.ticker as plticker
-import matplotlib.colors as colors
-import matplotlib.cm as cmx
-import matplotlib.patches as patches
-from matplotlib.colors import SymLogNorm
 
-import qubic
 from qubicpack.pixel_translation import make_id_focalplane, tes2index
 
 __all__ = ['Fringes']
 
 
+# ========== Plot functions =============
 def plot_horns(q):
     xhorns = q.horn.center[:, 0]
     yhorns = q.horn.center[:, 1]
@@ -29,57 +25,125 @@ def plot_baseline(q, bs):
     hcenters = q.horn.center[:, 0:2]
     plt.plot(hcenters[np.array(bs) - 1, 0], hcenters[np.array(bs) - 1, 1], lw=4, label=bs)
 
-def scatter_plot_FP(q, x, y, FP_signal, frame, title=None):
-    if q.config=='TD':
-        s = 180
-    else:
-        s = 40
-    plt.scatter(x, y, c=FP_signal, norm=SymLogNorm(1e-7), marker='s', s=s)
-    plt.colorbar()
-    plt.xlabel(f'X_{frame}')
-    plt.ylabel(f'Y_{frame}')
-    plt.axis('equal')
+
+def scatter_plot_FP(q, x, y, FP_signal, frame, s=None, title=None, **kwargs):
+    if s is None:
+        if q.config == 'TD':
+            s = 180
+        else:
+            s = 40
+    plt.scatter(x, y, c=FP_signal, marker='s', s=s, **kwargs)
+    clb = plt.colorbar()
+    clb.ax.set_title('[W / Hz]')
+    plt.xlabel(f'X_{frame} [m]', fontsize=14)
+    plt.ylabel(f'Y_{frame} [m]', fontsize=14)
+    plt.axis('square')
     plt.title(title)
 
 
-def pcolor_plot_FP(q, x, y, FP_signal, frame, title=None):
+def pcolor_plot_FP(q, x, y, FP_signal, frame, title=None, **kwargs):
     x2D = q.detector.unpack(x)
     y2D = q.detector.unpack(y)
     FP_signal2D = q.detector.unpack(FP_signal)
 
-    plt.pcolor(x2D, y2D, FP_signal2D, norm=SymLogNorm(1e-7))
-    plt.colorbar()
-    plt.xlabel(f'X_{frame}')
-    plt.ylabel(f'Y_{frame}')
-    plt.axis('equal')
+    plt.pcolor(x2D, y2D, FP_signal2D, **kwargs)
+    clb = plt.colorbar()
+    clb.ax.set_title('[W / Hz]')
+    plt.xlabel(f'X_{frame} [m]', fontsize=14)
+    plt.ylabel(f'Y_{frame} [m]', fontsize=14)
+    plt.axis('square')
     plt.title(title)
 
 
-def plot_horn_and_FP(q, x, y, FP_signal, frame, title=None):
+def plot_horn_and_FP(q, x, y, FP_signal, frame, title=None, s=None, **kwargs):
     plt.subplots(1, 2)
     plt.suptitle(title, fontsize=18)
+    plt.subplots_adjust(wspace=0.3)
 
     plt.subplot(121)
     q.horn.plot()
-    plt.axis('on')
-    plt.xlabel('X_GRF')
-    plt.ylabel('Y_GRF')
+    plt.axis('square')
+    plt.xlabel('X_GRF [m]', fontsize=14)
+    plt.ylabel('Y_GRF [m]', fontsize=14)
 
     plt.subplot(122)
-    if q.config=='TD':
-        s = 180
-    else:
-        s = 40
-    plt.scatter(x, y, c=FP_signal, norm=SymLogNorm(1e-7), marker='s', s=s)
-    plt.colorbar()
-    plt.xlabel(f'X_{frame}')
-    plt.ylabel(f'Y_{frame}')
-    plt.axis('equal')
+    if s is None:
+        if q.config == 'TD':
+            s = 180
+        else:
+            s = 40
+    plt.scatter(x, y, c=FP_signal, marker='s', s=s, **kwargs)
+    clb = plt.colorbar()
+    clb.ax.set_title('[W / Hz]')
+    plt.xlabel(f'X_{frame} [m]', fontsize=14)
+    plt.ylabel(f'Y_{frame} [m]', fontsize=14)
+    plt.axis('square')
 
 
+# ========== Tool functions =============
 def close_switches(q, switches):
+    q.horn.open = True
     for i in switches:
         q.horn.open[i - 1] = False
+
+
+def open_switches(q, switches):
+    q.horn.open = False
+    for i in switches:
+        q.horn.open[i - 1] = True
+
+
+def get_TEScoordinates_ONAFP(q):
+    # TES centers in the ONAFP frame
+    xGRF_TES = q.detector.center[:, 0]
+    yGRF_TES = q.detector.center[:, 1]
+    xONAFP_TES = - yGRF_TES
+    yONAFP_TES = xGRF_TES
+
+    # TES vertex in the ONAFP frame
+    vGRF_TES = q.detector.vertex
+    vONAFP_TES = vGRF_TES[..., [1, 0, 2]]
+    vONAFP_TES[..., 0] *= - 1
+
+    return xONAFP_TES, yONAFP_TES, vONAFP_TES
+
+
+def get_TESvertices_FromMaynoothFiles(rep, ndet=992):
+    """
+    Get TES vertices from Maynooth files.
+    Parameters
+    ----------
+    rep : str
+        Path of the repository for the simulated files, can be download at :
+        https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
+    ndet : int
+        Number of TES.
+
+    Returns
+    -------
+    A 3D array containing the TES vertices coordinates on the focal plane.
+    Shape=(992, 4, 2)
+
+    """
+    # Get a 2D array from the file
+    vertices2D = pd.read_csv(rep + '/vertices.txt', sep='\ ', header=None, engine='python')
+
+    # Make a 3D array of shape (992, 4, 2)
+    vertices = np.zeros((ndet, 4, 2))
+    for i in range(4):
+        vertices[:, i, :] = vertices2D.iloc[i::4, :]
+    return vertices
+
+
+def make_position(xmin, xmax, reso, focal_length):
+    """Position on the focal plane in the GRF frame."""
+    xx, yy = np.meshgrid(np.linspace(xmin, xmax, reso), np.linspace(xmin, xmax, reso))
+    x1d = np.ravel(xx)
+    y1d = np.ravel(yy)
+    z1d = x1d * 0 - focal_length
+    position = np.array([x1d, y1d, z1d]).T
+
+    return position
 
 
 def give_bs_pars(q, bs):
@@ -148,7 +212,90 @@ def find_equivalent_baselines(all_bs, q):
     return bseq, all_eqtype
 
 
-def get_response_power(q, theta, phi, spectral_irradiance, nu, frame='ONAFP', verbose=False):
+# ========== Compute power on the focal plane =============
+def make_external_A(rep, open_horns):
+    """
+    Compute external_A from simulated files with aberrations.
+    This can be used in get_response_power method that returns the synthetic beam on the sky.
+    Parameters
+    ----------
+    rep : str
+        Path of the repository for the simulated files, can be download at :
+        https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
+    open_horns : list
+        Indices of the open horns between 1 and 64.
+
+    Returns
+    -------
+    external_A : list of tables describing the phase and amplitude at each point of the focal
+            plane for each of the horns:
+            [0] : array, X coordinates with shape (n) in GRF [m]
+            [1] : array, Y coordinates with shape (n) in GRF [m]
+            [2] : array, amplitude on X with shape (n, nhorns)
+            [3] : array, amplitude on Y with shape (n, nhorns)
+            [4] : array, phase on X with shape (n, nhorns) [rad]
+            [5] : array, phase on Y with shape (n, nhorns) [rad]
+
+    """
+    # Get simulation files
+    files = sorted(glob.glob(rep + '/*.dat'))
+
+    nhorns = len(files)
+    if nhorns != 64:
+        raise ValueError('You should have 64 .dat files')
+
+    # This is done to get the right file for each horn
+    horn_transpose = np.arange(64)
+    horn_transpose = np.reshape(horn_transpose, (8, 8))
+    horn_transpose = np.ravel(horn_transpose.T)
+
+    # Get the sample number from the first file
+    data0 = pd.read_csv(files[0], sep='\t', skiprows=0)
+    nn = (data0['X_Index'].iloc[-1] + 1)
+    print('Sampling number = ', nn)
+
+    n = len(data0.index)
+
+    # X and Y positions in the GRF frame
+    xONAFP = data0['X'] * 1e-3
+    yONAFP = data0['Y'] * 1e-3
+    xGRF = yONAFP
+    yGRF = - xONAFP
+    print(xGRF.shape)
+
+    # Get all amplitudes and phases for each open horn
+    nopen_horns = len(open_horns)
+
+    allampX = np.empty((n, nopen_horns))
+    allphiX = np.empty((n, nopen_horns))
+    allampY = np.empty((n, nopen_horns))
+    allphiY = np.empty((n, nopen_horns))
+    print(allphiY.shape)
+    for i, swi in enumerate(open_horns):
+        print('horn ', swi)
+        if swi < 1 or swi > 64:
+            raise ValueError('The horn indices must be between 1 and 64 ')
+
+        thefile = files[horn_transpose[swi - 1]]
+        print('Horn ', swi, ': ', thefile[-10:])
+        data = pd.read_csv(thefile, sep='\t', skiprows=0)
+
+        print(data['MagX'].shape)
+        allampX[:, i] = data['MagX']
+        allampY[:, i] = data['MagX']
+
+        allphiX[:, i] = data['PhaseX']
+        allphiY[:, i] = data['PhaseY']
+
+    external_A = [xGRF, yGRF, allampX, allampY, allphiX, allphiY]
+
+    return external_A
+
+
+def get_response_power(q,
+                       theta, phi, nu, spectral_irradiance,
+                       frame='ONAFP', external_A=None, hwp_position=0,
+                       verbose=False):
     """
     Compute power on the focal plane in the ONAFP frame for different positions of the source
     with respect to the instrument.
@@ -178,62 +325,185 @@ def get_response_power(q, theta, phi, spectral_irradiance, nu, frame='ONAFP', ve
     """
     nptg = len(theta)
 
-    # Electric field on the FP in the GRF frame
-    position = q.detector.center  # GRF frame
-    field = q._get_response(theta, phi, spectral_irradiance, position, q.detector.area,
-                            nu, q.horn, q.primary_beam, q.secondary_beam)
-    power = np.abs(field) ** 2
-    # power2D = q.detector.unpack(power)
+    if external_A is None:
+        position = q.detector.center  # GRF
+    else:
+        x1d = external_A[0]
+        y1d = external_A[1]
+        z1d = x1d * 0 - q.optics.focal_length
+        position = np.array([x1d, y1d, z1d]).T
     xGRF = position[:, 0]
     yGRF = position[:, 1]
 
+    # Electric field on the FP in the GRF frame
+    E = q._get_response(theta, phi, spectral_irradiance, position, q.detector.area,
+                        nu, q.horn, q.primary_beam, q.secondary_beam,
+                        external_A=external_A, hwp_position=hwp_position)
+    power = np.abs(E) ** 2
+    # power *= q.filter.bandwidth  # [W/Hz] to [W]
+
     if verbose:
         print(f'# pointings = {nptg}')
-        print(position.shape)
-        print(field.shape)
+        print(q.detector.center.shape)
+        print(E.shape)
+        print(power.shape)
         print(xGRF.shape)
 
     if frame == 'GRF':
         return xGRF, yGRF, power
-
     elif frame == 'ONAFP':
         # Make a pi/2 rotation from GRF -> ONAFP referential frame
         xONAFP = - yGRF
         yONAFP = xGRF
         return xONAFP, yONAFP, power
-
     else:
         raise ValueError('The frame is not valid. It must be GRF or ONAFP.')
 
 
+def get_power_Maynooth(open_horns, theta, nu, horn_center, rep, hwp_position=0, verbose=True):
+    # Get simulation files
+    files = sorted(glob.glob(rep + '/*.dat'))
+    if len(files) != 64:
+        raise ValueError('You should have 64 .dat files')
+
+    nhorns = len(open_horns)
+    # Get the sample number from the first file and the coordinates X, Y
+    data0 = pd.read_csv(files[0], sep='\t', skiprows=0)
+    nn = data0['X_Index'].iloc[-1] + 1
+    xONAFP = data0['X'] * 1e-3  # convert from mm to m
+    yONAFP = data0['Y'] * 1e-3
+
+    if verbose:
+        print(f'# open horns = {nhorns}')
+        print(f'Sampling number = {nn}')
+        print(f'Number of lines = {nn ** 2}')
+
+    # This is done to get the right file for each horn
+    horn_transpose = np.arange(64)
+    horn_transpose = np.reshape(horn_transpose, (8, 8))
+    horn_transpose = np.ravel(horn_transpose.T)
+
+    Ax = np.zeros((nhorns, nn ** 2))
+    Ay = np.zeros_like(Ax)
+    Phasex = np.zeros_like(Ax)
+    Phasey = np.zeros_like(Ax)
+    for i, swi in enumerate(open_horns):
+        if swi < 1 or swi > 64:
+            raise ValueError('The switch indices must be between 1 and 64 ')
+
+        thefile = files[horn_transpose[swi - 1]]
+        if verbose:
+            print('Horn ', swi, ': ', thefile[-10:])
+        data = pd.read_csv(thefile, sep='\t', skiprows=0)
+
+        # Phase calculation
+        horn_x = horn_center[swi - 1, 0]
+        horn_y = horn_center[swi - 1, 1]
+        dist = np.sqrt(horn_x ** 2 + horn_y ** 2)  # distance between the horn and the center
+        additional_phase = - 2 * np.pi / 3e8 * nu * 1e9 * dist * np.sin(np.deg2rad(theta))
+
+        Ax[i, :] = data['MagX']
+        Ay[i, :] = data['MagY']
+
+        Phasex[i, :] = data['PhaseX'] + additional_phase
+        Phasey[i, :] = data['PhaseY'] + additional_phase
+
+    # Electric field for each open horn
+    Ex = Ax * (np.cos(Phasex) + 1j * np.sin(Phasex))
+    Ey = Ay * (np.cos(Phasey) + 1j * np.sin(Phasey))
+
+    # Sum of the electric fields
+    sumEx = np.sum(Ex, axis=0)
+    sumEy = np.sum(Ey, axis=0)
+
+    # HWP modulation
+    phi_hwp = np.arange(0, 8) * np.pi / 16
+    sumEx *= np.cos(2 * phi_hwp[hwp_position])
+    sumEy *= np.sin(2 * phi_hwp[hwp_position])
+
+    # Power on the focal plane
+    # power = np.abs(sumEx) ** 2 + np.abs(sumEy) ** 2
+    power = np.abs(sumEx + sumEy) ** 2
+
+    return xONAFP, yONAFP, power
+
+
+def fullreso2TESreso(x, y, power, TESvertex, TESarea, interp=False, verbose=True):
+    ndet = np.shape(TESvertex)[0]
+    powerTES = np.zeros(ndet)
+    print('ndet:', ndet)
+
+    if interp:
+        print('********** Begin interpolation **********')
+        reso = int(np.sqrt(x.shape[0]))
+        print('Reso:', reso)
+        power_interp = RegularGridInterpolator((np.unique(x), np.unique(y)), power.reshape((reso, reso)), method='linear',
+                                               bounds_error=False, fill_value=0.)
+        power_interp_function = lambda x, y: power_interp(np.array([x, y]))
+
+        print('********** Begin integration in the TES era **********')
+        for TES in range(ndet):
+            # Boundaries for the integral
+            x1 = np.min(TESvertex[TES, :, 0])
+            x2 = np.max(TESvertex[TES, :, 0])
+            y1 = np.min(TESvertex[TES, :, 1])
+            y2 = np.max(TESvertex[TES, :, 1])
+            gfun = lambda x: y1
+            hfun = lambda x: y2
+            if verbose:
+                xTES = (x1 + x2) / 2
+                yTES = (y1 + y2) / 2
+                print('\n Power at the TES center:', power_interp_function(xTES, yTES))
+                print('x boundaries: {:.2f} to {:.2f} mm'.format(x1 * 1e3, x2 * 1e3))
+                print('Delta x = {:.2f} mm'.format((x2 - x1) * 1e3))
+                print('y boundaries: {:.2f} to {:.2f} mm'.format(y1 * 1e3, y2 * 1e3))
+                print('Delta y = {:.2f} mm'.format((y2 - y1) * 1e3))
+
+            power, _ = dblquad(power_interp_function, x1, x2, gfun, hfun)
+            powerTES[TES] = power
+
+        powerTES /= TESarea
+
+    else:
+        for TES in range(ndet):
+            x1 = np.min(TESvertex[TES, :, 0])
+            x2 = np.max(TESvertex[TES, :, 0])
+            y1 = np.min(TESvertex[TES, :, 1])
+            y2 = np.max(TESvertex[TES, :, 1])
+
+            insideTEScondition = ((x >= x1) & (x <= x2) & (y >= y1) & (y <= y2))
+            indices = np.where(insideTEScondition)[0]
+            count = indices.shape[0]
+            powerTES[TES] = np.sum(power[indices])
+            powerTES[TES] /= count
+
+    return powerTES
+
+# ========== Fringe simulations =============
 class Fringes:
-    def __init__(self, baseline, d):
+    def __init__(self, baseline):
         """
         Parameters
         ----------
         baseline: list
             Baseline formed with 2 horns, index between 1 and 64 as on the instrument.
-        d: dictionary
         """
-        if len(baseline) != 2:
-            raise ValueError('The baseline should contain 2 horns.')
         for i in baseline:
             if i < 1 or i > 400:
                 raise ValueError('Horns indices must be in [1, 400].')
 
         self.baseline = baseline
-        self.d = d
 
     def get_fringes(self, q,
                     theta=np.array([0.]), phi=np.array([0.]),
                     nu=150e9, spectral_irradiance=1.,
                     frame='ONAFP',
-                    doplot=True, verbose=True):
+                    doplot=True, verbose=True, **kwargs):
 
         q.horn.open = False
         q.horn.open[self.baseline[0] - 1] = True
         q.horn.open[self.baseline[1] - 1] = True
-        x, y, fringes = get_response_power(q, theta, phi, spectral_irradiance, nu,
+        x, y, fringes = get_response_power(q, theta, phi, nu, spectral_irradiance,
                                            frame=frame, verbose=verbose)
 
         if doplot:
@@ -242,14 +512,14 @@ class Fringes:
                 plot_horn_and_FP(q, x, y, fringes[:, i], frame=frame,
                                  title='Baseline {} - Theta={}deg - Phi={}deg'.format(self.baseline,
                                                                                       np.rad2deg(theta[i]),
-                                                                                      np.rad2deg(phi[i])))
+                                                                                      np.rad2deg(phi[i])), **kwargs)
         return x, y, fringes
 
     def get_all_combinations_power(self, q,
                                    theta=np.array([0.]), phi=np.array([0.]),
                                    nu=150e9, spectral_irradiance=1.,
                                    frame='ONAFP',
-                                   doplot=True, verbose=True):
+                                   doplot=True, verbose=True, **kwargs):
         """
             Returns the power on the focal plane for each pointing, for different configurations
             of the horn array: all open, all open except i, except j, except i and j, only i open,
@@ -284,61 +554,61 @@ class Fringes:
         q.horn.open = True
 
         # All open
-        x, y, S = get_response_power(q, theta, phi, spectral_irradiance, nu, frame=frame, verbose=verbose)
+        x, y, S = get_response_power(q, theta, phi, nu, spectral_irradiance, frame=frame, verbose=verbose)
         if doplot:
-            plot_horn_and_FP(q, x, y, S[:, 0], frame=frame, title='$S$ - All open')
+            plot_horn_and_FP(q, x, y, S[:, 0], frame=frame, title='$S$ - All open', **kwargs)
 
         # All open except i
         q.horn.open[self.baseline[0] - 1] = False
-        _, _, Cminus_i = get_response_power(q, theta, phi, spectral_irradiance, nu, frame=frame, verbose=verbose)
+        _, _, Cminus_i = get_response_power(q, theta, phi, nu, spectral_irradiance, frame=frame, verbose=verbose)
         if doplot:
             plot_horn_and_FP(q, x, y, Cminus_i[:, 0], frame=frame,
-                             title='$C_{-i}$' + f' - Horn {self.baseline[0]} close')
+                             title='$C_{-i}$' + f' - Horn {self.baseline[0]} close', **kwargs)
 
         # All open except baseline [i, j]
         q.horn.open[self.baseline[1] - 1] = False
-        _, _, Sminus_ij = get_response_power(q, theta, phi, spectral_irradiance, nu, frame=frame, verbose=verbose)
+        _, _, Sminus_ij = get_response_power(q, theta, phi, nu, spectral_irradiance, frame=frame, verbose=verbose)
         if doplot:
             plot_horn_and_FP(q, x, y, Sminus_ij[:, 0], frame=frame,
-                             title='$S_{-ij}$' + f' - Baseline {self.baseline} close')
+                             title='$S_{-ij}$' + f' - Baseline {self.baseline} close', **kwargs)
 
         # All open except j
         q.horn.open[self.baseline[0] - 1] = True
-        _, _, Cminus_j = get_response_power(q, theta, phi, spectral_irradiance, nu, frame=frame, verbose=verbose)
+        _, _, Cminus_j = get_response_power(q, theta, phi, nu, spectral_irradiance, frame=frame, verbose=verbose)
         if doplot:
             plot_horn_and_FP(q, x, y, Cminus_j[:, 0], frame=frame,
-                             title='$C_{-j}$' + f' - Horn {self.baseline[1]} close')
+                             title='$C_{-j}$' + f' - Horn {self.baseline[1]} close', **kwargs)
 
         # Only i open (not a realistic observable)
         q.horn.open = False
         q.horn.open[self.baseline[0] - 1] = True
-        _, _, Ci = get_response_power(q, theta, phi, spectral_irradiance, nu, frame=frame, verbose=verbose)
+        _, _, Ci = get_response_power(q, theta, phi, nu, spectral_irradiance, frame=frame, verbose=verbose)
         if doplot:
             plot_horn_and_FP(q, x, y, Ci[:, 0], frame=frame,
-                             title='$C_i$' + f' - Only horn {self.baseline[0]} open')
+                             title='$C_i$' + f' - Only horn {self.baseline[0]} open', **kwargs)
 
         # Only j open (not a realistic observable)
         q.horn.open[self.baseline[0] - 1] = False
         q.horn.open[self.baseline[1] - 1] = True
-        _, _, Cj = get_response_power(q, theta, phi, spectral_irradiance, nu, frame=frame, verbose=verbose)
+        _, _, Cj = get_response_power(q, theta, phi, nu, spectral_irradiance, frame=frame, verbose=verbose)
         if doplot:
             plot_horn_and_FP(q, x, y, Cj[:, 0], frame=frame,
-                             title='$C_j$' + f' - Only horn {self.baseline[1]} open')
+                             title='$C_j$' + f' - Only horn {self.baseline[1]} open', **kwargs)
 
         # Only baseline [i, j] open (not a realistic observable)
         q.horn.open[self.baseline[0] - 1] = True
-        _, _, Sij = get_response_power(q, theta, phi, spectral_irradiance, nu, frame=frame, verbose=verbose)
+        _, _, Sij = get_response_power(q, theta, phi, nu, spectral_irradiance, frame=frame, verbose=verbose)
         if doplot:
             plot_horn_and_FP(q, x, y, Sij[:, 0], frame=frame,
-                             title='$S_{ij}$' + f' - Only baseline {self.baseline} open')
+                             title='$S_{ij}$' + f' - Only baseline {self.baseline} open', **kwargs)
 
         return x, y, S, Cminus_i, Sminus_ij, Cminus_j, Ci, Cj, Sij
 
-    def get_fringes_from_combination(self, q,
+    def get_fringes_from_combination(self, q, measured_comb=True,
                                      theta=np.array([0.]), phi=np.array([0.]),
                                      nu=150e9, spectral_irradiance=1.,
                                      frame='ONAFP',
-                                     doplot=True, verbose=True):
+                                     doplot=True, verbose=True, **kwargs):
         """
         Return the fringes on the FP by making the computation
         fringes =(S_tot - Cminus_i - Cminus_j + Sminus_ij)
@@ -350,231 +620,77 @@ class Fringes:
                                                theta=theta, phi=phi,
                                                nu=nu, spectral_irradiance=spectral_irradiance,
                                                frame=frame,
-                                               doplot=False, verbose=verbose)
-
-        fringes = S_tot - Cminus_i - Cminus_j + Sminus_ij + Ci + Cj
+                                               doplot=False, verbose=verbose, **kwargs)
+        if measured_comb:
+            fringes_comb = S_tot - Cminus_i - Cminus_j + Sminus_ij
+        else:
+            fringes_comb = S_tot - Cminus_i - Cminus_j + Sminus_ij + Ci + Cj
 
         if doplot:
             nptg = np.shape(theta)[0]
             for i in range(nptg):
-                plot_horn_and_FP(q, x, y, fringes[:, 0], frame=frame,
+                plot_horn_and_FP(q, x, y, fringes_comb[:, 0], frame=frame,
                                  title='Baseline {} - Theta={}deg - Phi={}deg'.format(self.baseline,
                                                                                       np.rad2deg(theta[i]),
-                                                                                      np.rad2deg(phi[i])))
-        return x, y, fringes
+                                                                                      np.rad2deg(phi[i])), **kwargs)
+        return x, y, fringes_comb
+
+    def get_fringes_Maynooth(self, q, rep,
+                             theta=np.array([0.]), nu=150e9,
+                             interp=False,
+                             verbose=True):
+        if q.config != 'TD':
+            raise ValueError('Maynooth simulations are for the TD only.')
+
+        xONAFP, yONAFP, power = get_power_Maynooth(self.baseline, theta, nu, q.horn.center, rep, verbose=verbose)
+
+        # TES centers and TES vertex in the ONAFP frame
+        xONAFP_TES, yONAFP_TES, vONAFP_TES = get_TEScoordinates_ONAFP(q)
+
+        powerTES = fullreso2TESreso(xONAFP, yONAFP, power,
+                                    vONAFP_TES, q.detector.area,
+                                    interp=interp,
+                                    verbose=verbose)
+
+        # power_TES *= q.filter.bandwidth  # W/Hz to W
+
+        return xONAFP_TES, yONAFP_TES, powerTES
+
+    def get_fringes_Maynooth_combination(self, q, rep,
+                                         measured_comb=True,
+                                         theta=np.array([0.]), nu=150e9,
+                                         interp=False,
+                                         verbose=True):
+        i = self.baseline[0]
+        j = self.baseline[1]
+        all_open = np.arange(1, 65)
+        first_close = np.delete(all_open, i - 1)
+        second_close = np.delete(all_open, j - 1)
+        both_close = np.delete(all_open, [i - 1, j - 1])
+        xONAFP, yONAFP, S_tot = get_power_Maynooth(all_open, theta, nu, q.horn.center, rep, verbose=verbose)
+        _, _, Cminus_i = get_power_Maynooth(first_close, theta, nu, q.horn.center, rep, verbose=verbose)
+        _, _, Cminus_j = get_power_Maynooth(second_close, theta, nu, q.horn.center, rep, verbose=verbose)
+        _, _, Sminus_ij = get_power_Maynooth(both_close, theta, nu, q.horn.center, rep, verbose=verbose)
+
+        if measured_comb:
+            fringes_comb = S_tot - Cminus_i - Cminus_j + Sminus_ij
+        else:
+            _, _, Ci = get_power_Maynooth([i - 1], theta, nu, q.horn.center, rep, verbose=verbose)
+            _, _, Cj = get_power_Maynooth([j - 1], theta, nu, q.horn.center, rep, verbose=verbose)
+            fringes_comb = S_tot - Cminus_i - Cminus_j + Sminus_ij + Ci + Cj
+
+        # TES centers and TES vertex in the ONAFP frame
+        xONAFP_TES, yONAFP_TES, vONAFP_TES = get_TEScoordinates_ONAFP(q)
+
+        fringes_comb_TES = fullreso2TESreso(xONAFP, yONAFP, fringes_comb,
+                                            vONAFP_TES, q.detector.area,
+                                            interp=interp,
+                                            verbose=verbose)
+
+        return xONAFP_TES, yONAFP_TES, fringes_comb_TES
 
 
-def get_power_fp_aberration(self, rep, doplot=True, indep_config=None):
-    """
-    Compute power on the focal plane for a given horn configuration taking
-    into account optical aberrations given by Maynooth simulations. The source
-    is on the optical axis emitting at 150GHz.
-
-    Parameters
-    ----------
-    rep : str
-        Path of the repository for the simulated files, can be download at :
-        https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
-    doplot : bool
-        If True, make a plot with the intensity in the focal plane.
-    indep_config : list of int
-        By default it is None and in this case, it will use the baseline
-        defined in your object on which you call the method.
-        If you want an other configuration (all open for example), you can
-        put here a list with the horns you want to open.
-
-    Returns
-    -------
-    power : array of shape (nn, nn)
-        Power on the focal plane at high resolution (sampling used in simulations).
-
-    """
-    if self.d['config'] != 'TD':
-        raise ValueError('The instrument in the dictionary must be the TD')
-
-    q = qubic.QubicInstrument(self.d)
-
-    # Get simulation files
-    files = sorted(glob.glob(rep + '/*.dat'))
-
-    nhorns = len(files)
-    if nhorns != 64:
-        raise ValueError('You should have 64 .dat files')
-
-    # This is done to get the right file for each horn
-    horn_transpose = np.arange(64)
-    horn_transpose = np.reshape(horn_transpose, (8, 8))
-    horn_transpose = np.ravel(horn_transpose.T)
-
-    # Get the sample number from the first file
-    data0 = pd.read_csv(files[0], sep='\t', skiprows=0)
-    nn = data0['X_Index'].iloc[-1] + 1
-    print('Sampling number = {}'.format(nn))
-
-    # Get all amplitudes and phases for each open horn
-    if indep_config is None:
-        open_horns = self.baseline
-        nopen_horns = len(self.baseline)
-    else:
-        open_horns = indep_config
-        nopen_horns = len(indep_config)
-
-    q.horn.open = False
-    q.horn.open[np.asarray(open_horns) - 1] = True
-
-    allampX = np.empty((nopen_horns, nn, nn))
-    allphiX = np.empty((nopen_horns, nn, nn))
-    allampY = np.empty((nopen_horns, nn, nn))
-    allphiY = np.empty((nopen_horns, nn, nn))
-    for i, swi in enumerate(open_horns):
-        if swi < 1 or swi > 64:
-            raise ValueError('The switch indices must be between 1 and 64 ')
-
-        thefile = files[horn_transpose[swi - 1]]
-        # print('Horn ', swi, ': ', thefile[98:104])
-        data = pd.read_csv(thefile, sep='\t', skiprows=0)
-
-        allampX[i, :, :] = np.reshape(np.asarray(data['MagX']), (nn, nn)).T
-        allampY[i, :, :] = np.reshape(np.asarray(data['MagY']), (nn, nn)).T
-
-        allphiX[i, :, :] = np.reshape(np.asarray(data['PhaseX']), (nn, nn)).T
-        allphiY[i, :, :] = np.reshape(np.asarray(data['PhaseY']), (nn, nn)).T
-
-    # Electric field for each open horn
-    Ax = allampX * (np.cos(allphiX) + 1j * np.sin(allphiX))
-    Ay = allampY * (np.cos(allphiY) + 1j * np.sin(allphiY))
-
-    # Sum of the electric fields
-    sumampx = np.sum(Ax, axis=0)
-    sumampy = np.sum(Ay, axis=0)
-
-    # Power on the focal plane
-    power = np.abs(sumampx) ** 2 + np.abs(sumampy) ** 2
-
-    if doplot:
-        plt.figure()
-        plt.subplot(121)
-        q.horn.plot()
-        plt.axis('off')
-
-        plt.subplot(122)
-        plt.imshow(power, origin='lower')
-        plt.title('Power at the sampling resolution')
-        plt.colorbar()
-
-    return power
-
-def get_fringes_aberration_combination(self, rep):
-    """
-    Return the fringes on the FP (power) with aberrations using Creidhe files
-    by doing the computation :
-    fringes = (S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
-
-    Parameters
-    ----------
-    rep : str
-        Path of the repository for the simulated files, can be download at :
-        https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
-
-    Returns
-    -------
-    fringes_aber : array of shape (nn, nn)
-        Fringes in the focal plane at high resolution (sampling used in simulations).
-
-    """
-    i = self.baseline[0]
-    j = self.baseline[1]
-    all_open = np.arange(1, 65)
-
-    S_tot_aber = SelfCalibration.get_power_fp_aberration(self, rep,
-                                                         doplot=False,
-                                                         indep_config=all_open)
-    Cminus_i_aber = SelfCalibration.get_power_fp_aberration(self, rep,
-                                                            doplot=False,
-                                                            indep_config=np.delete(all_open, i - 1))
-    Cminus_j_aber = SelfCalibration.get_power_fp_aberration(self, rep,
-                                                            doplot=False,
-                                                            indep_config=np.delete(all_open, j - 1))
-    Sminus_ij_aber = SelfCalibration.get_power_fp_aberration(self, rep,
-                                                             doplot=False,
-                                                             indep_config=np.delete(all_open, [i - 1, j - 1]))
-    Ci_aber = SelfCalibration.get_power_fp_aberration(self, rep,
-                                                      doplot=True,
-                                                      indep_config=[i])
-
-    fringes_aber = (S_tot_aber - Cminus_i_aber - Cminus_j_aber + Sminus_ij_aber) / Ci_aber
-
-    return fringes_aber
-
-def make_external_A(rep, open_horns):
-    """
-    Compute external_A from simulated files with aberrations.
-    This can be used in get_synthbeam method that returns the synthetic beam on the sky.
-    Parameters
-    ----------
-    rep : str
-        Path of the repository for the simulated files, can be download at :
-        https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
-    open_horns : list
-        Indices of the open horns between 0 and 63.
-
-    Returns
-    -------
-    external_A : list of tables describing the phase and amplitude at each point of the focal
-        plane for each of the horns:
-        [0] : array of nn with x values in meters
-        [1] : array of nn with y values in meters
-        [2] : array of [nhorns, nn, nn] with amplitude on X
-        [3] : array of [nhorns, nn, nn] with amplitude on Y
-        [4] : array of [nhorns, nn, nn] with phase on X in degrees
-        [5] : array of [nhorns, nn, nn] with phase on Y in degrees
-
-    """
-    # Get simulation files
-    files = sorted(glob.glob(rep + '/*.dat'))
-
-    nhorns = len(files)
-    if nhorns != 64:
-        raise ValueError('You should have 64 .dat files')
-
-    # Get the sample number from the first file
-    data0 = pd.read_csv(files[0], sep='\t', skiprows=0)
-    nn = data0['X_Index'].iloc[-1] + 1
-    print('Sampling number = ', nn)
-
-    xmin = data0['X'].iloc[0] * 1e-3
-    xmax = data0['X'].iloc[-1] * 1e-3
-    ymin = data0['Y'].iloc[0] * 1e-3
-    ymax = data0['Y'].iloc[-1] * 1e-3
-    print('xmin={}m, xmax={}m, ymin={}m, ymax={}m'.format(xmin, xmax, ymin, ymax))
-
-    xx = np.linspace(xmin, xmax, nn)
-    yy = np.linspace(ymin, ymax, nn)
-
-    # Get all amplitudes and phases for each open horn
-    nopen_horns = len(open_horns)
-
-    allampX = np.empty((nopen_horns, nn, nn))
-    allphiX = np.empty((nopen_horns, nn, nn))
-    allampY = np.empty((nopen_horns, nn, nn))
-    allphiY = np.empty((nopen_horns, nn, nn))
-    for i, horn in enumerate(open_horns):
-        print('horn ', horn)
-        if horn < 0 or horn > 63:
-            raise ValueError('The horn indices must be between 0 and 63 ')
-
-        data = pd.read_csv(files[horn], sep='\t', skiprows=0)
-        allampX[i, :, :] = np.reshape(np.asarray(data['MagX']), (nn, nn))
-        allampY[i, :, :] = np.reshape(np.asarray(data['MagY']), (nn, nn))
-
-        allphiX[i, :, :] = np.reshape(np.asarray(data['PhaseX']), (nn, nn))
-        allphiY[i, :, :] = np.reshape(np.asarray(data['PhaseY']), (nn, nn))
-
-    external_A = [-xx, -yy, allampX, allampY, allphiX, allphiY]
-
-    return external_A
-
-
+# ========== Old functions =============
 def index2TESandASIC(index):
     """
     Convert an index on the FP to the corresponding TES and ASICS.
@@ -650,353 +766,3 @@ def tes_signal2image_fp(tes_signal, asics):
                 image_fp[index // 34, index % 34] = tes_signal[TES, ASIC - 1]
     return image_fp
 
-
-def get_TESvertices_FromMaynoothFiles(rep, ndet=992):
-    """
-    Get TES vertices from Maynooth files.
-    Parameters
-    ----------
-    rep : str
-        Path of the repository for the simulated files, can be download at :
-        https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
-    ndet : int
-        Number of TES.
-
-    Returns
-    -------
-    A 3D array containing the TES vertices coordinates on the focal plane.
-    Shape=(992, 4, 2)
-
-    """
-    # Get an 2D array from the file
-    vertices2D = pd.read_csv(rep + '/vertices.txt', sep='\ ', header=None, engine='python')
-
-    # Make a 3D array of shape (992, 4, 2)
-    vertices = np.zeros((ndet, 4, 2))
-    for i in range(4):
-        vertices[:, i, :] = vertices2D.iloc[i::4, :]
-    return vertices
-
-
-def make_TESimg(vertices, nn=241, ndet=992, img_size=0.12, doplot=True):
-    """
-    Make an image of the focal plane at a given resolution where
-    pixels included in each TES are set to the same number. Based on Creidhe code.
-
-    Parameters
-    ----------
-    vertices : bytearray
-    nn : int
-        Resolution of the image. Default value is the Maynooth simulation resolution.
-    ndet : int
-        Number of TES.
-    img_size : float
-        Dimension in m of one side of the image.
-    doplot : bool
-
-    Returns
-    -------
-    TESimg : array_like of ints
-            Image of the FP at a given resolution where each TES is set to a number.
-    """
-    TESimg = np.zeros((nn, nn)) + np.nan
-
-    xx = np.linspace(- img_size / 2., img_size / 2., nn)
-    yy = np.linspace(- img_size / 2., img_size / 2., nn)
-    XX, YY = np.meshgrid(xx, yy)
-
-    for i in range(nn):
-        for j in range(nn):
-            for d in range(0, ndet):
-                if vertices[d, 2, 0] <= XX[i, j] <= vertices[d, 3, 0] and \
-                        vertices[d, 2, 1] <= YY[i, j] <= vertices[d, 1, 1]:
-                    TESimg[i, j] = d
-    if doplot:
-        plt.figure()
-        plt.imshow(TESimg, origin='lower')
-        plt.colorbar()
-        plt.show()
-
-    return TESimg
-
-
-def fullreso2TESpixels(img, TESimg, q, ndet=992):
-    """
-        Get signal in each TES (real FP).
-
-        Parameters
-        ----------
-        img : array of shape (nn, nn)
-            Signal on the focal plane at high resolution, can be larger than the real FP.
-        TESimg : array_like of ints
-            Image of the FP at a given resolution where each TES is set to a number.
-        q : a QUBIC instrument (TD or FI)
-        ndet : int
-            Number of TES.
-
-        Returns
-        -------
-        3 lists with the number of points averaged in each TES, the sum of the signal and the mean.
-        """
-    unique, counts_perTES = np.unique(TESimg[~np.isnan(TESimg)], return_counts=True)
-    mean_perTES = ndimage.mean(img, TESimg, index=np.arange(ndet))
-    sum_perTES = ndimage.sum(img, TESimg, index=np.arange(ndet))
-
-    # Take only the 248 TES of the TD
-    if q.config == 'TD':
-        counts_perTES = counts_perTES[496: 744]
-        mean_perTES = mean_perTES[496: 744]
-        sum_perTES = sum_perTES[496: 744]
-
-    counts_perTES = q.detector.unpack(counts_perTES)
-    mean_perTES = q.detector.unpack(mean_perTES)
-    sum_perTES = q.detector.unpack(sum_perTES)
-
-    # Take only quadrant 3 and rotate it
-    if q.config == 'TD':
-        counts_perTES = np.rot90(counts_perTES[17:, :17], k=2)
-        mean_perTES = np.rot90(mean_perTES[17:, :17], k=2)
-        sum_perTES = np.rot90(sum_perTES[17:, :17], k=2)
-
-    return counts_perTES, sum_perTES, mean_perTES
-
-
-def make_plot_real_fp(TESvertices, sig_perTES, vmin=0., vmax=1.):
-    """
-    Plot real FP using TES locations.
-    """
-    # All this to get colormap
-    cm = plt.get_cmap('viridis')
-    # plot scale from average
-    cNorm = colors.Normalize(vmin=vmin, vmax=vmax)
-    scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=cm)
-    scalarMap.set_array(sig_perTES)
-
-    fig, ax7 = plt.subplots()
-    fig.figsize = (12, 12)
-    for i in range(0, 992):
-        rect = patches.Rectangle((TESvertices[i, 2, 0], TESvertices[i, 2, 1]),
-                                 (TESvertices[i, 0, 0] - TESvertices[i, 1, 0]),
-                                 (TESvertices[i, 0, 1] - TESvertices[i, 3, 1]),
-                                 linewidth=1,
-                                 edgecolor='none',
-                                 facecolor=scalarMap.to_rgba(sig_perTES[i]))
-        ax7.add_patch(rect)
-
-    plt.xlim(-.055, .055)  # to see the focal plane
-    plt.ylim(-.055, .055)
-    plt.xlabel('X [m]')
-    plt.ylabel('Y [m]')
-    ax7.set_aspect('equal')
-    plt.colorbar(scalarMap, shrink=0.8)
-
-    return fig
-
-
-def add_fp_simu_aber(image_aber, vmin, vmax, alpha=0.3, diameter_simu=120):
-    """
-    Over plot the real FP on a simulation with aberrations.
-    Should be improved because space between quadrants is not taken into account.
-    Parameters
-    ----------
-    image_aber : 2D array
-        Image larger than the real focal plane.
-    vmin, vmax : float
-        Color scale for imshow.
-    alpha : float
-        Transparency for the FP circle.
-    diameter_simu : float
-        Diameter of the simulation image in mm.
-
-    Returns
-    -------
-    fig : the figure
-
-    """
-    nn = np.shape(image_aber)[0]  # Sampling used in the simu
-    fp_radius = 51 * nn / diameter_simu  # Radius in pixels
-    tes_size = 3 * nn / diameter_simu
-    print('TES size in pixels :', tes_size)
-    print('FP radius in pixels :', fp_radius)
-
-    fig, ax = plt.subplots()
-    ax.imshow(image_aber, origin='lower', vmin=vmin, vmax=vmax)
-
-    # Add a circle of the FP size
-    circ = Circle((nn / 2., nn / 2.), fp_radius, alpha=alpha, color='w')
-    ax.add_patch(circ)
-
-    # Add a grid where each square is a TES
-    loc = plticker.MultipleLocator(base=tes_size)
-    ax.xaxis.set_major_locator(loc)
-    ax.yaxis.set_major_locator(loc)
-    ax.grid(color='w', linestyle='-', linewidth=1)
-
-    # Add 2 lines to see the quadrants
-    x = range(nn)
-    y = np.ones(nn) * nn / 2.
-    ax.plot(x, y, '-', linewidth=3, color='w')
-    ax.plot(y, x, '-', linewidth=3, color='w')
-
-    return fig
-
-
-def get_fringes_with_aberrations(param, q, baseline, files, nn=241, doplot=True, verbose=True):
-    """
-    Get a simulation from Maynooth on quadrant 3 to fit the fringe measurement.
-    Parameters
-    ----------
-    param : list
-        Theta angle (degrees) and frequency (GHz) for the calibration source.
-        Parameter that you will fit.
-    q : a qubic instrument
-    baseline : tuple of int
-        The 2 open horns, between 1 and 64.
-    files : list
-         The simulation .dat files.
-    TESimg : array_like of ints
-        Image of the FP at a given resolution where each TES is set to a number.
-    nn : int
-        Sampling resolution for the simulations.
-    doplot : bool
-    verbose : bool
-
-    Returns
-    -------
-    img : quadrant 3 with the signal in each TES.
-
-    """
-    theta_source = param[0]
-    freq_source = param[1]
-
-    # This is done to get the right file for each horn
-    horn_transpose = np.arange(64)
-    horn_transpose = np.reshape(horn_transpose, (8, 8))
-    horn_transpose = np.ravel(horn_transpose.T)
-
-    allampX = np.empty((2, nn, nn))
-    allphiX = np.empty((2, nn, nn))
-    allampY = np.empty((2, nn, nn))
-    allphiY = np.empty((2, nn, nn))
-    for i, swi in enumerate(baseline):
-        # Phase calculation
-        horn_x = q.horn.center[swi - 1, 0]
-        horn_y = q.horn.center[swi - 1, 1]
-        dist = np.sqrt(horn_x ** 2 + horn_y ** 2)  # distance between the horn and the center
-        phi = - 2 * np.pi / 3e8 * freq_source * 1e9 * dist * np.sin(np.deg2rad(theta_source))
-
-        thefile = files[horn_transpose[swi - 1]]
-        if verbose:
-            print('Horn ', swi, ': ', thefile[-10:])
-        data = pd.read_csv(thefile, sep='\t', skiprows=0)
-
-        allampX[i, :, :] = np.reshape(np.asarray(data['MagX']), (nn, nn)).T
-        allampY[i, :, :] = np.reshape(np.asarray(data['MagY']), (nn, nn)).T
-
-        allphiX[i, :, :] = np.reshape(np.asarray(data['PhaseX']), (nn, nn)).T + phi
-        allphiY[i, :, :] = np.reshape(np.asarray(data['PhaseY']), (nn, nn)).T + phi
-
-    # Electric field for each open horn
-    Ax = allampX * (np.cos(allphiX) + 1j * np.sin(allphiX))
-    Ay = allampY * (np.cos(allphiY) + 1j * np.sin(allphiY))
-
-    # Sum of the electric fields
-    sumampx = np.sum(Ax, axis=0)
-    sumampy = np.sum(Ay, axis=0)
-
-    # Power on the focal plane
-    power = np.abs(sumampx) ** 2 + np.abs(sumampy) ** 2
-
-    if doplot:
-        plot_horn_and_FP(q, power, title=f'Baseline {baseline} - Power at high resolution')
-
-    return power
-
-# def make_position(xmin, xmax, reso, focal_length):
-#     """Position on the focal plane in the GRF frame."""
-#     xx, yy = np.meshgrid(np.linspace(xmin, xmax, reso), np.linspace(xmin, xmax, reso))
-#     x1d = np.ravel(xx)
-#     y1d = np.ravel(yy)
-#     z1d = x1d * 0 - focal_length
-#     position = np.array([x1d, y1d, z1d]).T
-#
-#     return position
-
-# def kill_pixel_outside_FP(FP_full):
-#     if np.shape(FP_full) != (34, 34):
-#         raise ValueError('The focal plane shape should be (34, 34).')
-#
-#     else:
-#         FPidentity = make_id_focalplane()
-#         tes = np.reshape(FPidentity.TES, (34, 34))
-#         # Set the pixels that are not TES to NAN
-#         FP_real = np.where(tes == 0, np.nan, FP_full)
-#
-#     return FP_real
-
-
-# def get_one_quadrant(q, FP_full, iquad):
-#     if np.shape(FP_full) != (34, 34):
-#         raise ValueError('The focal plane shape should be (34, 34).')
-#     if iquad in [1, 2, 3, 4]:
-#         quadrant = q.detector.all.quadrant
-#         xGRF_2D = q.detector.all.center[:, :, 0]
-#         yGRF_2D = q.detector.all.center[:, :, 1]
-#         plt.figure()
-#         plt.pcolor(xGRF_2D, yGRF_2D, quadrant)
-#         plt.xlabel('X_GRF')
-#         plt.ylabel('Y_GRF')
-#         plt.colorbar()
-#
-#         FP_quad = FP_full[quadrant == iquad]
-#
-#         # FP_quad = FP_full[np.where(quadrant != iquad, 6, FP_full) != 6]
-#         # FP_quad = np.reshape(FP_quad, (17, 17))
-#         return FP_quad
-#
-#     else:
-#         raise ValueError('Wrong quadrant index.')
-
-# FPidentity = make_id_focalplane()
-# if iquad in [1, 2, 3, 4]:
-#     quadrant = np.reshape(FPidentity.quadrant, (34, 34))
-#     plt.figure()
-#     plt.imshow(quadrant)
-#     plt.colorbar()
-#     FP_quad = FP_full[np.where(quadrant != iquad, 6, FP_full) != 6]
-#     FP_quad = np.reshape(FP_quad, (17, 17))
-
-# def get_quadrant3(q, signal_perTES, doplot=False):
-#     """
-#
-#     Parameters
-#     ----------
-#     q : a qubic instrument
-#     signal_perTES : bytearray
-#         Signal in each TES (992 detectors).
-#     doplot : bool
-#         If True, make a plot.
-#
-#     Returns
-#     -------
-#     An image (17x17) of quadrant 3.
-#
-#     """
-#     quadrant3 = signal_perTES[496:744]
-#     indice = -(q.detector.center // 0.003)
-#     print(indice.shape)
-#     print(indice[0, :])
-#
-#     img = np.zeros((17, 17))
-#     for k in range(248):
-#         i = int(indice[k, 0])
-#         j = int(indice[k, 1])
-#         img[i - 1, j - 1] = quadrant3[k]
-#     img[img == 0.] = np.nan
-#     # img = np.rot90(img)
-#
-#     if doplot:
-#         plt.figure()
-#         plt.imshow(img)
-#
-#     return img

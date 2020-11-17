@@ -152,11 +152,12 @@ class MyChi2_nocov:
         chi2 = np.sum((self.y - val) ** 2)
         # chi2 = np.dot(self.y - val, self.y - val)
         return chi2
+        
 
 
 # ## Call Minuit
 def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=None, rangepars=None, nohesse=False,
-              force_chi2_ndf=False, verbose=True, minos=False, extra_args=None, print_level=0, force_diag=False,
+              force_chi2_ndf=False, verbose=True, minos=True, extra_args=None, print_level=0, force_diag=False,
               nsplit=1, ncallmax=10000, precision=None):
 
     # check if covariance or error bars were given
@@ -173,8 +174,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
         chi2 = MyChi2(x, y, covar, functname, extra_args=extra_args)
     # nohesse=False
     else:
-        chi2 = chi2(x, y, covar, functname)
-        nohesse = True
+        chi2 = chi2(x, y, covar, functname, extra_args=extra_args)
     # variables
     ndim = np.size(guess)
     parnames = []
@@ -194,9 +194,10 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     drng = {}
     dstep = {}
     if rangepars is not None:
+        step_norm = 100
         for i in range(len(parnames)):
             drng['limit_' + parnames[i]] = rangepars[i]
-            dstep['error_' + parnames[i]] = (rangepars[i][1] - rangepars[i][0]) / 10
+            dstep['error_' + parnames[i]] = (rangepars[i][1] - rangepars[i][0]) / step_norm
     else:
         for i in range(len(parnames)):
             drng['limit_' + parnames[i]] = False
@@ -216,15 +217,21 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
             for k in drng.keys():
                 theguess[k] = drng[k]
         theargs.update(theguess)
-    m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=1., print_level=print_level, **theargs)
+    m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=1, print_level=print_level, **theargs)
     m.migrad(ncall=ncallmax * nsplit, nsplit=nsplit, precision=precision)
     # print('Migrad Done')
     if minos:
-        m.minos()
-        # print('Minos Done')
+        try:
+            m.minos()
+            if verbose: print('Minos Done')
+        except:
+            if verbose: print('Minos Failed !')
     if nohesse is False:
-        m.hesse()
-        # print('Hesse Done')
+        try:
+            m.hesse()
+            if verbose: print('Hesse Done')
+        except:
+            if verbose: print('Hesse failed !')
     # build np.array output
     parfit = []
     for i in parnames: parfit.append(m.values[i])

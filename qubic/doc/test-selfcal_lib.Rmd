@@ -24,17 +24,18 @@ from __future__ import division, print_function
 # %matplotlib notebook
 
 import numpy as np
-import healpy as hp
+import scipy
 import matplotlib.pyplot as plt
 import matplotlib.ticker as plticker
+from matplotlib.colors import SymLogNorm
 
 from qubicpack.utilities import Qubic_DataDir
 
 import qubic
 
-from qubic import selfcal_lib as sc
+from qubic import selfcal_lib as scal
 
-plt.rcParams['figure.figsize'] = (8, 8)
+plt.rcParams['figure.figsize'] = (12, 6)
 
 
 # import matplotlib.animation as animation
@@ -45,9 +46,10 @@ plt.rcParams['figure.figsize'] = (8, 8)
 # Use a tool from qubicpack to get a path
 basedir = Qubic_DataDir(datafile='instrument.py', ) 
 print('basedir : ', basedir)
-dictfilename = basedir + '/dicts/global_source_oneDet.dict'
+
 
 # Get a dictionary
+dictfilename = basedir + '/dicts/global_source_oneDet.dict'
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 print(d['detarray'])
@@ -56,39 +58,102 @@ print(d['nf_sub'])
 
 d['MultiBand'] = False
 d['nf_sub'] = 1
-d['config'] = 'FI'
+d['config'] = 'TD'
 d['beam_shape'] = 'gaussian'
-
-# Create an object
-baseline = [25, 57]
-ca = sc.SelfCalibration(baseline, d)
 ```
-
-# Qubic soft simulation (no aberrations)
-
-
-### Get all combinations for one baseline
-This is a simulation that doesn't take into account optical aberrations (only geometrical optics). If the point source is on the optical axis, then you get a symmetrical image.
-
-You can choose the resolution you want.
 
 ```{python}
 # You need a qubic instrument for that function
 q = qubic.QubicInstrument(d)
 
-# Focal length (if you want to change it)
-# q.optics.focal_length = 0.30
+plt.figure(figsize=(6, 4))
+q.detector.plot(fill=True)
+plt.xlabel('X_GRF')
+plt.ylabel('Y_GRF')
+plt.title('q.detector.plot()')
 
-reso = 34
+# q.optics.focal_length = 0.30 # Change the focal length
+```
 
-# FP radius
-radius = 0.051
-S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij = ca.get_power_combinations(q, theta=[0], 
-                                                                          phi=[0], nu=150e9, reso=reso,
-                                                                          xmin=-radius, xmax=radius)
+# Instrument horn config
+
+```{python}
+q.horn.open = False # All close
+q.horn.open[3] = True # Close one
+print(q.horn)
+
+plt.subplots(1, 2, figsize=(12, 6))
+
+plt.subplot(121)
+q.horn.plot()
+plt.xlabel('$X_{GRF}$ [m]', fontsize=20)
+plt.ylabel('$Y_{GRF}$ [m]', fontsize=20)
+plt.axis('equal')
+
+# Numbering on the horns
+a = 1
+x = q.horn.center[:, 0]
+y = q.horn.center[:, 1]
+for i,j in zip(x, y):
+    corr = -0.002 # adds a little correction to put annotation in marker's centrum
+    plt.annotate(str(a),  xy=(i + corr, j + corr), fontsize=14, color='r')
+    a += 1
+    
+plt.subplot(122)
+q.horn.plot()
+scal.plot_baseline(q, [25, 57])
+plt.xlabel('$X_{GRF}$ [m]', fontsize=20)
+plt.ylabel('$Y_{GRF}$ [m]', fontsize=20)
+plt.axis('equal')
+```
+
+# Qubic soft simulation (no aberrations)
+
+This is a simulation that doesn't take into account optical aberrations (only geometrical optics). If the point source is on the optical axis, then you get a symmetrical image.
+
+You can choose the resolution you want for the image on the FP.
+
+```{python}
+# Create an object
+# baseline = [142, 230]
+baseline = [25, 57]
+f = scal.Fringes(baseline)
+
+xONAFP, yONAFP, fringes = f.get_fringes(q,
+                                        theta=np.array([0.]), phi=np.array([0.]),
+                                        nu=150e9, spectral_irradiance=1.,
+                                        frame='ONAFP',
+                                        doplot=True, verbose=True, norm=None)
+
+print(fringes.shape)
+```
+
+```{python}
+x, y, S, Cminus_i, Sminus_ij, Cminus_j, Ci, Cj, Sij = f.get_all_combinations_power(q, 
+                                                                             theta=[0], phi=[0], 
+                                                                             nu=150e9, spectral_irradiance=1.,
+                                                                             frame='ONAFP',
+                                                                             doplot=True, verbose=True, 
+                                                                             norm=None)
 
 # They are 3D arrays : (reso, reso, #pointings)
 print('shape of each combination :', Cminus_i.shape)
+```
+
+```{python}
+fringes_true = S - Cminus_i - Cminus_j + Sminus_ij + Ci + Cj
+fringes_meas = S - Cminus_i - Cminus_j + Sminus_ij
+
+plt.subplots(1, 2)
+plt.suptitle(f'Baseline: {baseline}', fontsize=18)
+plt.subplots_adjust(wspace=0.3)
+
+plt.subplot(121)
+scal.scatter_plot_FP(q, x, y, fringes_true[:, 0], frame='ONAFP', title='Complete combination', norm=None)
+# scal.pcolor_plot_FP(q, x, y, fringes_true[:, 0], frame='ONAFP', title='Complete combination')
+
+plt.subplot(122)
+scal.scatter_plot_FP(q, x, y, fringes_meas[:, 0], frame='ONAFP', title='Measured combination', norm=None)
 ```
 
 ### Fringes by combining the different horn configurations
@@ -96,219 +161,96 @@ print('shape of each combination :', Cminus_i.shape)
 ```{python}
 # Make the combination (S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
 
-fringes = ca.compute_fringes(q, theta=list(np.deg2rad(np.arange(0, 4, 0.25))), 
-                                phi=list(np.zeros(16)), reso=reso, nu=150e9,
-                             xmin=-radius, xmax=radius)
+x, y, fringes_combined = f.get_fringes_from_combination(q,
+                                                        measured_comb=False,
+                                                        theta=[0], phi=[0], 
+                                                        nu=150e9, spectral_irradiance=1.,
+                                                        frame='ONAFP',
+                                                        doplot=True, verbose=True)
 print(fringes.shape)
 ```
 
-```{python}
-# Look at the difference between fringes for 2 punctual source positions
-plt.figure()
-plt.imshow(fringes[:, :, 0] - fringes[:, :, 1], origin='lower')
-plt.pause(0.5)
-```
-
-### Get the focal plane image for the real instrument
-#### Without taking into account space between the quadrants
-
-```{python}
-# The focal plane image must already have 34x34 pixels
-# reso must be 34
-real_fringes = sc.get_real_fp(Sij[:, :, 0])
-
-# Full focal plane
-plt.figure()
-plt.subplot(321)
-plt.imshow(real_fringes, origin='lower')
-
-# Get only one quadrant:
-real_fringes, real_fringes_quad = sc.get_real_fp(Sij[:,:,0], quadrant=3)
-plt.subplot(322)
-plt.imshow(real_fringes_quad, origin='lower')
-
-# Remove dead detectors
-# Build masks
-d['detarray'] = 'CalQubic_DetArray_P87_TD.fits'
-
-if d['detarray'] == 'CalQubic_DetArray_P87_TD.fits':
-    full_mask, quart_mask = ca.get_dead_detectors_mask()
-    plt.subplot(323)
-    plt.imshow(full_mask, origin='lower')
-    plt.subplot(324)
-    plt.imshow(quart_mask, origin='lower')
-
-    # Apply the mask on the focal plane
-    plt.subplot(325)
-    plt.imshow(real_fringes*full_mask, origin='lower')
-    plt.subplot(326)
-    plt.imshow(real_fringes_quad*quart_mask, origin='lower')
-
-
-```
-
-```{python}
-# This is not very useful
-# Add a grid (quadrant and TES)
-fig, ax = plt.subplots()
-extent = [-radius, radius, -radius, radius]
-ax.imshow(real_fringes, origin='lower', extent=extent)
-
-det_size = 0.003
-grid_ticks = np.arange(-radius, radius, det_size)
-quadrant_ticks = np.arange(-radius, radius, radius)
-
-ax.set_xticks(grid_ticks , minor=True)
-ax.set_yticks(grid_ticks , minor=True)
-
-ax.set_xticks(quadrant_ticks , minor=False)
-ax.set_yticks(quadrant_ticks , minor=False)
-
-ax.grid(which='major', color='w', linewidth=3)
-
-ax.grid(which='minor', color='w', linewidth=0.5)
-```
-
-#### Plot with real TES locations
-
-```{python}
-# Path to the simulated files from Creidhe in order to get the TES coordinates
-rep = Qubic_DataDir(datafile='detcentres.txt', datadir='/home/lmousset/QUBIC/')
-print(rep)
-
-# Let's look at the coordinates for the center of each TES
-# Here we use the file given by Creidhe 
-detxy = np.loadtxt(rep + '/detcentres.txt', skiprows=1)
-plt.figure(figsize=(15, 10))
-plt.scatter(detxy[:,0], detxy[:, 1], alpha=0.)
-for i in range(992): 
-    plt.text(detxy[i,0 ], detxy[i, 1], str(i))    
-
-
-
-```
-
-```{python}
-# readv will contains the TES vertices coordinates and labels gives one number to each TES
-readv, labels = sc.make_labels(rep, nn=reso, img_size=2*radius)
-```
-
-```{python}
-print(labels.shape)
-plt.figure()
-plt.imshow(labels)
-```
-
-```{python}
-counts_perTES, sum_perTES, mean_perTES = sc.fulldef2tespixels(S[:, :, 0], labels)
-```
-
-```{python}
-fig = sc.make_plot_real_fp(readv, mean_perTES/np.max(mean_perTES), vmin=0, vmax=0.05)
-```
-
 # Power on the focal plane with optical aberrations
-Using Creidhe simulations,
+Using simulations from Maynooth,
 need to download the files at : https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
 
 ```{python}
 # Path to the simulated files 
 rep = Qubic_DataDir(datafile='detcentres.txt', datadir='/home/lmousset/QUBIC/')
 print('rep:', rep)
-
-# Finges with aberations
-# Directly using the 2 horns opened
-fringes_aber = ca.get_power_fp_aberration(rep, doplot=True)
-
-print(fringes_aber.shape)
-
 ```
 
 ```{python}
-# Other way to get fringes with aberrations :
-# Make the combination (S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
-fringes_aber_comb = ca.get_fringes_aberration_combination(rep)
-print('fringes_aber_comb.shape shape :', fringes_aber_comb.shape)
+open_horns = [25, 57]
+xONAFP, yONAFP, power = scal.get_power_Maynooth(open_horns, 0., 150e9, q.horn.center, rep, hwp_position=0)
+print(xONAFP.shape)
+print(power.shape)
 
+plt.figure()
+scal.scatter_plot_FP(q, xONAFP, yONAFP, power, s=1, 
+                   frame='ONAFP', 
+                   title='Maynooth full resolution', 
+                   norm=None)
 ```
 
 ```{python}
-# This simulation is larger than the FP 
-# Let's overplot the real FP
-# This is not exactly right because the 4 quadrants should be more separated... 
-fringes_aber[fringes_aber==0]=['nan']
+open_horns = [25, 57]
+scal.open_switches(q, open_horns)
 
-fig = sc.add_fp_simu_aber(fringes_aber, vmin=0., vmax=0.05)
-# plt.savefig('/home/louisemousset/QUBIC/Qubic_images/plots/fringes_aber_25_57.png')
+external_A = scal.make_external_A(rep, open_horns)
+
+xONAFP, yONAFP, power = scal.get_response_power(q,
+                                              theta=np.array([0.]), phi=np.array([0.]),
+                                              nu=150e9, spectral_irradiance=1.,
+                                              frame='ONAFP',
+                                              external_A=external_A, hwp_position=0, 
+                                              verbose=True)
+
+plt.figure()
+scal.scatter_plot_FP(q, xONAFP, yONAFP, power, s=100, 
+                   frame='ONAFP', 
+                   title='Maynooth full resolution', 
+                   norm=None)
 ```
 
 ```{python}
-# Get real FP by averaging the signal and using real TES locations.
+xONAFP_TES, yONAFP_TES, powerTES = f.get_fringes_Maynooth(q, rep, 
+                                                          theta=np.array([0.]), nu=150e9,
+                                                          interp=True,
+                                                          verbose=True)
 
-readv_aber, labels_aber = sc.make_labels(rep)
+plt.figure()
+scal.scatter_plot_FP(q, xONAFP_TES, yONAFP_TES, powerTES, s=None, 
+                   frame='ONAFP', 
+                   title='Maynooth at TES resolution', 
+                   norm=None)
 ```
 
 ```{python}
-fringes_aber.shape
+xONAFP_TES, yONAFP_TES, powerTES = f.get_fringes_Maynooth(q, rep, 
+                                                          theta=np.array([0.]), nu=150e9,
+                                                          interp=False,
+                                                          verbose=True)
+
+plt.figure()
+scal.scatter_plot_FP(q, xONAFP_TES, yONAFP_TES, powerTES, s=None, 
+                   frame='ONAFP', 
+                   title='Maynooth at TES resolution', 
+                   norm=None)
 ```
 
 ```{python}
-counts_aber, sum_aber, mean_aber = sc.fulldef2tespixels(fringes_aber, labels_aber)
+xONAFP_TES, yONAFP_TES, fringes_comb_TES = f.get_fringes_Maynooth_combination(q, rep,
+                                                                              measured_comb=True,
+                                                                              theta=np.array([0.]), nu=150e9,
+                                                                              interp=False,
+                                                                              verbose=True)
 
-fig = sc.make_plot_real_fp(readv_aber, mean_aber)
-plt.title('Baseline {} with aberrations'.format(baseline))
-```
-
-# Instrument horn config
-
-```{python}
-q.horn.open=False # All close
-q.horn.open[3]=True # Close one
-q.horn
-```
-
-```{python}
-# Power on the focal plane
-power = sc.get_power_on_array(q, reso=200)
-print('power shape :', power.shape)
-plt.imshow(power[:,:,0])
-```
-
-```{python}
-# Horn array in the GRF frame
-center = q.horn.center
-center.shape
-x = center[:, 0]
-y = center[:, 1]
-
-fig, ax = plt.subplots()
-
-# instanciate a figure and ax object
-# annotate is a method that belongs to axes
-ax.plot(x, y, 'go', markersize=40, alpha=0.2)
-
-a = 1
-for i,j in zip(x,y):
-    corr = -0.002 # adds a little correction to put annotation in marker's centrum
-    ax.annotate(str(a),  xy=(i + corr, j + corr), fontsize=14)
-    a+=1
-plt.xticks(fontsize=14)
-plt.yticks(fontsize=14)
-ax.set_xlabel('$X_{GRF}$ [m]', fontsize=20)
-ax.set_ylabel('$Y_{GRF}$ [m]', fontsize=20)
-```
-
-# Get an array with TES signal
-
-```{python}
-signal = sc.image_fp2tes_signal(real_fringes)
-print('shape : (#TES, #ASICS)', signal.shape)
-```
-
-```{python}
-# Do the inverse
-image_fp = sc.tes_signal2image_fp(signal, asics=np.arange(1, 9))
-plt.imshow(image_fp, origin='lower')
+plt.figure()
+scal.scatter_plot_FP(q, xONAFP_TES, yONAFP_TES, fringes_comb_TES, s=None, 
+                   frame='ONAFP', 
+                   title='Maynooth TES resolution', 
+                   norm=None)
 ```
 
 ```{python}

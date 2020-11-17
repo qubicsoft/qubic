@@ -183,7 +183,8 @@ class model_fringe_th:
         return np.nan_to_num(np.ravel(self(theta, phi, amp, fwhmprim)))
 
         
-index_fringe = all_bs.index([49, 53])
+# index_fringe = all_bs.index([49, 53])
+index_fringe = all_bs.index([17, 49])
 fr = model_fringe_th(all_bs[index_fringe], d, mask) 
 
 pix2deg = np.degrees(3./300)
@@ -241,7 +242,8 @@ def read_my_fringe(bs, files, all_bs):
     myfile = files[all_bs.index(bs)]
     return np.load(myfile)
 
-index_fringe = all_bs.index([49, 53])
+# index_fringe = all_bs.index([49, 53])
+index_fringe = all_bs.index([17, 49])
 #index_fringe = all_bs.index([9, 11])
 
 myfringe = read_my_fringe(all_bs[index_fringe], all_files, all_bs)
@@ -258,18 +260,18 @@ title(all_bs[index_fringe])
 # ### Fitting with Qubic Software fringes
 # from scipy.optimize import curve_fit
 
-# index_fringe = all_bs.index([49, 53])
+# index_fringe = all_bs.index([17, 49])
 # myfringe = read_my_fringe(all_bs[index_fringe], all_files, all_bs)
 
 
 # theta_init = 0.03
 # phi_init = 0.
 # amp_init = 0.5
-# fwhm_init = 30
+# fwhm_init = 100
 # p0 = np.array([theta_init, phi_init, amp_init, fwhm_init])
 # coeffs, coeffs_cov = curve_fit(fr.flat_data, 0, np.nan_to_num(np.ravel(myfringe)), 
 #                                p0=p0,
-#                               bounds=(0, [np.pi/10, np.pi/10, 2, 100]))
+#                               bounds=([0, 0, 0, 99], [np.pi/10, np.pi/10, 2, 100]))
 # print(coeffs)
 # print(coeffs_cov)
 

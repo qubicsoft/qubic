@@ -11,140 +11,7 @@ from qubic import selfcal_lib as sc
 from qubicpack.utilities import Qubic_DataDir
 from qubicpack.qubicfp import qubicfp
 import qubic.fibtools as ft
-
-
-# ============== Functions ==============
-def get_data(dirs, nf, asic, tes=28, doplot=True):
-    asic = str(asic)
-    thedir = dirs[nf]
-
-    # Qubicpack object
-    a = qubicfp()
-    a.verbosity = 0
-    a.read_qubicstudio_dataset(thedir)
-    data = a.azel_etc(TES=None)
-
-    # Signal for one TES
-    t0 = data['t_data ' + asic][0]
-    t_data = data['t_data ' + asic] - t0
-    data = data['data ' + asic]
-
-    if doplot:
-        fig, axs = plt.subplots(1, 2, figsize=(15, 3))
-        plt.subplots_adjust(wspace=0.5)
-
-        axs[0].plot(t_data, data[tes - 1, :])
-        axs[0].set_title(thedir[-5:])
-
-        axs[1].plot(t_data, data[tes - 1, :])
-        axs[1].set_title(thedir[-5:])
-        axs[1].set_xlim(0, 40)
-        plt.show()
-
-    return thedir, t_data, data
-
-
-def cut_data(t0, tf, t_data, data):
-    ok = (t_data > t0) & (t_data < tf)
-    t_data_cut = t_data[ok] - t0
-    data_cut = data[:, ok]
-
-    return t_data_cut, data_cut
-
-
-def make_spectrum(t_data, data_oneTES, period):
-    # Sampling frequency
-    npoints = len(t_data)
-    t0, tf = t_data[0], t_data[-1]
-    f_sampling = npoints / (tf - t0)
-
-    # Spectrum
-    spectrum_f, freq_f = mlab.psd(data_oneTES,
-                                  Fs=f_sampling,
-                                  NFFT=2 ** int(np.log(len(data_oneTES)) / np.log(2)),
-                                  window=mlab.window_hanning)
-    plt.plot(freq_f, spectrum_f)
-    plt.loglog()
-    plt.xlim(0.1, 10)
-    for i in range(1, 10):
-        plt.axvline(x=i / period, color='orange')
-    plt.grid()
-
-    return spectrum_f, freq_f
-
-
-def find_right_period(guess, t_data, data_oneTES):
-    ppp = np.linspace(guess - 1.5, guess + 1.5, 250)
-    rms = np.zeros(len(ppp))
-    for i in range(len(ppp)):
-        xin = t_data % ppp[i]
-        yin = data_oneTES
-        xx, yy, dx, dy, o = ft.profile(xin, yin, nbins=100, plot=False)
-        rms[i] = np.std(yy)
-    period = ppp[np.argmax(rms)]
-
-    return ppp, rms, period
-
-
-def make_diff_sig(params, x, stable_time, data):
-    thesim = ft.simsig_fringes(x, stable_time, params)
-    diff = data - thesim
-    return diff
-
-
-def make_combination(param_est):
-    amps = param_est[2:8]
-    print('Check:', amps[2], amps[4])
-    # return amps[0] + amps[3] - amps[1] - amps[2]
-    return amps[1] + amps[2] - amps[0] - amps[3]
-
-
-def analyse_fringes(dirs, m, w, t0=4, tf=400, stable_time=3.,
-                    lowcut=0.001, highcut=10, nbins=120,
-                    notch=np.array([[1.724, 0.005, 10]]),
-                    tes_check=28, param_guess=[0.1, 0., 1, 1, 1, 1, 1, 1]):
-    res_w = np.zeros(256)
-    res_fit = np.zeros(256)
-    param_est = np.zeros((256, 8))
-    folded_bothasics = np.zeros((256, nbins))
-    for asic in [1, 2]:
-        _, t_data, data = get_data(dirs, m, asic, doplot=False)
-        t_data_cut, data_cut = cut_data(t0, tf, t_data, data)
-        if asic == 1:
-            ppp, rms, period = find_right_period(6 * stable_time, t_data_cut, data_cut[tes_check - 1, :])
-            print('period:', period)
-
-        folded, t, folded_nonorm, newdata = ft.fold_data(t_data_cut,
-                                                         data_cut,
-                                                         period,
-                                                         lowcut,
-                                                         highcut,
-                                                         nbins,
-                                                         notch=notch
-                                                         )
-        if asic == 1:
-            folded_bothasics[:128, :] = folded
-        else:
-            folded_bothasics[128:, :] = folded
-
-        for tes in range(1, 129):
-            TESindex = (tes - 1) + 128 * (asic - 1)
-            res_w[TESindex] = np.sum(folded[tes - 1, :] * w)
-
-            fit = sop.least_squares(make_diff_sig,
-                                    param_guess,
-                                    args=(t,
-                                          stable_time,
-                                          folded[tes - 1, :]),
-                                    bounds=([0., -2, -2, -2, -2, -2, -2, -2],
-                                            [1., 2, 2, 2, 2, 2, 2, 2]),
-                                    verbose=1
-                                    )
-            param_est[TESindex, :] = fit.x
-            res_fit[TESindex] = make_combination(param_est[TESindex, :])
-
-    return t, folded_bothasics, param_est, res_w, res_fit
-
+import qubic.fringes_lib as fl
 
 # =============== Fringe simulations =================
 rep = Qubic_DataDir(datafile='detcentres.txt')
@@ -205,16 +72,16 @@ nf = 2
 tes = 28
 asic = 1
 
-thedir, t_data, data = get_data(dirs, nf, asic, tes)
+thedir, t_data, data = fl.get_data(dirs, nf, asic, tes)
 
 # Cut the data
 tstart = 4
 tend = 400
 
-t_data_cut, data_cut = cut_data(tstart, tend, t_data, data)
+t_data_cut, data_cut = fl.cut_data(tstart, tend, t_data, data)
 
 # Find the right period
-ppp, rms, period = find_right_period(18, t_data_cut, data_cut[tes - 1, :])
+ppp, rms, period = fl.find_right_period(18, t_data_cut, data_cut[tes - 1, :])
 print('period : ', ppp[np.argmax(rms)])
 
 plt.figure(figsize=(9, 4.5))
@@ -237,18 +104,12 @@ notch = np.array([[1.724, 0.005, nharm]])
 newdata = ft.filter_data(t_data_cut, data_cut[tes-1, :], lowcut, highcut, notch=notch,
                          rebin=True, verbose=True, order=5)
 
-spectrum_f, freq_f = make_spectrum(t_data_cut, data_cut[tes-1, :], period)
-
-spectrum_f2, freq_f2 = make_spectrum(t_data_cut, newdata, period)
-
 # compute spectrum with fibtools
-spectrum_f3, freq_f3 = ft.power_spectrum(t_data_cut, newdata, rebin=True)
+spectrum_f, freq_f = ft.power_spectrum(t_data_cut, newdata, rebin=True)
 
 plt.figure()
 plt.subplot(211)
-plt.plot(freq_f, spectrum_f, label='Original')
-plt.plot(freq_f2, spectrum_f2, label='filtered')
-plt.plot(freq_f3, spectrum_f3, label='filtered2')
+plt.plot(freq_f, spectrum_f, label='Filtered')
 plt.legend()
 plt.loglog()
 plt.ylim(1e1, 1e17)
@@ -284,7 +145,7 @@ plt.show()
 # ========== Fit folded signal ================
 param_guess = [0.1, 0., 1, 1, 1, 1, 1, 1]
 stable_time = 3.
-fit = sop.least_squares(make_diff_sig,
+fit = sop.least_squares(fl.make_diff_sig,
                         param_guess,
                         args=(t,
                               stable_time,
@@ -308,7 +169,7 @@ plt.legend()
 plt.grid()
 plt.show()
 
-comb = make_combination(param_est)
+comb = fl.make_combination(param_est)
 print('Comb:', comb)
 
 # ========= Michel's method ===================
@@ -345,8 +206,8 @@ plt.show()
 
 
 # ============ Analysis for both ASICs and all measurements ==================
-t, folded_bothasics, param_est, res_w, res_fit = analyse_fringes(dirs, nf, w, t0=4, tf=200, stable_time=3.)
-fringe = ft.image_asics(all1=res_w)
+t, folded_bothasics, param_est, res_w, res_fit = fl.analyse_fringes(dirs, nf, w, t0=4, tf=200, stable_time=3.)
+# fringe = ft.image_asics(all1=res_w)
 fringe = ft.image_asics(all1=res_fit)
 
 # =================== Make a mask ==============
@@ -380,8 +241,8 @@ mask2 = ft.image_asics(all1=maskres)
 
 # Mask to remove max values from check
 lim = 10000
-mask3 = np.ones_like(fringe_fit)
-mask3[np.abs(fringe_fit) < lim] = np.nan
+mask3 = np.ones_like(res_fit)
+mask3[np.abs(res_fit) < lim] = np.nan
 
 plt.figure()
 plt.imshow(mask3, vmin=-1e5, vmax=1e5)
@@ -423,7 +284,7 @@ allparam_est = []
 allres_w = []
 allres_fit = []
 for m in range(12):
-    t, folded_bothasics, param_est, res_w, res_fit = analyse_fringes(dirs, m, w)
+    t, folded_bothasics, param_est, res_w, res_fit = fl.analyse_fringes(dirs, m, w)
     allfolded_bothasics.append(folded_bothasics)
     allparam_est.append(param_est)
     allres_w.append(res_w)

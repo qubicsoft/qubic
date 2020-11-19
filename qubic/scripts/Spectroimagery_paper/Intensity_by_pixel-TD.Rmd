@@ -331,7 +331,7 @@ plt.show()
 ## Udgrading maps
 
 ```{python}
-nside_new = 8
+nside_new = 64
 npix_ud = 12 * nside_new **2 
 noiseFI_ud = np.zeros((nreals, len(nus_out), npix_ud, 3))
 
@@ -443,7 +443,7 @@ def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 ```{python}
 pix = [hp.ang2pix(dTD['nside'], np.pi / 2 - np.deg2rad(center[1] - 0), np.deg2rad(center[0] + 1  ) ), ]
 pix_ud = PixPix(pix[0])
-pix_ud = 272
+pix_ud = 22144
 pix_red = np.where(np.where(cov_ud == True)[0] == pix_ud)[0][0]
 
 plt.figure(figsize = (10,4))
@@ -453,12 +453,12 @@ hp.gnomview(mapsTD_ud[-1,:,0], reso = 15,
             max = 0.4*np.max(mapsTD_ud[-1,:,0]), 
             unit = r'$\mu$K',
             rot = center)
-hp.projscatter(hp.pix2ang(nside_new, pix_ud), marker = '*', color = 'r', s = 200)
+hp.projscatter(hp.pix2ang(nside_new, pix_ud), marker = 'o', color = 'r', s = 160)
 hp.gnomview(mapsFI_ud[-1,:,0], reso = 15, title = 'FI patch ',
             unit = r'$\mu$K', sub = (122),
             min = 0,
             rot = center)
-hp.projscatter(hp.pix2ang(nside_new, pix_ud), marker = '*', color = 'r', s = 200)
+hp.projscatter(hp.pix2ang(nside_new, pix_ud), marker = 'o', color = 'r', s = 160)
 ```
 
 ```{python}
@@ -524,15 +524,20 @@ ylim = ax[0].get_ylim()
 ax[0].axvspan(xlim[0], nus_edge_out[0], color = 'k', alpha = 0.1)
 ax[0].axvspan(nus_edge_out[-1], xlim[-1], color = 'k', alpha = 0.1)
 
+#
+
 ax[0].set_title('TD - {} year'.format(dTD['effective_duration']), fontsize = 16)
 ax[0].set_ylabel(r'$I(\nu)~[\mu$K]', fontsize = 16)
 ax[0].set_xlabel(r'$\nu~[GHz]$', fontsize = 16)
 ax[0].legend(loc = 'lower right', fontsize = 14)
 ax[0].grid()
+ax[0].ticklabel_format(axis = 'y', style = 'sci', scilimits = (0,0), useLocale = True, useMathText = True)
 ax[0].set_xlim(xlim)
 ax[0].set_ylim(ylim)
 ax[0].text(xlim[0]+(xlim[1]-xlim[0])*0.1, ylim[-1]*0.85, r'$150~$GHz band', fontsize = 14)
-
+ax[0].set_aspect(1/(np.diff(ax[0].get_ylim())/np.diff(ax[0].get_xlim())), 
+                 anchor = (0.5,0.52), adjustable = 'box') #for pix 368 & 272
+#ax[0].set_yticklabels('%.1f')
 plt.axes(ax[1])
 hp.gnomview(dust_map_TD_ud[3,:,0], reso = 15, hold = True, notext = True,
             title = ' ',
@@ -579,8 +584,8 @@ hp.gnomview(mapsTD_ud[3,:,0], reso = 15, hold = True, notext = True,
             unit = r'$\mu$K',
             rot = center)
 
-hp.projscatter(hp.pix2ang(nside_new,pix_ud), marker = '*', color = 'r', s = 180)
-hp.graticule(dpar = dpar, dmer = dmer, alpha = 0.6, verbose = True)
+hp.projscatter(hp.pix2ang(nside_new,pix_ud), marker = 'o', color = 'r', s = 140)
+hp.graticule(dpar = dpar, dmer = dmer, alpha = 0.6, verbose = False)
 
 #paralels
 for ilong in long_coords:
@@ -604,19 +609,20 @@ hp.projtext(mer_coords[2] + 10.5, long_coords[2] - 1, r'$b$', rotation = 90, col
 
 plt.tight_layout()#plt.tight_layout()
 
-plt.savefig('FastSim-TD-Figs/TD{}_CMB-dust_nrec{}_nside{}_pixQ{}_pixG{}_Intensity_grat.svg'.format(FuncModel.__name__,
-                                                                                    dTD['nf_recon'],nside_new,
-                                                           pix_ud, pix_ud), 
-            format = 'svg', bbox_inches='tight')
-plt.savefig('FastSim-TD-Figs/TD{}_CMB-dust_nrec{}_nside{}_pixQ{}_pixG{}_Intensity_grat.pdf'.format(FuncModel.__name__,
-                                                                               dTD['nf_recon'],nside_new,
-                                                           pix_ud, pix_ud), 
-            format = 'pdf', bbox_inches='tight')
+#plt.savefig('FastSim-TD-Figs/TD{}_CMB-dust_nrec{}_nside{}_pixQ{}_pixG{}_Intensity_grat.svg'.format(FuncModel.__name__,
+#                                                                                    dTD['nf_recon'],nside_new,
+#                                                           pix_ud, pix_ud), 
+#            format = 'svg', bbox_inches='tight')
+#plt.savefig('FastSim-TD-Figs/TD{}_CMB-dust_nrec{}_nside{}_pixQ{}_pixG{}_Intensity_grat.pdf'.format(FuncModel.__name__,
+#                                                                               dTD['nf_recon'],nside_new,
+#                                                           pix_ud, pix_ud), 
+#            format = 'pdf', bbox_inches='tight')
 #plt.savefig('FastSim-TD-Figs/TD{}_CMB-dust_nrec{}_nside{}_pixQ{}_pixG{}_Intensity_grat'.format(FuncModel.__name__, 
 #                                                                           dTD['nf_recon'],
 #                                                                           nside_new,pix_ud, pix_ud),
 #           bbox_inches='tight')r'{}$\degree$'.format(imer),
 plt.show()
+
 ```
 
 ### Polarization
@@ -663,6 +669,8 @@ ax[0].grid()
 ax[0].set_xlim(xlim)
 ax[0].set_ylim(ylim)
 ax[0].text(xlim[0]+(xlim[1]-xlim[0])*0.1, ylim[-1]*0.85, r'$150~$GHz band', fontsize = 14)
+ax[0].set_aspect(1/(np.diff(ax[0].get_ylim())/np.diff(ax[0].get_xlim())), 
+                 anchor = (0.5,0.52), adjustable = 'box') #for pix 368 & 272
 
 
 plt.axes(ax[1])
@@ -711,7 +719,7 @@ hp.gnomview(auxmapG,
             max = 0.75 * np.max(auxmapG),
             unit = r'$\mu$K',
             rot = center)
-hp.projscatter(hp.pix2ang(nside_new,pix_ud),marker = '*', s = 180, color = 'r',)
+hp.projscatter(hp.pix2ang(nside_new,pix_ud),marker = 'o', s = 140, color = 'r',)
 hp.graticule(dpar = 10, dmer = 20,alpha = 0.6, verbose = False)
 #paralels
 for ilong in long_coords:
@@ -737,18 +745,20 @@ hp.projtext(mer_coords[2] + 10.5, long_coords[2] - 1, r'$b$', rotation = 90, col
 
 plt.tight_layout()#plt.tight_layout()
 
-plt.savefig('FastSim-TD-Figs/TD{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_grat.svg'.format(FuncModel.__name__,
-                                                                                     dTD['nf_recon'],nside_new,
-                                                           pix_ud, pix_ud), 
-            format = 'svg', bbox_inches='tight')
-plt.savefig('FastSim-TD-Figs/TD{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_grat.pdf'.format(FuncModel.__name__,
-                                                                               dTD['nf_recon'],nside_new,
-                                                           pix_ud, pix_ud), 
-            format = 'pdf', bbox_inches='tight' )
+#plt.savefig('FastSim-TD-Figs/TD{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_grat.svg'.format(FuncModel.__name__,
+#                                                                                     dTD['nf_recon'],nside_new,
+#                                                           pix_ud, pix_ud), 
+#            format = 'svg', bbox_inches='tight')
+#plt.savefig('FastSim-TD-Figs/TD{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_grat.pdf'.format(FuncModel.__name__,
+#                                                                               dTD['nf_recon'],nside_new,
+#                                                           pix_ud, pix_ud), 
+#            format = 'pdf', bbox_inches='tight' )
 #plt.savefig('FastSim-TD-Figs/TD{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_grat'.format(FuncModel.__name__, 
 #                                                                           dTD['nf_recon'],
 #                                                                           nside_new,pix_ud, pix_ud))
+print(np.diff(ax[0].get_ylim())/np.diff(ax[0].get_xlim()))
 plt.show()
+
 ```
 
 ```{python}

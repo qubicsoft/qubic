@@ -131,7 +131,7 @@ class MyChi2:
         self.functname = functname
         self.extra_args = extra_args
 
-    def __call__(self, *pars):
+    def __call__(self, *pars, extra_args=None):
         val = self.functname(self.x, pars, extra_args=self.extra_args)
         chi2 = np.dot(np.dot(self.y - val, self.invcov), self.y - val)
         return chi2
@@ -173,8 +173,10 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     if chi2 is None:
         chi2 = MyChi2(x, y, covar, functname, extra_args=extra_args)
     # nohesse=False
-    else:
-        chi2 = chi2(x, y, covar, functname, extra_args=extra_args)
+
+    ### Test:
+    bla = chi2(guess)
+
     # variables
     ndim = np.size(guess)
     parnames = []
@@ -217,7 +219,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
             for k in drng.keys():
                 theguess[k] = drng[k]
         theargs.update(theguess)
-    m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=1, print_level=print_level, **theargs)
+    m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=0.1, print_level=print_level, **theargs)
     m.migrad(ncall=ncallmax * nsplit, nsplit=nsplit, precision=precision)
     # print('Migrad Done')
     if minos:
@@ -267,7 +269,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
         print(np.array(errfit) * np.sqrt(correct))
         print('Chi2=', chisq)
         print('ndf=', ndf)
-    return m, np.array(parfit), np.array(errfit) * np.sqrt(correct), np.array(covariance) * correct, chi2(*parfit), ndf
+    return m, np.array(parfit), np.array(errfit) * np.sqrt(correct), np.array(covariance) * correct, chi2(*parfit), ndf, chi2 
 
 
 # ##############################################################################

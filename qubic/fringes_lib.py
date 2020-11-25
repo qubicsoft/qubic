@@ -1,32 +1,43 @@
 from __future__ import division, print_function
-
 import glob
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.mlab as mlab
-import scipy.optimize as sop
+from astropy.io import fits as pyfits
 from matplotlib.backends.backend_pdf import PdfPages
+import scipy.optimize as sop
 
-import qubic
-from qubic import selfcal_lib as sc
-from qubicpack.utilities import Qubic_DataDir
-
-from qubicpack import qubicpack as qp
 from qubicpack.qubicfp import qubicfp
 import qubic.fibtools as ft
+from qubic import selfcal_lib as scal
 
 
+# ============== Get data ==============
+def get_fringes_datasets(rep, keyword, q):
+    if rep[-1] != '/':
+        rep += '/'
+
+    datasets = np.sort(glob.glob(rep + '*' + keyword + '*'))
+    print('Number of folders in the dataset:', len(datasets))
+
+    allBLs, allNcycles, allwt = [], [], []
+    for ds in datasets:
+        strs = ds.split('_')
+        allNcycles.append(float(strs[strs.index('ncycles') + 1]))
+        allwt.append(float(strs[strs.index('wt') + 1]))
+        allBLs.append([int(strs[-2]), int(strs[-1])])
+
+    BLs_sort, BLs_type = scal.find_equivalent_baselines(allBLs, q)
+
+    return datasets, allBLs, allNcycles, allwt, BLs_sort, BLs_type
 
 
-# ============== Functions ==============
-def get_data(dirs, nf, asic, tes=28, doplot=True):
+def get_data(datafolder, asic, tes=28, doplot=True):
     asic = str(asic)
-    thedir = dirs[nf]
 
     # Qubicpack object
     a = qubicfp()
     a.verbosity = 0
-    a.read_qubicstudio_dataset(thedir)
+    a.read_qubicstudio_dataset(datafolder)
     data = a.azel_etc(TES=None)
 
     # Signal for one TES
@@ -39,14 +50,14 @@ def get_data(dirs, nf, asic, tes=28, doplot=True):
         plt.subplots_adjust(wspace=0.5)
 
         axs[0].plot(t_data, data[tes - 1, :])
-        axs[0].set_title(thedir[-5:])
+        axs[0].set_title(datafolder[-5:])
 
         axs[1].plot(t_data, data[tes - 1, :])
-        axs[1].set_title(thedir[-5:])
+        axs[1].set_title(datafolder[-5:])
         axs[1].set_xlim(0, 40)
         plt.show()
 
-    return thedir, t_data, data
+    return t_data, data
 
 def cut_data(t0, tf, t_data, data):
     if t0 is None:
@@ -73,43 +84,85 @@ def find_right_period(guess, t_data, data_oneTES):
 
     return ppp, rms, period
 
-def make_diff_sig(params, x, stable_time, data):
-    thesim = ft.simsig_fringes(x, stable_time, params)
+def make_diff_sig(params, x, wt, data):
+    """
+    Parameters
+    ----------
+    params: list
+        ctime, starting time, the 6 amplitudes.
+    x:
+    wt:
+    data:
+
+    Returns
+    -------
+
+    """
+
+    thesim = ft.simsig_fringes(x, wt, params)
     diff = data - thesim
     return diff
+
 
 def make_combination(param_est, verbose=0):
     amps = param_est[2:8]
     if verbose>0:
         print('Check:', amps[2], amps[4])
-    #return amps[0] + amps[3] - amps[1] - amps[2]
     return (amps[0]+amps[3]+amps[5])/3 + amps[2] - amps[1] - amps[4]
 
-def analyse_fringes(dirs, m, w=None, t0=None, tf=None, stable_time=3.,
-                    lowcut=0.001, highcut=10, nbins=120,
-                    notch=np.array([[1.724, 0.005, 10]]),
-                    tes_check=28, param_guess=[0.1, 0., 1, 1, 1, 1, 1, 1], 
-                    verbose=0, median=False, read_data = None, silent=False):
-    res_w = np.zeros(256)
-    res_fit = np.zeros(256)
+
+def analyse_fringesLouise(datafolder, t0=None, tf=None, wt=5.,
+                          lowcut=0.001, highcut=10, nbins=120,
+                          notch=np.array([[1.724, 0.005, 10]]),
+                          tes_check=28, param_guess=[0.1, 0., 1, 1, 1, 1, 1, 1],
+                          verbose=True, median=False, read_data=None):
+    """
+
+    Parameters
+    ----------
+    datafile
+    t0
+    tf
+    wt: float
+        Waiting time [s] on each step.
+    lowcut
+    highcut
+    nbins
+    notch
+    tes_check
+    param_guess: list
+        ctime, starting time, the 6 amplitudes.
+    verbose
+    median
+    read_data
+    silent
+
+    Returns
+    -------
+
+    """
+
+    combination = np.zeros(256)
     param_est = np.zeros((256, 8))
     folded_bothasics = np.zeros((256, nbins))
-    for asic in [1, 2]:
+    residuals = np.zeros_like(folded_bothasics)
+
+    for ASIC in [1, 2]:
         if read_data is None:
-            #print('Reading data')
-            _, t_data, data = get_data(dirs, m, asic, doplot=False)
+            # Read the data
+            t_data, data = get_data(datafolder, ASIC, doplot=False)
         else:
-            t_data, data = read_data[asic-1]
+            t_data, data = read_data[ASIC - 1]
 
         # Cut the data
         t_data_cut, data_cut = cut_data(t0, tf, t_data, data)
 
         # Find the true period
-        if asic == 1:
-            ppp, rms, period = find_right_period(6 * stable_time, t_data_cut, data_cut[tes_check - 1, :])
+        if ASIC == 1:
+            ppp, rms, period = find_right_period(6 * wt, t_data_cut, data_cut[tes_check - 1, :])
             if verbose:
                 print('period:', period)
-                print('Expected : ', 6 * stable_time)
+                print('Expected : ', 6 * wt)
 
         # Fold and filter the data
         folded, t, folded_nonorm, newdata = ft.fold_data(t_data_cut,
@@ -120,30 +173,355 @@ def analyse_fringes(dirs, m, w=None, t0=None, tf=None, stable_time=3.,
                                                          nbins,
                                                          notch=notch,
                                                          median=median,
-                                                         silent=silent
+                                                         silent=verbose,
                                                          )
-        if asic == 1:
+        if ASIC == 1:
             folded_bothasics[:128, :] = folded
         else:
             folded_bothasics[128:, :] = folded
 
-        # Fit (Louise method) and Michel method
-        for tes in range(1, 129):
-            TESindex = (tes - 1) + 128 * (asic - 1)
-            if w is not None:
-                res_w[TESindex] = np.sum(folded[tes - 1, :] * w)
-
+        # Fit (Louise method)
+        for TES in range(1, 129):
+            index = (TES - 1) + 128 * (ASIC - 1)
             fit = sop.least_squares(make_diff_sig,
                                     param_guess,
                                     args=(t,
                                           period / 6.,
-                                          folded[tes - 1, :]),
+                                          folded[TES - 1, :]),
                                     bounds=([0., -2, -2, -2, -2, -2, -2, -2],
                                             [1., 2, 2, 2, 2, 2, 2, 2]),
                                     verbose=verbose
                                     )
-            param_est[TESindex, :] = fit.x
-            res_fit[TESindex] = make_combination(param_est[TESindex, :])
+            param_est[index, :] = fit.x
+            combination[index] = make_combination(param_est[index, :])
 
-    return t, folded_bothasics, param_est, res_w, res_fit, period
+            residuals[index, :] = folded_bothasics[index, :] - ft.simsig_fringes(t, period / 6., param_est[index, :])
+
+    return t, folded_bothasics, param_est, combination, period, residuals
+
+
+def make_w_Michel(t, tm1=12, tm2=2, ph=5):
+    # w is made to make the combination to see fringes with Michel's method
+    w = np.zeros_like(t)
+    wcheck = np.zeros_like(t)
+    period = len(w) / 6
+    for i in range(len(w)):
+        if (((i - ph) % period) >= tm1) and (((i - ph) % period) < period - tm2):
+            if (((i - ph) // period) == 0) | (((i - ph) // period) == 3):
+                w[i] = 1.
+            if (((i - ph) // period) == 1) | (((i - ph) // period) == 2):
+                w[i] = -1.
+
+    return w, wcheck
+
+
+def analyse_fringes_Michel(datafolder, w, t0=None, tf=None, wt=5.,
+                            lowcut=0.001, highcut=10, nbins=120,
+                            notch=np.array([[1.724, 0.005, 10]]),
+                            tes_check=28,
+                            verbose=True, median=False, read_data = None, silent=False):
+    """
+
+    Parameters
+    ----------
+    datafolder
+    w
+    t0
+    tf
+    wt
+    lowcut
+    highcut
+    nbins
+    notch
+    tes_check
+    verbose
+    median
+    read_data
+    silent
+
+    Returns
+    -------
+
+    """
+
+    res_michel = np.zeros(256)
+    folded_bothasics = np.zeros((256, nbins))
+
+    for ASIC in [1, 2]:
+        if read_data is None:
+            # Read the data
+            t_data, data = get_data(datafolder, ASIC, doplot=False)
+        else:
+            t_data, data = read_data[ASIC - 1]
+
+        # Cut the data
+        t_data_cut, data_cut = cut_data(t0, tf, t_data, data)
+
+        # Find the true period
+        if ASIC == 1:
+            ppp, rms, period = find_right_period(6 * wt, t_data_cut, data_cut[tes_check - 1, :])
+            if verbose:
+                print('period:', period)
+                print('Expected : ', 6 * wt)
+
+        # Fold and filter the data
+        folded, t, folded_nonorm, newdata = ft.fold_data(t_data_cut,
+                                                         data_cut,
+                                                         period,
+                                                         lowcut,
+                                                         highcut,
+                                                         nbins,
+                                                         notch=notch,
+                                                         median=median,
+                                                         silent=silent,
+                                                         )
+        if ASIC == 1:
+            folded_bothasics[:128, :] = folded
+        else:
+            folded_bothasics[128:, :] = folded
+
+        # Michel method
+        for TES in range(1, 129):
+            index = (TES - 1) + 128 * (ASIC - 1)
+            res_michel[index] = np.sum(folded[TES - 1, :] * w)
+
+    return t, folded_bothasics, res_michel, period
+
+
+def make_keyvals(date, type_eq, neq, Vtes, nstep=6, ecosorb='yes', frame='ONAFP'):
+    '''
+    assign the FITS keyword values for the primary header
+    '''
+    keyvals = {}
+    keyvals['DATE-OBS'] = (date, 'Date of the measurement')
+    keyvals['TYPE-EQ'] = (type_eq, 'Equivalence type for this dataset')
+    keyvals['NBLS'] = (neq, 'Number of equivalent baselines')
+    keyvals['NSTEP'] = (nstep, 'Number of stable steps per cycle')
+    keyvals['V_TES'] = (Vtes, 'TES voltage [V]')
+    keyvals['ECOSORD'] = (ecosorb, 'Ecosorb on the source')
+    keyvals['FRAME'] = (frame, 'Referential frame for (X, Y) TES')
+
+    return keyvals
+
+
+def make_fdict(BLs_eq, wt_eq, Ncycles_eq, xTES, yTES, t,
+               folded, params, combination, periods, residuals, images):
+    fdict = {}
+    fdict['BLS-EQ'] = BLs_eq
+    fdict['WT'] = wt_eq
+    fdict['NCYCLES'] = Ncycles_eq
+    fdict['X_TES'] = xTES
+    fdict['Y_TES'] = yTES
+    fdict['TIME'] = t
+    fdict['FOLDED'] = folded
+    fdict['PARAMS'] = params
+    fdict['COMBINATION'] = combination
+    fdict['PERIODS'] = periods
+    fdict['RESIDUALS'] = residuals
+    fdict['IMAGES'] = images
+
+    return fdict
+
+
+def write_fits_fringes(out_dir, save_name, keyvals, fdict):
+    if out_dir[-1] != '/':
+        out_dir += '/'
+
+    # Header creation
+    hdr = pyfits.Header()
+    for key in keyvals.keys():
+        hdr[key] = (keyvals[key])
+
+    hdu_prim = pyfits.PrimaryHDU(header=hdr)
+    allhdu = [hdu_prim]
+    for key in fdict.keys():
+        hdu = pyfits.ImageHDU(data=fdict[key], name=key)
+        allhdu.append(hdu)
+
+    thdulist = pyfits.HDUList(allhdu)
+    thdulist.writeto(out_dir + save_name, 'warn')
+
+    return
+
+def read_fits_fringes(file):
+    hdulist = pyfits.open(file)
+    header = hdulist[0].header
+    print(header.keys)
+
+    fringes_dict = {}
+    for i in range(1, len(hdulist)):
+        extname = hdulist[i].header['EXTNAME']
+        data = hdulist[i].data
+        fringes_dict[extname] = data
+
+    return header, fringes_dict
+
+
+def plot_fringes_onFP(q, BL_index, keyvals, fdict, mask=None):
+    if type(keyvals['NSTEP']) is tuple:
+        for i in keyvals:
+            keyvals[i] = keyvals[i][0]
+
+    BL = fdict['BLS-EQ'][BL_index]
+    date = keyvals['DATE-OBS']
+    xONAFP = fdict['X_TES']
+    yONAFP = fdict['Y_TES']
+    combi = fdict['COMBINATION'][BL_index]
+    frame = keyvals['FRAME']
+    image = fdict['IMAGES'][BL_index]
+
+    # Remove the 8 thermometers:
+    combi = combi[xONAFP != 0.]
+    xONAFP = xONAFP[xONAFP != 0.]
+    yONAFP = yONAFP[yONAFP != 0.]
+
+    if mask is None:
+        mask_thermos = np.ones((17, 17))
+        mask_thermos[0, 12:] = np.nan
+        mask_thermos[1:5, 16] = np.nan
+        mask = mask_thermos
+
+    plt.subplots(1, 2, figsize=(14, 7))
+    plt.suptitle(f'Baseline {BL} - ' + date, fontsize=14)
+    lim = 2
+    cmap = 'bwr'
+    plt.subplot(121)
+    plt.imshow(np.nan_to_num(image * mask),
+               vmin=-lim, vmax=lim,
+               cmap=cmap,
+               interpolation='Gaussian')
+    ft.qgrid()
+    plt.title('Imshow', fontsize=14)
+    plt.colorbar()
+
+    plt.subplot(122)
+    scal.scatter_plot_FP(q, xONAFP, yONAFP, combi, frame,
+                         title='Scatter plot',
+                         unit=None,
+                         cmap=cmap,
+                         vmin=-lim, vmax=lim
+                         )
+    return
+
+
+def save_fringes_pdf_plots(out_dir, q, keyvals, fdict, mask=None):
+    if type(keyvals['NSTEP']) is tuple:
+        for i in keyvals:
+            keyvals[i] = keyvals[i][0]
+
+    neq = keyvals['NBLS']
+    date = keyvals['DATE-OBS']
+    type_eq = keyvals['TYPE-EQ']
+    myname = 'Fringes_' + date + f'_TypeEq{type_eq}_with_{neq}BLs.pdf'
+
+    with PdfPages(out_dir + myname) as pp:
+        for i in range(neq):
+            plot_fringes_onFP(q, i, keyvals, fdict, mask=mask)
+            pp.savefig()
+    return
+
+
+def plot_folded_fit(TES, BL_index, keyvals, fdict):
+    if type(keyvals['NSTEP']) is tuple:
+        for i in keyvals:
+            keyvals[i] = keyvals[i][0]
+
+    BL = fdict['BLS-EQ'][BL_index]  # Baseline
+    date = keyvals['DATE-OBS']  # Date of observation
+    params = fdict['PARAMS'][BL_index, TES - 1, :]  # Fit parameters
+    t0 = params[1]  # Starting time
+    amps = params[2:8]  # Amplitudes
+    t = fdict['TIME']  # Time
+    folded = fdict['FOLDED'][BL_index, TES - 1, :]  # Folded signal
+    period = fdict['PERIODS'][BL_index]  # Period
+    nstep = keyvals['NSTEP']
+    stable_time = period / nstep
+    resid = fdict['RESIDUALS'][BL_index, TES - 1, :]  # Rediduals
+
+    # Plot
+    plt.figure(figsize=(6, 6))
+    plt.plot(t, folded, label='folded signal')
+    plt.plot(t, ft.simsig_fringes(t, stable_time, params), label='Fit')
+    plt.plot(np.arange(0, period, stable_time) + t0, amps, 'ro', label='Amplitudes')
+    plt.plot(t, resid, label='Residuals: RMS={0:6.4f}'.format(np.std(resid)))
+
+    for k in range(nstep):
+        plt.axvline(x=stable_time * k + t0, color='k', ls=':', alpha=0.3)
+    plt.title(f'TES {TES} - Baseline {BL} - {date}', fontsize=14)
+    plt.legend(loc='upper right')
+    plt.ylim(-2.5, 2.5)
+
+    return
+
+
+def save_folded_fit_pdf_plots(out_dir, keyvals, fdict):
+    if type(keyvals['NSTEP']) is tuple:
+        for i in keyvals:
+            keyvals[i] = keyvals[i][0]
+
+    neq = keyvals['NBLS']
+    date = keyvals['DATE-OBS']
+    type_eq = keyvals['TYPE-EQ']
+    myname = 'Folded_fit_' + date + f'_TypeEq{type_eq}_with_{neq}BLs.pdf'
+
+    with PdfPages(out_dir + myname) as pp:
+        for BL_index in range(neq):
+            BL = fdict['BLS-EQ'][BL_index]
+            plt.figure()
+            plt.text(-1, 0, f'Baseline {BL}', fontsize=40)
+            plt.xlim(-2, 2)
+            plt.ylim(-2, 2)
+            plt.axis('off')
+            pp.savefig()
+            for TES in range(256):
+                plot_folded_fit(TES, BL_index, keyvals, fdict)
+                pp.savefig()
+    return
+
+
+def plot_sum_diff_fringes(keyvals, fdict, mask=None, lim=2, cmap='bwr'):
+    if type(keyvals['NSTEP']) is tuple:
+        for i in keyvals:
+            keyvals[i] = keyvals[i][0]
+
+    images = fdict['IMAGES']
+    neq = keyvals['NBLS']
+    date = keyvals['DATE-OBS']
+    type_eq = keyvals['TYPE-EQ']
+
+    if mask is None:
+        mask_thermos = np.ones((17, 17))
+        mask_thermos[0, 12:] = np.nan
+        mask_thermos[1:5, 16] = np.nan
+        mask = mask_thermos
+
+    sgns = np.ones((neq, 17, 17))
+    for i in range(neq):
+        sgns[i, :, :] *= (-1) ** i
+
+    av_fringe = np.sum(images, axis=0) / neq
+    diff_fringe = np.sum(images * sgns, axis=0) / neq
+
+    plt.subplots(1, 2, figsize=(14, 7))
+    plt.suptitle(f'Class equi {type_eq} with {neq} BLs - {date}', fontsize=14)
+
+    plt.subplot(121)
+    plt.imshow(np.nan_to_num(av_fringe * mask),
+               vmin=-lim, vmax=lim,
+               cmap=cmap,
+               interpolation='Gaussian')
+    ft.qgrid()
+    plt.title(f'Imshow - Sum / {neq}', fontsize=14)
+    plt.colorbar()
+
+    plt.subplot(122)
+    plt.imshow(np.nan_to_num(diff_fringe * mask),
+               vmin=-lim, vmax=lim,
+               cmap=cmap,
+               interpolation='Gaussian')
+    ft.qgrid()
+    plt.title(f'Imshow - Diff / {neq}', fontsize=14)
+    plt.colorbar()
+    plt.tight_layout()
+
 

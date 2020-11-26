@@ -9,24 +9,52 @@ from scipy.integrate import dblquad
 
 import matplotlib.pyplot as plt
 
-from qubicpack.pixel_translation import make_id_focalplane, tes2index
+from qubicpack.pixel_translation import tes2index
 
 __all__ = ['Fringes']
 
 
 # ========== Plot functions =============
 def plot_horns(q):
-    xhorns = q.horn.center[:, 0]
-    yhorns = q.horn.center[:, 1]
-    plt.plot(xhorns, yhorns, 'ro')
+    # xhorns = q.horn.center[:, 0]
+    # yhorns = q.horn.center[:, 1]
+    # plt.plot(xhorns, yhorns, 'ro')
+    q.horn.plot()
+    plt.xlabel('X_GRF [m]', fontsize=14)
+    plt.ylabel('Y_GRF [m]', fontsize=14)
+    return
 
 
 def plot_baseline(q, bs):
     hcenters = q.horn.center[:, 0:2]
     plt.plot(hcenters[np.array(bs) - 1, 0], hcenters[np.array(bs) - 1, 1], lw=4, label=bs)
+    return
 
 
 def scatter_plot_FP(q, x, y, FP_signal, frame, s=None, title=None, unit='[W / Hz]', **kwargs):
+    """
+    Make a scatter plot of the focal plane.
+    Parameters
+    ----------
+    q: QubicInstrument()
+    x: array
+        X coordinates for the TES.
+    y: array
+        Y coordinates for the TES.
+    FP_signal: array
+        Signal to plot in 1D, should be ordered as x and y
+    frame: str
+        'GRF' or 'ONAFP', the frame used for x and y
+    s: int
+        Marker size on the plot
+    title: str
+        Plot title
+    unit: str
+        Unit of the signal to plot.
+    kwargs: any kwarg for plt.scatter()
+
+    """
+
     if s is None:
         if q.config == 'TD':
             s = 180
@@ -42,6 +70,27 @@ def scatter_plot_FP(q, x, y, FP_signal, frame, s=None, title=None, unit='[W / Hz
 
 
 def pcolor_plot_FP(q, x, y, FP_signal, frame, title=None, unit='[W / Hz]', **kwargs):
+    """
+    Make a pcolor plot of the focal plane.
+    !!! x, y, FP_signal must be ordered as defined in q.detector.
+    Parameters
+    ----------
+    q: QubicInstrument()
+    x: array
+        X coordinates for the TES.
+    y: array
+        Y coordinates for the TES.
+    FP_signal: array
+        Signal to plot in 1D, should be ordered as x and y
+    frame: str
+        'GRF' or 'ONAFP', the frame used for x and y
+    title: str
+        Plot title
+    unit: str
+        Unit of the signal to plot.
+    kwargs: any kwarg for plt.pcolor()
+
+    """
     x2D = q.detector.unpack(x)
     y2D = q.detector.unpack(y)
     FP_signal2D = q.detector.unpack(FP_signal)
@@ -55,7 +104,11 @@ def pcolor_plot_FP(q, x, y, FP_signal, frame, title=None, unit='[W / Hz]', **kwa
     plt.title(title, fontsize=14)
 
 
-def plot_horn_and_FP(q, x, y, FP_signal, frame, title=None, s=None, unit='[W / Hz]', **kwargs):
+def plot_horn_and_FP(q, x, y, FP_signal, frame, s=None, title=None, unit='[W / Hz]', **kwargs):
+    """
+    Plot the horn array in GRF and a scatter plot of the focal plane in GRF or ONAFP.
+    See scatter_plot_FP()
+    """
     plt.subplots(1, 2)
     plt.suptitle(title, fontsize=18)
     plt.subplots_adjust(wspace=0.3)
@@ -80,6 +133,34 @@ def plot_horn_and_FP(q, x, y, FP_signal, frame, title=None, s=None, unit='[W / H
     plt.axis('square')
 
 
+def plot_BLs_eq(allBLs, BLs_sort, q):
+    """
+    Plot the horn array and the observed baselines for each type (class of equivalence).
+    Parameters
+    ----------
+    allBLs: list
+        List containing all the baselines in the dataset.
+    BLs_sort: list
+        Indices of the baselines in the dataset for each type
+    q: QubicInstrument
+    """
+    nclass_eq = len(BLs_sort)
+
+    plt.subplots(1, nclass_eq, figsize=(16, 6))
+    for i in range(nclass_eq):
+        dataset_eq = BLs_sort[i]
+        ax = plt.subplot(1, nclass_eq, i + 1)
+        ax.set_aspect('equal')
+        plot_horns(q)
+        plt.title(f'Type {i}', fontsize=14)
+        print(f'Type {i}:')
+        for j in dataset_eq:
+            print(f'  - {allBLs[j]}')
+            plot_baseline(q, allBLs[j])
+        plt.legend()
+
+    return
+
 # ========== Tool functions =============
 def close_switches(q, switches):
     q.horn.open = True
@@ -94,6 +175,10 @@ def open_switches(q, switches):
 
 
 def get_TEScoordinates_ONAFP(q):
+    """
+    Get coordinates of the TES, x and y for the centers
+    and the 4 corners (vertex) in the ONAFP frame.
+    """
     # TES centers in the ONAFP frame
     xGRF_TES = q.detector.center[:, 0]
     yGRF_TES = q.detector.center[:, 1]
@@ -123,6 +208,8 @@ def TES_Instru2coord(TES, ASIC, q, frame='ONAFP'):
 
     Returns
     -------
+    x, y: TES center coordinates.
+    FP_index: Focal Plane index, as used in Qubic soft.
 
     """
     if TES in [4, 36, 68, 100]:
@@ -148,6 +235,9 @@ def TES_Instru2coord(TES, ASIC, q, frame='ONAFP'):
 
 
 def get_TES_Instru_coords(q, frame='ONAFP'):
+    """
+    Same as TES_Instru2coord() but loop on all TES.
+    """
     thermos = [4, 36, 68, 100]
     if q.config == 'TD':
         nASICS = 2
@@ -173,7 +263,8 @@ def get_TES_Instru_coords(q, frame='ONAFP'):
 
 def get_TESvertices_FromMaynoothFiles(rep, ndet=992):
     """
-    Get TES vertices from Maynooth files.
+    Get TES vertices coordinates from Maynooth files.
+    Not very useful because `q.detector.vertex` gives the same.
     Parameters
     ----------
     rep : str
@@ -181,12 +272,6 @@ def get_TESvertices_FromMaynoothFiles(rep, ndet=992):
         https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
     ndet : int
         Number of TES.
-
-    Returns
-    -------
-    A 3D array containing the TES vertices coordinates on the focal plane.
-    Shape=(992, 4, 2)
-
     """
     # Get a 2D array from the file
     vertices2D = pd.read_csv(rep + '/vertices.txt', sep='\ ', header=None, engine='python')
@@ -210,16 +295,21 @@ def make_position(xmin, xmax, reso, focal_length):
 
 
 def give_bs_pars(q, bs):
+    """Find orientation angle and length for a baseline."""
+
+    # X, Y coordinates of the 2 horns.
     hc = q.horn.center[:, 0:2]
     hc0 = hc[np.array(bs[0]) - 1, :]
     hc1 = hc[np.array(bs[1]) - 1, :]
     bsxy = hc1 - hc0
+
     theta = np.degrees(np.arctan2(bsxy[1], bsxy[0]))
     length = np.sqrt(np.sum(bsxy ** 2))
     return theta, length
 
 
 def check_equiv(vecbs1, vecbs2, tol=1e-5):
+    """Check if 2 baselines are equivalent."""
     norm1 = np.dot(vecbs1, vecbs1)
     norm2 = np.dot(vecbs2, vecbs2)
     cross12 = np.cross(vecbs1, vecbs2)
@@ -230,6 +320,24 @@ def check_equiv(vecbs1, vecbs2, tol=1e-5):
 
 
 def find_equivalent_baselines(all_bs, q):
+    """
+    Find the equivalent baselines in a list.
+    Parameters
+    ----------
+    all_bs: list
+        List of baselines.
+    q: QubicInstrument
+
+    Returns
+    -------
+    BLs_sort: List with baseline indices sorted according to equivalence.
+        ex: BLs_sort = [[1, 3], [0, 2, 4]] means that you have 2 different classes
+        of equivalence with 2 and 3 baselines respectively.
+    all_eqtype: List of integers with the type of each baseline.
+        ex: In the example above, you have 2 types (0 or 1)
+        so you will get all_eqtype = [1, 0, 1, 0, 1]
+
+    """
     ### Convert to array
     all_bs = np.array(all_bs)
     ### centers
@@ -275,30 +383,12 @@ def find_equivalent_baselines(all_bs, q):
     return BLs_sort, all_eqtype
 
 
-def plot_BLs_eq(allBLs, BLs_sort, q):
-    nclass_eq = len(BLs_sort)
-
-    plt.subplots(1, nclass_eq, figsize=(16, 6))
-    for i in range(nclass_eq):
-        dataset_eq = BLs_sort[i]
-        ax = plt.subplot(1, nclass_eq, i + 1)
-        ax.set_aspect('equal')
-        plot_horns(q)
-        plt.title(f'Type {i}', fontsize=14)
-        print(f'Type {i}:')
-        for j in dataset_eq:
-            print(f'  - {allBLs[j]}')
-            plot_baseline(q, allBLs[j])
-        plt.legend()
-
-    return
-
-
 # ========== Compute power on the focal plane =============
 def make_external_A(rep, open_horns):
     """
     Compute external_A from simulated files with aberrations.
-    This can be used in get_response_power method that returns the synthetic beam on the sky.
+    This can be used in get_response_power method that returns the synthetic beam on the sky
+    or in get_response() to have the signal on the focal plane.
     Parameters
     ----------
     rep : str
@@ -317,7 +407,6 @@ def make_external_A(rep, open_horns):
             [3] : array, amplitude on Y with shape (n, nhorns)
             [4] : array, phase on X with shape (n, nhorns) [rad]
             [5] : array, phase on Y with shape (n, nhorns) [rad]
-
     """
     # Get simulation files
     files = sorted(glob.glob(rep + '/*.dat'))
@@ -384,27 +473,30 @@ def get_response_power(q,
 
     Parameters
     ----------
-    q : a qubic monochromatic instrument
-    theta : array-like
+    q: a qubic monochromatic instrument
+    theta: array-like
         The source zenith angle [rad].
-    phi : array-like
+    phi: array-like
         The source azimuthal angle [rad].
-    nu : float
+    nu: float
         Source frequency in Hz.
     spectral_irradiance : array-like
         The source spectral_irradiance [W/m^2/Hz].
-    reso : int
-        Pixel number on one side on the focal plane image
-    xmin : float
-        Position of the border of the focal plane to the center [m]
-    xmax : float
-        Position of the opposite border of the focal plane to the center [m]
+    frame: str
+        Referential frame you want to use: 'GRF' or 'ONAFP'
+    external_A: list of tables describing the phase and amplitude at
+    each point of the focal plane for each of the horns, see make_external_A()
+    hwp_position : int
+        HWP position from 0 to 7.
 
     Returns
     ----------
-    power : array of shape (reso, reso, #pointings)
-        The power on the focal plane for each pointing.
+    x, y: 1D arrays with the coordinates on the focal plane in GRF or ONAFP.
+    power: array with the power on the focal plane for each posiion (x, y) and each pointing.
     """
+    if frame not in ['GRF', 'ONAFP']:
+        raise ValueError('The frame is not valid. It must be GRF or ONAFP.')
+
     nptg = len(theta)
 
     if external_A is None:
@@ -426,23 +518,46 @@ def get_response_power(q,
 
     if verbose:
         print(f'# pointings = {nptg}')
-        print(q.detector.center.shape)
-        print(E.shape)
-        print(power.shape)
-        print(xGRF.shape)
+        print('Detector centers shape:', q.detector.center.shape)
+        print('Power shape:', power.shape)
+        print('X_GRF shape:', xGRF.shape)
 
     if frame == 'GRF':
-        return xGRF, yGRF, power
-    elif frame == 'ONAFP':
+        x = xGRF
+        y = yGRF
+    else:
         # Make a pi/2 rotation from GRF -> ONAFP referential frame
         xONAFP = - yGRF
         yONAFP = xGRF
-        return xONAFP, yONAFP, power
-    else:
-        raise ValueError('The frame is not valid. It must be GRF or ONAFP.')
+        x = xONAFP
+        y = yONAFP
+    return x, y, power
 
 
-def get_power_Maynooth(open_horns, theta, nu, horn_center, rep, hwp_position=0, verbose=True):
+def get_power_Maynooth(rep, open_horns, theta, nu, horn_center, hwp_position=0, verbose=True):
+    """
+    Get power on the focal plane from Maynooth simulations.
+    Parameters
+    ----------
+    rep: str
+        Repository with the simulation files.
+    open_horns: list
+        List of open horns.
+    theta: array-like
+        The source zenith angle [rad].
+    nu: float
+        Frequency of the calibration source [Hz]
+    horn_center: array
+        Coordinates of the horns.
+    hwp_position: int
+        HWP position from 0 to 7.
+    verbose: bool
+
+    Returns
+    -------
+    (x, y) coordinates on the focal plane in the ONAFP frame and the power at each coordinate.
+
+    """
     # Get simulation files
     files = sorted(glob.glob(rep + '/*.dat'))
     if len(files) != 64:
@@ -482,7 +597,7 @@ def get_power_Maynooth(open_horns, theta, nu, horn_center, rep, hwp_position=0, 
         horn_x = horn_center[swi - 1, 0]
         horn_y = horn_center[swi - 1, 1]
         dist = np.sqrt(horn_x ** 2 + horn_y ** 2)  # distance between the horn and the center
-        additional_phase = - 2 * np.pi / 3e8 * nu * 1e9 * dist * np.sin(np.deg2rad(theta))
+        additional_phase = - 2 * np.pi / 3e8 * nu * dist * np.sin(theta)
 
         Ax[i, :] = data['MagX']
         Ay[i, :] = data['MagY']
@@ -511,6 +626,27 @@ def get_power_Maynooth(open_horns, theta, nu, horn_center, rep, hwp_position=0, 
 
 
 def fullreso2TESreso(x, y, power, TESvertex, TESarea, interp=False, verbose=True):
+    """
+    Decrease the resolution to have the power in each TES.
+    Parameters
+    ----------
+    x, y: array
+        Coordinates on the FP
+    power: array
+        Power on the FP.
+    TESvertex: array
+        Coordinates of the 4 corners of each TES.
+    TESarea: float
+        Area of the detectors [m²]
+    interp: bool
+        If True, interpolate and integrate in each TES (takes time).
+        If False, make the mean in each TES (faster).
+    verbose: bool
+
+    Returns
+    -------
+    The power in each TES.
+    """
     ndet = np.shape(TESvertex)[0]
     powerTES = np.zeros(ndet)
     print('ndet:', ndet)
@@ -519,8 +655,12 @@ def fullreso2TESreso(x, y, power, TESvertex, TESarea, interp=False, verbose=True
         print('********** Begin interpolation **********')
         reso = int(np.sqrt(x.shape[0]))
         print('Reso:', reso)
-        power_interp = RegularGridInterpolator((np.unique(x), np.unique(y)), power.reshape((reso, reso)), method='linear',
-                                               bounds_error=False, fill_value=0.)
+        power_interp = RegularGridInterpolator((np.unique(x),
+                                                np.unique(y)),
+                                               power.reshape((reso, reso)),
+                                               method='linear',
+                                               bounds_error=False,
+                                               fill_value=0.)
         power_interp_function = lambda x, y: power_interp(np.array([x, y]))
 
         print('********** Begin integration in the TES era **********')
@@ -561,6 +701,7 @@ def fullreso2TESreso(x, y, power, TESvertex, TESarea, interp=False, verbose=True
 
     return powerTES
 
+
 # ========== Fringe simulations =============
 class Fringes:
     def __init__(self, baseline):
@@ -570,9 +711,6 @@ class Fringes:
         baseline: list
             Baseline formed with 2 horns, index between 1 and 64 as on the instrument.
         """
-        for i in baseline:
-            if i < 1 or i > 400:
-                raise ValueError('Horns indices must be in [1, 400].')
 
         self.baseline = baseline
 
@@ -580,13 +718,22 @@ class Fringes:
                     theta=np.array([0.]), phi=np.array([0.]),
                     nu=150e9, spectral_irradiance=1.,
                     frame='ONAFP',
+                    external_A=None,
+                    hwp_position=0,
                     doplot=True, verbose=True, **kwargs):
+        """
+        Compute the fringes on the focal plane directly opening the baseline.
+        see get_response_power() for the arguments.
+        Returns (x, y) coordinates and the power.
+        """
+        open_switches(q, self.baseline)
 
-        q.horn.open = False
-        q.horn.open[self.baseline[0] - 1] = True
-        q.horn.open[self.baseline[1] - 1] = True
-        x, y, fringes = get_response_power(q, theta, phi, nu, spectral_irradiance,
-                                           frame=frame, verbose=verbose)
+        x, y, fringes = get_response_power(q, theta, phi, nu,
+                                           spectral_irradiance,
+                                           frame=frame,
+                                           external_A=external_A,
+                                           hwp_position=hwp_position,
+                                           verbose=verbose)
 
         if doplot:
             nptg = np.shape(theta)[0]
@@ -603,33 +750,30 @@ class Fringes:
                                    frame='ONAFP',
                                    doplot=True, verbose=True, **kwargs):
         """
-            Returns the power on the focal plane for each pointing, for different configurations
-            of the horn array: all open, all open except i, except j, except i and j, only i open,
-            only j open, only i and j open.
+            Returns the power on the focal plane at each pointing (each position of the source),
+            for different configurations of the horn array: all open, all open except i, except j,
+            except i and j, only i open, only j open, only i and j open.
         Parameters
         ----------
-        q : a qubic monochromatic instrument
+        q: QubicInstrument
         theta : array-like
             The source zenith angle [rad].
-        phi : array-like
+        phi: array-like
             The source azimuthal angle [rad].
-        nu : float
-            Source frequency in Hz.
-        spectral_irradiance : array-like
+        nu: float
+            Source frequency [Hz].
+        spectral_irradiance: array-like
             The source spectral_irradiance [W/m^2/Hz].
-        reso : int
-            Pixel number on one side on the focal plane image
-        xmin : float
-            Position of the border of the focal plane to the center [m]
-        xmax : float
-            Position of the opposite border of the focal plane to the center [m]
-        doplot : bool
-            If True, do the plots for the first pointing.
+        frame: str
+            'GRF' or 'ONAFP'.
+        doplot: bool
+        verbose: bool
 
         Returns
         -------
-        S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij : arrays of shape (reso, reso, #pointings)
-            Power on the focal plane for each configuration, for each pointing.
+        x, y: The coordinates on the FP.
+        S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij : arrays
+            Power on the focal plane for each configuration, at each pointing.
 
         """
 
@@ -692,10 +836,32 @@ class Fringes:
                                      frame='ONAFP',
                                      doplot=True, verbose=True, **kwargs):
         """
-        Return the fringes on the FP by making the computation
-        fringes =(S_tot - Cminus_i - Cminus_j + Sminus_ij)
-        q : a qubic monochromatic instrument
+        Return the fringes on the FP by making the combination
+        Parameters
+        ----------
+        q: QubicInstrument
+        measured_comb: bool
+            If True, returns the measured combination: S_tot - Cminus_i - Cminus_j + Sminus_ij.
+            If False, returns the complete combination: S_tot - Cminus_i - Cminus_j + Sminus_ij + Ci + Cj.
+        theta : array-like
+            The source zenith angle [rad].
+        phi: array-like
+            The source azimuthal angle [rad].
+        nu: float
+            Source frequency [Hz].
+        spectral_irradiance: array-like
+            The source spectral_irradiance [W/m^2/Hz].
+        frame: str
+            'GRF' or 'ONAFP'.
+        doplot: bool
+        verbose: bool
+
+        Returns
+        -------
+        x, y: The coordinates on the FP.
+        fringes : Fringes on the FP, for each coordinate, at each pointing.
         """
+
 
         x, y, S_tot, Cminus_i, Sminus_ij, Cminus_j, Ci, Cj, Sij = \
             Fringes.get_all_combinations_power(self, q,
@@ -721,10 +887,31 @@ class Fringes:
                              theta=np.array([0.]), nu=150e9,
                              interp=False,
                              verbose=True):
+        """
+        Compute fringes on the focal plane from Maynooth simulations.
+        Parameters
+        ----------
+        q: QubicInstrument
+        rep: str
+            Repository with the simulation files.
+        theta: array-like
+            The source zenith angle [rad].
+        nu: float
+            Frequency of the calibration source [Hz]
+        interp: bool
+            If True, interpolate and integrate in each TES (takes time).
+            If False, make the mean in each TES (faster).
+        verbose: bool
+
+        Returns
+        -------
+        x, y coordinates on the FP in the ONAFP frame and the corresponding power.
+
+        """
         if q.config != 'TD':
             raise ValueError('Maynooth simulations are for the TD only.')
 
-        xONAFP, yONAFP, power = get_power_Maynooth(self.baseline, theta, nu, q.horn.center, rep, verbose=verbose)
+        xONAFP, yONAFP, power = get_power_Maynooth( rep, self.baseline, theta, nu, q.horn.center, verbose=verbose)
 
         # TES centers and TES vertex in the ONAFP frame
         xONAFP_TES, yONAFP_TES, vONAFP_TES = get_TEScoordinates_ONAFP(q)
@@ -743,22 +930,47 @@ class Fringes:
                                          theta=np.array([0.]), nu=150e9,
                                          interp=False,
                                          verbose=True):
+        """
+        Compute fringes on the focal plane from Maynooth simulations doing the combination with
+        S_tot, Cminus_i, Cminus_j, Sminus_ij, Ci and Cj.
+        Parameters
+        ----------
+        q: QubicInstrument
+        rep: str
+            Repository with the simulation files.
+        measured_comb: bool
+            If True, returns the measured combination: S_tot - Cminus_i - Cminus_j + Sminus_ij.
+            If False, returns the complete combination: S_tot - Cminus_i - Cminus_j + Sminus_ij + Ci + Cj.
+        theta: array-like
+            The source zenith angle [rad].
+        nu: float
+            Frequency of the calibration source [Hz]
+        interp: bool
+            If True, interpolate and integrate in each TES (takes time).
+            If False, make the mean in each TES (faster).
+        verbose: bool
+
+        Returns
+        -------
+        x, y coordinates on the FP in the ONAFP frame and the corresponding power.
+        """
+
         i = self.baseline[0]
         j = self.baseline[1]
         all_open = np.arange(1, 65)
         first_close = np.delete(all_open, i - 1)
         second_close = np.delete(all_open, j - 1)
         both_close = np.delete(all_open, [i - 1, j - 1])
-        xONAFP, yONAFP, S_tot = get_power_Maynooth(all_open, theta, nu, q.horn.center, rep, verbose=verbose)
-        _, _, Cminus_i = get_power_Maynooth(first_close, theta, nu, q.horn.center, rep, verbose=verbose)
-        _, _, Cminus_j = get_power_Maynooth(second_close, theta, nu, q.horn.center, rep, verbose=verbose)
-        _, _, Sminus_ij = get_power_Maynooth(both_close, theta, nu, q.horn.center, rep, verbose=verbose)
+        xONAFP, yONAFP, S_tot = get_power_Maynooth(rep, all_open, theta, nu, q.horn.center, verbose=verbose)
+        _, _, Cminus_i = get_power_Maynooth(rep, first_close, theta, nu, q.horn.center, verbose=verbose)
+        _, _, Cminus_j = get_power_Maynooth(rep, second_close, theta, nu, q.horn.center, verbose=verbose)
+        _, _, Sminus_ij = get_power_Maynooth(rep, both_close, theta, nu, q.horn.center, verbose=verbose)
 
         if measured_comb:
             fringes_comb = S_tot - Cminus_i - Cminus_j + Sminus_ij
         else:
-            _, _, Ci = get_power_Maynooth([i - 1], theta, nu, q.horn.center, rep, verbose=verbose)
-            _, _, Cj = get_power_Maynooth([j - 1], theta, nu, q.horn.center, rep, verbose=verbose)
+            _, _, Ci = get_power_Maynooth(rep, [i - 1], theta, nu, q.horn.center, verbose=verbose)
+            _, _, Cj = get_power_Maynooth(rep, [j - 1], theta, nu, q.horn.center, verbose=verbose)
             fringes_comb = S_tot - Cminus_i - Cminus_j + Sminus_ij + Ci + Cj
 
         # TES centers and TES vertex in the ONAFP frame
@@ -770,81 +982,3 @@ class Fringes:
                                             verbose=verbose)
 
         return xONAFP_TES, yONAFP_TES, fringes_comb_TES
-
-
-# ========== Old functions =============
-def index2TESandASIC(index):
-    """
-    Convert an index on the FP to the corresponding TES and ASICS.
-    Parameters
-    ----------
-    index : int
-        index on the FP between 0 and 1155.
-
-    Returns
-    -------
-    TES: int between 1 and 128 if the given index corresponds to a TES,
-        0 if not.
-    ASIC: int between 1 and 8 if the given index corresponds to a TES,
-        0 if not.
-
-    """
-    if index < 0 or index > 1155:
-        raise ValueError('index must be between 0 and 1155')
-    else:
-        FPidentity = make_id_focalplane()
-        TES = FPidentity[index].TES
-        ASIC = FPidentity[index].ASIC
-
-    return TES, ASIC
-
-
-def image_fp2tes_signal(full_real_fp):
-    """
-    Convert an image of the FP to an array with the signal
-    of each TES using the TES indices of the real FP.
-    Make sure to use the ONAFP frame.
-    Parameters
-    ----------
-    full_real_fp : array of shape (34, 34)
-        Image on the full FP.
-
-    Returns
-    -------
-    tes_signal : array of shape (128, 8)
-        Signal on each TES, for each ASIC.
-
-    """
-    if np.shape(full_real_fp) != (34, 34):
-        raise ValueError('The focal plane image should have for shape (34, 34).')
-
-    else:
-        tes_signal = np.empty((128, 8))
-        index = 0
-        for i in range(34):
-            for j in range(34):
-                TES, ASIC = index2TESandASIC(index)
-                if TES != 0:
-                    tes_signal[TES - 1, ASIC - 1] = full_real_fp[i, j]
-                index += 1
-        return tes_signal
-
-
-def tes_signal2image_fp(tes_signal, asics):
-    """
-    tes_signal : array of shape (128, #ASICS)
-        Signal on each TES, for each ASIC.
-    asics : list
-        Indices of the asics used between 1 and 8.
-    """
-    thermos = [4, 36, 68, 100]
-    image_fp = np.empty((34, 34))
-    image_fp[:] = np.nan
-    FPidentity = make_id_focalplane()
-    for ASIC in asics:
-        for TES in range(128):
-            if TES + 1 not in thermos:
-                index = tes2index(TES + 1, ASIC)
-                image_fp[index // 34, index % 34] = tes_signal[TES, ASIC - 1]
-    return image_fp
-

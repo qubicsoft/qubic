@@ -49,7 +49,7 @@ d['MultiBand'] = False
 d['nf_sub'] = 1
 
 # Choose TD or FI
-config = 'FI'
+config = 'TD'
 d['config'] = config
 ```
 
@@ -74,30 +74,6 @@ The frame used is ONAFP:
 
 ```{python}
 hdu[0].header['FRAME']
-```
-
-```{python}
-# Center of each bolometer
-# center = hdu['center'].data
-# x = center[:, :, 0]
-# y = center[:, :, 1]
-
-# old = hdu['quadrant'].data
-# plt.figure()
-# plt.pcolor(x, y, old)
-# plt.colorbar()
-# print(np.unique(old))
-
-# new = old + 1
-# new[new==0] = 255
-# plt.figure()
-# plt.pcolor(x, y, new)
-# plt.colorbar()
-
-# print(np.unique(new))
-
-# hdu['quadrant'].data = new
-# hdu.writeto(basedir + 'calfiles/CalQubic_DetArray_v4_' + config + '.fits', overwrite=True)
 ```
 
 ```{python}
@@ -150,11 +126,14 @@ plt.colorbar()
 vertex = hdu['corner'].data
 print(vertex.shape)
 
-plt.figure(figsize=(12, 10))
+plt.figure(figsize=(6, 6))
 for i in range(4):
     xvertex = vertex[:, :, i, 0].flatten()
     yvertex = vertex[:, :, i, 1].flatten()
     plt.scatter(xvertex, yvertex, marker='.')
+    plt.title('TES Corners')
+    plt.xlabel('X_ONAFP [m]')
+    plt.ylabel('Y_ONAFP [m]')
 ```
 
 ## A simple example using `PackedTable` from `pysimulators`
@@ -268,16 +247,20 @@ The same information (center, efficiency, vertex=corners, removed...) and more a
 
 When you initialize a QubicInstrument, the detector layout is built with `_get_detector_layout()` from `instrument.py`. This function reads the calibration fits file with:
 
-`shape, vertex, removed, index, quadrant, efficiency = self.calibration.get('detarray')` which is a method from `calibration.py`.
+`shape, vertex, removed, index, quadrant, efficiency = self.calibration.get('detarray')`
+This method is defined in `calibration.py`. In this function, we make a pi/2 rotation from ONAFP to GRF frame. 
 
-Then it instanciates a `Layout()` object of `pysimulators` (see `layouts.py`) which is actually a class that inherites from the `PackedTable()` we studied above.
+!!! **The calibration file is defined in the ONAFP frame. However, QUBIC soft works in the GRF frame. For this reason there is a pi/2 rotation between the following plots and the previous ones from the calibration file.** 
 
-!!! **The calibration file is defined in the ONAFP frame. Homever, QUBIC soft works in the GRF frame. For this reason there is a pi/2 rotation between the following plots and the previous ones from the calibration file.**
+Then, it instanciates a `Layout()` object of `pysimulators` (see `layouts.py`) which is actually a class that inherites from the `PackedTable()` we studied above.
+
+
 
 ```{python}
 # Make a QUBIC intrument
 q = qubic.QubicInstrument(d)
 
+# Look at what q.detector contains
 from pprint import pprint
 pprint(vars(q.detector))
 ```

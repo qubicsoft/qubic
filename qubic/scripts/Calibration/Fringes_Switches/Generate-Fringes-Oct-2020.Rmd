@@ -25,7 +25,7 @@ There is clear room for improvement:
 
 ```{python}
 # %matplotlib inline
-# # %matplotlib notebook
+# %matplotlib notebook
 
 from importlib import reload
 
@@ -62,11 +62,11 @@ TES = 46
 ASIC = 1 # If q is a TD, it should be 1 or 2
 xONAFP, yONAFP, FP_index = scal.TES_Instru2coord(TES, ASIC, q, frame='ONAFP')
 
-# Get it for all TES
+# Get coordinates for all TES
 xTES, yTES, allFP_index = scal.get_TES_Instru_coords(q, frame='ONAFP')
 ```
 
-## Get data
+## Look at the dataset
 
 ```{python}
 #### 27/10/2020
@@ -112,9 +112,49 @@ try:
     os.makedirs(out_dir, exist_ok = True)
 except OSError as e:
     print('Unable to create Output Directory: ' + out_dir)
+```
 
+```{python}
 # Get the datasets
-datasets, allBLs, allNcycles, allwt, BLs_sort, BLs_type = fl.get_fringes_datasets(global_dir + date, 'RF_switch_ncy', q)
+def get_fringes_datasets(rep, keyword, q):
+    """
+    Get the dataset with fringes measurements and classify the baselines
+    by type of equivalency.
+    Parameters
+    ----------
+    rep: str
+        Repository with the data.
+    keyword: str
+        Key word in the data folders you want to look at.
+    q: QubicInstrument
+
+    Returns
+    -------
+    datasets: List with all the data folders
+    allBLs: List with all the baselines.
+    allNcycles: List with the Ncycles corresponding to each data folder.
+    allwt: List with the waiting times corresponding to each data folder.
+    BLs_sort, BLs_type: Baseline ordered by type.
+        See find_equivalent_baselines() from selfcal_lib
+    """
+    if rep[-1] != '/':
+        rep += '/'
+
+    datasets = np.sort(glob.glob(rep + '*' + keyword + '*'))
+    print('Number of folders in the dataset:', len(datasets))
+
+    allBLs, allNcycles, allwt = [], [], []
+    for ds in datasets:
+        strs = ds.split('_')
+        allNcycles.append(float(strs[strs.index('ncycles') + 1]))
+        allwt.append(float(strs[strs.index('wt') + 1]))
+        allBLs.append([int(strs[-2]), int(strs[-1])])
+
+    BLs_sort, BLs_type = scal.find_equivalent_baselines(allBLs, q)
+
+    return datasets, allBLs, allNcycles, allwt, BLs_sort, BLs_type
+
+datasets, allBLs, allNcycles, allwt, BLs_sort, BLs_type = get_fringes_datasets(global_dir + date, 'RF_switch_ncy', q)
 
 print('Ncycles:', allNcycles)
 print('WT:', allwt)
@@ -126,15 +166,17 @@ print('BL Type:', BLs_type)
 scal.plot_BLs_eq(allBLs, BLs_sort, q)
 ```
 
+## Analysis
+
 ```{python}
-# ============ Analysis for both ASICs and all measurements ==================
 # Choose one class of equivalence
 type_eq = 2
 neq = len(BLs_sort[type_eq])
 
-print('Folders indices in the dataset:', BLs_sort[type_eq])
-print(f'Type {type_eq}')
+print(f'\n ===================== Type {type_eq} starting ===================')   
 print(f'There are {neq} baselines in this class of equivalence.')
+print('Folders indices in the dataset:', BLs_sort[type_eq])
+
 
 # Filtering parameters
 lowcut = 0.00001
@@ -162,8 +204,8 @@ for i, ids in enumerate(BLs_sort[type_eq]):
     BLs_eq[i] = BL
     wt_eq[i] = allwt[ids]
     Ncycles_eq[i] = allNcycles[ids]
-    print("    +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++    ")
-    print(f'     * dsnum={ids} {BL}')#.format(ids, BL[0], BL[1]))    
+    print("    ++++++++++++++++++++++++++++++++++++++++++++++++++++++++    ")
+    print(f'     * Folder index {ids} - Baseline {BL}')   
     print("Data folder:", datasets[ids])
 
     # Analysis
@@ -218,6 +260,7 @@ fl.save_folded_fit_pdf_plots(out_dir, keyvals, fdict)
 ```{python}
 # Plot sum and difference
 fl.plot_sum_diff_fringes(keyvals, fdict, mask=None, lim=2, cmap='bwr')
+plt.show()
 ```
 
 ## Save data in a .fits
@@ -234,20 +277,122 @@ fl.write_fits_fringes(out_dir, myname, keyvals, fdict)
 
 ```
 
-### Read a fits file
+### Read the fits file and make the plots
 
 header can be used as `keyvals` for plotting functions.
 
 ```{python}
-# Read fits file
 header, fdict = fl.read_fits_fringes(out_dir + myname)
 print(fdict.keys())
 
 ```
 
+Plot the data from the .fits that you just read.
+You can use the same functions as before, just replace `keyvals` by `header`.
+
 ```{python}
 # Plot fringes on the FP
 fl.plot_fringes_onFP(q, 0, header, fdict)
+
+# Plot folded signal and the fit for one TES 
+TES = 95
+BL_index = 1
+fl.plot_folded_fit(TES, BL_index, header, fdict)
+
+```
+
+## Loop on all type of equivalence in the dataset
+We make the analysis for each type of equivalence and we save the .fits.
+
+```{python}
+# Filtering parameters
+lowcut = 0.00001
+highcut = 2.
+nharm = 10
+notch = np.array([[1.724, 0.005, nharm]])
+
+
+# Loop on the types of equivalence
+ntypes = len(BLs_sort)
+for type_eq in range(ntypes):
+    print(f'\n ===================== Type {type_eq} starting ===================')
+    
+    neq = len(BLs_sort[type_eq])
+    print(f'There are {neq} baselines in this class of equivalence.')
+    print('Folders indices in the dataset:', BLs_sort[type_eq])
+
+    folded, residuals = [], []
+    params = np.zeros((neq, 256, 8))
+    combination = np.zeros((neq, 256))
+    periods = np.zeros(neq)
+    fringes = np.zeros((neq, 17, 17))
+    BLs_eq = np.zeros((neq, 2))
+    wt_eq = np.zeros(neq)
+    Ncycles_eq = np.zeros(neq)
+
+    all_names = ''
+    all_bs_names = ''    
+
+    # Loop on the BLs in this equivalent class
+    for i, ids in enumerate(BLs_sort[type_eq]):
+
+        # Get the baseline
+        BL = allBLs[ids]
+        BLs_eq[i] = BL
+        wt_eq[i] = allwt[ids]
+        Ncycles_eq[i] = allNcycles[ids]
+        print("    ++++++++++++++++++++++++++++++++++++++++++++++++++++++++    ")
+        print(f'     * Folder index {ids} - Baseline {BL}')   
+        print("Data folder:", datasets[ids])
+
+        # Analysis
+        t, folded_bothasics, params[i], combination[i], periods[i], resid = fl.analyse_fringesLouise(datasets[ids], 
+                                                                                      lowcut=lowcut, 
+                                                                                      highcut=highcut, 
+                                                                                      notch=notch,
+                                                                                      t0=None, 
+                                                                                      tf=None,
+                                                                                      wt=allwt[ids]/1000,
+                                                                                      verbose=False)
+
+        folded.append(folded_bothasics)
+        residuals.append(resid)
+
+        # Make the 2D fringes 
+        fringes[i] = ft.image_asics(all1=combination[i]) # Make a 2D image
+        fringes[i] /= np.nanstd(fringes[i])       # Normalization    
+
+    folded = np.array(folded)
+    residuals = np.array(residuals)
+    
+    # Make keyvals and fdict
+    keyvals = fl.make_keyvals(date, type_eq, neq, vtes, nstep=6, ecosorb='yes')
+    fdict = fl.make_fdict(BLs_eq, wt_eq, Ncycles_eq, xTES, yTES, t, 
+                   folded, params, combination, periods, residuals, fringes)
+    
+    # Save pdf with all plots
+    fl.save_fringes_pdf_plots(out_dir, q, keyvals, fdict)
+#     fl.save_folded_fit_pdf_plots(out_dir, keyvals, fdict)
+    
+    # Save a .fits
+    name_split = datasets[0].split('/')[-1].split('_')
+    date = name_split[0]
+    myname = 'Fringes_' + date + f'_TypeEq{type_eq}_with_{neq}BLs.fits'
+    print('Myname:', myname)
+    fl.write_fits_fringes(out_dir, myname, keyvals, fdict)
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 ### Try to improve method

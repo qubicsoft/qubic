@@ -695,13 +695,13 @@ def simsig_asym(x, pars, extra_args=None):
     return np.nan_to_num(thesim)
 
 
-def simsig_fringes(x, stable_time, params):
+def simsig_fringes(t, stable_time, params):
     """
     Simulate a TOD signal obtained during the fringe measurement.
     This function was done to make a fit.
     Parameters
     ----------
-    x : array
+    t : array
         Time sampling.
     stable_time : float
         Number of second the signal keep constant
@@ -713,16 +713,16 @@ def simsig_fringes(x, stable_time, params):
     The simulated signal.
 
     """
-    dx = x[1] - x[0]
-    npoints = len(x)
-    tf = x[-1]
+    dt = t[1] - t[0]
+    npoints = len(t)
+    tf = t[-1]
 
     ctime = params[0]
-    x0 = params[1]
+    t0 = params[1]
     amp = params[2:8]
     #     print(amp)
 
-    sim_init = np.zeros(len(x))
+    sim_init = np.zeros(npoints)
 
     for i in range(6):
         a = int(npoints / tf * stable_time * i)
@@ -731,10 +731,10 @@ def simsig_fringes(x, stable_time, params):
         sim_init[a: b] = amp[i]
 
     # Add a phase
-    sim_init_shift = np.interp((x - x0) % max(x), x, sim_init)
+    sim_init_shift = np.interp((t - t0) % max(t), t, sim_init)
 
     # Convolved by an exponential filter
-    thesim = exponential_filter1d(sim_init_shift, ctime / dx, mode='wrap')
+    thesim = exponential_filter1d(sim_init_shift, ctime / dt, mode='wrap')
 
     return np.array(thesim).astype(np.float64)
 

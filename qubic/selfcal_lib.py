@@ -192,6 +192,20 @@ def get_TEScoordinates_ONAFP(q):
 
     return xONAFP_TES, yONAFP_TES, vONAFP_TES
 
+def get_horn_coordinates_ONAFP(q):
+    """
+    Get coordinates of the horn center (x, y, z),
+    in the ONAFP frame.
+    """
+    # Horn centers in the ONAFP frame
+    center_GRF = q.horn.center
+    center_ONAFP = np.zeros_like(center_GRF)
+    center_ONAFP[:, 0] = - center_GRF[:, 1] # xONAFP = -yGRF
+    center_ONAFP[:, 1] = center_GRF[:, 0]   # yONAFP = xGRF
+    center_ONAFP[:, 2] = center_GRF[:, 2]   # zONAFP = zGRF
+
+    return center_ONAFP
+
 
 def TES_Instru2coord(TES, ASIC, q, frame='ONAFP'):
     """
@@ -210,28 +224,31 @@ def TES_Instru2coord(TES, ASIC, q, frame='ONAFP'):
     -------
     x, y: TES center coordinates.
     FP_index: Focal Plane index, as used in Qubic soft.
+    index_q: position index of the FP_index in q.detector.index()
 
     """
     if TES in [4, 36, 68, 100]:
         raise ValueError('This is a thermometer !')
     FP_index = tes2index(TES, ASIC)
-    print('FP_index', FP_index)
+    print('FP_index =', FP_index)
+
+    index_q = np.where(q.detector.index == FP_index)[0][0]
+    print('Index_q =', index_q)
 
     centerGRF = q.detector.center[q.detector.index == FP_index][0]
     xGRF = centerGRF[0]
     yGRF = centerGRF[1]
 
-    if frame == 'GRF':
+    if frame not in ['GRF', 'ONAFP']:
+        raise ValueError('The frame is not valid.')
+    elif frame == 'GRF':
         print('X_GRF = {:.3f} mm, Y_GRF = {:.3f} mm'.format(xGRF * 1e3, yGRF * 1e3))
-        return xGRF, yGRF, FP_index
-
+        return xGRF, yGRF, FP_index, index_q
     elif frame == 'ONAFP':
         xONAFP = - yGRF
         yONAFP = xGRF
         print('X_ONAFP = {:.3f} mm, Y_ONAFP = {:.3f} mm'.format(xONAFP * 1e3, yONAFP * 1e3))
-        return xONAFP, yONAFP, FP_index
-    else:
-        raise ValueError('The frame is not valid.')
+        return xONAFP, yONAFP, FP_index, index_q
 
 
 def get_TES_Instru_coords(q, frame='ONAFP'):
@@ -248,17 +265,18 @@ def get_TES_Instru_coords(q, frame='ONAFP'):
     x = np.zeros(nTES)
     y = np.zeros(nTES)
     FP_index = np.zeros(nTES)
+    index_q = np.zeros(nTES)
 
     for ASIC in range(1, nASICS + 1):
         for TES in range(1, 129):
             print(f'\n ASIC {ASIC} - TES {TES}')
             if TES not in thermos:
-                index = (TES - 1) + 128 * (ASIC - 1)
-                x[index], y[index], FP_index[index] = TES_Instru2coord(TES, ASIC, q, frame=frame)
+                i = (TES - 1) + 128 * (ASIC - 1)
+                x[i], y[i], FP_index[i], index_q[i]= TES_Instru2coord(TES, ASIC, q, frame=frame)
             else:
                 print('Thermometer !')
 
-    return x, y, FP_index
+    return x, y, FP_index, index_q
 
 
 def get_TESvertices_FromMaynoothFiles(rep, ndet=992):
@@ -294,18 +312,23 @@ def make_position(xmin, xmax, reso, focal_length):
     return position
 
 
-def give_bs_pars(q, bs):
+def give_bs_pars(q, bs, frame='GRF'):
     """Find orientation angle and length for a baseline."""
 
-    # X, Y coordinates of the 2 horns.
-    hc = q.horn.center[:, 0:2]
-    hc0 = hc[np.array(bs[0]) - 1, :]
-    hc1 = hc[np.array(bs[1]) - 1, :]
-    bsxy = hc1 - hc0
+    # X, Y coordinates of the 2 horns in GRF or ONAFP.
+    if frame == 'ONAFP':
+        hc = get_horn_coordinates_ONAFP(q)
+        hc = hc[:, :2]
+    elif frame == 'GRF':
+        hc = q.horn.center[:, :2]
+    hc0 = hc[bs[0] - 1, :]
+    hc1 = hc[bs[1] - 1, :]
 
+    bsxy = hc1 - hc0
     theta = np.degrees(np.arctan2(bsxy[1], bsxy[0]))
     length = np.sqrt(np.sum(bsxy ** 2))
-    return theta, length
+    xycenter = (hc0 + hc1) / 2.
+    return theta, length, xycenter
 
 
 def check_equiv(vecbs1, vecbs2, tol=1e-5):

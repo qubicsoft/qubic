@@ -30,9 +30,9 @@ def save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved,
         Name of the simulation.
 
     """
-    
+
     if save_dir[-1] != '/':
-        save_dir = save_dir+'/'
+        save_dir = save_dir + '/'
 
     hdu_primary = fits.PrimaryHDU()
     hdu_recon = fits.ImageHDU(data=maps_recon, name='maps_recon')
@@ -144,6 +144,7 @@ def get_patch_many_files(rep_simu, name, badval=-1.6375e+30, rtol=1e-05, atol=1e
         Relative tolerance for badval
     atol : float
         Absolute tolerance for badval
+    verbose: bool
     Returns
     -------
     A list with the names of all the files you took.
@@ -186,6 +187,7 @@ def get_maps_many_files(rep_simu, name, verbose=True):
         Repository where the fits files are.
     name : str
         Name of the files you are interested in.
+    verbose : bool
     Returns
     -------
     A list with the names of all the files you took.
@@ -213,8 +215,7 @@ def get_maps_many_files(rep_simu, name, verbose=True):
         all_maps_convo.append(map_convo)
         all_maps_diff.append(map_diff)
 
-    return all_fits, np.asarray(all_maps_recon), \
-           np.asarray(all_maps_convo), np.asarray(all_maps_diff)
+    return all_fits, np.asarray(all_maps_recon), np.asarray(all_maps_convo), np.asarray(all_maps_diff)
 
 
 # ================== Cut a patch in different zones ====================
@@ -238,7 +239,7 @@ def pix2ang(ns, center, seenmap=None):
     return np.degrees(np.arccos(np.dot(v0, vpix)))
 
 
-def make_zones(patch, nzones, nside, center, seenmap, angle = False, dtheta=15., verbose=True, doplot=True):
+def make_zones(patch, nzones, nside, center, seenmap, angle=False, dtheta=15., verbose=True, doplot=True):
     """
     Mask a path to get different concentric zones.
 
@@ -259,6 +260,7 @@ def make_zones(patch, nzones, nside, center, seenmap, angle = False, dtheta=15.,
     dtheta : float
         Size of the patch were the pointing was done (degree),
         by default it is 15°.
+    verbose: bool
     doplot : bool
         If True, makes a plot with the different zones obtained.
 
@@ -278,7 +280,7 @@ def make_zones(patch, nzones, nside, center, seenmap, angle = False, dtheta=15.,
         angles_zone = np.linspace(0, np.max(ang), nzones + 1)[1:]
     elif angle:
         angles_zone = np.array([dtheta, np.max(ang)])
-    
+
     angles_zone = np.insert(angles_zone, 0, 0.)
 
     # Make a list with the masks
@@ -286,9 +288,9 @@ def make_zones(patch, nzones, nside, center, seenmap, angle = False, dtheta=15.,
     for pix in range(npixok):
         for a, angle in enumerate(angles_zone[1:]):
             if ang[pix] <= angle:
-                allmask[a][:, pix, :] = 1. 
+                allmask[a][:, pix, :] = 1.
                 break
-    #for a, angle in enumerate(angles_zone[1:]):
+    # for a, angle in enumerate(angles_zone[1:]):
     #    #print(a,angle)
     #    if a == 0:
     #        mask0 = np.where(ang < angle)
@@ -303,7 +305,7 @@ def make_zones(patch, nzones, nside, center, seenmap, angle = False, dtheta=15.,
 
     # Apply the masks on the patch
     allmaps_mask = allmask * patch
-    #print('allmaps_maks',np.shape(allmaps_mask))
+    # print('allmaps_maks',np.shape(allmaps_mask))
     # Compute the numbers of pixels in each zone
     pix_per_zone = [np.count_nonzero(m[0, :, 0]) for m in allmask]
     if verbose:
@@ -317,8 +319,7 @@ def make_zones(patch, nzones, nside, center, seenmap, angle = False, dtheta=15.,
             map = np.zeros((patch.shape[0], 12 * nside ** 2, 3))
             map[:, seenmap, :] = allmaps_mask[i]
             map[:, ~seenmap, :] = hp.UNSEEN
-            hp.gnomview(map[0, :, istokes], sub=(1, nzones, i+1),
+            hp.gnomview(map[0, :, istokes], sub=(1, nzones, i + 1),
                         rot=center, reso=15,
                         title='Zone {}, npix = {}, istokes = {}'.format(i, pix_per_zone[i], istokes))
     return pix_per_zone, allmaps_mask
-

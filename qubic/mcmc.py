@@ -164,10 +164,14 @@ class LogLikelihood:
 
 
     ### This should be modified in order to call the current likelihood instead, not an external one...
-    def minuit(self, p0=None, chi2=None, verbose=True, print_level=0, ncallmax=10000, extra_args=None, nsplit=1):
+    def minuit(self, p0=None, chi2=None, verbose=True, print_level=0, ncallmax=10000, extra_args=None, nsplit=1,
+                return_chi2fct=False):
         if p0 is None:
             p0=self.p0
-        if verbose:
+        if verbose & (print_level>1):
+            print('About to call Minuit with chi2:')
+            print(chi2)
+            print('Initial parameters, fixed and bounds:')
             for i in range(len(p0)):
                 print('Param {0:}: init={1:6.2f} Fixed={2:} Range=[{3:6.3f}, {4:6.3f}]'.format(i, p0[i], 
                     self.fixedpars[i], self.flatprior[i][0], self.flatprior[i][1]))
@@ -180,20 +184,21 @@ class LogLikelihood:
             cov = np.diag(self.fitresult_minuit[2])
         else:
             cov = self.fitresult_minuit[3]
-        return self.fitresult_minuit[1], cov
-
-    def random_explore_guess(self, ntry=100, chi2=None, verbose = True, extra_args=None):
-        #### Define the chi2 with intercals
-        if chi2 is None:
-            thech2 = self
+        if return_chi2fct:
+            return self.fitresult_minuit[1], cov, self.fitresult_minuit[6]
         else:
-            thech2 = chi2(self.xvals, self.yvals, self.covar, self.model, extra_args=extra_args)
+            return self.fitresult_minuit[1], cov
+
+    def random_explore_guess(self, ntry=100, fraction=1, verbose = True, extra_args=None):
         fit_range_simu = self.flatprior
         fit_fixed_simu = self.fixedpars
         myguess_params = np.zeros((ntry, len(fit_range_simu)))
         for i in range(len(fit_range_simu)):
             if fit_fixed_simu[i]==0:
-                myguess_params[:,i] = np.random.rand(ntry)*(fit_range_simu[i][1]-fit_range_simu[i][0])+fit_range_simu[i][0]
+                rng = (fit_range_simu[i][1]-fit_range_simu[i][0]) * fraction
+                mini = np.max([fit_range_simu[i][0], self.p0[i]-rng/2])
+                maxi = np.min([fit_range_simu[i][0], self.p0[i]+rng/2])
+                myguess_params[:,i] = np.random.rand(ntry)*(maxi-mini)+mini
             else:
                 myguess_params[:,i] = self.p0[i]
         return myguess_params

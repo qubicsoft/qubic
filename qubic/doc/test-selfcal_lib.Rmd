@@ -14,7 +14,7 @@ jupyter:
 
 # Simulations for calibration (fringes on the FP)
 
-#### Edited by Louise
+#### Edited by Louise 26-11-2020
 selfcal_lib.py allows to do several simulations concerning the calibration, especially the simlation of the signal on the focal plane. This notebook gives some examples of what you can do with.
 
 ```{python pycharm={'is_executing': False}}
@@ -30,16 +30,11 @@ import matplotlib.ticker as plticker
 from matplotlib.colors import SymLogNorm
 
 from qubicpack.utilities import Qubic_DataDir
-
 import qubic
-
 from qubic import selfcal_lib as scal
 
 plt.rcParams['figure.figsize'] = (12, 6)
 
-
-# import matplotlib.animation as animation
-# from IPython.display import HTML
 ```
 
 ```{python}
@@ -62,8 +57,10 @@ d['config'] = 'TD'
 d['beam_shape'] = 'gaussian'
 ```
 
+## Instrument detector and horn config
+
 ```{python}
-# You need a qubic instrument for that function
+# QubicInstrument
 q = qubic.QubicInstrument(d)
 
 plt.figure(figsize=(6, 4))
@@ -75,13 +72,12 @@ plt.title('q.detector.plot()')
 # q.optics.focal_length = 0.30 # Change the focal length
 ```
 
-# Instrument horn config
-
 ```{python}
-q.horn.open = False # All close
-q.horn.open[3] = True # Close one
-print(q.horn)
+# Open or close switches
+scal.close_switches(q, np.arange(1, 64))
+scal.open_switches(q, [1, 45, 50])
 
+# Plot the horn array and a baseline
 plt.subplots(1, 2, figsize=(12, 6))
 
 plt.subplot(121)
@@ -95,7 +91,7 @@ a = 1
 x = q.horn.center[:, 0]
 y = q.horn.center[:, 1]
 for i,j in zip(x, y):
-    corr = -0.002 # adds a little correction to put annotation in marker's centrum
+    corr = -0.002 # add a little correction to put annotation in marker's centrum
     plt.annotate(str(a),  xy=(i + corr, j + corr), fontsize=14, color='r')
     a += 1
     
@@ -111,38 +107,86 @@ plt.axis('equal')
 
 This is a simulation that doesn't take into account optical aberrations (only geometrical optics). If the point source is on the optical axis, then you get a symmetrical image.
 
-You can choose the resolution you want for the image on the FP.
+In general Qubic Soft uses only the GRF frame. However, selfcal_lib allows to use the ONAFP frame which is the one uned on the instrument.
+
+
+#### Create an Fringes object
 
 ```{python}
-# Create an object
-# baseline = [142, 230]
-baseline = [25, 57]
-f = scal.Fringes(baseline)
+# baseline = [142, 230] # for the FI
+baseline = [25, 57]     # for the TD
 
+f = scal.Fringes(baseline)
+```
+
+#### Get fringes 
+
+You can choose ONAFP or GRF frame.
+Each pointing is defined by a position of the source (theta, phi).
+
+```{python}
 xONAFP, yONAFP, fringes = f.get_fringes(q,
                                         theta=np.array([0.]), phi=np.array([0.]),
                                         nu=150e9, spectral_irradiance=1.,
                                         frame='ONAFP',
                                         doplot=True, verbose=True, norm=None)
 
-print(fringes.shape)
+print('fringes shape:', fringes.shape)
 ```
 
+#### Plot the fringes
+
+There are 2 functions, one with scatter plot and the other with pcolor.
+It is convenient to be sure of the coordinates and the image orientation. 
+
 ```{python}
+plt.subplots(1, 2)
+plt.suptitle(f'Baseline: {baseline}', fontsize=18)
+plt.subplots_adjust(wspace=0.3)
+
+plt.subplot(121)
+scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes[:, 0], frame='ONAFP', title='Scatter plot', norm=None)
+
+plt.subplot(122)
+scal.pcolor_plot_FP(q, xONAFP, yONAFP, fringes[:, 0], frame='ONAFP', title='pcolor plot', norm=None)
+```
+
+#### Get fringes from the combination 
+
+```{python}
+# Get all combinations
 x, y, S, Cminus_i, Sminus_ij, Cminus_j, Ci, Cj, Sij = f.get_all_combinations_power(q, 
                                                                              theta=[0], phi=[0], 
                                                                              nu=150e9, spectral_irradiance=1.,
                                                                              frame='ONAFP',
                                                                              doplot=True, verbose=True, 
-                                                                             norm=None)
+                                                                             norm=SymLogNorm(5e-8))
 
-# They are 3D arrays : (reso, reso, #pointings)
 print('shape of each combination :', Cminus_i.shape)
 ```
 
 ```{python}
-fringes_true = S - Cminus_i - Cminus_j + Sminus_ij + Ci + Cj
-fringes_meas = S - Cminus_i - Cminus_j + Sminus_ij
+# Make the combination to get the fringes
+
+# Complete one: S_tot - Cminus_i - Cminus_j + Sminus_ij + Ci +Cj
+x, y, fringes_true = f.get_fringes_from_combination(q,
+                                                    measured_comb=False,
+                                                    theta=[0], phi=[0], 
+                                                    nu=150e9, spectral_irradiance=1.,
+                                                    frame='ONAFP',
+                                                    doplot=True, verbose=False)
+
+# Measured one: S_tot - Cminus_i - Cminus_j + Sminus_ij
+x, y, fringes_meas = f.get_fringes_from_combination(q,
+                                                    measured_comb=True,
+                                                    theta=[0], phi=[0], 
+                                                    nu=150e9, spectral_irradiance=1.,
+                                                    frame='ONAFP',
+                                                    doplot=True, verbose=False)
+```
+
+```{python}
+# Look at the difference between both combinations
 
 plt.subplots(1, 2)
 plt.suptitle(f'Baseline: {baseline}', fontsize=18)
@@ -150,24 +194,9 @@ plt.subplots_adjust(wspace=0.3)
 
 plt.subplot(121)
 scal.scatter_plot_FP(q, x, y, fringes_true[:, 0], frame='ONAFP', title='Complete combination', norm=None)
-# scal.pcolor_plot_FP(q, x, y, fringes_true[:, 0], frame='ONAFP', title='Complete combination')
 
 plt.subplot(122)
 scal.scatter_plot_FP(q, x, y, fringes_meas[:, 0], frame='ONAFP', title='Measured combination', norm=None)
-```
-
-### Fringes by combining the different horn configurations
-
-```{python}
-# Make the combination (S_tot - Cminus_i - Cminus_j + Sminus_ij) / Ci
-
-x, y, fringes_combined = f.get_fringes_from_combination(q,
-                                                        measured_comb=False,
-                                                        theta=[0], phi=[0], 
-                                                        nu=150e9, spectral_irradiance=1.,
-                                                        frame='ONAFP',
-                                                        doplot=True, verbose=True)
-print(fringes.shape)
 ```
 
 # Power on the focal plane with optical aberrations
@@ -180,9 +209,17 @@ rep = Qubic_DataDir(datafile='detcentres.txt', datadir='/home/lmousset/QUBIC/')
 print('rep:', rep)
 ```
 
+#### Get the power on the FP for an arbitrary horn configuration
+
+This simulations are done in the ONAFP frame. The resolution is high (241 x 241) and it assumes an area bigger than the focal plane.
+
 ```{python}
-open_horns = [25, 57]
-xONAFP, yONAFP, power = scal.get_power_Maynooth(open_horns, 0., 150e9, q.horn.center, rep, hwp_position=0)
+open_horns = [1, 6, 7, 34, 10, 16]
+xONAFP, yONAFP, power = scal.get_power_Maynooth(rep, open_horns, 
+                                                0., 150e9, 
+                                                q.horn.center,  
+                                                hwp_position=0,
+                                                verbose=True)
 print(xONAFP.shape)
 print(power.shape)
 
@@ -193,8 +230,11 @@ scal.scatter_plot_FP(q, xONAFP, yONAFP, power, s=1,
                    norm=None)
 ```
 
+The following is an other way to do the same.
+
+Qubic soft has an option `external_A` in `get_response()`. So I tried to use this option by passing Maynooth results in `external_A` but it is not fully working for now. There is a small bug.
+
 ```{python}
-open_horns = [25, 57]
 scal.open_switches(q, open_horns)
 
 external_A = scal.make_external_A(rep, open_horns)
@@ -208,23 +248,13 @@ xONAFP, yONAFP, power = scal.get_response_power(q,
 
 plt.figure()
 scal.scatter_plot_FP(q, xONAFP, yONAFP, power, s=100, 
-                   frame='ONAFP', 
-                   title='Maynooth full resolution', 
-                   norm=None)
+                       frame='ONAFP', 
+                       title='Maynooth full resolution', 
+                       norm=None)
 ```
 
-```{python}
-xONAFP_TES, yONAFP_TES, powerTES = f.get_fringes_Maynooth(q, rep, 
-                                                          theta=np.array([0.]), nu=150e9,
-                                                          interp=True,
-                                                          verbose=True)
-
-plt.figure()
-scal.scatter_plot_FP(q, xONAFP_TES, yONAFP_TES, powerTES, s=None, 
-                   frame='ONAFP', 
-                   title='Maynooth at TES resolution', 
-                   norm=None)
-```
+#### Get the fringes at TES resolution
+To decrease the resolution, you can either make a real interpolation (`interp=True`) and then integrate or you can just make the mean inside each TES (`interp=False`). The second way is much faster.
 
 ```{python}
 xONAFP_TES, yONAFP_TES, powerTES = f.get_fringes_Maynooth(q, rep, 
@@ -234,10 +264,14 @@ xONAFP_TES, yONAFP_TES, powerTES = f.get_fringes_Maynooth(q, rep,
 
 plt.figure()
 scal.scatter_plot_FP(q, xONAFP_TES, yONAFP_TES, powerTES, s=None, 
-                   frame='ONAFP', 
-                   title='Maynooth at TES resolution', 
-                   norm=None)
+                       frame='ONAFP', 
+                       title='Maynooth at TES resolution', 
+                       norm=None)
 ```
+
+#### Get the fringes at TES reso doing the combination
+
+You can make the "true" combination or the measured one.
 
 ```{python}
 xONAFP_TES, yONAFP_TES, fringes_comb_TES = f.get_fringes_Maynooth_combination(q, rep,

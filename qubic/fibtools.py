@@ -131,7 +131,7 @@ class MyChi2:
         self.functname = functname
         self.extra_args = extra_args
 
-    def __call__(self, *pars):
+    def __call__(self, *pars, extra_args=None):
         val = self.functname(self.x, pars, extra_args=self.extra_args)
         chi2 = np.dot(np.dot(self.y - val, self.invcov), self.y - val)
         return chi2
@@ -173,8 +173,10 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     if chi2 is None:
         chi2 = MyChi2(x, y, covar, functname, extra_args=extra_args)
     # nohesse=False
-    else:
-        chi2 = chi2(x, y, covar, functname, extra_args=extra_args)
+
+    ### Test:
+    bla = chi2(guess)
+
     # variables
     ndim = np.size(guess)
     parnames = []
@@ -217,7 +219,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
             for k in drng.keys():
                 theguess[k] = drng[k]
         theargs.update(theguess)
-    m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=1, print_level=print_level, **theargs)
+    m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=0.1, print_level=print_level, **theargs)
     m.migrad(ncall=ncallmax * nsplit, nsplit=nsplit, precision=precision)
     # print('Migrad Done')
     if minos:
@@ -267,7 +269,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
         print(np.array(errfit) * np.sqrt(correct))
         print('Chi2=', chisq)
         print('ndf=', ndf)
-    return m, np.array(parfit), np.array(errfit) * np.sqrt(correct), np.array(covariance) * correct, chi2(*parfit), ndf
+    return m, np.array(parfit), np.array(errfit) * np.sqrt(correct), np.array(covariance) * correct, chi2(*parfit), ndf, chi2 
 
 
 # ##############################################################################
@@ -693,13 +695,13 @@ def simsig_asym(x, pars, extra_args=None):
     return np.nan_to_num(thesim)
 
 
-def simsig_fringes(x, stable_time, params):
+def simsig_fringes(t, stable_time, params):
     """
     Simulate a TOD signal obtained during the fringe measurement.
     This function was done to make a fit.
     Parameters
     ----------
-    x : array
+    t : array
         Time sampling.
     stable_time : float
         Number of second the signal keep constant
@@ -711,16 +713,16 @@ def simsig_fringes(x, stable_time, params):
     The simulated signal.
 
     """
-    dx = x[1] - x[0]
-    npoints = len(x)
-    tf = x[-1]
+    dt = t[1] - t[0]
+    npoints = len(t)
+    tf = t[-1]
 
     ctime = params[0]
-    x0 = params[1]
+    t0 = params[1]
     amp = params[2:8]
     #     print(amp)
 
-    sim_init = np.zeros(len(x))
+    sim_init = np.zeros(npoints)
 
     for i in range(6):
         a = int(npoints / tf * stable_time * i)
@@ -729,10 +731,10 @@ def simsig_fringes(x, stable_time, params):
         sim_init[a: b] = amp[i]
 
     # Add a phase
-    sim_init_shift = np.interp((x - x0) % max(x), x, sim_init)
+    sim_init_shift = np.interp((t - t0) % max(t), t, sim_init)
 
     # Convolved by an exponential filter
-    thesim = exponential_filter1d(sim_init_shift, ctime / dx, mode='wrap')
+    thesim = exponential_filter1d(sim_init_shift, ctime / dt, mode='wrap')
 
     return np.array(thesim).astype(np.float64)
 

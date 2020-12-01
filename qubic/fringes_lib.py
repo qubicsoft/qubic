@@ -1,5 +1,4 @@
 from __future__ import division, print_function
-import glob
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits as pyfits
@@ -355,6 +354,13 @@ def read_fits_fringes(file):
     return header, fringes_dict
 
 
+def make_mask2D_thermometers_TD():
+    mask_thermos = np.ones((17, 17))
+    mask_thermos[0, 12:] = np.nan
+    mask_thermos[1:5, 16] = np.nan
+    return mask_thermos
+
+
 def plot_fringes_onFP(q, BL_index, keyvals, fdict, mask=None):
     """Plot fringes on the FP with imshow and with a scatter plot."""
     if type(keyvals['NSTEP']) is tuple:
@@ -375,10 +381,7 @@ def plot_fringes_onFP(q, BL_index, keyvals, fdict, mask=None):
     y = y[y != 0.]
 
     if mask is None:
-        mask_thermos = np.ones((17, 17))
-        mask_thermos[0, 12:] = np.nan
-        mask_thermos[1:5, 16] = np.nan
-        mask = mask_thermos
+        mask = make_mask2D_thermometers_TD()
 
     plt.subplots(1, 2, figsize=(14, 7))
     plt.suptitle(f'Baseline {BL} - ' + date, fontsize=14)
@@ -494,10 +497,7 @@ def plot_sum_diff_fringes(keyvals, fdict, mask=None, lim=2, cmap='bwr'):
     type_eq = keyvals['TYPE-EQ']
 
     if mask is None:
-        mask_thermos = np.ones((17, 17))
-        mask_thermos[0, 12:] = np.nan
-        mask_thermos[1:5, 16] = np.nan
-        mask = mask_thermos
+        mask = make_mask2D_thermometers_TD()
 
     sgns = np.ones((neq, 17, 17))
     for i in range(neq):

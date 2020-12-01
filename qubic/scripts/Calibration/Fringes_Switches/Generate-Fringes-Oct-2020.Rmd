@@ -60,10 +60,10 @@ q = qubic.QubicInstrument(d)
 # Try just for one TES
 TES = 46
 ASIC = 1 # If q is a TD, it should be 1 or 2
-xONAFP, yONAFP, FP_index = scal.TES_Instru2coord(TES, ASIC, q, frame='ONAFP')
+xONAFP, yONAFP, FP_index, index_q = scal.TES_Instru2coord(TES, ASIC, q, frame='ONAFP')
 
 # Get coordinates for all TES
-xTES, yTES, allFP_index = scal.get_TES_Instru_coords(q, frame='ONAFP')
+xTES, yTES, allFP_index, allindex_q = scal.get_TES_Instru_coords(q, frame='ONAFP')
 ```
 
 ## Look at the dataset
@@ -189,7 +189,7 @@ params = np.zeros((neq, 256, 8))
 combination = np.zeros((neq, 256))
 periods = np.zeros(neq)
 fringes = np.zeros((neq, 17, 17))
-BLs_eq = np.zeros((neq, 2))
+BLs_eq = np.zeros((neq, 2), dtype=int)
 wt_eq = np.zeros(neq)
 Ncycles_eq = np.zeros(neq)
 
@@ -201,6 +201,7 @@ for i, ids in enumerate(BLs_sort[type_eq]):
     
     # Get the baseline
     BL = allBLs[ids]
+    print(BL)
     BLs_eq[i] = BL
     wt_eq[i] = allwt[ids]
     Ncycles_eq[i] = allNcycles[ids]
@@ -235,6 +236,7 @@ keyvals = fl.make_keyvals(date, type_eq, neq, vtes, nstep=6, ecosorb='yes')
 
 fdict = fl.make_fdict(BLs_eq, wt_eq, Ncycles_eq, xTES, yTES, t, 
                folded, params, combination, periods, residuals, fringes)
+print(fdict.keys())
 ```
 
 ## Plots and save as pdf files
@@ -259,6 +261,7 @@ fl.save_folded_fit_pdf_plots(out_dir, keyvals, fdict)
 
 ```{python}
 # Plot sum and difference
+plt.figure()
 fl.plot_sum_diff_fringes(keyvals, fdict, mask=None, lim=2, cmap='bwr')
 plt.show()
 ```
@@ -326,7 +329,7 @@ for type_eq in range(ntypes):
     combination = np.zeros((neq, 256))
     periods = np.zeros(neq)
     fringes = np.zeros((neq, 17, 17))
-    BLs_eq = np.zeros((neq, 2))
+    BLs_eq = np.zeros((neq, 2), dtype=int)
     wt_eq = np.zeros(neq)
     Ncycles_eq = np.zeros(neq)
 

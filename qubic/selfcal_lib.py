@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 from qubicpack.pixel_translation import tes2index
 
-__all__ = ['Fringes']
+__all__ = ['Model_Fringes_QubicSoft', 'Model_Fringes_Maynooth']
 
 
 # ========== Plot functions =============
@@ -240,7 +240,7 @@ def TES_Instru2coord(TES, ASIC, q, frame='ONAFP'):
     yGRF = centerGRF[1]
 
     if frame not in ['GRF', 'ONAFP']:
-        raise ValueError('The frame is not valid.')
+         raise ValueError('The frame is not valid.')
     elif frame == 'GRF':
         print('X_GRF = {:.3f} mm, Y_GRF = {:.3f} mm'.format(xGRF * 1e3, yGRF * 1e3))
         return xGRF, yGRF, FP_index, index_q
@@ -726,7 +726,7 @@ def fullreso2TESreso(x, y, power, TESvertex, TESarea, interp=False, verbose=True
 
 
 # ========== Fringe simulations =============
-class Fringes:
+class Model_Fringes_QubicSoft:
     def __init__(self, baseline):
         """
         Parameters
@@ -886,12 +886,10 @@ class Fringes:
         """
 
 
-        x, y, S_tot, Cminus_i, Sminus_ij, Cminus_j, Ci, Cj, Sij = \
-            Fringes.get_all_combinations_power(self, q,
-                                               theta=theta, phi=phi,
-                                               nu=nu, spectral_irradiance=spectral_irradiance,
-                                               frame=frame,
-                                               doplot=False, verbose=verbose, **kwargs)
+        x, y, S_tot, Cminus_i, Sminus_ij, Cminus_j, Ci, Cj, Sij = self.get_all_combinations_power(q, theta=theta, phi=phi,
+                                       nu=nu, spectral_irradiance=spectral_irradiance,
+                                       frame=frame,
+                                       doplot=False, verbose=verbose, **kwargs)
         if measured_comb:
             fringes_comb = S_tot - Cminus_i - Cminus_j + Sminus_ij
         else:
@@ -905,6 +903,18 @@ class Fringes:
                                                                                       np.rad2deg(theta[i]),
                                                                                       np.rad2deg(phi[i])), **kwargs)
         return x, y, fringes_comb
+
+
+class Model_Fringes_Maynooth:
+    def __init__(self, baseline):
+        """
+        Parameters
+        ----------
+        baseline: list
+            Baseline formed with 2 horns, index between 1 and 64 as on the instrument.
+        """
+
+        self.baseline = baseline
 
     def get_fringes_Maynooth(self, q, rep,
                              theta=np.array([0.]), nu=150e9,

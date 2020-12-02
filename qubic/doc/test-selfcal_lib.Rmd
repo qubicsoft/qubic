@@ -116,7 +116,7 @@ In general Qubic Soft uses only the GRF frame. However, selfcal_lib allows to us
 # baseline = [142, 230] # for the FI
 baseline = [25, 57]     # for the TD
 
-f = scal.Fringes(baseline)
+Model_QS = scal.Model_Fringes_QubicSoft(baseline)
 ```
 
 #### Get fringes 
@@ -125,7 +125,7 @@ You can choose ONAFP or GRF frame.
 Each pointing is defined by a position of the source (theta, phi).
 
 ```{python}
-xONAFP, yONAFP, fringes = f.get_fringes(q,
+xONAFP, yONAFP, fringes = Model_QS.get_fringes(q,
                                         theta=np.array([0.]), phi=np.array([0.]),
                                         nu=150e9, spectral_irradiance=1.,
                                         frame='ONAFP',
@@ -155,7 +155,7 @@ scal.pcolor_plot_FP(q, xONAFP, yONAFP, fringes[:, 0], frame='ONAFP', title='pcol
 
 ```{python}
 # Get all combinations
-x, y, S, Cminus_i, Sminus_ij, Cminus_j, Ci, Cj, Sij = f.get_all_combinations_power(q, 
+x, y, S, Cminus_i, Sminus_ij, Cminus_j, Ci, Cj, Sij = Model_QS.get_all_combinations_power(q, 
                                                                              theta=[0], phi=[0], 
                                                                              nu=150e9, spectral_irradiance=1.,
                                                                              frame='ONAFP',
@@ -169,7 +169,7 @@ print('shape of each combination :', Cminus_i.shape)
 # Make the combination to get the fringes
 
 # Complete one: S_tot - Cminus_i - Cminus_j + Sminus_ij + Ci +Cj
-x, y, fringes_true = f.get_fringes_from_combination(q,
+x, y, fringes_true = Model_QS.get_fringes_from_combination(q,
                                                     measured_comb=False,
                                                     theta=[0], phi=[0], 
                                                     nu=150e9, spectral_irradiance=1.,
@@ -177,7 +177,7 @@ x, y, fringes_true = f.get_fringes_from_combination(q,
                                                     doplot=True, verbose=False)
 
 # Measured one: S_tot - Cminus_i - Cminus_j + Sminus_ij
-x, y, fringes_meas = f.get_fringes_from_combination(q,
+x, y, fringes_meas = Model_QS.get_fringes_from_combination(q,
                                                     measured_comb=True,
                                                     theta=[0], phi=[0], 
                                                     nu=150e9, spectral_irradiance=1.,
@@ -257,10 +257,17 @@ scal.scatter_plot_FP(q, xONAFP, yONAFP, power, s=100,
 To decrease the resolution, you can either make a real interpolation (`interp=True`) and then integrate or you can just make the mean inside each TES (`interp=False`). The second way is much faster.
 
 ```{python}
-xONAFP_TES, yONAFP_TES, powerTES = f.get_fringes_Maynooth(q, rep, 
-                                                          theta=np.array([0.]), nu=150e9,
-                                                          interp=False,
-                                                          verbose=True)
+# baseline = [142, 230] # for the FI
+baseline = [25, 57]     # for the TD
+
+Model_Maynooth = scal.Model_Fringes_Maynooth(baseline)
+```
+
+```{python}
+xONAFP_TES, yONAFP_TES, powerTES = Model_Maynooth.get_fringes_Maynooth(q, rep, 
+                                                                      theta=np.array([0.]), nu=150e9,
+                                                                      interp=False,
+                                                                      verbose=True)
 
 plt.figure()
 scal.scatter_plot_FP(q, xONAFP_TES, yONAFP_TES, powerTES, s=None, 
@@ -274,7 +281,7 @@ scal.scatter_plot_FP(q, xONAFP_TES, yONAFP_TES, powerTES, s=None,
 You can make the "true" combination or the measured one.
 
 ```{python}
-xONAFP_TES, yONAFP_TES, fringes_comb_TES = f.get_fringes_Maynooth_combination(q, rep,
+xONAFP_TES, yONAFP_TES, fringes_comb_TES = Model_Maynooth.get_fringes_Maynooth_combination(q, rep,
                                                                               measured_comb=True,
                                                                               theta=np.array([0.]), nu=150e9,
                                                                               interp=False,

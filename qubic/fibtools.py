@@ -50,6 +50,11 @@ def statstr(x, divide=False, median=False, cut=None):
         s /= nn
     return '{0:6.5f} +/- {1:6.5f}'.format(m, s)
 
+def qgrid():
+    for i in range(17):
+        axvline(x=i-0.5, alpha=0.3, color='k')
+        axhline(y=i-0.5, alpha=0.3, color='k')
+
 
 def image_asics(data1=None, data2=None, all1=None):
     """
@@ -126,7 +131,7 @@ class MyChi2:
         self.functname = functname
         self.extra_args = extra_args
 
-    def __call__(self, *pars):
+    def __call__(self, *pars, extra_args=None):
         val = self.functname(self.x, pars, extra_args=self.extra_args)
         chi2 = np.dot(np.dot(self.y - val, self.invcov), self.y - val)
         return chi2
@@ -147,11 +152,12 @@ class MyChi2_nocov:
         chi2 = np.sum((self.y - val) ** 2)
         # chi2 = np.dot(self.y - val, self.y - val)
         return chi2
+        
 
 
 # ## Call Minuit
 def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=None, rangepars=None, nohesse=False,
-              force_chi2_ndf=False, verbose=True, minos=False, extra_args=None, print_level=0, force_diag=False,
+              force_chi2_ndf=False, verbose=True, minos=True, extra_args=None, print_level=0, force_diag=False,
               nsplit=1, ncallmax=10000, precision=None):
 
     # check if covariance or error bars were given
@@ -167,9 +173,10 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     if chi2 is None:
         chi2 = MyChi2(x, y, covar, functname, extra_args=extra_args)
     # nohesse=False
-    else:
-        chi2 = chi2(x, y, covar, functname)
-        nohesse = True
+
+    ### Test:
+    bla = chi2(guess)
+
     # variables
     ndim = np.size(guess)
     parnames = []
@@ -189,9 +196,10 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     drng = {}
     dstep = {}
     if rangepars is not None:
+        step_norm = 100
         for i in range(len(parnames)):
             drng['limit_' + parnames[i]] = rangepars[i]
-            dstep['error_' + parnames[i]] = (rangepars[i][1] - rangepars[i][0]) / 10
+            dstep['error_' + parnames[i]] = (rangepars[i][1] - rangepars[i][0]) / step_norm
     else:
         for i in range(len(parnames)):
             drng['limit_' + parnames[i]] = False
@@ -211,15 +219,21 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
             for k in drng.keys():
                 theguess[k] = drng[k]
         theargs.update(theguess)
-    m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=1., print_level=print_level, **theargs)
+    m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=0.1, print_level=print_level, **theargs)
     m.migrad(ncall=ncallmax * nsplit, nsplit=nsplit, precision=precision)
     # print('Migrad Done')
     if minos:
-        m.minos()
-        # print('Minos Done')
+        try:
+            m.minos()
+            if verbose: print('Minos Done')
+        except:
+            if verbose: print('Minos Failed !')
     if nohesse is False:
-        m.hesse()
-        # print('Hesse Done')
+        try:
+            m.hesse()
+            if verbose: print('Hesse Done')
+        except:
+            if verbose: print('Hesse failed !')
     # build np.array output
     parfit = []
     for i in parnames: parfit.append(m.values[i])
@@ -255,7 +269,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
         print(np.array(errfit) * np.sqrt(correct))
         print('Chi2=', chisq)
         print('ndf=', ndf)
-    return m, np.array(parfit), np.array(errfit) * np.sqrt(correct), np.array(covariance) * correct, chi2(*parfit), ndf
+    return m, np.array(parfit), np.array(errfit) * np.sqrt(correct), np.array(covariance) * correct, chi2(*parfit), ndf, chi2 
 
 
 # ##############################################################################
@@ -681,13 +695,13 @@ def simsig_asym(x, pars, extra_args=None):
     return np.nan_to_num(thesim)
 
 
-def simsig_fringes(x, stable_time, params):
+def simsig_fringes(t, stable_time, params):
     """
     Simulate a TOD signal obtained during the fringe measurement.
     This function was done to make a fit.
     Parameters
     ----------
-    x : array
+    t : array
         Time sampling.
     stable_time : float
         Number of second the signal keep constant
@@ -699,16 +713,16 @@ def simsig_fringes(x, stable_time, params):
     The simulated signal.
 
     """
-    dx = x[1] - x[0]
-    npoints = len(x)
-    tf = x[-1]
+    dt = t[1] - t[0]
+    npoints = len(t)
+    tf = t[-1]
 
     ctime = params[0]
-    x0 = params[1]
+    t0 = params[1]
     amp = params[2:8]
     #     print(amp)
 
-    sim_init = np.zeros(len(x))
+    sim_init = np.zeros(npoints)
 
     for i in range(6):
         a = int(npoints / tf * stable_time * i)
@@ -717,17 +731,18 @@ def simsig_fringes(x, stable_time, params):
         sim_init[a: b] = amp[i]
 
     # Add a phase
-    sim_init_shift = np.interp((x - x0) % max(x), x, sim_init)
+    sim_init_shift = np.interp((t - t0) % max(t), t, sim_init)
 
     # Convolved by an exponential filter
-    thesim = exponential_filter1d(sim_init_shift, ctime / dx, mode='wrap')
+    thesim = exponential_filter1d(sim_init_shift, ctime / dt, mode='wrap')
 
     return np.array(thesim).astype(np.float64)
 
 
 def fold_data(time, dd, period, lowcut, highcut, nbins,
               notch=None, rebin=None, verbose=None,
-              return_error=False, silent=False, median=False, return_noise_harmonics=None):
+              return_error=False, silent=False, median=False, mode=False, clip=None,
+              return_noise_harmonics=None):
     """
 
     Parameters
@@ -776,9 +791,9 @@ def fold_data(time, dd, period, lowcut, highcut, nbins,
             bar.update()
         data = dd[THEPIX, :]
         newdata = filter_data(time, data, lowcut, highcut, notch=notch, rebin=rebin, verbose=verbose)
-        t, yy, dx, dy, others = profile(tfold, newdata, range=[0, period],
+        t, yy, dx, dy, others = profile(tfold, newdata,
                                         nbins=nbins, dispersion=False, plot=False,
-                                        cutbad=False, median=median)
+                                        cutbad=False, median=median, mode=mode, clip=clip)
         folded[THEPIX, :] = (yy - np.mean(yy)) / np.std(yy)
         folded_nonorm[THEPIX, :] = (yy - np.mean(yy))
         dfolded[THEPIX, :] = dy / np.std(yy)

@@ -2,13 +2,19 @@ import numpy as np
 import emcee
 from scipy.optimize import curve_fit
 from scipy.integrate import cumtrapz
+from pylab import *
+import iminuit
+from qubic import fibtools as ft
 
 __all__ = ['LogLikelihood']
 
 
+
 class LogLikelihood:
     def __init__(self, xvals=None, yvals=None, errors=None, model=None, nbins=16,
-                 nsiginit=10, nsigprior=20, flatprior=None, covariance_model_funct=None, p0=None):
+                 nsiginit=10, nsigprior=20, flatprior=None, fixedpars=None,
+                 covariance_model_funct=None, p0=None, nwalkers=32, chi2=None,
+                 extra_args = None):
         self.prior = None
         self.model = model
         self.xvals = xvals
@@ -17,6 +23,9 @@ class LogLikelihood:
         self.nsiginit = nsiginit
         self.nsigprior = nsigprior
         self.covariance_model_funct = covariance_model_funct
+        self.nwalkers = nwalkers
+        self.fixedpars = fixedpars
+        self.p0=p0
 
         if np.ndim(errors) == 1:
             self.covar = np.zeros((np.size(errors), np.size(errors)))
@@ -26,12 +35,19 @@ class LogLikelihood:
 
         self.flatprior = flatprior
         if not flatprior:
-            self.fitresult = curve_fit(model, self.xvals, self.yvals, sigma=np.sqrt(np.diag(self.covar)),
-                                       maxfev=1000000, ftol=1e-5, p0=p0)
-            print('Initial Fit: ', self.fitresult)
+            initial_fit = self.minuit(p0=self.p0)
+            self.fitresult = [initial_fit[0], initial_fit[1]]
+ 
+    def __call__(self, mytheta, extra_args=None, verbose=False):
+        # if self.fixedpars is not None:
+        #     theta = self.p0.copy()
+        #     #theta[self.fixedpars == 0] = mytheta
+        #     theta[self.fixedpars == 0] = mytheta[self.fixedpars == 0]
+        # else:
+        #     theta = mytheta
+        theta = mytheta
 
-    def __call__(self, theta):
-        self.modelval = self.model(self.xvals[:self.nbins], *theta)
+        self.modelval = self.model(self.xvals[:self.nbins], theta)
 
         if self.covariance_model_funct is None:
             self.invcov = np.linalg.inv(self.covar)
@@ -40,6 +56,21 @@ class LogLikelihood:
             self.invcov = np.linalg.inv(cov_repeat + self.covar)
 
         lp = self.log_priors(theta)
+        if verbose:
+            print('Pars')
+            print(theta)
+            print('Y')
+            print(np.shape(self.yvals))
+            print(self.yvals[0:10])
+            print('Model')
+            print(np.shape(self.modelval))
+            print(self.modelval[:10])
+            print('Diff')
+            print(np.shape((self.yvals - self.modelval)))
+            print((self.yvals - self.modelval)[0:10])
+            print('Diff x invcov')
+            print(np.shape((self.yvals - self.modelval).T @ self.invcov))
+            print(((self.yvals - self.modelval).T @ self.invcov)[0:10])
         # logLLH = lp - 0.5 * np.dot(np.dot(self.yvals - self.modelval, self.invcov), self.yvals - self.modelval)
         logLLH = lp - 0.5 * (((self.yvals - self.modelval).T @ self.invcov) @ (self.yvals - self.modelval))
         if not np.isfinite(logLLH):
@@ -77,7 +108,8 @@ class LogLikelihood:
         else:
             return -np.inf
 
-    def run(self, nbmc, nwalkers=32):
+    def run(self, nbmc):
+        nwalkers = self.nwalkers
         if self.flatprior:
             ndim = len(self.flatprior)
             pos = np.zeros((nwalkers, ndim))
@@ -91,8 +123,16 @@ class LogLikelihood:
             for d in range(ndim):
                 pos[:, d] = np.random.randn(nwalkers) * np.sqrt(self.fitresult[1][d, d]) * nsigmas + self.fitresult[0][
                     d]
-
+        print('Ndim init:',ndim)
+        if self.fixedpars is not None:
+            ndim = int(np.sum(self.fixedpars == 0))
+        print('New ndim:', ndim)
         sampler = emcee.EnsembleSampler(nwalkers, ndim, self.__call__)
+        if self.fixedpars is not None:
+            print('Len(pos):',np.shape(pos))
+            print('len(fixedpars):',len(self.fixedpars))
+            pos = pos[:,self.fixedpars==0]
+            print('New len(pos):',np.shape(pos))
         sampler.run_mcmc(pos, nbmc, progress=True)
         return sampler
 
@@ -111,3 +151,55 @@ class LogLikelihood:
         sigma68 = np.sqrt(Cov_r)
 
         return sigma68
+
+    def call4curvefit(self, x, *pars):
+        return self.model(x, pars)
+
+    def curve_fit(self, p0=None):
+        if p0 is None:
+            p0=self.p0
+        self.fitresult_curvefit = curve_fit(self.call4curvefit, self.xvals, self.yvals, sigma=np.sqrt(np.diag(self.covar)),
+                                   maxfev=1000000, ftol=1e-5, p0=p0)
+        return self.fitresult_curvefit[0], self.fitresult_curvefit[1]
+
+
+    ### This should be modified in order to call the current likelihood instead, not an external one...
+    def minuit(self, p0=None, chi2=None, verbose=True, print_level=0, ncallmax=10000, extra_args=None, nsplit=1,
+                return_chi2fct=False):
+        if p0 is None:
+            p0=self.p0
+        if verbose & (print_level>1):
+            print('About to call Minuit with chi2:')
+            print(chi2)
+            print('Initial parameters, fixed and bounds:')
+            for i in range(len(p0)):
+                print('Param {0:}: init={1:6.2f} Fixed={2:} Range=[{3:6.3f}, {4:6.3f}]'.format(i, p0[i], 
+                    self.fixedpars[i], self.flatprior[i][0], self.flatprior[i][1]))
+        self.fitresult_minuit = ft.do_minuit(self.xvals, self.yvals, self.covar, p0,
+            functname=self.model, 
+            fixpars=self.fixedpars, rangepars=self.flatprior,
+            verbose=verbose, chi2=chi2, print_level=print_level, 
+            ncallmax=ncallmax, extra_args=extra_args, nsplit=nsplit)
+        if len(self.fitresult_minuit[3])==0:
+            cov = np.diag(self.fitresult_minuit[2])
+        else:
+            cov = self.fitresult_minuit[3]
+        if return_chi2fct:
+            return self.fitresult_minuit[1], cov, self.fitresult_minuit[6]
+        else:
+            return self.fitresult_minuit[1], cov
+
+    def random_explore_guess(self, ntry=100, fraction=1, verbose = True, extra_args=None):
+        fit_range_simu = self.flatprior
+        fit_fixed_simu = self.fixedpars
+        myguess_params = np.zeros((ntry, len(fit_range_simu)))
+        for i in range(len(fit_range_simu)):
+            if fit_fixed_simu[i]==0:
+                rng = (fit_range_simu[i][1]-fit_range_simu[i][0]) * fraction
+                mini = np.max([fit_range_simu[i][0], self.p0[i]-rng/2])
+                maxi = np.min([fit_range_simu[i][0], self.p0[i]+rng/2])
+                myguess_params[:,i] = np.random.rand(ntry)*(maxi-mini)+mini
+            else:
+                myguess_params[:,i] = self.p0[i]
+        return myguess_params
+

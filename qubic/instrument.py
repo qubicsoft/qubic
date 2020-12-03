@@ -192,13 +192,13 @@ class QubicInstrument(Instrument):
         Instrument.__init__(self, layout)
 
     def _get_detector_layout(self, ngrids, nep, fknee, fslope, ncorr, tau):
-        shape, vertex, removed, index, quadrant, efficiency = \
+        shape, vertex, removed, ordering, quadrant, efficiency = \
             self.calibration.get('detarray')
         if ngrids == 2:
             shape = (2,) + shape
             vertex = np.array([vertex, vertex])
             removed = np.array([removed, removed])
-            index = np.array([index, index + np.max(index) + 1], index.dtype)
+            ordering = np.array([ordering, ordering + np.max(ordering) + 1], ordering.dtype)
             quadrant = np.array([quadrant, quadrant + 4], quadrant.dtype)
             efficiency = np.array([efficiency, efficiency])
         # focal_length = self.calibration.get('optics')['focal length']
@@ -214,7 +214,7 @@ class QubicInstrument(Instrument):
             return np.arctan2(self.center[..., 1], self.center[..., 0])
 
         layout = Layout(
-            shape, vertex=vertex, selection=~removed, ordering=index,
+            shape, vertex=vertex, selection=~removed, ordering=ordering,
             quadrant=quadrant, nep=nep, fknee=fknee, fslope=fslope,
             tau=tau, theta=theta, phi=phi, efficiency=efficiency)
 
@@ -753,7 +753,7 @@ class QubicInstrument(Instrument):
         """
         nd = len(self)
         nt = len(sampling)
-        grid = self.detector.quadrant // 4
+        grid = (self.detector.quadrant - 1) // 4
 
         if scene.kind == 'I':
             if self.optics.polarizer:
@@ -967,12 +967,12 @@ class QubicInstrument(Instrument):
             The secondary beam.
         external_A : list of tables describing the phase and amplitude at each point of the focal
             plane for each of the horns:
-            [0] : array of nn with x values in meters
-            [1] : array of nn with y values in meters
-            [2] : array of [nhorns, nn, nn] with amplitude on X
-            [3] : array of [nhorns, nn, nn] with amplitude on Y
-            [4] : array of [nhorns, nn, nn] with phase on X in degrees
-            [5] : array of [nhorns, nn, nn] with phase on Y in degrees
+            [0] : array, X coordinates with shape (n) in GRF [m]
+            [1] : array, Y coordinates with shape (n) in GRF [m]
+            [2] : array, amplitude on X with shape (n, nhorns)
+            [3] : array, amplitude on Y with shape (n, nhorns)
+            [4] : array, phase on X with shape (n, nhorns) [rad]
+            [5] : array, phase on Y with shape (n, nhorns) [rad]
         hwp_position : int
             HWP position from 0 to 7.
 
@@ -996,15 +996,14 @@ class QubicInstrument(Instrument):
             phi_hwp = np.arange(0, 8) * np.pi / 16
             xx = external_A[0]
             yy = external_A[1]
-            amp_x = external_A[2]
-            amp_y = external_A[3]
+            Ax = external_A[2]
+            Ay = external_A[3]
             phi_x = external_A[4]
             phi_y = external_A[5]
-            ix = np.argmin(np.abs(xx - position[0, 0]))
-            jy = np.argmin(np.abs(yy - position[0, 1]))
-            Ex = amp_x[:, ix, jy] * (np.cos(phi_x[:, ix, jy]) + 1j * np.sin(phi_x[:, ix, jy]))
-            Ey = amp_y[:, ix, jy] * (np.cos(phi_y[:, ix, jy]) + 1j * np.sin(phi_y[:, ix, jy]))
-            return Ex * np.cos(2 * phi_hwp[hwp_position]) + Ey * np.sin(2 * phi_hwp[hwp_position])
+            Ex = Ax * (np.cos(phi_x) + 1j * np.sin(phi_x)) * np.cos(2 * phi_hwp[hwp_position])
+            Ey = Ay * (np.cos(phi_y) + 1j * np.sin(phi_y)) * np.sin(2 * phi_hwp[hwp_position])
+            A = Ex + Ey
+            return A
 
     @staticmethod
     def _get_response_B(theta, phi, spectral_irradiance, nu, horn, primary_beam):
@@ -1075,12 +1074,12 @@ class QubicInstrument(Instrument):
             The secondary beam.
         external_A : list of tables describing the phase and amplitude at each point of the focal
             plane for each of the horns:
-            [0] : array of nn with x values in meters
-            [1] : array of nn with y values in meters
-            [2] : array of [nhorns, nn, nn] with amplitude on X
-            [3] : array of [nhorns, nn, nn] with amplitude on Y
-            [4] : array of [nhorns, nn, nn] with phase on X in degrees
-            [5] : array of [nhorns, nn, nn] with phase on Y in degrees
+            [0] : array, X coordinates with shape (n) in GRF [m]
+            [1] : array, Y coordinates with shape (n) in GRF [m]
+            [2] : array, amplitude on X with shape (n, nhorns)
+            [3] : array, amplitude on Y with shape (n, nhorns)
+            [4] : array, phase on X with shape (n, nhorns) [rad]
+            [5] : array, phase on Y with shape (n, nhorns) [rad]
         hwp_position : int
             HWP position from 0 to 7.
 
@@ -1135,12 +1134,12 @@ class QubicInstrument(Instrument):
             assumed to be zero, in degrees.
         external_A : list of tables describing the phase and amplitude at each point of the focal
             plane for each of the horns:
-            [0] : array of nn with x values in meters
-            [1] : array of nn with y values in meters
-            [2] : array of [nhorns, nn, nn] with amplitude on X
-            [3] : array of [nhorns, nn, nn] with amplitude on Y
-            [4] : array of [nhorns, nn, nn] with phase on X in degrees
-            [5] : array of [nhorns, nn, nn] with phase on Y in degrees
+            [0] : array, X coordinates with shape (n) in GRF [m]
+            [1] : array, Y coordinates with shape (n) in GRF [m]
+            [2] : array, amplitude on X with shape (n, nhorns)
+            [3] : array, amplitude on Y with shape (n, nhorns)
+            [4] : array, phase on X with shape (n, nhorns) [rad]
+            [5] : array, phase on Y with shape (n, nhorns) [rad]
         hwp_position : int
             HWP position from 0 to 7.
 
@@ -1196,12 +1195,12 @@ class QubicInstrument(Instrument):
             assumed to be zero, in degrees.
         external_A : list of tables describing the phase and amplitude at each point of the focal
             plane for each of the horns:
-            [0] : array of nn with x values in meters
-            [1] : array of nn with y values in meters
-            [2] : array of [nhorns, nn, nn] with amplitude on X
-            [3] : array of [nhorns, nn, nn] with amplitude on Y
-            [4] : array of [nhorns, nn, nn] with phase on X in degrees
-            [5] : array of [nhorns, nn, nn] with phase on Y in degrees
+            [0] : array, X coordinates with shape (n) in GRF [m]
+            [1] : array, Y coordinates with shape (n) in GRF [m]
+            [2] : array, amplitude on X with shape (n, nhorns)
+            [3] : array, amplitude on Y with shape (n, nhorns)
+            [4] : array, phase on X with shape (n, nhorns) [rad]
+            [5] : array, phase on Y with shape (n, nhorns) [rad]
         hwp_position : int
             HWP position from 0 to 7.
         detector_integrate: Optional, number of subpixels in x direction for integration over detectors

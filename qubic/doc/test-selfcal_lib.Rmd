@@ -103,6 +103,20 @@ plt.ylabel('$Y_{GRF}$ [m]', fontsize=20)
 plt.axis('equal')
 ```
 
+## Analytical function
+
+```{python}
+baseline = [25, 57]
+Model_Ana = scal.Model_Fringes_Ana(q, baseline, theta_source=0., nu_source=150e9, fwhm=20., amp=1., frame='ONAFP')
+print(Model_Ana.focal)
+
+xONAFP, yONAFP, fringes = Model_Ana.get_fringes(times_gaussian=True)
+
+plt.figure()
+scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP')
+
+```
+
 # Qubic soft simulation (no aberrations)
 
 This is a simulation that doesn't take into account optical aberrations (only geometrical optics). If the point source is on the optical axis, then you get a symmetrical image.

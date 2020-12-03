@@ -66,7 +66,7 @@ dictfilename = global_dir + '/dicts/spectroimaging_article.dict'
 dFI = qubic.qubicdict.qubicDict()
 dFI.read_from_file(dictfilename)
 dFI['nf_recon'] = 5
-dFI['nf_recon'] = 5
+dFI['nf_sub'] = 5
 dFI['photon_noise'] = True
 dFI['effective_duration'] = 1
 dTD = dFI.copy()
@@ -176,9 +176,9 @@ Nfreq_edges_out, nus_edge_out, nus_out, _, _, _ = qubic.compute_freq(band,
 
 ##### QubicSkySim instanciation
 #seed = 42#None
-sky_config_TD = {'dust': 'd1'}
+sky_config_TD = {'CMB':'c1', 'dust': 'd1'}
 Qubic_sky_TD = qss.Qubic_sky(sky_config_TD, dTD)
-sky_config_FI = {'dust': 'd1'}
+sky_config_FI = {'CMB':'c1', 'dust': 'd1'}
 Qubic_sky_FI = qss.Qubic_sky(sky_config_FI, dFI)
 
 # Now averaging maps into reconstruction sub-bands maps
@@ -208,7 +208,7 @@ elif dTD['nf_sub'] == dTD['nf_recon']:
 
 ```{python}
 ##### Getting FastSimulator output maps
-nreals=100
+nreals = 100
 noiseFI = np.zeros((nreals,dTD['nf_recon'], 12*dTD['nside']**2,3))
 
 for i in range(nreals):
@@ -225,7 +225,7 @@ noisymapsTD = np.zeros_like(noiseFI)
 noisymapsFI = np.zeros_like(noiseFI)
 
 for i in range(nreals):
-    noisymapsTD[i, ...] = 31*noiseFI[i, ...] + dust_map_TD
+    noisymapsTD[i, ...] = 31 * noiseFI[i, ...] + dust_map_TD
     noisymapsFI[i, ...] = noiseFI[i, ...] + dust_map_FI
 #
 mapsTD, stdTD = np.mean(noisymapsTD, axis = 0), np.std(noisymapsTD, axis = 0)
@@ -234,12 +234,12 @@ mapsFI, stdFI = np.mean(noisymapsFI, axis = 0), np.std(noisymapsFI, axis = 0)
 
 ### Look at the maps... okk..
 
-
+```{python}
 #print(np.shape(maps_qubic), np.shape(maps_noiseless), np.shape(maps_noise), np.shape(coverage))
-cov=np.zeros_like(coverageTD,dtype=bool)
-covmsk=np.where(coverageTD > 0.01*np.max(coverageTD))
+cov=np.zeros_like(coverageFI,dtype=bool)
+covmsk=np.where(coverageFI > 0.01*np.max(coverageFI))
 cov[covmsk] = 1
-
+```
 
 for iNU in range(dTD['nf_recon']):
     mapsTD[iNU,~cov,0] = hp.UNSEEN
@@ -375,7 +375,7 @@ CpFI = amc.get_Cp(noiseFI_ud[:, :, cov_ud, :], verbose = False, doplot = False)
 
 _, CpTD_prime = amc.Cp2Cp_prime_viaCorr(CpTD, verbose = False)
 _, CpFI_prime = amc.Cp2Cp_prime_viaCorr(CpFI, verbose = False)
-
+print(np.shape(CpTD_prime))
 plt.figure()
 plt.imshow((CpTD_prime)[:, :, 0, 0])
 plt.colorbar()
@@ -443,20 +443,22 @@ def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 ```{python}
 pix = [hp.ang2pix(dTD['nside'], np.pi / 2 - np.deg2rad(center[1] - 0), np.deg2rad(center[0] + 1  ) ), ]
 pix_ud = PixPix(pix[0])
-
+pix_ud = 24448
 pix_red = np.where(np.where(cov_ud == True)[0] == pix_ud)[0][0]
 
 plt.figure(figsize = (10,4))
 hp.gnomview(mapsTD_ud[-1,:,0], reso = 15,
             notext = True, title = 'TD patch ', sub = (121),
+            min=0,
             max = 0.4*np.max(mapsTD_ud[-1,:,0]), 
             unit = r'$\mu$K',
             rot = center)
-hp.projscatter(hp.pix2ang(nside_new, pix_ud), marker = '*', color = 'r', s = 200)
+hp.projscatter(hp.pix2ang(nside_new, pix_ud), marker = 'o', color = 'r', s = 160)
 hp.gnomview(mapsFI_ud[-1,:,0], reso = 15, title = 'FI patch ',
             unit = r'$\mu$K', sub = (122),
+            min = 0,
             rot = center)
-hp.projscatter(hp.pix2ang(nside_new, pix_ud), marker = '*', color = 'r', s = 200)
+hp.projscatter(hp.pix2ang(nside_new, pix_ud), marker = 'o', color = 'r', s = 160)
 ```
 
 ```{python}
@@ -493,62 +495,144 @@ print("Done it in {:.2f} min".format((time.time()-t1)/60))
 # Modeling fit to map values
 xSED = nus_out
 ySED = dust_map_TD_ud[:,pix_ud,0]
-def lin(x, a, b):
-    return x * a + b
 
 p_opt, p_cov = curve_fit(quad, xSED, ySED)
 ```
 
 ```{python}
-xnew = np.linspace(130,170,1000)
+xnew = np.linspace(nus_edge_out[0],nus_edge_out[-1],1000)
 plt.plot(xnew, quad(xnew, *p_opt))
 plt.plot(xSED, ySED, 'ko')
 ```
 
 ```{python}
-fig,ax=plt.subplots(nrows=1,ncols=3,figsize=(16,7),)
+from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
+
+fig,ax=plt.subplots(nrows=1,ncols=3,figsize=(16,7),gridspec_kw = {'wspace': 0.3})
 ax=ax.ravel()
+#ax[1] = plt.subplot(132, projection='mollweide')
+
+plt.subplots_adjust(wspace=0.3)
+
+plt.rc('font', size = 14)
 
 ax[0].plot(nus_out, dust_map_TD_ud[:,pix_ud,0], 'ro', lw = 3, label='Input map')
-#ax[0].plot(x, ImvalsTD, 'g', label = 'Best fit modified Black-Body')
 ySED_fit = quad(x, *p_opt)
 ax[0].fill_between(x, y1 = ySED_fit - IsvalsTD, y2 = ySED_fit + IsvalsTD, 
-                   color = 'g', alpha = 0.3, label = '68% C.L.')
+                   color = 'r', alpha = 0.3, label = '68% C.L.')
 
+xlim = ax[0].get_xlim()
+ylim = ax[0].get_ylim()
+ax[0].axvspan(xlim[0], nus_edge_out[0], color = 'k', alpha = 0.1)
+ax[0].axvspan(nus_edge_out[-1], xlim[-1], color = 'k', alpha = 0.1)
 
-ax[0].set_title('TD - {} year'.format(dTD['effective_duration']), fontsize = 14)
-ax[0].set_ylabel(r'$I(\nu)~[\mu$K]', fontsize = 14)
-ax[0].set_xlabel(r'$\nu~[GHz]$', fontsize = 14)
-ax[0].legend(loc = 'upper left', fontsize = 12)
+#
+
+ax[0].set_title('TD - {} year'.format(dTD['effective_duration']), fontsize = 16)
+ax[0].set_ylabel(r'$I(\nu)~[\mu$K]', fontsize = 16)
+ax[0].set_xlabel(r'$\nu~[GHz]$', fontsize = 16)
+ax[0].legend(loc = 'lower right', fontsize = 14)
 ax[0].grid()
-
+ax[0].ticklabel_format(axis = 'y', style = 'sci', scilimits = (0,0), useLocale = True, useMathText = True)
+ax[0].set_xlim(xlim)
+ax[0].set_ylim(ylim)
+ax[0].text(xlim[0]+(xlim[1]-xlim[0])*0.1, ylim[-1]*0.85, r'$150~$GHz band', fontsize = 14)
+ax[0].set_aspect(1/(np.diff(ax[0].get_ylim())/np.diff(ax[0].get_xlim())), 
+                 anchor = (0.5,0.52), adjustable = 'box') #for pix 368 & 272
+#ax[0].set_yticklabels('%.1f')
+plt.rcParams['xtick.direction'] = 'in'
+plt.rcParams['ytick.direction'] = 'in'
+plt.rcParams['xtick.top'] = True
+plt.rcParams['ytick.right'] = True
+ax[0].xaxis.set_minor_locator(MultipleLocator(3))
+ax[0].yaxis.set_minor_locator(MultipleLocator(600))
+#plt.rcParams['ytick.minor'] = True
+#plt.rcParams['xtick.minor'] = True
 plt.axes(ax[1])
 hp.gnomview(dust_map_TD_ud[3,:,0], reso = 15, hold = True, notext = True,
-            title = 'Input map',
-            max = 0.8 * np.max(dust_map_TD_ud[0,:,0]),
-            cbar = True,
-            unit = r'$\mu$K',
-            rot = center)
-hp.projscatter(hp.pix2ang(nside_new, pix_ud), marker = '*', s = 180, color = 'r',)
-plt.axes(ax[2])
-hp.gnomview(mapsTD_ud[3,:,0], reso = 15, hold = True, notext = True, 
-            title = 'Reconstructed',
+            title = ' ',
+            min = 0, 
             max = 0.8 * np.max(dust_map_TD_ud[0,:,0]), 
             cbar = True,
             unit = r'$\mu$K',
             rot = center)
-hp.projscatter(hp.pix2ang(nside_new,pix_ud),marker='*',color='r', s = 180)
-#plt.savefig('FastSim-TD-Figs/TDnrec{}_nside{}_pixQ{}_pixG{}_Intensity.svg'.format(dTD['nf_recon'],nside_new,
-#                                                           pixQ_ud, pixG_ud), 
-#            format = 'svg')
-plt.savefig('FastSim-TD-Figs/TD{}_nrec{}_nside{}_pixQ{}_pixG{}_Intensity.pdf'.format(FuncModel.__name__,
+hp.projscatter(hp.pix2ang(nside_new, pix_ud), marker = '*', s = 180, color = 'r',)
+#hp.projscatter(10,10, lonlat = True, marker = '*', s = 180, color = 'w',)
+
+dpar = 10
+dmer = 20
+mer_coords = [center[0] - dmer, center[0], center[0] + dmer]
+long_coords = [center[1] - 2*dpar, center[1] - dpar, center[1], center[1] + dpar, center[1] + 2 * dpar]
+#paralels
+for ilong in long_coords:
+    plt.text(np.deg2rad(mer_coords[0] - 11), 1.1*np.deg2rad(ilong), r'{}$\degree$'.format(ilong),)
+#meridians
+for imer in mer_coords:
+    if imer < 0:
+        jmer = imer + 360
+        ip, dp = divmod(jmer/15,1)
+    else:
+        ip, dp = divmod(imer/15,1)
+    if imer == 0:
+        plt.text(-np.deg2rad(imer + 2), np.deg2rad(long_coords[-1] + 6), 
+             r'{}$\degree$'.format(imer ))
+             #r'{}h'.format(int(ip) ))
+    else:
+        plt.text(-np.deg2rad(imer + 5), np.deg2rad(long_coords[-1] + 6), 
+             r'{:.0f}$\degree$'.format(imer))
+             #r'{}h{}m'.format(int(ip), int(round(dp*60))))
+
+#hp.projtext(mer_coords[1] + 2, long_coords[0] - 6, 'RA',  color = 'k', lonlat=True)
+#hp.projtext(mer_coords[2] + 10.5, long_coords[2] - 1, 'Dec', rotation = 90, color = 'k', lonlat=True)
+
+plt.axes(ax[2])
+hp.gnomview(mapsTD_ud[3,:,0], reso = 15, hold = True, notext = True, 
+            title = ' ',
+            min = 0,
+            max = 0.8 * np.max(dust_map_TD_ud[0,:,0]), 
+            cbar = True,
+            unit = r'$\mu$K',
+            rot = center)
+
+hp.projscatter(hp.pix2ang(nside_new,pix_ud), marker = 'o', color = 'r', s = 140)
+hp.graticule(dpar = dpar, dmer = dmer, alpha = 0.6, verbose = False)
+
+#paralels
+for ilong in long_coords:
+    plt.text(np.deg2rad(mer_coords[0] - 11), 1.1*np.deg2rad(ilong), r'{}$\degree$'.format(ilong),)
+#meridians
+for imer in mer_coords:
+    if imer < 0:
+        jmer = imer + 360
+        ip, dp = divmod(jmer/15,1)
+    else:
+        ip, dp = divmod(imer/15,1)
+    if imer == 0:
+        plt.text(-np.deg2rad(imer + 2), np.deg2rad(long_coords[-1] + 6), 
+             r'{}$\degree$'.format(imer ))
+             #r'{}h'.format(int(ip) ))
+    else:
+        plt.text(-np.deg2rad(imer + 5), np.deg2rad(long_coords[-1] + 6), 
+             r'{:.0f}$\degree$'.format(imer))
+hp.projtext(mer_coords[1] + 2, long_coords[0] - 6, r'$l$',  color = 'k', lonlat=True)
+hp.projtext(mer_coords[2] + 10.5, long_coords[2] - 1, r'$b$', rotation = 90, color = 'k', lonlat=True)
+
+plt.tight_layout()#plt.tight_layout()
+
+#plt.savefig('FastSim-TD-Figs/TD{}_CMB-dust_nrec{}_nside{}_pixQ{}_pixG{}_Intensity_grat.svg'.format(FuncModel.__name__,
+#                                                                                    dTD['nf_recon'],nside_new,
+#                                                           pix_ud, pix_ud), 
+#            format = 'svg', bbox_inches='tight')
+plt.savefig('FastSim-TD-Figs/TD{}_CMB-dust_nrec{}_nside{}_pixQ{}_pixG{}_Intensity_grat_newformat.pdf'.format(FuncModel.__name__,
                                                                                dTD['nf_recon'],nside_new,
                                                            pix_ud, pix_ud), 
-            format = 'pdf')
-plt.savefig('FastSim-TD-Figs/TD{}_nrec{}_nside{}_pixQ{}_pixG{}_Intensity'.format(FuncModel.__name__, 
-                                                                           dTD['nf_recon'],
-                                                                           nside_new,pix_ud, pix_ud))
+            format = 'pdf', bbox_inches='tight')
+#plt.savefig('FastSim-TD-Figs/TD{}_CMB-dust_nrec{}_nside{}_pixQ{}_pixG{}_Intensity_grat'.format(FuncModel.__name__, 
+#                                                                           dTD['nf_recon'],
+#                                                                           nside_new,pix_ud, pix_ud),
+#           bbox_inches='tight')r'{}$\degree$'.format(imer),
 plt.show()
+
 ```
 
 ### Polarization
@@ -569,23 +653,35 @@ ErrBar2 = lambda Q, U, Qerr, Uerr: np.sqrt( Q ** 2 * Qerr ** 2 + U ** 2 * Uerr *
 ```{python}
 PmeanTD = np.sqrt(QmvalsTD ** 2 + UmvalsTD ** 2)
 PerrTD = ErrBar2(QmvalsTD, UmvalsTD, QsvalsTD, UsvalsTD)
+plt.rc('font', size = 14)
 
-fig,ax=plt.subplots(nrows=1,ncols=3,figsize=(16,7),)
+fig,ax=plt.subplots(nrows=1,ncols=3,figsize=(16,7), gridspec_kw = {'wspace': 0.3})
 ax=ax.ravel()
 
+plt.subplots_adjust(wspace=0.3)
+greyscale = 0.1
 ax[0].plot(nus_out, np.sqrt(dust_map_TD_ud[:,pix_ud,1] ** 2 + dust_map_TD_ud[:,pix_ud,2] ** 2), 
            'ro', lw = 3, label='Input map')
-#ax[0].plot(x, PmeanTD, 'g', label = 'Best fit modified Black-Body')
 ySED_fit_pol = quad(x, *p_opt_pol)
 ax[0].fill_between(x, y1 = ySED_fit_pol - PerrTD, y2 = ySED_fit_pol + PerrTD, 
-                   color = 'g', alpha = 0.3, label = '68% C.L.')
+                   color = 'r', alpha = 0.3, label = '68% C.L.')
 
+xlim = ax[0].get_xlim()
+ylim = ax[0].get_ylim()
+ax[0].axvspan(xlim[0], nus_edge_out[0], color = 'k', alpha = greyscale)
+ax[0].axvspan(nus_edge_out[-1], xlim[-1], color = 'k', alpha = greyscale)
 
-ax[0].set_title('TD - {} year'.format(dTD['effective_duration']), fontsize = 14)
-ax[0].set_ylabel(r'$P(\nu)~[\mu$K]', fontsize = 14)
-ax[0].set_xlabel(r'$\nu~[GHz]$', fontsize = 14)
-ax[0].legend(loc = 'upper left', fontsize = 14)
+ax[0].set_title('TD - {} year'.format(dTD['effective_duration']), fontsize = 16)
+ax[0].set_ylabel(r'$P(\nu)~[\mu$K]', fontsize = 16)
+ax[0].set_xlabel(r'$\nu~[GHz]$', fontsize = 16)
+ax[0].legend(loc = 'lower right', fontsize = 14)
 ax[0].grid()
+ax[0].set_xlim(xlim)
+ax[0].set_ylim(ylim)
+ax[0].text(xlim[0]+(xlim[1]-xlim[0])*0.1, ylim[-1]*0.85, r'$150~$GHz band', fontsize = 14)
+ax[0].set_aspect(1/(np.diff(ax[0].get_ylim())/np.diff(ax[0].get_xlim())), 
+                 anchor = (0.5,0.52), adjustable = 'box') #for pix 368 & 272
+
 
 plt.axes(ax[1])
 auxmap = np.sqrt(dust_map_TD_ud[0,:,1] ** 2 + dust_map_TD_ud[0,:,2] ** 2)
@@ -594,32 +690,85 @@ auxmapG = np.sqrt(mapsTD_ud[0,:,1] ** 2 + mapsTD_ud[0,:,2] ** 2)
 auxmapG[~cov_ud] = hp.UNSEEN
 hp.gnomview(auxmap,
             reso = 15, hold = True, notext = True,
-            title = 'Input map',
+            title = ' ',
+            min = 0,
             max = 0.75 * np.max(auxmapG), 
             cbar = True,
             unit = r'$\mu$K',
             rot = center)
 hp.projscatter(hp.pix2ang(nside_new, pix_ud), marker = '*', s = 180, color = 'r',)
+dpar = 10
+dmer = 20
+mer_coords = [center[0] - dmer, center[0], center[0] + dmer]
+long_coords = [center[1] - 2*dpar, center[1] - dpar, center[1], center[1] + dpar, center[1] + 2 * dpar]
+#paralels
+for ilong in long_coords:
+    plt.text(np.deg2rad(mer_coords[0] - 11), 1.1*np.deg2rad(ilong), r'{}$\degree$'.format(ilong),)
+#meridians
+for imer in mer_coords:
+    if imer < 0:
+        jmer = imer + 360
+        ip, dp = divmod(jmer/15,1)
+    else:
+        ip, dp = divmod(imer/15,1)
+    if imer == 0:
+        plt.text(-np.deg2rad(imer + 2), np.deg2rad(long_coords[-1] + 6), 
+             r'{}$\degree$'.format(imer ))
+             #r'{}h'.format(int(ip) ))
+    else:
+        plt.text(-np.deg2rad(imer + 5), np.deg2rad(long_coords[-1] + 6), 
+             r'{:.0f}$\degree$'.format(imer))
+             #r'{}h{}m'.format(int(ip), int(round(dp*60))))
+        
 plt.axes(ax[2])
 hp.gnomview(auxmapG,
             reso = 15, hold = True, notext = True, 
-            title = 'Reconstructed',
+            title = ' ',
             cbar = True,
+            min = 0,
             max = 0.75 * np.max(auxmapG),
             unit = r'$\mu$K',
             rot = center)
-hp.projscatter(hp.pix2ang(nside_new,pix_ud),marker = '*', s = 180, color = 'r',)
-#plt.savefig('FastSim-TD-Figs/TDnrec{}_nside{}_pixQ{}_pixG{}_Polarization.svg'.format(d150Q['nf_recon'],nside_new,
-#                                                           pixQ_ud, pixG_ud), 
-#            format = 'svg')
-plt.savefig('FastSim-TD-Figs/TD{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization.pdf'.format(FuncModel.__name__,
-                                                                               dTD['nf_recon'],nside_new,
-                                                           pix_ud, pix_ud), 
-            format = 'pdf')
-plt.savefig('FastSim-TD-Figs/TD{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization'.format(FuncModel.__name__, 
-                                                                           dTD['nf_recon'],
-                                                                           nside_new,pix_ud, pix_ud))
+hp.projscatter(hp.pix2ang(nside_new,pix_ud),marker = 'o', s = 140, color = 'r',)
+hp.graticule(dpar = 10, dmer = 20,alpha = 0.6, verbose = False)
+#paralels
+for ilong in long_coords:
+    plt.text(np.deg2rad(mer_coords[0] - 11), 1.1*np.deg2rad(ilong), r'{}$\degree$'.format(ilong),)
+#meridians
+for imer in mer_coords:
+    if imer < 0:
+        jmer = imer + 360
+        ip, dp = divmod(jmer/15,1)
+    else:
+        ip, dp = divmod(imer/15,1)
+    if imer == 0:
+        plt.text(-np.deg2rad(imer + 2), np.deg2rad(long_coords[-1] + 6), 
+             r'{}$\degree$'.format(imer))
+             #r'{}h'.format(int(ip) ))
+    else:
+        plt.text(-np.deg2rad(imer + 5), np.deg2rad(long_coords[-1] + 6), 
+             r'{:.0f}$\degree$'.format(imer))
+             #r'{}h{}m'.format(int(ip), int(round(dp*60))))
+
+hp.projtext(mer_coords[1] + 2, long_coords[0] - 6, r'$l$',  color = 'k', lonlat=True)
+hp.projtext(mer_coords[2] + 10.5, long_coords[2] - 1, r'$b$', rotation = 90, color = 'k', lonlat=True)
+
+plt.tight_layout()#plt.tight_layout()
+
+#plt.savefig('FastSim-TD-Figs/TD{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_grat.svg'.format(FuncModel.__name__,
+#                                                                                     dTD['nf_recon'],nside_new,
+#                                                           pix_ud, pix_ud), 
+#            format = 'svg', bbox_inches='tight')
+#plt.savefig('FastSim-TD-Figs/TD{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_grat.pdf'.format(FuncModel.__name__,
+#                                                                               dTD['nf_recon'],nside_new,
+#                                                           pix_ud, pix_ud), 
+#            format = 'pdf', bbox_inches='tight' )
+#plt.savefig('FastSim-TD-Figs/TD{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_grat'.format(FuncModel.__name__, 
+#                                                                           dTD['nf_recon'],
+#                                                                           nside_new,pix_ud, pix_ud))
+print(np.diff(ax[0].get_ylim())/np.diff(ax[0].get_xlim()))
 plt.show()
+
 ```
 
 ```{python}

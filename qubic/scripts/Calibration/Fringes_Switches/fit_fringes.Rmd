@@ -4,8 +4,8 @@ jupyter:
     text_representation:
       extension: .Rmd
       format_name: rmarkdown
-      format_version: '1.1'
-      jupytext_version: 1.2.1
+      format_version: '1.2'
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -30,51 +30,139 @@ from matplotlib.backends.backend_pdf import PdfPages
 import scipy.optimize as sop
 
 import qubic
-from qubic import selfcal_lib as sc
+from qubic import selfcal_lib as scal
 from qubicpack.utilities import Qubic_DataDir
+from qubic import fringes_lib as fl
 
-from qubicpack import qubicpack as qp
-from qubicpack.qubicfp import qubicfp
 import qubic.fibtools as ft
 ```
 
-```{python}
-# Load fringes
-data_dir =  '/home/louisemousset/QUBIC/Qubic_work/Calibration/datas/2020-01-13/'
+## Get the measurement
 
-fringe = np.load(data_dir + 'fringe52-28.npy')
-plt.imshow(fringe, vmin=-3, vmax=3, interpolation='none')
+```{python}
+global_dir = '/home/lmousset/QUBIC/Qubic_work/Calibration/datas/Fringes/'
+myfringes = 'Fringes_2020-10-27_TypeEq0_with_10BLs.fits'
+#'Fringes_2020-10-27_TypeEq2_with_2BLs.fits'
+
+header, fdict = fl.read_fits_fringes(global_dir + myfringes)
+print(fdict.keys())
+
+nBLs = header['NBLS']
+BLs_eq = fdict['BLS-EQ']
+print(BLs_eq)
 ```
 
-## Fit with an analytical function
+```{python}
+# Make a QUBIC instrument
+basedir = Qubic_DataDir(datafile='instrument.py', )
+dictfilename = basedir + '/dicts/global_source_oneDet.dict'
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+q = qubic.QubicInstrument(d)
+
+
+# Horn array with all baselines
+plt.figure(figsize=(6, 6))
+scal.plot_horns(q)
+for i in range(nBLs):
+    scal.plot_baseline(q, BLs_eq[i])
+
+# Plot fringes on the FP
+BL_index = 0
+fl.plot_fringes_onFP(q, BL_index, header, fdict)
+
+# Plot folded signal and the fit for one TES 
+TES = 95
+fl.plot_folded_fit(TES, BL_index, header, fdict)
+
+```
+
+## Fringes models
 
 ```{python}
-def sim_fringe_new(Amp, phase, det_dist=3e-3, focal=0.3,
-                   baseline=14.e-3*4., nu=150.e9, alpha=-45.,
-                   w=40.87e-3, yc=0., xc=0.):
+baseline = fdict['BLS-EQ'][BL_index]
+print(baseline)
+```
 
-    lam = 3.e8/nu
-    alpha_rad = np.deg2rad(alpha)
-    
-    ndet = 17
-    fringe = np.zeros((ndet, ndet))
-    i, j = np.mgrid[0:ndet, 0:ndet]
-    
-    #w=np.sqrt(2*(12.9*np.pi/180*f/2.355)**2)
-    
-    gaussian = np.exp(-((16-i+xc)**2 + (j-yc)**2) * det_dist**2 / (w**2))
-    xprime = (i * np.cos(alpha_rad) + j * np.sin(alpha_rad)) * det_dist
-    interfrange = lam * focal / baseline
-    fringe = Amp * np.cos((2. * np.pi / interfrange * xprime) + phase)# * gaussian
-    
-    return fringe
+### QUBIC soft simulation
 
-# Using the parameters that Michel found with the fit
-fringes = sim_fringe_new(1., 0.277, focal=0.35, alpha=-44.4)
-s = 0.051
-extent = (-s, 0, -s, 0)
+```{python}
+Model_QS = scal.Model_Fringes_QubicSoft(q, baseline,
+                                        theta_source=np.array([0.]), phi_source=np.array([0.]),
+                                        nu_source=150e9, spec_irrad_source=1.,
+                                        frame='ONAFP',)
+
+rc('figure', figsize=(12, 6))
+xONAFP, yONAFP, fringes = Model_QS.get_fringes(doplot=True, verbose=True, norm=None, s=100)
+
+print('fringes shape:', fringes.shape)
+```
+
+### Maynooth simu
+
+```{python}
+# Path to the simulated files 
+rep = Qubic_DataDir(datafile='detcentres.txt', datadir='/home/lmousset/QUBIC/')
+print('rep:', rep)
+
+Model_Maynooth = scal.Model_Fringes_Maynooth(q, baseline, rep, 
+                                             theta_source=np.array([0.]), nu_source=150e9,
+                                             frame='ONAFP', interp=False)
+
+xONAFP, yONAFP, fringes = Model_Maynooth.get_fringes(verbose=True)
+
 plt.figure()
-plt.imshow(fringes, origin='lower', extent=extent)
+scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, s=None, 
+                       frame='ONAFP', 
+                       title='Maynooth at TES resolution', 
+                       norm=None)
+```
+
+### Analytical function
+
+```{python}
+theta_deg = 0.
+Model_Ana = scal.Model_Fringes_Ana(q, baseline, theta_source=np.deg2rad(theta_deg), nu_source=150e9, fwhm=20., amp=1., frame='ONAFP')
+print(Model_Ana.focal)
+
+xONAFP, yONAFP, fringes = Model_Ana.get_fringes(times_gaussian=True)
+
+plt.figure()
+scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP')
+
+```
+
+```{python}
+def get_fit_model(params, model, **kwargs):
+    focal, theta_source = params
+    
+    model.q.optics.focal_length = focal
+    model.theta_source = theta_source
+    
+    x, y, fringes = model.get_fringes(**kwargs)
+    
+    return x, y, fringes
+
+
+def get_chi2(params, model, invcov, data, **kwargs):
+    
+    x, y, M = get_fit_model(params, model, **kwargs)
+    
+    ndet = len(data)
+    chi2 = 0.
+    for idet in range(ndet):
+        # Amplitude factor (linear so we can compute it analitically)
+        sigma_A = 1 / (M[idet].T @ invcov @ M[idet])
+        A = sigma_A * M[idet].T @ invcov @ data[idet]
+    
+        R = A * M[idet] - data[idet]
+        chi2 += R.T @ invcov @ R  
+    return chi2
+    
+```
+
+```{python}
+np.array([1, 2, 3])* np.array([5, 5, 5])
 ```
 
 ```{python}

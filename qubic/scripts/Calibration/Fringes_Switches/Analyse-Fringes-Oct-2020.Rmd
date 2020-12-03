@@ -1,0 +1,1600 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Analysis of fringes taken in October 2020
+In this notebook we analyse the fringes taken in October 2020
+* Fringes are produced by the script : Generate-Fringes-Oct-2020.Rmd
+* This produces npy files for each fringe with names of the form: fringes_bs_17_21_2020-10-27_11.34.04.npy
+
+
+```{python}
+from pylab import *
+import os
+import sys
+import time
+import pickle
+from importlib import reload
+
+
+# Specific science modules
+import healpy as hp
+import scipy
+import glob
+import numpy as np
+import matplotlib.pyplot as plt
+import scipy.optimize as sop
+import pandas as pd
+import corner
+
+from matplotlib.backends.backend_pdf import PdfPages
+import qubic
+from qubic import selfcal_lib as sc
+from qubicpack.utilities import Qubic_DataDir
+from qubicpack import qubicpack as qp
+from qubicpack.qubicfp import qubicfp
+import qubic.fibtools as ft
+from qubic import fringes_lib as fl
+from qubic import mcmc
+
+
+rc('figure', figsize=(16,7))
+
+# Use a tool from qubicpack to get a path
+basedir = Qubic_DataDir(datafile='instrument.py', )
+print('basedir : ', basedir)
+dictfilename = basedir + '/dicts/global_source_oneDet.dict'
+
+# Get a dictionary and an instrument
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+q = qubic.QubicInstrument(d)
+```
+
+```{python}
+reload(sc)
+reload(fl)
+### Get the list of available fringes
+directories = ['/Users/hamilton/Qubic/Calib-TD/Fringes/Fringes_2020-10-27_Vtes_5_Eco_1/']
+
+all_files = []
+all_dates = []
+all_cycles = []
+all_bs = []
+all_tension = []
+all_eco = []
+all_Vtes = []
+all_id = []
+all_wt = []
+for dd in directories:
+    ff = np.sort(glob.glob(dd+'/fringes*.npy'))
+    for f in ff:
+        fn = f.split('/')[-1]
+        spl = fn.split('_')
+        all_files.append(f)
+        all_bs.append([int(spl[spl.index('bs')+1]), int(spl[spl.index('bs')+2])])
+        all_cycles.append(float(spl[spl.index('NCycles')+1]))
+        all_wt.append(float(spl[spl.index('WT')+1]))
+        all_Vtes.append(float(spl[spl.index('Vtes')+1]))
+        all_eco.append(float(spl[spl.index('Eco')+1]))
+        all_dates.append(spl[spl.index('Eco')+2])
+        all_id.append(spl[spl.index('Eco')+3])
+
+bseqindex, all_bs_eqidx = sc.find_equivalent_baselines(all_bs, q)
+
+for i in range(len(bseqindex)):
+    ax=subplot(1,len(bseqindex), i+1)
+    ax.set_aspect('equal')
+    print('Type {}:'.format(i))
+    sc.plot_horns(q)
+    title('Type {}'.format(i))
+    for j in range(len(bseqindex[i])):
+        print('  - {}'.format(all_bs[bseqindex[i][j]]))
+        sc.plot_baseline(q,all_bs[bseqindex[i][j]])
+    legend()
+
+print()
+print(bseqindex)
+print()
+for i in range(len(all_bs)):
+    print(i, all_bs[i], all_bs_eqidx[i])
+```
+
+```{python}
+print(bseqindex)
+print()
+print(all_bs_eqidx)
+```
+
+# Masking Bad Pixels
+
+```{python}
+mask = np.array([[ True,  True,  True,  True,  True,  True,  True,  True, False,
+        False, False, False, False, False, False, False, False],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+        False, False, False, False, False, False, False, False],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True, False, False, False, False, False, False],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True, False, False, False, False, False],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True, False, False, False, False, False],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True, False, False, False],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True, False, False],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True, False, False],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True, False],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True,  True],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True,  True],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True,  True],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True,  True],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True,  True],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True,  True],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True,  True],
+       [ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True,  True]])
+
+imshow(mask)
+```
+
+# Fringes Modeling
+
+
+## Fringes from QUBIC Software (no aberrations yet)
+
+```{python}
+class model_fringe_th:
+    def __init__(self, baseline, d, mask):
+        self.baseline = baseline
+        self.dict = d
+        self.selfcal = sc.SelfCalibration(baseline, d)
+        self.pixels = np.arange(17)+0.5
+        self.xx, self.yy = np.meshgrid(self.pixels, self.pixels)       
+        self.mask = mask
+     
+    def __call__(self, theta, phi, amp, fwhmprim):
+        fringestot = self.selfcal.compute_fringes(q, doplot=False, theta=[theta], phi=[phi])
+        
+        _, quart_fp = sc.get_real_fp(fringestot[:, :, 0], quadrant=2)
+        mygaussian = amp * np.exp(-0.5*(self.xx**2 + (self.yy-17)**2)/(fwhmprim/2.35)**2)
+        return mygaussian * np.flip(quart_fp, axis=1) * self.mask
+    
+    def flat_data(self, x, theta, phi, amp, fwhmprim):
+        return np.nan_to_num(np.ravel(self(theta, phi, amp, fwhmprim)))
+
+        
+# index_fringe = all_bs.index([49, 53])
+index_fringe = all_bs.index([17, 49])
+fr = model_fringe_th(all_bs[index_fringe], d, mask) 
+
+pix2deg = np.degrees(3./300)
+
+imshow(np.nan_to_num(fr(0.03,0.,1,13./pix2deg)), cmap='bwr', interpolation='Gaussian', vmin=-2, vmax=2)
+colorbar()
+ft.qgrid()
+```
+
+## Sine Modulated by a Gaussian (analytical)
+
+```{python}
+class model_fringe_ana:
+    def __init__(self, mask, focal=0.3, nu=150.e9):
+        self.focal = focal
+        self.xc = 0
+        self.yc = 0
+        self.det_dist = 3.e-3
+        self.nu = nu
+        self.lam = 3.e8/nu
+        self.ndet = 17
+        self.fringe = np.zeros((self.ndet, self.ndet))
+        self.pixels = np.arange(self.ndet)+0.5
+        self.xx, self.yy = np.meshgrid(self.pixels, self.pixels)
+        self.yy = 17-self.yy        
+        self.mask = mask
+
+    def __call__(self, fwhm, angle, baseline, amp, phase):
+        sigma = np.radians(fwhm/2.355*self.focal)
+        gaussian = np.exp(-0.5*((self.xx-self.xc)**2 + (self.yy-self.yc)**2) * self.det_dist**2 / sigma**2)
+        xprime = (self.xx * np.cos(angle+np.pi/2) + self.yy * np.sin(angle+np.pi/2)) * self.det_dist
+        interfrange = self.lam * self.focal / baseline
+        self.fringe = amp * np.cos((2. * np.pi / interfrange * xprime) + phase) * gaussian
+        return self.fringe * self.mask
+    
+    def flat_data(self, x, fwhm, angle, baseline, amp, phase):
+        return np.nan_to_num(np.ravel(self(fwhm, angle, baseline, amp, phase)))
+
+    def flat_data_mn(self, x, pars, extra_args=None):
+        return np.nan_to_num(np.ravel(self(pars[0], pars[1], pars[2], pars[3], pars[4])))
+
+
+fr_ana = model_fringe_ana(mask)
+
+subplot(1,2,1)
+mybsdet = 10.
+imshow(fr_ana(12.9, np.radians(45.), mybsdet*3e-3, 1., 0.), cmap='bwr', interpolation='Gaussian')
+colorbar()
+```
+
+# fringes in data
+
+```{python}
+def read_my_fringe(bs, files, all_bs):
+    myfile = files[all_bs.index(bs)]
+    return np.load(myfile)
+
+# index_fringe = all_bs.index([49, 53])
+index_fringe = all_bs.index([17, 49])
+#index_fringe = all_bs.index([9, 11])
+
+myfringe = read_my_fringe(all_bs[index_fringe], all_files, all_bs)
+imshow(np.nan_to_num(myfringe*mask), cmap='bwr', interpolation='Gaussian',vmin=-2, vmax=2)
+ft.qgrid()
+colorbar()
+title(all_bs[index_fringe])
+
+```
+
+# Fitting Fringes
+
+```{python}
+# ### Fitting with Qubic Software fringes
+# from scipy.optimize import curve_fit
+
+# index_fringe = all_bs.index([17, 49])
+# myfringe = read_my_fringe(all_bs[index_fringe], all_files, all_bs)
+
+
+# theta_init = 0.03
+# phi_init = 0.
+# amp_init = 0.5
+# fwhm_init = 100
+# p0 = np.array([theta_init, phi_init, amp_init, fwhm_init])
+# coeffs, coeffs_cov = curve_fit(fr.flat_data, 0, np.nan_to_num(np.ravel(myfringe)), 
+#                                p0=p0,
+#                               bounds=([0, 0, 0, 99], [np.pi/10, np.pi/10, 2, 100]))
+# print(coeffs)
+# print(coeffs_cov)
+
+# #coeffs = [0.03,0.5,100./pix2deg]
+# interp = 'Gaussian'
+
+# subplot(2,4,1)
+# imshow(np.nan_to_num(myfringe * mask), cmap='bwr', interpolation=interp,vmin=-2, vmax=2)
+# colorbar()
+# ft.qgrid()
+# title('Data')
+
+# subplot(2,4,2)
+# imshow(np.nan_to_num(fr(*p0) * mask), cmap='bwr', interpolation=interp,vmin=-2, vmax=2)
+# colorbar()
+# ft.qgrid()
+# title('Initial Guess')
+
+# subplot(2,4,3)
+# imshow(np.nan_to_num(fr(*coeffs) * mask), cmap='bwr', interpolation=interp,vmin=-2, vmax=2)
+# colorbar()
+# ft.qgrid()
+# title('Fit')
+
+# subplot(2,4,4)
+# imshow(np.nan_to_num(myfringe * mask) - np.nan_to_num(fr(*coeffs) * mask), cmap='bwr', interpolation=interp,vmin=-2, vmax=2)
+# colorbar()
+# ft.qgrid()
+# title('Residuals')
+
+```
+
+```{python}
+reload(sc)
+#### Let's try to predict the analytical parameters of a given baseline
+thebs = [49, 53]
+#thebs = [17, 49]
+index_fringe = all_bs.index(thebs)
+myfringe = read_my_fringe(all_bs[index_fringe], all_files, all_bs)
+
+subplot(2,2,1)
+imshow(np.nan_to_num(myfringe * mask), cmap='bwr', interpolation='Gaussian',vmin=-2, vmax=2)
+colorbar()
+ft.qgrid()
+title('Data {}'.format(thebs))
+
+mythinit, mylengthinit = sc.give_bs_pars(q, all_bs[index_fringe])
+
+subplot(2,2,2)
+fr = model_fringe_th(all_bs[index_fringe], d, mask) 
+imshow(np.nan_to_num(fr(0,0.,1.,30)), cmap='bwr', interpolation='Gaussian', vmin=-2, vmax=2)
+colorbar()
+title(r'Theory: $\theta$={0:5.2f} - L={1:5.3f}'.format(mythinit, mylengthinit))
+```
+
+```{python}
+#### Fitting with analytical shape and Minuit
+from scipy.optimize import curve_fit
+
+# thebs = [49, 53]
+# thebs = [9, 11]
+thebs = [17, 49]
+index_fringe = all_bs.index(thebs)
+myfringe = read_my_fringe(all_bs[index_fringe], all_files, all_bs)
+mythinit, mylengthinit = sc.give_bs_pars(q, all_bs[index_fringe])
+
+
+figure()
+# fwhm, angle, baseline, amp, phase
+fwhm_init = 23.9
+angle_init = np.radians(mythinit)
+baseline_init = mylengthinit
+amp_init = 1.
+phase_init = 0.
+p0 = np.array([fwhm_init, angle_init, baseline_init, amp_init, phase_init])
+print('Initial Guess: {}'.format(p0))
+
+my_y = np.nan_to_num(np.ravel(myfringe))
+resfit = ft.do_minuit(np.zeros(len(my_y)), my_y, my_y*0+1,p0, 
+                      rangepars=[[0,30], [-np.pi/2,np.pi/2], [0,1], [0,2], [0,2*np.pi]],
+                      fixpars = [1,0,0,0,0],
+                      functname=fr_ana.flat_data_mn, verbose=False)
+coeffs = resfit[1]
+
+
+
+print('Result Fit: {}'.format(coeffs))
+
+interp = 'Gaussian'
+
+subplot(2,4,1)
+imshow(np.nan_to_num(myfringe * mask), cmap='bwr', interpolation=interp,vmin=-2, vmax=2)
+colorbar()
+ft.qgrid()
+title('Data {}'.format(thebs))
+
+subplot(2,4,2)
+imshow(np.nan_to_num(fr_ana(*p0) * mask), cmap='bwr', interpolation=interp,vmin=-2, vmax=2)
+colorbar()
+ft.qgrid()
+title('Initial Guess')
+
+subplot(2,4,3)
+imshow(np.nan_to_num(fr_ana(*coeffs) * mask), cmap='bwr', interpolation=interp,vmin=-2, vmax=2)
+colorbar()
+ft.qgrid()
+title('Fit')
+
+subplot(2,4,4)
+imshow(np.nan_to_num(myfringe * mask) - np.nan_to_num(fr_ana(*coeffs) * mask), cmap='bwr', interpolation=interp,vmin=-2, vmax=2)
+colorbar()
+ft.qgrid()
+title('Residuals')
+
+```
+
+### Fit a few of them
+
+```{python}
+print()
+for i in range(len(all_bs)):
+    print(i, all_bs[i], all_bs_eqidx[i])
+```
+
+```{python}
+num_fringes = [2,9, 10]
+
+rc('figure', figsize=(16,10))
+for i in range(len(num_fringes)):
+    nn = num_fringes[i]
+    myfringe = read_my_fringe(all_bs[nn], all_files, all_bs)
+    mythinit, mylengthinit = sc.give_bs_pars(q, all_bs[nn])
+
+    
+    p0 = [100, np.radians(mythinit), mylengthinit, 0.5, np.pi]
+    my_y = np.nan_to_num(np.ravel(myfringe))
+    resfit = ft.do_minuit(np.zeros(len(my_y)), my_y, my_y*0+1,p0, 
+                          rangepars=[[0,30], [-np.pi/2,np.pi/2], [0,1], [0,2], [0,2*np.pi]],
+                          fixpars = [1,0,0,0,0],
+                          functname=fr_ana.flat_data_mn, verbose=False)
+    coeffs = resfit[1]
+    print('FWHM={0:6.3f} - Th={1:5.3f} - L={2:5.3f} - Amp={3:5.3f} = Phase={4:5.3f}'.format(*coeffs))
+
+    
+    fit_fringe = fr_ana(*coeffs)
+    
+    subplot(4,len(num_fringes),i+1)
+    imshow(np.nan_to_num(myfringe*mask), cmap='bwr', interpolation='Gaussian',vmin=-2, vmax=2)
+    title('BS:{} Type: {}'.format(all_bs[nn], all_bs_eqidx[nn]))
+    ft.qgrid()
+    colorbar()
+    
+    subplot(4,len(num_fringes),i+1+len(num_fringes))
+    imshow(np.nan_to_num(fr_ana(*p0)*mask), cmap='bwr', interpolation='Gaussian',vmin=-2, vmax=2)
+    title('P0')
+    ft.qgrid()
+    colorbar()
+
+    subplot(4,len(num_fringes),i+1+len(num_fringes)*2)
+    imshow(np.nan_to_num(fit_fringe*mask), cmap='bwr', interpolation='Gaussian',vmin=-2, vmax=2)
+    title('Fit')
+    ft.qgrid()
+    colorbar()
+
+    subplot(4,len(num_fringes),i+1+len(num_fringes)*3)
+    imshow(np.nan_to_num((myfringe-fit_fringe)*mask), cmap='bwr', interpolation='Gaussian',vmin=-2, vmax=2)
+    title('Residuals')
+    ft.qgrid()
+    colorbar()
+
+tight_layout()
+```
+
+## Trying to fit simultaneously equivalent baselines
+
+```{python}
+class model_multi_fringe_ana:
+    def __init__(self, eqtypes, mask, focal=0.3, nu=150.e9, verbose=False):
+        self.focal = focal
+        self.xc = 0
+        self.yc = 0
+        self.det_dist = 3.e-3
+        self.nu = nu
+        self.lam = 3.e8/nu
+        self.ndet = 17
+        self.pixels = np.arange(self.ndet)+0.5
+        self.xx, self.yy = np.meshgrid(self.pixels, self.pixels)
+        self.yy = 17-self.yy        
+        self.mask = mask
+        self.nbfringes = len(eqtypes)
+        
+        
+        
+        #### Equivalent baselines:
+        # Each baseline corresponds to a given equivalency type
+        # for each unique equvalency type, there is a equivalency index
+        # so each baseline has an equivalency type and an equivalency index used
+        # later
+        self.eqtypes = np.array(eqtypes)
+        self.eqs = np.unique(self.eqtypes)
+        self.neq = len(self.eqs)
+        self.eqindex = np.zeros(self.nbfringes,dtype=int)
+        for i in range(self.nbfringes):
+            self.eqindex[i] = list(self.eqs).index(self.eqtypes[i])
+        if verbose:
+            print('Object multi_fringes_ana: ')
+            print('  - Number of fringes: {}'.format(self.nbfringes))
+            print('  - Eqtypes: {}'.format(self.eqtypes))
+            print('    - Neq: {}'.format(self.neq))
+            print('    - Equivalents: {}'.format(self.eqs))
+            print('    - EqIndex: {}'.format(self.eqindex))
+            
+        #### List of fringes
+        #self.fringes = []
+        #for i in range(self.nbfringes):
+        #    self.fringes.append(np.zeros((self.ndet, self.ndet)))
+
+    def __call__(self, params):
+        #### Transform input parameters into relevant arrays
+        self.fwhm, self.angles, self.baselines, self.amps, self.phases_eq = self.pars_array_2_list(params, verbose=False)
+        #### Common gaussian envelope
+        sigma = np.radians(self.fwhm/2.355*self.focal)
+        gaussian = np.exp(-0.5*((self.xx-self.xc)**2 + (self.yy-self.yc)**2) * self.det_dist**2 / sigma**2)
+        #### Now each fringe
+        fringes = []
+        for i in range(self.nbfringes):
+            idx = self.eqindex[i]
+            xprime = (self.xx * np.cos(self.angles[idx]+np.pi/2) + 
+                      self.yy * np.sin(self.angles[idx]+np.pi/2)) * self.det_dist
+            interfrange = self.lam * self.focal / self.baselines[idx]
+            fringes.append(self.amps[idx] * np.cos((2. * np.pi / interfrange * xprime) + self.phases_eq[idx]) * gaussian * self.mask)
+        return fringes
+    
+    def flat_data(self, x, params, extra_args=None):
+        return np.nan_to_num(np.ravel(np.array(self(params))))
+    
+    def pars_list_2_array(self, fwhm, angles, baselines, amps, phases, verbose=False):
+        myarray = np.append(fwhm, np.array([angles, baselines, amps, phases]).ravel())
+        if verbose:
+            print('FWHM       = {}'.format(fwhm))
+            print('Angles     = {}'.format(np.degrees(angles)))
+            print('Baselines  = {}'.format(baselines))
+            print('Amplitudes = {}'.format(amps))
+            print('Phases     = {}'.format(np,degrees(phases)))
+            print('Output array: {}'.format(myarray))
+        return myarray
+    
+    def pars_array_2_list(self, pars, verbose=False):
+        fwhm = pars[0]
+        otherpars = np.reshape(pars[1:], (4, self.neq))
+        angles = otherpars[0,:]
+        baselines = otherpars[1,:]
+        amps = otherpars[2,:]
+        phases = otherpars[3,:]
+        if verbose:
+            print('Input Array: {}'.format(pars))
+            print('FWHM       = {}'.format(fwhm))
+            print('Angles     = {}'.format(np.degrees(angles)))
+            print('Baselines  = {}'.format(baselines))
+            print('Amplitudes = {}'.format(amps))
+            print('Phases     = {}'.format(np.degrees(phases)))
+        return fwhm, angles, baselines, amps, phases
+        
+##### Testing
+# nbfringes = 4
+# eqtypes = [0,2,2,1]
+# fr_multi_ana = model_multi_fringe_ana(eqtypes, mask, verbose=True)
+
+# fwhm = 12.9
+# angles = [np.radians(45), np.radians(0), np.radians(30)]
+# baselines = [10.*3e-3, 15.*3e-3, 20.*3e-3]
+# amps = [1., 2., 0.5]
+# phases = [np.radians(0), np.radians(10.), np.radians(30.)]
+# allpars = fr_multi_ana.pars_list_2_array(fwhm, angles, baselines, amps, phases, verbose=True)
+
+
+# myfringes = fr_multi_ana(allpars)
+# for i in range(nbfringes):
+#     subplot(2, nbfringes,i+1)
+#     imshow(myfringes[i], cmap='bwr', interpolation='None', vmin=-2, vmax=2)
+#     title('Finge {} - Eqtype {}'.format(i, fr_multi_ana.eqtypes[i]))
+#     colorbar()
+
+# myfringesflat = fr_multi_ana.flat_data(0,allpars)
+# subplot(2,1,2)
+# plot(myfringesflat)
+# title('All Flat')
+```
+
+```{python}
+for i in range(len(all_bs)):
+    print(i, all_bs[i], all_bs_eqidx[i])
+```
+
+```{python}
+reload(ft)
+
+# num_fringes = [2]
+# num_fringes = [2,5,9]
+# num_fringes = [2,4,5,9,10]
+num_fringes = list(np.arange(len(all_bs)))
+
+data_fringes = []
+for i in range(len(num_fringes)):
+    nn = num_fringes[i]
+    myfringe = read_my_fringe(all_bs[nn], all_files, all_bs)
+    data_fringes.append(myfringe)
+
+
+### Determine corresponding fringes and equivalency types
+mybs = []
+eqtypes = []
+print('Selected fringes:')
+for i in range(len(num_fringes)): 
+    mybs.append(all_bs[num_fringes[i]])
+    eqtypes.append(all_bs_eqidx[num_fringes[i]])
+    print(' {}: type={}'.format(mybs[i], eqtypes[i]))
+
+### Instanciate multifringe object
+fr_multi_ana = model_multi_fringe_ana(eqtypes, mask, verbose=False)
+
+# fix_fwhm = True
+# fix_eq_phase = False
+# fix_bs_phase = True
+
+# ### Prepare initialization for guess, fit-range and fixed parameters
+# param_type = []
+# # Global parameters - common to all fringes and equivalent baselines
+# fwhm_init = 100.
+# param_type.append('g')
+# # parameters for each baseline
+# amps_init = np.zeros(len(num_fringes))
+
+
+angles_init = np.zeros(fr_multi_ana.neq)
+baselines_init = np.zeros(fr_multi_ana.neq)
+amps_init = np.zeros(fr_multi_ana.neq)
+phases_init = np.zeros(fr_multi_ana.neq)
+### Initialize guess parameters for each equivalency type
+print()
+for i in range(fr_multi_ana.neq):
+    print('Eq Type = {}'.format(fr_multi_ana.eqs[i]))
+    possible_fringes = mybs[eqtypes.index(fr_multi_ana.eqs[i])]
+    print('    Example fringe: {}'.format(possible_fringes))
+    mythinit, mylengthinit = sc.give_bs_pars(q, possible_fringes)
+    angles_init[i] = np.radians(mythinit)
+    baselines_init[i] = mylengthinit
+    amps_init[i] = 0.5
+    phases_init[i] = 0.
+    print('    Initialized with theta={0:6.2f} - L={1:6.3f} - A={2:6.2f} - Ph={3:6.2f}'.format(np.degrees(angles_init[i]), 
+                                                                                             baselines_init[i],
+                                                                                             amps_init[i],
+                                                                                             np.degrees(phases_init[i])))
+
+### Get all parameters in an array
+print()
+print('Initial Guess parameters:')
+allpars = fr_multi_ana.pars_list_2_array(fwhm_init, angles_init, baselines_init, amps_init, phases_init, verbose=True)
+guess_fringes = fr_multi_ana(allpars).copy()
+
+### Fix some parameters
+fixpars = np.zeros(len(allpars))
+fixpars[0] = 1
+
+### Do the fit
+my_y = np.nan_to_num(np.ravel(data_fringes))
+resfit = ft.do_minuit(np.zeros(len(my_y)), my_y, my_y*0+1, allpars.copy(),
+                      fixpars=fixpars,
+                      functname=fr_multi_ana.flat_data, verbose=False)
+### Fitted Fringes
+coeffs = resfit[1]
+fitted_fringes = fr_multi_ana(coeffs)
+print()
+print('Fitted Parameters')
+fitpars = fr_multi_ana.pars_array_2_list(coeffs, verbose=True)
+
+
+rc('figure', figsize=(16,3 * len(num_fringes)))
+
+for i in range(len(num_fringes)):
+    nn = num_fringes[i]
+
+    subplot(len(num_fringes),4,i*4+1)
+    imshow(np.nan_to_num(data_fringes[i]*mask), cmap='bwr', interpolation='Gaussian',vmin=-2, vmax=2)
+    title('BS:{} EqType: {}'.format(all_bs[nn], fr_multi_ana.eqtypes[i]))
+    ft.qgrid()
+    colorbar()
+    
+    subplot(len(num_fringes), 4, i*4+2)
+    imshow(np.nan_to_num(guess_fringes[i]*mask), cmap='bwr', interpolation='Gaussian', vmin=-2, vmax=2)
+    title('Guess: {} - EqType {}'.format(all_bs[nn], fr_multi_ana.eqtypes[i]))
+    ft.qgrid()
+    colorbar()
+
+    subplot(len(num_fringes), 4, i*4+3)
+    imshow(np.nan_to_num(fitted_fringes[i]*mask), cmap='bwr', interpolation='Gaussian',vmin=-2, vmax=2)
+    title('Fitted {} - EqType {}'.format(all_bs[nn], fr_multi_ana.eqtypes[i]))
+    ft.qgrid()
+    colorbar()
+        
+    subplot(len(num_fringes), 4, i*4+4)
+    imshow(np.nan_to_num((data_fringes[i]-fitted_fringes[i])*mask), cmap='bwr', interpolation='Gaussian', vmin=-2, vmax=2)
+    title('Residuals {} - EqType {}'.format(all_bs[nn], fr_multi_ana.eqtypes[i]))
+    ft.qgrid()
+    colorbar()
+
+    
+tight_layout()
+
+
+```
+
+### More advanced
+
+
+We need one phase per fringe, also one amplitude per fringe...
+
+We also need to be able to fix parameters
+
+**No Intercalibration yet !**
+
+```{python}
+class fit_multi_fringe_ana:
+    def __init__(self, baselines, q, mask, focal=0.3, nu=150.e9, 
+                 verbose=False, 
+                 fix_fwhm=True, eq_common_phase=True, 
+                 fix_one_amp=False, fix_all_amps=False,
+                 fix_lengthes=False):
+        self.focal = focal
+        self.xc = 0
+        self.yc = 0
+        self.det_dist = 3.e-3
+        self.nu = nu
+        self.lam = 3.e8/nu
+        self.ndet = 17
+        self.pixels = np.arange(self.ndet)+0.5
+        self.xx, self.yy = np.meshgrid(self.pixels, self.pixels)
+        self.yy = 17-self.yy        
+        self.mask = mask
+        self.nbfringes = len(baselines)
+        self.baselines = baselines
+        self.q = q
+        self.verbose = verbose
+        
+        ### Identify equivalency types among input baselines
+        bseqs, eqtypes = sc.find_equivalent_baselines(baselines, q)
+        self.eqtypes = eqtypes
+        self.eqs = np.unique(eqtypes)
+        self.neq = len(bseqs)
+        self.eqindex = bseqs
+        if verbose:
+            print('Object multi_fringes_ana: ')
+            print('  - Number of fringes: {}'.format(self.nbfringes))
+            print('  - Eqtypes: {}'.format(self.eqtypes))
+            print('    - Neq: {}'.format(self.neq))
+            print('    - Equivalents: {}'.format(self.eqs))
+            print('    - EqIndex: {}'.format(self.eqindex))
+        
+        ### Parameters initialisation
+        self.param_fit_dict = self.init_parameters(verbose=self.verbose, 
+                                                   fix_fwhm=fix_fwhm, 
+                                                   eq_common_phase=eq_common_phase,
+                                                  fix_one_amp=fix_one_amp,
+                                                   fix_all_amps=fix_all_amps,
+                                                  fix_lengthes=fix_lengthes)
+
+    def __call__(self, paramsin):
+        #### Transform input parameters into relevant arrays
+        params = np.ravel(paramsin)
+        fwhm = params[0]
+        amps = params[1:self.nbfringes+1]
+        phi_bs = params[self.nbfringes+1:self.nbfringes*2+1]
+        angle_eq = params[self.nbfringes*2+1:self.nbfringes*2+1+self.neq]
+        length_eq = params[self.nbfringes*2+1+self.neq:self.nbfringes*2+1+self.neq*2]
+        phi_eq = params[self.nbfringes*2+1+self.neq*2:self.nbfringes*2+1+self.neq*3]
+        #### Common gaussian envelope
+        sigma = np.radians(fwhm/2.355*self.focal)
+        gaussian = np.exp(-0.5*((self.xx-self.xc)**2 + (self.yy-self.yc)**2) * self.det_dist**2 / sigma**2)
+        #### Now each fringe
+        fringes = []
+        for i in range(self.nbfringes):
+            idx = self.eqtypes[i]
+            xprime = (self.xx * np.cos(angle_eq[idx]+np.pi/2) + 
+                      self.yy * np.sin(angle_eq[idx]+np.pi/2)) * self.det_dist
+            interfrange = self.lam * self.focal / length_eq[idx]
+            phase = phi_eq[idx] + phi_bs[i]
+            argcos = 2. * np.pi / interfrange * xprime + phase
+            fringes.append(amps[i] * np.cos(argcos) * gaussian * self.mask)
+        return fringes
+    
+    def flat_data(self, x, params, extra_args=None):
+        return np.nan_to_num(np.ravel(np.array(self(params))))
+        
+        
+    #### This function initalized the parameter for the fit from the instrument model and baselines
+    def init_parameters(self, fix_fwhm=True, 
+                        eq_common_phase=True, fwhm_init=100, 
+                        fix_one_amp=False, fix_all_amps=False,
+                        fix_lengthes=False,
+                        amps_init=0.5, verbose=False):
+        ####### There are three types of parameters:##########################
+        ###########################################################################
+        ### g: global to all baselines and equivalency types 
+        # ------------------------------------------------------------------------
+        # FWHM primary beam 
+        fwhm = {'name':'fwhm', 'type':'g',  'size':1,
+                'initvals':fwhm_init, 
+                'vmin':0., 'vmax':100., 
+                'fixed':0}
+        # ------------------------------------------------------------------------
+        ###########################################################################
+        ### b: different for each baseline independently of being equivalent or not
+        # ------------------------------------------------------------------------
+        # Amplitude of each baseline 
+        amps = {'name':'amps', 'type':'b', 'size':len(self.baselines),
+                'initvals':np.zeros(len(self.baselines))+amps_init, 
+                'vmin':0, 'vmax':2., 
+                'fixed':np.zeros(len(self.baselines),dtype=int)}
+        # ------------------------------------------------------------------------
+        # Phase of each baseline 
+        phi_bs = {'name':'phi_bs', 'type':'b', 'size':len(self.baselines),
+                  'initvals':np.zeros(len(self.baselines)), 
+                  'vmin':-np.pi*0, 'vmax':np.pi, 
+                  'fixed':np.zeros(len(self.baselines),dtype=int)}
+        # ------------------------------------------------------------------------
+        ###########################################################################
+        # e: common to all equivalent baselines
+        # ------------------------------------------------------------------------
+        # Angles of equivalency type
+        angles = {'name':'angle_eq', 'type':'g', 'size':self.neq,
+                  'initvals':np.zeros(self.neq), 
+                  'vmin':-np.pi/2, 'vmax':np.pi/2, 
+                  'fixed':np.zeros(self.neq,dtype=int)}
+        # ------------------------------------------------------------------------
+        # Length of equivalency type
+        lengthes = {'name':'length_eq', 'type':'g', 'size':self.neq, 
+                    'initvals':np.zeros(self.neq), 
+                    'vmin':0., 'vmax':1., 
+                    'fixed':np.zeros(self.neq,dtype=int)}
+        # ------------------------------------------------------------------------
+        # Phase common to equivalency type
+        phi_eq = {'name':'phi_eq', 'type':'g', 'size':self.neq, 
+                  'initvals':np.zeros(self.neq), 
+                  'vmin':-np.pi*0, 'vmax':np.pi, 
+                  'fixed':np.zeros(self.neq,dtype=int)}
+        ###########################################################################
+
+
+        #### Possible fitting configurations ######################################
+        # Possibility to fix the FWHM to some value
+        if fix_fwhm: 
+            fwhm['fixed'] = 1
+        # Do we have a common phase for all equivalent baselines or are phases 
+        # different for each baseline
+        if eq_common_phase:
+            phi_bs['fixed'][:] = 1
+            phi_eq['fixed'][:] = 0
+        else:
+            phi_bs['fixed'][:] = 0
+            phi_eq['fixed'][:] = 1
+        # Do we want to fix one of the amplitudes ?
+        if fix_one_amp:
+            amps['fixed'][0] = 1
+        if fix_all_amps:
+            amps['fixed'][:] = 1
+        if fix_lengthes:
+            lengthes['fixed'][:] = 1
+        ###########################################################################
+
+        #### Intitalisation of parameters #########################################
+        if verbose: print('Initialization of angles:')
+        for i in range(self.neq):
+            # Find one such baseline
+            possible_fringe = self.baselines[list(self.eqtypes).index(i)]
+            mythinit, mylengthinit = sc.give_bs_pars(self.q, possible_fringe)
+            angles['initvals'][i] = np.radians(mythinit)
+            lengthes['initvals'][i] = mylengthinit
+            if verbose:
+                print(' Eq Type = {}'.format(i))
+                print('    Example fringe: {}'.format(possible_fringe))
+                print('    Angle = {0:6.3f} Length= {1:6.3f}'.format(mythinit, mylengthinit))
+
+        ### Now we need to make arrays with [fwhm, amps, phi_bs, angles, lengthes, phi_eq]
+        dictp = {'fwhm':fwhm, 'amps':amps, 'phi_bs':phi_bs, 'angle_eq':angles, 'length_eq':lengthes, 'phi_eq':phi_eq}
+        return dictp
+    
+    # Converts the parameters dictionary to an array (to be given to minuit)
+    def pars_dict2array(self, param_fit_dict, verbose=False):
+        init_value = np.array([])
+        fit_range = []
+        fixed = np.array([],dtype=int)
+        pname = []
+        ptype = []
+        for k in param_fit_dict.keys():
+            p = param_fit_dict[k]
+            # Initial values
+            init_value = np.append(init_value,np.array(p['initvals']))
+            fixed = np.append(fixed, p['fixed'])
+            # fit_range
+            for i in range(p['size']):
+                fit_range.append([p['vmin'], p['vmax']])
+                pname.append(p['name'])
+                ptype.append(p['type'])
+                
+        if verbose:
+            for i in range(len(init_value)):
+                print('Param {0:3.0f} - {1:10s} - {2:1s} - Init Values = {3:7.3f} - Fixed = {4:} - Range = {5:}'.format(i,pname[i], ptype[i], init_value[i], fixed[i], fit_range[i]))
+            print()
+        
+        return init_value, fit_range, fixed, pname, ptype
+         
+    # converts the arrays of parameters inot a dictionary (after a fit)
+    def pars_array2dict(self, init_values, verbose=False):
+        newparsdict = self.param_fit_dict
+        allnames = newparsdict.keys()
+        ii = 0
+        for k in allnames:
+            nb = newparsdict[k]['size']
+            if nb == 1:
+                newparsdict[k]['initvals'] = init_values[ii]
+            else:
+                newparsdict[k]['initvals'] = init_values[ii:ii+nb]
+            ii += nb
+        if verbose:
+            print('----------------------------------------------------------------------------------')
+            print('---------------------------     Parameters Values    -----------------------------')
+            for k in newparsdict.keys():
+                print('----------------------------------------------------------------------------------')
+                if k in ['phi_bs', 'angle_eq', 'phi_eq']:
+                    print(k, np.degrees(newparsdict[k]['initvals']))
+                else:
+                    print(k, newparsdict[k]['initvals'])
+                print('fixed:',newparsdict[k]['fixed'])
+            print('----------------------------------------------------------------------------------')
+        return newparsdict
+                
+    # Finds the indices of some element into a list
+    def strmatch(self,mystr, mylist):
+        matched_indexes = []
+        i = 0
+        length = len(mylist)
+        while i < length:
+            if mystr == mylist[i]:
+                matched_indexes.append(i)
+            i += 1
+        return matched_indexes
+
+
+```
+
+```{python}
+# num_fringes = [2]
+# num_fringes = [2,10,9]
+num_fringes = [2,4,5,9,10]
+# num_fringes = list(np.arange(len(all_bs)))
+
+### Get corresponding baselines and data
+data_fringes = []
+mybs = []
+for i in range(len(num_fringes)): 
+    mybs.append(all_bs[num_fringes[i]])
+    myfringe = read_my_fringe(mybs[i], all_files, all_bs)
+    data_fringes.append(myfringe)
+print(mybs)
+
+### Instanciate multifringe object ##############
+fit_multi_ana = fit_multi_fringe_ana(mybs, q, mask, verbose=False, 
+                                     eq_common_phase=True, fix_fwhm=True, 
+                                     fix_lengthes=False, fix_all_amps=False)
+
+
+### Initiating input and other parameters
+print()
+fit_initvals, fit_range, fit_fixed, fit_pname, fit_ptype=fit_multi_ana.pars_dict2array(fit_multi_ana.param_fit_dict, verbose=False)
+
+
+
+### Guess fringes
+guess_params = fit_initvals
+guess_fringes = fit_multi_ana(guess_params)
+print()
+print('===============================================================')
+print('Initial Guess:')
+_ = fit_multi_ana.pars_array2dict(guess_params, verbose=True)
+print('===============================================================')
+
+
+
+
+
+
+# Fitting with MCMC package (using minuit - not MCMC) ################
+reload(mcmc)
+import corner
+my_y = np.nan_to_num(np.ravel(data_fringes))
+myll = mcmc.LogLikelihood(xvals = np.zeros(len(my_y)), yvals = my_y, errors=my_y*0+1, 
+                          p0=guess_params, 
+                          model=fit_multi_ana.flat_data, 
+                          fixedpars=fit_fixed, 
+                          flatprior=fit_range)
+
+#### Fit with Minuit
+fitm_nointercal, fitmcov_nointercal = myll.minuit(guess_params)
+print()
+print('===============================================================')
+print('After Fit Minuit:')
+fitpars = fit_multi_ana.pars_array2dict(fitm_nointercal, verbose=True)
+print('===============================================================')
+
+
+# ### Fitted Fringes
+fitted_fringes = fit_multi_ana(fitm_nointercal)
+
+rc('figure', figsize=(16,3 * len(num_fringes)))
+for i in range(len(num_fringes)):   
+    nn = num_fringes[i]
+
+    subplot(len(num_fringes),4,i*4+1)
+    imshow(np.nan_to_num(data_fringes[i]*mask), cmap='bwr', interpolation='Gaussian',vmin=-2, vmax=2)
+    title('BS:{} EqType: {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
+    ft.qgrid()
+    colorbar()
+    
+    subplot(len(num_fringes), 4, i*4+2)
+    imshow(np.nan_to_num(guess_fringes[i]*mask), cmap='bwr', interpolation='Gaussian', vmin=-2, vmax=2)
+    title('Guess: {} - EqType {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
+    ft.qgrid()
+    colorbar()
+
+    subplot(len(num_fringes), 4, i*4+3)
+    imshow(np.nan_to_num(fitted_fringes[i]*mask), cmap='bwr', interpolation='Gaussian',vmin=-2, vmax=2)
+    title('Fitted {} - EqType {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
+    ft.qgrid()
+    colorbar()
+        
+    subplot(len(num_fringes), 4, i*4+4)
+    imshow(np.nan_to_num((data_fringes[i]-fitted_fringes[i])*mask), cmap='bwr', interpolation='Gaussian', vmin=-2, vmax=2)
+    title('Residuals {} - EqType {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
+    ft.qgrid()
+    colorbar()
+  
+tight_layout()
+
+
+```
+
+```{python}
+#### MCMC does not seem to account for the limits and guess values... need to investigate that
+# rc('figure', figsize=(16,5))
+# reload(mcmc)
+
+# nsamples = 5000
+# bla = myll.run(nsamples)
+# flat_samples = bla.get_chain(discard=nsamples//2, thin=32, flat=True)
+
+```
+
+# Now we add intercalibrations
+we use a method suggested by Louise: becasue the intercalibrations are linear, they can be determined analyticasll for each set of parameters during chi2 minimization. The chi2 will then use the intercalibrated data. This aallows simukltaneous minimization of the "usual parameterers" and the intercalibrations without having too many parameters to deal with in mimnimization. The linear ones are done analytically.
+
+The New Chi2 below does that:
+
+
+# First with a simulation
+We first work with simulated data. The true fringes are obtained from the model with some parameters. We then apply intercalibrations and add noise
+
+```{python}
+num_fringes = [2,4,5,9,10]
+# num_fringes = [2,4,5]
+# num_fringes = list(np.arange(len(all_bs)))
+
+### Get corresponding baselines and data
+data_fringes = []
+mybs = []
+for i in range(len(num_fringes)): 
+    mybs.append(all_bs[num_fringes[i]])
+    myfringe = read_my_fringe(mybs[i], all_files, all_bs)
+    data_fringes.append(myfringe)
+print(mybs)
+
+
+### Instanciate multifringe object ##############
+fit_multi_ana = fit_multi_fringe_ana(mybs, q, mask, verbose=False, 
+                                     eq_common_phase=True, fix_fwhm=True, 
+                                     fix_lengthes=False, fix_all_amps=False)
+
+
+### Initiating input and other parameters
+print()
+fit_initvals, fit_range, fit_fixed, fit_pname, fit_ptype=fit_multi_ana.pars_dict2array(fit_multi_ana.param_fit_dict, verbose=False)
+
+
+
+############################### Simulations ###########################
+### We take the init parameters and create a True dataset
+true_params = fit_initvals
+# true_params = fitm_nointercal
+
+true_fringes = fit_multi_ana(true_params)
+
+### Now we take some random intercalibs
+true_intercals = (1+(np.random.rand(17,17)-0.5)*1.)*mask
+
+### And we apply this to our frineges
+sig =0.02    # we should put very small noise to check for the accuracy
+data_fringes = []
+all_noise = []
+for i in range(len(true_fringes)):
+    noise = np.random.randn(17,17)*sig*mask
+    all_noise.append(noise)
+    data_fringes.append((true_fringes[i] * true_intercals + noise) * mask)
+
+for i in range(len(true_fringes)):
+    rc('figure', figsize=(16,3))
+    figure()
+    subplot(1,4,1)
+    imshow(true_fringes[i],cmap='bwr', interpolation='Gaussian', vmin=-0.5, vmax=0.5)
+    title('True Fr. {}'.format(i))
+    colorbar()
+    subplot(1,4,2)
+    imshow(true_intercals,cmap='bwr', interpolation='None', vmin=0, vmax=2)
+    title('True Intercals')
+    colorbar()
+    subplot(1,4,3)
+    imshow(all_noise[i],cmap='bwr', interpolation='None', vmin=-0.5, vmax=0.5)
+    title('Noise {}'.format(i))
+    colorbar()
+    subplot(1,4,4)
+    imshow(data_fringes[i],cmap='bwr', interpolation='Gaussian', vmin=-0.5, vmax=0.5)
+    title('Obs. Fringes (noise + intercals) {}'.format(i))
+    colorbar()
+#######################################################################
+
+```
+
+Let's first check the intercalibration part of the code. In order to do so, we apply the intercalibration part of the code between the true data and the simulated data => the other parameters are "as if they were well fitted" so we can only check the accuracy of the intercalib determination.
+
+```{python}
+################################ Check Intercal Software ####################
+# We apply the intercalibration part between the data and the true data
+# We should recover the input intercalibrations with no bias
+##### Intercalibrations
+allA, sA = get_intercal(np.reshape(true_fringes, (len(num_fringes), 17*17)), 
+                        np.reshape(data_fringes, (len(num_fringes), 17*17)))
+intercals = np.reshape(allA, (17,17))
+
+ok = mask == 1
+
+idfr = 0
+rc('figure', figsize=(16,3))
+figure()
+subplot(1,4,1)
+imshow(true_intercals * mask,cmap='bwr', interpolation='None', vmin=0, vmax=2)
+title('True Intercals')
+colorbar()
+
+subplot(1,4,2)
+imshow(intercals * mask,cmap='bwr', interpolation='None', vmin=0, vmax=2)
+title('Rec Intercals')
+colorbar()
+
+subplot(1,4,3)
+imshow((intercals-true_intercals) * mask,cmap='bwr', interpolation='None', vmin=-1, vmax=1)
+title('Resid Intercals')
+colorbar()
+
+subplot(1,4,4)
+hist((intercals-true_intercals)[ok], bins=30, label=ft.statstr((intercals-true_intercals)[ok]))
+xlabel('Residuals Intercals')
+legend()
+tight_layout()
+
+
+figure()
+subplot(1,4,1)
+imshow(true_fringes[idfr] * mask,cmap='bwr', interpolation='Gaussian', vmin=-0.5, vmax=0.5)
+title('true Fr. {}'.format(idfr))
+colorbar()
+
+subplot(1,4,2)
+imshow(np.nan_to_num(data_fringes[idfr]/intercals)*mask,cmap='bwr', interpolation='Gaussian', vmin=-0.5, vmax=0.5)
+title('Calibrated Fr. {}'.format(idfr))
+colorbar()
+
+subplot(1,4,3)
+residuals = data_fringes[idfr]/intercals-true_fringes[idfr]
+imshow(residuals * mask,cmap='bwr', interpolation='None', vmin=-0.5, vmax=0.5)
+title('Resid Fr. {}'.format(idfr))
+colorbar()
+
+mm, ss = ft.meancut(residuals[ok], 3)
+
+subplot(1,4,4)
+hist(residuals[ok], bins=30, label=ft.statstr(residuals[ok]), range=[-5*ss, 5*ss])
+xlabel('Fringe residuals {}'.format(idfr))
+legend()
+tight_layout()
+
+
+figure()
+subplot(1,2,1)
+plot(true_intercals[ok], residuals[ok], 'k.')
+ylim(-5*ss, 5*ss)
+xlabel('True Intercals')
+ylabel('Fringe residuals {}'.format(idfr))
+
+subplot(1,2,2)
+plot(true_fringes[idfr][ok], residuals[ok], 'k.')
+ylim(-5*ss, 5*ss)
+xlabel('True Fringe value')
+ylabel('Fringe residuals {}'.format(idfr))
+tight_layout()
+
+
+```
+
+##### As one would expect, the RMS of the residuals is worse when intercalibrations are close to zero. It seems the code is working OK.
+
+# Now let's try the global fitting
+As usual the problem of the initial values appears. 
+
+If we use the "true values" for the parameters of the fit as initial guess, then we have a nice convergence and accurate determination of the intercalobration and parameters at the same time.
+
+As soon as we use another set of input parameters, the fit goes wrong...
+
+```{python}
+class MyChi2_Intercal_LM:
+    """
+    Class defining the minimizer and the data
+    """
+
+    def __init__(self, xin, yin, covarin, functname, extra_args=None, reshape_inputs = None, mask=None):
+        self.x = xin
+        self.y = yin
+        self.covar = covarin
+        self.invcov = np.linalg.inv(covarin)
+        self.functname = functname
+        self.extra_args = extra_args
+        if mask is not None:
+            self.mask = mask
+        else: 
+            self.mask = None
+        
+        if extra_args is not None:
+            #print('Extra Args: found {}'.format(len(extra_args)))
+            self.nx = extra_args[0]
+            self.mask = np.ravel(extra_args[1])
+        else:
+            self.mask=None
+            self.nx = 1
+        
+        self.reshape_inputs = (self.nx, len(self.y)//self.nx)
+        #print('Data will be reshape as {}'.format(self.reshape_inputs))
+
+
+    def __call__(self, *pars, verbose=False, extra_args = None):
+        valmodel = self.functname(self.x, pars, extra_args=self.extra_args)
+        newvalmodel = np.reshape(valmodel, self.reshape_inputs)
+        newdata = np.reshape(self.y, self.reshape_inputs)        
+#         allA = np.ones(self.reshape_inputs[1])
+        sA = np.ones(self.reshape_inputs[1])
+        allA[self.mask], sA[self.mask] = get_intercal(newvalmodel[:, self.mask], newdata[:, self.mask])
+        delta = newvalmodel-newdata/allA
+        chi2 = np.nansum(delta[:, self.mask]**2)
+        if verbose:
+            print('Pars:')
+            print(np.array(pars))
+            print('allA:')
+            print(np.shape(allA))
+            print(allA[0:10])
+            print('Y')
+            print(np.shape(np.ravel(newdata)))
+            print(np.ravel(newdata)[0:10])
+            print('Y/allA')
+            print(np.shape(np.ravel(newdata/allA)))
+            print(np.ravel(newdata/allA)[0:10])
+            print('Model Raveled')
+            print(np.shape(np.ravel(newvalmodel)))
+            print(np.ravel(newvalmodel)[:10])
+            print('Diff')
+            print(np.shape(np.ravel(delta)))
+            print(np.ravel(delta)[0:10])
+            print('Chi2')
+            print(chi2)
+        return chi2
+    
+def get_intercal(newvalmodel, newdata):
+    allA = np.mean(newdata/newvalmodel, axis=0)
+    allA[0] = 1
+    sA = 1./np.sum(newvalmodel**2, axis=0)
+    return allA, sA
+
+
+
+def dothefit(bs, fringes, mask, q,
+             guess=None,
+            verbose=False, 
+            eq_common_phase=True, fix_fwhm=True, 
+            fix_one_amp=True, fix_all_amps=False,
+            fix_lengthes=False, fit_intercals=False, 
+             explore_guess=None,
+             print_level=0, 
+             doplot=False):
+    ### Instanciate multifringe object ##############
+    ok = mask == 1
+    fit_multi_ana = fit_multi_fringe_ana(bs, q, mask, verbose=verbose, 
+                                        eq_common_phase=eq_common_phase, fix_fwhm=fix_fwhm, 
+                                        fix_one_amp=fix_one_amp, fix_all_amps=fix_all_amps,
+                                        fix_lengthes=fix_lengthes)
+    fit_initvals, fit_range, fit_fixed, fit_pname, fit_ptype=fit_multi_ana.pars_dict2array(fit_multi_ana.param_fit_dict, verbose=False)
+    
+    if guess is None:
+        if verbose:
+            print('No initial guess was given, we use the theoretical values as a guess')
+        guess =  fit_initvals
+    else:
+        if verbose:
+            print('An input initial guess was given, we will use it for fitting')
+    if verbose:
+        print()
+        print('===============================================================')
+        print('Initial Guess:')
+        dict_guess = fit_multi_ana.pars_array2dict(guess, verbose=True)
+        print('===============================================================')
+    
+
+    # Define general likelihood
+    my_y = np.nan_to_num(np.ravel(fringes))
+    errs = my_y*0+1
+    errs[my_y == 0] = 1e10
+    myll = mcmc.LogLikelihood(xvals = np.zeros(len(my_y)), yvals = my_y, errors=errs, 
+                              p0=guess, 
+                              model=fit_multi_ana.flat_data, 
+                              fixedpars=fit_fixed, 
+                              flatprior=fit_range)
+    
+    # If fit_intercals is True we need to define a specific chi2
+    if fit_intercals:
+        if verbose:
+            print('We will fit intercals')
+        mychi2 = MyChi2_Intercal_LM(myll.xvals, myll.yvals, myll.covar, myll.model, 
+                                    extra_args=[len(fringes),mask])
+    else:
+        if verbose:
+            print('We will not fit intercals')
+        mychi2 = None
+    
+    
+    ################## Explore Guess Space ######################################
+    if explore_guess is not None:
+        ntry = explore_guess[0]
+        frac = explore_guess[1]
+        print('Exploring possible guesses with {} random trials with {} around p0'.format(ntry, frac))
+        all_guesses = myll.random_explore_guess(ntry=ntry, fraction=frac)
+        chi2guess = np.zeros(ntry)
+        for i in range(ntry):
+            fitm, fitmcov, chi2fct = myll.minuit(all_guesses[i], chi2=mychi2, 
+                                        verbose=False, print_level=0,
+                                        extra_args=[len(fringes),mask], return_chi2fct=True)
+            chi2guess[i] = chi2fct(all_guesses[i])
+            print('Trial {}: chi2={}'.format(i, chi2guess[i]))
+    ############################################################################
+    
+    
+    
+    ######################### MINUIT ###########################################
+    fitm, fitmcov, chi2fct = myll.minuit(guess, chi2=mychi2, 
+                                verbose=verbose, print_level=print_level,
+                                extra_args=[len(fringes),mask], return_chi2fct=True)
+    print('Initial chi2:', chi2fct(guess, extra_args=[len(fringes),mask]))
+    print('Final chi2:', chi2fct(fitm, extra_args=[len(fringes),mask]))
+    if verbose:
+        print('Minuit done')
+        print()
+        print('Fit Minuit:')
+        fitpars = fit_multi_ana.pars_array2dict(fitm, verbose=True)
+    ### Guess Fringes
+    guess_fringes = fit_multi_ana(guess)
+    ### Fitted Fringes
+    fitted_fringes = fit_multi_ana(fitm)
+    ############################################################################
+
+
+    ##### Intercalibrations ####################################################
+    if fit_intercals:
+        allA, sA = get_intercal(np.reshape(fitted_fringes, (len(fringes), 17*17)), 
+                        np.reshape(my_y, (len(fringes), 17*17)))
+        intercals = np.reshape(allA, (17,17))
+        if doplot:
+            rc('figure', figsize=(16,3))
+            figure()
+            mm, ss = ft.meancut(intercals[ok],3)
+            imshow(intercals, vmin=mm-3*ss, vmax=mm+3*ss, cmap='bwr')
+            colorbar()
+    else:
+        intercals = 1
+    
+    if doplot:
+        rc('figure', figsize=(16,3 * len(fringes)))
+        maxi = 1
+        interp = 'Gaussian'
+        figure()
+        for i in range(len(fringes)):   
+            nn = num_fringes[i]
+
+            subplot(len(fringes),6,i*6+1)
+            imshow(np.nan_to_num(fringes[i]*mask), cmap='bwr', interpolation=interp,vmin=-maxi, vmax=maxi)
+            title('BS:{} EqType: {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
+            ft.qgrid()
+            colorbar()
+
+            subplot(len(fringes), 6, i*6+2)
+            imshow(np.nan_to_num(fringes[i]/intercals*mask), cmap='bwr', interpolation=interp,vmin=-maxi, vmax=maxi)
+            title('IntercCal BS: {} - EqType {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
+            ft.qgrid()
+            colorbar()
+
+            subplot(len(fringes), 6, i*6+3)
+            imshow(np.nan_to_num(guess_fringes[i]*mask), cmap='bwr', interpolation=interp,vmin=-maxi, vmax=maxi)
+            title('Guess: {} - EqType {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
+            ft.qgrid()
+            colorbar()
+
+            subplot(len(fringes), 6, i*6+4)
+            imshow(np.nan_to_num(fitted_fringes[i]*mask), cmap='bwr', interpolation=interp,vmin=-maxi, vmax=maxi)
+            title('Fitted {} - EqType {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
+            ft.qgrid()
+            colorbar()
+          
+            resid = (fringes[i]/intercals-fitted_fringes[i])
+            subplot(len(fringes), 6, i*6+5)
+            imshow(np.nan_to_num(resid*mask), cmap='bwr', interpolation=interp,vmin=-maxi, vmax=maxi)
+            title('Residuals {} - EqType {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
+            ft.qgrid()
+            colorbar()
+
+            mm, ss = ft.meancut(resid[ok],3)
+            subplot(len(fringes), 6, i*6+6)
+            hist(resid[ok], bins=30, range=[mm-5*ss, mm+5*ss], label='{0:5.3f} +/- {1:5.3f}'.format(mm, ss))
+            xlabel('Residuals {} - EqType {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
+            legend()
+
+        tight_layout()
+
+    
+    return fitm
+
+
+```
+
+```{python}
+reload(ft)
+reload(mcmc)
+
+
+num_fringes = [2,4,5,9,10]
+# num_fringes = [2,4,5]
+# num_fringes = [2,3,4,5,9,10]
+# num_fringes = list(np.arange(len(all_bs)))
+
+### Get corresponding baselines and data
+data_fringes = []
+mybs = []
+for i in range(len(num_fringes)): 
+    mybs.append(all_bs[num_fringes[i]])
+    myfringe = read_my_fringe(mybs[i], all_files, all_bs)
+    data_fringes.append(myfringe)
+print(mybs)
+
+
+### Instanciate multifringe object ##############
+fit_multi_ana = fit_multi_fringe_ana(mybs, q, mask, verbose=False, 
+                                     eq_common_phase=True, fix_fwhm=True, 
+                                     fix_lengthes=False, fix_all_amps=False)
+
+
+### Initiating input and other parameters
+print()
+fit_initvals, fit_range, fit_fixed, fit_pname, fit_ptype=fit_multi_ana.pars_dict2array(fit_multi_ana.param_fit_dict, verbose=False)
+
+
+############################### Simulations ###########################
+### We take the init parameters and create a True dataset
+true_params = fit_initvals
+# true_params = fitm_nointercal
+
+true_fringes = fit_multi_ana(true_params)
+
+### Now we take some random intercalibs
+true_intercals = (1+(np.random.rand(17,17)-0.5)*5.)*mask
+
+### And we apply this to our frineges
+sig =0.02    # we should put very small noise to check for the accuracy
+data_fringes = []
+all_noise = []
+for i in range(len(true_fringes)):
+    noise = np.random.randn(17,17)*sig*mask
+    all_noise.append(noise)
+    data_fringes.append((true_fringes[i] * true_intercals + noise) * mask)
+
+
+
+### Let's try a fit without intercals: because we do not fit intercalibration, we need to let all amplitudes free
+print('First fit with no intercalibrations')
+#guess_params = fit_initvals
+#guess_params = fitm_nointercal
+guess_params = None
+print('initial Parameters:',guess_params)
+fit_nointercals = dothefit(mybs, data_fringes, mask, q,
+                           verbose=False, 
+                           eq_common_phase=True, fix_fwhm=True, 
+                           fix_one_amp=False, fix_all_amps=False,
+                           fix_lengthes=False, fit_intercals=False, 
+                           doplot=True)
+
+### And now a fit with intercals
+print('Second Fit with intercalibrations')
+# guess_params = None
+guess_paramss = fit_nointercals
+print('initial Parameters:',guess_params)
+fit = dothefit(mybs, data_fringes, mask, q,
+               guess = guess_params,
+               verbose=False, 
+               eq_common_phase=True, fix_fwhm=True, 
+               fix_one_amp=True, fix_all_amps=False,
+               fix_lengthes=False, fit_intercals=True, 
+               doplot=True)
+
+```
+
+<!-- #region -->
+### Tests faits:
+* mettre les angles en radians
+    * pas d'amélioration
+* Minimize à la place
+    * Fixer des paramètres... => fait en mettatn des bounds étroites
+    * pas convaincant...
+* multi-start random autour des et prendre le min des multi-starts
+    * ne marche pas avec tout le range
+    * <font color='red'>peut être réduire le range plus proches des valeurs initiales pour certains parametres...</font>
+
+
+### Tests à faire:
+* réflechir aux dégénérescences intrinsèques du modèle ?
+* remplacer les angles par des sin ou des cos
+* Fournir le gradient à minuit
+* pas de départ pour chaque variable
+* fixer certains parametres au debut: 
+    * les longueurs de baseline
+        * <font color='red'>sans effet</font>
+    * les amplitudes => peut etre mieux car visiblement ce sont les intercals qui foutent la merde
+    * enlever fix_one_amp ?
+* faire d'abord un fit baseline par baseline pour avoir les amplitudes et les phases par exemple et ensuite passer au reste ?
+<!-- #endregion -->
+
+# Now let's try with the data
+
+```{python}
+reload(ft)
+reload(mcmc)
+
+
+# num_fringes = [2]
+# num_fringes = [2,10,9]
+num_fringes = [2,4,5]
+# num_fringes = [2,4,5,9]
+# num_fringes = [2,4,5,9,10]
+# num_fringes = list(np.arange(len(all_bs)))
+
+### Get corresponding baselines and data
+data_fringes = []
+mybs = []
+for i in range(len(num_fringes)): 
+    mybs.append(all_bs[num_fringes[i]])
+    myfringe = read_my_fringe(mybs[i], all_files, all_bs)
+    data_fringes.append(myfringe)
+print(mybs)
+
+### Let's try a fit without intercals: because we do not fit intercalibration, we need to let all amplitudes free
+print('First fit with no intercalibrations')
+#guess_params = fit_initvals
+#guess_params = fitm_nointercal
+guess_params = None
+print('initial Parameters:',guess_params)
+fit_nointercals = dothefit(mybs, data_fringes, mask, q,
+                           verbose=False, 
+                           eq_common_phase=True, fix_fwhm=True, 
+                           fix_one_amp=False, fix_all_amps=False,
+                           fix_lengthes=False, fit_intercals=False, 
+                           doplot=True)
+
+### And now a fit with intercals
+#guess_params = None
+guess_params = fit_nointercals
+print()
+print('Second Fit with intercalibrations')
+print('initial Parameters:',guess_params)
+fit = dothefit(mybs, data_fringes, mask, q,
+               guess = guess_params,
+               verbose=False, 
+               eq_common_phase=True, fix_fwhm=True, 
+               fix_one_amp=True, fix_all_amps=False,
+               fix_lengthes=False, fit_intercals=True, 
+               doplot=True)
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

@@ -723,6 +723,67 @@ def fullreso2TESreso(x, y, power, TESvertex, TESarea, interp=False, verbose=True
 
 
 # ========== Fringe simulations =============
+class Model_Fringes_Ana:
+    def __init__(self, q, baseline, theta_source=0., nu_source=150e9, fwhm=20., amp=1., frame='ONAFP'):
+        """
+
+        Parameters
+        ----------
+        q: QubicInstrument
+        baseline: list
+            Baseline formed with 2 horns, index between 1 and 64 as on the instrument.
+        theta_source: float
+            The source zenith angle [rad].
+        nu_source: float
+            Source frequency [Hz].
+        fwhm: float
+        amp: float
+            Global amplitude for the fringes.
+        """
+        self.BL = baseline
+        self.q = q
+        self.focal = q.optics.focal_length
+        self.theta_source = theta_source
+        self.nu_source = nu_source
+        self.lam = 3e8 / self.nu_source
+        self.fwhm = fwhm
+        self.amp = amp
+        self.frame = frame
+
+        # Detector centers
+        if self.frame == 'ONAFP':
+            xONAFP, yONAFP, _ = get_TEScoordinates_ONAFP(self.q)
+            self.x = xONAFP
+            self.y = yONAFP
+        elif self.frame == 'GRF':
+            self.x = self.q.detector.center[:, 0]
+            self.y = self.q.detector.center[:, 1]
+
+        # Angle and length of the baseline:
+        BL_angle, BL_length, BL_center = give_bs_pars(self.q, self.BL, frame='ONAFP')
+        self.BL_angle = np.deg2rad(BL_angle)
+        self.BL_length = BL_length
+        self.BL_xc = BL_center[0]
+        self.BL_yc = BL_center[1]
+
+        # Additional phase
+        dist = np.sqrt(self.BL_xc ** 2 + self.BL_yc ** 2)
+        phase = - 2 * np.pi / 3e8 * self.nu_source * dist * np.sin(self.theta_source)
+        self.phase = phase
+
+    def get_fringes(self, times_gaussian=True):
+        if times_gaussian:
+            sigma = np.deg2rad(self.fwhm / 2.355 * self.focal)
+            gaussian = np.exp(- 0.5 * ((self.x - self.BL_xc) ** 2 + (self.y - self.BL_yc) ** 2) / sigma ** 2)
+        else:
+            gaussian = 1.
+        xprime = (self.x * np.cos(self.BL_angle) + self.y * np.sin(self.BL_angle))
+        interfrange = self.lam * self.focal / self.BL_length
+        self.fringes = self.amp * np.cos((2. * np.pi / interfrange * xprime) + self.phase) * gaussian
+
+        return self.x, self.y, self.fringes
+
+
 class Model_Fringes_QubicSoft:
     def __init__(self, q, baseline,
                  theta_source=0.,

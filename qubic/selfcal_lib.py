@@ -491,15 +491,15 @@ def get_response_power(q,
                        frame='ONAFP', external_A=None, hwp_position=0,
                        verbose=False):
     """
-    Compute power on the focal plane in the ONAFP frame for different positions of the source
+    Compute power on the focal plane in the ONAFP frame for one position of the source
     with respect to the instrument.
 
     Parameters
     ----------
     q: a qubic monochromatic instrument
-    theta: array-like
+    theta: float
         The source zenith angle [rad].
-    phi: array-like
+    phi: float
         The source azimuthal angle [rad].
     nu: float
         Source frequency in Hz.
@@ -520,8 +520,6 @@ def get_response_power(q,
     if frame not in ['GRF', 'ONAFP']:
         raise ValueError('The frame is not valid. It must be GRF or ONAFP.')
 
-    nptg = len(theta)
-
     if external_A is None:
         position = q.detector.center  # GRF
     else:
@@ -540,7 +538,6 @@ def get_response_power(q,
     # power *= q.filter.bandwidth  # [W/Hz] to [W]
 
     if verbose:
-        print(f'# pointings = {nptg}')
         print('Detector centers shape:', q.detector.center.shape)
         print('Power shape:', power.shape)
         print('X_GRF shape:', xGRF.shape)
@@ -566,7 +563,7 @@ def get_power_Maynooth(rep, open_horns, theta, nu, horn_center, hwp_position=0, 
         Repository with the simulation files.
     open_horns: list
         List of open horns.
-    theta: array-like
+    theta: float
         The source zenith angle [rad].
     nu: float
         Frequency of the calibration source [Hz]
@@ -727,70 +724,69 @@ def fullreso2TESreso(x, y, power, TESvertex, TESarea, interp=False, verbose=True
 
 # ========== Fringe simulations =============
 class Model_Fringes_QubicSoft:
-    def __init__(self, baseline):
+    def __init__(self, q, baseline,
+                 theta_source=0.,
+                 phi_source=0.,
+                 nu_source=150e9,
+                 spec_irrad_source=1.,
+                 frame='ONAFP',
+                 external_A=None,
+                 hwp_position=0):
         """
         Parameters
         ----------
+        q: QubicInstrument
         baseline: list
             Baseline formed with 2 horns, index between 1 and 64 as on the instrument.
+        theta_source: float
+            The source zenith angle [rad].
+        phi_source: float
+            The source azimuthal angle [rad].
+        nu_source: float
+            Source frequency [Hz].
+        spec_irrad: array-like
+            The source spectral_irradiance [W/m^2/Hz].
+        frame: str
+            'GRF' or 'ONAFP'.
         """
-
+        self.q = q
         self.baseline = baseline
+        self.theta_source = theta_source
+        self.phi_source = phi_source
+        self.nu_source = nu_source
+        self.spec_irrad_source = spec_irrad_source
+        self.frame = frame
+        self.external_A = external_A
+        self.hwp_position = hwp_position
 
-    def get_fringes(self, q,
-                    theta=np.array([0.]), phi=np.array([0.]),
-                    nu=150e9, spectral_irradiance=1.,
-                    frame='ONAFP',
-                    external_A=None,
-                    hwp_position=0,
-                    doplot=True, verbose=True, **kwargs):
+    def get_fringes(self, doplot=True, verbose=True, **kwargs):
         """
         Compute the fringes on the focal plane directly opening the baseline.
         see get_response_power() for the arguments.
         Returns (x, y) coordinates and the power.
         """
-        open_switches(q, self.baseline)
+        open_switches(self.q, self.baseline)
 
-        x, y, fringes = get_response_power(q, theta, phi, nu,
-                                           spectral_irradiance,
-                                           frame=frame,
-                                           external_A=external_A,
-                                           hwp_position=hwp_position,
+        self.x, self.y, self.fringes = get_response_power(self.q, self.theta_source, self.phi_source, self.nu_source,
+                                           self.spec_irrad_source,
+                                           frame=self.frame,
+                                           external_A=self.external_A,
+                                           hwp_position=self.hwp_position,
                                            verbose=verbose)
 
         if doplot:
-            nptg = np.shape(theta)[0]
-            for i in range(nptg):
-                plot_horn_and_FP(q, x, y, fringes[:, i], frame=frame,
-                                 title='Baseline {} - Theta={}deg - Phi={}deg'.format(self.baseline,
-                                                                                      np.rad2deg(theta[i]),
-                                                                                      np.rad2deg(phi[i])), **kwargs)
-        return x, y, fringes
+            plot_horn_and_FP(self.q, self.x, self.y, self.fringes, frame=self.frame,
+                             title='Baseline {} - Theta={}deg - Phi={}deg'.format(self.baseline,
+                                                                                  np.rad2deg(self.theta_source),
+                                                                                  np.rad2deg(self.phi_source)),
+                             **kwargs)
+        return self.x, self.y, self.fringes
 
-    def get_all_combinations_power(self, q,
-                                   theta=np.array([0.]), phi=np.array([0.]),
-                                   nu=150e9, spectral_irradiance=1.,
-                                   frame='ONAFP',
-                                   doplot=True, verbose=True, **kwargs):
+    def get_all_combinations_power(self, doplot=True, verbose=True, **kwargs):
         """
             Returns the power on the focal plane at each pointing (each position of the source),
             for different configurations of the horn array: all open, all open except i, except j,
             except i and j, only i open, only j open, only i and j open.
-        Parameters
-        ----------
-        q: QubicInstrument
-        theta : array-like
-            The source zenith angle [rad].
-        phi: array-like
-            The source azimuthal angle [rad].
-        nu: float
-            Source frequency [Hz].
-        spectral_irradiance: array-like
-            The source spectral_irradiance [W/m^2/Hz].
-        frame: str
-            'GRF' or 'ONAFP'.
-        doplot: bool
-        verbose: bool
 
         Returns
         -------
@@ -800,84 +796,69 @@ class Model_Fringes_QubicSoft:
 
         """
 
-        q.horn.open = True
+        self.q.horn.open = True
 
         # All open
-        x, y, S = get_response_power(q, theta, phi, nu, spectral_irradiance, frame=frame, verbose=verbose)
+        self.x, self.y, S = get_response_power(self.q, self.theta_source, self.phi_source, self.nu_source,
+                                     self.spec_irrad_source, frame=self.frame, verbose=verbose)
         if doplot:
-            plot_horn_and_FP(q, x, y, S[:, 0], frame=frame, title='$S$ - All open', **kwargs)
+            plot_horn_and_FP(self.q, self.x, self.y, S, frame=self.frame, title='$S$ - All open', **kwargs)
 
         # All open except i
-        q.horn.open[self.baseline[0] - 1] = False
-        _, _, Cminus_i = get_response_power(q, theta, phi, nu, spectral_irradiance, frame=frame, verbose=verbose)
+        self.q.horn.open[self.baseline[0] - 1] = False
+        _, _, Cminus_i = get_response_power(self.q, self.theta_source, self.phi_source, self.nu_source,
+                                            self.spec_irrad_source, frame=self.frame, verbose=verbose)
         if doplot:
-            plot_horn_and_FP(q, x, y, Cminus_i[:, 0], frame=frame,
+            plot_horn_and_FP(self.q, self.x, self.y, Cminus_i, frame=self.frame,
                              title='$C_{-i}$' + f' - Horn {self.baseline[0]} close', **kwargs)
 
         # All open except baseline [i, j]
-        q.horn.open[self.baseline[1] - 1] = False
-        _, _, Sminus_ij = get_response_power(q, theta, phi, nu, spectral_irradiance, frame=frame, verbose=verbose)
+        self.q.horn.open[self.baseline[1] - 1] = False
+        _, _, Sminus_ij = get_response_power(self.q, self.theta_source, self.phi_source, self.nu_source,
+                                             self.spec_irrad_source, frame=self.frame, verbose=verbose)
         if doplot:
-            plot_horn_and_FP(q, x, y, Sminus_ij[:, 0], frame=frame,
+            plot_horn_and_FP(self.q, self.x, self.y, Sminus_ij, frame=self.frame,
                              title='$S_{-ij}$' + f' - Baseline {self.baseline} close', **kwargs)
 
         # All open except j
-        q.horn.open[self.baseline[0] - 1] = True
-        _, _, Cminus_j = get_response_power(q, theta, phi, nu, spectral_irradiance, frame=frame, verbose=verbose)
+        self.q.horn.open[self.baseline[0] - 1] = True
+        _, _, Cminus_j = get_response_power(self.q, self.theta_source, self.phi_source, self.nu_source,
+                                            self.spec_irrad_source, frame=self.frame, verbose=verbose)
         if doplot:
-            plot_horn_and_FP(q, x, y, Cminus_j[:, 0], frame=frame,
+            plot_horn_and_FP(self.q, self.x, self.y, Cminus_j, frame=self.frame,
                              title='$C_{-j}$' + f' - Horn {self.baseline[1]} close', **kwargs)
 
         # Only i open (not a realistic observable)
-        q.horn.open = False
-        q.horn.open[self.baseline[0] - 1] = True
-        _, _, Ci = get_response_power(q, theta, phi, nu, spectral_irradiance, frame=frame, verbose=verbose)
+        self.q.horn.open = False
+        self.q.horn.open[self.baseline[0] - 1] = True
+        _, _, Ci = get_response_power(self.q, self.theta_source, self.phi_source, self.nu_source,
+                                      self.spec_irrad_source, frame=self.frame, verbose=verbose)
         if doplot:
-            plot_horn_and_FP(q, x, y, Ci[:, 0], frame=frame,
+            plot_horn_and_FP(self.q, self.x, self.y, Ci, frame=self.frame,
                              title='$C_i$' + f' - Only horn {self.baseline[0]} open', **kwargs)
 
         # Only j open (not a realistic observable)
-        q.horn.open[self.baseline[0] - 1] = False
-        q.horn.open[self.baseline[1] - 1] = True
-        _, _, Cj = get_response_power(q, theta, phi, nu, spectral_irradiance, frame=frame, verbose=verbose)
+        self.q.horn.open[self.baseline[0] - 1] = False
+        self.q.horn.open[self.baseline[1] - 1] = True
+        _, _, Cj = get_response_power(self.q, self.theta_source, self.phi_source, self.nu_source,
+                                      self.spec_irrad_source, frame=self.frame, verbose=verbose)
         if doplot:
-            plot_horn_and_FP(q, x, y, Cj[:, 0], frame=frame,
+            plot_horn_and_FP(self.q, self.x, self.y, Cj, frame=self.frame,
                              title='$C_j$' + f' - Only horn {self.baseline[1]} open', **kwargs)
 
         # Only baseline [i, j] open (not a realistic observable)
-        q.horn.open[self.baseline[0] - 1] = True
-        _, _, Sij = get_response_power(q, theta, phi, nu, spectral_irradiance, frame=frame, verbose=verbose)
+        self.q.horn.open[self.baseline[0] - 1] = True
+        _, _, Sij = get_response_power(self.q, self.theta_source, self.phi_source, self.nu_source,
+                                       self.spec_irrad_source, frame=self.frame, verbose=verbose)
         if doplot:
-            plot_horn_and_FP(q, x, y, Sij[:, 0], frame=frame,
+            plot_horn_and_FP(self.q, self.x, self.y, Sij, frame=self.frame,
                              title='$S_{ij}$' + f' - Only baseline {self.baseline} open', **kwargs)
 
-        return x, y, S, Cminus_i, Sminus_ij, Cminus_j, Ci, Cj, Sij
+        return self.x, self.y, S, Cminus_i, Sminus_ij, Cminus_j, Ci, Cj, Sij
 
-    def get_fringes_from_combination(self, q, measured_comb=True,
-                                     theta=np.array([0.]), phi=np.array([0.]),
-                                     nu=150e9, spectral_irradiance=1.,
-                                     frame='ONAFP',
-                                     doplot=True, verbose=True, **kwargs):
+    def get_fringes_from_combination(self, measured_comb=True, doplot=True, verbose=True, **kwargs):
         """
         Return the fringes on the FP by making the combination
-        Parameters
-        ----------
-        q: QubicInstrument
-        measured_comb: bool
-            If True, returns the measured combination: S_tot - Cminus_i - Cminus_j + Sminus_ij.
-            If False, returns the complete combination: S_tot - Cminus_i - Cminus_j + Sminus_ij + Ci + Cj.
-        theta : array-like
-            The source zenith angle [rad].
-        phi: array-like
-            The source azimuthal angle [rad].
-        nu: float
-            Source frequency [Hz].
-        spectral_irradiance: array-like
-            The source spectral_irradiance [W/m^2/Hz].
-        frame: str
-            'GRF' or 'ONAFP'.
-        doplot: bool
-        verbose: bool
 
         Returns
         -------
@@ -885,102 +866,95 @@ class Model_Fringes_QubicSoft:
         fringes : Fringes on the FP, for each coordinate, at each pointing.
         """
 
-
-        x, y, S_tot, Cminus_i, Sminus_ij, Cminus_j, Ci, Cj, Sij = self.get_all_combinations_power(q, theta=theta, phi=phi,
-                                       nu=nu, spectral_irradiance=spectral_irradiance,
-                                       frame=frame,
-                                       doplot=False, verbose=verbose, **kwargs)
+        self.x, self.y, S_tot, Cminus_i, Sminus_ij, Cminus_j, Ci, Cj, Sij = \
+            self.get_all_combinations_power(doplot=doplot, verbose=verbose, **kwargs)
         if measured_comb:
-            fringes_comb = S_tot - Cminus_i - Cminus_j + Sminus_ij
+            self.fringes_comb = S_tot - Cminus_i - Cminus_j + Sminus_ij
         else:
-            fringes_comb = S_tot - Cminus_i - Cminus_j + Sminus_ij + Ci + Cj
+            self.fringes_comb = S_tot - Cminus_i - Cminus_j + Sminus_ij + Ci + Cj
 
         if doplot:
-            nptg = np.shape(theta)[0]
-            for i in range(nptg):
-                plot_horn_and_FP(q, x, y, fringes_comb[:, 0], frame=frame,
-                                 title='Baseline {} - Theta={}deg - Phi={}deg'.format(self.baseline,
-                                                                                      np.rad2deg(theta[i]),
-                                                                                      np.rad2deg(phi[i])), **kwargs)
-        return x, y, fringes_comb
+            plot_horn_and_FP(self.q, self.x, self.y, self.fringes_comb, frame=self.frame,
+                             title='Baseline {} - Theta={}deg - Phi={}deg'.format(self.baseline,
+                                                                                  np.rad2deg(self.theta_source),
+                                                                                  np.rad2deg(self.phi_source)),
+                             **kwargs)
+        return self.x, self.y, self.fringes_comb
 
 
 class Model_Fringes_Maynooth:
-    def __init__(self, baseline):
+    def __init__(self, q, baseline, rep,
+                 theta_source=0., nu_source=150e9,
+                 frame='ONAFP', interp=False):
         """
-        Parameters
-        ----------
-        baseline: list
-            Baseline formed with 2 horns, index between 1 and 64 as on the instrument.
-        """
-
-        self.baseline = baseline
-
-    def get_fringes_Maynooth(self, q, rep,
-                             theta=np.array([0.]), nu=150e9,
-                             interp=False,
-                             verbose=True):
-        """
-        Compute fringes on the focal plane from Maynooth simulations.
         Parameters
         ----------
         q: QubicInstrument
+        baseline: list
+            Baseline formed with 2 horns, index between 1 and 64 as on the instrument.
         rep: str
             Repository with the simulation files.
-        theta: array-like
+        theta: float
             The source zenith angle [rad].
         nu: float
             Frequency of the calibration source [Hz]
+        frame: str
+            'GRF' or 'ONAFP'.
         interp: bool
             If True, interpolate and integrate in each TES (takes time).
             If False, make the mean in each TES (faster).
-        verbose: bool
+        """
+        self.q = q
+        self.baseline = baseline
+        self.rep = rep
+        self.theta_source = theta_source
+        self.nu_source = nu_source
+        self.frame = frame
+        self.interp = interp
 
+    def get_fringes(self, verbose=True):
+        """
+        Compute fringes on the focal plane from Maynooth simulations.
         Returns
         -------
         x, y coordinates on the FP in the ONAFP frame and the corresponding power.
 
         """
-        if q.config != 'TD':
+        if self.q.config != 'TD':
             raise ValueError('Maynooth simulations are for the TD only.')
 
-        xONAFP, yONAFP, power = get_power_Maynooth( rep, self.baseline, theta, nu, q.horn.center, verbose=verbose)
+        xONAFP, yONAFP, fringes_fullreso = get_power_Maynooth(self.rep, self.baseline,
+                                                   self.theta_source, self.nu_source,
+                                                   self.q.horn.center, verbose=verbose)
 
         # TES centers and TES vertex in the ONAFP frame
-        xONAFP_TES, yONAFP_TES, vONAFP_TES = get_TEScoordinates_ONAFP(q)
+        xONAFP_TES, yONAFP_TES, vONAFP_TES = get_TEScoordinates_ONAFP(self.q)
 
-        powerTES = fullreso2TESreso(xONAFP, yONAFP, power,
-                                    vONAFP_TES, q.detector.area,
-                                    interp=interp,
-                                    verbose=verbose)
+        self.fringes = fullreso2TESreso(xONAFP, yONAFP, fringes_fullreso,
+                                        vONAFP_TES, self.q.detector.area,
+                                        interp=self.interp,
+                                        verbose=verbose)
 
         # power_TES *= q.filter.bandwidth  # W/Hz to W
 
-        return xONAFP_TES, yONAFP_TES, powerTES
+        if self.frame == 'ONAFP':
+            self.x = xONAFP_TES
+            self.y = yONAFP_TES
+        elif self.frame == 'GRF':
+            self.x = yONAFP_TES
+            self.y = - xONAFP_TES
+        return self.x, self.y, self.fringes
 
-    def get_fringes_Maynooth_combination(self, q, rep,
-                                         measured_comb=True,
-                                         theta=np.array([0.]), nu=150e9,
-                                         interp=False,
-                                         verbose=True):
+    def get_fringes_from_combination(self, measured_comb=True, verbose=True):
         """
         Compute fringes on the focal plane from Maynooth simulations doing the combination with
         S_tot, Cminus_i, Cminus_j, Sminus_ij, Ci and Cj.
         Parameters
         ----------
-        q: QubicInstrument
-        rep: str
-            Repository with the simulation files.
         measured_comb: bool
             If True, returns the measured combination: S_tot - Cminus_i - Cminus_j + Sminus_ij.
             If False, returns the complete combination: S_tot - Cminus_i - Cminus_j + Sminus_ij + Ci + Cj.
-        theta: array-like
-            The source zenith angle [rad].
-        nu: float
-            Frequency of the calibration source [Hz]
-        interp: bool
-            If True, interpolate and integrate in each TES (takes time).
-            If False, make the mean in each TES (faster).
+
         verbose: bool
 
         Returns
@@ -994,24 +968,36 @@ class Model_Fringes_Maynooth:
         first_close = np.delete(all_open, i - 1)
         second_close = np.delete(all_open, j - 1)
         both_close = np.delete(all_open, [i - 1, j - 1])
-        xONAFP, yONAFP, S_tot = get_power_Maynooth(rep, all_open, theta, nu, q.horn.center, verbose=verbose)
-        _, _, Cminus_i = get_power_Maynooth(rep, first_close, theta, nu, q.horn.center, verbose=verbose)
-        _, _, Cminus_j = get_power_Maynooth(rep, second_close, theta, nu, q.horn.center, verbose=verbose)
-        _, _, Sminus_ij = get_power_Maynooth(rep, both_close, theta, nu, q.horn.center, verbose=verbose)
+        xONAFP, yONAFP, S_tot = get_power_Maynooth(self.rep, all_open, self.theta_source, self.nu_source,
+                                                   self.q.horn.center, verbose=verbose)
+        _, _, Cminus_i = get_power_Maynooth(self.rep, first_close, self.theta_source, self.nu_source,
+                                            self.q.horn.center, verbose=verbose)
+        _, _, Cminus_j = get_power_Maynooth(self.rep, second_close, self.theta_source, self.nu_source,
+                                            self.q.horn.center, verbose=verbose)
+        _, _, Sminus_ij = get_power_Maynooth(self.rep, both_close, self.theta_source, self.nu_source,
+                                             self.q.horn.center, verbose=verbose)
 
         if measured_comb:
-            fringes_comb = S_tot - Cminus_i - Cminus_j + Sminus_ij
+            fringes_comb_fullreso = S_tot - Cminus_i - Cminus_j + Sminus_ij
         else:
-            _, _, Ci = get_power_Maynooth(rep, [i - 1], theta, nu, q.horn.center, verbose=verbose)
-            _, _, Cj = get_power_Maynooth(rep, [j - 1], theta, nu, q.horn.center, verbose=verbose)
-            fringes_comb = S_tot - Cminus_i - Cminus_j + Sminus_ij + Ci + Cj
+            _, _, Ci = get_power_Maynooth(self.rep, [i - 1], self.theta_source, self.nu_source,
+                                          self.q.horn.center, verbose=verbose)
+            _, _, Cj = get_power_Maynooth(self.rep, [j - 1], self.theta_source, self.nu_source,
+                                          self.q.horn.center, verbose=verbose)
+            fringes_comb_fullreso = S_tot - Cminus_i - Cminus_j + Sminus_ij + Ci + Cj
 
         # TES centers and TES vertex in the ONAFP frame
-        xONAFP_TES, yONAFP_TES, vONAFP_TES = get_TEScoordinates_ONAFP(q)
+        xONAFP_TES, yONAFP_TES, vONAFP_TES = get_TEScoordinates_ONAFP(self.q)
 
-        fringes_comb_TES = fullreso2TESreso(xONAFP, yONAFP, fringes_comb,
-                                            vONAFP_TES, q.detector.area,
-                                            interp=interp,
+        self.fringes_comb = fullreso2TESreso(xONAFP, yONAFP, fringes_comb_fullreso,
+                                            vONAFP_TES, self.q.detector.area,
+                                            interp=self.interp,
                                             verbose=verbose)
+        if self.frame == 'ONAFP':
+            self.x = xONAFP_TES
+            self.y = yONAFP_TES
+        elif self.frame == 'GRF':
+            self.x = yONAFP_TES
+            self.y = - xONAFP_TES
 
-        return xONAFP_TES, yONAFP_TES, fringes_comb_TES
+        return self.x, self.y, self.fringes_comb

@@ -361,6 +361,14 @@ def make_mask2D_thermometers_TD():
     return mask_thermos
 
 
+def remove_thermometers(x, y, combi):
+    """Remove the 8 thermometers.
+    Returns AD arrays with 248 values and not 256."""
+    combi = combi[x != 0.]
+    x = x[x != 0.]
+    y = y[y != 0.]
+    return x, y, combi
+
 def plot_fringes_onFP(q, BL_index, keyvals, fdict, mask=None):
     """Plot fringes on the FP with imshow and with a scatter plot."""
     if type(keyvals['NSTEP']) is tuple:
@@ -375,10 +383,7 @@ def plot_fringes_onFP(q, BL_index, keyvals, fdict, mask=None):
     frame = keyvals['FRAME']
     image = fdict['IMAGES'][BL_index]
 
-    # Remove the 8 thermometers:
-    combi = combi[x != 0.]
-    x = x[x != 0.]
-    y = y[y != 0.]
+    x, y, combi = remove_thermometers(x, y, combi)
 
     if mask is None:
         mask = make_mask2D_thermometers_TD()

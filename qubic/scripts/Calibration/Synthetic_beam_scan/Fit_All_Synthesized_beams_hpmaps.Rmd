@@ -29,6 +29,7 @@ import qubic.lin_lib as ll
 import qubic.demodulation_lib as dl
 import qubic.io
 import qubic.sb_fitting as sbfit
+from qubicpack.pixel_translation import make_id_focalplane, plot_id_focalplane, tes2pix, tes2index
 
 from pysimulators import FitsArray
 
@@ -266,7 +267,8 @@ qTD = qubic.QubicInstrument(dTD)
 ```
 
 ```{python}
-for i in range(256):
+FPidentity = make_id_focalplane()
+for i in range(248):
     print('pix', i+1, 'FP', qTD.detector.index[i], 
           'TES', FPidentity[qTD.detector.index[i]].TES,
          'ASIC', FPidentity[qTD.detector.index[i]].ASIC,
@@ -276,8 +278,22 @@ for i in range(256):
 
 ```{python}
 PIXNum = 93#242#123 #1-256. Numbering of the Healpix Files
-PIXq = PIXNum - 1 #0-255. Numbering for qubicsoft
-TESNum, ASICNum = FPidentity[qTD.detector.index[PIXq]].TES, FPidentity[qTD.detector.index[PIXq]].ASIC
+if PIXNum in [4,36,68,100]:
+    raise ValueError('Thermometer')
+else:
+    if PIXNum > 128:
+        TESNum, ASIC = PIXNum - 128, 2
+    else: 
+        TESNum, ASIC = PIXNum , 1
+    
+# busco index # tes2index
+PIXq = tes2pix(TESNum, ASIC) - 1 
+FPidx = tes2index(TESNum, ASIC)
+print(PIXq, FPidx)
+#index2qubicsoft
+
+#FPidx = qTD.detector.index[PIXq] #Take FP index from QubicInstrument
+#TESNum, ASICNum = FPidentity[FPidx].TES, FPidentity[FPidx].ASIC
 
 ```
 
@@ -310,6 +326,7 @@ Look at the maps...
 
 ```{python}
 hj = 0
+figure(figsize = (8,8))
 xlabel(r'n$_{x}$ = $\sin{\theta} \cos{\phi}$', fontsize = 15)
 ylabel(r'n$_{y}$ = $\sin{\theta} \sin{\phi}$', fontsize = 15)
 scatter(np.sin(th_tes_all)*np.cos(ph_tes_all), 
@@ -431,6 +448,13 @@ print('Done Flat in {:.2f} minutes'.format((time.time()-t1)/60))
 
     
 print('All done in {} minutes'.format((time.time()-t00)/60) )
+```
+
+```{python}
+figure(figsize=(8,8))
+plot(qTD.detector[PIXq].center[0,0],qTD.detector[PIXq].center[0,1],'ks',ms=20)
+qTD.detector.plot(fill=False)
+
 ```
 
 ```{python}

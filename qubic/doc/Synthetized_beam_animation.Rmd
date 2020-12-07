@@ -173,7 +173,7 @@ plt.title('Focal plane')
 # Simulation
 plt.subplot(132)
 plt.axis('off')
-hp.gnomview(sb[index_q], min=0, max=1e5, rot=(0, 90, 180), reso=20, sub=(132), 
+hp.gnomview(sb[index_q], min=0, max=1e5, rot=(0, 90, 180), reso=12, sub=(132), 
             title='Simulation', cbar=False)
 hp.graticule()
 # for p in range(npeaks):
@@ -187,7 +187,7 @@ hp.graticule()
 # Measurement
 plt.subplot(133)
 plt.axis('off')
-hp.gnomview(sb_measured[index_q], min=0, max=1e4, rot=(0, 0, 0), reso=15, sub=(133), 
+hp.gnomview(sb_measured[index_q], min=0, max=1e4, rot=(0, 0, 0), reso=12, sub=(133), 
             title='Measurement', cbar=False)
 hp.graticule()
 ```

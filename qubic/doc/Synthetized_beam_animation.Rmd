@@ -208,7 +208,7 @@ def animate(det):
     
     
     # Simulation
-    hp.gnomview(sb[det], min=0, max=1e5, rot=(0, 90), reso=30, sub=(222), 
+    hp.gnomview(sb[det], min=0, max=1e5, rot=(0, 90, 180), reso=30, sub=(222), 
                 title='Simulation', cbar=False)
     hp.graticule()
     for p in range(npeaks):
@@ -221,7 +221,7 @@ def animate(det):
         hp.visufunc.projtext(th2+0.02, ph2+0.02, str(p), color='r', fontsize=12) 
     
     # Measurement
-    hp.gnomview(sb_measured[det], rot=(0, 0, 180), reso=15, sub=(223), 
+    hp.gnomview(sb_measured[det], rot=(0, 0, 0), reso=15, sub=(223), 
                 title='Measurement', cbar=False)
     hp.graticule()
 

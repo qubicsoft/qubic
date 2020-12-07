@@ -201,7 +201,6 @@ class QubicInstrument(Instrument):
             ordering = np.array([ordering, ordering + np.max(ordering) + 1], ordering.dtype)
             quadrant = np.array([quadrant, quadrant + 4], quadrant.dtype)
             efficiency = np.array([efficiency, efficiency])
-        # focal_length = self.calibration.get('optics')['focal length']
         vertex = np.concatenate([vertex, np.full_like(vertex[..., :1],
                                                       -self.optics.focal_length)], -1)
 
@@ -267,7 +266,6 @@ class QubicInstrument(Instrument):
         optics = Optics()
         calib = self.calibration.get('optics')
         optics.components = calib['components']
-        # optics.focal_length = calib['focal length']
         optics.focal_length = d['focal_length']
         optics.polarizer = bool(polarizer)
         self.optics = optics
@@ -393,7 +391,7 @@ class QubicInstrument(Instrument):
                       cc[indf][2])
             else:
                 print('No neutral density filter')
-        # compnents before the horn plane
+        # components before the horn plane
         ib2b = names.index(b'ba2ba')
         g[:ib2b] = gp[:ib2b, None] * S_horns_eff * omega_det * (nu / c) ** 2 \
                    * sec_beam * dnu
@@ -475,7 +473,7 @@ class QubicInstrument(Instrument):
                 print(names[ics], ', T=', temperatures[ics],
                       'K, P = {0:.2e} W'.format(P_phot[ics].max()),
                       ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ics]).max()) + '  W/sqrt(Hz)')
-            ## dicroic 
+            # Dicroic
             if self.config == 'FI':
                 idic = ics + 1
                 T = temperatures[idic]
@@ -879,7 +877,7 @@ class QubicInstrument(Instrument):
     @staticmethod
     def _peak_angles(scene, nu, position, synthbeam, horn, primary_beam):
         """
-        Compute the angles and intensity of the syntheam beam peaks which
+        Compute the angles and intensity of the synthetic beam peaks which
         accounts for a specified energy fraction.
 
         """

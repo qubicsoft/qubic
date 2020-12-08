@@ -1,5 +1,5 @@
 [general]
-focal length = 0.3
+# focal length = 0.3 # This parameter has been put in the dictionary.
 
 [components]
 #name T transmission emissivity nstate_polarization

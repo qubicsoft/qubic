@@ -116,7 +116,8 @@ class QubicInstrument(Instrument):
             self.FRBW = filter_relative_bandwidth
         if self.debug:
             print('FRBW = ', self.FRBW, 'dnu = ', filter_relative_bandwidth)
-        ## Choose the relevant Optics calibration file  
+
+        ## Choose the relevant Optics calibration file
         self.nu1 = 150e9
         self.nu1_up = 150e9 * (1 + self.FRBW / 1.9)
         self.nu1_down = 150e9 * (1 - self.FRBW / 1.9)
@@ -171,22 +172,24 @@ class QubicInstrument(Instrument):
         if self.debug:
             print('primary_shape', primary_shape)
             print("d['primbeam']", d['primbeam'])
-        calibration = QubicCalibration(d)
         self.config = d['config']
+        calibration =  QubicCalibration(d)
         self.calibration = calibration
-        layout = self._get_detector_layout(detector_ngrids, detector_nep,
-                                           detector_fknee, detector_fslope,
-                                           detector_ncorr, detector_tau)
-        Instrument.__init__(self, layout)
+
         self.ripples = ripples
         self.nripples = nripples
         self._init_beams(primary_shape, secondary_shape, filter_nu)
         self._init_filter(filter_nu, filter_relative_bandwidth)
         self._init_horns(filter_nu)
-        self._init_optics(polarizer)
+        self._init_optics(polarizer, d)
         self._init_synthbeam(synthbeam_dtype, synthbeam_peak150_fwhm)
         self.synthbeam.fraction = synthbeam_fraction
         self.synthbeam.kmax = synthbeam_kmax
+
+        layout = self._get_detector_layout(detector_ngrids, detector_nep,
+                                           detector_fknee, detector_fslope,
+                                           detector_ncorr, detector_tau)
+        Instrument.__init__(self, layout)
 
     def _get_detector_layout(self, ngrids, nep, fknee, fslope, ncorr, tau):
         shape, vertex, removed, ordering, quadrant, efficiency = \
@@ -198,9 +201,8 @@ class QubicInstrument(Instrument):
             ordering = np.array([ordering, ordering + np.max(ordering) + 1], ordering.dtype)
             quadrant = np.array([quadrant, quadrant + 4], quadrant.dtype)
             efficiency = np.array([efficiency, efficiency])
-        focal_length = self.calibration.get('optics')['focal length']
         vertex = np.concatenate([vertex, np.full_like(vertex[..., :1],
-                                                      -focal_length)], -1)
+                                                      -self.optics.focal_length)], -1)
 
         def theta(self):
             return np.arctan2(
@@ -260,11 +262,11 @@ class QubicInstrument(Instrument):
                     filter_nu ** 2 / c ** 2
             self.horn.radeff = self.horn.radius / np.sqrt(kappa)
 
-    def _init_optics(self, polarizer):
+    def _init_optics(self, polarizer, d):
         optics = Optics()
         calib = self.calibration.get('optics')
         optics.components = calib['components']
-        optics.focal_length = calib['focal length']
+        optics.focal_length = d['focal_length']
         optics.polarizer = bool(polarizer)
         self.optics = optics
 
@@ -389,7 +391,7 @@ class QubicInstrument(Instrument):
                       cc[indf][2])
             else:
                 print('No neutral density filter')
-        # compnents before the horn plane
+        # components before the horn plane
         ib2b = names.index(b'ba2ba')
         g[:ib2b] = gp[:ib2b, None] * S_horns_eff * omega_det * (nu / c) ** 2 \
                    * sec_beam * dnu
@@ -471,7 +473,7 @@ class QubicInstrument(Instrument):
                 print(names[ics], ', T=', temperatures[ics],
                       'K, P = {0:.2e} W'.format(P_phot[ics].max()),
                       ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ics]).max()) + '  W/sqrt(Hz)')
-            ## dicroic 
+            # Dicroic
             if self.config == 'FI':
                 idic = ics + 1
                 T = temperatures[idic]
@@ -875,7 +877,7 @@ class QubicInstrument(Instrument):
     @staticmethod
     def _peak_angles(scene, nu, position, synthbeam, horn, primary_beam):
         """
-        Compute the angles and intensity of the syntheam beam peaks which
+        Compute the angles and intensity of the synthetic beam peaks which
         accounts for a specified energy fraction.
 
         """
@@ -982,7 +984,6 @@ class QubicInstrument(Instrument):
             uvec = position / np.sqrt(np.sum(position ** 2, axis=-1))[..., None]
             thetaphi = Cartesian2SphericalOperator('zenith,azimuth')(uvec)
             sr = - area / position[..., 2] ** 2 * np.cos(thetaphi[..., 0]) ** 3
-            sr = np.abs(sr)  # This is temporary to fix an issue with new .fits files for detarray
             tr = np.sqrt(secondary_beam(thetaphi[..., 0], thetaphi[..., 1]) *
                          sr / secondary_beam.solid_angle)[..., None]
             const = 2j * np.pi * nu / c

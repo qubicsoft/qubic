@@ -145,8 +145,11 @@ class QubicCalibration(object):
                         'components': np.empty(0, dtype=dtype)}
             parser = ConfigParser()
             parser.read(self.optics)
-            keys = 'focal length',
-            out = dict((key, parser.getfloat('general', key)) for key in keys)
+            # ### The 2 next lines are commented as there is nothing in the section
+            # ### "general" in the optics calibration file. Focal length has been moved to the dictionary.
+            # keys = 'focal length',
+            # out = dict((key, parser.getfloat('general', key)) for key in keys)
+            out = {}
             raw = parser.items('components')
             components = np.empty(len(raw), dtype=dtype)
             for i, r in enumerate(raw):

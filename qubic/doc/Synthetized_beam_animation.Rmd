@@ -114,32 +114,6 @@ for TES in range(248):
 
 ```
 
-### Measured beam
-
-Get the measurement and order them as the simulations.
-
-```{python}
-path = '/home/lmousset/QUBIC/Qubic_work/Calibration/datas/Synthetic_beams/2019-avril/synth_beam_150'
-
-sb_measured = np.zeros_like(sb)
-for PIX in range(1, 256):
-    # Convert to Qubic soft numerotation
-    if PIX < 129:
-        TES = PIX
-        ASIC = 1
-    else:
-        TES = PIX - 128
-        ASIC = 2
-    print(PIX, TES, ASIC)
-    if TES not in [4, 36, 68, 100]:
-        x, y, FP_index, index_q = scal.TES_Instru2coord(TES, ASIC, q, frame='ONAFP')
-    
-    sb_measured[index_q, :] = sbfit.get_hpmap(PIX, path)
-    if PIX == 93:
-        hp.gnomview(sb_measured[index_q, :], reso=9, min=0., max=1e5)
-plt.show()
-```
-
 ### Coordinates of the TES in ONAFP
 
 ```{python}
@@ -158,12 +132,12 @@ To compare simu/measurement, it looks we have to do the following (not sure):
 TES, ASIC = 6, 1
 x0, y0, FP_index, index_q = scal.TES_Instru2coord(TES, ASIC, q, frame='ONAFP')
 
-plt.subplots(1, 3, figsize=(12, 7))
+plt.subplots(1, 2, figsize=(12, 7))
 plt.suptitle(f'TES {TES} - ASIC {ASIC} - Index_q {index_q}')
 
 # Focal plane
-plt.subplot(131)
-plt.scatter(xONAFP, yONAFP, marker='s', s=50, alpha=0.3)
+plt.subplot(121)
+plt.scatter(xONAFP, yONAFP, marker='s', s=100, alpha=0.3)
 plt.xlabel('X_ONAFP')
 plt.ylabel('Y_ONAFP')
 plt.plot(x0, y0, 'ro')
@@ -171,9 +145,9 @@ plt.axis('square')
 plt.title('Focal plane')
 
 # Simulation
-plt.subplot(132)
+plt.subplot(122)
 plt.axis('off')
-hp.gnomview(sb[index_q], min=0, max=1e5, rot=(0, 90, 180), reso=12, sub=(132), 
+hp.gnomview(sb[index_q], min=0, max=1e5, rot=(0, 90, 180), reso=12, sub=(122),
             title='Simulation', cbar=False)
 hp.graticule()
 # for p in range(npeaks):
@@ -184,12 +158,7 @@ hp.graticule()
 #     hp.visufunc.projtext(th-0.02, ph-0.02, str(p), color='w', fontsize=10) 
 #     hp.visufunc.projtext(th2+0.02, ph2+0.02, str(p), color='r', fontsize=10) 
 
-# Measurement
-plt.subplot(133)
-plt.axis('off')
-hp.gnomview(sb_measured[index_q], min=0, max=1e4, rot=(0, 0, 0), reso=12, sub=(133), 
-            title='Measurement', cbar=False)
-hp.graticule()
+
 ```
 
 ### Animation to see the beam moving
@@ -208,48 +177,49 @@ def animate(det):
     
     
     # Simulation
-    hp.gnomview(sb[det], min=0, max=1e5, rot=(0, 90, 180), reso=30, sub=(222), 
+    hp.gnomview(sb[det], min=0, max=1e5, rot=(0, 90, 180), reso=20, sub=(122), 
                 title='Simulation', cbar=False)
     hp.graticule()
-    for p in range(npeaks):
-        th = theta[det, p]
-        ph = phi[det, p]
-        th2 = theta_order[det, p]
-        ph2 = phi_order[det, p]
-#         hp.visufunc.projscatter(th, ph, color='w', marker='+')
-        hp.visufunc.projtext(th-0.02, ph-0.02, str(p), color='w', fontsize=12) 
-        hp.visufunc.projtext(th2+0.02, ph2+0.02, str(p), color='r', fontsize=12) 
     
-    # Measurement
-    hp.gnomview(sb_measured[det], rot=(0, 0, 0), reso=15, sub=(223), 
-                title='Measurement', cbar=False)
-    hp.graticule()
-
+    # pixel with Highest intensity
+    nside = hp.get_nside(sb[det])
+    pix_max = np.argmax(sb[det])
+    lon, lat = hp.pix2ang(hp.get_nside(sb[det]), pix_max, lonlat=True)
+    hp.visufunc.projscatter(lon, lat, color='r', marker='+', s=500, lonlat=True, label='Highest pixel')
+    plt.legend()
+    # Numbering of the peaks (absolute and ordered by intensity)
+#     for p in range(npeaks):
+#         th = theta[det, p]
+#         ph = phi[det, p]
+#         th2 = theta_order[det, p]
+#         ph2 = phi_order[det, p]
+# #         hp.visufunc.projscatter(th, ph, color='w', marker='+')
+#         hp.visufunc.projtext(th-0.02, ph-0.02, str(p), color='w', fontsize=12) 
+#         hp.visufunc.projtext(th2+0.02, ph2+0.02, str(p), color='r', fontsize=12) 
+    
 
 def init():
 #     ax1.set_title('Synthetic beam on the sky')
     ax1.axis('square')
     ax2.axis('off')
-    ax3.axis('off')
-    ax4.axis('off')
-    
-    
 
-fig, axs = plt.subplots(2, 2, figsize=(12, 12))
-ax1, ax2, ax3, ax4 = np.ravel(axs)
+    
+fig, axs = plt.subplots(1, 2, figsize=(12, 8))
+ax1, ax2 = np.ravel(axs)
 ax1.scatter(xONAFP, yONAFP, marker='s', s=200, alpha=0.3)
 ax1.set_xlabel('X_ONAFP')
 ax1.set_ylabel('Y_ONAFP')
 
-det0 = 130
+det0 = 238
 x0 = xONAFP[det0]
 y0 = yONAFP[det0]
 point, = ax1.plot(x0, y0, 'ro')
-steps = np.arange(det0, det0+20, 2)
+steps = np.arange(det0, det0+10, 1)
 
-ani = FuncAnimation(fig, animate, steps, init_func=init, interval=1000, blit=True, repeat=False)
+anim = FuncAnimation(fig, animate, steps, init_func=init, interval=1000, blit=True, repeat=False)
 
-
+# Save a .gif
+# anim.save('./animation_beam.gif', writer='imagemagick')
 ```
 
 ```{python}

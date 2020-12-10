@@ -72,8 +72,9 @@ def cut_data(t0, tf, t_data, data):
 
     return t_data_cut, data_cut
 
-def find_right_period(guess, t_data, data_oneTES):
-    ppp = np.linspace(guess - 1.5, guess + 1.5, 250)
+
+def find_right_period(guess, t_data, data_oneTES, delta=1.5, nb=250):
+    ppp = np.linspace(guess - delta, guess + delta, nb)
     rms = np.zeros(len(ppp))
     for i in range(len(ppp)):
         xin = t_data % ppp[i]
@@ -84,6 +85,7 @@ def find_right_period(guess, t_data, data_oneTES):
 
     return ppp, rms, period
 
+    
 def make_diff_sig(params, t, wt, data):
     """
     Make the difference between the TODs and the simulation.
@@ -535,4 +537,59 @@ def plot_sum_diff_fringes(keyvals, fdict, mask=None, lim=2, cmap='bwr'):
 
     return
 
+
+def find_t0(tfold, dfold, period, nconfigs=6, doplot=False):
+    """
+    Find time where configuration change in the square modulation.
+    """
+
+    # Average the signal over all periods
+    msignal = np.mean(dfold, axis=0)
+    # calculate the derivative and find where it is high
+    dsignal = np.abs(np.gradient(msignal))
+    md, sd = ft.meancut(dsignal, 3)
+    thr = np.abs(dsignal - md) > (3 * sd)
+
+    # Let's find clusters of high derivatives:
+    # each time we take the first high derivative element
+    t_change = tfold[thr]
+    expected_stable_time = period / nconfigs
+    start_times = []
+    incluster = 0
+    for i in range(len(t_change)):
+        if incluster == 0:
+            start_times.append(t_change[i])
+            incluster = 1
+        if i > 0:
+            if (t_change[i] - t_change[i - 1]) > (expected_stable_time * 0.6):
+                incluster = 0
+    start_times = np.array(start_times)
+
+    # Now we take the median of all start_times modulo period/nconfigs
+    t0 = np.median(start_times % (period / nconfigs))
+
+    if doplot:
+        plt.subplot(1, 2, 2)
+        plt.plot(tfold, msignal, label='Mean over periods')
+        plt.plot(tfold, dsignal, label='Derivative')
+        plt.plot(tfold[thr], dsignal[thr], 'ro', label='High Derivative (>3sig)')
+        for i in range(len(start_times)):
+            if i == 0:
+                lab = 'Found Start times'
+            else:
+                lab = None
+            plt.axvline(x=start_times[i], ls='--', label=lab, alpha=0.5)
+        for i in range(6):
+            if i == 0:
+                lab = 'Median Start Time (modulo period/6)'
+            else:
+                lab = None
+            plt.axvline(x=t0 + i * period / nconfigs, color='r', ls='--', label=lab)
+        plt.legend(framealpha=0.2)
+        plt.title('t0 determination on Reference TES')
+        plt.xlabel('Time in Period')
+        plt.ylabel('Signal averaged over periods')
+        plt.tight_layout()
+
+    return t0
 

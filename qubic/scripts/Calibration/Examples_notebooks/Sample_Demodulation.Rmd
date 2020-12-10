@@ -1,0 +1,611 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.6.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Here is a basic demodulation
+Hopefully you have everything installed now and acces to the data
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(9,4.5))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack.qubicfp import qubicfp
+import qubic.fibtools as ft
+# import qubic.plotters as p
+# import qubic.lin_lib as ll
+import qubic.demodulation_lib as dl
+# import satorchipy as stpy
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+# import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import datetime as dt
+# import pickle
+from importlib import reload
+import scipy.misc
+import pprint
+from scipy.signal import chirp, find_peaks, peak_widths
+import qubic.sb_fitting as sbfit
+import healpy as hp
+from qubic.io import write_map
+```
+
+<!-- #region -->
+# I usually copy the text from elog to describe the data analysed here
+
+
+## Setting the directory containing data
+
+Here are the vailable data:
+### 2020-07-30
+scan map of the sky
+
+##    Preparing the scanning:
+
+
+    T regulation ON: at 320mK on MMR3 ch2
+    Offset tuned
+    V_bias = 2.8V
+    I_FLL=160
+    7h38UT: start of scans at 150GHz  with script ScanMapFast2:
+        delta_az = 40deg
+        delta_el = 20deg
+        el_center = 50deg: yesterday the 1K fridge cycle finished when el ~ 55deg
+        nscans = 101
+        speed = VE5
+        Cal source modulated at 1Hz with 0.5V offset and 0.5V amplitude (sine modulation) to avoid saturations of TESs
+    1K fridge cyce finished at about 15h35UT, before the end of the scan
+<!-- #endregion -->
+
+# find and load your dataset
+
+```{python}
+day = '2020-07-30'
+#day= '2020-11-10'
+keyword = '*ScanFast*'
+#keyword= '*test'
+data_dir = '/sps/hep/qubic/Data/Calib-TD/'+day+'/'
+dirs = np.sort(glob.glob(data_dir+keyword))
+print(dirs)
+```
+
+# Select the file if there are multiple that meet your criteria
+
+```{python}
+ifile = 0
+thedir = dirs[ifile]
+print(thedir)
+
+#note here is how you load the data in memory!
+a = qubicfp()
+a.read_qubicstudio_dataset(thedir)
+```
+
+# examine the keys like this
+
+```{python}
+print(a.hk.keys())
+a.hk.keys()
+
+print("The keys in this dictionary are:\n")
+for k in a.hk['CALSOURCE-CONF'].keys():
+    print(k, a.hk['CALSOURCE-CONF'][k])
+```
+
+# The following plot is useful for scan map demodulation
+note the time is plotted in hours here
+
+you can see the scanning in az-el and time 
+
+```{python}
+rc('figure',figsize=(12,12))
+
+time_azel = a.timeaxis(datatype='hk',axistype='pps')
+az = a.azimuth()
+el = a.elevation()
+
+t_src = a.calsource()[0]
+data_src = a.calsource()[1]
+
+subplot(2,2,1)
+plot((time_azel-t0)/3600, az,',')
+xlabel('Time [h]')
+ylabel('Az')
+subplot(2,2,2)
+plot((time_azel-t0)/3600, el,',')
+xlabel('Time [h]')
+ylabel('El')
+ylim(30,70)
+
+subplot(2,2,3)
+plot(az*np.cos(np.radians(el)), el,',')
+xlabel('Az')
+ylabel('El')
+
+subplot(2,2,4)
+plot((t_src-t0)/3600, data_src,',')
+xlabel('Time [h]')
+ylabel('Src Data')
+```
+
+# now plot the TOD and the calibration source
+dl.renorm is useful since the calsource and tod have different values
+
+def renorm(ar):
+
+    return (ar - np.mean(ar)) / np.std(ar)
+
+```{python}
+rc('figure',figsize=(16,12))
+#choose your favourite TES. Usually asic 1 has good SNR. TES 94, 93, 76 are popular but may be saturated
+TESNum = 94
+asic = 1
+tod = a.timeline(TES=TESNum, asic=asic)
+tt = a.timeaxis(axistype='pps', asic=asic)
+
+plot(t_src, dl.renorm(data_src), label='Calsource', color='tab:orange')
+plot(tt, dl.renorm(tod), label='Data TES {} ASIC {}'.format(TESNum,asic), color='tab:blue')
+xlabel('Unix Epoch (s)')
+
+legend(loc='upper left')
+title(thedir)
+```
+
+# Filtering
+we want to preserve the calsource signal and harmonics while filtering out pulse tubes at 1.724
+
+
+```{python}
+"""here we plot the frequency power spectrum. Want to highlight the source signal 
+but filter out pulse tube frequency"""
+font = {'family' : 'normal',
+        'weight' : 'normal',
+        'size'   : 20}
+rc('font', **font)
+
+rc('figure',figsize=(16,8))
+#### Filtering
+reload(ft)
+
+#load the modulation frequency from the HK data
+thefreqmod = a.hk['CALSOURCE-CONF']['Mod_freq']
+
+#filtering parameters
+period = 1./ thefreqmod
+lowcut = 0.5
+highcut = 20
+
+#plot limits
+xmin = 0.01
+xmax = 90.
+ymin = 1e0
+ymax = 1e13
+
+############ Power spectrum RAW plot
+spectrum_f, freq_f = ft.power_spectrum(tt, tod, rebin=True)
+plot(freq_f, f.gaussian_filter1d(spectrum_f,1), label='Raw Data')
+yscale('log')
+xscale('log')
+xlabel('Frequency [Hz]')
+ylabel('Power Spectrum')
+xlim(xmin, xmax)
+ylim(ymin, ymax)
+#title('TES {} ASIC {}'.format(TESNum,asic))
+
+########## New Power spectrum filtered and plotted
+#number of harmonics
+nharm = 10
+#notch filter at each harmonic of the PTs
+notch = np.array([[1.724, 0.004, nharm]])
+
+newdata = ft.filter_data(tt, tod, lowcut, highcut, notch=notch, rebin=True, verbose=True, order=5)
+spectrum_f2, freq_f2 = ft.power_spectrum(tt, newdata, rebin=True)
+plot(freq_f2, f.gaussian_filter1d(spectrum_f2,1), label='Filtered data', alpha=0.9)
+
+#plot highcut low cut frdeqs
+plot([lowcut, lowcut],[ymin,ymax],'k', lw=3, label='Bandpass')
+plot([highcut, highcut],[ymin,ymax],'k', lw=3)
+
+#plot calsource harmonics
+plot([1./period,1./period],[ymin,ymax],'k--', lw=3, alpha=0.3, label='Calsource Harmonics')
+for i in range(10):
+    plot([1./period*i,1./period*i],[ymin,ymax],'k--', lw=3, alpha=0.3)
+
+#plot the pulse tube harmoncs
+plot([notch[0,0],notch[0,0]], [ymin,ymax],'m:', lw=3, label='Pulse Tube Harmonics')
+for i in range(nharm):
+    plot([notch[0,0]*(i+1),notch[0,0]*(i+1)], [ymin,ymax],'m:', lw=3)
+legend(loc='center left')
+
+tight_layout()
+
+#savefig("fpowspec.png", bbox_inches='tight')
+```
+
+# to see the filtered data as TOD
+
+```{python}
+figure(figsize=(16,8))
+plot(t_src, (data_src-np.mean(data_src))/np.std(data_src), color='tab:orange', label='calibration Source', alpha=0.5)
+plot(tt, (tod-np.mean(tod))/np.std(tod), label='Raw Data', color= 'tab:blue', alpha=0.5)
+plot(tt, (newdata-np.mean(newdata))/np.std(newdata), color= 'tab:green', label='Filtered Data', alpha=0.5)
+xlabel('Unix Epoch (s)')
+
+ylim(-5,5)
+legend()
+```
+
+an open research question... be carefull
+# calsource and data synchronisation
+try to zoom in on some strong signal events + the start and endpoints
+
+```{python}
+
+#make some start and endpoints for plotting
+endpt2  = max(tt) + 2
+endpt1  = max(tt) - 3
+startp1 = min(tt) - 1
+startp2 = min(tt) + 4
+
+figure(figsize=(16,12))
+#zoom on signal
+subplot(2,2,3)
+plot(t_src, (data_src-np.mean(data_src))/np.std(data_src), color='tab:orange', label='Measured Source Signal', alpha=0.5)
+plot(tt, (newdata-np.mean(newdata))/np.std(newdata),color= 'tab:green',  label='Filtered Data', alpha=0.5)
+ylim(-5,5)
+xlim(1.596100115e+09, 1.596100125e+09)
+legend(loc='lower right')
+#zoom on signal
+subplot(2,2,4)
+plot(t_src, (data_src-np.mean(data_src))/np.std(data_src), color='tab:orange', label='Measured Source Signal', alpha=0.5)
+plot(tt, (newdata-np.mean(newdata))/np.std(newdata), color= 'tab:green', label='Filtered Data', alpha=0.5)
+ylim(-5,5)
+xlim(1.59611721e+09, 1.59611722e+09)
+legend(loc='lower right')
+#start point
+figure(figsize=(16,6))
+subplot(1,2,1)
+plot(t_src, (data_src-np.mean(data_src))/np.std(data_src), color='tab:orange', label='Measured Source Signal', alpha=0.5)
+plot(tt, (newdata-np.mean(newdata))/np.std(newdata), color= 'tab:green',  label='Filtered Data', alpha=0.5)
+ylim(-5,5)
+xlim(startp1, startp2)
+legend(loc='lower right')
+#endpoint
+subplot(1,2,2)
+plot(t_src, (data_src-np.mean(data_src))/np.std(data_src), color='tab:orange', label='Measured Source Signal', alpha=0.5)
+plot(tt, (newdata-np.mean(newdata))/np.std(newdata),color= 'tab:green', label='Filtered Data', alpha=0.5)
+ylim(-5,5)
+xlim(endpt1, endpt2)
+legend(loc='lower right')
+```
+
+# demodulate 1 TES
+I suggest to use quadrature demodulation to start, it gets a good result. I can share another script if you want to find a better demodulation. Or if you know how to improve these methods, please tell!
+
+the calsource and instrument data do not have the same data shape so we have to interpolate (there is probably room for improvement here according to the chat from 'data-reduction')
+
+some links - http://web.mit.edu/6.02/www/s2012/handouts/14.pdf - https://ict.iitk.ac.in/wp-content/uploads/EE320A-Principles-Of-Communication-CommunicationSystems-4ed-Haykin.pdf
+
+```{python}
+##### Filtering to be used same as above?
+lowcut = 0.5
+highcut = 20
+nharm = 10
+notch = np.array([[1.724, 0.004, nharm]]) #should probably keep same notch and filters the same as filter
+fourier_cuts = [lowcut, highcut, notch]
+freq_mod = a.hk['CALSOURCE-CONF']['Mod_freq']
+
+# internpolate
+src = [tt, np.interp(tt, t_src, data_src)]
+#demod in quadrature, should have no time dependance but increased RMS noise
+newt_demod, amp_demod, errors_demod = dl.demodulate_methods([tt, newdata],
+                                                            freq_mod, 
+                                                            src_data_in=src,
+                                                            method='demod_quad', remove_noise=False,
+                                                            fourier_cuts=fourier_cuts)
+
+```
+
+```{python}
+print(newt_demod.shape, amp_demod.shape, errors_demod.shape)
+```
+
+# make a flat map!
+
+
+```{python}
+#for quad demod
+newaz = np.interp(newt_demod, time_azel, az)
+newel = np.interp(newt_demod, time_azel, el)
+
+azmin = min(az)
+azmax = max(az)
+elmin = min(el)
+elmax = max(el)
+naz = 101
+nel = 101
+#map for quad demod
+mymap, azmap, elmap = dl.coadd_flatmap(amp_demod, newaz, newel, 
+                                    filtering=None,
+                                    azmin=azmin, azmax=azmax, 
+                                    elmin=elmin, elmax=elmax, 
+                                    naz=naz,nel=nel)
+```
+
+```{python}
+figure(figsize=(16,8))
+
+
+imshow(mymap, aspect='equal', origin='lower',
+       extent=[azmin, azmax, elmin, elmax])
+title("Quadrature")
+colorbar()
+```
+
+# check the demodulation on TOD
+
+
+```{python}
+plot(tt, (tod-np.mean(tod))/np.std(tod), label='Raw Data', color='tab:blue', lw=3, alpha=0.5)
+plot(t_src, (data_src-np.mean(data_src))/np.std(data_src), color='tab:orange', lw=3, label='Calibration Source Signal')
+plot(tt, (newdata-np.mean(newdata))/np.std(newdata), label='Filtered Data', lw=3, color='tab:green')
+plot(newt_demod, (amp_demod-np.mean(amp_demod))/np.std(amp_demod), '--', color='r', lw=3,  label='Quadrature Demodulation')
+
+
+xlim(1596117208, 1596117224)
+ylabel("Normalised Signal")
+xlabel("Unix Epoch (s)")
+legend(loc='upper right')
+#ylim(-1.5e6, 1.5e6)
+ylim(-5,5)
+```
+
+# how to save the flat map
+the flat maps require that you also ave the az and el data
+make a directory. It must have 'Flat' as a subdirectory
+we should eventua
+
+# then test load the flat map
+make note to use dirfile without the 'Flat'
+i think get_flatmap could be changed to work with asic specified.
+
+```{python}
+print("saving flat map for single map, TESNum {} ASIC {}".format(TESNum, asic))
+FitsArray(mymap).save('/sps/hep/qubic/Users/jdmurphy/synthdata/tutorial_data/Flat/imgflat_TESNum_{}.fits'.format(TESNum))
+
+"""save the az el files for flats..."""
+FitsArray(azmap).save('/sps/hep/qubic/Users/jdmurphy/synthdata/tutorial_data/Flat/azimuth.fits')
+FitsArray(elmap).save('/sps/hep/qubic/Users/jdmurphy/synthdata/tutorial_data/Flat/elevation.fits')
+
+```
+
+```{python}
+dirfile = '/sps/hep/qubic/Users/jdmurphy/synthdata/tutorial_data'
+
+flatmap, az, el = sbfit.get_flatmap(TESNum, dirfile, azmin = azmin, azmax=azmax)
+AZ, EL = np.meshgrid(az, el)
+
+figure(figsize=(12,16))
+imshow(flatmap, aspect='equal', origin='lower',
+          extent=[np.min(AZ), np.max(AZ), np.min(EL), np.max(EL)])
+```
+
+# Healpix map
+use demodulated signal from before
+
+```{python}
+"""seems okay, now try healpix and TEST before save files"""
+#make map
+hpmapa = dl.scan2hpmap(128, newaz*np.cos(np.radians(50)), newel-50, amp_demod)
+#plot map
+hp.mollview(hpmapa)
+hp.gnomview(hpmapa,reso=10,max=np.max(hpmapa)/5,min=0)
+#save a healpix map
+path = '/sps/hep/qubic/Users/jdmurphy/synthdata/tutorial_data/Healpix/'
+write_map(path+'healpix_'+'TESNum_'+str(TESNum)+'.fits', hpmapa)
+```
+
+```{python}
+#testload and plot
+directory = '/sps/hep/qubic/Users/jdmurphy/synthdata/tutorial_data'
+hpmap = sbfit.get_hpmap(TESNum, directory)
+hp.gnomview(hpmap, reso=10, title='TES #{}'.format(TESNum),cmap='jet',max=np.max(hpmap)/5,min=0)
+```
+
+# Great! Congratulations! Have a beer and celebrate!
+now thats one tes done, we can just use loops to do for all tes on both ASICS!
+
+
+# to do for all TES
+carefull with the demodulation, sometimes the the asics will have different demodulate lengths which may cause an issue here. the simple solution is to demodulate each asic separately and combine later
+
+doing this part can probably be improved. I think with jupyter only one core is used. Maybe somebody already knows how to multithread with jupyter, please tell!
+
+```{python}
+"""USE TO DEMOD BOTH ASICS
+
+This crashes on this dataset, revert to alternative method"""
+reload(dl)
+### Now do all maps with the same cuts
+
+
+##### Filtering to be used should keep the same as before
+# lowcut = 0.5
+# highcut = 20
+# nharm = 10
+# notch = np.array([[1.724, 0.004, nharm]])
+# fourier_cuts = [lowcut, highcut, notch]
+
+amps_demod = np.zeros((256, len(amp_demod)))
+
+#loop over each asic
+for asic in [1,2]:
+    #load time series data for the asic
+    tt = a.timeaxis(axistype='pps', asic=asic)
+    #build a structure form for dl.demodulate
+    #interpolate the source to match tt
+    src = [tt, np.interp(tt, t_src, data_src)]
+    #loop over each TES on an asic
+    for i in range(128):
+        print('Mapmaking for Asic {} TES {}'.format(asic,i+1))
+        #load TOD for TES on the ASIC
+        tod = a.timeline(TES=i+1,asic=asic)
+        #demodulate
+        print('- Demodulation')
+        newt_demod, amps_demod[i+128*(asic-1),:], errors_demod = dl.demodulate_methods([tt, tod],
+                                                                    freq_mod, 
+                                                                    src_data_in=src,
+                                                                    method='demod_quad', remove_noise=True,
+                                                                   fourier_cuts=fourier_cuts)
+
+```
+
+```{python}
+# """here we check the demodulation sizes if you demodualted each asic separately """
+# print("amp demod size asic1", len(amp_demodasic1))
+
+# print("amp demod size asic2", len(amp_demodasic2))
+
+#if uneven - 
+
+# #need to cut one of these to size of other
+# amps_demod = np.vstack([amps_demoda1, amps_demoda2[:,:len(amps_demoda1[0,:])]])
+# print(amps_demod.shape)
+```
+
+# now make all flatmaps
+
+
+```{python}
+"""create maps"""
+time_azel = a.timeaxis(datatype='hk',axistype='pps')
+az = a.azimuth()
+el = a.elevation()
+
+newaz = np.interp(newt_demod, time_azel, az)
+newel = np.interp(newt_demod, time_azel, el)
+azmin = min(az)
+azmax = max(az)
+elmin = min(el)
+elmax = max(el)
+naz = 101
+nel = 101
+nmaps = 256
+mapdata = np.zeros((256, nel, naz))
+
+
+mapdata, azmap, elmap = dl.coadd_flatmap(amps_demod, newaz, newel, 
+                                                                filtering=None,
+                                                                azmin=azmin, azmax=azmax, 
+                                                                elmin=elmin, elmax=elmax, 
+                                                                naz=naz,nel=nel)
+print(mapdata.shape)
+#print(newt_demod.shape, time_azel.shape, az.shape)
+
+```
+
+```{python}
+"""save the maps
+you can see the numbering here doesn't really reflect the real naming of TES we use"""
+
+for i in range(256):
+    print("saving flat map for tes {}".format(i+1))
+    FitsArray(mapdata[i,:,:]).save('/sps/hep/qubic/Users/jdmurphy/synthdata/tutorial_data/Flat/imgflat_TESNum_{}.fits'.format(i+1))
+    
+"""save the az el files for flats..."""
+
+FitsArray(azmap).save('/sps/hep/qubic/Users/jdmurphy/synthdata/tutorial_data/Flat/azimuth.fits')
+FitsArray(elmap).save('/sps/hep/qubic/Users/jdmurphy/synthdata/tutorial_data/Flat/elevation.fits')   
+```
+
+```{python}
+"""load flat maps"""
+tesar = np.linspace(1, 256, 256)
+flatmaps = np.zeros([256, 101, 101])
+
+for i, tes in enumerate(tesar):
+
+    flatmap, az, el = sbfit.get_flatmap(int(tes), dirfile, azmin = azmin, azmax=azmax)
+    flatmaps[i, :, :] = flatmap
+print(flatmaps.shape)
+
+#contrast plot
+rc('figure',figsize=(16,8))
+nnx = 5
+nny=2
+k=0
+nplots = int(256/nnx/nny)+1
+
+elmin = min(el)
+elmax = max(el)
+azmin = min(az)
+azmax = max(az)
+
+for k in range(nplots):
+    figure()
+    for i in range(nnx*nny):
+        ites = i+k*nnx*nny
+        if ites < 256:
+            subplot(nny,nnx,i+1)
+            mm, ss = ft.meancut(flatmaps[ites,:,:],3)
+            
+            imshow(flatmaps[ites,:,:], aspect='equal', origin='lower',
+                   extent=[np.min(az), np.max(az), np.min(el), np.max(el)],
+            vmin=mm-3*ss, vmax=mm+50*ss)
+
+            title('TES {} 2020-08-02'.format(int(tesar[ites])), fontsize=16)
+            #plt.savefig('/sps/hep/qubic/Users/jdmurphy/synthdata/tutorial_data/imagescontrast/jj{}.png'.format(k), bbox_inches='tight')
+    tight_layout()
+    show()
+```
+
+# Now save, load and test the healpix
+again the naming system here isn't smart.
+takes a while
+
+```{python}
+"""for each demodulated signal make a hpmap and save it"""
+
+path = '/sps/hep/qubic/Users/jdmurphy/synthdata/tutorial_data/Healpix/'
+
+for tes in np.linspace(0,255, 256, dtype=int):
+    tesnum=str(tes+1)
+    print("tes idx, tesnum ", tes, tes+1)
+    hpmap = dl.scan2hpmap(128, newaz*np.cos(np.radians(50)), newel-50, amps_demod[tes,:])
+    write_map(path+'healpix_'+'TESNum_'+tesnum+'.fits', hpmap)
+```
+
+```{python}
+"""test loading and plotting healpix maps"""
+
+directory = '/sps/hep/qubic/Users/jdmurphy/synthdata/tutorial_data'
+tes =10
+hpmap = sbfit.get_hpmap(tes, directory)
+hp.gnomview(hpmap, reso=10, title='TES #{}'.format(tes),cmap='jet',max=np.max(hpmap)/5,min=0)
+
+print(hpmap.shape)
+```
+
+```{python}
+
+```

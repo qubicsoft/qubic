@@ -172,12 +172,9 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     # instantiate minimizer
     if chi2 is None:
         chi2 = MyChi2(x, y, covar, functname, extra_args=extra_args)
-    # nohesse=False
+        # nohesse=False
     elif chi2.__name__ is 'MyChi2_nocov':
         chi2 = chi2(x, y, covar, functname)
-
-    ### Test:
-    #bla = chi2(guess)
 
     # variables
     ndim = np.size(guess)
@@ -739,6 +736,9 @@ def simsig_fringes(t, stable_time, params):
     thesim = exponential_filter1d(sim_init_shift, ctime / dt, mode='wrap')
 
     return np.array(thesim).astype(np.float64)
+
+
+
 
 
 def fold_data(time, dd, period, lowcut, highcut, nbins,

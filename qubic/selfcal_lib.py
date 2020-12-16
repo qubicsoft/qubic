@@ -33,8 +33,7 @@ def plot_baseline(q, bs):
     return
 
 
-def scatter_plot_FP(q, x, y, FP_signal, frame, s=None, title=None, unit='[W / Hz]', cbar=True,
-    **kwargs):
+def scatter_plot_FP(q, x, y, FP_signal, frame, figsize=(8, 8), s=None, title=None, unit='[W / Hz]', cbar=True, **kwargs):
     """
     Make a scatter plot of the focal plane.
     Parameters
@@ -57,12 +56,12 @@ def scatter_plot_FP(q, x, y, FP_signal, frame, s=None, title=None, unit='[W / Hz
     kwargs: any kwarg for plt.scatter()
 
     """
-
+    fig = plt.figure(figsize=figsize)
     if s is None:
         if q.config == 'TD':
-            s = 180
+            s = ((fig.get_figwidth() / 35 * fig.dpi) ** 2)
         else:
-            s = 40
+            s = ((fig.get_figwidth() / 70 * fig.dpi) ** 2)
     plt.scatter(x, y, c=FP_signal, marker='s', s=s, **kwargs)
     if cbar:
         clb = plt.colorbar()
@@ -71,6 +70,7 @@ def scatter_plot_FP(q, x, y, FP_signal, frame, s=None, title=None, unit='[W / Hz
     plt.ylabel(f'Y_{frame} [m]', fontsize=14)
     plt.axis('square')
     plt.title(title, fontsize=14)
+    return
 
 
 def pcolor_plot_FP(q, x, y, FP_signal, frame, title=None, unit='[W / Hz]', **kwargs):
@@ -106,6 +106,7 @@ def pcolor_plot_FP(q, x, y, FP_signal, frame, title=None, unit='[W / Hz]', **kwa
     plt.ylabel(f'Y_{frame} [m]', fontsize=14)
     plt.axis('square')
     plt.title(title, fontsize=14)
+    return
 
 
 def plot_horn_and_FP(q, x, y, FP_signal, frame, s=None, title=None, unit='[W / Hz]', **kwargs):

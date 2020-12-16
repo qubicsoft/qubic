@@ -11,7 +11,7 @@ from qubic import selfcal_lib as scal
 
 
 # ============== Get data ==============
-def get_data(datafolder, ASIC, TES==28, doplot=True, src_data=False, 
+def get_data(datafolder, ASIC, TES=28, doplot=True, src_data=False, 
     subtract_t0=True):
     """
     Get the TODs for one ASIC.

@@ -31,7 +31,7 @@ def get_data(datafolder, ASIC, TES=28, doplot=True, src_data=False,
     -------
     Time and signal for all TES in one ASIC. If src_data is True: will also return the  source time and signal
     """
-    ASIC = str(ASIC)
+    ASIC = int(ASIC)
 
     # Qubicpack object
     a = qubicfp()

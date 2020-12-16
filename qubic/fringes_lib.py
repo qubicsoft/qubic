@@ -45,10 +45,10 @@ def get_data(datafolder, ASIC, TES=28, doplot=True, src_data=False,
     if subtract_t0:
         t_data -= t0
     if src_data:
-    	t_src = a.calsource()[0]
+        t_src = a.calsource()[0]
         if subtract_t0:
             t_src -= t0
-    	d_src = a.calsource()[1]
+        d_src = a.calsource()[1]
 
     if doplot:
         fig, axs = plt.subplots(1, 2, figsize=(15, 3))
@@ -63,9 +63,9 @@ def get_data(datafolder, ASIC, TES=28, doplot=True, src_data=False,
         plt.show()
 
     if src_data:
-    	return t_data, data, t_src, d_src
+        return t_data, data, t_src, d_src
     else:
-	    return t_data, data
+        return t_data, data
 
 def cut_data(t0, tf, t_data, data):
     """

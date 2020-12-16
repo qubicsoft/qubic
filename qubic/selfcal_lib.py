@@ -15,11 +15,13 @@ __all__ = ['Model_Fringes_QubicSoft', 'Model_Fringes_Maynooth']
 
 
 # ========== Plot functions =============
-def plot_horns(q):
-    # xhorns = q.horn.center[:, 0]
-    # yhorns = q.horn.center[:, 1]
-    # plt.plot(xhorns, yhorns, 'ro')
-    q.horn.plot()
+def plot_horns(q, simple=False):
+    if simple:
+        xhorns = q.horn.center[:, 0]
+        yhorns = q.horn.center[:, 1]
+        plt.plot(xhorns, yhorns, 'ro')
+    else:
+        q.horn.plot()
     plt.xlabel('X_GRF [m]', fontsize=14)
     plt.ylabel('Y_GRF [m]', fontsize=14)
     return
@@ -31,7 +33,8 @@ def plot_baseline(q, bs):
     return
 
 
-def scatter_plot_FP(q, x, y, FP_signal, frame, s=None, title=None, unit='[W / Hz]', **kwargs):
+def scatter_plot_FP(q, x, y, FP_signal, frame, s=None, title=None, unit='[W / Hz]', cbar=True,
+    **kwargs):
     """
     Make a scatter plot of the focal plane.
     Parameters
@@ -61,8 +64,9 @@ def scatter_plot_FP(q, x, y, FP_signal, frame, s=None, title=None, unit='[W / Hz
         else:
             s = 40
     plt.scatter(x, y, c=FP_signal, marker='s', s=s, **kwargs)
-    clb = plt.colorbar()
-    clb.ax.set_title(unit)
+    if cbar:
+        clb = plt.colorbar()
+        clb.ax.set_title(unit)
     plt.xlabel(f'X_{frame} [m]', fontsize=14)
     plt.ylabel(f'Y_{frame} [m]', fontsize=14)
     plt.axis('square')
@@ -207,7 +211,7 @@ def get_horn_coordinates_ONAFP(q):
     return center_ONAFP
 
 
-def TES_Instru2coord(TES, ASIC, q, frame='ONAFP'):
+def TES_Instru2coord(TES, ASIC, q, frame='ONAFP', verbose=True):
     """
     From (TES, ASIC) numbering on the instrument to (x,y) coordinates in ONAFP or GRF frame.
     Returns also the focal plane index.
@@ -230,10 +234,12 @@ def TES_Instru2coord(TES, ASIC, q, frame='ONAFP'):
     if TES in [4, 36, 68, 100]:
         raise ValueError('This is a thermometer !')
     FP_index = tes2index(TES, ASIC)
-    print('FP_index =', FP_index)
+    if verbose:
+        print('FP_index =', FP_index)
 
     index_q = np.where(q.detector.index == FP_index)[0][0]
-    print('Index_q =', index_q)
+    if verbose:
+        print('Index_q =', index_q)
 
     centerGRF = q.detector.center[q.detector.index == FP_index][0]
     xGRF = centerGRF[0]
@@ -242,16 +248,18 @@ def TES_Instru2coord(TES, ASIC, q, frame='ONAFP'):
     if frame not in ['GRF', 'ONAFP']:
          raise ValueError('The frame is not valid.')
     elif frame == 'GRF':
-        print('X_GRF = {:.3f} mm, Y_GRF = {:.3f} mm'.format(xGRF * 1e3, yGRF * 1e3))
+        if verbose:
+            print('X_GRF = {:.3f} mm, Y_GRF = {:.3f} mm'.format(xGRF * 1e3, yGRF * 1e3))
         return xGRF, yGRF, FP_index, index_q
     elif frame == 'ONAFP':
         xONAFP = - yGRF
         yONAFP = xGRF
-        print('X_ONAFP = {:.3f} mm, Y_ONAFP = {:.3f} mm'.format(xONAFP * 1e3, yONAFP * 1e3))
+        if verbose:
+            print('X_ONAFP = {:.3f} mm, Y_ONAFP = {:.3f} mm'.format(xONAFP * 1e3, yONAFP * 1e3))
         return xONAFP, yONAFP, FP_index, index_q
 
 
-def get_TES_Instru_coords(q, frame='ONAFP'):
+def get_TES_Instru_coords(q, frame='ONAFP', verbose=True):
     """
     Same as TES_Instru2coord() but loop on all TES.
     """
@@ -269,12 +277,14 @@ def get_TES_Instru_coords(q, frame='ONAFP'):
 
     for ASIC in range(1, nASICS + 1):
         for TES in range(1, 129):
-            print(f'\n ASIC {ASIC} - TES {TES}')
+            if verbose:
+                print(f'\n ASIC {ASIC} - TES {TES}')
             if TES not in thermos:
                 i = (TES - 1) + 128 * (ASIC - 1)
-                x[i], y[i], FP_index[i], index_q[i]= TES_Instru2coord(TES, ASIC, q, frame=frame)
+                x[i], y[i], FP_index[i], index_q[i]= TES_Instru2coord(TES, ASIC, q, frame=frame, verbose=verbose)
             else:
-                print('Thermometer !')
+                if verbose:
+                    print('Thermometer !')
 
     return x, y, FP_index, index_q
 

@@ -28,13 +28,13 @@ synthbeam_kmax=8
 synthbeam_peak150_fwhm=0.39268176 # in degree
 ripples=False
 nripples=0
+focal_length=0.3
 
 ########## Calibration files, should not be edited #####################@
 
 optics='CalQubic_Optics_v3_CC_FFF.txt'
 primbeam='CalQubic_PrimBeam_vx.fits' # X=2 gaussian, 3 fitted, 4 multi frequency splines
-detarray='CalQubic_DetArray_P87_CC.fits' # this is only for TD.
-#detarray='CalQubic_DetArray_CC.fits'
+detarray='CalQubic_DetArray_v4_CC.fits'
 hornarray='CalQubic_HornArray_CC.fits'
 
 ############################################# Scene ################################

@@ -61,16 +61,34 @@ def cut_data(t0, tf, t_data, data):
     They can be None if you do not want to cut the beginning or the end.
     """
     if t0 is None:
-        t0 = 0
-
+        t0 = t_data[0]
     if tf is None:
-        tf = np.max(t_data)
+        tf = t_data[-1]
 
-    ok = (t_data > t0) & (t_data < tf)
-    t_data_cut = t_data[ok] - t0
+    ok = (t_data >= t0) & (t_data <= tf)
+    t_data_cut = t_data[ok]
     data_cut = data[:, ok]
 
     return t_data_cut, data_cut
+
+
+def cut_data_Nperiods(t0, tf, t_data, data, period):
+    """
+    Cut the TODs from t0 to tf with an integer number of periods
+    They can be None if you do not want to cut the beginning or the end.
+    """
+    if t0 is None:
+        t0 = t_data[0]
+    if tf is None:
+        tf = t_data[-1]
+
+    nper = np.floor((tf - t0) / period).astype(int)
+    tend = t0 + nper * period
+    ok = (t_data >= t0) & (t_data <= tend)
+    t_data_cut = t_data[ok]
+    data_cut = data[:, ok]
+
+    return t_data_cut, data_cut, nper
 
 
 def find_right_period(guess, t_data, data_oneTES, delta=1.5, nb=250):
@@ -85,7 +103,7 @@ def find_right_period(guess, t_data, data_oneTES, delta=1.5, nb=250):
 
     return ppp, rms, period
 
-    
+
 def make_diff_sig(params, t, wt, data):
     """
     Make the difference between the TODs and the simulation.
@@ -113,6 +131,12 @@ def make_combination(param_est, verbose=0):
     if verbose>0:
         print('Check:', amps[2], amps[4])
     return (amps[0]+amps[3]+amps[5])/3 + amps[2] - amps[1] - amps[4]
+
+
+def weighted_sum(vals, errs, coeffs):
+    thesum = np.sum(coeffs * vals)
+    thesigma = np.sqrt(np.sum(coeffs**2 * errs**2))
+    return thesum, thesigma
 
 
 def analyse_fringesLouise(datafolder, t0=None, tf=None, wt=5.,
@@ -569,7 +593,7 @@ def find_t0(tfold, dfold, period, nconfigs=6, doplot=False):
     t0 = np.median(start_times % (period / nconfigs))
 
     if doplot:
-        plt.subplot(1, 2, 2)
+        plt.figure(figsize=(10, 8))
         plt.plot(tfold, msignal, label='Mean over periods')
         plt.plot(tfold, dsignal, label='Derivative')
         plt.plot(tfold[thr], dsignal[thr], 'ro', label='High Derivative (>3sig)')

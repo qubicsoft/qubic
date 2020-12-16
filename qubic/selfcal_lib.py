@@ -264,8 +264,8 @@ def get_TES_Instru_coords(q, frame='ONAFP'):
     nTES = nASICS * 128
     x = np.zeros(nTES)
     y = np.zeros(nTES)
-    FP_index = np.zeros(nTES)
-    index_q = np.zeros(nTES)
+    FP_index = np.zeros(nTES, dtype=int)
+    index_q = np.zeros(nTES, dtype=int)
 
     for ASIC in range(1, nASICS + 1):
         for TES in range(1, 129):

@@ -19,20 +19,22 @@ import qubic.fibtools as ft
 
 
 # ============== Functions ==============
-def get_data(dirs, nf, asic, tes=28, doplot=True):
-    asic = str(asic)
+def get_data(dirs, nf, asic, tes=28, doplot=True, src_data=False):
     thedir = dirs[nf]
 
     # Qubicpack object
     a = qubicfp()
     a.verbosity = 0
     a.read_qubicstudio_dataset(thedir)
-    data = a.azel_etc(TES=None)
 
-    # Signal for one TES
-    t0 = data['t_data ' + asic][0]
-    t_data = data['t_data ' + asic] - t0
-    data = data['data ' + asic]
+    # Data form the object
+    data  = a.timeline_array(asic=asic)
+    t_data = a.timeaxis(datatype='science',asic=asic)
+    t0 = t_data[0]
+    t_data -= t0
+    if src_data:
+    	t_src = a.calsource()[0] - t0
+    	d_src = a.calsource()[1]
 
     if doplot:
         fig, axs = plt.subplots(1, 2, figsize=(15, 3))
@@ -46,7 +48,10 @@ def get_data(dirs, nf, asic, tes=28, doplot=True):
         axs[1].set_xlim(0, 40)
         plt.show()
 
-    return thedir, t_data, data
+    if src_data:
+    	return thedir, t_data, data, t_src, d_src
+    else:
+	    return thedir, t_data, data
 
 def cut_data(t0, tf, t_data, data):
     if t0 is None:
@@ -81,8 +86,8 @@ def make_spectrum(t_data, data_oneTES, period):
 
     return spectrum_f, freq_f
 
-def find_right_period(guess, t_data, data_oneTES):
-    ppp = np.linspace(guess - 1.5, guess + 1.5, 250)
+def find_right_period(guess, t_data, data_oneTES, delta = 1.5, nb=250):
+    ppp = np.linspace(guess - delta, guess + delta, nb)
     rms = np.zeros(len(ppp))
     for i in range(len(ppp)):
         xin = t_data % ppp[i]
@@ -109,7 +114,7 @@ def analyse_fringes(dirs, m, w=None, t0=None, tf=None, stable_time=3.,
                     lowcut=0.001, highcut=10, nbins=120,
                     notch=np.array([[1.724, 0.005, 10]]),
                     tes_check=28, param_guess=[0.1, 0., 1, 1, 1, 1, 1, 1], 
-                    verbose=0, median=False, read_data = None, silent=False):
+                    verbose=0, median=False, read_data = None, silent=False, forceperiod=None):
     res_w = np.zeros(256)
     res_fit = np.zeros(256)
     param_est = np.zeros((256, 8))
@@ -126,8 +131,12 @@ def analyse_fringes(dirs, m, w=None, t0=None, tf=None, stable_time=3.,
 
         # Find the true period
         if asic == 1:
-            ppp, rms, period = find_right_period(6 * stable_time, t_data_cut, data_cut[tes_check - 1, :])
+            if forceperiod is None:
+                ppp, rms, period = find_right_period(6 * stable_time, t_data_cut, data_cut[tes_check - 1, :])
+            else:
+                period = forceperiod
             if verbose:
+                print('forceperiod: ',forceperiod)
                 print('period:', period)
                 print('Expected : ', 6 * stable_time)
 
@@ -160,7 +169,7 @@ def analyse_fringes(dirs, m, w=None, t0=None, tf=None, stable_time=3.,
                                           folded[tes - 1, :]),
                                     bounds=([0., -2, -2, -2, -2, -2, -2, -2],
                                             [1., 2, 2, 2, 2, 2, 2, 2]),
-                                    verbose=verbose
+                                    verbose=False
                                     )
             param_est[TESindex, :] = fit.x
             res_fit[TESindex] = make_combination(param_est[TESindex, :])

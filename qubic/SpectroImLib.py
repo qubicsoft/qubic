@@ -36,10 +36,12 @@ def create_TOD(d, pointing, x0, verbose=False):
     return TOD, maps_convolved
 
 
-def create_acquisition_operator_REC(pointing, d, nf_sub_rec):
+def create_acquisition_operator_REC(pointing, d, nf_sub_rec, verbose=False, instrument=None):
     # scene
     s = qubic.QubicScene(d)
     if d['nf_sub'] == 1:
+        if verbose :
+            print('Making a QubicInstrument.')
         q = qubic.QubicInstrument(d)
         # one subfreq for recons
         _, nus_edge, _, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, nf_sub_rec, d['filter_relative_bandwidth'])
@@ -47,7 +49,12 @@ def create_acquisition_operator_REC(pointing, d, nf_sub_rec):
 
         return arec
     else:
-        q = qubic.QubicMultibandInstrument(d)
+        if instrument is None:
+            if verbose :
+                print('Making a QubicMultibandInstrument.')
+            q = qubic.QubicMultibandInstrument(d)
+        else:
+            q = instrument
         # number of sub frequencies for reconstruction
         _, nus_edge, _, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, nf_sub_rec, d['filter_relative_bandwidth'])
         # Operator for Maps Reconstruction
@@ -70,9 +77,9 @@ def get_hitmap(instrument, scene, pointings, threshold=0.01):
     return rot_beams
 
 
-def reconstruct_maps(TOD, d, pointing, nf_sub_rec, x0=None):
+def reconstruct_maps(TOD, d, pointing, nf_sub_rec, x0=None, verbose=False, instrument=None):
     _, nus_edge, nus, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, nf_sub_rec, d['filter_relative_bandwidth'])
-    arec = create_acquisition_operator_REC(pointing, d, nf_sub_rec)
+    arec = create_acquisition_operator_REC(pointing, d, nf_sub_rec, verbose=verbose, instrument=instrument)
     cov = arec.get_coverage()
     maps_recon, nit, error = arec.tod2map(TOD, d, cov=cov)
     if not d['verbose']:

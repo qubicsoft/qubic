@@ -794,7 +794,7 @@ class fit_multi_fringe_ana:
         # Phase of each baseline 
         phi_bs = {'name':'phi_bs', 'type':'b', 'size':len(self.baselines),
                   'initvals':np.zeros(len(self.baselines)), 
-                  'vmin':-np.pi, 'vmax':np.pi, 
+                  'vmin':-np.pi*0, 'vmax':np.pi, 
                   'fixed':np.zeros(len(self.baselines),dtype=int)}
         # ------------------------------------------------------------------------
         ###########################################################################
@@ -815,7 +815,7 @@ class fit_multi_fringe_ana:
         # Phase common to equivalency type
         phi_eq = {'name':'phi_eq', 'type':'g', 'size':self.neq, 
                   'initvals':np.zeros(self.neq), 
-                  'vmin':-np.pi, 'vmax':np.pi, 
+                  'vmin':-np.pi*0, 'vmax':np.pi, 
                   'fixed':np.zeros(self.neq,dtype=int)}
         ###########################################################################
 
@@ -852,7 +852,7 @@ class fit_multi_fringe_ana:
             if verbose:
                 print(' Eq Type = {}'.format(i))
                 print('    Example fringe: {}'.format(possible_fringe))
-                print('    Angle = {0:6.3f} Length= {1:6.3f}'.format(np.degrees(mythinit), mylengthinit))
+                print('    Angle = {0:6.3f} Length= {1:6.3f}'.format(mythinit, mylengthinit))
 
         ### Now we need to make arrays with [fwhm, amps, phi_bs, angles, lengthes, phi_eq]
         dictp = {'fwhm':fwhm, 'amps':amps, 'phi_bs':phi_bs, 'angle_eq':angles, 'length_eq':lengthes, 'phi_eq':phi_eq}
@@ -896,11 +896,15 @@ class fit_multi_fringe_ana:
                 newparsdict[k]['initvals'] = init_values[ii:ii+nb]
             ii += nb
         if verbose:
+            print('----------------------------------------------------------------------------------')
+            print('---------------------------     Parameters Values    -----------------------------')
             for k in newparsdict.keys():
                 print('----------------------------------------------------------------------------------')
-                print(k)
-                print(newparsdict[k]['initvals'])
-                print(newparsdict[k]['fixed'])
+                if k in ['phi_bs', 'angle_eq', 'phi_eq']:
+                    print(k, np.degrees(newparsdict[k]['initvals']))
+                else:
+                    print(k, newparsdict[k]['initvals'])
+                print('fixed:',newparsdict[k]['fixed'])
             print('----------------------------------------------------------------------------------')
         return newparsdict
                 
@@ -1035,6 +1039,32 @@ The New Chi2 below does that:
 We first work with simulated data. The true fringes are obtained from the model with some parameters. We then apply intercalibrations and add noise
 
 ```{python}
+num_fringes = [2,4,5,9,10]
+# num_fringes = [2,4,5]
+# num_fringes = list(np.arange(len(all_bs)))
+
+### Get corresponding baselines and data
+data_fringes = []
+mybs = []
+for i in range(len(num_fringes)): 
+    mybs.append(all_bs[num_fringes[i]])
+    myfringe = read_my_fringe(mybs[i], all_files, all_bs)
+    data_fringes.append(myfringe)
+print(mybs)
+
+
+### Instanciate multifringe object ##############
+fit_multi_ana = fit_multi_fringe_ana(mybs, q, mask, verbose=False, 
+                                     eq_common_phase=True, fix_fwhm=True, 
+                                     fix_lengthes=False, fix_all_amps=False)
+
+
+### Initiating input and other parameters
+print()
+fit_initvals, fit_range, fit_fixed, fit_pname, fit_ptype=fit_multi_ana.pars_dict2array(fit_multi_ana.param_fit_dict, verbose=False)
+
+
+
 ############################### Simulations ###########################
 ### We take the init parameters and create a True dataset
 true_params = fit_initvals
@@ -1197,12 +1227,11 @@ class MyChi2_Intercal_LM:
         #print('Data will be reshape as {}'.format(self.reshape_inputs))
 
 
-    def __call__(self, *pars, verbose=False):
+    def __call__(self, *pars, verbose=False, extra_args = None):
         valmodel = self.functname(self.x, pars, extra_args=self.extra_args)
         newvalmodel = np.reshape(valmodel, self.reshape_inputs)
-        newdata = np.reshape(self.y, self.reshape_inputs)
-        
-        allA = np.ones(self.reshape_inputs[1])
+        newdata = np.reshape(self.y, self.reshape_inputs)        
+#         allA = np.ones(self.reshape_inputs[1])
         sA = np.ones(self.reshape_inputs[1])
         allA[self.mask], sA[self.mask] = get_intercal(newvalmodel[:, self.mask], newdata[:, self.mask])
         delta = newvalmodel-newdata/allA
@@ -1231,9 +1260,164 @@ class MyChi2_Intercal_LM:
     
 def get_intercal(newvalmodel, newdata):
     allA = np.mean(newdata/newvalmodel, axis=0)
+    allA[0] = 1
     sA = 1./np.sum(newvalmodel**2, axis=0)
     return allA, sA
 
+
+
+def dothefit(bs, fringes, mask, q,
+             guess=None,
+            verbose=False, 
+            eq_common_phase=True, fix_fwhm=True, 
+            fix_one_amp=True, fix_all_amps=False,
+            fix_lengthes=False, fit_intercals=False, 
+             explore_guess=None,
+             print_level=0, 
+             doplot=False):
+    ### Instanciate multifringe object ##############
+    ok = mask == 1
+    fit_multi_ana = fit_multi_fringe_ana(bs, q, mask, verbose=verbose, 
+                                        eq_common_phase=eq_common_phase, fix_fwhm=fix_fwhm, 
+                                        fix_one_amp=fix_one_amp, fix_all_amps=fix_all_amps,
+                                        fix_lengthes=fix_lengthes)
+    fit_initvals, fit_range, fit_fixed, fit_pname, fit_ptype=fit_multi_ana.pars_dict2array(fit_multi_ana.param_fit_dict, verbose=False)
+    
+    if guess is None:
+        if verbose:
+            print('No initial guess was given, we use the theoretical values as a guess')
+        guess =  fit_initvals
+    else:
+        if verbose:
+            print('An input initial guess was given, we will use it for fitting')
+    if verbose:
+        print()
+        print('===============================================================')
+        print('Initial Guess:')
+        dict_guess = fit_multi_ana.pars_array2dict(guess, verbose=True)
+        print('===============================================================')
+    
+
+    # Define general likelihood
+    my_y = np.nan_to_num(np.ravel(fringes))
+    errs = my_y*0+1
+    errs[my_y == 0] = 1e10
+    myll = mcmc.LogLikelihood(xvals = np.zeros(len(my_y)), yvals = my_y, errors=errs, 
+                              p0=guess, 
+                              model=fit_multi_ana.flat_data, 
+                              fixedpars=fit_fixed, 
+                              flatprior=fit_range)
+    
+    # If fit_intercals is True we need to define a specific chi2
+    if fit_intercals:
+        if verbose:
+            print('We will fit intercals')
+        mychi2 = MyChi2_Intercal_LM(myll.xvals, myll.yvals, myll.covar, myll.model, 
+                                    extra_args=[len(fringes),mask])
+    else:
+        if verbose:
+            print('We will not fit intercals')
+        mychi2 = None
+    
+    
+    ################## Explore Guess Space ######################################
+    if explore_guess is not None:
+        ntry = explore_guess[0]
+        frac = explore_guess[1]
+        print('Exploring possible guesses with {} random trials with {} around p0'.format(ntry, frac))
+        all_guesses = myll.random_explore_guess(ntry=ntry, fraction=frac)
+        chi2guess = np.zeros(ntry)
+        for i in range(ntry):
+            fitm, fitmcov, chi2fct = myll.minuit(all_guesses[i], chi2=mychi2, 
+                                        verbose=False, print_level=0,
+                                        extra_args=[len(fringes),mask], return_chi2fct=True)
+            chi2guess[i] = chi2fct(all_guesses[i])
+            print('Trial {}: chi2={}'.format(i, chi2guess[i]))
+    ############################################################################
+    
+    
+    
+    ######################### MINUIT ###########################################
+    fitm, fitmcov, chi2fct = myll.minuit(guess, chi2=mychi2, 
+                                verbose=verbose, print_level=print_level,
+                                extra_args=[len(fringes),mask], return_chi2fct=True)
+    print('Initial chi2:', chi2fct(guess, extra_args=[len(fringes),mask]))
+    print('Final chi2:', chi2fct(fitm, extra_args=[len(fringes),mask]))
+    if verbose:
+        print('Minuit done')
+        print()
+        print('Fit Minuit:')
+        fitpars = fit_multi_ana.pars_array2dict(fitm, verbose=True)
+    ### Guess Fringes
+    guess_fringes = fit_multi_ana(guess)
+    ### Fitted Fringes
+    fitted_fringes = fit_multi_ana(fitm)
+    ############################################################################
+
+
+    ##### Intercalibrations ####################################################
+    if fit_intercals:
+        allA, sA = get_intercal(np.reshape(fitted_fringes, (len(fringes), 17*17)), 
+                        np.reshape(my_y, (len(fringes), 17*17)))
+        intercals = np.reshape(allA, (17,17))
+        if doplot:
+            rc('figure', figsize=(16,3))
+            figure()
+            mm, ss = ft.meancut(intercals[ok],3)
+            imshow(intercals, vmin=mm-3*ss, vmax=mm+3*ss, cmap='bwr')
+            colorbar()
+    else:
+        intercals = 1
+    
+    if doplot:
+        rc('figure', figsize=(16,3 * len(fringes)))
+        maxi = 1
+        interp = 'Gaussian'
+        figure()
+        for i in range(len(fringes)):   
+            nn = num_fringes[i]
+
+            subplot(len(fringes),6,i*6+1)
+            imshow(np.nan_to_num(fringes[i]*mask), cmap='bwr', interpolation=interp,vmin=-maxi, vmax=maxi)
+            title('BS:{} EqType: {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
+            ft.qgrid()
+            colorbar()
+
+            subplot(len(fringes), 6, i*6+2)
+            imshow(np.nan_to_num(fringes[i]/intercals*mask), cmap='bwr', interpolation=interp,vmin=-maxi, vmax=maxi)
+            title('IntercCal BS: {} - EqType {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
+            ft.qgrid()
+            colorbar()
+
+            subplot(len(fringes), 6, i*6+3)
+            imshow(np.nan_to_num(guess_fringes[i]*mask), cmap='bwr', interpolation=interp,vmin=-maxi, vmax=maxi)
+            title('Guess: {} - EqType {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
+            ft.qgrid()
+            colorbar()
+
+            subplot(len(fringes), 6, i*6+4)
+            imshow(np.nan_to_num(fitted_fringes[i]*mask), cmap='bwr', interpolation=interp,vmin=-maxi, vmax=maxi)
+            title('Fitted {} - EqType {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
+            ft.qgrid()
+            colorbar()
+          
+            resid = (fringes[i]/intercals-fitted_fringes[i])
+            subplot(len(fringes), 6, i*6+5)
+            imshow(np.nan_to_num(resid*mask), cmap='bwr', interpolation=interp,vmin=-maxi, vmax=maxi)
+            title('Residuals {} - EqType {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
+            ft.qgrid()
+            colorbar()
+
+            mm, ss = ft.meancut(resid[ok],3)
+            subplot(len(fringes), 6, i*6+6)
+            hist(resid[ok], bins=30, range=[mm-5*ss, mm+5*ss], label='{0:5.3f} +/- {1:5.3f}'.format(mm, ss))
+            xlabel('Residuals {} - EqType {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
+            legend()
+
+        tight_layout()
+
+    
+    return fitm
 
 
 ```
@@ -1242,196 +1426,79 @@ def get_intercal(newvalmodel, newdata):
 reload(ft)
 reload(mcmc)
 
-### Guess fringes
-# guess_params = fit_initvals
-guess_params = fitm_nointercal
-guess_fringes = fit_multi_ana(guess_params)
+
+num_fringes = [2,4,5,9,10]
+# num_fringes = [2,4,5]
+# num_fringes = [2,3,4,5,9,10]
+# num_fringes = list(np.arange(len(all_bs)))
+
+### Get corresponding baselines and data
+data_fringes = []
+mybs = []
+for i in range(len(num_fringes)): 
+    mybs.append(all_bs[num_fringes[i]])
+    myfringe = read_my_fringe(mybs[i], all_files, all_bs)
+    data_fringes.append(myfringe)
+print(mybs)
 
 
 ### Instanciate multifringe object ##############
-fit_multi_ana_simu = fit_multi_fringe_ana(mybs, q, mask, verbose=False, 
-                                          eq_common_phase=True, fix_fwhm=True, 
-                                          fix_one_amp=True, fix_all_amps=False,
-                                          fix_lengthes=False)
+fit_multi_ana = fit_multi_fringe_ana(mybs, q, mask, verbose=False, 
+                                     eq_common_phase=True, fix_fwhm=True, 
+                                     fix_lengthes=False, fix_all_amps=False)
 
 
-
+### Initiating input and other parameters
 print()
-print('===============================================================')
-print('Initial Guess:')
-dict_guess = fit_multi_ana_simu.pars_array2dict(guess_params, verbose=True)
-fit_initvals_simu, fit_range_simu, fit_fixed_simu, fit_pname_simu, fit_ptype_simu=fit_multi_ana_simu.pars_dict2array(fit_multi_ana_simu.param_fit_dict, verbose=False)
-print('===============================================================')
+fit_initvals, fit_range, fit_fixed, fit_pname, fit_ptype=fit_multi_ana.pars_dict2array(fit_multi_ana.param_fit_dict, verbose=False)
 
 
-### Now the fit ##########################################
+############################### Simulations ###########################
+### We take the init parameters and create a True dataset
+true_params = fit_initvals
+# true_params = fitm_nointercal
 
-# Define general likelihood
-my_y = np.nan_to_num(np.ravel(data_fringes))
-errs = my_y*0+1
-errs[my_y == 0] = 1e10
-myll = mcmc.LogLikelihood(xvals = np.zeros(len(my_y)), yvals = my_y, errors=errs, 
-                          p0=guess_params, 
-                          model=fit_multi_ana_simu.flat_data, 
-                          fixedpars=fit_fixed_simu, 
-                          flatprior=fit_range_simu)
+true_fringes = fit_multi_ana(true_params)
 
-### Define the chi2
-mychi2 = MyChi2_Intercal_LM(myll.xvals, myll.yvals, myll.covar, myll.model, 
-                            extra_args=[len(data_fringes),mask])
+### Now we take some random intercalibs
+true_intercals = (1+(np.random.rand(17,17)-0.5)*5.)*mask
 
-### Guess parameters
-######### p0 ###############################################################
-# theguess = guess_params
-############################################################################
-
-######## Random exploration ################################################
-ntry = 50
-many_guess_params = myll.random_explore_guess(ntry=ntry, chi2=MyChi2_Intercal_LM, extra_args=[len(data_fringes),mask])
-
-allch2 = np.zeros(ntry)
-for i in range(ntry):
-    fitm_simu_test, fitmcov_simu_test = myll.minuit(many_guess_params[i,:], chi2=MyChi2_Intercal_LM, 
-                                                      verbose=False, print_level=0, nsplit=1,
-                                                      extra_args=[len(data_fringes),mask])
-    allch2[i] = mychi2(*fitm_simu_test)
-    print(i, allch2[i])
-theguess = many_guess_params[np.argmin(allch2),:]
-###########################################################################
-
-
-print()
-print('Using guess:')
-_ = fit_multi_ana_simu.pars_array2dict(theguess, verbose=True)
-
-
-######################### MINUIT ###########################################
-print('Calling Minuit')
-fitm_simu, fitmcov_simu = myll.minuit(theguess, chi2=MyChi2_Intercal_LM, 
-                                      verbose=True, print_level=10, nsplit=1,
-                                      extra_args=[len(data_fringes),mask])
-print('Minuit done')
-print()
-print('Fit Minuit:')
-fitpars_simu = fit_multi_ana_simu.pars_array2dict(fitm_simu, verbose=True)
-############################################################################
-
-####################### scipy.optimize.minimize ############################
-# print('Calling scipy.optimize.minimize')
-# import scipy.optimize
-# mybounds = []
-# for i in range(len(theguess)):
-#     if fit_fixed_simu[i]==0:
-#         mybounds.append(fit_range_simu[i])
-#     else:
-#         mybounds.append([theguess[i]-0.0000001, theguess[i]+0.0000001])
-#     print(i, theguess[i], fit_fixed_simu[i], mybounds[i])
-
-# res = scipy.optimize.minimize(mychi2, theguess, bounds=mybounds)
-# fitm_simu = res['x']
-# print('Minimize done')
-# print()
-# print('Fit Minimize:')
-# fitpars_simu = fit_multi_ana_simu.pars_array2dict(fitm_simu, verbose=True)
-############################################################################
+### And we apply this to our frineges
+sig =0.02    # we should put very small noise to check for the accuracy
+data_fringes = []
+all_noise = []
+for i in range(len(true_fringes)):
+    noise = np.random.randn(17,17)*sig*mask
+    all_noise.append(noise)
+    data_fringes.append((true_fringes[i] * true_intercals + noise) * mask)
 
 
 
-# ### Fitted Fringes
-fitted_fringes = fit_multi_ana_simu(fitm_simu)
+### Let's try a fit without intercals: because we do not fit intercalibration, we need to let all amplitudes free
+print('First fit with no intercalibrations')
+#guess_params = fit_initvals
+#guess_params = fitm_nointercal
+guess_params = None
+print('initial Parameters:',guess_params)
+fit_nointercals = dothefit(mybs, data_fringes, mask, q,
+                           verbose=False, 
+                           eq_common_phase=True, fix_fwhm=True, 
+                           fix_one_amp=False, fix_all_amps=False,
+                           fix_lengthes=False, fit_intercals=False, 
+                           doplot=True)
 
-##### Calculate chi2 before and after fit
-chi2init = mychi2(*theguess)
-chi2post = mychi2(*fitm_simu)
-print()
-print('============================================================================')
-print('Chi2 init = {0:8.2f} - Final = {1:8.2f}'.format(chi2init, chi2post))
-print('============================================================================')
-
-##### Intercalibrations
-allA, sA = get_intercal(np.reshape(fitted_fringes, (len(num_fringes), 17*17)), 
-                        np.reshape(my_y, (len(num_fringes), 17*17)))
-intercals = np.reshape(allA, (17,17))
-
-##### We can check the coherence by calculating the chi2 from the no-intercal-chi2 on the intercal-corrected data
-corrected_data = []
-for i in range(len(data_fringes)):
-    corrected_data.append(data_fringes[i]/intercals)
-myll.yvals = np.nan_to_num(np.ravel(corrected_data))
-print()
-print('============================================================================')
-print('New Chi2 with no-intercal-chi2 on intercalibrated data {0:8.2f}'.format(-2*myll(fitm_simu)))
-print('============================================================================')
-
-
-rc('figure', figsize=(16,3))
-maxi=2
-figure()
-subplot(1,4,1)
-imshow(true_intercals, vmin=-maxi, vmax=maxi, cmap='bwr')
-colorbar()
-title('True Intercals')
-subplot(1,4,2)
-imshow(intercals, vmin=-maxi, vmax=maxi, cmap='bwr')
-colorbar()
-title('Rec Intercals')
-subplot(1,4,3)
-imshow(intercals-true_intercals, vmin=-maxi, vmax=maxi, cmap='bwr')
-colorbar()
-title('Rsiduals Intercals')
-
-subplot(1,4,4)
-hist(intercals[ok]-true_intercals[ok], bins=30, label=ft.statstr(intercals[ok]-true_intercals[ok]))
-xlabel('Residuals Intercals')
-legend()
-
-
-rc('figure', figsize=(16,3 * len(num_fringes)))
-maxi = 1
-interp = 'Gaussian'
-figure()
-for i in range(len(num_fringes)):   
-    nn = num_fringes[i]
-
-    subplot(len(num_fringes),6,i*6+1)
-    imshow(np.nan_to_num(data_fringes[i]*mask), cmap='bwr', interpolation=interp,vmin=-maxi, vmax=maxi)
-    title('BS:{} EqType: {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
-    ft.qgrid()
-    colorbar()
-    
-    subplot(len(num_fringes),6,i*6+2)
-    imshow(np.nan_to_num(data_fringes[i]/intercals*mask), cmap='bwr', interpolation=interp,vmin=-maxi, vmax=maxi)
-    title('BS Intercal:{} EqType: {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
-    ft.qgrid()
-    colorbar()
-    
-    subplot(len(num_fringes), 6, i*6+3)
-    imshow(np.nan_to_num(guess_fringes[i]*mask), cmap='bwr', interpolation=interp,vmin=-maxi, vmax=maxi)
-    title('Guess: {} - EqType {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
-    ft.qgrid()
-    colorbar()
-
-    subplot(len(num_fringes), 6, i*6+4)
-    imshow(np.nan_to_num(fitted_fringes[i]*mask), cmap='bwr', interpolation=interp,vmin=-maxi, vmax=maxi)
-    title('Fitted {} - EqType {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
-    ft.qgrid()
-    colorbar()
-        
-    subplot(len(num_fringes), 6, i*6+5)
-    imshow(np.nan_to_num((data_fringes[i]/intercals-fitted_fringes[i])*mask), cmap='bwr', interpolation=interp,vmin=-maxi, vmax=maxi)
-    title('Residuals {} - EqType {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
-    ft.qgrid()
-    colorbar()
-  
-    resid = (data_fringes[i]/intercals-fitted_fringes[i])
-    mm, ss = ft.meancut(resid[ok],3)
-    subplot(len(num_fringes), 6, i*6+6)
-    hist(resid[ok], bins=30, range=[mm-5*ss, mm+5*ss], label='{0:5.3f} +/- {1:5.3f}'.format(mm, ss))
-    xlabel('Residuals {} - EqType {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
-    legend()
-    
-tight_layout()
-
+### And now a fit with intercals
+print('Second Fit with intercalibrations')
+# guess_params = None
+guess_paramss = fit_nointercals
+print('initial Parameters:',guess_params)
+fit = dothefit(mybs, data_fringes, mask, q,
+               guess = guess_params,
+               verbose=False, 
+               eq_common_phase=True, fix_fwhm=True, 
+               fix_one_amp=True, fix_all_amps=False,
+               fix_lengthes=False, fit_intercals=True, 
+               doplot=True)
 
 ```
 
@@ -1460,66 +1527,17 @@ tight_layout()
 * faire d'abord un fit baseline par baseline pour avoir les amplitudes et les phases par exemple et ensuite passer au reste ?
 <!-- #endregion -->
 
-```{python}
-
-```
+# Now let's try with the data
 
 ```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-# With Real Data
-
-```{python}
+reload(ft)
 reload(mcmc)
 
-### Let's define a new chi2 function to give to minuit that accoujnts for intercalibration
-### using the method proposed by Louise:
-### - determination of intercaalibration is done analytically in the call function and the chi2
-###   is caalculated with the intercalibrated data
-class MyChi2_Intercal_LM:
-    """
-    Class defining the minimizer and the data
-    """
 
-    def __init__(self, xin, yin, covarin, functname, extra_args=None, reshape_inputs = None):
-        self.x = xin
-        self.y = yin
-        self.covar = covarin
-        self.invcov = np.linalg.inv(covarin)
-        self.functname = functname
-        self.extra_args = extra_args
-        if reshape_inputs is None:
-            self.reshape_inputs = (5, len(self.x)//5)
-        else:
-            self.reshape_inputs = reshape_inputs
-            
-
-    def __call__(self, *pars):
-        val = self.functname(self.x, pars, extra_args=self.extra_args)
-        newval = np.reshape(val, self.reshape_inputs)
-        newd = np.reshape(self.y, self.reshape_inputs)
-        allA, sA = get_intercal(newval, newd)
-        delta = allA*newval-newd
-        chi2 = np.nansum(delta**2)
-        return chi2
-    
-def get_intercal(newval, newd):
-    allA = np.mean(newd/newval, axis=0)
-    sA = 1./np.sum(newval**2, axis=0)
-    return allA, sA
-        
-        
 # num_fringes = [2]
 # num_fringes = [2,10,9]
+num_fringes = [2,4,5]
+# num_fringes = [2,4,5,9]
 # num_fringes = [2,4,5,9,10]
 # num_fringes = list(np.arange(len(all_bs)))
 
@@ -1532,98 +1550,32 @@ for i in range(len(num_fringes)):
     data_fringes.append(myfringe)
 print(mybs)
 
-### Instanciate multifringe object ##############
-fit_multi_ana = fit_multi_fringe_ana(mybs, q, mask, verbose=False, 
-                                     eq_common_phase=True, fix_fwhm=True, fix_one_amp=True)
+### Let's try a fit without intercals: because we do not fit intercalibration, we need to let all amplitudes free
+print('First fit with no intercalibrations')
+#guess_params = fit_initvals
+#guess_params = fitm_nointercal
+guess_params = None
+print('initial Parameters:',guess_params)
+fit_nointercals = dothefit(mybs, data_fringes, mask, q,
+                           verbose=False, 
+                           eq_common_phase=True, fix_fwhm=True, 
+                           fix_one_amp=False, fix_all_amps=False,
+                           fix_lengthes=False, fit_intercals=False, 
+                           doplot=True)
 
-### Initiating input and other parameters
+### And now a fit with intercals
+#guess_params = None
+guess_params = fit_nointercals
 print()
-fit_initvals, fit_range, fit_fixed, fit_pname, fit_ptype=fit_multi_ana.pars_dict2array(fit_multi_ana.param_fit_dict, verbose=False)
-
-
-### Guess fringes
-# guess_params = fit_initvals
-guess_params = fitm_nointercal
-guess_fringes = fit_multi_ana(guess_params)
-print()
-print('===============================================================')
-print('Initial Guess:')
-_ = fit_multi_ana.pars_array2dict(guess_params, verbose=True)
-print('===============================================================')
-
-
-
-# Fitting with with MCMC package (using minuit - not MCMC) ################
-reload(mcmc)
-import corner
-my_y = np.nan_to_num(np.ravel(data_fringes))
-myll = mcmc.LogLikelihood(xvals = np.zeros(len(my_y)), yvals = my_y, errors=my_y*0+1, 
-                          p0=guess_params, 
-                          model=fit_multi_ana.flat_data, 
-                          fixedpars=fit_fixed, 
-                          flatprior=fit_range)
-
-fitm, fitmcov = myll.minuit(guess_params, chi2=MyChi2_Intercal_LM)
-print('===============================================================')
-print('Fit Minuit:')
-fitpars = fit_multi_ana.pars_array2dict(fitm, verbose=True)
-print('===============================================================')
-
-# ### Fitted Fringes
-fitted_fringes = fit_multi_ana(fitm)
-
-##### Intercalibrations
-allA, sA = get_intercal(np.reshape(fitted_fringes, (len(num_fringes), 17*17)), 
-                        np.reshape(my_y, (len(num_fringes), 17*17)))
-intercals = np.reshape(allA, (17,17))
-
-rc('figure', figsize=(16,3))
-figure()
-imshow(intercals, vmin=-5, vmax=5, cmap='bwr')
-colorbar()
-title('Rec. Intercals')
-
-
-rc('figure', figsize=(16,3 * len(num_fringes)))
-mm = 2
-interp = 'Gaussian'
-figure()
-for i in range(len(num_fringes)):   
-    nn = num_fringes[i]
-
-    subplot(len(num_fringes),5,i*5+1)
-    imshow(np.nan_to_num(data_fringes[i]*mask), cmap='bwr', interpolation=interp,vmin=-mm, vmax=mm)
-    title('BS:{} EqType: {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
-    ft.qgrid()
-    colorbar()
-    
-    subplot(len(num_fringes),5,i*5+2)
-    imshow(np.nan_to_num(data_fringes[i]/intercals*mask), cmap='bwr', interpolation=interp,vmin=-mm, vmax=mm)
-    title('BS Intercal:{} EqType: {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
-    ft.qgrid()
-    colorbar()
-    
-    subplot(len(num_fringes), 5, i*5+3)
-    imshow(np.nan_to_num(guess_fringes[i]*mask), cmap='bwr', interpolation=interp,vmin=-mm, vmax=mm)
-    title('Guess: {} - EqType {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
-    ft.qgrid()
-    colorbar()
-
-    subplot(len(num_fringes), 5, i*5+4)
-    imshow(np.nan_to_num(fitted_fringes[i]*mask), cmap='bwr', interpolation=interp,vmin=-mm, vmax=mm)
-    title('Fitted {} - EqType {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
-    ft.qgrid()
-    colorbar()
-        
-    subplot(len(num_fringes), 5, i*5+5)
-    imshow(np.nan_to_num((data_fringes[i]/intercals-fitted_fringes[i])*mask), cmap='bwr', interpolation=interp,vmin=-mm, vmax=mm)
-    title('Residuals {} - EqType {}'.format(all_bs[nn], fit_multi_ana.eqtypes[i]))
-    ft.qgrid()
-    colorbar()
-  
-tight_layout()
-
-
+print('Second Fit with intercalibrations')
+print('initial Parameters:',guess_params)
+fit = dothefit(mybs, data_fringes, mask, q,
+               guess = guess_params,
+               verbose=False, 
+               eq_common_phase=True, fix_fwhm=True, 
+               fix_one_amp=True, fix_all_amps=False,
+               fix_lengthes=False, fit_intercals=True, 
+               doplot=True)
 
 ```
 
@@ -1641,10 +1593,6 @@ tight_layout()
 
 ```{python}
 
-```
-
-```{python}
-np.array(data_fringes).shape
 ```
 
 ```{python}

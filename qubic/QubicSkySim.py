@@ -5,9 +5,9 @@ import numpy as np
 import random as rd
 import string
 import os
-import pysm
-import pysm.units as u
-from pysm import utils
+import pysm3 as pysm
+import pysm3.units as u
+from pysm3 import utils
 from pylab import *
 from scipy.optimize import curve_fit
 import pickle

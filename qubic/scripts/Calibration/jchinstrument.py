@@ -896,6 +896,7 @@ class QubicInstrument(Instrument):
 
         """
         normal = False
+        import matplotlib.pyplot as plt
         if normal:
             print('Normal')
             theta, phi = QubicInstrument._peak_angles_kmax(
@@ -926,14 +927,50 @@ class QubicInstrument(Instrument):
             val *= solid_angle / scene.solid_angle * len(horn)
         else:
             print('Custom Values')
+            print('Nu  = {}'.format(nu/1e9))
             import pickle
             #file = open('/Users/hamilton/Qubic/RealistcReconstruction/peaks.pk', 'rb')
             file = open(os.environ['QUBIC_PEAKS']+'peaks.pk', 'rb')
             theta, phi, val = pickle.load(file)
             file.close()
-            print('Theta: ', np.shape(theta))
-            print('Phi: ', np.shape(phi))
-            print('Val: ', np.shape(val))
+
+            ### Now we need to scale the SB peak position w.r.t. frequency
+            sh  =  np.shape(theta)
+            print('SHAPE={}'.format(sh))
+            # theta, phi to be taken as line of sight, used as the center of the homothety in frequency
+            ### Use one of the peaks, identified to be the right one... "bricolage"
+            factor = 150e9/nu
+            print('Factor = {}'.format(factor))
+            import qubic.sb_fitting as sbfit
+            myposition =  -position / np.sqrt(np.sum(position**2, axis=-1))[..., None]
+            local_dict = {'nx': myposition[:, 0, None], 'ny': myposition[:, 1, None]}
+            print(local_dict)
+            thlos = ne.evaluate('arcsin(sqrt(nx**2 + ny**2))',
+                        local_dict=local_dict)
+            phlos = ne.evaluate('arctan2(ny, nx)', local_dict=local_dict)
+            for idet in range(sh[0]):
+                #### Use the theoretical L.O.S ?
+                # myangs = np.array([phlos[idet][0],thlos[idet][0], phlos[idet][0]])
+                # plt.plot(phlos[idet][0],thlos[idet][0], 'r+', ms=10, markeredgewidth=3)
+
+                #### Or use the measured location of the corresponding TES
+                numpeak=6
+                thlos = theta[idet,numpeak]
+                phlos = phi[idet,numpeak]
+                plt.plot(phlos,thlos, 'r+', ms=10, markeredgewidth=3)
+                myangs = np.array([phlos,thlos, phlos])
+
+
+                print('My Angs: {}'.format(myangs))
+                newth, newph = sbfit.rotate_q2m(theta[idet,:], phi[idet,:], angs=myangs, inverse=True)
+                theta[idet,:], phi[idet,:] = sbfit.rotate_q2m(newth*factor, newph, angs=myangs, inverse=False)
+
+        print('Theta: ', theta)
+        order = np.flip(np.argsort(np.ravel(val)))[0:9]
+        vv = np.ravel(val)[order]
+        plt.scatter(np.ravel(phi)[order], np.ravel(theta)[order], s=vv/np.max(vv)*300)
+            #print('Phi: ', np.shape(phi))
+            #print('Val: ', np.shape(val))
 
 
         return theta, phi, val

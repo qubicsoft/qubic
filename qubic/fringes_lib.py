@@ -11,7 +11,8 @@ from qubic import selfcal_lib as scal
 
 
 # ============== Get data ==============
-def get_data(datafolder, ASIC, TES=28, doplot=True):
+def get_data(datafolder, ASIC, TES=28, doplot=True, src_data=False, 
+    subtract_t0=True):
     """
     Get the TODs for one ASIC.
     Parameters
@@ -23,23 +24,31 @@ def get_data(datafolder, ASIC, TES=28, doplot=True):
     TES: int
         TES number as defined on the instrument (for the plot only)
     doplot: bool
+    src_data: if True,will return the srouce data as well
+    subtract_t0: if True, will remove to the time the first time element
 
     Returns
     -------
-    Time and signal for all TES in one ASIC.
+    Time and signal for all TES in one ASIC. If src_data is True: will also return the  source time and signal
     """
-    ASIC = str(ASIC)
+    ASIC = int(ASIC)
 
     # Qubicpack object
     a = qubicfp()
     a.verbosity = 0
     a.read_qubicstudio_dataset(datafolder)
-    data = a.azel_etc(TES=None)
 
-    # Signal for one TES
-    t0 = data['t_data ' + ASIC][0]
-    t_data = data['t_data ' + ASIC] - t0
-    data = data['data ' + ASIC]
+    # Data form the object
+    data  = a.timeline_array(asic=ASIC)
+    t_data = a.timeaxis(datatype='science',asic=ASIC)
+    t0 = t_data[0]
+    if subtract_t0:
+        t_data -= t0
+    if src_data:
+        t_src = a.calsource()[0]
+        if subtract_t0:
+            t_src -= t0
+        d_src = a.calsource()[1]
 
     if doplot:
         fig, axs = plt.subplots(1, 2, figsize=(15, 3))
@@ -53,7 +62,10 @@ def get_data(datafolder, ASIC, TES=28, doplot=True):
         axs[1].set_xlim(0, 40)
         plt.show()
 
-    return t_data, data
+    if src_data:
+        return t_data, data, t_src, d_src
+    else:
+        return t_data, data
 
 def cut_data(t0, tf, t_data, data):
     """
@@ -145,7 +157,6 @@ def analyse_fringesLouise(datafolder, t0=None, tf=None, wt=5.,
                           tes_check=28, param_guess=[0.1, 0., 1, 1, 1, 1, 1, 1],
                           median=False, read_data=None, verbose=True, ):
     """
-
     Parameters
     ----------
     datafolder: str
@@ -170,7 +181,6 @@ def analyse_fringesLouise(datafolder, t0=None, tf=None, wt=5.,
         If it is None, it will read the data,
         else, it will use the one you pass here (saves time).
     verbose: bool
-
     Returns
     -------
     Time, folded signal, the 8 parameters estimated with the fit,

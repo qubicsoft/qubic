@@ -18,23 +18,33 @@ jupyter:
 from __future__ import division, print_function
 
 # %matplotlib inline
-import matplotlib
-matplotlib.use('nbagg')
+# %matplotlib notebook
 
 import glob
 import numpy as np
+
 import matplotlib.pyplot as plt
-import scipy.optimize as sop
-import pandas as pd
+from matplotlib.colors import SymLogNorm
 from matplotlib.backends.backend_pdf import PdfPages
+
 import scipy.optimize as sop
+from scipy.ndimage import gaussian_filter
+import pandas as pd
+import emcee
+import corner
 
 import qubic
 from qubic import selfcal_lib as scal
 from qubicpack.utilities import Qubic_DataDir
-from qubic import fringes_lib as fl
-
+from qubic import fringes_lib as flib
 import qubic.fibtools as ft
+
+rc('figure', figsize=(8, 8))
+rc('font', size=14)
+```
+
+```{python}
+simu = True
 ```
 
 ## Get the measurement
@@ -44,12 +54,12 @@ global_dir = '/home/lmousset/QUBIC/Qubic_work/Calibration/datas/Fringes/'
 myfringes = 'Fringes_2020-10-27_TypeEq0_with_10BLs.fits'
 #'Fringes_2020-10-27_TypeEq2_with_2BLs.fits'
 
-header, fdict = fl.read_fits_fringes(global_dir + myfringes)
+header, fdict = flib.read_fits_fringes(global_dir + myfringes)
 print(fdict.keys())
 
-nBLs = header['NBLS']
-BLs_eq = fdict['BLS-EQ']
-print(BLs_eq)
+nimages = header['NBLS']
+BLs = fdict['BLS-EQ']
+print(BLs)
 ```
 
 ```{python}
@@ -64,162 +74,450 @@ q = qubic.QubicInstrument(d)
 # Horn array with all baselines
 plt.figure(figsize=(6, 6))
 scal.plot_horns(q)
-for i in range(nBLs):
-    scal.plot_baseline(q, BLs_eq[i])
+for i in range(nimages):
+    scal.plot_baseline(q, BLs[i])
 
 # Plot fringes on the FP
 BL_index = 0
-fl.plot_fringes_onFP(q, BL_index, header, fdict)
+flib.plot_fringes_onFP(q, BL_index, header, fdict)
 
 # Plot folded signal and the fit for one TES 
 TES = 95
-fl.plot_folded_fit(TES, BL_index, header, fdict)
+flib.plot_folded_fit(TES, BL_index, header, fdict)
 
 ```
+
+### Remove thermometers
 
 ```{python}
 x = fdict['X_TES']
 y = fdict['Y_TES']
-data = fdict['COMBINATION'][BL_index]
+data = list(fdict['COMBINATION'])
 
-x, y, data = fl.remove_thermometers(x, y, data)
+for k in range(nimages):
+    xdata, ydata, data[k] = flib.remove_thermometers(x, y, data[k])
 
-print(data.shape)
-```
-
-```{python}
-fdict.keys()
-```
-
-## Fringes models
-
-```{python}
-baseline = fdict['BLS-EQ'][BL_index]
-print(baseline)
-```
-
-### QUBIC soft simulation
-
-```{python}
-Model_QS = scal.Model_Fringes_QubicSoft(q, baseline,
-                                        theta_source=np.array([0.]), phi_source=np.array([0.]),
-                                        nu_source=150e9, spec_irrad_source=1.,
-                                        frame='ONAFP',)
-
-rc('figure', figsize=(12, 6))
-xONAFP, yONAFP, fringes = Model_QS.get_fringes(doplot=True, verbose=True, norm=None, s=100)
-
-print('fringes shape:', fringes.shape)
-```
-
-### Maynooth simu
-
-```{python}
-# Path to the simulated files 
-rep = Qubic_DataDir(datafile='detcentres.txt', datadir='/home/lmousset/QUBIC/')
-print('rep:', rep)
-
-Model_Maynooth = scal.Model_Fringes_Maynooth(q, baseline, rep, 
-                                             theta_source=np.array([0.]), nu_source=150e9,
-                                             frame='ONAFP', interp=False)
-
-xONAFP, yONAFP, fringes = Model_Maynooth.get_fringes(verbose=True)
-
-plt.figure()
-scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, s=None, 
+plt.figure(figsize=(7, 7))
+scal.scatter_plot_FP(q, xdata, ydata, data[0], s=None, 
                        frame='ONAFP', 
-                       title='Maynooth at TES resolution', 
+                       title='Data', 
+                       cmap='bwr',
+                       vmin=-2, vmax=2,
                        norm=None)
 ```
 
-### Analytical function
+## Re-order data as the simulations
 
 ```{python}
-theta_deg = 0.
-Model_Ana = scal.Model_Fringes_Ana(q, baseline, theta_source=np.deg2rad(theta_deg), nu_source=150e9, fwhm=20., amp=1., frame='ONAFP')
-print(Model_Ana.focal)
+xONAFP, yONAFP, _ = scal.get_TEScoordinates_ONAFP(q)
 
-xONAFP, yONAFP, fringes = Model_Ana.get_fringes(times_gaussian=True)
+print(xdata[:10])
+print(xONAFP[:10])
+ndet = xdata.shape[0]
+print('Number of detectors:', ndet)
+```
 
-plt.figure()
-scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP')
+```{python}
+newdata = []
+for k in range(nimages):
+    data_img = data[k]
+    new_img = np.zeros_like(data[k])
+    for det in range(ndet):
+        index_simu = np.where((xONAFP == xdata[det]) & (yONAFP == ydata[det]))[0][0]
+#         print(index_simu)
+        new_img[index_simu] = data_img[det]
+    newdata.append(new_img)
 
+scal.scatter_plot_FP(q, xdata, ydata, data[2], frame='ONAFP', vmin=-1, vmax=1, title='Original order')
+scal.scatter_plot_FP(q, xONAFP, yONAFP, newdata[2], frame='ONAFP', vmin=-1, vmax=1, title='Re-order')
 ```
 
 # Start fitting
 
+
+#### Make fake data
+
 ```{python}
-def get_chi2(params, invcov, data, **kwargs):
+# BLs = fdict['BLS-EQ']
+BLs = [[49, 53], [25, 57], [2, 6]]
+nimages = len(BLs)
+
+ndet = 248 
+print('ndet:', ndet)
+
+# Parameters for the fit
+focal_fake = 0.28
+theta_fake = np.deg2rad(2)
+# allP_fake = [1.] * nimages
+allP_fake = list(np.random.rand(nimages))
+
+d['focal_length'] = focal_fake
+q = qubic.QubicInstrument(d)
+
+
+# Gain for each TES (same for each image)
+# gains_fake = np.ones_like(fake_fringes[0])
+gains_fake = np.random.normal(1., 2., size=ndet)
+print('gains fake:', gains_fake[:10])
+
+sigma = 0.2 # Gaussian noise
+
+fake_fringes = []
+allPhi_fake = []
+for k in range(nimages):
+    model_fake_data = scal.Model_Fringes_Ana(q, BLs[k], 
+                                             theta_source=theta_fake, 
+                                             nu_source=150e9, 
+                                             fwhm=20., 
+                                             amp=1., 
+                                             frame='ONAFP')
+
+    x, y, Phi = model_fake_data.get_fringes(times_gaussian=False)
+    allPhi_fake.append(Phi)
     
-    focal, theta_source = params
+    # Multiply by a global amplitude (Calibration source power)
+    fake_P = Phi * allP_fake[k]
     
+    # Gain
+    fake_gain = fake_P * gains_fake
+    
+    # Add gaussian noise
+    noise = np.random.normal(loc=0., scale=sigma, size=ndet)
+    print('Gaussian noise:', noise[:10])
+    fake_noise = fake_gain + noise
+    
+    fake_fringes.append(fake_noise)
+    
+    if k == 0:
+        scal.scatter_plot_FP(q, xONAFP, yONAFP, Phi, frame='ONAFP', title='Pure fringes', unit=None)
+        scal.scatter_plot_FP(q, xONAFP, yONAFP, fake_P, frame='ONAFP', title='Fringes x Power', unit=None)
+        scal.scatter_plot_FP(q, xONAFP, yONAFP, fake_gain, frame='ONAFP', title='With Gains', unit=None)
+        scal.scatter_plot_FP(q, xONAFP, yONAFP, fake_noise, frame='ONAFP', vmin=-1, vmax=1,
+                             title='Adding noise and inter-calibrations', unit=None)
+
+if simu:
+    newdata = fake_fringes
+    
+```
+
+#### Covariance matrix
+
+```{python}
+allInvCov = []
+for k in range(nimages):
+    Cov = np.identity(ndet) * sigma**2
+#     Cov = np.diag(fake_fringes[k]*1000)
+    print(Cov)
+    
+    InvCov = np.diag(1. / np.diag(Cov))
+#     print(InvCov)
+    allInvCov.append(InvCov)
+```
+
+```{python}
+def get_gains(allPhi, allinvcov, alldata):
+    nimages = len(allPhi)
+    
+    InvCov_A = np.zeros_like(allinvcov[0])
+    Term = np.zeros_like(alldata[0])
+    for k in range(nimages):
+        Phi_mat = np.diag(allPhi[k])
+        InvCov_A += Phi_mat.T @ allinvcov[k] @ Phi_mat
+        Term += Phi_mat.T @ allinvcov[k] @ alldata[k]
+    Cov_A = np.linalg.inv(InvCov_A)
+    
+    A = Cov_A @ Term
+    
+    A /= np.mean(A)
+    Cov_A /= np.mean(A)**2
+
+    return A, Cov_A
+
+
+def get_chi2(params, allinvcov, alldata, BLs):
+    nimages = len(BLs) 
+    focal = params[0]
+    theta_source = params[1]
+    allP = params[2:]
     q.optics.focal_length = focal
-    model = scal.Model_Fringes_Ana(q, baseline, 
-                                    theta_source=theta_source, 
+    allPhi = []
+    for k in range(nimages):
+        model = scal.Model_Fringes_Ana(q, BLs[k], 
+                                        theta_source=theta_source, 
+                                        nu_source=150e9, 
+                                        fwhm=20., amp=1., frame='ONAFP')
+
+        x, y, Phi = model.get_fringes(times_gaussian=False)
+        
+        # Global amplitude
+        Phi *= allP[k]
+        allPhi.append(Phi)
+    
+    # Gain for each detector
+    A, Cov_A = get_gains(allPhi, allinvcov, alldata)
+#     A = 1.
+    
+    chi2 = 0.
+    for k in range(nimages):
+        M = np.diag(allPhi[k]) @ A
+        R = M - alldata[k]
+        chi2 += R.T @ allinvcov[k] @ R
+
+    return chi2
+```
+
+#### Explore the chi2 to find guess parameters
+
+```{python}
+nval_fl = 20
+nval_th = 20
+
+fl_min, fl_max = 0.25, 0.35
+th_min, th_max = np.deg2rad(0), np.deg2rad(4)
+
+chi2_grid = np.zeros((nval_fl, nval_th))
+
+all_fl = np.linspace(fl_min, fl_max, nval_fl)
+all_th = np.linspace(th_min, th_max, nval_th)
+print(all_fl, np.rad2deg(all_th))
+for i, fl in enumerate(all_fl):
+    for j, th in enumerate(all_th):
+        params = [fl, th] + [1.] * nimages
+        chi2_grid[i, j] = get_chi2(params, allInvCov, newdata, BLs)
+
+```
+
+```{python}
+# Smooth with a gaussian
+smooth = True
+step_fl = all_fl[1] - all_fl[0]
+step_th = all_th[1] - all_th[0]
+if smooth:
+    chi2_grid = gaussian_filter(chi2_grid, sigma=[step_fl*100, step_th*100])
+```
+
+```{python}
+# Find the min
+min_indices = np.unravel_index(np.argmin(chi2_grid), (nval_fl, nval_th))
+print(f'Chi2 min = {np.min(chi2_grid)} at {min_indices}')
+
+fl_guess = all_fl[min_indices[0]]
+# fl_guess = 0.3
+th_guess = all_th[min_indices[1]]
+# th_guess = np.deg2rad(0.)
+allP_guess = [1.] * nimages
+
+params_guess = [fl_guess, th_guess] + allP_guess
+
+print('Guess:', params_guess)
+```
+
+```{python}
+fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+ax1, ax2 = np.ravel(axs)
+
+c = ax1.pcolor(np.rad2deg(all_th), all_fl, chi2_grid, norm=SymLogNorm(0.1))
+ax1.set_xlabel('Theta')
+ax1.set_ylabel('Focal length')
+if simu:
+    ax1.scatter(np.rad2deg(theta_fake),  focal_fake,  marker='o', color='r', s=100, label='Fake data')
+ax1.scatter(np.rad2deg(th_guess),  fl_guess,  marker='o', color='m', s=100, label='Guess')
+fig.colorbar(c, ax=ax1)
+ax1.legend()
+
+
+```
+
+#### Minimize the chi2 with `scipy.optimize.minimize`
+
+```{python}
+result = sop.minimize(get_chi2, 
+                      x0=params_guess, 
+                      args=(allInvCov, newdata, BLs), 
+                      method='Nelder-Mead')
+```
+
+```{python}
+print(result)
+```
+
+```{python}
+print('***** Focal:')
+if simu:
+    print('Fake:', focal_fake)
+print('Result:', result['x'][0])
+print('Guess:', fl_guess)
+
+print('\n***** Theta:')
+if simu:
+    print('Fake:', np.rad2deg(theta_fake), 6)
+print('Result:', np.round(np.rad2deg(result['x'][1]), 6))
+print('Guess:', np.round(np.rad2deg(th_guess), 6))
+
+print('\n***** Power:')
+print('Guess:', allP_guess)
+print('Result:', np.round(result['x'][2:], 4))
+if simu:
+    print('Fake:', np.round(allP_fake, 4))
+    print('Fake / Result:', np.round(allP_fake / result['x'][2:], 4))
+```
+
+```{python}
+q.optics.focal_length = result['x'][0]
+allP_res = result['x'][2:]
+allPhi = []
+for k in range(nimages):
+    model = scal.Model_Fringes_Ana(q, BLs[k], 
+                                    theta_source=result['x'][1], 
                                     nu_source=150e9, 
                                     fwhm=20., amp=1., frame='ONAFP')
+
+    x, y, Phi = model.get_fringes(times_gaussian=False)
+    allPhi.append(Phi)
     
-    x, y, Phi = model.get_fringes(**kwargs)
-    print(Phi.shape)
+    # Global amplitude
+    Phi *= allP_res[k]
     
-#     ndet = len(data)
-#     A = np.zeros_like(Phi)
-#     for idet in range(ndet):
-#         sigma_A = 1. / (Phi[idet].T * invcov[idet, idet] * Phi[idet])
-#         A[idet] = sigma_A * Phi[idet].T * invcov[idet, idet] * data[idet]
-        
-    R = Phi - data
-    chi2 = R.T @ invcov @ R 
-    return chi2
-    
+
+# Gain for each detector
+A, Cov_A = get_gains(allPhi, allInvCov, fake_fringes)
+
+fringes_res = []
+for k in range(nimages):
+    fringes_res.append(allPhi[k] * A)
+
+
+print('\nA:', np.round(A[:10], 4))
+if simu:
+    print('\nGains fake:', np.round(gains_fake[:10], 4))
 ```
 
 ```{python}
-# fake data
-focal_data = 0.27
-theta_data = 0.
-
-q.optics.focal_length = focal_data
-model_fake_data = scal.Model_Fringes_Ana(q, baseline, 
-                                theta_source=theta_data, 
-                                nu_source=150e9, 
-                                fwhm=20., amp=1., frame='ONAFP')
-
-x, y, fake_fringes = model_fake_data.get_fringes(times_gaussian=False)
-
-gain = np.ones_like(fake_fringes)
-# gain = np.random.rand(fake_fringes.shape[0]) * 10
-fake_fringes *= gain
-
 plt.figure()
-scal.scatter_plot_FP(q, xONAFP, yONAFP, fake_fringes, frame='ONAFP')
+scal.scatter_plot_FP(q, xONAFP, yONAFP, A, frame='ONAFP', title='Gains', unit=None, vmin=None, vmax=None)
+```
+
+```{python}
+for k in range(nimages):
+    plt.subplots(1, 3, figsize=(12, 6))
+
+    plt.subplot(131)
+    scal.scatter_plot_FP(q, xONAFP, yONAFP, newdata[k], frame='ONAFP', title='Data', s=50, vmin=-1, vmax=1)
+    
+    plt.subplot(132)
+    scal.scatter_plot_FP(q, xONAFP, yONAFP, allPhi[k], frame='ONAFP', title='Fit', s=50, unit=None)
+    
+    plt.subplot(133)
+    scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes_res[k] - newdata[k], frame='ONAFP', 
+                         title='Residuals', s=50, vmin=-1, vmax=1)
+```
+
+```{python}
+plt.figure()
+plt.imshow(Cov_A)
+plt.colorbar()
+plt.title('Cov_A')
+```
+
+```{python}
+if simu:
+    fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+    ax1, ax2 = np.ravel(axs)
+
+    ax1.plot(allP_fake, result['x'][2:], 'ro')
+    ax1.plot(allP_fake, allP_fake, 'k--', label='y=x')
+    ax1.set_xlabel('P Fake Data')
+    ax1.set_ylabel('P Fit result')
+    ax1.set_title('Power')
+    ax1.legend()
+
+    ax2.errorbar(gains_fake, A, yerr=np.sqrt(np.diag(Cov_A)), fmt='o', color='b')
+    # ax2.plot(gains_fake, A, 'b.')
+    ax2.plot(gains_fake, gains_fake, 'k--', label='y=x')
+    ax2.set_ylim(-5, 5)
+    ax2.set_xlabel('Gain Fake Data')
+    ax2.set_ylabel('Gain Fit result')
+    ax2.set_title('Gain')
+    ax2.legend()
+
 
 ```
 
 ```{python}
-invcov = np.identity(fake_fringes.shape[0])
-invcov = np.diag(np.random.rand(fake_fringes.shape[0]) * 100)
-```
-
-```{python}
-params = [0.27, 0.]
-chi2 = get_chi2(params, invcov, fake_fringes, times_gaussian=True)
-print(chi2)
-```
-
-```{python}
-result = sop.minimize(get_chi2, x0=[0.3, 0.], args=(invcov, data), method="CG", tol=None)
-```
-
-```{python}
-result
-```
-
-```{python}
 
 ```
 
+#### Minimize the chi2 with `scipy.optimize.least_squares`
+
+To get errors on the focal length, theta and P_k.
+
 ```{python}
+def lnlike(params, allInvCov, alldata, BLs):
+    LnLike = -0.5 * get_chi2(params, allInvCov, alldata, BLs)
+    return LnLike
+
+def lnprior(params):
+    fl = params[0]
+    th = params[1]
+    allP = params[2:]
+
+    if fl > 0 and th > 0:
+        return 0.0
+    else:
+        return -np.inf
+    
+# Log of the posterior (Posterior = prior x likelihood)
+def lnprob(params, allInvCov, alldata, BLs):
+    lp = lnprior(params)
+    if not np.isfinite(lp):
+        return -np.inf
+    return lp + lnlike(params, allInvCov, alldata, BLs)
+
+def run(p0, nwalkers, niter, ndim, lnprob, args):
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=args)
+
+    print("\n =========== Running burn-in... ===============")
+    p0, _, _ = sampler.run_mcmc(p0, 10, progress=True)
+    sampler.reset()
+
+    print("\n =========== Running production... ===========")
+    pos, prob, state = sampler.run_mcmc(p0, niter, progress=True)
+
+    return sampler, pos, prob, state
+
+```
+
+```{python}
+ndim = len(params_guess)
+nwalkers = 100
+
+# Initial guess
+p0 = [params_guess + 1e-4 * np.random.rand(ndim) for i in range(nwalkers)]
+
+niter = 100000
+args = (allInvCov, newdata, BLs)
+sampler, pos, prob, state = run(p0, nwalkers, niter, ndim, lnprob, args)
+```
+
+```{python}
+flat_samples = sampler.get_chain(discard=100, thin=15, flat=True)
+print(flat_samples.shape)
+
+plt.subplots(1, 2, figsize=(12, 6))
+plt.subplot(121)
+plt.hist(flat_samples[:, 0], 30, label=np.mean(flat_samples[:, 0]))
+plt.xlabel(r"$\theta_1$")
+plt.ylabel(r"$p(\theta_1)$")
+# plt.gca().set_yticks([]);
+plt.legend()
+
+plt.subplot(122)
+plt.hist(np.rad2deg(flat_samples[:, 1]), 30,
+         label=np.rad2deg(np.mean(flat_samples[:, 1])))
+plt.xlabel(r"$\theta_2$")
+plt.ylabel(r"$p(\theta_2)$")
+# plt.gca().set_yticks([]);
+plt.legend()
 
 ```
 

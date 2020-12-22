@@ -8,6 +8,7 @@ from scipy.interpolate import RegularGridInterpolator
 from scipy.integrate import dblquad
 
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from qubicpack.pixel_translation import tes2index
 
@@ -15,25 +16,32 @@ __all__ = ['Model_Fringes_QubicSoft', 'Model_Fringes_Maynooth']
 
 
 # ========== Plot functions =============
-def plot_horns(q, simple=False):
+def plot_horns(q, simple=False, ax=None):
+    if ax is None:
+        fig, ax = plt.subplots()
+
     if simple:
         xhorns = q.horn.center[:, 0]
         yhorns = q.horn.center[:, 1]
-        plt.plot(xhorns, yhorns, 'ro')
+        ax.plot(xhorns, yhorns, 'ro')
     else:
         q.horn.plot()
-    plt.xlabel('X_GRF [m]', fontsize=14)
-    plt.ylabel('Y_GRF [m]', fontsize=14)
+    ax.set_xlabel('X_GRF [m]', fontsize=14)
+    ax.set_ylabel('Y_GRF [m]', fontsize=14)
+    ax.axis('square')
     return
 
 
-def plot_baseline(q, bs):
+def plot_baseline(q, bs, ax=None):
+    if ax is None:
+        fig, ax = plt.subplots()
     hcenters = q.horn.center[:, 0:2]
-    plt.plot(hcenters[np.array(bs) - 1, 0], hcenters[np.array(bs) - 1, 1], lw=4, label=bs)
+    ax.plot(hcenters[np.array(bs) - 1, 0], hcenters[np.array(bs) - 1, 1], lw=4, label=bs)
     return
 
 
-def scatter_plot_FP(q, x, y, FP_signal, frame, figsize=(8, 8), s=None, title=None, unit='[W / Hz]', cbar=True, **kwargs):
+def scatter_plot_FP(q, x, y, FP_signal, frame, fig=None, ax=None,
+                    s=None, title=None, unit='[W / Hz]', cbar=True, **kwargs):
     """
     Make a scatter plot of the focal plane.
     Parameters
@@ -56,20 +64,23 @@ def scatter_plot_FP(q, x, y, FP_signal, frame, figsize=(8, 8), s=None, title=Non
     kwargs: any kwarg for plt.scatter()
 
     """
-    fig = plt.figure(figsize=figsize)
+    if fig is None:
+        fig, ax = plt.subplots()
     if s is None:
         if q.config == 'TD':
             s = ((fig.get_figwidth() / 35 * fig.dpi) ** 2)
         else:
             s = ((fig.get_figwidth() / 70 * fig.dpi) ** 2)
-    plt.scatter(x, y, c=FP_signal, marker='s', s=s, **kwargs)
+    img = ax.scatter(x, y, c=FP_signal, marker='s', s=s, **kwargs)
     if cbar:
-        clb = plt.colorbar()
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes('right', size='5%', pad=0.05)
+        clb = fig.colorbar(img, cax=cax)
         clb.ax.set_title(unit)
-    plt.xlabel(f'X_{frame} [m]', fontsize=14)
-    plt.ylabel(f'Y_{frame} [m]', fontsize=14)
-    plt.axis('square')
-    plt.title(title, fontsize=14)
+    ax.set_xlabel(f'X_{frame} [m]', fontsize=14)
+    ax.set_ylabel(f'Y_{frame} [m]', fontsize=14)
+    ax.axis('square')
+    ax.set_title(title, fontsize=14)
     return
 
 
@@ -114,31 +125,18 @@ def plot_horn_and_FP(q, x, y, FP_signal, frame, s=None, title=None, unit='[W / H
     Plot the horn array in GRF and a scatter plot of the focal plane in GRF or ONAFP.
     See scatter_plot_FP()
     """
-    plt.subplots(1, 2)
-    plt.suptitle(title, fontsize=18)
-    plt.subplots_adjust(wspace=0.3)
+    fig, axs = plt.subplots(1, 2)
+    ax0, ax1 = np.ravel(axs)
+    fig.suptitle(title, fontsize=18)
+    fig.subplots_adjust(wspace=0.3)
 
-    plt.subplot(121)
-    q.horn.plot()
-    plt.axis('square')
-    plt.xlabel('X_GRF [m]', fontsize=14)
-    plt.ylabel('Y_GRF [m]', fontsize=14)
+    plot_horns(q, ax=ax0)
 
-    plt.subplot(122)
-    if s is None:
-        if q.config == 'TD':
-            s = 180
-        else:
-            s = 40
-    plt.scatter(x, y, c=FP_signal, marker='s', s=s, **kwargs)
-    clb = plt.colorbar()
-    clb.ax.set_title(unit)
-    plt.xlabel(f'X_{frame} [m]', fontsize=14)
-    plt.ylabel(f'Y_{frame} [m]', fontsize=14)
-    plt.axis('square')
+    scatter_plot_FP(q, x, y, FP_signal, frame, fig=fig, ax=ax1, marker='s', s=s, **kwargs)
+    return
 
 
-def plot_BLs_eq(allBLs, BLs_sort, q):
+def plot_BLs_eq(allBLs, BLs_sort, q, simple=True, figsize=(12, 6)):
     """
     Plot the horn array and the observed baselines for each type (class of equivalence).
     Parameters
@@ -151,19 +149,18 @@ def plot_BLs_eq(allBLs, BLs_sort, q):
     """
     nclass_eq = len(BLs_sort)
 
-    plt.subplots(1, nclass_eq, figsize=(16, 6))
+    fig, axs = plt.subplots(1, nclass_eq, figsize=figsize)
+    axs = np.ravel(axs)
     for i in range(nclass_eq):
+        ax = axs[i]
         dataset_eq = BLs_sort[i]
-        ax = plt.subplot(1, nclass_eq, i + 1)
-        ax.set_aspect('equal')
-        plot_horns(q)
-        plt.title(f'Type {i}', fontsize=14)
+        plot_horns(q, simple=simple, ax=ax)
+        ax.set_title(f'Type {i}', fontsize=14)
         print(f'Type {i}:')
         for j in dataset_eq:
             print(f'  - {allBLs[j]}')
-            plot_baseline(q, allBLs[j])
-        plt.legend()
-
+            plot_baseline(q, allBLs[j], ax=ax)
+        ax.legend()
     return
 
 # ========== Tool functions =============

@@ -153,13 +153,12 @@ def make_diff_sig(params, t, wt, data):
     return diff
 
 
-def make_combination(param_est, verbose=0):
+def make_combination(vals, verbose=0):
     """ Make the combination to get the fringes:
         S_tot - Cminus_i - Cminus_j + Sminus_ij using the amplitudes found in the fit."""
-    amps = param_est[2:8]
     if verbose > 0:
-        print('Check:', amps[2], amps[4])
-    return (amps[0] + amps[3] + amps[5]) / 3 + amps[2] - amps[1] - amps[4]
+        print('Check:', vals[2], vals[4])
+    return (vals[0] + vals[3] + vals[5]) / 3 + vals[2] - vals[1] - vals[4]
 
 
 def weighted_sum(vals, errs, coeffs):
@@ -168,16 +167,19 @@ def weighted_sum(vals, errs, coeffs):
     return thesum, thesigma
 
 
-def analyse_fringesLouise(datafolder, asics, t0=None, tf=None, wt=5.,
+def analyse_fringesLouise(datafolder, asics=[1, 2], t0=None, tf=None, wt=5.,
                           lowcut=1e-5, highcut=2., nbins=120,
                           notch=np.array([[1.724, 0.005, 10]]),
-                          tes_check=28, param_guess=[0.1, 0., 1, 1, 1, 1, 1, 1],
+                          refTESnum=95, nconfigs=6,
+                          return_folding=False,
                           median=False, verbose=True, ):
     """
     Parameters
     ----------
     datafolder: str
         Folder containing the data.
+    asics: list
+        ASIC numbers.
     t0, tf: float
         Start and end time to cut the TODs.
     wt: float
@@ -211,23 +213,27 @@ def analyse_fringesLouise(datafolder, asics, t0=None, tf=None, wt=5.,
     ndet_tot = nasics * ndet
 
     fringes1D = np.zeros(ndet_tot)
-    param_est = np.zeros((ndet_tot, 8))
-    dfold = np.zeros((ndet_tot, nbins))
-    residuals_time = np.zeros_like(dfold)
+    err_fringes1D = np.zeros(ndet_tot)
+    params = np.zeros((ndet_tot, nconfigs+2))
+    err_params = np.zeros_like(params)
+    datafold = np.zeros((ndet_tot, nbins))
+    err_datafold = np.zeros_like(datafold)
+    residuals_time = np.zeros_like(datafold)
 
+    coeffs = np.array([1. / 3, -1., 1., 1. / 3, -1., 1. / 3])
     for i, ASIC in enumerate(asics):
         # Cut the data
         t_data_cut, data_cut = cut_data(t0, tf, t_data[i], data[i])
 
         # Find the true period
         if i == 0:
-            ppp, rms, period = find_right_period(6 * wt, t_data_cut, data_cut[tes_check - 1, :])
+            ppp, rms, period = find_right_period(nconfigs * wt, t_data_cut, data_cut[refTESnum - 1, :])
             if verbose:
                 print('period:', period)
-                print('Expected : ', 6 * wt)
+                print('Expected : ', nconfigs * wt)
 
         # Fold and filter the data
-        fold, tfold, _, _ = ft.fold_data(t_data_cut,
+        dfold, tfold, _, errfold, _, _ = ft.fold_data(t_data_cut,
                                          data_cut,
                                          period,
                                          lowcut,
@@ -235,35 +241,49 @@ def analyse_fringesLouise(datafolder, asics, t0=None, tf=None, wt=5.,
                                          nbins,
                                          notch=notch,
                                          median=median,
-                                         silent=verbose,
+                                         return_error=True,
+                                         silent=verbose
                                          )
-        dfold[ndet * i:ndet * (i + 1), :] = fold
+
+        datafold[ndet * i:ndet * (i + 1), :] = dfold
+        err_datafold[ndet * i:ndet * (i + 1), :] = errfold
 
         # Fit (Louise method)
+        stable_time = period / nconfigs
+        param_guess = [0.1, 0.] + [1.] * nconfigs
+        if verbose:
+            print('Guess parameters:', param_guess)
+
         for j in range(ndet):
             index = ndet * i + j
-            fit = sop.least_squares(make_diff_sig,
-                                    param_guess,
-                                    args=(tfold,
-                                          period / 6.,
-                                          fold[j, :]),
-                                    bounds=([0., -2, -2, -2, -2, -2, -2, -2],
-                                            [1., 2, 2, 2, 2, 2, 2, 2]),
-                                    verbose=verbose
-                                    )
-            param_est[index, :] = fit.x
-            fringes1D[index] = make_combination(param_est[index, :])
+            # With curve_fit, it is not possible to have 'args'
+            popt, pcov = sop.curve_fit(lambda tfold, ctime, tstart, a0, a1, a2, a3, a4, a5:
+                                       ft.simsig_fringes(tfold, stable_time, [ctime, tstart, a0, a1, a2, a3, a4, a5]),
+                                       tfold,
+                                       dfold[j, :],
+                                       p0=param_guess,
+                                       sigma=errfold[j, :],
+                                       absolute_sigma=True,
+                                       bounds=([0., -2, -2, -2, -2, -2, -2, -2],
+                                               [1., 2, 2, 2, 2, 2, 2, 2])
+                                               )
+            params[index, :] = popt
+            err_params[index, :] = np.sqrt(np.diag(pcov))
 
-            residuals_time[index, :] = dfold[index, :] - ft.simsig_fringes(tfold, period / 6., param_est[index, :])
+            # Combination to get fringes
+            fringes1D[index], err_fringes1D[index] = weighted_sum(params[index, 2:], err_params[index, 2:], coeffs)
 
-    return tfold, dfold, param_est, fringes1D, period, residuals_time
+            residuals_time[index, :] = dfold[j, :] - ft.simsig_fringes(tfold, stable_time, popt)
+    if return_folding:
+        return params, err_params, fringes1D, err_fringes1D, period, tfold, datafold, err_datafold, residuals_time
+    else:
+        return params, err_params, fringes1D, err_fringes1D, period
 
 
-def make_w_Michel(t, tm1=12, tm2=2, ph=5):
+def make_w_Michel(t, period, tm1=12, tm2=2, ph=5):
     # w is made to make the combination to see fringes with Michel's method
     w = np.zeros_like(t)
     wcheck = np.zeros_like(t)
-    period = len(w) / 6
     for i in range(len(w)):
         if (((i - ph) % period) >= tm1) and (((i - ph) % period) < period - tm2):
             if (((i - ph) // period) == 0) | (((i - ph) // period) == 3):
@@ -274,57 +294,56 @@ def make_w_Michel(t, tm1=12, tm2=2, ph=5):
     return w, wcheck
 
 
-def analyse_fringes_Michel(datafolder, w, t0=None, tf=None, wt=5.,
+def analyse_fringes_Michel(datafolder, asics=[1, 2], w=None, t0=None, tf=None, wt=5.,
                            lowcut=0.001, highcut=10, nbins=120,
                            notch=np.array([[1.724, 0.005, 10]]),
                            tes_check=28,
-                           verbose=True, median=False, read_data=None, silent=False):
+                           median=False,
+                           verbose=True):
     """
     Compute the fringes with Michel's method.
     """
 
-    res_michel = np.zeros(256)
-    folded_bothasics = np.zeros((256, nbins))
+    # Read the data
+    tdata, data = get_data(datafolder, asics)
+    nasics, ndet, _ = data.shape
+    ndet_tot = nasics * ndet
 
-    for ASIC in [1, 2]:
-        if read_data is None:
-            # Read the data
-            t_data, data = get_data(datafolder, ASIC, doplot=False)
-        else:
-            t_data, data = read_data[ASIC - 1]
+    fringes1D = np.zeros(ndet_tot)
+    dfold = np.zeros((ndet_tot, nbins))
 
+    for i, ASIC in enumerate(asics):
         # Cut the data
-        t_data_cut, data_cut = cut_data(t0, tf, t_data, data)
+        tdata_cut, data_cut = cut_data(t0, tf, tdata[i], data[i])
 
         # Find the true period
-        if ASIC == 1:
-            ppp, rms, period = find_right_period(6 * wt, t_data_cut, data_cut[tes_check - 1, :])
+        if i == 0:
+            ppp, rms, period = find_right_period(6 * wt, tdata_cut, data_cut[tes_check - 1, :])
             if verbose:
                 print('period:', period)
                 print('Expected : ', 6 * wt)
 
         # Fold and filter the data
-        folded, t, _, newdata = ft.fold_data(t_data_cut,
-                                             data_cut,
-                                             period,
-                                             lowcut,
-                                             highcut,
-                                             nbins,
-                                             notch=notch,
-                                             median=median,
-                                             silent=silent,
-                                             )
-        if ASIC == 1:
-            folded_bothasics[:128, :] = folded
-        else:
-            folded_bothasics[128:, :] = folded
+        fold, tfold, _, _ = ft.fold_data(tdata_cut,
+                                         data_cut,
+                                         period,
+                                         lowcut,
+                                         highcut,
+                                         nbins,
+                                         notch=notch,
+                                         median=median,
+                                         silent=verbose,
+                                         )
+        dfold[ndet * i:ndet * (i + 1), :] = fold
+        if w is None:
+            w, _ = make_w_Michel(tfold, period)
 
         # Michel method
-        for TES in range(1, 129):
-            index = (TES - 1) + 128 * (ASIC - 1)
-            res_michel[index] = np.sum(folded[TES - 1, :] * w)
+        for j in range(ndet):
+            index = ndet * i + j
+            fringes1D[index] = np.sum(fold[j, :] * w)
 
-    return t, folded_bothasics, res_michel, period
+    return tfold, dfold, fringes1D, period
 
 
 def make_keyvals(date, nBLs, Vtes, nstep=6, ecosorb='yes', frame='ONAFP'):
@@ -604,18 +623,18 @@ def plot_sum_diff_fringes(q, keyvals, fdict, mask=None, lim=2, cmap='bwr'):
 
 def plot_fringes_scatter(q, xTES, yTES, fringes1D, normalize=True, frame='ONAFP', fig=None, ax=None,
                          cbar=True, lim=1., cmap='bwr', s=None, title='Scatter plot'):
-    xTES, yTES, fringes1D = remove_thermometers(xTES, yTES, fringes1D)
+    x, y, fringes = remove_thermometers(xTES, yTES, fringes1D)
 
     if normalize:
-        fringes1D /= np.nanstd(fringes1D)
+        fringes /= np.nanstd(fringes)
 
     if ax is None:
         fig, ax = plt.subplots()
-    scal.scatter_plot_FP(q, xTES, yTES, fringes1D, frame,
+    scal.scatter_plot_FP(q, x, y, fringes, frame,
                          fig=fig, ax=ax,
                          s=s,
                          title=title,
-                         unit=None,
+                         unit='',
                          cmap=cmap,
                          vmin=-lim, vmax=lim,
                          cbar=cbar
@@ -639,12 +658,34 @@ def plot_fringes_imshow_interp(fringes1D, normalize=True, interp='Gaussian', mas
                     vmin=-lim, vmax=lim,
                     cmap=cmap,
                     interpolation=interp)
-    ft.qgrid()
+    # ft.qgrid()
     ax.set_title(title, fontsize=14)
     if cbar:
         divider = make_axes_locatable(ax)
         cax = divider.append_axes('right', size='5%', pad=0.05)
         fig.colorbar(img, cax=cax)
+    return
+
+
+def plot_folding_fit(TES, ASIC, tfold, datafold, period,
+                     params, errs, allh=[True, False, False, True, False, True]):
+    idx = (ASIC-1) * 128 + (TES - 1)
+    nconfigs = len(params[TES, 2:])
+    amps = params[:, 2:]
+    mean_allh = np.mean(amps[idx, allh])
+
+    plt.figure()
+    plt.axhline(mean_allh, color='k', linestyle='--', label='Mean all open')
+    plt.plot(tfold, datafold[idx, :], label='Folded signal')
+    plt.errorbar(np.arange(0, period, period/nconfigs), amps[idx, :], yerr=errs[idx, 2:],
+                 fmt='o', color='r', label='Fit Amplitudes')
+    plt.plot(tfold, ft.simsig_fringes(tfold, period/nconfigs, params[idx, :]),
+            label='Fit')
+    plt.legend()
+    plt.xlabel('Time [s]')
+    plt.ylabel('TOD')
+    plt.title(f'TES {TES} - ASIC {ASIC}')
+    plt.grid()
     return
 
 
@@ -755,27 +796,29 @@ def plot_residuals(q, sigres, oktes, xTES, yTES, frame='ONAFP', suptitle=None):
                          fig=fig, ax=ax1, cmap='bwr', cbar=False, s=60, title='TES OK (2sig)')
 
     scal.scatter_plot_FP(q, xTES, yTES, sigres * oktes, frame=frame,
-                         fig=fig, ax=ax2, cmap='bwr', cbar=True, unit=None, s=60, title='TOD Residuals')
+                         fig=fig, ax=ax2, cmap='bwr', cbar=True, unit='', s=60, title='TOD Residuals')
     return
 
 
-def plot_fringes_errors(q, fringes1D, err_fringes1D, xTES, yTES, frame='ONAFP', suptitle=None):
+def plot_fringes_errors(q, fringes1D, err_fringes1D, xTES, yTES, frame='ONAFP',
+                        s=None, lim=1., suptitle=None):
     _, _, fringes1D = remove_thermometers(xTES, yTES, fringes1D)
     xTES, yTES, err_fringes1D = remove_thermometers(xTES, yTES, err_fringes1D)
 
-    mm, ss = ft.meancut(fringes1D, 3)
-    rng = 3 * ss
+    if lim is None:
+        mm, ss = ft.meancut(fringes1D, 3)
+        lim = 3 * ss
 
     fig, axs = plt.subplots(1, 2)
     fig.suptitle(suptitle)
     fig.subplots_adjust(wspace=0.5)
     ax0, ax1 = axs
     scal.scatter_plot_FP(q, xTES, yTES, err_fringes1D, frame=frame,
-                         fig=fig, ax=ax0, cmap='bwr', cbar=True, unit=None, s=80, title='Errors',
-                         vmin=-rng, vmax=rng)
+                         fig=fig, ax=ax0, cmap='bwr', cbar=True, unit='', s=s, title='Errors',
+                         vmin=-lim, vmax=lim)
 
     scal.scatter_plot_FP(q, xTES, yTES, np.abs(fringes1D / err_fringes1D), frame=frame,
-                         fig=fig, ax=ax1, cmap='bwr', cbar=True, unit=None, s=80, title='|Values / Errors|',
+                         fig=fig, ax=ax1, cmap='bwr', cbar=True, unit='', s=s, title='|Values / Errors|',
                          vmin=0, vmax=3)
     return
 
@@ -850,6 +893,50 @@ def find_t0(tfold, dfold, period, nconfigs=6, doplot=False):
     return t0
 
 
+def folding_oneTES(timeTES, dataTES, period, t0,
+                   lowcut=1e-5, highcut=5., notch=np.array([[1.724, 0.005, 30]]),
+                   nsp_per=240, all_h=[True, False, False, True, False, True],
+                   skip_rise=0.2, skip_fall=0.1, doplot=True):
+    nconfigs = len(all_h)
+
+    # First Step: Data Filtering
+    dfilter = ft.filter_data(timeTES, dataTES, lowcut, highcut, notch=notch, rebin=True)
+
+    # Crop the data in order to have an integer number of periods
+    tcrop, dcrop, nper = cut_data_Nperiods(None, None, timeTES, dfilter, period)
+
+    # Resample the signal
+    newtime = np.linspace(tcrop[0], tcrop[-1], nper * nsp_per)
+    newdata = resample(dcrop, nper * nsp_per)
+    if doplot:
+        plt.figure(figsize=(8, 6))
+        plt.plot(newtime, newdata)
+        plt.xlabel('Time')
+        plt.ylabel('ADU')
+
+    # Fold the data
+    tfold = np.linspace(0, period, nsp_per)
+    dfold = np.reshape(newdata, (nper, nsp_per))
+
+    # Shift the folded data in order to have t0=0
+    droll = np.roll(dfold, -int(t0 / period * nsp_per), axis=1)
+
+    # Roughly remove the average of the all_h configurations
+    ok_all_horns = np.zeros_like(tfold, dtype=bool)
+    for i in range(nconfigs):
+        if all_h[i]:
+            tmini = i * period / nconfigs + skip_rise * period / nconfigs
+            tmaxi = (i + 1) * period / nconfigs - skip_fall * period / nconfigs
+            ok = (tfold >= tmini) & (tfold < tmaxi)
+            ok_all_horns[ok] = True
+    droll -= np.median(droll[:, ok_all_horns])
+
+    if doplot:
+        plot_folding(tfold, droll, period, nper, skip_rise, skip_fall)
+
+    return tfold, droll
+
+
 def average_datafold_oneTES(tfold, dfold, period, skip_rise=0., skip_fall=0.,
                             median=True, remove_slope=False,
                             all_h=[True, False, False, True, False, True], speak=False,
@@ -891,8 +978,13 @@ def average_datafold_oneTES(tfold, dfold, period, skip_rise=0., skip_fall=0.,
         # Fit a slope between the "all horns open" configurations and remove it
         xx = np.arange(6)
         for i in range(nper):
-            pars, cc = np.polyfit(np.arange(6)[all_h], vals_per[i, all_h], 1, w=1. / errs_per[i, all_h] ** 2, cov=True)
-            errfit = np.sqrt(np.diag(cc))
+            # Linear fit
+            pars = np.polyfit(x=np.arange(6)[all_h],
+                              y=vals_per[i, all_h],
+                              deg=1,
+                              w=1. / errs_per[i, all_h] ** 2,
+                              full=False,
+                              cov=False)
             vals_per[i, :] = vals_per[i, :] - (pars[0] * xx + pars[1])
     else:
         # Remove the average off "all horns open configurations"
@@ -943,50 +1035,6 @@ def average_datafold_oneTES(tfold, dfold, period, skip_rise=0., skip_fall=0.,
     return vals, errs, residuals_time, residuals_bin, sigres, status
 
 
-def folding_oneTES(timeTES, dataTES, period, t0,
-                   lowcut=1e-5, highcut=5., notch=np.array([[1.724, 0.005, 30]]),
-                   nsp_per=240, all_h=[True, False, False, True, False, True],
-                   skip_rise=0.2, skip_fall=0.1, doplot=True):
-    nconfigs = len(all_h)
-
-    # First Step: Data Filtering
-    dfilter = ft.filter_data(timeTES, dataTES, lowcut, highcut, notch=notch, rebin=True)
-
-    # Crop the data in order to have an integer number of periods
-    tcrop, dcrop, nper = cut_data_Nperiods(None, None, timeTES, dfilter, period)
-
-    # Resample the signal
-    newtime = np.linspace(tcrop[0], tcrop[-1], nper * nsp_per)
-    newdata = resample(dcrop, nper * nsp_per)
-    if doplot:
-        plt.figure(figsize=(8, 6))
-        plt.plot(newtime, newdata)
-        plt.xlabel('Time')
-        plt.ylabel('ADU')
-
-    # Fold the data
-    tfold = np.linspace(0, period, nsp_per)
-    dfold = np.reshape(newdata, (nper, nsp_per))
-
-    # Shift the folded data in order to have t0=0
-    droll = np.roll(dfold, -int(t0 / period * nsp_per), axis=1)
-
-    # Roughly remove the average of the all_h configurations
-    ok_all_horns = np.zeros_like(tfold, dtype=bool)
-    for i in range(nconfigs):
-        if all_h[i]:
-            tmini = i * period / nconfigs + skip_rise * period / nconfigs
-            tmaxi = (i + 1) * period / nconfigs - skip_fall * period / nconfigs
-            ok = (tfold >= tmini) & (tfold < tmaxi)
-            ok_all_horns[ok] = True
-    droll -= np.median(droll[:, ok_all_horns])
-
-    if doplot:
-        plot_folding(tfold, droll, period, nper, skip_rise, skip_fall)
-
-    return tfold, droll
-
-
 def analyse_fringesJC(directory, asics=[1, 2],
                       lowcut=1e-5, highcut=5., notch=np.array([[1.724, 0.005, 30]]),
                       refTESnum=95, refASICnum=1, expected_period=30,
@@ -995,8 +1043,9 @@ def analyse_fringesJC(directory, asics=[1, 2],
                       force_period=None, force_t0=None,
                       verbose=True, doplot=True):
     tdata, data = get_data(directory, asics)
-    print(tdata.shape, data.shape)
+    print('tdata and data shapes:', tdata.shape, data.shape)
     nasics, ndet, _ = data.shape
+    ndet_tot = nasics * ndet
     nconfigs = len(all_h)
 
     # ================= Determine the correct period reference TES ========
@@ -1037,19 +1086,18 @@ def analyse_fringesJC(directory, asics=[1, 2],
             print('Using forced t0 {0:5.3f}s'.format(t0))
 
     # =============== Loop on ASICs and TES ======================
-    vals = np.zeros((nasics * ndet, nconfigs))
-    errs = np.zeros((nasics * ndet, nconfigs))
-    sigres = np.zeros((nasics * ndet))
-    status = np.zeros((nasics * ndet, nconfigs))
-    fringes1D = np.zeros((nasics * ndet))
-    err_fringes1D = np.zeros((nasics * ndet))
+    vals = np.zeros((ndet_tot, nconfigs))
+    errs = np.zeros((ndet_tot, nconfigs))
+    sigres = np.zeros(ndet_tot)
+    status = np.zeros((ndet_tot, nconfigs))
+    fringes1D = np.zeros(ndet_tot)
+    err_fringes1D = np.zeros(ndet_tot)
     coeffs = np.array([1. / 3, -1, 1, 1. / 3, -1, 1. / 3])
     for i, ASIC in enumerate(asics):
         print(f'*********** Starting ASIC{ASIC} **************')
         for j, TES in enumerate(np.arange(1, 129)):
 
             index = i * ndet + j
-            print(index)
             if (i == (refASICnum - 1)) & (j == (refTESnum - 1)):
                 speak = True
                 thedoplot = True * doplot
@@ -1059,13 +1107,14 @@ def analyse_fringesJC(directory, asics=[1, 2],
 
             timeTES = tdata[i, :]
             dataTES = data[i, j, :]
+            # Folding
             tfold, droll = folding_oneTES(timeTES, dataTES, period, t0,
                                           lowcut=lowcut, highcut=highcut, notch=notch,
                                           nsp_per=nsp_per, all_h=all_h,
                                           skip_rise=skip_rise, skip_fall=skip_fall,
                                           doplot=thedoplot)
 
-            # Calculate the baselines configurations in each TES
+            # Average each period
             vals[index, :], errs[index, :], res_time, res_bin, sigres[index], status[index,
                                                                               :] = average_datafold_oneTES(tfold,
                                                                                                            droll,
@@ -1076,9 +1125,7 @@ def analyse_fringesJC(directory, asics=[1, 2],
                                                                                                            remove_slope=remove_slope,
                                                                                                            doplot=thedoplot,
                                                                                                            speak=speak)
-            if speak:
-                print('status:', status[index, :])
-
+            # Combination and get fringes
             fringes1D[index], err_fringes1D[index] = weighted_sum(vals[index, :], errs[index, :], coeffs)
 
     # Cut on residuals
@@ -1086,4 +1133,4 @@ def analyse_fringesJC(directory, asics=[1, 2],
     oktes = np.ones((nasics * ndet))
     oktes[np.abs(np.log10(sigres) - mm) > 2 * ss] = np.nan
 
-    return vals, errs, sigres, period, t0, fringes1D, err_fringes1D, oktes, status
+    return vals, errs, sigres, period, fringes1D, err_fringes1D, oktes, status

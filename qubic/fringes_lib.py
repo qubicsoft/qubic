@@ -14,71 +14,575 @@ from qubic import selfcal_lib as scal
 __all__ = ['Fringes_Analysis']
 
 
-# ============== Get data ==============
-def get_data(datafolder, asics, src_data=False, subtract_t0=True):
-    """
-    Get the TODs for one ASIC.
-    Parameters
-    ----------
-    datafolder: str
-        Folder containing the data.
-    asics: list
-        ASIC numbers.
-    doplot: bool
-    src_data: if True,will return the srouce data as well
-    subtract_t0: if True, will remove to the time the first time element
+class Fringes_Analysis:
+    def __init__(self, datafolder, date, q, baseline, ncycles=20, stable_time=5.,
+                 asics=[1, 2], src_data=False, subtract_t0=True, cut=False, t0cut=None, tfcut=None,
+                 refTESnum=95, refASICnum=1, allh=[True, False, False, True, False, False], nsp_per=240,
+                 lowcut=1e-5, highcut=2., nbins=120, notch=np.array([[1.724, 0.005, 10]]),
+                 verbose=False):
+        """
+        Parameters
+        ----------
+        datafolder: str
+            Folder containing the data.
+        asics: list
+            ASIC numbers.
+        src_data: bool
+            If True, will return the source data as well
+        subtract_t0: bool,
+            If True, will remove to the time the first time element when getting data.
+        t0cut, tfcut: float
+            Start and end time to cut the TODs.
+        wt: float
+            Waiting time [s] on each step.
+        lowcut, highcut: float
+            Low and high cut for filtering
+        nbins: int
+            Number of bins for filtering
+        notch: array
+            Defined a notch filter.
+        tes_check: int
+            One TES to check the period.
+        param_guess: list
+            ctime, starting time, the 6 amplitudes.
+        median: bool
+            Parameter for folding.
+        read_data: array
+            If it is None, it will read the data,
+            else, it will use the one you pass here (saves time).
+        verbose: bool
+        """
+        self.datafolder = datafolder
+        self.date = date
+        self.q = q
+        self.baseline = baseline
+        self.ncycles = ncycles
+        self.asics = asics
+        self.src_data = src_data
+        self.subtract_t0 = subtract_t0
+        self.refTESnum = refTESnum
+        self.refASICnum = refASICnum
+        self.stable_time = stable_time
+        self.allh = allh
+        self.nsp_per = nsp_per
+        self.lowcut = lowcut
+        self.highcut = highcut
+        self.nbins = nbins
+        self.notch = notch
+        self.verbose = verbose
+        self.nasics, self.ndet_oneASIC, _ = self.data.shape
+        self.ndet = self.nasics * self.ndet_oneASIC
+        self.nconfigs = len(self.allh)
+        self.expected_period = self.stable_time * self.nconfigs
 
-    Returns
-    -------
-    Time and signal for all TES in one ASIC.
-    If src_data is True: will also return the  source time and signal
-    """
+        self.tdata, self.data, self.tsrc, self.dsrc = self._get_data()
 
-    # Qubicpack object
-    a = qubicfp()
-    a.verbosity = 0
-    a.read_qubicstudio_dataset(datafolder)
+        self.cut = cut
+        self.t0cut = t0cut
+        self.tfcut = tfcut
+        if cut:
+            print('Cutting the data from t0cut to tfcut.')
+            self.tdata, self.data = cut_data(self.t0cut, self.tfcut, self.tdata, self.data)
 
-    # TOD from all ASICS
-    data = []
-    tdata = []
-    for i, ASIC in enumerate(asics):
-        ASIC = int(ASIC)
-        data_oneASIC = a.timeline_array(asic=ASIC)
-        data.append(data_oneASIC)
-        tdata_oneASIC = a.timeaxis(datatype='science', asic=ASIC)
-        if subtract_t0:
-            tdata_oneASIC -= tdata_oneASIC[0]
-        tdata.append(tdata_oneASIC)
-    tdata = np.array(tdata)
-    data = np.array(data)
+        # Reference period
+        _, _, self.refperiod = self.find_right_period()
+        self.refstable_time = self.refperiod / self.nconfigs
 
-    if src_data:  # Get calibration source data
-        tsrc = a.calsource()[0]
-        if subtract_t0:
-            tsrc -= tsrc[0]
-        dsrc = a.calsource()[1]
+        # Get coordinates for all TES, order as on the instrument
+        self.xTES, self.yTES, _, self.allindex_q = scal.get_TES_Instru_coords(self.q, frame='ONAFP')
+
+    def _get_data(self):
+        """
+        Get the TODs for one ASIC.
+        Returns
+        -------
+        Time and signal for all TES in one ASIC.
+        If src_data is True: will also return the  source time and signal
+        """
+
+        # Qubicpack object
+        a = qubicfp()
+        a.verbosity = 0
+        a.read_qubicstudio_dataset(datadir=self.datafolder)
+
+        # TOD from all ASICS
+        data = []
+        tdata = []
+        for i, ASIC in enumerate(self.asics):
+            ASIC = int(ASIC)
+            data_oneASIC = a.timeline_array(asic=ASIC)
+            data.append(data_oneASIC)
+            tdata_oneASIC = a.timeaxis(datatype='science', asic=ASIC)
+            if self.subtract_t0:
+                tdata_oneASIC -= tdata_oneASIC[0]
+            tdata.append(tdata_oneASIC)
+        tdata = np.array(tdata)
+        data = np.array(data)
+
+        if self.src_data:  # Get calibration source data
+            tsrc = a.calsource()[0]
+            if self.subtract_t0:
+                tsrc -= tsrc[0]
+            dsrc = a.calsource()[1]
+        else:
+            tsrc = None
+            dsrc = None
 
         return tdata, data, tsrc, dsrc
-    else:
-        return tdata, data
+
+    def plot_TOD(self, ASIC, TES, xlim=None, figsize=(12, 6)):
+        idx = (ASIC - 1) * 128 + (TES - 1)
+        plt.figure(figsize=figsize)
+        ax = plt.gca()
+        ax.plot(self.tdata, self.data[idx, :])
+        ax.set_title(f'TOD for TES {TES} - ASIC {ASIC}')
+        if xlim is not None:
+            ax.set_xlim(0, xlim)
+        plt.show()
+
+        if self.dsrc is not None:
+            plt.figure(figsize=figsize)
+            ax = plt.gca()
+            ax.plot(self.tsrc, self.dsrc[idx, :])
+            ax.set_title('Calibration source data')
+            if xlim is not None:
+                ax.set_xlim(0, xlim)
+            plt.show()
+        return
+
+    def find_right_period(self, TES=None, ASIC=None, filtering=True, delta=0.5, nb=100):
+        if TES is None:
+            TES = self.refTESnum
+            ASIC = self.refASICnum
+        idx = (ASIC - 1) * 128 + (TES - 1)
+
+        if filtering:
+            thedata = ft.filter_data(self.tdata[TES - 1, :],
+                                     self.data[TES - 1, TES, :],
+                                     self.lowcut, self.highcut, notch=self.notch, rebin=True)
+        else:
+            thedata = self.data
+        ppp = np.linspace(self.expected_period - delta, self.expected_period + delta, nb)
+        rms = np.zeros(len(ppp))
+        for i in range(len(ppp)):
+            xin = self.tdata % ppp[i]
+            yin = thedata[idx, :]
+            xx, yy, dx, dy, o = ft.profile(xin, yin, nbins=100, plot=False)
+            rms[i] = np.std(yy)
+        period = ppp[np.argmax(rms)]
+
+        if self.verbose:
+            print('Found period {0:5.3f}s on TES {1:} ASIC {1:}'.format(period, TES, ASIC))
+            print('Expected : ', self.expected_period)
+
+        return ppp, rms, period
+
+    def analyse_fringesLouise(self, return_folding=False, median=False):
+        """
+        Parameters
+        ----------
+
+        Returns
+        -------
+        Time, folded signal, the 8 parameters estimated with the fit,
+        the combination of the amplitudes, the period and the residuals
+        between the fit and the signal. They are computed for each TES.
+        """
+
+        fringes1D = np.zeros(self.ndet)
+        err_fringes1D = np.zeros(self.ndet)
+        params = np.zeros((self.ndet, self.nconfigs + 2))
+        err_params = np.zeros_like(params)
+        datafold = np.zeros((self.ndet, self.nbins))
+        err_datafold = np.zeros_like(datafold)
+        residuals_time = np.zeros_like(datafold)
+
+        coeffs = np.array([1. / 3, -1., 1., 1. / 3, -1., 1. / 3])
+        for i, ASIC in enumerate(self.asics):
+            # Fold and filter the data
+            dfold, tfold, _, errfold, _, _ = ft.fold_data(self.tdata,
+                                                          self.data,
+                                                          self.refperiod,
+                                                          self.lowcut,
+                                                          self.highcut,
+                                                          self.nbins,
+                                                          notch=self.notch,
+                                                          median=median,
+                                                          return_error=True,
+                                                          silent=self.verbose
+                                                          )
+
+            datafold[self.ndet_oneASIC * i:self.ndet_oneASIC * (i + 1), :] = dfold
+            err_datafold[self.ndet_oneASIC * i:self.ndet_oneASIC * (i + 1), :] = errfold
+
+            # Fit (Louise method)
+            param_guess = [0.1, 0.] + [1.] * self.nconfigs
+            if self.verbose:
+                print('Guess parameters:', param_guess)
+            for j in range(self.ndet_oneASIC):
+                index = self.ndet_oneASIC * i + j
+                # With curve_fit, it is not possible to have 'args'
+                popt, pcov = sop.curve_fit(lambda tfold, ctime, tstart, a0, a1, a2, a3, a4, a5:
+                                           ft.simsig_fringes(tfold,
+                                                             self.refstable_time,
+                                                             [ctime, tstart, a0, a1, a2, a3, a4, a5]),
+                                           tfold,
+                                           dfold[j, :],
+                                           p0=param_guess,
+                                           sigma=errfold[j, :],
+                                           absolute_sigma=True,
+                                           bounds=([0., -2, -2, -2, -2, -2, -2, -2],
+                                                   [1., 2, 2, 2, 2, 2, 2, 2])
+                                           )
+                params[index, :] = popt
+                err_params[index, :] = np.sqrt(np.diag(pcov))
+
+                # Combination to get fringes
+                fringes1D[index], err_fringes1D[index] = weighted_sum(params[index, 2:], err_params[index, 2:], coeffs)
+
+                residuals_time[index, :] = dfold[j, :] - ft.simsig_fringes(tfold, self.refstable_time, popt)
+        if return_folding:
+            return params, err_params, fringes1D, err_fringes1D, tfold, datafold, err_datafold, residuals_time
+        else:
+            return params, err_params, fringes1D, err_fringes1D
+
+    def _make_w_Michel(self, t, tm1=12, tm2=2, ph=5):
+        # w is made to make the combination to see fringes with Michel's method
+        w = np.zeros_like(t)
+        wcheck = np.zeros_like(t)
+        for i in range(len(w)):
+            if (((i - ph) % self.refperiod) >= tm1) and (((i - ph) % self.refperiod) < self.refperiod - tm2):
+                if (((i - ph) // self.refperiod) == 0) | (((i - ph) // self.refperiod) == 3):
+                    w[i] = 1.
+                if (((i - ph) // self.refperiod) == 1) | (((i - ph) // self.refperiod) == 2):
+                    w[i] = -1.
+
+        return w, wcheck
+
+    def analyse_fringes_Michel(self, median=False, verbose=True):
+        """
+        Compute the fringes with Michel's method.
+        """
+        fringes1D = np.zeros(self.ndet)
+        dfold = np.zeros((self.ndet, self.nbins))
+
+        for i, ASIC in enumerate(self.asics):
+
+            # Fold and filter the data
+            fold, tfold, _, _ = ft.fold_data(self.tdata,
+                                             self.data,
+                                             self.refperiod,
+                                             self.lowcut,
+                                             self.highcut,
+                                             self.nbins,
+                                             notch=self.notch,
+                                             median=median,
+                                             silent=verbose,
+                                             )
+            dfold[self.ndet_oneASIC * i:self.ndet_oneASIC * (i + 1), :] = fold
+
+            # Michel method
+            w, _ = self._make_w_Michel(tfold, self.refperiod)
+            for j in range(self.ndet_oneASIC):
+                index = self.ndet_oneASIC * i + j
+                fringes1D[index] = np.sum(fold[j, :] * w)
+
+        return tfold, dfold, fringes1D
+
+    def find_t0(self, period=None, doplot=False):
+        """
+        Find time where configuration change in the square modulation.
+        """
+        if period is None:
+            period = self.refperiod
+
+        # Filter, crop, resample and fold
+        dfilter = ft.filter_data(self.tdata[self.refASICnum - 1, :],
+                                 self.data[self.refASICnum - 1, self.refTESnum, :],
+                                 self.lowcut, self.highcut, notch=self.notch, rebin=True)
+        tcrop, dcrop, nper = cut_data_Nperiods(None, None,
+                                               self.tdata[self.refASICnum - 1, :],
+                                               dfilter, period)
+        newdata = resample(dcrop, nper * self.nsp_per)
+        tfold = np.linspace(0, period, self.nsp_per)
+        dfold = np.reshape(newdata, (nper, self.nsp_per))
+
+        # Average the signal over all periods
+        msignal = np.mean(dfold, axis=0)
+        # calculate the derivative and find where it is high
+        dsignal = np.abs(np.gradient(msignal))
+        md, sd = ft.meancut(dsignal, 3)
+        thr = np.abs(dsignal - md) > (3 * sd)
+
+        # Let's find clusters of high derivatives:
+        # each time we take the first high derivative element
+        t_change = tfold[thr]
+        expected_stable_time = period / self.nconfigs
+        start_times = []
+        incluster = 0
+        for i in range(len(t_change)):
+            if incluster == 0:
+                start_times.append(t_change[i])
+                incluster = 1
+            if i > 0:
+                if (t_change[i] - t_change[i - 1]) > (expected_stable_time * 0.6):
+                    incluster = 0
+        start_times = np.array(start_times)
+
+        # Now we take the median of all start_times modulo period/nconfigs
+        t0 = np.median(start_times % expected_stable_time)
+
+        if doplot:
+            plt.figure(figsize=(10, 8))
+            plt.plot(tfold, msignal, label='Mean over periods')
+            plt.plot(tfold, dsignal, label='Derivative')
+            plt.plot(tfold[thr], dsignal[thr], 'ro', label='High Derivative (>3sig)')
+            for i in range(len(start_times)):
+                if i == 0:
+                    lab = 'Found Start times'
+                else:
+                    lab = None
+                plt.axvline(x=start_times[i], ls='--', label=lab, alpha=0.5)
+            for i in range(6):
+                if i == 0:
+                    lab = 'Median Start Time (modulo period/6)'
+                else:
+                    lab = None
+                plt.axvline(x=t0 + i * expected_stable_time, color='r', ls='--', label=lab)
+            plt.legend(framealpha=0.2)
+            plt.title('t0 determination on Reference TES')
+            plt.xlabel('Time in Period')
+            plt.ylabel('Signal averaged over periods')
+            plt.tight_layout()
+
+        return t0
+
+    def folding_oneTES(self, timeTES, dataTES, t0, period=None,
+                       skip_rise=0.2, skip_fall=0.1, doplot=True):
+
+        if period is None:
+            period = self.refperiod
+
+        # First Step: Data Filtering
+        dfilter = ft.filter_data(timeTES, dataTES, self.lowcut, self.highcut, notch=self.notch, rebin=True)
+
+        # Crop the data in order to have an integer number of periods
+        tcrop, dcrop, nper = cut_data_Nperiods(None, None, timeTES, dfilter, period)
+
+        # Resample the signal
+        newtime = np.linspace(tcrop[0], tcrop[-1], nper * self.nsp_per)
+        newdata = resample(dcrop, nper * self.nsp_per)
+        if doplot:
+            plt.figure(figsize=(8, 6))
+            plt.plot(newtime, newdata)
+            plt.xlabel('Time')
+            plt.ylabel('ADU')
+
+        # Fold the data
+        tfold = np.linspace(0, period, self.nsp_per)
+        dfold = np.reshape(newdata, (nper, self.nsp_per))
+
+        # Shift the folded data in order to have t0=0
+        droll = np.roll(dfold, -int(t0 / period * self.nsp_per), axis=1)
+
+        # Roughly remove the average of the all_h configurations
+        ok_all_horns = np.zeros_like(tfold, dtype=bool)
+        for i in range(self.nconfigs):
+            if self.allh[i]:
+                tmini = i * period / self.nconfigs + skip_rise * period / self.nconfigs
+                tmaxi = (i + 1) * period / self.nconfigs - skip_fall * period / self.nconfigs
+                ok = (tfold >= tmini) & (tfold < tmaxi)
+                ok_all_horns[ok] = True
+        droll -= np.median(droll[:, ok_all_horns])
+
+        if doplot:
+            plot_folding(tfold, droll, period, nper, skip_rise, skip_fall)
+
+        return tfold, droll
+
+    def average_datafold_oneTES(self, tfold, dfold, period=None, skip_rise=0., skip_fall=0.,
+                                median=True, remove_slope=False,
+                                speak=False, doplot=False):
+        """
+        Calculating the average in each bin over periods in various ways:
+            1/ We can use the whole flat section or cut a bit at the beginning and at the end
+            2/ Simple average
+            3/ more fancy stuff: removing a slope determined by asking the 3 measurements of "all horns" to be equal
+        """
+        if period is None:
+            period = self.refperiod
+
+        # We assume that the array has been np.rolled so that the t0 is in time sample 0
+        nper, nsp_per = np.shape(dfold)
+        stable_time = period / self.nconfigs
+
+        status = np.zeros(self.nconfigs)
+
+        # Remove the average of each period
+        dfold = (dfold.T - np.mean(dfold, axis=1)).T
+
+        # Perform first an average/median in each of the stable sections of each period
+        # (possibly skipping beginning and end)
+        vals_per = np.zeros((nper, self.nconfigs))
+        errs_per = np.zeros((nper, self.nconfigs))
+        for i in range(self.nconfigs):
+            # Cut the data
+            tstart = i * stable_time + skip_rise * stable_time
+            tend = (i + 1) * stable_time - skip_fall * stable_time
+            ok = (tfold >= tstart) & (tfold < tend)
+            for j in range(nper):
+                if median:
+                    vals_per[j, i] = np.median(dfold[j, ok])
+                else:
+                    vals_per[j, i], _ = ft.meancut(dfold[j, ok], 3)
+                errs_per[j, i] = np.std(dfold[j, ok])
+
+        if remove_slope:
+            # Fit a slope between the "all horns open" configurations and remove it
+            xx = np.arange(6)
+            for i in range(nper):
+                # Linear fit
+                pars = np.polyfit(x=np.arange(6)[self.allh],
+                                  y=vals_per[i, self.allh],
+                                  deg=1,
+                                  w=1. / errs_per[i, self.allh] ** 2,
+                                  full=False,
+                                  cov=False)
+                vals_per[i, :] = vals_per[i, :] - (pars[0] * xx + pars[1])
+        else:
+            # Remove the average off "all horns open configurations"
+            for i in range(nper):
+                vals_per[i, :] -= np.mean(vals_per[i, self.allh])
+
+        # Average/median all periods
+        vals = np.zeros(self.nconfigs)
+        errs = np.zeros(self.nconfigs)
+        for i in range(self.nconfigs):
+            if median:
+                vals[i] = np.median(vals_per[:, i])
+            else:
+                vals[i] = np.mean(vals_per[:, i])
+            errs[i] = np.std(vals_per[:, i])
+            # Try to detect cases where switches did not work properly
+            if errs[i] > (4 * np.mean(errs_per[:, i])):
+                status[i] += 1
+
+        # Residuals in time domain (not too relevant as some baselines were removed
+        # as a result, large fluctuations in time-domain are usually well removed)
+        newdfold = np.zeros_like(dfold)
+        for i in range(self.nconfigs):
+            newdfold[:, i * nsp_per // 6:(i + 1) * nsp_per // 6] = vals[i]
+        residuals_time = dfold - newdfold
+
+        # We would rather calculate the relevant residuals in the binned domain
+        # between the final values and those after levelling
+        residuals_bin = np.ravel(vals_per - vals)
+        _, sigres = ft.meancut(residuals_bin, 3)
+
+        if speak:
+            for i in range(self.nconfigs):
+                print('############')
+                print('config {}'.format(i))
+                for j in range(nper):
+                    print('per {}: {} +/- {}'.format(j, vals_per[j, i], errs_per[j, i]))
+                print('============')
+                print('Value {} +/- {}'.format(vals[i], errs[i]))
+                print('============')
+
+        if doplot:
+            plot_average_foldedTES(nper, self.nconfigs, stable_time,
+                                   vals_per, errs_per,
+                                   dfold, newdfold, residuals_time,
+                                   vals, errs, residuals_bin, remove_slope)
+
+        return vals, errs, residuals_time, residuals_bin, sigres, status
+
+    def analyse_fringesJC(self, skip_rise=0.2, skip_fall=0.1, remove_slope=True,
+                          force_period=None, force_t0=None, doplot=True):
+
+        # ================= Determine the correct period reference TES ========
+        if force_period is None:
+            period = self.refperiod
+            if self.verbose:
+                print('Using reference period {0:5.3f}s'.format(self.refperiod))
+        else:
+            period = force_period
+            if self.verbose:
+                print('Using Forced period {0:5.3f}s'.format(period))
+
+        # =============== Determine t0 on reference TES ======================
+        if force_t0 is None:
+            t0 = self.find_t0(period=period, doplot=doplot)
+            if self.verbose:
+                print('Found t0 {0:5.3f}s on TES#{1:}'.format(t0, self.refTESnum))
+        else:
+            t0 = force_t0
+            if self.verbose:
+                print('Using forced t0 {0:5.3f}s'.format(t0))
+
+        # =============== Loop on ASICs and TES ======================
+        vals = np.zeros((self.ndet, self.nconfigs))
+        errs = np.zeros((self.ndet, self.nconfigs))
+        sigres = np.zeros(self.ndet)
+        status = np.zeros((self.ndet, self.nconfigs))
+        fringes1D = np.zeros(self.ndet)
+        err_fringes1D = np.zeros(self.ndet)
+        coeffs = np.array([1. / 3, -1, 1, 1. / 3, -1, 1. / 3])
+        for i, ASIC in enumerate(self.asics):
+            print(f'*********** Starting ASIC{ASIC} **************')
+            for j, TES in enumerate(np.arange(1, 129)):
+
+                index = i * self.ndet_oneASIC + j
+                if (i == (self.refASICnum - 1)) & (j == (self.refTESnum - 1)):
+                    speak = True
+                    thedoplot = True * doplot
+                else:
+                    speak = False
+                    thedoplot = False
+
+                timeTES = self.tdata[i, :]
+                dataTES = self.data[i, j, :]
+                # Folding
+                tfold, droll = self.folding_oneTES(timeTES, dataTES, t0, period=period,
+                                                   skip_rise=skip_rise, skip_fall=skip_fall,
+                                                   doplot=thedoplot)
+                # Average each period
+                vals[index, :], errs[index, :], res_time, res_bin, \
+                sigres[index], status[index, :] = self.average_datafold_oneTES(tfold,
+                                                                               droll,
+                                                                               period=period,
+                                                                               skip_rise=skip_rise,
+                                                                               skip_fall=skip_fall,
+                                                                               remove_slope=remove_slope,
+                                                                               doplot=thedoplot,
+                                                                               speak=speak)
+                # Combination and get fringes
+                fringes1D[index], err_fringes1D[index] = weighted_sum(vals[index, :], errs[index, :], coeffs)
+
+        # Cut on residuals
+        mm, ss = ft.meancut(np.log10(sigres), 3)
+        oktes = np.ones(self.ndet)
+        oktes[np.abs(np.log10(sigres) - mm) > 2 * ss] = np.nan
+
+        return vals, errs, sigres, period, fringes1D, err_fringes1D, oktes, status
 
 
-def cut_data(t0, tf, t_data, data):
+# ============== Tool functions ==============
+def cut_data(t0, tf, tdata, data):
     """
     Cut the TODs from t0 to tf.
     They can be None if you do not want to cut the beginning or the end.
     """
     if t0 is None:
-        t0 = t_data[0]
+        t0 = tdata[0]
     if tf is None:
-        tf = t_data[-1]
+        tf = tdata[-1]
 
-    ok = (t_data >= t0) & (t_data <= tf)
-    t_data_cut = t_data[ok]
+    ok = (tdata >= t0) & (tdata <= tf)
+    tdata_cut = tdata[ok]
     data_cut = data[:, ok]
 
-    return t_data_cut, data_cut
+    return tdata_cut, data_cut
 
 
 def cut_data_Nperiods(t0, tf, t_data, data, period):
@@ -100,26 +604,105 @@ def cut_data_Nperiods(t0, tf, t_data, data, period):
     return t_data_cut, data_cut, nper
 
 
-# ============== Plots functions ==============
-def plot_TOD(tdata, data, TES, tsrc=None, dsrc=None, xlim=None, figsize=(12, 6)):
-    plt.figure(figsize=figsize)
-    ax = plt.gca()
-    ax.plot(tdata, data[TES - 1, :])
-    ax.set_title(f'TOD for TES {TES}')
-    if xlim is not None:
-        ax.set_xlim(0, xlim)
-    plt.show()
+def weighted_sum(vals, errs, coeffs):
+    thesum = np.sum(coeffs * vals)
+    thesigma = np.sqrt(np.sum(coeffs ** 2 * errs ** 2))
+    return thesum, thesigma
 
-    if dsrc is not None:
-        plt.figure(figsize=figsize)
-        ax = plt.gca()
-        ax.plot(tsrc, dsrc[TES - 1, :])
-        ax.set_title('Calibration source data')
-        if xlim is not None:
-            ax.set_xlim(0, xlim)
-        plt.show()
+
+def make_keyvals(date, nBLs, Vtes, nstep=6, ecosorb='yes', frame='ONAFP'):
+    """
+    Make a dictionary with relevant information on the measurement.
+    Assign the FITS keyword values for the primary header
+    """
+    keyvals = {'DATE-OBS': (date, 'Date of the measurement'), 'NBLS': (nBLs, 'Number of baselines'),
+               'NSTEP': (nstep, 'Number of stable steps per cycle'), 'V_TES': (Vtes, 'TES voltage [V]'),
+               'ECOSORD': (ecosorb, 'Ecosorb on the source'), 'FRAME': (frame, 'Referential frame for (X, Y) TES')}
+
+    return keyvals
+
+
+def make_fdict(allBLs, allwt, allNcycles, xTES, yTES, t,
+               allfolded, allparams, allfringes1D, allperiods, allresiduals):
+    """ Make a dictionary with all relevant data."""
+    fdict = {'BLS': allBLs, 'WT': allwt, 'NCYCLES': allNcycles, 'X_TES': xTES, 'Y_TES': yTES, 'TIME': t,
+             'FOLDED': allfolded, 'PARAMS': allparams, 'FRINGES_1D': allfringes1D, 'PERIODS': allperiods,
+             'RESIDUALS': allresiduals}
+
+    return fdict
+
+
+def write_fits_fringes(out_dir, save_name, keyvals, fdict):
+    """ Save a .fits with the fringes data."""
+    if out_dir[-1] != '/':
+        out_dir += '/'
+
+    # Header creation
+    hdr = pyfits.Header()
+    for key in keyvals.keys():
+        hdr[key] = (keyvals[key])
+
+    hdu_prim = pyfits.PrimaryHDU(header=hdr)
+    allhdu = [hdu_prim]
+    for key in fdict.keys():
+        hdu = pyfits.ImageHDU(data=fdict[key], name=key)
+        allhdu.append(hdu)
+
+    thdulist = pyfits.HDUList(allhdu)
+    thdulist.writeto(out_dir + save_name, 'warn')
+
     return
 
+
+def read_fits_fringes(file):
+    """
+    Read a .fits where you saved the data and returns two dictionaries with
+    the header content and the data themselves.
+    """
+    hdulist = pyfits.open(file)
+    header = hdulist[0].header
+    print(header.keys)
+
+    fringes_dict = {}
+    for i in range(1, len(hdulist)):
+        extname = hdulist[i].header['EXTNAME']
+        data = hdulist[i].data
+        fringes_dict[extname] = data
+
+    return header, fringes_dict
+
+
+def make_mask2D_thermometers_TD():
+    mask_thermos = np.ones((17, 17))
+    mask_thermos[0, 12:] = np.nan
+    mask_thermos[1:5, 16] = np.nan
+    return mask_thermos
+
+
+def remove_thermometers(x, y, fringes1D):
+    """Remove the 8 thermometers.
+    Returns 1D arrays with 248 values and not 256."""
+    fringes1D = fringes1D[x != 0.]
+    x = x[x != 0.]
+    y = y[y != 0.]
+    return x, y, fringes1D
+
+
+def reorder_data(data, xdata, ydata, xqsoft, yqsoft):
+    ndata = len(data)
+    ndet = xdata.shape[0]
+    data_ordered = []
+    for k in range(ndata):
+        olddata = data[k]
+        newdata = np.zeros_like(olddata)
+        for det in range(ndet):
+            index_simu = np.where((xqsoft == xdata[det]) & (yqsoft == ydata[det]))[0][0]
+            newdata[index_simu] = olddata[det]
+        data_ordered.append(newdata)
+    return data_ordered
+
+
+# ============== Plots functions ==============
 def plot_sum_diff_fringes(q, keyvals, fdict, mask=None, lim=2, cmap='bwr'):
     """Plot the sum and the difference of all equivalent baselines."""
     if type(keyvals['NSTEP']) is tuple:
@@ -219,7 +802,7 @@ def plot_fringes_imshow_interp(fringes1D, normalize=True, interp='Gaussian', mas
 
 def plot_folding_fit(TES, ASIC, tfold, datafold, period,
                      params, errs, allh=[True, False, False, True, False, True]):
-    idx = (ASIC-1) * 128 + (TES - 1)
+    idx = (ASIC - 1) * 128 + (TES - 1)
     nconfigs = len(params[TES, 2:])
     amps = params[:, 2:]
     mean_allh = np.mean(amps[idx, allh])
@@ -227,15 +810,47 @@ def plot_folding_fit(TES, ASIC, tfold, datafold, period,
     plt.figure()
     plt.axhline(mean_allh, color='k', linestyle='--', label='Mean all open')
     plt.plot(tfold, datafold[idx, :], label='Folded signal')
-    plt.errorbar(np.arange(0, period, period/nconfigs), amps[idx, :], yerr=errs[idx, 2:],
+    plt.errorbar(np.arange(0, period, period / nconfigs), amps[idx, :], yerr=errs[idx, 2:],
                  fmt='o', color='r', label='Fit Amplitudes')
-    plt.plot(tfold, ft.simsig_fringes(tfold, period/nconfigs, params[idx, :]),
-            label='Fit')
+    plt.plot(tfold, ft.simsig_fringes(tfold, period / nconfigs, params[idx, :]),
+             label='Fit')
     plt.legend()
     plt.xlabel('Time [s]')
     plt.ylabel('TOD')
     plt.title(f'TES {TES} - ASIC {ASIC}')
     plt.grid()
+    return
+
+def plot_folded_fit(TES, BL_index, keyvals, fdict, ax=None, legend=True):
+    """Plot one folded signal for one TES with the fit and the residuals."""
+    if type(keyvals['NSTEP']) is tuple:
+        for i in keyvals:
+            keyvals[i] = keyvals[i][0]
+
+    params = fdict['PARAMS'][BL_index][TES - 1, :]  # Fit parameters
+    t0 = params[1]  # Starting time
+    amps = params[2:8]  # Amplitudes
+    t = fdict['TIME']  # Time
+    folded = fdict['FOLDED'][BL_index][TES - 1, :]  # Folded signal
+    period = fdict['PERIODS'][BL_index]  # Period
+    nstep = keyvals['NSTEP']
+    stable_time = period / nstep
+    resid = fdict['RESIDUALS'][BL_index][TES - 1, :]  # Residuals
+
+    # Plot
+    if ax is None:
+        fig, ax = plt.subplots()
+    ax.plot(t, folded, label='folded signal')
+    ax.plot(t, ft.simsig_fringes(t, stable_time, params), label='Fit')
+    ax.plot(np.arange(0, period, stable_time) + t0, amps, 'ro', label='Amplitudes')
+    ax.plot(t, resid, label='Residuals: RMS={0:6.4f}'.format(np.std(resid)))
+
+    for k in range(nstep):
+        ax.axvline(x=stable_time * k + t0, color='k', ls=':', alpha=0.3)
+    ax.set_title(f'TES {TES}', fontsize=14)
+    ax.set_ylim(-2.5, 2.5)
+    if legend:
+        ax.legend(loc='upper right')
     return
 
 
@@ -373,101 +988,21 @@ def plot_fringes_errors(q, fringes1D, err_fringes1D, xTES, yTES, frame='ONAFP',
     return
 
 
-
-# def plot_fringes_onFP(q, BL_index, keyvals, fdict, mask=None, lim=2, cmap='bwr', cbar=True, s=None):
-#     """Plot fringes on the FP with imshow and with a scatter plot."""
-#     if type(keyvals['NSTEP']) is tuple:
-#         for i in keyvals:
-#             keyvals[i] = keyvals[i][0]
-#
-#     BL = fdict['BLS'][BL_index]
-#     date = keyvals['DATE-OBS']
-#     x = fdict['X_TES']
-#     y = fdict['Y_TES']
-#     fringes1D = fdict['FRINGES_1D'][BL_index]
-#     frame = keyvals['FRAME']
-#
-#     x, y, fringes1D = remove_thermometers(x, y, fringes1D)
-#
-#     if mask is None:
-#         mask = make_mask2D_thermometers_TD()
-#
-#     fig = plt.figure()
-#     fig.suptitle(f'Baseline {BL} - ' + date, fontsize=14)
-#     ax0 = plt.subplot(121)
-#     img = ax0.imshow(np.nan_to_num(fringes2D * mask),
-#                        vmin=-lim, vmax=lim,
-#                        cmap=cmap,
-#                        interpolation='Gaussian')
-#     ft.qgrid()
-#     ax0.set_title('Imshow', fontsize=14)
-#     if cbar:
-#         divider = make_axes_locatable(ax0)
-#         cax = divider.append_axes('right', size='5%', pad=0.05)
-#         fig.colorbar(img, cax=cax)
-#
-#     ax1 = plt.subplot(122)
-#     scal.scatter_plot_FP(q, x, y, fringes1D, frame,
-#                          fig=fig, ax=ax1,
-#                          s=s,
-#                          title='Scatter plot',
-#                          unit=None,
-#                          cmap=cmap,
-#                          vmin=-lim, vmax=lim,
-#                          cbar=cbar
-#                          )
-#     return
-
-#
-# def save_fringes_pdf_plots(out_dir, q, keyvals, fdict, mask=None, **kwargs):
-#     """Save all the fringe plots (all baselines) in a pdf file."""
-#     if type(keyvals['NSTEP']) is tuple:
-#         for i in keyvals:
-#             keyvals[i] = keyvals[i][0]
-#
-#     neq = keyvals['NBLS']
-#     date = keyvals['DATE-OBS']
-#     myname = 'Fringes_' + date + f'_{neq}BLs.pdf'
-#
-#     with PdfPages(out_dir + myname) as pp:
-#         for i in range(neq):
-#             plot_fringes_onFP(q, i, keyvals, fdict, mask=mask, **kwargs)
-#             pp.savefig()
-#     return
-
-
-def plot_folded_fit(TES, BL_index, keyvals, fdict, ax=None, legend=True):
-    """Plot one folded signal for one TES with the fit and the residuals."""
+def save_fringes_pdf_plots(out_dir, q, keyvals, fdict, mask=None, **kwargs):
+    """Save all the fringe plots (all baselines) in a pdf file."""
     if type(keyvals['NSTEP']) is tuple:
         for i in keyvals:
             keyvals[i] = keyvals[i][0]
 
-    params = fdict['PARAMS'][BL_index][TES - 1, :]  # Fit parameters
-    t0 = params[1]  # Starting time
-    amps = params[2:8]  # Amplitudes
-    t = fdict['TIME']  # Time
-    folded = fdict['FOLDED'][BL_index][TES - 1, :]  # Folded signal
-    period = fdict['PERIODS'][BL_index]  # Period
-    nstep = keyvals['NSTEP']
-    stable_time = period / nstep
-    resid = fdict['RESIDUALS'][BL_index][TES - 1, :]  # Residuals
+    neq = keyvals['NBLS']
+    date = keyvals['DATE-OBS']
+    myname = 'Fringes_' + date + f'_{neq}BLs.pdf'
 
-    # Plot
-    if ax is None:
-        fig, ax = plt.subplots()
-    ax.plot(t, folded, label='folded signal')
-    ax.plot(t, ft.simsig_fringes(t, stable_time, params), label='Fit')
-    ax.plot(np.arange(0, period, stable_time) + t0, amps, 'ro', label='Amplitudes')
-    ax.plot(t, resid, label='Residuals: RMS={0:6.4f}'.format(np.std(resid)))
-
-    for k in range(nstep):
-        ax.axvline(x=stable_time * k + t0, color='k', ls=':', alpha=0.3)
-    ax.set_title(f'TES {TES}', fontsize=14)
-    ax.set_ylim(-2.5, 2.5)
-    if legend:
-        ax.legend(loc='upper right')
+    with PdfPages(out_dir + myname) as pp:
+        for i in range(neq):
+            plot_fringes_onFP(q, i, keyvals, fdict, mask=mask, **kwargs)
+            pp.savefig()
     return
-
 
 def save_folded_fit_pdf_plots(out_dir, keyvals, fdict):
     """Save all the plots (folded signal, fit and residuals)
@@ -505,608 +1040,3 @@ def save_folded_fit_pdf_plots(out_dir, keyvals, fdict):
                         plot_folded_fit(TES, BL_index, keyvals, fdict, ax=ax, legend=False)
                 pp.savefig()
     return
-
-
-
-# ============== Tool functions ==============
-def find_right_period(guess, t_data, data_oneTES, delta=1.5, nb=250):
-    ppp = np.linspace(guess - delta, guess + delta, nb)
-    rms = np.zeros(len(ppp))
-    for i in range(len(ppp)):
-        xin = t_data % ppp[i]
-        yin = data_oneTES
-        xx, yy, dx, dy, o = ft.profile(xin, yin, nbins=100, plot=False)
-        rms[i] = np.std(yy)
-    period = ppp[np.argmax(rms)]
-
-    return ppp, rms, period
-
-
-def weighted_sum(vals, errs, coeffs):
-    thesum = np.sum(coeffs * vals)
-    thesigma = np.sqrt(np.sum(coeffs ** 2 * errs ** 2))
-    return thesum, thesigma
-
-
-def make_w_Michel(t, period, tm1=12, tm2=2, ph=5):
-    # w is made to make the combination to see fringes with Michel's method
-    w = np.zeros_like(t)
-    wcheck = np.zeros_like(t)
-    for i in range(len(w)):
-        if (((i - ph) % period) >= tm1) and (((i - ph) % period) < period - tm2):
-            if (((i - ph) // period) == 0) | (((i - ph) // period) == 3):
-                w[i] = 1.
-            if (((i - ph) // period) == 1) | (((i - ph) // period) == 2):
-                w[i] = -1.
-
-    return w, wcheck
-
-
-def make_keyvals(date, nBLs, Vtes, nstep=6, ecosorb='yes', frame='ONAFP'):
-    '''
-    Make a dictionary with relevant information on the measurement.
-    Assign the FITS keyword values for the primary header
-    '''
-    keyvals = {}
-    keyvals['DATE-OBS'] = (date, 'Date of the measurement')
-    keyvals['NBLS'] = (nBLs, 'Number of baselines')
-    keyvals['NSTEP'] = (nstep, 'Number of stable steps per cycle')
-    keyvals['V_TES'] = (Vtes, 'TES voltage [V]')
-    keyvals['ECOSORD'] = (ecosorb, 'Ecosorb on the source')
-    keyvals['FRAME'] = (frame, 'Referential frame for (X, Y) TES')
-
-    return keyvals
-
-
-def make_fdict(allBLs, allwt, allNcycles, xTES, yTES, t,
-               allfolded, allparams, allfringes1D, allperiods, allresiduals):
-    """ Make a dictionary with all relevant data."""
-    fdict = {}
-    fdict['BLS'] = allBLs
-    fdict['WT'] = allwt
-    fdict['NCYCLES'] = allNcycles
-    fdict['X_TES'] = xTES
-    fdict['Y_TES'] = yTES
-    fdict['TIME'] = t
-    fdict['FOLDED'] = allfolded
-    fdict['PARAMS'] = allparams
-    fdict['FRINGES_1D'] = allfringes1D
-    fdict['PERIODS'] = allperiods
-    fdict['RESIDUALS'] = allresiduals
-
-    return fdict
-
-
-def write_fits_fringes(out_dir, save_name, keyvals, fdict):
-    """ Save a .fits with the fringes data."""
-    if out_dir[-1] != '/':
-        out_dir += '/'
-
-    # Header creation
-    hdr = pyfits.Header()
-    for key in keyvals.keys():
-        hdr[key] = (keyvals[key])
-
-    hdu_prim = pyfits.PrimaryHDU(header=hdr)
-    allhdu = [hdu_prim]
-    for key in fdict.keys():
-        hdu = pyfits.ImageHDU(data=fdict[key], name=key)
-        allhdu.append(hdu)
-
-    thdulist = pyfits.HDUList(allhdu)
-    thdulist.writeto(out_dir + save_name, 'warn')
-
-    return
-
-
-def read_fits_fringes(file):
-    """
-    Read a .fits where you saved the data and returns two dictionaries with
-    the header content and the data themselves.
-    """
-    hdulist = pyfits.open(file)
-    header = hdulist[0].header
-    print(header.keys)
-
-    fringes_dict = {}
-    for i in range(1, len(hdulist)):
-        extname = hdulist[i].header['EXTNAME']
-        data = hdulist[i].data
-        fringes_dict[extname] = data
-
-    return header, fringes_dict
-
-
-def make_mask2D_thermometers_TD():
-    mask_thermos = np.ones((17, 17))
-    mask_thermos[0, 12:] = np.nan
-    mask_thermos[1:5, 16] = np.nan
-    return mask_thermos
-
-
-def remove_thermometers(x, y, combi):
-    """Remove the 8 thermometers.
-    Returns AD arrays with 248 values and not 256."""
-    combi = combi[x != 0.]
-    x = x[x != 0.]
-    y = y[y != 0.]
-    return x, y, combi
-
-
-def reorder_data(data, xdata, ydata, xqsoft, yqsoft):
-    ndata = len(data)
-    ndet = xdata.shape[0]
-    data_ordered = []
-    for k in range(ndata):
-        olddata = data[k]
-        newdata = np.zeros_like(olddata)
-        for det in range(ndet):
-            index_simu = np.where((xqsoft == xdata[det]) & (yqsoft == ydata[det]))[0][0]
-            newdata[index_simu] = olddata[det]
-        data_ordered.append(newdata)
-    return data_ordered
-
-
-# ============== Big analysis ==============
-def analyse_fringesLouise(datafolder, asics=[1, 2], t0=None, tf=None, wt=5.,
-                          lowcut=1e-5, highcut=2., nbins=120,
-                          notch=np.array([[1.724, 0.005, 10]]),
-                          refTESnum=95, nconfigs=6,
-                          return_folding=False,
-                          median=False, verbose=True, ):
-    """
-    Parameters
-    ----------
-    datafolder: str
-        Folder containing the data.
-    asics: list
-        ASIC numbers.
-    t0, tf: float
-        Start and end time to cut the TODs.
-    wt: float
-        Waiting time [s] on each step.
-    lowcut, highcut: float
-        Low and high cut for filtering
-    nbins: int
-        Number of bins for filtering
-    notch: array
-        Defined a notch filter.
-    tes_check: int
-        One TES to check the period.
-    param_guess: list
-        ctime, starting time, the 6 amplitudes.
-    median: bool
-        Parameter for folding.
-    read_data: array
-        If it is None, it will read the data,
-        else, it will use the one you pass here (saves time).
-    verbose: bool
-    Returns
-    -------
-    Time, folded signal, the 8 parameters estimated with the fit,
-    the combination of the amplitudes, the period and the residuals
-    between the fit and the signal. They are computed for each TES.
-    """
-
-    # Read the data
-    t_data, data = get_data(datafolder, asics)
-    nasics, ndet, _ = data.shape
-    ndet_tot = nasics * ndet
-
-    fringes1D = np.zeros(ndet_tot)
-    err_fringes1D = np.zeros(ndet_tot)
-    params = np.zeros((ndet_tot, nconfigs+2))
-    err_params = np.zeros_like(params)
-    datafold = np.zeros((ndet_tot, nbins))
-    err_datafold = np.zeros_like(datafold)
-    residuals_time = np.zeros_like(datafold)
-
-    coeffs = np.array([1. / 3, -1., 1., 1. / 3, -1., 1. / 3])
-    for i, ASIC in enumerate(asics):
-        # Cut the data
-        t_data_cut, data_cut = cut_data(t0, tf, t_data[i], data[i])
-
-        # Find the true period
-        if i == 0:
-            ppp, rms, period = find_right_period(nconfigs * wt, t_data_cut, data_cut[refTESnum - 1, :])
-            if verbose:
-                print('period:', period)
-                print('Expected : ', nconfigs * wt)
-
-        # Fold and filter the data
-        dfold, tfold, _, errfold, _, _ = ft.fold_data(t_data_cut,
-                                         data_cut,
-                                         period,
-                                         lowcut,
-                                         highcut,
-                                         nbins,
-                                         notch=notch,
-                                         median=median,
-                                         return_error=True,
-                                         silent=verbose
-                                         )
-
-        datafold[ndet * i:ndet * (i + 1), :] = dfold
-        err_datafold[ndet * i:ndet * (i + 1), :] = errfold
-
-        # Fit (Louise method)
-        stable_time = period / nconfigs
-        param_guess = [0.1, 0.] + [1.] * nconfigs
-        if verbose:
-            print('Guess parameters:', param_guess)
-
-        for j in range(ndet):
-            index = ndet * i + j
-            # With curve_fit, it is not possible to have 'args'
-            popt, pcov = sop.curve_fit(lambda tfold, ctime, tstart, a0, a1, a2, a3, a4, a5:
-                                       ft.simsig_fringes(tfold, stable_time, [ctime, tstart, a0, a1, a2, a3, a4, a5]),
-                                       tfold,
-                                       dfold[j, :],
-                                       p0=param_guess,
-                                       sigma=errfold[j, :],
-                                       absolute_sigma=True,
-                                       bounds=([0., -2, -2, -2, -2, -2, -2, -2],
-                                               [1., 2, 2, 2, 2, 2, 2, 2])
-                                               )
-            params[index, :] = popt
-            err_params[index, :] = np.sqrt(np.diag(pcov))
-
-            # Combination to get fringes
-            fringes1D[index], err_fringes1D[index] = weighted_sum(params[index, 2:], err_params[index, 2:], coeffs)
-
-            residuals_time[index, :] = dfold[j, :] - ft.simsig_fringes(tfold, stable_time, popt)
-    if return_folding:
-        return params, err_params, fringes1D, err_fringes1D, period, tfold, datafold, err_datafold, residuals_time
-    else:
-        return params, err_params, fringes1D, err_fringes1D, period
-
-
-def analyse_fringes_Michel(datafolder, asics=[1, 2], w=None, t0=None, tf=None, wt=5.,
-                           lowcut=0.001, highcut=10, nbins=120,
-                           notch=np.array([[1.724, 0.005, 10]]),
-                           tes_check=28,
-                           median=False,
-                           verbose=True):
-    """
-    Compute the fringes with Michel's method.
-    """
-
-    # Read the data
-    tdata, data = get_data(datafolder, asics)
-    nasics, ndet, _ = data.shape
-    ndet_tot = nasics * ndet
-
-    fringes1D = np.zeros(ndet_tot)
-    dfold = np.zeros((ndet_tot, nbins))
-
-    for i, ASIC in enumerate(asics):
-        # Cut the data
-        tdata_cut, data_cut = cut_data(t0, tf, tdata[i], data[i])
-
-        # Find the true period
-        if i == 0:
-            ppp, rms, period = find_right_period(6 * wt, tdata_cut, data_cut[tes_check - 1, :])
-            if verbose:
-                print('period:', period)
-                print('Expected : ', 6 * wt)
-
-        # Fold and filter the data
-        fold, tfold, _, _ = ft.fold_data(tdata_cut,
-                                         data_cut,
-                                         period,
-                                         lowcut,
-                                         highcut,
-                                         nbins,
-                                         notch=notch,
-                                         median=median,
-                                         silent=verbose,
-                                         )
-        dfold[ndet * i:ndet * (i + 1), :] = fold
-        if w is None:
-            w, _ = make_w_Michel(tfold, period)
-
-        # Michel method
-        for j in range(ndet):
-            index = ndet * i + j
-            fringes1D[index] = np.sum(fold[j, :] * w)
-
-    return tfold, dfold, fringes1D, period
-
-
-def find_t0(tfold, dfold, period, nconfigs=6, doplot=False):
-    """
-    Find time where configuration change in the square modulation.
-    """
-
-    # Average the signal over all periods
-    msignal = np.mean(dfold, axis=0)
-    # calculate the derivative and find where it is high
-    dsignal = np.abs(np.gradient(msignal))
-    md, sd = ft.meancut(dsignal, 3)
-    thr = np.abs(dsignal - md) > (3 * sd)
-
-    # Let's find clusters of high derivatives:
-    # each time we take the first high derivative element
-    t_change = tfold[thr]
-    expected_stable_time = period / nconfigs
-    start_times = []
-    incluster = 0
-    for i in range(len(t_change)):
-        if incluster == 0:
-            start_times.append(t_change[i])
-            incluster = 1
-        if i > 0:
-            if (t_change[i] - t_change[i - 1]) > (expected_stable_time * 0.6):
-                incluster = 0
-    start_times = np.array(start_times)
-
-    # Now we take the median of all start_times modulo period/nconfigs
-    t0 = np.median(start_times % (period / nconfigs))
-
-    if doplot:
-        plt.figure(figsize=(10, 8))
-        plt.plot(tfold, msignal, label='Mean over periods')
-        plt.plot(tfold, dsignal, label='Derivative')
-        plt.plot(tfold[thr], dsignal[thr], 'ro', label='High Derivative (>3sig)')
-        for i in range(len(start_times)):
-            if i == 0:
-                lab = 'Found Start times'
-            else:
-                lab = None
-            plt.axvline(x=start_times[i], ls='--', label=lab, alpha=0.5)
-        for i in range(6):
-            if i == 0:
-                lab = 'Median Start Time (modulo period/6)'
-            else:
-                lab = None
-            plt.axvline(x=t0 + i * period / nconfigs, color='r', ls='--', label=lab)
-        plt.legend(framealpha=0.2)
-        plt.title('t0 determination on Reference TES')
-        plt.xlabel('Time in Period')
-        plt.ylabel('Signal averaged over periods')
-        plt.tight_layout()
-
-    return t0
-
-
-def folding_oneTES(timeTES, dataTES, period, t0,
-                   lowcut=1e-5, highcut=5., notch=np.array([[1.724, 0.005, 30]]),
-                   nsp_per=240, all_h=[True, False, False, True, False, True],
-                   skip_rise=0.2, skip_fall=0.1, doplot=True):
-    nconfigs = len(all_h)
-
-    # First Step: Data Filtering
-    dfilter = ft.filter_data(timeTES, dataTES, lowcut, highcut, notch=notch, rebin=True)
-
-    # Crop the data in order to have an integer number of periods
-    tcrop, dcrop, nper = cut_data_Nperiods(None, None, timeTES, dfilter, period)
-
-    # Resample the signal
-    newtime = np.linspace(tcrop[0], tcrop[-1], nper * nsp_per)
-    newdata = resample(dcrop, nper * nsp_per)
-    if doplot:
-        plt.figure(figsize=(8, 6))
-        plt.plot(newtime, newdata)
-        plt.xlabel('Time')
-        plt.ylabel('ADU')
-
-    # Fold the data
-    tfold = np.linspace(0, period, nsp_per)
-    dfold = np.reshape(newdata, (nper, nsp_per))
-
-    # Shift the folded data in order to have t0=0
-    droll = np.roll(dfold, -int(t0 / period * nsp_per), axis=1)
-
-    # Roughly remove the average of the all_h configurations
-    ok_all_horns = np.zeros_like(tfold, dtype=bool)
-    for i in range(nconfigs):
-        if all_h[i]:
-            tmini = i * period / nconfigs + skip_rise * period / nconfigs
-            tmaxi = (i + 1) * period / nconfigs - skip_fall * period / nconfigs
-            ok = (tfold >= tmini) & (tfold < tmaxi)
-            ok_all_horns[ok] = True
-    droll -= np.median(droll[:, ok_all_horns])
-
-    if doplot:
-        plot_folding(tfold, droll, period, nper, skip_rise, skip_fall)
-
-    return tfold, droll
-
-
-def average_datafold_oneTES(tfold, dfold, period, skip_rise=0., skip_fall=0.,
-                            median=True, remove_slope=False,
-                            all_h=[True, False, False, True, False, True], speak=False,
-                            doplot=False):
-    """
-    Calculating the average in each bin over periods in various ways:
-        1/ We can use the whole flat section or cut a bit at the beginning and at the end
-        2/ Simple average
-        3/ more fancy stuff: removing a slope determined by asking the 3 measurements of "all horns" to be equal
-    """
-
-    # We assume that the array has been np.rolled so that the t0 is in time sample 0
-    nper, nsp_per = np.shape(dfold)
-    nconfigs = len(all_h)
-    stable_time = period / nconfigs
-
-    status = np.zeros(nconfigs)
-
-    # Remove the average of each period
-    dfold = (dfold.T - np.mean(dfold, axis=1)).T
-
-    # Perform first an average/median in each of the stable sections of each period
-    # (possibly skipping beginning and end)
-    vals_per = np.zeros((nper, nconfigs))
-    errs_per = np.zeros((nper, nconfigs))
-    for i in range(nconfigs):
-        # Cut the data
-        tstart = i * stable_time + skip_rise * stable_time
-        tend = (i + 1) * stable_time - skip_fall * stable_time
-        ok = (tfold >= tstart) & (tfold < tend)
-        for j in range(nper):
-            if median:
-                vals_per[j, i] = np.median(dfold[j, ok])
-            else:
-                vals_per[j, i], _ = ft.meancut(dfold[j, ok], 3)
-            errs_per[j, i] = np.std(dfold[j, ok])
-
-    if remove_slope:
-        # Fit a slope between the "all horns open" configurations and remove it
-        xx = np.arange(6)
-        for i in range(nper):
-            # Linear fit
-            pars = np.polyfit(x=np.arange(6)[all_h],
-                              y=vals_per[i, all_h],
-                              deg=1,
-                              w=1. / errs_per[i, all_h] ** 2,
-                              full=False,
-                              cov=False)
-            vals_per[i, :] = vals_per[i, :] - (pars[0] * xx + pars[1])
-    else:
-        # Remove the average off "all horns open configurations"
-        for i in range(nper):
-            vals_per[i, :] -= np.mean(vals_per[i, all_h])
-
-    # Average/median all periods
-    vals = np.zeros(nconfigs)
-    errs = np.zeros(nconfigs)
-    for i in range(nconfigs):
-        if median:
-            vals[i] = np.median(vals_per[:, i])
-        else:
-            vals[i] = np.mean(vals_per[:, i])
-        errs[i] = np.std(vals_per[:, i])
-        # Try to detect cases where switches did not work properly
-        if errs[i] > (4 * np.mean(errs_per[:, i])):
-            status[i] += 1
-
-    # Residuals in time domain (not too relevant as some baselines were removed
-    # as a result, large fluctuations in time-domain are usually well removed)
-    newdfold = np.zeros_like(dfold)
-    for i in range(nconfigs):
-        newdfold[:, i * nsp_per // 6:(i + 1) * nsp_per // 6] = vals[i]
-    residuals_time = dfold - newdfold
-
-    # We would rather calculate the relevant residuals in the binned domain
-    # between the final values and those after levelling
-    residuals_bin = np.ravel(vals_per - vals)
-    _, sigres = ft.meancut(residuals_bin, 3)
-
-    if speak:
-        for i in range(nconfigs):
-            print('############')
-            print('config {}'.format(i))
-            for j in range(nper):
-                print('per {}: {} +/- {}'.format(j, vals_per[j, i], errs_per[j, i]))
-            print('============')
-            print('Value {} +/- {}'.format(vals[i], errs[i]))
-            print('============')
-
-    if doplot:
-        plot_average_foldedTES(nper, nconfigs, stable_time,
-                               vals_per, errs_per,
-                               dfold, newdfold, residuals_time,
-                               vals, errs, residuals_bin, remove_slope)
-
-    return vals, errs, residuals_time, residuals_bin, sigres, status
-
-
-def analyse_fringesJC(directory, asics=[1, 2],
-                      lowcut=1e-5, highcut=5., notch=np.array([[1.724, 0.005, 30]]),
-                      refTESnum=95, refASICnum=1, expected_period=30,
-                      all_h=[True, False, False, True, False, True],
-                      nsp_per=240, skip_rise=0.2, skip_fall=0.1, remove_slope=True,
-                      force_period=None, force_t0=None,
-                      verbose=True, doplot=True):
-    tdata, data = get_data(directory, asics)
-    print('tdata and data shapes:', tdata.shape, data.shape)
-    nasics, ndet, _ = data.shape
-    ndet_tot = nasics * ndet
-    nconfigs = len(all_h)
-
-    # ================= Determine the correct period reference TES ========
-    if force_period is None:
-        # Filter
-        dfilter = ft.filter_data(tdata[refASICnum - 1, :],
-                                 data[refASICnum - 1, refTESnum, :],
-                                 lowcut, highcut, notch=notch, rebin=True)
-        ppp, rms, period = find_right_period(expected_period,
-                                             tdata[refASICnum - 1, :],
-                                             dfilter,
-                                             delta=0.5, nb=100)
-        if verbose:
-            print('Found period {0:5.3f}s on TES#{1:}'.format(period, refTESnum))
-    else:
-        period = force_period
-        if verbose:
-            print('Using Forced period {0:5.3f}s'.format(period))
-
-    # =============== Determine t0 on reference TES ======================
-    if force_t0 is None:
-        # Filter, crop, resample and fold
-        dfilter = ft.filter_data(tdata[refASICnum - 1, :],
-                                 data[refASICnum - 1, refTESnum, :],
-                                 lowcut, highcut, notch=notch, rebin=True)
-        tcrop, dcrop, nper = cut_data_Nperiods(None, None,
-                                               tdata[refASICnum - 1, :],
-                                               dfilter, period)
-        newdata = resample(dcrop, nper * nsp_per)
-        tfold = np.linspace(0, period, nsp_per)
-        dfold = np.reshape(newdata, (nper, nsp_per))
-        t0 = find_t0(tfold, dfold, period, doplot=doplot)
-        if verbose:
-            print('Found t0 {0:5.3f}s on TES#{1:}'.format(t0, refTESnum))
-    else:
-        t0 = force_t0
-        if verbose:
-            print('Using forced t0 {0:5.3f}s'.format(t0))
-
-    # =============== Loop on ASICs and TES ======================
-    vals = np.zeros((ndet_tot, nconfigs))
-    errs = np.zeros((ndet_tot, nconfigs))
-    sigres = np.zeros(ndet_tot)
-    status = np.zeros((ndet_tot, nconfigs))
-    fringes1D = np.zeros(ndet_tot)
-    err_fringes1D = np.zeros(ndet_tot)
-    coeffs = np.array([1. / 3, -1, 1, 1. / 3, -1, 1. / 3])
-    for i, ASIC in enumerate(asics):
-        print(f'*********** Starting ASIC{ASIC} **************')
-        for j, TES in enumerate(np.arange(1, 129)):
-
-            index = i * ndet + j
-            if (i == (refASICnum - 1)) & (j == (refTESnum - 1)):
-                speak = True
-                thedoplot = True * doplot
-            else:
-                speak = False
-                thedoplot = False
-
-            timeTES = tdata[i, :]
-            dataTES = data[i, j, :]
-            # Folding
-            tfold, droll = folding_oneTES(timeTES, dataTES, period, t0,
-                                          lowcut=lowcut, highcut=highcut, notch=notch,
-                                          nsp_per=nsp_per, all_h=all_h,
-                                          skip_rise=skip_rise, skip_fall=skip_fall,
-                                          doplot=thedoplot)
-
-            # Average each period
-            vals[index, :], errs[index, :], res_time, res_bin, sigres[index], status[index,
-                                                                              :] = average_datafold_oneTES(tfold,
-                                                                                                           droll,
-                                                                                                           period,
-                                                                                                           all_h=all_h,
-                                                                                                           skip_rise=skip_rise,
-                                                                                                           skip_fall=skip_fall,
-                                                                                                           remove_slope=remove_slope,
-                                                                                                           doplot=thedoplot,
-                                                                                                           speak=speak)
-            # Combination and get fringes
-            fringes1D[index], err_fringes1D[index] = weighted_sum(vals[index, :], errs[index, :], coeffs)
-
-    # Cut on residuals
-    mm, ss = ft.meancut(np.log10(sigres), 3)
-    oktes = np.ones((nasics * ndet))
-    oktes[np.abs(np.log10(sigres) - mm) > 2 * ss] = np.nan
-
-    return vals, errs, sigres, period, fringes1D, err_fringes1D, oktes, status

@@ -70,12 +70,14 @@ class Fringes_Analysis:
         self.nbins = nbins
         self.notch = notch
         self.verbose = verbose
+
+        #Get data
+        self.tdata, self.data, self.tsrc, self.dsrc = self._get_data()
+
         self.nasics, self.ndet_oneASIC, _ = self.data.shape
         self.ndet = self.nasics * self.ndet_oneASIC
         self.nconfigs = len(self.allh)
         self.expected_period = self.stable_time * self.nconfigs
-
-        self.tdata, self.data, self.tsrc, self.dsrc = self._get_data()
 
         self.cut = cut
         self.t0cut = t0cut
@@ -89,7 +91,7 @@ class Fringes_Analysis:
         self.refstable_time = self.refperiod / self.nconfigs
 
         # Get coordinates for all TES, order as on the instrument
-        self.xTES, self.yTES, _, self.allindex_q = scal.get_TES_Instru_coords(self.q, frame='ONAFP')
+        self.xTES, self.yTES, _, self.allindex_q = scal.get_TES_Instru_coords(self.q, frame='ONAFP', verbose=False)
 
     def _get_data(self):
         """
@@ -154,20 +156,19 @@ class Fringes_Analysis:
         if TES is None:
             TES = self.refTESnum
             ASIC = self.refASICnum
-        idx = (ASIC - 1) * 128 + (TES - 1)
+        # idx = (ASIC - 1) * 128 + (TES - 1)
 
         if filtering:
-            thedata = ft.filter_data(self.tdata[TES - 1, :],
-                                     self.data[TES - 1, TES, :],
+            thedata = ft.filter_data(self.tdata[ASIC - 1, :],
+                                     self.data[ASIC - 1, TES - 1, :],
                                      self.lowcut, self.highcut, notch=self.notch, rebin=True)
         else:
-            thedata = self.data
+            thedata = self.data[ASIC - 1, TES - 1, :]
         ppp = np.linspace(self.expected_period - delta, self.expected_period + delta, nb)
         rms = np.zeros(len(ppp))
         for i in range(len(ppp)):
-            xin = self.tdata % ppp[i]
-            yin = thedata[idx, :]
-            xx, yy, dx, dy, o = ft.profile(xin, yin, nbins=100, plot=False)
+            xin = self.tdata[ASIC - 1, :] % ppp[i]
+            xx, yy, dx, dy, o = ft.profile(xin, thedata, nbins=100, plot=False)
             rms[i] = np.std(yy)
         period = ppp[np.argmax(rms)]
 
@@ -177,7 +178,7 @@ class Fringes_Analysis:
 
         return ppp, rms, period
 
-    def analyse_fringesLouise(self, return_folding=False, median=False):
+    def analyse_fringesLouise(self, return_folding=False, median=False, doplot=True):
         """
         Parameters
         ----------
@@ -200,8 +201,8 @@ class Fringes_Analysis:
         coeffs = np.array([1. / 3, -1., 1., 1. / 3, -1., 1. / 3])
         for i, ASIC in enumerate(self.asics):
             # Fold and filter the data
-            dfold, tfold, _, errfold, _, _ = ft.fold_data(self.tdata,
-                                                          self.data,
+            dfold, tfold, _, errfold, _, _ = ft.fold_data(self.tdata[i, :],
+                                                          self.data[i, :, :],
                                                           self.refperiod,
                                                           self.lowcut,
                                                           self.highcut,
@@ -241,6 +242,23 @@ class Fringes_Analysis:
                 fringes1D[index], err_fringes1D[index] = weighted_sum(params[index, 2:], err_params[index, 2:], coeffs)
 
                 residuals_time[index, :] = dfold[j, :] - ft.simsig_fringes(tfold, self.refstable_time, popt)
+        if doplot:
+            # Fringes
+            fig, axs = plt.subplots(1, 2, figsize=(13, 7))
+            fig.subplots_adjust(wspace=0.5)
+            fig.suptitle(f'Fringes - BL {self.baseline} - {self.date}')
+            ax0, ax1 = axs.ravel()
+            plot_fringes_imshow_interp(fringes1D, fig=fig, ax=ax0)
+            plot_fringes_scatter(self.q, self.xTES, self.yTES, fringes1D, s=80, fig=fig, ax=ax1)
+
+            # Errors
+            plot_fringes_errors(self.q, fringes1D, err_fringes1D, self.xTES, self.yTES, s=80, lim=0.1,
+                                suptitle=f'Errors - BL {self.baseline} - {self.date}')
+
+            # Folding
+            plot_folding_fit(self.refTESnum, self.refASICnum, tfold, datafold, residuals_time,
+                             self.refperiod, params, err_params)
+
         if return_folding:
             return params, err_params, fringes1D, err_fringes1D, tfold, datafold, err_datafold, residuals_time
         else:
@@ -259,7 +277,7 @@ class Fringes_Analysis:
 
         return w, wcheck
 
-    def analyse_fringes_Michel(self, median=False, verbose=True):
+    def analyse_fringes_Michel(self, median=False, verbose=True, doplot=True):
         """
         Compute the fringes with Michel's method.
         """
@@ -269,8 +287,8 @@ class Fringes_Analysis:
         for i, ASIC in enumerate(self.asics):
 
             # Fold and filter the data
-            fold, tfold, _, _ = ft.fold_data(self.tdata,
-                                             self.data,
+            fold, tfold, _, _ = ft.fold_data(self.tdata[i, :],
+                                             self.data[i, :, :],
                                              self.refperiod,
                                              self.lowcut,
                                              self.highcut,
@@ -282,10 +300,14 @@ class Fringes_Analysis:
             dfold[self.ndet_oneASIC * i:self.ndet_oneASIC * (i + 1), :] = fold
 
             # Michel method
-            w, _ = self._make_w_Michel(tfold, self.refperiod)
+            w, _ = self._make_w_Michel(tfold)
             for j in range(self.ndet_oneASIC):
                 index = self.ndet_oneASIC * i + j
                 fringes1D[index] = np.sum(fold[j, :] * w)
+
+        if doplot:
+            plot_fringes_imshow_interp(fringes1D)
+            plot_fringes_scatter(self.q, self.xTES, self.yTES, fringes1D, s=280)
 
         return tfold, dfold, fringes1D
 
@@ -298,7 +320,7 @@ class Fringes_Analysis:
 
         # Filter, crop, resample and fold
         dfilter = ft.filter_data(self.tdata[self.refASICnum - 1, :],
-                                 self.data[self.refASICnum - 1, self.refTESnum, :],
+                                 self.data[self.refASICnum - 1, self.refTESnum - 1, :],
                                  self.lowcut, self.highcut, notch=self.notch, rebin=True)
         tcrop, dcrop, nper = cut_data_Nperiods(None, None,
                                                self.tdata[self.refASICnum - 1, :],
@@ -800,59 +822,34 @@ def plot_fringes_imshow_interp(fringes1D, normalize=True, interp='Gaussian', mas
     return
 
 
-def plot_folding_fit(TES, ASIC, tfold, datafold, period,
+def plot_folding_fit(TES, ASIC, tfold, datafold, residuals_time, period,
                      params, errs, allh=[True, False, False, True, False, True]):
     idx = (ASIC - 1) * 128 + (TES - 1)
-    nconfigs = len(params[TES, 2:])
-    amps = params[:, 2:]
-    mean_allh = np.mean(amps[idx, allh])
+    nconfigs = len(params[idx, 2:])
+    amps = params[idx, 2:]
+    t0 = params[idx, 1]
+    stable_time = period / nconfigs
+    print(stable_time)
+    mean_allh = np.mean(amps[allh])
 
     plt.figure()
-    plt.axhline(mean_allh, color='k', linestyle='--', label='Mean all open')
     plt.plot(tfold, datafold[idx, :], label='Folded signal')
-    plt.errorbar(np.arange(0, period, period / nconfigs), amps[idx, :], yerr=errs[idx, 2:],
+    plt.errorbar(np.arange(0, period, period / nconfigs), amps, yerr=errs[idx, 2:],
                  fmt='o', color='r', label='Fit Amplitudes')
     plt.plot(tfold, ft.simsig_fringes(tfold, period / nconfigs, params[idx, :]),
              label='Fit')
-    plt.legend()
+    plt.plot(tfold, residuals_time[idx, :],
+             label='Residuals: RMS={0:6.4f}'.format(np.std(residuals_time[idx, :])))
+    for k in range(nconfigs):
+        plt.axvline(x=stable_time * k + t0, color='k', ls=':', alpha=0.3)
+    plt.axhline(mean_allh, color='k', linestyle='--', label='Mean all open')
+    plt.legend(loc='upper right')
     plt.xlabel('Time [s]')
     plt.ylabel('TOD')
     plt.title(f'TES {TES} - ASIC {ASIC}')
     plt.grid()
+    plt.ylim(-2.5, 2.5)
     return
-
-def plot_folded_fit(TES, BL_index, keyvals, fdict, ax=None, legend=True):
-    """Plot one folded signal for one TES with the fit and the residuals."""
-    if type(keyvals['NSTEP']) is tuple:
-        for i in keyvals:
-            keyvals[i] = keyvals[i][0]
-
-    params = fdict['PARAMS'][BL_index][TES - 1, :]  # Fit parameters
-    t0 = params[1]  # Starting time
-    amps = params[2:8]  # Amplitudes
-    t = fdict['TIME']  # Time
-    folded = fdict['FOLDED'][BL_index][TES - 1, :]  # Folded signal
-    period = fdict['PERIODS'][BL_index]  # Period
-    nstep = keyvals['NSTEP']
-    stable_time = period / nstep
-    resid = fdict['RESIDUALS'][BL_index][TES - 1, :]  # Residuals
-
-    # Plot
-    if ax is None:
-        fig, ax = plt.subplots()
-    ax.plot(t, folded, label='folded signal')
-    ax.plot(t, ft.simsig_fringes(t, stable_time, params), label='Fit')
-    ax.plot(np.arange(0, period, stable_time) + t0, amps, 'ro', label='Amplitudes')
-    ax.plot(t, resid, label='Residuals: RMS={0:6.4f}'.format(np.std(resid)))
-
-    for k in range(nstep):
-        ax.axvline(x=stable_time * k + t0, color='k', ls=':', alpha=0.3)
-    ax.set_title(f'TES {TES}', fontsize=14)
-    ax.set_ylim(-2.5, 2.5)
-    if legend:
-        ax.legend(loc='upper right')
-    return
-
 
 def plot_folding(tfold, datafold, period, nper, skip_rise, skip_fall, suptitle=None, figsize=(12, 6)):
     fig, axs = plt.subplots(1, 2, figsize=figsize)

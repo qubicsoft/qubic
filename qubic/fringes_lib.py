@@ -360,7 +360,7 @@ class Fringes_Analysis:
         t0 = np.median(start_times % expected_stable_time)
 
         if doplot:
-            plot_finding_t0(tfold, msignal, dsignal, thr, start_times, expected_stable_time, t0)
+            self.plot_finding_t0(tfold, msignal, dsignal, thr, start_times, t0)
 
         return t0
 
@@ -404,8 +404,8 @@ class Fringes_Analysis:
         droll -= np.median(droll[:, ok_all_horns])
 
         if doplot:
-            plot_foldingJC(tfold, droll, period, nper, skip_rise, skip_fall,
-                           suptitle='Folding result with JC method')
+            self.plot_foldingJC(tfold, droll, period, nper, skip_rise, skip_fall,
+                                suptitle='Folding result with JC method')
 
         return tfold, droll
 
@@ -499,10 +499,8 @@ class Fringes_Analysis:
                 print('============')
 
         if doplot:
-            plot_average_foldedTES(nper, self.nconfigs, stable_time,
-                                   vals_per, errs_per,
-                                   dfold, newdfold, residuals_time,
-                                   vals, errs, residuals_bin, remove_slope)
+            self.plot_average_foldedTES(nper, vals_per, errs_per, dfold, newdfold, residuals_time,
+                                        vals, errs, residuals_bin, remove_slope)
 
         return vals, errs, residuals_time, residuals_bin, sigres, status
 
@@ -591,6 +589,111 @@ class Fringes_Analysis:
 
         return vals, errs, sigres, fringes1D, err_fringes1D, oktes, status
 
+    # ================ Plot functions very specific to JC analysis
+    def plot_finding_t0(self, tfold, msignal, dsignal, thr, start_times, t0, figsize=(12, 6)):
+        plt.figure(figsize=figsize)
+        plt.plot(tfold, msignal, label='Mean over periods')
+        plt.plot(tfold, dsignal, label='Derivative')
+        plt.plot(tfold[thr], dsignal[thr], 'ro', label='High Derivative (>3sig)')
+        for i in range(len(start_times)):
+            if i == 0:
+                lab = 'Found Start times'
+            else:
+                lab = None
+            plt.axvline(x=start_times[i], ls='--', label=lab, alpha=0.5)
+        for i in range(6):
+            if i == 0:
+                lab = 'Median Start Time (modulo period/6)'
+            else:
+                lab = None
+            plt.axvline(x=t0 + i * self.stable_time, color='r', ls='--', label=lab)
+        plt.legend(framealpha=0.2)
+        plt.title('t0 determination on Reference TES')
+        plt.xlabel('Time in Period')
+        plt.ylabel('Signal averaged over periods')
+        plt.tight_layout()
+
+        return
+
+    def plot_foldingJC(self, tfold, datafold, period, nper, skip_rise, skip_fall, suptitle=None, figsize=(12, 6)):
+        fig, axs = plt.subplots(1, 2, figsize=figsize)
+        fig.suptitle(suptitle)
+        ax1, ax2 = np.ravel(axs)
+
+        ax1.imshow(datafold,
+                   origin='lower',
+                   aspect='auto',
+                   extent=[0, np.max(tfold) + (tfold[1] - tfold[0]) / 2, 0, nper + 0.5])
+        for i in range(6):
+            ax1.axvline(x=i * (period / 6), color='k', lw=3)
+        ax1.set_xlabel('Time in period')
+        ax1.set_ylabel('Period #')
+
+        for i in range(nper):
+            ax2.plot(tfold, datafold[i, :], alpha=0.5)
+        for i in range(6):
+            ax2.axvline(x=i * (period / 6), color='k', lw=3)
+            ax2.axvspan(i * (period / 6), (i + skip_rise) * (period / 6), alpha=0.1, color='red')
+            ax2.axvspan((i + (1. - skip_fall)) * (period / 6), (i + 1) * (period / 6), alpha=0.1, color='red')
+        ax2.set_xlabel('Time in period')
+        ax2.set_ylabel('ADU')
+
+        return
+
+    def plot_average_foldedTES(self, nper, vals_per, errs_per,
+                               dfold, newdfold, residuals_time,
+                               vals, errs, residuals_bin, remove_slope,
+                               suptitle=None, figsize=(12, 12)):
+        fig, axs = plt.subplots(2, 2, figsize=figsize)
+        fig.suptitle(suptitle)
+        ax1, ax2, ax3, ax4 = np.ravel(axs)
+
+        ttt = np.arange(self.nconfigs) * self.stable_time + self.stable_time / 2  # Mean time of each step
+
+        for i in range(nper):
+            if i == 0:
+                lab = 'Raw'
+            else:
+                lab = None
+            ax1.errorbar(ttt, vals_per[i, :],
+                         yerr=errs_per[i, :],
+                         xerr=self.stable_time / 2, fmt='o', label=lab)
+        ax1.set_title('Configuration bins before levelling per period')
+        ax1.set_xlabel('Time in period')
+        ax1.set_ylabel('Value for each period')
+        ax1.legend()
+
+        ax2.plot(np.ravel(dfold), label='Input signal')
+        ax2.plot(np.ravel(newdfold), label='Reconstructed')
+        ax2.plot(np.ravel(residuals_time), label='Residuals')
+        ax2.set_xlabel('time samples')
+        ax2.set_ylabel('Time domain signal')
+        ax2.set_title('Time domain \n[large drift is actually removed]')
+        ax2.legend()
+
+        ax3.plot(np.ravel(vals_per), ls='solid', label='Per Period')
+        ax3.plot(np.ravel(vals_per * 0. + vals), ls='solid', label='Values')
+        ax3.plot(residuals_bin, ls='solid', label='Residuals')
+        ax3.set_xlabel('Time')
+        ax3.set_ylabel('Values')
+        ax3.set_title('Final Residuals')
+        ax3.legend()
+
+        for i in range(nper):
+            if i == 0:
+                lab = 'remove_slope={}'.format(remove_slope)
+            else:
+                lab = None
+            ax4.errorbar(ttt, vals_per[i, :], yerr=errs_per[i, :],
+                         xerr=self.stable_time / 2, fmt='x', alpha=0.3, color='orange', label=lab)
+        ax4.errorbar(ttt, vals, yerr=errs, xerr=self.stable_time / 2, color='r',
+                     label='Final Points', fmt='rx')
+        ax4.set_title('Final Configurations (after levelling)')
+        ax4.set_xlabel('Time in period')
+        ax4.set_ylabel('Value')
+        ax4.legend()
+
+        return
 
 # ============== Tool functions ==============
 def cut_data(t0, tf, tdata, data):
@@ -663,68 +766,6 @@ def reorder_data(data, xdata, ydata, xqsoft, yqsoft):
             newdata[index_simu] = olddata[det]
         data_ordered.append(newdata)
     return data_ordered
-
-
-def make_keyvals(date, nBLs, Vtes, nstep=6, ecosorb='yes', frame='ONAFP'):
-    """
-    Make a dictionary with relevant information on the measurement.
-    Assign the FITS keyword values for the primary header
-    """
-    keyvals = {'DATE-OBS': (date, 'Date of the measurement'), 'NBLS': (nBLs, 'Number of baselines'),
-               'NSTEP': (nstep, 'Number of stable steps per cycle'), 'V_TES': (Vtes, 'TES voltage [V]'),
-               'ECOSORD': (ecosorb, 'Ecosorb on the source'), 'FRAME': (frame, 'Referential frame for (X, Y) TES')}
-
-    return keyvals
-
-
-def make_fdict(allBLs, allwt, allNcycles, xTES, yTES, t,
-               allfolded, allparams, allfringes1D, allperiods, allresiduals):
-    """ Make a dictionary with all relevant data."""
-    fdict = {'BLS': allBLs, 'WT': allwt, 'NCYCLES': allNcycles, 'X_TES': xTES, 'Y_TES': yTES, 'TIME': t,
-             'FOLDED': allfolded, 'PARAMS': allparams, 'FRINGES_1D': allfringes1D, 'PERIODS': allperiods,
-             'RESIDUALS': allresiduals}
-
-    return fdict
-
-
-def write_fits_fringes(out_dir, save_name, keyvals, fdict):
-    """ Save a .fits with the fringes data."""
-    if out_dir[-1] != '/':
-        out_dir += '/'
-
-    # Header creation
-    hdr = pyfits.Header()
-    for key in keyvals.keys():
-        hdr[key] = (keyvals[key])
-
-    hdu_prim = pyfits.PrimaryHDU(header=hdr)
-    allhdu = [hdu_prim]
-    for key in fdict.keys():
-        hdu = pyfits.ImageHDU(data=fdict[key], name=key)
-        allhdu.append(hdu)
-
-    thdulist = pyfits.HDUList(allhdu)
-    thdulist.writeto(out_dir + save_name, 'warn')
-
-    return
-
-
-def read_fits_fringes(file):
-    """
-    Read a .fits where you saved the data and returns two dictionaries with
-    the header content and the data themselves.
-    """
-    hdulist = pyfits.open(file)
-    header = hdulist[0].header
-    print(header.keys)
-
-    fringes_dict = {}
-    for i in range(1, len(hdulist)):
-        extname = hdulist[i].header['EXTNAME']
-        data = hdulist[i].data
-        fringes_dict[extname] = data
-
-    return header, fringes_dict
 
 
 # ============== Plots functions ==============
@@ -854,114 +895,6 @@ def plot_folding_fit(TES, ASIC, tfold, datafold, residuals_time, period,
     plt.ylim(-2.5, 2.5)
     return
 
-def plot_finding_t0(tfold, msignal, dsignal, thr, start_times, expected_stable_time, t0, figsize=(12, 6)):
-    plt.figure(figsize=figsize)
-    plt.plot(tfold, msignal, label='Mean over periods')
-    plt.plot(tfold, dsignal, label='Derivative')
-    plt.plot(tfold[thr], dsignal[thr], 'ro', label='High Derivative (>3sig)')
-    for i in range(len(start_times)):
-        if i == 0:
-            lab = 'Found Start times'
-        else:
-            lab = None
-        plt.axvline(x=start_times[i], ls='--', label=lab, alpha=0.5)
-    for i in range(6):
-        if i == 0:
-            lab = 'Median Start Time (modulo period/6)'
-        else:
-            lab = None
-        plt.axvline(x=t0 + i * expected_stable_time, color='r', ls='--', label=lab)
-    plt.legend(framealpha=0.2)
-    plt.title('t0 determination on Reference TES')
-    plt.xlabel('Time in Period')
-    plt.ylabel('Signal averaged over periods')
-    plt.tight_layout()
-
-    return
-
-
-def plot_foldingJC(tfold, datafold, period, nper, skip_rise, skip_fall, suptitle=None, figsize=(12, 6)):
-    fig, axs = plt.subplots(1, 2, figsize=figsize)
-    fig.suptitle(suptitle)
-    ax1, ax2 = np.ravel(axs)
-
-    ax1.imshow(datafold,
-               origin='lower',
-               aspect='auto',
-               extent=[0, np.max(tfold) + (tfold[1] - tfold[0]) / 2, 0, nper + 0.5])
-    for i in range(6):
-        ax1.axvline(x=i * (period / 6), color='k', lw=3)
-    ax1.set_xlabel('Time in period')
-    ax1.set_ylabel('Period #')
-
-    for i in range(nper):
-        ax2.plot(tfold, datafold[i, :], alpha=0.5)
-    for i in range(6):
-        ax2.axvline(x=i * (period / 6), color='k', lw=3)
-        ax2.axvspan(i * (period / 6), (i + skip_rise) * (period / 6), alpha=0.1, color='red')
-        ax2.axvspan((i + (1. - skip_fall)) * (period / 6), (i + 1) * (period / 6), alpha=0.1, color='red')
-    ax2.set_xlabel('Time in period')
-    ax2.set_ylabel('ADU')
-
-    return
-
-
-def plot_average_foldedTES(nper, nconfigs, stable_time,
-                           vals_per, errs_per,
-                           dfold, newdfold, residuals_time,
-                           vals, errs, residuals_bin, remove_slope,
-                           suptitle=None, figsize=(12, 12)):
-    fig, axs = plt.subplots(2, 2, figsize=figsize)
-    fig.suptitle(suptitle)
-    ax1, ax2, ax3, ax4 = np.ravel(axs)
-
-    ttt = np.arange(nconfigs) * stable_time + stable_time / 2  # Mean time of each step
-
-    for i in range(nper):
-        if i == 0:
-            lab = 'Raw'
-        else:
-            lab = None
-        ax1.errorbar(ttt, vals_per[i, :],
-                     yerr=errs_per[i, :],
-                     xerr=stable_time / 2, fmt='o', label=lab)
-    ax1.set_title('Configuration bins before levelling per period')
-    ax1.set_xlabel('Time in period')
-    ax1.set_ylabel('Value for each period')
-    ax1.legend()
-
-    ax2.plot(np.ravel(dfold), label='Input signal')
-    ax2.plot(np.ravel(newdfold), label='Reconstructed')
-    ax2.plot(np.ravel(residuals_time), label='Residuals')
-    ax2.set_xlabel('time samples')
-    ax2.set_ylabel('Time domain signal')
-    ax2.set_title('Time domain \n[large drift is actually removed]')
-    ax2.legend()
-
-    ax3.plot(np.ravel(vals_per), ls='solid', label='Per Period')
-    ax3.plot(np.ravel(vals_per * 0. + vals), ls='solid', label='Values')
-    ax3.plot(residuals_bin, ls='solid', label='Residuals')
-    ax3.set_xlabel('Time')
-    ax3.set_ylabel('Values')
-    ax3.set_title('Final Residuals')
-    ax3.legend()
-
-    for i in range(nper):
-        if i == 0:
-            lab = 'remove_slope={}'.format(remove_slope)
-        else:
-            lab = None
-        ax4.errorbar(ttt, vals_per[i, :], yerr=errs_per[i, :],
-                     xerr=stable_time / 2, fmt='x', alpha=0.3, color='orange', label=lab)
-    ax4.errorbar(ttt, vals, yerr=errs, xerr=stable_time / 2, color='r',
-                 label='Final Points', fmt='rx')
-    ax4.set_title('Final Configurations (after levelling)')
-    ax4.set_xlabel('Time in period')
-    ax4.set_ylabel('Value')
-    ax4.legend()
-
-    return
-
 
 def plot_residuals(q, sigres, oktes, xTES, yTES, frame='ONAFP', suptitle=None):
     _, _, sigres = remove_thermometers(xTES, yTES, sigres)
@@ -1015,6 +948,7 @@ def plot_fringes_errors(q, fringes1D, err_fringes1D, xTES, yTES, frame='ONAFP',
     return
 
 
+# =========================================
 def save_fringes_pdf_plots(out_dir, q, keyvals, fdict, mask=None, **kwargs):
     """Save all the fringe plots (all baselines) in a pdf file."""
     if type(keyvals['NSTEP']) is tuple:
@@ -1067,3 +1001,65 @@ def save_folded_fit_pdf_plots(out_dir, keyvals, fdict):
                         plot_folded_fit(TES, BL_index, keyvals, fdict, ax=ax, legend=False)
                 pp.savefig()
     return
+
+
+def make_keyvals(date, nBLs, Vtes, nstep=6, ecosorb='yes', frame='ONAFP'):
+    """
+    Make a dictionary with relevant information on the measurement.
+    Assign the FITS keyword values for the primary header
+    """
+    keyvals = {'DATE-OBS': (date, 'Date of the measurement'), 'NBLS': (nBLs, 'Number of baselines'),
+               'NSTEP': (nstep, 'Number of stable steps per cycle'), 'V_TES': (Vtes, 'TES voltage [V]'),
+               'ECOSORD': (ecosorb, 'Ecosorb on the source'), 'FRAME': (frame, 'Referential frame for (X, Y) TES')}
+
+    return keyvals
+
+
+def make_fdict(allBLs, allwt, allNcycles, xTES, yTES, t,
+               allfolded, allparams, allfringes1D, allperiods, allresiduals):
+    """ Make a dictionary with all relevant data."""
+    fdict = {'BLS': allBLs, 'WT': allwt, 'NCYCLES': allNcycles, 'X_TES': xTES, 'Y_TES': yTES, 'TIME': t,
+             'FOLDED': allfolded, 'PARAMS': allparams, 'FRINGES_1D': allfringes1D, 'PERIODS': allperiods,
+             'RESIDUALS': allresiduals}
+
+    return fdict
+
+
+def write_fits_fringes(out_dir, save_name, keyvals, fdict):
+    """ Save a .fits with the fringes data."""
+    if out_dir[-1] != '/':
+        out_dir += '/'
+
+    # Header creation
+    hdr = pyfits.Header()
+    for key in keyvals.keys():
+        hdr[key] = (keyvals[key])
+
+    hdu_prim = pyfits.PrimaryHDU(header=hdr)
+    allhdu = [hdu_prim]
+    for key in fdict.keys():
+        hdu = pyfits.ImageHDU(data=fdict[key], name=key)
+        allhdu.append(hdu)
+
+    thdulist = pyfits.HDUList(allhdu)
+    thdulist.writeto(out_dir + save_name, 'warn')
+
+    return
+
+
+def read_fits_fringes(file):
+    """
+    Read a .fits where you saved the data and returns two dictionaries with
+    the header content and the data themselves.
+    """
+    hdulist = pyfits.open(file)
+    header = hdulist[0].header
+    print(header.keys)
+
+    fringes_dict = {}
+    for i in range(1, len(hdulist)):
+        extname = hdulist[i].header['EXTNAME']
+        data = hdulist[i].data
+        fringes_dict[extname] = data
+
+    return header, fringes_dict

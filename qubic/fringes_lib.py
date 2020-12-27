@@ -246,7 +246,7 @@ class Fringes_Analysis:
             # Fringes
             fig, axs = plt.subplots(1, 2, figsize=(13, 7))
             fig.subplots_adjust(wspace=0.5)
-            fig.suptitle(f'Fringes - BL {self.baseline} - {self.date}')
+            fig.suptitle(f'Fringes with Louise method - BL {self.baseline} - {self.date}')
             ax0, ax1 = axs.ravel()
             plot_fringes_imshow_interp(fringes1D, fig=fig, ax=ax0)
             plot_fringes_scatter(self.q, self.xTES, self.yTES, fringes1D, s=80, fig=fig, ax=ax1)
@@ -306,8 +306,13 @@ class Fringes_Analysis:
                 fringes1D[index] = np.sum(fold[j, :] * w)
 
         if doplot:
-            plot_fringes_imshow_interp(fringes1D)
-            plot_fringes_scatter(self.q, self.xTES, self.yTES, fringes1D, s=280)
+            # Fringes
+            fig, axs = plt.subplots(1, 2, figsize=(13, 7))
+            fig.subplots_adjust(wspace=0.5)
+            fig.suptitle(f'Fringes with Michel method - BL {self.baseline} - {self.date}')
+            ax0, ax1 = axs.ravel()
+            plot_fringes_imshow_interp(fringes1D, fig=fig, ax=ax0)
+            plot_fringes_scatter(self.q, self.xTES, self.yTES, fringes1D, s=80, fig=fig, ax=ax1)
 
         return tfold, dfold, fringes1D
 
@@ -355,27 +360,7 @@ class Fringes_Analysis:
         t0 = np.median(start_times % expected_stable_time)
 
         if doplot:
-            plt.figure(figsize=(10, 8))
-            plt.plot(tfold, msignal, label='Mean over periods')
-            plt.plot(tfold, dsignal, label='Derivative')
-            plt.plot(tfold[thr], dsignal[thr], 'ro', label='High Derivative (>3sig)')
-            for i in range(len(start_times)):
-                if i == 0:
-                    lab = 'Found Start times'
-                else:
-                    lab = None
-                plt.axvline(x=start_times[i], ls='--', label=lab, alpha=0.5)
-            for i in range(6):
-                if i == 0:
-                    lab = 'Median Start Time (modulo period/6)'
-                else:
-                    lab = None
-                plt.axvline(x=t0 + i * expected_stable_time, color='r', ls='--', label=lab)
-            plt.legend(framealpha=0.2)
-            plt.title('t0 determination on Reference TES')
-            plt.xlabel('Time in Period')
-            plt.ylabel('Signal averaged over periods')
-            plt.tight_layout()
+            plot_finding_t0(tfold, msignal, dsignal, thr, start_times, expected_stable_time, t0)
 
         return t0
 
@@ -399,6 +384,7 @@ class Fringes_Analysis:
             plt.plot(newtime, newdata)
             plt.xlabel('Time')
             plt.ylabel('ADU')
+            plt.title('TODs crop and resample')
 
         # Fold the data
         tfold = np.linspace(0, period, self.nsp_per)
@@ -418,7 +404,8 @@ class Fringes_Analysis:
         droll -= np.median(droll[:, ok_all_horns])
 
         if doplot:
-            plot_folding(tfold, droll, period, nper, skip_rise, skip_fall)
+            plot_foldingJC(tfold, droll, period, nper, skip_rise, skip_fall,
+                           suptitle='Folding result with JC method')
 
         return tfold, droll
 
@@ -551,7 +538,7 @@ class Fringes_Analysis:
         err_fringes1D = np.zeros(self.ndet)
         coeffs = np.array([1. / 3, -1, 1, 1. / 3, -1, 1. / 3])
         for i, ASIC in enumerate(self.asics):
-            print(f'*********** Starting ASIC{ASIC} **************')
+            print(f'*********** Starting ASIC {ASIC} **************')
             for j, TES in enumerate(np.arange(1, 129)):
 
                 index = i * self.ndet_oneASIC + j
@@ -586,7 +573,23 @@ class Fringes_Analysis:
         oktes = np.ones(self.ndet)
         oktes[np.abs(np.log10(sigres) - mm) > 2 * ss] = np.nan
 
-        return vals, errs, sigres, period, fringes1D, err_fringes1D, oktes, status
+        if doplot:
+            # Fringes
+            fig, axs = plt.subplots(1, 2, figsize=(13, 7))
+            fig.subplots_adjust(wspace=0.5)
+            fig.suptitle(f'Fringes with JC method - BL {self.baseline} - {self.date}')
+            ax0, ax1 = axs.ravel()
+            plot_fringes_imshow_interp(fringes1D, fig=fig, ax=ax0)
+            plot_fringes_scatter(self.q, self.xTES, self.yTES, fringes1D, s=80, fig=fig, ax=ax1)
+
+            # Error
+            plot_fringes_errors(self.q, fringes1D, err_fringes1D, self.xTES, self.yTES,
+                                s=80, lim=None, frame='ONAFP')
+
+            # TOD Residuals
+            plot_residuals(self.q, sigres, oktes, self.xTES, self.yTES)
+
+        return vals, errs, sigres, fringes1D, err_fringes1D, oktes, status
 
 
 # ============== Tool functions ==============
@@ -630,6 +633,36 @@ def weighted_sum(vals, errs, coeffs):
     thesum = np.sum(coeffs * vals)
     thesigma = np.sqrt(np.sum(coeffs ** 2 * errs ** 2))
     return thesum, thesigma
+
+
+def make_mask2D_thermometers_TD():
+    mask_thermos = np.ones((17, 17))
+    mask_thermos[0, 12:] = np.nan
+    mask_thermos[1:5, 16] = np.nan
+    return mask_thermos
+
+
+def remove_thermometers(x, y, fringes1D):
+    """Remove the 8 thermometers.
+    Returns 1D arrays with 248 values and not 256."""
+    fringes1D = fringes1D[x != 0.]
+    x = x[x != 0.]
+    y = y[y != 0.]
+    return x, y, fringes1D
+
+
+def reorder_data(data, xdata, ydata, xqsoft, yqsoft):
+    ndata = len(data)
+    ndet = xdata.shape[0]
+    data_ordered = []
+    for k in range(ndata):
+        olddata = data[k]
+        newdata = np.zeros_like(olddata)
+        for det in range(ndet):
+            index_simu = np.where((xqsoft == xdata[det]) & (yqsoft == ydata[det]))[0][0]
+            newdata[index_simu] = olddata[det]
+        data_ordered.append(newdata)
+    return data_ordered
 
 
 def make_keyvals(date, nBLs, Vtes, nstep=6, ecosorb='yes', frame='ONAFP'):
@@ -692,36 +725,6 @@ def read_fits_fringes(file):
         fringes_dict[extname] = data
 
     return header, fringes_dict
-
-
-def make_mask2D_thermometers_TD():
-    mask_thermos = np.ones((17, 17))
-    mask_thermos[0, 12:] = np.nan
-    mask_thermos[1:5, 16] = np.nan
-    return mask_thermos
-
-
-def remove_thermometers(x, y, fringes1D):
-    """Remove the 8 thermometers.
-    Returns 1D arrays with 248 values and not 256."""
-    fringes1D = fringes1D[x != 0.]
-    x = x[x != 0.]
-    y = y[y != 0.]
-    return x, y, fringes1D
-
-
-def reorder_data(data, xdata, ydata, xqsoft, yqsoft):
-    ndata = len(data)
-    ndet = xdata.shape[0]
-    data_ordered = []
-    for k in range(ndata):
-        olddata = data[k]
-        newdata = np.zeros_like(olddata)
-        for det in range(ndet):
-            index_simu = np.where((xqsoft == xdata[det]) & (yqsoft == ydata[det]))[0][0]
-            newdata[index_simu] = olddata[det]
-        data_ordered.append(newdata)
-    return data_ordered
 
 
 # ============== Plots functions ==============
@@ -851,7 +854,33 @@ def plot_folding_fit(TES, ASIC, tfold, datafold, residuals_time, period,
     plt.ylim(-2.5, 2.5)
     return
 
-def plot_folding(tfold, datafold, period, nper, skip_rise, skip_fall, suptitle=None, figsize=(12, 6)):
+def plot_finding_t0(tfold, msignal, dsignal, thr, start_times, expected_stable_time, t0, figsize=(12, 6)):
+    plt.figure(figsize=figsize)
+    plt.plot(tfold, msignal, label='Mean over periods')
+    plt.plot(tfold, dsignal, label='Derivative')
+    plt.plot(tfold[thr], dsignal[thr], 'ro', label='High Derivative (>3sig)')
+    for i in range(len(start_times)):
+        if i == 0:
+            lab = 'Found Start times'
+        else:
+            lab = None
+        plt.axvline(x=start_times[i], ls='--', label=lab, alpha=0.5)
+    for i in range(6):
+        if i == 0:
+            lab = 'Median Start Time (modulo period/6)'
+        else:
+            lab = None
+        plt.axvline(x=t0 + i * expected_stable_time, color='r', ls='--', label=lab)
+    plt.legend(framealpha=0.2)
+    plt.title('t0 determination on Reference TES')
+    plt.xlabel('Time in Period')
+    plt.ylabel('Signal averaged over periods')
+    plt.tight_layout()
+
+    return
+
+
+def plot_foldingJC(tfold, datafold, period, nper, skip_rise, skip_fall, suptitle=None, figsize=(12, 6)):
     fig, axs = plt.subplots(1, 2, figsize=figsize)
     fig.suptitle(suptitle)
     ax1, ax2 = np.ravel(axs)
@@ -871,6 +900,8 @@ def plot_folding(tfold, datafold, period, nper, skip_rise, skip_fall, suptitle=N
         ax2.axvline(x=i * (period / 6), color='k', lw=3)
         ax2.axvspan(i * (period / 6), (i + skip_rise) * (period / 6), alpha=0.1, color='red')
         ax2.axvspan((i + (1. - skip_fall)) * (period / 6), (i + 1) * (period / 6), alpha=0.1, color='red')
+    ax2.set_xlabel('Time in period')
+    ax2.set_ylabel('ADU')
 
     return
 
@@ -879,10 +910,10 @@ def plot_average_foldedTES(nper, nconfigs, stable_time,
                            vals_per, errs_per,
                            dfold, newdfold, residuals_time,
                            vals, errs, residuals_bin, remove_slope,
-                           suptitle=None, figsize=(12, 20)):
-    fig, axs = plt.subplots(3, 2, figsize=figsize)
+                           suptitle=None, figsize=(12, 12)):
+    fig, axs = plt.subplots(2, 2, figsize=figsize)
     fig.suptitle(suptitle)
-    ax1, ax2, ax3, ax4, ax5, ax6 = np.ravel(axs)
+    ax1, ax2, ax3, ax4 = np.ravel(axs)
 
     ttt = np.arange(nconfigs) * stable_time + stable_time / 2  # Mean time of each step
 
@@ -922,14 +953,13 @@ def plot_average_foldedTES(nper, nconfigs, stable_time,
             lab = None
         ax4.errorbar(ttt, vals_per[i, :], yerr=errs_per[i, :],
                      xerr=stable_time / 2, fmt='x', alpha=0.3, color='orange', label=lab)
+    ax4.errorbar(ttt, vals, yerr=errs, xerr=stable_time / 2, color='r',
+                 label='Final Points', fmt='rx')
     ax4.set_title('Final Configurations (after levelling)')
     ax4.set_xlabel('Time in period')
     ax4.set_ylabel('Value')
     ax4.legend()
 
-    ax5.errorbar(ttt, vals, yerr=errs, xerr=stable_time / 2, color='r',
-                 label='Final Points', fmt='rx')
-    ax5.legend()
     return
 
 

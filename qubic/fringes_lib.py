@@ -11,10 +11,10 @@ from qubicpack.qubicfp import qubicfp
 import qubic.fibtools as ft
 from qubic import selfcal_lib as scal
 
-__all__ = ['Fringes_Analysis']
+__all__ = ['FringesAnalysis', 'SaveFringesFitsPdf']
 
 
-class Fringes_Analysis:
+class FringesAnalysis:
     def __init__(self, datafolder, date, q, baseline, ncycles=20, stable_time=5.,
                  asics=[1, 2], src_data=False, subtract_t0=True, cut=False, t0cut=None, tfcut=None,
                  refTESnum=95, refASICnum=1, allh=[True, False, False, True, False, False], nsp_per=240,
@@ -360,7 +360,7 @@ class Fringes_Analysis:
         t0 = np.median(start_times % expected_stable_time)
 
         if doplot:
-            self.plot_finding_t0(tfold, msignal, dsignal, thr, start_times, t0)
+            self._plot_finding_t0(tfold, msignal, dsignal, thr, start_times, t0)
 
         return t0
 
@@ -404,7 +404,7 @@ class Fringes_Analysis:
         droll -= np.median(droll[:, ok_all_horns])
 
         if doplot:
-            self.plot_foldingJC(tfold, droll, period, nper, skip_rise, skip_fall,
+            self._plot_foldingJC(tfold, droll, period, nper, skip_rise, skip_fall,
                                 suptitle='Folding result with JC method')
 
         return tfold, droll
@@ -499,7 +499,7 @@ class Fringes_Analysis:
                 print('============')
 
         if doplot:
-            self.plot_average_foldedTES(nper, vals_per, errs_per, dfold, newdfold, residuals_time,
+            self._plot_average_foldedTES(nper, vals_per, errs_per, dfold, newdfold, residuals_time,
                                         vals, errs, residuals_bin, remove_slope)
 
         return vals, errs, residuals_time, residuals_bin, sigres, status
@@ -590,7 +590,7 @@ class Fringes_Analysis:
         return vals, errs, sigres, fringes1D, err_fringes1D, oktes, status
 
     # ================ Plot functions very specific to JC analysis
-    def plot_finding_t0(self, tfold, msignal, dsignal, thr, start_times, t0, figsize=(12, 6)):
+    def _plot_finding_t0(self, tfold, msignal, dsignal, thr, start_times, t0, figsize=(12, 6)):
         plt.figure(figsize=figsize)
         plt.plot(tfold, msignal, label='Mean over periods')
         plt.plot(tfold, dsignal, label='Derivative')
@@ -615,7 +615,7 @@ class Fringes_Analysis:
 
         return
 
-    def plot_foldingJC(self, tfold, datafold, period, nper, skip_rise, skip_fall, suptitle=None, figsize=(12, 6)):
+    def _plot_foldingJC(self, tfold, datafold, period, nper, skip_rise, skip_fall, suptitle=None, figsize=(12, 6)):
         fig, axs = plt.subplots(1, 2, figsize=figsize)
         fig.suptitle(suptitle)
         ax1, ax2 = np.ravel(axs)
@@ -640,7 +640,7 @@ class Fringes_Analysis:
 
         return
 
-    def plot_average_foldedTES(self, nper, vals_per, errs_per,
+    def _plot_average_foldedTES(self, nper, vals_per, errs_per,
                                dfold, newdfold, residuals_time,
                                vals, errs, residuals_bin, remove_slope,
                                suptitle=None, figsize=(12, 12)):
@@ -694,6 +694,111 @@ class Fringes_Analysis:
         ax4.legend()
 
         return
+
+
+# =========================================
+class SaveFringesFitsPdf:
+    def __init__(self, q, date_obs, allBLs, allstable_time, allNcycles, xTES, yTES, allfringes1D, allerr_fringes1D,
+                 nstep=6, ecosorb='yes', frame='ONAFP'):
+        self.q = q
+        self.date_obs = date_obs
+        self.allBLs = allBLs
+        self.nBLs = len(allBLs)
+        self.BLs_sort, self.BLs_type = scal.find_equivalent_baselines(self.allBLs, self.q)
+        self.allstable_time = allstable_time
+        self.allNcycles = allNcycles
+        self.xTES = xTES
+        self.yTES = yTES
+        self.allfringes1D = allfringes1D
+        self.allerr_fringes1D = allerr_fringes1D
+        self.nstep = nstep
+        self.ecosorb = ecosorb
+        self.frame = frame
+        self.keyvals = self._make_keyvals()
+        self.fdict = self._make_fdict()
+
+    def _make_keyvals(self):
+        """
+        Make a dictionary with relevant information on the measurement.
+        Assign the FITS keyword values for the primary header
+        """
+        keyvals = {'DATE-OBS': (self.date_obs, 'Date of the measurement'),
+                   'NBLS': (self.nBLs, 'Number of baselines'),
+                   'NSTEP': (self.nstep, 'Number of stable steps per cycle'),
+                   'ECOSORD': (self.ecosorb, 'Ecosorb on the source'),
+                   'FRAME': (self.frame, 'Referential frame for (X, Y) TES')}
+
+        return keyvals
+
+    def _make_fdict(self):
+        """ Make a dictionary with all relevant data."""
+        fdict = {'BLS': self.allBLs, 'Stable_time': self.allstable_time, 'NCYCLES': self.allNcycles,
+                 'X_TES': self.xTES, 'Y_TES': self.yTES, 'FRINGES_1D': self.allfringes1D,
+                 'ERRORS': self.allerr_fringes1D}
+
+        return fdict
+
+    def save_fringes_pdf_plots(self, out_dir, save_name=None, mask=None):
+        """Save all the fringe plots (all baselines) in a pdf file."""
+        if type(self.nstep) is tuple:
+            for i in self.keyvals:
+                self.keyvals[i] = self.keyvals[i][0]
+        if save_name is None:
+            save_name = 'Fringes_' + self.date_obs + f'_{self.nBLs}BLs.pdf'
+
+        with PdfPages(out_dir + save_name) as pp:
+            for i in range(self.nBLs):
+                fig, axs = plt.subplots(1, 2, figsize=(13, 7))
+                fig.subplots_adjust(wspace=0.5)
+                fig.suptitle(f'Fringes - BL {self.allBLs[i]} - {self.date_obs} - type {self.BLs_type[i]}')
+                ax0, ax1 = axs.ravel()
+                plot_fringes_imshow_interp(self.allfringes1D[i], fig=fig, ax=ax0, mask=mask)
+                plot_fringes_scatter(self.q, self.xTES, self.yTES, self.allfringes1D[i], s=80, fig=fig, ax=ax1)
+                pp.savefig()
+        return
+
+    def write_fits_fringes(self, out_dir, save_name=None):
+        """ Save a .fits with the fringes data."""
+        if out_dir[-1] != '/':
+            out_dir += '/'
+
+        if save_name is None:
+            save_name = 'Fringes_' + self.date_obs + f'_{self.nBLs}BLs.fits'
+
+        # Header creation
+        hdr = pyfits.Header()
+        for key in self.keyvals.keys():
+            hdr[key] = (self.keyvals[key])
+
+        hdu_prim = pyfits.PrimaryHDU(header=hdr)
+        allhdu = [hdu_prim]
+        for key in self.fdict.keys():
+            hdu = pyfits.ImageHDU(data=self.fdict[key], name=key)
+            allhdu.append(hdu)
+
+        thdulist = pyfits.HDUList(allhdu)
+        thdulist.writeto(out_dir + save_name, 'warn')
+
+        return
+
+
+def read_fits_fringes(file):
+    """
+    Read a .fits where you saved the data and returns two dictionaries with
+    the header content and the data themselves.
+    """
+    hdulist = pyfits.open(file)
+    header = hdulist[0].header
+    print(header.keys)
+
+    fringes_dict = {}
+    for i in range(1, len(hdulist)):
+        extname = hdulist[i].header['EXTNAME']
+        data = hdulist[i].data
+        fringes_dict[extname] = data
+
+    return header, fringes_dict
+
 
 # ============== Tool functions ==============
 def cut_data(t0, tf, tdata, data):
@@ -768,7 +873,7 @@ def reorder_data(data, xdata, ydata, xqsoft, yqsoft):
     return data_ordered
 
 
-# ============== Plots functions ==============
+# ============== Plot functions ==============
 def plot_sum_diff_fringes(q, keyvals, fdict, mask=None, lim=2, cmap='bwr'):
     """Plot the sum and the difference of all equivalent baselines."""
     if type(keyvals['NSTEP']) is tuple:
@@ -946,120 +1051,3 @@ def plot_fringes_errors(q, fringes1D, err_fringes1D, xTES, yTES, frame='ONAFP',
                          fig=fig, ax=ax1, cmap='bwr', cbar=True, unit='', s=s, title='|Values / Errors|',
                          vmin=0, vmax=3)
     return
-
-
-# =========================================
-def save_fringes_pdf_plots(out_dir, q, keyvals, fdict, mask=None, **kwargs):
-    """Save all the fringe plots (all baselines) in a pdf file."""
-    if type(keyvals['NSTEP']) is tuple:
-        for i in keyvals:
-            keyvals[i] = keyvals[i][0]
-
-    neq = keyvals['NBLS']
-    date = keyvals['DATE-OBS']
-    myname = 'Fringes_' + date + f'_{neq}BLs.pdf'
-
-    with PdfPages(out_dir + myname) as pp:
-        for i in range(neq):
-            plot_fringes_onFP(q, i, keyvals, fdict, mask=mask, **kwargs)
-            pp.savefig()
-    return
-
-def save_folded_fit_pdf_plots(out_dir, keyvals, fdict):
-    """Save all the plots (folded signal, fit and residuals)
-    for all TES in a .pdf."""
-    if type(keyvals['NSTEP']) is tuple:
-        for i in keyvals:
-            keyvals[i] = keyvals[i][0]
-
-    nBLs = keyvals['NBLS']
-    date = keyvals['DATE-OBS']
-    myname = 'Folded_fit_' + date + f'_{nBLs}BLs.pdf'
-
-    with PdfPages(out_dir + myname) as pp:
-        plt.figure()
-        plt.text(-1, 0, f'Data from {date}', fontsize=40)
-        plt.xlim(-2, 2)
-        plt.ylim(-2, 2)
-        plt.axis('off')
-        pp.savefig()
-        for BL_index in range(nBLs):
-            BL = fdict['BLS'][BL_index]
-            plt.figure()
-            plt.text(-1, 0, f'Baseline {BL}', fontsize=40)
-            plt.xlim(-2, 2)
-            plt.ylim(-2, 2)
-            plt.axis('off')
-            pp.savefig()
-            for page in range(11):
-                fig, axs = plt.subplots(6, 4, figsize=(15, 25))
-                axs = np.ravel(axs)
-                for t in range(24):
-                    ax = axs[t]
-                    TES = page * 24 + t
-                    if TES < 256:
-                        plot_folded_fit(TES, BL_index, keyvals, fdict, ax=ax, legend=False)
-                pp.savefig()
-    return
-
-
-def make_keyvals(date, nBLs, Vtes, nstep=6, ecosorb='yes', frame='ONAFP'):
-    """
-    Make a dictionary with relevant information on the measurement.
-    Assign the FITS keyword values for the primary header
-    """
-    keyvals = {'DATE-OBS': (date, 'Date of the measurement'), 'NBLS': (nBLs, 'Number of baselines'),
-               'NSTEP': (nstep, 'Number of stable steps per cycle'), 'V_TES': (Vtes, 'TES voltage [V]'),
-               'ECOSORD': (ecosorb, 'Ecosorb on the source'), 'FRAME': (frame, 'Referential frame for (X, Y) TES')}
-
-    return keyvals
-
-
-def make_fdict(allBLs, allwt, allNcycles, xTES, yTES, t,
-               allfolded, allparams, allfringes1D, allperiods, allresiduals):
-    """ Make a dictionary with all relevant data."""
-    fdict = {'BLS': allBLs, 'WT': allwt, 'NCYCLES': allNcycles, 'X_TES': xTES, 'Y_TES': yTES, 'TIME': t,
-             'FOLDED': allfolded, 'PARAMS': allparams, 'FRINGES_1D': allfringes1D, 'PERIODS': allperiods,
-             'RESIDUALS': allresiduals}
-
-    return fdict
-
-
-def write_fits_fringes(out_dir, save_name, keyvals, fdict):
-    """ Save a .fits with the fringes data."""
-    if out_dir[-1] != '/':
-        out_dir += '/'
-
-    # Header creation
-    hdr = pyfits.Header()
-    for key in keyvals.keys():
-        hdr[key] = (keyvals[key])
-
-    hdu_prim = pyfits.PrimaryHDU(header=hdr)
-    allhdu = [hdu_prim]
-    for key in fdict.keys():
-        hdu = pyfits.ImageHDU(data=fdict[key], name=key)
-        allhdu.append(hdu)
-
-    thdulist = pyfits.HDUList(allhdu)
-    thdulist.writeto(out_dir + save_name, 'warn')
-
-    return
-
-
-def read_fits_fringes(file):
-    """
-    Read a .fits where you saved the data and returns two dictionaries with
-    the header content and the data themselves.
-    """
-    hdulist = pyfits.open(file)
-    header = hdulist[0].header
-    print(header.keys)
-
-    fringes_dict = {}
-    for i in range(1, len(hdulist)):
-        extname = hdulist[i].header['EXTNAME']
-        data = hdulist[i].data
-        fringes_dict[extname] = data
-
-    return header, fringes_dict

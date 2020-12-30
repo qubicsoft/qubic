@@ -329,15 +329,15 @@ def do_some_dets(detnums, d, directory, fittedpeaksfile, custom=False,
         imshow(img, vmin=mm-3*ss, vmax=mm+3*ss,
                extent=[np.min(a)*c50, np.max(a)*c50, np.min(b), np.max(b)], aspect='equal')
         colorbar()
-        title('TOD')
+        title('TOD {}'.format(detnums[i]))
         subplot(1,2,2)
         imshow(img, vmin=mm-3*ss, vmax=mm+3*ss,
                extent=[np.min(a)*c50, np.max(a)*c50, np.min(b), np.max(b)], aspect='equal')
-        plot(-np.degrees(allphis_M[idet,:]), 50+90-np.degrees(allthetas_M[idet,:]), 'r+', ms=10, markeredgewidth=2)
+        plot(-np.degrees(allphis_M[i ,:]), 50+90-np.degrees(allthetas_M[i,:]), 'r+', ms=10, markeredgewidth=2)
         for k in range(len(np.degrees(allphis_M[idet,:]))):
-            text(-np.degrees(allphis_M[idet,k])+0.3, 50+90-np.degrees(allthetas_M[idet,k])+0.3,k, fontsize=15, weight='bold', color='r')
+            text(-np.degrees(allphis_M[i,k])+0.3, 50+90-np.degrees(allthetas_M[i,k])+0.3,k, fontsize=15, weight='bold', color='r')
         colorbar()
-        title('TOD')
+        title('TOD {}'.format(detnums[i]))
         show()
         print('####################################################++++++++++++++++++++++')
         print('i={}'.format(i))
@@ -510,7 +510,7 @@ fitted_directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/FitSB/'
 # 226 (noisy), 227, 229, 231, 235, 239, 242, 244, 247, 
 # strong: 73, 74, 80, 93, 106, 120, 134, 135, 141, 150, 165, 181, 183, 185, 186, 191, 
 # 195, 201, 206, 208, 236, 250
-detnums = [71, 72, 74, 75]
+detnums = [5, 28, 60, 81]
 
 
 
@@ -543,10 +543,6 @@ for k in range(nf_sub_rec):
                 title='Custom Refit TES{} - SUB={}'.format(detnums, k),min=mini, max=maxi, sub=(1,nf_sub_rec,k+1))
 
 
-
-```
-
-```{python}
 
 ```
 

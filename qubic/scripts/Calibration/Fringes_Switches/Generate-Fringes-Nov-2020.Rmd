@@ -24,6 +24,9 @@ There is clear room for improvement:
 - for the fringe construction: apparently the fringe patterns seems to disappear gradually with the number of cycles (see for example with fringe [49,53] and [17,21] in the last part of code (label: Try to improve method). This is not understood yet and is a big issue as for now it seems that integrating longer does not improve statistics. 
 
 ```{python}
+# %matplotlib inline
+# #%matplotlib notebook
+
 from pylab import *
 import os
 import sys
@@ -134,16 +137,18 @@ print()
 print()
 print('Found {} equivalency classes:'.format(len(all_equiv)))
 reload(sc)
+figure()
 for i in range(len(all_equiv)):
     dsequiv = where(np.array(equiv)==all_equiv[i])[0]
     subplot(1,4,i+1, aspect='equal')
-    sc.plot_horns(q)
+    sc.plot_horns(q, simple=True)
     title('Type = {}'.format(all_equiv[i]))
     print(' - Type {}'.format(all_equiv[i]))
     for j in range(len(dsequiv)):
         print('     * dsnum={} [{},{}]'.format(dsequiv[j], horns[dsequiv[j]][0], horns[dsequiv[j]][1]))
         sc.plot_baseline(q,[horns[dsequiv[j]][0], horns[dsequiv[j]][1]])
     legend(fontsize=10)
+tight_layout()
 ```
 
 ```{python}
@@ -158,7 +163,7 @@ mask[1:5, 16] = np.nan
 ### Try to improve method
 
 ```{python}
-
+reload(fl)
 #### Read data for a given baseline
 ids = 0
 myds = [datasets[ids]]
@@ -171,7 +176,7 @@ print(myhorns)
 read_data = []
 #### Read data
 for asic in [1, 2]:
-    _, my_t_data, my_data, t_src, data_src = fl.get_data(myds, 0, asic, doplot=False, src_data=True)
+    my_t_data, my_data, t_src, data_src = fl.get_data(myds[0], asic, doplot=False, src_data=True)
     read_data.append([my_t_data, my_data])
     tmin = my_t_data[0]
     tmax = my_t_data[-1]
@@ -543,7 +548,7 @@ def get_baselines_configurations(datain,
 
     ######### Now determine t0 on reference TES #################################
     if force_t0 is None:
-        t0 = find_t0(tfold, newdata[refTESnum-1,:,:], period, doplot=doplot)
+        t0 = find_t0(tdata, newdata[refTESnum-1,:,:], period, doplot=doplot)
         if verbose:
             print('Found t0 {0:5.3f}s on TES#{1:}'.format(t0, refTESnum))
     else:
@@ -560,7 +565,7 @@ def get_baselines_configurations(datain,
         if all_h[i]:
             tmini = i*period/nconfigs + skip_rise*period/nconfigs
             tmaxi = (i+1)*period/nconfigs - skip_fall*period/nconfigs
-            ok = (tfold >= tmini) & (tfold < tmaxi)
+            ok = (tdata >= tmini) & (tdata < tmaxi)
             ok_all_horns[ok] = True
     for i in range(ndet):
         newdata[i,:,:] -= np.median(newdata[i,:,ok_all_horns])
@@ -570,7 +575,7 @@ def get_baselines_configurations(datain,
     if doplot:
         figure()
         subplot(1,2,1)
-        imshow(newdata[refTESnum-1,:,:], origin='lower', aspect='auto', extent=[0,np.max(tfold)+(tfold[1]-tfold[0])/2, 0, nper+0.5])
+        imshow(newdata[refTESnum-1,:,:], origin='lower', aspect='auto', extent=[0,np.max(tdata)+(tdata[1]-tdata[0])/2, 0, nper+0.5])
         for i in range(6):
             axvline(x=i*(period/6), color='k', lw=3)
         title('Reference TES#{}'.format(refTESnum))

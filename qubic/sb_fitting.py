@@ -128,6 +128,11 @@ def thph2uv(th, ph):
     cph = np.cos(ph)
     return np.array([sth * cph, sth * sph, cth])
 
+def ang_dist(thph0, thph1):
+    uv0 = thph2uv(thph0[0], thph0[1])
+    uv1 = thph2uv(thph1[0], thph1[1])
+    ang = np.arccos(np.sum(uv0*uv1))
+    return ang
 
 def uv2thph(uv):
     r = np.sum(uv ** 2, axis=0)

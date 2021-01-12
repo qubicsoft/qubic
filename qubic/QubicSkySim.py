@@ -1,10 +1,8 @@
 from __future__ import division
 
 import healpy as hp
-import numpy as np
 import random as rd
 import string
-import os
 import pysm3 as pysm
 import pysm3.units as u
 from pysm3 import utils
@@ -112,7 +110,8 @@ class sky(object):
                     # No map nor CAMB spectra was given, so we recompute them.
                     # The assumed cosmology is the default one given in the get_CAMB_Dl() function
                     # from camb_interface library.
-                    if keyword is not None: np.random.seed(keyword)
+                    if keyword is not None:
+                        np.random.seed(keyword)
                     ell, totDL, unlensedCL = qc.get_camb_Dl(lmax=self.lmax)
                     mycls = qc.Dl2Cl_without_monopole(ell, totDL)
                     mymaps = hp.synfast(mycls.T, self.nside, verbose=False, new=True)
@@ -283,15 +282,15 @@ class Qubic_sky(sky):
                                                                        # Multiband instrument model
                                                                        d['filter_relative_bandwidth'])
         self.qubic_central_nus = central_nus
-        #THESE LINES HAVE TO BE CONFIRMED/IMPROVED in future since fwhm = lambda / (P Delta_x) is an approximation for the resolution 
+        # THESE LINES HAVE TO BE CONFIRMED/IMPROVED in future since fwhm = lambda / (P Delta_x) is an approximation for the resolution
         if d['config'] == 'FI':
             self.fi2td = 1
         elif d['config'] == 'TD':
-            P_FI = 22   #horns in the largest baseline in the FI
-            P_TD = 8    #horns in the largest baseline in the TD
-            self.fi2td = (P_FI-1)/(P_TD-1)
+            P_FI = 22  # horns in the largest baseline in the FI
+            P_TD = 8  # horns in the largest baseline in the TD
+            self.fi2td = (P_FI - 1) / (P_TD - 1)
         #
-        self.qubic_resolution_nus = d['synthbeam_peak150_fwhm'] *150 / self.qubic_central_nus * self.fi2td
+        self.qubic_resolution_nus = d['synthbeam_peak150_fwhm'] * 150 / self.qubic_central_nus * self.fi2td
         self.qubic_channels_names = ["{:.3s}".format(str(i)) + "_GHz" for i in self.qubic_central_nus]
 
         instrument = {'nside': d['nside'], 'frequencies': central_nus,  # GHz
@@ -425,12 +424,10 @@ class Qubic_sky(sky):
             #### Integartion time assumed in Fast Sim Files
             fastsimfile_effective_duration = 4.
 
-
-
         with open(global_dir + dir_fast +
                   'DataFastSimulator_{}{}_nfsub_{}.pkl'.format(self.dictionary['config'],
-                                                                                       str(filter_nu),
-                                                                                       nf_sub),
+                                                               str(filter_nu),
+                                                               nf_sub),
                   "rb") as file:
             DataFastSim = pickle.load(file)
             print(file)
@@ -750,7 +747,7 @@ def get_noise_invcov_profile(maps, coverage, covcut=0.1, nbins=100, fit=True, la
         if QUsep is False:
             eff_v = mymodel(invcov_samples, *myfit[0]) ** 2
             # Avoid extrapolation problem for pixels before the first bin or after the last one.
-            eff_v[invcov_samples < xx[0]**2] = mymodel(xx[0] **2, *myfit[0]) ** 2
+            eff_v[invcov_samples < xx[0] ** 2] = mymodel(xx[0] ** 2, *myfit[0]) ** 2
             eff_v[invcov_samples > xx[-1] ** 2] = mymodel(xx[-1] ** 2, *myfit[0]) ** 2
 
             effective_variance_invcov = np.array([invcov_samples, eff_v])
@@ -888,13 +885,13 @@ def map_corr_neighbtheta(themap_in, ipok_in, thetamin, thetamax, nbins, degrade=
             for l in ipneighb_inner: ipneighb.remove(l)
             valneighb = themap[ipneighb]
             thesum[k] += np.sum(valthis * valneighb)
-            thesum2[k] += np.sum((valthis * valneighb)**2)
+            thesum2[k] += np.sum((valthis * valneighb) ** 2)
             thecount[k] += len(valneighb)
             ipneighb_inner = ipneighb_outer.copy()
 
     mm = thesum / thecount
     mm2 = thesum2 / thecount
-    errs = np.sqrt(mm2 - mm**2)/np.sqrt(np.sqrt(thecount))
+    errs = np.sqrt(mm2 - mm ** 2) / np.sqrt(np.sqrt(thecount))
     corrfct = thesum / thecount
     mythetas = np.degrees(thvals[:-1] + thvals[1:]) / 2
     return mythetas, corrfct, errs
@@ -931,7 +928,7 @@ def ctheta_parts(themap, ipok, thetamin, thetamax, nbinstot, nsplit=4, degrade_i
             'Doing {0:3.0f} bins between {1:5.2f} and {2:5.2f} deg at nside={3:4.0f}'.format(mynbins, mythmin, mythmax,
                                                                                              mynside))
         myth, mycth, errs = map_corr_neighbtheta(themap, ipok, mythmin, mythmax, mynbins, degrade=mynside,
-                                           verbose=verbose)
+                                                 verbose=verbose)
         cthall[thispart] = mycth
         errcthall[thispart] = errs
         thall[thispart] = myth

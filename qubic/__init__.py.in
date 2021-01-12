@@ -24,7 +24,7 @@ from .AnalysisMC import *
 from .ReadMC import *
 from . import qubicdict 
 
-import pysm
+import pysm3
 
 def full(shape, fill_value, dtype=None, order='C'):
     import numpy as np

@@ -1,5 +1,5 @@
 from __future__ import division
-
+import os
 import healpy as hp
 import random as rd
 import string
@@ -309,7 +309,7 @@ class Qubic_sky(sky):
 
     def get_fullsky_convolved_maps(self, FWHMdeg=None, verbose=None):
         """
-        This returns full sky maps at each subfrequency convolved by the beam of  the  isntrument at
+        This returns full sky maps at each subfrequency convolved by the beam of  the  instrument at
         each frequency or with another beam if FWHMdeg is provided.
         when FWHMdeg is 0, the maps are not convolved.
 

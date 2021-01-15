@@ -273,12 +273,15 @@ class QubicAcquisition(Acquisition):
         if self.bandwidth is None and self.psd is None and self.sigma is None:
             raise ValueError('The noise model is not specified.')
 
+
+        print('In acquisition.py: self.forced_sigma={}'.format(self.forced_sigma))
+        print('and self.sigma is:{}'.format(self.sigma))
         if self.forced_sigma is None:
             print('Using theoretical TES noises')
         else:
             print('Using self.forced_sigma as TES noises')
             self.sigma = self.forced_sigma.copy()
-            
+
         shapein = (len(self.instrument), len(self.sampling))
 
         if self.bandwidth is None and self.instrument.detector.fknee == 0:

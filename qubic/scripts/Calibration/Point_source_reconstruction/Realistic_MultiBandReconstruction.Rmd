@@ -469,47 +469,47 @@ directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams
 In the following we will need to use the TES locations as well as sub-instruments. Here are functions to do this.
 
 ```{python}
-reload(jcinst)
-reload(sc)
-#### Problème d'indices des TES entre qubic_pack() et Qubic_Soft()
-q = jcinst.QubicMultibandInstrument(d)
+# reload(jcinst)
+# reload(sc)
+# #### Problème d'indices des TES entre qubic_pack() et Qubic_Soft()
+# q = jcinst.QubicMultibandInstrument(d)
 
-ndet = len(q[0].detector.center)
-print(ndet)
+# ndet = len(q[0].detector.center)
+# print(ndet)
 
-rc('figure', figsize=(15,15))
-x, y, FP_index, index_q = sc.get_TES_Instru_coords(q[0], frame='GRF', verbose=False)
+# rc('figure', figsize=(15,15))
+# x, y, FP_index, index_q = sc.get_TES_Instru_coords(q[0], frame='GRF', verbose=False)
 
 
-sc.scatter_plot_FP(q[0], x, y, np.arange(256), 'GRF', s=1900, unit='QP#', cmap='bwr', cbar=False, figsize=(15, 15))
-xlim(-0.053, 0)
-ylim(0, 0.053)
-for i in range(len(x)):
-    if (x[i] != 0) and (y[i] !=0):
-        text(x[i]-0.0013,y[i]-0.001, 'QP:{}\nQS:{}'.format(i+1,index_q[i]), fontsize=10, color='k',weight="bold")
+# sc.scatter_plot_FP(q[0], x, y, np.arange(256), 'GRF', s=1900, unit='QP#', cmap='bwr', cbar=False, figsize=(15, 15))
+# xlim(-0.053, 0)
+# ylim(0, 0.053)
+# for i in range(len(x)):
+#     if (x[i] != 0) and (y[i] !=0):
+#         text(x[i]-0.0013,y[i]-0.001, 'QP:{}\nQS:{}'.format(i+1,index_q[i]), fontsize=10, color='k',weight="bold")
 ```
 
 ```{python}
-idqp = np.array([60])
-index_q[idqp-1]
-qcut = select_det(jcinst.QubicMultibandInstrument(d), idqp)
+# idqp = np.array([60])
+# index_q[idqp-1]
+# qcut = select_det(jcinst.QubicMultibandInstrument(d), idqp)
 
-xGRF = x[np.array(idqp)-1]
-yGRF = y[np.array(idqp)-1]
-print('X: {}'.format(xGRF))
-print('Y: {}'.format(yGRF))
+# xGRF = x[np.array(idqp)-1]
+# yGRF = y[np.array(idqp)-1]
+# print('X: {}'.format(xGRF))
+# print('Y: {}'.format(yGRF))
 
-rc('figure', figsize=(15,15))
-sc.scatter_plot_FP(q[0], x, y, np.arange(256), 'GRF', s=1900, unit='QP#', cmap='bwr', cbar=False, figsize=(15,15))
-xlim(-0.053, 0)
-ylim(0, 0.053)
-for i in range(len(xGRF)):
-    if (xGRF[i] != 0) and (yGRF[i] !=0):
-        text(xGRF[i]-0.0013,yGRF[i]-0.001, 'QP:{}\nQS:{}'.format(idqp[i],0), fontsize=10, color='k',weight="bold")
+# rc('figure', figsize=(15,15))
+# sc.scatter_plot_FP(q[0], x, y, np.arange(256), 'GRF', s=1900, unit='QP#', cmap='bwr', cbar=False, figsize=(15,15))
+# xlim(-0.053, 0)
+# ylim(0, 0.053)
+# for i in range(len(xGRF)):
+#     if (xGRF[i] != 0) and (yGRF[i] !=0):
+#         text(xGRF[i]-0.0013,yGRF[i]-0.001, 'QP:{}\nQS:{}'.format(idqp[i],0), fontsize=10, color='k',weight="bold")
 
-xGRFqs = qcut[0].detector.center[:,0]
-yGRFqs = qcut[0].detector.center[:,1]
-plot(xGRFqs, yGRFqs, 'y*', ms=50, alpha=0.5)
+# xGRFqs = qcut[0].detector.center[:,0]
+# yGRFqs = qcut[0].detector.center[:,1]
+# plot(xGRFqs, yGRFqs, 'y*', ms=50, alpha=0.5)
 ```
 
 ### Removing a common mode between all detectors
@@ -624,7 +624,7 @@ fitted_directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/FitSB/'
 # detnums = [151, 152, 153, 166, 169]
 
 ### Non: 172, 173
-detnums = [5, 28, 37, 60, 96, 101, 122, 124, 137, 140, 149, 153, 163]#, 173]#, 176]#, 184, 193] #!! Wow
+detnums = [5, 28, 37, 60, 96, 101, 122, 124, 137, 140, 149]#, 153, 163]#, 173]#, 176]#, 184, 193] #!! Wow
 
 
 reso=20
@@ -846,10 +846,6 @@ legend(loc='upper left')
 
 tight_layout()
 
-
-```
-
-```{python}
 
 ```
 

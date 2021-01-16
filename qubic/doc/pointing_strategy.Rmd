@@ -112,37 +112,33 @@ print('\nPitch', p.pitch)
 We use the repeat pointing strategy.
 
 ```{python}
-d['nhwp_angles']
-```
-
-```{python}
 d['random_pointing'] = False
 d['repeat_pointing'] = True
 d['sweeping_pointing'] = False
 
 # Number of pointings
 d['npointings'] = 3000
-d['nhwp_angles'] = 6
+d['nhwp_angles'] = 3
 
 p = qubic.get_pointing(d)
 
 # Change the HWP angles along the pointing
 hwp = p.angle_hwp
-hwp = np.where(hwp>70., hwp-8., hwp*1)
-hwp1 = np.where(hwp<30., hwp+5., hwp*1)
-hwp2 = np.where(hwp<20., hwp-15., hwp*1)
-print('\nHWP angle', hwp)
+hwp0 = np.where(hwp>50., hwp-10., hwp*1)
+# hwp1 = np.where(hwp<30., hwp+5., hwp*1)
+# hwp2 = np.where(hwp<20., hwp-15., hwp*1)
 
 plt.figure(figsize=(6, 6))
-plt.plot(p.index, p.angle_hwp, 'r', label='Equally spaced')
-plt.plot(p.index, hwp2, 'b--', label='Not equally spaced')
+plt.plot(p.index, hwp, 'r', label='Equally spaced')
+plt.plot(p.index, hwp0, 'b--', label='Not equally spaced')
 # plt.plot(p.index, hwp1, 'g--', label='Not equally spaced')
 plt.xlabel('Pointing index')
 plt.ylabel('HWP angle [deg]')
 plt.legend()
 # plt.savefig('/home/lmousset/QUBIC/Notes_presentations/HWP_angle_regularly_spaced/6HWPangles.pdf', bbox_inches='tight')
 
-p.angle_hwp = hwp2
+# Apply the changes 
+p.angle_hwp = hwp0
 ```
 
 ```{python}
@@ -217,7 +213,7 @@ for istokes in range(3):
     hp.gnomview(diff[:, istokes], cmap='jet',rot=center, sub=(1,3,istokes+1), reso=rr,
                 title='Residuals ' + stokes[istokes], unit='$\mu K$', min=None, max=None)
 plt.tight_layout()
-plt.savefig('/home/lmousset/QUBIC/Notes_presentations/HWP_angle_regularly_spaced/residuals_6HWP_equal_space.pdf', bbox_inches='tight')
+# plt.savefig('/home/lmousset/QUBIC/Notes_presentations/HWP_angle_regularly_spaced/residuals_6HWP_equal_space.pdf', bbox_inches='tight')
 ```
 
 ```{python}

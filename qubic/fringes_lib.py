@@ -200,7 +200,7 @@ class FringesAnalysis:
 
         coeffs = np.array([1. / 3, -1., 1., 1. / 3, -1., 1. / 3])
         for i, ASIC in enumerate(self.asics):
-            # Fold and filter the data
+            # Filter, fold and normalize the data
             dfold, tfold, _, errfold, _, _ = ft.fold_data(self.tdata[i, :],
                                                           self.data[i, :, :],
                                                           self.refperiod,
@@ -1031,13 +1031,13 @@ def plot_residuals(q, sigres, oktes, xTES, yTES, frame='ONAFP', suptitle=None):
 
 
 def plot_fringes_errors(q, fringes1D, err_fringes1D, xTES, yTES, frame='ONAFP',
-                        s=None, lim=1., suptitle=None):
+                        s=None, normalize=True, lim=1., suptitle=None):
     _, _, fringes1D = remove_thermometers(xTES, yTES, fringes1D)
     xTES, yTES, err_fringes1D = remove_thermometers(xTES, yTES, err_fringes1D)
 
-    if lim is None:
-        mm, ss = ft.meancut(fringes1D, 3)
-        lim = 3 * ss
+    if normalize:
+        fringes1D /= np.nanstd(fringes1D)
+        err_fringes1D /= np.nanstd(err_fringes1D)
 
     fig, axs = plt.subplots(1, 2)
     fig.suptitle(suptitle)

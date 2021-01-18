@@ -173,8 +173,8 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     if chi2 is None:
         chi2 = MyChi2(x, y, covar, functname, extra_args=extra_args)
         # nohesse=False
-    elif chi2.__name__ is 'MyChi2_nocov':
-        chi2 = chi2(x, y, covar, functname)
+    #elif chi2.__name__ is 'MyChi2_nocov':
+    #    chi2 = chi2(x, y, covar, functname)
 
     # variables
     ndim = np.size(guess)

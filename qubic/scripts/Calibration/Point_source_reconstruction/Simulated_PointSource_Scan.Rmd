@@ -1,0 +1,583 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.7.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+ one thing that wuld be useful by the way, and maybe you could have a lok at this if you want:
+we would be in a much better situation for developping the reconstruction code if we had simualted data to play with. I mean simulate the observation of a source in the hall at 150 GHz with the theoretical SB => reproduce the Flat Beam Maps but with the theory, with the exact same pointing values
+so that we could:
+- test the reconstruction code
+- Try the SB Peak fitting on these
+- See how the multiband reconstruction behaves with "true peak positions" and with the fitted values
+
+
+```{python}
+# %matplotlib inline
+
+# system packages
+import os
+import sys
+from importlib import reload 
+import time
+
+# scientific packages
+import numpy as np
+import healpy as hp
+from matplotlib.pyplot import *
+from scipy.fftpack import rfft, rfftfreq
+
+# QUBIC packages
+import qubic
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+from qubic import demodulation_lib as dl
+from qubic import sb_fitting as sbfit
+import toolfit_hpmap as fh
+```
+
+```{python}
+def generate_region(az, el):
+    """
+    Generates the squared region scanned in the hall from the azimuth&elevation coordinates
+    saved in housekeeping data.
+    
+    Return a grid with coordinates
+    """
+    mult_el = []
+    for eachEl in el:
+        mult_el.extend(np.tile(eachEl, len(az)))
+    mult_el = mult_el[::-1]
+    mult_az = []
+    mult_az.append(np.tile(az, len(el)))
+    
+    return mult_az, mult_el
+
+def create_hall_pointing(d, az, el, angspeed_psi = 0, maxpsi = 0, period = 0.,
+                 date_obs = None, latitude = None, longitude = None, 
+                 fix_azimuth = None, random_hwp = True):
+    
+    '''
+    Model of the pointing used in the hall. No back and forth. 
+    
+    Parameters:
+        d: QUBIC dictionary
+        az, el: azimuth and elevation data from housekeeping data or fits file. 1-d array
+        period: QubicSampling parameter. If equal to zero, it matches with transformation from az,el
+        to ra, dec using qubic.hor2equ(az, el time = 0). Otherwise is not equal. Default: zero. 
+    Return: 
+        QUBIC's pointing object
+    '''
+
+    nsamples = len(az)*len(el)
+    
+    #mult_el = []
+    #for eachEl in el:
+    #    mult_el.extend(np.tile(eachEl, len(az)))
+    #mult_az = []
+    #mult_az.append(np.tile(az[::-1], len(el)))
+    mult_az, mult_el = generate_region(az,el)
+    pp = qubic.QubicSampling(nsamples, azimuth = mult_az[0], elevation = mult_el[0],
+                             date_obs = d['date_obs'], period = period, 
+                            latitude = latitude, longitude = longitude)
+    
+    pp.elevation = np.asarray(mult_el)[::-1]
+    pp.azimuth = np.asarray(mult_az[0])[::-1]
+    
+    #newcoord = np.zeros(pp.equatorial.shape)
+    #print(newcoord.shape, pp.equatorial.shape, pp.azimuth.shape)
+    #print(pp.equatorial[100])
+    #newcoord = qubic.hor2equ(pp.azimuth, pp.elevation, time = 0 )    
+    #print(pp.equatorial[100])
+    #setattr(pp, 'equatorial', newcoord)
+
+    ### scan psi as well,
+    pitch = pp.time * angspeed_psi
+    pitch = pitch % (4 * maxpsi)
+    mask = pitch > (2 * maxpsi)
+    pitch[mask] = -pitch[mask] + 4 * maxpsi
+    pitch -= maxpsi
+    
+    pp.pitch = pitch
+    
+    if random_hwp:
+        pp.angle_hwp = np.random.random_integers(0, 7, nsamples) * 11.25
+        
+    if d['fix_azimuth']['apply']:
+        pp.fix_az=True
+        if d['fix_azimuth']['fix_hwp']:
+            pp.angle_hwp=pp.pitch*0+ 11.25
+        if d['fix_azimuth']['fix_pitch']:
+            pp.pitch= 0
+    else:
+        pp.fix_az=False
+
+    return pp
+
+def hall_pointing(az, el, angspeed_psi, maxpsi,
+                 date_obs=None, latitude=None, longitude=None,fix_azimuth=None,random_hwp=True):
+    #This method will reproduce the pointing that is used in the hall to take the data. Will start from bottom
+    #left and will go up at fixed elevation.
+    
+    #nsamples = 2*len(az)*len(el) # commented bucause not go and back
+    nsamples = len(az)*len(el)
+    #print('nsamples = ', nsamples)
+    pp = qubic.QubicSampling(nsamples,date_obs=date_obs, period=0.1, latitude=latitude,longitude=longitude)
+    
+    #Comented because we do not go and back in simulations.. 
+    #mult_el = []
+    #for eachEl in el:
+    #    mult_el.append(np.tile(eachEl, 2*len(az)))
+    # Azimuth go and back and same elevation. 
+    #az_back = az[::-1]
+    #az = list(az)
+    #az.extend(az_back)
+    #mult_az = np.tile(az, len(el))
+    #print(i,np.asarray(mult_el).ravel().shape)
+    #pp.elevation = np.asarray(mult_el).ravel()
+    #pp.azimuth = np.asarray(mult_az).ravel()
+    
+    mult_el = []
+    for eachEl in el:
+        mult_el.extend(np.tile(eachEl, len(az)))
+    mult_az = []
+    mult_az.append(np.tile(az, len(el)))
+    #print(len(mult_el))
+    pp.elevation = np.asarray(mult_el)#az2d.ravel()
+    pp.azimuth = np.asarray(mult_az[0])#el2d.ravel()
+    
+    ### scan psi as well,
+    pitch = pp.time * angspeed_psi
+    pitch = pitch % (4 * maxpsi)
+    mask = pitch > (2 * maxpsi)
+    pitch[mask] = -pitch[mask] + 4 * maxpsi
+    pitch -= maxpsi
+    
+    pp.pitch = pitch
+    
+    if random_hwp:
+        pp.angle_hwp = np.random.random_integers(0, 7, nsamples) * 11.25
+        
+    if d['fix_azimuth']['apply']:
+        pp.fix_az=True
+        if d['fix_azimuth']['fix_hwp']:
+            pp.angle_hwp=pp.pitch*0+ 11.25
+        if d['fix_azimuth']['fix_pitch']:
+            pp.pitch= 0
+    else:
+        pp.fix_az=False
+
+    return pp
+    #print(pp.elevation)#, len(pp.elevation))
+
+```
+
+- First attemp with nf_sub = 10  , noiseless = True
+
+```{python}
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(os.environ['QUBIC_DICT']+'/global_source_oneDet.dict')
+d['MultiBand'] = True
+d['nf_sub'] = 6
+d['kind'] = 'I'
+d['config'] = 'TD'
+d['nside'] = 128
+#d['RA_denter'], d['DEC_center'] = 0,0 #qubic.hor2equ(0, 0, 0)
+d['synthbeam_fraction'] = 0.99
+d['noiseless'] = True
+```
+
+```{python}
+directory = os.environ['QUBIC_TODDIR'] + '150GHz-2019-04-06/'
+
+az = FitsArray(directory + 'Flat/azimuth.fits')
+el = FitsArray(directory + 'Flat/elevation.fits')
+azcen_fov = np.mean(az)
+elcen_fov = np.mean(el)
+print('Central FOV (A,h) = ', azcen_fov, elcen_fov)
+```
+
+```{python}
+newaz, newel = generate_region(az, el)
+print(np.mean(az), np.mean(el))
+#d['RA_center'], d['DEC_center'] = qubic.hor2equ(np.mean(az), np.mean(el), 0)
+d['RA_center'], d['DEC_center'] = (azcen_fov, elcen_fov)
+print(d['RA_center'], d['DEC_center'])
+d['npointings'] = len(az)*len(el) 
+p = create_hall_pointing(d, az, el, period = 0.1)
+#p = hall_pointing(az, el, 0, 0,)
+
+interval_time = d['effective_duration'] * 3600 * 24 * 365 #in sec
+ra = np.zeros_like(p.azimuth)
+dec = np.zeros_like(p.elevation)
+#rat = np.zeros_like(p.azimuth)
+#dect = np.zeros_like(p.elevation)
+#convert az, el in ra, dec
+# I fix 0 (in hor2equ) because we don't have rotation in the mirror. 
+
+#This has to be changed in realistic cases (time != 0)
+#rat[i], dect[i] = qubic.hor2equ(p.azimuth[i], p.elevation[i], i * (interval_time) / d['npointings'])
+ra, dec = qubic.hor2equ(p.azimuth, p.elevation, 0)
+#rat[i], dect[i] = qubic.hor2equ(p.azimuth[i], p.elevation[i], 0.1)        
+```
+
+```{python}
+figure(figsize=(14,4))
+subplot(121)
+xlim(0,1500)
+plot(np.array(newaz).ravel())
+subplot(122)
+xlim(0,1500)
+plot(np.array(newel).ravel())
+```
+
+```{python}
+fig, ax = subplots(nrows= 1, ncols = 3, figsize = (16,5))
+        
+ax[0].set_xlabel(r'A[°]', fontsize = 20)
+ax[0].set_ylabel(r'h[°]', fontsize = 20)
+ax[0].set_title('Az, El grid from hk data')
+ax[0].plot(np.reshape(newaz, (len(az), len(el))), np.reshape(newel, (len(az), len(el))), 'k.',
+          alpha = 0.4)
+ax[0].plot(np.mean(az), np.mean(el), 'y*')
+maskaux_px = np.zeros((12 * d['nside'] ** 2,))
+px_radec = hp.ang2pix(d['nside'], np.deg2rad(90 - dec), np.deg2rad(ra)) 
+maskaux_px[...] = hp.UNSEEN
+maskaux_px[px_radec] = 1.
+maskaux_px[~px_radec] = hp.UNSEEN
+axes(ax[1])
+hp.mollview(maskaux_px, coord = 'C', cmap = 'jet', #reso = 12, 
+            rot = (d['RA_center'], d['DEC_center'] ), cbar = False, #xsize = 300, ysize = 200, 
+            title = 'Scanned region in Eq. projection', max = 1, min = 0, hold = True)
+hp.graticule()
+
+ax[2].set_xlabel(r'$\alpha$[°]', fontsize = 20)
+ax[2].set_ylabel(r'$\delta$[°]', fontsize = 20)
+ax[2].set_title('RA,DEC converted from Az, El -hk data- using q.hor2equ ')
+ax[2].scatter(np.reshape(ra, (len(az), len(el))), np.reshape(dec, (len(az), len(el)))[:], color = 'k',
+              marker = '.',  alpha = 0.4)
+#ax[2].plot(d['RA_center'], d['DEC_center'], 'y*')
+```
+
+```{python}
+rc('font', size=12)
+figure(figsize = (14,5))
+subplot(121)
+ylabel(r'$\alpha$')
+xlabel('pointing')
+plot(p.equatorial[:,0], alpha = 0.7, label = 'QS')
+plot(ra, alpha= 0.7, label = 'Manual')
+#axhline(d['RA_center'], c = 'k', ls = '--')
+legend()
+
+subplot(122)
+ylabel(r'$\delta$')
+xlabel('pointing')
+plot(p.equatorial[:,1],  alpha = 0.7, label = 'QS')
+plot(dec, alpha= 0.7, label = 'Manual')
+#axhline(d['DEC_center'], c = 'k', ls = '--')
+
+#subplot(133)
+# Note the extra 'r' at the front
+#SAMPLE_RATE = 1
+#N = d['npointings'] * SAMPLE_RATE
+#yf = rfft(ra)
+#xf = rfftfreq(N, 1 / SAMPLE_RATE)
+#xlim(0,0.1)
+#plot(xf, np.abs(yf)/1e6)
+```
+
+See at the scan... Ok, works fine
+
+o --->--->--->---> ... --->
+
+                 v
+
+o --->--->--->---> ... --->
+
+                 v
+
+o --->--->--->---> ... --->|
+
+
+lim = 70
+ylim(63,66)
+scatter(p.azimuth[:lim], p.elevation[:lim], color = 'k', marker = '.', s = 5)
+scatter(p.azimuth[lim:2*lim], p.elevation[lim:2*lim], color = 'r', marker = '.', s = 5)
+scatter(p.azimuth[2*lim:3*lim], p.elevation[2*lim:3*lim], color = 'b', marker = '.', s = 5)
+
+
+#### Generate QUBIC objects (scene, instrument, acquisition)
+
+```{python}
+s = qubic.QubicScene(d)
+q = qubic.QubicMultibandInstrument(d)
+
+#Compute frequencies
+_, nus_edge_in, nus_in, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, d['nf_sub'],
+                                                d['filter_relative_bandwidth'])
+print(nus_in)
+```
+
+#### Generate point source
+
+
+It doesn't change the equatorial coordinates when changing center...weird. This could be related with the period in QubicSampling
+
+```{python}
+#150GHz
+idx = 3
+psmap = np.zeros((d['nf_sub'], 12 * d['nside'] ** 2))
+#central_pix = hp.ang2pix(d['nside'], np.deg2rad(90 - d['DEC_center']), np.deg2rad(d['RA_center']))
+central_pix = hp.ang2pix(d['nside'], np.deg2rad(90 - elcen_fov), np.deg2rad(azcen_fov))
+neig_pixs = hp.get_all_neighbours(d['nside'], central_pix)
+psmap[idx, central_pix] = 1e9
+#psmap[idx, neig_pixs] = 1e9
+psmap[idx] = hp.smoothing(psmap[idx], np.deg2rad(1.0))
+
+fig, ax = subplots(nrows = 1, ncols = 2, figsize = (15,5))
+axes(ax[0])
+#hp.gnomview(psmap[idx], rot = (d['RA_center'], d['DEC_center']), reso = 10, hold = True)
+hp.gnomview(psmap[idx], rot = (d['RA_center'], d['DEC_center']), 
+            title = 'PS@{:.2f}'.format(nus_in[idx]),
+            reso = 10, hold = True)
+
+
+ax[1].plot(p.equatorial.T[0], label = 'RA')
+ax[1].plot(p.equatorial.T[1], label = 'DEC')
+ax[1].legend()
+
+```
+
+#### Generate freqs, acquisition operator and observation
+
+```{python}
+a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_in)
+
+TOD, maps_convolved_useless = a.get_observation(psmap, noiseless = d['noiseless'])#, convolution = True)
+```
+
+Look at the TODs
+
+
+qpix, asic = 93, 1
+newaz = np.interp(newt_demod, time_azel, az)
+newel = np.interp(newt_demod, time_azel, el)
+azmin = np.min(az)
+azmax = np.max(az)
+elmin = np.min(el)
+elmax = np.max(el)
+naz = len(az)
+nel = len(el)
+mymap, azmap, elmap = dl.coadd_flatmap(TOD[qpix], newaz, newel, 
+                                    filtering=None,
+                                    azmin=azmin, azmax=azmax, 
+                                    elmin=elmin, elmax=elmax, 
+                                    naz=naz,nel=nel)
+
+
+```{python}
+directory
+```
+
+```{python}
+#figure(figsize = (14,6))
+#subplot(121)
+# I havew to invert the elevation to match with dataset. I don't know why. 
+reload(fh)
+for ites in range(256):
+    # WARNING
+    #================================================================== HERE == WARNING
+    #watch out here. Index didn't match
+    qpix = fh.q_pix(ites, simulation = True)[0]
+    print (ites, qpix)
+    #=================================================================== HERE
+    FitsArray(np.reshape(TOD[qpix], 
+                     (len(el), len(az)))[::-1, :]).save(directory + \
+                    'Simulations/Flat/imgflat_TESNum_{}'.format(qpix))
+#imshow(np.reshape(TOD[fh.q_pix(ites)[0]], (len(el), len(az)))[::-1, :] )
+#colorbar(None)
+#subplot(122)
+map_test = sbfit.get_flatmap(100, directory)[0]
+#imshow(map_test)
+```
+
+Fit peak positions in flat map.
+
+```{python}
+# Build model
+sbfitmodel = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, 
+                                     no_xy_shift=False, distortion=False)
+
+# Do fit for 1 TES
+TES2fit = [5, 28, 37, 60, 96, 101, 122, 124, 137, 140, 149]
+thexypeaks = np.zeros((len(TES2fit), 4, 9))
+flatmaps = np.zeros((len(TES2fit), len(el), len(az) ))
+t0 = time.time()
+for j, ites in enumerate(TES2fit): 
+    _, thexypeaks[j], flatmaps[j] = sbfit.fit_sb(np.reshape(TOD[fh.q_pix(ites)[0]], (len(el), len(az))), 
+                                                 az, el, sbfitmodel, resample = False, newsize = 150, 
+                                                 nsiglo = 100, nsighi = 2000,
+        az_center = azcen_fov, el_center = elcen_fov,
+         verbose = False, doplot = True, return_fitted =True,
+    figsave = os.environ['QUBIC_DATADIR'] + 'scripts/fit_theoretical_SB/TES{}_flatmap_peaks_fit'.format(ites),
+         extra_title='TES #{}'.format(ites))
+    clf()
+    
+print((time.time()-t0)/60 , 'minutes')
+```
+
+```{python}
+dirfiles = os.environ['QUBIC_TODDIR']+'150GHz-2019-04-06/'
+FitsArray(thexypeaks).save(dirfiles + 'FitSB/FlatMaps/fitted_peaks_test')
+```
+
+Test if reads is according with format...ok
+
+
+pruebaxypeaks = np.array(FitsArray(dirfiles + 'FitSB/fitted_peaks_flatmap'))
+for i in range(len(TES2fit)):
+    scatter(pruebaxypeaks[i,0], pruebaxypeaks[i,1])
+
+
+Fit peak positions in healpy map
+
+```{python}
+reload(fh)
+dirfiles = os.environ['QUBIC_TODDIR']+'150GHz-2019-04-06/'
+
+#PIXq = tes2pix(93, 1) - 1 
+#PIXq = TES2fit[1]
+#PIXq, _, _ = fh.q_pix(TES2fit[1])
+#TES2fit = [5, 28, 37, 60, 96, 101, 122, 124, 137, 140, 149]
+tes_fileconv = 5
+print(PIXq)
+hpnest, thphpeaksnew, absmaxpx = fh.fit_hpmap(tes_fileconv, q[3], s, dirfiles, plot = False,
+                                       filterbeam = 2, threshold = 2, threshold0 = 2, plotcenter = False)
+```
+
+```{python}
+allthetas_M = np.radians(90 - (thexypeaks[1,1,:] - elcen_fov))
+allphis_M = np.radians(-thexypeaks[1,0,:])#*thecos)
+angs = np.radians(np.array([0, 90, 0]))
+#allthetas_Q[idet,:], allphis_Q[idet,:] = sbfit.rotate_q2m(allthetas_M[idet,:], allphis_M[idet,:],  angs=angs, inverse=True)
+allthetas_Q, allphis_Q = sbfit.rotate_q2m(allthetas_M, allphis_M, angs=angs, inverse=True)
+# pi rotation of the measured SB w.r.t. simulations => we apply it here
+allphis_Q += np.pi
+
+fig, ax = subplots(nrows = 1, ncols = 2, figsize = (14,8))
+
+axes(ax[0])
+hp.gnomview(hpnest, nest = True, reso = 10, min = 0, max= 1e4, cbar= False, rot = (0,0),
+            title = 'Fitting (hp) TES = {}'.format(tes_fileconv), hold = True)
+hp.projscatter(thphpeaksnew.T, color = 'r', marker = '.')
+hp.graticule()
+
+im = ax[1].imshow(np.reshape(TOD[fh.q_pix(tes_fileconv)[0]], (len(el), len(az))), 
+             extent = [np.min(az) * np.cos(np.radians(elcen_fov)),
+                               np.max(az) * np.cos(np.radians(elcen_fov)),
+                               np.min(el), np.max(el)],  )
+ax[1].plot(thexypeaks[TES2fit.index(tes_fileconv),0,:], thexypeaks[TES2fit.index(tes_fileconv),1,:], 'r.')
+#fig.colorbar(im, ax = ax[1])
+ax[1].set_title('Fitting (flat)')
+ax[1].axvline(d['RA_center'], color = 'k')
+ax[1].axhline(d['DEC_center'], color = 'k')
+print(ax[1].get_ylim())
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+import scipy.signal as scsig
+import qubic.fibtools as ft
+
+flatmap = scsig.resample(scsig.resample(np.reshape(TOD[93], (len(el), len(az))), 144, axis=0), 200, axis=1)
+azaux = np.linspace(np.min(az), np.max(az), 200)
+elaux = np.linspace(np.min(el), np.max(el), 144)
+az2d, el2d = np.meshgrid(az * np.cos(np.radians(50)), np.flip(el))
+mm, ss = ft.meancut(flatmap, 3)
+```
+
+```{python}
+subplot(121)
+imshow(flatmap, vmin = mm - 100 * ss, vmax = mm + 2000 * ss)
+subplot(122)
+imshow(np.reshape(TOD[93], (len(el), len(az))))
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+H = a.get_operator()
+
+
+print(np.shape(H.T),)# 196608/12/128/128, 12*128**2, d['npointings'] * 248)
+
+
+#print('Operator ', a.get_operator())
+print(len(a.instrument), len(a.sampling))
+print(a.comm.allreduce(len(a.instrument)))
+print(a.comm.allreduce(len(a.sampling)))
+print('Period ', a.sampling.period)
+print(a.comm.allreduce(len(a.instrument)) * a.comm.allreduce(len(a.sampling)) * a.sampling.period)
+
+```{python}
+cov = a.get_coverage()
+```
+
+```{python}
+figure(figsize = (14,6))
+hp.mollview(cov, sub = (131), rot = (0,0))
+hp.mollview(psmap[0], sub=(132), rot = (0,0))
+```
+
+d['tol'] = 1e-3
+d['nf_recon'] = 1
+maps_recon, _, _ = a.tod2map(TOD, d, cov = cov)
+
+```{python}
+
+```

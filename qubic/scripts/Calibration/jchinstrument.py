@@ -914,8 +914,8 @@ class QubicInstrument(Instrument):
             solid_angle = synthbeam.peak150.solid_angle * (150e9 / nu)**2
             val *= solid_angle / scene.solid_angle * len(horn)
         else:
-            print('Custom Values')
-            print('Nu  = {}'.format(nu/1e9))
+            #print('Custom Values')
+            #print('Nu  = {}'.format(nu/1e9))
             import pickle
             #file = open('/Users/hamilton/Qubic/RealistcReconstruction/peaks.pk', 'rb')
             file = open(os.environ['QUBIC_PEAKS']+'peaks.pk', 'rb')
@@ -927,14 +927,14 @@ class QubicInstrument(Instrument):
             # theta, phi to be taken as line of sight, used as the center of the homothety in frequency
             ### Use one of the peaks, identified to be the right one... "bricolage"
             factor = 150e9/nu
-            print('Factor = {}'.format(factor))
+            #print('Factor = {}'.format(factor))
             import qubic.sb_fitting as sbfit
             myposition =  -position / np.sqrt(np.sum(position**2, axis=-1))[..., None]
             local_dict = {'nx': myposition[:, 0, None], 'ny': myposition[:, 1, None]}
             thlos = ne.evaluate('arcsin(sqrt(nx**2 + ny**2))',
                         local_dict=local_dict)
             phlos = ne.evaluate('arctan2(ny, nx)', local_dict=local_dict)
-            print('Numpeaks : {}'.format(numpeaks))
+            #print('Numpeaks : {}'.format(numpeaks))
             for idet in range(sh[0]):
                 #### Use the theoretical L.O.S ?
                 # myangs = np.array([phlos[idet][0]+np.pi,thlos[idet][0], phlos[idet][0]])
@@ -942,11 +942,11 @@ class QubicInstrument(Instrument):
 
                 #### Or use the measured location of the corresponding TES
                 numpeak=numpeaks[idet]
-                print('idet={} - peak number = {}'.format(idet, numpeak))
+                #print('idet={} - peak number = {}'.format(idet, numpeak))
                 thlos = theta[idet,numpeak]
                 phlos = phi[idet,numpeak]
-                print('Using peak #{} as the pivot one'.format(numpeak) )
-                plt.plot(phlos,thlos, 'r+', ms=10, markeredgewidth=3)
+                #print('Using peak #{} as the pivot one'.format(numpeak) )
+                #plt.plot(phlos,thlos, 'r+', ms=10, markeredgewidth=3)
                 myangs = np.array([phlos,thlos, phlos])
 
 

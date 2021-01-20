@@ -450,7 +450,7 @@ class FringesAnalysis:
 
         return m_points
 
-    def average_each_period_oneTES(self, tfold, droll, period, skip_rise=0., skip_fall=0.,
+    def average_over_points_oneTES(self, tfold, droll, period, skip_rise=0., skip_fall=0.,
                                    median=True, remove_slope=False):
 
         # We assume that the array has been np.rolled so that the t0 is in time sample 0
@@ -485,7 +485,7 @@ class FringesAnalysis:
 
         return m_points, std_points
 
-    def average_all_periods_oneTES(self, droll, m_points, std_points, median=True,
+    def average_over_cycles_oneTES(self, droll, m_points, std_points, median=True,
                                    speak=False, doplot=False):
         """
         Calculating the average in each bin over periods in various ways:
@@ -509,44 +509,44 @@ class FringesAnalysis:
         """
 
         # Average or median over all periods
-        vals = np.zeros(self.nsteps)
-        errs = np.zeros(self.nsteps)
+        Mcycles = np.zeros(self.nsteps)
+        err_Mcycles = np.zeros(self.nsteps)
         for i in range(self.nsteps):
             if median:
-                vals[i] = np.median(m_points[:, i])
+                Mcycles[i] = np.median(m_points[:, i])
             else:
-                vals[i] = np.mean(m_points[:, i])
-            # errs[i] = 1./self.ncycles * np.sqrt(self.nsteps / self.nsp_per) \
-            #           * np.sqrt(np.sum(m_points[:, i]**2))
-            errs[i] = np.std(m_points[:, i])
+                Mcycles[i] = np.mean(m_points[:, i])
+            err_Mcycles[i] = 1. / self.ncycles * np.sqrt(self.nsteps / self.nsp_per) \
+                             * np.sqrt(np.sum(std_points[:, i] ** 2))
+            # errs[i] = np.std(m_points[:, i])
 
         # Residuals in time domain (not too relevant as some baselines were removed
         # as a result, large fluctuations in time-domain are usually well removed)
         newdroll = np.zeros_like(droll)
         for i in range(self.nsteps):
-            newdroll[:, i * self.nsp_per // self.nsteps:(i + 1) * self.nsp_per // self.nsteps] = vals[i]
+            newdroll[:, i * self.nsp_per // self.nsteps:(i + 1) * self.nsp_per // self.nsteps] = Mcycles[i]
         residuals_time = droll - newdroll
 
         # We would rather calculate the relevant residuals in the binned domain
         # between the final values and those after levelling
-        residuals_bin = np.ravel(m_points - vals)
-        _, sigres = ft.meancut(residuals_bin, 3)
+        residuals_bin = np.ravel(m_points - Mcycles)
+        _, TODresiduals = ft.meancut(residuals_bin, 3)
 
         if speak:
             for i in range(self.nsteps):
                 print('############')
-                print('Step {}'.format(i+1))
+                print('Step {}'.format(i + 1))
                 for j in range(self.ncycles):
-                    print('per {}: {} +/- {}'.format(j, m_points[j, i], std_points[j, i]))
+                    print('cycle {}: {} +/- {}'.format(j, m_points[j, i], std_points[j, i]))
                 print('============')
-                print('Value {} +/- {}'.format(vals[i], errs[i]))
+                print('Mean/Median {} +/- {}'.format(Mcycles[i], err_Mcycles[i]))
                 print('============')
 
         if doplot:
             self._plot_average_foldedTES(m_points, std_points, droll, newdroll, residuals_time,
-                                         vals, errs, residuals_bin)
+                                         Mcycles, err_Mcycles, residuals_bin)
 
-        return vals, errs, sigres
+        return Mcycles, err_Mcycles, TODresiduals
 
     def analyse_fringesJC(self, skip_rise=0.2, skip_fall=0.1, median=True, remove_slope=False,
                           force_period=None, force_t0=None, doplot=True):
@@ -574,9 +574,9 @@ class FringesAnalysis:
         # =============== Loop on ASICs and TES ======================
         m_points = np.zeros((self.ndet, self.ncycles, self.nsteps))
         std_points = np.zeros((self.ndet, self.ncycles, self.nsteps))
-        vals = np.zeros((self.ndet, self.nsteps))
-        errs = np.zeros((self.ndet, self.nsteps))
-        sigres = np.zeros(self.ndet)
+        Mcycles = np.zeros((self.ndet, self.nsteps))
+        err_Mcycles = np.zeros((self.ndet, self.nsteps))
+        TODresiduals = np.zeros(self.ndet)
         fringes1D = np.zeros(self.ndet)
         err_fringes1D = np.zeros(self.ndet)
         weights = np.array([1. / 3, -1, 1, 1. / 3, -1, 1. / 3])
@@ -602,23 +602,27 @@ class FringesAnalysis:
                                                           doplot=thedoplot)
 
                 # Average each period
-                m_points[index, :, :], std_points[index, :, :] = self.average_each_period_oneTES(tfold, droll_rm_median, period,
-                                                                     skip_rise=skip_rise, skip_fall=skip_fall,
-                                                                     median=median, remove_slope=remove_slope)
+                m_points[index, :, :], std_points[index, :, :] = self.average_over_points_oneTES(tfold, droll_rm_median,
+                                                                                                 period,
+                                                                                                 skip_rise=skip_rise,
+                                                                                                 skip_fall=skip_fall,
+                                                                                                 median=median,
+                                                                                                 remove_slope=remove_slope)
                 # Average over all periods
-                vals[index, :], errs[index, :], sigres[index] = self.average_all_periods_oneTES(droll_rm_median,
-                                                                                                m_points[index, :, :],
-                                                                                                std_points[index, :, :],
-                                                                                                median=median,
-                                                                                                speak=speak,
-                                                                                                doplot=thedoplot)
+                Mcycles[index, :], err_Mcycles[index, :], TODresiduals[index] = self.average_over_cycles_oneTES(
+                    droll_rm_median,
+                    m_points[index, :, :],
+                    std_points[index, :, :],
+                    median=median,
+                    speak=speak,
+                    doplot=thedoplot)
                 # Combination and get fringes
-                fringes1D[index], err_fringes1D[index] = weighted_sum(vals[index, :], errs[index, :], weights)
+                fringes1D[index], err_fringes1D[index] = weighted_sum(Mcycles[index, :], err_Mcycles[index, :], weights)
 
         # Get the good TES from a cut on residuals
-        mm, ss = ft.meancut(np.log10(sigres), 3)
+        mm, ss = ft.meancut(np.log10(TODresiduals), 3)
         oktes = np.ones(self.ndet)
-        oktes[np.abs(np.log10(sigres) - mm) > 2 * ss] = np.nan
+        oktes[np.abs(np.log10(TODresiduals) - mm) > 2 * ss] = np.nan
 
         if doplot:
             # Fringes
@@ -634,9 +638,9 @@ class FringesAnalysis:
                                 s=80, normalize=True, lim=1., frame='ONAFP')
 
             # TOD Residuals
-            plot_residuals(self.q, sigres, oktes, self.xTES, self.yTES)
+            plot_residuals(self.q, TODresiduals, oktes, self.xTES, self.yTES)
 
-        return vals, errs, sigres, fringes1D, err_fringes1D, oktes, m_points, std_points
+        return m_points, std_points, Mcycles, err_Mcycles, fringes1D, err_fringes1D, TODresiduals, oktes
 
     # ================ Plot functions very specific to JC analysis
     def _plot_finding_t0(self, tfold, msignal, dsignal, thr, start_times, t0, figsize=(12, 6)):
@@ -697,7 +701,7 @@ class FringesAnalysis:
 
     def _plot_average_foldedTES(self, m_points, std_points,
                                 dfold, newdfold, residuals_time,
-                                vals, errs, residuals_bin,
+                                Mcycles, err_Mcycles, residuals_bin,
                                 suptitle=None, figsize=(12, 10)):
         fig, axs = plt.subplots(2, 2, figsize=figsize)
         fig.suptitle(suptitle)
@@ -727,7 +731,7 @@ class FringesAnalysis:
         ax2.legend()
 
         ax3.plot(np.ravel(m_points), ls='solid', label='Per Period')
-        ax3.plot(np.ravel(m_points * 0. + vals), ls='solid', label='Values')
+        ax3.plot(np.ravel(m_points * 0. + Mcycles), ls='solid', label='Values')
         ax3.plot(residuals_bin, ls='solid', label='Residuals')
         ax3.set_xlabel('Time')
         ax3.set_ylabel('Values')
@@ -741,7 +745,7 @@ class FringesAnalysis:
                 lab = None
             ax4.errorbar(ttt, m_points[i, :], yerr=std_points[i, :],
                          xerr=self.stable_time / 2, fmt='x', alpha=0.3, color='orange', label=lab)
-        ax4.errorbar(ttt, vals, yerr=errs, xerr=self.stable_time / 2, color='r',
+        ax4.errorbar(ttt, Mcycles, yerr=err_Mcycles, xerr=self.stable_time / 2, color='r',
                      label='Final Points', fmt='rx')
         ax4.set_title('Final Configurations (after levelling)')
         ax4.set_xlabel('Time in period')
@@ -754,7 +758,7 @@ class FringesAnalysis:
 # =========================================
 class SaveFringesFitsPdf:
     def __init__(self, q, date_obs, allBLs, allstable_time, allNcycles, xTES, yTES, allfringes1D, allerr_fringes1D,
-                 allokTES=None, allsigres=None, nsteps=6, ecosorb='yes', frame='ONAFP'):
+                 allokTES=None, allTODresiduals=None, nsteps=6, ecosorb='yes', frame='ONAFP'):
         self.q = q
         self.date_obs = date_obs
         self.allBLs = allBLs
@@ -767,7 +771,7 @@ class SaveFringesFitsPdf:
         self.allfringes1D = allfringes1D
         self.allerr_fringes1D = allerr_fringes1D
         self.allokTES = allokTES
-        self.allsigres = allsigres
+        self.allTODresiduals = allTODresiduals
         self.nsteps = nsteps
         self.ecosorb = ecosorb
         self.frame = frame
@@ -791,7 +795,7 @@ class SaveFringesFitsPdf:
         """ Make a dictionary with all relevant data."""
         fdict = {'BLS': self.allBLs, 'Stable_time': self.allstable_time, 'NCYCLES': self.allNcycles,
                  'X_TES': self.xTES, 'Y_TES': self.yTES, 'FRINGES_1D': self.allfringes1D,
-                 'ERRORS': self.allerr_fringes1D, 'OK_TES': self.allokTES, 'SIGMA_RES': self.allsigres}
+                 'ERRORS': self.allerr_fringes1D, 'OK_TES': self.allokTES, 'TOD_RES': self.allTODresiduals}
 
         return fdict
 
@@ -1061,18 +1065,18 @@ def plot_folding_fit(TES, ASIC, tfold, datafold, residuals_time, period,
     return
 
 
-def plot_residuals(q, sigres, oktes, xTES, yTES, frame='ONAFP', suptitle=None):
-    _, _, sigres = remove_thermometers(xTES, yTES, sigres)
+def plot_residuals(q, TODresiduals, oktes, xTES, yTES, frame='ONAFP', suptitle=None):
+    _, _, TODresiduals = remove_thermometers(xTES, yTES, TODresiduals)
     xTES, yTES, oktes = remove_thermometers(xTES, yTES, oktes)
 
-    mm, ss = ft.meancut(np.log10(sigres), 3)
+    mm, ss = ft.meancut(np.log10(TODresiduals), 3)
 
     fig, axs = plt.subplots(1, 3)
     fig.suptitle(suptitle)
     fig.subplots_adjust(wspace=0.5)
     ax0, ax1, ax2 = axs
 
-    ax0.hist(np.log10(sigres), bins=20, label='{0:5.2f} +/- {1:5.2f}'.format(mm, ss))
+    ax0.hist(np.log10(TODresiduals), bins=20, label='{0:5.2f} +/- {1:5.2f}'.format(mm, ss))
     ax0.axvline(x=mm, color='r', ls='-', label='Mean')
     ax0.axvline(x=mm - ss, color='r', ls='--', label='1 sigma')
     ax0.axvline(x=mm + ss, color='r', ls='--')
@@ -1085,7 +1089,7 @@ def plot_residuals(q, sigres, oktes, xTES, yTES, frame='ONAFP', suptitle=None):
     scal.scatter_plot_FP(q, xTES, yTES, oktes, frame=frame,
                          fig=fig, ax=ax1, cmap='bwr', cbar=False, s=60, title='TES OK (2sig)')
 
-    scal.scatter_plot_FP(q, xTES, yTES, sigres * oktes, frame=frame,
+    scal.scatter_plot_FP(q, xTES, yTES, TODresiduals * oktes, frame=frame,
                          fig=fig, ax=ax2, cmap='bwr', cbar=True, unit='', s=60, title='TOD Residuals')
     return
 

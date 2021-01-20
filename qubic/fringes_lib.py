@@ -216,7 +216,7 @@ class FringesAnalysis:
         err_datafold = np.zeros_like(datafold)
         residuals_time = np.zeros_like(datafold)
 
-        coeffs = np.array([1. / 3, -1., 1., 1. / 3, -1., 1. / 3])
+        weights = np.array([1. / 3, -1., 1., 1. / 3, -1., 1. / 3])
         for i, ASIC in enumerate(self.asics):
             # Filter, fold and normalize the data
             dfold, tfold, _, errfold, _, _ = ft.fold_data(self.tdata[i, :],
@@ -257,7 +257,7 @@ class FringesAnalysis:
                 err_params[index, :] = np.sqrt(np.diag(pcov))
 
                 # Combination to get fringes
-                fringes1D[index], err_fringes1D[index] = weighted_sum(params[index, 2:], err_params[index, 2:], coeffs)
+                fringes1D[index], err_fringes1D[index] = weighted_sum(params[index, 2:], err_params[index, 2:], weights)
 
                 residuals_time[index, :] = dfold[j, :] - ft.simsig_fringes(tfold, self.refstable_time, popt)
         if doplot:
@@ -516,6 +516,8 @@ class FringesAnalysis:
                 vals[i] = np.median(vals_per[:, i])
             else:
                 vals[i] = np.mean(vals_per[:, i])
+            # errs[i] = 1./self.ncycles * np.sqrt(self.nsteps / self.nsp_per) \
+            #           * np.sqrt(np.sum(vals_per[:, i]**2))
             errs[i] = np.std(vals_per[:, i])
 
         # Residuals in time domain (not too relevant as some baselines were removed
@@ -533,7 +535,7 @@ class FringesAnalysis:
         if speak:
             for i in range(self.nsteps):
                 print('############')
-                print('config {}'.format(i))
+                print('Step {}'.format(i+1))
                 for j in range(self.ncycles):
                     print('per {}: {} +/- {}'.format(j, vals_per[j, i], errs_per[j, i]))
                 print('============')
@@ -570,12 +572,14 @@ class FringesAnalysis:
                 print('Using forced t0 {0:5.3f}s'.format(t0))
 
         # =============== Loop on ASICs and TES ======================
+        vals_per = np.zeros((self.ndet, self.ncycles, self.nsteps))
+        errs_per = np.zeros((self.ndet, self.ncycles, self.nsteps))
         vals = np.zeros((self.ndet, self.nsteps))
         errs = np.zeros((self.ndet, self.nsteps))
         sigres = np.zeros(self.ndet)
         fringes1D = np.zeros(self.ndet)
         err_fringes1D = np.zeros(self.ndet)
-        coeffs = np.array([1. / 3, -1, 1, 1. / 3, -1, 1. / 3])
+        weights = np.array([1. / 3, -1, 1, 1. / 3, -1, 1. / 3])
         for i, ASIC in enumerate(self.asics):
             print(f'*********** Starting ASIC {ASIC} **************')
             for j, TES in enumerate(np.arange(1, 129)):
@@ -598,17 +602,18 @@ class FringesAnalysis:
                                                           doplot=thedoplot)
 
                 # Average each period
-                vals_per, errs_per = self.average_each_period_oneTES(tfold, droll_rm_median, period,
+                vals_per[index, :, :], errs_per[index, :, :] = self.average_each_period_oneTES(tfold, droll_rm_median, period,
                                                                      skip_rise=skip_rise, skip_fall=skip_fall,
                                                                      median=median, remove_slope=remove_slope)
                 # Average over all periods
                 vals[index, :], errs[index, :], sigres[index] = self.average_all_periods_oneTES(droll_rm_median,
-                                                                                                vals_per, errs_per,
+                                                                                                vals_per[index, :, :],
+                                                                                                errs_per[index, :, :],
                                                                                                 median=median,
                                                                                                 speak=speak,
                                                                                                 doplot=thedoplot)
                 # Combination and get fringes
-                fringes1D[index], err_fringes1D[index] = weighted_sum(vals[index, :], errs[index, :], coeffs)
+                fringes1D[index], err_fringes1D[index] = weighted_sum(vals[index, :], errs[index, :], weights)
 
         # Get the good TES from a cut on residuals
         mm, ss = ft.meancut(np.log10(sigres), 3)
@@ -631,7 +636,7 @@ class FringesAnalysis:
             # TOD Residuals
             plot_residuals(self.q, sigres, oktes, self.xTES, self.yTES)
 
-        return vals, errs, sigres, fringes1D, err_fringes1D, oktes
+        return vals, errs, sigres, fringes1D, err_fringes1D, oktes, vals_per, errs_per
 
     # ================ Plot functions very specific to JC analysis
     def _plot_finding_t0(self, tfold, msignal, dsignal, thr, start_times, t0, figsize=(12, 6)):
@@ -889,11 +894,11 @@ def cut_data_Nperiods(t0, tf, t_data, data, period):
     return t_data_cut, data_cut, nper
 
 
-def weighted_sum(vals, errs, coeffs):
-    """Weighted sum with the coeffs as weights."""
-    thesum = np.sum(coeffs * vals)
-    thesigma = np.sqrt(np.sum(coeffs ** 2 * errs ** 2))
-    return thesum, thesigma
+def weighted_sum(vals, errs, weights):
+    """Weighted sum and its error"""
+    sum = np.sum(weights * vals)
+    sigma = np.sqrt(np.sum(weights ** 2 * errs ** 2))
+    return sum, sigma
 
 
 def make_mask2D_thermometers_TD():

@@ -31,12 +31,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Specific qubic modules
-import pysm
+import pysm3
 import qubic
 from qubicpack.utilities import Qubic_DataDir
 from pysimulators import FitsArray
 
-from pysm import models
+# from pysm import models
 from qubic import QubicSkySim as qss
 
 rc('figure', figsize=(13, 10))
@@ -51,6 +51,13 @@ dictfilename = global_dir + 'dicts/pipeline_demo.dict'
 # Read dictionary chosen
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
+
+d['config'] = 'TD'
+d['noiseless'] = True
+d['tol'] = 1e-4
+d['dtheta'] = 4.
+d['nf_sub'] = 1
+d['nf_recon'] = 1
 
 # Center of the patch observed in galactic coordinates
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
@@ -75,7 +82,7 @@ rr = 9 # Resolution in arcmin
 plt.figure(figsize=(15, 6))
 for istk in range(3):
     plt.subplots_adjust(wspace=0.9)
-    hp.mollview(x0[0, :, istk], cmap='jet', sub = (1, 3, istk+1), 
+    hp.mollview(x0[0, :, istk], cmap='jet', sub=(1, 3, istk+1), 
                 title = '{0} Stokes parameter'.format(d['kind'][istk]))
 ```
 
@@ -86,18 +93,127 @@ d['repeat_pointing'] = True
 d['sweeping_pointing'] = False
 
 # Number of pointings
-d['npointings'] = 200
+d['npointings'] = 1500
 
 p = qubic.get_pointing(d)
 ```
 
 ```{python}
 # Look at the pointing parameters
-print('Index', p.index)
-print('HWP angle', p.angle_hwp)
-print('Azimuth', p.azimuth)
-print('Elevation', p.elevation)
-print('Pitch', p.pitch)
+print('\nIndex', p.index)
+print('\nHWP angle', p.angle_hwp)
+print('\nAzimuth', p.azimuth)
+print('\nElevation', p.elevation)
+print('\nPitch', p.pitch)
+```
+
+## Check that HWP angles must be equally spaced
+
+We use the repeat pointing strategy.
+
+```{python}
+d['random_pointing'] = False
+d['repeat_pointing'] = True
+d['sweeping_pointing'] = False
+
+# Number of pointings
+d['npointings'] = 3000
+d['nhwp_angles'] = 3
+
+p = qubic.get_pointing(d)
+
+# Change the HWP angles along the pointing
+hwp = p.angle_hwp
+hwp0 = np.where(hwp>50., hwp-10., hwp*1)
+# hwp1 = np.where(hwp<30., hwp+5., hwp*1)
+# hwp2 = np.where(hwp<20., hwp-15., hwp*1)
+
+plt.figure(figsize=(6, 6))
+plt.plot(p.index, hwp, 'r', label='Equally spaced')
+plt.plot(p.index, hwp0, 'b--', label='Not equally spaced')
+# plt.plot(p.index, hwp1, 'g--', label='Not equally spaced')
+plt.xlabel('Pointing index')
+plt.ylabel('HWP angle [deg]')
+plt.legend()
+# plt.savefig('/home/lmousset/QUBIC/Notes_presentations/HWP_angle_regularly_spaced/6HWPangles.pdf', bbox_inches='tight')
+
+# Apply the changes 
+p.angle_hwp = hwp0
+```
+
+```{python}
+# Model of the scene at the time of observation
+s = qubic.QubicScene(d)
+
+# Create a monofrequency Instrument.
+q = qubic.QubicInstrument(d)
+
+# Create an acquisition operator 
+a = qubic.QubicAcquisition(q, p, s, d)
+
+# Get coverage map
+# i.e. how many times were seen each pixel of the sky (not trivial because of the synthetic beam)
+cov = a.get_coverage()
+
+# Monofreq TOD making
+TOD, maps_convolved = a.get_observation(x0[0], noiseless=d['noiseless'])
+
+print('TOD shape: ', TOD.shape)
+print('maps conv shape: ', maps_convolved.shape)
+
+# From TOD reconstruct sky maps.
+maps_recon, nit, error = a.tod2map(TOD, d, cov=cov)
+
+print('The shape of the reconstructed maps is (#pixels, #stokes) :', maps_recon.shape)
+print('{} iterations were needed to get an error of {}'.format(nit, error))
+```
+
+```{python}
+# Compare with the convolved maps
+diff = maps_recon - maps_convolved
+print(diff.shape)
+print(maps_recon.shape)
+
+# Keeping only the sky region which has been significantly observed
+# Pixels not seen enough are replaced by UNSEEN value
+maxcov = np.max(cov)
+unseen = cov < maxcov * 0.15
+
+maps_convolved[unseen, :] = hp.UNSEEN
+maps_recon[unseen, :] = hp.UNSEEN
+diff[unseen, :] = hp.UNSEEN
+```
+
+```{python}
+rr = 7# Resolution in arcmin
+stokes = ['I', 'Q', 'U']
+plt.figure(figsize=(12, 12))
+for istokes in range(3):
+    if istokes == 0:
+        min = -200
+        max = 200
+    else:
+        min = -8
+        max = 8
+    hp.gnomview(maps_convolved[:, istokes], cmap='jet', rot=center, sub=(3,3,3*istokes+1), reso=rr,
+                title='Input ' + stokes[istokes], unit='$\mu K$', format='%g',  min=min, max=max)
+    hp.gnomview(maps_recon[:, istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+2), reso=rr,
+                title='Output ' + stokes[istokes], unit='$\mu K$', min=min, max=max)
+    hp.gnomview(diff[:, istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+3), reso=rr,
+                title='Residuals ' + stokes[istokes], unit='$\mu K$', min=None, max=None)
+
+```
+
+```{python}
+# Only plot the residuals
+rr = 7
+stokes = ['I', 'Q', 'U']
+plt.figure(figsize=(12, 4))
+for istokes in range(3):
+    hp.gnomview(diff[:, istokes], cmap='jet',rot=center, sub=(1,3,istokes+1), reso=rr,
+                title='Residuals ' + stokes[istokes], unit='$\mu K$', min=None, max=None)
+plt.tight_layout()
+# plt.savefig('/home/lmousset/QUBIC/Notes_presentations/HWP_angle_regularly_spaced/residuals_6HWP_equal_space.pdf', bbox_inches='tight')
 ```
 
 ```{python}

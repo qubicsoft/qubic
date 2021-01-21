@@ -140,24 +140,19 @@ class FringesAnalysis:
 
         return tdata, data, tsrc, dsrc
 
-    def plot_TOD(self, ASIC, TES, xlim=None, figsize=(12, 6)):
-        idx = (ASIC - 1) * 128 + (TES - 1)
+    def plot_TOD(self, ASIC=None, TES=None, xlim=None, figsize=(12, 6)):
+        if ASIC is None:
+            ASIC = self.refASICnum
+            TES = self.refTESnum
+        time = self.tdata[ASIC-1, :]
+        TOD = self.data[ASIC-1, TES-1, :]
         plt.figure(figsize=figsize)
         ax = plt.gca()
-        ax.plot(self.tdata, self.data[idx, :])
+        ax.plot(time, TOD)
         ax.set_title(f'TOD for TES {TES} - ASIC {ASIC}')
         if xlim is not None:
             ax.set_xlim(0, xlim)
         plt.show()
-
-        if self.dsrc is not None:
-            plt.figure(figsize=figsize)
-            ax = plt.gca()
-            ax.plot(self.tsrc, self.dsrc[idx, :])
-            ax.set_title('Calibration source data')
-            if xlim is not None:
-                ax.set_xlim(0, xlim)
-            plt.show()
         return
 
     def find_right_period(self, TES, ASIC, filtering=True, delta=0.5, nb=100):
@@ -191,7 +186,7 @@ class FringesAnalysis:
         period = ppp[np.argmax(rms)]
 
         if self.verbose:
-            print('Found period {0:5.3f}s on TES {1:} ASIC {1:}'.format(period, TES, ASIC))
+            print('Found period {0:5.3f}s on TES {1:} ASIC {2:}'.format(period, TES, ASIC))
             print('Expected : ', self.expected_period)
 
         return ppp, rms, period
@@ -456,7 +451,7 @@ class FringesAnalysis:
         # We assume that the array has been np.rolled so that the t0 is in time sample 0
         stable_time = period / self.nsteps
 
-        # Remove the average of each period
+        # Remove the average of each cycle
         droll = (droll.T - np.mean(droll, axis=1)).T
 
         # Perform first an average/median in each step of each cycle over the points
@@ -539,7 +534,7 @@ class FringesAnalysis:
                 for j in range(self.ncycles):
                     print('cycle {}: {} +/- {}'.format(j, m_points[j, i], std_points[j, i]))
                 print('============')
-                print('Mean/Median {} +/- {}'.format(Mcycles[i], err_Mcycles[i]))
+                print('Mean/Median: {} +/- {}'.format(Mcycles[i], err_Mcycles[i]))
                 print('============')
 
         if doplot:
@@ -565,7 +560,7 @@ class FringesAnalysis:
         if force_t0 is None:
             t0 = self.find_t0(period, doplot=doplot)
             if self.verbose:
-                print('Found t0 {0:5.3f}s on TES {1:}, ASIC {1:}'.format(t0, self.refTESnum, self.refASICnum))
+                print('Found t0 {0:5.3f}s on TES {1:}, ASIC {2:}'.format(t0, self.refTESnum, self.refASICnum))
         else:
             t0 = force_t0
             if self.verbose:

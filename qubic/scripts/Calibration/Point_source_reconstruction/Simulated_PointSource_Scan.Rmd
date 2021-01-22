@@ -44,7 +44,13 @@ from qubic import sb_fitting as sbfit
 import toolfit_hpmap as fh
 from qubicpack import pixel_translation as pt
 from qubicpack.pix2tes import assign_tes_grid, tes2pix
-
+from pyoperators import (
+    Cartesian2SphericalOperator,
+    Rotation3dOperator,
+    Spherical2CartesianOperator)
+from pysimulators import ( 
+    CartesianEquatorial2HorizontalOperator)
+from astropy.time import Time, TimeDelta
 ```
 
 ```{python}
@@ -64,12 +70,15 @@ def generate_region(az, el):
     
     return mult_az, mult_el
 
-def create_hall_pointing(d, az, el, angspeed_psi = 0, maxpsi = 0, period = 0.,
+def create_hall_pointing(d, az, el, center = None, angspeed_psi = 0, maxpsi = 0, period = 0,
                  date_obs = None, latitude = None, longitude = None, 
-                 fix_azimuth = None, random_hwp = True):
+                 fix_azimuth = None, random_hwp = True, verbose = False):
     
     '''
     Model of the pointing used in the hall. No back and forth. 
+    
+    Input coordinates are az, el. The function authomatically will convert (az, el) into (phi, theta) 
+    defined as qubic.sampling.create_random_pointing to match with qubicsoft. 
     
     Parameters:
         d: QUBIC dictionary
@@ -83,31 +92,37 @@ def create_hall_pointing(d, az, el, angspeed_psi = 0, maxpsi = 0, period = 0.,
     nsamples = len(az)*len(el)
     
     mult_az, mult_el = generate_region(az,el)
-    pp = qubic.QubicSampling(nsamples, azimuth = mult_az[0], elevation = mult_el[0],
+    theta = np.array(mult_el) - np.mean(el)
+    phi = np.array(mult_az[0]) - np.mean(az)
+    
+    # center = ra, dec
+    center = 
+    if verbose: print(theta, "\n", phi)
+        
+    pp = qubic.QubicSampling(nsamples, #azimuth = mult_az[0], elevation = mult_el[0],
                              date_obs = d['date_obs'], period = period, 
                             latitude = latitude, longitude = longitude)
     
-    pp.elevation = np.asarray(mult_el)#[::-1]
+    time = pp.date_obs + TimeDelta(pp.time, format='sec')
     
-    time = p.date_obs + TimeDelta(p.time, format='sec')
-
+    if verbose: print("Time: len(time) = {} \n t0 {} \n time/2 {} \n tf {}".format(time, 
+                                                                                   time[0],
+                                                                                   time[int(len(time)/2)],
+                                                                                  time[-1])  )
+    
+    #Same convertion as qubic sampling to obtain equatorial coordinates
     c2s = Cartesian2SphericalOperator('azimuth,elevation', degrees=True)
+    if verbose: print("long, lat, time: {} {}".format(pp.longitude, pp.latitude, time) )
     e2h = CartesianEquatorial2HorizontalOperator(
-        'NE', time, p.latitude, p.longitude)
+        'NE', time, pp.latitude, pp.longitude)
     rot = Rotation3dOperator("ZY'", center[0], 90 - center[1], degrees=True)
     s2c = Spherical2CartesianOperator('zenith,azimuth', degrees=True)
     rotation = c2s(e2h(rot(s2c)))
     coords = rotation(np.asarray([theta.T, phi.T]).T)
     
-    pp.azimuth = np.asarray(mult_az[0])#[::-1]
+    pp.elevation = coords[..., 1]#np.asarray(mult_el)
+    pp.azimuth = coords[..., 0]#np.asarray(mult_az[0])
     
-    #newcoord = np.zeros(pp.equatorial.shape)
-    #print(newcoord.shape, pp.equatorial.shape, pp.azimuth.shape)
-    #print(pp.equatorial[100])
-    #newcoord = qubic.hor2equ(pp.azimuth, pp.elevation, time = 0 )    
-    #print(pp.equatorial[100])
-    #setattr(pp, 'equatorial', newcoord)
-
     ### scan psi as well,
     pitch = pp.time * angspeed_psi
     pitch = pitch % (4 * maxpsi)
@@ -142,10 +157,106 @@ d['MultiBand'] = True
 d['nf_sub'] = 6
 d['kind'] = 'I'
 d['config'] = 'TD'
-d['nside'] = 128
+d['nside'] = 256
+d['dtheta'] = 8
 #d['RA_denter'], d['DEC_center'] = 0,0 #qubic.hor2equ(0, 0, 0)
 d['synthbeam_fraction'] = 0.99
 d['noiseless'] = True
+```
+
+Understanding step by step random_pointing... ok, understood it
+
+
+d['npointings'] = 900
+center = [d['RA_center'], d['DEC_center']]
+cosdtheta = np.cos(np.radians(d['dtheta']))
+seed = np.random.seed(None)
+r = np.random.RandomState(seed)
+# asumen ser ra, dec
+phi2 = r.rand(d['npointings']) * 360
+theta2 =np.degrees(np.arccos(cosdtheta + (1 - cosdtheta) * r.rand(d['npointings'])))
+
+ptest = qubic.QubicSampling(
+        d['npointings'], date_obs = d['date_obs'], period = d['period'], 
+    latitude = None, longitude = None)
+print("Before transformations and rotations")
+plot(phi2,
+     theta2,
+     'ko')
+time = ptest.date_obs + TimeDelta(ptest.time, format='sec')
+c2s = Cartesian2SphericalOperator('azimuth,elevation', degrees=True)
+e2h = CartesianEquatorial2HorizontalOperator(
+    'NE', time, ptest.latitude, ptest.longitude)
+rot = Rotation3dOperator("ZY'", center[0], 90 - center[1], degrees=True)
+s2c = Spherical2CartesianOperator('zenith,azimuth', degrees=True)
+rotation = c2s(e2h(rot(s2c)))
+coords = rotation(np.asarray([theta2.T, phi2.T]).T)
+ptest.azimuth = coords[..., 0]
+ptest.elevation = coords[..., 1]
+
+figure(figsize = (14,6))
+subplot(141)
+title("Cart. cenital cap (ph, th)")
+plot(phi2, theta2, "ko")
+subplot(142)
+title("Sp. cenital cap (ph, th)")
+plot(np.sin(np.radians(theta2))*np.cos(np.radians(phi2))*360/2/np.pi,
+     np.sin(np.radians(theta2))*np.sin(np.radians(phi2))*360/2/np.pi,"k.")
+subplot(143)
+title("Sp. Equatorial (p.eq[:,0],p.eq[:,1])")
+aux = ptest.equatorial[...,0]
+aux[aux>50] = aux[aux>50]-360
+plot(aux , ptest.equatorial[...,1], "b.")
+subplot(144)
+title("Horizontal coordinates")
+plot(ptest.azimuth, ptest.elevation, "m.")
+
+```{python}
+directory = os.environ['QUBIC_TODDIR'] + '150GHz-2019-04-06/'
+
+az = FitsArray(directory + 'Flat/azimuth.fits')
+el = FitsArray(directory + 'Flat/elevation.fits')
+d['npointings'] = len(az) * len(el)
+
+azcen_fov = np.mean(az)
+elcen_fov = np.mean(el)
+
+newcenter = qubic.hor2equ(azcen_fov, elcen_fov, 0)
+d['RA_center'], d['DEC_center'] = newcenter[0], newcenter[1]
+
+pp00 = create_hall_pointing(d, az, el, center = newcenter, period = 0., verbose = False)
+pp01 = create_hall_pointing(d, az, el, center = newcenter, period = 0.1, verbose = False)
+
+# convert deg in rad
+phi00, theta00 = np.radians(pp00.equatorial[:,0]), np.radians(90 - pp00.equatorial[:,1])
+phi01, theta01 = np.radians(pp01.equatorial[:,0]), np.radians(90 - pp01.equatorial[:,1])
+# convert ang2pix
+pix00 = hp.ang2pix(d['nside'], theta00, phi00)
+map00 = np.ones((12*256**2))
+map00[pix00] = 100
+
+pix01 = hp.ang2pix(d['nside'], theta01, phi01)
+map01 = np.ones((12*256**2))
+map01[pix01] = 100
+
+hp.gnomview(map00, sub = 121, rot = newcenter, reso = 12, coord = "C")
+hp.gnomview(map01, sub = 122, rot = newcenter, reso = 12, coord = "C")
+```
+
+```{python}
+subplot(221)
+xlim(28000,28500)
+plot(pp00.azimuth)
+subplot(223)
+xlim(28000,28500)
+plot(pp00.elevation)
+subplot(222)
+xlim(28000,28500)
+plot(pp01.azimuth)
+subplot(224)
+xlim(28000,28500)
+plot(pp01.elevation)
+
 ```
 
 ```{python}
@@ -153,15 +264,62 @@ directory = os.environ['QUBIC_TODDIR'] + '150GHz-2019-04-06/'
 
 az = FitsArray(directory + 'Flat/azimuth.fits')
 el = FitsArray(directory + 'Flat/elevation.fits')
+d['npointings'] = len(az) * len(el)
+
 azcen_fov = np.mean(az)
 elcen_fov = np.mean(el)
+
 print('Central FOV (A,h) = ', azcen_fov, elcen_fov)
+usehor = False
+if usehor:
+    d['RA_center'], d['DEC_center'] = azcen_fov, elcen_fov
+    mult_az, mult_el = generate_region(az,el)
+    print("Lengths az, el {} {}".format(len(mult_az[0]), len(mult_el)))
+    theta = np.array(mult_el) - elcen_fov
+    phi = np.array(mult_az[0]) - azcen_fov
+else:
+    newcenter = qubic.hor2equ(azcen_fov, elcen_fov, 0)
+    d['RA_center'], d['DEC_center'] = newcenter[0], newcenter[1]
+    mult_az, mult_el = generate_region(az,el)
+    print("Lengths az, el {} {}".format(len(mult_az[0]), len(mult_el)))
+    theta = np.array(mult_el) 
+    phi = np.array(mult_az[0])
+    # Convert horizontal coordinates in equatorial 
+    theta, phi = qubic.hor2equ(phi, theta, 0.1) 
+    # Center in (0,0) to rotate after
+    theta = theta - newcenter[1]
+    phi = phi - newcenter[0]
+
+pp = qubic.QubicSampling(len(az)*len(el), azimuth = mult_az[0], elevation = mult_el[0],
+                             date_obs = d['date_obs'], period = 0, 
+                            latitude = None, longitude = None)
+
+time = pp.date_obs + TimeDelta(pp.time, format='sec')
+
+c2s = Cartesian2SphericalOperator('azimuth,elevation', degrees=True)
+if True: print("long, lat, time: {} {}".format(pp.longitude, pp.latitude, time) )
+e2h = CartesianEquatorial2HorizontalOperator(
+    'NE', time, pp.latitude, pp.longitude)
+rot = Rotation3dOperator("ZY'", newcenter[0], 90 - newcenter[1], degrees=True)
+s2c = Spherical2CartesianOperator('zenith,azimuth', degrees=True)
+rotation = c2s(e2h(rot(s2c)))
+coords = rotation(np.asarray([theta.T, phi.T]).T)
+```
+
+```{python}
+thphpix = hp.ang2pix(256, np.pi/2 - np.radians(theta), np.radians(phi))
+auxmap = np.ones((12*256**2))
+auxmap[thphpix] = 100
+figure(figsize=(15,6))
+hp.mollview(auxmap, rot = (d['RA_center'], d['DEC_center']), sub = 121, )
+hp.gnomview(auxmap, rot = (0,0), sub = 122,
+           xsize = 300, ysize =200,reso = 13)
+hp.graticule(verbose = False)
 ```
 
 ```{python}
 newaz, newel = generate_region(az, el)
 print(np.mean(az), np.mean(el))
-d['RA_center'], d['DEC_center'] = (azcen_fov, elcen_fov)
 print(d['RA_center'], d['DEC_center'])
 d['npointings'] = len(az)*len(el) 
 p = create_hall_pointing(d, az, el, period = 0.1)

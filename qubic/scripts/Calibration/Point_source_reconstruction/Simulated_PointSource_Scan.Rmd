@@ -28,6 +28,7 @@ import os
 import sys
 from importlib import reload 
 import time
+from warnings import warn
 
 # scientific packages
 import numpy as np
@@ -49,7 +50,8 @@ from pyoperators import (
     Rotation3dOperator,
     Spherical2CartesianOperator)
 from pysimulators import ( 
-    CartesianEquatorial2HorizontalOperator)
+    CartesianEquatorial2HorizontalOperator,
+    CartesianHorizontal2EquatorialOperator)
 from astropy.time import Time, TimeDelta
 ```
 
@@ -70,8 +72,8 @@ def generate_region(az, el):
     
     return mult_az, mult_el
 
-def create_hall_pointing(d, az, el, center = None, angspeed_psi = 0, maxpsi = 0, period = 0,
-                 date_obs = None, latitude = None, longitude = None, 
+def create_hall_pointing(d, az, el, hor_center, angspeed_psi = 0, maxpsi = 0, period = 0,
+                 date_obs = None, latitude = None, longitude = None, doplot = False,
                  fix_azimuth = None, random_hwp = True, verbose = False):
     
     '''
@@ -92,36 +94,61 @@ def create_hall_pointing(d, az, el, center = None, angspeed_psi = 0, maxpsi = 0,
     nsamples = len(az)*len(el)
     
     mult_az, mult_el = generate_region(az,el)
-    theta = np.array(mult_el) - np.mean(el)
-    phi = np.array(mult_az[0]) - np.mean(az)
+    theta = np.array(mult_el) #- np.mean(el)
+    phi = np.array(mult_az[0]) #- np.mean(az)
     
-    # center = ra, dec
-    center = 
-    if verbose: print(theta, "\n", phi)
-        
+    if doplot:
+        pixs = hp.ang2pix(d['nside'], np.radians(90 - theta), np.radians(phi))
+        mapaThPh = np.ones((12*256**2))
+        mapaThPh[pixs] = 100
+        hp.mollview(mapaThPh, title = "Projection in horizontal coords")
+
     pp = qubic.QubicSampling(nsamples, #azimuth = mult_az[0], elevation = mult_el[0],
                              date_obs = d['date_obs'], period = period, 
                             latitude = latitude, longitude = longitude)
     
     time = pp.date_obs + TimeDelta(pp.time, format='sec')
+       
+    c2s = Cartesian2SphericalOperator('azimuth,elevation', degrees=True)
+    h2e = CartesianHorizontal2EquatorialOperator(
+        'NE', time, pp.latitude, pp.longitude)
+    s2c = Spherical2CartesianOperator('elevation,azimuth', degrees=True)
     
+    rotation = c2s(h2e(s2c))
+    coords = rotation(np.asarray([phi.T, theta.T]).T)
+
+    pp.elevation = mult_el
+    pp.azimuth = mult_az[0]
+    pp.equatorial[:,0] = coords[:,0]
+    pp.equatorial[:,1] = coords[:,1]
+
+    if doplot:
+        fig, ax = subplots(nrows = 1, ncols = 2, figsize = (14,6))
+        pixsH = hp.ang2pix(d['nside'], np.radians(90 - theta), np.radians(phi))
+        mapaH = np.ones((12*256**2))
+        mapaH[pixsH] = 100
+        axes(ax[0])
+        hp.mollview(mapaH, title = "Horizontal coordinates", hold = True)
+        pixsEq = hp.ang2pix(d['nside'], np.radians(90 - pp.equatorial[:,1]), np.radians(pp.equatorial[:,0]))
+        mapaEq = np.ones((12*256**2))
+        mapaEq[pixsEq] = 100
+        axes(ax[1])
+        hp.mollview(mapaEq, title = "Equatorial coordinates", hold = True)
+    
+    if period < 1e-4:
+        newcenter = qubic.hor2equ(azcen_fov, elcen_fov, 0)
+    else:
+        newcenter = qubic.hor2equ(azcen_fov, elcen_fov, pp.time[int(len(pp.time)/2)])
+
+    warn("Update RA, DEC in dictionary")
+    d['RA_center'], d['DEC_center'] = newcenter[0], newcenter[1]
+    # center = ra, dec
+    #center = (d['RA_center'], d['DEC_center'])
+
     if verbose: print("Time: len(time) = {} \n t0 {} \n time/2 {} \n tf {}".format(time, 
                                                                                    time[0],
                                                                                    time[int(len(time)/2)],
                                                                                   time[-1])  )
-    
-    #Same convertion as qubic sampling to obtain equatorial coordinates
-    c2s = Cartesian2SphericalOperator('azimuth,elevation', degrees=True)
-    if verbose: print("long, lat, time: {} {}".format(pp.longitude, pp.latitude, time) )
-    e2h = CartesianEquatorial2HorizontalOperator(
-        'NE', time, pp.latitude, pp.longitude)
-    rot = Rotation3dOperator("ZY'", center[0], 90 - center[1], degrees=True)
-    s2c = Spherical2CartesianOperator('zenith,azimuth', degrees=True)
-    rotation = c2s(e2h(rot(s2c)))
-    coords = rotation(np.asarray([theta.T, phi.T]).T)
-    
-    pp.elevation = coords[..., 1]#np.asarray(mult_el)
-    pp.azimuth = coords[..., 0]#np.asarray(mult_az[0])
     
     ### scan psi as well,
     pitch = pp.time * angspeed_psi
@@ -133,7 +160,7 @@ def create_hall_pointing(d, az, el, center = None, angspeed_psi = 0, maxpsi = 0,
     pp.pitch = pitch
     
     if random_hwp:
-        pp.angle_hwp = np.random.random_integers(0, 7, nsamples) * 11.25
+        pp.angle_hwp = np.random.randint(0, 7, nsamples) * 11.25
         
     if d['fix_azimuth']['apply']:
         pp.fix_az=True
@@ -180,9 +207,14 @@ ptest = qubic.QubicSampling(
         d['npointings'], date_obs = d['date_obs'], period = d['period'], 
     latitude = None, longitude = None)
 print("Before transformations and rotations")
-plot(phi2,
-     theta2,
-     'ko')
+#subplot(121)
+#plot(np.sin(np.radians(theta2))*np.cos(np.radians(phi2)),
+#     np.sin(np.radians(theta2))*np.sin(np.radians(phi2)),
+#     'ko')
+#subplot(122)
+#plot(phi2, theta2, 'ko')
+
+
 time = ptest.date_obs + TimeDelta(ptest.time, format='sec')
 c2s = Cartesian2SphericalOperator('azimuth,elevation', degrees=True)
 e2h = CartesianEquatorial2HorizontalOperator(
@@ -191,8 +223,12 @@ rot = Rotation3dOperator("ZY'", center[0], 90 - center[1], degrees=True)
 s2c = Spherical2CartesianOperator('zenith,azimuth', degrees=True)
 rotation = c2s(e2h(rot(s2c)))
 coords = rotation(np.asarray([theta2.T, phi2.T]).T)
+
+print (type(coords))
 ptest.azimuth = coords[..., 0]
 ptest.elevation = coords[..., 1]
+print( ptest)
+sys.exit()
 
 figure(figsize = (14,6))
 subplot(141)
@@ -221,45 +257,48 @@ d['npointings'] = len(az) * len(el)
 azcen_fov = np.mean(az)
 elcen_fov = np.mean(el)
 
-newcenter = qubic.hor2equ(azcen_fov, elcen_fov, 0)
-d['RA_center'], d['DEC_center'] = newcenter[0], newcenter[1]
+period = 0.1
+p = create_hall_pointing(d, az, el, hor_center = [azcen_fov, elcen_fov],
+                            period = period, verbose = False)
+```
 
-pp00 = create_hall_pointing(d, az, el, center = newcenter, period = 0., verbose = False)
-pp01 = create_hall_pointing(d, az, el, center = newcenter, period = 0.1, verbose = False)
+```{python}
+s = qubic.QubicScene(d)
+q = qubic.QubicMultibandInstrument(d)
 
-# convert deg in rad
-phi00, theta00 = np.radians(pp00.equatorial[:,0]), np.radians(90 - pp00.equatorial[:,1])
-phi01, theta01 = np.radians(pp01.equatorial[:,0]), np.radians(90 - pp01.equatorial[:,1])
-# convert ang2pix
-pix00 = hp.ang2pix(d['nside'], theta00, phi00)
-map00 = np.ones((12*256**2))
-map00[pix00] = 100
+#Compute frequencies
+_, nus_edge_in, nus_in, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, d['nf_sub'],
+                                                d['filter_relative_bandwidth'])
+a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_in)
+del cov
+```
 
-pix01 = hp.ang2pix(d['nside'], theta01, phi01)
-map01 = np.ones((12*256**2))
-map01[pix01] = 100
-
-hp.gnomview(map00, sub = 121, rot = newcenter, reso = 12, coord = "C")
-hp.gnomview(map01, sub = 122, rot = newcenter, reso = 12, coord = "C")
+```{python}
+if ("cov" not in locals()):
+    cov = a.get_coverage()
+    cov = np.mean(cov, axis = 0)
+    maskov = cov > 0.1* np.max(cov)
+    cov[~maskov] = hp.UNSEEN
+centGal = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+hp.gnomview(cov, rot = [0,50], reso = 14)
 ```
 
 ```{python}
 subplot(221)
-xlim(28000,28500)
-plot(pp00.azimuth)
+#xlim(28000,28500)
+plot(p.azimuth)
 subplot(223)
-xlim(28000,28500)
-plot(pp00.elevation)
+#xlim(28000,28500)
+plot(p.elevation)
 subplot(222)
 xlim(28000,28500)
-plot(pp01.azimuth)
+plot(p.azimuth)
 subplot(224)
 xlim(28000,28500)
-plot(pp01.elevation)
+plot(p.elevation)
 
 ```
 
-```{python}
 directory = os.environ['QUBIC_TODDIR'] + '150GHz-2019-04-06/'
 
 az = FitsArray(directory + 'Flat/azimuth.fits')
@@ -304,26 +343,8 @@ rot = Rotation3dOperator("ZY'", newcenter[0], 90 - newcenter[1], degrees=True)
 s2c = Spherical2CartesianOperator('zenith,azimuth', degrees=True)
 rotation = c2s(e2h(rot(s2c)))
 coords = rotation(np.asarray([theta.T, phi.T]).T)
-```
 
 ```{python}
-thphpix = hp.ang2pix(256, np.pi/2 - np.radians(theta), np.radians(phi))
-auxmap = np.ones((12*256**2))
-auxmap[thphpix] = 100
-figure(figsize=(15,6))
-hp.mollview(auxmap, rot = (d['RA_center'], d['DEC_center']), sub = 121, )
-hp.gnomview(auxmap, rot = (0,0), sub = 122,
-           xsize = 300, ysize =200,reso = 13)
-hp.graticule(verbose = False)
-```
-
-```{python}
-newaz, newel = generate_region(az, el)
-print(np.mean(az), np.mean(el))
-print(d['RA_center'], d['DEC_center'])
-d['npointings'] = len(az)*len(el) 
-p = create_hall_pointing(d, az, el, period = 0.1)
-
 interval_time = d['effective_duration'] * 3600 * 24 * 365 #in sec
 ra = np.zeros_like(p.azimuth)
 dec = np.zeros_like(p.elevation)
@@ -338,7 +359,6 @@ ra, dec = p.azimuth, p.elevation#qubic.hor2equ(p.azimuth, p.elevation, 0)
 #==========================================================
 ```
 
-```{python}
 fig, ax = subplots(nrows= 1, ncols = 3, figsize = (16,5))
         
 ax[0].set_xlabel(r'A[°]', fontsize = 20)
@@ -364,9 +384,8 @@ ax[2].set_title('RA,DEC converted from Az, El -hk data- using q.hor2equ ')
 ax[2].scatter(np.reshape(ra, (len(el), len(az))), np.reshape(dec, (len(el), len(az)))[:], color = 'k',
               marker = '.',  alpha = 0.4)
 #ax[2].plot(d['RA_center'], d['DEC_center'], 'y*')
-```
 
-```{python}
+
 rc('font', size=12)
 figure(figsize = (14,8))
 subplot(221)
@@ -400,7 +419,7 @@ plot(np.array(p.elevation).ravel())
 #xf = rfftfreq(N, 1 / SAMPLE_RATE)
 #xlim(0,0.1)
 #plot(xf, np.abs(yf)/1e6)
-```
+
 
 See at the scan... Ok, works fine
 
@@ -423,16 +442,6 @@ scatter(p.azimuth[2*lim:3*lim], p.elevation[2*lim:3*lim], color = 'b', marker = 
 
 
 #### Generate QUBIC objects (scene, instrument, acquisition)
-
-```{python}
-s = qubic.QubicScene(d)
-q = qubic.QubicMultibandInstrument(d)
-
-#Compute frequencies
-_, nus_edge_in, nus_in, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, d['nf_sub'],
-                                                d['filter_relative_bandwidth'])
-print(nus_in)
-```
 
 ```{python}
 #Create object with TES - PIXEL information and translation between data and simulation
@@ -466,7 +475,7 @@ psmap[idx] = hp.smoothing(psmap[idx], np.deg2rad(1.0))
 
 fig, ax = subplots(nrows = 1, ncols = 2, figsize = (15,5))
 axes(ax[0])
-hp.gnomview(psmap[idx], rot = (d['RA_center'], d['DEC_center']), 
+hp.gnomview(psmap[idx], rot = [0,50],#rot = (d['RA_center'], d['DEC_center']), 
             title = 'PS@{:.2f}'.format(nus_in[idx]),
             reso = 10, hold = True)
 
@@ -559,7 +568,7 @@ sbfitmodel = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True,
 # Do fit for 1 TES
 thexypeaks = np.zeros((len(tes), 4, 9))
 flatmaps = np.zeros((len(tes), len(el), len(az) ))
-t0 = time.time()
+#t0 = time.time()
 for j, ites in enumerate(tes): 
     #_asic_ = 1 if (ites < 128) else 2
     #ites = ites if (ites < 128) else ites - 128
@@ -570,14 +579,14 @@ for j, ites in enumerate(tes):
     print("qubicsoft number: {}".format(qpix[j]))
     _, thexypeaks[j], flatmaps[j] = sbfit.fit_sb(np.reshape(tod, (len(el), len(az))), 
                                                  az, el, sbfitmodel, resample = False, newsize = 150, 
-                                                 nsiglo = 100, nsighi = 2000,
+                                                 nsiglo = 100, nsighi = 8000,
         az_center = azcen_fov, el_center = elcen_fov,
          verbose = False, doplot = True, return_fitted =True,
     figsave = os.environ['QUBIC_DATADIR'] + 'scripts/fit_theoretical_SB/TES{}_flatmap_peaks_fit'.format(ites),
          extra_title='TES #{}'.format(ites))
     clf()
     
-print((time.time()-t0)/60 , 'minutes')
+#print((time.time()-t0)/60 , 'minutes')
 ```
 
 #### Saving flat fitting

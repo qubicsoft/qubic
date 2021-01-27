@@ -176,10 +176,10 @@ class sky(object):
 
         ##### Here is the new code from Edgar Jaber
         for i in range(Nf):
-            nbfreqinteg = 50
+            nfreqinteg = 50
             freqs = np.linspace(nus_edge[i], nus_edge[i + 1], nfreqinteg)
-            weights = np.ones(nbfreqinteg)
-            sky[i,:,:] = (self.sky.get_emission(freqs * u.GHz, weights) * utils.banpass_unit_conversion(freqs * u.GHz, weights, u.uK_CMB)).T
+            weights = np.ones(nfreqinteg)
+            sky[i,:,:] = (self.sky.get_emission(freqs * u.GHz, weights) * utils.bandpass_unit_conversion(freqs * u.GHz, weights, u.uK_CMB)).T
 
         return sky
 

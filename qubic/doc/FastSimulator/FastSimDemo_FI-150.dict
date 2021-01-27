@@ -33,7 +33,7 @@ nripples=0
 optics='CalQubic_Optics_v3_CC_FFF.txt'
 primbeam='CalQubic_PrimBeam_vX.fits' # X=2 gaussian, 3 fitted, 4 multi frequency splines
 #detarray='CalQubic_DetArray_P87_CC.fits' # this is only for TD.
-detarray='CalQubic_DetArray_CC.fits'
+detarray='CalQubic_DetArray_v4_CC.fits'
 hornarray='CalQubic_HornArray_CC.fits'
 
 ############################################# Scene ################################

@@ -245,6 +245,92 @@ def flat2hp_map(maps, az, el, nside = 256):
 #
 #
 #
+class SbHealpyModel:
+    
+    def __init__(self, d, q, s, pixnum, asic = None, id_fp_sys = "FileName", 
+                 npix = None, tes = None, qpix = None, verbose = False):
+        
+        """
+        pixnum:
+            Could be: pixel detector number (id_fp_sys = "FileName"), 
+                      QubicInstrument detector number (id_fp_sys = 'qsName')
+                      TES, ASIC detector number (id_fp_sys = 'TESName')
+        id_fp_sys: 
+            FileName --> user provides the number of TES in this convention: 1 - 256 in continuos way. This
+                        convention is not equal to the qubicsoft indexing. 
+                    kw needed: npix
+            TESName --> user provides (tes, asic)
+                    kw needed: tes, asic
+            qsName --> qubicsoft indexing
+                    kw needed: qpix
+            
+        """
+        
+        self.instrument = q
+        self.scene = s
+        self.nside = d['nside']
+
+        # Generate pixel, detector and TES numbers identification 
+        self._init_id(id_fp_sys, pixnum, asic = asic, verbose = verbose)
+        self._init_thph()
+
+        return
+
+    def _init_id(self, ident_focalplane, num, asic = None, verbose = False):
+        """
+        Generates focal plane identifications from user input
+        Parameter:
+            num: is the detector or pixel number. 
+            asic: ASIC number if ident_focalplane = TESName and num has to be the tes number.
+        """
+        
+        if ident_focalplane == 'FileName':
+            self.npix = num
+            self.tes, self.asic = (self.npix, 1) if (self.npix < 128) else (self.npix - 128, 2)
+            self.qpix = tes2pix(self.tes, self.asic) - 1
+        elif ident_focalplane == 'qsName':
+            FPidentity = make_id_focalplane()
+            self.qpix = num
+            det_index = self.instrument.detector[self.qpix].index[0]
+            self.tes = FPidentity[det_index].TES
+            self.asic = FPidentity[det_index].ASIC
+            self.npix = self.tes if self.asic == 1  else self.tes + 128
+        elif ident_focalplane == 'TESName':
+            if num > 128:
+                raise ValueError("Wrong TES value. You gave a TES number greater than 128.")
+            else:
+                if asic == None:
+                    raise ValueError("You choose {} identification but ASIC number is missing.".format(ident_focalplane))
+                else: 
+                    self.tes = num
+                    self.asic = asic
+                    self.npix = self.tes if self.asic == 1  else self.tes + 128
+                    self.qpix = tes2pix(self.tes, self.asic) - 1
+        if verbose: 
+            print("You are running fitting in healpix maps.")
+            print("========================================")
+            print("TES number {} asic number {}".format(self.tes, self.asic))
+            print("In FileName format the number of tes is {}".format(self.npix))
+            print("Index number: qpack {} qsoft {} ".format(\
+                                    tes2index(self.tes, self.asic), self.inst.detector[self.qpix].index[0] ))
+            print("qubicsoft number: {}".format(self.qpix))
+        return
+
+    def _init_thph(self, PiRot = True):
+        # Get healpix projection of the TOD for a given PIXNum
+        # Compute theoreticall th,ph from qsoft
+        th_tes_all, ph_tes_all = thph_qsoft(self.instrument, self.scene, self.qpix, PiRot = PiRot)
+        
+        # Using only central peak
+        th_tes, ph_tes = th_tes_all[0,0], ph_tes_all[0,0]
+
+        # theta, phi to vector of central peak for TES (p0 for fitting function)
+        vec_tes = np.array([np.sin(th_tes) * np.cos(ph_tes),
+                        np.sin(th_tes) * np.sin(ph_tes),
+                        np.cos(th_tes)])
+        
+        fullvec = hp.pix2vec(nside, range(0, 12 * nside ** 2), nest = nest)
+
 
 def fit_hpmap(PIXNum, q, s, dirfiles, verbose = False, #centerini, 
               nside = 256, nest = True, filterbeam = 3, PiRot = True, simulation = False, maps = None,
@@ -276,7 +362,7 @@ def fit_hpmap(PIXNum, q, s, dirfiles, verbose = False, #centerini,
     """
     # Convert from JCh convention to Qubicinstrument one.
     global TESNum
-
+    
     TESNum, asic = (PIXNum, 1) if (PIXNum < 128) else (PIXNum - 128, 2)
     PIXq = tes2pix(TESNum, asic) - 1
     npix = 12 * nside ** 2
@@ -288,8 +374,7 @@ def fit_hpmap(PIXNum, q, s, dirfiles, verbose = False, #centerini,
         print("Index number: qpack {} qsoft {} ".format(\
                                 tes2index(TESNum, asic), q.detector[PIXq].index[0] ))
         print("qubicsoft number: {}".format(PIXq))
-
-
+        
     # Get healpix projection of the TOD for a given PIXNum
     # Compute theoreticall th,ph from qsoft
     th_tes_all, ph_tes_all = thph_qsoft(q, s, PIXq, PiRot = PiRot)
@@ -306,6 +391,8 @@ def fit_hpmap(PIXNum, q, s, dirfiles, verbose = False, #centerini,
 
     if not simulation:
         # Carry synth beam from polar cap to the equatorial one
+        # Simulation from 2019 are centered in (0,0). That's the reason for this rotation. Otherwise we could use 
+        # just the rotation in y-axis 90 - center_elevation_fov
         centerini = [hp.vec2ang(np.dot(sbfit.rotmatY(np.pi/2), vec_tes))[0][0],
                     hp.vec2ang(np.dot(sbfit.rotmatY(np.pi/2), vec_tes))[1][0]]
 

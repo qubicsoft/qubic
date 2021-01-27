@@ -143,34 +143,43 @@ class sky(object):
         _, nus_edge, nus_in, _, _, Nbbands_in = qubic.compute_freq(band, Nf, filter_relative_bandwidth)
 
         sky = np.zeros((Nf, npix, 3))
-        # ww = (np.ones(Nf+1) * u.uK_CMB).to_value(u.uK_RJ,equivalencies=u.cmb_equivalencies(nus_edge*u.GHz))
-        for i in range(Nf):
-            ###################### This is puzzling part here: ############################
-            # See Issue on PySM Git: https://github.com/healpy/pysm/issues/49
-            ###############################################################################
-            # #### THIS IS WHAT WOULD MAKE SENSE BUT DOES NOT WORK ~ 5% on maps w.r.t. input
-            # nfreqinteg = 5
-            # nus = np.linspace(nus_edge[i], nus_edge[i + 1], nfreqinteg)
-            # freqs = utils.check_freq_input(nus)
-            # convert_to_uK_RJ = (np.ones(len(freqs), dtype=np.double) * u.uK_CMB).to_value(
-            # u.uK_RJ, equivalencies=u.cmb_equivalencies(freqs))
-            # #print('Convert_to_uK_RJ :',convert_to_uK_RJ)
-            # weights = np.ones(nfreqinteg) * convert_to_uK_RJ
-            ###############################################################################
-            ###### Works OK but not clear why...
-            ###############################################################################
-            nfreqinteg = 5
-            nus = np.linspace(nus_edge[i], nus_edge[i + 1], nfreqinteg)
-            filter_uK_CMB = np.ones(len(nus), dtype=np.double)
-            filter_uK_CMB_normalized = utils.normalize_weights(nus, filter_uK_CMB)
-            weights = 1. / filter_uK_CMB_normalized
-            ###############################################################################
 
-            ### Integrate through band using filter shape defined in weights
-            themaps_iqu = self.sky.get_emission(nus * u.GHz, weights=weights)
-            sky[i, :, :] = np.array(themaps_iqu.to(u.uK_CMB, equivalencies=u.cmb_equivalencies(nus_in[i] * u.GHz))).T
-            # ratio = np.mean(self.input_cmb_maps[0,:]/sky[i,:,0])
-            # print('Ratio to initial: ',ratio)
+        ##### This is the old code by JCH - It has been replaced by what Edgar Jaber has proposed
+        ##### see his presentation on Git: qubic/scripts/ComponentSeparation/InternshipJaber/teleconf_03122020.pdf
+        # for i in range(Nf):
+        #     # ###################### This is puzzling part here: ############################
+        #     # # See Issue on PySM Git: https://github.com/healpy/pysm/issues/49
+        #     # ###############################################################################
+        #     # # #### THIS IS WHAT WOULD MAKE SENSE BUT DOES NOT WORK ~ 5% on maps w.r.t. input
+        #     # # nfreqinteg = 5
+        #     # # nus = np.linspace(nus_edge[i], nus_edge[i + 1], nfreqinteg)
+        #     # # freqs = utils.check_freq_input(nus)
+        #     # # convert_to_uK_RJ = (np.ones(len(freqs), dtype=np.double) * u.uK_CMB).to_value(
+        #     # # u.uK_RJ, equivalencies=u.cmb_equivalencies(freqs))
+        #     # # #print('Convert_to_uK_RJ :',convert_to_uK_RJ)
+        #     # # weights = np.ones(nfreqinteg) * convert_to_uK_RJ
+        #     # ###############################################################################
+        #     # ###### Works OK but not clear why...
+        #     # ###############################################################################
+        #     # nfreqinteg = 5
+        #     # nus = np.linspace(nus_edge[i], nus_edge[i + 1], nfreqinteg)
+        #     # filter_uK_CMB = np.ones(len(nus), dtype=np.double)
+        #     # filter_uK_CMB_normalized = utils.normalize_weights(nus, filter_uK_CMB)
+        #     # weights = 1. / filter_uK_CMB_normalized
+        #     # ###############################################################################
+
+        #     # ### Integrate through band using filter shape defined in weights
+        #     # themaps_iqu = self.sky.get_emission(nus * u.GHz, weights=weights)
+        #     # sky[i, :, :] = np.array(themaps_iqu.to(u.uK_CMB, equivalencies=u.cmb_equivalencies(nus_in[i] * u.GHz))).T
+        #     # ratio = np.mean(self.input_cmb_maps[0,:]/sky[i,:,0])
+        #     # print('Ratio to initial: ',ratio)
+
+        ##### Here is the new code from Edgar Jaber
+        for i in range(Nf):
+            nfreqinteg = 50
+            freqs = np.linspace(nus_edge[i], nus_edge[i + 1], nfreqinteg)
+            weights = np.ones(nfreqinteg)
+            sky[i,:,:] = (self.sky.get_emission(freqs * u.GHz, weights) * utils.bandpass_unit_conversion(freqs * u.GHz, weights, u.uK_CMB)).T
 
         return sky
 

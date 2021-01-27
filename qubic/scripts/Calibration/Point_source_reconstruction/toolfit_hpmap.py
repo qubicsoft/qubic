@@ -13,38 +13,101 @@ from qubic import *
 from qubicpack.pixel_translation import make_id_focalplane, plot_id_focalplane, tes2pix, tes2index
 import qubic.sb_fitting as sbfit
 
-def create_hall_pointing(d, az, el, angspeed_psi, maxpsi,
-                 date_obs = None, latitude = None, longitude = None, 
-                 fix_azimuth = None, random_hwp = True):
+def generate_region(az, el):
+    """
+    Generates the squared region scanned in the hall from the azimuth&elevation coordinates
+    saved in housekeeping data.
     
-    '''This method will reproduce the pointing that is used in the hall to take the data. 
-    Will start from bottom left and will go up at fixed elevation.
-    '''
-
-    nsamples = len(az)*len(el)
-    pp = QubicSampling(nsamples,date_obs = d['date_obs'], period = 0.1, 
-        latitude = latitude, longitude = longitude)
-    
-    #Comented because we do not back and forth in simulations.. 
-    #mult_el = []
-    #for eachEl in el:
-    #    mult_el.append(np.tile(eachEl, 2*len(az)))
-    # Azimuth go and back and same elevation. 
-    #az_back = az[::-1]
-    #az = list(az)
-    #az.extend(az_back)
-    #mult_az = np.tile(az, len(el))
-    #print(i,np.asarray(mult_el).ravel().shape)
-    #pp.elevation = np.asarray(mult_el).ravel()
-    #pp.azimuth = np.asarray(mult_az).ravel()
-    
+    Return a grid with coordinates
+    """
     mult_el = []
     for eachEl in el:
         mult_el.extend(np.tile(eachEl, len(az)))
+    mult_el = mult_el[::-1]
     mult_az = []
     mult_az.append(np.tile(az, len(el)))
-    pp.elevation = np.asarray(mult_el)
-    pp.azimuth = np.asarray(mult_az[0])
+    
+    return mult_az, mult_el
+
+def create_hall_pointing(d, az, el, hor_center, angspeed_psi = 0, maxpsi = 0, period = 0,
+                 date_obs = None, latitude = None, longitude = None, doplot = False,
+                 fix_azimuth = None, random_hwp = True, verbose = False):
+    
+    '''
+    Model of the pointing used in the hall. No back and forth. 
+    
+    Input coordinates are az, el. The function authomatically will convert (az, el) into (phi, theta) 
+    defined as qubic.sampling.create_random_pointing to match with qubicsoft. 
+    
+    The coverage map center the region in hor_center coordinates. Take it into account for 
+    plotting and projecting maps
+    
+    Parameters:
+        d: QUBIC dictionary
+        az, el: azimuth and elevation data from housekeeping data or fits file. 1-d array
+        period: QubicSampling parameter. If equal to zero, it matches with transformation from az,el
+        to ra, dec using qubic.hor2equ(az, el time = 0). Otherwise is not equal. Default: zero. 
+        hor_center: center of the FOV
+    Return: 
+        QUBIC's pointing object
+    '''
+
+    nsamples = len(az)*len(el)
+    
+    mult_az, mult_el = generate_region(az,el)
+    theta = np.array(mult_el) #- np.mean(el)
+    phi = np.array(mult_az[0]) #- np.mean(az)
+    
+    # By defalut it computes HorizontalSampling in with SphericalSamplig
+    pp = qubic.QubicSampling(nsamples, #azimuth = mult_az[0], elevation = mult_el[0],
+                             date_obs = d['date_obs'], period = period, 
+                            latitude = latitude, longitude = longitude)
+    
+    time = pp.date_obs + TimeDelta(pp.time, format='sec')
+    
+    c2s = Cartesian2SphericalOperator('azimuth,elevation', degrees=True)
+    h2e = CartesianHorizontal2EquatorialOperator(
+        'NE', time, pp.latitude, pp.longitude)
+    s2c = Spherical2CartesianOperator('elevation,azimuth', degrees=True)
+    
+    rotation = c2s(h2e(s2c))
+    coords = rotation(np.asarray([theta.T, phi.T]).T)
+
+    pp.elevation = mult_el
+    pp.azimuth = mult_az[0]
+    pp.equatorial[:,0] = coords[:,0]
+    pp.equatorial[:,1] = coords[:,1]
+
+    if doplot:
+        fig, ax = subplots(nrows = 1, ncols = 2, figsize = (14,6))
+        pixsH = hp.ang2pix(d['nside'], np.radians(90 - theta), np.radians(phi))
+        mapaH = np.ones((12*256**2))
+        mapaH[pixsH] = 100
+        axes(ax[0])
+        hp.mollview(mapaH, title = "Horizontal coordinates", hold = True)
+        hp.graticule(verbose = False)
+        pixsEq = hp.ang2pix(d['nside'], np.radians(90 - pp.equatorial[:,1]), np.radians(pp.equatorial[:,0]))
+        mapaEq = np.ones((12*256**2))
+        mapaEq[pixsEq] = 100
+        axes(ax[1])
+        hp.mollview(mapaEq, title = "Equatorial coordinates", hold = True)
+        hp.graticule(verbose = False)
+        
+    
+    if period < 1e-4:
+        newcenter = qubic.hor2equ(azcen_fov, elcen_fov, 0)
+    else:
+        newcenter = qubic.hor2equ(azcen_fov, elcen_fov, pp.time[int(len(pp.time)/2)])
+
+    warn("Update RA, DEC in dictionary")
+    d['RA_center'], d['DEC_center'] = newcenter[0], newcenter[1]
+    # center = ra, dec
+    #center = (d['RA_center'], d['DEC_center'])
+
+    if verbose: print("Time: len(time) = {} \n t0 {} \n time/2 {} \n tf {}".format(time, 
+                                                                                   time[0],
+                                                                                   time[int(len(time)/2)],
+                                                                                  time[-1])  )
     
     ### scan psi as well,
     pitch = pp.time * angspeed_psi
@@ -56,7 +119,7 @@ def create_hall_pointing(d, az, el, angspeed_psi, maxpsi,
     pp.pitch = pitch
     
     if random_hwp:
-        pp.angle_hwp = np.random.random_integers(0, 7, nsamples) * 11.25
+        pp.angle_hwp = np.random.randint(0, 7, nsamples) * 11.25
         
     if d['fix_azimuth']['apply']:
         pp.fix_az=True
@@ -68,6 +131,7 @@ def create_hall_pointing(d, az, el, angspeed_psi, maxpsi,
         pp.fix_az=False
 
     return pp
+
 
 def npp(ipix):
     
@@ -164,15 +228,23 @@ def flat2hp_map(maps, az, el, nside = 256):
     return auxmap
 
 
-class SbHealpyModel:
-
-    """
-    This class aims to fit the location and amplitude of the peaks in healpix projections for TODs 
-    obtained in qubic simulations or from the data. Uses a pointing strategy adapted from
-    qubicsoft using scan azimuth and elevation coordinates.     
-    """
-    
-    def __init__(self):
+#class SbHealpyModel:
+#
+#    """
+#    This class aims to fit the location and amplitude of the peaks in healpix projections for TODs 
+#    obtained in qubic simulations or from the data. Uses a pointing strategy adapted from
+#    qubicsoft using scan azimuth and elevation coordinates.     
+#    """
+#
+#    def __init__(self):
+#
+#
+#
+#
+#
+#
+#
+#
 
 def fit_hpmap(PIXNum, q, s, dirfiles, verbose = False, #centerini, 
               nside = 256, nest = True, filterbeam = 3, PiRot = True, simulation = False, maps = None,
@@ -207,6 +279,7 @@ def fit_hpmap(PIXNum, q, s, dirfiles, verbose = False, #centerini,
 
     TESNum, asic = (PIXNum, 1) if (PIXNum < 128) else (PIXNum - 128, 2)
     PIXq = tes2pix(TESNum, asic) - 1
+    npix = 12 * nside ** 2
     
     if verbose:
         print("You are running fitting in healpix maps.")
@@ -218,47 +291,30 @@ def fit_hpmap(PIXNum, q, s, dirfiles, verbose = False, #centerini,
 
 
     # Get healpix projection of the TOD for a given PIXNum
+    # Compute theoreticall th,ph from qsoft
+    th_tes_all, ph_tes_all = thph_qsoft(q, s, PIXq, PiRot = PiRot)
+    
+    # Using only central peak
+    th_tes, ph_tes = th_tes_all[0,0], ph_tes_all[0,0]
+
+    # theta, phi to vector of central peak for TES (p0 for fitting function)
+    vec_tes = np.array([np.sin(th_tes) * np.cos(ph_tes),
+                    np.sin(th_tes) * np.sin(ph_tes),
+                    np.cos(th_tes)])
+    
+    fullvec = hp.pix2vec(nside, range(0, 12 * nside ** 2), nest = nest)
+
     if not simulation:
-        # Compute theoreticall th,ph from qsoft
-        th_tes_all, ph_tes_all = thph_qsoft(q, s, PIXq, PiRot = PiRot)
-        
-        # Using only central peak
-        th_tes, ph_tes = th_tes_all[0,0], ph_tes_all[0,0]
-
-        # theta, phi to vector of central peak for TES (p0 for fitting function)
-        vec_tes = np.array([np.sin(th_tes) * np.cos(ph_tes),
-                        np.sin(th_tes) * np.sin(ph_tes),
-                        np.cos(th_tes)])
-        
-        fullvec = hp.pix2vec(nside, range(0, 12 * nside ** 2), nest = nest)
-
         # Carry synth beam from polar cap to the equatorial one
         centerini = [hp.vec2ang(np.dot(sbfit.rotmatY(np.pi/2), vec_tes))[0][0],
                     hp.vec2ang(np.dot(sbfit.rotmatY(np.pi/2), vec_tes))[1][0]]
 
-        npix = 12 * nside ** 2
-
         hpmap = sbfit.get_hpmap(PIXNum, dirfiles)
 
     elif simulation:
-        # Compute theoreticall th,ph from qsoft
-        th_tes_all, ph_tes_all = thph_qsoft(q, s, PIXq, PiRot = PiRot)
-                
-        # Using only central peak
-        th_tes, ph_tes = th_tes_all[0,0], ph_tes_all[0,0]
-
-        # theta, phi to vector of central peak for TES (p0 for fitting function)
-        vec_tes = np.array([np.sin(th_tes) * np.cos(ph_tes),
-                        np.sin(th_tes) * np.sin(ph_tes),
-                        np.cos(th_tes)])
-        
-        fullvec = hp.pix2vec(nside, range(0, 12 * nside ** 2), nest = nest)
-
         # Carry synth beam from polar cap to the equatorial one
         centerini = [hp.vec2ang(np.dot(sbfit.rotmatY(np.deg2rad(90 - 50.712)), vec_tes))[0][0],
                     hp.vec2ang(np.dot(sbfit.rotmatY(np.deg2rad(90 - 50.712)), vec_tes))[1][0]]
-
-        npix = 12 * nside ** 2
 
         #hpmap = q.get_synthbeam(s)[PIXq, newpix]
         hpmap = maps
@@ -290,22 +346,11 @@ def fit_hpmap(PIXNum, q, s, dirfiles, verbose = False, #centerini,
         hp.projscatter(np.deg2rad(centerini[0]), np.deg2rad(centerini[1]), marker = '+', color = 'r')
 
     pxvec = hp.pix2vec(nside, px, nest = nest)
-    fullvec = hp.pix2vec(nside, range(0,npix), nest = nest)
+    #fullvec = hp.pix2vec(nside, range(0,npix), nest = nest)
     fullpx = np.linspace(0, npix, npix, dtype = int)
 
     aberr = np.deg2rad(np.array([0,05.]))
     delta = np.deg2rad(13.)
-    #Old peaksordering
-    #thphpeaks = [thetaphi,
-    #             thetaphi-delta*np.array([1,0]),                 
-    #            thetaphi+delta*np.array([1,0]), 
-    #            thetaphi-delta*np.array([0,1]+aberr),
-    #            thetaphi+delta*np.array([0,1]+aberr),
-    #            thetaphi-delta*0.5*np.array([1,1]),
-    #            thetaphi+delta*0.5*np.array([1,1]),
-    #            thetaphi-delta*0.5*np.array([-1,1]),
-    #            thetaphi+delta*0.5*np.array([-1,1]),
-    #             ]
     
     #peaks ordering according JCh and instrument module
     thphpeaks = [thetaphi + delta * np.array([1,0]),
@@ -319,7 +364,7 @@ def fit_hpmap(PIXNum, q, s, dirfiles, verbose = False, #centerini,
                  thetaphi - delta * np.array([1,0])
                  ]
 
-    fullvec = hp.pix2vec(nside, range(0,npix), nest = nest)
+    #fullvec = hp.pix2vec(nside, range(0,npix), nest = nest)
     realmaxpx = np.zeros((9,), dtype = int)
     absmaxpx = np.zeros((9,), dtype = int)
 

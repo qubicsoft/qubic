@@ -74,6 +74,7 @@ d['noiseless'] = True
 Understanding step by step random_pointing... ok, understood it
 
 ```{python}
+reload(fh)
 directory = os.environ['QUBIC_TODDIR'] + '150GHz-2019-04-06/'
 
 az = FitsArray(directory + 'Flat/azimuth.fits')
@@ -205,13 +206,16 @@ ax[1].legend()
 TOD, maps_convolved_useless = a.get_observation(psmap, noiseless = d['noiseless'])#, convolution = True)
 ```
 
-Look at the TODs
+Look at the TODs... okk..
 
 
 showtes, showasic = 93, 1
 showpix = tes2pix(showtes,showasic)
 print(showpix)
 imshow(np.reshape(TOD[showpix][::-1], (len(el),len(az)) ))
+
+
+Save flatmaps projection for each TES... is it neccessary to invert elevation? 
 
 ```{python}
 reload(fh)
@@ -220,7 +224,7 @@ for ipix in range(len(q[0].detector)):
     qtes = FPidentity[idet.index[0]].TES
     #print (FPidentity[idet.index[0]].PIX , ipix, qtes)
     FitsArray(np.reshape(TOD[ipix], 
-                     (len(el), len(az)))[::-1, :]).save(directory + \
+                     (len(el), len(az))) ).save(directory + \
                     'Simulations/Flat/imgflat_TESNum_{}'.format(qtes))
 ```
 
@@ -336,12 +340,19 @@ Fit peak positions in healpy map (data)
 
 ```{python}
 reload(fh)
+oldway = False
 dirfiles = os.environ['QUBIC_TODDIR']+'150GHz-2019-04-06/'
 todhp = tod[::-1]
 convmap = fh.flat2hp_map(todhp, p.azimuth, p.elevation, nside = d['nside'])
-hpnest, thphpeaksnew, absmaxpx = fh.fit_hpmap(TES[0], q[3], s, dirfiles, plot = False, verbose = True,
+if oldway:
+    hpnest, thphpeaksnew, absmaxpx = fh.fit_hpmap(TES[0], q[3], s, dirfiles, plot = False, verbose = True,
                                               simulation = True, maps = convmap,
                                        filterbeam = 2, threshold = 4, threshold0 = 3, plotcenter = False)
+else:
+    InitSearch = fh.SbHealpyModel(d, q[3], s, TES[0], az, el, dirfiles,
+                                 simulation = True, maps = convmap,)
+    
+    hpnest, thphpeaksnew, absmaxpx = InitSearch(simulation = True, maps = convmap)
 ```
 
 Testing rotation to be implemented in toolfit_healpy.... it works using sbfit tools
@@ -380,6 +391,8 @@ im = ax[1].imshow(np.reshape(TOD[qpix[0]], (len(el), len(az))),
              extent = [np.min(az) * np.cos(np.radians(elcen_fov)),
                                np.max(az) * np.cos(np.radians(elcen_fov)),
                                np.min(el), np.max(el)],  )
+ax[1].set_ylabel('El[°]')
+ax[1].set_xlabel('Az[°]')
 ax[1].plot(thexypeaks[0,0,:], thexypeaks[0,1,:], 'r.')
 #fig.colorbar(im, ax = ax[1])
 ax[1].set_title('Fitting (flat) TES {}'.format(tes))
@@ -484,15 +497,26 @@ print('Pol. Chi2 {:.3f}'.format(result_pol.chisqr) )
 ```
 
 ```{python}
+from lmfit import Model
+from lmfit.model import save_modelresult
+```
+
+```{python}
+def model_pro(x, a,b):
+    return a*x + b
+
+gmodel_pol = Model(model_pro, independent_vars=['x',], )
+params_pol = gmodel_pol.make_params()
 
 ```
 
 ```{python}
-
+gmodel_pol.independent_vars
 ```
 
 ```{python}
-
+result_pol = gmodel_pol.fit(yFPSF, params_pol, x=xFPSF)
+parspol = list(result_pol.best_values.values())
 ```
 
 Get healpix map for a tes in q instrument

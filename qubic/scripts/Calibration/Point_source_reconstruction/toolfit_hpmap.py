@@ -1,17 +1,26 @@
 #Importing system packages
 import os
 import sys
+from warnings import warn
 
 #Importing science packages
 import numpy as np
 import healpy as hp
 from matplotlib.pyplot import *
 import scipy.ndimage.filters as f
+from astropy.time import Time, TimeDelta
 
 #Importing qubic packages
 from qubic import *
 from qubicpack.pixel_translation import make_id_focalplane, plot_id_focalplane, tes2pix, tes2index
 import qubic.sb_fitting as sbfit
+from pyoperators import (
+    Cartesian2SphericalOperator,
+    Rotation3dOperator,
+    Spherical2CartesianOperator)
+from pysimulators import ( 
+    CartesianEquatorial2HorizontalOperator,
+    CartesianHorizontal2EquatorialOperator)
 
 def generate_region(az, el):
     """
@@ -93,7 +102,7 @@ def create_hall_pointing(d, az, el, hor_center, angspeed_psi = 0, maxpsi = 0, pe
         hp.mollview(mapaEq, title = "Equatorial coordinates", hold = True)
         hp.graticule(verbose = False)
         
-    
+    azcen_fov, elcen_fov = hor_center[0], hor_center[1]
     if period < 1e-4:
         newcenter = qubic.hor2equ(azcen_fov, elcen_fov, 0)
     else:
@@ -140,7 +149,7 @@ def npp(ipix):
     return np.array(hp.get_all_neighbours(256, ipix,nest=True))
 
 def selectcenter(hpmap, center, delta = 3, nside = 256, nest = True,
-                threshold = 3, displaycenters = False, plot = False):
+                threshold = 3, displaycenters = False, doplot = False):
     
     #return the pixel of the central peak
     npix = 12 * nside ** 2
@@ -167,7 +176,7 @@ def selectcenter(hpmap, center, delta = 3, nside = 256, nest = True,
 
     indxmax = np.argmax(relmaxpx)
     pixmax, newcenter = px[indxmax], centerarr[indxmax]
-    if plot:
+    if doplot:
         hp.gnomview(hpmap, reso = 12, rot = np.array([90,0]) - newcenter, nest = nest)
         if displaycenters:
             for each in centerarr:
@@ -176,8 +185,7 @@ def selectcenter(hpmap, center, delta = 3, nside = 256, nest = True,
 
     return pixmax, newcenter
 
-def thph_qsoft(qinst, scene, soft_pix, 
-               PiRot = True, ref_detector = False, index_ref = None):
+def thph_qsoft(qinst, scene, soft_pix, PiRot = True):
     
     """
     Returns th,ph for each peaks for a given TES and instrument. 
@@ -205,17 +213,18 @@ def thph_qsoft(qinst, scene, soft_pix,
     # PI rotation
     if PiRot:
         newthph = np.zeros((sim_th.shape[1],2))
-        th_tes_all = np.zeros((1, sim_th.shape[1]) ) 
-        ph_tes_all = np.zeros((1, sim_th.shape[1]) )
+        th_tes_all = np.zeros((sim_th.shape[1]) ) 
+        ph_tes_all = np.zeros((sim_th.shape[1]) )
 
-        for i in range(sim_th.shape[1]):
-            newuv = np.dot(sbfit.rotmatZ(np.pi), sbfit.thph2uv(sim_th[0, i], sim_ph[0, i]) )
-            newthph = sbfit.uv2thph(newuv)
-            th_tes_all[0, i] = newthph[0]
-            ph_tes_all[0, i] = newthph[1]
+        #for i in range(sim_th.shape[1]):
+        newuv = np.dot(sbfit.rotmatZ(np.pi), sbfit.thph2uv(sim_th[0], sim_ph[0]) )
+        newthph = sbfit.uv2thph(newuv)
+        th_tes_all = newthph[0]
+        ph_tes_all = newthph[1]
     else: 
         th_tes_all = sim_th
         ph_tes_all = sim_ph
+    
     return th_tes_all, ph_tes_all
 
 def flat2hp_map(maps, az, el, nside = 256):
@@ -227,34 +236,30 @@ def flat2hp_map(maps, az, el, nside = 256):
     
     return auxmap
 
-
-#class SbHealpyModel:
-#
-#    """
-#    This class aims to fit the location and amplitude of the peaks in healpix projections for TODs 
-#    obtained in qubic simulations or from the data. Uses a pointing strategy adapted from
-#    qubicsoft using scan azimuth and elevation coordinates.     
-#    """
-#
-#    def __init__(self):
-#
-#
-#
-#
-#
-#
-#
-#
-class SbHealpyModel:
+class SbHealpyModel(object):
     
-    def __init__(self, d, q, s, pixnum, asic = None, id_fp_sys = "FileName", 
-                 npix = None, tes = None, qpix = None, verbose = False):
+    """
+    This class aims to search (no fit) the location and amplitude of the peaks in healpix projections for TODs 
+    obtained in qubic simulations or from the data. Uses a pointing strategy adapted from
+    qubicsoft using scan azimuth and elevation coordinates.     
+    """
+    def __init__(self, d, q, s, pixnum, az, el, dirfiles, asic = None, id_fp_sys = "FileName", 
+                 npix = None, tes = None, qpix = None, verbose = False, PiRot = True,
+                 nest = True, simulation = False, maps = None, startpars= None):
         
         """
+        d: 
+            Qubic dictionary
+
         pixnum:
             Could be: pixel detector number (id_fp_sys = "FileName"), 
                       QubicInstrument detector number (id_fp_sys = 'qsName')
                       TES, ASIC detector number (id_fp_sys = 'TESName')
+        az, el:
+            Array with azimuth and elevation coordinates. 
+            len(az) = #azimuth in a fixed elevation step
+            len(el) = #elevation in a fixed azimuth step
+
         id_fp_sys: 
             FileName --> user provides the number of TES in this convention: 1 - 256 in continuos way. This
                         convention is not equal to the qubicsoft indexing. 
@@ -263,18 +268,173 @@ class SbHealpyModel:
                     kw needed: tes, asic
             qsName --> qubicsoft indexing
                     kw needed: qpix
-            
+        startpars: 
+            Array with th, ph coords of central peak. Dims: [2, npeaks]. npeaks should be grater than 8 (9 dims)
+        nest: 
+            Healpix parameter. NESTED or RING. Default: True. 
         """
         
         self.instrument = q
         self.scene = s
         self.nside = d['nside']
-
+        self.npixels = 12 * self.nside ** 2
+        self.pirot = PiRot
         # Generate pixel, detector and TES numbers identification 
         self._init_id(id_fp_sys, pixnum, asic = asic, verbose = verbose)
-        self._init_thph()
+        #self._init_thph(PiRot = self.pirot)
+        # Location of Data 
+        self.dirfiles = dirfiles
+        self.nest = nest
+        #Center of the FOV
+        self.elcenter = np.mean(el)
+        self.azcenter = np.mean(az)
 
-        return
+        if startpars is None:
+            self.init_th, self.init_ph = thph_qsoft(self.instrument, self.scene, self.qpix, PiRot = self.pirot)
+            self.cent_th_tes, self.cent_ph_tes = self.init_th[0], self.init_ph[0]
+        else: 
+            self.init_th, self.init_ph = startpars
+            self.cent_th_tes, self.cent_ph_tes = self.init_th[0], self.init_ph[0]
+
+        # Save vector coordinates of central peak 
+        self.vec_tes = np.array([np.sin(self.cent_th_tes) * np.cos(self.cent_ph_tes),
+                        np.sin(self.cent_th_tes) * np.sin(self.cent_ph_tes),
+                        np.cos(self.cent_th_tes)])
+        
+        #vecs_fullmap = hp.pix2vec(self.nside, range(0, self.npixels), nest = self.nest)
+    
+    def __call__(self, filterbeam = 3, simulation = False, maps = None, doplot = False,
+                threshold = 2, threshold0 = 2, shift = 0.05, delta = 13, 
+                refilter = False):
+            
+        """
+        filterbeam:
+            Used to smooth maps with gaussian kernels.
+        simulation: 
+            If False, uses data files to fit. If True, it fits simulated maps provided in 'maps'.
+        threshold, threshold0: 
+            Angular distance from a given center (diff for each peak) to define a sub-region to search maximum value.
+            The maximum value in the region is considered the central pixel of the peak. threshold0 is the same for central peak.
+        shift:
+            There are some shifts in projections of two peaks at the edges. This factor try to make the fit better.
+            Default: 0.05deg
+        delta: 
+            Linear angular separation between central peak and farest peak. This value is used for the initial guess.
+            Default: 13deg
+
+
+        """
+        #warn("{}: This class adjusts the location and width of the peaks of the synthesized beams. \
+        #    Currently, this approach can be used to adjust the 9 main peaks. For more peaks you have to update it ".format(self.__name__))
+        
+        if not simulation:
+            # Carry synth beam from polar cap to the equatorial zone
+            # Simulation from 2019 are centered in (0,0). That's the reason for this rotation. Otherwise we could use 
+            # just the rotation in y-axis 90 - center_elevation_fov
+            self.centerini = [hp.vec2ang(np.dot(sbfit.rotmatY(np.pi/2), self.vec_tes))[0][0],
+                                    hp.vec2ang(np.dot(sbfit.rotmatY(np.pi/2), self.vec_tes))[1][0]]
+            self.hpmap = sbfit.get_hpmap(self.npix, self.dirfiles)
+
+        elif simulation:
+            # Carry synth beam from polar cap to the equatorial one
+            self.centerini = [hp.vec2ang(np.dot(sbfit.rotmatY(np.deg2rad(90 - self.elcenter)), self.vec_tes))[0][0],
+                                hp.vec2ang(np.dot(sbfit.rotmatY(np.deg2rad(90 - self.elcenter)), self.vec_tes))[1][0]]
+
+            #hpmap = q.get_synthbeam(s)[PIXq, newpix]
+            self.hpmap = maps
+
+        if self.nest:
+            self.hpmap = hp.reorder(self.hpmap, r2n = self.nest)
+        else:
+            self.hpmap = self.hpmap
+        self.hpmap_filt = f.gaussian_filter(self.hpmap, filterbeam)
+        
+        # Searching for central peak in healpix map filtered
+        self.centerini = [np.rad2deg(self.centerini[0]), np.rad2deg(self.centerini[1])] 
+        px, center = selectcenter(self.hpmap_filt, self.centerini, doplot = doplot, nside = self.nside)
+
+        # Convert central pixel in th, ph coordinates 
+        thetaphi = hp.pix2ang(self.nside, px, nest = self.nest)
+
+        shift = np.deg2rad(np.array([shift]))
+        # Initial angular separation where the peaks will be searched 
+        delta = np.deg2rad(delta)
+        
+        #peaks ordering according JCh and instrument module
+        thphpeaks = [thetaphi + delta * np.array([1,0]),
+                     thetaphi - delta * 0.5 * np.array([-1,1]),
+                     thetaphi - delta * np.array([0,1] + shift), 
+                     thetaphi + delta * 0.5 * np.array([1,1]),
+                     thetaphi,
+                     thetaphi - delta * 0.5 * np.array([1,1]),
+                     thetaphi + delta * np.array([0,1] + shift),
+                     thetaphi + delta * 0.5 * np.array([-1,1]),
+                     thetaphi - delta * np.array([1,0])
+                     ]
+
+        #
+        #==
+        #   realmaxpx: relative maximum in each sub-region 
+        #   absmaxpx: absolute maximum --> 
+        realmaxpx = np.zeros((len(thphpeaks),), dtype = int)
+        absmaxpx = np.zeros(( len(thphpeaks),), dtype = int)
+
+        thphpeaksnew = np.zeros((len(thphpeaks),2))
+
+
+        fullvec = hp.pix2vec(self.nside, range(0, self.npixels), nest = self.nest)
+        ifullpx = np.linspace(0, self.npixels, self.npixels, dtype = int)
+
+        for j, ithphpx in enumerate(thphpeaks):
+            c = 'b'
+            if j == 4: 
+                threshold = threshold0
+            else:
+                threshold = threshold
+                
+            ivec = hp.ang2vec(ithphpx[0], ithphpx[1], )
+            maskipx = np.rad2deg(np.arccos(np.dot(ivec,fullvec))) < threshold
+            
+            if refilter:
+                mean, std = np.mean(hpnest_filt[maskipx]),np.std(hpnest_filt[maskipx])
+                maskipx2 = hpnest_filt[maskipx] < mean+3*std
+                maskipx3 = hpnest_filt[maskipx] > mean-3*std
+                maskipx[maskipx] = maskipx2 * maskipx3
+            maskidx = np.where(maskipx == True)[0]
+            #useless max (just to plot in 1d not healpix)
+            realmaxpx[j] = np.where(self.hpmap_filt[maskipx] == np.max(self.hpmap_filt[maskipx]))[0][0]
+            #usefull max (healpix)
+            absmaxpx[j] = maskidx[realmaxpx[j]]
+            thphpeaksnew[j] = hp.pix2ang(self.nside, absmaxpx[j], nest = self.nest)
+
+        if doplot:
+            warn("deprecated....")
+            vli = [px,]
+            xlo = px-100
+            xhi = px+100
+            
+            fig, ax = subplots(nrows = 1, ncols = 2, figsize = (12,4))
+            ax[0].set_title("Center peak")
+            ax[0].set_xlim(xlo,xhi)
+            ax[0].plot(self.hpmap, 'bo--', label = 'raw')
+            ax[0].plot(self.hpmap_filt, 'bo--', alpha = 0.4, label = 'filtered')
+            ax[0].legend()
+            for i in vli:
+                ax[0].axvline(i, c = 'k', alpha = 0.4, ls = '--')
+                neig = npp(i)
+            hp.gnomview(self.hpmap, reso = 12, rot = center, nest = True)
+            hp.projscatter(np.deg2rad(self.centerini), marker = '+', color = 'r')
+
+            fig, ax = subplots(nrows = 9, ncols = 1, figsize = (8,8),)
+            if plotnine:
+                for j, ithphpx in enumerate(thphpeaks):
+                    c = 'b'
+                    if j == 3: c = 'r'
+                    ax[j].axvline(realmaxpx[j], c = 'k', alpha = 0.4, ls = '--')
+                    ax[j].plot(self.hpmap_filt[maskipx], 'o--', color = c, alpha = 0.4, label = 'filtered')
+                    ax[j].legend()        
+
+        return self.hpmap_filt, thphpeaksnew, absmaxpx
 
     def _init_id(self, ident_focalplane, num, asic = None, verbose = False):
         """
@@ -283,7 +443,6 @@ class SbHealpyModel:
             num: is the detector or pixel number. 
             asic: ASIC number if ident_focalplane = TESName and num has to be the tes number.
         """
-        
         if ident_focalplane == 'FileName':
             self.npix = num
             self.tes, self.asic = (self.npix, 1) if (self.npix < 128) else (self.npix - 128, 2)
@@ -315,21 +474,6 @@ class SbHealpyModel:
                                     tes2index(self.tes, self.asic), self.inst.detector[self.qpix].index[0] ))
             print("qubicsoft number: {}".format(self.qpix))
         return
-
-    def _init_thph(self, PiRot = True):
-        # Get healpix projection of the TOD for a given PIXNum
-        # Compute theoreticall th,ph from qsoft
-        th_tes_all, ph_tes_all = thph_qsoft(self.instrument, self.scene, self.qpix, PiRot = PiRot)
-        
-        # Using only central peak
-        th_tes, ph_tes = th_tes_all[0,0], ph_tes_all[0,0]
-
-        # theta, phi to vector of central peak for TES (p0 for fitting function)
-        vec_tes = np.array([np.sin(th_tes) * np.cos(ph_tes),
-                        np.sin(th_tes) * np.sin(ph_tes),
-                        np.cos(th_tes)])
-        
-        fullvec = hp.pix2vec(nside, range(0, 12 * nside ** 2), nest = nest)
 
 
 def fit_hpmap(PIXNum, q, s, dirfiles, verbose = False, #centerini, 
@@ -377,20 +521,18 @@ def fit_hpmap(PIXNum, q, s, dirfiles, verbose = False, #centerini,
         
     # Get healpix projection of the TOD for a given PIXNum
     # Compute theoreticall th,ph from qsoft
-    th_tes_all, ph_tes_all = thph_qsoft(q, s, PIXq, PiRot = PiRot)
+    th_tes_all, ph_tes_all = thph_qsoft(q, s, PIXq, PiRot = True)
     
     # Using only central peak
-    th_tes, ph_tes = th_tes_all[0,0], ph_tes_all[0,0]
-
+    th_tes, ph_tes = th_tes_all[0], ph_tes_all[0]
     # theta, phi to vector of central peak for TES (p0 for fitting function)
     vec_tes = np.array([np.sin(th_tes) * np.cos(ph_tes),
                     np.sin(th_tes) * np.sin(ph_tes),
                     np.cos(th_tes)])
     
     fullvec = hp.pix2vec(nside, range(0, 12 * nside ** 2), nest = nest)
-
     if not simulation:
-        # Carry synth beam from polar cap to the equatorial one
+        # Carry synth beam from polar cap to the equatorial zone
         # Simulation from 2019 are centered in (0,0). That's the reason for this rotation. Otherwise we could use 
         # just the rotation in y-axis 90 - center_elevation_fov
         centerini = [hp.vec2ang(np.dot(sbfit.rotmatY(np.pi/2), vec_tes))[0][0],
@@ -413,7 +555,7 @@ def fit_hpmap(PIXNum, q, s, dirfiles, verbose = False, #centerini,
     hpnest_filt = f.gaussian_filter(hpnest, filterbeam)
 
     centerini = [np.rad2deg(centerini[0]), np.rad2deg(centerini[1])]
-    px, center = selectcenter(hpnest_filt, centerini, plot = plot, nside = nside)
+    px, center = selectcenter(hpnest_filt, centerini, doplot = plot, nside = nside)
     thetaphi = hp.pix2ang(nside, px, nest = nest)
     
     if plotcenter:

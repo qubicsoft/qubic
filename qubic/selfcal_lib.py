@@ -376,8 +376,8 @@ def find_equivalent_baselines(all_bs, q):
     ### Baselines vectors
     all_vecs = np.zeros((len(all_bs), 2))
     for ib in range(len(all_bs)):
-        coordsA = hcenters[all_bs[ib][0], :]
-        coordsB = hcenters[all_bs[ib][1], :]
+        coordsA = hcenters[all_bs[ib][0] - 1, :]
+        coordsB = hcenters[all_bs[ib][1] - 1, :]
         all_vecs[ib, :] = coordsB - coordsA
 
     ### List of types of equivalence for each baseline: initially = -1

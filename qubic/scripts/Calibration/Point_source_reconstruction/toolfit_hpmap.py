@@ -392,8 +392,7 @@ class SbHealpyModel(object):
         realmaxpx = np.zeros((len(thphpeaks),), dtype = int)
         absmaxpx = np.zeros(( len(thphpeaks),), dtype = int)
 
-        thphpeaksnew = np.zeros((len(thphpeaks),2))
-
+        thphpeaksnew = np.zeros((len(thphpeaks),4))
 
         fullvec = hp.pix2vec(self.nside, range(0, self.npixels), nest = self.nest)
         ifullpx = np.linspace(0, self.npixels, self.npixels, dtype = int)
@@ -419,7 +418,10 @@ class SbHealpyModel(object):
             realmaxpx[j] = np.where(self.hpmap_filt[maskipx] == np.max(self.hpmap_filt[maskipx]))[0][0]
             #usefull max (healpix)
             absmaxpx[j] = maskidx[realmaxpx[j]]
-            thphpeaksnew[j] = hp.pix2ang(self.nside, absmaxpx[j], nest = self.nest)
+            #Ssave coords of peaks
+            thphpeaksnew[j,:2] = hp.pix2ang(self.nside, absmaxpx[j], nest = self.nest)
+            #Save amplitude
+            thphpeaksnew[j,2] = self.hpmap_filt[absmaxpx[j]]
 
         if doplot:
             
@@ -455,7 +457,7 @@ class SbHealpyModel(object):
             #        ax[j].plot(self.hpmap_filt[maskipx], 'o--', color = c, alpha = 0.4, label = 'filtered')
             #        ax[j].legend()        
 
-        return self.hpmap_filt, thphpeaksnew, absmaxpx
+        return self.hpmap_filt, thphpeaksnew.T
 
 
     def _init_id(self, ident_focalplane, num, asic = None):

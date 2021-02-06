@@ -574,14 +574,19 @@ def notch_filter(data, f0, bw, fs):
 
 def meancut(data, nsig, med=False, disp=True):
     """
-
     Parameters
     ----------
-    data : array like
-    nsig : float
+    data: array like
+    nsig: float
         Lower and upper bound factor of sigma clipping.
+    med: bool
+        If True, perform the median and not the mean.
+    disp: bool
+        If True, return the dispersion (STD),
+        if False, return the error on the mean (STD/sqrt(N))
     Returns
     -------
+    The mean/median and the dispersion/error.
 
     """
     dd = data.copy()

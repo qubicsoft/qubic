@@ -187,6 +187,37 @@ x, y, S, Cminus_i, Sminus_ij, Cminus_j, Ci, Cj, Sij = Model_QS.get_all_combinati
 print('shape of each combination :', Cminus_i.shape)
 ```
 
+#### Look at the cycle acquired during measurement
+
+```{python}
+cycle = np.array((S, Cminus_i, Sminus_ij, S, Cminus_j, S, S)) - S
+cycle.shape
+```
+
+```{python}
+# TEs ans ASIC numbers
+tes = scal.get_all_tes_numbers(q)
+```
+
+```{python}
+for i in range(100, 120):
+    plt.figure()
+    plt.step(np.arange(0, 7), cycle[:, i], where='post', color='k')
+    
+    plt.axvspan(0, 1, color='k', alpha=0.2, label='All open')
+    plt.axvspan(3, 4, color='k', alpha=0.2)
+    plt.axvspan(5, 6, color='k', alpha=0.2)
+    plt.axvspan(1, 2, color='b', alpha=0.2, label='H1 close')
+    plt.axvspan(2, 3, color='g', alpha=0.2, label='H1 H2 close')
+    plt.axvspan(4, 5, color='c', alpha=0.2, label='H2 close')
+    
+    plt.xlim(0, 6)
+    plt.xlabel('Step index')
+    plt.ylabel('TOD')
+    plt.title(f'TES {tes[i, 1]} - ASIC {tes[i, 0]}')
+    plt.legend()
+```
+
 ```{python}
 # Make the combination to get the fringes
 

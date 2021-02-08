@@ -10,7 +10,7 @@ from scipy.integrate import dblquad
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from qubicpack.pixel_translation import tes2index
+from qubicpack.pixel_translation import tes2index, make_id_focalplane
 
 __all__ = ['Model_Fringes_QubicSoft', 'Model_Fringes_Maynooth']
 
@@ -294,6 +294,27 @@ def get_TES_Instru_coords(q, frame='ONAFP', verbose=True):
                     print('Thermometer !')
 
     return x, y, FP_index, index_q
+
+
+def index2tes(FPindex, FPidentity=None):
+    """Return ASIC and TES numbers (instrument numbering)
+    from the FPindex coming from q.detector.index"""
+    if FPidentity is None:
+        FPidentity = make_id_focalplane()
+    TES = int(FPidentity.TES[FPidentity.index == FPindex])
+    ASIC = int(FPidentity.ASIC[FPidentity.index == FPindex])
+    return ASIC, TES
+
+
+def get_all_tes_numbers(q):
+    """Return a 2D array with ASIC and TES numbers ordered as in Qubic soft."""
+    FPidentity = make_id_focalplane()
+    ndet = q.detector.index.shape[0]
+    tes = np.zeros((ndet, 2), dtype=int)
+    for i in range(ndet):
+        FPindex = q.detector.index[i]
+        tes[i, 0], tes[i, 1] = index2tes(FPindex, FPidentity)
+    return tes
 
 
 def get_TESvertices_FromMaynoothFiles(rep, ndet=992):

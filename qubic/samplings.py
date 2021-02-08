@@ -164,6 +164,14 @@ def create_random_pointings(center, npointings, dtheta, hwp_stepsize, date_obs=N
     """
     Return pointings randomly and uniformly distributed in a spherical cap.
 
+    1) Creates random coordinates theta, phi. Range: 0 < theta < dtheta, 0 < phi < 360 
+    (then are converted from spherical to cartesian coordinates), 
+    2) It rotates the points to center them in direction (RA, DEC) using Rotation3dOperator 
+    (equatorial reference system)
+    3) Convertion: Equatorial to Horizontal reference system 
+    (using CartesianEquatorial2HorizontalOperator's operator) 
+    4) Back to cartesian coordinates (using Cartesian2SphericalOperator) 
+
     Parameters
     ----------
     center : 2-tuple

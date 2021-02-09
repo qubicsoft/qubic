@@ -61,7 +61,7 @@ from astropy.time import Time, TimeDelta
 
 ```{python}
 d = qubic.qubicdict.qubicDict()
-d.read_from_file(os.environ['QUBIC_DICT']+'/global_source_oneDet.dict')
+d.read_from_file(os.environ['QUBIC_DICT']+'global_source_oneDet.dict')
 d['MultiBand'] = True
 d['nf_sub'] = 6
 d['kind'] = 'I'
@@ -257,7 +257,7 @@ tod = TOD[qpix[0]]
 
 #### Fit flatmap
 
-```{python}
+
 # Build model
 sbfitmodel = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, 
                                      no_xy_shift=False, distortion=False)
@@ -283,25 +283,13 @@ for j, ites in enumerate(tes):
     clf()
 
 print((time.time()-t0)/60 , 'minutes')
-```
+
 
 #### Saving flat fitting
 
 ```{python}
 #dirfiles = os.environ['QUBIC_TODDIR']+'150GHz-2019-04-06/'
 #FitsArray(thexypeaks).save(dirfiles + 'FitSB/FlatMaps/fitted_peaks_test')
-```
-
-```{python}
-#I have to pick len(az)*len(el) data coords from coverage. 
-# The fisrt approach is to take the coordinates of the first len(az)*len(el) elements in cov array
-if ("cov" not in locals()):
-    cov = a.get_coverage()
-    cov = np.mean(cov, axis = 0)
-    maskov = cov > 0.25* np.max(cov)
-    cov[~maskov] = hp.UNSEEN
-#print(len(np.where(cov != hp.UNSEEN)[0]))
-
 ```
 
 To generate Healpix maps from flat projections I need the pointing (az, el) from hk-data. Each (az, el) represents the sky direction towards QUBIC points. Each TES cover a different region in sky. 
@@ -348,6 +336,7 @@ reload(sbfit)
 # Selecting TES number in absolute (1-248) notation:
 #fullTES = np.arange(92,160,48, dtype = int)+1 #[28, 37, 60, 96, 101, 122, 124, 137, 140, 149]
 fullTES = np.array([28, 37, 60, 96, 101, 122, 124, 137, 140, 149]) #
+#fullTES = np.array([28, 122, 137]) #
 #thermos_index = np.array([4, 36, 68, 100, 4+128, 36+128, 68+128, 100+128]) 
 #thermos_index = np.array([7])
 #fullTES = np.delete(fullTES, [7])
@@ -360,6 +349,10 @@ flatmaps = np.zeros((len(fullTES), len(el), len(az) ))
 hpnest = np.zeros((len(fullTES), 12 * d['nside'] ** 2))
 thphpeaksnew = np.zeros((len(fullTES), 4, 9))
 valpeaksnew = np.zeros((len(fullTES), 9))
+
+#Flat Model
+sbfitmodel = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, 
+                                     no_xy_shift=False, distortion=False)
 print(fullTES)
 for j, iTES in enumerate(fullTES):
     print(iTES)
@@ -377,8 +370,8 @@ for j, iTES in enumerate(fullTES):
                                                  nsiglo = 100, nsighi = 1e7,
         az_center = azcen_fov, el_center = elcen_fov,
          verbose = False, doplot = False, return_fitted =True,
-    figsave = os.environ['QUBIC_DATADIR'] + 'scripts/fit_theoretical_SB/TES{}_flatmap_peaks_fit'.format(ites),
-         extra_title='TES #{}'.format(ites))
+    #figsave = os.environ['QUBIC_DATADIR'] + 'scripts/fit_theoretical_SB/TES{}_flatmap_peaks_fit'.format(ites),
+         extra_title='TES #{}'.format(iTES))
     
     # Save peaks location in flat maps
     print("saving fits position for TES {} in flat map".format(fulltes[j]))
@@ -396,8 +389,8 @@ for j, iTES in enumerate(fullTES):
                                  simulation = True, maps = convmap, verbose = False)
     
     hpnest[j], thphpeaksnew[j] = InitSearch(simulation = True, maps = convmap, threshold = 3,
-                                            filterbeam = 1.5, delta = 8, doplot = False, 
-                                                factor_corrector = 1.4)
+                                            filterbeam = 1.5, delta = 9, doplot = False, 
+                                                factor_corrector = 1.5)
     
     #Save file
     print("saving fits position for TES {} in healpy map".format(fulltes[j]))
@@ -440,47 +433,60 @@ for j in range(len(fullTES)):
                     'Simulations/Flat/synth_beam/flat_TES{}ASIC{}.fits'.format(fulltes[j], fullasic[j]))
     FitsArray(hpnest[j]).save(directory + \
                     'Simulations/Healpix/synth_beam/hp_TES{}ASIC{}.fits'.format(fulltes[j], fullasic[j]))
+#Save all peaks in a single calibration file
+FitsArray(thexypeaks).save(os.environ['QUBIC_PEAKS'] + \
+                                  +'150GHz-2019-04-06/Simulations/Flat/flatpeaks.fits')
+FitsArray(thphpeaksnew).save(os.environ['QUBIC_PEAKS'] + \
+                                  +'150GHz-2019-04-06/Simulations/Healpix/healpypeaks.fits')
+
 ```
 
 #### See plots... ok
 
+```{python}
+from matplotlib.backends.backend_pdf import PdfPages
+figure(figsize =)
+with PdfPages('multipage_pdf.pdf') as pdf:
+    for j in range(8):
+        fig, ax = subplots(nrows = 1, ncols = 2, figsize = (14,8))
+        tod = TOD[fullqpix[j]]
+        axes(ax[0])
+        funcpr= hp.gnomview
+        msk = np.where(cov == hp.UNSEEN, )
+        hpnest[j, msk] = hp.UNSEEN
+        funcpr(hpnest[j], nest = False, min = 0, cbar= False, rot = (azcen_fov, elcen_fov),
+                    title = 'Fitting (hp) TES = {}, asic = {}'.format(fulltes[j], fullasic[j]),
+               xsize = 200, ysize = 180, hold = True, reso = 10)
+        hp.projscatter(thphpeaksnew[j,0,:], thphpeaksnew[j,1,:], color = 'r', marker = '.')
+        #hp.projscatter(np.radians(50), np.radians(-10), color = 'y', s = 160, marker = '.')
+        hp.projtext(np.radians(25), np.radians(30), "> 25% CovMax", color = "w",
+                    weight='bold')
 
-for j in range(2):
-    fig, ax = subplots(nrows = 1, ncols = 3, figsize = (14,8))
-    tod = TOD[fullqpix[j]]
-    axes(ax[0])
-    funcpr= hp.gnomview
-    msk = np.where(cov == hp.UNSEEN, )
-    hpnest[j, msk] = hp.UNSEEN
-    funcpr(hpnest[j], nest = False, min = 0, cbar= False, rot = (azcen_fov, elcen_fov),
-                title = 'Fitting (hp) TES = {}, asic = {}'.format(fulltes[j], fullasic[j]),
-           xsize = 300, ysize = 250, hold = True, reso = 10)
-    hp.projscatter(thphpeaksnew[j].T, color = 'r', marker = '.')
-    hp.projtext(np.radians(25), np.radians(30), "> 25% CovMax", color = "w",
-                weight='bold')
-    
-    hp.graticule(verbose = 0, alpha = 0.4)
+        hp.graticule(verbose = 0, alpha = 0.4)
 
-    im = ax[1].imshow(np.reshape(tod, (len(el), len(az))), 
-                 extent = [np.min(az) * np.cos(np.radians(elcen_fov)),
-                                   np.max(az) * np.cos(np.radians(elcen_fov)),
-                                   np.min(el), np.max(el)],  )
-    ax[1].set_ylabel('El[°]')
-    ax[1].set_xlabel('Az[°]')
-    ax[1].plot(thexypeaks[j,0,:], thexypeaks[j,1,:], 'r.')
-    ax[1].set_title('Fitting (flat) TES {} asic {}'.format(fulltes[j], fullasic[j]))
-    
-    axes(ax[2])
-    hp.gnomview(cov, rot = (azcen_fov, elcen_fov), reso = 10, hold = True, cbar = False,
-               xsize = 300, ysize = 250, title = "Coverage map (>25%)")
-    hp.graticule(verbose = 0, alpha = 0.4)
+        im = ax[1].imshow(np.reshape(tod, (len(el), len(az)))[:, ::-1], 
+                     extent = [np.max(az) * np.cos(np.radians(elcen_fov)),
+                                       np.min(az) * np.cos(np.radians(elcen_fov)),
+                                       np.min(el), np.max(el)],  )
+        ax[1].set_ylabel('El[°]')
+        ax[1].set_xlabel('Az[°]')
+        ax[1].plot(thexypeaks[j,0,::-1], thexypeaks[j,1,::-1], 'r.')
+        ax[1].set_title('Fitting (flat) TES {} asic {}'.format(fulltes[j], fullasic[j]))
+
+        #axes(ax[2])
+        #hp.gnomview(cov, rot = (azcen_fov, elcen_fov), reso = 10, hold = True, cbar = False,
+        #           xsize = 300, ysize = 250, title = "Coverage map (>25%)")
+        #hp.graticule(verbose = 0, alpha = 0.4)
 
 
-### Map-making in flat projections (from JCh instrument and Realistic_MultiBandReconstruction.Rmd)
+    ### Map-making in flat projections (from JCh instrument and Realistic_MultiBandReconstruction.Rmd)
+```
 
 ```{python}
 #MM flat maps
-def do_some_dets(fullTES, d, directory + 'Simulations/Flat/imgflat_TESNum_{}.fits', 
+fittedpeaksfile = dirfiles + 'Simulations/Flat/peaks/fitted_peaks_flat_TES{}ASIC{}.fits'.format(fulltes[j],
+                                                                                               fullasic[j])
+def do_some_dets(fullTES, d, fittedpeaksfile, 
                  fittedpeaksfile, custom=False, 
                  nside=None, tol=5e-3, refit=False, resample=False, newsize=70, 
                  doplot=True, verbose=True, sbfitmodel=None, angs=None, usepeaks=None,

@@ -459,7 +459,6 @@ class SbHealpyModel(object):
 
         return self.hpmap_filt, thphpeaksnew.T
 
-
     def _init_id(self, ident_focalplane, num, asic = None):
         """
         Generates focal plane identifications from user input

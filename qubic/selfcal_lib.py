@@ -10,7 +10,7 @@ from scipy.integrate import dblquad
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from qubicpack.pixel_translation import tes2index
+from qubicpack.pixel_translation import tes2index, make_id_focalplane
 
 __all__ = ['Model_Fringes_QubicSoft', 'Model_Fringes_Maynooth']
 
@@ -20,12 +20,14 @@ def plot_horns(q, simple=False, ax=None):
     if ax is None:
         fig, ax = plt.subplots()
 
+    xhorns = q.horn.center[:, 0]
+    yhorns = q.horn.center[:, 1]
     if simple:
-        xhorns = q.horn.center[:, 0]
-        yhorns = q.horn.center[:, 1]
-        ax.plot(xhorns, yhorns, 'ro')
+        ax.plot(xhorns, yhorns, 'ko')
     else:
-        q.horn.plot()
+        ax.scatter(xhorns[np.invert(q.horn.open)], yhorns[np.invert(q.horn.open)], c='k', s=500)
+        ax.scatter(xhorns[q.horn.open], yhorns[q.horn.open], c='k', s=500, alpha=0.1)
+
     ax.set_xlabel('X_GRF [m]', fontsize=14)
     ax.set_ylabel('Y_GRF [m]', fontsize=14)
     ax.axis('square')
@@ -84,7 +86,8 @@ def scatter_plot_FP(q, x, y, FP_signal, frame, fig=None, ax=None,
     return
 
 
-def pcolor_plot_FP(q, x, y, FP_signal, frame, title=None, unit='[W / Hz]', **kwargs):
+def pcolor_plot_FP(q, x, y, FP_signal, frame, title=None, fig=None, ax=None, cbar=True,
+                   unit='[W / Hz]', **kwargs):
     """
     Make a pcolor plot of the focal plane.
     !!! x, y, FP_signal must be ordered as defined in q.detector.
@@ -106,17 +109,23 @@ def pcolor_plot_FP(q, x, y, FP_signal, frame, title=None, unit='[W / Hz]', **kwa
     kwargs: any kwarg for plt.pcolor()
 
     """
+    if fig is None:
+        fig, ax = plt.subplots()
+
     x2D = q.detector.unpack(x)
     y2D = q.detector.unpack(y)
     FP_signal2D = q.detector.unpack(FP_signal)
 
-    plt.pcolor(x2D, y2D, FP_signal2D, **kwargs)
-    clb = plt.colorbar()
-    clb.ax.set_title(unit)
-    plt.xlabel(f'X_{frame} [m]', fontsize=14)
-    plt.ylabel(f'Y_{frame} [m]', fontsize=14)
-    plt.axis('square')
-    plt.title(title, fontsize=14)
+    img = ax.pcolor(x2D, y2D, FP_signal2D, **kwargs)
+    if cbar:
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes('right', size='5%', pad=0.05)
+        clb = fig.colorbar(img, cax=cax)
+        clb.ax.set_title(unit)
+    ax.set_xlabel(f'X_{frame} [m]', fontsize=14)
+    ax.set_ylabel(f'Y_{frame} [m]', fontsize=14)
+    ax.axis('square')
+    ax.set_title(title, fontsize=14)
     return
 
 
@@ -131,8 +140,8 @@ def plot_horn_and_FP(q, x, y, FP_signal, frame, s=None, title=None, unit='[W / H
     fig.subplots_adjust(wspace=0.3)
 
     plot_horns(q, ax=ax0)
+    scatter_plot_FP(q, x, y, FP_signal, frame, s=s, fig=fig, ax=ax1, unit=unit, **kwargs)
 
-    scatter_plot_FP(q, x, y, FP_signal, frame, fig=fig, ax=ax1, marker='s', s=s, **kwargs)
     return
 
 
@@ -287,6 +296,27 @@ def get_TES_Instru_coords(q, frame='ONAFP', verbose=True):
     return x, y, FP_index, index_q
 
 
+def index2tes(FPindex, FPidentity=None):
+    """Return ASIC and TES numbers (instrument numbering)
+    from the FPindex coming from q.detector.index"""
+    if FPidentity is None:
+        FPidentity = make_id_focalplane()
+    TES = int(FPidentity.TES[FPidentity.index == FPindex])
+    ASIC = int(FPidentity.ASIC[FPidentity.index == FPindex])
+    return ASIC, TES
+
+
+def get_all_tes_numbers(q):
+    """Return a 2D array with ASIC and TES numbers ordered as in Qubic soft."""
+    FPidentity = make_id_focalplane()
+    ndet = q.detector.index.shape[0]
+    tes = np.zeros((ndet, 2), dtype=int)
+    for i in range(ndet):
+        FPindex = q.detector.index[i]
+        tes[i, 0], tes[i, 1] = index2tes(FPindex, FPidentity)
+    return tes
+
+
 def get_TESvertices_FromMaynoothFiles(rep, ndet=992):
     """
     Get TES vertices coordinates from Maynooth files.
@@ -376,8 +406,8 @@ def find_equivalent_baselines(all_bs, q):
     ### Baselines vectors
     all_vecs = np.zeros((len(all_bs), 2))
     for ib in range(len(all_bs)):
-        coordsA = hcenters[all_bs[ib][0], :]
-        coordsB = hcenters[all_bs[ib][1], :]
+        coordsA = hcenters[all_bs[ib][0] - 1, :]
+        coordsB = hcenters[all_bs[ib][1] - 1, :]
         all_vecs[ib, :] = coordsB - coordsA
 
     ### List of types of equivalence for each baseline: initially = -1

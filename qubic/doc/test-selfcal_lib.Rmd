@@ -78,29 +78,27 @@ scal.close_switches(q, np.arange(1, 64))
 scal.open_switches(q, [1, 45, 50])
 
 # Plot the horn array and a baseline
-plt.subplots(1, 2, figsize=(12, 6))
+fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+ax1, ax2 = np.ravel(axs)
+scal.plot_horns(q, simple=True, ax=ax1)
+# q.horn.plot()
+ax1.set_xlabel('$X_{GRF}$ [m]', fontsize=20)
+ax1.set_ylabel('$Y_{GRF}$ [m]', fontsize=20)
 
-plt.subplot(121)
-q.horn.plot()
-plt.xlabel('$X_{GRF}$ [m]', fontsize=20)
-plt.ylabel('$Y_{GRF}$ [m]', fontsize=20)
-plt.axis('equal')
 
 # Numbering on the horns
 a = 1
 x = q.horn.center[:, 0]
 y = q.horn.center[:, 1]
 for i,j in zip(x, y):
-    corr = -0.002 # add a little correction to put annotation in marker's centrum
-    plt.annotate(str(a),  xy=(i + corr, j + corr), fontsize=14, color='r')
+    corr = -0.005 # add a little correction to put annotation in marker's centrum
+    ax1.annotate(str(a),  xy=(i + corr, j + corr), fontsize=14, color='r')
     a += 1
-    
-plt.subplot(122)
+
 q.horn.plot()
-scal.plot_baseline(q, [25, 57])
-plt.xlabel('$X_{GRF}$ [m]', fontsize=20)
-plt.ylabel('$Y_{GRF}$ [m]', fontsize=20)
-plt.axis('equal')
+scal.plot_baseline(q, [25, 57], ax=ax2)
+ax2.set_xlabel('$X_{GRF}$ [m]', fontsize=20)
+ax2.set_ylabel('$Y_{GRF}$ [m]', fontsize=20)
 ```
 
 ## Analytical function
@@ -112,7 +110,6 @@ print(Model_Ana.focal)
 
 xONAFP, yONAFP, fringes = Model_Ana.get_fringes(times_gaussian=True)
 
-plt.figure()
 scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP')
 
 ```
@@ -124,7 +121,7 @@ This is a simulation that doesn't take into account optical aberrations (only ge
 In general Qubic Soft uses only the GRF frame. However, selfcal_lib allows to use the ONAFP frame which is the one uned on the instrument.
 
 
-#### Create an Fringes object
+#### Create a Fringes object
 
 ```{python}
 # baseline = [142, 230] # for the FI
@@ -166,15 +163,16 @@ There are 2 functions, one with scatter plot and the other with pcolor.
 It is convenient to be sure of the coordinates and the image orientation. 
 
 ```{python}
-plt.subplots(1, 2)
-plt.suptitle(f'Baseline: {baseline}', fontsize=18)
-plt.subplots_adjust(wspace=0.3)
+fig, axs = plt.subplots(1, 2)
+ax1, ax2 = np.ravel(axs)
+fig.suptitle(f'Baseline: {baseline}', fontsize=18)
+fig.subplots_adjust(wspace=0.3)
 
-plt.subplot(121)
-scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP', title='Scatter plot', norm=None)
+scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP', fig=fig, ax=ax1, 
+                     title='Scatter plot', norm=None)
 
-plt.subplot(122)
-scal.pcolor_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP', title='pcolor plot', norm=None)
+scal.pcolor_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP', fig=fig, ax=ax2, 
+                    title='pcolor plot', norm=None)
 ```
 
 #### Get fringes from the combination 
@@ -183,9 +181,41 @@ scal.pcolor_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP', title='pcolor plo
 # Get all combinations
 x, y, S, Cminus_i, Sminus_ij, Cminus_j, Ci, Cj, Sij = Model_QS.get_all_combinations_power(doplot=True, 
                                                                                           verbose=True, 
-                                                                                          norm=SymLogNorm(5e-8))
+                                                                                          norm=SymLogNorm(5e-8), 
+                                                                                          s=150)
 
 print('shape of each combination :', Cminus_i.shape)
+```
+
+#### Look at the cycle acquired during measurement
+
+```{python}
+cycle = np.array((S, Cminus_i, Sminus_ij, S, Cminus_j, S, S)) - S
+cycle.shape
+```
+
+```{python}
+# TEs ans ASIC numbers
+tes = scal.get_all_tes_numbers(q)
+```
+
+```{python}
+for i in range(100, 120):
+    plt.figure()
+    plt.step(np.arange(0, 7), cycle[:, i], where='post', color='k')
+    
+    plt.axvspan(0, 1, color='k', alpha=0.2, label='All open')
+    plt.axvspan(3, 4, color='k', alpha=0.2)
+    plt.axvspan(5, 6, color='k', alpha=0.2)
+    plt.axvspan(1, 2, color='b', alpha=0.2, label='H1 close')
+    plt.axvspan(2, 3, color='g', alpha=0.2, label='H1 H2 close')
+    plt.axvspan(4, 5, color='c', alpha=0.2, label='H2 close')
+    
+    plt.xlim(0, 6)
+    plt.xlabel('Step index')
+    plt.ylabel('TOD')
+    plt.title(f'TES {tes[i, 1]} - ASIC {tes[i, 0]}')
+    plt.legend()
 ```
 
 ```{python}
@@ -193,25 +223,26 @@ print('shape of each combination :', Cminus_i.shape)
 
 # Complete one: S_tot - Cminus_i - Cminus_j + Sminus_ij + Ci +Cj
 x, y, fringes_true = Model_QS.get_fringes_from_combination(measured_comb=False,
-                                                           doplot=True, verbose=False)
+                                                           doplot=True, verbose=False, s=150)
 
 # Measured one: S_tot - Cminus_i - Cminus_j + Sminus_ij
 x, y, fringes_meas = Model_QS.get_fringes_from_combination(measured_comb=True,
-                                                           doplot=True, verbose=False)
+                                                           doplot=True, verbose=False, s=150)
 ```
 
 ```{python}
 # Look at the difference between both combinations
 
-plt.subplots(1, 2)
-plt.suptitle(f'Baseline: {baseline}', fontsize=18)
-plt.subplots_adjust(wspace=0.3)
+fig, axs = plt.subplots(1, 2)
+ax1, ax2 = axs.ravel()
+fig.suptitle(f'Baseline: {baseline}', fontsize=18)
+fig.subplots_adjust(wspace=0.3)
 
-plt.subplot(121)
-scal.scatter_plot_FP(q, x, y, fringes_true, frame='ONAFP', title='Complete combination', norm=None)
+scal.scatter_plot_FP(q, x, y, fringes_true, frame='ONAFP', 
+                     fig=fig, ax=ax1, title='Complete combination', norm=None, s=150)
 
-plt.subplot(122)
-scal.scatter_plot_FP(q, x, y, fringes_meas, frame='ONAFP', title='Measured combination', norm=None)
+scal.scatter_plot_FP(q, x, y, fringes_meas, frame='ONAFP', 
+                     fig=fig, ax=ax2, title='Measured combination', norm=None, s=150)
 ```
 
 # Power on the focal plane with Maynooth simulations
@@ -239,7 +270,6 @@ xONAFP, yONAFP, power = scal.get_power_Maynooth(rep, open_horns,
 print(xONAFP.shape)
 print(power.shape)
 
-plt.figure()
 scal.scatter_plot_FP(q, xONAFP, yONAFP, power, s=1, 
                    frame='ONAFP', 
                    title='Maynooth full resolution', 
@@ -262,7 +292,6 @@ xONAFP, yONAFP, power = scal.get_response_power(q,
                                               external_A=external_A, hwp_position=0, 
                                               verbose=True)
 
-plt.figure()
 scal.scatter_plot_FP(q, xONAFP, yONAFP, power, s=100, 
                        frame='ONAFP', 
                        title='Maynooth full resolution', 
@@ -291,8 +320,7 @@ print(Model_Maynooth.baseline)
 ```{python}
 xONAFP, yONAFP, fringes = Model_Maynooth.get_fringes(verbose=True)
 
-plt.figure()
-scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, s=None, 
+scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, s=200, 
                        frame='ONAFP', 
                        title='Maynooth at TES resolution', 
                        norm=None)
@@ -305,8 +333,7 @@ You can make the "true" combination or the measured one.
 ```{python}
 xONAFP, yONAFP, fringes_comb = Model_Maynooth.get_fringes_from_combination(measured_comb=True, verbose=True)
 
-plt.figure()
-scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes_comb, s=None, 
+scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes_comb, s=200, 
                    frame='ONAFP', 
                    title='Maynooth TES resolution', 
                    norm=None)

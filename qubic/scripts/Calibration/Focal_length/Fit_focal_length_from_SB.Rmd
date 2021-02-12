@@ -46,7 +46,7 @@ d.read_from_file(os.environ['QUBIC_DICT']+'pipeline_demo.dict')
 
 d['config'] = 'TD'
 d['synthbeam_kmax'] = 3
-d['nside'] = 128
+d['nside'] = 256
 NSIDE = d['nside']
 npix = 12 * NSIDE**2
 
@@ -58,22 +58,19 @@ s = qubic.QubicScene(d)
 q = qubic.QubicInstrument(d)
 ```
 
-```{python}
-q.detector.focal_length
-```
-
 ### Get real data
 
 ```{python}
 mydir = '/home/lmousset/QUBIC/Qubic_work/Calibration/datas/Synthetic_beams/'
 
 # === 2019 April
-# date = '2019-avril'
-# data_dir = mydir + date + '/synth_beam_150/Healpix/'
-# myname = date + '_Healpix_maps.pdf'
-# # Selection of good TES
-# PIX_ok = np.arange(1, 257)#[6, 9, 16, 22, 26, 27, 37, 50, 51, 58, 73, 74, 75, 76, 80, 83, 86, 87, 93, 107, 
-          #34, 135, 150, 170, 185, 186, 191, 195, 206, 210, 218, 219, 236] 
+date = '2019-avril'
+data_dir = mydir + date + '/synth_beam_160/Healpix/'
+myname = date + '_Healpix_maps.pdf'
+# Selection of good TES
+# PIX_ok = [6, 9, 16, 22, 26, 27, 37, 50, 51, 58, 73, 74, 75, 76, 80, 83, 86, 87, 93, 107, 
+#           34, 135, 150, 170, 185, 186, 191, 195, 206, 210, 218, 219, 236] 
+PIX_ok = [93]
 
 # === 2020 January
 # date = '2020-01-14'
@@ -98,11 +95,11 @@ mydir = '/home/lmousset/QUBIC/Qubic_work/Calibration/datas/Synthetic_beams/'
 # PIX_ok = np.arange(1, 257) 
 
 # === 2020 July
-date = '2020-07-30'
-data_dir = mydir + date + '/Healpix/'
-myname = date + '_Healpix_maps.pdf'
-# Selection of good TES
-PIX_ok = [2, 5, 9, 13, 14, 15, 19, 22, 23, 24, 25, 27, 28, 31, 33, 34, 51, 52, 61, 62, 64, 66, 67, 69, 70, 71, 72]#, 73,
+# date = '2020-07-30'
+# data_dir = mydir + date + '/Healpix/'
+# myname = date + '_Healpix_maps.pdf'
+# # Selection of good TES
+# PIX_ok = [2, 5, 9, 13, 14, 15, 19, 22, 23, 24, 25, 27, 28, 31, 33, 34, 51, 52, 61, 62, 64, 66, 67, 69, 70, 71, 72]#, 73,
 #           74, 75, 76, 80, 81, 82, 83, 85, 86, 87, 88, 93, 94, 95, 96, 107, 133, 134, 158, 160, 162, 163, 167, 197, 
 #           200, 201, 210, 216, 221, 255]
 
@@ -110,53 +107,46 @@ PIX_ok = [2, 5, 9, 13, 14, 15, 19, 22, 23, 24, 25, 27, 28, 31, 33, 34, 51, 52, 6
 ```
 
 ```{python}
-patch_radius = 15 # [deg]
+# Get TES coordinate and index_q, ordered as on the instrument
+xONAFP, yONAFP, FP_index, index_q = scal.get_TES_Instru_coords(q, frame='ONAFP')
+print(index_q.shape)
+```
+
+```{python}
+patch_radius = 20 # [deg]
 ndet = len(PIX_ok)
 print('Number of detectors:', ndet)
 mydata = []
-myindex_q = []
-mypix = []
+index_q_ok = []
 for PIX in PIX_ok:
+    print('\nPIX:', PIX)
+    # Convert to Qubic soft numerotation        
+    index_q_ok.append(index_q[PIX-1])
+    print('Index_q:', index_q_ok[-1])
     
-    # Convert to Qubic soft numerotation
-    if PIX < 129:
-        TES = PIX
-        ASIC = 1
-    else:
-        TES = PIX - 128
-        ASIC = 2
-    print(PIX, TES, ASIC)
-    # Avoid thermometers
-    if TES not in [4, 36, 68, 100]:
-    
-        xONAFP, yONAFP, FP_index, index_q = scal.TES_Instru2coord(TES, ASIC, q, frame='ONAFP')
-        print(FP_index, index_q)
-        myindex_q.append(index_q)
-        mypix.append(PIX)
-        
-        # Get the map
-        hdu = fits.open(data_dir + f'healpix_TESNum_{PIX}.fits')
-        print(hdu.info())
-        image = hdu[1].data
-        # For April 2019, maps have an extra dim
-        if image.ndim != 1:
-            image = image[0] 
+    # Get the map
+    hdu = fits.open(data_dir + f'healpix_TESNum_{PIX}.fits')
+    print(hdu.info())
+    image = hdu[1].data
+    # For April 2019, maps have an extra dim
+    if image.ndim != 1:
+        image = image[0] 
 
-        NSIDE_data = hp.get_nside(image)
-        print('Old NSIDE:', NSIDE_data)
-        
-        # Downgrade resolution
-        image = hp.ud_grade(image, NSIDE)
-        print('New NSIDE:',hp.get_nside(image))
+    NSIDE_data = hp.get_nside(image)
+    print('Old NSIDE:', NSIDE_data)
 
-        # Make a patch
-        vec = hp.ang2vec(0, 0, lonlat=True)
-        radius = np.deg2rad(patch_radius)
-        ipix_patch = hp.query_disc(NSIDE, vec, radius)
-        data_patch = image[ipix_patch]
-        npix_patch = np.shape(data_patch)[0]
-        print('#pix in the patch:', npix_patch)
-        mydata.append(data_patch)
+    # Downgrade resolution
+    image = hp.ud_grade(image, NSIDE)
+    print('New NSIDE:',hp.get_nside(image))
+
+    # Make a patch
+    vec = hp.ang2vec(0, 0, lonlat=True)
+    radius = np.deg2rad(patch_radius)
+    ipix_patch = hp.query_disc(NSIDE, vec, radius)
+    data_patch = image[ipix_patch]
+    npix_patch = np.shape(data_patch)[0]
+    print('#pix in the patch:', npix_patch)
+    mydata.append(data_patch)
 ```
 
 ```{python}
@@ -166,7 +156,7 @@ for PIX in PIX_ok:
 #         patch_mask = np.zeros(12 * NSIDE**2) + hp.UNSEEN
 #         patch_mask[ipix_patch] = data_patch
         
-#         hp.gnomview(patch_mask, reso=10, title=f'PIX {mypix[i]} - Index_q {myindex_q[i]}', min=0)
+#         hp.gnomview(patch_mask, reso=10, title=f'PIX {PIX_ok[i]} - Index_q {index_q_ok[i]}', min=0)
 #         # hp.visufunc.projscatter(0., 0., color='r', marker='+', lonlat=True, s=100)
 #         hp.graticule()
     
@@ -178,7 +168,7 @@ for i, data_patch in enumerate(mydata):
     patch_mask = np.zeros(12 * NSIDE**2) + hp.UNSEEN
     patch_mask[ipix_patch] = data_patch
 
-    hp.gnomview(patch_mask, reso=10, title=f'PIX {mypix[i]} - Index_q {myindex_q[i]}', min=0)
+    hp.gnomview(patch_mask, reso=10, title=f'PIX {PIX_ok[i]} - Index_q {index_q_ok[i]}', min=0)
     # hp.visufunc.projscatter(0., 0., color='r', marker='+', lonlat=True, s=100)
     hp.graticule()
 ```
@@ -186,13 +176,14 @@ for i, data_patch in enumerate(mydata):
 ### Model: Simulated beam
 
 ```{python}
-def model(theta, index_q, d, s, radius=15, doplot=False):
+def model(theta, index_q, d, s, radius=20, nu=150e9, doplot=False):
     fl, phi = theta
     print('theta:', theta)
     
     nside = d['nside']
     
     # Change the focal length
+    d['filter_nu'] = nu
     d['focal_length'] = fl
     q = qubic.QubicInstrument(d)
     print('Focal length = ', q.optics.focal_length)
@@ -201,11 +192,11 @@ def model(theta, index_q, d, s, radius=15, doplot=False):
     sb = q.get_synthbeam(s, idet=index_q, external_A=None, hwp_position=0)
     
     # Rotate
-    Rotator = hp.Rotator(rot=(0, 90, phi), deg=True)
+    Rotator = hp.Rotator(rot=(0, 90, 180+phi), deg=True)
     sb_rot = Rotator.rotate_map_alms(sb)
     
     # Make a patch
-    vec = hp.ang2vec(180, 0, lonlat=True)
+    vec = hp.ang2vec(0, 0, lonlat=True)
     radius = np.deg2rad(radius)
     ipix_patch = hp.query_disc(nside, vec, radius)
 
@@ -229,10 +220,10 @@ theta_fake = (0.3, 0)
 
 mydata_fake = []
 gains_fake = np.zeros(ndet)
-for i, idet in enumerate(myindex_q):
-    M = model(theta_fake, idet, d, s, doplot=False)
-    gains_fake[i] = np.random.rand(1) * 5
-    noise = np.random.normal(0., 10., M.shape)
+for i, idet in enumerate(index_q_ok):
+    M = model(theta_fake, idet, d, s, nu=160e9, doplot=True)
+    gains_fake[i] = 1.#np.random.rand(1) * 5
+    noise = np.random.normal(0., 10., M.shape) * 0.
     mydata_fake.append((gains_fake[i] * M) + noise)
 
 print(gains_fake)
@@ -241,6 +232,52 @@ print(gains_fake)
 ### Compare real and fake data
 
 ```{python}
+import matplotlib.pyplot as plt
+import matplotlib.colors as colors
+import numpy as np
+import seaborn as sns
+from matplotlib.colors import ListedColormap
+
+def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=1000):
+    new_cmap = colors.LinearSegmentedColormap.from_list(
+        'trunc({n},{a:.2f},{b:.2f})'.format(n=cmap.name, a=minval, b=maxval),
+        cmap(np.linspace(minval, maxval, n)))
+    return new_cmap
+
+# arr = np.linspace(0, 50, 100).reshape((10, 10))
+# fig, ax = plt.subplots(ncols=2)
+
+cmap = plt.get_cmap('cubehelix')
+# cmap = ListedColormap(sns.color_palette("mako").as_hex())
+# new_cmap = sns.color_palette("mako")
+new_cmap = truncate_colormap(cmap, 0., 0.35)
+# ax[0].imshow(arr, interpolation='nearest', cmap=cmap)
+# ax[1].imshow(arr, interpolation='nearest', cmap=new_cmap)
+# plt.show()
+
+```
+
+```{python}
+### Save a pdf
+# myname = date + '_Healpix_maps_simu_data.pdf'
+# with PdfPages(mydir + myname) as pp:
+#     for idx in range(ndet):
+#         real = np.zeros(12 * NSIDE**2) + hp.UNSEEN
+#         real[ipix_patch] = mydata[idx]
+
+#         fake = np.zeros(12 * NSIDE**2) + hp.UNSEEN
+#         fake[ipix_patch] = mydata_fake[idx]
+
+#         plt.figure(figsize=(12, 8))
+#         plt.suptitle(f'PIX {PIX_ok[idx]} - Index_q {index_q_ok[idx]}')
+#         hp.gnomview(real, sub=(121), reso=15, title='Real', min=0., max=None)#norm=SymLogNorm(1e3))
+#         hp.gnomview(fake, sub=(122), reso=15, title='Fake', min=0., max=None)#norm=SymLogNorm(1e4))
+#         hp.graticule()
+#         hp.visufunc.projscatter(0., 0., color='r', marker='+', lonlat=True, s=100)
+        
+#         pp.savefig()
+        
+### Plot in the notebook
 for idx in range(ndet):
     real = np.zeros(12 * NSIDE**2) + hp.UNSEEN
     real[ipix_patch] = mydata[idx]
@@ -249,28 +286,12 @@ for idx in range(ndet):
     fake[ipix_patch] = mydata_fake[idx]
 
     plt.figure(figsize=(12, 8))
-    plt.suptitle(f'PIX {PIX_ok[idx]} - Index_q {myindex_q[idx]}')
-    hp.gnomview(real, sub=(121), reso=15, title='Real', min=0., max=1e6)#norm=SymLogNorm(1e3))
-    hp.gnomview(fake, sub=(122), reso=15, title='Fake', min=0., max=1e6)#norm=SymLogNorm(1e4))
+    plt.suptitle(f'PIX {PIX_ok[idx]} - Index_q {index_q_ok[idx]}')
+    hp.gnomview(real, sub=(121), reso=15, title='Measurement', min=0., max=5e4, cmap=new_cmap)#norm=SymLogNorm(1e3))
+    hp.gnomview(fake, sub=(122), reso=15, title='Simulation', min=0., max=1e6, cmap=new_cmap)#norm=SymLogNorm(1e4))
     hp.graticule()
-    hp.visufunc.projscatter(0., 0., color='r', marker='+', lonlat=True, s=100)
+#     hp.visufunc.projscatter(0., 0., color='r', marker='+', lonlat=True, s=100)
 
-```
-
-```{python}
-plt.figure()
-q.horn.plot(edgecolor_open='k', facecolor_open='grey')
-plt.axis('off')
-plt.savefig('/home/lmousset/Desktop/horn_array.png')
-```
-
-```{python}
-d['config'] = 'FI'
-q = qubic.QubicInstrument(d)
-plt.figure()
-q.detector.plot(facecolor='grey', fill=True)
-plt.axis('off')
-plt.savefig('/home/lmousset/Desktop/detector_array.png')
 ```
 
 ### Covariance matrix of the noise

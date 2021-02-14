@@ -83,11 +83,13 @@ class FringesAnalysis:
         self.nsteps = len(self.allh)
         self.expected_period = self.stable_time * self.nsteps
 
+        self.detectors_sort = self.find_goodTES()
         if refTESnum is not None:
             self.refTESnum = refTESnum
             self.refASICnum = refASICnum
         else:
-            self.goodTES, self.goodASIC, self.refTESnum, self.refASICnum = self.find_goodTES()
+            self.refTESnum = self.detectors_sort[0, 0]
+            self.refASICnum = self.detectors_sort[0, 1]
 
         # Reference period determine on reference TES
         _, _, self.refperiod = self.find_right_period(self.refTESnum, self.refASICnum)
@@ -244,31 +246,22 @@ class FringesAnalysis:
                 err_params[index, :] = np.sqrt(np.diag(pcov))
 
                 residuals_time[index, :] = dfold[j, :] - ft.simsig_fringes(tfold, self.stable_time, popt)
-        # Select TES that look good (arbitrary)
-        goodTES, goodASIC = [], []
-        for j in range(self.ndet):
-            if np.std(residuals_time[j, :]) < np.std(residuals_time) / 10:
-                if j < self.ndet_oneASIC:
-                    goodTES.append(j + 1)
-                    goodASIC.append(1)
-                else:
-                    goodTES.append(j + 1 - self.ndet_oneASIC)
-                    goodASIC.append(2)
-        # Get the best one
-        bestTES = np.argmin(np.std(residuals_time, axis=1)) + 1
-        if bestTES <= self.ndet_oneASIC:
-            bestASIC = 1
-        else:
-            bestTES -= self.ndet_oneASIC
-            bestASIC = 2
+        # Order the TES as function of the residual on the fit
+        std = np.std(residuals_time, axis=1)
+        std_argsort = np.argsort(std)
+        detectors_sort = np.zeros((self.ndet, 2), dtype=int)
+        detectors_sort[:, 0] = (std_argsort % self.ndet_oneASIC) + 1  # TES
+        detectors_sort[:, 1]  = (std_argsort // self.ndet_oneASIC) + 1 # ASIC
+
+        # Plot the 5 best TES
         if self.verbose:
-            print('******** Good TES found:', goodTES, goodASIC)
+            print('******** 10 best TES found:', detectors_sort[:10, 0], detectors_sort[:10, 1])
         if doplot:
-            for p in range(len(goodTES)):
-                plot_folding_fit(goodTES[p], goodASIC[p], tfold, datafold, residuals_time,
+            for p in range(5):
+                plot_folding_fit(detectors_sort[p, 0], detectors_sort[p, 1], tfold, datafold, residuals_time,
                                  self.expected_period, params, err_params)
 
-        return goodTES, goodASIC, bestTES, bestASIC
+        return detectors_sort
 
     def _make_w_Michel(self, t, tm1=12, tm2=2, ph=5):
         # w is made to make the combination to see fringes with Michel's method
@@ -439,7 +432,7 @@ class FringesAnalysis:
                 if doplot:
                     ttt = xx * self.stable_time + self.stable_time / 2
                     plt.figure()
-                    plt.title('Fit the slope on all horn open - 1st cycle')
+                    plt.title(f'Fit the slope on all horn open - Cycle {j+1}')
                     plt.plot(ttt, (pars[0] * xx + pars[1]), 'k--', label='Linear fit all open')
                     plt.step(ttt, m_points[j, :], color='b', where='mid', label='Original points')
                     plt.step(ttt, m_points_rm[j, :], color='r', where='mid', label='After correction')
@@ -613,7 +606,7 @@ class FringesAnalysis:
                                                                 disp=False)
 
         if rm_slope_percycle:
-            m_points= self.remove_slope_percycle(m_points, err_m_points, doplot=doplot)
+            m_points = self.remove_slope_percycle(m_points, err_m_points, doplot=doplot)
         if rm_slope_allcycles:
             # Fit a slope between the "all horns open" configurations and remove it.
             m_points = self.remove_slope_allcycles(m_points, err_m_points, doplot=doplot)
@@ -647,12 +640,12 @@ class FringesAnalysis:
         for i in range(self.nsteps):
             Mcycles[i], err_Mcycles[i] = ft.meancut(m_points[:Ncycles_to_use, i], nsig=3, med=median, disp=False)
 
-        # Residuals in time domain (not too relevant as some baselines were removed
-        # as a result, large fluctuations in time-domain are usually well removed)
-        newdroll = np.zeros_like(droll)
-        for i in range(self.nsteps):
-            newdroll[:, i * self.nsp_per // self.nsteps:(i + 1) * self.nsp_per // self.nsteps] = Mcycles[i]
-        residuals_time = droll - newdroll
+        # # Residuals in time domain (not too relevant as some baselines were removed
+        # # as a result, large fluctuations in time-domain are usually well removed)
+        # newdroll = np.zeros_like(droll)
+        # for i in range(self.nsteps):
+        #     newdroll[:, i * self.nsp_per // self.nsteps:(i + 1) * self.nsp_per // self.nsteps] = Mcycles[i]
+        # residuals_time = droll - newdroll
 
         # We would rather calculate the relevant residuals in the binned domain
         # between the final values and those after levelling
@@ -671,14 +664,13 @@ class FringesAnalysis:
 
         if doplot:
             self.plot_average_over_steps(m_points, err_m_points, Mcycles, err_Mcycles)
-            self._plot_folding_residuals(droll, newdroll, residuals_time)
 
         return Mcycles, err_Mcycles, TODresiduals
 
     def analyse_fringes(self, skip_rise=0.2, skip_fall=0.1, median=True, remove_median_allh=False,
                           Ncycles_to_use=None,
                           rm_slope_percycle=False, rm_slope_allcycles=False,
-                          force_period=None, force_t0=None, doplot=True):
+                          force_period=None, force_t0=None, doplotTESsort=0):
 
         # ================= Determine the correct period reference TES ========
         if force_period is None:
@@ -692,7 +684,7 @@ class FringesAnalysis:
 
         # =============== Determine t0 on reference TES ======================
         if force_t0 is None:
-            t0 = self.find_t0(period, doplot=doplot)
+            t0 = self.find_t0(period, doplot=True)
             if self.verbose:
                 print('Found t0 {0:5.3f}s on TES {1:}, ASIC {2:}'.format(t0, self.refTESnum, self.refASICnum))
         else:
@@ -711,27 +703,29 @@ class FringesAnalysis:
         fringes1D_percycle = np.zeros((self.ndet, self.ncycles))
         err_fringes1D_percycle = np.zeros((self.ndet, self.ncycles))
         weights = np.array([1. / 3, -1, 1, 1. / 3, -1, 1. / 3])
+
         for i, ASIC in enumerate(self.asics):
             print(f'*********** Starting ASIC {ASIC} **************')
             for j, TES in enumerate(np.arange(1, 129)):
+                if TES == self.detectors_sort[doplotTESsort, 0] and ASIC == self.detectors_sort[doplotTESsort, 1]:
+                    print(f'Making plots for TES {TES} - ASIC {ASIC} - Goodness rank {doplotTESsort + 1}')
+                    doplot = True
+                    speak = True
+                else:
+                    doplot = False
+                    speak = False
 
                 index = i * self.ndet_oneASIC + j
-                if (i == (self.refASICnum - 1)) & (j == (self.refTESnum - 1)):
-                    speak = True
-                    thedoplot = True * doplot
-                else:
-                    speak = False
-                    thedoplot = False
 
                 timeTES = self.tdata[i, :]
                 dataTES = self.data[i, j, :]
                 # Fold, roll and remove the median of allh
-                tfold, dfold = self.resample_fold_oneTES(timeTES, dataTES, period=period, doplot=thedoplot)
+                tfold, dfold = self.resample_fold_oneTES(timeTES, dataTES, period=period, doplot=doplot)
                 droll = self.roll_oneTES(dfold, t0, period=period)
                 if remove_median_allh:
                     droll = self.remove_median_allh(tfold, droll, period,
                                                     skip_rise=skip_rise, skip_fall=skip_fall)
-                if thedoplot:
+                if doplot:
                     self._plot_folding(tfold, droll, period, skip_rise=skip_rise, skip_fall=skip_fall,
                                          suptitle='Data fold after rolling and removing allh average')
 
@@ -745,7 +739,7 @@ class FringesAnalysis:
                     median=median,
                     rm_slope_percycle=rm_slope_percycle,
                     rm_slope_allcycles=rm_slope_allcycles,
-                    doplot=thedoplot)
+                    doplot=doplot)
                 # Make the combination for each cycle
                 for j in range(self.ncycles):
                     fringes1D_percycle[index, j], err_fringes1D_percycle[index, j] = weighted_sum(m_points[index, j, :],
@@ -760,29 +754,31 @@ class FringesAnalysis:
                     median=median,
                     Ncycles_to_use=Ncycles_to_use,
                     speak=speak,
-                    doplot=thedoplot)
+                    doplot=doplot)
                 fringes1D[index], err_fringes1D[index] = weighted_sum(Mcycles[index, :], err_Mcycles[index, :], weights)
+                if doplot:
+                    self._plot_TOD_reconstruction(droll, Mcycles[index, :])
 
         # Get the good TES from a cut on residuals
         mm, ss = ft.meancut(np.log10(TODresiduals), nsig=3)
         oktes = np.ones(self.ndet)
         oktes[np.abs(np.log10(TODresiduals) - mm) > 2 * ss] = np.nan
 
-        if doplot:
-            # Fringes
-            fig, axs = plt.subplots(1, 2, figsize=(12, 6))
-            fig.subplots_adjust(wspace=0.5)
-            fig.suptitle(f'Fringes with JC method - BL {self.baseline} - {self.date}')
-            ax0, ax1 = axs.ravel()
-            plot_fringes_imshow_interp(fringes1D, fig=fig, ax=ax0)
-            plot_fringes_scatter(self.q, self.xTES, self.yTES, fringes1D, s=80, fig=fig, ax=ax1)
+        # Final plots
+        # Fringes
+        fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+        fig.subplots_adjust(wspace=0.5)
+        fig.suptitle(f'Fringes with JC method - BL {self.baseline} - {self.date}')
+        ax0, ax1 = axs.ravel()
+        plot_fringes_imshow_interp(fringes1D, fig=fig, ax=ax0)
+        plot_fringes_scatter(self.q, self.xTES, self.yTES, fringes1D, s=80, fig=fig, ax=ax1)
 
-            # Error
-            plot_fringes_errors(self.q, fringes1D, err_fringes1D, self.xTES, self.yTES,
-                                s=80, normalize=False, lim=400., frame='ONAFP')
+        # Error
+        plot_fringes_errors(self.q, fringes1D, err_fringes1D, self.xTES, self.yTES,
+                            s=80, normalize=False, lim=400., frame='ONAFP')
 
-            # TOD Residuals
-            plot_residuals(self.q, TODresiduals, oktes, self.xTES, self.yTES)
+        # TOD Residuals
+        plot_residuals(self.q, TODresiduals, oktes, self.xTES, self.yTES)
 
         return m_points, err_m_points, Mcycles, err_Mcycles, fringes1D, err_fringes1D, \
                fringes1D_percycle, err_fringes1D_percycle, TODresiduals, oktes
@@ -857,7 +853,7 @@ class FringesAnalysis:
                 lab = None
             ax.errorbar(ttt, m_points[i, :],
                          yerr=err_m_points[i, :],
-                         xerr=self.stable_time / 2, fmt='o', alpha=0.1 + i*0.025, color='b', label=lab)
+                         xerr=self.stable_time / 2, fmt='o', alpha=0.1 + i*0.025, color='blue', label=lab)
         ax.errorbar(ttt, Mcycles, yerr=err_Mcycles, xerr=self.stable_time / 2, color='r',
                      label='Mean over cycles', fmt='rx')
         ax.set_xlabel('Time [s]')
@@ -865,14 +861,17 @@ class FringesAnalysis:
         ax.legend()
         return
 
-    def _plot_folding_residuals(self, dfold, newdfold, residuals_time, figsize=(12, 10)):
+    def _plot_TOD_reconstruction(self, dfold, Mcycles, figsize=(12, 10)):
+        tf = self.ncycles * self.nsteps * self.stable_time
+        tt = np.arange(0, tf, self.stable_time)
+        time = np.linspace(0., tf, self.ncycles * self.nsp_per)
+        TOD_reconstructed = np.tile(Mcycles, self.ncycles)
         fig = plt.figure(figsize=figsize)
         ax = fig.gca()
-        ax.plot(np.ravel(dfold), label='Input signal')
-        ax.plot(np.ravel(newdfold), label='Reconstructed')
-        ax.plot(np.ravel(residuals_time), label='Residuals in time')
+        ax.plot(time, np.ravel(dfold), label='Input signal')
+        ax.step(tt, TOD_reconstructed, where='post', label='Reconstructed TOD with Mcycles')
         ax.set_xlabel('Time samples')
-        ax.set_ylabel('Time domain signal')
+        ax.set_ylabel('TOD')
         ax.legend()
         return
 

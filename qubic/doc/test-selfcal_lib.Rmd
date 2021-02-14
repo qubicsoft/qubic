@@ -200,9 +200,9 @@ tes = scal.get_all_tes_numbers(q)
 ```
 
 ```{python}
-for i in range(100, 120):
+for i in range(100, 102):
     plt.figure()
-    plt.step(np.arange(0, 7), cycle[:, i], where='post', color='k')
+    plt.step(np.arange(0, 7), cycle[:, i], where='post', color='r')
     
     plt.axvspan(0, 1, color='k', alpha=0.2, label='All open')
     plt.axvspan(3, 4, color='k', alpha=0.2)

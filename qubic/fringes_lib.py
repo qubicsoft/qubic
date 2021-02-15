@@ -272,58 +272,6 @@ class FringesAnalysis:
 
         return detectors_sort, oktes
 
-    # def _make_w_Michel(self, t, tm1=12, tm2=2, ph=5):
-    #     # w is made to make the combination to see fringes with Michel's method
-    #     w = np.zeros_like(t)
-    #     wcheck = np.zeros_like(t)
-    #     for i in range(len(w)):
-    #         if (((i - ph) % self.refperiod) >= tm1) and (((i - ph) % self.refperiod) < self.refperiod - tm2):
-    #             if (((i - ph) // self.refperiod) == 0) | (((i - ph) // self.refperiod) == 3):
-    #                 w[i] = 1.
-    #             if (((i - ph) // self.refperiod) == 1) | (((i - ph) // self.refperiod) == 2):
-    #                 w[i] = -1.
-    #
-    #     return w, wcheck
-    #
-    # def analyse_fringes_Michel(self, median=False, verbose=True, doplot=True):
-    #     """
-    #     Compute the fringes with Michel's method.
-    #     """
-    #     fringes1D = np.zeros(self.ndet)
-    #     dfold = np.zeros((self.ndet, self.nbins))
-    #
-    #     for i, ASIC in enumerate(self.asics):
-    #
-    #         # Fold and filter the data
-    #         fold, tfold, _, _ = ft.fold_data(self.tdata[i, :],
-    #                                          self.data[i, :, :],
-    #                                          self.refperiod,
-    #                                          self.lowcut,
-    #                                          self.highcut,
-    #                                          self.nbins,
-    #                                          notch=self.notch,
-    #                                          median=median,
-    #                                          silent=verbose,
-    #                                          )
-    #         dfold[self.ndet_oneASIC * i:self.ndet_oneASIC * (i + 1), :] = fold
-    #
-    #         # Michel method
-    #         w, _ = self._make_w_Michel(tfold)
-    #         for j in range(self.ndet_oneASIC):
-    #             index = self.ndet_oneASIC * i + j
-    #             fringes1D[index] = np.sum(fold[j, :] * w)
-    #
-    #     if doplot:
-    #         # Fringes
-    #         fig, axs = plt.subplots(1, 2, figsize=(13, 7))
-    #         fig.subplots_adjust(wspace=0.5)
-    #         fig.suptitle(f'Fringes with Michel method - BL {self.baseline} - {self.date}')
-    #         ax0, ax1 = axs.ravel()
-    #         plot_fringes_imshow_interp(fringes1D, fig=fig, ax=ax0)
-    #         plot_fringes_scatter(self.q, self.xTES, self.yTES, fringes1D, s=80, fig=fig, ax=ax1)
-    #
-    #     return tfold, dfold, fringes1D
-
     def find_high_derivative(self, signal):
         """Calculate the derivative of a signal and find where it is high."""
         dsignal = np.abs(np.gradient(signal))
@@ -554,41 +502,41 @@ class FringesAnalysis:
     #
     #     return m_points_rm
 
-    def correct_high_step(self, m_points, doplot=True):
-        xx = np.arange(self.nsteps * self.ncycles)
-        ttt = xx * self.stable_time + self.stable_time / 2
-
-        # Stot = np.zeros(self.ncycles)
-        # for j in range(self.ncycles):
-        #     Stot[j], _ = ft.meancut(m_points[j, self.allh], nsig=3)
-        Stot = np.mean(m_points[:, self.allh], axis=1)
-        # high1, _ = ft.meancut(m_points[:, 1] - Stot, nsig=3)
-        # high2, _ = ft.meancut(m_points[:, 2] - Stot, nsig=3)
-        # high3, _ = ft.meancut(m_points[:, 4] - Stot, nsig=3)
-        high1 = np.median(m_points[:, 1] - Stot)
-        high2 = np.median(m_points[:, 2] - Stot)
-        high3 = np.median(m_points[:, 4] - Stot)
-        m_points_corr = np.copy(m_points)
-        for j in range(self.ncycles):
-            m_points_corr[j, 1] = Stot[j] + high1 # Step 1
-            m_points_corr[j, 2] = Stot[j] + high2 # Step 2
-            m_points_corr[j, 4] = Stot[j] + high3 # Step 4
-
-        if doplot:
-            plt.figure()
-            # plt.step(ttt[:8*self.nsteps], np.ravel(m_points[:8, :]), where='mid', label='Old')
-            plt.plot(ttt[1::6], np.ravel(m_points[:, 1]), 'r', label='Old h1')
-            plt.plot(ttt[2::6], np.ravel(m_points[:, 2]), 'b', label='Old h1h2')
-            plt.plot(ttt[4::6], np.ravel(m_points[:, 4]), 'g', label='Old h2')
-            plt.plot(ttt[self.allh * self.ncycles], np.ravel(m_points[:, self.allh]), 'k', label='All open')
-
-            # plt.step(ttt[:8*self.nsteps], np.ravel(m_points[:8, :]), where='mid', label='New')
-            plt.plot(ttt[1::6], np.ravel(m_points_corr[:, 1]),  'r--', label='New h1')
-            plt.plot(ttt[2::6], np.ravel(m_points_corr[:, 2]), 'b--', label='New h1h2')
-            plt.plot(ttt[4::6], np.ravel(m_points_corr[:, 4]), 'g--', label='New h2')
-            plt.legend()
-
-        return m_points_corr
+    # def correct_high_step(self, m_points, doplot=True):
+    #     xx = np.arange(self.nsteps * self.ncycles)
+    #     ttt = xx * self.stable_time + self.stable_time / 2
+    #
+    #     # Stot = np.zeros(self.ncycles)
+    #     # for j in range(self.ncycles):
+    #     #     Stot[j], _ = ft.meancut(m_points[j, self.allh], nsig=3)
+    #     Stot = np.mean(m_points[:, self.allh], axis=1)
+    #     # high1, _ = ft.meancut(m_points[:, 1] - Stot, nsig=3)
+    #     # high2, _ = ft.meancut(m_points[:, 2] - Stot, nsig=3)
+    #     # high3, _ = ft.meancut(m_points[:, 4] - Stot, nsig=3)
+    #     high1 = np.median(m_points[:, 1] - Stot)
+    #     high2 = np.median(m_points[:, 2] - Stot)
+    #     high3 = np.median(m_points[:, 4] - Stot)
+    #     m_points_corr = np.copy(m_points)
+    #     for j in range(self.ncycles):
+    #         m_points_corr[j, 1] = Stot[j] + high1 # Step 1
+    #         m_points_corr[j, 2] = Stot[j] + high2 # Step 2
+    #         m_points_corr[j, 4] = Stot[j] + high3 # Step 4
+    #
+    #     if doplot:
+    #         plt.figure()
+    #         # plt.step(ttt[:8*self.nsteps], np.ravel(m_points[:8, :]), where='mid', label='Old')
+    #         plt.plot(ttt[1::6], np.ravel(m_points[:, 1]), 'r', label='Old h1')
+    #         plt.plot(ttt[2::6], np.ravel(m_points[:, 2]), 'b', label='Old h1h2')
+    #         plt.plot(ttt[4::6], np.ravel(m_points[:, 4]), 'g', label='Old h2')
+    #         plt.plot(ttt[self.allh * self.ncycles], np.ravel(m_points[:, self.allh]), 'k', label='All open')
+    #
+    #         # plt.step(ttt[:8*self.nsteps], np.ravel(m_points[:8, :]), where='mid', label='New')
+    #         plt.plot(ttt[1::6], np.ravel(m_points_corr[:, 1]),  'r--', label='New h1')
+    #         plt.plot(ttt[2::6], np.ravel(m_points_corr[:, 2]), 'b--', label='New h1h2')
+    #         plt.plot(ttt[4::6], np.ravel(m_points_corr[:, 4]), 'g--', label='New h2')
+    #         plt.legend()
+    #
+    #     return m_points_corr
 
     def average_over_points_oneTES(self, tfold, droll, period, skip_rise=0., skip_fall=0.,
                                    median=True, rm_slope_percycle=False, rm_slope_allcycles=False, doplot=True):
@@ -616,10 +564,10 @@ class FringesAnalysis:
 
         if rm_slope_percycle:
             m_points = self.remove_slope_percycle(m_points, err_m_points, doplot=doplot)
-        if rm_slope_allcycles:
-            # Fit a slope between the "all horns open" configurations and remove it.
-            m_points = self.remove_slope_allcycles(m_points, err_m_points, doplot=doplot)
-            m_points = self.correct_high_step(m_points, doplot=doplot)
+        # if rm_slope_allcycles:
+        #     # Fit a slope between the "all horns open" configurations and remove it.
+        #     m_points = self.remove_slope_allcycles(m_points, err_m_points, doplot=doplot)
+        #     m_points = self.correct_high_step(m_points, doplot=doplot)
 
         return m_points, err_m_points
 
@@ -1204,54 +1152,3 @@ def plot_folding_fit(TES, ASIC, tfold, datafold, residuals_time, period,
     plt.ylim(-2.5, 2.5)
     return
 
-
-# def plot_residuals(q, TODresiduals, oktes, xTES, yTES, frame='ONAFP', suptitle=None):
-#     _, _, TODresiduals = remove_thermometers(xTES, yTES, TODresiduals)
-#     xTES, yTES, oktes = remove_thermometers(xTES, yTES, oktes)
-#
-#     mm, ss = ft.meancut(np.log10(TODresiduals), 3)
-#
-#     fig, axs = plt.subplots(1, 3)
-#     fig.suptitle(suptitle)
-#     fig.subplots_adjust(wspace=0.5)
-#     ax0, ax1, ax2 = axs
-#
-#     ax0.hist(np.log10(TODresiduals), bins=20, label='{0:5.2f} +/- {1:5.2f}'.format(mm, ss))
-#     ax0.axvline(x=mm, color='r', ls='-', label='Mean')
-#     ax0.axvline(x=mm - ss, color='r', ls='--', label='1 sigma')
-#     ax0.axvline(x=mm + ss, color='r', ls='--')
-#     ax0.axvline(x=mm - 2 * ss, color='r', ls=':', label='2 sigma')
-#     ax0.axvline(x=mm + 2 * ss, color='r', ls=':')
-#     ax0.set_xlabel('np.log10(TOD Residuals)')
-#     ax0.set_title('Histogram residuals')
-#     ax0.legend()
-#
-#     scal.scatter_plot_FP(q, xTES, yTES, oktes, frame=frame,
-#                          fig=fig, ax=ax1, cmap='bwr', cbar=False, s=60, title='TES OK (2sig)')
-#
-#     scal.scatter_plot_FP(q, xTES, yTES, TODresiduals * oktes, frame=frame,
-#                          fig=fig, ax=ax2, cmap='bwr', cbar=True, unit='', s=60, title='TOD Residuals')
-#     return
-
-
-# def plot_fringes_errors(q, fringes1D, err_fringes1D, xTES, yTES, frame='ONAFP',
-#                         s=None, normalize=True, lim=1., suptitle=None):
-#     _, _, fringes1D = remove_thermometers(xTES, yTES, fringes1D)
-#     xTES, yTES, err_fringes1D = remove_thermometers(xTES, yTES, err_fringes1D)
-#
-#     if normalize:
-#         fringes1D /= np.nanstd(fringes1D)
-#         err_fringes1D /= np.nanstd(err_fringes1D)
-#
-#     fig, axs = plt.subplots(1, 2)
-#     fig.suptitle(suptitle)
-#     fig.subplots_adjust(wspace=0.5)
-#     ax0, ax1 = axs
-#     scal.scatter_plot_FP(q, xTES, yTES, err_fringes1D, frame=frame,
-#                          fig=fig, ax=ax0, cbar=True, unit='', s=s, title='Errors',
-#                          vmin=0, vmax=lim)
-#
-#     scal.scatter_plot_FP(q, xTES, yTES, np.abs(fringes1D / err_fringes1D), frame=frame,
-#                          fig=fig, ax=ax1, cbar=True, unit='', s=s, title='|Values / Errors|',
-#                          vmin=0, vmax=3)
-#     return

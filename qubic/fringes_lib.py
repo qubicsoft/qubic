@@ -272,13 +272,6 @@ class FringesAnalysis:
 
         return detectors_sort, oktes
 
-    def find_high_derivative(self, signal):
-        """Calculate the derivative of a signal and find where it is high."""
-        dsignal = np.abs(np.gradient(signal))
-        md, sd = ft.meancut(dsignal, 3)
-        thr = np.abs(dsignal - md) > (3 * sd)
-        return dsignal, thr
-
     def find_high_derivative_clusters(self, tfold, thr, period):
         """ Find clusters of high derivatives: each time we take the first high derivative element."""
 
@@ -309,7 +302,7 @@ class FringesAnalysis:
         msignal = np.mean(dfold, axis=0)
 
         # Calculate the derivative and find where it is high
-        dsignal, thr = self.find_high_derivative(msignal)
+        dsignal, thr = find_high_derivative(msignal)
 
         # Find clusters of high derivatives
         start_times = self.find_high_derivative_clusters(tfold, thr, period)
@@ -940,6 +933,14 @@ def read_fits_fringes(file):
 
 
 # ============== Tool functions ==============
+def find_high_derivative(signal):
+    """Calculate the derivative of a signal and find where it is high."""
+    dsignal = np.abs(np.gradient(signal))
+    md, sd = ft.meancut(dsignal, 3)
+    thr = np.abs(dsignal - md) > (3 * sd)
+    return dsignal, thr
+
+
 def cut_data(t0, tf, tdata, data):
     """
     Cut the TODs from t0 to tf.

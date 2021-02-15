@@ -85,7 +85,7 @@ class FringesAnalysis:
         self.nsteps = len(self.allh)
         self.expected_period = self.stable_time * self.nsteps
 
-        self.detectors_sort, self.oktes = self.find_goodTES()
+        self.detectors_sort, self.oktes, self.ctimes = self.find_goodTES()
         if self.verbose:
             print('******** 10 best TES found:', self.detectors_sort[:10, 0], self.detectors_sort[:10, 1])
             print('******** Bad detectors:', int(len(self.oktes) - np.nansum(self.oktes)), '/', len(self.oktes))
@@ -206,6 +206,7 @@ class FringesAnalysis:
         between the fit and the signal. They are computed for each TES.
         """
 
+        ctimes = np.zeros((self.nasics, self.ndet_oneASIC))
         params = np.zeros((self.ndet, self.nsteps + 2))
         err_params = np.zeros_like(params)
         datafold = np.zeros((self.ndet, self.nbins))
@@ -234,7 +235,7 @@ class FringesAnalysis:
             param_guess = [0.1, 0.] + [1.] * self.nsteps
             for j in range(self.ndet_oneASIC):
                 index = self.ndet_oneASIC * i + j
-                # With curve_fit, it is not possible to have 'args'
+                # With curve_fit, it is not possible to have 'args' so we use a lambda function
                 popt, pcov = sop.curve_fit(lambda tfold, ctime, tstart, a0, a1, a2, a3, a4, a5:
                                            ft.simsig_fringes(tfold,
                                                              self.stable_time,
@@ -249,11 +250,14 @@ class FringesAnalysis:
                                            maxfev=10000
                                            )
                 params[index, :] = popt
+                # Take the time constant of the detectors
+                ctimes[i, j] = popt[0]
                 err_params[index, :] = np.sqrt(np.diag(pcov))
 
                 residuals_time[index, :] = dfold[j, :] - ft.simsig_fringes(tfold, self.stable_time, popt)
-        # Order the TES as function of the residual on the fit
 
+
+        # Order the TES as function of the residual on the fit
         std = np.std(residuals_time, axis=1)
         std_argsort = np.argsort(std)
         detectors_sort = np.zeros((self.ndet, 2), dtype=int)
@@ -270,7 +274,7 @@ class FringesAnalysis:
                 plot_folding_fit(detectors_sort[p, 0], detectors_sort[p, 1], tfold, datafold, residuals_time,
                                  self.expected_period, params, err_params)
 
-        return detectors_sort, oktes
+        return detectors_sort, oktes, ctimes
 
     def find_high_derivative_clusters(self, tfold, thr, period):
         """ Find clusters of high derivatives: each time we take the first high derivative element."""
@@ -617,7 +621,7 @@ class FringesAnalysis:
 
         return Mcycles, err_Mcycles
 
-    def analyse_fringes(self, skip_rise=0.2, skip_fall=0.1, median=True, remove_median_allh=False,
+    def analyse_fringes(self, median=True, remove_median_allh=False,
                           Ncycles_to_use=None,
                           rm_slope_percycle=False, rm_slope_allcycles=False,
                           force_period=None, force_t0=None, doplotTESsort=0):
@@ -656,8 +660,22 @@ class FringesAnalysis:
         for i, ASIC in enumerate(self.asics):
             print(f'*********** Starting ASIC {ASIC} **************')
             for j, TES in enumerate(np.arange(1, 129)):
-                if TES == self.detectors_sort[doplotTESsort, 0] and ASIC == self.detectors_sort[doplotTESsort, 1]:
-                    print(f'Making plots for TES {TES} - ASIC {ASIC} - Goodness rank {doplotTESsort + 1}')
+                # Use the time constant for skip rise and skip fall
+                if self.ctimes[i, j] < 0.4:
+                    skip_rise = self.ctimes[i, j]
+                    skip_fall = self.ctimes[i, j]
+                    print(skip_rise, skip_fall)
+                else:
+                    skip_rise = 0.2
+                    skip_fall = 0.2
+
+                # If TES in doplotTESsort, active the plot option
+                want_plot = np.any((self.detectors_sort[doplotTESsort, 0] == TES) & \
+                            (self.detectors_sort[doplotTESsort, 1] == ASIC))
+                if want_plot:
+                    rank = np.where((self.detectors_sort[:, 0] == TES) & \
+                           (self.detectors_sort[:, 1] == ASIC))[0][0]
+                    print(f'\n ===== Making plots for TES {TES} - ASIC {ASIC} - Goodness rank{rank}')
                     doplot = True
                     speak = True
                 else:
@@ -665,18 +683,20 @@ class FringesAnalysis:
                     speak = False
 
                 index = i * self.ndet_oneASIC + j
-
                 timeTES = self.tdata[i, :]
                 dataTES = self.data[i, j, :]
                 # Fold, roll and remove the median of allh
                 tfold, dfold = self.resample_fold_oneTES(timeTES, dataTES, period=period, doplot=doplot)
                 droll = self.roll_oneTES(dfold, t0, period=period)
+                if doplot:
+                    self._plot_folding(tfold, droll, period, skip_rise=skip_rise, skip_fall=skip_fall,
+                                         suptitle='Data fold and roll')
                 if remove_median_allh:
                     droll = self.remove_median_allh(tfold, droll, period,
                                                     skip_rise=skip_rise, skip_fall=skip_fall)
-                if doplot:
-                    self._plot_folding(tfold, droll, period, skip_rise=skip_rise, skip_fall=skip_fall,
-                                         suptitle='Data fold after rolling and removing allh average')
+                    if doplot:
+                        self._plot_folding(tfold, droll, period, skip_rise=skip_rise, skip_fall=skip_fall,
+                                             suptitle='Data fold, roll and remove median all horn open')
 
                 # Average each step on each cycle
                 m_points[index, :, :], err_m_points[index, :, :] = self.average_over_points_oneTES(
@@ -762,6 +782,7 @@ class FringesAnalysis:
     def _plot_folding(self, tfold, dfold, period, skip_rise=None, skip_fall=None, suptitle='', figsize=(12, 6)):
 
         fig, axs = plt.subplots(1, 2, figsize=figsize)
+        fig.subplots_adjust(wspace=0.5)
         fig.suptitle(suptitle)
         ax1, ax2 = np.ravel(axs)
 
@@ -771,22 +792,29 @@ class FringesAnalysis:
                    extent=[0, np.max(tfold) + (tfold[1] - tfold[0]) / 2, 0, self.ncycles + 0.5])
         for i in range(self.nsteps):
             ax1.axvline(x=i * (period / self.nsteps), color='k', lw=3)
-        ax1.set_xlabel('Time in period')
-        ax1.set_ylabel('Period #')
+        ax1.set_xlabel('Time [s]')
+        ax1.set_ylabel('Cycle number')
 
         for i in range(self.ncycles):
             ax2.plot(tfold, dfold[i, :], alpha=0.5)
         for i in range(self.nsteps):
             ax2.axvline(x=i * (period / self.nsteps), color='k', lw=3)
             if skip_rise is not None:
+                if i == 0:
+                    lab1 = 'Skip rise {:.2f}s'.format(skip_rise)
+                    lab2 = 'Skip fall {:.2f}s'.format(skip_fall)
+                else:
+                    lab1 = None
+                    lab2 = None
                 ax2.axvspan(i * (period / self.nsteps),
                             (i + skip_rise) * (period / self.nsteps),
-                            alpha=0.1, color='red')
+                            alpha=0.2, color='red', label=lab1)
                 ax2.axvspan((i + (1. - skip_fall)) * (period / self.nsteps),
                             (i + 1) * (period / self.nsteps),
-                            alpha=0.1, color='red')
-        ax2.set_xlabel('Time in period')
+                            alpha=0.2, color='b', label=lab2)
+        ax2.set_xlabel('Time [s]')
         ax2.set_ylabel('ADU')
+        ax2.legend()
 
         return
 

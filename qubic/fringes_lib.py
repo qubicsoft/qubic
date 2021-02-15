@@ -357,8 +357,8 @@ class FringesAnalysis:
         ok_all_horns = np.zeros_like(tfold, dtype=bool)
         for i in range(self.nsteps):
             if self.allh[i]:
-                tmini = i * period / self.nsteps + skip_rise * period / self.nsteps
-                tmaxi = (i + 1) * period / self.nsteps - skip_fall * period / self.nsteps
+                tmini = i * period / self.nsteps + skip_rise #* period / self.nsteps
+                tmaxi = (i + 1) * period / self.nsteps - skip_fall #* period / self.nsteps
                 ok = (tfold >= tmini) & (tfold < tmaxi)
                 ok_all_horns[ok] = True
         droll_rm_median = droll - np.median(droll[:, ok_all_horns])
@@ -550,8 +550,8 @@ class FringesAnalysis:
         err_m_points = np.zeros((self.ncycles, self.nsteps))
         for i in range(self.nsteps):
             # Cut the data
-            tstart = i * stable_time + skip_rise * stable_time
-            tend = (i + 1) * stable_time - skip_fall * stable_time
+            tstart = i * stable_time + skip_rise
+            tend = (i + 1) * stable_time - skip_fall
             ok = (tfold >= tstart) & (tfold < tend)
             for j in range(self.ncycles):
                 m_points[j, i], err_m_points[j, i] = ft.meancut(droll[j, ok],
@@ -660,14 +660,10 @@ class FringesAnalysis:
         for i, ASIC in enumerate(self.asics):
             print(f'*********** Starting ASIC {ASIC} **************')
             for j, TES in enumerate(np.arange(1, 129)):
-                # Use the time constant for skip rise and skip fall
-                if self.ctimes[i, j] < 0.4:
-                    skip_rise = self.ctimes[i, j]
-                    skip_fall = self.ctimes[i, j]
-                    print(skip_rise, skip_fall)
-                else:
-                    skip_rise = 0.2
-                    skip_fall = 0.2
+                # Use the time constant for skip rise
+                skip_rise = self.ctimes[i, j] * 3.
+                skip_fall = 0.2
+                print(skip_rise, skip_fall)
 
                 # If TES in doplotTESsort, active the plot option
                 want_plot = np.any((self.detectors_sort[doplotTESsort, 0] == TES) & \
@@ -675,7 +671,7 @@ class FringesAnalysis:
                 if want_plot:
                     rank = np.where((self.detectors_sort[:, 0] == TES) & \
                            (self.detectors_sort[:, 1] == ASIC))[0][0]
-                    print(f'\n ===== Making plots for TES {TES} - ASIC {ASIC} - Goodness rank{rank}')
+                    print(f'\n ===== Making plots for TES {TES} - ASIC {ASIC} - Goodness rank {rank}')
                     doplot = True
                     speak = True
                 else:
@@ -735,19 +731,19 @@ class FringesAnalysis:
 
         # Final plots
         # Fringes
-        fig, axs = plt.subplots(2, 2, figsize=(12, 12))
+        fig, axs = plt.subplots(2, 2, figsize=(10, 12))
         fig.subplots_adjust(wspace=0.5)
         fig.suptitle(f'Fringes and errors - BL {self.baseline} - {self.date}')
         ax0, ax1, ax2, ax3 = axs.ravel()
         plot_fringes_imshow_interp(fringes1D * self.oktes, fig=fig, ax=ax0)
-        plot_fringes_scatter(self.q, self.xTES, self.yTES, fringes1D * self.oktes, s=100, fig=fig, ax=ax1)
+        plot_fringes_scatter(self.q, self.xTES, self.yTES, fringes1D * self.oktes, s=150, fig=fig, ax=ax1)
 
         # Errors
         cmap_viridis = make_cmap_nan_grey('viridis')
-        plot_fringes_scatter(self.q, self.xTES, self.yTES, err_fringes1D * self.oktes, s=100, fig=fig, ax=ax2,
+        plot_fringes_scatter(self.q, self.xTES, self.yTES, err_fringes1D * self.oktes, s=150, fig=fig, ax=ax2,
                              cmap=cmap_viridis, normalize=False, vmin=0., vmax=400, title='Errors')
         plot_fringes_scatter(self.q, self.xTES, self.yTES, np.abs(fringes1D / err_fringes1D) * self.oktes,
-                             s=100, fig=fig, ax=ax3, cmap=cmap_viridis, normalize=False, vmin=0., vmax=3.,
+                             s=150, fig=fig, ax=ax3, cmap=cmap_viridis, normalize=False, vmin=0., vmax=3.,
                              title='|Values/Errors|')
 
         return m_points, err_m_points, Mcycles, err_Mcycles, fringes1D, err_fringes1D, \
@@ -806,10 +802,11 @@ class FringesAnalysis:
                 else:
                     lab1 = None
                     lab2 = None
+
                 ax2.axvspan(i * (period / self.nsteps),
-                            (i + skip_rise) * (period / self.nsteps),
+                            (i * (period / self.nsteps) + skip_rise),
                             alpha=0.2, color='red', label=lab1)
-                ax2.axvspan((i + (1. - skip_fall)) * (period / self.nsteps),
+                ax2.axvspan(((i+1) * (period / self.nsteps) - skip_fall),
                             (i + 1) * (period / self.nsteps),
                             alpha=0.2, color='b', label=lab2)
         ax2.set_xlabel('Time [s]')

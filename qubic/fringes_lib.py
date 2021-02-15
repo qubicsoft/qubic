@@ -130,7 +130,7 @@ class FringesAnalysis:
                 tdata_oneASIC -= tdata_oneASIC[0]
             tdata.append(tdata_oneASIC)
         tdata = np.array(tdata)
-        data = np.array(data)
+        data = - np.array(data) # Minus because when the current goes down it means more power.
 
         if self.src_data:  # Get calibration source data
             tsrc = a.calsource()[0]

@@ -1,9 +1,11 @@
 from __future__ import division, print_function
 import numpy as np
+import copy
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from astropy.io import fits as pyfits
 from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib import cm
 import scipy.optimize as sop
 from scipy.signal import resample
 
@@ -83,13 +85,17 @@ class FringesAnalysis:
         self.nsteps = len(self.allh)
         self.expected_period = self.stable_time * self.nsteps
 
-        self.detectors_sort = self.find_goodTES()
+        self.detectors_sort, self.oktes = self.find_goodTES()
+        if self.verbose:
+            print('******** 10 best TES found:', self.detectors_sort[:10, 0], self.detectors_sort[:10, 1])
+            print('******** Bad detectors:', int(len(self.oktes) - np.nansum(self.oktes)), '/', len(self.oktes))
         if refTESnum is not None:
             self.refTESnum = refTESnum
             self.refASICnum = refASICnum
         else:
             self.refTESnum = self.detectors_sort[0, 0]
             self.refASICnum = self.detectors_sort[0, 1]
+
 
         # Reference period determine on reference TES
         _, _, self.refperiod = self.find_right_period(self.refTESnum, self.refASICnum)
@@ -247,73 +253,76 @@ class FringesAnalysis:
 
                 residuals_time[index, :] = dfold[j, :] - ft.simsig_fringes(tfold, self.stable_time, popt)
         # Order the TES as function of the residual on the fit
+
         std = np.std(residuals_time, axis=1)
         std_argsort = np.argsort(std)
         detectors_sort = np.zeros((self.ndet, 2), dtype=int)
         detectors_sort[:, 0] = (std_argsort % self.ndet_oneASIC) + 1  # TES
         detectors_sort[:, 1]  = (std_argsort // self.ndet_oneASIC) + 1 # ASIC
 
+        # Select good TES
+        oktes = np.ones(self.ndet)
+        oktes[std > np.min(std) * 25] = np.nan
+
         # Plot the 5 best TES
-        if self.verbose:
-            print('******** 10 best TES found:', detectors_sort[:10, 0], detectors_sort[:10, 1])
         if doplot:
             for p in range(5):
                 plot_folding_fit(detectors_sort[p, 0], detectors_sort[p, 1], tfold, datafold, residuals_time,
                                  self.expected_period, params, err_params)
 
-        return detectors_sort
+        return detectors_sort, oktes
 
-    def _make_w_Michel(self, t, tm1=12, tm2=2, ph=5):
-        # w is made to make the combination to see fringes with Michel's method
-        w = np.zeros_like(t)
-        wcheck = np.zeros_like(t)
-        for i in range(len(w)):
-            if (((i - ph) % self.refperiod) >= tm1) and (((i - ph) % self.refperiod) < self.refperiod - tm2):
-                if (((i - ph) // self.refperiod) == 0) | (((i - ph) // self.refperiod) == 3):
-                    w[i] = 1.
-                if (((i - ph) // self.refperiod) == 1) | (((i - ph) // self.refperiod) == 2):
-                    w[i] = -1.
-
-        return w, wcheck
-
-    def analyse_fringes_Michel(self, median=False, verbose=True, doplot=True):
-        """
-        Compute the fringes with Michel's method.
-        """
-        fringes1D = np.zeros(self.ndet)
-        dfold = np.zeros((self.ndet, self.nbins))
-
-        for i, ASIC in enumerate(self.asics):
-
-            # Fold and filter the data
-            fold, tfold, _, _ = ft.fold_data(self.tdata[i, :],
-                                             self.data[i, :, :],
-                                             self.refperiod,
-                                             self.lowcut,
-                                             self.highcut,
-                                             self.nbins,
-                                             notch=self.notch,
-                                             median=median,
-                                             silent=verbose,
-                                             )
-            dfold[self.ndet_oneASIC * i:self.ndet_oneASIC * (i + 1), :] = fold
-
-            # Michel method
-            w, _ = self._make_w_Michel(tfold)
-            for j in range(self.ndet_oneASIC):
-                index = self.ndet_oneASIC * i + j
-                fringes1D[index] = np.sum(fold[j, :] * w)
-
-        if doplot:
-            # Fringes
-            fig, axs = plt.subplots(1, 2, figsize=(13, 7))
-            fig.subplots_adjust(wspace=0.5)
-            fig.suptitle(f'Fringes with Michel method - BL {self.baseline} - {self.date}')
-            ax0, ax1 = axs.ravel()
-            plot_fringes_imshow_interp(fringes1D, fig=fig, ax=ax0)
-            plot_fringes_scatter(self.q, self.xTES, self.yTES, fringes1D, s=80, fig=fig, ax=ax1)
-
-        return tfold, dfold, fringes1D
+    # def _make_w_Michel(self, t, tm1=12, tm2=2, ph=5):
+    #     # w is made to make the combination to see fringes with Michel's method
+    #     w = np.zeros_like(t)
+    #     wcheck = np.zeros_like(t)
+    #     for i in range(len(w)):
+    #         if (((i - ph) % self.refperiod) >= tm1) and (((i - ph) % self.refperiod) < self.refperiod - tm2):
+    #             if (((i - ph) // self.refperiod) == 0) | (((i - ph) // self.refperiod) == 3):
+    #                 w[i] = 1.
+    #             if (((i - ph) // self.refperiod) == 1) | (((i - ph) // self.refperiod) == 2):
+    #                 w[i] = -1.
+    #
+    #     return w, wcheck
+    #
+    # def analyse_fringes_Michel(self, median=False, verbose=True, doplot=True):
+    #     """
+    #     Compute the fringes with Michel's method.
+    #     """
+    #     fringes1D = np.zeros(self.ndet)
+    #     dfold = np.zeros((self.ndet, self.nbins))
+    #
+    #     for i, ASIC in enumerate(self.asics):
+    #
+    #         # Fold and filter the data
+    #         fold, tfold, _, _ = ft.fold_data(self.tdata[i, :],
+    #                                          self.data[i, :, :],
+    #                                          self.refperiod,
+    #                                          self.lowcut,
+    #                                          self.highcut,
+    #                                          self.nbins,
+    #                                          notch=self.notch,
+    #                                          median=median,
+    #                                          silent=verbose,
+    #                                          )
+    #         dfold[self.ndet_oneASIC * i:self.ndet_oneASIC * (i + 1), :] = fold
+    #
+    #         # Michel method
+    #         w, _ = self._make_w_Michel(tfold)
+    #         for j in range(self.ndet_oneASIC):
+    #             index = self.ndet_oneASIC * i + j
+    #             fringes1D[index] = np.sum(fold[j, :] * w)
+    #
+    #     if doplot:
+    #         # Fringes
+    #         fig, axs = plt.subplots(1, 2, figsize=(13, 7))
+    #         fig.subplots_adjust(wspace=0.5)
+    #         fig.suptitle(f'Fringes with Michel method - BL {self.baseline} - {self.date}')
+    #         ax0, ax1 = axs.ravel()
+    #         plot_fringes_imshow_interp(fringes1D, fig=fig, ax=ax0)
+    #         plot_fringes_scatter(self.q, self.xTES, self.yTES, fringes1D, s=80, fig=fig, ax=ax1)
+    #
+    #     return tfold, dfold, fringes1D
 
     def find_high_derivative(self, signal):
         """Calculate the derivative of a signal and find where it is high."""
@@ -649,8 +658,8 @@ class FringesAnalysis:
 
         # We would rather calculate the relevant residuals in the binned domain
         # between the final values and those after levelling
-        residuals_bin = np.ravel(m_points - Mcycles)
-        _, TODresiduals = ft.meancut(residuals_bin, nsig=3, med=median, disp=True)
+        # residuals_bin = np.ravel(m_points - Mcycles)
+        # _, TODresiduals = ft.meancut(residuals_bin, nsig=3, med=median, disp=True)
 
         if speak:
             for i in range(self.nsteps):
@@ -665,7 +674,7 @@ class FringesAnalysis:
         if doplot:
             self.plot_average_over_steps(m_points, err_m_points, Mcycles, err_Mcycles)
 
-        return Mcycles, err_Mcycles, TODresiduals
+        return Mcycles, err_Mcycles
 
     def analyse_fringes(self, skip_rise=0.2, skip_fall=0.1, median=True, remove_median_allh=False,
                           Ncycles_to_use=None,
@@ -697,7 +706,6 @@ class FringesAnalysis:
         err_m_points = np.zeros((self.ndet, self.ncycles, self.nsteps))
         Mcycles = np.zeros((self.ndet, self.nsteps))
         err_Mcycles = np.zeros((self.ndet, self.nsteps))
-        TODresiduals = np.zeros(self.ndet)
         fringes1D = np.zeros(self.ndet)
         err_fringes1D = np.zeros(self.ndet)
         fringes1D_percycle = np.zeros((self.ndet, self.ncycles))
@@ -747,7 +755,7 @@ class FringesAnalysis:
                                                                                                   weights)
 
                 # Average over cycles and make the combination on the mean to get fringes
-                Mcycles[index, :], err_Mcycles[index, :], TODresiduals[index] = self.average_over_cycles_oneTES(
+                Mcycles[index, :], err_Mcycles[index, :] = self.average_over_cycles_oneTES(
                     droll,
                     m_points[index, :, :],
                     err_m_points[index, :, :],
@@ -760,28 +768,29 @@ class FringesAnalysis:
                     self._plot_TOD_reconstruction(droll, Mcycles[index, :])
 
         # Get the good TES from a cut on residuals
-        mm, ss = ft.meancut(np.log10(TODresiduals), nsig=3)
-        oktes = np.ones(self.ndet)
-        oktes[np.abs(np.log10(TODresiduals) - mm) > 2 * ss] = np.nan
+        # mm, ss = ft.meancut(np.log10(TODresiduals), nsig=3)
+        # oktes = np.ones(self.ndet)
+        # oktes[np.abs(np.log10(TODresiduals) - mm) > 2 * ss] = np.nan
 
         # Final plots
         # Fringes
-        fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+        fig, axs = plt.subplots(2, 2, figsize=(12, 12))
         fig.subplots_adjust(wspace=0.5)
-        fig.suptitle(f'Fringes with JC method - BL {self.baseline} - {self.date}')
-        ax0, ax1 = axs.ravel()
-        plot_fringes_imshow_interp(fringes1D, fig=fig, ax=ax0)
-        plot_fringes_scatter(self.q, self.xTES, self.yTES, fringes1D, s=80, fig=fig, ax=ax1)
+        fig.suptitle(f'Fringes and errors - BL {self.baseline} - {self.date}')
+        ax0, ax1, ax2, ax3 = axs.ravel()
+        plot_fringes_imshow_interp(fringes1D * self.oktes, fig=fig, ax=ax0)
+        plot_fringes_scatter(self.q, self.xTES, self.yTES, fringes1D * self.oktes, s=100, fig=fig, ax=ax1)
 
-        # Error
-        plot_fringes_errors(self.q, fringes1D, err_fringes1D, self.xTES, self.yTES,
-                            s=80, normalize=False, lim=400., frame='ONAFP')
-
-        # TOD Residuals
-        plot_residuals(self.q, TODresiduals, oktes, self.xTES, self.yTES)
+        # Errors
+        cmap_viridis = make_cmap_nan_grey('viridis')
+        plot_fringes_scatter(self.q, self.xTES, self.yTES, err_fringes1D * self.oktes, s=100, fig=fig, ax=ax2,
+                             cmap=cmap_viridis, normalize=False, vmin=0., vmax=400, title='Errors')
+        plot_fringes_scatter(self.q, self.xTES, self.yTES, np.abs(fringes1D / err_fringes1D) * self.oktes,
+                             s=100, fig=fig, ax=ax3, cmap=cmap_viridis, normalize=False, vmin=0., vmax=3.,
+                             title='|Values/Errors|')
 
         return m_points, err_m_points, Mcycles, err_Mcycles, fringes1D, err_fringes1D, \
-               fringes1D_percycle, err_fringes1D_percycle, TODresiduals, oktes
+               fringes1D_percycle, err_fringes1D_percycle
 
     # ================ Plot functions very specific to JC analysis
     def _plot_finding_t0(self, tfold, msignal, dsignal, thr, start_times, t0, figsize=(12, 6)):
@@ -879,7 +888,7 @@ class FringesAnalysis:
 # =========================================
 class SaveFringesFitsPdf:
     def __init__(self, q, date_obs, allBLs, allstable_time, allNcycles, xTES, yTES, allfringes1D, allerr_fringes1D,
-                 allokTES=None, allTODresiduals=None, nsteps=6, ecosorb='yes', frame='ONAFP'):
+                 allokTES=None, nsteps=6, ecosorb='yes', frame='ONAFP'):
         self.q = q
         self.date_obs = date_obs
         self.allBLs = allBLs
@@ -892,7 +901,6 @@ class SaveFringesFitsPdf:
         self.allfringes1D = allfringes1D
         self.allerr_fringes1D = allerr_fringes1D
         self.allokTES = allokTES
-        self.allTODresiduals = allTODresiduals
         self.nsteps = nsteps
         self.ecosorb = ecosorb
         self.frame = frame
@@ -916,7 +924,7 @@ class SaveFringesFitsPdf:
         """ Make a dictionary with all relevant data."""
         fdict = {'BLS': self.allBLs, 'Stable_time': self.allstable_time, 'NCYCLES': self.allNcycles,
                  'X_TES': self.xTES, 'Y_TES': self.yTES, 'FRINGES_1D': self.allfringes1D,
-                 'ERRORS': self.allerr_fringes1D, 'OK_TES': self.allokTES, 'TOD_RES': self.allTODresiduals}
+                 'ERRORS': self.allerr_fringes1D, 'OK_TES': self.allokTES}
 
         return fdict
 
@@ -934,8 +942,9 @@ class SaveFringesFitsPdf:
                 fig.subplots_adjust(wspace=0.5)
                 fig.suptitle(f'Fringes - BL {self.allBLs[i]} - {self.date_obs} - type {self.BLs_type[i]}')
                 ax0, ax1 = axs.ravel()
-                plot_fringes_imshow_interp(self.allfringes1D[i], fig=fig, ax=ax0, mask=mask)
-                plot_fringes_scatter(self.q, self.xTES, self.yTES, self.allfringes1D[i], s=80, fig=fig, ax=ax1)
+                plot_fringes_imshow_interp(self.allfringes1D[i]* self.allokTES[i], fig=fig, ax=ax0, mask=mask)
+                plot_fringes_scatter(self.q, self.xTES, self.yTES, self.allfringes1D[i] * self.allokTES[i],
+                                     s=80, fig=fig, ax=ax1)
                 pp.savefig()
         return
 
@@ -1110,9 +1119,14 @@ def plot_sum_diff_fringes(q, keyvals, fdict, mask=None, lim=2, cmap='bwr'):
 
     return
 
+def make_cmap_nan_grey(cmap):
+    cmap_bwr = copy.copy(cm.get_cmap(cmap))
+    cmap_bwr.set_bad(color='lightgrey')
+    return cmap_bwr
 
 def plot_fringes_scatter(q, xTES, yTES, fringes1D, normalize=True, frame='ONAFP', fig=None, ax=None,
-                         cbar=True, lim=1., cmap='bwr', s=None, title='Scatter plot'):
+                         cbar=True, vmin=-1., vmax=1., cmap=make_cmap_nan_grey('bwr'), s=None, title='Scatter plot'):
+
     x, y, fringes = remove_thermometers(xTES, yTES, fringes1D)
 
     if normalize:
@@ -1126,14 +1140,18 @@ def plot_fringes_scatter(q, xTES, yTES, fringes1D, normalize=True, frame='ONAFP'
                          title=title,
                          unit='',
                          cmap=cmap,
-                         vmin=-lim, vmax=lim,
-                         cbar=cbar
+                         vmin=vmin,
+                         vmax=vmax,
+                         cbar=cbar,
+                         plotnonfinite=True
                          )
     return
 
 
 def plot_fringes_imshow_interp(fringes1D, normalize=True, interp='Gaussian', mask=None,
-                               fig=None, ax=None, cbar=True, lim=1., cmap='bwr', title='Imshow'):
+                               fig=None, ax=None, cbar=True, vmin=-1, vmax=1.,
+                               cmap='bwr', title='Imshow with interpolation'):
+
     # Make the 2D fringes
     fringes2D = ft.image_asics(all1=fringes1D)
     if normalize:
@@ -1144,11 +1162,11 @@ def plot_fringes_imshow_interp(fringes1D, normalize=True, interp='Gaussian', mas
 
     if ax is None:
         fig, ax = plt.subplots()
-    img = ax.imshow(np.nan_to_num(fringes2D * mask),
-                    vmin=-lim, vmax=lim,
+    img = ax.imshow(np.nan_to_num(np.rot90(fringes2D * mask, k=2)),
+                    vmin=vmin, vmax=vmax,
                     cmap=cmap,
                     interpolation=interp)
-    # ft.qgrid()
+
     ax.set_title(title, fontsize=14)
     if cbar:
         divider = make_axes_locatable(ax)
@@ -1187,53 +1205,53 @@ def plot_folding_fit(TES, ASIC, tfold, datafold, residuals_time, period,
     return
 
 
-def plot_residuals(q, TODresiduals, oktes, xTES, yTES, frame='ONAFP', suptitle=None):
-    _, _, TODresiduals = remove_thermometers(xTES, yTES, TODresiduals)
-    xTES, yTES, oktes = remove_thermometers(xTES, yTES, oktes)
+# def plot_residuals(q, TODresiduals, oktes, xTES, yTES, frame='ONAFP', suptitle=None):
+#     _, _, TODresiduals = remove_thermometers(xTES, yTES, TODresiduals)
+#     xTES, yTES, oktes = remove_thermometers(xTES, yTES, oktes)
+#
+#     mm, ss = ft.meancut(np.log10(TODresiduals), 3)
+#
+#     fig, axs = plt.subplots(1, 3)
+#     fig.suptitle(suptitle)
+#     fig.subplots_adjust(wspace=0.5)
+#     ax0, ax1, ax2 = axs
+#
+#     ax0.hist(np.log10(TODresiduals), bins=20, label='{0:5.2f} +/- {1:5.2f}'.format(mm, ss))
+#     ax0.axvline(x=mm, color='r', ls='-', label='Mean')
+#     ax0.axvline(x=mm - ss, color='r', ls='--', label='1 sigma')
+#     ax0.axvline(x=mm + ss, color='r', ls='--')
+#     ax0.axvline(x=mm - 2 * ss, color='r', ls=':', label='2 sigma')
+#     ax0.axvline(x=mm + 2 * ss, color='r', ls=':')
+#     ax0.set_xlabel('np.log10(TOD Residuals)')
+#     ax0.set_title('Histogram residuals')
+#     ax0.legend()
+#
+#     scal.scatter_plot_FP(q, xTES, yTES, oktes, frame=frame,
+#                          fig=fig, ax=ax1, cmap='bwr', cbar=False, s=60, title='TES OK (2sig)')
+#
+#     scal.scatter_plot_FP(q, xTES, yTES, TODresiduals * oktes, frame=frame,
+#                          fig=fig, ax=ax2, cmap='bwr', cbar=True, unit='', s=60, title='TOD Residuals')
+#     return
 
-    mm, ss = ft.meancut(np.log10(TODresiduals), 3)
 
-    fig, axs = plt.subplots(1, 3)
-    fig.suptitle(suptitle)
-    fig.subplots_adjust(wspace=0.5)
-    ax0, ax1, ax2 = axs
-
-    ax0.hist(np.log10(TODresiduals), bins=20, label='{0:5.2f} +/- {1:5.2f}'.format(mm, ss))
-    ax0.axvline(x=mm, color='r', ls='-', label='Mean')
-    ax0.axvline(x=mm - ss, color='r', ls='--', label='1 sigma')
-    ax0.axvline(x=mm + ss, color='r', ls='--')
-    ax0.axvline(x=mm - 2 * ss, color='r', ls=':', label='2 sigma')
-    ax0.axvline(x=mm + 2 * ss, color='r', ls=':')
-    ax0.set_xlabel('np.log10(TOD Residuals)')
-    ax0.set_title('Histogram residuals')
-    ax0.legend()
-
-    scal.scatter_plot_FP(q, xTES, yTES, oktes, frame=frame,
-                         fig=fig, ax=ax1, cmap='bwr', cbar=False, s=60, title='TES OK (2sig)')
-
-    scal.scatter_plot_FP(q, xTES, yTES, TODresiduals * oktes, frame=frame,
-                         fig=fig, ax=ax2, cmap='bwr', cbar=True, unit='', s=60, title='TOD Residuals')
-    return
-
-
-def plot_fringes_errors(q, fringes1D, err_fringes1D, xTES, yTES, frame='ONAFP',
-                        s=None, normalize=True, lim=1., suptitle=None):
-    _, _, fringes1D = remove_thermometers(xTES, yTES, fringes1D)
-    xTES, yTES, err_fringes1D = remove_thermometers(xTES, yTES, err_fringes1D)
-
-    if normalize:
-        fringes1D /= np.nanstd(fringes1D)
-        err_fringes1D /= np.nanstd(err_fringes1D)
-
-    fig, axs = plt.subplots(1, 2)
-    fig.suptitle(suptitle)
-    fig.subplots_adjust(wspace=0.5)
-    ax0, ax1 = axs
-    scal.scatter_plot_FP(q, xTES, yTES, err_fringes1D, frame=frame,
-                         fig=fig, ax=ax0, cbar=True, unit='', s=s, title='Errors',
-                         vmin=0, vmax=lim)
-
-    scal.scatter_plot_FP(q, xTES, yTES, np.abs(fringes1D / err_fringes1D), frame=frame,
-                         fig=fig, ax=ax1, cbar=True, unit='', s=s, title='|Values / Errors|',
-                         vmin=0, vmax=3)
-    return
+# def plot_fringes_errors(q, fringes1D, err_fringes1D, xTES, yTES, frame='ONAFP',
+#                         s=None, normalize=True, lim=1., suptitle=None):
+#     _, _, fringes1D = remove_thermometers(xTES, yTES, fringes1D)
+#     xTES, yTES, err_fringes1D = remove_thermometers(xTES, yTES, err_fringes1D)
+#
+#     if normalize:
+#         fringes1D /= np.nanstd(fringes1D)
+#         err_fringes1D /= np.nanstd(err_fringes1D)
+#
+#     fig, axs = plt.subplots(1, 2)
+#     fig.suptitle(suptitle)
+#     fig.subplots_adjust(wspace=0.5)
+#     ax0, ax1 = axs
+#     scal.scatter_plot_FP(q, xTES, yTES, err_fringes1D, frame=frame,
+#                          fig=fig, ax=ax0, cbar=True, unit='', s=s, title='Errors',
+#                          vmin=0, vmax=lim)
+#
+#     scal.scatter_plot_FP(q, xTES, yTES, np.abs(fringes1D / err_fringes1D), frame=frame,
+#                          fig=fig, ax=ax1, cbar=True, unit='', s=s, title='|Values / Errors|',
+#                          vmin=0, vmax=3)
+#     return

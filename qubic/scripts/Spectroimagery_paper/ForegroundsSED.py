@@ -212,7 +212,10 @@ def noise_qss(dictionaries, sky_configuration, coverages, realizations, verbose 
 	
 	"""
 	Assume all dictionaries have the same 'effective_duration' and same 'nf_recon'
+
+
 	"""
+
 	##### Getting FastSimulator output maps
 	noise = np.zeros((len(dictionaries), realizations, dictionaries[0]['nf_recon'], 12 * dictionaries[0]['nside']**2,3))
 
@@ -235,7 +238,15 @@ def noise_qss(dictionaries, sky_configuration, coverages, realizations, verbose 
 	return noise
 
 def foreground_with_noise(dictionaries, sky_configuration, regions, bands, realizations, sky = 'T',
-	seed = None, verbose = False):
+	seed = None, verbose = False, ud_grade = False, nside_out = None):
+
+	"""
+	
+	"""
+
+	if ud_grade:
+		if nside_out == None: 
+			raise ValueError("You ask for ud_grade maps but nside_out is None. Please specify nside_out")
 
 	fground_maps = foreground_signal(dictionaries, sky_configuration, verbose = verbose)
 	
@@ -244,6 +255,7 @@ def foreground_with_noise(dictionaries, sky_configuration, regions, bands, reali
 	noise = noise_qss(dictionaries, sky_configuration, coverages, realizations, verbose = verbose) 
 
 	outmaps = []
+	stdmaps = [] # Useless
 
 	for ic, idict in enumerate(dictionaries):
 		noisy_frgrounds = np.zeros(np.shape(noise)[1:])
@@ -251,19 +263,23 @@ def foreground_with_noise(dictionaries, sky_configuration, regions, bands, reali
 			if verbose: print( np.shape(noise), np.shape(fground_maps), np.shape(noisy_frgrounds))
 			noisy_frgrounds[j, ...] = noise[ic, j, ...] + fground_maps[ic]
 		outmaps.append(np.mean(noisy_frgrounds, axis = 0))#, np.std(noisymaps150Q, axis = 0)
+		stdmaps.append(np.std(noisy_frgrounds, axis = 0))
 
-	return np.array(outmaps), coverages
+	return np.array(outmaps), coverages, np.array(stdmaps)
 
 def _mask_maps(maps, coverages, nf_recon):
 
-	for j, icov in enumerate(coverages):
-		cov = np.zeros_like(icov, dtype = bool)
-		print(cov.shape)
-		covmsk = np.where(icov > 0.01*np.max(icov))
-		cov[covmsk] = 1
+	cov = []
+	for j, ic in enumerate(coverages):
+		icov = np.zeros_like(ic, dtype = bool)
+		#print(cov.shape)
+		covmsk = np.where(ic > 0.01*np.max(ic))
+		icov[covmsk] = 1
 
 		for jsub in range(nf_recon):
-			maps[j, jsub, ~cov, 0] = hp.UNSEEN
+			maps[j, jsub, ~icov, 0] = hp.UNSEEN
 
-	return maps
+		cov.append(icov)
+
+	return maps, cov
 

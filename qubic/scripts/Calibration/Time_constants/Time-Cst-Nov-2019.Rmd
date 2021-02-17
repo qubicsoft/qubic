@@ -4,8 +4,8 @@ jupyter:
     text_representation:
       extension: .Rmd
       format_name: rmarkdown
-      format_version: '1.1'
-      jupytext_version: 1.2.4
+      format_version: '1.2'
+      jupytext_version: 1.4.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -221,10 +221,10 @@ def plot_result_asic(allpars, allerrpars, ok, pngname=None, savefilename=None):
     imshow(img,vmin=0, vmax=120000)
     colorbar()
     title('Amplitude [ADU] - TES OK: {0:4.1f}%'.format(fraction*100))
-    show()
     
     if pngname is not None:
         savefig(pngname)
+    show()
     
     if savefilename is not None:
         tesindex = np.arange(256)

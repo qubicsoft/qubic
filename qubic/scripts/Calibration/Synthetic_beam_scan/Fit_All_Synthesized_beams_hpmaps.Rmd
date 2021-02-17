@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.0
+      jupytext_version: 1.7.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -15,6 +15,7 @@ jupyter:
 ```{python}
 # ##### %matplotlib notebook
 # %matplotlib inline
+
 from matplotlib import rc
 rc('figure',figsize=(16,4))
 rc('font',size=12)
@@ -29,9 +30,11 @@ import qubic.lin_lib as ll
 import qubic.demodulation_lib as dl
 import qubic.io
 import qubic.sb_fitting as sbfit
+from qubicpack.pixel_translation import make_id_focalplane, plot_id_focalplane, tes2pix, tes2index
 
 from pysimulators import FitsArray
 
+from astroML.plotting import scatter_contour
 import numpy as np
 from matplotlib.pyplot import *
 import matplotlib.mlab as mlab
@@ -43,275 +46,515 @@ import scipy.signal as scsig
 from scipy import interpolate
 import os
 import healpy as hp
-import pandas as pd
 import time
 import scipy.ndimage.filters as f
 
+import toolfit_hpmap as fh
+from importlib import reload
 ```
 
 ```{python}
-def npp(ipix):
-    #neighboring pixel of the peak
-    # map in nest
-    return np.array(hp.get_all_neighbours(256, ipix,nest=True))
+AZ, EL = 0, 90
 
-def selectcenter(hpmap,center,delta=3, nside=256,nest=True,
-                threshold=3, displaycenters=False, plot=False):
-    #return the pixel of the central peak
-    npix=12*nside**2
-    centerarr = [center,
-                center-delta*np.array([1,0]),
-                center-2*delta*np.array([1,0]),
-                center+delta*np.array([1,0]),
-                center+2*delta*np.array([1,0])]
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(os.environ['QUBIC_DICT']+'/global_source_oneDet.dict')
+d['MultiBand'] = False
+d['nf_sub'] = 1
+d['kind'] = 'I'
+d['config'] = 'FI'
+d['RA_denter'], d['DEC_center'] = qubic.hor2equ(AZ, EL, 0)
+d['synthbeam_fraction'] = 0.99
+center_gal = qubic.hor2gal(AZ, EL, 0)
+sFI = qubic.QubicScene(d)
+qFI = qubic.QubicInstrument(d)
+dTD = d.copy()
+dTD['config'] = 'TD'
+sTD = qubic.QubicScene(dTD)
+qTD = qubic.QubicInstrument(dTD)
 
-    fullvec=hp.pix2vec(nside, range(0,npix), nest=nest)
-    relmaxpx=np.zeros((len(centerarr),))
-    px=np.zeros((len(centerarr),),dtype=int)
-
-    for j,icenter in enumerate(centerarr):
-        ivec = hp.ang2vec(np.deg2rad(icenter[0]), np.deg2rad(icenter[1]))
-        imaskpx = np.rad2deg(np.arccos(np.dot(ivec,fullvec))) < threshold
-        imaskidx = np.where(imaskpx == True)[0]
-        #print(imaskidx)
-        relmaxpx[j] = np.max(hpmap[imaskpx])
-        px[j] = imaskidx[np.argmax(hpmap[imaskpx])]
-
-    indxmax = np.argmax(relmaxpx)
-    pixmax, newcenter = px[indxmax], centerarr[indxmax]
-    if plot:
-        hp.gnomview(hpnest, reso=12, rot=np.array([90,0])-newcenter, nest=nest)
-        if displaycenters:
-            for each in centerarr:
-                hp.projscatter(np.deg2rad(each), marker='+', color='r')
-        #print('crux', np.rad2deg(hp.pix2ang(256, pixmax, nest=nest)))
-        hp.projscatter(hp.pix2ang(256, pixmax, nest=nest), marker='+', color='r')
-
-    return pixmax, newcenter
+nside = dTD['nside']
 ```
 
 ```{python}
-def fit_hpmap(TESNum, dirfiles, az_center, el_center, 
-              nside = 256, nest = True, filterbeam = 3,
-             threshold = 3,threshold0=4, plotcenter = False,
-             plotnine=False, plotneig=False, refilter=False ):
-    t0=time.time()
-    npix=12*nside**2
+#PIXNum = 123#93#242#150# #1-256. Numbering of the Healpix Files
 
-    hpmap = sbfit.get_hpmap(TESNum, dirfiles)
+#FPidx = tes2index(TESNum, ASIC)
+#print(PIXq, FPidx)
 
-    if nest:
-        hpnest= hp.reorder(hpmap, r2n=nest, )
-    else:
-        hpnest= hpmap
-    hpnest_filt= f.gaussian_filter(hpnest, filterbeam)
+## Central pix
+#FPidx_central = tes2index(96, 1)
+#PIXcentral = np.where(qTD.detector.index == FPidx_central)[0][0]
 
-    centerini = [90-az_center,el_center]
-    px, center = selectcenter(hpnest_filt,centerini+np.array([90,0]))
-    vli = [px,]
-    thetaphi=hp.pix2ang(nside,px,nest=nest)
-    xlo = px-100
-    xhi = px+100
-    if plotcenter:
-        fig,ax=subplots(nrows=1,ncols=2,figsize=(12,4))
-        ax[0].set_xlim(xlo,xhi)
-        ax[0].plot(hpnest, 'bo--', label='raw')
-        ax[0].plot(hpnest_filt, 'bo--', alpha=0.4, label='filtered')
-        ax[0].legend()
-        for i in vli:
-            ax[0].axvline(i, c='k',alpha=0.4,ls='--')
-            neig=npp(i)
-        hp.gnomview(hpnest, reso=12, rot=center, nest=True)
-        hp.projscatter(np.deg2rad(az_center), np.deg2rad(el_center), marker='+', color='r')
+#FP_index = tes2index(TESNum, ASIC)
+#print('FP_index', FP_index)
+#index_q = np.where(qTD.detector.index == FP_index)[0][0]
+#print('a', index_q)
 
-    pxvec=hp.pix2vec(nside, px, nest=nest)
-    fullvec=hp.pix2vec(nside, range(0,npix), nest=nest)
-    fullpx = np.linspace(0,npix,npix,dtype=int)
-
-    aberr= np.deg2rad(np.array([0,1.]))
-    delta = np.deg2rad(12.5)
-    #Old peaksordering
-    #thphpeaks = [thetaphi,
-    #             thetaphi-delta*np.array([1,0]),                 
-    #            thetaphi+delta*np.array([1,0]), 
-    #            thetaphi-delta*np.array([0,1]+aberr),
-    #            thetaphi+delta*np.array([0,1]+aberr),
-    #            thetaphi-delta*0.5*np.array([1,1]),
-    #            thetaphi+delta*0.5*np.array([1,1]),
-    #            thetaphi-delta*0.5*np.array([-1,1]),
-    #            thetaphi+delta*0.5*np.array([-1,1]),
-    #             ]
-    
-    #peaks ordering according JCh and instrument module
-    thphpeaks = [thetaphi+delta*np.array([1,0]),
-                 thetaphi-delta*0.5*np.array([-1,1]),
-                 thetaphi-delta*np.array([0,1]+aberr), 
-                 thetaphi+delta*0.5*np.array([1,1]),
-                 thetaphi,
-                 thetaphi-delta*0.5*np.array([1,1]),
-                 thetaphi+delta*np.array([0,1]+aberr),
-                 thetaphi+delta*0.5*np.array([-1,1]),
-                 thetaphi-delta*np.array([1,0])
-                 ]
-
-    fullvec=hp.pix2vec(nside, range(0,npix), nest=nest)
-    realmaxpx=np.zeros((9,),dtype=int)
-    absmaxpx=np.zeros((9,),dtype=int)
-
-    if plotnine: fig, ax = subplots(nrows=9,ncols=1,figsize=(8,8),)#sharex=True, )
-    thphpeaksnew = np.zeros((9,2))
-    for j,ithphpx in enumerate(thphpeaks):
-        c='b'
-        if j == 4: 
-            threshold = threshold0
-        else:
-            threshold =threshold
-        ivec = hp.ang2vec(ithphpx[0],ithphpx[1], )
-        ifullpx = np.linspace(0,npix,npix,dtype=int)
-        maskipx = np.rad2deg(np.arccos(np.dot(ivec,fullvec))) < threshold
-        if refilter:
-            mean, std = np.mean(hpnest_filt[maskipx]),np.std(hpnest_filt[maskipx])
-            maskipx2 = hpnest_filt[maskipx] < mean+3*std
-            maskipx3 = hpnest_filt[maskipx] > mean-3*std
-            maskipx[maskipx]=maskipx2*maskipx3
-        maskidx = np.where(maskipx == True)[0]
-        #useless max (just to plot in 1d not healpix)
-        realmaxpx[j]=np.where(hpnest_filt[maskipx] == np.max(hpnest_filt[maskipx]))[0][0]
-        #usefull max (healpix)
-        absmaxpx[j]=maskidx[realmaxpx[j]]
-        thphpeaksnew[j] = hp.pix2ang(nside,absmaxpx[j],nest=nest)
-        print()
-        #ax[j].set_title('masked values at {}deg from px'.format(threshold))
-
-        if plotnine:
-            if j==3: c='r'
-            ax[j].axvline(realmaxpx[j], c='k',alpha=0.4,ls='--')
-            ax[j].plot(hpnest_filt[maskipx], 'o--',color=c, alpha=0.4, label='filtered')
-            ax[j].legend()        
-
-    return hpnest, thphpeaksnew, absmaxpx#, thphpeaksnew
 ```
 
 ```{python}
+reload(fh)
+# Take the direction of the central peak of the central detector
+dTD['synthbeam_kmax'] = 8
+qTD = qubic.QubicInstrument(dTD)
+
+PIXNum = 125#93#242#150# #1-256. Numbering of the Healpix Files
+PIXCentral = 96
+PIXq, TESNum, ASIC = fh.q_pix(PIXNum)
+PIXcentral, TESNum_c, ASIC_c = fh.q_pix(PIXCentral)
+del PIXCentral
+print(PIXq, TESNum, ASIC)
+print(PIXcentral, TESNum_c, ASIC_c)
+```
+
+Look at the maps...
+
+
+from astropy.io import fits
+hdus = fits.open(qubic.QubicCalibration(dTD).detarray)
+#qTD.calibration.get('hornarray')
+hdus[0].header
+
+
+from qubic.selfcal_lib import get_TEScoordinates_ONAFP
+
+xONAFP,yONAFP, _ = get_TEScoordinates_ONAFP(qTD)
+
+```{python}
+reload(fh) 
+th_tes_all, ph_tes_all, _ = fh.thph_qsoft(qTD, sTD, PIXq)
+th_cent_all, ph_cent_all, _ = fh.thph_qsoft(qTD, sTD, PIXcentral)
+#Take central peak
+th_cent, ph_cent = th_cent_all[0,0], ph_cent_all[0,0]
+th_tes, ph_tes = th_tes_all[0,0], ph_tes_all[0,0]
+
+hj = 0
+figure(figsize = (8,8))
+xlabel(r'n$_{x}$ = $\sin{\theta} \cos{\phi}$', fontsize = 15)
+ylabel(r'n$_{y}$ = $\sin{\theta} \sin{\phi}$', fontsize = 15)
+scatter(np.sin(th_tes_all)*np.cos(ph_tes_all), 
+        np.sin(th_tes_all)*np.sin(ph_tes_all), 
+        label = 'perif TES', color = 'b')
+scatter(np.sin(th_cent_all)*np.cos(ph_cent_all), 
+        np.sin(th_cent_all)*np.sin(ph_cent_all), c = 'g', label = 'central TES')
+scatter(np.sin(th_tes)*np.cos(ph_tes), 
+        np.sin(th_tes)*np.sin(ph_tes), c = 'r')
+legend()
+
+vec_cent = np.array([np.sin(th_cent) * np.cos(ph_cent),
+           np.sin(th_cent) * np.sin(ph_cent),
+           np.cos(th_cent)])
+vec_tes = np.array([np.sin(th_tes) * np.cos(ph_tes),
+           np.sin(th_tes) * np.sin(ph_tes),
+           np.cos(th_tes)])
+
+#savefig('Reference_frame_plots/TES{}ASIC{}_peaks'.format(TESNum,ASIC))
+```
+
+```{python}
+#from mpl_toolkits.mplot3d import Axes3D
+#rc['font':'size', 14]
+fig = figure(figsize=(15,7))
+ax = fig.add_subplot(1, 2, 1, projection='3d', facecolor = 'w')
+ax.set_xlabel(r'X$_{GRF}$')
+ax.set_ylabel(r'Y$_{GRF}$')
+ax.set_zlabel(r'Z$_{GRF}$')
+ax.set_xlim(-0.3, 0.3)
+ax.set_ylim(-0.3, 0.3)
+zmax = 13
+ax.set_zlim(0,zmax)
+
+# optycal axis
+ax.plot([0,0], [0,0], [0,zmax], color = 'k')
+
+# detectors in GRF frame
+ax.plot(qTD.detector.center[...,0],
+        qTD.detector.center[...,1], zdir ='z', zs = 0, marker = 's', ls = '', markersize = 3,
+       color = 'k', alpha = 0.1)
+ax.plot([qTD.detector.center[PIXcentral,0],],
+        [qTD.detector.center[PIXcentral,1],], zdir ='z', zs = 0, marker = 's', ls = '', markersize = 3,
+       color = 'g', alpha = 0.4)
+ax.plot([qTD.detector.center[PIXq,0],],
+        [qTD.detector.center[PIXq,1],], zdir ='z', zs = 0, marker = 's', ls = '', markersize = 3,
+       color = 'b', alpha = 0.4)
+# detectors in ONAFP frame
+#ax.plot(xONAFP,yONAFP, zdir = 'z', zs = 0, marker = 's', ms = 3, color = 'r')
+
+# horns in GRF frame
+theta = np.linspace(0, 2 * np.pi, 201)
+r = 0.005
+xcir = r*np.cos(theta)
+ycir = r*np.sin(theta)
+for icenter in zip(qTD.horn.center[...,0], qTD.horn.center[...,1]):
+    ax.plot(xcir + icenter[0], ycir +icenter[1], zdir = 'z', zs = 8, marker = '', ls = '-', lw = 2,
+       color = 'g', alpha = 0.4)
+
+# projected synthesized beam 
+ax.plot(np.sin(th_cent_all[0])*np.cos(ph_cent_all[0]), 
+        np.sin(th_cent_all[0])*np.sin(ph_cent_all[0]), zdir = 'z', zs = zmax, marker = 'o', 
+        ls ='',  c = 'g', )
+ax.plot(np.sin(th_tes_all[0])*np.cos(ph_tes_all[0]), 
+        np.sin(th_tes_all[0])*np.sin(ph_tes_all[0]), zdir = 'z', zs = zmax, marker = 'o', 
+        ls = '', c = 'b', )
+ax.plot(np.sin(th_tes)*np.cos(ph_tes), 
+        np.sin(th_tes)*np.sin(ph_tes), zdir = 'z', zs = zmax, marker = 'o', c = 'r')
+
+ax2 = fig.add_subplot(1, 2, 2, projection='3d')
+ax2.plot(qTD.detector.center[...,0],
+        qTD.detector.center[...,1], zdir ='z', zs = 0, marker = 's', ls = '', markersize = 6,
+       color = 'k', alpha = 0.2)
+ax2.plot([qTD.detector.center[PIXq,0],],
+        [qTD.detector.center[PIXq,1],], zdir ='z', zs = 0, marker = 's', ls = '', markersize = 6,
+       color = 'b')
+ax2.plot([qTD.detector.center[PIXcentral,0],],
+        [qTD.detector.center[PIXcentral,1],], zdir ='z', zs = 0, marker = 's', ls = '', markersize = 6,
+       color = 'g')
+
+
+#a = plt.axes([0.2, 0.6, .2, .2], facecolor='y')
+#plt.plot(t[:len(r)], r)
+#plt.title('Impulse response')
+#plt.xlim(0, 0.2)
+#plt.xticks([])
+#plt.yticks([])
+```
+
+Test for one TES... it works fine!
+
+
+print(np.rad2deg(th_cent), np.rad2deg(th_tes))
+print(np.rad2deg(ph_cent)+360, np.rad2deg(ph_tes)+180)
+print(np.tan(ph_cent), np.tan(ph_cent+np.pi) )
+
+
+np.rad2deg(hp.vec2ang(vec_cent)), np.rad2deg(hp.vec2ang(vec_tes))
+
+
+hp.vec2ang(np.dot(sbfit.rotmatY(np.pi/2), vec_tes))
+
+```{python}
+reload(fh)
 # Get the data
-freq_source = 150
-dirfiles = '/home/lmousset/QUBIC/Qubic_work/Calibration/datas/synth_beam_150'
-# dirfiles = os.environ['QUBIC_TODDIR']+'150GHz-2019-04-06/'
+dirfiles = os.environ['QUBIC_TODDIR']+'150GHz-2019-04-06/'
 print('dirfiles :', dirfiles)
 
 c50 = np.cos(np.radians(50))
 azmin = -15./c50
 azmax = 15./c50
 
-TESNum = 93
-# reload(sbfit)
-flatmap, az, el = sbfit.get_flatmap(TESNum, dirfiles, azmin = azmin, azmax=azmax)
+flatmap, az, el = sbfit.get_flatmap(PIXNum, dirfiles, azmin = azmin, azmax=azmax)
 npix = len(np.ravel(flatmap))
 
-subplot(1,2,1)
-imshow(flatmap,
-       extent=[np.min(az)*c50, np.max(az)*c50, np.min(el), np.max(el)], aspect='equal',
-      vmin=-3000, vmax=3000)
-# colorbar()
-
-```
-
-```{python}
 alldata_renorm = np.zeros((256, npix))
 for i in range(256):
     flatmap, az, el = sbfit.get_flatmap(i+1, dirfiles, azmin=azmin, azmax=azmax)
     alldata_renorm[i, :] = np.ravel((flatmap - np.mean(flatmap)) / np.std(flatmap))  
-
 ##### Estimating the median of all SB images - to be removed - Origin still unexplained...
 med = np.reshape(np.median(alldata_renorm,axis=0),np.shape(flatmap))
 mm = np.mean(med)
 ss = np.std(med)
 
-```
+t00 = time.time()
+tesvec = np.array([93,64,59,91,28,124,9,105,11,107,1,97])
+asicvec = np.array([1,2,1,2,1,2,1,2,1,2,1,2])
+#tesvec = np.array([93,61,])#59,91,28,124,9,105,11,107,1,97])
+#asicvec = np.array([1,2,])#1,2,1,2,1,2,1,2,1,2])
 
-```{python}
-az_center = 90
-el_center = 0
-```
-
-Test for one TES... it works fine!
-
-```{python}
-nside = 256
-npix = 12*nside**2
-nest = True
-ites = 96
-fullvec=hp.pix2vec(nside, range(0,npix), nest=nest)
-
-t00=time.time()
-for ites in range(90,91):
+for j, tesic in enumerate(zip(tesvec,asicvec)):
     
-    t0=time.time()
-    hpnest, thphpeaksnew, absmaxpx = fit_hpmap(ites, dirfiles, az_center, el_center,
-                                           filterbeam=2,threshold=2,threshold0=2,)
+    PIXq = tes2pix(tesic[0], tesic[1]) -1 
+    if tesic[1] ==1:
+        PIXNum = tesic[0] 
+    else:
+        PIXNum = tesic[0] + 128
+    #Configuration fo the pixel number and peak and vector
+    th_cent_all, ph_cent_all, _ = fh.thph_qsoft(qTD, sTD, PIXcentral, PiRot = True)
+    th_cent, ph_cent = th_cent_all[0,0], ph_cent_all[0,0]
 
-    fig, ax1 = subplots(nrows=1, ncols=2, figsize=(10,8))
+    th_tes_all, ph_tes_all, _ = fh.thph_qsoft(qTD, sTD, PIXq, PiRot = True)
+    th_tes, ph_tes = th_tes_all[0,0], ph_tes_all[0,0]
+
+    # theta, phi to vector of central peak for TES (p0 for fitting function)
+    vec_tes = np.array([np.sin(th_tes) * np.cos(ph_tes),
+           np.sin(th_tes) * np.sin(ph_tes),
+           np.cos(th_tes)])
+    
+    nest = True
+    fullvec = hp.pix2vec(nside, range(0, 12*nside**2), nest=nest)
+
+    t0 = time.time()
+    # Carry synth beam from polar cap to the equatorial one
+    newcenter = [hp.vec2ang(np.dot(sbfit.rotmatY(np.pi/2), vec_tes))[0][0],
+                hp.vec2ang(np.dot(sbfit.rotmatY(np.pi/2), vec_tes))[1][0]]
+
+    #Fit for HEALPix maps
+    hpnest, thphpeaksnew, absmaxpx = fh.fit_hpmap(PIXNum, dirfiles, newcenter, plot = False, nest = nest,
+                                       filterbeam = 2, threshold = 2, threshold0 = 2, plotcenter = False)
+    hpnest = fh.mask_unseen(hpnest, az, el, nest = nest)
+    #End fit
+    fig, ax1 = subplots(nrows = 1, ncols = 3, figsize = (14,4))
     axes(ax1[0])
-    hp.gnomview(hpnest, reso=10, nest=nest, title= 'Healpy projection (TES#{})'.format(ites),
-                      hold=True, cbar=False)
-    hp.graticule(dpar=5,dmer=5,color='w')
-    
+    #hp.gnomview(hp.ud_grade(hpnest, int(nside/2), order_in = 'NEST', order_out = 'NEST'), reso = 10, nest = nest, 
+    hp.gnomview(hpnest, reso = 10, nest = nest, 
+                xsize = 200, ysize = 200,
+                title = 'Healpy projection (TES#{} ASIC {})'.format(tesic[0], tesic[1]),
+                hold = True, cbar = False)
+    hp.graticule(dpar = 5, dmer = 5, color = 'w', verbose = False)
+    hp.projscatter(th_cent , ph_cent , rot = (0,0), marker = 's', color = 'w')
+    hp.projscatter(th_tes , ph_tes , rot = (0,0), marker = 's', color = 'y')
+
     for ip in range(9):
-        #loc = hp.pix2ang(nside,absmaxpx[jp], nest=nest)
-        hp.projscatter(thphpeaksnew[ip], marker='+', color='r')
-        hp.projtext(thphpeaksnew[ip,0],thphpeaksnew[ip,1], s='{}'.format(ip),color='w')
-    print('Done Healpy in {:.2f} minutes'.format((time.time()-t0)/60))
+        hp.projscatter(thphpeaksnew[ip], marker = '+', color = 'r')
+        hp.projtext(thphpeaksnew[ip,0],thphpeaksnew[ip,1], s = '{}'.format(ip),color = 'w')
+    print('Done Healpy in {:.2f} minutes'.format((time.time() - t0)/60))
 
     #Flat fit
-    t1=time.time()
-    flatmap, az, el = sbfit.get_flatmap(ites, dirfiles, remove=med, azmin=azmin, azmax=azmax)
+    t1 = time.time()
+    flatmap, az, el = sbfit.get_flatmap(PIXNum, dirfiles, remove = med, azmin = azmin, azmax = azmax)
 
     #### Instantiate a model
-    sbfitmodel3 = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, no_xy_shift=False, distortion=False)
+    sbfitmodel3 = sbfit.SbModelIndepPeaks(nrings = 2, common_fwhm = True, 
+                                          no_xy_shift = False, distortion = False)
 
-    fit, xypeaks = sbfit.fit_sb(flatmap, az, el, sbfitmodel3, verbose=False, resample=False, 
-                            doplot=False, extra_title='TES #{}'.format(TESNum))
+    fit, xypeaks = sbfit.fit_sb(flatmap, az, el, sbfitmodel3, verbose = False, resample = False, 
+                            doplot = False, extra_title = 'TES #{} ASIC {}'.format(tesic[0], tesic[1]))
 
     axes(ax1[1])
-    title('Flat projection (TES#{})'.format(ites))
-    imshow(flatmap, extent=[np.min(az)*np.cos(np.radians(50)), 
-                                   np.max(az)*np.cos(np.radians(50)), 
-                                   np.min(el), np.max(el)])
-    scatter(xypeaks[0,:],xypeaks[1,:], marker='+', color='r')
+    title('Flat projection (TES#{} ASIC {})'.format(tesic[0], tesic[1]))
+    imshow(flatmap, extent = [np.min(az)*np.cos(np.radians(50)), 
+                               np.max(az)*np.cos(np.radians(50)), 
+                               np.min(el), np.max(el)])
+    scatter(xypeaks[0,:], xypeaks[1,:], marker = '+', color = 'r')
     for ir in range(9):
-        text(xypeaks[0,ir],xypeaks[1,ir], s='{}'.format(ir)  , color='w')
-    grid(color='w', ls='--', fillstyle='full')
+        text(xypeaks[0,ir],xypeaks[1,ir], s = '{}'.format(ir)  , color = 'w')
+    grid(color = 'w', ls = '--', fillstyle = 'full')
+    
     xlabel('Az[deg]*cos(50)')
     ylabel('El[deg]')
     print('Done Flat in {:.2f} minutes'.format((time.time()-t1)/60))
 
+    axes(ax1[2])
+    plot(qTD.detector[PIXq].center[0,0],qTD.detector[PIXq].center[0,1], 'ys', ms = 8)
+    plot(qTD.detector[PIXcentral].center[0,0],qTD.detector[PIXcentral].center[0,1], 'ws', ms = 8)
+    qTD.detector.plot(fill = True, facecolor = 'k', edgecolor = 'k', alpha = 0.1)
+    ax1[2].set_aspect(np.diff(ax1[2].get_xlim()), 
+                     anchor = (0.5,0.52), adjustable = 'box')
+#savefig('Reference_frame_plots/TES{}ASIC{}_hpVSflat'.format(TESNum,ASIC))
+print('All done in {} minutes'.format((time.time()-t00)/60) )
+```
+
+```{python}
+hpnest_cp = hpnest.copy()
+
+fakemap = fh.mask_unseen(hpnest_cp, az, el, nest = True)
+figure(figsize = (14,11))
+subplot(221)
+xlabel(r'azimuth (hk)')
+ylabel(r'elevation (hk)')
+azel = np.meshgrid(az, el)
+scatter(azel[0], azel[1], marker = 'o', s = 0.1)
+subplot(222)
+xlabel(r'$\alpha$[deg]')
+ylabel(r'$\delta$[deg]')
+radec = qubic.hor2equ(azel[0].ravel(), azel[1].ravel(), 0)
+#scatter_contour(radec[0],radec[1], filled_contour = False)
+scatter(radec[0],radec[1], marker = 'o', s = 0.1)
+subplot(223)
+hp.gnomview(fakemap,
+            xsize = 270, ysize = 200, reso = 12, 
+            hold = True, cbar = False, nest = True,
+           title = 'Heapy map nside = 256 (original)')
+subplot(224)
+hp.gnomview(hp.ud_grade(fakemap, 128, order_in = 'NESTED'),
+            xsize = 270, ysize = 200, reso = 12, 
+            hold = True, cbar = False, nest = True,
+           title = 'Heapy map nside = 128 (udgraded)')
+```
+
+```{python}
+reload(fh)
+cmap = get_cmap('jet', 7)
+figure(figsize=(18,6))
+#tesvec = np.array([9,64,59,91,28,124,9,105,11,107,1,97])
+#asicvec = np.array([1,2,1,2,1,2,1,2,1,2,1,2])
+tesvec = np.array([30])#,9, 59,28,9,11,1])
+asicvec = np.array([2,])#1, 1,1,1,1,1])
+
+
+th_ref, phi_ref, index_ref = fh.thph_qsoft(qTD, sTD, PIXcentral, ref_detector = True )
+subplot(121)
+hp.gnomview(np.zeros_like(hpnest), reso = 10, nest = nest, 
+        xsize = 200, ysize = 200, cmap = 'seismic',
+        title = 'peaks',
+        hold = True, cbar = False)
+hp.graticule(dpar = 5, dmer = 5, color = 'k', verbose = False)
+
+for j, tesic in enumerate(zip(tesvec,asicvec)):
     
-print('All done in {} minutes'.format((t00-time.time())/60) )
+    #parcolor = (len(tesvec)-j)/len(tesvec) 
+    parcolor = (5-(j+4))/5 
+    PIXq = tes2pix(tesic[0], tesic[1]) - 1
+    if tesic[1] == 1:
+        PIXNum = tesic[0] 
+    else:
+        PIXNum = tesic[0] + 128
+
+    th_tes_all, phi_tes_all, _ = fh.thph_qsoft(qTD, sTD, PIXq, new = True,
+                                            PiRot = True, ref_detector = True, index_ref = index_ref)
+    #th_cen_all, phi_cen_all, _ = fh.thph_qsoft(qTD, sTD, PIXCentral, new = False,
+    #                                        PiRot = True, ref_detector = False)
+    th_tes, ph_tes = th_tes_all[0,0:9], phi_tes_all[0,0:9]
+    hp.projscatter(th_tes, ph_tes, marker = 'o', rot = (0,0), s = 120,
+                   color = cmap(parcolor))
+    hp.projscatter(th_ref, phi_ref, marker = 'o', rot = (0,0), s = 120,
+                   color = 'k', alpha = 0.2)
+
+    #vec_tes = np.array([np.sin(th_tes) * np.cos(ph_tes),
+    #       np.sin(th_tes) * np.sin(ph_tes),
+    #       np.cos(th_tes)])
+    #newcenter = [hp.vec2ang(np.dot(sbfit.rotmatY(np.pi/2), vec_tes))[0][0],
+    #            hp.vec2ang(np.dot(sbfit.rotmatY(np.pi/2), vec_tes))[1][0]]
+    
+    subplot(122)    
+    plot(qTD.detector[PIXq].center[0,0],qTD.detector[PIXq].center[0,1], 's', 
+         c = cmap(parcolor), ms = 9)
+    plot(qTD.detector[PIXcentral].center[0,0],qTD.detector[PIXcentral].center[0,1], 'ks', ms = 9)
+qTD.detector.plot(fill=True, facecolor = 'k', edgecolor = 'k', alpha = 0.1)
+#savefig('fig_tes{}asic{}'.format(tesic[0],tesic[1]))
 ```
 
-Saving peaks locations
+Look at the 'central peak' for each TES... not working the plot I want.. see later
 
 ```{python}
-for TESNum in range(1,2):
-    _, thphpeaks, _  = fit_hpmap(ites, dirfiles, az_center, el_center,
-                                           filterbeam=2,threshold=2,threshold0=2,)
-    print(thphpeaks)
+#tesvec = np.array([np.arange(1,129),np.arange(1,129)]).ravel()
+#asicvec = np.array([np.repeat([1], 128),np.repeat([2], 128)]).ravel()
+tesvec = np.array([np.arange(1,36)]).ravel()
+asicvec = np.array([np.repeat([1], 36)]).ravel()
+
+tesvec = np.delete(tesvec, [3,35])
+asicvec = np.delete(asicvec, [3,35])
+cmap = get_cmap('jet', 256)
+
+PIXq = tes2pix(93, 1) -1
+th_tes_all, ph_tes_all, _ = fh.thph_qsoft(qTD, sTD, PIXq)
+th_tes, ph_tes = th_tes_all[0,0], ph_tes_all[0,0]
+
+vec_tes = np.array([np.sin(th_tes) * np.cos(ph_tes),
+           np.sin(th_tes) * np.sin(ph_tes),
+           np.cos(th_tes)])
+    
+nest = True
+fullvec = hp.pix2vec(nside, range(0, 12*nside**2), nest=nest)
+
+t0 = time.time()
+# Carry synth beam from polar cap to the equatorial one
+newcenter = [hp.vec2ang(np.dot(sbfit.rotmatY(np.pi/2), vec_tes))[0][0],
+            hp.vec2ang(np.dot(sbfit.rotmatY(np.pi/2), vec_tes))[1][0]]
+
+#Fit for HEALPix maps
+hpnest, thphpeaksnew, absmaxpx = fh.fit_hpmap(93, dirfiles, newcenter, plot = False, nest = nest,
+                                   filterbeam = 2, threshold = 2, threshold0 = 2, plotcenter = False)
+hpnest = fh.mask_unseen(hpnest, az, el, nest = nest)
+#End fit
+fig, ax1 = subplots(nrows = 1, ncols = 2, figsize = (14,4))
+axes(ax1[0])
+hp.gnomview(hp.ud_grade(hpnest, int(nside/2), order_in = 'NEST', order_out = 'NEST'), reso = 10, nest = nest, 
+#hp.gnomview(hpnest, reso = 10, nest = nest, 
+            xsize = 200, ysize = 200,
+            title = 'Healpy projection (TES#{} ASIC {})'.format(tesic[0], tesic[1]),
+            hold = True, cbar = False)
+hp.graticule(dpar = 5, dmer = 5, color = 'w', verbose = False)
+
+for j, tesic in enumerate(zip(tesvec,asicvec)):
+    parcolor = (len(tesvec)-j)/len(tesvec)
+    
+    PIXq = tes2pix(tesic[0], tesic[1]) -1 
+    if tesic[1] ==1:
+        PIXNum = tesic[0] 
+    else:
+        PIXNum = tesic[0] + 128
+    #Configuration fo the pixel number and peak and vector
+    
+    th_tes_all, ph_tes_all, _ = fh.thph_qsoft(qTD, sTD, PIXq)
+    th_tes, ph_tes = th_tes_all[0,0], ph_tes_all[0,0]
+
+    # theta, phi to vector of central peak for TES (p0 for fitting function)
+    hp.projscatter(th_cent , ph_cent , rot = (0,0), marker = 's', color = 'w')
+    hp.projscatter(th_tes , ph_tes , rot = (0,0), marker = 's', color = cmap(parcolor))
+
+    for ip in range(9):
+        hp.projscatter(thphpeaksnew[ip], marker = '+', color = 'r')
+        hp.projtext(thphpeaksnew[ip,0],thphpeaksnew[ip,1], s = '{}'.format(ip),color = 'w')
+    #print('Done Healpy in {:.2f} minutes'.format((time.time() - t0)/60))
+
+axes(ax1[1])
+for j, tesic in enumerate(zip(tesvec,asicvec)):
+    PIXq = tes2pix(tesic[0], tesic[1]) -1 
+    parcolor = (len(tesvec)-j)/len(tesvec)
+    
+    plot(qTD.detector[PIXq].center[0,0],qTD.detector[PIXq].center[0,1], cmap(parcolor), 's', ms = 8)
+    qTD.detector.plot(fill = True, facecolor = 'k', edgecolor = 'k', alpha = 0.1)
+    ax1[1].set_aspect(np.diff(ax1[1].get_xlim()), 
+                     anchor = (0.5,0.52), adjustable = 'box')
 ```
 
 ```{python}
-dirsave = dirfiles+'/fit_HPpeaks/'
+
+```
+
+```{python}
+
+```
+
+```{python}
+#ubic.QubicInstrument._peak_angles_kmax(qTD.synthbeam.kmax, getattr(qTD, 'horn', None).spacing,
+#                                      getattr(qTD, 'horn', None).angle, 
+#                                       qTD.filter.nu, qTD.detector[231].center)
+lmbda = 3e9 /qTD.filter.nu
+angle = 45
+kmax = qTD.synthbeam.kmax
+horn_spacing = getattr(qTD, 'horn', None).spacing
+_kx, _ky = np.mgrid[-kmax:kmax + 1, -kmax:kmax + 1]
+kx = _kx * np.cos(angle * np.pi / 180) - _ky * np.sin(angle * np.pi / 180)
+ky = _kx * np.sin(angle * np.pi / 180) + _ky * np.cos(angle * np.pi / 180)
+
+#newkx, newky = sbfit.uv2thph(np.dot(sbfit.rotmatZ(np.pi), sbfit.thph2uv(kx.ravel(), ky.ravel()) ))
+position = -qTD.detector.center / np.sqrt(np.sum(qTD.detector.center ** 2, axis=-1))[..., None]
+
+nx = position[:, 0, None] - lmbda * kx.ravel() / horn_spacing
+ny = position[:, 1, None] - lmbda * ky.ravel() / horn_spacing
+#nx = position[:, 0, None] - lmbda * newkx.ravel() / horn_spacing
+#ny = position[:, 1, None] - lmbda * newky.ravel() / horn_spacing
+
+```
+
+```{python}
+figure(figsize = (10,6))
+import numexpr as ne
+local_dict = {'nx': nx, 'ny': ny}
+the_x = ne.evaluate('arcsin(sqrt(nx**2 + ny**2))',
+                            local_dict=local_dict)
+phi_y = ne.evaluate('arctan2(ny, nx)', local_dict=local_dict)
+print(len(phi_y), np.shape(nx))
+#scatter(nx, ny)
+#scatter(the_x, phi_y)
+scatter(np.sin(the_x) * np.cos(phi_y),
+        np.sin(the_x) * np.sin(phi_y), alpha = 0.3)
+```
+
+# dirsave = dirfiles+'/fit_HPpeaks/'
 try:
     os.mkdir(dirsave)
     print('Fit saved in {}'.format(dirsave))    
 except:
     print('Fit saved in {}'.format(dirsave))    
     print(' ')
-TEXMax = 3
+TESMax = 3
 for TESNum in range(1,TESMax+1):
     _, thphpeaks, _ = fit_hpmap(ites, dirfiles, az_center, el_center,
                                            filterbeam=2,threshold=2,threshold0=2,)
     print(thphpeaks)
-```
+
 
 Make pdf file with all TES... not working
 
@@ -325,79 +568,41 @@ Make pdf file with all TES... not working
 
 .
 
+
+## The idea is to get the FOV given a detector and the center of the FOV (determined from optical axis). Because of the synthesized bemas, not all the detectors will observe the same region.
+
+
 ```{python}
-nside=256
-npix=12*nside**2
-nest=True
-nperpage=7
-TESMax=9
-
-fullvec=hp.pix2vec(nside, range(0,npix), nest=nest)
-from matplotlib.backends.backend_pdf import PdfPages
-t00=time.time()
-with PdfPages('00prueba-hp.pdf') as pdf:
-    for TESNum in range(1,TESMax+1):
-        ipage = (TESNum-1) % nperpage
-        print('ipage', ipage)
-        if ipage  == 0:
-            rc('figure', figsize=(20,28))
-            #if (TESNum)%nperpage == 0: 
-            fig, ax1  = subplots(nrows=7,ncols=2)
-            print(np.shape(ax1))
-        
-        #t0=time.time()
-        hpnest, thphpeaks, absmaxpx = fit_hpmap(TESNum, dirfiles, az_center, el_center,
-                                               filterbeam=2,threshold=2,threshold0=2,)
-        j = TESNum%7        
-        axes(ax1[j,0])
-        cla()
-        hp.gnomview(hpnest, reso=10, nest=nest, title= 'Healpy projection (TES#{})'.format(TESNum),
-                          hold=True, cbar=False)
-        hp.graticule(color='w')
-        for jp in range(9):
-            loc = hp.pix2ang(nside,absmaxpx[jp], nest=nest)
-            hp.projscatter(loc, marker='+', color='r')
-            hp.projtext(loc[0],loc[1], s='{}'.format(jp),color='w')
-        #print('Done Healpy in {:.2f} minutes'.format((time.time()-t0)/60))
-
-        #Flat fit
-        #t1=time.time()
-        flatmap, az, el = sbfit.get_flatmap(TESNum, dirfiles, remove=med, azmin=azmin, azmax=azmax)
-
-        #### Instantiate a model
-        sbfitmodel3 = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, no_xy_shift=False, distortion=False)#
-
-        _, xypeaks = sbfit.fit_sb(flatmap, az, el, sbfitmodel3, verbose=False, resample=False, 
-                                doplot=False, extra_title='TES #{}'.format(TESNum))
-
-        axes(ax1[j,1])
-        cla()
-        title('Flat projection (TES#{})'.format(TESNum))
-        imshow(flatmap, extent=[np.min(az)*np.cos(np.radians(50)), 
-                                       np.max(az)*np.cos(np.radians(50)), 
-                                       np.min(el), np.max(el)])
-        scatter(xypeaks[0,:],xypeaks[1,:], marker='+', color='r')
-        for ir in range(9):
-            text(xypeaks[0,ir],xypeaks[1,ir], s='{}'.format(ir)  , color='w')
-        grid(color='w', ls='--', fillstyle='full')
-        xlabel('Az[deg]*cos(50)')
-        ylabel('El[deg]')
-        
-        #print('Done Healpy in {:.2f} minutes'.format((time.time()-t0)/60))
-        if (ipage == (nperpage-1)) or TESNum==TESMax:
-            #tight_layout()
-            pdf.savefig()
-            clf()
-
-    print('All done in {} minutes'.format((time.time()-t00)/60) )
+sbFI = qFI.get_synthbeam(sFI, detector_integrate = None)
+sbTD = qTD.get_synthbeam(sTD, detector_integrate = None)
 ```
 
 ```{python}
+idet = qFI.detector[231]
+idetTD_center = qTD.detector[231]
+idetTD_tes = qTD.detector[PIXNum]
+#subplot(121)
+#plot(idet.center[0,0], idet.center[0,1], 'ob')
+#qFI.detector.plot()
+#subplot(122)
+plot(idetTD_center.center[0,0], idetTD_center.center[0,1], 'ob')
+plot(idetTD_tes.center[0,0], idetTD_tes.center[0,1], 'og')
+qTD.detector.plot()
 
 ```
 
 ```{python}
-
+figure(figsize = (12,12))
+hp.gnomview(np.sum(sbFI, axis=0), rot = (0, 90), title = 'FI', reso = 12, sub = 221)
+hp.gnomview(np.sum(sbTD, axis=0), rot = (0, 90), title = 'TD', reso = 12, sub = 222, 
+            min = 0, max = 5e7)
+#addingmap = 0
+#for i in range(248):
+#    addingmap += sbfit.get_hpmap(i+1, dirfiles)
+hp.gnomview(addingmap, title = 'Data', reso = 12, sub = 223, 
+            min = 0, max = 1e6)
+#hp.gnomview(sb[120], rot = (0, 90), reso = 12, sub = 223)
+#hp.gnomview(sb[200], rot = (0, 90), reso = 12, sub = 224)
 ```
 
 ```{python}

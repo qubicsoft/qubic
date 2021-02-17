@@ -28,6 +28,7 @@ synthbeam_kmax=1
 synthbeam_peak150_fwhm=0.39268176 # in degree
 ripples=False
 nripples=0
+focal_length=0.3
 
 ########## Calibration files, should not be edited #####################@
 

@@ -1,0 +1,924 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Reconstruction of Calibration Source map with measured synth. beam
+#### J.-Ch. Hamilton heavily inspired by Martin Gamboa's notebook scanSource_oneDet.ipynb
+
+```{python}
+# %matplotlib inline
+# #%matplotlib notebook
+from matplotlib import rc
+rc('figure', figsize=(15,8))
+rc('font', size=12)
+rc('text', usetex=False)
+rc('image', cmap='viridis')
+
+import healpy as hp
+import pickle
+from importlib import reload
+
+import qubic.io
+from pysimulators import FitsArray
+import qubic.fibtools as ft
+import qubic.demodulation_lib as dl
+import qubic.sb_fitting as sbfit
+from qubicpack.utilities import Qubic_DataDir
+import qubic.SpectroImLib as si
+import qubic.selfcal_lib as sc
+
+# Import jchinstrument from ../
+import os,sys,inspect
+current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parent_dir = os.path.dirname(current_dir)
+sys.path.insert(0, parent_dir) 
+import jchinstrument as jcinst
+
+
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+```
+
+```{python}
+def hall_pointing(az, el, angspeed_psi, maxpsi,
+                 date_obs=None, latitude=None, longitude=None,fix_azimuth=None,random_hwp=True):
+    #This method will reproduce the pointing that is used in the hall to take the data. Will start from bottom
+    #left and will go up at fixed elevation.
+    
+    #nsamples = 2*len(az)*len(el) # commented bucause not go and back
+    nsamples = len(az)*len(el)
+    #print('nsamples = ', nsamples)
+    pp = qubic.QubicSampling(nsamples,date_obs=date_obs, period=0.1, latitude=latitude,longitude=longitude)
+    
+    #Comented because we do not go and back in simulations.. 
+    #mult_el = []
+    #for eachEl in el:
+    #    mult_el.append(np.tile(eachEl, 2*len(az)))
+    # Azimuth go and back and same elevation. 
+    #az_back = az[::-1]
+    #az = list(az)
+    #az.extend(az_back)
+    #mult_az = np.tile(az, len(el))
+    #print(i,np.asarray(mult_el).ravel().shape)
+    #pp.elevation = np.asarray(mult_el).ravel()
+    #pp.azimuth = np.asarray(mult_az).ravel()
+    
+    mult_el = []
+    for eachEl in el:
+        mult_el.extend(np.tile(eachEl, len(az)))
+    mult_az = []
+    mult_az.append(np.tile(az, len(el)))
+    #print(len(mult_el))
+    pp.elevation = np.asarray(mult_el)#az2d.ravel()
+    pp.azimuth = np.asarray(mult_az[0])#el2d.ravel()
+    
+    ### scan psi as well,
+    pitch = pp.time * angspeed_psi
+    pitch = pitch % (4 * maxpsi)
+    mask = pitch > (2 * maxpsi)
+    pitch[mask] = -pitch[mask] + 4 * maxpsi
+    pitch -= maxpsi
+    
+    pp.pitch = pitch
+    
+    if random_hwp:
+        pp.angle_hwp = np.random.random_integers(0, 7, nsamples) * 11.25
+        
+    if fix_azimuth['apply']:
+        pp.fix_az=True
+        if fix_azimuth['fix_hwp']:
+            pp.angle_hwp=pp.pitch*0+ 11.25
+        if fix_azimuth['fix_pitch']:
+            pp.pitch= 0
+    else:
+        pp.fix_az=False
+
+    return pp
+    #print(pp.elevation)#, len(pp.elevation))
+
+
+
+
+
+def select_det(q,idqp):
+    """
+    Returns a sub-instrument with detectors index given by idqp. These indices are to be understood
+    in the qubicpack() numbering starting from 1
+    """
+    if len(q)==1:
+        x, y, FP_index, index_q = sc.get_TES_Instru_coords(q, frame='ONAFP', verbose=False)
+        q.detector = q.detector[index_q[np.array(idqp)-1]]
+    else:
+        x, y, FP_index, index_q = sc.get_TES_Instru_coords(q[0], frame='ONAFP', verbose=False)
+        for i in range(len(q)):
+            q[i].detector = q[i].detector[index_q[np.array(idqp)-1]]
+    return(q)
+
+
+
+
+def do_some_dets(detnums, d, directory, fittedpeaksfile, custom=False, 
+                 nside=None, tol=5e-3, refit=False, resample=False, newsize=70, 
+                 doplot=True, verbose=True, sbfitmodel=None, angs=None, usepeaks=None,
+                 azmin=None, azmax=None, remove=None, fitted_directory=None, weighted=False,
+                nf_sub_rec=1, lowcut=1e-3, highcut=0.3):
+    if nside is not None:
+        d['nside']=nside
+    s = qubic.QubicScene(d)
+    ids = detnums.copy()
+    
+    q = qubic.QubicMultibandInstrument(d)
+    xgrf, ygrf, FP_index, index_q = sc.get_TES_Instru_coords(q[0], frame='GRF', verbose=False)
+
+    if not custom:
+        if verbose:
+            print('')
+            print('Normal Reconstruction')
+        qcut = select_det(qubic.QubicMultibandInstrument(d),ids)
+        #qcut = select_det(qubic.QubicMultibandInstrument(d),[145])
+    else:
+        if verbose:
+            print('')
+            print('Custom Reconstruction')
+        ### Refit or not the locations of the peaks 
+        ### from the synthesized beam images      
+        ### First instantiate a jchinstrument (modified from instrument 
+        ### to be able to read peaks from a file)
+        qcut = select_det(jcinst.QubicMultibandInstrument(d),ids)
+        
+        ### In the present case, we use the peak measurements at 150 GHz
+        ### So we assume its index is len(qcut)//2
+        id150 = len(qcut)//2
+        nu = qcut[id150].filter.nu
+        synthbeam = qcut[id150].synthbeam
+        horn = getattr(qcut[id150], 'horn', None)
+        primary_beam = getattr(qcut[id150], 'primary_beam', None)
+        thecos = np.cos(np.radians(50))
+
+        if refit:
+            if verbose: 
+                print('We refit the peak locations')
+            ### We call the fitting function for the Synthesized beam
+            xypeaks = []
+            for i in range(len(detnums)):
+                if fitted_directory is None:
+                    flatmap, az, el = sbfit.get_flatmap(detnums[i], directory, 
+                                                        azmin=azmin, azmax=azmax, remove=remove)
+                    if sbfitmodel is None:
+                        sbfitmodel = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, 
+                                                         no_xy_shift=False, distortion=False)
+                    if verbose: 
+                        print('Using Fit Model {} for TES #{}'.format(sbfitmodel.name,detnums[i]))
+                    
+                    figure()
+                    fit, thexypeaks = sbfit.fit_sb(flatmap, az, el, sbfitmodel, resample=resample, newsize=newsize,
+                                                   verbose=verbose, doplot=True, 
+                                                   extra_title='TES #{}'.format(detnums[i]))
+                    print('FITING')
+                    show()
+                else:
+                    flatmap, az, el, fitmap, thexypeaks = sbfit.get_flatmap(detnums[i], directory, 
+                                                                            azmin=azmin, azmax=azmax, remove=remove,
+                                                                           fitted_directory=fitted_directory)
+                xypeaks.append(thexypeaks)
+                
+            ### Convert to measurement coordinate system
+            xypeaks = np.array(xypeaks)
+            allthetas_M = np.radians(90-(xypeaks[:,1,:]-50))
+            allphis_M = np.radians(-xypeaks[:,0,:])#*thecos)
+            allvals_M = xypeaks[:,2,:]
+        else:           
+            if verbose: print('No refitting of the peak locations')
+            ### We just read them from the old peak file
+            peaks = np.array(FitsArray(fittedpeakfile))
+            peaks[:,0,:] = peaks[:,0,:]/thecos
+            ### An put them in the expected format
+            mypeaks = peaks[np.array(detnums)-1,:,:]
+            allthetas_M = np.radians(90-(mypeaks[:,1,:]-50))
+            allphis_M = np.radians(-mypeaks[:,0,:]*thecos)
+            allvals_M = mypeaks[:,2,:]
+        
+        ### Now we want to perform the rotation to go to boresight 
+        ### reference frame (used internally by QubicSoft)
+        if angs is None:
+            angs = np.radians(np.array([0, 90, 0]))
+        allthetas_Q = np.zeros_like(allthetas_M)
+        allphis_Q = np.zeros_like(allthetas_M)
+        allvals_Q = np.zeros_like(allthetas_M)
+        numpeak = np.zeros(len(detnums), dtype=int)
+        for idet in range(len(detnums)):
+            allthetas_Q[idet,:], allphis_Q[idet,:] = sbfit.rotate_q2m(allthetas_M[idet,:], 
+                                                                      allphis_M[idet,:], 
+                                                                      angs=angs, inverse=True)
+            allvals_Q[idet,:] = allvals_M[idet,:]/np.max(allvals_M[idet,:])*synthbeam.peak150.solid_angle * (150e9 / nu)**2 / s.solid_angle * len(horn)
+            print('For TES {}'.format(idet))
+            print('Thetas: {}'.format(np.degrees(allthetas_Q[idet,:])))
+            print('Phis: {}'.format(np.degrees(allphis_Q[idet,:])))
+            
+            #### Louise mentions a pi rotation of the measured SB w.r.t. simulations => we apply it here
+            allphis_Q[idet,:] += np.pi
+        
+        ### get TES position in the GRF
+        for idet in range(len(detnums)):
+            clf()
+            ax=plt.subplot(131)
+            ax.set_aspect('equal')
+            plot(xgrf, ygrf, 'k+')
+            xlim(-0.053, 0)
+            ylim(0, 0.053)
+
+            position = np.ravel(qcut[0].detector[idet].center)
+            print(position)
+            plot(position[0], position[1], 'ro', label='TES#{}'.format(detnums[idet]))
+            legend()
+            
+            
+            print('==== Position ==')
+            position = -position / np.sqrt(np.sum(position**2))
+            print(position)
+            theta_center = np.arcsin(np.sqrt(position[0]**2 + position[1]**2))
+            phi_center = np.arctan2(position[1], position[0])
+            print(theta_center, phi_center)
+            print('=================')
+        
+            ax=plt.subplot(132, projection='polar')
+            title('Initial')
+            rav_phQ = np.ravel(allphis_Q[idet,:])
+            rav_thQ = np.ravel(allthetas_Q[idet,:])
+            scatter(rav_phQ, rav_thQ, s=np.ravel(allvals_Q[idet,:])/np.max(allvals_Q[idet,:])*300)
+            for k in range(len(rav_phQ)):
+                text(rav_phQ[k], rav_thQ[k], k)
+            ax.set_rmax(0.5)
+            plot(phi_center, theta_center,'r+', ms=10, markeredgewidth=3, label = 'Th. Line of sight')
+        
+            ## Now we identify the nearest peak to the theoretical Line Of Sight
+            angdist = np.zeros(len(rav_phQ))
+            for k in range(len(rav_phQ)):
+                angdist[k] = sbfit.ang_dist([theta_center, phi_center], [rav_thQ[k], rav_phQ[k]])
+                print(k,np.degrees(angdist[k]))
+            idxmin = np.argmin(angdist)
+
+            
+            
+            numpeak[idet]=idxmin
+            throt = allthetas_Q[idet,numpeak[idet]]
+            phrot = allphis_Q[idet,numpeak[idet]]
+            ## Rotate around the position predicted from the TES location
+            #throt = theta_center
+            #phrot = phi_center
+            print('+++++++++++')
+            print(throt, phrot)
+            print('+++++++++++')
+
+            plot(phrot, throt, 'gx', ms=15, markeredgewidth=2, label='Measured Line of sight')
+            ax.set_rmax(0.5)
+            legend()
+
+            myangs = np.array([phrot,throt, phrot])
+            newth, newph = sbfit.rotate_q2m(allthetas_Q[idet,:], allphis_Q[idet,:], angs=myangs, inverse=True)
+        
+            ax=plt.subplot(133, projection='polar')
+            scatter(np.ravel(allphis_Q[idet,:]), np.ravel(allthetas_Q[idet,:]), s=np.ravel(allvals_Q[idet,:])/np.max(allvals_Q[idet,:])*300)
+            title('Back')
+            for k in range(len(qcut)):
+                factor = 150e9/qcut[k].filter.nu
+                newthfinal, newphfinal = sbfit.rotate_q2m(newth*factor, newph, angs=myangs, inverse=False)
+                scatter(np.ravel(newphfinal), np.ravel(newthfinal), s=np.ravel(allvals_Q)/np.max(allvals_Q)*300)
+            ax.set_rmax(0.5)
+            legend()
+            show()
+
+
+        ### We nowwrite the temporary file that contains the peaks locations to be used
+        if usepeaks is None:
+            peaknums = np.arange(9)
+        else:
+            peaknums = usepeaks
+        data = [allthetas_Q[:,peaknums], allphis_Q[:,peaknums]-np.pi, allvals_Q[:,peaknums], numpeak]
+        file = open(os.environ['QUBIC_PEAKS']+'peaks.pk', 'wb')
+        pickle.dump(data, file)
+        file.close()
+    
+
+    ### Make the TODs from the measured synthesized beams
+    # Read azimuth and elevation
+    bla, az, el = sbfit.get_flatmap(detnums[0], directory, azmin=azmin, azmax=azmax)
+    #az = FitsArray(directory + 'Flat/azimuth.fits')
+    #el = FitsArray(directory + 'Flat/elevation.fits')
+    # Build pointing from them
+    p = hall_pointing(az, el, 0, 0, fix_azimuth=d['fix_azimuth'])
+    # Read data and fill TOD
+    realTOD = np.zeros((len(detnums),len(p)))
+    sigmaTOD = np.zeros(len(detnums))
+    if weighted:
+        sumweight = 0.
+    
+    allimg = []
+    for i in range(len(detnums)):
+        img, a,b = sbfit.get_flatmap(detnums[i], directory, azmin=azmin, azmax=azmax, remove=remove)
+        allimg.append(img)
+        mm,ss = ft.meancut(img,3)
+        c50 = np.cos(np.radians(50))
+        figure()
+        subplot(1,2,1)
+        imshow(img, vmin=mm-3*ss, vmax=mm+3*ss,
+               extent=[np.min(a)*c50, np.max(a)*c50, np.min(b), np.max(b)], aspect='equal')
+        colorbar()
+        title('TOD {}'.format(detnums[i]))
+        subplot(1,2,2)
+        imshow(img, vmin=mm-3*ss, vmax=mm+3*ss,
+               extent=[np.min(a)*c50, np.max(a)*c50, np.min(b), np.max(b)], aspect='equal')
+        plot(-np.degrees(allphis_M[i ,:]), 50+90-np.degrees(allthetas_M[i,:]), 'r+', ms=10, markeredgewidth=2)
+        for k in range(len(np.degrees(allphis_M[idet,:]))):
+            text(-np.degrees(allphis_M[i,k])+0.3, 50+90-np.degrees(allthetas_M[i,k])+0.3,k, fontsize=15, weight='bold', color='r')
+        colorbar()
+        title('TOD {}'.format(detnums[i]))
+        show()
+        print('####################################################++++++++++++++++++++++')
+        print('i={}'.format(i))
+        print('####################################################++++++++++++++++++++++')
+        fact = 5e-28
+        realTOD[i,:] = np.ravel(img) * fact
+        if weighted:   ## Not to be used - old test...
+            realTOD[i,:] *= 1./ss**2
+            sumweight += 1./ss**2
+        
+#     ### Cut in azimuth and elevation
+#     azmin = -15./np.cos(np.radians(50))
+#     azmax = 15./np.cos(np.radians(50))
+#     elmin = 20.
+#     elmax = 80.
+#     ok = ((p.azimuth >= azmin) & (p.azimuth <= azmax)) & ((p.elevation >= elmin) & (p.elevation <= elmax))
+#     if verbose: print('AzEl cuts: Keeping only {} samples out of {}'.format(ok.sum(), len(ok)))
+        
+    ### Former code for single band
+#     ### And we instantiate the QUBIC isntrument that uses qcut which a 
+#     ### jchinstrument (modified to read the above file)
+#     sima = qubic.QubicAcquisition(qcut, p, s, d)
+#     ### Run the mapmaker
+#     d['tol'] = tol
+#     maps_recon, niter, error = sima.tod2map(realTOD, d, cov=None)
+#     if verbose: print('Mapmaking QUBIC done in {} iterations with error: {}'.format(niter, error))
+
+    ### new code multiband
+    figure()
+    for i in range(len(detnums)):
+        plot(realTOD[i,:], label='TES#{0:}'.format(detnums[i]))
+    legend()
+    xlabel('Samples')
+    ylabel('TOD')
+    show()
+    
+    figure()
+    for i in range(len(detnums)):
+        spectrum_f, freq_f = ft.power_spectrum(np.arange(len(realTOD[i,:])), realTOD[i,:])
+        pl=plot(freq_f, spectrum_f, label='TES#{0:}'.format(detnums[i]), alpha=0.5)
+        xscale('log')
+        yscale('log')
+    legend()
+    xlabel('Fourier mode')
+    ylabel('Power Spectrum')
+    title('Before Filtering')
+    show()
+    
+    for i in range(len(detnums)):
+        figure()
+        realTOD[i,:] = ft.filter_data(np.arange(len(realTOD[i,:])), realTOD[i,:], lowcut, highcut)
+        mm,ss = ft.meancut(realTOD[i,:],3)
+        sigmaTOD[i] = ss 
+        subplot(1,2,1)
+        imshow(allimg[i] * fact, vmin=mm-3*ss, vmax=mm+3*ss,
+               extent=[np.min(a)*c50, np.max(a)*c50, np.min(b), np.max(b)], aspect='equal')
+        colorbar()
+        title('Init - TOD {0:} RMS={1:5.2g}'.format(detnums[i],sigmaTOD[i]))
+        subplot(1,2,2)
+        imshow(np.reshape(realTOD[i,:], np.shape(img)), vmin=mm-3*ss, vmax=mm+3*ss,
+               extent=[np.min(a)*c50, np.max(a)*c50, np.min(b), np.max(b)], aspect='equal')
+        colorbar()
+        title('Filtered - TOD {0:} RMS={1:5.2g}'.format(detnums[i],sigmaTOD[i]))
+
+    
+    figure()
+    for i in range(len(detnums)):
+        spectrum_f, freq_f = ft.power_spectrum(np.arange(len(realTOD[i,:])), realTOD[i,:])
+        pl=plot(freq_f, spectrum_f, label='TES#{0:} Var*2pi={1:5.2g}'.format(detnums[i],sigmaTOD[i]**2*2*np.pi), alpha=0.5)
+        plot(freq_f, freq_f*0+sigmaTOD[i]**2*2*np.pi, color=pl[0].get_color())
+        xscale('log')
+        yscale('log')
+    ylim(np.min(sigmaTOD**2*2*np.pi)/10000, np.max(sigmaTOD**2*2*np.pi)*10000)
+    legend()
+    xlabel('Fourier mode')
+    ylabel('Power Spectrum')
+    title('After Filtering')
+    if lowcut:
+        axvline(x=lowcut, color='k')
+    if highcut:
+        axvline(x=highcut, color='k')    
+    show()
+
+    
+    
+    figure()
+    clf()
+    print('%%%%%%%%%%%%%%%%%%%%%%')
+    ax=plt.subplot(111, projection='polar')
+    maps_recon, cov, nus, nus_edge = si.reconstruct_maps(realTOD, d, p,
+                                                        nf_sub_rec, x0=None, instrument=qcut, verbose=True,
+                                                        forced_tes_sigma=sigmaTOD)
+    ax.set_rmax(0.5)
+    #legend(fontsize=8)
+    if weighted:
+        maps_recon /= sumweight/len(detnums)
+    return maps_recon, qcut, np.mean(cov, axis=0), nus, nus_edge
+
+
+
+
+```
+
+```{python}
+# INSTRUMENT
+ns = 256
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(global_dir+'/dicts/global_source_oneDet_multiband.dict')
+#d.read_from_file(global_dir+'/dicts/pipeline_demo.dict')
+print(d['kind'])
+d['kind']='I'
+print(d['kind'])
+d['nside']=ns
+
+fittedpeakfile = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/fitted_peaks.fits'
+directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/150GHz-2019-04-06/'
+# directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/130GHz-2019-04-18/'
+# directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/170GHz-2019-04-14/'
+# directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/140GHz-2019-04-10/'
+
+
+```
+
+# TES locations and sub-instruments
+In the following we will need to use the TES locations as well as sub-instruments. Here are functions to do this.
+
+```{python}
+# reload(jcinst)
+# reload(sc)
+# #### Problème d'indices des TES entre qubic_pack() et Qubic_Soft()
+# q = jcinst.QubicMultibandInstrument(d)
+
+# ndet = len(q[0].detector.center)
+# print(ndet)
+
+# rc('figure', figsize=(15,15))
+# x, y, FP_index, index_q = sc.get_TES_Instru_coords(q[0], frame='GRF', verbose=False)
+
+
+# sc.scatter_plot_FP(q[0], x, y, np.arange(256), 'GRF', s=1900, unit='QP#', cmap='bwr', cbar=False, figsize=(15, 15))
+# xlim(-0.053, 0)
+# ylim(0, 0.053)
+# for i in range(len(x)):
+#     if (x[i] != 0) and (y[i] !=0):
+#         text(x[i]-0.0013,y[i]-0.001, 'QP:{}\nQS:{}'.format(i+1,index_q[i]), fontsize=10, color='k',weight="bold")
+```
+
+```{python}
+# idqp = np.array([60])
+# index_q[idqp-1]
+# qcut = select_det(jcinst.QubicMultibandInstrument(d), idqp)
+
+# xGRF = x[np.array(idqp)-1]
+# yGRF = y[np.array(idqp)-1]
+# print('X: {}'.format(xGRF))
+# print('Y: {}'.format(yGRF))
+
+# rc('figure', figsize=(15,15))
+# sc.scatter_plot_FP(q[0], x, y, np.arange(256), 'GRF', s=1900, unit='QP#', cmap='bwr', cbar=False, figsize=(15,15))
+# xlim(-0.053, 0)
+# ylim(0, 0.053)
+# for i in range(len(xGRF)):
+#     if (xGRF[i] != 0) and (yGRF[i] !=0):
+#         text(xGRF[i]-0.0013,yGRF[i]-0.001, 'QP:{}\nQS:{}'.format(idqp[i],0), fontsize=10, color='k',weight="bold")
+
+# xGRFqs = qcut[0].detector.center[:,0]
+# yGRFqs = qcut[0].detector.center[:,1]
+# plot(xGRFqs, yGRFqs, 'y*', ms=50, alpha=0.5)
+```
+
+### Removing a common mode between all detectors
+I have noticed a common shady shape on all Synthesized beams images. So we first need to remove it. It turns out this shady shape also contains most of the noise in the SB images... So removing it is a very significant improvement. The origin of this common mode is yet to be identified...
+
+We also perform a cut in azimuth in order to avoid noisy regions on the edge.
+
+```{python}
+c50 = np.cos(np.radians(50))
+azmin = -15./c50
+azmax = 15./c50
+flatmap, az, el = sbfit.get_flatmap(1, directory, azmin=azmin, azmax=azmax)
+npix = len(np.ravel(flatmap))
+alldata_renorm = np.zeros((256, npix))
+for i in range(256):
+    flatmap, az, el = sbfit.get_flatmap(i+1, directory, azmin=azmin, azmax=azmax)
+    mm,ss = ft.meancut(flatmap,3)
+    alldata_renorm[i,:] = np.ravel((flatmap-mm)/ss)  
+
+med = np.reshape(np.median(alldata_renorm,axis=0),np.shape(flatmap))
+mm=np.mean(med)
+ss = np.std(med)
+
+rc('figure', figsize=(15,8))
+imshow(np.reshape(med, np.shape(flatmap)),
+       extent=[np.min(az)*c50, np.max(az)*c50, np.min(el), np.max(el)], aspect='equal')
+colorbar()
+title('Median over all S.B. images (renormalized)')
+```
+
+```{python}
+fittedpeakfile = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/fitted_peaks.fits'
+peaks = np.array(FitsArray(fittedpeakfile))
+print(np.shape(peaks))
+maxpeakamps = np.max(peaks[:,2,:], axis=1)
+sumpeakamps = np.sum(peaks[:,2,:], axis=1)
+
+allnums = np.arange(256)+1
+detsgood = [5, 28, 37, 60, 96, 101, 122, 124, 137, 140, 149]
+
+subplot(2,2,1)
+plot(allnums, maxpeakamps)
+plot(allnums[np.array(detsgood)-1], maxpeakamps[np.array(detsgood)-1], 'ro')
+xlabel('TES#')
+ylabel('Highest peak for each TES')
+
+subplot(2,2,2)
+plot(allnums, np.log10(maxpeakamps))
+plot(allnums[np.array(detsgood)-1], np.log10(maxpeakamps[np.array(detsgood)-1]), 'ro')
+xlabel('TES#')
+ylabel('log10(Highest peak) for each TES')
+
+subplot(2,2,3)
+h = hist(maxpeakamps, bins=30)
+xlabel('Highest peak for each TES')
+
+subplot(2,2,4)
+h = hist(np.log10(maxpeakamps), range=[2.5, 6], bins=50)
+xlabel('Log10(Highest peak) for each TES')
+
+
+figure()
+plot(maxpeakamps, sumpeakamps, 'ko')
+plot(maxpeakamps[np.array(detsgood)-1], sumpeakamps[np.array(detsgood)-1], 'ro')
+xlabel('Highest peak for each TES')
+ylabel('Sum peak for each TES')
+xscale('log')
+yscale('log')
+
+figure()
+plot(allnums, sumpeakamps/maxpeakamps, 'ko')
+plot(allnums[np.array(detsgood)-1], sumpeakamps[np.array(detsgood)-1]/maxpeakamps[np.array(detsgood)-1], 'ro')
+
+```
+
+```{python}
+reload(dl)
+reload(sbfit)
+reload(jcinst)
+reload(si)
+reload(ft)
+
+
+# INSTRUMENT
+ns = 256
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(global_dir+'/dicts/global_source_oneDet_multiband.dict')
+#d.read_from_file(global_dir+'/dicts/pipeline_demo.dict')
+print(d['kind'])
+d['kind']='I'
+print(d['kind'])
+d['nside']=ns
+
+fittedpeakfile = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/fitted_peaks.fits'
+# directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/150GHz-2019-04-06/'
+#directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/130GHz-2019-04-18/'
+fitted_directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/FitSB/'
+
+# detnums = [5]  ### Works well
+# detnums = [7]  ### Works well alone but not with others apparently
+# detnums = [9]  ### bof
+# detnums = [28]   ### Works quite. well !
+# detnums = [5, 28]   ### Works quite. well !
+# detnums = [5, 28, 22]   ### Works quite. well !
+# detnums = [5, 28, 60] VERY NICE !
+
+# detnums = [5, 28, 37, 60, 96, 101, 122, 124, 137, 140, 149] #!! Wow
+# detnums = [5, 28, 60, 137, 140, 149]
+
+# detnums = [5, 7, 28, 37, 38, 41, 44, 49, 52, 57, 59, 60, 71, 72, 78, 79, 81, 82, 96, 101, 107, 110] # bof
+
+# detnums = [151, 152, 153, 166, 169]
+
+### Non: 172, 173
+detnums = [5, 28, 37, 60, 96, 101, 122, 124, 137, 140, 149]#, 153, 163]#, 173]#, 176]#, 184, 193] #!! Wow
+
+
+reso=20
+center = [0,50]
+nsrec = 256
+nf_sub_rec = 5
+all_maps_recon_th = np.zeros((nf_sub_rec, 12*nsrec**2))
+all_maps_recon_custom = np.zeros((nf_sub_rec, 12*nsrec**2))
+all_maps_recon_custom_new = np.zeros((nf_sub_rec, 12*nsrec**2))
+d['verbose']=True
+clf()
+all_maps_recon_custom_new, qcut, cov, nus, nus_edge = do_some_dets(detnums, d, directory, fittedpeakfile, 
+                                              custom=True, nside=nsrec, refit=True, 
+                                              verbose=False, doplot=True, weighted=False,
+                                             azmin=azmin, azmax=azmax, remove=med, 
+                                              fitted_directory=fitted_directory, nf_sub_rec=nf_sub_rec)
+show()
+
+
+figure()
+for k in range(nf_sub_rec):
+    okpix = all_maps_recon_custom_new[k,:] != 0
+    mm, ss = ft.meancut(all_maps_recon_custom_new[k,okpix],3)
+#     mini = mm-ss
+#     maxi = mm+3*ss
+    mini = -0.01
+    maxi = 0.03
+    hp.gnomview((all_maps_recon_custom_new[k,:]), reso=reso/2, rot=center, cmap = 'viridis', 
+                title='Ntes={0:} \n nu=[{1:5.1f},{2:5.1f}]'.format(len(detnums), nus_edge[k], nus_edge[k+1]),min=mini, max=maxi, sub=(1,nf_sub_rec,k+1))
+tight_layout()
+
+hp.gnomview(cov, reso=reso/2, rot=center, min=0,max=1)
+
+okpix = cov > 0.3
+all_maps_recon_custom_new_cut = all_maps_recon_custom_new.copy()
+all_maps_recon_custom_new_cut[:,~okpix] = 0
+figure()
+for k in range(nf_sub_rec):
+    okpix = all_maps_recon_custom_new_cut[k,:] != 0
+    mm, ss = ft.meancut(all_maps_recon_custom_new_cut[k,okpix],3)
+#     mini = mm-ss
+#     maxi = mm+3*ss
+    mini = -0.01
+    maxi = 0.03
+    hp.gnomview((all_maps_recon_custom_new_cut[k,:]), reso=reso/2, rot=center, cmap = 'viridis', 
+                title='Ntes={0:} - nu=[{1:5.1f},{2:5.1f}]'.format(len(detnums), nus_edge[k], nus_edge[k+1]),min=mini, max=maxi, sub=(1,nf_sub_rec,k+1))
+tight_layout()
+
+
+```
+
+```{python}
+def plotcircle(c, r, color=None,lw=None, ls=None):
+    nn = 100
+    ang = np.linspace(0,2*np.pi, nn)
+    plot(c[0]+r*np.cos(ang), c[1]+r*np.sin(ang), color=color)
+    
+def aperture_photometry(img, centers, rads, plot=False, stampsize=25, magnitude_zero=0, cmap='gray_r', subs=True):
+    npix = np.shape(img)[0]
+    xx,yy = np.meshgrid(np.arange(npix), np.arange(npix))
+    nobjects = np.shape(centers)[0]
+    flux = np.zeros(nobjects)
+    err_flux = np.zeros(nobjects)
+    nsq = int(np.ceil(np.sqrt(nobjects)))
+    for i in range(nobjects):
+        c = centers[i,:]
+        inner_pix = np.sqrt((xx-c[0])**2+(yy-c[1])**2) < rads[0]
+        outer_pix = (np.sqrt((xx-c[0])**2+(yy-c[1])**2) > rads[0]) & (np.sqrt((xx-c[0])**2+(yy-c[1])**2) < rads[1])
+        Nin = inner_pix.sum()
+        Nout = outer_pix.sum()
+        #bg = np.mean(img[outer_pix])
+        bg = np.median(img[outer_pix])
+        sigbg = np.std(img[outer_pix])/np.sqrt(Nout)
+        flux[i] = np.sum(img[inner_pix])-bg*inner_pix.sum()
+        err_flux[i] = np.std(img[outer_pix]) * np.sqrt(Nin * (1+Nin*1./Nout))
+    
+        if plot:
+            if subs:
+                subplot(nsq,nsq,i+1)
+            imshow(img, cmap=cmap, vmin=-5*np.std(img), vmax=5*np.std(img), origin='lower')
+            colorbar()
+            xlim(c[0]-stampsize, c[0]+stampsize)
+            ylim(c[1]-stampsize, c[1]+stampsize)
+            plotcircle(c, rads[0], color='r', lw=2)
+            plotcircle(c, rads[1], color='r', lw=2)
+    mag = -2.5*np.log10(flux) + magnitude_zero
+    err_mag = 2.5/np.log(10.) * err_flux/flux
+    return flux, err_flux, mag, err_mag
+
+```
+
+```{python}
+okpix = cov > 0.3
+all_maps_recon_custom_new_cut = all_maps_recon_custom_new.copy()
+all_maps_recon_custom_new_cut[:,~okpix] = 0
+figure()
+maps = []
+for k in range(nf_sub_rec):
+    okpix = all_maps_recon_custom_new_cut[k,:] != 0
+    mm, ss = ft.meancut(all_maps_recon_custom_new_cut[k,okpix],3)
+#     mini = mm-ss
+#     maxi = mm+3*ss
+    mini = -0.01
+    maxi = 0.03
+    mymap = hp.gnomview((all_maps_recon_custom_new_cut[k,:]), reso=reso/2, rot=center, cmap = 'viridis', 
+                title='nu=[{0:5.1f},{1:5.1f}]'.format(nus_edge[k], nus_edge[k+1]),min=mini, max=maxi, sub=(3,3,k+1),
+               return_projected_map=True)
+    maps.append(mymap)
+tight_layout()
+
+```
+
+```{python}
+# import scipy.ndimage as scf
+# from mpl_toolkits.mplot3d import Axes3D
+# from matplotlib.colors import LightSource
+# import numpy as np
+# ls = LightSource(270, 45)
+
+# nrows, ncols = maps[0].shape
+# print(nrows,ncols)
+# x = np.arange(ncols)
+# y = np.arange(nrows)
+# x, y = np.meshgrid(x, y)
+
+# sm = 1
+# for i in range(nf_sub_rec):
+#     fig, ax = plt.subplots(subplot_kw=dict(projection='3d'))
+#     img = scf.gaussian_filter(maps[i], sm, mode='mirror')
+#     surf = ax.plot_surface(x,y,img, rstride=2, cstride=2, antialiased=True, shade=True, cmap='viridis', vmin=-.02, vmax=0.03)
+#     title('nu=[{0:5.1f},{1:5.1f}]'.format(nus_edge[k], nus_edge[k+1]))
+#     ax.set_zlim(-0.02, 0.03)
+#     fig.colorbar(surf)
+```
+
+```{python}
+def mygaussian(x, pars, extra_args=None):
+    return pars[0]+pars[1]*np.exp(-0.5*(x-pars[2])**2/pars[3]**2)
+
+mycenter = np.reshape(np.array([100.,108.]), (1,2))
+# mycenter = np.reshape(np.array([100.,100.]), (1,2))
+radius = [12., 30.]
+flux = np.zeros(len(maps))
+err_flux = np.zeros(len(maps))
+for i in range(len(maps)):
+    subplot(3,3,i+1)
+    flux[i], err_flux[i], mag, err_mag = aperture_photometry(maps[i], mycenter, radius, subs=False,
+                                                             plot=True, stampsize=100, magnitude_zero=0, cmap=None)
+    title('nu=[{0:5.1f},{1:5.1f}]'.format(nus_edge[i], nus_edge[i+1]))
+tight_layout()
+
+nus = 0.5*(nus_edge[1:]+nus_edge[:-1])
+dnu = 0.5*(nus_edge[1:]-nus_edge[:-1])
+
+
+guess = np.array([0., np.max(flux), 150., 5. ])
+fitg = ft.do_minuit(nus, flux, err_flux, guess, functname=mygaussian, fixpars=[1,0,0,0])
+
+xxx = np.linspace(130, 170, 100)
+print(fitg[1])
+print(fitg[2])
+figure()
+errorbar(nus,flux, yerr=err_flux, xerr=dnu, fmt='ro')
+plot(xxx, mygaussian(xxx, fitg[1]), label=r'$\nu_0$={0:5.1f} +/- {1:5.1f} ; $\sigma$={2:5.1f} +/- {3:5.1f}'.format(fitg[1][2], fitg[2][2], fitg[1][3], fitg[2][3]))
+axhline(y=0,color='k', ls='--')
+xlabel('Frequency')
+ylabel('Source Flux')
+#ylim(-1.5, 3)
+legend()
+```
+
+```{python}
+
+guess = np.array([0., np.max(flux), 150., 5. ])
+fitg = ft.do_minuit(nus, flux, err_flux, guess, functname=mygaussian, fixpars=[0,0,0,0])
+
+xxx = np.linspace(120, 180, 100)
+print(fitg[1])
+print(fitg[2])
+subplot(2,3,6)
+errorbar(nus,flux-fitg[1][0], yerr=err_flux, xerr=dnu, fmt='ro')
+plot(xxx, mygaussian(xxx, fitg[1])-fitg[1][0], 
+     label=r'$\nu_0$={0:5.1f} +/- {1:5.1f}'.format(fitg[1][2], fitg[2][2])+'\n'+r'$\sigma$={0:5.1f} +/- {1:5.1f}'.format(fitg[1][3], fitg[2][3]))
+axhline(y=0,color='k', ls='--')
+xlabel('Frequency', fontsize=14)
+ylabel('Source Flux', fontsize=14)
+#ylim(-0.2, 4.5)
+xlim(130, 170)
+legend(loc='upper left')
+```
+
+```{python}
+okpix = cov > 0.3
+all_maps_recon_custom_new_cut = all_maps_recon_custom_new.copy()
+all_maps_recon_custom_new_cut[:,~okpix] = 0
+figure()
+maps = []
+for k in range(nf_sub_rec):
+    okpix = all_maps_recon_custom_new_cut[k,:] != 0
+    mm, ss = ft.meancut(all_maps_recon_custom_new_cut[k,okpix],3)
+#     mini = mm-ss
+#     maxi = mm+3*ss
+    mini = -0.01
+    maxi = 0.03
+    mymap = hp.gnomview((all_maps_recon_custom_new_cut[k,:]), reso=reso/2, rot=center, cmap = 'viridis', 
+                title='nu=[{0:5.1f},{1:5.1f}]'.format(nus_edge[k], nus_edge[k+1]),min=mini, max=maxi, sub=(3,3,k+1),
+               return_projected_map=True)
+    maps.append(mymap)
+subplot(3,3,6)
+errorbar(nus,flux-fitg[1][0], yerr=err_flux, xerr=dnu, fmt='ro')
+plot(xxx, mygaussian(xxx, fitg[1])-fitg[1][0], 
+     label=r'$\nu_0$={0:5.1f} +/- {1:5.1f}'.format(fitg[1][2], fitg[2][2])+'\n'+r'$\sigma$={0:5.1f} +/- {1:5.1f}'.format(fitg[1][3], fitg[2][3]))
+axhline(y=0,color='k', ls='--')
+xlabel('Frequency', fontsize=14)
+ylabel('Source Flux', fontsize=14)
+ylim(-0.2, 4.5)
+xlim(130, 170)
+legend(loc='upper left')
+
+tight_layout()
+
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+# Run all individual TES
+##########################
+
+# #### Do all TES and save figures
+# # INSTRUMENT
+# ns = 256
+# d = qubic.qubicdict.qubicDict()
+# d.read_from_file(global_dir+'/dicts/global_source_oneDet_multiband.dict')
+# #d.read_from_file(global_dir+'/dicts/pipeline_demo.dict')
+# print(d['kind'])
+# d['kind']='I'
+# print(d['kind'])
+# d['nside']=ns
+
+# fittedpeakfile = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/fitted_peaks.fits'
+# directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/150GHz-2019-04-06/'
+# fitted_directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/FitSB/'
+
+# for i in range(256):
+#     detnums = [i+1]
+
+#     reso=20
+#     center = [0,50]
+#     nsrec = 256
+#     nf_sub_rec = 3
+#     all_maps_recon_th = np.zeros((nf_sub_rec, 12*nsrec**2))
+#     all_maps_recon_custom = np.zeros((nf_sub_rec, 12*nsrec**2))
+#     all_maps_recon_custom_new = np.zeros((nf_sub_rec, 12*nsrec**2))
+#     d['verbose']=True
+#     clf()
+#     all_maps_recon_custom_new, qcut = do_some_dets(detnums, d, directory, fittedpeakfile, 
+#                                                   custom=True, nside=nsrec, refit=True, 
+#                                                   verbose=False, doplot=True, weighted=False,
+#                                                  azmin=azmin, azmax=azmax, remove=med, 
+#                                                   fitted_directory=fitted_directory, nf_sub_rec=nf_sub_rec)
+#     show()
+
+#     figure()
+#     for k in range(nf_sub_rec):
+#         okpix = all_maps_recon_custom_new[k,:] != 0
+#         mm, ss = ft.meancut(all_maps_recon_custom_new[k,okpix],3)
+#         mini = -0.01
+#         maxi = 0.03
+#         hp.gnomview((all_maps_recon_custom_new[k,:]), reso=reso/2, rot=center, cmap = 'viridis', 
+#                     title='Custom Refit TES{} - SUB={}'.format(detnums, k),min=mini, max=maxi, sub=(2,nf_sub_rec,k+1))
+#         mini = mm-ss
+#         maxi = mm+3*ss
+#         hp.gnomview((all_maps_recon_custom_new[k,:]), reso=reso/2, rot=center, cmap = 'viridis', 
+#                     title='Custom Refit TES{} - SUB={}'.format(detnums, k),min=mini, max=maxi, sub=(2,nf_sub_rec,k+1+3))
+        
+#     savefig('/Users/hamilton/Qubic/Calib-TD/MultiBandPointSource/IndividualTES/src_150GHz_bands_{}_TES_{:03d}.png'.format(nf_sub_rec, i+1))
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

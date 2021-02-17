@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -29,15 +29,15 @@ from matplotlib.animation import FuncAnimation
 
 from matplotlib import rc
 rc('figure',figsize=(15,15))
-rc('font',size=20)
+rc('font',size=14)
 #rc('text',usetex=False)
 
 from qubicpack.utilities import Qubic_DataDir
 import qubic 
 import qubic.sb_fitting as sbfit
+import qubic.selfcal_lib as scal
 
 from qubicpack.pixel_translation import make_id_focalplane, tes2index
-from qubic.selfcal_lib import index2TESandASIC
 ```
 
 ```{python}
@@ -49,176 +49,184 @@ d.read_from_file(os.environ['QUBIC_DICT']+'pipeline_demo.dict')
 d['config'] = 'TD'
 
 d['synthbeam_kmax'] = 3
-```
 
-```{python}
 # Instrument and scene
-
 q = qubic.QubicInstrument(d)
 s = qubic.QubicScene(d)
+```
 
-print(q.detector.index)
-# Synthetic beams on the sky for all TES
+### Synthetic beams on the sky for all TES
+
+```{python}
 sb = q.get_synthbeam(s, idet=None, external_A=None, hwp_position=0)
 print(sb.shape)
 ```
 
-```{python}
-# Coordinates of the peaks (spherical coordinates in radian) for each TES
+#### Coordinates of the peaks (spherical coordinates in radian) for each TES
 
+```{python}
 kmax = d['synthbeam_kmax']
 npeaks = (2 * kmax + 1)**2
-delta_horn = q.horn.spacing
-angle_horn = q.horn.angle
+
+horn_spacing = q.horn.spacing
+horn_angle = q.horn.angle
 nu = d['filter_nu']
+
 position_TES = q.detector.center
-theta, phi = q._peak_angles_kmax(kmax, delta_horn, angle_horn, nu, position_TES)
 
-theta2, phi2, val = q._peak_angles(s, nu, q.detector.center, q.synthbeam, q.horn, q.primary_beam)
+# Coordinate on a simple grid
+theta, phi = q._peak_angles_kmax(kmax, horn_spacing, horn_angle, nu, position_TES)
+print(theta[0])
 
-print(theta.shape)
+# Coordinates ordered from highest intensity to the smallest one
+theta_order, phi_order, val = q._peak_angles(s, nu, q.detector.center, q.synthbeam, q.horn, q.primary_beam)
+
 ```
 
 ```{python}
-index_theta = np.zeros((248, npeaks))
-for tes in range(248):
-    print('TES', tes)
-    for i, th in enumerate(theta[tes, :]):
-        print(th)
-        index_theta[tes, i] = np.where(theta2[tes, :] == th)[0]
-print(index_theta)
+# Plot
+TES = 2
+
+# plt.figure(figsize=(8, 8))
+# plt.axis('off')
+hp.gnomview(sb[TES], min=0, max=1e5, rot=(0, 90), reso=30, title='Grid numbering')
+for p in range(npeaks):
+    th = theta[TES, p]
+    ph = phi[TES, p]
+#     hp.visufunc.projscatter(th, ph, color='w', marker='+')
+    hp.visufunc.projtext(th-0.02, ph-0.02, str(p), color='w', fontsize=14)
+
+# plt.figure(figsize=(8, 8))
+# plt.axis('off')
+hp.gnomview(sb[TES], min=0, max=1e5, rot=(0, 90), reso=30, title='Intensity numbering')
+for p in range(npeaks):
+    th2 = theta_order[TES, p]
+    ph2 = phi_order[TES, p]
+#     hp.visufunc.projscatter(th2, ph2, color='w', marker='+')
+    hp.visufunc.projtext(th2+0.02, ph2+0.02, str(p), color='w', fontsize=14)
 ```
 
-```{python}
-index = qubic.instrument._argsort_reverse(val)
-print(index)
-```
-
-```{python}
-# index_9peaks = np.argsort(val, axis=1)[:, -9:]
-# print(index_9peaks.shape)
-
-# theta9 = np.take(theta, index_9peaks)
-# phi9 = np.take(phi, index_9peaks)
-# theta9.shape
-```
-
-```{python}
-for TES in range(100, 130):
-#     plt.figure(figsize=(15, 15))
-    hp.gnomview(sb[TES], min=0, max=1e6, rot=(180, 90), reso=25, title=None)
-    for p in range(npeaks):
-        th = theta[TES, p]
-        ph = phi[TES, p]
-        th2 = theta2[TES, p]
-        ph2 = phi2[TES, p]
-#         hp.visufunc.projscatter(th, ph, color='w', marker='+')
-        hp.visufunc.projtext(th2-0.02, ph2, str(p), color='r', fontsize=12)
-        hp.visufunc.projtext(th+0.02, ph, str(p), color='w', fontsize=12)
-#     for pp in range(9):
-#         color = 'w'
-#         th9 = theta9[TES, pp]
-#         ph9 = phi9[TES, pp]
-#         hp.visufunc.projscatter(th9, ph9, color=color, marker='+')
-#         hp.visufunc.projtext(th9, ph9, str(pp), color=color, fontsize=15)
-#     plt.legend()
-
-```
+#### Print on the sky the motion of the one peak for all TES 
 
 ```{python}
 # Choose a peak
-
-hp.gnomview(sb[200], min=0, max=1e6, rot=(180, 90), reso=12, title=None)
+p = 30
+hp.gnomview(sb[200] * 0., min=0, max=1e6, rot=(0, 90), reso=12, title=None)
 for TES in range(248):
-    for p in range(npeaks):
-        color = 'w'
-        th = theta[TES, p]
-        ph = phi[TES, p]
-        hp.visufunc.projscatter(th, ph, color=color, marker='.')
-    #     hp.visufunc.projtext(th, ph, str(TES), color=color, fontsize=10)
+    color = 'w'
+    th = theta[TES, p]
+    ph = phi[TES, p]
+    hp.visufunc.projscatter(th, ph, color=color, marker='.')
+#     hp.visufunc.projtext(th, ph, str(TES), color=color, fontsize=10)
 
 ```
+
+### Coordinates of the TES in ONAFP
 
 ```{python}
-# Coordinates of the TES
-tes_index = q.detector.index
-tes_coord = q.detector.center[:, :2]
-print(tes_coord.shape)
-
+xONAFP, yONAFP, vONAFP = scal.get_TEScoordinates_ONAFP(q)
+print(xONAFP.shape)
 ```
+
+### Plot
+
+To compare simu/measurement, it looks we have to do the following (not sure):
+* Measurement: centered on (lon=0, lat=0, phi=0)
+* Simulation: centered on (lon=0, lat=90, phi=180)
 
 ```{python}
-# Measured beam
-path = '/home/lmousset/QUBIC/Qubic_work/Calibration/datas/synth_beam_150'
-FPidentity = make_id_focalplane()
-sb_measured = np.zeros_like(sb)
+# Choose a TES (Instrument numerotation)
+TES, ASIC = 6, 1
+x0, y0, FP_index, index_q = scal.TES_Instru2coord(TES, ASIC, q, frame='ONAFP')
 
-for i, index in enumerate(q.detector.index):
-    tes = FPidentity[index].TES
-    print(i, index, tes)
+plt.subplots(1, 2, figsize=(12, 7))
+plt.suptitle(f'TES {TES} - ASIC {ASIC} - Index_q {index_q}')
 
-    sb_measured[i, :] = sbfit.get_hpmap(tes, path)
-    if index == 1103:
-        hp.gnomview(sb_measured[i, :], reso=9)
+# Focal plane
+plt.subplot(121)
+plt.scatter(xONAFP, yONAFP, marker='s', s=100, alpha=0.3)
+plt.xlabel('X_ONAFP')
+plt.ylabel('Y_ONAFP')
+plt.plot(x0, y0, 'ro')
+plt.axis('square')
+plt.title('Focal plane')
+
+# Simulation
+plt.subplot(122)
+plt.axis('off')
+hp.gnomview(sb[index_q], min=0, max=1e5, rot=(0, 90, 180), reso=12, sub=(122),
+            title='Simulation', cbar=False)
+hp.graticule()
+# for p in range(npeaks):
+#     th = theta[index_q, p]
+#     ph = phi[index_q, p]
+#     th2 = theta_order[index_q, p]
+#     ph2 = phi_order[index_q, p]
+#     hp.visufunc.projtext(th-0.02, ph-0.02, str(p), color='w', fontsize=10) 
+#     hp.visufunc.projtext(th2+0.02, ph2+0.02, str(p), color='r', fontsize=10) 
+
+
 ```
+
+### Animation to see the beam moving
 
 ```{python}
 def animate(det):
-    index = tes_index[det]
-    tes = FPidentity[index].TES
-    
+    index = q.detector.index[det]
+       
     # Focal plane
 #     ax1.annotate(str(tes_index[tes]),  xy=(x, y), fontsize=10, color='r')
     
-    x = tes_coord[det, 0]
-    y = tes_coord[det, 1]
+    x = xONAFP[det]
+    y = yONAFP[det]
     point.set_data(x, y)
-    ax1.set_title('TES {}'.format(index))
+#     ax1.set_title('TES {}'.format(index))
     
     
     # Simulation
-    hp.gnomview(sb[det], min=0, max=1e6, rot=(180, 90), reso=25, sub=(222), 
+    hp.gnomview(sb[det], min=0, max=1e5, rot=(0, 90, 180), reso=20, sub=(122), 
                 title='Simulation', cbar=False)
-    for p in range(npeaks):
-        if p == npeaks//2:
-            color = 'w'
-        else:
-            color = 'r'
-        th = theta[det, p]
-        ph = phi[det, p]
-#         hp.visufunc.projscatter(th, ph, color=color, marker='+')
-        hp.visufunc.projtext(th, ph, str(p), color=color, fontsize=12) 
+    hp.graticule()
     
-    # Measurement
-#     hp.gnomview(sb_measured[det], rot=(0, 0, 180), reso=15, sub=(223), 
-#                 title='Measurement', cbar=False)
-#     hp.graticule()
-
+    # pixel with Highest intensity
+    nside = hp.get_nside(sb[det])
+    pix_max = np.argmax(sb[det])
+    lon, lat = hp.pix2ang(hp.get_nside(sb[det]), pix_max, lonlat=True)
+    hp.visufunc.projscatter(lon, lat, color='r', marker='+', s=500, lonlat=True, label='Highest pixel')
+    plt.legend()
+    # Numbering of the peaks (absolute and ordered by intensity)
+#     for p in range(npeaks):
+#         th = theta[det, p]
+#         ph = phi[det, p]
+#         th2 = theta_order[det, p]
+#         ph2 = phi_order[det, p]
+# #         hp.visufunc.projscatter(th, ph, color='w', marker='+')
+#         hp.visufunc.projtext(th-0.02, ph-0.02, str(p), color='w', fontsize=12) 
+#         hp.visufunc.projtext(th2+0.02, ph2+0.02, str(p), color='r', fontsize=12) 
+    
 
 def init():
 #     ax1.set_title('Synthetic beam on the sky')
-    
-    ax1.set_xlim(-0.055, 0.005)
-    ax1.set_ylim(-0.055, 0.005)
+    ax1.axis('square')
     ax2.axis('off')
-    ax3.axis('off')
-    ax4.axis('off')
+
     
-    
+fig, axs = plt.subplots(1, 2, figsize=(12, 8))
+ax1, ax2 = np.ravel(axs)
+ax1.scatter(xONAFP, yONAFP, marker='s', s=200, alpha=0.3)
+ax1.set_xlabel('X_ONAFP')
+ax1.set_ylabel('Y_ONAFP')
 
-fig, axs = plt.subplots(2, 2, figsize=(12, 12))
-ax1, ax2, ax3, ax4 = np.ravel(axs)
-ax1.scatter(tes_coord[:, 0], tes_coord[:, 1], marker='s', s=200, alpha=0.3)
-det0 = 130
-x0 = tes_coord[det0, 0]
-y0 = tes_coord[det0, 1]
-   
-point, = ax1.plot(x0, y0, 'go')
+det0 = 238
+x0 = xONAFP[det0]
+y0 = yONAFP[det0]
+point, = ax1.plot(x0, y0, 'ro')
+steps = np.arange(det0, det0+10, 1)
 
-steps = np.arange(det0, det0+20, 2)
-ani = FuncAnimation(fig, animate, steps, init_func=init, interval=1000, blit=True, repeat=False)
+anim = FuncAnimation(fig, animate, steps, init_func=init, interval=1000, blit=True, repeat=False)
 
-
+# Save a .gif
+# anim.save('./animation_beam.gif', writer='imagemagick')
 ```
 
 ```{python}

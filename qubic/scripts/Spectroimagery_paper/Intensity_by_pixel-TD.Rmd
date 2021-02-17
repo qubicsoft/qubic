@@ -42,6 +42,7 @@ from qubic import QubicSkySim as qss
 from qubic.polyacquisition import compute_freq
 from qubic import ReadMC as rmc
 from qubic import create_acquisition_operator_REC
+import ForegroundsSED as fsed
 
 from scipy.optimize import curve_fit
 import scipy.constants
@@ -50,9 +51,7 @@ import qubic.AnalysisMC as amc
 
 plt.rc('text',usetex=False)
 plt.rc('font', size=16)
-```
 
-```{python}
 from mpl_toolkits.mplot3d import Axes3D
 ```
 
@@ -73,9 +72,19 @@ dTD = dFI.copy()
 dTD['config'] = 'TD'
 #dTD['detector_nep']=2.05e-16
 dTD['npointings'] = 10000
+# Coordinates of the zone observed in the sky
+center = np.array([0,0]) #galaxy center
+dTD['RA_center'],dTD['DEC_center'] = qubic.gal2equ(center[0],center[1])
+dFI['RA_center'],dFI['DEC_center'] = dTD['RA_center'],dTD['DEC_center'] 
+
+regions = ["GalCen_Field"]
+bands = ["150"]
+center = [center]
+dictionaries = [dTD]
 ```
 
 ```{python}
+# OLD (16 Feb 2021)
 def make_covTD(d):
     pointing = qubic.get_pointing(d)
     q= qubic.QubicMultibandInstrument(d)
@@ -86,24 +95,8 @@ def make_covTD(d):
     arec = qubic.QubicMultibandAcquisition(q, pointing, s, d, nus_edge)
     cov = arec.get_coverage()
     return cov
-def save_covTD(cov, savedir=os.environ['QUBIC_DATADIR']+'doc/'):
-    #hdu_primary = fits.PrimaryHDU()
-    hdu_cov = fits.ImageHDU(data=cov, name='coverage')
-    
-    thefile = fits.HDUList([hdu_cov])
-    thefile.writeto('')
-```
 
-```{python}
-QUBICField=False
-
-# Coordinates of the zone observed in the sky
-center = np.array([0,0]) #galaxy center
-dTD['RA_center'],dTD['DEC_center'] = qubic.gal2equ(center[0],center[1])
-dFI['RA_center'],dFI['DEC_center'] = dTD['RA_center'],dTD['DEC_center'] 
-```
-
-```{python}
+# OLD (16 Feb 2021)
 makeCovTD = False
 
 if makeCovTD:
@@ -114,15 +107,11 @@ else:
     fileTD=pickle.load(open(global_dir+'/doc/FastSimulator/Data/DataFastSimulator_TD150_coverage.pkl', 'rb') )
     coverageTD=fileTD['coverage']
     coverageTD /= np.max(coverageTD)# Normalize by the max
-```
 
-```{python}
 cov=np.zeros_like(coverageTD,dtype=bool)
 covmsk=coverageTD > 0.1*np.max(coverageTD)
 coverageTD[~covmsk] = 0
-```
 
-```{python}
 #just used to compare, after is defined coverageFI. Depends if cengal is T or F
 coverageFI = np.load(global_dir+'/doc/FastSimulator/Data/coverage_nfsub15_nptgs10000_qubicpatch.pk')
 coverageFI /= np.max(coverageFI)
@@ -132,6 +121,13 @@ coverageFI /= np.max(coverageFI)
 ```
 
 ```{python}
+reload(fsed)
+covname = [global_dir+'/doc/FastSimulator/Data/DataFastSimulator_TD150G_coverage.fits',]
+coverageTD = fsed.coverage(dictionaries, regions, bands, filename = covname)
+```
+
+```{python}
+#OLD
 lacarte=hp.gnomview(coverageTD,rot=center,reso=13,return_projected_map=True, no_plot=True)
 lacarteFI=hp.gnomview(covFI,rot=qubic.equ2gal(0,-57),
                       reso=13,return_projected_map=True, no_plot=True)
@@ -152,6 +148,12 @@ ax.plot_surface(X,Y, lacarte-lacarteFI, cmap=plt.cm.viridis, linewidth=0.2)
 #plt.savefig('coverage_TD1e4-FI1e4_cut.pdf',format='pdf')
 ```
 
+```{python}
+#NEW
+reload(fsed)
+fsed._plot_covs(regions, bands, coverageTD, center, config = "TD")
+```
+
 ##### QubicSkySim instanciation
 seed = None
 sky_config_220 = {'dust': 'd1'}
@@ -163,6 +165,8 @@ auxmaps220, noiseless220, _, _ = Qubic_sky_220.get_partial_sky_maps_withnoise(sp
                                                                               coverage=coverage)
 
 ```{python}
+# OLD (16 Feb 2021)
+
 #Averaging manually the maps into a band
 band = dTD['filter_nu'] / 1e9
 ### Input bands
@@ -207,6 +211,15 @@ elif dTD['nf_sub'] == dTD['nf_recon']:
 ```
 
 ```{python}
+# NEW (16 Feb 2021)
+
+reload(fsed)
+sky_conf = {'dust': 'd1'}
+fground_maps = fsed.foreground_signal(dictionaries, sky_conf)
+```
+
+```{python}
+# OLD (16 Feb 2021)
 ##### Getting FastSimulator output maps
 nreals = 100
 noiseFI = np.zeros((nreals,dTD['nf_recon'], 12*dTD['nside']**2,3))
@@ -221,6 +234,14 @@ for i in range(nreals):
 ```
 
 ```{python}
+# NEW (16 Feb 2021)
+
+reload(fsed)
+noise = fsed.foreground_with_noise(dictionaries, sky_conf, coverageTD, 10, verbose = False) 
+```
+
+```{python}
+# OLD (16 Feb 2021)
 noisymapsTD = np.zeros_like(noiseFI)
 noisymapsFI = np.zeros_like(noiseFI)
 
@@ -232,12 +253,17 @@ mapsTD, stdTD = np.mean(noisymapsTD, axis = 0), np.std(noisymapsTD, axis = 0)
 mapsFI, stdFI = np.mean(noisymapsFI, axis = 0), np.std(noisymapsFI, axis = 0)
 ```
 
+```{python}
+# NEW (16 Feb 2021)
+maps, cov = fsed.foregrounds_with_noise()
+```
+
 ### Look at the maps... okk..
 
 ```{python}
 #print(np.shape(maps_qubic), np.shape(maps_noiseless), np.shape(maps_noise), np.shape(coverage))
-cov=np.zeros_like(coverageFI,dtype=bool)
-covmsk=np.where(coverageFI > 0.01*np.max(coverageFI))
+cov = np.zeros_like(coverageFI,dtype=bool)
+covmsk = np.where(coverageFI > 0.01 * np.max(coverageFI))
 cov[covmsk] = 1
 ```
 
@@ -594,7 +620,7 @@ hp.gnomview(mapsTD_ud[3,:,0], reso = 15, hold = True, notext = True,
             unit = r'$\mu$K',
             rot = center)
 
-hp.projscatter(hp.pix2ang(nside_new,pix_ud), marker = 'o', color = 'r', s = 140)
+hp.projscatter(hp.pix2ang(nside_new,pix_ud), marker = '*', color = 'r', s = 140)
 hp.graticule(dpar = dpar, dmer = dmer, alpha = 0.6, verbose = False)
 
 #paralels
@@ -623,10 +649,10 @@ plt.tight_layout()#plt.tight_layout()
 #                                                                                    dTD['nf_recon'],nside_new,
 #                                                           pix_ud, pix_ud), 
 #            format = 'svg', bbox_inches='tight')
-plt.savefig('FastSim-TD-Figs/TD{}_CMB-dust_nrec{}_nside{}_pixQ{}_pixG{}_Intensity_grat_newformat.pdf'.format(FuncModel.__name__,
-                                                                               dTD['nf_recon'],nside_new,
-                                                           pix_ud, pix_ud), 
-            format = 'pdf', bbox_inches='tight')
+#plt.savefig('FastSim-TD-Figs/TD{}_CMB-dust_nrec{}_nside{}_pixQ{}_pixG{}_Intensity_grat_newformat.pdf'.format(FuncModel.__name__,
+#                                                                               dTD['nf_recon'],nside_new,
+#                                                           pix_ud, pix_ud), 
+#            format = 'pdf', bbox_inches='tight')
 #plt.savefig('FastSim-TD-Figs/TD{}_CMB-dust_nrec{}_nside{}_pixQ{}_pixG{}_Intensity_grat'.format(FuncModel.__name__, 
 #                                                                           dTD['nf_recon'],
 #                                                                           nside_new,pix_ud, pix_ud),

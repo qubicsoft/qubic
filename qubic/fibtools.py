@@ -131,7 +131,7 @@ class MyChi2:
         self.functname = functname
         self.extra_args = extra_args
 
-    def __call__(self, *pars):
+    def __call__(self, *pars, extra_args=None):
         val = self.functname(self.x, pars, extra_args=self.extra_args)
         chi2 = np.dot(np.dot(self.y - val, self.invcov), self.y - val)
         return chi2
@@ -172,9 +172,10 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
     # instantiate minimizer
     if chi2 is None:
         chi2 = MyChi2(x, y, covar, functname, extra_args=extra_args)
-    # nohesse=False
-    else:
-        chi2 = chi2(x, y, covar, functname, extra_args=extra_args)
+        # nohesse=False
+    #elif chi2.__name__ is 'MyChi2_nocov':
+    #    chi2 = chi2(x, y, covar, functname)
+
     # variables
     ndim = np.size(guess)
     parnames = []
@@ -217,7 +218,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
             for k in drng.keys():
                 theguess[k] = drng[k]
         theargs.update(theguess)
-    m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=1, print_level=print_level, **theargs)
+    m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=0.1, print_level=print_level, **theargs)
     m.migrad(ncall=ncallmax * nsplit, nsplit=nsplit, precision=precision)
     # print('Migrad Done')
     if minos:
@@ -267,7 +268,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
         print(np.array(errfit) * np.sqrt(correct))
         print('Chi2=', chisq)
         print('ndf=', ndf)
-    return m, np.array(parfit), np.array(errfit) * np.sqrt(correct), np.array(covariance) * correct, chi2(*parfit), ndf
+    return m, np.array(parfit), np.array(errfit) * np.sqrt(correct), np.array(covariance) * correct, chi2(*parfit), ndf, chi2 
 
 
 # ##############################################################################
@@ -573,14 +574,19 @@ def notch_filter(data, f0, bw, fs):
 
 def meancut(data, nsig, med=False, disp=True):
     """
-
     Parameters
     ----------
-    data : array like
-    nsig : float
+    data: array like
+    nsig: float
         Lower and upper bound factor of sigma clipping.
+    med: bool
+        If True, perform the median and not the mean.
+    disp: bool
+        If True, return the dispersion (STD),
+        if False, return the error on the mean (STD/sqrt(N))
     Returns
     -------
+    The mean/median and the dispersion/error.
 
     """
     dd = data.copy()
@@ -693,16 +699,16 @@ def simsig_asym(x, pars, extra_args=None):
     return np.nan_to_num(thesim)
 
 
-def simsig_fringes(x, stable_time, params):
+def simsig_fringes(time, stable_time, params):
     """
     Simulate a TOD signal obtained during the fringe measurement.
     This function was done to make a fit.
     Parameters
     ----------
-    x : array
+    time : array
         Time sampling.
-    stable_time : float
-        Number of second the signal keep constant
+    stable_time: float
+        Stable time [s] on each step.
     params : list
         ctime, starting time, the 6 amplitudes.
 
@@ -711,36 +717,36 @@ def simsig_fringes(x, stable_time, params):
     The simulated signal.
 
     """
-    dx = x[1] - x[0]
-    npoints = len(x)
-    tf = x[-1]
+    dt = time[1] - time[0]
+    tf = time[-1]
+    npoints = len(time)
 
     ctime = params[0]
-    x0 = params[1]
-    amp = params[2:8]
-    #     print(amp)
+    t0 = params[1]
+    amp = params[2:]
 
-    sim_init = np.zeros(len(x))
+    sim_init = np.zeros(npoints)
 
     for i in range(6):
         a = int(npoints / tf * stable_time * i)
         b = int((stable_time * i + stable_time) * npoints / tf)
-        #         print(a, b)
         sim_init[a: b] = amp[i]
 
     # Add a phase
-    sim_init_shift = np.interp((x - x0) % max(x), x, sim_init)
+    sim_init_shift = np.interp((time - t0) % max(time), time, sim_init)
 
     # Convolved by an exponential filter
-    thesim = exponential_filter1d(sim_init_shift, ctime / dx, mode='wrap')
+    thesim = exponential_filter1d(sim_init_shift, ctime / dt, mode='wrap')
 
     return np.array(thesim).astype(np.float64)
 
 
 def fold_data(time, dd, period, lowcut, highcut, nbins,
-              notch=None, rebin=None, verbose=None,
-              return_error=False, silent=False, median=False, mode=False, clip=None,
-              return_noise_harmonics=None):
+              notch=None, rebin=None,
+              median=False, mode=False, clip=None,
+              return_error=False,
+              return_noise_harmonics=None,
+              silent=False, verbose=None):
     """
 
     Parameters
@@ -764,9 +770,9 @@ def fold_data(time, dd, period, lowcut, highcut, nbins,
     ndet = sh[0]
 
     if return_noise_harmonics is not None:
-        #### We estimate the noise in between the harmonics of the signal between harm=1 and 
-        #### harm=return_noise_harmonics
-        #### First we find the corresponding frequencies, below we measure the nosie
+        # We estimate the noise in between the harmonics of the signal between harm=1 and
+        # nharm=return_noise_harmonics
+        # First we find the corresponding frequencies, below we measure the noise
         nharm = return_noise_harmonics
         margin = 0.2
         fmin = np.zeros(nharm)
@@ -803,12 +809,12 @@ def fold_data(time, dd, period, lowcut, highcut, nbins,
                 noise[THEPIX, i] = np.sqrt(np.mean(spectrum[ok]))
 
     if return_error:
-        if return_noise_harmonics:
+        if return_noise_harmonics is not None:
             return folded, t, folded_nonorm, dfolded, dfolded_nonorm, newdata, fnoise, noise
         else:
             return folded, t, folded_nonorm, dfolded, dfolded_nonorm, newdata
     else:
-        if return_noise_harmonics:
+        if return_noise_harmonics is not None:
             return folded, t, folded_nonorm, newdata, fnoise, noise
         else:
             return folded, t, folded_nonorm, newdata

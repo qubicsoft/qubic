@@ -1,0 +1,534 @@
+---
+jupyter:
+  jupytext:
+    formats: ipynb,Rmd
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.9.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Contents
+- [Importation](#Importation)
+
+- [Coverage map](#Coverage-map)
+
+- [Difference between 2 frequencies](#Difference-between-2-frequencies)
+
+- [Definitions](#Definitions)
+    - [Same resol maps](#Same-resol-maps)
+    - [SED](#SED)
+    - [plot maps diff freq](#plot-maps-diff-freq)
+    - [Plot maps](#Plot-maps)
+- [Main program](#Main-program)
+    - [Sed](#Sed)
+    - [Difference between Qubic and PySM (for the same frequency)](#Difference-between-Qubic-and-PySM-(for-the-same-frequency))
+    - [Difference between 2 frequencies](#Difference-between-2-frequencies)
+- [FG-Buster](#FG-Buster)    
+    - [Maps of foregrounds](#Maps-of-foregrounds)
+    - [Histograms of foregrounds](#Histograms-of-foregrounds)
+
+
+## Importation
+
+```{python}
+import random
+import healpy as hp
+import glob
+from scipy.optimize import curve_fit
+import pickle
+from importlib import reload
+import time
+import scipy
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import sys
+import pylab
+from pylab import arange, show, cm
+from astropy import units as uq
+
+### Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm3 
+import pysm3.units as u
+import qubic
+from qubic import QubicSkySim as qss
+from qubic import fibtools as ft
+from qubic import camb_interface as qc
+from qubic import SpectroImLib as si
+from qubic import NamasterLib as nam
+from qubic import mcmc
+from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
+
+### FGBuster functions module
+from fgbuster import get_instrument, get_sky, get_observation, basic_comp_sep  # Predefined instrumental and sky-creation configurations
+from fgbuster.visualization import corner_norm, plot_component
+from fgbuster.mixingmatrix import MixingMatrix
+from fgbuster.observation_helpers import _rj2cmb, _jysr2rj
+
+# Imports needed for component separation
+from fgbuster import (separation_recipes, xForecast, CMB, Dust, Synchrotron,  # sky-fitting model
+                      basic_comp_sep)  # separation routine
+
+# Widgets
+
+import ipywidgets as widgets
+
+reload(qss)
+reload(ft)
+
+plt.rc('figure', figsize=(16, 10))
+plt.rc('font', size=15)
+plt.rcParams['image.cmap'] = 'jet'
+```
+
+```{python}
+### Some initializations, to be replaced with specific path, or to modify in bash
+os.environ['QUBIC_DATADIR'] = '/home/mathias/Bureau/qubic/qubic'
+os.environ['QUBIC_DICT'] = '/home/mathias/Bureau/qubic/qubic/dicts'
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+```
+
+```{python}
+### This is for the FI
+config = 'FI-150'
+### Read some stuff
+    # Read dictionary chosen
+dictfilename = global_dir + '/doc/FastSimulator/FastSimDemo_{}.dict'.format(config)
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+d['focal_length'] = 0.3
+d['nside'] = 512
+    #Define the number of reconstruction bands:
+nbands = 3
+d['nf_recon'] = nbands
+
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+```
+
+## Coverage map
+
+
+Here we compute the "view" area of our instrument. It is always at the same place but depends on the number of samples
+
+```{python}
+d['nf_sub'] = nbands
+d['npointings'] = 3000
+
+p = qubic.get_pointing(d)
+
+s = qubic.QubicScene(d)
+
+# Qubic Instrument
+
+q = qubic.QubicMultibandInstrument(d)
+
+# number of sub frequencies for reconstruction
+
+_, nus_edge, _, _, _, _ = qubic.compute_freq(150, d['nf_sub'])
+
+# Operator for Maps Reconstruction
+
+a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge)
+
+# Coverage
+
+coverage = a.get_coverage()
+coverage = np.sum(coverage, axis=0)# Sum the bands
+coverage /= np.max(coverage)# Normalize by the max
+```
+
+```{python}
+hp.mollview(coverage)
+plt.show()
+```
+
+```{python}
+a=0
+seenpix = coverage != 0
+Stokes = ['I', 'Q', 'U']
+```
+
+## Definitions
+
+
+### Same resol maps
+
+
+The same_resol_maps definition take **2 maps**, the **Full Width at Half Maximum** (FWHM), the **map of coverage** to know where the instrument "see" and the dictionnary **d**. The returns are both maps at the same resolution.
+
+```{python}
+#Same resolution function
+def same_resol_maps(freq_map_qubic, freq_map_pysm, FWHMs, coverage, d):
+    
+    """
+    Function that returns QSS maps and PySm maps at the resolution of the lowest frequency of QSS
+    
+    input:
+        freq_map_qubic, freq_map_pysm: np.array, corresponding maps
+        FWHMs: list, of FWHMs for the convolution kernel
+        coverage: np.array, coverage map
+        d: dict, qubic dictionary
+        
+    returns:
+        freq_map_qubic, freq_map_pysm: np.array at the good resolution 
+    """
+    
+    def get_sigma_iband(q, iband):
+        """Get the sigma of one band."""
+        sigma = q[iband].synthbeam.peak150.sigma * (150e9 / q[iband].filter.nu)
+        return sigma
+
+    def get_sigma_prime(q, iband):
+        """Get the sigma needed to convolve one band at the first band resolution."""
+        sigma_band0 = get_sigma_iband(q, 0)
+        sigma_bandi = get_sigma_iband(q, iband)
+        sigma_prime = np.sqrt(sigma_band0**2 - sigma_bandi**2)
+        #print(sigma_band0, sigma_bandi, sigma_prime)
+        return sigma_prime
+    
+    seenpix = coverage != 0
+    freq_map_pysm[:,:,~seenpix] = 0
+    #print('')
+    print('Reconvolving PySM to QSS resolutions')
+    for i in range(d['nf_recon']):
+        myFWHM = np.deg2rad(FWHMs[i])
+        print('Convolving PySM band {} with {} rad {} deg'.format(i, myFWHM, FWHMs[i]))
+        freq_map_pysm[i,:,:] = hp.sphtfunc.smoothing(freq_map_pysm[i,:,:], fwhm=myFWHM, verbose=False)
+    freq_map_pysm[:,:,~seenpix] = 0 
+    #print('')
+    #print(np.std((freq_map_pysm - freq_map_qubic)[:,:,seenpix], axis=2))
+    #print('')
+    print('Now convolving PySM and QSS to worst resolution')
+    for i in range(d['nf_recon']):
+        myFWHM = 2.35*get_sigma_prime(q,i)
+        print('Convolving PySM band {} with {} rad {} deg'.format(i, myFWHM, np.rad2deg(myFWHM)))
+            #print(np.sqrt(FWHMs[i]**2 + np.rad2deg(myFWHM)**2))
+        freq_map_pysm[i,:,:] = hp.sphtfunc.smoothing(freq_map_pysm[i,:,:], fwhm=myFWHM, verbose=False) 
+        print('Convolving QSS band {} with {} rad {} deg'.format(i, myFWHM, np.rad2deg(myFWHM)))
+        freq_map_qubic[i,:,:] = hp.sphtfunc.smoothing(freq_map_qubic[i,:,:], fwhm=myFWHM, verbose=False)
+    freq_map_qubic[:,:,~seenpix] = 0   
+    freq_map_pysm[:,:,~seenpix] = 0
+    
+    return(freq_map_qubic, freq_map_pysm)
+```
+
+### SED
+
+
+The SED definition create a figure which show us the spectrale energy density for different maps and for different stokes parameter.
+
+```{python}
+def SED(q, coverage, d, pix):
+    
+    """
+    Procedure that returns the amplitude value of a pixel as a function of frequency
+    
+    inputs:
+        q: dict, qubic dict
+        coverage: np.array, coverage map
+        d: dict, qubic dictionary
+        pix: list, index of the seen pixels
+    
+    returns:
+        plots of the SEDs
+    """
+    
+    global Stokes
+    reload(qss)
+    # Can be modified ... 
+    sky_config_1 = {'dust': 'd0'}
+    sky_config_2 = {'CMB':'c1'}
+    Qubic_sky_1 = qss.Qubic_sky(sky_config_1, d)
+    Qubic_sky_2 = qss.Qubic_sky(sky_config_2, d)
+    _, qss_d0, _, _ = Qubic_sky_1.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=coverage)             # map of dust with Qubic instrument
+    _, qss_c1, _, _ = Qubic_sky_2.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=coverage)			   # CMB map with Qubic instrument
+    FWHMs1 = Qubic_sky_1.dictionary['synthbeam_peak150_fwhm'] * 150. / Qubic_sky_1.qubic_central_nus * Qubic_sky_1.fi2td
+    FWHMs2 = Qubic_sky_2.dictionary['synthbeam_peak150_fwhm'] * 150. / Qubic_sky_2.qubic_central_nus * Qubic_sky_2.fi2td
+    
+    #print(FWHMs1)
+    #print(FWHMs2)
+    
+    qss_d0 = np.transpose(qss_d0, (0, 2, 1)) 
+    qss_c1 = np.transpose(qss_c1, (0, 2, 1))
+
+    instrument = get_instrument('Qubic' + str(nbands) + 'bands')
+
+    pysm_d0 = get_observation(instrument, 'd0', nside=d['nside'])
+    pysm_c1 = get_observation(instrument, 'c1', nside=d['nside'])
+
+    qss_d0, pysm_d0 = same_resol_maps(qss_d0, pysm_d0, FWHMs1, coverage, d)
+    qss_c1, pysm_c1 = same_resol_maps(qss_c1, pysm_c1, FWHMs2, coverage, d)
+    
+    p_qss_d0 = np.where(qss_d0 != 0)[2]
+    p_pysm_d0 = np.where(pysm_d0 != 0)[2]
+    
+    p_qss_c1 = np.where(qss_c1 != 0)[2]
+    p_pysm_c1 = np.where(pysm_c1 != 0)[2]
+    
+    #X = instrument.frequency
+    ind = 30
+    X = nus_in
+    fig, axs = plt.subplots(2, 3)
+    for i in range(3):
+        axs[0,i].plot(X, qss_d0[:, i, p_qss_d0[ind]], 'b-x', label = 'd0 QSS ' + Stokes[i])
+        axs[0,i].plot(X, pysm_d0[:, i, p_pysm_d0[ind]], 'g-x', label = 'd0 PySM ' + Stokes[i])
+        axs[0,i].set_xlabel("f [GHz]")
+        axs[0,i].set_title("{} Stokes parameter".format(Stokes[i]))
+        axs[0,i].legend()
+        axs[1,i].plot(X, qss_c1[:, i, p_qss_c1[ind]], 'b-x', label = 'c1 QSS ' + Stokes[i])
+        axs[1,i].plot(X, pysm_c1[:, i, p_pysm_c1[ind]], 'g-x',label = 'c1 PySM ' + Stokes[i])
+        axs[1,i].set_xlabel("f [GHz]")
+        axs[1,i].legend()
+```
+
+### plot maps diff freq
+
+```{python}
+def plot_maps_diff_freq(map1, qub_dic, seenpix, sub_freq1, sub_freq2, ind_stokes, title):
+    
+    """
+    inputs:
+        map1, map2: np.array, of the format (nband, npix, nStokes)
+        qub_dic: dict, with QSS attributes
+        sub_freq: int, at which subfrequency we plot the maps
+        
+    returns
+        matplotlib plot 1x3 of input map, estimated map, difference between frequency
+    """
+    
+    sig1 = np.std(map1[sub_freq1, ind_stokes, :])
+    sig2 = np.std(map1[sub_freq2, ind_stokes, :])
+    
+    nsig = 3
+    Stokes = ['I', 'Q', 'U']
+    center = qubic.equ2gal(qub_dic['RA_center'], qub_dic['DEC_center'])
+    freq1 = np.round(nus_in[sub_freq1], 2)
+    freq2 = np.round(nus_in[sub_freq2], 2)
+    fig = plt.figure()
+    
+    hp.gnomview(map1[sub_freq1, ind_stokes, :], rot = center, reso = 15, sub = (1, 3, 1), min = - nsig * sig1, max = nsig * sig1, title = '$\mathbf{s}^{' + Stokes[ind_stokes] + '}_{' + str(freq1) + ' GHz}$')
+    hp.gnomview(map1[sub_freq2, ind_stokes, :], rot = center, reso = 15, sub = (1, 3, 2), min = - nsig * sig1, max = nsig * sig1, title = '$\hat{\mathbf{s}}^{' + Stokes[ind_stokes] + '}_{' + str(freq2) + ' GHz}$')
+    hp.gnomview(map1[sub_freq2, ind_stokes, :] - map1[sub_freq1, ind_stokes, :], rot = center, reso = 15, sub = (1, 3, 3), min = - nsig * sig1, max = nsig * sig1, title = '$\hat{\mathbf{s}}^{' + Stokes[ind_stokes] + '}_{' + str(freq2) + 'GHz} - \mathbf{s}^{' + Stokes[ind_stokes] + '}_{' + str(freq1) + 'GHz}$')
+    
+    plt.suptitle(title)
+    
+    #plt.tight_layout(pad=2.5)
+```
+
+### Plot maps
+
+```{python}
+def plot_maps(map1, map2, qub_dic, sub_freq, seenpix):
+    
+    """
+    inputs:
+        map1, map2: np.array, of the format (nband, npix, nStokes)
+        qub_dic: dict, with QSS attributes
+        sub_freq: int, at which subfrequency we plot the maps
+        
+    returns
+        matplotlib plot 3x3 of input map, estimated map, difference
+    """
+    
+    nsig = 3
+    Stokes = ['I', 'Q', 'U']
+    center = qubic.equ2gal(qub_dic['RA_center'], qub_dic['DEC_center'])
+    fig = plt.figure()
+    
+    for i in range(3):
+        
+        sig = np.std(map1[sub_freq, i, seenpix])      # Compute standard deviation of the map1 to the bare sub-frequency sub_freq
+        
+        hp.gnomview(map1[sub_freq, i, :], rot=center, reso=15, sub=(3, 3, 3*i+1), min=-nsig*sig, max=nsig*sig, title= '$\mathbf{s}^{' + Stokes[i] +  '}$')   
+      
+        hp.gnomview(map2[0, i, :], rot=center, reso=15, sub=(3, 3, 3*i+2), min=-nsig*sig, max=nsig*sig, title='$\hat{\mathbf{s}}^{' + Stokes[i] + '}$')
+        
+        hp.gnomview(map2[sub_freq, i, :] - map1[sub_freq, i, :], min=-nsig*sig, max=nsig*sig, rot=center, reso=15, sub=(3, 3, 3*i+3), title='$\hat{\mathbf{s}}^{' + Stokes[i] + '} - \mathbf{s}^{' + Stokes[i] + '}$ \n mm: ')
+        
+    plt.tight_layout(pad=2.5)
+```
+
+## Main program
+
+
+We apply now the FG-Buster algorithm to create some maps of the foreground components.
+
+```{python}
+reload(qss)
+
+sky_config = {'dust':'d0'}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+
+#Raw qss map
+raw_qss_map = np.transpose(Qubic_sky.get_fullsky_convolved_maps(), (0, 2, 1))
+#Raw pysm map (with bp)
+raw_pysm_map = np.transpose(Qubic_sky.get_simple_sky_map(), (0, 2, 1))
+instrument = get_instrument('Qubic' + str(nbands) + 'bands')
+```
+
+```{python}
+npix = 12 * d['nside'] ** 2     # 12*nside**2
+Nf = int(d['nf_sub'])           # 3
+band = d['filter_nu'] / 1e9     # 150 GHz
+filter_relative_bandwidth = d['filter_relative_bandwidth']     # 0.25
+_, nus_edge, nus_in, _, _, Nbbands_in = qubic.compute_freq(band, Nf, filter_relative_bandwidth)
+```
+
+```{python}
+new_list_of_freqs = []
+'''
+for i in range(Nf):
+    nfreqinteg = 50
+    freqs = np.linspace(nus_edge[i], nus_edge[i + 1], nfreqinteg)
+    weights_flat = np.ones(nfreqinteg)
+    weights = weights_flat / _jysr2rj(freqs)
+    weights /= _rj2cmb(freqs)
+    weights /= np.trapz(weights, freqs * 1e9)
+    new_list_of_freqs.append((freqs, weights))
+'''
+new_list_of_freqs = []
+for i in range(instrument.frequency.shape[0]) :
+    new_list_of_freqs.append(instrument.frequency[i])
+#print(new_list_of_freqs)
+```
+
+```{python}
+FWHMs = Qubic_sky.dictionary['synthbeam_peak150_fwhm'] * 150. / Qubic_sky.qubic_central_nus * Qubic_sky.fi2td
+freq_map_qubic, freq_map_pysm = same_resol_maps(raw_qss_map, raw_pysm_map, FWHMs, coverage, d)
+```
+
+```{python}
+plt.figure(1)
+k = 0
+for i in range(nbands):
+    for j in range(3):
+    	hp.gnomview(freq_map_qubic[i, j, :], title = r'{} - f = {} GHz'.format(Stokes[j], str(np.round(nus_in[i], 2))), sub = (nbands, 3, k+1), rot=center, reso=15)
+    	k += 1
+
+plt.show() 
+```
+
+### Sed
+
+```{python}
+SED(q, coverage, d, np.where(seenpix == True)[0])
+```
+
+### Difference between Qubic and PySM (for the same frequency)
+
+```{python}
+ind_freq = 0
+
+plot_maps(freq_map_qubic, freq_map_pysm, d, ind_freq, seenpix)
+```
+
+### Difference between 2 frequencies
+
+```{python}
+ind_freq1 = 0
+ind_freq2 = 2
+stokes_par = 0
+
+for i in range(3) :
+    plot_maps_diff_freq(freq_map_qubic, d, seenpix, ind_freq1, ind_freq2, i, 'Difference between 2 frequencies for ' + str(Stokes[i]))
+```
+
+## FG-Buster
+
+
+To compare, we compute the foreground maps with **fgbuster** module.
+
+```{python}
+instrument = get_instrument('Qubic' + str(nbands) + 'bands')
+```
+
+```{python}
+freq_maps = get_observation(instrument, 'c1d0s0', nside = d['nside'])
+```
+
+```{python}
+components = []
+
+for i in range(nbands) :
+    print('band {}/'.format(i+1) + str(nbands))
+    components.append([CMB(), Dust(nus_in[i])])
+print('Done !')
+```
+
+```{python}
+res = []
+
+for i in range(nbands) :
+    print('band {}/'.format(i+1) + str(nbands))
+    res.append(basic_comp_sep(components[i], instrument, freq_maps))
+print('Done !')
+```
+
+```{python}
+if nbands == 3 : 
+    b = widgets.Dropdown(options = [(str(np.round(nus_in[0], 2)) + ' GHz', 0), (str(np.round(nus_in[1], 2)) + ' GHz', 1), (str(np.round(nus_in[2], 2)) + ' GHz', 2)], value = 0, desciption = 'Stokes parameter : ')
+elif nbands == 4 :
+    b = widgets.Dropdown(options = [(str(np.round(nus_in[0], 2)) + ' GHz', 0), (str(np.round(nus_in[1], 2)) + ' GHz', 1), (str(np.round(nus_in[2], 2)) + ' GHz', 2), (str(np.round(nus_in[3], 3)) + ' GHz', 3)], value = 0, desciption = 'Stokes parameter : ')
+elif nbands == 5 :
+    b = widgets.Dropdown(options = [(str(np.round(nus_in[0], 2)) + ' GHz', 0), (str(np.round(nus_in[1], 2)) + ' GHz', 1), (str(np.round(nus_in[2], 2)) + ' GHz', 2), (str(np.round(nus_in[3], 3)) + ' GHz', 3), (str(np.round(nus_in[4], 4)) + ' GHz', 4)], value = 0, desciption = 'Stokes parameter : ')    
+else :
+    pass
+b
+```
+
+### Maps of foregrounds
+
+```{python}
+#ind_stokes = a.value
+ind_freq = b.value
+
+
+nsig = 3
+
+plt.figure()
+for j in range(3) :
+    sig1 = np.std(freq_map_qubic[ind_freq, j, :])
+    hp.gnomview(freq_map_qubic[ind_freq, j, :], min = - nsig * sig1, max = nsig * sig1, reso = 15, 
+                    rot = center, sub = (3, 3, 3*j+1), title = 'Qubic map - {}'.format(Stokes[j]))
+    hp.gnomview(res[ind_freq].s[1, j, :], min = - nsig * sig1, max = nsig * sig1, reso = 15, rot = center, 
+                    sub = (3, 3, 3*j+2), title = 'FG-buster - {}'.format(Stokes[j]))
+    hp.gnomview(freq_map_qubic[ind_freq, j, :] - res[ind_freq].s[1, j, :], cmap = 'bwr', min = - nsig * sig1, 
+                    max = nsig * sig1, reso = 15, rot = center, sub = (3, 3, 3*j+3), title = 'map1 - map2')
+
+plt.tight_layout(pad = 2.5)
+plt.show()
+```
+
+### Histograms of foregrounds
+
+
+To compare both, we can plot histograms for each stokes parameters at each frequencies. If the reconstruction is good, these histograms look like approximately the same.
+
+```{python}
+seenpix = coverage != 0
+
+fig, axs = plt.subplots(nbands, 3)
+for i in range(nbands) :
+    for j in range(3) :
+        if j == 0 :
+            axs[i, j].hist(res[i].s[1, j, seenpix], bins = 100, alpha = 0.3, label = 'FGbuster', color = 'r', range = [0, 20])
+            axs[i, j].hist(freq_map_qubic[i, j, seenpix], bins = 100, alpha = 0.3, label = 'Qubic', color = 'b', range = [0, 20])
+        else :
+            axs[i, j].hist(res[i].s[1, j, seenpix], bins = 100, alpha = 0.3, label = 'FGbuster', color = 'r')
+            axs[i, j].hist(freq_map_qubic[i, j, seenpix], bins = 100, alpha = 0.3, label = 'Qubic', color = 'b')
+        axs[i, j].set_title('f = {} GHz - {}'.format(np.round(nus_in[i], 2), Stokes[j]))
+        axs[i, j].legend()
+fig.tight_layout(pad=2.5)
+```
+
+```{python}
+
+```

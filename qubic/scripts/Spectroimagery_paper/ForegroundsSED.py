@@ -8,6 +8,7 @@ import sys
 import glob
 from importlib import reload
 import gc
+import time
 # Specific science modules
 import healpy as hp
 import matplotlib.pyplot as plt
@@ -283,3 +284,72 @@ def _mask_maps(maps, coverages, nf_recon):
 
 	return maps, cov
 
+###################### preparing MCMC runs
+#from lmfit import Model
+
+def LinModel(x, a, b):
+    return a + x**b
+
+def QuadModel(x, a, b,c):
+    return a*x**2 + b*x + c
+
+def Bnu(nuGHz, temp):
+    h = scipy.constants.h
+    c = scipy.constants.c
+    k = scipy.constants.k
+    nu = nuGHz * 1e9
+    return 2 * h * nu ** 3 / c ** 2 / (np.exp(h * nu / k / temp ) - 1 )
+
+def PlanckFunc353(x, a, b):
+    Tdust = 19.6
+    bnu = Bnu(x, Tdust)
+    bnu0 = Bnu(353, Tdust)
+    return a * bnu0 / bnu * (x / 353) ** (b / 2)
+
+def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
+           maxfev = 10000, initP0 = None, verbose = False,
+          nsamples = 5000):
+    
+    popt, _ = curve_fit(FuncModel, nus, maps[:, pix, istk], 
+                            sigma=covMat[:, :, istk, pix_red], absolute_sigma=True,
+                            maxfev = maxfev, p0 = initP0)
+
+    myfit = mcmc.LogLikelihood(xvals = nus, yvals = maps[:, pix, istk], 
+                               errors = covMat[:, :, istk, pix_red], 
+                               model = FuncModel, p0=popt)
+    fit_prep = myfit.run(nsamples)
+    flat_samples = fit_prep.get_chain(discard = nsamples//2, thin=32, flat=True)
+    nspls = flat_samples.shape[0]
+    #Generating realizations for parameters of the model (fake X(nu))
+    
+    x = np.linspace(nus_edge[0], nus_edge[-1], nsamples//2)
+    vals = np.zeros((len(x), nspls))
+    for i in range(len(x)):
+        for j in range(nspls):
+            vals[i, j] = FuncModel(x[i], *flat_samples[j, :])
+    
+    mvals = np.mean(vals, axis=1)
+    svals = np.std(vals, axis=1)
+    
+    return mvals, svals, x
+    
+
+def foregrounds_run_mcmc(dictionaries, fgr_map, Cp_prime, FuncModel,
+					nus_out, nus_edge, pixs, pixs_red = None, 
+					samples = 5000, verbose = True, ):
+	t0 = time.time()
+
+	MeanVals = np.zeros((len(dictionaries), samples//2, 3))
+	StdVals = np.zeros((len(dictionaries), samples//2, 3))
+	xarr = np.zeros((len(dictionaries), samples//2, 3))
+
+	for istk in range(3):
+	    if verbose: print("======== Doing {} Stokes parameter =============".format(dictionaries[0]['kind'][istk]))
+	    for j in range(len(dictionaries)):
+	        MeanVals[j, :, istk], StdVals[j, :, istk], xarr[j, :, istk] = \
+	                                                    PixSED_Xstk(nus_out[j], fgr_map[j], FuncModel, 
+	                                                                pixs[j], pixs_red[j], 
+	                                                                istk, Cp_prime[j], nus_edge[j], nsamples = samples)
+	print('Done in {:.2f} min'.format((time.time()-t0)/60 ))
+
+	return MeanVals, StdVals, xarr[:,:,0]

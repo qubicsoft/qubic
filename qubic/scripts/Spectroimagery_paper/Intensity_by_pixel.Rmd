@@ -762,10 +762,6 @@ maps220G_ud, std220G_ud = np.mean(maps220G_ud_i, axis = 0), np.std(maps220G_ud_i
 ```
 
 ```{python}
-fground_maps.shape, maps.shape
-```
-
-```{python}
 #NEW (17 Feb 2021)
 
 nside_new = 64
@@ -975,23 +971,29 @@ print('Done in {:.2f} min'.format((time.time()-t0)/60 ))
 
 ```{python}
 # NEW (17 Feb 2021)
-t0 = time.time()
-FuncModel = func353
-istk = 0
+reload(fsed)
 nus_out = [nus_out150, nus_out220, nus_out150, nus_out220]
 pixs_ud = [pixQ_ud, pixQ_ud, pixG_ud, pixG_ud]
 pixs_red = [pixQ_red, pixQ_red, pixG_red, pixG_red]
 nus_edge = [nus150, nus220, nus150, nus220]
-samples = 5000
-Imvals = np.zeros((len(dictionaries), samples//2))
-Isvals = np.zeros((len(dictionaries), samples//2))
-xarr = np.zeros((len(dictionaries), samples//2))
 
-for j in range(len(dictionaries)):
-    Imvals[j], Isvals[j], xarr[j] = PixSED_Xstk(nus_out[j], fgr_map_ud[j], FuncModel, 
-                                                pixs_ud[j], pixs_red[j], 
-                               istk, Cp_prime[j], nus_edge[j])
-print('Done in {:.2f} min'.format((time.time()-t0)/60 ))
+FuncModel = fsed.PlanckFunc353
+
+Imvals, Isvals, xarr = fsed.foregrounds_run_mcmc(dictionaries, fgr_map_ud, Cp_prime, FuncModel,
+                                                nus_out, nus_edge, pixs_ud, pixs_red = pixs_red, 
+                                                samples = 5000, verbose = True, )
+#Imvals = np.zeros((len(dictionaries), samples//2, 3))
+#Isvals = np.zeros((len(dictionaries), samples//2, 3))
+#xarr = np.zeros((len(dictionaries), samples//2, 3))
+
+#for istk in range(3):
+#    print("======== Doing {} Stokes parameter =============".format(dictionaries[0]['kind'][istk]))
+#    for j in range(len(dictionaries)):
+#        Imvals[j, :, istk], Isvals[j, :, istk], xarr[j, :, istk] = \
+#                                                    PixSED_Xstk(nus_out[j], fgr_map_ud[j], FuncModel, 
+#                                                                pixs_ud[j], pixs_red[j], 
+#                                                                istk, Cp_prime[j], nus_edge[j])
+#print('Done in {:.2f} min'.format((time.time()-t0)/60 ))
 ```
 
 ```{python}
@@ -1041,22 +1043,50 @@ p_opt220G, p_cov220G = curve_fit(quad, xSED220, ySED220G)
 ```
 
 ```{python}
+ErrBar2 = lambda Q, U, Qerr, Uerr: np.sqrt( Q ** 2 * Qerr ** 2 + U ** 2 * Uerr ** 2) / \
+                np.sqrt( Q ** 2 + U ** 2)
+```
+
+```{python}
 # NEW (17 Feb 2021)
 from lmfit import Model
 
 xSED = [nus_out150, nus_out220, nus_out150, nus_out220]
 #Without polarization
 gmodel = Model(quad, independent_vars=['x'])
-print(len(gmodel.param_names))
-ySED = np.zeros((len(dictionaries), nf_recon))
-popt = np.zeros((len(dictionaries), len(gmodel.param_names)))
-pcov = np.zeros((len(dictionaries), len(gmodel.param_names), len(gmodel.param_names)))
+# last dimenssion ==2 because polarization is P = sqrt(Q**2 + U**2)
+ySED = np.zeros((len(dictionaries), nf_recon, 2))
+popt = np.zeros((len(dictionaries), len(gmodel.param_names), 2))
+pcov = np.zeros((len(dictionaries), len(gmodel.param_names), len(gmodel.param_names), 2))
 #With polarization
 #ySED = np.zeros((len(dictionaries), nf_recon, 3))
 
-for j in range(len(dictionaries)):
-    ySED[j] = fgr_map_ud[j][:,pixs_ud[j],0]
-    popt[j], pcov[j] = curve_fit(quad, xSED[j], ySED[j])
+# Modeling fit to map values
+for icomp in range(2):
+    for j in range(len(dictionaries)):
+        if istk == 0:
+            ySED[j, :, icomp] = fgr_map_ud[j][:,pixs_ud[j],0]
+            popt[j, :, icomp], pcov[j, :, :, istk] = curve_fit(quad, xSED[j], ySED[j, :, icomp])
+        else:
+            ySED[j, :, icomp] = np.sqrt(fgr_map_ud[j][:,pixs_ud[j], 1] ** 2 + \
+                                        fgr_map_ud[j][:,pixs_ud[j], 2] ** 2)
+            popt[j, :, icomp], pcov[j, :, :, icomp] = curve_fit(quad, xSED[j], ySED[j, :, icomp])
+
+
+ySED_fit = np.zeros((len(dictionaries), len(xarr[0]), 2 ))
+Perr = np.zeros((len(dictionaries), len(Imvals[j, :, 2])) )
+for icomp in range(2):
+    for j in range(len(dictionaries)):
+        if icomp == 0:
+            ySED_fit[j,:,icomp] = quad(xarr[j, :], *popt[j, :, icomp])
+        else:
+            # Prepare maps to plot and errorbars after MCMC
+            Pmean = np.sqrt(Imvals[j, :, 1] ** 2 + Imvals[j, :, 2] ** 2)
+            #Error 
+            Perr[j, :] = ErrBar2(Imvals[j, :, 1], Imvals[j, :, 2], 
+                               Isvals[j, :, 1], Isvals[j, :, 2])
+            
+            ySED_fit[j,:,icomp] = quad(xarr[j, :], *popt[j, :, icomp])
 
 ```
 
@@ -1082,18 +1112,22 @@ plt.legend()
 #NEW (17 Feb 2021)
 xnew1 = np.linspace(nus150[0],nus150[-1],1000)
 xnew2 = np.linspace(nus220[0],nus220[-1],1000)
-plt.subplot(121)
-plt.plot(xnew1, quad(xnew1, *popt[0]),'r-',label='150Q')
-plt.plot(xnew1, quad(xnew1, *popt[2]),'b-',label='150G')
-plt.plot(xSED[0], ySED[0], 'ro')
-plt.plot(xSED[2], ySED[2], 'bo')
-plt.legend()
-plt.subplot(122)
-plt.plot(xnew2, quad(xnew2, *popt[1]),'r-',label='220Q')
-plt.plot(xnew2, quad(xnew2, *popt[3]),'b-',label='220G')
-plt.plot(xSED[1], ySED[1], 'ro')
-plt.plot(xSED[3], ySED[3], 'bo')
-plt.legend()
+plt.figure(figsize = (14,4) )
+for icomp in range(2):
+    plt.subplot(1,4,icomp*2+1)
+    plt.title("{} component".format("I" if icomp ==0 else "P"))
+    plt.plot(xnew1, quad(xnew1, *popt[0,:,icomp]),'r-',label='150Q')
+    plt.plot(xnew1, quad(xnew1, *popt[2,:,icomp]),'b-',label='150G')
+    plt.plot(xSED[0], ySED[0,:,icomp], 'ro')
+    plt.plot(xSED[2], ySED[2,:,icomp], 'bo')
+    plt.legend()
+    plt.subplot(1,4,icomp*2+2)
+    plt.title("{} component".format("I" if icomp ==0 else "P"))
+    plt.plot(xnew2, quad(xnew2, *popt[1,:,icomp]),'r-',label='220Q')
+    plt.plot(xnew2, quad(xnew2, *popt[3,:,icomp]),'b-',label='220G')
+    plt.plot(xSED[1], ySED[1,:,icomp], 'ro')
+    plt.plot(xSED[3], ySED[3,:,icomp], 'bo')
+    plt.legend()
 ```
 
 ```{python}
@@ -1219,8 +1253,8 @@ for imer in mer_coordsQ:
     plt.text(-np.deg2rad(imer-360+48), np.deg2rad(long_coordsQ[-1]+58+7), 
          r'{:.1f}$\degree$'.format(imer))
          #r'{}h{}m'.format(int(ip), int(round(dp*60))))
-#hp.projtext(mer_coordsQ[0] + 360, long_coordsQ[0] - 6, r'$l$',  color = 'k', lonlat=True)
-#hp.projtext(mer_coordsQ[2] - 360 + 36, long_coordsQ[2] + 10, r'$b$', rotation = 90, color = 'k', lonlat=True)
+hp.projtext(mer_coordsQ[0] + 360, long_coordsQ[0] - 6, r'$l$',  color = 'k', lonlat=True)
+hp.projtext(mer_coordsQ[2] - 360 + 36, long_coordsQ[2] + 10, r'$b$', rotation = 90, color = 'k', lonlat=True)
 
 hp.graticule(dpar = dpar, dmer = dmer, alpha = 0.6, verbose = False)
 
@@ -1248,26 +1282,26 @@ RESO = 15
 capsize = 3
 plt.rc('font', size = 14)
 
-ySED_fit = np.zeros((len(dictionaries), len(xarr[0])))
-for j in range(len(dictionaries)):
-    ySED_fit[j] = quad(xarr[j], *popt[j])
-
 fig,ax = plt.subplots(nrows = 1, ncols = 4,figsize = (19,4.5), gridspec_kw = {'wspace': 0.4})
 ax = ax.ravel()
 plt.subplots_adjust(wspace = 0.1)
 # Plotting
-p1, = ax[0].plot(nus_out150, fgr_map_ud[2, :, pixG_ud, 0], 'ro', label = 'Input sky')
-p2, = ax[0].plot(nus_out220, fgr_map_ud[3, :, pixG_ud, 0], 'bo')
-e1 = ax[0].fill_between(xarr[2], y1 = ySED_fit[2] - Isvals[2], y2 = ySED_fit[2] + Isvals[2], 
+p1, = ax[0].plot(nus_out150, fgr_map_ud[2, :, pixs_ud[2], 0], 'ro', label = 'Input sky')
+p2, = ax[0].plot(nus_out220, fgr_map_ud[3, :, pixs_ud[2], 0], 'bo')
+e1 = ax[0].fill_between(xarr[2,:], y1 = ySED_fit[2,:,0] - Isvals[2, :, 0], 
+                                y2 = ySED_fit[2, :, 0] + Isvals[2, :, 0], 
                  color = 'r', alpha = 0.3, label = '68% C.L.')
-e2 = ax[0].fill_between(xarr[3], y1 = ySED_fit[3] - Isvals[3], y2 = ySED_fit[3] + Isvals[3], 
+e2 = ax[0].fill_between(xarr[3, :], y1 = ySED_fit[3, :, 0] - Isvals[3, :, 0], 
+                        y2 = ySED_fit[3, :, 0] + Isvals[3, :, 0], 
                    color = 'b', alpha = 0.3)
 
-ax[2].plot(nus_out150, fgr_map_ud[0, :, pixQ_ud, 0], 'ro')
-ax[2].plot(nus_out220, fgr_map_ud[1, :, pixQ_ud, 0], 'bo')
-ax[2].fill_between(xarr[0], y1 = ySED_fit[0] - Isvals[0], y2 = ySED_fit[0] + Isvals[0], 
+ax[2].plot(nus_out150, fgr_map_ud[0, :, pixs_ud[0], 0], 'ro')
+ax[2].plot(nus_out220, fgr_map_ud[1, :, pixs_ud[0], 0], 'bo')
+ax[2].fill_between(xarr[0, :], y1 = ySED_fit[0, :, 0] - Isvals[0, :, 0], 
+                   y2 = ySED_fit[0, :, 0] + Isvals[0, :, 0], 
                    color = 'r', alpha = 0.3)
-ax[2].fill_between(xarr[1], y1 = ySED_fit[1] - Isvals[1], y2 = ySED_fit[1] + Isvals[1], 
+ax[2].fill_between(xarr[1, :], y1 = ySED_fit[1, :, 0] - Isvals[1, :, 0], 
+                   y2 = ySED_fit[1, :, 0] + Isvals[1, :, 0], 
                    color = 'b', alpha = 0.3)
 
 # Settings
@@ -1315,7 +1349,7 @@ hp.gnomview(maps_ud[2, -1, :, 0], reso = 15,hold = True,
             max = 0.4*np.max(maps_ud[2, -1, :, 0]), 
             unit = r'$\mu$K',
             rot = centers[2])
-hp.projscatter(hp.pix2ang(nside_new, pixG_ud), marker = '*', color = 'r', s = 180)
+hp.projscatter(hp.pix2ang(nside_new, pixs_ud[2]), marker = '*', color = 'r', s = 180)
 dpar = 10
 dmer = 20
 #Watch out, the names are wrong (change it)
@@ -1365,8 +1399,8 @@ for imer in mer_coordsQ:
     plt.text(-np.deg2rad(imer-360+48), np.deg2rad(long_coordsQ[-1]+58+7), 
          r'{:.1f}$\degree$'.format(imer))
          #r'{}h{}m'.format(int(ip), int(round(dp*60))))
-#hp.projtext(mer_coordsQ[0] + 360, long_coordsQ[0] - 6, r'$l$',  color = 'k', lonlat=True)
-#hp.projtext(mer_coordsQ[2] - 360 + 36, long_coordsQ[2] + 10, r'$b$', rotation = 90, color = 'k', lonlat=True)
+#hp.projtext(mer_coordsQ[0] , long_coordsQ[0] - 6, r'$l$',  color = 'k', lonlat=True)
+#hp.projtext(mer_coordsQ[2] - 360, long_coordsQ[2] + 10, r'$b$', rotation = 90, color = 'k', lonlat=True)
 
 hp.graticule(dpar = dpar, dmer = dmer, alpha = 0.6, verbose = False)
 
@@ -1391,6 +1425,7 @@ plt.show()
 
 Average realizations and compute std of realizations
 ```{python}
+# OLD (17 Feb 2021) Implemented above
 # Modeling fit to map values
 ySED150G_pol = np.sqrt(dust_map_150G_ud[:,pixG_ud,1] ** 2 + dust_map_150G_ud[:,pixG_ud,2] ** 2)
 ySED220G_pol = np.sqrt(dust_map_220G_ud[:,pixG_ud,1] ** 2 + dust_map_220G_ud[:,pixG_ud,2] ** 2)
@@ -1404,17 +1439,21 @@ p_opt220G_pol, p_cov220G_pol = curve_fit(quad, xSED220, ySED220G_pol)
 ```
 
 ```{python}
+# OLD (17 Feb 2021 not use it anymore)
 ErrBar = lambda xmean, xstd, px: np.sqrt( xmean[:,px,1] ** 2 *xstd[:,px,1] ** 2 + \
                                          xmean[:,px,2] ** 2 * xstd[:,px,2] ** 2) / \
                                            np.sqrt( xmean[:,px,1] ** 2 + xmean[:,px,2] ** 2)
 ```
 
 ```{python}
+#OLD (17Feb 2021) Implemented above
 ErrBar2 = lambda Q, U, Qerr, Uerr: np.sqrt( Q ** 2 * Qerr ** 2 + U ** 2 * Uerr ** 2) / \
                 np.sqrt( Q ** 2 + U ** 2)
 ```
 
 ```{python}
+# OLD (17 Feb 2021)
+
 Pmean150G = np.sqrt(Qmvals150G ** 2 + Umvals150G ** 2)
 Pmean220G = np.sqrt(Qmvals220G ** 2 + Umvals220G ** 2)
 Pmean150Q = np.sqrt(Qmvals150Q ** 2 + Umvals150Q ** 2)
@@ -1446,6 +1485,152 @@ p2, = ax[0].plot(nus_out220,
                'bo', lw = 3)
 
 e1 = ax[0].fill_between(x150, y1 = ySED150G_fit_pol - Perr150G, y2 = ySED150G_fit_pol + Perr150G, 
+                   color = 'r', alpha = 0.3, label = '68% C.L. ')
+e2 = ax[0].fill_between(x220, y1 = ySED220G_fit_pol - Perr220G, y2 = ySED220G_fit_pol + Perr220G, 
+                   color = 'b', alpha = 0.3)
+ax[0].axvspan(nus_edge150[-1], nus_edge220[0], color = 'k', alpha = greyscale)
+ax[2].plot(nus_out150, 
+               np.sqrt(dust_map_150Q_ud[:,pixQ_ud,1] ** 2 + dust_map_150Q_ud[:,pixQ_ud,2] ** 2),
+               'ro', lw = 3)
+ax[2].plot(nus_out220, 
+               np.sqrt(dust_map_220Q_ud[:,pixQ_ud,1] ** 2 + dust_map_220Q_ud[:,pixQ_ud,2] ** 2),
+               'bo', lw = 3)
+ax[2].fill_between(x150, y1 = ySED150Q_fit_pol - Perr150Q, y2 = ySED150Q_fit_pol + Perr150Q, 
+                   color = 'r', alpha = 0.3)
+ax[2].fill_between(x220, y1 = ySED220Q_fit_pol - Perr220Q, y2 = ySED220Q_fit_pol + Perr220Q, 
+                   color = 'b', alpha = 0.3)
+
+# Setting
+ax[0].set_title('GC patch - {} year'.format(d150G['effective_duration']),fontsize=14)
+ax[0].set_ylabel(r'$P(\nu)~[\mu$K]', fontsize = 14)
+ax[0].set_xlabel(r'$\nu~[GHz]$', fontsize = 14)
+ax[0].legend(loc = 2, fontsize = 12)
+ax[0].grid()
+ax[2].set_xlabel(r'$\nu~[GHz]$', fontsize = 14)
+ax[2].axvspan(nus_edge150[-1], nus_edge220[0], color = 'k', alpha = greyscale)
+ax[2].set_ylabel(r'$P(\nu)~[\mu$K]', fontsize = 14)
+ax[2].set_title('QUBIC patch - {} years'.format(d150Q['effective_duration']),fontsize=14)
+ax[2].grid()
+
+xlim = ax[0].get_xlim()
+ylim = ax[0].get_ylim()
+xlim2 = ax[2].get_xlim()
+ylim2 = ax[2].get_ylim()
+
+ax[0].axvspan(xlim2[0], nus_edge_out150[0], color = 'k', alpha = greyscale)
+ax[0].axvspan(nus_edge_out220[-1], xlim2[-1], color = 'k', alpha = greyscale)
+ax[2].axvspan(xlim2[0], nus_edge_out150[0], color = 'k', alpha = greyscale)
+ax[2].axvspan(nus_edge_out220[-1], xlim2[-1], color = 'k', alpha = greyscale)
+
+ax[0].set_xlim(xlim)
+ax[0].set_ylim(ylim)
+ax[0].text(xlim[0]+(xlim[1]-xlim[0])*0.1, ylim[-1]*0.8, '150 GHz \n band', fontsize = 10)
+ax[0].text(xlim[0]+(xlim[1]-xlim[0])*0.6, ylim[-1]*0.8, '220 GHz \n band', fontsize = 10)
+ax[2].set_xlim(xlim2)
+ax[2].set_ylim(ylim2)
+ax[2].text(xlim2[0]+(xlim2[1]-xlim2[0])*0.1, ylim2[-1]*0.8, '150 GHz \n band', fontsize = 10)
+ax[2].text(xlim2[0]+(xlim2[1]-xlim2[0])*0.6, ylim2[-1]*0.8, '220 GHz \n band', fontsize = 10)
+
+# Displaying maps    
+plt.axes(ax[1])
+auxmapG = np.sqrt(maps150G_ud[0,:,1] ** 2 + maps150G_ud[0,:,2] ** 2)
+auxmapG[~cov150G_ud] = hp.UNSEEN
+hp.gnomview(auxmapG,
+            reso = 15, hold = True, notext = True, 
+            title = ' ',
+            min = 0,
+            cbar = True,
+            unit = r'$\mu$K',
+            rot = centerG)
+hp.projscatter(hp.pix2ang(nside_new,pixG_ud),marker = '*',color = 'r', s = 180)
+dpar = 10
+dmer = 20
+#Watch out, the names are wrong (change it)
+mer_coordsG = [centerG[0] - dmer, centerG[0], centerG[0] + dmer]
+long_coordsG = [centerG[1] - 2*dpar, centerG[1] - dpar, centerG[1], centerG[1] + dpar, centerG[1] + 2 * dpar]
+#paralels
+for ilong in long_coordsG:
+    plt.text(np.deg2rad(mer_coordsG[0] - 12), 1.1*np.deg2rad(ilong), 
+             r'{}$\degree$'.format(ilong))
+#meridians
+for imer in mer_coordsG:
+    if imer < 0:
+        jmer = imer + 360
+        ip, dp = divmod(jmer/15,1)
+    else:
+        ip, dp = divmod(imer/15,1)
+    if imer == 0:
+        plt.text(-np.deg2rad(imer + 3), np.deg2rad(long_coordsG[-1] + 6), 
+             r'{}$\degree$'.format(int(ip) ))
+    else:
+        plt.text(-np.deg2rad(imer + 3), np.deg2rad(long_coordsG[-1] + 6), 
+             r'{}$\degree$'.format(imer))
+             #r'{}h{}m'.format(int(ip), int(round(dp*60))))
+hp.projtext(mer_coordsG[1] + 2, long_coordsG[0] - 6, '$l$',  color = 'k', lonlat=True)
+hp.projtext(mer_coordsG[2] + 12.5, long_coordsG[2] - 1, '$b$', rotation = 90, color = 'k', lonlat=True)
+
+plt.axes(ax[3])
+auxmapQ = np.sqrt(maps150Q_ud[0,:,1] ** 2 + maps150Q_ud[0,:,2] ** 2)
+auxmapQ[~cov150Q_ud] = hp.UNSEEN
+hp.gnomview(auxmapQ,
+            reso = 15, hold = True, notext = True, 
+            #max = 1e2,
+            min = 0,
+            title = ' ',
+            cbar = True,
+            unit = r'$\mu$K',
+            rot = centerQ)
+hp.projscatter(hp.pix2ang(nside_new,pixQ_ud),marker='*',color='r', s = 180)
+mer_coordsQ = [centerQ[0] - dmer, centerQ[0]+0, centerQ[0] + dmer]
+long_coordsQ = [centerQ[1] - 2*dpar, centerQ[1] - dpar, centerQ[1], centerQ[1] + dpar, centerQ[1] + 2 * dpar]
+#paralels
+for ilong in long_coordsQ:
+    plt.text(np.deg2rad(mer_coordsQ[0]-360+31), 1.1*np.deg2rad(ilong+58), r'{:.0f}$\degree$'.format(ilong),)
+#meridians
+for imer in mer_coordsQ:
+    ip, dp = divmod(imer/15,1)
+    plt.text(-np.deg2rad(imer-360+48), np.deg2rad(long_coordsQ[-1]+58+7), 
+         r'{:.1f}$\degree$'.format(imer))
+         #r'{}h{}m'.format(int(ip), int(round(dp*60))))
+#hp.projtext(mer_coordsQ[0] + 360, long_coordsQ[0] - 6, r'$l$',  color = 'k', lonlat=True)
+#hp.projtext(mer_coordsQ[2] - 360 + 36, long_coordsQ[2] + 10, r'$b$', rotation = 90, color = 'k', lonlat=True)
+
+hp.graticule(dpar = dpar, dmer = dmer, alpha = 0.6, verbose = False)
+l = ax[0].legend([(p1, p2), (e1, e2)], ['Input sky', '68% C.L.'], numpoints=1, loc = 4, fontsize = 12,
+               handler_map={tuple: HandlerTuple(ndivide=None)})
+plt.tight_layout()#plt.tight_layout()
+
+#plt.savefig('Figs-FI-SED/{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_grat.svg'.format(FuncModel.__name__,
+#                                                                d150Q['nf_recon'], nside_new,
+#                                                           pixQ_ud, pixG_ud), 
+#            format = 'svg', bbox_inches='tight')
+#plt.savefig('Figs-FI-SED/{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_grat.pdf'.format(FuncModel.__name__,
+#                                                                                  d150Q['nf_recon'], nside_new,
+#                                                           pixQ_ud, pixG_ud), 
+#            format = 'pdf', bbox_inches='tight')
+#plt.savefig('Figs-FI-SED/{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_grat'.format(FuncModel.__name__,
+#                                                                           d150Q['nf_recon'], 
+#                                                                           nside_new,pixQ_ud, pixG_ud),
+#           bbox_inches='tight')
+plt.show()
+```
+
+```{python}
+# NEW (17 Feb 2021)
+
+fig,ax = plt.subplots(nrows = 1,ncols = 4, figsize = (19,4.5), gridspec_kw = {'wspace': 0.4})
+ax = ax.ravel()
+plt.subplots_adjust(wspace=0.1)
+
+# Plotting
+p1, = ax[0].plot(nus_out150, 
+               np.sqrt(fgr_map_ud[2][:,pixs_ud[2],1] ** 2 + fgr_map_ud[2][:,pixs_ud[2],2] ** 2),
+               'ro', lw = 3, label = 'Input sky')
+p2, = ax[0].plot(nus_out220, 
+               np.sqrt(fgr_map_ud[3][:,pixs_ud[3],1] ** 2 + fgr_map_ud[3][:,pixs_ud[3],2] ** 2),
+               'bo', lw = 3)
+
+e1 = ax[0].fill_between(xarr[0], y1 = ySED150G_fit_pol - Perr150G, y2 = ySED150G_fit_pol + Perr150G, 
                    color = 'r', alpha = 0.3, label = '68% C.L. ')
 e2 = ax[0].fill_between(x220, y1 = ySED220G_fit_pol - Perr220G, y2 = ySED220G_fit_pol + Perr220G, 
                    color = 'b', alpha = 0.3)

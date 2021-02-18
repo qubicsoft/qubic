@@ -381,7 +381,7 @@ def udgrade_maps(fground_maps, noise, new_nside, nf_recon, nreals):
 
 	maps_ud, std_ud = np.mean(maps_ud_i, axis = 1), np.std(maps_ud_i, axis = 1)
 
-	return maps_ud, std_ud, noise_ud_i
+	return maps_ud, std_ud, fgr_map_ud, noise_ud_i
 
 def make_fit_SED(xSED, xarr, Imvals, Isvals, FuncModel, fgr_map_ud, pixs_ud, nf_recon):
 

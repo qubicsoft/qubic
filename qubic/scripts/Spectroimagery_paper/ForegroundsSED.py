@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pickle 
 import astropy.io as fits
+from lmfit import Model
 
 # Specific qubic modules
 import qubic
@@ -305,6 +306,7 @@ def PlanckFunc353(x, a, b):
     bnu = Bnu(x, Tdust)
     bnu0 = Bnu(353, Tdust)
     return a * bnu0 / bnu * (x / 353) ** (b / 2)
+    #return a * 1e18 * bnu * (x / 353) ** (b / 2)
 
 def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
            maxfev = 10000, initP0 = None, verbose = False,
@@ -353,3 +355,146 @@ def foregrounds_run_mcmc(dictionaries, fgr_map, Cp_prime, FuncModel,
 	print('Done in {:.2f} min'.format((time.time()-t0)/60 ))
 
 	return MeanVals, StdVals, xarr[:,:,0]
+
+def udgrade_maps(fground_maps, noise, new_nside, nf_recon, nreals):
+	
+	"""
+	Upgrade or Degrade foreground maps. 
+
+	It returns foreground maps UD-graded, std (useless) and noise maps UD-graded for each noise realization
+	"""
+	
+	new_nside = 64
+	npix_ud = 12 * new_nside **2 
+
+	fgr_map_ud = np.zeros((len(fground_maps), nf_recon, npix_ud, 3))
+	noise_ud_i = np.zeros((len(fground_maps), nreals, nf_recon, npix_ud, 3))
+	maps_ud_i = np.zeros_like(noise_ud_i)
+
+	for bandreg in range(len(fground_maps)):
+	    for irec in range(nf_recon):
+	        fgr_map_ud[bandreg, irec] = hp.ud_grade(fground_maps[bandreg, irec].T, new_nside).T
+	        for ireal in range(nreals):
+	            noise_ud_i[bandreg, ireal, irec] = hp.ud_grade(noise[bandreg, ireal, irec].T, new_nside).T
+	            maps_ud_i[bandreg, ireal, ...] = noise_ud_i[bandreg, ireal, ...] + fgr_map_ud[bandreg]
+	#
+
+	maps_ud, std_ud = np.mean(maps_ud_i, axis = 1), np.std(maps_ud_i, axis = 1)
+
+	return maps_ud, std_ud, noise_ud_i
+
+def make_fit_SED(xSED, xarr, Imvals, Isvals, FuncModel, fgr_map_ud, pixs_ud, nf_recon):
+
+
+	# NEW (18 Feb 2021)
+	ErrBar2 = lambda Q, U, Qerr, Uerr: np.sqrt( Q ** 2 * Qerr ** 2 + U ** 2 * Uerr ** 2) / \
+	                np.sqrt( Q ** 2 + U ** 2)
+	
+	gmodel = Model(FuncModel, independent_vars=['x'])
+
+	# last dimenssion ==2 because polarization is P = sqrt(Q**2 + U**2)
+	ySED = np.zeros((len(fgr_map_ud), nf_recon, 2))
+	popt = np.zeros((len(fgr_map_ud), len(gmodel.param_names), 2))
+	pcov = np.zeros((len(fgr_map_ud), len(gmodel.param_names), len(gmodel.param_names), 2))
+	#With polarization
+
+	# Modeling fit to map values
+	for icomp in range(2):
+	    for j in range(len(fgr_map_ud)):
+	        if icomp == 0:
+	            ySED[j, :, icomp] = fgr_map_ud[j][:,pixs_ud[j],0]
+	            popt[j, :, icomp], pcov[j, :, :, icomp] = curve_fit(FuncModel, xSED[j], ySED[j, :, icomp])
+	        else:
+	            ySED[j, :, icomp] = np.sqrt(fgr_map_ud[j][:,pixs_ud[j], 1] ** 2 + \
+	                                        fgr_map_ud[j][:,pixs_ud[j], 2] ** 2)
+	            popt[j, :, icomp], pcov[j, :, :, icomp] = curve_fit(FuncModel, xSED[j], ySED[j, :, icomp])
+
+
+	ySED_fit = np.zeros((len(fgr_map_ud), len(xarr[0]), 2 ))
+	Perr = np.zeros((len(fgr_map_ud), len(xarr[0])) )
+	for icomp in range(2):
+	    for j in range(len(fgr_map_ud)):
+	        if icomp == 0:
+	            ySED_fit[j,:,icomp] = FuncModel(xarr[j, :], *popt[j, :, icomp])
+	        else:
+	            # Prepare maps to plot and errorbars after MCMC
+	            Pmean = np.sqrt(Imvals[j, :, 1] ** 2 + Imvals[j, :, 2] ** 2)
+	            #Error 
+	            Perr[j, :] = ErrBar2(Imvals[j, :, 1], Imvals[j, :, 2], 
+	                               Isvals[j, :, 1], Isvals[j, :, 2])
+	            
+	            ySED_fit[j,:,icomp] = FuncModel(xarr[j, :], *popt[j, :, icomp])
+
+	return ySED_fit, Pmean, Perr
+
+def _plot_exampleSED(dictionary, center, nus_out, maskmaps, savefig = None):
+
+	"""
+	Plot an example of Figure 10 (map + SED ) in paper 1
+
+	===============
+	Parameters: 
+		dictionary:
+			QUBIC dictionary
+		center: 
+			center of the FOV for the map (maskmap)
+		nus_out:
+			frequencies where was reconstructed the map
+		maskmap:
+			a sky map. 'mask' prefix it's because is recommended to use masked maps (unseen values) in the unobserved region
+	===============
+	Return:
+		Figure with 2 subplots. At left a sky region (healpix projection), right subplot the SED.
+	"""
+
+	capsize=3
+	plt.rc('font', size=16)
+
+	pixG = [hp.ang2pix(dictionary['nside'], np.pi / 2 - np.deg2rad(center[1] + 1 ), 
+	                   np.deg2rad(center[0]) ), ]
+
+	fig,ax = plt.subplots(nrows=1,ncols=2,figsize=(14,5),)
+	ax = ax.ravel()
+	IPIXG = pixG[0]
+	ax[1].plot(nus_out, maskmaps[:,IPIXG,0], 'o-', color='r')
+	ax[1].set_ylabel(r'$I_\nu$ [$\mu$K]')
+	ax[1].set_xlabel(r'$\nu$[GHz]')
+	ax[0].cla()
+	plt.axes(ax[0])
+	hp.gnomview(maskmaps[-1,:,0], reso = 15,hold = True, title = ' ',unit = r'$\mu$K', notext =True,
+	            min = 0 ,
+	            max = 0.23 * np.max(maskmaps[-1,:,0]), rot = center)
+	hp.projscatter(hp.pix2ang(dictionary['nside'], IPIXG), marker = '*', color = 'r',s = 180)
+	dpar = 10
+	dmer = 20
+	#Watch out, the names are wrong (change it)
+	mer_coordsG = [ center[0] - dmer,   center[0], center[0] + dmer]
+	long_coordsG = [center[1] - 2*dpar, center[1] - dpar, center[1], 
+	                center[1] + dpar,   center[1] + 2 * dpar]
+	#paralels
+	for ilong in long_coordsG:
+	    plt.text(np.deg2rad(mer_coordsG[0] - 13), 1.1*np.deg2rad(ilong), 
+	             r'{}$\degree$'.format(ilong))
+	#meridians
+	for imer in mer_coordsG:
+	    if imer < 0:
+	        jmer = imer + 360
+	        ip, dp = divmod(jmer/15,1)
+	    else:
+	        ip, dp = divmod(imer/15,1)
+	    if imer == 0:
+	        plt.text(-np.deg2rad(imer + 3), np.deg2rad(long_coordsG[-1] + 6), 
+	             r'{}$\degree$'.format(int(ip) ))
+	    else:
+	        plt.text(-np.deg2rad(imer + 3), np.deg2rad(long_coordsG[-1] + 6), 
+	             r'{}$\degree$'.format(imer))
+
+	hp.projtext(mer_coordsG[1] + 2, long_coordsG[0] - 6, '$l$',  color = 'k', lonlat=True)
+	hp.projtext(mer_coordsG[2] + 12.5, long_coordsG[2] - 1, '$b$', rotation = 90, color = 'k', lonlat=True)
+	hp.graticule(dpar = dpar, dmer = dmer, alpha = 0.6, verbose = False)
+	plt.tight_layout()
+	if savefig != None:
+		plt.savefig('true-sky.svg', format = 'svg',  bbox_inches='tight')
+		plt.savefig('true-sky.pdf', format = 'pdf',  bbox_inches='tight')
+		plt.savefig('true-sky',  bbox_inches='tight')
+	plt.show()

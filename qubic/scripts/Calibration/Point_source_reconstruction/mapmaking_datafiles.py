@@ -150,16 +150,16 @@ def get_data_Mrefsyst(detnums, filemaps, az, el, fitted_directory, fittedpeakfil
 		peaks = np.array(FitsArray(fittedpeakfile))
 		#Thph indexes
 		if proj_name == "flat":
-			thphidx = [1,0] 
-			peaks[:,thphidx[1],:] = peaks[:,thphidx[1],:] / thecos
+			thphidx = [0,1] 
+			peaks[:,1,:] = peaks[:,1,:] / thecos
 		elif proj_name == "healpix":
 			thphidx = [0,1]
-			peaks[:,thphidx[1],:] = peaks[:,thphidx[1],:] 
+			peaks[:,1,:] = peaks[:,1,:] 
 		### An put them in the expected format. Save TES of interest
 		mypeaks = peaks[np.array(detnums)-1,:,:]
 		#Peaks in degrees
-		allphis_M = mypeaks[:,thphidx[1],:]
-		allthetas_M = mypeaks[:,thphidx[0],:]
+		allphis_M = mypeaks[:,1,:]
+		allthetas_M = mypeaks[:,0,:]
 		allvals_M = mypeaks[:,2,:]
 
 	return allphis_M, allthetas_M, allvals_M 
@@ -267,6 +267,9 @@ def do_some_dets(detnums, d, p, directory, fittedpeakfile, az, el, proj_name, cu
 				 doplot=True, verbose=True, sbfitmodel=None, angs=None, usepeaks=None,
 				 azmin=None, azmax=None, remove=None, fitted_directory=None, weighted=False,
 				nf_sub_rec=1, lowcut=1e-3, highcut=0.3):
+
+	print("You are in {}".format(do_some_dets.__name__))
+
 	if nside is not None:
 		d['nside']=nside
 	s = qubic.QubicScene(d)
@@ -307,7 +310,10 @@ def do_some_dets(detnums, d, p, directory, fittedpeakfile, az, el, proj_name, cu
 		### from the synthesized beam images      
 		### First instantiate a jchinstrument (modified from instrument 
 		### to be able to read peaks from a file)
-		qcut = select_det(jcinst.QubicMultibandInstrument(d),ids)
+
+		print("Generating jchinstrument")
+		qcut = select_det(jcinst.QubicMultibandInstrument(d, peakfile = fittedpeakfile), qpix)
+		print("Generating jchinstrument"[::-1])
 		
 		### In the present case, we use the peak measurements at 150 GHz
 		### So we assume its index is len(qcut)//2
@@ -476,9 +482,10 @@ def do_some_dets(detnums, d, p, directory, fittedpeakfile, az, el, proj_name, cu
 	plt.clf()
 	print('%%%%%%%%%%%%%%%%%%%%%%')
 	ax=plt.subplot(111, projection='polar')
+	print(qcut)
 	maps_recon, cov, nus, nus_edge = si.reconstruct_maps(realTOD, d, p,
-														nf_sub_rec, x0=None, instrument=qcut, #verbose=True,
-														forced_tes_sigma=sigmaTOD)
+														nf_sub_rec, x0 = None, instrument = qcut, #verbose=True,
+														forced_tes_sigma = sigmaTOD)
 	ax.set_rmax(0.5)
 	#legend(fontsize=8)
 	if weighted:

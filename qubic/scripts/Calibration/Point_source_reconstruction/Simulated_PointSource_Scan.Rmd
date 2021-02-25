@@ -122,7 +122,7 @@ if ("cov" not in locals()):
     cov[~maskov] = hp.UNSEEN
 centGal = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 hp.gnomview(cov, title = "Coverage map", 
-            rot = [0,50], reso = 14)
+            rot = [azcen_fov, elcen_fov], reso = 14)
 ```
 
 subplot(221)
@@ -221,16 +221,17 @@ imshow(np.reshape(TOD[showpix][::-1], (len(el),len(az)) ))
 Save flatmaps projection for each TES... is it neccessary to invert elevation? 
 
 ```{python}
-reload(fh)
-for ipix in range(len(q[0].detector)):
-    idet = q[0].detector[ipix]
-    qtes, _asic_ = FPidentity[idet.index[0]].TES, FPidentity[idet.index[0]].ASIC
-    # convert to qubicpack numeration (1-248)
-    qtes = qtes if _asic_ == 1 else qtes + 128
-    #print (FPidentity[idet.index[0]].PIX , ipix, qtes)
-    FitsArray(np.reshape(TOD[ipix], 
-                     (len(el), len(az))) ).save(directory + \
-                    'Simulations/Flat/imgflat_TESNum_{}.fits'.format(qtes))
+# OLD (22 Feb 2021)
+#reload(fh)
+#for ipix in range(len(q[0].detector)):
+#    idet = q[0].detector[ipix]
+#    qtes, _asic_ = FPidentity[idet.index[0]].TES, FPidentity[idet.index[0]].ASIC
+#    # convert to qubicpack numeration (1-248)
+#    qtes = qtes if _asic_ == 1 else qtes + 128
+#    #print (FPidentity[idet.index[0]].PIX , ipix, qtes)
+#    #FitsArray(np.reshape(TOD[ipix], 
+#    #                 (len(el), len(az))) ).save(directory + \
+#    #                'Simulations/Flat/imgflat_TESNum_{}.fits'.format(qtes))
 ```
 
 #### Choose a qpix (or TES, ASIC) to fit peak position with:
@@ -240,20 +241,20 @@ for ipix in range(len(q[0].detector)):
 * Healpy
 
 ```{python}
-# Selecting TES number in absolute (1-248) notation:
-TES = [37, ] #[149, 28, 37, 60, 96, 101, 122, 124, 137, 140, 149]
-tes = np.zeros((len(TES), ), dtype = int)
-asic = np.zeros((len(TES), ), dtype = int)
-qpix = np.zeros((len(TES), ), dtype = int)
-for j, iTES in enumerate(TES):
-    tes[j], asic[j] = (iTES, 1) if (iTES < 128) else (iTES - 128, 2)
-    # Transform to qubicsoft notation
-    print(tes[j], asic[j])
-    qpix[j] = tes2pix(tes[j], asic[j]) - 1
-    print(qpix[j])
-
-# Select tod to fit in healpy and flat projections (just one)
-tod = TOD[qpix[0]]
+## Selecting TES number in absolute (1-248) notation:
+#TES = [37, ] #[149, 28, 37, 60, 96, 101, 122, 124, 137, 140, 149]
+#tes = np.zeros((len(TES), ), dtype = int)
+#asic = np.zeros((len(TES), ), dtype = int)
+#qpix = np.zeros((len(TES), ), dtype = int)
+#for j, iTES in enumerate(TES):
+#    tes[j], asic[j] = (iTES, 1) if (iTES < 128) else (iTES - 128, 2)
+#    # Transform to qubicsoft notation
+#    print(tes[j], asic[j])
+#    qpix[j] = tes2pix(tes[j], asic[j]) - 1
+#    print(qpix[j])
+#
+## Select tod to fit in healpy and flat projections (just one)
+#tod = TOD[qpix[0]]
 ```
 
 #### Fit flatmap
@@ -331,28 +332,28 @@ for i in range(len(TES2fit)):
 #                                       filterbeam = 2, threshold = 4, threshold0 = 3, plotcenter = False)
 #else:
 #===============
-dirfiles = os.environ['QUBIC_TODDIR']+'150GHz-2019-04-06/'
+dirfiles = directory#os.environ['QUBIC_TODDIR']+'150GHz-2019-04-06/'
 reload(fh)
 reload(sbfit)
 generate_files = False
-
+makeflat = False
+makehp = False
 if generate_files:
     # Selecting TES number in absolute (1-248) notation:
     fullTES = np.arange(1, 257, dtype = int) #[28, 37, 60, 96, 101, 122, 124, 137, 140, 149]
-    #fullTES = np.array([28, 37, 60, 96, 101, 122, 124, 137, 140, 149]) #
-    #fullTES = np.array([28, 122, 137]) #
     thermos_index = np.array([4, 36, 68, 100, 4+128, 36+128, 68+128, 100+128]) - 1
-    #thermos_index = np.array([7])
+
     fullTES = np.delete(fullTES, thermos_index)
     fulltes = np.zeros((len(fullTES), ), dtype = int)
     fullasic = np.zeros((len(fullTES), ), dtype = int)
     fullqpix = np.zeros((len(fullTES), ), dtype = int)
 
-    thexypeaks = np.zeros((len(fullTES), 4, 9))
-    flatmaps = np.zeros((len(fullTES), len(el), len(az) ))
-    hpnest = np.zeros((len(fullTES), 12 * d['nside'] ** 2))
-    thphpeaksnew = np.zeros((len(fullTES), 4, 9))
-    valpeaksnew = np.zeros((len(fullTES), 9))
+    if makeflat:
+        flatthph = np.zeros((len(fullTES), 4, 9))
+        flatmaps = np.zeros((len(fullTES), len(el), len(az) ))
+    if makehp:
+        hpnest = np.zeros((len(fullTES), 12 * d['nside'] ** 2))
+        hpthph = np.zeros((len(fullTES), 4, 9))
 
     #Flat Model
     sbfitmodel = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, 
@@ -370,94 +371,98 @@ if generate_files:
         # Select tod to fit in healpy and flat projections (just one)
         tod = TOD[fullqpix[j]]
 
-        #Flatmaps
-        _, thexypeaks[j], flatmaps[j] = sbfit.fit_sb(np.reshape(tod, (len(el), len(az))), 
+        if makeflat:
+            #Flatmaps
+            _, flatthph[j], flatmaps[j] = sbfit.fit_sb(np.reshape(tod, (len(el), len(az))), 
                                                      az, el, sbfitmodel, resample = False, newsize = 150, 
                                                      nsiglo = 100, nsighi = 1e7,
-            az_center = azcen_fov, el_center = elcen_fov,
-             verbose = False, doplot = False, return_fitted =True,
-        #figsave = os.environ['QUBIC_DATADIR'] + 'scripts/fit_theoretical_SB/TES{}_flatmap_peaks_fit'.format(ites),
-             extra_title='TES #{}'.format(iTES))
+                                                     az_center = azcen_fov, el_center = elcen_fov,
+                                                     verbose = False, doplot = False, return_fitted =True,
+                                                     extra_title='TES #{}'.format(iTES))
 
-        # Save peaks location in flat maps
-        #print("saving fits position for TES {} in flat map".format(fulltes[j]))
-        thexypeaks[j,0] = np.radians(thexypeaks[j,0,::-1])
-        thexypeaks[j,1] = np.radians(thexypeaks[j,1,::-1])
-        FitsArray(thexypeaks[j]).save(dirfiles + \
+            # Save peaks location in flat maps
+            # Invert indexes to have th and ph and convert az,el to ph,th
+            flatthph[j,[1,0]] = np.radians(flatthph[j,[0,1],::-1])
+            flatthph[j,0] = np.pi/2 - flatthph[j,0]
+            
+            FitsArray(flatthph[j]).save(dirfiles + \
                                       'Simulations/Flat/peaks/fitted_peaks_flat_ASIC{}TES{}.fits'.format(fullasic[j],
                                                                                                          fulltes[j]
                                                                                                    ))
-        # Save flat maps
-        FitsArray(np.reshape(tod, 
+            # Save flat maps
+            FitsArray(np.reshape(tod, 
                          (len(el), len(az)))[:, ::-1] ).save(directory + \
                         'Simulations/Flat/synth_beam/flat_ASIC{}TES{}.fits'.format(fullasic[j], fulltes[j]))
 
-        #print('Flat done in {:.2f} minutes'.format((time.time()-t0)/60))
+            #print('Flat done in {:.2f} minutes'.format((time.time()-t0)/60))
 
-        t1 = time.time()
-        #HEalpix maps
-        convmap = fh.flat2hp_map(tod, p.azimuth, p.elevation, nside = d['nside'])
+            t1 = time.time()
+            
+        if makehp:
+            #HEalpix maps
+            convmap = fh.flat2hp_map(tod, p.azimuth, p.elevation, nside = d['nside'])
 
-        InitSearch = fh.SbHealpyModel(d, q[3], s, fullTES[j], az, el, dirfiles, nest = False,
-                                     simulation = True, maps = convmap, verbose = False)
+            InitSearch = fh.SbHealpyModel(d, q[3], s, fullTES[j], az, el, dirfiles, nest = False,
+                                         simulation = True, maps = convmap, verbose = False)
 
-        hpnest[j], thphpeaksnew[j] = InitSearch(simulation = True, maps = convmap, threshold = 3,
-                                                filterbeam = 1.5, delta = 9, doplot = False, 
-                                                    factor_corrector = 1.5)
+            hpnest[j], hpthph[j] = InitSearch(simulation = True, maps = convmap, threshold = 3,
+                                                    filterbeam = 1.5, delta = 9, doplot = False, 
+                                                        factor_corrector = 1.5)
 
-        #Save file
-        #print("saving fits position for TES {} in healpy map".format(fulltes[j]))
-        FitsArray(thphpeaksnew[j]).save(dirfiles + \
-                                        'Simulations/Healpix/peaks/fitted_peaks_hp_ASIC{}TES{}.fits'.format(fullasic[j],
-                                                                                                fulltes[j]))
-        # Save healpix maps
-        FitsArray(hpnest[j]).save(directory + \
-                        'Simulations/Healpix/synth_beam/hp_ASIC{}TES{}.fits'.format(fullasic[j], fulltes[j]))
+            #Save file
+            #print("saving fits position for TES {} in healpy map".format(fulltes[j]))
+            FitsArray(hpthph[j]).save(dirfiles + \
+                                'Simulations/Healpix/peaks/fitted_peaks_hp_ASIC{}TES{}.fits'.format(fullasic[j],
+                                                                                                    fulltes[j]))
+            # Save healpix maps
+            FitsArray(hpnest[j]).save(directory + \
+                            'Simulations/Healpix/synth_beam/hp_ASIC{}TES{}.fits'.format(fullasic[j], fulltes[j]))
 
-        print('Healpy done in {:.2f} minutes '.format((time.time()-t1)/60))
+            print('Healpy done in {:.2f} minutes '.format((time.time()-t1)/60))
 
-        print('TES {} ASIC {} done in {:.2f} minutes.'.format(fulltes[j], fullasic[j], (time.time()-t0)/60 ))
+            print('TES {} ASIC {} done in {:.2f} minutes.'.format(fulltes[j], fullasic[j], (time.time()-t0)/60 ))
 
     print("ALL DONE in {:.2f}".format((time.time()-ti)/60) ) 
     
     #Save all peaks in a single calibration file
-    fitflatpeaks = os.environ['QUBIC_PEAKS'] + '150GHz-2019-04-06/Simulations/Flat/flatpeaks.fits'
-    FitsArray(thexypeaks).save(fitflatpeaks)
-    fithppeaks = os.environ['QUBIC_PEAKS'] + '150GHz-2019-04-06/Simulations/Healpix/healpypeaks.fits'
-    FitsArray(thphpeaksnew).save(fithppeaks)
+    if makeflat:
+        fitflatpeaks = os.environ['QUBIC_PEAKS'] + '150GHz-2019-04-06/Simulations/Flat/flatpeaks.fits'
+        FitsArray(flatthph).save(fitflatpeaks)
+    if makehp:
+        fithppeaks = os.environ['QUBIC_PEAKS'] + '150GHz-2019-04-06/Simulations/Healpix/healpypeaks.fits'
+        FitsArray(hpthph).save(fithppeaks)
 
 elif not generate_files:
+    print("Reading files...")
     # Selecting TES number in absolute (1-248) notation:
     fullTES = np.arange(1, 257, dtype = int) #[28, 37, 60, 96, 101, 122, 124, 137, 140, 149]
-    #fullTES = np.array([28, 37, 60, 96, 101, 122, 124, 137, 140, 149]) #
-    #fullTES = np.array([28, 122, 137]) #
     thermos_index = np.array([4, 36, 68, 100, 4+128, 36+128, 68+128, 100+128]) - 1
-    #thermos_index = np.array([7])
     fullTES = np.delete(fullTES, thermos_index)
     fulltes = np.zeros((len(fullTES), ), dtype = int)
+    
     fullasic = np.zeros((len(fullTES), ), dtype = int)
     fullqpix = np.zeros((len(fullTES), ), dtype = int)
 
-    thexypeaks = np.zeros((len(fullTES), 4, 9))
+    flatthph = np.zeros((len(fullTES), 4, 9))
     flatmaps = np.zeros((len(fullTES), len(el), len(az) ))
     hpnest = np.zeros((len(fullTES), 12 * d['nside'] ** 2))
-    thphpeaksnew = np.zeros((len(fullTES), 4, 9))
+    hpthph = np.zeros((len(fullTES), 4, 9))
 
     fitflatpeaks = os.environ['QUBIC_PEAKS'] + '150GHz-2019-04-06/Simulations/Flat/flatpeaks.fits'
-    thexypeaks = FitsArray(fitflatpeaks)
+    flatthph = FitsArray(fitflatpeaks)
     
     fithppeaks = os.environ['QUBIC_PEAKS'] + '150GHz-2019-04-06/Simulations/Healpix/healpypeaks.fits'
-    thphpeaksnew = FitsArray(fithppeaks)
+    hpthph = FitsArray(fithppeaks)
     for j, iTES in enumerate(fullTES):
-        fulltes[j], fullasic[j] = (iTES, 1) if (iTES <= 128) else (iTES - 127, 2)
+        fulltes[j], fullasic[j] = (iTES, 1) if (iTES <= 128) else (iTES - 128, 2)
         # Transform to qubicsoft notation
         fullqpix[j] = tes2pix(fulltes[j], fullasic[j]) - 1
 
         # Select tod to fit in healpy and flat projections (just one)
         tod = TOD[fullqpix[j]]
-        print(fullasic[j], fulltes[j],np.shape(FitsArray(directory + \
-                             'Simulations/Flat/synth_beam/flat_ASIC{}TES{}.fits'.format(fullasic[j], 
-                                                                                        fulltes[j]))))
+        #print(fullasic[j], fulltes[j],np.shape(FitsArray(directory + \
+        #                     'Simulations/Flat/synth_beam/flat_ASIC{}TES{}.fits'.format(fullasic[j], 
+        #                                                                                fulltes[j]))))
         #Flatmaps
         flatmaps[j] = FitsArray(directory + \
                              'Simulations/Flat/synth_beam/flat_ASIC{}TES{}.fits'.format(fullasic[j], 
@@ -466,18 +471,48 @@ elif not generate_files:
         hpnest[j] = FitsArray(directory + \
                               'Simulations/Healpix/synth_beam/hp_ASIC{}TES{}.fits'.format(fullasic[j], 
                                                                                           fulltes[j]))
-        
+print("Done it.")
+```
+
+```{python}
+print(np.shape(flatthph), np.shape(hpthph))
+
+for i in range(9):
+    hpthph[: , 3, i] = int(i)
+    flatthph[: , 3, i] = int(i)
+#flatthph[:,1,:] = np.pi/2 - flatthph[:, 1, :] 
+#thphpeaksnew[: , 3, 2]
+#thphpeaksnew[: , 3, 3]
+flatbla = flatthph
+hpbla = hpthph
 ```
 
 ```{python}
 #Save all peaks in a single calibration file
 fitflatpeaks = os.environ['QUBIC_PEAKS'] + '150GHz-2019-04-06/Simulations/Flat/flatpeaks.fits'
-FitsArray(thexypeaks).save(fitflatpeaks)
+FitsArray(flatbla).save(fitflatpeaks)
 fithppeaks = os.environ['QUBIC_PEAKS'] + '150GHz-2019-04-06/Simulations/Healpix/healpypeaks.fits'
-FitsArray(thphpeaksnew).save(fithppeaks)
+FitsArray(hpbla).save(fithppeaks)
 ```
 
 #### See plots... ok
+
+```{python}
+mmm = hpthph[0,1] < 2
+#from matplotlib.pyplot import cm
+color = ['r','g','b','y','m','c','orange','purple','brown']#iter(cm.jet_r(range(9)))
+
+for i in range(9):
+    plot(np.rad2deg(flatthph[0,1, i]), 90 - np.rad2deg(flatthph[0,0, i]), 'o', color = color[i])
+    mterm = 0 if mmm[i] else 2*np.pi
+    plot(np.rad2deg(hpthph[0,1, i] - mterm), 90 - np.rad2deg(hpthph[0,0, i]), 'o', color = color[i])
+    text(np.rad2deg(flatthph[0,1, i])*0.95, 90 - np.rad2deg(flatthph[0,0, i]), "{}".format(i), fontsize = 12)
+    text(np.rad2deg(hpthph[0,1, i] - mterm)*1.15, 90 - np.rad2deg(hpthph[0,0, i])*0.95, "{}".format(i), fontsize = 12, 
+         fontweight = "bold")
+xlabel("azimuth", fontsize = 14)
+ylabel("elevation", fontsize = 14)
+pause(0.5)
+```
 
 ```{python}
 #from matplotlib.backends.backend_pdf import PdfPages
@@ -487,7 +522,7 @@ cm2inch = lambda cm: cm/2.54
 nperpage = 4
 #with PdfPages('flat-healpix_peaks.pdf') as pdf:
 #    rc('figure', figsize=(20,28))#(cm2inch(21), cm2inch(29.7)))
-for j in [1, ]:
+for j in [140, ]:
     fig, ax = subplots(nrows = 1, ncols = 2, figsize = (12,6))
     tod = TOD[fullqpix[j-1]]
     axes(ax[0])
@@ -498,7 +533,7 @@ for j in [1, ]:
     funcpr(hpnest[j-1], nest = False, min = 0, cbar= False, rot = (azcen_fov, elcen_fov),
                 title = 'Fitting (hp) TES = {}, asic = {}'.format(fulltes[j-1], fullasic[j-1]),
            xsize = 200, ysize = 200, hold = True, reso = 10)
-    hp.projscatter(thphpeaksnew[j-1,0,:], thphpeaksnew[j-1,1,:], color = 'r', marker = '.')
+    hp.projscatter(hpthph[j-1,0], hpthph[j-1,1], color = 'r', marker = '.')
     #hp.projscatter(np.radians(55), np.radians(-5), color = 'y', s = 200,marker = 'o')
     hp.projtext(np.radians(25), np.radians(30), "> 25% CovMax", color = "w",
                 weight='bold')
@@ -511,7 +546,7 @@ for j in [1, ]:
                                    np.min(el), np.max(el)],  )
     ax[1].set_ylabel('El[°]')
     ax[1].set_xlabel('Az[°]')
-    ax[1].plot(np.rad2deg(thexypeaks[j-1,0,::-1]), np.rad2deg(thexypeaks[j-1,1,::-1]), 'r.')
+    ax[1].plot(np.rad2deg(flatthph[j-1,1]), 90-np.rad2deg(flatthph[j-1,0]), 'r.')
     ax[1].set_title('Fitting (flat) TES {} asic {}'.format(fulltes[j-1], fullasic[j-1]))
 ```
 
@@ -528,7 +563,8 @@ elif doproj == "flat":
     dirfiles = directory + 'Simulations/Flat/synth_beam/'
     fitfile = fitflatpeaks 
 #map-making flatmaps
-detnums =  np.array([28, 37, 60, 96, 101, 122, 124, 137, 140, 149]) #
+#detnums =  np.array([28, 37, 60, 96, 101, 122, 124, 137, 140, 149]) #
+detnums =  np.array([140,])
 maps_recon, qcut, cov_rec, nus, nus_edge = mm.do_some_dets(detnums,
                             d, p, dirfiles, fitfile, az, el, doproj,  custom=True, 
                  nside=None, tol=5e-3, refit=False, resample=False, newsize=70, 
@@ -539,8 +575,15 @@ maps_recon, qcut, cov_rec, nus, nus_edge = mm.do_some_dets(detnums,
 ```
 
 ```{python}
-hp.gnomview(maps_recon, rot = (azcen_fov, elcen_fov), reso = 10, xsize =300, ysize=200,
-           min = 0, max = 7e6)
+thetatest, phitest, valtest, numpeakstest = FitsArray(fitflatpeaks)[140]
+print(np.shape(FitsArray(fitflatpeaks)[140]))
+print(numpeakstest)
+```
+
+```{python}
+hp.gnomview(maps_recon, rot = (azcen_fov, elcen_fov), reso = 10, xsize =300, ysize=260,
+            title = "TES {}".format(detnums),
+           min = 0, max = 7e5)
 ```
 
 ```{python}

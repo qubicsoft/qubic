@@ -104,6 +104,11 @@ Qubic_sky_220 = qss.Qubic_sky(sky_config_220, d220)
 auxmaps220, noiseless220, _, _ = Qubic_sky_220.get_partial_sky_maps_withnoise(spatial_noise=False, 
                                                                               coverage=coverage)
 
+```{python}
+dtest = d150G.copy()
+qtest = qubic.QubicMultibandInstrument(dtest)
+print(len(qtest))
+```
 
 Make coverage..
 
@@ -125,14 +130,14 @@ fsed._plot_covs(regions, bands, coveragesmaps, centers)
 ```{python}
 # NEW (16 Feb 2021)
 reload(fsed)
-sky_conf = {'dust': 'd1'}
+sky_conf = {'synch': 's1'}
 fground_maps = fsed.foreground_signal(dictionaries, sky_conf)
 ```
 
 ```{python}
 # NEW (16 Feb 2021)
 reload(fsed)
-nreals = 20
+nreals = 40
 noise = fsed.noise_qss(dictionaries, sky_conf, coveragesmaps, nreals, verbose = False) 
 
 ```
@@ -326,17 +331,46 @@ pixs_ud = [pixQ_ud, pixQ_ud, pixG_ud, pixG_ud]
 pixs_red = [pixQ_red, pixQ_red, pixG_red, pixG_red]
 nus_edge = [nus150, nus220, nus150, nus220]
 
-FuncModel = fsed.PlanckFunc353
+FuncModel = fsed.Synchrotron_storja
+#FuncModel = {'freedust': DustModel}
 
-Imvals, Isvals, xarr = fsed.foregrounds_run_mcmc(dictionaries, fgr_map_ud, Cp_prime, FuncModel,
+Imvals, Isvals, xarr, flat_samples = fsed.foregrounds_run_mcmc(dictionaries, fgr_map_ud, Cp_prime, FuncModel,
                                                 nus_out, nus_edge, pixs_ud, pixs_red = pixs_red, 
-                                                samples = 5000, verbose = True, )
+                                                samples = 5000, verbose = True, initP0 = [50, 3])
 ```
 
 ```{python}
-# NEW (18 Feb 2021)
-ErrBar2 = lambda Q, U, Qerr, Uerr: np.sqrt( Q ** 2 * Qerr ** 2 + U ** 2 * Uerr ** 2) / \
-                np.sqrt( Q ** 2 + U ** 2)
+#plt.hist(flat_samples[0,:,0], bins = 20, histtype="step")
+plt.xlabel("b")
+plt.ylabel("A")
+plt.hist2d(flat_samples[0,:,0], flat_samples[0,:,1], bins = 20)
+```
+
+```{python}
+#See pasrametric model
+frg = "synch" #"dust"
+xrange = np.arange(50,1100)
+ax = plt.subplot(111)
+ax.set_xscale("log")
+ax.set_yscale("log")
+ax.set_xlabel(r"$\nu$[GHz]")
+ax.set_xticks([50,100,1000])
+ax.set_xticklabels(['50', '100', '1000'])
+ax.set_title ("Free dust")
+if frg == "dust":
+    ax.plot(xrange, FuncModel(xrange, 100, 1,), 'r-', label = "A = 100, b = 1")
+    ax.plot(xrange, FuncModel(xrange, 100, 1.5, ), 'y-', label = "A = 100, b = 1.5")
+    ax.plot(xrange, FuncModel(xrange, 100, 1.5, ), 'g-', label = "A = 100, b = 1.5")
+    ax.plot(xrange, FuncModel(xrange, 100, 1.5, ), 'c-', label = "A = 100, b = 1")
+    ax.plot(xrange, FuncModel(xrange, 100, 2., ), 'b-', label = "A = 100, b = 2")
+else:
+    ax.plot(xrange, FuncModel(xrange, 30, - 3), 'r-', label = "A = 30, b = -3")
+    ax.plot(xrange, FuncModel(xrange, 30, - 2), 'y-', label = "A = 30, b = -2")
+    ax.plot(xrange, FuncModel(xrange, 30, - 1), 'g-', label = "A = 30, b = -1")
+#ax.plot(xrange, FuncModel(xrange, 100, 1.55, T = 23), 'k-', label = "Best fit-Planck")
+ax.axvspan(130, 170, ymin = 0, ymax = ax.get_ylim()[-1], color = 'k', alpha = 0.2)
+ax.axvspan(210, 260, ymin = 0, ymax = ax.get_ylim()[-1], color = 'k', alpha = 0.2)
+ax.legend(fontsize = 10)
 ```
 
 ```{python}
@@ -355,7 +389,6 @@ ySED_fit, Pmean, Perr = fsed.make_fit_SED(xSED, xarr, Imvals, Isvals,
                                           FuncModel, fgr_map_ud, pixs_ud, nf_recon)
 ```
 
-```{python}
 #NEW (17 Feb 2021)
 xnew1 = np.linspace(nus150[0],nus150[-1],1000)
 xnew2 = np.linspace(nus220[0],nus220[-1],1000)
@@ -375,7 +408,6 @@ for icomp in range(2):
     plt.plot(xSED[1], ySED[1,:,icomp], 'ro')
     plt.plot(xSED[3], ySED[3,:,icomp], 'bo')
     plt.legend()
-```
 
 ```{python}
 # NEW (17 feb 2021)

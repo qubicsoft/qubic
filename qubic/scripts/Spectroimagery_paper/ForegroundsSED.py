@@ -240,7 +240,7 @@ def noise_qss(dictionaries, sky_configuration, coverages, realizations, verbose 
 	return noise
 
 def foreground_with_noise(dictionaries, sky_configuration, regions, bands, realizations, sky = 'T',
-	seed = None, verbose = False, ud_grade = False, nside_out = None):
+	coverages = None, seed = None, verbose = False, ud_grade = False, nside_out = None):
 
 	"""
 	
@@ -252,8 +252,9 @@ def foreground_with_noise(dictionaries, sky_configuration, regions, bands, reali
 
 	fground_maps = foreground_signal(dictionaries, sky_configuration, verbose = verbose)
 	
-	coverages = coverage(dictionaries, regions, bands)
-
+	if coverages == None:
+		coverages = coverage(dictionaries, regions, bands)
+	
 	noise = noise_qss(dictionaries, sky_configuration, coverages, realizations, verbose = verbose) 
 
 	outmaps = []
@@ -289,72 +290,168 @@ def _mask_maps(maps, coverages, nf_recon):
 #from lmfit import Model
 
 def LinModel(x, a, b):
-    return a + x**b
+	return a + x**b
 
 def QuadModel(x, a, b,c):
-    return a*x**2 + b*x + c
+	return a*x**2 + b*x + c
 
 def Bnu(nuGHz, temp):
-    h = scipy.constants.h
-    c = scipy.constants.c
-    k = scipy.constants.k
-    nu = nuGHz * 1e9
-    return 2 * h * nu ** 3 / c ** 2 / (np.exp(h * nu / k / temp ) - 1 )
+	h = scipy.constants.h
+	c = scipy.constants.c
+	k = scipy.constants.k
+	nu = nuGHz * 1e9
+	return 2 * h * nu ** 3 / c ** 2 / (np.exp(h * nu / k / temp ) - 1 )
 
-def PlanckFunc353(x, a, b):
-    Tdust = 19.6
-    bnu = Bnu(x, Tdust)
-    bnu0 = Bnu(353, Tdust)
-    return a * bnu0 / bnu * (x / 353) ** (b / 2)
-    #return a * 1e18 * bnu * (x / 353) ** (b / 2)
+def ThermDust_Planck353(x, A, b, T = 19.6):
+	"""
+
+	"""
+	nu0 = 353
+	bnu = Bnu(x, T)
+	bnu0 = Bnu(nu0, T)
+	#print(bnu / bnu0)
+	#return a * bnu / bnu0 * (x / nu0) ** (b / 2)
+	return A * 1e18 * bnu * (x / nu0) ** (b / 2)
+
+def ThermDust_Planck545(x, A, b, T = 23):
+	"""
+	Three parameter model for thermal dust [ arXiv:1502.01588]:
+		s_d = A_d * (nu / nu0)**(b_d+1) * [(exp(gamma*nu0)-1) / (exp(gamma*nu)-1) ]
+		gamma = h / k_b / T_d
+
+		[s_d] = brightness temperature (uK)
+		nu0 = 545GHz
+
+	Parameters: 
+		A --> A_d: amplitude
+		b --> b_d: spectral index
+		T --> T_d: temperature
+		x --> nu [GHz] array
+	"""
+
+	h = scipy.constants.h
+	k = scipy.constants.k
+	nu0 = 545 #GHz
+
+	gamma = h / k / T
+	#exp = lambda nu: np.exp(gamma * nu) - 1
+
+	return A * (x / nu0) ** (b + 1) * (np.exp(gamma * nu0) - 1)/(np.exp(gamma * x) - 1)
+
+def Synchrotron_storja(x, A, p):
+	"""
+	Two parameter model for Synchrotron effect [ arXiv:1502.01588] and [arxiv: 1108.4822] (Strong, Orlando & Jaffe):
+
+		s_s = A_s * (nu0 / nu)**2 * f_s(nu/alpha) / f_s(nu0/alpha)
+		f_s = external template
+		
+		alpha > 0, spatially constant
+		A_s > 0
+		[s_s] = brightness temperature (uK)
+		nu0 = 408MHz
+	
+	Ver también: 	https://ui.adsabs.harvard.edu/link_gateway/2013MNRAS.436.2127O/PUB_PDF (2013)
+					https://arxiv.org/pdf/1207.3675.pdf (Delabrouille 2012)
+					https://arxiv.org/pdf/1108.4822.pdf (Strong, Orlando & Jaffe 2011)
+					https://arxiv.org/pdf/1106.4821.pdf (Aksoy $ Lewicki 2011)
+	Parameters: 
+		x --> nu [GHz] array
+
+		A 	--> A_s: amplitude
+		alpha-> alpha: spectral parameter 
+
+
+
+	"""
+	h = scipy.constants.h
+	c = scipy.constants.c
+	k = scipy.constants.k
+
+	#I = lambda nu: 
+	b = (p + 3) / 2
+
+	return A * x ** (- b)
+ 
+def Synchrotron_Planck(x, A, alpha, nu0 = 408e-3):
+	"""
+	
+	"""
+	h = scipy.constants.h
+	c = scipy.constants.c
+	k = scipy.constants.k
+
+	
+	return A * (x / nu0) ** 2
 
 def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
-           maxfev = 10000, initP0 = None, verbose = False,
-          nsamples = 5000):
-    
-    popt, _ = curve_fit(FuncModel, nus, maps[:, pix, istk], 
-                            sigma=covMat[:, :, istk, pix_red], absolute_sigma=True,
-                            maxfev = maxfev, p0 = initP0)
+		   maxfev = 10000, initP0 = None, verbose = False,
+		  nsamples = 5000, new = False):
+	
+	if new:
+		gmodel = Model(FuncModel)
 
-    myfit = mcmc.LogLikelihood(xvals = nus, yvals = maps[:, pix, istk], 
-                               errors = covMat[:, :, istk, pix_red], 
-                               model = FuncModel, p0=popt)
-    fit_prep = myfit.run(nsamples)
-    flat_samples = fit_prep.get_chain(discard = nsamples//2, thin=32, flat=True)
-    nspls = flat_samples.shape[0]
-    #Generating realizations for parameters of the model (fake X(nu))
-    
-    x = np.linspace(nus_edge[0], nus_edge[-1], nsamples//2)
-    vals = np.zeros((len(x), nspls))
-    for i in range(len(x)):
-        for j in range(nspls):
-            vals[i, j] = FuncModel(x[i], *flat_samples[j, :])
-    
-    mvals = np.mean(vals, axis=1)
-    svals = np.std(vals, axis=1)
-    
-    return mvals, svals, x
-    
+		#Set initial params...
+		#print(gmodel.fit(maps[:, pix, istk], pars, x = nus, nan_policy = "omit"))
+		if initP0 != None:
+			for j, ipar in enumerate(gmodel.param_names):
+				gmodel.set_param_hint(ipar, value = initP0[j])
+		pars = gmodel.make_params()
+		fit_par = gmodel.fit(maps[:, pix, istk], pars, x = nus, nan_policy = "omit")
+
+		popt = list(fit_par.best_values.values())
+	else:
+		popt, pcov = curve_fit(FuncModel, nus, maps[:, pix, istk], 
+								sigma = covMat[:, :, istk, pix_red], absolute_sigma=True,
+								maxfev = maxfev, p0 = initP0)
+	#print("Calling LogLikelihood", popt, pcov)
+	myfit = mcmc.LogLikelihood(xvals = nus, yvals = maps[:, pix, istk], 
+							   errors = covMat[:, :, istk, pix_red], 
+							   model = FuncModel, p0 = popt)
+	#print("myfit info: " )
+	fit_prep = myfit.run(nsamples)
+	#print("Doing chain")
+	flat_samples = fit_prep.get_chain(discard = nsamples//2, thin=32, flat=True)
+	#print("Samples ", flat_samples, np.shape(flat_samples))
+	nspls = flat_samples.shape[0]
+	#Generating realizations for parameters of the model (fake X(nu))
+	
+	x = np.linspace(nus_edge[0], nus_edge[-1], nsamples//2)
+	vals = np.zeros((len(x), nspls))
+	for i in range(len(x)):
+		for j in range(nspls):
+			vals[i, j] = FuncModel(x[i], *flat_samples[j, :])
+	
+	mvals = np.mean(vals, axis=1)
+	svals = np.std(vals, axis=1)
+	
+	return mvals, svals, x, flat_samples
+	
 
 def foregrounds_run_mcmc(dictionaries, fgr_map, Cp_prime, FuncModel,
 					nus_out, nus_edge, pixs, pixs_red = None, 
-					samples = 5000, verbose = True, ):
+					samples = 5000, verbose = True, initP0 = None):
 	t0 = time.time()
 
 	MeanVals = np.zeros((len(dictionaries), samples//2, 3))
 	StdVals = np.zeros((len(dictionaries), samples//2, 3))
 	xarr = np.zeros((len(dictionaries), samples//2, 3))
+	_flat_samples = np.zeros((len(dictionaries), 2496, 2))
 
 	for istk in range(3):
-	    if verbose: print("======== Doing {} Stokes parameter =============".format(dictionaries[0]['kind'][istk]))
-	    for j in range(len(dictionaries)):
-	        MeanVals[j, :, istk], StdVals[j, :, istk], xarr[j, :, istk] = \
-	                                                    PixSED_Xstk(nus_out[j], fgr_map[j], FuncModel, 
-	                                                                pixs[j], pixs_red[j], 
-	                                                                istk, Cp_prime[j], nus_edge[j], nsamples = samples)
+		if verbose: print("======== Doing {} Stokes parameter =============".format(dictionaries[0]['kind'][istk]))
+		for j in range(len(dictionaries)):
+			
+			if verbose: print(np.shape(dictionaries), np.shape(fgr_map[j]), np.shape(Cp_prime[j]), np.shape(nus_out[j]), 
+							np.shape(nus_edge[j])) 
+			print(initP0)
+			MeanVals[j, :, istk], StdVals[j, :, istk], xarr[j, :, istk], _flat_samples[j] = \
+														PixSED_Xstk(nus_out[j], fgr_map[j], FuncModel, 
+																	pixs[j], pixs_red[j], 
+																	istk, Cp_prime[j], nus_edge[j], 
+																	initP0 = initP0, nsamples = samples)
 	print('Done in {:.2f} min'.format((time.time()-t0)/60 ))
 
-	return MeanVals, StdVals, xarr[:,:,0]
+	return MeanVals, StdVals, xarr[:,:,0], _flat_samples
 
 def udgrade_maps(fground_maps, noise, new_nside, nf_recon, nreals):
 	
@@ -372,11 +469,11 @@ def udgrade_maps(fground_maps, noise, new_nside, nf_recon, nreals):
 	maps_ud_i = np.zeros_like(noise_ud_i)
 
 	for bandreg in range(len(fground_maps)):
-	    for irec in range(nf_recon):
-	        fgr_map_ud[bandreg, irec] = hp.ud_grade(fground_maps[bandreg, irec].T, new_nside).T
-	        for ireal in range(nreals):
-	            noise_ud_i[bandreg, ireal, irec] = hp.ud_grade(noise[bandreg, ireal, irec].T, new_nside).T
-	            maps_ud_i[bandreg, ireal, ...] = noise_ud_i[bandreg, ireal, ...] + fgr_map_ud[bandreg]
+		for irec in range(nf_recon):
+			fgr_map_ud[bandreg, irec] = hp.ud_grade(fground_maps[bandreg, irec].T, new_nside).T
+			for ireal in range(nreals):
+				noise_ud_i[bandreg, ireal, irec] = hp.ud_grade(noise[bandreg, ireal, irec].T, new_nside).T
+				maps_ud_i[bandreg, ireal, ...] = noise_ud_i[bandreg, ireal, ...] + fgr_map_ud[bandreg]
 	#
 
 	maps_ud, std_ud = np.mean(maps_ud_i, axis = 1), np.std(maps_ud_i, axis = 1)
@@ -388,7 +485,7 @@ def make_fit_SED(xSED, xarr, Imvals, Isvals, FuncModel, fgr_map_ud, pixs_ud, nf_
 
 	# NEW (18 Feb 2021)
 	ErrBar2 = lambda Q, U, Qerr, Uerr: np.sqrt( Q ** 2 * Qerr ** 2 + U ** 2 * Uerr ** 2) / \
-	                np.sqrt( Q ** 2 + U ** 2)
+					np.sqrt( Q ** 2 + U ** 2)
 	
 	gmodel = Model(FuncModel, independent_vars=['x'])
 
@@ -400,30 +497,30 @@ def make_fit_SED(xSED, xarr, Imvals, Isvals, FuncModel, fgr_map_ud, pixs_ud, nf_
 
 	# Modeling fit to map values
 	for icomp in range(2):
-	    for j in range(len(fgr_map_ud)):
-	        if icomp == 0:
-	            ySED[j, :, icomp] = fgr_map_ud[j][:,pixs_ud[j],0]
-	            popt[j, :, icomp], pcov[j, :, :, icomp] = curve_fit(FuncModel, xSED[j], ySED[j, :, icomp])
-	        else:
-	            ySED[j, :, icomp] = np.sqrt(fgr_map_ud[j][:,pixs_ud[j], 1] ** 2 + \
-	                                        fgr_map_ud[j][:,pixs_ud[j], 2] ** 2)
-	            popt[j, :, icomp], pcov[j, :, :, icomp] = curve_fit(FuncModel, xSED[j], ySED[j, :, icomp])
+		for j in range(len(fgr_map_ud)):
+			if icomp == 0:
+				ySED[j, :, icomp] = fgr_map_ud[j][:,pixs_ud[j],0]
+				popt[j, :, icomp], pcov[j, :, :, icomp] = curve_fit(FuncModel, xSED[j], ySED[j, :, icomp])
+			else:
+				ySED[j, :, icomp] = np.sqrt(fgr_map_ud[j][:,pixs_ud[j], 1] ** 2 + \
+											fgr_map_ud[j][:,pixs_ud[j], 2] ** 2)
+				popt[j, :, icomp], pcov[j, :, :, icomp] = curve_fit(FuncModel, xSED[j], ySED[j, :, icomp])
 
 
 	ySED_fit = np.zeros((len(fgr_map_ud), len(xarr[0]), 2 ))
 	Perr = np.zeros((len(fgr_map_ud), len(xarr[0])) )
 	for icomp in range(2):
-	    for j in range(len(fgr_map_ud)):
-	        if icomp == 0:
-	            ySED_fit[j,:,icomp] = FuncModel(xarr[j, :], *popt[j, :, icomp])
-	        else:
-	            # Prepare maps to plot and errorbars after MCMC
-	            Pmean = np.sqrt(Imvals[j, :, 1] ** 2 + Imvals[j, :, 2] ** 2)
-	            #Error 
-	            Perr[j, :] = ErrBar2(Imvals[j, :, 1], Imvals[j, :, 2], 
-	                               Isvals[j, :, 1], Isvals[j, :, 2])
-	            
-	            ySED_fit[j,:,icomp] = FuncModel(xarr[j, :], *popt[j, :, icomp])
+		for j in range(len(fgr_map_ud)):
+			if icomp == 0:
+				ySED_fit[j,:,icomp] = FuncModel(xarr[j, :], *popt[j, :, icomp])
+			else:
+				# Prepare maps to plot and errorbars after MCMC
+				Pmean = np.sqrt(Imvals[j, :, 1] ** 2 + Imvals[j, :, 2] ** 2)
+				#Error 
+				Perr[j, :] = ErrBar2(Imvals[j, :, 1], Imvals[j, :, 2], 
+								   Isvals[j, :, 1], Isvals[j, :, 2])
+				
+				ySED_fit[j,:,icomp] = FuncModel(xarr[j, :], *popt[j, :, icomp])
 
 	return ySED_fit, Pmean, Perr
 
@@ -451,7 +548,7 @@ def _plot_exampleSED(dictionary, center, nus_out, maskmaps, savefig = None):
 	plt.rc('font', size=16)
 
 	pixG = [hp.ang2pix(dictionary['nside'], np.pi / 2 - np.deg2rad(center[1] + 1 ), 
-	                   np.deg2rad(center[0]) ), ]
+					   np.deg2rad(center[0]) ), ]
 
 	fig,ax = plt.subplots(nrows=1,ncols=2,figsize=(14,5),)
 	ax = ax.ravel()
@@ -462,32 +559,32 @@ def _plot_exampleSED(dictionary, center, nus_out, maskmaps, savefig = None):
 	ax[0].cla()
 	plt.axes(ax[0])
 	hp.gnomview(maskmaps[-1,:,0], reso = 15,hold = True, title = ' ',unit = r'$\mu$K', notext =True,
-	            min = 0 ,
-	            max = 0.23 * np.max(maskmaps[-1,:,0]), rot = center)
+				min = 0 ,
+				max = 0.23 * np.max(maskmaps[-1,:,0]), rot = center)
 	hp.projscatter(hp.pix2ang(dictionary['nside'], IPIXG), marker = '*', color = 'r',s = 180)
 	dpar = 10
 	dmer = 20
 	#Watch out, the names are wrong (change it)
 	mer_coordsG = [ center[0] - dmer,   center[0], center[0] + dmer]
 	long_coordsG = [center[1] - 2*dpar, center[1] - dpar, center[1], 
-	                center[1] + dpar,   center[1] + 2 * dpar]
+					center[1] + dpar,   center[1] + 2 * dpar]
 	#paralels
 	for ilong in long_coordsG:
-	    plt.text(np.deg2rad(mer_coordsG[0] - 13), 1.1*np.deg2rad(ilong), 
-	             r'{}$\degree$'.format(ilong))
+		plt.text(np.deg2rad(mer_coordsG[0] - 13), 1.1*np.deg2rad(ilong), 
+				 r'{}$\degree$'.format(ilong))
 	#meridians
 	for imer in mer_coordsG:
-	    if imer < 0:
-	        jmer = imer + 360
-	        ip, dp = divmod(jmer/15,1)
-	    else:
-	        ip, dp = divmod(imer/15,1)
-	    if imer == 0:
-	        plt.text(-np.deg2rad(imer + 3), np.deg2rad(long_coordsG[-1] + 6), 
-	             r'{}$\degree$'.format(int(ip) ))
-	    else:
-	        plt.text(-np.deg2rad(imer + 3), np.deg2rad(long_coordsG[-1] + 6), 
-	             r'{}$\degree$'.format(imer))
+		if imer < 0:
+			jmer = imer + 360
+			ip, dp = divmod(jmer/15,1)
+		else:
+			ip, dp = divmod(imer/15,1)
+		if imer == 0:
+			plt.text(-np.deg2rad(imer + 3), np.deg2rad(long_coordsG[-1] + 6), 
+				 r'{}$\degree$'.format(int(ip) ))
+		else:
+			plt.text(-np.deg2rad(imer + 3), np.deg2rad(long_coordsG[-1] + 6), 
+				 r'{}$\degree$'.format(imer))
 
 	hp.projtext(mer_coordsG[1] + 2, long_coordsG[0] - 6, '$l$',  color = 'k', lonlat=True)
 	hp.projtext(mer_coordsG[2] + 12.5, long_coordsG[2] - 1, '$b$', rotation = 90, color = 'k', lonlat=True)

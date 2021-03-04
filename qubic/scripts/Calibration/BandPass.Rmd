@@ -5,11 +5,11 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.10.0
   kernelspec:
-    display_name: Python 2
+    display_name: Python 3
     language: python
-    name: python2
+    name: python3
 ---
 
 ```{python}
@@ -20,12 +20,11 @@ rc('figure',figsize=(16,8))
 rc('font',size=12)
 rc('text',usetex=False)
 
-from qubicpack import qubicpack as qp
-import fibtools as ft
-import plotters as p
-import lin_lib as ll
-import demodulation_lib as dl
-import satorchipy as stpy
+from qubicpack.qubicfp import qubicfp
+from qubic import fibtools as ft
+from qubic import plotters as p
+from qubic import lin_lib as ll
+from qubic import demodulation_lib as dl
 from pysimulators import FitsArray
 
 import numpy as np
@@ -37,6 +36,8 @@ import string
 import scipy.signal as scsig
 from scipy import interpolate
 import datetime as dt
+from importlib import reload  
+savedir = '.'
 
 ```
 
@@ -50,14 +51,15 @@ Lets get the directories corresponding to each dataset:
 
 #### Only take from 80 to the end
 n = 'ScanFreq'
+datadir = '2019'
 days = ['2019-04-15', '2019-04-16']
 
 dirs = []
 freqs=[]
 for d in days:
-    dd = glob.glob('/qubic/Data/Calib-TD/'+d+'/*'+n+'*')
-    for i in xrange(len(dd)): 
-        #print dd[i]
+    dd = glob.glob(datadir+'/'+d+'/*'+n+'*')
+    for i in range(len(dd)): 
+        #print(dd[i])
         truc = str.split(dd[i],'_')
         the_nu = truc[-1]
         try:
@@ -65,17 +67,17 @@ for d in days:
             freqs.append(np.float(the_nu))
             dirs.append(dd[i])
         except:
-            print 'File '+dd[i]+' has a format that des not comply with expectations => rejected'
+            print('File '+dd[i]+' has a format that des not comply with expectations => rejected')
             continue
-    print '  * ',d,' : {} files'.format(len(dd))
-print '  => Total = {} files'.format(len(dirs))
-print '  => Frequency ranges from {} to {}'.format(np.min(freqs),np.max(freqs))
+    print('  * ',d,' : {} files'.format(len(dd)))
+print('  => Total = {} files'.format(len(dirs)))
+print('  => Frequency ranges from {} to {}'.format(np.min(freqs),np.max(freqs)))
 
 dirs = dirs[80:]
 freqs = freqs[80:]
-print 'After cut'
-print '  => Total = {} files'.format(len(dirs))
-print '  => Frequency ranges from {} to {}'.format(np.min(freqs),np.max(freqs))
+print('After cut')
+print('  => Total = {} files'.format(len(dirs)))
+print('  => Frequency ranges from {} to {}'.format(np.min(freqs),np.max(freqs)))
 
 ```
 
@@ -88,21 +90,34 @@ for d in dirs:
     labels.append(bla[1])
     dir_time.append(blo[-1])
     
-for i in xrange(len(labels)): 
-    print i, labels[i], dir_time[i], 'Frequency: ', freqs[i]
+for i in range(len(labels)): 
+    print(i, labels[i], dir_time[i], 'Frequency: ', freqs[i])
 
 ```
 
 ```{python}
 ii = 20
 thedir = dirs[ii]
-print thedir, 'Frequency =',freqs[ii]
+print(thedir, 'Frequency =',freqs[ii])
 AsicNum = 1
-a = qp()
-a.read_qubicstudio_dataset(thedir, asic=AsicNum)
-data=a.azel_etc(TES=None)
-#data['t_src'] += 7200
+a = qubicfp()
+a.read_qubicstudio_dataset(thedir)
+data = a.azel_etc()
+data['t_src'] += 7200
+data['data'] = data['data %i' % AsicNum] # hack
+data['t_data'] = data['t_data %i' % AsicNum] # hack
 
+```
+
+```{python}
+indata = data
+el = np.interp(indata['t_data'], indata['t_azel'], indata['el'])
+
+az = np.interp(indata['t_data'], indata['t_azel'], indata['az'])
+print(len(az),len(el))
+z = np.array([az,el])
+print(z.shape)
+print(data['data'].shape)
 ```
 
 ```{python}
@@ -117,7 +132,8 @@ highcut = 10.
 elevation = 50
 
 method = 'rms'
-
+print('data shape: ',data['data'].shape)
+print('data ndim: ',data['data'].ndim)
 unbinned, binned = dl.general_demodulate(ppp, data, lowcut, highcut,
                                                     median=True, method=method, 
                                                     doplot=False, rebin=False, 
@@ -125,19 +141,27 @@ unbinned, binned = dl.general_demodulate(ppp, data, lowcut, highcut,
 
 
 
+print('unbinned keys: ',unbinned.keys())
+print('unbinned sb shape: ',unbinned['sb'].shape)
+if binned is not None:
+    print('binned keys: ',binned.keys())
+    print('binned sb shape: ',binned['sb'].shape)
+else:
+    print('binned is None')
+
 ntes = data['data'].shape[0]
+print('ntes=%i' % ntes)
 mm = np.zeros(ntes)
 ss = np.zeros(ntes)
-for i in xrange(ntes):
+for i in range(ntes):
     mm[i], ss[i] = ft.meancut(unbinned['sb'][i,:], 3)
 
 TESindex = 92
 subplot(1,3,1)
 errorbar(unbinned['t'],unbinned['sb'][TESindex,:], yerr=unbinned['dsb'][TESindex,:], fmt='ro')
 
-print unbinned['sb'].shape
 mmi, ssi = ft.meancut(unbinned['sb'][TESindex,:], 3)
-print mmi,ssi
+print(mmi,ssi)
 subplot(1,3,2)
 errorbar(unbinned['t'],unbinned['sb'][TESindex,:], yerr=unbinned['dsb'][TESindex,:], fmt='ro')
 ylim(mmi-5*ssi, mmi+5*ssi)
@@ -147,7 +171,6 @@ img = ft.image_asics(data1=mm)
 imshow(img)
 colorbar()
 
-print unbinned.keys()
 ```
 
 ```{python}
@@ -164,31 +187,33 @@ reload(ft)
 ppp = 1./freq_mod
 lowcut = 0.3
 highcut = 10.
-method = 'demod'
+method = 'rms'
 
 nbins = 250
 
 
-for ii in xrange(len(dirs)):
+for ii in range(len(dirs)):
     thedir = dirs[ii]
-    print '##############################################################'
-    print 'Directory {} / {} :'.format(ii, len(dirs)), thedir
-    print '##############################################################'
+    print('##############################################################')
+    print('Directory {} / {} :'.format(ii, len(dirs)), thedir)
+    print('##############################################################')
     if done[ii] == 0:
         print('Not Done yet: doing it...')
         for iasic in [0,1]:
-            print '======== ASIC {} ====================='.format(iasic)
+            print('======== ASIC {} ====================='.format(iasic))
             AsicNum = iasic+1
-            a = qp()
-            a.read_qubicstudio_dataset(thedir, asic=AsicNum)
-            data=a.azel_etc(TES=None)
-            data['t_src'] += 7200
+            a = qubicfp()
+            a.read_qubicstudio_dataset(thedir)
+            data = a.azel_etc()
+            data['data'] = data['data %i' % AsicNum] # hack
+            data['t_data'] = data['t_data %i' % AsicNum] # hack
+            if data['t_src'] is not None: data['t_src'] += 7200
             unbinned, binned = dl.general_demodulate(ppp, data, 
                                                     lowcut, highcut,
                                                     nbins=nbins, median=True, method=method, 
                                                     doplot=False, rebin=False, verbose=False)
 
-            for i in xrange(128):
+            for i in range(128):
                 allmm[iasic*128+i,ii], allss[iasic*128+i,ii] = ft.meancut(unbinned['sb'][i,:], 3)
         done[ii] = 1
     else:
@@ -197,14 +222,14 @@ for ii in xrange(len(dirs)):
 name = method+'_'+n
 for d in days:
     name = name+'_'+d
-FitsArray(allmm).save('/Users/hamilton/Qubic/Calib-TD/SpectralResponse/allmm_'+name+'.fits')
-FitsArray(allss).save('/Users/hamilton/Qubic/Calib-TD/SpectralResponse/allss_'+name+'.fits')    
-FitsArray(freqs).save('/Users/hamilton/Qubic/Calib-TD/SpectralResponse/freqs_'+name+'.fits')    
+FitsArray(allmm).save(savedir+'/allmm_'+name+'.fits')
+FitsArray(allss).save(savedir+'/allss_'+name+'.fits')    
+FitsArray(freqs).save(savedir+'/freqs_'+name+'.fits')    
 
 ```
 
 ```{python}
-print 'Done !'
+print('Done !')
 ```
 
 ```{python}
@@ -214,25 +239,29 @@ for d in days:
     name = name+'_'+d
 
 nsig=3
-ff, f_demod, errf_demod = dl.get_spectral_response(name, freqs, allmm, allss, method='demod',nsig=nsig)
-ff, f_rms, errf_rms = dl.get_spectral_response(name, freqs, allmm, allss, method='rms',nsig=nsig)
+ff, f_demod, errf_demod = dl.get_spectral_response(name, freqs, allmm, allss, method='demod',nsig=nsig,directory='.')
+ff, f_rms, errf_rms = dl.get_spectral_response(name, freqs, allmm, allss, method='rms',nsig=nsig,directory='.')
 
-errorbar(ff, dl.dB(f_rms), yerr=dl.dB(f_rms+errf_rms)-dl.dB(f_rms),label='rms', fmt='b.-')
-errorbar(ff, dl.dB(f_demod), yerr=dl.dB(f_demod+errf_demod)-dl.dB(f_demod), label='demod', fmt='r.-')
+errorbar(ff, dl.dB(f_rms), yerr=dl.dB(f_rms+errf_rms)-dl.dB(f_rms),label='rms', fmt='b.-',ls='none')
+errorbar(ff, dl.dB(f_demod), yerr=dl.dB(f_demod+errf_demod)-dl.dB(f_demod), label='demod', fmt='r.-',ls='none')
 legend()
 ylabel('dB')
 xlabel('Frequency [GHz]')
 title(name)
 ylim(-40,0)
+sorted_index=sorted(range(len(ff)), key=lambda i: ff[i])
+plot(ff[sorted_index],dl.dB(f_rms[sorted_index]))
+plot(ff[sorted_index],dl.dB(f_demod[sorted_index]))
 ```
 
 ```{python}
-errorbar(ff, dl.dB(f_demod), yerr=dl.dB(f_demod+errf_demod)-dl.dB(f_demod), label='Demodulated', fmt='r.-')
+errorbar(ff, dl.dB(f_demod), yerr=dl.dB(f_demod+errf_demod)-dl.dB(f_demod), label='Demodulated', fmt='r.-',ls='none')
 legend()
 ylabel('dB')
 xlabel('Frequency [GHz]')
 title(name)
 ylim(-40,0)
+plot(ff[sorted_index],dl.dB(f_demod[sorted_index]),color='red')
 ```
 
 ```{python}

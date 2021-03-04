@@ -82,6 +82,7 @@ def return_rms_period(period, indata, others=None, verbose=False, remove_noise=F
     attempt to debias the result from HF noise
     """
 
+    if verbose: print('return_rms_period: indata length=',len(indata))
     time = indata[0]
     data = indata[1]
 
@@ -92,6 +93,7 @@ def return_rms_period(period, indata, others=None, verbose=False, remove_noise=F
     else:
         sh = np.shape(data)
         nTES = sh[0]
+    if verbose: print('return_rms_period: nTES=',nTES)
     # We label each data sample with a period
     period_index = ((time - time[0]) / period).astype(int)
     # We loop on periods to measure their respective amplitude and azimuth
@@ -139,7 +141,7 @@ def scan2ang_RMS(period, indata, median=True, lowcut=None, highcut=None, verbose
         if verbose:
             printnow('Filtering data')
         dataf = ft.filter_data(indata['t_data'], indata['data'], lowcut, highcut)
-
+    if verbose: print('scan2ang_RMS:  dataf.shape=',dataf.shape)
     # ## First get the RMS per period
     if verbose:
         printnow('Resampling Azimuth')
@@ -147,8 +149,8 @@ def scan2ang_RMS(period, indata, median=True, lowcut=None, highcut=None, verbose
     if verbose:
         printnow('Resampling Elevation')
     el = np.interp(indata['t_data'], indata['t_azel'], indata['el'])
-    others = [az, el]
-    tper, ampdata, err_ampdata, newothers = return_rms_period(period, indata['t_data'], dataf,
+    others = np.array([az, el])
+    tper, ampdata, err_ampdata, newothers = return_rms_period(period, (indata['t_data'], dataf),
                                                               verbose=verbose, others=others)
     azper = newothers[0]
     elper = newothers[1]
@@ -166,6 +168,9 @@ def scan2ang_RMS(period, indata, median=True, lowcut=None, highcut=None, verbose
 
 
 def scan2ang_demod(period, indata, lowcut=None, highcut=None, verbose=False):
+    print('scan2ang_demod: type(indata)=',type(indata))
+    print('scan2ang_demod: indata.keys()=',indata.keys())
+    print("scan2ang_demod: indata['data'].shape=",indata['data'].shape)
     if indata['data'].ndim == 1:
         nTES = 1
     else:
@@ -173,8 +178,7 @@ def scan2ang_demod(period, indata, lowcut=None, highcut=None, verbose=False):
         nTES = sh[0]
 
     # ## First demodulate
-    demodulated = demodulate(indata, 1. / period, verbose=verbose, lowcut=lowcut, highcut=highcut)
-
+    demodulated = demodulate_old(indata, 1. / period, verbose=verbose, lowcut=lowcut, highcut=highcut)
     # ## Resample az and el similarly as data
     azd = np.interp(indata['t_data'], indata['t_azel'], indata['az'])
     eld = np.interp(indata['t_data'], indata['t_azel'], indata['el'])

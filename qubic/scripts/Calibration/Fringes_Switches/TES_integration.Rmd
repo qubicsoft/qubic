@@ -1,0 +1,285 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.6.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+"""this file will take the grasp/modal files and generate intensity data for the detectors"""
+```
+
+```{python}
+from CSFPA_main import MainProg
+from CSFPA_dataIO import IntensityCalcRAW, getXYcoords, dataIO, RetrieveVars
+from CSFPA_plots import MultiFIntensityTESPlot
+import glob
+import re
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+from qubicpack.utilities import Qubic_DataDir
+import qubic
+```
+
+```{python}
+tesdatrep = '/home/james/GRASPdata/DavesTabSourceFIModel/TESdat/'
+pklrep = '/home/james/GRASPdata/DavesTabSourceFIModel/PKLfiles/'
+qbrep = '/home/james/GRASPdata/DavesTabSourceFIModel/MODALfiles/'
+files = sorted(glob.glob(qbrep+'*.qb'))
+print('read', len(files), 'files')
+```
+
+```{python}
+# print(files[0])
+# fpath = os.path.basename(files[0])
+# #print(fname)
+# fname = os.path.splitext(fpath)[0]
+# #print(fname)
+# hnum = re.search(r'\d+', fname).group(0)
+# print("horn number and file name: ",hnum, fname)
+# #Ix, Iy, IT = IntensityCalcRAW(files[0])
+# #sum the intensity and compare the 4pi, the total power of a horn
+# print(sum(IT), IT.shape)
+# print(4*np.pi, sum(IT)/(4*np.pi))
+```
+
+```{python}
+
+```
+
+```{python}
+"""also no need for this now"""
+#i think this saves both TES and pkl files 
+
+"""get the intensity integrated over the bolometers"""
+#also initialise folrder for tes data
+# tesdat150 = '/home/james/GRASPdata/DavesTabSourceFIModel/TESdat/'
+
+# MainProg(files[0], pklrep, tesdat150)
+```
+
+```{python}
+pklfiles = sorted(glob.glob(pklrep+'*.pkl'))
+print(len(pklfiles))
+MagXarr, PhaXarr, ReXarr, ImXarr, MagYarr, PhaYarr, ReYarr, ImYarr, vtxcntarr, PixCenX, PixCenY, IntX, IntY, IntT, Ix, Iy, IT, xycoords, filename, freq = RetrieveVars(pklfiles[0])
+
+
+#MultiFIntensityTESPlot(IT,PixCenX, PixCenY, "singlepkl")
+```
+
+```{python}
+# plt.figure(figsize=(16,16))
+
+# plt.scatter(PixCenX*1000,PixCenY*1000, c=IntT, cmap='jet',marker='s', s=200)
+# plt.axis([-60, 60, -60, 60])
+# plt.axis('equal')
+# plt.title("sample", fontsize=10)
+# plt.subplots_adjust(bottom=0.1, right=0.8, top=0.9)
+# cax = plt.axes([0.825, 0.1, 0.04, 0.8])
+# plt.colorbar(cax=cax,label="Intensity (W)", shrink=0.9)
+# plt.show()
+```
+
+```{python}
+"""okay this works now run for all TES. Creat TES and PKLs for all grasp/modal data"""
+# No need that it has been run once already. Data is already made. Only run if you need to create the data.
+# for file in files:
+#     print(file)
+#     MainProg(file, pklrep, tesdat150)
+```
+
+```{python}
+FIhorns = np.linspace(1,400,400, dtype=int)
+tdrow1 = np.linspace(120, 127, 8, dtype=int)
+tdrow2 = np.linspace(142, 149, 8, dtype=int)
+tdrow3 = np.linspace(164, 171, 8, dtype=int)
+tdrow4 = np.linspace(186, 193, 8, dtype=int)
+tdrow5 = np.linspace(208, 215, 8, dtype=int)
+tdrow6 = np.linspace(230, 237, 8, dtype=int)
+tdrow7 = np.linspace(252, 259, 8, dtype=int)
+tdrow8 = np.linspace(274, 281, 8, dtype=int)
+TDhorns = np.concatenate((tdrow1, tdrow2, tdrow3, tdrow4, tdrow5, tdrow6, tdrow7, tdrow8))
+#TDhorns.extend(tdrow1, tdrow2)
+print(TDhorns.shape, FIhorns.shape)
+baseline = [120, 127]
+print(baseline)
+```
+
+```{python}
+"""add the relevant horns to be added eventually we could save every possible combination
+can choose, baseline, TD, FI"""
+#load the files in the rep 
+#load a sample file just to grab headers for later
+data = pd.read_csv(qbrep+'FP_planar_grid_horn'+str(100)+'_150_GHz_Mstyle.qb', sep='\t')
+#print(data)
+
+addimx = np.zeros(len(data['Rex']))
+addrex = np.zeros(len(data['Rex']))
+addrey = np.zeros(len(data['Rex']))
+addimy = np.zeros(len(data['Rex']))
+
+#baseline, TDhorns, FIhorns all interchangeable here
+cnt = 0
+for horn in TDhorns:
+    
+    print(qbrep+'FP_planar_grid_horn'+str(horn)+'_150_GHz_Mstyle.qb')
+    file = qbrep+'FP_planar_grid_horn'+str(horn)+'_150_GHz_Mstyle.qb'
+    data = pd.read_csv(file, sep='\t')
+    print(data.shape)
+    
+    #add the relevant compnents to an array
+    addrex = np.vstack((addrex, data['Rex']))
+    addimx = np.vstack((addimx, data['Imx']))
+    addrey = np.vstack((addrey, data['Rey']))
+    addimy = np.vstack((addimy, data['Imy']))
+    
+    cnt+=1
+    
+#add / flatten the array
+addrex = np.sum(addrex.T, axis=1, dtype=float)
+addimx = np.sum(addimx.T, axis=1, dtype=float)
+addrey = np.sum(addrey.T, axis=1, dtype=float)
+addimy = np.sum(addimy.T, axis=1, dtype=float)
+#convert to mag and phase... why didn't i just load the mag and phase...?
+MagX = np.sqrt(addrex**2 + addimx**2)
+PhaX = np.arctan2(addimx, addrex)
+MagY = np.sqrt(addrey**2 + addimy**2)
+PhaY = np.arctan2(addimy, addrey)
+#convert mag phase to intensity
+itx = (MagX*np.cos(PhaX))**2 + (MagX*np.sin(PhaX))**2
+ity = (MagY*np.cos(PhaY))**2 + (MagY*np.sin(PhaY))**2
+it = itx[:] + ity[:]
+print("it shape: ", it.shape, cnt)
+```
+
+```{python}
+"""plot all the focal plane data, will need to integrate on bolometer"""
+plt.figure(figsize=(16,12))
+plt.suptitle('summing')
+plt.scatter(data['Xpos'], data['Ypos'], c=it, cmap='jet', marker='.')#, s=1)
+plt.axis([-60, 60, -60, 60])
+plt.axis('equal')
+plt.title("sample", fontsize=10)
+plt.subplots_adjust(bottom=0.1, right=0.8, top=0.9)
+cax = plt.axes([0.825, 0.1, 0.04, 0.8])
+plt.colorbar(cax=cax,label="Intensity (W)", shrink=0.9)
+plt.show()
+```
+
+```{python}
+"""must load vertex"""
+
+basedir = Qubic_DataDir(datafile='instrument.py', ) 
+print('basedir : ', basedir)
+dictfilename = basedir + '/dicts/global_source_oneDet.dict'
+d = qubic.qubicdict.qubicDict()
+#d.read_from_file('../qubic/qubic/dicts/global_source_oneDet.dict')
+#change to moddded dictionary
+d.read_from_file('/home/james/libraries/qubic/qubic/dicts/global_source_oneDetFI.dict')
+q = qubic.QubicMultibandInstrument(d)
+
+vtxs = q[0].detector.vertex
+vtxcounter = np.zeros(992)
+print("vertexes shape: ", vtxs.shape)
+    
+
+xycoords = np.array([data['Xpos'], data['Ypos']])
+    
+def IntegrateHornCombOnFP(it, xycoords, vtxs):
+    
+    #xycoords = np.array(data[:,2:4])
+    #bolometer arrays
+    intbol = np.array([])
+    bols= np.array([])
+    #pixel centers
+    PixCenX = np.array([])
+    PixCenY = np.array([])
+    
+    cnti = 0
+    cntj = 0
+    vtxcntarr = ([])
+    #count number of data points per pixel for analysis/normalisation
+    vtxcnt = 0  
+    for i in vtxs:
+        cnti = cnti + 1
+        cntj = 0
+        
+        for j in range(len(xycoords[0,:])):
+            #if f.endswith((".qb")):
+            #careful here about weird Y first thing from MODAL...
+            x = xycoords[0, j]
+            y = xycoords[1, j]
+            #else:                
+                #x = j[0]
+                #y = j[1]
+            x1 = i[0,0]
+            y1 = i[0,1]
+            x2 = i[2,0]
+            y2 = i[2,1]
+            
+            if x >= x2 and x <= x1 and y >= y2 and y <= y1:
+                #print(x,y, x1, y1, x2, y2)
+                #if the point is inside the bolometer area, add to array
+                intbol = np.append(intbol, it[cntj])
+                
+                vtxcnt = vtxcnt + 1
+                
+            cntj = cntj + 1
+            
+        #sum the values in bolometer area and append to the bolometer array
+        bols = np.append(bols, sum(intbol))
+        intbol = np.array([])
+        
+        #data points per pixel counter
+        vtxcntarr = np.append(vtxcntarr,vtxcnt)
+        vtxcnt = 0 
+        #Pixel centers as array
+        pixcenx = (x1 + x2) / 2        
+        pixceny = (y1 + y2) / 2
+        PixCenX = np.append(PixCenX,pixcenx)
+        PixCenY = np.append(PixCenY,pixceny)
+        
+    return PixCenX, PixCenY, bols
+
+PixCenX, PixCenY, bols = IntegrateHornCombOnFP(it, xycoords, vtxs)
+```
+
+```{python}
+plt.figure(figsize=(16,12))
+
+plt.scatter(PixCenX, PixCenY, c=bols, cmap='jet', marker='s', s=100)
+plt.axis([-60, 60, -60, 60])
+plt.axis('equal')
+
+if cnt == 64:
+    plt.title("TD Configuration", fontsize=16)
+if cnt == 400:
+    plt.title("FI Configuration", fontsize=16)
+if cnt == 2:
+    plt.title('Baseline: '+str(baseline), fontsize=16)
+    
+plt.subplots_adjust(bottom=0.1, right=0.8, top=0.9)
+cax = plt.axes([0.825, 0.1, 0.04, 0.8])
+plt.colorbar(cax=cax,label="Intensity (1 W per Horn)", shrink=0.9)
+
+
+
+plt.show()
+```
+
+```{python}
+print(cnt, len(baseline))
+```
+
+```{python}
+
+```

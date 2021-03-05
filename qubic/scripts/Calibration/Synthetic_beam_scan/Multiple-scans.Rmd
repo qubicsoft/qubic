@@ -1,0 +1,240 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.0
+  kernelspec:
+    display_name: Python 2
+    language: python
+    name: python2
+---
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(16,8))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack import qubicpack as qp
+import fibtools as ft
+import plotters as p
+import lin_lib as ll
+import demodulation_lib as dl
+
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+```
+
+```{python}
+
+```
+
+## Dataset
+Between March 13th 2019 and March 17th 2019 we have performed 4 series of scans, each starting at -XX in elevation (w.r.t. rest position==50 deg.) and then making 40 azimuth scans, each from -20 to 20 degrees. After each azimuth scan, the elevation is increased by 1 degree (not encoder degrees, only step motors, so with a significant uncertainty, but Louise has done some calibration of this).
+
+Here is a description of each dataset:
+1. "ScanMap": from 2019-03-13 @ 19h21 to 2019-03-14 @ 11h03 
+    - First scan from -20 in elevation to +20, therefore actual elevation from 30 to 70
+    - To be analyzed
+2. "ScanMapNew": from 2019-03-14 @ 13h22 to 15h34, then 2019-03-15 @ 13h42 to 14h13
+    - Many GPS issues with this scan
+    - finally interrupted. 
+    - Not to be analaysed in priority
+3. "ScanMapNew2": from 2019-03-15 @ 17h21 to 2019-03-16 @ 9h17
+    - Scan from -20 in elevation to +20, therefore actual elevation from 30 to 70
+    - Cycle finished at scan 38 or 39 => take care of this
+    - to be analysed
+4. "ScanMapNew2_Start_40.5": from 2019-03-16 @ 20h17 to 2019-03-17 @ 12h15
+    - Scan started at el-19.5 to + 20.5: therefore actual elevation 30.5 to 70.5
+    - to be analyzed
+    
+Lets get the directories corresponding to each dataset:
+
+```{python}
+names = ['ScanMap', 'ScanMapNew2', 'ScanMapNew2_start-40.5']
+days = [['2019-03-13', '2019-03-14'], ['2019-03-15', '2019-03-16'], ['2019-03-16', '2019-03-17']]
+el_start = [30., 30., 30.5]
+delta_el = 1.
+
+all_elevation = []
+datasets=[]
+for inames in xrange(len(names)):
+    n = names[inames]
+    print n, ' Elevation starts at {}'.format(el_start[inames])
+    datasets.append([])
+    for d in days[inames]:
+        dd = glob.glob('/qubic/Data/Calib-TD/'+d+'/*'+n)
+        for i in xrange(len(dd)): 
+            datasets[inames].append(dd[i])
+        print '  * ',d,' : {} files'.format(len(dd))
+    print '  => Total = {} files'.format(len(datasets[inames]))
+    elevations = el_start[inames]+arange(len(datasets[inames]))*delta_el
+    all_elevation.append(elevations)
+    print '  => Elevation ends at {}'.format(np.max(elevations))
+
+```
+
+We start with the forst dataset ('ScanMap'):
+
+```{python}
+index = 0
+dirs = datasets[index]
+elevation = all_elevation[index]
+
+labels = []
+dir_time = []
+for d in dirs:
+    bla = str.split(d,'__')
+    blo = str.split(bla[0],'/')
+    labels.append(bla[1])
+    dir_time.append(blo[-1])
+    
+for i in xrange(len(labels)): 
+    print labels[i], dir_time[i], 'Elevation: ', elevation[i]
+
+```
+
+And we first start with the middle file: i=21
+
+```{python}
+ii = 20
+thedir = datasets[index][ii]
+print thedir, 'Elevation =',all_elevation[index][ii]
+```
+
+## Reading Data for a given asic
+
+```{python}
+AsicNum = 1
+a = qp()
+a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+```
+
+## Reading TES data
+
+```{python}
+TESNum = 96
+data = a.timeline(TES=TESNum)
+t_data = a.timeline_timeaxis(axistype='pps')
+
+plot(t_data-t_data[0], (data-np.mean(data))/np.std(data), label='Data')
+#a.plot_timestamp_diagnostic()
+```
+
+## Reading Azimuth Data
+
+```{python}
+az = a.azimuth()
+#t_az = a.timeaxis(datatype='hk',axistype='index')
+t_az = (np.max(t_data)-np.min(t_data))*np.linspace(0,1,len(az))
+
+plot(t_az, az)
+```
+
+### Plot Data and Azimuth together (they should match)
+
+```{python}
+subplot(1,2,1)
+plot(t_data, f.gaussian_filter1d((data-np.mean(data))/np.std(data),15), label='Data')
+plot(t_az, (az-np.mean(az))/np.std(az), label='Az')
+legend()
+
+subplot(1,2,2)
+plot(np.interp(t_data, t_az, az), data-f.gaussian_filter1d(data,1000))
+xlim(-5,5)
+```
+
+Let's check the modulation frequency (main peak in data)
+
+```{python}
+FREQ_SAMPLING = 1./(t_data[1]-t_data[0])
+spectrum_f, freq_f = mlab.psd(data, Fs=FREQ_SAMPLING, NFFT=len(data), window=mlab.window_hanning)
+plot(freq_f, f.gaussian_filter1d(spectrum_f,1),label='Data')
+yscale('log')
+xscale('log')
+xlim(0.2,0.45)
+freq_mod = 0.333
+plot([freq_mod, freq_mod], [1e6, 1e12], label='Modulation Frequency: {}'.format(freq_mod))
+ylim(1e6, 1e12)
+legend()
+```
+
+# Demodulation with RMS per period
+
+```{python}
+reload(dl)
+
+#### Parameters
+ppp = 1./freq_mod
+lowcut = 0.1
+highcut = 15.
+nbins = 100
+elevation = 50
+
+t_src = []
+data_src = []
+angle, sb, dsb, pars, err_pars = dl.general_demodulate(ppp, t_data, data, t_src, data_src, t_az, az, 
+                                                    lowcut, highcut, elevation, 
+                                                    nbins=nbins, median=True, method='rms', 
+                                                    doplot=True, unbinned=False, 
+                                                    renormalize_plot=True)
+
+
+```
+
+Now we loop on the TES
+
+```{python}
+reload(dl)
+reload(ft)
+savedir = '/Volumes/Data/Qubic/Calib-TD/ScanData/'
+for ids in xrange(len(datasets)):
+    dirs = datasets[ids]
+    for ii in xrange(len(dirs)):
+        thedir = dirs[ii]
+        print '##############################################################'
+        print 'Dataset {} / {} :'.format(ids,len(datasets)),names[ids]
+        print 'Directory {} / {} :'.format(ii, len(dirs)), thedir
+        print '##############################################################'
+        alldemod = np.zeros((256,100))
+        for iasic in [0,1]:
+            print '======== ASIC {} ====================='.format(iasic)
+            AsicNum = iasic+1
+            a = qp()
+            a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+            t_data = a.timeline_timeaxis(axistype='index')
+            FREQ_SAMPLING = 1./(t_data[1]-t_data[0])
+            az = a.azimuth()
+            t_az = (np.max(t_data)-np.min(t_data))*np.linspace(0,1,len(az))
+            for TESNum in np.arange(128)+1:
+                if (16*(TESNum/16))==TESNum: print(TESNum)
+                TESindex = iasic*128+(TESNum-1)
+                thedata = a.timeline(TES=TESNum)
+                t_src=[]
+                data_src=[]
+                angle, sb, dsb, pars, err_pars = dl.general_demodulate(ppp, t_data, thedata, t_src, data_src, t_az, az, 
+                                                            lowcut, highcut, all_elevation[ids][ii], 
+                                                            nbins=nbins, median=True, method='rms', 
+                                                            doplot=False, unbinned=False)
+                alldemod[TESindex,:] = sb
+        FitsArray(alldemod).save(savedir+'alltes_{}_el_{}.fits'.format(names[ids],all_elevation[ids][ii]))
+        FitsArray(np.append(pars,err_pars).reshape((2,4))).save(savedir+'fitpars_{}_el_{}.fits'.format(names[ids],all_elevation[ids][ii]))
+
+```
+
+```{python}
+
+```

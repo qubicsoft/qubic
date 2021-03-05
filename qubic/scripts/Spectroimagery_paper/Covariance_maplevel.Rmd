@@ -1,0 +1,676 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Covariances at map level
+
+#### Louise Mousset, 2020/06/05
+
+This notebook is structured in 2 parts:
+- get all possible covariance matrices
+- recombine the sub-bands in only one
+
+We try to do it using simulations from FastSim and from the full pipeline simulations to compare.  
+
+```{python}
+# %matplotlib inline
+from pylab import *
+import os
+import sys
+import glob
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+from astropy.io import fits
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm
+import pysm.units as u
+
+import qubic
+from qubic import SpectroImLib as si
+from qubic import QubicSkySim as qss
+from qubic import NamasterLib as nam
+import qubic.fibtools as ft
+from qubic.polyacquisition import compute_freq
+
+from qubic import ReadMC as rmc
+from qubic import AnalysisMC as amc
+
+rc('figure', figsize=(13, 10))
+rc('font', size=15)
+```
+
+```{python}
+import matplotlib.colors as mcolors
+colorlist = list(mcolors.TABLEAU_COLORS.keys())
+```
+
+# Get the files
+
+```{python}
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+print(global_dir)
+
+datadir = os.environ['DATA_SPECTROIM']
+
+```
+
+```{python}
+# rep_mapCC = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/Simu_spectroim/FastSimulator/maps_FastSim/'
+
+# rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/galaxy_center_d1/test_residuals/31613089/'
+# rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/29712494/'
+
+nfrecon = 3
+freq = 150
+rep = datadir + f'/NERSC_simuEnd2End/Good_photon_noise2020/simu_NERSC_MC/FI{freq}/galaxycenter_3bandes/'
+```
+
+```{python}
+# For full pipeline simulations
+dictionary = glob.glob(rep + '/*.dict')[0]
+print(dictionary)
+
+# Dictionary saved during the simulation
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictionary)
+
+# Coordinates of the zone observed in the sky
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+
+# Number of subbands used during the simulation
+
+nfsub = d['nf_sub']
+print('nf_sub = {}, nf_recon = {}'.format(nfsub, nfrecon))
+
+# Get fits files names in a list
+fits_noise = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessFalse*.fits'.format(nfsub, nfrecon), 
+                              recursive=True))
+fits_noiseless = np.sort(glob.glob(rep + '*_nfsub{}_nfrecon{}_noiselessTrue*.fits'.format(nfsub, nfrecon), 
+                              recursive=True))
+
+print(fits_noiseless)
+
+# Number of noise realisations
+nreals = len(fits_noise)
+print('nreals = ', nreals)
+
+# Get seen map (observed pixels)
+seenmap = rmc.get_seenmap(fits_noiseless[0])
+print(seenmap.shape)
+
+# Number of pixels and nside
+npix = seenmap.sum()
+print('npix:', npix)
+
+patch = amc.get_residuals(fits_noise, fits_noiseless[0], 'noiseless')
+```
+
+```{python}
+stokes = ['I', 'Q', 'U']
+allrecon = [1, 2, 3, 4, 5, 8]
+nfrecon = 3
+config = 'FI150'
+```
+
+```{python}
+# Make just one file
+# for nfrecon in allrecon:
+#     files = glob.glob(rep_mapCC + 'noisepatch_NOspat*_nbands{}*FI150*20reals*.npy'.format(nfrecon))
+#     nfiles = len(files)
+#     print('# files:', nfiles)
+
+#     for i, file in enumerate(files):
+#         pa = np.load(file)
+#         if i == 0:
+#             patch = pa
+#         else:
+#             patch = np.concatenate((patch, pa), axis=0)
+#     print(patch.shape)
+# #     patch_seen = patch[:, :, seenmap, :]
+# #     print(patch_seen.shape)
+
+#     # Save the full array 
+#     np.save(rep_mapCC + 'noisepatch_NOspatialcorr_nbands{}_FI150_500reals.npy'.format(nfrecon), patch)
+```
+
+```{python}
+# Load a file already saved
+patch = np.load(rep_mapCC + f'noisepatch_NOspatialcorr_nbands{nfrecon}_' + config + '_500reals.npy')
+print(patch.shape)
+nreals = patch.shape[0]
+```
+
+```{python}
+# Frequencies of the reconstructed subbands
+for nf in allrecon:
+    Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(int(config[-3:]), nf)
+    print(f'nbands = {nf}', nus)
+```
+
+## Coverage and seenmap
+
+
+#### If simu from Fast Simulator
+
+```{python}
+import pickle
+# The coverage is the same for all numbers of bands
+DataFastSimCoverage = pickle.load(open(global_dir +
+                                       '/doc/FastSimulator/Data/DataFastSimulator_' + config + '_coverage.pkl',
+                                       "rb"))
+coverage_norm = DataFastSimCoverage['coverage']
+
+# Before we had one coverage for each number of bands
+# with open(rep_mapCC + 'coverage_norm.pkl', 'rb') as f:
+#     coverage = pickle.load(f)
+# coverage_normlist = coverage[1:]
+
+# index = allrecon.index(nfrecon)
+# coverage_norm = coverage_normlist[index]
+```
+
+```{python}
+unseen = coverage_norm < np.max(coverage_norm) * 0.1
+seenmap = np.invert(unseen)
+
+# Number of pixels
+npix = seenmap.sum()
+print('npix:', npix)
+
+```
+
+```{python}
+# with open(rep_mapCC + 'seenmap.pkl', 'rb') as f:
+#     smap = pickle.load(f)
+# seenmaplist = smap[1:]
+
+# index = allrecon.index(nfrecon)
+# seenmap = seenmaplist[index]
+```
+
+#### If simu from Full pipeline
+
+```{python}
+fitsfile = fits.open(fits_noise[0])
+coverage = fitsfile['COVERAGE'].data
+hp.mollview(coverage)
+
+coverage_patch = coverage[seenmap]
+coverage_patch.shape
+```
+
+```{python}
+ang = rmc.pix2ang(d['nside'], center, seenmap)
+coverage_norm = coverage_patch / np.max(coverage_patch)
+inverse_coverage = 1. / (np.sqrt(coverage_norm))
+```
+
+# Covariances matrices
+
+
+### Cp matrices
+
+```{python}
+p = 10
+s = 0
+plt.scatter(patch[:, 0, p, s], patch[:, 1, p, s])
+pval = np.polyfit(patch[:, 0, p, s], patch[:, 1, p, s], deg=1)
+print(pval)
+x = np.linspace(-40, 40, 10)
+plt.plot(x, np.polyval(pval, x))
+plt.title(f'{stokes[s]} - pixel {p}')
+plt.xlabel('Freq 0')
+plt.ylabel('Freq 1')
+```
+
+```{python}
+Cp = amc.get_Cp(patch, verbose=False)
+print('Cp shape:', Cp.shape)
+
+Cpcorr = np.zeros_like(Cp)
+for p in range(npix):
+    for s in range(3):
+        Cpcorr[:, :, s, p] = amc.cov2corr(Cp[:, :, s, p])
+```
+
+```{python}
+labs = []
+for i in range(nfrecon):
+    labs.append(r'$\nu_{}$'.format(i))
+
+plt.figure(figsize=(20, 100))
+for p in range(1, 10):
+    for s in range(3):
+        plt.subplot(10, 3, 3*p + s + 1)
+        vmax = np.max(np.abs(Cp[:, :, s, p]))
+        plt.imshow(Cp[:, :, s, p], vmin=-vmax, vmax=vmax, cmap='bwr')
+        plt.title('Cov - ' + stokes[s] + ' - pixel {}'.format(p))
+        plt.colorbar(orientation='horizontal', fraction=0.2)
+        plt.xticks(np.arange(len(labs)), labs)
+        plt.yticks(np.arange(len(labs)), labs)
+
+   
+```
+
+```{python}
+plt.figure(figsize=(20, 100))
+for p in range(1, 10):
+    for s in range(3):
+        plt.subplot(10, 3, 3*p + s + 1)
+        plt.imshow(Cpcorr[:, :, s, p], vmin=-1, vmax=1, cmap='bwr')
+        plt.title('Corr - ' + stokes[s] + ' - pixel {}'.format(p))
+        plt.colorbar(orientation='horizontal', fraction=0.2)
+        plt.xticks(np.arange(len(labs)), labs)
+        plt.yticks(np.arange(len(labs)), labs)
+```
+
+```{python}
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+def make_axis_label(ax, labs):
+    ax.set_xticks(np.arange(len(labs)))
+    ax.set_xticklabels(labs)
+    ax.set_yticks(np.arange(len(labs)))
+    ax.set_yticklabels(labs)
+    return
+    
+fig, axs = plt.subplots(1, 3)
+fig.set_figheight(5)
+fig.set_figwidth(15)
+fig.subplots_adjust(wspace=0.5)
+for s in range(3):
+    ax = axs[s]
+    im = ax.imshow(np.mean(Cpcorr[:, :, s, :], axis=2), vmin=-1, vmax=1, cmap='bwr')
+    
+    ax.set_title(stokes[s])
+    make_axis_label(ax, labs)    
+    
+    divider = make_axes_locatable(axs[s])
+    cax = divider.append_axes('bottom', size='5%', pad=0.5)
+    fig.colorbar(im, cax=cax, orientation='horizontal')
+    
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/corr_matrix_Cp_maplevel_avg_overpix.pdf')
+```
+
+### Go to Cp_prime
+
+```{python}
+# Cp_prime over bins (normalisation by the first term)
+N00, Cp_prime00 = amc.Cp2Cp_prime(Cp, verbose=True)
+
+# pixel:
+p = 10
+
+plt.figure(figsize=(15, 10))
+for s in range(3):
+    plt.subplot(1, 3, s+1)
+    vmax = np.max(np.abs(Cp_prime00[:, :, s, p]))
+    plt.imshow(Cp_prime00[:, :, s, p], vmin=-vmax, vmax=vmax, cmap='bwr')
+    plt.title(stokes[s] + ' - Cp_prime00 - pixel {}'.format(p))
+    plt.colorbar(orientation='horizontal', fraction=0.1)
+    plt.xticks(np.arange(len(labs)), labs)
+    plt.yticks(np.arange(len(labs)), labs)
+```
+
+```{python}
+# Cp_prime over bins (normalisation by the diagonal)
+N, Cp_prime = amc.Cp2Cp_prime_viaCorr(Cp, verbose=True)
+
+# pixel:
+p = 10
+
+plt.figure(figsize=(15, 10))
+for s in range(3):
+    plt.subplot(1, 3, s+1)
+    vmax = np.max(np.abs(Cp_prime[:, :, s, p]))
+    plt.imshow(Cp_prime[:, :, s, p], vmin=-vmax, vmax=vmax, cmap='bwr')
+    plt.title(stokes[s] + ' - Cp_prime - pixel {}'.format(p))
+    plt.colorbar(orientation='horizontal', fraction=0.1)
+    plt.xticks(np.arange(len(labs)), labs)
+    plt.yticks(np.arange(len(labs)), labs)
+```
+
+### Covariance matrices between subbands and I Q U
+
+```{python}
+bigcov, bigcorr = amc.get_covcorr_patch(patch, stokesjoint=True, doplot=True)
+```
+
+```{python}
+labs = []
+for s in range(3):
+    for i in range(nfrecon):
+#         r'$\nu_{}$'.format(i)
+        labs.append(stokes[s] + r' $\nu_{}$'.format(i))
+        
+print(labs)
+```
+
+```{python}
+plt.figure(figsize=(15, 50))
+for p in range(0, 10):
+    
+    plt.subplot(10, 2, p*2 +1)
+    vmax = np.max(np.abs(bigcov[:, :, p]))
+    plt.imshow(bigcov[:, :, p], vmin=-vmax, vmax=vmax, cmap='bwr')
+    plt.xticks(np.arange(len(labs)), labs, fontsize=12)
+    plt.yticks(np.arange(len(labs)), labs, fontsize=12)
+    for s in range(nfrecon):
+        plt.axhline(y=(s+1)*nfrecon-0.5, lw=3, color='k')
+        plt.axvline(x=(s+1)*nfrecon-0.5, lw=3, color='k')
+    plt.title('Covariance - pixel {}'.format(p))
+    plt.colorbar(fraction=0.05)
+    
+    plt.subplot(10, 2, p*2 +2)
+    plt.imshow(bigcorr[:, :, p], vmin=-1, vmax=1, cmap='bwr')
+    plt.xticks(np.arange(len(labs)), labs, fontsize=12)
+    plt.yticks(np.arange(len(labs)), labs, fontsize=12)
+    for s in range(nfrecon):
+        plt.axhline(y=(s+1)*nfrecon-0.5, lw=3, color='k')
+        plt.axvline(x=(s+1)*nfrecon-0.5, lw=3, color='k')
+    plt.title('Correlation - pixel {}'.format(p))
+    plt.colorbar(fraction=0.05)
+```
+
+```{python}
+rc('font', size=20)
+plt.figure(figsize=(10, 10))
+ax = plt.gca()
+# im = plt.imshow(np.mean(bigcorr, axis=2), vmin=-1, vmax=1, cmap='bwr')
+# plt.title('Averaged over pixels')
+# ax.xaxis.set_ticks(np.arange(1, 9, 3))
+# ax.xaxis.set_ticklabels(['x=0', 'x=1', 'x=2'], 
+#                           rotation = 90, 
+#                           color = 'k', 
+#                         fontsize = 30, style = 'italic', verticalalignment = 'center') 
+im = plt.imshow(bigcorr[:, :, 7], vmin=-1, vmax=1, cmap='bwr')
+plt.title('Pixel 7')
+
+
+# create an axes on the right side of ax. The width of cax will be 5%
+# of ax and the padding between cax and ax will be fixed at 0.05 inch.
+divider = make_axes_locatable(ax)
+cax = divider.append_axes("bottom", size="5%", pad=0.5)
+plt.colorbar(im, cax=cax, orientation='horizontal')
+
+make_axis_label(ax, labs)
+
+for s in range(nfrecon):
+    ax.axhline(y=(s+1)*nfrecon-0.5, lw=3, color='k')
+    ax.axvline(x=(s+1)*nfrecon-0.5, lw=3, color='k')
+    
+    
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/corr_matrix_IQUmaplevel_avg_overpix_GoodPhotonNoise.pdf')
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/corr_matrix_IQUmaplevel_pixel7_GoodPhotonNoise.pdf')
+```
+
+### Covariances between pixels
+
+```{python}
+# Too big we have to reduce it
+coverage_min = 0.8
+coverage_max = 0.9
+condition = (coverage_min<coverage_norm[seenmap]) & (coverage_norm[seenmap]<coverage_max)
+patch_reduce = patch[:, :, condition, :]
+print(patch_reduce.shape)
+cov_pix, corr_pix = amc.get_covcorr_between_pix(patch_reduce, verbose=True)
+print(cov_pix.shape)
+```
+
+```{python}
+isub = 0
+s = 0
+
+plt.figure()
+vmax = np.max(np.abs(cov_pix[isub, s, :, :]))
+plt.imshow(cov_pix[isub, s, :, :], vmin=-vmax, vmax=vmax, cmap='bwr')
+plt.title('Covariance pix/pix - ' + stokes[s] 
+          + f' - Band {isub} for pixels with {coverage_min} < coverage < {coverage_max}')
+plt.colorbar()
+```
+
+### Covariance with JC method
+
+We normalize the maps by the coverage and the factor to get a covariance matrix (Nbands x Nbands) for each Stokes parameter. 
+
+```{python}
+covI, covQ, covU, all_fitcov, all_norm_noise = qss.get_cov_nunu(patch[10], coverage_norm[seenmap])
+
+covJC = np.asarray([covI, covQ, covU])
+covJC.shape
+```
+
+```{python}
+labs = []
+for i in range(nfrecon):
+    labs.append('f{}'.format(i))
+
+plt.figure(figsize=(15, 5))
+for s in range(3):
+    plt.subplot(1, 3, s+1)
+    vmax = np.max(np.abs(covJC[s, :, :]))
+    plt.imshow(covJC[s, :, :], vmin=-vmax, vmax=vmax, cmap='bwr')
+    plt.title(stokes[s] + ' - Cov JC')
+    plt.colorbar(orientation='horizontal')
+    plt.xticks(np.arange(len(labs)), labs)
+    plt.yticks(np.arange(len(labs)), labs)
+```
+
+The RMS on the maps is not proportional to sqrt(coverage) maybe because of border effect with the beam. The normalisation is more complex. Here we compute the normalisation factor, from a fit of the RMS per bin of the coverage.
+
+```{python}
+isub = 0
+xx, yy, fitcov = qss.get_noise_invcov_profile(patch[0, isub, :, :], 
+                                              coverage_norm[seenmap], 
+                                              nbins=20, 
+                                              norm=False,
+                                              label='sub-band: {}'.format(isub), 
+                                              fit=True, 
+                                              doplot=True,
+                                              allstokes=True)
+print(fitcov.shape)
+```
+
+```{python}
+correction = np.interp(1. / coverage_norm[seenmap], fitcov[0, :], fitcov[1, :])
+print(correction.shape)
+
+norm_factor = coverage_norm[seenmap] / correction
+print(norm_factor.shape)
+
+# Galactic center
+RA_center = 266.41 #deg
+DEC_center = -28.94 #deg
+
+center = qubic.equ2gal(RA_center, DEC_center)
+ang = rmc.pix2ang(256, center, seenmap)
+
+plt.figure(figsize=(15, 5))
+plt.subplot(121)
+plt.plot(1 / coverage_norm[seenmap], correction, '.')
+plt.xlabel('1 / (Coverage / MAX(Coverage))')
+plt.ylabel('Correction')
+
+plt.subplot(122)
+plt.plot(ang, norm_factor, '.')
+plt.ylabel('Coverage / correction')
+plt.xlabel('Angle [deg]')
+plt.title('Normalisation factor')
+```
+
+### Covariances with JC method between bands and I Q U
+
+```{python}
+# Flatten each realisation
+newpatch = np.zeros_like(patch)
+for i in range(nreals):
+    newpatch[i], all_fitcov, all_norm_noise = qss.flatten_noise(patch[i], 
+                                                              coverage_norm[seenmap], 
+                                                              nbins=20, 
+                                                              doplot=False, 
+                                                              QUsep=False)
+print(newpatch.shape)
+```
+
+```{python}
+bigcovJC, bigcorrJC = amc.get_covcorr_patch(newpatch, stokesjoint=True, doplot=True)
+```
+
+```{python}
+labs = []
+for s in range(3):
+    for i in range(nfrecon):
+        labs.append(stokes[s]+' f{}'.format(i))
+        
+print(labs)
+```
+
+```{python}
+plt.figure(figsize=(15, 50))
+for p in range(0, 10):
+    
+    plt.subplot(10, 2, p*2 +1)
+    vmax = np.max(np.abs(bigcovJC[:, :, p]))
+    plt.imshow(bigcovJC[:, :, p], vmin=-vmax, vmax=vmax, cmap='bwr')
+    plt.xticks(np.arange(len(labs)), labs, fontsize=12)
+    plt.yticks(np.arange(len(labs)), labs, fontsize=12)
+    for s in range(nfrecon):
+        plt.axhline(y=(s+1)*nfrecon-0.5, lw=3, color='k')
+        plt.axvline(x=(s+1)*nfrecon-0.5, lw=3, color='k')
+    plt.title('Covariance - pixel {}'.format(p))
+    plt.colorbar(fraction=0.05)
+    
+    plt.subplot(10, 2, p*2 +2)
+    plt.imshow(bigcorrJC[:, :, p], vmin=-1, vmax=1, cmap='bwr')
+    plt.xticks(np.arange(len(labs)), labs, fontsize=12)
+    plt.yticks(np.arange(len(labs)), labs, fontsize=12)
+    for s in range(nfrecon):
+        plt.axhline(y=(s+1)*nfrecon-0.5, lw=3, color='k')
+        plt.axvline(x=(s+1)*nfrecon-0.5, lw=3, color='k')
+    plt.title('Correlation - pixel {}'.format(p))
+    plt.colorbar(fraction=0.05)
+```
+
+```{python}
+# Average over pixels
+# We can average the covariance matrices because pixels were normalized before.
+plt.figure(figsize=(7, 7))
+bigcovJC_mean = np.mean(bigcovJC, axis=2)
+vmax = np.max(bigcovJC_mean)
+plt.imshow(bigcovJC_mean, vmin=-vmax, vmax=vmax, cmap='bwr')
+plt.title('Covariance matrices averaged over pixels')
+plt.colorbar(orientation='horizontal')
+
+plt.xticks(np.arange(len(labs)), labs, fontsize=12)
+plt.yticks(np.arange(len(labs)), labs, fontsize=12)
+
+for s in range(nfrecon):
+    plt.axhline(y=(s+1)*nfrecon-0.5, lw=3, color='k')
+    plt.axvline(x=(s+1)*nfrecon-0.5, lw=3, color='k')
+    
+
+plt.figure(figsize=(7, 7))
+plt.imshow(np.mean(bigcorrJC, axis=2), vmin=-1, vmax=1, cmap='bwr')
+plt.title('Correlation matrices averaged over pixels')
+plt.colorbar(orientation='horizontal')
+
+plt.xticks(np.arange(len(labs)), labs, fontsize=12)
+plt.yticks(np.arange(len(labs)), labs, fontsize=12)
+
+for s in range(nfrecon):
+    plt.axhline(y=(s+1)*nfrecon-0.5, lw=3, color='k')
+    plt.axvline(x=(s+1)*nfrecon-0.5, lw=3, color='k')
+```
+
+### Save matrices
+
+```{python}
+#     with open(rep_save + 'seenmap_nfsub{}_nfrecon{}.pkl'.format(nfsub, nfrec), 'wb') as f:
+#         pickle.dump(seenmap, f)
+```
+
+## 1st term evolution as function of the number of sub-bands
+
+
+#### Get Cp and covJC for each number of sub-bands
+
+```{python}
+mylist_Cp, mylist_covJC = [], []
+for i in range(6):
+    nfrecon = allrecon[i]
+    print('\n nfrecon:', nfrecon)
+    patch = np.load(rep_mapCC + f'noisepatch_NOspatialcorr_nbands{nfrecon}_' + config + '_500reals.npy')
+    print('patch shape:', patch.shape)
+
+    nreals, _, npix, _ = patch.shape
+    print('npix:', npix)
+    print('# realisations:', nreals)
+    
+    Cp = amc.get_Cp(patch, verbose=False)
+    print('Cp shape:', Cp.shape)
+    mylist_Cp.append(Cp)
+    
+#     coverage_norm = coverage_normlist[i]
+    covI, covQ, covU, all_fitcov, all_norm_noise = qss.get_cov_nunu(patch[0], coverage_norm[seenmap])
+    covJC = np.asarray([covI, covQ, covU])
+    mylist_covJC.append(covJC)
+
+```
+
+```{python}
+len(mylist_Cp)
+# allrecon[:-1]
+mylist_Cp[0].shape
+```
+
+```{python}
+pix = 0
+plt.figure()
+for istk in range(3):
+    myterms = [mylist_Cp[i][0, 0, istk, pix] for i in range(6)]
+    plt.plot(allrecon, myterms, 'o', color=colorlist[istk])
+
+    a, b, c = np.polyfit(allrecon, myterms, deg=2, rcond=None, full=False, w=None, cov=False)
+    x = np.arange(1, 9, 0.1)
+    plt.plot(x, a*x**2 + b*x + c, color=colorlist[istk], 
+             label='{}: ${:2.3}x^2 {:2.3}x + {:2.3}$'.format(stokes[istk], a, b, c))
+
+plt.xlabel('# Bands')
+plt.ylabel('$Cp_{00}$ - pixel')
+plt.legend()
+```
+
+```{python}
+plt.figure()
+for istk in range(3):
+    myterms = [mylist_covJC[i][istk, 0, 0] for i in range(6)]
+    plt.plot(allrecon, myterms, 'o', color=colorlist[istk])
+
+    a, b, c = np.polyfit(allrecon, myterms, deg=2, rcond=None, full=False, w=None, cov=False)
+    x = np.arange(1, 9, 0.1)
+    plt.plot(x, a*x**2 + b*x + c, color=colorlist[istk], 
+             label='{}: ${:2.3}x^2 {:2.3}x + {:2.3}$'.format(stokes[istk], a, b, c))
+
+plt.xlabel('# Bands')
+plt.ylabel('$Cov JC$')
+plt.legend()
+```
+
+```{python}
+
+```

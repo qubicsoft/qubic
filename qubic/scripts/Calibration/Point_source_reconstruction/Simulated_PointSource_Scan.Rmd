@@ -1,0 +1,724 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.7.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+ one thing that wuld be useful by the way, and maybe you could have a lok at this if you want:
+we would be in a much better situation for developping the reconstruction code if we had simualted data to play with. I mean simulate the observation of a source in the hall at 150 GHz with the theoretical SB => reproduce the Flat Beam Maps but with the theory, with the exact same pointing values
+so that we could:
+- test the reconstruction code
+- Try the SB Peak fitting on these
+- See how the multiband reconstruction behaves with "true peak positions" and with the fitted values
+
+
+```{python}
+# %matplotlib inline
+
+# system packages
+import os
+import sys
+from importlib import reload 
+import time
+from warnings import warn
+
+# scientific packages
+import numpy as np
+import healpy as hp
+from matplotlib.pyplot import *
+from scipy.fftpack import rfft, rfftfreq
+from tqdm import tqdm #progress bar
+
+# QUBIC packages
+import qubic
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+from qubic import demodulation_lib as dl
+from qubic import sb_fitting as sbfit
+import toolfit_hpmap as fh
+from qubicpack import pixel_translation as pt
+import jchinstrument as jcinst
+
+from qubicpack.pix2tes import assign_tes_grid, tes2pix
+from pyoperators import (
+    Cartesian2SphericalOperator,
+    Rotation3dOperator,
+    Spherical2CartesianOperator)
+from pysimulators import ( 
+    CartesianEquatorial2HorizontalOperator,
+    CartesianHorizontal2EquatorialOperator)
+from astropy.time import Time, TimeDelta
+```
+
+- First attemp with nf_sub = 10  , noiseless = True
+
+```{python}
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(os.environ['QUBIC_DICT']+'global_source_oneDet.dict')
+d['MultiBand'] = True
+d['nf_sub'] = 6
+d['kind'] = 'I'
+d['config'] = 'TD'
+d['nside'] = 256
+d['dtheta'] = 8
+#d['RA_denter'], d['DEC_center'] = 0,0 #qubic.hor2equ(0, 0, 0)
+d['synthbeam_fraction'] = 0.99
+d['noiseless'] = True
+```
+
+Understanding step by step random_pointing... ok, understood it
+
+```{python}
+reload(fh)
+directory = os.environ['QUBIC_TODDIR'] + '150GHz-2019-04-06/'
+
+az = FitsArray(directory + 'Flat/azimuth.fits')
+el = FitsArray(directory + 'Flat/elevation.fits')
+d['npointings'] = len(az) * len(el)
+
+azcen_fov = np.mean(az)
+elcen_fov = np.mean(el)
+
+period = 0.1
+p = fh.create_hall_pointing(d, az, el, hor_center = [azcen_fov, elcen_fov], doplot = True,
+                            period = period, verbose = False)
+```
+
+```{python}
+s = qubic.QubicScene(d)
+q = qubic.QubicMultibandInstrument(d)
+
+#Compute frequencies
+_, nus_edge_in, nus_in, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, d['nf_sub'],
+                                                d['filter_relative_bandwidth'])
+a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_in)
+#del cov
+```
+
+pq = qubic.get_pointing(d)
+aq = qubic.QubicMultibandAcquisition(q, pq, s, d, nus_edge_in)
+if ("covq" not in locals()):
+    covq = aq.get_coverage()
+    covq = np.mean(covq, axis = 0)
+    maskovq = covq > 0.1* np.max(covq)
+    covq[~maskovq] = hp.UNSEEN
+
+
+Testing coverage map.... ok
+
+```{python}
+if ("cov" not in locals()):
+    cov = a.get_coverage()
+    cov = np.mean(cov, axis = 0)
+    maskov = cov > 0.1* np.max(cov)
+    cov[~maskov] = hp.UNSEEN
+centGal = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+hp.gnomview(cov, title = "Coverage map", 
+            rot = [0,50], reso = 14)
+```
+
+subplot(221)
+#xlim(28000,28500)
+plot(p.azimuth)
+subplot(223)
+#xlim(28000,28500)
+plot(p.elevation)
+subplot(222)
+xlim(28000,28500)
+plot(p.azimuth)
+subplot(224)
+xlim(28000,28500)
+plot(p.elevation)
+
+
+
+See at the scan... Ok, works fine
+
+o --->--->--->---> ... --->
+
+                 v
+
+o --->--->--->---> ... --->
+
+                 v
+
+o --->--->--->---> ... --->|
+
+
+lim = 70
+ylim(63,66)
+scatter(p.azimuth[:lim], p.elevation[:lim], color = 'k', marker = '.', s = 5)
+scatter(p.azimuth[lim:2*lim], p.elevation[lim:2*lim], color = 'r', marker = '.', s = 5)
+scatter(p.azimuth[2*lim:3*lim], p.elevation[2*lim:3*lim], color = 'b', marker = '.', s = 5)
+
+
+#### Generate QUBIC objects (scene, instrument, acquisition)
+
+```{python}
+#Create object with TES - PIXEL information and translation between data and simulation
+# pix --> qubicsoft (1-256 or 248)
+# tes --> qubicdata (1-128)
+# index -> TRANSLATOR
+FPidentity = pt.make_id_focalplane()
+#Check consistncy:
+
+#print("This convert indexes in qinstrument into fp ones")
+#print("Index \t TES \t qpix")
+#for idet in q[0].detector:
+#    print(idet.index[0], '\t', FPidentity[idet.index[0]].TES, '\t', FPidentity[idet.index[0]].PIX)
+#    print(" ", "\t", " ", "\t" , tes2pix(FPidentity[idet.index[0]].TES, FPidentity[idet.index[0]].ASIC))
+```
+
+#### Generate point source
+
+
+It doesn't change the equatorial coordinates when changing center...weird. This could be related with the period in QubicSampling
+
+```{python}
+#150GHz
+idx = 3
+psmap = np.zeros((d['nf_sub'], 12 * d['nside'] ** 2))
+central_pix = hp.ang2pix(d['nside'], np.deg2rad(90 - elcen_fov), np.deg2rad(azcen_fov))
+neig_pixs = hp.get_all_neighbours(d['nside'], central_pix)
+psmap[idx, central_pix] = 1e9
+psmap[idx] = hp.smoothing(psmap[idx], np.deg2rad(1.0), verbose = False)
+
+fig, ax = subplots(nrows = 1, ncols = 2, figsize = (15,5))
+axes(ax[0])
+hp.gnomview(psmap[idx], rot = [0,50],#rot = (d['RA_center'], d['DEC_center']), 
+            title = 'PS@{:.2f}GHz'.format(nus_in[idx]),
+            reso = 10, hold = True)
+
+ax[1].plot(p.equatorial.T[0], label = 'RA')
+ax[1].plot(p.equatorial.T[1], label = 'DEC')
+ax[1].legend()
+
+```
+
+#### Generate freqs, acquisition operator and observation
+
+```{python}
+TOD, maps_convolved_useless = a.get_observation(psmap, noiseless = d['noiseless'])#, convolution = True)
+```
+
+Look at the TODs... okk..
+
+
+showtes, showasic = 93, 1
+showpix = tes2pix(showtes,showasic)
+print(showpix)
+imshow(np.reshape(TOD[showpix][::-1], (len(el),len(az)) ))
+
+
+Save flatmaps projection for each TES... is it neccessary to invert elevation? 
+
+```{python}
+reload(fh)
+for ipix in range(len(q[0].detector)):
+    idet = q[0].detector[ipix]
+    qtes, _asic_ = FPidentity[idet.index[0]].TES, FPidentity[idet.index[0]].ASIC
+    # convert to qubicpack numeration (1-248)
+    qtes = qtes if _asic_ == 1 else qtes + 128
+    #print (FPidentity[idet.index[0]].PIX , ipix, qtes)
+    FitsArray(np.reshape(TOD[ipix], 
+                     (len(el), len(az))) ).save(directory + \
+                    'Simulations/Flat/imgflat_TESNum_{}.fits'.format(qtes))
+```
+
+#### Choose a qpix (or TES, ASIC) to fit peak position with:
+
+* Flat
+
+* Healpy
+
+```{python}
+# Selecting TES number in absolute (1-248) notation:
+TES = [37, ] #[149, 28, 37, 60, 96, 101, 122, 124, 137, 140, 149]
+tes = np.zeros((len(TES), ), dtype = int)
+asic = np.zeros((len(TES), ), dtype = int)
+qpix = np.zeros((len(TES), ), dtype = int)
+for j, iTES in enumerate(TES):
+    tes[j], asic[j] = (iTES, 1) if (iTES < 128) else (iTES - 128, 2)
+    # Transform to qubicsoft notation
+    print(tes[j], asic[j])
+    qpix[j] = tes2pix(tes[j], asic[j]) - 1
+    print(qpix[j])
+
+# Select tod to fit in healpy and flat projections (just one)
+tod = TOD[qpix[0]]
+```
+
+#### Fit flatmap
+
+
+# Build model
+sbfitmodel = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, 
+                                     no_xy_shift=False, distortion=False)
+
+# Do fit for 1 TES
+thexypeaks = np.zeros((len(tes), 4, 9))
+flatmaps = np.zeros((len(tes), len(el), len(az) ))
+t0 = time.time()
+
+for j, ites in enumerate(tes): 
+
+    print("TES number {} asic number {}".format(ites, asic[j]))
+    print("Index number: qpack {} qsoft {} ".format(\
+                                pt.tes2index(ites, asic[j]), q[0].detector[qpix[j]].index[0] ))
+    print("qubicsoft number: {}".format(qpix[j]))
+    _, thexypeaks[j], flatmaps[j] = sbfit.fit_sb(np.reshape(tod, (len(el), len(az))), 
+                                                 az, el, sbfitmodel, resample = False, newsize = 150, 
+                                                 nsiglo = 100, nsighi = 1e7,
+        az_center = azcen_fov, el_center = elcen_fov,
+         verbose = False, doplot = True, return_fitted =True,
+    figsave = os.environ['QUBIC_DATADIR'] + 'scripts/fit_theoretical_SB/TES{}_flatmap_peaks_fit'.format(ites),
+         extra_title='TES #{}'.format(ites))
+    clf()
+
+print((time.time()-t0)/60 , 'minutes')
+
+
+#### Saving flat fitting
+
+```{python}
+#dirfiles = os.environ['QUBIC_TODDIR']+'150GHz-2019-04-06/'
+#FitsArray(thexypeaks).save(dirfiles + 'FitSB/FlatMaps/fitted_peaks_test')
+```
+
+To generate Healpix maps from flat projections I need the pointing (az, el) from hk-data. Each (az, el) represents the sky direction towards QUBIC points. Each TES cover a different region in sky. 
+
+* The first point is generate a coverage map for each TES for each frequency in a full scan.
+
+
+##### See at the coverage map... seems to be OK! =)
+
+
+#flat to hp with data
+hp_pix = hp.ang2pix(d['nside'], np.radians(90 - p.elevation), np.radians(p.azimuth))
+
+regionmap = np.zeros((12*d['nside']**2,))
+regionmap[hp_pix] = 1e7
+figure(figsize = (11,6))
+hp.gnomview(cov, rot = (azcen_fov, elcen_fov), title = 'Coverage', reso = 14, sub = 121)
+hp.gnomview(regionmap, rot = (azcen_fov, elcen_fov), title = 'Conv', reso = 14, sub = 122)
+
+
+##### Test if reads is according with format...ok
+
+
+pruebaxypeaks = np.array(FitsArray(dirfiles + 'FitSB/fitted_peaks_flatmap'))
+for i in range(len(TES2fit)):
+    scatter(pruebaxypeaks[i,0], pruebaxypeaks[i,1])
+
+
+##### Fit peak positions in healpy map (data)
+
+```{python}
+#==============
+# OLD WAY DEPRACATED
+#oldway = False
+#if oldway:
+#    hpnest, thphpeaksnew, absmaxpx = fh.fit_hpmap(TES[0], q[3], s, dirfiles, plot = False, verbose = True,
+#                                              simulation = True, maps = convmap,
+#                                       filterbeam = 2, threshold = 4, threshold0 = 3, plotcenter = False)
+#else:
+#===============
+dirfiles = os.environ['QUBIC_TODDIR']+'150GHz-2019-04-06/'
+reload(fh)
+reload(sbfit)
+generate_files = False
+
+if generate_files:
+    # Selecting TES number in absolute (1-248) notation:
+    fullTES = np.arange(1, 257, dtype = int) #[28, 37, 60, 96, 101, 122, 124, 137, 140, 149]
+    #fullTES = np.array([28, 37, 60, 96, 101, 122, 124, 137, 140, 149]) #
+    #fullTES = np.array([28, 122, 137]) #
+    thermos_index = np.array([4, 36, 68, 100, 4+128, 36+128, 68+128, 100+128]) - 1
+    #thermos_index = np.array([7])
+    fullTES = np.delete(fullTES, thermos_index)
+    fulltes = np.zeros((len(fullTES), ), dtype = int)
+    fullasic = np.zeros((len(fullTES), ), dtype = int)
+    fullqpix = np.zeros((len(fullTES), ), dtype = int)
+
+    thexypeaks = np.zeros((len(fullTES), 4, 9))
+    flatmaps = np.zeros((len(fullTES), len(el), len(az) ))
+    hpnest = np.zeros((len(fullTES), 12 * d['nside'] ** 2))
+    thphpeaksnew = np.zeros((len(fullTES), 4, 9))
+    valpeaksnew = np.zeros((len(fullTES), 9))
+
+    #Flat Model
+    sbfitmodel = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, 
+                                         no_xy_shift=False, distortion=False)
+    #print(fullTES)
+    #for k, _ in tqdm(range(len(fullTES)), desc = "Flat and Healpix ...", ascii = False):
+    ti = time.time()
+    for j, iTES in enumerate(fullTES):
+        print("Doing TES {} ({}/{})".format(iTES, j, len(fullTES)))
+        t0 = time.time()
+        fulltes[j], fullasic[j] = (iTES, 1) if (iTES <= 128) else (iTES - 128, 2)
+        # Transform to qubicsoft notation
+        fullqpix[j] = tes2pix(fulltes[j], fullasic[j]) - 1
+
+        # Select tod to fit in healpy and flat projections (just one)
+        tod = TOD[fullqpix[j]]
+
+        #Flatmaps
+        _, thexypeaks[j], flatmaps[j] = sbfit.fit_sb(np.reshape(tod, (len(el), len(az))), 
+                                                     az, el, sbfitmodel, resample = False, newsize = 150, 
+                                                     nsiglo = 100, nsighi = 1e7,
+            az_center = azcen_fov, el_center = elcen_fov,
+             verbose = False, doplot = False, return_fitted =True,
+        #figsave = os.environ['QUBIC_DATADIR'] + 'scripts/fit_theoretical_SB/TES{}_flatmap_peaks_fit'.format(ites),
+             extra_title='TES #{}'.format(iTES))
+
+        # Save peaks location in flat maps
+        #print("saving fits position for TES {} in flat map".format(fulltes[j]))
+        thexypeaks[j,0] = np.radians(thexypeaks[j,0,::-1])
+        thexypeaks[j,1] = np.radians(thexypeaks[j,1,::-1])
+        FitsArray(thexypeaks[j]).save(dirfiles + \
+                                      'Simulations/Flat/peaks/fitted_peaks_flat_ASIC{}TES{}.fits'.format(fullasic[j],
+                                                                                                         fulltes[j]
+                                                                                                   ))
+        # Save flat maps
+        FitsArray(np.reshape(tod, 
+                         (len(el), len(az)))[:, ::-1] ).save(directory + \
+                        'Simulations/Flat/synth_beam/flat_ASIC{}TES{}.fits'.format(fullasic[j], fulltes[j]))
+
+        #print('Flat done in {:.2f} minutes'.format((time.time()-t0)/60))
+
+        t1 = time.time()
+        #HEalpix maps
+        convmap = fh.flat2hp_map(tod, p.azimuth, p.elevation, nside = d['nside'])
+
+        InitSearch = fh.SbHealpyModel(d, q[3], s, fullTES[j], az, el, dirfiles, nest = False,
+                                     simulation = True, maps = convmap, verbose = False)
+
+        hpnest[j], thphpeaksnew[j] = InitSearch(simulation = True, maps = convmap, threshold = 3,
+                                                filterbeam = 1.5, delta = 9, doplot = False, 
+                                                    factor_corrector = 1.5)
+
+        #Save file
+        #print("saving fits position for TES {} in healpy map".format(fulltes[j]))
+        FitsArray(thphpeaksnew[j]).save(dirfiles + \
+                                        'Simulations/Healpix/peaks/fitted_peaks_hp_ASIC{}TES{}.fits'.format(fullasic[j],
+                                                                                                fulltes[j]))
+        # Save healpix maps
+        FitsArray(hpnest[j]).save(directory + \
+                        'Simulations/Healpix/synth_beam/hp_ASIC{}TES{}.fits'.format(fullasic[j], fulltes[j]))
+
+        print('Healpy done in {:.2f} minutes '.format((time.time()-t1)/60))
+
+        print('TES {} ASIC {} done in {:.2f} minutes.'.format(fulltes[j], fullasic[j], (time.time()-t0)/60 ))
+
+    print("ALL DONE in {:.2f}".format((time.time()-ti)/60) ) 
+    
+    #Save all peaks in a single calibration file
+    fitflatpeaks = os.environ['QUBIC_PEAKS'] + '150GHz-2019-04-06/Simulations/Flat/flatpeaks.fits'
+    FitsArray(thexypeaks).save(fitflatpeaks)
+    fithppeaks = os.environ['QUBIC_PEAKS'] + '150GHz-2019-04-06/Simulations/Healpix/healpypeaks.fits'
+    FitsArray(thphpeaksnew).save(fithppeaks)
+
+elif not generate_files:
+    # Selecting TES number in absolute (1-248) notation:
+    fullTES = np.arange(1, 257, dtype = int) #[28, 37, 60, 96, 101, 122, 124, 137, 140, 149]
+    #fullTES = np.array([28, 37, 60, 96, 101, 122, 124, 137, 140, 149]) #
+    #fullTES = np.array([28, 122, 137]) #
+    thermos_index = np.array([4, 36, 68, 100, 4+128, 36+128, 68+128, 100+128]) - 1
+    #thermos_index = np.array([7])
+    fullTES = np.delete(fullTES, thermos_index)
+    fulltes = np.zeros((len(fullTES), ), dtype = int)
+    fullasic = np.zeros((len(fullTES), ), dtype = int)
+    fullqpix = np.zeros((len(fullTES), ), dtype = int)
+
+    thexypeaks = np.zeros((len(fullTES), 4, 9))
+    flatmaps = np.zeros((len(fullTES), len(el), len(az) ))
+    hpnest = np.zeros((len(fullTES), 12 * d['nside'] ** 2))
+    thphpeaksnew = np.zeros((len(fullTES), 4, 9))
+
+    fitflatpeaks = os.environ['QUBIC_PEAKS'] + '150GHz-2019-04-06/Simulations/Flat/flatpeaks.fits'
+    thexypeaks = FitsArray(fitflatpeaks)
+    
+    fithppeaks = os.environ['QUBIC_PEAKS'] + '150GHz-2019-04-06/Simulations/Healpix/healpypeaks.fits'
+    thphpeaksnew = FitsArray(fithppeaks)
+    for j, iTES in enumerate(fullTES):
+        fulltes[j], fullasic[j] = (iTES, 1) if (iTES <= 128) else (iTES - 127, 2)
+        # Transform to qubicsoft notation
+        fullqpix[j] = tes2pix(fulltes[j], fullasic[j]) - 1
+
+        # Select tod to fit in healpy and flat projections (just one)
+        tod = TOD[fullqpix[j]]
+        print(fullasic[j], fulltes[j],np.shape(FitsArray(directory + \
+                             'Simulations/Flat/synth_beam/flat_ASIC{}TES{}.fits'.format(fullasic[j], 
+                                                                                        fulltes[j]))))
+        #Flatmaps
+        flatmaps[j] = FitsArray(directory + \
+                             'Simulations/Flat/synth_beam/flat_ASIC{}TES{}.fits'.format(fullasic[j], 
+                                                                                        fulltes[j]))
+        #HEalpix maps
+        hpnest[j] = FitsArray(directory + \
+                              'Simulations/Healpix/synth_beam/hp_ASIC{}TES{}.fits'.format(fullasic[j], 
+                                                                                          fulltes[j]))
+        
+```
+
+```{python}
+#Save all peaks in a single calibration file
+fitflatpeaks = os.environ['QUBIC_PEAKS'] + '150GHz-2019-04-06/Simulations/Flat/flatpeaks.fits'
+FitsArray(thexypeaks).save(fitflatpeaks)
+fithppeaks = os.environ['QUBIC_PEAKS'] + '150GHz-2019-04-06/Simulations/Healpix/healpypeaks.fits'
+FitsArray(thphpeaksnew).save(fithppeaks)
+```
+
+#### See plots... ok
+
+```{python}
+#from matplotlib.backends.backend_pdf import PdfPages
+#import matplotlib.gridspec as gridspec
+
+cm2inch = lambda cm: cm/2.54
+nperpage = 4
+#with PdfPages('flat-healpix_peaks.pdf') as pdf:
+#    rc('figure', figsize=(20,28))#(cm2inch(21), cm2inch(29.7)))
+for j in [1, ]:
+    fig, ax = subplots(nrows = 1, ncols = 2, figsize = (12,6))
+    tod = TOD[fullqpix[j-1]]
+    axes(ax[0])
+
+    funcpr= hp.gnomview
+    msk = np.where(cov == hp.UNSEEN, )
+    hpnest[j-1, msk] = hp.UNSEEN
+    funcpr(hpnest[j-1], nest = False, min = 0, cbar= False, rot = (azcen_fov, elcen_fov),
+                title = 'Fitting (hp) TES = {}, asic = {}'.format(fulltes[j-1], fullasic[j-1]),
+           xsize = 200, ysize = 200, hold = True, reso = 10)
+    hp.projscatter(thphpeaksnew[j-1,0,:], thphpeaksnew[j-1,1,:], color = 'r', marker = '.')
+    #hp.projscatter(np.radians(55), np.radians(-5), color = 'y', s = 200,marker = 'o')
+    hp.projtext(np.radians(25), np.radians(30), "> 25% CovMax", color = "w",
+                weight='bold')
+
+    hp.graticule(verbose = 0, alpha = 0.4)
+
+    im = ax[1].imshow(np.reshape(tod, (len(el), len(az)))[:, ::-1], 
+                 extent = [np.max(az) * np.cos(np.radians(elcen_fov)),
+                                   np.min(az) * np.cos(np.radians(elcen_fov)),
+                                   np.min(el), np.max(el)],  )
+    ax[1].set_ylabel('El[°]')
+    ax[1].set_xlabel('Az[°]')
+    ax[1].plot(np.rad2deg(thexypeaks[j-1,0,::-1]), np.rad2deg(thexypeaks[j-1,1,::-1]), 'r.')
+    ax[1].set_title('Fitting (flat) TES {} asic {}'.format(fulltes[j-1], fullasic[j-1]))
+```
+
+```{python}
+#MM flat maps
+import mapmaking_datafiles as mm
+reload(jcinst)
+reload(mm)
+doproj = "flat" #"flat"
+if doproj == "healpix":
+    dirfiles = directory + 'Simulations/Healpix/synth_beam/'
+    fitfile = fithppeaks 
+elif doproj == "flat":
+    dirfiles = directory + 'Simulations/Flat/synth_beam/'
+    fitfile = fitflatpeaks 
+#map-making flatmaps
+detnums =  np.array([28, 37, 60, 96, 101, 122, 124, 137, 140, 149]) #
+maps_recon, qcut, cov_rec, nus, nus_edge = mm.do_some_dets(detnums,
+                            d, p, dirfiles, fitfile, az, el, doproj,  custom=True, 
+                 nside=None, tol=5e-3, refit=False, resample=False, newsize=70, 
+                 doplot=False, verbose=False, sbfitmodel=None, angs=None, usepeaks=None,
+                 azmin=None, azmax=None, remove=None, fitted_directory=None, weighted=False,
+                nf_sub_rec=1, lowcut=1e-3, highcut=0.3)
+
+```
+
+```{python}
+hp.gnomview(maps_recon, rot = (azcen_fov, elcen_fov), reso = 10, xsize =300, ysize=200,
+           min = 0, max = 7e6)
+```
+
+```{python}
+hp.gnomview(cov_rec, rot = (azcen_fov, elcen_fov), reso = 10, xsize =300, ysize=200,)
+```
+
+Testing rotation to be implemented in toolfit_healpy.... it works using sbfit tools
+
+
+auxth,auxph = fh.thph_qsoft(q[2], s, 96, PiRot = True)
+auxth, auxph = auxth[0], auxph[0]
+hp.mollview(np.zeros((12*d['nside']**2,)), cmap = "bwr" , rot = (0,70))
+hp.graticule(verbose = False)
+hp.projscatter(auxth, auxph, color = "r", )#rot = [0, 20, 0])
+newth, newph = sbfit.rotate_q2m(auxth, auxph, angs = np.radians(np.array([azcen_fov, elcen_fov, azcen_fov])))
+#rotation(np.asarray([np.rad2deg(auxth).T, np.rad2deg(auxph).T]).T).T
+hp.projscatter(newth, newph, color = "b",)# rot = (0,0,0))
+
+sbfit.rotate_q2m
+
+
+Testing fh function to convert from id's systems... it works fine! 
+
+
+reload(fh)
+fh.test_fit(q[2], s, 149, id_fp_sys = "FileName", verbose = True)
+fh.test_fit(q[2], s, 21, asic = 2, id_fp_sys = "TESName", verbose = True)
+fh.test_fit(q[2], s, 96, id_fp_sys = "qsName", verbose = True)
+
+
+
+## Fitting
+
+```{python}
+#hp.gnomview(hp.ud_grade(hpnest, int(d['nside']/2), order_in = 'NEST', order_out = 'RING'), 
+#             rot = (0,50), reso = 12) 
+#hp.projscatter(thphpeaksnew.T, color = 'r', marker = '.')
+# Select region of pixel 1 (lower middle)
+from lmfit import Model
+
+ipeak = 1
+def sel_reg(pa, info = 'px'):
+    auxmap = np.zeros((12 * d['nside'] ** 2,), dtype = bool)
+    if info == 'px':
+        mask = np.arccos(np.dot(hp.pix2vec(d['nside'], 
+                                           pa, nest = True),hp.pix2vec(d['nside'], 
+                                                          np.arange(12*d['nside']**2), nest = True))) < np.deg2rad(5)
+    elif info == 'thph':
+        mask = np.arccos(np.dot(hp.ang2vec(pa[0], pa[1]),
+                                list(hp.pix2vec(d['nside'], 
+                                           np.arange(12 * d['nside'] ** 2))) ))< np.deg2rad(5)
+    return mask
+
+#See regions
+#for i in range(9):
+#    regpx = sel_reg(thphpeaksnew[i].T, info = 'thph')
+#    hp.gnomview(np.array(regpx, dtype = float), rot = (0,50), reso = 12)
+#    hp.projscatter(thphpeaksnew.T, color = 'r', marker = '.')
+#    pause(2)
+
+#The mask works fine.
+# Lo hago para un pico, luego lo generalizo
+regpx = sel_reg(thphpeaksnew[0].T, info = 'thph')
+newmap = np.zeros_like(hpnest)
+newmap[regpx] = hp.reorder(hpnest,inp = 'NEST', out = 'RING')[regpx]
+newmap[~regpx] = hp.UNSEEN
+#hp.gnomview(newmap, rot=(0,50), reso = 12, nest = 0)
+
+thang, phang = hp.pix2ang(d['nside'], np.arange(0, 12 * d['nside'] ** 2)[regpx])
+xydata = np.array([np.sin(thang)*np.cos(phang), np.sin(thang)*np.sin(phang)])
+datamap = newmap[regpx]
+print(np.shape(pxs2angs))
+figure(figsize = (8,8))
+plot(xydata[0], xydata[1], 'bo')
+xlabel("x(th, ph)")
+ylabel("y(th, ph)")
+
+def g2dModel(x,y, amp, xmean, ymean, xstd, ystd):
+    """2-d gaussian model"""
+    
+    #amp = 1 / (2 * np.pi * xstd * ystd)
+    xterm = ((x - xmean) / xstd) ** 2
+    yterm = ((y - ymean) / ystd) ** 2
+    return amp * np.exp(- 0.5 * ( xterm + yterm ) )
+    
+gmodel = Model(g2dModel, independent_vars=["x", "y"], 
+               param_names=["amp", "xmean", "ymean", "xstd", "ystd"],)
+print('parameter names: {}'.format(gmodel.param_names))
+print('independent variables: {}'.format(gmodel.independent_vars))
+
+
+```
+
+```{python}
+params = gmodel.make_params(amp = 1e-15, xmean=0.74, ymean = -0.05, xstd = 0.03, ystd = 0.03)
+result = gmodel.fit(datamap, x = xydata[0], y = xydata[1], params = params )
+
+```
+
+```{python}
+imshow(datamap)
+```
+
+```{python}
+result.best_fit)
+```
+
+```{python}
+import matplotlib.pyplot as plt
+xydata2 = np.meshgrid(xydata[0], xydata[1])
+plt.contourf(xydata2[0], xydata2[1],datamap)
+
+```
+
+```{python}
+from lmfit import Model
+from lmfit.model import save_modelresult
+```
+
+```{python}
+def model_pro(x, a,b):
+    return a*x + b
+
+gmodel_pol = Model(model_pro, independent_vars=['x',], )
+params_pol = gmodel_pol.make_params()
+
+```
+
+```{python}
+gmodel_pol.independent_vars
+```
+
+```{python}
+result_pol = gmodel_pol.fit(yFPSF, params_pol, x=xFPSF)
+parspol = list(result_pol.best_values.values())
+```
+
+Get healpix map for a tes in q instrument
+
+```{python}
+hp.gnomview(q[2].get_synthbeam(s)[qpix[0]], rot = [azcen_fov, elcen_fov], reso = 12)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+H = a.get_operator()
+
+
+print(np.shape(H.T),)# 196608/12/128/128, 12*128**2, d['npointings'] * 248)
+
+
+#print('Operator ', a.get_operator())
+print(len(a.instrument), len(a.sampling))
+print(a.comm.allreduce(len(a.instrument)))
+print(a.comm.allreduce(len(a.sampling)))
+print('Period ', a.sampling.period)
+print(a.comm.allreduce(len(a.instrument)) * a.comm.allreduce(len(a.sampling)) * a.sampling.period)
+
+```{python}
+cov = a.get_coverage()
+```
+
+```{python}
+figure(figsize = (14,6))
+hp.mollview(cov, sub = (131), rot = (0,0))
+hp.mollview(psmap[0], sub=(132), rot = (0,0))
+```
+
+d['tol'] = 1e-3
+d['nf_recon'] = 1
+maps_recon, _, _ = a.tod2map(TOD, d, cov = cov)
+
+```{python}
+
+```

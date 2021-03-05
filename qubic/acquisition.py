@@ -1,5 +1,5 @@
 # coding: utf-8
-from __future__ import division
+from __future__ import division, print_function
 
 import healpy as hp
 import numpy as np
@@ -13,8 +13,6 @@ from pysimulators import Acquisition, FitsArray
 from pysimulators.interfaces.healpy import (
     HealpixConvolutionGaussianOperator)
 from .data import PATH
-from .instrument import QubicInstrument
-from .scene import QubicScene
 from .calibration import QubicCalibration
 from .samplings import create_random_pointings
 
@@ -30,114 +28,62 @@ class QubicAcquisition(Acquisition):
 
     """
     def __init__(self, instrument, sampling, scene, d):
-        
-        filter_nu=d['filter_nu']
-        filter_relative_bandwidth=d['filter_relative_bandwidth']
-        detector_fknee=d['detector_fknee']
-        detector_fslope=d['detector_fslope']
-        detector_ncorr=d['detector_ncorr']
-        detector_nep=d['detector_nep']
-        detector_ngrids=d['detector_ngrids']
-        detector_tau=d['detector_tau']
-        polarizer=d['polarizer']
-        synthbeam_dtype=np.float32
-        synthbeam_fraction=d['synthbeam_fraction']
-        synthbeam_kmax=d['synthbeam_kmax']
-        synthbeam_peak150_fwhm=d['synthbeam_peak150_fwhm']
-        ripples=d['ripples']
-        nripples=d['nripples']
-        primary_beam=None
-        secondary_beam=None
-        calibration = QubicCalibration(d)
-        block=d['block']
-        effective_duration=d['effective_duration']
-        photon_noise=d['photon_noise']
-        max_nbytes=d['max_nbytes']
-        nprocs_instrument=d['nprocs_instrument']
-        nprocs_sampling=d['nprocs_sampling']
-        comm=d['comm']
-        psd=d['psd']
-        bandwidth=d['bandwidth']
-        twosided=d['twosided']
-        sigma=d['sigma']
-       
         """
-        acq = QubicAcquisition(band, sampling, [scene, nprocs_instrument,
-                               nprocs_sampling, comm])
-        acq = QubicAcquisition(instrument, sampling, [scene, nprocs_instrument,
-                               nprocs_sampling, comm])
+        acq = QubicAcquisition(instrument, sampling, scene, d)
 
         Parameters
         ----------
-        band : int
-            The module nominal frequency, in GHz.
-        scene : QubicScene, optional
-            The discretized observed scene (the sky). If not specified,
-            the scene is instantiated using QubicScene().
-        block : tuple of slices, optional
-            Partition of the samplings.
         instrument : QubicInstrument, optional
             The QubicInstrument instance.
-        calibration : QubicCalibration, optional
-            The calibration tree.
-        detector_fknee : array-like, optional
-            The detector 1/f knee frequency in Hertz.
-        detector_fslope : array-like, optional
-            The detector 1/f slope index.
-        detector_ncorr : int, optional
-            The detector 1/f correlation length.
-        detector_nep : array-like, optional
-            The detector NEP [W/sqrt(Hz)].
-        detector_ngrids : 1 or 2, optional
-            Number of detector grids.
-        detector_tau : array-like, optional
-            The detector time constants in seconds.
-        effective_duration : float, optional
-            If not None, the noise properties are rescaled so that this
-            acquisition has an effective duration equal to the specified value,
-            in years.
-        filter_relative_bandwidth : float, optional
-            The filter relative bandwidth Δν/ν.
-        polarizer : boolean, optional
-            If true, the polarizer grid is present in the optics setup.
-        photon_noise : boolean, optional
-            If true, the photon noise contribution is included.
-        primary_beam : function f(theta [rad], phi [rad]), optional
-            The primary beam transmission function.
-        secondary_beam : function f(theta [rad], phi [rad]), optional
-            The secondary beam transmission function.
-        synthbeam_dtype : dtype, optional
-            The data type for the synthetic beams (default: float32).
-            It is the dtype used to store the values of the pointing matrix.
-        synthbeam_fraction: float, optional
-            The fraction of significant peaks retained for the computation
-            of the synthetic beam.
-        max_nbytes : int or None, optional
-            Maximum number of bytes to be allocated for the acquisition's
-            operator.
-        nprocs_instrument : int, optional
-            For a given sampling slice, number of procs dedicated to
-            the instrument.
-        nprocs_sampling : int, optional
-            For a given detector slice, number of procs dedicated to
-            the sampling.
-        comm : mpi4py.MPI.Comm, optional
-            The acquisition's MPI communicator. Note that it is transformed
-            into a 2d cartesian communicator before being stored as the 'comm'
-            attribute. The following relationship must hold:
-                comm.size = nprocs_instrument * nprocs_sampling
-        psd : array-like, optional
-            The one-sided or two-sided power spectrum density
-            [signal unit/sqrt Hz].
-        bandwidth : float, optional
-            The PSD frequency increment [Hz].
-        twosided : boolean, optional
-            Whether or not the input psd is one-sided (only positive
-            frequencies) or two-sided (positive and negative frequencies).
-        sigma : float
-            Standard deviation of the white noise component.
-
+        sampling : pointing
+            Pointing obtained with get_pointing().
+        scene : QubicScene, optional
+            The discretized observed scene (the sky).
+        d : dictionary with lot of parameters:
+            block : tuple of slices, optional
+                Partition of the samplings.
+            effective_duration : float, optional
+                If not None, the noise properties are rescaled so that this
+                acquisition has an effective duration equal to the specified value,
+                in years.
+            photon_noise : boolean, optional
+                If true, the photon noise contribution is included.
+            max_nbytes : int or None, optional
+                Maximum number of bytes to be allocated for the acquisition's
+                operator.
+            nprocs_instrument : int, optional
+                For a given sampling slice, number of procs dedicated to
+                the instrument.
+            nprocs_sampling : int, optional
+                For a given detector slice, number of procs dedicated to
+                the sampling.
+            comm : mpi4py.MPI.Comm, optional
+                The acquisition's MPI communicator. Note that it is transformed
+                into a 2d cartesian communicator before being stored as the 'comm'
+                attribute. The following relationship must hold:
+                    comm.size = nprocs_instrument * nprocs_sampling
+            psd : array-like, optional
+                The one-sided or two-sided power spectrum density
+                [signal unit/sqrt Hz].
+            bandwidth : float, optional
+                The PSD frequency increment [Hz].
+            twosided : boolean, optional
+                Whether or not the input psd is one-sided (only positive
+                frequencies) or two-sided (positive and negative frequencies).
+            sigma : float
+                Standard deviation of the white noise component.
         """
+        block = d['block']
+        effective_duration = d['effective_duration']
+        photon_noise = d['photon_noise']
+        max_nbytes = d['max_nbytes']
+        nprocs_instrument = d['nprocs_instrument']
+        nprocs_sampling = d['nprocs_sampling']
+        comm = d['comm']
+        psd = d['psd']
+        bandwidth = d['bandwidth']
+        twosided = d['twosided']
+        sigma = d['sigma']
 
         Acquisition.__init__(
             self, instrument, sampling, scene, block=block,
@@ -149,11 +95,7 @@ class QubicAcquisition(Acquisition):
         self.psd = psd
         self.twosided = twosided
         self.sigma = sigma
-        self.detector_fknee = detector_fknee
-        self.detector_fslope = detector_fslope
-        self.detector_ncorr = detector_ncorr
-
-
+        self.forced_sigma = None
 
     def get_coverage(self):
         """
@@ -180,7 +122,7 @@ class QubicAcquisition(Acquisition):
         if nside is None:
             nside = self.scene.nside
         ipixel = self.sampling.healpix(nside)
-        npixel = 12 * nside**2
+        npixel = 12 * nside ** 2
         hit = np.histogram(ipixel, bins=npixel, range=(0, npixel))[0]
         self.sampling.comm.Allreduce(MPI.IN_PLACE, as_mpi(hit), op=MPI.SUM)
         return hit
@@ -193,6 +135,7 @@ class QubicAcquisition(Acquisition):
             out *= np.sqrt(nsamplings * self.sampling.period /
                            (self.effective_duration * 31557600))
         return out
+
     get_noise.__doc__ = Acquisition.get_noise.__doc__
 
     def get_aperture_integration_operator(self):
@@ -253,27 +196,25 @@ class QubicAcquisition(Acquisition):
             [self.instrument.get_hwp_operator(self.sampling[b], self.scene)
              for b in self.block], axisin=1)
 
-
-
     def get_diag_invntt_operator(self):
-    
-        print 'Use diagonal noise covariance matrix'
-        
-        sigma_detector = self.instrument.detector.nep / np.sqrt(2*self.sampling.period)
+
+        print('Use diagonal noise covariance matrix')
+
+        sigma_detector = self.instrument.detector.nep / np.sqrt(2 * self.sampling.period)
         if self.photon_noise:
             sigma_photon = self.instrument._get_noise_photon_nep(self.scene) / np.sqrt(2 * self.sampling.period)
         else:
             sigma_photon = 0
 
-        out = DiagonalOperator(1 / (sigma_detector**2 + sigma_photon**2),broadcast='rightward',shapein=(len(self.instrument), len(self.sampling)))
+        out = DiagonalOperator(1 / (sigma_detector ** 2 + sigma_photon ** 2), broadcast='rightward',
+                               shapein=(len(self.instrument), len(self.sampling)))
         if self.effective_duration is not None:
             nsamplings = self.comm.allreduce(len(self.sampling))
-            out /= (nsamplings * self.sampling.period /(self.effective_duration * 31557600))
+            out /= (nsamplings * self.sampling.period / (self.effective_duration * 31557600))
         return out
-    
-    
+
     def get_invntt_operator(self):
-        
+
         """
         Return the inverse time-time noise correlation matrix as an Operator.
             
@@ -297,14 +238,8 @@ class QubicAcquisition(Acquisition):
             frequencies) or two-sided (positive and negative frequencies).
         sigma : float
             Standard deviation of the white noise component.
-        detector_fknee : float
-            The 1/f noise knee frequency [Hz].
-        detector_fslope : float
-            The 1/f noise slope.
         sampling_frequency : float
             The sampling frequency [Hz].
-        detector_ncorr : int
-            The correlation length of the time-time noise correlation matrix.
         fftw_flag : string, optional
             The flags FFTW_ESTIMATE, FFTW_MEASURE, FFTW_PATIENT and
             FFTW_EXHAUSTIVE can be used to describe the increasing amount of
@@ -316,39 +251,54 @@ class QubicAcquisition(Acquisition):
             the number of cores.
             
         """
-        
+
         fftw_flag = 'FFTW_MEASURE'
         nthreads = None
-        
+
+        #if self.bandwidth is None or self.psd is None:
         if self.bandwidth is None and self.psd is not None or self.bandwidth is not None and self.psd is None:
             raise ValueError('The bandwidth or the PSD is not specified.')
+
+        # Get sigma in Watt
         if self.instrument.detector.nep is not None:
             self.sigma = self.instrument.detector.nep / np.sqrt(2 * self.sampling.period)
-            
+
             if self.photon_noise:
-                sigma_photon = self.instrument._get_noise_photon_nep(self.scene) /np.sqrt(2 * self.sampling.period)
-                self.sigma = np.sqrt(self.sigma**2+sigma_photon**2)
+                sigma_photon = self.instrument._get_noise_photon_nep(self.scene) / np.sqrt(2 * self.sampling.period)
+                self.sigma = np.sqrt(self.sigma ** 2 + sigma_photon ** 2)
             else:
-                sigma_photon = 0
-        
+                pass
+                # sigma_photon = 0
+
         if self.bandwidth is None and self.psd is None and self.sigma is None:
             raise ValueError('The noise model is not specified.')
-    
+
+
+        print('In acquisition.py: self.forced_sigma={}'.format(self.forced_sigma))
+        print('and self.sigma is:{}'.format(self.sigma))
+        if self.forced_sigma is None:
+            print('Using theoretical TES noises')
+        else:
+            print('Using self.forced_sigma as TES noises')
+            self.sigma = self.forced_sigma.copy()
+
         shapein = (len(self.instrument), len(self.sampling))
-                
-        if self.bandwidth is None and self.detector_fknee == 0:
-            print 'diagonal case'
-            
-            out = DiagonalOperator(1 / self.sigma**2, broadcast='rightward', shapein=(len(self.instrument), len(self.sampling)))
-            
+
+        if self.bandwidth is None and self.instrument.detector.fknee == 0:
+            print('diagonal case')
+
+            out = DiagonalOperator(1 / self.sigma ** 2, broadcast='rightward',
+                                   shapein=(len(self.instrument), len(self.sampling)))
+            print(out.shape)
+            print(out)
+
             if self.effective_duration is not None:
                 nsamplings = self.comm.allreduce(len(self.sampling))
                 out /= (nsamplings * self.sampling.period / (self.effective_duration * 31557600))
             return out
-                
-    
+
         sampling_frequency = 1 / self.sampling.period
-        
+
         nsamples_max = len(self.sampling)
         fftsize = 2
         while fftsize < nsamples_max:
@@ -361,20 +311,19 @@ class QubicAcquisition(Acquisition):
             f = np.arange(fftsize // 2 + 1, dtype=float) * new_bandwidth
             p = _unfold_psd(_logloginterp_psd(f, self.bandwidth, self.psd))
         else:
-            p = _gaussian_psd_1f(fftsize, sampling_frequency, self.sigma, self.detector_fknee,self.detector_fslope, twosided=True)
+            p = _gaussian_psd_1f(fftsize, sampling_frequency, self.sigma, self.instrument.detector.fknee,
+                                 self.instrument.detector.fslope, twosided=True)
         p[..., 0] = p[..., 1]
-        invntt = _psd2invntt(p, new_bandwidth, self.detector_ncorr, fftw_flag=fftw_flag)
-        
-        print 'non diagonal case'
+        invntt = _psd2invntt(p, new_bandwidth, self.instrument.detector.ncorr, fftw_flag=fftw_flag)
+
+        print('non diagonal case')
         if self.effective_duration is not None:
             nsamplings = self.comm.allreduce(len(self.sampling))
             invntt /= (nsamplings * self.sampling.period / (self.effective_duration * 31557600))
 
-
         return SymmetricBandToeplitzOperator(shapein, invntt, fftw_flag=fftw_flag, nthreads=nthreads)
 
     get_invntt_operator.__doc__ = Acquisition.get_invntt_operator.__doc__
-    
 
     def get_unit_conversion_operator(self):
         """
@@ -442,12 +391,14 @@ class QubicAcquisition(Acquisition):
             return BlockColumnOperator(
                 [f(self.sampling[b], self.scene, verbose=verbose)
                  for b in self.block], axisout=1)
-        #XXX HACK
+
+        # XXX HACK
         def callback(i):
             p = f(self.sampling[self.block[i]], self.scene, verbose=False)
             return p
-        shapeouts = [(len(self.instrument), s.stop-s.start) +
-                      self.scene.shape[1:] for s in self.block]
+
+        shapeouts = [(len(self.instrument), s.stop - s.start) +
+                     self.scene.shape[1:] for s in self.block]
         proxies = proxy_group(len(self.block), callback, shapeouts=shapeouts)
         return BlockColumnOperator(proxies, axisout=1)
 
@@ -467,7 +418,7 @@ class QubicAcquisition(Acquisition):
         partitionin = 2 * (len(self.instrument) // 2,)
         return BlockRowOperator([I, -I], axisin=0, partitionin=partitionin)
 
-    def get_observation(self, map, noiseless=False, convolution=False):
+    def get_observation(self, map, convolution=True, noiseless=False):
         """
         tod = map2tod(acquisition, map)
         tod, convolved_map = map2tod(acquisition, map, convolution=True)
@@ -505,26 +456,23 @@ class QubicAcquisition(Acquisition):
 
         return tod
 
-
-    def tod2map(self,tod,d):
-        '''
+    def tod2map(self, tod, d, cov=None):
+        """
         Reconstruct map from tod
-        '''
-        tol=d['tol']
-        maxiter=d['maxiter']
-        cov=d['cov']
-        verbose=d['verbose']
-        sampling= self[0].sampling
-            
+        """
+        tol = d['tol']
+        maxiter = d['maxiter']
+        verbose = d['verbose']
+
         H = self.get_operator()
-        invntt = self.get_invntt_operator(d)
-            
+        invntt = self.get_invntt_operator()
+
         A = H.T * invntt * H
         b = H.T * invntt * tod
-                    
+
         preconditioner = self.get_preconditioner(cov)
-        solution = pcg(A, b, M=preconditioner,disp=verbose, tol=tol, maxiter=maxiter)
-        return solution['x']
+        solution = pcg(A, b, M=preconditioner, disp=verbose, tol=tol, maxiter=maxiter)
+        return solution['x'], solution['nit'], solution['error']
 
     def get_preconditioner(self, cov):
         if cov is not None:
@@ -594,12 +542,12 @@ class PlanckAcquisition(object):
 
     _SIMULATED_PLANCK_SEED = 0
 
-    def get_operator(self):        
+    def get_operator(self):
         return DiagonalOperator(self.mask.astype(np.int), broadcast='rightward',
                                 shapein=self.scene.shape)
 
     def get_invntt_operator(self):
-        return DiagonalOperator(1 / self.sigma**2, broadcast='leftward',
+        return DiagonalOperator(1 / self.sigma ** 2, broadcast='leftward',
                                 shapein=self.scene.shape)
 
     def get_noise(self):
@@ -614,12 +562,12 @@ class PlanckAcquisition(object):
         if not noiseless:
             obs = obs + self.C(self.get_noise())
         if len(self.scene.shape) == 2:
-            for i in xrange(self.scene.shape[1]):
+            for i in range(self.scene.shape[1]):
                 obs[~(self.mask), i] = 0.
         else:
             obs[~(self.mask)] = 0.
         return obs
-        #XXX neglecting convolution effects...
+        # XXX neglecting convolution effects...
         HealpixConvolutionGaussianOperator(fwhm=self.fwhm)(obs, obs)
         return obs
 
@@ -630,6 +578,7 @@ class QubicPlanckAcquisition(object):
     acquisitions.
 
     """
+
     def __init__(self, qubic, planck):
         """
         acq = QubicPlanckAcquisition(qubic_acquisition, planck_acquisition)

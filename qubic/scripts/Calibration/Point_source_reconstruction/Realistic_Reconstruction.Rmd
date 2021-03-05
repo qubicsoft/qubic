@@ -1,0 +1,902 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Reconstruction of Calibration Source map with measured synth. beam
+#### J.-Ch. Hamilton heavily inspired by Martin Gamboa's notebook scanSource_oneDet.ipynb
+
+```{python}
+# %matplotlib inline
+# #%matplotlib notebook
+from matplotlib import rc
+rc('figure', figsize=(15,8))
+rc('font', size=12)
+rc('text', usetex=False)
+rc('image', cmap='viridis')
+
+import healpy as hp
+import pickle
+from importlib import reload
+
+import qubic.io
+from pysimulators import FitsArray
+import qubic.fibtools as ft
+import qubic.demodulation_lib as dl
+import qubic.sb_fitting as sbfit
+from qubicpack.utilities import Qubic_DataDir
+
+# Import jchinstrument from ../
+import os,sys,inspect
+current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parent_dir = os.path.dirname(current_dir)
+sys.path.insert(0, parent_dir) 
+import jchinstrument as jcinst
+
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+```
+
+```{python}
+def hall_pointing(az, el, angspeed_psi, maxpsi,
+                 date_obs=None, latitude=None, longitude=None,fix_azimuth=None,random_hwp=True):
+    #This method will reproduce the pointing that is used in the hall to take the data. Will start from bottom
+    #left and will go up at fixed elevation.
+    
+    #nsamples = 2*len(az)*len(el) # commented bucause not go and back
+    nsamples = len(az)*len(el)
+    #print('nsamples = ', nsamples)
+    pp = qubic.QubicSampling(nsamples,date_obs=date_obs, period=0.1, latitude=latitude,longitude=longitude)
+    
+    #Comented because we do not go and back in simulations.. 
+    #mult_el = []
+    #for eachEl in el:
+    #    mult_el.append(np.tile(eachEl, 2*len(az)))
+    # Azimuth go and back and same elevation. 
+    #az_back = az[::-1]
+    #az = list(az)
+    #az.extend(az_back)
+    #mult_az = np.tile(az, len(el))
+    #print(i,np.asarray(mult_el).ravel().shape)
+    #pp.elevation = np.asarray(mult_el).ravel()
+    #pp.azimuth = np.asarray(mult_az).ravel()
+    
+    mult_el = []
+    for eachEl in el:
+        mult_el.extend(np.tile(eachEl, len(az)))
+    mult_az = []
+    mult_az.append(np.tile(az, len(el)))
+    #print(len(mult_el))
+    pp.elevation = np.asarray(mult_el)#az2d.ravel()
+    pp.azimuth = np.asarray(mult_az[0])#el2d.ravel()
+    
+    ### scan psi as well,
+    pitch = pp.time * angspeed_psi
+    pitch = pitch % (4 * maxpsi)
+    mask = pitch > (2 * maxpsi)
+    pitch[mask] = -pitch[mask] + 4 * maxpsi
+    pitch -= maxpsi
+    
+    pp.pitch = pitch
+    
+    if random_hwp:
+        pp.angle_hwp = np.random.random_integers(0, 7, nsamples) * 11.25
+        
+    if fix_azimuth['apply']:
+        pp.fix_az=True
+        if fix_azimuth['fix_hwp']:
+            pp.angle_hwp=pp.pitch*0+ 11.25
+        if fix_azimuth['fix_pitch']:
+            pp.pitch= 0
+    else:
+        pp.fix_az=False
+
+    return pp
+    #print(pp.elevation)#, len(pp.elevation))
+
+
+def select_det(q,id):
+    #### For now the ids are not matched... so we only take the len(id) first detectors...
+    detector_i = q.detector[:len(id)]
+    q.detector = detector_i
+    return(q)
+
+def do_some_dets(detnums, d, directory, fittedpeaksfile, custom=False, 
+                 nside=None, tol=5e-3, refit=False, resample=False, newsize=70, 
+                 doplot=True, verbose=True, sbfitmodel=None, angs=None, usepeaks=None,
+                 azmin=None, azmax=None, remove=None, fitted_directory=None, weighted=False):
+    if nside is not None:
+        d['nside']=nside
+    s = qubic.QubicScene(d)
+    ids = []
+    for n in detnums:
+        ids.append(0)
+    
+    if not custom:
+        if verbose:
+            print('')
+            print('Normal Reconstruction')
+        qcut = select_det(qubic.QubicInstrument(d),ids)
+    else:
+        if verbose:
+            print('')
+            print('Custom Reconstruction')
+        ### Refit or not the locations of the peaks 
+        ### from the synthesized beam images      
+        ### First instantiate a jchinstrument (modified from instrument 
+        ### to be able to read peaks from a file)
+        qcut = select_det(jcinst.QubicInstrument(d),ids)
+        nu = qcut.filter.nu
+        synthbeam = qcut.synthbeam
+        horn = getattr(qcut, 'horn', None)
+        primary_beam = getattr(qcut, 'primary_beam', None)
+        thecos = np.cos(np.radians(50))
+
+        if refit:
+            if verbose: 
+                print('We refit the peak locations')
+            ### We call the fitting function for the Synthesized beam
+            xypeaks = []
+            for i in range(len(detnums)):
+                if fitted_directory is None:
+                    flatmap, az, el = sbfit.get_flatmap(detnums[i], directory, 
+                                                        azmin=azmin, azmax=azmax, remove=remove)
+                    if sbfitmodel is None:
+                        sbfitmodel = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, 
+                                                         no_xy_shift=False, distortion=False)
+                    if verbose: print('Using Fit Model {} for TES #{}'.format(sbfitmodel.name,detnums[i]))
+                    fit, thexypeaks = sbfit.fit_sb(flatmap, az, el, sbfitmodel, resample=resample, newsize=newsize,
+                                                   verbose=verbose, doplot=doplot, 
+                                                   extra_title='TES #{}'.format(detnums[i]))
+                else:
+                    flatmap, az, el, fitmap, thexypeaks = sbfit.get_flatmap(detnums[i], directory, 
+                                                                            azmin=azmin, azmax=azmax, remove=remove,
+                                                                           fitted_directory=fitted_directory)
+                xypeaks.append(thexypeaks)
+                
+            ### Convert to measurement coordinate system
+            xypeaks = np.array(xypeaks)
+            allthetas_M = np.radians(90-(xypeaks[:,1,:]-50))
+            allphis_M = np.radians(-xypeaks[:,0,:])#*thecos)
+            allvals_M = xypeaks[:,2,:]
+        else:           
+            if verbose: print('No refitting of the peak locations')
+            ### We just read them from the old peak file
+            peaks = np.array(FitsArray(fittedpeakfile))
+            peaks[:,0,:] = peaks[:,0,:]/thecos
+            ### An put them in the expected format
+            mypeaks = peaks[np.array(detnums)-1,:,:]
+            allthetas_M = np.radians(90-(mypeaks[:,1,:]-50))
+            allphis_M = np.radians(-mypeaks[:,0,:]*thecos)
+            allvals_M = mypeaks[:,2,:]
+        
+        ### Now we want to perform the rotation to go to boresight 
+        ### reference frame (used internally by QubicSoft)
+        if angs is None:
+            angs = np.radians(np.array([0, 90, 0]))
+        allthetas_Q = np.zeros_like(allthetas_M)
+        allphis_Q = np.zeros_like(allthetas_M)
+        allvals_Q = np.zeros_like(allthetas_M)
+        for ites in range(len(detnums)):
+            allthetas_Q[ites,:], allphis_Q[ites,:] = sbfit.rotate_q2m(allthetas_M[ites,:], 
+                                                                      allphis_M[ites,:], 
+                                                                      angs=angs, inverse=True)
+            allvals_Q[ites,:] = allvals_M[ites,:]/np.max(allvals_M[ites,:])*synthbeam.peak150.solid_angle * (150e9 / nu)**2 / s.solid_angle * len(horn)
+        
+        ### We nowwrite the temporary file that contains the peaks locations to be used
+        if usepeaks is None:
+            peaknums = np.arange(9)
+        else:
+            peaknums = usepeaks
+        data = [allthetas_Q[:,peaknums], allphis_Q[:,peaknums], allvals_Q[:,peaknums],[0]]
+        file = open(os.environ['QUBIC_PEAKS']+'peaks.pk', 'wb')
+        pickle.dump(data, file)
+        file.close()
+    
+
+    ### Make the TODs from the measured synthesized beams
+    # Read azimuth and elevation
+    bla, az, el = sbfit.get_flatmap(detnums[0], directory, azmin=azmin, azmax=azmax)
+    #az = FitsArray(directory + 'Flat/azimuth.fits')
+    #el = FitsArray(directory + 'Flat/elevation.fits')
+    # Build pointing from them
+    p = hall_pointing(az, el, 0, 0, fix_azimuth=d['fix_azimuth'])
+    # Read data and fill TOD
+    realTOD = np.zeros((len(detnums),len(p)))
+    for i in range(len(detnums)):
+        img, a,b = sbfit.get_flatmap(detnums[i], directory, azmin=azmin, azmax=azmax, remove=remove)
+        #filename = directory + 'Flat/imgflat_TESNum_{}.fits'.format(detnums[i])
+        #if verbose: print('Reading {}'.format(detnums[i]))
+        #img = FitsArray(filename)
+        mm,ss = ft.meancut(img,3)
+        realTOD[i,:] = np.ravel(img) * 5e-28
+        if weighted:
+            realTOD[i,:] *= 1./ss**2
+        
+#     ### Cut in azimuth and elevation
+#     azmin = -15./np.cos(np.radians(50))
+#     azmax = 15./np.cos(np.radians(50))
+#     elmin = 20.
+#     elmax = 80.
+#     ok = ((p.azimuth >= azmin) & (p.azimuth <= azmax)) & ((p.elevation >= elmin) & (p.elevation <= elmax))
+#     if verbose: print('AzEl cuts: Keeping only {} samples out of {}'.format(ok.sum(), len(ok)))
+        
+    ### And we instantiate the QUBIC isntrument that uses qcut which a 
+    ### jchinstrument (modified to read the above file)
+#     sima = qubic.QubicAcquisition(qcut, p[ok], s, d)
+    sima = qubic.QubicAcquisition(qcut, p, s, d)
+
+    ### Run the mapmaker
+    d['tol'] = tol
+#     maps_recon, niter, error = sima.tod2map(realTOD[:,ok], d, cov=None)
+    maps_recon, niter, error = sima.tod2map(realTOD, d, cov=None)
+    if verbose: print('Mapmaking QUBIC done in {} iterations with error: {}'.format(niter, error))
+    return maps_recon, qcut
+
+
+
+
+```
+
+```{python}
+# INSTRUMENT
+ns = 256
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(global_dir+'/dicts/global_source_oneDet.dict')
+print(d['kind'])
+d['kind']='I'
+print(d['kind'])
+d['nside']=ns
+
+fittedpeakfile = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/fitted_peaks.fits'
+directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/150GHz-2019-04-06/'
+```
+
+### Removing a common mode between all detectors
+I have noticed a common shady shape on all SYnthesized beams images. So we first need to remove it. It turns out this shady shape also contains most of the noise in the SB images... So removing it is a very significant improvement. The origin of this common mode is yet to be identified...
+
+We also perform a cut in azimuth in order to avoid noisy regions on the edge.
+
+```{python}
+c50 = np.cos(np.radians(50))
+azmin = -15./c50
+azmax = 15./c50
+flatmap, az, el = sbfit.get_flatmap(1, directory, azmin=azmin, azmax=azmax)
+npix = len(np.ravel(flatmap))
+alldata_renorm = np.zeros((256, npix))
+for i in range(256):
+    flatmap, az, el = sbfit.get_flatmap(i+1, directory, azmin=azmin, azmax=azmax)
+    mm,ss = ft.meancut(flatmap,3)
+    alldata_renorm[i,:] = np.ravel((flatmap-mm)/ss)  
+
+med = np.reshape(np.median(alldata_renorm,axis=0),np.shape(flatmap))
+mm=np.mean(med)
+ss = np.std(med)
+
+imshow(np.reshape(med, np.shape(flatmap)),
+       extent=[np.min(az)*c50, np.max(az)*c50, np.min(el), np.max(el)], aspect='equal')
+colorbar()
+title('Median over all S.B. images (renormalized)')
+```
+
+```{python}
+reload(dl)
+reload(sbfit)
+reload(jcinst)
+
+fitted_directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/FitSB/'
+
+#detnums = [6, 37, 38, 72, 79, 86, 94, 96, 110, 124, 149, 153, 176, 184, 185, 199, 205, 229, 231, 235, 247]
+#detnums = [37, 124, 185, 229]
+#detnums = [37, 185, 229]
+#detnums = [60, 64, 69, 70, 101, 129, 130, 133, 136, 137, 163, 168, 175, 176, 185, 193, 199, 200, 212, 213, 214, 215, 216, 220, 223, 225, 226, 229, 231, 235, 239]
+#detnums = [60,  101, 129, 137, 163, 168, 175, 193, 199, 212, 214, 215, 220,  223, 225, 226, 229, 239]
+#### This is the. good one (old)
+# detnums = [60,  101, 215, 220,  225, 229]
+#detnums = [60]
+detnums = [18]
+detnums = [28]
+
+
+reso=20
+center = [0,50]
+nsrec = 256
+tol = 1e-3
+all_maps_recon_th = np.zeros((len(detnums), 12*nsrec**2))
+all_maps_recon_custom = np.zeros((len(detnums), 12*nsrec**2))
+all_maps_recon_custom_new = np.zeros((len(detnums), 12*nsrec**2))
+for i in range(len(detnums)):
+    d['verbose']=False
+    clf()
+#     all_maps_recon_th[i,:], qcut = do_some_dets([detnums[i]], d, directory, fittedpeakfile, 
+#                                           custom=False, nside=nsrec, tol=tol, refit=False,
+#                                          azmin=azmin, azmax=azmax, remove=med)    
+#     all_maps_recon_custom[i,:], qcut = do_some_dets([detnums[i]], d, directory, fittedpeakfile, 
+#                                               custom=True, nside=nsrec, tol=tol, refit=False,
+#                                              azmin=azmin, azmax=azmax, remove=med)    
+    all_maps_recon_custom_new[i,:], qcut = do_some_dets([detnums[i]], d, directory, fittedpeakfile, 
+                                                  custom=True, nside=nsrec, tol=tol, refit=True, 
+                                                  verbose=True, doplot=True,
+                                                 azmin=azmin, azmax=azmax, remove=med, 
+                                                  fitted_directory=fitted_directory)
+    okpix = all_maps_recon_custom_new[i,:] != 0
+    mm, ss = ft.meancut(all_maps_recon_custom_new[i,okpix],3)
+    print(mm,ss,np.std(all_maps_recon_custom_new[i,okpix]))
+#     hp.gnomview((all_maps_recon_th[i,:]), reso=reso/2, rot=center, cmap = 'viridis', 
+#             title='Th TES{}'.format(detnums[i]),min=mm-ss, max=mm+3*ss, sub=(1,3,1))
+#     hp.gnomview((all_maps_recon_custom[i,:]), reso=reso/2, rot=center, cmap = 'viridis', 
+#             title='Custom TES{}'.format(detnums[i]),min=mm-ss, max=mm+3*ss, sub=(1,3,2))
+    hp.gnomview((all_maps_recon_custom_new[i,:]), reso=reso/2, rot=center, cmap = 'viridis', 
+            title='Custom Refit TES{}'.format(detnums[i]),min=mm-ss, max=mm+3*ss, sub=(1,3,3))
+    show()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+#detnums = [101, 220,  225, 229]
+detnums = [60,  101, 215, 220,  225, 229]
+#detnums = [60,  101, 129, 137, 163, 168, 175, 193, 199, 212, 214, 215, 220,  223, 225, 226, 229, 239]
+weighted = False
+
+d['verbose']=False
+#angs = np.radians(np.array([0, 90, 0]))
+angs = np.radians(np.array([0.4, 87.2, 0.8]))
+
+#### Very slow convergence so put tol to 1e-2 for fast results, anyway result is crap
+maps_recon_th = do_some_dets(detnums, d, directory, fittedpeakfile, 
+                                          custom=False, nside=nsrec, tol=1e-2, refit=False,
+                                         azmin=azmin, azmax=azmax, remove=med, weighted=weighted)    
+
+#### Faster so 1e-3 is OK
+maps_recon_custom = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+                                              custom=True, nside=nsrec, tol=1e-3, refit=False,
+                                         azmin=azmin, azmax=azmax, remove=med, weighted=weighted)    
+
+#### faster so 1e-3 is OK
+maps_recon_custom_new = do_some_dets(detnums, d, directory, fittedpeakfile, angs=angs,
+                                                  custom=True, nside=nsrec, tol=1e-3, refit=True, 
+                                                  verbose=True, doplot=True,
+                                         azmin=azmin, azmax=azmax, remove=med, 
+                                                  fitted_directory=fitted_directory, weighted=weighted)
+```
+
+```{python}
+rc('figure', figsize=(15,6))
+mm, ss = ft.meancut(maps_recon_custom_new[maps_recon_custom_new != 0], 3)
+nb = 2
+hp.gnomview((maps_recon_th), reso=reso/2, rot=center, cmap = 'viridis', sub=(1,3,1), 
+        title='Th. TES', min=mm-nb*ss, max=mm+nb*ss)
+hp.gnomview((maps_recon_custom), reso=reso/2, rot=center, cmap = 'viridis', sub=(1,3,2), 
+        title='Custom OldFit', min=mm-nb*ss, max=mm+nb*ss)
+hp.gnomview((maps_recon_custom_new), reso=reso/2, rot=center, cmap = 'viridis', sub=(1,3,3), 
+        title='Custom Refit', min=mm-nb*ss, max=mm+nb*ss)
+```
+
+***
+### Invetigating the tol parameter needed for these maps:
+10-3 is sufficient... We will probably need more when we have more detectors.
+
+```{python}
+# reload(sbfit)
+# ### Investigate tol
+# tols = [1e-2, 1e-3, 1e-4]
+# maps = []
+# for t in tols:
+#     maps.append(do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+#                                               custom=True, nside=nsrec, tol=t, refit=False,
+#                                         azmin=azmin, azmax=azmax, remove=med))  
+# sbfit.beeps(4)
+```
+
+```{python}
+# mm, ss = ft.meancut(maps[0][maps[0] != 0], 3)
+# for i in range(len(tols)):
+#     hp.gnomview((maps[i]-maps[2]), reso=reso, rot=center, cmap = 'viridis', sub=(1,len(tols),i+1), 
+#         title='Tol = '.format(tols[i]), min=mm-nb*ss, max=mm+nb*ss)
+
+```
+
+***
+### Investigating nside
+ns=256 is fine
+
+```{python}
+### Investigate nside. Only when many detectors are available we can go to higher nside.
+
+# maps_128 = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+#                                               custom=True, nside=128, tol=1e-3, refit=False,
+#                                         azmin=azmin, azmax=azmax, remove=med)
+# maps_256 = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+#                                               custom=True, nside=256, tol=1e-3, refit=False,
+#                                         azmin=azmin, azmax=azmax, remove=med)
+# maps_512 = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+#                                               custom=True, nside=512, tol=1e-3, refit=False,
+#                                         azmin=azmin, azmax=azmax, remove=med)
+# hp.gnomview((maps_128), reso=reso/2, rot=center, cmap = 'viridis', sub=(1,3,1), 
+#         title='Nside = 128', min=mm-nb*ss, max=mm+nb*ss)
+# hp.gnomview((maps_256), reso=reso/2, rot=center, cmap = 'viridis', sub=(1,3,2), 
+#         title='Nside = 256', min=mm-nb*ss, max=mm+nb*ss)
+# hp.gnomview((maps_512), reso=reso/2, rot=center, cmap = 'viridis', sub=(1,3,3), 
+#         title='Nside = 512', min=mm-nb*ss, max=mm+nb*ss)
+
+```
+
+***
+### Now what happens if we remove systematically one of the peaks from the reconstruction ?
+It trashes everything...
+
+```{python}
+# d['verbose']=False
+# tol=1e-2
+# angs = np.radians(np.array([0, 90, 0]))
+# # map_recon = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+# #                         custom=True, nside=nsrec, tol=tol, refit=False,
+# #                                        azmin=azmin, azmax=azmax, remove=med)    
+
+# map_recon_remove = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+#                                 custom=True, nside=nsrec, tol=tol, refit=False,
+#                                         azmin=azmin, azmax=azmax, remove=med
+#                                 usepeaks=[0,2,3,4,5,6,7,8])    
+
+# mm, ss = ft.meancut(map_recon[map_recon != 0], 3)
+# nb = 1.5
+# hp.gnomview((map_recon), reso=reso*0.5, rot=center, cmap = 'viridis', sub=(1,2,1),
+#         title='Custom OldFit TES{}'.format(detnums), min=mm-nb*ss, max=mm+nb*ss)
+# nb = 1.5
+# hp.gnomview((map_recon_remove), reso=reso*0.5, rot=center, cmap = 'viridis', sub=(1,2,2),
+#         title='Custom OldFit TES{}'.format(detnums), min=mm-nb*ss, max=mm+nb*ss)
+
+```
+
+***
+### Investigating the rotation we apply in order to nring the measurement in the boresight reference frame
+It appears we need to think a bit more about this rotation as its effect is more complicated than just a shift of the reocnstructed image...
+
+```{python}
+# ############# Trying to play with the rotation applied to put the peaks into the boresight reference frame
+# d['verbose']=False
+# tol=1e-2
+# angs = np.radians(np.array([0, 90, 0]))
+# maps_recon_custom_0 = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+#                                                custom=True, nside=nsrec, tol=tol, refit=False,
+#                                          azmin=azmin, azmax=azmax, remove=med)    
+
+
+# angs = np.radians(np.array([-5, 90, 0]))
+# maps_recon_custom_1 = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+#                                               custom=True, nside=nsrec, tol=tol, refit=False,
+#                                          azmin=azmin, azmax=azmax, remove=med)    
+
+# mm, ss = ft.meancut(maps_recon_custom_0[maps_recon_custom_0 != 0], 3)
+# nb = 1.5
+# hp.gnomview((maps_recon_custom_0), reso=reso*0.5, rot=center, cmap = 'viridis', sub=(1,3,1),
+#         title='Custom OldFit TES{}'.format(detnums), min=mm-nb*ss, max=mm+nb*ss)
+
+# nb = 1.5
+# hp.gnomview((maps_recon_custom_1), reso=reso*0.5, rot=center, cmap = 'viridis', sub=(1,3,2),
+#         title='Custom OldFit TES{} Shift Rot'.format(detnums), min=mm-nb*ss, max=mm+nb*ss)
+
+# hp.gnomview((maps_recon_custom_1-maps_recon_custom_0), reso=reso*0.5, rot=center, cmap = 'viridis', sub=(1,3,3),
+#         title='2-1'.format(detnums), min=mm-nb*ss, max=mm+nb*ss)
+
+```
+
+So it may be worth trying to explore these three number and try to see if there is an optimal combinationm. The metric could be the RMS of the map (as a naive start) ???
+
+```{python}
+# detnums = [60,  101, 215, 220,  225, 229]
+# nn = 31
+# amp = 5.
+# tol=1e-2
+# angbase = np.radians(np.array([0.25,88.75,-1.25]))
+# #angbase = np.radians(np.array([0.,90.,0.]))
+# dphi0 = np.linspace(-amp,amp,nn)
+# dtheta = np.linspace(-amp,amp,nn)
+# dphi1 = np.linspace(-amp,amp,nn)
+# maps_phi0 = np.zeros((nn,12*nsrec**2))
+# maps_theta = np.zeros((nn,12*nsrec**2))
+# maps_phi1 = np.zeros((nn,12*nsrec**2))
+# for i in range(nn):
+#     print('\n\n\n\n\n')
+#     angs = angbase + np.radians(np.array([dphi0[i], 0, 0]))
+#     print(angs)
+#     maps_phi0[i,:] = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+#                                               custom=True, nside=nsrec, tol=tol, refit=True,
+#                                          azmin=azmin, azmax=azmax, remove=med, 
+#                                                   fitted_directory=fitted_directory)    
+#     angs = angbase + np.radians(np.array([0, dtheta[i], 0]))
+#     print(angs)
+#     maps_theta[i,:] = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+#                                               custom=True, nside=nsrec, tol=tol, refit=True,
+#                                          azmin=azmin, azmax=azmax, remove=med, 
+#                                                   fitted_directory=fitted_directory)    
+#     angs = angbase + np.radians(np.array([0, 0, dphi1[i]]))
+#     print(angs)
+#     maps_phi1[i,:] = do_some_dets(detnums, d, directory, fittedpeakfile, angs = angs,
+#                                               custom=True, nside=nsrec, tol=tol, refit=True,
+#                                          azmin=azmin, azmax=azmax, remove=med, 
+#                                                   fitted_directory=fitted_directory)    
+
+```
+
+```{python}
+# ### Make a first mask to get the central part
+# centerpix = hp.ang2pix(nsrec, center[0], center[1], lonlat=True)
+# vec_center = hp.pix2vec(nsrec,centerpix)
+# allvec = hp.pix2vec(nsrec,arange(12*nsrec**2))
+# acosang = np.degrees(np.arccos(np.dot(vec_center,allvec)))
+# angdist=11
+# mask = (acosang < angdist)
+# #hp.gnomview(maps_phi0[nn/2,:]*mask,reso=reso, rot=center, cmap = 'viridis',sub=(1,2,1),title='Mask < {} deg'.format(angdist))
+
+# ### Now find the max of each image and mask around it
+# new_maps_phi0 = np.zeros_like(maps_phi0)
+# new_maps_theta = np.zeros_like(maps_theta)
+# new_maps_phi1 = np.zeros_like(maps_phi1)
+# rms_phi0 = np.zeros(nn)
+# rms_theta = np.zeros(nn)
+# rms_phi1 = np.zeros(nn)
+# for i in range(nn):
+#     ### Phi0
+#     themap = maps_phi0[i,:].copy()
+#     themap[~mask] = 0
+#     cosang = np.degrees(np.arccos(np.dot(hp.pix2vec(nsrec, np.argmax(themap)), allvec)))
+#     newmask = (cosang < angdist) & (cosang > 2) 
+#     new_maps_phi0[i,newmask] = maps_phi0[i,newmask]
+#     rms_phi0[i] = np.std(maps_phi0[i,newmask])
+#     ### theta
+#     themap = maps_theta[i,:].copy()
+#     themap[~mask] = 0
+#     cosang = np.degrees(np.arccos(np.dot(hp.pix2vec(nsrec, np.argmax(themap)), allvec)))
+#     newmask = (cosang < angdist) & (cosang > 2) 
+#     new_maps_theta[i,newmask] = maps_theta[i,newmask]
+#     rms_theta[i] = np.std(maps_theta[i,newmask])
+#     ### Phi1
+#     themap = maps_phi1[i,:].copy()
+#     themap[~mask] = 0
+#     cosang = np.degrees(np.arccos(np.dot(hp.pix2vec(nsrec, np.argmax(themap)), allvec)))
+#     newmask = (cosang < angdist) & (cosang > 2) 
+#     new_maps_phi1[i,newmask] = maps_phi1[i,newmask]
+#     rms_phi1[i] = np.std(maps_phi1[i,newmask])
+
+
+
+
+```
+
+```{python}
+# hp.gnomview(new_maps_phi0[nn/2,:]*mask,reso=reso, rot=center, cmap = 'viridis',sub=(1,2,1),title='Mask < {} deg'.format(angdist))
+
+# deg = 4
+# w=np.ones(nn)
+# #w[nn/2] = 1000
+# subplot(1,2,2)
+# p=plot(dphi0,rms_phi0, 'ro', label='Phi0')
+# polphi0 = np.poly1d(np.polyfit(dphi0,rms_phi0,deg, w=w))
+# plot(dphi0, polphi0(dphi0),color=p[0].get_color())
+
+# p=plot(dtheta,rms_theta, 'go', label='theta')
+# poltheta = np.poly1d(np.polyfit(dtheta,rms_theta,deg, w=w))
+# plot(dtheta, poltheta(dtheta),color=p[0].get_color())
+
+# p=plot(dphi1,rms_phi1, 'bo', label='Phi1')
+# polphi1 = np.poly1d(np.polyfit(dphi1,rms_phi1,deg, w=w))
+# plot(dphi1, polphi1(dphi1),color=p[0].get_color())
+# #yscale('log')
+
+# xlabel('Degrees')
+# legend()
+
+
+```
+
+```{python}
+# def animate_images(images, frame_duration, reso=20, rot=None, healpix=False,vmin=None, vmax=None, cb=True, 
+#                    titlevalues=None, thetitle=None):
+#     from matplotlib import animation, rc
+#     from IPython.display import HTML
+#     rc('animation', html='html5')
+#     sh = np.shape(images)
+    
+#     if healpix:
+#         allimg = np.zeros((sh[0], 200,200))
+#         for i in range(sh[0]):
+#             allimg[i,:,:] = hp.gnomview(images[i,:], reso=reso, rot=rot, return_projected_map=True,fig=0)
+#     else:
+#         allimg = images
+    
+#     fig = figure()
+#     im = imshow(allimg[0,:,:], vmin=vmin, vmax=vmax)
+#     if cb:
+#         colorbar()
+
+#     def animate_func(i):
+#         im.set_array(allimg[i % sh[0]])
+#         if thetitle:
+#             if titlevalues is None:
+#                 title(thetitle)
+#             else:
+#                 title(thetitle+'{0:7.2f}'.format(titlevalues[i % sh[0]]))
+#         return [im]
+        
+#     return fig, animation.FuncAnimation(
+#                                fig, 
+#                                animate_func,
+#                                interval = frame_duration, # in ms
+#                                )
+```
+
+```{python}
+# rc('figure', figsize=(6,6))
+# fig, anim = animate_images(new_maps_phi0, 100, reso=15, rot=center, healpix=True, 
+#                            vmin=-0.02, vmax=0.02, thetitle='phi0 = ', titlevalues=dphi0)
+# #title('Phi 0')
+# anim
+```
+
+```{python}
+# rc('figure', figsize=(6,6))
+# fig, anim = animate_images(new_maps_theta, 100, reso=15, rot=center, healpix=True, vmin=-0.02, vmax=0.02, 
+#                            thetitle='theta = ', titlevalues=dtheta+90)
+# anim
+```
+
+```{python}
+# rc('figure', figsize=(6,6))
+# fig, anim = animate_images(new_maps_phi1, 100, reso=15, rot=center, healpix=True, vmin=-0.02, vmax=0.02, 
+#                            thetitle='phi1 = ', titlevalues=dphi1)
+# anim
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+### Can we fit the three parameters using this RMS (or vsariance) as a metric ?
+class mymaskedmap:
+    def __init__(self, detnums, d, directory, fittedpeakfile, globalmask, remove=None, azmin=None, azmax=None,
+                 custom=True, nside=256, tol=1e-3, refit=False, angdist_large=10, angdist_small=1.5,
+                 scaling=1., fitted_directory=None):
+        self.detnums = detnums
+        self.d = d
+        self.directory = directory
+        self.fittedpeakfile = fittedpeakfile
+        self.custom = custom
+        self.nside = nside
+        self.tol = tol
+        self.refit = refit
+        self.angdist_large = angdist_large
+        self.angdist_small = angdist_small
+        self.globalmask = globalmask
+        self.allvec = hp.pix2vec(self.nside,arange(12*self.nside**2))
+        self.scaling = scaling
+        self.remove = remove
+        self.azmin = azmin
+        self.azmax = azmax
+        self.fitted_directory=fitted_directory
+        
+    def __call__(self, x, angs):
+        print('')
+        print('Angle:',np.degrees(angs))
+        maprec = do_some_dets(self.detnums, self.d, self.directory, 
+                              self.fittedpeakfile, angs = angs,
+                              custom=self.custom, nside=self.nside, 
+                              tol=self.tol, refit=self.refit, verbose=False,
+                              azmin=self.azmin, azmax=self.azmax, remove=self.remove, 
+                              fitted_directory=self.fitted_directory)
+        maxpix = np.argmax(maprec*self.globalmask)
+        vecmaxpix = hp.pix2vec(self.nside,maxpix)
+        cosang = np.degrees(np.arccos(np.dot(vecmaxpix, allvec)))
+        newmask = (cosang < self.angdist_large) & (cosang > self.angdist_small)
+        maprec *= newmask
+        maprec *= self.scaling
+        print('In Function: chisquare = ',np.sum(maprec**2))
+        return maprec
+
+ #     cosang = np.degrees(np.arccos(np.dot(hp.pix2vec(nsrec, np.argmax(themap)), allvec)))
+#     newmask = (cosang < angdist) & (cosang > 2) 
+#     new_maps_phi0[i,newmask] = maps_phi0[i,newmask]
+
+```
+
+```{python}
+### Make a first mask to get the central part
+centerpix = hp.ang2pix(nsrec, center[0], center[1], lonlat=True)
+vec_center = hp.pix2vec(nsrec,centerpix)
+allvec = hp.pix2vec(nsrec,arange(12*nsrec**2))
+acosang = np.degrees(np.arccos(np.dot(vec_center,allvec)))
+angdist=10
+mask = (acosang < angdist) & (acosang > 0)
+
+   
+essai = mymaskedmap(detnums, d, directory, fittedpeakfile, mask, tol=1e-2, refit=True,
+                    azmin=azmin, azmax=azmax, remove=med, fitted_directory=fitted_directory)
+guess = np.array([np.radians(0), np.radians(90), np.radians(0)])
+mm=essai(2,guess)
+hp.gnomview(mm, rot=center, reso=20, min=-0.006, max=0.006)
+```
+
+```{python}
+#### Now a 3D exploration
+essai = mymaskedmap(detnums, d, directory, fittedpeakfile, mask, tol=1e-2,
+                    azmin=azmin, azmax=azmax, remove=med, refit=True, fitted_directory=fitted_directory)
+nnth=21
+nnph0=21
+nnph1=21
+thvals = np.linspace(86,94,nnth)
+ph0vals = np.linspace(-4,4,nnph0)
+ph1vals = np.linspace(-4,4,nnph1)
+ch2 = np.zeros((nnph1, nnph0, nnth))
+for i in range(nnth):
+    for j in range(nnph0):
+        for k in range(nnph1):
+            print('')
+            print(i,j,k)
+            guess = np.array([np.radians(ph0vals[j]), np.radians(thvals[i]), np.radians(ph1vals[k])])
+            mm = essai(2,guess)
+            ch2[k,j,i]=np.sum(mm**2)
+
+
+```
+
+```{python}
+def plotminarray(bla,axes,axesnames=None,vmin=None,vmax=None):
+    if vmin is None:
+        vmin = np.min(bla)
+    if vmax is None:
+        vmax = np.max(bla)
+    if axesnames is None:
+        axesnames=['axis0','axis1','axis2']
+    ix,iy,iz = np.unravel_index(np.argmin(bla), np.shape(bla))
+    dx = (axes[0][1]-axes[0][0])
+    dy = (axes[1][1]-axes[1][0])
+    dz = (axes[2][1]-axes[2][0])
+    ndim = len(shape(bla))
+    subplot(2,2,1)
+    imshow(bla[:,:,iz].T, vmin=vmin, vmax = vmax, origin='lower', 
+           extent = [np.min(axes[0])-dx/2, np.max(axes[0])+dx/2, np.min(axes[1])-dy/2, np.max(axes[1])+dy/2])
+    plot(axes[0][ix], axes[1][iy],'r+')
+    title('{0:}={1:5.3f} , {2:}={3:5.3f}'.format(axesnames[0], axes[0][ix], axesnames[1],axes[1][iy]))
+    xlabel(axesnames[0])
+    ylabel(axesnames[1])
+    colorbar()
+    subplot(2,2,3)
+    imshow(bla[:,iy,:].T, vmin=vmin, vmax = vmax, origin='lower', 
+           extent = [np.min(axes[0])-dx/2, np.max(axes[0])+dx/2, np.min(axes[2])-dz/2, np.max(axes[2])+dz/2])
+    plot(axes[0][ix], axes[2][iz],'r+')
+    title('{0:}={1:5.3f} , {2:}={3:5.3f}'.format(axesnames[0], axes[0][ix], axesnames[2],axes[2][iz]))
+    xlabel(axesnames[0])
+    ylabel(axesnames[2])
+    colorbar()
+    subplot(2,2,4)
+    imshow(bla[ix,:,:].T, vmin=vmin, vmax = vmax, origin='lower', 
+           extent = [np.min(axes[1])-dy/2, np.max(axes[1])+dy/2, np.min(axes[2])-dz/2, np.max(axes[2])+dz/2])
+    plot(axes[1][iy], axes[2][iz],'r+')
+    title('{0:}={1:5.3f} , {2:}={3:5.3f}'.format(axesnames[1], axes[1][iy], axesnames[2],axes[2][iz]))
+    xlabel(axesnames[1])
+    ylabel(axesnames[2])
+    colorbar()
+    tight_layout()
+    
+```
+
+```{python}
+rc('figure', figsize=(15,10))
+import scipy.ndimage.filters as scf
+plotminarray(scf.gaussian_filter(ch2,0.00005), 
+             [ph1vals, ph0vals, thvals], axesnames=['ph1','ph0','th'])
+#newch2 = scf.gaussian_filter(ch2,0.5)
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+reload(jcinst)
+reload(ft)
+delta = 10. # degrees
+mapfct = mymaskedmap(detnums, d, directory, fittedpeakfile, mask, tol=1e-2, scaling=1000,
+                    azmin=azmin, azmax=azmax, remove=med, refit=True, fitted_directory=fitted_directory)
+zeromap = np.zeros(12*256**2)
+guess = np.array([np.radians(0), np.radians(90), np.radians(0)])
+rangepars = np.array([[np.radians(-delta), np.radians(delta)], 
+                      [np.radians(90.-delta), np.radians(90.+delta)],
+                      [np.radians(-delta), np.radians(delta)]])
+fit = ft.do_minuit(2., zeromap, zeromap+1,guess, functname=mapfct, chi2=ft.MyChi2_nocov, rangepars=rangepars)
+
+```
+
+```{python}
+print(np.degrees(fit[1]))
+print(np.degrees(fit[2]))
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

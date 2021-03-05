@@ -1,0 +1,371 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+from pylab import *
+import os
+import sys
+import time
+import pickle
+from importlib import reload
+
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+from scipy import interpolate
+
+rc('figure', figsize=(16, 10))
+rc('font', size=15)
+
+```
+
+<!-- #region -->
+# Introduction
+In this notebook, we want to estimate the impact of accounting for the realistic noise in Alto Chorrillos after finding that the code had never been updated and was still using Dome C (Concordia) atmospheric data...
+
+The values Hard-Coded in scene.py are the following (the three parameters are: Tatmosphere, Emissivity, transmission), with summer=False in current simulations:
+
+`
+        if summer:
+            self.atmosphere = Atmosphere(233., 0.05, 1.)
+        else:
+            self.atmosphere = Atmosphere(200., 0.015, 1.)
+`
+
+A study was made by JCH several years from data taken at LLAMA site with a tipper at 210 GHz as well as meteoroligal data, all over a few years. It lead to plots of comparison of the two sites (Comcordia and Chorrillos), some of them being reproduced below:
+
+##### Comparison of opacity at Concordia and Chorillos
+<img src="files/opacity.png">
+
+##### Comparison of Emissivity at Concordia and Chorillos
+Let's recall that emissivity is calculated from opacity with the following expression:
+$$ \epsilon = \exp\left( -\frac{\tau}{\cos\theta}\right)$$
+where $\theta$ is the zenith angle. For QUBIC the elevation is 50 degrees on average, and therefore the zenith angle should be $\theta = 90-50 = 40$ degrees. 
+    
+<img src="files/emissivity.png">
+
+
+##### Temperature at Chorillos
+<img src="files/temperature.png">
+
+
+<!-- #endregion -->
+
+The two plots "Opacity" and "Emissivity" therefore make sense as recalculated below with the formula (if we keep only good moths for Chorillos)
+
+```{python}
+sites = ['Concordia', 'Chorillos']
+nus = np.array([150, 220])
+taumin_150 = [0.025, 0.05]
+taumax_150 = [0.035, 0.08]
+taumin_220 = [0.05, 0.08]
+taumax_220 = [0.07, 0.15]
+
+eav_150 = np.zeros(2)
+eav_220 = np.zeros(2)
+
+elevation = 50.
+theta = np.radians(90-elevation)
+for i in range(len(sites)):
+    print(sites[i])
+    emin_150 = 1. - np.exp(-taumin_150[i]/np.cos(theta))
+    emax_150 = 1. - np.exp(-taumax_150[i]/np.cos(theta))
+    emin_220 = 1. - np.exp(-taumin_220[i]/np.cos(theta))
+    emax_220 = 1. - np.exp(-taumax_220[i]/np.cos(theta))
+    eav_150[i] = 0.5*(emin_150+emax_150)
+    eav_220[i] = 0.5*(emin_220+emax_220)
+    print(' - 150 GHz:')
+    print('     emin = {0:6.3f}     emax = {1:6.3f}    Average: {2:6.3f}'.format(emin_150, emax_150, eav_150[i]))
+    print(' - 220 GHz:')
+    print('     emin = {0:6.3f}     emax = {1:6.3f}    Average: {2:6.3f}'.format(emin_220, emax_220, eav_220[i]))
+
+em_chorillos = np.array([eav_150[1], eav_220[1]])
+```
+
+So we should take the values above for Argentina:
+- Tatm = 270 K and emissivity = 0.081 at 150 GHz and 0.138 at 220 GHz
+
+W.r.t. former incorrect values this is a significant increase in effective atmospheric temperature:
+
+
+```{python}
+Tatm_old = 200.
+em_old = 0.015
+Teff_old = Tatm_old * em_old
+
+Tatm = 270.
+Teff = Tatm * em_chorillos
+
+print('Old (incorrect) effective temperature = {0:5.3f} K'.format(Teff_old))
+print('New effective temperature at 150 GHz = {0:5.3f} K'.format(Teff[0]))
+print('New effective temperature at 220 GHz = {0:5.3f} K'.format(Teff[1]))
+```
+
+So we should have an interpolating function between 150 and 220 GHz:
+
+```{python}
+nn = np.linspace(130, 250, 1000)
+p1 = (em_chorillos[1]-em_chorillos[0])/(nus[1]-nus[0])
+p0 = em_chorillos[0]-p1*nus[0]
+
+f = interpolate.interp1d(nus, em_chorillos, fill_value="extrapolate")
+
+print(p0,p1)
+plot(nus, em_chorillos, 'ro', label = 'from LLAMA Tipper')
+plot(nn,f(nn), label='Interpolation Function')
+xlabel('Frequency')
+ylabel('Emissivity')
+legend()
+```
+
+<!-- #region -->
+#### So we should expect a significant effect...
+
+
+# Simulation with QUBIC software
+<!-- #endregion -->
+
+```{python}
+from pylab import *
+import os
+import sys
+import time
+import pickle
+from importlib import reload
+
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+from scipy import interpolate
+
+rc('figure', figsize=(16, 10))
+rc('font', size=15)
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm
+import qubic
+from qubic import fibtools as ft
+from qubic import SpectroImLib as si
+from qubic import scene
+```
+
+```{python}
+### Read input dictionary
+reload(si)
+reload(scene)
+reload(qubic)
+
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+dictfilename = global_dir + '/dicts/test_photon_noise.dict'
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+d['npointings'] = 1000
+d['nf_recon'] = 1
+d['nf_sub'] = 1    ### this is OK as we use noise-only simulations
+
+### Input map set to zeros
+x0 = np.zeros((d['nf_sub'],d['nside']**2*12,3))
+### Random pointing
+p = qubic.get_pointing(d)
+
+print(d['synthbeam_kmax'])
+print(d['synthbeam_fraction'])
+```
+
+```{python}
+configs = ['old', 'newav', 'newmin', 'newmax']
+freqs = [150., 220.]
+
+all_rms_det = []
+all_rms_both = []
+all_rms_phot = []
+
+for cc in configs:
+    print()
+    print('Configuration: '+cc)
+    if cc=='old':
+        d['TemperatureAtmosphere150'] = 200.
+        d['TemperatureAtmosphere220'] = 200.
+        d['EmissivityAtmosphere150'] = 0.015
+        d['EmissivityAtmosphere220'] = 0.015
+    elif cc=='newav':
+        d['TemperatureAtmosphere150'] = 270.
+        d['TemperatureAtmosphere220'] = 270.
+        d['EmissivityAtmosphere150'] = 0.081 #emin =  0.063     emax =  0.099    Average:  0.081
+        d['EmissivityAtmosphere220'] = 0.138 #emin =  0.099     emax =  0.178    Average:  0.138
+    elif cc=='newmin':
+        d['TemperatureAtmosphere150'] = 260.
+        d['TemperatureAtmosphere220'] = 260.
+        d['EmissivityAtmosphere150'] = 0.063 #emin =  0.063     emax =  0.099    Average:  0.081
+        d['EmissivityAtmosphere220'] = 0.099 #emin =  0.099     emax =  0.178    Average:  0.138
+    elif cc=='newmax':
+        d['TemperatureAtmosphere150'] = 280.
+        d['TemperatureAtmosphere220'] = 280.
+        d['EmissivityAtmosphere150'] = 0.099 #emin =  0.063     emax =  0.099    Average:  0.081
+        d['EmissivityAtmosphere220'] = 0.178 #emin =  0.099     emax =  0.178    Average:  0.138
+
+    my_rms_det = np.zeros((2, 992))
+    my_rms_phot = np.zeros((2, 992))
+    my_rms_both = np.zeros((2, 992))
+    for i in range(len(freqs)):
+        f = freqs[i]
+        print('   Frequency = {}'.format(f))
+        d['filter_nu'] = f*1e9
+        ### No Photon Noise
+        d['photon_noise'] = False
+        TOD, maps_convolved = si.create_TOD(d, p, x0)
+        my_rms_det[i,:] = np.std(TOD, axis=1)
+        ### With Photon noise
+        d['photon_noise'] = True
+        TOD, maps_convolved = si.create_TOD(d, p, x0)
+        my_rms_both[i,:] = np.std(TOD, axis=1)
+        ### Calculate photon noise only
+        my_rms_phot[i,:] = np.sqrt(my_rms_both[i,:]**2 - my_rms_det[i,:]**2)  
+    
+    print()
+    print('------------------------------------------------------------------------------------------')
+    print('Configuration: '+cc)
+    for i in range(len(freqs)):
+        print('   Frequency = {}'.format(freqs[i]))
+        print('     RMS Det = {0:5.3g}     RMS Phot = {1:5.3g}    RMS All = {2:5.3g}'.format(np.nanmean(my_rms_det[i,:]), 
+                                                                           np.nanmean(my_rms_phot[i,:]), 
+                                                                           np.nanmean(my_rms_both[i,:])))
+    print('------------------------------------------------------------------------------------------')
+    print()
+    
+    all_rms_det.append(my_rms_det)
+    all_rms_both.append(my_rms_both)
+    all_rms_phot.append(my_rms_phot)
+        
+
+    
+
+```
+
+```{python}
+s = qubic.QubicScene(d)
+```
+
+```{python}
+print('In W/sqrt(Hz)')
+for ic in range(1,len(configs)):
+    cc = configs[ic]
+    print()
+    print('Configuration: '+cc)
+
+    for i in range(len(freqs)):
+        f = freqs[i]
+        fact = 4.7e-17 / np.mean(all_rms_det[ic][i,:])
+        print('   Frequency = {}'.format(f))
+        ndet = fact*np.nanmean(all_rms_det[ic][i,:])
+        nphot = fact*np.nanmean(all_rms_phot[ic][i,:])
+        nall = fact*np.nanmean(all_rms_both[ic][i,:])
+        print('   RMS Det = {0:5.3g}     RMS Phot = {1:5.3g}    RMS All = {2:5.3g}'.format(ndet, nphot, nall))
+
+
+```
+
+```{python}
+refconf = 1
+print('Relative to mean')
+for ic in range(1,len(configs)):
+    cc = configs[ic]
+    print()
+    print('Configuration: '+cc)
+
+    for i in range(len(freqs)):
+        f = freqs[i]
+        fact = 4.7e-17 / np.mean(all_rms_det[ic][i,:])
+        print('   Frequency = {}'.format(f))
+        ndet = fact*np.nanmean(all_rms_det[ic][i,:])
+        nphot = fact*np.nanmean(all_rms_phot[ic][i,:])
+        nall = fact*np.nanmean(all_rms_both[ic][i,:])
+        
+        ndetref = fact*np.nanmean(all_rms_det[refconf][i,:])
+        nphotref = fact*np.nanmean(all_rms_phot[refconf][i,:])
+        nallref = fact*np.nanmean(all_rms_both[refconf][i,:])
+        
+        relndet = 100*(ndet-ndetref)/ndetref
+        relnphot = 100*(nphot-nphotref)/nphotref
+        relnall = 100*(nall-nallref)/nallref
+        
+        print('   RMS Det = {0:5.3g}%     RMS Phot = {1:5.3g}%   RMS All = {2:5.3g}%'.format(relndet, relnphot, relnall))
+
+
+```
+
+```{python}
+### TD
+detnoiseTD = 2.05e-16
+photnoiseTDav = 2.6e-17
+photnoiseTDmin = 2.6e-17*(1-0.15)
+photnoiseTDmax = 2.6e-17*(1+0.15)
+totnoiseTDav = np.sqrt(detnoiseTD**2+photnoiseTDav**2)
+totnoiseTDmin = np.sqrt(detnoiseTD**2+photnoiseTDmin**2)
+totnoiseTDmax = np.sqrt(detnoiseTD**2+photnoiseTDmax**2)
+
+print('TD AV: det={0:5.3g} Phot={1:5.3g} Tot={2:5.3g}'.format(detnoiseTD, photnoiseTDav, totnoiseTDav))
+print('TD MIN: det={0:5.3g} Phot={1:5.3g} Tot={2:5.3g}'.format(detnoiseTD, photnoiseTDmin, totnoiseTDmin))
+print('TD MAX: det={0:5.3g} Phot={1:5.3g} Tot={2:5.3g}'.format(detnoiseTD, photnoiseTDmax, totnoiseTDmax))
+print()
+
+print('TD AV: det={0:5.3g}% Phot={1:5.3g}% Tot={2:5.3g}%'.format(0, 0, 0))
+print('TD MIN: det={0:5.3g}% Phot={1:5.3g}% Tot={2:5.3g}%'.format(0, 100*(photnoiseTDmin-photnoiseTDav)/photnoiseTDav, 100*(totnoiseTDmin-totnoiseTDav)/totnoiseTDav))
+print('TD MAX: det={0:5.3g}% Phot={1:5.3g}% Tot={2:5.3g}%'.format(0, 100*(photnoiseTDmax-photnoiseTDav)/photnoiseTDav, 100*(totnoiseTDmax-totnoiseTDav)/totnoiseTDav))
+
+
+```
+
+```{python}
+rc('figure', figsize=(16, 8))
+rc('font', size=15)
+
+ratio_both = np.zeros((2, 992))
+ratio_det = np.zeros((2, 992))
+ratio_phot = np.zeros((2, 992))
+for i in range(len(freqs)):
+    f = freqs[i]
+    print('   Frequency = {}'.format(f))
+    ratio_det[i,:] = all_rms_det[1][i,:] / all_rms_det[0][i,:]
+    ratio_phot[i,:] = all_rms_phot[1][i,:] / all_rms_phot[0][i,:]
+    ratio_both[i,:] = all_rms_both[1][i,:] / all_rms_both[0][i,:]
+
+    subplot(1,2,i+1)
+    title('Frequency = {} GHz'.format(nus[i]))
+    a=hist(ratio_det[i,:], bins=50, range=[0.,3], alpha=0.3, label = 'Det noise '+ft.statstr(ratio_det[i,:]))
+    a=hist(ratio_phot[i,:], bins=50, range=[0.,3], alpha=0.3, label = 'Photon noise '+ft.statstr(ratio_phot[i,:]))
+    a=hist(ratio_both[i,:], bins=50, range=[0.,3], alpha=0.3, label = 'Total noise '+ft.statstr(ratio_both[i,:]))
+    xlabel('Ratio New / Old')
+    legend()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

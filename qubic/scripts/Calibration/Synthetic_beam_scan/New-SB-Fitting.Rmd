@@ -1,0 +1,160 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.0
+  kernelspec:
+    display_name: Python [default]
+    language: python
+    name: python2
+---
+
+```{python}
+# ##### %matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(16,6))
+rc('font',size=12)
+rc('text',usetex=False)
+rc('image', cmap='viridis')
+
+from qubicpack import qubicpack as qp
+import fibtools as ft
+import plotters as p
+import lin_lib as ll
+import demodulation_lib as dl
+import qubic.io
+import sb_fitting as sbfit
+
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import os
+import healpy as hp
+import pandas as pd
+
+```
+
+```{python}
+dirfreq = '150GHz-2019-04-06/'
+dirallfreqs = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/'
+dirfiles = dirallfreqs+dirfreq
+c50 = np.cos(np.radians(50))
+azmin = -15./c50
+azmax = 15./c50
+
+
+TESNum = 37
+reload(sbfit)
+flatmap, az, el = sbfit.get_flatmap(TESNum, dirfiles, azmin = azmin, azmax=azmax)
+npix = len(np.ravel(flatmap))
+
+subplot(1,2,1)
+imshow(flatmap,
+       extent=[np.min(az)*c50, np.max(az)*c50, np.min(el), np.max(el)], aspect='equal',
+      vmin=-3000, vmax=3000)
+colorbar()
+
+```
+
+```{python}
+alldata_renorm = np.zeros((256, npix))
+for i in range(256):
+    flatmap, az, el = sbfit.get_flatmap(i+1, dirfiles, azmin=azmin, azmax=azmax)
+    mm,ss = ft.meancut(flatmap,3)
+    alldata_renorm[i,:] = np.ravel((flatmap-mm)/ss)  
+```
+
+```{python}
+##### Estimating the median of all SB images - to be removed - Origin still unexplained...
+med = np.reshape(np.median(alldata_renorm,axis=0),np.shape(flatmap))
+mm=np.mean(med)
+ss = np.std(med)
+
+imshow(np.reshape(med, np.shape(flatmap)),
+       extent=[np.min(az)*c50, np.max(az)*c50, np.min(el), np.max(el)], aspect='equal')
+colorbar()
+title('Median over all S.B. images')
+```
+
+```{python}
+reload(sbfit)
+TESNum = 16
+flatmap, az, el = sbfit.get_flatmap(TESNum, dirfiles, remove=med, azmin=azmin, azmax=azmax)
+#### Instantiate a model
+sbfitmodel3 = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, no_xy_shift=False,distortion=False)
+figure()
+fit, xypeaks = sbfit.fit_sb(flatmap, az, el, sbfitmodel3, verbose=False, 
+                            doplot=True, extra_title='TES #{}'.format(TESNum))
+#savefig('Fit-TES#{}.png'.format(TESNum))
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+reload(sbfit)
+#### Instantiate a model
+sbfitmodel0 = sbfit.SimpleSbModel(nrings=2)
+fit0, xypeaks0 = sbfit.fit_sb(flatmap, az, el, sbfitmodel0, verbose=True, doplot=True)
+```
+
+```{python}
+reload(sbfit)
+#### Instantiate a model
+sbfitmodel1 = sbfit.SbModelIndepPeaksAmpFWHM(nrings=2, common_fwhm=True)
+
+fit1, xypeaks1 = sbfit.fit_sb(flatmap, az, el, sbfitmodel1, verbose=True, doplot=True)
+```
+
+```{python}
+reload(sbfit)
+#### Instantiate a model
+sbfitmodel2 = sbfit.SbModelIndepPeaksAmpFWHM(nrings=2, common_fwhm=False)
+figure()
+fit, xypeaks = sbfit.fit_sb(flatmap, az, el, sbfitmodel2, verbose=True, doplot=True,newsize=70)
+```
+
+```{python}
+reload(sbfit)
+#### Instantiate a model
+sbfitmodel3 = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, no_xy_shift=False,distortion=False)
+figure()
+fit, xypeaks = sbfit.fit_sb(flatmap, az, el, sbfitmodel3, verbose=True, doplot=True)
+```
+
+```{python}
+reload(sbfit)
+#### Instantiate a model
+sbfitmodel3 = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=False, no_xy_shift=False,distortion=False)
+figure()
+fit, xypeaks = sbfit.fit_sb(flatmap, az, el, sbfitmodel3, verbose=True, doplot=True)
+```
+
+```{python}
+
+```

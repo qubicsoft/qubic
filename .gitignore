@@ -1,10 +1,15 @@
-*pyc
+.DS_Store
+.ipynb_checkpoints
+*.ipynb
+*.pyc
+.idea/
 .coverage
 .f2py_f2cmap
 MANIFEST
 build
 dist
 htmlcov
+__init__.py
 qubic/__init__.py
 qubic/_flib.so
 src/polarization.f90

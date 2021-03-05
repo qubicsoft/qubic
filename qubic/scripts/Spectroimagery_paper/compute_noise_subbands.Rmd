@@ -1,0 +1,284 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+from __future__ import division, print_function
+
+# %matplotlib inline
+import matplotlib
+matplotlib.use('nbagg')
+
+import glob
+import os
+import healpy as hp
+import numpy as np
+
+from scipy import interpolate
+
+from qubic import ReadMC as rmc
+from qubic import AnalysisMC as amc
+
+import qubic
+from qubic import equ2gal
+
+from qubicpack.utilities import Qubic_DataDir
+
+```
+
+***
+# Get the simulation files
+
+```{python}
+simu3000 = ['24817644/20190926_low_nep', # 1e-18
+               '24817840/20190926_low_nep', #2.5e-18
+               '24817884/20190926_low_nep', # 5e-18
+               '24817902/20190926_low_nep', # 7.5e-18
+               '24858757/20190927_low_nep', # 7.5e-17
+               '24870671/20190928_low_nep', # 5e-17
+               '24870759/20190928_low_nep', # 2.5e-17
+               '24870780/20190928_low_nep'] # 1e-17
+
+simu9000 = ['24870861/20190929_low_nep', # 7.5e-17
+                   '24870921/20190929_low_nep', # 5e-17
+                   '24870964/20190929_low_nep', # 2.5e-17
+                   '24870972/20190929_low_nep', # 1e-17
+                   '24818388/20190926_low_nep', # 1e-18
+                   '24818399/20190926_low_nep', # 2.5e-18
+                   '24818404/20190926_low_nep', # 5e-18
+                   '24818411/20190926_low_nep'] # 7.5e-18
+
+simu128 = ['24445883/20190909_low_nep',
+                  '24445922/20190909_low_nep',
+                  '24445999/20190909_low_nep',
+                  '24446008/20190909_low_nep']
+
+simu220 = ['25591014/20191106_low_nep'] # 1e-18
+```
+
+```{python}
+# Simulation date and name
+date_name = simu3000[0]
+# date_name = 'NERSC_runs/24334789/20190903_low_nep'
+
+# Get the repository where the simulation is
+rep_simu = Qubic_DataDir(datafile=date_name + '.dict') + '/'
+print('rep_simu : ', rep_simu)
+
+# Dictionary saved during the simulation
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(rep_simu + date_name + '.dict')
+
+print('NEP =', d['detector_nep'])
+print('npointings =', d['npointings'])
+```
+
+## Get full maps or patchs
+
+```{python}
+irec = 2
+
+files, maps_recon, maps_conv, maps_diff = \
+rmc.get_maps_many_files(rep_simu + date_name, '*nfrecon{}*False*'.format(irec))
+
+nreals=len(files)
+
+print(maps_recon.shape)
+```
+
+```{python}
+_, maps_recon_patch, maps_conv_patch, maps_diff_patch = \
+rmc.get_patch_many_files(rep_simu + date_name, '*nfrecon{}*False*'.format(irec))
+
+npix_patch = maps_recon_patch.shape[2]
+print('npix_patch = ', npix_patch)
+```
+
+```{python}
+# Coordinates of the zone observed in the sky
+center = equ2gal(d['RA_center'], d['DEC_center'])
+
+seenmap = rmc.get_seenmap(files[0])
+
+# Angle for each pixel in the patch
+ang = rmc.pix2ang(d['nside'], center, seenmap)
+ang
+```
+
+# Compute all sigma
+
+```{python}
+# Make a loop over irec and fill dictionnaries
+dict_sig2MC = {}
+dict_sig2 = {}
+ang_th = 5
+
+for irec in d['nf_recon']:
+    print('irec =', irec)   
+    _, recon_patch, _, _ = rmc.get_patch_many_files(rep_simu + date_name, '*nfrecon{}*False*'.format(irec))
+    
+    if irec == 1:
+        # Remove the single dimension  
+        recon_patch = np.squeeze(recon_patch)
+        print(recon_patch.shape)
+
+        sig2MC_monofreq = np.var(recon_patch, axis=0) # Variance over realizations
+        sig2MCmean_monofreq = amc.average_pix_sig2(sig2MC_monofreq, ang, ang_threshold=ang_th)
+        dict_sig2MC.update({'{}'.format(irec): sig2MC_monofreq})
+        dict_sig2MC.update({'{}mean'.format(irec): sig2MCmean_monofreq})
+        
+        print('\n')
+       
+    else:
+        if irec == 4:
+            doplot = True
+        else :
+            doplot = False
+        Cp = amc.get_Cp(recon_patch, nfrecon=d['nf_recon'], verbose=False, doplot=doplot)
+        Cp_prime = amc.Cp2Cp_prime_viaCorr(Cp, verbose=True)
+#         Cp_prime = amc.Cp2Cp_prime(Cp, verbose=True)
+        
+        # Compute sig2 and sig2MC 
+        # Using Cp or Cp_prime
+        weighted_av, sig2 = amc.make_weighted_av(recon_patch, Cp_prime, verbose=False)
+        
+        sig2mean = amc.average_pix_sig2(sig2, ang, ang_threshold=ang_th)
+        dict_sig2.update({'{}'.format(irec): sig2})
+        dict_sig2.update({'{}mean'.format(irec): sig2mean})
+        
+        sig2MC = np.var(weighted_av, axis=0)
+        sig2MCmean = amc.average_pix_sig2(sig2MC, ang, ang_threshold=ang_th)
+        dict_sig2MC.update({'{}'.format(irec): sig2MC})
+        dict_sig2MC.update({'{}mean'.format(irec): sig2MCmean})
+        
+        print('\n')
+
+```
+
+```{python}
+plt.plot(dict_sig2['2'][:, 0], '.')
+np.min(dict_sig2['8'][:, 0])
+dict_sig2MC
+```
+
+***
+# Plots
+
+```{python}
+Stokes = ['I', 'Q', 'U']
+nbins = 6
+
+def make_fit(x, y, nbins):
+    bin_edges = np.linspace(0, np.max(x), nbins + 1)
+    bin_centers = 0.5 * (bin_edges[0:nbins] + bin_edges[1:])
+
+    mean_bin = np.zeros(nbins)
+    for b in range(nbins):
+        ok = (x > bin_edges[b]) & (x < bin_edges[b + 1])
+        mean_bin[b] = np.mean(y[ok], axis=0)
+    fit = interpolate.interp1d(bin_centers, mean_bin, axis=0, kind='linear', fill_value='extrapolate')
+    return bin_centers, mean_bin, fit
+
+def plot_sigma2profile(ang, dict_sig2, dict_sig2MC, nbins, nf_recon):
+    plt.figure(figsize=(12, 7))
+    for nband in nf_recon:
+        for s in range(3):
+
+            # Interpolation to get a profile
+            bin_centers, mean_bin, fit = make_fit(ang, dict_sig2['{}'.format(nband)][:, s], nbins)
+            bin_centersMC, mean_binMC, fitMC = make_fit(ang, dict_sig2MC['{}'.format(nband)][:, s], nbins)
+            
+            plt.subplot(1, 3, s+1)
+            plt.subplots_adjust(wspace=0.5)
+
+            p = plt.plot(bin_centers, mean_bin, 'o', label='sig2 nband ={}'.format(nband))
+            plt.plot(ang, fit(ang), '--', color=p[0].get_color())
+            
+            pMC = plt.plot(bin_centersMC, mean_binMC, 's', color=p[0].get_color(), 
+                           label='sig2MC nband ={}'.format(nband))
+            plt.plot(ang, fitMC(ang), '--', color=p[0].get_color())
+            
+            plt.title(Stokes[s], fontsize=20)
+            plt.xlabel('angle (°)', fontsize=15)
+            plt.ylabel('sig2', fontsize=15)
+            plt.ylim(0, 0.0005)
+            plt.xlim(0, 18)
+            plt.legend()
+    return p, pMC
+
+def plot_sigma2profile_frac(ang, dict_sig2, dict_sig2MC, nbins, nf_recon):
+    plt.figure(figsize=(12, 7))
+    for nband in nf_recon:
+        for s in range(3):
+
+            # Interpolation to get a profile
+            frac = dict_sig2['{}'.format(nband)][:, s] / dict_sig2MC['{}'.format(nband)][:, s]
+            bin_centers, mean_bin, fit = make_fit(ang,frac, nbins)
+            
+            plt.subplot(1, 3, s+1)
+            plt.subplots_adjust(wspace=0.5)
+            
+            p = plt.plot(bin_centers, mean_bin, 'o', label='nband ={}'.format(nband))
+            plt.plot(ang, fit(ang), '--', color=p[0].get_color())
+            
+            plt.title(Stokes[s], fontsize=20)
+            plt.xlabel('angle (°)', fontsize=15)
+            plt.ylabel('$\sigma^2 / \sigma^2_{MC}$', fontsize=15)
+#             plt.ylim(0, 0.0005)
+#             plt.xlim(0, 18)
+            plt.legend()
+    return p
+
+```
+
+```{python}
+p, pMC = plot_sigma2profile(ang, dict_sig2, dict_sig2MC, nbins=6, nf_recon=d['nf_recon'][1:])
+```
+
+```{python}
+p = plot_sigma2profile_frac(ang, dict_sig2, dict_sig2MC, nbins=7, nf_recon=d['nf_recon'][1:])
+```
+
+```{python}
+def plot_sig_mean(dict_sig2, dict_sig2MC, nf_recon):
+    plt.figure(figsize=(12, 7))
+    for s in range(3):
+        for irec in nf_recon: 
+
+            plt.subplot(1, 3, s+1)
+            plt.subplots_adjust(wspace=0.5)
+            
+            if irec == 1: 
+                sig_monofreq = dict_sig2MC['{}mean'.format(irec)][s]
+                plt.plot(irec, sig_monofreq, 'b*')
+            else:
+                sig2 = dict_sig2['{}mean'.format(irec)][s]
+                sig2MC = dict_sig2MC['{}mean'.format(irec)][s]
+                plt.plot(irec, sig2/sig2MC, 'ro')
+        
+            plt.title(Stokes[s])
+            plt.xlabel('# of bands', fontsize=20)
+            plt.ylabel(r'$\sigma^2 / \sigma^2_{MC}$', fontsize=20)
+            if irec == 2: 
+                plt.legend(loc='lower right')
+            
+    return 
+```
+
+```{python}
+plot_sig_mean(dict_sig2, dict_sig2MC, d['nf_recon'][1:])
+```
+
+```{python}
+
+```

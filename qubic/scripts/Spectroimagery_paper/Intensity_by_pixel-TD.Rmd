@@ -1,0 +1,983 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.6.0rc0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Spectroimaging pixel by pixel
+
+Edited by Louise, 18/06/2020
+
+Edited by Martin, 21/06/2020 (implement FastSimulator)
+
+In this notebook, I try to reproduce what Gabriele has done. Spectroimaging on the galaxy center, compare the reconstruction to the input sky pixel by pixel
+
+```{python}
+# %matplotlib inline
+
+import os
+import sys
+import glob
+from importlib import reload
+import gc
+# Specific science modules
+import healpy as hp
+import matplotlib.pyplot as plt
+import numpy as np
+import pickle 
+import astropy.io as fits
+
+# Specific qubic modules
+import qubic
+from qubicpack.utilities import Qubic_DataDir
+from qubic import QubicSkySim as qss
+from qubic.polyacquisition import compute_freq
+from qubic import ReadMC as rmc
+from qubic import create_acquisition_operator_REC
+import ForegroundsSED as fsed
+import qubic.AnalysisMC as amc
+
+from scipy.optimize import curve_fit
+import scipy.constants
+from qubic import mcmc
+import qubic.AnalysisMC as amc
+
+plt.rc('text',usetex=False)
+plt.rc('font', size=16)
+
+from mpl_toolkits.mplot3d import Axes3D
+```
+
+Implementing FastSimulator
+
+```{python}
+# Dictionary saved during the simulation
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+#dictfilename = global_dir + '/doc/FastSimulator/FastSimDemo_{}.dict'.format(config)
+dictfilename = global_dir + '/dicts/spectroimaging_article.dict'
+dFI = qubic.qubicdict.qubicDict()
+dFI.read_from_file(dictfilename)
+dFI['nf_recon'] = 5
+dFI['nf_sub'] = 5
+dFI['photon_noise'] = True
+dFI['effective_duration'] = 1
+dTD = dFI.copy()
+dTD['config'] = 'TD'
+#dTD['detector_nep']=2.05e-16
+dTD['npointings'] = 10000
+# Coordinates of the zone observed in the sky
+center = np.array([0,0]) #galaxy center
+dTD['RA_center'],dTD['DEC_center'] = qubic.gal2equ(center[0],center[1])
+dFI['RA_center'],dFI['DEC_center'] = dTD['RA_center'],dTD['DEC_center'] 
+
+regions = ["GalCen_Field"]
+bands = ["150"]
+center = [center]
+dictionaries = [dTD]
+```
+
+```{python}
+# OLD (16 Feb 2021)
+def make_covTD(d):
+    pointing = qubic.get_pointing(d)
+    q= qubic.QubicMultibandInstrument(d)
+    s= qubic.QubicScene(d)
+    nf_sub_rec = d['nf_recon']
+    _, nus_edge, nus, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, 
+                                                   nf_sub_rec, d['filter_relative_bandwidth'])
+    arec = qubic.QubicMultibandAcquisition(q, pointing, s, d, nus_edge)
+    cov = arec.get_coverage()
+    return cov
+
+# OLD (16 Feb 2021)
+makeCovTD = False
+
+if makeCovTD:
+    covTD = make_covTD(dTD)
+    coverageTD = np.sum(covTD, axis=0)# Sum the bands
+    coverageTD /= np.max(coverageTD)# Normalize by the max
+else:
+    fileTD=pickle.load(open(global_dir+'/doc/FastSimulator/Data/DataFastSimulator_TD150_coverage.pkl', 'rb') )
+    coverageTD=fileTD['coverage']
+    coverageTD /= np.max(coverageTD)# Normalize by the max
+
+cov=np.zeros_like(coverageTD,dtype=bool)
+covmsk=coverageTD > 0.1*np.max(coverageTD)
+coverageTD[~covmsk] = 0
+
+#just used to compare, after is defined coverageFI. Depends if cengal is T or F
+coverageFI = np.load(global_dir+'/doc/FastSimulator/Data/coverage_nfsub15_nptgs10000_qubicpatch.pk')
+coverageFI /= np.max(coverageFI)
+#cov=np.zeros_like(coverageFI,dtype=bool)
+#covmskFI=covFI > 0.1*np.max(covFI)
+#covFI[~covmskFI] = 0
+```
+
+```{python}
+# NEW (19 Feb 2021)
+reload(fsed)
+covnameTD = [global_dir+'/doc/FastSimulator/Data/DataFastSimulator_TD150G_coverage.fits',]
+coveragesTD = fsed.coverage(dictionaries, regions, bands, filename = covnameTD)
+covnameFI = [global_dir+'/doc/FastSimulator/Data/DataFastSimulator_FI150G_coverage.fits',]
+coveragesFI = fsed.coverage(dictionaries, regions, bands, filename = covnameFI)
+```
+
+```{python}
+##### OLD
+lacarte=hp.gnomview(coverageTD,rot=center,reso=13,return_projected_map=True, no_plot=True)
+lacarteFI=hp.gnomview(covFI,rot=qubic.equ2gal(0,-57),
+                      reso=13,return_projected_map=True, no_plot=True)
+X,Y=np.meshgrid(range(200), range(200))
+
+fig = plt.figure(figsize=(18,6))
+ax = fig.add_subplot(1, 3, 1, projection='3d')
+ax.set_title('coverage TD ({})'.format(dTD['npointings']), fontsize=16)
+ax.plot_surface(X,Y, lacarte, cmap=plt.cm.viridis, linewidth=0.2)
+
+ax = fig.add_subplot(1, 3, 2, projection='3d')
+ax.set_title('coverage FI (10000)', fontsize=16)
+ax.plot_surface(X,Y, lacarteFI, cmap=plt.cm.viridis, linewidth=0.2)
+
+ax = fig.add_subplot(1, 3, 3, projection='3d')
+ax.set_title('Diff = covTD-covFI', fontsize=16)
+ax.plot_surface(X,Y, lacarte-lacarteFI, cmap=plt.cm.viridis, linewidth=0.2)
+#plt.savefig('coverage_TD1e4-FI1e4_cut.pdf',format='pdf')
+```
+
+```{python}
+#NEW
+reload(fsed)
+fsed._plot_covs(regions, bands, coveragesTD, center, config = "TD")
+fsed._plot_covs(regions, bands, coveragesFI, center, config = "FI")
+```
+
+##### QubicSkySim instanciation
+seed = None
+sky_config_220 = {'dust': 'd1'}
+d220=d.copy()
+d220['filter_nu']=220*1e9
+d220['nf_recon']=5
+Qubic_sky_220 = qss.Qubic_sky(sky_config_220, d220)
+auxmaps220, noiseless220, _, _ = Qubic_sky_220.get_partial_sky_maps_withnoise(spatial_noise=False, 
+                                                                              coverage=coverage)
+
+```{python}
+# OLD (16 Feb 2021)
+
+#Averaging manually the maps into a band
+band = dTD['filter_nu'] / 1e9
+### Input bands
+Nfreq_edges, nus_edge, nus, _, _, _ = qubic.compute_freq(band, 
+                                                         dTD['nf_sub'],
+                                                         dTD['filter_relative_bandwidth'])
+### Output bands
+Nfreq_edges_out, nus_edge_out, nus_out, _, _, _ = qubic.compute_freq(band, 
+                                                                     dTD['nf_recon'],
+                                                                     dTD['filter_relative_bandwidth'])
+
+##### QubicSkySim instanciation
+#seed = 42#None
+sky_config_TD = {'CMB':'c1', 'dust': 'd1'}
+Qubic_sky_TD = qss.Qubic_sky(sky_config_TD, dTD)
+sky_config_FI = {'CMB':'c1', 'dust': 'd1'}
+Qubic_sky_FI = qss.Qubic_sky(sky_config_FI, dFI)
+
+# Now averaging maps into reconstruction sub-bands maps
+print('Averaging input maps from input sub-bands into reconstruction sub-bands:')
+dust_map_TD = np.zeros((dTD['nf_recon'], 12 * dTD['nside'] ** 2, 3))
+dust_map_FI = np.zeros((dTD['nf_recon'], 12 * dTD['nside'] ** 2, 3))
+
+if dTD['nf_sub'] != dTD['nf_recon']:
+    # Generate convolved sky of dust without noise 
+    dust_map_TD_in = Qubic_sky_TD.get_fullsky_convolved_maps(FWHMdeg=None, verbose=False)
+    print('=== Done TD map ====')
+    dust_map_FI_in = Qubic_sky_FI.get_fullsky_convolved_maps(FWHMdeg=None, verbose=False)
+    print('=== Done FI map ====')
+    for i in range(dTD['nf_recon']):
+        print('doing band {} {} {}'.format(i, nus_edge_out[i], nus_edge_out[i + 1]))
+        inband = (nus > nus_edge_out[i]) & (nus < nus_edge_out[i + 1])
+
+        dust_map_TD[i, :, :] = np.mean(dust_map_TD_in[inband, :, :], axis=0)    
+        dust_map_FI[i, :, :] = np.mean(dust_map_FI_in[inband, :, :], axis=0)
+elif dTD['nf_sub'] == dTD['nf_recon']:
+    # Generate convolved sky of dust without noise 
+    dust_map_TD = Qubic_sky_TD.get_fullsky_convolved_maps(FWHMdeg=None, verbose=False)
+    print('=== Done TD map ====')
+    dust_map_FI = Qubic_sky_FI.get_fullsky_convolved_maps(FWHMdeg=None, verbose=False)
+    print('=== Done FI map ====')
+```
+
+```{python}
+# NEW (16 Feb 2021)
+
+reload(fsed)
+sky_conf = {'dust': 'd1'}
+fground_maps = fsed.foreground_signal(dictionaries, sky_conf)
+```
+
+```{python}
+# OLD (16 Feb 2021)
+##### Getting FastSimulator output maps
+nreals = 100
+noiseFI = np.zeros((nreals,dTD['nf_recon'], 12*dTD['nside']**2,3))
+
+for i in range(nreals):
+    noiseFI[i, ...], coverageFI = \
+        Qubic_sky_FI.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=coverageTD, 
+                                                    noise_only = True, Nyears=dFI['effective_duration'])        
+    print('=== Done interation #{} ===='.format(i+1))
+    gc.collect()
+    
+```
+
+```{python}
+# NEW (19 Feb 2021)
+reload(fsed)
+nreals = 100
+noiseTD = fsed.noise_qss(dictionaries, sky_conf, coveragesTD, nreals, verbose = False) 
+noiseFI = fsed.noise_qss([dFI], sky_conf, coveragesFI, nreals, verbose = False) 
+```
+
+```{python}
+# OLD (16 Feb 2021)
+noisymapsTD = np.zeros_like(noiseFI)
+noisymapsFI = np.zeros_like(noiseFI)
+
+for i in range(nreals):
+    noisymapsTD[i, ...] = 31 * noiseFI[i, ...] + dust_map_TD
+    noisymapsFI[i, ...] = noiseFI[i, ...] + dust_map_FI
+#
+mapsTD, stdTD = np.mean(noisymapsTD, axis = 0), np.std(noisymapsTD, axis = 0)
+mapsFI, stdFI = np.mean(noisymapsFI, axis = 0), np.std(noisymapsFI, axis = 0)
+```
+
+```{python}
+# NEW (16 Feb 2021)
+
+reload(fsed)
+for ic, idict in enumerate(dictionaries):
+    noisy_frgrounds = np.zeros(np.shape(noiseFI)[1:])
+    for j in range(nreals):
+        noisy_frgrounds[j, ...] = 31 * noiseFI[ic, j, ...] + fground_maps[ic]
+    maps = np.array([np.mean(noisy_frgrounds, axis = 0)])
+    stdmaps = np.array([np.std(noisy_frgrounds, axis = 0)])
+
+```
+
+### Look at the maps... okk..
+
+```{python}
+# NEW (19 Feb 2021)
+reload(fsed)
+nf_recon = dictionaries[0]['nf_recon']
+maskmaps, mapregion = fsed._mask_maps(maps, coveragesTD, nf_recon)
+```
+
+```{python}
+# OLD (19 Feb 2021)
+
+#print(np.shape(maps_qubic), np.shape(maps_noiseless), np.shape(maps_noise), np.shape(coverage))
+cov = np.zeros_like(coverageFI,dtype=bool)
+covmsk = np.where(coverageFI > 0.01 * np.max(coverageFI))
+cov[covmsk] = 1
+```
+
+for iNU in range(dTD['nf_recon']):
+    mapsTD[iNU,~cov,0] = hp.UNSEEN
+    mapsFI[iNU,~cov,0] = hp.UNSEEN
+
+
+NU = 0
+STK = 0
+RESO = 15
+mapsTD_noiseFI[NU,~cov,0] = hp.UNSEEN
+mapsFI[NU,~cov,0] = hp.UNSEEN
+
+pol = True
+if pol:
+    plt.figure(figsize = (12,8))
+    #hp.gnomview(mapsP[NU], sub = (2,2,1), 
+    hp.gnomview(np.sqrt(mapsTD[NU, : , 1] ** 2 + mapsTD[NU, : , 2] ** 2), sub = (2,2,1), 
+                title = 'I_P', reso = RESO, rot = center)
+    hp.gnomview(np.sqrt(mapsFI[NU,:,1]**2+mapsFI[NU,:,2]**2), sub=(2,2,2), 
+                title='FastSim FI', reso=RESO, rot=center)
+
+    hp.gnomview(np.sqrt(dust_map_TD[NU,:,1]**2+dust_map_TD[NU,:,2]**2), 
+                sub=(2,2,3), title='noiseless TD', reso=RESO, rot=center)
+    hp.gnomview(np.sqrt(dust_map_FI[NU,:,1]**2+dust_map_FI[NU,:,2]**2), 
+                sub=(2,2,4), title='noiseless FI', reso=RESO, rot=center)
+elif not pol:
+    plt.figure(figsize=(12,8))
+    hp.gnomview(mapsTD[NU,:,0], sub=(2,2,1), 
+                max=0.4*np.max(mapsTD[NU,cov,0]), 
+                title='FastSim TD I', reso=RESO, rot=center)
+    hp.gnomview(mapsFI[NU,:,0], sub=(2,2,2), 
+                max=0.4*np.max(mapsFI[NU,:,0]), 
+                title='FastSim FI', reso=RESO, rot=center)
+
+    hp.gnomview(dust_map_TD[NU,:,0], sub=(2,2,3), title='noiseless TD', reso=RESO, rot=center)
+    hp.gnomview(dust_map_FI[NU,:,0], sub=(2,2,4), title='noiseless FI', reso=RESO, rot=center)
+
+```{python}
+# OLD (19 Feb 2021)
+_,nus_edge,nus_out,_,_,_=qubic.compute_freq(dTD['filter_nu']/1e9, dTD['nf_recon'], dTD['filter_relative_bandwidth'] )
+#_,nus_edge_in,nus_in,_,_,_=qubic.compute_freq(d['filter_nu']/1e9, d['nf_sub'], 
+#                                              d['filter_relative_bandwidth'] )
+```
+
+IPIX = covmsk[0][11500] #almost center
+mctest = True
+STK = 0
+dust_map_TD[0,~cov,0] = hp.UNSEEN
+mapsTD_noiseFI[0,~cov,0] = hp.UNSEEN
+plt.rc('font', size = 15)
+factor = 0.5
+# good pixel 401928 384526
+# masomenos pixel 401902
+# bad pixel 349666
+for j,IPIX in enumerate([384526, 401928,520725]):
+    fig,ax = plt.subplots(nrows = 1, ncols = 3, figsize = (16,7),)
+    ax = ax.ravel()
+    if mctest:
+        ax[0].errorbar(nus, dust_map_TD[:,IPIX,STK],lw = 3,
+               fmt = 'o-',color = 'b',label = 'convolved', alpha = 0.7)
+        ax[0].errorbar(nus, mapsTD[:,IPIX,STK],yerr=stdTD_nFI[:,IPIX,0],capsize=3 ,lw=3,
+               fmt = 'o-',color = 'r',label = 'reconstructed', alpha = 0.7)
+        #ax[0].errorbar(nus, mapsP[:,IPIX],yerr=stdP[:,IPIX],capsize=3 ,lw=3,
+        #       fmt = 'o-',color = 'r',label = 'reconstructed', alpha = 0.7)
+        #ax[0].set_title('Dust - TD/FI pix {}'.format(IPIX),fontsize=15)
+    ax[0].set_ylabel(r'$I_\nu~[\mu$K]',fontsize = 15)
+    ax[0].set_xlabel(r'$\nu~[GHz]$',fontsize = 15)
+    ax[0].legend(loc='upper left',fontsize = 14)
+    ax[0].grid()
+    plt.axes(ax[1])
+    hp.gnomview(dust_map_TD[0,:,STK], reso = 15, hold = True, notext = True, title = 'Convolved',
+                max = factor*np.max(mapsTD[0,:,STK]),
+                cbar = True,
+                unit = r'$\mu$K',
+                rot = center)
+    hp.projscatter(hp.pix2ang(dTD['nside'],IPIX),marker = '+', color = 'r',)
+    plt.axes(ax[2])
+    hp.gnomview(mapsTD[0,:,STK], reso = 15, hold = True, notext = True, title = 'Reconstructed',
+    #hp.gnomview(mapsP[0,:], reso = 15, hold = True, notext = True, title = 'Reconstructed',
+                #max = factor*np.max(mapsTD_noiseFI[0,:,STK]), 
+                cbar = True,
+                unit = r'$\mu$K',
+                rot = center)
+    hp.projscatter(hp.pix2ang(dTD['nside'],IPIX), marker = '+', color = 'r',)
+    #plt.savefig('FastSim-TD-Figs/new{}_1e4pntg'.format(IPIX),)#format='pdf')
+
+plt.show()
+
+```{python}
+# NEW (19 Feb 2021)
+NU = 0
+STK = 0
+RESO = 15
+
+capsize=3
+plt.rc('font', size=15)
+pixG = [hp.ang2pix(dictionaries[0]['nside'], np.pi / 2 - np.deg2rad(center[0][1] + 3), 
+                   np.deg2rad(center[0][0] + 7) ), ]
+
+_, nus_edge150, nus_out150, _, _, _ = qubic.compute_freq(dictionaries[0]['filter_nu'] / 1e9,  
+                            dictionaries[0]['nf_recon'],
+                            dictionaries[0]['filter_relative_bandwidth'])
+
+for j in range(1):
+    fig,ax=plt.subplots(nrows = 1, ncols = 2, figsize = (18,4.5),)
+    ax=ax.ravel()
+    IPIXG = pixG[j]
+    print(pixG[j])
+    ax[0].errorbar(nus_out150, maskmaps[0,:,IPIXG,0],yerr = stdmaps[0, :,IPIXG,0], capsize = capsize,
+           fmt = 'o-', color = 'r', label = 'reconstructed', alpha = 0.8)
+    ax[0].plot(nus_out150, fground_maps[0,:,IPIXG,0],
+           'bo-',label='convolved', alpha=0.7)
+    #ax[0].axvspan(nus_edge150[-1],nus220[0],color='k',alpha=0.2)
+
+    ax[0].set_title('GC patch',fontsize=17)
+    ax[0].set_ylabel(r'$I_\nu$ [$\mu$K]',fontsize=18)
+    ax[0].set_xlabel(r'$\nu$[GHz]',fontsize=18)
+    ax[0].legend(loc='best',fontsize=12)
+    ax[0].grid()
+    ax[1].cla()
+    plt.axes(ax[1])
+    hp.gnomview(maskmaps[0, -1, :, 0], reso = 15,hold = True, notext = True, title = ' ',unit = r'$\mu$K',
+                max = 0.23 * np.max(maskmaps[0, -1, :, 0]), rot = center)
+    hp.projscatter(hp.pix2ang(dictionaries[0]['nside'], IPIXG), marker = '+', color = 'r',)
+    #plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Intensity.svg'.format(d150Q['nf_recon'],
+    #                                                                                          d150Q['nside'],
+    #                                                           pixQ[j], IPIXG), 
+    #            format = 'svg')
+    #plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Intensity.pdf'.format(d150Q['nf_recon'],
+    #                                                                                          d150Q['nside'],
+    #                                                           pixQ[j], IPIXG), 
+    #            format = 'pdf')
+    #plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Intensity'.format(d150Q['nf_recon'],
+    #                                                                                      d150Q['nside'],
+    #                                                                 pixQ[j], IPIXG))
+plt.show()
+```
+
+```{python}
+# NEW (17 Feb 2021)
+reload(fsed)
+fsed._plot_exampleSED(dictionaries[0], center[0], nus_out150, maskmaps[0])
+```
+
+## Udgrading maps
+
+```{python}
+# OLD (19 Feb  2021)
+
+nside_new = 64
+npix_ud = 12 * nside_new **2 
+noiseFI_ud = np.zeros((nreals, len(nus_out), npix_ud, 3))
+
+for ireal in range(nreals):
+    for irec in range(len(nus_out)):
+        noiseFI_ud[ireal, irec] = hp.ud_grade(noiseFI[ireal, irec].T, nside_new).T
+#
+dust_map_TD_ud = np.zeros((len(nus_out), 12 * nside_new ** 2, 3))
+dust_map_FI_ud = np.zeros_like(dust_map_TD_ud)
+
+for irec in range(len(nus_out)):
+    dust_map_TD_ud[irec] = hp.ud_grade(dust_map_TD[irec].T, nside_new).T
+    dust_map_FI_ud[irec] = hp.ud_grade(dust_map_FI[irec].T, nside_new).T
+#
+```
+
+```{python}
+# NEW (19 Feb 2021)
+reload(fsed)
+nside_new = 64
+nf_recon = dictionaries[0]['nf_recon']
+
+maps_ud, std_ud, fgr_map_ud, noise_ud_i = fsed.udgrade_maps(fground_maps, noiseTD, nside_new, nf_recon, nreals)
+```
+
+```{python}
+# OLD (19 Feb 2021)
+mapsTD_ud_i = np.zeros_like(noiseFI_ud)
+mapsFI_ud_i = np.zeros_like(noiseFI_ud)
+
+for i in range(nreals):
+    mapsTD_ud_i[i, ...] = 31 * noiseFI_ud[i, ...] + dust_map_TD_ud
+    mapsFI_ud_i[i, ...] = noiseFI_ud[i, ...] + dust_map_FI_ud
+#
+
+mapsTD_ud, stdTD_ud = np.mean(mapsTD_ud_i, axis = 0), np.std(mapsTD_ud_i, axis = 0)
+mapsFI_ud, stdFI_ud = np.mean(mapsFI_ud_i, axis = 0), np.std(mapsFI_ud_i, axis = 0)
+```
+
+```{python}
+PixPix = lambda p: hp.ang2pix(nside_new, hp.pix2ang(dTD['nside'], p)[0], hp.pix2ang(dTD['nside'], p)[1] )
+```
+
+```{python}
+# OLD (19 Feb 2021)
+
+cov_ud = hp.ud_grade(cov, nside_new)
+
+CpTD = amc.get_Cp(31 * noiseFI_ud[:, :, cov_ud, :], verbose = False, doplot = False)
+CpFI = amc.get_Cp(noiseFI_ud[:, :, cov_ud, :], verbose = False, doplot = False)
+
+_, CpTD_prime = amc.Cp2Cp_prime_viaCorr(CpTD, verbose = False)
+_, CpFI_prime = amc.Cp2Cp_prime_viaCorr(CpFI, verbose = False)
+print(np.shape(CpTD_prime))
+plt.figure()
+plt.imshow((CpTD_prime)[:, :, 0, 0])
+plt.colorbar()
+```
+
+```{python}
+# NEW (19 Feb 2021)
+reload(fsed)
+
+_, covmask = fsed._mask_maps(maps, coveragesTD, nf_recon)
+cov_ud = hp.ud_grade(covmask, nside_new)
+print("cov_ud shape", np.shape(cov_ud))
+Cp = []
+Cp_prime = []
+for br in range(len(dictionaries)):
+    Cp = amc.get_Cp(noise_ud_i[br][:, :, cov_ud[br], :], verbose = False, doplot = False)
+    Cp_prime.append(amc.Cp2Cp_prime_viaCorr(Cp, verbose = False)[1])
+
+plt.figure()
+plt.imshow(Cp_prime[0][:, :, 0, 0])
+plt.colorbar()
+```
+
+```{python}
+# OLD (19 Feb 2021)
+
+for iNU in range(dTD['nf_recon']):
+    mapsTD_ud[iNU,~cov_ud,:] = hp.UNSEEN
+    mapsFI_ud[iNU,~cov_ud,:] = hp.UNSEEN
+    dust_map_TD_ud[iNU,~cov_ud,:] = hp.UNSEEN
+    dust_map_FI_ud[iNU,~cov_ud,:] = hp.UNSEEN
+```
+
+```{python}
+# NEW (17 feb 2021)
+for idict in range(len(dictionaries)):
+    for iNU in range(nf_recon):
+        maps_ud[idict, iNU,~cov_ud[idict],:] = hp.UNSEEN
+```
+
+### FIT
+
+```{python}
+# OLD (19 Feb 2021)
+#from lmfit import Model
+
+def funcPot(x, a, b):
+    return a + x**b
+
+def quad(x, a, b,c):
+    return a*x**2 + b*x + c
+
+def Bnu(nuGHz, temp):
+    h = scipy.constants.h
+    c = scipy.constants.c
+    k = scipy.constants.k
+    nu = nuGHz * 1e9
+    return 2 * h * nu ** 3 / c ** 2 / (np.exp(h * nu / k / temp ) - 1 )
+
+def func353(x, a, b):
+    Tdust = 19.6
+    bnu = Bnu(x, Tdust)
+    return a * 1e18 * bnu * (x / 353) ** (b / 2)
+
+def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
+           maxfev = 10000, initP0 = None, verbose = False,
+          nsamples = 5000):
+    
+    popt, _ = curve_fit(FuncModel, nus, maps[:, pix, istk], 
+                            sigma=covMat[:, :, istk, pix_red], absolute_sigma=True,
+                            maxfev = maxfev, p0 = initP0)
+
+    myfit = mcmc.LogLikelihood(xvals = nus, yvals = maps[:, pix, istk], 
+                               errors = covMat[:, :, istk, pix_red], 
+                               model = FuncModel, p0=popt)
+    fit_prep = myfit.run(nsamples)
+    flat_samples = fit_prep.get_chain(discard = nsamples//2, thin=32, flat=True)
+    nspls = flat_samples.shape[0]
+    #Generating realizations for parameters of the model (fake X(nu))
+    
+    x = np.linspace(nus_edge[0], nus_edge[-1], nsamples//2)
+    vals = np.zeros((len(x), nspls))
+    for i in range(len(x)):
+        for j in range(nspls):
+            vals[i, j] = FuncModel(x[i], *flat_samples[j, :])
+    
+    mvals = np.mean(vals, axis=1)
+    svals = np.std(vals, axis=1)
+    
+    return mvals, svals, x
+```
+
+```{python}
+# OLD (19 Feb 2021)
+
+pix = [hp.ang2pix(dTD['nside'], np.pi / 2 - np.deg2rad(center[1] - 0), np.deg2rad(center[0] + 1  ) ), ]
+pix_ud = PixPix(pix[0])
+pix_ud = 24448
+pix_red = np.where(np.where(cov_ud == True)[0] == pix_ud)[0][0]
+
+plt.figure(figsize = (10,4))
+hp.gnomview(mapsTD_ud[-1,:,0], reso = 15,
+            notext = True, title = 'TD patch ', sub = (121),
+            min=0,
+            max = 0.4*np.max(mapsTD_ud[-1,:,0]), 
+            unit = r'$\mu$K',
+            rot = center)
+hp.projscatter(hp.pix2ang(nside_new, pix_ud), marker = 'o', color = 'r', s = 160)
+hp.gnomview(mapsFI_ud[-1,:,0], reso = 15, title = 'FI patch ',
+            unit = r'$\mu$K', sub = (122),
+            min = 0,
+            rot = center)
+hp.projscatter(hp.pix2ang(nside_new, pix_ud), marker = 'o', color = 'r', s = 160)
+```
+
+```{python}
+# NEW (19 Feb 2021)
+#
+#   Choose pixel for regions
+#
+
+pixG = [hp.ang2pix(dictionaries[0]['nside'], 
+                   np.pi / 2 - np.deg2rad(center[0][1] - 8), 
+                   np.deg2rad(center[0][0] - 4 ) ), ]
+
+pixG_ud = PixPix(pixG[0])
+# Where the sky pixel is in the reduce format (pixels seen array and not full map)
+pixG_red = np.where(np.where(cov_ud[0] == True)[0] == pixG_ud)[0][0]
+
+plt.figure(figsize = (10,4))
+hp.gnomview(maps_ud[0,-1,:,0], reso = 15,#hold = True, 
+            notext = False, title = 'G patch ', sub = (121),
+            max = 0.4*np.max(maps_ud[0,-1,:,0]), 
+            unit = r'$\mu$K',
+            rot = center[0])
+hp.projscatter(hp.pix2ang(nside_new, pixG_ud), marker = '*', color = 'r', s = 200)
+hp.graticule(dpar = 10, dmer = 20, alpha = 0.6)
+```
+
+```{python}
+# OLD (19 Feb 2021)
+import time
+FuncModel = func353
+t0 = time.time()
+istk = 0
+ImvalsTD, IsvalsTD, x = PixSED_Xstk(nus_out, dust_map_TD_ud, FuncModel, pix_ud, pix_red, 
+                               istk, CpTD_prime, nus_edge_out)
+#ImvalsFI, IsvalsFI, _ = PixSED_Xstk(nus_out, dust_map_FI_ud, FuncModel, pix_ud, pix_red, 
+#                               istk, CpFI_prime, nus_edge_out)
+print("Done it in {:.2f} min".format((time.time()-t0)/60))
+```
+
+```{python}
+# OLD (19 Feb 2021)
+
+t1 = time.time()
+istk = 1
+print("===============  Doing {} stokes  ====================".format(dTD['kind'][istk]))
+QmvalsTD, QsvalsTD, _ = PixSED_Xstk(nus_out, dust_map_TD_ud, FuncModel, pix_ud, pix_red, 
+                               istk, CpTD_prime, nus_edge_out)
+#QmvalsFI, QsvalsFI, _ = PixSED_Xstk(nus_out, dust_map_FI_ud, FuncModel, pix_ud, pix_red, 
+#                               istk, CpFI_prime, nus_edge_out)
+
+istk = 2
+print("===============  Doing {} stokes  =====================".format(dTD['kind'][istk]))
+UmvalsTD, UsvalsTD, _ = PixSED_Xstk(nus_out, dust_map_TD_ud, FuncModel, pix_ud, pix_red, 
+                               istk, CpTD_prime, nus_edge_out)
+#UmvalsFI, UsvalsFI, _ = PixSED_Xstk(nus_out, dust_map_FI_ud, FuncModel, pix_ud, pix_red, 
+#                               istk, CpFI_prime, nus_edge_out)
+print("Done it in {:.2f} min".format((time.time()-t1)/60))
+```
+
+```{python}
+# OLD (19 Feb 2021)
+
+# Modeling fit to map values
+xSED = nus_out
+ySED = dust_map_TD_ud[:,pix_ud,0]
+
+p_opt, p_cov = curve_fit(quad, xSED, ySED)
+```
+
+```{python}
+# OLD (19 Feb 2021)
+
+xnew = np.linspace(nus_edge_out[0],nus_edge_out[-1],1000)
+plt.plot(xnew, quad(xnew, *p_opt))
+plt.plot(xSED, ySED, 'ko')
+```
+
+```{python}
+np.shape(Cp_prime), fgr_map_ud.shape, np.shape(nus_out[0])
+```
+
+```{python}
+# NEW (19 Feb 2021)
+
+reload(fsed)
+nus_out = [nus_out150, ]
+pixs_ud = [pixG_ud, ]
+pixs_red = [pixG_red, ]
+nus_edge = [nus_edge150, ]
+
+FuncModel = fsed.PlanckFunc353
+print(np.shape(dictionaries), np.shape(fgr_map_ud), np.shape(Cp_prime), np.shape(nus_out),
+     np.shape(nus_edge), np.shape(pixs_ud), np.shape(pixs_red))
+Imvals, Isvals, xarr = fsed.foregrounds_run_mcmc(dictionaries, fgr_map_ud, Cp_prime, FuncModel,
+                                                nus_out, nus_edge, pixs_ud, pixs_red = pixs_red, 
+                                                samples = 5000, verbose = True, initP0 = [1e18, -2])
+```
+
+```{python}
+from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
+
+fig,ax=plt.subplots(nrows=1,ncols=3,figsize=(16,7),gridspec_kw = {'wspace': 0.3})
+ax=ax.ravel()
+#ax[1] = plt.subplot(132, projection='mollweide')
+
+plt.subplots_adjust(wspace=0.3)
+
+plt.rc('font', size = 14)
+
+ax[0].plot(nus_out, dust_map_TD_ud[:,pix_ud,0], 'ro', lw = 3, label='Input map')
+ySED_fit = quad(x, *p_opt)
+ax[0].fill_between(x, y1 = ySED_fit - IsvalsTD, y2 = ySED_fit + IsvalsTD, 
+                   color = 'r', alpha = 0.3, label = '68% C.L.')
+
+xlim = ax[0].get_xlim()
+ylim = ax[0].get_ylim()
+ax[0].axvspan(xlim[0], nus_edge_out[0], color = 'k', alpha = 0.1)
+ax[0].axvspan(nus_edge_out[-1], xlim[-1], color = 'k', alpha = 0.1)
+
+#
+
+ax[0].set_title('TD - {} year'.format(dTD['effective_duration']), fontsize = 16)
+ax[0].set_ylabel(r'$I(\nu)~[\mu$K]', fontsize = 16)
+ax[0].set_xlabel(r'$\nu~[GHz]$', fontsize = 16)
+ax[0].legend(loc = 'lower right', fontsize = 14)
+ax[0].grid()
+ax[0].ticklabel_format(axis = 'y', style = 'sci', scilimits = (0,0), useLocale = True, useMathText = True)
+ax[0].set_xlim(xlim)
+ax[0].set_ylim(ylim)
+ax[0].text(xlim[0]+(xlim[1]-xlim[0])*0.1, ylim[-1]*0.85, r'$150~$GHz band', fontsize = 14)
+ax[0].set_aspect(1/(np.diff(ax[0].get_ylim())/np.diff(ax[0].get_xlim())), 
+                 anchor = (0.5,0.52), adjustable = 'box') #for pix 368 & 272
+#ax[0].set_yticklabels('%.1f')
+plt.rcParams['xtick.direction'] = 'in'
+plt.rcParams['ytick.direction'] = 'in'
+plt.rcParams['xtick.top'] = True
+plt.rcParams['ytick.right'] = True
+ax[0].xaxis.set_minor_locator(MultipleLocator(3))
+ax[0].yaxis.set_minor_locator(MultipleLocator(600))
+#plt.rcParams['ytick.minor'] = True
+#plt.rcParams['xtick.minor'] = True
+plt.axes(ax[1])
+hp.gnomview(dust_map_TD_ud[3,:,0], reso = 15, hold = True, notext = True,
+            title = ' ',
+            min = 0, 
+            max = 0.8 * np.max(dust_map_TD_ud[0,:,0]), 
+            cbar = True,
+            unit = r'$\mu$K',
+            rot = center)
+hp.projscatter(hp.pix2ang(nside_new, pix_ud), marker = '*', s = 180, color = 'r',)
+#hp.projscatter(10,10, lonlat = True, marker = '*', s = 180, color = 'w',)
+
+dpar = 10
+dmer = 20
+mer_coords = [center[0] - dmer, center[0], center[0] + dmer]
+long_coords = [center[1] - 2*dpar, center[1] - dpar, center[1], center[1] + dpar, center[1] + 2 * dpar]
+#paralels
+for ilong in long_coords:
+    plt.text(np.deg2rad(mer_coords[0] - 11), 1.1*np.deg2rad(ilong), r'{}$\degree$'.format(ilong),)
+#meridians
+for imer in mer_coords:
+    if imer < 0:
+        jmer = imer + 360
+        ip, dp = divmod(jmer/15,1)
+    else:
+        ip, dp = divmod(imer/15,1)
+    if imer == 0:
+        plt.text(-np.deg2rad(imer + 2), np.deg2rad(long_coords[-1] + 6), 
+             r'{}$\degree$'.format(imer ))
+             #r'{}h'.format(int(ip) ))
+    else:
+        plt.text(-np.deg2rad(imer + 5), np.deg2rad(long_coords[-1] + 6), 
+             r'{:.0f}$\degree$'.format(imer))
+             #r'{}h{}m'.format(int(ip), int(round(dp*60))))
+
+#hp.projtext(mer_coords[1] + 2, long_coords[0] - 6, 'RA',  color = 'k', lonlat=True)
+#hp.projtext(mer_coords[2] + 10.5, long_coords[2] - 1, 'Dec', rotation = 90, color = 'k', lonlat=True)
+
+plt.axes(ax[2])
+hp.gnomview(mapsTD_ud[3,:,0], reso = 15, hold = True, notext = True, 
+            title = ' ',
+            min = 0,
+            max = 0.8 * np.max(dust_map_TD_ud[0,:,0]), 
+            cbar = True,
+            unit = r'$\mu$K',
+            rot = center)
+
+hp.projscatter(hp.pix2ang(nside_new,pix_ud), marker = '*', color = 'r', s = 140)
+hp.graticule(dpar = dpar, dmer = dmer, alpha = 0.6, verbose = False)
+
+#paralels
+for ilong in long_coords:
+    plt.text(np.deg2rad(mer_coords[0] - 11), 1.1*np.deg2rad(ilong), r'{}$\degree$'.format(ilong),)
+#meridians
+for imer in mer_coords:
+    if imer < 0:
+        jmer = imer + 360
+        ip, dp = divmod(jmer/15,1)
+    else:
+        ip, dp = divmod(imer/15,1)
+    if imer == 0:
+        plt.text(-np.deg2rad(imer + 2), np.deg2rad(long_coords[-1] + 6), 
+             r'{}$\degree$'.format(imer ))
+             #r'{}h'.format(int(ip) ))
+    else:
+        plt.text(-np.deg2rad(imer + 5), np.deg2rad(long_coords[-1] + 6), 
+             r'{:.0f}$\degree$'.format(imer))
+hp.projtext(mer_coords[1] + 2, long_coords[0] - 6, r'$l$',  color = 'k', lonlat=True)
+hp.projtext(mer_coords[2] + 10.5, long_coords[2] - 1, r'$b$', rotation = 90, color = 'k', lonlat=True)
+
+plt.tight_layout()#plt.tight_layout()
+
+#plt.savefig('FastSim-TD-Figs/TD{}_CMB-dust_nrec{}_nside{}_pixQ{}_pixG{}_Intensity_grat.svg'.format(FuncModel.__name__,
+#                                                                                    dTD['nf_recon'],nside_new,
+#                                                           pix_ud, pix_ud), 
+#            format = 'svg', bbox_inches='tight')
+#plt.savefig('FastSim-TD-Figs/TD{}_CMB-dust_nrec{}_nside{}_pixQ{}_pixG{}_Intensity_grat_newformat.pdf'.format(FuncModel.__name__,
+#                                                                               dTD['nf_recon'],nside_new,
+#                                                           pix_ud, pix_ud), 
+#            format = 'pdf', bbox_inches='tight')
+#plt.savefig('FastSim-TD-Figs/TD{}_CMB-dust_nrec{}_nside{}_pixQ{}_pixG{}_Intensity_grat'.format(FuncModel.__name__, 
+#                                                                           dTD['nf_recon'],
+#                                                                           nside_new,pix_ud, pix_ud),
+#           bbox_inches='tight')r'{}$\degree$'.format(imer),
+plt.show()
+
+```
+
+### Polarization
+
+```{python}
+# Modeling fit to map values
+xSED_pol = nus_out
+ySED_pol = np.sqrt(dust_map_TD_ud[:,pix_ud,1] ** 2 + dust_map_TD_ud[:,pix_ud,2] ** 2)
+
+p_opt_pol, p_cov_pol = curve_fit(quad, xSED_pol, ySED_pol)
+```
+
+```{python}
+ErrBar2 = lambda Q, U, Qerr, Uerr: np.sqrt( Q ** 2 * Qerr ** 2 + U ** 2 * Uerr ** 2) / \
+                np.sqrt( Q ** 2 + U ** 2)
+```
+
+```{python}
+PmeanTD = np.sqrt(QmvalsTD ** 2 + UmvalsTD ** 2)
+PerrTD = ErrBar2(QmvalsTD, UmvalsTD, QsvalsTD, UsvalsTD)
+plt.rc('font', size = 14)
+
+fig,ax=plt.subplots(nrows=1,ncols=3,figsize=(16,7), gridspec_kw = {'wspace': 0.3})
+ax=ax.ravel()
+
+plt.subplots_adjust(wspace=0.3)
+greyscale = 0.1
+ax[0].plot(nus_out, np.sqrt(dust_map_TD_ud[:,pix_ud,1] ** 2 + dust_map_TD_ud[:,pix_ud,2] ** 2), 
+           'ro', lw = 3, label='Input map')
+ySED_fit_pol = quad(x, *p_opt_pol)
+ax[0].fill_between(x, y1 = ySED_fit_pol - PerrTD, y2 = ySED_fit_pol + PerrTD, 
+                   color = 'r', alpha = 0.3, label = '68% C.L.')
+
+xlim = ax[0].get_xlim()
+ylim = ax[0].get_ylim()
+ax[0].axvspan(xlim[0], nus_edge_out[0], color = 'k', alpha = greyscale)
+ax[0].axvspan(nus_edge_out[-1], xlim[-1], color = 'k', alpha = greyscale)
+
+ax[0].set_title('TD - {} year'.format(dTD['effective_duration']), fontsize = 16)
+ax[0].set_ylabel(r'$P(\nu)~[\mu$K]', fontsize = 16)
+ax[0].set_xlabel(r'$\nu~[GHz]$', fontsize = 16)
+ax[0].legend(loc = 'lower right', fontsize = 14)
+ax[0].grid()
+ax[0].set_xlim(xlim)
+ax[0].set_ylim(ylim)
+ax[0].text(xlim[0]+(xlim[1]-xlim[0])*0.1, ylim[-1]*0.85, r'$150~$GHz band', fontsize = 14)
+ax[0].set_aspect(1/(np.diff(ax[0].get_ylim())/np.diff(ax[0].get_xlim())), 
+                 anchor = (0.5,0.52), adjustable = 'box') #for pix 368 & 272
+
+
+plt.axes(ax[1])
+auxmap = np.sqrt(dust_map_TD_ud[0,:,1] ** 2 + dust_map_TD_ud[0,:,2] ** 2)
+auxmap[~cov_ud] = hp.UNSEEN
+auxmapG = np.sqrt(mapsTD_ud[0,:,1] ** 2 + mapsTD_ud[0,:,2] ** 2)
+auxmapG[~cov_ud] = hp.UNSEEN
+hp.gnomview(auxmap,
+            reso = 15, hold = True, notext = True,
+            title = ' ',
+            min = 0,
+            max = 0.75 * np.max(auxmapG), 
+            cbar = True,
+            unit = r'$\mu$K',
+            rot = center)
+hp.projscatter(hp.pix2ang(nside_new, pix_ud), marker = '*', s = 180, color = 'r',)
+dpar = 10
+dmer = 20
+mer_coords = [center[0] - dmer, center[0], center[0] + dmer]
+long_coords = [center[1] - 2*dpar, center[1] - dpar, center[1], center[1] + dpar, center[1] + 2 * dpar]
+#paralels
+for ilong in long_coords:
+    plt.text(np.deg2rad(mer_coords[0] - 11), 1.1*np.deg2rad(ilong), r'{}$\degree$'.format(ilong),)
+#meridians
+for imer in mer_coords:
+    if imer < 0:
+        jmer = imer + 360
+        ip, dp = divmod(jmer/15,1)
+    else:
+        ip, dp = divmod(imer/15,1)
+    if imer == 0:
+        plt.text(-np.deg2rad(imer + 2), np.deg2rad(long_coords[-1] + 6), 
+             r'{}$\degree$'.format(imer ))
+             #r'{}h'.format(int(ip) ))
+    else:
+        plt.text(-np.deg2rad(imer + 5), np.deg2rad(long_coords[-1] + 6), 
+             r'{:.0f}$\degree$'.format(imer))
+             #r'{}h{}m'.format(int(ip), int(round(dp*60))))
+        
+plt.axes(ax[2])
+hp.gnomview(auxmapG,
+            reso = 15, hold = True, notext = True, 
+            title = ' ',
+            cbar = True,
+            min = 0,
+            max = 0.75 * np.max(auxmapG),
+            unit = r'$\mu$K',
+            rot = center)
+hp.projscatter(hp.pix2ang(nside_new,pix_ud),marker = 'o', s = 140, color = 'r',)
+hp.graticule(dpar = 10, dmer = 20,alpha = 0.6, verbose = False)
+#paralels
+for ilong in long_coords:
+    plt.text(np.deg2rad(mer_coords[0] - 11), 1.1*np.deg2rad(ilong), r'{}$\degree$'.format(ilong),)
+#meridians
+for imer in mer_coords:
+    if imer < 0:
+        jmer = imer + 360
+        ip, dp = divmod(jmer/15,1)
+    else:
+        ip, dp = divmod(imer/15,1)
+    if imer == 0:
+        plt.text(-np.deg2rad(imer + 2), np.deg2rad(long_coords[-1] + 6), 
+             r'{}$\degree$'.format(imer))
+             #r'{}h'.format(int(ip) ))
+    else:
+        plt.text(-np.deg2rad(imer + 5), np.deg2rad(long_coords[-1] + 6), 
+             r'{:.0f}$\degree$'.format(imer))
+             #r'{}h{}m'.format(int(ip), int(round(dp*60))))
+
+hp.projtext(mer_coords[1] + 2, long_coords[0] - 6, r'$l$',  color = 'k', lonlat=True)
+hp.projtext(mer_coords[2] + 10.5, long_coords[2] - 1, r'$b$', rotation = 90, color = 'k', lonlat=True)
+
+plt.tight_layout()#plt.tight_layout()
+
+#plt.savefig('FastSim-TD-Figs/TD{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_grat.svg'.format(FuncModel.__name__,
+#                                                                                     dTD['nf_recon'],nside_new,
+#                                                           pix_ud, pix_ud), 
+#            format = 'svg', bbox_inches='tight')
+#plt.savefig('FastSim-TD-Figs/TD{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_grat.pdf'.format(FuncModel.__name__,
+#                                                                               dTD['nf_recon'],nside_new,
+#                                                           pix_ud, pix_ud), 
+#            format = 'pdf', bbox_inches='tight' )
+#plt.savefig('FastSim-TD-Figs/TD{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_grat'.format(FuncModel.__name__, 
+#                                                                           dTD['nf_recon'],
+#                                                                           nside_new,pix_ud, pix_ud))
+print(np.diff(ax[0].get_ylim())/np.diff(ax[0].get_xlim()))
+plt.show()
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

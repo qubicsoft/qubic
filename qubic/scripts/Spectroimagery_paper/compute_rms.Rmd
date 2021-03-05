@@ -1,0 +1,765 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+from __future__ import division, print_function
+import glob
+import os
+import healpy as hp
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import rc
+
+from qubic import ReadMC as rmc
+from qubic import AnalysisMC as amc
+
+import qubic
+from qubic import equ2gal
+
+from qubicpack.utilities import Qubic_DataDir
+
+# %matplotlib inline
+rc({'cmap', 'viridis'})
+plt.rcParams['figure.figsize'] = (8, 8)
+
+```
+
+***
+# Get the simulation files
+
+```{python}
+# Simulation date and name
+#date_name = simu220[0]
+date_name = 'NERSC_runs/24334789/20190903_low_nep'
+
+# Get the repository where the simulation is
+rep_simu = Qubic_DataDir(datafile=date_name + '.dict') + '/'
+print('rep_simu : ', rep_simu)
+
+# Dictionary saved during the simulation
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(rep_simu + date_name + '.dict')
+```
+
+***
+### Number of subbands, NEP and Ptg
+
+```{python}
+nf_recon = d['nf_recon']
+print('nf_recon', nf_recon)
+
+nep = d['detector_nep']
+print('NEP = ', nep)
+
+ptg = d['npointings']
+print('ptg = ', ptg)
+
+filter_nu = d['filter_nu']
+print('Freq =', filter_nu)
+
+center = equ2gal(d['RA_center'], d['DEC_center'])
+stokes = ['I', 'Q', 'U']
+
+```
+
+***
+## Choose a number of reconstructed subbands
+
+```{python}
+nfrec = 4
+index_frec = nf_recon.index(nfrec)
+print('index_frec = ', index_frec)
+```
+
+## Get full maps
+analysis with noise
+
+
+```{python}
+# Remember: get_patch_many_file do seen_map + read each map
+files, maps_recon, maps_conv, maps_diff = \
+rmc.get_maps_many_files(rep_simu + date_name, '*nfrecon{}*False*'.format(nfrec))
+
+nreals=len(files)
+
+print('Shape maps: {}, Tolerance: {}, NEP: {}, pointings: {}'.format(
+    maps_recon.shape, d['tol'], d['detector_nep'], d['npointings'] ))
+
+setpar = {'tol':d['tol'], 'nep':d['detector_nep'], 'npoint':d['npointings']}
+```
+
+```{python}
+# Plot the maps
+isub = 0
+ireal = 0
+
+plt.figure('Noise maps real{}'.format(real))
+for i in range(3):
+    hp.gnomview(maps_conv[ireal, isub, :, i], rot=center, reso=12, sub=(3, 3, i + 1),
+                title='conv ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nfrec))
+    hp.gnomview(maps_recon[ireal, isub, :, i], rot=center, reso=12, sub=(3, 3, 3 + i + 1),
+                title='recon ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nfrec))
+    hp.gnomview(maps_diff[ireal, isub, :, i], rot=center, reso=12, sub=(3, 3, 6 + i + 1),
+                title='diff ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nfrec))
+```
+
+## Compute residuals
+
+```{python}
+# Diff with the noiseless recon
+_, maps_recon_nl, maps_conv_nl, maps_diff_nl = \
+    rmc.get_maps_many_files(rep_simu + date_name, '*nfrecon{}*True*'.format(nfrec), verbose=False)
+
+res1 = maps_recon - maps_recon_nl
+
+# Diff with the convolved map
+res2 = maps_diff
+
+#Diff with the mean of the recon
+res3 = maps_recon - np.mean(maps_recon, axis=0)
+
+ireal = 1
+isub = 0
+
+plt.figure('Noise maps real{}'.format(real))
+for i in range(3):
+    hp.gnomview(res1[ireal, isub, :, i], rot=center, reso=12, sub=(3, 3, i + 1),
+                title='noiseless ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nfrec))
+    hp.gnomview(res2[ireal, isub, :, i], rot=center, reso=12, sub=(3, 3, 3 + i + 1),
+                title='conv ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nfrec))
+    hp.gnomview(res3[ireal, isub, :, i], rot=center, reso=12, sub=(3, 3, 6 + i + 1),
+                title='mean_recon ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nfrec))
+```
+
+## Get patchs
+
+```{python}
+_, maps_recon_patch, maps_conv_patch, maps_diff_patch = \
+rmc.get_patch_many_files(rep_simu + date_name, '*nfrecon{}*False*'.format(nfrec))
+substractnl = False
+if substractnl:
+    _, maps_recon_nl, maps_conv_nl, maps_diff_nl = \
+    rmc.get_patch_many_files(rep_simu + date_name, '*nfrecon{}*True*'.format(nfrec))
+    maps_diff_patch = maps_diff_patch - maps_diff_nl
+    print(maps_diff_nl.shape)
+
+npix_patch = maps_diff_patch.shape[2]
+setpar.update({ 'pixpatch': npix_patch})
+print('npix_patch = ', npix_patch)
+
+```
+
+```{python}
+# Residuals with patchs
+
+# Diff with the noiseless recon
+_, patch_recon_nl, patch_conv_nl, patch_diff_nl = \
+    rmc.get_patch_many_files(rep_simu + date_name, '*nfrecon{}*True*'.format(nfrec), verbose=False)
+
+res_patch1 = maps_recon_patch - patch_recon_nl
+
+# Diff with the convolved map
+res_patch2 = maps_diff_patch
+
+#Diff with the mean of the recon
+res_patch3 = maps_recon_patch - np.mean(maps_recon_patch, axis=0)
+
+```
+
+***
+### Compute for entire map (no split in zones) and with diff maps
+
+
+
+
+Compute the distance. If distance between the two (or more, depends $n_{rec}$ choose it) maps are lt tolerance, we can follow the study of the rms with just one of the maps (and split in zones, etc)
+
+For example, if $n_{rec} = 2$, we want to know if $$|d^{fullmap}_{map1} - d^{fullmap}_{map2}| \le tolerance$$
+
+```{python}
+# Simple average over realizations: 
+maps_diff_av = np.mean(maps_diff_patch, axis=0)
+
+print(np.shape(maps_diff_av))
+
+distance = np.empty((nfrec, len(d['kind']) ) )
+#distance2 = np.empty((nfrec, len(d['kind']) ) )
+
+for i in range(nfrec):
+    for j in range(len(d['kind'])):
+        distance[i,j] = amc.distance_square(maps_diff_av[i,:,j]) 
+        #testing
+        #distance[i,j] = np.sum(np.square(maps_diff_av[i,:,j])) / np.shape(maps_diff_av)[1]**2
+#print(distance)
+```
+
+***
+Make zones for averaged maps
+
+
+```{python}
+
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+seenmap = rmc.get_seenmap(files[0])
+print(seenmap.shape)
+nside = hp.get_nside(maps_recon[0,0,:,0])
+pix_zones, all_maps_zones = rmc.make_zones(maps_diff_av, 2, nside, center, seenmap, 
+                                           angle = False, dtheta=15., verbose=True, doplot=True)
+
+print(all_maps_zones.shape)
+```
+
+***
+Check if the distance between reconstructed maps is accepted (comparisson between maps for all stokes parameters)
+
+```{python}
+tolerance = 1e-3 #arbitrary
+
+if nfrec == 1: print('add that posibility please (not done yet)')
+    
+check = np.empty((nfrec-1,len(d['kind']), ))
+
+for i in range(nfrec-1):
+    check[i,:] = np.abs(distance[i+1,:] - distance[i,:]) < tolerance
+    
+print(check)
+```
+
+Keep the study with a single map (one of the nfrec)
+
+```{python}
+rms_I,rms_Q,rms_U = np.empty((nfrec,)), np.empty((nfrec,)), np.empty((nfrec,))
+maps = maps_diff_av#[0,:,:]
+
+for i in range(nfrec):
+    rms_I[i] = np.sqrt(np.dot(maps[i,:,0],maps[i,:,0])/len(maps[i,:,0]))
+    rms_Q[i] = np.sqrt(np.dot(maps[i,:,1],maps[i,:,1])/len(maps[i,:,1]))
+    rms_U[i] = np.sqrt(np.dot(maps[i,:,2],maps[i,:,2])/len(maps[i,:,2]))
+
+print(rms_I, rms_Q, rms_U)
+```
+
+***
+
+## Check 
+I put this lines here to keep in mind we can use it
+
+
+```{python}
+# distance = np.empty((nfrec, len(d['kind']) ) )
+# #distance2 = np.empty((nfrec, len(d['kind']) ) )
+
+# for i in range(nfrec):
+#     for j in range(len(d['kind'])):
+#         distance[i,j] = amc.distance_square(maps_diff_av[i,:,j]) 
+
+# tolerance = tolerance#1e-3 #arbitrary
+
+# if nfrec == 1: print('add that posibility please (not done yet)')
+# check = np.empty((nfrec-1,len(d['kind']), ))
+# for i in range(nfrec-1):
+#     check[i,:] = np.abs(distance[i+1,:] - distance[i,:]) < tolerance
+
+# print('Cheking', check)
+```
+
+***
+
+## Some functions to plot
+
+
+```{python}
+def rms_method_loop_simu(simulations, residuals_way, zones=1, noiseless=False):
+    rms_I, rms_Q, rms_U, param = [],[],[],[]
+    for jsimu in simulations:
+        rms_i, rms_q, rms_u, par = amc.rms_method(name=jsimu, residuals_way=residuals_way, 
+                                                  zones=zones, noiseless=noiseless)
+        rms_I.append(rms_i)
+        rms_Q.append(rms_q)
+        rms_U.append(rms_u)
+        param.append(par)
+    return rms_I, rms_Q, rms_U, param
+```
+
+```{python}
+def plot2(simulations, nzones, residuals_way, noiseless):
+    color = ['k','g','r','c','m','y','b','orange']
+
+    plt.figure(figsize=(20, 20))
+
+    rms_I, rms_Q, rms_U, param = [],[],[],[]
+    for jsimu, simu in enumerate(simulations):
+        #     print(jsimu)
+        
+        rms_i, rms_q, rms_u, par = amc.rms_method(name=simu, residuals_way=residuals_way, 
+                                                  zones=nzones, noiseless=noiseless)
+        rms_I.append(rms_i)
+        rms_Q.append(rms_q)
+        rms_U.append(rms_u)
+        param.append(par)
+        
+        nep = param[jsimu]['nep']
+        npoint = param[jsimu]['npoint']
+
+        for ist, istokes in enumerate('IQU'):
+
+            if istokes == 'I':
+                rms = rms_I[jsimu]
+            elif istokes == 'Q':
+                rms = rms_Q[jsimu]
+            elif istokes == 'U':
+                rms = rms_U[jsimu]
+
+            nfreq = list(rms.keys()) # numbers of reconstructed subbands (1, 2, 4, 8)
+            values = list(rms.values())
+#             print('values', values)
+            
+            # mean over subbands (averaging the sigma**2)
+            rms_square = [i**2 for i in values]
+            if nzones == 1:
+                rms_av = [np.sqrt(np.sum(i, axis=0)) for i in rms_square]
+#                 print('av', rms_av) 
+            else:
+                rms_av = [np.sqrt(np.sum(i, axis=1)) for i in rms_square]
+#                 print('av', rms_av)
+                
+            rms_av = np.array(rms_av) # make an array instead of a list
+            print('shape', rms_av.shape)
+
+            for izone in range(nzones):
+                plt.subplot(nzones, 3, ist+3*izone+1)
+                plt.subplots_adjust(hspace=0.5)
+                plt.title('Stokes {}, zone {}'.format(istokes, izone+1), fontsize=18)
+                plt.xlabel('# recon subbands', fontsize=16)
+                plt.ylabel('rms', fontsize=16)
+
+                if nzones==1:
+                    plt.plot(nfreq, rms_av / nep,
+                             label='nep,ptg: {:1.0e},{}'.format(nep, npoint))
+                else:
+                    plt.plot(nfreq, rms_av[:, izone] / nep,
+                             label='nep,ptg: {:1.0e},{}'.format(nep, npoint))
+
+            if ist==0: plt.legend(loc='upper center', bbox_to_anchor=(1.75, 1.3), ncol=4, fontsize=15)
+    
+    return
+```
+
+***
+
+## NEP cste, ptg different => Martin
+
+```{python}
+#rms_i0, rms_q0, rms_u0, par0 = rms_method(name='NERSC_runs/24334789/20190903_low_nep')
+simulations = ['NERSC_runs/24817644/20190926_low_nep',
+              'NERSC_runs/24817884/20190926_low_nep',
+              'NERSC_runs/24817902/20190926_low_nep',
+              'NERSC_runs/24817974/20190926_low_nep',
+              'NERSC_runs/24817950/20190926_low_nep',
+              'NERSC_runs/24817987/20190926_low_nep',
+              'NERSC_runs/24817999/20190926_low_nep',
+              'NERSC_runs/24818388/20190926_low_nep',
+              'NERSC_runs/24818399/20190926_low_nep',
+              'NERSC_runs/24818404/20190926_low_nep',
+              'NERSC_runs/24818411/20190926_low_nep',
+              'NERSC_runs/24122605/20190825_low_nep',
+              'NERSC_runs/24870671/20190928_low_nep']
+print(len(simulations))
+
+# 1 zone
+rms_i, rms_q, rms_u, par = rms_method_loop_simu(simulations, residuals_way='noiseless')
+
+# 2 zones
+rms_iZ, rms_qZ, rms_uZ, parZ = rms_method_loop_simu(simulations, residuals_way='noiseless', zones=2)
+
+# 3 zones
+rms_i3Z, rms_q3Z, rms_u3Z, par3Z = rms_method_loop_simu(simulations, residuals_way='noiseless', zones=3)
+```
+
+***
+check if is working the store (ok))
+
+```{python}
+for i in range(len(simulations)):
+    #print(rms_i[i]['8'])    
+    print(par[i])
+print('Number of simulations :', len(simulations))
+```
+
+```{python}
+#help(amc.get_corrections)
+corr,_=amc.get_corrections(d['nf_sub'],d['nf_recon'][2])
+print(corr)
+#help(qubic.compute_freq)
+_,_,banda,_,_,_ = qubic.compute_freq(150,4)
+#print(len(qubic.compute_freq(150,4)))
+print('width, ', banda, '\n',
+      'corre, ', corr, '\n',
+      'band corr ', banda*corr)
+```
+
+```{python}
+#freq = '4' # number of channels for reconstruction
+import matplotlib._color_data as mcd
+keycolor = ['fuchsia','aquamarine','brown','orangered',
+            'crimson',
+           'darkblue','darkgreen','green','indigo',
+           'orange','plum','purple','teal','coral',
+           'tomato','yellowgreen']
+color = []
+for n in keycolor:
+    #n='xkcd:'+n
+    color.append(mcd.CSS4_COLORS[n])
+    
+
+#color = ['k','g','r','c','m','y','b','orange','r','c','m','y','r']
+plt.clf()
+nzones = [1, 2, 3]
+marker = ['o','+','*','<']
+#print(nf_recon)
+#nf_recon= [1,2,4,8]
+plt.figure(figsize=(14,6))
+nf_recon= [8,]
+for irec, kfreq in enumerate(nf_recon):
+    print(kfreq)
+    corrections, _ = amc.get_corrections(16, kfreq)
+    for jsimu in range(len(par)):
+        ab = 0 # fix legend warning
+        valval = 7.5e-18
+        condition0 = par[jsimu]['nep'] == valval
+        condition1 = parZ[jsimu]['nep'] == valval
+        condition2 = par3Z[jsimu]['nep'] == valval
+
+        #condition0 = par[jsimu]['npoint'] == 3000
+        #condition1 = parZ[jsimu]['npoint'] == 3000
+        #condition2 = par3Z[jsimu]['npoint'] == 3000
+
+        for ist, istokes in enumerate('IQU'):
+            plt.subplot(1, 3, ist+1)
+            plt.title('Stokes {}'.format(istokes), fontsize=18)
+            plt.xlabel('# zones', fontsize=16)
+            plt.ylabel('rms', fontsize=16)
+            plt.xticks([1,2,3], fontsize= 14)
+            plt.yticks(fontsize = 10)
+            plt.axvline(1.5, color='k', alpha= 0.3, linewidth=3, linestyle='-')
+            plt.axvline(2.5, color='k', alpha= 0.3, linewidth=3, linestyle='-')
+            plt.xlim(0.70,3.6)
+
+            for izones in nzones:
+                if izones == 1: 
+                    if condition0:
+                        if istokes == 'I':                         
+    #                         print(len(rms_i[jsimu]['{}'.format(kfreq)]))
+                            plt.plot(np.ones_like(rms_i[jsimu]['{}'.format(kfreq)]), 
+                             rms_i[jsimu]['{}'.format(kfreq)] / np.sqrt(corrections), 
+                             label = 'nep,ptg: {:1.0e},{}'.format(par[jsimu]['nep'], par[jsimu]['npoint']),
+                             color=color[jsimu], marker = marker[irec], linestyle='', mew =3)
+                             #ms=par[jsimu]['npoint']/1e3*2, alpha = 1.)
+                        elif istokes == 'Q': 
+                            plt.plot(np.ones_like(rms_q[jsimu]['{}'.format(kfreq)]), 
+                             rms_q[jsimu]['{}'.format(kfreq)] / np.sqrt(corrections), 
+                             #label = 'ptg: {}'.format(par[jsimu]['npoint']),
+                             color=color[jsimu], marker = marker[irec], linestyle='',mew =3)
+                             #ms=par[jsimu]['npoint']/1e3*2, alpha = 1.)
+                        elif istokes == 'U': 
+                            plt.plot(np.ones_like(rms_u[jsimu]['{}'.format(kfreq)]), 
+                             rms_u[jsimu]['{}'.format(kfreq)] / np.sqrt(corrections), 
+                             #label = 'ptg: {}'.format(par[jsimu]['npoint']),
+                            color=color[jsimu], marker = marker[irec], linestyle='', mew =3)
+                            #ms=par[jsimu]['npoint']/1e3*2, alpha = 1.)
+                        if ab == 0: plt.legend(loc='upper center', bbox_to_anchor=(1.75, 1.3),ncol=4,fontsize = 15)
+                        ab +=1
+                elif izones == 2:
+                    for iizo in range(izones):
+                        if iizo == 0: 
+                            xx = 1.75
+                            xdim = xx*np.ones((int(kfreq),))
+                        else: 
+                            xx = 2.25
+                            xdim = xx*np.ones((int(kfreq),))
+                        if condition1:
+                            if istokes == 'I': 
+                                plt.plot(xdim, 
+                                 rms_iZ[jsimu]['{}'.format(kfreq)][iizo] / np.sqrt(corrections), 
+                                 color=color[jsimu], marker = marker[irec], linestyle='',mew =3)
+                             #ms=par[jsimu]['npoint']/1e3*2, alpha = 1.)
+                            elif istokes == 'Q': 
+                                plt.plot(xdim, 
+                                 rms_qZ[jsimu]['{}'.format(kfreq)][iizo] / np.sqrt(corrections), 
+                                 color=color[jsimu], marker = marker[irec], linestyle='',mew =3)
+                             #ms=par[jsimu]['npoint']/1e3*2, alpha = 1.)
+                            elif istokes == 'U': 
+                                plt.plot(xdim, 
+                                 rms_uZ[jsimu]['{}'.format(kfreq)][iizo] / np.sqrt(corrections), 
+                                 color=color[jsimu], marker = marker[irec], linestyle='',mew =3)
+                             #ms=par[jsimu]['npoint']/1e3*2, alpha = 1.)
+
+                elif izones == 3:
+                    for iizo in range(izones):
+                        if iizo == 0: 
+                            xx = 2.67
+                            xdim = xx*np.ones((int(kfreq),))
+                        elif iizo == 1: 
+                            xx = 3.
+                            xdim = xx*np.ones((int(kfreq),))
+                        elif iizo == 2:
+                            xx = 3.33
+                            xdim = xx*np.ones((int(kfreq),))
+                        if condition2:
+                            if istokes == 'I': 
+                                plt.plot(xdim, 
+                                 rms_i3Z[jsimu]['{}'.format(kfreq)][iizo] / np.sqrt(corrections), 
+                                 color=color[jsimu], marker = marker[irec], linestyle='',mew =3)
+                             #ms=par[jsimu]['npoint']/1e3*2, alpha = 1.)
+                            elif istokes == 'Q': 
+                                plt.plot(xdim, 
+                                 rms_q3Z[jsimu]['{}'.format(kfreq)][iizo] / np.sqrt(corrections), 
+                                 color=color[jsimu], marker = marker[irec], linestyle='',mew =3) 
+                             #ms=par[jsimu]['npoint']/1e3*2, alpha = 1.)
+                            elif istokes == 'U': 
+                                plt.plot(xdim, 
+                                 rms_u3Z[jsimu]['{}'.format(kfreq)][iizo] / np.sqrt(corrections), 
+                                 color=color[jsimu], marker = marker[irec], linestyle='',mew =3)
+                             #ms=par[jsimu]['npoint']/1e3*2, alpha = 1.)
+
+        #plt.text(-1.7,0.04,'map_rec',fontsize=18)
+
+            #plt.xlim(1.7,1.8)
+```
+
+```{python}
+plot2(simulations, nzones=3, residuals_way='noiseless', noiseless=False)
+```
+
+***
+
+### Std profile
+
+```{python}
+seenmap = rmc.get_seenmap(files[0])
+```
+
+```{python}
+nbins = 30
+isub = 2
+
+plt.figure(figsize=(15, 6))
+for ist in range(3):
+    plt.subplot(131)
+    bin_centers, ang, std_bin, std_profile = amc.std_profile(res_patch1, nbins, d['nside'], center, seenmap)
+    plt.plot(bin_centers, std_bin[:, isub, ist], '.', label=stokes[ist])
+    plt.title('Noiseless subband {}/{}'.format(isub+1, nfrec))
+    plt.xlabel('Angle (°)')
+    plt.ylabel('STD')
+    plt.legend()
+    
+    plt.subplot(132)
+    bin_centers, ang, std_bin, std_profile = amc.std_profile(res_patch2, nbins, d['nside'], center, seenmap)
+    plt.plot(bin_centers, std_bin[:, isub, ist], '.', label=stokes[ist])
+    plt.title('Conv subband {}/{}'.format(isub+1, nfrec))
+    plt.xlabel('Angle (°)')
+    plt.ylabel('STD')
+    
+    plt.subplot(133)
+    bin_centers, ang, std_bin, std_profile = amc.std_profile(res_patch3, nbins, d['nside'], center, seenmap)
+    plt.plot(bin_centers, std_bin[:, isub, ist], '.', label=stokes[ist])
+    plt.title('Mean recon subband {}/{}'.format(isub+1, nfrec))
+    plt.xlabel('Angle (°)')
+    plt.ylabel('STD')
+
+```
+
+***
+## Ptg cste, NEP different => Louise 
+
+```{python}
+simulations3000 = ['24817644/20190926_low_nep',
+               '24817840/20190926_low_nep',
+               '24817884/20190926_low_nep',
+               '24817902/20190926_low_nep',
+               '24858757/20190927_low_nep',
+               '24870671/20190928_low_nep',
+               '24870759/20190928_low_nep',
+               '24870780/20190928_low_nep']
+
+simulations9000 = ['24870861/20190929_low_nep',
+                   '24870921/20190929_low_nep',
+                   '24870964/20190929_low_nep',
+                   '24870972/20190929_low_nep',
+                   '24818388/20190926_low_nep',
+                   '24818399/20190926_low_nep',
+                   '24818404/20190926_low_nep',
+                   '24818411/20190926_low_nep']
+
+simulations128 = ['24445883/20190909_low_nep',
+                  '24445922/20190909_low_nep',
+                  '24445999/20190909_low_nep',
+                  '24446008/20190909_low_nep']
+simu220 = ['25591014/20191106_low_nep']
+```
+
+```{python}
+simu = simu220                
+# 1 zone
+rms_i, rms_q, rms_u, par = rms_method_loop_simu(simu, residuals_way='noiseless')
+
+# 2 zones
+rms_iZ, rms_qZ, rms_uZ, parZ = rms_method_loop_simu(simu, residuals_way='noiseless', zones=2)
+
+# 3 zones
+rms_i3Z, rms_q3Z, rms_u3Z, par3Z = rms_method_loop_simu(simu, residuals_way='noiseless', zones=3)
+```
+
+```{python}
+nf_recon = [1, 2, 4, 8] # number of channels for reconstruction
+color = ['k','g','r','c','m','y','b','orange','r','c','m','y']
+
+plt.figure(figsize=(20, 26))
+nzones = [1, 2, 3]
+
+for irec, kfreq in enumerate(nf_recon):
+    corrections, _ = amc.get_corrections(16, kfreq)
+#     print(corrections)
+    print(irec)
+    for jsimu in range(len(par)):
+        nep = par[jsimu]['nep']
+        npoint = par[jsimu]['npoint']
+        ab = 0 # fix legend warning
+
+        for ist, istokes in enumerate('IQU'):
+            plt.subplot(len(nf_recon), 3, 3*irec+ist+1)
+            plt.title('Stokes {} nf_recon {}'.format(istokes, kfreq), fontsize=18)
+            plt.xlabel('# zones', fontsize=16)
+            plt.ylabel('rms', fontsize=16)
+            plt.xticks([1,2,3], fontsize= 14)
+            plt.yticks(fontsize = 10)
+            plt.axvline(1.5, color='k', alpha= 0.3, linewidth=3, linestyle='-')
+            plt.axvline(2.5, color='k', alpha= 0.3, linewidth=3, linestyle='-')
+            plt.xlim(0.70,3.6)
+    #         plt.ylim(0.,0.5)
+
+            for izones in nzones:
+                if izones == 1: 
+                    if istokes == 'I':
+                        rms = rms_i
+                    elif istokes == 'Q': 
+                        rms = rms_q
+                    elif istokes == 'U':
+                        rms = rms_u
+                        
+                    plt.plot(np.ones_like(rms[jsimu]['{}'.format(kfreq)]), 
+                             rms_i[jsimu]['{}'.format(kfreq)] / (nep * np.sqrt(corrections)), 
+                             label = 'nep,ptg: {:1.0e},{}'.format(nep, npoint),
+                             color=color[jsimu], marker='o', linestyle='', mew=3, 
+                             ms=par[jsimu]['npoint']/1e3*2, alpha=0.4)
+                
+                    if ab == 0 and irec == 0: 
+                        plt.legend(loc='upper center', bbox_to_anchor=(1.75, 1.3), ncol=4, fontsize=15)
+                    ab += 1
+                    
+                elif izones == 2:
+                    for iizo in range(izones):
+                        if iizo == 0: 
+                            xx = 1.75
+                            xdim = xx*np.ones((int(kfreq),))
+                        else: 
+                            xx = 2.25
+                            xdim = xx*np.ones((int(kfreq),))
+
+                        if istokes == 'I': 
+                            rms = rms_iZ
+                        elif istokes == 'Q': 
+                            rms = rms_qZ
+                        elif istokes == 'U': 
+                            rms = rms_uZ
+                            
+                        plt.plot(xdim, rms[jsimu]['{}'.format(kfreq)][iizo] / (nep * np.sqrt(corrections)), 
+                                 color=color[jsimu], marker='*', linestyle='', mew=3, 
+                                 ms=par[jsimu]['npoint']/1e3*2, alpha=0.4)
+
+                elif izones == 3:
+                    for iizo in range(izones):
+                        if iizo == 0: 
+                            xx = 2.67
+                            xdim = xx*np.ones((int(kfreq),))
+                        elif iizo == 1: 
+                            xx = 3.
+                            xdim = xx*np.ones((int(kfreq),))
+                        elif iizo == 2:
+                            xx = 3.33
+                            xdim = xx*np.ones((int(kfreq),))
+                        if istokes == 'I': 
+                            rms = rms_i3Z
+                        elif istokes == 'Q': 
+                            rms = rms_q3Z
+                        elif istokes == 'U':
+                            rms = rms_u3Z
+                        
+                        plt.plot(xdim, rms[jsimu]['{}'.format(kfreq)][iizo] / (nep * np.sqrt(corrections)),
+                                 color=color[jsimu], marker='+', linestyle='', mew=3, 
+                                 ms=par[jsimu]['npoint']/1e3*2, alpha=0.4)
+                            
+
+
+```
+
+```{python}
+plot2(simu, nzones=3, residuals_way='noiseless', noiseless=False)
+```
+
+### STD profile
+
+```{python}
+res_patch1.shape
+
+```
+
+```{python}
+seenmap = rmc.get_seenmap(files[0])
+```
+
+```{python}
+nbins = 30
+isub = 2
+
+plt.figure(figsize=(15, 6))
+for ist in range(3):
+    plt.subplot(131)
+    bin_centers, ang, std_bin, std_profile = amc.std_profile(res_patch1, nbins, d['nside'], center, seenmap)
+    plt.plot(bin_centers, std_bin[:, isub, ist], '.', label=stokes[ist])
+    plt.title('Noiseless subband {}/{}'.format(isub+1, nfrec))
+    plt.xlabel('Angle (°)')
+    plt.ylabel('STD')
+    plt.legend()
+    
+    plt.subplot(132)
+    bin_centers, ang, std_bin, std_profile = amc.std_profile(res_patch2, nbins, d['nside'], center, seenmap)
+    plt.plot(bin_centers, std_bin[:, isub, ist], '.', label=stokes[ist])
+    plt.title('Conv subband {}/{}'.format(isub+1, nfrec))
+    plt.xlabel('Angle (°)')
+    plt.ylabel('STD')
+    
+    plt.subplot(133)
+    bin_centers, ang, std_bin, std_profile = amc.std_profile(res_patch3, nbins, d['nside'], center, seenmap)
+    plt.plot(bin_centers, std_bin[:, isub, ist], '.', label=stokes[ist])
+    plt.title('Mean recon subband {}/{}'.format(isub+1, nfrec))
+    plt.xlabel('Angle (°)')
+    plt.ylabel('STD')
+
+
+```
+
+```{python}
+
+```

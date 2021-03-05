@@ -1,0 +1,300 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# %matplotlib inline
+# #%matplotlib notebook
+from matplotlib import rc
+rc('figure', figsize=(15,6))
+rc('font', size=12)
+rc('text', usetex=False)
+rc('image', cmap='viridis')
+
+import healpy as hp
+import pickle
+from importlib import reload
+
+import qubic.io
+from pysimulators import FitsArray
+import qubic.fibtools as ft
+import qubic.demodulation_lib as dl
+import qubic.sb_fitting as sbfit
+
+# Import jchinstrument from ../
+import os,sys,inspect
+current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parent_dir = os.path.dirname(current_dir)
+sys.path.insert(0, parent_dir) 
+import jchinstrument as jcinst
+```
+
+```{python}
+fitted_directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/FitSB/'
+directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/150GHz-2019-04-06/'
+```
+
+```{python}
+c50 = np.cos(np.radians(50))
+azmin = -15./c50
+azmax = 15./c50
+flatmap, az, el = sbfit.get_flatmap(1, directory, azmin=azmin, azmax=azmax)
+npix = len(np.ravel(flatmap))
+alldata_renorm = np.zeros((256, npix))
+for i in range(256):
+    flatmap, az, el = sbfit.get_flatmap(i+1, directory, azmin=azmin, azmax=azmax)
+    mm,ss = ft.meancut(flatmap,3)
+    alldata_renorm[i,:] = np.ravel((flatmap-mm)/ss)  
+
+med = np.reshape(np.median(alldata_renorm,axis=0),np.shape(flatmap))
+mm=np.mean(med)
+ss = np.std(med)
+
+imshow(np.reshape(med, np.shape(flatmap)),
+       extent=[np.min(az)*c50, np.max(az)*c50, np.min(el), np.max(el)], aspect='equal')
+colorbar()
+title('Median over all S.B. images (renormalized)')
+```
+
+Calculate residuals for all TES
+
+```{python}
+importlib.reload(sbfit)
+npix = len(np.ravel(med))
+alldata = np.zeros((256, npix))
+allfit = np.zeros((256, npix))
+allresiduals = np.zeros((256, npix))
+for i in range(256):
+    flatmap, az, el, fitmap, xypeaks = sbfit.get_flatmap(i+1, directory, 
+                                                                              azmin=azmin, azmax=azmax,
+                                                                             remove=med, 
+                                                                              fitted_directory=fitted_directory)
+    alldata[i,:] = np.ravel(flatmap)
+    allfit[i,:] = np.ravel(fitmap)
+    allresiduals[i,:] = alldata[i,:] - allfit[i,:]
+```
+
+```{python}
+detnum = 60
+
+mm,ss = ft.meancut(alldata[detnum-1,:],3)
+
+rc('figure', figsize=(15,4))
+subplot(1,3,1)
+imshow(np.reshape(alldata[detnum-1,:], np.shape(med)), vmin=mm-5*ss, vmax=mm+5*ss,
+       extent=[np.min(az)*c50, np.max(az)*c50, np.min(el), np.max(el)], aspect='equal')
+colorbar()
+title('S.B. TES#{}'.format(detnum))
+xlabel('Az')
+ylabel('El')
+
+subplot(1,3,2)
+imshow(np.reshape(allfit[detnum-1,:], np.shape(med)), vmin=mm-5*ss, vmax=mm+5*ss,
+       extent=[np.min(az)*c50, np.max(az)*c50, np.min(el), np.max(el)], aspect='equal')
+colorbar()
+title('Fit TES#{}'.format(detnum))
+xlabel('Az')
+ylabel('El')
+
+subplot(1,3,3)
+imshow(np.reshape(allresiduals[detnum-1,:], np.shape(med)), vmin=mm-5*ss, vmax=mm+5*ss,
+       extent=[np.min(az)*c50, np.max(az)*c50, np.min(el), np.max(el)], aspect='equal')
+colorbar()
+title('Residuals TES#{}'.format(detnum))
+xlabel('Az')
+ylabel('El')
+
+tight_layout()
+
+```
+
+```{python}
+rc('figure', figsize=(15,6))
+
+matcorr_res_fit_all = np.corrcoef(allresiduals,allfit)
+subplot(1,2,1)
+imshow(matcorr_res_fit_all)
+xlabel('Residuals                         Fit')
+ylabel('Fit                         Residuals')
+colorbar()
+plot([255-0.5, 255-0.5],[0,511],'r',lw=1)
+plot([0,511],[255-0.5,255-0.5],'r',lw=1)
+
+plot([127-0.5, 127-0.5],[0,255],'k',lw=1)
+plot([0,255],[127-0.5,127-0.5],'k',lw=1)
+
+plot([127+256-0.5, 127+256-0.5],[0+256,255+256],'k',lw=1)
+plot([0+256,255+256],[127+256-0.5,127+256-0.5],'k',lw=1)
+
+matcorr_res_fit = matcorr_res_fit_all[0:256,256:]
+
+rng = 0.1
+subplot(1,2,2)
+imshow(np.abs(matcorr_res_fit), vmin=0,vmax=rng)
+xlabel('Fit')
+ylabel('Residuals')
+colorbar()
+plot([127-0.5, 127-0.5],[0,255],'k',lw=1)
+plot([0,255],[127-0.5,127-0.5],'k',lw=1)
+
+```
+
+```{python}
+rc('figure', figsize=(15,6))
+imshow(np.log10(np.abs(matcorr_res_fit)), vmin=-2.,vmax=-1.)
+xlabel('Fit')
+ylabel('Residuals')
+plot([127-0.5, 127-0.5],[0,255],'r',lw=1)
+plot([0,255],[127-0.5,127-0.5],'r',lw=1)
+
+# for i in range(5):
+#     plot([32*i, 32*i],[0,127],'r')
+#     plot([0,127],[32*i, 32*i],'r')
+#     plot([127+32*i+1, 127+32*i+1],[127,255],'r')
+#     plot([127,255],[127+32*i+1, 127+32*i+1],'r')
+xlim(0,255)
+ylim(255,0)
+colorbar()
+```
+
+```{python}
+rc('figure', figsize=(15,6))
+matcorr_res_fit_asic1 = matcorr_res_fit[:128,:128]
+matcorr_res_fit_asic2 = matcorr_res_fit[128:,128:]
+
+subplot(1,2,1)
+imshow(np.log10(np.abs(matcorr_res_fit_asic1)), vmin=-2.,vmax=-1.)
+xlabel('Fit')
+ylabel('Residuals')
+title('Asic 1')
+colorbar()
+
+subplot(1,2,2)
+imshow(np.log10(np.abs(matcorr_res_fit_asic2)), vmin=-2.,vmax=-1.)
+xlabel('Fit')
+ylabel('Residuals')
+title('Asic 2')
+colorbar()
+```
+
+```{python}
+rc('figure', figsize=(15,30))
+matcorr_res_fit_asic1 = matcorr_res_fit[:128,:128]
+matcorr_res_fit_asic2 = matcorr_res_fit[128:,128:]
+
+
+subplot(2,1,1)
+maxi=np.max(np.log10(np.abs(matcorr_res_fit_asic1)))-0.01
+imshow(np.log10(np.abs(matcorr_res_fit_asic1)), vmin=-2.,vmax=maxi)
+xlabel('Fit')
+ylabel('Residuals')
+title('Asic 1')
+colorbar()
+for i in range(1,4):
+    plot([32*i-0.5, 32*i-0.5],[0,127],'r',lw=1)
+    plot([0,127],[32*i-0.5, 32*i-0.5],'r',lw=1)
+
+#### Order the matrix elements from high to low
+ord1 = np.argsort(np.ravel(np.log10(np.abs(matcorr_res_fit_asic1))))[::-1]
+
+maxi_asic1 = np.array(np.unravel_index(ord1, np.shape(matcorr_res_fit_asic1)))
+plot(maxi_asic1[1,:10], maxi_asic1[0,:10],'r.')
+    
+subplot(2,1,2)
+maxi=np.max(np.log10(np.abs(matcorr_res_fit_asic2)))-0.01
+imshow(np.log10(np.abs(matcorr_res_fit_asic2)), vmin=-2.,vmax=maxi)
+xlabel('Fit')
+ylabel('Residuals')
+title('Asic 2')
+colorbar()
+for i in range(1,4):
+    plot([32*i-0.5, 32*i-0.5],[0,127],'r',lw=1)
+    plot([0,127],[32*i-0.5, 32*i-0.5],'r',lw=1)
+
+    
+ord2 = np.argsort(np.ravel(np.log10(np.abs(matcorr_res_fit_asic2))))[::-1]
+
+    
+maxi_asic2 = np.array(np.unravel_index(ord2, np.shape(matcorr_res_fit_asic2)))
+plot(maxi_asic2[1,:10], maxi_asic2[0,:10],'r.')
+
+```
+
+```{python}
+num = 0
+
+rc('figure', figsize=(15,10))
+subplot(2,3,1)
+imshow(np.reshape(alldata[maxi_asic1[1,num],:], np.shape(med)))
+title('Data {}'.format(maxi_asic1[1,num]+1))
+
+subplot(2,3,2)
+imshow(np.reshape(allfit[maxi_asic1[1,num],:], np.shape(med)))
+title('Fit {}'.format(maxi_asic1[1,num]+1))
+
+subplot(2,3,3)
+imshow(np.reshape(allresiduals[maxi_asic1[1,num],:], np.shape(med)))
+title('Residuals {}'.format(maxi_asic1[1,num]+1))
+
+
+subplot(2,3,4)
+imshow(np.reshape(alldata[maxi_asic1[0,num],:], np.shape(med)))
+title('Data {}'.format(maxi_asic1[0,num]+1))
+
+subplot(2,3,5)
+imshow(np.reshape(allfit[maxi_asic1[0,num],:], np.shape(med)))
+title('Fit {}'.format(maxi_asic1[0,num]+1))
+
+subplot(2,3,6)
+imshow(np.reshape(allresiduals[maxi_asic1[0,num],:], np.shape(med)))
+title('Residuals {} contaminated by {}'.format(maxi_asic1[0,num]+1,maxi_asic1[1,num]+1))
+
+```
+
+```{python}
+num=0
+
+rc('figure', figsize=(15,10))
+subplot(2,3,1)
+imshow(np.reshape(alldata[maxi_asic2[1,num]+128,:], np.shape(med)))
+title('Data {}'.format(maxi_asic2[1,num]+128))
+
+subplot(2,3,2)
+imshow(np.reshape(allfit[maxi_asic2[1,num]+128,:], np.shape(med)))
+title('Fit {}'.format(maxi_asic2[1,num]+128+1))
+
+subplot(2,3,3)
+imshow(np.reshape(allresiduals[maxi_asic2[1,num]+128,:], np.shape(med)))
+title('Res {}'.format(maxi_asic2[1,num]+128+1))
+
+subplot(2,3,4)
+imshow(np.reshape(alldata[maxi_asic2[0,num]+128,:], np.shape(med)))
+title('Data {}'.format(maxi_asic2[0,num]+128+1))
+
+subplot(2,3,5)
+imshow(np.reshape(allfit[maxi_asic2[0,num]+128,:], np.shape(med)))
+title('Fit {}'.format(maxi_asic2[0,num]+128+1))
+
+subplot(2,3,6)
+imshow(np.reshape(allresiduals[maxi_asic2[0,num]+128,:], np.shape(med)))
+title('Res {} cont. by {}'.format(maxi_asic2[0,num]+128+1,maxi_asic2[1,num]+128+1))
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

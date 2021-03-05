@@ -1,0 +1,176 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.0
+  kernelspec:
+    display_name: Python [default]
+    language: python
+    name: python2
+---
+
+```{python}
+# %matplotlib notebook
+# #%matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(9,4.5))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack import qubicpack as qp
+import fibtools as ft
+import plotters as p
+import lin_lib as ll
+import demodulation_lib as dl
+import satorchipy as stpy
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import datetime as dt
+import pickle
+
+```
+
+```{python}
+day = '2019-05-27'
+data_dir = '/qubic/Data/Calib-TD/'+day+'/'
+#dirs = np.sort(glob.glob(data_dir+'*test_sw*'))
+dirs = np.sort(glob.glob(data_dir+'*Fibers*'))
+print (dirs)
+
+labels = []
+for d in dirs:
+    bla = str.split(d,'__')
+    labels.append(bla[1])
+print labels
+```
+
+```{python}
+#thedir = '/qubic/Data/Calib-TD/2019-04-18/2019-04-18_16.56.51__RF_switch_cont'
+thedir = dirs[0]
+print(thedir)
+AsicNum = 1
+a = qp()
+a.verbosity=0
+a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+data1=a.azel_etc(TES=None)
+
+AsicNum = 2
+a = qp()
+a.verbosity=0
+a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+data2=a.azel_etc(TES=None)
+
+```
+
+```{python}
+TESNum=93
+t0=data1['t_data'][0]
+subplot(2,1,1)
+plot((data1['t_data']-t0)/3600, data1['data'][TESNum-1,:])
+xlabel('Hours')
+subplot(2,1,2)
+plot((data2['t_data']-t0)/3600, data2['data'][TESNum-1,:])
+xlabel('Hours')
+```
+
+```{python}
+rc('figure',figsize=(9,6))
+reload(ft)
+
+TESNum=59
+tt = data1['t_data']
+t0 = tt[0]
+dd = data1['data'][TESNum-1,:].reshape((1,len(tt)))
+
+# oktime = (((tt-t0)/3600) > 7) & (((tt-t0)/3600) < 10)
+# tt = tt[oktime]
+# dd = dd[:,oktime]
+
+period = 1.
+nbins = 50
+lowcut = 0.05
+highcut = 20.
+notch = np.array([[0.852, 0.003, 1],
+                  [1.724, 0.003, 3],
+                  [2.35, 0.03, 1],
+                  [6.939, 0.003, 1]])
+xmin = 0.4
+xmax = 20.
+ymin = 1e4
+ymax = 1e7
+
+############ Power spectrum
+subplot(2,1,1)
+spectrum_f, freq_f = ft.power_spectrum(tt, dd[0], rebin=True)
+plot(freq_f, f.gaussian_filter1d(spectrum_f,10))
+yscale('log')
+xscale('log')
+xlim(xmin, xmax)
+ylim(ymin, ymax)
+
+for i in range(10):
+    plot([period*i,period*i],[ymin,ymax],'k--',alpha=0.3)
+
+plot([lowcut, lowcut],[ymin,ymax],'k')
+plot([highcut, highcut],[ymin,ymax],'k')
+
+for i in range(notch.shape[0]):
+    nharms = notch[i,2].astype(int)
+    for j in range(nharms):
+        if j==0:
+            p=plot([notch[i,0]*(j+1), notch[i,0]*(j+1)],[ymin,ymax],'--',alpha=0.3)   
+        else:
+            plot([notch[i,0]*(j+1), notch[i,0]*(j+1)],[ymin,ymax],'--',alpha=0.3, color=p[0].get_color())
+
+########## Folding
+folded, t, folded_nonorm, newdata= ft.fold_data(tt, dd, period, lowcut, highcut, nbins, median=True, 
+                                                notch=notch, rebin=True, verbose=True)
+subplot(2,1,2)
+plot(t, folded_nonorm[0,:])
+xlim(0,period)
+
+########## New Power spectrum
+spectrum_f2, freq_f2 = ft.power_spectrum(tt, newdata, rebin=True)
+subplot(2,1,1)
+plot(freq_f2, f.gaussian_filter1d(spectrum_f2,10))
+
+```
+
+```{python}
+########## Folding all Asic 1
+folded1, t1, folded_nonorm1, newdata1= ft.fold_data(data1['t_data'], data1['data'], period, lowcut, highcut, 
+                                                nbins, median=True, 
+                                                notch=notch, rebin=True, verbose=False)
+
+
+```
+
+```{python}
+########## Folding all Asic 2
+folded2, t2, folded_nonorm2, newdata2= ft.fold_data(data2['t_data'], data2['data'], period, lowcut, highcut, 
+                                                nbins, median=True, 
+                                                notch=notch, rebin=True, verbose=False)
+
+
+```
+
+```{python}
+for i in range(128):
+    plot(t1, folded1[i,:], 'k',alpha=0.1)
+plot(t1, np.median(folded1,axis=0))
+```
+
+```{python}
+
+```

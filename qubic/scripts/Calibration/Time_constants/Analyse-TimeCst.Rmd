@@ -1,0 +1,593 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.4
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(15, 8))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack import qubicpack as qp
+import qubic.fibtools as ft
+import qubic.plotters as p
+import qubic.lin_lib as ll
+import qubic.demodulation_lib as dl
+import satorchipy as stpy
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import datetime as dt
+import pickle
+from importlib import reload
+```
+
+```{python}
+directory = '/Users/hamilton/Qubic/Calib-TD/TimeConstants/'
+files = glob.glob(directory + '/TimeCst-2019-11-12*_data.txt')
+files_freq = glob.glob(directory + '/TimeCst-2019-11-12*_freqnoise.txt')
+files_noise = glob.glob(directory + '/TimeCst-2019-11-12*_noise.txt')
+label = []
+nu = np.zeros(len(files))
+voltage = np.zeros(len(files))
+fmod = np.zeros(len(files))
+amp = np.zeros(len(files))
+offset = np.zeros(len(files))
+dutycycle = np.zeros(len(files))
+dutycycle = np.zeros(len(files))
+for i in range(len(files)):
+    d = files[i]
+    bla = str.split(d,'_')
+    print(bla)
+    label.append(bla[3])
+    nu[i] = bla[5]
+    fmod[i] = bla[7]
+    amp[i] = bla[9]
+    offset[i] = bla[11]
+    dutycycle[i] = bla[13]
+    voltage[i] = bla[17]
+print(voltage)
+print(fmod)
+print(amp)
+print(offset)
+print(dutycycle)
+```
+
+```{python}
+nv = len(files)
+alldata = np.zeros((nv, 256, 6))
+allfn = np.zeros((nv, 30))
+allnn = np.zeros((nv, 256, 30))
+for i in range(nv):
+    alldata[i,:,:] = np.loadtxt(files[i])[:,1:]
+    allfn[i,:] = np.loadtxt(files_freq[i])
+    allnn[i,:] = np.loadtxt(files_noise[i])
+ok = (np.sum(alldata[:,:,0], axis=0) != 0)
+print(ok.sum()*1./256*100)
+```
+
+```{python}
+TESNum = 39
+thetesindex = TESNum-1
+print(TESNum)
+print(alldata[0,thetesindex,0],alldata[0,thetesindex,2],alldata[0,thetesindex,4])
+print(alldata.shape)
+```
+
+```{python}
+disp = False
+med = True
+reload(ft)
+mean_rise = np.zeros(nv)
+sig_rise = np.zeros(nv)
+mean_fall = np.zeros(nv)
+sig_fall = np.zeros(nv)
+mean_relative_amp = np.zeros(nv)
+sig_relative_amp = np.zeros(nv)
+nsig_clip = 3.
+for i in range(nv):
+    thisok = alldata[i,:,1] != 0
+    mean_rise[i], sig_rise[i] = ft.meancut(alldata[i,thisok,0],nsig_clip, disp=disp, med=med)
+    #sig_rise[i] /= np.sqrt(thisok.sum())
+    mean_fall[i], sig_fall[i] = ft.meancut(alldata[i,thisok,2],nsig_clip, disp=disp, med=med)
+    #sig_fall[i] /= np.sqrt(thisok.sum())
+    mm, ss = ft.meancut(alldata[0,thisok,4],nsig_clip)
+    ratio = alldata[i,thisok,4]/mm
+    mean_relative_amp[i], sig_relative_amp[i] = ft.meancut(ratio[isfinite(ratio)],nsig_clip, disp=disp, med=med)
+    #sig_relative_amp[i] /= np.sqrt(thisok.sum())
+
+```
+
+```{python}
+rc('figure',figsize=(9, 7))
+
+errorbar(voltage, mean_rise, yerr=sig_rise,fmt='ro', label='Rise Time')
+errorbar(voltage, mean_fall, yerr=sig_fall,fmt='bo', label='Fall Time')
+ylabel('Average Time COnstant [sec]')
+xlabel('TES Bias [V]')
+legend()
+ylim(0,0.15)
+
+```
+
+```{python}
+reload(ft)
+rc('figure',figsize=(15, 10))
+subplot(2,2,1)
+errorbar(voltage, mean_rise, yerr=sig_rise,fmt='ro', label='Rise Time')
+errorbar(voltage, mean_fall, yerr=sig_fall,fmt='bo', label='Fall Time')
+ylabel('Average Time COnstant [sec]')
+xlabel('TES Bias [V]')
+legend()
+ylim(0,0.15)
+
+subplot(2,2,2)
+errorbar(voltage, mean_relative_amp, yerr=sig_relative_amp,fmt='go', label='Relative Amplitude')
+ylabel('Relative Amplitude')
+xlabel('TES Bias [V]')
+legend()
+ylim(0,6)
+
+inoise = 2
+freqnoise = allfn[0,inoise]
+noise_levels = np.zeros(len(voltage))
+err_noise_levels = np.zeros(len(voltage))
+print(allnn.shape)
+for i in range(len(voltage)):
+    noise_levels[i], err_noise_levels[i] = ft.meancut(allnn[i,:,inoise], 3, med=med, disp=disp)
+
+subplot(2,2,3)
+errorbar(voltage,noise_levels, yerr=err_noise_levels, fmt='ko')
+xlabel('TES Bias [V]')
+title('Noise Level at f={0:5.2f} Hz'.format(freqnoise))
+
+
+subplot(2,2,4)
+ratio = mean_relative_amp / noise_levels
+err_ratio = ratio * np.sqrt((err_noise_levels/noise_levels)**2 + (sig_relative_amp/mean_relative_amp)**2)
+errorbar(voltage,ratio, yerr=err_ratio, fmt= 'mo')
+xlabel('TES Bias [V]')
+title('Signal to Noise at f={0:5.2f} Hz'.format(freqnoise))
+
+tight_layout()
+```
+
+```{python}
+#### Cumulative Histograms
+cumul_rise=[]
+cumul_fall=[]
+for i in range(len(voltage)):
+    thisok = alldata[i,:,1] != 0
+
+    rise_times = alldata[i,thisok,0]
+    a = hist(rise_times, range=[0,1], bins=100, cumulative=True, density=True)
+    yy = a[0]
+    xx = 0.5*(a[1][1:]+a[1][0:-1])
+    cumul_rise.append([xx,yy])
+
+    fall_times = alldata[i,thisok,2]
+    a = hist(fall_times, range=[0,1], bins=100, cumulative=True, density=True)
+    yy = a[0]
+    xx = 0.5*(a[1][1:]+a[1][0:-1])
+    cumul_fall.append([xx,yy])
+
+```
+
+```{python}
+rc('figure',figsize=(12,7))
+#for i in range(len(voltage)):
+i=20
+xx = cumul_rise[i][0]
+yy = cumul_rise[i][1]
+p=plot(xx*1000,yy,'o-')
+val50 = np.interp(0.5, yy, xx*1000)
+plot([val50,val50],[0,1],':',color=p[0].get_color(), 
+     label='Rise Time - Median: {1:3.1f} ms'.format(voltage[i],val50))
+
+xx = cumul_fall[i][0]
+yy = cumul_fall[i][1]
+p=plot(xx*1000,yy,'o-')
+val50 = np.interp(0.5, yy, xx*1000)
+plot([val50,val50],[0,1],':',color=p[0].get_color(), 
+     label='Fall Time - Median: {1:3.1f} ms'.format(voltage[i],val50))
+
+
+
+
+plot(linspace(0.,250,100),np.zeros(100)+0.5,'k:')
+legend(loc='upper left')
+xlim(0,250)
+ylim(0,1)
+xlabel('Time Constant [ms]')
+ylabel('Cumulative Distribution')
+title('VBias={0:3.1f}$\mu$V '.format(voltage[i]))
+```
+
+```{python}
+i=20
+thisok = alldata[i,:,1] != 0
+
+rise_times = alldata[i,thisok,0]
+a = hist(rise_times, range=[0,0.3], bins=15, density=True, alpha=0.5)
+yy = a[0]
+xx = 0.5*(a[1][1:]+a[1][0:-1])
+
+fall_times = alldata[i,thisok,2]
+a = hist(fall_times, range=[0,0.3], bins=15, density=True, alpha=0.5)
+yy = a[0]
+xx = 0.5*(a[1][1:]+a[1][0:-1])
+
+```
+
+```{python}
+i=20
+rt =  alldata[i,:,0]
+thisok = alldata[i,:,1] != 0
+rt[~thisok] = np.nan
+img = ft.image_asics(all1=rt)
+imshow(img,vmin=0,vmax=0.2)
+colorbar()
+```
+
+<!-- #region -->
+From https://kicp-workshops.uchicago.edu/CMB-School/resources/depot/benson__2.pdf I find:
+
+
+The power on a TES is the sum of the optical power $P_{opt}$ and the electrical power $P_{elec}=V^2/R$.
+When the TES receives radiation itheats up and its resistance increases, this reduces the electrical power and tends to maintain the total power constant. This speeds-up the TES as it helps it going back to a lower power when illuminated.
+
+The speedup is:
+$$\tau(\mathcal{L}) = \frac{\tau_0}{1+\mathcal{L}}$$
+where $\mathcal{L}$ is the ETF loop-gain:
+$$\mathcal{L} = \frac{P_{elec}\alpha}{GT}$$
+and $\alpha$ is the the TES gain:
+$$\alpha = \frac{T}{R}\frac{dR}{dT}$$
+
+Finally the time constant scales as:
+\begin{eqnarray}
+\tau(\mathcal{L}) &=& \frac{\tau_0}{1+\mathcal{L}} \\\
+&=& \frac{\tau_0}{1+\frac{P_{elec}\alpha}{GT}} \\\
+&=& \frac{\tau_0}{1+\frac{V^2\alpha}{GTR}}
+\end{eqnarray}
+
+However, $R$ also depends upon $V$
+
+So we can fit its evolution with bias as:
+$$\tau(V) =  \frac{\tau_0}{1+\left(\frac{V}{V0}\right)^p}$$
+
+The response of the TES scales as:
+$$S_I = \frac{-1}{V}\frac{\mathcal{L}}{1+\mathcal{L}} \sim \frac{-1}{V}$$
+because $\mathcal{L}$ is large.
+
+### NB: Of course, all the above is only true in the ETF mode, which is not quite the case now... So the fitting here is a bit meaningless in reality...###
+<!-- #endregion -->
+
+```{python}
+
+```
+
+```{python}
+### Fit them together
+def loop_gain(x,pars, extra_args=None):
+    #return (x/pars[0])**pars[1]
+    #return pars[0]+pars[1]*x+pars[2]*x**2+pars[3]*x**3
+    return pars[3]+pars[0]*x**pars[1]/(np.exp(x/pars[2])-1)
+
+def tau(x,pars, extra_args=None):
+    tau0 = pars[0]
+    pars_loop = pars[1:]
+    return 0.03+tau0/(1+loop_gain(x, pars_loop))
+
+def tautauresponse(x, pars, extra_args=None):
+    pars_loop = pars[3:]
+    pars_rise = np.append(pars[0], pars_loop)
+    pars_fall = np.append(pars[1], pars_loop)
+    rise = tau(x,pars_rise)
+    fall = tau(x,pars_fall)
+    lll = loop_gain(x, pars_loop)
+    response = pars[2]/x * (lll/(1+lll))
+    return np.append(np.append(rise, fall), response)
+
+data_to_fit = np.append(np.append(mean_rise, mean_fall),mean_relative_amp)
+err_to_fit = np.append(np.append(sig_rise, sig_fall),sig_relative_amp)
+
+#guess = np.array([0.3, 0.5, 7, 0.5, -1])
+#guess = np.array([0.12, 0.2, 8, -1.2,6.4, -3.5, 0.5])
+guess = np.array([0.1, 0.15, 10, 80.,8,0.2,0.2])
+
+model_guess = tautauresponse(voltage, guess)
+model_rise = model_guess[0:len(voltage)]
+model_fall = model_guess[len(voltage):2*len(voltage)]
+model_response = model_guess[2*len(voltage):3*len(voltage)]
+
+fit =ft.do_minuit(voltage, data_to_fit, err_to_fit, guess, functname=tautauresponse,
+        force_chi2_ndf=True, verbose=False, print_level=0,nsplit=3, nohesse=True)
+fitted_curves = tautauresponse(voltage, fit[1])
+fitted_rise = fitted_curves[0:len(voltage)]
+fitted_fall = fitted_curves[len(voltage):2*len(voltage)]
+fitted_response = fitted_curves[2*len(voltage):3*len(voltage)]
+
+rc('figure',figsize=(15, 8))
+subplot(1,3,1)
+errorbar(voltage, mean_rise, yerr=sig_rise,fmt='ro', label='Rise Time')
+plot(voltage, model_rise,'r--', label='Guess')
+plot(voltage, fitted_rise,'r', label='Fit')
+errorbar(voltage, mean_fall, yerr=sig_fall,fmt='bo', label='Fall Time')
+plot(voltage, model_fall,'b--', label='Guess')
+plot(voltage, fitted_fall,'b', label='Fit')
+ylabel('Average Time COnstant [sec]')
+xlabel('TES Bias [$\mu$V]')
+legend()
+#ylim(0,0.15)
+
+subplot(1,3,2)
+errorbar(voltage, mean_relative_amp, yerr=sig_relative_amp,fmt='go', label='Relative Amplitude')
+plot(voltage, model_response,'g--', label='Guess')
+plot(voltage, fitted_response,'g', label='Fit')
+ylabel('Relative Amplitude')
+xlabel('TES Bias [$\mu$V]')
+legend()
+#ylim(0,7)
+
+subplot(1,3,3)
+loop = loop_gain(voltage,fit[1][3:])
+plot(voltage, loop)
+plot(voltage, loop_gain(voltage, guess[3:]),'--')
+ylabel('Fitted Loop Gain')
+xlabel('TES Bias [$\mu$V]')
+
+print(fit[1])
+print(fit[2])
+```
+
+The response is:
+$$S=\frac{p_0}{V}\times \frac{\mathcal{L}}{1+\mathcal{L}}$$
+where $p_0$ converts ADU to Watts.
+
+Therefore we have:
+$$\mathcal{L} = \frac{VS}{p_0-VS}$$
+
+```{python}
+VS = voltage * mean_relative_amp
+plot(voltage, VS/(10-VS))
+```
+
+Because we have:
+$$\tau = \frac{\tau_0}{1+\mathcal{L}}$$
+and 
+$$S=\frac{S_0}{V}\times\frac{\mathcal{L}}{1+\mathcal{L}}$$
+We can rewrite the first as:
+$$\mathcal{L} = \frac{\tau_0-\tau}{\tau}$$
+and insert this into the second leading to:
+$$S = \frac{S_0}{V} \times \frac{\tau-\tau_0}{\tau_0}$$
+So we can try to determine the best $\tau_0$ and $S_0$ using a brute force $\chi^2$
+
+```{python}
+nns = 200
+s0vals = np.linspace(3,10,nns)
+nnt = 150
+t0vals = np.linspace(0.1,0.5,nnt)
+s2d, t2d = np.meshgrid(s0vals, t0vals)
+
+ch2_rise = np.zeros((nns, nnt))
+ch2_fall = np.zeros((nns, nnt))
+for i in range(nns):
+    for j in range(nnt):
+        smodel = s0vals[i]/voltage * (t0vals[j]-mean_rise)/t0vals[j]
+        error = np.sqrt(sig_relative_amp**2 + sig_rise**2)
+        ch2_rise[i,j] = np.sum((smodel-mean_relative_amp)**2/error**2)        
+        smodel = s0vals[i]/voltage * (t0vals[j]-mean_fall)/t0vals[j]
+        error = np.sqrt(sig_relative_amp**2 + sig_fall**2)
+        ch2_fall[i,j] = np.sum((smodel-mean_relative_amp)**2/error**2)
+```
+
+```{python}
+subplot(1,2,1)
+imshow(np.log10(ch2_rise), origin='lower',
+       extent=[np.min(t0vals), np.max(t0vals), np.min(s0vals), np.max(s0vals)], aspect='auto',
+      vmin = np.min(np.log10(ch2_rise)), vmax=np.min(np.log10(ch2_rise))+0.01)
+xlabel(r'$\tau_0$')
+ylabel(r'$S_0$')
+colorbar()
+subplot(1,2,2)
+imshow(np.log10(ch2_fall), origin='lower',
+       extent=[np.min(t0vals), np.max(t0vals), np.min(s0vals), np.max(s0vals)], aspect='auto',
+      vmin = np.min(np.log10(ch2_fall)), vmax=np.min(np.log10(ch2_fall))+0.01)
+xlabel(r'$\tau_0$')
+ylabel(r'$S_0$')
+colorbar()
+```
+
+```{python}
+plot(voltage, (0.22-mean_rise)/mean_rise, 'ro-', label='From Rise Time')
+plot(voltage, (0.35-mean_fall)/mean_fall, 'bo-', label='From Fall Time')
+plot(voltage, (voltage*mean_relative_amp)/(6-voltage*mean_relative_amp), 'go-', label='From AMplitude')
+legend()
+ylim(0,10)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+#Independent Fit: start with response to fit the shape of loop-gain
+def response(x, pars, extra_args=None):
+    return pars[0]/x**pars[1]
+
+okfit = voltage >= 1.45
+guess = [1.,1.]
+fitamp = ft.do_minuit(voltage[okfit], mean_relative_amp[okfit], sig_relative_amp[okfit], guess, functname=response,
+        force_chi2_ndf=False, verbose=False, print_level=0,nsplit=3)
+
+
+
+vvv=np.linspace(0.9,3,100)
+errorbar(voltage, mean_relative_amp, yerr=sig_relative_amp,fmt='go', label='Relative Amplitude')
+plot(vvv, response(vvv, fitamp[1]), 'g',lw=2, 
+     label=r'Fit $V_0$={0:5.3f} +/- {1:5.3f} V'.format(fitamp[1][0], fitamp[2][0]))
+ylabel('Relative amplitude')
+xlabel('TES Bias [V]')
+legend()
+ylim(0,7)
+
+```
+
+```{python}
+#independent Fit
+
+def tau(x, pars, extra_args=None):
+    return pars[0]/(1+(x/pars[1])**pars[2])
+
+guessrise = [0.2, 8.,-1]
+fitrise = ft.do_minuit(voltage, mean_rise, sig_rise, guessrise, functname=tau,
+        force_chi2_ndf=True, verbose=False, print_level=5,nsplit=3, nohesse=True)
+
+guessfall = [0.5, 10.,-1.]
+# fitfall = ft.do_minuit(voltage, mean_fall, sig_fall, guessfall, functname=tau,
+#         force_chi2_ndf=True, verbose=False, print_level=0,nsplit=3)
+
+print('Rise:')
+print(fitrise[1])
+print(fitrise[2])
+print('Fall:')
+print(fitfall[1])
+print(fitfall[2])
+
+
+vvv=np.linspace(np.min(voltage),np.max(voltage),100)
+errorbar(voltage, mean_rise, yerr=sig_rise,fmt='ro', label='Rise Time')
+#plot(vvv, tau(vvv,guessrise),'r--')
+plot(vvv, tau(vvv, fitrise[1]), 'r',lw=2, 
+     label=r'Fit $\tau_0$={0:5.3f} +/- {1:5.3f} s ; V0 = {2:5.3f} +/- {3:5.3f} $V$ ; pow = {4:5.3f} +/- {5:5.3f}'.format(fitrise[1][0], fitrise[2][0], 
+                                                                   fitrise[1][1], fitrise[2][1], fitrise[1][2], fitrise[2][2]))
+errorbar(voltage, mean_fall, yerr=sig_fall,fmt='bo', label='Fall Time')
+#plot(vvv, tau(vvv,guessfall),'b--')
+plot(vvv, tau(vvv, fitfall[1]), 'b',lw=2, 
+     label=r'Fit $\tau_0$={0:5.3f} +/- {1:5.3f} ; V0 = {2:5.3f} +/- {3:5.3f} $V$ ; pow = {4:5.3f} +/- {5:5.3f}'.format(fitfall[1][0], fitfall[2][0], 
+                                                                   fitfall[1][1], fitfall[2][1], fitfall[1][2], fitfall[2][2]))
+ylabel('Average Fall/Rise Time [sec]')
+xlabel('TES Bias [V]')
+legend()
+
+```
+
+```{python}
+def response(x, pars, extra_args=None):
+    return pars[0]/x**pars[3] * ((x-pars[2])**pars[1]) / (1+(x-pars[2])**pars[1])
+
+guess = np.array([6,35.,0.1, 1.])
+fitamp = ft.do_minuit(voltage, mean_relative_amp, sig_relative_amp, guess, functname=response,
+        force_chi2_ndf=False, verbose=False, print_level=0,nsplit=3)
+
+print(fitamp[1])
+print(fitamp[2])
+
+subplot(1,2,1)
+vvv=np.linspace(0.9,3,100)
+errorbar(voltage, mean_relative_amp, yerr=sig_relative_amp,fmt='go', label='Relative Amplitude')
+plot(vvv, response(vvv, fitamp[1]), 'g',lw=2, 
+     label=r'Fit $V_0$={0:5.3f} +/- {1:5.3f} V'.format(fitamp[1][0], fitamp[2][0]))
+#plot(vvv, response(vvv, guess),'k--')
+ylabel('Relative amplitude')
+xlabel('TES Bias [V]')
+legend()
+#yscale('log')
+
+subplot(1,2,2)
+plot(voltage, (voltage-fitamp[1][2])**fitamp[1][1])
+```
+
+```{python}
+print(guess)
+print(fitamp[1])
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+### Looking amplitudes individually
+
+
+```{python}
+TESNum = 93
+good = alldata[:,TESNum-1,4] != 0
+errorbar(voltage[good],alldata[good,TESNum-1,4],yerr=alldata[good,TESNum-1,5],fmt='ro-')
+print(alldata[:,TESNum-1,4])
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

@@ -47,20 +47,18 @@ The values Hard-Coded in scene.py are the following (the three parameters are: T
 A study was made by JCH several years from data taken at LLAMA site with a tipper at 210 GHz as well as meteoroligal data, all over a few years. It lead to plots of comparison of the two sites (Comcordia and Chorrillos), some of them being reproduced below:
 
 ##### Comparison of opacity at Concordia and Chorillos
-![opacity.png](attachment:opacity.png)
-
+<img src="files/opacity.png">
 
 ##### Comparison of Emissivity at Concordia and Chorillos
 Let's recall that emissivity is calculated from opacity with the following expression:
 $$ \epsilon = \exp\left( -\frac{\tau}{\cos\theta}\right)$$
 where $\theta$ is the zenith angle. For QUBIC the elevation is 50 degrees on average, and therefore the zenith angle should be $\theta = 90-50 = 40$ degrees. 
     
-![emissivity.png](attachment:emissivity.png)
+<img src="files/emissivity.png">
 
 
 ##### Temperature at Chorillos
-![temperature.png](attachment:temperature.png)
-
+<img src="files/temperature.png">
 
 
 <!-- #endregion -->
@@ -132,10 +130,6 @@ ylabel('Emissivity')
 legend()
 ```
 
-```{python}
-scipy.__version__
-```
-
 <!-- #region -->
 #### So we should expect a significant effect...
 
@@ -194,7 +188,7 @@ print(d['synthbeam_fraction'])
 ```
 
 ```{python}
-configs = ['old', 'new']
+configs = ['old', 'newav', 'newmin', 'newmax']
 freqs = [150., 220.]
 
 all_rms_det = []
@@ -209,11 +203,21 @@ for cc in configs:
         d['TemperatureAtmosphere220'] = 200.
         d['EmissivityAtmosphere150'] = 0.015
         d['EmissivityAtmosphere220'] = 0.015
-    else:
+    elif cc=='newav':
         d['TemperatureAtmosphere150'] = 270.
         d['TemperatureAtmosphere220'] = 270.
-        d['EmissivityAtmosphere150'] = 0.081
-        d['EmissivityAtmosphere220'] = 0.138
+        d['EmissivityAtmosphere150'] = 0.081 #emin =  0.063     emax =  0.099    Average:  0.081
+        d['EmissivityAtmosphere220'] = 0.138 #emin =  0.099     emax =  0.178    Average:  0.138
+    elif cc=='newmin':
+        d['TemperatureAtmosphere150'] = 260.
+        d['TemperatureAtmosphere220'] = 260.
+        d['EmissivityAtmosphere150'] = 0.063 #emin =  0.063     emax =  0.099    Average:  0.081
+        d['EmissivityAtmosphere220'] = 0.099 #emin =  0.099     emax =  0.178    Average:  0.138
+    elif cc=='newmax':
+        d['TemperatureAtmosphere150'] = 280.
+        d['TemperatureAtmosphere220'] = 280.
+        d['EmissivityAtmosphere150'] = 0.099 #emin =  0.063     emax =  0.099    Average:  0.081
+        d['EmissivityAtmosphere220'] = 0.178 #emin =  0.099     emax =  0.178    Average:  0.138
 
     my_rms_det = np.zeros((2, 992))
     my_rms_phot = np.zeros((2, 992))
@@ -231,10 +235,18 @@ for cc in configs:
         TOD, maps_convolved = si.create_TOD(d, p, x0)
         my_rms_both[i,:] = np.std(TOD, axis=1)
         ### Calculate photon noise only
-        my_rms_phot[i,:] = np.sqrt(my_rms_both[i,:]**2 - my_rms_det[i,:]**2)        
-        print('     RMS Det = {}     RMS Phot = {}    RMS All = {}'.format(np.mean(my_rms_det[i,:]), 
-                                                                           np.mean(my_rms_phot[i,:]), 
-                                                                           np.mean(my_rms_both[i,:])))
+        my_rms_phot[i,:] = np.sqrt(my_rms_both[i,:]**2 - my_rms_det[i,:]**2)  
+    
+    print()
+    print('------------------------------------------------------------------------------------------')
+    print('Configuration: '+cc)
+    for i in range(len(freqs)):
+        print('   Frequency = {}'.format(freqs[i]))
+        print('     RMS Det = {0:5.3g}     RMS Phot = {1:5.3g}    RMS All = {2:5.3g}'.format(np.nanmean(my_rms_det[i,:]), 
+                                                                           np.nanmean(my_rms_phot[i,:]), 
+                                                                           np.nanmean(my_rms_both[i,:])))
+    print('------------------------------------------------------------------------------------------')
+    print()
     
     all_rms_det.append(my_rms_det)
     all_rms_both.append(my_rms_both)
@@ -250,17 +262,71 @@ s = qubic.QubicScene(d)
 ```
 
 ```{python}
-for ic in range(len(configs)):
+print('In W/sqrt(Hz)')
+for ic in range(1,len(configs)):
     cc = configs[ic]
     print()
     print('Configuration: '+cc)
 
     for i in range(len(freqs)):
         f = freqs[i]
+        fact = 4.7e-17 / np.mean(all_rms_det[ic][i,:])
         print('   Frequency = {}'.format(f))
-        print('   RMS Det = {}     RMS Phot = {}    RMS All = {}'.format(np.mean(all_rms_det[ic][i,:]), 
-                                                                           np.mean(all_rms_phot[ic][i,:]), 
-                                                                           np.mean(all_rms_both[ic][i,:])))
+        ndet = fact*np.nanmean(all_rms_det[ic][i,:])
+        nphot = fact*np.nanmean(all_rms_phot[ic][i,:])
+        nall = fact*np.nanmean(all_rms_both[ic][i,:])
+        print('   RMS Det = {0:5.3g}     RMS Phot = {1:5.3g}    RMS All = {2:5.3g}'.format(ndet, nphot, nall))
+
+
+```
+
+```{python}
+refconf = 1
+print('Relative to mean')
+for ic in range(1,len(configs)):
+    cc = configs[ic]
+    print()
+    print('Configuration: '+cc)
+
+    for i in range(len(freqs)):
+        f = freqs[i]
+        fact = 4.7e-17 / np.mean(all_rms_det[ic][i,:])
+        print('   Frequency = {}'.format(f))
+        ndet = fact*np.nanmean(all_rms_det[ic][i,:])
+        nphot = fact*np.nanmean(all_rms_phot[ic][i,:])
+        nall = fact*np.nanmean(all_rms_both[ic][i,:])
+        
+        ndetref = fact*np.nanmean(all_rms_det[refconf][i,:])
+        nphotref = fact*np.nanmean(all_rms_phot[refconf][i,:])
+        nallref = fact*np.nanmean(all_rms_both[refconf][i,:])
+        
+        relndet = 100*(ndet-ndetref)/ndetref
+        relnphot = 100*(nphot-nphotref)/nphotref
+        relnall = 100*(nall-nallref)/nallref
+        
+        print('   RMS Det = {0:5.3g}%     RMS Phot = {1:5.3g}%   RMS All = {2:5.3g}%'.format(relndet, relnphot, relnall))
+
+
+```
+
+```{python}
+### TD
+detnoiseTD = 2.05e-16
+photnoiseTDav = 2.6e-17
+photnoiseTDmin = 2.6e-17*(1-0.15)
+photnoiseTDmax = 2.6e-17*(1+0.15)
+totnoiseTDav = np.sqrt(detnoiseTD**2+photnoiseTDav**2)
+totnoiseTDmin = np.sqrt(detnoiseTD**2+photnoiseTDmin**2)
+totnoiseTDmax = np.sqrt(detnoiseTD**2+photnoiseTDmax**2)
+
+print('TD AV: det={0:5.3g} Phot={1:5.3g} Tot={2:5.3g}'.format(detnoiseTD, photnoiseTDav, totnoiseTDav))
+print('TD MIN: det={0:5.3g} Phot={1:5.3g} Tot={2:5.3g}'.format(detnoiseTD, photnoiseTDmin, totnoiseTDmin))
+print('TD MAX: det={0:5.3g} Phot={1:5.3g} Tot={2:5.3g}'.format(detnoiseTD, photnoiseTDmax, totnoiseTDmax))
+print()
+
+print('TD AV: det={0:5.3g}% Phot={1:5.3g}% Tot={2:5.3g}%'.format(0, 0, 0))
+print('TD MIN: det={0:5.3g}% Phot={1:5.3g}% Tot={2:5.3g}%'.format(0, 100*(photnoiseTDmin-photnoiseTDav)/photnoiseTDav, 100*(totnoiseTDmin-totnoiseTDav)/totnoiseTDav))
+print('TD MAX: det={0:5.3g}% Phot={1:5.3g}% Tot={2:5.3g}%'.format(0, 100*(photnoiseTDmax-photnoiseTDav)/photnoiseTDav, 100*(totnoiseTDmax-totnoiseTDav)/totnoiseTDav))
 
 
 ```

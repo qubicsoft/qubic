@@ -1,0 +1,667 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.0
+  kernelspec:
+    display_name: Python [conda env:anaconda]
+    language: python
+    name: conda-env-anaconda-py
+---
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(16,8))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack import qubicpack as qp
+import fibtools as ft
+import plotters as p
+import lin_lib as ll
+import demodulation_lib as dl
+import satorchipy as stpy
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import datetime as dt
+
+```
+
+## Dataset
+Lets get the directories corresponding to each dataset:
+
+```{python}
+# n = 'ScanMap_Speed_VE4_El'
+# days = ['2019-03-28', '2019-03-29']
+n = 'ScanMap_Speed_VE4_El'
+days = ['2019-03-30', '2019-03-31']
+# n = 'ScanMap_Speed_VE4_El'
+# days = ['2019-04-05', '2019-04-06']
+# n = 'ScanMap_160GHz_Speed_VE4_El'
+# days = ['2019-04-07', '2019-04-08']
+
+dirs = []
+elevations=[]
+for d in days:
+    dd = glob.glob('/qubic/Data/Calib-TD/'+d+'/*'+n+'*')
+    for i in xrange(len(dd)): 
+        #print dd[i]
+        truc = str.split(dd[i],'_')
+        the_el = truc[-1]
+        try:
+            elfloat = np.float(the_el)
+            elevations.append(np.float(the_el))
+            dirs.append(dd[i])
+        except:
+            print 'File '+dd[i]+' has a format that des not comply with expectations => rejected'
+            continue
+    print '  * ',d,' : {} files'.format(len(dd))
+print '  => Total = {} files'.format(len(dirs))
+print '  => Elevation ranges from {} to {}'.format(np.min(elevations),np.max(elevations))
+
+```
+
+```{python}
+labels = []
+dir_time = []
+for d in dirs:
+    bla = str.split(d,'__')
+    blo = str.split(bla[0],'/')
+    labels.append(bla[1])
+    dir_time.append(blo[-1])
+    
+for i in xrange(len(labels)): 
+    print i, labels[i], dir_time[i], 'Elevation: ', elevations[i]
+
+```
+
+# Demodulation
+
+```{python}
+ii = 72
+thedir = dd[ii]
+print('Dir: ')
+print thedir, 'Elevation =',elevations[ii]
+print('-----------------')
+
+
+AsicNum = 1
+a = qp()
+a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+data=a.azel_etc(TES=None)
+data['t_src'] += 7200
+
+data['data'] = data['data'][92:98]
+print data['data'].shape
+
+```
+
+```{python}
+def return_rms_period(period, time, azimuth, elevation, data, verbose=False):
+    if verbose: 
+        printnow('Entering RMS/period')
+    if data.ndim == 1:
+        nTES = 1
+    else:
+        sh = np.shape(data)
+        nTES = sh[0]
+    ### we label each data sample with a period
+    period_index = ((time-time[0])/period).astype(int)
+    ### We loop on periods to measure their respective amplitude and azimuth
+    allperiods = np.unique(period_index)
+    tper = np.zeros(len(allperiods))
+    azper = np.zeros(len(allperiods))
+    elper = np.zeros(len(allperiods))
+    ampdata = np.zeros((nTES, len(allperiods)))
+    err_ampdata = np.zeros((nTES, len(allperiods)))
+    if verbose: 
+        printnow('Calculating RMS per period for {} periods and {} TES'.format(len(allperiods), nTES))
+    for i in xrange(len(allperiods)):
+        ok = (period_index == allperiods[i])
+        azper[i] = np.mean(azimuth[ok])
+        elper[i] = np.mean(elevation[ok])
+        tper[i] = np.mean(time[ok])
+        if nTES == 1:
+            mm, ss = ft.meancut(data[ok],3)
+            ampdata[0,i] = ss
+            err_ampdata[0,i] = 1
+        else:
+            for j in xrange(nTES):
+                mm, ss = ft.meancut(data[j,ok],3)
+                ampdata[j,i] = ss
+                err_ampdata[j,i] = 1
+    return tper, azper, elper, ampdata, err_ampdata
+
+def vec_interp(x, xin, yin):
+    sh = np.shape(yin)
+    nvec = sh[0]
+    yout = np.zeros_like(yin)
+    for i in xrange(nvec):
+        yout[i,:] = np.interp(x, xin, yin[i,:])
+    return yout
+
+def filter_data(time_in, data_in, lowcut, highcut, rebin=True, verbose=False):
+    sh = np.shape(data_in)
+    if rebin:
+        if verbose: printnow('Rebinning before Filtering')
+        ### Resample the data on a regular grid
+        time = np.linspace(time_in[0], time_in[-1], len(time_in))
+        if len(sh)==1:
+            data = np.interp(time, time_in, data_in)
+        else:
+            data = vec_interp(time, time_in, data_in)
+    else:
+        if verbose: printnow('No rebinning before Filtering')
+        time = time_in
+        data = data_in
+    
+    FREQ_SAMPLING = 1./((np.max(time)-np.min(time))/len(time))
+    filt = scsig.butter(5, [lowcut / FREQ_SAMPLING, highcut / FREQ_SAMPLING], btype='bandpass', output='sos')
+    if len(sh)==1:
+        dataf = scsig.sosfilt(filt, data)
+    else:
+        dataf = scsig.sosfilt(filt, data, axis=1)
+    return dataf
+
+def printnow(truc):
+    print(truc)
+    sys.stdout.flush()
+    
+def scan2ang_RMS(period, indata, median=True, lowcut=None, highcut=None, verbose=False):
+    new_az = np.interp(indata['t_data'], indata['t_azel'], indata['az'])
+    
+    ### Check if filtering is requested
+    if (lowcut is None) & (highcut is None):
+        dataf = indata['data'].copy()
+    else:
+        if verbose: printnow('Filtering data')
+        dataf = filter_data(indata['t_data'], indata['data'], lowcut, highcut)
+        
+    ### First get the RMS per period
+    if verbose: printnow('Resampling Azimuth')
+    az = np.interp(indata['t_data'], indata['t_azel'], indata['az'])
+    if verbose: printnow('Resampling Elevation')
+    el = np.interp(indata['t_data'], indata['t_azel'], indata['el'])
+    tper, azper, elper, ampdata, err_ampdata = return_rms_period(period, indata['t_data'], az, el, dataf, verbose=verbose)
+    ### Convert azimuth to angle
+    angle = azper * np.cos(np.radians(elper))
+    ### Fill the return variable for unbinned
+    unbinned = {}
+    unbinned['t'] = tper
+    unbinned['az'] = azper
+    unbinned['el'] = elper
+    unbinned['az_ang'] = angle
+    unbinned['sb'] = ampdata
+    unbinned['dsb'] = err_ampdata
+    return unbinned     
+    
+def your_super_demodulate(period, indata, lowcut, highcut, 
+                   nbins=150, median=True, method='demod', verbose=False,
+                   doplot=True, rebin=False, cut=None, label=None, renormalize_plot=True):
+
+    ### Call one of the methods
+    if method == 'demod':
+        if verbose: printnow('Demodulation Method')
+        unbinned = scan2ang_demod(period, indata, verbose=verbose,
+                                 median=median, lowcut=lowcut, highcut=highcut)
+    elif method == 'rms':
+        if verbose: printnow('RMS Method')
+        unbinned = scan2ang_RMS(period, indata, verbose=verbose,
+                                 median=median, lowcut=lowcut, highcut=highcut)
+    # elif method == 'splfit':
+    #     azbins, elbins, angle, sb, dsb = scan2ang_splfit(period, time, data, t_src, src, 
+    #                                      t_az, az, lowcut, highcut, elevation, 
+    #                                     nbins=nbins, superbinning=1., doplot=False)
+    
+    if rebin:
+        ### Now rebin the data
+        if verbose: printnow('Now rebin the data')
+        if indata['data'].ndim == 1:
+            sh = [1, len(indata['data'])]
+        else:
+            sh = np.shape(indata['data'])
+        ang = np.zeros(nbins)
+        sb = np.zeros((sh[0], nbins))
+        dsb = np.zeros((sh[0], nbins))
+        others = np.zeros((nbins,2))
+        for i in xrange(sh[0]):
+            if verbose: 
+                if (16*(i/16))==i: 
+                    printnow('Rebinning TES {} over {}'.format(i,sh[0]))
+            ang, sb[i,:], dang, dsb[i,:], others = ft.profile(unbinned['az_ang'], unbinned['sb'][i,:], nbins=nbins, plot=False, dispersion=True, log=False, median=median, cutbad=False, rebin_as_well=[unbinned['az'], unbinned['el']])
+        binned = {}
+        binned['az'] = others[:,0]
+        binned['el'] = others[:,1]
+        binned['az_ang'] = ang
+        binned['sb'] = sb
+        binned['dsb'] = dsb
+    else:
+        binned = None
+
+    ### If requested plot the result
+    if doplot==True:
+        if verbose: printnow('Plot')
+        toplot = unbinned
+        if rebin: toplot=binned
+        if label==None:
+            label=method
+        if indata['data'].ndim==1:
+            sh = [1, len(indata['data'])]
+        else:
+            sh = np.shape(indata['data'])
+        for i in xrange(sh[0]):
+            errorbar(toplot['az_ang'], toplot['sb'][i,:], yerr=toplot['dsb'][i,:], fmt='.-', label=label+' {}'.format(i))
+        legend()
+    
+    return unbinned, binned
+
+
+```
+
+```{python}
+from scipy.fftpack import fft, fftfreq
+
+def sweepFFT(data, time, azimuth, elevation,Nw, step = 1):
+    c = dict()
+    N = len(data)
+    for i in range(0, N-Nw, step):
+        datah = data[i:i+Nw]# * np.hamming(Nw)
+        datafft = fft(datah)/ Nw
+        for a in range(8):
+            if str(a) not in c : c[str(a)] = list()
+            c[str(a)].append(datafft[a])
+        if 'time' not in c : c['time'] = list()        
+        c['time'].append(time[i])
+        if 'azimuth' not in c : c['azimuth'] = list()        
+        c['azimuth'].append(azimuth[i])
+        if 'elevation' not in c : c['elevation'] = list()        
+        c['elevation'].append(elevation[i])
+    return c
+
+
+def return_fft_period(period, time, azimuth, elevation, data, verbose=False):
+    if verbose: 
+        printnow('Entering RMS/period')
+    if data.ndim == 1:
+        nTES = 1
+    else:
+        sh = np.shape(data)
+        nTES = sh[0]
+        
+    #    
+    timer = (time-time[0])
+
+    # Adquisition 
+    fs = 2e6/128/100 # samples per second
+    dt = 1/ fs
+    # Modulation of light source
+    fm = 1.0 # Hz
+    # define window
+    Np = 4 # number of period of fft (relate frequency resolution)
+    Nw = int(fs/fm*Np) # number of bins per windows
+    N  = len(timer)
+    Nstep = 1
+    # sweep FFT 
+    data_out = list()
+    data_err = list()
+    for ti in range(nTES):
+        cf = sweepFFT(data[ti], timer,  azimuth, elevation,Nw, step = Nstep)
+        
+        data_out.append(cf[str(Np)])
+        data_err.append(cf[str(Np)])
+        plot(cf['time'],np.abs(data_out[ti]))
+    ylim([0,20000])
+    show()
+
+    
+    ### we label each data sample with a period
+    period_index = ((time-time[0])/period).astype(int)
+    ### We loop on periods to measure their respective amplitude and azimuth
+    allperiods = np.unique(period_index)
+    tper = np.zeros(len(allperiods))
+    azper = np.zeros(len(allperiods))
+    elper = np.zeros(len(allperiods))
+    ampdata = np.zeros((nTES, len(allperiods)))
+    err_ampdata = np.zeros((nTES, len(allperiods)))
+    if verbose: 
+        printnow('Calculating RMS per period for {} periods and {} TES'.format(len(allperiods), nTES))
+    for i in xrange(len(allperiods)):
+        ok = (period_index == allperiods[i])
+        azper[i] = np.mean(azimuth[ok])
+        elper[i] = np.mean(elevation[ok])
+        tper[i] = np.mean(time[ok])
+        if nTES == 1:
+            mm, ss = ft.meancut(data[ok],3)
+            ampdata[0,i] = ss
+            err_ampdata[0,i] = 1
+        else:
+            for j in xrange(nTES):
+                mm, ss = ft.meancut(data[j,ok],3)
+                ampdata[j,i] = ss
+                err_ampdata[j,i] = 1
+                
+                
+    plot(cf['time'], np.abs(data_out[0])/max(np.abs(data_out[0])))
+    #show()
+    plot(tper-time[0], ampdata[0]/20000)
+    ylim([0,2])
+    show()
+    
+    #return cf['time']+time[0],cf['azimuth'],cf['elevation'],data_out,data_err
+    return tper, azper, elper, ampdata, err_ampdata
+
+
+
+def scan2ang_FFT(period, indata, median=True, lowcut=None, highcut=None, verbose=False):
+
+
+    new_az = np.interp(indata['t_data'], indata['t_azel'], indata['az'])
+    
+    ### Check if filtering is requested
+    if (lowcut is None) & (highcut is None):
+        dataf = indata['data'].copy()
+    else:
+        if verbose: printnow('Filtering data')
+        dataf = filter_data(indata['t_data'], indata['data'], lowcut, highcut)
+        
+    ### First get the RMS per period
+    if verbose: printnow('Resampling Azimuth')
+    az = np.interp(indata['t_data'], indata['t_azel'], indata['az'])
+    if verbose: printnow('Resampling Elevation')
+    el = np.interp(indata['t_data'], indata['t_azel'], indata['el'])
+    
+    ### RETURN RMS PERIOD
+    tper, azper, elper, ampdata, err_ampdata = return_fft_period(period, indata['t_data'], az, el, dataf, verbose=verbose)
+    
+    
+    
+    ### Convert azimuth to angle
+    angle = azper * np.cos(np.radians(elper))
+    ### Fill the return variable for unbinned
+    unbinned = {}
+    unbinned['t'] = tper
+    unbinned['az'] = azper
+    unbinned['el'] = elper
+    unbinned['az_ang'] = angle
+    unbinned['sb'] = ampdata
+    unbinned['dsb'] = err_ampdata
+    return unbinned   
+
+
+def my_super_demodulate(period, indata, lowcut, highcut, 
+                   nbins=150, median=True, method='exp', verbose=False,
+                   doplot=True, rebin=False, cut=None, label=None, renormalize_plot=True):
+
+    ### Call one of the methods
+    if method == 'demod':
+        if verbose: printnow('Demodulation Method')
+        unbinned = scan2ang_demod(period, indata, verbose=verbose,
+                                 median=median, lowcut=lowcut, highcut=highcut)
+    elif method == 'rms':
+        if verbose: printnow('RMS Method')
+        unbinned = scan2ang_RMS(period, indata, verbose=verbose,
+                                 median=median, lowcut=lowcut, highcut=highcut)
+        
+    elif method == 'fft':
+        if verbose: printnow('FFT Method')
+        unbinned = scan2ang_FFT(period, indata, verbose=verbose,
+                                 median=median, lowcut=lowcut, highcut=highcut)
+        
+    # elif method == 'splfit':
+    #     azbins, elbins, angle, sb, dsb = scan2ang_splfit(period, time, data, t_src, src, 
+    #                                      t_az, az, lowcut, highcut, elevation, 
+    #                                     nbins=nbins, superbinning=1., doplot=False)
+    
+    if rebin:
+        ### Now rebin the data
+        if verbose: printnow('Now rebin the data')
+        if indata['data'].ndim == 1:
+            sh = [1, len(indata['data'])]
+        else:
+            sh = np.shape(indata['data'])
+        ang = np.zeros(nbins)
+        sb = np.zeros((sh[0], nbins))
+        dsb = np.zeros((sh[0], nbins))
+        others = np.zeros((nbins,2))
+        for i in xrange(sh[0]):
+            if verbose: 
+                if (16*(i/16))==i: 
+                    printnow('Rebinning TES {} over {}'.format(i,sh[0]))
+            ang, sb[i,:], dang, dsb[i,:], others = ft.profile(unbinned['az_ang'], unbinned['sb'][i,:], nbins=nbins, plot=False, dispersion=True, log=False, median=median, cutbad=False, rebin_as_well=[unbinned['az'], unbinned['el']])
+        binned = {}
+        binned['az'] = others[:,0]
+        binned['el'] = others[:,1]
+        binned['az_ang'] = ang
+        binned['sb'] = sb
+        binned['dsb'] = dsb
+    else:
+        binned = None
+
+    ### If requested plot the result
+    if doplot==True:
+        if verbose: printnow('Plot')
+        toplot = unbinned
+        if rebin: toplot=binned
+        if label==None:
+            label=method
+        if indata['data'].ndim==1:
+            sh = [1, len(indata['data'])]
+        else:
+            sh = np.shape(indata['data'])
+        for i in xrange(sh[0]):
+            errorbar(toplot['az_ang'], toplot['sb'][i,:], yerr=toplot['dsb'][i,:], fmt='.-', label=label+' {}'.format(i))
+        legend()
+    
+    return unbinned, binned
+
+```
+
+```{python}
+reload(dl)
+reload(ft)
+
+#### Parameters
+freq_mod = 1.
+ppp = 1./freq_mod
+lowcut = 0.3
+highcut = 10.
+nbins = 250 #int((np.max(data['t_data'])-np.min(data['t_data']))/ppp/2)
+elevation = 50
+
+method = 'fft'
+
+unbinned, binned = my_super_demodulate(ppp, data, lowcut, highcut,
+                                                    nbins=nbins, median=True, method=method, 
+                                                    doplot=False, rebin=True, 
+                                                    renormalize_plot=False, verbose=True)
+
+
+
+
+#toplot=binned
+#if data['data'].ndim==1:
+#    sh = [1, len(data['data'])]
+#else:
+#    sh = np.shape(data['data'])
+#for i in xrange(sh[0]):
+#    errorbar(toplot['az_ang'], toplot['sb'][i,:], yerr=toplot['dsb'][i,:], fmt='.-', label=' {}'.format(i))
+
+toplot=unbinned
+if data['data'].ndim==1:
+    sh = [1, len(data['data'])]
+else:
+    sh = np.shape(data['data'])
+for i in xrange(sh[0]):
+    errorbar(toplot['t'], toplot['sb'][i,:], yerr=toplot['dsb'][i,:], fmt='.-', label=' {}'.format(i))
+    
+legend()
+
+ylim(-1000, 50000)
+print 'Un-Binned:'
+for k in unbinned.keys(): print k, unbinned[k].shape
+if binned:
+    print 'Binned:'
+    for k in binned.keys(): print k, binned[k].shape
+
+
+```
+
+```{python}
+
+```
+
+## Run on all TES and all files
+
+```{python}
+#### Parameters
+ppp = 1./freq_mod
+lowcut = 0.3
+highcut = 10.
+method = 'demod'
+
+nbins = 250
+
+reload(dl)
+reload(ft)
+savedir = '/Volumes/Data/Qubic/Calib-TD/ScanData_2019-03-31_DemodSrc_NewCode/'
+
+ids=0
+
+for ids in xrange(len(datasets)):
+    dirs = datasets[ids]
+    #for ii in xrange(len(dirs)):
+    for ii in [22]:
+        thedir = dirs[ii]
+        print '##############################################################'
+        print 'Dataset {} / {} :'.format(ids,len(datasets)),names[ids]
+        print 'Directory {} / {} :'.format(ii, len(dirs)), thedir
+        print '##############################################################'
+        allsb = []
+        all_az_el_azang = []
+        for iasic in [0,1]:
+            print '======== ASIC {} ====================='.format(iasic)
+            AsicNum = iasic+1
+            a = qp()
+            a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+            data=a.azel_etc(TES=None)
+            data['t_src'] += 7200
+            unbinned, binned = dl.general_demodulate(ppp, data, 
+                                                    lowcut, highcut,
+                                                    nbins=nbins, median=True, method=method, 
+                                                    doplot=False, rebin=False, verbose=False)
+            all_az_el_azang.append(np.array([unbinned['az'], unbinned['el'], unbinned['az_ang']]))
+            allsb.append(unbinned['sb'])
+        sh0 = allsb[0].shape
+        sh1 = allsb[1].shape
+        mini = np.min([sh0[1], sh1[1]])
+        print sh0, sh1, mini
+        sb = np.append(allsb[0][:,:mini], allsb[1][:,:mini], axis=0)
+        az_el_azang = np.append(all_az_el_azang[0][:,:mini], all_az_el_azang[1][:,:mini])
+        print sb.shape
+        print az_el_azang.shape
+        print savedir+'alltes_unbinned_{}_{}.fits'.format(names[ids],elevations[ii])
+        print savedir+'angles_unbinned_{}_{}.fits'.format(names[ids],elevations[ii])
+        #FitsArray(sb).save(savedir+'alltes_unbinned_{}_{}.fits'.format(names[ids],elevations[ii]))
+        #FitsArray(az_el_azang).save(savedir+'angles_unbinned_{}_{}.fits'.format(names[ids],elevations[ii]))
+
+
+```
+
+```{python}
+467*3*2
+```
+
+Now we loop on the TES
+
+```{python}
+# #### Parameters
+# ppp = 1./freq_mod
+# lowcut = 0.3
+# highcut = 10.
+# nbins = int((np.max(t_data)-np.min(t_data))/ppp/2)
+# elevation = 50
+
+# reload(dl)
+# reload(ft)
+# savedir = '/Volumes/Data/Qubic/Calib-TD/ScanData_2019-03-31_DemodSrc/'
+
+# ids=0
+# FitsArray(angle).save(savedir+'az_ang_{}.fits'.format(names[ids]))
+
+
+# for ids in xrange(len(datasets)):
+#     dirs = datasets[ids]
+#     for ii in xrange(len(dirs)):
+#         thedir = dirs[ii]
+#         print '##############################################################'
+#         print 'Dataset {} / {} :'.format(ids,len(datasets)),names[ids]
+#         print 'Directory {} / {} :'.format(ii, len(dirs)), thedir
+#         print '##############################################################'
+#         alldemod = np.zeros((256,nbins))
+#         for iasic in [0,1]:
+#             print '======== ASIC {} ====================='.format(iasic)
+#             AsicNum = iasic+1
+#             a = qp()
+#             a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+#             #t_data = a.timeline_timeaxis(axistype='index')
+#             #FREQ_SAMPLING = 1./(t_data[1]-t_data[0])
+#             #az = a.azimuth()
+#             #t_az = (np.max(t_data)-np.min(t_data))*np.linspace(0,1,len(az))
+#             t_data = a.timeline_timeaxis(axistype='pps')
+#             FREQ_SAMPLING = 1./(t_data[1]-t_data[0])
+#             az = a.azimuth()
+#             t_az = a.timeaxis(datatype='platform',axistype='pps')
+#             for TESNum in np.arange(128)+1:
+#                 if (16*(TESNum/16))==TESNum: print(TESNum)
+#                 TESindex = iasic*128+(TESNum-1)
+#                 thedata = a.timeline(TES=TESNum)
+#                 #t_src=[]
+#                 #data_src=[]
+#                 angle, sb, dsb = dl.general_demodulate(ppp, t_data, thedata, t_src, data_src, t_az, az, 
+#                                                             lowcut, highcut, all_elevation[ids][ii], 
+#                                                             nbins=nbins, median=True, method='demod', 
+#                                                             doplot=False, unbinned=False)
+#                 alldemod[TESindex,:] = sb
+#         FitsArray(alldemod).save(savedir+'alltes_{}_el_{}.fits'.format(names[ids],all_elevation[ids][ii]))
+
+
+```
+
+```{python}
+print 'Fini'
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+bla = np.random.rand(256)
+img = ft.image_asics(all1=bla)
+imshow(img)
+```
+
+```{python}
+
+```

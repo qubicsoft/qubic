@@ -1,0 +1,569 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# QUBIC Synthesized Beam
+This notebook aims at showing how to obtain the QUBIC Synthesized beam for a given set of horns accounting for various effets (detector size, bandwidth...).
+
+## Basic Instructions
+### The QubicInstrument object
+The basic object in QUBIC simulaiton software is called a QubicInstrument, it contains all the description of the instrument that can be easily modified upon creation of the object but for which there are default values so that it can be called with just a few arguments.
+
+```{python}
+import glob
+import os 
+
+import numpy as np
+import healpy as hp
+import pandas as pd
+
+import matplotlib.pyplot as plt
+
+# %matplotlib inline
+# %matplotlib notebook
+
+from matplotlib import rc
+rc('figure',figsize=(10,10))
+rc('font',size=20)
+rc('text',usetex=False)
+
+from qubicpack.utilities import Qubic_DataDir
+import qubic
+import qubic.selfcal_lib as sc 
+```
+
+```{python}
+# global_dir = Qubic_DataDir(datafile='instrument.py', datadir='../')
+# dictfilename = global_dir + 'dicts/pipeline_demo.dict'
+
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(os.environ['QUBIC_DICT']+'pipeline_demo.dict')
+
+# d.read_from_file(dictfilename)
+```
+
+```{python}
+d['config'] = 'FI'
+q = qubic.QubicInstrument(d)
+```
+
+### The QubicScene
+It is also important to create an object called QubicScene that descibes the environmental parameters (atmosphere model when it will be avilable, pixellization of the sky, ...).
+
+```{python}
+d['nside'] = 512
+scene = qubic.QubicScene(d)
+```
+
+### Looking at the detector array
+Once the QubicIntrument exists, it contains a lot of informations on the instrument. For instance on can easily look at the detector array:
+
+```{python}
+fp_index = 561 # from 0 to 1155
+ii = np.where(q.detector.index == fp_index)[0]
+print('ii = ', ii)
+
+plt.figure()
+plt.plot(q.detector[ii].center[0,0], q.detector[ii].center[0,1], 'go')
+q.detector.plot()
+```
+
+Where we have emphasized a detector close to the center.
+
+
+### Looking at the horn array
+Similarly one can have access to the horn array:
+
+```{python}
+centers = q.horn.center[:, 0:2]
+col = q.horn.column
+row = q.horn.row
+for i in range(len(centers)):
+    plt.text(centers[i,0]-0.006, centers[i,1], 'c{0:}'.format(col[i]), color='r',fontsize=6)
+    plt.text(centers[i,0]+0.001, centers[i,1], 'r{0:}'.format(row[i]), color='b',fontsize=6)
+
+plt.figure()
+q.horn.plot()
+```
+
+### Closing and opening horns
+
+
+The q.horn.open object returns the list of horns that are open or closed. It can be easlily modified:
+
+```{python}
+### Horns for FI
+d['config'] = 'FI'
+instFI = qubic.QubicInstrument(d)
+hornsFI = instFI.horn.open
+
+
+hornsTD = (col >= 8) & (col <= 15) & (row >= 8) & (row <= 15)
+# print(hornsTD)
+
+### Now create First Instrument and TD monochromatic
+instTD = qubic.QubicInstrument(d)
+instTD.horn.open[~hornsTD] = False
+
+plt.figure()
+instTD.horn.plot()
+```
+
+# Synthesized Beam projected on the sky
+
+### Simplest case: monochromatic and point-like detectors
+The QubicInstrument object has a method that calculates the synthesized beam for a given TES in the case of a perfect instrument. This means that it assumes that the amplitude and phases of the electric field from each horn in the focal plane are just the geometrical ones. The calculation is done only at the central frequency and at the center of the detector.
+
+```{python}
+# Detector number
+idet = ii
+sbidealFI = instFI[idet].get_synthbeam(scene)[0]
+sbidealTD = instTD[idet].get_synthbeam(scene)[0]
+
+plt.figure()
+mini = - 30
+hp.gnomview(np.log10(sbidealFI/np.max(sbidealFI))*10, rot=[0,90], reso=5, 
+            sub=(1,2,1), title='First Instrument', min=mini, max=0)
+hp.gnomview(np.log10(sbidealTD/np.max(sbidealTD))*10, rot=[0,90], reso=5, 
+            sub=(1,2,2), title='Technological Demonstrator', min=mini, max=0)
+```
+
+### Integration over the pixel area
+Integration over the pixel area is implemented in the function get_synthbeam(), here with a 4x4 average over the pixel surface.
+
+```{python}
+nsub = 4
+idet = 231
+sbidealFI = instFI[idet].get_synthbeam(scene, detector_integrate=nsub)[0]
+sbidealTD = instTD[idet].get_synthbeam(scene, detector_integrate=nsub)[0]
+
+plt.figure()
+mini = - 30
+hp.gnomview(np.log10(sbidealFI/np.max(sbidealFI))*10, rot=[0,90], reso=5, 
+            sub=(1,2,1), title='FI Instrument', min=mini, max=0)
+hp.gnomview(np.log10(sbidealTD/np.max(sbidealTD))*10, rot=[0,90], reso=5, 
+            sub=(1,2,2), title='Technological Demonstrator', min=mini, max=0)
+
+```
+
+### Integration over bandwith
+Integration over bandwidth is not yet implemented in the get_synthbeam() function but can be easily done outside:
+
+```{python}
+def getsb(scene, q, nu0, idet, OKhorns, dnu_nu=None, detector_integrate=None, nsubnus=1, nside=256):
+    sb = np.zeros(12 * nside**2)
+    if dnu_nu:
+        numin = nu0 * (1 - dnu_nu / 2)
+        numax = nu0 * (1 + dnu_nu / 2)
+        nuvals = linspace(numin, numax, nsubnus)
+        for i in range(nsubnus):
+            print('nu={} number {} over {}'.format(nuvals[i], i, nsubnus))
+            q.horn.open[~OKhorns] = False
+            sb += q[idet].get_synthbeam(scene, detector_integrate=detector_integrate)[0] / nsubnus
+    else:
+        q.horn.open[~OKhorns] = False
+        sb = q[idet].get_synthbeam(scene, detector_integrate=detector_integrate)[0]
+    return sb
+
+nsub = 4
+idet = 231
+sbidealFI_150 = getsb(scene, instFI, 150., idet, hornsFI, dnu_nu=None, 
+                      detector_integrate=None, nside=d['nside'])
+sbidealTD_150 = getsb(scene, instTD, 150., idet, hornsTD, dnu_nu=None, nsubnus=10, 
+                      detector_integrate=True, nside=d['nside'])
+
+reso = 7.
+mini = -30
+plt.figure()
+mapFI = hp.gnomview(np.log10(sbidealFI_150/np.max(sbidealFI_150))*10, 
+                    rot=[0,90], reso=reso, 
+                    sub=(1,2,1), title='FI - 150 GHz - Det + Nu Integ.', 
+                    min=mini, max=0, return_projected_map=True)
+
+mapTD = hp.gnomview(np.log10(sbidealTD_150/np.max(sbidealTD_150))*10, 
+                    rot=[0,90], reso=reso, 
+                    sub=(1,2,2), title='TD - 150 GHz - Det + Nu Integ.', 
+                    min=mini, max=0, return_projected_map=True)
+```
+
+### Studying the beam
+Just for the pleasure one can study the synthesized beam resolution:
+
+```{python}
+# location of maximum 
+maxx, maxy = np.unravel_index(np.argmax(mapFI), dims=(200, 200))
+
+# diagonal cut of array shifted so that maximum is at center
+initcutFI = np.diag(np.roll(np.roll(mapFI, 99-maxx, axis=0), 
+                            99-maxy, axis=1))
+initcutTD = np.diag(np.roll(np.roll(mapTD, 99-maxx, axis=0), 
+                            99-maxy, axis=1))
+
+# sqrt(2) comes because we take a diagonal cut
+xxinit = np.linspace(-100, 100, 200) * reso * np.sqrt(2) / 60
+
+# Need more points for next steps: interpolate
+xx = np.linspace(-100, 100, 20000) * reso * np.sqrt(2) / 60
+cutFI = np.interp(xx, xxinit, initcutFI)
+cutTD = np.interp(xx, xxinit, initcutTD)
+
+plt.figure()
+plt.xlabel('Angle (deg)')
+plt.ylabel('Synthesized Beam (dB)')
+plt.plot(xx, cutFI, label = 'FI - 150 GHz - Det + Nu Integ.')
+plt.plot(xx, cutTD, label = 'TD - 150 GHz - Det + Nu Integ.')
+plt.title('TES {}'.format(fp_index))
+plt.legend(loc='lower right', fontsize=10)
+```
+
+```{python}
+#### Angular resolution
+halfmaxFI = cutFI > (np.log10(0.5) * 10)
+halfmaxTD = cutTD > (np.log10(0.5) * 10)
+
+fwhmFI = np.max(xx[halfmaxFI] * 60) - np.min(xx[halfmaxFI] * 60)
+fwhmTD = np.max(xx[halfmaxTD] * 60) - np.min(xx[halfmaxTD] * 60)
+print(fwhmFI, fwhmTD)
+
+plt.clf()
+plt.xlabel('Angle (arcmin)')
+plt.ylabel('Synthesized Beam (dB)')
+plt.xlim(-60, 60)
+plt.ylim(-10, 0)
+plt.plot(xx * 60, cutFI, label = 'FI - 150 GHz - Det + Nu Integ. - FWHM = {0:5.1f} arcmin'.format(fwhmFI))
+plt.plot(xx * 60, cutTD, label = 'TD - 150 GHz - Det + Nu Integ. - FWHM = {0:5.1f} arcmin'.format(fwhmTD))
+plt.plot(xx * 60, xx * 0 + np.log10(0.5) * 10, 'k--')
+plt.legend(loc='lower right', fontsize=10)
+```
+
+### Non ideal synthesized beam
+It is also possible to provide the code with an external array for the phase and amplitude of the electric field in the focal plane for each of the horns. This kind of realistic electric field is provided by the Maynooth team.
+
+For instance through the following (assuming that "files" is a variable that contains the filename of the 400 electric field ASCII files). 
+
+An example of such files is given below, you can download them at:
+https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
+
+```{python}
+# Path to the simulated files 
+rep = Qubic_DataDir(datafile='detcentres.txt')
+print('rep:', rep)
+
+files = sorted(glob.glob(rep+'/*.dat'))
+print('#files :', len(files)) # Should be 64 (TD)
+
+# Look at one file
+data = pd.read_csv(files[6], sep='\t', skiprows=0)
+data.head(10)
+print(data.shape)
+```
+
+```{python}
+d['config'] = 'TD'
+q = qubic.QubicInstrument(d)
+
+# Define the horn configuration
+open_horns=list(np.arange(1, 65)) # between 1 and 64 (real instrument numbers)
+open_horns = [horn - 1 for horn in open_horns]
+q.horn.open = False
+q.horn.open[open_horns] = True
+# q.horn.plot()
+
+# Compute the beam projected on the sky for a given TES
+fp_index = 594 # from 0 to 1155 but in the quadrant 3 (TD)
+ii = np.where(q.detector.index == fp_index)[0]
+print('ii = ', ii)
+
+external_A = sc.make_external_A(rep, open_horns=open_horns)
+
+sb_aber = q.get_synthbeam(scene, idet=ii, external_A=external_A)
+sb_ideal = q.get_synthbeam(scene, idet=ii, external_A=None)
+```
+
+```{python}
+plt.figure()
+plt.subplot(321)
+q.horn.plot()
+plt.axis('off')
+hp.gnomview(sb_aber, rot=[0,90], reso=10, title='Aber', sub=(323))
+hp.gnomview(np.log10(sb_aber / np.max(sb_aber)), rot=[0,90], reso=10, 
+            title='Aber, log10(sb/max(sb))', sub=(324))
+hp.gnomview(sb_ideal, rot=[0,90], reso=10, title='Ideal', sub=(325))
+hp.gnomview(np.log10(sb_ideal / np.max(sb_ideal)), rot=[0,90], reso=10, 
+            title='Ideal, log10(sb/max(sb))', sub=(326))
+```
+
+```{python}
+diff = np.log10(sb_ideal / np.max(sb_ideal)) - np.log10(sb_aber / np.max(sb_aber))
+hp.gnomview(diff, rot=[0,90], reso=15, min=-1, max=1,
+            title='Ideal - Aber')
+
+```
+
+## Beam from an analytical formula
+
+```{python}
+# This is the analytical synthesized for a pixel at the focal plane center 
+# without accounting for the primary beam (just the mukltple peaks)
+#def sb_noprim(th_deg, nu):
+#    th = np.radians(th_deg)
+#    lam = 3e8/nu
+#    P = 20
+#    deltax = 0.013
+#    df = 300.
+#    abscissa = np.pi * deltax/lam * th
+#    sb = np.sin(P*abscissa)**2 / np.sin(abscissa)**2
+#    return sb/np.max(sb)
+
+# For a detector not at the center
+def sb_noprim(th_deg, nu, rx):
+    th = np.radians(th_deg)
+    nx = np.sin(th)
+    lam = 3e8 / nu
+    P = 20
+    deltah = 0.014
+    f = 300.
+    a = np.pi * deltah / lam
+    sb = (np.sin(P * a * (rx / f - nx)))**2 / (np.sin(a * (rx / f - nx)))**2
+    return sb / np.max(sb)
+
+
+def envelope(th_deg, ph, rx):
+    f = 300.
+    th = np.radians(th_deg)
+    primary_beam = q.primary_beam(th, ph)
+    th_off = np.arctan(rx / f)
+    factor_offaxis = q.primary_beam(th_off, ph)
+#     if rx != 0:
+#         factor_offaxis = 0.8985**2
+    env = factor_offaxis * primary_beam
+    #print('factor =', factor_offaxis)
+    return env 
+
+def beam_total(th_deg, ph, nu, rx):
+    env = envelope(th_deg, ph, rx)
+    sb = env * sb_noprim(th_deg, nu, rx)
+    return env, sb
+```
+
+```{python}
+nu = 150e9   
+nn = 10000
+th_deg = np.linspace(-12, 12, nn)
+ph = 0
+d['config'] = 'FI'
+d['beam_shape'] = 'gaussian'
+q = qubic.QubicInstrument(d)
+
+e1, sb1 = beam_total(th_deg, ph, nu, 0)
+e2, sb2 = beam_total(th_deg, ph, nu, 12)
+
+fig, ax = plt.subplots(figsize=(10,8))
+plt.rc('font',size=15)
+#ax=ax.ravel()
+# ax.plot(th_deg, q.primary_beam(np.deg2rad(th_deg), ph),'b--')
+ax.plot(th_deg, e1,'b--', label=r'$B_{prim}$')
+ax.plot(th_deg, e2,'c--', label=r'$B_{prim} \times B(\theta_{off})$')
+ax.plot(th_deg, sb1, 'b', label='r = 0', lw=2)
+ax.plot(th_deg, sb2, 'c', label='r = 12 mm',alpha=0.6,lw=2)
+
+# axvline(np.rad2deg(np.arctan(12 / 300)), ymin=0, ymax=1.2, color='r')
+ax.set_xlabel(r'$\theta$ [deg]', fontsize=15)
+ax.set_ylabel('Relative intensity', fontsize=15)
+ax.legend(fontsize=14, loc=1)
+ax.grid()
+ax.tick_params(axis='both',bottom=True, top=True, left=True, right=True,direction='in')
+ax.annotate(r"FWHM($\lambda$)", xytext=(-4,0.6), xy=(0,0.5),
+            arrowprops=dict(arrowstyle="fancy",fc="b", ec="b"),bbox=dict(boxstyle="round", fc="w"),
+            fontsize=15 )
+ax.annotate(' ', xy=(8.3,0.33), xytext=(-0.3,0.33), ha="center", va="center",
+            arrowprops=dict(arrowstyle="<->",), rotation=0)
+ax.text(4, 0.37, r"$\theta(\lambda)$", ha="center", va="center",
+            fontsize=15,
+            bbox=dict(boxstyle="round", fc="w"))
+# B(\theta_{off})
+# plt.savefig('/home/martin/QUBIC/qubic/qubic/scripts/Spectroimagery_paper/beam_cut_2TESb.pdf')
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/beam_cut_2TESb.pdf', 
+#             bbox_inches='tight')
+```
+
+```{python}
+color=iter(plt.cm.jet(np.linspace(0,1,6))[::-1] )
+sum_b = np.zeros((9,len(th_deg),) )
+NUNU=np.linspace(131e9,169e9,9)#[131e9,135e9,140e9,145e9,150e9,155e9,160e9,165e9,169e9]
+for j,inu in enumerate(NUNU):
+    d['filter_nu'] = NUNU[j]
+    q = qubic.QubicInstrument(d)
+    beam=q.primary_beam(np.radians(th_deg), ph)
+    sum_b[j]= beam*sb_noprim(th_deg, NUNU[j], 0)
+    #_, sum_b[j] = beam_total(th_deg, ph, inu*1e9, 0)
+    
+allbeams=np.zeros((2,nn))
+freqs=[NUNU[0],NUNU[8]]
+for i in range(2):
+    d['filter_nu'] = freqs[i]
+    q = qubic.QubicInstrument(d)
+    allbeams[i, :] = q.primary_beam(np.radians(th_deg), ph)
+
+fig, ax = plt.subplots(nrows=1,ncols=2,figsize=(15,6),gridspec_kw={'wspace':0.06},)
+plt.rc('font',size=15)
+ax=ax.ravel()
+ax[0].plot(th_deg, allbeams[0],'--', c = plt.cm.jet(np.linspace(0,1,6))[::-1][0],
+           label=r'${:.2f}~$GHz'.format(freqs[0]/1e9))
+ax[0].plot(th_deg, allbeams[1],'--', c = plt.cm.jet(np.linspace(0,1,6))[::-1][4],
+           label=r'${:.2f}~$GHz'.format(freqs[1]/1e9))
+ax[0].plot(th_deg, allbeams[0]*sb_noprim(th_deg, freqs[0],0), 
+           c = plt.cm.jet(np.linspace(0,1,6))[::-1][0],
+           label=None, lw=2)
+ax[0].plot(th_deg, allbeams[1]*sb_noprim(th_deg, freqs[1],0),
+           c = plt.cm.jet(np.linspace(0,1,6))[::-1][4],
+           label=None, lw=2)
+ax[0].grid()
+ax[0].legend(loc='best',fontsize=12)
+ax[0].set_xlabel(r'$\theta$ [deg]', fontsize=15)
+ax[0].set_ylabel('Synthesized beam', fontsize=15)
+ax[0].tick_params(axis='both',bottom=True, top=True, left=True, right=True,direction='in')
+
+sumleg=ax[1].plot(th_deg, np.sum(sum_b,axis=0), 'k', lw=2)
+#sumleg15=ax[1].plot(th_deg, np.sum(sum_b_15,axis=0)/max(np.sum(sum_b_15,axis=0)), 'k', lw=2)
+blo=[]
+for i in range(0,len(NUNU),2):
+    blo+=ax[1].plot(th_deg, sum_b[i], c=next(color), )
+
+# axvline(np.rad2deg(np.arctan(12 / 300)), ymin=0, ymax=1.2, color='r')
+ax[1].set_xlabel(r'$\theta$ [deg]', fontsize=15)
+#ax[1].set_ylabel('Arbitrary units', fontsize=15)
+ax[1].legend(sumleg, [r'PolySB'], fontsize=12, loc='upper left', )
+# Create the second legend and add the artist manually.
+from matplotlib.legend import Legend
+leg = Legend(ax[1], blo[:], [r'MonoSB @${:.2f}~$GHz'.format(NUNU[0]/1e9),
+                             '\t \t ${:.2f}~$GHz'.format(NUNU[2]/1e9),
+                          '\t \t ${:.2f}~$GHz'.format(NUNU[4]/1e9),
+                             '\t \t ${:.2f}~$GHz'.format(NUNU[6]/1e9),
+                             '\t \t ${:.2f}~$GHz'.format(NUNU[8]/1e9)],
+             fontsize=12,loc='upper right', )
+leg._legend_box.align = "right"
+ax[1].add_artist(leg);
+ax[1].grid()
+ax[1].tick_params(axis='both',bottom=True, top=True, left=True, right=True,direction='in')
+# B(\theta_{off})
+plt.savefig('/home/martin/QUBIC/qubic/qubic/scripts/Spectroimagery_paper/synth_beam_many_freq.pdf')
+```
+
+```{python}
+nn = 10000
+th_deg = np.linspace(-12, 12, nn)
+ph = 0
+d['config'] = 'FI'
+d['beam_shape'] = 'gaussian'
+q = qubic.QubicInstrument(d)
+
+sbb = sb_noprim(th_deg, nu, 10)
+
+e1, sb1 = beam_total(th_deg, ph, 140e9, 0)
+e2, sb2 = beam_total(th_deg, ph, 160e9, 0)
+
+fig, ax = plt.subplots()
+ax.plot(th_deg, sb1+1.5*sb2, 'k', label='amplitudes\n1.0@140GHz\n1.5@160GHz')
+ax.set_xlabel('theta [deg]')
+ax.set_ylabel('Intensity (relative)')
+ax.legend(fontsize=13)
+ax.grid()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+#### Working on fit
+
+```{python}
+ndat=1e4
+angles=np.linspace(6,14,ndat)
+data_peaks=np.zeros((2,int(ndat)))
+central_freq=140e9
+freq_iter=np.linspace(138e9,142e9,80)
+
+d['filter_nu'] = central_freq
+q = qubic.QubicInstrument(d)
+central_data=q.primary_beam(np.radians(np.abs(angles)), ph)*sb_noprim(angles, central_freq,0)
+plt.plot(angles, central_data  )
+
+```
+
+```{python}
+from lmfit import Model
+def gaussian(x, amp, x0, varx):
+    gauss = amp*np.exp(-0.5*( (x-x0)**2/varx**2 ))
+    return gauss
+def gaussian_add(x, amp0,x0, varx0, amp1, x1, varx1):
+    gauss = amp0*np.exp(-0.5*( (x-x0)**2/varx0**2 ))+amp1*np.exp(-0.5*( (x-x1)**2/varx1**2 ))
+    return gauss
+
+angles=np.linspace(1,10,ndat)
+
+gmodel = Model(gaussian, independent_vars=['x',], )
+params = gmodel.make_params(amp=0.3,x0=8.9, varx=0.1 )
+
+gmodel_2g = Model(gaussian_add, independent_vars=['x',], )
+params_2g = gmodel_2g.make_params(amp0=0.3, x0=8.9, varx0=0.1, amp1=0.3, x1=8.9, varx1=0.1, )
+
+Chi=[]
+Chi_2g=[]
+central_freq=140
+d['filter_nu'] = central_freq*1e9
+q = qubic.QubicInstrument(d)
+central_data=q.primary_beam(np.radians(np.abs(angles)), ph)*sb_noprim(angles, central_freq*1e9,30)
+for ifreq in np.linspace(central_freq,
+                         central_freq+5*d['synthbeam_peak150_fwhm']*150/central_freq,20):
+    #print('doing {:.4f}'.format(ifreq))
+    d['filter_nu'] = ifreq*1e9
+    q = qubic.QubicInstrument(d)
+    idata=q.primary_beam(np.radians(np.abs(angles)), ph)*sb_noprim(angles, ifreq*1e9,0)
+    
+    result = gmodel.fit(central_data+idata, params, x=angles)
+    result_2g = gmodel_2g.fit(central_data+idata, params_2g, x=angles)
+    
+    Chi.append(result.chisqr)    
+    Chi_2g.append(result_2g.chisqr)
+```
+
+```{python}
+plt.plot(Chi, 'o', label='1G')
+plt.plot(Chi_2g, 'o', label='2G')
+plt.legend()
+```
+
+```{python}
+print(Chi, Chi_2g, result.fit_report(), result_2g.fit_report())
+#result.chisqr, result.best_values
+```
+
+```{python}
+plt.plot(angles,result.best_fit, label='g')
+plt.plot(angles,result_2g.best_fit,label='2g')
+plt.plot(angles, central_data+idata,label='data')
+plt.legend()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

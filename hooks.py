@@ -33,11 +33,11 @@ ABBREV = 5
 F77_OPENMP = True
 F90_OPENMP = True
 F77_COMPILE_ARGS_GFORTRAN = []
-F77_COMPILE_DEBUG_GFORTRAN = ['-fcheck=all -Og']
-F77_COMPILE_OPT_GFORTRAN = ['-O2 -march=native']
+F77_COMPILE_DEBUG_GFORTRAN = ['-fcheck=all','-Og']
+F77_COMPILE_OPT_GFORTRAN = ['-O2','-march=native']
 F90_COMPILE_ARGS_GFORTRAN = ['-cpp']
-F90_COMPILE_DEBUG_GFORTRAN = ['-fcheck=all -Og']
-F90_COMPILE_OPT_GFORTRAN = ['-O2 -march=native']
+F90_COMPILE_DEBUG_GFORTRAN = ['-fcheck=all','-Og']
+F90_COMPILE_OPT_GFORTRAN = ['-O2','-march=native']
 F77_COMPILE_ARGS_IFORT = []
 F77_COMPILE_DEBUG_IFORT = ['-check all']
 F77_COMPILE_OPT_IFORT = ['-fast']
@@ -73,7 +73,7 @@ from numpy.distutils.command.build_clib import build_clib
 from numpy.distutils.command.build_ext import build_ext
 from numpy.distutils.command.build_src import build_src
 from numpy.distutils.command.sdist import sdist
-from numpy.distutils.core import Command
+from distutils.cmd import Command
 from numpy.distutils.exec_command import find_executable
 from numpy.distutils.fcompiler import new_fcompiler
 from numpy.distutils.fcompiler.gnu import Gnu95FCompiler

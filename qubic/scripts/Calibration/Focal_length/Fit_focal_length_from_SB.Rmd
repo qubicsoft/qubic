@@ -1,0 +1,538 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Fit focal length from the Beam measurements
+
+```{python}
+import numpy as np
+import healpy as hp
+import scipy.optimize as op
+from astropy.io import fits 
+import matplotlib.pyplot as plt
+from IPython.display import display, Math
+from matplotlib.colors import SymLogNorm
+from matplotlib.backends.backend_pdf import PdfPages
+
+# %matplotlib inline
+# %matplotlib notebook
+
+from matplotlib import rc
+rc('figure', figsize=(12, 12))
+rc('font', size=14)
+
+import emcee
+import corner
+
+from qubicpack.utilities import Qubic_DataDir
+import qubic 
+from qubic import selfcal_lib as scal
+```
+
+```{python}
+# Dictionary
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(os.environ['QUBIC_DICT']+'pipeline_demo.dict')
+
+d['config'] = 'TD'
+d['synthbeam_kmax'] = 3
+d['nside'] = 256
+NSIDE = d['nside']
+npix = 12 * NSIDE**2
+
+kmax = d['synthbeam_kmax']
+npeaks = (2 * kmax + 1)**2
+
+# Scene
+s = qubic.QubicScene(d)
+q = qubic.QubicInstrument(d)
+```
+
+### Get real data
+
+```{python}
+mydir = '/home/lmousset/QUBIC/Qubic_work/Calibration/datas/Synthetic_beams/'
+
+# === 2019 April
+date = '2019-avril'
+data_dir = mydir + date + '/synth_beam_160/Healpix/'
+myname = date + '_Healpix_maps.pdf'
+# Selection of good TES
+# PIX_ok = [6, 9, 16, 22, 26, 27, 37, 50, 51, 58, 73, 74, 75, 76, 80, 83, 86, 87, 93, 107, 
+#           34, 135, 150, 170, 185, 186, 191, 195, 206, 210, 218, 219, 236] 
+PIX_ok = [93]
+
+# === 2020 January
+# date = '2020-01-14'
+# data_dir = mydir + date + '/Healpix/'
+# myname = date + '_Healpix_maps.pdf'
+# # Selection of good TES
+# PIX_ok = np.arange(1, 257)
+
+# === 2020 June
+# date = '2020-06-26'
+# data_dir = mydir + date + '/Healpix/'
+# myname = date + '_Healpix_maps.pdf'
+# # Selection of good TES
+# PIX_ok = np.arange(1, 123) # No files after TES 122
+
+
+# === 2020 July 29
+# date = '2020-07-29'
+# data_dir = mydir + date + '/Healpix/'
+# myname = date + '_Healpix_maps.pdf'
+# # Selection of good TES
+# PIX_ok = np.arange(1, 257) 
+
+# === 2020 July
+# date = '2020-07-30'
+# data_dir = mydir + date + '/Healpix/'
+# myname = date + '_Healpix_maps.pdf'
+# # Selection of good TES
+# PIX_ok = [2, 5, 9, 13, 14, 15, 19, 22, 23, 24, 25, 27, 28, 31, 33, 34, 51, 52, 61, 62, 64, 66, 67, 69, 70, 71, 72]#, 73,
+#           74, 75, 76, 80, 81, 82, 83, 85, 86, 87, 88, 93, 94, 95, 96, 107, 133, 134, 158, 160, 162, 163, 167, 197, 
+#           200, 201, 210, 216, 221, 255]
+
+
+```
+
+```{python}
+# Get TES coordinate and index_q, ordered as on the instrument
+xONAFP, yONAFP, FP_index, index_q = scal.get_TES_Instru_coords(q, frame='ONAFP')
+print(index_q.shape)
+```
+
+```{python}
+patch_radius = 20 # [deg]
+ndet = len(PIX_ok)
+print('Number of detectors:', ndet)
+mydata = []
+index_q_ok = []
+for PIX in PIX_ok:
+    print('\nPIX:', PIX)
+    # Convert to Qubic soft numerotation        
+    index_q_ok.append(index_q[PIX-1])
+    print('Index_q:', index_q_ok[-1])
+    
+    # Get the map
+    hdu = fits.open(data_dir + f'healpix_TESNum_{PIX}.fits')
+    print(hdu.info())
+    image = hdu[1].data
+    # For April 2019, maps have an extra dim
+    if image.ndim != 1:
+        image = image[0] 
+
+    NSIDE_data = hp.get_nside(image)
+    print('Old NSIDE:', NSIDE_data)
+
+    # Downgrade resolution
+    image = hp.ud_grade(image, NSIDE)
+    print('New NSIDE:',hp.get_nside(image))
+
+    # Make a patch
+    vec = hp.ang2vec(0, 0, lonlat=True)
+    radius = np.deg2rad(patch_radius)
+    ipix_patch = hp.query_disc(NSIDE, vec, radius)
+    data_patch = image[ipix_patch]
+    npix_patch = np.shape(data_patch)[0]
+    print('#pix in the patch:', npix_patch)
+    mydata.append(data_patch)
+```
+
+```{python}
+# =========== Save plots in a pdf file
+# with PdfPages(mydir + myname) as pp:
+#     for i, data_patch in enumerate(mydata):
+#         patch_mask = np.zeros(12 * NSIDE**2) + hp.UNSEEN
+#         patch_mask[ipix_patch] = data_patch
+        
+#         hp.gnomview(patch_mask, reso=10, title=f'PIX {PIX_ok[i]} - Index_q {index_q_ok[i]}', min=0)
+#         # hp.visufunc.projscatter(0., 0., color='r', marker='+', lonlat=True, s=100)
+#         hp.graticule()
+    
+#         pp.savefig()
+
+
+# ============= Plot just in the Notebook
+for i, data_patch in enumerate(mydata):
+    patch_mask = np.zeros(12 * NSIDE**2) + hp.UNSEEN
+    patch_mask[ipix_patch] = data_patch
+
+    hp.gnomview(patch_mask, reso=10, title=f'PIX {PIX_ok[i]} - Index_q {index_q_ok[i]}', min=0)
+    # hp.visufunc.projscatter(0., 0., color='r', marker='+', lonlat=True, s=100)
+    hp.graticule()
+```
+
+### Model: Simulated beam
+
+```{python}
+def model(theta, index_q, d, s, radius=20, nu=150e9, doplot=False):
+    fl, phi = theta
+    print('theta:', theta)
+    
+    nside = d['nside']
+    
+    # Change the focal length
+    d['filter_nu'] = nu
+    d['focal_length'] = fl
+    q = qubic.QubicInstrument(d)
+    print('Focal length = ', q.optics.focal_length)
+    
+    # Synthetic beams on the sky for the TES
+    sb = q.get_synthbeam(s, idet=index_q, external_A=None, hwp_position=0)
+    
+    # Rotate
+    Rotator = hp.Rotator(rot=(0, 90, 180+phi), deg=True)
+    sb_rot = Rotator.rotate_map_alms(sb)
+    
+    # Make a patch
+    vec = hp.ang2vec(0, 0, lonlat=True)
+    radius = np.deg2rad(radius)
+    ipix_patch = hp.query_disc(nside, vec, radius)
+
+    sb_rot_patch = np.zeros(12 * nside**2) + hp.UNSEEN
+    sb_rot_patch[ipix_patch] = sb_rot[ipix_patch]
+    
+    if doplot:
+#         hp.mollview(sb)
+#         hp.mollview(sb_rot)
+        hp.gnomview(sb_rot_patch, reso=15, title=f'Index_q {index_q}')
+        hp.graticule()
+        hp.visufunc.projscatter(0., 0., color='r', marker='+', lonlat=True, s=100)
+    
+    return sb_rot_patch[ipix_patch]
+```
+
+### Make fake data
+
+```{python}
+theta_fake = (0.3, 0)
+
+mydata_fake = []
+gains_fake = np.zeros(ndet)
+for i, idet in enumerate(index_q_ok):
+    M = model(theta_fake, idet, d, s, nu=160e9, doplot=True)
+    gains_fake[i] = 1.#np.random.rand(1) * 5
+    noise = np.random.normal(0., 10., M.shape) * 0.
+    mydata_fake.append((gains_fake[i] * M) + noise)
+
+print(gains_fake)
+```
+
+### Compare real and fake data
+
+```{python}
+import matplotlib.pyplot as plt
+import matplotlib.colors as colors
+import numpy as np
+import seaborn as sns
+from matplotlib.colors import ListedColormap
+
+def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=1000):
+    new_cmap = colors.LinearSegmentedColormap.from_list(
+        'trunc({n},{a:.2f},{b:.2f})'.format(n=cmap.name, a=minval, b=maxval),
+        cmap(np.linspace(minval, maxval, n)))
+    return new_cmap
+
+# arr = np.linspace(0, 50, 100).reshape((10, 10))
+# fig, ax = plt.subplots(ncols=2)
+
+cmap = plt.get_cmap('cubehelix')
+# cmap = ListedColormap(sns.color_palette("mako").as_hex())
+# new_cmap = sns.color_palette("mako")
+new_cmap = truncate_colormap(cmap, 0., 0.35)
+# ax[0].imshow(arr, interpolation='nearest', cmap=cmap)
+# ax[1].imshow(arr, interpolation='nearest', cmap=new_cmap)
+# plt.show()
+
+```
+
+```{python}
+### Save a pdf
+# myname = date + '_Healpix_maps_simu_data.pdf'
+# with PdfPages(mydir + myname) as pp:
+#     for idx in range(ndet):
+#         real = np.zeros(12 * NSIDE**2) + hp.UNSEEN
+#         real[ipix_patch] = mydata[idx]
+
+#         fake = np.zeros(12 * NSIDE**2) + hp.UNSEEN
+#         fake[ipix_patch] = mydata_fake[idx]
+
+#         plt.figure(figsize=(12, 8))
+#         plt.suptitle(f'PIX {PIX_ok[idx]} - Index_q {index_q_ok[idx]}')
+#         hp.gnomview(real, sub=(121), reso=15, title='Real', min=0., max=None)#norm=SymLogNorm(1e3))
+#         hp.gnomview(fake, sub=(122), reso=15, title='Fake', min=0., max=None)#norm=SymLogNorm(1e4))
+#         hp.graticule()
+#         hp.visufunc.projscatter(0., 0., color='r', marker='+', lonlat=True, s=100)
+        
+#         pp.savefig()
+        
+### Plot in the notebook
+for idx in range(ndet):
+    real = np.zeros(12 * NSIDE**2) + hp.UNSEEN
+    real[ipix_patch] = mydata[idx]
+
+    fake = np.zeros(12 * NSIDE**2) + hp.UNSEEN
+    fake[ipix_patch] = mydata_fake[idx]
+
+    plt.figure(figsize=(12, 8))
+    plt.suptitle(f'PIX {PIX_ok[idx]} - Index_q {index_q_ok[idx]}')
+    hp.gnomview(real, sub=(121), reso=15, title='Measurement', min=0., max=5e4, cmap=new_cmap)#norm=SymLogNorm(1e3))
+    hp.gnomview(fake, sub=(122), reso=15, title='Simulation', min=0., max=1e6, cmap=new_cmap)#norm=SymLogNorm(1e4))
+    hp.graticule()
+#     hp.visufunc.projscatter(0., 0., color='r', marker='+', lonlat=True, s=100)
+
+```
+
+### Covariance matrix of the noise
+
+```{python}
+# Covariance matrix (npix x npix)
+invcov = np.zeros((ndet, npix_patch, npix_patch))
+for i in range(ndet):
+#     cov = 100 * np.identity(npix_patch)
+    
+    diago = np.abs(mydata_fake[i])
+    cov = np.diag(diago)
+
+#     diago = np.abs(mydata[i])
+#     cov = np.diag(diago)
+#     # Remove 0 value
+#     zero_pix = 0
+#     for j in range(npix_patch):
+#         if cov[j, j] == 0.:
+#             cov[j, j] = np.mean(diago) / 1e4
+#             zero_pix += 1
+#     print(zero_pix)
+
+    # Inverse covariance: Cholesky method
+    L = np.linalg.inv(np.linalg.cholesky(cov))
+    invcov[i, :, :] = L.T @ L
+    
+# plt.figure()
+# plt.imshow(invcov)
+# plt.colorbar()
+```
+
+### Define the Chi2
+
+```{python}
+# Chi2
+def get_chi2(theta, data, invcov, d, s, radius=20, verbose=False):
+    ndet = len(data)
+    chi2 = 0.
+    for idet in range(ndet):
+        M = model(theta, idet, d, s, radius=radius, doplot=False)
+        
+        # Amplitude factor (linear so we can compute it analitically)
+        sigma_A = 1. / (M.T @ invcov[idet] @ M)
+        A = sigma_A * M.T @ invcov[idet] @ data[idet]
+        
+        R = A * M - data[idet]
+        chi2 += R.T @ invcov[idet] @ R
+        
+        if verbose:
+            print(f'Det {idet+1}/{ndet}')
+            print('M =', M)
+            print('A =', A)
+            print('R =', R)
+            
+    print('Chi2 =', chi2)
+    return chi2
+
+```
+
+```{python}
+# Explore the chi2
+nval = 10
+phi_min, phi_max = 0., 10.
+fl_min, fl_max = 0.25, 0.35
+chi2_grid = np.zeros((nval, nval))
+all_phi = np.linspace(phi_min, phi_max, nval)
+all_fl = np.linspace(fl_min, fl_max, nval)
+for f, fl in enumerate(all_fl):
+    for p, phi in enumerate(all_phi):
+        theta = (fl, phi)
+        chi2_grid[f, p] = get_chi2(theta, mydata, invcov, d, s)
+        
+
+```
+
+```{python}
+plt.figure(figsize=(8, 8))
+plt.imshow(chi2_grid)
+plt.colorbar()
+plt.xlabel('phi')
+plt.ylabel('Focal length')
+plt.xticks(np.arange(nval), np.round(all_phi, 1), fontsize=10)
+plt.yticks(np.arange(nval), np.round(all_fl, 2), fontsize=10)
+```
+
+```{python}
+# Find the min on the grid => guess values for the MCMC or the minimizer
+print(np.min(chi2_grid))
+min_indices = np.unravel_index(np.argmin(chi2_grid), (nval, nval))
+print(min_indices)
+
+fl_guess = all_fl[min_indices[0]]
+phi_guess = all_phi[min_indices[1]]
+theta_guess = np.array((fl_guess, phi_guess))
+
+print('Guess:', fl_guess, phi_guess)
+```
+
+### Minimize the Chi2
+
+```{python}
+bds = ((0, 10), (None, None))
+result = op.minimize(get_chi2, 
+                     x0=[fl_guess, phi_guess], 
+                     args=(mydata, invcov, d, s), 
+                     bounds=None,
+                     method='Nelder-Mead')
+```
+
+```{python}
+print('Data fake:', theta_fake)
+print('\nMinimization result:\n', result)
+```
+
+```{python}
+invcov.shape
+```
+
+```{python}
+# Compute analitically gains for each TES
+def get_gains(theta, data, invcov, d, s, radius=18, verbose=False):
+    ndet = len(data)
+    gains = np.zeros(ndet)
+    for idet in range(ndet):
+        M = model(theta, idet, d, s, radius=radius, doplot=False)
+
+        # Amplitude factor (linear so we can compute it analitically)
+        sigma_A = 1. / (M.T @ invcov[idet] @ M)
+        gains[idet] = sigma_A * M.T @ invcov[idet] @ data[idet]
+        
+        if verbose:
+            print(f'Det {idet+1}/{ndet}')
+            print('M =', M)
+            print('A =', gains[idet])
+            
+    return gains
+
+gains = get_gains(result['x'], mydata, invcov, d, s)
+print('Gains:', gains)
+print('Gains fake:', gains_fake)
+```
+
+### MCMC
+
+```{python}
+def lnlike(theta, data, invcov, d, s, radius=20, verbose=False):
+    LnLike = -0.5 * get_chi2(theta, data, invcov, d, s, radius=radius, verbose=verbose)
+    return LnLike
+```
+
+```{python}
+def lnprior(theta):
+    fl, phi = theta
+    if fl > 0 and phi > 0:
+        return 0.0
+    else:
+        return -np.inf
+```
+
+```{python}
+# Log of the posterior (Posterior = prior x likelihood)
+def lnprob(theta, data, invcov, d, s, radius=20, verbose=False):
+    lp = lnprior(theta)
+    if not np.isfinite(lp):
+        return -np.inf
+    return lp + lnlike(theta, data, invcov, d, s, radius=radius, verbose=verbose)
+```
+
+```{python}
+def run(p0, nwalkers, niter, ndim, lnprob, args):
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=args)
+
+    print("\n =========== Running burn-in... ===============")
+    p0, _, _ = sampler.run_mcmc(p0, 10, progress=True)
+    sampler.reset()
+
+    print("\n =========== Running production... ===========")
+    pos, prob, state = sampler.run_mcmc(p0, niter, progress=True)
+
+    return sampler, pos, prob, state
+
+```
+
+```{python}
+ndim = 2
+nwalkers = 8
+
+# Initial guess
+p0 = [theta_guess + 1e-4 * np.random.rand(ndim) for i in range(nwalkers)]
+
+niter = 200
+args = (mydata, invcov, d, s)
+sampler, pos, prob, state = run(p0, nwalkers, niter, ndim, lnprob, args)
+```
+
+```{python}
+flat_samples = sampler.get_chain(discard=100, thin=15, flat=True)
+print(flat_samples.shape)
+
+plt.subplots(1, 2, figsize=(14, 6))
+plt.subplot(121)
+plt.hist(flat_samples[:, 0], 100, color="k", histtype="step")
+plt.xlabel(r"$\theta_1$")
+plt.ylabel(r"$p(\theta_1)$")
+# plt.gca().set_yticks([]);
+
+plt.subplot(122)
+plt.hist(flat_samples[:, 1], 100, color="k", histtype="step")
+plt.xlabel(r"$\theta_2$")
+plt.ylabel(r"$p(\theta_2)$")
+# plt.gca().set_yticks([]);
+
+
+```
+
+```{python}
+print("Mean acceptance fraction: {0:.3f}".format(np.mean(sampler.acceptance_fraction)))
+
+print("Mean autocorrelation time: {0:.3f} steps".format(
+        np.mean(sampler.get_autocorr_time())))
+
+```
+
+```{python}
+labels = ['FL', 'phi']
+rc('font', size=12)
+rc('figure', figsize=(20, 20))
+fig = corner.corner(
+    flat_samples, labels=labels, truths=theta_data)
+```
+
+```{python}
+for i in range(ndim):
+    mcmc = np.percentile(flat_samples[:, i], [16, 50, 84])
+    q = np.diff(mcmc)
+    txt = "\mathrm{{{3}}} = {0:.5f}_{{-{1:.5f}}}^{{{2:.5f}}}"
+    txt = txt.format(mcmc[1], q[0], q[1], labels[i])
+    display(Math(txt))
+```
+
+```{python}
+
+```

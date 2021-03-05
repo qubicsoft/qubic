@@ -1,0 +1,352 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Notebook to test Namaster tools to get spectra
+
+Editting by Jean-Christophe and Louise
+
+March 2020
+
+```{python}
+# %matplotlib inline
+import numpy as np
+import healpy as hp
+import matplotlib.pyplot as plt
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+
+import qubic
+from qubic import QubicSkySim as qss
+from qubic import NamasterLib as nam
+from qubic import camb_interface as qc
+
+rc('font', size=15)
+```
+
+# Build maps 
+
+In this first part, we build sky maps knowing the spectra. For that, we use PySM3 implemented in Qubic soft. 
+
+```{python}
+#### Create sample CMB I,Q,U maps
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+
+# dictfilename = global_dir + '/dicts/BmodesNoDustNoSystPaper0_2020.dict'
+dictfilename = global_dir + '/dicts/test_QubicSkySim.dict'
+
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+d['nside'] = 256
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+print(center)
+```
+
+```{python}
+def make_maps(d, seenpix, seed=None, noise_level=0.):
+    sky_config = {'cmb': seed}
+    Qubic_sky = qss.Qubic_sky(sky_config, d)
+    x0 = Qubic_sky.get_simple_sky_map()
+
+    # Noise
+    fact_noise = [1., sqrt(2), sqrt(2)]
+
+    ### For Now Uniform noise
+    np.random.seed()
+    maps_observed = np.zeros_like(x0)
+    for i in range(3):
+        maps_observed[:, seenpix, i] = x0[:, seenpix, i] + np.random.randn(seenpix.sum()) * noise_level * fact_noise[i] 
+
+    print('maps_observed shape:', maps_observed.shape)
+    return Qubic_sky, x0, maps_observed
+```
+
+```{python}
+# Read a sample QUBIC coverage map (made in the RandomPointing approximmation)
+cov = hp.ud_grade(hp.read_map('sample_coverage_qubic.fits', verbose=False), d['nside'])
+cov /= np.max(cov)
+plt.figure()
+hp.mollview(cov)
+
+
+# Define the seen pixels
+seenpix = cov > 0.1#(np.max(cov)/1000)
+
+Qubic_sky, x0, maps_observed = make_maps(d, seenpix)
+print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0))
+
+stn = ['I', 'Q', 'U']
+rng = (np.std(x0, axis=(0,1))*3).astype(int)
+rng[1:] = np.max(rng[1:])
+
+rc('figure', figsize=(16, 10))
+# figure() 
+# numsub = 1
+# for i in range(d['nf_sub']):
+#     for istokes in [0,1,2]:
+#         hp.mollview(maps_observed[i, :, istokes], min=-rng[istokes], max=rng[istokes],
+#                     sub=(d['nf_sub']+1,3,numsub), title=stn[istokes]+' subfreq {}'.format(i))
+#         numsub += 1
+
+figure() 
+numsub = 1
+for i in range(d['nf_sub']):
+    for istokes in [0,1,2]:
+        hp.gnomview(maps_observed[i,:,istokes], min=-rng[istokes], max=rng[istokes],
+                    rot=center, reso=15,
+                    sub=(d['nf_sub']+1,3,numsub), title=stn[istokes]+' subfreq {}'.format(i))
+        numsub += 1
+
+
+
+figure()
+numsub = 4
+for i in range(d['nf_sub']):
+    for istokes in [0, 1, 2]:
+        hp.mollview(x0[i, :, istokes], min=-rng[istokes], max=rng[istokes],
+                    sub=(d['nf_sub']+1, 3, numsub), title=stn[istokes]+' subfreq {}'.format(i))
+        numsub += 1
+```
+
+### Remember that we can always retrieve the input CMB maps and spectra
+
+```{python}
+### Input Maps
+input_maps = Qubic_sky.input_cmb_maps
+rng = (np.std(input_maps, axis=(1))*3).astype(int)
+rng[1:] = np.max(rng[1:])
+
+figure()
+rc('figure', figsize=(10, 8))
+hp.mollview(input_maps[0, :], title="I input map used", min=-rng[0], max=rng[0], sub=(1,3,1))
+hp.mollview(input_maps[1, :], title="Q input map used", min=-rng[1], max=rng[1], sub=(1,3,2))
+hp.mollview(input_maps[2, :], title="U input map used", min=-rng[2], max=rng[2], sub=(1,3,3))
+
+### Input Dls
+input_Dl = Qubic_sky.input_cmb_spectra
+if input_Dl is not None:
+    input_ell = np.arange(np.shape(input_Dl)[0])
+    print('input_ell shape = ', input_ell.shape)
+    figure()
+    order = ['TT', 'EE', 'BB', 'TE']
+    for i in range(4):
+        subplot(2, 2, i+1)
+        plot(input_ell, input_Dl[:, i], color='k')
+        title(order[i])
+        xlabel('$\\ell$')
+        ylabel('$D_\\ell$')
+    tight_layout()
+```
+
+# Testing the library NamasterLib
+
+Now we have the maps with known spectra so we can retrieve spectra with Namaster. We will do it using the library implemented in the Qubic Pipeline. 
+
+```{python}
+# Create a Namaster object
+lmin = 20
+lmax = 2 * d['nside'] - 1
+delta_ell = 16
+
+### Making mask - it will be automaticall apodized when instanciating the object with default (tunable) parameters
+mask = np.zeros(12 * d['nside']**2)
+mask[seenpix] = 1
+
+Namaster = nam.Namaster(mask, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+```
+
+### Test the function that binned a spectra between lmin and lmax
+
+```{python}
+ell_binned, b = Namaster.get_binning(d['nside'])
+
+Dls_binned = Namaster.bin_spectra(input_Dl[:, 0], d['nside'])
+print('lmax=', lmax)
+
+print(ell_binned.shape, Dls_binned.shape)
+
+rc('figure', figsize=(8, 6))
+plt.figure()
+plt.plot(input_ell[:lmax], input_Dl[:lmax, 0])
+plt.plot(ell_binned, Dls_binned[0, :],'o')
+plt.xlabel('$\\ell$')
+plt.ylabel('$D_\\ell$')
+```
+
+### Get spectra from IQU maps
+
+```{python}
+# the apodized mask has been generated when instanciating the object
+mask_apo = Namaster.mask_apo
+
+plt.figure()
+hp.mollview(mask_apo, sub=(121))
+hp.gnomview(mask_apo, rot=center, sub=(122), reso=12)
+```
+
+### Make spectra
+
+```{python}
+# Make an 2D array containing IQU maps, the shape must be (3, #pixels)
+maps = maps_observed[0].T
+print('maps shape:', maps.shape)
+
+# Get spectra
+leff, cells, w = Namaster.get_spectra(maps, 
+                                      purify_e=True, 
+                                      purify_b=False, 
+                                      beam_correction=None,
+                                      pixwin_correction=None)
+```
+
+```{python}
+clnames = ['TT', 'EE', 'BB', 'TE']
+
+rc('figure', figsize=(12, 8))
+plt.figure()
+for i in range(4):
+    plt.subplot(2, 2, i+1)
+    plt.plot(input_ell[:lmax], input_Dl[:lmax, i])
+    plt.plot(leff[:lmax], cells[:lmax, i],'o')
+    plt.xlabel('$\\ell$')
+    plt.ylabel('$D_\\ell$')
+    plt.title(clnames[i])
+plt.tight_layout()
+```
+
+### Test the beam correction
+
+```{python}
+# We smooth the maps with a gaussian beam having the same FWHM as the QUBIC beam. 
+smooth_maps = hp.sphtfunc.smoothing(maps, fwhm=np.deg2rad(d['synthbeam_peak150_fwhm']))
+                          
+# Get spectra
+# We compute 2 spectra, one with the beam correction and the other no. 
+leff_nobeam, cells_nobeam, w_nobeam = Namaster.get_spectra(smooth_maps, 
+                                                           purify_e=True, 
+                                                           purify_b=False, 
+                                                           beam_correction=None)
+leff_beam, cells_beam, w_beam = Namaster.get_spectra(smooth_maps, 
+                                                     purify_e=True, 
+                                                     purify_b=False, 
+                                                     beam_correction=True)
+
+
+```
+
+```{python}
+clnames = ['TT', 'EE', 'BB', 'TE']
+
+plt.figure()
+for i in range(4):
+    plt.subplot(2, 2, i+1)
+    plt.plot(input_ell[:lmax], input_Dl[:lmax, i], label='Input spectra')
+    plt.plot(leff_nobeam[:lmax], cells_nobeam[:lmax, i], 'o', label='No correction')
+    plt.plot(leff_beam[:lmax], cells_beam[:lmax, i], 'o', label='Beam correction')
+    plt.xlabel('$\\ell$')
+    plt.ylabel('$D_\\ell$')
+    plt.title(clnames[i])
+    plt.legend()
+plt.tight_layout()
+```
+
+### Test the pixwin correction
+
+```{python}
+# This function gives you the pixel window correction binned
+pwb = Namaster.get_pixwin_correction(d['nside'])
+print(pwb.shape)
+
+# Make maps with integration into pixels
+# To use synfast, we need to convert Dls to Cls
+input_Cl = qc.Dl2Cl_without_monopole(input_ell, input_Dl)
+pw_maps = hp.synfast(input_Cl.T, d['nside'], pol=True, lmax=Namaster.lmax, pixwin=True, new=True)
+print(pw_maps.shape)
+
+# Get only the observed patch
+pw_seenmaps = np.zeros_like(pw_maps)
+for i in range(3):
+    pw_seenmaps[i, seenpix] = pw_maps[i, seenpix]
+# hp.mollview(pw_seenmaps[0, :])
+
+# Get spectra with and without the pixwin correction
+leff_pw, cells_pw, w_pw = Namaster.get_spectra(pw_seenmaps, 
+                                               purify_e=True, 
+                                               purify_b=False, 
+                                               beam_correction=None,
+                                               pixwin_correction=True)
+
+leff_nopw, cells_nopw, w_nopw = Namaster.get_spectra(pw_seenmaps, 
+                                                     purify_e=True, 
+                                                     purify_b=False, 
+                                                     beam_correction=None,
+                                                     pixwin_correction=None)
+```
+
+```{python}
+clnames = ['TT', 'EE', 'BB', 'TE']
+
+plt.figure()
+for i in range(4):
+    plt.subplot(2, 2, i+1)
+    plt.plot(input_ell[:lmax], input_Dl[:lmax, i], label='Input spectra')
+    plt.plot(leff_nopw[:lmax], cells_nopw[:lmax, i], 'o', label='No correction')
+    plt.plot(leff_pw[:lmax], cells_pw[:lmax, i], 'o', label='Pixwin correction')
+    plt.xlabel('$\\ell$')
+    plt.ylabel('$D_\\ell$')
+    plt.title(clnames[i])
+    plt.legend()
+plt.tight_layout()
+```
+
+### Do many realisations
+
+
+```{python}
+# Do many realizations, same CMB (seed=42) but random noise realisations
+nsim = 4
+nsim_cells = []
+for sim in range(nsim):
+    Qubic_sky, x0, maps_observed = make_maps(d, seenpix, seed=42, noise_level=0.2)
+    maps = maps_observed[0].T
+    leff, cells, w = Namaster.get_spectra(maps, purify_e=True, purify_b=False, beam_correction=None)
+    nsim_cells.append(cells)
+nsim_cells = np.array(nsim_cells)
+print(nsim_cells.shape)
+```
+
+```{python}
+mean_cells = np.mean(nsim_cells, axis=0)
+std_cells = np.std(nsim_cells, axis=0)
+print(mean_cells.shape)
+
+clnames = ['TT', 'EE', 'BB', 'TE']
+
+for i in range(4):
+    plt.subplot(2, 2, i+1)
+    plt.plot(input_ell[:lmax], input_Dl[:lmax, i], label='Input spectra')
+    plt.errorbar(leff[:lmax], mean_cells[:lmax, i], std_cells[:, i], fmt='m.', label='Reconstructed Dls')
+#     plt.plot(leff, mean_cells[:, i], 'o', label='No correction')
+    plt.xlabel('$\\ell$')
+    plt.ylabel('$D_\\ell$')
+    plt.title(clnames[i])
+    plt.legend()
+plt.tight_layout()
+```
+
+```{python}
+
+```

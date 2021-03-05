@@ -1,0 +1,582 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(9,4.5))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack.qubicfp import qubicfp
+import qubic.fibtools as ft
+import qubic.plotters as p
+import qubic.lin_lib as ll
+import qubic.demodulation_lib as dl
+import satorchipy as stpy
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import datetime as dt
+import pickle
+from importlib import reload
+import corner
+
+```
+
+# Location of the Data
+### 2019-12-23: 4
+- Modulator: Amplitude = 2V. Offset = 1.5 V
+- Nice data although source data does not have the same shape as TES data, probably the source measurement was not configured correctly. The data can however be exploited using Simulated Cal Src.
+
+### 2019-12-24: 0
+- Modulator: Amplitude = 500 mV ; Offest = 250 mV
+- Nice data with 180 sec/pos and 3 cycles.
+- SrcData not there...
+- Can be used with Simulated Cal Src
+
+### 2019-12-26: 0
+- Modulator: Amplitude: 500mV, Offset 2. V
+- Only one cycle but good quality data, The source is ON and seems weell configured
+
+### 2019-12-26: 1
+- Modulator: Amplitude: 500mV, Offset 2.5 V
+- Long overnight acquisition - to be looked at closely
+
+### 2019-12-27: 2
+- Modulator: Amplitude = 500mV ; Offest = 2.5 V
+- Excellent data
+
+
+***Important Remark:
+The mount has moved on Dec. 26th 18h30 CET, so this means that the data [2019-12-23_Dataset_4, 2019-12-24_Dataset_0, 2019-12-26_Dataset_0] have the same pointing while [2019-12-26_Dataset_1, 2019-12-27_Dataset_2] are with another pointing.***
+
+```{python}
+data_dir = '/Users/hamilton/Qubic/Calib-TD/HWP-Fitting/'
+
+### We put them in the order of the offset for Cal Src
+
+subdirs = ['2019-12-24_Dataset_0',
+           '2019-12-23_Dataset_4',
+           '2019-12-26_Dataset_0',
+           '2019-12-26_Dataset_1',
+           '2019-12-27_Dataset_2']
+
+ptg = [0,0,0,1,1]
+mod_amp = [0.5, 2., 0.5, 0.5, 0.5]
+mod_off = [0.25, 1.5, 2., 2.5, 2.5]
+
+data_allth = []
+data_uniqueth = []
+fit_uniqueth = np.zeros((len(subdirs), 256, 2, 4))
+
+for idir in range(len(subdirs)):
+    ### Look at 1st TES to get the dimensions of the arrays
+    TESNum = 1
+    bla0 = np.loadtxt(data_dir+subdirs[idir]+'/Data/hwp_measurement_AllTh_TES_{}.txt'.format(TESNum)).T
+    bla1 = np.loadtxt(data_dir+subdirs[idir]+'/Data/hwp_measurement_UniqueTh_TES_{}.txt'.format(TESNum)).T
+    print(idir, bla0.shape, bla1.shape)
+
+    data_allth_subd = np.zeros((256, bla0.shape[0], bla0.shape[1]))
+    data_uniqueth_subd = np.zeros((256, bla1.shape[0], bla1.shape[1]))
+
+    for TESNum in range(1,256):
+        data_allth_subd[TESNum-1,:,:] = np.loadtxt(data_dir+subdirs[idir]+'/Data/hwp_measurement_AllTh_TES_{}.txt'.format(TESNum)).T
+        data_uniqueth_subd[TESNum-1,:,:] = np.loadtxt(data_dir+subdirs[idir]+'/Data/hwp_measurement_UniqueTh_TES_{}.txt'.format(TESNum)).T
+        fit_uniqueth[idir,TESNum-1,:,:] = np.loadtxt(data_dir+subdirs[idir]+'/Data/hwp_measurement_Fit_UniqueTh_TES_{}.txt'.format(TESNum)).T
+    
+    data_allth.append(data_allth_subd)
+    data_uniqueth.append(data_uniqueth_subd)
+
+
+```
+
+Plot the data for a given TES and show that the fir can be redone here
+
+```{python}
+rc('figure',figsize=(6,6))
+reload(dl)
+TESNum = 95
+iii = (TESNum-1)
+idir = 0
+myguess = np.array([np.max(abs(data_uniqueth[idir][iii,1,:])), 0., 0., 5.])
+resfit = dl.hwp_fitpol(data_uniqueth[idir][TESNum-1,0,:], data_uniqueth[idir][TESNum-1,1,:], data_uniqueth[idir][TESNum-1,2,:], 
+                       doplot=True, str_title='Demodulation TES{}'.format(iii+1), 
+                       saturation=True, myguess=myguess, force_chi2_ndf=False)
+tight_layout()
+# ylim(0,0.01)
+# xlim(25,35)
+print(resfit[1])
+```
+
+```{python}
+resfit[2]
+```
+
+```{python}
+
+```
+
+```{python}
+### NEW JCH Feb. 26 2021
+rc('figure',figsize=(6,6))
+rc('font',size=12)
+
+reload(dl)
+reload(corner)
+myguess = resfit[1]
+myrange = [[0., 3*resfit[1][0]], 
+           [0.,1.], 
+           [resfit[1][2]-10*resfit[2][2], resfit[1][2]+10*resfit[2][2]],
+           [0, 10*resfit[1][3]]]
+           
+print(myrange)
+
+resmcmc, samples = dl.hwp_fitpol_new(data_uniqueth[idir][TESNum-1,0,:], data_uniqueth[idir][TESNum-1,1,:], data_uniqueth[idir][TESNum-1,2,:], 
+                       doplot=True, str_title='Demodulation TES{}'.format(iii+1), 
+                       saturation=True, myguess=myguess, force_chi2_ndf=False, myrange=myrange, upperlims=True)
+
+tight_layout()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+Plot for a given TES for all available configurations
+
+```{python}
+rc('figure',figsize=(8,6))
+TESNum = 95
+
+for idir in range(len(subdirs)):
+    thefit = fit_uniqueth[idir][TESNum-1][0,:]
+    errfit = fit_uniqueth[idir][TESNum-1][1,:]
+    xx = data_uniqueth[idir][TESNum-1,0,:]
+    yy = data_uniqueth[idir][TESNum-1,1,:]
+    dy = data_uniqueth[idir][TESNum-1,2,:]
+
+    angs = np.linspace(0,90,100)
+#     subplot(1,2,1)
+#     p = errorbar(xx, yy, yerr=dy, fmt='o', 
+#                  label = 'Off = {} - Amp = {} - Ptg = {}'.format(mod_off[idir], mod_amp[idir], ptg[idir]))
+#     plot(angs,dl.hwp_sin_sat(angs, thefit), color=p[0].get_color())
+#     title('TES #{}'.format(TESNum))
+#     xlabel('Angle [deg.]')
+#     ylabel('Signal Amplitude [ADU]')
+#     legend(fontsize=8, loc='upper left', framealpha=0.7)
+    
+#     subplot(1,2,2)
+    p=errorbar(xx, yy/thefit[0], yerr=dy/thefit[0], fmt='o', #color=p[0].get_color(), 
+                 label = 'Off = {} - Amp = {} - Ptg = {} - {}'.format(mod_off[idir], mod_amp[idir], ptg[idir], subdirs[idir]))
+    plot(angs, dl.hwp_sin_sat(angs, thefit)/thefit[0], color=p[0].get_color())
+    plot(angs, angs*0+1, 'k:')
+    plot(angs, angs*0, 'k:')
+    ylim(-0.05,1.05)
+    title('TES #{}'.format(TESNum))
+    xlabel('Angle [deg.]')
+    ylabel('Relative Signal Amplitude')
+    legend(fontsize=8, loc='upper left', framealpha=0.7)
+    
+```
+
+Explore the behavior of saturation and amplitude of signal w.r.t. Offest and Amplitude of Modulation Source
+
+```{python}
+### The parameters if fit_uniqueth are:
+# 0: amplitude
+# 1: Xpol
+# 2: Phase
+# 3: Saturation
+
+TESNum = 95
+errorbar(mod_off, fit_uniqueth[:, TESNum-1, 0, 3], yerr = fit_uniqueth[:, TESNum-1, 1, 3], fmt='ro')
+xlabel('Cal Src Modulation Offset [V]')
+ylabel('HWP Signal Saturation')
+
+```
+
+```{python}
+### Now we produce all plots to havve a look at them
+rc('figure',figsize=(15,6))
+TESNum = 95
+
+for TESNum in range(1, 256):
+    clf()
+    for idir in range(len(subdirs)):
+        thefit = fit_uniqueth[idir][TESNum-1][0,:]
+        errfit = fit_uniqueth[idir][TESNum-1][1,:]
+        xx = data_uniqueth[idir][TESNum-1,0,:]
+        yy = data_uniqueth[idir][TESNum-1,1,:]
+        dy = data_uniqueth[idir][TESNum-1,2,:]
+
+        angs = np.linspace(0,90,100)    
+        subplot(1,2,1)
+        p=errorbar(xx, yy/thefit[0], yerr=dy/thefit[0], fmt='o', 
+                     label = 'Off = {} - Amp = {} - Ptg = {}'.format(mod_off[idir], mod_amp[idir], ptg[idir]))
+        plot(angs, dl.hwp_sin_sat(angs, thefit)/thefit[0], color=p[0].get_color())
+        plot(angs, angs*0+1, 'k:')
+        plot(angs, angs*0, 'k:')
+        ylim(-0.05,1.05)
+        title('TES #{}'.format(TESNum))
+        xlabel('Angle [deg.]')
+        ylabel('Relative Signal Amplitude')
+        legend(fontsize=8, loc='upper left', framealpha=0.3)
+
+        subplot(1,2,2)
+        errorbar(mod_off[idir], fit_uniqueth[idir, TESNum-1, 0, 3], yerr = fit_uniqueth[idir, TESNum-1, 1, 3], 
+                 fmt='o', color=p[0].get_color())
+        ylim(0,np.max(fit_uniqueth[idir, TESNum-1, 0, 3])*1.2)
+        xlabel('Cal Src Modulation Offset [V]')
+        ylabel('HWP Signal Saturation')
+        tight_layout()
+    savefig(data_dir+'/PerTES/All_SrcConfig_TES_{}.png'.format(TESNum))
+```
+
+### Study good TES
+
+```{python}
+### List of TES that show more or less good looking signal
+oklist = [1, 5, 8, 13, 16, 17, 20, 21, 22, 24, 25, 26, 27, 28, 30, 31, 32, 33, 34, 53, 54, 60, 61, 62, 63, 64, 66, 
+         67, 71, 72, 73, 74, 75, 76, 77, 79, 81, 83, 84, 85, 86, 88, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 101, 
+         103, 104, 105, 106, 107, 109, 110, 116, 117, 118, 122, 123, 124, 125, 127, 128, 129, 130, 131, 133, 134,
+         135, 136, 137, 138, 139, 140, 141, 142, 143, 146, 152, 156, 158, 159, 162, 163, 166, 167, 168, 169, 170, 
+         171, 172, 173, 175, 176, 177, 178, 179, 183, 184, 185, 186, 187, 188, 193, 194, 197, 198, 199, 200, 201, 
+         202, 203, 205, 206, 207, 209, 210, 212, 213, 214, 215, 216, 218, 219, 220, 221, 223, 224, 239, 244, 245, 
+         246, 247, 248, 250, 252]
+
+ok = np.zeros(256) != 0
+for i in range(256):
+    if (i+1) in oklist: ok[i] = True
+
+        
+
+img = ft.image_asics(all1=ok.astype(int))
+imshow(img)
+colorbar()
+```
+
+```{python}
+params = ['HWP Amplitude', 'HWP XPol', 'HWP Phase', 'HWP Sat']
+op = ['Log10', 'Log10', '', 'Log10']
+rng = [[3,6], [-6,0], [-30,30], [-5,2]]
+
+params = ['HWP Amplitude', 'HWP XPol', 'HWP Phase', 'HWP Sat']
+op = ['Log10', '', '', '']
+rng = [[3,6], [0,0.1], [-20,0], [0,10]]
+
+
+rc('figure',figsize=(15,10))
+for k in range(4):
+    for i in range(len(subdirs)):
+        subplot(4, len(subdirs), k*len(subdirs)+i+1)
+        param = fit_uniqueth[i,:,0,k]
+        if op[k]=='Log10':
+            param = np.log10(param)
+        param[~ok] = np.nan
+        img = ft.image_asics(all1=param)
+        imshow(img, vmin=rng[k][0], vmax = rng[k][1])
+        title(op[k]+' '+params[k]+'\n off={} amp={}'.format(mod_off[i], mod_amp[i]))
+        colorbar()
+tight_layout()
+```
+
+```{python}
+myok = ok.copy()
+
+#### Possible to add a cut to have only the non saturated TES (done on subdir 1)
+# cutLogSat = np.log10(fit_uniqueth[3,:,0,3]) < -2
+# myok = myok & cutLogSat
+
+### Possible to add a cut to have only the ones that have log(xpol) > -5
+# cutLogXPol = np.log10(fit_uniqueth[3,:,0,1]) > -5
+# print(myok.sum())
+# myok = myok & cutLogXPol
+# print(myok.sum())
+
+reload(ft)
+params = ['HWP Amplitude', 'HWP XPol', 'HWP Phase', 'HWP Sat']
+op = ['Log10', '', '', '']
+rng = [[3,6], [0,0.3], [-20,0], [0,10]]
+rc('figure',figsize=(15,10))
+for k in range(4):
+    for i in range(len(subdirs)):
+        subplot(4, len(subdirs), k*len(subdirs)+i+1)
+        param = fit_uniqueth[i,:,0,k]
+        if op[k]=='Log10':
+            param = np.log10(param)
+        param[~myok] = np.nan
+        lab = ft.statstr(param[myok], divide=False, median=True)
+        hist(param[myok], bins=15, range=rng[k], label=lab)
+        title(op[k]+' '+params[k]+'\n off={} amp={}'.format(mod_off[i], mod_amp[i]))
+        legend(loc='upper right')
+tight_layout()
+```
+
+```{python}
+rc('figure',figsize=(9,7))
+### Now some statistics on XPol: cumulative histograms for XPol
+k=2
+histos = []
+average_error = []
+for i in range(1,len(subdirs)):
+#    subplot(1, len(subdirs), i+1)
+    param = fit_uniqueth[i,:,0,k]
+    if op[k]=='Log10':
+        param = np.log10(param)
+    param[~myok] = np.nan
+    lab = 'off={} amp={}: '.format(mod_off[i], mod_amp[i])+ft.statstr(param[myok], divide=False, cut=3)
+    a=hist(param[myok], bins=20, range=[-20,0], label=lab, density=True, alpha=0.3)
+    xx = 0.5 * (a[1][1:]+a[1][0:-1])
+    #plot(xx,a[0])
+    histos.append([xx,a[0]])
+    average_error.append(np.median(fit_uniqueth[i,:,1,k]))
+    #xlim(-3,0)
+    xlabel('Maximum damping angle (Deg.)')
+    title(op[k]+' '+params[k])
+    legend(loc='upper left')
+savefig('angle_hwp.png')
+# !pwd
+```
+
+## Cumulative histograms for Xpol
+
+```{python}
+rc('figure',figsize=(15,7))
+### Now some statistics on XPol: cumulative histograms for XPol
+k=1
+histos = []
+average_error = []
+for i in range(len(subdirs)):
+#    subplot(1, len(subdirs), i+1)
+    param = fit_uniqueth[i,:,0,k]
+    if op[k]=='Log10':
+        param = np.log10(param)
+    param[~myok] = np.nan
+    lab = 'off={} amp={}'.format(mod_off[i], mod_amp[i])+ft.statstr(param[myok], divide=False, median=True)
+    a=hist(np.log10(param[myok]), bins=30, range=[-5,0], label=lab, cumulative=True, density=True, alpha=0.5)
+    xx = 0.5 * (a[1][1:]+a[1][0:-1])
+    plot(xx,a[0])
+    histos.append([xx,a[0]])
+    average_error.append(np.median(fit_uniqueth[i,:,1,k]))
+    xlim(-3,0)
+    title(op[k]+' '+params[k])
+    legend(loc='upper right')
+
+```
+
+```{python}
+rc('figure',figsize=(12,7))
+#### The same but only 1st case and nicer plot (in %)
+fig, ax = plt.subplots()
+#for i in range(len(subdirs)):
+for i in [1]:
+    newx = 10**histos[i][0]
+    p=plot(newx*100,histos[i][1],'o-', label='Cal. Src.: Off={}V Amp={}V'.format(mod_off[i], mod_amp[i]))
+    print(average_error[i])
+    val50 = np.interp(0.5, histos[i][1], newx*100)
+    print(val50)
+    plot([val50,val50],[0,1],':',color=p[0].get_color(), label='Median: {0:3.1f}%'.format(val50))
+    plot([average_error[i]*100,average_error[i]*100],[0,1],'-.',
+         color=p[0].get_color(), label='Median Uncertainty: {0:3.1f} %'.format(average_error[i]*100))
+xscale('log')
+xlim(0.1,100)
+ylim(0,1)
+legend()
+xlabel('Measured Cross Polarization')
+ylabel('Cumulative Distribution')
+plot(linspace(0.01,100,100),np.zeros(100)+0.5,'k:')
+
+
+#### To have xaxis in % with digits
+from matplotlib.ticker import FuncFormatter
+for axis in [ax.xaxis]:
+    formatter = FuncFormatter(lambda y, _: '{:.16g} %'.format(y))
+    axis.set_major_formatter(formatter)
+
+
+
+```
+
+## Cumulative histograms for error on Xpol
+
+```{python}
+rc('figure',figsize=(15,7))
+### Now some statistics on XPol: cumulative histograms for XPol
+k=1
+histos_error = []
+average_error_error = []
+for i in range(len(subdirs)):
+#    subplot(1, len(subdirs), i+1)
+    param = fit_uniqueth[i,:,1,k]
+    if op[k]=='Log10':
+        param = np.log10(param)
+    param[~myok] = np.nan
+    lab = 'off={} amp={}'.format(mod_off[i], mod_amp[i])+ft.statstr(param[myok], divide=False, median=True)
+    a=hist(np.log10(param[myok]), bins=30, range=[-5,0], label=lab, cumulative=True, density=True, alpha=0.5)
+    xx = 0.5 * (a[1][1:]+a[1][0:-1])
+    plot(xx,a[0])
+    histos_error.append([xx,a[0]])
+    average_error_error.append(np.median(fit_uniqueth[i,:,1,k]))
+    xlim(-3,0)
+    title(op[k]+' '+params[k])
+    legend(loc='upper right')
+
+```
+
+```{python}
+rc('figure',figsize=(12,7))
+#### The same but only 1st case and nicer plot (in %)
+fig, ax = plt.subplots()
+#for i in range(len(subdirs)):
+for i in [1]:
+    newx = 10**histos[i][0]
+    p=plot(newx*100,histos[i][1],'o-', label='Cal. Src.: Off={}V Amp={}V'.format(mod_off[i], mod_amp[i]))
+    print(average_error[i])
+    plot(newx*100,histos_error[i][1],'o-', label='Uncertainty on XPol')
+    val50 = np.interp(0.5, histos[i][1], newx*100)
+    print(val50)
+    plot([val50,val50],[0,1],':',color=p[0].get_color(), label='Median: {0:3.1f}%'.format(val50))
+    #plot([average_error[i]*100,average_error[i]*100],[0,1],'-.',
+    #     color=p[0].get_color(), label='Median Uncertainty: {0:3.1f} %'.format(average_error[i]*100))
+xscale('log')
+xlim(0.1,100)
+ylim(0,1)
+legend()
+xlabel('Measured Cross Polarization')
+ylabel('Cumulative Distribution')
+plot(linspace(0.01,100,100),np.zeros(100)+0.5,'k:')
+
+
+#### To have xaxis in % with digits
+from matplotlib.ticker import FuncFormatter
+for axis in [ax.xaxis]:
+    formatter = FuncFormatter(lambda y, _: '{:.16g} %'.format(y))
+    axis.set_major_formatter(formatter)
+
+
+
+```
+
+```{python}
+rc('figure',figsize=(15,7))
+### Now some statistics on XPol: cumulative histograms for XPol
+k=1
+histos_ratio = []
+average_ratio = []
+for i in range(len(subdirs)):
+#    subplot(1, len(subdirs), i+1)
+    param = fit_uniqueth[i,:,0,k]/fit_uniqueth[i,:,1,k]
+    if op[k]=='Log10':
+        param = np.log10(param)
+    param[~myok] = np.nan
+    lab = 'off={} amp={}'.format(mod_off[i], mod_amp[i])+ft.statstr(param[myok], divide=False, median=True)
+    a=hist(np.log10(param[myok]), bins=30, range=[-2,1], label=lab, cumulative=True, density=True, alpha=0.5)
+    xx = 0.5 * (a[1][1:]+a[1][0:-1])
+    plot(xx,a[0])
+    histos_ratio.append([xx,a[0]])
+    average_ratio.append(np.median(fit_uniqueth[i,:,1,k]))
+    #xlim(-3,0)
+    title(op[k]+' '+params[k])
+    legend(loc='upper right')
+
+```
+
+```{python}
+rc('figure',figsize=(12,7))
+#### The same but only 1st case and nicer plot (in %)
+fig, ax = plt.subplots()
+#for i in range(len(subdirs)):
+for i in [1]:
+    newx = 10**histos_ratio[i][0]
+    p=plot(newx,histos_ratio[i][1],'o-', label='Cal. Src.: Off={}V Amp={}V'.format(mod_off[i], mod_amp[i]))
+    val50 = np.interp(0.5, histos_ratio[i][1], newx)
+    print(val50)
+    plot([val50,val50],[0,1],':',color=p[0].get_color(), label='Median: {0:3.1f}'.format(val50))
+    #plot([average_error[i]*100,average_error[i]*100],[0,1],'-.',
+    #     color=p[0].get_color(), label='Median Uncertainty: {0:3.1f} %'.format(average_error[i]*100))
+xscale('log')
+xlim(0.1,10)
+ylim(0,1)
+legend()
+xlabel('Measured ratio: Cross Polarization / Error(Cross Polarization)')
+ylabel('Cumulative Distribution')
+plot(linspace(0.01,100,100),np.zeros(100)+0.5,'k:')
+
+
+#### To have xaxis in % with digits
+from matplotlib.ticker import FuncFormatter
+for axis in [ax.xaxis]:
+    formatter = FuncFormatter(lambda y, _: '{:.16g}'.format(y))
+    axis.set_major_formatter(formatter)
+
+
+```
+
+```{python}
+rc('figure',figsize=(10,7))
+#### The same but only 1st case and nicer plot (in %)
+fig, ax = plt.subplots()
+#for i in range(len(subdirs)):
+for i in [1]:
+    newx = 10**histos_ratio[i][0]
+    #p=plot(newx,histos_ratio[i][1],'o-', label='Cal. Src.: Off={}V Amp={}V'.format(mod_off[i], mod_amp[i]))
+    p=plot(newx,histos_ratio[i][1],'o-', label='Data')
+    val1sigma = np.interp(1,newx,histos_ratio[i][1])
+    print(val1sigma)
+    plot([1,1],[0,val1sigma],':',color='r')
+    plot([0,1],[val1sigma,val1sigma],':',color='r', label='Compatible with 0 at 1 $\sigma$: {0:3.1f}% '.format(val1sigma*100))
+    val2sigma = np.interp(2,newx,histos_ratio[i][1])
+    plot([2,2],[0,val2sigma],':',color='g')
+    plot([0,2],[val2sigma,val2sigma],':',color='g', label='Compatible with 0 at 2 $\sigma$: {0:3.1f}% '.format(val2sigma*100))
+xscale('log')
+xlim(0.1,10)
+ylim(0,1)
+legend(loc='lower right')
+xlabel('Measured ratio: Cross Polarization / Error(Cross Polarization)')
+ylabel('Cumulative Distribution')
+
+
+#### To have xaxis in % with digits
+from matplotlib.ticker import FuncFormatter
+for axis in [ax.xaxis]:
+    formatter = FuncFormatter(lambda y, _: '{:.16g}'.format(y))
+    axis.set_major_formatter(formatter)
+
+
+```
+
+```{python}
+
+```

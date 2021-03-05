@@ -1,0 +1,544 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+from __future__ import division, print_function
+import glob
+import os
+import sys
+import healpy as hp
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import rc
+import scipy as sc
+
+from qubic import ReadMC as rmc
+from qubic import AnalysisMC as amc
+
+import qubic
+from qubic import equ2gal
+
+from qubicpack.utilities import Qubic_DataDir
+
+from scipy.stats import pearsonr
+from scipy.linalg import cholesky
+
+# %matplotlib inline
+rc({'cmap', 'viridis'})
+plt.rcParams['figure.figsize'] = (5, 5)
+
+```
+
+# Noisy maps with no correlations
+
+## With a uniform coverage
+
+```{python}
+npix = 2
+nreals = 10000
+std = 2
+maxfrec = 10
+
+allsig2MC = []
+allsig2 = []
+    
+for nfrec in range(1, maxfrec):
+    xn_noisy = np.random.normal(0., std*np.sqrt(nfrec), size=(nreals, nfrec, npix, 3))
+    
+    # Get Cp
+    Cp = amc.get_Cp(xn_noisy, nfrecon=[nfrec,], verbose=False, doplot=False)
+    Cp_prime = amc.Cp2Cp_prime(Cp, verbose=False)
+    
+    plt.figure()
+    plt.imshow(Cp[:, :, 0, 0])
+    plt.title('Cp')
+    
+    # Average subbands   
+    weighted_av, sig2 = amc.make_weighted_av(xn_noisy, Cp, verbose=False)
+    print(weighted_av.shape)
+    print(sig2.shape)
+    
+    # Average sig2 over IQU
+    allsig2.append(np.mean(sig2, axis=1))
+    
+    
+    # Variance over reals and IQU for each pixel
+    sig2MC = np.var(weighted_av, axis=(0, 2))
+    allsig2MC.append(sig2MC)
+    print(sig2MC)  
+    
+allsig2MC = np.array(allsig2MC)
+allsig2 = np.array(allsig2)
+```
+
+```{python}
+print(allsig2MC.shape)
+print(allsig2.shape)
+nsub = np.arange(1, maxfrec)
+plt.figure(figsize=(12, 8))
+ax = plt.gca()
+
+for p in range(2):
+    color = next(ax._get_lines.prop_cycler)['color']
+    plt.plot(nsub, allsig2MC[:, p], 'o', color=color, label='pix {}'.format(p))
+    plt.plot(nsub, allsig2[:, p], color=color, label='sig2')
+    
+plt.plot(nsub, nsub * 0 + std**2, 'k--', label='std^2')
+plt.legend(loc='best') 
+plt.ylim(std**2 - 1, std**2 +1)
+```
+
+## Add a coverage
+
+```{python}
+coverage = np.arange(npix)+1
+
+npix = 5
+nreals = 1000
+std = 2
+maxfrec = 6
+
+allsig2MC = []
+allsig2 = []
+    
+for nfrec in range(1, maxfrec):
+    xn_noisy = np.zeros((nreals, nfrec, npix, 3))
+    for p in range(npix):
+        xn_noisy[:, :, p, :] = np.random.normal(0., std*np.sqrt(nfrec)/np.sqrt(coverage[p]), 
+                                                size=(nreals, nfrec, 3))
+    
+    # Get Cp
+    Cp = amc.get_Cp(xn_noisy, nfrecon=[nfrec,], verbose=False, doplot=False)
+    Cp_prime = amc.Cp2Cp_prime(Cp, verbose=False)
+    
+    # Average subbands   
+    weighted_av, sig2 = amc.make_weighted_av(xn_noisy, Cp_prime, verbose=False)
+    print(weighted_av.shape)
+    print(sig2)
+    
+    # Average sig2 over IQU
+    allsig2.append(np.mean(sig2, axis=1))
+    
+    
+    # Variance over reals and IQU for each pixel
+    sig2MC = np.var(weighted_av, axis=(0, 2))
+    allsig2MC.append(sig2MC)
+    print(sig2MC)  
+    
+allsig2MC = np.array(allsig2MC)
+allsig2 = np.array(allsig2)
+    
+
+```
+
+```{python}
+print(allsig2MC.shape)
+print(allsig2.shape)
+nsub = np.arange(1, maxfrec)
+plt.figure(figsize=(12, 8))
+ax = plt.gca()
+
+for p in range(npix):
+    color = next(ax._get_lines.prop_cycler)['color']
+    plt.plot(nsub, allsig2MC[:, p]*coverage[p], 'o', color=color, label='pix {}'.format(p))
+    plt.plot(nsub, allsig2[:, p]*coverage[p], color=color, label='sig2')
+    
+plt.plot(nsub, nsub * 0 + std**2, 'k--', label='std^2')
+plt.legend(loc='best') 
+plt.ylim(std**2 - 1, std**2 +1)
+
+```
+
+***
+# With band band correlations
+
+I try different covariance matrices r and the result depends a lot on this matrix. The sig2 in the weighted map will be below or above the std²=4 chosen at the begining as a reference. 
+
+```{python}
+# Generate the covariance matrix between subbands
+
+def make_cov_bandband(std, nfrec):
+    # Make eigen values
+    e = np.random.random(nfrec)
+    e = e / np.sum(e)*nfrec
+    return sc.stats.random_correlation.rvs(e) * nfrec * std**2
+
+def make_cov_bandband2(std, nfrec):
+    r = np.zeros((nfrec, nfrec))
+    rho =np.arange(nfrec)
+    for j in range(nfrec):
+        r[:, j] = np.roll(1 - rho / nfrec, j) * nfrec * std**2
+    for i in range(nfrec):
+        for j in range(nfrec):
+            r[i, j] = r[j, i]
+    return r
+
+def make_cov_bandband3(std, nfrec):
+    cov = np.zeros((nfrec, nfrec))
+    for i in range(nfrec):
+        for j in range(nfrec):
+            if i==j:
+                cov[i, j]=1
+            else:
+                cov[i, j] = 1. / (np.abs(i - j) + 1)
+                if ((i - j) % 2) != 0:
+                    cov[i, j] *= -1
+                    
+    return cov * nfrec * std**2
+
+def cov2cmatrix(r, method='cholesky'):
+    # Construct c, so c*c^T = r
+
+    if method == 'cholesky':
+        # Compute the Cholesky decomposition.
+        c = cholesky(r, lower=False)
+    else:
+        # Compute the eigenvalues and eigenvectors.
+        evals, evecs = np.linalg.eigh(r)
+        c = np.dot(evecs, np.diag(np.sqrt(evals))).T
+    return c
+
+std = 2.
+nfrec = 4
+r = make_cov_bandband(std, nfrec)
+c = cov2cmatrix(r, method='cholesky')
+# Check that c*c^T = r
+plt.subplot(131)
+plt.imshow(r)
+plt.title('r')
+
+plt.subplot(132)
+plt.imshow(c)
+plt.title('c')
+
+plt.subplot(133)
+plt.imshow(c.T @ c)
+plt.title('c*c^T')
+
+# Check correlation coeff between lines or columns
+# corr1 , _ = pearsonr(r[:, 0], r[:, -1])
+# corr2 , _ = pearsonr(r[0, :], r[2, :])
+# print(corr1, corr2)
+```
+
+```{python}
+# Small test using np.random.multivariate_normal
+nreals = 100
+std = 2
+maxfrec = 10
+allsig2MC = []
+allsig2 = []
+
+for nfrec in range(2, maxfrec):
+
+    # Make correlated variables
+    r = make_cov_bandband3(std, nfrec)
+    
+    xn_noisy_corr = np.random.multivariate_normal(np.zeros(nfrec), r, size=nreals)
+
+    print('Var in first band corr:', np.var(xn_noisy_corr[:, 0]))
+
+    # Get Cp using np.cov 
+    Cp = np.cov(xn_noisy_corr, rowvar=False)
+    print('Cp shape:', Cp.shape)
+    plt.figure()
+    plt.plot([-20, 30], [-20, 30] )
+    plt.plot(np.ravel(Cp), np.ravel(r), '.')
+
+    plt.figure()
+    plt.subplot(121)
+    plt.imshow(Cp)
+    plt.title('Cp')
+    plt.colorbar(orientation='horizontal')
+
+    plt.subplot(122)
+    plt.imshow(r)
+    plt.title('r')
+    plt.colorbar(orientation='horizontal')
+
+    # Weighted average for each real
+    weighted_av = np.zeros((nreals))
+    sig2 = np.zeros((nreals))
+    for k in range(nreals):
+#         weighted_av[k] = np.mean(xn_noisy_corr[k, :])
+#         sig2[k] = np.std(xn_noisy_corr[k, :])
+        weighted_av[k], sig2[k] = amc.get_weighted_correlation_average(xn_noisy_corr[k, :], Cp)
+    
+    allsig2.append(sig2[0])
+    print('Sigma2 optimal:', sig2[0])
+    
+    allsig2MC.append(np.var(weighted_av))
+    print('Var in weighted map:', np.var(weighted_av), '\n')
+    
+allsig2MC = np.array(allsig2MC)
+allsig2 = np.array(allsig2)
+```
+
+```{python}
+print(allsig2MC)
+print(allsig2)
+
+nsub = np.arange(2, maxfrec)
+
+plt.figure()
+plt.plot(nsub, allsig2MC, 'o', label='sig2 MC')
+plt.plot(nsub, allsig2, label='sig2')
+plt.plot(nsub, nsub*0 + std**2, 'k--', label='No correlations')
+# plt.ylim(0.8, 1.2)
+plt.legend()
+```
+
+```{python}
+# Small test NOT using np.random.multivariate_normal
+nreals = 100
+std = 2
+maxfrec = 10
+
+allsig2MC = []
+allsig2 = []
+
+for nfrec in range(2, maxfrec):
+    xn_noisy = np.random.normal(0., 1., size=(nreals, nfrec))
+    print('Var in first band no corr:', np.var(xn_noisy[:, 0]))
+
+    # Apply correlations
+    r = make_cov_bandband3(std, nfrec)
+    c = cov2cmatrix(r, method='cholesky')
+
+    xn_noisy_corr = np.empty_like(xn_noisy)
+    for i in range(nreals):
+        xn_noisy_corr[i, :] = xn_noisy[i, :] @ c
+
+    print('Var in first band corr:', np.var(xn_noisy_corr[:, 0]))
+
+    # Get Cp using np.cov 
+    Cp_corr = np.cov(xn_noisy_corr, rowvar=False)
+    print('Cp shape:', Cp_corr.shape)
+    plt.figure()
+    plt.plot(np.ravel(Cp_corr), np.ravel(r), '.')
+
+    plt.figure()
+    plt.subplot(121)
+    plt.imshow(Cp_corr)
+    plt.title('Cp')
+    plt.colorbar(orientation='horizontal')
+
+    plt.subplot(122)
+    plt.imshow(r)
+    plt.title('r')
+    plt.colorbar(orientation='horizontal')
+
+    # Weighted average for each real
+    weighted_av_corr = np.zeros((nreals))
+    sig2_corr = np.zeros((nreals))
+    for k in range(nreals):
+        weighted_av_corr[k], sig2_corr[k] = amc.get_weighted_correlation_average(xn_noisy_corr[k, :], Cp_corr)
+    
+    allsig2.append(sig2_corr[0])
+    print('Sigma optimal:', sig2_corr[0])
+    
+    allsig2MC.append(np.var(weighted_av_corr))
+    print('Var in weighted map:', np.var(weighted_av_corr), '\n')
+
+allsig2MC = np.array(allsig2MC)
+allsig2 = np.array(allsig2)
+```
+
+```{python}
+print(allsig2MC)
+print(allsig2)
+
+nsub = np.arange(2, maxfrec)
+
+plt.figure()
+plt.plot(nsub, allsig2MC, 'o')
+plt.plot(nsub, allsig2)
+plt.plot(nsub, nsub*0 + std**2, 'k--', label='No correlations')
+# plt.ylim(0.8, 1.2)
+plt.legend()
+```
+
+## Try with maps to test AnalysisMC functions
+### Without coverage
+
+```{python}
+nreals = 1000
+std = 2
+npix = 5
+maxfrec = 5
+
+allsig2MC = []
+allsig2 = []
+
+for nfrec in range(1, maxfrec):
+    # Make correlations
+    r = make_cov_bandband3(std, nfrec)
+    c = cov2cmatrix(r)
+    
+    xn_noisy =  np.random.normal(0., 1., size=(nreals, nfrec, npix, 3))
+    xn_noisy_corr = np.zeros((nreals, nfrec, npix, 3))
+    for i in range(nreals):
+        for p in range(npix):
+            for istokes in range(3):
+                xn_noisy_corr[i, :, p, istokes] = xn_noisy[i, :, p, istokes] @ c
+    
+    print(xn_noisy_corr.shape)
+    print('Var in correlated multiband maps:', np.var(xn_noisy_corr))
+
+    # Get Cp    
+    Cp = amc.get_Cp(xn_noisy_corr, nfrecon=[nfrec,], verbose=False, doplot=False)
+    Cp_prime = amc.Cp2Cp_prime_viaCorr(Cp)
+    
+    plt.figure()
+    plt.plot(np.ravel(Cp[:, :, 0, 0]), np.ravel(r), '.')
+    
+    print('Cp shape:', Cp.shape)
+    
+    plt.figure()
+    plt.subplot(121)
+    plt.imshow(Cp[:, :, 0, 0])
+    plt.title('Cp')
+    plt.colorbar(orientation='horizontal')
+    
+    plt.subplot(122)
+    plt.imshow(r)
+    plt.title('r')
+    plt.colorbar(orientation='horizontal')
+    
+    # Weighted average for each real, each pix, IQU
+#     weighted_av = np.mean(xn_noisy_corr, axis=1) # To compare with an arithmetic mean
+    weighted_av, sig2 = amc.make_weighted_av(xn_noisy_corr, Cp)
+    print('Weihted map shape:', weighted_av.shape)
+    print('Sigma optimal:', sig2)
+    
+    # Average sig2 over IQU
+    allsig2.append(np.mean(sig2, axis=1))
+    
+    # Variance over real and IQU     
+    allsig2MC.append(np.var(weighted_av, axis=(0, 2)))
+    print('Var in weighted map:', np.var(weighted_av), '\n')
+
+
+allsig2MC = np.array(allsig2MC)
+allsig2 = np.array(allsig2)
+
+```
+
+```{python}
+print(allsig2MC)
+print(allsig2)
+nsub = np.arange(1, maxfrec)
+plt.figure(figsize=(12, 8))
+ax = plt.gca()
+
+for p in range(npix):
+    color = next(ax._get_lines.prop_cycler)['color']
+    plt.plot(nsub, allsig2MC[:, p], 'o', color=color, label='sig2 MC')
+    plt.plot(nsub, allsig2[:, p], color=color, label='sig2')
+    
+plt.plot(nsub, nsub * 0 + std**2, 'k--', label='std^2')
+plt.legend(loc='best') 
+plt.xlabel('# of bands')
+# plt.ylim(std**2 - 1, std**2 +1)
+
+```
+
+### Add a coverage
+
+```{python}
+coverage = np.arange(npix) + 1
+
+nreals = 100
+std = 2
+npix = 5
+maxfrec = 10
+
+allsig2MC = []
+allsig2 = []
+
+for nfrec in range(2, maxfrec):
+
+    # Make correlations
+    xn_noisy =  np.random.normal(0., 1., size=(nreals, nfrec, npix, 3))
+    xn_noisy_corr = np.zeros((nreals, nfrec, npix, 3))
+    r = np.zeros((nfrec, nfrec, npix))
+    for p in range(npix):
+        r[:, :, p] = make_cov_bandband(std, nfrec) / coverage[p]
+        c = cov2cmatrix(r[:, :, p])
+        for i in range(nreals):
+            for istokes in range(3):
+                xn_noisy_corr[i, :, p, istokes] = xn_noisy[i, :, p, istokes] @ c
+    
+    print(xn_noisy_corr.shape)
+    print('Var in correlated multiband maps:', np.var(xn_noisy_corr))
+
+    # Get Cp    
+    Cp = amc.get_Cp(xn_noisy_corr, nfrecon=[nfrec,], verbose=False, doplot=False)
+    Cp_prime = amc.Cp2Cp_prime_viaCorr(Cp)
+    
+    plt.figure()
+    plt.plot(np.ravel(Cp[:, :, 0, 0]), np.ravel(r[:, :, 0]), '.')
+    
+    print('Cp shape:', Cp.shape)
+    
+    plt.figure()
+    plt.subplot(121)
+    plt.imshow(Cp[:, :, 0, 0])
+    plt.title('Cp')
+    plt.colorbar(orientation='horizontal')
+    
+    plt.subplot(122)
+    plt.imshow(r[:, :, 0])
+    plt.title('r')
+    plt.colorbar(orientation='horizontal')
+    
+    # Weighted average for each real, each pix, IQU
+    weighted_av, sig2 = amc.make_weighted_av(xn_noisy_corr, Cp)
+    print('Weihted map shape:', weighted_av.shape)
+    print('Sigma optimal:', sig2)
+    
+    # Average sig2 over IQU
+    allsig2.append(np.mean(sig2, axis=1))
+    
+    # Variance over real and IQU     
+    allsig2MC.append(np.var(weighted_av, axis=(0, 2)))
+    print('Var in weighted map:', np.var(weighted_av), '\n')
+
+
+allsig2MC = np.array(allsig2MC)
+allsig2 = np.array(allsig2)
+
+
+```
+
+```{python}
+print(allsig2MC.shape)
+print(allsig2.shape)
+nsub = np.arange(2, maxfrec)
+plt.figure(figsize=(12, 8))
+ax = plt.gca()
+
+for p in range(npix):
+    color = next(ax._get_lines.prop_cycler)['color']
+    plt.plot(nsub, allsig2MC[:, p]*coverage[p], 'o', color=color, label='pix {}'.format(p))
+    plt.plot(nsub, allsig2[:, p]*coverage[p], color=color, label='sig2')
+    
+plt.plot(nsub, nsub * 0 + std**2, 'k--', label='std^2')
+plt.legend(loc='best') 
+# plt.ylim(std**2 - 1, std**2 +1)
+```
+
+```{python}
+
+```

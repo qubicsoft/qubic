@@ -1,0 +1,165 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.4
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(9,4.5))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack.qubicfp import qubicfp
+import qubic.fibtools as ft
+import qubic.plotters as p
+import qubic.lin_lib as ll
+import qubic.demodulation_lib as dl
+import satorchipy as stpy
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import datetime as dt
+import pickle
+from importlib import reload
+```
+
+```{python}
+###
+CalibDataDir = '/Users/hamilton/Qubic/Calib-TD/'
+days = ['2019-12-16', '2019-12-17']
+keyword = '*NoiseMeasurement_FileDuration_600*'
+dirs = []
+for d in days:
+    data_dir = '/Users/hamilton/Qubic/Calib-TD/'+d+'/'
+    dirsok = np.sort(glob.glob(data_dir+keyword))
+    for dd in dirsok: dirs.append(dd)
+print(dirs)
+
+voltages = linspace(6, 2., len(dirs))
+print(voltages)
+print(len(dirs))
+```
+
+```{python}
+ifile = 0
+thedir = dirs[ifile]
+print(thedir)
+a = qubicfp()
+a.read_qubicstudio_dataset(thedir)
+data=a.azel_etc(TES=None)
+t0=data['t_data 1'][0]
+
+TESNum=94
+tt = data['t_data 1']
+t0 = tt[0]
+dd = data['data 1'][TESNum-1,:]
+
+plot(tt-t0, dd)
+
+#hwp = a.hk['INTERN_HK']['HWP-Position']
+#hwp_timestamps = a.timeaxis(datatype='hk',axistype='computertime')
+```
+
+```{python}
+### Loop on TES
+TESNum = 96
+doplot = True
+regions = [[0.1, 1.], [1., 10.], [10., 50.]]
+meanps = np.zeros((len(dirs), len(regions), 256))
+tt = []
+dd = []
+rmsk = []
+xmin = 0.01
+xmax = 100.
+ymin = 1e-17
+ymax = 1e-12
+
+names = dirs.copy()
+for i in range(len(dirs)*0+1):
+    voltage = voltages[i]
+    a = qubicfp()
+    a.Rfeedback = 100e3 ### Apparent bug in QubicStudio... the value is wrong...
+    a.read_qubicstudio_dataset(thedir)
+    data=a.azel_etc(TES=None)
+    for asic in [1,2]:
+        print(i,len(dirs),asic)
+        t0=data['t_data {}'.format(asic)][0]
+        tt.append(data['t_data {}'.format(asic)]-t0)
+        dd_ADU = data['data {}'.format(asic)]
+        dd.append(a.ADU2I(dd_ADU))
+        for k in range(128):
+            spectrum_f, freq_f = ft.power_spectrum(tt[i], dd[i][k,:]*1e-6 * voltage, rebin=True)
+            for r in range(len(regions)):
+                ok = (freq_f >= regions[r][0]) & (freq_f < regions[r][1])
+                mm, ss = ft.meancut(spectrum_f[ok],3)
+                meanps[i,r,128*(asic-1)+k] = np.sqrt(mm)
+            if doplot:
+                if ((128*(asic-1)+k)+1)==TESNum:
+                    p=plot(freq_f, np.sqrt(f.gaussian_filter1d(spectrum_f,1)),label=voltages[i])
+                    yscale('log')
+                    xscale('log')
+                    xlabel('Frequency [Hz]')
+                    ylabel('Amplitude Spectral Density $[W/\sqrt{Hz}]$')
+                    #xlim(xmin, xmax)
+                    #ylim(ymin, ymax)
+                    title('TES#={}'.format(TESNum))
+                    print(meanps[i,:,128*(asic-1)+k])
+                    for r in range(len(regions)):
+                        plot(regions[r], [meanps[i,r,128*(asic-1)+k], meanps[i,r,128*(asic-1)+k]])
+                    
+
+
+legend()
+grid()
+            
+            
+            
+```
+
+```{python}
+meanps.shape
+```
+
+```{python}
+mini = -13
+maxi = -8
+rc('figure',figsize=(15,8))
+for i in range(len(regions)):
+    subplot(len(regions),1,i+1)
+    imshow(np.log10(meanps[:,i,:]), aspect='auto', vmin=mini, vmax=maxi)
+    colorbar()
+```
+
+```{python}
+for i in range(len(regions)):
+    p=plot(voltages, np.log10(np.mean(meanps[:,i,:], axis=1)), '-',
+         label='Mean {} to {} Hz'.format(regions[i][0], regions[i][1]))
+    plot(voltages, np.log10(np.median(meanps[:,i,:], axis=1)), '--',
+         label='Median {} to {} Hz'.format(regions[i][0], regions[i][1]), color=p[0].get_color())
+#     for k in range(256):
+#         plot(voltages, np.log10(meanps[:,i,k]), alpha=0.01)
+legend()
+xlabel('Voltage')
+```
+
+```{python}
+
+```

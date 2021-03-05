@@ -1,0 +1,217 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# QUBIC B-Modes - No Dust No Systematics
+
+#### JCH 2019-03-12 Inspired by Notebook spectroimaging_dust.Rmd from Louise & Martin
+
+In this notebook we aim at exploring the B-Modes capabilities of QUBIC in the absence of dust and systematics
+
+```{python}
+# %matplotlib inline
+from pylab import *
+import os
+import sys
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm
+import qubic
+from qubic import SpectroImLib as si
+from qubic import QubicSkySim as qss
+from qubic import NamasterLib as nam
+
+rc('figure', figsize=(13, 10))
+rc('font', size=15)
+```
+
+```{python}
+# Repository for dictionary and input maps
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+dictfilename = global_dir + '/dicts/Small_BmodesNoDustNoSystPaper0_2020.dict'
+
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+print(center)
+print(d)
+```
+
+# Input sky (to change)
+* cmb
+
+```{python}
+# Make a sky using QubicSkySim with r=0 (default simple request - the camb spectrum is calculated inside)
+seed = 42
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+x0 = np.reshape(Qubic_sky.get_simple_sky_map(),(d['nf_sub'],d['nside']**2*12,3))
+
+# The input spectra are
+input_cl = Qubic_sky.input_cmb_spectra
+
+print('Input SubFrequencies Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0))
+```
+
+```{python}
+# Look at the input sky maps using Healpy
+istokes = 0 # Stokes parameter (I, Q, U)
+imap = 0 # Frequency subband, should be smaller than nf_sub
+rr=15 # Resolution in arcmin
+
+plt.figure(figsize=(13,8))
+for istk in range(3):
+    plt.subplots_adjust(wspace=0.9)
+    hp.mollview(x0[imap,:,istk], cmap='jet', sub = (3,2,2*istk+1), 
+                title = '{0}, map {1}'.format(d['kind'][istk], imap))
+    hp.gnomview(x0[imap,:,istk], cmap ='jet', sub = (3,2,2*istk+2), rot=center, reso=rr, 
+                title = '{0}, map {1}'.format(d['kind'][istk], imap))
+tight_layout()
+```
+
+# TOD simulation
+
+```{python}
+# Pointing strategy
+p = qubic.get_pointing(d)
+print('=== Pointing DONE! ===')
+
+# ==== TOD making ====
+TOD, maps_convolved = si.create_TOD(d, p, x0)
+maps_convolved = np.array(maps_convolved)
+print('--------- Noiseless TOD with shape: {} - Done ---------'.format(np.shape(TOD)))
+print('-------- Maps Convolved with shape: {} - Done ---------'.format(np.shape(maps_convolved)))
+```
+
+```{python}
+q = qubic.QubicMultibandInstrument(d)
+s = qubic.QubicScene(d)
+# rot_beams = si.get_hitmap(q[0], s, p)
+# rot_beams.shape
+# hp.mollview(np.sum(rot_beams, axis=0))
+```
+
+```{python}
+TOD.shape
+print(d['nf_recon'])
+```
+
+# Map-Making
+
+```{python}
+nf_sub_rec = d['nf_recon']
+
+Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = qubic.compute_freq(150, nf_sub_rec)
+print('Band center:', nus)
+print('Band edges:', nus_edge)
+print('Band width:', deltas)
+
+len(nus_edge)
+for i in range(len(nus_edge) - 1):
+    print('base =', nus_edge[i+1] / nus_edge[i])
+    
+# plt.plot(nus, [1, 1], 'ro')
+# plt.plot(nus_edge, [1, 1, 1], 'bo')
+```
+
+```{python}
+maps_recon, cov, nus, nus_edge, maps_convolved = si.reconstruct_maps(TOD, d, p,
+                                                                    nf_sub_rec, x0=x0)
+maps_convolved = np.reshape(maps_convolved,(d['nf_recon'], 12*d['nside']**2, 3))
+maps_recon = np.reshape(maps_recon,(d['nf_recon'], 12*d['nside']**2, 3))
+print(maps_recon.shape)
+```
+
+```{python}
+# Look at the coverage of the sky
+coverage = np.sum(cov.copy(), axis=0)
+maxcov = np.max(coverage)
+unseen = coverage < maxcov * 0.1
+print(maps_convolved.shape)
+maps_convolved[:, unseen, :] = hp.UNSEEN
+maps_recon[:, unseen, :] = hp.UNSEEN
+```
+
+```{python}
+print(coverage.shape)
+hp.mollview(coverage)
+#hp.write_map('sample_coverage_qubic.fits',coverage)
+```
+
+```{python}
+maps_diff = maps_convolved - maps_recon
+# np.unique(np.isnan(maps_recon))
+maps_diff[maps_recon == -1.6375e+30] = -1.6375e+30
+hp.mollview(maps_diff[0, :, 0],min=-200,max=200)
+```
+
+```{python}
+# Look at IQU in one band
+band = 0
+plt.figure(figsize=(8,8))
+rr = 15
+lim = [200, 3, 3]
+for istk in range(3):
+    plt.subplots_adjust(wspace=0.9)
+    hp.gnomview(maps_recon[band,:,istk], cmap ='jet', sub = (3,3,3*istk+1), rot=center, reso=rr, 
+                title = '{0} rec {1}'.format(d['kind'][istk], band), min=-lim[istk], max=lim[istk])
+    hp.gnomview(maps_convolved[band,:,istk], cmap ='jet', sub = (3,3,3*istk+2), rot=center, reso=rr, 
+                title = '{0} conv {1}'.format(d['kind'][istk], band), min=-lim[istk], max=lim[istk])
+    hp.gnomview(maps_diff[band,:,istk], cmap ='jet', sub = (3,3,3*istk+3), rot=center, reso=rr, 
+                title = '{0} diff {1}'.format(d['kind'][istk], band), min=-lim[istk], max=lim[istk])
+```
+
+```{python}
+okpix = maps_diff[0,:,0] != hp.UNSEEN
+print(np.std(maps_diff[:,okpix,:],axis=1))
+```
+
+```{python}
+#### Save maps
+rnd_name = qss.random_string(10)
+directory = '/qubic/Sims/EndToEndMaps/'
+FitsArray(maps_recon).save(directory+'maps_recon_seed_'+str(seed)+'_'+rnd_name+'.fits')
+FitsArray(maps_convolved).save(directory+'maps_convolved_seed_'+str(seed)+'_'+rnd_name+'.fits')
+FitsArray(coverage).save(directory+'maps_coverage_'+rnd_name+'.fits')
+   
+import pickle
+with open(directory+'dictionary_'+rnd_name+'.pickle', 'wb') as handle:
+    pickle.dump(d, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+with open(directory+'input_cell_'+rnd_name+'.pickle', 'wb') as handle:
+    pickle.dump(Qubic_sky.input_cmb_spectra, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+
+
+```{python}
+
+```

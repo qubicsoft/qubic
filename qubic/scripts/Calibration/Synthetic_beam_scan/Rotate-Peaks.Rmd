@@ -1,0 +1,249 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.0
+  kernelspec:
+    display_name: Python [default]
+    language: python
+    name: python2
+---
+
+# Rotation of measured synthesized in order to put it into the boresight reference frame that is used in QubicSoft
+#### J.-Ch. Hamilton heavily inspired by Martin Gamboa's notebook scanSource_oneDet.ipynb
+
+#### Beware: Part of the code needs to be modified to account for the new pixel numbering !
+
+```{python}
+# %matplotlib inline
+# #%matplotlib notebook
+from matplotlib import rc
+rc('figure', figsize=(15,8))
+rc('font', size=12)
+rc('text', usetex=False)
+rc('image', cmap='viridis')
+
+import healpy as hp
+import qubic.io
+from pysimulators import FitsArray
+import fibtools as ft
+import demodulation_lib as dl
+import sb_fitting as sbfit
+
+ns = 256
+```
+
+```{python}
+TESNum = 37
+thecos = np.cos(np.radians(50))
+
+dirallfreqs = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/'
+dirfreq='150GHz-2019-04-06/'
+flatmap, az, el, fitmap, peaks = sbfit.get_flatmap(TESNum, dirallfreqs+dirfreq, 
+                                                     fitted_directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/FitSB/')
+print(peaks[0,:])
+print(peaks[1,:])
+print(peaks[2,:])
+print(peaks[3,:])
+print('')
+
+### In measurement coordinate system
+thetas_measured_M = np.radians(90-(peaks[1,:]-50))
+phis_measured_M = np.radians(-peaks[0,:])
+amps_measured_M = peaks[2,:]
+fwhm_measured_M = peaks[3,:]
+
+
+
+directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/150GHz-2019-04-06/'
+
+filename = directory + 'Flat/imgflat_TESNum_{}.fits'.format(TESNum)
+img = FitsArray(filename)
+az = FitsArray(directory + 'Flat/azimuth.fits')
+el = FitsArray(directory + 'Flat/elevation.fits')
+
+mm, ss = ft.meancut(img[img != 0], 3)
+subplot(1,2,1)
+imshow(img, 
+       extent = [np.min(az)*thecos, np.max(az)*thecos, np.min(el), np.max(el)], 
+       cmap='viridis',
+       vmin = -3*ss, vmax = 10*ss)
+plot(peaks[0,:],peaks[1,:],'rX', label='Fitted')
+legend()
+
+mymap = qubic.io.read_map(directory+'/Healpix/healpix_TESNum_{}.fits'.format(TESNum))
+hp.gnomview(mymap, reso=10, sub=(1,2,2), min=-3*ss, max=10*ss,cmap='viridis')
+hp.projscatter(-peaks[0,:],peaks[1,:]-50, lonlat=True, marker='X',color='r', label='Fitted')
+legend()
+```
+
+```{python}
+did_det={'93':180, '94':197, '95':214, '96':231}#180sim == 93real, 197sim == 94 real, 214sim == 95real, 231sim == 96real 
+
+def select_det(q,id):
+    # Select detector number id from a QubicInstrument instance q
+    # Return:
+    #     A QubicInstrument object with only detector id (insted full detector array)
+    id=[id]
+    detector_i = q.detector[id]
+    q.detector = detector_i
+    return(q)
+```
+
+### Findng realistic peaks locations in the right reference frame
+We instantiate a QUBIC instrument, get the synthesized beam for a given detector and plot the synthesized beam in the Qubic System, meaning that it is oriented towards the zenith. We also extract the locations of the peaks from the QUBIC software.
+
+```{python}
+sel_det=True #If you want to select one detector
+TESid = TESNum
+
+# INSTRUMENT
+d = qubic.qubicdict.qubicDict()
+d.read_from_file('../pointsource/global_source_oneDet.dict')
+print(d['kind'])
+d['kind']='I'
+print(d['kind'])
+d['nside']=ns
+
+q = qubic.QubicInstrument(d)
+# plt.title('Detector array')
+# plt.plot(q.detector.center[did_det['93']][0],q.detector.center[did_det['93']][1], 'ko')
+# q.detector.plot()
+
+############################# THIS NEEDS TO BE MODEIFIED WITH THE NEW PIXEL NUMBERING ####################
+if sel_det:
+    if str(TESid) not in did_det.keys():
+        q =select_det(q,TESid)
+    else:
+        q=select_det(q,did_det['{}'.format(TESid)])
+        
+s = qubic.QubicScene(d)
+
+nu = q.filter.nu
+detcenter = q.detector.center
+synthbeam = q.synthbeam
+horn = getattr(q, 'horn', None)
+primary_beam = getattr(q, 'primary_beam', None)
+synthbeam.kmax = 2
+thetas, phis, vals  = q._peak_angles(s, nu, detcenter, synthbeam, horn, primary_beam)
+thetas = np.reshape(thetas, thetas.shape[1])
+phis = np.reshape(phis, phis.shape[1])
+vals = np.reshape(vals, vals.shape[1])
+
+sb = q.get_synthbeam(s, 0, detpos=q.detector.center[0])
+xr=0.1*np.max(sb)
+```
+
+Now let's overplot the Synthesized beam and the peak locations in mollweide with no healpix map rotation: peaks appear towards the zenith. We also plot the same bt using healpix rotation of the map in order to have the SB on the equator, and then we plot in gnomonic (with the same rotation of course).
+
+```{python}
+hp.mollview(sb, min=0, max=xr, title='Qubic reference frame: optical center towards z (90,0)', sub=(2,2,1))
+hp.mollview(sb, min=0, max=xr, rot=[0,90], title='Qubic reference frame: optical center towards z (90,0) - Healpix Rotated', sub=(2,2,3))
+hp.gnomview(sb, rot=[0,90],reso=10, min=0, max=xr,cmap='viridis', sub=(1,2,2), title='Qubic reference frame: optical center towards z (90,0) - Healpix Rotated')
+
+#Overplotting (for some reason ot plots on both subplots...)
+hp.projscatter(thetas,phis, marker='X',color='r', label='True Positions', alpha=0.4)
+legend()
+
+```
+
+Similarly, we plot the measured synthesized beam (that is in another reference frame: towards the x axis instead of z) and overplot the location of the fitted peaks.
+
+```{python}
+hp.mollview(hp.ud_grade(mymap, 128), min=-3*ss, max=10*ss, title='Measurement reference frame: optical center towards x (0,0)', sub=(1,2,1))
+
+hp.gnomview(hp.ud_grade(mymap, 128), reso=10, sub=(1,2,2), min=-3*ss, max=10*ss,cmap='viridis', title='Measurement frame: optical center towards X <=> (0,0)')
+hp.projscatter(thetas_measured_M,phis_measured_M, marker='X',color='r', label='Fitted', alpha=0.4)
+legend()
+```
+
+The exercize is to be able to convert the peaks locations from one reference frame to the other
+
+Let's define some angular transformation functions and try to combine them in order to perform the desired rotation.
+
+```{python}
+
+##### Test: we draw a cross in initial reference frame (towards z) and rotate it to the new one. 
+##### We also do the reverse transformation to the points we obtained and check that we are back.
+th0 = np.radians([0., 5., 5., 5., 5.])
+ph0 = np.radians([0., 0., 90., 180., 270.])
+
+th1, ph1 = sbfit.rotate_q2m(th0, ph0)
+hp.mollview(np.zeros(12), title='From Q to M')
+hp.projscatter(th0,ph0, marker='X',color='r', alpha=0.4, label='Initial points')
+hp.projscatter(th1,ph1, marker='+',color='b', alpha=0.4, label='Rotated points')
+
+th2, ph2 = sbfit.rotate_q2m(th1, ph1, inverse=True)
+hp.projscatter(th2,ph2, marker='+',color='k', alpha=0.4, label='ReRotated-back points')
+legend()
+
+print(th0-th2)
+print((ph0-ph2) % (2*np.pi))
+```
+
+OK ! It's working well apparently !
+
+Now we apply this to the data: we transform the QUBIC theoretical peak locations into the measurement reference frame and overplot them onto the measured synthesized beam.
+
+```{python}
+#angs = np.radians(np.array([0.4, 87.2, 0.8]))     ### Fitted minimizing the residuals around pt src...
+angs = np.radians(np.array([0, 90, 0]))
+#angs = np.radians(np.array([0.4, 90.5, -2.5]))
+
+thetas_new, phis_new = sbfit.rotate_q2m(thetas, phis, angs=angs)
+
+hp.mollview(hp.ud_grade(mymap, 128), min=-3*ss, max=10*ss, title='Measurement reference frame: optical center towards x (0,0)', sub=(1,2,1))
+
+hp.gnomview(hp.ud_grade(mymap, 128), reso=10,min=-3*ss, max=10*ss, title='Measurement reference frame: optical center towards x (0,0)', sub=(1,2,2), cmap='viridis')
+hp.projscatter(thetas_new,phis_new, marker='X',color='r', s=100,label='Theoretical rotated')
+hp.projscatter(thetas_measured_M,phis_measured_M, marker='*',color='k',s=100, label='Fitted')
+
+legend()
+```
+
+Seems to be working OK !
+
+Let's do the opposite (which is actually what we want): rotate the measured synthesized beam peaks and overplot them onto the theoretical one.
+
+```{python}
+thetas_measured_Q, phis_measured_Q = sbfit.rotate_q2m(thetas_measured_M, phis_measured_M, angs=angs, inverse=True)
+
+hp.mollview(sb, min=0, max=xr, title='Qubic reference frame: optical center towards z (90,0)', sub=(2,2,1))
+hp.mollview(sb, min=0, max=xr, rot=[0,90], title='Qubic reference frame: optical center towards z (90,0) - Healpix Rotated', sub=(2,2,3))
+
+hp.gnomview(sb, rot=[0,90],reso=10, min=0, max=xr,cmap='viridis', sub=(1,2,2), title='Qubic reference frame: optical center towards z (90,0) - Healpix Rotated')
+hp.projscatter(thetas,phis, marker='X',color='r', label='Theoretical Positions',s=100)
+hp.projscatter(thetas_measured_Q,phis_measured_Q, marker='*',color='g',s=300, label='Fitted Positions')
+legend()
+
+```
+
+So the nes values to put in the QUBIC reconstruction software are:
+
+```{python}
+print('Thetas:')
+print(thetas_measured_Q)
+print('Phis:')
+print(phis_measured_Q)
+
+#normalization similar to instrument.py line 920
+### Note: here we use the fitted amplitudes but they are heavily affected by saturation of the TES, 
+### so it may turn out to be a better approximation to use the primary beam shape at these locations...
+### To be revisited later
+amps_measured_Q = amps_measured_M/np.max(amps_measured_M)*synthbeam.peak150.solid_angle * (150e9 / nu)**2 / s.solid_angle * len(horn)
+print('Amps:')
+print(amps_measured_Q)
+```
+
+Now we need to put this into the QUBIC Software
+
+```{python}
+
+```
+
+```{python}
+
+```

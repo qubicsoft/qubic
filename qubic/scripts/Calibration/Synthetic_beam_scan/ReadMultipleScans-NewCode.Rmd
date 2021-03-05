@@ -1,0 +1,300 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.0
+  kernelspec:
+    display_name: Python [default]
+    language: python
+    name: python2
+---
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(16,8))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack import qubicpack as qp
+import fibtools as ft
+import plotters as p
+import lin_lib as ll
+import demodulation_lib as dl
+
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import os
+import healpy as hp
+```
+
+```{python}
+method = 'rms'
+
+dirfiles = '/Volumes/Data/Qubic/Calib-TD/ScanData_2019-04-18_130GHz_'+method+'_NewCode/'
+names = 'unbinned_ScanMap_170GHz_Speed_VE4_El' ### They are labelled 170 but this is a mistake: it is really 130 GHz
+freq = '130 GHz - 2019-04-18'
+# dirfiles = '/Volumes/Data/Qubic/Calib-TD/ScanData_2019-04-10_140GHz_'+method+'_NewCode/'
+# names = 'unbinned_ScanMap_140GHz_Speed_VE4_El'
+# freq = '140GHz-2019-04-10'
+# dirfiles = '/Volumes/Data/Qubic/Calib-TD/ScanData_2019-03-31_'+method+'_NewCode/'
+# names = 'unbinned_ScanMap_Speed_VE4_El'
+# freq = '150GHz-2019-03-31'
+# dirfiles = '/Volumes/Data/Qubic/Calib-TD/ScanData_2019-04-06_'+method+'_NewCode/'
+# names = 'unbinned_ScanMap_Speed_VE4_El'
+# freq = '150GHz-2019-04-06'
+# dirfiles = '/Volumes/Data/Qubic/Calib-TD/ScanData_2019-04-08_160GHz_'+method+'_NewCode/'
+# names = 'unbinned_ScanMap_160GHz_Speed_VE4_El'
+# freq = '160GHz-2019-04-08'
+# dirfiles = '/Volumes/Data/Qubic/Calib-TD/ScanData_2019-04-14_170GHz_'+method+'_NewCode/'
+# names = 'unbinned_ScanMap_170GHz_Speed_VE4_El'
+# freq = '170 GHz - 2019-04-14'
+
+nu = int(str.split(freq,'-')[0][0:3])
+allfiles = np.sort(glob.glob(dirfiles+'alltes*_'+names+'_*.fits'))
+allfiles = np.sort(allfiles)
+
+allfiles_ang = np.sort(glob.glob(dirfiles+'angles*_'+names+'_*.fits'))
+allfiles_ang = np.sort(allfiles_ang)
+
+allels = np.zeros(len(allfiles))
+for i in xrange(len(allfiles)):
+    allels[i] = str.split(allfiles[i],'_')[-1][:-5]
+
+print 'Found {} Files'.format(len(allfiles))
+print nu
+```
+
+```{python}
+alldata = []
+allaz = []
+allel = []
+allang_az = []
+for j in xrange(len(allfiles)):
+    data = np.array(FitsArray(allfiles[j]))
+    sh = np.shape(data)
+    alldata.append((data.T-np.median(data,axis=1)).T)
+    bla = np.array(FitsArray(allfiles_ang[j]))
+    allaz.append(bla[0,:])
+    allel.append(bla[1,:]+124.35)
+    allang_az.append(bla[2,:])
+
+tod = dl.make_tod(alldata)
+az = dl.make_tod(allaz, axis=0)
+el = dl.make_tod(allel, axis=0)
+print tod.shape
+print az.shape
+print el.shape
+```
+
+```{python}
+reload(dl)
+nbins_x = 200
+x_max = np.max(az)+0.5
+x_min = -x_max
+TESNum=93
+nsig_lo = 5
+nsig_hi = 30
+
+img, xx, yy = dl.bin_image_elscans(allaz, allels, alldata, [x_min, x_max], nbins_x, TESNum-1)
+mm, ss = ft.meancut(img[img != 0], 3)
+print mm, ss
+
+
+
+nside = 256
+ok = np.abs(az) <= x_max 
+newtod = tod.copy()
+newtod[:, ~ok] = 0
+sbmap = dl.scan2hpmap(nside, az*np.cos(np.radians(50)), el-50, newtod[TESNum-1,:])
+
+
+subplot(1,2,1)
+imshow(img, 
+       extent=[x_min*np.cos(np.radians(50)),x_max*np.cos(np.radians(50)), np.min(allels), np.max(allels)], 
+       aspect='equal',vmin=-ss*nsig_lo, vmax=ss*nsig_hi)
+colorbar()
+title(freq+'\n FlatMap - TES={}'.format(TESNum))
+ylabel('Elevation')
+xlabel('Azimuth x cos(50)')
+
+#mm, ss = ft.meancut(sbmap[sbmap != 0], 4)
+hp.gnomview(sbmap, rot=[0,np.mean(allels)-50], 
+            reso=10,min=-ss*nsig_lo, max=+ss*nsig_hi,
+            title=freq+'\n Healpix - TES={}'.format(TESNum), sub=(1,2,2))
+tight_layout()
+
+savefig('/Volumes/Data/Qubic/Calib-TD/'+freq+'_'+method+'.png')
+```
+
+```{python}
+mini = -2e-4
+maxi = 1e-3
+subplot(1,2,1)
+imshow(img/np.sum(img), 
+       extent=[x_min*np.cos(np.radians(50)),x_max*np.cos(np.radians(50)), np.min(allels), np.max(allels)], 
+       aspect='equal',vmin=mini, vmax=maxi)
+colorbar()
+title(freq+'\n FlatMap - TES={}'.format(TESNum))
+ylabel('Elevation')
+xlabel('Azimuth x cos(50)')
+
+#mm, ss = ft.meancut(sbmap[sbmap != 0], 4)
+hp.gnomview(sbmap/np.sum(sbmap), rot=[0,np.mean(allels)-50], 
+            reso=10,min=mini, max=maxi,
+            title=freq+'\n Healpix - TES={}'.format(TESNum), sub=(1,2,2))
+tight_layout()
+
+
+```
+
+```{python}
+map122=sbmap.copy()
+```
+
+```{python}
+hp.gnomview(map58, rot=[0,np.mean(allels)-50], 
+            reso=10,min=0, max=5e3,
+            title='58', sub=(1,3,1))
+hp.gnomview(map90, rot=[0,np.mean(allels)-50], 
+            reso=10,min=0, max=5e3,
+            title='90', sub=(1,3,2))
+hp.gnomview(map122, rot=[0,np.mean(allels)-50], 
+            reso=10,min=0, max=5e3,
+            title='122', sub=(1,3,3))
+
+
+```
+
+```{python}
+hp.gnomview(np.log10(np.abs(map58)), rot=[0,np.mean(allels)-50], 
+            reso=10,min=2, max=4,
+            title='58', sub=(1,3,1))
+hp.gnomview(np.log10(np.abs(map90)), rot=[0,np.mean(allels)-50], 
+            reso=10,min=2, max=4,
+            title='90', sub=(1,3,2))
+hp.gnomview(np.log10(np.abs(map122)), rot=[0,np.mean(allels)-50], 
+            reso=10,min=2, max=4,
+            title='122', sub=(1,3,3))
+
+
+```
+
+```{python}
+# %matplotlib inline
+rc('figure',figsize=(16,8))
+
+hp.gnomview(np.log10(map90/map58), rot=[0,np.mean(allels)-50], 
+            reso=10,min=-4, max=-1,
+            title='90/58', sub=(1,2,1))
+hp.gnomview(np.log10(map90/map122), rot=[0,np.mean(allels)-50], 
+            reso=10,min=-5, max=-2,
+            title='90/122', sub=(1,2,2))
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+import qubic.io
+import healpy as hp
+ns = 256
+sb = np.zeros(12*ns**2)
+sb[0:1000] = np.random.rand(1000)
+
+qubic.io.write_map('toto.fits', sb,mask= sb != 0)
+
+sb2 = np.random.rand(12*ns**2)
+qubic.io.write_map('toto2.fits', sb2)
+
+m = qubic.io.read_map('toto.fits')
+m2 = qubic.io.read_map('toto2.fits')
+
+
+
+```
+
+## All plots for all TES can be done using the script launch_plots.py on Git under Calibration/
+
+```{python}
+dir_all = '/Volumes/Data/Qubic/Calib-TD/Synthesized_Beams/' + freq
+dir_healpix = dir_all + '/Healpix'
+dir_flat = dir_all + '/Flat'
+dir_img = dir_all + '/Images'
+dir_img_flat = dir_img + '/Flat'
+dir_img_healpix = dir_img + '/Healpix'
+dirs = [dir_all, dir_healpix, dir_flat, dir_img, dir_img_flat, dir_img_healpix]
+for d in dirs:
+    try: 
+        os.mkdir(d)
+    except:
+        print ''
+
+```
+
+```{python}
+## Then for Healpix
+nn1 = 6  ## Vertical
+nn2 = 4  ## Horizonthal
+ic=0
+#nseries = 256/(nn1*nn2)+1
+nseries = 1
+fs = 9
+rc('figure',figsize=(16,28))
+rcParams.update({'font.size': fs})
+from matplotlib.backends.backend_pdf import PdfPages
+with PdfPages(dir_img+'allTES_Healpix.pdf') as pdf:
+    for serie in xrange(nseries):
+        print 'Doing Healpix all-in-one image: page {} out of {}'.format(serie, 256/(nn1*nn2)+1)
+        for i in xrange(nn1*nn2):
+            TESNum = serie*nn1*nn2+i+1
+            TESIndex = TESNum-1
+            if TESNum <= 256:
+				ok = np.abs(az) <= x_max 
+				newtod = tod.copy()
+				newtod[:, ~ok] = 0
+				sbmap = dl.scan2hpmap(nside, az*np.cos(np.radians(50)), el-50, newtod[TESIndex,:])
+				the_sbmap = sbmap.copy()
+				the_sbmap[sbmap < (-ss*nsig_lo)] = -ss*nsig_lo
+				hp.gnomview(sbmap, rot=[0,np.mean(allels)-50], 
+				            reso=10,min=-ss*nsig_lo, max=+ss*nsig_hi,
+				            title='Nu={} GHz - TESNum={}'.format(nu,TESIndex+1), sub=(nn1,nn2,i+1))      
+        tight_layout()        
+        pdf.savefig()
+    close()
+
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

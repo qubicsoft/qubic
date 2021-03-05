@@ -1,5 +1,5 @@
 #!/bin/env python
-from __future__ import division
+from __future__ import division, print_function
 import sys
 import healpy as hp
 import numpy as np
@@ -99,7 +99,7 @@ for istokes in [0,1,2]:
 		xr=200
 	else:
 		xr=5
-	for i in xrange(parameters['nf_sub_rec']):
+	for i in range(parameters['nf_sub_rec']):
 		hp.gnomview(maps_convolved[i,:,istokes], rot=center_gal, reso=10, 
 			sub=(parameters['nf_sub_rec'],3,3*i+1), min=-xr, max=xr, 
 			title='Input '+stokes[istokes]+' SubFreq {}'.format(i))

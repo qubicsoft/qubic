@@ -1,8 +1,13 @@
 # coding: utf-8
-from __future__ import division
+from __future__ import division, print_function
 from astropy.io import fits
-from ConfigParser import ConfigParser
-from glob import glob
+import sys
+import glob
+if sys.version_info.major==2:
+    from ConfigParser import ConfigParser
+else:
+    from configparser import ConfigParser
+
 from os.path import join
 from pysimulators import Layout, LayoutGrid
 from .calfiles import PATH
@@ -41,10 +46,10 @@ class QubicCalibration(object):
 
         """
         self.path = os.path.abspath(path)
-        self.detarray =   os.path.abspath(join(self.path, d['detarray']))
+        self.detarray = os.path.abspath(join(self.path, d['detarray']))
         self.hornarray = os.path.abspath(join(self.path, d['hornarray']))
         self.optics = os.path.abspath(join(self.path, d['optics'])) 
-        self.primbeam =  os.path.abspath(join(self.path, d['primbeam'])) 
+        self.primbeam = os.path.abspath(join(self.path, d['primbeam']))
         self.nu = int(d['filter_nu']/1e9)
 
     def __str__(self):
@@ -74,23 +79,19 @@ class QubicCalibration(object):
         if name == 'detarray':
             hdus = fits.open(self.detarray)
             version = hdus[0].header['format version']
-            corner = hdus[2].data
-            shape = corner.shape[:-2]
-            n = shape[0] * shape[1]
-            if version == '1.0':
-                removed = np.zeros(shape, bool)
-                index = np.arange(n, dtype=np.int32).reshape(shape)
-                quadrant = np.zeros(shape, np.int8)
-                efficiency = np.ones(shape)
-            else:
-                removed = hdus[3].data.view(bool)
-                index = hdus[4].data
-                quadrant = hdus[5].data
-                if version > '2.0':
-                    efficiency = hdus[6].data
-                else:
-                    efficiency = np.ones(shape)
-            return shape, corner, removed, index, quadrant, efficiency
+            vertex = hdus[2].data
+            frame = hdus[0].header['FRAME']
+            if frame == 'ONAFP':
+                # Make a pi/2 rotation from ONAFP -> GRF referential frame
+                vertex[..., [0, 1]] = vertex[..., [1, 0]]
+                vertex[..., 1] *= - 1
+            shape = vertex.shape[:-2]
+            removed = hdus[3].data.view(bool)
+            ordering = hdus[4].data
+            quadrant = hdus[5].data
+            efficiency = hdus[6].data
+
+            return shape, vertex, removed, ordering, quadrant, efficiency
 
         elif name == 'hornarray':
             hdus = fits.open(self.hornarray)
@@ -144,8 +145,11 @@ class QubicCalibration(object):
                         'components': np.empty(0, dtype=dtype)}
             parser = ConfigParser()
             parser.read(self.optics)
-            keys = 'focal length',
-            out = dict((key, parser.getfloat('general', key)) for key in keys)
+            # ### The 2 next lines are commented as there is nothing in the section
+            # ### "general" in the optics calibration file. Focal length has been moved to the dictionary.
+            # keys = 'focal length',
+            # out = dict((key, parser.getfloat('general', key)) for key in keys)
+            out = {}
             raw = parser.items('components')
             components = np.empty(len(raw), dtype=dtype)
             for i, r in enumerate(raw):

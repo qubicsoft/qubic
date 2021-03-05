@@ -1,0 +1,188 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.4
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(9,4.5))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack import qubicpack as qp
+import qubic.fibtools as ft
+import qubic.plotters as p
+import qubic.lin_lib as ll
+import qubic.demodulation_lib as dl
+import satorchipy as stpy
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import datetime as dt
+import pickle
+
+```
+
+```{python}
+days = ['2019-07-01', '2019-07-02']
+alldirs = []
+for d in days:
+    data_dir = '/qubic/Data/Calib-TD/'+d+'/'
+    alldirs.append(np.sort(glob.glob(data_dir+'*ScanSmallMap_150GHz*')))
+dirs = np.append(alldirs[0], alldirs[1])  
+    
+el = []
+for i in range(len(dirs)):
+    d = dirs[i]
+    #print(d)
+    bla = str.split(d,'_')
+    #print(bla)
+    el.append(float(bla[-1]))
+el = np.array(el)
+```
+
+```{python}
+def normalize(x):
+    return (x-np.nanmean(x))/np.nanstd(x)
+```
+
+```{python}
+### Uncomment if you want to run it
+
+# rc('figure',figsize=(10,7))
+# allslopes = np.zeros((len(dirs), 256))
+# for ifile in range(len(dirs)):
+#     theASIC = 1
+#     theTESnum = 93
+
+#     slopes = np.zeros(256)
+#     err_slopes = np.zeros(256)
+#     for AsicNum in [1,2]:
+#         a = qp()
+#         a.read_qubicstudio_dataset(dirs[ifile], asic=AsicNum)
+#         data=a.azel_etc(TES=None)
+#         az_tdata = np.interp(data['t_data'], data['t_azel'], data['az'])
+#     #     if AsicNum == theASIC:
+#     #         plot(data['t_data'], normalize(data['data'][theTESnum-1,:]), label='Data ASIC {} TESNum {}'.format(theASIC, theTESnum))
+#     #         plot(data['t_data'], normalize(az_tdata), label='Azimuth')
+#     #         legend()
+#         for i in range(128):
+#             pol, cov = np.polyfit(az_tdata,data['data'][i,:], 1, full=False, cov=True)
+#             slopes[(AsicNum-1)*128+i] = pol[0]
+#             err_slopes[(AsicNum-1)*128+i] = np.sqrt(np.diag(cov))[0]
+
+#     slopes_1 = np.reshape(slopes[:128], (4,32)).T
+#     slopes_2 = np.reshape(slopes[128:], (4,32)).T
+#     clf()
+#     subplot(2,3,1)
+#     img = ft.image_asics(all1=slopes)
+#     imshow(np.abs(img),vmin=0,vmax=40000)
+#     title('Elevation = {0:5.2f} deg.'.format(el[ifile]))
+#     colorbar()
+#     subplot(2,3,4)
+#     hist(np.log10(np.abs(slopes[:128])), range=[0.1,np.log10(np.max(np.abs(slopes)))+1], bins=20, alpha=0.5, label='Asic 1',color='blue')
+#     hist(np.log10(np.abs(slopes[128:])), range=[0.1,np.log10(np.max(np.abs(slopes)))+1], bins=20, alpha=0.5, label='Asic 2', color='red')
+#     legend()
+#     xlabel('Log10(|Slope| [ADU/Deg.])')
+#     subplot(1,3,2)
+#     imshow(np.abs(slopes_1), origin='lower',vmin=0,vmax=40000, extent=[0.5,4.5, 0.5, 32.5])
+#     colorbar()
+#     title('Asic 1')
+#     subplot(1,3,3)
+#     imshow(np.abs(slopes_2), origin='lower',vmin=0,vmax=40000, extent=[0.5,4.5, 0.5, 32.5])
+#     colorbar()
+#     title('Asic 2')
+#     #tight_layout()
+
+#     savefig('/Volumes/Data/Qubic/Calib-TD/MagneticLeak/plotslopes_el_{0:5.2f}.png'.format(el[ifile]))
+#     np.savetxt('/Volumes/Data/Qubic/Calib-TD/MagneticLeak/slopes_el_{0:5.2f}.txt'.format(el[ifile]),slopes)
+
+
+```
+
+```{python}
+allslopes = np.zeros((len(dirs), 256))
+for ifile in range(len(dirs)):
+    allslopes[ifile,:] = np.loadtxt('/Volumes/Data/Qubic/Calib-TD/MagneticLeak/slopes_el_{0:5.2f}.txt'.format(el[ifile]))
+```
+
+```{python}
+imshow(np.log10(np.abs(allslopes)),vmin=1,vmax=5)
+colorbar()
+print(el[75])
+```
+
+```{python}
+allslopes_renorm=(allslopes-np.mean(allslopes, axis=0))/np.std(allslopes, axis=0)
+imshow(allslopes_renorm,vmin=0,vmax=2, extent=[0,255,np.min(el),np.max(el)], aspect='auto')
+colorbar()
+xlabel('TES #')
+ylabel('Elevation')
+```
+
+```{python}
+for i in range(256):
+    plot(el, allslopes_renorm[:,i],'k',alpha=0.05)
+    ylim(-10,10)
+```
+
+```{python}
+tes_el_slope = np.zeros(256)
+tes_err_el_slope = np.zeros(256)
+for i in range(256):
+    pol, cov = np.polyfit(el,allslopes[:,i], 1, full=False, cov=True)
+    tes_el_slope[i] = pol[0]
+    tes_err_el_slope[i] = np.sqrt(np.diag(cov))[0]
+tes_el_slopes_1 = np.reshape(tes_el_slope[:128], (4,32)).T
+tes_el_slopes_2 = np.reshape(tes_el_slope[128:], (4,32)).T
+
+subplot(1,2,1)
+imshow(np.abs(tes_el_slopes_1), origin='lower', extent=[0.5,4.5, 0.5, 32.5])
+title('ASIC 1')
+colorbar()
+subplot(1,2,2)
+imshow(np.abs(tes_el_slopes_2), origin='lower', extent=[0.5,4.5, 0.5, 32.5])
+title('ASIC 2')
+colorbar()
+```
+
+```{python}
+subplot(1,2,1)
+imshow(np.sign(tes_el_slopes_1), origin='lower', extent=[0.5,4.5, 0.5, 32.5])
+title('ASIC 1')
+colorbar()
+subplot(1,2,2)
+imshow(np.sign(tes_el_slopes_2), origin='lower', extent=[0.5,4.5, 0.5, 32.5])
+title('ASIC 2')
+colorbar()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

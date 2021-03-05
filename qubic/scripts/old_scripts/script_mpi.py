@@ -32,5 +32,5 @@ hit = acq.get_hitmap()
 tod = acq.get_observation(input_map)
 output_map, coverage = tod2map_all(acq, tod)
 
-print acq.comm.rank, output_map[coverage > 0][:5]
-print acq.comm.rank, hit[hit > 0][:10]
+print(acq.comm.rank, output_map[coverage > 0][:5])
+print(acq.comm.rank, hit[hit > 0][:10])

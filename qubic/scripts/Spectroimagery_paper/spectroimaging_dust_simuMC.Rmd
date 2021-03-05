@@ -1,0 +1,554 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# QUBIC spectroimaging
+
+#### Louise Mousset, 2020/06/05
+
+This notebook look at maps produced by a full pipeline simulations with severals noise realisations and make the Inter-Band Cross Spectra (IBCS). 
+
+```{python}
+# %matplotlib inline
+from pylab import *
+import os
+import sys
+import glob
+
+# Specific science modules
+import seaborn as sns
+import healpy as hp
+import numpy as np
+from astropy.io import fits
+from itertools import combinations_with_replacement
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm
+import pysm.units as u
+
+import qubic
+from qubic import SpectroImLib as si
+from qubic import QubicSkySim as qss
+from qubic import NamasterLib as nam
+from qubic.polyacquisition import compute_freq
+
+from qubic import fibtools as ft
+
+from qubic import ReadMC as rmc
+from qubic import AnalysisMC as amc
+
+rc('figure', figsize=(13, 10))
+rc('font', size=20)
+```
+
+## Choose a simulation
+
+```{python}
+# Get the files
+datadir = os.environ['DATA_SPECTROIM']
+
+
+nfrecon = 1
+freq = 220 # GHz
+# rep = datadir + f'NERSC_simuEnd2End/Good_photon_noise2020/simu_FI{freq}/'
+# rep = datadir + f'NERSC_simuEnd2End/Good_photon_noise2020/simu_NERSC_MC/FI{freq}/galaxycenter_3bandes/'
+rep = datadir + f'NERSC_simuEnd2End/Good_photon_noise2020/simu_NERSC_MC/FI{freq}/qubicpatch/'
+
+dictionary = glob.glob(rep + '*.dict')[0]
+print(dictionary)
+
+# Dictionary saved during the simulation
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictionary)
+
+# Coordinates of the zone observed in the sky
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+print(center)
+
+# Get fits files names in a list
+fits_noise = np.sort(glob.glob(rep + '*nfrecon{}_noiselessFalse*.fits'.format(nfrecon), 
+                              recursive=True))
+fits_noiseless = np.sort(glob.glob(rep + '*nfrecon{}_noiselessTrue*.fits'.format(nfrecon), 
+                              recursive=True))
+
+# print(fits_noise, fits_noiseless)
+```
+
+```{python}
+print(dictionary)
+```
+
+```{python}
+# Number of noise realisations
+nreals = len(fits_noise)
+print('nreals = ', nreals)
+
+# Get seen map (observed pixels)
+seenmap = rmc.get_seenmap(fits_noiseless[0])
+print('seenmap shape:', seenmap.shape)
+
+# Number of pixels and nside
+npix = len(seenmap)
+print(npix)
+ns = d['nside']
+
+# Central frequencies and FWHM of each band
+_, _, nus, _, _, _ = compute_freq(freq, nfrecon)
+print('nus:', nus)
+fwhms = [d['synthbeam_peak150_fwhm'] * 150 / nu for nu in nus]
+print('fwhms', fwhms)
+
+```
+
+### Look at the maps
+
+```{python}
+# Get the noiseless map
+noiseless, _, _ = rmc.get_maps(fits_noiseless[0])
+# noiseless = np.expand_dims(noiseless, axis=0)
+print(noiseless.shape)
+
+# Get the noise maps
+maps_recon = np.zeros((nreals, nfrecon, npix, 3))
+maps_conv = np.zeros((nreals, nfrecon, npix, 3))
+for i, real in enumerate(fits_noise):
+    maps_recon[i], maps_conv[i], _ = rmc.get_maps(real)
+    
+# If you want to compute spectra with Namaster, set the pixels out of the patch to 0 and not UNSEEN
+# Not necessary for the plot (Fig 8 spectroim paper)
+# maps_recon[maps_recon == hp.UNSEEN] = 0.
+# maps_conv[maps_conv == hp.UNSEEN] = 0.
+```
+
+```{python}
+# Compute residuals in a given way
+residuals = amc.get_residuals(fits_noise, fits_noiseless[0], 'noiseless')
+print(residuals.shape)
+
+# There is only the patch so you need to put them in a full map to plot with healpy
+maps_residu = np.ones_like(maps_conv) * hp.UNSEEN
+# maps_residu = np.zeros_like(maps_conv)
+maps_residu[:, :, seenmap, :] = residuals
+
+```
+
+```{python}
+stokes = ['I', 'Q', 'U']
+istk = 0
+real = 0
+plt.figure(figsize=(22, 30))
+rr = 15
+min = None
+max = None
+
+# center = (0, 0)
+# Plot for spectroim paper
+for band in range(nfrecon):
+    hp.gnomview(maps_conv[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+1), 
+                rot=center, reso=rr,
+                title = 'Input - {}'.format(d['kind'][istk]), unit='$\mu K$', min=min, max=max)
+    plt.text(-1, 0., '{:3.0f} GHz'.format(nus[band]), fontsize=30)
+    hp.gnomview(maps_recon[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+2), 
+                rot=center, reso=rr,
+                title = 'Output - {0}'.format(d['kind'][istk]), unit='$\mu K$', min=min, max=max)
+    hp.gnomview(maps_residu[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+3), 
+                rot=center, reso=rr,
+                title = 'Residuals - {0}'.format(d['kind'][istk]), unit='$\mu K$', min=-10, max=10)
+# plt.tight_layout()
+# plt.savefig(f'/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/maps{stokes[istk]}_FI220_{nfrecon}bands_GoodPhotonNoise.pdf',
+#            bbox_inches='tight')
+```
+
+## Coverage
+
+```{python}
+fitsfile = fits.open(fits_noise[0])
+coverage = fitsfile['COVERAGE'].data
+hp.mollview(coverage)
+
+coverage_patch = coverage[seenmap]
+coverage_patch.shape
+```
+
+```{python}
+ang = rmc.pix2ang(d['nside'], center, seenmap)
+coverage_norm = coverage_patch / np.max(coverage_patch)
+inverse_coverage = 1. / (np.sqrt(coverage_norm))
+
+plt.plot(ang, coverage_norm, '.', label='coverage')
+plt.plot(ang, np.sqrt(coverage_norm), '.', label='$\sqrt{coverage}$')
+plt.xlabel('Angle [deg]')
+plt.ylabel('Coverage normalized')
+plt.legend()
+```
+
+## Save residuals, coverage and seenmap
+
+Here we save the files that will be used to create data for FastSimulator
+
+```{python}
+# rep_save = datadir + 'Data_for_FastSimulator/'
+# rep = datadir + f'/NERSC_simuEnd2End/Good_photon_noise2020/simu_FI{freq}/'
+rep_save = rep + 'filesJC/'
+
+for nfrecon in [1]:#, 2, 3, 4, 5, 8]:
+
+    # Get fits files names in a list
+    fits_noise = np.sort(glob.glob(rep + '*nfrecon{}_noiselessFalse*.fits'.format(nfrecon), 
+                                  recursive=True))
+    fits_noiseless = np.sort(glob.glob(rep + '*nfrecon{}_noiselessTrue*.fits'.format(nfrecon), 
+                                  recursive=True))
+    print(fits_noise)
+
+    # Get seen map (observed pixels)
+    seenmap = rmc.get_seenmap(fits_noiseless[0])
+    print('seenmap shape:', seenmap.shape)
+    np.save(rep_save + f'seenmap_{nfrecon}bands_FI{freq}.npy', seenmap)
+    
+    # Get the coverage
+    fitsfile = fits.open(fits_noise[0])
+    coverage = fitsfile['COVERAGE'].data
+    coverage_patch = coverage[seenmap]
+    coverage_norm = coverage_patch / np.max(coverage_patch)
+    np.save(rep_save + f'coverage_{nfrecon}bands_FI{freq}.npy', coverage_norm)
+
+   
+    # Compute residuals in a given way
+    residuals = amc.get_residuals(fits_noise, fits_noiseless[0], 'noiseless')
+    np.save(rep_save + f'residuals_{nfrecon}bands_FI{freq}.npy', residuals)
+    print(residuals.shape)
+
+```
+
+```{python}
+# sm = np.load(rep_save + f'seenmap_{nfrecon}bands_FI150.npy')
+# print(sm.shape)
+
+# cov = np.load(rep_save + f'coverage_{nfrecon}bands_FI150.npy')
+# print(cov.shape)
+
+# res = np.load(rep_save + f'residuals_{nfrecon}bands_FI150.npy')
+# print(res.shape)
+```
+
+## Power spectrum
+
+```{python}
+# Create a Namaster object
+lmin = 40
+lmax = 2 * d['nside'] - 1
+delta_ell = 30
+print('lmin', lmin)
+print('lmax', lmax)
+print('delta ell', delta_ell)
+
+mask = np.zeros(12 * d['nside']**2)
+mask[seenmap] = 1
+
+Namaster = nam.Namaster(mask, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+
+# Make a mask
+mask_apo = Namaster.get_apodized_mask()
+# hp.mollview(mask_apo)
+
+# Binning
+ell_binned, b = Namaster.get_binning(d['nside'])
+nbins = len(ell_binned)
+print('nbins:', nbins)
+print('ell binned:', ell_binned)
+
+# Possible combinations between bands
+combi = list(combinations_with_replacement(np.arange(nfrecon), 2))
+ncombi = len(combi)
+print('combi:', combi)
+print('ncombi:', ncombi)
+
+# Frequency combinations for the plot labels
+Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(freq, nfrecon)
+print(nus) 
+combi_nus = list(combinations_with_replacement(nus, 2))
+print(combi_nus)
+
+# Color palet
+palet = sns.cubehelix_palette(ncombi, start=2, hue=1, light=0.75, dark=0.3)
+sns.palplot(palet)
+```
+
+## Theoretical spectra
+
+```{python}
+# Make a Sky with dust
+d['nf_sub'] = nfrecon
+sky_config = {'dust': 'd1'}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+x0 = Qubic_sky.get_simple_sky_map()
+print(x0.shape)
+```
+
+```{python}
+cross_x0 = np.zeros((ncombi, nbins, 4))
+
+# Map not convolved => No Beam correction
+# Beam correction is None so we can compute w only once        
+w = None
+for i, (band1, band2) in enumerate(combi):
+    print(f'Bands {band1} {band2}')
+    map1x0 = x0[band1, :, :]
+    map2x0 = x0[band2, :, :]
+    leff, cross_x0[i, :, :], w = Namaster.get_spectra(map1x0.T,
+                                                      mask_apo,
+                                                      map2x0.T,
+                                                      w=w,
+                                                      purify_e=True,
+                                                      purify_b=False,
+                                                      beam_correction=None,
+                                                      pixwin_correction=True)
+
+
+```
+
+### Inter-Band Cross Spectra for each realisation
+
+```{python}
+IBCSsame_recon = np.zeros((nreals, ncombi, nbins, 4))
+IBCSsame_residu = np.zeros((nreals, ncombi, nbins, 4))
+
+for real in range(nreals):
+    print(f'\n Real {real+1}/{nreals}')
+    for i, (band1, band2) in enumerate(combi):
+        print(f'Bands {band1} {band2}')
+        beam_corr = np.sqrt(fwhms[band1] * fwhms[band2])
+        print('Beam correction:', beam_corr)
+
+        map1 = maps_recon[real, band1, :, :]
+        map2 = maps_recon[real, band2, :, :]
+        leff, IBCSsame_recon[real, i, :, :], w = Namaster.get_spectra(map1.T,
+                                                                                mask_apo,
+                                                                                map2.T,
+                                                                                w=None,
+                                                                                purify_e=True,
+                                                                                purify_b=False,
+                                                                                beam_correction=beam_corr,
+                                                                                pixwin_correction=True)
+        
+        map1noise = maps_residu[real, band1, :, :]
+        map2noise = maps_residu[real, band2, :, :]
+        leff, IBCSsame_residu[real, i, :, :], w = Namaster.get_spectra(map1noise.T,
+                                                                                mask_apo,
+                                                                                map2noise.T,
+                                                                                w=None,
+                                                                                purify_e=True,
+                                                                                purify_b=False,
+                                                                                beam_correction=beam_corr,
+                                                                                pixwin_correction=True)
+
+```
+
+```{python}
+# Save IBCS
+rep_save = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/Simu_spectroim/simu_nersc_dust_fullpipeline/IBCS_fullpipeline/'
+
+# np.save(rep_save + f'IBCSsame_recon_{nfrecon}bands_150fullpipeline.npy', IBCSsame_recon)
+# np.save(rep_save + f'IBCSsame_residu_{nfrecon}bands_150fullpipeline.npy', IBCSsame_residu)
+```
+
+```{python}
+IBCSsame_recon = np.load(rep_save + f'IBCSsame_recon_{nfrecon}bands_150fullpipeline.npy')
+IBCSsame_residu = np.load(rep_save + f'IBCSsame_residu_{nfrecon}bands_150fullpipeline.npy')
+```
+
+```{python}
+# Average over realisations
+IBCSsame_recon_avg = np.mean(IBCSsame_recon, axis=0)
+IBCSsame_recon_std = np.std(IBCSsame_recon, axis=0)
+
+IBCSsame_residu_avg = np.mean(IBCSsame_residu, axis=0)
+IBCSsame_residu_std = np.std(IBCSsame_residu, axis=0)
+
+```
+
+```{python}
+clnames = ['TT', 'EE', 'BB', 'TE']
+
+rc('figure', figsize=(12, 8))
+
+fig, axs = plt.subplots(2, 2)
+axs = axs.ravel()
+
+for i in range(4):
+    ax = axs[i]
+    for cross in range(ncombi): 
+        c = palet[cross]
+        ax.errorbar(leff, 
+                    IBCSsame_recon_avg[cross, :, i],
+                    yerr=IBCSsame_recon_std[cross, :, i],
+                    fmt='o', 
+                    color=c, 
+                    label='{:3.0f} x {:3.0f}'.format(combi_nus[cross][0], combi_nus[cross][1]))
+#         ax.errorbar(leff, 
+#                     IBCSsame_residu_avg[cross, :, i],
+#                     yerr=IBCSsame_residu_std[cross, :, i],
+#                     fmt='o', 
+#                     color=c, 
+#                     label='{:3.0f} x {:3.0f}'.format(combi_nus[cross][0], combi_nus[cross][1]))
+        ax.plot(leff, cross_x0[cross, :, i], '--', color=c)
+    ax.set_xlabel('$\\ell$')
+    ax.set_ylabel('$D_\\ell$')
+    ax.legend(fontsize=10, loc='best')
+    ax.set_title(clnames[i])
+
+plt.tight_layout()
+   
+```
+
+### Inter-Band Cross Spectra mixing 2 noise realisations
+
+This will remove the noise bias. We only do cross spectrum between independant pairs in order to avoid corelations. So we only have nreals/2 cross spectra.
+
+```{python}
+ncross = nreals // 2
+print('ncross:', ncross)
+print('nbins:', nbins)
+
+IBCSmix_recon = np.zeros((ncross, ncombi, nbins, 4))
+IBCSmix_residu = np.zeros((ncross, ncombi, nbins, 4))
+
+cross = 0
+for c1 in range(0, nreals - 1, 2):  # do not mix pairs to avoid correlation
+    c2 = c1 + 1
+    print(f'\n Reals {c1} {c2}')
+    for i, (band1, band2) in enumerate(combi):
+        print(f'Bands {band1} {band2}')
+        beam_corr = np.sqrt(fwhms[band1] * fwhms[band2])
+        print('Beam correction:', beam_corr)
+
+        map1 = maps_recon[c1, band1, :, :]
+        map2 = maps_recon[c2, band2, :, :]
+        leff, IBCSmix_recon[cross, i, :, :], w = Namaster.get_spectra(map1.T,
+                                                                     mask_apo,
+                                                                     map2.T,
+                                                                     w=None,
+                                                                     purify_e=True,
+                                                                     purify_b=False,
+                                                                     beam_correction=beam_corr,
+                                                                     pixwin_correction=True)
+
+        map1noise = maps_residu[c1, band1, :, :]
+        map2noise = maps_residu[c2, band2, :, :]
+        leff, IBCSmix_residu[cross, i, :, :], w = Namaster.get_spectra(map1noise.T,
+                                                                         mask_apo,
+                                                                         map2noise.T,
+                                                                         w=None,
+                                                                         purify_e=True,
+                                                                         purify_b=False,
+                                                                         beam_correction=beam_corr,
+                                                                         pixwin_correction=True)
+    cross += 1
+
+```
+
+```{python}
+# Save IBCS
+np.save(rep + f'IBCSmix_recon_{nfrecon}bands_220fullpipeline_galaxycenter_2years.npy', IBCSmix_recon)
+np.save(rep + f'IBCSmix_residu_{nfrecon}bands_220fullpipeline_galaxycenter_2years.npy', IBCSmix_residu)
+```
+
+```{python}
+# IBCSmix_recon = np.load(rep_save + f'IBCSmix_recon_{nfrecon}bands_150fullpipeline.npy')
+# IBCSmix_residu = np.load(rep_save + f'IBCSmix_residu_{nfrecon}bands_150fullpipeline.npy')
+
+IBCSmix_recon = np.load(rep + f'IBCSmix_recon_{nfrecon}bands_{freq}fullpipeline_galaxycenter_2years.npy')
+IBCSmix_residu = np.load(rep + f'IBCSmix_residu_{nfrecon}bands_{freq}fullpipeline_galaxycenter_2years.npy')
+```
+
+```{python}
+# Average over realisations
+IBCSmix_recon_avg = np.mean(IBCSmix_recon, axis=0)
+IBCSmix_recon_std = np.std(IBCSmix_recon, axis=0)
+
+IBCSmix_residu_avg = np.mean(IBCSmix_residu, axis=0)
+IBCSmix_residu_std = np.std(IBCSmix_residu, axis=0)
+
+```
+
+```{python}
+clnames = ['TT', 'EE', 'BB', 'TE']
+rc('figure', figsize=(16, 10))
+
+fig, axs = plt.subplots(2, 2)
+axs = axs.ravel()
+
+for i in range(4):
+    ax = axs[i]
+    for cross in range(ncombi): 
+        c = palet[cross]
+        ax.errorbar(leff, 
+                    IBCSmix_recon_avg[cross, :, i],
+                    yerr=IBCSmix_recon_std[cross, :, i] * np.sqrt(2),
+                    fmt='o', 
+                    color=c, 
+                    label='{:3.0f} x {:3.0f}'.format(combi_nus[cross][0], combi_nus[cross][1]))
+#         ax.errorbar(leff, 
+#                     IBCSmix_residu_avg[cross, :, i],
+#                     yerr=IBCSmix_residu_std[cross, :, i] * np.sqrt(2),
+#                     fmt='o', 
+#                     color=c, 
+#                     label='{:3.0f} x {:3.0f}'.format(combi_nus[cross][0], combi_nus[cross][1]))
+        ax.plot(leff, cross_x0[cross, :, i], '--', color=c)
+    ax.set_xlabel('$\\ell$')
+    ax.set_ylabel('$D_\\ell$')
+    ax.legend(fontsize=12, loc='upper center')
+    ax.set_title(clnames[i])
+    ax.grid()
+
+plt.tight_layout()
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/'+
+#             'IBCSmix_{}bands_recon_galaxydustFullpipeline.pdf'.format(nfrecon),
+#             bbox_inches='tight')
+```
+
+```{python}
+clnames = ['TT', 'EE', 'BB', 'TE']
+rc('figure', figsize=(8, 6))
+
+fig = plt.figure()
+
+ax = plt.gca()
+
+for cross in range(ncombi): 
+    c = palet[cross]
+    ax.errorbar(leff, 
+                IBCSmix_recon_avg[cross, :, 2],
+                yerr=IBCSmix_recon_std[cross, :, 2] * np.sqrt(2),
+                fmt='o', 
+                color=c, 
+                label='{:3.0f} x {:3.0f}'.format(combi_nus[cross][0], combi_nus[cross][1]))
+    ax.plot(leff, cross_x0[cross, :, 2], '--', color=c)
+ax.set_xlabel('Multipole moment, $\\ell$')
+ax.set_ylabel('$D_\\ell \,[\mu \mathrm{K}^2]$')
+ax.legend(fontsize=12, loc='upper center')
+ax.set_title(clnames[2] + f' - {freq} GHz')
+ax.grid()
+# ax.set_ylim(-10, 25)
+
+plt.tight_layout()
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/'+
+#             f'IBCSmixBB_{nfrecon}bands_recon_galaxydustFullpipeline{freq}_goodPhotonNoise.pdf',
+#             bbox_inches='tight')
+```
+
+```{python}
+
+```

@@ -1,0 +1,165 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.0
+  kernelspec:
+    display_name: Python [conda env:anaconda]
+    language: python
+    name: conda-env-anaconda-py
+---
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(16,8))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack import qubicpack as qp
+import fibtools as ft
+import plotters as p
+import lin_lib as ll
+import demodulation_lib as dl
+import satorchipy as stpy
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import datetime as dt
+
+```
+
+## Dataset
+Lets get the directories corresponding to each dataset:
+
+```{python}
+# name = '2019-04-04_18.47.51__ScanMap_Speed_VE20_FastNoMod'
+# day = '2019-04-04'
+name = '2019-04-05_14.58.57__ScanMap_Speed_VE20_FastNoMod'
+day = '2019-04-05'
+
+datasets=[]
+thedir = glob.glob('/qubic/Data/Calib-TD/'+day+'/*'+name+'*')[0]
+
+print thedir
+
+AsicNum = 1
+TESNum = 93
+data = dl.read_data_azel_src(thedir, AsicNum, TESNum=TESNum, verbose=True)
+
+```
+
+### Plot Data and Azimuth and source together (they should match)
+
+```{python}
+t0 = data['t_data'][0]
+fdata = f.gaussian_filter1d(dl.renorm(data['data']),10)
+plot(data['t_data']-t0, dl.renorm(fdata), label='Data')
+plot(data['t_azel']-t0, dl.renorm(data['az']), label='Az')
+plot(data['t_azel']-t0, dl.renorm(data['el']), label='el')
+legend()
+
+```
+
+```{python}
+newaz = np.interp(data['t_data'], data['t_azel'], data['az'])
+newel = np.interp(data['t_data'], data['t_azel'], data['el'])
+plot(newaz, data['data'])
+```
+
+```{python}
+import scipy.stats as scistat
+reg = scistat.linregress(newaz, data['data'])
+print reg
+print reg[0], reg[1]
+
+subplot(2,1,1)
+plot(newaz, data['data'])
+plot(newaz, reg[0]*newaz+reg[1])
+plot(newaz, data['data']-reg[0]*newaz-reg[1])
+
+data_detrend = data['data']-reg[0]*newaz-reg[1]
+
+subplot(2,1,2)
+plot(newel,data_detrend)
+```
+
+```{python}
+FREQ_SAMPLING = 1./(data['t_data'][1]-data['t_data'][0])
+
+newt = np.linspace(data['t_data'][0], data['t_data'][-1], len(data['t_data']))
+newdata = np.interp(newt, data['t_data'], data_detrend)
+#newdata = np.interp(newt, data['t_data'], data['data'])
+spectrum_f, freq_f = mlab.psd(newdata, Fs=1./(newt[1]-newt[0]), NFFT=len(data['data']), window=mlab.window_hanning)
+plot(freq_f, f.gaussian_filter1d(spectrum_f,1),label='Data')
+yscale('log')
+xscale('log')
+ylim(1e4, 1e15)
+legend()
+```
+
+```{python}
+##### Filter Data and Source Signal the same way
+lowcut = 0.001
+highcut = 50
+FREQ_SAMPLING = 1./(data['t_data'][1]-data['t_data'][0])
+filt = scsig.butter(5, [lowcut / FREQ_SAMPLING, highcut / FREQ_SAMPLING], btype='bandpass', output='sos')
+# Filter Data and change its sign to be in the same as Src
+newdata = np.interp(newt, data['t_data'], data_detrend)
+new_data = -scsig.sosfilt(filt, newdata)
+
+subplot(1,3,1)
+plot(data['t_data'], new_data)
+subplot(1,3,2)
+plot(newaz, new_data)
+
+nbaz = 100
+dd = 0.1
+azmin = np.min(newaz)-dd
+azmax = np.max(newaz)+dd
+azimg = np.linspace(azmin, azmax, nbaz+1)
+nbel = 40
+elmin = np.min(newel)-dd
+elmax = np.max(newel)+dd
+elimg = np.linspace(elmin, elmax, nbel+1)
+
+img = np.zeros((nbel,nbaz))
+for i in xrange(nbel):
+    ok_el = (newel >= elimg[i]) & (newel < elimg[i+1])
+    mm, ss = ft.meancut(new_data[ok_el], 3)
+    for j in xrange(nbaz):
+        ok_az = (newaz >= azimg[j]) & (newaz < azimg[j+1])
+        ok = ok_el & ok_az
+        mm2, ss2 = ft.meancut(new_data[ok]-mm, 3)
+        img[i,j] = mm2
+        
+subplot(1,3,3)
+mm, ss = ft.meancut(img,3)
+imshow(img, extent=[azmin*np.cos(np.radians(50)), azmax*np.cos(np.radians(50)), elmin, elmax], aspect='equal',vmin=-50000, vmax=100000)
+colorbar()
+xlabel('Az')
+ylabel('el')
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

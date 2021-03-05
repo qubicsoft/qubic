@@ -1,0 +1,162 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# %matplotlib inline
+from pylab import *
+import os
+import sys
+from importlib import reload
+import glob
+import pickle
+import time
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm
+import qubic
+from qubic import SpectroImLib as si
+from qubic import QubicSkySim as qss
+from qubic import NamasterLib as nam
+from qubic import camb_interface as qc
+from qubic import fibtools as ft
+from qubic.utils import progress_bar
+
+rc('figure', figsize=(13, 6))
+rc('font', size=12)
+```
+
+#### In this Notebook we try to measure the 2pt-correlation function of the noise in QUBIC simulations performed at NERSC
+
+```{python}
+### Initialize
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+
+dictfilename = global_dir + '/dicts/BmodesNoDustNoSystPaper0_2020.dict'
+
+
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+d['nside']=256
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+print(center)
+```
+
+```{python}
+#### This function reads the maps
+def read_files_mc(dirmap,file_rnd_string, verbose=False):
+    m = np.array(FitsArray(glob.glob(dirmap+'*_maps_recon_*'+file_rnd_string+'.fits')[0]))
+    c = np.array(FitsArray(glob.glob(dirmap+'*_maps_convolved_*'+file_rnd_string+'.fits')[0]))
+    cov = np.array(FitsArray(glob.glob(dirmap+'*_maps_coverage_*'+file_rnd_string+'.fits')[0]))
+    with open(glob.glob(dirmap+'*_dictionary_'+file_rnd_string+'.pickle')[0], 'rb') as handle: d = pickle.load(handle)
+    with open(glob.glob(dirmap+'*_input_cell_'+file_rnd_string+'.pickle')[0], 'rb') as handle: icl = pickle.load(handle)
+    filetype = glob.glob(dirmap+'*_maps_recon_*'+file_rnd_string+'.fits')[0].split('/')[-1]
+    if verbose: print('read {}'.format(filetype))
+    return m, c, cov, d, icl, filetype
+
+### Get reconstructed maps from a simulation made on NERSC with 200000 pointings and tol=1e-5
+### First Instrument
+### detector_nep=4.7e-17
+### effecgtive_duration = 3 years
+nptg = 200000
+dirmaps='/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_NERSC/Maps/'
+file_rnd_string='H990hwzaGn'
+tol=1e-5
+
+m, c, covar, d, icl, ftype = read_files_mc(dirmaps, file_rnd_string, verbose=True)
+print(np.shape(m))
+residuals_maps = m[0,:,:]-c[0,:,:]
+
+rc('figure', figsize=(16, 10))
+res = 15
+figure()
+st = ['I', 'Q', 'U']
+rng = [5, 5, 5]
+for s in range(3):
+    hp.gnomview(residuals_maps[:,s], rot=center, reso=res, sub=(1,3,s+1), title='NERSC 200000 '+st[s],
+               min=-rng[s], max=rng[s])
+tight_layout()
+
+
+
+
+```
+
+### Calculation of the 2-pt Correlation Function in pixel-space
+
+```{python}
+reload(qss)
+reload(ft)
+
+# 1) Fit RMS Vs 1/cov
+dofit=True
+nbins = 25
+subplot(2,2,1)
+xx, yy, fit_n200k = qss.get_noise_invcov_profile(residuals_maps, covar, nbins=nbins,
+                                              label='NERSC 200000',fit=dofit)
+title('200k')
+
+
+# 2) Correct maps for RMS vs 1/cov
+new_diff = qss.correct_maps_rms(residuals_maps, covar, fit_n200k)
+subplot(2,2,2)
+bla = qss.get_angular_profile(new_diff, label='Nersc 200k corrected',
+                              allstokes=True,nbins=50,thmax=22, fontsize=10)
+title('200k')
+
+# 3) Calculate 2Pt Correlation function
+
+```
+
+```{python}
+
+ns = d['nside']
+okpix = covar > (np.max(covar)*0.1)
+ip = np.arange(12*ns**2).astype(int)
+ipok = ip[okpix]
+
+th, cth_200k = qss.ctheta_parts(new_diff[:,0], ipok, 0, 20, 20, nsplit=5, degrade_init=128, verbose=False)
+
+
+
+```
+
+```{python}
+rc('figure', figsize=(13, 6))
+from scipy.optimize import curve_fit
+
+fct = lambda x, a, b, c: a * np.sin(x/b) * exp(-x/c)
+results_200k = curve_fit(fct, th[1:], cth_200k[1:]/cth_200k[0])
+
+thetas = np.linspace(0,20,100)
+p=plot(th,cth_200k/cth_200k[0],'o', label='200k')
+plot(thetas, fct(thetas, *results_200k[0]), color=p[0].get_color(),
+         label=r'$a\times\sin(\theta/b)\times\exp(\theta/c)$'+'\n a={0:4.2f} b={1:4.2f} c={2:4.2f}'.format(*results_200k[0]))
+plot(th,th*0,'k:')
+legend()
+xlabel(r'$\theta$ [deg]')
+ylabel(r'$C(\theta)$')
+
+print(np.var(new_diff[ipok,0]))
+```
+
+```{python}
+
+```

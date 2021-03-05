@@ -1,0 +1,532 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Notebook to analyze simulations
+Done by Martin and Louise
+
+```{python}
+from __future__ import division
+import glob
+import os
+import healpy as hp
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import rc
+
+from qubic import ReadMC as rmc
+from qubic import AnalysisMC as amc
+
+import qubic
+from qubic import equ2gal
+
+from qubicpack.utilities import Qubic_DataDir
+
+# %matplotlib inline
+```
+
+```{python}
+rc({'cmap', 'viridis'})
+plt.rcParams['figure.figsize'] = (8,8)
+```
+
+# Get the simulation files
+
+```{python}
+# Simulation date and name
+date_name = 'NERSC_runs/24334702/20190903_low_nep'
+
+# Get the repository where the simulation is
+rep_simu = Qubic_DataDir(datafile=date_name + '.dict') + '/'
+print(rep_simu)
+
+# Dictionary saved during the simulation
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(rep_simu + date_name + '.dict')
+```
+
+### Number of subbands used during the simulation
+
+```{python}
+all_nf_recon = d['nf_recon']
+nf_recon = d['nf_recon'][2] # the nf_recon you want to look at
+
+nf_sub = d['nf_sub']
+print('nf_sub = {}, all_nf_recon = {}'.format(nf_sub, all_nf_recon))
+```
+
+### Get fits files names in a list
+
+```{python}
+# You only get maps with the nf_recon you asked before
+fits_noise = np.sort(glob.glob(rep_simu + date_name + '*nfrecon{}_noiselessFalse*.fits'.format(nf_recon)))
+fits_noiseless = glob.glob(rep_simu + date_name + '*nfrecon{}_noiselessTrue*.fits'.format(nf_recon))
+```
+
+```{python}
+stokes = ['I', 'Q', 'U']
+center = equ2gal(d['RA_center'], d['DEC_center'])
+```
+
+```{python}
+fits_noiseless
+```
+
+```{python}
+fits_noise
+```
+
+### Number of noise realisations
+
+```{python}
+nreals = len(fits_noise)
+print('nreals = ', nreals)
+```
+
+### Option to save plots running this notebook
+
+```{python}
+save_plots = False
+if save_plots :
+    try:
+        os.makedirs(rep_simu+'plots')
+    except:
+        pass
+```
+
+## Corrections ($AnalysisMC.get\_corrections()$):
+Because we have different wide for each sub-band, do we need to do some corrections? Idea (did it by Louise): for Nfsub = 15, Nrec = 3, and deltaNU = 37.5GHz (25% bandwidth)
+
+    . Take Nfsub/Nrec (5) input freq for each reconstructed sub-band,
+        sub-band = 0 wide = 11.46GHz
+        sub-band = 1 wide = 12.47GHz
+        sub-band = 2 wide = 13.56GHz
+    . Then compute,
+       a) scalar correction: relative_width = deltaNU / (wide_i * Nfsub)
+       b) matrix correction: relative_width[i,j] = deltaNU / np.sqrt(wide_i*wide_j*nf_sub)
+
+```{python}
+#reload(amc)
+corrections, correction_mat = amc.get_corrections(nf_sub, nf_recon)
+print('corrections : ', corrections)
+plt.imshow(correction_mat)
+plt.colorbar()
+apply_corrections = False
+```
+
+# Get seen map (observed pixels)
+
+```{python}
+seen_map = rmc.get_seenmap(fits_noiseless[0])
+
+# Number of pixels and nside
+npix = len(seen_map)
+ns = d['nside']
+print('seen map shape', seen_map.shape)
+```
+
+# Get one full maps
+
+```{python}
+real = 3
+if real >= nreals:
+    raise ValueError('Invalid index of realization')
+    
+maps_recon, maps_convo, maps_diff = rmc.get_maps(fits_noise[real])
+maps_recon_nl, maps_convo_nl, maps_diff_nl = rmc.get_maps(fits_noiseless[0])
+print('Getting maps with shape : {}'.format(maps_recon.shape))
+print('Getting maps with shape : {}'.format(maps_recon_nl.shape))
+
+```
+
+### Look at the noiseless maps
+
+```{python}
+isub = 0 #could be 0,1,2 because nf_rec = 3 or 0,1 in nf_rec = 2 case.
+if isub >= nf_recon:
+    raise ValueError('Invalid index of subband')
+r=12
+plt.figure('Noiseless maps real{}'.format(real), figsize=(10,10))
+for i in range(3):
+    if i == 0:
+        mmin=-204
+        mmax=164
+    elif i==1:
+        mmin=-2.67
+        mmax=2.64
+    elif i==2:
+        mmin=-3.14
+        mmax=2.24
+    hp.gnomview(maps_convo_nl[isub, :, i], rot=center, reso=r, sub=(3, 3, i + 1),cmap='viridis',
+                title='conv ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon))#, min=mmin, max=mmax)
+    hp.gnomview(maps_recon_nl[isub, :, i], rot=center, reso=r, sub=(3, 3, 3 + i + 1),cmap='viridis',
+                title='recon ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon))#, min=mmin, max=mmax)
+    hp.gnomview(maps_diff_nl[isub, :, i], rot=center, reso=r, sub=(3, 3, 6 + i + 1),cmap='viridis',
+                title='diff ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon))#, min=mmin, max=mmax)
+if save_plots :
+    plt.savefig(rep_simu+'plots/00-'+'noiseless_')
+    
+```
+
+```{python}
+hp.mollview(maps_convo_nl[0, :, 2], rot=center, cmap='viridis',
+                title='conv ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon))#, min=mmin, max=mmax)
+
+```
+
+### Look at the noise maps
+
+```{python}
+isub = 3 #could be 0,1,2 because nf_rec = 3 or 0,1 in nf_rec = 2 case.
+if isub >= nf_recon:
+    raise ValueError('Invalid index of subband')
+
+plt.figure('Noise maps real{}'.format(real), figsize=(10,10))
+for i in range(3):
+    if i == 0:
+        mmin=-204
+        mmax=164
+    elif i==1:
+        mmin=-2.67
+        mmax=2.64
+    elif i==2:
+        mmin=-3.14
+        mmax=2.24
+    hp.gnomview(maps_convo[isub, :, i], rot=center, reso=r, sub=(3, 3, i + 1),cmap='viridis',
+                title='conv ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon), min=mmin, max=mmax)
+    hp.gnomview(maps_recon[isub, :, i], rot=center, reso=r, sub=(3, 3, 3 + i + 1),cmap='viridis',
+                title='recon ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon), min=mmin, max=mmax)
+    hp.gnomview(maps_diff[isub, :, i], rot=center, reso=r, sub=(3, 3, 6 + i + 1),cmap='viridis',
+                title='diff ' + stokes[i] + ' subband {}/{}'.format(isub + 1, nf_recon), min=mmin, max=mmax)
+if save_plots:
+    plt.savefig(rep_simu+'plots/00-'+'noise_')
+    
+```
+
+# Get patches
+
+
+### Noise patches
+
+```{python}
+maps_recon_cut, maps_convo_cut, maps_diff_cut = rmc.get_patch(fits_noise[real], seen_map)
+print('Getting patches with shape : {}'.format(maps_recon_cut.shape))
+
+npix_patch = np.shape(maps_recon_cut)[1]
+
+# Get all patches (all noise realisations)
+all_fits, all_patch_recon, all_patch_conv, all_patch_diff = rmc.get_patch_many_files(
+    rep_simu, date_name + '*nfrecon{}_noiselessFalse*.fits'.format(nf_recon))
+print('Getting all patch realizations with shape : {}'.format(all_patch_recon.shape))
+```
+
+### Noiseless patches
+
+```{python}
+maps_recon_cut_nl, maps_convo_cut_nl, maps_diff_cut_nl = rmc.get_patch(fits_noiseless[0], seen_map)
+print('Getting patches with shape : {}'.format(maps_recon_cut_nl.shape))
+
+npix_patch = np.shape(maps_recon_cut_nl)[1]
+
+# Get all patches (noiseless realisation)
+all_fits_nl, all_patch_recon_nl, all_patch_conv_nl, all_patch_diff_nl = rmc.get_patch_many_files(
+    rep_simu, date_name + '*nfrecon{}_noiselessTrue*.fits'.format(nf_recon))
+print('Getting all noiseless patch realizations with shape : {}'.format(all_patch_recon_nl.shape))
+
+```
+
+# Look at diff in zones 
+
+
+```{python}
+# reload(rmc)
+nzones = 4
+conv_zones = np.empty((nreals, nzones, nf_recon, npix_patch, 3))
+reco_zones = np.empty((nreals, nzones, nf_recon, npix_patch, 3))
+diff_zones = np.empty((nreals, nzones, nf_recon, npix_patch, 3))
+
+for real in range(nreals):
+    if real == 0:
+        pix_per_zone, conv_zones[real, ...] = rmc.make_zones(all_patch_conv[real, ...], nzones, ns, center, 
+                                                             seen_map, doplot = False, angle = True)
+
+        pix_per_zone, reco_zones[real, ...] = rmc.make_zones(all_patch_recon[real, ...], nzones, ns, center, 
+                                                             seen_map, doplot = False, angle = True)
+
+        pix_per_zone, diff_zones[real, ...] = rmc.make_zones(all_patch_diff[real, ...], nzones, ns, center, 
+                                                             seen_map, doplot = False, angle = True)
+
+    else:
+        _, conv_zones[real, ...] = rmc.make_zones(all_patch_conv[real, ...], nzones, ns, center, seen_map,
+                                                       verbose = False, doplot = False, angle = True)
+        _, reco_zones[real, ...] = rmc.make_zones(all_patch_recon[real, ...], nzones, ns, center, seen_map,
+                                                       verbose = False, doplot = False, angle = True)
+        _, diff_zones[real, ...] = rmc.make_zones(all_patch_diff[real, ...], nzones, ns, center, seen_map,
+                                                       verbose = False, doplot = False, angle = True)
+#noiseless        
+diff_zones_nl = np.empty((1, nzones, nf_recon, npix_patch, 3))
+
+pix_per_zone_nl, diff_zones_nl[0, ...] = rmc.make_zones(all_patch_diff_nl[0, ...], nzones, ns, center, 
+                                                             seen_map, doplot = False,angle = True)
+
+print(np.shape(diff_zones_nl[0][0]))
+
+```
+
+### Plots
+
+```{python}
+istokes = 2
+plt.figure('Zones noise')
+for i in range(nzones):
+    map = np.zeros((all_patch_conv[0].shape[0], 12 * d['nside'] ** 2, 3))
+    print(map.shape)
+    map[:, seen_map, :] = conv_zones[i][i]
+    map[:, ~seen_map, :] = hp.UNSEEN
+    hp.gnomview(map[0, :, istokes], sub=(1, nzones, i+1),cmap='viridis',
+              rot=center, reso=10,
+              title='Zone {}, npix = {}, conv {}'.format(i, pix_per_zone[i], 'IQU'[istokes]))
+
+if save_plots :
+    plt.savefig(rep_simu+'plots/01-{}a-zones'.format('IQU'[istokes]))
+```
+
+```{python}
+plt.figure('Zones noiseless')
+for i in range(nzones):
+    map_nl = np.zeros((all_patch_recon[0].shape[0], 12 * d['nside'] ** 2, 3))
+    map_nl[:, seen_map, :] = reco_zones[i][i]
+    map_nl[:, ~seen_map, :] = hp.UNSEEN
+    hp.gnomview(map_nl[0, :, istokes], sub=(1, nzones, i+1),cmap='viridis',
+              rot=center, reso=10,
+              title='Zone {}, npix = {}, reco {}'.format(i, pix_per_zone[i], 'IQU'[istokes]))
+
+if save_plots:
+    plt.savefig(rep_simu+'plots/01-{}b-zones'.format('IQU'[istokes]))
+```
+
+```{python}
+plt.figure(figsize=(12,12))
+plt.figure('Zones diff')
+for i in range(nzones):
+    map_nl = np.zeros((all_patch_diff[0].shape[0], 12 * d['nside'] ** 2, 3))
+    map_nl[:, seen_map, :] = diff_zones[i][i]
+    map_nl[:, ~seen_map, :] = hp.UNSEEN
+    hp.gnomview(map_nl[0, :, istokes], sub=(1, nzones, i+1),cmap='viridis',
+              rot=center, reso=10,
+              title='Zone {}, npix = {}, diff {}'.format(i, pix_per_zone[i], 'IQU'[istokes]))
+
+if save_plots:
+    plt.savefig(rep_simu+'plots/01-{}c-zones'.format('IQU'[istokes]))
+```
+
+```{python}
+diff_zones_nl.shape
+```
+
+### Std over pixels and realizations in each zone
+
+```{python}
+std_diff_zones = np.std(diff_zones, axis=(0, 3))
+#std_diff_zones_nl = np.std(diff_zones_nl, axis=(0, 3))
+
+plt.figure(figsize = (6,6))
+plt.title('std_diff_zones')
+isub = 0
+for i in range(3):
+    plt.plot(std_diff_zones[:, isub, i], 'o', label=stokes[i])
+    #plt.plot(std_diff_zones_nl[:, isub, i], 's', label='nl '+stokes[i])
+plt.ylabel('std over pixels and realizations')
+plt.xlim(-0.1,len(range(nzones))-0.8)
+plt.xlabel('zone')
+plt.legend(loc='best')
+
+if save_plots:
+    plt.savefig(rep_simu+'plots/02-{}-std-zones'.format('IQU'[istokes]))
+```
+
+# Look at residuals
+
+```{python}
+residuals = all_patch_recon - np.mean(all_patch_recon, axis=0)
+
+# Histogram of the residuals (first real, first subband)
+isub = 0
+if isub >= nf_recon:
+    raise ValueError('Invalid index of subband')
+
+real = 0
+if real >= nreals:
+    raise ValueError('Invalid index of realization')
+
+plt.figure('Residuals isub{} real{}'.format(isub, real), figsize=(12,6))
+for i in range(3):
+    plt.subplot(1, 3, i + 1)
+    data = np.ravel(residuals[real, isub, :, i])
+    std = np.std(data)
+    mean = np.mean(data)
+    plt.hist(data, range=[-20, 20], bins=100, label='$m={0:.2f}$ \n $\sigma={1:.2f}$'.format(mean, std))
+            #histtype='stepfilled')
+    plt.title(stokes[i] + ' real{0} subband{1}/{2}'.format(real, isub + 1, nf_recon))
+    plt.legend(fontsize='medium')
+```
+
+### Std profile
+
+```{python}
+bin_centers, ang, std_bin, std_profile = amc.std_profile(residuals, 20, d['nside'], center, seen_map)
+
+# if apply_corrections:
+#     for isub in range(nf_recon):
+#         std_bin[:, isub, :] /= np.sqrt(corrections[isub])
+#         std_profile[:, isub, :] /= np.sqrt(corrections[isub])
+
+isub = 0
+plt.figure('std profile isub{}'.format(isub))
+for istk in range(3):
+    # plt.plot(bin_centers, std_bin[:, isub, istk], 'o', label=stokes[istk])
+    plt.plot(ang, std_profile[:, isub, istk], label=stokes[istk])
+plt.xlabel('Angle (degree)')
+plt.ylabel('std profile')
+plt.title('std profile (recon map)')
+plt.axvline(x=4, alpha=0.5, c ='k', ls='--')
+plt.text(1,0.015,'zone 0')
+plt.text(6,0.020,'zone 1')
+plt.legend(loc='best')
+
+if save_plots:
+    plt.savefig(rep_simu+'plots/02-{}-std-zones-profile'.format('IQU'[istokes]))
+```
+
+# Correlations matrices between pixels
+
+```{python}
+cov_pix, corr_pix = amc.get_covcorr_between_pix(residuals, verbose=True)
+
+# Apply correction (don't know if it is a good idea...)
+if apply_corrections:
+    for isub in range(nf_recon):
+        cov_pix[isub, ...] /= corrections[isub]
+        corr_pix[isub, ...] /= corrections[isub]
+
+isub = 0
+if isub >= nf_recon:
+    raise ValueError('Invalid index of subband')
+```
+
+```{python}
+plt.figure('Cov corr pix isub{}'.format(isub),figsize=(16,16))
+for istk in range(3):
+    plt.subplot(2, 3, istk + 1)
+    plt.title('Cov matrix pix, {}, subband{}/{}'.format(stokes[istk], isub + 1, nf_recon))
+    plt.imshow(cov_pix[isub, istk, :, :], cmap='viridis')  # , vmin=-50, vmax=50)
+    plt.colorbar(fraction=0.03)
+
+    plt.subplot(2, 3, istk + 4)
+    plt.title('Corr matrix pix, {}, subband{}/{}'.format(stokes[istk], isub + 1, nf_recon))
+    plt.imshow(corr_pix[isub, istk, :, :], cmap='viridis')  # , vmin=-0.6, vmax=0.6)
+    plt.colorbar(fraction=0.03)
+
+if save_plots:
+    plt.savefig(rep_simu+'plots/03-{}-covcorr-full'.format('IQU'[istokes]))
+
+    
+```
+
+```{python}
+print(all_patch_diff.shape)
+print(maps_diff.shape)
+```
+
+# Correlations between subbands and IQU
+
+
+### Residuals
+
+```{python}
+cov, corr = amc.get_covcorr_patch(residuals, doplot=True, stokesjoint=True)
+mean_cov = np.mean(cov, axis=2)
+mean_corr = np.mean(corr, axis=2)
+mean_corr -= np.identity(3 * nf_recon)  # substract identity matrix
+
+std_cov = np.std(cov, axis=2)
+std_corr = np.std(corr, axis=2)
+
+# Apply correction (don't know if it is a good idea...)
+# if apply_corrections:
+#     mean_cov /= correction_mat
+#     mean_corr /= correction_mat
+
+plt.figure('Mean Std cov corr')
+plt.subplot(221)
+plt.imshow(mean_cov)
+plt.title('Mean cov')
+plt.colorbar()
+
+plt.subplot(222)
+plt.imshow(mean_corr)
+plt.title('Mean corr - Id')
+plt.colorbar()
+
+plt.subplot(223)
+plt.imshow(std_cov)
+plt.title('Std cov')
+plt.colorbar()
+
+plt.subplot(224)
+plt.imshow(std_corr)
+plt.title('Std corr')
+plt.colorbar()
+
+# Histogram over pixels
+amc.plot_hist(cov, bins=50, title_prefix='Cov', ymax=0.1, color='r')
+amc.plot_hist(corr, bins=30, title_prefix='Corr', ymax=4., color='b')
+
+
+```
+
+### Diff
+
+```{python}
+# reload(amc)
+cov_diff, corr_diff = amc.get_covcorr_patch(all_patch_diff)
+plt.figure(figsize=(16,16))
+# plt.figure('Mean over pixels')
+plt.subplot(121)
+plt.imshow(np.mean(cov_diff, axis=2), interpolation = 'none')
+plt.title('Mean cov')
+# plt.colorbar()
+plt.subplot(122)
+plt.imshow(np.mean(corr_diff, axis=2), interpolation = 'none')
+plt.title('Mean corr')
+# plt.colorbar()
+
+```
+
+```{python}
+cov_diff_sj, corr_diff_sj = amc.get_covcorr_patch(all_patch_diff, stokesjoint = True)
+plt.figure(figsize=(16,16))
+plt.figure('Mean over pixels')
+plt.subplot(121)
+plt.imshow(np.mean(cov_diff_sj, axis=2), interpolation = 'none')
+plt.title('Mean cov')
+#plt.colorbar()
+plt.subplot(122)
+plt.imshow(np.mean(corr_diff_sj, axis=2), interpolation = 'none')
+plt.title('Mean corr')
+#plt.colorbar()
+
+```
+
+
+

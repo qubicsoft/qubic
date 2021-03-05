@@ -1,0 +1,302 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.0
+  kernelspec:
+    display_name: Python [conda env:anaconda]
+    language: python
+    name: conda-env-anaconda-py
+---
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(16,8))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack import qubicpack as qp
+import fibtools as ft
+import plotters as p
+import lin_lib as ll
+import demodulation_lib as dl
+import satorchipy as stpy
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import datetime as dt
+
+```
+
+## Dataset
+Lets get the directories corresponding to each dataset:
+
+```{python}
+# n = 'ScanMap_Speed_VE4_El'
+# days = ['2019-03-28', '2019-03-29']
+# n = 'ScanMap_Speed_VE4_El'
+# days = ['2019-03-30', '2019-03-31']
+n = 'ScanMap_Speed_VE4_El'
+days = ['2019-04-05', '2019-04-06']
+# n = 'ScanMap_160GHz_Speed_VE4_El'
+# days = ['2019-04-07', '2019-04-08']
+# n = 'ScanMap_170GHz_Speed_VE4_El'
+# days = ['2019-04-11', '2019-04-12']
+# n = 'ScanSmallMap_150GHz_1V_AllOpen_Speed_VE4'
+# days = ['2019-04-28']
+
+dirs = []
+elevations=[]
+for d in days:
+    dd = glob.glob('/qubic/Data/Calib-TD/'+d+'/*'+n+'*')
+    for i in xrange(len(dd)): 
+        #print dd[i]
+        truc = str.split(dd[i],'_')
+        the_el = truc[-1]
+        try:
+            elfloat = np.float(the_el)
+            elevations.append(np.float(the_el))
+            dirs.append(dd[i])
+        except:
+            print 'File '+dd[i]+' has a format that des not comply with expectations => rejected'
+            continue
+    print '  * ',d,' : {} files'.format(len(dd))
+print '  => Total = {} files'.format(len(dirs))
+print '  => Elevation ranges from {} to {}'.format(np.min(elevations),np.max(elevations))
+
+```
+
+```{python}
+labels = []
+dir_time = []
+for d in dirs:
+    bla = str.split(d,'__')
+    blo = str.split(bla[0],'/')
+    labels.append(bla[1])
+    dir_time.append(blo[-1])
+    
+for i in xrange(len(labels)): 
+    print i, labels[i], dir_time[i], 'Elevation: ', elevations[i]
+
+```
+
+# Demodulation
+
+```{python}
+ii = 65
+thedir = dirs[ii]
+print thedir, 'Elevation =',elevations[ii]
+AsicNum = 1
+a = qp()
+a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+data=a.azel_etc(TES=None)
+data['t_src'] += 7200
+
+data['data'] = data['data'][92:98]
+print data['data'].shape
+
+```
+
+```{python}
+rc('figure',figsize=(16,8))
+#plot(data['t_data']-data['t_data'][0], data['data'][0,:])
+#plot(data['t_azel']-data['t_data'][0], data['az'])
+
+plot(np.interp(data['t_data'], data['t_azel'], data['az']), data['data'][0,:])
+xlim(-5,5)
+```
+
+```{python}
+rc('figure',figsize=(16,8))
+#plot(data['t_data']-data['t_data'][0], data['data'][0,:])
+#plot(data['t_azel']-data['t_data'][0], data['az'])
+
+plot(np.interp(data['t_data'], data['t_azel'], data['az']), data['data'][0,:])
+```
+
+```{python}
+reload(dl)
+reload(ft)
+
+#### Parameters
+freq_mod = 1.
+ppp = 1./freq_mod
+lowcut = 0.3
+highcut = 10.
+nbins = 200
+elevation = 50
+
+method = 'rms'
+
+unbinned, binned = dl.general_demodulate(ppp, data, lowcut, highcut,
+                                                    nbins=nbins, median=True, method=method, 
+                                                    doplot=True, rebin=True, 
+                                                    renormalize_plot=False, verbose=True)
+ylim(-10000, 500000)
+print 'Un-Binned:'
+for k in unbinned.keys(): print k, unbinned[k].shape
+if binned:
+    print 'Binned:'
+    for k in binned.keys(): print k, binned[k].shape
+
+
+```
+
+```{python}
+
+```
+
+## Run on all TES and all files
+
+```{python}
+#### Parameters
+ppp = 1./freq_mod
+lowcut = 0.3
+highcut = 10.
+method = 'demod'
+
+nbins = 250
+
+reload(dl)
+reload(ft)
+savedir = '/Volumes/Data/Qubic/Calib-TD/ScanData_2019-03-31_DemodSrc_NewCode/'
+
+ids=0
+
+for ids in xrange(len(datasets)):
+    dirs = datasets[ids]
+    #for ii in xrange(len(dirs)):
+    for ii in [22]:
+        thedir = dirs[ii]
+        print '##############################################################'
+        print 'Dataset {} / {} :'.format(ids,len(datasets)),names[ids]
+        print 'Directory {} / {} :'.format(ii, len(dirs)), thedir
+        print '##############################################################'
+        allsb = []
+        all_az_el_azang = []
+        for iasic in [0,1]:
+            print '======== ASIC {} ====================='.format(iasic)
+            AsicNum = iasic+1
+            a = qp()
+            a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+            data=a.azel_etc(TES=None)
+            data['t_src'] += 7200
+            unbinned, binned = dl.general_demodulate(ppp, data, 
+                                                    lowcut, highcut,
+                                                    nbins=nbins, median=True, method=method, 
+                                                    doplot=False, rebin=False, verbose=False)
+            all_az_el_azang.append(np.array([unbinned['az'], unbinned['el'], unbinned['az_ang']]))
+            allsb.append(unbinned['sb'])
+        sh0 = allsb[0].shape
+        sh1 = allsb[1].shape
+        mini = np.min([sh0[1], sh1[1]])
+        print sh0, sh1, mini
+        sb = np.append(allsb[0][:,:mini], allsb[1][:,:mini], axis=0)
+        az_el_azang = np.append(all_az_el_azang[0][:,:mini], all_az_el_azang[1][:,:mini])
+        print sb.shape
+        print az_el_azang.shape
+        print savedir+'alltes_unbinned_{}_{}.fits'.format(names[ids],elevations[ii])
+        print savedir+'angles_unbinned_{}_{}.fits'.format(names[ids],elevations[ii])
+        #FitsArray(sb).save(savedir+'alltes_unbinned_{}_{}.fits'.format(names[ids],elevations[ii]))
+        #FitsArray(az_el_azang).save(savedir+'angles_unbinned_{}_{}.fits'.format(names[ids],elevations[ii]))
+
+
+```
+
+```{python}
+467*3*2
+```
+
+Now we loop on the TES
+
+```{python}
+# #### Parameters
+# ppp = 1./freq_mod
+# lowcut = 0.3
+# highcut = 10.
+# nbins = int((np.max(t_data)-np.min(t_data))/ppp/2)
+# elevation = 50
+
+# reload(dl)
+# reload(ft)
+# savedir = '/Volumes/Data/Qubic/Calib-TD/ScanData_2019-03-31_DemodSrc/'
+
+# ids=0
+# FitsArray(angle).save(savedir+'az_ang_{}.fits'.format(names[ids]))
+
+
+# for ids in xrange(len(datasets)):
+#     dirs = datasets[ids]
+#     for ii in xrange(len(dirs)):
+#         thedir = dirs[ii]
+#         print '##############################################################'
+#         print 'Dataset {} / {} :'.format(ids,len(datasets)),names[ids]
+#         print 'Directory {} / {} :'.format(ii, len(dirs)), thedir
+#         print '##############################################################'
+#         alldemod = np.zeros((256,nbins))
+#         for iasic in [0,1]:
+#             print '======== ASIC {} ====================='.format(iasic)
+#             AsicNum = iasic+1
+#             a = qp()
+#             a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+#             #t_data = a.timeline_timeaxis(axistype='index')
+#             #FREQ_SAMPLING = 1./(t_data[1]-t_data[0])
+#             #az = a.azimuth()
+#             #t_az = (np.max(t_data)-np.min(t_data))*np.linspace(0,1,len(az))
+#             t_data = a.timeline_timeaxis(axistype='pps')
+#             FREQ_SAMPLING = 1./(t_data[1]-t_data[0])
+#             az = a.azimuth()
+#             t_az = a.timeaxis(datatype='platform',axistype='pps')
+#             for TESNum in np.arange(128)+1:
+#                 if (16*(TESNum/16))==TESNum: print(TESNum)
+#                 TESindex = iasic*128+(TESNum-1)
+#                 thedata = a.timeline(TES=TESNum)
+#                 #t_src=[]
+#                 #data_src=[]
+#                 angle, sb, dsb = dl.general_demodulate(ppp, t_data, thedata, t_src, data_src, t_az, az, 
+#                                                             lowcut, highcut, all_elevation[ids][ii], 
+#                                                             nbins=nbins, median=True, method='demod', 
+#                                                             doplot=False, unbinned=False)
+#                 alldemod[TESindex,:] = sb
+#         FitsArray(alldemod).save(savedir+'alltes_{}_el_{}.fits'.format(names[ids],all_elevation[ids][ii]))
+
+
+```
+
+```{python}
+print 'Fini'
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+bla = np.random.rand(256)
+img = ft.image_asics(all1=bla)
+imshow(img)
+```
+
+```{python}
+
+```

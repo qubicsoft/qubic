@@ -1,0 +1,132 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.0
+  kernelspec:
+    display_name: Python 2
+    language: python
+    name: python2
+---
+
+# Comparison on PSD between various configurations 
+## Objective: improving EMI/EMC
+Data taken on Feb 18th 2019 by MP, FV and ST - Code by JCH
+
+```{python}
+# %matplotlib notebook
+from matplotlib import rc
+rc('figure',figsize=(8,5))
+rc('font',size=12)
+rc('text',usetex=False)
+
+import fibtools as ft
+import plotters as p
+from qubicpack import qubicpack as qp
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+```
+
+Get the names of the directories that were created during this session:
+
+```{python}
+init_dir = '/Users/hamilton/Qubic/Grounding/2019-02-18'
+dirs = glob.glob(init_dir+'/*')
+for d in dirs: print d
+```
+
+Get the last part of the string in order to have proper label for each file:
+
+```{python}
+lab = []
+for d in dirs:
+    bla = 'spectre'+str.split(d,'spectre')[1]
+    print bla
+    lab.append(bla)
+```
+
+Select a TES and plot the spectra:
+
+```{python}
+allspecs = []
+allfreqs = []
+medspec = []
+for i in xrange(len(dirs)):
+    print(i)
+    a1 = qp()
+    a1.read_qubicstudio_dataset(dirs[i], asic=1)
+    a2 = qp()
+    a2.read_qubicstudio_dataset(dirs[i], asic=2)
+    nsamples = len(a1.timeline(TES=7))
+    pow2 = int(np.log(nsamples)/np.log(2))
+    ns = 2**pow2
+    FREQ_SAMPLING = 1./a1.sample_period()
+    print(nsamples)
+    
+    specs = np.zeros((256, ns/2+1))
+    for j in xrange(128):
+        spectrum, freq = mlab.psd(a1.timeline(TES=j+1)[:ns], Fs=FREQ_SAMPLING, NFFT=ns, window=mlab.window_hanning)
+        specs[j,:] = spectrum
+        spectrum, freq = mlab.psd(a2.timeline(TES=j+1)[:ns], Fs=FREQ_SAMPLING, NFFT=ns, window=mlab.window_hanning)
+        specs[j+128,:] = spectrum
+    allspecs.append(specs)
+    allfreqs.append(freq)
+    medspec.append(np.median(specs,axis=0))
+```
+
+Now displaying the TES Spectra in the various configurations. If `median=False` the TES whose number is given by `theTES` will be plotted, instead the median of all TES will be plotted.
+
+The spectra are smoothed by a gaussian of widh `filt`. Values like 10 or more are useful for looking at high frequency while smaller values are better at low frequency.
+
+There will be as many plots as there are elements in `minfreq`, `maxfreq` and `filt`
+
+
+```{python}
+rc('figure',figsize=(10,5))
+theTES = 96
+median=True
+
+minfreq = [1., 10.]
+maxfreq = [10., FREQ_SAMPLING/2]
+filt = [1,5]
+
+clf()
+for j in xrange(len(allspecs)):
+    for k in xrange(len(minfreq)):
+        subplot(1,len(minfreq),k+1)
+        xscale('log')
+        yscale('log')
+        xlim(minfreq[k], maxfreq[k])
+        ylim(5e4, 5e7)
+        if median:
+            toplot = medspec[j]
+        else:
+            toplot = allspecs[j][theTES,:]
+        plot(allfreqs[j], f.gaussian_filter1d(toplot,filt[k]), label=lab[j], alpha=0.5)
+        legend(loc='upper left', fontsize=5)
+        xlabel('Frequency [Hz]')
+        if j==0: 
+            if median:
+                title('Median')
+            else:
+                title('TES={}'.format(theTES))
+            
+        
+show()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

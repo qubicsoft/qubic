@@ -1,0 +1,245 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# ##### %matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(16,4))
+rc('font',size=12)
+rc('text',usetex=False)
+rc('image', cmap='viridis')
+
+from qubicpack import qubicpack as qp
+import qubic.fibtools as ft
+import qubic.plotters as p
+import qubic.lin_lib as ll
+import qubic.demodulation_lib as dl
+import qubic.io
+import qubic.sb_fitting as sbfit
+
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import os
+import healpy as hp
+import pandas as pd
+from importlib import reload
+
+```
+
+### Reading measured Synthesized Beam
+
+```{python}
+dirfreq = '150GHz-2019-04-06/'
+dirallfreqs = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/'
+dirfiles = dirallfreqs+dirfreq
+c50 = np.cos(np.radians(50))
+azmin = -15./c50
+azmax = 15./c50
+
+
+TESNum = 96
+hpmap = sbfit.get_hpmap(TESNum, dirfiles)
+hp.gnomview(hpmap, reso=10, title='TES #{}'.format(TESNum),cmap='jet',max=np.max(hpmap)/5,min=0)
+pixok = hpmap != 0
+npixok = np.sum(pixok)
+```
+
+```{python}
+npix=512
+myimage = hp.gnomview(hpmap, reso=10*200./npix, title='TES #{}'.format(TESNum),cmap='jet',max=np.max(hpmap)/5,min=0, return_projected_map=True,xsize=npix)
+```
+
+```{python}
+imshow(myimage, origin='lower',vmin=-10000,vmax=10000)
+colorbar()
+print(myimage.shape)
+```
+
+```{python}
+plot(myimage[256,:],'.')
+```
+
+```{python}
+imshow(myimage[200:250,:][:,200:250], origin='lower',vmin=-10000,vmax=10000)
+
+```
+
+### Comparison with theory
+
+```{python}
+TESNum=93
+hpmap = sbfit.get_hpmap(TESNum, dirfiles)
+
+rc('figure',figsize=(10,10))
+# INSTRUMENT
+reload(qubic)
+ns = 512
+
+d = qubic.qubicdict.qubicDict()
+d.read_from_file('/Users/hamilton/Python/GitQubicMousset/qubic/qubic/dicts/global_source_oneDet.dict')
+d['nside']=ns
+
+q = qubic.QubicInstrument(d)
+s = qubic.QubicScene(d)
+
+def select_det(q,id):
+    #### For now the ids are not matched... so we only take the len(id) first detectors...
+    detector_i = q.detector[id]
+    q.detector = detector_i
+    return(q)
+
+from qubicpack.pixel_translation import tes2index
+from qubicpack.pixel_translation import make_id_focalplane
+fpmatrix = make_id_focalplane()
+
+if TESNum > 128: 
+    asicnum=2
+    thetes = TESNum-128
+else:
+    asicnum =1
+    thetes = TESNum
+    
+idx = tes2index(thetes,asicnum)
+iii = np.where(q.detector.index == idx)[0]
+
+q = select_det(q,iii)
+sb = q.get_synthbeam(s,0)
+xr=0.1*np.max(sb)
+
+hp.gnomview(hpmap, reso=10, sub=(1,2,1), title='Data TES #{}'.format(TESNum))
+img=hp.gnomview(sb, rot=[0,90], reso=10,sub=(1,2,2), title='Theory TES #{}'.format(TESNum))
+tight_layout()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+## These are unfinished attemps to measure the peaks FWHM. But saturation makes it complicated.
+
+```{python}
+fact_res = 1
+img=hp.gnomview(sb, rot=[0,90], reso=10/fact_res, title='Theory TES #{}'.format(TESNum), 
+                xsize=200*fact_res, return_projected_map=True, sub=(1,3,1))
+imgdata=hp.gnomview(hpmap, reso=10/fact_res, title='Data #{}'.format(TESNum), 
+                xsize=200*fact_res, return_projected_map=True, sub=(1,3,2))
+sh = img.shape
+reso = 10./fact_res
+print(reso)
+dx = 200*fact_res *reso /60
+x = np.linspace(-dx/2,dx/2,sh[0])
+xx,yy= np.meshgrid(x,x)
+
+subplot(1,3,3)
+imshow(img, extent=[-dx/2, dx/2, -dx/2, dx/2])
+
+```
+
+```{python}
+#### Test method
+fwhm_true = 0.69
+img_sim = np.exp(-0.5*(xx**2+yy**2)/(fwhm_true/2.35)**2)
+subplot(1,2,1)
+imshow(img_sim, extent=[-dx/2, dx/2, -dx/2, dx/2])
+
+fwhm_rec = np.sqrt(np.sum(img_sim/np.sum(img_sim)*xx**2))*2.35
+print(fwhm_rec)
+
+subplot(1,2,2)
+okx = np.abs(x) < 3
+oky = np.abs(x) < 3
+newmap = img_sim[oky,:][:,okx]
+imshow(newmap, extent = [np.min(x[okx]), np.max(x[okx]), np.min(x[oky]), np.max(x[oky])])
+print(np.sqrt(np.sum(newmap/np.sum(newmap)*xx[okx,:][:,oky]**2))*2.35)
+```
+
+```{python}
+## Now real and model QUBIC data
+subplot(1,2,1)
+imshow(img, extent=[-dx/2, dx/2, -dx/2, dx/2], origin='lower')
+
+okx = np.abs(x+5) < 3
+oky = np.abs(x+7) < 3
+newmap = img[oky,:][:,okx]
+subplot(1,2,2)
+imshow(newmap,extent = [np.min(x[okx]), np.max(x[okx]), np.min(x[oky]), np.max(x[oky])], origin='lower')
+
+print(np.sqrt(np.sum(newmap/np.sum(newmap)*xx[oky,:][:,okx]**2))*2.35)
+```
+
+```{python}
+## Now real and model QUBIC data
+subplot(1,2,1)
+imshow(imgdata, extent=[-dx/2, dx/2, -dx/2, dx/2], origin='lower')
+
+okx = np.abs(x+5) < 3
+oky = np.abs(x+7) < 3
+newmap = imgdata[oky,:][:,okx]
+subplot(1,2,2)
+imshow(newmap,extent = [np.min(x[okx]), np.max(x[okx]), np.min(x[oky]), np.max(x[oky])], origin='lower')
+
+print(np.sqrt(np.sum(newmap/np.sum(newmap)*xx[oky,:][:,okx]**2))*2.35)
+```
+
+```{python}
+lamb = 2.e-3
+P = 8.*np.sqrt(2)
+delta_x = 13.e-3
+print(np.degrees(lamb/(P*delta_x)))
+
+```
+
+```{python}
+
+img=hp.gnomview(sb, rot=[0,90], reso=10,sub=(1,2,2), 
+                title='Theory TES #{}'.format(TESNum),
+                min=1000, max=np.max(sb)/2, 
+                cmap='jet')
+
+
+
+```
+
+```{python}
+# hp.gnomview?
+```
+
+```{python}
+
+```

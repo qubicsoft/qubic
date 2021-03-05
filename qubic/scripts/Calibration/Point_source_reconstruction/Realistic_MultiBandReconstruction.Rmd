@@ -130,7 +130,7 @@ def do_some_dets(detnums, d, directory, fittedpeaksfile, custom=False,
                  nside=None, tol=5e-3, refit=False, resample=False, newsize=70, 
                  doplot=True, verbose=True, sbfitmodel=None, angs=None, usepeaks=None,
                  azmin=None, azmax=None, remove=None, fitted_directory=None, weighted=False,
-                nf_sub_rec=1, lowcut=1e-3, highcut=0.3):
+                nf_sub_rec=1, lowcut=1e-3, highcut=0.3, filtering=True):
     if nside is not None:
         d['nside']=nside
     s = qubic.QubicScene(d)
@@ -216,6 +216,7 @@ def do_some_dets(detnums, d, directory, fittedpeaksfile, custom=False,
         allvals_Q = np.zeros_like(allthetas_M)
         numpeak = np.zeros(len(detnums), dtype=int)
         for idet in range(len(detnums)):
+            c50 = np.cos(np.radians(50))
             allthetas_Q[idet,:], allphis_Q[idet,:] = sbfit.rotate_q2m(allthetas_M[idet,:], 
                                                                       allphis_M[idet,:], 
                                                                       angs=angs, inverse=True)
@@ -392,7 +393,8 @@ def do_some_dets(detnums, d, directory, fittedpeaksfile, custom=False,
     
     for i in range(len(detnums)):
         figure()
-        realTOD[i,:] = ft.filter_data(np.arange(len(realTOD[i,:])), realTOD[i,:], lowcut, highcut)
+        if filtering: 
+            realTOD[i,:] = ft.filter_data(np.arange(len(realTOD[i,:])), realTOD[i,:], lowcut, highcut)
         mm,ss = ft.meancut(realTOD[i,:],3)
         sigmaTOD[i] = ss 
         subplot(1,2,1)
@@ -548,7 +550,8 @@ maxpeakamps = np.max(peaks[:,2,:], axis=1)
 sumpeakamps = np.sum(peaks[:,2,:], axis=1)
 
 allnums = np.arange(256)+1
-detsgood = [5, 28, 37, 60, 96, 101, 122, 124, 137, 140, 149]
+detsgood = [5, 20, 42, 54, 57, 60, 72, 78, 81, 117, 122, 124, 129, 130, 131, 133, 137, 
+           149, 163, 193, 198, 199, 200, 202, 209, 214, 229, 231]
 
 subplot(2,2,1)
 plot(allnums, maxpeakamps)
@@ -624,12 +627,16 @@ fitted_directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/FitSB/'
 # detnums = [151, 152, 153, 166, 169]
 
 ### Non: 172, 173
-detnums = [5, 28, 37, 60, 96, 101, 122, 124, 137, 140, 149]#, 153, 163]#, 173]#, 176]#, 184, 193] #!! Wow
+# detnums = [5, 28, 37, 60, 96, 101, 122, 124, 137, 140, 149]#, 153, 163]#, 173]#, 176]#, 184, 193] #!! Wow
 
+#detnums = [5, 7, 8, 20, 38, 42, 54, 57, 60, 64, 71, 72, 78, 81, 117, 122, 124, 127, 128, 129, 130, 131, 133, 137, 139, 146, 149, 163, 178, 180, 193, 198, 199, 200, 202, 209, 210, 214, 224, 229, 231]
+detnums = [5, 20, 42, 54, 57, 60, 72, 78, 81, 117, 124, 129, 130, 131, 133, 137, 
+           163, 193, 198, 199, 200, 202, 209, 214, 229, 231]
 
 reso=20
 center = [0,50]
 nsrec = 256
+
 nf_sub_rec = 5
 all_maps_recon_th = np.zeros((nf_sub_rec, 12*nsrec**2))
 all_maps_recon_custom = np.zeros((nf_sub_rec, 12*nsrec**2))
@@ -640,7 +647,8 @@ all_maps_recon_custom_new, qcut, cov, nus, nus_edge = do_some_dets(detnums, d, d
                                               custom=True, nside=nsrec, refit=True, 
                                               verbose=False, doplot=True, weighted=False,
                                              azmin=azmin, azmax=azmax, remove=med, 
-                                              fitted_directory=fitted_directory, nf_sub_rec=nf_sub_rec)
+                                              fitted_directory=fitted_directory, nf_sub_rec=nf_sub_rec,
+                                                filtering=False)
 show()
 
 
@@ -673,6 +681,27 @@ for k in range(nf_sub_rec):
                 title='Ntes={0:} - nu=[{1:5.1f},{2:5.1f}]'.format(len(detnums), nus_edge[k], nus_edge[k+1]),min=mini, max=maxi, sub=(1,nf_sub_rec,k+1))
 tight_layout()
 
+
+```
+
+```{python}
+okpix = cov > 0.3
+all_maps_recon_custom_new_cut = all_maps_recon_custom_new.copy()
+all_maps_recon_custom_new_cut[:,~okpix] = 0
+figure()
+maps = []
+for k in range(nf_sub_rec):
+    okpix = all_maps_recon_custom_new_cut[k,:] != 0
+    mm, ss = ft.meancut(all_maps_recon_custom_new_cut[k,okpix],3)
+#     mini = mm-ss
+#     maxi = mm+3*ss
+    mini = -0.01
+    maxi = 0.03
+    mymap = hp.gnomview((all_maps_recon_custom_new_cut[k,:]), reso=reso/2, rot=center, cmap = 'viridis', 
+                title='nu=[{0:5.1f},{1:5.1f}]'.format(nus_edge[k], nus_edge[k+1]),min=mini, max=maxi, sub=(2,5,k+1),
+               return_projected_map=True)
+    maps.append(mymap)
+tight_layout()
 
 ```
 
@@ -717,27 +746,6 @@ def aperture_photometry(img, centers, rads, plot=False, stampsize=25, magnitude_
 ```
 
 ```{python}
-okpix = cov > 0.3
-all_maps_recon_custom_new_cut = all_maps_recon_custom_new.copy()
-all_maps_recon_custom_new_cut[:,~okpix] = 0
-figure()
-maps = []
-for k in range(nf_sub_rec):
-    okpix = all_maps_recon_custom_new_cut[k,:] != 0
-    mm, ss = ft.meancut(all_maps_recon_custom_new_cut[k,okpix],3)
-#     mini = mm-ss
-#     maxi = mm+3*ss
-    mini = -0.01
-    maxi = 0.03
-    mymap = hp.gnomview((all_maps_recon_custom_new_cut[k,:]), reso=reso/2, rot=center, cmap = 'viridis', 
-                title='nu=[{0:5.1f},{1:5.1f}]'.format(nus_edge[k], nus_edge[k+1]),min=mini, max=maxi, sub=(3,3,k+1),
-               return_projected_map=True)
-    maps.append(mymap)
-tight_layout()
-
-```
-
-```{python}
 # import scipy.ndimage as scf
 # from mpl_toolkits.mplot3d import Axes3D
 # from matplotlib.colors import LightSource
@@ -764,24 +772,41 @@ tight_layout()
 def mygaussian(x, pars, extra_args=None):
     return pars[0]+pars[1]*np.exp(-0.5*(x-pars[2])**2/pars[3]**2)
 
+nu0 = 150.
+
+sh = np.shape(maps[0])
+nbmc = 1000
 mycenter = np.reshape(np.array([100.,108.]), (1,2))
-# mycenter = np.reshape(np.array([100.,100.]), (1,2))
+fracmc = 0.7
+rndcenters = (np.random.rand(nbmc,2)-0.5)*(sh[0]*fracmc,sh[1]*fracmc)+mycenter
+plot(rndcenters[:,0], rndcenters[:,1],'r.')
+xlim(0,200)
+ylim(0,200)
+title('Boostrap centers')
+show()
+
+figure()
 radius = [12., 30.]
 flux = np.zeros(len(maps))
+mcflux = np.zeros((len(maps), nbmc))
 err_flux = np.zeros(len(maps))
 for i in range(len(maps)):
     subplot(3,3,i+1)
     flux[i], err_flux[i], mag, err_mag = aperture_photometry(maps[i], mycenter, radius, subs=False,
                                                              plot=True, stampsize=100, magnitude_zero=0, cmap=None)
     title('nu=[{0:5.1f},{1:5.1f}]'.format(nus_edge[i], nus_edge[i+1]))
+    mcflux[i,:], _, mag, err_mag = aperture_photometry(maps[i], rndcenters, radius)
 tight_layout()
 
 nus = 0.5*(nus_edge[1:]+nus_edge[:-1])
 dnu = 0.5*(nus_edge[1:]-nus_edge[:-1])
 
+covar = np.cov(mcflux)
+err_flux = np.sqrt(np.diag(covar))
 
-guess = np.array([0., np.max(flux), 150., 5. ])
-fitg = ft.do_minuit(nus, flux, err_flux, guess, functname=mygaussian, fixpars=[1,0,0,0])
+thsig = nu0/8/2.35
+guess = np.array([np.min(flux), np.max(flux)-np.min(flux), nu0, thsig ])
+fitg = ft.do_minuit(nus, flux, covar, guess, functname=mygaussian, fixpars=[0,0,0,0])
 
 xxx = np.linspace(130, 170, 100)
 print(fitg[1])
@@ -798,20 +823,28 @@ legend()
 
 ```{python}
 
-guess = np.array([0., np.max(flux), 150., 5. ])
-fitg = ft.do_minuit(nus, flux, err_flux, guess, functname=mygaussian, fixpars=[0,0,0,0])
+#mycovar = covar.copy()
+mycovar = np.diag(np.diag(covar))
+
+guess = np.array([np.min(flux), np.max(flux)-np.min(flux), nu0, thsig ])
+fitg = ft.do_minuit(nus, flux, mycovar, guess, functname=mygaussian, fixpars=[0,0,1,1])
+
+resid = mygaussian(nus, fitg[1])-flux
+chi2 = np.dot(np.dot(resid.T, np.linalg.inv(mycovar)), resid)
+print('Chi2={} ndf={}'.format(chi2, len(flux)-2))
 
 xxx = np.linspace(120, 180, 100)
 print(fitg[1])
 print(fitg[2])
-subplot(2,3,6)
+subplot(2,3,1)
 errorbar(nus,flux-fitg[1][0], yerr=err_flux, xerr=dnu, fmt='ro')
-plot(xxx, mygaussian(xxx, fitg[1])-fitg[1][0], 
-     label=r'$\nu_0$={0:5.1f} +/- {1:5.1f}'.format(fitg[1][2], fitg[2][2])+'\n'+r'$\sigma$={0:5.1f} +/- {1:5.1f}'.format(fitg[1][3], fitg[2][3]))
+plot(xxx, mygaussian(xxx, fitg[1])-fitg[1][0], label=r'Expected: $\nu_0$={0:} $\sigma=${1:3.1f} GHz'.format(nu0, thsig))
+     #label=r'$\nu_0$={0:5.1f} +/- {1:5.1f}'.format(fitg[1][2], fitg[2][2])+'\n'+r'$\sigma$={0:5.1f} +/- {1:5.1f}'.format(fitg[1][3], fitg[2][3]))
 axhline(y=0,color='k', ls='--')
+title('QUBIC Laboratory data')
 xlabel('Frequency', fontsize=14)
 ylabel('Source Flux', fontsize=14)
-#ylim(-0.2, 4.5)
+ylim(-np.abs(np.min(flux-fitg[1][0])*1.3), np.max(flux-fitg[1][0])*1.3)
 xlim(130, 170)
 legend(loc='upper left')
 ```
@@ -833,23 +866,37 @@ for k in range(nf_sub_rec):
                 title='nu=[{0:5.1f},{1:5.1f}]'.format(nus_edge[k], nus_edge[k+1]),min=mini, max=maxi, sub=(3,3,k+1),
                return_projected_map=True)
     maps.append(mymap)
-subplot(3,3,6)
+tight_layout()
+
+figure()
+subplot(3,3,1)
 errorbar(nus,flux-fitg[1][0], yerr=err_flux, xerr=dnu, fmt='ro')
-plot(xxx, mygaussian(xxx, fitg[1])-fitg[1][0], 
-     label=r'$\nu_0$={0:5.1f} +/- {1:5.1f}'.format(fitg[1][2], fitg[2][2])+'\n'+r'$\sigma$={0:5.1f} +/- {1:5.1f}'.format(fitg[1][3], fitg[2][3]))
+plot(xxx, mygaussian(xxx, fitg[1])-fitg[1][0], label=r'Expected: $\nu_0$={0:} $\sigma=${1:3.1f} GHz'.format(nu0, thsig))
+     #label=r'$\nu_0$={0:5.1f} +/- {1:5.1f}'.format(fitg[1][2], fitg[2][2])+'\n'+r'$\sigma$={0:5.1f} +/- {1:5.1f}'.format(fitg[1][3], fitg[2][3]))
 axhline(y=0,color='k', ls='--')
+#title('QUBIC Laboratory data')
 xlabel('Frequency', fontsize=14)
 ylabel('Source Flux', fontsize=14)
-ylim(-0.2, 4.5)
+ylim(-np.abs(np.min(flux-fitg[1][0])*1.3), np.max(flux-fitg[1][0])*1.3)
 xlim(130, 170)
 legend(loc='upper left')
-
 tight_layout()
+
 
 
 ```
 
 ```{python}
+from qubic import QubicSkySim as qss
+subplot(2,2,1)
+imshow(covar, cmap='bwr', vmin=-np.max([np.min(covar), np.max(covar)]), vmax=np.max([np.min(covar), np.max(covar)]))
+colorbar()
+title('Covariance Matrix')
+
+subplot(2,2,2)
+imshow(qss.cov2corr(covar), cmap='bwr', vmin=-1, vmax=1)
+colorbar()
+title('Correlation Matrix')
 
 ```
 

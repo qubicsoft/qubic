@@ -26,11 +26,11 @@ from fgbuster.observation_helpers import _rj2cmb, _jysr2rj, get_noise_realizatio
 # Imports needed for component separation
 from fgbuster import (separation_recipes, xForecast, CMB, Dust, Synchrotron, FreeFree, PowerLaw,  # sky-fitting model
                       basic_comp_sep)  # separation routine
+
                       
+
                       
-                      
-                      
-                      
+
 class CompSep :
     
     def __init__(self) :
@@ -56,6 +56,8 @@ class CompSep :
         comp = [CMB(), comp1]
         
         ins = get_instrument('Qubic' + str(nb_bands) + 'bands')
+        print('FWHM are:')
+        print(ins.fwhm)
         
         r = basic_comp_sep(comp, ins, map1)
         
@@ -148,27 +150,27 @@ class CompSep :
             tab_cmb[0, i, :] = X[i].s[0]
         
         return tab_cmb
+
                       
+
                       
+
                       
+
                       
+
                       
+
                       
+
                       
+
                       
+
                       
+
                       
+
                       
-                      
-                      
-                      
-                      
-                      
-                      
-                      
-                      
-                      
-                      
-                      
-                      
+
                       

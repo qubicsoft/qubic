@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.0
+      jupytext_version: 1.4.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -320,7 +320,7 @@ plt.tight_layout()
 nsim = 4
 nsim_cells = []
 for sim in range(nsim):
-    Qubic_sky, x0, maps_observed = make_maps(d, seenpix, seed=42, noise_level=2.)
+    Qubic_sky, x0, maps_observed = make_maps(d, seenpix, seed=42, noise_level=0.2)
     maps = maps_observed[0].T
     leff, cells, w = Namaster.get_spectra(maps, purify_e=True, purify_b=False, beam_correction=None)
     nsim_cells.append(cells)

@@ -7,6 +7,7 @@ import qubic.sb_fitting as sbfit
 import qubic
 from pysimulators import FitsArray
 from qubic.utils import progress_bar
+from qubic import mcmc
 
 import numpy as np
 from matplotlib.pyplot import *
@@ -17,6 +18,7 @@ from scipy import interpolate
 import datetime as dt
 import sys
 import healpy as hp
+import corner
 
 
 def printnow(truc):
@@ -1436,11 +1438,13 @@ def hwp_fitpol(thvals, ampvals, ampvals_err, doplot=False, str_title=None, satur
         print('Range: ', rangepars)
     fithwp = ft.do_minuit(thvals[okdata], np.abs(ampvals[okdata]), ampvals_err[okdata], guess, functname=fct_name,
                           force_chi2_ndf=force_chi2_ndf, verbose=False, rangepars=rangepars)
-    print(fithwp[1])
+    for i in range(len(guess)):
+        print(i,fithwp[1][i],fithwp[2][i])
+
     if doplot:
         errorbar(thvals[okdata], np.abs(ampvals[okdata]) / fithwp[1][0], yerr=ampvals_err[okdata] / fithwp[1][0],
                  fmt='r.')
-        angs = np.linspace(0, 90, 90)
+        angs = np.linspace(0, 90, 900)
         if saturation is False:
             lab = 'XPol = {0:5.2f}% +/- {1:5.2f}% '.format(fithwp[1][1] * 100, fithwp[2][1] * 100)
         else:
@@ -1460,6 +1464,93 @@ def hwp_fitpol(thvals, ampvals, ampvals_err, doplot=False, str_title=None, satur
         if str_title:
             title(str_title)
     return fithwp
+
+def hwp_fitpol_new(thvals, ampvals, ampvals_err, doplot=False, str_title=None, saturation=False, myguess=None,
+               force_chi2_ndf=True, nbmc=10000, myrange=None, upperlims=True):
+    okdata = ampvals_err != 0
+
+    if not saturation:
+        print('Using Simple SIN')
+        fct_name = hwp_sin
+        guess = np.array([np.max(np.abs(ampvals)), 0, 0.])
+        rangepars = [[0, np.max(np.abs(ampvals)) * 10], [0, 1], [-180, 180]]
+    else:
+        print('Using Sin with Saturation')
+        fct_name = hwp_sin_sat
+        guess = np.array([np.max(np.abs(ampvals)), 0, 0., 1.])
+        rangepars = [[0, np.max(np.abs(ampvals)) * 10], [0, 1], [-180, 180], [0., 100.]]
+
+    if myguess is not None:
+        guess = myguess
+        print('Guess: ', guess)
+        if myrange is not None:
+            rangepars = myrange
+        print('Range: ', rangepars)
+
+    ll = mcmc.LogLikelihood(xvals=thvals[okdata], yvals=np.abs(ampvals[okdata]), errors=ampvals_err[okdata],
+        p0=guess, model=fct_name, flatprior=rangepars)
+
+    samp = ll.run(nbmc)
+    flat_samples = samp.get_chain(discard=nbmc//3, thin=32, flat=True)
+    q = [0.16, 0.5, 0.84]
+    mcmc_fit = np.zeros(len(guess))
+    mcmc_err = np.zeros(len(guess))
+    for i in range(len(guess)):
+        qt = corner.quantile(flat_samples[:,i],q)
+        mcmc_fit[i] = qt[1]
+        mcmc_err[i] = np.mean([qt[1]-qt[0], [qt[2]-qt[1]]])
+        print(i,mcmc_fit[i],mcmc_err[i])
+
+    if doplot:
+        newsamples = flat_samples[:,[False, True, False, True]].copy()
+        newsamples[:,0] *= 100
+
+        if upperlims:
+            labs = ['Xpol %', 'Sat']
+            upperlim95 = np.zeros(2)
+            titles = []
+            for i in range(2):
+                upperlim95[i] = corner.quantile(newsamples[:,i],[0.95])
+                titles.append(labs[i]+' < {0:.2f} @ 95% C.L.'.format(upperlim95[i]))
+            fig = corner.corner(newsamples,quantiles=[0.95], labels=labs, force_titles=titles)
+
+        else:
+            fig = corner.corner(
+            newsamples, labels=['Xpol %', 'Sat'],quantiles=[0.95],show_titles=True)
+
+
+
+
+
+        figure()
+        errorbar(thvals[okdata], np.abs(ampvals[okdata]) / mcmc_fit[0], yerr=ampvals_err[okdata] / mcmc_fit[0],
+                 fmt='r.')
+        angs = np.linspace(0, 90, 90)
+        if saturation is False:
+            lab = 'XPol = {0:5.2f}% +/- {1:5.2f}% '.format(mcmc_fit[1] * 100, mcmc_err[1] * 100)
+        else:
+            lab = 'XPol = {0:5.2f}% +/- {1:5.2f}% \n Saturation = {2:5.2f} +/- {3:5.2f}'.format(mcmc_fit[1] * 100,
+                                                                                                mcmc_err[1] * 100,
+                                                                                                mcmc_fit[3],
+                                                                                                mcmc_err[3])
+            if upperlims:
+                lab = 'XPol < {0:5.2f}% (95% C.L.) \n Saturation < {1:5.2f} (95% C.L.)'.format(upperlim95[0],upperlim95[1])
+
+        plot(angs, fct_name(angs, mcmc_fit) / mcmc_fit[0],
+             label=lab)
+        ylim(-0.1, 1.3)
+        plot(angs, angs * 0, 'k--')
+        plot(angs, angs * 0 + 1, 'k--')
+        legend(loc='upper left')
+        xlabel('HWP Angle [Deg.]')
+        ylabel('Normalized signal')
+        if str_title:
+            title(str_title)
+
+
+
+
+    return [mcmc_fit, mcmc_err], flat_samples
 
 
 def coadd_flatmap(datain, az, el,

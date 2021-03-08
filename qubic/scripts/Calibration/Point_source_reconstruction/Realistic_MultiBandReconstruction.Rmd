@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.7.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -154,7 +154,6 @@ def do_some_dets(detnums, d, directory, fittedpeaksfile, custom=False,
         ### First instantiate a jchinstrument (modified from instrument 
         ### to be able to read peaks from a file)
         qcut = select_det(jcinst.QubicMultibandInstrument(d),ids)
-        
         ### In the present case, we use the peak measurements at 150 GHz
         ### So we assume its index is len(qcut)//2
         id150 = len(qcut)//2
@@ -206,7 +205,6 @@ def do_some_dets(detnums, d, directory, fittedpeaksfile, custom=False,
             allthetas_M = np.radians(90-(mypeaks[:,1,:]-50))
             allphis_M = np.radians(-mypeaks[:,0,:]*thecos)
             allvals_M = mypeaks[:,2,:]
-        
         ### Now we want to perform the rotation to go to boresight 
         ### reference frame (used internally by QubicSoft)
         if angs is None:
@@ -226,7 +224,6 @@ def do_some_dets(detnums, d, directory, fittedpeaksfile, custom=False,
             
             #### Louise mentions a pi rotation of the measured SB w.r.t. simulations => we apply it here
             allphis_Q[idet,:] += np.pi
-        
         ### get TES position in the GRF
         for idet in range(len(detnums)):
             clf()
@@ -266,8 +263,6 @@ def do_some_dets(detnums, d, directory, fittedpeaksfile, custom=False,
                 angdist[k] = sbfit.ang_dist([theta_center, phi_center], [rav_thQ[k], rav_phQ[k]])
                 print(k,np.degrees(angdist[k]))
             idxmin = np.argmin(angdist)
-
-            
             
             numpeak[idet]=idxmin
             throt = allthetas_Q[idet,numpeak[idet]]
@@ -292,11 +287,11 @@ def do_some_dets(detnums, d, directory, fittedpeaksfile, custom=False,
             for k in range(len(qcut)):
                 factor = 150e9/qcut[k].filter.nu
                 newthfinal, newphfinal = sbfit.rotate_q2m(newth*factor, newph, angs=myangs, inverse=False)
-                scatter(np.ravel(newphfinal), np.ravel(newthfinal), s=np.ravel(allvals_Q)/np.max(allvals_Q)*300)
+                scatter(np.ravel(newphfinal), np.ravel(newthfinal), )
+                        #s=np.ravel(allvals_Q)/np.max(allvals_Q)*300)
             ax.set_rmax(0.5)
             legend()
             show()
-
 
         ### We nowwrite the temporary file that contains the peaks locations to be used
         if usepeaks is None:
@@ -351,6 +346,7 @@ def do_some_dets(detnums, d, directory, fittedpeaksfile, custom=False,
         if weighted:   ## Not to be used - old test...
             realTOD[i,:] *= 1./ss**2
             sumweight += 1./ss**2
+    print("img shape", np.shape(allimg))
         
 #     ### Cut in azimuth and elevation
 #     azmin = -15./np.cos(np.radians(50))
@@ -431,6 +427,11 @@ def do_some_dets(detnums, d, directory, fittedpeaksfile, custom=False,
     clf()
     print('%%%%%%%%%%%%%%%%%%%%%%')
     ax=plt.subplot(111, projection='polar')
+    
+    print("=?===============================")
+    print(np.shape(realTOD), np.shape(p), nf_sub_rec, np.shape(qcut))
+    print("=?===============================")
+    
     maps_recon, cov, nus, nus_edge = si.reconstruct_maps(realTOD, d, p,
                                                         nf_sub_rec, x0=None, instrument=qcut, verbose=True,
                                                         forced_tes_sigma=sigmaTOD)
@@ -456,8 +457,10 @@ d['kind']='I'
 print(d['kind'])
 d['nside']=ns
 
-fittedpeakfile = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/fitted_peaks.fits'
-directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/150GHz-2019-04-06/'
+fittedpeakfile = '/home/martin/QUBIC/qubiccalibration/Data/Calib-TD/Files/SynthesizedBeams/fitted_peaks.fits'
+directory = '/home/martin/QUBIC/qubiccalibration/Data/Calib-TD/150GHz-2019-04-06'
+#fittedpeakfile = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/fitted_peaks.fits'
+#directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/150GHz-2019-04-06/'
 # directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/130GHz-2019-04-18/'
 # directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/170GHz-2019-04-14/'
 # directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/140GHz-2019-04-10/'
@@ -541,7 +544,7 @@ title('Median over all S.B. images (renormalized)')
 ```
 
 ```{python}
-fittedpeakfile = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/fitted_peaks.fits'
+#fittedpeakfile = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/fitted_peaks.fits'
 peaks = np.array(FitsArray(fittedpeakfile))
 print(np.shape(peaks))
 maxpeakamps = np.max(peaks[:,2,:], axis=1)
@@ -586,6 +589,10 @@ plot(allnums[np.array(detsgood)-1], sumpeakamps[np.array(detsgood)-1]/maxpeakamp
 ```
 
 ```{python}
+import matplotlib.pyplot as plt
+```
+
+```{python}
 reload(dl)
 reload(sbfit)
 reload(jcinst)
@@ -603,11 +610,11 @@ d['kind']='I'
 print(d['kind'])
 d['nside']=ns
 
-fittedpeakfile = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/fitted_peaks.fits'
+#fittedpeakfile = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/fitted_peaks.fits'
 # directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/150GHz-2019-04-06/'
 #directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/130GHz-2019-04-18/'
-fitted_directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/FitSB/'
-
+#fitted_directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/FitSB/'
+fitted_directory = "/home/martin/QUBIC/qubiccalibration/Data/Calib-TD/150GHz-2019-04-06/FitSB/"
 # detnums = [5]  ### Works well
 # detnums = [7]  ### Works well alone but not with others apparently
 # detnums = [9]  ### bof

@@ -372,16 +372,20 @@ def Synchrotron_storja(x, A, p):
 
 	return A * x ** (- b)
  
-def Synchrotron_Planck(x, A, alpha, nu0 = 408e-3):
+def Synchrotron_Planck(x, A, alpha, b, extra_args = None ):
+	"""
+	x: frequency array
+	A: Amplitude
+	alpha: 
+	b: spectral index
 	"""
 	
-	"""
 	h = scipy.constants.h
 	c = scipy.constants.c
 	k = scipy.constants.k
 
 	
-	return A * (x / nu0) ** 2
+	return A * (x / alpha) ** (- b)
 
 def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 		   maxfev = 10000, initP0 = None, verbose = False,
@@ -403,7 +407,8 @@ def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 		popt, pcov = curve_fit(FuncModel, nus, maps[:, pix, istk], 
 								sigma = covMat[:, :, istk, pix_red], absolute_sigma=True,
 								maxfev = maxfev, p0 = initP0)
-	#print("Calling LogLikelihood", popt, pcov)
+		#popt = initP0
+	print("Calling LogLikelihood", popt, pcov)
 	myfit = mcmc.LogLikelihood(xvals = nus, yvals = maps[:, pix, istk], 
 							   errors = covMat[:, :, istk, pix_red], 
 							   model = FuncModel, p0 = popt)

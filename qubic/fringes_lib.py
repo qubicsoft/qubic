@@ -4,6 +4,7 @@ import copy
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from astropy.io import fits as pyfits
+from astropy.convolution import convolve, Gaussian2DKernel
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib import cm
 import scipy.optimize as sop
@@ -20,7 +21,7 @@ class FringesAnalysis:
     def __init__(self, datafolder, date, q, baseline, ncycles=20, stable_time=5.,
                  asics=[1, 2], src_data=False, subtract_t0=True,
                  refTESnum=None, refASICnum=None, allh=[True, False, False, True, False, True], nsp_per=240,
-                 lowcut=1e-5, highcut=2., nbins=120, notch=np.array([[1.724, 0.005, 10]]),
+                 lowcut=1e-5, highcut=2., nbins=120, notch=np.array([[1.724, 0.005, 10]]), sigma_conv_astropy=0.7,
                  verbose=False):
         """
         Parameters
@@ -58,6 +59,8 @@ class FringesAnalysis:
             Number of bins for filtering.
         notch: array
             Define a notch filter.
+        sigma_conv_astropy: float
+            Sigma of the Gaussian for the Astropy convolution for plots, in numbers of detectors.
         verbose: bool
         """
         self.datafolder = datafolder
@@ -75,6 +78,7 @@ class FringesAnalysis:
         self.highcut = highcut
         self.nbins = nbins
         self.notch = notch
+        self.sigma_conv_astropy = sigma_conv_astropy
         self.verbose = verbose
 
         # Get data
@@ -261,12 +265,14 @@ class FringesAnalysis:
         std = np.std(residuals_time, axis=1)
         std_argsort = np.argsort(std)
         detectors_sort = np.zeros((self.ndet, 2), dtype=int)
-        detectors_sort[:, 0] = (std_argsort % self.ndet_oneASIC) + 1  # TES
+        detectors_sort[:, 0] = (std_argsort % self.ndet_oneASIC) + 1   # TES
         detectors_sort[:, 1]  = (std_argsort // self.ndet_oneASIC) + 1 # ASIC
 
         # Select good TES
         oktes = np.ones(self.ndet)
-        oktes[std > np.min(std) * 25] = np.nan
+        alldet = detectors_sort[:, 0] + self.ndet_oneASIC *  (detectors_sort[:, 1] - 1) # All TES from 1 to 128*nasics
+        oktes[alldet[int(0.75 * self.ndet):] - 1] = np.nan
+        # oktes[std > np.min(std) * 10] = np.nan
 
         # Plot the 5 best TES
         if doplot:
@@ -357,8 +363,8 @@ class FringesAnalysis:
         ok_all_horns = np.zeros_like(tfold, dtype=bool)
         for i in range(self.nsteps):
             if self.allh[i]:
-                tmini = i * period / self.nsteps + skip_rise #* period / self.nsteps
-                tmaxi = (i + 1) * period / self.nsteps - skip_fall #* period / self.nsteps
+                tmini = i * period / self.nsteps + skip_rise
+                tmaxi = (i + 1) * period / self.nsteps - skip_fall
                 ok = (tfold >= tmini) & (tfold < tmaxi)
                 ok_all_horns[ok] = True
         droll_rm_median = droll - np.median(droll[:, ok_all_horns])
@@ -660,9 +666,12 @@ class FringesAnalysis:
         for i, ASIC in enumerate(self.asics):
             print(f'*********** Starting ASIC {ASIC} **************')
             for j, TES in enumerate(np.arange(1, 129)):
-                # Use the time constant for skip rise
-                skip_rise = self.ctimes[i, j] * 3.
-                skip_fall = 0.2
+                # Use the time constant for skip rise if it is reasonable.
+                if self.ctimes[i, j] < 0.6:
+                    skip_rise = self.ctimes[i, j] * 5.
+                else:
+                    skip_rise = 1.
+                skip_fall = 0.5
                 print(skip_rise, skip_fall)
 
                 # If TES in doplotTESsort, active the plot option
@@ -724,26 +733,27 @@ class FringesAnalysis:
                 if doplot:
                     self._plot_TOD_reconstruction(droll, Mcycles[index, :])
 
-        # Get the good TES from a cut on residuals
-        # mm, ss = ft.meancut(np.log10(TODresiduals), nsig=3)
-        # oktes = np.ones(self.ndet)
-        # oktes[np.abs(np.log10(TODresiduals) - mm) > 2 * ss] = np.nan
-
         # Final plots
         # Fringes
         fig, axs = plt.subplots(2, 2, figsize=(10, 12))
         fig.subplots_adjust(wspace=0.5)
         fig.suptitle(f'Fringes and errors - BL {self.baseline} - {self.date}')
         ax0, ax1, ax2, ax3 = axs.ravel()
-        plot_fringes_imshow_interp(fringes1D * self.oktes, fig=fig, ax=ax0)
-        plot_fringes_scatter(self.q, self.xTES, self.yTES, fringes1D * self.oktes, s=150, fig=fig, ax=ax1)
+        # Make a convolution with Astropy (just to see better the fringes)
+        fringes2D = make2Dfringes_data(fringes1D * self.oktes)
+        fringes2D_conv = astropy_convolution(fringes2D, sigma=self.sigma_conv_astropy)
+        cmap_bwr = make_cmap_nan_black('bwr')
+        plot_fringes_imshow(fringes2D_conv, fig=fig, ax=ax0, cmap=cmap_bwr,
+                            title='Astropy convolution', mask=make_mask2D_thermometers_TD())
+        plot_fringes_scatter(self.q, self.xTES, self.yTES, fringes1D * self.oktes, s=100,
+                             fig=fig, ax=ax1, cmap=cmap_bwr)
 
         # Errors
-        cmap_viridis = make_cmap_nan_grey('viridis')
-        plot_fringes_scatter(self.q, self.xTES, self.yTES, err_fringes1D * self.oktes, s=150, fig=fig, ax=ax2,
+        cmap_viridis = make_cmap_nan_black('viridis')
+        plot_fringes_scatter(self.q, self.xTES, self.yTES, err_fringes1D * self.oktes, s=100, fig=fig, ax=ax2,
                              cmap=cmap_viridis, normalize=False, vmin=0., vmax=400, title='Errors')
         plot_fringes_scatter(self.q, self.xTES, self.yTES, np.abs(fringes1D / err_fringes1D) * self.oktes,
-                             s=150, fig=fig, ax=ax3, cmap=cmap_viridis, normalize=False, vmin=0., vmax=3.,
+                             s=100, fig=fig, ax=ax3, cmap=cmap_viridis, normalize=False, vmin=0., vmax=3.,
                              title='|Values/Errors|')
 
         return m_points, err_m_points, Mcycles, err_Mcycles, fringes1D, err_fringes1D, \
@@ -908,7 +918,10 @@ class SaveFringesFitsPdf:
                 fig.subplots_adjust(wspace=0.5)
                 fig.suptitle(f'Fringes - BL {self.allBLs[i]} - {self.date_obs} - type {self.BLs_type[i]}')
                 ax0, ax1 = axs.ravel()
-                plot_fringes_imshow_interp(self.allfringes1D[i]* self.allokTES[i], fig=fig, ax=ax0, mask=mask)
+                fringes2D = make2Dfringes_data(self.allfringes1D[i]* self.allokTES[i])
+                fringes2D_conv = astropy_convolution(fringes2D)
+                plot_fringes_imshow(fringes2D_conv, fig=fig, ax=ax0, mask=mask, title='Astropy convolution',
+                                    cmap=make_cmap_nan_black('bwr'))
                 plot_fringes_scatter(self.q, self.xTES, self.yTES, self.allfringes1D[i] * self.allokTES[i],
                                      s=80, fig=fig, ax=ax1)
                 pp.savefig()
@@ -1093,13 +1106,13 @@ def plot_sum_diff_fringes(q, keyvals, fdict, mask=None, lim=2, cmap='bwr'):
 
     return
 
-def make_cmap_nan_grey(cmap):
+def make_cmap_nan_black(cmap):
     cmap_bwr = copy.copy(cm.get_cmap(cmap))
-    cmap_bwr.set_bad(color='lightgrey')
+    cmap_bwr.set_bad(color='k')
     return cmap_bwr
 
 def plot_fringes_scatter(q, xTES, yTES, fringes1D, normalize=True, frame='ONAFP', fig=None, ax=None,
-                         cbar=True, vmin=-1., vmax=1., cmap=make_cmap_nan_grey('bwr'), s=None, title='Scatter plot'):
+                         cbar=True, vmin=-1., vmax=1., cmap=make_cmap_nan_black('bwr'), s=None, title='Scatter plot'):
 
     x, y, fringes = remove_thermometers(xTES, yTES, fringes1D)
 
@@ -1121,26 +1134,45 @@ def plot_fringes_scatter(q, xTES, yTES, fringes1D, normalize=True, frame='ONAFP'
                          )
     return
 
+def make2Dfringes_QubicSoft(fringes1D, q, nan2zero=False):
+    """fringes1D must have 248 elements ordered as in Qubic soft."""
+    fringes2D = q.detector.unpack(fringes1D)[17:, :17]
+    if nan2zero:
+        fringes2D[np.isnan(fringes2D)] = 0.
+    return fringes2D
 
-def plot_fringes_imshow_interp(fringes1D, normalize=True, interp='Gaussian', mask=None,
-                               fig=None, ax=None, cbar=True, vmin=-1, vmax=1.,
-                               cmap='bwr', title='Imshow with interpolation'):
-
-    # Make the 2D fringes
+def make2Dfringes_data(fringes1D, nan2zero=False):
     fringes2D = ft.image_asics(all1=fringes1D)
+    if nan2zero:
+        fringes2D[np.isnan(fringes2D)] = 0.
+    return fringes2D
+
+def astropy_convolution(fringes2D, sigma=0.7, nan_treatment='interpolate', preserve_nan=True):
+
+    kernel = Gaussian2DKernel(sigma)
+    image_convolved = convolve(fringes2D,
+                               kernel,
+                               nan_treatment=nan_treatment,
+                               preserve_nan=preserve_nan)
+    return image_convolved
+
+def plot_fringes_imshow(fringes2D, normalize=True, interp=None, mask=None,
+                        fig=None, ax=None, cbar=True, vmin=-1, vmax=1.,
+                        cmap='bwr', title='Imshow'):
+
     if normalize:
         fringes2D /= np.nanstd(fringes2D)
 
-    if mask is None:
-        mask = make_mask2D_thermometers_TD()
+    if mask is not None:
+        fringes2D *= mask
 
     if ax is None:
         fig, ax = plt.subplots()
-    img = ax.imshow(np.nan_to_num(np.rot90(fringes2D * mask, k=2)),
+    img = ax.imshow(np.rot90(fringes2D, k=2),
                     vmin=vmin, vmax=vmax,
                     cmap=cmap,
                     interpolation=interp)
-
+    ax.axis('off')
     ax.set_title(title, fontsize=14)
     if cbar:
         divider = make_axes_locatable(ax)

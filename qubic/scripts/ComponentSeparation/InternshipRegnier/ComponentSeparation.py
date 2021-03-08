@@ -41,7 +41,7 @@ def same_resol(map1, fwhm, fwhm_target=None, verbose=False) :
     print(myfwhm, np.max(fwhm))
     maps_out = np.zeros_like(map1)
     fwhm_out = np.zeros(nb_bands)
-    for i in range(nb_bands):
+    for i in range(map1.shape[0]):
         delta_fwhm_deg = np.sqrt(myfwhm**2-fwhm[i]**2)
         if verbose:
             print('Sub {0:}: Going from {1:5.2f} to {2:5.2f}'.format(i, fwhm[i], myfwhm))
@@ -101,7 +101,7 @@ class CompSep(object) :
         # Change resolution of each map if it's necessary
         map1, tab_fwhm, delta_fwhm = same_resol(map1, fwhmdeg, fwhm_target = target, verbose = True)
         
-        # Apply FG BUster
+        # Apply FG Buster
         r = basic_comp_sep(comp, ins, map1[:, :, okpix])
         
         return r
@@ -119,14 +119,25 @@ class CompSep(object) :
     		- tab_dust and/or tab_cmb : one or two array type which contains differents components. The form of these arrays is (nfreq, nstokes, npix).
     	
     	"""
+
+        X_array = np.zeros((((X.s.shape[0], self.Nfin, 3, self.npix))))
+    
+        for i in range(X.s.shape[0]) :
+            for j in range(self.Nfin) :
+                for k in range(3) :
+                    X_array[i, j, k, okpix] = X.s[i, k, :]
+                
+        return X_array
+        '''
         if X.s.shape[0] == 1 :
             tab_cmb = np.zeros(((self.Nfin, 3, self.npix)))
         
             for i in range(self.Nfin) :
                 for j in range(3) :
                     tab_cmb[i, j, :] = X.s[0, j, :]
-            
-            return tab_cmb
+           
+        
+        
         
         elif X.s.shape[0] == 2 :
         	
@@ -142,7 +153,7 @@ class CompSep(object) :
             
         else :
             raise TypeError("Please enter the good number of component")
-    
+        '''
         
     def internal_linear_combination(self, map1 = None, comp = None) :
 		

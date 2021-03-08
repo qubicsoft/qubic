@@ -374,9 +374,9 @@ def Synchrotron_storja(x, A, p):
  
 def Synchrotron_Planck(x, A, alpha, b, extra_args = None ):
 	"""
-	x: frequency array
-	A: Amplitude
-	alpha: 
+	x: frequency array [GHz]
+	A: Amplitude []
+	alpha: shift normalization in frequency 
 	b: spectral index
 	"""
 	

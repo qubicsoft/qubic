@@ -1,0 +1,565 @@
+---
+jupyter:
+  jupytext:
+    formats: ipynb,Rmd
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.9.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+import random
+import healpy as hp
+import glob
+from scipy.optimize import curve_fit
+import pickle
+from importlib import reload
+import time
+import scipy
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import sys
+import pylab
+from pylab import arange, show, cm
+from astropy import units as uq
+import gc
+from scipy.stats import linregress
+
+### Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm3 
+import pysm3.units as u
+import pysm3.utils as utils
+import qubic
+from qubic import QubicSkySim as qss
+from qubic import fibtools as ft
+from qubic import camb_interface as qc
+from qubic import SpectroImLib as si
+from qubic import NamasterLib as nam
+from qubic import mcmc
+from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
+
+### FGBuster functions module
+from fgbuster import get_instrument, get_sky, get_observation, ilc, basic_comp_sep, harmonic_ilc, weighted_comp_sep, multi_res_comp_sep  # Predefined instrumental and sky-creation configurations
+from fgbuster.visualization import corner_norm, plot_component
+from fgbuster.mixingmatrix import MixingMatrix
+from fgbuster.observation_helpers import _rj2cmb, _jysr2rj, get_noise_realization
+
+# Imports needed for component separation
+from fgbuster import (separation_recipes, xForecast, CMB, Dust, Synchrotron, FreeFree, PowerLaw,  # sky-fitting model
+                      basic_comp_sep)  # separation routine
+
+import ComponentSeparation
+from Plots import Plots
+from PowerSpectrum import PowerSpec
+
+# Widgets
+
+import ipywidgets as widgets
+
+reload(qss)
+reload(ft)
+
+plt.rc('figure', figsize=(16, 10))
+plt.rc('font', size=15)
+plt.rcParams['image.cmap'] = 'jet'
+```
+
+```{python}
+
+```
+
+```{python}
+### Some initializations, to be replaced with specific path, or to modify in bash
+os.environ['QUBIC_DATADIR'] = '/home/mathias/Bureau/qubic/qubic'
+os.environ['QUBIC_DICT'] = '/home/mathias/Bureau/qubic/qubic/dicts'
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+```
+
+```{python}
+### Qubic dictionaries for 150GHz and 220Ghz
+config_150, config_220 = 'FI-150', 'FI-220'
+dictfilename150 = global_dir + '/doc/FastSimulator/FastSimDemo_{}.dict'.format(config_150)
+dictfilename220 = global_dir + '/doc/FastSimulator/FastSimDemo_{}.dict'.format(config_220)
+d150, d220 = qubic.qubicdict.qubicDict(), qubic.qubicdict.qubicDict()
+d150.read_from_file(dictfilename150)
+d220.read_from_file(dictfilename220)
+qub_dic = {'150': d150, '220': d220}
+center = qubic.equ2gal(d150['RA_center'], d150['DEC_center'])
+```
+
+```{python}
+### Read some stuff
+    # Read dictionary chosen
+d150['focal_length'] = 0.3
+d150['nside'] = 256
+    #Define the number of reconstruction bands:
+nbands = 3
+d150['nf_recon'] = nbands
+```
+
+```{python}
+def coverage_func(qub_dic, nbands, is_2_band, fq, npoints):
+    
+    """
+    Procedure that returns coverage maps either at both 150 and 220 or only 150 or 220
+    
+    inputs:
+        qub_dic: dict, of the form {'150': qub_dic_150, '220': ...}
+        nbands: int, number of subbands
+        is_2_band: boolean, if user wants coverage for only 1 frequency band or for 2
+        fq: int, either 150 or 220
+        npoints: int, number of pointing points
+    
+    returns:
+        q: qubic object
+        cov: np.array, coverage map
+    """
+    
+    if is_2_band == True:
+        qubic_dict_150, qubic_dict_220 = qub_dic['150'], qub_dic['220']
+        qubic_dict_150['nside'], qubic_dict_220['nside'] = d150['nside'], d150['nside']
+        qubic_dict_150['nf_recon'] = nbands
+        qubic_dict_220['nf_recon'] = nbands
+        qubic_dict_150['nf_sub'] = nbands
+        qubic_dict_220['nf_sub'] = nbands
+        qubic_dict_150['npointings'] = npoints
+        qubic_dict_220['npointings'] = npoints
+        p150 = qubic.get_pointing(qubic_dict_150)
+        p220 = qubic.get_pointing(qubic_dict_220)
+        s150 = qubic.QubicScene(qubic_dict_150)
+        s220 = qubic.QubicScene(qubic_dict_220)
+        q150 = qubic.QubicMultibandInstrument(qubic_dict_150)
+        q220 = qubic.QubicMultibandInstrument(qubic_dict_220)
+        _, nus_edge_150, _, _, _, _ = qubic.compute_freq(150, qubic_dict_150['nf_sub'])
+        _, nus_edge_220, _, _, _, _ = qubic.compute_freq(220, qubic_dict_220['nf_sub'])
+        a150 = qubic.QubicMultibandAcquisition(q150, p150, s150, qubic_dict_150, nus_edge_150)
+        a220 = qubic.QubicMultibandAcquisition(q220, p220, s220, qubic_dict_220, nus_edge_220)
+        cov1 = a150.get_coverage()
+        cov2 = a220.get_coverage()
+        a150 = 0
+        a220 = 0
+        cov1 = np.sum(cov1, axis=0)
+        cov2 = np.sum(cov2, axis=0)
+        cov1 /= np.max(cov1)
+        cov2 /= np.max(cov2)
+        return q150, q220, cov1, cov2
+    else:
+        gc.collect()
+        qubic_dict = qub_dic[str(fq)]
+        qubic_dict['nside'] = d150['nside']
+        qubic_dict['nf_recon'] = nbands
+        qubic_dict['nf_sub'] = nbands
+        qubic_dict['npointings'] = npoints
+        p = qubic.get_pointing(qubic_dict)
+        s = qubic.QubicScene(qubic_dict)
+        q = qubic.QubicMultibandInstrument(qubic_dict)
+        _, nus_edge, _, _, _, _ = qubic.compute_freq(fq, qubic_dict['nf_sub'])
+        a = qubic.QubicMultibandAcquisition(q, p, s, qubic_dict, nus_edge)
+        cov = a.get_coverage()
+        a = 0
+        cov = np.sum(cov, axis=0)
+        cov /= np.max(cov)
+        return q, cov
+```
+
+```{python}
+npix = 12 * d150['nside'] ** 2
+Nf = int(d150['nf_sub'])
+band = d150['filter_nu'] / 1e9
+filter_relative_bandwidth = d150['filter_relative_bandwidth']
+_, nus_edge, nus_in, _, _, Nbbands_in = qubic.compute_freq(band, Nf, filter_relative_bandwidth)
+```
+
+```{python}
+### Example of how it works ...
+q150, cov150 = coverage_func(qub_dic, nbands, False, 150, 3000)
+```
+
+```{python}
+
+```
+
+```{python}
+def give_me_simple_maps(mysky, freqs, fwhmdeg, okpix=None, signoise=None):
+    
+    allmaps = np.zeros((len(freqs), 3, 12*d150['nside']**2))
+    allmaps_noise = np.zeros((len(freqs), 3, 12*d150['nside']**2))
+    for i in range(len(freqs)):
+        
+        ### Get maps at infinite resolution
+        mymaps = mysky.sky.get_emission(freqs[i] * u.GHz) * utils.bandpass_unit_conversion(freqs[i] * u.GHz, 1, u.uK_CMB).T
+        
+        ### Convolve them to appropriate resolution
+        mymaps = hp.sphtfunc.smoothing(mymaps, fwhm=np.deg2rad(fwhmdeg[i]))
+        
+        if okpix is not None:
+            mymaps[:,~okpix] = 0
+        
+        if signoise is not None:
+            npixok = np.sum(okpix)
+            
+            a = np.random.randn(npixok)*signoise
+            b = np.random.randn(npixok)*signoise*np.sqrt(2)
+            c = np.random.randn(npixok)*signoise*np.sqrt(2)
+            
+            allmaps_noise[i, 0, okpix] = a
+            allmaps_noise[i, 1, okpix] = b
+            allmaps_noise[i, 2, okpix] = c
+            
+            mymaps[0,okpix] += a
+            mymaps[1,okpix] += b
+            mymaps[2,okpix] += c
+        allmaps[i,:,:] = mymaps
+            
+    return allmaps, allmaps_noise
+```
+
+```{python}
+okpix = (cov150 > (0.1*np.max(cov150)))
+signoise = 1e-10
+seed = 42
+sky_config = {'dust': 'd0', 'cmb': seed}
+Qubic_sky_150_cmbdust = qss.Qubic_sky(sky_config, d150)
+
+#fwhmdegs = [0.42999269, 0.39543908, 0.36366215]
+fwhmdegs = [0.42999269, 0.42999269, 0.42999269]
+freqs = [136.98433698, 148.95407944, 161.96974246]
+#freqs = [90, 150, 220]
+
+
+cmbdust, noise_cmbdust = give_me_simple_maps(Qubic_sky_150_cmbdust, freqs, fwhmdegs, okpix=okpix, signoise=signoise)
+cmbdust_only = cmbdust - noise_cmbdust
+```
+
+```{python}
+sky_config = {'cmb': seed}
+Qubic_sky_150_cmb = qss.Qubic_sky(sky_config, d150)
+
+cmb, noise_cmb = give_me_simple_maps(Qubic_sky_150_cmb, freqs, fwhmdegs, okpix=okpix, signoise=signoise)
+cmb_only = cmb - noise_cmb
+```
+
+```{python}
+sky_config = {'dust': 'd0'}
+Qubic_sky_150 = qss.Qubic_sky(sky_config, d150)
+
+dust, noise_dust = give_me_simple_maps(Qubic_sky_150, freqs, fwhmdegs, okpix=okpix, signoise=signoise)
+dust_only = dust - noise_dust
+```
+
+```{python}
+def same_resol(map1, nb_bands, fwhmdeg) :
+      
+    arg_max = np.argmax(fwhmdeg)
+    maps = np.zeros(((3, 3, 12*d150['nside']**2)))
+    tab_fwhm = []
+    
+    if np.sum(fwhmdeg) != fwhmdeg[0]*nb_bands :
+        print('Resolution changement')
+        for i in range(nb_bands) :    
+            if arg_max != i :
+                reso = np.sqrt(fwhmdeg[arg_max]**2 - fwhmdeg[i]**2)
+                tab_fwhm.append(np.sqrt(reso**2 + fwhmdeg[i]**2))
+                print(i, reso)
+                maps[i] = hp.sphtfunc.smoothing(map1[i], fwhm = np.deg2rad(reso))
+            else :
+                maps[i] = map1[i]
+                tab_fwhm.append(fwhmdeg[i])
+        
+            #tab_fwhm = [fwhmdeg[arg_max]] * nb_bands
+    else :
+        print('No changement')
+        maps = map1
+        tab_fwhm = fwhmdeg
+    
+    return maps, tab_fwhm
+```
+
+```{python}
+dust_same_resol, FWHM_same = same_resol(dust_only, nbands, fwhmdegs)
+cmb_same_resol, FWHM_same = same_resol(cmb_only, nbands, fwhmdegs)
+```
+
+```{python}
+FWHM_same
+```
+
+```{python}
+maps_same_resol, FWHM_same = same_resol(cmbdust, nbands, fwhmdegs)
+```
+
+```{python}
+reload(ComponentSeparation)
+```
+
+```{python}
+indf = 1
+R = ComponentSeparation.CompSep(d150).fg_buster(maps_same_resol, 
+                                        [CMB(), Dust(freqs[indf], temp = 20)], freq = freqs, fwhmdeg = FWHM_same)
+```
+
+```{python}
+R.x
+```
+
+```{python}
+cmb_est_fg, dust_est_fg = ComponentSeparation.CompSep(d150).basic_2_tab(R)
+```
+
+```{python}
+Plots.all_components(dust_est_fg, indf, center, 15, 'dust est')
+Plots.all_components(dust_same_resol, indf, center, 15, 'dust')
+```
+
+```{python}
+
+```
+
+```{python}
+#Plots.diff_2_maps(cmb_same_resol, cmb_est_fg, cov150, indf, center, 15, 'CMB', 'CMB est')
+```
+
+```{python}
+#a1, b1, a2, b2 = Plots.diff_2_hist(cmb_same_resol, cmb_est_fg, cov150, indf, 'CMB in', 'CMB out')
+```
+
+```{python}
+#Plots.diff_2_maps(dust_same_resol, dust_est_fg, cov150, indf, center, 15, 'Dust', 'Dust est')
+```
+
+```{python}
+#a1, b1, a2, b2 = Plots.diff_2_hist(dust_same_resol, dust_est_fg, cov150, indf, 'dust in', 'dust out')
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+## Spherical harmonic
+
+```{python}
+### Input Dls
+input_Dl = Qubic_sky_150_cmb.input_cmb_spectra
+if input_Dl is not None:
+    input_ell = np.arange(np.shape(input_Dl)[0])
+    print('input_ell shape = ', input_ell.shape)
+```
+
+```{python}
+# Create a Namaster object
+lmin = 20
+lmax = 2 * d150['nside'] - 1
+delta_ell = 8
+
+### Making mask - it will be automaticall apodized when instanciating the object with default (tunable) parameters
+mask = np.zeros(12 * d150['nside']**2)
+mask[okpix] = 1
+
+Namaster = nam.Namaster(mask, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+```
+
+```{python}
+ell_binned, b = Namaster.get_binning(d150['nside'])
+
+Dls_binned = Namaster.bin_spectra(input_Dl[:, 0], d150['nside'])
+print('lmax=', lmax)
+
+print(ell_binned.shape, Dls_binned.shape)
+
+plt.rc('figure', figsize=(8, 6))
+plt.figure()
+plt.plot(input_ell[:lmax], input_Dl[:lmax, 0])
+plt.plot(ell_binned, Dls_binned[0, :],'o')
+plt.xlabel('$\\ell$')
+plt.ylabel('$D_\\ell$')
+```
+
+# For CMB
+
+```{python}
+def Dl_2_Cl(D, C) :
+    Df = np.zeros(D.shape)
+    for i in range(D.shape[1]) :
+        for j in range(D.shape[0]) :
+            Df[j, i] = 2 * np.pi * D[j, i] / (C[j] * (C[j] + 1))
+    return Df
+```
+
+```{python}
+input_Dl = Qubic_sky_150_cmb.input_cmb_spectra
+```
+
+```{python}
+lmax = 2 * d150['nside'] - 1
+seenpix = (cov150 > (0.1*np.max(cov150)))
+mask = np.zeros(12 * d150['nside']**2)
+mask[seenpix] = 1
+```
+
+```{python}
+# Namaster object
+        
+Namaster = nam.Namaster(mask, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+```
+
+```{python}
+ell_binned, b = Namaster.get_binning(d150['nside'])
+
+Dls_binned = Namaster.bin_spectra(input_Dl[:, 0], d150['nside'])
+```
+
+```{python}
+# Get spectra
+leff_cmb_est, cells_cmb_est, w_cmb_est = Namaster.get_spectra(cmb_est_fg[indf], purify_e=True, purify_b=False, 
+                                                    beam_correction=FWHM_same[0], pixwin_correction=True)
+```
+
+```{python}
+# Get spectra
+leff_cmb, cells_cmb, w_cmb = Namaster.get_spectra(cmb_same_resol[indf], purify_e=True, purify_b=False, 
+                                                  beam_correction=FWHM_same[0], pixwin_correction=True)
+```
+
+```{python}
+clnames = ['TT', 'EE', 'BB', 'TE']
+
+plt.rc('figure', figsize=(12, 8))
+plt.figure()
+
+for i in range(4) :
+    plt.subplot(2, 2, i+1)
+    plt.plot(input_ell[:lmax], input_Dl[:lmax, i], '-k')
+    
+    plt.plot(leff_cmb[:lmax], cells_cmb[:lmax, i],'or', label = 'CMB', markersize = 6)
+    plt.plot(leff_cmb_est[:lmax], cells_cmb_est[:lmax, i],'xb', label = 'CMB est', markersize = 10)
+    plt.xlabel('$\\ell$')
+    plt.ylabel('$D_\\ell$')
+    plt.title(clnames[i])
+    plt.legend()
+plt.tight_layout()
+```
+
+```{python}
+
+```
+
+# For Dust
+
+```{python}
+# Get spectra
+leff_dust_est, cells_dust_est, w_dust_est = Namaster.get_spectra(dust_est_fg[indf], purify_e=True, 
+                            purify_b=False, beam_correction=FWHM_same[0], pixwin_correction=True)
+```
+
+```{python}
+# Get spectra
+leff_dust, cells_dust, w_dust = Namaster.get_spectra(dust_same_resol[indf], purify_e=True, 
+                            purify_b=False, beam_correction=FWHM_same[0], pixwin_correction=True)
+```
+
+We can fit the dust power spectrum by a power law :
+
+$$C_\ell \approx \beta \ell^{- \alpha}$$
+
+```{python}
+from scipy.optimize import curve_fit
+```
+
+```{python}
+def power_law(x, a, b):
+    """ Calcul la loi de puissance avec les constantes a et b """
+    return a*np.power(x, b)
+```
+
+```{python}
+Cl_est = Dl_2_Cl(cells_dust_est, leff_dust_est)
+Cl = Dl_2_Cl(cells_dust, leff_dust)
+```
+
+```{python}
+alpha = []
+beta = []
+for i in range(1, 3) :
+    pars, cov = curve_fit(f=power_law, xdata=leff_dust, ydata=Cl[:, i], p0=[2, 4], bounds=(-5, 5))
+    alpha.append(np.round(pars[1], 3))
+    beta.append(np.round(pars[0], 3))
+```
+
+```{python}
+
+```
+
+```{python}
+clnames = ['EE', 'BB']
+plt.rc('figure', figsize=(16, 8))
+
+plt.figure()
+for i in range(1, 3) :
+    plt.subplot(1, 2, i)
+    plt.semilogy(leff_dust[:lmax], beta[i-1] * leff_dust[:lmax]**alpha[i-1], '--k', label = '$\\beta \\ell^{-\\alpha}$')
+    plt.semilogy(leff_dust[:lmax], Cl[:lmax, i],'or', label = 'dust', markersize = 6)
+    plt.semilogy(leff_dust_est[:lmax], Cl_est[:lmax, i],'xb', label = 'dust est', markersize = 10)
+    plt.xlabel('$\\ell$')
+    plt.ylabel('$C_\\ell$')
+    plt.title(clnames[i-1] + '\n $\\alpha$ = {} \n $\\beta$ = {}'.format(-alpha[i-1], beta[i-1]))
+    plt.legend()
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

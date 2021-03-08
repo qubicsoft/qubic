@@ -378,8 +378,8 @@ def Synchrotron_Planck(x, A, alpha, b, extra_args = None ):
 	A: Amplitude
 	alpha: 
 	b: spectral index
-	
 	"""
+	
 	h = scipy.constants.h
 	c = scipy.constants.c
 	k = scipy.constants.k

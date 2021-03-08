@@ -38,7 +38,7 @@ def generate_region(az, el):
     
     return mult_az, mult_el
 
-def create_hall_pointing(d, az, el, hor_center, angspeed_psi = 0, maxpsi = 0, period = 0,
+def create_hall_pointing(d, az, el, hor_center, angspeed_psi = 0, maxpsi = 0, period = 0, fillfield = False,
                  date_obs = None, latitude = None, longitude = None, doplot = False,
                  fix_azimuth = None, random_hwp = True, verbose = False):
     
@@ -61,19 +61,24 @@ def create_hall_pointing(d, az, el, hor_center, angspeed_psi = 0, maxpsi = 0, pe
         QUBIC's pointing object
     '''
 
+    if fillfield:
+        az = np.arange(az[0], az[-1], hp.nside2resol(d['nside'], arcmin = True) / 60)
+        el = np.arange(el[0], el[-1], hp.nside2resol(d['nside'], arcmin = True) / 60)
+    
     nsamples = len(az)*len(el)
     
     mult_az, mult_el = generate_region(az,el)
     theta = np.array(mult_el) #- np.mean(el)
     phi = np.array(mult_az[0]) #- np.mean(az)
     
+
     # By defalut it computes HorizontalSampling in with SphericalSamplig
     pp = qubic.QubicSampling(nsamples, #azimuth = mult_az[0], elevation = mult_el[0],
                              date_obs = d['date_obs'], period = period, 
                             latitude = latitude, longitude = longitude)
     
     time = pp.date_obs + TimeDelta(pp.time, format='sec')
-    
+    print("time", np.shape(time))
     c2s = Cartesian2SphericalOperator('azimuth,elevation', degrees=True)
     h2e = CartesianHorizontal2EquatorialOperator(
         'NE', time, pp.latitude, pp.longitude)
@@ -90,13 +95,14 @@ def create_hall_pointing(d, az, el, hor_center, angspeed_psi = 0, maxpsi = 0, pe
     if doplot:
         fig, ax = subplots(nrows = 1, ncols = 2, figsize = (14,6))
         pixsH = hp.ang2pix(d['nside'], np.radians(90 - theta), np.radians(phi))
-        mapaH = np.ones((12*256**2))
+        mapaH = np.ones((12*d['nside']**2))
         mapaH[pixsH] = 100
         axes(ax[0])
-        hp.mollview(mapaH, title = "Horizontal coordinates", hold = True)
+        hp.gnomview(mapaH, title = "Horizontal coordinates", reso = 12,
+            rot = [np.mean(phi),np.mean(theta)], hold = True)
         hp.graticule(verbose = False)
         pixsEq = hp.ang2pix(d['nside'], np.radians(90 - pp.equatorial[:,1]), np.radians(pp.equatorial[:,0]))
-        mapaEq = np.ones((12*256**2))
+        mapaEq = np.ones((12*d['nside']**2))
         mapaEq[pixsEq] = 100
         axes(ax[1])
         hp.mollview(mapaEq, title = "Equatorial coordinates", hold = True)

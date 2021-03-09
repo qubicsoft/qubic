@@ -17,6 +17,11 @@ jupyter:
 ```
 
 ```{python}
+import os
+import sys
+
+sys.path.append('/home/james/mylibs/multifrequency/')
+sys.path.append('/home/james/')
 from CSFPA_main import MainProg
 from CSFPA_dataIO import IntensityCalcRAW, getXYcoords, dataIO, RetrieveVars
 from CSFPA_plots import MultiFIntensityTESPlot
@@ -31,9 +36,10 @@ import qubic
 ```
 
 ```{python}
-tesdatrep = '/home/james/GRASPdata/DavesTabSourceFIModel/TESdat/'
-pklrep = '/home/james/GRASPdata/DavesTabSourceFIModel/PKLfiles/'
-qbrep = '/home/james/GRASPdata/DavesTabSourceFIModel/MODALfiles/'
+# tesdatrep = '/home/james/GRASPdata/DavesTabSourceFIModel/TESdat/'
+# pklrep = '/home/james/GRASPdata/DavesTabSourceFIModel/PKLfiles/'
+# qbrep = '/home/james/GRASPdata/DavesTabSourceFIModel/MODALfiles/'
+qbrep = '/home/james/GRASPdata/MyTabSourceFIModel/150GHz/MODALfiles/'
 files = sorted(glob.glob(qbrep+'*.qb'))
 print('read', len(files), 'files')
 ```
@@ -74,6 +80,12 @@ MagXarr, PhaXarr, ReXarr, ImXarr, MagYarr, PhaYarr, ReYarr, ImYarr, vtxcntarr, P
 
 
 #MultiFIntensityTESPlot(IT,PixCenX, PixCenY, "singlepkl")
+```
+
+```{python}
+print(files[0])
+sampledata = np.loadtxt(files[0], skiprows=1).T
+print(sampledata.shape, sampledata[0,])
 ```
 
 ```{python}
@@ -129,7 +141,7 @@ addimy = np.zeros(len(data['Rex']))
 
 #baseline, TDhorns, FIhorns all interchangeable here
 cnt = 0
-for horn in TDhorns:
+for horn in baseline:
     
     print(qbrep+'FP_planar_grid_horn'+str(horn)+'_150_GHz_Mstyle.qb')
     file = qbrep+'FP_planar_grid_horn'+str(horn)+'_150_GHz_Mstyle.qb'
@@ -178,13 +190,15 @@ plt.show()
 ```{python}
 """must load vertex"""
 
-basedir = Qubic_DataDir(datafile='instrument.py', ) 
+#basedir = Qubic_DataDir(datafile='instrument.py', ) 
+basedir= '~/libraries/qubic/qubic'
 print('basedir : ', basedir)
 dictfilename = basedir + '/dicts/global_source_oneDet.dict'
 d = qubic.qubicdict.qubicDict()
 #d.read_from_file('../qubic/qubic/dicts/global_source_oneDet.dict')
 #change to moddded dictionary
-d.read_from_file('/home/james/libraries/qubic/qubic/dicts/global_source_oneDetFI.dict')
+d.read_from_file('/home/james/libraries/qubic/qubic/dicts/global_source_oneDet.dict')
+d['config']='FI'
 q = qubic.QubicMultibandInstrument(d)
 
 vtxs = q[0].detector.vertex
@@ -210,6 +224,7 @@ def IntegrateHornCombOnFP(it, xycoords, vtxs):
     #count number of data points per pixel for analysis/normalisation
     vtxcnt = 0  
     for i in vtxs:
+        
         cnti = cnti + 1
         cntj = 0
         
@@ -225,9 +240,9 @@ def IntegrateHornCombOnFP(it, xycoords, vtxs):
             y1 = i[0,1]
             x2 = i[2,0]
             y2 = i[2,1]
-            
-            if x >= x2 and x <= x1 and y >= y2 and y <= y1:
-                #print(x,y, x1, y1, x2, y2)
+            #print("no match", x,y, x1, y1, x2, y2)
+            if x >= x2 and x <= x1 and y <= y2 and y >= y1:
+                print("match", x,y, x1, y1, x2, y2)
                 #if the point is inside the bolometer area, add to array
                 intbol = np.append(intbol, it[cntj])
                 
@@ -254,9 +269,48 @@ PixCenX, PixCenY, bols = IntegrateHornCombOnFP(it, xycoords, vtxs)
 ```
 
 ```{python}
+print(bols.shape)
+print(vtxs[600,:,:])
+print(vtxs[600,0,0], vtxs[600,0,1])
+print(max(xycoords[0,:]), max(vtxs[:,0,0]))
+print(PixCenX[600],PixCenY[600], it[600])
+
+print(xycoords[1,:])
+```
+
+```{python}
+cnti = 0
+cntj = 0
+vtxcntarr = ([])
+#count number of data points per pixel for analysis/normalisation
+vtxcnt = 0  
+for i in vtxs:
+
+    cnti = cnti + 1
+    cntj = 0
+    
+    x1 = i[0,0]
+    y1 = i[0,1]
+    x2 = i[2,0]
+    y2 = i[2,1]
+    
+    #print(i[0,0], i[0,1], i[2,0], i[0,1])
+    
+    for j in range(len(xycoords[0,:])):
+        x = xycoords[0, j]
+        y = xycoords[1, j]
+        #print(x)
+        
+        if x >= x2 and x <= x1 and y <= y2 and y >= y1:
+            print("match")
+```
+
+```{python}
 plt.figure(figsize=(16,12))
 
+#plt.scatter(xycoords[0,:], xycoords[1,:], c=it, cmap='jet', marker='s', s=100)
 plt.scatter(PixCenX, PixCenY, c=bols, cmap='jet', marker='s', s=100)
+plt.scatter(-0.0264, 0.0264, c='r')
 plt.axis([-60, 60, -60, 60])
 plt.axis('equal')
 

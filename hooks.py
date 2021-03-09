@@ -73,7 +73,7 @@ from numpy.distutils.command.build_clib import build_clib
 from numpy.distutils.command.build_ext import build_ext
 from numpy.distutils.command.build_src import build_src
 from numpy.distutils.command.sdist import sdist
-from numpy.distutils.core import Command
+from distutils.cmd import Command
 from numpy.distutils.exec_command import find_executable
 from numpy.distutils.fcompiler import new_fcompiler
 from numpy.distutils.fcompiler.gnu import Gnu95FCompiler

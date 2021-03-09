@@ -128,6 +128,11 @@ def thph2uv(th, ph):
     cph = np.cos(ph)
     return np.array([sth * cph, sth * sph, cth])
 
+def ang_dist(thph0, thph1):
+    uv0 = thph2uv(thph0[0], thph0[1])
+    uv1 = thph2uv(thph1[0], thph1[1])
+    ang = np.arccos(np.sum(uv0*uv1))
+    return ang
 
 def uv2thph(uv):
     r = np.sum(uv ** 2, axis=0)
@@ -614,13 +619,13 @@ class SbModelIndepPeaks:
         if verbose:
             self.print_start()
 
-    def __call__(self, x, pars, return_peaks=False):
+    def __call__(self, x, mypars, return_peaks=False):
         # t0 = time.time()
         # self.ncalls += 1
         # print('Call #{0} - {1:5.2f} ms '.format(self.ncalls, 1000*(t0-self.time)))
         # self.time = t0
         x2d, y2d = x  # The Azimuth and elevation values of the pixels
-
+        pars = np.ravel(mypars)
         # The parameters ##########################################
         xc = pars[0]
         yc = pars[1]
@@ -765,8 +770,9 @@ def fit_sb(flatmap_init, az_init, el_init, model, newsize=70, dmax=5., az_center
     if verbose:
         print('Running Minuit with model: {}'.format(model.name))
         model.print_start()
+    mychi2 = ft.MyChi2_nocov(x, np.ravel(flatmap), np.zeros_like(np.ravel(flatmap)) + ss, model)
     fit = ft.do_minuit(x, np.ravel(flatmap), np.zeros_like(np.ravel(flatmap)) + ss, parsinit,
-                       functname=model, chi2=ft.MyChi2_nocov, rangepars=ranges, fixpars=fixpars,
+                       functname=model, chi2=mychi2, rangepars=ranges, fixpars=fixpars,
                        force_chi2_ndf=False, verbose=False, nohesse=True, precision=precision)
     fitpars = fit[1]
     fiterrs = fit[2]

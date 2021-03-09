@@ -1,0 +1,1077 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Generate Fringes from datasets
+
+In this notebook we produce the fringes files from the raw QUBIC datasets.
+
+They are saved into numpy files of the type: fringes_bs_17_21_2020-10-27_11.34.04.npy
+
+## Status of the code:
+There is clear room for improvement:
+- intercalibration are not good. This is addressed in the notebook called Analyse-Fringes-Oct-2020.Rmd
+- for the fringe construction: apparently the fringe patterns seems to disappear gradually with the number of cycles (see for example with fringe [49,53] and [17,21] in the last part of code (label: Try to improve method). This is not understood yet and is a big issue as for now it seems that integrating longer does not improve statistics. 
+
+```{python}
+# %matplotlib inline
+# #%matplotlib notebook
+
+from pylab import *
+import os
+import sys
+import time
+import pickle
+from importlib import reload
+
+
+# Specific science modules
+import healpy as hp
+import scipy
+import glob
+import numpy as np
+import matplotlib.pyplot as plt
+import scipy.optimize as sop
+import pandas as pd
+import scipy.signal
+
+
+from matplotlib.backends.backend_pdf import PdfPages
+import qubic
+from qubic import selfcal_lib as sc
+from qubicpack.utilities import Qubic_DataDir
+from qubicpack import qubicpack as qp
+from qubicpack.qubicfp import qubicfp
+import qubic.fibtools as ft
+import qubic.demodulation_lib as dl
+from qubic import fringes_lib as fl
+
+rc('figure', figsize=(16,7))
+rc('font', size=12)
+
+
+
+# Get a dictionary
+basedir = Qubic_DataDir(datafile='instrument.py', )
+print('basedir : ', basedir)
+dictfilename = basedir + '/dicts/global_source_oneDet.dict'
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+q = qubic.QubicInstrument(d)
+
+reload(sc)
+```
+
+# looping over TES and Datasets
+
+```{python}
+# ============== Get data ==============
+
+#### 27/10/2020
+#### Vtes = 5
+global_dir = '/Volumes/LaCie/QubicData/Calib-TD/Fringes/2020-10-27/'
+vtes = 5
+eco = 1
+out_dir = '/Users/hamilton/Qubic/Calib-TD/Fringes/Fringes_2020-10-27_Vtes_5_Eco_1'
+datasets = np.sort(glob.glob(global_dir+'/*RF_switch*'))
+equiv = [0,0,1,1,2,2,3,3,3,3,3,3,3,3]    
+
+#### 28/10/2020
+# global_dir = '/Volumes/LaCie/QubicData/Calib-TD/Fringes/2020-10-28/'
+# ### Vtes=4
+# datasets = np.sort(glob.glob(global_dir+'/*RF_switch_Vtes_4_*'))
+# vtes = 4
+# eco = 1
+# equiv = [0,0,1,1,2,2,3,3]    
+# out_dir = '/Users/hamilton/Qubic/Calib-TD/Fringes/Fringes_2020-10-28_Vtes_4_Eco_1'
+# ### Vtes=3.5
+# datasets = np.sort(glob.glob(global_dir+'/*RF_switch_Vtes_3.5_*'))
+# vtes = 3.5
+# eco = 1
+# equiv = [0,0,1,1,2,2,3,3]    
+# out_dir = '/Users/hamilton/Qubic/Calib-TD/Fringes/Fringes_2020-10-28_Vtes_3.5_Eco_1'
+### Vtes=4 & No Eccosorb
+# datasets = np.sort(glob.glob(global_dir+'/*RF_switch_NoEco_Vtes_4_*'))
+# vtes = 4
+# eco = 0
+# equiv = [0,0,1,1,2,2,3,3]    
+# out_dir = '/Users/hamilton/Qubic/Calib-TD/Fringes/Fringes_2020-10-28_Vtes_4_Eco_0'
+
+```
+
+```{python}
+horns = []
+ncycles = []
+wt = []
+for ds in datasets:
+    strs = ds.split('_')
+    ncycles.append(float(strs[strs.index('ncycles')+1]))
+    wt.append(float(strs[strs.index('wt')+1]))
+    horns.append([int(strs[-2]), int(strs[-1])])
+
+print('Ncycles')
+print(ncycles)
+print('WT')
+print(wt)
+print('Horns')
+print(horns)
+
+#### Equivalency class
+bseqindex, equiv = sc.find_equivalent_baselines(horns, q)
+all_equiv = np.unique(equiv)
+
+print('equivalency of baselines')
+print(equiv)
+print()
+print()
+print()
+print('Found {} equivalency classes:'.format(len(all_equiv)))
+reload(sc)
+figure()
+for i in range(len(all_equiv)):
+    dsequiv = where(np.array(equiv)==all_equiv[i])[0]
+    subplot(1,4,i+1, aspect='equal')
+    sc.plot_horns(q, simple=True)
+    title('Type = {}'.format(all_equiv[i]))
+    print(' - Type {}'.format(all_equiv[i]))
+    for j in range(len(dsequiv)):
+        print('     * dsnum={} [{},{}]'.format(dsequiv[j], horns[dsequiv[j]][0], horns[dsequiv[j]][1]))
+        sc.plot_baseline(q,[horns[dsequiv[j]][0], horns[dsequiv[j]][1]])
+    legend(fontsize=10)
+tight_layout()
+```
+
+```{python}
+# =================== Make a mask ==============
+# Mask to remove the 8 thermometer pixels
+mask = np.ones((17,17))
+mask[0, 12:] = np.nan
+mask[1:5, 16] = np.nan
+
+```
+
+### Try to improve method
+
+```{python}
+reload(fl)
+#### Read data for a given baseline
+ids = 0
+myds = [datasets[ids]]
+myhorns = horns[ids]
+stable_time = wt[ids]/1000
+print('Stable Time Th: {}'.format(stable_time))
+print(myds)
+print(myhorns)
+
+read_data = []
+#### Read data
+for asic in [1, 2]:
+    my_t_data, my_data, t_src, data_src = fl.get_data(myds[0], asic, doplot=False, src_data=True)
+    read_data.append([my_t_data, my_data])
+    tmin = my_t_data[0]
+    tmax = my_t_data[-1]
+    delta_t = tmax-tmin
+print(tmin, tmax, delta_t)
+
+```
+
+```{python}
+rc('font', size=12)
+TESnum = 95
+mydata = read_data[0]
+subplot(2,1,1)
+plot(mydata[0],  mydata[1][TESnum-1,:])
+title('TES #{}'.format(TESnum))
+subplot(2,1,2)
+title('Cal Source')
+### Remove a linear trand to source data
+linfct = np.poly1d(np.polyfit(t_src, data_src,1))
+data_src = data_src - linfct(t_src)
+plot(t_src, data_src)
+```
+
+```{python}
+# this is the best period for a given TES
+ppp, rms, per = fl.find_right_period(6 * stable_time, mydata[0], mydata[1][TESnum-1,:], delta=0.5, nb=20)
+subplot(1,2,1)
+plot(ppp,rms,'o-')
+xlabel('Test Period')
+ylabel('Folded data RMS')
+axvline(x=per, label='Best period: {0:6.3f}s'.format(per))
+legend()
+print(per)
+
+```
+
+```{python}
+np.shape(mydata[1])
+```
+
+```{python}
+rc('font', size=15)
+nsp_per = 240
+used_period = per.copy()
+nper = np.floor((delta_t/used_period)).astype(int)
+
+THEPIX = TESnum-1
+print(THEPIX)
+rebin = None
+verbose = None
+time = mydata[0]
+dd = mydata[1]
+tstart = 0
+period = 30.07831325301205
+
+# plot(time, dd[TESnum-1,:],label='Raw')
+# print('Data: {}, {}'.format(np.shape(time), np.shape(dd)))
+# print()
+
+### start_time and end_time
+tmin = time[0]
+tmax = time[-1]
+print('input data: tmin={}, tmax={}'.format(tmin,tmax))
+print('Period is: {}'.format(period))
+print('Tstart is: {}'.format(tstart))
+nper = np.floor((tmax-tstart)/period).astype(int)
+print('We have {} periods between tstart and tmax'.format(nper))
+tend = tstart + nper*period
+print('Tend is {}'.format(tend))
+okdata = (time >= tstart) & (time <= tend)
+data = dd[THEPIX, okdata]
+time = time[okdata]
+print('Time after cut: from {} to {}'.format(time[0], time[-1]))
+print('Shapes after cut: {} {}'.format(np.shape(time), np.shape(data)))
+print()
+
+oksrc = (t_src >= tstart) & (t_src <= tend)
+time_src = t_src[oksrc]
+dsrc = data_src[oksrc]
+
+# Filter the the data
+lowcut = 6e-6
+highcut = 5.
+nharm = 30
+notch = np.array([[1.724, 0.005, nharm]])
+
+newdata = ft.filter_data(time, data, lowcut, highcut, notch=notch, rebin=rebin, verbose=verbose)
+
+dsrc = ft.filter_data(t_src, dsrc, lowcut, highcut, notch=notch, rebin=rebin, verbose=verbose)
+
+print('Shape for time and filtered data: {} , {}'.format(np.shape(time), np.shape(newdata)))
+print()
+
+newd = scipy.signal.resample(newdata, nper*nsp_per)
+newsrc = scipy.signal.resample(dsrc, nper*nsp_per)
+newt = np.linspace(tstart, tend, nper*nsp_per)
+print('Resampled time goes from {} to {}'.format(newt[0], newt[-1]))
+print('Shape for Resampled time and filtered data: {} , {}'.format(np.shape(newt), np.shape(newd)))
+
+#subplot(1,2,1)
+plot(newt,dl.renorm(newd), label='Resampled (normalized) TES#{}'.format(TESnum))
+plot(newt, -dl.renorm(newsrc)/10-0.7, label='CalSrc (normalized) sign inverted')
+xlabel('Time')
+ylabel('Signal')
+ylim(-2,2)
+legend()
+```
+
+# New reconstruction on all TES
+But the t0 and period are determined on a reference TES (we'll have to figure out an automated technique to choose the TES on which these are determined)
+
+```{python}
+def find_t0(tfold, dfold, period, nconfigs = 6, doplot=False):
+    ### This finds time where configuration change in the square modulation
+    
+    # Average the signal over all periods
+    msignal = np.mean(dfold, axis=0)
+    # calculate the derivative and find where it is high
+    dsignal = np.abs(np.gradient(msignal))
+    md, sd = ft.meancut(dsignal, 3)
+    thr = np.abs(dsignal-md) > (3*sd)
+    
+    # Let's find clusters of high derivatives: 
+    # each time we take the first high derivative element
+    t_change = tfold[thr]
+    expected_stable_time = period/nconfigs
+    start_times = []
+    incluster = 0
+    for i in range(len(t_change)):
+        if incluster==0:
+            start_times.append(t_change[i])
+            incluster=1
+        if i > 0:
+            if (t_change[i]-t_change[i-1]) > (expected_stable_time * 0.6):
+                incluster = 0
+    start_times = np.array(start_times)
+    
+    # Now we take the median of all start_times modulo period/nconfigs
+    t0 = np.median(start_times % (period/nconfigs))
+
+    if doplot:
+        subplot(1,2,2)
+        plot(tfold, msignal, label='Mean over periods')
+        plot(tfold, dsignal, label='Derivative')
+        plot(tfold[thr], dsignal[thr], 'ro', label='High Derivative (>3sig)')
+        for i in range(len(start_times)):
+            if i==0:
+                lab = 'Found Start times'
+            else:
+                lab = None
+            axvline(x=start_times[i], ls='--', label=lab, alpha=0.5)
+        for i in range(6):
+            if i ==0:
+                lab = 'Median Start Time (modulo period/6)'
+            else:
+                lab = None
+            axvline(x=t0+i*period/nconfigs, color='r', ls='--', label=lab)
+        legend(framealpha=0.2)
+        title('t0 determination on Reference TES')
+        xlabel('Time in Period')
+        ylabel('Signal averaged over periods')
+        tight_layout()
+
+    
+    return t0
+
+#### Now we have various ways of calculating the average in each bin over periods
+# 1/ We can use the whole flat section or cut a bit at the beginning and at the end
+# 2/ Simple average
+# 3/ more fancy stuff: removing a slope determined by asking the three measurements of "all horns" to be equal
+def average_bins_periods(tfold, dfold, period, skip_rise=0., skip_fall=0.,
+                        median=True, remove_slope=False, return_residuals=False, 
+                         all_h = [True, False, False, True, False, True], speak=False,
+                        doplot=False):
+    # We assume that the array has been np.rolled so that the t0 is in time sample 0    
+    sh = np.shape(dfold)
+    nper = sh[0]
+    nsp_per = sh[1]
+    nconfigs=len(all_h)
+    
+    status = np.zeros(nconfigs)
+    
+    # First we remove the average of each period
+    #dfold = (dfold.T-np.mean(dfold,axis=1)).T
+    
+    # then we perform first an average / median in each of the stable sections of each
+    # period (possibly skipping beginning and end)
+    vals_per = np.zeros((nper, nconfigs))
+    errs_per = np.zeros((nper, nconfigs))
+    stable_time = period/nconfigs
+    for i in range(nconfigs):
+        tstart = i*stable_time + skip_rise*stable_time
+        tend = (i+1)*stable_time - skip_fall*stable_time
+        ok = (tfold >= tstart) & (tfold < tend)
+        for j in range(nper):
+            if median:
+                vals_per[j,i] = np.median(dfold[j,ok])                
+            else:
+                vals_per[j,i], _ = ft.meancut(dfold[j,ok],3) 
+            errs_per[j,i] = np.std(dfold[j,ok]) 
+    ttt = np.arange(nconfigs)*stable_time+stable_time/2
+            
+    if doplot:
+        #figure()
+        #subplot(1,2,1)
+        for i in range(nper):
+            if i==0:
+                lab = 'Raw'
+            else:
+                lab=None
+            errorbar(ttt, vals_per[i,:], yerr=errs_per[i,:], 
+                     xerr=stable_time/2, fmt='o', label=lab)
+        title('Configuration bins before levelling per period')
+        xlabel('Time in period')
+        ylabel('Value for each period')
+        legend()
+        tight_layout()
+        
+    if remove_slope:
+        ### We fit a slope between the "all horns open" configurations and remove it
+        xx = np.arange(6)
+        for i in range(nper):
+            pars, cc = np.polyfit(np.arange(6)[all_h], vals_per[i,all_h], 1, w=1./errs_per[i,all_h]**2, cov=True)
+            errfit = np.sqrt(np.diag(cc))
+            vals_per[i,:] = vals_per[i,:] - (pars[0]*xx+pars[1])  
+    else:
+        ### We just remove the average off "all horns open configurations"
+        for i in range(nper):
+            vals_per[i,:] -= np.mean(vals_per[i,all_h])
+        
+
+    # And finally we average/median all periods
+    vals = np.zeros(6)
+    errs = np.zeros(6)
+    for i in range(nconfigs):
+        if median:
+            vals[i] = np.median(vals_per[:,i])
+        else:
+            vals[i] = np.mean(vals_per[:,i])
+        errs[i] = np.std(vals_per[:,i])
+        ### Try to detect cases where switches did not work properly
+        if errs[i] > (4*np.mean(errs_per[:,i])):
+            status[i] += 1
+    if doplot:   
+        errorbar(ttt, vals, yerr=errs, xerr=stable_time/2, color='r', 
+                 label='Final Points', fmt='rx')
+        legend()
+    
+    if speak:
+        for i in range(nconfigs):
+            print('############')
+            print('config {}'.format(i))
+            for j in range(nper):
+                print('per {}: {} +/- {}'.format(j, vals_per[j,i], errs_per[j,i]))
+            print('============')
+            print('Value {} +/- {}'.format(vals[i], errs[i]))
+            print('============')
+    
+    ### Residuals in time domain (not too relevant as some baseloines were removed
+    ### as a result, large fluctuations in time-domain are usually well removed)
+    newdfold = np.zeros_like(dfold)
+    for i in range(6):
+        newdfold[:,i*nsp_per//6:(i+1)*nsp_per//6] = vals[i]
+    residuals = dfold-newdfold
+    
+    ### We would rather calculate the relevant residuals in the binned domain
+    ### between the final values and those after levelling
+    final_residuals = np.ravel(vals_per-vals)
+    mm, ss = ft.meancut(final_residuals,3)
+    if doplot:
+        figure()
+        plot(np.ravel(dfold), label='Input signal')
+        plot(np.ravel(newdfold), label='Reconstructed')
+        plot(np.ravel(residuals), label='Residuals')
+        xlabel('time samples')
+        ylabel('Time domain signal')
+        title('Time domain \n[large drift is actually remvoed]')
+        legend()
+        tight_layout()
+
+        figure()
+        plot(np.ravel(vals_per), ls='steps', label='Per Period')
+        plot(np.ravel(vals_per-vals_per+vals), ls='steps', label='Values')
+        plot(final_residuals, ls='steps', label='Residuals')
+        xlabel('Time')
+        ylabel('Values')
+        title('Final Residuals')
+        legend()
+        tight_layout()
+        
+    if doplot:
+        figure()
+        ttt = np.arange(nconfigs)*stable_time+stable_time/2
+        for i in range(nper):
+            if i==0:
+                lab = 'remove_slope={}'.format(remove_slope)
+            else:
+                lab=None
+            errorbar(ttt, vals_per[i,:], yerr=errs_per[i,:], 
+                     xerr=stable_time/2, fmt='x', alpha=0.3, color='orange', label=lab)
+        title('Final Configurations (after levelling)')
+        xlabel('Time in period')
+        ylabel('Value')
+        legend()
+        tight_layout()
+
+    if return_residuals:
+        return vals, errs, final_residuals, ss, status
+    else:
+        return vals, errs, status
+
+def get_baselines_configurations(datain, 
+                                 lowcut=1e-5, highcut = 5., notch=np.array([[1.724, 0.005, 30]]),
+                                 refTESnum=95, expected_period=30, all_h = [True, False, False, True, False, True],
+                                 nsp_per = 240, skip_rise=0.2, skip_fall=0.1, remove_slope=True,
+                                 force_period=None, force_t0=None,
+                                 verbose=True, doplot=True):
+    
+    sh = np.shape(datain[1])
+    ndet = sh[0]
+    nconfigs=len(all_h)
+    ########## First Step: Data Filtering ######################################
+    time = datain[0]
+    data = np.zeros_like(datain[1])
+    for i in range(ndet):
+        data[i,:] = ft.filter_data(time, datain[1][i,:], lowcut, highcut, notch=notch, rebin=True)
+    ############################################################################
+
+    ########## Determine the correct period on the reference TES ################
+    if force_period is None:
+        ppp, rms, period = fl.find_right_period(expected_period, time, data[refTESnum-1,:], delta=0.5, nb=100)
+        if verbose:
+            print('Found period {0:5.3f}s on TES#{1:}'.format(period, refTESnum))
+    else:
+        period=force_period
+        if verbose:
+            print('Using Forced period {0:5.3f}s'.format(period))
+
+    #############################################################################
+    
+    ########## Crop the data in order to have an integer number of periods #####
+    tmin = time[0]
+    tmax = time[-1]
+    nper = np.floor((tmax-tmin)/period).astype(int)
+    tend = tmin + nper*period
+    okdata = (time >= tmin) & (time <= tend)
+    time = time[okdata]
+    data = data[:, okdata]
+    #############################################################################
+    
+    ########## Resample the signal ##############################################
+    newdata = np.zeros((ndet, nper * nsp_per))
+    newt = np.linspace(tstart, tend, nper * nsp_per)
+    for i in range(ndet):
+        newdata[i,:] = scipy.signal.resample(data[i,:], nper*nsp_per)
+    if doplot:
+        figure()
+        subplot(1,2,1)
+        plot(newt, newdata[refTESnum-1,:])
+        xlabel('time')
+        ylabel('ADU')
+        title('TES #{}'.format(refTESnum))
+    #############################################################################
+    
+    ######### Now Fold the data #################################################
+    tdata = np.linspace(0, period, nsp_per)
+    newdata = np.reshape(newdata, (ndet, nper, nsp_per))
+    #############################################################################
+
+    ######### Now determine t0 on reference TES #################################
+    if force_t0 is None:
+        t0 = find_t0(tdata, newdata[refTESnum-1,:,:], period, doplot=doplot)
+        if verbose:
+            print('Found t0 {0:5.3f}s on TES#{1:}'.format(t0, refTESnum))
+    else:
+        t0 = force_t0
+        if verbose:
+            print('Using forced t0 {0:5.3f}s'.format(t0))
+    #############################################################################
+    
+    ######### Shift the folded data in order to have t0=0 ######################
+    newdata = np.roll(newdata, -int(t0/period*nsp_per), axis=2)
+    # Also roughly remove the average of the all_h configurations
+    ok_all_horns = np.zeros_like(tdata, dtype=bool)
+    for i in range(nconfigs):
+        if all_h[i]:
+            tmini = i*period/nconfigs + skip_rise*period/nconfigs
+            tmaxi = (i+1)*period/nconfigs - skip_fall*period/nconfigs
+            ok = (tdata >= tmini) & (tdata < tmaxi)
+            ok_all_horns[ok] = True
+    for i in range(ndet):
+        newdata[i,:,:] -= np.median(newdata[i,:,ok_all_horns])
+    #############################################################################
+    
+    ######### Do some plots #####################################################
+    if doplot:
+        figure()
+        subplot(1,2,1)
+        imshow(newdata[refTESnum-1,:,:], origin='lower', aspect='auto', extent=[0,np.max(tdata)+(tdata[1]-tdata[0])/2, 0, nper+0.5])
+        for i in range(6):
+            axvline(x=i*(period/6), color='k', lw=3)
+        title('Reference TES#{}'.format(refTESnum))
+        xlabel('Time in period')
+        ylabel('Period #')
+        subplot(1,2,2)
+        for i in range(nper):
+            plot(tdata, newdata[refTESnum-1, i,:], alpha=0.5)
+        for i in range(6):
+            axvline(x=i*(period/6), color='k', lw=3)
+            axvspan(i*(period/6), (i+skip_rise)*(period/6), alpha=0.1, color='red')
+            axvspan((i+(1.-skip_fall))*(period/6), (i+1)*(period/6), alpha=0.1, color='red')
+        title('Reference TES#{}'.format(refTESnum))
+    #############################################################################
+
+    ######### Calculate the baselines configurations in each TES
+    vals = np.zeros((ndet,nconfigs))
+    errs = np.zeros((ndet,nconfigs))
+    sigres = np.zeros(ndet)
+    status = np.zeros((ndet, nconfigs))
+    for i in range(ndet):
+        if i == (refTESnum-1):
+            speak = True
+            thedoplot = True * doplot
+        else:
+            speak = False
+            thedoplot=False
+        vals[i,:], errs[i,:], res, sigres[i], status[i,:] =  average_bins_periods(tdata, newdata[i,:,:], period, 
+                                                                     all_h=all_h,
+                                                                     skip_rise=skip_rise, 
+                                                                     skip_fall=skip_fall, 
+                                                                     remove_slope=remove_slope, 
+                                                                     return_residuals=True,
+                                                                     doplot=thedoplot)
+#         if speak:
+#             print(status[i,:])
+    if doplot:
+#         print('++++++++++++')
+#         print('Final :')
+#         for i in range(nconfigs):
+#             print('Config {}: {} +/- {}'.format(i, vals[refTESnum-1,i], errs[refTESnum-1,i]))
+        errorbar((np.arange(6)+0.5)*period/6, vals[refTESnum-1,:], yerr=errs[refTESnum-1,:], xerr=period/12,
+                 fmt='bo', label='Configuration values', barsabove=True, zorder=100, capsize=5, capthick=2)
+        legend()
+
+    return vals, errs, sigres, period, t0, status
+
+def weighted_sum(vals, errs, coeffs):
+    thesum = np.sum(coeffs * vals)
+    thesigma = np.sqrt(np.sum(coeffs**2 * errs**2))
+    return thesum, thesigma
+
+def get_baselines_configurations_asics(directory, asics=[1,2], 
+                                 lowcut=1e-5, highcut = 5., notch=np.array([[1.724, 0.005, 30]]),
+                                 refTESnum=95, expected_period=30, all_h = [True, False, False, True, False, True],
+                                 nsp_per = 240, skip_rise=0.2, skip_fall=0.1, remove_slope=True,
+                                 force_period=None, force_t0=None,
+                                 verbose=True, doplot=True, myhorns=None):
+    ### Prepare data read
+    a = qubicfp()
+    a.verbosity = 0
+    a.read_qubicstudio_dataset(directory)
+    
+    dsdate = myds.split('/')[-1].split('_')[0]
+    dstime = myds.split('/')[-1].split('_')[1]
+    add_title=(dsdate + ' '+dstime)
+    
+    ### Loop on asics
+    for asic in asics:
+        if verbose:
+            print('Doing ASIC#{}'.format(asic))
+        # read data and put in a list [time, dataTES]
+        datain = [a.timeaxis(datatype='science',asic=asic), a.timeline_array(asic=asic)]
+        # start time at 0
+        datain[0] -= datain[0][0]
+        
+        if asic != 1:
+            force_period = period
+            force_t0 = t0
+            mydoplot = False
+        else:
+            mydoplot = doplot
+            
+        myvals, myerrs, mysigres, period, t0, mystatus = get_baselines_configurations(datain,
+                                                                      lowcut=lowcut, highcut=highcut,notch=notch,
+                                                                      refTESnum=refTESnum, 
+                                                                      expected_period=expected_period, all_h = all_h, 
+                                                                      nsp_per = nsp_per,
+                                                                      skip_rise=skip_rise, skip_fall=skip_fall, 
+                                                                      remove_slope=remove_slope,
+                                                                      force_period=force_period, 
+                                                                      force_t0=force_t0,
+                                                                      verbose=verbose, doplot=mydoplot)
+        if asic == 1:
+            vals = myvals
+            errs = myerrs
+            sigres = mysigres
+            status = mystatus
+        else:
+            vals = np.concatenate((vals, myvals))
+            errs = np.concatenate((errs, myerrs))
+            sigres = np.concatenate((sigres, mysigres))
+            status = np.concatenate((status, mystatus))
+
+    
+    coeffs = np.array([1./3, -1, 1, 1./3, -1, 1./3])
+    fringes = np.zeros(256)
+    err_fringes = np.zeros(256)
+    for i in range(256):
+        fringes[i], err_fringes[i] = weighted_sum(vals[i,:], errs[i,:], coeffs)
+
+    ### Cut on residuals
+    mm, ss = ft.meancut(np.log10(sigres),3)
+    oktes = np.ones(256)
+    oktes[np.abs(np.log10(sigres)-mm) > 2*ss] = np.nan
+
+        
+    if doplot:
+        errorbar(period/2, fringes[refTESnum-1], yerr=err_fringes[refTESnum-1], xerr=period/2, 
+         fmt='ro', capsize=5, capthick=2, label='Fringe Value',zorder=200, lw=3)
+        legend()
+        
+        figure()
+        subplot(2,3,1)
+        a=hist(np.log10(sigres), bins=15, label='{0:5.2f} +/- {1:5.2f}'.format(mm,ss))
+        axvline(x=mm, color='r', ls='--')
+        axvline(x=mm-ss, color='r', ls=':')
+        axvline(x=mm+ss, color='r', ls=':')
+        axvline(x=mm-2*ss, color='r', ls=':')
+        axvline(x=mm+2*ss, color='r', ls=':')
+        xlabel('np.log10(TOD Residuals)')
+        title('{}\n'.format(myhorns)+add_title)
+        legend()
+
+        subplot(2,3,2)
+        title('TES OK (2sig) {}\n'.format(myhorns) +add_title)
+        residuals = ft.image_asics(all1=oktes)
+        imshow(residuals, vmin=0,vmax=1,cmap='bwr')
+        colorbar()
+
+        subplot(2,3,3)
+        title('TOD Residuals {}\n'.format(myhorns) +add_title)
+        residuals = ft.image_asics(all1=sigres * oktes)
+        imshow(residuals, vmin=0)
+        colorbar()
+
+        
+        fr2d = ft.image_asics(all1=fringes) * mask
+        err_fr2d = ft.image_asics(all1=err_fringes) *mask
+        mm, ss = ft.meancut(fringes,3)
+        rng = 3*ss
+        figure()
+        myinterp = 'Gaussian'
+        subplot(2,3,4)
+        imshow(np.nan_to_num(fr2d), cmap='bwr', vmin=-rng, vmax=rng, interpolation=myinterp)
+        ft.qgrid()
+        colorbar()
+        title('Fringe {}\n'.format(myhorns) +add_title)
+
+        subplot(2,3,5)
+        imshow(np.nan_to_num(err_fr2d), cmap='bwr', vmin=-rng, vmax=rng, interpolation=None)
+        ft.qgrid()
+        colorbar()
+        title('Error {}\n'.format(myhorns) +add_title)
+
+        subplot(2,3,6)
+        imshow(np.nan_to_num(np.abs(fr2d/err_fr2d)), vmin=0, vmax=3, interpolation=None)
+        ft.qgrid()
+        colorbar()
+        title('Values / Error {}\n'.format(myhorns) +add_title)   
+        tight_layout()
+        
+        figure()
+        imshow(np.nan_to_num(fr2d), cmap='bwr', vmin=-rng, vmax=rng, interpolation=myinterp)
+        ft.qgrid()
+        colorbar()
+        title('Fringe {}\n'.format(myhorns) +add_title)
+
+        figure()
+        imshow(np.nan_to_num(fr2d), cmap='bwr', vmin=-rng, vmax=rng, interpolation=None)
+        ft.qgrid()
+        colorbar()
+        title('Fringe {}\n'.format(myhorns) +add_title)
+        show()
+    return vals, errs, sigres, period, t0, fringes, err_fringes, oktes, status
+
+```
+
+```{python}
+myref = 95
+ids = 0
+myds = datasets[ids]
+myhorns = horns[ids]
+print(myds)
+print(myhorns)
+lowcut=1e-5
+highcut = 5.
+vals, errs, sigres, period, t0, fringes, err_fringes, oktes, status = get_baselines_configurations_asics(myds, 
+                                                                                          refTESnum=myref,
+                                                                                         myhorns=myhorns,
+                                                                                        lowcut=lowcut,
+                                                                                        highcut=highcut) 
+print(np.sum(status, axis=0))
+```
+
+### We have everything needed to recover the fringes from individual configurations
+This will be need when accounting for non-linearities...
+
+```{python}
+rc('figure', figsize=(16,6))
+list_tes = [40, 34, 33, 64, 51, 62]
+
+coeffs = np.array([1./3, -1, 1, 1./3, -1, 1./3])
+for thetes in list_tes:
+    figure()
+    subplot(1,2,1)
+    errorbar(np.arange(6)+0.5, vals[thetes-1,:], yerr=errs[thetes-1,:], 
+             xerr=0.5, fmt='ro', capsize=5, capthick=2, label='Configurations')
+    errorbar(3, fringes[thetes-1], yerr=err_fringes[thetes-1], xerr=3, 
+             fmt='bo', capsize=5, capthick=2, label='Fringe Value')
+    for i in range(len(coeffs)):
+        text(i+0.1,0, '{0:4.2f}'.format(coeffs[i]))
+    xlabel('Configuration')
+    ylabel('ADU')
+    title('TES #{}'.format(thetes))
+    legend()
+
+    subplot(1,2,2)
+    fringes = np.zeros(256)
+    err_fringes = np.zeros(256)
+    for i in range(256):
+        fringes[i], err_fringes[i] = weighted_sum(vals[i,:], errs[i,:], coeffs)
+
+    fr2d = ft.image_asics(all1=fringes * oktes) * mask
+    err_fr2d = ft.image_asics(all1=err_fringes * oktes) * mask
+    mm, ss = ft.meancut(fringes,3)
+    rng = 3*ss
+
+    myinterp = 'None'
+    imshow(np.nan_to_num(fr2d), cmap='bwr', vmin=-rng, vmax=rng, interpolation=myinterp)
+    ft.qgrid()
+    colorbar()
+    title('Fringe {}'.format(myhorns))
+
+    imgnums = ft.image_asics(all1=np.arange(1,257))
+    indx = np.argwhere(imgnums == thetes)[0]
+
+    plot(indx[1], indx[0], '+', color='lime',ms=15, mew=3)
+    show()
+```
+
+```{python}
+rng = 20000
+subplot(2,2,1)
+title('All configurations')
+xlabel('Configuration #')
+ylabel('TES#')
+imshow(vals, aspect='auto', vmin=-rng, vmax=rng)
+colorbar()
+
+subplot(2,2,2)
+imshow(errs, aspect='auto', vmin=-rng, vmax=rng)
+title('All configurations Error')
+xlabel('Configuration #')
+ylabel('TES#')
+colorbar()
+tight_layout()
+subplot(2,3,4)
+mm, ss = ft.meancut(np.log10(sigres),3)
+a=hist(np.log10(sigres), bins=15, label='{0:5.2f} +/- {1:5.2f}'.format(mm,ss))
+axvline(x=mm, color='r', ls='--')
+axvline(x=mm-ss, color='r', ls=':')
+axvline(x=mm+ss, color='r', ls=':')
+axvline(x=mm-2*ss, color='r', ls=':')
+axvline(x=mm+2*ss, color='r', ls=':')
+xlabel('np.log10(TOD Residuals)')
+legend()
+
+subplot(2,3,5)
+title('TES OK (residuals 2sig)')
+residuals = ft.image_asics(all1=oktes)
+imshow(residuals, vmin=0,vmax=1,cmap='bwr')
+colorbar()
+
+
+subplot(2,3,6)
+title('TOD Residuals')
+oktes = np.ones(len(sigres))
+oktes[np.log10(sigres) > 4.5] = np.nan
+residuals = ft.image_asics(all1=sigres * oktes)
+imshow(residuals)
+colorbar()
+
+tight_layout()
+```
+
+```{python}
+### Now the fringes
+coeffs = np.array([1./3, -1, 1, 1./3, -1, 1./3])
+fringes = np.zeros(256)
+err_fringes = np.zeros(256)
+for i in range(256):
+    fringes[i], err_fringes[i] = weighted_sum(vals[i,:], errs[i,:], coeffs)
+
+fr2d = ft.image_asics(all1=fringes * oktes) * mask
+err_fr2d = ft.image_asics(all1=err_fringes * oktes) * mask
+mm, ss = ft.meancut(fringes,3)
+rng = 3*ss
+
+myinterp = 'Gaussian'
+subplot(1,3,1)
+imshow(np.nan_to_num(fr2d), cmap='bwr', vmin=-rng, vmax=rng, interpolation=myinterp)
+ft.qgrid()
+colorbar()
+title('Fringe {}'.format(myhorns))
+
+subplot(1,3,2)
+imshow(np.nan_to_num(err_fr2d), cmap='bwr', vmin=-rng, vmax=rng, interpolation=myinterp)
+ft.qgrid()
+colorbar()
+title('Error{}'.format(myhorns))
+
+subplot(1,3,3)
+imshow(np.nan_to_num(np.abs(fr2d/err_fr2d)), vmin=0, vmax=3, interpolation=myinterp)
+ft.qgrid()
+colorbar()
+title('Values / Error {}'.format(myhorns))
+```
+
+# Now we can have a look at any dataset
+
+```{python}
+# ============== Get data ==============
+
+#### 27/10/2020
+#### Vtes = 5
+global_dir = '/Volumes/LaCie/QubicData/Calib-TD/Fringes/2020-10-27/'
+vtes = 5
+eco = 1
+out_dir = '/Users/hamilton/Qubic/Calib-TD/Fringes/Fringes_2020-10-27_Vtes_5_Eco_1'
+datasets = np.sort(glob.glob(global_dir+'/*RF_switch*'))
+equiv = [0,0,1,1,2,2,3,3,3,3,3,3,3,3]    
+
+#### 28/10/2020
+# global_dir = '/Volumes/LaCie/QubicData/Calib-TD/Fringes/2020-10-28/'
+# ### Vtes=4
+# datasets = np.sort(glob.glob(global_dir+'/*RF_switch_Vtes_4_*'))
+# vtes = 4
+# eco = 1
+# equiv = [0,0,1,1,2,2,3,3]    
+# out_dir = '/Users/hamilton/Qubic/Calib-TD/Fringes/Fringes_2020-10-28_Vtes_4_Eco_1'
+# ### Vtes=3.5
+# datasets = np.sort(glob.glob(global_dir+'/*RF_switch_Vtes_3.5_*'))
+# vtes = 3.5
+# eco = 1
+# equiv = [0,0,1,1,2,2,3,3]    
+# out_dir = '/Users/hamilton/Qubic/Calib-TD/Fringes/Fringes_2020-10-28_Vtes_3.5_Eco_1'
+### Vtes=4 & No Eccosorb
+# datasets = np.sort(glob.glob(global_dir+'/*RF_switch_NoEco_Vtes_4_*'))
+# vtes = 4
+# eco = 0
+# equiv = [0,0,1,1,2,2,3,3]    
+# out_dir = '/Users/hamilton/Qubic/Calib-TD/Fringes/Fringes_2020-10-28_Vtes_4_Eco_0'
+
+
+horns = []
+ncycles = []
+wt = []
+dsdate = []
+for ds in datasets:
+    strs = ds.split('_')
+    dsdate.append((strs[0]+' '+strs[1]).split('/')[-1])
+    ncycles.append(float(strs[strs.index('ncycles')+1]))
+    wt.append(float(strs[strs.index('wt')+1]))
+    horns.append([int(strs[-2]), int(strs[-1])])
+
+print('Dates')
+print(dsdate)
+print('Ncycles')
+print(ncycles)
+print('WT')
+print(wt)
+print('Horns')
+print(horns)
+
+#### Equivalency class
+bseqindex, equiv = sc.find_equivalent_baselines(horns, q)
+all_equiv = np.unique(equiv)
+
+print('equivalency of baselines')
+print(equiv)
+print()
+print()
+print()
+print('Found {} equivalency classes:'.format(len(all_equiv)))
+reload(sc)
+for i in range(len(all_equiv)):
+    dsequiv = where(np.array(equiv)==all_equiv[i])[0]
+    subplot(1,4,i+1, aspect='equal')
+    sc.plot_horns(q)
+    title('Type = {}'.format(all_equiv[i]))
+    print(' - Type {}'.format(all_equiv[i]))
+    for j in range(len(dsequiv)):
+        print('     * dsnum={} [{},{}]'.format(dsequiv[j], horns[dsequiv[j]][0], horns[dsequiv[j]][1]))
+        sc.plot_baseline(q,[horns[dsequiv[j]][0], horns[dsequiv[j]][1]])
+    legend(fontsize=10)
+```
+
+```{python}
+allvals = []
+allerrs= []
+allsigres = []
+allfringes = []
+allerr_fringes =[]
+alloktes = []
+allstatus = []
+for ids in range(len(datasets)):
+    myds = datasets[ids]
+    myhorns = horns[ids]
+    print('#########################################################################')
+    print(myds)
+    print(myhorns)
+    myref = 95
+    vals, errs, sigres, period, t0, fringes, err_fringes, oktes, status = get_baselines_configurations_asics(myds, 
+                                                                                          refTESnum=myref,
+                                                                                         myhorns=myhorns) 
+    allvals.append(vals)
+    allerrs.append(errs)
+    allsigres.append(sigres)
+    allfringes.append(fringes)
+    allerr_fringes.append(err_fringes)
+    alloktes.append(oktes)
+    allstatus.append(status)
+
+allvals = np.array(allvals)
+allerrs = np.array(allerrs)
+allsigres = np.array(allsigres)
+allfringes = np.array(allfringes)
+allerr_fringes = np.array(allerr_fringes)
+alloktes = np.array(alloktes)
+allstatus = np.array(allstatus)
+
+```
+
+```{python}
+# allvals = np.array(allvals)
+# allerrs = np.array(allerrs)
+# allsigres = np.array(allsigres)
+# allfringes = np.array(allfringes)
+# allerr_fringes = np.array(allerr_fringes)
+# alloktes = np.array(alloktes)
+
+np.shape(allerr_fringes)
+# for i in range(len(horns)):
+#     plot(allerr_fringes[i,:])
+plot(np.median(allerr_fringes, axis=0), color='k', lw=3, label='Median Error on Fringes')
+plot(np.median(allsigres, axis=0), color='r', lw=3, label='Median RMS residuals')
+legend()
+yscale('log')
+xlabel('TES number')
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+rc('figure', figsize=(16,10))
+## Make a map of TES#
+nums = np.arange(1,257)
+im = ft.image_asics(all1=nums)
+imshow(im, cmap='binary')
+ft.qgrid()
+for j in range(17):
+    for i in range(17):
+        if isfinite(im[i,j]):
+            text(j-0.25,i+0.25,int(im[i,j]), fontsize=12, color='r', fontweight='bold')
+```
+
+```{python}
+
+```

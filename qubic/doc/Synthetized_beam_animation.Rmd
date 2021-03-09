@@ -85,18 +85,25 @@ theta_order, phi_order, val = q._peak_angles(s, nu, q.detector.center, q.synthbe
 
 ```{python}
 # Plot
-nTES = 2
-for TES in range(nTES):
-#     hp.mollview(sb[TES], min=0, max=1e5, title=None)
-    hp.gnomview(sb[TES], min=0, max=1e5, rot=(0, 90), reso=30, title=None)
-    for p in range(npeaks):
-        th = theta[TES, p]
-        ph = phi[TES, p]
-        th2 = theta_order[TES, p]
-        ph2 = phi_order[TES, p]
-#         hp.visufunc.projscatter(th, ph, color='w', marker='+')
-        hp.visufunc.projtext(th, ph, str(p), color='w', fontsize=12)
-        hp.visufunc.projtext(th2 - 0.02, ph2, str(p), color='r', fontsize=12)
+TES = 2
+
+# plt.figure(figsize=(8, 8))
+# plt.axis('off')
+hp.gnomview(sb[TES], min=0, max=1e5, rot=(0, 90), reso=30, title='Grid numbering')
+for p in range(npeaks):
+    th = theta[TES, p]
+    ph = phi[TES, p]
+#     hp.visufunc.projscatter(th, ph, color='w', marker='+')
+    hp.visufunc.projtext(th-0.02, ph-0.02, str(p), color='w', fontsize=14)
+
+# plt.figure(figsize=(8, 8))
+# plt.axis('off')
+hp.gnomview(sb[TES], min=0, max=1e5, rot=(0, 90), reso=30, title='Intensity numbering')
+for p in range(npeaks):
+    th2 = theta_order[TES, p]
+    ph2 = phi_order[TES, p]
+#     hp.visufunc.projscatter(th2, ph2, color='w', marker='+')
+    hp.visufunc.projtext(th2+0.02, ph2+0.02, str(p), color='w', fontsize=14)
 ```
 
 #### Print on the sky the motion of the one peak for all TES 

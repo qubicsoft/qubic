@@ -21,8 +21,8 @@ sudo conda install -c conda-forge pysm3
 ```
 
 ```{python}
-import pysm
-import pysm.units as u
+import pysm3
+import pysm3.units as u
 import healpy as hp
 import numpy as np
 import matplotlib.pyplot as plt

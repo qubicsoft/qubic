@@ -8,30 +8,42 @@ from scipy.interpolate import RegularGridInterpolator
 from scipy.integrate import dblquad
 
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from qubicpack.pixel_translation import tes2index
+from qubicpack.pixel_translation import tes2index, make_id_focalplane
 
 __all__ = ['Model_Fringes_QubicSoft', 'Model_Fringes_Maynooth']
 
 
 # ========== Plot functions =============
-def plot_horns(q):
-    # xhorns = q.horn.center[:, 0]
-    # yhorns = q.horn.center[:, 1]
-    # plt.plot(xhorns, yhorns, 'ro')
-    q.horn.plot()
-    plt.xlabel('X_GRF [m]', fontsize=14)
-    plt.ylabel('Y_GRF [m]', fontsize=14)
+def plot_horns(q, simple=False, ax=None):
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    xhorns = q.horn.center[:, 0]
+    yhorns = q.horn.center[:, 1]
+    if simple:
+        ax.plot(xhorns, yhorns, 'ko')
+    else:
+        ax.scatter(xhorns[np.invert(q.horn.open)], yhorns[np.invert(q.horn.open)], c='k', s=500)
+        ax.scatter(xhorns[q.horn.open], yhorns[q.horn.open], c='k', s=500, alpha=0.1)
+
+    ax.set_xlabel('X_GRF [m]', fontsize=14)
+    ax.set_ylabel('Y_GRF [m]', fontsize=14)
+    ax.axis('square')
     return
 
 
-def plot_baseline(q, bs):
+def plot_baseline(q, bs, ax=None):
+    if ax is None:
+        fig, ax = plt.subplots()
     hcenters = q.horn.center[:, 0:2]
-    plt.plot(hcenters[np.array(bs) - 1, 0], hcenters[np.array(bs) - 1, 1], lw=4, label=bs)
+    ax.plot(hcenters[np.array(bs) - 1, 0], hcenters[np.array(bs) - 1, 1], lw=4, label=bs)
     return
 
 
-def scatter_plot_FP(q, x, y, FP_signal, frame, s=None, title=None, unit='[W / Hz]', **kwargs):
+def scatter_plot_FP(q, x, y, FP_signal, frame, fig=None, ax=None,
+                    s=None, title=None, unit='[W / Hz]', cbar=True, **kwargs):
     """
     Make a scatter plot of the focal plane.
     Parameters
@@ -54,22 +66,28 @@ def scatter_plot_FP(q, x, y, FP_signal, frame, s=None, title=None, unit='[W / Hz
     kwargs: any kwarg for plt.scatter()
 
     """
-
+    if fig is None:
+        fig, ax = plt.subplots()
     if s is None:
         if q.config == 'TD':
-            s = 180
+            s = ((fig.get_figwidth() / 35 * fig.dpi) ** 2)
         else:
-            s = 40
-    plt.scatter(x, y, c=FP_signal, marker='s', s=s, **kwargs)
-    clb = plt.colorbar()
-    clb.ax.set_title(unit)
-    plt.xlabel(f'X_{frame} [m]', fontsize=14)
-    plt.ylabel(f'Y_{frame} [m]', fontsize=14)
-    plt.axis('square')
-    plt.title(title, fontsize=14)
+            s = ((fig.get_figwidth() / 70 * fig.dpi) ** 2)
+    img = ax.scatter(x, y, c=FP_signal, marker='s', s=s, **kwargs)
+    if cbar:
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes('right', size='5%', pad=0.05)
+        clb = fig.colorbar(img, cax=cax)
+        clb.ax.set_title(unit)
+    ax.set_xlabel(f'X_{frame} [m]', fontsize=14)
+    ax.set_ylabel(f'Y_{frame} [m]', fontsize=14)
+    ax.axis('square')
+    ax.set_title(title, fontsize=14)
+    return
 
 
-def pcolor_plot_FP(q, x, y, FP_signal, frame, title=None, unit='[W / Hz]', **kwargs):
+def pcolor_plot_FP(q, x, y, FP_signal, frame, title=None, fig=None, ax=None, cbar=True,
+                   unit='[W / Hz]', **kwargs):
     """
     Make a pcolor plot of the focal plane.
     !!! x, y, FP_signal must be ordered as defined in q.detector.
@@ -91,17 +109,24 @@ def pcolor_plot_FP(q, x, y, FP_signal, frame, title=None, unit='[W / Hz]', **kwa
     kwargs: any kwarg for plt.pcolor()
 
     """
+    if fig is None:
+        fig, ax = plt.subplots()
+
     x2D = q.detector.unpack(x)
     y2D = q.detector.unpack(y)
     FP_signal2D = q.detector.unpack(FP_signal)
 
-    plt.pcolor(x2D, y2D, FP_signal2D, **kwargs)
-    clb = plt.colorbar()
-    clb.ax.set_title(unit)
-    plt.xlabel(f'X_{frame} [m]', fontsize=14)
-    plt.ylabel(f'Y_{frame} [m]', fontsize=14)
-    plt.axis('square')
-    plt.title(title, fontsize=14)
+    img = ax.pcolor(x2D, y2D, FP_signal2D, **kwargs)
+    if cbar:
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes('right', size='5%', pad=0.05)
+        clb = fig.colorbar(img, cax=cax)
+        clb.ax.set_title(unit)
+    ax.set_xlabel(f'X_{frame} [m]', fontsize=14)
+    ax.set_ylabel(f'Y_{frame} [m]', fontsize=14)
+    ax.axis('square')
+    ax.set_title(title, fontsize=14)
+    return
 
 
 def plot_horn_and_FP(q, x, y, FP_signal, frame, s=None, title=None, unit='[W / Hz]', **kwargs):
@@ -109,31 +134,18 @@ def plot_horn_and_FP(q, x, y, FP_signal, frame, s=None, title=None, unit='[W / H
     Plot the horn array in GRF and a scatter plot of the focal plane in GRF or ONAFP.
     See scatter_plot_FP()
     """
-    plt.subplots(1, 2)
-    plt.suptitle(title, fontsize=18)
-    plt.subplots_adjust(wspace=0.3)
+    fig, axs = plt.subplots(1, 2)
+    ax0, ax1 = np.ravel(axs)
+    fig.suptitle(title, fontsize=18)
+    fig.subplots_adjust(wspace=0.3)
 
-    plt.subplot(121)
-    q.horn.plot()
-    plt.axis('square')
-    plt.xlabel('X_GRF [m]', fontsize=14)
-    plt.ylabel('Y_GRF [m]', fontsize=14)
+    plot_horns(q, ax=ax0)
+    scatter_plot_FP(q, x, y, FP_signal, frame, s=s, fig=fig, ax=ax1, unit=unit, **kwargs)
 
-    plt.subplot(122)
-    if s is None:
-        if q.config == 'TD':
-            s = 180
-        else:
-            s = 40
-    plt.scatter(x, y, c=FP_signal, marker='s', s=s, **kwargs)
-    clb = plt.colorbar()
-    clb.ax.set_title(unit)
-    plt.xlabel(f'X_{frame} [m]', fontsize=14)
-    plt.ylabel(f'Y_{frame} [m]', fontsize=14)
-    plt.axis('square')
+    return
 
 
-def plot_BLs_eq(allBLs, BLs_sort, q):
+def plot_BLs_eq(allBLs, BLs_sort, q, simple=True, figsize=(12, 6)):
     """
     Plot the horn array and the observed baselines for each type (class of equivalence).
     Parameters
@@ -146,19 +158,18 @@ def plot_BLs_eq(allBLs, BLs_sort, q):
     """
     nclass_eq = len(BLs_sort)
 
-    plt.subplots(1, nclass_eq, figsize=(16, 6))
+    fig, axs = plt.subplots(1, nclass_eq, figsize=figsize)
+    axs = np.ravel(axs)
     for i in range(nclass_eq):
+        ax = axs[i]
         dataset_eq = BLs_sort[i]
-        ax = plt.subplot(1, nclass_eq, i + 1)
-        ax.set_aspect('equal')
-        plot_horns(q)
-        plt.title(f'Type {i}', fontsize=14)
+        plot_horns(q, simple=simple, ax=ax)
+        ax.set_title(f'Type {i}', fontsize=14)
         print(f'Type {i}:')
         for j in dataset_eq:
             print(f'  - {allBLs[j]}')
-            plot_baseline(q, allBLs[j])
-        plt.legend()
-
+            plot_baseline(q, allBLs[j], ax=ax)
+        ax.legend()
     return
 
 # ========== Tool functions =============
@@ -207,7 +218,7 @@ def get_horn_coordinates_ONAFP(q):
     return center_ONAFP
 
 
-def TES_Instru2coord(TES, ASIC, q, frame='ONAFP'):
+def TES_Instru2coord(TES, ASIC, q, frame='ONAFP', verbose=True):
     """
     From (TES, ASIC) numbering on the instrument to (x,y) coordinates in ONAFP or GRF frame.
     Returns also the focal plane index.
@@ -230,10 +241,12 @@ def TES_Instru2coord(TES, ASIC, q, frame='ONAFP'):
     if TES in [4, 36, 68, 100]:
         raise ValueError('This is a thermometer !')
     FP_index = tes2index(TES, ASIC)
-    print('FP_index =', FP_index)
+    if verbose:
+        print('FP_index =', FP_index)
 
     index_q = np.where(q.detector.index == FP_index)[0][0]
-    print('Index_q =', index_q)
+    if verbose:
+        print('Index_q =', index_q)
 
     centerGRF = q.detector.center[q.detector.index == FP_index][0]
     xGRF = centerGRF[0]
@@ -242,16 +255,18 @@ def TES_Instru2coord(TES, ASIC, q, frame='ONAFP'):
     if frame not in ['GRF', 'ONAFP']:
          raise ValueError('The frame is not valid.')
     elif frame == 'GRF':
-        print('X_GRF = {:.3f} mm, Y_GRF = {:.3f} mm'.format(xGRF * 1e3, yGRF * 1e3))
+        if verbose:
+            print('X_GRF = {:.3f} mm, Y_GRF = {:.3f} mm'.format(xGRF * 1e3, yGRF * 1e3))
         return xGRF, yGRF, FP_index, index_q
     elif frame == 'ONAFP':
         xONAFP = - yGRF
         yONAFP = xGRF
-        print('X_ONAFP = {:.3f} mm, Y_ONAFP = {:.3f} mm'.format(xONAFP * 1e3, yONAFP * 1e3))
+        if verbose:
+            print('X_ONAFP = {:.3f} mm, Y_ONAFP = {:.3f} mm'.format(xONAFP * 1e3, yONAFP * 1e3))
         return xONAFP, yONAFP, FP_index, index_q
 
 
-def get_TES_Instru_coords(q, frame='ONAFP'):
+def get_TES_Instru_coords(q, frame='ONAFP', verbose=True):
     """
     Same as TES_Instru2coord() but loop on all TES.
     """
@@ -264,19 +279,42 @@ def get_TES_Instru_coords(q, frame='ONAFP'):
     nTES = nASICS * 128
     x = np.zeros(nTES)
     y = np.zeros(nTES)
-    FP_index = np.zeros(nTES)
-    index_q = np.zeros(nTES)
+    FP_index = np.zeros(nTES, dtype=int)
+    index_q = np.zeros(nTES, dtype=int)
 
     for ASIC in range(1, nASICS + 1):
         for TES in range(1, 129):
-            print(f'\n ASIC {ASIC} - TES {TES}')
+            if verbose:
+                print(f'\n ASIC {ASIC} - TES {TES}')
             if TES not in thermos:
                 i = (TES - 1) + 128 * (ASIC - 1)
-                x[i], y[i], FP_index[i], index_q[i]= TES_Instru2coord(TES, ASIC, q, frame=frame)
+                x[i], y[i], FP_index[i], index_q[i]= TES_Instru2coord(TES, ASIC, q, frame=frame, verbose=verbose)
             else:
-                print('Thermometer !')
+                if verbose:
+                    print('Thermometer !')
 
     return x, y, FP_index, index_q
+
+
+def index2tes(FPindex, FPidentity=None):
+    """Return ASIC and TES numbers (instrument numbering)
+    from the FPindex coming from q.detector.index"""
+    if FPidentity is None:
+        FPidentity = make_id_focalplane()
+    TES = int(FPidentity.TES[FPidentity.index == FPindex])
+    ASIC = int(FPidentity.ASIC[FPidentity.index == FPindex])
+    return ASIC, TES
+
+
+def get_all_tes_numbers(q):
+    """Return a 2D array with ASIC and TES numbers ordered as in Qubic soft."""
+    FPidentity = make_id_focalplane()
+    ndet = q.detector.index.shape[0]
+    tes = np.zeros((ndet, 2), dtype=int)
+    for i in range(ndet):
+        FPindex = q.detector.index[i]
+        tes[i, 0], tes[i, 1] = index2tes(FPindex, FPidentity)
+    return tes
 
 
 def get_TESvertices_FromMaynoothFiles(rep, ndet=992):
@@ -368,8 +406,8 @@ def find_equivalent_baselines(all_bs, q):
     ### Baselines vectors
     all_vecs = np.zeros((len(all_bs), 2))
     for ib in range(len(all_bs)):
-        coordsA = hcenters[all_bs[ib][0], :]
-        coordsB = hcenters[all_bs[ib][1], :]
+        coordsA = hcenters[all_bs[ib][0] - 1, :]
+        coordsB = hcenters[all_bs[ib][1] - 1, :]
         all_vecs[ib, :] = coordsB - coordsA
 
     ### List of types of equivalence for each baseline: initially = -1

@@ -26,18 +26,17 @@ from fgbuster.observation_helpers import _rj2cmb, _jysr2rj, get_noise_realizatio
 # Imports needed for component separation
 from fgbuster import (separation_recipes, xForecast, CMB, Dust, Synchrotron, FreeFree, PowerLaw,  # sky-fitting model
                       basic_comp_sep)  # separation routine
+                                           
                       
-                      
-                      
-                      
-                      
-class CompSep :
+class CompSep(object) :
     
-    def __init__(self) :
+    def __init__(self, d) :
         
-        pass
+        self.nside = d['nside']
+        self.npix = 12 * self.nside**2
+        self.Nfin = int(d['nf_sub'])
     
-    def fg_buster(nb_bands, map1, comp1) :
+    def fg_buster(self, map1=None, comp=None, freq=None, fwhmdeg=None, Nside=0) :
         
         """
         --------
@@ -52,16 +51,24 @@ class CompSep :
                     ind_comp means the component (0 for CMB and 1 for comp1). 
         
         """
+        ins = get_instrument('Qubic' + str(self.Nfin) + 'bands')
         
-        comp = [CMB(), comp1]
+        component = comp
         
-        ins = get_instrument('Qubic' + str(nb_bands) + 'bands')
         
-        r = basic_comp_sep(comp, ins, map1)
+        ins.frequency = freq
+        ins.fwhm = fwhmdeg
+        
+        
+        print('freq = {} & fwhm = {}'.format(ins.frequency, ins.fwhm))
+        
+        
+        r = basic_comp_sep(comp, ins, map1, nside = Nside)
         
         return r
-        
-    def weighted(nb_bands, map1, coverage, comp1, ifreq) :
+    
+    '''    
+    def weighted(self.Nfin, map1, coverage, comp1, ifreq) :
         
         """
         --------
@@ -98,18 +105,34 @@ class CompSep :
             tab_cmb[0, j, :] = X[j].s[0, :, j]
             tab_dust[0, j, :] = X[j].s[1, :, j]
         return tab_cmb, tab_dust
-        
-    def basic_2_tab(X, nb_bands) :
-        tab_cmb = np.zeros(((nb_bands, 3, 12*256**2)))
-        tab_dust = np.zeros(((nb_bands, 3, 12*256**2)))
+    '''    
+    def basic_2_tab(self, X) :
     
-        for i in range(nb_bands) :
-            for j in range(3) :
-                tab_cmb[i, j, :] = X.s[0, j, :]
-                tab_dust[i, j, :] = X.s[1, j, :]
-        return tab_cmb, tab_dust
+        if X.s.shape[0] == 1 :
+            tab_cmb = np.zeros(((self.Nfin, 3, self.npix)))
         
-    def internal_linear_combination(nb_bands, map1) :
+            for i in range(self.Nfin) :
+                for j in range(3) :
+                    tab_cmb[i, j, :] = X.s[0, j, :]
+            
+            return tab_cmb
+        
+        elif X.s.shape[0] == 2 :
+        	
+            tab_cmb = np.zeros(((self.Nfin, 3, self.npix)))
+            tab_dust = np.zeros(((self.Nfin, 3, self.npix)))
+            
+            for i in range(self.Nfin) :
+                for j in range(3) :
+                    tab_cmb[i, j, :] = X.s[0, j, :]
+                    tab_dust[i, j, :] = X.s[1, j, :]
+        
+            return tab_cmb, tab_dust
+            
+        else :
+            raise TypeError("Please enter the good number of component")
+        
+    def internal_linear_combination(self, map1 = None) :
 		
         """
         
@@ -125,7 +148,7 @@ class CompSep :
         """
 		
         comp = [CMB()]
-        ins = get_instrument('Qubic' + str(nb_bands) + 'bands')
+        ins = get_instrument('Qubic' + str(self.Nfin) + 'bands')
         map_convert = np.transpose(map1, (0, 2, 1))
         A = []
         B = []
@@ -140,35 +163,32 @@ class CompSep :
 
         return r
     
-    def ilc_2_tab(X, nb_bands) :
+    def ilc_2_tab(self, X) :
     
-        tab_cmb = np.zeros(((3, 3, 12*256**2)))
+        tab_cmb = np.zeros(((3, 3, self.npix)))
         
         for i in range(3) :
             tab_cmb[0, i, :] = X[i].s[0]
         
         return tab_cmb
                       
+
                       
+
                       
+
                       
+
                       
+
                       
+
                       
+
                       
+
                       
+
                       
-                      
-                      
-                      
-                      
-                      
-                      
-                      
-                      
-                      
-                      
-                      
-                      
-                      
+
                       

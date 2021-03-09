@@ -6,7 +6,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.9.1
+      jupytext_version: 1.4.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -93,8 +93,8 @@ plt.rcParams['image.cmap'] = 'jet'
 
 ```{python}
 ### Some initializations, to be replaced with specific path, or to modify in bash
-os.environ['QUBIC_DATADIR'] = '/home/mathias/Bureau/qubic/qubic'
-os.environ['QUBIC_DICT'] = '/home/mathias/Bureau/qubic/qubic/dicts'
+#os.environ['QUBIC_DATADIR'] = '/home/mathias/Bureau/qubic/qubic'
+#os.environ['QUBIC_DICT'] = '/home/mathias/Bureau/qubic/qubic/dicts'
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
 ```
 
@@ -243,14 +243,14 @@ def plot_maps(map1, map2, qub_dic, sub_freq, seenpix):
                 reso=15,
                 sub=(3,3,3*i+1),
                 min=-nsig*sig, max=nsig*sig,
-                title= '$\mathbf{s}^{' + Stokes[i] +  '}$')   
+                title= '$\mathbf{s}^{' + Stokes[i] +  '}$'+' nu={}'.format(sub_freq))   
       
         hp.gnomview(map2[sub_freq,:,i], 
                 rot=center,
                 reso=15,
                 sub=(3,3,3*i+2),
                 min=-nsig*sig, max=nsig*sig,
-                title='$\hat{\mathbf{s}}^{' + Stokes[i] + '}$')
+                title='$\hat{\mathbf{s}}^{' + Stokes[i] + '}$'+' nu={}'.format(sub_freq))
         
         diff = map1[sub_freq,:,i]/map2[sub_freq,:,i]-1
         mm = round(np.mean(diff[seenpix]), 3)
@@ -510,12 +510,13 @@ reload(qss)
 
 ### QubicSkySim instanciation
 seed = 42
-sky_config = {'dust': 'd1', 'cmb': seed, 'synchrotron': 's0'}
+sky_config = {'dust': 'd1', 'cmb': seed} #, 'synchrotron': 's0'}
 Qubic_sky_150 = qss.Qubic_sky(sky_config, d150)
 
 ### We create a qubic map with JC's fast-simulator
 qubic_map_150, noiseless_maps_150, noise150, _ = Qubic_sky_150.get_partial_sky_maps_withnoise(spatial_noise=False,
-                                                                                  coverage=cov150)
+                                                                                  coverage=cov150, Nyears=400,
+                                                                                              nunu_correlation=False)
 
 ### Get all maps with same resolution
 qubic_map_150 = make_all_bands_same_resolution(q150, qubic_map_150)
@@ -525,6 +526,9 @@ noise150 = make_all_bands_same_resolution(q150, noise150)
 ```{python}
 ### CMB estimation with ILC
 CMB150_est, weights_list, variance_ILC = ILC(qubic_map_150, cov150, nbands)
+CMB150_est[1,:,:] = CMB150_est[0,:,:]
+CMB150_est[2,:,:] = CMB150_est[0,:,:]
+
 ```
 
 ```{python}
@@ -533,15 +537,121 @@ qss_sky_CMB = qss.Qubic_sky({'cmb': seed}, d150)
 CMB150_noisy, CMB150, _, _ = qss_sky_CMB.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=cov150)
 
 CMB150 = make_all_bands_same_resolution(q150, CMB150)
+
 CMB150_noisy = make_all_bands_same_resolution(q150, CMB150_noisy)
+```
+
+```{python}
+### Simulated CMB map for comparison
+qss_sky_Dust = qss.Qubic_sky({'dust': 'd1'}, d150)
+Dust150_noisy, Dust150, _, _ = qss_sky_Dust.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=cov150)
+
+Dust150 = make_all_bands_same_resolution(q150, Dust150)
+
+Dust150_noisy = make_all_bands_same_resolution(q150, Dust150_noisy)
+```
+
+```{python}
+subf = 0
+istk = 0
+
+#qubic_map_150 CMB+dust+noise QUBIC
+#noise150 Noise QUBIC 
+#CMB150 CMB pur noiseless
+#Dust150 Dust pure noiseless
+#CMB150_est CMB estimé par ILC
+
+
+nsig =3
+
+for subf in range(3):
+    for istk in range(3):
+        
+        figure()
+        ### select non zero pixels
+        okpix = qubic_map_150[0,:,0] != 0
+        
+        ### Calculate RMS
+        sig = np.std(qubic_map_150[subf,okpix,istk])
+        
+        hp.gnomview(qubic_map_150[subf,:,istk], sub=(1,5,1), rot=center, reso=15, 
+                    title='Qubic: CMB+Dust+noise \n S={} Nu={}'.format(istk, subf),
+                    min=-nsig*sig, max=nsig*sig)
+        
+        hp.gnomview(noise150[subf,:,istk], sub=(1,5,2), rot=center, reso=15, 
+                    title='Qubic: noise \n S={} Nu={}'.format(istk, subf),
+                    min=-nsig*sig, max=nsig*sig)
+        
+        hp.gnomview(CMB150[subf,:,istk], sub=(1,5,3), rot=center, reso=15, 
+                    title='Qubic: CMB \n S={} Nu={}'.format(istk, subf),
+                    min=-nsig*sig, max=nsig*sig)
+        
+        hp.gnomview(Dust150[subf,:,istk], sub=(1,5,4), rot=center, reso=15, 
+                    title='Qubic: Dust \n S={} Nu={}'.format(istk, subf),
+                    min=-nsig*sig, max=nsig*sig)
+        
+        hp.gnomview(qubic_map_150[subf,:,istk]-noise150[subf,:,istk]-CMB150[subf,:,istk]-Dust150[subf,:,istk], sub=(1,5,5), rot=center, reso=15, 
+                    title='Diff=0 \n S={} Nu={}'.format(istk, subf),
+                    min=-nsig*sig, max=nsig*sig)
+        show()
+
+
+```
+
+```{python}
+subf = 0
+istk = 0
+
+#qubic_map_150 CMB+dust+noise QUBIC
+#noise150 Noise QUBIC 
+#CMB150 CMB pur noiseless
+#Dust150 Dust pure noiseless
+#CMB150_est CMB estimé par ILC
+
+
+nsig =3
+
+for subf in range(3):
+    for istk in range(3):
+        
+        figure()
+        ### select non zero pixels
+        okpix = qubic_map_150[0,:,0] != 0
+        
+        ### Calculate RMS
+        sig = np.std(qubic_map_150[subf,okpix,istk])
+        
+        hp.gnomview(CMB150_est[subf,:,istk], sub=(1,5,1), rot=center, reso=15, 
+                    title='ILC: CMB \n S={} Nu={}'.format(istk, subf),
+                    min=-nsig*sig, max=nsig*sig)
+        
+        hp.gnomview(CMB150[subf,:,istk], sub=(1,5,2), rot=center, reso=15, 
+                    title='Qubic: CMB \n S={} Nu={}'.format(istk, subf),
+                    min=-nsig*sig, max=nsig*sig)
+        
+        hp.gnomview(CMB150_est[subf,:,istk]-CMB150[subf,:,istk], sub=(1,5,3), rot=center, reso=15, 
+                    title='Diff CMB \n S={} Nu={}'.format(istk, subf),
+                    min=-nsig*sig, max=nsig*sig)
+        
+        hp.gnomview(Dust150[subf,:,istk], sub=(1,5,4), rot=center, reso=15, 
+                    title='Qubic: Dust \n S={} Nu={}'.format(istk, subf),
+                    min=-nsig*sig, max=nsig*sig)
+
+        hp.gnomview(CMB150_est[subf,:,istk]-CMB150[subf,:,istk]-Dust150[subf,:,istk], sub=(1,5,5), rot=center, reso=15, 
+                    title='Diff CMB - Dust \n S={} Nu={}'.format(istk, subf),
+                    min=-nsig*sig, max=nsig*sig)
+
+        show()
+
+
 ```
 
 ## Plots
 
 ```{python}
-#seenpix = cov150 != 0
-#for i in range(3):
-    #plot_maps(CMB150, CMB150_est, d150, i, seenpix)
+seenpix = cov150 != 0
+for i in range(3):
+    plot_maps(CMB150, CMB150_est, d150, i, seenpix)
 ```
 
 ```{python}

@@ -57,7 +57,7 @@ class Plots :
                               title = title2 + '\n {} Stokes parameter'.format(Stokes[istk]), sub = (3, 3, 3*istk+2), min = -nsig * sig, max = nsig * sig)
             residue = map1[ifreq, istk, :] - map2[ifreq, istk, :]
             hp.gnomview(residue, rot = rot, reso = reso, 
-                              title = 'Residue \n {} Stokes parameter'.format(Stokes[istk]), sub = (3, 3, 3*istk+3), min = -nsig * sig, max = nsig * sig)
+                              title = 'Residue \n {} Stokes parameter'.format(Stokes[istk]), sub = (3, 3, 3*istk+3), min = -nsig * sig/10, max = nsig * sig/10)
 
         plt.show()
 
@@ -102,14 +102,14 @@ class Plots :
         plt.show()
 
         
+
         
+
         
+
         
+
         
+
         
-        
-        
-        
-        
-        
-        
+

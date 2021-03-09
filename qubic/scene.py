@@ -10,7 +10,7 @@ __all__ = ['QubicScene']
 
 class Atmosphere(object):
     def __init__(self, temperature, emissivity, transmission):
-        print('   Using Atmosphere: T={} em={} Trans={}'.format(temperature, emissivity, transmission))
+        #print('   Using Atmosphere: T={} em={} Trans={}'.format(temperature, emissivity, transmission))
         self.temperature = temperature
         self.emissivity = emissivity
         self.transmission = transmission

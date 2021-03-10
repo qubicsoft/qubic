@@ -163,6 +163,20 @@ class FringesAnalysis:
         return tdata, data, tsrc, dsrc
 
     def plot_TOD(self, ASIC=None, TES=None, xlim=None, figsize=(12, 6)):
+        """
+        Plot the TODs for a given TES. if TES is None, the plot is done for the reference TES.
+        Parameters
+        ----------
+        ASIC: int
+            ASIC number, 1 or 2 for the TD.
+        TES: int
+            TES index, between 1 and 128.
+        xlim: float
+            Upper abscissa limit.
+        figsize: bytearray
+            Size of the figure, as in matplotlib.
+
+        """
         if ASIC is None:
             ASIC = self.refASICnum
             TES = self.refTESnum
@@ -179,15 +193,15 @@ class FringesAnalysis:
 
     def find_right_period(self, TES, ASIC, filtering=True, delta=0.5, nb=100):
         """
-
+        Determine the true period of one cycle.
         Parameters
         ----------
         TES, ASIC: int
             TES and ASIC numbers.
         filtering: bool
             If True, data are filtered.
-        delta
-        nb
+        delta: float
+        nb: int
 
         Returns
         -------
@@ -215,8 +229,14 @@ class FringesAnalysis:
 
     def sort_TES_good2bad(self, median=True, doplot=True):
         """
+        Make a fit on the TODs, fit the steps of the cycle with time constants.
+        The residuals are used to order the TES from the best to the worst.
         Parameters
         ----------
+        median: bool
+            If True, a median and not a mean is done when folding the data using a function from fibtools.
+        doplot: bool
+            If True, a plot is made for the 5 best TES.
 
         Returns
         -------
@@ -465,6 +485,7 @@ class FringesAnalysis:
 
     def average_over_points_oneTES(self, tfold, droll, period, skip_rise=0., skip_fall=0.,
                                    median=True, rm_slope_percycle=False, doplot=True):
+        """Average on each step in the cycle."""
 
         # We assume that the array has been np.rolled so that the t0 is in time sample 0
         stable_time = period / self.nsteps
@@ -497,7 +518,8 @@ class FringesAnalysis:
         """
         Parameters
         ----------
-        m_points, err_m_points:
+        m_points, err_m_points: float
+            Mean and errors on each step for one TES.
         median: bool
             If True, takes the median and not the mean on each folded step.
         Ncycles_to_use: int
@@ -537,6 +559,29 @@ class FringesAnalysis:
                         Ncycles_to_use=None,
                         rm_slope_percycle=False,
                         force_period=None, force_t0=None, doplotTESsort=0):
+        """
+        Full analysis to get fringes from the TODs.
+        Parameters
+        ----------
+        median: bool
+        remove_median_allh: bool
+        Ncycles_to_use: int
+            Number of cycles to use. If None, all cycles will be used.
+        rm_slope_percycle: bool
+            If True, for each cycle, a slope on the steps where all horns are open is fit
+            and removed.
+        force_period: float
+            If None, the period is determined automatically but the period can be forced using this argument.
+        force_t0: float
+            If None, t0 is determined on the best TES but it can be given using this argument.
+        doplotTESsort: int
+            TES index once they are ordered from the best to the worst for which plots are made.
+            By default, it is 0, so plots are made for the best TES.
+
+        Returns
+        -------
+
+        """
 
         # ================= Determine the correct period reference TES ========
         if force_period is None:
@@ -664,7 +709,7 @@ class FringesAnalysis:
         return m_points, err_m_points, Mcycles, err_Mcycles, fringes1D, err_fringes1D, \
                fringes1D_percycle, err_fringes1D_percycle
 
-    # ================ Plot functions very specific to JC analysis
+    # ================ Plot functions very specific to the fringes analysis
     def _plot_finding_t0(self, tfold, msignal, dsignal, thr, start_times, t0, figsize=(12, 6)):
         plt.figure(figsize=figsize)
         plt.plot(tfold, msignal, label='Mean over periods')

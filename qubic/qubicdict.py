@@ -1,4 +1,3 @@
-from __future__ import division, print_function
 import os,sys
 import string
 
@@ -15,6 +14,8 @@ def ask_for( key ):
     return val
 
 class qubicDict( dict ):
+    # assign the directory where to find dictionaries by default
+    dicts_dir = os.path.dirname(__file__) + '/dicts'
 
     def __init__( self, ask = False):
         """
@@ -22,6 +23,8 @@ class qubicDict( dict ):
         """
         dict.__init__(self)
         self.ask = ask
+
+        return
 
     def __getitem__( self, key ):
         if key not in self:
@@ -35,6 +38,24 @@ class qubicDict( dict ):
         return dict.__getitem__( self, key )
 
     def read_from_file( self, filename ):
+        '''
+        read a given dictionary file
+        '''
+
+        # read from default location if the filename is not found
+        if not os.path.isfile(filename):
+            basename = os.path.basename(filename)
+
+            if 'QUBIC_DICT' in os.environ.keys():
+                # read from the users QUBIC_DICT path if defined
+                filename = os.environ['QUBIC_DICT']+os.sep+basename
+                if not os.path.isfile(filename):
+                    # try to read from the package path
+                    filename = self.dicts_dir+os.sep+basename
+                    if not os.path.isfile(filename):
+                        print('Could not read dictionary.  File not found: %s' % basename)
+                        return
+            
         f = open( filename )
         old = ''
         for line in f:

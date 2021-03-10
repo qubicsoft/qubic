@@ -13,3 +13,5 @@ __init__.py
 qubic/__init__.py
 qubic/_flib.so
 src/polarization.f90
+.project
+.pydevproject

@@ -4,8 +4,8 @@ jupyter:
     text_representation:
       extension: .Rmd
       format_name: rmarkdown
-      format_version: '1.2'
-      jupytext_version: 1.6.0
+      format_version: '1.1'
+      jupytext_version: 1.2.4
   kernelspec:
     display_name: Python 3
     language: python
@@ -67,10 +67,8 @@ component=0
 sel_det=True #If you want to select one detector
 
 # INSTRUMENT
-path = '/home/james/libraries/qubic/qubic/dicts/'
 d = qubic.qubicdict.qubicDict()
-#d.read_from_file(os.environ['QUBIC_DICT']+'global_source_oneDet.dict')
-d.read_from_file(path+'global_source_oneDet.dict')
+d.read_from_file(os.environ['QUBIC_DICT']+'global_source_oneDet.dict')
 d['nside'] = 512
 d['RA'] = 0
 d['DEC'] = 0
@@ -293,8 +291,7 @@ def select_mband_det(q,id):
 
 # MULTIBAND INSTRUMENT
 dmb = qubic.qubicdict.qubicDict()
-#dmb.read_from_file(os.environ['QUBIC_DICT']+'global_source_oneDet.dict')
-dmb.read_from_file(path+'global_source_oneDet.dict')
+dmb.read_from_file(os.environ['QUBIC_DICT']+'global_source_oneDet.dict')
 dmb['nside'] = 512
 dmb['RA'] = 0
 dmb['DEC'] = 0

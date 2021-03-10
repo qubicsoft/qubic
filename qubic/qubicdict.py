@@ -49,12 +49,14 @@ class qubicDict( dict ):
             if 'QUBIC_DICT' in os.environ.keys():
                 # read from the users QUBIC_DICT path if defined
                 filename = os.environ['QUBIC_DICT']+os.sep+basename
+
+            if not os.path.isfile(filename):
+                # try to read from the package path
+                filename = self.dicts_dir+os.sep+basename
+
                 if not os.path.isfile(filename):
-                    # try to read from the package path
-                    filename = self.dicts_dir+os.sep+basename
-                    if not os.path.isfile(filename):
-                        print('Could not read dictionary.  File not found: %s' % basename)
-                        return
+                    print('Could not read dictionary.  File not found: %s' % basename)
+                    return
             
         f = open( filename )
         old = ''

@@ -21,7 +21,8 @@ class FringesAnalysis:
     def __init__(self, datafolder, date, q, baseline, ncycles=20, stable_time=5.,
                  asics=[1, 2], src_data=False, subtract_t0=True,
                  refTESnum=None, refASICnum=None, allh=[True, False, False, True, False, True], nsp_per=240,
-                 lowcut=1e-5, highcut=2., nbins=120, notch=np.array([[1.724, 0.005, 10]]), sigma_conv_astropy=0.7,
+                 lowcut=1e-5, highcut=2., nbins=120, notch=np.array([[1.724, 0.005, 10]]),
+                 fraction_bad_TES=0.75, sigma_conv_astropy=0.7, sort_TES=True,
                  verbose=False):
         """
         Parameters
@@ -59,8 +60,14 @@ class FringesAnalysis:
             Number of bins for filtering.
         notch: array
             Define a notch filter.
+        fraction_bad_TES: float
+            Fraction between 0 and 1 to set a threshold for bad TES.
+            For example, if fraction=0.75, 1/4 of the detectors will be masked.
         sigma_conv_astropy: float
             Sigma of the Gaussian for the Astropy convolution for plots, in numbers of detectors.
+        sort_TES: bool
+            If False, do not sort the TES from good to bad. It can be useful in some cases, for example,
+            when you do not want to make the full analysis but simply look at some TOD.
         verbose: bool
         """
         self.datafolder = datafolder
@@ -78,6 +85,7 @@ class FringesAnalysis:
         self.highcut = highcut
         self.nbins = nbins
         self.notch = notch
+        self.fraction_bad_TES = fraction_bad_TES
         self.sigma_conv_astropy = sigma_conv_astropy
         self.verbose = verbose
 
@@ -89,16 +97,24 @@ class FringesAnalysis:
         self.nsteps = len(self.allh)
         self.expected_period = self.stable_time * self.nsteps
 
-        self.detectors_sort, self.oktes, self.ctimes = self.find_goodTES()
-        if self.verbose:
-            print('******** 10 best TES found:', self.detectors_sort[:10, 0], self.detectors_sort[:10, 1])
-            print('******** Bad detectors:', int(len(self.oktes) - np.nansum(self.oktes)), '/', len(self.oktes))
+        if sort_TES:
+            self.detectors_sort, self.ctimes = self.sort_TES_good2bad()
+            self.mask_bad_TES = self.make_mask_bad_tes(self.detectors_sort, fraction=self.fraction_bad_TES)
+
+            if self.verbose:
+                print('******** 10 best TES found:', self.detectors_sort[:10, 0], self.detectors_sort[:10, 1])
+
+                nbad_TES = int(self.ndet - self.fraction_bad_TES * self.ndet)
+                print(f'******** With fraction_bad_TES = {self.fraction_bad_TES}, '
+                      f'{nbad_TES}/{self.ndet} are considered as bad.')
         if refTESnum is not None:
             self.refTESnum = refTESnum
             self.refASICnum = refASICnum
-        else:
+        elif refTESnum is None and sort_TES:
             self.refTESnum = self.detectors_sort[0, 0]
             self.refASICnum = self.detectors_sort[0, 1]
+        else:
+            raise ValueError('You should either give a reference TES and ASIC or set sort_TES to True.')
 
 
         # Reference period determine on reference TES
@@ -198,7 +214,7 @@ class FringesAnalysis:
 
         return ppp, rms, period
 
-    def find_goodTES(self, median=True, doplot=True):
+    def sort_TES_good2bad(self, median=True, doplot=True):
         """
         Parameters
         ----------
@@ -217,7 +233,7 @@ class FringesAnalysis:
         err_datafold = np.zeros_like(datafold)
         residuals_time = np.zeros_like(datafold)
         if self.verbose:
-            print('******** Start finding good TES.***********')
+            print('******** Start sort TES from good to bad.***********')
         for i, ASIC in enumerate(self.asics):
             # Filter, fold and normalize the data
             dfold, tfold, _, errfold, _, _ = ft.fold_data(self.tdata[i, :],
@@ -268,19 +284,37 @@ class FringesAnalysis:
         detectors_sort[:, 0] = (std_argsort % self.ndet_oneASIC) + 1   # TES
         detectors_sort[:, 1]  = (std_argsort // self.ndet_oneASIC) + 1 # ASIC
 
-        # Select good TES
-        oktes = np.ones(self.ndet)
-        alldet = detectors_sort[:, 0] + self.ndet_oneASIC *  (detectors_sort[:, 1] - 1) # All TES from 1 to 128*nasics
-        oktes[alldet[int(0.75 * self.ndet):] - 1] = np.nan
-        # oktes[std > np.min(std) * 10] = np.nan
-
         # Plot the 5 best TES
         if doplot:
             for p in range(5):
                 plot_folding_fit(detectors_sort[p, 0], detectors_sort[p, 1], tfold, datafold, residuals_time,
                                  self.expected_period, params, err_params)
 
-        return detectors_sort, oktes, ctimes
+        return detectors_sort, ctimes
+
+    def make_mask_bad_tes(self, detectors_sort, fraction=0.75):
+        """
+
+        Parameters
+        ----------
+        detectors_sort: array
+            TES numbers ordered from the best to the worst.
+            It is a 2D array containing the TES and the ASIC index.
+        fraction: float
+            Fraction between 0 and 1 to set a threshold for bad TES.
+            For example, if fraction=0.75, 1/4 of the detectors will be masked.
+
+        Returns
+        -------
+        mask: 1 for good TES and NAN for bad TES.
+        """
+
+        mask = np.ones(self.ndet)
+        # All TES in a 1D array from 1 to 128*nasics
+        alldet = detectors_sort[:, 0] + self.ndet_oneASIC * (detectors_sort[:, 1] - 1)
+        mask[alldet[int(fraction * self.ndet):] - 1] = np.nan
+        return mask
+
 
     def find_high_derivative_clusters(self, tfold, thr, period):
         """ Find clusters of high derivatives: each time we take the first high derivative element."""
@@ -672,7 +706,7 @@ class FringesAnalysis:
                 else:
                     skip_rise = 1.
                 skip_fall = 0.5
-                print(skip_rise, skip_fall)
+                # print(skip_rise, skip_fall)
 
                 # If TES in doplotTESsort, active the plot option
                 want_plot = np.any((self.detectors_sort[doplotTESsort, 0] == TES) & \
@@ -740,19 +774,19 @@ class FringesAnalysis:
         fig.suptitle(f'Fringes and errors - BL {self.baseline} - {self.date}')
         ax0, ax1, ax2, ax3 = axs.ravel()
         # Make a convolution with Astropy (just to see better the fringes)
-        fringes2D = make2Dfringes_data(fringes1D * self.oktes)
+        fringes2D = make2Dfringes_data(fringes1D * self.mask_bad_TES)
         fringes2D_conv = astropy_convolution(fringes2D, sigma=self.sigma_conv_astropy)
         cmap_bwr = make_cmap_nan_black('bwr')
         plot_fringes_imshow(fringes2D_conv, fig=fig, ax=ax0, cmap=cmap_bwr,
                             title='Astropy convolution', mask=make_mask2D_thermometers_TD())
-        plot_fringes_scatter(self.q, self.xTES, self.yTES, fringes1D * self.oktes, s=100,
+        plot_fringes_scatter(self.q, self.xTES, self.yTES, fringes1D * self.mask_bad_TES, s=100,
                              fig=fig, ax=ax1, cmap=cmap_bwr)
 
         # Errors
         cmap_viridis = make_cmap_nan_black('viridis')
-        plot_fringes_scatter(self.q, self.xTES, self.yTES, err_fringes1D * self.oktes, s=100, fig=fig, ax=ax2,
+        plot_fringes_scatter(self.q, self.xTES, self.yTES, err_fringes1D * self.mask_bad_TES, s=100, fig=fig, ax=ax2,
                              cmap=cmap_viridis, normalize=False, vmin=0., vmax=400, title='Errors')
-        plot_fringes_scatter(self.q, self.xTES, self.yTES, np.abs(fringes1D / err_fringes1D) * self.oktes,
+        plot_fringes_scatter(self.q, self.xTES, self.yTES, np.abs(fringes1D / err_fringes1D) * self.mask_bad_TES,
                              s=100, fig=fig, ax=ax3, cmap=cmap_viridis, normalize=False, vmin=0., vmax=3.,
                              title='|Values/Errors|')
 
@@ -864,7 +898,7 @@ class FringesAnalysis:
 # =========================================
 class SaveFringesFitsPdf:
     def __init__(self, q, date_obs, allBLs, allstable_time, allNcycles, xTES, yTES, allfringes1D, allerr_fringes1D,
-                 allokTES=None, nsteps=6, ecosorb='yes', frame='ONAFP'):
+                 allmask_bad_TES=None, nsteps=6, ecosorb='yes', frame='ONAFP'):
         self.q = q
         self.date_obs = date_obs
         self.allBLs = allBLs
@@ -876,7 +910,7 @@ class SaveFringesFitsPdf:
         self.yTES = yTES
         self.allfringes1D = allfringes1D
         self.allerr_fringes1D = allerr_fringes1D
-        self.allokTES = allokTES
+        self.allmask_bad_TES = allmask_bad_TES
         self.nsteps = nsteps
         self.ecosorb = ecosorb
         self.frame = frame
@@ -900,7 +934,7 @@ class SaveFringesFitsPdf:
         """ Make a dictionary with all relevant data."""
         fdict = {'BLS': self.allBLs, 'Stable_time': self.allstable_time, 'NCYCLES': self.allNcycles,
                  'X_TES': self.xTES, 'Y_TES': self.yTES, 'FRINGES_1D': self.allfringes1D,
-                 'ERRORS': self.allerr_fringes1D, 'OK_TES': self.allokTES}
+                 'ERRORS': self.allerr_fringes1D, 'MASK_BAD_TES': self.allmask_bad_TES}
 
         return fdict
 
@@ -918,11 +952,11 @@ class SaveFringesFitsPdf:
                 fig.subplots_adjust(wspace=0.5)
                 fig.suptitle(f'Fringes - BL {self.allBLs[i]} - {self.date_obs} - type {self.BLs_type[i]}')
                 ax0, ax1 = axs.ravel()
-                fringes2D = make2Dfringes_data(self.allfringes1D[i]* self.allokTES[i])
+                fringes2D = make2Dfringes_data(self.allfringes1D[i]* self.allmask_bad_TES[i])
                 fringes2D_conv = astropy_convolution(fringes2D)
                 plot_fringes_imshow(fringes2D_conv, fig=fig, ax=ax0, mask=mask, title='Astropy convolution',
                                     cmap=make_cmap_nan_black('bwr'))
-                plot_fringes_scatter(self.q, self.xTES, self.yTES, self.allfringes1D[i] * self.allokTES[i],
+                plot_fringes_scatter(self.q, self.xTES, self.yTES, self.allfringes1D[i] * self.allmask_bad_TES[i],
                                      s=80, fig=fig, ax=ax1)
                 pp.savefig()
         return
@@ -971,6 +1005,45 @@ def read_fits_fringes(file):
 
 
 # ============== Tool functions ==============
+def decide_bad_TES(allmask_bad_TES, condition=2):
+    """
+    Make a mask for bad detectors, common to all images.
+    Parameters
+    ----------
+    allmask_bad_TES: list
+        List with the mask of the worst TES for each image.
+    condition: int
+        Number of images where the detector must be NAN to consider it as bad.
+
+    """
+    nimages = len(allmask_bad_TES)
+    ndet = allmask_bad_TES[0].shape[0]
+
+    the_mask = np.zeros(ndet)
+    for k in range(nimages):
+        if k == 0:  # replace NAN by 1
+            the_mask[np.isnan(allmask_bad_TES[k])] = 1
+        else:  # Add 1 if it is NAN
+            the_mask[np.isnan(allmask_bad_TES[k])] += 1
+
+    the_mask[the_mask >= condition] = np.nan
+    the_mask[the_mask < condition] = 1
+
+    print(f'Number of bad detectors: {int(ndet - np.nansum(the_mask))}/{ndet}')
+    return the_mask
+
+
+def give_index_bad_TES(the_mask):
+    """Give the index of the bad TES from a mask."""
+    ndet = the_mask.shape[0]
+    nbadtes = int(ndet - np.nansum(the_mask))
+    badTES = np.zeros((nbadtes, 2), dtype=int)
+    badTES[:, 0] = np.argwhere(np.isnan(the_mask))[:, 0] % 128 + 1 # TES
+    badTES[:, 1] = np.argwhere(np.isnan(the_mask))[:, 0] // 128 + 1 # ASIC
+
+    return badTES
+
+
 def find_high_derivative(signal):
     """Calculate the derivative of a signal and find where it is high."""
     dsignal = np.abs(np.gradient(signal))

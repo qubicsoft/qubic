@@ -236,7 +236,7 @@ class QubicInstrument(Instrument):
             PrimBeam = MultiFreqBeam(parth, parfr, parbeam, alpha, xspl,
                                      nu=nu)
         self.primary_beam = PrimBeam
-        if secondary is 'gaussian':
+        if secondary == 'gaussian':
             SecBeam = BeamGaussian(
                 np.radians(self.calibration.get('primbeam')), nu=nu,
                 backward=True)

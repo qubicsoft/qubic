@@ -13,6 +13,7 @@ from scipy.ndimage.filters import correlate1d, gaussian_filter1d
 import glob
 from astropy.io import fits
 from iminuit.util import describe, make_func_code
+from functools import partial, update_wrapper
 from qubic.utils import progress_bar
 
 from qubicpack import qubicpack as qp
@@ -193,6 +194,9 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 	# instantiate minimizer
 	if chi2 is None:
 		chi2 = MyChi2(x, y, covar, functname, extra_args=extra_args)
+	else:
+		chi2 = Chi2Implement(functname, x, y, covar)
+
 		# nohesse=False
 	#elif chi2.__name__ is 'MyChi2_nocov':
 	#    chi2 = chi2(x, y, covar, functname)
@@ -240,23 +244,18 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 				theguess[k] = drng[k]
 		theargs.update(theguess)
 
-	print(chi2.functname, parnames)
-	from functools import partial, update_wrapper
-	#def wrapper_partial(func, *args, **kwargs):
-	#	partial_func = partial(func, *args, **kwargs)
-	#	update_wrapper(partial_func, func)
-	#	return partial_func
-	#MinimizerObj_partial = partial(Chi2Minimizer(functname, x, y))
-	#MinimizerObj = MinimizerObj_partial(covar)
-	MinimizerObj = Chi2Implement(functname, x, y, covar)
-	#m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=0.1, print_level=print_level, **theargs)
-	print("Minimizer object: ", MinimizerObj.__dict__)
-	print("Guess: ", *guess)
-	print("ncallmax, nsplit, precision: ", ncallmax, nsplit, precision)	
-	m = iminuit.Minuit(MinimizerObj, *guess)
-	#m.migrad(ncall=ncallmax * nsplit, nsplit=nsplit, precision=precision)
-	m.migrad(ncall = ncallmax * nsplit)
-	#m.migrad()
+	if isinstance(chi2, MyChi2):
+		m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=0.1, print_level=print_level, **theargs)
+		m.migrad(ncall=ncallmax * nsplit, nsplit=nsplit, precision=precision)
+
+	elif isinstance(chi2, Chi2Implement):
+		if verbose:
+			print("Minimizer object: ", MinimizerObj.__dict__)
+			print("Guess: ", *guess)
+			print("ncallmax, nsplit, precision: ", ncallmax, nsplit, precision)	
+		m = iminuit.Minuit(MinimizerObj, *guess)
+		m.migrad(ncall = ncallmax * nsplit)
+
 	# print('Migrad Done')
 	if minos:
 		try:
@@ -295,9 +294,12 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 		for j in range(ndimfit):
 			covariance[i, j] = m.covariance[(parnamesfit[i], parnamesfit[j])]
 
-	#chisq = chi2(*parfit)
-	ChiEvaluate = Chi2Minimizer(functname, x, y, covar) 
-	chisq = ChiEvaluate(*parfit) 
+	if isinstance(chi2, MyChi2):
+		chisq = chi2(*parfit)
+	elif isinstance(chi2, Chi2Implement):
+		ChiEvaluate = Chi2Minimizer(functname, x, y, covar) 
+		chisq = ChiEvaluate(*parfit) 
+		
 	ndf = np.size(x) - ndim
 	if force_chi2_ndf:
 		correct = chisq / ndf

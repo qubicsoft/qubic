@@ -339,7 +339,7 @@ def ThermDust_Planck545(x, A, b, T = 23, extra_args = None):
 
 	return A * (x / nu0) ** (b + 1) * (np.exp(gamma * nu0) - 1)/(np.exp(gamma * x) - 1)
 
-def Synchrotron_storja(x, A, p):
+def Synchrotron_storja(x, c0, c1, extra_args = None):
 	"""
 	Two parameter model for Synchrotron effect [ arXiv:1502.01588] and [arxiv: 1108.4822] (Strong, Orlando & Jaffe):
 
@@ -369,11 +369,11 @@ def Synchrotron_storja(x, A, p):
 	k = scipy.constants.k
 
 	#I = lambda nu: 
-	b = (p + 3) / 2
+	#b = (p + 3) / 2
 
-	return A * x ** (- b)
+	return c0 * 1e10 * x ** (- c1)
  
-def Synchrotron_Planck(x, A, alpha, b, extra_args = None ):
+def Synchrotron_Planck(x, c0, c1, c2, extra_args = None ):
 	"""
 	x: frequency array [in GHz]
 	A: Amplitude [in uK?]
@@ -386,7 +386,7 @@ def Synchrotron_Planck(x, A, alpha, b, extra_args = None ):
 	k = scipy.constants.k
 
 	
-	return A * (x / alpha) ** (- b)
+	return c0 * 1e5 * (x / c1) ** (- c2)
 
 def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 		   maxfev = 10000, initP0 = None, verbose = False,

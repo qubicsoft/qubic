@@ -1,0 +1,168 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.6.0rc0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+## TOD comparisson in spectral imaging case
+
+author: Martín Gamboa
+date: 11th march 2021
+
+This notebook is to illustrate how the frequencies contributes to the final TOD measured in a wide band
+
+```{python}
+##Loading modules. 
+
+# General modules
+from __future__ import division, print_function
+# %matplotlib inline
+from pylab import *
+import os
+import sys
+import time
+import datetime
+import shutil
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import qubic
+from qubic import QubicSkySim as qss
+from qubic import SpectroImLib as si
+rc('figure', figsize=(13, 10))
+rc('font', size=13)
+```
+
+```{python}
+## Preparing the run...
+
+# Repository for dictionary and input maps
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir='../')
+dictfilename = global_dir + '/dicts/pipeline_demo.dict'
+dictmaps = global_dir + 'doc/'
+
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+
+# Print a parameter from the dictionary. 
+print('beam shape :', d['beam_shape'])
+d['nside'] = 512
+
+# You can change it  as follows:
+# d['beam_shape'] = 'multi_freq' # or 'gaussian' or 'fitted_beam' 
+
+# Check nf_sub/nf_sub_rec is an integer
+d['nf_sub'] = 8
+nf_sub = d['nf_sub']
+# for nf_sub_rec in d['nf_recon']:
+#     if nf_sub % nf_sub_rec != 0:
+#         raise ValueError('nf_sub/nf_sub_rec must be an integer.')
+d['nf_recon'] = 2
+d['MultiBand'] = True
+
+# Center of the patch observed in galactic coordinates
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+```
+
+```{python}
+m0 = np.zeros((12 * d['nside'] ** 2))
+x0 = np.zeros((d['nf_sub'], len(m0), 3))
+x1 = np.zeros((d['nf_sub'], len(m0), 3))
+x2 = np.zeros((d['nf_sub'], len(m0), 3))
+x_sum = np.zeros((d['nf_sub'], len(m0), 3))
+idn = hp.pixelfunc.ang2pix(d['nside'], np.radians(90-center[1]), np.radians(center[0]),)
+source = m0 * 0
+source[idn] = 1e7
+source = hp.sphtfunc.smoothing(source, fwhm = np.radians(5))
+print(np.shape(source))
+x0[1, :, 0] = source
+x1[4, :, 0] = source
+x2[7, :, 0] = source
+x_sum[[1,4,7], : , 0] = source
+
+if hp.get_nside(x0[0,:,0]) == d['nside']:
+    print('Good size')
+    y0=x0
+    y1=x1
+    y2=x2
+    y_sum=x_sum
+else:
+    print('Bad size')
+    y0 = np.empty((d['nf_sub'], 12 * d['nside'] ** 2, 3))
+    y1 = np.empty((d['nf_sub'], 12 * d['nside'] ** 2, 3))
+    y2 = np.empty((d['nf_sub'], 12 * d['nside'] ** 2, 3))
+    for i in range(d['nf_sub']):
+        for j in range(3):
+            y0[i, :, j] = hp.ud_grade(x0[i, :, j], d['nside'])
+            y1[i, :, j] = hp.ud_grade(x1[i, :, j], d['nside'])
+            y2[i, :, j] = hp.ud_grade(x2[i, :, j], d['nside'])
+```
+
+```{python}
+# Pointing strategy
+p = qubic.get_pointing(d)
+print('=== Pointing DONE! ===')
+
+# Model of the scene at the time of observation
+s = qubic.QubicScene(d)
+
+# Create MultibandInstrument. Model of the instrument with a focal plane sensitivity to 
+# multiple frequencies
+q = qubic.QubicMultibandInstrument(d)
+
+# Generate the sub-band limits to be used (later we can see what information we are ignoring with '_')
+_, nus_edge_in, nus_in, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, d['nf_sub'],
+                                                d['filter_relative_bandwidth'])
+
+# Finally create an acquisition multiband operator which combines all relevant information
+#scene, instrument configuration and strategy pointing. 
+a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_in)
+```
+
+```{python}
+TOD0, _ = a.get_observation(y0, noiseless=d['noiseless'])#, convolution = True)
+TOD1, _ = a.get_observation(y1, noiseless=d['noiseless'])#, convolution = True)
+TOD2, _ = a.get_observation(y2, noiseless=d['noiseless'])#, convolution = True)
+TOD_sum, _ = a.get_observation(y_sum, noiseless=d['noiseless'])#, convolution = True)
+```
+
+```{python}
+print('--------- TOD with shape (#detectors, #pointings) : {} '.format(np.shape(TOD0)))
+rc('font', size=15)
+rc('lines', linewidth=3)
+print(np.max(TOD0))
+tes = 231
+fig, ax = plt.subplots(nrows = 2, ncols=1, figsize=(12,8), sharex = True)
+ax[0].plot(TOD0[tes, :], 'b-', label = r'$\nu = {:.0f}~$GHz'.format(nus_in[1]))
+ax[0].plot(TOD1[tes, :], 'r-', label = r'$\nu = {:.0f}~$GHz'.format(nus_in[4]))
+ax[0].plot(TOD2[tes, :], 'y-', label = r'$\nu = {:.0f}~$GHz'.format(nus_in[7]))
+ax[0].plot((TOD0+TOD1+TOD2)[tes,:], 'k-', alpha = 0.4) 
+ax[0].set_xlim(75,200)
+ax[1].set_xlabel('Indice de escaneo')
+ax[0].set_ylabel('UA')
+ax[1].set_ylabel('UA')
+ax[0].legend()
+ax[1].set_xlim(100,125)
+ax[1].plot((TOD0+TOD1+TOD2)[tes,:], 'k-', alpha = 0.4) 
+ax[1].plot(TOD_sum[tes,:], 'k--', ) 
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+
+```

@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.7.1
+      jupytext_version: 1.6.0rc0
   kernelspec:
     display_name: Python 3
     language: python
@@ -80,7 +80,7 @@ nf_sub = d['nf_sub']
 # for nf_sub_rec in d['nf_recon']:
 #     if nf_sub % nf_sub_rec != 0:
 #         raise ValueError('nf_sub/nf_sub_rec must be an integer.')
-
+d['nf_recon'] = 2
 d['MultiBand'] = True
 
 # Center of the patch observed in galactic coordinates
@@ -95,24 +95,10 @@ In this case we read a map $X_0$ simulated previously which contains fluctuation
 
 ```{python}
 # Make a sky using PYSM
-#seed = None
-#sky_config = {'cmb': seed, 'dust': 'd1'}
-#Qubic_sky = qss.Qubic_sky(sky_config, d)
-#x0 = Qubic_sky.get_simple_sky_map()
-m0 = np.zeros((12 * d['nside'] ** 2))
-x0 = np.zeros((d['nf_sub'], len(m0), 3))
-x1 = np.zeros((d['nf_sub'], len(m0), 3))
-x2 = np.zeros((d['nf_sub'], len(m0), 3))
-x_sum = np.zeros((d['nf_sub'], len(m0), 3))
-idn = hp.pixelfunc.ang2pix(d['nside'], np.radians(90-center[1]), np.radians(center[0]),)
-source = m0 * 0
-source[idn] = 1e7
-source = hp.sphtfunc.smoothing(source, fwhm = np.radians(5))
-print(np.shape(source))
-x0[1, :, 0] = source
-x1[4, :, 0] = source
-x2[7, :, 0] = source
-x_sum[[1,4,7], : , 0] = source
+seed = None
+sky_config = {'cmb': seed, 'dust': 'd1'}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+x0 = Qubic_sky.get_simple_sky_map()
 # Load a CMB map
 # x0 = FitsArray(dictmaps + 'CMB_nside64_nfsub14.fits')
     
@@ -122,19 +108,12 @@ print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0))
 if hp.get_nside(x0[0,:,0]) == d['nside']:
     print('Good size')
     y0=x0
-    y1=x1
-    y2=x2
-    y_sum=x_sum
 else:
     print('Bad size')
     y0 = np.empty((d['nf_sub'], 12 * d['nside'] ** 2, 3))
-    y1 = np.empty((d['nf_sub'], 12 * d['nside'] ** 2, 3))
-    y2 = np.empty((d['nf_sub'], 12 * d['nside'] ** 2, 3))
     for i in range(d['nf_sub']):
         for j in range(3):
             y0[i, :, j] = hp.ud_grade(x0[i, :, j], d['nside'])
-            y1[i, :, j] = hp.ud_grade(x1[i, :, j], d['nside'])
-            y2[i, :, j] = hp.ud_grade(x2[i, :, j], d['nside'])
 
 ```
 
@@ -182,15 +161,8 @@ a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_in)
 ```{python}
 # MultiFreq TOD making
 #(i.e. TOD for several subbands to reproduce a wideband observation)
-TOD0, _ = a.get_observation(y0, noiseless=d['noiseless'])#, convolution = True)
-TOD1, _ = a.get_observation(y1, noiseless=d['noiseless'])#, convolution = True)
-TOD2, _ = a.get_observation(y2, noiseless=d['noiseless'])#, convolution = True)
+TOD, _ = a.get_observation(y0, noiseless=d['noiseless'])#, convolution = True)
 #del(maps_convolved_useless)
-```
-
-```{python}
-TOD_sum, _ = a.get_observation(y_sum, noiseless=d['noiseless'])#, convolution = True)
-
 ```
 
 ```{python}
@@ -200,23 +172,11 @@ rc('font', size=15)
 rc('lines', linewidth=3)
 print(np.max(TOD))
 tes = 231
-fig, ax = plt.subplots(nrows = 2, ncols=1, figsize=(12,8), sharex = True)
-ax[0].plot(TOD0[tes, :], 'b-', label = r'$\nu = {:.0f}~$GHz'.format(nus_in[1]))
-ax[0].plot(TOD1[tes, :], 'r-', label = r'$\nu = {:.0f}~$GHz'.format(nus_in[4]))
-ax[0].plot(TOD2[tes, :], 'y-', label = r'$\nu = {:.0f}~$GHz'.format(nus_in[7]))
-ax[0].plot((TOD0+TOD1+TOD2)[tes,:], 'k-', alpha = 0.4) 
-ax[0].set_xlim(75,200)
-ax[1].set_xlabel('Indice de escaneo')
-ax[0].set_ylabel('UA')
-ax[1].set_ylabel('UA')
-ax[0].legend()
-ax[1].set_xlim(100,125)
-ax[1].plot((TOD0+TOD1+TOD2)[tes,:], 'k-', alpha = 0.4) 
-ax[1].plot(TOD_sum[tes,:], 'k--', ) 
+plt.plot(TOD[tes, :], 'b-', label = r'TES = {}'.format(tes))
+plt.xlabel('Pointing index')
+plt.ylabel('TOD [AU]')
 plt.tight_layout()
-plt.savefig("/home/martin/Doctorado/Tesis-Doctoral/Figuras_Tesis_Overleaf/TODsumatoria_esp.pdf", 
-            format = "pdf")
-plt.savefig("/home/martin/Doctorado/Tesis-Doctoral/Figuras_Tesis_Overleaf/TODsumatoria_esp")
+plt.show()
 ```
 
 ## From observations to maps...

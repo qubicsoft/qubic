@@ -130,7 +130,8 @@ fsed._plot_covs(regions, bands, coveragesmaps, centers)
 ```{python}
 # NEW (16 Feb 2021)
 reload(fsed)
-sky_conf = {'synch': 's1'}
+sky_conf = {'synch': 's0'}
+#sky_conf = {'dust': 'd1'}
 fground_maps = fsed.foreground_signal(dictionaries, sky_conf)
 ```
 
@@ -249,7 +250,7 @@ fsed._plot_exampleSED(dictionaries[2], centers[2], nus_out150, maskmaps[2])
 ```{python}
 #NEW (17 Feb 2021)
 reload(fsed)
-nside_new = 64
+nside_new = 32
 nf_recon = dictionaries[0]['nf_recon']
 
 maps_ud, std_ud, fgr_map_ud, noise_ud_i = fsed.udgrade_maps(fground_maps, noise, nside_new, nf_recon, nreals)
@@ -333,7 +334,7 @@ nus_edge = [nus150, nus220, nus150, nus220]
 
 FuncModel = fsed.Synchrotron_storja
 #FuncModel = {'freedust': DustModel}
-
+reload(qubic)
 Imvals, Isvals, xarr, flat_samples = fsed.foregrounds_run_mcmc(dictionaries, fgr_map_ud, Cp_prime, FuncModel,
                                                 nus_out, nus_edge, pixs_ud, pixs_red = pixs_red, 
                                                 samples = 5000, verbose = True, initP0 = [50, 3])
@@ -341,8 +342,8 @@ Imvals, Isvals, xarr, flat_samples = fsed.foregrounds_run_mcmc(dictionaries, fgr
 
 ```{python}
 #plt.hist(flat_samples[0,:,0], bins = 20, histtype="step")
-plt.xlabel("b")
-plt.ylabel("A")
+plt.xlabel("c0")
+plt.ylabel("c1")
 plt.hist2d(flat_samples[0,:,0], flat_samples[0,:,1], bins = 20)
 ```
 
@@ -517,7 +518,7 @@ hp.gnomview(maskmaps[1, -1, :, 0], reso = 15, hold = True,
             notext = True, title = ' ',
             unit = r'$\mu$K',
             min = 0,
-            max = 0.4*np.max(maps_ud[1, -1, :, 0]), 
+            max = 0.9*np.max(maps_ud[1, -1, :, 0]), 
             rot = centerQ)
 hp.projscatter(hp.pix2ang(nside_new, pixQ_ud),marker = '*', color = 'r', s = 180)
 

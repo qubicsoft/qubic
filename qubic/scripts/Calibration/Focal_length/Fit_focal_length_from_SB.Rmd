@@ -65,12 +65,13 @@ mydir = '/home/lmousset/QUBIC/Qubic_work/Calibration/datas/Synthetic_beams/'
 
 # === 2019 April
 date = '2019-avril'
-data_dir = mydir + date + '/synth_beam_160/Healpix/'
+freq = 150
+data_dir = mydir + date + f'/synth_beam_{freq}/Healpix/'
 myname = date + '_Healpix_maps.pdf'
 # Selection of good TES
-# PIX_ok = [6, 9, 16, 22, 26, 27, 37, 50, 51, 58, 73, 74, 75, 76, 80, 83, 86, 87, 93, 107, 
-#           34, 135, 150, 170, 185, 186, 191, 195, 206, 210, 218, 219, 236] 
-PIX_ok = [93]
+PIX_ok = [6, 9, 16, 22, 26, 27, 37, 50, 51, 58, 73, 74, 75, 76, 80, 83, 86, 87, 93, 107, 
+          34, 135, 150, 170, 185, 186, 191, 195, 206, 210, 218, 219, 236] 
+PIX_ok = [93, 37, 73]
 
 # === 2020 January
 # date = '2020-01-14'
@@ -176,7 +177,7 @@ for i, data_patch in enumerate(mydata):
 ### Model: Simulated beam
 
 ```{python}
-def model(theta, index_q, d, s, radius=20, nu=150e9, doplot=False):
+def model(theta, index_q, d, s, radius=20, nu=150e9, PIrot=True, doplot=False):
     fl, phi = theta
     print('theta:', theta)
     
@@ -192,7 +193,10 @@ def model(theta, index_q, d, s, radius=20, nu=150e9, doplot=False):
     sb = q.get_synthbeam(s, idet=index_q, external_A=None, hwp_position=0)
     
     # Rotate
-    Rotator = hp.Rotator(rot=(0, 90, 180+phi), deg=True)
+    if PIrot:
+        Rotator = hp.Rotator(rot=(0, 90, 180+phi), deg=True)
+    else:
+        Rotator = hp.Rotator(rot=(0, 90, phi), deg=True)
     sb_rot = Rotator.rotate_map_alms(sb)
     
     # Make a patch
@@ -221,7 +225,7 @@ theta_fake = (0.3, 0)
 mydata_fake = []
 gains_fake = np.zeros(ndet)
 for i, idet in enumerate(index_q_ok):
-    M = model(theta_fake, idet, d, s, nu=160e9, doplot=True)
+    M = model(theta_fake, idet, d, s, nu=freq * 1e9, PIrot=True, doplot=False)
     gains_fake[i] = 1.#np.random.rand(1) * 5
     noise = np.random.normal(0., 10., M.shape) * 0.
     mydata_fake.append((gains_fake[i] * M) + noise)
@@ -230,32 +234,6 @@ print(gains_fake)
 ```
 
 ### Compare real and fake data
-
-```{python}
-import matplotlib.pyplot as plt
-import matplotlib.colors as colors
-import numpy as np
-import seaborn as sns
-from matplotlib.colors import ListedColormap
-
-def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=1000):
-    new_cmap = colors.LinearSegmentedColormap.from_list(
-        'trunc({n},{a:.2f},{b:.2f})'.format(n=cmap.name, a=minval, b=maxval),
-        cmap(np.linspace(minval, maxval, n)))
-    return new_cmap
-
-# arr = np.linspace(0, 50, 100).reshape((10, 10))
-# fig, ax = plt.subplots(ncols=2)
-
-cmap = plt.get_cmap('cubehelix')
-# cmap = ListedColormap(sns.color_palette("mako").as_hex())
-# new_cmap = sns.color_palette("mako")
-new_cmap = truncate_colormap(cmap, 0., 0.35)
-# ax[0].imshow(arr, interpolation='nearest', cmap=cmap)
-# ax[1].imshow(arr, interpolation='nearest', cmap=new_cmap)
-# plt.show()
-
-```
 
 ```{python}
 ### Save a pdf
@@ -279,6 +257,8 @@ new_cmap = truncate_colormap(cmap, 0., 0.35)
         
 ### Plot in the notebook
 for idx in range(ndet):
+    TES = PIX_ok[idx] % 128
+    ASIC = PIX_ok[idx] // 128 + 1
     real = np.zeros(12 * NSIDE**2) + hp.UNSEEN
     real[ipix_patch] = mydata[idx]
 
@@ -286,10 +266,10 @@ for idx in range(ndet):
     fake[ipix_patch] = mydata_fake[idx]
 
     plt.figure(figsize=(12, 8))
-    plt.suptitle(f'PIX {PIX_ok[idx]} - Index_q {index_q_ok[idx]}')
-    hp.gnomview(real, sub=(121), reso=15, title='Measurement', min=0., max=5e4, cmap=new_cmap)#norm=SymLogNorm(1e3))
-    hp.gnomview(fake, sub=(122), reso=15, title='Simulation', min=0., max=1e6, cmap=new_cmap)#norm=SymLogNorm(1e4))
-    hp.graticule()
+    plt.suptitle(f'TES {TES} - ASIC {ASIC} - {freq} GHz')# - Index_q {index_q_ok[idx]}')
+    hp.gnomview(real, sub=(121), reso=13, title='Measurement', min=0., max=5e4)#norm=SymLogNorm(1e3))
+    hp.gnomview(fake, sub=(122), reso=13, title='Simulation', min=0., max=1e6)#norm=SymLogNorm(1e4))
+#     hp.graticule()
 #     hp.visufunc.projscatter(0., 0., color='r', marker='+', lonlat=True, s=100)
 
 ```

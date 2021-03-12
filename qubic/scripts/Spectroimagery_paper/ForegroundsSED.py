@@ -302,18 +302,19 @@ def Bnu(nuGHz, temp):
 	nu = nuGHz * 1e9
 	return 2 * h * nu ** 3 / c ** 2 / (np.exp(h * nu / k / temp ) - 1 )
 
-def ThermDust_Planck353(x, A, b, T = 19.6):
+def ThermDust_Planck353(x, c0, c1, extra_args = None):
 	"""
 
 	"""
+	T = 19.6
 	nu0 = 353
 	bnu = Bnu(x, T)
-	bnu0 = Bnu(nu0, T)
+	#bnu0 = Bnu(nu0, T)
 	#print(bnu / bnu0)
 	#return a * bnu / bnu0 * (x / nu0) ** (b / 2)
-	return A * 1e18 * bnu * (x / nu0) ** (b / 2)
+	return c0 * 1e18 * bnu * (x / nu0) ** (c1 / 2)
 
-def ThermDust_Planck545(x, A, b, T = 23):
+def ThermDust_Planck545(x, A, b, T = 23, extra_args = None):
 	"""
 	Three parameter model for thermal dust [ arXiv:1502.01588]:
 		s_d = A_d * (nu / nu0)**(b_d+1) * [(exp(gamma*nu0)-1) / (exp(gamma*nu)-1) ]
@@ -338,7 +339,7 @@ def ThermDust_Planck545(x, A, b, T = 23):
 
 	return A * (x / nu0) ** (b + 1) * (np.exp(gamma * nu0) - 1)/(np.exp(gamma * x) - 1)
 
-def Synchrotron_storja(x, A, p):
+def Synchrotron_storja(x, c0, c1, extra_args = None):
 	"""
 	Two parameter model for Synchrotron effect [ arXiv:1502.01588] and [arxiv: 1108.4822] (Strong, Orlando & Jaffe):
 
@@ -368,20 +369,24 @@ def Synchrotron_storja(x, A, p):
 	k = scipy.constants.k
 
 	#I = lambda nu: 
-	b = (p + 3) / 2
+	#b = (p + 3) / 2
 
-	return A * x ** (- b)
+	return c0 * 1e10 * x ** (- c1)
  
-def Synchrotron_Planck(x, A, alpha, nu0 = 408e-3):
+def Synchrotron_Planck(x, c0, c1, c2, extra_args = None ):
+	"""
+	x: frequency array [in GHz]
+	A: Amplitude [in uK?]
+	alpha: shift normalization in frequency 
+	b: spectral index
 	"""
 	
-	"""
 	h = scipy.constants.h
 	c = scipy.constants.c
 	k = scipy.constants.k
 
 	
-	return A * (x / nu0) ** 2
+	return c0 * 1e5 * (x / c1) ** (- c2)
 
 def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 		   maxfev = 10000, initP0 = None, verbose = False,
@@ -403,7 +408,10 @@ def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 		popt, pcov = curve_fit(FuncModel, nus, maps[:, pix, istk], 
 								sigma = covMat[:, :, istk, pix_red], absolute_sigma=True,
 								maxfev = maxfev, p0 = initP0)
-	#print("Calling LogLikelihood", popt, pcov)
+		#popt = initP0
+	if verbose:
+		print("Calling LogLikelihood", popt, pcov)
+		print("xvals, yvals", nus, maps[:, pix, istk])
 	myfit = mcmc.LogLikelihood(xvals = nus, yvals = maps[:, pix, istk], 
 							   errors = covMat[:, :, istk, pix_red], 
 							   model = FuncModel, p0 = popt)
@@ -443,7 +451,7 @@ def foregrounds_run_mcmc(dictionaries, fgr_map, Cp_prime, FuncModel,
 			
 			if verbose: print(np.shape(dictionaries), np.shape(fgr_map[j]), np.shape(Cp_prime[j]), np.shape(nus_out[j]), 
 							np.shape(nus_edge[j])) 
-			print(initP0)
+			print("initP0 ", initP0)
 			MeanVals[j, :, istk], StdVals[j, :, istk], xarr[j, :, istk], _flat_samples[j] = \
 														PixSED_Xstk(nus_out[j], fgr_map[j], FuncModel, 
 																	pixs[j], pixs_red[j], 
@@ -500,12 +508,15 @@ def make_fit_SED(xSED, xarr, Imvals, Isvals, FuncModel, fgr_map_ud, pixs_ud, nf_
 		for j in range(len(fgr_map_ud)):
 			if icomp == 0:
 				ySED[j, :, icomp] = fgr_map_ud[j][:,pixs_ud[j],0]
-				popt[j, :, icomp], pcov[j, :, :, icomp] = curve_fit(FuncModel, xSED[j], ySED[j, :, icomp])
+				print("FuncModel,xSED, ySED", FuncModel, xSED[j], ySED[j,:,icomp])
+				print("curve_fit", curve_fit(FuncModel, xSED[j], ySED[j,:,icomp])[0])
+				auxpopt, auxcov = curve_fit(FuncModel, xSED[j], ySED[j, :, icomp])
+				popt[j, :, icomp], pcov[j, :, :, icomp] = auxpopt[:-1], auxcov[:-1,:-1]
 			else:
 				ySED[j, :, icomp] = np.sqrt(fgr_map_ud[j][:,pixs_ud[j], 1] ** 2 + \
 											fgr_map_ud[j][:,pixs_ud[j], 2] ** 2)
-				popt[j, :, icomp], pcov[j, :, :, icomp] = curve_fit(FuncModel, xSED[j], ySED[j, :, icomp])
-
+				auxpopt, auxcov = curve_fit(FuncModel, xSED[j], ySED[j, :, icomp])
+				popt[j, :, icomp], pcov[j, :, :, icomp] = auxpopt[:-1], auxcov[:-1, :-1]
 
 	ySED_fit = np.zeros((len(fgr_map_ud), len(xarr[0]), 2 ))
 	Perr = np.zeros((len(fgr_map_ud), len(xarr[0])) )

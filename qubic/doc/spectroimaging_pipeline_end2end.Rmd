@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.0
+      jupytext_version: 1.6.0rc0
   kernelspec:
     display_name: Python 3
     language: python
@@ -51,8 +51,6 @@ from pysimulators import FitsArray
 import qubic
 from qubic import QubicSkySim as qss
 from qubic import SpectroImLib as si
-from pysm import models
-import pysm
 rc('figure', figsize=(13, 10))
 rc('font', size=13)
 ```
@@ -71,18 +69,18 @@ d.read_from_file(dictfilename)
 
 # Print a parameter from the dictionary. 
 print('beam shape :', d['beam_shape'])
-d['nside'] = 8
+d['nside'] = 512
 
 # You can change it  as follows:
 # d['beam_shape'] = 'multi_freq' # or 'gaussian' or 'fitted_beam' 
 
 # Check nf_sub/nf_sub_rec is an integer
-d['nf_sub'] = 15
+d['nf_sub'] = 8
 nf_sub = d['nf_sub']
 # for nf_sub_rec in d['nf_recon']:
 #     if nf_sub % nf_sub_rec != 0:
 #         raise ValueError('nf_sub/nf_sub_rec must be an integer.')
-
+d['nf_recon'] = 2
 d['MultiBand'] = True
 
 # Center of the patch observed in galactic coordinates
@@ -101,7 +99,6 @@ seed = None
 sky_config = {'cmb': seed, 'dust': 'd1'}
 Qubic_sky = qss.Qubic_sky(sky_config, d)
 x0 = Qubic_sky.get_simple_sky_map()
-
 # Load a CMB map
 # x0 = FitsArray(dictmaps + 'CMB_nside64_nfsub14.fits')
     
@@ -124,15 +121,15 @@ else:
 # Look at the input sky maps using Healpy
 
 istokes = 0 # Stokes parameter (I, Q, U)
-imap = 8 # Frequency subband, should be smaller than nf_sub
+imap = 1 # Frequency subband, should be smaller than nf_sub
 rr=9 # Resolution in arcmin
 
 plt.figure(figsize=(13,8))
 for istk in range(3):
     plt.subplots_adjust(wspace=0.9)
-    hp.mollview(y0[imap,:,istk], cmap='jet', sub = (3,2,2*istk+1), 
+    hp.mollview(y0[imap,:,istk], cmap='jet', sub = (3,2,2*istk+1),
                 title = 'Mollview {0} Stokes parameter, map {1}'.format(d['kind'][istk], imap))
-    hp.gnomview(y0[imap,:,istk], cmap ='jet', sub = (3,2,2*istk+2), rot=center, reso=rr, 
+    hp.gnomview(y0[imap,:,istk], cmap ='jet', sub = (3,2,2*istk+2), reso=rr, rot = center,
                 title = 'Gnomview {0} Stokes parameter, map {1}'.format(d['kind'][istk], imap))
 
 ```
@@ -153,27 +150,33 @@ s = qubic.QubicScene(d)
 q = qubic.QubicMultibandInstrument(d)
 
 # Generate the sub-band limits to be used (later we can see what information we are ignoring with '_')
-_, nus_edge_in, _, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, d['nf_sub'],
+_, nus_edge_in, nus_in, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, d['nf_sub'],
                                                 d['filter_relative_bandwidth'])
 
 # Finally create an acquisition multiband operator which combines all relevant information
 #scene, instrument configuration and strategy pointing. 
 a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_in)
+```
 
+```{python}
 # MultiFreq TOD making
 #(i.e. TOD for several subbands to reproduce a wideband observation)
-TOD, maps_convolved_useless = a.get_observation(y0, noiseless=d['noiseless'])#, convolution = True)
-del(maps_convolved_useless)
+TOD, _ = a.get_observation(y0, noiseless=d['noiseless'])#, convolution = True)
+#del(maps_convolved_useless)
 ```
 
 ```{python}
 # Look at TOD for one TES
 print('--------- TOD with shape (#detectors, #pointings) : {} '.format(np.shape(TOD)))
-
-tes = 6
-plt.plot(TOD[tes, :], label='TES {}'.format(tes))
+rc('font', size=15)
+rc('lines', linewidth=3)
+print(np.max(TOD))
+tes = 231
+plt.plot(TOD[tes, :], 'b-', label = r'TES = {}'.format(tes))
 plt.xlabel('Pointing index')
-plt.ylabel('TOD')
+plt.ylabel('TOD [AU]')
+plt.tight_layout()
+plt.show()
 ```
 
 ## From observations to maps...

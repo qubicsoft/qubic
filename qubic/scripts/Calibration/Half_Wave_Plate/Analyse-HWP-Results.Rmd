@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.2
+      jupytext_version: 1.4.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -39,6 +39,8 @@ from scipy import interpolate
 import datetime as dt
 import pickle
 from importlib import reload
+import corner
+
 ```
 
 # Location of the Data
@@ -121,7 +123,55 @@ resfit = dl.hwp_fitpol(data_uniqueth[idir][TESNum-1,0,:], data_uniqueth[idir][TE
                        doplot=True, str_title='Demodulation TES{}'.format(iii+1), 
                        saturation=True, myguess=myguess, force_chi2_ndf=False)
 tight_layout()
+# ylim(0,0.01)
+# xlim(25,35)
 print(resfit[1])
+```
+
+```{python}
+resfit[2]
+```
+
+```{python}
+
+```
+
+```{python}
+### NEW JCH Feb. 26 2021
+rc('figure',figsize=(6,6))
+rc('font',size=12)
+
+reload(dl)
+reload(corner)
+myguess = resfit[1]
+myrange = [[0., 3*resfit[1][0]], 
+           [0.,1.], 
+           [resfit[1][2]-10*resfit[2][2], resfit[1][2]+10*resfit[2][2]],
+           [0, 10*resfit[1][3]]]
+           
+print(myrange)
+
+resmcmc, samples = dl.hwp_fitpol_new(data_uniqueth[idir][TESNum-1,0,:], data_uniqueth[idir][TESNum-1,1,:], data_uniqueth[idir][TESNum-1,2,:], 
+                       doplot=True, str_title='Demodulation TES{}'.format(iii+1), 
+                       saturation=True, myguess=myguess, force_chi2_ndf=False, myrange=myrange, upperlims=True)
+
+tight_layout()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 Plot for a given TES for all available configurations
@@ -149,7 +199,7 @@ for idir in range(len(subdirs)):
     
 #     subplot(1,2,2)
     p=errorbar(xx, yy/thefit[0], yerr=dy/thefit[0], fmt='o', #color=p[0].get_color(), 
-                 label = 'Off = {} - Amp = {} - Ptg = {}'.format(mod_off[idir], mod_amp[idir], ptg[idir]))
+                 label = 'Off = {} - Amp = {} - Ptg = {} - {}'.format(mod_off[idir], mod_amp[idir], ptg[idir], subdirs[idir]))
     plot(angs, dl.hwp_sin_sat(angs, thefit)/thefit[0], color=p[0].get_color())
     plot(angs, angs*0+1, 'k:')
     plot(angs, angs*0, 'k:')
@@ -320,6 +370,8 @@ savefig('angle_hwp.png')
 # !pwd
 ```
 
+## Cumulative histograms for Xpol
+
 ```{python}
 rc('figure',figsize=(15,7))
 ### Now some statistics on XPol: cumulative histograms for XPol
@@ -376,6 +428,8 @@ for axis in [ax.xaxis]:
 
 
 ```
+
+## Cumulative histograms for error on Xpol
 
 ```{python}
 rc('figure',figsize=(15,7))
@@ -443,7 +497,7 @@ histos_ratio = []
 average_ratio = []
 for i in range(len(subdirs)):
 #    subplot(1, len(subdirs), i+1)
-    param = fit_uniqueth[i,:,1,k]/fit_uniqueth[i,:,0,k]
+    param = fit_uniqueth[i,:,0,k]/fit_uniqueth[i,:,1,k]
     if op[k]=='Log10':
         param = np.log10(param)
     param[~myok] = np.nan
@@ -476,9 +530,42 @@ xscale('log')
 xlim(0.1,10)
 ylim(0,1)
 legend()
-xlabel('Measured ratio: Error(Cross Polarization) / Cross Polarization')
+xlabel('Measured ratio: Cross Polarization / Error(Cross Polarization)')
 ylabel('Cumulative Distribution')
 plot(linspace(0.01,100,100),np.zeros(100)+0.5,'k:')
+
+
+#### To have xaxis in % with digits
+from matplotlib.ticker import FuncFormatter
+for axis in [ax.xaxis]:
+    formatter = FuncFormatter(lambda y, _: '{:.16g}'.format(y))
+    axis.set_major_formatter(formatter)
+
+
+```
+
+```{python}
+rc('figure',figsize=(10,7))
+#### The same but only 1st case and nicer plot (in %)
+fig, ax = plt.subplots()
+#for i in range(len(subdirs)):
+for i in [1]:
+    newx = 10**histos_ratio[i][0]
+    #p=plot(newx,histos_ratio[i][1],'o-', label='Cal. Src.: Off={}V Amp={}V'.format(mod_off[i], mod_amp[i]))
+    p=plot(newx,histos_ratio[i][1],'o-', label='Data')
+    val1sigma = np.interp(1,newx,histos_ratio[i][1])
+    print(val1sigma)
+    plot([1,1],[0,val1sigma],':',color='r')
+    plot([0,1],[val1sigma,val1sigma],':',color='r', label='Compatible with 0 at 1 $\sigma$: {0:3.1f}% '.format(val1sigma*100))
+    val2sigma = np.interp(2,newx,histos_ratio[i][1])
+    plot([2,2],[0,val2sigma],':',color='g')
+    plot([0,2],[val2sigma,val2sigma],':',color='g', label='Compatible with 0 at 2 $\sigma$: {0:3.1f}% '.format(val2sigma*100))
+xscale('log')
+xlim(0.1,10)
+ylim(0,1)
+legend(loc='lower right')
+xlabel('Measured ratio: Cross Polarization / Error(Cross Polarization)')
+ylabel('Cumulative Distribution')
 
 
 #### To have xaxis in % with digits

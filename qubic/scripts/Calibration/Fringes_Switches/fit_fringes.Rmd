@@ -49,11 +49,7 @@ simu = False
 ```
 
 ```{python}
-def make2Dfringes(fringes1D):
-    """fringes1D must have 248 elements ordered as in Qubic soft."""
-    fringes2D = q.detector.unpack(fringes1D)
-    fringes2D[np.isnan(fringes2D)] = 0.
-    return fringes2D[17:, :17]
+
 
 ```
 
@@ -62,26 +58,36 @@ def make2Dfringes(fringes1D):
 ```{python}
 global_dir = '/home/lmousset/QUBIC/Qubic_work/Calibration/datas/Fringes/'
 # myfringes = 'Fringes_LouiseMethod_2020-10-27_15BLs.fits'
-myfringes = 'Fringes_JCMethod_2020-10-27_14BLs_RMslopeFalse_medianTrue_refTES93.fits'
+# myfringes = 'Fringes_JCMethod_2020-10-27_12BLs_RMslopeFalse_medianTrue_refTESautomatic.fits'
+# myfringes = 'Fringes_JCMethod_2020-10-27_12BLs_RMslopeAllCycles_medianTrue_refTESautomatic.fits'
+# myfringes = 'Fringes_2020-10-27_12BLs_RemoveSlopePerTES_medianTrue_refTESautomatic.fits'
+myfringes = 'Fringes_2020-10-27_12BLs_RemoveSlopePerTES_medianTrue_refTESautomatic_inverse.fits'
 
 header, fdict = flib.read_fits_fringes(global_dir + myfringes)
 print(fdict.keys())
 
 allfringes = fdict['FRINGES_1D']
 allerr = fdict['ERRORS']
-# Normalization different for each ASIC
+# Normalization 
 for k in range(len(allfringes)):
-    print(np.std(allfringes[k]))
-    print(np.std(allerr[k]))
-    # First ASIC
-    allfringes[k][:128] /= np.std(allfringes[k][:128])
-    allerr[k][:128] /= np.std(allfringes[k][:128])
-    # Second ASIC
-    allfringes[k][128:] /= np.std(allfringes[k][128:])
-    allerr[k][128:] /= np.std(allfringes[k][128:])
+    std = np.std(allfringes[k])
+    allfringes[k] /= std
+    allerr[k] /= std
+
+# Normalization different for each ASIC
+# for k in range(len(allfringes)):
+#     print(np.std(allfringes[k]))
+#     print(np.std(allerr[k]))
+#     # First ASIC
+#     allfringes[k][:128] /= np.std(allfringes[k][:128])
+#     allerr[k][:128] /= np.std(allfringes[k][:128])
+#     # Second ASIC
+#     allfringes[k][128:] /= np.std(allfringes[k][128:])
+#     allerr[k][128:] /= np.std(allfringes[k][128:])
 
 allokTES = fdict['OK_TES']
 allBLs = fdict['BLS']
+nimages = len(allBLs)
 
 x = fdict['X_TES']
 y = fdict['Y_TES']
@@ -98,27 +104,200 @@ BLs_sort, BLs_type = scal.find_equivalent_baselines(allBLs, q)
 ```
 
 ```{python}
-# Plot fringes on the FP
-k = 8
-fig, axs = plt.subplots(1, 2, figsize=(13, 7))
-fig.subplots_adjust(wspace=0.5)
-fig.suptitle(f'BL {allBLs[k]}')
-ax0, ax1 = axs.ravel()
-
-flib.plot_fringes_imshow_interp(allfringes[k], normalize=False, lim=1, fig=fig, ax=ax0)
-flib.plot_fringes_scatter(q, x, y, allfringes[k], normalize=False, lim=1, s=150, fig=fig, ax=ax1)
-
-```
-
-```{python}
-# Error
-flib.plot_fringes_errors(q, allfringes[k], allerr[k], x, y, normalize=False, lim=500, s=150)
+allokTES
 ```
 
 ```{python}
 # Plot the baselines
 scal.plot_BLs_eq(allBLs, BLs_sort, q)
 
+```
+
+### Remove thermometers 
+
+```{python}
+data, error, okTES = [], [], []
+for k in range(nimages):
+    xdata, ydata, mydata = flib.remove_thermometers(x, y, allfringes[k])
+    _, _, myerror = flib.remove_thermometers(x, y, allerr[k])
+    _, _, myokTES = flib.remove_thermometers(x, y, allokTES[k])
+    
+    data.append(mydata)
+    error.append(myerror)
+    okTES.append(myokTES)
+
+ndet = xdata.shape[0]
+print('Number of detectors:', ndet)
+```
+
+### Re-order data as simulations from Qubic soft
+
+```{python}
+xONAFP, yONAFP, _ = scal.get_TEScoordinates_ONAFP(q)
+newdata = flib.reorder_data(data, xdata, ydata, xONAFP, yONAFP)
+newerror = flib.reorder_data(error, xdata, ydata, xONAFP, yONAFP)
+newokTES = flib.reorder_data(okTES, xdata, ydata, xONAFP, yONAFP)
+
+vmin = -1
+vmax = 1
+# Check the re-ordering is correct
+for k in range(nimages):
+    fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+    fig.suptitle(f'BL {allBLs[k]}')
+    fig.subplots_adjust(wspace=0.5)
+    ax0, ax1 = axs
+    scal.scatter_plot_FP(q, xdata, ydata, data[k]*okTES[k], frame='ONAFP', 
+                         fig=fig, ax=ax0, s=170, cmap='bwr', 
+                         vmin=vmin, vmax=vmax, title='Original order', unit=None)
+
+    scal.scatter_plot_FP(q, xONAFP, yONAFP, newdata[k]*newokTES[k], frame='ONAFP', 
+                         fig=fig, ax=ax1, s=170, cmap='bwr', 
+                         vmin=vmin, vmax=vmax, title='Re-order', unit=None)
+```
+
+```{python}
+# Plot fringes on the FP
+for k in range(nimages):
+    fig, axs = plt.subplots(1, 2, figsize=(13, 7))
+    fig.subplots_adjust(wspace=0.5)
+    fig.suptitle(f'k={k} - BL {allBLs[k]}')
+    ax0, ax1 = axs.ravel()
+
+    fringes2D = make2Dfringes(newdata[k])
+    ax0.imshow(fringes2D, cmap='bwr', vmin=-0.5, vmax=0.5, interpolation='Gaussian')
+    # divider = make_axes_locatable(ax0)
+    # cax = divider.append_axes('right', size='5%', pad=0.05)
+    # clb = fig.colorbar(img_old, cax=cax)
+
+    flib.plot_fringes_scatter(q, x, y, allfringes[k]*allokTES[k], normalize=False, s=180, fig=fig, ax=ax1)
+
+```
+
+```{python}
+import numpy as np
+import scipy as sp
+import scipy.ndimage
+
+sigma=2.0                  # standard deviation for Gaussian kernel
+truncate=4.0               # truncate filter at this many sigmas
+
+U=sp.randn(10,10)          # random array...
+U[U>2]=np.nan              # ...with NaNs for testing
+
+V=U.copy()
+V[np.isnan(U)]=0
+VV=sp.ndimage.gaussian_filter(V,sigma=sigma,truncate=truncate)
+
+W=0*U.copy()+1
+W[np.isnan(U)]=0
+WW=sp.ndimage.gaussian_filter(W,sigma=sigma,truncate=truncate)
+
+Z=VV/WW
+fig, axs = plt.subplots(2, 2)
+ax1, ax2, ax3, ax4 = np.ravel(axs)
+cmap = flib.make_cmap_nan_black('bwr')
+ax1.imshow(U, cmap=cmap)
+ax2.imshow(VV, cmap=cmap)
+ax3.imshow(WW, cmap=cmap)
+ax4.imshow(Z, cmap=cmap)
+
+```
+
+```{python}
+k=0
+sigma=0.7
+truncate=1
+U = q.detector.unpack(newdata[k]*newokTES[k])[17:, :17]
+V=U.copy()
+V[np.isnan(U)]=0
+VV=sp.ndimage.gaussian_filter(V, sigma=sigma, truncate=truncate)
+
+W=0*U.copy()+1
+W[np.isnan(U)]=0
+WW=sp.ndimage.gaussian_filter(W, sigma=sigma, truncate=truncate)
+
+Z=VV/WW
+
+fig, axs = plt.subplots(2, 2)
+ax1, ax2, ax3, ax4 = np.ravel(axs)
+cmap = flib.make_cmap_nan_black('bwr')
+ax1.imshow(U, cmap=cmap, vmin=-1, vmax=1)
+ax2.imshow(VV, cmap=cmap, vmin=-1, vmax=1)
+ax3.imshow(WW, cmap=cmap, vmin=-1, vmax=1)
+ax4.imshow(Z, cmap=cmap, vmin=-1, vmax=1)
+
+```
+
+```{python}
+import astropy
+from astropy.convolution import convolve, Gaussian2DKernel
+sigma = 0.7
+
+k = 5
+U = q.detector.unpack(newdata[k]*newokTES[k])[17:, :17]
+Kernel = Gaussian2DKernel(sigma)
+Z = astropy.convolution.convolve(U, Kernel, nan_treatment='interpolate', preserve_nan=False)
+ZZ = astropy.convolution.convolve(U, Kernel, nan_treatment='interpolate', preserve_nan=True)
+
+Y = astropy.convolution.interpolate_replace_nans(U, Kernel)
+
+fig, axs = plt.subplots(2, 3, figsize=(13, 13))
+ax1, ax2, ax3, ax4, ax5, ax6 = np.ravel(axs)
+cmap = flib.make_cmap_nan_black('bwr')
+vmin=-0.5
+vmax=0.5
+ax1.imshow(U, cmap=cmap, vmin=vmin, vmax=vmax)
+ax1.set_title('Data')
+ax2.imshow(Z, cmap=cmap, vmin=vmin, vmax=vmax)
+ax2.set_title('Astropy conv')
+ax3.imshow(ZZ, cmap=cmap, vmin=vmin, vmax=vmax)
+ax3.set_title('Astropy conv, show NAN')
+ax4.imshow(Y, cmap=cmap, vmin=vmin, vmax=vmax)
+ax4.set_title('Astropy replace NAN')
+ax5.imshow(Y, cmap=cmap, vmin=vmin, vmax=vmax, interpolation='Gaussian')
+ax5.set_title('Imshow interp after replace NAN')
+ax6.imshow(np.nan_to_num(U), cmap=cmap, vmin=vmin, vmax=vmax, interpolation='Gaussian')
+ax6.set_title('Data Imshow interp')
+fig.savefig('/home/lmousset/Desktop/fringes_conv.pdf')
+```
+
+```{python}
+from scipy.interpolate import griddata
+from scipy.interpolate import Rbf
+k=0
+z = allfringes[k]*allokTES[k]
+goodTES = np.invert(np.isnan(allokTES[k]))
+Ngood = np.sum(goodTES)
+print(Ngood)
+
+# xx=(x*allokTES[k]).ravel() #Flat input into 1d vector
+xx=x[goodTES]#eliminate any NaN
+# print(len(xx))
+# yy=(y*allokTES[k]).ravel()
+yy=y[goodTES]
+# zz=z.ravel()
+zz=z[goodTES]
+
+
+xnew = np.arange(np.min(xx), np.max(xx), 0.001)
+ynew = np.arange(np.min(yy), np.max(yy), 0.001)
+# znew = griddata((xx, yy), zz, (xnew[None,:], ynew[:,None]), method='linear')
+rbfi = Rbf(xx, yy, zz, function='gaussian')
+# print(xnew.shape, znew.shape)
+znew = rbfi(xnew, ynew)
+print(znew.shape)
+
+# levels = np.linspace(min(zz), max(zz), 15)
+plt.figure()
+plt.ylabel('Y', size=15)
+plt.xlabel('X', size=15)
+cmap = flib.make_cmap_nan_black('bwr')
+cs = plt.scatter(xnew, ynew, znew, cmap=cmap, vmin=-1, vmax=1)
+# cs = plt.pcolor(xnew, ynew, znew, cmap=cmap, vmin=-1, vmax=1)
+# cs = plt.contourf(xnew, ynew, znew, levels=levels, cmap=cmap)
+cbar = plt.colorbar(cs)
+cbar.set_label('Z', rotation=90, fontsize=15) # gas fraction
+plt.show()
 ```
 
 ### Make a selection
@@ -128,55 +307,27 @@ selection = True
 if selection:
     myselection = [0, 2, 5]
 #     myselection = [0, 1, 2, 3, 5, 11]
-    fringes, errs, BLs = [], [], []
+    fringes, errs, BLs, ok = [], [], [], []
     for i in myselection:
-        fringes.append(allfringes[i])
-        errs.append(allerr[i])
+        fringes.append(newdata[i])
+        errs.append(newerror[i])
         BLs.append(allBLs[i])
+        ok.append(newokTES[i])
     print('Selected baselines:', BLs)
 else:
-    fringes = allfringes
-    errs = allerr
+    fringes = newdata
+    errs = newerror
     BLs = allBLs
+    okTES = newokTES
     
 nimages = len(BLs)
 x = fdict['X_TES']
 y = fdict['Y_TES']
 ```
 
-### Remove thermometers and re-order data as simulations from Qubic soft
-
 ```{python}
-data, error = [], []
-for k in range(nimages):
-    xdata, ydata, mydata = flib.remove_thermometers(x, y, fringes[k])
-    _, _, myerror = flib.remove_thermometers(x, y, errs[k])
-    data.append(mydata)
-    error.append(myerror)
-ndet = xdata.shape[0]
-print('Number of detectors:', ndet)
-```
-
-```{python}
-xONAFP, yONAFP, _ = scal.get_TEScoordinates_ONAFP(q)
-newdata = flib.reorder_data(data, xdata, ydata, xONAFP, yONAFP)
-newerror = flib.reorder_data(error, xdata, ydata, xONAFP, yONAFP)
-
-vmin = -1
-vmax = 1
-# Check the re-ordering is correct
-for k in range(nimages):
-    fig, axs = plt.subplots(1, 2, figsize=(12, 6))
-    fig.suptitle(f'BL {BLs[k]}')
-    fig.subplots_adjust(wspace=0.5)
-    ax0, ax1 = axs
-    scal.scatter_plot_FP(q, xdata, ydata, data[k], frame='ONAFP', 
-                         fig=fig, ax=ax0, s=170, cmap='bwr', 
-                         vmin=vmin, vmax=vmax, title='Original order', unit=None)
-
-    scal.scatter_plot_FP(q, xONAFP, yONAFP, newdata[k], frame='ONAFP', 
-                         fig=fig, ax=ax1, s=170, cmap='bwr', 
-                         vmin=vmin, vmax=vmax, title='Re-order', unit=None)
+plt.figure()
+plt.hist(errs[0], range=(0, 1), bins=15, alpha=0.4,)
 ```
 
 # Start fitting
@@ -199,8 +350,8 @@ params_fake = [focal_fake, theta_fake] + allP_fake
 
 # Gain for each TES (same for each image)
 # gains_fake = np.ones_like(fake_fringes[0])
-gains_fake = np.random.normal(10., 5., size=ndet)
-gains_fake /= np.mean(gains_fake)
+gains_fake = np.random.normal(1., 1., size=ndet)
+# gains_fake /= np.mean(gains_fake)
 print('gain mean:', np.mean(gains_fake))
 print('gains fake:', gains_fake[:10])
 print('gains negative:', gains_fake[gains_fake<0.])
@@ -231,7 +382,7 @@ for k in range(nimages):
     # Add gaussian noise
     noise = np.random.normal(loc=0., scale=sigma, size=ndet)
     print('Gaussian noise:', noise[:10])
-    fake_noise = fake_gain + noise
+    fake_noise = fake_gain #+ noise
     
     fake_fringes.append(fake_noise)
     
@@ -248,31 +399,38 @@ for k in range(nimages):
                          fig=fig, ax=ax3, title='Adding noise', unit=None, s=170, cmap='bwr')
 
 if simu:
-    newdata = fake_fringes
-    newerror = list(np.ones_like(fake_fringes) * sigma)
+    fringes = fake_fringes
+    errs = list(np.ones_like(fake_fringes) * sigma)
 ```
 
 #### Covariance matrix
 
 ```{python}
+# Put a very high error to bad TES => very small weight 
+# for k in range(nimages):
+#     errs[k][np.isnan(okTES[k])] *= 1e20 
+```
+
+```{python}
 allInvCov = []
 for k in range(nimages):
-    Cov = np.diag(newerror[k]**2/1000)
+    Cov = np.diag(errs[k]**2)
     print(Cov)
     
     InvCov = np.diag(1. / np.diag(Cov))
 #     print(InvCov)
     allInvCov.append(InvCov)
+
 ```
 
 ```{python}
-def get_gains(allPhi, allinvcov, alldata):
-    nimages = len(allPhi)
+def get_gains(allPowerPhi, allinvcov, alldata):
+    nimages = len(allPowerPhi)
     
     InvCov_A = np.zeros_like(allinvcov[0])
     Term = np.zeros_like(alldata[0])
     for k in range(nimages):
-        Phi_mat = np.diag(allPhi[k])
+        Phi_mat = np.diag(allPowerPhi[k])
         InvCov_A += Phi_mat.T @ allinvcov[k] @ Phi_mat
         Term += Phi_mat.T @ allinvcov[k] @ alldata[k]
     Cov_A = np.linalg.inv(InvCov_A)
@@ -291,7 +449,7 @@ def get_chi2(params, allinvcov, alldata, BLs, returnA=False):
     theta_source = params[1]
     allP = params[2:]
     q.optics.focal_length = focal
-    allPhi = []
+    allPowerPhi = []
     for k in range(nimages):
         model = scal.Model_Fringes_Ana(q, BLs[k], 
                                         theta_source=theta_source, 
@@ -301,15 +459,14 @@ def get_chi2(params, allinvcov, alldata, BLs, returnA=False):
         x, y, Phi = model.get_fringes(times_gaussian=False)
         
         # Global amplitude
-        Phi *= allP[k]
-        allPhi.append(Phi)
+        allPowerPhi.append(Phi * allP[k])
     
     # Gain for each detector
-    A, Cov_A = get_gains(allPhi, allinvcov, alldata)
+    A, Cov_A = get_gains(allPowerPhi, allinvcov, alldata)
     
     chi2 = 0.
     for k in range(nimages):
-        M = np.diag(allPhi[k]) @ A
+        M = np.diag(allPowerPhi[k]) @ A
         R = M - alldata[k]
         chi2 += R.T @ allinvcov[k] @ R
     
@@ -338,20 +495,20 @@ if fixPower:
     for i, fl in enumerate(all_fl):
         for j, th in enumerate(all_th):
             params = [fl, th] + [0.5] * nimages
-            chi2_grid[i, j] = get_chi2(params, allInvCov, newdata, BLs)
+            chi2_grid[i, j] = get_chi2(params, allInvCov, fringes, BLs)
 else:
     power_optimize = np.zeros((nval_fl, nval_th, nimages))
     step = 0
     for i, fl in enumerate(all_fl):
         for j, th in enumerate(all_th):
             
-            def chi2_temporary(mypower, allInvCov, newdata, BLs):
+            def chi2_temporary(mypower, allInvCov, fringes, BLs):
                 params = [fl, th] + list(mypower)
-                chi2_temp = get_chi2(params, allInvCov, newdata, BLs)
+                chi2_temp = get_chi2(params, allInvCov, fringes, BLs)
                 return chi2_temp
             result = sop.minimize(chi2_temporary, 
                                   x0=[0.5] * nimages, 
-                                  args=(allInvCov, newdata, BLs), 
+                                  args=(allInvCov, fringes, BLs), 
                                   method='Nelder-Mead',
                                   options={'maxiter':10000})
             chi2_grid[i, j] = result['fun']
@@ -366,11 +523,11 @@ else:
 
 ```{python}
 # Smooth with a gaussian
-smooth = False
+smooth = True
 step_fl = all_fl[1] - all_fl[0]
 step_th = all_th[1] - all_th[0]
 if smooth:
-    chi2_grid = gaussian_filter(chi2_grid, sigma=[step_fl*5e2, step_th*5e2])
+    chi2_grid = gaussian_filter(chi2_grid, sigma=[step_fl*1e3, step_th*1e3])
 ```
 
 ```{python}
@@ -393,7 +550,7 @@ if simu:
 
 ```{python}
 fig, ax = plt.subplots(figsize=(8, 8))
-c = ax.pcolor(np.rad2deg(all_th), all_fl, chi2_grid, vmax=1e3)#, norm=SymLogNorm(3e4))
+c = ax.pcolor(np.rad2deg(all_th), all_fl, chi2_grid)#, vmax=2e11, norm=SymLogNorm(3e11))
 ax.set_xlabel('Theta')
 ax.set_ylabel('Focal length')
 if simu:
@@ -411,7 +568,7 @@ Using `scipy.optimize.minimize`
 # params_guess = [0.30, np.deg2rad(-0.5)] + [0.5]*3
 result = sop.minimize(get_chi2, 
                       x0=params_guess, 
-                      args=(allInvCov, newdata, BLs), 
+                      args=(allInvCov, fringes, BLs), 
                       method='Nelder-Mead',
                       options={'maxiter':10000})
 print(result)
@@ -445,7 +602,7 @@ print('\nReduce Chi2:', result['fun']/(nimages * ndet))
 ```{python}
 q.optics.focal_length = result['x'][0]
 allP_res = result['x'][2:]
-allPhi = []
+PowerPhi = []
 for k in range(nimages):
     model = scal.Model_Fringes_Ana(q, BLs[k], 
                                    theta_source=result['x'][1], 
@@ -455,17 +612,11 @@ for k in range(nimages):
     x, y, Phi = model.get_fringes(times_gaussian=False)
     
     # Global amplitude
-    Phi *= allP_res[k]
-    allPhi.append(Phi)
+    PowerPhi.append(Phi * allP_res[k])
     
 
 # Gain for each detector
-A, Cov_A = get_gains(allPhi, allInvCov, newdata)
-
-Model_minimize = []
-for k in range(nimages):
-    Model_minimize.append(allPhi[k] * A)
-
+A, Cov_A = get_gains(PowerPhi, allInvCov, fringes)
 
 print('Gains found:\n', np.round(A[:10], 4))
 if simu:
@@ -494,7 +645,7 @@ else:
     fig, axs = plt.subplots(1, 2, figsize=(13, 4))
     ax1, ax2 = np.ravel(axs)
     scal.scatter_plot_FP(q, xONAFP, yONAFP, A, fig=fig, ax=ax1, frame='ONAFP', title='Gains found', 
-                         unit=None, vmin=-5, vmax=5, s=100, cmap='bwr')
+                         unit=None, vmin=-1, vmax=1, s=100, cmap='bwr')
     ax2.hist(A, bins=30, range=(-10, 10), label='{:.2f} +- {}'.format(np.mean(A), np.std(A)))
     ax2.set_xlabel('Gains found')
     ax2.axvline(np.mean(A), color='r')
@@ -526,91 +677,64 @@ if simu:
 
 ```
 
-#### Fringes corrected by intercalibrations
+#### Residuals and correction by intercalibrations (gains)
 
 ```{python}
-data_correct = []
-for i in range(nimages):
-    data_correct.append(newdata[i] / result['x'][2 + i] / A)
-
-fig, axs = plt.subplots(nimages, 2, figsize=(13, nimages*4))
-axs = np.ravel(axs)
-for k in range(nimages):
-    scal.scatter_plot_FP(q, xONAFP, yONAFP, newdata[k], fig=fig, ax=axs[k*2], frame='ONAFP', 
-                     title=f'Initial - BL {BLs[k]}', 
-                     unit=None, vmin=-1, vmax=1, s=130, cmap='bwr')
-    scal.scatter_plot_FP(q, xONAFP, yONAFP, data_correct[k], fig=fig, ax=axs[k*2+1], frame='ONAFP', 
-                     title=f'Corrected - BL {BLs[k]}', 
-                     unit=None, vmin=-1, vmax=1, s=130, cmap='bwr')
-fig.tight_layout()
-
-```
-
-```{python}
-fig, axs = plt.subplots(nimages, 2, figsize=(13, nimages*4))
-axs = np.ravel(axs)
-for k in range(nimages):
-    ax0 = axs[k*2]
-    ax1 = axs[k*2 + 1]
-    old2D = make2Dfringes(newdata[k])
-    new2D = make2Dfringes(data_correct[k])
-    
-    img_old = ax0.imshow(old2D, cmap='bwr', vmin=-1, vmax=1, interpolation='Gaussian')
-    ax0.set_title(f'Initial - BL {BLs[k]}')
-    divider = make_axes_locatable(ax0)
+def make_colorbar(ax, image):
+    divider = make_axes_locatable(ax)
     cax = divider.append_axes('right', size='5%', pad=0.05)
-    clb = fig.colorbar(img_old, cax=cax)
-
-    img_new = ax1.imshow(new2D, cmap='bwr', vmin=-1, vmax=1, interpolation='Gaussian')
-    ax1.set_title(f'Corrected - BL {BLs[k]}')
-    divider = make_axes_locatable(ax1)
-    cax = divider.append_axes('right', size='5%', pad=0.05)
-    clb = fig.colorbar(img_new, cax=cax)
+    clb = fig.colorbar(image, cax=cax)
+    return
+ 
+def plot_residuals(q, xONAFP, yONAFP, BL, data, okTES, PowerPhi, errors, gains):
+    fig, axs = plt.subplots(4, 2, figsize=(12, 16))
+    fig.suptitle(f'BL {BL}')
+    axs = np.ravel(axs)
     
-fig.tight_layout()
-```
-
-#### Look at the residuals
-
-```{python}
-vmin = -1
-vmax = 1
-for k in range(nimages):
-    fig, axs = plt.subplots(2, 2, figsize=(12, 8))
-    fig.suptitle(f'BL {BLs[k]}')
+    # Initial / corrected 
+    correct = data/gains
+    flib.plot_fringes_scatter(q, xONAFP, yONAFP, data*okTES, fig=fig, ax=axs[0], frame='ONAFP', 
+                     title=f'Data', s=100, vmin=-0.5, vmax=0.5)
+    flib.plot_fringes_scatter(q, xONAFP, yONAFP, correct*okTES, fig=fig, ax=axs[1], frame='ONAFP', 
+                     title=f'Data / gains', s=100, vmin=-0.5, vmax=0.5)
     
-    fig.subplots_adjust(wspace=0.3)
-    ax0, ax1, ax2, ax3 = np.ravel(axs)
-    scal.scatter_plot_FP(q, xONAFP, yONAFP, newdata[k]/np.std(newdata[k]), frame='ONAFP', 
-                         fig=fig, ax=ax0, unit=None, title='Data', s=100, vmin=vmin, vmax=vmax, cmap='bwr')
-
-    scal.scatter_plot_FP(q, xONAFP, yONAFP, Model_minimize[k]/np.std(Model_minimize[k]), frame='ONAFP', 
-                         fig=fig, ax=ax1, unit=None, title='Fit result', s=100, vmin=vmin, vmax=vmax, cmap='bwr')
+    # Initial / corrected smooth  
+    img_old = axs[2].imshow(make2Dfringes(data*okTES), cmap='bwr', vmin=-1, vmax=1, interpolation='Gaussian')
+    axs[2].set_title(f'Data')
+    make_colorbar(axs[2], img_old)
+   
+    img_new = axs[3].imshow(make2Dfringes(correct*okTES), cmap='bwr', vmin=-1, vmax=1, interpolation='Gaussian')
+    axs[3].set_title(f'Data / gains')
+    make_colorbar(axs[3], img_new)
     
-    scal.scatter_plot_FP(q, xONAFP, yONAFP, Model_minimize[k] - newdata[k], frame='ONAFP',
-                         fig=fig, ax=ax2, unit=None, 
-                         title='Residuals', s=100, vmin=vmin, vmax=vmax, cmap='bwr')
+    # Fit
+    flib.plot_fringes_scatter(q, xONAFP, yONAFP, PowerPhi, frame='ONAFP', fig=fig, ax=axs[4], 
+                              title='Fit: Power x Phi', s=100, vmin=-1, vmax=1, normalize=False)
     
-    scal.scatter_plot_FP(q, xONAFP, yONAFP, (Model_minimize[k] - newdata[k])/newerror[k], frame='ONAFP',
-                         fig=fig, ax=ax3, unit=None, 
-                         title='Residuals/errors', s=100, vmin=vmin/100, vmax=vmax/100, cmap='bwr')
+    # Residuals
+    residu = (correct - PowerPhi) * okTES
+    flib.plot_fringes_scatter(q, xONAFP, yONAFP, residu, frame='ONAFP',
+                             fig=fig, ax=axs[5], title='Residuals = Data/gains - Power x Phi', s=100, vmin=-1, vmax=1, normalize=False)
+    
+    # Pull
+    pull = residu / (errors/gains)
+    mean = np.nanmean(pull)
+    std = np.nanstd(pull)
+    axs[6].hist(pull, range=(-15, 15), bins=15, label='{:.5f} +- {:.5f}'.format(mean, std))
+    axs[6].axvline(mean, color='r')
+    axs[6].axvline(mean+std, color='r', linestyle='--')
+    axs[6].axvline(mean-std, color='r', linestyle='--')
+    axs[6].set_title('Pull = Residuals / (errors/gains)')
+    axs[6].legend()
+    plt.axvline
     fig.tight_layout()
+    return
 ```
 
 ```{python}
-fig, axs = plt.subplots(2, nimages, figsize=(12, 10))
-fig.suptitle('Histogram on the residuals/errors after minimization')
-axs = np.ravel(axs)
 for k in range(nimages):
-    mean = np.mean((Model_minimize[k] - newdata[k])/newerror[k])
-    std = np.std((Model_minimize[k] - newdata[k])/newerror[k])
-    ax = axs[k]
-    ax.hist((Model_minimize[k] - newdata[k])/newerror[k], bins=30, label='{:.5f} +- {:.5f}'.format(mean, std))
-    ax.axvline(mean, color='r', label='mean')
-    ax.set_title(f'BL {BLs[k]}')
-    ax.set_xlabel('Residuals/errors')
-    ax.legend()
-fig.tight_layout()
+    plot_residuals(q, xONAFP, yONAFP, BLs[k], fringes[k], okTES[k], PowerPhi[k], errs[k], A)
+
 ```
 
 ## MCMC
@@ -636,7 +760,7 @@ print("{0} CPUs".format(ncpu))
 def lnlike(params, allInvCov, alldata, BLs):
     chi2, A, Cov_A = get_chi2(params, allInvCov, alldata, BLs, returnA=True)
     LnLike = - 0.5 * chi2
-    print(chi2)
+#     print(chi2)
     return LnLike, A, Cov_A
 
 def lnprior(params):
@@ -644,7 +768,7 @@ def lnprior(params):
     th = params[1]
     allP = params[2:]
 
-    if fl > 0.:#25 and fl < 0.35 and np.rad2deg(th) < 2 and np.rad2deg(th) > -2:
+    if fl > 0.:#.29 and fl < 0.31:
         return 0.0
     else:
         return -np.inf
@@ -683,24 +807,28 @@ def run(p0, nwalkers, niter, ndim, lnprob, args, withpool=True):
 ```
 
 ```{python}
+allInvCov
+```
+
+```{python}
 ndim = len(params_guess)
-nwalkers = 20
+nwalkers = 50
 
 # Initial guess
 p0 = [params_guess + 1e-4 * np.random.rand(ndim) for i in range(nwalkers)]
 # print(p0)
 
 niter = 1000
-args = (allInvCov, newdata, BLs)
+args = (allInvCov, fringes, BLs)
 sampler, pos, prob, state, blob_A, blob_Cov_A = run(p0, nwalkers, niter, ndim, lnprob, args, withpool=False)
 ```
 
 ```{python}
 # Look at the full chain
-thin = 10
+thin = 1
 flat_samples = sampler.get_chain(discard=0, thin=thin, flat=True)
 print(flat_samples.shape)
-cut = 800
+cut = 20200
 
 plt.subplots(3, 1, figsize=(12, 8))
 plt.suptitle('Full chain')
@@ -723,7 +851,7 @@ if simu:
     plt.axhline(np.rad2deg(theta_fake), label='Truth')
 plt.axvline(cut, color='r', label='Cut')
 plt.ylabel('Theta [deg]')
-# plt.xlim(800, 1000)
+plt.xlim(30000, 31000)
 # plt.ylim(-1, 0.)
 
 plt.subplot(313)
@@ -816,7 +944,7 @@ print('STD from MCMC:', std_param[2:])
 
 # Reduced: Chi2
 nDDL = nimages * ndet
-print('\n***Reduced Chi2:', get_chi2(mean_param, allInvCov, newdata, BLs) / nDDL)
+print('\n***Reduced Chi2:', get_chi2(mean_param, allInvCov, fringes, BLs) / nDDL)
 
 ```
 
@@ -825,7 +953,7 @@ print('\n***Reduced Chi2:', get_chi2(mean_param, allInvCov, newdata, BLs) / nDDL
 ```{python}
 # Directly, from the mean obtained with the MCMC
 q.optics.focal_length = mean_param[0]
-allPhi = []
+allpowerPhi = []
 for k in range(nimages):
     model = scal.Model_Fringes_Ana(q, BLs[k], 
                                     theta_source=mean_param[0], 
@@ -833,13 +961,12 @@ for k in range(nimages):
                                     fwhm=20., amp=1., frame='ONAFP')
 
     x, y, Phi = model.get_fringes(times_gaussian=False)
-    allPhi.append(Phi)
     
     # Global amplitude
-    Phi *= allP_res[k]  
+    allPowerPhi.append(Phi * allP_res[k])
 
 # Gain for each detector
-A, Cov_A = get_gains(allPhi, allInvCov, newdata)
+A, Cov_A = get_gains(allPowerPhi, allInvCov, fringes)
 
 print('\nA:', np.round(A[:10], 4))
 if simu:
@@ -854,7 +981,7 @@ allA = np.zeros((size, ndet))
 for i in range(size):
     params = distrib[i]
     q.optics.focal_length = params[0]
-    allPhi = []
+    allPowerPhi = []
     for k in range(nimages):
         model = scal.Model_Fringes_Ana(q, BLs[k], 
                                         theta_source=params[1], 
@@ -862,14 +989,13 @@ for i in range(size):
                                         fwhm=20., amp=1., frame='ONAFP')
 
         x, y, Phi = model.get_fringes(times_gaussian=False)
-        allPhi.append(Phi)
-
+        
         # Global amplitude
-        Phi *= allP_res[k]
+        allPowerPhi.append(Phi * allP_res[k])
 
 
     # Gain for each detector
-    allA[i, :], Cov_A = get_gains(allPhi, allInvCov, newdata)
+    allA[i, :], Cov_A = get_gains(allPowerPhi, allInvCov, fringes)
 
 stdA = np.std(allA, axis=0)    
 meanA = np.mean(allA, axis=0)    
@@ -947,51 +1073,7 @@ else:
 #     plt.legend()
 ```
 
-#### Look at the fringes corrected by intercalibrations
-
-```{python}
-data_correct = []
-for i in range(nimages):
-    data_correct.append(newdata[i]/mean_param[2 + i] / blobA_mean)
-
-fig, axs = plt.subplots(nimages, 2, figsize=(13, nimages*3))
-axs = np.ravel(axs)
-for k in range(nimages):
-    scal.scatter_plot_FP(q, xONAFP, yONAFP, newdata[k], fig=fig, ax=axs[k*2], frame='ONAFP', 
-                     title=f'Initial - BL {BLs[k]}', 
-                     unit=None, vmin=-1, vmax=1, s=50, cmap='bwr')
-    scal.scatter_plot_FP(q, xONAFP, yONAFP, data_correct[k], fig=fig, ax=axs[k*2+1], frame='ONAFP', 
-                     title=f'Corrected - BL {BLs[k]}', 
-                     unit=None, vmin=-1, vmax=1, s=50, cmap='bwr')
-fig.tight_layout()
-
-```
-
-```{python}
-fig, axs = plt.subplots(nimages, 2, figsize=(13, nimages*3))
-axs = np.ravel(axs)
-for k in range(nimages):
-    ax0 = axs[k*2]
-    ax1 = axs[k*2 + 1]
-    old2D = make2Dfringes(newdata[k])
-    new2D = make2Dfringes(data_correct[k])
-    
-    img_old = ax0.imshow(old2D, cmap='bwr', vmin=-1, vmax=1, interpolation='Gaussian')
-    ax0.set_title(f'Initial - BL {BLs[k]}')
-    divider = make_axes_locatable(ax0)
-    cax = divider.append_axes('right', size='5%', pad=0.05)
-    clb = fig.colorbar(img_old, cax=cax)
-
-    img_new = ax1.imshow(new2D, cmap='bwr', vmin=-1, vmax=1, interpolation='Gaussian')
-    ax1.set_title(f'Corrected - BL {BLs[k]}')
-    divider = make_axes_locatable(ax1)
-    cax = divider.append_axes('right', size='5%', pad=0.05)
-    clb = fig.colorbar(img_new, cax=cax)
-    
-fig.tight_layout()
-```
-
-#### Look at the residuals
+#### Look at the residuals and data corrected by inter-calibrations
 
 ```{python}
 q.optics.focal_length = mean_param[0]
@@ -1007,51 +1089,8 @@ for k in range(nimages):
     
     fullmodel = Phi * mean_param[2 + k] * blobA_mean
     model_MCMC.append(fullmodel)
-    Residuals.append(newdata[k] - fullmodel)
+    Residuals.append(fringes[k] - fullmodel)
 
-```
-
-```{python}
-vmin = -2
-vmax = 2
-for k in range(nimages):
-    fig, axs = plt.subplots(2, 2, figsize=(12, 8))
-    fig.suptitle(f'BL {BLs[k]}')
-    
-    fig.subplots_adjust(wspace=0.3)
-    ax0, ax1, ax2, ax3 = np.ravel(axs)
-    scal.scatter_plot_FP(q, xONAFP, yONAFP, newdata[k]/np.std(newdata[k]), frame='ONAFP', 
-                         fig=fig, ax=ax0, unit=None, title='Data', s=100, vmin=vmin, vmax=vmax, cmap='bwr')
-
-    scal.scatter_plot_FP(q, xONAFP, yONAFP, model_MCMC[k]/np.std(model_MCMC[k]), frame='ONAFP', 
-                         fig=fig, ax=ax1, unit=None, title='MCMC result', s=100, vmin=vmin, vmax=vmax, cmap='bwr')
-    
-    scal.scatter_plot_FP(q, xONAFP, yONAFP, Residuals[k], frame='ONAFP',
-                         fig=fig, ax=ax2, unit=None, 
-                         title='Residuals', s=100, vmin=vmin, vmax=vmax, cmap='bwr')
-    
-    scal.scatter_plot_FP(q, xONAFP, yONAFP, (Residuals[k])/newerror[k], frame='ONAFP',
-                         fig=fig, ax=ax3, unit=None, 
-                         title='Residuals/errors', s=100, vmin=vmin, vmax=vmax, cmap='bwr')
-    fig.tight_layout()
-
-
-```
-
-```{python}
-fig, axs = plt.subplots(2, nimages//2, figsize=(12, 10))
-fig.suptitle('Histogram on the residuals/errors after MCMC')
-axs = np.ravel(axs)
-for k in range(nimages):
-    mean = np.mean(Residuals[k]/newerror[k])
-    std = np.std(Residuals[k]/newerror[k])
-    ax = axs[k]
-    ax.hist(Residuals[k]/newerror[k], bins=30, label='{:.5f} +- {:.5f}'.format(mean, std))
-    ax.axvline(mean, color='r', label='mean')
-    ax.set_title(f'BL {BLs[k]}')
-    ax.set_xlabel('Residuals/errors')
-    ax.legend()
-fig.tight_layout()
 ```
 
 ```{python}

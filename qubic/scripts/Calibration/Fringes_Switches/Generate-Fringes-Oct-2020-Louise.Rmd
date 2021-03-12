@@ -14,11 +14,13 @@ jupyter:
 
 # Generate Fringes from datasets
 
-Edited by Louise 01/2021
+Edited by Louise 03/2021
 
-In this notebook we produce the fringes files from the raw QUBIC datasets. We use the library `fringes_lib.py`.
+In this notebook we produce the fringes files from the raw QUBIC datasets from 2020/01/13, 27/10/2020 and 28/10/2020. 
 
-They are saved into fits files.
+We mainly use the libraries `fringes_lib.py` and `selfcal_lib.py` from QUBIC soft.
+
+Fringes are saved into **fits** files. PDF with plots can also be produced.
  
 
 ```{python}
@@ -166,7 +168,7 @@ allTODresiduals = []
 allmask_bad_TES = []
 
 # Loop on the BLs
-for i, BL in enumerate(allBLs[:]):
+for i, BL in enumerate(allBLs[:1]):
     print(f'\n ===================== Measurement {i+1}/{nBLs} - BL {BL} starting ===================')   
     print("Data folder:", datasets[i])
 
@@ -181,9 +183,8 @@ for i, BL in enumerate(allBLs[:]):
                               doplotTESsort=[0, 50],
                               median=True,
                               Ncycles_to_use=None,
-                              remove_median_allh=False,
-                              rm_slope_percycle=True,
-                              rm_slope_allcycles=False)
+                              remove_median_allh=True,
+                              rm_slope_percycle=True)
 
     allm_points.append(m_points)
     allerr_m_points.append(err_m_points)
@@ -202,23 +203,25 @@ for i, BL in enumerate(allBLs[:]):
 ctimes = Fringes_Ana.ctimes
 plt.figure()
 plt.hist(np.ravel(ctimes), bins=15, alpha=0.4, label='Times response')
-plt.hist(np.ravel(ctimes)*the_mask, bins=15, alpha=0.4, label='Times responses without bad det')
+plt.hist(np.ravel(ctimes)*Fringes_Ana.mask_bad_TES, bins=15, alpha=0.4, label='Times responses without bad det')
 plt.legend()
 plt.xlabel('Time response [s]')
 ```
 
 ```{python}
-for TES in range(10):
-    Fringes_Ana.plot_TOD(ASIC=1, TES=TES)
+for TES in range(1):
+    Fringes_Ana.plot_TOD(ASIC=1, TES=70)
+    plt.xlabel('Time [s]', fontsize=16)
+    plt.ylabel('TOD [A.U.]', fontsize=16)
 ```
 
 ```{python}
-for TES in range(20):
+for TES in range(2):
     Fringes_Ana.plot_average_over_steps(m_points[TES], err_m_points[TES], Mcycles[TES], err_Mcycles[TES])
 ```
 
 ```{python}
-for TES in range(100, 120):
+for TES in range(100, 102):
     plt.figure()
     plt.plot(m_points[TES, :, 0], label='step 1')
     plt.plot(m_points[TES, :, 1], label='step 2')
@@ -248,16 +251,15 @@ ax2.legend()
 ```
 
 ```{python}
-fringes1D_percycle.shape
 TES = Fringes_Ana.refTESnum
 # print(Fringes_Ana.goodTES)
-for t in range(100, 120):#Fringes_Ana.goodTES:
+for t in range(100, 104):#Fringes_Ana.goodTES:
     ASIC = t//128 + 1
     if t < 128:
         TES = t+1
     else:
         TES = t-128+1
-    if Fringes_Ana.oktes[t] == 1:
+    if Fringes_Ana.mask_bad_TES[t] == 1:
         status = 'ok'
     else:
         status = 'bad'
@@ -294,8 +296,20 @@ for t in range(100, 120):#Fringes_Ana.goodTES:
 
 ```{python}
 k = 0
-flib.plot_fringes_imshow_interp(allfringes1D[k], normalize=True)
-flib.plot_fringes_scatter(q, xTES, yTES, allfringes1D[k], s=280)
+cmap_bwr = flib.make_cmap_nan_black('bwr')
+
+fig, axs = plt.subplots(1, 2)
+ax1, ax2 = axs.ravel()
+
+# Imshow after a convolution with Astropy (gaussian kernel)
+fringes2D = flib.make2Dfringes_data(allfringes1D[k] * allmask_bad_TES[k])
+fringes2D_conv = flib.astropy_convolution(fringes2D, sigma=0.7)
+flib.plot_fringes_imshow(fringes2D_conv, normalize=True, fig=fig, ax=ax1, cmap=cmap_bwr, 
+                         title='Astropy convolution', mask=flib.make_mask2D_thermometers_TD())
+
+# Scatter plot
+flib.plot_fringes_scatter(q, xTES, yTES, allfringes1D[k]* allmask_bad_TES[k], s=150, 
+                          fig=fig, ax=ax2, cmap=cmap_bwr)
 ```
 
 ## Save the data
@@ -305,7 +319,7 @@ Save_class = flib.SaveFringesFitsPdf(q, date, allBLs[:], allstable_time[:], allN
                                        allfringes1D, allerr_fringes1D, allmask_bad_TES=allmask_bad_TES,
                                        nsteps=6, ecosorb='yes', frame='ONAFP')
 
-save_name = 'Fringes_' + date + f'_{Save_class.nBLs}BLs_RemoveSlopePerTES_medianTrue_refTESautomatic_maskbadTES'
+save_name = 'Fringes_' + date + f'_{Save_class.nBLs}BLs_RemoveSlopePerTES_medianTrue_refTESautomatic_maskbadTES0.75'
 Save_class.save_fringes_pdf_plots(global_dir, save_name=save_name + '.pdf', mask=flib.make_mask2D_thermometers_TD())
 
 Save_class.write_fits_fringes(global_dir, save_name=save_name + '.fits')
@@ -320,11 +334,17 @@ Save_class.write_fits_fringes(global_dir, save_name=save_name + '.fits')
 
 ```{python}
 # Load a fits file already saved with several images
-myfringes = 'Fringes_2020-10-27_12BLs_RemoveSlopePerTES_medianTrue_refTESautomatic_maskbadTES.fits'
+myfringes = 'Fringes_2020-10-27_12BLs_RemoveSlopePerTES_medianTrue_refTESautomatic_maskbadTES0.75.fits'
 
 header, fdict = flib.read_fits_fringes(global_dir + myfringes)
 print(fdict.keys())
-allmask_bad_TES = fdict['OK_TES']
+allmask_bad_TES = fdict['MASK_BAD_TES']
+
+```
+
+```{python}
+cmap = flib.make_cmap_nan_black('bwr')
+flib.plot_fringes_scatter(q, xTES, yTES, allmask_bad_TES[0], normalize=False, cbar=False, s=180, cmap=cmap)
 ```
 
 ```{python}
@@ -340,6 +360,7 @@ plt.figure()
 plt.plot(thecond, nbad, 'bo')
 plt.xlabel('Number of images where the TES is NAN')
 plt.ylabel('Number of bad TES')
+plt.grid()
 
 ```
 
@@ -352,7 +373,7 @@ print(the_mask)
 badTES = flib.give_index_bad_TES(the_mask)
 print(badTES.T)
 
-flib.plot_fringes_scatter(q, xTES, yTES, the_mask, normalize=False, s=140)
+flib.plot_fringes_scatter(q, xTES, yTES, the_mask, normalize=False, s=140, cbar=False)
 ```
 
 ```{python}

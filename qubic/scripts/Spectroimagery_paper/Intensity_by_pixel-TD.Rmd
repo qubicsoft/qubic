@@ -43,6 +43,7 @@ from qubic.polyacquisition import compute_freq
 from qubic import ReadMC as rmc
 from qubic import create_acquisition_operator_REC
 import ForegroundsSED as fsed
+import qubic.AnalysisMC as amc
 
 from scipy.optimize import curve_fit
 import scipy.constants
@@ -121,13 +122,16 @@ coverageFI /= np.max(coverageFI)
 ```
 
 ```{python}
+# NEW (19 Feb 2021)
 reload(fsed)
-covname = [global_dir+'/doc/FastSimulator/Data/DataFastSimulator_TD150G_coverage.fits',]
-coverageTD = fsed.coverage(dictionaries, regions, bands, filename = covname)
+covnameTD = [global_dir+'/doc/FastSimulator/Data/DataFastSimulator_TD150G_coverage.fits',]
+coveragesTD = fsed.coverage(dictionaries, regions, bands, filename = covnameTD)
+covnameFI = [global_dir+'/doc/FastSimulator/Data/DataFastSimulator_FI150G_coverage.fits',]
+coveragesFI = fsed.coverage(dictionaries, regions, bands, filename = covnameFI)
 ```
 
 ```{python}
-#OLD
+##### OLD
 lacarte=hp.gnomview(coverageTD,rot=center,reso=13,return_projected_map=True, no_plot=True)
 lacarteFI=hp.gnomview(covFI,rot=qubic.equ2gal(0,-57),
                       reso=13,return_projected_map=True, no_plot=True)
@@ -151,7 +155,8 @@ ax.plot_surface(X,Y, lacarte-lacarteFI, cmap=plt.cm.viridis, linewidth=0.2)
 ```{python}
 #NEW
 reload(fsed)
-fsed._plot_covs(regions, bands, coverageTD, center, config = "TD")
+fsed._plot_covs(regions, bands, coveragesTD, center, config = "TD")
+fsed._plot_covs(regions, bands, coveragesFI, center, config = "FI")
 ```
 
 ##### QubicSkySim instanciation
@@ -234,10 +239,11 @@ for i in range(nreals):
 ```
 
 ```{python}
-# NEW (16 Feb 2021)
-
+# NEW (19 Feb 2021)
 reload(fsed)
-noise = fsed.foreground_with_noise(dictionaries, sky_conf, coverageTD, 10, verbose = False) 
+nreals = 100
+noiseTD = fsed.noise_qss(dictionaries, sky_conf, coveragesTD, nreals, verbose = False) 
+noiseFI = fsed.noise_qss([dFI], sky_conf, coveragesFI, nreals, verbose = False) 
 ```
 
 ```{python}
@@ -255,12 +261,29 @@ mapsFI, stdFI = np.mean(noisymapsFI, axis = 0), np.std(noisymapsFI, axis = 0)
 
 ```{python}
 # NEW (16 Feb 2021)
-maps, cov = fsed.foregrounds_with_noise()
+
+reload(fsed)
+for ic, idict in enumerate(dictionaries):
+    noisy_frgrounds = np.zeros(np.shape(noiseFI)[1:])
+    for j in range(nreals):
+        noisy_frgrounds[j, ...] = 31 * noiseFI[ic, j, ...] + fground_maps[ic]
+    maps = np.array([np.mean(noisy_frgrounds, axis = 0)])
+    stdmaps = np.array([np.std(noisy_frgrounds, axis = 0)])
+
 ```
 
 ### Look at the maps... okk..
 
 ```{python}
+# NEW (19 Feb 2021)
+reload(fsed)
+nf_recon = dictionaries[0]['nf_recon']
+maskmaps, mapregion = fsed._mask_maps(maps, coveragesTD, nf_recon)
+```
+
+```{python}
+# OLD (19 Feb 2021)
+
 #print(np.shape(maps_qubic), np.shape(maps_noiseless), np.shape(maps_noise), np.shape(coverage))
 cov = np.zeros_like(coverageFI,dtype=bool)
 covmsk = np.where(coverageFI > 0.01 * np.max(coverageFI))
@@ -304,6 +327,7 @@ elif not pol:
     hp.gnomview(dust_map_FI[NU,:,0], sub=(2,2,4), title='noiseless FI', reso=RESO, rot=center)
 
 ```{python}
+# OLD (19 Feb 2021)
 _,nus_edge,nus_out,_,_,_=qubic.compute_freq(dTD['filter_nu']/1e9, dTD['nf_recon'], dTD['filter_relative_bandwidth'] )
 #_,nus_edge_in,nus_in,_,_,_=qubic.compute_freq(d['filter_nu']/1e9, d['nf_sub'], 
 #                                              d['filter_relative_bandwidth'] )
@@ -353,10 +377,67 @@ for j,IPIX in enumerate([384526, 401928,520725]):
 
 plt.show()
 
+```{python}
+# NEW (19 Feb 2021)
+NU = 0
+STK = 0
+RESO = 15
+
+capsize=3
+plt.rc('font', size=15)
+pixG = [hp.ang2pix(dictionaries[0]['nside'], np.pi / 2 - np.deg2rad(center[0][1] + 3), 
+                   np.deg2rad(center[0][0] + 7) ), ]
+
+_, nus_edge150, nus_out150, _, _, _ = qubic.compute_freq(dictionaries[0]['filter_nu'] / 1e9,  
+                            dictionaries[0]['nf_recon'],
+                            dictionaries[0]['filter_relative_bandwidth'])
+
+for j in range(1):
+    fig,ax=plt.subplots(nrows = 1, ncols = 2, figsize = (18,4.5),)
+    ax=ax.ravel()
+    IPIXG = pixG[j]
+    print(pixG[j])
+    ax[0].errorbar(nus_out150, maskmaps[0,:,IPIXG,0],yerr = stdmaps[0, :,IPIXG,0], capsize = capsize,
+           fmt = 'o-', color = 'r', label = 'reconstructed', alpha = 0.8)
+    ax[0].plot(nus_out150, fground_maps[0,:,IPIXG,0],
+           'bo-',label='convolved', alpha=0.7)
+    #ax[0].axvspan(nus_edge150[-1],nus220[0],color='k',alpha=0.2)
+
+    ax[0].set_title('GC patch',fontsize=17)
+    ax[0].set_ylabel(r'$I_\nu$ [$\mu$K]',fontsize=18)
+    ax[0].set_xlabel(r'$\nu$[GHz]',fontsize=18)
+    ax[0].legend(loc='best',fontsize=12)
+    ax[0].grid()
+    ax[1].cla()
+    plt.axes(ax[1])
+    hp.gnomview(maskmaps[0, -1, :, 0], reso = 15,hold = True, notext = True, title = ' ',unit = r'$\mu$K',
+                max = 0.23 * np.max(maskmaps[0, -1, :, 0]), rot = center)
+    hp.projscatter(hp.pix2ang(dictionaries[0]['nside'], IPIXG), marker = '+', color = 'r',)
+    #plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Intensity.svg'.format(d150Q['nf_recon'],
+    #                                                                                          d150Q['nside'],
+    #                                                           pixQ[j], IPIXG), 
+    #            format = 'svg')
+    #plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Intensity.pdf'.format(d150Q['nf_recon'],
+    #                                                                                          d150Q['nside'],
+    #                                                           pixQ[j], IPIXG), 
+    #            format = 'pdf')
+    #plt.savefig('Figs-FI-SED/nrec{}_nside{}_pixQ{}_pixG{}_Intensity'.format(d150Q['nf_recon'],
+    #                                                                                      d150Q['nside'],
+    #                                                                 pixQ[j], IPIXG))
+plt.show()
+```
+
+```{python}
+# NEW (17 Feb 2021)
+reload(fsed)
+fsed._plot_exampleSED(dictionaries[0], center[0], nus_out150, maskmaps[0])
+```
 
 ## Udgrading maps
 
 ```{python}
+# OLD (19 Feb  2021)
+
 nside_new = 64
 npix_ud = 12 * nside_new **2 
 noiseFI_ud = np.zeros((nreals, len(nus_out), npix_ud, 3))
@@ -375,6 +456,16 @@ for irec in range(len(nus_out)):
 ```
 
 ```{python}
+# NEW (19 Feb 2021)
+reload(fsed)
+nside_new = 64
+nf_recon = dictionaries[0]['nf_recon']
+
+maps_ud, std_ud, fgr_map_ud, noise_ud_i = fsed.udgrade_maps(fground_maps, noiseTD, nside_new, nf_recon, nreals)
+```
+
+```{python}
+# OLD (19 Feb 2021)
 mapsTD_ud_i = np.zeros_like(noiseFI_ud)
 mapsFI_ud_i = np.zeros_like(noiseFI_ud)
 
@@ -392,7 +483,7 @@ PixPix = lambda p: hp.ang2pix(nside_new, hp.pix2ang(dTD['nside'], p)[0], hp.pix2
 ```
 
 ```{python}
-import qubic.AnalysisMC as amc
+# OLD (19 Feb 2021)
 
 cov_ud = hp.ud_grade(cov, nside_new)
 
@@ -408,6 +499,26 @@ plt.colorbar()
 ```
 
 ```{python}
+# NEW (19 Feb 2021)
+reload(fsed)
+
+_, covmask = fsed._mask_maps(maps, coveragesTD, nf_recon)
+cov_ud = hp.ud_grade(covmask, nside_new)
+print("cov_ud shape", np.shape(cov_ud))
+Cp = []
+Cp_prime = []
+for br in range(len(dictionaries)):
+    Cp = amc.get_Cp(noise_ud_i[br][:, :, cov_ud[br], :], verbose = False, doplot = False)
+    Cp_prime.append(amc.Cp2Cp_prime_viaCorr(Cp, verbose = False)[1])
+
+plt.figure()
+plt.imshow(Cp_prime[0][:, :, 0, 0])
+plt.colorbar()
+```
+
+```{python}
+# OLD (19 Feb 2021)
+
 for iNU in range(dTD['nf_recon']):
     mapsTD_ud[iNU,~cov_ud,:] = hp.UNSEEN
     mapsFI_ud[iNU,~cov_ud,:] = hp.UNSEEN
@@ -415,9 +526,17 @@ for iNU in range(dTD['nf_recon']):
     dust_map_FI_ud[iNU,~cov_ud,:] = hp.UNSEEN
 ```
 
+```{python}
+# NEW (17 feb 2021)
+for idict in range(len(dictionaries)):
+    for iNU in range(nf_recon):
+        maps_ud[idict, iNU,~cov_ud[idict],:] = hp.UNSEEN
+```
+
 ### FIT
 
 ```{python}
+# OLD (19 Feb 2021)
 #from lmfit import Model
 
 def funcPot(x, a, b):
@@ -467,6 +586,8 @@ def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 ```
 
 ```{python}
+# OLD (19 Feb 2021)
+
 pix = [hp.ang2pix(dTD['nside'], np.pi / 2 - np.deg2rad(center[1] - 0), np.deg2rad(center[0] + 1  ) ), ]
 pix_ud = PixPix(pix[0])
 pix_ud = 24448
@@ -488,6 +609,31 @@ hp.projscatter(hp.pix2ang(nside_new, pix_ud), marker = 'o', color = 'r', s = 160
 ```
 
 ```{python}
+# NEW (19 Feb 2021)
+#
+#   Choose pixel for regions
+#
+
+pixG = [hp.ang2pix(dictionaries[0]['nside'], 
+                   np.pi / 2 - np.deg2rad(center[0][1] - 8), 
+                   np.deg2rad(center[0][0] - 4 ) ), ]
+
+pixG_ud = PixPix(pixG[0])
+# Where the sky pixel is in the reduce format (pixels seen array and not full map)
+pixG_red = np.where(np.where(cov_ud[0] == True)[0] == pixG_ud)[0][0]
+
+plt.figure(figsize = (10,4))
+hp.gnomview(maps_ud[0,-1,:,0], reso = 15,#hold = True, 
+            notext = False, title = 'G patch ', sub = (121),
+            max = 0.4*np.max(maps_ud[0,-1,:,0]), 
+            unit = r'$\mu$K',
+            rot = center[0])
+hp.projscatter(hp.pix2ang(nside_new, pixG_ud), marker = '*', color = 'r', s = 200)
+hp.graticule(dpar = 10, dmer = 20, alpha = 0.6)
+```
+
+```{python}
+# OLD (19 Feb 2021)
 import time
 FuncModel = func353
 t0 = time.time()
@@ -500,6 +646,8 @@ print("Done it in {:.2f} min".format((time.time()-t0)/60))
 ```
 
 ```{python}
+# OLD (19 Feb 2021)
+
 t1 = time.time()
 istk = 1
 print("===============  Doing {} stokes  ====================".format(dTD['kind'][istk]))
@@ -518,6 +666,8 @@ print("Done it in {:.2f} min".format((time.time()-t1)/60))
 ```
 
 ```{python}
+# OLD (19 Feb 2021)
+
 # Modeling fit to map values
 xSED = nus_out
 ySED = dust_map_TD_ud[:,pix_ud,0]
@@ -526,9 +676,32 @@ p_opt, p_cov = curve_fit(quad, xSED, ySED)
 ```
 
 ```{python}
+# OLD (19 Feb 2021)
+
 xnew = np.linspace(nus_edge_out[0],nus_edge_out[-1],1000)
 plt.plot(xnew, quad(xnew, *p_opt))
 plt.plot(xSED, ySED, 'ko')
+```
+
+```{python}
+np.shape(Cp_prime), fgr_map_ud.shape, np.shape(nus_out[0])
+```
+
+```{python}
+# NEW (19 Feb 2021)
+
+reload(fsed)
+nus_out = [nus_out150, ]
+pixs_ud = [pixG_ud, ]
+pixs_red = [pixG_red, ]
+nus_edge = [nus_edge150, ]
+
+FuncModel = fsed.PlanckFunc353
+print(np.shape(dictionaries), np.shape(fgr_map_ud), np.shape(Cp_prime), np.shape(nus_out),
+     np.shape(nus_edge), np.shape(pixs_ud), np.shape(pixs_red))
+Imvals, Isvals, xarr = fsed.foregrounds_run_mcmc(dictionaries, fgr_map_ud, Cp_prime, FuncModel,
+                                                nus_out, nus_edge, pixs_ud, pixs_red = pixs_red, 
+                                                samples = 5000, verbose = True, initP0 = [1e18, -2])
 ```
 
 ```{python}

@@ -17,6 +17,10 @@ jupyter:
 ```
 
 ```{python}
+import sys
+sys.path.append('/home/james/')
+sys.path.append('/home/james/mylibs/multifrequency/')
+
 from CSFPA_main import MainProg
 from CSFPA_dataIO import IntensityCalcRAW, getXYcoords, dataIO, RetrieveVars
 from CSFPA_plots import MultiFIntensityTESPlot
@@ -177,14 +181,16 @@ plt.show()
 
 ```{python}
 """must load vertex"""
-
+path='/home/james/libraries/qubic/qubic/'
 basedir = Qubic_DataDir(datafile='instrument.py', ) 
 print('basedir : ', basedir)
 dictfilename = basedir + '/dicts/global_source_oneDet.dict'
+dictfilename = path + '/dicts/global_source_oneDet.dict'
 d = qubic.qubicdict.qubicDict()
 #d.read_from_file('../qubic/qubic/dicts/global_source_oneDet.dict')
 #change to moddded dictionary
-d.read_from_file('/home/james/libraries/qubic/qubic/dicts/global_source_oneDetFI.dict')
+d.read_from_file('/home/james/libraries/qubic/qubic/dicts/global_source_oneDet.dict')
+d['config'] = 'FI'
 q = qubic.QubicMultibandInstrument(d)
 
 vtxs = q[0].detector.vertex
@@ -226,7 +232,7 @@ def IntegrateHornCombOnFP(it, xycoords, vtxs):
             x2 = i[2,0]
             y2 = i[2,1]
             
-            if x >= x2 and x <= x1 and y >= y2 and y <= y1:
+            if x >= x2 and x <= x1 and y >= y1 and y <= y2:
                 #print(x,y, x1, y1, x2, y2)
                 #if the point is inside the bolometer area, add to array
                 intbol = np.append(intbol, it[cntj])

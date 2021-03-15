@@ -21,6 +21,7 @@ __all__ = ['PlanckAcquisition',
            'QubicPlanckAcquisition']
 
 
+
 class QubicAcquisition(Acquisition):
     """
     The QubicAcquisition class, which combines the instrument, sampling and

@@ -389,7 +389,7 @@ def Synchrotron_Planck(x, c0, c1, c2, extra_args = None ):
 	return c0 * 1e5 * (x / c1) ** (- c2)
 
 def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
-		   maxfev = 10000, initP0 = None, verbose = False,
+		   maxfev = 10000, verbose = False, initP0 = None, chi2 = None,
 		  nsamples = 5000, new = False):
 	
 	if new:
@@ -413,7 +413,7 @@ def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 		print("Calling LogLikelihood", popt, pcov)
 		print("xvals, yvals", nus, maps[:, pix, istk])
 	myfit = mcmc.LogLikelihood(xvals = nus, yvals = maps[:, pix, istk], 
-							   errors = covMat[:, :, istk, pix_red], 
+							   errors = covMat[:, :, istk, pix_red], chi2 = chi2,
 							   model = FuncModel, p0 = popt)
 	#print("myfit info: " )
 	fit_prep = myfit.run(nsamples)
@@ -436,7 +436,7 @@ def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 	
 
 def foregrounds_run_mcmc(dictionaries, fgr_map, Cp_prime, FuncModel,
-					nus_out, nus_edge, pixs, pixs_red = None, 
+					nus_out, nus_edge, pixs, pixs_red = None, chi2 = None,
 					samples = 5000, verbose = True, initP0 = None):
 	t0 = time.time()
 
@@ -456,7 +456,7 @@ def foregrounds_run_mcmc(dictionaries, fgr_map, Cp_prime, FuncModel,
 														PixSED_Xstk(nus_out[j], fgr_map[j], FuncModel, 
 																	pixs[j], pixs_red[j], 
 																	istk, Cp_prime[j], nus_edge[j], 
-																	initP0 = initP0, nsamples = samples)
+																	chi2 = chi2, initP0 = initP0, nsamples = samples)
 	print('Done in {:.2f} min'.format((time.time()-t0)/60 ))
 
 	return MeanVals, StdVals, xarr[:,:,0], _flat_samples

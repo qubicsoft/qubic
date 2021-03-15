@@ -250,10 +250,10 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 
 	elif isinstance(chi2, Chi2Implement):
 		if verbose:
-			print("Minimizer object: ", MinimizerObj.__dict__)
+			print("Minimizer object: ", chi2.__dict__)
 			print("Guess: ", *guess)
 			print("ncallmax, nsplit, precision: ", ncallmax, nsplit, precision)	
-		m = iminuit.Minuit(MinimizerObj, *guess)
+		m = iminuit.Minuit(chi2, *guess)
 		m.migrad(ncall = ncallmax * nsplit)
 
 	# print('Migrad Done')

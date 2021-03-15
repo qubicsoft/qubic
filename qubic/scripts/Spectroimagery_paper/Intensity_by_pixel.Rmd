@@ -334,11 +334,13 @@ nus_edge = [nus150, nus220, nus150, nus220]
 
 #FuncModel = fsed.Synchrotron_Planck
 FuncModel = fsed.ThermDust_Planck353
+Chi2Model = "Chi2Implement"
 p0 = [50,3]
 #FuncModel = {'freedust': DustModel}
 reload(qubic)
 Imvals, Isvals, xarr, flat_samples = fsed.foregrounds_run_mcmc(dictionaries, fgr_map_ud, Cp_prime, FuncModel,
-                                                nus_out, nus_edge, pixs_ud, pixs_red = pixs_red, 
+                                                nus_out, nus_edge, pixs_ud, 
+                                                pixs_red = pixs_red, chi2=Chi2Model, 
                                                 samples = 5000, verbose = False, initP0 = p0)
 ```
 

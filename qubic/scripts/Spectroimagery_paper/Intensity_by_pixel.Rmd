@@ -130,15 +130,15 @@ fsed._plot_covs(regions, bands, coveragesmaps, centers)
 ```{python}
 # NEW (16 Feb 2021)
 reload(fsed)
-sky_conf = {'synch': 's0'}
-#sky_conf = {'dust': 'd1'}
+#sky_conf = {'synch': 's0'}
+sky_conf = {'dust': 'd1'}
 fground_maps = fsed.foreground_signal(dictionaries, sky_conf)
 ```
 
 ```{python}
 # NEW (16 Feb 2021)
 reload(fsed)
-nreals = 10
+nreals = 40
 noise = fsed.noise_qss(dictionaries, sky_conf, coveragesmaps, nreals, verbose = False) 
 
 ```
@@ -332,13 +332,14 @@ pixs_ud = [pixQ_ud, pixQ_ud, pixG_ud, pixG_ud]
 pixs_red = [pixQ_red, pixQ_red, pixG_red, pixG_red]
 nus_edge = [nus150, nus220, nus150, nus220]
 
-FuncModel = fsed.Synchrotron_Planck
-p0 = [50,20,3]
+#FuncModel = fsed.Synchrotron_Planck
+FuncModel = fsed.ThermDust_Planck353
+p0 = [50,3]
 #FuncModel = {'freedust': DustModel}
 reload(qubic)
 Imvals, Isvals, xarr, flat_samples = fsed.foregrounds_run_mcmc(dictionaries, fgr_map_ud, Cp_prime, FuncModel,
                                                 nus_out, nus_edge, pixs_ud, pixs_red = pixs_red, 
-                                                samples = 5000, verbose = True, initP0 = p0)
+                                                samples = 5000, verbose = False, initP0 = p0)
 ```
 
 ```{python}

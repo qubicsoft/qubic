@@ -1,0 +1,144 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+rc('figure',figsize=(16,4))
+rc('font',size=12)
+
+```
+
+```{python}
+def get_primbeam(th, lam, fwhmprimbeam_150=14.):
+    fwhmprim = 14. * lam / (3e8/150e9)
+    primbeam = np.exp(-0.5 * th**2 / (fwhmprim/2.35)**2)
+    return primbeam
+
+def give_sbcut(th, dx, lam, sqnh, Df=1., detpos=0., fwhmprimbeam_150=14.):
+    primbeam =  get_primbeam(th, lam, fwhmprimbeam_150=fwhmprimbeam_150)
+    theth = th - np.degrees(detpos/Df)
+    sb = np.sin(sqnh * np.pi * dx / lam * np.radians(theth))**2 / np.sin(np.pi * dx / lam * np.radians(theth))**2
+    return sb/np.max(sb)*primbeam
+
+```
+
+```{python}
+#### Synthesized beam cut plot
+fwhmprim_150 = 14. #deg
+nu = 150e9
+lam = 3e8/nu    #m
+dx = 14./1000  #m
+sqnh = 20
+Df = 1. #m
+minth = -20.
+maxth = 20
+nth = 1000
+th = np.linspace(minth, maxth, nth)
+
+sb = np.sin(sqnh * np.pi * dx / lam * np.radians(th))**2 / np.sin(np.pi * dx / lam * np.radians(th))**2
+sb = sb/max(sb)
+
+fwhmpeak = np.degrees(lam / sqnh / dx)
+thetapeak = np.degrees(lam / dx)
+
+# clf()
+# plot(th, give_sbcut(th, dx, lam, sqnh, Df=Df, detpos=0.), lw=2, label='r = 0')
+# plot(th, give_sbcut(th, dx, lam, sqnh, Df=Df, detpos=50./1000), lw=2, label = 'r = 50 mm')
+# plot([-fwhmpeak/2, fwhmpeak/2], [0.5,0.5],'m--',lw=2)
+# plot([-fwhmpeak/2], [0.5],'m',lw=2, marker=5,ms=10)
+# plot([fwhmpeak/2], [0.5],'m',lw=2, marker=4, ms=10)
+# text(-9, 0.48, r'$\mathrm{FWHM}=\frac{\lambda}{P\Delta x}$',fontsize=15, color='m')
+# hh = 0.39
+# plot([0, thetapeak], [hh,hh],'m--',lw=2)
+# plot([0], [hh],'m',lw=2, marker=4,ms=10)
+# plot([thetapeak], [hh],'m',lw=2, marker=5, ms=10)
+# text(thetapeak/2, 0.32, r'$\theta=\frac{\lambda}{\Delta x}$',fontsize=15, color='m')
+# plot(th, get_primbeam(th, lam), 'r--', lw=2)
+# xlabel(r'$\theta$ [deg.]')
+# ylabel('Synthesized beam')
+# legend()
+
+
+
+
+
+sbth = give_sbcut(th, dx, lam, sqnh, Df=Df, detpos=0.)
+
+# f=open('synthbeam.txt','wb')
+# for i in xrange(len(th)):
+#     f.write('{0:10.5f} {1:10.8f}\n'.format(th[i],sbth[i]))
+# f.close()
+
+rc('figure',figsize=(16,6))
+rc('font',size=16)
+
+figure()
+
+subplot(1,2,1)
+dist = [0.]
+for d in dist:
+    nu0=140.
+    nu1=160.
+    lam0 = 3e8/(nu0*1e9)
+    lam1 = 3e8/(nu1*1e9)
+    b1 = give_sbcut(th, dx, lam0, sqnh, Df=Df, detpos=d/1000)
+    b2 = give_sbcut(th, dx, lam1, sqnh, Df=Df, detpos=d/1000)
+    plot(th, b1, 'r', lw=2, label='Th. Synth. Beam at {0:3.0f} GHz'.format(nu0))
+    plot(th, b2, 'b', lw=2, label='Th. Synth. Beam at {0:3.0f} GHz'.format(nu1))
+    plot(th, get_primbeam(th, lam0), 'r--', lw=2, label='Th. Prim. Beam at {0:3.0f} GHz'.format(nu0))
+    plot(th, get_primbeam(th, lam1), 'b--', lw=2, label='Th. Prim. Beam at {0:3.0f} GHz'.format(nu1))
+    xlabel(r'$\theta$ [deg.]')
+    ylabel('Synthesized beam')
+    draw()
+    ylim(0,1.5)
+    xlim(-20,20)
+    legend(loc='upper left')
+    bb1 = b1/np.sqrt(np.sum(b1**2))
+    bb2 = b2/np.sqrt(np.sum(b2**2))
+    print(np.sum(bb1*bb2))
+    
+subplot(1,2,2)
+dist = [0.]
+for d in dist:
+    nu0=140.
+    nu1=160.
+    lam0 = 3e8/(nu0*1e9)
+    lam1 = 3e8/(nu1*1e9)
+    b1 = give_sbcut(th, dx, lam0, sqnh, Df=Df, detpos=d/1000)
+    b2 = give_sbcut(th, dx, lam1, sqnh, Df=Df, detpos=d/1000)
+    amps = [1., 1.5]
+    tod = (b1*amps[0]+b2*amps[1])
+    plot(th, tod, 'k', lw=2, label='{} at 140 GHZ \n {} at 160 GHz'.format(amps[0], amps[1]))
+    xlabel(r'$\theta$ [deg.]')
+    ylabel('TOD')
+    legend(title='Source brightness:')
+    draw()
+    ylim(0,2.6)
+    xlim(-20,20)
+    bb1 = b1/np.sqrt(np.sum(b1**2))
+    bb2 = b2/np.sqrt(np.sum(b2**2))
+    print(np.sum(bb1*bb2))
+
+```
+
+```{python}
+1./8
+```
+
+```{python}
+1./20
+```
+
+```{python}
+
+```

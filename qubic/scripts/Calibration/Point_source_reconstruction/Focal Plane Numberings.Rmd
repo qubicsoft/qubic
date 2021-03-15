@@ -1,0 +1,107 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# %matplotlib inline
+# #%matplotlib notebook
+from matplotlib import rc
+rc('figure', figsize=(8,8))
+rc('font', size=12)
+rc('text', usetex=False)
+rc('image', cmap='viridis')
+
+import healpy as hp
+import pickle
+from importlib import reload
+
+import qubic.io
+from pysimulators import FitsArray
+import qubic.fibtools as ft
+import qubic.demodulation_lib as dl
+import qubic.sb_fitting as sbfit
+from qubicpack.utilities import Qubic_DataDir
+import qubic.SpectroImLib as si
+import qubic.selfcal_lib as sc
+
+# Import jchinstrument from ../
+import os,sys,inspect
+current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parent_dir = os.path.dirname(current_dir)
+sys.path.insert(0, parent_dir) 
+
+
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+
+# INSTRUMENT
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(global_dir+'/dicts/pipeline_demo.dict')
+```
+
+```{python}
+reload(sc)
+d['config'] = 'TD'
+
+q = qubic.QubicMultibandInstrument(d)
+
+ndet = len(q[0].detector.center)
+print(ndet)
+
+x, y, FP_index, index_q = sc.get_TES_Instru_coords(q[0], frame='ONAFP', verbose=False)
+    
+numqp = 60
+iq = index_q[numqp-1]
+print('TES# {} has index {} in QubicSoft()'.format(numqp,iq))
+
+rc('figure', figsize=(15,15))
+sc.scatter_plot_FP(q[0], x, y, np.arange(256), 'ONAFP', s=1900, unit='QP#', cmap='bwr', cbar=False)
+xlim(-0.053, 0)
+ylim(-0.053, 0)
+for i in range(len(x)):
+    if (x[i] != 0) and (y[i] !=0):
+        text(x[i]-0.0013,y[i]-0.001, 'QP:{}\nQS:{}'.format(i+1,index_q[i]), fontsize=10, color='k',weight="bold")
+
+
+
+```
+
+```{python}
+reload(sc)
+d['config'] = 'TD'
+
+q = qubic.QubicMultibandInstrument(d)
+
+ndet = len(q[0].detector.center)
+print(ndet)
+
+x, y, FP_index, index_q = sc.get_TES_Instru_coords(q[0], frame='GRF', verbose=False)
+    
+numqp = 60
+iq = index_q[numqp-1]
+print('TES# {} has index {} in QubicSoft()'.format(numqp,iq))
+
+rc('figure', figsize=(15,15))
+sc.scatter_plot_FP(q[0], x, y, np.arange(256), 'GRF', s=1900, unit='QP#', cmap='bwr', cbar=False)
+xlim(-0.053, 0)
+ylim(0, 0.053)
+for i in range(len(x)):
+    if (x[i] != 0) and (y[i] !=0):
+        text(x[i]-0.0013,y[i]-0.001, 'QP:{}\nQS:{}'.format(i+1,index_q[i]), fontsize=10, color='k',weight="bold")
+
+
+
+```
+
+```{python}
+
+```

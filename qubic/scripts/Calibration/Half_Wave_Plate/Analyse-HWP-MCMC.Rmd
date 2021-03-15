@@ -1,0 +1,192 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(9,4.5))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack.qubicfp import qubicfp
+import qubic.fibtools as ft
+import qubic.plotters as p
+import qubic.lin_lib as ll
+import qubic.demodulation_lib as dl
+import satorchipy as stpy
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import datetime as dt
+import pickle
+from importlib import reload
+import corner
+
+```
+
+# Location of the Data
+### 2019-12-23: 4
+- Modulator: Amplitude = 2V. Offset = 1.5 V
+- Nice data although source data does not have the same shape as TES data, probably the source measurement was not configured correctly. The data can however be exploited using Simulated Cal Src.
+
+### 2019-12-24: 0
+- Modulator: Amplitude = 500 mV ; Offest = 250 mV
+- Nice data with 180 sec/pos and 3 cycles.
+- SrcData not there...
+- Can be used with Simulated Cal Src
+
+### 2019-12-26: 0
+- Modulator: Amplitude: 500mV, Offset 2. V
+- Only one cycle but good quality data, The source is ON and seems weell configured
+
+### 2019-12-26: 1
+- Modulator: Amplitude: 500mV, Offset 2.5 V
+- Long overnight acquisition - to be looked at closely
+
+### 2019-12-27: 2
+- Modulator: Amplitude = 500mV ; Offest = 2.5 V
+- Excellent data
+
+
+***Important Remark:
+The mount has moved on Dec. 26th 18h30 CET, so this means that the data [2019-12-23_Dataset_4, 2019-12-24_Dataset_0, 2019-12-26_Dataset_0] have the same pointing while [2019-12-26_Dataset_1, 2019-12-27_Dataset_2] are with another pointing.***
+
+```{python}
+data_dir = '/Users/hamilton/Qubic/Calib-TD/HWP-Fitting/'
+
+### We put them in the order of the offset for Cal Src
+
+subdirs = ['2019-12-24_Dataset_0',
+           '2019-12-23_Dataset_4',
+           '2019-12-26_Dataset_0',
+           '2019-12-26_Dataset_1',
+           '2019-12-27_Dataset_2']
+
+ptg = [0,0,0,1,1]
+mod_amp = [0.5, 2., 0.5, 0.5, 0.5]
+mod_off = [0.25, 1.5, 2., 2.5, 2.5]
+
+data_allth = []
+data_uniqueth = []
+fit_uniqueth = np.zeros((len(subdirs), 256, 2, 4))
+
+for idir in range(len(subdirs)):
+    ### Look at 1st TES to get the dimensions of the arrays
+    TESNum = 1
+    bla0 = np.loadtxt(data_dir+subdirs[idir]+'/Data/hwp_measurement_AllTh_TES_{}.txt'.format(TESNum)).T
+    bla1 = np.loadtxt(data_dir+subdirs[idir]+'/Data/hwp_measurement_UniqueTh_TES_{}.txt'.format(TESNum)).T
+    print(idir, bla0.shape, bla1.shape)
+
+    data_allth_subd = np.zeros((256, bla0.shape[0], bla0.shape[1]))
+    data_uniqueth_subd = np.zeros((256, bla1.shape[0], bla1.shape[1]))
+
+    for TESNum in range(1,256):
+        data_allth_subd[TESNum-1,:,:] = np.loadtxt(data_dir+subdirs[idir]+'/Data/hwp_measurement_AllTh_TES_{}.txt'.format(TESNum)).T
+        data_uniqueth_subd[TESNum-1,:,:] = np.loadtxt(data_dir+subdirs[idir]+'/Data/hwp_measurement_UniqueTh_TES_{}.txt'.format(TESNum)).T
+        fit_uniqueth[idir,TESNum-1,:,:] = np.loadtxt(data_dir+subdirs[idir]+'/Data/hwp_measurement_Fit_UniqueTh_TES_{}.txt'.format(TESNum)).T
+    
+    data_allth.append(data_allth_subd)
+    data_uniqueth.append(data_uniqueth_subd)
+
+
+```
+
+Plot the data for a given TES and show that the fir can be redone here
+
+```{python}
+rc('figure',figsize=(6,6))
+from matplotlib.backends.backend_pdf import PdfPages
+reload(dl)
+
+TESNum = 95
+iii = (TESNum-1)
+idir = 0
+
+### First a minuit Fit
+myguess = np.array([np.max(abs(data_uniqueth[idir][iii,1,:])), 0., 0., 5.])
+resfit = dl.hwp_fitpol(data_uniqueth[idir][TESNum-1,0,:], data_uniqueth[idir][TESNum-1,1,:], data_uniqueth[idir][TESNum-1,2,:], 
+                       doplot=False, str_title='Demodulation TES{}'.format(iii+1), 
+                       saturation=True, myguess=myguess, force_chi2_ndf=False, verbose=False)
+print(resfit)
+if np.prod(resfit[2])!=0:
+    ### Then a MCMC sampling
+    myguess = resfit[1]
+    myrange = [[0., 3*resfit[1][0]], 
+               [0.,1.], 
+               [resfit[1][2]-10*resfit[2][2], resfit[1][2]+10*resfit[2][2]],
+               [0, 10*resfit[1][3]]]
+
+    resmcmc, samples, fig = dl.hwp_fitpol_MCMC(data_uniqueth[idir][TESNum-1,0,:], data_uniqueth[idir][TESNum-1,1,:], data_uniqueth[idir][TESNum-1,2,:], 
+                           doplot=True, str_title='Demodulation TES{}'.format(iii+1), 
+                           saturation=True, myguess=myguess, force_chi2_ndf=False, myrange=myrange, upperlims=True, verbose=False)
+    tight_layout()
+    print(resmcmc)
+```
+
+### Loop over bolometers
+
+```{python}
+res_dir = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/HWP-MCMC/TES-Results'
+idir = 0
+mydir = res_dir+'/'+subdirs[idir]
+os.makedirs(mydir, exist_ok=True)
+os.makedirs(mydir+'/Figs', exist_ok=True)
+os.makedirs(mydir+'/Pkl', exist_ok=True)
+
+for TESNum in range(1, 257):
+    figure()
+    print('Doing TES#{}'.format(TESnum))
+    ### First a minuit Fit
+    myguess = np.array([np.max(abs(data_uniqueth[idir][iii,1,:])), 0., 0., 5.])
+    resfit = dl.hwp_fitpol(data_uniqueth[idir][TESNum-1,0,:], data_uniqueth[idir][TESNum-1,1,:], 
+                           data_uniqueth[idir][TESNum-1,2,:], 
+                           doplot=False, str_title='Demodulation TES{}'.format(TESNum), 
+                           saturation=True, myguess=myguess, force_chi2_ndf=False, verbose=False)
+
+    if np.prod(resfit[2]!=0):
+        ### Then a MCMC sampling
+        myguess = resfit[1]
+        myrange = [[0., 3*resfit[1][0]], 
+                   [0.,1.], 
+                   [resfit[1][2]-10*resfit[2][2], resfit[1][2]+10*resfit[2][2]],
+                   [0, 10*resfit[1][3]]]
+
+        resmcmc, samples, fig = dl.hwp_fitpol_MCMC(data_uniqueth[idir][TESNum-1,0,:], data_uniqueth[idir][TESNum-1,1,:], 
+                                              data_uniqueth[idir][TESNum-1,2,:], 
+                               doplot=True, str_title='Demodulation TES{}'.format(TESNum), 
+                               saturation=True, myguess=myguess, force_chi2_ndf=False, myrange=myrange, upperlims=True, verbose=False)
+        tight_layout()
+        print(resmcmc)
+        
+        #### Save successful ones
+        fig.savefig(mydir+'/Figs/Contours_TES_{}.png'.format(TESNum))
+        savefig(mydir+'/Figs/Result_TES_{}.png'.format(TESNum))
+        pickle.dump( [resfit[1:], resmcmc, samples], open( mydir+'/Pkl/TES_{}.pk'.format(TESNum), "wb" ) )
+        
+    
+    
+    
+```
+
+```{python}
+
+```

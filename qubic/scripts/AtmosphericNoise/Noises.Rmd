@@ -1,0 +1,179 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+from pylab import *
+import os
+import sys
+import time
+import pickle
+from importlib import reload
+
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+from scipy import interpolate
+
+rc('figure', figsize=(16, 10))
+rc('font', size=15)
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm
+import qubic
+from qubic import fibtools as ft
+from qubic import SpectroImLib as si
+from qubic import scene
+```
+
+```{python}
+config = 'TD'
+#config = 'FI'
+
+if config == 'TD':
+    dictname = 'test_photon_noise-TD.dict'
+    freqs = [150.]
+    ndet = 248
+elif config == 'FI':
+    dictname = 'test_photon_noise.dict'
+    freqs = [150., 220.]
+    ndet = 992
+
+### Read input dictionary
+reload(si)
+reload(scene)
+reload(qubic)
+
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+dictfilename = global_dir + '/dicts/'+dictname
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+d['npointings'] = 5000
+d['nf_recon'] = 1
+d['nf_sub'] = 1    ### this is OK as we use noise-only simulations
+
+### Input map set to zeros
+x0 = np.zeros((d['nf_sub'],d['nside']**2*12,3))
+### Random pointing
+p = qubic.get_pointing(d)
+
+print(d['synthbeam_kmax'])
+print(d['synthbeam_fraction'])
+```
+
+```{python}
+d['TemperatureAtmosphere150'] = 270.
+d['TemperatureAtmosphere220'] = 270.
+d['EmissivityAtmosphere150'] = 0.081
+d['EmissivityAtmosphere220'] = 0.138
+
+my_rms_det = np.zeros((2, ndet))
+my_rms_phot = np.zeros((2, ndet))
+my_rms_both = np.zeros((2, ndet))
+for i in range(len(freqs)):
+    f = freqs[i]
+    print('   Frequency = {}'.format(f))
+    d['filter_nu'] = f*1e9
+    ### No Photon Noise
+    d['photon_noise'] = False
+    TOD, maps_convolved = si.create_TOD(d, p, x0)
+    my_rms_det[i,:] = np.std(TOD, axis=1)
+    #print(my_rms_det[i,:])
+    ### With Photon noise
+    d['photon_noise'] = True
+    TOD, maps_convolved = si.create_TOD(d, p, x0)
+    my_rms_both[i,:] = np.std(TOD, axis=1)
+    #print(my_rms_both[i,:])
+
+    ### Calculate photon noise only
+    my_rms_phot[i,:] = np.sqrt(my_rms_both[i,:]**2 - np.mean(my_rms_det[i,:])**2) 
+    #print(my_rms_phot[i,:])
+#     print('     RMS Det = {}     RMS Phot = {}    RMS All = {}'.format(np.mean(my_rms_det[i,:]), 
+#                                                                        np.mean(my_rms_phot[i,:]), 
+#                                                                        np.mean(my_rms_both[i,:])))
+
+
+
+```
+
+```{python}
+
+for i in range(len(freqs)):
+    ratio = d['detector_nep'] / np.nanmean(my_rms_det[i,:])
+    f = freqs[i]
+    print('   Frequency = {}'.format(f))
+    print('   RMS Det = {0:6.3g} W/sqrt(Hz)    RMS Phot = {1:6.3g} W/sqrt(Hz)   RMS All = {2:6.3g} W/sqrt(Hz)'.format(np.nanmean(my_rms_det[i,:]*ratio), 
+                                                                       np.nanmean(my_rms_phot[i,:]*ratio), 
+                                                                       np.nanmean(my_rms_both[i,:]*ratio)))
+    print('   MINIMUM: RMS Det = {0:6.3g} W/sqrt(Hz)    RMS Phot = {1:6.3g} W/sqrt(Hz)   RMS All = {2:6.3g} W/sqrt(Hz)'.format(np.nanmin(my_rms_det[i,:]*ratio), 
+                                                                       np.nanmin(my_rms_phot[i,:]*ratio), 
+                                                                       np.nanmin(my_rms_both[i,:]*ratio)))
+    print('   MAXIMUM: RMS Det = {0:6.3g} W/sqrt(Hz)    RMS Phot = {1:6.3g} W/sqrt(Hz)   RMS All = {2:6.3g} W/sqrt(Hz)'.format(np.nanmax(my_rms_det[i,:]*ratio), 
+                                                                       np.nanmax(my_rms_phot[i,:]*ratio), 
+                                                                       np.nanmax(my_rms_both[i,:]*ratio)))
+
+```
+
+# TD
+Frequency = 150.0
+* Mean
+    * RMS Det = 2.05e-16 W/sqrt(Hz)    
+    * RMS Phot = 2.57e-17 W/sqrt(Hz)   
+    * RMS All = 2.06e-16 W/sqrt(Hz)
+* MINIMUM: 
+    * RMS Det =  2e-16 W/sqrt(Hz)    
+    * RMS Phot = 2.99e-18 W/sqrt(Hz)   
+    * RMS All = 1.99e-16 W/sqrt(Hz)
+* MAXIMUM: 
+    * RMS Det = 2.1e-16 W/sqrt(Hz)    
+    * RMS Phot = 5.63e-17 W/sqrt(Hz)   
+    * RMS All = 2.13e-16 W/sqrt(Hz)
+
+
+# FI
+
+Frequency = 150.0
+* Mean:
+    *   RMS Det = 4.7e-17 W/sqrt(Hz)    
+    *   RMS Phot = 3.12e-17 W/sqrt(Hz)   
+    * RMS All = 5.67e-17 W/sqrt(Hz)
+*   MINIMUM: 
+    * RMS Det = 4.55e-17 W/sqrt(Hz)    
+    * RMS Phot = 1.92e-17 W/sqrt(Hz)   
+    * RMS All = 5.08e-17 W/sqrt(Hz)
+*   MAXIMUM: 
+    * RMS Det = 4.85e-17 W/sqrt(Hz)    
+    * RMS Phot = 4.7e-17 W/sqrt(Hz)   
+    * RMS All = 6.65e-17 W/sqrt(Hz)
+
+Frequency = 220.0
+* Mean
+    *   RMS Det = 4.7e-17 W/sqrt(Hz)    
+    * RMS Phot = 1.17e-16 W/sqrt(Hz)   
+    * RMS All = 1.26e-16 W/sqrt(Hz)
+*   MINIMUM: 
+    * RMS Det = 4.55e-17 W/sqrt(Hz)    
+    * RMS Phot = 7.29e-17 W/sqrt(Hz)   
+    * RMS All = 8.67e-17 W/sqrt(Hz)
+*   MAXIMUM: 
+    * RMS Det = 4.85e-17 W/sqrt(Hz)    
+    * RMS Phot = 1.74e-16 W/sqrt(Hz)   
+    * RMS All = 1.8e-16 W/sqrt(Hz)
+
+
+```{python}
+
+```

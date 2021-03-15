@@ -1,0 +1,173 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# %matplotlib inline
+from pylab import *
+import os
+import sys
+from importlib import reload
+import glob
+import pickle
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm
+import qubic
+from qubic import SpectroImLib as si
+from qubic import QubicSkySim as qss
+from qubic import NamasterLib as nam
+from qubic import camb_interface as qc
+
+rc('figure', figsize=(13, 10))
+rc('font', size=12)
+```
+
+# MCMC Constraints on r with no dust (very idealistic...)
+
+
+The following cell calculates or read a library of CAMB spectra with only r varying. This allows to interpolate between these spectra for any value of r in the library range and have a fast way of getting spectra - useful for MCMC. The function qc.get_D__fromlib() from the camb_interface.py library is the one to be used for getting any of these spectra.
+
+```{python}
+reload(qc)
+### Build CAMB library with only r varying
+# rmin = 0.001
+# rmax = 1
+# nb =100
+# lmaxcamb = 3*256
+# rvalues = np.concatenate((np.zeros(1),np.logspace(np.log10(rmin),np.log10(rmax),nb)))
+# camblib = qc.rcamblib(rvalues, lmaxcamb,save='camblib.pickle')
+
+### Read the camb lib from the file
+camblib = qc.read_camblib('camblib.pickle')
+```
+
+```{python}
+reload(qc)
+lvals = np.arange(300)
+rvals = [0., 0.01, 0.07, 0.1]
+spn = ['TT', 'EE', 'BB', 'TE']
+
+s = 2
+for r in rvals:
+    spec, specUnlensed = qc.get_Dl_fromlib(lvals, r, lib=camblib)
+    p=plot(lvals, spec[:,s], label='Lensed r={}'.format(r))
+    plot(lvals, specUnlensed[:,s], ':', label='Un-Lensed r={}'.format(r), color=p[0].get_color())
+title(spn[s])
+legend()
+tight_layout()
+```
+
+```{python}
+reload(qc)
+reload(nam)
+
+### One needs a NaMaster object to be able to bin the spectra
+### We build it from the info saved from end-to-end sims
+with open('errors_mc_dl_30.pickle', 'rb') as handle: 
+    leff, mcells_rec, scells_rec, delta_ell, lmin, lmax, seenpix = pickle.load(handle)
+
+    
+    
+### Instanciate a Namaster object
+weight_mask = None
+Namaster = nam.Namaster(weight_mask, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+leff, b = Namaster.get_binning(256)
+
+
+### In order to be able to a a MCMC, one needs theoreticasl binned spectra. 
+### Binning on the fly during MCMC sampling is clearly too costly from the CPU poit of view
+### The easiest workaround seems to be to prepare a binned version of the CAMB library
+binned_camblib = qc.bin_camblib(Namaster, 'camblib.pickle', 256)
+```
+
+```{python}
+### Get a theoretical Power spectrum
+rvalue = 0.
+lvals = arange(3*256)
+spec, specUnlensed = qc.get_Dl_fromlib(lvals, rvalue, lib=camblib)
+
+### function to directly get the binned spectrum for a given r
+def myBBth(ell, r):
+    clBB = qc.get_Dl_fromlib(ell, r, lib=binned_camblib)[0][:,2]
+    return clBB
+
+### Fake BB data
+data = myBBth(leff, rvalue)
+
+with open('errors_mc_dl_{}.pickle'.format(delta_ell), 'rb') as handle: 
+    bla = pickle.load(handle)
+scls = bla[2][:,2]
+scls[0] = 100
+
+figure()
+s=2
+p=plot(lvals, spec[:,s], label='Lensed r={}'.format(r))
+errorbar(leff, data, yerr=scls, fmt='ro', label='Fake data')
+plot(leff, scls, label='MC error bars')
+plot(leff, )
+ylim(0,0.1)
+legend()
+```
+
+```{python}
+from qubic import mcmc
+reload(mcmc)
+
+
+ll = mcmc.LogLikelihood(xvals=leff, yvals=data, errors=scls/2, 
+                       model = myBBth, flatprior=[[0,1]])
+
+nsamples = 3000
+sampler = ll.run(nsamples, nwalkers=32)
+
+
+```
+
+```{python}
+rc('figure', figsize=(13, 10))
+import corner
+flat_samples = sampler.get_chain(discard=nsamples//10, thin=32, flat=True)
+
+
+
+q = 0.68
+fig = corner.corner(
+    flat_samples, labels=['r'], truths=[0], quantiles=[q])
+
+tit = 'r < {0:4.3f} @ {1:2.0f}% C.L.'.format(corner.quantile(flat_samples,q)[0],q*100)    
+title(tit, fontsize=10)
+```
+
+```{python}
+rv = np.linspace(0,1,1000)
+like = np.zeros_like(rv)
+for i in range(len(rv)):
+    like[i] = np.exp(ll([rv[i]]))
+
+like = like / (np.sum(like)*(rv[1]-rv[0]))
+
+a=hist(flat_samples[:,0], range=[0,0.1], bins=30, density=True)
+xlim(0,0.1)
+plot(rv,like)
+```
+
+```{python}
+
+```

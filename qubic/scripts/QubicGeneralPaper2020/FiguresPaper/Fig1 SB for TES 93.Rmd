@@ -1,0 +1,112 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# ##### %matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(16,4))
+rc('font',size=12)
+rc('text',usetex=False)
+rc('image', cmap='viridis')
+
+from qubicpack import qubicpack as qp
+import qubic.fibtools as ft
+import qubic.plotters as p
+import qubic.lin_lib as ll
+import qubic.demodulation_lib as dl
+import qubic.io
+import qubic.sb_fitting as sbfit
+
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+import scipy.signal as scsig
+from scipy import interpolate
+import os
+import healpy as hp
+import pandas as pd
+from importlib import reload
+
+```
+
+```{python}
+dirfreq = '150GHz-2019-04-06/'
+dirallfreqs = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/'
+dirfiles = dirallfreqs+dirfreq
+c50 = np.cos(np.radians(50))
+azmin = -15./c50
+azmax = 15./c50
+```
+
+```{python}
+TESNum=93
+hpmap = sbfit.get_hpmap(TESNum, dirfiles)
+
+rc('figure',figsize=(10,10))
+# INSTRUMENT
+reload(qubic)
+ns = 512
+
+d = qubic.qubicdict.qubicDict()
+d.read_from_file('/Users/hamilton/Python/GitQubicMousset/qubic/qubic/dicts/global_source_oneDet.dict')
+d['nside']=ns
+
+q = qubic.QubicInstrument(d)
+s = qubic.QubicScene(d)
+
+def select_det(q,id):
+    #### For now the ids are not matched... so we only take the len(id) first detectors...
+    detector_i = q.detector[id]
+    q.detector = detector_i
+    return(q)
+
+from qubicpack.pixel_translation import tes2index
+from qubicpack.pixel_translation import make_id_focalplane
+fpmatrix = make_id_focalplane()
+
+if TESNum > 128: 
+    asicnum=2
+    thetes = TESNum-128
+else:
+    asicnum =1
+    thetes = TESNum
+    
+idx = tes2index(thetes,asicnum)
+iii = np.where(q.detector.index == idx)[0]
+print(iii)
+
+q = select_det(q,iii)
+sb = q.get_synthbeam(s,0)
+xr=0.1*np.max(sb)
+
+mm, ss = ft.meancut(hpmap,3)
+myhpmap = hpmap-mm
+mx = 0.15
+rc('figure',figsize=(11,6))
+rc('font',size=16)
+figure()
+hp.gnomview(myhpmap/np.max(myhpmap)/3, reso=10, sub=(1,2,1), title='Frequency: 150 GHz - Data', min=0, max=mx)
+img=hp.gnomview(sb/np.max(sb), rot=[0,90, 90], reso=10,sub=(1,2,2), title='Frequency: 150 GHz - Data', min=0,max=mx)
+# tight_layout()
+```
+
+```{python}
+
+```

@@ -1,0 +1,328 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# %matplotlib inline
+from pylab import *
+import os
+import sys
+from importlib import reload
+import glob
+import pickle
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm
+import qubic
+from qubic import SpectroImLib as si
+from qubic import QubicSkySim as qss
+from qubic import NamasterLib as nam
+reload(nam)
+
+rc('figure', figsize=(13, 10))
+rc('font', size=12)
+```
+
+```{python}
+#dirmaps = '/qubic/Sims/EndToEndMaps/'
+dirmaps = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/Sims_PureCMB/'
+listinit = glob.glob(dirmaps+'*maps_recon*.fits')
+allstr = []
+allkeyword = []
+allseed = []
+for l in listinit:
+    bla= l.split('.')[0].split('_')
+    allkeyword.append(bla[1].split('/')[1])
+    allstr.append(bla[-1])
+    allseed.append(bla[-2])
+
+allstr = unique(np.array(allstr))
+
+mykeywords = np.unique(allkeyword)
+myseeds = np.unique(allseed)
+
+print('Keywords Available:')
+for k in range(len(mykeywords)):
+    print('{}: '.format(k)+mykeywords[k])
+print('')
+print('Seeds Available:')
+for s in range(len(myseeds)):
+    print('{}: '.format(s)+myseeds[s])
+
+print('')
+print('Choose a keword and a seed index below')
+```
+
+```{python}
+kindex = 0
+sindex = 0
+
+### Get corresponding files:
+kk = mykeywords[kindex]
+ss = myseeds[sindex]
+listfiles = glob.glob(dirmaps+kk+'*maps_recon_seed_'+ss+'*.fits')
+print('For Keyword {} and seed {}:'.format(kk, ss))
+print('There are {} realizations available - Choose one in the cell below'.format(len(listfiles)))
+```
+
+```{python}
+ifile = 0
+thefile = listfiles[ifile].split('/')[-1]
+rr = thefile.split('.')[0].split('_')[-1]
+print('You have selected: '+thefile)
+print('The random string ID is: '+rr)
+
+##### Read the files
+maps_recon = np.array(FitsArray(dirmaps+kk+'_maps_recon_seed_'+ss+'_'+rr+'.fits'))
+maps_convolved = np.array(FitsArray(dirmaps+kk+'_maps_convolved_seed_'+ss+'_'+rr+'.fits'))
+coverage = np.array(FitsArray(dirmaps+kk+'_maps_coverage_'+rr+'.fits'))
+with open(dirmaps+kk+'_dictionary_'+rr+'.pickle', 'rb') as handle: d = pickle.load(handle)
+with open(dirmaps+kk+'_input_cell_'+rr+'.pickle', 'rb') as handle: input_cell = pickle.load(handle)
+
+### Center of the QUBIC Field
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+
+### ell for theoretical spectrum
+ellth= np.arange(input_cell.shape[0])
+
+print('All files have been read')
+```
+
+```{python}
+maps_diff = maps_convolved - maps_recon
+maps_diff[maps_recon == -1.6375e+30] = -1.6375e+30
+
+# Look at IQU in one band
+band = 0
+plt.figure(figsize=(13,10))
+rr = 15
+lim = [200, 3, 3]
+for istk in range(3):
+    plt.subplots_adjust(wspace=0.9)
+    hp.gnomview(maps_recon[band,:,istk], cmap ='jet', sub = (3,3,3*istk+1), rot=center, reso=rr, 
+                title = '{0} rec {1}'.format(d['kind'][istk], band), min=-lim[istk], max=lim[istk])
+    hp.gnomview(maps_convolved[band,:,istk], cmap ='jet', sub = (3,3,3*istk+2), rot=center, reso=rr, 
+                title = '{0} conv {1}'.format(d['kind'][istk], band), min=-lim[istk], max=lim[istk])
+    hp.gnomview(maps_diff[band,:,istk], cmap ='jet', sub = (3,3,3*istk+3), rot=center, reso=rr, 
+                title = '{0} diff {1}'.format(d['kind'][istk], band), min=-lim[istk], max=lim[istk])
+```
+
+```{python}
+# Create a Mask
+seenpix = coverage > (np.max(coverage)/10)
+
+# Create a Namaster object
+lmin = 30
+lmax = 3 * d['nside'] - 1
+delta_ell = 25
+Namaster = nam.Namaster(seenpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+
+# Make a mask
+mask_apo = Namaster.get_apodized_mask()
+hp.mollview(mask_apo, rot=center)
+
+ell_binned, b = Namaster.get_binning(d)
+
+clname = ['TT', 'EE', 'BB', 'TE']
+```
+
+```{python}
+print(maps_recon.shape)
+maps_to_cl = maps_recon.copy()
+unseen = maps_to_cl == hp.UNSEEN
+maps_to_cl[unseen]=0
+maps_to_cl.shape
+
+cells_rec = np.zeros((d['nf_recon'], len(ell_binned), 4))
+for i in range(d['nf_recon']):
+    leff, cells_rec[i,:,:], wdata = Namaster.get_spectra(maps_to_cl[i,:,:].T, d, 
+                                                     mask_apo,
+                                                     purify_e=False, purify_b=True, 
+                                                     beam_correction=True, pixwin_correction=False,
+                                                     verbose=False)
+
+```
+
+```{python}
+rc('figure', figsize=(13, 10))
+for i in range(4):
+    subplot(2,2,i+1)
+    plot(ellth, input_cell[:, i])
+    plot(ellth, ellth*0,'k:')
+    for k in range(d['nf_recon']):
+        plot(ell_binned, cells_rec[k, :, i],'o', label='Sub-Band {}'.format(k))
+    xlabel('$\\ell$')
+    ylabel('$D_\\ell$')
+    title(clname[i])
+    xlim(0,2*d['nside'])
+    ylim(1.2*np.min(input_cell[:2*d['nside'], i]),1.2*np.max(input_cell[:2*d['nside'], i]))
+tight_layout()
+```
+
+Here we take the reconstructed map and we fit the RMS as a function of coverage in order to have a noise model. This would really only make full sense if the maps were completely noise dominated, which is not the case in this realization. This is particularly true for I and also true to a lesser extent for Q and U. Therefore we would have to make some correction that depends on the amplitude of the resal signal.
+
+We can try instead with the diff maps, which are not known in reality
+
+```{python}
+from qubic import fibtools as ft
+from scipy.optimize import curve_fit
+
+#### If one uses the rec maps
+#maps_to_noise_estimate = maps_recon.copy()
+#### If one uses the diff maps insteafd
+maps_to_noise_estimate = maps_diff.copy()
+
+
+#### Make a MC for the noise debiasing
+tocorrelate = 1./np.sqrt(coverage[seenpix])
+nbins = 25
+newx, newy, dx, dyI, _ = ft.profile(tocorrelate, maps_to_noise_estimate[0,seenpix,0], nbins=nbins, plot=False)
+newx, newy, dx, dyQ, _ = ft.profile(tocorrelate, maps_to_noise_estimate[0,seenpix,1], nbins=nbins, plot=False)
+newx, newy, dx, dyU, _ = ft.profile(tocorrelate, maps_to_noise_estimate[0,seenpix,2], nbins=nbins, plot=False)
+
+poly2 = lambda x, a, b, c, d : a+b*x+c*x**2+d*x**3
+resultsI = curve_fit(poly2, newx, dyI,maxfev=1000000, ftol=1e-5)
+resultsQ = curve_fit(poly2, newx, dyQ,maxfev=1000000, ftol=1e-5)
+resultsU = curve_fit(poly2, newx, dyU,maxfev=1000000, ftol=1e-5)
+parsI = resultsI[0]
+parsQ = resultsQ[0]
+parsU = resultsU[0]
+plot(newx, dyI,'ro', label='I')
+plot(newx, dyQ,'go', label='Q')
+plot(newx, dyU,'bo', label='U')
+plot(newx, poly2(newx, *parsI), 'r')
+plot(newx, poly2(newx, *parsQ), 'g')
+plot(newx, poly2(newx, *parsU), 'b')
+xlabel(r'$1/cov^{1/2}$')
+ylabel('RMS Map')
+yscale('log')
+```
+
+```{python}
+RMS_map = np.zeros((12*d['nside']**2, 3))
+#RMS_map[seenpix,0] = poly2(tocorrelate, *parsQ)/np.sqrt(2)
+RMS_map[seenpix,0] = poly2(tocorrelate, *parsI)
+RMS_map[seenpix,1] = poly2(tocorrelate, *parsQ)
+RMS_map[seenpix,2] = poly2(tocorrelate, *parsU)
+
+res = 15
+for i in range(3):
+    hp.gnomview(RMS_map[:,i], reso=res, rot=center, sub=(1,3,i+1))
+```
+
+```{python}
+nbmc = 30
+
+cells = np.zeros((nbmc, len(leff), 4))
+
+for i in range(nbmc):
+    print(i, nbmc)
+    maps = np.random.randn(*np.shape(RMS_map))*RMS_map
+    leff, cells[i,:,:], w = Namaster.get_spectra(maps.T, d, 
+                                        mask_apo,
+                                        purify_e=False, purify_b=True, 
+                                        beam_correction=True, pixwin_correction=False,
+                                        verbose=False,
+                                        w=w)
+```
+
+We recalculate the Cls in order to be able to play with the FWHM that may not be exactly right in the dictionary
+
+```{python}
+reload(nam)
+rc('figure', figsize=(13, 6))
+mcls = np.mean(cells, axis=0)
+scls = np.std(cells, axis=0)
+
+fwhmdeg = 22./60
+
+# Create a Namaster object
+lmin = 30
+lmax = 3 * d['nside'] - 1
+delta_ell = 25
+Namaster = nam.Namaster(seenpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+
+# Make a mask
+mask_apo = Namaster.get_apodized_mask()
+
+ell_binned, b = Namaster.get_binning(d)
+
+clname = ['TT', 'EE', 'BB', 'TE']
+cells_rec = np.zeros((d['nf_recon'], len(ell_binned), 4))
+for i in range(d['nf_recon']):
+    leff, cells_rec[i,:,:], w = Namaster.get_spectra(maps_to_cl[i,:,:].T, d, 
+                                                     mask_apo,
+                                                     purify_e=False, purify_b=True, 
+                                                     beam_correction=fwhmdeg, pixwin_correction=False,
+                                                     verbose=False)
+
+
+
+#### Correction on noise for accounting for Signal prensent in maps - should be one if maps_diff are used
+#correction = 0.5
+correction = 1.
+
+# figure()
+# for i in range(3):
+#     subplot(1,3,i+1)
+#     plot(ellth, input_cell[:, i])
+#     for k in range(d['nf_recon']):
+#         plot(leff, cells_rec[k, :, i],'o', label='QUBIC Sub-Band {}'.format(k))
+#     errorbar(leff, mcls[:,i]*correction, yerr=scls[:,i]*correction, fmt='ro-', label='Noise MC')
+#     xlabel('$\\ell$')
+#     ylabel('$D_\\ell$')
+#     title(clname[i])
+#     xlim(0,2*d['nside'])
+#     ylim(np.min(input_cell[:, i]), 1.5*np.max(input_cell[:, i]))
+#     if i==2: ylim(0,1)
+#     legend(loc='upper right', fontsize=9)
+# tight_layout()    
+    
+figure()
+for i in range(3):
+    subplot(1,3,i+1)
+    plot(ellth, input_cell[:, i])
+    for k in range(d['nf_recon']):
+        errorbar(leff, cells_rec[k, :, i]-mcls[:,i]*correction,yerr=scls[:,i]*correction,fmt='ro', label='QUBIC Sub-Band {}'.format(k))
+    xlabel('$\\ell$')
+    ylabel('$D_\\ell$')
+    title(clname[i])
+    xlim(0,2*d['nside'])
+    ylim(np.min(input_cell[:, i]), 1.5*np.max(input_cell[:, i]))
+    if i==2: ylim(-0.2,0.2)
+    legend(loc='upper right', fontsize=9)
+tight_layout()    
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

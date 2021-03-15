@@ -84,7 +84,3 @@ plot(x, myfct_pars(x, myfit[1]))
 ```{python}
 
 ```
-
-```{python}
-
-```

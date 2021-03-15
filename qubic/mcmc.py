@@ -48,7 +48,7 @@ class LogLikelihood:
         #     theta = mytheta
         theta = mytheta
 
-        self.modelval = self.model(self.xvals[:self.nbins], *theta)
+        self.modelval = self.model(self.xvals[:self.nbins], theta)
 
         if self.covariance_model_funct is None:
             self.invcov = np.linalg.inv(self.covar)

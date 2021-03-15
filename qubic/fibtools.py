@@ -148,7 +148,7 @@ class Chi2Minimizer(object):
 		self.invcov = np.linalg.inv(covarin)
 		self.functname = functname
 		self.extra_args = extra_args
-		return 
+ 
 	def __call__(self, *pars, extra_args = None):
 		val = self.functname(self.x, *pars, extra_args = self.extra_args)
 		chi2 = np.dot(np.dot(self.y - val, self.invcov), self.y - val)

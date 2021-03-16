@@ -16,7 +16,7 @@ jupyter:
 
 Edited by Louise 16/03/2021
 
-In this notebook, I use an analytical model from the fringes, defined in the library `selfcal_lib.py`.  
+In this notebook, I use an analytical model from the fringes, defined in the library `selfcal_lib.py` to fit the fringes measurements.  
 
 ```{python}
 from __future__ import division, print_function
@@ -24,6 +24,9 @@ from __future__ import division, print_function
 # %matplotlib inline
 # %matplotlib notebook
 
+from multiprocessing import cpu_count, Pool
+import time
+import os
 import glob
 import numpy as np
 
@@ -207,27 +210,22 @@ plt.hist(errs[0], range=(0, 1), bins=15, alpha=0.4,)
 #### Make fake data
 
 ```{python}
-q.filter.nu
-```
-
-```{python}
 ndet = 248 
 print('ndet:', ndet)
 
 # Parameters for the fit
 focal_fake = 0.29
 theta_fake = np.deg2rad(0.5)
-allP_fake = [0.5] * nimages
-# allP_fake = list(np.random.rand(nimages))
-# allP_fake = [0.1, 0.4, 0.7]
+# allP_fake = [0.5] * nimages
+allP_fake = list(np.random.rand(nimages))
 print('P_k fake:', allP_fake)
 params_fake = [focal_fake, theta_fake] + allP_fake
 
 
 # Gain for each TES (same for each image)
-gains_fake = np.ones(ndet)
-# gains_fake = np.random.normal(1., 2, size=ndet)
-# gains_fake /= np.mean(gains_fake)
+# gains_fake = np.ones(ndet)
+gains_fake = np.random.normal(1., 1., size=ndet)
+gains_fake /= np.mean(gains_fake)
 print('gain mean:', np.mean(gains_fake))
 print('gains fake:', gains_fake[:10])
 print('gains negative:', gains_fake[gains_fake<0.])
@@ -241,7 +239,7 @@ q = qubic.QubicInstrument(d)
 for k in range(nimages):
     model_fake_data = scal.Model_Fringes_Ana(q, BLs[k], 
                                              theta_source=theta_fake, 
-                                             nu_source=q.filter.nu,
+                                             nu_source=150e9,
                                              frame='ONAFP')
 
     x, y, Phi = model_fake_data.get_fringes(times_gaussian=False)
@@ -286,117 +284,18 @@ if simu:
 ```
 
 ```{python}
-def make_inverse_covariance(errors, verbose=True):
-    Cov = np.diag(errors**2)
-    if verbose:
-        print(Cov)
-    
-    InvCov = np.diag(1. / np.diag(Cov))
-    return InvCov
-
 # Make a list with an inverse covariance matrix for each image
-allInvCov = [make_inverse_covariance(errs[k], verbose=True) for k in range(nimages)]
-```
-
-```{python}
-def get_gains(allPowerPhi, allinvcov, alldata):
-    nimages = len(allPowerPhi)
-    
-    InvCov_A = np.zeros_like(allinvcov[0])
-    Term = np.zeros_like(alldata[0])
-    for k in range(nimages):
-        # Make a diagonal matrix
-        PowerPhi_mat = np.diag(allPowerPhi[k]) 
-
-        InvCov_A += PowerPhi_mat.T @ allinvcov[k] @ PowerPhi_mat
-        Term += PowerPhi_mat.T @ allinvcov[k] @ alldata[k]
-    Cov_A = np.linalg.inv(InvCov_A)
-    
-    A = Cov_A @ Term
-    
-    # Normalization
-    A /= np.mean(A)
-    Cov_A /= np.mean(A)**2
-
-    return A, Cov_A
-
-
-def get_chi2(params, allinvcov, alldata, BLs, nu_source=150e9, returnA=False):
-    nimages = len(BLs) 
-    focal = params[0]
-    theta_source = params[1]
-    allP = params[2:]
-    q.optics.focal_length = focal
-    allPowerPhi = []
-    for k in range(nimages):
-        model = scal.Model_Fringes_Ana(q, 
-                                       BLs[k], 
-                                       theta_source=theta_source, 
-                                       nu_source=nu_source)
-
-        x, y, Phi = model.get_fringes(times_gaussian=False)
-        
-        # Global amplitude
-        allPowerPhi.append(Phi * allP[k])
-    
-    # Gain for each detector
-    A, Cov_A = get_gains(allPowerPhi, allinvcov, alldata)
-    
-    chi2 = 0.
-    for k in range(nimages):
-        M = np.diag(allPowerPhi[k]) @ A
-        R = M - alldata[k]
-        chi2 += R.T @ allinvcov[k] @ R
-    
-    if returnA:
-        return chi2, A, Cov_A
-    else:
-        return chi2
+allInvCov = [scal.make_inverse_covariance(errs[k], verbose=True) for k in range(nimages)]
 ```
 
 #### Explore the chi2 to find guess parameters
 
 ```{python}
-fixPower = True
-nval_fl = 20
-nval_th = 20
-
-fl_min, fl_max = 0.27, 0.31
-th_min, th_max = np.deg2rad(-3.), np.deg2rad(3)
-
-chi2_grid = np.zeros((nval_fl, nval_th))
-
-all_fl = np.linspace(fl_min, fl_max, nval_fl)
-all_th = np.linspace(th_min, th_max, nval_th)
-
-if fixPower:
-    for i, fl in enumerate(all_fl):
-        for j, th in enumerate(all_th):
-            params = [fl, th] + [0.5] * nimages
-            chi2_grid[i, j] = get_chi2(params, allInvCov, fringes, BLs)
-else:
-    power_optimize = np.zeros((nval_fl, nval_th, nimages))
-    step = 0
-    for i, fl in enumerate(all_fl):
-        for j, th in enumerate(all_th):
-            
-            def chi2_temporary(mypower, allInvCov, fringes, BLs):
-                params = [fl, th] + list(mypower)
-                chi2_temp = get_chi2(params, allInvCov, fringes, BLs)
-                return chi2_temp
-            result = sop.minimize(chi2_temporary, 
-                                  x0=[0.5] * nimages, 
-                                  args=(allInvCov, fringes, BLs), 
-                                  method='Nelder-Mead',
-                                  options={'maxiter':10000})
-            chi2_grid[i, j] = result['fun']
-            power_optimize[i, j, :] = result['x']
-            
-            print(f'\n***Step {step+1}/{nval_fl*nval_th}')
-            print('Chi2 min:', result['fun'])
-            print('with powers =', result['x'])
-            
-            step += 1
+all_fl, all_th, chi2_grid = scal.make_chi2_grid(allInvCov, fringes, BLs, q, 
+                                nval_fl=30, nval_th=30, 
+                                fl_min=0.25, fl_max=0.35,
+                                th_min=np.deg2rad(-1.), th_max=np.deg2rad(1), 
+                                fixPower=True)
 ```
 
 ```{python}
@@ -410,7 +309,7 @@ if smooth:
 
 ```{python}
 # Find the min
-min_indices = np.unravel_index(np.argmin(chi2_grid), (nval_fl, nval_th))
+min_indices = np.unravel_index(np.argmin(chi2_grid), chi2_grid.shape)
 print(f'Chi2 min = {np.min(chi2_grid)} at {min_indices}')
 
 fl_guess = all_fl[min_indices[0]]
@@ -444,9 +343,9 @@ Using `scipy.optimize.minimize`
 
 ```{python}
 # params_guess = [0.30, np.deg2rad(-0.5)] + [0.5]*3
-result = sop.minimize(get_chi2, 
+result = sop.minimize(scal.get_chi2, 
                       x0=params_guess, 
-                      args=(allInvCov, fringes, BLs), 
+                      args=(allInvCov, fringes, BLs, q), 
                       method='Nelder-Mead',
                       options={'maxiter':10000})
 print(result)
@@ -476,6 +375,7 @@ print('\nReduce Chi2:', result['fun']/(nimages * ndet))
 ```
 
 #### Get the intercalibrations
+We compute the detector gains using the result of the minimisation.
 
 ```{python}
 q.optics.focal_length = result['x'][0]
@@ -485,7 +385,7 @@ for k in range(nimages):
     model = scal.Model_Fringes_Ana(q, BLs[k], 
                                    theta_source=result['x'][1], 
                                    nu_source=150e9, 
-                                   fwhm=20., amp=1., frame='ONAFP')
+                                   frame='ONAFP')
 
     x, y, Phi = model.get_fringes(times_gaussian=False)
     
@@ -494,7 +394,7 @@ for k in range(nimages):
     
 
 # Gain for each detector
-A, Cov_A = get_gains(PowerPhi, allInvCov, fringes)
+A, Cov_A = scal.get_gains(PowerPhi, allInvCov, fringes)
 
 print('Gains found:\n', np.round(A[:10], 4))
 if simu:
@@ -564,7 +464,7 @@ def make_colorbar(ax, image):
     clb = fig.colorbar(image, cax=cax)
     return
  
-def plot_residuals(q, xONAFP, yONAFP, BL, data, okTES, PowerPhi, errors, gains):
+def plot_residuals(q, xONAFP, yONAFP, BL, data, okTES, PowerPhi, errors, gains, cmap='bwr'):
     fig, axs = plt.subplots(4, 2, figsize=(12, 16))
     fig.suptitle(f'BL {BL}')
     axs = np.ravel(axs)
@@ -576,14 +476,16 @@ def plot_residuals(q, xONAFP, yONAFP, BL, data, okTES, PowerPhi, errors, gains):
     flib.plot_fringes_scatter(q, xONAFP, yONAFP, correct*okTES, fig=fig, ax=axs[1], frame='ONAFP', 
                      title=f'Data / gains', s=100, vmin=-0.5, vmax=0.5)
     
-    # Initial / corrected smooth  
-    img_old = axs[2].imshow(make2Dfringes(data*okTES), cmap='bwr', vmin=-1, vmax=1, interpolation='Gaussian')
-    axs[2].set_title(f'Data')
-    make_colorbar(axs[2], img_old)
-   
-    img_new = axs[3].imshow(make2Dfringes(correct*okTES), cmap='bwr', vmin=-1, vmax=1, interpolation='Gaussian')
-    axs[3].set_title(f'Data / gains')
-    make_colorbar(axs[3], img_new)
+    # Initial / corrected smooth
+    init2D = flib.make2Dfringes_QubicSoft(data*okTES, q)
+    init2D_conv = flib.astropy_convolution(init2D, sigma=0.7)
+    flib.plot_fringes_imshow(init2D_conv, normalize=True, fig=fig, ax=axs[2], cmap=cmap, 
+                             title='Data with Astropy convolution', mask=flib.make_mask2D_thermometers_TD())
+    
+    correct2D = flib.make2Dfringes_QubicSoft(correct*okTES, q)
+    correct2D_conv = flib.astropy_convolution(correct2D, sigma=0.7)
+    flib.plot_fringes_imshow(correct2D_conv, normalize=True, fig=fig, ax=axs[3], cmap=cmap, 
+                             title='Data / gains with Astropy convolution', mask=flib.make_mask2D_thermometers_TD())
     
     # Fit
     flib.plot_fringes_scatter(q, xONAFP, yONAFP, PowerPhi, frame='ONAFP', fig=fig, ax=axs[4], 
@@ -610,8 +512,10 @@ def plot_residuals(q, xONAFP, yONAFP, BL, data, okTES, PowerPhi, errors, gains):
 ```
 
 ```{python}
+cmap_bwr=flib.make_cmap_nan_black('bwr')
 for k in range(nimages):
-    plot_residuals(q, xONAFP, yONAFP, BLs[k], fringes[k], okTES[k], PowerPhi[k], errs[k], A)
+    print(okTES[k].shape, fringes[k].shape)
+    plot_residuals(q, xONAFP, yONAFP, BLs[k], fringes[k], okTES[k], PowerPhi[k], errs[k], A, cmap=cmap_bwr)
 
 ```
 
@@ -620,9 +524,6 @@ for k in range(nimages):
 To get errors on the focal length, theta and P_k.
 
 ```{python}
-from multiprocessing import cpu_count, Pool
-import time
-import os
 os.environ["OMP_NUM_THREADS"] = "1"
 
 ncpu = cpu_count()
@@ -636,7 +537,7 @@ print("{0} CPUs".format(ncpu))
 
 ```{python}
 def lnlike(params, allInvCov, alldata, BLs):
-    chi2, A, Cov_A = get_chi2(params, allInvCov, alldata, BLs, returnA=True)
+    chi2, A, Cov_A = scal.get_chi2(params, allInvCov, alldata, BLs, q, returnA=True)
     LnLike = - 0.5 * chi2
 #     print(chi2)
     return LnLike, A, Cov_A
@@ -646,7 +547,7 @@ def lnprior(params):
     th = params[1]
     allP = params[2:]
 
-    if fl > 0.:#.29 and fl < 0.31:
+    if fl > 0.:
         return 0.0
     else:
         return -np.inf
@@ -822,7 +723,7 @@ print('STD from MCMC:', std_param[2:])
 
 # Reduced: Chi2
 nDDL = nimages * ndet
-print('\n***Reduced Chi2:', get_chi2(mean_param, allInvCov, fringes, BLs) / nDDL)
+print('\n***Reduced Chi2:', scal.get_chi2(mean_param, allInvCov, fringes, BLs, q) / nDDL)
 
 ```
 
@@ -844,7 +745,7 @@ for k in range(nimages):
     allPowerPhi.append(Phi * allP_res[k])
 
 # Gain for each detector
-A, Cov_A = get_gains(allPowerPhi, allInvCov, fringes)
+A, Cov_A = scal.get_gains(allPowerPhi, allInvCov, fringes)
 
 print('\nA:', np.round(A[:10], 4))
 if simu:
@@ -873,7 +774,7 @@ for i in range(size):
 
 
     # Gain for each detector
-    allA[i, :], Cov_A = get_gains(allPowerPhi, allInvCov, fringes)
+    allA[i, :], Cov_A = scal.get_gains(allPowerPhi, allInvCov, fringes)
 
 stdA = np.std(allA, axis=0)    
 meanA = np.mean(allA, axis=0)    

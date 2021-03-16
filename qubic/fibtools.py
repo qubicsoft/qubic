@@ -744,17 +744,17 @@ def simsig_asym(x, pars, extra_args=None):
 
 
 def simsig_fringes(time, stable_time, params):
-  """
-  Simulate a TOD signal obtained during the fringe measurement.
-  This function was done to make a fit.
-  Parameters
-  ----------
-  time : array
-      Time sampling.
-  stable_time: float
-      Stable time [s] on each step.
-  params : list
-      ctime (constant time response of the detector), starting time, the 6 amplitudes.
+	"""
+	Simulate a TOD signal obtained during the fringe measurement.
+	This function was done to make a fit.
+	Parameters
+	----------
+	time : array
+	  Time sampling.
+	stable_time: float
+	  Stable time [s] on each step.
+	params : list
+	  ctime (constant time response of the detector), starting time, the 6 amplitudes.
 
 	Returns
 	-------

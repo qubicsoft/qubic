@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.6.0rc0
+      jupytext_version: 1.4.2
   kernelspec:
     display_name: Python 3
     language: python
@@ -51,6 +51,8 @@ from pysimulators import FitsArray
 import qubic
 from qubic import QubicSkySim as qss
 from qubic import SpectroImLib as si
+from pysm import models
+import pysm
 rc('figure', figsize=(13, 10))
 rc('font', size=13)
 ```
@@ -60,7 +62,7 @@ rc('font', size=13)
 
 # Repository for dictionary and input maps
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir='../')
-dictfilename = global_dir + '/dicts/pipeline_demo.dict'
+dictfilename = global_dir + '/dicts/spectroimaging_article.dict'
 dictmaps = global_dir + 'doc/'
 
 # Read dictionary chosen
@@ -69,19 +71,15 @@ d.read_from_file(dictfilename)
 
 # Print a parameter from the dictionary. 
 print('beam shape :', d['beam_shape'])
-d['nside'] = 512
-
 # You can change it  as follows:
 # d['beam_shape'] = 'multi_freq' # or 'gaussian' or 'fitted_beam' 
 
 # Check nf_sub/nf_sub_rec is an integer
-d['nf_sub'] = 8
+d['nf_sub'] = 20
 nf_sub = d['nf_sub']
 # for nf_sub_rec in d['nf_recon']:
 #     if nf_sub % nf_sub_rec != 0:
 #         raise ValueError('nf_sub/nf_sub_rec must be an integer.')
-d['nf_recon'] = 2
-d['MultiBand'] = True
 
 # Center of the patch observed in galactic coordinates
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
@@ -96,9 +94,10 @@ In this case we read a map $X_0$ simulated previously which contains fluctuation
 ```{python}
 # Make a sky using PYSM
 seed = None
-sky_config = {'cmb': seed, 'dust': 'd1'}
+sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, d)
 x0 = Qubic_sky.get_simple_sky_map()
+
 # Load a CMB map
 # x0 = FitsArray(dictmaps + 'CMB_nside64_nfsub14.fits')
     
@@ -121,15 +120,15 @@ else:
 # Look at the input sky maps using Healpy
 
 istokes = 0 # Stokes parameter (I, Q, U)
-imap = 1 # Frequency subband, should be smaller than nf_sub
+imap = 8 # Frequency subband, should be smaller than nf_sub
 rr=9 # Resolution in arcmin
 
 plt.figure(figsize=(13,8))
 for istk in range(3):
     plt.subplots_adjust(wspace=0.9)
-    hp.mollview(y0[imap,:,istk], cmap='jet', sub = (3,2,2*istk+1),
+    hp.mollview(y0[imap,:,istk], cmap='jet', sub = (3,2,2*istk+1), 
                 title = 'Mollview {0} Stokes parameter, map {1}'.format(d['kind'][istk], imap))
-    hp.gnomview(y0[imap,:,istk], cmap ='jet', sub = (3,2,2*istk+2), reso=rr, rot = center,
+    hp.gnomview(y0[imap,:,istk], cmap ='jet', sub = (3,2,2*istk+2), rot=center, reso=rr, 
                 title = 'Gnomview {0} Stokes parameter, map {1}'.format(d['kind'][istk], imap))
 
 ```
@@ -138,6 +137,8 @@ for istk in range(3):
 Let's now simulate the TOD. We will do so by reading a simulated map. The input map needs to be smoothed to the angular resolution of the instrument (these maps are already smoothed) and we need to know the pixel number for each of the TOD samples. This is easily obtained in Healpix with the $ang2pix()$ function. 
 
 ```{python}
+#Claudia: Voy cambiando el nf_sub para poder ver los bins en frequency:
+d['nf_sub'] = 8
 # Pointing strategy
 p = qubic.get_pointing(d)
 print('=== Pointing DONE! ===')
@@ -148,11 +149,41 @@ s = qubic.QubicScene(d)
 # Create MultibandInstrument. Model of the instrument with a focal plane sensitivity to 
 # multiple frequencies
 q = qubic.QubicMultibandInstrument(d)
+```
 
+```{python}
 # Generate the sub-band limits to be used (later we can see what information we are ignoring with '_')
-_, nus_edge_in, nus_in, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, d['nf_sub'],
+_, nus_edge_in, _, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, d['nf_sub'],
                                                 d['filter_relative_bandwidth'])
+```
 
+```{python}
+#print(nus_edge_in)
+
+#print(len(nus_edge_in))
+
+nu_min = nus_edge_in[:len(nus_edge_in)-1]
+nu_max = nus_edge_in[1:len(nus_edge_in)]
+nu_av = 0.5*(nu_min+nu_max)
+ 
+print(' ')
+
+print(nu_av)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
 # Finally create an acquisition multiband operator which combines all relevant information
 #scene, instrument configuration and strategy pointing. 
 a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_in)
@@ -161,22 +192,18 @@ a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_in)
 ```{python}
 # MultiFreq TOD making
 #(i.e. TOD for several subbands to reproduce a wideband observation)
-TOD, _ = a.get_observation(y0, noiseless=d['noiseless'])#, convolution = True)
-#del(maps_convolved_useless)
+TOD, maps_convolved_useless = a.get_observation(y0, noiseless=d['noiseless'])#, convolution = True)
+del(maps_convolved_useless)
 ```
 
 ```{python}
 # Look at TOD for one TES
 print('--------- TOD with shape (#detectors, #pointings) : {} '.format(np.shape(TOD)))
-rc('font', size=15)
-rc('lines', linewidth=3)
-print(np.max(TOD))
-tes = 231
-plt.plot(TOD[tes, :], 'b-', label = r'TES = {}'.format(tes))
+
+tes = 6
+plt.plot(TOD[tes, :], label='TES {}'.format(tes))
 plt.xlabel('Pointing index')
-plt.ylabel('TOD [AU]')
-plt.tight_layout()
-plt.show()
+plt.ylabel('TOD')
 ```
 
 ## From observations to maps...
@@ -198,7 +225,7 @@ We therefore have an easy manner of obtaining the most optimal map that one can 
 
 ```{python}
 # Map-making process for a given number of reconstructed subbands
-nf_sub_rec = 3
+nf_sub_rec = d['nf_recon'][0]
 
 print('************* Map-Making on {} sub-map(s) *************'.format(nf_sub_rec))
 
@@ -276,36 +303,6 @@ for istokes in [0,1,2]:
     hp.gnomview(diff[ifreq,:,istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+3), reso=rr,
                 title='diff '+d['kind'][istokes]+' SubFreq {}'.format(ifreq))
 plt.show()
-```
-
-## Intensity pixel by pixel
-
-```{python}
-_, _, nus_rec, _, _, _ = qubic.compute_freq(150, nf_sub_rec)
-_, _, nus, _, _, _ = qubic.compute_freq(150, nf_sub)
-```
-
-```{python}
-pix_indices = np.where(np.invert(unseen))[0]
-```
-
-```{python}
-istk = 0
-for pix in pix_indices:
-    plt.figure()
-
-    plt.plot(nus, x0[:, pix, istk], 'go', label='Input sky')
-    plt.plot(nus_rec, maps_recon[:, pix, istk], 'ro', label='Recon')
-    plt.plot(nus_rec, maps_convolved[:, pix, istk], 'bo', label='Convolved')
-
-    plt.legend()
-    plt.title('Pixel {}, NSIDE=256'.format(pix))
-    plt.xlabel('Frequency [GHz]')
-    plt.ylabel('I (µK)')
-```
-
-```{python}
-d['beam_shape']
 ```
 
 ```{python}

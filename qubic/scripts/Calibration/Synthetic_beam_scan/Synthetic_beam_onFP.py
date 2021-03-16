@@ -1,3 +1,7 @@
+# ## Project the synthetic beam on the focal plane
+#
+#
+
 from __future__ import division, print_function
 
 import numpy as np
@@ -39,6 +43,7 @@ def get_one_scan_azimuth(tes_fit, elev, quadrant=3):
     for i in range(naz):
         image_fp = sc.tes_signal2image_fp(signal[:, :, i], [1, 2])
         _, quart_fp = sc.get_real_fp(image_fp, quadrant=quadrant)
+        
         all_quartfp.append(quart_fp)
 
     return all_quartfp
@@ -105,10 +110,16 @@ def make_hist(distances, threshold):
 
     return mean, std
 
-# Get the data
+# ## Get the data
+#
+# Path to the fit synthetic beam. This directory should contain a folder FitSB.
+
+# +
 freq_source = 170
-rep = Qubic_DataDir(datafile='allFitSB_{}.pdf'.format(freq_source))
+rep = f'/home/lmousset/QUBIC/Qubic_work/Calibration/datas/Synthetic_beams/2019-avril/synth_beam_{freq_source}'
+
 print(rep)
+# -
 
 tes_fit = get_all_fit(rep)
 

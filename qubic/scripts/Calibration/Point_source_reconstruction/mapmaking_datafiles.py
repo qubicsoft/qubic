@@ -150,18 +150,17 @@ def get_data_Mrefsyst(detnums, filemaps, az, el, fitted_directory, fittedpeakfil
 		peaks = np.array(FitsArray(fittedpeakfile))
 		#Thph indexes
 		if proj_name == "flat":
-			thphidx = [1,0] 
-			peaks[:,thphidx[1],:] = peaks[:,thphidx[1],:] / thecos
+			thphidx = [0,1] 
+			peaks[:,1,:] = peaks[:,1,:] / thecos
 		elif proj_name == "healpix":
 			thphidx = [0,1]
-			peaks[:,thphidx[1],:] = peaks[:,thphidx[1],:] 
+			peaks[:,1,:] = peaks[:,1,:] 
 		### An put them in the expected format. Save TES of interest
 		mypeaks = peaks[np.array(detnums)-1,:,:]
 		#Peaks in degrees
-		allphis_M = mypeaks[:,thphidx[1],:]
-		allthetas_M = mypeaks[:,thphidx[0],:]
+		allphis_M = mypeaks[:,1,:]
+		allthetas_M = mypeaks[:,0,:]
 		allvals_M = mypeaks[:,2,:]
-
 	return allphis_M, allthetas_M, allvals_M 
 
 def convert_M2Q(detnums, allphis_M, allthetas_M, allvals_M, elcen_fov, solid_angle,
@@ -263,17 +262,23 @@ def _plot_grfRF(detnums, xgrf, ygrf, qcut, numpeak):
 		plt.show()
 
 def do_some_dets(detnums, d, p, directory, fittedpeakfile, az, el, proj_name, custom=False, 
-				 nside=None, tol=5e-3, refit=False, resample=False, newsize=70, 
+				 q = None, nside=None, tol=5e-3, refit=False, resample=False, newsize=70, 
 				 doplot=True, verbose=True, sbfitmodel=None, angs=None, usepeaks=None,
 				 azmin=None, azmax=None, remove=None, fitted_directory=None, weighted=False,
 				nf_sub_rec=1, lowcut=1e-3, highcut=0.3):
+
+
 	if nside is not None:
 		d['nside']=nside
 	s = qubic.QubicScene(d)
-	ids = detnums.copy()
 	
-	q = qubic.QubicMultibandInstrument(d)
-	xgrf, ygrf, FP_index, index_q = sc.get_TES_Instru_coords(q[0], frame='GRF', verbose=False)
+	if q == None:
+		q = qubic.QubicMultibandInstrument(d)
+	
+	if len(q) == 1:
+		xgrf, ygrf, FP_index, index_q = sc.get_TES_Instru_coords(q, frame='GRF', verbose=False)
+	else:
+		xgrf, ygrf, FP_index, index_q = sc.get_TES_Instru_coords(q[0], frame='GRF', verbose=False)
 
 	# Create TES, index and ASIC numbers assuming detnums is continuos TES number (1-248).
 	tes, asic = np.zeros((len(detnums), ), dtype = int), np.zeros((len(detnums), ), dtype = int)
@@ -297,7 +302,7 @@ def do_some_dets(detnums, d, p, directory, fittedpeakfile, az, el, proj_name, cu
 		if verbose:
 			print('')
 			print('Normal Reconstruction')
-		qcut = select_det(qubic.QubicMultibandInstrument(d),ids)
+		qcut = select_det(qubic.QubicMultibandInstrument(d),detnums)
 		#qcut = select_det(qubic.QubicMultibandInstrument(d),[145])
 	else:
 		if verbose:
@@ -307,7 +312,12 @@ def do_some_dets(detnums, d, p, directory, fittedpeakfile, az, el, proj_name, cu
 		### from the synthesized beam images      
 		### First instantiate a jchinstrument (modified from instrument 
 		### to be able to read peaks from a file)
-		qcut = select_det(jcinst.QubicMultibandInstrument(d),ids)
+
+		print("Generating jchinstrument")
+		qcut = select_det(jcinst.QubicMultibandInstrument(d, peakfile = fittedpeakfile, 
+			tes = tes, asic = asic), qpix)
+		print("LEN(qcut) and detector", len(qcut), np.shape(qcut[0].detector.center))
+		print("Generating jchinstrument"[::-1])
 		
 		### In the present case, we use the peak measurements at 150 GHz
 		### So we assume its index is len(qcut)//2
@@ -319,8 +329,8 @@ def do_some_dets(detnums, d, p, directory, fittedpeakfile, az, el, proj_name, cu
 		# Cosine projection with elevation center of the FOV considering symetric scan in azimuth for each elevation step
 		thecos = np.cos(np.radians(elcen_fov))
 
-
 		#Read map (flat or healpy) for each detector
+		print("TES ASIC", tes, asic)
 		filemaps = readmaps(directory, tes, asic, az, el, p, 
 							proj_name = proj_name, nside = d['nside'], verbose = verbose)
 
@@ -328,7 +338,6 @@ def do_some_dets(detnums, d, p, directory, fittedpeakfile, az, el, proj_name, cu
 		allphis_M, allthetas_M, allvals_M = get_data_Mrefsyst(detnums, filemaps, az, el, fitted_directory, fittedpeakfile, proj_name,
 										resample = resample, newsize = newsize, azmin = azmin, azmax = azmax, remove = remove,
 										sbfitmodel = sbfitmodel, refit = refit, verbose = verbose)
-
 		if doplot: _plot_onemap(filemaps,az,el,[allphis_M, allthetas_M], proj_name, makerotation = False)
 
 		### Now we want to perform the rotation to go to boresight 
@@ -340,6 +349,7 @@ def do_some_dets(detnums, d, p, directory, fittedpeakfile, az, el, proj_name, cu
 														elcen_fov, solid_angle = synthbeam.peak150.solid_angle,
 														nu = nu, horn = horn, solid_angle_s = s.solid_angle,
 														angs = angs, verbose = verbose)
+		print("allphis_Q , allvals_Q shapes", np.shape(allphis_Q), np.shape(allvals_Q))
 		
 		if doplot:
 			plt.title("xy coord. of peaks in M and Q ref system")
@@ -355,6 +365,22 @@ def do_some_dets(detnums, d, p, directory, fittedpeakfile, az, el, proj_name, cu
 		if doplot:
 			# Plot peaks in measured reference frame. 
 			_plot_grfRF(detnums, xgrf, ygrf, qcut, numpeak)
+
+		for idet in range(len(detnums)):
+			position = np.ravel(qcut[0].detector[idet].center)
+			position = - position / np.sqrt(np.sum(position ** 2))
+			theta_center = np.arcsin(np.sqrt(position[0] ** 2 + position[1] ** 2 ))
+			phi_center = np.arctan2(position[1], position[0])
+			rav_thQ = np.ravel(allthetas_Q[idet,:])
+			rav_phQ = np.ravel(allphis_Q[idet,:])
+			## Now we identify the nearest peak to the theoretical Line Of Sight
+			angdist = np.zeros(len(rav_phQ))
+			for k in range(len(rav_phQ)):
+				angdist[k] = sbfit.ang_dist([theta_center, phi_center], [rav_thQ[k], rav_phQ[k]])
+				print(k,np.degrees(angdist[k]))
+			idxmin = np.argmin(angdist)
+			numpeak[idet] = idxmin
+
 
 		### We nowwrite the temporary file that contains the peaks locations to be used
 		if usepeaks is None:
@@ -389,31 +415,7 @@ def do_some_dets(detnums, d, p, directory, fittedpeakfile, az, el, proj_name, cu
 		if weighted:   ## Not to be used - old test...
 			realTOD[i,:] *= 1./ss**2
 			sumweight += 1./ss**2
-
-		##img, a,b = sbfit.get_flatmap(detnums[i], directory, azmin=azmin, azmax=azmax, remove=remove)
-		#allimg.append(img)
-		#mm, ss = ft.meancut(img, 3)
-		#c50 = np.cos(np.radians(elcen_fov))
-		#plt.figure()
-		#plt.subplot(1,2,1)
-		#plt.imshow(img, vmin = mm - 3 * ss, vmax = mm + 3 * ss,
-		#	   extent=[np.max(az) * c50, np.min(az) * c50, np.min(el), np.max(el)], aspect='equal')
-		#plt.colorbar()
-		#plt.title('TOD {}'.format(detnums[i]))
-		#plt.subplot(1,2,2)
-		#plt.imshow(img, vmin = mm - 3 * ss, vmax = mm + 3 * ss,
-		#	   extent=[np.max(az) * c50, np.min(az) * c50, np.min(el), np.max(el)], aspect='equal')
-		#plt.plot(-np.degrees(allphis_M[i ,:]), elcen_fov + 90 - np.degrees(allthetas_M[i,:]), 'r+', ms=10, markeredgewidth=2)
-		#for k in range(len(np.degrees(allphis_M[i,:]))):
-		#	plt.text(-np.degrees(allphis_M[i,k]) + 0.3, elcen_fov + 90 - np.degrees(allthetas_M[i,k]) + 0.3,
-		#				k, fontsize=15, weight='bold', color='r')
-		#plt.colorbar()
-		#plt.title('TOD {}'.format(detnums[i]))
-		#plt.show()
-		#print('####################################################++++++++++++++++++++++')
-		#print('i={}'.format(i))
-		#print('####################################################++++++++++++++++++++++')
-		
+	print("All img", np.shape(allimg))
 	### new code multiband
 	plt.figure()
 	for i in range(len(detnums)):
@@ -476,9 +478,14 @@ def do_some_dets(detnums, d, p, directory, fittedpeakfile, az, el, proj_name, cu
 	plt.clf()
 	print('%%%%%%%%%%%%%%%%%%%%%%')
 	ax=plt.subplot(111, projection='polar')
+	print("len qcut", len(qcut[0].detector.center))
+	print("=?===============================")
+	print(np.shape(realTOD), np.shape(p), nf_sub_rec, np.shape(qcut))
+	print("=?===============================")
+	
 	maps_recon, cov, nus, nus_edge = si.reconstruct_maps(realTOD, d, p,
-														nf_sub_rec, x0=None, instrument=qcut, #verbose=True,
-														forced_tes_sigma=sigmaTOD)
+														nf_sub_rec, x0 = None, instrument = qcut, #verbose=True,
+														forced_tes_sigma = sigmaTOD)
 	ax.set_rmax(0.5)
 	#legend(fontsize=8)
 	if weighted:

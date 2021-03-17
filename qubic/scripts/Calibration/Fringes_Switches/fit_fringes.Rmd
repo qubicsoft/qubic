@@ -53,11 +53,13 @@ rc('figure', figsize=(12, 6))
 rc('font', size=14)
 ```
 
+### Choose if you work with real data or with simulations
+
 ```{python}
 simu = True
 ```
 
-## Get the measurement
+### Get the measurement
 
 
 Get the .fits file with the fringes measurement. You must put your personal directory.
@@ -82,12 +84,12 @@ for k in range(len(allfringes)):
     allerr[k] /= std
 
 allmask_bad_TES = fdict['MASK_BAD_TES']
-allBLs = fdict['BLS']
-nimages = len(allBLs)
+BLs = fdict['BLS']
+nimages = len(BLs)
 
 xTES = fdict['X_TES']
 yTES = fdict['Y_TES']
-# print(allBLs)
+# print(BLs)
 
 # Make a QUBIC instrument
 d = qubic.qubicdict.qubicDict()
@@ -97,13 +99,13 @@ d['Multiband'] = False
 q = qubic.QubicInstrument(d)
 
 
-BLs_sort, BLs_type = scal.find_equivalent_baselines(allBLs, q)
+BLs_sort, BLs_type = scal.find_equivalent_baselines(BLs, q)
 ```
 
 Plot the baselines. There are sorted by equivalence type.
 
 ```{python}
-scal.plot_BLs_eq(allBLs, BLs_sort, q)
+scal.plot_BLs_eq(BLs, BLs_sort, q)
 ```
 
 ### Detect bad detectors
@@ -112,7 +114,7 @@ This is also done at theend of the Notebook `scripts/Calibration/Fringes_Switche
 
 ```{python}
 # Make a loop on N, compute how many bad TES it gives to choose the N you want.
-thecond = np.arange(2, 13)
+thecond = np.arange(2, 12)
 nbad = []
 
 for cond in thecond:
@@ -154,7 +156,7 @@ cmap_bwr = flib.make_cmap_nan_black('bwr')
 for k in range(nimages):
     fig, axs = plt.subplots(1, 2, figsize=(13, 7))
     fig.subplots_adjust(wspace=0.5)
-    fig.suptitle(f'k={k} - BL {allBLs[k]}')
+    fig.suptitle(f'k={k} - BL {BLs[k]}')
     ax0, ax1 = axs.ravel()
     
     # Scatter plot
@@ -207,7 +209,7 @@ vmin = -1
 vmax = 1
 for k in range(nimages):
     fig, axs = plt.subplots(1, 2, figsize=(12, 6))
-    fig.suptitle(f'BL {allBLs[k]}')
+    fig.suptitle(f'BL {BLs[k]}')
     fig.subplots_adjust(wspace=0.5)
     ax0, ax1 = axs
     scal.scatter_plot_FP(q, xdata, ydata, data[k]*the_mask, frame='ONAFP', 
@@ -223,16 +225,17 @@ for k in range(nimages):
 If you want to perform the fit on a reduce number of images, you can select them here.
 
 ```{python}
-selection = False
+selection = True
 if selection:
     myselection = [0, 2, 5]
 #     myselection = [0, 1, 2, 3, 5, 11]
     fringes = [fringes[i] for i in myselection]
     errs = [errs[i] for i in myselection]
-    BLs = [allBLs[i] for i in myselection]
+    BLs = [BLs[i] for i in myselection]
     print('Selected baselines:', BLs)
     
 nimages = len(BLs)
+print(f'We will work with {nimages} images.')
 ```
 
 # Start fitting
@@ -287,7 +290,7 @@ for k in range(nimages):
     # Add gaussian noise
     noise = np.random.normal(loc=0., scale=sigma, size=ndet)
     print('Gaussian noise:', noise[:10])
-    fake_noise = fake_gain #+ noise
+    fake_noise = fake_gain + noise
     
     fake_fringes.append(fake_noise)
     
@@ -315,8 +318,8 @@ To eliminate bad TES, we put a very high error on them => very small weight in t
 Then we make a list with an inverse covariance matrix for each image.
 
 ```{python}
-for k in range(nimages):
-    errs[k][np.isnan(the_mask)] *= 1e20 
+# for k in range(nimages):
+#     errs[k][np.isnan(the_mask)] *= 1e20 
 
 allInvCov = [scal.make_inverse_covariance(errs[k], verbose=True) for k in range(nimages)]
 ```
@@ -325,19 +328,19 @@ allInvCov = [scal.make_inverse_covariance(errs[k], verbose=True) for k in range(
 
 ```{python}
 all_fl, all_th, chi2_grid = scal.make_chi2_grid(allInvCov, fringes, BLs, q, 
-                                nval_fl=30, nval_th=30, 
+                                nval_fl=40, nval_th=40, 
                                 fl_min=0.25, fl_max=0.35,
                                 th_min=np.deg2rad(-1.), th_max=np.deg2rad(1), 
                                 fixPower=True)
 ```
 
 ```{python}
-# Smooth with a gaussian to avoid loosing the min in random pixel very low (not mandatory).
-smooth = False
+# Smooth with a gaussian to avoid loosing the min in random pixel very low (not always necessary).
+smooth = True
 step_fl = all_fl[1] - all_fl[0]
 step_th = all_th[1] - all_th[0]
 if smooth:
-    chi2_grid = gaussian_filter(chi2_grid, sigma=[step_fl*1e3, step_th*1e3])
+    chi2_grid = gaussian_filter(chi2_grid, sigma=[step_fl*4e2, step_th*4e2])
 ```
 
 ```{python}
@@ -361,7 +364,7 @@ if simu:
 ```{python}
 # Plot the chi2 map 
 fig, ax = plt.subplots(figsize=(8, 8))
-c = ax.pcolor(np.rad2deg(all_th), all_fl, chi2_grid, vmin=0, vmax=1e5)#, norm=SymLogNorm(99e9))
+c = ax.pcolor(np.rad2deg(all_th), all_fl, chi2_grid, vmin=0, vmax=1e6)#, norm=SymLogNorm(99e9))
 ax.set_xlabel('Theta')
 ax.set_ylabel('Focal length')
 if simu:
@@ -498,27 +501,27 @@ def make_colorbar(ax, image):
     clb = fig.colorbar(image, cax=cax)
     return
  
-def plot_residuals(q, xONAFP, yONAFP, BL, data, okTES, PowerPhi, errors, gains, cmap='bwr'):
+def plot_residuals(q, xONAFP, yONAFP, BL, data, the_mask, PowerPhi, errors, gains, cmap='bwr'):
     fig, axs = plt.subplots(4, 2, figsize=(12, 16))
     fig.suptitle(f'BL {BL}')
     axs = np.ravel(axs)
     
     # Initial / corrected 
     correct = data/gains
-    flib.plot_fringes_scatter(q, xONAFP, yONAFP, data*okTES, fig=fig, ax=axs[0], frame='ONAFP', 
-                     title=f'Data', s=100, vmin=-0.5, vmax=0.5)
-    flib.plot_fringes_scatter(q, xONAFP, yONAFP, correct*okTES, fig=fig, ax=axs[1], frame='ONAFP', 
-                     title=f'Data / gains', s=100, vmin=-0.5, vmax=0.5)
+    flib.plot_fringes_scatter(q, xONAFP, yONAFP, data*the_mask, fig=fig, ax=axs[0], frame='ONAFP', 
+                     title=f'Data', s=100, normalize=False)
+    flib.plot_fringes_scatter(q, xONAFP, yONAFP, correct*the_mask, fig=fig, ax=axs[1], frame='ONAFP', 
+                     title=f'Data / gains', s=100, normalize=False)
     
     # Initial / corrected smooth
-    init2D = flib.make2Dfringes_QubicSoft(data*okTES, q)
+    init2D = flib.make2Dfringes_QubicSoft(data*the_mask, q)
     init2D_conv = flib.astropy_convolution(init2D, sigma=0.7)
-    flib.plot_fringes_imshow(init2D_conv, normalize=True, fig=fig, ax=axs[2], cmap=cmap, 
+    flib.plot_fringes_imshow(init2D_conv, normalize=False, fig=fig, ax=axs[2], cmap=cmap, 
                              title='Data with Astropy convolution', mask=flib.make_mask2D_thermometers_TD())
     
-    correct2D = flib.make2Dfringes_QubicSoft(correct*okTES, q)
+    correct2D = flib.make2Dfringes_QubicSoft(correct*the_mask, q)
     correct2D_conv = flib.astropy_convolution(correct2D, sigma=0.7)
-    flib.plot_fringes_imshow(correct2D_conv, normalize=True, fig=fig, ax=axs[3], cmap=cmap, 
+    flib.plot_fringes_imshow(correct2D_conv, normalize=False, fig=fig, ax=axs[3], cmap=cmap, 
                              title='Data / gains with Astropy convolution', mask=flib.make_mask2D_thermometers_TD())
     
     # Fit
@@ -526,7 +529,7 @@ def plot_residuals(q, xONAFP, yONAFP, BL, data, okTES, PowerPhi, errors, gains, 
                               title='Fit: Power x Phi', s=100, vmin=-1, vmax=1, normalize=False)
     
     # Residuals
-    residu = (correct - PowerPhi) * okTES
+    residu = (correct - PowerPhi) * the_mask
     flib.plot_fringes_scatter(q, xONAFP, yONAFP, residu, frame='ONAFP',
                              fig=fig, ax=axs[5], title='Residuals = Data/gains - Power x Phi', s=100, vmin=-1, vmax=1, normalize=False)
     
@@ -548,8 +551,7 @@ def plot_residuals(q, xONAFP, yONAFP, BL, data, okTES, PowerPhi, errors, gains, 
 ```{python}
 cmap_bwr=flib.make_cmap_nan_black('bwr')
 for k in range(nimages):
-    print(okTES[k].shape, fringes[k].shape)
-    plot_residuals(q, xONAFP, yONAFP, BLs[k], fringes[k], okTES[k], PowerPhi[k], errs[k], A, cmap=cmap_bwr)
+    plot_residuals(q, xONAFP, yONAFP, BLs[k], fringes[k], the_mask, PowerPhi[k], errs[k], A, cmap=cmap_bwr)
 
 ```
 
@@ -562,11 +564,6 @@ os.environ["OMP_NUM_THREADS"] = "1"
 
 ncpu = cpu_count()
 print("{0} CPUs".format(ncpu))
-```
-
-```{python}
-# for k in range(nimages):
-#     allInvCov[k] *= 1e8
 ```
 
 ```{python}
@@ -620,10 +617,6 @@ def run(p0, nwalkers, niter, ndim, lnprob, args, withpool=True):
 ```
 
 ```{python}
-allInvCov
-```
-
-```{python}
 ndim = len(params_guess)
 nwalkers = 50
 
@@ -631,7 +624,7 @@ nwalkers = 50
 p0 = [params_guess + 1e-4 * np.random.rand(ndim) for i in range(nwalkers)]
 # print(p0)
 
-niter = 1000
+niter = 2000
 args = (allInvCov, fringes, BLs)
 sampler, pos, prob, state, blob_A, blob_Cov_A = run(p0, nwalkers, niter, ndim, lnprob, args, withpool=False)
 ```
@@ -641,7 +634,7 @@ sampler, pos, prob, state, blob_A, blob_Cov_A = run(p0, nwalkers, niter, ndim, l
 thin = 1
 flat_samples = sampler.get_chain(discard=0, thin=thin, flat=True)
 print(flat_samples.shape)
-cut = 20200
+cut = 15000
 
 plt.subplots(3, 1, figsize=(12, 8))
 plt.suptitle('Full chain')
@@ -681,13 +674,13 @@ plt.axvline(cut, color='r', label='Cut')
 
 ```{python}
 # Cut the chain and get the parameters
-flat_samples = sampler.get_chain(discard=cut, thin=thin, flat=True)
+flat_samples = sampler.get_chain(discard=100, thin=thin, flat=True)
 # flat_samples = sampler.get_chain(discard=cut, thin=5, flat=True)
-print(flat_samples.shape)
+print(flat_samples)
 
 mean_param = np.mean(flat_samples, axis=0)
 std_param = np.std(flat_samples, axis=0)
-print(mean_param.shape)
+print(mean_param)
 
 cov_param = np.cov(flat_samples.T)
 print(cov_param.shape)
@@ -696,7 +689,7 @@ lim = np.abs(np.max(cov_param))
 
 
 fig, ax = plt.subplots(1, 1, figsize=(6, 6))
-im = ax.imshow(cov_param, cmap='bwr', vmin=-lim, vmax=lim)
+im = ax.imshow(cov_param, cmap='bwr', vmin=-0.01, vmax=0.01)
 ax.set_xticks(np.arange(len(params_guess)))
 ax.set_yticks(np.arange(len(params_guess)))
 ax.set_xticklabels(label)
@@ -766,7 +759,7 @@ print('\n***Reduced Chi2:', scal.get_chi2(mean_param, allInvCov, fringes, BLs, q
 ```{python}
 # Directly, from the mean obtained with the MCMC
 q.optics.focal_length = mean_param[0]
-allpowerPhi = []
+allPowerPhi = []
 for k in range(nimages):
     model = scal.Model_Fringes_Ana(q, BLs[k], 
                                     theta_source=mean_param[0], 
@@ -886,23 +879,16 @@ else:
 #     plt.legend()
 ```
 
-#### Look at the residuals and data corrected by inter-calibrations
+#### Residuals and data corrected by inter-calibrations
 
 ```{python}
-q.optics.focal_length = mean_param[0]
-model_MCMC = []
-Residuals = []
 for k in range(nimages):
-    model = scal.Model_Fringes_Ana(q, BLs[k], 
-                                   theta_source=mean_param[1], 
-                                   nu_source=150e9, 
-                                   fwhm=20., amp=1., frame='ONAFP')
-
-    x, y, Phi = model.get_fringes(times_gaussian=False)
-    
-    fullmodel = Phi * mean_param[2 + k] * blobA_mean
-    model_MCMC.append(fullmodel)
-    Residuals.append(fringes[k] - fullmodel)
+    plot_residuals(q, xONAFP, yONAFP, BLs[k], 
+                   fringes[k], 
+                   the_mask, 
+                   allPowerPhi[k], 
+                   errs[k], 
+                   blobA_mean, cmap=cmap_bwr)
 
 ```
 

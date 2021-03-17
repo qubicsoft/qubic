@@ -204,3 +204,9 @@ class LogLikelihood:
                 myguess_params[:,i] = self.p0[i]
         return myguess_params
 
+
+
+
+
+
+

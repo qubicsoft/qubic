@@ -1031,16 +1031,11 @@ def remove_thermometers(x, y, fringes1D):
 def reorder_data(data, xdata, ydata, xqsoft, yqsoft):
     """Reorder data (TES signal) as ordered in the QUBIC soft.
     The number of TES should be 248 (without thermometers)."""
-    ndata = len(data)
     ndet = xdata.shape[0]
-    data_ordered = []
-    for k in range(ndata):
-        olddata = data[k]
-        newdata = np.zeros_like(olddata)
-        for det in range(ndet):
-            index_simu = np.where((xqsoft == xdata[det]) & (yqsoft == ydata[det]))[0][0]
-            newdata[index_simu] = olddata[det]
-        data_ordered.append(newdata)
+    data_ordered = np.zeros_like(data)
+    for det in range(ndet):
+        index_simu = np.where((xqsoft == xdata[det]) & (yqsoft == ydata[det]))[0][0]
+        data_ordered[index_simu] = data[det]
     return data_ordered
 
 

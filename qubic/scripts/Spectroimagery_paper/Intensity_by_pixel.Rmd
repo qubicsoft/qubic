@@ -130,15 +130,15 @@ fsed._plot_covs(regions, bands, coveragesmaps, centers)
 ```{python}
 # NEW (16 Feb 2021)
 reload(fsed)
-sky_conf = {'synch': 's0'}
-#sky_conf = {'dust': 'd1'}
+#sky_conf = {'synch': 's0'}
+sky_conf = {'dust': 'd1'}
 fground_maps = fsed.foreground_signal(dictionaries, sky_conf)
 ```
 
 ```{python}
 # NEW (16 Feb 2021)
 reload(fsed)
-nreals = 40
+nreals = 4
 noise = fsed.noise_qss(dictionaries, sky_conf, coveragesmaps, nreals, verbose = False) 
 
 ```
@@ -332,7 +332,7 @@ pixs_ud = [pixQ_ud, pixQ_ud, pixG_ud, pixG_ud]
 pixs_red = [pixQ_red, pixQ_red, pixG_red, pixG_red]
 nus_edge = [nus150, nus220, nus150, nus220]
 
-study = "synch"
+study = "dust"
 
 if study == "dust":
     FuncModel = fsed.ThermDust_Planck545
@@ -353,13 +353,12 @@ Imvals, Isvals, xarr, flat_samples = fsed.foregrounds_run_mcmc(dictionaries, fgr
 ```{python}
 #plt.hist(flat_samples[0,:,0], bins = 20, histtype="step")
 plt.xlabel("c0")
-plt.ylabel("c2")
+plt.ylabel("c1")
 plt.hist2d(flat_samples[0,:,0], flat_samples[0,:,1], bins = 60, cmap = "Purples")
 ```
 
 ```{python}
 #See pasrametric model
-study = "synch"
 xrange = np.arange(50,1100)
 ax = plt.subplot(111)
 ax.set_xscale("log")

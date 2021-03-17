@@ -56,7 +56,7 @@ rc('font', size=14)
 ### Choose if you work with real data or with simulations
 
 ```{python}
-simu = True
+simu = False
 ```
 
 ### Get the measurement
@@ -77,6 +77,7 @@ print(fdict.keys())
 
 allfringes = fdict['FRINGES_1D']
 allerr = fdict['ERRORS']
+
 # Normalization 
 for k in range(len(allfringes)):
     std = np.std(allfringes[k])
@@ -133,7 +134,7 @@ plt.grid()
 There is a plateau around N=9,10 which leads to ~30 bad detectors. We will choose N=30.
 
 ```{python}
-the_mask = flib.decide_bad_TES(allmask_bad_TES, condition=9)
+the_mask = flib.decide_bad_TES(allmask_bad_TES, condition=5)
 nbad = int(256 - np.nansum(the_mask))
 
 # print(the_mask)
@@ -228,7 +229,8 @@ If you want to perform the fit on a reduce number of images, you can select them
 selection = True
 if selection:
     myselection = [0, 2, 5]
-#     myselection = [0, 1, 2, 3, 5, 11]
+#     myselection = [0, 1, 2, 3, 4, 5]
+    remind_all_fringes = fringes.copy() 
     fringes = [fringes[i] for i in myselection]
     errs = [errs[i] for i in myselection]
     BLs = [BLs[i] for i in myselection]
@@ -318,8 +320,8 @@ To eliminate bad TES, we put a very high error on them => very small weight in t
 Then we make a list with an inverse covariance matrix for each image.
 
 ```{python}
-# for k in range(nimages):
-#     errs[k][np.isnan(the_mask)] *= 1e20 
+for k in range(nimages):
+    errs[k][np.isnan(the_mask)] *= 1e20 
 
 allInvCov = [scal.make_inverse_covariance(errs[k], verbose=True) for k in range(nimages)]
 ```
@@ -364,7 +366,7 @@ if simu:
 ```{python}
 # Plot the chi2 map 
 fig, ax = plt.subplots(figsize=(8, 8))
-c = ax.pcolor(np.rad2deg(all_th), all_fl, chi2_grid, vmin=0, vmax=1e6)#, norm=SymLogNorm(99e9))
+c = ax.pcolor(np.rad2deg(all_th), all_fl, chi2_grid, vmin=0, vmax=1e56)#, norm=SymLogNorm(99e9))
 ax.set_xlabel('Theta')
 ax.set_ylabel('Focal length')
 if simu:
@@ -501,7 +503,7 @@ def make_colorbar(ax, image):
     clb = fig.colorbar(image, cax=cax)
     return
  
-def plot_residuals(q, xONAFP, yONAFP, BL, data, the_mask, PowerPhi, errors, gains, cmap='bwr'):
+def plot_residuals(q, xONAFP, yONAFP, BL, data, the_mask, PowerPhi, errors, gains, cmap='bwr', normalize=True):
     fig, axs = plt.subplots(4, 2, figsize=(12, 16))
     fig.suptitle(f'BL {BL}')
     axs = np.ravel(axs)
@@ -509,19 +511,19 @@ def plot_residuals(q, xONAFP, yONAFP, BL, data, the_mask, PowerPhi, errors, gain
     # Initial / corrected 
     correct = data/gains
     flib.plot_fringes_scatter(q, xONAFP, yONAFP, data*the_mask, fig=fig, ax=axs[0], frame='ONAFP', 
-                     title=f'Data', s=100, normalize=False)
+                     title=f'Data', s=100, normalize=normalize)
     flib.plot_fringes_scatter(q, xONAFP, yONAFP, correct*the_mask, fig=fig, ax=axs[1], frame='ONAFP', 
-                     title=f'Data / gains', s=100, normalize=False)
+                     title=f'Data / gains', s=100, normalize=normalize)
     
     # Initial / corrected smooth
     init2D = flib.make2Dfringes_QubicSoft(data*the_mask, q)
     init2D_conv = flib.astropy_convolution(init2D, sigma=0.7)
-    flib.plot_fringes_imshow(init2D_conv, normalize=False, fig=fig, ax=axs[2], cmap=cmap, 
+    flib.plot_fringes_imshow(init2D_conv, normalize=normalize, fig=fig, ax=axs[2], cmap=cmap, 
                              title='Data with Astropy convolution', mask=flib.make_mask2D_thermometers_TD())
     
     correct2D = flib.make2Dfringes_QubicSoft(correct*the_mask, q)
     correct2D_conv = flib.astropy_convolution(correct2D, sigma=0.7)
-    flib.plot_fringes_imshow(correct2D_conv, normalize=False, fig=fig, ax=axs[3], cmap=cmap, 
+    flib.plot_fringes_imshow(correct2D_conv, normalize=normalize, fig=fig, ax=axs[3], cmap=cmap, 
                              title='Data / gains with Astropy convolution', mask=flib.make_mask2D_thermometers_TD())
     
     # Fit
@@ -551,8 +553,35 @@ def plot_residuals(q, xONAFP, yONAFP, BL, data, the_mask, PowerPhi, errors, gain
 ```{python}
 cmap_bwr=flib.make_cmap_nan_black('bwr')
 for k in range(nimages):
-    plot_residuals(q, xONAFP, yONAFP, BLs[k], fringes[k], the_mask, PowerPhi[k], errs[k], A, cmap=cmap_bwr)
+    plot_residuals(q, xONAFP, yONAFP, BLs[k], fringes[k], the_mask, PowerPhi[k], errs[k], A, 
+                   cmap=cmap_bwr, normalize=False)
 
+```
+
+### Correct images not used by the intercalibrations
+
+```{python}
+not_used = list(np.arange(12))
+for i in myselection[::-1]:
+    del not_used[i]
+print(myselection, not_used)
+```
+
+```{python}
+if selection:
+    fringes_not_used = [remind_all_fringes[i] for i in not_used]
+    
+    for k in range(len(not_used)):
+        bl = fdict['BLS'][not_used[k]]
+        correct = fringes_not_used[k] / A
+
+        fig, axs = plt.subplots(1, 2)
+        fig.suptitle(f'BL {bl}')
+        flib.plot_fringes_scatter(q, xONAFP, yONAFP, fringes_not_used[k]*the_mask, fig=fig, ax=axs[0], frame='ONAFP', 
+                         title=f'Data', s=190, normalize=False)
+        flib.plot_fringes_scatter(q, xONAFP, yONAFP, correct*the_mask, fig=fig, ax=axs[1], frame='ONAFP', 
+                         title=f'Data / gains', s=190, normalize=False)
+        fig.tight_layout()
 ```
 
 ## MCMC

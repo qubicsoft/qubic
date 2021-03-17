@@ -64,7 +64,7 @@ Get the .fits file with the fringes measurement. You must put your personal dire
 
 ```{python}
 global_dir = '/home/lmousset/QUBIC/Qubic_work/Calibration/datas/Fringes/'
-myfringes = 'Fringes_2020-10-27_12BLs_RemoveSlopePerTES_medianTrue_refTESautomatic_inverse.fits'
+myfringes = 'Fringes_2020-10-27_12BLs_RemoveSlopePerTES_medianTrue_refTESautomatic_maskbadTES0.75.fits'
 ```
 
 Read informations saved in the fits file and make a QubicInstrument:
@@ -81,12 +81,12 @@ for k in range(len(allfringes)):
     allfringes[k] /= std
     allerr[k] /= std
 
-allokTES = fdict['OK_TES']
+allmask_bad_TES = fdict['MASK_BAD_TES']
 allBLs = fdict['BLS']
 nimages = len(allBLs)
 
-x = fdict['X_TES']
-y = fdict['Y_TES']
+xTES = fdict['X_TES']
+yTES = fdict['Y_TES']
 # print(allBLs)
 
 # Make a QUBIC instrument
@@ -106,52 +106,44 @@ Plot the baselines. There are sorted by equivalence type.
 scal.plot_BLs_eq(allBLs, BLs_sort, q)
 ```
 
-### Remove thermometers 
+### Detect bad detectors
 
-Data contains 256 detectors, 248 are bolometers but 8 are thermometers. To compare with Qubic soft simulations, it is useful to remove thermometers.
-
-```{python}
-data, error, okTES = [], [], []
-for k in range(nimages):
-    xdata, ydata, mydata = flib.remove_thermometers(x, y, allfringes[k])
-    _, _, myerror = flib.remove_thermometers(x, y, allerr[k])
-    _, _, myokTES = flib.remove_thermometers(x, y, allokTES[k])
-    
-    data.append(mydata)
-    error.append(myerror)
-    okTES.append(myokTES)
-
-ndet = xdata.shape[0]
-print('Number of detectors:', ndet)
-```
-
-### Re-order data as simulations from Qubic soft
-TES numbering on the instrument and in simulations are different. To compare the two, we re-order the data following simulation order.
+This is also done at theend of the Notebook `scripts/Calibration/Fringes_Switches/Generate-Fringes-Oct-2020-Louise.Rmd`. To be set as bad, the TES must be NAN in at least N images. This N can be chosen. 
 
 ```{python}
-xONAFP, yONAFP, _ = scal.get_TEScoordinates_ONAFP(q)
-newdata = flib.reorder_data(data, xdata, ydata, xONAFP, yONAFP)
-newerror = flib.reorder_data(error, xdata, ydata, xONAFP, yONAFP)
-newokTES = flib.reorder_data(okTES, xdata, ydata, xONAFP, yONAFP)
+# Make a loop on N, compute how many bad TES it gives to choose the N you want.
+thecond = np.arange(2, 13)
+nbad = []
 
-# Check the re-ordering is correct, the 2 plots for each baseline should be identical.
-vmin = -1
-vmax = 1
-for k in range(nimages):
-    fig, axs = plt.subplots(1, 2, figsize=(12, 6))
-    fig.suptitle(f'BL {allBLs[k]}')
-    fig.subplots_adjust(wspace=0.5)
-    ax0, ax1 = axs
-    scal.scatter_plot_FP(q, xdata, ydata, data[k]*okTES[k], frame='ONAFP', 
-                         fig=fig, ax=ax0, s=170, cmap='bwr', 
-                         vmin=vmin, vmax=vmax, title='Original order', unit=None)
+for cond in thecond:
+    the_mask = flib.decide_bad_TES(allmask_bad_TES, condition=cond)
+#     print(the_mask)
+    nbad.append(int(256 - np.nansum(the_mask)))
 
-    scal.scatter_plot_FP(q, xONAFP, yONAFP, newdata[k]*newokTES[k], frame='ONAFP', 
-                         fig=fig, ax=ax1, s=170, cmap='bwr', 
-                         vmin=vmin, vmax=vmax, title='Re-order', unit=None)
+plt.figure()
+plt.plot(thecond, nbad, 'bo')
+plt.xlabel('Number of images where the TES is NAN')
+plt.ylabel('Number of bad TES')
+plt.grid()
+
 ```
 
-Plot the fringes measurements. We make 2 plots:
+There is a plateau around N=9,10 which leads to ~30 bad detectors. We will choose N=30.
+
+```{python}
+the_mask = flib.decide_bad_TES(allmask_bad_TES, condition=9)
+nbad = int(256 - np.nansum(the_mask))
+
+# print(the_mask)
+flib.plot_fringes_scatter(q, xTES, yTES, the_mask, normalize=False, s=140, cbar=False)
+
+badTES = flib.give_index_bad_TES(the_mask)
+print(badTES.T)
+
+```
+
+### Plot the fringes measurements. 
+We make 2 plots:
 * A simple scatter plot
 * A imshow plot after performing a Gaussian convolution using Astropy (just for visual help)
 
@@ -166,11 +158,11 @@ for k in range(nimages):
     ax0, ax1 = axs.ravel()
     
     # Scatter plot
-    flib.plot_fringes_scatter(q, x, y, allfringes[k]*allokTES[k], normalize=False, s=180, fig=fig, ax=ax0)
+    flib.plot_fringes_scatter(q, xTES, yTES, allfringes[k] * the_mask, normalize=False, s=180, fig=fig, ax=ax0)
 
 
     # Plot with Astropy convolution 
-    fringes2D = flib.make2Dfringes_data(allfringes[k] * allokTES[k])
+    fringes2D = flib.make2Dfringes_data(allfringes[k] * the_mask)
     fringes2D_conv = flib.astropy_convolution(fringes2D, sigma=0.7)
     flib.plot_fringes_imshow(fringes2D_conv, normalize=True, fig=fig, ax=ax1, cmap=cmap_bwr, 
                              title='Gaussian convolution', mask=flib.make_mask2D_thermometers_TD())
@@ -178,30 +170,69 @@ for k in range(nimages):
     
 ```
 
+### Remove thermometers 
+
+Data contains 256 detectors, 248 are bolometers but 8 are thermometers. To compare with Qubic soft simulations, it is useful to remove thermometers.
+
+```{python}
+xdata, ydata, the_mask = flib.remove_thermometers(xTES, yTES, the_mask)
+ndet = xdata.shape[0]
+print('Number of detectors:', ndet)
+
+data, error = [], []
+for k in range(nimages):
+    _, _, mydata = flib.remove_thermometers(xTES, yTES, allfringes[k])
+    _, _, myerror = flib.remove_thermometers(xTES, yTES, allerr[k])
+    data.append(mydata)
+    error.append(myerror)
+
+
+```
+
+### Re-order data as simulations from Qubic soft
+TES numbering on the instrument and in simulations are different. To compare the two, we re-order the data following simulation order.
+
+```{python}
+xONAFP, yONAFP, _ = scal.get_TEScoordinates_ONAFP(q)
+the_mask = flib.reorder_data(the_mask, xdata, ydata, xONAFP, yONAFP)
+
+fringes, errs = [], []
+for k in range(nimages):
+    fringes.append(flib.reorder_data(data[k], xdata, ydata, xONAFP, yONAFP))
+    errs.append(flib.reorder_data(error[k], xdata, ydata, xONAFP, yONAFP))
+
+
+# Check the re-ordering is correct, the 2 plots for each baseline should be identical.
+vmin = -1
+vmax = 1
+for k in range(nimages):
+    fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+    fig.suptitle(f'BL {allBLs[k]}')
+    fig.subplots_adjust(wspace=0.5)
+    ax0, ax1 = axs
+    scal.scatter_plot_FP(q, xdata, ydata, data[k]*the_mask, frame='ONAFP', 
+                         fig=fig, ax=ax0, s=170, cmap='bwr', 
+                         vmin=vmin, vmax=vmax, title='Original order', unit=None)
+
+    scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes[k]*the_mask, frame='ONAFP', 
+                         fig=fig, ax=ax1, s=170, cmap='bwr', 
+                         vmin=vmin, vmax=vmax, title='Re-order', unit=None)
+```
+
 ### Make a selection
 If you want to perform the fit on a reduce number of images, you can select them here.
 
 ```{python}
-selection = True
+selection = False
 if selection:
     myselection = [0, 2, 5]
 #     myselection = [0, 1, 2, 3, 5, 11]
-    fringes, errs, BLs, ok = [], [], [], []
-    for i in myselection:
-        fringes.append(newdata[i])
-        errs.append(newerror[i])
-        BLs.append(allBLs[i])
-        ok.append(newokTES[i])
+    fringes = [fringes[i] for i in myselection]
+    errs = [errs[i] for i in myselection]
+    BLs = [allBLs[i] for i in myselection]
     print('Selected baselines:', BLs)
-else:
-    fringes = newdata
-    errs = newerror
-    BLs = allBLs
-    okTES = newokTES
     
 nimages = len(BLs)
-x = fdict['X_TES']
-y = fdict['Y_TES']
 ```
 
 # Start fitting
@@ -285,7 +316,7 @@ Then we make a list with an inverse covariance matrix for each image.
 
 ```{python}
 for k in range(nimages):
-    errs[k][np.isnan(okTES[k])] *= 1e20 
+    errs[k][np.isnan(the_mask)] *= 1e20 
 
 allInvCov = [scal.make_inverse_covariance(errs[k], verbose=True) for k in range(nimages)]
 ```
@@ -301,8 +332,8 @@ all_fl, all_th, chi2_grid = scal.make_chi2_grid(allInvCov, fringes, BLs, q,
 ```
 
 ```{python}
-# Smooth with a gaussian to avoid loosing the min in random pixel very low (not manda)
-smooth = True
+# Smooth with a gaussian to avoid loosing the min in random pixel very low (not mandatory).
+smooth = False
 step_fl = all_fl[1] - all_fl[0]
 step_th = all_th[1] - all_th[0]
 if smooth:
@@ -328,6 +359,7 @@ if simu:
 ```
 
 ```{python}
+# Plot the chi2 map 
 fig, ax = plt.subplots(figsize=(8, 8))
 c = ax.pcolor(np.rad2deg(all_th), all_fl, chi2_grid, vmin=0, vmax=1e5)#, norm=SymLogNorm(99e9))
 ax.set_xlabel('Theta')

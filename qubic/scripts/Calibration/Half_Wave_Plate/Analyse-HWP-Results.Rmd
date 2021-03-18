@@ -1,13 +1,15 @@
 ---
 jupyter:
   jupytext:
+    display_name: Python 3
+    language: python
+    name: python3
     text_representation:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-
-      jupytext_version: 1.4.2
-
+      jupytext_version: 1.4.1
+  kernelspec:
     display_name: Python 3
     language: python
     name: python3
@@ -130,15 +132,7 @@ print(resfit[1])
 ```
 
 ```{python}
-resfit[2]
-```
-
-```{python}
-
-```
-
-```{python}
-### NEW JCH Feb. 26 2021
+### NEW JCH March 17th 2021
 rc('figure',figsize=(6,6))
 rc('font',size=12)
 
@@ -152,10 +146,9 @@ myrange = [[0., 3*resfit[1][0]],
            
 print(myrange)
 
-resmcmc, samples = dl.hwp_fitpol_MCMC(data_uniqueth[idir][TESNum-1,0,:], data_uniqueth[idir][TESNum-1,1,:], data_uniqueth[idir][TESNum-1,2,:], 
-                       doplot=True, str_title='Demodulation TES{}'.format(iii+1), 
-                       saturation=True, myguess=myguess, force_chi2_ndf=False, myrange=myrange, upperlims=True)
-
+samples, valbest, intervals, intervals_CL, res_str = dl.hwp_fitpol_MCMC(data_uniqueth[idir][TESNum-1,0,:], data_uniqueth[idir][TESNum-1,1,:], data_uniqueth[idir][TESNum-1,2,:], 
+                           doplot=True, str_title='Demodulation TES{} (MCMC)'.format(iii+1), 
+                           saturation=True, myguess=myguess, force_chi2_ndf=False, myrange=myrange, upperlims=True, verbose=False)
 tight_layout()
 ```
 

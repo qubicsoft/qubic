@@ -117,7 +117,7 @@ rc('figure',figsize=(6,6))
 from matplotlib.backends.backend_pdf import PdfPages
 reload(dl)
 
-TESNum = 60
+TESNum = 96
 iii = (TESNum-1)
 idir = 0
 
@@ -126,9 +126,8 @@ errorbar(data_uniqueth[idir][TESNum-1,0,:], data_uniqueth[idir][TESNum-1,1,:],
          yerr = data_uniqueth[idir][TESNum-1,2,:], label='Data', fmt='ro')
 legend(loc='upper left')
 xlabel('HWP Angle [Deg.]')
-ylabel('Normalized signal')
+ylabel('signal')
 title('TES #{}'.format(TESNum))
-
 ```
 
 ```{python}
@@ -136,7 +135,7 @@ rc('figure',figsize=(6,6))
 from matplotlib.backends.backend_pdf import PdfPages
 reload(dl)
 
-TESNum = 60
+TESNum = 95
 iii = (TESNum-1)
 idir = 0
 
@@ -159,6 +158,10 @@ if np.prod(resfit[2])!=0:
                            saturation=True, myguess=myguess, force_chi2_ndf=False, myrange=myrange, upperlims=True, verbose=False)
     tight_layout()
     print(resmcmc)
+```
+
+```{python}
+intervals
 ```
 
 ### Loop over bolometers
@@ -197,12 +200,12 @@ for TESNum in range(1, 257):
                                doplot=True, str_title='Demodulation TES{} (MCMC)'.format(TESNum), 
                                saturation=True, myguess=myguess, force_chi2_ndf=False, 
                                 myrange=myrange, upperlims=True, verbose=False,
-                                savecontour = mydir+'/Figs/Contours_TES_{}.png'.format(TESNum))
+                                savecontour = mydir+'/Figs/Contours_TES_{}.pdf'.format(TESNum))
         tight_layout()
         print(resmcmc)
         
         #### Save successful ones
-        savefig(mydir+'/Figs/Result_TES_{}.png'.format(TESNum))
+        savefig(mydir+'/Figs/Result_TES_{}.pdf'.format(TESNum))
         pickle.dump( [resfit[1:], samples, valbest, intervals, intervals_CL, res_str], open( mydir+'/Pkl/TES_{}.pk'.format(TESNum), "wb" ) )
         
         

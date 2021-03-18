@@ -217,31 +217,51 @@ idir = 0
 mydir = res_dir+'/'+subdirs[idir]
 
 allsamples = []
+allvalbest = []
+allintervals = []
+allintervals_CL = []
+allres_str = []
 for TESNum in range(1, 257):
     chain_file = mydir+'/Pkl/TES_{}.pk'.format(TESNum)
     ff = glob.glob(chain_file)
     if len(ff) != 0:
-        resfit, resmcmc, samples = pickle.load(open(chain_file,'rb'))
+        resfit, samples, valbest, intervals, intervals_CL, res_str = pickle.load(open(chain_file,'rb'))
     allsamples.append(samples)
+    allvalbest.append(valbest)
+    allintervals.append(intervals)
+    allintervals_CL.append(intervals_CL)
+    allres_str.append(res_str)
 allsamples = np.array(allsamples)
+allvalbest = np.array(allvalbest)
+allintervals = np.array(allintervals)
+allintervals_CL = np.array(allintervals_CL)
+allres_str = np.array(allres_str)
 print(np.shape(allsamples))
+print(np.shape(allvalbest))
+print(np.shape(allintervals))
+print(np.shape(allintervals_CL))
+print(np.shape(allres_str))
+
+```
+
+```{python}
+has_upperlimit = allintervals_CL[:,0] == 0.95
+print('We have {} upperlimits out of 256: {}%'.format(has_upperlimit.sum(), has_upperlimit.sum()/256*100))
 ```
 
 ```{python}
 means = np.mean(allsamples, axis=1)
-means[:,1] *= 100
 errs = np.std(allsamples, axis=1)
-errs[:,1] *= 100
 ```
 
 ```{python}
-varnames = ['Amp','Xpol %', 'Phase', 'Sat']
+varnames = ['Xpol %', 'Phase', 'Sat']
 rc('figure',figsize=(16,8))
-for i in range(4):
-    subplot(2,4,i+1)
+for i in range(3):
+    subplot(2,3,i+1)
     hist(means[:,i], bins=100)    
     xlabel('Mean '+varnames[i])
-    subplot(2,4,i+1+4)
+    subplot(2,3,i+1+3)
     hist(errs[:,i], bins=100)
     xlabel('Std '+varnames[i])
 tight_layout()
@@ -253,7 +273,7 @@ np.shape(means)
 
 ```{python}
 from sklearn.cluster import DBSCAN
-def DBSCAN_cut(values, errors, doplot=False, min_samples=40):
+def DBSCAN_cut(values, errors, doplot=False, min_samples=40, parnames=None):
     norm_values = np.zeros_like(values)
     norm_errors = np.zeros_like(errors)
     sh = np.shape(values)
@@ -272,13 +292,18 @@ def DBSCAN_cut(values, errors, doplot=False, min_samples=40):
     
     if doplot:
         for i in range(sh[1]):
+            if parnames is None:
+                pn = 'Param {}'.format(i)
+            else:
+                pn = parnames[i]
+                
             subplot(2,sh[1], i+1)
             for k in range(len(unique_labels)):
                 thisone = labels == unique_labels[k]
                 scatter(values[thisone,i],errors[thisone,i],c=mycolors[k],
                         label='Type {} : n={}'.format(unique_labels[k],thisone.sum()))
-                xlabel('Param {}'.format(i))
-                ylabel('Error Param {}'.format(i))
+                xlabel(pn)
+                ylabel('Error '+pn)
                 if i==0:
                     legend()
     return (labels == 0)
@@ -289,14 +314,17 @@ def normalize(x):
 ```
 
 ```{python}
-ok = DBSCAN_cut(means[:,1:], errs[:,1:], doplot=True, min_samples=55)
+ok = DBSCAN_cut(means, errs, doplot=True, min_samples=55, parnames=varnames)
 ```
 
 ```{python}
-varnames = ['Amp','Xpol %', 'Phase', 'Sat']
+has_upperlimit = allintervals_CL[ok,0] == 0.95
+print('We have {} upperlimits out of {}: {}%'.format(has_upperlimit.sum(), ok.sum(), has_upperlimit.sum()/ok.sum()*100))
+
+
 rc('figure',figsize=(16,8))
-nbins = 15
-for i in range(4):
+nbins = 30
+for i in range(3):
     mm, ss = ft.weighted_mean(means[ok,i], errs[ok,i], dispersion=True)
     subplot(2,4,i+1)
     hist(means[ok,i], bins=nbins, label='Mean over {0:} TES:\n{1:5.3f} +/- {2:5.3f}'.format(np.sum(ok),mm,ss))    
@@ -312,13 +340,13 @@ tight_layout()
 rc('figure',figsize=(16,8))
 myok = ok.copy()
 subplot(1,2,1)
-a=hist(means[myok,1]/errs[myok,1], range=[0,5], bins=30)
+a=hist(means[myok,0]/errs[myok,0], range=[0,5], bins=30)
 subplot(1,2,2)
-a=hist(means[myok,1]/errs[myok,1], range=[0,3], bins=30, cumulative=True, density=True)
+a=hist(means[myok,0]/errs[myok,0], range=[0,3], bins=30, cumulative=True, density=True)
 ```
 
 ```{python}
-rc('figure',figsize=(8,8))
+rc('figure',figsize=(12,8))
 xx = 0.5 * (a[1][1:]+a[1][0:-1])
 plot(xx,a[0])
 val2sig = np.interp(2., xx,a[0])
@@ -329,15 +357,33 @@ xlim(0,3)
 ylim(0,1.)
 xlabel('Xpol/$\sigma$(Xpol)')
 ylabel('Cumulative counts')
-title('Passing cuts: {} TES out of 248'.format(np.sum(ok)))
+title('Passing cuts: {} TES out of 256'.format(np.sum(ok)))
 ```
 
 ```{python}
+numdets = np.arange(256)+1
+selected_dets = numdets[ok]
+
+has_xpol = ok & (allintervals_CL[:,0] == 0.68)
+print(np.sum(has_xpol))
+
+selected_dets
+
 
 ```
 
 ```{python}
+numdets[has_xpol]
+```
 
+```{python}
+img = ft.image_asics(all1=has_xpol)
+imshow(img)
+```
+
+```{python}
+img = ft.image_asics(all1=ok)
+imshow(img)
 ```
 
 ```{python}

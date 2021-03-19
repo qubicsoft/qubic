@@ -117,6 +117,24 @@ rc('figure',figsize=(6,6))
 from matplotlib.backends.backend_pdf import PdfPages
 reload(dl)
 
+TESNum = 96
+iii = (TESNum-1)
+idir = 0
+
+figure()
+errorbar(data_uniqueth[idir][TESNum-1,0,:], data_uniqueth[idir][TESNum-1,1,:], 
+         yerr = data_uniqueth[idir][TESNum-1,2,:], label='Data', fmt='ro')
+legend(loc='upper left')
+xlabel('HWP Angle [Deg.]')
+ylabel('signal')
+title('TES #{}'.format(TESNum))
+```
+
+```{python}
+rc('figure',figsize=(6,6))
+from matplotlib.backends.backend_pdf import PdfPages
+reload(dl)
+
 TESNum = 95
 iii = (TESNum-1)
 idir = 0
@@ -135,16 +153,23 @@ if np.prod(resfit[2])!=0:
                [resfit[1][2]-10*resfit[2][2], resfit[1][2]+10*resfit[2][2]],
                [0, 10*resfit[1][3]]]
 
-    resmcmc, samples, fig = dl.hwp_fitpol_MCMC(data_uniqueth[idir][TESNum-1,0,:], data_uniqueth[idir][TESNum-1,1,:], data_uniqueth[idir][TESNum-1,2,:], 
-                           doplot=True, str_title='Demodulation TES{}'.format(iii+1), 
+    samples, valbest, intervals, intervals_CL, res_str = dl.hwp_fitpol_MCMC(data_uniqueth[idir][TESNum-1,0,:], data_uniqueth[idir][TESNum-1,1,:], data_uniqueth[idir][TESNum-1,2,:], 
+                           doplot=True, str_title='Demodulation TES{} (MCMC)'.format(iii+1), 
                            saturation=True, myguess=myguess, force_chi2_ndf=False, myrange=myrange, upperlims=True, verbose=False)
     tight_layout()
     print(resmcmc)
 ```
 
+```{python}
+intervals
+```
+
 ### Loop over bolometers
 
+1) Run the chains:
+
 ```{python}
+reload(dl)
 res_dir = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/HWP-MCMC/TES-Results'
 idir = 0
 mydir = res_dir+'/'+subdirs[idir]
@@ -154,7 +179,7 @@ os.makedirs(mydir+'/Pkl', exist_ok=True)
 
 for TESNum in range(1, 257):
     figure()
-    print('Doing TES#{}'.format(TESnum))
+    print('Doing TES#{}'.format(TESNum))
     ### First a minuit Fit
     myguess = np.array([np.max(abs(data_uniqueth[idir][iii,1,:])), 0., 0., 5.])
     resfit = dl.hwp_fitpol(data_uniqueth[idir][TESNum-1,0,:], data_uniqueth[idir][TESNum-1,1,:], 
@@ -170,21 +195,198 @@ for TESNum in range(1, 257):
                    [resfit[1][2]-10*resfit[2][2], resfit[1][2]+10*resfit[2][2]],
                    [0, 10*resfit[1][3]]]
 
-        resmcmc, samples, fig = dl.hwp_fitpol_MCMC(data_uniqueth[idir][TESNum-1,0,:], data_uniqueth[idir][TESNum-1,1,:], 
+        samples, valbest, intervals, intervals_CL, res_str = dl.hwp_fitpol_MCMC(data_uniqueth[idir][TESNum-1,0,:], data_uniqueth[idir][TESNum-1,1,:], 
                                               data_uniqueth[idir][TESNum-1,2,:], 
-                               doplot=True, str_title='Demodulation TES{}'.format(TESNum), 
-                               saturation=True, myguess=myguess, force_chi2_ndf=False, myrange=myrange, upperlims=True, verbose=False)
+                               doplot=True, str_title='Demodulation TES{} (MCMC)'.format(TESNum), 
+                               saturation=True, myguess=myguess, force_chi2_ndf=False, 
+                                myrange=myrange, upperlims=True, verbose=False,
+                                savecontour = mydir+'/Figs/Contours_TES_{}.pdf'.format(TESNum))
         tight_layout()
         print(resmcmc)
         
         #### Save successful ones
-        fig.savefig(mydir+'/Figs/Contours_TES_{}.png'.format(TESNum))
-        savefig(mydir+'/Figs/Result_TES_{}.png'.format(TESNum))
-        pickle.dump( [resfit[1:], resmcmc, samples], open( mydir+'/Pkl/TES_{}.pk'.format(TESNum), "wb" ) )
+        savefig(mydir+'/Figs/Result_TES_{}.pdf'.format(TESNum))
+        pickle.dump( [resfit[1:], samples, valbest, intervals, intervals_CL, res_str], open( mydir+'/Pkl/TES_{}.pk'.format(TESNum), "wb" ) )
         
+        
+
+```
+
+2) Read the chains
+
+```{python}
+res_dir = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/HWP-MCMC/TES-Results'
+idir = 0
+mydir = res_dir+'/'+subdirs[idir]
+
+allsamples = []
+allvalbest = []
+allintervals = []
+allintervals_CL = []
+allres_str = []
+for TESNum in range(1, 257):
+    chain_file = mydir+'/Pkl/TES_{}.pk'.format(TESNum)
+    ff = glob.glob(chain_file)
+    if len(ff) != 0:
+        resfit, samples, valbest, intervals, intervals_CL, res_str = pickle.load(open(chain_file,'rb'))
+    allsamples.append(samples)
+    allvalbest.append(valbest)
+    allintervals.append(intervals)
+    allintervals_CL.append(intervals_CL)
+    allres_str.append(res_str)
+allsamples = np.array(allsamples)
+allvalbest = np.array(allvalbest)
+allintervals = np.array(allintervals)
+allintervals_CL = np.array(allintervals_CL)
+allres_str = np.array(allres_str)
+print(np.shape(allsamples))
+print(np.shape(allvalbest))
+print(np.shape(allintervals))
+print(np.shape(allintervals_CL))
+print(np.shape(allres_str))
+
+```
+
+```{python}
+has_upperlimit = allintervals_CL[:,0] == 0.95
+print('We have {} upperlimits out of 256: {}%'.format(has_upperlimit.sum(), has_upperlimit.sum()/256*100))
+```
+
+```{python}
+means = np.mean(allsamples, axis=1)
+errs = np.std(allsamples, axis=1)
+```
+
+```{python}
+varnames = ['Xpol %', 'Phase', 'Sat']
+rc('figure',figsize=(16,8))
+for i in range(3):
+    subplot(2,3,i+1)
+    hist(means[:,i], bins=100)    
+    xlabel('Mean '+varnames[i])
+    subplot(2,3,i+1+3)
+    hist(errs[:,i], bins=100)
+    xlabel('Std '+varnames[i])
+tight_layout()
+```
+
+```{python}
+np.shape(means)
+```
+
+```{python}
+from sklearn.cluster import DBSCAN
+def DBSCAN_cut(values, errors, doplot=False, min_samples=40, parnames=None):
+    norm_values = np.zeros_like(values)
+    norm_errors = np.zeros_like(errors)
+    sh = np.shape(values)
+    results = np.zeros((sh[0], sh[1]*2))
+    for i in range(sh[1]):
+        results[:,i] = normalize(values[:,i])
+        results[:,i+sh[1]] = normalize(errors[:,i])
     
+    clustering = DBSCAN(eps=1.3, min_samples=min_samples).fit(results)
+    labels = clustering.labels_
+    nfound = len(np.unique(np.sort(labels)))
+    unique_labels = unique(labels)  
+    mycolors = [plt.cm.jet(each)
+              for each in np.linspace(0, 1, len(unique_labels))]
+    print(mycolors)
     
-    
+    if doplot:
+        for i in range(sh[1]):
+            if parnames is None:
+                pn = 'Param {}'.format(i)
+            else:
+                pn = parnames[i]
+                
+            subplot(2,sh[1], i+1)
+            for k in range(len(unique_labels)):
+                thisone = labels == unique_labels[k]
+                scatter(values[thisone,i],errors[thisone,i],c=mycolors[k],
+                        label='Type {} : n={}'.format(unique_labels[k],thisone.sum()))
+                xlabel(pn)
+                ylabel('Error '+pn)
+                if i==0:
+                    legend()
+    return (labels == 0)
+
+def normalize(x):
+    return (x-np.nanmean(x))/np.nanstd(x)
+
+```
+
+```{python}
+ok = DBSCAN_cut(means, errs, doplot=True, min_samples=55, parnames=varnames)
+```
+
+```{python}
+has_upperlimit = allintervals_CL[ok,0] == 0.95
+print('We have {} upperlimits out of {}: {}%'.format(has_upperlimit.sum(), ok.sum(), has_upperlimit.sum()/ok.sum()*100))
+
+
+rc('figure',figsize=(16,8))
+nbins = 30
+for i in range(3):
+    mm, ss = ft.weighted_mean(means[ok,i], errs[ok,i], dispersion=True)
+    subplot(2,4,i+1)
+    hist(means[ok,i], bins=nbins, label='Mean over {0:} TES:\n{1:5.3f} +/- {2:5.3f}'.format(np.sum(ok),mm,ss))    
+    xlabel('Mean '+varnames[i])
+    legend(loc='upper right')
+    subplot(2,4,i+1+4)
+    hist(errs[ok,i], bins=nbins)
+    xlabel('Std '+varnames[i])
+tight_layout()
+```
+
+```{python}
+rc('figure',figsize=(16,8))
+myok = ok.copy()
+subplot(1,2,1)
+a=hist(means[myok,0]/errs[myok,0], range=[0,5], bins=30)
+subplot(1,2,2)
+a=hist(means[myok,0]/errs[myok,0], range=[0,3], bins=30, cumulative=True, density=True)
+```
+
+```{python}
+rc('figure',figsize=(12,8))
+xx = 0.5 * (a[1][1:]+a[1][0:-1])
+plot(xx,a[0])
+val2sig = np.interp(2., xx,a[0])
+plot([2,2],[0,val2sig],':',color='g')
+plot([0,2],[val2sig,val2sig],':',color='g', label='Compatible with XPol=0 at 2 $\sigma$: {0:3.1f}% '.format(val2sig*100))
+legend()
+xlim(0,3)
+ylim(0,1.)
+xlabel('Xpol/$\sigma$(Xpol)')
+ylabel('Cumulative counts')
+title('Passing cuts: {} TES out of 256'.format(np.sum(ok)))
+```
+
+```{python}
+numdets = np.arange(256)+1
+selected_dets = numdets[ok]
+
+has_xpol = ok & (allintervals_CL[:,0] == 0.68)
+print(np.sum(has_xpol))
+
+selected_dets
+
+
+```
+
+```{python}
+numdets[has_xpol]
+```
+
+```{python}
+img = ft.image_asics(all1=has_xpol)
+imshow(img)
+```
+
+```{python}
+img = ft.image_asics(all1=ok)
+imshow(img)
 ```
 
 ```{python}

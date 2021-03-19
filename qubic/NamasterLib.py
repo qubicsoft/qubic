@@ -189,7 +189,7 @@ class Namaster(object):
         return cl_decoupled
 
     def get_spectra(self, map, mask_apo=None, map2=None, purify_e=False, purify_b=True, w=None,
-                    beam_correction=None, pixwin_correction=None, verbose=True):
+                    beam_correction=None, pixwin_correction=False, verbose=True):
         """
         Get spectra from IQU maps.
         Parameters
@@ -213,7 +213,7 @@ class Namaster(object):
             If True, a correction by the Qubic beam at 150GHz is applied.
             You can also give the beam FWHM you want to correct for.
         pixwin_correction: bool, optional
-            If not None, a correction for the pixel integration function is applied.
+            If True, a correction for the pixel integration function is applied.
         verbose: bool, optional
             True by default.
         Returns
@@ -277,7 +277,7 @@ class Namaster(object):
         if verbose:
             print('Getting TT, EE, BB, TE spectra in that order.')
 
-        if pixwin_correction is not None:
+        if pixwin_correction is True:
             pwb = self.get_pixwin_correction(nside)
             spectra[:, 0] /= (pwb[0] ** 2) # TT
             spectra[:, 1] /= (pwb[1] ** 2) # EE

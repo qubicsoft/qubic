@@ -132,14 +132,25 @@ tight_layout()
 ```
 
 ```{python}
+rc('figure',figsize=(10,6))
+### Check the window functions
+cldata = hp.anafast(hpmap/np.mean(hpmap), lmax=256)
+pixwin = (hp.pixwin(hp.npix2nside(len(hpmap)))[0:257])
+cldatacorr = cldata / pixwin**2
 
+clth = hp.anafast(sb/np.mean(sb), lmax=256)
+#plot(cldata, label='Data')
+plot(cldatacorr, label='Data (pixwin corrected)')
+plot(clth,label='Theory')
+#plot(pixwin, label='Pixwin**2')
+legend()
 ```
 
 ```{python}
-
-```
-
-```{python}
+#plot((cldata/np.mean(cldata))/(clth/mean(clth)))
+plot(cldatacorr/clth)
+axhline(y=1, color='k', ls='--')
+ylim(0,2)
 
 ```
 

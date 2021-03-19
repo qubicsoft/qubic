@@ -131,14 +131,15 @@ fsed._plot_covs(regions, bands, coveragesmaps, centers)
 # NEW (16 Feb 2021)
 reload(fsed)
 #sky_conf = {'synch': 's0'}
-sky_conf = {'dust': 'd1'}
+#sky_conf = {'dust': 'd1'}
+sky_conf = {'dust': 'd1', 'synch': 's0'}
 fground_maps = fsed.foreground_signal(dictionaries, sky_conf)
 ```
 
 ```{python}
 # NEW (16 Feb 2021)
 reload(fsed)
-nreals = 4
+nreals = 43
 noise = fsed.noise_qss(dictionaries, sky_conf, coveragesmaps, nreals, verbose = False) 
 
 ```
@@ -298,9 +299,9 @@ for idict in range(len(dictionaries)):
 #
 
 pixQ = [hp.ang2pix(dictionaries[0]['nside'], 
-                   np.pi / 2 - np.deg2rad(centers[0][1] + 12), np.deg2rad(centers[0][0] - 10  ) ), ]
+                   np.pi / 2 - np.deg2rad(centers[0][1] - 8), np.deg2rad(centers[0][0] - 10  ) ), ]
 pixG = [hp.ang2pix(dictionaries[0]['nside'], 
-                   np.pi / 2 - np.deg2rad(centers[2][1] - 8), np.deg2rad(centers[2][0] - 4 ) ), ]
+                   np.pi / 2 - np.deg2rad(centers[2][1] - 5), np.deg2rad(centers[2][0] + 2 ) ), ]
 
 pixQ_ud = PixPix(pixQ[0])
 pixG_ud = PixPix(pixG[0])
@@ -327,6 +328,8 @@ hp.graticule(dpar = 10, dmer = 20, alpha = 0.6)
 ```{python}
 # NEW (17 Feb 2021)
 reload(fsed)
+reload(qubic)
+
 nus_out = [nus_out150, nus_out220, nus_out150, nus_out220]
 pixs_ud = [pixQ_ud, pixQ_ud, pixG_ud, pixG_ud]
 pixs_red = [pixQ_red, pixQ_red, pixG_red, pixG_red]
@@ -335,15 +338,19 @@ nus_edge = [nus150, nus220, nus150, nus220]
 study = "dust"
 
 if study == "dust":
-    FuncModel = fsed.ThermDust_Planck545
+    FuncModel = fsed.ThermDust_Planck353
     p0 = np.array([1e3,3])
 elif study == "synch":
-    FuncModel = fsed.Synchrotron_Planck
-    p0 = np.array([1e1,20,-3])
+    FuncModel = fsed.Synchrotron_storja
+    #p0 = np.array([1e1,20,-3]) #Planch
+    p0 = np.array([1e1,-3])
+elif study == "dust+synch":
+    FuncModel = fsed.DustSynch_model
+    p0 = np.array([1e4, 3, 1e2, -2.5])
+    
+    
+Chi2Model = None#"Chi2Implement"
 
-Chi2Model = "Chi2Implement"
-
-reload(qubic)
 Imvals, Isvals, xarr, flat_samples = fsed.foregrounds_run_mcmc(dictionaries, fgr_map_ud, Cp_prime, FuncModel,
                                                 nus_out, nus_edge, pixs_ud, 
                                                 pixs_red = pixs_red, chi2=Chi2Model, 
@@ -352,9 +359,15 @@ Imvals, Isvals, xarr, flat_samples = fsed.foregrounds_run_mcmc(dictionaries, fgr
 
 ```{python}
 #plt.hist(flat_samples[0,:,0], bins = 20, histtype="step")
-plt.xlabel("c0")
-plt.ylabel("c1")
-plt.hist2d(flat_samples[0,:,0], flat_samples[0,:,1], bins = 60, cmap = "Purples")
+plt.figure(figsize=(12,6))
+plt.subplot(121)
+plt.xlabel("Amp_d")
+plt.ylabel(r"$\beta_d$")
+plt.hist2d(flat_samples[0,:,0], flat_samples[0,:,1], bins = 20, cmap = "Purples")
+plt.subplot(122)
+plt.xlabel("Amp_s")
+plt.ylabel(r"$\beta_S$")
+plt.hist2d(flat_samples[0,:,2], flat_samples[0,:,3], bins = 20, cmap = "Purples")
 ```
 
 ```{python}
@@ -375,9 +388,18 @@ if study == "dust":
     ax.plot(xrange, FuncModel(xrange, [100, 2.], ), 'b-', label = "A = 100, b = 2")
 elif study == "synch":
     ax.set_title ("Synchrotron")
-    ax.plot(xrange, FuncModel(xrange, [30, 20, - 3]), 'r-', label = "A = 30 nu0 = 20 b = -3")
-    ax.plot(xrange, FuncModel(xrange, [30, 20,- 2]), 'y-', label = "A = 30 nu0 = 20 b = -2")
-    ax.plot(xrange, FuncModel(xrange, [30, 20, - 1]), 'g-', label = "A = 30 nu0 = 20 b = -1")
+    #ax.plot(xrange, FuncModel(xrange, [30, 20, - 3]), 'r-', label = "A = 30 nu0 = 20 b = -3")
+    #ax.plot(xrange, FuncModel(xrange, [30, 20,- 2]), 'y-', label = "A = 30 nu0 = 20 b = -2")
+    #ax.plot(xrange, FuncModel(xrange, [30, 20, - 1]), 'g-', label = "A = 30 nu0 = 20 b = -1")
+    ax.plot(xrange, FuncModel(xrange, [30, - 3]), 'r-', label = "A = 30 b = -3")
+    ax.plot(xrange, FuncModel(xrange, [30, - 2]), 'y-', label = "A = 30 b = -2")
+    ax.plot(xrange, FuncModel(xrange, [30, - 1]), 'g-', label = "A = 30 b = -1")
+elif study == "dust+synch":
+    ax.plot(xrange, FuncModel(xrange, [100, 1.5, 30, - 3]), 'r-', label = r"$A_{d} =100$ $\beta_{dt} = 1.5$ $A_{s} = 30$ $\beta_{s} = -3$")
+    ax.plot(xrange, FuncModel(xrange, [200, 1.5, 50, - 3]), 'b-', label = r"$A_{d} =200$ $\beta_{dt} = 1.5$ $A_{s} = 50$ $\beta_{s} = -3$")
+    ax.plot(xrange, FuncModel(xrange, [200, 1.5, 50, - 2]), 'g-', label = r"$A_{d} =200$ $\beta_{dt} = 1.5$ $A_{s} = 50$ $\beta_{s} = -2$")
+    ax.plot(xrange, FuncModel(xrange, [200, 5, 50, - 2]), 'y-', label = r"$A_{d} =200$ $\beta_{dt} = 5$ $A_{s} = 50$ $\beta_{s} = -2$")
+    
 #ax.plot(xrange, FuncModel(xrange, 100, 1.55, T = 23), 'k-', label = "Best fit-Planck")
 ax.axvspan(130, 170, ymin = 0, ymax = ax.get_ylim()[-1], color = 'k', alpha = 0.2)
 ax.axvspan(210, 260, ymin = 0, ymax = ax.get_ylim()[-1], color = 'k', alpha = 0.2)
@@ -397,14 +419,19 @@ reload(fsed)
 xSED = [nus_out150, nus_out220, nus_out150, nus_out220]
 
 if study == "dust":
-    FuncPoint = fsed.ThermDust_Planck545_pointer
+    FuncPoint = fsed.ThermDust_Planck353_pointer
+    #FuncPoint = fsed.ThermDust_Planck545_pointer
+        
 elif study == "synch":
-    #FuncPoint = fsed.Synchrotron_storja_pointer
-    FuncPoint = fsed.Synchrotron_Planck_pointer
+    FuncPoint = fsed.Synchrotron_storja_pointer
+    #FuncPoint = fsed.Synchrotron_Planck_pointer
+
+elif study == "dust+synch":
+    FuncPoint = fsed.DustSynch_model_pointer
     
 ySED_fit, Pmean, Perr = fsed.make_fit_SED(xSED, xarr, Imvals, Isvals,
                                           FuncPoint, fgr_map_ud, pixs_ud, nf_recon, 
-                                          initP0 = p0)
+                                          initP0 = np.array([1,3,]))
 ```
 
 #NEW (17 Feb 2021)

@@ -423,6 +423,45 @@ def Synchrotron_Planck_pointer(x, *pars, extra_args = None ):
 
 	return pars[0] * 1e5 * (x / pars[1]) ** (- pars[2])
 
+def DustSynch_model(x, pars, extra_args = None):
+	"""
+	ThermDust_Planck353 + Synchrotron_storja
+	"""
+	#Dust
+	c0 = pars[0]
+	c1 = pars[1]
+	T = 19.6
+	nu0 = 353
+	bnu = Bnu(x, T)
+	#Synch
+	c2 = pars[2]
+	c3 = pars[3]
+
+	h = scipy.constants.h
+	c = scipy.constants.c
+	k = scipy.constants.k
+	return c0 * 1e18 * bnu * (x / nu0) ** (c1 / 2) + c2 * 1e10 *x ** (- c3)
+
+def DustSynch_model_pointer(x, *pars, extra_args = None):
+	"""
+	ThermDust_Planck353 + Synchrotron_storja
+	"""
+	#Dust
+	c0 = pars[0]
+	c1 = pars[1]
+	T = 19.6
+	nu0 = 353
+	bnu = Bnu(x, T)
+	#Synch
+	c2 = pars[2]
+	c3 = pars[3]
+
+	h = scipy.constants.h
+	c = scipy.constants.c
+	k = scipy.constants.k
+	return pars[0] * 1e18 * bnu * (x / nu0) ** (pars[1] / 2) + pars[2] * 1e10 * x ** (- pars[3])
+
+
 def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 		   maxfev = 10000, initP0 = None, verbose = False, chi2 = None,
 		  nsamples = 5000, new = False):
@@ -480,6 +519,7 @@ def foregrounds_run_mcmc(dictionaries, fgr_map, Cp_prime, FuncModel,
 	StdVals = np.zeros((len(dictionaries), samples//2, 3))
 	xarr = np.zeros((len(dictionaries), samples//2, 3))
 	_flat_samples = np.zeros((len(dictionaries), 2496, len(initP0)))
+	#_flat_samples = np.zeros((len(dictionaries), 4000, len(initP0)))
 
 	for istk in range(3):
 		if verbose: print("======== Doing {} Stokes parameter =============".format(dictionaries[0]['kind'][istk]))

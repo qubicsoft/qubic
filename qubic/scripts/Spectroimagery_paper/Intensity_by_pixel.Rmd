@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.6.0rc0
+      jupytext_version: 1.4.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -111,6 +111,35 @@ print(len(qtest))
 ```
 
 Make coverage..
+
+```{python}
+#Added by JCH 19/03/2021 -> creatd the files
+# 			["doc/FastSimulator/Data/DataFastSimulator_FI150Q_coverage.fits'",
+# 			 "doc/FastSimulator/Data/DataFastSimulator_FI220Q_coverage.fits'",
+# 			 "doc/FastSimulator/Data/DataFastSimulator_FI150G_coverage.fits'",
+# 			 "doc/FastSimulator/Data/DataFastSimulator_FI220G_coverage.fits'" ]
+# from the files with the same name but extension .npy that are in. the same directory...
+
+from pysimulators import FitsArray
+files = ["doc/FastSimulator/Data/DataFastSimulator_FI150Q_coverage",
+         "doc/FastSimulator/Data/DataFastSimulator_FI220Q_coverage",
+         "doc/FastSimulator/Data/DataFastSimulator_FI150G_coverage",
+         "doc/FastSimulator/Data/DataFastSimulator_FI220G_coverage" ]
+
+for f in files:
+    fnpy = global_dir+'/'+f+'.npy'
+    ffits = global_dir+'/'+f+'.fits'
+    if len(glob.glob(ffits))==0:
+        print('{} does not exist, creating it from the npy'.format(ffits))
+        if len(glob.glob(fnpy))==0:
+            print('npy files {} does exist either...'.format(fnpy))
+        else:
+            print('Reading {}'.format(fnpy))
+            cov = np.load(fnpy)
+            print('Writing the fits file')
+            FitsArray(cov).save(ffits)
+
+```
 
 ```{python}
 # NEW  16 Feb 2021

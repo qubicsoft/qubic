@@ -1,0 +1,380 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Monte-Carlo to explore the optimal mask for QUBIC - Analysis
+
+```{python}
+# %matplotlib inline
+import numpy as np
+import healpy as hp
+import matplotlib.pyplot as plt
+from importlib import reload
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm
+import qubic
+from qubic import SpectroImLib as si
+from qubic import QubicSkySim as qss
+from qubic import NamasterLib as nam
+from qubic import camb_interface as qc
+from qubic import mcmc
+
+
+rc('figure', figsize=(12, 8))
+rc('font', size=15)
+rc('text', usetex=False)
+```
+
+```{python}
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+dictfilename = global_dir + '/dicts/test_cross-spectra.dict'
+
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+d['nside']=256
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+print(center)
+
+print(d['nf_sub'])
+
+# Restore a QUBIC typical coverage
+cov = hp.ud_grade(hp.read_map('sample_coverage_qubic.fits', verbose=False), d['nside'])
+cov /= np.max(cov)
+hp.mollview(cov)
+
+# Get Sky Simulation (in order to get the input Cls)
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+
+### Input Th Spectra
+input_cell = Qubic_sky.input_cmb_spectra
+ellth= np.arange(input_cell.shape[0])
+
+
+```
+
+```{python}
+import pickle
+reload(qss)
+reload(nam)
+
+##### MC Parameters
+delta_ell_values = np.array([10., 20., 30., 40., 50])
+covcut_values = np.array([0.01, 0.05, 0.1, 0.2, 0.5])
+
+def read_and_average_cls(filenames, doplot=False):
+    print('Number of files: {}'.format(len(filenames)))
+    with open(filenames[0], 'rb') as handle: 
+        ls, cls = pickle.load(handle)
+    allcls = np.zeros((len(filenames), len(ls), 4))
+    for i in range(len(filenames)):
+        with open(filenames[i], 'rb') as handle: 
+            ls, allcls[i,:,:] = pickle.load(handle)
+    
+    mcls = np.mean(allcls,axis=0)
+    scls = np.std(allcls, axis=0)
+
+    if doplot:
+        for s in range(4):
+            subplot(2,2,s+1)
+            errorbar(ls, mcls[:,s], yerr=scls[:,s], fmt='ro')
+            for i in range(len(filenames)):
+                plot(ls, allcls[i,:,s], 'k', alpha=0.5)
+    return ls, mcls, scls
+
+
+# delta_ell_values = np.array([20., 30.])
+# covcut_values = np.array([0.1, 0.05])
+
+import glob
+directory = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/Sims_Optimize_Weighting/Noise_70/'
+allflat = glob.glob(directory+'cls_flat_data_covcut*.pickle')
+
+all_mean_data_flat = []
+all_mean_data_cov = []
+all_sig_data_flat = []
+all_sig_data_cov = []
+all_mean_noise_flat = []
+all_mean_noise_cov = []
+all_sig_noise_flat = []
+all_sig_noise_cov = []
+lll = []
+
+### Best combination for noise and data
+all_bestsig_noise = []
+all_bestsig_data = []
+
+fact = 1.
+
+for icc in range(len(covcut_values)):
+    print(' - Doing covcut = {}'.format(covcut_values[icc]))
+    mean_data_flat = []
+    mean_data_cov = []
+    sig_data_flat = []
+    sig_data_cov = []
+    mean_noise_flat = []
+    mean_noise_cov = []
+    sig_noise_flat = []
+    sig_noise_cov = []
+    lls = []
+    bestsig_noise = []
+    bestsig_data = []
+
+    for idl in range(len(delta_ell_values)):
+        print('    - Doing DeltaEll = {}'.format(delta_ell_values[idl]))
+         
+        files_flat_data = glob.glob(directory+'cls_flat_data_covcut_{}_deltaell_{}_*.pickle'.format(covcut_values[icc],
+                                                                                                    delta_ell_values[idl]))
+        ll, mm, ss = read_and_average_cls(files_flat_data)
+        mean_data_flat.append(mm)
+        sig_data_flat.append(ss / fact)
+        
+        files_cov_data = glob.glob(directory+'cls_cov_data_covcut_{}_deltaell_{}_*.pickle'.format(covcut_values[icc], 
+                                                                                                    delta_ell_values[idl]))
+        ll, mm, ss = read_and_average_cls(files_cov_data)
+        mean_data_cov.append(mm)
+        sig_data_cov.append(ss / fact)
+        
+        files_flat_noise = glob.glob(directory+'cls_flat_noise_covcut_{}_deltaell_{}_*.pickle'.format(covcut_values[icc], 
+                                                                                                    delta_ell_values[idl]))
+        ll, mm, ss = read_and_average_cls(files_flat_noise)
+        mean_noise_flat.append(mm)
+        sig_noise_flat.append(ss / fact)
+        
+        files_cov_noise = glob.glob(directory+'cls_cov_noise_covcut_{}_deltaell_{}_*.pickle'.format(covcut_values[icc], 
+                                                                                                    delta_ell_values[idl]))
+        ll, mm, ss = read_and_average_cls(files_cov_data)
+        mean_noise_cov.append(mm)
+        sig_noise_cov.append(ss / fact)
+        
+        lls.append(ll)
+        
+        ### Best combination of both
+        bn = np.zeros((len(ll),4))
+        bd = np.zeros((len(ll),4))
+        for k in range(len(ll)):
+            for s in range(4):
+                bn[k,s] = np.min([sig_noise_flat[idl][k,s], sig_noise_cov[idl][k,s]])
+                bd[k,s] = np.min([sig_data_flat[idl][k,s], sig_data_cov[idl][k,s]], axis=0)
+        bestsig_noise.append(bn)
+        bestsig_data.append(bd)
+    
+    all_mean_data_flat.append(mean_data_flat)
+    all_sig_data_flat.append(sig_data_flat)
+    all_mean_data_cov.append(mean_data_cov)
+    all_sig_data_cov.append(sig_data_cov)
+    all_mean_noise_flat.append(mean_noise_flat)
+    all_sig_noise_flat.append(sig_noise_flat)
+    all_mean_noise_cov.append(mean_noise_cov)
+    all_sig_noise_cov.append(sig_noise_cov)
+    lll.append(lls)
+    all_bestsig_noise.append(bestsig_noise)
+    all_bestsig_data.append(bestsig_data)
+
+```
+
+```{python}
+rc('figure', figsize=(15, 16))
+rc('font', size=12)
+
+s = 2
+i=0
+for icc in range(len(covcut_values)):
+    for idl in range(len(delta_ell_values)):
+        subplot(5,5,i+1)
+        title('Cut={} $\Delta\\ell$={}'.format(covcut_values[icc], delta_ell_values[idl]), fontsize=12)
+        xlim(0, 512)
+        ylim(0,0.1)
+        plot(ellth, input_cell[:,s],'k')
+        plot(lll[icc][idl], all_sig_data_flat[icc][idl][:,s], '-',
+               label='Data Flat')
+        plot(lll[icc][idl], all_sig_data_cov[icc][idl][:,s], ':', 
+             label='Data Cov')
+        plot(lll[icc][idl], all_sig_noise_flat[icc][idl][:,s], '--',
+             label='Noise Flat$')
+        plot(lll[icc][idl], all_sig_noise_cov[icc][idl][:,s], '.-',
+             label='Noise Cov')
+
+        plot(lll[icc][idl], all_bestsig_noise[icc][idl][:,s], '.-',
+             label='Noise Mixed')
+        plot(lll[icc][idl], all_bestsig_data[icc][idl][:,s], '.-',
+             label='Data Mixed')
+        legend(fontsize=8, loc='lower right')
+        i += 1
+tight_layout()
+```
+
+```{python}
+rc('figure', figsize=(15, 16))
+rc('font', size=12)
+reload(qc)
+reload(mcmc)
+import scipy
+
+### Read the camb lib from the file - We will not use it directly but it will 
+### be binned according to the. binning scheme for each case
+camblib = qc.read_camblib('../../scripts/QubicGeneralPaper2020/camblib.pickle')
+
+### function to directly get the binned spectrum for a given r
+
+def ana_likelihood(rv, leff, fakedata, errors, model, prior):
+    ll = mcmc.LogLikelihood(xvals=leff, yvals=fakedata, errors=errors, 
+                            model = model, flatprior=prior)
+    
+    like = np.zeros_like(rv)
+    for i in range(len(rv)):
+        like[i] = np.exp(ll([rv[i]]))
+    cumint = scipy.integrate.cumtrapz(like, x=rv)
+    cumint = cumint / np.max(cumint)
+    onesigma = np.interp(0.68, cumint, rv[1:])
+    
+    return like, cumint, onesigma
+
+nside = 256
+lmin = 20
+lmax = 2 * nside - 1
+rv = np.linspace(0,1.,1000)
+
+allrlim_data_flat = np.zeros((len(covcut_values), len(delta_ell_values)))
+allrlim_data_cov = np.zeros((len(covcut_values), len(delta_ell_values)))
+allrlim_noise_flat = np.zeros((len(covcut_values), len(delta_ell_values)))
+allrlim_noise_cov = np.zeros((len(covcut_values), len(delta_ell_values)))
+allrlim_noise_mixed = np.zeros((len(covcut_values), len(delta_ell_values)))
+allrlim_data_mixed = np.zeros((len(covcut_values), len(delta_ell_values)))
+
+ipl=0
+for icc in range(len(covcut_values)):
+    for idl in range(len(delta_ell_values)):
+        print('Cut={} DeltaEll={}'.format(covcut_values[icc], delta_ell_values[idl]))
+        
+        ### Create Namasert Object
+        Namaster = nam.Namaster(None, lmin=lmin, lmax=lmax, delta_ell=delta_ell_values[idl])
+        leff, b = Namaster.get_binning(256)
+        
+        ### Bibnning CambLib
+        binned_camblib = qc.bin_camblib(Namaster, '../../scripts/QubicGeneralPaper2020/camblib.pickle', 
+                                        nside, verbose=False)
+        
+        ### Redefine the function for getting binned Cls
+        def myBBth(ell, r):
+            clBB = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=False, specindex=2)[0]
+            return clBB
+        
+        ### Fake data
+        fakedata = myBBth(leff, 0.)
+        
+        ### Errors from MC
+        like_data_flat, cumint, allrlim_data_flat[icc,idl] = ana_likelihood(rv, leff, fakedata, 
+                                                                            all_sig_data_flat[icc][idl][:,2], 
+                                                                             myBBth, [[0,1]])
+        like_data_cov, cumint, allrlim_data_cov[icc,idl] = ana_likelihood(rv, leff, fakedata, 
+                                                                            all_sig_data_cov[icc][idl][:,2], 
+                                                                             myBBth, [[0,1]])
+        like_noise_flat, cumint, allrlim_noise_flat[icc,idl] = ana_likelihood(rv, leff, fakedata, 
+                                                                            all_sig_noise_flat[icc][idl][:,2], 
+                                                                             myBBth, [[0,1]])
+        like_noise_cov, cumint, allrlim_noise_cov[icc,idl] = ana_likelihood(rv, leff, fakedata, 
+                                                                            all_sig_noise_cov[icc][idl][:,2], 
+                                                                             myBBth, [[0,1]])
+
+        like_data_mixed, cumint, allrlim_data_mixed[icc,idl] = ana_likelihood(rv, leff, fakedata, 
+                                                                            all_bestsig_data[icc][idl][:,2], 
+                                                                             myBBth, [[0,1]])
+        like_noise_mixed, cumint, allrlim_noise_mixed[icc,idl] = ana_likelihood(rv, leff, fakedata, 
+                                                                            all_bestsig_noise[icc][idl][:,2], 
+                                                                             myBBth, [[0,1]])
+
+        
+        
+        subplot(5,5,ipl+1)
+        title('Cut={} $\Delta\\ell$={}'.format(covcut_values[icc], delta_ell_values[idl]), fontsize=12)
+        p=plot(rv, like_data_flat/np.max(like_data_flat), 
+               label='Data Flat: $\sigma(r)={0:5.3f}$'.format(allrlim_data_flat[icc,idl]))
+        plot(allrlim_data_flat[icc,idl]+np.zeros(2), [0,1.2], ':', color=p[0].get_color())
+
+#         p=plot(rv, like_data_cov/np.max(like_data_cov), 
+#                label='Data Cov: $\sigma(r)={0:5.3f}$'.format(allrlim_data_cov[icc,idl]))
+#         plot(allrlim_data_cov[icc,idl]+np.zeros(2), [0,1.2], ':', color=p[0].get_color())
+
+#         p=plot(rv, like_noise_flat/np.max(like_noise_flat), 
+#                label='Noise Flat: $\sigma(r)={0:5.3f}$'.format(allrlim_noise_flat[icc,idl]))
+#         plot(allrlim_noise_flat[icc,idl]+np.zeros(2), [0,1.2], ':', color=p[0].get_color())
+
+#         p=plot(rv, like_noise_cov/np.max(like_noise_cov), 
+#                label='Noise Cov: $\sigma(r)={0:5.3f}$'.format(allrlim_noise_cov[icc,idl]))
+#         plot(allrlim_noise_cov[icc,idl]+np.zeros(2), [0,1.2], ':', color=p[0].get_color())
+
+        p=plot(rv, like_data_mixed/np.max(like_data_mixed), 
+               label='Data Mixed: $\sigma(r)={0:5.3f}$'.format(allrlim_data_mixed[icc,idl]))
+        plot(allrlim_data_mixed[icc,idl]+np.zeros(2), [0,1.2], ':', color=p[0].get_color())
+
+#         p=plot(rv, like_noise_mixed/np.max(like_noise_mixed), 
+#                label='Noise Mixed: $\sigma(r)={0:5.3f}$'.format(allrlim_noise_mixed[icc,idl]))
+#         plot(allrlim_noise_mixed[icc,idl]+np.zeros(2), [0,1.2], ':', color=p[0].get_color())
+
+        legend(fontsize=8, loc='upper right')
+        xlim(0,0.3)
+        #xscale('log')
+        ylim(0,1.2)
+        
+        ipl = ipl+1
+        
+        
+        
+tight_layout()
+```
+
+```{python}
+rc('figure', figsize=(15, 10))
+rc('font', size=12)
+
+toplot = [allrlim_data_flat, allrlim_data_cov, allrlim_data_mixed, 
+          allrlim_noise_flat, allrlim_noise_cov, allrlim_noise_mixed]
+
+names = ['Data Flat', 'Data Cov', 'Data Best', 'Noise Flat', 'Noise Cov', 'Noise Best']
+
+for k in range(len(toplot)):
+    subplot(2,3,k+1)
+    allrlim = toplot[k]
+    imshow(allrlim, origin='lower',vmin=np.min(allrlim),vmax=np.max(allrlim))
+    mini = np.argwhere(allrlim == np.min(allrlim))
+    plot(mini[0][1], mini[0][0], 'ro', label ='$\sigma(r)={0:5.3f}$'.format(np.min(allrlim)))
+    plt.xticks(range(len(delta_ell_values)), delta_ell_values)
+    plt.yticks(range(len(covcut_values)), covcut_values)
+    xlabel('$\Delta\\ell$')
+    ylabel('Cov. Threshold')
+    title(names[k])
+    legend()
+    colorbar()
+
+
+tight_layout()
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

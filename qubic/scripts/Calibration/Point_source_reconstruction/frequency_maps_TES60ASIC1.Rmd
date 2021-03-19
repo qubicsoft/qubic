@@ -1,0 +1,553 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+import qubic.sb_fitting as sbfit
+import matplotlib.pyplot as plt
+import numpy as np
+import glob
+from qubicpack.qubicfp import qubicfp
+from scipy.signal import chirp, find_peaks, peak_widths
+import scipy.misc
+```
+
+```{python}
+day = '2020-07-30'
+keyword = '*ScanFast*'
+data_dir = '/sps/hep/qubic/Data/Calib-TD/'+day+'/'
+dirs = np.sort(glob.glob(data_dir+keyword))
+print(dirs)
+ifile = 0
+thedir = dirs[ifile]
+print(thedir)
+a = qubicfp()
+
+az = a.azimuth()
+el = a.elevation()#
+#print(type(az))
+a.read_qubicstudio_dataset(thedir)
+time_azel = a.timeaxis(datatype='hk',axistype='pps')
+#azmin = min(az)
+#azmax = max(az)
+
+#make sure to delete a
+```
+
+```{python}
+az = a.azimuth()
+print(az)
+azmin = min(az)
+azmax = max(az)
+```
+
+```{python}
+dirfile = '/sps/hep/qubic/Users/jdmurphy/synthdata/2020-07-30/'
+
+TESNum=60
+
+flatmap150, az, el = sbfit.get_flatmap(TESNum, dirfile, azmin = azmin, azmax=azmax)
+AZ, EL = np.meshgrid(az, el)
+AZ = AZ*np.cos(np.deg2rad(50))
+
+plt.figure(figsize=(12,16))
+plt.imshow(flatmap150, aspect='equal', origin='lower',
+          extent=[np.min(AZ), np.max(AZ), np.min(EL), np.max(EL)])
+
+
+plt.figure(figsize=(16,12))
+plt.imshow(flatmap150, aspect='equal')
+# show()
+# pts1, pts2, pts3 = ginput(3)
+# #close()
+# print(pts1, pts2)
+# # #%matplotlib inline
+plt.xticks(np.arange(0, 100, step=2), rotation=-90)
+plt.yticks(np.arange(0, 100, step=2))
+plt.grid(True)
+
+x0, y0 = 20, 90
+x1, y1 = 54, 42
+x2, y2 = 80, 14
+
+
+
+plt.plot([x0, x1], [y0, y1], 'ro-')
+plt.plot([x1, x2], [y1, y2], 'bo-')
+
+#x, y = np.linspace(x0, x1, 40), np.linspace(y0, y1, 40)
+xr = np.linspace(x0, x2, x2-x0)
+#xa, ya = np.linspace(x1, x2, 20), np.linspace(y1, y2, 20)
+yi = np.linspace(y0, y1, x1-x0)
+yj = np.linspace(y1, y2, x2-x1)
+
+#xr = np.append(x, xa)
+yr = np.append(yi, yj)
+
+#make x y mesggrid
+X = np.linspace(min(az)*np.cos(np.deg2rad(50)), max(az)*np.cos(np.deg2rad(50)), 101)
+Y = np.linspace(max(el), min(el), 101)
+
+plt.figure(figsize=(16,16))
+
+plt.imshow(flatmap150, aspect='equal', extent=[min(az)*np.cos(np.deg2rad(50)), max(az)*np.cos(np.deg2rad(50)), min(el), max(el)])
+plt.grid(True)
+plt.plot([X[x0], X[x1]], [Y[y0], Y[y1]], 'ro-')
+plt.plot([X[x1], X[x2]], [Y[y1], Y[y2]], 'bo-')
+plt.xticks(np.arange(int(min(az)), int(max(az)), step=1))
+plt.yticks(np.arange(int(min(el)), int(max(el)), step=1))
+plt.tight_layout()
+
+
+plt.figure(figsize=(16,8))
+zi150 = flatmap150[xr.astype(np.int), yr.astype(np.int)]
+zi150 = scipy.ndimage.map_coordinates(np.transpose(flatmap150), np.vstack((xr,yr)))
+#maybe remove degpt azi from here
+#degpt = (X[x2] - X[x0]) /len(zi150)
+#azi = np.linspace(X[x0], X[x2], len(zi))
+azi150 = np.linspace(-1*np.sqrt(X[x0]**2+(Y[y0]-50)**2), np.sqrt(X[x2]**2+(Y[y2]-50)**2), len(zi150))
+degpt150 = (max(azi150) - min(azi150)) / len(zi150)
+
+peaks150, _ = find_peaks(zi150, prominence=0.5e5)
+results_half150 = peak_widths(zi150, peaks150, rel_height=0.5)
+
+plt.plot(azi150, zi150, label="Cut", lw=4)
+plt.plot(azi150[peaks150], zi150[peaks150], "x", label="Peaks",  mew=5, ms=10)
+plt.plot(azi150[peaks150], results_half150[1], '_', mew=5, ms=10, 
+     label="FWHM = {:3.3}$^\circ$".format(results_half150[0][1]*degpt150))
+plt.plot(azi150[peaks150], zi150[peaks150], "x", mew=5, ms=10, 
+     label="Peak Sep {:.2f}$^\circ$, {:.2f}$^\circ$".format(azi150[peaks150][1]-azi150[peaks150][0], azi150[peaks150][1]-azi150[peaks150][2]))
+plt.ylim(0,1e6)
+plt.legend(loc='upper left', fontsize=15)
+```
+
+```{python}
+"""now for 170
+Teachnically I should reload az for each dataset but i kow i can skip it
+"""
+
+dirfile = '/sps/hep/qubic/Users/jdmurphy/synthdata/2020-08-02'
+
+#TESNum=76
+
+flatmap170, az, el = sbfit.get_flatmap(TESNum, dirfile, azmin = azmin, azmax=azmax)
+AZ, EL = np.meshgrid(az, el)
+AZ*np.cos(np.deg2rad(50))
+
+plt.figure(figsize=(12,16))
+plt.imshow(flatmap170, aspect='equal', origin='lower',
+          extent=[np.min(AZ), np.max(AZ), np.min(EL), np.max(EL)])
+
+plt.figure(figsize=(16,12))
+plt.imshow(flatmap170, aspect='equal')
+# show()
+# pts1, pts2, pts3 = ginput(3)
+# #close()
+# print(pts1, pts2)
+# # #%matplotlib inline
+plt.xticks(np.arange(0, 100, step=2), rotation=-90)
+plt.yticks(np.arange(0, 100, step=2))
+plt.grid(True)
+
+x0, y0 = 24, 90
+x1, y1 = 58, 44
+x2, y2 = 78, 22
+
+
+plt.plot([x0, x1], [y0, y1], 'ro-')
+plt.plot([x1, x2], [y1, y2], 'bo-')
+
+#x, y = np.linspace(x0, x1, 40), np.linspace(y0, y1, 40)
+xr = np.linspace(x0, x2, x2-x0)
+#xa, ya = np.linspace(x1, x2, 20), np.linspace(y1, y2, 20)
+yi = np.linspace(y0, y1, x1-x0)
+yj = np.linspace(y1, y2, x2-x1)
+
+#xr = np.append(x, xa)
+yr = np.append(yi, yj)
+
+#make x y mesggrid
+X = np.linspace(min(az)*np.cos(np.deg2rad(50)), max(az)*np.cos(np.deg2rad(50)), 101)
+Y = np.linspace(max(el), min(el), 101)
+
+plt.figure(figsize=(16,8))
+
+plt.imshow(flatmap170, aspect='equal', extent=[min(az)*np.cos(np.deg2rad(50)), max(az)*np.cos(np.deg2rad(50)), min(el), max(el)])
+plt.grid(True)
+plt.plot([X[x0], X[x1]], [Y[y0], Y[y1]], 'ro-')
+plt.plot([X[x1], X[x2]], [Y[y1], Y[y2]], 'bo-')
+plt.xticks(np.arange(int(min(az)), int(max(az)), step=1))
+plt.yticks(np.arange(int(min(el)), int(max(el)), step=1))
+plt.tight_layout()
+
+
+plt.figure(figsize=(16,8))
+zi170 = flatmap170[xr.astype(np.int), yr.astype(np.int)]
+zi170 = scipy.ndimage.map_coordinates(np.transpose(flatmap170), np.vstack((xr,yr)))
+#maybe remove degpt azi from here
+#degpt = (X[x2] - X[x0]) /len(zi170)
+#azi = np.linspace(X[x0], X[x2], len(zi))
+azi170 = np.linspace(-1*np.sqrt(X[x0]**2+(Y[y0]-50)**2), np.sqrt(X[x2]**2+(Y[y2]-50)**2), len(zi170))
+degpt170 = (max(azi170) - min(azi170)) / len(zi170)
+
+peaks170, _ = find_peaks(zi170, prominence=2e6)
+results_half170 = peak_widths(zi170, peaks170, rel_height=0.5)
+
+plt.plot(azi170, zi170, label="Cut", lw=4)
+plt.plot(azi170[peaks170], zi170[peaks170], "x", label="Peaks",  mew=5, ms=10)
+plt.plot(azi170[peaks170], results_half170[1], '_', mew=5, ms=10, 
+     label="FWHM = {:3.3}$^\circ$".format(results_half170[0][1]*degpt170))
+plt.plot(azi170[peaks170], zi170[peaks170], "x", mew=5, ms=10, 
+     label="Peak Sep {:.2f}$^\circ$, {:.2f}$^\circ$".format(azi170[peaks170][1]-azi170[peaks170][0], azi170[peaks170][1]-azi170[peaks170][2]))
+plt.ylim(0,1e7)
+plt.legend(loc='upper left', fontsize=15)
+
+```
+
+```{python}
+"""now for 130
+Teachnically I should reload az for each dataset but i kow i can skip it
+"""
+
+dirfile = '/sps/hep/qubic/Users/jdmurphy/synthdata/2020-08-01'
+#TESNum=76
+
+flatmap130, az, el = sbfit.get_flatmap(TESNum, dirfile, azmin = azmin, azmax=azmax)
+AZ, EL = np.meshgrid(az, el)
+AZ=AZ*np.cos(np.deg2rad(50))
+
+plt.figure(figsize=(12,16))
+plt.imshow(flatmap130, aspect='equal', origin='lower',
+          extent=[np.min(AZ), np.max(AZ), np.min(EL), np.max(EL)])
+
+plt.figure(figsize=(16,12))
+plt.imshow(flatmap130, aspect='equal')
+
+plt.xticks(np.arange(0, 100, step=2), rotation=-90)
+plt.yticks(np.arange(0, 100, step=2))
+plt.grid(True)
+
+x0, y0 = 12, 92
+x1, y1 = 48, 43
+x2, y2 = 74, 12
+
+
+plt.plot([x0, x1], [y0, y1], 'ro-')
+plt.plot([x1, x2], [y1, y2], 'bo-')
+
+#x, y = np.linspace(x0, x1, 40), np.linspace(y0, y1, 40)
+xr = np.linspace(x0, x2, x2-x0)
+#xa, ya = np.linspace(x1, x2, 20), np.linspace(y1, y2, 20)
+yi = np.linspace(y0, y1, x1-x0)
+yj = np.linspace(y1, y2, x2-x1)
+
+#xr = np.append(x, xa)
+yr = np.append(yi, yj)
+
+#make x y mesggrid
+X = np.linspace(min(az)*np.cos(np.deg2rad(50)), max(az)*np.cos(np.deg2rad(50)), 101)
+Y = np.linspace(max(el), min(el), 101)
+
+plt.figure(figsize=(16,8))
+
+plt.imshow(flatmap130, aspect='equal', extent=[min(az)*np.cos(np.deg2rad(50)), max(az)*np.cos(np.deg2rad(50)), min(el), max(el)])
+plt.grid(True)
+plt.plot([X[x0], X[x1]], [Y[y0], Y[y1]], 'ro-')
+plt.plot([X[x1], X[x2]], [Y[y1], Y[y2]], 'bo-')
+plt.xticks(np.arange(int(min(az)), int(max(az)), step=1))
+plt.yticks(np.arange(int(min(el)), int(max(el)), step=1))
+plt.tight_layout()
+
+
+plt.figure(figsize=(16,8))
+zi130 = flatmap130[xr.astype(np.int), yr.astype(np.int)]
+zi130 = scipy.ndimage.map_coordinates(np.transpose(flatmap130), np.vstack((xr,yr)))
+#maybe remove degpt azi from here
+#degpt = (X[x2] - X[x0]) /len(zi130)
+#azi = np.linspace(X[x0], X[x2], len(zi))
+azi130 = np.linspace(-1*np.sqrt(X[x0]**2+(Y[y0]-50)**2), np.sqrt(X[x2]**2+(Y[y2]-50)**2), len(zi130))
+degpt130 = (max(azi130) - min(azi130)) / len(zi130)
+
+peaks130, _ = find_peaks(zi130, prominence=0.2e5)
+results_half130 = peak_widths(zi130, peaks130, rel_height=0.5)
+
+plt.plot(azi130, zi130, label="Cut", lw=4)
+plt.plot(azi130[peaks130], zi130[peaks130], "x", label="Peaks",  mew=5, ms=10)
+plt.plot(azi130[peaks130], results_half130[1], '_', mew=5, ms=10, 
+     label="FWHM = {:3.3}$^\circ$".format(results_half130[0][1]*degpt130))
+plt.plot(azi130[peaks130], zi130[peaks130], "x", mew=5, ms=10, 
+     label="Peak Sep {:.2f}$^\circ$, {:.2f}$^\circ$".format(azi130[peaks130][1]-azi130[peaks130][0], azi130[peaks130][1]-azi130[peaks130][2]))
+plt.ylim(0,1e6)
+plt.legend(loc='upper left', fontsize=15)
+```
+
+```{python}
+"""here we plot the frequency power spectrum. Want to highlight the source signal 
+but filter out pulse tube frequency"""
+from matplotlib import rc
+rc('figure',figsize=(9,4.5))
+rc('font',size=12)
+rc('text',usetex=False)
+
+font = {'family' : 'normal',
+        'weight' : 'normal',
+        'size'   : 16}
+rc('font', **font)
+
+```
+
+```{python}
+"""Now plot all together"""
+plt.figure(figsize=(16,8))
+
+plt.plot(azi130, zi130, label="130 Cut", lw=4)
+plt.plot(azi130[peaks130], zi130[peaks130], "x", label="Peaks",  mew=5, ms=10)
+plt.plot(azi130[peaks130], results_half130[1], '_', mew=5, ms=10, 
+     label="FWHM = {:3.3}$^\circ$".format(results_half130[0][1]*degpt130))
+plt.plot(azi130[peaks130], zi130[peaks130], "x", mew=5, ms=10, 
+     label="Peak Sep {:.2f}$^\circ$, {:.2f}$^\circ$".format(azi130[peaks130][1]-azi130[peaks130][0],
+         azi130[peaks130][1]-azi130[peaks130][2]))
+
+plt.plot(azi150, zi150, label="150 Cut", lw=4)
+plt.plot(azi150[peaks150], zi150[peaks150], "x", label="Peaks",  mew=5, ms=10)
+plt.plot(azi150[peaks150], results_half150[1], '_', mew=5, ms=10, 
+     label="FWHM = {:3.3}$^\circ$".format(results_half150[0][1]*degpt150))
+plt.plot(azi150[peaks150], zi150[peaks150], "x", mew=5, ms=10, 
+     label="Peak Sep {:.2f}$^\circ$, {:.2f}$^\circ$".format(azi150[peaks150][1]-azi150[peaks150][0],  azi150[peaks150][1]-azi150[peaks150][2]))
+
+
+plt.plot(azi170, zi170, label="170 Cut", lw=4)
+plt.plot(azi170[peaks170], zi170[peaks170], "x", label="Peaks",  mew=5, ms=10)
+plt.plot(azi170[peaks170], results_half170[1], '_', mew=5, ms=10, 
+     label="FWHM = {:3.3}$^\circ$".format(results_half170[0][1]*degpt170))
+plt.plot(azi170[peaks170], zi170[peaks170], "x", mew=5, ms=10, 
+     label="Peak Sep {:.2f}$^\circ$, {:.2f}$^\circ$".format(azi170[peaks170][1]-azi170[peaks170][0],azi170[peaks170][1]-azi170[peaks170][2]))
+
+
+plt.legend(loc='upper right', fontsize=12)
+plt.xticks(np.arange(-13,13,step=1));
+#plt.savefig("/sps/hep/qubic/Users/jdmurphy/files/freqs.png", bbox_inches='tight', dpi=300)
+```
+
+```{python}
+"""Now plot all together with NORM"""
+zi170n = zi170 /4
+font = {'family' : 'normal',
+        'weight' : 'normal',
+        'size'   : 20}
+rc('font', **font)
+
+plt.figure(figsize=(16,8))
+
+plt.plot(azi170[peaks170], results_half170[1]/4, '_', color='mediumseagreen', mew=4, ms=30*results_half170[0][1]*degpt170, 
+     label="FWHM = {:3.3}$^\circ$".format(results_half170[0][1]*degpt170))
+
+plt.plot(azi170[peaks170], zi170n[peaks170], "x", color='mediumseagreen', mew=4, ms=10, 
+     label="Peak Sep {:.2f}$^\circ$, {:.2f}$^\circ$".format(azi170[peaks170][1]-azi170[peaks170][0],azi170[peaks170][1]-azi170[peaks170][2]))
+
+plt.plot(azi170, zi170n, '--', color='mediumseagreen', label="170 GHz Cut", lw=4)
+
+########################
+
+plt.plot(azi150[peaks150], results_half150[1], '_', color='tab:orange', mew=4, ms=25*results_half130[0][1]*degpt150, 
+     label="FWHM = {:3.3}$^\circ$".format(results_half150[0][1]*degpt150))
+
+plt.plot(azi150[peaks150], zi150[peaks150], "x", color='tab:orange', mew=4, ms=10, 
+     label="Peak Sep {:.2f}$^\circ$, {:.2f}$^\circ$".format(azi150[peaks150][1]-azi150[peaks150][0],  azi150[peaks150][1]-azi150[peaks150][2]))
+
+plt.plot(azi150, zi150, '--', color='tab:orange', label="150 GHz Cut", lw=4)
+##################
+
+######
+plt.plot(azi130[peaks130], results_half130[1], '_', color='tab:blue', mew=4, ms=30*results_half130[0][1]*degpt130, 
+     label="FWHM = {:3.3}$^\circ$".format(results_half130[0][1]*degpt130))
+
+plt.plot(azi130[peaks130], zi130[peaks130], "x", color='tab:blue', mew=4, ms=10, 
+     label="Peak Sep {:.2f}$^\circ$, {:.2f}$^\circ$".format(azi130[peaks130][1]-azi130[peaks130][0],
+         azi130[peaks130][1]-azi130[peaks130][2]))
+
+plt.plot(azi130, zi130, '--', lw=4, color='tab:blue', label="130 GHz Cut")
+#assist
+plt.plot(azi150[peaks150], results_half150[1], '_', color='tab:orange', mew=4, ms=25*results_half130[0][1]*degpt150)
+
+
+
+plt.legend(loc='upper right', fontsize=14)
+plt.xticks(np.arange(-11,12,step=1));
+plt.xlabel(r'Angle on the Sky$^\circ$')
+plt.ylabel('Demodulated Instrument Units')
+plt.savefig("/sps/hep/qubic/Users/jdmurphy/files/freqsNORM.png", bbox_inches='tight', dpi=300)
+```
+
+```{python}
+n=8
+print(np.degrees(2e-3 / ((n - 1) * 14e-3)))
+
+fs = np.array([130e9, 150e9, 170e9])
+#c= f. lamda
+lambs = 3e8 / fs
+print(lambs)
+
+#do fwhm calcs
+print(np.degrees(lambs/ ((n - 1) * 14e-3)))
+
+print(zi150[peaks150], zi130[peaks130])
+print(zi130[peaks130] / zi150[peaks150])
+
+print("degs per scan point", 40/101)
+print(azi150[peaks150], azi150[peaks150+1])
+print(peaks150)
+peakerrhalf = peak_widths(zi150, peaks150, rel_height=0.5)
+print("peakerrhalf", peakerrhalf[0][1]*0.396)
+```
+
+```{python}
+# from qubicpack.plot_physical_layout import plot_physical_layout
+# from qubicpack.qubicfp import qubicfp
+# from qubicpack import qubicpack as qp
+```
+
+```{python}
+font = {'family' : 'normal',
+        'weight' : 'normal',
+        'size'   : 20}
+rc('font', **font)
+
+plt.figure(figsize=(16,10))
+plt.imshow(flatmap150, aspect='equal', extent=[min(az)*np.cos(np.deg2rad(50)), max(az)*np.cos(np.deg2rad(50)), min(el), max(el)])
+#plt.grid(True)
+plt.plot([X[x0], X[x1]], [Y[y0], Y[y1]], 'ro-')
+plt.plot([X[x1], X[x2]], [Y[y1], Y[y2]], 'bo-')
+plt.xticks(np.arange(int(min(az*np.cos(np.deg2rad(50)))), int(max(az*np.cos(np.deg2rad(50)))), step=2))
+plt.yticks(np.arange(int(min(el)), int(max(el)), step=2))
+#plt.axis('equal')
+plt.ylim(min(el), max(el))
+plt.xlim(min(az*np.cos(np.deg2rad(50))), max(az*np.cos(np.deg2rad(50))))
+plt.xlabel("Azimuth$^\circ$")
+plt.ylabel("Elevation$^\circ$")
+plt.colorbar(label='Demodulated Instrument Units')
+plt.savefig("/sps/hep/qubic/Users/jdmurphy/files/examplecut.png", bbox_inches='tight', dpi=300)
+```
+
+```{python}
+# a.plot_iv_focalplane()
+```
+
+```{python}
+# plot_physical_layout()
+```
+
+```{python}
+# import qubic
+# from qubicpack.pixel_translation import make_id_focalplane, plot_id_focalplane
+# FPidentity = make_id_focalplane()
+# plot_id_focalplane()
+# import matplotlib.pyplot as plt
+# import numpy as np
+# plt.savefig("/sps/hep/qubic/Users/jdmurphy/files/Tespix.pdf", bbox_inches='tight')
+```
+
+```{python}
+
+```
+
+```{python}
+# quadrant_colour = ['blue','red','green','purple']
+# asic_colour = ['blue','darkblue','red','#cc0000','green','#00cc00','purple','#7210a7']
+
+# def plot_square(x,y,colour='black',label='null',labelcolour='white',ax=None,fontsize=10):
+#     '''
+#     plot a square with a label
+#     '''
+#     sidelen = 0.8
+#     if ax is None: ax = plt.gca()
+    
+#     xpts = x + np.array([-0.5*sidelen,  0.5*sidelen,  0.5*sidelen,  -0.5*sidelen, -0.5*sidelen])
+#     ypts = y + np.array([-0.5*sidelen, -0.5*sidelen,  0.5*sidelen,   0.5*sidelen, -0.5*sidelen])
+
+#     ax.fill(xpts,ypts,color=colour)
+#     ax.text(x,y,label,va='center',ha='center',fontsize=fontsize,color=labelcolour)
+#     return
+
+
+# def plot_id_focalplane(figsize=(30,30)):
+#     '''
+#     plot all the different identity names of each pixel in the focal plane
+
+#     FPidentity is a recarray of shape 34*34
+#     '''
+#     FPidentity = make_id_focalplane()
+
+#     scale_factor = figsize[0]
+#     title_fontsize = 0.67*scale_factor
+#     label_fontsize = 0.2*scale_factor
+
+#     fig = plt.figure(figsize=figsize)
+#     fig.canvas.set_window_title('plt: QUBIC Focal Plane ID Matrix')
+#     ax = fig.add_axes([0,0,1,1])
+#     ax.text(0.5,0.96,'QUBIC Focal Plane ID Matrix',
+#             ha='center',va='bottom',transform=ax.transAxes,fontsize=title_fontsize)
+#     ax.set_xlim(-1,35)
+#     ax.set_ylim(-1,35)
+#     ax.set_aspect('equal')
+    
+#     for fp_idx in range(len(FPidentity)):
+#         txt = 'Q%i' % (FPidentity[fp_idx].quadrant)
+#         quadrant = FPidentity[fp_idx].quadrant
+#         asic = FPidentity[fp_idx].ASIC
+#         colour = asic_colour[asic-1]
+#         row = FPidentity[fp_idx].row
+#         col = FPidentity[fp_idx].col
+#         if FPidentity[fp_idx].TES==0:
+#             colour = 'black'
+#             txt += '\nFP%4i' % FPidentity[fp_idx].index
+#         else:
+#             txt += ' %s\nFP%4i\nPIX%03i\nASIC%i\nTES%03i'\
+#                 % (FPidentity[fp_idx].matrix.decode('UTF-8'),
+#                    FPidentity[fp_idx].index,
+#                    FPidentity[fp_idx].PIX,
+#                    FPidentity[fp_idx].ASIC,
+#                    FPidentity[fp_idx].TES)
+#         plot_square(col,row,colour=colour,labelcolour='white',label=txt,fontsize=label_fontsize)
+        
+#     plt.savefig("/home/james/Pictures/Tespix.png", bbox_inches='tight')
+#     return
+
+# plot_id_focalplane()
+```
+
+```{python}
+# """loadand plot pixcens"""
+# import qubic
+# d = qubic.qubicdict.qubicDict()
+# d.read_from_file('../libraries/qubic/qubic/dicts/global_source_oneDet.dict')
+# q = qubic.QubicMultibandInstrument(d)
+# vtxs = q[0].detector.vertex
+# #load qubicpack TESnums and flip*
+# from qubicpack.pixel_translation import make_id_focalplane, plot_id_focalplane
+# FPidentity = make_id_focalplane()
+# #q3arr = np.array([])
+# # for i in range(len(FPidentity.PIX)):
+# #     #print(FPidentity[i].PIX)
+# #     if FPidentity[i].quadrant == 3:# and FPidentity[i].PIX >= 0:
+# #         print(FPidentity[i])
+# #         q3arr = np.append(q3arr, FPidentity[i].TES)
+# # q3arr = np.flip(q3arr)
+# for i in range(len(FPidentity.PIX)):
+#     if FPidentity[i].quadrant == 3:
+#         print(FPidentity[i])
+```
+
+```{python}
+
+```

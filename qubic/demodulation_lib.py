@@ -19,6 +19,8 @@ import datetime as dt
 import sys
 import healpy as hp
 import corner
+import getdist
+from getdist import plots, MCSamples
 
 
 def printnow(truc):
@@ -1421,29 +1423,33 @@ def hwp_sin_sat(x, pars, extra_args=None):
 
 
 def hwp_fitpol(thvals, ampvals, ampvals_err, doplot=False, str_title=None, saturation=False, myguess=None,
-               force_chi2_ndf=True):
+               force_chi2_ndf=True, verbose=True):
     okdata = ampvals_err != 0
 
     if not saturation:
-        print('Using Simple SIN')
+        if verbose: 
+            print('Using Simple SIN')
         fct_name = hwp_sin
         guess = np.array([np.max(np.abs(ampvals)), 0, 0.])
         rangepars = [[0, np.max(np.abs(ampvals)) * 10], [0, 1], [-180, 180]]
     else:
-        print('Using Sin with Saturation')
+        if verbose:
+            print('Using Sin with Saturation')
         fct_name = hwp_sin_sat
         guess = np.array([np.max(np.abs(ampvals)), 0, 0., 1.])
         rangepars = [[0, np.max(np.abs(ampvals)) * 10], [0, 1], [-180, 180], [0., 100.]]
 
     if myguess is not None:
         guess = myguess
+        if verbose:
+            print('Guess: ', guess)
+            print('Range: ', rangepars)
 
-        print('Guess: ', guess)
-        print('Range: ', rangepars)
     fithwp = ft.do_minuit(thvals[okdata], np.abs(ampvals[okdata]), ampvals_err[okdata], guess, functname=fct_name,
                           force_chi2_ndf=force_chi2_ndf, verbose=False, rangepars=rangepars)
-    for i in range(len(guess)):
-        print(i,fithwp[1][i],fithwp[2][i])
+    if verbose:
+        for i in range(len(guess)):
+            print(i,fithwp[1][i],fithwp[2][i])
 
     if doplot:
         errorbar(thvals[okdata], np.abs(ampvals[okdata]) / fithwp[1][0], yerr=ampvals_err[okdata] / fithwp[1][0],
@@ -1469,79 +1475,108 @@ def hwp_fitpol(thvals, ampvals, ampvals_err, doplot=False, str_title=None, satur
             title(str_title)
     return fithwp
 
-def hwp_fitpol_new(thvals, ampvals, ampvals_err, doplot=False, str_title=None, saturation=False, myguess=None,
-               force_chi2_ndf=True, nbmc=10000, myrange=None, upperlims=True):
+def hwp_fitpol_MCMC(thvals, ampvals, ampvals_err, doplot=False, str_title=None, saturation=False, myguess=None,
+               force_chi2_ndf=True, nbmc=10000, myrange=None, upperlims=True, plot_regions=True, verbose=True,
+               savecontour=None):
     okdata = ampvals_err != 0
 
     if not saturation:
-        print('Using Simple SIN')
+        if verbose:
+            print('Using Simple SIN')
         fct_name = hwp_sin
         guess = np.array([np.max(np.abs(ampvals)), 0, 0.])
         rangepars = [[0, np.max(np.abs(ampvals)) * 10], [0, 1], [-180, 180]]
     else:
-        print('Using Sin with Saturation')
+        if verbose:
+            print('Using Sin with Saturation')
         fct_name = hwp_sin_sat
         guess = np.array([np.max(np.abs(ampvals)), 0, 0., 1.])
         rangepars = [[0, np.max(np.abs(ampvals)) * 10], [0, 1], [-180, 180], [0., 100.]]
 
     if myguess is not None:
         guess = myguess
-        print('Guess: ', guess)
+        if verbose:
+            print('Guess: ', guess)
         if myrange is not None:
             rangepars = myrange
-        print('Range: ', rangepars)
+        if verbose:
+            print('Range: ', rangepars)
 
     ll = mcmc.LogLikelihood(xvals=thvals[okdata], yvals=np.abs(ampvals[okdata]), errors=ampvals_err[okdata],
         p0=guess, model=fct_name, flatprior=rangepars)
 
     samp = ll.run(nbmc)
     flat_samples = samp.get_chain(discard=nbmc//3, thin=32, flat=True)
-    q = [0.16, 0.5, 0.84]
-    mcmc_fit = np.zeros(len(guess))
-    mcmc_err = np.zeros(len(guess))
-    for i in range(len(guess)):
-        qt = corner.quantile(flat_samples[:,i],q)
-        mcmc_fit[i] = qt[1]
-        mcmc_err[i] = np.mean([qt[1]-qt[0], [qt[2]-qt[1]]])
-        print(i,mcmc_fit[i],mcmc_err[i])
+    mean_amp = np.mean(flat_samples[:,0])
+
+    ### We marginalize over amplitude which is a nuisance paraameter
+    newsamples = flat_samples[:,[False, True, True, True]].copy()
+    names = ['Xpol%', 'Ang', 'Sat']
+    labels = ['Xpol[$%$]', 'Ang', 'Sat']
+    ### And we convert  XPol in percents
+    newsamples[:,0] *= 100
+
+    #We use MCSamples for getdist to access the statistics
+    samps = MCSamples(samples=newsamples, names=names, labels=labels,
+                  ranges={'Xpol%':(0, None), 'Sat':(0,None)})
+
+    # COnfidence levels
+    conf = samps.contours
+
+    # COnfidence intervals and type
+    valbest = np.zeros(len(names))
+    intervals = np.zeros((len(names), 2))
+    intervals_CL = np.zeros(len(names))
+    errors = np.zeros(len(names))
+    stats = samps.getMargeStats()
+    res_str = []
+    for j in range(len(names)):
+        mystat = stats.parWithName(names[j])
+        valbest[j] = mystat.mean
+        
+        # Check if we have a 68% two-tail interval (=> we show two tail 68% CL) or not (=> we show 95% CL Upper limit)
+        if mystat.limits[1].limitType() == 'two tail':
+            contnum = 0
+        else:
+            contnum = 1
+        
+        intervals[j,:] = np.array([mystat.limits[contnum].lower, mystat.limits[contnum].upper])
+        intervals_CL[j] = conf[contnum]
+        if contnum == 0:
+            errors[j] = (mystat.limits[contnum].upper - mystat.limits[contnum].lower)/2
+            res_str.append('{0:} = {1:8.3f} +/- {2:8.3f} (68% C.L.)'.format(names[j], valbest[j], errors[j]))
+        else:
+            res_str.append('{0:} < {1:8.3f} (95% C.L.)'.format(names[j], intervals[j,1]))
+        
+    for j in range(len(names)):
+        #print(names[j], valbest[j], errors[j], intervals_CL[j], intervals[j,:])
+        print(res_str[j])
+
 
     if doplot:
-        newsamples = flat_samples[:,[False, True, False, True]].copy()
-        newsamples[:,0] *= 100
-
-        if upperlims:
-            labs = ['Xpol %', 'Sat']
-            upperlim95 = np.zeros(2)
-            titles = []
-            for i in range(2):
-                upperlim95[i] = corner.quantile(newsamples[:,i],[0.95])
-                titles.append(labs[i]+' < {0:.2f} @ 95% C.L.'.format(upperlim95[i]))
-            fig = corner.corner(newsamples,quantiles=[0.95], labels=labs, force_titles=titles)
-
-        else:
-            fig = corner.corner(
-            newsamples, labels=['Xpol %', 'Sat'],quantiles=[0.95],show_titles=True)
-
-
-
+        figure()
+        g = plots.getSubplotPlotter()
+        g.triangle_plot(samps, filled=True,title_limit=2)
+        if savecontour is not None:
+            savefig(savecontour)
 
 
         figure()
-        errorbar(thvals[okdata], np.abs(ampvals[okdata]) / mcmc_fit[0], yerr=ampvals_err[okdata] / mcmc_fit[0],
+        errorbar(thvals[okdata], np.abs(ampvals[okdata]) / mean_amp, yerr=ampvals_err[okdata] / mean_amp,
                  fmt='r.')
-        angs = np.linspace(0, 90, 90)
-        if saturation is False:
-            lab = 'XPol = {0:5.2f}% +/- {1:5.2f}% '.format(mcmc_fit[1] * 100, mcmc_err[1] * 100)
-        else:
-            lab = 'XPol = {0:5.2f}% +/- {1:5.2f}% \n Saturation = {2:5.2f} +/- {3:5.2f}'.format(mcmc_fit[1] * 100,
-                                                                                                mcmc_err[1] * 100,
-                                                                                                mcmc_fit[3],
-                                                                                                mcmc_err[3])
-            if upperlims:
-                lab = 'XPol < {0:5.2f}% (95% C.L.) \n Saturation < {1:5.2f} (95% C.L.)'.format(upperlim95[0],upperlim95[1])
+        angs = np.linspace(0, 90, 900)
+        lab = res_str[0] + '\n' + res_str[2]
 
-        plot(angs, fct_name(angs, mcmc_fit) / mcmc_fit[0],
-             label=lab)
+        sh = np.shape(flat_samples)
+        allfcts = np.zeros((sh[0], len(angs)))
+        for i in range(sh[0]):
+            allfcts[i,:] = fct_name(angs, flat_samples[i,:]) / flat_samples[i,0]
+        mean_curve = np.mean(allfcts, axis=0)
+        std_curve = np.std(allfcts, axis=0)
+        fill_between(angs, mean_curve+2*std_curve, y2=mean_curve-2*std_curve, alpha=0.2, color='b')
+        fill_between(angs, mean_curve+std_curve, y2=mean_curve-std_curve, alpha=0.2, color='b')
+        plot(angs, mean_curve, 'b', label=lab)
+
         ylim(-0.1, 1.3)
         plot(angs, angs * 0, 'k--')
         plot(angs, angs * 0 + 1, 'k--')
@@ -1553,8 +1588,7 @@ def hwp_fitpol_new(thvals, ampvals, ampvals_err, doplot=False, str_title=None, s
 
 
 
-
-    return [mcmc_fit, mcmc_err], flat_samples
+    return newsamples, valbest, intervals, intervals_CL, res_str
 
 
 def coadd_flatmap(datain, az, el,

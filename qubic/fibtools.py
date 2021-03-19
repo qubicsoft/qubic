@@ -132,7 +132,7 @@ class MyChi2:
 		self.functname = functname
 		self.extra_args = extra_args
 	def __call__(self, *pars, extra_args=None):
-		val = self.functname(self.x, *pars, extra_args=self.extra_args)
+		val = self.functname(self.x, pars, extra_args=self.extra_args)
 		chi2 = np.dot(np.dot(self.y - val, self.invcov), self.y - val)
 		return chi2
 
@@ -148,7 +148,7 @@ class Chi2Minimizer(object):
 		self.invcov = np.linalg.inv(covarin)
 		self.functname = functname
 		self.extra_args = extra_args
-		return 
+ 
 	def __call__(self, *pars, extra_args = None):
 		val = self.functname(self.x, *pars, extra_args = self.extra_args)
 		chi2 = np.dot(np.dot(self.y - val, self.invcov), self.y - val)
@@ -250,10 +250,10 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 
 	elif isinstance(chi2, Chi2Implement):
 		if verbose:
-			print("Minimizer object: ", MinimizerObj.__dict__)
+			print("Minimizer object: ", chi2.__dict__)
 			print("Guess: ", *guess)
 			print("ncallmax, nsplit, precision: ", ncallmax, nsplit, precision)	
-		m = iminuit.Minuit(MinimizerObj, *guess)
+		m = iminuit.Minuit(chi2, *guess)
 		m.migrad(ncall = ncallmax * nsplit)
 
 	# print('Migrad Done')
@@ -271,7 +271,6 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 			if verbose: print('Hesse failed !')
 	# build np.array output
 	parfit = []
-	print(m.values)
 	for i in parnames: parfit.append(m.values[i])
 
 	errfit = []
@@ -286,13 +285,11 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 	else:
 		parnamesfit = parnames
 	ndimfit = len(parnamesfit)  # int(np.sqrt(len(m.errors)))
-	print("len(ndimfit): ", len(parnamesfit))
-	print("m.covariance: ", m.covariance)
 	covariance = np.zeros((ndimfit, ndimfit))
-	#if m.covariance:
-	for i in range(ndimfit):
-		for j in range(ndimfit):
-			covariance[i, j] = m.covariance[(parnamesfit[i], parnamesfit[j])]
+	if m.covariance:
+		for i in range(ndimfit):
+			for j in range(ndimfit):
+				covariance[i, j] = m.covariance[(parnamesfit[i], parnamesfit[j])]
 
 	if isinstance(chi2, MyChi2):
 		chisq = chi2(*parfit)

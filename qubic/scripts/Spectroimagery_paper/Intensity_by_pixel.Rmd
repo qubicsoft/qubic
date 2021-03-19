@@ -130,8 +130,8 @@ fsed._plot_covs(regions, bands, coveragesmaps, centers)
 ```{python}
 # NEW (16 Feb 2021)
 reload(fsed)
-sky_conf = {'synch': 's0'}
-#sky_conf = {'dust': 'd1'}
+#sky_conf = {'synch': 's0'}
+sky_conf = {'dust': 'd1'}
 fground_maps = fsed.foreground_signal(dictionaries, sky_conf)
 ```
 
@@ -250,7 +250,7 @@ fsed._plot_exampleSED(dictionaries[2], centers[2], nus_out150, maskmaps[2])
 ```{python}
 #NEW (17 Feb 2021)
 reload(fsed)
-nside_new = 32
+nside_new = 64
 nf_recon = dictionaries[0]['nf_recon']
 
 maps_ud, std_ud, fgr_map_ud, noise_ud_i = fsed.udgrade_maps(fground_maps, noise, nside_new, nf_recon, nreals)
@@ -332,19 +332,23 @@ pixs_ud = [pixQ_ud, pixQ_ud, pixG_ud, pixG_ud]
 pixs_red = [pixQ_red, pixQ_red, pixG_red, pixG_red]
 nus_edge = [nus150, nus220, nus150, nus220]
 
-FuncModel = fsed.Synchrotron_storja
+#FuncModel = fsed.Synchrotron_Planck
+FuncModel = fsed.ThermDust_Planck353
+Chi2Model = "Chi2Implement"
+p0 = [50,3]
 #FuncModel = {'freedust': DustModel}
 reload(qubic)
 Imvals, Isvals, xarr, flat_samples = fsed.foregrounds_run_mcmc(dictionaries, fgr_map_ud, Cp_prime, FuncModel,
-                                                nus_out, nus_edge, pixs_ud, pixs_red = pixs_red, 
-                                                samples = 5000, verbose = True, initP0 = [50, 3])
+                                                nus_out, nus_edge, pixs_ud, 
+                                                pixs_red = pixs_red, chi2=Chi2Model, 
+                                                samples = 5000, verbose = False, initP0 = p0)
 ```
 
 ```{python}
 #plt.hist(flat_samples[0,:,0], bins = 20, histtype="step")
 plt.xlabel("c0")
 plt.ylabel("c1")
-plt.hist2d(flat_samples[0,:,0], flat_samples[0,:,1], bins = 20)
+plt.hist2d(flat_samples[0,:,0], flat_samples[0,:,1], bins = 20, )
 ```
 
 ```{python}

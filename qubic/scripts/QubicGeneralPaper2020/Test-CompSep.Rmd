@@ -1,0 +1,410 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+from pylab import *
+import os
+import sys
+import time
+import pickle
+from importlib import reload
+
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+import scipy
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+#from mpi4py import MPI
+# from pyoperators import MPI
+import pysm
+import qubic
+from qubic import QubicSkySim as qss
+from qubic import fibtools as ft
+from qubic import camb_interface as qc
+from qubic import SpectroImLib as si
+from qubic import NamasterLib as nam
+from qubic import mcmc
+from qubic import AnalysisMC as amc
+
+rc('figure', figsize=(16, 10))
+rc('font', size=15)
+plt.rcParams['image.cmap'] = 'jet'
+
+
+
+### Initialize
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+
+
+```
+
+```{python}
+##### Let's get the coverage and noise for both bands
+def get_map_band(band, qubic_sky = None, duration=3., nsnew = None, spatial_noise=False, old_config=False):
+    dictfilename = global_dir + '/dicts/pipeline_demo.dict'
+    d = qubic.qubicdict.qubicDict()
+    d.read_from_file(dictfilename)
+    d['nside'] = 256
+    center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+    print(center)
+    nbands = 1
+    d['nf_recon'] = nbands
+    d['nf_sub'] = nbands
+
+    # Frequency band
+    dA = d.copy()
+    dA['filter_nu'] = band * 1e9
+    print(dA['filter_nu']/1e9)
+
+    seed = np.random.randint(100000)
+    sky_config = {'cmb': seed}
+
+    if qubic_sky is None:
+        Qubic_sky_A = qss.Qubic_sky(sky_config, dA)
+    else:
+        Qubic_sky_A = qubic_sky
+
+    ##### Getting FastSimulator output maps
+    maps_qubicA, maps_noiselessA, maps_noiseA, coverageA = Qubic_sky_A.get_partial_sky_maps_withnoise(spatial_noise=spatial_noise,
+                                                                                 Nyears=duration, old_config=old_config)
+
+    if nsnew is not None:
+        print('Changinf to nside={}'.format(nsnew))
+        sh = np.shape(maps_qubicA)
+        new_maps = np.zeros((sh[0], 12*nsnew**2, 3))
+        for i in range(sh[0]):
+            for j in range(3):
+                new_maps[i,:,j] = hp.ud_grade(maps_noiseA[i,:,j], nsnew)
+        maps_noiseA = new_maps
+        coverageA = hp.ud_grade(coverageA, nsnew, power=-2)
+    
+    return maps_noiseA, coverageA, Qubic_sky_A
+```
+
+```{python}
+reload(qss)
+nsnew = 256
+old_config = False
+spatial_noise=False
+
+
+#### Figure with error for each band...
+band = 150
+duration = 3.
+maps_noise_150, coverage_150, qubic_sky = get_map_band(band, duration=duration, nsnew = nsnew, 
+                                                       spatial_noise=spatial_noise, old_config=old_config)
+
+band = 220
+duration = 3.
+maps_noise_220, coverage_220, qubic_sky = get_map_band(band, duration=duration, nsnew = nsnew, 
+                                                       spatial_noise=spatial_noise, old_config=old_config)
+
+
+
+
+```
+
+```{python}
+
+def plot_errors_lines(leff, err, dl, color='r', label=''):
+    for i in range(len(leff)):
+        if i==0:
+            plot([leff[i]-dl/2, leff[i]+dl/2], [err[i,s], err[i,s]],color, label=label)
+        else:
+            plot([leff[i]-dl/2, leff[i]+dl/2], [err[i,s], err[i,s]],color)
+        if i < (len(leff)-1):
+            plot([leff[i]+dl/2,leff[i]+dl/2], [err[i,s], err[i+1,s]], color)
+    
+
+
+def ana_likelihood(rv, leff, fakedata, errors, model, prior, 
+                   mylikelihood=mcmc.LogLikelihood, covariance_model_funct=None, otherp=None):
+    ll = mylikelihood(xvals=leff, yvals=fakedata, errors=errors, 
+                            model = model, flatprior=prior, covariance_model_funct=covariance_model_funct) 
+    like = np.zeros_like(rv)
+    for i in range(len(rv)):
+        like[i] = np.exp(ll([rv[i]]))
+        #print(rv[i],ll([rv[i]]),like[i])
+    cumint = scipy.integrate.cumtrapz(like, x=rv)
+    cumint = cumint / np.max(cumint)
+    onesigma = np.interp(0.68, cumint, rv[1:])
+    if otherp:
+        other = np.interp(otherp, cumint, rv[1:])
+        return like, cumint, onesigma, other
+    else:
+        return like, cumint, onesigma
+
+
+def explore_like(leff, mcl_noise, errors, lmin, dl, cc, rv, otherp=None,
+                 cov=None, plotlike=False, plotcls=False, 
+                 verbose=False, sample_variance=True, mytitle='', color=None, mylabel='',my_ylim=None,
+                delensing_residuals = 1.):
+    
+#     print(lmin, dl, cc)
+#     print(leff)
+#     print(scl_noise[:,2])
+    ### Create Namaster Object
+    # Unfortunately we need to recalculate fsky for calculating sample variance
+    nside = 256
+    lmax = 2 * nside - 1
+    if cov is None:
+        Namaster = nam.Namaster(None, lmin=lmin, lmax=lmax, delta_ell=dl)
+        Namaster.fsky = 0.018
+    else:
+        okpix = cov > (np.max(cov) * float(cc))
+        maskpix = np.zeros(12*nside**2)
+        maskpix[okpix] = 1
+        Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=dl)
+    
+#     print('Fsky: {}'.format(Namaster.fsky))
+    lbinned, b = Namaster.get_binning(nside)
+
+    ### Bibnning CambLib
+#     binned_camblib = qc.bin_camblib(Namaster, '../../scripts/QubicGeneralPaper2020/camblib.pickle', 
+#                                     nside, verbose=False)
+    binned_camblib = qc.bin_camblib(Namaster, global_dir + '/doc/CAMB/camblib.pkl', 
+                                    nside, verbose=False)
+
+    ### And we need a fast one for BB only as well
+    def myBBth(ell, r):
+        clBBl, clBBul = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=True, specindex=2)
+        lens = clBBl-clBBul
+        return clBBul + lens*delensing_residuals
+
+    ### Fake data
+    fakedata = myBBth(leff, 0.)        
+    
+    if sample_variance:
+        covariance_model_funct = Namaster.knox_covariance
+    else:
+        covariance_model_funct = None
+        
+    if otherp is None:
+        like, cumint, allrlim = ana_likelihood(rv, leff, fakedata, 
+                                            errors, 
+                                            myBBth, [[0,1]],
+                                           covariance_model_funct=covariance_model_funct)
+    else:
+        like, cumint, allrlim, other = ana_likelihood(rv, leff, fakedata, 
+                                            errors, 
+                                            myBBth, [[0,1]],
+                                           covariance_model_funct=covariance_model_funct, otherp=otherp)
+    if plotcls:
+        if plotlike:
+            subplot(1,2,1)
+            if np.ndim(BBcov) == 2:
+                errorstoplot = np.sqrt(np.diag(errors))
+            else:
+                errorstoplot = errors
+        #plot(inputl, inputcl[:,2], 'k', label='r=0')
+        plot(leff, errorstoplot, label=mylabel+' Errors', color=color)
+        xlim(0,lmax)
+        if my_ylim is None:
+            ylim(1e-4,1e0)
+        else:
+            ylim(my_ylim[0], my_ylim[1])
+        yscale('log')
+        xlabel('$\\ell$')
+        ylabel('$D_\\ell$')
+        legend(loc='upper left')
+    if plotlike:
+        if plotcls:
+            subplot(1,2,2)
+        p=plot(rv, like/np.max(like), 
+               label=mylabel+' $\sigma(r)={0:6.4f}$'.format(allrlim), color=color)
+        plot(allrlim+np.zeros(2), [0,1.2], ':', color=p[0].get_color())
+        xlabel('r')
+        ylabel('posterior')
+        legend(fontsize=8, loc='upper right')
+        xlim(0,0.1)
+        ylim(0,1.2)
+        title(mytitle)
+    
+    if otherp is None:
+        return like, cumint, allrlim
+    else:
+        return like, cumint, allrlim, other
+
+```
+
+```{python}
+def get_results(directory, config, duration, nbmc, coverage, method, 
+                lmin=40, delta_ell=30, covcut=0.1, nmodes=1., delensing_residuals=1., rv=None, factornoise=1.):
+    nn = config+'_nbmc_{}_dur_{}_lmin_{}_dl_{}_cc_{}_meth_{}'.format(nbmc,duration,lmin,delta_ell,covcut,method)
+    #print(nn)
+    leff, mcl_noise_qubic, scl_noise_qubic, covbin, coverage, args = pickle.load(open(directory+'/MC_Cls_'+nn+'.pkl', 'rb'))
+
+    if factornoise != 1.:
+        print('**** BEWARE ! Using Factornoise = {}'.format(factornoise))
+
+    ### BB Covariance
+    BBcov = covbin[:, :, 2]/nmodes**2*factornoise**2
+    ### BB sigmas
+    sclBB = scl_noise_qubic[:, 2]/nmodes*factornoise
+    #print(scl_noise_qubic[:, 2])
+    if method=='sigma':
+        to_use = sclBB.copy()
+    elif method=='covariance':
+        to_use = BBcov.copy()
+    #print(to_use)
+    ### Likelihood
+    if rv is None:
+        rv = np.linspace(0,1,10000)
+    like, cumint, rlim68, rlim95 = explore_like(leff, sclBB*0, to_use, lmin, delta_ell, covcut, rv,
+                                     cov=coverage_150, plotlike=False, plotcls=False, 
+                                     verbose=True, sample_variance=True, otherp=0.95, delensing_residuals=delensing_residuals)
+
+    return leff, scl_noise_qubic*factornoise, rv, like, cumint, rlim68, rlim95
+```
+
+```{python}
+
+camblib = qc.read_camblib(global_dir + '/doc/CAMB/camblib.pkl')
+
+rv = np.linspace(0,1,1000)
+
+lll = np.arange(512)
+cl0 = qc.get_Dl_fromlib(lll, 0, lib=camblib, unlensed=False)[0]   
+cl0_01 = qc.get_Dl_fromlib(lll, 0.01, lib=camblib, unlensed=False)[0]   
+cl0_06 = qc.get_Dl_fromlib(lll, 0.06, lib=camblib, unlensed=False)[0]   
+
+```
+
+```{python}
+nbmc = 500
+directory = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/ClLike/MC_FI_{}_PB_BC_OK_ATM_NEW/'.format(nbmc)
+
+durationA = 3.
+durationB = 3.
+meth='sigma'
+leff_150, scl_150, rv_150, like_150, cumint_150, rlim68_150, rlim95_150 = get_results(directory, 'FI150_FI150', 
+                                                                                      durationA, nbmc, 
+                                                                                      coverage_150, meth)
+leff_220, scl_220, rv_220, like_220, cumint_220, rlim68_220, rlim95_220 = get_results(directory, 'FI220_FI220', 
+                                                                                      durationB, nbmc, 
+                                                                                      coverage_220, meth)
+print(rlim68_150, rlim68_220)
+```
+
+```{python}
+#### Dust Model
+import dust_lib as dl
+
+f0 = 150.
+f1 = 220.
+dldust=dl.Dl_BB_dust(lll, f0, freqGHz2=f0)
+# dl?
+```
+
+```{python}
+s=2
+plot(lll, np.abs(cl0[:,s]),label='r=0', color='k')
+plot(lll, np.abs(cl0_01[:,s]),label='r=0.01', color='orange')
+plot(lll, np.abs(cl0_06[:,s]),label='r=0.06', color='g')
+plot(lll, dldust)
+
+```
+
+```{python}
+camblib = qc.read_camblib(global_dir + '/doc/CAMB/camblib.pkl')
+
+def BBth(ell, params):
+    f0 = params[0]
+    f1 = params[1]
+    r = params[2]
+    ### Tensors + Lensing
+    DlBBCMB = qc.get_Dl_fromlib(ell, r, lib=camblib, unlensed=False, specindex=2)[0]
+    ### Dust
+    dustpars = params[3:]
+    DlBBdust = dl.Dl_BB_dust(lll, f0, freqGHz2=f1, params=dustpars)
+    return DlBBCMB + DlBBdust
+    
+```
+
+```{python}
+s=2
+plot(lll, np.abs(cl0[:,s]),label='r=0', color='k')
+plot(lll, np.abs(cl0_01[:,s]),label='r=0.01', color='orange')
+plot(lll, np.abs(cl0_06[:,s]),label='r=0.06', color='g')
+
+rval = 0.06
+Dl_353_ell80 = 13.4 * 0.45
+alpha_bb = -2.42
+betadust = 1.59
+Tdust = 19.6
+
+plot(lll, BBth(lll, [150., 150., rval, Dl_353_ell80, alpha_bb, betadust, Tdust]), 'r', lw=3)
+
+```
+
+```{python}
+### Now binning
+cc = 0.1
+lmin = 40
+lmax = 511
+nside = 256
+delta_ell = 30
+cov = coverage_150.copy()
+okpix = cov > (np.max(cov) * float(cc))
+maskpix = np.zeros(12*nside**2)
+maskpix[okpix] = 1
+Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
+
+def binned_BBth(ell, params):
+    bbth = BBth(ell, params)
+    return Namaster.bin_spectra(BBth(ell, params), nside)[0,:]
+
+ell, b = Namaster.get_binning(nside)
+
+rval = 0.06
+Dl_353_ell80 = 13.4 * 0.45
+alpha_bb = -2.42
+betadust = 1.59
+Tdust = 19.6
+params = [150., 150., rval, Dl_353_ell80, alpha_bb, betadust, Tdust]
+
+plot(lll,BBth(lll, params), 'k')
+plot(ell,binned_BBth(lll, params), 'ro', lw=3)
+```
+
+```{python}
+fakedata = binned_BBth(lll, params)
+
+
+mcmc.LogLikelihood
+```
+
+```{python}
+def ana_likelihood(rv, leff, fakedata, errors, model, prior, 
+                   mylikelihood=mcmc.LogLikelihood, covariance_model_funct=None, otherp=None):
+    ll = mylikelihood(xvals=leff, yvals=fakedata, errors=errors, 
+                            model = model, flatprior=prior, covariance_model_funct=covariance_model_funct) 
+    like = np.zeros_like(rv)
+    for i in range(len(rv)):
+        like[i] = np.exp(ll([rv[i]]))
+        #print(rv[i],ll([rv[i]]),like[i])
+    cumint = scipy.integrate.cumtrapz(like, x=rv)
+    cumint = cumint / np.max(cumint)
+    onesigma = np.interp(0.68, cumint, rv[1:])
+    if otherp:
+        other = np.interp(otherp, cumint, rv[1:])
+        return like, cumint, onesigma, other
+    else:
+        return like, cumint, onesigma
+
+```

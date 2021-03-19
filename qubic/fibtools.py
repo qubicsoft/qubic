@@ -750,11 +750,11 @@ def simsig_fringes(time, stable_time, params):
 	Parameters
 	----------
 	time : array
-		Time sampling.
+	  Time sampling.
 	stable_time: float
-		Stable time [s] on each step.
+	  Stable time [s] on each step.
 	params : list
-		ctime, starting time, the 6 amplitudes.
+	  ctime (constant time response of the detector), starting time, the 6 amplitudes.
 
 	Returns
 	-------

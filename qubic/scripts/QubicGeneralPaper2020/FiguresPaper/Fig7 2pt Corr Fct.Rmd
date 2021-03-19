@@ -1,0 +1,399 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# This is essentially a copy of 2pt-Correlation Function-New
+
+```{python}
+# %matplotlib inline
+from pylab import *
+import os
+import sys
+from importlib import reload
+import glob
+import pickle
+import time
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm
+import qubic
+from qubic import SpectroImLib as si
+from qubic import QubicSkySim as qss
+from qubic import NamasterLib as nam
+from qubic import camb_interface as qc
+from qubic import fibtools as ft
+from qubic.utils import progress_bar
+
+rc('figure', figsize=(13, 6))
+rc('font', size=12)
+```
+
+```{python}
+### Initialize
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+
+dictfilename = global_dir + '/dicts/BmodesNoDustNoSystPaper0_2020.dict'
+
+
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+d['nside']=256
+
+```
+
+```{python}
+def get_maps_from_louise(directory, nfsub, config):
+    residuals_patch = np.load(directory + f'residuals_{nfsub}bands_{config}.npy')
+    seenmap = np.load(directory + f'seenmap_{nfsub}bands_{config}.npy')
+    coverage_patch = np.load(directory + f'coverage_{nfsub}bands_{config}.npy')
+    nside = 256
+    residuals = np.zeros((nfsub, 12 * nside ** 2, 3))
+    residuals[:, seenmap, :] = residuals_patch
+    coverage = np.zeros(12 * nside ** 2)
+    coverage[seenmap] = coverage_patch
+    return residuals, coverage, seenmap
+
+
+
+```
+
+```{python}
+simname = 'Louise-NERSC-4Years-kmax=1'
+#residuals_maps, covar = get_maps_from_louise_old(1)
+
+
+directory = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_NERSC/MapsLouiseAtmosphereOK_Sept7_2020/'
+residuals_maps, covar, seen = get_maps_from_louise(directory, 1, 'FI150')
+residuals_maps = residuals_maps[0,:,:]
+
+print(np.shape(residuals_maps))
+center = [0,0]
+
+rc('figure', figsize=(16, 10))
+res = 15
+figure()
+st = ['I', 'Q', 'U']
+rng = [5, 5, 5]
+for s in range(3):
+    hp.gnomview(residuals_maps[:,s], rot=center, reso=res, sub=(1,3,s+1), title=simname+' '+st[s],
+               min=-rng[s], max=rng[s], unit=r'$\mu K$')
+tight_layout()
+
+figure()
+hp.mollview(covar)
+```
+
+```{python}
+reload(qss)
+rc('figure', figsize=(12, 6))
+xx, yyI, yyQ, yyU = qss.get_angular_profile(residuals_maps, nbins=30, separate=True, center=center)
+pix_size = hp.nside2resol(d['nside'], arcmin=True)
+plot(xx, yyI * pix_size, 'o',label='I')
+plot(xx, yyQ * pix_size , 'o',label='Q')
+plot(xx, yyU * pix_size, 'o',label='U')
+meanvalI = np.mean(yyI[xx<10]) * pix_size
+meanvalQU = np.mean((yyQ[xx<10]+yyQ[xx<10])/2) * pix_size
+axhline(y=meanvalI, label=r'I RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalI), color='r', ls=':')
+axhline(y=meanvalQU, label=r'QU RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalQU), color='m', ls=':')
+xlim(0,20)
+xlabel('Degrees from center of the field')
+ylabel(r'Noise RMS $[\mu K.arcmin]$')
+title(simname)
+legend()
+ylim(0,50)
+
+#savefig('noiseprofile_mukarcmin.pdf')
+```
+
+```{python}
+reload(qss)
+reload(ft)
+
+# 1) Fit RMS Vs 1/cov
+dofit=True
+nbins = 25
+subplot(1,2,1)
+xx, yy, fit_n200k = qss.get_noise_invcov_profile(residuals_maps, covar, nbins=nbins,
+                                              label=simname,fit=dofit, doplot=True)
+
+# 2) Correct maps for RMS vs 1/cov
+new_diff = qss.correct_maps_rms(residuals_maps, covar, fit_n200k)
+subplot(1,2,2)
+bla = qss.get_angular_profile(new_diff, label=simname+' corrected', center=center,
+                              allstokes=True,nbins=50,thmax=22, fontsize=10, doplot=True)
+
+# 3) Calculate 2Pt Correlation function
+
+```
+
+```{python}
+reload(qss)
+ns = d['nside']
+okpix = covar > (np.max(covar)*0.1)
+ip = np.arange(12*ns**2).astype(int)
+ipok = ip[okpix]
+
+nbins = 20
+th, cth_200k, errs = qss.ctheta_parts(new_diff[:,0], ipok, 0, 20, nbins, nsplit=5, degrade_init=128, verbose=False)
+th = th[isfinite(cth_200k)]
+errs = errs[isfinite(cth_200k)]
+cth_200k = cth_200k[isfinite(cth_200k)]
+
+```
+
+```{python}
+rc('figure', figsize=(13, 6))
+from scipy.optimize import curve_fit
+
+fct = lambda x, a, b, c: a * np.sin(x/b) * exp(-x/c)
+results_200k = curve_fit(fct, th[1:], cth_200k[1:]/cth_200k[0])
+
+thetas = np.linspace(0,20,100)
+p=errorbar(th[1:],cth_200k[1:]/cth_200k[0], yerr=errs[1:]/cth_200k[0],fmt='o', label=simname)
+plot(0,1,'o', color=p[0].get_color())
+plot(thetas, fct(thetas, *results_200k[0]), color=p[0].get_color(),
+         label=r'$a\times\sin(\theta/b)\times\exp(\theta/c)$'+'\n a={0:4.2f} b={1:4.2f} c={2:4.2f}'.format(*results_200k[0]))
+axhline(y=0, color='k', ls=':')
+legend()
+xlabel(r'$\theta$ [deg]')
+ylabel(r'$C(\theta)$')
+
+print(np.var(new_diff[ipok,0]))
+```
+
+```{python}
+reload(qss)
+reload(ft)
+center = [0,0]
+directory = '/Users/hamilton/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_NERSC/MapsLouiseAtmosphereOK_Sept7_2020/'
+
+nbins = 20
+
+configs = ['FI150', 'FI220']
+allcth = []
+allctherrs = []
+for i in range(len(configs)):
+    my_residuals_maps, my_covar, my_seen = get_maps_from_louise(directory, 1, configs[i])
+    my_residuals_maps = my_residuals_maps[0,:,:]
+    # 1) Fit RMS Vs 1/cov
+    dofit=True
+    xx, yy, my_fit = qss.get_noise_invcov_profile(my_residuals_maps, my_covar, nbins=nbins,
+                                                      label=simname,fit=dofit, doplot=False)
+    # 2) Correct maps for RMS vs 1/cov
+    my_new_diff = qss.correct_maps_rms(my_residuals_maps, my_covar, my_fit)
+    th, my_cth, my_errs = qss.ctheta_parts(my_new_diff[:,0], ipok, 0, 20, nbins, nsplit=5, degrade_init=128, verbose=False)
+    th = th[isfinite(my_cth)]
+    my_errs = my_errs[isfinite(my_cth)]
+    my_cth = my_cth[isfinite(my_cth)]
+    allcth.append(my_cth)
+    allctherrs.append(my_errs)
+    print(my_cth.shape)
+
+
+```
+
+```{python}
+from scipy import signal
+
+fct = lambda x, a, b, c: a * np.sin(x/b) * exp(-x/c)
+
+thetas = np.linspace(0,20,100)
+myresults = []
+for i in range(len(configs)):
+    results = curve_fit(fct, th[1:], allcth[i][1:]/allcth[i][0], maxfev = 10000)
+    p=errorbar(th[1:],allcth[i][1:]/allcth[i][0],yerr=allctherrs[i][1:]/allcth[i][0],fmt='o', label=configs[i])
+    plot(0,1,'o', color=p[0].get_color())
+    plot(thetas, fct(thetas, *results[0]), color=p[0].get_color(),
+             label=r'$a\times\sin(\theta/b)\times\exp(\theta/c)$'+'\n a={0:4.2f} b={1:4.2f} c={2:4.2f}'.format(*results[0]))
+    myresults.append(results)
+    
+axhline(y=0, color='k', ls=':')
+legend()
+xlabel(r'$\theta$ [deg]')
+ylabel(r'$C(\theta)/C(0)$')
+
+```
+
+```{python}
+#### Figure without the zero-point
+
+rc('figure', figsize=(8, 6))
+fct = lambda x, a, b, c: a * np.sin(x/b) * exp(-x/c)
+
+thetas = np.linspace(0,20,100)
+freqs = np.array([150., 220.])
+labels = ['End-to-End sims 150 GHz', 'End-to-End sims 220 GHz']
+colors=['red', 'blue']
+
+myangs = 8.8*150/freqs
+
+for i in range(len(configs)):
+    results = curve_fit(fct, th[1:], allcth[i][1:]/allcth[i][0])
+    p=errorbar(th[1:],allcth[i][1:]/allcth[i][0],yerr=allctherrs[i][1:]/allcth[i][0],
+               fmt='o', label=labels[i], color=colors[i])
+    #plot(0,1,'o', color=p[0].get_color())
+    plot(thetas, fct(thetas, *results[0]), color=p[0].get_color())
+    axvline(x=myangs[i], 
+            label='S.B. peaks separation: {0:3.1f} deg.'.format(myangs[i]), 
+            color=p[0].get_color(), ls=':')
+
+axhline(y=0, color='k', ls=':')
+legend()
+xlabel(r'$\theta$ [deg]')
+ylabel(r'$C(\theta)/C(0)$')
+
+```
+
+```{python}
+#### Figure without the zero-point
+
+rc('figure', figsize=(8, 6))
+fct = lambda x, a, b, c: a * np.sin(x/b) * exp(-x/c)
+
+thetas = np.linspace(0,20,100)
+freqs = np.array([150., 220.])
+labels = ['End-to-End sims 150 GHz', 'End-to-End sims 220 GHz']
+colors=['red', 'blue']
+
+myangs = 8.8*150/freqs
+
+ls = ['-','-']
+for i in range(len(configs)):
+    results = curve_fit(fct, th[1:], allcth[i][1:]/allcth[i][0])
+    p=errorbar(th[1:],allcth[i][1:]/allcth[i][0],yerr=allctherrs[i][1:]/allcth[i][0],
+               fmt='o', label=labels[i], color=colors[i])
+    plot(0,1,'o', color=p[0].get_color())
+    plot([0,0],[0,1], color=p[0].get_color(), ls=ls[i])
+    plot(thetas, fct(thetas, *results[0]), color=p[0].get_color())
+    axvline(x=myangs[i], 
+            label='S.B. peaks separation: {0:3.1f} deg.'.format(myangs[i]), 
+            color=p[0].get_color(), ls=':')
+
+axhline(y=0, color='k', ls=':')
+legend()
+xlabel(r'$\theta$ [deg]')
+ylabel(r'$C(\theta)/C(0)$')
+
+```
+
+```{python}
+rc('figure', figsize=(15, 6))
+reload(qc)
+reload(qss)
+
+mylmax = 1024
+theta = np.linspace(0,180,1000)
+ctheta = fct(theta, *results_200k[0])
+ctheta[0] = 1
+#ctheta[1:] = 0
+
+#### Disply input C(theta)
+subplot(1,2,1)
+plot(theta,ctheta,label='Input C(theta)')
+xlabel(r'$\theta$ [deg]')
+ylabel(r'$C(\theta)$')
+xlim(0,25)
+
+#### COnvert to Cl and display
+lll, clth = qc.ctheta_2_cell(theta, ctheta, lmax=mylmax)
+
+#### Go back to c(theta)
+thback, ctheta_back = qc.cell_2_ctheta(clth, theta_deg=theta)
+plot(theta, ctheta_back, '--',label='C(theta) back from Cell')
+plot(theta, theta*0,'k:')
+legend()
+
+
+subplot(1,2,2)
+plot(lll, clth, label='Output Cell / cl[0]')
+plot(lll, lll*0+1,'k:')
+xlabel(r'$\ell$')
+ylabel(r'$C_\ell$')
+xlim(0,np.max(lll))
+legend()
+
+
+
+```
+
+```{python}
+rc('figure', figsize=(8, 6))
+rc('font',size=16)
+reload(qc)
+reload(qss)
+mylmax = 1024
+theta = np.linspace(0,180,10000)
+print(myangs)
+ellpeak = np.pi/np.radians(myangs)
+colors = ['red', 'blue']
+for i in range(len(configs)):
+    ctheta = fct(theta, *myresults[i][0])
+    ctheta[0] = 1
+
+    #### COnvert to Cl and display
+    lll, clth = qc.ctheta_2_cell(theta, ctheta, lmax=mylmax)
+    p=plot(lll, clth, label='{} GHz'.format(freqs[i]), color=colors[i])
+    print(ellpeak[i])
+    #axvline(x=ellpeak[i], color=p[0].get_color(), ls=':', label = r'$\ell = {\pi}/ \theta_{peaks}$'+' = {0:5.0f}'.format(ellpeak[i]))
+    #axvline(x=[40,50][i], color=p[0].get_color(), ls=':', label = r'$\ell$ = {0:2.0f}'.format([40,50][i]))
+xlabel('$\ell$')
+ylabel('$C_\ell$')
+xlim(0,400)
+axhline(y=1,color='k',ls=':',label='White noise')
+legend()
+```
+
+```{python}
+#### Figure without the zero-point
+
+rc('font',size=16)
+rc('figure', figsize=(8, 6))
+fct = lambda x, a, b, c: a * np.sin(x/b) * exp(-x/c)
+
+thetas = np.linspace(0,20,100)
+freqs = np.array([150., 220.])
+labels = ['End-to-End sims 150 GHz', 'End-to-End sims 220 GHz']
+colors=['red', 'blue']
+
+myangs = 8.8*150/freqs
+
+ls = ['-','-']
+for i in range(len(configs)):
+    results = curve_fit(fct, th[1:], allcth[i][1:]/allcth[i][0])
+    p=errorbar(th[1:],allcth[i][1:]/allcth[i][0],yerr=allctherrs[i][1:]/allcth[i][0],
+               fmt='o', label=labels[i], color=colors[i])
+    plot(0,1,'o', color=p[0].get_color())
+    plot([0,0],[0,1], color=p[0].get_color(), ls=ls[i])
+    plot(thetas, fct(thetas, *results[0]), color=p[0].get_color())
+    axvline(x=myangs[i], 
+            label='S.B. peaks separation: {0:3.1f} deg.'.format(myangs[i]), 
+            color=p[0].get_color(), ls=':')
+
+axhline(y=0, color='k', ls=':')
+legend()
+xlim(-0.5,20)
+xlabel(r'$\theta$ [deg]')
+ylabel(r'$C(\theta)/C(0)$')
+
+```
+
+```{python}
+
+```

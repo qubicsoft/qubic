@@ -1,0 +1,356 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# %matplotlib inline
+from pylab import *
+import os
+import sys
+from importlib import reload
+import glob
+import pickle
+import time
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm
+import qubic
+from qubic import SpectroImLib as si
+from qubic import QubicSkySim as qss
+from qubic import NamasterLib as nam
+from qubic import camb_interface as qc
+from qubic import fibtools as ft
+from qubic.utils import progress_bar
+
+rc('figure', figsize=(13, 6))
+rc('font', size=12)
+
+### Initialize
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+
+dictfilename = global_dir + '/dicts/BmodesNoDustNoSystPaper0_2020.dict'
+
+
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+d['nside']=256
+
+```
+
+```{python}
+##### Read Files from Louise at NERSC
+def get_maps_from_louise_manyreal(directory, nfsub, config):
+    residuals_patch = np.load(directory + f'residuals_{nfsub}bands_{config}.npy')
+    seenmap = np.load(directory + f'seenmap_{nfsub}bands_{config}.npy')
+    coverage_patch = np.load(directory + f'coverage_{nfsub}bands_{config}.npy')
+    sh_res = np.shape(residuals_patch)
+    sh_seen = np.shape(seenmap)
+    sh_cov = np.shape(coverage_patch)
+    nside = 256
+    residuals = np.zeros((sh_res[0], sh_res[1], 12 * nside ** 2, sh_res[3]))
+    residuals[:, :, seenmap, :] = residuals_patch
+    coverage = np.zeros(12*nside**2)
+    coverage[seenmap] = coverage_patch
+    return residuals, coverage
+
+myfreq = 150
+rep = '/Users/hamilton/CMB/Qubic/QubicGeneralPaper2020/Sims/SimsPureCMB_NERSC/FromLouiseOct16-2020/'
+all_residuals_maps, coverage = get_maps_from_louise_manyreal(rep, 1, 'FI{}'.format(myfreq))
+nreal = np.shape(all_residuals_maps)[0]
+print(np.shape(all_residuals_maps))
+print(np.shape(coverage))
+
+all_residuals_maps = 0
+```
+
+```{python}
+hp.mollview(coverage)
+```
+
+# We want to calculate the 2pt-correlation function theoretically
+The idea is to check fro its shape, possibly find a more accurate model that the sin x exp() we've been using so far. We also want to check that it goes to zero at zero, which appears clearly from the 150 GHz simulations but not so clearly at 220 GHz.
+
+The map we produce is the solution of the map-making equation: 
+$$ T = \left( A^t \cdot N^{-1} \cdot A\right)^{-1} A^t \cdot N^{-1}\cdot d$$
+and has covariance matrix:
+$$\mathcal{N}= \left< T\cdot T^t\right> = \left( A^t \cdot N^{-1} \cdot A\right)^{-1}$$
+and the 2-pt correlation is just:
+$$C(\theta_{ij}) = \mathcal{N}_{ij}$$
+
+So as a first step, we can try to estimate:
+$$ \mathcal{N}^{-1} =  A^t \cdot N^{-1} \cdot A$$
+If we assume white noise with $\sigma^2=1$, then $N=\mathbb{1}$ and:
+$$ \mathcal{M}=\mathcal{N}^{-1} =  A^t \cdot A$$
+$ \mathcal{M}$ is a matrix with size $(n_\mathrm{pix} \times n_\mathrm{pix})$ while $A$ has size $(n_\mathrm{t} \times n_\mathrm{pix})$:
+$$\begin{eqnarray} 
+M_{ij} &=& \sum_{k=0}^{n_t-1} (A^t)_{i,k} A_{k,j}\\
+&=& \sum_{k=0}^{n_t-1} A_{k,i} A_{k,j}
+\end{eqnarray}$$
+where $A$ is the *pointing matrix* which has the following structure:
+- for each $k$ time sample $A_{k,j}=a(k)_j$ is a $n_\mathrm{pix}$ vector with zeros everywhere except at pixels touched by peaks of the synthesized beam, where it contains the amplitude. It is therefore a Dirac comb (modulated by primary beam).
+- each $k$ corresponds to a different time-sample, therefaore a different pointing and orientation of the synthesized beam w.r.t. pointing direction.
+- additionally, $k$ also runs for all TES, which have different synthesized beams. So one should also average over TES with a weight given by the secondary beam of each TES...
+
+So finally, all of this is rather complicated but not undoable...
+
+Let's try to get one element as a starting point.
+
+
+# Calculating $A_{k,i}$
+
+```{python}
+# Dictionary
+d = qubic.qubicdict.qubicDict()
+
+# Only I, FI and 20000 ptgs
+d.read_from_file(os.environ['QUBIC_DICT']+'pipeline_demo.dict')
+d['nside'] = 32
+d['config'] = 'FI'
+d['kind'] = 'I'
+d['npointings'] = 20000
+# Instrument and scene
+q = qubic.QubicInstrument(d)
+
+### Let's select a detector
+q.detector = q.detector[0]
+
+s = qubic.QubicScene(d)
+
+### Pointing 
+p = qubic.get_pointing(d)
+print(p.shape)
+```
+
+```{python}
+A=q.get_projection_operator(p,s)
+print(A.shape)
+### Shape of A: nsamples x npeaks
+print(A.matrix.data.shape)
+print(A.matrix.data.index.shape)
+print(A.matrix.data.index)
+print(A.matrix.data.value.shape)
+print(A.matrix.data.value)
+
+### Convert the coverage to the right nside
+newcoverage = hp.ud_grade(coverage, d['nside'])
+newcoverage /= np.max(newcoverage)
+hp.mollview(newcoverage, sub=(1,2,1))
+
+okpix = newcoverage > 0.1
+print('Npix = {}'.format(np.sum(okpix)))
+
+#seenpixels = np.unique(A.matrix.data.index)
+seenpixels = np.arange(12*d['nside']**2)[okpix]
+testmap = np.zeros(12*d['nside']**2)
+testmap[seenpixels] = 1
+hp.mollview(testmap, sub=(1,2,2))
+
+print(len(seenpixels))
+```
+
+```{python}
+### Angular separation between pixels
+subplot(1,3,2)
+uv = np.array(hp.pix2vec(d['nside'], seenpixels))
+angs = np.degrees(np.arccos(np.dot(uv.T, uv)))
+imshow(angs,vmin=0,vmax=90)
+colorbar()
+print('done angles')
+
+### We need a correspondance between indices from 0 to len(seenpixels)-1 and the ips of each seen pixels
+mapindices = np.zeros(12*d['nside']**2, dtype=int)-1
+for k in range(len(seenpixels)):
+    if ((k//1000)*1000) == k:
+        print(k, len(seenpixels))
+    mapindices[seenpixels[k]] = k
+## Test:
+num = np.random.randint(len(seenpixels))
+print(seenpixels[num])
+print(num,mapindices[seenpixels[num]])
+hp.mollview(mapindices, sub=(1,3,3))
+```
+
+```{python}
+def ninv_detector(q, p, s, seenpixels, mapindices, verbose = False, corr=False):
+    A=q.get_projection_operator(p,s)
+    invn = np.zeros((len(seenpixels), len(seenpixels)))
+    for k in range(len(p)):
+        if verbose:
+            if (k % (len(p)//10))==0:
+                print(k, len(p))
+        ips = A.matrix.data[k].index
+        vals = A.matrix.data[k].value
+        for i in range(len(ips)):
+            for j in range(len(ips)):
+                invn[mapindices[ips[i]], mapindices[ips[j]]] += vals[i] * vals[j]  
+    if corr:
+        invn = qss.cov2corr(invn)
+    return invn
+    
+```
+
+```{python}
+invn = ninv_detector(q, p, s, seenpixels, mapindices, verbose = True, corr=False)
+```
+
+```{python}
+subplot(1,2,1)
+mm, ss = ft.meancut(invn,3)
+mm = 5*ss
+imshow(invn, cmap='bwr', vmin=-mm, vmax=mm )
+colorbar()
+title('InvN')
+
+```
+
+```{python}
+invinvn = qss.cov2corr(np.linalg.inv(invn))
+
+subplot(1,2,1)
+mm, ss = ft.meancut(invn,3)
+mm = 5*ss
+imshow(invn, cmap='bwr', vmin=-mm, vmax=mm )
+colorbar()
+title('InvN')
+
+subplot(1,2,2)
+mm, ss = ft.meancut(invinvn,3)
+mm = 5*ss
+imshow(invinvn, cmap='bwr', vmin=-mm, vmax=mm )
+colorbar()
+title('N')
+
+```
+
+```{python}
+plot(np.ravel(angs), np.ravel(invinvn),',')
+plot(linspace(0,20,100), np.zeros(100), 'k:')
+xx, yy, dx, dy,_ = ft.profile(np.ravel(angs), np.ravel(invinvn), nbins=100)
+xlim(0,20)
+```
+
+# Now we loop over all detectors and do the same...
+
+```{python}
+# Dictionary
+d = qubic.qubicdict.qubicDict()
+
+# Only I, FI and 20000 ptgs
+d.read_from_file(os.environ['QUBIC_DICT']+'pipeline_demo.dict')
+d['nside'] = 64
+d['config'] = 'FI'
+d['kind'] = 'I'
+d['npointings'] = 10000
+
+# Instrument and scene
+q = qubic.QubicInstrument(d)
+q2 = qubic.QubicInstrument(d)
+
+# ### Let's select a detector
+# q.detector = q.detector[0]
+
+s = qubic.QubicScene(d)
+
+### Pointing 
+p = qubic.get_pointing(d)
+print(p.shape)
+
+### Convert the coverage to the right nside
+newcoverage = hp.ud_grade(coverage, d['nside'])
+newcoverage /= np.max(newcoverage)
+hp.mollview(newcoverage, sub=(1,2,1))
+
+okpix = newcoverage > 0.4
+print('Npix = {}'.format(np.sum(okpix)))
+
+#seenpixels = np.unique(A.matrix.data.index)
+seenpixels = np.arange(12*d['nside']**2)[okpix]
+testmap = np.zeros(12*d['nside']**2)
+testmap[seenpixels] = 1
+hp.mollview(testmap, sub=(1,2,2))
+
+print(len(seenpixels))
+
+mapindices = np.zeros(12*d['nside']**2, dtype=int)-1
+for k in range(len(seenpixels)):
+    if ((k//1000)*1000) == k:
+        print(k, len(seenpixels))
+    mapindices[seenpixels[k]] = k
+
+
+```
+
+```{python}
+invn = np.zeros((len(seenpixels), len(seenpixels)))
+for idet in range(len(q.detector)*0+30):
+    print('Detector: {} / {}'.format(idet, len(q.detector)))
+    numdet = np.random.randint(len(q.detector))
+    q2.detector = q.detector[numdet]
+    verb = False
+    if idet==0:
+        verb = True
+    invn += ninv_detector(q2, p, s, seenpixels, mapindices, verbose = verb, corr=False)
+```
+
+```{python}
+subplot(1,2,1)
+mm, ss = ft.meancut(invn,3)
+mm = 5*ss
+imshow(invn, cmap='bwr', vmin=-mm, vmax=mm )
+colorbar()
+title('InvN')
+
+```
+
+```{python}
+invinvn = qss.cov2corr(np.linalg.inv(invn))
+
+subplot(1,2,2)
+mm, ss = ft.meancut(invinvn,3)
+mm = 5*ss
+imshow(invinvn, cmap='bwr', vmin=-mm, vmax=mm )
+colorbar()
+title('N')
+
+```
+
+```{python}
+uv = np.array(hp.pix2vec(d['nside'], seenpixels))
+angs = np.degrees(np.arccos(np.dot(uv.T, uv)))
+plot(np.ravel(angs), np.ravel(invinvn),',')
+plot(linspace(0,20,100), np.zeros(100), 'k:')
+xx, yy, dx, dy,_ = ft.profile(np.ravel(angs), np.ravel(invinvn), nbins=100)
+xlim(0,20)
+ylim(-0.1, 0.1)
+```
+
+```{python}
+uv = np.array(hp.pix2vec(d['nside'], seenpixels))
+angs = np.degrees(np.arccos(np.dot(uv.T, uv)))
+plot(np.ravel(angs), np.ravel(invinvn),',')
+plot(linspace(0,20,100), np.zeros(100), 'k:')
+xx, yy, dx, dy,_ = ft.profile(np.ravel(angs), np.ravel(invinvn), nbins=100)
+xlim(0,20)
+ylim(-0.1, 0.1)
+```
+
+```{python}
+
+```

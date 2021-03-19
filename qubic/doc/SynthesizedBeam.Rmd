@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -457,7 +457,7 @@ ax[1].add_artist(leg);
 ax[1].grid()
 ax[1].tick_params(axis='both',bottom=True, top=True, left=True, right=True,direction='in')
 # B(\theta_{off})
-plt.savefig('/home/martin/QUBIC/qubic/qubic/scripts/Spectroimagery_paper/synth_beam_many_freq.pdf')
+# plt.savefig('/home/martin/QUBIC/qubic/qubic/scripts/Spectroimagery_paper/synth_beam_many_freq.pdf')
 ```
 
 ```{python}

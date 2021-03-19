@@ -150,14 +150,14 @@ class Chi2Minimizer(object):
 		self.extra_args = extra_args
  
 	def __call__(self, *pars, extra_args = None):
-		val = self.functname(self.x, *pars, extra_args = self.extra_args)
+		val = self.functname(self.x, pars, extra_args = self.extra_args)
 		chi2 = np.dot(np.dot(self.y - val, self.invcov), self.y - val)
 		return chi2
 
 class Chi2Implement(Chi2Minimizer):
-	def __init__(self, functname, x, y, covarin):
-		super().__init__(functname, x, y, covarin)
-		self.func_code = make_func_code(describe(functname)[1:-1])
+	def __init__(self, functname, x, y, covarin, extra_args=None):
+		super().__init__(functname, x, y, covarin, extra_args = extra_args)
+		self.func_code = make_func_code(describe(functname)[1:-2])
 
 class MyChi2_nocov:
 	"""
@@ -195,7 +195,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 	if chi2 is None:
 		chi2 = MyChi2(x, y, covar, functname, extra_args=extra_args)
 	else:
-		chi2 = Chi2Implement(functname, x, y, covar)
+		chi2 = Chi2Implement(functname, x, y, covar, extra_args=extra_args)
 
 		# nohesse=False
 	#elif chi2.__name__ is 'MyChi2_nocov':
@@ -249,13 +249,16 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 		m.migrad(ncall=ncallmax * nsplit, nsplit=nsplit, precision=precision)
 
 	elif isinstance(chi2, Chi2Implement):
-		if verbose:
-			print("Minimizer object: ", chi2.__dict__)
-			print("Guess: ", *guess)
-			print("ncallmax, nsplit, precision: ", ncallmax, nsplit, precision)	
-		m = iminuit.Minuit(chi2, *guess)
-		m.migrad(ncall = ncallmax * nsplit)
-
+		#if verbose:
+		#	print("Minimizer object: ", chi2.__dict__)
+		#	print("Guess: ", *guess)
+		#	print("ncallmax, nsplit, precision: ", ncallmax, nsplit, precision)	
+		# if iminuit.version==2.2
+		#m = iminuit.Minuit(chi2, *guess)
+		#m.migrad(ncall = ncallmax * nsplit)
+		#if iminuit.version==1.3
+		m  = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=0.1, print_level=print_level, **theargs)
+		m.migrad(ncall=ncallmax * nsplit, nsplit=nsplit, precision=precision)
 	# print('Migrad Done')
 	if minos:
 		try:

@@ -251,7 +251,7 @@ fsed._plot_exampleSED(dictionaries[2], centers[2], nus_out150, maskmaps[2])
 ```{python}
 #NEW (17 Feb 2021)
 reload(fsed)
-nside_new = 64
+nside_new = 32
 nf_recon = dictionaries[0]['nf_recon']
 
 maps_ud, std_ud, fgr_map_ud, noise_ud_i = fsed.udgrade_maps(fground_maps, noise, nside_new, nf_recon, nreals)
@@ -335,7 +335,7 @@ pixs_ud = [pixQ_ud, pixQ_ud, pixG_ud, pixG_ud]
 pixs_red = [pixQ_red, pixQ_red, pixG_red, pixG_red]
 nus_edge = [nus150, nus220, nus150, nus220]
 
-study = "dust"
+study = "dust+synch"
 
 if study == "dust":
     FuncModel = fsed.ThermDust_Planck353
@@ -346,7 +346,7 @@ elif study == "synch":
     p0 = np.array([1e1,-3])
 elif study == "dust+synch":
     FuncModel = fsed.DustSynch_model
-    p0 = np.array([1e4, 3, 1e2, -2.5])
+    p0 = np.array([1e4, 3, 1e2, -3])
     
     
 Chi2Model = None#"Chi2Implement"

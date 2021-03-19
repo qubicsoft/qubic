@@ -366,7 +366,7 @@ if simu:
 ```{python}
 # Plot the chi2 map 
 fig, ax = plt.subplots(figsize=(8, 8))
-c = ax.pcolor(np.rad2deg(all_th), all_fl, chi2_grid, vmin=0, vmax=1e56)#, norm=SymLogNorm(99e9))
+c = ax.pcolor(np.rad2deg(all_th), all_fl, chi2_grid, vmin=0, vmax=1e7)#, norm=SymLogNorm(99e9))
 ax.set_xlabel('Theta')
 ax.set_ylabel('Focal length')
 if simu:
@@ -410,7 +410,7 @@ if simu:
     print('Fake:', np.round(allP_fake, 4))
     print('Fake / Result:', np.round(allP_fake / result['x'][2:], 4))
     
-print('\nReduce Chi2:', result['fun']/(nimages * ndet))
+print('\nReduce Chi2:', result['fun']/(nimages * ndet -(ndet + nimages + 2)))
 ```
 
 #### Get the intercalibrations

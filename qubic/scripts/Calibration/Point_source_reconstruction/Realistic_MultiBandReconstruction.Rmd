@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.7.1
+      jupytext_version: 1.10.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -16,6 +16,72 @@ jupyter:
 #### J.-Ch. Hamilton heavily inspired by Martin Gamboa's notebook scanSource_oneDet.ipynb
 
 ```{python}
+'''
+directories where FITS files are found, and where output is written
+'''
+import os
+import datetime as dt
+now = dt.datetime.now()
+now_str = now.strftime('%Y%m%dT%H%M%S')
+
+top_dir = '/sps/hep/qubic' # in CC-IN2P3
+user_dir = 'Users/satorchi' 
+
+# where to write output
+out_dir = None
+if 'QUBIC_PEAKS' in os.environ.keys():
+    out_dir = os.environ['QUBIC_PEAKS']
+    if not os.path.isdir(out_dir): out_dir = None
+if out_dir is None:
+    out_dir = os.sep.join([top_dir,user_dir])
+    tmpfile_name = out_dir+os.sep+'temporary_file_to_check_read_write_%s.tmp' % now_str
+    try:
+        h = open(tmpfile_name,'wb')
+        h.close()
+        os.remove(tmpfile_name)
+    except:
+        out_dir = None
+if out_dir is None:
+    out_dir = os.environ['HOME']
+    
+if not os.path.isdir(out_dir):
+    print('Could not find a suitable directory for output: ',out_dir)
+
+
+# top_dir = '/home/martin/QUBIC/qubiccalibration/Data/Calib-TD/Files'
+# synthbeam_topdir = 'SynthesizedBeams'
+# synthbeam_subdir = ''
+
+synthbeam_topdir = 'Synthesized Beams'
+synthbeam_subdir = 'Synthesized_Beams_Files'
+
+fittedpeakfile = os.sep.join([top_dir,user_dir,synthbeam_topdir,'fitted_peaks.fits'])
+if not os.path.isfile(fittedpeakfile):
+    print('File not found: ',fittedpeakfile)
+    
+freq_subdir = {}
+freq_subdir[130] = '130GHz-2019-04-18'
+freq_subdir[140] = '140GHz-2019-04-10'
+freq_subdir[150] = '150GHz-2019-04-06'
+freq_subdir[170] = '170GHz-2019-04-14'
+
+freq_name = 150
+directory = os.sep.join([top_dir,user_dir,synthbeam_topdir,synthbeam_subdir,freq_subdir[freq_name]])
+
+if not os.path.isdir(directory):
+    print('Directory not found: ',directory)
+
+user_dir = 'Users/mmgamboa'
+fitted_directory = os.sep.join([top_dir,user_dir,freq_subdir[freq_name],'FitSB'])
+if not os.path.isdir(fitted_directory):
+    print('Directory not found: ',fitted_directory)
+
+```
+
+```{python}
+'''
+Import packages
+'''
 # %matplotlib inline
 # #%matplotlib notebook
 from matplotlib import rc
@@ -23,8 +89,11 @@ rc('figure', figsize=(15,8))
 rc('font', size=12)
 rc('text', usetex=False)
 rc('image', cmap='viridis')
+from matplotlib.pyplot import *
+import matplotlib.pyplot as plt
 
 import healpy as hp
+import numpy as np
 import pickle
 from importlib import reload
 
@@ -39,13 +108,8 @@ import qubic.selfcal_lib as sc
 
 # Import jchinstrument from ../
 import os,sys,inspect
-current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-parent_dir = os.path.dirname(current_dir)
-sys.path.insert(0, parent_dir) 
-import jchinstrument as jcinst
+from qubic import jchinstrument as jcinst
 
-
-global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
 ```
 
 ```{python}
@@ -300,7 +364,7 @@ def do_some_dets(detnums, d, directory, fittedpeaksfile, custom=False,
         else:
             peaknums = usepeaks
         data = [allthetas_Q[:,peaknums], allphis_Q[:,peaknums]-np.pi, allvals_Q[:,peaknums], numpeak]
-        file = open(os.environ['QUBIC_PEAKS']+'peaks.pk', 'wb')
+        file = open(out_dir+'/peaks.pk', 'wb')
         pickle.dump(data, file)
         file.close()
     
@@ -324,21 +388,21 @@ def do_some_dets(detnums, d, directory, fittedpeaksfile, custom=False,
         allimg.append(img)
         mm,ss = ft.meancut(img,3)
         c50 = np.cos(np.radians(50))
-        figure()
-        subplot(1,2,1)
-        imshow(img, vmin=mm-3*ss, vmax=mm+3*ss,
-               extent=[np.min(a)*c50, np.max(a)*c50, np.min(b), np.max(b)], aspect='equal')
-        colorbar()
-        title('TOD {}'.format(detnums[i]))
-        subplot(1,2,2)
-        imshow(img, vmin=mm-3*ss, vmax=mm+3*ss,
-               extent=[np.min(a)*c50, np.max(a)*c50, np.min(b), np.max(b)], aspect='equal')
-        plot(-np.degrees(allphis_M[i ,:]), 50+90-np.degrees(allthetas_M[i,:]), 'r+', ms=10, markeredgewidth=2)
+        fig = plt.figure()
+        plt.subplot(1,2,1)
+        plt.imshow(img, vmin=mm-3*ss, vmax=mm+3*ss,
+                   extent=[np.min(a)*c50, np.max(a)*c50, np.min(b), np.max(b)], aspect='equal')
+        plt.colorbar()
+        plt.title('TOD {}'.format(detnums[i]))
+        plt.subplot(1,2,2)
+        plt.imshow(img, vmin=mm-3*ss, vmax=mm+3*ss,
+                   extent=[np.min(a)*c50, np.max(a)*c50, np.min(b), np.max(b)], aspect='equal')
+        plt.plot(-np.degrees(allphis_M[i ,:]), 50+90-np.degrees(allthetas_M[i,:]), 'r+', ms=10, markeredgewidth=2)
         for k in range(len(np.degrees(allphis_M[idet,:]))):
-            text(-np.degrees(allphis_M[i,k])+0.3, 50+90-np.degrees(allthetas_M[i,k])+0.3,k, fontsize=15, weight='bold', color='r')
-        colorbar()
-        title('TOD {}'.format(detnums[i]))
-        show()
+            plt.text(-np.degrees(allphis_M[i,k])+0.3, 50+90-np.degrees(allthetas_M[i,k])+0.3,k, fontsize=15, weight='bold', color='r')
+        plt.colorbar()
+        plt.title('TOD {}'.format(detnums[i]))
+        plt.show()
         print('####################################################++++++++++++++++++++++')
         print('i={}'.format(i))
         print('####################################################++++++++++++++++++++++')
@@ -367,66 +431,66 @@ def do_some_dets(detnums, d, directory, fittedpeaksfile, custom=False,
 #     if verbose: print('Mapmaking QUBIC done in {} iterations with error: {}'.format(niter, error))
 
     ### new code multiband
-    figure()
+    fig = plt.figure()
     for i in range(len(detnums)):
-        plot(realTOD[i,:], label='TES#{0:}'.format(detnums[i]))
-    legend()
-    xlabel('Samples')
-    ylabel('TOD')
-    show()
+        plt.plot(realTOD[i,:], label='TES#{0:}'.format(detnums[i]))
+    plt.legend()
+    plt.xlabel('Samples')
+    plt.ylabel('TOD')
+    plt.show()
     
-    figure()
+    fig = plt.figure()
     for i in range(len(detnums)):
         spectrum_f, freq_f = ft.power_spectrum(np.arange(len(realTOD[i,:])), realTOD[i,:])
-        pl=plot(freq_f, spectrum_f, label='TES#{0:}'.format(detnums[i]), alpha=0.5)
-        xscale('log')
-        yscale('log')
-    legend()
-    xlabel('Fourier mode')
-    ylabel('Power Spectrum')
-    title('Before Filtering')
-    show()
+        pl=plt.plot(freq_f, spectrum_f, label='TES#{0:}'.format(detnums[i]), alpha=0.5)
+        plt.xscale('log')
+        plt.yscale('log')
+    plt.legend()
+    plt.xlabel('Fourier mode')
+    plt.ylabel('Power Spectrum')
+    plt.title('Before Filtering')
+    plt.show()
     
     for i in range(len(detnums)):
-        figure()
+        fig = plt.figure()
         if filtering: 
             realTOD[i,:] = ft.filter_data(np.arange(len(realTOD[i,:])), realTOD[i,:], lowcut, highcut)
         mm,ss = ft.meancut(realTOD[i,:],3)
         sigmaTOD[i] = ss 
-        subplot(1,2,1)
-        imshow(allimg[i] * fact, vmin=mm-3*ss, vmax=mm+3*ss,
-               extent=[np.min(a)*c50, np.max(a)*c50, np.min(b), np.max(b)], aspect='equal')
-        colorbar()
-        title('Init - TOD {0:} RMS={1:5.2g}'.format(detnums[i],sigmaTOD[i]))
-        subplot(1,2,2)
-        imshow(np.reshape(realTOD[i,:], np.shape(img)), vmin=mm-3*ss, vmax=mm+3*ss,
-               extent=[np.min(a)*c50, np.max(a)*c50, np.min(b), np.max(b)], aspect='equal')
-        colorbar()
-        title('Filtered - TOD {0:} RMS={1:5.2g}'.format(detnums[i],sigmaTOD[i]))
+        plt.subplot(1,2,1)
+        plt.imshow(allimg[i] * fact, vmin=mm-3*ss, vmax=mm+3*ss,
+                   extent=[np.min(a)*c50, np.max(a)*c50, np.min(b), np.max(b)], aspect='equal')
+        plt.colorbar()
+        plt.title('Init - TOD {0:} RMS={1:5.2g}'.format(detnums[i],sigmaTOD[i]))
+        plt.subplot(1,2,2)
+        plt.imshow(np.reshape(realTOD[i,:], np.shape(img)), vmin=mm-3*ss, vmax=mm+3*ss,
+                   extent=[np.min(a)*c50, np.max(a)*c50, np.min(b), np.max(b)], aspect='equal')
+        plt.colorbar()
+        plt.title('Filtered - TOD {0:} RMS={1:5.2g}'.format(detnums[i],sigmaTOD[i]))
 
     
-    figure()
+    fig = plt.figure()
     for i in range(len(detnums)):
         spectrum_f, freq_f = ft.power_spectrum(np.arange(len(realTOD[i,:])), realTOD[i,:])
-        pl=plot(freq_f, spectrum_f, label='TES#{0:} Var*2pi={1:5.2g}'.format(detnums[i],sigmaTOD[i]**2*2*np.pi), alpha=0.5)
-        plot(freq_f, freq_f*0+sigmaTOD[i]**2*2*np.pi, color=pl[0].get_color())
-        xscale('log')
-        yscale('log')
-    ylim(np.min(sigmaTOD**2*2*np.pi)/10000, np.max(sigmaTOD**2*2*np.pi)*10000)
-    legend()
-    xlabel('Fourier mode')
-    ylabel('Power Spectrum')
-    title('After Filtering')
+        pl=plt.plot(freq_f, spectrum_f, label='TES#{0:} Var*2pi={1:5.2g}'.format(detnums[i],sigmaTOD[i]**2*2*np.pi), alpha=0.5)
+        plt.plot(freq_f, freq_f*0+sigmaTOD[i]**2*2*np.pi, color=pl[0].get_color())
+        plt.xscale('log')
+        plt.yscale('log')
+    plt.ylim(np.min(sigmaTOD**2*2*np.pi)/10000, np.max(sigmaTOD**2*2*np.pi)*10000)
+    plt.legend()
+    plt.xlabel('Fourier mode')
+    plt.ylabel('Power Spectrum')
+    plt.title('After Filtering')
     if lowcut:
-        axvline(x=lowcut, color='k')
+        plt.axvline(x=lowcut, color='k')
     if highcut:
-        axvline(x=highcut, color='k')    
-    show()
+        plt.axvline(x=highcut, color='k')    
+    plt.show()
 
     
     
-    figure()
-    clf()
+    fig = plt.figure()
+    plt.clf()
     print('%%%%%%%%%%%%%%%%%%%%%%')
     ax=plt.subplot(111, projection='polar')
     
@@ -452,22 +516,16 @@ def do_some_dets(detnums, d, directory, fittedpeaksfile, custom=False,
 # INSTRUMENT
 ns = 256
 d = qubic.qubicdict.qubicDict()
-d.read_from_file(global_dir+'/dicts/global_source_oneDet_multiband.dict')
-#d.read_from_file(global_dir+'/dicts/pipeline_demo.dict')
+d.read_from_file('global_source_oneDet_multiband.dict')
+#d.read_from_file('pipeline_demo.dict')
 print(d['kind'])
 d['kind']='I'
 print(d['kind'])
 d['nside']=ns
 
-fittedpeakfile = '/home/martin/QUBIC/qubiccalibration/Data/Calib-TD/Files/SynthesizedBeams/fitted_peaks.fits'
-directory = '/home/martin/QUBIC/qubiccalibration/Data/Calib-TD/150GHz-2019-04-06'
-#fittedpeakfile = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/fitted_peaks.fits'
-#directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/150GHz-2019-04-06/'
-# directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/130GHz-2019-04-18/'
-# directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/170GHz-2019-04-14/'
-# directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/140GHz-2019-04-10/'
-
-
+'''
+directory is defined at the top of this script
+'''
 ```
 
 # TES locations and sub-instruments
@@ -546,7 +604,6 @@ title('Median over all S.B. images (renormalized)')
 ```
 
 ```{python}
-#fittedpeakfile = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/fitted_peaks.fits'
 peaks = np.array(FitsArray(fittedpeakfile))
 print(np.shape(peaks))
 maxpeakamps = np.max(peaks[:,2,:], axis=1)
@@ -592,10 +649,6 @@ plot(allnums[np.array(detsgood)-1], sumpeakamps[np.array(detsgood)-1]/maxpeakamp
 ```
 
 ```{python}
-import matplotlib.pyplot as plt
-```
-
-```{python}
 reload(dl)
 reload(sbfit)
 reload(jcinst)
@@ -606,18 +659,14 @@ reload(ft)
 # INSTRUMENT
 ns = 256
 d = qubic.qubicdict.qubicDict()
-d.read_from_file(global_dir+'/dicts/global_source_oneDet_multiband.dict')
-#d.read_from_file(global_dir+'/dicts/pipeline_demo.dict')
+d.read_from_file('global_source_oneDet_multiband.dict')
+#d.read_from_file('pipeline_demo.dict')
 print(d['kind'])
 d['kind']='I'
 print(d['kind'])
 d['nside']=ns
 
-#fittedpeakfile = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/fitted_peaks.fits'
-# directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/150GHz-2019-04-06/'
-#directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/130GHz-2019-04-18/'
-#fitted_directory = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/FitSB/'
-fitted_directory = "/home/martin/QUBIC/qubiccalibration/Data/Calib-TD/150GHz-2019-04-06/FitSB/"
+# relevant directories are defined at the top of this script
 # detnums = [5]  ### Works well
 # detnums = [7]  ### Works well alone but not with others apparently
 # detnums = [9]  ### bof
@@ -860,7 +909,9 @@ legend(loc='upper left')
 okpix = cov > 0.3
 all_maps_recon_custom_new_cut = all_maps_recon_custom_new.copy()
 all_maps_recon_custom_new_cut[:,~okpix] = 0
-figure()
+fig = figure(figsize=(32,32))
+rc('xtick', labelsize=40) 
+rcParams['font.size'] = 40
 maps = []
 for k in range(nf_sub_rec):
     okpix = all_maps_recon_custom_new_cut[k,:] != 0
@@ -875,18 +926,38 @@ for k in range(nf_sub_rec):
     maps.append(mymap)
 tight_layout()
 
-figure()
+# hack to fix text labels
+axes = fig.get_axes()
+for ax_idx,ax in enumerate(axes):
+    axelements = ax.get_children()
+    for el_idx,element in enumerate(axelements):
+        el_type = str(type(element))
+        #if el_type.find('Text')>=0:
+            #print(element.get_text())
+            #if element.get_text().find('nu')<0:
+             #   element.set_visible(False)
+        
+    
+    if ax_idx==0:
+        axelements[0].set_visible(True)
+        axelements[0].set_size(40)
+        
+
+        
+
+figure(figsize=(32,16))
 subplot(3,3,1)
 errorbar(nus,flux-fitg[1][0], yerr=err_flux, xerr=dnu, fmt='ro')
 plot(xxx, mygaussian(xxx, fitg[1])-fitg[1][0], label=r'Expected: $\nu_0$={0:} $\sigma=${1:3.1f} GHz'.format(nu0, thsig))
      #label=r'$\nu_0$={0:5.1f} +/- {1:5.1f}'.format(fitg[1][2], fitg[2][2])+'\n'+r'$\sigma$={0:5.1f} +/- {1:5.1f}'.format(fitg[1][3], fitg[2][3]))
 axhline(y=0,color='k', ls='--')
 #title('QUBIC Laboratory data')
-xlabel('Frequency', fontsize=14)
-ylabel('Source Flux', fontsize=14)
-ylim(-np.abs(np.min(flux-fitg[1][0])*1.3), np.max(flux-fitg[1][0])*1.3)
+xlabel('Frequency', fontsize=40)
+ylabel('Source Flux', fontsize=40)
+tick_params(axis='both',labelsize=40)
+ylim(-np.abs(np.min(flux-fitg[1][0])*1.3), np.max(flux-fitg[1][0])*1.5)
 xlim(130, 170)
-legend(loc='upper left')
+legend(loc='upper left',fontsize=20)
 tight_layout()
 
 
@@ -908,10 +979,6 @@ title('Correlation Matrix')
 ```
 
 ```{python}
-
-```
-
-```{python}
 # Run all individual TES
 ##########################
 
@@ -919,8 +986,8 @@ title('Correlation Matrix')
 # # INSTRUMENT
 # ns = 256
 # d = qubic.qubicdict.qubicDict()
-# d.read_from_file(global_dir+'/dicts/global_source_oneDet_multiband.dict')
-# #d.read_from_file(global_dir+'/dicts/pipeline_demo.dict')
+# d.read_from_file('global_source_oneDet_multiband.dict')
+# #d.read_from_file('pipeline_demo.dict')
 # print(d['kind'])
 # d['kind']='I'
 # print(d['kind'])

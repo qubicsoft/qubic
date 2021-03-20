@@ -15,6 +15,7 @@ from pylab import arange, show, cm
 from astropy import units as uq
 import gc
 from qubic import QubicSkySim as qss
+from qubic import NamasterLib as nam
 
 
 ### FGBuster functions module
@@ -44,7 +45,7 @@ def same_resol(map1, fwhm, fwhm_target=None, verbose=False) :
     for i in range(map1.shape[0]):
         delta_fwhm_deg = np.sqrt(myfwhm**2-fwhm[i]**2)
         if verbose:
-            print('Sub {0:}: Going from {1:5.2f} to {2:5.2f}'.format(i, fwhm[i], myfwhm))
+            print('Sub {0:}: Going from {1:5.12f} to {2:5.12f}'.format(i, fwhm[i], myfwhm))
         if delta_fwhm_deg != 0:
             delta_fwhm[i] = delta_fwhm_deg
             print('   -> Convolution with {0:5.2f}'.format(delta_fwhm_deg))
@@ -72,8 +73,63 @@ class CompSep(object) :
         self.nside = d['nside']
         self.npix = 12 * self.nside**2
         self.Nfin = int(d['nf_sub'])
+        self.lmin = 20
+        self.lmax = 2 * self.nside - 1
+        self.delta_ell = 16
     
-    def fg_buster(self, map1=None, comp=None, freq=None, fwhmdeg=None, target = None, okpix = None) :
+    def basic_2_tab(self, X, okpix) :
+    
+        """
+        --------
+    	inputs :
+    		- X : Dictionnary which come from "fg_buster" definition.
+    		- okpix : boolean array type which exclude the edges of the map.
+    	
+    	--------
+    	outputs :
+    		- X_array : Array type which contains all components. The form of these arrays is (nb_components, nfreq, nstokes, npix).
+    	
+    	"""
+
+        if X.s.shape[1] == 3 :
+           
+            X_array = np.zeros(((X.s.shape[0], self.Nfin, 3, self.npix)))
+
+            for i in range(X.s.shape[0]) :
+                for k in range(3) :
+                    for l in range(self.Nfin) :
+                        X_array[i, l, k, okpix] = X.s[i, k, :]
+
+        elif X.s.shape[1] == 2 :
+
+            X_arrayP = np.zeros(((X.s.shape[0], self.Nfin, 2, self.npix)))
+
+            for i in range(X.s.shape[0]) :
+                for l in range(self.Nfin) :
+                    X_arrayP[i, l, 0, okpix] = X.s[i, 0, :]
+                    X_arrayP[i, l, 1, okpix] = X.s[i, 1, :]
+
+            return X_arrayP
+
+        elif len(X.s) == 2 :
+
+            X_arrayT = np.zeros(((X.s.shape[0], self.Nfin, 1, self.npix)))
+
+            for i in range(X.s.shape[0]) :
+                for l in range(self.Nfin) :
+                    X_arrayT[i, l, 0, okpix] = X.s[i, :]
+
+            return X_arrayT
+
+        else :
+
+             raise TypeError('Incorrect Stokes parameter')
+    
+        
+                
+        return X_array   
+    
+    def fg_buster(self, map1=None, comp=None, freq=None, fwhmdeg=None, target = None, okpix = None, Stokesparameter = 'IQU') :
         
         """
         --------
@@ -92,7 +148,7 @@ class CompSep(object) :
         """
         
         ins = get_instrument('Qubic' + str(self.Nfin) + 'bands')
-        
+    
         
         # Change good frequency and FWHM
         ins.frequency = freq
@@ -100,60 +156,26 @@ class CompSep(object) :
         
         # Change resolution of each map if it's necessary
         map1, tab_fwhm, delta_fwhm = same_resol(map1, fwhmdeg, fwhm_target = target, verbose = True)
-        
-        # Apply FG Buster
-        r = basic_comp_sep(comp, ins, map1[:, :, okpix])
-        
-        return r
-        
-    def basic_2_tab(self, X, okpix) :
-    
-        """
-        --------
-    	inputs :
-    		- X : Dictionnary which come from "fg_buster" definition.
-    		- okpix : boolean array type which exclude the edges of the map.
-    	
-    	--------
-    	outputs :
-    		- tab_dust and/or tab_cmb : one or two array type which contains differents components. The form of these arrays is (nfreq, nstokes, npix).
-    	
-    	"""
 
-        X_array = np.zeros((((X.s.shape[0], self.Nfin, 3, self.npix))))
-    
-        for i in range(X.s.shape[0]) :
-            for j in range(self.Nfin) :
-                for k in range(3) :
-                    X_array[i, j, k, okpix] = X.s[i, k, :]
-                
-        return X_array
-        '''
-        if X.s.shape[0] == 1 :
-            tab_cmb = np.zeros(((self.Nfin, 3, self.npix)))
-        
-            for i in range(self.Nfin) :
-                for j in range(3) :
-                    tab_cmb[i, j, :] = X.s[0, j, :]
+        # Apply FG Buster
+
+        if Stokesparameter == 'IQU' :
            
-        
-        
-        
-        elif X.s.shape[0] == 2 :
-        	
-            tab_cmb = np.zeros(((self.Nfin, 3, self.npix)))
-            tab_dust = np.zeros(((self.Nfin, 3, self.npix)))
-            
-            for i in range(self.Nfin) :
-                for j in range(3) :
-                    tab_cmb[i, j, okpix] = X.s[0, j, :]
-                    tab_dust[i, j, okpix] = X.s[1, j, :]
-        
-            return tab_cmb, tab_dust
-            
+            r = basic_comp_sep(comp, ins, map1[:, :, okpix])
+
+        elif Stokesparameter == 'QU' :
+
+            r = basic_comp_sep(comp, ins, map1[:, 1:, okpix])
+
+        elif Stokesparameter == 'I' :
+
+            r = basic_comp_sep(comp, ins, map1[:, 0, okpix])
+
         else :
-            raise TypeError("Please enter the good number of component")
-        '''
+
+             raise TypeError('Incorrect Stokes parameter')
+
+        return r
         
     def internal_linear_combination(self, map1 = None, comp = None) :
 		

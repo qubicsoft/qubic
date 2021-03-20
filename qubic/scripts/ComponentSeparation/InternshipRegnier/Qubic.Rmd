@@ -60,7 +60,6 @@ import ComponentSeparation
 import Plots
 
 # Widgets
-
 import ipywidgets as widgets
 
 reload(qss)
@@ -174,12 +173,44 @@ a, nus_edge, nus_in, d, e, Nbbands_in = qubic.compute_freq(band, Nf, filter_rela
 ```
 
 ```{python}
-
+qub_dic['150']['dtheta'] = 50
 ```
 
 ```{python}
 ### Example of how it works ...
-q150, cov150 = coverage_func(qub_dic, nbands, False, 150, 3000)
+q150, cov150 = coverage_func(qub_dic, nbands, False, 150, 7000)
+```
+
+```{python}
+hp.mollview(cov150)
+```
+
+```{python}
+okpix_inside = (cov150 > (0.5*np.max(cov150)))
+okpix_qubic = np.loadtxt('mask_fgbuster')
+okpix_qubic = okpix_qubic != 0
+```
+
+```{python}
+maps = cov150.copy()
+maps[~okpix_qubic] = 0
+hp.mollview(maps)
+```
+
+```{python}
+hp.gnomview(maps, rot = center, reso = qub_dic['150']['dtheta'])
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 Here we define all frequencies and FWHM and we decide the noise level and if we integrate into band.
@@ -197,13 +228,13 @@ elif nbands == 5 :
 else :
     raise TypeError('Incorrect frequency number')
 
-fwhm_final = 0.50     # All maps will have this resolution
+fwhm_final = np.max(fwhmdegs) + 1e-10    # All maps will have this resolution
 
 verbose = False
 integration_into_band = True
-nunu_correlation = True
+nunu_correlation = False
 FWHMdeg = fwhmdegs
-spatial_noise = True
+spatial_noise = False
 nyears = 4e10
 ```
 
@@ -217,7 +248,7 @@ sky_config = {'dust': 'd0', 'cmb': seed}
 Qubic_sky_150 = qss.Qubic_sky(sky_config, d150)
 
 
-CMBdust, CMBdust_noiseless, CMBdust_noise, _ = Qubic_sky_150.get_partial_sky_maps_withnoise(coverage=cov150,
+CMBdust, CMBdust_noiseless, CMBdust_noise, P = Qubic_sky_150.get_partial_sky_maps_withnoise(coverage=cov150,
                                        Nyears=nyears, verbose=verbose, FWHMdeg=FWHMdeg, seed = 42,
                                        spatial_noise=spatial_noise,
                                        nunu_correlation=nunu_correlation,
@@ -252,26 +283,10 @@ dust, dust_noiseless, dust_noise, _ = Qubic_sky_150_dust.get_partial_sky_maps_wi
                                        Nyears=nyears, verbose=verbose, FWHMdeg=FWHMdeg, seed = 42,
                                        spatial_noise=spatial_noise,
                                        nunu_correlation=nunu_correlation,
-                                       integrate_into_band=integration_into_band
-                                            )
+                                       integrate_into_band=integration_into_band)
 dust = np.transpose(dust, (0, 2, 1))
 dust_noiseless = np.transpose(dust_noiseless, (0, 2, 1))
 dust_noise = np.transpose(dust_noise, (0, 2, 1))
-```
-
-```{python}
-sky_config = {'synchrotron': 's0'}
-Qubic_sky_150_sync = qss.Qubic_sky(sky_config, d150)
-
-sync, sync_noiseless, sync_noise, _ = Qubic_sky_150_sync.get_partial_sky_maps_withnoise(coverage=cov150,
-                                       Nyears=nyears, verbose=verbose, FWHMdeg=FWHMdeg, seed = 42,
-                                       spatial_noise=spatial_noise,
-                                       nunu_correlation=nunu_correlation,
-                                       integrate_into_band=integration_into_band
-                                            )
-sync = np.transpose(sync, (0, 2, 1))
-sync_noiseless = np.transpose(sync_noiseless, (0, 2, 1))
-sync_noise = np.transpose(sync_noise, (0, 2, 1))
 ```
 
 We put all maps at the same resolution to compare them.
@@ -287,37 +302,36 @@ cmb_same_resol, tab_fwhm, delta_fwhm = ComponentSeparation.same_resol(CMB_noisel
 ```
 
 ```{python}
-#sync_same_resol, tab_fwhm, delta_fwhm = ComponentSeparation.same_resol(sync_noiseless, fwhmdegs, 
-                                                                #fwhm_target = fwhm_final, verbose=True)
-```
-
-```{python}
 stk = ['I','Q','U']
+reso = qub_dic['150']['dtheta']
 jstk = 0
-
+maps = cmb_same_resol.copy()
+maps[:, :, okpix_qubic] = np.nan
 plt.rc('figure', figsize=(22, 10))
 itest = 0
+plt.figure(figsize = (16, 10))
 for i in range(len(freqs)):
-    hp.gnomview(CMB_noiseless[i,jstk,:]-CMB_noiseless[itest,jstk,:], rot=center, reso=17,
+    hp.gnomview(CMB_noiseless[i,jstk,:]-CMB_noiseless[itest,jstk,:], rot=center, reso=reso,
                 sub=(nbands,len(freqs),len(freqs)*i+1), min=-1, max=1,
                 title='$\Delta$CMBin {}-{} for {}'.format(i,itest,stk[jstk]))
-    hp.gnomview(cmb_same_resol[i,jstk,:]-cmb_same_resol[itest,jstk,:], rot=center, reso=17,
+    hp.gnomview(cmb_same_resol[i,jstk,:]-cmb_same_resol[itest,jstk,:], rot=center, reso=reso,
                 sub=(nbands,len(freqs),len(freqs)*i+2), min=-1, max=1,
                 title='$\Delta$CMBout {}-{} for {}'.format(i,itest,stk[jstk]))
+    hp.gnomview(maps[i,jstk,:]-maps[itest,jstk,:], rot=center, reso=reso,
+                sub=(nbands,len(freqs),len(freqs)*i+3), min=-1, max=1,
+                title='$\Delta$CMBout {}-{} for {}'.format(i,itest,stk[jstk]))
 plt.tight_layout()
+plt.show()
 ```
 
 This plot show different coverage, in green the initial coverage and in red a correction to take into account the bad convolution at the edges.
 
 ```{python}
-okpix_inside = (cov150 > (0.3*np.max(cov150)))
+maps = np.zeros(12*256**2)
+maps[okpix] = 1
+maps[okpix_qubic] = 2
 
-test = np.zeros(12*d150['nside']**2)
-test[okpix] = 1
-test[okpix_inside] = 2
-
-
-hp.gnomview(test, rot = center, reso = 17)
+hp.gnomview(maps, rot = center, reso = reso)
 ```
 
 ```{python}
@@ -327,27 +341,39 @@ reload(ComponentSeparation)
 We call here the **fg_buster** function from **ComponentSeparation.py** to separe components.
 
 ```{python}
-indf = 0 # Choose a frequency for Dust and Synchrotron effect
+okpix = cov150 != 0
+```
+
+```{python}
+indf = 0 # Choose a frequency for Dust
+Stkp = 'QU'
+okpix_maps = okpix_qubic.copy()
 
 R = ComponentSeparation.CompSep(d150).fg_buster(CMBdust, 
-        [CMB(), Dust(freqs[indf])], freq = freqs, fwhmdeg = fwhmdegs, 
-                                                target = fwhm_final, okpix = okpix_inside)
+        [CMB(), Dust(freqs[indf], temp = 20.)], freq = freqs, fwhmdeg = fwhmdegs, 
+                                                target = fwhm_final, okpix = okpix_maps, Stokesparameter = Stkp)
 ```
 
 To have an idea of the reconstruction quality, we show the $\beta_d$ and dust temperature which must be respectively $\beta_d = 1.54$ and $T = 20 K$
 
 ```{python}
-print(' \n beta_d = {:.5f} \n \n T = {:.5f}'.format(R.x[0], R.x[1]))
+print(' \n beta_d = {:.5f} \n'.format(R.x[0]))
+```
+
+```{python}
+reload(ComponentSeparation)
 ```
 
 We convert the R dictionary to arrays. The form of the final array is (Ncomp, Nfreq, Stokes, Npix) where Ncomp = 0 for the CMB, Ncomp = 1 for the dust and Ncomp = 2 for the synchrotron effect.
 
 ```{python}
 #cmb_est_fg, dust_est_fg = ComponentSeparation.CompSep(d150).basic_2_tab(R, okpix_inside)
-array_est_fg = ComponentSeparation.CompSep(d150).basic_2_tab(R, okpix_inside)
-cmb_same_resol[:, :, ~okpix_inside] = 0
-dust_same_resol[:, :, ~okpix_inside] = 0
-#sync_same_resol[:, :, ~okpix_inside] = 0
+array_est_fg = ComponentSeparation.CompSep(d150).basic_2_tab(R, okpix_maps)
+cmb_same_resol[:, :, ~okpix_qubic] = 0
+dust_same_resol[:, :, ~okpix_qubic] = 0
+
+array_est_fg[0][:, :, ~okpix_qubic] = 0
+array_est_fg[1][:, :, ~okpix_qubic] = 0
 ```
 
 ```{python}
@@ -355,47 +381,33 @@ array_est_fg.shape
 ```
 
 ```{python}
-Plots.Plots.diff_2_maps(cmb_same_resol, array_est_fg[0], okpix_inside, indf, center, 12, 'CMB', 'CMB est')
+reload(Plots)
 ```
 
 ```{python}
-Plots.Plots.diff_2_maps(dust_same_resol, array_est_fg[1], okpix_inside, indf, center, 12, 'Dust', 'Dust estimated')
+Plots.Plots.diff_2_maps(cmb_same_resol, array_est_fg[0], okpix_qubic, indf, center, 15,
+                                                                'CMB', 'CMB est', Stokesparameter = Stkp)
 ```
 
 ```{python}
-#Plots.Plots.diff_2_maps(sync_same_resol, array_est_fg[2], okpix_inside, indf, center, 12, 'Sync', 'Sync estimated')
+Plots.Plots.diff_2_maps(dust_same_resol, array_est_fg[1], okpix_qubic, indf, center, 15, 
+                                              'Dust', 'Dust estimated', Stokesparameter = Stkp)
 ```
 
 ```{python}
-Plots.Plots.diff_2_hist(cmb_same_resol, array_est_fg[0], okpix_inside, indf, 'CMB out', 'CMB in')
+ranges = [[-240, 240], [-5, 5], [-5, 5]]
+Plots.Plots.diff_2_hist(cmb_same_resol, array_est_fg[0], okpix_qubic, indf, 'CMB in', 'CMB out', 
+                        ranges = ranges, bins = 100, Stokesparameter = Stkp)
 ```
 
 ```{python}
-Plots.Plots.diff_2_hist(dust_same_resol, array_est_fg[1], okpix_inside, indf, 'Dust in', 'Dust out')
-```
-
-```{python}
-#Plots.Plots.diff_2_hist(sync_same_resol, array_est_fg[2], okpix_inside, indf, 'Sync in', 'Sync out')
+ranges = [[0, 20], [-1, 6], [-3, 2]]
+Plots.Plots.diff_2_hist(dust_same_resol, array_est_fg[1], okpix_qubic, indf, 'Dust in', 'Dust out', 
+                        ranges = ranges, bins = 100, Stokesparameter = Stkp)
 ```
 
 Here we plot all the results firstly for the reconstruction maps from FG-Buster algorithm and secondly for maps created by Qubic simulations (from **QubicSkySim.py**)
 
-```{python}
-reload(Plots)
-CMBdust[:, :, ~okpix_inside] = 0
-noise_est_fg = CMBdust - array_est_fg[0] - array_est_fg[1]
-Plots.Plots.all_components([array_est_fg[0], array_est_fg[1], noise_est_fg], indf, center, 15, ['CMB', 'Dust', 'Rest'], nb_component = 3)
-```
-
-```{python}
-reload(Plots)
-CMBdust[:, :, ~okpix_inside] = 0
-CMB_noiseless[:, :, ~okpix_inside] = 0
-dust_noiseless[:, :, ~okpix_inside] = 0
-#sync_noiseless[:, :, ~okpix_inside] = 0
-rest = CMBdust - CMB_noiseless - dust_noiseless 
-Plots.Plots.all_components([CMB_noiseless, dust_noiseless, rest], indf, center, 15, ['CMB', 'Dust', 'Rest'], nb_component = 3)
-```
 
 # Power spectrum
 
@@ -466,6 +478,11 @@ Namaster = nam.Namaster(mask, lmin=lmin, lmax=lmax, delta_ell=delta_ell)
 ell_binned, b = Namaster.get_binning(d150['nside'])
 mask_apo = Namaster.mask_apo
 Dls_binned = Namaster.bin_spectra(input_Dl[:, 0], d150['nside'])
+```
+
+```{python}
+hp.gnomview(mask_apo, rot = center, reso = 50)
+hp.gnomview(CMBdust[0, 0, :] * mask_apo, rot = center, reso = 25)
 ```
 
 ```{python}

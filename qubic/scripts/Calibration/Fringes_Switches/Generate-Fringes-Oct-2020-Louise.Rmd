@@ -154,7 +154,7 @@ for baseline in allBLs:
 #     print('fringes shape:', fringes.shape)
 ```
 
-## Analysis JC method
+## Fringes Analysis
 
 
 #### Analysis
@@ -198,15 +198,55 @@ for i, BL in enumerate(allBLs[:1]):
     allerr_fringes1D_percycle.append(err_fringes1D_percycle)
 ```
 
+## Make some plots
+
+#### Plot the fringes on the FP
+
 ```{python}
-# Time response
+k = 0
+cmap_bwr = flib.make_cmap_nan_black('bwr')
+
+fig, axs = plt.subplots(1, 2)
+ax1, ax2 = axs.ravel()
+# Scatter plot
+flib.plot_fringes_scatter(q, xTES, yTES, allfringes1D[k]* allmask_bad_TES[k], s=150, 
+                          fig=fig, ax=ax1, cmap=cmap_bwr)
+
+# Imshow after a convolution with Astropy (gaussian kernel)
+fringes2D = flib.make2Dfringes_data(allfringes1D[k] * allmask_bad_TES[k])
+fringes2D_conv = flib.astropy_convolution(fringes2D, sigma=0.7)
+flib.plot_fringes_imshow(fringes2D_conv, normalize=True, fig=fig, ax=ax2, cmap=cmap_bwr, 
+                         title='Gaussian convolution', mask=flib.make_mask2D_thermometers_TD())
+
+```
+
+#### Plot the fringes value as a function of the cycle
+
+```{python}
+k = 0
+ASIC = 1
+for TES in [70, 35, 95, 100]:
+    Fringes_Ana._plot_fringes_measurement_perTES(allfringes1D[k], 
+                                                 allerr_fringes1D[k], 
+                                                 allfringes1D_percycle[k], 
+                                                 allerr_fringes1D_percycle[k],
+                                                 TES=TES,
+                                                 ASIC=ASIC)
+
+```
+
+#### Plot time response with and without bad TES 
+
+```{python}
 ctimes = Fringes_Ana.ctimes
 plt.figure()
-plt.hist(np.ravel(ctimes), bins=15, alpha=0.4, label='Times response')
-plt.hist(np.ravel(ctimes)*Fringes_Ana.mask_bad_TES, bins=15, alpha=0.4, label='Times responses without bad det')
+plt.hist(np.ravel(ctimes), bins=15, alpha=0.4, label='with all TES')
+plt.hist(np.ravel(ctimes)*Fringes_Ana.mask_bad_TES, bins=15, alpha=0.4, label='without the 25% worst TES')
 plt.legend()
-plt.xlabel('Time response [s]')
+plt.xlabel('Time response [s]', fontsize=16)
 ```
+
+#### Look at some TODs
 
 ```{python}
 for TES in range(1):
@@ -215,101 +255,11 @@ for TES in range(1):
     plt.ylabel('TOD [A.U.]', fontsize=16)
 ```
 
+#### Look at the average made on each cycle for some TES
+
 ```{python}
 for TES in range(2):
     Fringes_Ana.plot_average_over_steps(m_points[TES], err_m_points[TES], Mcycles[TES], err_Mcycles[TES])
-```
-
-```{python}
-for TES in range(100, 102):
-    plt.figure()
-    plt.plot(m_points[TES, :, 0], label='step 1')
-    plt.plot(m_points[TES, :, 1], label='step 2')
-    plt.plot(m_points[TES, :, 2], label='step 3')
-    plt.legend()
-    plt.xlabel('Cycle index')
-    plt.ylabel('Step value')
-```
-
-```{python}
-fig, axs = plt.subplots(1, 2)
-ax1, ax2 = np.ravel(axs)
-ax1.hist(np.ravel(m_points[:, :, 2]), range=(-5000, 5000), bins=100, alpha=0.4, label='m_points')
-ax1.legend()
-ax2.hist(np.ravel(err_m_points[:, :, 2]), range=(0, 1000), bins=20, alpha=0.4, 
-         label='err_m_points 1st step')
-ax2.legend()
-
-fig, axs = plt.subplots(1, 2)
-ax1, ax2 = np.ravel(axs)
-ax1.hist(np.ravel(Mcycles[:, 1]), range=(-5000, 5000), bins=100, alpha=0.4, label='Mcycles')
-ax1.legend()
-ax2.hist(np.ravel(err_Mcycles[:, 1]), range=(0, 400), bins=20, alpha=0.4, 
-         label='err_Mcycles 1st step')
-ax2.legend()
-
-```
-
-```{python}
-TES = Fringes_Ana.refTESnum
-# print(Fringes_Ana.goodTES)
-for t in range(100, 104):#Fringes_Ana.goodTES:
-    ASIC = t//128 + 1
-    if t < 128:
-        TES = t+1
-    else:
-        TES = t-128+1
-    if Fringes_Ana.mask_bad_TES[t] == 1:
-        status = 'ok'
-    else:
-        status = 'bad'
-    err_plus = fringes1D[t] + err_fringes1D[t]
-    err_minus = fringes1D[t] - err_fringes1D[t]
-    meancut_mean, mean_cut_std = ft.meancut(fringes1D_percycle[t, :], nsig=3, med=False)
-    
-    plt.figure()
-    plt.title(f'TES {TES} - ASIC {ASIC} - Status {status}')
-#     plt.axhline(np.mean(fringes1D_percycle[t, :], axis=0), color='b', label='mean')
-    plt.axhline(np.median(fringes1D_percycle[t, :], axis=0), color='c', label='median')
-    plt.axhline(meancut_mean, color='m', label='mean cut')
-    plt.axhline(meancut_mean + mean_cut_std, color='m', linestyle='--')
-    plt.axhline(meancut_mean - mean_cut_std, color='m', linestyle='--')
-    
-    xx = np.arange(1, Fringes_Ana.ncycles + 1)
-    plt.errorbar(xx, fringes1D_percycle[t, :], 
-                 yerr=err_fringes1D_percycle[t, :], fmt='o', color='b', label='Fringes per cycle')
-    p = np.polyfit(xx, fringes1D_percycle[t, :], deg=3, w=1/err_fringes1D_percycle[t, :])
-    fit = p[0] * xx**3 + p[1] * xx**2 + p[2]*xx + p[3]
-    plt.plot(xx, fit, 'b', label='polynomial fit deg=3')
-    
-    plt.axhline(err_plus, color='r', linestyle='--')
-    plt.axhline(err_minus, color='r', linestyle='--')
-    plt.fill_between(np.arange(0.5, 21.5), err_minus, err_plus, facecolor='r', alpha=0.15 )
-    plt.axhline(fringes1D[t], color='r', label='Fringes on all cycles')
-    plt.xlabel('Cycle index')
-    plt.ylabel('Fringes value')
-    plt.xlim(0.5, 20.5)
-    plt.xticks(np.arange(1, Fringes_Ana.ncycles + 1))
-    plt.legend()
-    plt.ylim(-np.max(np.abs(fringes1D_percycle[t, :])) *1.2, np.max(np.abs(fringes1D_percycle[t, :])) *1.2)
-```
-
-```{python}
-k = 0
-cmap_bwr = flib.make_cmap_nan_black('bwr')
-
-fig, axs = plt.subplots(1, 2)
-ax1, ax2 = axs.ravel()
-
-# Imshow after a convolution with Astropy (gaussian kernel)
-fringes2D = flib.make2Dfringes_data(allfringes1D[k] * allmask_bad_TES[k])
-fringes2D_conv = flib.astropy_convolution(fringes2D, sigma=0.7)
-flib.plot_fringes_imshow(fringes2D_conv, normalize=True, fig=fig, ax=ax1, cmap=cmap_bwr, 
-                         title='Astropy convolution', mask=flib.make_mask2D_thermometers_TD())
-
-# Scatter plot
-flib.plot_fringes_scatter(q, xTES, yTES, allfringes1D[k]* allmask_bad_TES[k], s=150, 
-                          fig=fig, ax=ax2, cmap=cmap_bwr)
 ```
 
 ## Save the data
@@ -401,44 +351,4 @@ Fringes_Ana = flib.FringesAnalysis(datasets[img], date, q, BL, stable_time=5., n
                                    sigma_conv_astropy=0.7, sort_TES=False, verbose=True)
 for ibad in range(nbad):
     Fringes_Ana.plot_TOD(ASIC=badTES[ibad, 1], TES=badTES[ibad, 0])
-```
-
-#### Find good TES by hand (old code)
-
-```{python}
-# i = 13
-# # print(datasets[i])
-# BL = allBLs[i]
-# print(BL)
-# Fringes_Ana = flib.FringesAnalysis(datasets[i], date, q, BL, verbose=True)
-# for t in range(80, 128):
-#     Fringes_Ana.plot_TOD(1, t+1, xlim=100, figsize=(6,3))
-```
-
-```{python}
-# gtes0 = [2, 57, 58, 59, 70, 94, 95, 96, 99, 107]
-# gtes1 = [2, 6, 38, 40, 53, 57, 58, 81, 94, 96, 106, 107, 110, 111]
-# gtes2 = [2, 40, 58, 70, 93, 96, 99]
-# gtes3 = [2, 40, 57, 58, 59, 70, 94, 95, 96, 107]
-# gtes4 = [2, 58, 81, 95, 96, 99]
-# gtes5 = [2, 6, 58, 59, 70, 96, 99, 107]
-# gtes6 = [58, 59, 94, 99, 107, 111]
-# gtes7 = [2, 6, 10, 19, 27, 58, 59, 90, 93, 94, 99, 106, 111]
-# gtes8 = [10, 17, 19, 27, 33, 40, 57, 58, 59, 74, 93, 106, 111]
-# gtes9 = [2, 10, 16, 28, 33, 35, 58, 61, 63, 64, 70, 74, 99, 106, 107, 111]
-# gtes10 = [3, 27, 55, 58, 59, 69, 93, 94, 99]
-# gtes11 = [17, 69, 93]
-
-# for t in gtes6:
-#     Fringes_Ana.plot_TOD(1, t, xlim=600, figsize=(6,3))
-
-```
-
-```{python}
-# refTES = [70, 58, 58, 2, 58, 58, 99, 58, 93, 106, 58, 69] 
-
-# for i, TES in enumerate(refTES):
-#     BL = allBLs[i]
-#     Fringes_Ana = flib.FringesAnalysis(datasets[i], date, q, BL, verbose=True)
-#     Fringes_Ana.plot_TOD(1, TES, xlim=600, figsize=(6,3))
 ```

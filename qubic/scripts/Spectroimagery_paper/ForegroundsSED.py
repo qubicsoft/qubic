@@ -424,6 +424,38 @@ def Synchrotron_Planck_pointer(x, *pars, extra_args = None ):
 
 	return pars[0] * 1e5 * (x / pars[1]) ** (- pars[2])
 
+def DustSynch_model(x, pars, extra_args = None):
+	c0 = pars[0]
+	c1 = pars[1]
+	T = 19.6
+	nu0 = 353
+	bnu = Bnu(x, T)
+	
+	c2 = pars[2]
+	c3 = pars[3]
+
+	h = scipy.constants.h
+	c = scipy.constants.c
+	k = scipy.constants.k
+
+	return c0 * 1e18 * bnu * (x / nu0) ** (c1 / 2) +  c2 * 1e10 * x ** (- c3)
+
+def DustSynch_model_pointer(x, *pars, extra_args = None):
+	c0 = pars[0]
+	c1 = pars[1]
+	T = 19.6
+	nu0 = 353
+	bnu = Bnu(x, T)
+	
+	c2 = pars[2]
+	c3 = pars[3]
+	#c4 = pars[4] 
+	h = scipy.constants.h
+	c = scipy.constants.c
+	k = scipy.constants.k
+
+	return pars[0] * 1e18 * bnu * (x / nu0) ** (pars[1] / 2) + pars[2] * 1e10 * x ** (- pars[3])
+
 def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 		   maxfev = 10000, initP0 = None, verbose = False, chi2 = None,
 		  nsamples = 5000, new = False):
@@ -506,7 +538,6 @@ def udgrade_maps(fground_maps, noise, new_nside, nf_recon, nreals):
 	It returns foreground maps UD-graded, std (useless) and noise maps UD-graded for each noise realization
 	"""
 	
-	new_nside = 64
 	npix_ud = 12 * new_nside **2 
 
 	fgr_map_ud = np.zeros((len(fground_maps), nf_recon, npix_ud, 3))
@@ -526,7 +557,7 @@ def udgrade_maps(fground_maps, noise, new_nside, nf_recon, nreals):
 	return maps_ud, std_ud, fgr_map_ud, noise_ud_i
 
 def make_fit_SED(xSED, xarr, Imvals, Isvals, FuncModel, fgr_map_ud, pixs_ud, nf_recon, 
-				initP0 = None):
+				initP0 = None, maxfev = 1000):
 
 
 	# NEW (18 Feb 2021)
@@ -552,7 +583,7 @@ def make_fit_SED(xSED, xarr, Imvals, Isvals, FuncModel, fgr_map_ud, pixs_ud, nf_
 				#print("curve_fit", curve_fit(f = FuncModel, xdata = xSED[j], 
 				#							ydata = ySED[j,:,icomp], p0 = initP0)[0],)
 				auxpopt, auxcov = curve_fit(f = FuncModel, xdata = xSED[j], 
-											ydata = ySED[j, :, icomp], p0 = initP0)
+											ydata = ySED[j, :, icomp], p0 = initP0, maxfev = maxfev)
 				print("auxpopt, auxpcov", auxpopt, auxcov)
 				popt[j, :, icomp], pcov[j, :, :, icomp] = auxpopt, auxcov
 				#print("==== Parameters for optimization (SED fitting)")
@@ -561,7 +592,7 @@ def make_fit_SED(xSED, xarr, Imvals, Isvals, FuncModel, fgr_map_ud, pixs_ud, nf_
 				ySED[j, :, icomp] = np.sqrt(fgr_map_ud[j][:,pixs_ud[j], 1] ** 2 + \
 											fgr_map_ud[j][:,pixs_ud[j], 2] ** 2)
 				auxpopt, auxcov = curve_fit(f = FuncModel, xdata = xSED[j], 
-											ydata = ySED[j, :, icomp], p0 = initP0)
+											ydata = ySED[j, :, icomp], p0 = initP0, maxfev = maxfev)
 				popt[j, :, icomp], pcov[j, :, :, icomp] = auxpopt, auxcov
 
 	ySED_fit = np.zeros((len(fgr_map_ud), len(xarr[0]), 2 ))

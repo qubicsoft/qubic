@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.6.0rc0
+      jupytext_version: 1.4.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -113,6 +113,35 @@ print(len(qtest))
 Make coverage..
 
 ```{python}
+#Added by JCH 19/03/2021 -> creatd the files
+# 			["doc/FastSimulator/Data/DataFastSimulator_FI150Q_coverage.fits'",
+# 			 "doc/FastSimulator/Data/DataFastSimulator_FI220Q_coverage.fits'",
+# 			 "doc/FastSimulator/Data/DataFastSimulator_FI150G_coverage.fits'",
+# 			 "doc/FastSimulator/Data/DataFastSimulator_FI220G_coverage.fits'" ]
+# from the files with the same name but extension .npy that are in. the same directory...
+
+from pysimulators import FitsArray
+files = ["doc/FastSimulator/Data/DataFastSimulator_FI150Q_coverage",
+         "doc/FastSimulator/Data/DataFastSimulator_FI220Q_coverage",
+         "doc/FastSimulator/Data/DataFastSimulator_FI150G_coverage",
+         "doc/FastSimulator/Data/DataFastSimulator_FI220G_coverage" ]
+
+for f in files:
+    fnpy = global_dir+'/'+f+'.npy'
+    ffits = global_dir+'/'+f+'.fits'
+    if len(glob.glob(ffits))==0:
+        print('{} does not exist, creating it from the npy'.format(ffits))
+        if len(glob.glob(fnpy))==0:
+            print('npy files {} does exist either...'.format(fnpy))
+        else:
+            print('Reading {}'.format(fnpy))
+            cov = np.load(fnpy)
+            print('Writing the fits file')
+            FitsArray(cov).save(ffits)
+
+```
+
+```{python}
 # NEW  16 Feb 2021
 reload(fsed)
 regions = ['Qubic_field', 'GalCen_field']
@@ -138,7 +167,7 @@ fground_maps = fsed.foreground_signal(dictionaries, sky_conf)
 ```{python}
 # NEW (16 Feb 2021)
 reload(fsed)
-nreals = 40
+nreals = 4
 noise = fsed.noise_qss(dictionaries, sky_conf, coveragesmaps, nreals, verbose = False) 
 
 ```
@@ -332,11 +361,17 @@ pixs_ud = [pixQ_ud, pixQ_ud, pixG_ud, pixG_ud]
 pixs_red = [pixQ_red, pixQ_red, pixG_red, pixG_red]
 nus_edge = [nus150, nus220, nus150, nus220]
 
-#FuncModel = fsed.Synchrotron_Planck
-FuncModel = fsed.ThermDust_Planck353
+study = "dust"
+
+if study == "dust":
+    FuncModel = fsed.ThermDust_Planck545
+    p0 = np.array([1e3,3])
+elif study == "synch":
+    FuncModel = fsed.Synchrotron_Planck
+    p0 = np.array([1e1,20,-3])
+
 Chi2Model = "Chi2Implement"
-p0 = [50,3]
-#FuncModel = {'freedust': DustModel}
+
 reload(qubic)
 Imvals, Isvals, xarr, flat_samples = fsed.foregrounds_run_mcmc(dictionaries, fgr_map_ud, Cp_prime, FuncModel,
                                                 nus_out, nus_edge, pixs_ud, 
@@ -348,30 +383,30 @@ Imvals, Isvals, xarr, flat_samples = fsed.foregrounds_run_mcmc(dictionaries, fgr
 #plt.hist(flat_samples[0,:,0], bins = 20, histtype="step")
 plt.xlabel("c0")
 plt.ylabel("c1")
-plt.hist2d(flat_samples[0,:,0], flat_samples[0,:,1], bins = 20, )
+plt.hist2d(flat_samples[0,:,0], flat_samples[0,:,1], bins = 60, cmap = "Purples")
 ```
 
 ```{python}
 #See pasrametric model
-frg = "synch" #"dust"
 xrange = np.arange(50,1100)
 ax = plt.subplot(111)
 ax.set_xscale("log")
 ax.set_yscale("log")
 ax.set_xlabel(r"$\nu$[GHz]")
-ax.set_xticks([50,100,1000])
-ax.set_xticklabels(['50', '100', '1000'])
-ax.set_title ("Free dust")
-if frg == "dust":
-    ax.plot(xrange, FuncModel(xrange, 100, 1,), 'r-', label = "A = 100, b = 1")
-    ax.plot(xrange, FuncModel(xrange, 100, 1.5, ), 'y-', label = "A = 100, b = 1.5")
-    ax.plot(xrange, FuncModel(xrange, 100, 1.5, ), 'g-', label = "A = 100, b = 1.5")
-    ax.plot(xrange, FuncModel(xrange, 100, 1.5, ), 'c-', label = "A = 100, b = 1")
-    ax.plot(xrange, FuncModel(xrange, 100, 2., ), 'b-', label = "A = 100, b = 2")
-else:
-    ax.plot(xrange, FuncModel(xrange, 30, - 3), 'r-', label = "A = 30, b = -3")
-    ax.plot(xrange, FuncModel(xrange, 30, - 2), 'y-', label = "A = 30, b = -2")
-    ax.plot(xrange, FuncModel(xrange, 30, - 1), 'g-', label = "A = 30, b = -1")
+if study == "dust":
+    ax.set_xticks([50,100,1000])
+    ax.set_xticklabels(['50', '100', '1000'])
+    ax.set_title ("Free dust")
+    ax.plot(xrange, FuncModel(xrange, [100, 1],), 'r-', label = "A = 100, b = 1")
+    ax.plot(xrange, FuncModel(xrange, [100, 1.5], ), 'y-', label = "A = 100, b = 1.5")
+    ax.plot(xrange, FuncModel(xrange, [100, 1.5], ), 'g-', label = "A = 100, b = 1.5")
+    ax.plot(xrange, FuncModel(xrange, [100, 1.5], ), 'c-', label = "A = 100, b = 1")
+    ax.plot(xrange, FuncModel(xrange, [100, 2.], ), 'b-', label = "A = 100, b = 2")
+elif study == "synch":
+    ax.set_title ("Synchrotron")
+    ax.plot(xrange, FuncModel(xrange, [30, 20, - 3]), 'r-', label = "A = 30 nu0 = 20 b = -3")
+    ax.plot(xrange, FuncModel(xrange, [30, 20,- 2]), 'y-', label = "A = 30 nu0 = 20 b = -2")
+    ax.plot(xrange, FuncModel(xrange, [30, 20, - 1]), 'g-', label = "A = 30 nu0 = 20 b = -1")
 #ax.plot(xrange, FuncModel(xrange, 100, 1.55, T = 23), 'k-', label = "Best fit-Planck")
 ax.axvspan(130, 170, ymin = 0, ymax = ax.get_ylim()[-1], color = 'k', alpha = 0.2)
 ax.axvspan(210, 260, ymin = 0, ymax = ax.get_ylim()[-1], color = 'k', alpha = 0.2)
@@ -390,8 +425,15 @@ reload(fsed)
 
 xSED = [nus_out150, nus_out220, nus_out150, nus_out220]
 
+if study == "dust":
+    FuncPoint = fsed.ThermDust_Planck545_pointer
+elif study == "synch":
+    #FuncPoint = fsed.Synchrotron_storja_pointer
+    FuncPoint = fsed.Synchrotron_Planck_pointer
+    
 ySED_fit, Pmean, Perr = fsed.make_fit_SED(xSED, xarr, Imvals, Isvals,
-                                          FuncModel, fgr_map_ud, pixs_ud, nf_recon)
+                                          FuncPoint, fgr_map_ud, pixs_ud, nf_recon, 
+                                          initP0 = p0)
 ```
 
 #NEW (17 Feb 2021)

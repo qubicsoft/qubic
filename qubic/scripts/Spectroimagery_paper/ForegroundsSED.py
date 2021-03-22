@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 #
 # Author: Martín M. Gamboa Lerena.
 # Date: Feb 15th 2021
@@ -286,8 +287,8 @@ def _mask_maps(maps, coverages, nf_recon):
 
 	return maps, cov
 
-###################### preparing MCMC runs
-#from lmfit import Model
+# ##################### preparing MCMC runs
+# from lmfit import Model
 
 def LinModel(x, a, b):
 	return a + x**b
@@ -302,10 +303,12 @@ def Bnu(nuGHz, temp):
 	nu = nuGHz * 1e9
 	return 2 * h * nu ** 3 / c ** 2 / (np.exp(h * nu / k / temp ) - 1 )
 
-def ThermDust_Planck353(x, c0, c1, extra_args = None):
+def ThermDust_Planck353(x, pars, extra_args = None):
 	"""
 
 	"""
+	c0 = pars[0]
+	c1 = pars[1]
 	T = 19.6
 	nu0 = 353
 	bnu = Bnu(x, T)
@@ -314,7 +317,13 @@ def ThermDust_Planck353(x, c0, c1, extra_args = None):
 	#return a * bnu / bnu0 * (x / nu0) ** (b / 2)
 	return c0 * 1e18 * bnu * (x / nu0) ** (c1 / 2)
 
-def ThermDust_Planck545(x, A, b, T = 23, extra_args = None):
+def ThermDust_Planck353_pointer(x, *pars, extra_args = None):
+	T = 19.6
+	nu0 = 353
+	bnu = Bnu(x, T)
+	return pars[0] * 1e18 * bnu * (x / nu0) ** (pars[1] / 2)
+
+def ThermDust_Planck545(x, pars, extra_args = None):
 	"""
 	Three parameter model for thermal dust [ arXiv:1502.01588]:
 		s_d = A_d * (nu / nu0)**(b_d+1) * [(exp(gamma*nu0)-1) / (exp(gamma*nu)-1) ]
@@ -329,17 +338,29 @@ def ThermDust_Planck545(x, A, b, T = 23, extra_args = None):
 		T --> T_d: temperature
 		x --> nu [GHz] array
 	"""
-
+	A = pars[0]
+	b = pars[1]
+	
+	T = 23
 	h = scipy.constants.h
 	k = scipy.constants.k
 	nu0 = 545 #GHz
 
 	gamma = h / k / T
-	#exp = lambda nu: np.exp(gamma * nu) - 1
 
 	return A * (x / nu0) ** (b + 1) * (np.exp(gamma * nu0) - 1)/(np.exp(gamma * x) - 1)
 
-def Synchrotron_storja(x, c0, c1, extra_args = None):
+def ThermDust_Planck545_pointer(x, *pars, extra_args = None):
+	T = 23
+	h = scipy.constants.h
+	k = scipy.constants.k
+	nu0 = 545 #GHz
+
+	gamma = h / k / T
+
+	return pars[0] * (x / nu0) ** (pars[1] + 1) * (np.exp(gamma * nu0) - 1)/(np.exp(gamma * x) - 1)
+
+def Synchrotron_storja(x, pars, extra_args = None):
 	"""
 	Two parameter model for Synchrotron effect [ arXiv:1502.01588] and [arxiv: 1108.4822] (Strong, Orlando & Jaffe):
 
@@ -364,16 +385,22 @@ def Synchrotron_storja(x, c0, c1, extra_args = None):
 
 
 	"""
+
+	c0 = pars[0]
+	c1 = pars[1]
+
 	h = scipy.constants.h
 	c = scipy.constants.c
 	k = scipy.constants.k
-
-	#I = lambda nu: 
-	#b = (p + 3) / 2
-
 	return c0 * 1e10 * x ** (- c1)
- 
-def Synchrotron_Planck(x, c0, c1, c2, extra_args = None ):
+
+def Synchrotron_storja_pointer(x, *pars, extra_args = None):
+	h = scipy.constants.h
+	c = scipy.constants.c
+	k = scipy.constants.k
+	return pars[0] * 1e10 * x ** (- pars[1])
+
+def Synchrotron_Planck(x, pars, extra_args = None ):
 	"""
 	x: frequency array [in GHz]
 	A: Amplitude [in uK?]
@@ -381,15 +408,24 @@ def Synchrotron_Planck(x, c0, c1, c2, extra_args = None ):
 	b: spectral index
 	"""
 	
+	c0 = pars[0]
+	c1 = pars[1]
+	c2 = pars[2] 
 	h = scipy.constants.h
 	c = scipy.constants.c
 	k = scipy.constants.k
 
-	
 	return c0 * 1e5 * (x / c1) ** (- c2)
 
+def Synchrotron_Planck_pointer(x, *pars, extra_args = None ):
+	h = scipy.constants.h
+	c = scipy.constants.c
+	k = scipy.constants.k
+
+	return pars[0] * 1e5 * (x / pars[1]) ** (- pars[2])
+
 def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
-		   maxfev = 10000, verbose = False, initP0 = None, chi2 = None,
+		   maxfev = 10000, initP0 = None, verbose = False, chi2 = None,
 		  nsamples = 5000, new = False):
 	
 	if new:
@@ -405,15 +441,16 @@ def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 
 		popt = list(fit_par.best_values.values())
 	else:
-		popt, pcov = curve_fit(FuncModel, nus, maps[:, pix, istk], 
-								sigma = covMat[:, :, istk, pix_red], absolute_sigma=True,
-								maxfev = maxfev, p0 = initP0)
-		#popt = initP0
+		#popt, pcov = curve_fit(FuncModel, nus, maps[:, pix, istk], 
+		#						sigma = covMat[:, :, istk, pix_red], absolute_sigma=True,
+		#						maxfev = maxfev, p0 = initP0)
+		popt = initP0
+
 	if verbose:
 		print("Calling LogLikelihood", popt, pcov)
 		print("xvals, yvals", nus, maps[:, pix, istk])
-	myfit = mcmc.LogLikelihood(xvals = nus, yvals = maps[:, pix, istk], 
-							   errors = covMat[:, :, istk, pix_red], chi2 = chi2,
+	myfit = mcmc.LogLikelihood(xvals = nus, yvals = maps[:, pix, istk], chi2 = chi2,
+							   errors = covMat[:, :, istk, pix_red], 
 							   model = FuncModel, p0 = popt)
 	#print("myfit info: " )
 	fit_prep = myfit.run(nsamples)
@@ -427,13 +464,13 @@ def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 	vals = np.zeros((len(x), nspls))
 	for i in range(len(x)):
 		for j in range(nspls):
-			vals[i, j] = FuncModel(x[i], *flat_samples[j, :])
+			vals[i, j] = FuncModel(x[i], flat_samples[j, :])
 	
 	mvals = np.mean(vals, axis=1)
 	svals = np.std(vals, axis=1)
 	
 	return mvals, svals, x, flat_samples
-	
+
 
 def foregrounds_run_mcmc(dictionaries, fgr_map, Cp_prime, FuncModel,
 					nus_out, nus_edge, pixs, pixs_red = None, chi2 = None,
@@ -443,19 +480,19 @@ def foregrounds_run_mcmc(dictionaries, fgr_map, Cp_prime, FuncModel,
 	MeanVals = np.zeros((len(dictionaries), samples//2, 3))
 	StdVals = np.zeros((len(dictionaries), samples//2, 3))
 	xarr = np.zeros((len(dictionaries), samples//2, 3))
-	_flat_samples = np.zeros((len(dictionaries), 2496, 2))
+	_flat_samples = np.zeros((len(dictionaries), 2496, len(initP0)))
 
 	for istk in range(3):
 		if verbose: print("======== Doing {} Stokes parameter =============".format(dictionaries[0]['kind'][istk]))
 		for j in range(len(dictionaries)):
 			
-			if verbose: print(np.shape(dictionaries), np.shape(fgr_map[j]), np.shape(Cp_prime[j]), np.shape(nus_out[j]), 
+			if verbose: 
+				print(np.shape(dictionaries), np.shape(fgr_map[j]), np.shape(Cp_prime[j]), np.shape(nus_out[j]), 
 							np.shape(nus_edge[j])) 
-			print("initP0 ", initP0)
+				print("initP0 ", initP0)
 			MeanVals[j, :, istk], StdVals[j, :, istk], xarr[j, :, istk], _flat_samples[j] = \
 														PixSED_Xstk(nus_out[j], fgr_map[j], FuncModel, 
-																	pixs[j], pixs_red[j], 
-																	istk, Cp_prime[j], nus_edge[j], 
+																	pixs[j], pixs_red[j], istk, Cp_prime[j], nus_edge[j], 
 																	chi2 = chi2, initP0 = initP0, nsamples = samples)
 	print('Done in {:.2f} min'.format((time.time()-t0)/60 ))
 
@@ -488,19 +525,22 @@ def udgrade_maps(fground_maps, noise, new_nside, nf_recon, nreals):
 
 	return maps_ud, std_ud, fgr_map_ud, noise_ud_i
 
-def make_fit_SED(xSED, xarr, Imvals, Isvals, FuncModel, fgr_map_ud, pixs_ud, nf_recon):
+def make_fit_SED(xSED, xarr, Imvals, Isvals, FuncModel, fgr_map_ud, pixs_ud, nf_recon, 
+				initP0 = None):
 
 
 	# NEW (18 Feb 2021)
 	ErrBar2 = lambda Q, U, Qerr, Uerr: np.sqrt( Q ** 2 * Qerr ** 2 + U ** 2 * Uerr ** 2) / \
 					np.sqrt( Q ** 2 + U ** 2)
 	
-	gmodel = Model(FuncModel, independent_vars=['x'])
+	#if not hasattr(initP0, '__len__'):
+	#	raise ValueError("{}: You have to provide the init, otherwise curve_fit cannot \
+	#				determine the number of parameters".format(FuncModel._name__))
 
 	# last dimenssion ==2 because polarization is P = sqrt(Q**2 + U**2)
 	ySED = np.zeros((len(fgr_map_ud), nf_recon, 2))
-	popt = np.zeros((len(fgr_map_ud), len(gmodel.param_names), 2))
-	pcov = np.zeros((len(fgr_map_ud), len(gmodel.param_names), len(gmodel.param_names), 2))
+	popt = np.zeros((len(fgr_map_ud), len(initP0), 2))
+	pcov = np.zeros((len(fgr_map_ud), len(initP0), len(initP0), 2))
 	#With polarization
 
 	# Modeling fit to map values
@@ -508,17 +548,24 @@ def make_fit_SED(xSED, xarr, Imvals, Isvals, FuncModel, fgr_map_ud, pixs_ud, nf_
 		for j in range(len(fgr_map_ud)):
 			if icomp == 0:
 				ySED[j, :, icomp] = fgr_map_ud[j][:,pixs_ud[j],0]
-				print("FuncModel,xSED, ySED", FuncModel, xSED[j], ySED[j,:,icomp])
-				print("curve_fit", curve_fit(FuncModel, xSED[j], ySED[j,:,icomp])[0])
-				auxpopt, auxcov = curve_fit(FuncModel, xSED[j], ySED[j, :, icomp])
-				popt[j, :, icomp], pcov[j, :, :, icomp] = auxpopt[:-1], auxcov[:-1,:-1]
+				#print("FuncModel,xSED, ySED", FuncModel, xSED[j], ySED[j,:,icomp])
+				#print("curve_fit", curve_fit(f = FuncModel, xdata = xSED[j], 
+				#							ydata = ySED[j,:,icomp], p0 = initP0)[0],)
+				auxpopt, auxcov = curve_fit(f = FuncModel, xdata = xSED[j], 
+											ydata = ySED[j, :, icomp], p0 = initP0)
+				print("auxpopt, auxpcov", auxpopt, auxcov)
+				popt[j, :, icomp], pcov[j, :, :, icomp] = auxpopt, auxcov
+				#print("==== Parameters for optimization (SED fitting)")
+				print(popt[j, :, icomp], pcov[j, :, :, icomp])
 			else:
 				ySED[j, :, icomp] = np.sqrt(fgr_map_ud[j][:,pixs_ud[j], 1] ** 2 + \
 											fgr_map_ud[j][:,pixs_ud[j], 2] ** 2)
-				auxpopt, auxcov = curve_fit(FuncModel, xSED[j], ySED[j, :, icomp])
-				popt[j, :, icomp], pcov[j, :, :, icomp] = auxpopt[:-1], auxcov[:-1, :-1]
+				auxpopt, auxcov = curve_fit(f = FuncModel, xdata = xSED[j], 
+											ydata = ySED[j, :, icomp], p0 = initP0)
+				popt[j, :, icomp], pcov[j, :, :, icomp] = auxpopt, auxcov
 
 	ySED_fit = np.zeros((len(fgr_map_ud), len(xarr[0]), 2 ))
+	Pmean = np.zeros((len(fgr_map_ud), len(xarr[0])) )
 	Perr = np.zeros((len(fgr_map_ud), len(xarr[0])) )
 	for icomp in range(2):
 		for j in range(len(fgr_map_ud)):
@@ -526,7 +573,7 @@ def make_fit_SED(xSED, xarr, Imvals, Isvals, FuncModel, fgr_map_ud, pixs_ud, nf_
 				ySED_fit[j,:,icomp] = FuncModel(xarr[j, :], *popt[j, :, icomp])
 			else:
 				# Prepare maps to plot and errorbars after MCMC
-				Pmean = np.sqrt(Imvals[j, :, 1] ** 2 + Imvals[j, :, 2] ** 2)
+				Pmean[j] = np.sqrt(Imvals[j, :, 1] ** 2 + Imvals[j, :, 2] ** 2)
 				#Error 
 				Perr[j, :] = ErrBar2(Imvals[j, :, 1], Imvals[j, :, 2], 
 								   Isvals[j, :, 1], Isvals[j, :, 2])

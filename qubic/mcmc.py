@@ -47,7 +47,6 @@ class LogLikelihood:
         # else:
         #     theta = mytheta
         theta = mytheta
-
         self.modelval = self.model(self.xvals[:self.nbins], theta)
 
         if self.covariance_model_funct is None:

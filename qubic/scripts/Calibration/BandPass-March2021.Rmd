@@ -209,9 +209,8 @@ legend()
 ```{python}
 reload(dl)
 
-nsig=3
 ff, f_rms, errf_rms = dl.get_spectral_response(name, allfreqs, allmm.T, allss.T, 
-                                               method='rms',nsig=nsig,directory=savedir)
+                                               method='rms',directory=savedir)
 
 
 

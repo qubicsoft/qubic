@@ -115,7 +115,7 @@ method = 'rms'
 # method = 'demod'
 
 allnums = np.arange(len(dirs))
-nbtodo = 10#len(dirs)
+nbtodo = len(dirs)
 mynums = allnums[(allnums % (len(allnums)//nbtodo)) == 0]
 print()
 print('##############################################################')
@@ -178,6 +178,11 @@ FitsArray(allfreqs).save(savedir+'/allfreqs_'+name+'.fits')
 # Now read files and average demodulated data
 
 ```{python}
+method = 'rms'
+name = method+'_'+n
+for d in days:
+    name = name+'_'+d
+
 alldemodulated = FitsArray(savedir+'/alldemodulated_'+name+'.fits')
 allerrdemodulated = FitsArray(savedir+'/allerrdemodulated_'+name+'.fits')
 allfreqs = FitsArray(savedir+'/allfreqs_'+name+'.fits')
@@ -203,14 +208,14 @@ legend()
 
 ```{python}
 reload(dl)
-name = n
-for d in days:
-    name = name+'_'+d
 
 nsig=3
 ff, f_rms, errf_rms = dl.get_spectral_response(name, allfreqs, allmm.T, allss.T, 
                                                method='rms',nsig=nsig,directory=savedir)
 
+
+
+figure()
 errorbar(ff, dl.dB(f_rms), yerr=dl.dB(f_rms+errf_rms)-dl.dB(f_rms),label='rms', fmt='b.-',ls='none')
 legend()
 ylabel('dB')
@@ -220,6 +225,11 @@ ylim(-40,0)
 sorted_index=sorted(range(len(ff)), key=lambda i: ff[i])
 plot(ff[sorted_index],dl.dB(f_rms[sorted_index]))
 
+
+print(ff)
+print(f_rms)
+
+print(errf_rms)
 ```
 
 ```{python}

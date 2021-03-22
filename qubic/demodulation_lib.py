@@ -1029,7 +1029,6 @@ def get_spectral_response(name, freqs, allmm_in, allss_in, nsig=3, method='demod
         # errfiltershape /= np.sqrt(ok.sum())
         # Then remove the smallest value in order to avoid negative values
         filtershape -= np.min(filtershape)
-        print(filtershape)
         return freqs, filtershape, errfiltershape
 
 

@@ -4,6 +4,7 @@ import copy
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from astropy.io import fits as pyfits
+from astropy.convolution import convolve, Gaussian2DKernel
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib import cm
 import scipy.optimize as sop
@@ -21,6 +22,7 @@ class FringesAnalysis:
                  asics=[1, 2], src_data=False, subtract_t0=True,
                  refTESnum=None, refASICnum=None, allh=[True, False, False, True, False, True], nsp_per=240,
                  lowcut=1e-5, highcut=2., nbins=120, notch=np.array([[1.724, 0.005, 10]]),
+                 fraction_bad_TES=0.75, sigma_conv_astropy=0.7, sort_TES=True,
                  verbose=False):
         """
         Parameters
@@ -58,6 +60,14 @@ class FringesAnalysis:
             Number of bins for filtering.
         notch: array
             Define a notch filter.
+        fraction_bad_TES: float
+            Fraction between 0 and 1 to set a threshold for bad TES.
+            For example, if fraction=0.75, 1/4 of the detectors will be masked.
+        sigma_conv_astropy: float
+            Sigma of the Gaussian for the Astropy convolution for plots, in numbers of detectors.
+        sort_TES: bool
+            If False, do not sort the TES from good to bad. It can be useful in some cases, for example,
+            when you do not want to make the full analysis but simply look at some TOD.
         verbose: bool
         """
         self.datafolder = datafolder
@@ -75,6 +85,8 @@ class FringesAnalysis:
         self.highcut = highcut
         self.nbins = nbins
         self.notch = notch
+        self.fraction_bad_TES = fraction_bad_TES
+        self.sigma_conv_astropy = sigma_conv_astropy
         self.verbose = verbose
 
         # Get data
@@ -85,17 +97,24 @@ class FringesAnalysis:
         self.nsteps = len(self.allh)
         self.expected_period = self.stable_time * self.nsteps
 
-        self.detectors_sort, self.oktes = self.find_goodTES()
-        if self.verbose:
-            print('******** 10 best TES found:', self.detectors_sort[:10, 0], self.detectors_sort[:10, 1])
-            print('******** Bad detectors:', int(len(self.oktes) - np.nansum(self.oktes)), '/', len(self.oktes))
+        if sort_TES:
+            self.detectors_sort, self.ctimes = self.sort_TES_good2bad()
+            self.mask_bad_TES = self.make_mask_bad_tes(self.detectors_sort, fraction=self.fraction_bad_TES)
+
+            if self.verbose:
+                print('******** 10 best TES found:', self.detectors_sort[:10, 0], self.detectors_sort[:10, 1])
+
+                nbad_TES = int(self.ndet - self.fraction_bad_TES * self.ndet)
+                print(f'******** With fraction_bad_TES = {self.fraction_bad_TES}, '
+                      f'{nbad_TES}/{self.ndet} are considered as bad.')
         if refTESnum is not None:
             self.refTESnum = refTESnum
             self.refASICnum = refASICnum
-        else:
+        elif refTESnum is None and sort_TES:
             self.refTESnum = self.detectors_sort[0, 0]
             self.refASICnum = self.detectors_sort[0, 1]
-
+        else:
+            raise ValueError('You should either give a reference TES and ASIC or set sort_TES to True.')
 
         # Reference period determine on reference TES
         _, _, self.refperiod = self.find_right_period(self.refTESnum, self.refASICnum)
@@ -130,7 +149,7 @@ class FringesAnalysis:
                 tdata_oneASIC -= tdata_oneASIC[0]
             tdata.append(tdata_oneASIC)
         tdata = np.array(tdata)
-        data = np.array(data)
+        data = - np.array(data)  # Minus because when the current goes down it means more power.
 
         if self.src_data:  # Get calibration source data
             tsrc = a.calsource()[0]
@@ -144,11 +163,25 @@ class FringesAnalysis:
         return tdata, data, tsrc, dsrc
 
     def plot_TOD(self, ASIC=None, TES=None, xlim=None, figsize=(12, 6)):
+        """
+        Plot the TODs for a given TES. if TES is None, the plot is done for the reference TES.
+        Parameters
+        ----------
+        ASIC: int
+            ASIC number, 1 or 2 for the TD.
+        TES: int
+            TES index, between 1 and 128.
+        xlim: float
+            Upper abscissa limit.
+        figsize: bytearray
+            Size of the figure, as in matplotlib.
+
+        """
         if ASIC is None:
             ASIC = self.refASICnum
             TES = self.refTESnum
-        time = self.tdata[ASIC-1, :]
-        TOD = self.data[ASIC-1, TES-1, :]
+        time = self.tdata[ASIC - 1, :]
+        TOD = self.data[ASIC - 1, TES - 1, :]
         plt.figure(figsize=figsize)
         ax = plt.gca()
         ax.plot(time, TOD)
@@ -160,15 +193,15 @@ class FringesAnalysis:
 
     def find_right_period(self, TES, ASIC, filtering=True, delta=0.5, nb=100):
         """
-
+        Determine the true period of one cycle.
         Parameters
         ----------
         TES, ASIC: int
             TES and ASIC numbers.
         filtering: bool
             If True, data are filtered.
-        delta
-        nb
+        delta: float
+        nb: int
 
         Returns
         -------
@@ -194,10 +227,16 @@ class FringesAnalysis:
 
         return ppp, rms, period
 
-    def find_goodTES(self, median=True, doplot=True):
+    def sort_TES_good2bad(self, median=True, doplot=True):
         """
+        Make a fit on the TODs, fit the steps of the cycle with time constants.
+        The residuals are used to order the TES from the best to the worst.
         Parameters
         ----------
+        median: bool
+            If True, a median and not a mean is done when folding the data using a function from fibtools.
+        doplot: bool
+            If True, a plot is made for the 5 best TES.
 
         Returns
         -------
@@ -206,13 +245,14 @@ class FringesAnalysis:
         between the fit and the signal. They are computed for each TES.
         """
 
+        ctimes = np.zeros((self.nasics, self.ndet_oneASIC))
         params = np.zeros((self.ndet, self.nsteps + 2))
         err_params = np.zeros_like(params)
         datafold = np.zeros((self.ndet, self.nbins))
         err_datafold = np.zeros_like(datafold)
         residuals_time = np.zeros_like(datafold)
         if self.verbose:
-            print('******** Start finding good TES.***********')
+            print('******** Start sort TES from good to bad.***********')
         for i, ASIC in enumerate(self.asics):
             # Filter, fold and normalize the data
             dfold, tfold, _, errfold, _, _ = ft.fold_data(self.tdata[i, :],
@@ -234,7 +274,7 @@ class FringesAnalysis:
             param_guess = [0.1, 0.] + [1.] * self.nsteps
             for j in range(self.ndet_oneASIC):
                 index = self.ndet_oneASIC * i + j
-                # With curve_fit, it is not possible to have 'args'
+                # With curve_fit, it is not possible to have 'args' so we use a lambda function
                 popt, pcov = sop.curve_fit(lambda tfold, ctime, tstart, a0, a1, a2, a3, a4, a5:
                                            ft.simsig_fringes(tfold,
                                                              self.stable_time,
@@ -249,20 +289,18 @@ class FringesAnalysis:
                                            maxfev=10000
                                            )
                 params[index, :] = popt
+                # Take the time constant of the detectors
+                ctimes[i, j] = popt[0]
                 err_params[index, :] = np.sqrt(np.diag(pcov))
 
                 residuals_time[index, :] = dfold[j, :] - ft.simsig_fringes(tfold, self.stable_time, popt)
-        # Order the TES as function of the residual on the fit
 
+        # Order the TES as function of the residual on the fit
         std = np.std(residuals_time, axis=1)
         std_argsort = np.argsort(std)
         detectors_sort = np.zeros((self.ndet, 2), dtype=int)
         detectors_sort[:, 0] = (std_argsort % self.ndet_oneASIC) + 1  # TES
-        detectors_sort[:, 1]  = (std_argsort // self.ndet_oneASIC) + 1 # ASIC
-
-        # Select good TES
-        oktes = np.ones(self.ndet)
-        oktes[std > np.min(std) * 25] = np.nan
+        detectors_sort[:, 1] = (std_argsort // self.ndet_oneASIC) + 1  # ASIC
 
         # Plot the 5 best TES
         if doplot:
@@ -270,7 +308,30 @@ class FringesAnalysis:
                 plot_folding_fit(detectors_sort[p, 0], detectors_sort[p, 1], tfold, datafold, residuals_time,
                                  self.expected_period, params, err_params)
 
-        return detectors_sort, oktes
+        return detectors_sort, ctimes
+
+    def make_mask_bad_tes(self, detectors_sort, fraction=0.75):
+        """
+
+        Parameters
+        ----------
+        detectors_sort: array
+            TES numbers ordered from the best to the worst.
+            It is a 2D array containing the TES and the ASIC index.
+        fraction: float
+            Fraction between 0 and 1 to set a threshold for bad TES.
+            For example, if fraction=0.75, 1/4 of the detectors will be masked.
+
+        Returns
+        -------
+        mask: 1 for good TES and NAN for bad TES.
+        """
+
+        mask = np.ones(self.ndet)
+        # All TES in a 1D array from 1 to 128*nasics
+        alldet = detectors_sort[:, 0] + self.ndet_oneASIC * (detectors_sort[:, 1] - 1)
+        mask[alldet[int(fraction * self.ndet):] - 1] = np.nan
+        return mask
 
     def find_high_derivative_clusters(self, tfold, thr, period):
         """ Find clusters of high derivatives: each time we take the first high derivative element."""
@@ -353,8 +414,8 @@ class FringesAnalysis:
         ok_all_horns = np.zeros_like(tfold, dtype=bool)
         for i in range(self.nsteps):
             if self.allh[i]:
-                tmini = i * period / self.nsteps + skip_rise * period / self.nsteps
-                tmaxi = (i + 1) * period / self.nsteps - skip_fall * period / self.nsteps
+                tmini = i * period / self.nsteps + skip_rise
+                tmaxi = (i + 1) * period / self.nsteps - skip_fall
                 ok = (tfold >= tmini) & (tfold < tmaxi)
                 ok_all_horns[ok] = True
         droll_rm_median = droll - np.median(droll[:, ok_all_horns])
@@ -382,7 +443,7 @@ class FringesAnalysis:
                 if doplot:
                     ttt = xx * self.stable_time + self.stable_time / 2
                     plt.figure()
-                    plt.title(f'Fit the slope on all horn open - Cycle {j+1}')
+                    plt.title(f'Fit the slope on all horn open - Cycle {j + 1}')
                     plt.plot(ttt, (pars[0] * xx + pars[1]), 'k--', label='Linear fit all open')
                     plt.step(ttt, m_points[j, :], color='b', where='mid', label='Original points')
                     plt.step(ttt, m_points_rm[j, :], color='r', where='mid', label='After correction')
@@ -392,7 +453,8 @@ class FringesAnalysis:
         return m_points_rm
 
     def remove_slope_allcycles(self, m_points, err_m_points, doplot=True):
-        """Fit a slope between the "all horns open" configurations and remove it."""
+        """Fit a slope between the "all horns open" configurations and remove it.
+        Finally this function is not used for the fringes analysis, I prefer removing the slope cycle by cycle. """
         xx = np.arange(self.nsteps * self.ncycles)
 
         # Linear fit
@@ -404,8 +466,6 @@ class FringesAnalysis:
                           cov=False)
         # Subtract the slope to the points, take the first point as the reference
         ref, _ = ft.meancut(m_points[:, self.allh], nsig=3)
-        # ref = np.mean(m_points[:, self.allh])
-        # ref = m_points[0, 0]
         m_points_rm = np.ravel(m_points) - (pars[0] * xx + pars[1]) + ref
 
         m_points_rm = np.reshape(m_points_rm, (self.ncycles, self.nsteps))
@@ -423,116 +483,9 @@ class FringesAnalysis:
 
         return m_points_rm
 
-    # def remove_allslopes(self, m_points, std_points, doplot=True):
-    #     """Fit a slope between the "all horns open" configurations and remove it."""
-    #     xx = np.arange(self.nsteps * self.ncycles)
-    #
-    #     # Linear fit
-    #     pars_allh = np.polyfit(x=xx[self.allh * self.ncycles],
-    #                           y=np.ravel(m_points[:, self.allh]),
-    #                           deg=1,
-    #                           w=1. / np.ravel(std_points[:, self.allh]),
-    #                           full=False,
-    #                           cov=False)
-    #     pars_h1 = np.polyfit(x=xx[1::6],
-    #                            y=np.ravel(m_points[:, 1]),
-    #                            deg=1,
-    #                            w=1. / np.ravel(std_points[:, 1]),
-    #                            full=False,
-    #                            cov=False)
-    #     pars_h1h2 = np.polyfit(x=xx[2::6],
-    #                          y=np.ravel(m_points[:, 2]),
-    #                          deg=1,
-    #                          w=1. / np.ravel(std_points[:, 2]),
-    #                          full=False,
-    #                          cov=False)
-    #     pars_h2 = np.polyfit(x=xx[4::6],
-    #                          y=np.ravel(m_points[:, 4]),
-    #                          deg=1,
-    #                          w=1. / np.ravel(std_points[:, 4]),
-    #                          full=False,
-    #                          cov=False)
-    #
-    #     # Subtract the slope to the points, take the first point as the reference
-    #     m_points_rm = np.zeros_like(xx)
-    #     m_points_rm[self.allh * self.ncycles] = np.ravel(m_points[:, self.allh])\
-    #                                             - (pars_allh[0] * xx[self.allh * self.ncycles] + pars_allh[1]) \
-    #                                             + np.median(m_points[:, self.allh])
-    #                                             # + m_points[0, 0]
-    #     m_points_rm[1::6] = np.ravel(m_points[:, 1]) \
-    #                                 - (pars_h1[0] * xx[1::6] + pars_h1[1]) \
-    #                                 + np.median(m_points[:, 1])
-    #                                 # + m_points[0, 1]
-    #
-    #     m_points_rm[2::6] = np.ravel(m_points[:, 2]) \
-    #                                 - (pars_h1h2[0] * xx[2::6] + pars_h1h2[1]) \
-    #                                 + np.median(m_points[:, 2])
-    #                                 # + m_points[0, 2]
-    #     m_points_rm[4::6] = np.ravel(m_points[:, 4]) \
-    #                                 - (pars_h2[0] * xx[4::6] + pars_h2[1]) \
-    #                                 + np.median(m_points[:, 4])
-    #                                 # + m_points[0, 4]
-    #
-    #     m_points_rm = np.reshape(m_points_rm, (self.ncycles, self.nsteps))
-    #
-    #
-    #     ttt = xx * self.stable_time + self.stable_time / 2
-    #     plt.figure()
-    #     plt.title('Fit the slope on all horn open - All cycles')
-    #     plt.plot(ttt, (pars_allh[0] * xx + pars_allh[1]), 'k--', label='fit allh open')
-    #     plt.plot(ttt, (pars_h1[0] * xx + pars_h1[1]), 'm--', label='h1')
-    #     plt.plot(ttt, (pars_h1h2[0] * xx + pars_h1h2[1]), 'c--', label='h1h2')
-    #     plt.plot(ttt, (pars_h2[0] * xx + pars_h2[1]), 'g--', label='h2')
-    #     plt.plot(ttt[self.allh * self.ncycles], np.ravel(m_points[:, self.allh]), 'ko', label='Old allh')
-    #     plt.plot(ttt[1::6], np.ravel(m_points[:, 1]), 'mo', label='Old h1')
-    #     plt.plot(ttt[2::6], np.ravel(m_points[:, 2]), 'co', label='Old h1h2')
-    #     plt.plot(ttt[4::6], np.ravel(m_points[:, 4]), 'go', label='Old h2')
-    #
-    #     plt.plot(ttt, np.ravel(m_points_rm), 'ro', label='After correction')
-    #     plt.xlabel('Time[s]')
-    #     plt.ylabel('Amplitude')
-    #     plt.legend()
-    #
-    #     return m_points_rm
-
-    # def correct_high_step(self, m_points, doplot=True):
-    #     xx = np.arange(self.nsteps * self.ncycles)
-    #     ttt = xx * self.stable_time + self.stable_time / 2
-    #
-    #     # Stot = np.zeros(self.ncycles)
-    #     # for j in range(self.ncycles):
-    #     #     Stot[j], _ = ft.meancut(m_points[j, self.allh], nsig=3)
-    #     Stot = np.mean(m_points[:, self.allh], axis=1)
-    #     # high1, _ = ft.meancut(m_points[:, 1] - Stot, nsig=3)
-    #     # high2, _ = ft.meancut(m_points[:, 2] - Stot, nsig=3)
-    #     # high3, _ = ft.meancut(m_points[:, 4] - Stot, nsig=3)
-    #     high1 = np.median(m_points[:, 1] - Stot)
-    #     high2 = np.median(m_points[:, 2] - Stot)
-    #     high3 = np.median(m_points[:, 4] - Stot)
-    #     m_points_corr = np.copy(m_points)
-    #     for j in range(self.ncycles):
-    #         m_points_corr[j, 1] = Stot[j] + high1 # Step 1
-    #         m_points_corr[j, 2] = Stot[j] + high2 # Step 2
-    #         m_points_corr[j, 4] = Stot[j] + high3 # Step 4
-    #
-    #     if doplot:
-    #         plt.figure()
-    #         # plt.step(ttt[:8*self.nsteps], np.ravel(m_points[:8, :]), where='mid', label='Old')
-    #         plt.plot(ttt[1::6], np.ravel(m_points[:, 1]), 'r', label='Old h1')
-    #         plt.plot(ttt[2::6], np.ravel(m_points[:, 2]), 'b', label='Old h1h2')
-    #         plt.plot(ttt[4::6], np.ravel(m_points[:, 4]), 'g', label='Old h2')
-    #         plt.plot(ttt[self.allh * self.ncycles], np.ravel(m_points[:, self.allh]), 'k', label='All open')
-    #
-    #         # plt.step(ttt[:8*self.nsteps], np.ravel(m_points[:8, :]), where='mid', label='New')
-    #         plt.plot(ttt[1::6], np.ravel(m_points_corr[:, 1]),  'r--', label='New h1')
-    #         plt.plot(ttt[2::6], np.ravel(m_points_corr[:, 2]), 'b--', label='New h1h2')
-    #         plt.plot(ttt[4::6], np.ravel(m_points_corr[:, 4]), 'g--', label='New h2')
-    #         plt.legend()
-    #
-    #     return m_points_corr
-
     def average_over_points_oneTES(self, tfold, droll, period, skip_rise=0., skip_fall=0.,
-                                   median=True, rm_slope_percycle=False, rm_slope_allcycles=False, doplot=True):
+                                   median=True, rm_slope_percycle=False, doplot=True):
+        """Average on each step in the cycle."""
 
         # We assume that the array has been np.rolled so that the t0 is in time sample 0
         stable_time = period / self.nsteps
@@ -546,8 +499,8 @@ class FringesAnalysis:
         err_m_points = np.zeros((self.ncycles, self.nsteps))
         for i in range(self.nsteps):
             # Cut the data
-            tstart = i * stable_time + skip_rise * stable_time
-            tend = (i + 1) * stable_time - skip_fall * stable_time
+            tstart = i * stable_time + skip_rise
+            tend = (i + 1) * stable_time - skip_fall
             ok = (tfold >= tstart) & (tfold < tend)
             for j in range(self.ncycles):
                 m_points[j, i], err_m_points[j, i] = ft.meancut(droll[j, ok],
@@ -557,23 +510,20 @@ class FringesAnalysis:
 
         if rm_slope_percycle:
             m_points = self.remove_slope_percycle(m_points, err_m_points, doplot=doplot)
-        # if rm_slope_allcycles:
-        #     # Fit a slope between the "all horns open" configurations and remove it.
-        #     m_points = self.remove_slope_allcycles(m_points, err_m_points, doplot=doplot)
-        #     m_points = self.correct_high_step(m_points, doplot=doplot)
-
         return m_points, err_m_points
 
-    def average_over_cycles_oneTES(self, droll, m_points, err_m_points, median=True,
+    def average_over_cycles_oneTES(self, m_points, err_m_points, median=True,
                                    Ncycles_to_use=None,
                                    speak=False, doplot=False):
         """
         Parameters
         ----------
-        droll:
-        m_points, err_m_points:
+        m_points, err_m_points: float
+            Mean and errors on each step for one TES.
         median: bool
             If True, takes the median and not the mean on each folded step.
+        Ncycles_to_use: int
+            Number of cycles to use. If None, all cycles will be used.
         speak: bool
         doplot: bool
 
@@ -590,18 +540,6 @@ class FringesAnalysis:
         for i in range(self.nsteps):
             Mcycles[i], err_Mcycles[i] = ft.meancut(m_points[:Ncycles_to_use, i], nsig=3, med=median, disp=False)
 
-        # # Residuals in time domain (not too relevant as some baselines were removed
-        # # as a result, large fluctuations in time-domain are usually well removed)
-        # newdroll = np.zeros_like(droll)
-        # for i in range(self.nsteps):
-        #     newdroll[:, i * self.nsp_per // self.nsteps:(i + 1) * self.nsp_per // self.nsteps] = Mcycles[i]
-        # residuals_time = droll - newdroll
-
-        # We would rather calculate the relevant residuals in the binned domain
-        # between the final values and those after levelling
-        # residuals_bin = np.ravel(m_points - Mcycles)
-        # _, TODresiduals = ft.meancut(residuals_bin, nsig=3, med=median, disp=True)
-
         if speak:
             for i in range(self.nsteps):
                 print('############')
@@ -617,10 +555,33 @@ class FringesAnalysis:
 
         return Mcycles, err_Mcycles
 
-    def analyse_fringes(self, skip_rise=0.2, skip_fall=0.1, median=True, remove_median_allh=False,
-                          Ncycles_to_use=None,
-                          rm_slope_percycle=False, rm_slope_allcycles=False,
-                          force_period=None, force_t0=None, doplotTESsort=0):
+    def analyse_fringes(self, median=True, remove_median_allh=False,
+                        Ncycles_to_use=None,
+                        rm_slope_percycle=False,
+                        force_period=None, force_t0=None, doplotTESsort=0):
+        """
+        Full analysis to get fringes from the TODs.
+        Parameters
+        ----------
+        median: bool
+        remove_median_allh: bool
+        Ncycles_to_use: int
+            Number of cycles to use. If None, all cycles will be used.
+        rm_slope_percycle: bool
+            If True, for each cycle, a slope on the steps where all horns are open is fit
+            and removed.
+        force_period: float
+            If None, the period is determined automatically but the period can be forced using this argument.
+        force_t0: float
+            If None, t0 is determined on the best TES but it can be given using this argument.
+        doplotTESsort: int
+            TES index once they are ordered from the best to the worst for which plots are made.
+            By default, it is 0, so plots are made for the best TES.
+
+        Returns
+        -------
+
+        """
 
         # ================= Determine the correct period reference TES ========
         if force_period is None:
@@ -656,8 +617,21 @@ class FringesAnalysis:
         for i, ASIC in enumerate(self.asics):
             print(f'*********** Starting ASIC {ASIC} **************')
             for j, TES in enumerate(np.arange(1, 129)):
-                if TES == self.detectors_sort[doplotTESsort, 0] and ASIC == self.detectors_sort[doplotTESsort, 1]:
-                    print(f'Making plots for TES {TES} - ASIC {ASIC} - Goodness rank {doplotTESsort + 1}')
+                # Use the time constant for skip rise if it is reasonable.
+                if self.ctimes[i, j] < 0.6:
+                    skip_rise = self.ctimes[i, j] * 5.
+                else:
+                    skip_rise = 1.
+                skip_fall = 0.5
+                # print(skip_rise, skip_fall)
+
+                # If TES in doplotTESsort, active the plot option
+                want_plot = np.any((self.detectors_sort[doplotTESsort, 0] == TES) &
+                                   (self.detectors_sort[doplotTESsort, 1] == ASIC))
+                if want_plot:
+                    rank = np.where((self.detectors_sort[:, 0] == TES) &
+                                    (self.detectors_sort[:, 1] == ASIC))[0][0]
+                    print(f'\n ===== Making plots for TES {TES} - ASIC {ASIC} - Goodness rank {rank}')
                     doplot = True
                     speak = True
                 else:
@@ -665,18 +639,20 @@ class FringesAnalysis:
                     speak = False
 
                 index = i * self.ndet_oneASIC + j
-
                 timeTES = self.tdata[i, :]
                 dataTES = self.data[i, j, :]
                 # Fold, roll and remove the median of allh
                 tfold, dfold = self.resample_fold_oneTES(timeTES, dataTES, period=period, doplot=doplot)
                 droll = self.roll_oneTES(dfold, t0, period=period)
+                if doplot:
+                    self._plot_folding(tfold, droll, period, skip_rise=skip_rise, skip_fall=skip_fall,
+                                       suptitle='Data fold and roll')
                 if remove_median_allh:
                     droll = self.remove_median_allh(tfold, droll, period,
                                                     skip_rise=skip_rise, skip_fall=skip_fall)
-                if doplot:
-                    self._plot_folding(tfold, droll, period, skip_rise=skip_rise, skip_fall=skip_fall,
-                                         suptitle='Data fold after rolling and removing allh average')
+                    if doplot:
+                        self._plot_folding(tfold, droll, period, skip_rise=skip_rise, skip_fall=skip_fall,
+                                           suptitle='Data fold, roll and remove median all horn open')
 
                 # Average each step on each cycle
                 m_points[index, :, :], err_m_points[index, :, :] = self.average_over_points_oneTES(
@@ -687,17 +663,16 @@ class FringesAnalysis:
                     skip_fall=skip_fall,
                     median=median,
                     rm_slope_percycle=rm_slope_percycle,
-                    rm_slope_allcycles=rm_slope_allcycles,
                     doplot=doplot)
                 # Make the combination for each cycle
-                for j in range(self.ncycles):
-                    fringes1D_percycle[index, j], err_fringes1D_percycle[index, j] = weighted_sum(m_points[index, j, :],
-                                                                                                  err_m_points[index, j, :],
+                for k in range(self.ncycles):
+                    fringes1D_percycle[index, k], err_fringes1D_percycle[index, k] = weighted_sum(m_points[index, k, :],
+                                                                                                  err_m_points[index, k,
+                                                                                                  :],
                                                                                                   weights)
 
                 # Average over cycles and make the combination on the mean to get fringes
                 Mcycles[index, :], err_Mcycles[index, :] = self.average_over_cycles_oneTES(
-                    droll,
                     m_points[index, :, :],
                     err_m_points[index, :, :],
                     median=median,
@@ -708,32 +683,37 @@ class FringesAnalysis:
                 if doplot:
                     self._plot_TOD_reconstruction(droll, Mcycles[index, :])
 
-        # Get the good TES from a cut on residuals
-        # mm, ss = ft.meancut(np.log10(TODresiduals), nsig=3)
-        # oktes = np.ones(self.ndet)
-        # oktes[np.abs(np.log10(TODresiduals) - mm) > 2 * ss] = np.nan
-
         # Final plots
         # Fringes
-        fig, axs = plt.subplots(2, 2, figsize=(12, 12))
+        fig, axs = plt.subplots(2, 2, figsize=(10, 12))
         fig.subplots_adjust(wspace=0.5)
         fig.suptitle(f'Fringes and errors - BL {self.baseline} - {self.date}')
         ax0, ax1, ax2, ax3 = axs.ravel()
-        plot_fringes_imshow_interp(fringes1D * self.oktes, fig=fig, ax=ax0)
-        plot_fringes_scatter(self.q, self.xTES, self.yTES, fringes1D * self.oktes, s=100, fig=fig, ax=ax1)
+        # Make a convolution with Astropy (just to see better the fringes)
+        fringes2D = make2Dfringes_data(fringes1D * self.mask_bad_TES)
+        fringes2D_conv = astropy_convolution(fringes2D, sigma=self.sigma_conv_astropy)
+        cmap_bwr = make_cmap_nan_black('bwr')
+        plot_fringes_imshow(fringes2D_conv, fig=fig, ax=ax0, cmap=cmap_bwr,
+                            title='Astropy convolution', mask=make_mask2D_thermometers_TD())
+        plot_fringes_scatter(self.q, self.xTES, self.yTES, fringes1D * self.mask_bad_TES, s=100,
+                             fig=fig, ax=ax1, cmap=cmap_bwr)
 
         # Errors
-        cmap_viridis = make_cmap_nan_grey('viridis')
-        plot_fringes_scatter(self.q, self.xTES, self.yTES, err_fringes1D * self.oktes, s=100, fig=fig, ax=ax2,
+        cmap_viridis = make_cmap_nan_black('viridis')
+        plot_fringes_scatter(self.q, self.xTES, self.yTES, err_fringes1D * self.mask_bad_TES, s=100, fig=fig, ax=ax2,
                              cmap=cmap_viridis, normalize=False, vmin=0., vmax=400, title='Errors')
-        plot_fringes_scatter(self.q, self.xTES, self.yTES, np.abs(fringes1D / err_fringes1D) * self.oktes,
+        plot_fringes_scatter(self.q, self.xTES, self.yTES, np.abs(fringes1D / err_fringes1D) * self.mask_bad_TES,
                              s=100, fig=fig, ax=ax3, cmap=cmap_viridis, normalize=False, vmin=0., vmax=3.,
                              title='|Values/Errors|')
+
+        # Plot the result for the reference TES
+        self._plot_fringes_measurement_perTES(fringes1D, err_fringes1D, fringes1D_percycle, err_fringes1D_percycle,
+                                              TES=None, ASIC=None)
 
         return m_points, err_m_points, Mcycles, err_Mcycles, fringes1D, err_fringes1D, \
                fringes1D_percycle, err_fringes1D_percycle
 
-    # ================ Plot functions very specific to JC analysis
+    # ================ Plot functions very specific to the fringes analysis
     def _plot_finding_t0(self, tfold, msignal, dsignal, thr, start_times, t0, figsize=(12, 6)):
         plt.figure(figsize=figsize)
         plt.plot(tfold, msignal, label='Mean over periods')
@@ -762,6 +742,7 @@ class FringesAnalysis:
     def _plot_folding(self, tfold, dfold, period, skip_rise=None, skip_fall=None, suptitle='', figsize=(12, 6)):
 
         fig, axs = plt.subplots(1, 2, figsize=figsize)
+        fig.subplots_adjust(wspace=0.5)
         fig.suptitle(suptitle)
         ax1, ax2 = np.ravel(axs)
 
@@ -771,22 +752,30 @@ class FringesAnalysis:
                    extent=[0, np.max(tfold) + (tfold[1] - tfold[0]) / 2, 0, self.ncycles + 0.5])
         for i in range(self.nsteps):
             ax1.axvline(x=i * (period / self.nsteps), color='k', lw=3)
-        ax1.set_xlabel('Time in period')
-        ax1.set_ylabel('Period #')
+        ax1.set_xlabel('Time [s]')
+        ax1.set_ylabel('Cycle number')
 
         for i in range(self.ncycles):
             ax2.plot(tfold, dfold[i, :], alpha=0.5)
         for i in range(self.nsteps):
             ax2.axvline(x=i * (period / self.nsteps), color='k', lw=3)
             if skip_rise is not None:
+                if i == 0:
+                    lab1 = 'Skip rise {:.2f}s'.format(skip_rise)
+                    lab2 = 'Skip fall {:.2f}s'.format(skip_fall)
+                else:
+                    lab1 = None
+                    lab2 = None
+
                 ax2.axvspan(i * (period / self.nsteps),
-                            (i + skip_rise) * (period / self.nsteps),
-                            alpha=0.1, color='red')
-                ax2.axvspan((i + (1. - skip_fall)) * (period / self.nsteps),
+                            (i * (period / self.nsteps) + skip_rise),
+                            alpha=0.2, color='red', label=lab1)
+                ax2.axvspan(((i + 1) * (period / self.nsteps) - skip_fall),
                             (i + 1) * (period / self.nsteps),
-                            alpha=0.1, color='red')
-        ax2.set_xlabel('Time in period')
+                            alpha=0.2, color='b', label=lab2)
+        ax2.set_xlabel('Time [s]')
         ax2.set_ylabel('ADU')
+        ax2.legend()
 
         return
 
@@ -802,10 +791,10 @@ class FringesAnalysis:
             else:
                 lab = None
             ax.errorbar(ttt, m_points[i, :],
-                         yerr=err_m_points[i, :],
-                         xerr=self.stable_time / 2, fmt='o', alpha=0.1 + i*0.025, color='blue', label=lab)
+                        yerr=err_m_points[i, :],
+                        xerr=self.stable_time / 2, fmt='o', alpha=0.1 + i * 0.025, color='blue', label=lab)
         ax.errorbar(ttt, Mcycles, yerr=err_Mcycles, xerr=self.stable_time / 2, color='r',
-                     label='Mean over cycles', fmt='rx')
+                    label='Mean over cycles', fmt='rx')
         ax.set_xlabel('Time [s]')
         ax.set_ylabel('Value for each cycle')
         ax.legend()
@@ -825,11 +814,59 @@ class FringesAnalysis:
         ax.legend()
         return
 
+    def _plot_fringes_measurement_perTES(self, fringes1D, err_fringes1D, fringes1D_percycle, err_fringes1D_percycle,
+                                         TES=None, ASIC=None):
+        if TES is None or ASIC is None:
+            ASIC = self.refASICnum
+            TES = self.refTESnum
+        idx = (ASIC - 1) * self.ndet_oneASIC + (TES - 1)
+        xx = np.arange(1, self.ncycles + 1)
+
+        plt.figure()
+        plt.title(f'TES {TES} - ASIC {ASIC}')
+
+        # Measurement on each cycle
+        plt.errorbar(xx, fringes1D_percycle[idx, :],
+                     yerr=err_fringes1D_percycle[idx, :], fmt='o', color='b', label='Fringes per cycle')
+
+        # Fit
+        p = np.polyfit(xx, fringes1D_percycle[idx, :], deg=3, w=1 / err_fringes1D_percycle[idx, :])
+        fit = p[0] * xx ** 3 + p[1] * xx ** 2 + p[2] * xx + p[3]
+        plt.plot(xx, fit, 'b', label='Polynomial fit deg=3')
+
+        # Final measurement and the error
+        err_plus = fringes1D[idx] + err_fringes1D[idx]
+        err_minus = fringes1D[idx] - err_fringes1D[idx]
+        plt.axhline(err_plus, color='r', linestyle='--')
+        plt.axhline(err_minus, color='r', linestyle='--')
+        plt.fill_between(np.arange(0.5, 21.5), err_minus, err_plus, facecolor='r', alpha=0.15)
+        plt.axhline(fringes1D[idx], color='r', label='Fringes on all cycles')
+
+        # Mean over the measurements on each cycle
+        plt.axhline(np.mean(fringes1D_percycle[idx, :], axis=0), color='b', label='Simple mean')
+
+        # Median  over the measurements on each cycle
+        plt.axhline(np.median(fringes1D_percycle[idx, :], axis=0), color='c', label='Median')
+
+        # Meancut  over the measurements on each cycle
+        meancut_mean, mean_cut_std = ft.meancut(fringes1D_percycle[idx, :], nsig=3, med=False)
+        plt.axhline(meancut_mean, color='m', label='Mean cut')
+        plt.axhline(meancut_mean + mean_cut_std, color='m', linestyle='--')
+        plt.axhline(meancut_mean - mean_cut_std, color='m', linestyle='--')
+
+        plt.xlabel('Cycle index')
+        plt.ylabel('Fringes value')
+        plt.xlim(0.5, 20.5)
+        plt.xticks(np.arange(1, self.ncycles + 1))
+        plt.legend()
+        plt.ylim(- np.max(np.abs(fringes1D_percycle[idx, :])) * 1.2,
+                 np.max(np.abs(fringes1D_percycle[idx, :])) * 1.2)
+        return
 
 # =========================================
 class SaveFringesFitsPdf:
     def __init__(self, q, date_obs, allBLs, allstable_time, allNcycles, xTES, yTES, allfringes1D, allerr_fringes1D,
-                 allokTES=None, nsteps=6, ecosorb='yes', frame='ONAFP'):
+                 allmask_bad_TES=None, nsteps=6, ecosorb='yes', frame='ONAFP'):
         self.q = q
         self.date_obs = date_obs
         self.allBLs = allBLs
@@ -841,7 +878,7 @@ class SaveFringesFitsPdf:
         self.yTES = yTES
         self.allfringes1D = allfringes1D
         self.allerr_fringes1D = allerr_fringes1D
-        self.allokTES = allokTES
+        self.allmask_bad_TES = allmask_bad_TES
         self.nsteps = nsteps
         self.ecosorb = ecosorb
         self.frame = frame
@@ -865,7 +902,7 @@ class SaveFringesFitsPdf:
         """ Make a dictionary with all relevant data."""
         fdict = {'BLS': self.allBLs, 'Stable_time': self.allstable_time, 'NCYCLES': self.allNcycles,
                  'X_TES': self.xTES, 'Y_TES': self.yTES, 'FRINGES_1D': self.allfringes1D,
-                 'ERRORS': self.allerr_fringes1D, 'OK_TES': self.allokTES}
+                 'ERRORS': self.allerr_fringes1D, 'MASK_BAD_TES': self.allmask_bad_TES}
 
         return fdict
 
@@ -883,8 +920,11 @@ class SaveFringesFitsPdf:
                 fig.subplots_adjust(wspace=0.5)
                 fig.suptitle(f'Fringes - BL {self.allBLs[i]} - {self.date_obs} - type {self.BLs_type[i]}')
                 ax0, ax1 = axs.ravel()
-                plot_fringes_imshow_interp(self.allfringes1D[i]* self.allokTES[i], fig=fig, ax=ax0, mask=mask)
-                plot_fringes_scatter(self.q, self.xTES, self.yTES, self.allfringes1D[i] * self.allokTES[i],
+                fringes2D = make2Dfringes_data(self.allfringes1D[i] * self.allmask_bad_TES[i])
+                fringes2D_conv = astropy_convolution(fringes2D)
+                plot_fringes_imshow(fringes2D_conv, fig=fig, ax=ax0, mask=mask, title='Astropy convolution',
+                                    cmap=make_cmap_nan_black('bwr'))
+                plot_fringes_scatter(self.q, self.xTES, self.yTES, self.allfringes1D[i] * self.allmask_bad_TES[i],
                                      s=80, fig=fig, ax=ax1)
                 pp.savefig()
         return
@@ -933,6 +973,45 @@ def read_fits_fringes(file):
 
 
 # ============== Tool functions ==============
+def decide_bad_TES(allmask_bad_TES, condition=2):
+    """
+    Make a mask for bad detectors, common to all images.
+    Parameters
+    ----------
+    allmask_bad_TES: list
+        List with the mask of the worst TES for each image.
+    condition: int
+        Number of images where the detector must be NAN to consider it as bad.
+
+    """
+    nimages = len(allmask_bad_TES)
+    ndet = allmask_bad_TES[0].shape[0]
+
+    the_mask = np.zeros(ndet)
+    for k in range(nimages):
+        if k == 0:  # replace NAN by 1
+            the_mask[np.isnan(allmask_bad_TES[k])] = 1
+        else:  # Add 1 if it is NAN
+            the_mask[np.isnan(allmask_bad_TES[k])] += 1
+
+    the_mask[the_mask >= condition] = np.nan
+    the_mask[the_mask < condition] = 1
+
+    print(f'Number of bad detectors: {int(ndet - np.nansum(the_mask))}/{ndet}')
+    return the_mask
+
+
+def give_index_bad_TES(the_mask):
+    """Give the index of the bad TES from a mask."""
+    ndet = the_mask.shape[0]
+    nbadtes = int(ndet - np.nansum(the_mask))
+    badTES = np.zeros((nbadtes, 2), dtype=int)
+    badTES[:, 0] = np.argwhere(np.isnan(the_mask))[:, 0] % 128 + 1  # TES
+    badTES[:, 1] = np.argwhere(np.isnan(the_mask))[:, 0] // 128 + 1  # ASIC
+
+    return badTES
+
+
 def find_high_derivative(signal):
     """Calculate the derivative of a signal and find where it is high."""
     dsignal = np.abs(np.gradient(signal))
@@ -952,7 +1031,7 @@ def cut_data(t0, tf, tdata, data):
     if tf is None:
         tf = tdata[-1]
 
-    ok = (tdata>= t0) & (tdata <= tf)
+    ok = (tdata >= t0) & (tdata <= tf)
     tdata_cut = tdata[ok]
     data_cut = data[:, ok]
 
@@ -980,9 +1059,9 @@ def cut_data_Nperiods(t0, tf, t_data, data, period):
 
 def weighted_sum(vals, errs, weights):
     """Weighted sum and its error"""
-    sum = np.sum(weights * vals)
+    w_sum = np.sum(weights * vals)
     sigma = np.sqrt(np.sum(weights ** 2 * errs ** 2))
-    return sum, sigma
+    return w_sum, sigma
 
 
 def make_mask2D_thermometers_TD():
@@ -1004,16 +1083,11 @@ def remove_thermometers(x, y, fringes1D):
 def reorder_data(data, xdata, ydata, xqsoft, yqsoft):
     """Reorder data (TES signal) as ordered in the QUBIC soft.
     The number of TES should be 248 (without thermometers)."""
-    ndata = len(data)
     ndet = xdata.shape[0]
-    data_ordered = []
-    for k in range(ndata):
-        olddata = data[k]
-        newdata = np.zeros_like(olddata)
-        for det in range(ndet):
-            index_simu = np.where((xqsoft == xdata[det]) & (yqsoft == ydata[det]))[0][0]
-            newdata[index_simu] = olddata[det]
-        data_ordered.append(newdata)
+    data_ordered = np.zeros_like(data)
+    for det in range(ndet):
+        index_simu = np.where((xqsoft == xdata[det]) & (yqsoft == ydata[det]))[0][0]
+        data_ordered[index_simu] = data[det]
     return data_ordered
 
 
@@ -1068,14 +1142,15 @@ def plot_sum_diff_fringes(q, keyvals, fdict, mask=None, lim=2, cmap='bwr'):
 
     return
 
-def make_cmap_nan_grey(cmap):
+
+def make_cmap_nan_black(cmap):
     cmap_bwr = copy.copy(cm.get_cmap(cmap))
-    cmap_bwr.set_bad(color='lightgrey')
+    cmap_bwr.set_bad(color='k')
     return cmap_bwr
 
-def plot_fringes_scatter(q, xTES, yTES, fringes1D, normalize=True, frame='ONAFP', fig=None, ax=None,
-                         cbar=True, vmin=-1., vmax=1., cmap=make_cmap_nan_grey('bwr'), s=None, title='Scatter plot'):
 
+def plot_fringes_scatter(q, xTES, yTES, fringes1D, normalize=True, frame='ONAFP', fig=None, ax=None,
+                         cbar=True, vmin=-1., vmax=1., cmap=make_cmap_nan_black('bwr'), s=None, title='Scatter plot'):
     x, y, fringes = remove_thermometers(xTES, yTES, fringes1D)
 
     if normalize:
@@ -1097,25 +1172,47 @@ def plot_fringes_scatter(q, xTES, yTES, fringes1D, normalize=True, frame='ONAFP'
     return
 
 
-def plot_fringes_imshow_interp(fringes1D, normalize=True, interp='Gaussian', mask=None,
-                               fig=None, ax=None, cbar=True, vmin=-1, vmax=1.,
-                               cmap='bwr', title='Imshow with interpolation'):
+def make2Dfringes_QubicSoft(fringes1D, q, nan2zero=False):
+    """fringes1D must have 248 elements ordered as in Qubic soft."""
+    fringes2D = q.detector.unpack(fringes1D)[17:, :17]
+    fringes2D = np.rot90(fringes2D, k=2)
+    if nan2zero:
+        fringes2D[np.isnan(fringes2D)] = 0.
+    return fringes2D
 
-    # Make the 2D fringes
+
+def make2Dfringes_data(fringes1D, nan2zero=False):
     fringes2D = ft.image_asics(all1=fringes1D)
+    if nan2zero:
+        fringes2D[np.isnan(fringes2D)] = 0.
+    return fringes2D
+
+
+def astropy_convolution(fringes2D, sigma=0.7, nan_treatment='interpolate', preserve_nan=True):
+    kernel = Gaussian2DKernel(sigma)
+    image_convolved = convolve(fringes2D,
+                               kernel,
+                               nan_treatment=nan_treatment,
+                               preserve_nan=preserve_nan)
+    return image_convolved
+
+
+def plot_fringes_imshow(fringes2D, normalize=True, interp=None, mask=None,
+                        fig=None, ax=None, cbar=True, vmin=-1, vmax=1.,
+                        cmap='bwr', title='Imshow'):
     if normalize:
         fringes2D /= np.nanstd(fringes2D)
 
-    if mask is None:
-        mask = make_mask2D_thermometers_TD()
+    if mask is not None:
+        fringes2D *= mask
 
     if ax is None:
         fig, ax = plt.subplots()
-    img = ax.imshow(np.nan_to_num(np.rot90(fringes2D * mask, k=2)),
+    img = ax.imshow(np.rot90(fringes2D, k=2),
                     vmin=vmin, vmax=vmax,
                     cmap=cmap,
                     interpolation=interp)
-
+    ax.axis('off')
     ax.set_title(title, fontsize=14)
     if cbar:
         divider = make_axes_locatable(ax)
@@ -1152,4 +1249,3 @@ def plot_folding_fit(TES, ASIC, tfold, datafold, residuals_time, period,
     plt.grid()
     plt.ylim(-2.5, 2.5)
     return
-

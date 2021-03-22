@@ -1018,9 +1018,15 @@ def get_spectral_response(name, freqs, allmm, allss, nsig=3, method='demod', TES
     else:
         # Discriminant Variable: a chi2 we want it to be bad in the sense that
         # we want the spectrum to be inconsistent with a straight line inside the QUBIC band
+        figure()
+        for i in range(256):
+            plot(freqs, allfnorm[i,:], alpha=0.1)
+
         discrim = np.nansum(allfnorm[:, infilter] ** 2 / allsnorm[:, infilter] ** 2, axis=1)
-        mr, sr = ft.meancut(discrim, 3)
+        mr, sr = ft.meancut(discrim[np.isfinite(discrim)], 3)
         threshold = mr + nsig * sr
+        print(mr, sr)
+        print(threshold)
         ok = (discrim > threshold)
         print('Spectral Response calculated over {} TES'.format(ok.sum()))
         filtershape = np.zeros(len(freqs))

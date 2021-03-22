@@ -169,8 +169,31 @@ name = method+'_'+n
 for d in days:
     name = name+'_'+d
 
-FitsArray(alldemodulated).save(savedir+'/alldemodulated_'+name+'.fits')
-FitsArray(allerrdemodulated).save(savedir+'/allerrdemodulated_'+name+'.fits')
+    
+
+```
+
+```{python}
+allnbins = np.zeros(len(freqs), dtype=int)
+for i in range(len(freqs)):
+    allnbins[i] = alldemodulated[i].shape[1]
+    
+mynbins = np.max(allnbins)
+
+my_alldemodulated = np.zeros((len(freqs), 256, mynbins))
+my_allerrdemodulated = np.zeros((len(freqs), 256, mynbins))
+for i in range(len(freqs)):
+    sh = np.shape(alldemodulated[i])
+    if sh[1]==mynbins:
+        my_alldemodulated[i,:,:] = alldemodulated[i]
+        my_allerrdemodulated[i,:,:] = allerrdemodulated[i]
+    else:
+        print(sh[1])
+        my_alldemodulated[i,:,0:sh[1]] = alldemodulated[i]        
+        my_allerrdemodulated[i,:,0:sh[1]] = allerrdemodulated[i]
+
+FitsArray(my_alldemodulated).save(savedir+'/alldemodulated_'+name+'.fits')
+FitsArray(my_allerrdemodulated).save(savedir+'/allerrdemodulated_'+name+'.fits')
 FitsArray(allfreqs).save(savedir+'/allfreqs_'+name+'.fits')
 
 ```
@@ -197,6 +220,7 @@ allmm = np.zeros((len(mynums), 256))
 allss = np.zeros((len(mynums), 256))
 
 for j in range(len(mynums)):
+    if (j % 10)==0: print('{} over {}'.format(j,len(mynums)-1))
     for i in range(256):
         allmm[j, i], allss[j, i] = ft.meancut(alldemodulated[j,i,:], 3, med=True, disp=False)
 
@@ -225,10 +249,6 @@ sorted_index=sorted(range(len(ff)), key=lambda i: ff[i])
 plot(ff[sorted_index],dl.dB(f_rms[sorted_index]))
 
 
-print(ff)
-print(f_rms)
-
-print(errf_rms)
 ```
 
 ```{python}

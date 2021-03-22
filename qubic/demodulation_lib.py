@@ -203,7 +203,7 @@ def scan2ang_demod(period, indata, lowcut=None, highcut=None, verbose=False):
         newaz[i] = np.mean(azd[ok])
         newel[i] = np.mean(eld[ok])
         newsb[:, i] = np.mean(demodulated[:, ok], axis=1)
-        newdsb[:, i] = np.std(demodulated[:, ok], axis=1) / ok.sum()
+        newdsb[:, i] = np.std(demodulated[:, ok], axis=1) / np.sqrt(ok.sum())
 
     unbinned = {}
     unbinned['t'] = newt
@@ -982,9 +982,9 @@ def dB(y):
 def get_spectral_response(name, freqs, allmm, allss, nsig=3, method='demod', TESNum=None,
                           directory='/Users/hamilton/Qubic/Calib-TD/SpectralResponse/'):
     # Restore the data already treated
-    allmm = FitsArray(directory + '/allmm_' + method + '_' + name + '.fits')
-    allss = FitsArray(directory + '/allss_' + method + '_' + name + '.fits')
-    freqs = FitsArray(directory + '/freqs_' + method + '_' + name + '.fits')
+    # allmm = FitsArray(directory + '/allmm_' + method + '_' + name + '.fits')
+    # allss = FitsArray(directory + '/allss_' + method + '_' + name + '.fits')
+    # freqs = FitsArray(directory + '/freqs_' + method + '_' + name + '.fits')
 
     # Correct for Source Characteristics
     if method == 'rms':

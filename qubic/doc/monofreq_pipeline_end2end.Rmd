@@ -18,9 +18,9 @@ jupyter:
 
 #### Edited by Louise Mousset, 2019/11/29
 
-This notebook is the typical pipeline for data simulation and analysis. There are 2 parts :
+This notebook shows the typical pipeline for data simulation and analysis. There are 2 parts :
 * From a given sky map, simulate Time Order Data (TOD) 
-* From those TOD, perform Map Making to reconstruct the input sky
+* From those TOD, perform Map Making to reconstruct the input sky map
 
 Here we work with only one frequency band.
 <!-- #endregion -->

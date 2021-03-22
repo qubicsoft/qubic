@@ -14,14 +14,14 @@ jupyter:
 
 # Generate Fringes from datasets
 
-In this notebook we produce the fringes files from the raw QUBIC datasets.
+Edited by Louise 03/2021
 
-They are saved into numpy files of the type: fringes_bs_17_21_2020-10-27_11.34.04.npy
+In this notebook we produce the fringes files from the raw QUBIC datasets from 2020/01/13, 27/10/2020 and 28/10/2020. 
 
-## Status of the code:
-There is clear room for improvement:
-- intercalibration are not good. This is addressed in the notebook called Analyse-Fringes-Oct-2020.Rmd
-- for the fringe construction: apparently the fringe patterns seems to disappear gradually with the number of cycles (see for example with fringe [49,53] and [17,21] in the last part of code (label: Try to improve method). This is not understood yet and is a big issue as for now it seems that integrating longer does not improve statistics. 
+We mainly use the libraries `fringes_lib.py` and `selfcal_lib.py` from QUBIC soft.
+
+Fringes are saved into **fits** files. PDF with plots can also be produced.
+ 
 
 ```{python}
 # %matplotlib inline
@@ -40,10 +40,11 @@ from qubicpack.utilities import Qubic_DataDir
 from qubicpack import qubicpack as qp
 from qubicpack.qubicfp import qubicfp
 import qubic.fibtools as ft
-from qubic import fringes_lib as fl
+from qubic import fringes_lib as flib
 from qubic import selfcal_lib as scal
 
-
+rc('figure',figsize=(12,6))
+rc('font',size=12)
 ```
 
 ## Make a QUBIC instrument and get TES coordinates
@@ -69,39 +70,10 @@ xTES, yTES, allFP_index, allindex_q = scal.get_TES_Instru_coords(q, frame='ONAFP
 ## Look at the dataset
 
 ```{python}
-#### 27/10/2020
-#### Vtes = 5
-# global_dir = '/Volumes/LaCie/QubicData/Calib-TD/Fringes/2020-10-27/'
-# vtes = 5
-# eco = 1
-# out_dir = '/Users/hamilton/Qubic/Calib-TD/Fringes/Fringes_2020-10-27_Vtes_5_Eco_1'
-# datasets = np.sort(glob.glob(global_dir+'/*RF_switch*'))
-# equiv = [0,0,1,1,2,2,3,3,3,3,3,3,3,3]    
-
-#### 28/10/2020
-# global_dir = '/Volumes/LaCie/QubicData/Calib-TD/Fringes/2020-10-28/'
-# ### Vtes=4
-# datasets = np.sort(glob.glob(global_dir+'/*RF_switch_Vtes_4_*'))
-# vtes = 4
-# eco = 1
-# equiv = [0,0,1,1,2,2,3,3]    
-# out_dir = '/Users/hamilton/Qubic/Calib-TD/Fringes/Fringes_2020-10-28_Vtes_4_Eco_1'
-# ### Vtes=3.5
-# datasets = np.sort(glob.glob(global_dir+'/*RF_switch_Vtes_3.5_*'))
-# vtes = 3.5
-# eco = 1
-# equiv = [0,0,1,1,2,2,3,3]    
-# out_dir = '/Users/hamilton/Qubic/Calib-TD/Fringes/Fringes_2020-10-28_Vtes_3.5_Eco_1'
-### Vtes=4 & No Eccosorb
-# datasets = np.sort(glob.glob(global_dir+'/*RF_switch_NoEco_Vtes_4_*'))
-# vtes = 4
-# eco = 0
-# equiv = [0,0,1,1,2,2,3,3]    
-# out_dir = '/Users/hamilton/Qubic/Calib-TD/Fringes/Fringes_2020-10-28_Vtes_4_Eco_0'
-
-# Louise
 global_dir = '/home/lmousset/QUBIC/Qubic_work/Calibration/datas/Fringes/'
 date = '2020-10-27'
+# date = '2020-01-13'
+
 print(global_dir)
 vtes = 5
 eco = 1
@@ -133,9 +105,7 @@ def get_fringes_datasets(rep, keyword, q):
     datasets: List with all the data folders
     allBLs: List with all the baselines.
     allNcycles: List with the Ncycles corresponding to each data folder.
-    allwt: List with the waiting times corresponding to each data folder.
-    BLs_sort, BLs_type: Baseline ordered by type.
-        See find_equivalent_baselines() from selfcal_lib
+    allstable_time: List with the waiting times corresponding to each data folder.
     """
     if rep[-1] != '/':
         rep += '/'
@@ -143,21 +113,25 @@ def get_fringes_datasets(rep, keyword, q):
     datasets = np.sort(glob.glob(rep + '*' + keyword + '*'))
     print('Number of folders in the dataset:', len(datasets))
 
-    allBLs, allNcycles, allwt = [], [], []
+    allBLs, allNcycles, allstable_time = [], [], []
     for ds in datasets:
         strs = ds.split('_')
+#         print(strs)
+#         allNcycles.append(100)
+#         allstable_time.append(3000.)
         allNcycles.append(float(strs[strs.index('ncycles') + 1]))
-        allwt.append(float(strs[strs.index('wt') + 1]))
+        allstable_time.append(float(strs[strs.index('wt') + 1]))
         allBLs.append([int(strs[-2]), int(strs[-1])])
 
-    BLs_sort, BLs_type = scal.find_equivalent_baselines(allBLs, q)
+    return datasets, allBLs, allNcycles, allstable_time
 
-    return datasets, allBLs, allNcycles, allwt, BLs_sort, BLs_type
+datasets, allBLs, allNcycles, allstable_time = get_fringes_datasets(global_dir + date, '*' + 'RF_switch', q)
+BLs_sort, BLs_type = scal.find_equivalent_baselines(allBLs, q)
 
-datasets, allBLs, allNcycles, allwt, BLs_sort, BLs_type = get_fringes_datasets(global_dir + date, 'RF_switch_ncy', q)
-
+nBLs = len(allBLs)
+print('nBLs:', nBLs)
 print('Ncycles:', allNcycles)
-print('WT:', allwt)
+print('Stable time:', allstable_time)
 print('Baselines:', allBLs)
 print('BL sorted:', BLs_sort)
 print('BL Type:', BLs_type)   
@@ -166,226 +140,215 @@ print('BL Type:', BLs_type)
 scal.plot_BLs_eq(allBLs, BLs_sort, q)
 ```
 
-## Analysis
+## Simulation to compare 
 
 ```{python}
-# Choose one class of equivalence
-type_eq = 2
-neq = len(BLs_sort[type_eq])
+for baseline in allBLs:
+    Model_QS = scal.Model_Fringes_QubicSoft(q, baseline,
+                                            theta_source=0., phi_source=0.,
+                                            nu_source=150e9, spec_irrad_source=1.,
+                                            frame='ONAFP', external_A=None, hwp_position=0)
 
-print(f'\n ===================== Type {type_eq} starting ===================')   
-print(f'There are {neq} baselines in this class of equivalence.')
-print('Folders indices in the dataset:', BLs_sort[type_eq])
+    xONAFP, yONAFP, fringes = Model_QS.get_fringes(doplot=True, verbose=True, norm=None, unit=None, s=180)
+
+#     print('fringes shape:', fringes.shape)
+```
+
+## Fringes Analysis
 
 
-# Filtering parameters
-lowcut = 0.00001
-highcut = 2.
-nharm = 10
-notch = np.array([[1.724, 0.005, nharm]])
+#### Analysis
 
-folded, residuals = [], []
-params = np.zeros((neq, 256, 8))
-combination = np.zeros((neq, 256))
-periods = np.zeros(neq)
-fringes = np.zeros((neq, 17, 17))
-BLs_eq = np.zeros((neq, 2), dtype=int)
-wt_eq = np.zeros(neq)
-Ncycles_eq = np.zeros(neq)
+```{python}
+allm_points, allerr_m_points = [], []
+allMcycles, allerr_Mcycles = [], []
+allfringes1D, allerr_fringes1D = [], []
+allfringes1D_percycle, allerr_fringes1D_percycle = [], []
+allTODresiduals = []
+allmask_bad_TES = []
 
-all_names = ''
-all_bs_names = ''    
-
-# Loop on the BLs in this equivalent class
-for i, ids in enumerate(BLs_sort[type_eq]):
-    
-    # Get the baseline
-    BL = allBLs[ids]
-    print(BL)
-    BLs_eq[i] = BL
-    wt_eq[i] = allwt[ids]
-    Ncycles_eq[i] = allNcycles[ids]
-    print("    ++++++++++++++++++++++++++++++++++++++++++++++++++++++++    ")
-    print(f'     * Folder index {ids} - Baseline {BL}')   
-    print("Data folder:", datasets[ids])
+# Loop on the BLs
+for i, BL in enumerate(allBLs[:1]):
+    print(f'\n ===================== Measurement {i+1}/{nBLs} - BL {BL} starting ===================')   
+    print("Data folder:", datasets[i])
 
     # Analysis
-    t, folded_bothasics, params[i], combination[i], periods[i], resid = fl.analyse_fringesLouise(datasets[ids], 
-                                                                                  lowcut=lowcut, 
-                                                                                  highcut=highcut, 
-                                                                                  notch=notch,
-                                                                                  t0=None, 
-                                                                                  tf=None,
-                                                                                  wt=allwt[ids]/1000,
-                                                                                  verbose=False)
+    Fringes_Ana = flib.FringesAnalysis(datasets[i], date, q, BL, stable_time=5., ncycles=20, 
+                                       refTESnum=None, refASICnum=None, fraction_bad_TES=0.75, 
+                                       sigma_conv_astropy=0.7, verbose=True)
+    allmask_bad_TES.append(Fringes_Ana.mask_bad_TES)
+    Fringes_Ana.plot_TOD()
+    m_points, err_m_points, Mcycles, err_Mcycles, \
+    fringes1D, err_fringes1D, fringes1D_percycle, err_fringes1D_percycle = Fringes_Ana.analyse_fringes(
+                              doplotTESsort=[0, 50],
+                              median=True,
+                              Ncycles_to_use=None,
+                              remove_median_allh=True,
+                              rm_slope_percycle=True)
 
-    folded.append(folded_bothasics)
-    residuals.append(resid)
-
-    # Make the 2D fringes 
-    fringes[i] = ft.image_asics(all1=combination[i]) # Make a 2D image
-    fringes[i] /= np.nanstd(fringes[i])       # Normalization    
-
-folded = np.array(folded)
-residuals = np.array(residuals)
+    allm_points.append(m_points)
+    allerr_m_points.append(err_m_points)
+    allMcycles.append(Mcycles)
+    allerr_Mcycles.append(err_Mcycles)
+    
+    allfringes1D.append(fringes1D)
+    allerr_fringes1D.append(err_fringes1D)
+    
+    allfringes1D_percycle.append(fringes1D_percycle)
+    allerr_fringes1D_percycle.append(err_fringes1D_percycle)
 ```
 
+## Make some plots
+
+#### Plot the fringes on the FP
+
 ```{python}
-keyvals = fl.make_keyvals(date, type_eq, neq, vtes, nstep=6, ecosorb='yes')
+k = 0
+cmap_bwr = flib.make_cmap_nan_black('bwr')
 
+fig, axs = plt.subplots(1, 2)
+ax1, ax2 = axs.ravel()
+# Scatter plot
+flib.plot_fringes_scatter(q, xTES, yTES, allfringes1D[k]* allmask_bad_TES[k], s=150, 
+                          fig=fig, ax=ax1, cmap=cmap_bwr)
 
-fdict = fl.make_fdict(BLs_eq, wt_eq, Ncycles_eq, xTES, yTES, t, 
-               folded, params, combination, periods, residuals, fringes)
-print(fdict.keys())
+# Imshow after a convolution with Astropy (gaussian kernel)
+fringes2D = flib.make2Dfringes_data(allfringes1D[k] * allmask_bad_TES[k])
+fringes2D_conv = flib.astropy_convolution(fringes2D, sigma=0.7)
+flib.plot_fringes_imshow(fringes2D_conv, normalize=True, fig=fig, ax=ax2, cmap=cmap_bwr, 
+                         title='Gaussian convolution', mask=flib.make_mask2D_thermometers_TD())
+
 ```
 
-## Plots and save as pdf files
+#### Plot the fringes value as a function of the cycle
 
 ```{python}
-# Plot fringes on the FP
-fl.plot_fringes_onFP(q, 0, keyvals, fdict)
+k = 0
+ASIC = 1
+for TES in [70, 35, 95, 100]:
+    Fringes_Ana._plot_fringes_measurement_perTES(allfringes1D[k], 
+                                                 allerr_fringes1D[k], 
+                                                 allfringes1D_percycle[k], 
+                                                 allerr_fringes1D_percycle[k],
+                                                 TES=TES,
+                                                 ASIC=ASIC)
 
-# Save a pdf with all plots
-fl.save_fringes_pdf_plots(out_dir, q, keyvals, fdict)
 ```
 
-```{python}
-# Plot folded signal and the fit for one TES 
-TES = 95
-BL_index = 1
-fl.plot_folded_fit(TES, BL_index, keyvals, fdict)
-
-# Save all the plot in a pdf (all TES and all BLs in this equivalent class)
-fl.save_folded_fit_pdf_plots(out_dir, keyvals, fdict)
-```
+#### Plot time response with and without bad TES 
 
 ```{python}
-# Plot sum and difference
+ctimes = Fringes_Ana.ctimes
 plt.figure()
-fl.plot_sum_diff_fringes(keyvals, fdict, mask=None, lim=2, cmap='bwr')
-plt.show()
+plt.hist(np.ravel(ctimes), bins=15, alpha=0.4, label='with all TES')
+plt.hist(np.ravel(ctimes)*Fringes_Ana.mask_bad_TES, bins=15, alpha=0.4, label='without the 25% worst TES')
+plt.legend()
+plt.xlabel('Time response [s]', fontsize=16)
 ```
 
-## Save data in a .fits
+#### Look at some TODs
 
 ```{python}
-neq = len(BLs_eq)
+for TES in range(1):
+    Fringes_Ana.plot_TOD(ASIC=1, TES=70)
+    plt.xlabel('Time [s]', fontsize=16)
+    plt.ylabel('TOD [A.U.]', fontsize=16)
+```
 
-name_split = datasets[0].split('/')[-1].split('_')
-date = name_split[0]
-myname = 'Fringes_' + date + f'_TypeEq{type_eq}_with_{neq}BLs.fits'
-print(myname)
+#### Look at the average made on each cycle for some TES
 
-fl.write_fits_fringes(out_dir, myname, keyvals, fdict)
+```{python}
+for TES in range(2):
+    Fringes_Ana.plot_average_over_steps(m_points[TES], err_m_points[TES], Mcycles[TES], err_Mcycles[TES])
+```
+
+## Save the data
+
+```{python}
+Save_class = flib.SaveFringesFitsPdf(q, date, allBLs[:], allstable_time[:], allNcycles[:], xTES, yTES, 
+                                       allfringes1D, allerr_fringes1D, allmask_bad_TES=allmask_bad_TES,
+                                       nsteps=6, ecosorb='yes', frame='ONAFP')
+
+save_name = 'Fringes_' + date + f'_{Save_class.nBLs}BLs_RemoveSlopePerTES_medianTrue_refTESautomatic_maskbadTES0.75'
+Save_class.save_fringes_pdf_plots(global_dir, save_name=save_name + '.pdf', mask=flib.make_mask2D_thermometers_TD())
+
+Save_class.write_fits_fringes(global_dir, save_name=save_name + '.fits')
 
 ```
 
-### Read the fits file and make the plots
+```{python}
 
-header can be used as `keyvals` for plotting functions.
+```
+
+## Find the bad TES using all images
 
 ```{python}
-header, fdict = fl.read_fits_fringes(out_dir + myname)
+# Load a fits file already saved with several images
+myfringes = 'Fringes_2020-10-27_12BLs_RemoveSlopePerTES_medianTrue_refTESautomatic_maskbadTES0.75.fits'
+
+header, fdict = flib.read_fits_fringes(global_dir + myfringes)
 print(fdict.keys())
-
-```
-
-Plot the data from the .fits that you just read.
-You can use the same functions as before, just replace `keyvals` by `header`.
-
-```{python}
-# Plot fringes on the FP
-fl.plot_fringes_onFP(q, 0, header, fdict)
-
-# Plot folded signal and the fit for one TES 
-TES = 95
-BL_index = 1
-fl.plot_folded_fit(TES, BL_index, header, fdict)
-
-```
-
-## Loop on all type of equivalence in the dataset
-We make the analysis for each type of equivalence and we save the .fits.
-
-```{python}
-# Filtering parameters
-lowcut = 0.00001
-highcut = 2.
-nharm = 10
-notch = np.array([[1.724, 0.005, nharm]])
-
-
-# Loop on the types of equivalence
-ntypes = len(BLs_sort)
-for type_eq in range(ntypes):
-    print(f'\n ===================== Type {type_eq} starting ===================')
-    
-    neq = len(BLs_sort[type_eq])
-    print(f'There are {neq} baselines in this class of equivalence.')
-    print('Folders indices in the dataset:', BLs_sort[type_eq])
-
-    folded, residuals = [], []
-    params = np.zeros((neq, 256, 8))
-    combination = np.zeros((neq, 256))
-    periods = np.zeros(neq)
-    fringes = np.zeros((neq, 17, 17))
-    BLs_eq = np.zeros((neq, 2), dtype=int)
-    wt_eq = np.zeros(neq)
-    Ncycles_eq = np.zeros(neq)
-
-    all_names = ''
-    all_bs_names = ''    
-
-    # Loop on the BLs in this equivalent class
-    for i, ids in enumerate(BLs_sort[type_eq]):
-
-        # Get the baseline
-        BL = allBLs[ids]
-        BLs_eq[i] = BL
-        wt_eq[i] = allwt[ids]
-        Ncycles_eq[i] = allNcycles[ids]
-        print("    ++++++++++++++++++++++++++++++++++++++++++++++++++++++++    ")
-        print(f'     * Folder index {ids} - Baseline {BL}')   
-        print("Data folder:", datasets[ids])
-
-        # Analysis
-        t, folded_bothasics, params[i], combination[i], periods[i], resid = fl.analyse_fringesLouise(datasets[ids], 
-                                                                                      lowcut=lowcut, 
-                                                                                      highcut=highcut, 
-                                                                                      notch=notch,
-                                                                                      t0=None, 
-                                                                                      tf=None,
-                                                                                      wt=allwt[ids]/1000,
-                                                                                      verbose=False)
-
-        folded.append(folded_bothasics)
-        residuals.append(resid)
-
-        # Make the 2D fringes 
-        fringes[i] = ft.image_asics(all1=combination[i]) # Make a 2D image
-        fringes[i] /= np.nanstd(fringes[i])       # Normalization    
-
-    folded = np.array(folded)
-    residuals = np.array(residuals)
-    
-    # Make keyvals and fdict
-    keyvals = fl.make_keyvals(date, type_eq, neq, vtes, nstep=6, ecosorb='yes')
-    fdict = fl.make_fdict(BLs_eq, wt_eq, Ncycles_eq, xTES, yTES, t, 
-                   folded, params, combination, periods, residuals, fringes)
-    
-    # Save pdf with all plots
-    fl.save_fringes_pdf_plots(out_dir, q, keyvals, fdict)
-#     fl.save_folded_fit_pdf_plots(out_dir, keyvals, fdict)
-    
-    # Save a .fits
-    name_split = datasets[0].split('/')[-1].split('_')
-    date = name_split[0]
-    myname = 'Fringes_' + date + f'_TypeEq{type_eq}_with_{neq}BLs.fits'
-    print('Myname:', myname)
-    fl.write_fits_fringes(out_dir, myname, keyvals, fdict)
+allmask_bad_TES = fdict['MASK_BAD_TES']
 
 ```
 
 ```{python}
+cmap = flib.make_cmap_nan_black('bwr')
+flib.plot_fringes_scatter(q, xTES, yTES, allmask_bad_TES[0], normalize=False, cbar=False, s=180, cmap=cmap)
+```
 
+```{python}
+thecond = np.arange(2, 13)
+nbad = []
+
+for cond in thecond:
+    the_mask = flib.decide_bad_TES(allmask_bad_TES, condition=cond)
+#     print(the_mask)
+    nbad.append(int(256 - np.nansum(the_mask)))
+
+plt.figure()
+plt.plot(thecond, nbad, 'bo')
+plt.xlabel('Number of images where the TES is NAN')
+plt.ylabel('Number of bad TES')
+plt.grid()
+
+```
+
+```{python}
+the_mask = flib.decide_bad_TES(allmask_bad_TES, condition=9)
+nbad = int(256 - np.nansum(the_mask))
+
+print(the_mask)
+
+badTES = flib.give_index_bad_TES(the_mask)
+print(badTES.T)
+
+flib.plot_fringes_scatter(q, xTES, yTES, the_mask, normalize=False, s=140, cbar=False)
+```
+
+```{python}
+# Plot TOD of the one bad TES on all images
+ibad = 0 # Bad TES index
+for i, BL in enumerate(allBLs[:]):
+    print(f'\n ===================== Measurement {i+1}/{nBLs} - BL {BL} starting ===================')   
+    print("Data folder:", datasets[i])
+
+    Fringes_Ana = flib.FringesAnalysis(datasets[i], date, q, BL, stable_time=5., ncycles=20, 
+                                       refTESnum=95, refASICnum=1, fraction_bad_TES=0.75, 
+                                       sigma_conv_astropy=0.7, sort_TES=False, verbose=True)
+
+    Fringes_Ana.plot_TOD(ASIC=badTES[ibad, 1], TES=badTES[ibad, 0])
+```
+
+```{python}
+# Plot TOD of all bad TES on one image
+img = 6 # image index
+ 
+print("Data folder:", datasets[img])
+
+Fringes_Ana = flib.FringesAnalysis(datasets[img], date, q, BL, stable_time=5., ncycles=20, 
+                                   refTESnum=95, refASICnum=1, fraction_bad_TES=0.75, 
+                                   sigma_conv_astropy=0.7, sort_TES=False, verbose=True)
+for ibad in range(nbad):
+    Fringes_Ana.plot_TOD(ASIC=badTES[ibad, 1], TES=badTES[ibad, 0])
 ```

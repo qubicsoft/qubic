@@ -165,10 +165,6 @@ for ii in range(len(mynums)):
     allerrdemodulated.append(np.append(myerrdemod[0], myerrdemod[1], axis=0))
     allfreqs.append(thefreq)
 
-name = method+'_'+n
-for d in days:
-    name = name+'_'+d
-
     
 
 ```
@@ -191,6 +187,10 @@ for i in range(len(freqs)):
         print(sh[1])
         my_alldemodulated[i,:,0:sh[1]] = alldemodulated[i]        
         my_allerrdemodulated[i,:,0:sh[1]] = allerrdemodulated[i]
+
+name = method+'_'+n
+for d in days:
+    name = name+'_'+d
 
 FitsArray(my_alldemodulated).save(savedir+'/alldemodulated_'+name+'.fits')
 FitsArray(my_allerrdemodulated).save(savedir+'/allerrdemodulated_'+name+'.fits')

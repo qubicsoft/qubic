@@ -741,7 +741,7 @@ samps = MCSamples(samples=flat_samples, names=names, labels=labels,
 
 g = plots.getSubplotPlotter()
 g.triangle_plot(samps, filled=True, title_limit=2, legend_labels='Samples', 
-                markers=params_fake, markers_args=(color='r', linestyle='--'))
+                markers=params_fake)
 
 ```
 

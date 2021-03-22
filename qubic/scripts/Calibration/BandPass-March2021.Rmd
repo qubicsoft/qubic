@@ -225,16 +225,13 @@ for j in range(len(mynums)):
         allmm[j, i], allss[j, i] = ft.meancut(alldemodulated[j,i,:], 3, med=True, disp=False)
 
 
-ites = 59
-errorbar(allfreqs, allmm[:,ites], yerr=allss[:,ites], fmt='ro', label='TES#{}'.format(ites+1))
-legend()
 ```
 
 ```{python}
 reload(dl)
 
 ff, f_rms, errf_rms = dl.get_spectral_response(name, allfreqs, allmm.T, allss.T, 
-                                               method='rms',directory=savedir)
+                                               method='rms',directory=savedir, correct_source=False)
 
 
 
@@ -249,10 +246,6 @@ sorted_index=sorted(range(len(ff)), key=lambda i: ff[i])
 plot(ff[sorted_index],dl.dB(f_rms[sorted_index]))
 
 
-```
-
-```{python}
-allmm.shape
 ```
 
 ```{python}

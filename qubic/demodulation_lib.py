@@ -980,19 +980,20 @@ def dB(y):
 
 
 def get_spectral_response(name, freqs, allmm_in, allss_in, nsig=3, method='demod', TESNum=None,
-                          directory='/Users/hamilton/Qubic/Calib-TD/SpectralResponse/'):
+                          directory='/Users/hamilton/Qubic/Calib-TD/SpectralResponse/', correct_source=True):
     allmm = allmm_in.copy()
     allss = allss_in.copy()
-    # Correct for Source Characteristics
-    if method == 'rms':
-        # Then the analysis does not use the power meter data and we only need to correct for the output power
-        allmm /= (CalSrcPower_Vs_Nu(freqs))
-        allss /= (CalSrcPower_Vs_Nu(freqs))
-    else:
-        # In the case of demod we need to correct for both the power_meter response and the output power
-        # This is done using the function below
-        allmm /= (CalSrcPowerMeterResponse_Vs_Nu(freqs))
-        allss /= (CalSrcPowerMeterResponse_Vs_Nu(freqs))
+    if correct_source:
+        # Correct for Source Characteristics
+        if method == 'rms':
+            # Then the analysis does not use the power meter data and we only need to correct for the output power
+            allmm /= (CalSrcPower_Vs_Nu(freqs))
+            allss /= (CalSrcPower_Vs_Nu(freqs))
+        else:
+            # In the case of demod we need to correct for both the power_meter response and the output power
+            # This is done using the function below
+            allmm /= (CalSrcPowerMeterResponse_Vs_Nu(freqs))
+            allss /= (CalSrcPowerMeterResponse_Vs_Nu(freqs))
 
     sh = np.shape(allmm)
     nTES = sh[0]

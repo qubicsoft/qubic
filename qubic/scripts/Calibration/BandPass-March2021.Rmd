@@ -249,5 +249,24 @@ plot(ff[sorted_index],dl.dB(f_rms[sorted_index]))
 ```
 
 ```{python}
+rff, rf_rms, drff, rerrf_rms, bla = ft.profile(ff, f_rms, nbins=64, plot=False, dispersion=True)
+
+
+rc('figure',figsize=(16,8))
+rc('font',size=18)
+figure()
+errorbar(rff, dl.dB(rf_rms), yerr=dl.dB(rf_rms+rerrf_rms)-dl.dB(rf_rms),label='rms', fmt='bo',ls='none')
+legend()
+ylabel('dB')
+xlabel('Frequency [GHz]')
+#title(name)
+ylim(-25,1)
+sorted_index=sorted(range(len(rff)), key=lambda i: rff[i])
+plot(rff[sorted_index],dl.dB(rf_rms[sorted_index]))
+axhline(y=0, color='k',ls=':')
+savefig(savedir+'bandpass_qubic.pdf')
+```
+
+```{python}
 
 ```

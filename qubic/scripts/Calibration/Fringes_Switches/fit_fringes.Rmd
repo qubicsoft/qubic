@@ -56,7 +56,7 @@ rc('font', size=14)
 ### Choose if you work with real data or with simulations
 
 ```{python}
-simu = False
+simu = True
 ```
 
 ### Get the measurement
@@ -338,7 +338,7 @@ all_fl, all_th, chi2_grid = scal.make_chi2_grid(allInvCov, fringes, BLs, q,
 
 ```{python}
 # Smooth with a gaussian to avoid loosing the min in random pixel very low (not always necessary).
-smooth = True
+smooth = False
 step_fl = all_fl[1] - all_fl[0]
 step_th = all_th[1] - all_th[0]
 if smooth:
@@ -647,13 +647,13 @@ def run(p0, nwalkers, niter, ndim, lnprob, args, withpool=True):
 
 ```{python}
 ndim = len(params_guess)
-nwalkers = 50
+nwalkers = 20
 
 # Initial guess
 p0 = [params_guess + 1e-4 * np.random.rand(ndim) for i in range(nwalkers)]
 # print(p0)
 
-niter = 2000
+niter = 200
 args = (allInvCov, fringes, BLs)
 sampler, pos, prob, state, blob_A, blob_Cov_A = run(p0, nwalkers, niter, ndim, lnprob, args, withpool=False)
 ```
@@ -661,9 +661,11 @@ sampler, pos, prob, state, blob_A, blob_Cov_A = run(p0, nwalkers, niter, ndim, l
 ```{python}
 # Look at the full chain
 thin = 1
+samples = sampler.get_chain(discard=0, thin=thin, flat=False)
+print(samples.shape)
 flat_samples = sampler.get_chain(discard=0, thin=thin, flat=True)
 print(flat_samples.shape)
-cut = 15000
+cut = 1000
 
 plt.subplots(3, 1, figsize=(12, 8))
 plt.suptitle('Full chain')
@@ -729,28 +731,17 @@ fig.colorbar(im)
 ```
 
 ```{python}
-floatfloatfig, axs = plt.subplots(2, 3, figsize=(13, 9))
-fig.suptitle('Parameter distibution (with cut)')
-axs = np.ravel(axs)
-for i in range(5):
-    mean = mean_param[i]
-    std = std_param[i]
-    axs[i].hist(flat_samples[:, i], 30, alpha=0.3, color='b',
-                label='{:.4f} +- {:.4f} m'.format(mean, std))
-#     axs[i].set_xlim(mean - 1*std, mean + 1*std)
-    axs[i].set_ylabel(f'p({label[i]})')
-    axs[i].set_xlabel(label[i])
-    # plt.gca().set_yticks([]);
-    axs[i].axvline(mean, color='b', label='Mean')
-    if simu:
-        axs[i].axvline(params_fake[i], color='r', label='True')
-    axs[i].legend(loc='lower left', fontsize=10)
-fig.tight_layout()
-```
+import getdist
+from getdist import plots, MCSamples
 
-```{python}
-fig = corner.corner(flat_samples, plot_datapoints=True, 
-                    labels=label, truths=params_fake, bins=30, color='b', truth_color='r')
+names = ['Focal', 'Theta'] + [f'P{i+1}' for i in range(nimages)]
+labels = ['f', r'\theta'] + [f'P_{i+1}' for i in range(nimages)]
+samps = MCSamples(samples=flat_samples, names=names, labels=labels,
+        ranges={'Focal':(0, None), 'Theta':(None,None)})
+
+g = plots.getSubplotPlotter()
+g.triangle_plot(samps, filled=True, title_limit=2, legend_labels='Samples', 
+                markers=params_fake, markers_args=(color='r', linestyle='--'))
 
 ```
 
@@ -778,7 +769,7 @@ print('Mean from MCMC:', mean_param[2:])
 print('STD from MCMC:', std_param[2:])
 
 # Reduced: Chi2
-nDDL = nimages * ndet
+nDDL = nimages * ndet - (ndet + nimages + 2)
 print('\n***Reduced Chi2:', scal.get_chi2(mean_param, allInvCov, fringes, BLs, q) / nDDL)
 
 ```

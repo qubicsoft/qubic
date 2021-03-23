@@ -329,15 +329,15 @@ plt.colorbar()
 #   Choose pixel for regions
 #
 
-#pixQ = [hp.ang2pix(dictionaries[0]['nside'], 
-#                   np.pi / 2 - np.deg2rad(centers[0][1] + 10), np.deg2rad(centers[0][0] + 6  ) ), ]
-#pixG = [hp.ang2pix(dictionaries[0]['nside'], 
-#                   np.pi / 2 - np.deg2rad(centers[2][1] + 8), np.deg2rad(centers[2][0] - 5  ) ), ]
+pixQ = [hp.ang2pix(dictionaries[0]['nside'], 
+                   np.pi / 2 - np.deg2rad(centers[0][1] + 10), np.deg2rad(centers[0][0] + 6  ) ), ]
+pixG = [hp.ang2pix(dictionaries[0]['nside'], 
+                   np.pi / 2 - np.deg2rad(centers[2][1] + 8), np.deg2rad(centers[2][0] - 5  ) ), ]
 
-#pixQ_ud = PixPix(pixQ[0])
-#pixG_ud = PixPix(pixG[0])
-pixQ_ud = 2955
-pixG_ud = 1632
+pixQ_ud = PixPix(pixQ[0])
+pixG_ud = PixPix(pixG[0])
+#pixQ_ud = 2955
+#pixG_ud = 1632
 # Where the sky pixel is in the reduce format (pixels seen array and not full map)
 pixQ_red = np.where(np.where(cov_ud[0] == True)[0] == pixQ_ud)[0][0]
 pixG_red = np.where(np.where(cov_ud[2] == True)[0] == pixG_ud)[0][0]

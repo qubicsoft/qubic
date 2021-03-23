@@ -33,10 +33,10 @@ import qubic.AnalysisMC as amc
 savefigs = True
 nreals = 43
 nside_new = 32
-from_coords = False
+from_coords = True
 if from_coords:
-	DeltaThetaQ, DeltaPhiQ = 10, 6
-	DeltaThetaG, DeltaphiG = -8, 3
+	DeltaThetaQ, DeltaPhiQ = 10, -6
+	DeltaThetaG, DeltaPhiG = -8, 5
 else: 
 	pixQ_ud = 10759
 	pixG_ud = 7235

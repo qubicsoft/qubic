@@ -706,6 +706,10 @@ class FringesAnalysis:
                              s=100, fig=fig, ax=ax3, cmap=cmap_viridis, normalize=False, vmin=0., vmax=3.,
                              title='|Values/Errors|')
 
+        # Plot the result for the reference TES
+        self._plot_fringes_measurement_perTES(fringes1D, err_fringes1D, fringes1D_percycle, err_fringes1D_percycle,
+                                              TES=None, ASIC=None)
+
         return m_points, err_m_points, Mcycles, err_Mcycles, fringes1D, err_fringes1D, \
                fringes1D_percycle, err_fringes1D_percycle
 
@@ -810,6 +814,54 @@ class FringesAnalysis:
         ax.legend()
         return
 
+    def _plot_fringes_measurement_perTES(self, fringes1D, err_fringes1D, fringes1D_percycle, err_fringes1D_percycle,
+                                         TES=None, ASIC=None):
+        if TES is None or ASIC is None:
+            ASIC = self.refASICnum
+            TES = self.refTESnum
+        idx = (ASIC - 1) * self.ndet_oneASIC + (TES - 1)
+        xx = np.arange(1, self.ncycles + 1)
+
+        plt.figure()
+        plt.title(f'TES {TES} - ASIC {ASIC}')
+
+        # Measurement on each cycle
+        plt.errorbar(xx, fringes1D_percycle[idx, :],
+                     yerr=err_fringes1D_percycle[idx, :], fmt='o', color='b', label='Fringes per cycle')
+
+        # Fit
+        p = np.polyfit(xx, fringes1D_percycle[idx, :], deg=3, w=1 / err_fringes1D_percycle[idx, :])
+        fit = p[0] * xx ** 3 + p[1] * xx ** 2 + p[2] * xx + p[3]
+        plt.plot(xx, fit, 'b', label='Polynomial fit deg=3')
+
+        # Final measurement and the error
+        err_plus = fringes1D[idx] + err_fringes1D[idx]
+        err_minus = fringes1D[idx] - err_fringes1D[idx]
+        plt.axhline(err_plus, color='r', linestyle='--')
+        plt.axhline(err_minus, color='r', linestyle='--')
+        plt.fill_between(np.arange(0.5, 21.5), err_minus, err_plus, facecolor='r', alpha=0.15)
+        plt.axhline(fringes1D[idx], color='r', label='Fringes on all cycles')
+
+        # Mean over the measurements on each cycle
+        plt.axhline(np.mean(fringes1D_percycle[idx, :], axis=0), color='b', label='Simple mean')
+
+        # Median  over the measurements on each cycle
+        plt.axhline(np.median(fringes1D_percycle[idx, :], axis=0), color='c', label='Median')
+
+        # Meancut  over the measurements on each cycle
+        meancut_mean, mean_cut_std = ft.meancut(fringes1D_percycle[idx, :], nsig=3, med=False)
+        plt.axhline(meancut_mean, color='m', label='Mean cut')
+        plt.axhline(meancut_mean + mean_cut_std, color='m', linestyle='--')
+        plt.axhline(meancut_mean - mean_cut_std, color='m', linestyle='--')
+
+        plt.xlabel('Cycle index')
+        plt.ylabel('Fringes value')
+        plt.xlim(0.5, 20.5)
+        plt.xticks(np.arange(1, self.ncycles + 1))
+        plt.legend()
+        plt.ylim(- np.max(np.abs(fringes1D_percycle[idx, :])) * 1.2,
+                 np.max(np.abs(fringes1D_percycle[idx, :])) * 1.2)
+        return
 
 # =========================================
 class SaveFringesFitsPdf:
@@ -1031,16 +1083,11 @@ def remove_thermometers(x, y, fringes1D):
 def reorder_data(data, xdata, ydata, xqsoft, yqsoft):
     """Reorder data (TES signal) as ordered in the QUBIC soft.
     The number of TES should be 248 (without thermometers)."""
-    ndata = len(data)
     ndet = xdata.shape[0]
-    data_ordered = []
-    for k in range(ndata):
-        olddata = data[k]
-        newdata = np.zeros_like(olddata)
-        for det in range(ndet):
-            index_simu = np.where((xqsoft == xdata[det]) & (yqsoft == ydata[det]))[0][0]
-            newdata[index_simu] = olddata[det]
-        data_ordered.append(newdata)
+    data_ordered = np.zeros_like(data)
+    for det in range(ndet):
+        index_simu = np.where((xqsoft == xdata[det]) & (yqsoft == ydata[det]))[0][0]
+        data_ordered[index_simu] = data[det]
     return data_ordered
 
 
@@ -1128,6 +1175,7 @@ def plot_fringes_scatter(q, xTES, yTES, fringes1D, normalize=True, frame='ONAFP'
 def make2Dfringes_QubicSoft(fringes1D, q, nan2zero=False):
     """fringes1D must have 248 elements ordered as in Qubic soft."""
     fringes2D = q.detector.unpack(fringes1D)[17:, :17]
+    fringes2D = np.rot90(fringes2D, k=2)
     if nan2zero:
         fringes2D[np.isnan(fringes2D)] = 0.
     return fringes2D

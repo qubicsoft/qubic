@@ -167,7 +167,7 @@ RESO = 15
 capsize=3
 plt.rc('font', size=15)
 pixQ = [hp.ang2pix(dictionaries[0]['nside'], np.pi / 2 - np.deg2rad(centers[0][1] + 15), 
-                   np.deg2rad(centers[0][0] - 13) ), ]
+                   np.deg2rad(centers[0][0] - 0) ), ]
 pixG = [hp.ang2pix(dictionaries[0]['nside'], np.pi / 2 - np.deg2rad(centers[2][1] + 3), 
                    np.deg2rad(centers[2][0] + 7) ), ]
 
@@ -251,7 +251,7 @@ fsed._plot_exampleSED(dictionaries[2], centers[2], nus_out150, maskmaps[2])
 ```{python}
 #NEW (17 Feb 2021)
 reload(fsed)
-nside_new = 16
+nside_new = 64
 nf_recon = dictionaries[0]['nf_recon']
 
 maps_ud, std_ud, fgr_map_ud, noise_ud_i = fsed.udgrade_maps(fground_maps, noise, nside_new, nf_recon, nreals)
@@ -299,9 +299,9 @@ for idict in range(len(dictionaries)):
 #
 
 pixQ = [hp.ang2pix(dictionaries[0]['nside'], 
-                   np.pi / 2 - np.deg2rad(centers[0][1] + 11), np.deg2rad(centers[0][0] - 10  ) ), ]
+                   np.pi / 2 - np.deg2rad(centers[0][1] + 10), np.deg2rad(centers[0][0] + 6  ) ), ]
 pixG = [hp.ang2pix(dictionaries[0]['nside'], 
-                   np.pi / 2 - np.deg2rad(centers[2][1] + 10), np.deg2rad(centers[2][0] + 8 ) ), ]
+                   np.pi / 2 - np.deg2rad(centers[2][1] + 8), np.deg2rad(centers[2][0] - 5  ) ), ]
 
 pixQ_ud = PixPix(pixQ[0])
 pixG_ud = PixPix(pixG[0])
@@ -359,6 +359,8 @@ Imvals, Isvals, xarr, flat_samples = fsed.foregrounds_run_mcmc(dictionaries, fgr
 
 ```{python}
 #plt.hist(flat_samples[0,:,0], bins = 20, histtype="step")
+savefigs = True
+
 plt.figure(figsize=(12,6))
 plt.subplot(121)
 plt.xlabel("Amp_d")
@@ -369,11 +371,14 @@ plt.xlabel("Amp_s")
 plt.ylabel(r"$\beta_S$")
 plt.hist2d(flat_samples[0,:,2], flat_samples[0,:,3], bins = 20, cmap = "Purples")
 plt.tight_layout()
-plt.savefig('Figs-FI-SED/March2021/hits_param_space_{}_{}_{}_{}_{}.svg'.format(FuncModel.__name__,
+if savefigs:
+    plt.savefig('Figs-FI-SED/March2021/NSIDE{}/hits_param_space_{}_{}_{}_{}_{}.svg'.format(nside_new,
+                                                                                           FuncModel.__name__,
                                                                             d150Q['nf_recon'],nside_new,
                                                            pixQ_ud, pixG_ud), 
             format = 'svg', bbox_inches='tight')
-
+else:
+    plt.show()
 ```
 
 ```{python}
@@ -437,7 +442,7 @@ elif study == "dust+synch":
 
 ySED_fit, Pmean, Perr = fsed.make_fit_SED(xSED, xarr, Imvals, Isvals,
                                           FuncPoint, fgr_map_ud, pixs_ud, nf_recon, 
-                                          initP0 = np.array([1e9, 3, 1e12, 2.5]), 
+                                          initP0 = np.array([1e10, 3, 1e10, 3]), 
                                           maxfev = 15000)
 ```
 
@@ -569,7 +574,7 @@ hp.gnomview(maps_ud[1, -1, :, 0], reso = 15, hold = True,
             notext = True, title = ' ',
             unit = r'$\mu$K',
             min = 0,
-            max = 0.9*np.max(maps_ud[1, -1, :, 0]), 
+            max = 0.4*np.max(maps_ud[1, -1, :, 0]), 
             rot = centerQ)
 hp.projscatter(hp.pix2ang(nside_new, pixQ_ud),marker = '*', color = 'r', s = 180)
 
@@ -591,20 +596,24 @@ for imer in mer_coordsQ:
 hp.graticule(dpar = dpar, dmer = dmer, alpha = 0.6, verbose = False)
 
 plt.tight_layout()
-plt.savefig('Figs-FI-SED/March2021/{}_nrec{}_nside{}_pixQ{}_pixG{}_Intensity_grat.svg'.format(FuncModel.__name__,
+if savefigs:
+    plt.savefig('Figs-FI-SED/March2021/NSIDE{}/{}_nrec{}_nside{}_pixQ{}_pixG{}_Intensity_grat.svg'.format(nside_new,
+                                                                            FuncModel.__name__,
                                                                             d150Q['nf_recon'],nside_new,
                                                            pixQ_ud, pixG_ud), 
             format = 'svg', bbox_inches='tight')
-plt.savefig('Figs-FI-SED/March2021/{}_nrec{}_nside{}_pixQ{}_pixG{}_Intensity_grat.pdf'.format(FuncModel.__name__,
+    plt.savefig('Figs-FI-SED/March2021/NSIDE{}/{}_nrec{}_nside{}_pixQ{}_pixG{}_Intensity_grat.pdf'.format(nside_new,
+                                                                                FuncModel.__name__,
                                                                                d150Q['nf_recon'],nside_new,
                                                            pixQ_ud, pixG_ud), 
             format = 'pdf', bbox_inches='tight')
-plt.savefig('Figs-FI-SED/March2021/{}_nrec{}_nside{}_pixQ{}_pixG{}_Intensity'.format(FuncModel.__name__, 
+    plt.savefig('Figs-FI-SED/March2021/NSIDE{}/{}_nrec{}_nside{}_pixQ{}_pixG{}_Intensity'.format(nside_new,
+                                                                        FuncModel.__name__, 
                                                                            d150Q['nf_recon'],
                                                                            nside_new,pixQ_ud, pixG_ud),
            bbox_inches='tight')
-
-plt.show()
+else:
+    plt.show()
 ```
 
 ### Polarization
@@ -720,7 +729,7 @@ auxmapQ = np.sqrt(maps_ud[0, 0, :, 1] ** 2 + maps_ud[0, 0, :, 2] ** 2)
 auxmapQ[~cov_ud[0]] = hp.UNSEEN
 hp.gnomview(auxmapQ,
             reso = 15, hold = True, notext = True, 
-            #max = 1e2,
+            max = 7,
             min = 0,
             title = ' ',
             cbar = True,
@@ -744,23 +753,28 @@ l = ax[0].legend([(p1, p2), (e1, e2)], ['Input sky', '68% C.L.'], numpoints=1, l
                handler_map={tuple: HandlerTuple(ndivide=None)})
 plt.tight_layout()#plt.tight_layout()
 
-plt.savefig('Figs-FI-SED/March2021/{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_grat.svg'.format(FuncModel.__name__,
+if savefigs: 
+    plt.savefig('Figs-FI-SED/March2021/NSIDE{}/{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_grat.svg'.format(nside_new,
+                                                                FuncModel.__name__,
                                                                 d150Q['nf_recon'], nside_new,
                                                            pixQ_ud, pixG_ud), 
             format = 'svg', bbox_inches='tight')
-plt.savefig('Figs-FI-SED/March2021/{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_grat.pdf'.format(FuncModel.__name__,
+    plt.savefig('Figs-FI-SED/March2021/NSIDE{}/{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_grat.pdf'.format(nside_new,
+                                                                                                             FuncModel.__name__,
                                                                 d150Q['nf_recon'], nside_new,
                                                            pixQ_ud, pixG_ud), 
             format = 'pdf', bbox_inches='tight')
-plt.savefig('Figs-FI-SED/March2021/{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_grat'.format(FuncModel.__name__,
+    plt.savefig('Figs-FI-SED/March2021/NSIDE{}/{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_grat'.format(nside_new,
+                                                                            FuncModel.__name__,
                                                                            d150Q['nf_recon'], 
                                                                            nside_new,pixQ_ud, pixG_ud),
            bbox_inches='tight')
-plt.show()
+else:
+    plt.show()
 ```
 
 ```{python}
-
+nside_new
 ```
 
 ```{python}

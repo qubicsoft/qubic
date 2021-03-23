@@ -979,23 +979,21 @@ def dB(y):
     return bla
 
 
-def get_spectral_response(name, freqs, allmm, allss, nsig=3, method='demod', TESNum=None,
-                          directory='/Users/hamilton/Qubic/Calib-TD/SpectralResponse/'):
-    # Restore the data already treated
-    # allmm = FitsArray(directory + '/allmm_' + method + '_' + name + '.fits')
-    # allss = FitsArray(directory + '/allss_' + method + '_' + name + '.fits')
-    # freqs = FitsArray(directory + '/freqs_' + method + '_' + name + '.fits')
-
-    # Correct for Source Characteristics
-    if method == 'rms':
-        # Then the analysis does not use the power meter data and we only need to correct for the output power
-        allmm /= (CalSrcPower_Vs_Nu(freqs))
-        allss /= (CalSrcPower_Vs_Nu(freqs))
-    else:
-        # In the case of demod we need to correct for both the power_meter response and the output power
-        # This is done using the function below
-        allmm /= (CalSrcPowerMeterResponse_Vs_Nu(freqs))
-        allss /= (CalSrcPowerMeterResponse_Vs_Nu(freqs))
+def get_spectral_response(name, freqs, allmm_in, allss_in, nsig=3, method='demod', TESNum=None,
+                          directory='/Users/hamilton/Qubic/Calib-TD/SpectralResponse/', correct_source=True):
+    allmm = allmm_in.copy()
+    allss = allss_in.copy()
+    if correct_source:
+        # Correct for Source Characteristics
+        if method == 'rms':
+            # Then the analysis does not use the power meter data and we only need to correct for the output power
+            allmm /= (CalSrcPower_Vs_Nu(freqs))
+            allss /= (CalSrcPower_Vs_Nu(freqs))
+        else:
+            # In the case of demod we need to correct for both the power_meter response and the output power
+            # This is done using the function below
+            allmm /= (CalSrcPowerMeterResponse_Vs_Nu(freqs))
+            allss /= (CalSrcPowerMeterResponse_Vs_Nu(freqs))
 
     sh = np.shape(allmm)
     nTES = sh[0]
@@ -1006,7 +1004,7 @@ def get_spectral_response(name, freqs, allmm, allss, nsig=3, method='demod', TES
     infilter = (freqs >= 124) & (freqs <= 182)
     outfilter = ~infilter
     for tesindex in range(256):
-        baseline = np.mean(allmm[tesindex, outfilter])
+        baseline = np.median(allmm[tesindex, outfilter])
         integ = np.sum(allmm[tesindex, infilter] - baseline)
         allfnorm[tesindex, :] = (allmm[tesindex, :] - baseline) / integ
         allsnorm[tesindex, :] = allss[tesindex, :] / integ
@@ -1016,17 +1014,19 @@ def get_spectral_response(name, freqs, allmm, allss, nsig=3, method='demod', TES
     if TESNum is not None:
         return freqs, allfnorm[TESNum - 1, :] - np.min(allfnorm[TESNum - 1, :]), allsnorm[TESNum - 1, :]
     else:
-        # Discriminant Variable: a chi2 we want it to be bad in the sense that
-        # we want the spectrum to be inconsistent with a straight line inside the QUBIC band
-        discrim = np.nansum(allfnorm[:, infilter] ** 2 / allsnorm[:, infilter] ** 2, axis=1)
-        mr, sr = ft.meancut(discrim, 3)
-        threshold = mr + nsig * sr
-        ok = (discrim > threshold)
-        print('Spectral Response calculated over {} TES'.format(ok.sum()))
+    #     OLD CODE - NOT GOOD
+    #     # Discriminant Variable: a chi2 we want it to be bad in the sense that
+    #     # we want the spectrum to be inconsistent with a straight line inside the QUBIC band
+    #     discrim = np.nansum(allfnorm[:, infilter] ** 2 / allsnorm[:, infilter] ** 2, axis=1)
+    #     mr, sr = ft.meancut(discrim[np.isfinite(discrim)], 3)
+    #     threshold = mr + nsig * sr
+    #     ok = (discrim > threshold)
+    #     print('Spectral Response calculated over {} TES'.format(ok.sum()))
+
         filtershape = np.zeros(len(freqs))
         errfiltershape = np.zeros(len(freqs))
         for i in range(len(freqs)):
-            filtershape[i], errfiltershape[i] = ft.meancut(allfnorm[ok, i], 2)
+            filtershape[i], errfiltershape[i] = ft.meancut(allfnorm[:, i], 3, disp=False, med=True)
         # errfiltershape /= np.sqrt(ok.sum())
         # Then remove the smallest value in order to avoid negative values
         filtershape -= np.min(filtershape)

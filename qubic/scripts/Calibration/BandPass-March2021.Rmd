@@ -115,7 +115,7 @@ method = 'rms'
 # method = 'demod'
 
 allnums = np.arange(len(dirs))
-nbtodo = 10#len(dirs)
+nbtodo = len(dirs)
 mynums = allnums[(allnums % (len(allnums)//nbtodo)) == 0]
 print()
 print('##############################################################')
@@ -165,12 +165,35 @@ for ii in range(len(mynums)):
     allerrdemodulated.append(np.append(myerrdemod[0], myerrdemod[1], axis=0))
     allfreqs.append(thefreq)
 
+    
+
+```
+
+```{python}
+allnbins = np.zeros(len(freqs), dtype=int)
+for i in range(len(freqs)):
+    allnbins[i] = alldemodulated[i].shape[1]
+    
+mynbins = np.max(allnbins)
+
+my_alldemodulated = np.zeros((len(freqs), 256, mynbins))
+my_allerrdemodulated = np.zeros((len(freqs), 256, mynbins))
+for i in range(len(freqs)):
+    sh = np.shape(alldemodulated[i])
+    if sh[1]==mynbins:
+        my_alldemodulated[i,:,:] = alldemodulated[i]
+        my_allerrdemodulated[i,:,:] = allerrdemodulated[i]
+    else:
+        print(sh[1])
+        my_alldemodulated[i,:,0:sh[1]] = alldemodulated[i]        
+        my_allerrdemodulated[i,:,0:sh[1]] = allerrdemodulated[i]
+
 name = method+'_'+n
 for d in days:
     name = name+'_'+d
 
-FitsArray(alldemodulated).save(savedir+'/alldemodulated_'+name+'.fits')
-FitsArray(allerrdemodulated).save(savedir+'/allerrdemodulated_'+name+'.fits')
+FitsArray(my_alldemodulated).save(savedir+'/alldemodulated_'+name+'.fits')
+FitsArray(my_allerrdemodulated).save(savedir+'/allerrdemodulated_'+name+'.fits')
 FitsArray(allfreqs).save(savedir+'/allfreqs_'+name+'.fits')
 
 ```
@@ -178,6 +201,11 @@ FitsArray(allfreqs).save(savedir+'/allfreqs_'+name+'.fits')
 # Now read files and average demodulated data
 
 ```{python}
+method = 'rms'
+name = method+'_'+n
+for d in days:
+    name = name+'_'+d
+
 alldemodulated = FitsArray(savedir+'/alldemodulated_'+name+'.fits')
 allerrdemodulated = FitsArray(savedir+'/allerrdemodulated_'+name+'.fits')
 allfreqs = FitsArray(savedir+'/allfreqs_'+name+'.fits')
@@ -192,25 +220,22 @@ allmm = np.zeros((len(mynums), 256))
 allss = np.zeros((len(mynums), 256))
 
 for j in range(len(mynums)):
+    if (j % 10)==0: print('{} over {}'.format(j,len(mynums)-1))
     for i in range(256):
         allmm[j, i], allss[j, i] = ft.meancut(alldemodulated[j,i,:], 3, med=True, disp=False)
 
 
-ites = 59
-errorbar(allfreqs, allmm[:,ites], yerr=allss[:,ites], fmt='ro', label='TES#{}'.format(ites+1))
-legend()
 ```
 
 ```{python}
 reload(dl)
-name = n
-for d in days:
-    name = name+'_'+d
 
-nsig=3
 ff, f_rms, errf_rms = dl.get_spectral_response(name, allfreqs, allmm.T, allss.T, 
-                                               method='rms',nsig=nsig,directory=savedir)
+                                               method='rms',directory=savedir, correct_source=False)
 
+
+
+figure()
 errorbar(ff, dl.dB(f_rms), yerr=dl.dB(f_rms+errf_rms)-dl.dB(f_rms),label='rms', fmt='b.-',ls='none')
 legend()
 ylabel('dB')
@@ -220,10 +245,26 @@ ylim(-40,0)
 sorted_index=sorted(range(len(ff)), key=lambda i: ff[i])
 plot(ff[sorted_index],dl.dB(f_rms[sorted_index]))
 
+
 ```
 
 ```{python}
-allmm.shape
+rff, rf_rms, drff, rerrf_rms, bla = ft.profile(ff, f_rms, nbins=64, plot=False, dispersion=True)
+
+
+rc('figure',figsize=(16,8))
+rc('font',size=18)
+figure()
+errorbar(rff, dl.dB(rf_rms), yerr=dl.dB(rf_rms+rerrf_rms)-dl.dB(rf_rms),label='rms', fmt='bo',ls='none')
+legend()
+ylabel('dB')
+xlabel('Frequency [GHz]')
+#title(name)
+ylim(-25,1)
+sorted_index=sorted(range(len(rff)), key=lambda i: rff[i])
+plot(rff[sorted_index],dl.dB(rf_rms[sorted_index]))
+axhline(y=0, color='k',ls=':')
+savefig(savedir+'bandpass_qubic.pdf')
 ```
 
 ```{python}

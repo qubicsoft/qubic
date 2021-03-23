@@ -34,9 +34,12 @@ import numpy as np
 import pickle
 from importlib import reload
 import time
+from matplotlib.legend_handler import HandlerLine2D, HandlerTuple
+
 # Specific qubic modules
 from astropy.io import fits
 import qubic
+from pysimulators import FitsArray
 from qubicpack.utilities import Qubic_DataDir
 from qubic import QubicSkySim as qss
 from qubic.polyacquisition import compute_freq
@@ -104,11 +107,6 @@ Qubic_sky_220 = qss.Qubic_sky(sky_config_220, d220)
 auxmaps220, noiseless220, _, _ = Qubic_sky_220.get_partial_sky_maps_withnoise(spatial_noise=False, 
                                                                               coverage=coverage)
 
-```{python}
-dtest = d150G.copy()
-qtest = qubic.QubicMultibandInstrument(dtest)
-print(len(qtest))
-```
 
 Make coverage..
 
@@ -148,6 +146,7 @@ noise = fsed.noise_qss(dictionaries, sky_conf, coveragesmaps, nreals, verbose = 
 #NEW (16 feb 2021)
 reload(fsed)
 maps, _, stdmaps = fsed.foreground_with_noise(dictionaries, sky_conf, regions, bands, nreals)
+
 ```
 
 Look at the maps... okk..
@@ -156,6 +155,7 @@ Look at the maps... okk..
 # NEW (16 Feb 2021)
 reload(fsed)
 maskmaps, mapregion = fsed._mask_maps(maps, coveragesmaps, dictionaries[0]['nf_recon'])
+
 ```
 
 ```{python}
@@ -251,10 +251,59 @@ fsed._plot_exampleSED(dictionaries[2], centers[2], nus_out150, maskmaps[2])
 ```{python}
 #NEW (17 Feb 2021)
 reload(fsed)
+readfiles = False
 nside_new = 64
-nf_recon = dictionaries[0]['nf_recon']
+maps_ud_i = np.zeros((len(dictionaries), nreals, nf_recon, 12 * nside_new ** 2, 3))
 
-maps_ud, std_ud, fgr_map_ud, noise_ud_i = fsed.udgrade_maps(fground_maps, noise, nside_new, nf_recon, nreals)
+if readfiles:
+    maps = FitsArray("SED_FullMaps_nside{}_nreals{}.fits".format(nside_new,nreals))
+    fgr_map_ud = FitsArray("SED_ForegMaps_nside{}_nreals{}.fits".format(nside_new,nreals))
+    noise_ud_i = FitsArray("SED_NoiseMaps_nside{}_nreals{}.fits".format(nside_new,nreals))
+    Cp_prime = FitsArray("SED_CovarMatrix_nside{}_nreals{}.fits".format(nside_new,nreals))
+    _, covmask = fsed._mask_maps(maps, coveragesmaps, nf_recon)
+    
+    cov_ud = hp.ud_grade(covmask, nside_new)
+    print("shapessss: ", np.shape(noise_ud_i))
+    for idict in range(len(dictionaries)):
+        for iNU in range(nf_recon):
+            for ireal in range(nreals):
+                maps_ud_i[idict, ireal, iNU, ...] = noise_ud_i[idict, ireal, iNU, ...] + fgr_map_ud[idict, iNU]
+                
+    maps_ud = np.mean(maps_ud_i, axis = 1)
+    for idict in range(len(dictionaries)):
+        for iNU in range(nf_recon):
+            maps_ud[idict, iNU,~cov_ud[idict],:] = hp.UNSEEN
+            
+else:
+    nf_recon = dictionaries[0]['nf_recon']
+    maps_ud, _, fgr_map_ud, noise_ud_i = fsed.udgrade_maps(fground_maps, noise, nside_new, nf_recon, nreals)
+    _, covmask = fsed._mask_maps(maps, coveragesmaps, nf_recon)
+    cov_ud = hp.ud_grade(covmask, nside_new)
+    Cp = []
+    Cp_prime = []
+    for br in range(len(dictionaries)):
+        Cp = amc.get_Cp(noise_ud_i[br][:, :, cov_ud[br], :], verbose = False, doplot = False)
+        Cp_prime.append(amc.Cp2Cp_prime_viaCorr(Cp, verbose = False)[1])
+    
+    for idict in range(len(dictionaries)):
+        for iNU in range(nf_recon):
+            maps_ud[idict, iNU,~cov_ud[idict],:] = hp.UNSEEN
+print("cov_ud shape", np.shape(cov_ud))
+    
+```
+
+```{python}
+bandreg = ["FI150Q", "FI220Q", "FI150G", "FI220G"]
+if not readfiles:
+    FitsArray(fgr_map_ud).save("SED_ForegMaps_nside{}_nreals{}.fits".format(nside_new,nreals))
+    FitsArray(noise_ud_i).save("SED_NoiseMaps_nside{}_nreals{}.fits".format(nside_new,nreals))
+    for j, idict in enumerate(dictionaries):
+        FitsArray(Cp_prime[j]).save("SED_CovarMatrix_nside{}_nreals{}_{}.fits".format(nside_new,nreals,
+                                                                                  bandreg[j]))
+    #FitsArray(np.array(cov_ud)).save("SED_CoverMaps_nside{}_nreals{}.fits".format(nside_new,nreals))
+    FitsArray(maps).save("SED_FullMaps_nside{}_nreals{}.fits".format(nside_new,nreals))
+
+#noise, maskmaps, mapregion, fground_maps
 ```
 
 ```{python}
@@ -267,27 +316,9 @@ Computing the error bars considering covariance between sub-bands
 # NEW (17feb 2021)
 reload(fsed)
 
-_, covmask = fsed._mask_maps(maps, coveragesmaps, nf_recon)
-cov_ud = hp.ud_grade(covmask, nside_new)
-print("cov_ud shape", np.shape(cov_ud))
-Cp = []
-Cp_prime = []
-for br in range(len(dictionaries)):
-    Cp = amc.get_Cp(noise_ud_i[br][:, :, cov_ud[br], :], verbose = False, doplot = False)
-    Cp_prime.append(amc.Cp2Cp_prime_viaCorr(Cp, verbose = False)[1])
-
 plt.figure()
 plt.imshow(Cp_prime[0][:, :, 0, 0])
 plt.colorbar()
-```
-
-Do same plots averaging and/or computing rms in maps
-
-```{python}
-# NEW (17 feb 2021)
-for idict in range(len(dictionaries)):
-    for iNU in range(nf_recon):
-        maps_ud[idict, iNU,~cov_ud[idict],:] = hp.UNSEEN
 ```
 
 ### FIT
@@ -298,15 +329,15 @@ for idict in range(len(dictionaries)):
 #   Choose pixel for regions
 #
 
-pixQ = [hp.ang2pix(dictionaries[0]['nside'], 
-                   np.pi / 2 - np.deg2rad(centers[0][1] + 10), np.deg2rad(centers[0][0] + 6  ) ), ]
-pixG = [hp.ang2pix(dictionaries[0]['nside'], 
-                   np.pi / 2 - np.deg2rad(centers[2][1] + 8), np.deg2rad(centers[2][0] - 5  ) ), ]
+#pixQ = [hp.ang2pix(dictionaries[0]['nside'], 
+#                   np.pi / 2 - np.deg2rad(centers[0][1] + 10), np.deg2rad(centers[0][0] + 6  ) ), ]
+#pixG = [hp.ang2pix(dictionaries[0]['nside'], 
+#                   np.pi / 2 - np.deg2rad(centers[2][1] + 8), np.deg2rad(centers[2][0] - 5  ) ), ]
 
-pixQ_ud = PixPix(pixQ[0])
-pixG_ud = PixPix(pixG[0])
-#pixQ_ud = 42505
-#pixG_ud = 27776
+#pixQ_ud = PixPix(pixQ[0])
+#pixG_ud = PixPix(pixG[0])
+pixQ_ud = 2955
+pixG_ud = 1632
 # Where the sky pixel is in the reduce format (pixels seen array and not full map)
 pixQ_red = np.where(np.where(cov_ud[0] == True)[0] == pixQ_ud)[0][0]
 pixG_red = np.where(np.where(cov_ud[2] == True)[0] == pixG_ud)[0][0]
@@ -359,7 +390,7 @@ Imvals, Isvals, xarr, flat_samples = fsed.foregrounds_run_mcmc(dictionaries, fgr
 
 ```{python}
 #plt.hist(flat_samples[0,:,0], bins = 20, histtype="step")
-savefigs = True
+savefigs = False
 
 plt.figure(figsize=(12,6))
 plt.subplot(121)
@@ -373,7 +404,7 @@ plt.hist2d(flat_samples[0,:,2], flat_samples[0,:,3], bins = 20, cmap = "Purples"
 plt.tight_layout()
 if savefigs:
     plt.savefig('Figs-FI-SED/March2021/NSIDE{}/hits_param_space_{}_{}_{}_{}_{}.svg'.format(nside_new,
-                                                                                           FuncModel.__name__,
+                                                                            FuncModel.__name__,
                                                                             d150Q['nf_recon'],nside_new,
                                                            pixQ_ud, pixG_ud), 
             format = 'svg', bbox_inches='tight')
@@ -442,7 +473,7 @@ elif study == "dust+synch":
 
 ySED_fit, Pmean, Perr = fsed.make_fit_SED(xSED, xarr, Imvals, Isvals,
                                           FuncPoint, fgr_map_ud, pixs_ud, nf_recon, 
-                                          initP0 = np.array([1e10, 3, 1e10, 3]), 
+                                          initP0 = np.array([1e3, 3, 1e8, 3]), 
                                           maxfev = 15000)
 ```
 
@@ -468,7 +499,6 @@ for icomp in range(2):
 
 ```{python}
 # NEW (17 feb 2021)
-from matplotlib.legend_handler import HandlerLine2D, HandlerTuple
 RESO = 15
 capsize = 3
 plt.rc('font', size = 14)
@@ -771,10 +801,6 @@ if savefigs:
            bbox_inches='tight')
 else:
     plt.show()
-```
-
-```{python}
-nside_new
 ```
 
 ```{python}

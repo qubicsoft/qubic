@@ -68,7 +68,6 @@ class LogLikelihood:
             print('Diff x invcov')
             print(np.shape((self.yvals - self.modelval).T @ self.invcov))
             print(((self.yvals - self.modelval).T @ self.invcov)[0:10])
-        # logLLH = lp - 0.5 * np.dot(np.dot(self.yvals - self.modelval, self.invcov), self.yvals - self.modelval)
         logLLH = lp - 0.5 * (((self.yvals - self.modelval).T @ self.invcov) @ (self.yvals - self.modelval))
         if not np.isfinite(logLLH):
             return -np.inf

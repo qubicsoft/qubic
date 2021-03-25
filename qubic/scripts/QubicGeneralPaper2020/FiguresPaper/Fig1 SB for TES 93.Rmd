@@ -103,8 +103,8 @@ rc('figure',figsize=(11,6))
 rc('font',size=16)
 figure()
 hp.gnomview(myhpmap/np.max(myhpmap)/3, reso=10, sub=(1,2,1), title='Frequency: 150 GHz - Data', min=0, max=mx)
-img=hp.gnomview(sb/np.max(sb), rot=[0,90, 90], reso=10,sub=(1,2,2), title='Frequency: 150 GHz - Data', min=0,max=mx)
-# tight_layout()
+img=hp.gnomview(sb/np.max(sb), rot=[0,90, 90], reso=10,sub=(1,2,2), title='Frequency: 150 GHz - Simulation', min=0,max=mx)
+savefig('/Users/hamilton/Downloads/SB_QUBIC_150GHz.pdf')
 ```
 
 ```{python}

@@ -1546,7 +1546,7 @@ def hwp_fitpol_MCMC(thvals, ampvals, ampvals_err, doplot=False, str_title=None, 
             errors[j] = (mystat.limits[contnum].upper - mystat.limits[contnum].lower)/2
             res_str.append('{0:} = {1:8.3f} +/- {2:8.3f} (68% C.L.)'.format(names[j], valbest[j], errors[j]))
         else:
-            res_str.append('{0:} < {1:8.3f} (95% C.L.)'.format(names[j], intervals[j,1]))
+            res_str.append('{0:} < {1:5.1f} (95% C.L.)'.format(names[j], intervals[j,1]))
         
     for j in range(len(names)):
         #print(names[j], valbest[j], errors[j], intervals_CL[j], intervals[j,:])
@@ -1566,6 +1566,7 @@ def hwp_fitpol_MCMC(thvals, ampvals, ampvals_err, doplot=False, str_title=None, 
                  fmt='r.')
         angs = np.linspace(0, 90, 900)
         lab = res_str[0] + '\n' + res_str[2]
+        #lab = res_str[0] 
 
         sh = np.shape(flat_samples)
         allfcts = np.zeros((sh[0], len(angs)))
@@ -1577,7 +1578,7 @@ def hwp_fitpol_MCMC(thvals, ampvals, ampvals_err, doplot=False, str_title=None, 
         fill_between(angs, mean_curve+std_curve, y2=mean_curve-std_curve, alpha=0.2, color='b')
         plot(angs, mean_curve, 'b', label=lab)
 
-        ylim(-0.1, 1.3)
+        ylim(-0.1, 1.2)
         plot(angs, angs * 0, 'k--')
         plot(angs, angs * 0 + 1, 'k--')
         legend(loc='upper left')

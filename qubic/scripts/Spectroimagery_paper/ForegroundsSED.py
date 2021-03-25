@@ -457,25 +457,13 @@ def DustSynch_model_pointer(x, *pars, extra_args = None):
 
 def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 		   maxfev = 10000, initP0 = None, verbose = False, chi2 = None,
-		  nsamples = 5000, new = False):
+		  nsamples = 5000):
 	
-	if new:
-		gmodel = Model(FuncModel)
-
-		#Set initial params...
-		#print(gmodel.fit(maps[:, pix, istk], pars, x = nus, nan_policy = "omit"))
-		if initP0 != None:
-			for j, ipar in enumerate(gmodel.param_names):
-				gmodel.set_param_hint(ipar, value = initP0[j])
-		pars = gmodel.make_params()
-		fit_par = gmodel.fit(maps[:, pix, istk], pars, x = nus, nan_policy = "omit")
-
-		popt = list(fit_par.best_values.values())
-	else:
-		#popt, pcov = curve_fit(FuncModel, nus, maps[:, pix, istk], 
-		#						sigma = covMat[:, :, istk, pix_red], absolute_sigma=True,
-		#						maxfev = maxfev, p0 = initP0)
-		popt = initP0
+	#print(np.shape(covMat[:, :, istk, pix_red]))
+	#popt, pcov = curve_fit(ThermDust_Planck353_l, nus, maps[:, pix, istk], 
+	#						sigma = covMat[:, :, istk, pix_red], absolute_sigma=True,
+	#						maxfev = maxfev, p0 = initP0)
+	popt = initP0
 
 	if verbose:
 		print("Calling LogLikelihood", popt, pcov)
@@ -511,7 +499,10 @@ def foregrounds_run_mcmc(dictionaries, fgr_map, Cp_prime, FuncModel,
 	MeanVals = np.zeros((len(dictionaries), samples//2, 3))
 	StdVals = np.zeros((len(dictionaries), samples//2, 3))
 	xarr = np.zeros((len(dictionaries), samples//2, 3))
-	_flat_samples = np.zeros((len(dictionaries), 2496, len(initP0)))
+	# ndim = 
+	#2496 if samples == 5k or 4992 if samples == 10k 7488 is sample == 15k 
+	ndim = 2496
+	_flat_samples = np.zeros((len(dictionaries), ndim, len(initP0)))
 
 	for istk in range(3):
 		if verbose: print("======== Doing {} Stokes parameter =============".format(dictionaries[0]['kind'][istk]))
@@ -540,7 +531,9 @@ def udgrade_maps(fground_maps, noise, new_nside, nf_recon, nreals):
 	npix_ud = 12 * new_nside **2 
 
 	fgr_map_ud = np.zeros((len(fground_maps), nf_recon, npix_ud, 3))
+
 	noise_ud_i = np.zeros((len(fground_maps), nreals, nf_recon, npix_ud, 3))
+	
 	maps_ud_i = np.zeros_like(noise_ud_i)
 
 	for bandreg in range(len(fground_maps)):
@@ -586,7 +579,7 @@ def make_fit_SED(xSED, xarr, Imvals, Isvals, FuncModel, fgr_map_ud, pixs_ud, nf_
 				print("auxpopt, auxpcov", auxpopt, auxcov)
 				popt[j, :, icomp], pcov[j, :, :, icomp] = auxpopt, auxcov
 				#print("==== Parameters for optimization (SED fitting)")
-				print(popt[j, :, icomp], pcov[j, :, :, icomp])
+				#print(popt[j, :, icomp], pcov[j, :, :, icomp])
 			else:
 				ySED[j, :, icomp] = np.sqrt(fgr_map_ud[j][:,pixs_ud[j], 1] ** 2 + \
 											fgr_map_ud[j][:,pixs_ud[j], 2] ** 2)
@@ -612,7 +605,8 @@ def make_fit_SED(xSED, xarr, Imvals, Isvals, FuncModel, fgr_map_ud, pixs_ud, nf_
 
 	return ySED_fit, Pmean, Perr
 
-def _plot_exampleSED(dictionary, center, nus_out, maskmaps, savefig = None):
+def _plot_exampleSED(dictionary, center, nus_out, maskmaps, mapsarray = False, savefig = None,
+					DeltaTheta = 0, DeltaPhi = 0):
 
 	"""
 	Plot an example of Figure 10 (map + SED ) in paper 1
@@ -635,23 +629,36 @@ def _plot_exampleSED(dictionary, center, nus_out, maskmaps, savefig = None):
 	capsize=3
 	plt.rc('font', size=16)
 
-	pixG = [hp.ang2pix(dictionary['nside'], np.pi / 2 - np.deg2rad(center[1] + 1 ), 
-					   np.deg2rad(center[0]) ), ]
+	pixG = [hp.ang2pix(dictionary['nside'], np.pi / 2 - np.deg2rad(center[1] + DeltaTheta ), 
+					   np.deg2rad(center[0] + DeltaPhi) ), ]
 
 	fig,ax = plt.subplots(nrows=1,ncols=2,figsize=(14,5),)
 	ax = ax.ravel()
-	IPIXG = pixG[0]
-	ax[1].plot(nus_out, maskmaps[:,IPIXG,0], 'o-', color='r')
+	IPIXG = pixG[0] 
+	color = ['r','g','k']
+	label = ['dust', 'synchrotron', 'dust+synchrotron']
+	if mapsarray:
+		for j, imap in enumerate(maskmaps):
+			ax[1].plot(nus_out, imap[:,IPIXG,0], 'o', color=color[j], label = label[j])
+		ax[1].legend()
+		ax[0].cla()	
+		plt.axes(ax[0])
+		hp.gnomview(maskmaps[-1][-1,:,0], reso = 15,hold = True, title = ' ',unit = r'$\mu$K', notext =True,
+					min = 0 ,
+					max = 0.23 * np.max(maskmaps[-1][-1,:,0]), rot = center)
+	else:
+		ax[1].plot(nus_out, maskmaps[:,IPIXG,0], 'o-', color='r')
+		ax[0].cla()
+		plt.axes(ax[0])
+		hp.gnomview(maskmaps[-1,:,0], reso = 15,hold = True, title = ' ',unit = r'$\mu$K', notext =True,
+					min = 0 ,
+					max = 0.23 * np.max(maskmaps[-1,:,0]), rot = center)
+	hp.projscatter(hp.pix2ang(dictionary['nside'], IPIXG), marker = '*', color = 'r',s = 180)
 	ax[1].set_ylabel(r'$I_\nu$ [$\mu$K]')
 	ax[1].set_xlabel(r'$\nu$[GHz]')
-	ax[0].cla()
-	plt.axes(ax[0])
-	hp.gnomview(maskmaps[-1,:,0], reso = 15,hold = True, title = ' ',unit = r'$\mu$K', notext =True,
-				min = 0 ,
-				max = 0.23 * np.max(maskmaps[-1,:,0]), rot = center)
-	hp.projscatter(hp.pix2ang(dictionary['nside'], IPIXG), marker = '*', color = 'r',s = 180)
 	dpar = 10
 	dmer = 20
+	ax[1].grid()
 	#Watch out, the names are wrong (change it)
 	mer_coordsG = [ center[0] - dmer,   center[0], center[0] + dmer]
 	long_coordsG = [center[1] - 2*dpar, center[1] - dpar, center[1], 

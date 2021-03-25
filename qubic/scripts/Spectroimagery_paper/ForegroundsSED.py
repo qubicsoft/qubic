@@ -605,8 +605,8 @@ def make_fit_SED(xSED, xarr, Imvals, Isvals, FuncModel, fgr_map_ud, pixs_ud, nf_
 
 	return ySED_fit, Pmean, Perr
 
-def _plot_exampleSED(dictionary, center, nus_out, maskmaps, mapsarray = False, savefig = None,
-					DeltaTheta = 0, DeltaPhi = 0):
+def _plot_exampleSED(dictionary, center, nus_out, maskmaps, mapsarray = False, 
+					DeltaTheta = 0, DeltaPhi = 0, savefig = False):
 
 	"""
 	Plot an example of Figure 10 (map + SED ) in paper 1
@@ -685,8 +685,8 @@ def _plot_exampleSED(dictionary, center, nus_out, maskmaps, mapsarray = False, s
 	hp.projtext(mer_coordsG[2] + 12.5, long_coordsG[2] - 1, '$b$', rotation = 90, color = 'k', lonlat=True)
 	hp.graticule(dpar = dpar, dmer = dmer, alpha = 0.6, verbose = False)
 	plt.tight_layout()
-	if savefig != None:
-		plt.savefig('true-sky.svg', format = 'svg',  bbox_inches='tight')
-		plt.savefig('true-sky.pdf', format = 'pdf',  bbox_inches='tight')
-		plt.savefig('true-sky',  bbox_inches='tight')
+	if savefig:
+		plt.savefig('SED-components.svg', format = 'svg',  bbox_inches='tight')
+		plt.savefig('SED-components.pdf', format = 'pdf',  bbox_inches='tight')
+		plt.savefig('SED-components',  bbox_inches='tight')
 	plt.show()

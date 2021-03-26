@@ -387,8 +387,21 @@ Imvals, Isvals, xarr, flat_samples = fsed.foregrounds_run_mcmc(dictionaries, fgr
 ```
 
 ```{python}
+print(flat_samples.shape)
+
+import getdist
+from getdist import plots, MCSamples
+
+for i in range(len(dictionaries)):
+    samps = MCSamples(samples=flat_samples[i,:,:])
+    g = plots.getSubplotPlotter()
+    g.triangle_plot(samps, filled=True,title_limit=2)
+
+```
+
+```{python}
 #plt.hist(flat_samples[0,:,0], bins = 20, histtype="step")
-savefigs = True
+savefigs = False
 
 plt.figure(figsize=(12,6))
 plt.subplot(121)
@@ -804,6 +817,22 @@ else:
 
 ```{python}
 nside_new
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 ```{python}

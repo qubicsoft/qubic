@@ -1,0 +1,334 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.7.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# %matplotlib inline
+
+import os
+import sys
+import glob
+from importlib import reload
+import gc
+# Specific science modules
+import healpy as hp
+import matplotlib.pyplot as plt
+import numpy as np
+import pickle 
+import astropy.io as fits
+
+# Specific qubic modules
+import qubic
+from qubicpack.utilities import Qubic_DataDir
+from qubic import QubicSkySim as qss
+from qubic.polyacquisition import compute_freq
+from qubic import ReadMC as rmc
+from qubic import create_acquisition_operator_REC
+import ForegroundsSED as fsed
+import qubic.AnalysisMC as amc
+
+from pysimulators import FitsArray
+import time
+from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
+from scipy.optimize import curve_fit
+import scipy.constants
+from qubic import mcmc
+import qubic.AnalysisMC as amc
+import pickle as pk
+
+plt.rc('text',usetex=False)
+plt.rc('font', size=16)
+
+from mpl_toolkits.mplot3d import Axes3D
+```
+
+```{python}
+nside = 8
+savefigs = False
+
+if nside == 64:
+    # pixels used in paper: 24448 and 22144
+    pixG_ud = 22144 
+elif nside == 8:
+    # pixels used in paper: 368 or 272
+    pixG_ud = 368
+```
+
+```{python}
+file = open("DataSED/SED-component_data.pk", 'rb')
+dictionaries, centers, nus, Maps = pk.load(file)
+_, nus_edge150, nus150, _, _, _ = qubic.compute_freq(dictionaries[0]['filter_nu'] / 1e9,  
+                            dictionaries[0]['nf_recon'],
+                            dictionaries[0]['filter_relative_bandwidth'])
+file.close()
+
+fsed._plot_exampleSED(dictionaries[0], centers[0], nus, Maps, mapsarray = True, 
+                     DeltaTheta = 1, DeltaPhi = 0, savefig = 0)
+```
+
+```{python}
+file = open("DataSED/SED_CovarMatrix_configGalCen_Field150TD_nside{}_nreals100.pk".format(nside), "rb")
+Cp_prime = pk.load(file)
+file.close()
+```
+
+```{python}
+file = open("DataSED/MCMC_run_TDnside{}_nreals100_pix{}.pk".format(nside, pixG_ud), "rb")
+Mean_mcmc, Std_mcmc, xarr_mcmc, ySED_fit, Pmean, Perr, pixs_ud = pk.load(file)
+file.close()
+```
+
+```{python}
+file = open("DataSED/ForegroundMaps_TDnside{}.pk".format(nside), "rb")
+fgr_map_dust_ud, fgr_map_synch_ud, fgr_map_ud, maps_ud, cov_ud = pk.load(file)
+file.close()
+```
+
+```{python}
+#
+#                  Intensity
+#
+_, nus_edge220, nus220, _, _, _ = qubic.compute_freq(220,  
+                            dictionaries[0]['nf_recon'],
+                            dictionaries[0]['filter_relative_bandwidth'])
+
+# NEW (17 feb 2021)
+RESO = 15
+capsize = 3
+plt.rc('font', size = 14)
+
+fig,ax = plt.subplots(nrows = 1, ncols = 2,figsize = (12,6), gridspec_kw = {'wspace': 0.4})
+ax = ax.ravel()
+plt.subplots_adjust(wspace = 0.1)
+# Plotting
+# Dust galactic center
+t0, = ax[0].plot(nus150, fgr_map_dust_ud[0,:,pixs_ud[0],0], ls = '', 
+           marker = 'd', color = 'g',alpha = 0.5, label = 'Dust')
+#Synch galactic center
+t1, = ax[0].plot(nus150, fgr_map_synch_ud[0,:,pixs_ud[0],0], ls = '', 
+           marker = 's', color = 'g', alpha = 0.5, label = 'Synchrotron')
+#Two components
+p1, = ax[0].plot(nus150, fgr_map_ud[0, :, pixs_ud[0], 0], 'ro', label = 'Input sky')
+
+e1 = ax[0].fill_between(xarr_mcmc[0,:], y1 = ySED_fit[0,:,0] - Std_mcmc[0, :, 0], 
+                                y2 = ySED_fit[0, :, 0] + Std_mcmc[0, :, 0], 
+                 color = 'r', alpha = 0.3, label = '68% C.L.')
+
+# Settings
+greyscale = 0.1
+xlim = ax[0].get_xlim()
+ylim = ax[0].get_ylim()
+ax[0].axvspan(nus_edge150[-1], nus_edge220[0],color='k',alpha = greyscale)
+ax[0].axvspan(xlim[0], nus_edge150[0], color = 'k', alpha = greyscale)
+ax[0].axvspan(nus_edge220[-1], xlim[-1], color = 'k', alpha = greyscale)
+
+ax[0].set_xlim(xlim)
+ax[0].set_ylim(ylim)
+
+#l = ax[0].legend([(t0,t1), (p1, p2), (e1, e2)], ["Dust - Synch", 'Full ', '68% C.L.'], numpoints=1, 
+#                 loc = 2, fontsize = 12,
+#               handler_map={tuple: HandlerTuple(ndivide=None)})
+
+ax[0].grid()
+ax[0].set_title('GC patch - {} year'.format(dictionaries[0]['effective_duration']),fontsize=16)
+ax[0].set_ylabel(r'$I(\nu)$ [$\mu$K]',fontsize=16)
+ax[0].set_xlabel(r'$\nu$[GHz]',fontsize=16)
+ax[0].legend()
+# Displaying maps
+ax[1].cla()
+plt.axes(ax[1])
+hp.gnomview(maps_ud[0, -1, :, 0], reso = 15,hold = True, 
+            notext = True, title = ' ',
+            min = 0,
+            max = 0.4*np.max(maps_ud[0, -1, :, 0]), 
+            unit = r'$\mu$K',
+            rot = centers[0])
+hp.projscatter(hp.pix2ang(nside, pixs_ud[0]), marker = '*', color = 'r', s = 180)
+dpar = 10
+dmer = 20
+#Watch out, the names are wrong (change it)
+mer_coordsG = [centers[0][0] - dmer, centers[0][0], centers[0][0] + dmer]
+long_coordsG = [centers[0][1] - 2*dpar, centers[0][1] - dpar, 
+                centers[0][1], centers[0][1] + dpar, centers[0][1] + 2 * dpar]
+#paralels
+for ilong in long_coordsG:
+    plt.text(np.deg2rad(mer_coordsG[0] - 12), 1.1*np.deg2rad(ilong), 
+             r'{}$\degree$'.format(ilong))
+#meridians
+for imer in mer_coordsG:
+    if imer < 0:
+        jmer = imer + 360
+        ip, dp = divmod(jmer/15,1)
+    else:
+        ip, dp = divmod(imer/15,1)
+    if imer == 0:
+        plt.text(-np.deg2rad(imer + 3), np.deg2rad(long_coordsG[-1] + 6), 
+             r'{}$\degree$'.format(int(ip) ))
+    else:
+        plt.text(-np.deg2rad(imer + 3), np.deg2rad(long_coordsG[-1] + 6), 
+             r'{}$\degree$'.format(imer))
+             #r'{}h{}m'.format(int(ip), int(round(dp*60))))
+hp.projtext(mer_coordsG[1] + 2, long_coordsG[0] - 6, '$l$',  color = 'k', lonlat=True)
+hp.projtext(mer_coordsG[2] + 12.5, long_coordsG[2] - 1, '$b$', rotation = 90, color = 'k', lonlat=True)
+
+hp.graticule(dpar = dpar, dmer = dmer, alpha = 0.6, verbose = False)
+
+plt.tight_layout()
+if savefigs:
+    plt.savefig('Figs-TD-SED/March2021/NSIDE{}/{}_nrec{}_nside{}_pixG{}_Intensity_grat.svg'.format(nside,
+                                                                            FuncModel.__name__,
+                                                                            nf_recon,nside,
+                                                           pixG_ud), 
+            format = 'svg', bbox_inches='tight')
+    plt.savefig('Figs-TD-SED/March2021/NSIDE{}/{}_nrec{}_nside{}_pixG{}_Intensity_grat.pdf'.format(nside,
+                                                                                FuncModel.__name__,
+                                                                               nf_recon,nside,
+                                                           pixG_ud), 
+            format = 'pdf', bbox_inches='tight')
+    plt.savefig('Figs-TD-SED/March2021/NSIDE{}/{}_nrec{}_nside{}_pixG{}_Intensity'.format(nside,
+                                                                        FuncModel.__name__, 
+                                                                           nf_recon,
+                                                                           nside, pixG_ud),
+           bbox_inches='tight')
+else:
+    plt.show()
+```
+
+```{python}
+#
+#                  Polarization
+#
+RESO = 15
+capsize = 3
+plt.rc('font', size = 14)
+
+fig,ax = plt.subplots(nrows = 1, ncols = 2,figsize = (12,6), gridspec_kw = {'wspace': 0.4})
+ax = ax.ravel()
+plt.subplots_adjust(wspace = 0.1)
+# Plotting
+# Dust galactic center
+t0, = ax[0].plot(nus150, np.sqrt(fgr_map_dust_ud[0,:,pixs_ud[0],1] ** 2 + \
+                 fgr_map_dust_ud[0,:,pixs_ud[0],2] **2), ls = '', 
+           marker = 'd', color = 'g',alpha = 0.5, label = 'Dust')
+#Synch galactic center
+t1, = ax[0].plot(nus150, np.sqrt(fgr_map_synch_ud[0,:,pixs_ud[0],1] ** 2 + \
+                                    fgr_map_synch_ud[0,:,pixs_ud[0],2] ** 2), ls = '', 
+           marker = 's', color = 'g', alpha = 0.5, label = 'Synchrotron')
+#Two components
+p1, = ax[0].plot(nus150, np.sqrt(fgr_map_ud[0,:,pixs_ud[0],1] ** 2 + \
+                                     fgr_map_ud[0,:,pixs_ud[0],2] ** 2),
+                 'ro', label = 'Input sky')
+
+e1 = ax[0].fill_between(xarr_mcmc[0,:], y1 = ySED_fit[0, :, 1] - Perr[0], 
+                        y2 = ySED_fit[0, :, 1] + Perr[0], 
+                 color = 'r', alpha = 0.3, label = '68% C.L.')
+
+# Settings
+greyscale = 0.1
+xlim = ax[0].get_xlim()
+ylim = ax[0].get_ylim()
+ax[0].axvspan(nus_edge150[-1], nus_edge220[0],color='k',alpha = greyscale)
+ax[0].axvspan(xlim[0], nus_edge150[0], color = 'k', alpha = greyscale)
+ax[0].axvspan(nus_edge220[-1], xlim[-1], color = 'k', alpha = greyscale)
+
+ax[0].set_xlim(xlim)
+ax[0].set_ylim(ylim)
+
+#l = ax[0].legend([(t0,t1), (p1, p2), (e1, e2)], ["Dust - Synch", 'Full ', '68% C.L.'], numpoints=1, 
+#                 loc = 2, fontsize = 12,
+#               handler_map={tuple: HandlerTuple(ndivide=None)})
+ax[0].legend()
+ax[0].set_title('TD - {} year'.format(dictionaries[0]['effective_duration']), fontsize = 14)
+ax[0].set_ylabel(r'$P(\nu)~[\mu$K]', fontsize = 14)
+ax[0].set_xlabel(r'$\nu~[GHz]$', fontsize = 14)
+ax[0].legend(loc = 2, fontsize = 12)
+ax[0].grid()
+
+# Displaying maps
+auxmapG = np.sqrt(maps_ud[0, 0, :, 1] ** 2 + maps_ud[0, 0, :, 2] ** 2)
+auxmapG[~cov_ud[0]] = hp.UNSEEN
+ax[1].cla()
+plt.axes(ax[1])
+hp.gnomview(auxmapG, reso = 15,hold = True, 
+            notext = True, title = ' ',
+            min = 0,
+            max = 0.9*np.max(auxmapG), 
+            unit = r'$\mu$K',
+            rot = centers[0])
+hp.projscatter(hp.pix2ang(nside, pixs_ud[0]), marker = '*', color = 'r', s = 180)
+dpar = 10
+dmer = 20
+#Watch out, the names are wrong (change it)
+mer_coordsG = [centers[0][0] - dmer, centers[0][0], centers[0][0] + dmer]
+long_coordsG = [centers[0][1] - 2*dpar, centers[0][1] - dpar, 
+                centers[0][1], centers[0][1] + dpar, centers[0][1] + 2 * dpar]
+#paralels
+for ilong in long_coordsG:
+    plt.text(np.deg2rad(mer_coordsG[0] - 12), 1.1*np.deg2rad(ilong), 
+             r'{}$\degree$'.format(ilong))
+#meridians
+for imer in mer_coordsG:
+    if imer < 0:
+        jmer = imer + 360
+        ip, dp = divmod(jmer/15,1)
+    else:
+        ip, dp = divmod(imer/15,1)
+    if imer == 0:
+        plt.text(-np.deg2rad(imer + 3), np.deg2rad(long_coordsG[-1] + 6), 
+             r'{}$\degree$'.format(int(ip) ))
+    else:
+        plt.text(-np.deg2rad(imer + 3), np.deg2rad(long_coordsG[-1] + 6), 
+             r'{}$\degree$'.format(imer))
+             #r'{}h{}m'.format(int(ip), int(round(dp*60))))
+hp.projtext(mer_coordsG[1] + 2, long_coordsG[0] - 6, '$l$',  color = 'k', lonlat=True)
+hp.projtext(mer_coordsG[2] + 12.5, long_coordsG[2] - 1, '$b$', rotation = 90, color = 'k', lonlat=True)
+
+hp.graticule(dpar = dpar, dmer = dmer, alpha = 0.6, verbose = False)
+
+plt.tight_layout()
+if savefigs:
+    plt.savefig('{}_nrec{}_nside{}_pixG{}_Polarization_grat.svg'.format(nside,
+                                                                            FuncModel.__name__,
+                                                                            nf_recon,nside,
+                                                            pixG_ud), 
+            format = 'svg', bbox_inches='tight')
+    plt.savefig('Figs-TD-SED/March2021/NSIDE{}/{}_nrec{}_nside{}_pixG{}_Polarization_grat.pdf'.format(nside,
+                                                                                FuncModel.__name__,
+                                                                               nf_recon,nside,
+                                                            pixG_ud), 
+            format = 'pdf', bbox_inches='tight')
+    plt.savefig('Figs-TD-SED/March2021/NSIDE{}/{}_nrec{}_nside{}_pixG{}_Polarization'.format(nside,
+                                                                        FuncModel.__name__, 
+                                                                           nf_recon,
+                                                                           nside, pixG_ud),
+           bbox_inches='tight')
+else:
+    plt.show()
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

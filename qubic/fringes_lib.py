@@ -1150,7 +1150,8 @@ def make_cmap_nan_black(cmap):
 
 
 def plot_fringes_scatter(q, xTES, yTES, fringes1D, normalize=True, frame='ONAFP', fig=None, ax=None,
-                         cbar=True, vmin=-1., vmax=1., cmap=make_cmap_nan_black('bwr'), s=None, title='Scatter plot'):
+                         cbar=True, vmin=-1., vmax=1., cmap=make_cmap_nan_black('bwr'), s=None,
+                         title='Scatter plot', fontsize=14):
     x, y, fringes = remove_thermometers(xTES, yTES, fringes1D)
 
     if normalize:
@@ -1167,7 +1168,8 @@ def plot_fringes_scatter(q, xTES, yTES, fringes1D, normalize=True, frame='ONAFP'
                          vmin=vmin,
                          vmax=vmax,
                          cbar=cbar,
-                         plotnonfinite=True
+                         plotnonfinite=True,
+                         fontsize=fontsize
                          )
     return
 

@@ -117,7 +117,7 @@ def pcolor_plot_FP(q, x, y, FP_signal, frame, title=None, fig=None, ax=None, cba
     y2D = q.detector.unpack(y)
     FP_signal2D = q.detector.unpack(FP_signal)
 
-    img = ax.pcolor(x2D, y2D, FP_signal2D, **kwargs)
+    img = ax.pcolor(x2D, y2D, FP_signal2D, shading='auto', **kwargs)
     if cbar:
         divider = make_axes_locatable(ax)
         cax = divider.append_axes('right', size='5%', pad=0.05)

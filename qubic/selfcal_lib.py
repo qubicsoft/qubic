@@ -802,8 +802,10 @@ def get_gains(allPowerPhi, allInvCov, allData):
     A = Cov_A @ Term
 
     # Normalization
-    A /= np.mean(A)
-    Cov_A /= np.mean(A) ** 2
+    weights = 1 / np.diag(Cov_A) # To cancel bad detectors
+    avgA = np.average(A, weights=weights) # Weighted mean
+    A /= avgA
+    Cov_A /= avgA ** 2
 
     return A, Cov_A
 
@@ -864,7 +866,6 @@ def get_chi2(params, allInvCov, allData, BLs, q, nu_source=150e9, returnA=False)
         M = np.diag(allPowerPhi[k]) @ A
         R = M - allData[k]
         chi2 += R.T @ InvCov_correct @ R
-        # print(chi2)
 
     if returnA:
         return chi2, A, Cov_A

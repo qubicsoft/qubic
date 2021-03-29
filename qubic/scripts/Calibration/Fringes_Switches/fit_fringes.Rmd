@@ -135,8 +135,10 @@ plt.grid()
 There is a plateau around N=9,10 which leads to ~30 bad detectors. We will choose N=30.
 
 ```{python}
+
 the_mask = flib.decide_bad_TES(allmask_bad_TES, condition=9)
 nbad = int(256 - np.nansum(the_mask))
+print(nbad)
 
 # print(the_mask)
 flib.plot_fringes_scatter(q, xTES, yTES, the_mask, normalize=False, s=140, cbar=False)
@@ -162,7 +164,7 @@ for k in range(nimages):
     ax0, ax1 = axs.ravel()
     
     # Scatter plot
-    flib.plot_fringes_scatter(q, xTES, yTES, allfringes[k] * the_mask, normalize=False, s=180, fig=fig, ax=ax0)
+    flib.plot_fringes_scatter(q, xTES, yTES, allfringes[k] * the_mask, normalize=True, s=180, fig=fig, ax=ax0)
 
 
     # Plot with Astropy convolution 
@@ -182,7 +184,7 @@ ax = fig.gca()
 flib.plot_fringes_scatter(q, xTES, yTES, allfringes[k] * the_mask, normalize=False, s=350,
                           fig=fig, ax=ax, vmin=-0.3, vmax=0.3, title=f'Data - Baseline {BLs[k]}', fontsize=20)
 fig.tight_layout()
-fig.savefig('/home/lmousset/QUBIC/Images/Data20201027_fringes_49-51.pdf')
+# fig.savefig('/home/lmousset/QUBIC/Images/Data20201027_fringes_49-51.pdf')
 ```
 
 ### Remove thermometers 
@@ -191,6 +193,7 @@ Data contains 256 detectors, 248 are bolometers but 8 are thermometers. To compa
 
 ```{python}
 xdata, ydata, the_mask = flib.remove_thermometers(xTES, yTES, the_mask)
+
 ndet = xdata.shape[0]
 print('Number of detectors:', ndet)
 
@@ -210,6 +213,9 @@ TES numbering on the instrument and in simulations are different. To compare the
 ```{python}
 xONAFP, yONAFP, _ = scal.get_TEScoordinates_ONAFP(q)
 the_mask = flib.reorder_data(the_mask, xdata, ydata, xONAFP, yONAFP)
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# the_mask[246] = np.nan
+# the_mask[230] = np.nan
 
 fringes, errs = [], []
 for k in range(nimages):
@@ -226,7 +232,7 @@ for k in range(nimages):
     fig.subplots_adjust(wspace=0.5)
     ax0, ax1 = axs
     scal.scatter_plot_FP(q, xdata, ydata, data[k]*the_mask, frame='ONAFP', 
-                         fig=fig, ax=ax0, s=170, cmap='bwr', 
+                         fig=fig, ax=ax0, s=170, cmap='bwr',
                          vmin=vmin, vmax=vmax, title='Original order', unit=None)
 
     scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes[k]*the_mask, frame='ONAFP', 
@@ -280,7 +286,7 @@ print('gain mean:', np.mean(gains_fake))
 print('gains fake:', gains_fake[:10])
 print('gains negative:', gains_fake[gains_fake<0.])
 
-sigma = 0.3 # Gaussian noise
+sigma = 0.03 # Gaussian noise
 
 fake_fringes = []
 allPhi_fake = []
@@ -332,10 +338,11 @@ To eliminate bad TES, we put a very high error on them => very small weight in t
 Then we make a list with an inverse covariance matrix for each image.
 
 ```{python}
+allInvCov = []
 for k in range(nimages):
     errs[k][np.isnan(the_mask)] *= 1e20
 
-allInvCov = [scal.make_inverse_covariance(errs[k], verbose=True) for k in range(nimages)]
+    allInvCov.append(scal.make_inverse_covariance(errs[k], verbose=True))
 ```
 
 #### Explore the chi2 to find guess parameters
@@ -344,7 +351,7 @@ allInvCov = [scal.make_inverse_covariance(errs[k], verbose=True) for k in range(
 all_fl, all_th, chi2_grid = scal.make_chi2_grid(allInvCov, fringes, BLs, q, 
                                 nval_fl=40, nval_th=40, 
                                 fl_min=0.25, fl_max=0.35,
-                                th_min=np.deg2rad(-0.7), th_max=np.deg2rad(0.7), 
+                                th_min=np.deg2rad(-0.75), th_max=np.deg2rad(1), 
                                 fixPower=True)
 ```
 
@@ -354,7 +361,7 @@ smooth = False
 step_fl = all_fl[1] - all_fl[0]
 step_th = all_th[1] - all_th[0]
 if smooth:
-    chi2_grid = gaussian_filter(chi2_grid, sigma=[step_fl*3e2, step_th*3e2])
+    chi2_grid = gaussian_filter(chi2_grid, sigma=[step_fl*4e2, step_th*4e2])
 ```
 
 ```{python}
@@ -381,7 +388,7 @@ def plot_chi2_map(all_th, all_fl, chi2_grid,
                   vmin=0, vmax=1e10, norm=None, 
                   thetas=[], focals=[], labels=[]):
     fig, ax = plt.subplots(figsize=(8, 8))
-    c = ax.pcolor(np.rad2deg(all_th), all_fl, chi2_grid, vmin=0, vmax=1e10)#, norm=SymLogNorm(99e9))
+    c = ax.pcolor(np.rad2deg(all_th), all_fl, chi2_grid, vmin=0, vmax=1e14, shading='auto')#, norm=SymLogNorm(99e9))
     for i in range(len(thetas)):
         ax.scatter(np.rad2deg(thetas[i]), focals[i],  marker='o', s=100, label=labels[i])
     ax.set_xlabel('Theta')
@@ -411,12 +418,12 @@ Using `scipy.optimize.minimize`
 
 ```{python}
 # params_guess = [0.30, np.deg2rad(-0.5)] + [0.5]*3
-result = sop.minimize(scal.get_chi2, 
-                      x0=params_guess, 
-                      args=(allInvCov, fringes, BLs, q), 
-                      method='Nelder-Mead',
-                      options={'maxiter':10000})
-print(result)
+# result = sop.minimize(scal.get_chi2, 
+#                       x0=params_guess, 
+#                       args=(allInvCov, fringes, BLs, q), 
+#                       method='Nelder-Mead',
+#                       options={'maxiter':10000})
+# print(result)
 ```
 
 #### Using iMinuit
@@ -430,7 +437,8 @@ params_guess = [0.3, np.deg2rad(0.5)] + [0.5] * nimages
 m = Minuit.from_array_func(chi2_minuit, 
                            params_guess, 
                            errordef=1, print_level=2,
-                           error=[1e-3, np.deg2rad(0.01)] + [0.01] * nimages)
+                           error=[2e-3, np.deg2rad(0.01)] + [0.01] * nimages,
+                           fix=[False]*(nimages+2))
 m.migrad()
 ```
 
@@ -445,17 +453,17 @@ print('***** Focal:')
 if simu:
     print('Fake:', focal_fake)
 print('Result:', fl_minuit)
-print('Guess:', fl_guess)
+print('Guess:', params_guess[0])
 
 print('\n***** Theta:')
 if simu:
     print('Fake:', np.rad2deg(theta_fake))
 print('Result:', np.round(np.rad2deg(th_minuit), 6))
-print('Guess:', np.round(np.rad2deg(th_guess), 6))
+print('Guess:', np.round(np.rad2deg(params_guess[1]), 6))
 
 print('\n***** Power:')
-print('Guess:', allP_guess)
-print('Result:', np.round(Pk_minuit, 4))
+print('Guess:', params_guess[2:])
+print('Result:', Pk_minuit)
 if simu:
     print('Fake:', np.round(allP_fake, 4))
     print('Fake / Result:', np.round(allP_fake / Pk_minuit, 4))
@@ -465,6 +473,12 @@ print('\nReduce Chi2:', chi2_minuit / NDDL)
 ```
 
 ```{python}
+np.rad2deg(params_guess[1])
+```
+
+```{python}
+fl_guess = params_guess[0]
+th_guess = params_guess[1]
 if simu:
     plot_chi2_map(all_th, all_fl, chi2_grid,
                   vmin=0, vmax=1e10, norm=None,
@@ -517,10 +531,23 @@ if simu:
 plt.figure(figsize=(12, 6))
 plt.errorbar(x=np.arange(ndet), y=A, yerr=np.sqrt(np.diag(Cov_A)),
             fmt='o')
+plt.errorbar(x=np.arange(ndet)[np.isnan(the_mask)], y=A[np.isnan(the_mask)], yerr=np.sqrt(np.diag(Cov_A))[np.isnan(the_mask)],
+            fmt='o', color='k')
 plt.ylim(-5, 5)
 plt.xlabel('Detector index')
 plt.ylabel('Gains')
 plt.grid()
+```
+
+```{python}
+print(np.argmin(A))
+print(np.nanmax(A*the_mask))
+```
+
+```{python}
+the_mask[246]
+np.sort(A*the_mask)
+print(A[246])
 ```
 
 ```{python}
@@ -542,15 +569,20 @@ if simu:
     ax4.legend()
     fig.tight_layout()
 else:
+    cmap = flib.make_cmap_nan_black('bwr')
     fig, axs = plt.subplots(1, 2, figsize=(13, 4))
     ax1, ax2 = np.ravel(axs)
-    scal.scatter_plot_FP(q, xONAFP, yONAFP, A, fig=fig, ax=ax1, frame='ONAFP', title='Gains found', 
-                         unit=None, vmin=-1, vmax=1, s=100, cmap='bwr')
-    ax2.hist(A, bins=30, range=(-10, 10), label='{:.2f} +- {}'.format(np.mean(A), np.std(A)))
+    scal.scatter_plot_FP(q, xONAFP, yONAFP, A*the_mask, fig=fig, ax=ax1, frame='ONAFP', title='Gains found', 
+                         unit=None, vmin=-1, vmax=1, s=100, cmap=cmap)
+    ax2.hist(A*the_mask, bins=30, range=(-100, 100), label='{:.2f} +- {}'.format(np.nanmean(A*the_mask), np.nanstd(A*the_mask)))
     ax2.set_xlabel('Gains found')
-    ax2.axvline(np.mean(A), color='r')
+    ax2.axvline(np.nanmean(A*the_mask), color='r')
     ax2.legend()
     fig.tight_layout()
+```
+
+```{python}
+np.average(A, weights=1/np.diag(Cov_A))
 ```
 
 ```{python}
@@ -654,6 +686,12 @@ for k in range(nimages):
     allmean_pull.append(np.mean(pull))
     allstd_pull.append(np.std(pull))
 print(allstd_pull)
+```
+
+```{python}
+nanstd(fringes[0]/A)
+print(nanmax(fringes[0]/A))
+print(nanmin(fringes[0]/A))
 ```
 
 ### Correct the errors to have std(Pull) = 1
@@ -765,10 +803,17 @@ print("{0} CPUs".format(ncpu))
 ```
 
 ```{python}
+fringes[0].shape[0]
+# np.shape(fringes[0])
+```
+
+```{python}
 def lnlike(params, allInvCov, alldata, BLs):
     chi2, A, _ = scal.get_chi2(params, allInvCov, alldata, BLs, q, returnA=True)
     LnLike = - 0.5 * chi2
-#     print(chi2)
+#     print('A:', A[:20])
+#     print('chi2:', chi2)
+    
     return LnLike, A
 
 def lnprior(params):
@@ -776,16 +821,17 @@ def lnprior(params):
     th = params[1]
     allP = params[2:]
 
-    if fl > 0.:
-        return 0.0
-    else:
-        return -np.inf
+    if fl > 0. and np.all(allP > 0.):
+        return 0.
+    return -np.inf
     
-# Log of the posterior (Posterior = prior x likelihood)
+
 def lnprob(params, allInvCov, alldata, BLs):
     lp = lnprior(params)
+#     print('Prior', lp)
+    ndet = alldata[0].shape[0]
     if not np.isfinite(lp):
-        return -np.inf
+        return -np.inf, np.ones(248)*(-np.inf)
     LnLike, A = lnlike(params, allInvCov, alldata, BLs)
     return lp + LnLike, A
 
@@ -1086,8 +1132,8 @@ myselection
 ```
 
 ```{python}
-# params_guess = m.np_values()
-params_guess = [0.3, np.deg2rad(0.5), 0.5, 0.5, 0.5]
+params_guess = np.abs(m.np_values())
+# params_guess = [0.3, np.deg2rad(0.5), 0.5, 0.5, 0.5]
 print('Guess:', params_guess)
 
 ndim = len(params_guess)
@@ -1099,8 +1145,9 @@ p0 = [params_guess + 1e-4 * np.random.rand(ndim) for i in range(nwalkers)]
 
 niter = 1000
 axis_names = ['Focal', 'Theta'] + [f'P{i+1}' for i in range(nimages)]
+
 mcmc = MCMC(nwalkers, niter, ndim, p0, burnin=0, axis_names=axis_names, withpool=False, 
-            emcee_filename='emcee_2020-10-27_BLs0-2-5_v5.h5')
+            emcee_filename='test1.h5')
 args = (allInvCov, fringes, BLs)
 ```
 
@@ -1134,12 +1181,12 @@ print(f'Reduce Chi2: {chi2_reduce:.4f}')
 
 ```{python}
 mcmc.get_params_errors()
-
+from qubic.AnalysisMC import cov2corr
 # Covariance between parameters
-lim = np.abs(np.max(mcmc.params_cov)/100)
+lim = 1#np.abs(np.max(mcmc.params_cov)/100)
 
 fig, ax = plt.subplots(1, 1, figsize=(6, 6))
-im = ax.imshow(mcmc.params_cov, cmap='bwr', vmin=-lim, vmax=lim)
+im = ax.imshow(cov2corr(mcmc.params_cov), cmap='bwr', vmin=-lim, vmax=lim)
 ax.set_xticks(np.arange(nimages+2))
 ax.set_yticks(np.arange(nimages+2))
 ax.set_xticklabels(mcmc.axis_names)
@@ -1154,13 +1201,17 @@ import getdist
 from getdist import plots, MCSamples
 
 labels = ['f', r'\theta'] + [f'P_{i+1}' for i in range(nimages)]
-samps = MCSamples(samples=mcmc.chains, names=mcmc.axis_names, labels=labels,
+samps = MCSamples(samples=mcmc.chains[400:], names=mcmc.axis_names, labels=labels,
         ranges={'Focal':(0, None), 'Theta':(None,None)})
 
 g = plots.getSubplotPlotter()
 g.triangle_plot(samps, filled=True, title_limit=2, 
                 markers=params_fake)
 
+```
+
+```{python}
+np.min(mcmc.chains[:,0,-1])
 ```
 
 #### Get A from the fit parameters

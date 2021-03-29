@@ -803,11 +803,6 @@ print("{0} CPUs".format(ncpu))
 ```
 
 ```{python}
-fringes[0].shape[0]
-# np.shape(fringes[0])
-```
-
-```{python}
 def lnlike(params, allInvCov, alldata, BLs):
     chi2, A, _ = scal.get_chi2(params, allInvCov, alldata, BLs, q, returnA=True)
     LnLike = - 0.5 * chi2
@@ -953,7 +948,6 @@ class MCMC:
         chisq_std = []
         for k in nchains:
             chisqs = -2 * self.lnprobs[self.burnin:, k]
-            # if np.mean(chisqs) < 1e5:
             chisq_averages.append(np.mean(chisqs))
             chisq_std.append(np.std(chisqs))
         self.global_average = np.mean(chisq_averages)
@@ -1022,14 +1016,15 @@ class MCMC:
     
 
     def convergence_tests(self, fontsize=14):
-        """Compute the convergence tests (Gelman-Rubin, acceptance rate).
+        """
+        Compute the convergence tests (Gelman-Rubin, acceptance rate).
 
         """
-        chains = self.chains[self.burnin:, :, :]  # .reshape((-1, self.ndim))
+        chains = self.chains[self.burnin:, :, :]
         nchains = [k for k in range(self.nwalkers)]
         steps = np.arange(self.burnin, self.niter)
         
-         # Acceptance rate vs Index
+        # Acceptance rate vs Index
         print("Computing acceptance rate...")
         min_len = self.niter
         window = 100
@@ -1049,19 +1044,6 @@ class MCMC:
                     ax[self.ndim].plot(indices, ARs, label=f'Walker {k:d}', c='gray', linestyle='--')
                 ax[self.ndim].set_xlabel('Steps', fontsize=fontsize)
                 ax[self.ndim].set_ylabel('Aceptance rate', fontsize=8)
-#                 ax[self.ndim].legend(loc='upper left', ncol=2, fontsize=10)
-        
-        # Parameter PDFs by chain
-#         print("Computing chain by chain PDFs...")
-#         for k in nchains:
-#             likelihood = self.chain2likelihood(pdfonly=True, walker_index=k)
-#             likelihood.stats(pdfonly=True, verbose=False)
-            # for i in range(self.dim):
-            # ax[i, 1].plot(likelihood.pdfs[i].axe.axis, likelihood.pdfs[i].grid, lw=var.LINEWIDTH,
-            #               label=f'Walker {k:d}')
-            # ax[i, 1].set_xlabel(self.axis_names[i])
-            # ax[i, 1].set_ylabel('PDF')
-            # ax[i, 1].legend(loc='upper right', ncol=2, fontsize=10)
         
         # Gelman-Rubin test
         if len(nchains) > 1:
@@ -1099,8 +1081,6 @@ class MCMC:
         self.gelmans = np.array(self.gelmans)
         fig.tight_layout()
         plt.subplots_adjust(hspace=0)
-#         if parameters.DISPLAY:  # pragma: no cover
-#             plt.show()
         figure_name = self.emcee_filename.replace('.h5', '_convergence.pdf')
         print(f'Save figure: {figure_name}')
         fig.savefig(figure_name, dpi=100)
@@ -1125,10 +1105,6 @@ class MCMC:
         self.params_cov = np.cov(flat_chains.T)
         print(self.params_cov.shape)
         return
-```
-
-```{python}
-myselection
 ```
 
 ```{python}

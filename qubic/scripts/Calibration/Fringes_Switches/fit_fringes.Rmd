@@ -803,6 +803,10 @@ print("{0} CPUs".format(ncpu))
 ```
 
 ```{python}
+
+```
+
+```{python}
 def lnlike(params, allInvCov, alldata, BLs):
     chi2, A, _ = scal.get_chi2(params, allInvCov, alldata, BLs, q, returnA=True)
     LnLike = - 0.5 * chi2
@@ -828,6 +832,8 @@ def lnprob(params, allInvCov, alldata, BLs):
     if not np.isfinite(lp):
         return -np.inf, np.ones(248)*(-np.inf)
     LnLike, A = lnlike(params, allInvCov, alldata, BLs)
+
+#     return [lp + LnLike] + list(A)
     return lp + LnLike, A
 
 
@@ -842,51 +848,41 @@ class MCMC:
         self.withpool = withpool
         self.emcee_filename = emcee_filename
    
-    def run(self, lnprob, args):
+
+    def run(self, lnprob, args, backend=True):
+        
         with Pool() as pool:
             if not self.withpool:
                 pool = None
-            dtype = [("A", ndarray)]
-
-            sampler = emcee.EnsembleSampler(self.nwalkers, self.ndim, lnprob, args=args, 
-                                            pool=pool,
-                                            blobs_dtype=dtype)
-
-            print("\n =========== Running production... ===========")
-            start = time.time()
-            sampler.run_mcmc(self.p0, 
-                             nsteps=self.niter, 
-                             progress=True)
-            end = time.time()
-            print("MCMC took {0:.1f} seconds".format(end - start))
-
-        return sampler
-    
-    def run_backend(self, lnprob, args):
-        with Pool() as pool:
-            if not self.withpool:
-                pool = None
-            backend = emcee.backends.HDFBackend(self.emcee_filename)
-            sampler = emcee.EnsembleSampler(self.nwalkers, self.ndim, lnprob, args=args, 
-                                            pool=pool,
-                                            blobs_dtype=None,
-                                            backend=backend)
-            if backend.iteration > 0:
-                self.p0 = backend.get_last_sample()
-            if self.niter - backend.iteration > 0:
+            if backend:
+                backend = emcee.backends.HDFBackend(self.emcee_filename)
+     
+                sampler = emcee.EnsembleSampler(self.nwalkers, self.ndim, lnprob, args=args, 
+                                                pool=pool,
+                                                backend=backend)
+                if backend.iteration > 0:
+                    self.p0 = backend.get_last_sample()
+                if self.niter - backend.iteration > 0:
+                    print("\n =========== Running production... ===========")
+                    start = time.time()
+                    sampler.run_mcmc(self.p0, 
+                                     nsteps=max(0, self.niter - backend.iteration), 
+                                     progress=True)   
+            else:
+                sampler = emcee.EnsembleSampler(self.nwalkers, self.ndim, lnprob, args=args, 
+                                                pool=pool,
+                                                backend=None)
                 print("\n =========== Running production... ===========")
                 start = time.time()
-                sampler.run_mcmc(self.p0, 
-                                 nsteps=max(0, self.niter - backend.iteration), 
-                                 progress=True)
-                end = time.time()
-                print("MCMC took {0:.1f} seconds".format(end - start))
-        
+                sampler.run_mcmc(self.p0, nsteps=self.niter, progress=True)
+                
+        end = time.time()
+        print("MCMC took {0:.1f} seconds".format(end - start))       
         return sampler
     
-    def read_sampler(self, sampler, withblobs=True):
-        if withblobs:
-            self.blobs = sampler.get_blobs(flat=True)
+    def read_sampler(self, sampler, has_blobs=True):
+        if has_blobs:
+            self.blobs = sampler.get_blobs(flat=False)
         
         self.chains = sampler.get_chain(discard=0, flat=False, thin=1)
         self.lnprobs = sampler.get_log_prob(discard=0, flat=False, thin=1)
@@ -898,6 +894,8 @@ class MCMC:
             tau = reader.get_autocorr_time()
         except emcee.autocorr.AutocorrError:
             tau = -1
+        if reader.has_blobs():
+            self.blobs = reader.get_blobs(flat=False)
         self.chains = reader.get_chain(discard=0, flat=False, thin=1)
         self.lnprobs = reader.get_log_prob(discard=0, flat=False, thin=1)
         return tau
@@ -1119,26 +1117,27 @@ nwalkers = 20
 p0 = [params_guess + 1e-4 * np.random.rand(ndim) for i in range(nwalkers)]
 # print(p0)
 
-niter = 1000
+niter = 100
 axis_names = ['Focal', 'Theta'] + [f'P{i+1}' for i in range(nimages)]
 
 mcmc = MCMC(nwalkers, niter, ndim, p0, burnin=0, axis_names=axis_names, withpool=False, 
-            emcee_filename='test1.h5')
+            emcee_filename='test3.h5')
 args = (allInvCov, fringes, BLs)
 ```
 
 ```{python}
-# Get blobs A
-# sampler = mcmc.run(lnprob, args)
-
-# No blobs but save the chain
-sampler = mcmc.run_backend(lnprob, args)
+# Run the MCMC and save a backend
+sampler = mcmc.run(lnprob, args, backend=True)
 ```
 
 ```{python}
 tau = mcmc.read_backends()
 chain_validity = mcmc.set_chain_validity()
 print(np.sum(chain_validity))
+```
+
+```{python}
+mcmc.blobs
 ```
 
 ```{python}

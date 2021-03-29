@@ -47,7 +47,8 @@ from qubic import ReadMC as rmc
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.optimize import curve_fit
 import scipy.constants
-from qubic import mcmc
+#from qubic import mcmc
+import mcmc_old as mcmc
 import ForegroundsSED as fsed
 
 plt.rc('text',usetex=False)
@@ -115,7 +116,7 @@ Make coverage..
 reload(fsed)
 regions = ['Qubic_field', 'GalCen_field']
 bands = ['150', '220']
-
+nf_recon = dictionaries[0]['nf_recon']
 coveragesmaps = fsed.coverage(dictionaries, regions, bands)
 ```
 
@@ -143,15 +144,14 @@ fground_maps = fsed.foreground_signal(dictionaries, sky_conf_all)
 # NEW (16 Feb 2021)
 reload(fsed)
 nreals = 43
-noise = fsed.noise_qss(dictionaries, sky_conf_all, coveragesmaps, nreals, verbose = False) 
+noise = fsed.noise_qss(dictionaries, sky_conf_dust, coveragesmaps, nreals, verbose = False) 
 
 ```
 
 ```{python}
 #NEW (16 feb 2021)
 reload(fsed)
-maps, _, stdmaps = fsed.foreground_with_noise(dictionaries, sky_conf_all, regions, bands, nreals)
-
+#maps, _, stdmaps = fsed.foreground_with_noise(dictionaries, sky_conf_all, regions, bands, nreals)
 ```
 
 Look at the maps... okk..
@@ -160,9 +160,9 @@ Look at the maps... okk..
 # NEW (16 Feb 2021)
 reload(fsed)
 #maskmaps, mapregion = fsed._mask_maps(maps, coveragesmaps, dictionaries[0]['nf_recon'])
-maskmaps_dust, _ = fsed._mask_maps(fground_maps_dust, coveragesmaps, dictionaries[0]['nf_recon'])
-maskmaps_synch, _ = fsed._mask_maps(fground_maps_synch, coveragesmaps, dictionaries[0]['nf_recon'])
-maskmaps_all, _ = fsed._mask_maps(fground_maps, coveragesmaps, dictionaries[0]['nf_recon'])
+maskmaps_dust, _ = fsed._mask_maps(fground_maps_dust, coveragesmaps, nf_recon)
+maskmaps_synch, _ = fsed._mask_maps(fground_maps_synch, coveragesmaps, nf_recon)
+maskmaps_all, _ = fsed._mask_maps(fground_maps, coveragesmaps, nf_recon)
 
 ```
 
@@ -171,10 +171,10 @@ maskmaps_all, _ = fsed._mask_maps(fground_maps, coveragesmaps, dictionaries[0]['
 ```{python}
 # NEW (17 Feb 2021)
 _, nus150, nus_out150, _, _, _ = qubic.compute_freq(dictionaries[0]['filter_nu'] / 1e9,  
-                            dictionaries[0]['nf_recon'],
+                            nf_recon,
                             dictionaries[0]['filter_relative_bandwidth'])
 _, nus220, nus_out220, _, _, _ = qubic.compute_freq(dictionaries[1]['filter_nu'] / 1e9,  
-                            dictionaries[1]['nf_recon'],
+                            nf_recon,
                             dictionaries[1]['filter_relative_bandwidth'])
 
 reload(fsed)
@@ -182,83 +182,57 @@ ix = 2
 
 MapsArray = [maskmaps_dust[ix], maskmaps_synch[ix], maskmaps_all[ix]]
 fsed._plot_exampleSED(dictionaries[ix], centers[ix], nus_out150, MapsArray, mapsarray = True, 
-                     DeltaTheta = 1, DeltaPhi = 1)
+                     DeltaTheta = 1, DeltaPhi = 1, savefig = False)
 
 ```
 
 ```{python}
-file = open("DataSED/FI-component_data.pk", 'wb')
-pk.dump([dictionaries, centers], file)
-file.close()
+writefiles = False
+if writefiles:
+    file = open("DataSED/FI-component_data.pk", 'wb')
+    pk.dump([dictionaries, centers], file)
+    file.close()
 ```
 
 ### Udgrade
 
 ```{python}
-#noise_ud_i = np.zeros((4, 4*43, 5,12 * nside_new ** 2, 3))
-#for i in range(4):
-#    print(43*i,43*(i+1))
-#    noise_ud_i[:, 43*i:43*(i+1), :, :, :] = FitsArray("SED_NoiseMaps_nside64_nreals43_{}.fits".format(i))
-```
-
-```{python}
 #NEW (17 Feb 2021)
 reload(fsed)
-readfiles = False
 nside_new = 64
-nf_recon = dictionaries[0]['nf_recon']
 
-if readfiles:
-    maps_ud_i = np.zeros((len(dictionaries), nreals, nf_recon, 12 * nside_new ** 2, 3))
-    maps = FitsArray("SED_FullMaps_nside{}_nreals{}.fits".format(nside_new,nreals))
-    fgr_map_ud = FitsArray("SED_ForegMaps_nside{}_nreals{}.fits".format(nside_new,nreals))
-    noise_ud_i = FitsArray("SED_NoiseMaps_nside{}_nreals{}.fits".format(nside_new,nreals))
-    Cp_prime = FitsArray("SED_CovarMatrix_nside{}_nreals{}.fits".format(nside_new,nreals))
-    _, covmask = fsed._mask_maps(maps, coveragesmaps, nf_recon)
-    
-    cov_ud = hp.ud_grade(covmask, nside_new)
-    print("shapessss: ", np.shape(noise_ud_i))
-    for idict in range(len(dictionaries)):
-        for iNU in range(nf_recon):
-            for ireal in range(nreals):
-                maps_ud_i[idict, ireal, iNU, ...] = noise_ud_i[idict, ireal, iNU, ...] + fgr_map_ud[idict, iNU]
-                
-    maps_ud = np.mean(maps_ud_i, axis = 1)
-    for idict in range(len(dictionaries)):
-        for iNU in range(nf_recon):
-            maps_ud[idict, iNU,~cov_ud[idict],:] = hp.UNSEEN
-            
-else:
-    _, _, fgr_map_dust_ud, _ = fsed.udgrade_maps(fground_maps_dust, noise, 
-                                                             nside_new, nf_recon, nreals)
-    _, _, fgr_map_synch_ud, _ = fsed.udgrade_maps(fground_maps_synch, noise, 
-                                                              nside_new, nf_recon, nreals)
-    maps_ud, _, fgr_map_ud, noise_ud_i = fsed.udgrade_maps(fground_maps, noise, 
-                                                           nside_new, nf_recon, nreals)
-    _, covmask = fsed._mask_maps(maps, coveragesmaps, nf_recon)
-    cov_ud = hp.ud_grade(covmask, nside_new)
-    Cp = []
-    Cp_prime = []
-    for br in range(len(dictionaries)):
-        Cp = amc.get_Cp(noise_ud_i[br][:, :, cov_ud[br], :], verbose = False, doplot = False)
-        Cp_prime.append(amc.Cp2Cp_prime_viaCorr(Cp, verbose = False)[1])
-    
-    for idict in range(len(dictionaries)):
-        for iNU in range(nf_recon):
-            maps_ud[idict, iNU,~cov_ud[idict],:] = hp.UNSEEN
-print("cov_ud shape", np.shape(cov_ud))
-    
+t0 = time.time()
+fgr_map_dust_ud = fsed.udgrade_maps(fground_maps_dust, noise, nside_new, 
+                                    nf_recon, nreals, return_with_noise = False)
+fgr_map_synch_ud = fsed.udgrade_maps(fground_maps_synch, noise, nside_new, 
+                                     nf_recon, nreals, return_with_noise = False)
+maps_ud, _, fgr_map_ud, noise_ud_i = fsed.udgrade_maps(fground_maps, noise, nside_new, 
+                                                       nf_recon, nreals,return_with_noise = True)
+#_, covmask = fsed._mask_maps(maps, coveragesmaps, nf_recon)
+_, covmask = fsed._mask_maps(fground_maps, coveragesmaps, nf_recon)
+cov_ud = hp.ud_grade(covmask, nside_new)
+Cp = []
+Cp_prime = []
+for br in range(len(dictionaries)):
+    Cp = amc.get_Cp(noise_ud_i[br][:, :, cov_ud[br], :], verbose = False, doplot = False)
+    Cp_prime.append(amc.Cp2Cp_prime_viaCorr(Cp, verbose = False)[1])
+
+for idict in range(len(dictionaries)):
+    for iNU in range(nf_recon):
+        maps_ud[idict, iNU,~cov_ud[idict],:] = hp.UNSEEN
+#print("cov_ud shape", np.shape(cov_ud))   
 ```
 
 ```{python}
 bandreg = ["Qubic_Field150FI", "Qubic_Field220FI",
            "GalCen_Field150FI", "GalCen_Field220FI"]
-for j, idict in enumerate(dictionaries):
-    file = open("DataSED/SED_CovarMatrix_config{}_nside{}_nreals{}.pk".format(bandreg[j], 
-                                                                                   nside_new,
-                                                                                   nreals), "wb")
-    pk.dump(Cp_prime[j], file)
-    file.close()
+if writefiles:
+    for j, idict in enumerate(dictionaries):
+        file = open("DataSED/SED_CovarMatrix_config{}_nside{}_nreals{}.pk".format(bandreg[j], 
+                                                                                       nside_new,
+                                                                                       nreals), "wb")
+        pk.dump(Cp_prime[j], file)
+        file.close()
 ```
 
 ```{python}
@@ -272,7 +246,7 @@ Computing the error bars considering covariance between sub-bands
 reload(fsed)
 
 plt.figure()
-plt.imshow(Cp_prime[0][:, :, 0, pixQ_red])
+plt.imshow(Cp_prime[2][:, :, 0, 100])
 plt.colorbar()
 ```
 
@@ -312,9 +286,26 @@ hp.graticule(dpar = 10, dmer = 20, alpha = 0.6)
 ```
 
 ```{python}
+def Bnu(nuGHz, temp):
+    h = scipy.constants.h
+    c = scipy.constants.c
+    k = scipy.constants.k
+    nu = nuGHz * 1e9
+    return 2 * h * nu ** 3 / c ** 2 / (np.exp(h * nu / k / temp ) - 1 )
+def func353(x, a, b):
+    #a = pars[0]
+    #b = pars[1]
+    Tdust = 19.6
+    bnu = Bnu(x, Tdust)
+    return a * 1e18 * bnu * (x / 353) ** (b / 2)
+
+```
+
+```{python}
 # NEW (17 Feb 2021)
 reload(fsed)
 reload(qubic)
+reload(mcmc)
 
 nus_out = [nus_out150, nus_out220, nus_out150, nus_out220]
 pixs_ud = [pixQ_ud, pixQ_ud, pixG_ud, pixG_ud]
@@ -324,7 +315,8 @@ nus_edge = [nus150, nus220, nus150, nus220]
 study = "dust"
 
 if study == "dust":
-    FuncModel = fsed.ThermDust_Planck353
+    #FuncModel = fsed.ThermDust_Planck353
+    FuncModel = func353
     p0 = np.array([1e3,3])
 elif study == "synch":
     FuncModel = fsed.Synchrotron_storja
@@ -337,10 +329,25 @@ elif study == "dust+synch":
     
 Chi2Model = None#"Chi2Implement"
 
-Imvals, Isvals, xarr, flat_samples = fsed.foregrounds_run_mcmc(dictionaries, fgr_map_ud, Cp_prime, FuncModel,
+flatprior = [np.array([1e1,1.5]), np.array([[0.3, 0.3], [0.3, 0.3]])]
+
+Imvals, Isvals, xarr, flat_samples = fsed.foregrounds_run_mcmc(dictionaries, fgr_map_dust_ud, Cp_prime, 
+                                                               FuncModel,
                                                 nus_out, nus_edge, pixs_ud, 
                                                 pixs_red = pixs_red, chi2=Chi2Model, 
-                                                samples = 5000, verbose = False, initP0 = p0)
+                                                samples = 5000, verbose = False, initP0 = p0,
+                                                               flatprior = None,
+                                                plotcovar = True, past_mcmc = True)
+```
+
+```{python}
+if writefiles:
+    file = open("DataSED/data_torun_MCMC_nside{}_nreals{}_pixG{}_pixQ{}.pk".format(nside_new,
+                                                                                  nreals,
+                                                                                  pixG_ud, pixQ_ud), 'wb')
+    pk.dump([dictionaries, fgr_map_dust_ud, Cp_prime, 
+             nus_out, nus_edge, pixs_ud, pixs_red], file)
+    file.close()                                                
 ```
 
 ```{python}
@@ -436,23 +443,33 @@ ySED_fit, Pmean, Perr = fsed.make_fit_SED(xSED, xarr, Imvals, Isvals,
 ```
 
 ```{python}
-for j, idict in enumerate(dictionaries):
-    file = open("DataSED/MCMC_run_{}nside{}_nreals{}_pixG{}_pixQ{}.pk".format(dictionaries[0]["config"],
-                                                                  nside_new,
-                                                                nreals,
-                                                                pixG_ud, pixQ_ud), "wb")
-    pk.dump([Imvals, Isvals, xarr, ySED_fit, Pmean, Perr, pixs_ud], file)
-    file.close()
+plt.plot(np.arange(2500), np.sqrt(Imvals[0,:,1]**2 + Imvals[0,:,1]**2), 'r-')
+plt.fill_between(np.arange(2500), y1 = np.sqrt(Imvals[0,:,1]**2 +Imvals[0,:,2]**2) - \
+                 np.sqrt(Isvals[0,:,1]**2 + Isvals[0,:,2]**2), 
+                 y2 = np.sqrt(Imvals[0,:,1]**2 + Imvals[0,:,2]**2) + \
+                 np.sqrt(Isvals[0,:,1]**2 + Isvals[0,:,2]**2) )
+```
 
-file = open("DataSED/ForegroundMaps_{}nside{}.pk".format(dictionaries[0]["config"],
-                                                                  nside_new), "wb")
-pk.dump([fgr_map_dust_ud, fgr_map_synch_ud, fgr_map_ud, maps_ud, cov_ud], file)
-file.close()
+```{python}
+if writefiles:
+    for j, idict in enumerate(dictionaries):
+        file = open("DataSED/MCMC_run_{}nside{}_nreals{}_pixG{}_pixQ{}.pk".format(dictionaries[0]["config"],
+                                                                      nside_new,
+                                                                    nreals,
+                                                                    pixG_ud, pixQ_ud), "wb")
+        pk.dump([Imvals, Isvals, xarr, ySED_fit, Pmean, Perr, pixs_ud], file)
+        file.close()
+
+    file = open("DataSED/ForegroundMaps_{}nside{}.pk".format(dictionaries[0]["config"],
+                                                                      nside_new), "wb")
+    pk.dump([fgr_map_dust_ud, fgr_map_synch_ud, fgr_map_ud, maps_ud, cov_ud], file)
+    file.close()
+    
 ```
 
 ```{python}
 # NEW (17 feb 2021)
-savefigs = True
+savefigs = False
 
 RESO = 15
 capsize = 3
@@ -815,7 +832,7 @@ else:
 ```
 
 ```{python}
-pixQ_ud, pixG_ud
+
 ```
 
 ```{python}

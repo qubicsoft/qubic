@@ -154,7 +154,7 @@ if not readdata:
 
     flatprior = None#[np.array([1e1,1.5]), np.array([[0.3, 0.3], [0.3, 0.3]])]
 
-    Mean_mcmc2, Std_mcmc2, _, flat_samples2 = fsed.foregrounds_run_mcmc(dictionaries, fgr_map_dust_ud, Cp_prime, 
+    Mean_mcmc, Std_mcmc, xarr_mcmc, flat_samples = fsed.foregrounds_run_mcmc(dictionaries, fgr_map_dust_ud, Cp_prime, 
                                                     FuncModel, nus_out, nus_edge, pixs_ud, 
                                                     pixs_red = pixs_red, chi2=Chi2Model, 
                                                     samples = 5000, verbose = False, initP0 = p0,
@@ -166,7 +166,7 @@ if not readdata:
     
     xSED = [nus150, nus220, nus150, nus220]
 
-    ySED_fit2, Pmean2, Perr2 = fsed.make_fit_SED(xSED, xarr_mcmc, Mean_mcmc2, Std_mcmc2,
+    ySED_fit, Pmean, Perr = fsed.make_fit_SED(xSED, xarr_mcmc, Mean_mcmc, Std_mcmc,
                                           FuncPoint, fgr_map_ud, pixs_ud, nf_recon, 
                                           initP0 = initGuess, 
                                           maxfev = 15000)
@@ -543,7 +543,7 @@ else:
 #                  Intensity
 #
 # NEW (17 feb 2021)
-two_contours = False
+two_contours = True
 RESO = 15
 capsize = 3
 plt.rc('font', size = 14)
@@ -553,13 +553,13 @@ ax = ax.ravel()
 plt.subplots_adjust(wspace = 0.1)
 # Plotting
 # Dust galactic center
-t0, = ax[0].plot(nus150, fgr_map_dust_ud[2,:,pixs_ud[2],0], ls = '', 
-           marker = 'd', color = 'g',alpha = 0.5, label = 'Dust')
-ax[0].plot(nus220, fgr_map_dust_ud[3,:,pixs_ud[2],0], marker = 'd', ls = '', color = 'g', alpha = 0.5)
+#t0, = ax[0].plot(nus150, fgr_map_dust_ud[2,:,pixs_ud[2],0], ls = '', 
+#           marker = 'd', color = 'g',alpha = 0.5, label = 'Dust')
+#ax[0].plot(nus220, fgr_map_dust_ud[3,:,pixs_ud[2],0], marker = 'd', ls = '', color = 'g', alpha = 0.5)
 #Synch galactic center
-t1, = ax[0].plot(nus150, fgr_map_synch_ud[2,:,pixs_ud[2],0], ls = '', 
-           marker = 's', color = 'g', alpha = 0.5, label = 'Synchrotron')
-ax[0].plot(nus220, fgr_map_synch_ud[3,:,pixs_ud[2],0], marker = 's', ls = '', color = 'g', alpha = 0.5)
+#t1, = ax[0].plot(nus150, fgr_map_synch_ud[2,:,pixs_ud[2],0], ls = '', 
+#           marker = 's', color = 'g', alpha = 0.5, label = 'Synchrotron')
+#ax[0].plot(nus220, fgr_map_synch_ud[3,:,pixs_ud[2],0], marker = 's', ls = '', color = 'g', alpha = 0.5)
 #Two components
 p1, = ax[0].plot(nus150, fgr_map_ud[2, :, pixs_ud[2], 0], 'ro', label = 'Input sky')
 p2, = ax[0].plot(nus220, fgr_map_ud[3, :, pixs_ud[2], 0], 'ro')
@@ -581,13 +581,13 @@ if two_contours:
                        color = 'b', alpha = 0.3)
 
 # Dust galactic center
-ax[2].plot(nus150, fgr_map_dust_ud[0,:,pixs_ud[0],0], ls = '', 
-           marker = 'd', color = 'g',alpha = 0.5, label = 'Dust')
-ax[2].plot(nus220, fgr_map_dust_ud[1,:,pixs_ud[0],0], marker = 'd', ls = '', color = 'g', alpha = 0.5)
+#ax[2].plot(nus150, fgr_map_dust_ud[0,:,pixs_ud[0],0], ls = '', 
+#           marker = 'd', color = 'g',alpha = 0.5, label = 'Dust')
+#ax[2].plot(nus220, fgr_map_dust_ud[1,:,pixs_ud[0],0], marker = 'd', ls = '', color = 'g', alpha = 0.5)
 #Synch galactic center
-ax[2].plot(nus150, fgr_map_synch_ud[0,:,pixs_ud[0],0], ls = '', 
-           marker = 's', color = 'g', alpha = 0.5, label = 'Synchrotron')
-ax[2].plot(nus220, fgr_map_synch_ud[1,:,pixs_ud[0],0], marker = 's', ls = '', color = 'g', alpha = 0.5)
+#ax[2].plot(nus150, fgr_map_synch_ud[0,:,pixs_ud[0],0], ls = '', 
+#           marker = 's', color = 'g', alpha = 0.5, label = 'Synchrotron')
+#ax[2].plot(nus220, fgr_map_synch_ud[1,:,pixs_ud[0],0], marker = 's', ls = '', color = 'g', alpha = 0.5)
 
 ax[2].plot(nus150, fgr_map_ud[0, :, pixs_ud[0], 0], 'ro')
 ax[2].plot(nus220, fgr_map_ud[1, :, pixs_ud[0], 0], 'ro')

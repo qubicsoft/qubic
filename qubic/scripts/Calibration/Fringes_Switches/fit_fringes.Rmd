@@ -250,7 +250,8 @@ If you want to perform the fit on a reduce number of images, you can select them
 ```{python}
 selection = True
 if selection:
-    myselection = [1, 2, 4, 5, 7, 8, 9, 10, 11]
+    myselection = [2, 5]
+#     myselection = [1, 2, 4, 5, 7, 8, 9, 10, 11]
 #     myselection = [0, 1, 2, 4, 5, 11]
     remind_all_fringes = fringes.copy() 
     fringes = [fringes[i] for i in myselection]
@@ -352,18 +353,19 @@ for k in range(nimages):
 #### Explore the chi2 to find guess parameters
 
 ```{python}
-# all_fl, all_th, chi2_grid = scal.make_chi2_grid(allInvCov, fringes, BLs, q, 
+all_fl, all_th, chi2_grid = scal.make_chi2_grid(allInvCov, fringes, BLs, q, 
+                                nval_fl=40, nval_th=40, 
+                                fl_min=0.25, fl_max=0.35,
+                                th_min=np.deg2rad(-1), th_max=np.deg2rad(1), 
+                                LogPower=-1,
+                                fixPower=True)
+
+# all_fl, all_th, chi2_grid, popt = scal.make_chi2_grid(allInvCov, fringes, BLs, q, 
 #                                 nval_fl=10, nval_th=10, 
 #                                 fl_min=0.25, fl_max=0.35,
 #                                 th_min=np.deg2rad(-1), th_max=np.deg2rad(1), 
-#                                 fixPower=True)
-
-all_fl, all_th, chi2_grid, popt = scal.make_chi2_grid(allInvCov, fringes, BLs, q, 
-                                nval_fl=10, nval_th=10, 
-                                fl_min=0.25, fl_max=0.35,
-                                th_min=np.deg2rad(-1), th_max=np.deg2rad(1), 
-                                
-                                fixPower=False)
+#                                 LogPower=-1,
+#                                 fixPower=False)
 ```
 
 ```{python}
@@ -399,7 +401,7 @@ def plot_chi2_map(all_th, all_fl, chi2_grid,
                   vmin=0, vmax=1e10, norm=None, 
                   thetas=[], focals=[], labels=[]):
     fig, ax = plt.subplots(figsize=(8, 8))
-    c = ax.pcolor(np.rad2deg(all_th), all_fl, chi2_grid, vmin=0, vmax=5e4, shading='auto')#, norm=SymLogNorm(99e9))
+    c = ax.pcolor(np.rad2deg(all_th), all_fl, chi2_grid, vmin=0, vmax=5e8, shading='auto')#, norm=SymLogNorm(99e9))
     for i in range(len(thetas)):
         ax.scatter(np.rad2deg(thetas[i]), focals[i],  marker='o', s=100, label=labels[i])
     ax.set_xlabel('Theta')
@@ -447,7 +449,7 @@ We can change:
 
 ```{python}
 def chi2_minuit(params):
-    params[2:] = 10**(params[2:])
+#     params[2:] = 10**(params[2:])
     chi2 = scal.get_chi2(params, allInvCov, fringes, BLs, q, nu_source=150e9, returnA=False)
     return chi2
 
@@ -467,11 +469,12 @@ m.migrad()
 
 ```{python}
 # Get the parameters
-chi2_iminuit = m.fcn(m.np_values())
+chi2_Minuit = m.fcn(m.np_values())
 
 fl_minuit = m.np_values()[0]
 th_minuit = m.np_values()[1]
-Pk_minuit = 10**(m.np_values()[2:])
+LogPk_minuit = m.np_values()[2:]
+Pk_minuit = 10**(LogPk_minuit)
 
 print('***** Focal:')
 if simu:
@@ -485,15 +488,15 @@ if simu:
 print('Result:', np.round(np.rad2deg(th_minuit), 6))
 print('Guess:', np.round(np.rad2deg(params_guess[1]), 6))
 
-print('\n***** Power:')
-print('Guess:', params_guess[2:])
+print('\n***** Power Pk:')
+print('Guess:', [10**a for a in params_guess[2:]])
 print('Result:', Pk_minuit)
 if simu:
     print('Fake:', np.round(allP_fake, 4))
     print('Fake / Result:', np.round(allP_fake / Pk_minuit, 4))
 
 NDDL = nimages * ndet - (ndet + nimages + 2)
-print('\nReduce Chi2:', chi2_iminuit / NDDL)
+print('\nReduce Chi2:', chi2_Minuit / NDDL)
 ```
 
 ```{python}
@@ -826,15 +829,14 @@ def lnlike(params, allInvCov, alldata, BLs):
     LnLike = - 0.5 * chi2
 #     print('A:', A[:20])
 #     print('chi2:', chi2)
-    
     return LnLike, A
 
 def lnprior(params):
     fl = params[0]
     th = params[1]
-    allP = params[2:]
+    logP = params[2:]
 
-    if fl > 0. and np.all(allP > 0.):
+    if fl > 0.:
         return 0.
     return -np.inf
     
@@ -846,8 +848,6 @@ def lnprob(params, allInvCov, alldata, BLs):
     if not np.isfinite(lp):
         return -np.inf, np.ones(248)*(-np.inf)
     LnLike, A = lnlike(params, allInvCov, alldata, BLs)
-
-#     return [lp + LnLike] + list(A)
     return lp + LnLike, A
 
 
@@ -1008,14 +1008,16 @@ class MCMC:
         # Parameter vs Index
         print("Computing Parameter vs Index plots...")
         for i in range(self.ndim):
-            ax[i].set_ylabel(self.axis_names[i], fontsize=fontsize)
+            h = ax[i].set_ylabel(self.axis_names[i], fontsize=fontsize)
+            h.set_rotation(0)
             for k in nchains:
                 if self.valid_chains[k]:
                     ax[i].plot(steps, chains[:, k, i])
                 else:
                     ax[i].plot(steps, chains[:, k, i], c='0.5', linestyle='--')
                 ax[i].get_yaxis().set_label_coords(-0.05, 0.5)
-        ax[self.ndim].set_ylabel(r'$\chi^2$', fontsize=fontsize)
+        h = ax[self.ndim].set_ylabel(r'$\chi^2$', fontsize=fontsize)
+        h.set_rotation(0)
         ax[self.ndim].set_xlabel('Steps', fontsize=fontsize)
         ax[self.ndim].get_yaxis().set_label_coords(-0.05, 0.5)
         
@@ -1126,25 +1128,26 @@ myselection
 
 ```{python}
 Pk_minuit
+LogPk_minuit
 ```
 
 ```{python}
-params_guess = [fl_minuit, th_minuit] + list(Pk_minuit)
+params_guess = [fl_minuit, th_minuit] + list(LogPk_minuit)
 # params_guess = [0.3, np.deg2rad(0.5), 0.5, 0.5, 0.5]
 print('Guess:', params_guess)
 
 ndim = len(params_guess)
-nwalkers = 30
+nwalkers = 15
 
 # Initial guess
 p0 = [params_guess + 1e-4 * np.random.rand(ndim) for i in range(nwalkers)]
 # print(p0)
 
-niter = 5000
-axis_names = ['Focal', 'Theta'] + [f'P{i+1}' for i in range(nimages)]
+niter = 1000
+axis_names = ['Focal', 'Theta'] + [f'LogP{i+1}' for i in range(nimages)]
 
 mcmc = MCMC(nwalkers, niter, ndim, p0, burnin=0, axis_names=axis_names, withpool=False, 
-            emcee_filename='emcee_2020-10-27_BLs0-1-2-4-5-7-8-9-10-11_v1.h5')
+            emcee_filename='emcee_2020-10-27_BLs2-5_v3.h5')
 args = (allInvCov, fringes, BLs)
 ```
 
@@ -1194,11 +1197,11 @@ fig.colorbar(im)
 import getdist
 from getdist import plots, MCSamples
 
-mcmc.burnin = 1000
+mcmc.burnin = 0
 
-labels = ['f', r'\theta'] + [f'P_{i+1}' for i in range(nimages)]
+labels = ['f', r'\theta'] + [f'Log(P_{i+1})' for i in range(nimages)]
 samps = MCSamples(samples=mcmc.chains[mcmc.burnin:], names=mcmc.axis_names, labels=labels,
-        ranges={'Focal':(0, None), 'Theta':(None,None), 'P_1':(0.,None), 'P_2':(0.,None), 'P_3':(0.,None)})
+        ranges={'Focal':(0, None), 'Theta':(None,None)})
 
 g = plots.getSubplotPlotter()
 g.triangle_plot(samps, filled=True, title_limit=2, 
@@ -1231,7 +1234,7 @@ for i in range(size):
         x, y, Phi = model.get_fringes(times_gaussian=False)
         
         # Global amplitude
-        allPowerPhi.append(Phi * mcmc.params[2+k])
+        allPowerPhi.append(Phi * 10**mcmc.params[2+k])
 
 
     # Gain for each detector
@@ -1304,12 +1307,15 @@ else:
     fig.suptitle('Gains and errors found with MCMC')
     ax1, ax2, ax3, ax4 = np.ravel(axs)
     fig.subplots_adjust(wspace=0.4)
-    scal.scatter_plot_FP(q, xONAFP, yONAFP, blobA_mean, fig=fig, ax=ax1, frame='ONAFP', title='A', 
-                         unit=None, 
-                         vmin=vmin, vmax=vmax, s=100, cmap='bwr')
-    scal.scatter_plot_FP(q, xONAFP, yONAFP, blobA_std, fig=fig, ax=ax2, 
-                         frame='ONAFP', title='STD(A)', 
-                         unit=None, vmin=vmin, vmax=vmax, s=100, cmap='bwr')
+    flib.plot_fringes_scatter(q, xONAFP, yONAFP, blobA_mean*the_mask, 
+                              fig=fig, ax=ax1, title='Gains A', 
+                              normalize=False, vmin=vmin, vmax=vmax, 
+                              s=100)
+
+    flib.plot_fringes_scatter(q, xONAFP, yONAFP, blobA_std*the_mask, 
+                              fig=fig, ax=ax2, title='Errors STD(A)', 
+                              normalize=False, vmin=vmin, vmax=vmax, 
+                              s=100)
     
     ax3.hist(blobA_mean, bins=30, range=(-10, 10))
     ax3.set_xlabel('Gains found with MCMC')

@@ -820,7 +820,7 @@ def get_chi2(params, allInvCov, allData, BLs, q, nu_source=150e9, returnA=False)
     Parameters
     ----------
     params: list
-        Focal length, source off-axis angle, global powers P_k
+        Focal length, source off-axis angle, log_10 of global powers P_k
     allInvCov: list
         List with the inverse covariance matrices, one for each image.
     allData: list
@@ -841,7 +841,7 @@ def get_chi2(params, allInvCov, allData, BLs, q, nu_source=150e9, returnA=False)
     nimages = len(BLs)
     focal = params[0]
     theta_source = params[1]
-    allP = params[2:]
+    logP = params[2:]
     q.optics.focal_length = focal
     allPowerPhi = []
     for k in range(nimages):
@@ -853,7 +853,7 @@ def get_chi2(params, allInvCov, allData, BLs, q, nu_source=150e9, returnA=False)
         x, y, Phi = model.get_fringes(times_gaussian=False)
 
         # Global amplitude
-        allPowerPhi.append(Phi * allP[k])
+        allPowerPhi.append(Phi * 10**logP[k])
 
     # Gain for each detector
     A, Cov_A = get_gains(allPowerPhi, allInvCov, allData)
@@ -872,9 +872,9 @@ def get_chi2(params, allInvCov, allData, BLs, q, nu_source=150e9, returnA=False)
 
 
 def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.25, fl_max=0.35,
-                   th_min=np.deg2rad(-1.), th_max=np.deg2rad(1), initPower=0.5, fixPower=True):
+                   th_min=np.deg2rad(-1.), th_max=np.deg2rad(1), LogPower=-1, fixPower=True):
     """Loop over the parameters (focal length and source off-axis angle) to explore the chi2.
-    Global powers are fixed to 0.5 or optimized at each step by minimizing a temporary chi2 (longer)."""
+    Global powers are fixed to Log_10(Power)=-1 or optimized at each step by minimizing a temporary chi2 (longer)."""
     nimages = len(BLs)
     chi2_grid = np.zeros((nval_fl, nval_th))
 
@@ -886,7 +886,7 @@ def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.
         # Global powers are fixed to initPower and we loop on fl and th.
         for i, fl in enumerate(all_fl):
             for j, th in enumerate(all_th):
-                params = [fl, th] + [initPower] * nimages
+                params = [fl, th] + [LogPower] * nimages
                 chi2_grid[i, j] = get_chi2(params, allInvCov, fringes, BLs, q)
         return all_fl, all_th, chi2_grid
 
@@ -903,7 +903,7 @@ def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.
                     return chi2_temp
 
                 result = sop.minimize(chi2_temporary,
-                                      x0=[initPower] * nimages,
+                                      x0=[LogPower] * nimages,
                                       args=(allInvCov, fringes, BLs, q),
                                       method='Nelder-Mead',
                                       options={'maxiter': 10000})

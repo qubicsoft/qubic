@@ -306,8 +306,8 @@ class FringesAnalysis:
         # Plot the 5 best TES
         if doplot:
             for p in range(5):
-                plot_folding_fit(detectors_sort[p, 0], detectors_sort[p, 1], tfold, datafold, residuals_time,
-                                 self.expected_period, params, err_params)
+                self._plot_folding_fit(detectors_sort[p, 0], detectors_sort[p, 1], tfold, datafold, residuals_time,
+                                        self.expected_period, params, err_params)
 
         return detectors_sort, ctimes
 
@@ -864,6 +864,33 @@ class FringesAnalysis:
                  np.max(np.abs(fringes1D_percycle[idx, :])) * 1.2)
         return
 
+    def _plot_folding_fit(self, TES, ASIC, tfold, datafold, residuals_time, period, params, errs):
+        idx = (ASIC - 1) * self.ndet_oneASIC + (TES - 1)
+        amps = params[idx, 2:]
+        t0 = params[idx, 1]
+        stable_time = period / self.nsteps
+        print(stable_time)
+        mean_allh = np.mean(amps[self.allh])
+
+        plt.figure()
+        plt.plot(tfold, datafold[idx, :], label='Folded signal')
+        plt.errorbar(np.arange(0, period, period / self.nsteps), amps, yerr=errs[idx, 2:],
+                     fmt='o', color='r', label='Fit Amplitudes')
+        plt.plot(tfold, ft.simsig_fringes(tfold, period / self.nsteps, params[idx, :]),
+                 label='Fit')
+        plt.plot(tfold, residuals_time[idx, :],
+                 label='Residuals: RMS={0:6.4f}'.format(np.std(residuals_time[idx, :])))
+        for k in range(self.nsteps):
+            plt.axvline(x=stable_time * k + t0, color='k', ls=':', alpha=0.3)
+        plt.axhline(mean_allh, color='k', linestyle='--', label='Mean all open')
+        plt.legend(loc='upper right')
+        plt.xlabel('Time [s]')
+        plt.ylabel('TOD')
+        plt.title(f'TES {TES} - ASIC {ASIC}')
+        plt.grid()
+        plt.ylim(-2.5, 2.5)
+        return
+
 # =========================================
 class SaveFringesFitsPdf:
     def __init__(self, q, date_obs, allBLs, allstable_time, allNcycles, xTES, yTES, allfringes1D, allerr_fringes1D,
@@ -1228,31 +1255,4 @@ def plot_fringes_imshow(fringes2D, normalize=True, interp=None, mask=None,
     return
 
 
-def plot_folding_fit(TES, ASIC, tfold, datafold, residuals_time, period,
-                     params, errs, allh=[True, False, False, True, False, True]):
-    idx = (ASIC - 1) * 128 + (TES - 1)
-    nsteps = len(params[idx, 2:])
-    amps = params[idx, 2:]
-    t0 = params[idx, 1]
-    stable_time = period / nsteps
-    print(stable_time)
-    mean_allh = np.mean(amps[allh])
 
-    plt.figure()
-    plt.plot(tfold, datafold[idx, :], label='Folded signal')
-    plt.errorbar(np.arange(0, period, period / nsteps), amps, yerr=errs[idx, 2:],
-                 fmt='o', color='r', label='Fit Amplitudes')
-    plt.plot(tfold, ft.simsig_fringes(tfold, period / nsteps, params[idx, :]),
-             label='Fit')
-    plt.plot(tfold, residuals_time[idx, :],
-             label='Residuals: RMS={0:6.4f}'.format(np.std(residuals_time[idx, :])))
-    for k in range(nsteps):
-        plt.axvline(x=stable_time * k + t0, color='k', ls=':', alpha=0.3)
-    plt.axhline(mean_allh, color='k', linestyle='--', label='Mean all open')
-    plt.legend(loc='upper right')
-    plt.xlabel('Time [s]')
-    plt.ylabel('TOD')
-    plt.title(f'TES {TES} - ASIC {ASIC}')
-    plt.grid()
-    plt.ylim(-2.5, 2.5)
-    return

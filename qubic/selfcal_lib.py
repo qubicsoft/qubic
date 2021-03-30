@@ -860,12 +860,10 @@ def get_chi2(params, allInvCov, allData, BLs, q, nu_source=150e9, returnA=False)
 
     chi2 = 0.
     for k in range(nimages):
-        # Correct errors by the global power P_k and inter-calibrations
-        InvCov_correct = allInvCov[k] * (allP[k] * A)**2
         # Compute the chi2
         M = np.diag(allPowerPhi[k]) @ A
         R = M - allData[k]
-        chi2 += R.T @ InvCov_correct @ R
+        chi2 += R.T @ allInvCov[k] @ R
 
     if returnA:
         return chi2, A, Cov_A
@@ -874,7 +872,7 @@ def get_chi2(params, allInvCov, allData, BLs, q, nu_source=150e9, returnA=False)
 
 
 def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.25, fl_max=0.35,
-                   th_min=np.deg2rad(-1.), th_max=np.deg2rad(1), fixPower=True):
+                   th_min=np.deg2rad(-1.), th_max=np.deg2rad(1), initPower=0.5, fixPower=True):
     """Loop over the parameters (focal length and source off-axis angle) to explore the chi2.
     Global powers are fixed to 0.5 or optimized at each step by minimizing a temporary chi2 (longer)."""
     nimages = len(BLs)
@@ -885,10 +883,10 @@ def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.
 
     # Fast method
     if fixPower:
-        # Global powers are fixed to 0.5 and we loop on fl and th.
+        # Global powers are fixed to initPower and we loop on fl and th.
         for i, fl in enumerate(all_fl):
             for j, th in enumerate(all_th):
-                params = [fl, th] + [0.5] * nimages
+                params = [fl, th] + [initPower] * nimages
                 chi2_grid[i, j] = get_chi2(params, allInvCov, fringes, BLs, q)
         return all_fl, all_th, chi2_grid
 
@@ -905,8 +903,8 @@ def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.
                     return chi2_temp
 
                 result = sop.minimize(chi2_temporary,
-                                      x0=[0.5] * nimages,
-                                      args=(allInvCov, fringes, BLs),
+                                      x0=[initPower] * nimages,
+                                      args=(allInvCov, fringes, BLs, q),
                                       method='Nelder-Mead',
                                       options={'maxiter': 10000})
                 chi2_grid[i, j] = result['fun']

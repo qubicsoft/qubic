@@ -250,7 +250,7 @@ If you want to perform the fit on a reduce number of images, you can select them
 ```{python}
 selection = True
 if selection:
-    myselection = [2, 5]
+    myselection = [2, 5, 11]
 #     myselection = [1, 2, 4, 5, 7, 8, 9, 10, 11]
 #     myselection = [0, 1, 2, 4, 5, 11]
     remind_all_fringes = fringes.copy() 
@@ -449,7 +449,6 @@ We can change:
 
 ```{python}
 def chi2_minuit(params):
-#     params[2:] = 10**(params[2:])
     chi2 = scal.get_chi2(params, allInvCov, fringes, BLs, q, nu_source=150e9, returnA=False)
     return chi2
 
@@ -644,7 +643,9 @@ def make_colorbar(ax, image):
     clb = fig.colorbar(image, cax=cax)
     return
 
-def get_pull(data, errors, gains, PowerPhi):
+def get_pull(data, errors, gains, PowerPhi, mask=None):
+    if mask is not None:
+        data *= mask
     correct = data/gains
     residu = correct - PowerPhi
     pull = residu / (errors/gains)
@@ -652,54 +653,85 @@ def get_pull(data, errors, gains, PowerPhi):
     return correct, residu, pull
     
 def plot_residuals(q, xONAFP, yONAFP, BL, data, the_mask, PowerPhi, errors, gains, cmap='bwr', 
-                   normalize=True, vmin=-1, vmax=1):
+                   normalize=True, vmin=-1, vmax=1, s=120):
+    """Make all plots, data, correction, residuals, model...
+    1D plots can only work with diagonal fringes."""
     
-    correct, residu, pull = get_pull(data, errors, gains, PowerPhi)
+    # Orientation of the baseline
+    theta, _, _ = scal.give_bs_pars(q, BL)
+    if int(theta)== -45:
+        anti_diag = True
+    else:
+        anti_diag = False
+    print(int(theta))
     
-    fig, axs = plt.subplots(4, 2, figsize=(12, 16))
+    # Compute residuals, pull and mask the data
+    correct, residu, pull = get_pull(data, errors, gains, PowerPhi, mask=the_mask)
+    
+    fig, axs = plt.subplots(5, 2, figsize=(12, 20))
     fig.suptitle(f'BL {BL}')
     axs = np.ravel(axs)
     
     # Initial / corrected 
-    flib.plot_fringes_scatter(q, xONAFP, yONAFP, data*the_mask, fig=fig, ax=axs[0], frame='ONAFP', 
-                     title=f'Data', s=100, normalize=normalize, vmin=vmin, vmax=vmax)
-    flib.plot_fringes_scatter(q, xONAFP, yONAFP, correct*the_mask, fig=fig, ax=axs[1], frame='ONAFP', 
-                     title=f'Data / gains', s=100, normalize=normalize, vmin=vmin, vmax=vmax)
+    flib.plot_fringes_scatter(q, xONAFP, yONAFP, data, 
+                              fig=fig, ax=axs[0], cmap=cmap, title='Data', s=s, 
+                              normalize=normalize, vmin=vmin, vmax=vmax)
+    flib.plot_fringes_scatter(q, xONAFP, yONAFP, correct, 
+                              fig=fig, ax=axs[1], cmap=cmap, title='Data / gains', s=s, 
+                              normalize=normalize, vmin=vmin, vmax=vmax)
     
-    # Initial / corrected smooth
-    init2D = flib.make2Dfringes_QubicSoft(data*the_mask, q)
-    init2D_conv = flib.astropy_convolution(init2D, sigma=0.7)
-    flib.plot_fringes_imshow(init2D_conv, normalize=normalize, vmin=vmin, vmax=vmax,
-                             fig=fig, ax=axs[2], cmap=cmap, 
-                             title='Data with Astropy convolution', mask=flib.make_mask2D_thermometers_TD())
+    # Plot fringes and corrected fringes in 1D diagonal
+    data2D = flib.make2Dfringes_QubicSoft(data, q, nan2zero=True)
+    flib.plot_fringes_diagonal(data2D, idiag=[-3, -4, -2, -1, 0, 1, 2, 3, 4], anti_diag=anti_diag,
+                          fig=fig, ax=axs[2], ylim=(-0.2, 0.2), title='Data')
     
-    correct2D = flib.make2Dfringes_QubicSoft(correct*the_mask, q)
-    correct2D_conv = flib.astropy_convolution(correct2D, sigma=0.7)
-    flib.plot_fringes_imshow(correct2D_conv, normalize=normalize, vmin=vmin, vmax=vmax,  
-                             fig=fig, ax=axs[3], cmap=cmap, 
-                             title='Data / gains with Astropy convolution', mask=flib.make_mask2D_thermometers_TD())
-    
+    correct2D = flib.make2Dfringes_QubicSoft(correct, q, nan2zero=True)
+    flib.plot_fringes_diagonal(correct2D, idiag=[-3, -4, -2, -1, 0, 1, 2, 3, 4], anti_diag=anti_diag, 
+                          fig=fig, ax=axs[3], ylim=(-0.2, 0.2), title='Data / gains')
+        
     # Fit
-    flib.plot_fringes_scatter(q, xONAFP, yONAFP, PowerPhi, frame='ONAFP', fig=fig, ax=axs[4], 
-                              title='Fit: Power x Phi', s=100, vmin=-0.01, vmax=0.01, normalize=False)
+    flib.plot_fringes_scatter(q, xONAFP, yONAFP, PowerPhi,
+                              fig=fig, ax=axs[4], cmap=cmap, title='Fit: Power x Phi', s=s,
+                              normalize=False, vmin=-0.01, vmax=0.01)
     
     # Residuals
-    flib.plot_fringes_scatter(q, xONAFP, yONAFP, residu*the_mask, frame='ONAFP',
-                             fig=fig, ax=axs[5], title='Residuals = Data/gains - Power x Phi', s=100,
-                             vmin=-0.1, vmax=0.1, normalize=False)
+    flib.plot_fringes_scatter(q, xONAFP, yONAFP, residu,
+                             fig=fig, ax=axs[5], cmap=cmap, title='Residuals = Data/gains - Power x Phi', s=s,
+                             normalize=False, vmin=-0.1, vmax=0.1)
     
+    # Plot model and residuals 1D diagonal
+    PowerPhi2D = flib.make2Dfringes_QubicSoft(PowerPhi, q, nan2zero=True)
+    flib.plot_fringes_diagonal(PowerPhi2D, idiag=[-3, -4, -2, -1, 0, 1, 2, 3, 4], anti_diag=anti_diag,
+                          fig=fig, ax=axs[6], title='Fit')
+    
+    residu2D = flib.make2Dfringes_QubicSoft(residu, q, nan2zero=True)
+    flib.plot_fringes_diagonal(residu2D, idiag=[-3, -4, -2, -1, 0, 1, 2, 3, 4], anti_diag=anti_diag,
+                          fig=fig, ax=axs[7], ylim=(-0.2, 0.2), title='Residuals')
+  
     # Pull
     mean_pull = np.nanmean(pull)
     std_pull = np.nanstd(pull)
-    axs[6].hist(pull, range=(-15, 15), bins=15, label='{:.5f} +- {:.5f}'.format(mean_pull, std_pull))
-    axs[6].axvline(mean_pull, color='r')
-    axs[6].axvline(mean_pull+std_pull, color='r', linestyle='--')
-    axs[6].axvline(mean_pull-std_pull, color='r', linestyle='--')
-    axs[6].set_title('Pull = Residuals / (errors/gains)')
-    axs[6].legend()
-    plt.axvline
+    axs[8].hist(pull, range=(-15, 15), bins=15, label='{:.5f} +- {:.5f}'.format(mean_pull, std_pull))
+    axs[8].axvline(mean_pull, color='r')
+    axs[8].axvline(mean_pull+std_pull, color='r', linestyle='--')
+    axs[8].axvline(mean_pull-std_pull, color='r', linestyle='--')
+    axs[8].set_title('Pull = Residuals / (errors/gains)')
+    axs[8].legend()
+    
+    # Histogram Data/Gain and Residuals
+    axs[9].hist(correct*the_mask, bins=20, alpha=0.2, label='Data/Gain', range=(-0.3, 0.3))
+    axs[9].hist(residu*the_mask, bins=20, alpha=0.2, label='Residuals', range=(-0.3, 0.3))
+    axs[9].legend()
+    axs[9].set_title(f'STD(data/gain) / STD(Residus) = {np.nanstd(correct/residu):.3f}')
     fig.tight_layout()
+    
     return
+
+```
+
+```{python}
+# correct, residu, pull = get_pull(fringes[0], errs[0], A, PowerPhi[0])
+# pull*the_mask
 ```
 
 ```{python}
@@ -708,7 +740,7 @@ allmean_pull, allstd_pull = [], []
 for k in range(nimages):
     
     plot_residuals(q, xONAFP, yONAFP, BLs[k], fringes[k], the_mask, PowerPhi[k], errs[k], A, 
-                   cmap=cmap_bwr, normalize=True, vmin=-1, vmax=1)
+                   cmap=cmap_bwr, normalize=True, vmin=-1, vmax=1, s=100)
     _, _, pull = get_pull(fringes[k], errs[k], A, PowerPhi[k])
     allmean_pull.append(np.mean(pull))
     allstd_pull.append(np.std(pull))
@@ -1137,17 +1169,17 @@ params_guess = [fl_minuit, th_minuit] + list(LogPk_minuit)
 print('Guess:', params_guess)
 
 ndim = len(params_guess)
-nwalkers = 15
+nwalkers = 30
 
 # Initial guess
 p0 = [params_guess + 1e-4 * np.random.rand(ndim) for i in range(nwalkers)]
 # print(p0)
 
-niter = 1000
+niter = 3000
 axis_names = ['Focal', 'Theta'] + [f'LogP{i+1}' for i in range(nimages)]
 
 mcmc = MCMC(nwalkers, niter, ndim, p0, burnin=0, axis_names=axis_names, withpool=False, 
-            emcee_filename='emcee_2020-10-27_BLs2-5_v3.h5')
+            emcee_filename='emcee_2020-10-27_BLs1-2-4-5-7-8-9-10-11_v1.h5')
 args = (allInvCov, fringes, BLs)
 ```
 
@@ -1335,15 +1367,17 @@ else:
 #### Residuals and data corrected by inter-calibrations
 
 ```{python}
+cmap_viridis = flib.make_cmap_nan_black('viridis')
 for k in range(nimages):
     plot_residuals(q, xONAFP, yONAFP, BLs[k], 
                    fringes[k], 
                    the_mask, 
                    allPowerPhi[k], 
                    errs[k], 
-                   mcmcA, cmap=cmap_bwr,
+                   blobA_mean, cmap=cmap_viridis,
                    normalize=True,
-                   vmin=-1, vmax=1)
+                   vmin=-1, vmax=1,
+                   s=100)
 
 ```
 

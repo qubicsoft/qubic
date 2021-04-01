@@ -9,6 +9,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib import cm
 import scipy.optimize as sop
 from scipy.signal import resample
+from astropy.stats import sigma_clip
 
 from qubicpack.qubicfp import qubicfp
 import qubic.fibtools as ft
@@ -1150,11 +1151,14 @@ def make_cmap_nan_black(cmap):
 
 
 def plot_fringes_scatter(q, xTES, yTES, fringes1D, normalize=True, frame='ONAFP', fig=None, ax=None,
-                         cbar=True, vmin=-1., vmax=1., cmap=make_cmap_nan_black('bwr'), s=None, title='Scatter plot'):
+                         cbar=True, vmin=-1., vmax=1., cmap=make_cmap_nan_black('bwr'), s=None,
+                         title='Scatter plot', fontsize=14):
     x, y, fringes = remove_thermometers(xTES, yTES, fringes1D)
 
     if normalize:
-        fringes /= np.nanstd(fringes)
+        # Clip weird detectors, NAN values are automatically clipped
+        clip_mask = sigma_clip(fringes, sigma=3)
+        fringes /= np.std(clip_mask)
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -1167,7 +1171,8 @@ def plot_fringes_scatter(q, xTES, yTES, fringes1D, normalize=True, frame='ONAFP'
                          vmin=vmin,
                          vmax=vmax,
                          cbar=cbar,
-                         plotnonfinite=True
+                         plotnonfinite=True,
+                         fontsize=fontsize
                          )
     return
 
@@ -1201,7 +1206,9 @@ def plot_fringes_imshow(fringes2D, normalize=True, interp=None, mask=None,
                         fig=None, ax=None, cbar=True, vmin=-1, vmax=1.,
                         cmap='bwr', title='Imshow'):
     if normalize:
-        fringes2D /= np.nanstd(fringes2D)
+        # Clip weird detectors, NAN values are automatically clipped
+        clip_mask = sigma_clip(fringes2D, sigma=3)
+        fringes2D /= np.std(clip_mask)
 
     if mask is not None:
         fringes2D *= mask

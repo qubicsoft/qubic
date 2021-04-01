@@ -1255,4 +1255,74 @@ def plot_fringes_imshow(fringes2D, normalize=True, interp=None, mask=None,
     return
 
 
+def plot_fringes_diagonal(fringes2D, idiag=[0], anti_diag=False,
+                          fig=None, ax=None, figsize=(12, 8), ylim=(None, None), title=''):
+    """
+    Plot the diagonals in 1D and the sum of all diagonals.
+    Parameters
+    ----------
+    fringes2D: array
+        A 2D image of the focal plane (17x17).
+    idiag: list
+        Diagonal index you want to plot, 0 is the main one and it can be from -16 to 16.
+    anti_diag: bool
+        If True, it will take the anti-diagonals.
+    fig, ax: matplotlib figure
+        If not None, you can include the plot in matplotlib subplots.
+    figsize
+    ylim
+    title: str
+        Plot title
 
+    Returns
+    -------
+
+    """
+    fringes2D = np.nan_to_num(fringes2D)
+    if anti_diag:
+        fringes2D = np.fliplr(fringes2D)
+    sum_diag = sum_all_diag(fringes2D)
+
+    if fig is None:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.gca()
+    ax.plot(sum_diag, color='r', label='Sum of all diagonal')
+    for i in idiag:
+        diag = np.diagonal(fringes2D, offset=i)
+        if i == 0:
+            xx = np.arange(0, 33)[::2]
+        else:
+            xx = np.arange(0, 33)[np.abs(i):-np.abs(i)][::2]
+        ax.plot(xx, diag, 'o', label=f'Diagonal {i}')
+
+    ax.set_xlabel('TES index on the diagonal')
+    ax.set_ylabel('Signal')
+    ax.legend(fontsize=8)
+    ax.set_ylim(ylim)
+    ax.set_title(title)
+    return
+
+
+def sum_all_diag(fringes2D):
+    """Sum diagonal in a 2D images. Pixels that are not TES (outside the FP should be at 0.
+    The sum is normalized to take into account the diagonal lengths and the pixels that are not TES."""
+    offsets = np.arange(-16, 17)
+    sum_diag = np.zeros(33)
+    norm = np.zeros(33)
+    for i in offsets:
+        diag = np.diagonal(fringes2D, offset=i)
+        # Fill the array at right places
+        first = np.abs(i)
+        if i == 0:
+            last = None
+        else:
+            last = - np.abs(i)
+        sum_diag[first:last][::2] += diag
+
+        # Build the normalization array (take into account 0. outside the FP)
+        for j, dd in enumerate(diag):
+            if dd != 0.:
+                norm[first:last][::2][j] += 1
+    sum_diag /= norm
+
+    return sum_diag

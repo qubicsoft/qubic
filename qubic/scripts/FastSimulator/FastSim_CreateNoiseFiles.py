@@ -139,7 +139,6 @@ def get_nunu_covariance(residuals, coverage, nfsub, config, dirsave=None):
 
 
 def ctheta_measurement(residuals, coverage, myfitcovs, nfsub, config, alpha, dirsave=None):
-    plt.figure(figsize=(16, 6))
     fct = lambda x, a, b, c: a * np.sin(x / b) * np.exp(-x / c)
     thth = np.linspace(0, 180, 1000)
     allcth = []
@@ -148,13 +147,14 @@ def ctheta_measurement(residuals, coverage, myfitcovs, nfsub, config, alpha, dir
     pixgood = coverage > 0.1
     for i in range(nfsub):
         corrected_qubicnoise = qss.correct_maps_rms(residuals[i, :, :], coverage, myfitcovs[i])
-        th, thecth = qss.ctheta_parts(corrected_qubicnoise[:, 0], pixgood, 0, 20, 20, nsplit=5, degrade_init=128,
+        th, thecth, _ = qss.ctheta_parts(corrected_qubicnoise[:, 0], pixgood, 0, 20, 20, nsplit=5, degrade_init=128,
                                       verbose=False)
         okfit = np.isfinite(thecth)
         results = curve_fit(fct, th[okfit][1:], (thecth[okfit][1:] / thecth[0]), maxfev=100000, ftol=1e-7, p0=[0, 1, 1])
         allcth.append(thecth)
         allresults.append(results)
 
+        plt.figure(figsize=(16, 6))
         plt.subplot(1, 2, 1)
         p = plt.plot(th, allcth[i] / allcth[i][0], 'o', label='End-To-End Sub {}'.format(i + 1))
         plt.plot(thth, fct(thth, *allresults[i][0]), color=p[0].get_color())
@@ -192,7 +192,7 @@ datadir = os.environ['DATA_SPECTROIM'] + 'Data_for_FastSimulator/'
 # Repository where plots will be saved
 dirsave = os.environ['DATA_SPECTROIM'] + 'Data_for_FastSimulator/plots/'
 
-all_nf = [1, 2, 3, 4, 5, 8]
+all_nf = [1, 2, 3, 4, 5, 6, 7, 8]
 center = np.array([0, 0])
 nptg = 10000
 config = sys.argv[1] # TD150 or FI150 or FI220
@@ -242,6 +242,7 @@ for nfsub in all_nf:
             'CovI': cI,
             'CovQ': cQ,
             'CovU': cU,
+            'alpha': np.float(sys.argv[2]),
             'signoise': np.float(sys.argv[3]),
             'effective_variance_invcov': myfitcovs,
             'clnoise': clth_tosave}

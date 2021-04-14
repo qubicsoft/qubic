@@ -139,6 +139,7 @@ def get_nunu_covariance(residuals, coverage, nfsub, config, dirsave=None):
 
 
 def ctheta_measurement(residuals, coverage, myfitcovs, nfsub, config, alpha, dirsave=None):
+    plt.figure(figsize=(16, 6))
     fct = lambda x, a, b, c: a * np.sin(x / b) * np.exp(-x / c)
     thth = np.linspace(0, 180, 1000)
     allcth = []
@@ -154,7 +155,6 @@ def ctheta_measurement(residuals, coverage, myfitcovs, nfsub, config, alpha, dir
         allcth.append(thecth)
         allresults.append(results)
 
-        plt.figure(figsize=(16, 6))
         plt.subplot(1, 2, 1)
         p = plt.plot(th, allcth[i] / allcth[i][0], 'o', label='End-To-End Sub {}'.format(i + 1))
         plt.plot(thth, fct(thth, *allresults[i][0]), color=p[0].get_color())

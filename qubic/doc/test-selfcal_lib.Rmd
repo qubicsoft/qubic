@@ -38,22 +38,16 @@ plt.rcParams['figure.figsize'] = (12, 6)
 ```
 
 ```{python}
-# Use a tool from qubicpack to get a path
-basedir = Qubic_DataDir(datafile='instrument.py', ) 
-print('basedir : ', basedir)
-
-
 # Get a dictionary
-dictfilename = basedir + '/dicts/global_source_oneDet.dict'
 d = qubic.qubicdict.qubicDict()
-d.read_from_file(dictfilename)
+d.read_from_file('global_source_oneDet.dict')
 print(d['detarray'])
 print(d['MultiBand'])
 print(d['nf_sub'])
 
 d['MultiBand'] = False
 d['nf_sub'] = 1
-d['config'] = 'TD'
+d['config'] = 'FI'
 d['beam_shape'] = 'gaussian'
 ```
 
@@ -76,20 +70,24 @@ plt.title('q.detector.plot()')
 ```{python}
 # scal.close_switches(q, np.arange(1, 64))
 # scal.open_switches(q, [1, 45, 50])
-dictfilename = basedir + '/dicts/global_source_oneDet.dict'
 d1 = qubic.qubicdict.qubicDict()
-d1.read_from_file(dictfilename)
+d1.read_from_file('global_source_oneDet.dict')
 
 d1['config'] = 'TD'
 q1 = qubic.QubicInstrument(d1)
 
-plt.figure(figsize=(8, 8))
+fig = plt.figure(figsize=(10, 10))
 q.horn.plot(facecolor_open='grey', alpha=0.4)
 q1.horn.plot(facecolor_open='g', alpha=0.3)
 
-plt.xlabel('$X_{GRF}$ [m]', fontsize=20)
-plt.ylabel('$Y_{GRF}$ [m]', fontsize=20)
+# plt.xlabel('$X_{GRF}$ [m]', fontsize=20)
+# plt.ylabel('$Y_{GRF}$ [m]', fontsize=20)
+plt.xlabel('$h_x$ [m]', fontsize=30)
+plt.ylabel('$h_y$ [m]', fontsize=30)
 plt.axis('square')
+plt.rc('font', size=10) 
+fig.tight_layout()
+plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/horn_array.pdf', dpi=100)
 ```
 
 ```{python}
@@ -153,17 +151,18 @@ In general Qubic Soft uses only the GRF frame. However, selfcal_lib allows to us
 
 
 ```{python}
-scal.open_switches(q, np.arange(1, 401))
+scal.open_switches(q, np.arange(1, 401, 1))
 # scal.close_switches(q, np.arange(1, 64))
 
 xONAFP, yONAFP, power = scal.get_response_power(q, 0., 0., 150e9, 1.)
+# xONAFP, yONAFP, _ = scal.get_response_power(q, 0., 0., 150e9, 1.)
 
-# fig = plt.figure()
-# ax = fig.gca()
-scal.plot_horn_and_FP(q, xONAFP, yONAFP, power, frame='ONAFP', title='', s=35, unit=None, cbar=None,
-                      vmin=0, vmax=1e-5)
-#                       norm=SymLogNorm(1e-6))
-#
+fig = plt.figure(figsize=(10, 10))
+ax = fig.gca()
+scal.scatter_plot_FP(q, xONAFP, yONAFP, power, frame='ONAFP', title='', s=190, unit=None, cbar=None,
+                      vmin=0, vmax=1.5e-5, fig=fig, ax=ax, fontsize=30, Norm=SymLogNorm(1e-6))
+fig.tight_layout()
+plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/detector_array.pdf', dpi=100)
 ```
 
 #### Create a Fringes object
@@ -317,7 +316,7 @@ print('rep:', rep)
 This simulations are done in the ONAFP frame. The resolution is high (241 x 241) and it assumes an area bigger than the focal plane.
 
 ```{python}
-open_horns = [57, 64]
+open_horns = np.arange(1, 64)
 xONAFP, yONAFP, power = scal.get_power_Maynooth(rep, open_horns, 
                                                 0., 150e9, 
                                                 q.horn.center,  

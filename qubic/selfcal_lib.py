@@ -3,6 +3,7 @@ from __future__ import division, print_function
 import glob
 import numpy as np
 import pandas as pd
+import healpy as hp
 
 from scipy.interpolate import RegularGridInterpolator
 from scipy.integrate import dblquad
@@ -919,7 +920,7 @@ def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.
 
 # ========== Fringe simulations =============
 class Model_Fringes_Ana:
-    def __init__(self, q, baseline, theta_source=0., nu_source=150e9, fwhm=20., amp=1., frame='ONAFP'):
+    def __init__(self, q, baseline, theta_source=0., phi_source=0., nu_source=150e9, fwhm=20., amp=1., frame='ONAFP'):
         """
 
         Parameters
@@ -929,6 +930,8 @@ class Model_Fringes_Ana:
             Baseline formed with 2 horns, index between 1 and 64 as on the instrument.
         theta_source: float
             The source zenith angle [rad].
+        phi_source: float
+            The source azimuthal angle [rad].
         nu_source: float
             Source frequency [Hz].
         fwhm: float
@@ -939,6 +942,7 @@ class Model_Fringes_Ana:
         self.q = q
         self.focal = q.optics.focal_length
         self.theta_source = theta_source
+        self.phi_source = phi_source
         self.nu_source = nu_source
         self.lam = 3e8 / self.nu_source
         self.fwhm = fwhm
@@ -966,10 +970,18 @@ class Model_Fringes_Ana:
         phase = - 2 * np.pi / 3e8 * self.nu_source * dist * np.sin(self.theta_source)
         self.phase = phase
 
+    def make_gaussian(self):
+        sigma = np.deg2rad(self.fwhm / 2.355 * self.focal)
+        # The position of the gaussian depends on the position of the source
+        # Maybe there is a sign problem here...
+        x_center = self.focal * np.tan(self.theta_source) * np.cos(self.phi_source)
+        y_center = self.focal * np.tan(self.theta_source) * np.sin(self.phi_source)
+        self.gaussian = np.exp(- 0.5 * ((self.x - x_center) ** 2 + (self.y - y_center) ** 2) / sigma ** 2)
+        return self.gaussian
+
     def get_fringes(self, times_gaussian=True):
         if times_gaussian:
-            sigma = np.deg2rad(self.fwhm / 2.355 * self.focal)
-            gaussian = np.exp(- 0.5 * ((self.x - self.BL_xc) ** 2 + (self.y - self.BL_yc) ** 2) / sigma ** 2)
+            gaussian = self.make_gaussian()
         else:
             gaussian = 1.
         xprime = (self.x * np.cos(self.BL_angle) + self.y * np.sin(self.BL_angle))

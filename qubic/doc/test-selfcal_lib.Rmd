@@ -14,8 +14,15 @@ jupyter:
 
 # Simulations for calibration (fringes on the FP)
 
-#### Edited by Louise 26-11-2020
+#### Edited by Louise 16-04-2021
 selfcal_lib.py allows to do several simulations concerning the calibration, especially the simlation of the signal on the focal plane. This notebook gives some examples of what you can do with.
+
+To simulate the signal on the FP, there are 3 possibilities:
+ - Analytical simulation (only fringes, with a simple sine) 
+ - Qubic soft simulation
+ - Maynooth simulations (plotted through Qubic soft)
+ 
+Each possibility corresponds to a python class in Selfcal_lib.py.
 
 ```{python pycharm={'is_executing': False}}
 from __future__ import division, print_function
@@ -87,7 +94,7 @@ plt.ylabel('$h_y$ [m]', fontsize=30)
 plt.axis('square')
 plt.rc('font', size=10) 
 fig.tight_layout()
-plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/horn_array.pdf', dpi=100)
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/horn_array.pdf', dpi=100)
 ```
 
 ```{python}
@@ -127,16 +134,22 @@ ax2.axis('square')
 fig.tight_layout()
 ```
 
-## Analytical function
+## Analytical function to simulate fringes
+It is simply a 2D sine on the focal plane to make fringes according to the focal length, the frequency, the position of the source. 
+
+A gaussian apodization is done to represent the primary beam. The Gaussian is centered in (0, 0) when the source is on-axis (theta_source=0, phi_source=0.). It moves according to the position of the source. 
 
 ```{python}
-baseline = [120, 274]
-Model_Ana = scal.Model_Fringes_Ana(q, baseline, theta_source=0., nu_source=150e9, fwhm=20., amp=1., frame='ONAFP')
+baseline = [60, 63]
+Model_Ana = scal.Model_Fringes_Ana(q, baseline, 
+                                   theta_source=np.deg2rad(0.), 
+                                   phi_source=np.deg2rad(0.), 
+                                   nu_source=150e9, fwhm=20., amp=1., frame='ONAFP')
 print(Model_Ana.focal)
 
 xONAFP, yONAFP, fringes = Model_Ana.get_fringes(times_gaussian=True)
 
-scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP')
+scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP', s=50)
 
 ```
 
@@ -231,6 +244,7 @@ scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP', fig=fig, ax=ax,
 ```
 
 #### Get fringes from the combination 
+This is what is actually done when we measure the fringes.
 
 ```{python}
 # Get all combinations
@@ -305,6 +319,8 @@ scal.scatter_plot_FP(q, x, y, fringes_meas, frame='ONAFP',
 Those simulations include optical aberrations.
 You need to download the files at : https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
 
+They are only available for the TD instrument.
+
 ```{python}
 # Path to the simulated files 
 rep = Qubic_DataDir(datafile='detcentres.txt', datadir='/home/lmousset/QUBIC/')
@@ -336,12 +352,12 @@ scal.scatter_plot_FP(q, xONAFP, yONAFP, power, s=1,
 fig = plt.figure(figsize=(8, 8))
 ax = fig.gca()
 ax.axis('off')
-scal.scatter_plot_FP(q, xONAFP, yONAFP, power, s=1, 
+scal.scatter_plot_FP(q, xONAFP, yONAFP, power, s=100, 
                    frame='ONAFP', 
                    title='', 
                    norm=None,
                    fig=fig, ax=ax,
-                    cbar=False)
+                   cbar=False)
 # fig.savefig('/home/lmousset/QUBIC/Images/plots/fringes_Maynoothsimu_BaselineTD57-64.png', transparent=True)
 ```
 

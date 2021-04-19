@@ -1,0 +1,291 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.10.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+'''
+This is an edited version of the script by JCH.
+It has been altered to run on cc-in2p3
+'''
+# %matplotlib inline
+# #%matplotlib notebook
+from matplotlib import rc
+from matplotlib.pyplot import *
+rc('figure', figsize=(64,16))
+rc('font', size=12)
+rc('text', usetex=False)
+rc('image', cmap='viridis')
+
+import os
+import numpy as np
+import healpy as hp
+import pickle
+from importlib import reload
+
+import qubic.io
+from pysimulators import FitsArray
+import qubic.fibtools as ft
+import qubic.demodulation_lib as dl
+import qubic.sb_fitting as sbfit
+```
+
+```{python}
+# INSTRUMENT
+ns = 256
+d = qubic.qubicdict.qubicDict()
+d.read_from_file('global_source_oneDet_multiband.dict')
+
+q = qubic.QubicMultibandInstrument(d)
+
+
+```
+
+```{python}
+TESNum = 93
+
+### Old data from JC
+#dirdata = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/'
+data_dir = '/sps/hep/qubic/Users/satorchi/Synthesized Beams/Synthesized_Beams_Files'
+subdirs = ['130GHz-2019-04-18',
+           '140GHz-2019-04-10/',
+           '150GHz-2019-04-06/',
+           '160GHz-2019-04-08/',
+           '170GHz-2019-04-14/']
+#subdirs = ['2020-06-26', '2020-06-27', '2020-07-29', '2020-07-30', '2020-07-31', '2020-08-01', '2020-08-02']
+freqs = [130, 140, 150, 160, 170]
+
+'''
+### New data from James
+data_dir = '/sps/hep/qubic/Users/jdmurphy/synthdata'
+subdirs =  ['2020-08-01',
+            '2020-07-30',
+            '2020-08-02']
+freqs = [130, 150, 170]
+'''
+
+directories = []
+for sdir in subdirs:
+    directories.append(data_dir+os.sep+sdir)
+
+
+c50 = np.cos(np.radians(50))
+azmin = -15./c50
+azmax = 15./c50
+
+allmaps = []
+allaz = []
+allel =[]
+fig = figure(figsize=(64,16))
+for i in range(len(directories)):
+    full_dir = directories[i]
+    flatmap, az, el = sbfit.get_flatmap(TESNum, full_dir, azmin = azmin, azmax=azmax)
+    allmaps.append(flatmap)
+    allaz.append(az)
+    allel.append(el)
+
+    subplot(1, len(freqs), i+1)
+    ax = fig.get_axes()[-1]
+    AZ, EL = np.meshgrid(allaz[i], allel[i])
+    AZ = AZ*np.cos(np.deg2rad(50))
+    mm, ss = ft.meancut(allmaps[i], 5)
+    imshow(allmaps[i], aspect='equal', origin='lower',
+               extent=[np.min(AZ), np.max(AZ), np.min(EL), np.max(EL)])
+    #title('TES {} - {} GHz'.format(TESNum,freqs[i]))
+    title('%.0f GHz' % freqs[i],fontsize=80)
+    tick_params(axis='x',labelsize=60)
+    tick_params(axis='y',labelsize=0)
+    ax.set_xlabel('azimuth / degrees',fontsize=60)
+    if i==0: 
+        tick_params(axis='y',labelsize=60)
+        ax.set_ylabel('elevation / degrees',fontsize=60)
+```
+
+```{python}
+
+```
+
+```{python}
+import matplotlib.animation
+rcParams["animation.html"] = "jshtml"
+rcParams['figure.dpi'] = 60  
+ion()
+fig, ax = plt.subplots()
+
+nframes = len(freqs)
+
+def animate(t):
+    plt.cla()
+    findex = t
+    index = int(np.floor(findex))
+    AZ, EL = np.meshgrid(allaz[i], allel[i])
+    AZ = AZ*np.cos(np.deg2rad(50))
+    mm, ss = ft.meancut(allmaps[index], 5)
+    plt.imshow(allmaps[index], aspect='equal', origin='lower',
+               extent=[np.min(AZ), np.max(AZ), np.min(EL), np.max(EL)])
+    title('TES {} - {} GHz'.format(TESNum,freqs[index]))
+    
+matplotlib.animation.FuncAnimation(fig, animate, frames=nframes)
+```
+
+# Trying RGB image
+
+```{python}
+import scipy.ndimage
+TESNum = 93
+
+
+### Old data from JC
+dirdata = '/sps/hep/qubic/Users/satorchi/Synthesized Beams/Synthesized_Beams_Files'
+directories = [dirdata + '/130GHz-2019-04-18/',
+               dirdata + '/140GHz-2019-04-10/',
+               dirdata + '/150GHz-2019-04-06/',
+               dirdata + '/160GHz-2019-04-08/',
+               dirdata + '/170GHz-2019-04-14/']
+freqs = [130, 140, 150, 160, 170]
+
+### New data from James
+dirdata = '/sps/hep/qubic/Users/jdmurphy/synthdata'
+days  = ['2020-08-01',
+         '2020-07-30',
+         '2020-08-02']
+directories = []
+for day in days:
+    directories.append(dirdata+'/'+day)
+freqs = [130, 150, 170]
+
+n_freqs = len(freqs)
+
+c50 = np.cos(np.radians(50))
+azmin = -15./c50
+azmax = 15./c50
+
+allmaps = []
+allaz = []
+allel =[]
+for i in range(len(directories)):
+    flatmap, az, el = sbfit.get_flatmap(TESNum, directories[i], azmin = azmin, azmax=azmax)
+    allmaps.append(flatmap)
+    allaz.append(az)
+    allel.append(el)
+    AZ, EL = np.meshgrid(allaz[i], allel[i])
+    AZ = AZ*np.cos(np.deg2rad(50))
+
+from PIL import Image
+
+print('allmaps len: ',len(allmaps))
+x_dims = []
+y_dims = []
+for mapitem in allmaps:
+    print('map shape: ',mapitem.shape)
+    x_dims.append(mapitem.shape[0])
+    y_dims.append(mapitem.shape[1])
+x_dim = max(x_dims)
+y_dim = max(y_dims)
+rgbArray = np.zeros((x_dim,y_dim,3),dtype=np.uint8)
+    
+szfilt = 1.
+rgb_index = range(3)
+for idx,i in enumerate(rgb_index):
+    myimg = scipy.ndimage.gaussian_filter(allmaps[i], szfilt, order=0)
+    print('myimg shape: ',myimg.shape)
+    mm, ss = ft.meancut(myimg, 10)
+    mini = np.min(myimg)
+    maxi= np.max(myimg)
+    mini = 0
+    maxi = np.max(myimg)/2.5
+    bla = (myimg-mini)/(maxi-mini)*255
+    bla [bla >= 255] = 255
+    
+    rgbArray[0:bla.shape[0],0:bla.shape[1],idx] = (bla-np.min(bla))/(np.max(bla)-np.min(bla))*255 
+    print('rgbArray shape: ',rgbArray[:,:,idx].shape)
+
+img = Image.fromarray(rgbArray)
+
+fig = figure(figsize=(36,36))
+imshow(img, aspect='equal', origin='lower',
+               extent=[np.min(AZ), np.max(AZ), np.min(EL), np.max(EL)])
+#title('TES #{}'.format(TESNum))
+xlabel('Azimuth / degrees',fontsize=80)
+ylabel('Elevation / degrees',fontsize=80,labelpad=30)
+tick_params(axis='both',labelsize=80)
+```
+
+```{python}
+
+```
+
+```{python}
+from PIL import Image
+from matplotlib.backends.backend_pdf import PdfPages
+
+rc('figure', figsize=(16,16))
+nperline = 4
+nlinesperpage = 4
+numline = 0
+allimg = []
+myfile = '/sps/hep/qubic/Users/satorchi/pdfqubic.pdf'
+nplot = 1
+with PdfPages(myfile) as pp:
+    for TESNum in range(1,256):
+        allmaps = []
+        allaz = []
+        allel =[]
+        for i in range(len(directories)):
+            flatmap, az, el = sbfit.get_flatmap(TESNum, directories[i], azmin = azmin, azmax=azmax)
+            allmaps.append(flatmap)
+            allaz.append(az)
+            allel.append(el)
+            AZ, EL = np.meshgrid(allaz[i], allel[i])
+            AZ = AZ*np.cos(np.deg2rad(50))
+
+
+        sh = np.shape(allmaps[0])
+        rgbArray = np.zeros((sh[0], sh[1],3), 'uint8')
+#         for i in range(3):
+#             mini = np.min(allmaps[i])
+#             maxi= np.max(allmaps[i])
+#             rgbArray[..., i] = (allmaps[i]-mini)/(maxi-mini)*256
+#         img = Image.fromarray(rgbArray)
+#         allimg.append(img)
+        for i in range(3):
+            myimg = scipy.ndimage.gaussian_filter(allmaps[i], szfilt, order=0)
+            mm, ss = ft.meancut(myimg, 10)
+            mini = np.min(myimg)
+            maxi= np.max(myimg)
+            mini = 0
+            maxi = np.max(myimg)/2.5
+            bla = (myimg-mini)/(maxi-mini)*255
+            bla [bla >= 255] = 255
+            rgbArray[..., i] = (bla-np.min(bla))/(np.max(bla)-np.min(bla))*255
+        img = Image.fromarray(rgbArray)
+
+        iline = (TESNum-1) % (nperline * nlinesperpage)
+        subplot(nlinesperpage, nperline, nplot)
+        imshow(img, aspect='equal', origin='lower',
+                   extent=[np.min(AZ), np.max(AZ), np.min(EL), np.max(EL)])
+        title('TES #{}'.format(TESNum))
+        nplot += 1
+        if nplot > ((nperline * nlinesperpage)):
+            pp.savefig()
+            show()
+            figure()
+            nplot=1
+            
+
+# pp.savefig()
+show()
+```
+
+```{python}
+
+```

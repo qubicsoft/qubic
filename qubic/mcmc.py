@@ -26,6 +26,7 @@ class LogLikelihood:
         self.nwalkers = nwalkers
         self.fixedpars = fixedpars
         self.p0=p0
+        self.chi2 = chi2
 
         if np.ndim(errors) == 1:
             self.covar = np.zeros((np.size(errors), np.size(errors)))
@@ -35,7 +36,7 @@ class LogLikelihood:
 
         self.flatprior = flatprior
         if not flatprior:
-            initial_fit = self.minuit(p0=self.p0)
+            initial_fit = self.minuit(p0=self.p0, chi2 = self.chi2)
             self.fitresult = [initial_fit[0], initial_fit[1]]
  
     def __call__(self, mytheta, extra_args=None, verbose=False):
@@ -178,7 +179,7 @@ class LogLikelihood:
         self.fitresult_minuit = ft.do_minuit(self.xvals, self.yvals, self.covar, p0,
             functname=self.model, 
             fixpars=self.fixedpars, rangepars=self.flatprior,
-            verbose=verbose, chi2=chi2, print_level=print_level, 
+            verbose=verbose, chi2=self.chi2, print_level=print_level, 
             ncallmax=ncallmax, extra_args=extra_args, nsplit=nsplit)
         if len(self.fitresult_minuit[3])==0:
             cov = np.diag(self.fitresult_minuit[2])
@@ -202,4 +203,10 @@ class LogLikelihood:
             else:
                 myguess_params[:,i] = self.p0[i]
         return myguess_params
+
+
+
+
+
+
 

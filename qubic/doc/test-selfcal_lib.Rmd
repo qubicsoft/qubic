@@ -53,7 +53,7 @@ print(d['nf_sub'])
 
 d['MultiBand'] = False
 d['nf_sub'] = 1
-d['config'] = 'TD'
+d['config'] = 'FI'
 d['beam_shape'] = 'gaussian'
 ```
 
@@ -65,6 +65,7 @@ q = qubic.QubicInstrument(d)
 
 plt.figure(figsize=(6, 4))
 q.detector.plot(fill=True)
+plt.axis('square')
 plt.xlabel('X_GRF')
 plt.ylabel('Y_GRF')
 plt.title('q.detector.plot()')
@@ -73,9 +74,28 @@ plt.title('q.detector.plot()')
 ```
 
 ```{python}
+# scal.close_switches(q, np.arange(1, 64))
+# scal.open_switches(q, [1, 45, 50])
+dictfilename = basedir + '/dicts/global_source_oneDet.dict'
+d1 = qubic.qubicdict.qubicDict()
+d1.read_from_file(dictfilename)
+
+d1['config'] = 'TD'
+q1 = qubic.QubicInstrument(d1)
+
+plt.figure(figsize=(8, 8))
+q.horn.plot(facecolor_open='grey', alpha=0.4)
+q1.horn.plot(facecolor_open='g', alpha=0.3)
+
+plt.xlabel('$X_{GRF}$ [m]', fontsize=20)
+plt.ylabel('$Y_{GRF}$ [m]', fontsize=20)
+plt.axis('square')
+```
+
+```{python}
 # Open or close switches
-scal.close_switches(q, np.arange(1, 64))
-scal.open_switches(q, [1, 45, 50])
+# scal.close_switches(q, np.arange(1, 64))
+# scal.open_switches(q, [1, 45, 50])
 
 # Plot the horn array and a baseline
 fig, axs = plt.subplots(1, 2, figsize=(12, 6))
@@ -120,6 +140,23 @@ This is a simulation that doesn't take into account optical aberrations (only ge
 
 In general Qubic Soft uses only the GRF frame. However, selfcal_lib allows to use the ONAFP frame which is the one uned on the instrument.
 
+
+#### Get the image on the focal plane for a given horn configuration
+
+
+```{python}
+scal.close_switches(q, np.arange(1, 64))
+scal.open_switches(q, np.arange(1, 401))
+
+xONAFP, yONAFP, power = scal.get_response_power(q, 0., 0., 150e9, 1.)
+
+# fig = plt.figure()
+# ax = fig.gca()
+scal.plot_horn_and_FP(q, xONAFP, yONAFP, power, frame='ONAFP', title='', s=35, unit=None, cbar=None,
+                      vmin=0, vmax=1e-5)
+#                       norm=SymLogNorm(1e-6))
+#
+```
 
 #### Create a Fringes object
 

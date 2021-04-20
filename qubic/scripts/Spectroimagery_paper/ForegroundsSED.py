@@ -675,7 +675,7 @@ def make_fit_SED(xSED, xarr, Imvals, Isvals, FuncModel, fgr_map_ud, pixs_ud, nf_
 	return ySED_fit, Pmean, Perr
 
 def _plot_exampleSED(dictionary, center, nus_out, maskmaps, mapsarray = False, 
-					DeltaTheta = 0, DeltaPhi = 0, savefig = False):
+					DeltaTheta = 0, DeltaPhi = 0, savefig = False, newnside = None):
 
 	"""
 	Plot an example of Figure 10 (map + SED ) in paper 1
@@ -697,25 +697,33 @@ def _plot_exampleSED(dictionary, center, nus_out, maskmaps, mapsarray = False,
 
 	capsize=3
 	plt.rc('font', size=16)
+	if newnside == None:	
+		nside = dictionary['nside']
+	else:
+		nside = newnside
 
-	pixG = [hp.ang2pix(dictionary['nside'], np.pi / 2 - np.deg2rad(center[1] + DeltaTheta ), 
+	pixG = [hp.ang2pix(nside, np.pi / 2 - np.deg2rad(center[1] + DeltaTheta ), 
 					   np.deg2rad(center[0] + DeltaPhi) ), ]
+
 
 	fig,ax = plt.subplots(nrows=1,ncols=2,figsize=(14,5),)
 	ax = ax.ravel()
 	IPIXG = pixG[0] 
-	color = ['r','g','k']
-	label = ['dust', 'synchrotron', 'dust+synchrotron']
+	color = ['r','g','k','b']
+	label = ['dust', 'synchrotron', 'dust+synchrotron','cmb']
 	if mapsarray:
 		for j, imap in enumerate(maskmaps):
 			print(imap[:,IPIXG,0])
-			ax[1].plot(nus_out, imap[:,IPIXG,0], 'o', color=color[j], label = label[j])
+			ax[1].plot(nus_out, imap[:,IPIXG,0], marker = 'o' if j < 3 else '', 
+					color=color[j], label = label[j], 
+					linestyle = "-" if j == 3 else '')
 		ax[1].legend()
+		ax[1].set_yscale("log")
 		ax[0].cla()	
 		plt.axes(ax[0])
-		hp.gnomview(maskmaps[-1][-1,:,0], reso = 15,hold = True, title = ' ',unit = r'$\mu$K', notext =True,
+		hp.gnomview(maskmaps[2][-1,:,0], reso = 15,hold = True, title = ' ',unit = r'$\mu$K', notext =True,
 					min = 0 ,
-					max = 0.23 * np.max(maskmaps[-1][-1,:,0]), rot = center)
+					max = 0.23 * np.max(maskmaps[2][-1,:,0]), rot = center)
 	else:
 		ax[1].plot(nus_out, maskmaps[:,IPIXG,0], 'o-', color='r')
 		ax[0].cla()
@@ -723,7 +731,7 @@ def _plot_exampleSED(dictionary, center, nus_out, maskmaps, mapsarray = False,
 		hp.gnomview(maskmaps[-1,:,0], reso = 15,hold = True, title = ' ',unit = r'$\mu$K', notext =True,
 					min = 0 ,
 					max = 0.23 * np.max(maskmaps[-1,:,0]), rot = center)
-	hp.projscatter(hp.pix2ang(dictionary['nside'], IPIXG), marker = '*', color = 'r',s = 180)
+	hp.projscatter(hp.pix2ang(nside, IPIXG), marker = '*', color = 'r',s = 180)
 	#ax[1].set_yscale("log")
 	ax[1].set_ylabel(r'$I_\nu$ [$\mu$K]')
 	ax[1].set_xlabel(r'$\nu$[GHz]')

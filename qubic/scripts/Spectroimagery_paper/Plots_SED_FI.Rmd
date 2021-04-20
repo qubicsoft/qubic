@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.6.0rc0
+      jupytext_version: 1.7.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -18,29 +18,26 @@ jupyter:
 import os
 import sys
 import glob
+import time
 from importlib import reload
-import gc
+
 # Specific science modules
 import healpy as hp
 import matplotlib.pyplot as plt
+from matplotlib.legend_handler import HandlerLine2D, HandlerTuple
+import matplotlib.ticker as mtick
 import numpy as np
 import pickle 
 import astropy.io as fits
 
 # Specific qubic modules
 import qubic
-from qubicpack.utilities import Qubic_DataDir
-from qubic import QubicSkySim as qss
 from qubic.polyacquisition import compute_freq
 from qubic import ReadMC as rmc
-from qubic import create_acquisition_operator_REC
 import ForegroundsSED as fsed
 import qubic.AnalysisMC as amc
-from matplotlib.legend_handler import HandlerLine2D, HandlerTuple
 
 from pysimulators import FitsArray
-import time
-from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 from scipy.optimize import curve_fit
 import scipy.constants
 from qubic import mcmc
@@ -49,13 +46,12 @@ import pickle as pk
 
 plt.rc('text',usetex=False)
 plt.rc('font', size=16)
-
-from mpl_toolkits.mplot3d import Axes3D
 ```
 
 ```{python}
 nside = 64
-savefigs = False
+savefigs = True
+logscale = True
 nreals = 43
 component = "polarization"
 # pixels used in paper:
@@ -114,7 +110,8 @@ file.close()
 # NEW (17 feb 2021)
 RESO = 15
 capsize = 3
-plt.rc('font', size = 14)
+fonts = 16
+plt.rc('font', size = fonts)
 
 fig,ax = plt.subplots(nrows = 1, ncols = 4,figsize = (19,4.5), gridspec_kw = {'wspace': 0.4})
 ax = ax.ravel()
@@ -160,6 +157,7 @@ ax[2].fill_between(xarr_mcmc[1, :], y1 = ySED_fit[1, :, 0] - Std_mcmc[1, :, 0],
 
 # Settings
 greyscale = 0.1
+
 ax[2].axvspan(nus_edge150[-1], nus_edge220[0],color='k',alpha = greyscale)
 ax[0].axvspan(nus_edge150[-1], nus_edge220[0],color='k',alpha = greyscale)
 xlim = ax[0].get_xlim()
@@ -172,24 +170,42 @@ ax[0].axvspan(nus_edge220[-1], xlim[-1], color = 'k', alpha = greyscale)
 ax[2].axvspan(xlim2[0], nus_edge150[0], color = 'k', alpha = greyscale)
 ax[2].axvspan(nus_edge220[-1], xlim2[-1], color = 'k', alpha = greyscale)
 
+if logscale:
+    ax[0].set_yscale("log")
+    ax[2].set_yscale("log")
+    ax[0].set_xscale("log")
+    ax[2].set_xscale("log")
+
+
+ax[0].set_xticks([150, 220], ['150','220'])
+ax[0].xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1f'))
+ax[0].xaxis.set_minor_formatter(mtick.ScalarFormatter())
+ax[0].tick_params(axis = "both", which = "both",
+                  direction='in',width=1.3,)
 ax[0].set_xlim(xlim)
 ax[0].set_ylim(ylim)
+
+ax[2].set_xticks([150, 220], ['150','220'])
+ax[2].xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1f'))
+ax[2].xaxis.set_minor_formatter(mtick.ScalarFormatter())
+ax[2].tick_params(axis = "both", which = "both",
+                  direction='in',width=1.3,)
 ax[2].set_xlim(xlim2)
 ax[2].set_ylim(ylim2)
 
+ax[0].grid(which="both")
 ax[2].grid(which='both')
 l = ax[0].legend([(t0,t1), (p1, p2), (e1, e2)], ["Dust - Synch", 'Input sky ', '68% C.L.'], numpoints=1, 
-                 loc = 2, fontsize = 12,
+                 loc = "best", fontsize = 12,
                handler_map={tuple: HandlerTuple(ndivide=None)})
 
-ax[0].grid()
-ax[0].set_title('GC patch - {} year'.format(dictionaries[0]['effective_duration']),fontsize=16)
-ax[0].set_ylabel(r'$I(\nu)$ [$\mu$K]',fontsize=16)
-ax[0].set_xlabel(r'$\nu$[GHz]',fontsize=16)
+ax[0].set_title('GC patch - {} year'.format(dictionaries[0]['effective_duration']),fontsize=fonts)
+ax[0].set_ylabel(r'$I(\nu)$ [$\mu$K$_{CMB}$]',fontsize=fonts)
+ax[0].set_xlabel(r'$\nu$[GHz]',fontsize=fonts)
 
-ax[2].set_title('QUBIC patch - {} years'.format(dictionaries[0]['effective_duration']),fontsize=16)
-ax[2].set_ylabel(r'$I(\nu)$ [$\mu$K]',fontsize=16)
-ax[2].set_xlabel(r'$\nu$[GHz]',fontsize=16)
+ax[2].set_title('QUBIC patch - {} years'.format(dictionaries[0]['effective_duration']),fontsize=fonts)
+ax[2].set_ylabel(r'$I(\nu)$ [$\mu$K$_{CMB}$]',fontsize=fonts)
+ax[2].set_xlabel(r'$\nu$[GHz]',fontsize=fonts)
 
 # Displaying maps
 ax[1].cla()
@@ -198,7 +214,7 @@ hp.gnomview(maps_ud[2, -1, :, 0], reso = 15,hold = True,
             notext = True, title = ' ',
             min = 0,
             max = 0.4*np.max(maps_ud[2, -1, :, 0]), 
-            unit = r'$\mu$K',
+            unit = r'$\mu$K$_{CMB}$',
             rot = centers[2])
 hp.projscatter(hp.pix2ang(nside, pixs_ud[2]), marker = '*', color = 'r', s = 180)
 dpar = 10
@@ -209,7 +225,7 @@ long_coordsG = [centers[2][1] - 2*dpar, centers[2][1] - dpar,
                 centers[2][1], centers[2][1] + dpar, centers[2][1] + 2 * dpar]
 #paralels
 for ilong in long_coordsG:
-    plt.text(np.deg2rad(mer_coordsG[0] - 12), 1.1*np.deg2rad(ilong), 
+    plt.text(np.deg2rad(mer_coordsG[0] - 14), 1.1*np.deg2rad(ilong), 
              r'{}$\degree$'.format(ilong))
 #meridians
 for imer in mer_coordsG:
@@ -225,51 +241,59 @@ for imer in mer_coordsG:
         plt.text(-np.deg2rad(imer + 3), np.deg2rad(long_coordsG[-1] + 6), 
              r'{}$\degree$'.format(imer))
              #r'{}h{}m'.format(int(ip), int(round(dp*60))))
-hp.projtext(mer_coordsG[1] + 2, long_coordsG[0] - 6, '$l$',  color = 'k', lonlat=True)
-hp.projtext(mer_coordsG[2] + 12.5, long_coordsG[2] - 1, '$b$', rotation = 90, color = 'k', lonlat=True)
+#hp.projtext(mer_coordsG[1] + 2, long_coordsG[0] - 6, '$l$',  color = 'k', lonlat=True)
+#hp.projtext(mer_coordsG[2] + 13.5, long_coordsG[2] - 1, '$b$', rotation = 0, color = 'k', lonlat=True)
+plt.text(0.5,0.13, '$l$', transform=ax[1].transAxes)
+plt.text(-0.3,0.57, '$b$', transform=ax[1].transAxes)
 
 ax[3].cla()
 plt.axes(ax[3])
 hp.gnomview(maps_ud[1, -1, :, 0], reso = 15, hold = True, 
             notext = True, title = ' ',
-            unit = r'$\mu$K',
+            unit = r'$\mu$K$_{CMB}$',
             min = 0,
             max = 0.4*np.max(maps_ud[1, -1, :, 0]), 
             rot = centers[0])
 hp.projscatter(hp.pix2ang(nside, pixQ_ud),marker = '*', color = 'r', s = 180)
 
-mer_coordsQ = [centers[1][0] - dmer, centers[0][0]+0, centers[0][0] + dmer]
+mer_coordsQ = [centers[0][0] - dmer, centers[0][0]+0, centers[0][0] + dmer]
 long_coordsQ = [centers[0][1] - 2*dpar, centers[0][1] - dpar, centers[0][1], 
                 centers[0][1] + dpar, centers[0][1] + 2 * dpar]
 #paralels
 for ilong in long_coordsQ:
-    plt.text(np.deg2rad(mer_coordsQ[0]-360+31), 1.1*np.deg2rad(ilong+58), r'{:.0f}$\degree$'.format(ilong),)
+    plt.text(np.deg2rad(mer_coordsQ[0]-360+29), 1.1*np.deg2rad(ilong+58), r'{:.0f}$\degree$'.format(ilong),)
 #meridians
 for imer in mer_coordsQ:
     ip, dp = divmod(imer/15,1)
     plt.text(-np.deg2rad(imer-360+48), np.deg2rad(long_coordsQ[-1]+58+7), 
          r'{:.1f}$\degree$'.format(imer))
-         #r'{}h{}m'.format(int(ip), int(round(dp*60))))
-#hp.projtext(mer_coordsQ[0] , long_coordsQ[0] - 6, r'$l$',  color = 'k', lonlat=True)
-#hp.projtext(mer_coordsQ[2] - 360, long_coordsQ[2] + 10, r'$b$', rotation = 90, color = 'k', lonlat=True)
+
+plt.text(0.5,0.13, '$l$', transform=ax[3].transAxes)
+plt.text(-0.3,0.57, '$b$', transform=ax[3].transAxes)
+
+#hp.projtext(mer_coordsQ[0] , long_coordsQ[0] - 6, '$l$',  color = 'k', lonlat=True)
+#hp.projtext(mer_coordsQ[2] - 360, long_coordsQ[2] + 10, '$b$', rotation = 0, color = 'k', lonlat=True)
+#hp.projtext(-330, -60, '$b$', rotation = 0, color = 'k', lonlat=True)
 
 hp.graticule(dpar = dpar, dmer = dmer, alpha = 0.6, verbose = False)
 
-plt.tight_layout()
+#plt.tight_layout()
 if savefigs:
-    plt.savefig('Figs-FI-SED/March2021/NSIDE{}/{}_nrec{}_nside{}_pixQ{}_pixG{}_Intensity_grat.svg'.format(nside,
-                                                                            FuncModel.__name__,
-                                                                            d150Q['nf_recon'],nside,
+    plt.savefig('Fig-FI-SED/March2021/NSIDE{}/{}_nrec{}_nside{}_pixQ{}_pixG{}_Intensity_log.svg'.format(nside,
+                                                                            "ThermDust",
+                                                                            dictionaries[0]['nf_recon'],
+                                                                                nside,
                                                            pixQ_ud, pixG_ud), 
             format = 'svg', bbox_inches='tight')
-    plt.savefig('Figs-FI-SED/March2021/NSIDE{}/{}_nrec{}_nside{}_pixQ{}_pixG{}_Intensity_grat.pdf'.format(nside,
-                                                                                FuncModel.__name__,
-                                                                               d150Q['nf_recon'],nside,
+    plt.savefig('Fig-FI-SED/March2021/NSIDE{}/{}_nrec{}_nside{}_pixQ{}_pixG{}_Intensity_log.pdf'.format(nside,
+                                                                                "ThermDust",
+                                                                               dictionaries[0]['nf_recon'],
+                                                                            nside,
                                                            pixQ_ud, pixG_ud), 
             format = 'pdf', bbox_inches='tight')
-    plt.savefig('Figs-FI-SED/March2021/NSIDE{}/{}_nrec{}_nside{}_pixQ{}_pixG{}_Intensity'.format(nside,
-                                                                        FuncModel.__name__, 
-                                                                           d150Q['nf_recon'],
+    plt.savefig('Fig-FI-SED/March2021/NSIDE{}/{}_nrec{}_nside{}_pixQ{}_pixG{}_Intensity_log'.format(nside,
+                                                                        "ThermDust", 
+                                                                           dictionaries[0]['nf_recon'],
                                                                            nside,pixQ_ud, pixG_ud),
            bbox_inches='tight')
 else:
@@ -280,7 +304,6 @@ else:
 #
 #                  Polarization
 #
-
 fig,ax = plt.subplots(nrows = 1,ncols = 4, figsize = (19,4.5), gridspec_kw = {'wspace': 0.4})
 ax = ax.ravel()
 plt.subplots_adjust(wspace=0.1)
@@ -344,21 +367,22 @@ ax[2].fill_between(xarr_mcmc[1], y1 = ySED_fit[1, :, 1] - Perr[1],
                    color = 'b', alpha = 0.3)
 
 # Setting
-ax[0].set_title('GC patch - {} year'.format(dictionaries[0]['effective_duration']), fontsize = 14)
-ax[0].set_ylabel(r'$P(\nu)~[\mu$K]', fontsize = 14)
-ax[0].set_xlabel(r'$\nu~[GHz]$', fontsize = 14)
-ax[0].legend(loc = 2, fontsize = 12)
-ax[0].grid()
-ax[2].set_xlabel(r'$\nu~[GHz]$', fontsize = 14)
-ax[2].set_ylabel(r'$P(\nu)~[\mu$K]', fontsize = 14)
-ax[2].set_title('QUBIC patch - {} years'.format(dictionaries[0]['effective_duration']),fontsize=14)
-ax[2].grid()
+ax[0].set_title('GC patch - {} year'.format(dictionaries[0]['effective_duration']), fontsize = fonts)
+ax[0].set_ylabel(r'$P(\nu)~[\mu$K$_{CMB}$]', fontsize = fonts)
+ax[0].set_xlabel(r'$\nu~[GHz]$', fontsize = fonts)
+#ax[0].legend(loc = "best", fontsize = 12)
+l = ax[0].legend([(t0,t1), (p1, p2), (e1, e2)], ["Dust - Synch", 'Input sky ', '68% C.L.'], numpoints=1, 
+                 loc = "best", fontsize = 12,
+               handler_map={tuple: HandlerTuple(ndivide=None)})
+
+ax[2].set_xlabel(r'$\nu~[GHz]$', fontsize = fonts)
+ax[2].set_ylabel(r'$P(\nu)~[\mu$K$_{CMB}$]', fontsize = fonts)
+ax[2].set_title('QUBIC patch - {} years'.format(dictionaries[0]['effective_duration']),fontsize=fonts)
 
 xlim = ax[0].get_xlim()
 ylim = ax[0].get_ylim()
 xlim2 = ax[2].get_xlim()
 ylim2 = ax[2].get_ylim()
-
 ax[0].axvspan(nus_edge150[-1], nus_edge220[0], color = 'k', alpha = greyscale)
 ax[0].axvspan(xlim2[0], nus_edge150[0], color = 'k', alpha = greyscale)
 ax[0].axvspan(nus_edge220[-1], xlim2[-1], color = 'k', alpha = greyscale)
@@ -366,14 +390,32 @@ ax[2].axvspan(nus_edge150[-1], nus_edge220[0], color = 'k', alpha = greyscale)
 ax[2].axvspan(xlim2[0], nus_edge150[0], color = 'k', alpha = greyscale)
 ax[2].axvspan(nus_edge220[-1], xlim2[-1], color = 'k', alpha = greyscale)
 
+#logscale = True
+if logscale:
+    ax[0].set_yscale("log")
+    ax[2].set_yscale("log")
+    ax[0].set_xscale("log")
+    ax[2].set_xscale("log")
+
+
+ax[0].set_xticks([150, 220], ['150','220'])
+ax[0].xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1f'))
+ax[0].xaxis.set_minor_formatter(mtick.ScalarFormatter())
+ax[0].tick_params(axis = "both", which = "both",
+                  direction='in',width=1.3,)
 ax[0].set_xlim(xlim)
 ax[0].set_ylim(ylim)
-ax[0].text(xlim[0]+(xlim[1]-xlim[0])*0.1, ylim[-1]*0.8, '150 GHz \n band', fontsize = 10)
-ax[0].text(xlim[0]+(xlim[1]-xlim[0])*0.6, ylim[-1]*0.8, '220 GHz \n band', fontsize = 10)
+
+ax[2].set_xticks([150, 220], ['150','220'])
+ax[2].xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1f'))
+ax[2].xaxis.set_minor_formatter(mtick.ScalarFormatter())
+ax[2].tick_params(axis = "both", which = "both",
+                  direction='in',width=1.3,)
 ax[2].set_xlim(xlim2)
 ax[2].set_ylim(ylim2)
-ax[2].text(xlim2[0]+(xlim2[1]-xlim2[0])*0.1, ylim2[-1]*0.8, '150 GHz \n band', fontsize = 10)
-ax[2].text(xlim2[0]+(xlim2[1]-xlim2[0])*0.6, ylim2[-1]*0.8, '220 GHz \n band', fontsize = 10)
+
+ax[0].grid(which="both")
+ax[2].grid(which='both')
 
 # Displaying maps    
 plt.axes(ax[1])
@@ -384,7 +426,7 @@ hp.gnomview(auxmapG,
             title = ' ',
             min = 0,
             cbar = True,
-            unit = r'$\mu$K',
+            unit = r'$\mu$K$_{CMB}$',
             rot = centers[2])
 hp.projscatter(hp.pix2ang(nside, pixs_ud[2]),marker = '*',color = 'r', s = 180)
 dpar = 10
@@ -395,7 +437,7 @@ long_coordsG = [centers[2][1] - 2*dpar, centers[2][1] - dpar,
                 centers[2][1], centers[2][1] + dpar, centers[2][1] + 2 * dpar]
 #paralels
 for ilong in long_coordsG:
-    plt.text(np.deg2rad(mer_coordsG[0] - 12), 1.1*np.deg2rad(ilong), 
+    plt.text(np.deg2rad(mer_coordsG[0] - 14), 1.1*np.deg2rad(ilong), 
              r'{}$\degree$'.format(ilong))
 #meridians
 for imer in mer_coordsG:
@@ -411,8 +453,10 @@ for imer in mer_coordsG:
         plt.text(-np.deg2rad(imer + 3), np.deg2rad(long_coordsG[-1] + 6), 
              r'{}$\degree$'.format(imer))
              #r'{}h{}m'.format(int(ip), int(round(dp*60))))
-hp.projtext(mer_coordsG[1] + 2, long_coordsG[0] - 6, '$l$',  color = 'k', lonlat=True)
-hp.projtext(mer_coordsG[2] + 12.5, long_coordsG[2] - 1, '$b$', rotation = 90, color = 'k', lonlat=True)
+#hp.projtext(mer_coordsG[1] + 2, long_coordsG[0] - 6, '$l$',  color = 'k', lonlat=True)
+#hp.projtext(mer_coordsG[2] + 13.5, long_coordsG[2] - 1, '$b$', rotation = 0, color = 'k', lonlat=True)
+plt.text(0.5,0.13, '$l$', transform=ax[1].transAxes)
+plt.text(-0.3,0.57, '$b$', transform=ax[1].transAxes)
 
 plt.axes(ax[3])
 auxmapQ = np.sqrt(maps_ud[0, 0, :, 1] ** 2 + maps_ud[0, 0, :, 2] ** 2)
@@ -423,7 +467,7 @@ hp.gnomview(auxmapQ,
             min = 0,
             title = ' ',
             cbar = True,
-            unit = r'$\mu$K',
+            unit = r'$\mu$K$_{CMB}$',
             rot = centers[0])
 hp.projscatter(hp.pix2ang(nside, pixs_ud[0]), marker = '*', color = 'r', s = 180)
 mer_coordsQ = [centers[0][0] - dmer, centers[0][0]+0, centers[0][0] + dmer]
@@ -431,7 +475,8 @@ long_coordsQ = [centers[0][1] - 2*dpar, centers[0][1] - dpar,
                 centers[0][1], centers[0][1] + dpar, centers[0][1] + 2 * dpar]
 #paralels
 for ilong in long_coordsQ:
-    plt.text(np.deg2rad(mer_coordsQ[0]-360+31), 1.1*np.deg2rad(ilong+58), r'{:.0f}$\degree$'.format(ilong),)
+    plt.text(np.deg2rad(mer_coordsQ[0] - 360 + 29), 1.1 * np.deg2rad(ilong + 58), 
+             r'{:.0f}$\degree$'.format(ilong),)
 #meridians
 for imer in mer_coordsQ:
     ip, dp = divmod(imer/15,1)
@@ -439,28 +484,25 @@ for imer in mer_coordsQ:
          r'{:.1f}$\degree$'.format(imer))
 
 hp.graticule(dpar = dpar, dmer = dmer, alpha = 0.6, verbose = False)
-#l = ax[0].legend([(p1, p2), (e1, e2)], ['Input sky', '68% C.L.'], numpoints=1, loc = 4, fontsize = 12,
-#               handler_map={tuple: HandlerTuple(ndivide=None)})
-l = ax[0].legend([(t0,t1), (p1, p2), (e1, e2)], ["Dust - Synch", 'Input sky', '68% C.L.'], numpoints=1, 
-                 loc = 2, fontsize = 12,
-               handler_map={tuple: HandlerTuple(ndivide=None)})
+plt.text(0.5,0.13, '$l$', transform=ax[3].transAxes)
+plt.text(-0.3,0.57, '$b$', transform=ax[3].transAxes)
 
 plt.tight_layout()#plt.tight_layout()
 
 if savefigs: 
-    plt.savefig('Figs-FI-SED/March2021/NSIDE{}/{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_grat.svg'.format(nside,
-                                                                FuncModel.__name__,
-                                                                d150Q['nf_recon'], nside,
+    plt.savefig('Fig-FI-SED/March2021/NSIDE{}/{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_log.svg'.format(nside,
+                                                                "ThermDust",
+                                                                dictionaries[0]['nf_recon'], nside,
                                                            pixQ_ud, pixG_ud), 
             format = 'svg', bbox_inches='tight')
-    plt.savefig('Figs-FI-SED/March2021/NSIDE{}/{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_grat.pdf'.format(nside,
-                                                                                                             FuncModel.__name__,
-                                                                d150Q['nf_recon'], nside,
+    plt.savefig('Fig-FI-SED/March2021/NSIDE{}/{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_log.pdf'.format(nside,
+                                                                "ThermDust",
+                                                                dictionaries[0]['nf_recon'], nside,
                                                            pixQ_ud, pixG_ud), 
             format = 'pdf', bbox_inches='tight')
-    plt.savefig('Figs-FI-SED/March2021/NSIDE{}/{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_grat'.format(nside,
-                                                                            FuncModel.__name__,
-                                                                           d150Q['nf_recon'], 
+    plt.savefig('Fig-FI-SED/March2021/NSIDE{}/{}_nrec{}_nside{}_pixQ{}_pixG{}_Polarization_log'.format(nside,
+                                                                           "ThermDust",
+                                                                            dictionaries[0]['nf_recon'], 
                                                                            nside,pixQ_ud, pixG_ud),
            bbox_inches='tight')
 else:

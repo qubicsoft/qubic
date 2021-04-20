@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.6.0rc0
   kernelspec:
     display_name: Python 3
     language: python
@@ -14,15 +14,13 @@ jupyter:
 
 #### Author: Martín Gamboa
 
-Aim: analize the simulations rfor the study of the Point Spread Function (PSF) in frequency.
+Aim: analize the simulations for the study of the Frequency Point Spread Function (FPSF).
 
 For each simulation: 
 * read files (two different formats)
 * plot raw data
 * fit gaussian 
 * compute SNR 
-
-(this Martin's notebooks will replace plot.py, plot-raw.py, plot-results.py, plot-results2.py, plot-manyps.py, plot-MC-results.py
 
 ```{python}
 import healpy as hp
@@ -1143,7 +1141,7 @@ print('All done in {} seconds'.format((time.time() - t1) ) )
 fwhm_arrs1, fwhm_arrs0
 
 ```{python}
-fig,ax=plt.subplots(nrows = 1, ncols = 1, figsize = (8, FREQ),
+# fig,ax=plt.subplots(nrows = 1, ncols = 1, figsize = (8, FREQ),
                     sharey = True, gridspec_kw = {'hspace': 0.03})
 ax=[ax,]#ax.ravel()
 #fwhmTh = lambda nu: 61.3474/nu

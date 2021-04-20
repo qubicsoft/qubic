@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.7.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -116,7 +116,11 @@ mask=coverage>0.1*max(coverage)
 
 ```{python}
 maprec=mapsrec['{}'.format(d['nf_recon'][0])][0]
+#print("max rec", np.max(maprec))
 mapconv=mapsconv['{}'.format(d['nf_recon'][0])][0]
+maxmaps = np.max(mapconv.ravel())
+maprec /= maxmaps
+mapconv /= maxmaps
 nusrec=nus['{}'.format(d['nf_recon'][0])]
 nusedge=nus_edge['{}'.format(d['nf_recon'][0])]
 fact=d['nf_sub']/d['nf_recon'][0]
@@ -135,7 +139,7 @@ nusedge_im=nus_edge_im['1']
 ```{python}
 plt.figure(figsize=(10,10))
 plt.rc('font', size=8)
-hp.gnomview(maprec[1,:,0],reso=13,rot=center,min=-1e5,max=1e5,cmap='jet')
+hp.gnomview(maprec[0,:,0],reso=13,rot=center,cmap='jet')
 ```
 
 Loading FPSF model... (saved from analysis_psf.Rmd)
@@ -181,7 +185,7 @@ input_editted = np.copy(inputmap)
 Generate convolution manually as it is in polyacquisition.py, i.e., considering spectral intensity...
 
 ```{python}
-sum(width_out) , nus_edge_out
+#sum(width_out) , nus_edge_out
 ```
 
 ```{python}
@@ -441,46 +445,205 @@ for i in range(d['nf_recon'][0]):
 ```
 
 ```{python}
-plt.figure(figsize=(8,8))
-vmin=-2e4
-vmax=2e4
-nrec=2
-coln=5
-plt.rc('font', size=16)
-reso=12
-fig,ax=plt.subplots(nrows=nrec,ncols=coln,figsize=(16,6), sharex=True,
-                    gridspec_kw={'hspace': 0.01,'wspace': 0.01})
-cmap='coolwarm'
-#cmap='jet'
-#ax=ax.ravel()
-for i in range(5):
-    ax[0,i].cla()
-    plt.axes(ax[0,i])
-    hp.gnomview(mapconv[i,:,0],  rot= center,reso=12,notext=True,hold=True,
-                max=vmax,
-                min=vmin,
-                cmap=cmap,
-                cbar= True if i == 5 else False,
-               title=r'{:.1f} GHz'.format(nusrec[i]))
-    ax[1,i].cla()
-    plt.axes(ax[1,i])
-    hp.gnomview(maprec[i,:,0], rot= center,reso=12,notext=True,hold=True,
-                max= vmax,
-                min =vmin,
-                cmap=cmap, title = None,
-                cbar= True if i == 4 else False)
+reg_square_conv = np.copy(mapconv[1,:,0])
+reg_square_rec = np.copy(maprec[1,:,0])
+reg_circular_conv = np.copy(mapconv[3,:,0])
+reg_circular_rec = np.copy(mapconv[3,:,0])
+leak_0 = np.copy(maprec[0,:,0])
+leak_2 = np.copy(maprec[2,:,0])
+leak_4 = np.copy(maprec[4,:,0])
+mask_square = reg_square_conv < 0.3
+mask_circular = reg_circular_conv < 0.3
 
-plt.text(-4.,0.66,'Convolved',fontsize=16)
-plt.text(-4.,0.,'Reconstructed',fontsize=16)
-#plt.savefig('extsource_bar_5rec')
-#plt.text(-1.5,0,'{:.0f}GHz'.format(nusrec[2]),fontsize=16)
 ```
 
 ```{python}
-hp.gnomview(maprec[0,:,0], rot= center,reso=12,notext=True,
+mask_circsqua = (mask_circular == 1) & (mask_square == 1)
+```
+
+```{python}
+#Mask input signal
+#mask_circsqau = np.where(mask_circular & mask_square)
+reg_square_conv[mask_circsqua] = hp.UNSEEN
+leak_0[mask_circsqua] = hp.UNSEEN
+leak_2[mask_circsqua] = hp.UNSEEN
+plt.figure(figsize = (10,6))
+#cmap = copy.copy(mpl.cm.get_cmap("viridis"))
+hp.gnomview(reg_square_conv, rot = center, reso = 6, sub = (121))
+print("Median", np.median(reg_square_rec[~mask_square]))
+hp.gnomview(leak_2, rot = center, reso = 6, sub = (122))
+```
+
+```{python}
+print(np.median(leak_0[~mask_square]), np.median(leak_2[~mask_circsqua]), np.median(leak_4[~mask_circular]))
+print(np.mean([np.median(leak_0[~mask_square]), 
+               np.median(leak_2[~mask_circsqua]), np.median(leak_4[~mask_circular])]))
+```
+
+```{python}
+testmaps = []
+cmap = "Reds"#'coolwarm'
+for i in range(5):
+    testmaps.append(hp.gnomview(maprec[i,:,0], rot = center, cmap = cmap, reso= 8,
+                        return_projected_map = True, no_plot = True))
+    print("isub {} max = {:.2f}".format(i, np.max(maprec[i,:,0])))
+    print("relative with maximum value in rec maps {} ".format(np.max(maprec[i,:,0])/2.8e4))
+testmaps = np.array(testmaps)
+print(np.shape(testmaps))
+testvalues = np.mean(testmaps, axis = 0)
+print(np.shape(testvalues))
+
+print("Maximum value = {:.2f} \n Mean value = {:.2e} \n Median value = {:.2e}".format(np.max(testvalues),
+                                                                          np.mean(testvalues),
+                                                                         np.median(testvalues)))
+#print("Median in leak signal {:.2e}".format(np.median(maprec[0,~newmask,0])))
+```
+
+```{python}
+from matplotlib.colors import Normalize
+
+vmax=1#0.31#np.median(maprec[1,mask,0])
+vmin=-1#-vmax
+
+nrec=2
+coln=5
+plt.rc('font', size=16)
+reso=14
+fig,ax=plt.subplots(nrows=nrec,ncols=coln,figsize=(18,9), sharex=True,
+                    gridspec_kw={'hspace': -0.3, 'wspace': 0.1})
+
+cmap = "coolwarm"#"Reds"
+for i in range(5):
+    ax[0,i].cla()
+    plt.axes(ax[0,i])
+    hp.gnomview(mapconv[i,:,0],  rot= center,reso = reso,notext=True,hold=True,
+                max=vmax,
+                min=vmin,
+                cmap=cmap,
+                cbar= True if i == 5 else False, return_projected_map = True,
+               title=r'{:.1f} GHz'.format(nusrec[i]))
+    
+    #hp.graticule(dpar = 5, dmer = 5, verbose = False, alpha = 0.6)
+    ax[1,i].cla()
+    plt.axes(ax[1,i])
+    hp.gnomview(maprec[i,:,0], rot= center,reso = reso, notext = True, hold = True,
                 max= vmax,
                 min =vmin,
                 cmap=cmap, title = None,
-                cbar= True if i == 4 else False)
+                cbar= False if i == 4 else False)
+hp.graticule(dpar = 5, dmer = 5, verbose = False, alpha = 0.6)
+fig.colorbar(cm.ScalarMappable(norm=Normalize(vmin=vmin, vmax=vmax), cmap=cmap), 
+             ax=ax[1, 1:4], shrink=0.6, location = "bottom", format = "%.2f",
+            ticks = [vmin, vmax], label = "Arbitrary units")
+
+
+
+#fig.tight_layout()
+#plt.savefig('/home/martin/QUBIC/ArticlesSet_2020/RRPII/extsource_bar_5rec.pdf', format = "pdf", bbox_inches='tight')
+
+```
+
+```{python}
+#save maps
+lacartes = np.zeros((10, 200, 200))
+for i in range(5):
+    lacartes[i] = hp.gnomview(mapconv[i,:,0],  rot = center,reso = 9, min = -1, max = 1, 
+                              return_projected_map = True, no_plot = True)
+    lacartes[5+i] = hp.gnomview(maprec[i,:,0], rot= center,reso = 9, 
+                               return_projected_map = True, no_plot = True)
+```
+
+```{python}
+plt.rc('font', size=16)
+reso = 9
+fig, ax = plt.subplots(nrows = nrec, ncols = coln, figsize = (18, 12), sharex = True, sharey = True,
+                    gridspec_kw = {'hspace': -0.3, 'wspace': 0.1})
+ax = ax.ravel()
+cmap = "coolwarm"
+_cmap_ = "Blues_r"
+levels_neg = [-0.2, -0.1,]#0.1, 0.2, 0.3]
+levels_pos= [0.2,0.3]
+
+idx = 8
+for idx in range(10):
+    #plt.axes(ax)
+    ax[idx].imshow(lacartes[idx,::-1], vmin = -1, vmax = 1, cmap = cmap )
+    CS_n = ax[idx].contour(lacartes[idx, ::-1], levels = levels_neg, cmap = _cmap_, 
+                vmin = -1, vmax = 0, linestyles = "solid")
+    CS_p = ax[idx].contour(lacartes[idx, ::-1], levels = levels_pos, colors = "k",#cmap = "Reds", 
+                vmin = 0, vmax = 1, linestyles = ["solid", "dashed"], alpha = 0.6)
+    ax[idx].clabel(CS_p, CS_p.levels, inline=True, fontsize=13)
+    ax[idx].clabel(CS_n, CS_n.levels, inline=True, fontsize=13)
+    ax[idx].set_yticklabels([])
+    ax[idx].set_xticklabels([])    
+#fig.colorbar(cm.ScalarMappable(norm=Normalize(vmin=vmin, vmax=vmax), cmap=cmap), 
+#             ax=ax[6:9], shrink=0.6, location = "bottom", format = "%.2f",
+#            ticks = [vmin, vmax], label = "Arbitrary units")
+```
+
+```{python}
+mapa_ = hp.gnomview(maprec[1,:,0],  rot= center,reso = 8,notext=True,
+        max=vmax, no_plot = True,
+        min=vmin,
+        cmap=cmap,
+        return_projected_map = True, )
+```
+
+```{python}
+#plt.imshow(mapa_)
+mapa_1 = np.copy(maprec[1,:,0])
+hp.gnomview(mapa_1, reso = 9, rot = center)
+print("media {} median {}".format(np.mean(mapa_1[~mask_square]), np.median(mapa_1[~mask_square])))
+```
+
+```{python}
+center
+x_arr = np.zeros((200))
+for i in range(-100,100):
+    x_arr[i] = center[1] + (reso / 60) * i 
+
+```
+
+```{python}
+from matplotlib.ticker import FormatStrFormatter
+
+X,Y = np.meshgrid(range(200), range(200))
+
+fig = plt.figure(figsize=(18,6))
+for ic in range(5):
+    ax = fig.add_subplot(1, 5, ic + 1, projection='3d')
+    #ax.set_title('cov{} {}-patch {}'.format(bands[ic//2], regions[ic//2][0], config), fontsize=16)
+    ax.plot_surface(X, Y, lacartes[ic], cmap=cmap, linewidth=0.2)
+    ax.set_zlim(-1, 1)
+    if ic < 4: 
+        ax.set_zticks([])
+    ax.zaxis.set_major_formatter(FormatStrFormatter('%.0e'))
+    
+fig = plt.figure(figsize=(18,6))
+for ic in range(5):
+    ax = fig.add_subplot(1, 5, ic + 1, projection='3d')
+    #ax.set_title('cov{} {}-patch {}'.format(bands[ic//2], regions[ic//2][0], config), fontsize=16)
+    ax.plot_surface(X, Y, lacartes[5 + ic], cmap=cmap, linewidth=0.2)
+    ax.set_zlim(0, 1)
+    if ic < 4: 
+        ax.set_zticks([])
+    ax.zaxis.set_major_formatter(FormatStrFormatter('%.0e'))
+#fig.colorbar(cm.ScalarMappable(norm=Normalize(vmin = -2e4, vmax = 2e4), cmap = cmap), 
+#             ax=ax[1:4], shrink=0.6, location = "bottom", format = "%.1e",
+#            ticks = [vmin, vmax], label = "Arbitrary units")
+
+plt.show()
+
+```
+
+#### Trying to make a 3d plot
+
+```{python}
+ax = fig.add_subplot(1, 1, 1, projection='3d')
+ax.plot_surface(X, Y, lacartes[5]+lacartes[6], cmap=cmap, linewidth=0.2)
+
+```
+
+```{python}
 
 ```

@@ -44,7 +44,7 @@ def plot_baseline(q, bs, ax=None):
 
 
 def scatter_plot_FP(q, x, y, FP_signal, frame, fig=None, ax=None,
-                    s=None, title=None, unit='[W / Hz]', cbar=True, **kwargs):
+                    s=None, title=None, unit='[W / Hz]', cbar=True, fontsize=14, **kwargs):
     """
     Make a scatter plot of the focal plane.
     Parameters
@@ -80,10 +80,10 @@ def scatter_plot_FP(q, x, y, FP_signal, frame, fig=None, ax=None,
         cax = divider.append_axes('right', size='5%', pad=0.05)
         clb = fig.colorbar(img, cax=cax)
         clb.ax.set_title(unit)
-    ax.set_xlabel(f'X_{frame} [m]', fontsize=14)
-    ax.set_ylabel(f'Y_{frame} [m]', fontsize=14)
+    ax.set_xlabel(f'X_{frame} [m]', fontsize=fontsize)
+    ax.set_ylabel(f'Y_{frame} [m]', fontsize=fontsize)
     ax.axis('square')
-    ax.set_title(title, fontsize=14)
+    ax.set_title(title, fontsize=fontsize)
     return
 
 
@@ -117,7 +117,7 @@ def pcolor_plot_FP(q, x, y, FP_signal, frame, title=None, fig=None, ax=None, cba
     y2D = q.detector.unpack(y)
     FP_signal2D = q.detector.unpack(FP_signal)
 
-    img = ax.pcolor(x2D, y2D, FP_signal2D, **kwargs)
+    img = ax.pcolor(x2D, y2D, FP_signal2D, shading='auto', **kwargs)
     if cbar:
         divider = make_axes_locatable(ax)
         cax = divider.append_axes('right', size='5%', pad=0.05)
@@ -802,8 +802,10 @@ def get_gains(allPowerPhi, allInvCov, allData):
     A = Cov_A @ Term
 
     # Normalization
-    A /= np.mean(A)
-    Cov_A /= np.mean(A) ** 2
+    weights = 1 / np.diag(Cov_A) # To cancel bad detectors
+    avgA = np.average(A, weights=weights) # Weighted mean
+    A /= avgA
+    Cov_A /= avgA ** 2
 
     return A, Cov_A
 
@@ -858,9 +860,12 @@ def get_chi2(params, allInvCov, allData, BLs, q, nu_source=150e9, returnA=False)
 
     chi2 = 0.
     for k in range(nimages):
+        # Correct errors by the global power P_k and inter-calibrations
+        InvCov_correct = allInvCov[k] * (allP[k] * A)**2
+        # Compute the chi2
         M = np.diag(allPowerPhi[k]) @ A
         R = M - allData[k]
-        chi2 += R.T @ allInvCov[k] @ R
+        chi2 += R.T @ InvCov_correct @ R
 
     if returnA:
         return chi2, A, Cov_A

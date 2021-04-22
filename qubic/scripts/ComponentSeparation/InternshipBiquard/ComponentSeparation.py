@@ -1,168 +1,156 @@
-import random
+"""Functions using the FgBuster library for QUBIC component separation."""
+
+import fgbuster as fgb
 import healpy as hp
-import glob
-from scipy.optimize import curve_fit
-import pickle
-from importlib import reload
-import time
-import scipy
-import os
 import numpy as np
-import matplotlib.pyplot as plt
-import sys
-import pylab
-from pylab import arange, show, cm
-from astropy import units as uq
-import gc
-from qubic import QubicSkySim as qss
-from qubic import NamasterLib as nam
 
 
-### FGBuster functions module
-from fgbuster import get_instrument, get_sky, get_observation, ilc, basic_comp_sep, harmonic_ilc, weighted_comp_sep, multi_res_comp_sep  # Predefined instrumental and sky-creation configurations
-from fgbuster.visualization import corner_norm, plot_component
-from fgbuster.mixingmatrix import MixingMatrix
-from fgbuster.observation_helpers import _rj2cmb, _jysr2rj, get_noise_realization
+def same_resol(maps_in, map_fwhms_deg, fwhm_target=None, verbose=False):
+    """
+    Put all maps at the same resolution.
 
-# Imports needed for component separation
-from fgbuster import (separation_recipes, xForecast, CMB, Dust, Synchrotron, FreeFree, PowerLaw,  # sky-fitting model
-                      basic_comp_sep)  # separation routine
+    :param maps_in: array containing the maps to be smoothed (size of 1st dimension = # of sub-bands)
+    :param list[float] map_fwhms_deg: list of fwhms of the maps (in degrees)
+    :param float fwhm_target: the common resolution to which the function smooths the maps (if specified).
+        If not specified, the target resolution is the lowest of all input maps.
+    :param bool verbose: make the function verbose
 
-
-# Function to get all maps at the same resolution
-
-def same_resol(map1, fwhm, fwhm_target=None, verbose=False) :
-    sh = np.shape(map1)
+    :return: (maps_out, fwhm_out, delta_fwhm) with
+        - maps_out: array containing the maps smoothed down to a common resolution
+        - fwhm_out: common (new) fwhm
+    """
+    # define common output resolution
+    sh = np.shape(maps_in)
     nb_bands = sh[0]
-    delta_fwhm = np.zeros(nb_bands)
     if fwhm_target is None:
-        myfwhm = np.max(fwhm)
+        fwhm_out = np.max(map_fwhms_deg)
+        if verbose:
+            print("input maps will be smoothed down to minimal resolution (fwhm={:.3f}°)".format(fwhm_out))
     else:
-        myfwhm = fwhm_target
-    #print(myfwhm, np.max(fwhm))
-    maps_out = np.zeros_like(map1)
-    fwhm_out = np.zeros(nb_bands)
-    for i in range(map1.shape[0]):
-        delta_fwhm_deg = np.sqrt(myfwhm**2-fwhm[i]**2)
-        #if verbose:
-            #print('Sub {0:}: Going from {1:5.12f} to {2:5.12f}'.format(i, fwhm[i], myfwhm))
-        if delta_fwhm_deg != 0:
-            delta_fwhm[i] = delta_fwhm_deg
-            #print('   -> Convolution with {0:5.2f}'.format(delta_fwhm_deg))
-            maps_out[i,:,:] = hp.sphtfunc.smoothing(map1[i,:,:],
-                                                    fwhm=np.radians(delta_fwhm_deg),
-                                                    verbose=False)
+        fwhm_out = fwhm_target
+        if verbose:
+            print("input maps will be smoothed down to specified resolution (fwhm={:.3f}°)".format(fwhm_out))
+
+    # create array to contain output maps
+    maps_out = np.zeros_like(maps_in)
+
+    # loop over input maps (ie. over sub-bands)
+    for i in range(nb_bands):
+        fwhm_in = map_fwhms_deg[i]
+        kernel_fwhm = np.sqrt(fwhm_out ** 2 - fwhm_in ** 2)
+        if verbose:
+            print('Sub-band {:d}: going from fwhm={:3f}° to fwhm={:3f}°'.format(i, fwhm_in, fwhm_out))
+
+        if kernel_fwhm != 0:
+            if verbose:
+                print('    -> convolution with {:3f}° fwhm kernel.'.format(kernel_fwhm))
+            maps_out[i, :, :] = hp.sphtfunc.smoothing(maps_in[i, :, :],
+                                                      fwhm=np.radians(kernel_fwhm),
+                                                      verbose=False)
         else:
-            #print('   -> No Convolution'.format(delta_fwhm_deg))
-            maps_out[i,:,:] = map1[i,:,:]
+            if verbose:
+                print('    -> no convolution needed, map already at required resolution.')
+            maps_out[i, :, :] = maps_in[i, :, :]
 
-        fwhm_out[i] = np.sqrt(fwhm[i]**2 + delta_fwhm_deg**2)
+    return maps_out, fwhm_out
 
-    return maps_out, fwhm_out, delta_fwhm
 
-class CompSep(object) :
-
+class CompSep(object):
+    """
+    Class that brings together different methods of component separations. Currently, there is only 'fg_buster'
+    definition which work with 2 components (CMB and Dust).
     """
 
-    Class that brings together different methods of component separations. Currently, there is only 'fg_buster' definition which work with 2 components (CMB and Dust).
-
-    """
-
-    def __init__(self, d) :
+    def __init__(self, d):
 
         self.nside = d['nside']
-        self.npix = 12 * self.nside**2
-        self.Nfin = int(d['nf_sub'])
-        self.lmin = 20
-        self.lmax = 2 * self.nside - 1
+        self.npix = 12 * self.nside ** 2
+        self.nb_bands = int(d['nf_sub'])
+        self.l_min = 20
+        self.l_max = 2 * self.nside - 1
         self.delta_ell = 16
 
-    def fg_buster(self, map1=None, comp=None, freq=None, fwhmdeg=None, target = None, okpix = None, Stokesparameter = 'IQU') :
-
+    def fg_buster(self, maps_in=None, components=None, map_freqs=None, map_fwhms_deg=None, target=None, ok_pix=None,
+                  stokes='IQU'):
         """
-        --------
-        inputs :
-            - map1 : map of which we want to separate the components -> array type & (nb_bands, Nstokes, Npix)
-            - comp : list type which contains components that we want to separe. Dust must have nu0 in input and we can fixe the temperature.
-            - freq : list type of maps frequency
-            - fwhmdeg : list type of full width at half maximum (in degrees). It can be different values.
-            - target : if target is not None, "same_resol" definition is applied and put all the maps at the same resolution. If target is None, make sure that all the resolution are the same.
-            - okpix : boolean array type which exclude the edges of the map.
+        Perform FgBuster algorithm.
 
-        --------
-        output :
-            - r : Dictionary which contains the amplitude of each components, the estimated parameter beta_d and dust temperature.
+        :param maps_in: array of maps to be separated -> shape=(nb_bands, nb_stokes, npix)
+        :param components: list storing the components of the mixing matrix (ie. that we want to separate).
+        Dust must have nu0 in input and we can fix the temperature.
+        :param map_freqs: list storing the frequencies of the maps
+        :param map_fwhms_deg: list type of full width at half maximum (in degrees). It can be different values.
+        :param target: if target is not None, "same_resol" definition is applied and put all the maps at the same
+        resolution. If target is None, make sure that all the resolution are the same.
+        :param ok_pix: boolean array type which exclude the edges of the map.
+        :param stokes: Stokes parameters concerned by the separation
 
+        :return: Dictionary which contains the amplitude of each components, the estimated parameter beta_d and dust
+        temperature.
         """
 
-        ins = get_instrument('Qubic' + str(self.Nfin) + 'bands')
+        qubic_instrument = fgb.get_instrument('Qubic' + str(self.nb_bands) + 'bands')
 
-
-        # Change good frequency and FWHM
-        ins.frequency = freq
-        #ins.fwhm = fwhmdeg
+        # specify correct frequency and FWHM
+        qubic_instrument.frequency = map_freqs
+        qubic_instrument.fwhm = map_fwhms_deg
 
         # Change resolution of each map if it's necessary
-        map1, tab_fwhm, delta_fwhm = same_resol(map1, fwhmdeg, fwhm_target = target, verbose = True)
+        maps_in, _ = same_resol(maps_in, map_fwhms_deg, fwhm_target=target, verbose=True)
 
         # Apply FG Buster
 
-        if Stokesparameter == 'IQU' :
+        if stokes == 'IQU':
+            res = fgb.basic_comp_sep(components, qubic_instrument, maps_in[:, :, ok_pix])
 
-            r = basic_comp_sep(comp, ins, map1[:, :, okpix])
+        elif stokes == 'QU':
+            res = fgb.basic_comp_sep(components, qubic_instrument, maps_in[:, 1:, ok_pix])
 
-        elif Stokesparameter == 'QU' :
+        elif stokes == 'I':
+            res = fgb.basic_comp_sep(components, qubic_instrument, maps_in[:, 0, ok_pix])
 
-            r = basic_comp_sep(comp, ins, map1[:, 1:, okpix])
+        else:
+            raise TypeError("incorrect specification of Stokes parameters (must be either 'IQU', 'QU' or 'I')")
 
-        elif Stokesparameter == 'I' :
+        return res
 
-            r = basic_comp_sep(comp, ins, map1[:, 0, okpix])
+    def internal_linear_combination(self, maps_in=None, components=None, map_freqs=None, map_fwhms_deg=None,
+                                    target=None):
+        """
+        Perform Internal Linear Combination (ILC) algorithm.
 
-        else :
+        :param maps_in: maps from which to estimate CMB signal
+        :param components: list storing the components of the mixing matrix
+        :param map_freqs: list storing the frequencies of the maps
+        :param map_fwhms_deg: list storing the fwhms of the maps (in degrees). It may contain different values.
+        :param target:
 
-             raise TypeError('Incorrect Stokes parameter')
-
-        return r
-
-    def internal_linear_combination(self, map1 = None, comp = None, freq = None, fwhmdeg = None, target = None) :
-
+        :return: Dictionary for each Stokes parameter (I, Q, U) in a list.
+            To have the amplitude, we can write r[ind_stk].s[0].
         """
 
-        ----------
-        inputs :
-            - nb_bands : number of sub bands
-            - map1 : map of which we want to estimate CMB signal
+        qubic_instrument = fgb.get_instrument('Qubic' + str(self.nb_bands) + 'bands')
 
-        ----------
-        outputs :
-            - r : Dictionary for each Stokes parameter (I, Q, U) in a list. To have the amplitude, we can write r[ind_stk].s[0].
-
-        """
-
-        ins = get_instrument('Qubic' + str(self.Nfin) + 'bands')
-
-        # Change good frequency and FWHM
-        ins.frequency = freq
-        ins.fwhm = fwhmdeg
+        # specify correct frequency and FWHM
+        qubic_instrument.frequency = map_freqs
+        qubic_instrument.fwhm = map_fwhms_deg
 
         r = []
 
-        # Change resolution of each map if it's necessary
-        map1, tab_fwhm, delta_fwhm = same_resol(map1, fwhmdeg, fwhm_target = target, verbose = True)
-
+        # change resolutions of the maps if necessary
+        maps_in, _ = same_resol(maps_in, map_fwhms_deg, fwhm_target=target, verbose=True)
 
         # Apply ILC for each stokes parameter
-        for i in range(3) :
-        	r.append(ilc(comp, ins, map1[:, i, :]))
+        for i in range(3):
+            r.append(fgb.ilc(components, qubic_instrument, maps_in[:, i, :]))
 
         return r
 
-    def ilc_2_tab(self, X, seenpix) :
+    def ilc_2_tab(self, x, seen_pix):
 
-        tab_cmb = np.zeros(((self.Nfin, 3, self.npix)))
+        tab_cmb = np.zeros((self.nb_bands, 3, self.npix))
 
-        for i in range(3) :
-            tab_cmb[0, i, seenpix] = X[0].s[0]
+        for i in range(3):
+            tab_cmb[0, i, seen_pix] = x[0].s[0]
 
         return tab_cmb

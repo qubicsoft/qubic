@@ -14,8 +14,15 @@ jupyter:
 
 # Simulations for calibration (fringes on the FP)
 
-#### Edited by Louise 26-11-2020
+#### Edited by Louise 16-04-2021
 selfcal_lib.py allows to do several simulations concerning the calibration, especially the simlation of the signal on the focal plane. This notebook gives some examples of what you can do with.
+
+To simulate the signal on the FP, there are 3 possibilities:
+ - Analytical simulation (only fringes, with a simple sine) 
+ - Qubic soft simulation
+ - Maynooth simulations (plotted through Qubic soft)
+ 
+Each possibility corresponds to a python class in Selfcal_lib.py.
 
 ```{python pycharm={'is_executing': False}}
 from __future__ import division, print_function
@@ -38,15 +45,9 @@ plt.rcParams['figure.figsize'] = (12, 6)
 ```
 
 ```{python}
-# Use a tool from qubicpack to get a path
-basedir = Qubic_DataDir(datafile='instrument.py', ) 
-print('basedir : ', basedir)
-
-
 # Get a dictionary
-dictfilename = basedir + '/dicts/global_source_oneDet.dict'
 d = qubic.qubicdict.qubicDict()
-d.read_from_file(dictfilename)
+d.read_from_file('global_source_oneDet.dict')
 print(d['detarray'])
 print(d['MultiBand'])
 print(d['nf_sub'])
@@ -76,20 +77,24 @@ plt.title('q.detector.plot()')
 ```{python}
 # scal.close_switches(q, np.arange(1, 64))
 # scal.open_switches(q, [1, 45, 50])
-dictfilename = basedir + '/dicts/global_source_oneDet.dict'
 d1 = qubic.qubicdict.qubicDict()
-d1.read_from_file(dictfilename)
+d1.read_from_file('global_source_oneDet.dict')
 
 d1['config'] = 'TD'
 q1 = qubic.QubicInstrument(d1)
 
-plt.figure(figsize=(8, 8))
+fig = plt.figure(figsize=(10, 10))
 q.horn.plot(facecolor_open='grey', alpha=0.4)
 q1.horn.plot(facecolor_open='g', alpha=0.3)
 
-plt.xlabel('$X_{GRF}$ [m]', fontsize=20)
-plt.ylabel('$Y_{GRF}$ [m]', fontsize=20)
+# plt.xlabel('$X_{GRF}$ [m]', fontsize=20)
+# plt.ylabel('$Y_{GRF}$ [m]', fontsize=20)
+plt.xlabel('$h_x$ [m]', fontsize=30)
+plt.ylabel('$h_y$ [m]', fontsize=30)
 plt.axis('square')
+plt.rc('font', size=10) 
+fig.tight_layout()
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/horn_array.pdf', dpi=100)
 ```
 
 ```{python}
@@ -100,7 +105,7 @@ plt.axis('square')
 # Plot the horn array and a baseline
 fig, axs = plt.subplots(1, 2, figsize=(12, 6))
 ax1, ax2 = np.ravel(axs)
-scal.plot_horns(q, simple=True, ax=ax1)
+scal.plot_horns(q, simple=False, ax=ax1)
 # q.horn.plot()
 ax1.set_xlabel('$X_{GRF}$ [m]', fontsize=20)
 ax1.set_ylabel('$Y_{GRF}$ [m]', fontsize=20)
@@ -110,27 +115,41 @@ ax1.set_ylabel('$Y_{GRF}$ [m]', fontsize=20)
 a = 1
 x = q.horn.center[:, 0]
 y = q.horn.center[:, 1]
-for i,j in zip(x, y):
-    corr = -0.005 # add a little correction to put annotation in marker's centrum
-    ax1.annotate(str(a),  xy=(i + corr, j + corr), fontsize=14, color='r')
-    a += 1
+# for i,j in zip(x, y):
+#     corr = -0.005 # add a little correction to put annotation in marker's centrum
+#     ax1.annotate(str(a),  xy=(i + corr, j + corr), fontsize=14, color='r')
+#     a += 1
 
-q.horn.plot()
-scal.plot_baseline(q, [25, 57], ax=ax2)
+q.horn.plot(facecolor_open='green', alpha=0.2)
+# scal.plot_baseline(q, [25, 57], ax=ax2)
 ax2.set_xlabel('$X_{GRF}$ [m]', fontsize=20)
 ax2.set_ylabel('$Y_{GRF}$ [m]', fontsize=20)
+
+for i,j in zip(x, y):
+    corr = 0.001 # add a little correction to put annotation in marker's centrum
+    ax2.annotate(str(a),  xy=(i - (corr+0.001), j - corr), fontsize=10, color='k')
+    a += 1
+ax2.axis('square')
+
+fig.tight_layout()
 ```
 
-## Analytical function
+## Analytical function to simulate fringes
+It is simply a 2D sine on the focal plane to make fringes according to the focal length, the frequency, the position of the source. 
+
+A gaussian apodization is done to represent the primary beam. The Gaussian is centered in (0, 0) when the source is on-axis (theta_source=0, phi_source=0.). It moves according to the position of the source. 
 
 ```{python}
-baseline = [25, 57]
-Model_Ana = scal.Model_Fringes_Ana(q, baseline, theta_source=0., nu_source=150e9, fwhm=20., amp=1., frame='ONAFP')
+baseline = [60, 63]
+Model_Ana = scal.Model_Fringes_Ana(q, baseline, 
+                                   theta_source=np.deg2rad(0.), 
+                                   phi_source=np.deg2rad(0.), 
+                                   nu_source=150e9, fwhm=20., amp=1., frame='ONAFP')
 print(Model_Ana.focal)
 
 xONAFP, yONAFP, fringes = Model_Ana.get_fringes(times_gaussian=True)
 
-scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP')
+scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP', s=50)
 
 ```
 
@@ -145,24 +164,25 @@ In general Qubic Soft uses only the GRF frame. However, selfcal_lib allows to us
 
 
 ```{python}
-scal.close_switches(q, np.arange(1, 64))
-scal.open_switches(q, np.arange(1, 401))
+scal.open_switches(q, np.arange(1, 401, 1))
+# scal.close_switches(q, np.arange(1, 64))
 
 xONAFP, yONAFP, power = scal.get_response_power(q, 0., 0., 150e9, 1.)
+# xONAFP, yONAFP, _ = scal.get_response_power(q, 0., 0., 150e9, 1.)
 
-# fig = plt.figure()
-# ax = fig.gca()
-scal.plot_horn_and_FP(q, xONAFP, yONAFP, power, frame='ONAFP', title='', s=35, unit=None, cbar=None,
-                      vmin=0, vmax=1e-5)
-#                       norm=SymLogNorm(1e-6))
-#
+fig = plt.figure(figsize=(10, 10))
+ax = fig.gca()
+scal.scatter_plot_FP(q, xONAFP, yONAFP, power, frame='ONAFP', title='', s=190, unit=None, cbar=None,
+                      vmin=0, vmax=1.5e-5, fig=fig, ax=ax, fontsize=30, Norm=SymLogNorm(1e-6))
+fig.tight_layout()
+plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/detector_array.pdf', dpi=100)
 ```
 
 #### Create a Fringes object
 
 ```{python}
-# baseline = [142, 230] # for the FI
-baseline = [25, 57]     # for the TD
+baseline = [274, 281] # for the FI
+# baseline = [1, 57]     # for the TD
 
 Model_QS = scal.Model_Fringes_QubicSoft(q, baseline,
                                         theta_source=0., phi_source=0.,
@@ -183,7 +203,7 @@ You can choose ONAFP or GRF frame.
 Each pointing is defined by a position of the source (theta, phi).
 
 ```{python}
-xONAFP, yONAFP, fringes = Model_QS.get_fringes(doplot=True, verbose=True, norm=None)
+xONAFP, yONAFP, fringes = Model_QS.get_fringes(doplot=True, verbose=True, norm=None, s=30)
 
 print('fringes shape:', fringes.shape)
 ```
@@ -206,13 +226,25 @@ fig.suptitle(f'Baseline: {baseline}', fontsize=18)
 fig.subplots_adjust(wspace=0.3)
 
 scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP', fig=fig, ax=ax1, 
-                     title='Scatter plot', norm=None)
+                     title='Scatter plot', norm=None, s=30, cbar=True, fontsize=14)
+
 
 scal.pcolor_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP', fig=fig, ax=ax2, 
                     title='pcolor plot', norm=None)
 ```
 
+```{python}
+# Make a plot for paper 3 without any axis
+fig = plt.figure(figsize=(8, 8))
+ax = plt.gca()
+ax.axis('off')
+scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP', fig=fig, ax=ax,
+                     title='', norm=None, s=100, cbar=False, fontsize=18)
+# fig.savefig('/home/lmousset/QUBIC/Images/plots/fringes_QSsimu_BaselineTD57-64.png', transparent=True)
+```
+
 #### Get fringes from the combination 
+This is what is actually done when we measure the fringes.
 
 ```{python}
 # Get all combinations
@@ -287,6 +319,8 @@ scal.scatter_plot_FP(q, x, y, fringes_meas, frame='ONAFP',
 Those simulations include optical aberrations.
 You need to download the files at : https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
 
+They are only available for the TD instrument.
+
 ```{python}
 # Path to the simulated files 
 rep = Qubic_DataDir(datafile='detcentres.txt', datadir='/home/lmousset/QUBIC/')
@@ -298,7 +332,7 @@ print('rep:', rep)
 This simulations are done in the ONAFP frame. The resolution is high (241 x 241) and it assumes an area bigger than the focal plane.
 
 ```{python}
-open_horns = [1, 6, 7, 34, 10, 16]
+open_horns = np.arange(1, 64)
 xONAFP, yONAFP, power = scal.get_power_Maynooth(rep, open_horns, 
                                                 0., 150e9, 
                                                 q.horn.center,  
@@ -311,6 +345,20 @@ scal.scatter_plot_FP(q, xONAFP, yONAFP, power, s=1,
                    frame='ONAFP', 
                    title='Maynooth full resolution', 
                    norm=None)
+```
+
+```{python}
+# Make a plot for paper 3 without any axis
+fig = plt.figure(figsize=(8, 8))
+ax = fig.gca()
+ax.axis('off')
+scal.scatter_plot_FP(q, xONAFP, yONAFP, power, s=100, 
+                   frame='ONAFP', 
+                   title='', 
+                   norm=None,
+                   fig=fig, ax=ax,
+                   cbar=False)
+# fig.savefig('/home/lmousset/QUBIC/Images/plots/fringes_Maynoothsimu_BaselineTD57-64.png', transparent=True)
 ```
 
 The following is an other way to do the same.
@@ -339,8 +387,9 @@ scal.scatter_plot_FP(q, xONAFP, yONAFP, power, s=100,
 To decrease the resolution, you can either make a real interpolation (`interp=True`) and then integrate or you can just make the mean inside each TES (`interp=False`). The second way is much faster.
 
 ```{python}
-# baseline = [142, 230] # for the FI
-baseline = [25, 57]     # for the TD
+d['config'] = 'TD'
+q = qubic.QubicInstrument(d)
+baseline = [1, 57]  # for the TD
 
 Model_Maynooth = scal.Model_Fringes_Maynooth(q, baseline, rep, 
                                              theta_source=0., nu_source=150e9,

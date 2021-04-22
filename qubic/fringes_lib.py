@@ -306,8 +306,8 @@ class FringesAnalysis:
         # Plot the 5 best TES
         if doplot:
             for p in range(5):
-                plot_folding_fit(detectors_sort[p, 0], detectors_sort[p, 1], tfold, datafold, residuals_time,
-                                 self.expected_period, params, err_params)
+                self._plot_folding_fit(detectors_sort[p, 0], detectors_sort[p, 1], tfold, datafold, residuals_time,
+                                        self.expected_period, params, err_params)
 
         return detectors_sort, ctimes
 
@@ -864,6 +864,33 @@ class FringesAnalysis:
                  np.max(np.abs(fringes1D_percycle[idx, :])) * 1.2)
         return
 
+    def _plot_folding_fit(self, TES, ASIC, tfold, datafold, residuals_time, period, params, errs):
+        idx = (ASIC - 1) * self.ndet_oneASIC + (TES - 1)
+        amps = params[idx, 2:]
+        t0 = params[idx, 1]
+        stable_time = period / self.nsteps
+        print(stable_time)
+        mean_allh = np.mean(amps[self.allh])
+
+        plt.figure()
+        plt.plot(tfold, datafold[idx, :], label='Folded signal')
+        plt.errorbar(np.arange(0, period, period / self.nsteps), amps, yerr=errs[idx, 2:],
+                     fmt='o', color='r', label='Fit Amplitudes')
+        plt.plot(tfold, ft.simsig_fringes(tfold, period / self.nsteps, params[idx, :]),
+                 label='Fit')
+        plt.plot(tfold, residuals_time[idx, :],
+                 label='Residuals: RMS={0:6.4f}'.format(np.std(residuals_time[idx, :])))
+        for k in range(self.nsteps):
+            plt.axvline(x=stable_time * k + t0, color='k', ls=':', alpha=0.3)
+        plt.axhline(mean_allh, color='k', linestyle='--', label='Mean all open')
+        plt.legend(loc='upper right')
+        plt.xlabel('Time [s]')
+        plt.ylabel('TOD')
+        plt.title(f'TES {TES} - ASIC {ASIC}')
+        plt.grid()
+        plt.ylim(-2.5, 2.5)
+        return
+
 # =========================================
 class SaveFringesFitsPdf:
     def __init__(self, q, date_obs, allBLs, allstable_time, allNcycles, xTES, yTES, allfringes1D, allerr_fringes1D,
@@ -1228,31 +1255,74 @@ def plot_fringes_imshow(fringes2D, normalize=True, interp=None, mask=None,
     return
 
 
-def plot_folding_fit(TES, ASIC, tfold, datafold, residuals_time, period,
-                     params, errs, allh=[True, False, False, True, False, True]):
-    idx = (ASIC - 1) * 128 + (TES - 1)
-    nsteps = len(params[idx, 2:])
-    amps = params[idx, 2:]
-    t0 = params[idx, 1]
-    stable_time = period / nsteps
-    print(stable_time)
-    mean_allh = np.mean(amps[allh])
+def plot_fringes_diagonal(fringes2D, idiag=[0], anti_diag=False,
+                          fig=None, ax=None, figsize=(12, 8), ylim=(None, None), title=''):
+    """
+    Plot the diagonals in 1D and the sum of all diagonals.
+    Parameters
+    ----------
+    fringes2D: array
+        A 2D image of the focal plane (17x17).
+    idiag: list
+        Diagonal index you want to plot, 0 is the main one and it can be from -16 to 16.
+    anti_diag: bool
+        If True, it will take the anti-diagonals.
+    fig, ax: matplotlib figure
+        If not None, you can include the plot in matplotlib subplots.
+    figsize
+    ylim
+    title: str
+        Plot title
 
-    plt.figure()
-    plt.plot(tfold, datafold[idx, :], label='Folded signal')
-    plt.errorbar(np.arange(0, period, period / nsteps), amps, yerr=errs[idx, 2:],
-                 fmt='o', color='r', label='Fit Amplitudes')
-    plt.plot(tfold, ft.simsig_fringes(tfold, period / nsteps, params[idx, :]),
-             label='Fit')
-    plt.plot(tfold, residuals_time[idx, :],
-             label='Residuals: RMS={0:6.4f}'.format(np.std(residuals_time[idx, :])))
-    for k in range(nsteps):
-        plt.axvline(x=stable_time * k + t0, color='k', ls=':', alpha=0.3)
-    plt.axhline(mean_allh, color='k', linestyle='--', label='Mean all open')
-    plt.legend(loc='upper right')
-    plt.xlabel('Time [s]')
-    plt.ylabel('TOD')
-    plt.title(f'TES {TES} - ASIC {ASIC}')
-    plt.grid()
-    plt.ylim(-2.5, 2.5)
+    Returns
+    -------
+
+    """
+    fringes2D = np.nan_to_num(fringes2D)
+    if anti_diag:
+        fringes2D = np.fliplr(fringes2D)
+    sum_diag = sum_all_diag(fringes2D)
+
+    if fig is None:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.gca()
+    ax.plot(sum_diag, color='r', label='Sum of all diagonal')
+    for i in idiag:
+        diag = np.diagonal(fringes2D, offset=i)
+        if i == 0:
+            xx = np.arange(0, 33)[::2]
+        else:
+            xx = np.arange(0, 33)[np.abs(i):-np.abs(i)][::2]
+        ax.plot(xx, diag, 'o', label=f'Diagonal {i}')
+
+    ax.set_xlabel('TES index on the diagonal')
+    ax.set_ylabel('Signal')
+    ax.legend(fontsize=8)
+    ax.set_ylim(ylim)
+    ax.set_title(title)
     return
+
+
+def sum_all_diag(fringes2D):
+    """Sum diagonal in a 2D images. Pixels that are not TES (outside the FP should be at 0.
+    The sum is normalized to take into account the diagonal lengths and the pixels that are not TES."""
+    offsets = np.arange(-16, 17)
+    sum_diag = np.zeros(33)
+    norm = np.zeros(33)
+    for i in offsets:
+        diag = np.diagonal(fringes2D, offset=i)
+        # Fill the array at right places
+        first = np.abs(i)
+        if i == 0:
+            last = None
+        else:
+            last = - np.abs(i)
+        sum_diag[first:last][::2] += diag
+
+        # Build the normalization array (take into account 0. outside the FP)
+        for j, dd in enumerate(diag):
+            if dd != 0.:
+                norm[first:last][::2][j] += 1
+    sum_diag /= norm
+
+    return sum_diag

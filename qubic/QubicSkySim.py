@@ -406,9 +406,9 @@ class Qubic_sky(sky):
                                                                                 self.Nfin,
                                                                                 self.filter_relative_bandwidth)
         ### Output bands
-        # Beware, all nf_sub are not yet available...
-        if self.Nfout not in [1, 2, 3, 4, 5, 8]:
-            raise NameError('Nfout needs to be in [1,2,3,4,5,8] for FastSimulation (currently...)')
+        # Check Nfout is between 1 and 8.
+        if self.Nfout < 1 or self.Nfout > 8:
+            raise NameError("Nfout should be contained between 1 and 8 for FastSimulation.")
         Nfreq_edges_out, nus_edge_out, nus_out, deltas_out, Delta_out, Nbbands_out = qubic.compute_freq(self.filter_nu,
                                                                                                         self.Nfout,
                                                                                                         self.filter_relative_bandwidth)

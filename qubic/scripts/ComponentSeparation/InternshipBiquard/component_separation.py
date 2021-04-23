@@ -25,11 +25,11 @@ def same_resol(maps_in, map_fwhms_deg, fwhm_target=None, verbose=False):
     if fwhm_target is None:
         fwhm_out = np.max(map_fwhms_deg)
         if verbose:
-            print("input maps will be smoothed down to minimal resolution (fwhm={:.3f}°)".format(fwhm_out))
+            print("input maps will be smoothed down to minimal resolution (fwhm={:.6f}°)".format(fwhm_out))
     else:
         fwhm_out = fwhm_target
         if verbose:
-            print("input maps will be smoothed down to specified resolution (fwhm={:.3f}°)".format(fwhm_out))
+            print("input maps will be smoothed down to specified resolution (fwhm={:.6f}°)".format(fwhm_out))
 
     # create array to contain output maps
     maps_out = np.zeros_like(maps_in)
@@ -39,11 +39,11 @@ def same_resol(maps_in, map_fwhms_deg, fwhm_target=None, verbose=False):
         fwhm_in = map_fwhms_deg[i]
         kernel_fwhm = np.sqrt(fwhm_out ** 2 - fwhm_in ** 2)
         if verbose:
-            print('Sub-band {:d}: going from fwhm={:3f}° to fwhm={:3f}°'.format(i, fwhm_in, fwhm_out))
+            print('Sub-band {:d}: going from fwhm={:6f}° to fwhm={:6f}°'.format(i, fwhm_in, fwhm_out))
 
-        if kernel_fwhm != 0:
+        if kernel_fwhm > 1e-6:
             if verbose:
-                print('    -> convolution with {:3f}° fwhm kernel.'.format(kernel_fwhm))
+                print('    -> convolution with {:6f}° fwhm kernel.'.format(kernel_fwhm))
             maps_out[i, :, :] = hp.sphtfunc.smoothing(maps_in[i, :, :],
                                                       fwhm=np.radians(kernel_fwhm),
                                                       verbose=False)
@@ -71,7 +71,7 @@ class CompSep(object):
         self.delta_ell = 16
 
     def fg_buster(self, maps_in=None, components=None, map_freqs=None, map_fwhms_deg=None, target=None, ok_pix=None,
-                  stokes='IQU'):
+                  stokes='IQU', verbose=False):
         """
         Perform FgBuster algorithm.
 
@@ -84,6 +84,7 @@ class CompSep(object):
         resolution. If target is None, make sure that all the resolution are the same.
         :param ok_pix: boolean array type which exclude the edges of the map.
         :param stokes: Stokes parameters concerned by the separation
+        :param bool verbose: print progress
 
         :return: Dictionary which contains the amplitude of each components, the estimated parameter beta_d and dust
         temperature.
@@ -96,10 +97,9 @@ class CompSep(object):
         qubic_instrument.fwhm = map_fwhms_deg
 
         # Change resolution of each map if it's necessary
-        maps_in, _ = same_resol(maps_in, map_fwhms_deg, fwhm_target=target, verbose=True)
+        maps_in, _ = same_resol(maps_in, map_fwhms_deg, fwhm_target=target, verbose=verbose)
 
         # Apply FG Buster
-
         if stokes == 'IQU':
             res = fgb.basic_comp_sep(components, qubic_instrument, maps_in[:, :, ok_pix])
 

@@ -6,7 +6,7 @@ Command line arguments should be:
 - nb of simulations to perform
 - nb of sub-bands
 - nb of years of observation
-- QubicSkySim parameters spatial correlations, frequency correlations, integrate into band (111 = all True)
+- QubicSkySim parameters spatial correlations, frequency correlations (11 = both True)
 """
 
 # General imports
@@ -37,17 +37,18 @@ OUTDIR_CC = "/sps/qubic/Users/sbiquard/qubic/component_separation/output"
 DATADIR_CC = "/sps/qubic/Users/sbiquard/qubic/component_separation/data"
 
 if len(sys.argv) > 1:
-    loc = int(sys.argv[1])  # 0 for local (falaise), 1 for CC
-    if loc == 0:
-        OUTDIR = OUTDIR_LOCAL
-        DATADIR = DATADIR_LOCAL
-    elif loc == 1:
-        OUTDIR = OUTDIR_CC
-        DATADIR = DATADIR_CC
-    else:
-        raise ValueError("Specify where the execution takes place (0 = local, 1 = CC)")
+    LOC = int(sys.argv[1])  # 0 for local (falaise), 1 for CC
 else:
-    loc = 0  # if run from PyCharm, no command-line argument
+    LOC = 0
+
+if LOC == 0:
+    OUTDIR = OUTDIR_LOCAL
+    DATADIR = DATADIR_LOCAL
+elif LOC == 1:
+    OUTDIR = OUTDIR_CC
+    DATADIR = DATADIR_CC
+else:
+    raise ValueError("Specify where the execution takes place (0 = local, 1 = CC)")
 
 
 def get_coverage_from_file(file_name=None):
@@ -75,7 +76,7 @@ def get_sub_freqs_and_resolutions(dico):
         and the list of resolutions (in degrees).
     """
     band = dico['filter_nu'] / 1e9
-    n = int(dico['nf_sub'])
+    n = int(dico['nf_recon'])
     filter_relative_bandwidth = dico['filter_relative_bandwidth']
     _, _, nus_in, _, _, _ = qubic.compute_freq(band,
                                                Nfreq=n,
@@ -98,9 +99,9 @@ def print_results(band, beta_res) -> None:
 def read_arguments():
     """Read parameters / command-line arguments for local (personal computer) execution.
 
-    :return: local or CC, frequency band (GHz), nb of simulations, nb of sub-bands, nb of years and sky_sim parameters.
+    :return: frequency band (GHz), nb of simulations, nb of sub-bands, nb of years and sky_sim parameters.
     """
-    if len(sys.argv) > 1:
+    if len(sys.argv) - 1:
         frequency_band = int(sys.argv[2])
         nb_simu = int(sys.argv[3])
         nb_bands = int(sys.argv[4])
@@ -111,14 +112,13 @@ def read_arguments():
         nb_simu = int(input("Number of simulations to run = "))
         nb_bands = int(input("Number of sub-bands for 150 GHz = "))
         nb_years = int(input("Number of observation years = "))
-        sky_sim_param = input("spatial correlations, frequency correlations, integrate into band (111 = all True) = ")
+        sky_sim_param = input("spatial correlations, frequency correlations (11 = both True) = ")
 
     print()
     spatial_correlations = bool(sky_sim_param[0])
     nunu_correlations = bool(sky_sim_param[1])
-    integrate = bool(sky_sim_param[2])
 
-    return frequency_band, nb_simu, nb_bands, nb_years, spatial_correlations, nunu_correlations, integrate
+    return frequency_band, nb_simu, nb_bands, nb_years, spatial_correlations, nunu_correlations
 
 
 def run_simu_single_band(band: int,
@@ -127,10 +127,9 @@ def run_simu_single_band(band: int,
                          n_years: int,
                          sc: bool,
                          nunu: bool,
-                         iib: bool,
                          verbose=True):
     """
-    Run sky simulations (using `QubicSkySim`) and determine spectral parameters - for one frequency band.
+    Run sky simulations (using `QubicSkySim`) and determine spectral parameters.
 
     :param int band: main band frequency (150 or 220 GHz)
     :param int n_sub: number of sub-bands
@@ -138,15 +137,14 @@ def run_simu_single_band(band: int,
     :param int n_years: number of years of observation for simulated maps
     :param bool sc: QubicSkySim "spatial_noise" (ie. spatial noise correlations)
     :param bool nunu: QubicSkySim "nunu_correlation" (ie. noise frequency correlations)
-    :param bool iib: QubicSkySim "integrate_into_band" (ie. average input maps into output bands)
     :param bool verbose: print progress indications during process
     """
     # get dictionary for given frequency
     dico = qubic_dicts[band]
 
     # adjust number of sub-bands for sky simulation and reconstruction
-    dico['nf_sub'] = n_sub
     dico['nf_recon'] = n_sub
+    dico['nf_sub'] = 4 * n_sub  # should be integer multiple of 'nf_recon'
 
     # get coverage map and define pixels to use
     coverage = get_coverage_from_file()
@@ -187,7 +185,7 @@ def run_simu_single_band(band: int,
                                                      seed=seed,
                                                      spatial_noise=sc,  # noise spatial correlations
                                                      nunu_correlation=nunu,  # noise frequency correlations
-                                                     integrate_into_band=iib)
+                                                     )
 
         # modify shape to match FgBuster standard
         cmb_dust = np.transpose(cmb_dust, (0, 2, 1))
@@ -260,9 +258,9 @@ if __name__ == "__main__":
 
     # read arguments and run simulation
     arguments = read_arguments()
-    f_band, _, nb_sub, _, _, _, _ = arguments
+    f_band, _, nb_sub, _, _, _ = arguments
     beta_results = run_simu_single_band(*arguments)
-    if loc == 0:
+    if LOC == 0:
         print_results(f_band, beta_results)
 
     # write the results to file
@@ -271,4 +269,3 @@ if __name__ == "__main__":
     np.save(file, beta_results)
 
     sys.exit(0)
-

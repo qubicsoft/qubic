@@ -65,7 +65,7 @@ class CompSep(object):
 
         self.nside = d['nside']
         self.npix = 12 * self.nside ** 2
-        self.nb_bands = int(d['nf_sub'])
+        self.nb_bands = int(d['nf_recon'])
         self.l_min = 20
         self.l_max = 2 * self.nside - 1
         self.delta_ell = 16

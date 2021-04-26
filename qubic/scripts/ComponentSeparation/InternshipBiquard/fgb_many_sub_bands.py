@@ -1,3 +1,13 @@
+"""
+Perform FgBuster separation on simulated Qubic sky maps with many frequency sub-bands.
+Command line arguments should be:
+- frequency band (150 or 220 GHz)
+- nb of simulations to perform
+- nb of sub-bands
+- nb of years of observation
+- QubicSkySim parameters spatial correlations, frequency correlations, integrate into band (111 = all True)
+"""
+
 # General imports
 import os
 import pickle
@@ -20,10 +30,27 @@ OUTPUT_DIR = "/home/simon/Documents/qubic/component_separation/output"
 DATADIR = "/home/simon/Documents/qubic/component_separation/data"
 
 
+def get_coverage_from_file(file_name=None):
+    """
+    Get coverage map from saved file.
+
+    :param file_name: the name of the file
+
+    :return: the array containing the coverage map
+    """
+    if file_name is None:
+        t = pickle.load(open(DATADIR + '/coverage_dtheta_40_pointing_6000.pkl', 'rb'))
+    else:
+        t = pickle.load(open(DATADIR + '/{}.pkl'.format(file_name), 'rb'))
+    return t['coverage']
+
+
 def get_sub_freqs_and_resolutions(dico):
     """
     Give the frequency sub-bands and corresponding angular resolutions around f = 150 or 220 GHz.
+
     :param dico: instrument dictionary containing frequency band and nbr of sub-bands wanted
+
     :return: Tuple (freqs, fwhms) containing the list of the central frequencies
         and the list of resolutions (in degrees).
     """
@@ -38,25 +65,60 @@ def get_sub_freqs_and_resolutions(dico):
     return nus_in, dico['synthbeam_peak150_fwhm'] * 150 / nus_in
 
 
-def get_coverage_from_file(file_name=None):
+def print_results(band, beta_res) -> None:
+    print("{:d} GHz results".format(band))
+    print("---------------")
+    list_fmt = "[" + ", ".join(["{:.5f}"] * len(beta_res)) + "]"
+    print("results = " + list_fmt.format(*beta_res))
+    print("average beta  = {:.5f}".format(np.mean(beta_res)))
+    print("std deviation = {:.5f}".format(np.std(beta_res)))
+    print()
+
+
+def read_arguments():
+    """Read parameters / command-line arguments.
+
+    :return: frequency band (GHz), nb of simulations, nb of sub-bands, nb of years and sky_sim parameters.
     """
-    Get coverage map from saved file.
-    :param file_name: the name of the file
-    :return: the array containing the coverage map
-    """
-    if file_name is None:
-        t = pickle.load(open(DATADIR + '/coverage_dtheta_40_pointing_6000.pkl', 'rb'))
+    if len(sys.argv) > 1:
+        frequency_band = int(sys.argv[1])
+        nb_simu = int(sys.argv[2])
+        nb_bands = int(sys.argv[3])
+        nb_years = int(sys.argv[4])
+        sky_sim_param = sys.argv[5]
     else:
-        t = pickle.load(open(DATADIR + '/{}.pkl'.format(file_name), 'rb'))
-    return t['coverage']
+        frequency_band = int(input("Main frequency band (150 or 220 GHz) = "))
+        nb_simu = int(input("Number of simulations to run = "))
+        nb_bands = int(input("Number of sub-bands for 150 GHz = "))
+        nb_years = int(input("Number of observation years = "))
+        sky_sim_param = input("spatial correlations, frequency correlations, integrate into band (111 = all True) = ")
+
+    print()
+    spatial_correlations = bool(sky_sim_param[0])
+    nunu_correlations = bool(sky_sim_param[1])
+    integrate_into_band = bool(sky_sim_param[2])
+
+    return frequency_band, nb_simu, nb_bands, nb_years, spatial_correlations, nunu_correlations, integrate_into_band
 
 
-def run_simu_beta_dust(band: int, n_sub: int, n_sim: int, verbose=False):
+def run_simu_single_band(band: int,
+                         n_sim: int,
+                         n_sub: int,
+                         n_years: int,
+                         sc: bool,
+                         nunu: bool,
+                         iib: bool,
+                         verbose=True):
     """
-    Run sky simulations (using QubicSkySim) and determine spectral parameters.
+    Run sky simulations (using `QubicSkySim`) and determine spectral parameters - for one frequency band.
+
     :param int band: main band frequency (150 or 220 GHz)
-    :param int n_sub: number of sub-bands to simulate
-    :param int n_sim: number of simulations (a different seed is given to QubicSkySim each time)
+    :param int n_sub: number of sub-bands
+    :param int n_sim: number of simulations
+    :param int n_years: number of years of observation for simulated maps
+    :param bool sc: QubicSkySim "spatial_noise" (ie. spatial noise correlations)
+    :param bool nunu: QubicSkySim "nunu_correlation" (ie. noise frequency correlations)
+    :param bool iib: QubicSkySim "integrate_into_band" (ie. average input maps into output bands)
     :param bool verbose: print progress indications during process
     """
     # get dictionary for given frequency
@@ -66,14 +128,9 @@ def run_simu_beta_dust(band: int, n_sub: int, n_sim: int, verbose=False):
     dico['nf_sub'] = n_sub
     dico['nf_recon'] = n_sub
 
-    # center = qubic.equ2gal(dico['RA_center'], dico['DEC_center'])  # center in galactic spherical coordinates
-    # npix = 12 * dico['nside'] ** 2
-
     # get coverage map and define pixels to use
     coverage = get_coverage_from_file()
     okpix_inside = (coverage > (0.5 * np.max(coverage)))
-    # coverage_qubic = np.loadtxt(DATADIR + '/mask_fgbuster')
-    # okpix_qubic = coverage_qubic != 0
     if verbose:
         print("coverage from file ok")
 
@@ -88,25 +145,18 @@ def run_simu_beta_dust(band: int, n_sub: int, n_sim: int, verbose=False):
     # define common resolution for input maps (lowest one)
     fwhm_common = np.max(fwhms)
 
-    # QubicSkySim options
-    integration_into_band = True
-    nunu_correlation = True
-    spatial_noise = True
-    n_years = 400
-
     # variable to store the results of parameter estimation
     beta_values = []
 
     for i_sim in range(n_sim):
 
-        betas = []
         if verbose:
-            print("entering iteration number {:d} / n_sim={:d} of loop".format(i_sim + 1, n_sim))
+            print("entering iteration number {:d} of n_sim={:d} of loop".format(i_sim + 1, n_sim))
 
         # generate sky map using QubicSkySim, with random seed
         if verbose:
             print("generate sky map...")
-        seed = round(np.random.rand() * 100000)
+        seed = np.random.randint(1000000)
         sky_config = {'dust': 'd0', 'cmb': seed}
         qubic_sky = qss.Qubic_sky(sky_config, dico)
         cmb_dust, cmb_dust_noiseless, cmb_dust_noise, _ = \
@@ -115,9 +165,9 @@ def run_simu_beta_dust(band: int, n_sub: int, n_sim: int, verbose=False):
                                                      verbose=False,
                                                      FWHMdeg=fwhm_common,
                                                      seed=seed,
-                                                     spatial_noise=spatial_noise,
-                                                     nunu_correlation=nunu_correlation,
-                                                     integrate_into_band=integration_into_band)
+                                                     spatial_noise=sc,  # noise spatial correlations
+                                                     nunu_correlation=nunu,  # noise frequency correlations
+                                                     integrate_into_band=iib)
 
         # modify shape to match FgBuster standard
         cmb_dust = np.transpose(cmb_dust, (0, 2, 1))
@@ -127,32 +177,53 @@ def run_simu_beta_dust(band: int, n_sub: int, n_sim: int, verbose=False):
             print("sky map generated with seed {}".format(seed))
 
         # perform component separation using FgBuster
-        print("perform fgbuster separation...")
+        if verbose:
+            print("perform fgbuster separation...")
         comp_separation = component_separation.CompSep(dico)
-        for freq in freqs:
-            fg_res = comp_separation.fg_buster(maps_in=cmb_dust,
-                                               components=[fgb.CMB(), fgb.Dust(freq, temp=20.)],
-                                               map_freqs=freqs,
-                                               map_fwhms_deg=fwhms,
-                                               # target=fwhm_common,
-                                               ok_pix=okpix_inside,
-                                               stokes='IQU')
-            beta_dust_estimated = fg_res.x[0]
-            betas.append(beta_dust_estimated)
-            if verbose:
-                print("At sub-frequency {:.3f} GHz dust index estimate is {:.3f}".format(freq, beta_dust_estimated))
 
-            # array_est_fg_3bands[m, 0, f, :, okpix_inside] = fg_res.s[0, :, :].T
-            # array_est_fg_3bands[m, 1, f, :, okpix_inside] = fg_res.s[1, :, :].T
+        fg_res = comp_separation.fg_buster(maps_in=cmb_dust,
+                                           components=[fgb.CMB(), fgb.Dust(band, temp=20.)],
+                                           map_freqs=freqs,
+                                           map_fwhms_deg=fwhms,
+                                           ok_pix=okpix_inside,
+                                           stokes='IQU')
+        beta_dust_estimate = fg_res.x[0]
+        beta_values.append(beta_dust_estimate)
+        if verbose:
+            print("fgbuster separation performed (beta = {:.3f})".format(beta_dust_estimate))
 
-        beta_values.append(np.mean(betas))
+        # no loop is needed for beta evaluation
+        # but to recover the dust maps at each frequency, yes!
+        # betas = []
+        # for freq in freqs:
+        #     fg_res = comp_separation.fg_buster(maps_in=cmb_dust,
+        #                                        components=[fgb.CMB(), fgb.Dust(freq, temp=20.)],
+        #                                        map_freqs=freqs,
+        #                                        map_fwhms_deg=fwhms,
+        #                                        # target=fwhm_common,
+        #                                        ok_pix=okpix_inside,
+        #                                        stokes='IQU')
+        #     beta_dust_estimated = fg_res.x[0]
+        #     betas.append(beta_dust_estimated)
+        #
+        #     # array_est_fg_3bands[m, 0, f, :, okpix_inside] = fg_res.s[0, :, :].T
+        #     # array_est_fg_3bands[m, 1, f, :, okpix_inside] = fg_res.s[1, :, :].T
+        #
+        # perform average over beta values collected
+        # beta_mean = np.mean(betas)
 
         del cmb_dust
         del cmb_dust_noiseless
         del cmb_dust_noise
 
+    if verbose:
+        print("execution terminated, printing results...\n")
     return beta_values
 
+
+# To do:
+# - add function run_simu_double_band which uses both 150 and 220 GHz bands for separation
+# - ...
 
 if __name__ == "__main__":
     # Qubic dictionaries for 150 GHz and 220 Ghz
@@ -164,20 +235,9 @@ if __name__ == "__main__":
     d220.read_from_file(d220_name)
     qubic_dicts = {150: d150, 220: d220}
 
-    # parameters / command-line arguments
-    if len(sys.argv) > 1:
-        nb_simu = sys.argv[1]
-        nb_bands_150 = sys.argv[2]
-        nb_bands_220 = sys.argv[3]
-    else:
-        nb_simu = int(input("Number of simulations to run = "))
-        nb_bands_150 = int(input("Number of sub-bands for 150 GHz = "))
-        nb_bands_220 = int(input("Number of sub-bands for 220 GHz = "))
-
-    # beta150 = run_simu_beta_dust(150, nb_bands_150, nb_simu, verbose=False)
-    # print(beta150)
-
-    # beta220 = run_simu_beta_dust(220, nb_bands_220, nb_simu, verbose=False)
-    # print(beta220)
+    arguments = read_arguments()
+    if arguments[2]:
+        beta_results = run_simu_single_band(*arguments)
+        print_results(arguments[0], beta_results)
 
     sys.exit(0)

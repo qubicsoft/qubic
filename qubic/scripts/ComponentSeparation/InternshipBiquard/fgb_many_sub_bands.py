@@ -29,15 +29,25 @@ import component_separation
 QUBIC_DATADIR = os.environ['QUBIC_DATADIR']
 
 # for LOCAL EXECUTION
-OUTDIR = "/home/simon/Documents/qubic/component_separation/output"
-DATADIR = "/home/simon/Documents/qubic/component_separation/data"
+OUTDIR_LOCAL = "/home/simon/Documents/qubic/component_separation/output"
+DATADIR_LOCAL = "/home/simon/Documents/qubic/component_separation/data"
 
 # for execution on CC-IN2P3
 OUTDIR_CC = "/sps/qubic/Users/sbiquard/qubic/component_separation/output"
 DATADIR_CC = "/sps/qubic/Users/sbiquard/qubic/component_separation/data"
 
-OUTDIRS = OUTDIR, OUTDIR_CC
-DATADIRS = DATADIR, DATADIR_CC
+if len(sys.argv) > 1:
+    loc = int(sys.argv[1])  # 0 for local (falaise), 1 for CC
+    if loc == 0:
+        OUTDIR = OUTDIR_LOCAL
+        DATADIR = DATADIR_LOCAL
+    elif loc == 1:
+        OUTDIR = OUTDIR_CC
+        DATADIR = DATADIR_CC
+    else:
+        raise ValueError("Specify where the execution takes place (0 = local, 1 = CC)")
+else:
+    loc = 0  # if run from PyCharm, no command-line argument
 
 
 def get_coverage_from_file(file_name=None):
@@ -91,14 +101,12 @@ def read_arguments():
     :return: local or CC, frequency band (GHz), nb of simulations, nb of sub-bands, nb of years and sky_sim parameters.
     """
     if len(sys.argv) > 1:
-        local_or_cc = int(sys.argv[1])  # 0 for local, 1 for CC-IN2P3
         frequency_band = int(sys.argv[2])
         nb_simu = int(sys.argv[3])
         nb_bands = int(sys.argv[4])
         nb_years = int(sys.argv[5])
         sky_sim_param = sys.argv[6]
     else:
-        local_or_cc = 0
         frequency_band = int(input("Main frequency band (150 or 220 GHz) = "))
         nb_simu = int(input("Number of simulations to run = "))
         nb_bands = int(input("Number of sub-bands for 150 GHz = "))
@@ -110,7 +118,7 @@ def read_arguments():
     nunu_correlations = bool(sky_sim_param[1])
     integrate = bool(sky_sim_param[2])
 
-    return local_or_cc, frequency_band, nb_simu, nb_bands, nb_years, spatial_correlations, nunu_correlations, integrate
+    return frequency_band, nb_simu, nb_bands, nb_years, spatial_correlations, nunu_correlations, integrate
 
 
 def run_simu_single_band(band: int,
@@ -252,14 +260,15 @@ if __name__ == "__main__":
 
     # read arguments and run simulation
     arguments = read_arguments()
-    loc, f_band, _, nb_sub, _, _, _, _ = arguments
-    beta_results = run_simu_single_band(*arguments[1:])
+    f_band, _, nb_sub, _, _, _, _ = arguments
+    beta_results = run_simu_single_band(*arguments)
     if loc == 0:
         print_results(f_band, beta_results)
 
     # write the results to file
-    output_fmt = OUTDIRS[loc] + "/FgBuster_SingleBand{}_Nsub{}.npy"
+    output_fmt = OUTDIR + "/FgBuster_SingleBand{}_Nsub{}.npy"
     file = output_fmt.format(f_band, nb_sub)
     np.save(file, beta_results)
 
     sys.exit(0)
+

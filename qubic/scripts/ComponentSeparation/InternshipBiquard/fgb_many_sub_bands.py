@@ -1,6 +1,7 @@
 """
 Perform FgBuster separation on simulated Qubic sky maps with many frequency sub-bands.
 Command line arguments should be:
+- local (=0) or CC (=1) execution
 - frequency band (150 or 220 GHz)
 - nb of simulations to perform
 - nb of sub-bands
@@ -26,8 +27,17 @@ import component_separation
 
 # Define data / output directories
 QUBIC_DATADIR = os.environ['QUBIC_DATADIR']
-OUTPUT_DIR = "/home/simon/Documents/qubic/component_separation/output"
+
+# for LOCAL EXECUTION
+OUTDIR = "/home/simon/Documents/qubic/component_separation/output"
 DATADIR = "/home/simon/Documents/qubic/component_separation/data"
+
+# for execution on CC-IN2P3
+OUTDIR_CC = "/sps/qubic/Users/sbiquard/qubic/component_separation/output"
+DATADIR_CC = "/sps/qubic/Users/sbiquard/qubic/component_separation/data"
+
+OUTDIRS = OUTDIR, OUTDIR_CC
+DATADIRS = DATADIR, DATADIR_CC
 
 
 def get_coverage_from_file(file_name=None):
@@ -76,17 +86,19 @@ def print_results(band, beta_res) -> None:
 
 
 def read_arguments():
-    """Read parameters / command-line arguments.
+    """Read parameters / command-line arguments for local (personal computer) execution.
 
-    :return: frequency band (GHz), nb of simulations, nb of sub-bands, nb of years and sky_sim parameters.
+    :return: local or CC, frequency band (GHz), nb of simulations, nb of sub-bands, nb of years and sky_sim parameters.
     """
     if len(sys.argv) > 1:
-        frequency_band = int(sys.argv[1])
-        nb_simu = int(sys.argv[2])
-        nb_bands = int(sys.argv[3])
-        nb_years = int(sys.argv[4])
-        sky_sim_param = sys.argv[5]
+        local_or_cc = int(sys.argv[1])  # 0 for local, 1 for CC-IN2P3
+        frequency_band = int(sys.argv[2])
+        nb_simu = int(sys.argv[3])
+        nb_bands = int(sys.argv[4])
+        nb_years = int(sys.argv[5])
+        sky_sim_param = sys.argv[6]
     else:
+        local_or_cc = 0
         frequency_band = int(input("Main frequency band (150 or 220 GHz) = "))
         nb_simu = int(input("Number of simulations to run = "))
         nb_bands = int(input("Number of sub-bands for 150 GHz = "))
@@ -96,9 +108,9 @@ def read_arguments():
     print()
     spatial_correlations = bool(sky_sim_param[0])
     nunu_correlations = bool(sky_sim_param[1])
-    integrate_into_band = bool(sky_sim_param[2])
+    integrate = bool(sky_sim_param[2])
 
-    return frequency_band, nb_simu, nb_bands, nb_years, spatial_correlations, nunu_correlations, integrate_into_band
+    return local_or_cc, frequency_band, nb_simu, nb_bands, nb_years, spatial_correlations, nunu_correlations, integrate
 
 
 def run_simu_single_band(band: int,
@@ -217,8 +229,11 @@ def run_simu_single_band(band: int,
         del cmb_dust_noise
 
     if verbose:
-        print("execution terminated, printing results...\n")
-    return beta_values
+        print("execution terminated, writing / printing results...\n")
+
+    res = np.array(beta_values)
+
+    return res
 
 
 # To do:
@@ -235,9 +250,16 @@ if __name__ == "__main__":
     d220.read_from_file(d220_name)
     qubic_dicts = {150: d150, 220: d220}
 
+    # read arguments and run simulation
     arguments = read_arguments()
-    if arguments[2]:
-        beta_results = run_simu_single_band(*arguments)
-        print_results(arguments[0], beta_results)
+    loc, f_band, _, nb_sub, _, _, _, _ = arguments
+    beta_results = run_simu_single_band(*arguments[1:])
+    if loc == 0:
+        print_results(f_band, beta_results)
+
+    # write the results to file
+    output_fmt = OUTDIRS[loc] + "/FgBuster_SingleBand{}_Nsub{}.npy"
+    file = output_fmt.format(f_band, nb_sub)
+    np.save(file, beta_results)
 
     sys.exit(0)

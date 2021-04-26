@@ -144,7 +144,7 @@ def run_simu_single_band(band: int,
 
     # adjust number of sub-bands for sky simulation and reconstruction
     dico['nf_recon'] = n_sub
-    dico['nf_sub'] = 4 * n_sub  # should be integer multiple of 'nf_recon'
+    dico['nf_sub'] = 4 * n_sub  # should be integer multiple of 'nf_recon', like 4 or 5
 
     # get coverage map and define pixels to use
     coverage = get_coverage_from_file()
@@ -209,26 +209,6 @@ def run_simu_single_band(band: int,
         beta_values.append(beta_dust_estimate)
         if verbose:
             print("fgbuster separation performed (beta = {:.3f})".format(beta_dust_estimate))
-
-        # no loop is needed for beta evaluation
-        # but to recover the dust maps at each frequency, yes!
-        # betas = []
-        # for freq in freqs:
-        #     fg_res = comp_separation.fg_buster(maps_in=cmb_dust,
-        #                                        components=[fgb.CMB(), fgb.Dust(freq, temp=20.)],
-        #                                        map_freqs=freqs,
-        #                                        map_fwhms_deg=fwhms,
-        #                                        # target=fwhm_common,
-        #                                        ok_pix=okpix_inside,
-        #                                        stokes='IQU')
-        #     beta_dust_estimated = fg_res.x[0]
-        #     betas.append(beta_dust_estimated)
-        #
-        #     # array_est_fg_3bands[m, 0, f, :, okpix_inside] = fg_res.s[0, :, :].T
-        #     # array_est_fg_3bands[m, 1, f, :, okpix_inside] = fg_res.s[1, :, :].T
-        #
-        # perform average over beta values collected
-        # beta_mean = np.mean(betas)
 
         del cmb_dust
         del cmb_dust_noiseless

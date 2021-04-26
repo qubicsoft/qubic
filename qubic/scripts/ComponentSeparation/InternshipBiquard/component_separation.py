@@ -91,6 +91,7 @@ class CompSep(object):
         """
 
         qubic_instrument = fgb.get_instrument('Qubic' + str(self.nb_bands) + 'bands')
+        # qubic_instrument = fgb.get_instrument('QUBIC')
 
         # specify correct frequency and FWHM
         qubic_instrument.frequency = map_freqs

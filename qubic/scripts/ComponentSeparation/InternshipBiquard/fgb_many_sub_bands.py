@@ -20,29 +20,22 @@ OUTPUT_DIR = "/home/simon/Documents/qubic/component_separation/output"
 DATADIR = "/home/simon/Documents/qubic/component_separation/data"
 
 
-def get_sub_freqs(band: int):
+def get_sub_freqs_and_resolutions(dico):
     """
     Give the frequency sub-bands and corresponding angular resolutions around f = 150 or 220 GHz.
-    :param band: main band frequency (150 or 220 GHz)
-    :return: Tuple (freqs, fwhms) containing the list of the central frequencies and the resolutions (in degrees).
+    :param dico: instrument dictionary containing frequency band and nbr of sub-bands wanted
+    :return: Tuple (freqs, fwhms) containing the list of the central frequencies
+        and the list of resolutions (in degrees).
     """
-    dico = qubic_dicts[band]
+    band = dico['filter_nu'] / 1e9
     n = int(dico['nf_sub'])
-    _, _, frequencies, _, _, _ = qubic.compute_freq(band, n)
-    if n == 1:
-        resolutions = []
-    elif n == 2:
-        resolutions = []
-    elif n == 3:
-        resolutions = [0.42999269, 0.39543908, 0.36366215]
-    elif n == 4:
-        resolutions = [0.43468571, 0.40821527, 0.38335676, 0.36001202]
-    elif n == 5:
-        resolutions = [0.43750306, 0.41605639, 0.39566106, 0.37626551, 0.35782075]
-    else:
-        raise ValueError("Number of sub-bands not supported")
-
-    return frequencies, resolutions
+    filter_relative_bandwidth = dico['filter_relative_bandwidth']
+    _, _, nus_in, _, _, _ = qubic.compute_freq(band,
+                                               Nfreq=n,
+                                               relative_bandwidth=filter_relative_bandwidth)
+    # nus_in are in GHz so we use inverse scaling of resolution with frequency
+    # we know the fwhm at 150 GHz so the factor is 150 / (target frequency)
+    return nus_in, dico['synthbeam_peak150_fwhm'] * 150 / nus_in
 
 
 def get_coverage_from_file(file_name=None):
@@ -85,7 +78,7 @@ def run_simu_beta_dust(band: int, n_sub: int, n_sim: int, verbose=False):
         print("coverage from file ok")
 
     # get sub-bands characteristics
-    freqs, fwhms = get_sub_freqs(band)
+    freqs, fwhms = get_sub_freqs_and_resolutions(dico)
     if verbose:
         print("sub-bands frequencies and resolutions ok")
         print("   --> {} sub-bands".format(n_sub))
@@ -171,15 +164,20 @@ if __name__ == "__main__":
     d220.read_from_file(d220_name)
     qubic_dicts = {150: d150, 220: d220}
 
-    # read command-line arguments
-    nb_simu = int(sys.argv[1])
-    nb_bands_150 = int(sys.argv[2])
-    nb_bands_220 = int(sys.argv[3])
+    # parameters / command-line arguments
+    if len(sys.argv) > 1:
+        nb_simu = sys.argv[1]
+        nb_bands_150 = sys.argv[2]
+        nb_bands_220 = sys.argv[3]
+    else:
+        nb_simu = int(input("Number of simulations to run = "))
+        nb_bands_150 = int(input("Number of sub-bands for 150 GHz = "))
+        nb_bands_220 = int(input("Number of sub-bands for 220 GHz = "))
 
-    beta150 = run_simu_beta_dust(150, nb_bands_150, nb_simu, verbose=False)
-    # beta220 = run_simu_beta_dust(220, nb_bands_220, nb_simu)
+    # beta150 = run_simu_beta_dust(150, nb_bands_150, nb_simu, verbose=False)
+    # print(beta150)
 
-    print(beta150)
+    # beta220 = run_simu_beta_dust(220, nb_bands_220, nb_simu, verbose=False)
     # print(beta220)
 
     sys.exit(0)

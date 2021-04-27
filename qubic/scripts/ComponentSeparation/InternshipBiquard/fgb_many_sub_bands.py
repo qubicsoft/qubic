@@ -51,6 +51,17 @@ else:
     raise ValueError("Specify where the execution takes place (0 = local, 1 = CC)")
 
 
+def append_to_npy(fname, data) -> None:
+    """Append 1D data to a .npy binary file."""
+
+    try:  # try to load existing data
+        content = np.load(fname, allow_pickle=True)
+        new_content = np.concatenate((content, data), axis=None)
+        np.save(fname, new_content)
+    except IOError:  # if file does not yet exist, save data directly to file
+        np.save(fname, data)
+
+
 def get_coverage_from_file(file_name=None):
     """
     Get coverage map from saved file.
@@ -220,17 +231,6 @@ def run_simu_single_band(band: int,
     res = np.array(beta_values)
 
     return res
-
-
-def append_to_npy(fname, data) -> None:
-    """Append 1D data to a .npy binary file."""
-
-    try:  # try to load existing data
-        content = np.load(fname, allow_pickle=True)
-        new_content = np.concatenate((content, data), axis=None)
-        np.save(fname, new_content)
-    except IOError:  # if file does not yet exist, save data directly to file
-        np.save(fname, data)
 
 
 # To do:

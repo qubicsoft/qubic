@@ -29,12 +29,12 @@ import component_separation
 QUBIC_DATADIR = os.environ['QUBIC_DATADIR']
 
 # for LOCAL EXECUTION
-OUTDIR_LOCAL = "/home/simon/Documents/qubic/component_separation/output"
-DATADIR_LOCAL = "/home/simon/Documents/qubic/component_separation/data"
+OUTDIR_LOCAL = "/home/simon/PycharmProjects/qubic_comp_sep/output"
+DATADIR_LOCAL = "/home/simon/PycharmProjects/qubic_comp_sep/data"
 
 # for execution on CC-IN2P3
-OUTDIR_CC = "/sps/qubic/Users/sbiquard/qubic/component_separation/output"
-DATADIR_CC = "/sps/qubic/Users/sbiquard/qubic/component_separation/data"
+OUTDIR_CC = "/sps/qubic/Users/sbiquard/qubic/qubic_comp_sep/output"
+DATADIR_CC = "/sps/qubic/Users/sbiquard/qubic/qubic_comp_sep/data"
 
 if len(sys.argv) > 1:
     LOC = int(sys.argv[1])  # 0 for local (falaise), 1 for CC
@@ -110,7 +110,7 @@ def read_arguments():
     else:
         frequency_band = int(input("Main frequency band (150 or 220 GHz) = "))
         nb_simu = int(input("Number of simulations to run = "))
-        nb_bands = int(input("Number of sub-bands for 150 GHz = "))
+        nb_bands = int(input("Number of sub-bands for {} GHz = ".format(frequency_band)))
         nb_years = int(input("Number of observation years = "))
         sky_sim_param = input("spatial correlations, frequency correlations (11 = both True) = ")
 
@@ -222,9 +222,21 @@ def run_simu_single_band(band: int,
     return res
 
 
+def append_to_npy(fname, data) -> None:
+    """Append 1D data to a .npy binary file."""
+
+    try:  # try to load existing data
+        content = np.load(fname, allow_pickle=True)
+        new_content = np.concatenate((content, data), axis=None)
+        np.save(fname, new_content)
+    except IOError:  # if file does not yet exist, save data directly to file
+        np.save(fname, data)
+
+
 # To do:
 # - add function run_simu_double_band which uses both 150 and 220 GHz bands for separation
 # - ...
+
 
 if __name__ == "__main__":
     # Qubic dictionaries for 150 GHz and 220 Ghz
@@ -244,8 +256,7 @@ if __name__ == "__main__":
         print_results(f_band, beta_results)
 
     # write the results to file
-    output_fmt = OUTDIR + "/FgBuster_SingleBand{}_Nsub{}.npy"
-    file = output_fmt.format(f_band, nb_sub)
-    np.save(file, beta_results)
+    out_fmt = OUTDIR + "/FgBuster_SingleBand{}_Nsub{}.npy"
+    append_to_npy(out_fmt.format(f_band, nb_sub), beta_results)
 
     sys.exit(0)

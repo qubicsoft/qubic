@@ -1,0 +1,990 @@
+---
+jupyter:
+  jupytext:
+    formats: ipynb,Rmd
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.9.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Importations
+
+```{python}
+import random
+import healpy as hp
+import glob
+from scipy.optimize import curve_fit
+import pickle
+from importlib import reload
+import time
+import scipy
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import sys
+import pylab
+from pylab import arange, show, cm
+from astropy import units as uq
+import gc
+
+### Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm3 
+import pysm3.units as u
+import qubic
+from qubic import QubicSkySim as qss
+from qubic import fibtools as ft
+from qubic import camb_interface as qc
+from qubic import SpectroImLib as si
+from qubic import NamasterLib as nam
+from qubic import mcmc
+from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
+
+### FGBuster functions module
+from fgbuster import get_instrument, get_sky, get_observation, ilc, basic_comp_sep, harmonic_ilc, weighted_comp_sep, multi_res_comp_sep  # Predefined instrumental and sky-creation configurations
+from fgbuster.visualization import corner_norm, plot_component
+from fgbuster.mixingmatrix import MixingMatrix
+from fgbuster.observation_helpers import _rj2cmb, _jysr2rj, get_noise_realization
+
+# Imports needed for component separation
+from fgbuster import (separation_recipes, xForecast, CMB, Dust, Synchrotron, FreeFree,  # sky-fitting model
+                      basic_comp_sep)  # separation routine
+
+# Widgets
+
+import ipywidgets as widgets
+
+reload(qss)
+reload(ft)
+
+plt.rc('figure', figsize=(16, 10))
+plt.rc('font', size=15)
+plt.rcParams['image.cmap'] = 'jet'
+```
+
+```{python}
+### Some initializations, to be replaced with specific path, or to modify in bash
+os.environ['QUBIC_DATADIR'] = '/home/mathias/Bureau/qubic/qubic'
+os.environ['QUBIC_DICT'] = '/home/mathias/Bureau/qubic/qubic/dicts'
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+```
+
+```{python}
+### Qubic dictionaries for 150GHz and 220Ghz
+config_150, config_220 = 'FI-150', 'FI-220'
+dictfilename150 = global_dir + '/doc/FastSimulator/FastSimDemo_{}.dict'.format(config_150)
+dictfilename220 = global_dir + '/doc/FastSimulator/FastSimDemo_{}.dict'.format(config_220)
+d150, d220 = qubic.qubicdict.qubicDict(), qubic.qubicdict.qubicDict()
+d150.read_from_file(dictfilename150)
+d220.read_from_file(dictfilename220)
+qub_dic = {'150': d150, '220': d220}
+center = qubic.equ2gal(d150['RA_center'], d150['DEC_center'])
+```
+
+```{python}
+### Read some stuff
+    # Read dictionary chosen
+d150['focal_length'] = 0.3
+d150['nside'] = 256
+    #Define the number of reconstruction bands:
+nbands = 3
+d150['nf_recon'] = nbands
+```
+
+
+
+
+
+
+```{python}
+def coverage_func(qub_dic, nbands, is_2_band, fq, npoints):
+    
+    """
+    Procedure that returns coverage maps either at both 150 and 220 or only 150 or 220
+    
+    inputs:
+        qub_dic: dict, of the form {'150': qub_dic_150, '220': ...}
+        nbands: int, number of subbands
+        is_2_band: boolean, if user wants coverage for only 1 frequency band or for 2
+        fq: int, either 150 or 220
+        npoints: int, number of pointing points
+    
+    returns:
+        q: qubic object
+        cov: np.array, coverage map
+    """
+    
+    if is_2_band == True:
+        qubic_dict_150, qubic_dict_220 = qub_dic['150'], qub_dic['220']
+        qubic_dict_150['nside'], qubic_dict_220['nside'] = 256, 256
+        qubic_dict_150['nf_recon'] = nbands
+        qubic_dict_220['nf_recon'] = nbands
+        qubic_dict_150['nf_sub'] = nbands
+        qubic_dict_220['nf_sub'] = nbands
+        qubic_dict_150['npointings'] = npoints
+        qubic_dict_220['npointings'] = npoints
+        p150 = qubic.get_pointing(qubic_dict_150)
+        p220 = qubic.get_pointing(qubic_dict_220)
+        s150 = qubic.QubicScene(qubic_dict_150)
+        s220 = qubic.QubicScene(qubic_dict_220)
+        q150 = qubic.QubicMultibandInstrument(qubic_dict_150)
+        q220 = qubic.QubicMultibandInstrument(qubic_dict_220)
+        _, nus_edge_150, _, _, _, _ = qubic.compute_freq(150, qubic_dict_150['nf_sub'])
+        _, nus_edge_220, _, _, _, _ = qubic.compute_freq(220, qubic_dict_220['nf_sub'])
+        a150 = qubic.QubicMultibandAcquisition(q150, p150, s150, qubic_dict_150, nus_edge_150)
+        a220 = qubic.QubicMultibandAcquisition(q220, p220, s220, qubic_dict_220, nus_edge_220)
+        cov1 = a150.get_coverage()
+        cov2 = a220.get_coverage()
+        a150 = 0
+        a220 = 0
+        cov1 = np.sum(cov1, axis=0)
+        cov2 = np.sum(cov2, axis=0)
+        cov1 /= np.max(cov1)
+        cov2 /= np.max(cov2)
+        return q150, q220, cov1, cov2
+    else:
+        gc.collect()
+        qubic_dict = qub_dic[str(fq)]
+        qubic_dict['nside'] = 256
+        qubic_dict['nf_recon'] = nbands
+        qubic_dict['nf_sub'] = nbands
+        qubic_dict['npointings'] = npoints
+        p = qubic.get_pointing(qubic_dict)
+        s = qubic.QubicScene(qubic_dict)
+        q = qubic.QubicMultibandInstrument(qubic_dict)
+        _, nus_edge, _, _, _, _ = qubic.compute_freq(fq, qubic_dict['nf_sub'])
+        a = qubic.QubicMultibandAcquisition(q, p, s, qubic_dict, nus_edge)
+        cov = a.get_coverage()
+        a = 0
+        cov = np.sum(cov, axis=0)
+        cov /= np.max(cov)
+        return q, cov
+```
+
+```{python}
+###Same resolution functions
+def get_sigma_iband(q, iband):
+    """Get the sigma of one band."""
+    sigma = q[iband].synthbeam.peak150.sigma * (150e9 / q[iband].filter.nu)  
+    return sigma
+
+def get_sigma_prime(q, iband):
+    """Get the sigma needed to convolve one band at the first band resolution."""
+    sigma_band0 = get_sigma_iband(q, 0)
+    sigma_bandi = get_sigma_iband(q, iband)
+    sigma_prime = np.sqrt(sigma_band0**2 - sigma_bandi**2)
+    print(sigma_band0, sigma_bandi, sigma_prime)
+    return sigma_prime
+
+def make_all_bands_same_resolution(q, maps):
+    """ Convolve each band at the first band resolution."""
+    nbands = len(q)
+    maps_same_reso = np.zeros_like(maps)
+    for i in range(nbands):
+        sigma_prime = get_sigma_prime(q, i)
+        C = HealpixConvolutionGaussianOperator(sigma=sigma_prime)
+        maps_same_reso[i] = C(maps[i])
+    return maps_same_reso
+```
+
+```{python}
+class Plots(object) :
+    
+    def __init__(self, skyconfig, d, instrument) :
+        
+        '''
+        
+        '''
+        
+        self.skyconfig = skyconfig
+        self.d = d
+        self.instrument = instrument
+    
+    def histogram_ILC(CMB_est, CMB_map, qub_dic, coverage_map):
+    
+        """
+        Function that plots the histograms for 2 maps
+    
+        inputs: 
+            CMB_est: np.array, CMB estimated map
+            CMB_map: np.array, CMB simulated map
+            qub_dic: dict, qubic dictionary
+            coverage_map: np.array, coverage map
+        
+        returns:
+            Plot of histograms for every Stokes parameter with associated RMS
+        """
+        Stokes = ['I', 'Q', 'U']
+        ranges = {'I': [-300, 300], 'Q': [-25, 25], 'U': [-25, 25]}
+        seenpix = coverage_map != 0
+        fig, axs = plt.subplots(qub_dic['nf_recon'], 3)
+        color = ['b', 'r']
+        for band in range(qub_dic['nf_recon']):
+            for stk in range(3):                                      
+                axs[band, stk].hist(CMB_map[band,seenpix,stk], color=color[0], bins=200, range=ranges[Stokes[stk]], alpha=0.3)
+                axs[band, stk].hist(CMB_est[0,seenpix,stk], color='k', bins=200, histtype = 'step', range=ranges[Stokes[stk]], alpha=0.8)
+                axs[0, stk].title.set_text(Stokes[stk] + ' parameter')
+            axs[band, 0].set_ylabel('Band '+ str(band + 1) + '/' + str(qub_dic['nf_recon']))
+        #fig.suptitle('Histograms of foregrounds/ILC residuals - 220 $GHz$ ' + str(qub_dic['nf_recon']) + ' recon. bands')
+        fig.tight_layout(pad=2.5)
+        
+    def scatter_plots(CMB_est, CMB_map, R_nu, qub_dic, coverage, band):
+    
+        """
+        Function that returns the scatter plots of different input maps
+    
+        inputs:
+            CMB_est, CMB_map, R_nu: np.array, corresponding to the different maps
+            qub_dic: dict, qubic dictionary
+            coverage: np.array, coverage map
+            band: int, number of the band
+        
+        returns:
+            scatter plots: CMB_est -- CMB_map, (CMB_map - CMB_est) -- R_nu, for
+            every Stokes parameter at the i-th band
+        """
+    
+        Stokes = ['I', 'Q', 'U']
+        seenpix = coverage != 0
+        fig, axs = plt.subplots(2, 3)
+        color = ['b', 'r', 'g']
+        for stk in range(3):
+            axs[0, stk].scatter(CMB_est[0,seenpix,stk], CMB_map[band,seenpix,stk], color=color[0])
+            pval0 = np.polyfit(CMB_est[0,seenpix,stk], CMB_map[band,seenpix,stk], deg=1)
+            x = np.linspace(np.min(CMB_est[0,seenpix,stk]), np.max(CMB_est[0,seenpix,stk]), 10)
+            axs[0, stk].plot(x, x, color='r', linewidth=5)
+            axs[0, stk].plot(x, np.polyval(pval0, x), 'k', linewidth=5)
+        
+            axs[1, stk].scatter(CMB_est[0,seenpix,stk] - CMB_map[band,seenpix,stk], R_nu[seenpix,stk], color=color[0])
+            pval1 = np.polyfit(CMB_est[0,seenpix,stk] - CMB_map[band,seenpix,stk], R_nu[seenpix,stk], deg=1)
+            y = np.linspace(np.min(CMB_est[0,seenpix,stk] - CMB_map[band,seenpix,stk]), np.max(CMB_est[0,seenpix,stk] - CMB_map[band,seenpix,stk]), 10)
+            axs[1, stk].plot(y, y, color='r', linewidth=5)
+            axs[1, stk].plot(y, np.polyval(pval1, y), 'k', linewidth=5)
+        
+            axs[0, stk].set_ylabel('$\mathbf{s}^{'+ Stokes[stk] + '}$', fontsize=25)
+            axs[0, stk].set_xlabel('$\hat{\mathbf{s}}^{'+ Stokes[stk] + '}$', fontsize=25)
+            axs[1, stk].set_ylabel('$\mathbf{R}^{'+ Stokes[stk] + '}$', fontsize=25)
+            axs[1, stk].set_xlabel('$\hat{\mathbf{s}}^{'+ Stokes[stk] + '} - \mathbf{s}^{'+ Stokes[stk] + '}$', fontsize=25)   
+
+    
+        fig.tight_layout(pad=2.5)
+        
+    def plots_residuals(map1, map2, ind_freq, d, coverage, title1, title2) :
+        
+        """
+    
+        Function that returns a 3x3 maps of Qubic observations. 
+        inputs : 
+             map1, map2 : Theoretical map and result of ILC method
+             map_fg : Result of ForeGround Buster method
+             coverage : Coverage map
+             noisy : True if we want to see the noisy maps, False otherwise
+        returns :
+            3x3 maps for each Stokes parameter (Raws) and method (Columns) 
+    
+        """
+        nsig = 3
+        seenpix = coverage != 0
+        Stokes = ['I', 'Q', 'U']
+        plt.figure()
+        for i in range(3) :
+            sig = np.std(map1[ind_freq, seenpix, i])
+            hp.gnomview(map1[ind_freq, :, i], reso = 15, min = -nsig * sig, max = nsig * sig, rot = center, sub = (3, 3, 3*i+1), title = title1 + ' - ' + str(Stokes[i]))
+            hp.gnomview(map2[ind_freq, :, i], reso = 15, min = -nsig * sig, max = nsig * sig, rot = center, sub = (3, 3, 3*i+2), title = title2 + ' - ' + str(Stokes[i]))
+            hp.gnomview(map1[ind_freq, :, i] - map2[ind_freq, :, i], min = -nsig * sig, max = nsig * sig, reso = 15, rot = center, sub = (3, 3, 3*i+3), title = 'Residual' + ' - ' + str(Stokes[i]))
+        plt.show()
+    
+    def histograms(map1, map2, coverage_map, qub_dic, range1, range2, range3) :
+        Stokes = ['I', 'Q', 'U']
+        ranges = {'I': range1, 'Q': range2, 'U': range3}
+        seenpix = coverage_map != 0
+        a1 = np.zeros(((3, 200, 3)))
+        b1 = np.zeros(((3, 201, 3)))
+    
+        a2 = np.zeros(((3, 200, 3)))
+        b2 = np.zeros(((3, 201, 3)))
+
+        fig, axs = plt.subplots(qub_dic['nf_recon'], 3)
+        color = ['b', 'r', 'k']
+        for band in range(qub_dic['nf_recon']):
+            for stk in range(3):                                      
+                a1[band, :, stk], b1[band, :, stk], c1 = axs[band, stk].hist(map1[band, seenpix, stk], color = 'b', alpha = 0.3, bins = 200, range = ranges[Stokes[stk]])
+                a2[band, :, stk], b2[band, :, stk], c2 = axs[band, stk].hist(map2[band, seenpix, stk], histtype = 'step', color = 'k', alpha = 0.8, range = ranges[Stokes[stk]], bins = 200)
+                axs[0, stk].title.set_text(Stokes[stk] + ' parameter')
+                #axs[band, stk].legend()
+            axs[band, 0].set_ylabel('Band '+ str(band + 1) + '/' + str(qub_dic['nf_recon']))
+        fig.suptitle('Histograms - 150 $GHz$ ' + str(qub_dic['nf_recon']) + ' recon. bands')
+        fig.tight_layout(pad=2.5)
+        plt.show()
+        return a1, b1, a2, b2
+    
+    def plot1D_residuals(x, y, qub_dic, title, lim) :
+        
+        Stokes = ['I', 'Q', 'U']
+        fig, axs = plt.subplots(qub_dic['nf_recon'], 3)
+        color = ['b', 'r', 'k']
+        for band in range(qub_dic['nf_recon']) :
+            for stk in range(3):
+                axs[band, stk].plot(x[band, :-1, stk], y[band, :, stk], '-b', label = title)
+                axs[band, stk].axhline(0, color = 'black', ls = '--')
+                axs[0, stk].title.set_text(Stokes[stk] + ' parameter')
+                axs[band, stk].legend()
+                axs[band, stk].set_ylim(-lim, lim)
+            axs[band, 0].set_ylabel('Band '+ str(band + 1) + '/' + str(qub_dic['nf_recon']))
+        fig.suptitle('Residue - 150 $GHz$ ' + str(qub_dic['nf_recon']) + ' recon. bands')
+        fig.tight_layout(pad=2.5)
+        plt.show()
+        
+    def plot1D_2residuals(x, y, xp, yp, qub_dic, title1, title2, lim) :
+        Stokes = ['I', 'Q', 'U']
+        fig, axs = plt.subplots(qub_dic['nf_recon'], 3)
+        color = ['b', 'r', 'k']
+        for band in range(qub_dic['nf_recon']) :
+            for stk in range(3):
+                axs[band, stk].plot(x[band, :-1, stk], y[band, :, stk], '-b', label = title1)
+                axs[band, stk].plot(xp[band, :-1, stk], yp[band, :, stk], '-r', label = title2)
+                axs[0, stk].title.set_text(Stokes[stk] + ' parameter')
+                axs[band, stk].legend()
+                axs[band, stk].set_ylim(-lim, lim)
+            axs[band, 0].set_ylabel('Band '+ str(band + 1) + '/' + str(qub_dic['nf_recon']))
+        fig.suptitle('Residue - 150 $GHz$ ' + str(qub_dic['nf_recon']) + ' recon. bands')
+        fig.tight_layout(pad=2.5)
+        plt.show()
+    
+    def plots_allcomp(X, Y, ind_freq, ind_stk, d, coverage, title1, title2) :
+        
+        """
+    
+        Function that returns a 3x3 maps of Qubic observations. 
+        inputs : 
+             map1, map2 : Theoretical map and result of ILC method
+             map_fg : Result of ForeGround Buster method
+             coverage : Coverage map
+             noisy : True if we want to see the noisy maps, False otherwise
+        returns :
+            3x3 maps for each Stokes parameter (Raws) and method (Columns) 
+    
+        """
+        nsig = 3
+        seenpix = coverage != 0
+        Stokes = ['I', 'Q', 'U']
+        sig_cmb = np.std(X[0][ind_freq, seenpix, ind_stk])
+        sig_dust = np.std(X[1][ind_freq, seenpix, ind_stk])
+        sig_cmbdust = np.std(X[0][ind_freq, seenpix, ind_stk] + X[1][ind_freq, seenpix, ind_stk])
+        plt.figure()
+        
+        # First raw
+        
+        hp.gnomview(X[0][ind_freq, :, ind_stk], min = -nsig * sig_cmb, max = nsig * sig_cmb, reso = 15, rot = center, sub = (3, 3, 1), title = title1)
+        hp.gnomview(X[1][ind_freq, :, ind_stk], min = -nsig * sig_dust, max = nsig * sig_dust, reso = 15, rot = center, sub = (3, 3, 2), title = title2)
+        s_x = X[0][ind_freq, :, ind_stk] + X[1][ind_freq, :, ind_stk]
+        hp.gnomview(s_x, min = -nsig * sig_cmbdust, max = nsig * sig_cmbdust, reso = 15, rot = center, sub = (3, 3, 3), title = 'All')
+        
+        # Second raw
+        
+        hp.gnomview(Y[0][ind_freq, :, ind_stk], min = -nsig * sig_cmb, max = nsig * sig_cmb, reso = 15, rot = center, sub = (3, 3, 4), title = '')
+        hp.gnomview(Y[1][ind_freq, :, ind_stk], min = -nsig * sig_dust, max = nsig * sig_dust, reso = 15, rot = center, sub = (3, 3, 5), title = '')
+        s_y = Y[0][ind_freq, :, ind_stk] + Y[1][ind_freq, :, ind_stk]
+        hp.gnomview(s_y, min = -nsig * sig_cmbdust, max = nsig * sig_cmbdust, reso = 15, rot = center, sub = (3, 3, 6), title = '')
+        
+        # Residual
+        
+        hp.gnomview(X[0][ind_freq, :, ind_stk] - Y[0][ind_freq, :, ind_stk], min = -nsig * sig_cmb, max = nsig * sig_cmb, reso = 15, rot = center, sub = (3, 3, 7), title = '')
+        hp.gnomview(X[1][ind_freq, :, ind_stk] - Y[1][ind_freq, :, ind_stk], min = -nsig * sig_dust, max = nsig * sig_dust, reso = 15, rot = center, sub = (3, 3, 8), title = '')
+        s = s_x - s_y
+        
+        hp.gnomview(s, min = -nsig * sig_cmbdust, max = nsig * sig_cmbdust, reso = 15, rot = center, sub = (3, 3, 9), title = '')
+        
+        plt.tight_layout(pad=2.5)
+        
+        plt.show()
+```
+
+```{python}
+def ILC(noisy_map, coverage, nf):
+    
+    """
+    ILC procedure
+    
+    inputs:
+        noisy_map: np.array, input map of the form (nband, npix, nStokes)
+        coverage: np.array, input coverage map
+        nf: int, number of bands
+        
+    returns:
+        ILC_est: np.array, CMB estimated map
+        weights_list: list, containing the ILC weights for each frequency
+        variance_stokes_par: list, containing the variances of the ILC method for each
+                             Stokes parameter
+    """
+    
+    def calculate_wi(band, cov):
+        
+        """
+        Calculates the linear combination coefficients of the ILC procedure
+        
+        inputs:
+            band: int, for which frequency band we calculate the weight
+            cov: np.array, covariance matrix of the maps
+            
+        returns:
+            weight: float, ILC weight calculated according to the result of Lagrangian minimization 
+        """
+        
+        inv_cov = np.linalg.inv(cov)
+        return np.sum(inv_cov, axis=1)[band]/np.sum(inv_cov)
+    
+    def calculate_var_ILC(weights, cov):
+        
+        """
+        Calculates the variance of ILC estimator
+        
+        inputs:
+            weights: list, containing the ILC weights for each frequency
+            cov: np.array, covariance matrix of the maps
+            
+        returns:
+            variance: float, variance of ILC for a given Stokes parameter    
+        """
+        
+        return np.dot(np.transpose(weights), np.dot(cov, weights))
+    
+    ILC_est = np.empty(noisy_map.shape)
+    cov_mats = list(qss.get_cov_nunu(noisy_map, coverage, QUsep=True))
+    variance_stokes_par = []
+    weights_list = []
+    for i in range(3):
+        weights = []
+        for band in range(nf):
+            weights.append(calculate_wi(band, cov_mats[i]))
+            ILC_est[0,:,i] += np.multiply(calculate_wi(band, cov_mats[i]), noisy_map[band,:,i])
+        variance_stokes_par.append(calculate_var_ILC(weights, cov_mats[i]))
+        weights_list.append(weights)
+        
+    return ILC_est, weights_list, variance_stokes_par
+```
+
+```{python}
+class ComponentSeparation(object) :
+    
+    def __init__(self) :
+        
+        pass
+        
+        
+    def fg_buster_basic(nb_bands, maps) :
+        
+        instrument = get_instrument('Qubic' + str(nb_bands) + 'bands')
+        
+        component = []
+        for i in range(nb_bands) :
+            component.append([CMB(), Dust(nus_in[i]), Synchrotron(nus_in[i])])
+        
+        r = [] 
+        for i in range(nb_bands) :
+            r.append(basic_comp_sep(component[i], instrument, np.transpose(maps, (0, 2, 1))))
+        
+        return r
+    
+    def fg_buster_weighted(nb_bands, maps, cov) :
+        
+        instrument = get_instrument('Qubic' + str(nb_bands) + 'bands')
+        
+        component = [CMB(), Dust(nus_in[0]), Synchrotron(nus_in[0])]
+        
+        r = weighted_comp_sep(component, instrument, np.transpose(maps, (0, 2, 1)), cov, nside=0)
+        
+        return r
+    
+    def convdict2tab(X, nb_bands, qubic_dic) :
+        
+        nside = qubic_dic['nside']
+        
+        x_cmbdustsync = np.zeros(((nb_bands, 12*nside**2, 3)))
+        x_cmb = np.zeros(((nb_bands, 12*nside**2, 3)))
+        x_dust = np.zeros(((nb_bands, 12*nside**2, 3)))
+        x_sync = np.zeros(((nb_bands, 12*nside**2, 3)))
+        
+        for i in range(nb_bands) :        # Frequency
+            for j in range(3) :    # Stokes parameter
+                x_cmbdustsync[i, :, j] = X[i].s[0, j, :] + X[i].s[1, j, :]# + X[i].s[2, j, :]
+                x_cmb[i, :, j] = X[i].s[0, j, :]
+                x_dust[i, :, j] = X[i].s[1, j, :]
+                #x_sync[i, :, j] = X[i].s[2, j, :]
+        
+        return x_cmbdustsync, x_cmb, x_dust
+```
+
+```{python}
+#Same resolution function
+def same_resol_maps(freq_map_qubic, freq_map_pysm, FWHMs, coverage, d):
+    
+    """
+    Function that returns QSS maps and PySm maps at the resolution of the lowest frequency of QSS
+    
+    input:
+        freq_map_qubic, freq_map_pysm: np.array, corresponding maps
+        FWHMs: list, of FWHMs for the convolution kernel
+        coverage: np.array, coverage map
+        d: dict, qubic dictionary
+        
+    returns:
+        freq_map_qubic, freq_map_pysm: np.array at the good resolution 
+    """
+    
+    def get_sigma_iband(q150, iband):
+        
+        sigma = q150[iband].synthbeam.peak150.sigma * (150e9 / q150[iband].filter.nu)  
+        return sigma
+
+    def get_sigma_prime(q150, iband):
+        
+        sigma_band0 = get_sigma_iband(q150, 0)
+        sigma_bandi = get_sigma_iband(q150, iband)
+        sigma_prime = np.sqrt(sigma_band0**2 - sigma_bandi**2)
+        print(sigma_band0, sigma_bandi, sigma_prime)
+        return sigma_prime
+    
+    seenpix = coverage != 0
+    freq_map_pysm[:,:,~seenpix] = 0
+    print('')
+    print('Reconvolving PySM to QSS resolutions')
+    for i in range(d['nf_recon']):
+            myFWHM = np.deg2rad(FWHMs[i])
+            print('Convolving PySM band {} with {} rad {} deg'.format(i, myFWHM, FWHMs[i]))
+            freq_map_pysm[i,:,:] = hp.sphtfunc.smoothing(freq_map_pysm[i,:,:], fwhm=myFWHM,
+                                                              verbose=False)
+    freq_map_pysm[:,:,~seenpix] = 0 
+    print('')
+    print(np.std((freq_map_pysm - freq_map_qubic)[:,:,seenpix], axis=2))
+    print('')
+    print('Now convolving PySM and QSS to worst resolution')
+    for i in range(d['nf_recon']):
+            myFWHM = 2.35*get_sigma_prime(q150,i)
+            print('Convolving PySM band {} with {} rad {} deg'.format(i, myFWHM, np.rad2deg(myFWHM)))
+            print(np.sqrt(FWHMs[i]**2 + np.rad2deg(myFWHM)**2))
+            freq_map_pysm[i,:,:] = hp.sphtfunc.smoothing(freq_map_pysm[i,:,:], fwhm=myFWHM,
+                                                              verbose=False) 
+            print('Convolving QSS band {} with {} rad {} deg'.format(i, myFWHM, np.rad2deg(myFWHM)))
+            freq_map_qubic[i,:,:] = hp.sphtfunc.smoothing(freq_map_qubic[i,:,:], fwhm=myFWHM,
+                                                              verbose=False)
+    freq_map_qubic[:,:,~seenpix] = 0   
+    freq_map_pysm[:,:,~seenpix] = 0
+    
+    return(freq_map_qubic, freq_map_pysm)
+```
+
+# ILC
+
+
+
+
+<!-- #region -->
+There are many map-based astrophysical component separation techniques in the CMB literature, among which is also ILC of which I will now give a quick review.
+
+The maps at a given frequency $\nu$, for every pixel $p$ can be modelled as
+
+$$\mathbf{y}_{\nu}(p) = \mathbf{s}(p) + \mathbf{f}_{\nu}(p) + \mathbf{n}_{\nu}(p)$$
+
+We assume the maps $\mathbf{y}$ are at **the same resolution**.
+
+Given that the CMB signal $\mathbf{s}$ does not depend on the frequency, we can write the following convex estimator:
+
+$$\hat{\mathbf{s}}(p) = \sum_{\nu}\alpha_{\nu}\mathbf{y}_{\nu}(p), \; \; \text{where} \; \; \sum_{\nu}\alpha_{\nu} = 1 $$
+
+
+The idea is to find the coefficients $\alpha_{\nu}$ such that the variance of the estimator is minimum.
+
+By minimizing the associated Lagrangian, one finds for every frequency $i$:
+
+$$\alpha_{i} = \frac{\sum_{j}[\mathbf{C}^{-1}]_{ij}}{\sum_{kj}[\mathbf{C}^{-1}]_{kj}}$$
+
+where $\mathbf{C} = <\mathbf{yy}^{T}>$ is the covariance matrix of the observations. 
+
+In addition, the variance of the ILC map is given by
+
+$$\sigma^2 = \alpha^{T}\mathbf{C}\alpha$$
+<!-- #endregion -->
+
+## Study of results at 150GHz
+
+
+We compute here a dictionnary q150 and the coverage of the instrument.
+
+```{python}
+### Example of how it works ...
+q150, cov150 = coverage_func(qub_dic, nbands, False, 150, 3000)
+
+# q150 is the instrument and cov150 is an array which show us where the instrument see
+```
+
+# Computation of Qubic map
+
+
+## CMB + Dust
+
+```{python}
+reload(qss)
+
+### QubicSkySim instanciation
+seed = 42
+sky_config = {'dust': 'd0', 'cmb': seed}
+Qubic_sky_150 = qss.Qubic_sky(sky_config, d150)
+
+### We create a qubic map with JC's fast-simulator
+CMBdust, CMBdust_noiseless, CMBdust_noise, _ = Qubic_sky_150.get_partial_sky_maps_withnoise(spatial_noise=False,
+                                                    coverage=cov150, Nyears = 4e2, nunu_correlation = False)
+```
+
+## CMB
+
+```{python}
+reload(qss)
+
+### QubicSkySim instanciation
+seed = 42
+sky_config = {'cmb': seed}
+Qubic_sky_150 = qss.Qubic_sky(sky_config, d150)
+
+### We create a qubic map with JC's fast-simulator
+CMB_map, CMB_noiseless, CMB_noise, _ = Qubic_sky_150.get_partial_sky_maps_withnoise(spatial_noise=False,
+                                                    coverage=cov150, Nyears = 4e2, nunu_correlation = False)
+```
+
+## Dust
+
+```{python}
+reload(qss)
+
+### QubicSkySim instanciation
+
+seed = 42
+sky_config = {'dust': 'd0'}
+Qubic_sky_150 = qss.Qubic_sky(sky_config, d150)
+
+### We create a qubic map with JC's fast-simulator
+
+dust, dust_noiseless, dust_noise, _ = Qubic_sky_150.get_partial_sky_maps_withnoise(spatial_noise=False,
+                                                    coverage=cov150, Nyears = 4e2, nunu_correlation = False)
+```
+
+## Synchrotron
+
+```{python}
+reload(qss)
+
+### QubicSkySim instanciation
+
+seed = 42
+sky_config = {'synchrotron': 's0'}
+Qubic_sky_150 = qss.Qubic_sky(sky_config, d150)
+
+### We create a qubic map with JC's fast-simulator
+
+sync, sync_noiseless, sync_noise, _ = Qubic_sky_150.get_partial_sky_maps_withnoise(spatial_noise=False,
+                                                    coverage=cov150, Nyears = 4e2, nunu_correlation = False)
+```
+
+```{python}
+for subf in range(3) :
+    for istk in range(3) :
+        
+        plt.figure()
+        hp.gnomview(CMBdust_noiseless[subf, :, istk], rot = center, reso = 15, sub = (1, 3, 1), 
+                    title = 'cmb + dust \n Stokes : {} & nu = {}'.format(istk, subf))
+        hp.gnomview(CMB_noiseless[subf, :, istk], rot = center, reso = 15, sub = (1, 3, 2), 
+                    title = 'cmb \n Stokes : {} & nu = {}'.format(istk, subf))
+        hp.gnomview(dust_noiseless[subf, :, istk], rot = center, reso = 15, sub = (1, 3, 3), 
+                    title = 'dust \n Stokes : {} & nu = {}'.format(istk, subf))
+```
+
+## Plots
+
+```{python}
+### CMB estimation with ILC
+CMB_est, weights_list, variance_ILC = ILC(CMBdust, cov150, nbands)
+
+CMB_est[1] = CMB_est[0]
+CMB_est[2] = CMB_est[0]
+```
+
+```{python}
+
+```
+
+```{python}
+subf = 0
+istk = 0
+
+#qubic_map_150 CMB+dust+noise QUBIC
+#noise150 Noise QUBIC 
+#CMB150 CMB pur noiseless
+#Dust150 Dust pure noiseless
+#CMB150_est CMB estimé par ILC
+
+### select non zero pixels
+okpix = cov150 != 0
+nsig = 3
+
+for subf in range(3):
+    for istk in range(3):
+        
+        plt.figure()
+        
+        ### Calculate RMS
+        sig = np.std(CMB_est[subf,okpix,istk])
+        
+        hp.gnomview(CMB_est[subf,:,istk], sub=(1,5,1), rot=center, reso=15, title='ILC: CMB \n S={} Nu={}'.format(istk, subf), min=-nsig*sig, max=nsig*sig)
+        hp.gnomview(CMB_noiseless[subf,:,istk], sub=(1,5,2), rot=center, reso=15, title='Qubic: CMB \n S={} Nu={}'.format(istk, subf), min=-nsig*sig, max=nsig*sig)
+        hp.gnomview(CMB_est[subf,:,istk] - CMB_map[subf,:,istk], sub=(1,5,3), rot=center, reso=15, title='Diff CMB \n S={} Nu={}'.format(istk, subf), min=-nsig*sig, max=nsig*sig)
+        hp.gnomview(dust_noiseless[subf,:,istk], sub=(1,5,4), rot=center, reso=15, title='Qubic: Dust \n S={} Nu={}'.format(istk, subf), min=-nsig*sig, max=nsig*sig)
+        hp.gnomview(CMB_est[subf,:,istk] - CMB_map[subf,:,istk]-dust_noiseless[subf,:,istk], sub=(1,5,5), rot=center, reso=15, title='Diff CMB - Dust \n S={} Nu={}'.format(istk, subf), min=-nsig*sig, max=nsig*sig)
+
+        plt.show()
+
+```
+
+```{python}
+### Histogram plots
+
+#Plots.histogram_ILC(CMB_est, CMB_noiseless, d150, cov150)
+```
+
+
+
+
+# FG-Buster
+
+
+
+
+
+```{python}
+npix = 12 * d150['nside'] ** 2
+Nf = int(d150['nf_sub'])
+band = d150['filter_nu'] / 1e9
+filter_relative_bandwidth = d150['filter_relative_bandwidth']
+_, nus_edge, nus_in, _, _, Nbbands_in = qubic.compute_freq(band, Nf, filter_relative_bandwidth)
+```
+
+```{python}
+plt.figure()
+hp.gnomview(CMBdust[0, :, 1], rot = center, reso = 15, sub = (1, 3, 1), title = 'cmb + dust + noise')
+hp.gnomview(CMBdust_noiseless[0, :, 1], rot = center, reso = 15, sub = (1, 3, 2), title = 'cmb + dust')
+hp.gnomview(CMBdust_noise[0, :, 1], rot = center, reso = 15, sub = (1, 3, 3), title = 'noise')
+```
+
+## Application for all frequencies (with noise)
+
+```{python}
+data = CMBdust
+X = ComponentSeparation.fg_buster_basic(nbands, data)
+res_cmbdust, res_cmb, res_dust = ComponentSeparation.convdict2tab(X, nbands, d150)
+```
+
+```{python}
+indf = 0
+indstk = 1
+
+nsig = 3
+seenpix = cov150 != 0
+sig_cmb = np.std(CMB_map[indf, seenpix, indstk])
+
+hp.gnomview(CMBdust[indf, :, indstk], rot = center, reso = 15, sub = (3, 3, 1), 
+            min = -nsig * sig_cmb, max = nsig * sig_cmb, 
+            title = 'cmb + dust (Qubic) \n Stokes = {} & nu = {}'.format(indstk, indf))
+hp.gnomview(res_cmbdust[indf, :, indstk], rot = center, reso = 15, sub = (3, 3, 2),
+            min = -nsig * sig_cmb, max = nsig * sig_cmb, 
+            title = 'cmb + dust (FG) \n Stokes = {} & nu = {}'.format(indstk, indf))
+hp.gnomview(res_cmbdust[indf, :, indstk] - CMBdust[indf, :, indstk], rot = center, reso = 15,
+            sub = (3, 3, 3), min = -nsig * sig_cmb, max = nsig * sig_cmb, 
+            title = 'residue \n Stokes = {} & nu = {}'.format(indstk, indf))
+
+sig_cmbdust = np.std(CMB_map[indf, seenpix, indstk])
+
+hp.gnomview(CMB_map[indf, :, indstk], rot = center, reso = 15, sub = (3, 3, 4), 
+            min = -nsig * sig_cmbdust, max = nsig * sig_cmbdust, 
+            title = 'cmb (Qubic) \n Stokes = {} & nu = {}'.format(indstk, indf))
+hp.gnomview(res_cmb[indf, :, indstk], rot = center, reso = 15, sub = (3, 3, 5), 
+            min = -nsig * sig_cmbdust, max = nsig * sig_cmbdust, 
+            title = 'cmb (FG) \n Stokes = {} & nu = {}'.format(indstk, indf))
+hp.gnomview(res_cmb[indf, :, indstk] - CMB_map[indf, :, indstk], rot = center, reso = 15, 
+            sub = (3, 3, 6), min = -nsig * sig_cmbdust, max = nsig * sig_cmbdust, 
+            title = 'residue \n Stokes = {} & nu = {}'.format(indstk, indf))
+
+sig_dust = np.std(dust[indf, seenpix, indstk])
+
+hp.gnomview(dust[indf, :, indstk], rot = center, reso = 15, sub = (3, 3, 7), min = -nsig * sig_dust, max = nsig * sig_dust, 
+            title = 'dust (Qubic) \n Stokes = {} & nu = {}'.format(indstk, indf))
+hp.gnomview(res_dust[indf, :, indstk], rot = center, reso = 15, sub = (3, 3, 8), min = -nsig * sig_dust, max = nsig * sig_dust, 
+            title = 'dust (FG) \n Stokes = {} & nu = {}'.format(indstk, indf))
+hp.gnomview(res_dust[indf, :, indstk] - dust[indf, :, indstk], rot = center, reso = 15, sub = (3, 3, 9), min = -nsig * sig_dust, max = nsig * sig_dust, 
+            title = 'residue \n Stokes = {} & nu = {}'.format(indstk, indf))
+```
+
+```{python}
+a = [-500, 500]
+b = [-10, 10]
+c = [-10, 10]
+
+x_noise, y_noise, xp_noise, yp_noise = Plots.histograms(CMB_map, res_cmb, cov150, d150, a, b, c)
+```
+
+```{python}
+Plots.plot1D_residuals(y_noise, x_noise-xp_noise, d150, 'CMB', 700)
+```
+
+## Application for all frequencies (without noise)
+
+```{python}
+data = CMBdust_noiseless
+X_noiseless = ComponentSeparation.fg_buster_basic(nbands, data)
+res_cmbdust_noiseless, res_cmb_noiseless, res_dust_noiseless = ComponentSeparation.convdict2tab(X_noiseless, nbands, d150)
+```
+
+```{python}
+indf = 0
+indstk = 1
+
+nsig = 3
+seenpix = cov150 != 0
+sig_cmb = np.std(CMB_map[indf, seenpix, indstk])
+
+hp.gnomview(CMBdust_noiseless[indf, :, indstk], rot = center, reso = 15, sub = (3, 3, 1), 
+            min = -nsig * sig_cmb, max = nsig * sig_cmb, 
+            title = 'cmb + dust (Qubic) \n Stokes = {} & nu = {}'.format(indstk, indf))
+hp.gnomview(res_cmbdust_noiseless[indf, :, indstk], rot = center, reso = 15, sub = (3, 3, 2),
+            min = -nsig * sig_cmb, max = nsig * sig_cmb, 
+            title = 'cmb + dust (FG) \n Stokes = {} & nu = {}'.format(indstk, indf))
+hp.gnomview(res_cmbdust_noiseless[indf, :, indstk] - CMBdust_noiseless[indf, :, indstk], rot = center, reso = 15,
+            sub = (3, 3, 3), min = -nsig * sig_cmb, max = nsig * sig_cmb, 
+            title = 'residue \n Stokes = {} & nu = {}'.format(indstk, indf))
+
+sig_cmbdust = np.std(CMB_noiseless[indf, seenpix, indstk])
+
+hp.gnomview(CMB_noiseless[indf, :, indstk], rot = center, reso = 15, sub = (3, 3, 4), 
+            min = -nsig * sig_cmbdust, max = nsig * sig_cmbdust, 
+            title = 'cmb (Qubic) \n Stokes = {} & nu = {}'.format(indstk, indf))
+hp.gnomview(res_cmb_noiseless[indf, :, indstk], rot = center, reso = 15, sub = (3, 3, 5), 
+            min = -nsig * sig_cmbdust, max = nsig * sig_cmbdust, 
+            title = 'cmb (FG) \n Stokes = {} & nu = {}'.format(indstk, indf))
+hp.gnomview(res_cmb_noiseless[indf, :, indstk] - CMB_noiseless[indf, :, indstk], rot = center, reso = 15, 
+            sub = (3, 3, 6), min = -nsig * sig_cmbdust, max = nsig * sig_cmbdust, 
+            title = 'residue \n Stokes = {} & nu = {}'.format(indstk, indf))
+
+sig_dust = np.std(dust[indf, seenpix, indstk])
+
+hp.gnomview(dust_noiseless[indf, :, indstk], rot = center, reso = 15, sub = (3, 3, 7), min = -nsig * sig_dust, max = nsig * sig_dust, 
+            title = 'dust (Qubic) \n Stokes = {} & nu = {}'.format(indstk, indf))
+hp.gnomview(res_dust_noiseless[indf, :, indstk], rot = center, reso = 15, sub = (3, 3, 8), min = -nsig * sig_dust, max = nsig * sig_dust, 
+            title = 'dust (FG) \n Stokes = {} & nu = {}'.format(indstk, indf))
+hp.gnomview(res_dust_noiseless[indf, :, indstk] - dust_noiseless[indf, :, indstk], rot = center, reso = 15, sub = (3, 3, 9), min = -nsig * sig_dust, max = nsig * sig_dust, 
+            title = 'residue \n Stokes = {} & nu = {}'.format(indstk, indf))
+```
+
+```{python}
+a = [-500, 500]
+b = [-10, 10]
+c = [-10, 10]
+
+x_noiseless, y_noiseless, xp_noiseless, yp_noiseless = Plots.histograms(CMB_noiseless, res_cmb_noiseless, cov150, d150, a, b, c)
+```
+
+```{python}
+Plots.plot1D_residuals(y_noiseless, x_noiseless-xp_noiseless, d150, 'CMB', 200)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

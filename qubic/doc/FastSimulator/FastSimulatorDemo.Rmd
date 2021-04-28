@@ -37,9 +37,6 @@ from qubic import SpectroImLib as si
 from qubic import NamasterLib as nam
 from qubic import mcmc
 
-reload(qss)
-reload(ft)
-
 rc('figure', figsize=(16, 10))
 rc('font', size=15)
 plt.rcParams['image.cmap'] = 'jet'
@@ -58,9 +55,8 @@ The FastSimulator reproduces the noise structure that has been measured so far i
 
 
 ```{python}
-#### FI220, FI150, TD150 or FI-150 (old files)
+#### FI220, FI150, TD150
 config = 'FI220' 
-old_config = False
 
 ### Read some stuff
 # Read dictionary chosen
@@ -106,8 +102,7 @@ sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, d)
 
 ##### Getting FastSimulator output maps
-maps_qubic, maps_noiseless, maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(spatial_noise=False,
-                                                                                           old_config=old_config)
+maps_qubic, maps_noiseless, maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(spatial_noise=False)
 
 
 ################################# Displaying Results ##########################################
@@ -152,8 +147,7 @@ Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
 ##### Getting FastSimulator output maps
 new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, 
-                                                                    spatial_noise=False,
-                                                                    old_config=old_config)
+                                                                    spatial_noise=False)
 for i in range(newd['nf_recon']):
     for s in range(3):
         hp.gnomview(new_maps_noise[i, :, s], 
@@ -182,9 +176,10 @@ Qubic_sky = qss.Qubic_sky(sky_config, newd)
 ```{python}
 ### Let's read the input noise properties from the file that is used in the fast simulator 
 ### (these are fitted to end-to=-end simulations)
-rep = './Data/'
-print(rep)
-with open(rep + f'DataFastSimulator_{config}_nfsub_{nbands}.pkl', "rb") as file:
+version_FastSim = '01'
+rep = os.path.join('..', '..', 'data', f'FastSimulator_version{version_FastSim}')
+
+with open(rep + os.sep + f'DataFastSimulator_{config}_nfsub_{nbands}.pkl', "rb") as file:
     DataFastSim = pickle.load(file)
 
 print(DataFastSim.keys())
@@ -200,7 +195,6 @@ reload(qss)
 
 new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True,
                                                                     spatial_noise=False,
-                                                                    old_config=old_config,
                                                                     sigma_sec=100)
 
 plt.figure()
@@ -233,8 +227,7 @@ For this we can use the above simulation
 reload(qss)
 
 new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, 
-                                                                    spatial_noise=False,
-                                                                    old_config=old_config)
+                                                                    spatial_noise=False)
 
 
 cInew, cQnew, cUnew, fitcov, noise_norm = qss.get_cov_nunu(new_maps_noise, coverage, QUsep=True)
@@ -267,8 +260,7 @@ One needs to turn spatial_noise to True obviously...
 reload(qss)
 
 new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, 
-                                                                    spatial_noise=True,
-                                                                    old_config=old_config)
+                                                                    spatial_noise=True)
 ```
 
 ```{python}
@@ -313,8 +305,7 @@ sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, newd)
 
 new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True,
-                                                                    spatial_noise=False,
-                                                                    old_config=old_config)
+                                                                    spatial_noise=False)
 
 xx, yyI, yyQ, yyU = qss.get_angular_profile(new_maps_noise[0, :, :],
                                                 nbins=30,

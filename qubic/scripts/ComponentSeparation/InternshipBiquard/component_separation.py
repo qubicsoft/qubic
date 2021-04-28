@@ -70,8 +70,8 @@ class CompSep(object):
         self.l_max = 2 * self.nside - 1
         self.delta_ell = 16
 
-    def fg_buster(self, maps_in=None, components=None, map_freqs=None, map_fwhms_deg=None, target=None, ok_pix=None,
-                  stokes='IQU', verbose=False):
+    def fg_buster(self, maps_in, components, map_freqs, map_fwhms_deg, target=None, ok_pix=None, stokes='IQU',
+                  verbose=False):
         """
         Perform FgBuster algorithm.
 

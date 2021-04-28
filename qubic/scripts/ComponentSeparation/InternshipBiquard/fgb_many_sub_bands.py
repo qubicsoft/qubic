@@ -29,12 +29,12 @@ import component_separation
 QUBIC_DATADIR = os.environ['QUBIC_DATADIR']
 
 # for LOCAL EXECUTION
-OUTDIR_LOCAL = "/home/simon/PycharmProjects/qubic_comp_sep/output"
-DATADIR_LOCAL = "/home/simon/PycharmProjects/qubic_comp_sep/data"
+OUTDIR_LOCAL = "/home/simon/PycharmProjects/qubic_comp_sep/output/"
+DATADIR_LOCAL = "/home/simon/PycharmProjects/qubic_comp_sep/data/"
 
 # for execution on CC-IN2P3
-OUTDIR_CC = "/sps/qubic/Users/sbiquard/qubic/qubic_comp_sep/output"
-DATADIR_CC = "/sps/qubic/Users/sbiquard/qubic/qubic_comp_sep/data"
+OUTDIR_CC = "/sps/qubic/Users/sbiquard/qubic/qubic_comp_sep/output/"
+DATADIR_CC = "/sps/qubic/Users/sbiquard/qubic/qubic_comp_sep/data/"
 
 if len(sys.argv) > 1:
     LOC = int(sys.argv[1])  # 0 for local (falaise), 1 for CC
@@ -71,9 +71,9 @@ def get_coverage_from_file(file_name=None):
     :return: the array containing the coverage map
     """
     if file_name is None:
-        t = pickle.load(open(DATADIR + '/coverage_dtheta_40_pointing_6000.pkl', 'rb'))
+        t = pickle.load(open(DATADIR + 'coverage_dtheta_40_pointing_6000.pkl', 'rb'))
     else:
-        t = pickle.load(open(DATADIR + '/{}.pkl'.format(file_name), 'rb'))
+        t = pickle.load(open(DATADIR + file_name, 'rb'))
     return t['coverage']
 
 
@@ -112,7 +112,8 @@ def read_arguments():
 
     :return: frequency band (GHz), nb of simulations, nb of sub-bands, nb of years and sky_sim parameters.
     """
-    if len(sys.argv) - 1:
+    nargs = len(sys.argv) - 1
+    if nargs:
         frequency_band = int(sys.argv[2])
         nb_simu = int(sys.argv[3])
         nb_bands = int(sys.argv[4])
@@ -150,6 +151,15 @@ def run_simu_single_band(band: int,
     :param bool nunu: QubicSkySim "nunu_correlation" (ie. noise frequency correlations)
     :param bool verbose: print progress indications during process
     """
+    if verbose:
+        print("run single band simulation with parameters:")
+        print("     band = {}".format(band))
+        print("    n_sub = {}".format(n_sub))
+        print("    n_sim = {}".format(n_sim))
+        print("  n_years = {}".format(n_years))
+        print("       sc = {}".format(sc))
+        print("     nunu = {}".format(nunu))
+
     # get dictionary for given frequency
     dico = qubic_dicts[band]
 
@@ -172,7 +182,7 @@ def run_simu_single_band(band: int,
         print("   --> centered around frequencies " + list_fmt.format(*freqs))
 
     # define common resolution for input maps (lowest one)
-    fwhm_common = np.max(fwhms)
+    # fwhm_common = np.max(fwhms) + 1e8
 
     # variable to store the results of parameter estimation
     beta_values = []
@@ -192,7 +202,6 @@ def run_simu_single_band(band: int,
             qubic_sky.get_partial_sky_maps_withnoise(coverage=coverage,
                                                      Nyears=n_years,
                                                      verbose=False,
-                                                     FWHMdeg=fwhm_common,
                                                      seed=seed,
                                                      spatial_noise=sc,  # noise spatial correlations
                                                      nunu_correlation=nunu,  # noise frequency correlations
@@ -214,6 +223,7 @@ def run_simu_single_band(band: int,
                                            components=[fgb.CMB(), fgb.Dust(band, temp=20.)],
                                            map_freqs=freqs,
                                            map_fwhms_deg=fwhms,
+                                           # target=fwhm_common,
                                            ok_pix=okpix_inside,
                                            stokes='IQU')
         beta_dust_estimate = fg_res.x[0]
@@ -233,6 +243,26 @@ def run_simu_single_band(band: int,
     return res
 
 
+def run_single_band_different_noise(args, verbose=True) -> None:
+    simu_args = [(*args, False, False),  # white noise
+                 (*args, True, False),  # spatial correlation only
+                 (*args, False, True),  # nunu correlation only
+                 (*args, True, True)]  # all correlations (Qubic case)
+    for simu_arg in simu_args:
+        beta_results = run_simu_single_band(*simu_arg, verbose=verbose)
+        write_results_to_file(simu_arg, beta_results)
+
+
+def write_results_to_file(args, results) -> None:
+    """*args = f_band, nsub, nyears, spatial_corr, nunu_corr"""
+
+    fmt = "FgBuster_SingleBand{}_Nsim{}_Nsub{}_Nyears{}_spatial{}_nunu{}.npy"
+    fname = fmt.format(*args)
+    out_file = OUTDIR + fname
+    print("writing results to " + fname)
+    append_to_npy(out_file, results)
+
+
 # To do:
 # - add function run_simu_double_band which uses both 150 and 220 GHz bands for separation
 # - ...
@@ -250,13 +280,6 @@ if __name__ == "__main__":
 
     # read arguments and run simulation
     arguments = read_arguments()
-    f_band, _, nb_sub, _, _, _ = arguments
-    beta_results = run_simu_single_band(*arguments)
-    if LOC == 0:
-        print_results(f_band, beta_results)
-
-    # write the results to file
-    out_fmt = OUTDIR + "/FgBuster_SingleBand{}_Nsub{}.npy"
-    append_to_npy(out_fmt.format(f_band, nb_sub), beta_results)
+    run_single_band_different_noise(arguments[:-2])
 
     sys.exit(0)

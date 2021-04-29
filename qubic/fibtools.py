@@ -591,10 +591,10 @@ def notch_array(freqs, bw):
 	"""
 	notch = []
 
-	for i in range(len(freqs)):
-		notch.append([freqs[i], bw * (1 + i)])
+	for idx,freq in enumerate(freqs):
+		notch.append([freq, bw * (1 + idx)])
 
-	return notch
+	return np.array(notch)
 
 
 def notch_filter(data, f0, bw, fs):

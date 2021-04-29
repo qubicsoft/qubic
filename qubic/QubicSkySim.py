@@ -10,13 +10,10 @@ from pylab import *
 from scipy.optimize import curve_fit
 import pickle
 
-import camb.correlations as cc
-
 import qubic
 from qubic import camb_interface as qc
 from qubic import fibtools as ft
 from qubic.utils import progress_bar
-from qubicpack.utilities import Qubic_DataDir
 
 __all__ = ['sky', 'Qubic_sky']
 
@@ -123,7 +120,7 @@ class sky(object):
                     self.input_cmb_maps = mymaps
                     self.input_cmb_spectra = totDL
 
-                # Write a tenporary file with the maps so the PySM can read them
+                # Write a temporary file with the maps so the PySM can read them
                 rndstr = random_string(10)
                 hp.write_map('/tmp/' + rndstr, mymaps)
                 cmbmap = pysm.CMBMap(self.nside, map_IQU='/tmp/' + rndstr)
@@ -364,14 +361,11 @@ class Qubic_sky(sky):
                                                       verbose=verbose).T
         return fwhms, maps
 
-    def get_partial_sky_maps_withnoise(self, coverage=None, sigma_sec=None,
-                                       Nyears=4., verbose=False, FWHMdeg=None, seed=None,
-                                       noise_profile=True,
-                                       spatial_noise=True,
-                                       nunu_correlation=True,
-                                       noise_only=False,
-                                       old_config=False,
-                                       integrate_into_band=True):
+    def get_partial_sky_maps_withnoise(self, coverage=None, version_FastSim='01', sigma_sec=None,
+                                       Nyears=4., FWHMdeg=None, seed=None,
+                                       noise_profile=True, spatial_noise=True, nunu_correlation=True,
+                                       noise_only=False, integrate_into_band=True,
+                                       verbose=False):
         """
         This returns maps in the same way as with get_simple_sky_map but cut according to the coverage
         and with noise added according to this coverage and the RMS in muK.sqrt(sec) given by sigma_sec
@@ -387,17 +381,30 @@ class Qubic_sky(sky):
         
         Parameters
         ----------
-        coverage
-        sigma_sec
-        Nyears
-        verbose
-        FWHMdeg
-        seed
-        effective_variance_invcov
-        integrate_into_band
+        coverage: array
+            Coverage map of the sky.
+            By default, we load a coverage centered on the galactic center with 10000 pointings.
+        version_FastSim: str
+            Version of the FastSimulator files: 01, 02, 03... For now, only 01 exists.
+        sigma_sec: float
+        Nyears: float
+            Integration time for observation to scale the noise, by default it is 4.
+        FWHMdeg:
+        seed:
+        noise_profile:
+        spatial_noise: bool
+            If True, spatial noise correlations are added. True by default.
+        nunu_correlation: bool
+            If True, correlations between frequency sub-bands are added. True by default.
+        noise_only: bool
+            If True, only returns the noise maps and the coverage (without the sky signal).
+        integrate_into_band: bool
+            If True, averaging input sub-band maps into reconstruction sub-bands. True by default.
+        verbose: bool
 
         Returns
         -------
+        maps + noisemaps, maps, noisemaps, coverage
 
         """
 
@@ -440,30 +447,20 @@ class Qubic_sky(sky):
         ##############################################################################################################
         # Restore data for FastSimulation ############################################################################
         ##############################################################################################################
-        # files location
-        global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
-
         #### Directory for fast simulations
-        dir_fast = '/doc/FastSimulator/Data/'
+        dir_fast = os.path.join(os.path.dirname(__file__), 'data', f'FastSimulator_version{version_FastSim}')
         #### Integration time assumed in FastSim files
         fastsimfile_effective_duration = 2.
-        if old_config:
-            #### Directory for fast simulations
-            dir_fast = '/doc/FastSimulator/Data/OldData_bad_photon_noise/'
-            #### Integration time assumed in FastSim files
-            fastsimfile_effective_duration = 4.
 
-        with open(global_dir + dir_fast +
-                  'DataFastSimulator_{}{}_nfsub_{}.pkl'.format(self.dictionary['config'],
-                                                               str(self.filter_nu),
-                                                               self.Nfout),
+        with open(dir_fast + os.sep + 'DataFastSimulator_{}{}_nfsub_{}.pkl'.format(self.dictionary['config'],
+                                                                          str(self.filter_nu),
+                                                                          self.Nfout),
                   "rb") as file:
             DataFastSim = pickle.load(file)
             print(file)
         # Read Coverage map
         if coverage is None:
-            DataFastSimCoverage = pickle.load(open(global_dir + dir_fast +
-                                                   '/DataFastSimulator_{}{}_coverage.pkl'.format(
+            DataFastSimCoverage = pickle.load(open(dir_fast + os.sep + 'DataFastSimulator_{}{}_coverage.pkl'.format(
                                                        self.dictionary['config'],
                                                        str(self.filter_nu)), "rb"))
             coverage = DataFastSimCoverage['coverage']

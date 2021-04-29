@@ -390,6 +390,7 @@ for NUS in ['2']:
         ax[j].axvline(nusfull[NUS][ifrec],ls='-.',c='k')
         
         ax[j].grid()
+
 ```
 
 ```{python}
@@ -497,6 +498,30 @@ for ifreq, NUS in enumerate(['4',]):#NUS='6'
 ```
 
 ```{python}
+plt.subplot(111)
+freqwidth = np.diff(nusfulledge['4'])
+nana=[]
+for i in range(24):
+    if len(allrecon[i]['4']) != 0:
+        nana.append(np.max(allrecon[i]['4'][0,:,pixel,0]))
+nanamax = np.max(nana)
+for i in range(24): 
+    plt.clf()
+    if len(allrecon[i]['4']) != 0:
+        plt.ylim(-0.2,1.1)
+        plt.plot(nusfull['4'], allrecon[i]['4'][0,:,pixel,0]/nanamax, 'ko')
+        plt.axvline(nus_in[innu[i]], color = 'k', ls = '--')
+        #plt.plot((nus_in[innu[i]]+xData),result_pol.best_fit, 'k-')    
+        plt.axvspan(xmin = nusfulledge['4'][0], xmax = nusfulledge['4'][1], alpha = 0.2, color = 'b')
+        plt.axvspan(xmin = nusfulledge['4'][1], xmax = nusfulledge['4'][2], alpha = 0.2, color = 'g')
+        plt.axvspan(xmin = nusfulledge['4'][2], xmax = nusfulledge['4'][3], alpha = 0.2, color  ='y')
+        plt.axvspan(xmin = nusfulledge['4'][3], xmax = nusfulledge['4'][4], alpha = 0.2, color = 'r')
+        plt.savefig('i{}.jpg'.format(str(i).zfill(2)), format = 'jpg')
+        #plt.plot(allrecon[10]['4'][0,:,pixel,0]/1e5*NormFact2, 'bo')
+
+```
+
+```{python}
 xData = []#[Data[i][0] for i in range(4)]
 yData = []
 for i in range(np.shape(Data)[0]):
@@ -522,11 +547,6 @@ for j, xd in enumerate(set(xData_round)):
 
 ```
 
-```{python}
-plt.plot(yData)
-plt.plot(yData_round)
-```
-
 Editing xaxis...It should be ~47 values 
 
 ### Fit
@@ -545,15 +565,28 @@ from scipy.special import j0,j1,jn
 def model_sin(x,a,b):#c,e,ph):
     return a*np.sin(b*x)/(b*x)#+ e*np.exp(-c*x-ph)
 
+def model_exp(x, a, b, c, phi, y, y0, y1):
+    return a * np.exp(- b * x) * np.cos(c * x + phi) + y + y0 * x + y1 * x ** 2
+
 def model_bes(x,a,b):#,e):
     return a*j0(b*x)#+e*np.exp(-c*(x-x0))
 
 def model_pol(x,a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12):
-    return a0+a1*x+a2*x**2/2+a3*x**3/3+a4*x**4/4+a5*x**5/5+a6*x**6/6 + \
-            a7*x**7/7+a8*x**8/8+a9*x**9/9+a10*x**10/10+a11*x**11/11+a12*x**12/12
+    return a0+a1*x+a2*x**2+a3*x**3+a4*x**4+a5*x**5+a6*x**6 + \
+            a7*x**7+a8*x**8+a9*x**9+a10*x**10+a11*x**11+a12*x**12
 ```
 
 Preparing and fitting models...
+
+```{python}
+#:5, 7:9] 11:17 20 [23:25] 27 30:32 35:38, 41:43, 48:50 52:54 55:57 58:60 63 66 68 70 71
+#          73 74 76 77 79 80 82:
+#newidx  = [0,1,2,3, 5, 8,11,12,13,16,15,16,20,23,24,27,30,31,35,36,37,38,42,48,
+#           52,53,55,56,58,59,63,66,68,70,71,73,74,76,77,79,80,82,83,84,85,86,87]
+#newxData = xData[newidx]
+#newyData = result_pol.data[newidx]
+#plt.plot(newxData, newyData, 'bo')
+```
 
 ```{python}
 xFPSF = xData
@@ -563,13 +596,22 @@ yFPSF = yData
 gmodel_sin = Model(model_sin, independent_vars=['x',], )
 params_sin = gmodel_sin.make_params(a=0.3,b=1)#c=1, e=0.4,ph=0.4)
 result_sin = gmodel_sin.fit(yFPSF, params_sin, x=xFPSF)
+#result_sin = gmodel_sin.fit(newyData, params_sin, x=newxData)
 parssin = list(result_sin.best_values.values())
 print('Sin. Chi2 {:.3f}'.format(result_sin.chisqr ))
+
+#exp
+gmodel_exp = Model(model_exp, independent_vars=['x',], )
+params_exp = gmodel_exp.make_params(a = 1, b = 0.1, c = 0.5,phi = 0., y = 0.5, y0 = 0.1, y1 = 0.5)
+result_exp = gmodel_exp.fit(yFPSF, params_exp, x=xFPSF, )
+parsexp = list(result_exp.best_values.values())
+print('Exp. Chi2 {:.3f}'.format(result_exp.chisqr) )
 
 #bessel
 gmodel_bes = Model(model_bes, independent_vars=['x',], )
 params_bes = gmodel_bes.make_params(a=0.3,b=0.1,)#c=0.3, e=0.5,x0=0.5 )
 result_bes = gmodel_bes.fit(yFPSF, params_bes, x=xFPSF)
+#result_bes = gmodel_bes.fit(newyData, params_bes, x=newxData)
 parsbes = list(result_bes.best_values.values())
 print('Bes. Chi2 {:.3f}'.format(result_bes.chisqr) )
 
@@ -577,6 +619,7 @@ print('Bes. Chi2 {:.3f}'.format(result_bes.chisqr) )
 gmodel_pol = Model(model_pol, independent_vars=['x',], )
 params_pol = gmodel_pol.make_params(a0=1,a1=1,a2=1,a3=1,a4=1,a5=1,a6=1,a7=1,a8=1,a9=1,a10=1,a11=1,a12=1 )
 result_pol = gmodel_pol.fit(yFPSF, params_pol, x=xFPSF)
+#result_pol = gmodel_pol.fit(newyData, params_pol, x=newxData)
 parspol = list(result_pol.best_values.values())
 print('Pol. Chi2 {:.3f}'.format(result_pol.chisqr) )
 
@@ -593,60 +636,126 @@ fig = plt.figure(figsize = (10,6))
 plt.rc('font', size=16)
 
 result = result_pol
-
-plt.plot(xData, result_pol.data, 'bo', label = 'data')
-plt.plot(xData, result_pol.best_fit, 'r-', label = 'fit')
+#plt.subplot(121)
+plt.plot(xData, result.data, 'bo', label = 'data')
+plt.plot(xData, result.best_fit, 'r-', label = 'fit')
 dely = result.eval_uncertainty(sigma=3,)
 plt.axvspan(-0.5,0.5,color='k',alpha=0.2)
 plt.axvspan(-1.5,-0.5,color='k',alpha=0.1)
 plt.axvspan(0.5,1.5,color='k',alpha=0.1)
 plt.xlim(-2.1,2.1)
 plt.fill_between(xData, result.best_fit-dely, result.best_fit+dely, color='red',#"#ABABAB",
-                 alpha=0.3, label='3-$\sigma$ uncertainty band')
-plt.xlabel(r'${\rm d}_{\nu_c}(\nu)$ ', fontsize = 18)
+                 alpha=0.3, label='3$\sigma$ uncertainty band')
+#plt.xlabel(r'${\rm d}_{\nu_c}(\nu)$ ', fontsize = 18)
+plt.xlabel(r"$\frac{\nu - \nu_c}{\Delta \nu_c}$", fontsize = 22)
 plt.ylabel(r'Normalized FPSF', fontsize = 18)
-#plt.plot(-1, integration1/maxim, 'ko')
-#plt.plot(0,  integration2/maxim, 'ko')
-#plt.plot(1,  integration3/maxim, 'ko')
-plt.legend()
+plt.legend(loc = "best", fontsize = 14)
+#plt.subplot(122)
+#c = ['b', 'r', 'g', 'm']
+#for j, ifr in enumerate(_freqsout_):
+#    plt.axvline(x = ifr, ymin = 0.8, ymax = 0.95, linestyle = "--", color = "k")
+#    plt.axvline(x = ifr, ymax = 0.65, linestyle = "--", color = "k")
+#    plt.text(ifr-2.5, 0.7, "{:.1f}".format(ifr))
+#    plt.axvspan(xmin = _freqsEdgeOut_[j], xmax = _freqsEdgeOut_[j + 1], 
+#                color = c[j], alpha = 0.2)
+#plt.plot((_freqsin_ [:30] ), (fpsf(_freqsin_[:30], _freqsout_[0], _freqswidth_[0]) ), 
+#        color = c[0])
+#plt.plot((_freqsin_[:38] ), (fpsf(_freqsin_[:38], _freqsout_[1], _freqswidth_[1])),
+#        color = c[1])
+#plt.plot((_freqsin_[8:] ), (fpsf(_freqsin_[8:], _freqsout_[2], _freqswidth_[2])),
+#        color = c[2])
+#plt.plot((_freqsin_[12:] ), (fpsf(_freqsin_[12:], _freqsout_[3], _freqswidth_[3])),
+#        color = c[3])
 plt.tight_layout()
+#savefigs = True
 if savefigs:
-    plt.savefig('fpsf_nrec{}_new.pdf'.format(np.shape(Data)[0]), format='pdf' )
+    plt.savefig('fpsf_nrec{}_new.pdf'.format(np.shape(Data)[0]), format='pdf' , bbox_inches = "tight")
 ```
 
 ```{python}
-set(xData[interval1])
+from lmfit.model import load_modelresult , save_model, load_model
 ```
 
 ```{python}
-from scipy.integrate import simps
-import scipy.integrate as integrate
-
-interval1 = np.where((xData > -1.5) & (xData < -0.5))
-xintegrate1 = xData[interval1]
-#print(xintegrate1 )
-#print(result_pol.data[interval1])
-interval2 = np.where((xData > -0.5) & (xData < 0.5))
-xintegrate2 = xData[interval2]
-
-interval3 = np.where((xData > 0.5) & (xData < 1.5))
-xintegrate3 = xData[interval3]
-
-#I1 = simps(y1, x)
-integration1 = simps(result_pol.data[interval1], xintegrate1)
-integration2 = simps(result_pol.data[interval2], xintegrate2)
-integration3 = simps(result_pol.data[interval3], xintegrate3)
-print(np.max(integration1))
-maxim = np.max([np.max(integration1), np.max(integration2), np.max(integration3)]) 
-plt.plot(-0.5, integration1/maxim, 'ko')
-plt.plot(0,  integration2/maxim, 'ko')
-plt.plot(0.5,  integration3/maxim, 'ko')
+#save_modelresult(result_pol, 'polynomial_modelresult_nrec4.sav')
+#loadresult = load_modelresult('polynomial_modelresult_nrec4.sav')
+#filepars = open("polynomial_modelresult_nrec4.pk", "wb")
+#pk.dump(parspol, filepars)
+#|filepars.close()
 ```
 
 ```{python}
-avfwhm_nu = 0.05*qubic.compute_freq(150,2,0.25)[2]/qubic.compute_freq(150,2,0.25)[3]
-print(avfwhm_nu[0]/2.35)
-plt.plot(xData, np.exp(-0.5 * xData**2/(avfwhm_nu[0]/2.35)**2))
+def model_pol(x,a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12):
+    return a0+a1*x+a2*x**2+a3*x**3+a4*x**4+a5*x**5+a6*x**6 + \
+            a7*x**7+a8*x**8+a9*x**9+a10*x**10+a11*x**11+a12*x**12
+
+parspol = [1.0148592344536795, 0.09349606938655511, -2.4475688442596186, 
+           -0.17550734527944972, 1.8420819896602734, 0.10514202699252193, 
+           -0.6316268295742891, -0.02780935772683985, 0.10909049702236638, 
+           0.0033055903108466828, -0.009227105490183247, -0.000143491898172274, 
+           0.00030356820716515357]
+
+plt.plot(np.linspace(-1.5,1.5)*9.62*2.35+153.65, model_pol(np.linspace(-1.5,1.5),*parspol))
+```
+
+```{python}
+# TEst FPSF with a fake-map of a point source convolved with quebic resolution
+import scipy as sc
+# Generate map
+ps_map = np.zeros((48, 12 * d['nside'] ** 2, 3))
+ps_map_pxcenter = hp.ang2pix(d['nside'], np.radians(90 - center[1]), np.radians(center[0]))
+_freqsin_ = qubic.compute_freq(150, 48, 0.25)[2]
+_freqsEdgeOut_, _freqsout_, _freqswidth_ = qubic.compute_freq(150, 4, 0.25)[1:4]
+_idx_freq_ = 26
+print("PS centered in: ", _freqsin_[_idx_freq_])
+ps_map[_idx_freq_, ps_map_pxcenter, 0] = 1
+ps_map[_idx_freq_, :, 0] = hp.smoothing(ps_map[_idx_freq_, :, 0], verbose = False,
+                        fwhm = np.deg2rad(d['synthbeam_peak150_fwhm'] * 150 / _freqsin_[_idx_freq_] ))
+#Look at the map..ok
+#hp.gnomview(ps_map[_idx_freq_,:,0], rot = center, reso  = 2)
+
+#build the interp function for FPSF
+fpsf = lambda nu_i, nu_c, nu_w: np.interp((nu_i - nu_c) / nu_w, xData, result.best_fit)
+nbands = 4
+#plt.plot((_freqsin_ ), fpsf(_freqsin_, _freqsout_[0], _freqswidth_[0]))
+#plt.plot((_freqsin_ ), fpsf(_freqsin_, _freqsout_[1], _freqswidth_[1]))
+#plt.plot((_freqsin_ ), fpsf(_freqsin_, _freqsout_[2], _freqswidth_[2]))
+#sys.exit()
+integr = []
+for i in range(nbands):
+    integr.append( sc.integrate.simps(ps_map[:, ps_map_pxcenter, 0] * \
+          (fpsf(_freqsin_, _freqsout_[i], 2.35*_freqswidth_[i]) )**2*_freqswidth_[i]**2 ,
+                                      x = _freqsin_  ) )
+    #maskfreq = (_freqsin_ < _freqsEdgeOut_[i+1]) & (_freqsin_ > _freqsEdgeOut_[i])
+    #print(maskfreq)
+    #integr.append( sc.integrate.simps(ps_map[maskfreq, ps_map_pxcenter, 0] * \
+    #      abs(fpsf(_freqsin_[maskfreq], _freqsout_[i], _freqswidth_[i]) ) ,
+    #                                  x = _freqsin_[maskfreq]  ) )
+
+#def gauss(x, pars, extra_args = None):
+#    A = pars[0]
+#    x0 = pars[1]
+#    wd = pars[2]
+#    return A * np.exp(-0.5 * (x - x0) **2 / wd ** 2)
+def gauss(x, A, x0, wd):
+    return A * np.exp(-0.5 * (x - x0) **2 / wd ** 2)
+
+test_model = Model(gauss, independent_vars=['x',], )
+params_g = test_model.make_params(A = 0.3, x0 = _freqsin_[_idx_freq_], wd = 3)#c=1, e=0.4,ph=0.4)
+result_g = test_model.fit(np.array(integr), params_g, x = _freqsout_, weights= (np.diff(_freqsEdgeOut_)/2) )
+yvalues = gauss(_freqsin_, **result_g.best_values)
+fig, ax = plt.subplots(nrows=1, ncols= 1,)
+
+ax.errorbar(_freqsout_, integr/np.max(yvalues), color = 'r', marker = 'o', 
+             ls = " ", xerr = np.diff(_freqsEdgeOut_)/2, )
+ax.plot(_freqsin_, yvalues/np.max(yvalues), 'b', 
+        label = r'$\sigma$ = {:.2f}'.format(result_g.best_values['wd'] ))
+ax.grid(alpha = 0.5)
+ax.legend()
+
+#_freqsout_, integr/np.max(yvalues), np.diff(_freqsEdgeOut_)/2)
+#(_freqsin_, yvalues/np.max(yvalues))
+#print(_freqsin_)
 ```
 
 ```{python}
@@ -657,6 +766,7 @@ plt.xlabel(r'${\rm d}_{\nu_c}$ / $\Delta \nu$')
 plt.ylabel(r'${i_\nu}$[$\mu K$]')
 plt.plot(xFPSF, yFPSF, 'bo', label='Data')
 plt.plot(xfake,model_sin(xfake, *parssin),'r-',label='Sinusoidal')
+plt.plot(xfake,model_exp(xfake, *parsexp),'m-',label='Exponential')
 plt.plot(xfake,model_bes(xfake, *parsbes),'g-',label='Bessel')
 plt.plot(xfake,model_pol(xfake, *parspol),'c-',label='Polynom')
 plt.legend(fontsize=10)

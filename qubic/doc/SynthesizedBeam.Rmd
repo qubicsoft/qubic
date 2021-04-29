@@ -353,7 +353,7 @@ def beam_total(th_deg, ph, nu, rx):
 
 ```{python}
 nu = 150e9   
-nn = 10000
+nn = 1000
 th_deg = np.linspace(-12, 12, nn)
 ph = 0
 d['config'] = 'FI'
@@ -386,11 +386,14 @@ ax.annotate(' ', xy=(8.3,0.33), xytext=(-0.3,0.33), ha="center", va="center",
 ax.text(4, 0.37, r"$\theta(\lambda)$", ha="center", va="center",
             fontsize=15,
             bbox=dict(boxstyle="round", fc="w"))
+ax.xaxis.set_ticks(np.arange(-10, 15, 5))
 fig.tight_layout()
 # B(\theta_{off})
 # plt.savefig('/home/martin/QUBIC/qubic/qubic/scripts/Spectroimagery_paper/beam_cut_2TESb.pdf')
-plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/beam_cut_2TESb.pdf', 
-            bbox_inches='tight')
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/beam_cut_2TESb.pdf', 
+#             bbox_inches='tight')
+# import tikzplotlib as tkz
+# tkz.save('/home/lmousset/QUBIC/These_manuscrit/tikz/beam_cut_2TESb.tex')
 ```
 
 ```{python}

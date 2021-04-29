@@ -1,22 +1,19 @@
 # -*- coding: utf-8 -*-
-from __future__ import division, print_function
-import iminuit
-import math
+import os,sys,math,iminuit
 from matplotlib.pyplot import *
 from pysimulators import FitsArray
 import matplotlib.mlab as mlab
-import sys
+
 
 import scipy.signal as scsig
 import scipy.stats
 from scipy.ndimage.filters import correlate1d, gaussian_filter1d
-import glob
+from glob import glob
 from astropy.io import fits
 from iminuit.util import describe, make_func_code
 from functools import partial, update_wrapper
 from qubic.utils import progress_bar
 
-from qubicpack import qubicpack as qp
 from qubicpack.pix2tes import assign_pix_grid, assign_pix2tes, tes2pix, pix2tes, TES2PIX
 
 pix_grid = assign_pix_grid()
@@ -434,7 +431,7 @@ def exponential_filter1d(input, sigma, axis=-1, output=None, mode="reflect", cva
 	return correlate1d(input, weights, axis, output, mode, cval, 0)
 
 
-def qs2array(file, FREQ_SAMPLING, timerange=None):
+def qs2array(dataset, FREQ_SAMPLING=None, timerange=None, asic=None):
 	"""
 	Loads qubic instance to create 'dd' which is TOD for each TES
 	Also normalises raw data
@@ -443,32 +440,37 @@ def qs2array(file, FREQ_SAMPLING, timerange=None):
 
 	Parameters
 	----------
-	file : fits file
-		File containing data.
-	FREQ_SAMPLING
-	timerange : array
-		Time range, low and high boundaries
+	dataset       : directory containing the QubicStudio dataset
+	FREQ_SAMPLING : this argument is kept for backwards compatibility
+                        frequency sampling is given by the qubicpack qubicfp object
+                
+	timerange     : array
+		        Time range, low and high boundaries
 
-	Returns
+	Returns       : time array, data array, qubicfp object
 	-------
 
 	"""
-	a = qp()
-	a.read_fits(file)
-	npix = a.NPIXELS
-	nsamples = len(a.timeline(TES=1))
-	dd = np.zeros((npix, nsamples))
-	##### Normalisation en courant
-	# Rfb=100e3 #changing to read from pystudio dictionary
-	Rfb = a.Rfeedback
-	NbSamplesPerSum = 64.  # this could also be a.NPIXELS_sampled
-	gain = 1. / 2. ** 7 * 20. / 2. ** 16 / (NbSamplesPerSum * Rfb)
+	if os.path.isfile(dataset):
+		fitspath = dataset.copy()
+		scidir = os.path.dirname(fitspath)
+		dataset = os.path.dirname(scidir)
+	if not os.path.isdir(dataset):
+		print('ERROR! Dataset not found: %s' % dataset)
+		return None
+	
+	if asic is None:
+		print('Please give an asic number.')
+		return None
+	
+	a = qubicfp()
+	a.read_qubicstudio_dataset(dataset)
+	npix = a.asic(asic).NPIXELS
+	nsamples = len(a.timeline(asic=asic,TES=1))
+	dd = a.timeline_array(asic=asic)
+	dd = a.ADU2I(dd)
 
-	for i in range(npix):
-		dd[i, :] = a.timeline(TES=i + 1)
-		dd[i, :] = gain * dd[i, :]
-
-	time = np.arange(nsamples) / FREQ_SAMPLING
+	time = a.timeaxis(asic=asic,datatype='sci')
 
 	if timerange is not None:
 		print('Selecting time range: {} to {} sec'.format(timerange[0], timerange[1]))
@@ -495,7 +497,7 @@ def read_hkintern(basedir, thefieldname=None):
 	hk : array
 		Angle position given by the encoder (number of encoder steps).
 	"""
-	hkinternfile = glob.glob(basedir + '/Hks/hk-intern*')
+	hkinternfile = glob(basedir + '/Hks/hk-intern*')
 	hk = fits.open(hkinternfile[0])
 	nfields = hk[1].header['TFIELDS']
 	fields = {}

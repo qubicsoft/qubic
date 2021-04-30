@@ -129,6 +129,7 @@ axs = np.ravel(axs)
 for i in range(4):
     axs[i].plot(df['nu_in'], df[f'band{i+1}'], 'o', color=mycolors[i])
     axs[i].axvline(_nusrec_[i], color='grey')
+    axs[i].axvline(150, color='k')
     axs[i].text(_nusrec_[i]-2, -0.3, r'$\nu_{c}$' + f'{i+1}', color='grey')
     axs[i].set_title(f'Band {i+1}')
     axs[i].set_xlabel(r'$\nu_{in}$ [GHz]')
@@ -146,6 +147,7 @@ fig = plt.figure()
 ax = fig.gca()
 for i in range(4):
     ax.plot(df['nu_in'], df[f'band{i+1}'], 'o', color=mycolors[i])
+    ax.axvline(150, color='k')
     ax.axvline(_nusrec_[i], color='grey')
     ax.text(_nusrec_[i]-2, -0.3, r'$\nu_{c}$' + f'{i+1}', color='grey')
 ax.set_xlim(130, 165)
@@ -215,7 +217,7 @@ anim.save('./FPSF.gif', writer='imagemagick')
 ![SegmentLocal](FPSF.gif "segment")
 
 
-In order to superimpose all the points, we subtract $\nu_{in}$ on the x axis. What we get is a similar plot, symetric to figure 8. This time, I di not normalize by $\Delta_\nu$.
+In order to superimpose all the points, we subtract $\nu_{in}$ on the x axis. What we get is a similar plot, symetric to figure 8. This time, I did not normalized by $\Delta_\nu$.
 
 ```{python}
 # Make a nice color map for nu_in similar to the visible spectra
@@ -252,6 +254,9 @@ plt.ylabel(r'$I_{out}$')
 # plt.xlim(-2, 2)
 ```
 
+I think this is the good representation for the FPSF. I do not think we need to divide by $\Delta_\nu$.
+
+
 ## Comparison to the measurement
 
 ### 4 bands
@@ -265,9 +270,13 @@ yerr_4bands = array([0.16361646, 0.12812392, 0.18545706, 0.13256786])
 xerr_4bands = array([4.25540829, 4.53134733, 4.82517946, 5.13806492])
 ```
 
-This is completely similar to the simulation done by Martin with $\nu_{in}=150$ GHz (index 12).
+This is completely similar to the simulation done by Martin with $\nu_{in}=150$ GHz (index 12). Let's plot this simulation. This is done in the left plot.
+
+To relate this plot to the previous ones (first plots as a function of $\nu_{in}$), here we have selected the 4 points at 150 GHz, marked with the black vertical line.
 
 Indeed, it is pretty similar up to a constant offset...
+
+On the right plot, we center the complete FPSF on $\nu_{in}=150$ GHz.
 
 ```{python}
 offset = np.mean(measure_4bands) - np.mean(df.loc[12][1:])

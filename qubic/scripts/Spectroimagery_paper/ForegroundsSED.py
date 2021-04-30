@@ -698,9 +698,14 @@ def _plot_exampleSED(dictionary, center, nus_out, maskmaps, mapsarray = False,
 
 	capsize=3
 	plt.rc('font', size=16)
+	if newnside == None:	
+		nside = dictionary['nside']
+	else:
+		nside = newnside
 
-	pixG = [hp.ang2pix(dictionary['nside'], np.pi / 2 - np.deg2rad(center[1] + DeltaTheta ), 
+	pixG = [hp.ang2pix(nside, np.pi / 2 - np.deg2rad(center[1] + DeltaTheta ), 
 					   np.deg2rad(center[0] + DeltaPhi) ), ]
+
 
 	fig,ax = plt.subplots(nrows=1,ncols=2,figsize=(14,5),)
 	ax = ax.ravel()
@@ -714,11 +719,12 @@ def _plot_exampleSED(dictionary, center, nus_out, maskmaps, mapsarray = False,
 			ax[1].plot(nus_out, imap[:,IPIXG,0], marker = marker[j], color=color[j], label = label[j],
 				linestyle = "")
 		ax[1].legend()
+		ax[1].set_yscale("log")
 		ax[0].cla()	
 		plt.axes(ax[0])
 		hp.gnomview(maskmaps[-1][-1,:,0], reso = 15,hold = True, title = ' ',unit = r'$\mu$K$_{CMB}$', notext =True,
 					min = 0 ,
-					max = 0.23 * np.max(maskmaps[-1][-1,:,0]), rot = center)
+					max = 0.23 * np.max(maskmaps[2][-1,:,0]), rot = center)
 	else:
 		ax[1].plot(nus_out, maskmaps[:,IPIXG,0], 'o-', color='r')
 		ax[0].cla()

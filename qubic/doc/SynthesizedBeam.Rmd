@@ -43,13 +43,8 @@ import qubic.selfcal_lib as sc
 ```
 
 ```{python}
-# global_dir = Qubic_DataDir(datafile='instrument.py', datadir='../')
-# dictfilename = global_dir + 'dicts/pipeline_demo.dict'
-
 d = qubic.qubicdict.qubicDict()
-d.read_from_file(os.environ['QUBIC_DICT']+'pipeline_demo.dict')
-
-# d.read_from_file(dictfilename)
+d.read_from_file('pipeline_demo.dict')
 ```
 
 ```{python}
@@ -358,7 +353,7 @@ def beam_total(th_deg, ph, nu, rx):
 
 ```{python}
 nu = 150e9   
-nn = 10000
+nn = 1000
 th_deg = np.linspace(-12, 12, nn)
 ph = 0
 d['config'] = 'FI'
@@ -368,7 +363,7 @@ q = qubic.QubicInstrument(d)
 e1, sb1 = beam_total(th_deg, ph, nu, 0)
 e2, sb2 = beam_total(th_deg, ph, nu, 12)
 
-fig, ax = plt.subplots(figsize=(10,8))
+fig, ax = plt.subplots(figsize=(9, 7))
 plt.rc('font',size=15)
 #ax=ax.ravel()
 # ax.plot(th_deg, q.primary_beam(np.deg2rad(th_deg), ph),'b--')
@@ -378,9 +373,9 @@ ax.plot(th_deg, sb1, 'b', label='r = 0', lw=2)
 ax.plot(th_deg, sb2, 'c', label='r = 12 mm',alpha=0.6,lw=2)
 
 # axvline(np.rad2deg(np.arctan(12 / 300)), ymin=0, ymax=1.2, color='r')
-ax.set_xlabel(r'$\theta$ [deg]', fontsize=15)
-ax.set_ylabel('Relative intensity', fontsize=15)
-ax.legend(fontsize=14, loc=1)
+ax.set_xlabel(r'$\theta$ [deg]', fontsize=18)
+ax.set_ylabel('Relative intensity', fontsize=18)
+ax.legend(fontsize=16, loc=1)
 ax.grid()
 ax.tick_params(axis='both',bottom=True, top=True, left=True, right=True,direction='in')
 ax.annotate(r"FWHM($\lambda$)", xytext=(-4,0.6), xy=(0,0.5),
@@ -391,10 +386,14 @@ ax.annotate(' ', xy=(8.3,0.33), xytext=(-0.3,0.33), ha="center", va="center",
 ax.text(4, 0.37, r"$\theta(\lambda)$", ha="center", va="center",
             fontsize=15,
             bbox=dict(boxstyle="round", fc="w"))
+ax.xaxis.set_ticks(np.arange(-10, 15, 5))
+fig.tight_layout()
 # B(\theta_{off})
 # plt.savefig('/home/martin/QUBIC/qubic/qubic/scripts/Spectroimagery_paper/beam_cut_2TESb.pdf')
 # plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/beam_cut_2TESb.pdf', 
 #             bbox_inches='tight')
+# import tikzplotlib as tkz
+# tkz.save('/home/lmousset/QUBIC/These_manuscrit/tikz/beam_cut_2TESb.tex')
 ```
 
 ```{python}
@@ -416,12 +415,12 @@ for i in range(2):
     allbeams[i, :] = q.primary_beam(np.radians(th_deg), ph)
 
 fig, ax = plt.subplots(nrows=1,ncols=2,figsize=(15,6),gridspec_kw={'wspace':0.06},)
-plt.rc('font',size=15)
-ax=ax.ravel()
+plt.rc('font',size=18)
+ax = ax.ravel()
 ax[0].plot(th_deg, allbeams[0],'--', c = plt.cm.jet(np.linspace(0,1,6))[::-1][0],
-           label=r'${:.2f}~$GHz'.format(freqs[0]/1e9))
+           label=r'${:.1f}~$GHz'.format(freqs[0]/1e9))
 ax[0].plot(th_deg, allbeams[1],'--', c = plt.cm.jet(np.linspace(0,1,6))[::-1][4],
-           label=r'${:.2f}~$GHz'.format(freqs[1]/1e9))
+           label=r'${:.1f}~$GHz'.format(freqs[1]/1e9))
 ax[0].plot(th_deg, allbeams[0]*sb_noprim(th_deg, freqs[0],0), 
            c = plt.cm.jet(np.linspace(0,1,6))[::-1][0],
            label=None, lw=2)
@@ -429,9 +428,9 @@ ax[0].plot(th_deg, allbeams[1]*sb_noprim(th_deg, freqs[1],0),
            c = plt.cm.jet(np.linspace(0,1,6))[::-1][4],
            label=None, lw=2)
 ax[0].grid()
-ax[0].legend(loc='best',fontsize=12)
-ax[0].set_xlabel(r'$\theta$ [deg]', fontsize=15)
-ax[0].set_ylabel('Synthesized beam', fontsize=15)
+ax[0].legend(loc='best',fontsize=13)
+ax[0].set_xlabel(r'$\theta$ [deg]', fontsize=18)
+ax[0].set_ylabel('Synthesized beam', fontsize=18)
 ax[0].tick_params(axis='both',bottom=True, top=True, left=True, right=True,direction='in')
 
 sumleg=ax[1].plot(th_deg, np.sum(sum_b,axis=0), 'k', lw=2)
@@ -441,23 +440,27 @@ for i in range(0,len(NUNU),2):
     blo+=ax[1].plot(th_deg, sum_b[i], c=next(color), )
 
 # axvline(np.rad2deg(np.arctan(12 / 300)), ymin=0, ymax=1.2, color='r')
-ax[1].set_xlabel(r'$\theta$ [deg]', fontsize=15)
+ax[1].set_xlabel(r'$\theta$ [deg]', fontsize=18)
 #ax[1].set_ylabel('Arbitrary units', fontsize=15)
-ax[1].legend(sumleg, [r'PolySB'], fontsize=12, loc='upper left', )
+ax[1].legend(sumleg, [r'PolySB'], fontsize=13, loc='upper left', )
+
 # Create the second legend and add the artist manually.
 from matplotlib.legend import Legend
-leg = Legend(ax[1], blo[:], [r'MonoSB @${:.2f}~$GHz'.format(NUNU[0]/1e9),
-                             '\t \t ${:.2f}~$GHz'.format(NUNU[2]/1e9),
-                          '\t \t ${:.2f}~$GHz'.format(NUNU[4]/1e9),
-                             '\t \t ${:.2f}~$GHz'.format(NUNU[6]/1e9),
-                             '\t \t ${:.2f}~$GHz'.format(NUNU[8]/1e9)],
-             fontsize=12,loc='upper right', )
+leg = Legend(ax[1], blo[:], [r'MonoSB @${:.1f}~$GHz'.format(NUNU[0]/1e9),
+                             '\t \t ${:.1f}~$GHz'.format(NUNU[2]/1e9),
+                          '\t \t ${:.1f}~$GHz'.format(NUNU[4]/1e9),
+                             '\t \t ${:.1f}~$GHz'.format(NUNU[6]/1e9),
+                             '\t \t ${:.1f}~$GHz'.format(NUNU[8]/1e9)],
+             fontsize=13,loc='upper right', )
 leg._legend_box.align = "right"
 ax[1].add_artist(leg);
 ax[1].grid()
 ax[1].tick_params(axis='both',bottom=True, top=True, left=True, right=True,direction='in')
+fig.tight_layout()
 # B(\theta_{off})
 # plt.savefig('/home/martin/QUBIC/qubic/qubic/scripts/Spectroimagery_paper/synth_beam_many_freq.pdf')
+plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/synth_beam_many_freq.pdf', 
+            bbox_inches='tight')
 ```
 
 ```{python}

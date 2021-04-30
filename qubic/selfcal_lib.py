@@ -3,6 +3,7 @@ from __future__ import division, print_function
 import glob
 import numpy as np
 import pandas as pd
+import healpy as hp
 
 from scipy.interpolate import RegularGridInterpolator
 from scipy.integrate import dblquad
@@ -820,7 +821,7 @@ def get_chi2(params, allInvCov, allData, BLs, q, nu_source=150e9, returnA=False)
     Parameters
     ----------
     params: list
-        Focal length, source off-axis angle, global powers P_k
+        Focal length, source off-axis angle, log_10 of global powers P_k
     allInvCov: list
         List with the inverse covariance matrices, one for each image.
     allData: list
@@ -841,7 +842,7 @@ def get_chi2(params, allInvCov, allData, BLs, q, nu_source=150e9, returnA=False)
     nimages = len(BLs)
     focal = params[0]
     theta_source = params[1]
-    allP = params[2:]
+    logP = params[2:]
     q.optics.focal_length = focal
     allPowerPhi = []
     for k in range(nimages):
@@ -853,19 +854,17 @@ def get_chi2(params, allInvCov, allData, BLs, q, nu_source=150e9, returnA=False)
         x, y, Phi = model.get_fringes(times_gaussian=False)
 
         # Global amplitude
-        allPowerPhi.append(Phi * allP[k])
+        allPowerPhi.append(Phi * 10**logP[k])
 
     # Gain for each detector
     A, Cov_A = get_gains(allPowerPhi, allInvCov, allData)
 
     chi2 = 0.
     for k in range(nimages):
-        # Correct errors by the global power P_k and inter-calibrations
-        InvCov_correct = allInvCov[k] * (allP[k] * A)**2
         # Compute the chi2
         M = np.diag(allPowerPhi[k]) @ A
         R = M - allData[k]
-        chi2 += R.T @ InvCov_correct @ R
+        chi2 += R.T @ allInvCov[k] @ R
 
     if returnA:
         return chi2, A, Cov_A
@@ -874,9 +873,9 @@ def get_chi2(params, allInvCov, allData, BLs, q, nu_source=150e9, returnA=False)
 
 
 def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.25, fl_max=0.35,
-                   th_min=np.deg2rad(-1.), th_max=np.deg2rad(1), fixPower=True):
+                   th_min=np.deg2rad(-1.), th_max=np.deg2rad(1), LogPower=-1, fixPower=True):
     """Loop over the parameters (focal length and source off-axis angle) to explore the chi2.
-    Global powers are fixed to 0.5 or optimized at each step by minimizing a temporary chi2 (longer)."""
+    Global powers are fixed to Log_10(Power)=-1 or optimized at each step by minimizing a temporary chi2 (longer)."""
     nimages = len(BLs)
     chi2_grid = np.zeros((nval_fl, nval_th))
 
@@ -885,10 +884,10 @@ def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.
 
     # Fast method
     if fixPower:
-        # Global powers are fixed to 0.5 and we loop on fl and th.
+        # Global powers are fixed to initPower and we loop on fl and th.
         for i, fl in enumerate(all_fl):
             for j, th in enumerate(all_th):
-                params = [fl, th] + [0.5] * nimages
+                params = [fl, th] + [LogPower] * nimages
                 chi2_grid[i, j] = get_chi2(params, allInvCov, fringes, BLs, q)
         return all_fl, all_th, chi2_grid
 
@@ -905,8 +904,8 @@ def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.
                     return chi2_temp
 
                 result = sop.minimize(chi2_temporary,
-                                      x0=[0.5] * nimages,
-                                      args=(allInvCov, fringes, BLs),
+                                      x0=[LogPower] * nimages,
+                                      args=(allInvCov, fringes, BLs, q),
                                       method='Nelder-Mead',
                                       options={'maxiter': 10000})
                 chi2_grid[i, j] = result['fun']
@@ -921,7 +920,7 @@ def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.
 
 # ========== Fringe simulations =============
 class Model_Fringes_Ana:
-    def __init__(self, q, baseline, theta_source=0., nu_source=150e9, fwhm=20., amp=1., frame='ONAFP'):
+    def __init__(self, q, baseline, theta_source=0., phi_source=0., nu_source=150e9, fwhm=20., amp=1., frame='ONAFP'):
         """
 
         Parameters
@@ -931,6 +930,8 @@ class Model_Fringes_Ana:
             Baseline formed with 2 horns, index between 1 and 64 as on the instrument.
         theta_source: float
             The source zenith angle [rad].
+        phi_source: float
+            The source azimuthal angle [rad].
         nu_source: float
             Source frequency [Hz].
         fwhm: float
@@ -941,6 +942,7 @@ class Model_Fringes_Ana:
         self.q = q
         self.focal = q.optics.focal_length
         self.theta_source = theta_source
+        self.phi_source = phi_source
         self.nu_source = nu_source
         self.lam = 3e8 / self.nu_source
         self.fwhm = fwhm
@@ -968,10 +970,18 @@ class Model_Fringes_Ana:
         phase = - 2 * np.pi / 3e8 * self.nu_source * dist * np.sin(self.theta_source)
         self.phase = phase
 
+    def make_gaussian(self):
+        sigma = np.deg2rad(self.fwhm / 2.355 * self.focal)
+        # The position of the gaussian depends on the position of the source
+        # Maybe there is a sign problem here...
+        x_center = self.focal * np.tan(self.theta_source) * np.cos(self.phi_source)
+        y_center = self.focal * np.tan(self.theta_source) * np.sin(self.phi_source)
+        self.gaussian = np.exp(- 0.5 * ((self.x - x_center) ** 2 + (self.y - y_center) ** 2) / sigma ** 2)
+        return self.gaussian
+
     def get_fringes(self, times_gaussian=True):
         if times_gaussian:
-            sigma = np.deg2rad(self.fwhm / 2.355 * self.focal)
-            gaussian = np.exp(- 0.5 * ((self.x - self.BL_xc) ** 2 + (self.y - self.BL_yc) ** 2) / sigma ** 2)
+            gaussian = self.make_gaussian()
         else:
             gaussian = 1.
         xprime = (self.x * np.cos(self.BL_angle) + self.y * np.sin(self.BL_angle))

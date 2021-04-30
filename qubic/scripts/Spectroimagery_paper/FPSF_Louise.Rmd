@@ -1,0 +1,342 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# FPSF 
+
+Author: Louise
+Date: 29/04/2021
+
+In this notebook, I try to define the FPSF. I use the data from Martin's simulations.
+
+```{python}
+import numpy as np
+import pandas as pd
+from matplotlib.animation import FuncAnimation
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+
+rc('font',size=12)
+
+# %matplotlib notebook
+```
+
+## About the FPSF...
+
+By definition, the FPSF of an instrument is its response to an impulse. $I_{in}(\nu) = I_s\delta(\nu - \nu_{in})$
+
+A priori, the FPSF may depend on the frequency $\nu_{in}$... (ex: spectrometer)
+
+The response of the system will be:
+$$ I_{out}(\nu) = \int I_{in}(\nu') FPSF(\nu - \nu') d\nu' =  I_s \rm{FPSF}(\nu - \nu_{in})$$
+
+We can write this with a convolution product but it is a bit tricky if the FPSF vary with $\nu_{in}$:
+$ I_{out}(\nu) = [I_{in} \otimes \rm{FPSF}](\nu) $
+
+```{python}
+# this is a small example considering a impulse at nu_in=1 with a Gaussian response. 
+xx = np.arange(0, 2, 0.01)
+plt.figure(figsize=(4, 4))
+plt.plot(xx, np.exp(-0.5*(xx-1)**2/0.2**2))
+plt.axvline(1, color='k')
+plt.text(1, -0.5, r'$\nu_{in}$')
+plt.xlabel(r'$\nu$')
+plt.ylabel(r'$I_{out}$')
+```
+
+## Get the data from Martin's simulations
+
+In these simulations, we consider a monochromatic source: $I_{in}(\nu) = I_s\delta(\nu - \nu_{in})$
+
+And we reconstruct 4 bands centered at $\nu_{cj} = 135.51, 144.29, 153.65, 163.61$ GHz with bandwidths $\Delta_{\nu j}$, where $j$ is the index of the band.
+
+We vary $\nu_{in}$ on 22 values inside the wide band from 130 to 170 GHz. So in this way, we test the QUBIC FPSF at different \nu_{in}.
+
+
+```{python}
+# Input freqencies
+_nusin_ = [132.97971811, 134.37952271, 135.79406229, 137.22349195,
+          141.60269708, 143.09327106, 
+          144.59953548, 146.12165553, 146.8887135 , 147.6597981 , 
+          148.43493047, 149.21413186, 149.99742362, 150.78482723, 
+          151.57636428, 152.37205646, 153.97599357, 155.59681445, 
+          157.23469683, 158.8898203 , 160.56236634, 162.25251836]
+nsimu = len(_nusin_)
+
+# The four reconstructed sub-bands
+_nusrec_ = np.array([135.50540829, 144.29216391, 153.6486907 , 163.61193508])
+_nusedge_ = np.array([131.25, 139.76081658, 148.82351125, 158.47387016, 168.75])
+nu_bandwidth = np.diff(_nusedge_)
+
+# Measurement (intensity in the four sub-bands for each nu_in)
+datarec = np.array([[ 0.91601087, -0.16300357,  0.07148064, -0.02154493],
+                    [ 0.97108358, -0.12843866,  0.02048783, -0.01400606],
+                    [ 0.94662368, -0.06041048, -0.01865472, -0.00286433],
+                    [ 0.85516324,  0.07495715, -0.05477733,  0.00930614],
+                    [ 0.09077023,  0.82225625, -0.10677544,  0.03321614],
+                    [-0.03513556,  0.96278344, -0.09896842,  0.01836723],
+                    [-0.09086167,  0.99084585, -0.0621382 ,  0.00215334],
+                    [-0.10657393,  0.95787016,  0.0252968 , -0.0217093 ],
+                    [-0.09700264,  0.87454252,  0.09206298, -0.0290194 ],
+                    [-0.08114005,  0.77071529,  0.18829684, -0.03471806],
+                    [-0.05707247,  0.61135522,  0.33435032, -0.04617655],
+                    [-0.0329217 ,  0.41514615,  0.52139209, -0.06210269],
+                    [-0.02148455,  0.24494626,  0.68579009, -0.08144495],
+                    [-0.0081945 ,  0.1304667 ,  0.79391375, -0.08693801],
+                    [ 0.00326546,  0.04293615,  0.87552804, -0.08916238],
+                    [ 9.29098752e-04, -1.83078044e-02,  9.46933287e-01, -8.97956690e-02],
+                    [ 0.00475218, -0.09946185,  1.        , -0.06808089],
+                    [ 0.00940636, -0.12568378,  0.96436097,  0.00273789],
+                    [ 0.00452396, -0.13156937,  0.81214209,  0.17818687],
+                    [ 0.00121509, -0.08540265,  0.42981105,  0.50409209],
+                    [-0.01046448, -0.05775577,  0.14201797,  0.77813485],
+                    [-0.00907187, -0.04032238, -0.01218665,  0.91569607]]).T 
+
+# Make a dataframe unsing Pandas
+data = {'nu_in': _nusin_,
+        'band1': datarec[0],
+        'band2': datarec[1],
+        'band3': datarec[2],
+        'band4': datarec[3]}
+
+df = pd.DataFrame(data)
+df
+
+```
+
+## Reproduction of the plot in the paper
+
+First, for each band, we can plot the result as a function of $\nu_{in}$.
+As expected, the maximum corresponds to the center of the band $\nu_{cj}$.
+
+```{python}
+mycolors = ['b', 'g', 'orange', 'r']
+# One plot for each band
+fig, axs = plt.subplots(2, 2, figsize=(8, 8))
+axs = np.ravel(axs)
+
+for i in range(4):
+    axs[i].plot(df['nu_in'], df[f'band{i+1}'], 'o', color=mycolors[i])
+    axs[i].axvline(_nusrec_[i], color='grey')
+    axs[i].text(_nusrec_[i]-2, -0.3, r'$\nu_{c}$' + f'{i+1}', color='grey')
+    axs[i].set_title(f'Band {i+1}')
+    axs[i].set_xlabel(r'$\nu_{in}$ [GHz]')
+    axs[i].set_ylabel(r'$I_{out}$' + f'{i+1}')
+    axs[i].set_xlim(130, 165)
+    axs[i].set_ylim(-0.2, 1.1)
+    axs[i].grid()
+
+fig.tight_layout()
+```
+
+```{python}
+# The four plots on the same axis
+fig = plt.figure()
+ax = fig.gca()
+for i in range(4):
+    ax.plot(df['nu_in'], df[f'band{i+1}'], 'o', color=mycolors[i])
+    ax.axvline(_nusrec_[i], color='grey')
+    ax.text(_nusrec_[i]-2, -0.3, r'$\nu_{c}$' + f'{i+1}', color='grey')
+ax.set_xlim(130, 165)
+ax.set_ylim(-0.2, 1.1)
+ax.set_xlabel(r'$\nu_{in}$ [GHz]')
+ax.set_ylabel(r'$I_{out}$')
+ax.grid()
+```
+
+#### How can we superpose the 4 curves ?
+Let's recenter each curve on 0 by subtracting $\nu_{cj}$. We also normalize by $\Delta_{\nu j}$ because the frequencies are logarithmically spaced.
+
+This is the plot in the paper (figure 8)
+
+```{python}
+# The four plots on the same axis
+fig = plt.figure()
+ax = fig.gca()
+for i in range(4):
+    ax.plot((df['nu_in'] - _nusrec_[i])/nu_bandwidth[i], df[f'band{i+1}'], 
+            'o', color=mycolors[i], label=f'Band{i+1}')
+ax.set_xlim(-2, 2)
+ax.set_ylim(-0.2, 1.1)
+ax.set_xlabel(r'$\frac{(\nu_{in} - \nu_c)}{\Delta_\nu}$')
+ax.set_ylabel(r'$I_{out}$')
+ax.grid()
+ax.legend()
+```
+
+## Another way of plotting the same data
+
+For each $\nu_{in}$ let's look at the four points in the sub-bands.
+
+```{python}
+fig = plt.figure(figsize=(4, 4))
+ax = fig.gca()
+points, = ax.plot(_nusrec_, df.loc[0][1:], 'ko')
+line = ax.axvline(_nusin_[0], color = 'k', ls = '--')#, label=r'$\nu_{in}=$'+f'{nu:3.2f} GHz')
+text = ax.text(140, 1, r'$\nu_{in}=$'+f'{_nusin_[0]:3.2f} GHz', fontsize=14)
+
+def init():
+    ax.axhline(0, color = 'k', ls = '-', alpha = 0.2)
+    ax.axvspan(xmin = _nusedge_[0], xmax = _nusedge_[1], alpha = 0.2, color = 'b')
+    ax.axvspan(xmin = _nusedge_[1], xmax = _nusedge_[2], alpha = 0.2, color = 'g')
+    ax.axvspan(xmin = _nusedge_[2], xmax = _nusedge_[3], alpha = 0.2, color = 'y')
+    ax.axvspan(xmin = _nusedge_[3], xmax = _nusedge_[4], alpha = 0.2, color = 'r')
+    ax.set_xlabel(r'$\nu$ [GHz]')
+    ax.set_ylabel(r'$I_{out}$')
+    ax.set_ylim(-0.2,1.1)
+    return points
+
+def animate(i):
+    points.set_data(_nusrec_, df.loc[i][1:])
+    line.set_xdata(_nusin_[i])
+    text.set_text(r'$\nu_{in}=$'+f'{_nusin_[i]:3.2f} GHz')
+    return(points)
+
+
+steps = np.arange(nsimu)
+anim = FuncAnimation(fig, animate, steps, init_func=init, interval=1000, blit=False, repeat=False)
+
+# Save a .gif
+anim.save('./FPSF.gif', writer='imagemagick')
+```
+
+### Open the .gif 
+![SegmentLocal](FPSF.gif "segment")
+
+
+In order to superimpose all the points, we subtract $\nu_{in}$ on the x axis. What we get is a similar plot, symetric to figure 8. This time, I di not normalize by $\Delta_\nu$.
+
+```{python}
+# Make a nice color map for nu_in similar to the visible spectra
+def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=-1):
+    if n == -1:
+        n = cmap.N
+    new_cmap = mcolors.LinearSegmentedColormap.from_list(
+         'trunc({name},{a:.2f},{b:.2f})'.format(name=cmap.name, a=minval, b=maxval),
+         cmap(np.linspace(minval, maxval, n)))
+    return new_cmap
+
+
+cmap = plt.get_cmap('hsv_r')
+new_cmap = truncate_colormap(cmap, 0.2, 1)
+
+fig, ax = plt.subplots(figsize=(6, 1))
+fig.subplots_adjust(bottom=0.5)
+
+# cmap = mpl.cm.cool
+norm = mpl.colors.Normalize(vmin=None, vmax=None)
+
+fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=new_cmap),
+             cax=ax, orientation='horizontal', label='')
+
+```
+
+```{python}
+plt.figure()
+for i in range(22):
+    color = new_cmap(1 - i/22)
+    plt.plot((_nusrec_ - df['nu_in'][i]), df.loc[i][1:], 'o', color=color)
+plt.xlabel(r'$\nu - \nu_{in}$ [GHz]')
+plt.ylabel(r'$I_{out}$')
+# plt.xlim(-2, 2)
+```
+
+## Comparison to the measurement
+
+### 4 bands
+In the lab, the monochromatic point source is tuned at $\nu_{in} = 150$ GHz and we have reconstructed 4 bands.
+
+Here are the data:
+
+```{python}
+measure_4bands = array([0.32651116, 0.7645142 , 1.02739917, 0.30532894])
+yerr_4bands = array([0.16361646, 0.12812392, 0.18545706, 0.13256786])
+xerr_4bands = array([4.25540829, 4.53134733, 4.82517946, 5.13806492])
+```
+
+This is completely similar to the simulation done by Martin with $\nu_{in}=150$ GHz (index 12).
+
+Indeed, it is pretty similar up to a constant offset...
+
+```{python}
+offset = np.mean(measure_4bands) - np.mean(df.loc[12][1:])
+print('Offset:', offset)
+
+fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+ax1, ax2 = np.ravel(axs)
+ax1.errorbar(_nusrec_, measure_4bands-offset, xerr=xerr_4bands, yerr=yerr_4bands, fmt='ro', 
+             label=r'Measurement 4 bands $\nu_{in}=150$ GHz')
+ax1.plot(_nusrec_, df.loc[12][1:], 'o', color=(0.0, 1.0, 0.570955250040116, 1.0), label=r'Simulation with $\nu_{in}=150$ GHz')
+ax1.grid()
+ax1.set_xlabel(r'$\nu$ [GHz]')
+ax1.set_ylabel(r'$I_{out}$')
+ax1.legend()
+
+for i in range(nsimu):
+    color = new_cmap(1 - i/nsimu)
+    if i == 12:
+        ax2.plot((_nusrec_ - df['nu_in'][i])+150, df.loc[i][1:], 'o', color=color)
+    else:
+        ax2.plot((_nusrec_ - df['nu_in'][i])+150, df.loc[i][1:], 'o', color=color)
+
+ax2.errorbar(_nusrec_, measure-offset, xerr=xerr, yerr=yerr, fmt='ro', label=r'Measurement with $\nu_{in}=150$ GHz')
+ax2.set_xlabel(r'$(\nu - \nu_{in} + 150)$ [GHz]')
+ax2.set_ylabel(r'$I_{out}$')
+ax2.legend()
+fig.tight_layout()
+```
+
+
+
+
+### 5 bands
+With real data, we also reconstructed 5 bands. Let's try to superimpose.
+It is a bit more difficult. I am not sure it makes sens to do that, the FPSF may depend on the number of sub-bands...
+
+```{python}
+nusrec_5bands = array([134.63280448, 141.57278853, 148.8705114 , 156.54441361, 164.61388627])
+measure_5bands = array([0.23914916, 0.65218824, 0.95944226, 0.80615859, 0.26489076])
+yerr_5bands = array([0.23349574, 0.13297426, 0.19635872, 0.16571155, 0.16968057])
+xerr_5bands = array([3.38280448, 3.55717958, 3.74054328, 3.93335893, 4.13611373])
+```
+
+```{python}
+offset = np.mean(measure_5bands) - np.mean(df.loc[12][1:])
+print('Offset:', offset)
+
+fig, axs = plt.subplots(1, 2, figsize=(9, 4))
+ax1, ax2 = np.ravel(axs)
+ax1.errorbar(nusrec_5bands, measure_5bands-offset, xerr=xerr_5bands, yerr=yerr_5bands, fmt='go', 
+             label=r'Measurement 5 bands $\nu_{in}=150$ GHz')
+ax1.plot(_nusrec_, df.loc[12][1:], 'bo', label=r'Simulation with $\nu_{in}=150$ GHz')
+ax1.grid()
+ax1.set_xlabel(r'$\nu$ [GHz]')
+ax1.set_ylabel(r'$I_{out}$')
+ax1.legend()
+
+for i in range(22):
+    color = cmap(1 - i/30)
+    
+    ax2.plot((_nusrec_ - df['nu_in'][i])+150, df.loc[i][1:], 'o', color=color)
+ax2.errorbar(nusrec_5bands, measure_5bands-offset, xerr=xerr_5bands, yerr=yerr_5bands, fmt='go', 
+         label=r'Measurement 5 bands $\nu_{in}=150$ GHz')
+ax2.set_xlabel(r'$(\nu - \nu_{in} + 150)$ [GHz]')
+ax2.set_ylabel(r'$I_{out}$')
+ax2.legend()
+fig.tight_layout()
+```
+
+```{python}
+
+```

@@ -506,20 +506,79 @@ for i in range(24):
         nana.append(np.max(allrecon[i]['4'][0,:,pixel,0]))
 nanamax = np.max(nana)
 for i in range(24): 
-    plt.clf()
     if len(allrecon[i]['4']) != 0:
+        plt.clf()
+        plt.title("{:.2f}".format(nus_in[innu[i]]))
         plt.ylim(-0.2,1.1)
         plt.plot(nusfull['4'], allrecon[i]['4'][0,:,pixel,0]/nanamax, 'ko')
         plt.axvline(nus_in[innu[i]], color = 'k', ls = '--')
+        plt.axhline(0, color = 'k', ls = '-', alpha =0.3)
         #plt.plot((nus_in[innu[i]]+xData),result_pol.best_fit, 'k-')    
         plt.axvspan(xmin = nusfulledge['4'][0], xmax = nusfulledge['4'][1], alpha = 0.2, color = 'b')
         plt.axvspan(xmin = nusfulledge['4'][1], xmax = nusfulledge['4'][2], alpha = 0.2, color = 'g')
         plt.axvspan(xmin = nusfulledge['4'][2], xmax = nusfulledge['4'][3], alpha = 0.2, color  ='y')
         plt.axvspan(xmin = nusfulledge['4'][3], xmax = nusfulledge['4'][4], alpha = 0.2, color = 'r')
         plt.savefig('i{}.jpg'.format(str(i).zfill(2)), format = 'jpg')
+        #plt.pause(0.5)
         #plt.plot(allrecon[10]['4'][0,:,pixel,0]/1e5*NormFact2, 'bo')
 
 ```
+
+### Code to Louise
+_nusps_ = np.array([132.97971811, 134.37952271, 135.79406229, 137.22349195,
+ 138.66796843, 140.12765012, 141.60269708, 143.09327106, 
+ 144.59953548, 146.12165553, 146.8887135 , 147.6597981 , 
+ 148.43493047, 149.21413186, 149.99742362, 150.78482723, 
+ 151.57636428, 152.37205646, 153.97599357, 155.59681445, 
+ 157.23469683, 158.8898203 , 160.56236634, 162.25251836])
+_nusrec_ = np.array([135.50540829, 144.29216391, 153.6486907 , 163.61193508])
+_nusedge_ = np.array([131.25, 139.76081658, 148.82351125, 158.47387016, 168.75])
+_nuswd_ = np.diff(_nusedge_)
+#datarec = pk.load(open("Data4FPSF_nfrec4.pk", "rb"))
+datarec = [np.array([ 0.91601087, -0.16300357,  0.07148064, -0.02154493]),
+           np.array([ 0.97108358, -0.12843866,  0.02048783, -0.01400606]),
+           np.array([ 0.94662368, -0.06041048, -0.01865472, -0.00286433]),
+           np.array([ 0.85516324,  0.07495715, -0.05477733,  0.00930614]),
+           np.array([ 0.09077023,  0.82225625, -0.10677544,  0.03321614]),
+           np.array([-0.03513556,  0.96278344, -0.09896842,  0.01836723]),
+           np.array([-0.09086167,  0.99084585, -0.0621382 ,  0.00215334]),
+           np.array([-0.10657393,  0.95787016,  0.0252968 , -0.0217093 ]),
+           np.array([-0.09700264,  0.87454252,  0.09206298, -0.0290194 ]),
+           np.array([-0.08114005,  0.77071529,  0.18829684, -0.03471806]),
+           np.array([-0.05707247,  0.61135522,  0.33435032, -0.04617655]),
+           np.array([-0.0329217 ,  0.41514615,  0.52139209, -0.06210269]),
+           np.array([-0.02148455,  0.24494626,  0.68579009, -0.08144495]),
+           np.array([-0.0081945 ,  0.1304667 ,  0.79391375, -0.08693801]),
+           np.array([ 0.00326546,  0.04293615,  0.87552804, -0.08916238]),
+           np.array([ 9.29098752e-04, -1.83078044e-02,  9.46933287e-01, -8.97956690e-02]),
+           np.array([ 0.00475218, -0.09946185,  1.        , -0.06808089]),
+           np.array([ 0.00940636, -0.12568378,  0.96436097,  0.00273789]),
+           np.array([ 0.00452396, -0.13156937,  0.81214209,  0.17818687]),
+           np.array([ 0.00121509, -0.08540265,  0.42981105,  0.50409209]),
+           np.array([-0.01046448, -0.05775577,  0.14201797,  0.77813485]),
+           np.array([-0.00907187, -0.04032238, -0.01218665,  0.91569607])] 
+
+for i in range(len(datarec)): 
+    plt.clf()
+    plt.ylim(-0.2,1.1)
+    plt.plot(_nusrec_, datarec[i], 'ko')
+    plt.axvline(_nusps_[i], color = 'k', ls = '--')
+    plt.axhline(0, color = 'k', ls = '-', alpha = 0.2)
+    
+    plt.axvspan(xmin = _nusedge_[0], xmax = _nusedge_[1], alpha = 0.2, color = 'b')
+    plt.axvspan(xmin = _nusedge_[1], xmax = _nusedge_[2], alpha = 0.2, color = 'g')
+    plt.axvspan(xmin = _nusedge_[2], xmax = _nusedge_[3], alpha = 0.2, color = 'y')
+    plt.axvspan(xmin = _nusedge_[3], xmax = _nusedge_[4], alpha = 0.2, color = 'r')
+    plt.savefig('i{}.jpg'.format(str(i).zfill(2)), format = 'jpg')
+
+
+"""#datasave = []
+for i in range(24):
+    if len(allrecon[i]['4']) != 0:
+        datasave.append(allrecon[i]['4'][0,:,pixel,0]/nanamax)
+pk.dump(datasave, file)
+file.close()
+"""
 
 ```{python}
 xData = []#[Data[i][0] for i in range(4)]

@@ -12,14 +12,16 @@ jupyter:
     name: python3
 ---
 
+<!-- #region slideshow={"slide_type": "skip"} -->
 # FPSF 
 
 Author: Louise
 Date: 29/04/2021
 
 In this notebook, I try to define the FPSF. I use the data from Martin's simulations.
+<!-- #endregion -->
 
-```{python}
+```{python slideshow={'slide_type': 'skip'}}
 import numpy as np
 import pandas as pd
 from matplotlib.animation import FuncAnimation
@@ -27,24 +29,23 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
-rc('font',size=12)
+rc('font',size=14)
 
 # %matplotlib notebook
 ```
 
+<!-- #region slideshow={"slide_type": "slide"} -->
 ## About the FPSF...
 
-By definition, the FPSF of an instrument is its response to an impulse. $I_{in}(\nu) = I_s\delta(\nu - \nu_{in})$
-
-A priori, the FPSF may depend on the frequency $\nu_{in}$... (ex: spectrometer)
+By definition, the FPSF of an instrument is its response to an impulse at a given frequency. We can consider a monochromatic source with spectral energy density: $S_{in}(\nu) = I_0\delta(\nu - \nu_{in})$ with unit $[W/Hz]$
 
 The response of the system will be:
-$$ I_{out}(\nu) = \int I_{in}(\nu') FPSF(\nu - \nu') d\nu' =  I_s \rm{FPSF}(\nu - \nu_{in})$$
+$$ I_{out}(\nu) = [S_{in} \otimes \rm{FPSF}](\nu) = \int S_{in}(\nu') FPSF(\nu - \nu') d\nu' =  I_0 \rm{FPSF}(\nu - \nu_{in})$$
 
-We can write this with a convolution product but it is a bit tricky if the FPSF vary with $\nu_{in}$:
-$ I_{out}(\nu) = [I_{in} \otimes \rm{FPSF}](\nu) $
+The FPSF do not have unit.
+<!-- #endregion -->
 
-```{python}
+```{python slideshow={'slide_type': 'subslide'}}
 # this is a small example considering a impulse at nu_in=1 with a Gaussian response. 
 xx = np.arange(0, 2, 0.01)
 plt.figure(figsize=(4, 4))
@@ -55,16 +56,18 @@ plt.xlabel(r'$\nu$')
 plt.ylabel(r'$I_{out}$')
 ```
 
+<!-- #region slideshow={"slide_type": "slide"} -->
 ## Get the data from Martin's simulations
 
 In these simulations, we consider a monochromatic source: $I_{in}(\nu) = I_s\delta(\nu - \nu_{in})$
 
 And we reconstruct 4 bands centered at $\nu_{cj} = 135.51, 144.29, 153.65, 163.61$ GHz with bandwidths $\Delta_{\nu j}$, where $j$ is the index of the band.
 
-We vary $\nu_{in}$ on 22 values inside the wide band from 130 to 170 GHz. So in this way, we test the QUBIC FPSF at different \nu_{in}.
+We vary $\nu_{in}$ on 22 values inside the wide band from 130 to 170 GHz. So in this way, we test the QUBIC FPSF at different $\nu_{in}$.
 
+<!-- #endregion -->
 
-```{python}
+```{python slideshow={'slide_type': 'skip'}}
 # Input freqencies
 _nusin_ = [132.97971811, 134.37952271, 135.79406229, 137.22349195,
           141.60269708, 143.09327106, 
@@ -115,12 +118,14 @@ df
 
 ```
 
+<!-- #region slideshow={"slide_type": "slide"} -->
 ## Reproduction of the plot in the paper
 
 First, for each band, we can plot the result as a function of $\nu_{in}$.
 As expected, the maximum corresponds to the center of the band $\nu_{cj}$.
+<!-- #endregion -->
 
-```{python}
+```{python slideshow={'slide_type': 'subslide'}}
 mycolors = ['b', 'g', 'orange', 'r']
 # One plot for each band
 fig, axs = plt.subplots(2, 2, figsize=(8, 8))
@@ -141,7 +146,7 @@ for i in range(4):
 fig.tight_layout()
 ```
 
-```{python}
+```{python slideshow={'slide_type': 'slide'}}
 # The four plots on the same axis
 fig = plt.figure()
 ax = fig.gca()
@@ -157,13 +162,15 @@ ax.set_ylabel(r'$I_{out}$')
 ax.grid()
 ```
 
+<!-- #region slideshow={"slide_type": "slide"} -->
 #### How can we superpose the 4 curves ?
 Let's recenter each curve on 0 by subtracting $\nu_{cj}$. We also normalize by $\Delta_{\nu j}$ because the frequencies are logarithmically spaced.
 
 This is the plot in the paper (figure 8)
+<!-- #endregion -->
 
-```{python}
-# The four plots on the same axis
+```{python slideshow={'slide_type': 'subslide'}}
+# Superposition
 fig = plt.figure()
 ax = fig.gca()
 for i in range(4):
@@ -177,11 +184,13 @@ ax.grid()
 ax.legend()
 ```
 
+<!-- #region slideshow={"slide_type": "slide"} -->
 ## Another way of plotting the same data
 
 For each $\nu_{in}$ let's look at the four points in the sub-bands.
+<!-- #endregion -->
 
-```{python}
+```{python slideshow={'slide_type': 'subslide'}}
 fig = plt.figure(figsize=(4, 4))
 ax = fig.gca()
 points, = ax.plot(_nusrec_, df.loc[0][1:], 'ko')
@@ -213,13 +222,16 @@ anim = FuncAnimation(fig, animate, steps, init_func=init, interval=1000, blit=Fa
 anim.save('./FPSF.gif', writer='imagemagick')
 ```
 
+<!-- #region slideshow={"slide_type": "skip"} -->
 ### Open the .gif 
 ![SegmentLocal](FPSF.gif "segment")
+<!-- #endregion -->
 
-
+<!-- #region slideshow={"slide_type": "slide"} -->
 In order to superimpose all the points, we subtract $\nu_{in}$ on the x axis. What we get is a similar plot, symetric to figure 8. This time, I did not normalized by $\Delta_\nu$.
+<!-- #endregion -->
 
-```{python}
+```{python slideshow={'slide_type': 'subslide'}}
 # Make a nice color map for nu_in similar to the visible spectra
 def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=-1):
     if n == -1:
@@ -244,7 +256,7 @@ fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=new_cmap),
 
 ```
 
-```{python}
+```{python slideshow={'slide_type': 'slide'}}
 plt.figure()
 for i in range(22):
     color = new_cmap(1 - i/22)
@@ -254,37 +266,145 @@ plt.ylabel(r'$I_{out}$')
 # plt.xlim(-2, 2)
 ```
 
+<!-- #region slideshow={"slide_type": "notes"} -->
 I think this is the good representation for the FPSF. I do not think we need to divide by $\Delta_\nu$.
+<!-- #endregion -->
+
+#### Spline fitting (JC method)
+
+```{python}
+import numpy as np
+from pylab import *
+from scipy import interpolate
+
+class MySplineFitting:
+    def __init__(self,xin,yin,covarin,nbspl,logspace=False):
+        # input parameters
+        self.x=xin
+        self.y=yin
+        self.nbspl=nbspl
+        covar=covarin
+        if np.size(np.shape(covarin)) == 1:
+            err=covarin
+            covar=np.zeros((np.size(err),np.size(err)))
+            covar[np.arange(np.size(err)),np.arange(np.size(err))]=err**2
+        
+        self.covar=covar
+        self.invcovar=np.linalg.inv(covar)
+        
+        # Prepare splines
+        xspl=np.linspace(np.min(self.x),np.max(self.x),nbspl)
+        if logspace==True: xspl=np.logspace(np.log10(np.min(self.x)),np.log10(np.max(self.x)),nbspl)
+        self.xspl=xspl
+        F=np.zeros((np.size(xin),nbspl))
+        self.F=F
+        for i in np.arange(nbspl):
+            self.F[:,i]=self.get_spline_tofit(xspl,i,xin)
+        
+        # solution of the chi square
+        ft_cinv_y=np.dot(np.transpose(F),np.dot(self.invcovar,self.y))
+        covout=np.linalg.inv(np.dot(np.transpose(F),np.dot(self.invcovar,F)))
+        alpha=np.dot(covout,ft_cinv_y)
+        fitted=np.dot(F,alpha)
+        
+        # output
+        self.residuals=self.y-fitted
+        self.chi2=np.dot(np.transpose(self.residuals), np.dot(self.invcovar, self.residuals))
+        self.ndf=np.size(xin)-np.size(alpha)
+        self.alpha=alpha
+        self.covout=covout
+        self.dalpha=np.sqrt(np.diagonal(covout))
+    
+    def __call__(self,x):
+        theF=np.zeros((np.size(x),self.nbspl))
+        for i in np.arange(self.nbspl): theF[:,i]=self.get_spline_tofit(self.xspl,i,x)
+        return(dot(theF,self.alpha))
+
+    def with_alpha(self,x,alpha):
+        theF=np.zeros((np.size(x),self.nbspl))
+        for i in np.arange(self.nbspl): theF[:,i]=self.get_spline_tofit(self.xspl,i,x)
+        return(dot(theF,alpha))
+            
+    def get_spline_tofit(self,xspline,index,xx):
+        yspline=zeros(np.size(xspline))
+        yspline[index]=1.
+        tck=interpolate.splrep(xspline,yspline)
+        yy=interpolate.splev(xx,tck,der=0)
+        return(yy)
+```
+
+```{python}
+# Let's put all the point in 1D array:
+xx = np.zeros((22, 4))
+yy = np.zeros((22, 4))
+for i in range(22):
+    xx[i, :] = (_nusrec_ - df['nu_in'][i])
+    yy[i, :] = df.loc[i][1:]
+xx = np.ravel(xx)
+yy = np.ravel(yy)
+
+# Spline fitting
+nbspl = 15
+myspl = MySplineFitting(xx, yy, np.ones(len(xx)),nbspl)
 
 
+plt.figure(figsize=(8, 8))
+plt.plot(xx, yy, 'o', color='b', label='Measurement')
+xvals = np.linspace(np.min(xx), np.max(xx), 1000)
+plt.plot(xvals, myspl(xvals)/np.max(myspl(xvals)), 'r', label='Spline fitting')
+
+P = 20
+nu0 = 150
+sigma_expected = nu0/((P-1) * 2.355)
+print(sigma_expected)
+plt.plot(xvals, np.exp(-0.5*xvals**2/(sigma_expected**2)), label='Expected Gaussian')
+plt.grid()
+plt.xlabel(r'$\nu - \nu_{in}$ [GHz]')
+plt.ylabel(r'Synthetic FPSF with 4 sub-bands')
+plt.legend()
+
+```
+
+<!-- #region slideshow={"slide_type": "slide"} -->
 ## Comparison to the measurement
+
+This is completely wrong, the simulations were done for the FI and the measurements are for the TD... I think it works by chance, the normalization on the measurement is tricky because we only have 4 points. It is not easy to superimpose both.  
 
 ### 4 bands
 In the lab, the monochromatic point source is tuned at $\nu_{in} = 150$ GHz and we have reconstructed 4 bands.
+We measure the amplitude in the central pixel for each sub-band in order to get the spectrum.
 
-Here are the data:
+We fit a gaussian model with 4 parameters: $$ G = p_0 + p_1 \times \exp{\frac{-0.5 (x-p_2)^2}{p_3^2}} $$
+- $p_0$ => Offset
+- $p_1$ => Amplitude
+- $p_2$ => Mean
+- $p_3$ => Sigma
 
-```{python}
-measure_4bands = array([0.32651116, 0.7645142 , 1.02739917, 0.30532894])
-yerr_4bands = array([0.16361646, 0.12812392, 0.18545706, 0.13256786])
+The fit offset is negative
+
+We normalize the data by the height of the Gaussian (Maximum - offset).
+
+Here are the normalized data we obtained with 4 bands:
+<!-- #endregion -->
+
+```{python slideshow={'slide_type': 'fragment'}}
+measure_4bands = array([-0.14056635,  0.2982812 ,  0.55715316, -0.15771509])
+yerr_4bands = array([0.17112118, 0.12995618, 0.1863555 , 0.12754958])
 xerr_4bands = array([4.25540829, 4.53134733, 4.82517946, 5.13806492])
 ```
 
+<!-- #region slideshow={"slide_type": "slide"} -->
 This is completely similar to the simulation done by Martin with $\nu_{in}=150$ GHz (index 12). Let's plot this simulation. This is done in the left plot.
 
 To relate this plot to the previous ones (first plots as a function of $\nu_{in}$), here we have selected the 4 points at 150 GHz, marked with the black vertical line.
 
-Indeed, it is pretty similar up to a constant offset...
-
 On the right plot, we center the complete FPSF on $\nu_{in}=150$ GHz.
+<!-- #endregion -->
 
-```{python}
-offset = np.mean(measure_4bands) - np.mean(df.loc[12][1:])
-print('Offset:', offset)
-
+```{python slideshow={'slide_type': 'subslide'}}
 fig, axs = plt.subplots(1, 2, figsize=(10, 5))
 ax1, ax2 = np.ravel(axs)
-ax1.errorbar(_nusrec_, measure_4bands-offset, xerr=xerr_4bands, yerr=yerr_4bands, fmt='ro', 
+ax1.errorbar(_nusrec_, measure_4bands, xerr=xerr_4bands, yerr=yerr_4bands, fmt='ro', 
              label=r'Measurement 4 bands $\nu_{in}=150$ GHz')
 ax1.plot(_nusrec_, df.loc[12][1:], 'o', color=(0.0, 1.0, 0.570955250040116, 1.0), label=r'Simulation with $\nu_{in}=150$ GHz')
 ax1.grid()
@@ -299,7 +419,7 @@ for i in range(nsimu):
     else:
         ax2.plot((_nusrec_ - df['nu_in'][i])+150, df.loc[i][1:], 'o', color=color)
 
-ax2.errorbar(_nusrec_, measure-offset, xerr=xerr, yerr=yerr, fmt='ro', label=r'Measurement with $\nu_{in}=150$ GHz')
+ax2.errorbar(_nusrec_, measure_4bands, xerr=xerr_4bands, yerr=yerr_4bands, fmt='ro', label=r'Measurement with $\nu_{in}=150$ GHz')
 ax2.set_xlabel(r'$(\nu - \nu_{in} + 150)$ [GHz]')
 ax2.set_ylabel(r'$I_{out}$')
 ax2.legend()
@@ -315,18 +435,15 @@ It is a bit more difficult. I am not sure it makes sens to do that, the FPSF may
 
 ```{python}
 nusrec_5bands = array([134.63280448, 141.57278853, 148.8705114 , 156.54441361, 164.61388627])
-measure_5bands = array([0.23914916, 0.65218824, 0.95944226, 0.80615859, 0.26489076])
-yerr_5bands = array([0.23349574, 0.13297426, 0.19635872, 0.16571155, 0.16968057])
+measure_5bands = [-0.21088738,  0.20660622,  0.5078612,   0.35812012, -0.18409084]
+yerr_5bands = [0.2309525,  0.12816038, 0.19878606, 0.16506726, 0.17398308]
 xerr_5bands = array([3.38280448, 3.55717958, 3.74054328, 3.93335893, 4.13611373])
 ```
 
 ```{python}
-offset = np.mean(measure_5bands) - np.mean(df.loc[12][1:])
-print('Offset:', offset)
-
 fig, axs = plt.subplots(1, 2, figsize=(9, 4))
 ax1, ax2 = np.ravel(axs)
-ax1.errorbar(nusrec_5bands, measure_5bands-offset, xerr=xerr_5bands, yerr=yerr_5bands, fmt='go', 
+ax1.errorbar(nusrec_5bands, measure_5bands, xerr=xerr_5bands, yerr=yerr_5bands, fmt='go', 
              label=r'Measurement 5 bands $\nu_{in}=150$ GHz')
 ax1.plot(_nusrec_, df.loc[12][1:], 'bo', label=r'Simulation with $\nu_{in}=150$ GHz')
 ax1.grid()
@@ -338,7 +455,7 @@ for i in range(22):
     color = cmap(1 - i/30)
     
     ax2.plot((_nusrec_ - df['nu_in'][i])+150, df.loc[i][1:], 'o', color=color)
-ax2.errorbar(nusrec_5bands, measure_5bands-offset, xerr=xerr_5bands, yerr=yerr_5bands, fmt='go', 
+ax2.errorbar(nusrec_5bands, measure_5bands, xerr=xerr_5bands, yerr=yerr_5bands, fmt='go', 
          label=r'Measurement 5 bands $\nu_{in}=150$ GHz')
 ax2.set_xlabel(r'$(\nu - \nu_{in} + 150)$ [GHz]')
 ax2.set_ylabel(r'$I_{out}$')

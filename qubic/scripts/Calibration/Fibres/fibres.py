@@ -87,6 +87,7 @@ notch_shape = np.array(notch.shape)
 notch_shape[1] += 1
 new_notch = np.zeros(notch_shape,dtype=np.float)
 new_notch[:,:2] = notch
+new_notch[:,2] = 2 # notch filter also for two harmonics
 notch = new_notch
 
 FiltFreqResp(theTES, frange, fff, filt, dd, notch, FREQ_SAMPLING, nsamples, freq, spectrum, filtered_spec)

@@ -444,8 +444,8 @@ for ifreq, NUS in enumerate(['4',]):#NUS='6'
                     yvals.append(auxval)
                     yconv.append(allconv[jk][NUS][nreal,ifreqdata,pixel,0]/AmpFact*NormFact2)
 
-                    auxx=(nus_in[innu][jk] - cenfreq) / \
-                                (nusfulledge[NUS][ifreqdata + 1] - nusfulledge[NUS][ifreqdata])
+                    auxx=(nus_in[innu][jk] - cenfreq) #/ \
+                                #(nusfulledge[NUS][ifreqdata + 1] - nusfulledge[NUS][ifreqdata])
                     xx.append(auxx)
                     newnewx.append(auxx)
                     yy.append(yvals[-1])
@@ -460,7 +460,7 @@ for ifreq, NUS in enumerate(['4',]):#NUS='6'
 
         xx,yy,yc=np.array(xx), np.array(yy), np.array(yc)
 
-        ax[ifreq].set_xlabel(r'${\rm d}_{\nu_c}$ / $\Delta \nu$' ,fontsize=20)
+        ax[ifreq].set_xlabel(r'$\nu - \nu_{in}~[\mathrm{GHz}]$' ,fontsize=20)
         ax[ifreq].set_ylabel(r'${i_\nu}$[$\mu K$]' if ifreq ==0 else None, fontsize=20, labelpad=10)
         ax[ifreq].axhline(0,c='k')
         #xvals=nus_in[innu]-nusfull[NUS][ifreq]
@@ -479,14 +479,14 @@ for ifreq, NUS in enumerate(['4',]):#NUS='6'
             all_toFitX.append(xx)
             all_toFitY.append(yy)
         
-        ax[ifreq].set_xlim(-3.2,3.2)
+        #ax[ifreq].set_xlim(-3.2,3.2)
         xlim=ax[ifreq].get_xlim()
         for iedge in nusfulledge[NUS]:
             if (iedge > np.array(xlim)[0]) and (iedge < np.array(xlim)[1]):
                 ax[ifreq].axvline(iedge-cenfreq, color='k', ls='--',alpha=0.9)
 
-        ax[ifreq].axvspan((nusfulledge[NUS][ifreqdata]-cenfreq)/(nusfulledge[NUS][ifreqdata+1]-nusfulledge[NUS][ifreqdata]),
-            (nusfulledge[NUS][ifreqdata+1]-cenfreq)/(nusfulledge[NUS][ifreqdata+1]-nusfulledge[NUS][ifreqdata]), 
+        ax[ifreq].axvspan((nusfulledge[NUS][ifreqdata]-cenfreq),#/(nusfulledge[NUS][ifreqdata+1]-nusfulledge[NUS][ifreqdata]),
+            (nusfulledge[NUS][ifreqdata+1]-cenfreq),#/(nusfulledge[NUS][ifreqdata+1]-nusfulledge[NUS][ifreqdata]), 
                           color='k' , alpha=0.40) if ifreqdata == 0 else None
         
         ax[ifreq].axvline(nusfull[NUS][ifreqdata]-cenfreq,ls='-.',c='k' , alpha=0.2)
@@ -518,7 +518,7 @@ for i in range(24):
         plt.axvspan(xmin = nusfulledge['4'][1], xmax = nusfulledge['4'][2], alpha = 0.2, color = 'g')
         plt.axvspan(xmin = nusfulledge['4'][2], xmax = nusfulledge['4'][3], alpha = 0.2, color  ='y')
         plt.axvspan(xmin = nusfulledge['4'][3], xmax = nusfulledge['4'][4], alpha = 0.2, color = 'r')
-        plt.savefig('i{}.jpg'.format(str(i).zfill(2)), format = 'jpg')
+        #plt.savefig('i{}.jpg'.format(str(i).zfill(2)), format = 'jpg')
         #plt.pause(0.5)
         #plt.plot(allrecon[10]['4'][0,:,pixel,0]/1e5*NormFact2, 'bo')
 
@@ -691,6 +691,14 @@ savefigs = False
 ```
 
 ```{python}
+halfwidth = np.diff(nusfulledge['4'])/2
+```
+
+```{python}
+xData
+```
+
+```{python}
 fig = plt.figure(figsize = (10,6))
 plt.rc('font', size=16)
 
@@ -699,14 +707,18 @@ result = result_pol
 plt.plot(xData, result.data, 'bo', label = 'data')
 plt.plot(xData, result.best_fit, 'r-', label = 'fit')
 dely = result.eval_uncertainty(sigma=3,)
-plt.axvspan(-0.5,0.5,color='k',alpha=0.2)
-plt.axvspan(-1.5,-0.5,color='k',alpha=0.1)
-plt.axvspan(0.5,1.5,color='k',alpha=0.1)
-plt.xlim(-2.1,2.1)
+#plt.axvspan(-halfwidth[0],halfwidth[0],color='k',alpha=0.2)
+#plt.axvspan(-halfwidth[1],halfwidth[1],color='k',alpha=0.2)
+#plt.axvspan(-halfwidth[2],halfwidth[2],color='k',alpha=0.2)
+plt.axvspan(-halfwidth[3],halfwidth[3],color='k',alpha=0.2)
+#plt.axvspan(-1.5,-0.5,color='k',alpha=0.1)
+#plt.axvspan(0.5,1.5,color='k',alpha=0.1)
+#plt.xlim(-2.1,2.1)
+plt.xlim(-22,22)
 plt.fill_between(xData, result.best_fit-dely, result.best_fit+dely, color='red',#"#ABABAB",
-                 alpha=0.3, label='3$\sigma$ uncertainty band')
+                 alpha=0.5, label='3$\sigma$ uncertainty band')
 #plt.xlabel(r'${\rm d}_{\nu_c}(\nu)$ ', fontsize = 18)
-plt.xlabel(r"$\frac{\nu - \nu_c}{\Delta \nu_c}$", fontsize = 22)
+plt.xlabel(r"$(\nu - \nu_{in})~[\mathrm{GHz}]$", fontsize = 18)
 plt.ylabel(r'Normalized FPSF', fontsize = 18)
 plt.legend(loc = "best", fontsize = 14)
 #plt.subplot(122)
@@ -726,13 +738,20 @@ plt.legend(loc = "best", fontsize = 14)
 #plt.plot((_freqsin_[12:] ), (fpsf(_freqsin_[12:], _freqsout_[3], _freqswidth_[3])),
 #        color = c[3])
 plt.tight_layout()
+plt.tick_params(axis = 'both', bottom = True, top = True, 
+                  left = True, right = True, direction = 'in')
+plt.grid()
 #savefigs = True
 if savefigs:
     plt.savefig('fpsf_nrec{}_new.pdf'.format(np.shape(Data)[0]), format='pdf' , bbox_inches = "tight")
 ```
 
 ```{python}
-from lmfit.model import load_modelresult , save_model, load_model
+qubic.compute_freq(150, 35, 0.25)[2][18-17]
+```
+
+```{python}
+#from lmfit.model import load_modelresult , save_model, load_model
 ```
 
 ```{python}

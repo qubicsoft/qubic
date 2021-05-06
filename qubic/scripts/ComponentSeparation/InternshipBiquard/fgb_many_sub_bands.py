@@ -14,6 +14,7 @@ import os
 import pickle
 import sys
 import numpy as np
+from astropy.io import fits
 
 # Qubic modules
 import qubic
@@ -26,7 +27,7 @@ import fgbuster as fgb
 import component_separation
 
 # Define data / output directories
-QUBIC_DATADIR = os.environ['QUBIC_DATADIR']
+QUBIC_DATADIR = os.environ['QUBIC_DATADIR']  # TODO: determine if useless since QSS upgrade by Louise
 
 # for LOCAL EXECUTION
 OUTDIR_LOCAL = "/home/simon/PycharmProjects/qubic_comp_sep/output/"
@@ -51,15 +52,37 @@ else:
     raise ValueError("Specify where the execution takes place (0 = local, 1 = CC)")
 
 
-def append_to_npy(fname, data) -> None:
-    """Append 1D data to a .npy binary file."""
+def generate_cmb_dust_maps(dico, coverage, n_years, sc, nunu, save_maps=False, return_maps=True):
+    """Save CMB+Dust maps to FITS image format for later use, and/or return them immediately."""
 
-    try:  # try to load existing data
-        content = np.load(fname, allow_pickle=True)
-        new_content = np.concatenate((content, data), axis=None)
-        np.save(fname, new_content)
-    except IOError:  # if file does not yet exist, save data directly to file
-        np.save(fname, data)
+    seed = np.random.randint(1000000)
+    sky_config = {'dust': 'd0', 'cmb': seed}
+    qubic_sky = qss.Qubic_sky(sky_config, dico)
+    cmb_dust, cmb_dust_noiseless, cmb_dust_noise_only, _ = \
+        qubic_sky.get_partial_sky_maps_withnoise(coverage=coverage,
+                                                 Nyears=n_years,
+                                                 spatial_noise=sc,  # noise spatial correlations
+                                                 nunu_correlation=nunu,  # noise frequency correlations
+                                                 verbose=False,
+                                                 seed=seed,
+                                                 )
+    if save_maps:
+        common_fmt = "band{}_sub{}_years{}_spatial{}_nunu{}_seed{}.fits"
+        common = common_fmt.format(dico['band'], dico['nf_recon'], n_years, sc, nunu, seed)
+
+        hdu_cmb_dust = fits.PrimaryHDU(cmb_dust)
+        hdu_cmb_dust.writeto("data/cmb_dust_maps/cmb_dust" + common)
+
+        hdu_cmb_dust_noiseless = fits.PrimaryHDU(cmb_dust_noiseless)
+        hdu_cmb_dust_noiseless.writeto("data/cmb_dust_maps/cmb_dust_noiseless" + common)
+
+        hdu_cmb_dust_noise_only = fits.PrimaryHDU(cmb_dust_noise_only)
+        hdu_cmb_dust_noise_only.writeto("data/cmb_dust_maps/cmb_dust_noise_only" + common)
+
+    if return_maps:
+        return cmb_dust, cmb_dust_noiseless, cmb_dust_noise_only
+    else:
+        return
 
 
 def get_coverage_from_file(file_name=None):
@@ -97,16 +120,6 @@ def get_sub_freqs_and_resolutions(dico):
     return nus_in, dico['synthbeam_peak150_fwhm'] * 150 / nus_in
 
 
-def print_results(band, beta_res) -> None:
-    print("{:d} GHz results".format(band))
-    print("---------------")
-    list_fmt = "[" + ", ".join(["{:.5f}"] * len(beta_res)) + "]"
-    print("results = " + list_fmt.format(*beta_res))
-    print("average beta  = {:.5f}".format(np.mean(beta_res)))
-    print("std deviation = {:.5f}".format(np.std(beta_res)))
-    print()
-
-
 def read_arguments():
     """Read parameters / command-line arguments for local (personal computer) execution.
 
@@ -127,21 +140,19 @@ def read_arguments():
         sky_sim_param = input("spatial correlations, frequency correlations (11 = both True) = ")
 
     print()
-    spatial_correlations = bool(sky_sim_param[0])
-    nunu_correlations = bool(sky_sim_param[1])
+    spatial_correlations = bool(int(sky_sim_param[0]))
+    nunu_correlations = bool(int(sky_sim_param[1]))
 
     return frequency_band, nb_simu, nb_bands, nb_years, spatial_correlations, nunu_correlations
 
 
-def run_simu_single_band(band: int,
-                         n_sim: int,
-                         n_sub: int,
-                         n_years: int,
-                         sc: bool,
-                         nunu: bool,
-                         verbose=True):
+def run_simu_single_band(band: int, n_sim: int, n_sub: int, n_years: int, sc: bool, nunu: bool, **kwargs):
     """
     Run sky simulations (using `QubicSkySim`) and determine spectral parameters.
+
+    Possible keyword arguments are: *verbose* option (boolean), *run_on_noise* (boolean) which determines if the
+    noise maps should be fed to the FgBuster algorithm, and *stokes* (can be 'IQU', 'I' or 'QU') which determines
+    the set of Stokes parameters used for the separation.
 
     :param int band: main band frequency (150 or 220 GHz)
     :param int n_sub: number of sub-bands
@@ -149,16 +160,19 @@ def run_simu_single_band(band: int,
     :param int n_years: number of years of observation for simulated maps
     :param bool sc: QubicSkySim "spatial_noise" (ie. spatial noise correlations)
     :param bool nunu: QubicSkySim "nunu_correlation" (ie. noise frequency correlations)
-    :param bool verbose: print progress indications during process
     """
-    if verbose:
-        print("run single band simulation with parameters:")
-        print("     band = {}".format(band))
-        print("    n_sub = {}".format(n_sub))
-        print("    n_sim = {}".format(n_sim))
-        print("  n_years = {}".format(n_years))
-        print("       sc = {}".format(sc))
-        print("     nunu = {}".format(nunu))
+    if 'verbose' in kwargs:
+        verbose = kwargs['verbose']
+    else:
+        verbose = False
+
+    print("run single band simulation with parameters:")
+    print("     band = {}".format(band))
+    print("    n_sub = {}".format(n_sub))
+    print("    n_sim = {}".format(n_sim))
+    print("  n_years = {}".format(n_years))
+    print("       sc = {}".format(sc))
+    print("     nunu = {}".format(nunu))
 
     # get dictionary for given frequency
     dico = qubic_dicts[band]
@@ -185,7 +199,20 @@ def run_simu_single_band(band: int,
     # fwhm_common = np.max(fwhms) + 1e8
 
     # variable to store the results of parameter estimation
-    beta_values = []
+    if 'run_on_noise' in kwargs:
+        run_on_noise = kwargs['run_on_noise']
+    else:
+        run_on_noise = False
+    beta_values_cmbdust = []
+    beta_values_noiseless = []
+    beta_values_noise_only = []
+
+    if 'stokes' in kwargs:
+        stokes = kwargs['stokes']
+    else:
+        stokes = 'IQU'
+    dic_stk = {'I': 0, 'Q': 1, 'U': 2}
+    sig_to_noise = np.zeros((n_sim, len(stokes)))  # n_sim values for each Stokes parameter
 
     for i_sim in range(n_sim):
 
@@ -195,77 +222,77 @@ def run_simu_single_band(band: int,
         # generate sky map using QubicSkySim, with random seed
         if verbose:
             print("generate sky map...")
-        seed = np.random.randint(1000000)
-        sky_config = {'dust': 'd0', 'cmb': seed}
-        qubic_sky = qss.Qubic_sky(sky_config, dico)
-        cmb_dust, cmb_dust_noiseless, cmb_dust_noise, _ = \
-            qubic_sky.get_partial_sky_maps_withnoise(coverage=coverage,
-                                                     Nyears=n_years,
-                                                     verbose=False,
-                                                     seed=seed,
-                                                     spatial_noise=sc,  # noise spatial correlations
-                                                     nunu_correlation=nunu,  # noise frequency correlations
-                                                     )
+
+        cmb_dust, cmb_dust_noiseless, cmb_dust_noise_only = \
+            generate_cmb_dust_maps(dico, coverage, n_years, sc, nunu)
+
+        for stk in stokes:
+            i_stk = dic_stk[stk]
+            for i_band in range(n_sub):
+                sig_to_noise[i_sim, i_stk] += np.std(cmb_dust[i_band, :, i_stk]) \
+                                              / np.std(cmb_dust_noise_only[i_band, :, i_stk])
+            sig_to_noise[i_sim, i_stk] /= n_sub
 
         # modify shape to match FgBuster standard
         cmb_dust = np.transpose(cmb_dust, (0, 2, 1))
-        # cmb_dust_noiseless = np.transpose(cmb_dust_noiseless, (0, 2, 1))
-        # cmb_dust_noise = np.transpose(cmb_dust_noise, (0, 2, 1))
         if verbose:
-            print("sky map generated with seed {}".format(seed))
+            print("sky map generated")
 
         # perform component separation using FgBuster
         if verbose:
             print("perform fgbuster separation...")
         comp_separation = component_separation.CompSep(dico)
 
-        fg_res = comp_separation.fg_buster(maps_in=cmb_dust,
-                                           components=[fgb.CMB(), fgb.Dust(band, temp=20.)],
-                                           map_freqs=freqs,
-                                           map_fwhms_deg=fwhms,
-                                           # target=fwhm_common,
-                                           ok_pix=okpix_inside,
-                                           stokes='IQU')
-        beta_dust_estimate = fg_res.x[0]
-        beta_values.append(beta_dust_estimate)
+        fg_res_cmbdust = comp_separation.fg_buster(maps_in=cmb_dust,
+                                                   components=[fgb.CMB(), fgb.Dust(band, temp=20.)],
+                                                   map_freqs=freqs,
+                                                   map_fwhms_deg=fwhms,
+                                                   # target=fwhm_common,
+                                                   ok_pix=okpix_inside,
+                                                   stokes=stokes)
+        beta_cmbdust = fg_res_cmbdust.x[0]
+        beta_values_cmbdust.append(beta_cmbdust)
+
+        if run_on_noise:
+            cmb_dust_noiseless = np.transpose(cmb_dust_noiseless, (0, 2, 1))
+            cmb_dust_noise_only = np.transpose(cmb_dust_noise_only, (0, 2, 1))
+            fg_res_noiseless = comp_separation.fg_buster(maps_in=cmb_dust_noiseless,
+                                                         components=[fgb.CMB(), fgb.Dust(band, temp=20.)],
+                                                         map_freqs=freqs,
+                                                         map_fwhms_deg=fwhms,
+                                                         # target=fwhm_common,
+                                                         ok_pix=okpix_inside,
+                                                         stokes=stokes)
+            fg_res_noise_only = comp_separation.fg_buster(maps_in=cmb_dust_noise_only,
+                                                          components=[fgb.CMB(), fgb.Dust(band, temp=20.)],
+                                                          map_freqs=freqs,
+                                                          map_fwhms_deg=fwhms,
+                                                          # target=fwhm_common,
+                                                          ok_pix=okpix_inside,
+                                                          stokes=stokes)
+            beta_noiseless = fg_res_noiseless.x[0]
+            beta_noise_only = fg_res_noise_only.x[0]
+            beta_values_noiseless.append(beta_noiseless)
+            beta_values_noise_only.append(beta_noise_only)
+
         if verbose:
-            print("fgbuster separation performed (beta = {:.3f})".format(beta_dust_estimate))
+            print("fgbuster separation performed (beta = {:.3f})".format(beta_cmbdust))
 
         del cmb_dust
         del cmb_dust_noiseless
-        del cmb_dust_noise
+        del cmb_dust_noise_only
 
     if verbose:
         print("execution terminated, writing / printing results...\n")
 
-    res = np.array(beta_values)
-
-    return res
-
-
-def run_single_band_different_noise(args, verbose=True) -> None:
-    simu_args = [(*args, False, False),  # white noise
-                 (*args, True, False),  # spatial correlation only
-                 (*args, False, True),  # nunu correlation only
-                 (*args, True, True)]  # all correlations (Qubic case)
-    for simu_arg in simu_args:
-        beta_results = run_simu_single_band(*simu_arg, verbose=verbose)
-        write_results_to_file(simu_arg, beta_results)
+    if run_on_noise:
+        return np.array(beta_values_cmbdust), np.array(beta_values_noiseless), np.array(beta_values_noise_only), \
+               sig_to_noise
+    else:
+        return np.array(beta_values_cmbdust), sig_to_noise
 
 
-def write_results_to_file(args, results) -> None:
-    """*args = f_band, nsub, nyears, spatial_corr, nunu_corr"""
-
-    fmt = "FgBuster_SingleBand{}_Nsim{}_Nsub{}_Nyears{}_spatial{}_nunu{}.npy"
-    fname = fmt.format(*args)
-    out_file = OUTDIR + fname
-    print("writing results to " + fname)
-    append_to_npy(out_file, results)
-
-
-# To do:
-# - add function run_simu_double_band which uses both 150 and 220 GHz bands for separation
-# - ...
+# TODO: add function run_simu_double_band which uses both 150 and 220 GHz bands for separation
 
 
 if __name__ == "__main__":
@@ -278,8 +305,33 @@ if __name__ == "__main__":
     d220.read_from_file(d220_name)
     qubic_dicts = {150: d150, 220: d220}
 
-    # read arguments and run simulation
-    arguments = read_arguments()
-    run_single_band_different_noise(arguments[:-2])
+    # arguments = read_arguments()
+    
+    nsimu = 5
+    results_dic_IQU = {}
+    results_dic_I = {}
+    for f in [150, 220]:
+        for nsb in [3, 4, 5]:
+            for nu in [False, True]:
+                for s in [False, True]:
+                    # IQU separation
+                    beta_IQU, signoise_IQU = run_simu_single_band(f, nsimu, nsb, 400, s, nu, stokes='IQU')
+                    results_dic_IQU.update({'beta_{}_{}_{}{}'.format(f, nsb, str(int(nu)), str(int(s))): beta_IQU,
+                                            'signoiseI_{}_{}_{}{}'.format(f, nsb, str(int(nu)),
+                                                                          str(int(s))): np.ravel(signoise_IQU[:, 0]),
+                                            'signoiseQ_{}_{}_{}{}'.format(f, nsb, str(int(nu)),
+                                                                          str(int(s))): np.ravel(signoise_IQU[:, 1]),
+                                            'signoiseU_{}_{}_{}{}'.format(f, nsb, str(int(nu)),
+                                                                          str(int(s))): np.ravel(signoise_IQU[:, 2])
+                                            })
+                    # I separation
+                    beta_I, signoise_I = run_simu_single_band(f, nsimu, nsb, 400, s, nu, stokes='I')
+                    results_dic_I.update({'beta_{}_{}_{}{}'.format(f, nsb, str(int(nu)), str(int(s))): beta_I,
+                                          'signoise_{}_{}_{}{}'.format(f, nsb, str(int(nu)),
+                                                                       str(int(s))): np.ravel(signoise_I)
+                                          })
+
+    np.savez(OUTDIR + "SignalToNoise_stokesIQU_5sim_400years.npz", **results_dic_IQU)
+    np.savez(OUTDIR + "SignalToNoise_stokesI_5sim_400years.npz", **results_dic_I)
 
     sys.exit(0)

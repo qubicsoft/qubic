@@ -102,7 +102,13 @@ class CompSep(object):
 
         # Apply FG Buster
         if stokes == 'IQU':
-            res = fgb.basic_comp_sep(components, qubic_instrument, maps_in[:, :, ok_pix])
+            res = fgb.basic_comp_sep(components,
+                                     qubic_instrument,
+                                     maps_in[:, :, ok_pix],
+                                     method='BFGS',
+                                     tol=1,
+                                     options={'disp': False}  # disp=True raises KeyError in FgBuster modules...
+                                     )
 
         elif stokes == 'QU':
             res = fgb.basic_comp_sep(components, qubic_instrument, maps_in[:, 1:, ok_pix])

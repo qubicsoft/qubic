@@ -42,6 +42,11 @@ rc('font', size=15)
 plt.rcParams['image.cmap'] = 'jet'
 ```
 
+```{python}
+# If you want to save maps somewhere, change the following path:
+save_dir = '/home/lmousset/QUBIC/Qubic_work/Component_sep/QSSmaps/'
+```
+
 This notebook is a demo for using the QUBIC FastSimulator which is a shortcut to produce QUBIC noise maps without having to go through the long and CPU greedy process of QUBIC Map-Making on supercomputers.
 
 The FastSimulator reproduces the noise structure that has been measured so far in simulations:
@@ -86,8 +91,10 @@ The sky map is first constructed with infinite resolution at ech of the "input s
 #### Very important remark:
 When simulating with Spatial noise correlations, the RMS of the noise maps that are returned is **not at all** the expected one, the map however has the correct noise Cl power spectrum and should be used as it is (no renormalization of the noise to match the intended RMS) for Power Spectrum studies. If one is rather interested in map-space studies, and therefore is likely to need to rely on the RMS of the pixels at some point for statistical putposes, it is then important to set the keyword 'spatial_noise' to False in the call to the method get_partial_sky_maps_withnoise() of QubicSkySim.
 
-### First Example: CMB Only, a single noise realization, no spatial_noise
-In this case the code returns the number of sub-bands from the input dictionary (here 1). The maps are centered on the Galactic Center. Provide your own coverage map centered elsewhere (optional argument) for another target...
+### First Example: CMB Only, a single noise realization
+In this case the code returns the number of sub-bands from the input dictionary (here 1). 
+
+The maps are centered on the Galactic Center. You can provide your own coverage map centered elsewhere (optional argument) for another target...
 
 ```{python}
 reload(qss)
@@ -102,7 +109,9 @@ sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, d)
 
 ##### Getting FastSimulator output maps
-maps_qubic, maps_noiseless, maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(spatial_noise=False)
+maps_qubic, maps_noiseless, maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(spatial_noise=True,
+                                                                                            nunu_correlation=True,
+                                                                                            noise_only=False)
 
 
 ################################# Displaying Results ##########################################
@@ -112,23 +121,32 @@ hp.gnomview(coverage, reso=25, title='Coverage Map', sub=(2,2,2))
 
 ### Maps per sub-bands
 stn = ['I', 'Q', 'U']
-figure()
+plt.figure()
 for i in range(d['nf_recon']):
     for s in range(3):
-        hp.gnomview(maps_noiseless[i,:,s], reso=25, sub=(d['nf_recon'],3,3*i+s+1), 
+        hp.gnomview(maps_noiseless[i, :, s], reso=25, sub=(d['nf_recon'],3,3*i+s+1), 
                     title='Noiseless '+stn[s]+' Sub {}'.format(i))
         
-figure()
+plt.figure()
 for i in range(d['nf_recon']):
     for s in range(3):
-        hp.gnomview(maps_qubic[i,:,s], reso=25, sub=(d['nf_recon'],3,3*i+s+1), 
+        hp.gnomview(maps_qubic[i, :, s], reso=25, sub=(d['nf_recon'],3,3*i+s+1), 
                     title='QUBIC Fast Sim '+stn[s]+' Sub {}'.format(i))        
         
-figure()
+plt.figure()
 for i in range(d['nf_recon']):
     for s in range(3):
-        hp.gnomview(maps_noise[i,:,s], reso=25, sub=(d['nf_recon'],3,3*i+s+1), 
-                    title='QUBIC Noise Fast Sim '+stn[s]+' Sub {}'.format(i))            
+        hp.gnomview(maps_noise[i, :, s], reso=25, sub=(d['nf_recon'],3,3*i+s+1), 
+                    title='QUBIC Noise Fast Sim '+stn[s]+' Sub {}'.format(i))  
+
+#### Save the maps
+# Reduce the full map to a patch
+seenmap = coverage > np.max(coverage) * 0.1
+patch_noise = maps_noise[:, seenmap, :]
+
+name = f'NoisePatch_{nbands}bands_{config}_spatialCovTrue_nunuCovTrue.npy'
+np.save(save_dir + name, patch_noise)
+
 ```
 
 ### Multiple Noise realizations

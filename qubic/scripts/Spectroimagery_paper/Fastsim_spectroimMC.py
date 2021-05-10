@@ -55,6 +55,7 @@ print('fwhms', fwhms)
 seed = 42
 # sky_config = {'dust': 'd1', 'cmb':seed, 'synchrotron':'s1'}
 sky_config = {'dust': 'd1'}
+print('Sky config:', sky_config)
 Qubic_sky = qss.Qubic_sky(sky_config, d)
 inputmaps = Qubic_sky.get_fullsky_convolved_maps(FWHMdeg=None, verbose=True)
 
@@ -75,9 +76,10 @@ for r in range(nreals):
     noisemaps[r, ...], coverage = Qubic_sky.get_partial_sky_maps_withnoise(coverage=None,
                                                                            noise_only=True,
                                                                            spatial_noise=True,
+                                                                           nunu_correlation=True,
                                                                            Nyears=Nyears)
 
-# Make maps QUBIC = noise + CMB
+# Make maps QUBIC = noise + signal
 qubicmaps = np.zeros_like(noisemaps)
 for r in range(nreals):
     qubicmaps[r, ...] = noisemaps[r, ...] + inputmaps
@@ -166,7 +168,6 @@ print('ncombi:', ncombi)
 
 # Cross spectrum between bands but same real
 print('\n =============== Cross spectrum same real starting ================')
-
 cross_samereal_qubicmaps = np.zeros((nreals, ncombi, nbins, 4))
 cross_samereal_noisemaps = np.zeros((nreals, ncombi, nbins, 4))
 

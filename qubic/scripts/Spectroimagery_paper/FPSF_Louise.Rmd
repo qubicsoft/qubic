@@ -344,12 +344,12 @@ xx = np.ravel(xx)
 yy = np.ravel(yy)
 
 # Spline fitting
-nbspl = 15
+nbspl = 13
 myspl = MySplineFitting(xx, yy, np.ones(len(xx)),nbspl)
 
 
-plt.figure(figsize=(8, 8))
-plt.plot(xx, yy, 'o', color='b', label='Measurement')
+plt.figure(figsize=(8, 6))
+plt.plot(xx, yy/np.max(myspl(xvals)), 'o', color='b', label='Data')
 xvals = np.linspace(np.min(xx), np.max(xx), 1000)
 plt.plot(xvals, myspl(xvals)/np.max(myspl(xvals)), 'r', label='Spline fitting')
 
@@ -357,12 +357,15 @@ P = 20
 nu0 = 150
 sigma_expected = nu0/((P-1) * 2.355)
 print(sigma_expected)
-plt.plot(xvals, np.exp(-0.5*xvals**2/(sigma_expected**2)), label='Expected Gaussian')
+plt.plot(xvals, np.exp(-0.5*xvals**2/(sigma_expected**2)), label='Expected resolution')
+halfwidth = np.diff(_nusedge_)/2
+plt.axvspan(-halfwidth[3],halfwidth[3],color='k',alpha=0.2)
 plt.grid()
 plt.xlabel(r'$\nu - \nu_{in}$ [GHz]')
 plt.ylabel(r'Synthetic FPSF with 4 sub-bands')
 plt.legend()
-
+plt.tight_layout()
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/FPSF.pdf')
 ```
 
 <!-- #region slideshow={"slide_type": "slide"} -->

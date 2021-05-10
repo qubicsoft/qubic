@@ -1,36 +1,23 @@
-import os
 import sys
 import glob
 import numpy as np
-import healpy as hp
 from itertools import combinations_with_replacement
 
 import qubic
 from qubic.polyacquisition import compute_freq
-from qubicpack.utilities import Qubic_DataDir
 from qubic import QubicSkySim as qss
 from qubic import NamasterLib as nam
 from qubic import ReadMC as rmc
 from qubic import AnalysisMC as amc
 
-# To run the script: $ python Fastsim_spectroimMC.py rep_save nbands config
-
-# Repository for dictionary and input maps
-if 'QUBIC_DATADIR' in os.environ:
-    pass
-else:
-    raise NameError('You should define an environment variable QUBIC_DATADIR')
-
-global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
-print('global directory:', global_dir)
+###### To run the script: $ python Fastsim_spectroimMC.py rep_save nbands config
 
 # Repository where maps and spectra will be saved
 rep_save = sys.argv[1]
 
 # Get a dictionary
-dictionary = global_dir + '/dicts/spectroimaging_article.dict'
 d = qubic.qubicdict.qubicDict()
-d.read_from_file(dictionary)
+d.read_from_file('spectroimaging_article.dict')
 
 # Number of bands
 nbands = int(sys.argv[2])

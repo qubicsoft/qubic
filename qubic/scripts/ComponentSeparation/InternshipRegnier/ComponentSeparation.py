@@ -61,11 +61,20 @@ def same_resol(map1, fwhm, fwhm_target=None, verbose=False) :
     return maps_out, fwhm_out, delta_fwhm
 
 def depth(Nb, Ny) :
-    
+
     depth_p = np.ones(Nb) * (np.sqrt(2)*np.sqrt(3)*2/np.sqrt(Ny/3))
     depth_i = np.ones(Nb) * (np.sqrt(3)*2/np.sqrt(Ny/3))
-    
+
     return depth_i, depth_p
+
+def give_me_rms_I(X, nside) :
+    rms = np.std(X[:, 0, :], axis=1)
+    rms *= np.sqrt(hp.nside2pixarea(nside, degrees=True)) * 60
+    return rms
+
+def give_me_rms_P(X, nside) :
+    rms = np.std(X[:, 1:, :], axis=(1, 2)) * np.sqrt(hp.nside2pixarea(nside, degrees=True)) * 60
+    return rms
 
 class CompSep(object) :
 
@@ -85,7 +94,7 @@ class CompSep(object) :
         self.lmax = 2 * self.nside - 1
         self.delta_ell = 16
 
-    def fg_buster(self, map1=None, comp=None, freq=None, fwhmdeg=None, target = None, okpix = None, Stokesparameter = 'IQU', Ny = 4.) :
+    def fg_buster(self, map1=None, map_noise = None, comp=None, freq=None, fwhmdeg=None, target = None, okpix = None, Stokesparameter = 'IQU') :
 
         """
         --------
@@ -106,18 +115,24 @@ class CompSep(object) :
         ins = get_instrument('Qubic')
 
 
-        # Change good frequency and FWHM
-        ins.frequency = freq
-        ins.fwhm = fwhmdeg
-        ins.depth_i = depth(map1.shape[0], Ny)[0]
-        ins.depth_p = depth(map1.shape[0], Ny)[1]
-
         #print('depthp', ins.depth_p)
         #print('depthi', ins.depth_i)
 
         # Change resolution of each map if it's necessary
         if target is not None :
             map1, tab_fwhm, delta_fwhm = same_resol(map1, fwhmdeg, fwhm_target = target, verbose = True)
+            map_N, tab_fwhm, delta_fwhm = same_resol(map_noise, fwhmdeg, fwhm_target = target, verbose = True)
+
+        # Change good frequency and FWHM
+        ins.frequency = freq
+        ins.fwhm = fwhmdeg
+        if map_noise is not None :
+            ins.depth_i = give_me_rms_I(map_N[:, :, okpix], self.nside)
+            ins.depth_p = give_me_rms_I(map_N[:, :, okpix], self.nside)*np.sqrt(2)
+
+        else :
+            ins.depth_i = []
+            ins.depth_p = []
 
         # Apply FG Buster
 

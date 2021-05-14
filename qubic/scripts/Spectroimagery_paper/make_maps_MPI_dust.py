@@ -7,15 +7,9 @@ import shutil
 
 import healpy as hp
 import numpy as np
-import pylab as plt
 
-from pysimulators import FitsArray
 from qubic import QubicSkySim as qss
 import qubic
-import pysm
-import pysm.units as u
-
-from qubicpack.utilities import Qubic_DataDir
 
 import qubic.ReadMC as rmc
 import qubic.SpectroImLib as si
@@ -34,16 +28,6 @@ if rank == 0:
 
 today = datetime.datetime.now().strftime('%Y%m%d')
 
-# Repository for dictionary and input maps
-if 'QUBIC_DATADIR' in os.environ:
-    pass
-else:
-    raise NameError('You should define an environment variable QUBIC_DATADIR')
-
-global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
-# global_dir = '/global/homes/m/mmgamboa/qubicsoft/qubic'
-dictfilename = global_dir + '/dicts/' + sys.argv[4]
-
 # Repository for output files
 out_dir = sys.argv[1]
 if out_dir[-1] != '/':
@@ -58,6 +42,7 @@ name = today + '_' + sys.argv[2]
 nreals = int(sys.argv[3])
 
 # Get the dictionary
+dictfilename = sys.argv[4]
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
@@ -66,10 +51,6 @@ nf_sub = d['nf_sub']
 for nf_sub_rec in d['nf_recon']:
     if nf_sub % nf_sub_rec != 0:
         raise ValueError('nf_sub/nf_sub_rec must be an integer.')
-
-# Check that we do one simulation with only one reconstructed subband
-# if d['nf_recon'][0] != 1:
-#     raise ValueError('You should do one simulation without spectroimaging as a reference.')
 
 # Center
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
@@ -87,8 +68,6 @@ if rank == 0:
     Qubic_sky = qss.Qubic_sky(sky_config, d)
     x0 = Qubic_sky.get_simple_sky_map()
     print('Input map with shape:', x0.shape)
-    # hp.mollview(x0[2,:,0],rot=center)
-    # plt.savefig('test-dust')
     if x0.shape[1] % (12 * d['nside'] ** 2) == 0:
         print('Good size')
     else:
@@ -192,7 +171,7 @@ for j in range(nreals):
                                                                                    d['nf_recon'][i],
                                                                                    d['noiseless'],
                                                                                    d['npointings'],
-                                                                                   str(j).zfill(2) )
+                                                                                   str(j).zfill(2))
             rmc.save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved, out_dir, name + name_map)
 
         comm.Barrier()

@@ -9,13 +9,8 @@ import healpy as hp
 import numpy as np
 import pylab as plt
 
-from pysimulators import FitsArray
 from qubic import QubicSkySim as qss
 import qubic
-import pysm
-import pysm.units as u
-
-from qubicpack.utilities import Qubic_DataDir
 
 import qubic.ReadMC as rmc
 import qubic.SpectroImLib as si
@@ -34,13 +29,6 @@ if rank == 0:
 
 today = datetime.datetime.now().strftime('%Y%m%d')
 
-# Repository for dictionary and input maps
-if 'QUBIC_DATADIR' in os.environ:
-    pass
-else:
-    raise NameError('You should define an environment variable QUBIC_DATADIR')
-
-#global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
 global_dir = '/global/homes/m/mmgamboa/qubicsoft/qubic'
 if sys.argv[4].lower() == 'no':
     dictfilename = global_dir + '/dicts/spectroimaging.dict'

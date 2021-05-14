@@ -22,50 +22,43 @@ import matplotlib.lines as mlines
 ```
 
 ```{python}
-# Data for 400 years with different noise characteristics
-dicnpz = {}
-dicnpz['150_3_00'] = np.load("output/SignalToNoise_Band150_Nsub3_Nyears400_spatialFalse_nunuFalse.npz")
-dicnpz['150_3_01'] = np.load("output/SignalToNoise_Band150_Nsub3_Nyears400_spatialFalse_nunuTrue.npz")
-dicnpz['150_3_10'] = np.load("output/SignalToNoise_Band150_Nsub3_Nyears400_spatialTrue_nunuFalse.npz")
-dicnpz['150_3_11'] = np.load("output/SignalToNoise_Band150_Nsub3_Nyears400_spatialTrue_nunuTrue.npz")
-dicnpz['150_4_00'] = np.load("output/SignalToNoise_Band150_Nsub4_Nyears400_spatialFalse_nunuFalse.npz")
-dicnpz['150_4_01'] = np.load("output/SignalToNoise_Band150_Nsub4_Nyears400_spatialFalse_nunuTrue.npz")
-dicnpz['150_4_10'] = np.load("output/SignalToNoise_Band150_Nsub4_Nyears400_spatialTrue_nunuFalse.npz")
-dicnpz['150_4_11'] = np.load("output/SignalToNoise_Band150_Nsub4_Nyears400_spatialTrue_nunuTrue.npz")
-dicnpz['150_5_00'] = np.load("output/SignalToNoise_Band150_Nsub5_Nyears400_spatialFalse_nunuFalse.npz")
-dicnpz['150_5_01'] = np.load("output/SignalToNoise_Band150_Nsub5_Nyears400_spatialFalse_nunuTrue.npz")
-dicnpz['150_5_10'] = np.load("output/SignalToNoise_Band150_Nsub5_Nyears400_spatialTrue_nunuFalse.npz")
-dicnpz['150_5_11'] = np.load("output/SignalToNoise_Band150_Nsub5_Nyears400_spatialTrue_nunuTrue.npz")
-dicnpz['220_3_00'] = np.load("output/SignalToNoise_Band220_Nsub3_Nyears400_spatialFalse_nunuFalse.npz")
-dicnpz['220_3_01'] = np.load("output/SignalToNoise_Band220_Nsub3_Nyears400_spatialFalse_nunuTrue.npz")
-dicnpz['220_3_10'] = np.load("output/SignalToNoise_Band220_Nsub3_Nyears400_spatialTrue_nunuFalse.npz")
-dicnpz['220_3_11'] = np.load("output/SignalToNoise_Band220_Nsub3_Nyears400_spatialTrue_nunuTrue.npz")
-dicnpz['220_4_00'] = np.load("output/SignalToNoise_Band220_Nsub4_Nyears400_spatialFalse_nunuFalse.npz")
-dicnpz['220_4_01'] = np.load("output/SignalToNoise_Band220_Nsub4_Nyears400_spatialFalse_nunuTrue.npz")
-dicnpz['220_4_10'] = np.load("output/SignalToNoise_Band220_Nsub4_Nyears400_spatialTrue_nunuFalse.npz")
-dicnpz['220_4_11'] = np.load("output/SignalToNoise_Band220_Nsub4_Nyears400_spatialTrue_nunuTrue.npz")
-dicnpz['220_5_00'] = np.load("output/SignalToNoise_Band220_Nsub5_Nyears400_spatialFalse_nunuFalse.npz")
-dicnpz['220_5_01'] = np.load("output/SignalToNoise_Band220_Nsub5_Nyears400_spatialFalse_nunuTrue.npz")
-dicnpz['220_5_10'] = np.load("output/SignalToNoise_Band220_Nsub5_Nyears400_spatialTrue_nunuFalse.npz")
-dicnpz['220_5_11'] = np.load("output/SignalToNoise_Band220_Nsub5_Nyears400_spatialTrue_nunuTrue.npz")
+### Data for 400 years with different noise characteristics
+
+dicIQU_local = np.load("output/SignalToNoise_stokesIQU_400years_local.npz")
+# print(dicIQU_local.files)
+
+dicI_local = np.load("output/SignalToNoise_stokesI_400years_local.npz")
+# print(dicI_local.files)
+
+dicIQU_CC = np.load("output/SignalToNoise_stokesIQU_400years_CC.npz")
+# print(dicIQU_CC.files)
+
+dicI_CC = np.load("output/SignalToNoise_stokesI_400years_CC.npz")
+# print(dicI_CC.files)
 ```
 
 ```{python}
-print(dicnpz['150_3_00']['s_n_Q'])
-```
-
-```{python}
+##### IQU separation (local & CC) #####
 # create figure and grid for axes
-fig = plt.figure(figsize=(18, 6))
-gs = fig.add_gridspec(1, 3)
-axs = gs.subplots(sharey='row', sharex='row')
+fig = plt.figure(figsize=(18, 10))
+gs = fig.add_gridspec(2, 3)
+axs = gs.subplots(sharey='all', sharex='all')
+axsloc, axscc = axs
 
-# set titles
-ax1, ax2, ax3 = axs
-ax1.set_title("3 sub-bands", fontsize='x-large')
-ax2.set_title("4 sub-bands", fontsize='x-large')
-ax3.set_title("5 sub-bands", fontsize='x-large')
-fig.suptitle("Dust index evaluation and signal/noise ratio (separation on IQU together)", fontsize='xx-large')
+# set titles and text around axes
+fig.suptitle("Dust index evaluation and signal/noise ratio (separation on IQU together)", fontsize=24)
+
+axsloc[0].text(-0.4, 0.5, "local\nexecution", transform=axsloc[0].transAxes,
+               fontsize=18, fontweight='demi', fontstyle='italic', va='center', rotation=0)
+axscc[0].text(-0.4, 0.5, "execution\non CC", transform=axscc[0].transAxes,
+              fontsize=18, fontweight='demi', fontstyle='italic', va='center', rotation=0)
+
+axsloc[0].text(0.5, 1.02, "3 bands", transform=axsloc[0].transAxes,
+               fontsize=18, fontweight='demi', fontstyle='italic', ha='center')
+axsloc[1].text(0.5, 1.02, "4 bands", transform=axsloc[1].transAxes,
+               fontsize=18, fontweight='demi', fontstyle='italic', ha='center')
+axsloc[2].text(0.5, 1.02, "5 bands", transform=axsloc[2].transAxes,
+               fontsize=18, fontweight='demi', fontstyle='italic', ha='center')
 
 # plot data
 markers=['+', 'x', 'd', 'o']
@@ -73,28 +66,42 @@ colors=['blue', 'red']
 for f in [150, 220]:
     for i in range(3):      # i = number of sub-bands
         for j in range(4):  # j = noise properties
-            identifier = str(f)+'_'+str(i+3)+'_'+np.binary_repr(j, width=2)
-            beta = dicnpz[identifier]['beta']
-            mean_beta = np.mean(beta)
-            sn_db = 20*np.log10(dicnpz[identifier]['s_n_I'])
-            mean_sn_db = np.mean(sn_db)
-            axs[i].scatter(sn_db, beta, marker=markers[j], s=100, color=colors[f//151])
+            identifier = str(f)+'_'+str(i+3)+'_'+np.binary_repr(j, width=2)[::-1]
+            beta_local = dicIQU_local['beta_'+identifier]
+            sn_db_local = 20*np.log10(dicIQU_local['signoiseI_'+identifier])
+            beta_CC = dicIQU_CC['beta_'+identifier]
+            sn_db_CC = 20*np.log10(dicIQU_CC['signoiseI_'+identifier])
+            axsloc[i].scatter(sn_db_local, beta_local, marker=markers[j], s=66, color=colors[f//151])
+            axscc[i].scatter(sn_db_CC, beta_CC, marker=markers[j], s=66, color=colors[f//151])
+            # axsloc[i].errorbar(np.mean(sn_db_local), np.mean(beta_local),
+            #                    xerr=np.std(sn_db_local),
+            #                    yerr=np.std(beta_local),
+            #                    ls="", marker=markers[j], color=colors[f//151])
+            # axscc[i].errorbar(np.mean(sn_db_CC), np.mean(beta_CC),
+            #                   xerr=np.std(sn_db_CC),
+            #                   yerr=np.std(beta_CC),
+            #                   ls="", marker=markers[j], color=colors[f//151])
 
 # craft legend objects
 red_patch = mpatches.Patch(color='red', label='220 GHz')
 blue_patch = mpatches.Patch(color='blue', label='150 GHz')
 
-plus_marker = mlines.Line2D([], [], color='black', marker='+', linestyle='None', markersize=10, label='white noise')
-cross_marker = mlines.Line2D([], [], color='black', marker='x', linestyle='None', markersize=10, label='nunu correlations')
-diamond_marker = mlines.Line2D([], [], color='black', marker='d', linestyle='None', markersize=10, label='spatial correlations')
-ball_marker = mlines.Line2D([], [], color='black', marker='o', linestyle='None', markersize=10, label='all correlations')
+plus_marker = mlines.Line2D([], [], color='black', marker='+',
+                            linestyle='None', markersize=10, label='white noise')
+cross_marker = mlines.Line2D([], [], color='black', marker='x',
+                             linestyle='None', markersize=10, label='nunu correlations')
+diamond_marker = mlines.Line2D([], [], color='black', marker='d',
+                               linestyle='None', markersize=10, label='spatial correlations')
+ball_marker = mlines.Line2D([], [], color='black', marker='o',
+                            linestyle='None', markersize=10, label='all correlations')
 
 # set axis labels and draw legend
 for ax in axs.flat:
-    ax.set_ylabel("Dust spectral index estimate")
-    ax.set_xlabel("S/N ratio [dB]")
+    ax.set_ylabel("Dust spectral index estimate", fontsize=16)
+    ax.set_xlabel("S/N ratio [dB]", fontsize=16)
     betaline = ax.axhline(y=1.54, color='black', label='beta=1.54')
-    ax.legend(handles=[betaline, red_patch, blue_patch, plus_marker, cross_marker, diamond_marker, ball_marker])
+    ax.legend(handles=[betaline, red_patch, blue_patch,
+                       plus_marker, cross_marker, diamond_marker, ball_marker])
     ax.label_outer()
 
 # show results
@@ -103,59 +110,50 @@ plt.show()
 ```
 
 ```{python}
-fig, (axe1, axe2) = plt.subplots(1, 2, sharey=True, figsize=(15,7))
+##### IQU vs. I separation (CC data) #####
+# create figure and grid for axes
+fig = plt.figure(figsize=(18, 10))
+gs = fig.add_gridspec(2, 3)
+axs = gs.subplots(sharey='all', sharex='all')
+axsIQU, axsI = axs
 
-plt.suptitle("Dust index evaluation and signal/noise ratio", fontsize='x-large')
+# set titles and text around axes
+fig.suptitle("Dust index evaluation: separation using IQU vs. I only (calculation on CC)", fontsize=24)
 
-### first axe with results from separation with IQU parameters
-axe1.set_title("FgBuster separation with IQU parameters")
-axe1.set_xlabel("S/N ratio [dB]")
-axe1.set_ylabel("Dust spectral index estimate")
-betaline = axe1.axhline(y=1.54, color='black', label='beta=1.54')
+axsIQU[0].text(-0.45, 0.5, "separation\n on IQU", transform=axsIQU[0].transAxes,
+               fontsize=18, fontweight='demi', fontstyle='italic', va='center', rotation=0)
+axsI[0].text(-0.45, 0.5, "separation\n on I only", transform=axsI[0].transAxes,
+              fontsize=18, fontweight='demi', fontstyle='italic', va='center', rotation=0)
 
-# plot values
+axsIQU[0].text(0.5, 1.02, "3 bands", transform=axsIQU[0].transAxes,
+               fontsize=18, fontweight='demi', fontstyle='italic', ha='center')
+axsIQU[1].text(0.5, 1.02, "4 bands", transform=axsIQU[1].transAxes,
+               fontsize=18, fontweight='demi', fontstyle='italic', ha='center')
+axsIQU[2].text(0.5, 1.02, "5 bands", transform=axsIQU[2].transAxes,
+               fontsize=18, fontweight='demi', fontstyle='italic', ha='center')
+
+# plot data
 markers=['+', 'x', 'd', 'o']
 colors=['blue', 'red']
 for f in [150, 220]:
     for i in range(3):      # i = number of sub-bands
         for j in range(4):  # j = noise properties
-            identifier = str(f)+'_'+str(i+3)+'_'+np.binary_repr(j, width=2)
-            beta = dicnpz[identifier]['beta']
-            mean_beta = np.mean(beta)
-            mean_sn_db = 20*np.mean(np.log10(dicnpz[identifier]['s_n_I']))
-            axe1.scatter(mean_sn_db, mean_beta, marker=markers[j], s=100, color=colors[f//151])
-# craft the legend
-red_patch = mpatches.Patch(color='red', label='220 GHz')
-blue_patch = mpatches.Patch(color='blue', label='150 GHz')
+            identifier = str(f)+'_'+str(i+3)+'_'+np.binary_repr(j, width=2)[::-1]
+            beta_IQU = dicIQU_CC['beta_'+identifier]
+            sn_db_IQU = 20*np.log10(dicIQU_CC['signoiseI_'+identifier])
+            beta_I = dicI_CC['beta_'+identifier]
+            sn_db_I = 20*np.log10(dicI_CC['signoise_'+identifier])
+            axsIQU[i].scatter(sn_db_IQU, beta_IQU, marker=markers[j], s=100, color=colors[f//151])
+            axsI[i].scatter(sn_db_I, beta_I, marker=markers[j], s=100, color=colors[f//151])
 
-plus_marker = mlines.Line2D([], [], color='black', marker='+', linestyle='None', markersize=10, label='white noise')
-cross_marker = mlines.Line2D([], [], color='black', marker='x', linestyle='None', markersize=10, label='nunu correlations')
-diamond_marker = mlines.Line2D([], [], color='black', marker='d', linestyle='None', markersize=10, label='spatial correlations')
-ball_marker = mlines.Line2D([], [], color='black', marker='o', linestyle='None', markersize=10, label='all correlations')
-
-axe1.legend(handles=[betaline, red_patch, blue_patch, plus_marker, cross_marker, diamond_marker, ball_marker])
-
-
-### second axe with results from using only I Stokes parameter for separation
-I_separation = np.load("output/SignalToNoise_I_separation.npz")
-beta_I = I_separation['beta']
-sig_I = I_separation['sig_to_noise']
-
-axe2.set_title("FgBuster separation with I parameter")
-axe2.set_xlabel("S/N ratio [dB]")
-# axe2.set_ylabel("Dust spectral index estimate")
-betaline = axe2.axhline(y=1.54, color='black', label='beta=1.54')
-
-markers=['+', 'x', 'd', 'o']
-colors=['blue', 'red']
-for c in range(24, len(beta_I)):
-    axe2.scatter(20*np.log10(sig_I[c]),
-                 beta_I[c],
-                 marker=markers[c%4], s=100,
-                 color=colors[c//36])
-# draw the legend
-axe2.legend(handles=[betaline, red_patch, blue_patch, plus_marker, cross_marker, diamond_marker, ball_marker])
-
+# set axis labels and draw legend
+for ax in axs.flat:
+    ax.set_ylabel("Dust spectral index estimate", fontsize=16)
+    ax.set_xlabel("S/N ratio [dB]", fontsize=16)
+    ax.label_outer()
+    betaline = ax.axhline(y=1.54, color='black', label='beta=1.54')
+    ax.legend(handles=[betaline, red_patch, blue_patch,
+                       plus_marker, cross_marker, diamond_marker, ball_marker])
 
 # show results
 plt.tight_layout()
@@ -163,21 +161,52 @@ plt.show()
 ```
 
 ```{python}
-I_separation = np.load("output/SignalToNoise_I_separation.npz")
-print(I_separation['beta'])
-print(I_separation['sig_to_noise'])
-```
+##### IQU vs. I separation (local data) #####
+# create figure and grid for axes
+fig = plt.figure(figsize=(18, 10))
+gs = fig.add_gridspec(2, 3)
+axs = gs.subplots(sharey='all', sharex='all')
+axsIQU, axsI = axs
 
-```{python}
-c = 24
+# set titles and text around axes
+fig.suptitle("Dust index evaluation: separation using IQU vs. I only (calculation on CC)", fontsize=24)
+
+axsIQU[0].text(-0.45, 0.5, "separation\n on IQU", transform=axsIQU[0].transAxes,
+               fontsize=18, fontweight='demi', fontstyle='italic', va='center', rotation=0)
+axsI[0].text(-0.45, 0.5, "separation\n on I only", transform=axsI[0].transAxes,
+              fontsize=18, fontweight='demi', fontstyle='italic', va='center', rotation=0)
+
+axsIQU[0].text(0.5, 1.02, "3 bands", transform=axsIQU[0].transAxes,
+               fontsize=18, fontweight='demi', fontstyle='italic', ha='center')
+axsIQU[1].text(0.5, 1.02, "4 bands", transform=axsIQU[1].transAxes,
+               fontsize=18, fontweight='demi', fontstyle='italic', ha='center')
+axsIQU[2].text(0.5, 1.02, "5 bands", transform=axsIQU[2].transAxes,
+               fontsize=18, fontweight='demi', fontstyle='italic', ha='center')
+
+# plot data
+markers=['+', 'x', 'd', 'o']
+colors=['blue', 'red']
 for f in [150, 220]:
-    print("{} GHz".format(f))
-    for n_sub in [3, 4, 5]:
-        print("   {} sub-bands".format(n_sub))
-        for sc in [False, True]:
-            for nunu in [False, True]:
-                print("      (nunu, spatial) = ({}, {})".format(nunu, sc),
-                      " -> beta = {:.3f}".format(I_separation['beta'][c]))
-                c += 1
-    print()
+    for i in range(3):      # i = number of sub-bands
+        for j in range(4):  # j = noise properties
+            identifier = str(f)+'_'+str(i+3)+'_'+np.binary_repr(j, width=2)[::-1]
+            beta_IQU = dicIQU_local['beta_'+identifier]
+            sn_db_IQU = 20*np.log10(dicIQU_local['signoiseI_'+identifier])
+            beta_I = dicI_local['beta_'+identifier]
+            sn_db_I = 20*np.log10(dicI_local['signoise_'+identifier])
+            axsIQU[i].scatter(sn_db_IQU, beta_IQU, marker=markers[j], s=100, color=colors[f//151])
+            axsI[i].scatter(sn_db_I, beta_I, marker=markers[j], s=100, color=colors[f//151])
+
+# set axis labels and draw legend
+for ax in axs.flat:
+    ax.set_ylabel("Dust spectral index estimate", fontsize=16)
+    ax.set_xlabel("S/N ratio [dB]", fontsize=16)
+    ax.label_outer()
+    betaline = ax.axhline(y=1.54, color='black', label='beta=1.54')
+    ax.legend(handles=[betaline, red_patch, blue_patch,
+                       plus_marker, cross_marker, diamond_marker, ball_marker])
+
+# show results
+plt.tight_layout()
+plt.show()
 ```

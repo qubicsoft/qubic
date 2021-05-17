@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -29,7 +29,7 @@ import numpy as np
 # Specific qubic modules
 from qubicpack.utilities import Qubic_DataDir
 from pysimulators import FitsArray
-import pysm
+import pysm3
 import qubic
 from qubic import SpectroImLib as si
 from qubic import QubicSkySim as qss

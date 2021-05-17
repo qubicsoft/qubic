@@ -42,12 +42,13 @@ for i in range(nb):
 ```
 
 ```{python}
-# theoretical value
+## theoretical value: Analytical calculation on: 
+## https://drive.google.com/file/d/1ANp8K1ZLBxSAihmghVW3FiDXghFZvWce/view?usp=sharing
 pixsize = np.degrees(hp.nside2resol(nside))
 sigmas = fwhms/2.35
 th_rms_new =  noise_init / (sigmas * sqrt(4*np.pi) / pixsize)
 
-# Theoretical value accounting for pixel size
+# Theoretical value accounting for pixel size (1/sqrt(12) quadratically added)
 sigmas_eff = np.sqrt( (fwhms/2.35)**2 + (pixsize/sqrt(12))**2)
 th_rms_new2 =  noise_init / (sigmas_eff * sqrt(4*np.pi) / pixsize)
 

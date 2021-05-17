@@ -10,18 +10,17 @@ For FgBuster dust spectral index estimation, command line arguments should be:
 - QubicSkySim parameters spatial correlations, frequency correlations (11 = both True)
 """
 
+import comp_tools as tools
+
 # General imports
 import os
-import pickle
 import sys
 import numpy as np
 import numpy.ma as ma
-from astropy.io import fits
 import healpy as hp
 
 # Qubic modules
 import qubic
-from qubic import QubicSkySim as Qss
 
 # Imports needed for component separation
 import fgbuster as fgb
@@ -51,122 +50,16 @@ elif LOC == 1:
 else:
     raise ValueError("Specify where the execution takes place (0 = local, 1 = CC)")
 
+# Qubic dictionaries for 150 GHz and 220 Ghz
+config_150, config_220 = 'FI-150', 'FI-220'
+d150_name = QUBIC_DATADIR + '/doc/FastSimulator/FastSimDemo_{}.dict'.format(config_150)
+d220_name = QUBIC_DATADIR + '/doc/FastSimulator/FastSimDemo_{}.dict'.format(config_220)
+d150, d220 = qubic.qubicdict.qubicDict(), qubic.qubicdict.qubicDict()
+d150.read_from_file(d150_name)
+d220.read_from_file(d220_name)
+qubic_dicts = {150: d150, 220: d220}
 
-def append_to_npz(file_name, dico) -> None:
-    """
-    Save new data to a .npz archive, concatenate new values with already existing ones.
-
-    :param file_name: the name of the .npz (assumed to be in output/...)
-    :param dico: the dictionary containing the new data to save
-    """
-    try:
-        new_dico = {}
-        with np.load(OUTDIR + file_name) as old_npz:
-            for k, v in dico.items():
-                if k in old_npz.files:
-                    new_dico[k] = np.concatenate((old_npz[k], v), axis=0)
-                else:
-                    new_dico[k] = v
-        np.savez(OUTDIR + file_name, **new_dico)
-    except FileNotFoundError:
-        np.savez(OUTDIR + file_name, **dico)
-
-
-def generate_cmb_dust_maps(dico, coverage, n_years, noise_profile, nunu, sc,
-                           seed=None, save_maps=False, return_maps=True):
-    """
-    Save CMB+Dust maps to FITS image format for later use, and/or return them immediately.
-
-    :param dico: dictionary for FastSimulator at the desired frequency (150 or 220)
-    :param coverage: the sky coverage
-    :param int n_years: number of integration years
-    :param bool noise_profile: include noise profile (inhomogeneity)
-    :param bool nunu: include noise frequency correlations
-    :param bool sc: include noise spatial correlations
-    :param seed: seed for the map generation (if None, a random seed is taken)
-    :param bool save_maps: save maps in the FITS format (warning: check code first! default: False)
-    :param bool return_maps: whether the function has to return the generated maps (default: True)
-
-    :return: cmb+dust maps with noise, cmb+dust noiseless, and noise only maps
-    """
-    if seed is None:
-        seed = np.random.randint(1000000)
-    sky_config = {'dust': 'd0', 'cmb': seed}  # d0 is described in https://pysm3.readthedocs.io/en/latest/models.html
-    qubic_sky = Qss.Qubic_sky(sky_config, dico)
-    cmb_dust, cmb_dust_noiseless, cmb_dust_noise_only, _ = \
-        qubic_sky.get_partial_sky_maps_withnoise(coverage=coverage,
-                                                 Nyears=n_years,
-                                                 noise_profile=noise_profile,  # noise inhomogeneity
-                                                 nunu_correlation=nunu,  # noise frequency correlations
-                                                 spatial_noise=sc,  # noise spatial correlations
-                                                 verbose=False,
-                                                 seed=seed,
-                                                 )
-    if save_maps:
-        save_dir = "/media/simon/CLE32/qubic/maps/"
-        if noise_profile:
-            save_dir += "with_noise_profile/"
-        else:
-            save_dir += "no_noise_profile/"
-        save_dir += "{:d}ghz/".format(int(dico['filter_nu'] / 1e9))
-        save_dir += "{}/".format(seed)
-        try:
-            os.mkdir(save_dir)
-        except FileExistsError:
-            pass
-
-        common_fmt = "{}bands_{}y"  # .format(band, nsub, nyears, seed)
-        common = common_fmt.format(dico['nf_recon'], n_years)
-        # TODO: add more possibilities
-
-        hdu_cmb_dust = fits.PrimaryHDU(cmb_dust)
-        hdu_cmb_dust.writeto(save_dir + common + "_cmbdust.fits", overwrite=True)
-
-        hdu_cmb_dust_noiseless = fits.PrimaryHDU(cmb_dust_noiseless)
-        hdu_cmb_dust_noiseless.writeto(save_dir + common + "_cmbdust_noiseless.fits", overwrite=True)
-
-        hdu_cmb_dust_noise_only = fits.PrimaryHDU(cmb_dust_noise_only)
-        hdu_cmb_dust_noise_only.writeto(save_dir + common + "_noise.fits", overwrite=True)
-
-    if return_maps:
-        return cmb_dust, cmb_dust_noiseless, cmb_dust_noise_only
-    else:
-        return
-
-
-def get_coverage_from_file(file_name=None):
-    """
-    Get coverage map from saved file.
-
-    :param file_name: the name of the file
-
-    :return: the array containing the coverage map
-    """
-    if file_name is None:
-        t = pickle.load(open(DATADIR + 'coverage_dtheta_40_pointing_6000.pkl', 'rb'))
-    else:
-        t = pickle.load(open(DATADIR + file_name, 'rb'))
-    return t['coverage']
-
-
-def get_sub_freqs_and_resolutions(dico):
-    """
-    Give the frequency sub-bands and corresponding angular resolutions around f = 150 or 220 GHz.
-
-    :param dico: instrument dictionary containing frequency band and nbr of sub-bands wanted
-
-    :return: Tuple (freqs, fwhms) containing the list of the central frequencies
-        and the list of resolutions (in degrees).
-    """
-    band = dico['filter_nu'] / 1e9
-    n = int(dico['nf_recon'])
-    filter_relative_bandwidth = dico['filter_relative_bandwidth']
-    _, _, nus_in, _, _, _ = qubic.compute_freq(band,
-                                               Nfreq=n,
-                                               relative_bandwidth=filter_relative_bandwidth)
-    # nus_in are in GHz so we use inverse scaling of resolution with frequency
-    # we know the fwhm at 150 GHz so the factor is 150 / (target frequency)
-    return nus_in, dico['synthbeam_peak150_fwhm'] * 150 / nus_in
+fwhm_150 = 0.43
 
 
 def read_arguments():
@@ -195,9 +88,9 @@ def read_arguments():
     return frequency_band, nb_simu, nb_bands, nb_years, spatial_correlations, nunu_correlations
 
 
-def run_beta_dust_estimation_combine_bands(n_sim: int, n_sub: int, n_years: int, noise_profile=False, nunu=False,
-                                           sc=False, verbose=True, combine_bands=True, single_band_freq=None,
-                                           stokes='IQU', estimate_dust_temperature=False):
+def run_beta_dust_estimation_combine_bands(n_sim: int, n_sub: int, n_years: int, noise_profile=False, nu_corr=False,
+                                           spatial_corr=False, verbose=True, combine_bands=True, band=None,
+                                           stokes='IQU', estimate_dust_temperature=False, use_noise_maps=False):
     """
     Run sky simulations (using `QubicSkySim`) and determine spectral parameters with FgBuster, using `n_sub` * `n_sub`
     at 150 & 220 GHz simultaneously.
@@ -213,59 +106,31 @@ def run_beta_dust_estimation_combine_bands(n_sim: int, n_sub: int, n_years: int,
     :param int n_sim: number of simulations
     :param int n_years: number of years of observation for simulated maps
     :param noise_profile: QubicSkySim "noise_profile" (ie. noise inhomogeneity)
-    :param bool nunu: QubicSkySim "nunu_correlation" (ie. noise frequency correlations)
-    :param bool sc: QubicSkySim "spatial_noise" (ie. spatial noise correlations)
+    :param bool nu_corr: QubicSkySim "nunu_correlation" (ie. noise frequency correlations)
+    :param bool spatial_corr: QubicSkySim "spatial_noise" (ie. spatial noise correlations)
     :param bool verbose: print progress information (default: True)
     :param bool combine_bands: combine 150 and 220 GHz bands (each with *n_sub* sub-bands)
-    :param int|None single_band_freq: frequency band to use if not combined (must be 150 or 220)
+    :param int|None band: frequency band to use if not combined (must be 150 or 220)
     :param str stokes: Stokes parameters for which to perform the separation (must be 'IQU', 'I' or 'QU')
     :param bool estimate_dust_temperature: estimate dust temperature in addition to spectral index (default: False)
+    :param bool use_noise_maps: use noise maps to compute sensitivities
     """
 
-    # define useful variables, determine what bands to use, get FastSimulator dictionaries, etc.
-    dico150 = qubic_dicts[150]
-    dico220 = qubic_dicts[220]
-    dico150['nf_recon'] = dico220['nf_recon'] = n_sub  # nbr of reconstructed bands (output)
-    dico150['nf_sub'] = dico220['nf_sub'] = 4 * n_sub  # nbr of simulated bands (input)
-
-    # create dictionary for the component separation
-    dico = {'nside': 256,
-            'npix': hp.nside2npix(256),
-            'nyears': n_years,
-            'verbose': verbose}
+    # indicate what components the maps contain
     if estimate_dust_temperature:
-        dico['components'] = [fgb.CMB(), fgb.Dust(150.)]
+        components = [fgb.CMB(), fgb.Dust(150.)]
     else:
-        dico['components'] = [fgb.CMB(), fgb.Dust(150., temp=20.)]
+        components = [fgb.CMB(), fgb.Dust(150., temp=20.)]
 
-    # get sub-frequencies and fwhms
-    if combine_bands:
-        freqs150, fwhms150 = get_sub_freqs_and_resolutions(dico150)
-        freqs220, fwhms220 = get_sub_freqs_and_resolutions(dico220)
-        dico.update({'nbands': 2 * n_sub,
-                     'freqs': np.concatenate((freqs150, freqs220), axis=0),
-                     'fwhms': np.concatenate((fwhms150, fwhms220), axis=0)})
-    else:
-        single_dico = qubic_dicts[single_band_freq]
-        freqs, fwhms = get_sub_freqs_and_resolutions(single_dico)
-        dico.update(single_dico)
-        dico.update({'nbands': n_sub,
-                     'freqs': freqs,
-                     'fwhms': fwhms})
+    # create BasicCompSep instance with minimal parameters
+    comp_separation = BasicCompSep(256, n_sub, combine_bands, n_years, components,
+                                   verbose=verbose, band=band, use_noise_maps=use_noise_maps)
 
-    # get coverage map, define pixels to use & arguments for map generation, etc.
-    coverage = get_coverage_from_file()
-    # okpix_inside = (coverage > (0.5 * np.max(coverage)))
-    t_mask = np.empty((dico['nbands'], 3, dico['npix']), dtype=bool)
-    t_mask[...] = (coverage < (0.5 * np.max(coverage)))
-    dico['mask'] = t_mask
-
-    # arguments for map generation
-    map_args = coverage, n_years, noise_profile, nunu, sc
+    # create mask indicating what pixels to use
+    comp_separation.update_mask()
 
     # declare variable to store the results
     beta_values_cmbdust = []
-    beta2 = []
     temp_values_cmbdust = []
 
     # simulate n_sim realisations of sky maps using QubicSkySim
@@ -275,99 +140,30 @@ def run_beta_dust_estimation_combine_bands(n_sim: int, n_sub: int, n_years: int,
             print("entering iteration number {:d} of n_sim={:d}".format(i_sim + 1, n_sim))
             print("generate sky maps...")
 
-        # generate sky map with random seed
-        # if bands are combined, need to generate the maps with a common seed
-        if combine_bands:
-            common_seed = np.random.randint(1000000)
-            cmbdust150, _, noise150 = generate_cmb_dust_maps(dico150, *map_args, seed=common_seed)
-            cmbdust220, _, noise220 = generate_cmb_dust_maps(dico220, *map_args, seed=common_seed)
-            cmbdust = np.concatenate((cmbdust150, cmbdust220), axis=0)
-            noise = np.concatenate((noise150, noise220), axis=0)
-        else:
-            cmbdust, _, noise = generate_cmb_dust_maps(dico, *map_args)
-
-        # modify shape of maps for FgBuster, add them to dictionary
-        cmbdust = np.transpose(cmbdust, (0, 2, 1))
-        noise = np.transpose(noise, (0, 2, 1))
-        dico['maps_in'] = cmbdust
-        dico['noise_in'] = noise
+        # generate new sky maps
+        comp_separation.generate_new_maps(noise_profile, nu_corr, spatial_corr)
         if verbose:
-            print("sky maps generated\n")
+            print("sky maps generated")
 
-        # create BasicCompSep instance
-        comp_separation = BasicCompSep(dico)
+        # put maps at the same resolution before separation
+        comp_separation.put_maps_at_same_resolution()
 
         # perform component separation using FgBuster
-        fg_res = comp_separation.fg_buster(stokes=stokes)
-        fg_res_2 = comp_separation.fg_buster(stokes=stokes, target=fwhm_150)
+        fg_res = comp_separation.perform_separation(stokes=stokes)
         beta_cmbdust = fg_res.x[0]
         beta_values_cmbdust.append(beta_cmbdust)
-        beta2.append(fg_res_2.x[0])
         if estimate_dust_temperature:
             temp_cmbdust = fg_res.x[1]
             temp_values_cmbdust.append(temp_cmbdust)
         if verbose:
             print("fgbuster separation terminated (message: {})\n\n".format(fg_res.message))
 
-        del cmbdust
-        del noise
-        del comp_separation
-
     if estimate_dust_temperature:
         res = np.array(beta_values_cmbdust), np.array(temp_values_cmbdust)
     else:
-        res = np.array(beta_values_cmbdust), np.array(beta2)
+        res = np.array(beta_values_cmbdust)
 
     return res
-
-
-def same_resol(maps_in, map_fwhms_deg, fwhm_target=None, verbose=False):
-    """
-    Put all maps at the same resolution.
-
-    :param maps_in: array containing the maps to be smoothed (size of 1st dimension = # of sub-bands)
-    :param list[float] map_fwhms_deg: list of fwhms of the maps (in degrees)
-    :param float fwhm_target: the common resolution to which the function smooths the maps (if specified).
-        If not specified, the target resolution is the lowest of all input maps.
-    :param bool verbose: make the function verbose
-
-    :return: (maps_out, fwhm_out) with maps_out an array containing the maps smoothed down to a common resolution
-    and fwhm_out the common (new) fwhm
-    """
-    # define common output resolution
-    sh = np.shape(maps_in)
-    nb_bands = sh[0]
-    if fwhm_target is None:
-        fwhm_out = np.max(map_fwhms_deg)
-        if verbose:
-            print("input maps will be smoothed down to minimal resolution (fwhm={:.6f}°)".format(fwhm_out))
-    else:
-        fwhm_out = fwhm_target
-        if verbose:
-            print("input maps will be smoothed down to specified resolution (fwhm={:.6f}°)".format(fwhm_out))
-
-    # create array to contain output maps
-    maps_out = np.zeros_like(maps_in)
-
-    # loop over input maps (ie. over sub-bands)
-    for i in range(nb_bands):
-        fwhm_in = map_fwhms_deg[i]
-        kernel_fwhm = np.sqrt(fwhm_out ** 2 - fwhm_in ** 2)
-        if verbose:
-            print('Sub-band {:d}: going from fwhm={:6f}° to fwhm={:6f}°'.format(i, fwhm_in, fwhm_out))
-
-        if kernel_fwhm > 1e-6:
-            if verbose:
-                print('    -> convolution with {:6f}° fwhm kernel.'.format(kernel_fwhm))
-            maps_out[i, :, :] = hp.sphtfunc.smoothing(maps_in[i, :, :],
-                                                      fwhm=np.radians(kernel_fwhm),
-                                                      verbose=False)
-        else:
-            if verbose:
-                print('    -> no convolution needed, map already at required resolution.')
-            maps_out[i, :, :] = maps_in[i, :, :]
-
-    return maps_out, fwhm_out
 
 
 class BasicCompSep(object):
@@ -377,218 +173,225 @@ class BasicCompSep(object):
     https://fgbuster.github.io/fgbuster/api/fgbuster.separation_recipes.html#fgbuster.separation_recipes.basic_comp_sep
     """
 
-    def __init__(self, d):
+    def __init__(self, nside: int, nsub: int, combine_bands: bool, nyears: int, components, **kwargs):
         """
         Create instance of BasicCompSep.
 
-        :param d: dictionary containing all required parameters
+        :param kwargs: additional information for initialization. If parameter combine_bands is set to False,
+            kwargs must include an attribute 'band' which indicates which frequency band to use (150 or 220).
         """
+        # map pixelation
+        self.nside = nside
+        self.npix = hp.nside2npix(nside)
+        self.pix_size = hp.nside2resol(nside, arcmin=True)
 
-        self.verbose = d['verbose']
+        # determine total number of sub-bands, corresponding frequencies and fwhms
+        self.combine = combine_bands
+        d150['nf_recon'] = d220['nf_recon'] = nsub  # nbr of reconstructed bands (output)
+        d150['nf_sub'] = d220['nf_sub'] = 4 * nsub  # nbr of simulated bands (input)
+        if combine_bands:
+            self.band = None
+            freqs150, fwhms150 = tools.get_sub_freqs_and_resolutions(d150)
+            freqs220, fwhms220 = tools.get_sub_freqs_and_resolutions(d220)
+            self.nbands = 2 * nsub
+            self.freqs = np.concatenate((freqs150, freqs220), axis=0)
+            self.fwhms = np.concatenate((fwhms150, fwhms220), axis=0)
+        else:
+            try:
+                band = kwargs['band']
+                freqs, fwhms = tools.get_sub_freqs_and_resolutions(qubic_dicts[band])
+                self.nbands = nsub
+                self.freqs = freqs
+                self.fwhms = fwhms
+                self.band = band
+            except KeyError:
+                print("please specify the frequency to use, or set combine_bands=True")
 
-        self.nside = d['nside']
-        self.npix = d['npix']
-        self.nbands = d['nbands']  # number of sub-bands
-        self.nyears = d['nyears']  # number of years of integration
+        # save original map fwhms
+        self.original_fwhms = self.fwhms
+        self.new_fwhm = self.fwhms[0]
+
+        # integration time and coverage
+        self.nyears = nyears
+        if 'coverage_file' in kwargs:
+            self.coverage = tools.get_coverage_from_file(DATADIR, file_name=kwargs['coverage_file'])
+        else:
+            self.coverage = tools.get_coverage_from_file(DATADIR)
+
+        # sky components (CMB, Dust, ...)
+        self.components = components
+
+        # get instrument from experiments.yaml in cmbdb package
         instrument_name = 'Qubic' + str(self.nbands) + 'bands'
-        self.instrument = fgb.get_instrument(instrument_name)  # get instrument from experiments.yaml in cmbdb package
-        self.maps = d['maps_in']  # maps to be separated
-        self.noise = d['noise_in']  # noise maps (can be None)
-        self.freqs = d['freqs']  # frequencies of the maps
+        self.instrument = fgb.get_instrument(instrument_name)
         self.instrument.frequency = self.freqs
-        self.fwhms = d['fwhms']  # fwhms (in degrees) of the maps
-        self.mask = d['mask']  # mask that indicates pixels to consider for separation (True=bad pixel)
-        self.components = d['components']  # sky components (CMB, Dust, ...)
+        self.original_depth_i = None
+        self.original_depth_p = None
 
-        # solver options
-        self.solver_method = 'BFGS'
-        self.solver_tol = 1
-        self.solver_options = {'disp': False}  # disp=True raises KeyError in FgBuster modules...
+        if 'verbose' in kwargs:
+            self.verbose = kwargs['verbose']
+        else:
+            self.verbose = True
+        if 'use_noise_maps' in kwargs:
+            self.use_noise_maps = kwargs['use_noise_maps']
+        else:
+            self.use_noise_maps = False
 
-        if self.verbose:
-            print("Create BasicCompSep instance...")
-            print("  ->  nside = {}".format(self.nside))
-            print("  ->   npix = {}".format(self.npix))
-            print("  -> nbands = {}".format(self.nbands))
-            print("  -> nyears = {}".format(self.nyears))
-            print("  -> instrument = {}".format(instrument_name))
-            print("  -> shape of maps = {}".format(np.shape(self.maps)))
-            list_fmt = "[" + ", ".join(["{:.1f}"] * self.nbands) + "]"
-            print("  -> map frequencies (GHz) = " + list_fmt.format(*self.freqs))
-            list_fmt = "[" + ", ".join(["{:.3f}"] * self.nbands) + "]"
-            print("  ->   map fwhms (degrees) = " + list_fmt.format(*self.fwhms))
-            print("  -> mask defines {} good pixels".format(np.sum(np.logical_not(self.mask))))
-            print("  -> {} components specified".format(len(self.components)))
-            print("  ->    solver method = {}".format(self.solver_method))
-            print("  -> solver tolerance = {}".format(self.solver_tol))
-            print("  ->   solver options = {}".format(self.solver_options))
+        # mask (created with method update_mask)
+        self.mask = None
+
+        # maps (created with method generate_new_maps)
+        self.maps = None
+        self.noise = None
 
         # OLD CODE
         # self.l_min = 20
         # self.l_max = 2 * self.nside - 1
         # self.delta_ell = 16
 
-    def fg_buster(self, stokes='IQU', target=None):
+    def perform_separation(self, stokes='IQU', method='BFGS', tol=1.0, solver_options=None):
         """
         Perform FgBuster algorithm.
 
         :param str stokes: Stokes parameters for which to perform the separation.
-        :param float target: target resolution for the maps. If None, maps are smoothed to
-        the lowest resolution of them all.
-
+        :param str method: type of solver (default: 'BFGS')
+            (see https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html for possibilities)
+        :param float tol: tolerance for termination (default: 1.0)
+        :param solver_options: dictionary containing solver options
+            (default: {'disp': False} because True raises errors during FgBuster execution)
         :return: Dictionary which contains the amplitude of each components, the estimated parameter beta_d and dust
-        temperature.
+            temperature.
         """
 
-        # change resolution of each map if necessary
-        if self.verbose:
-            print("smooth input maps to common resolution...")
-        maps, fwhm = same_resol(self.maps, self.fwhms, fwhm_target=target, verbose=False)
-        if self.verbose:
-            print("maps smoothed to {:.3f} degrees".format(fwhm))
-
         # build MaskedArray maps
-        maps_m = ma.array(maps, mask=self.mask)
+        maps_m = ma.array(self.maps, mask=self.mask)
 
         # compute noise levels
-        if self.noise is None:  # if noise maps are not given
-            if self.verbose:
-                print("estimate roughly noise level (noise maps not provided)...")
-            depth_i = 2. * np.sqrt(2 * self.nbands / (3 * self.nyears)) / np.ones(self.nbands)
-            depth_p = depth_i * np.sqrt(2)
-        else:
+        if self.use_noise_maps:
+            assert self.noise is not None
             if self.verbose:
                 print("compute noise level with noise maps provided...")
-            noise, fwhm = same_resol(self.noise, self.fwhms, fwhm_target=target, verbose=False)
-            noise_m = ma.array(noise, mask=self.mask)
-            # noise estimation (in I component) using the noise maps
-            depth_i = ma.getdata(ma.std(noise_m[:, 0, :], axis=1))
-            depth_i *= np.sqrt(hp.nside2pixarea(self.nside, degrees=True)) * 60
-            # noise estimation (in Q & U components)
-            depth_p = ma.getdata(ma.std(noise_m[:, 1:, :], axis=(1, 2)))
-            depth_p *= np.sqrt(hp.nside2pixarea(self.nside, degrees=True)) * 60
+            noise_same_resol, _ = tools.same_resolution(self.noise, self.original_fwhms, self.new_fwhm)
+            new_depth_i, new_depth_p = tools.get_depths(noise_same_resol, self.pix_size, self.mask)
+        else:
+            if self.verbose:
+                print("estimate noise level analytically (noise maps not provided)...")
+            ker_fwhms = tools.get_kernel_fwhms_for_smoothing(self.original_fwhms, self.new_fwhm)
+            pix_size_deg = self.pix_size / 60  # in degrees instead of arcmin
+            ker_sigmas_eff = np.sqrt(np.square(ker_fwhms / 2.355) + np.square(pix_size_deg) / 12)
+            # the factor 1/12 is because RMS of uniform distribution on [0, 1] is 1/sqrt(12)
+            correction = ker_sigmas_eff * np.sqrt(4 * np.pi) / pix_size_deg
+            new_depth_i = self.original_depth_i / correction
+            new_depth_p = self.original_depth_p / correction
+
+            # approximate estimation
+            # depth_i = 2. * np.sqrt(2 * self.nbands / (3 * self.nyears)) / np.ones(self.nbands)
+            # depth_p = depth_i * np.sqrt(2)
 
         # update parameters of instrument with sensibilities
-        self.instrument.depth_i = depth_i
-        self.instrument.depth_p = depth_p
+        self.instrument.depth_i = new_depth_i
+        self.instrument.depth_p = new_depth_p
         if self.verbose:
             list_fmt = "[" + ", ".join(["{:.2f}"] * self.nbands) + "]"
-            print("  -> depth_i = " + list_fmt.format(*depth_i))
-            print("  -> depth_p = " + list_fmt.format(*depth_p))
+            print("  -> depth_i = " + list_fmt.format(*new_depth_i))
+            print("  -> depth_p = " + list_fmt.format(*new_depth_p))
 
-        # trying to compute noise after smoothing analytically
-        # noise_in_m = ma.array(noise_in, mask=t_mask)
-        # depth_1 = ma.getdata(ma.std(noise_in_m[:, 0, :], axis=1))
-        # depth_2 = depth_1.copy()
-        # depth_3 = depth_1.copy()
-        #
-        # depth_1 *= fwhms / fwhm
-        # depth_2 *= (fwhms / fwhm) ** 2
-        # depth_3[1:] /= np.sqrt(np.pi * (fwhm ** 2 - np.square(fwhms[1:]))) * 2 * 2.35
-        # depth_1 *= np.sqrt(hp.nside2pixarea(self.nside, degrees=True)) * 60
-        # depth_2 *= np.sqrt(hp.nside2pixarea(self.nside, degrees=True)) * 60
-        # depth_3 *= np.sqrt(hp.nside2pixarea(self.nside, degrees=True)) * 60
-
-        # apply FG Buster
+        # apply FG Buster on desired Stokes parameters
         if stokes == 'IQU':
-            res = fgb.basic_comp_sep(self.components,
-                                     self.instrument,
-                                     maps_m,
-                                     method=self.solver_method,
-                                     tol=self.solver_tol,
-                                     options=self.solver_options
-                                     )
-
-        elif stokes == 'QU':
-            res = fgb.basic_comp_sep(self.components,
-                                     self.instrument,
-                                     maps_m[:, 1:, :],
-                                     method=self.solver_method,
-                                     tol=self.solver_tol,
-                                     options=self.solver_options
-                                     )
-
+            map_slice = maps_m
         elif stokes == 'I':
-            res = fgb.basic_comp_sep(self.components,
-                                     self.instrument,
-                                     maps_m[:, 0, :],
-                                     method=self.solver_method,
-                                     tol=self.solver_tol,
-                                     options=self.solver_options
-                                     )
-
+            map_slice = maps_m[:, 0, :]
+        elif stokes == 'QU':
+            map_slice = maps_m[:, 1:, :]
         else:
             raise TypeError("incorrect specification of Stokes parameters (must be either 'IQU', 'QU' or 'I')")
 
+        if solver_options is None:
+            solver_options = {'disp': False}
+
+        res = fgb.basic_comp_sep(self.components,
+                                 self.instrument,
+                                 map_slice,
+                                 method=method,
+                                 tol=tol,
+                                 options=solver_options
+                                 )
         return res
 
+    def generate_new_maps(self, noise_profile=False, nu_corr=False, spatial_corr=False):
+        """
+        Generate new maps with given parameters.
 
-# TODO: 1) compute noise analytically rather than using smoothed maps --> complicated
+        :param noise_profile: add noise profile (inhomogeneity)
+        :param nu_corr: add frequency correlations
+        :param spatial_corr: add spatial correlations
+        """
+
+        map_args = self.coverage, self.nyears, noise_profile, nu_corr, spatial_corr
+        if self.combine:
+            common_seed = np.random.randint(1000000)
+            cmbdust150, _, noise150 = tools.generate_cmb_dust_maps(d150, *map_args, seed=common_seed)
+            cmbdust220, _, noise220 = tools.generate_cmb_dust_maps(d220, *map_args, seed=common_seed)
+            cmbdust = np.concatenate((cmbdust150, cmbdust220), axis=0)
+            noise = np.concatenate((noise150, noise220), axis=0)
+        else:
+            cmbdust, _, noise = tools.generate_cmb_dust_maps(qubic_dicts[self.band], *map_args)
+
+        # modify shape of maps for FgBuster
+        cmbdust = np.transpose(cmbdust, (0, 2, 1))
+        noise = np.transpose(noise, (0, 2, 1))
+
+        self.maps = cmbdust
+        self.noise = noise
+
+        # reset fwhms
+        self.fwhms = self.original_fwhms
+        self.original_depth_i, self.original_depth_p = tools.get_depths(self.noise, self.pix_size, self.mask)
+
+    def put_maps_at_same_resolution(self, target=None):
+        """
+        Put the maps at the same resolution.
+
+        :param float target: optional. Specify the common new resolution of the maps.
+        """
+        # don't smooth noise maps, because in reality they are not provided
+        # if self.noise is not None:
+        #     self.noise, _ = tools.same_resolution(self.noise, self.fwhms, fwhm_target=target)
+        self.maps, self.new_fwhm = tools.same_resolution(self.maps, self.fwhms, fwhm_target=target)
+        self.fwhms = self.new_fwhm + np.zeros(self.nbands)
+        if self.verbose:
+            print("maps smoothed to fwhm={:.3f} degrees".format(self.new_fwhm))
+
+    def update_mask(self, threshold=0.5):
+        """
+        Update the mask.
+
+        :param threshold: value of coverage above which pixels are selected.
+        """
+        mask = np.empty((self.nbands, 3, self.npix), dtype=bool)
+        mask[...] = (self.coverage < (threshold * np.max(self.coverage)))
+        self.mask = mask
+
+
+# TODO: 1) compute noise analytically rather than using smoothed maps
+# 1) -> done but there is a small difference (of approximately 1 uK.arcmin), no idea why
 # TODO: 2) find a way to perform separation in harmonic space
 # TODO: 3) use weighted_comp_sep to account for noise profile (circular dependence)
 # TODO: 4) check results with 220 GHz maps smoothed to 150 GHz resolution (to see if bias in combined separation is
 #          due to smoothing
-# TODO: 5) rewrite functions as methods of the BasicCompSep class
+# 4) -> it seems that the bias could be due to this smoothing (220 GHz results after smoothing to 0.43° fwhm are
+#       compatible with the hypothesis)
 
 
 if __name__ == "__main__":
-    # Qubic dictionaries for 150 GHz and 220 Ghz
-    config_150, config_220 = 'FI-150', 'FI-220'
-    d150_name = QUBIC_DATADIR + '/doc/FastSimulator/FastSimDemo_{}.dict'.format(config_150)
-    d220_name = QUBIC_DATADIR + '/doc/FastSimulator/FastSimDemo_{}.dict'.format(config_220)
-    d150, d220 = qubic.qubicdict.qubicDict(), qubic.qubicdict.qubicDict()
-    d150.read_from_file(d150_name)
-    d220.read_from_file(d220_name)
-    qubic_dicts = {150: d150, 220: d220}
-
-    fwhm_150 = 0.43
-
     # arguments = read_arguments()
-    r = run_beta_dust_estimation_combine_bands(5, 3, 3, combine_bands=True, single_band_freq=None)
+    r = run_beta_dust_estimation_combine_bands(15, 3, 3, combine_bands=True, band=None, use_noise_maps=True)
+    q = run_beta_dust_estimation_combine_bands(15, 3, 3, combine_bands=True, band=None, use_noise_maps=False)
 
     print("  average =", np.mean(r))
     print("deviation =", np.std(r))
 
-    sys.exit(0)
+    print("  average =", np.mean(q))
+    print("deviation =", np.std(q))
 
-# OLD CODE
-# def internal_linear_combination(self, maps_in=None, components=None, freqs=None, map_fwhms_deg=None,
-#                                 target=None):
-#     """
-#     Perform Internal Linear Combination (ILC) algorithm.
-#
-#     :param maps_in: maps from which to estimate CMB signal
-#     :param components: list storing the components of the mixing matrix
-#     :param freqs: list storing the frequencies of the maps
-#     :param map_fwhms_deg: list storing the fwhms of the maps (in degrees). It may contain different values.
-#     :param target:
-#
-#     :return: Dictionary for each Stokes parameter (I, Q, U) in a list.
-#         To have the amplitude, we can write r[ind_stk].s[0].
-#     """
-#
-#     qubic_instrument = fgb.get_instrument('Qubic' + str(self.nbands) + 'bands')
-#
-#     # specify correct frequency and FWHM
-#     qubic_instrument.frequency = freqs
-#     qubic_instrument.fwhm = map_fwhms_deg
-#
-#     r = []
-#
-#     # change resolutions of the maps if necessary
-#     maps_in, _ = same_resol(maps_in, map_fwhms_deg, fwhm_target=target, verbose=True)
-#
-#     # Apply ILC for each stokes parameter
-#     for i in range(3):
-#         r.append(fgb.ilc(components, qubic_instrument, maps_in[:, i, :]))
-#
-#     return r
-#
-# def ilc_2_tab(self, x, seen_pix):
-#
-#     tab_cmb = np.zeros((self.nbands, 3, self.npix))
-#
-#     for i in range(3):
-#         tab_cmb[0, i, seen_pix] = x[0].s[0]
-#
-#     return tab_cmb
+    sys.exit(0)

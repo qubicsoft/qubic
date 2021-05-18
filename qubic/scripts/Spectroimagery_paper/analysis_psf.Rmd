@@ -172,6 +172,7 @@ for ijob in range(len(jobids)):
     allconv.append(mapsconv)
 allrecon = np.array(allrecon)
 allconv = np.array(allconv)
+
 #Index where the point source was placed
 NU0=150
 
@@ -181,107 +182,76 @@ for ishift in dictshift.values():
     innu.append(innu0+ishift)
 ```
 
-Compute noise level at different angular distance to the source
-
-```{python}
-def ring4snr(center,d,lth=6,hth=8, doplot=False):
-    pxvec = hp.ang2vec(center[0],center[1],lonlat=True)
-    ip = np.arange(12*d['nside']**2)
-    vpix = hp.pix2vec(d['nside'],ip)
-    vecs = np.degrees(np.arccos(np.dot(pxvec,vpix)))
-    seenring = np.zeros((12*d['nside']**2),dtype=bool)
-    seenring[(vecs < hth) & (vecs > lth)]=int(1)
-    if doplot: hp.mollview(seenring,rot=center)
-    return seenring
-
-pixel = hp.pixelfunc.ang2pix(d['nside'], np.deg2rad(90-center[1]), np.deg2rad(center[0]),)
-pixel=pixel
-nreal=0
-```
-
 See at the profile of the amplitude relative to amplitude in the input_maps (1e5)... okk
 
 ```{python}
 pixel = hp.pixelfunc.ang2pix(d['nside'], np.deg2rad(90-center[1]), np.deg2rad(center[0]),)#
-pixel=pixel
 
-#fig,ax=plt.subplots(nrows=2,ncols=d['nf_recon'][-1]//2,
-#                   figsize=(20,14))
-fig,ax=plt.subplots(nrows=1,ncols=3,
-                   figsize=(20,6))
-ax=ax.ravel()
-#ax = [ax,]
-snr = {}
-nreal=0
+fig, ax = plt.subplots(nrows = 1, ncols = 3, figsize = (20,6), sharey = True)
+ax = ax.ravel()
+
+nreal = 0
+
 color=iter(cm.rainbow(np.linspace(0,1,len(dictshift)+1 )))
+
 plt.rc('text',usetex=False)
 plt.rc('font', size=15)
 
-for j,isub in enumerate([2,3,4,]):
-    idx='{}'.format(isub)
+for j,isub in enumerate([2,3,4]):
+    idx = '{}'.format(isub)
     ax[j].set_title(r'Rel. intensity nfrec={}'.format(isub))
     ax[j].set_xlabel(r'$\nu[GHz]$')
-    ax[j].set_ylabel(r'$I_{\rm A0=1e5}$')
+    #ax[j].set_ylabel(r'$I_{\rm A0=1e5}$')
 
     for k in range(isub):
         NormFact = 1#48/isub
         
-        markers = iter(['h','o','+','^','<','>','s','p','*','x','|','_','d','D','1','2','3','4','P','H','x'])
-        c=next(color)
-        #if k == 0: 
-        #else:labelc=None;labelr_2=None;labelr_1=None;labelr00=None;labelr02=None;
-        color2=iter(cm.jet(np.linspace(0,1,len(dictshift)+1)))
-        #c2=next(color2)
+        c = next(color)
+        color2 = iter(cm.jet(np.linspace(0,1,len(dictshift)+1)))
+        
         for inu,irecon in enumerate(allrecon):
-            if len(irecon[idx])==0:
-                c2=next(color2)
+            #Check if map is None (for nf_rec = 4 or 6)
+            if len(irecon[idx]) == 0:
+                c2 = next(color2)
                 pass
             else:
-                m='o'#next(markers)
-                c2=next(color2)
-                ax[j].plot(nusfull[idx][k], irecon[idx][nreal,k,pixel,0]*NormFact/1e5, 
-                           marker=m, color=c2, ms=8 )
-                if (j ==2)&(k+1==isub):
-                    ax[j].axvline(nus_in[innu[inu]], color=c2,alpha=0.4,ls='--',lw=3,
-                                          label='{:.2f}'.format(nus_in[innu[inu]]))
-                    #ax[j].legend(bbox_to_anchor=(2.3, 0.5, 0.5, 0.5))
-                    ax[j].legend(bbox_to_anchor=(1.6, 0.5, 0.5, 0.5))
+                m = 'o'#next(markers)
+                c2 = next(color2)
+                ax[j].plot(nusfull[idx][k], irecon[idx][nreal,k,pixel,0]*NormFact, 'o',
+                           color = c2, ms = 8 )
+                if (j == 2) & (k + 1 == isub):
+                    ax[j].axvline(nus_in[innu[inu]], color = c2, alpha = 0.4, ls = '--', lw = 3,
+                                          label = '{:.2f}'.format(nus_in[innu[inu]]))
+                    #ax[j].legend(bbox_to_anchor=(1.6, 0.5, 0.5, 0.5))
                 else:
-                    ax[j].axvline(nus_in[innu[inu]], color=c2,alpha=0.4,ls='--',lw=3,)
+                    ax[j].axvline(nus_in[innu[inu]], color = c2, alpha = 0.4, ls = '--', lw = 3)
         if len(irecon[idx])==0:
             pass
         else:
-            ringmask=ring4snr(center,d,lth=2,hth=6,doplot=False)
-            testmap = irecon[idx][0,k,:,0]
-            temean = np.mean(testmap[ringmask])*NormFact/1e5
-            #testd = np.sqrt(np.sum((testmap[ringmask])**2)/len(ringmask))*NormFact/1e5
-            testd = np.std(testmap[ringmask])*NormFact/1e5
-            deltanu = nusfulledge[idx][-1]-nusfulledge[idx][0]
-            #print('{} {} {:.6f} {:.4f}'.format(idx, k, temean, testd))
-            ax[j].axhspan(ymin=temean-3*testd,ymax=temean+3*testd, 
-                          xmin=(nusfulledge[idx][k]-nusfulledge[idx][0])/deltanu,
-                          xmax=(nusfulledge[idx][k+1]-nusfulledge[idx][0])/deltanu,
-                          color='k', alpha=0.8)
-            ax[j].axvspan(nusfulledge[idx][k],nusfulledge[idx][k+1], color=c, alpha=0.35)
+            deltanu = nusfulledge[idx][-1] - nusfulledge[idx][0]
+            ax[j].axvspan(nusfulledge[idx][k], nusfulledge[idx][k+1], color = c, alpha = 0.35)
     ax[j].grid()
     ax[j].set_xlim(132,168)
 ```
 
-See the profile of the reconstructed maps for each frequency....
-See the distance to the edge (freq where was placed the ps - the closest edge to that frequency) vs. intensity 
+Look at the profile of the reconstructed maps for each frequency. Plot the profile for each sub-band
 
 ```{python}
-for NUS in ['2','4']:#'6']:#NUS='6'
-    #print('NUS = {}'.format(NUS))
-    NormFact2=1#48/int(NUS)
-    fig,ax=plt.subplots(nrows=1,ncols=2,figsize=(12,4))
-    ax=ax.ravel()
-    if NUS=='2':
+for NUS in ['2', '3', '4']:
+
+    NormFact = 1#48/int(NUS)
+    
+    fig,ax = plt.subplots(nrows = 1, ncols = int(NUS), figsize = (18,4), sharey = True)
+    
+    ax = ax.ravel()
+    if NUS == '2':
         use = [0,1]
-    elif NUS=='4':
-        use = [1,2]
-    elif NUS=='6':
-        use = [2,3]
+    elif NUS == '3':
+        use = [0,1,2]
+    elif NUS == '4':
+        use = [0,1,2,3]
+    elif NUS == '6':
+        use = [0, 1, 2, 3, 4, 5]
     #print(NUS)
     for j,ifrec in enumerate(use):
         #print(NUS, ifrec, nusfull[NUS][ifrec])
@@ -292,11 +262,10 @@ for NUS in ['2','4']:#'6']:#NUS='6'
             if len(irec[NUS])==0:
                 yvals.append(None)
             else:
-                yvals.append(irec[NUS][nreal,ifrec,pixel,0]/1e5*NormFact2)
+                yvals.append(irec[NUS][nreal,ifrec,pixel,0]*NormFact)
 
-        ax[j].set_title(r'rec{} - I for px in band {:.0f}-{:.0f}GHz'.format(NUS,
-                                                                            nusfulledge[NUS][ifrec],
-                                                                           nusfulledge[NUS][ifrec+1]))
+        ax[j].set_title(r'band - {:.0f}-{:.0f}GHz'.format(nusfulledge[NUS][ifrec],
+                                                          nusfulledge[NUS][ifrec+1]))
         ax[j].set_xlabel(r'$\nu$[GHz]')
         #secax.set_xlabel(r'$d_\nu$[GHz](dist to the $\nu_{c}$ of the band)')
         ax[j].set_ylabel(r'$I_\nu(px)$')
@@ -318,7 +287,6 @@ for NUS in ['2','4']:#'6']:#NUS='6'
                 ax[j].axvline(iedge, color='k', ls='--')
         ax[j].grid()
         ax[j].axvspan(nusfulledge[NUS][ifrec],nusfulledge[NUS][ifrec+1], color='k', alpha=0.20)
-        print(NUS, ifrec, nusfull[NUS][ifrec])
         ax[j].axvline(nusfull[NUS][ifrec],ls='-.',c='k')
         
 ```

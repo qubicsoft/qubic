@@ -32,7 +32,8 @@ def append_to_npz(folder_path, file_name, dico) -> None:
 
 
 def generate_cmb_dust_maps(dico_fast_simulator, coverage, n_years, noise_profile, nunu, sc,
-                           seed=None, save_maps=False, return_maps=True):
+                           seed=None, save_maps=False, return_maps=True, dust_only=False, fwhm_gen=None,
+                           iib=True):
     """
     Save CMB+Dust maps to FITS image format for later use, and/or return them immediately.
 
@@ -43,13 +44,19 @@ def generate_cmb_dust_maps(dico_fast_simulator, coverage, n_years, noise_profile
     :param bool nunu: include noise frequency correlations
     :param bool sc: include noise spatial correlations
     :param seed: seed for the map generation (if None, a random seed is taken)
-    :param bool save_maps: save maps in the FITS format (warning: check code first! default: False)
-    :param bool return_maps: whether the function has to return the generated maps (default: True)
+    :param bool|None save_maps: save maps in the FITS format (warning: check code first!)
+    :param bool|None return_maps: whether the function has to return the generated maps
+    :param bool|None dust_only: generate sky maps containing only dust (no cmb)
+    :param float|None fwhm_gen: smooth maps to this fwhm during generation
+    :param bool iib: integrate simulated maps into output bands
     :return: cmb+dust maps with noise, cmb+dust noiseless, and noise only maps
     """
     if seed is None:
         seed = np.random.randint(1000000)
-    sky_config = {'dust': 'd0', 'cmb': seed}  # d0 is described in https://pysm3.readthedocs.io/en/latest/models.html
+    if dust_only:
+        sky_config = {'dust': 'd0'}  # see d0 in https://pysm3.readthedocs.io/en/latest/models.html
+    else:
+        sky_config = {'dust': 'd0', 'cmb': seed}
     qubic_sky = Qss.Qubic_sky(sky_config, dico_fast_simulator)
     cmb_dust, cmb_dust_noiseless, cmb_dust_noise_only, _ = \
         qubic_sky.get_partial_sky_maps_withnoise(coverage=coverage,
@@ -59,6 +66,8 @@ def generate_cmb_dust_maps(dico_fast_simulator, coverage, n_years, noise_profile
                                                  spatial_noise=sc,  # noise spatial correlations
                                                  verbose=False,
                                                  seed=seed,
+                                                 FWHMdeg=fwhm_gen,
+                                                 integrate_into_band=iib
                                                  )
     if save_maps:
         save_dir = "/media/simon/CLE32/qubic/maps/"
@@ -139,7 +148,7 @@ def get_kernel_fwhms_for_smoothing(fwhms, target=None):
 
     :param fwhms: the list of original fwhms
     :param float target: the target resolution. If None, it is considered to be the biggest fwhm of the maps.
-    :return: the list of fwhms for the kernels.
+    :return: the list of fwhms for the kernels, and the (updated) target
     """
     if target is None:
         target = np.max(fwhms)
@@ -147,7 +156,7 @@ def get_kernel_fwhms_for_smoothing(fwhms, target=None):
     diff = target ** 2 - np.square(fwhms)
     diff[diff < 0] = 0
 
-    return np.sqrt(diff)
+    return np.sqrt(diff), target
 
 
 def get_sub_freqs_and_resolutions(dico_fast_simulator):
@@ -182,7 +191,7 @@ def same_resolution(maps_in, map_fwhms_deg, fwhm_target=None, verbose=False):
         and fwhm_out the common (new) fwhm
     """
     # define common output resolution
-    kernel_fwhms = get_kernel_fwhms_for_smoothing(map_fwhms_deg, fwhm_target)
+    kernel_fwhms, fwhm_out = get_kernel_fwhms_for_smoothing(map_fwhms_deg, fwhm_target)
 
     # create array to contain output maps
     maps_out = np.zeros_like(maps_in)
@@ -201,4 +210,4 @@ def same_resolution(maps_in, map_fwhms_deg, fwhm_target=None, verbose=False):
                 print('  -> no convolution needed, sub-map {:d} already at required resolution.'.format(i))
             maps_out[i, :, :] = maps_in[i, :, :]
 
-    return maps_out, np.max(kernel_fwhms)
+    return maps_out, fwhm_out

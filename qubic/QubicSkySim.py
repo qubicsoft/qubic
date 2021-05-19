@@ -962,7 +962,6 @@ def ctheta_parts(themap, ipok, thetamin, thetamax, nbinstot, nsplit=4, degrade_i
     dtheta = allthetalims[1] - allthetalims[0]
     thall = 2. / 3 * ((thmin + dtheta) ** 3 - thmin ** 3) / ((thmin + dtheta) ** 2 - thmin ** 2)
     ### But it actually changes very little
-    # print('coucou')
     return thall, cthall, errcthall
 
 

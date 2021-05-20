@@ -24,8 +24,7 @@ from itertools import combinations, combinations_with_replacement
 from importlib import reload
 
 # Specific qubic modules
-from qubicpack.utilities import Qubic_DataDir
-import pysm
+import pysm3
 import qubic
 from qubic.polyacquisition import compute_freq
 from qubic import QubicSkySim as qss
@@ -40,25 +39,19 @@ rc('font', size=18)
 ```
 
 ```{python}
-datadir = os.environ['DATA_SPECTROIM']
-print(datadir)
+# If you plan to save data change the path here
+dir_save = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/Simu_spectroim/FastSimulator'
 ```
 
 ```{python}
-### Initialize
-global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
-print(global_dir)
-
-```
-
-```{python}
+# Choose the config FI150 or FI220
 config = 'FI220'
 ```
 
 ## Qubic sky object with dust
 
 ```{python}
-dictfilename = global_dir + '/dicts/pipeline_demo.dict'
+dictfilename = 'pipeline_demo.dict'
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
@@ -111,8 +104,7 @@ print(nus_eff)
 ## Coverage and seenmap
 
 ```{python}
-DataFastSimCoverage = pickle.load(open(global_dir +
-                                       '/doc/FastSimulator/Data/DataFastSimulator_' + config +'_coverage.pkl',
+DataFastSimCoverage = pickle.load(open('../../data/FastSimulator_version01/DataFastSimulator_' + config +'_coverage.pkl',
                                        "rb"))
 coverage = DataFastSimCoverage['coverage']
 seenmap = coverage > np.max(coverage) * 0.1
@@ -165,14 +157,14 @@ print('Fsky: {}'.format(Namaster.fsky))
 
 ```{python}
 # Load the CAMB library already saved
-with open(global_dir + '/doc/CAMB/camblib_0to1_step001.pkl', "rb") as file:
+with open('../../doc/CAMB/camblib_0to1_step001.pkl', "rb") as file:
     camblib = pickle.load(file)
 [lll, rvalues, spec, specunlensed] = camblib
 
 ```
 
 ```{python}
-binned_camblib = qc.bin_camblib(Namaster, global_dir + '/doc/CAMB/camblib_0to1_step001.pkl', nside, verbose=True)
+binned_camblib = qc.bin_camblib(Namaster, '../../doc/CAMB/camblib_0to1_step001.pkl', nside, verbose=True)
 
 [lll_b, rvalues_b, spec_b, specunlensed_b] = binned_camblib
 ```
@@ -212,7 +204,6 @@ for f, frac in enumerate(dust_fraction):
 ```
 
 ```{python}
-dir_save = datadir + 'FastSimulator'
 # np.save(dir_save + '/BBcross_dust_d1_' + config[-3:] + f'_{nbands}bands_dustfrac0-0.01-step0.001.npy', BBcross_dust)
 ```
 

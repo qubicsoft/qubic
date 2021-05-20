@@ -14,42 +14,48 @@ jupyter:
 
 #### Author: Martín Gamboa
 
-Aim: analize the simulations rfor the study of the Frequency Point Spread Function (PSF).
+Analize the simulations for the study of the Frequency Point Spread Function (PSF). The instrument has angular and frequency resolution. Both are defined by the instrumental features.
+
+The angular resolution can be approximated by the following expression: $FWHM_{\theta} = \frac{c}{\nu~(P-1)~\Delta h}$ \\
+
+The frequency resolution is a bit more complex and in this notebook we study it with simulations. The set of simulations are at NERSC in the common directory within mmgamboa user.
 
 For each simulation: 
 * read files (two different formats)
 * plot raw data
 * fit gaussian 
-* compute SNR 
 
 ```{python}
-import healpy as hp
-import matplotlib.pyplot as plt
-import matplotlib as mp
-from qubicpack.utilities import Qubic_DataDir
-import qubic
+from importlib import reload
+import pickle as pk
 import os
 import sys
 import time
-
-import pickle as pk
-import numpy as np
 import glob
-from astropy.io import fits
-import gc
 
-from lmfit.model import save_modelresult
+import healpy as hp
+import numpy as np
+import matplotlib as mp
+import pandas as pd 
+
+import scipy.stats as sc
 from scipy.optimize import curve_fit
-from importlib import reload
-import AnalysisPSF as anpsf
 from scipy.interpolate import interp1d
+
+import matplotlib.pyplot as plt
 from matplotlib.pyplot import cm
 from matplotlib.patches import Ellipse
-import AnalysisPSF as anpsf
-from importlib import reload
+from matplotlib.animation import FuncAnimation
+
 from lmfit import Model
-#from scipy.stats import median_abs_deviation as mad
-import scipy.stats as sc
+from astropy.io import fits
+
+import qubic
+from qubicpack.utilities import Qubic_DataDir
+
+import AnalysisPSF as anpsf
+
+# %matplotlib notebook
 ```
 
 ```{python}
@@ -62,6 +68,7 @@ def gaussian2d(z, amp,x0, y0, varx, vary):
     y=z[1]
     gauss = amp*np.exp(-0.5*((x-x0)**2/varx**2+(y-y0)**2/vary**2))
     return gauss.ravel()
+
 def get_maps(file):
     simu = fits.open(file)
 
@@ -72,7 +79,8 @@ def get_maps(file):
 
     return maps_recon, maps_convo, diff
 
-def get_maps_many_files(rep_simu, name, verbose=True):
+def get_maps_many_files(rep_simu, name, verbose = True, nfreq = None, nside = 256):
+    
     all_fits = glob.glob(rep_simu + name)
     nfiles = len(all_fits)
     if verbose:
@@ -81,17 +89,27 @@ def get_maps_many_files(rep_simu, name, verbose=True):
     all_maps_recon = []
     all_maps_convo = []
     all_maps_diff = []
-
-    for i, fits in enumerate(all_fits):
-        map_recon, map_convo, map_diff = get_maps(fits)
-        if i == 0:
-            right_shape = map_recon.shape
-        else:
-            if map_recon.shape != right_shape:
-                raise ValueError('You should take maps with identical shapes.')
+    
+    if nfiles == 0:
+        map_recon = np.full((nfreq, 12 * nside ** 2, 3), np.nan)
+        map_convo = np.full((nfreq, 12 * nside ** 2, 3), np.nan)
+        map_diff = np.full((nfreq, 12 * nside ** 2, 3), np.nan)
         all_maps_recon.append(map_recon)
         all_maps_convo.append(map_convo)
         all_maps_diff.append(map_diff)
+        print('\t filling array with nan values.')
+        del map_recon, map_convo, map_diff
+    else:
+        for i, fits in enumerate(all_fits):
+            map_recon, map_convo, map_diff = get_maps(fits)
+            if i == 0:
+                right_shape = map_recon.shape
+            else:
+                if map_recon.shape != right_shape:
+                    raise ValueError('You should take maps with identical shapes.')
+            all_maps_recon.append(map_recon)
+            all_maps_convo.append(map_convo)
+            all_maps_diff.append(map_diff)
 
     return all_fits, np.asarray(all_maps_recon), \
            np.asarray(all_maps_convo), np.asarray(all_maps_diff)
@@ -115,49 +133,44 @@ def read_run(jobid, repo=None, fixpar=True):
     d.read_from_file(repodict)
     center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
     if fixpar:
-        d['nf_sub']=48
-        d['nf_recon'] = [2,3,4,]#6] 
-    #nsub = d['nf_recon'][-1]
+        d['nf_sub'] = 48
+        d['nf_recon'] = [2,3,4]
     
-    _,_,nus_in,_,_,_=qubic.compute_freq(150,d['nf_sub'],0.25)
+    _,_,nus_in,_,_,_ = qubic.compute_freq(150,d['nf_sub'],0.25)
     sigma2fwhm = np.sqrt(8*np.log(2))
     # constant angular resolution using P = 19 and deltaX = 1.4cm
-    CteConf = d['synthbeam_peak150_fwhm']*150#61.57622 #2.998e10/20/1.4/1e9/np.pi*180
-    size=200
+    CteConf = d['synthbeam_peak150_fwhm'] * 150 #61.57622 #2.998e10/20/1.4/1e9/np.pi*180
+    size = 200
     reso = 3
-    nside=d['nside']
+    nside = d['nside']
     
-    #if nsub not in d['nf_recon']: raise ValueError('Invalid number of sub-bands for {} nus_in'.format(d['nf_sub']))
-    #_,_,nus_rec,_,_,_=qubic.compute_freq(150,nsub,0.25)
     print("Working with nf_sub = {} and nfrec = {}".format(d['nf_sub'], d['nf_recon']))
     mapsrec={}
     mapsconv={}
     nusfull = {}
     nusfulledge = {}
     for isub in d['nf_recon']:
-        _, maprec, mapconv, mapdif = get_maps_many_files(repo,'*recon{}*.fits'.format(isub))
-        _,inusedge,inus,_,_,_=qubic.compute_freq(150,isub,0.25)
+        _, maprec, mapconv, mapdif = get_maps_many_files(repo, '*recon{}*.fits'.format(isub),
+                                                        nfreq = isub, nside = nside )
+        _, inusedge, inus, _, _, _ = qubic.compute_freq(150,isub,0.25)
         mapsrec.update({'{}'.format(isub): maprec})
         mapsconv.update({'{}'.format(isub): mapconv})
         nusfull.update({'{}'.format(isub):inus})    
         nusfulledge.update({'{}'.format(isub):inusedge})    
     
-
     return mapsrec, mapsconv,nusfull,nusfulledge, nus_in, center,d
-
 ```
 
 ```{python}
-#jobids = ['32139830', '32140318','32139772', '32140658'] #[12,15,20,25]
-#jobids= ['32759969','32759907',#'32574156','32574178', 
-#          '32574170','32759934',]#'32574174','32759973'] #[48,48]|[1,2,3,4,6]
 dictshift = {'34245779': -23, '34245774': -21,'34145323':-19,'34145299':-17, 
              '33409471':-15,'33409418':-13, '33130322':-11,'33130175':-9,
              '32832344':-7, '33130311':-5, '32759969':-4,'32759907':-3, 
              '32574156':-2, '32574178':-1,'32574170':0, '32759934': 1,
              '32574174': 2, '32759973':3, '33130307':5, '32832346':7, 
              '33130149':9,'33130316':11,'33409459':13,'33409482':15}
-jobids=list(dictshift.keys())
+
+jobids = list(dictshift.keys())
+
 allrecon = []
 allconv = []
 jobid = np.zeros((len(jobids)))
@@ -174,17 +187,54 @@ allrecon = np.array(allrecon)
 allconv = np.array(allconv)
 
 #Index where the point source was placed
-NU0=150
+NU0 = 150
 
-innu0 = min(range(len(nus_in)), key=lambda i: abs(nus_in[i]-NU0))
+innu0 = min(range(len(nus_in)), key = lambda i: abs(nus_in[i]-NU0))
 innu = []
 for ishift in dictshift.values():
     innu.append(innu0+ishift)
 ```
 
-See at the profile of the amplitude relative to amplitude in the input_maps (1e5)... okk
+Save data for one pixel. I will create 3 structures: data_2bands, data_3bands, data_4bands. Each one has the amplitude for each realization, each frequency, each Stokes parameter (by the time only 'I' component it matters). You'll find 'nan' values for some simulations, this is due to the TIMEOUT in the end-to-end simulation.
 
 ```{python}
+pixel = hp.pixelfunc.ang2pix(d['nside'], np.deg2rad(90 - center[1]), np.deg2rad(center[0]))
+
+data_2bands = {'nu_in': nus_in[innu],
+              'nu_rec': nusfull['2'],
+              'nu_edge': nusfulledge['2']}
+data_3bands = {'nu_in': nus_in[innu],
+              'nu_rec': nusfull['3'],
+               'nu_edge': nusfulledge['3'] }
+data_4bands = {'nu_in': nus_in[innu],
+                'nu_rec': nusfull['4'],
+               'nu_edge': nusfulledge['4'] }
+for irec in d['nf_recon']:
+    keys = ['band{}'.format(i) for i in range(irec)]
+    
+    for bnd in range(irec):
+        auxarr = np.empty((len(jobids)), dtype = object)
+        
+        for isim in range(len(jobids)):
+            auxarr[isim] = allrecon[isim]['{}'.format(irec)][0, bnd, pixel, 0]
+        locals()["data_{}bands".format(irec)].update({keys[bnd] : auxarr}) 
+
+#Normalization
+max2bands = np.max([data_2bands['band{}'.format(i)] for i in range(2)])
+max3bands = np.max([data_3bands['band{}'.format(i)] for i in range(3)])
+max4bands = np.max([data_4bands['band{}'.format(i)] for i in range(4)])
+
+for i in range(2):
+    data_2bands['band{}'.format(i)] /= max2bands
+for i in range(3):
+    data_3bands['band{}'.format(i)] /= max3bands
+for i in range(4):
+    data_4bands['band{}'.format(i)] /= max4bands
+```
+
+See at the profile of the amplitude relative to amplitude in the input_maps (1e5)... okk
+
+
 pixel = hp.pixelfunc.ang2pix(d['nside'], np.deg2rad(90-center[1]), np.deg2rad(center[0]),)#
 
 fig, ax = plt.subplots(nrows = 1, ncols = 3, figsize = (20,6), sharey = True)
@@ -232,64 +282,105 @@ for j,isub in enumerate([2,3,4]):
             ax[j].axvspan(nusfulledge[idx][k], nusfulledge[idx][k+1], color = c, alpha = 0.35)
     ax[j].grid()
     ax[j].set_xlim(132,168)
-```
 
-Look at the profile of the reconstructed maps for each frequency. Plot the profile for each sub-band
+
+*Sub-band profile*. Plot intensity for all simulations for the pixel in a given sub-band in function of thefrequency of the point source $\nu_{in}$. The maximum should correspond when the distance between the center of the sub-band $\nu_{jc}$ and the position (in frequency) of the point source is minimum.
+
+We plot in grey the sub-band considered.
 
 ```{python}
 for NUS in ['2', '3', '4']:
 
     NormFact = 1#48/int(NUS)
     
+    data_array = locals()['data_{}bands'.format(int(NUS))]
     fig,ax = plt.subplots(nrows = 1, ncols = int(NUS), figsize = (18,4), sharey = True)
-    
     ax = ax.ravel()
-    if NUS == '2':
-        use = [0,1]
-    elif NUS == '3':
-        use = [0,1,2]
-    elif NUS == '4':
-        use = [0,1,2,3]
-    elif NUS == '6':
-        use = [0, 1, 2, 3, 4, 5]
-    #print(NUS)
-    for j,ifrec in enumerate(use):
-        #print(NUS, ifrec, nusfull[NUS][ifrec])
-        yvals=[]
-        color2=iter(cm.jet(np.linspace(0,1,len(dictshift)+1)))
+    
+    for j in range(int(NUS)):
+    
+        color = iter(cm.jet(np.linspace(0,1,3)))
         
-        for jk,irec in enumerate(allrecon):
-            if len(irec[NUS])==0:
-                yvals.append(None)
-            else:
-                yvals.append(irec[NUS][nreal,ifrec,pixel,0]*NormFact)
-
-        ax[j].set_title(r'band - {:.0f}-{:.0f}GHz'.format(nusfulledge[NUS][ifrec],
-                                                          nusfulledge[NUS][ifrec+1]))
+        ax[j].set_title(r'band - {:.0f}-{:.0f}GHz'.format(nusfulledge[NUS][j],
+                                                          nusfulledge[NUS][j+1]))
         ax[j].set_xlabel(r'$\nu$[GHz]')
-        #secax.set_xlabel(r'$d_\nu$[GHz](dist to the $\nu_{c}$ of the band)')
+
         ax[j].set_ylabel(r'$I_\nu(px)$')
-        ax[j].set_xlim(nus_in[innu][0]*0.98,nus_in[innu][-1]*1.02)
+        ax[j].set_xlim(data_array['nu_in'][0] * 0.98, data_array['nu_in'][-1] * 1.02)
         
-        xvals=nus_in[innu]-nusfull[NUS][ifrec]
-        #secax = ax[j].twiny()
+        xvals = nus_in[innu] - data_array['nu_rec'][j]
         
-        for i in range(len(innu)):
-            c2=next(color2)
-            if yvals[i] == None:
-                pass
-            else:
-                ax[j].plot(nus_in[innu][i],yvals[i],'o',c=c2,ms=12)
-                #secax.plot(xvals[i],yvals[i],'o',c=c2,ms=6)
-        xlim=ax[j].get_xlim()
-        for iedge in nusfulledge[NUS]:
+        ax[j].plot(data_array['nu_in'], data_array['band{}'.format(j)], 'o', c = next(color), ms = 12)
+        
+        xlim = ax[j].get_xlim()
+        for iedge in data_array['nu_edge']:
             if (iedge > np.array(xlim)[0]) and (iedge < np.array(xlim)[1]):
                 ax[j].axvline(iedge, color='k', ls='--')
         ax[j].grid()
-        ax[j].axvspan(nusfulledge[NUS][ifrec],nusfulledge[NUS][ifrec+1], color='k', alpha=0.20)
-        ax[j].axvline(nusfull[NUS][ifrec],ls='-.',c='k')
+        ax[j].axvspan(data_array['nu_edge'][j], data_array['nu_edge'][j + 1], 
+                      color = 'k', alpha = 0.20)
+        ax[j].axvline(data_array['nu_rec'][j], ls = '-.', c = 'k')
         
 ```
+
+Superimpose each sub-band by substracting $\nu_{jc}$ (no normalized by the width, it's not necessary) 
+
+```{python}
+fig, ax = plt.subplots(nrows = 1, ncols = 3, 
+                       sharey = True, figsize = (14,6))
+
+iax = 0
+for sb in [2,3,4]:
+    data_array = locals()['data_{}bands'.format(sb)]
+    for j in range(sb):
+        ax[iax].plot(data_array['nu_in'] - data_array['nu_rec'][j], data_array['band{}'.format(j)],
+                    'o', c = 'b')
+    iax += 1
+plt.tight_layout()
+#for j in range(3):
+```
+
+See how the FPSF change when it changes the frequency of the point source
+
+```{python}
+for ibnd in [2,3,4]:
+    fig = plt.figure(figsize=(4, 4))
+    ax = fig.gca()
+    data_array = locals()['data_{}bands'.format(ibnd)]
+    nsimu = len(data_array['nu_in'])
+    points, = ax.plot(data_array['nu_rec'], 
+                      np.array([data_array['band{}'.format(i)] for i in range(ibnd)]).T[0], 'ko')
+    line = ax.axvline(data_array['nu_in'][0], color = 'k', ls = '--')
+    text = ax.text(140, 1, r'$\nu_i=${:3.2f} GHz'.format(data_array['nu_in'][0]), fontsize=14)
+
+    def init():
+        ax.axhline(0, color = 'k', ls = '-', alpha = 0.2)
+        c = ['b', 'g', 'y', 'r']
+        for ib in range(ibnd):
+            ax.axvspan(xmin = data_array['nu_edge'][ib], xmax = data_array['nu_edge'][ib + 1], 
+                       alpha = 0.2, color = c[ib])
+        ax.set_xlim(130,170)
+        ax.set_xlabel(r'$\nu$ [GHz]')
+        ax.set_ylabel(r'$I_{out}$')
+        ax.set_ylim(-0.2,1.1)
+        return points
+
+    def animate(i):
+        points.set_data(data_array['nu_rec'], 
+                        np.array([data_array['band{}'.format(i)] for i in range(ibnd)]).T[i])
+        line.set_xdata(data_array['nu_in'][i])
+        text.set_text(r'$\nu_i=${:3.2f} GHz'.format(data_array['nu_in'][i]))
+        return(points)
+
+
+    steps = np.arange(nsimu)
+    anim = FuncAnimation(fig, animate, steps, init_func=init, interval=1000, blit=False, repeat=False)
+
+    # Save a .gif
+    anim.save('./{}FPSF.gif'.format(ibnd), writer='imagemagick')
+```
+
+quick computation of time for each simulation. Data taken from iris
 
 ```{python}
 sisi = np.array([1653,3343,2770,5085,8652])
@@ -310,7 +401,6 @@ print('{:.2f}hs'.format(np.sum(t4[1:-1])), 2666/60)
 
 ```
 
-```{python}
 for NUS in ['2']:
     NormFact2=1#48/int(NUS)
     fig,ax=plt.subplots(nrows=1,ncols=1,figsize=(6,4))
@@ -359,7 +449,6 @@ for NUS in ['2']:
         
         ax[j].grid()
 
-```
 
 ```{python}
 fig,ax=plt.subplots(nrows=1,ncols=1,figsize=(16,5),sharey=True,gridspec_kw={'wspace': 0.03})

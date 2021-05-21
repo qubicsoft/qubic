@@ -325,18 +325,20 @@ class Qubic_sky(sky):
 
     def get_fullsky_convolved_maps(self, FWHMdeg=None, verbose=None):
         """
-        This returns full sky maps at each subfrequency convolved by the beam of  the  instrument at
-        each frequency or with another beam if FWHMdeg is provided.
-        when FWHMdeg is 0, the maps are not convolved.
-
+        This returns full sky maps at each sub-frequency convolved by the beam of the  instrument at
+        each frequency.
         Parameters
         ----------
-        FWHMdeg: float
+        FWHMdeg:float
+            FWHM of the beam used to smooth the sub-band maps [deg].
+            It can be an array if you want a different value for each sub-band.
+            If None, it uses the QUBIC beam scaled for each sub-band.
+            If 0, maps are not convolved.
         verbose: bool
 
         Returns
         -------
-
+        The convolved maps.
         """
 
         # First get the full sky maps
@@ -349,7 +351,23 @@ class Qubic_sky(sky):
         return fullmaps
 
     def smoothing(self, maps, FWHMdeg, Nf, central_nus, verbose=True):
-        """Convolve the maps to the FWHM at each sub-frequency or to a common beam if FWHMdeg is given."""
+        """Convolve the maps to the FWHM at each sub-frequency or to a common beam if FWHMdeg is given.
+        Parameters
+        ----------
+        maps: array
+            maps to be convolved.
+        FWHMdeg:float
+            FWHM of the beam used to smooth the sub-band maps [deg], it can be an array.
+            If None, it uses the QUBIC beam scaled for each subband.
+        Nf: int
+            Number of frequency bands
+        central_nus: array
+            Central frequencies of each band.
+        verbose: bool
+        Returns
+        -------
+        The FWHM used for the convolution and the convolved maps.
+        """
         fwhms = np.zeros(Nf)
         if FWHMdeg is not None:
             fwhms += FWHMdeg
@@ -372,13 +390,7 @@ class Qubic_sky(sky):
         The default integration time is 4 years but can be modified with optional variable Nyears
         Note that the maps are convolved with the instrument beam by default, or with FWHMdeg (can be an array)
         if provided.
-        If seed is provided, it will be used for the noise realization. If not it will be a new realization at
-        each call.
-        The optional effective_variance_invcov keyword is a modification law to be applied to the coverage in order to obtain
-        more realistic noise profile. It is a law for effective RMS as a function of inverse coverage and is 2D array
-        with the first one being (nx samples) inverse coverage and the second being the corresponding effective variance to be
-        used through interpolation when generating the noise.
-        
+
         Parameters
         ----------
         coverage: array
@@ -389,9 +401,15 @@ class Qubic_sky(sky):
         sigma_sec: float
         Nyears: float
             Integration time for observation to scale the noise, by default it is 4.
-        FWHMdeg:
-        seed:
-        noise_profile:
+        FWHMdeg:float
+            FWHM of the beam used to smooth the sub-band maps [deg], it can be an array.
+            If None, it uses the QUBIC beam.
+        seed: int
+            If provided, it will be used for the noise realization. If None it will be a new realization at
+        each call.
+        noise_profile: bool
+            If True, a modification law is applied to the coverage in order to obtain more realistic noise profile.
+            It is a law for effective RMS as a function of inverse coverage (see get_noise_invcov_profile()).
         spatial_noise: bool
             If True, spatial noise correlations are added. True by default.
         nunu_correlation: bool
@@ -517,35 +535,40 @@ class Qubic_sky(sky):
             return maps + noisemaps, maps, noisemaps, coverage
 
     def create_noise_maps(self, sigma_sec, coverage, covcut=0.1, nsub=1,
-                          Nyears=4, verbose=False, seed=None,
+                          Nyears=4, seed=None,
                           effective_variance_invcov=None,
                           clnoise=None,
-                          sub_bands_cov=None):
-
+                          sub_bands_cov=None,
+                          verbose=False):
         """
         This returns a realization of noise maps for I, Q and U with no correlation between them, according to a
         noise RMS map built according to the coverage specified as an attribute to the class
-        The optional effective_variance_invcov keyword is a modification law to be applied to the coverage in order to obtain
-        more realistic noise profile. It is a law for effective RMS as a function of inverse coverage and is 2D array
-        with the first one being (nx samples) inverse coverage and the second being the corresponding effective variance to be
-        used through interpolation when generating the noise.
-        The clnoise option is used to apply a convolution to the noise to obtain spatially correlated noise. This cl should be 
-        calculated from the c(theta) of the noise that can be measured using the function ctheta_parts() below. The transformation
-        of this C9theta) into Cl has to be done using wrappers on camb function found in camb_interface.py of the QUBIC software:
-        the functions to back and forth from ctheta to cl are: cl_2_ctheta and ctheta_2_cell. The simulation of the noise itself
-        calls a function of camb_interface called simulate_correlated_map().
+        The optional effective_variance_invcov keyword is a modification law to be applied to the coverage in order to
+        obtain more realistic noise profile. It is a law for effective RMS as a function of inverse coverage and is 2D
+        array with the first one being (nx samples) inverse coverage and the second being the corresponding effective
+        variance to be used through interpolation when generating the noise.
+        The clnoise option is used to apply a convolution to the noise to obtain spatially correlated noise. This cl
+        should be calculated from the c(theta) of the noise that can be measured using the function ctheta_parts()
+        below. The transformation of this C9theta) into Cl has to be done using wrappers on camb function found in
+        camb_interface.py of the QUBIC software:
+        the functions to back and forth from ctheta to cl are: cl_2_ctheta and ctheta_2_cell.
+        The simulation of the noise itself calls a function of camb_interface called simulate_correlated_map().
         Parameters
         ----------
         sigma_sec
         coverage
+        covcut: float
+        nsub: int
         Nyears
-        verbose
-        seed
+        seed: int
         effective_variance_invcov
+        clnoise
+        sub_bands_cov
+        verbose: bool
 
         Returns
         -------
-
+        noise maps.
         """
         # Seen pixels
         seenpix = (coverage / np.max(coverage)) > covcut
@@ -716,6 +739,28 @@ def random_string(nchars):
 
 def get_noise_invcov_profile(maps, coverage, covcut=0.1, nbins=100, fit=True, label='',
                              norm=False, allstokes=False, fitlim=None, doplot=False, QUsep=True):
+    """
+    Build a law for effective RMS as a function of inverse coverage.
+    It is a 2D array with the first one being (nx samples) inverse coverage and the second being the corresponding
+    effective variance to be used through interpolation when generating the noise.
+    Parameters
+    ----------
+    maps
+    coverage
+    covcut: float
+    nbins: int
+    fit: bool
+    label: str
+    norm: bool
+    allstokes: bool
+    fitlim
+    doplot: bool
+    QUsep: bool
+
+    Returns
+    -------
+    xx, myY, effective_variance_invcov
+    """
     seenpix = coverage > (covcut * np.max(coverage))
     covnorm = coverage / np.max(coverage)
 

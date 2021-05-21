@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.0
+      jupytext_version: 1.7.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -74,19 +74,19 @@ d['nf_recon'] = 1
 # Center of the patch observed in galactic coordinates
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 print(center)
-
+d['effective_duration'] = 4
 # Adjust some parameters in the dictionary
 d['npointings'] = 3000
-
+d['tol'] = 1e-5
 d['filter_nu'] = 220e9
-d['photon_noise'] = True
+d['photon_noise'] = False
 d['noiseless'] = False
 
 print(d['filter_nu'])
 print(d['detector_nep'])
 print(d['photon_noise'])
 print(d['config'])
-d['effective_duration']
+print(d['effective_duration'])
 ```
 
 # Input sky
@@ -271,12 +271,13 @@ for istokes in range(3):
         min = -8
         max = 8
     hp.gnomview(maps_convolved[:, istokes], cmap='jet', rot=center, sub=(3,3,3*istokes+1), reso=rr,
-                title='Input ' + stokes[istokes], unit='$\mu K$', format='%g',  min=min, max=max)
+                title='Input ' + stokes[istokes], unit='$\mu K_{CMB}$', format='%g',  min=min, max=max)
     hp.gnomview(maps_recon[:, istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+2), reso=rr,
-                title='Output ' + stokes[istokes], unit='$\mu K$', min=min, max=max)
+                title='Output ' + stokes[istokes], unit='$\mu K_{CMB}$', min=min, max=max)
     hp.gnomview(diff[:, istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+3), reso=rr,
-                title='Difference ' + stokes[istokes], unit='$\mu K$', min=-2, max=2)
-# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/maps_1bands_4years.pdf')
+                title='Difference ' + stokes[istokes], unit='$\mu K_{CMB}$', min=-2, max=2)
+hp.graticule(dpar = 5, dmer = 5, verbose = False, alpha = 0.5)
+plt.savefig('/home/martin/QUBIC/ArticlesSet_2020/RRPII/plots_paperII/maps_1bands_4years.pdf')
 ```
 
 ```{python}

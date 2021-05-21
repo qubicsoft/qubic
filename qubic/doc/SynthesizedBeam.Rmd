@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.0
+      jupytext_version: 1.7.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -325,7 +325,7 @@ def sb_noprim(th_deg, nu, rx):
     th = np.radians(th_deg)
     nx = np.sin(th)
     lam = 3e8 / nu
-    P = 20
+    P = 22
     deltah = 0.014
     f = 300.
     a = np.pi * deltah / lam

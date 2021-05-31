@@ -1,0 +1,111 @@
+---
+jupyter:
+  jupytext:
+    formats: ipynb,Rmd
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.11.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+import pysm3
+import pysm3.units as u
+import numpy as np
+import numpy.ma as ma
+import healpy as hp
+
+from qubic import camb_interface as qc
+import fgbuster as fgb
+from comp_tools import format_alms
+
+import warnings
+warnings.filterwarnings("ignore")
+
+import matplotlib.pyplot as plt
+```
+
+## Generate a CMB+Dust sky map at nside=256
+
+```{python}
+nside = 256
+npix = hp.nside2npix(nside)
+f = 220
+```
+
+```{python}
+# generate sky map with PySM
+unit = u.uK_CMB
+sky = pysm3.Sky(nside=nside, preset_strings=['d0', 'c1'], output_unit=unit)
+sky_emission = sky.get_emission(220 * u.GHz)
+```
+
+```{python}
+carte = sky_emission.value
+```
+
+## Define a mask for Qubic coverage
+
+```{python}
+import pickle
+t = pickle.load(open('data/coverage_dtheta_40_pointing_6000.pkl', 'rb'))
+coverage = hp.ud_grade(t['coverage'], nside_out=nside)
+mask = np.empty((3, npix), dtype=bool)
+threshold = 0.5
+mask[...] = (coverage < (threshold * np.max(coverage)))  # True = bad pixel
+```
+
+```{python}
+carte_patch = ma.array(carte, mask=mask, fill_value=hp.UNSEEN)
+```
+
+## Visualize the original maps
+
+```{python}
+hp.mollview(carte[0], title='full sky', unit=unit, min=0, max=1e3)
+hp.mollview(carte_patch[0], title='sky patch', unit=unit, min=0, max=1e3)
+plt.show()
+```
+
+## Compute the alms of the maps
+
+```{python}
+lmax = 2 * nside
+alm_full = hp.map2alm(carte, lmax=lmax, pol=True)
+alm_patch = hp.map2alm(carte_patch, lmax=lmax, pol=True)
+```
+
+## Convert back directly to sky maps: pixels outside mask are indeed zero
+
+```{python}
+hp.mollview(hp.alm2map(alm_full, nside, pol=True, inplace=False)[0],
+            title='full sky', unit=unit, min=0, max=1e3)
+hp.mollview(hp.alm2map(alm_patch, nside, pol=True, inplace=False)[0],
+            title='sky patch', unit=unit, norm='hist')
+hp.mollview(hp.alm2map(alm_patch, nside, pol=True, inplace=False)[0],
+            title='sky patch', unit=unit, min=-5, max=5)
+```
+
+## Convert back but setting low multipoles to zero...
+
+```{python}
+lmin = 20
+alm_full_cut = alm_full.copy()
+alm_full_cut[..., :lmin] = 0
+alm_patch_cut = alm_patch.copy()
+alm_patch_cut[..., :lmin] = 0
+```
+
+```{python}
+hp.mollview(hp.alm2map(alm_full_cut, nside, pol=True, inplace=False)[0],
+            title='full sky', unit=unit, min=0, max=1e3)
+hp.mollview(hp.alm2map(alm_patch_cut, nside, pol=True, inplace=False)[0],
+            title='sky patch', unit=unit, norm='hist')
+hp.mollview(hp.alm2map(alm_patch, nside, pol=True, inplace=False)[0],
+            title='sky patch', unit=unit, min=-5, max=5)
+```

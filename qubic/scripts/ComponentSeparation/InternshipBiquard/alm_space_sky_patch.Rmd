@@ -19,11 +19,6 @@ import pysm3.units as u
 import numpy as np
 import numpy.ma as ma
 import healpy as hp
-
-from qubic import camb_interface as qc
-import fgbuster as fgb
-from comp_tools import format_alms
-
 import warnings
 warnings.filterwarnings("ignore")
 

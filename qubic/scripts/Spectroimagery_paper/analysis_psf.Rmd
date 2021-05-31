@@ -136,8 +136,11 @@ def read_run(jobid, repo=None, fixpar=True):
     if fixpar:
         d['nf_sub'] = 48
         d['nf_recon'] = [2,3,4]
-    
-    _,_,nus_in,_,_,_ = qubic.compute_freq(150,d['nf_sub'],0.25)
+    else:
+        d['nf_sub'] = 45
+        d['nf_recon'] = [5,]
+        
+    _,_,nus_in,_,_,_ = qubic.compute_freq(150, d['nf_sub'], 0.25)
     sigma2fwhm = np.sqrt(8*np.log(2))
     # constant angular resolution using P = 19 and deltaX = 1.4cm
     CteConf = d['synthbeam_peak150_fwhm'] * 150 #61.57622 #2.998e10/20/1.4/1e9/np.pi*180
@@ -196,6 +199,42 @@ for ishift in dictshift.values():
     innu.append(innu0+ishift)
 ```
 
+```{python}
+
+```
+
+```{python}
+#Read for Nrec = 5. Simulations are different so we have another files.
+dictshift_5sb = {'42904592': -17,}
+
+jobids_5sb = list(dictshift_5sb.keys())
+
+allrecon_5sb = []
+allconv_5sb = []
+jobid = np.zeros((len(jobids_5sb)))
+for ijob in range(len(jobids_5sb)):
+    print('Reading job {} ({}/{})'.format(jobids_5sb[ijob], ijob + 1, len(jobids_5sb)))
+    if ijob == 0:
+        maprec, mapsconv, nusfull_5sb, nusfulledge_5sb, nus_in_5sb, center, d_5sb = read_run(jobids_5sb[ijob],
+                                                                                            fixpar = False)
+    else: 
+        maprec, mapsconv, _, _, _, _, _ = read_run(jobids_5sb[ijob], fixpar = False)
+        
+    allrecon_5sb.append(maprec)
+    allconv_5sb.append(mapsconv)
+allrecon_5sb = np.array(allrecon_5sb)
+allconv_5sb = np.array(allconv_5sb)
+
+NU0 = 150
+innu0_5sb = min(range(len(nus_in_5sb)), key = lambda i: abs(nus_in_5sb[i] - NU0))
+innu_5sb = []
+for ishift in dictshift_5sb.values():
+    innu_5sb.append(innu0_5sb + ishift)
+
+# Put all edges in same array:
+nusfulledge.update({'5': nusfulledge_5sb['5']})
+```
+
 Save data for one pixel. I will create 3 structures: data_2bands, data_3bands, data_4bands. Each one has the amplitude for each realization, each frequency, each Stokes parameter (by the time only 'I' component it matters). You'll find 'nan' values for some simulations, this is due to the TIMEOUT in the end-to-end simulation.
 
 ```{python}
@@ -210,6 +249,10 @@ data_3bands = {'nu_in': nus_in[innu],
 data_4bands = {'nu_in': nus_in[innu],
                 'nu_rec': nusfull['4'],
                'nu_edge': nusfulledge['4'] }
+data_5bands = {'nu_in': nus_in_5sb[innu_5sb],
+                'nu_rec': nusfull_5sb['5'],
+               'nu_edge': nusfulledge_5sb['5'] }
+
 for irec in d['nf_recon']:
     keys = ['band{}'.format(i) for i in range(irec)]
     
@@ -220,10 +263,19 @@ for irec in d['nf_recon']:
             auxarr[isim] = allrecon[isim]['{}'.format(irec)][0, bnd, pixel, 0]
         locals()["data_{}bands".format(irec)].update({keys[bnd] : auxarr}) 
 
+keys_5sb = ['band{}'.format(i) for i in range(5)]
+for bnd in range(5):
+    auxarr_5sb = np.empty((len(jobids_5sb)), dtype = object)
+
+    for isim in range(len(jobids_5sb)):
+        auxarr_5sb[isim] = allrecon_5sb[isim]['{}'.format(5)][0, bnd, pixel, 0]
+    locals()["data_{}bands".format(5)].update({keys_5sb[bnd] : auxarr_5sb}) 
+
 #Normalization
 max2bands = np.max([np.max(data_2bands['band{}'.format(i)]) for i in range(2)])
 max3bands = np.max([np.max(data_3bands['band{}'.format(i)]) for i in range(3)])
 max4bands = np.max([np.max(data_4bands['band{}'.format(i)]) for i in range(4)])
+max5bands = np.max([np.max(data_5bands['band{}'.format(i)]) for i in range(5)])
 
 for i in range(2):
     data_2bands['band{}'.format(i)] /= max2bands
@@ -231,6 +283,9 @@ for i in range(3):
     data_3bands['band{}'.format(i)] /= max3bands
 for i in range(4):
     data_4bands['band{}'.format(i)] /= max4bands
+for i in range(5):
+    data_5bands['band{}'.format(i)] /= max5bands
+    
 ```
 
 *Sub-band profile*. Plot intensity for all simulations for the pixel in a given sub-band in function of thefrequency of the point source $\nu_{in}$. The maximum should correspond when the distance between the center of the sub-band $\nu_{jc}$ and the position (in frequency) of the point source is minimum.
@@ -238,7 +293,7 @@ for i in range(4):
 We plot in grey the sub-band considered.
 
 ```{python}
-for NUS in ['2', '3', '4']:
+for NUS in ['2', '3', '4', '5']:
 
     NormFact = 1#48/int(NUS)
     
@@ -255,8 +310,12 @@ for NUS in ['2', '3', '4']:
         ax[j].set_xlabel(r'$\nu$[GHz]')
 
         ax[j].set_ylabel(r'$I_\nu(px)$')
-        ax[j].set_xlim(data_array['nu_in'][0] * 0.98, data_array['nu_in'][-1] * 1.02)
         
+        if NUS != '5':
+            ax[j].set_xlim(data_array['nu_in'][0] * 0.98, data_array['nu_in'][-1] * 1.02)
+        else: 
+            ax[j].set_xlim(data_4bands['nu_in'][0] * 0.98, data_4bands['nu_in'][-1] * 1.02)
+            
         xvals = nus_in[innu] - data_array['nu_rec'][j]
         
         ax[j].plot(data_array['nu_in'], data_array['band{}'.format(j)], 'o', c = next(color), ms = 12)
@@ -269,33 +328,33 @@ for NUS in ['2', '3', '4']:
         ax[j].axvspan(data_array['nu_edge'][j], data_array['nu_edge'][j + 1], 
                       color = 'k', alpha = 0.20)
         ax[j].axvline(data_array['nu_rec'][j], ls = '-.', c = 'k')
+
         
 ```
 
 Superimpose each sub-band by substracting $\nu_{jc}$ (no normalized by the width, it's not necessary) 
 
 ```{python}
-fig, ax = plt.subplots(nrows = 1, ncols = 3, 
+data_5bands['nu_rec']
+```
+
+```{python}
+fig, ax = plt.subplots(nrows = 1, ncols = 4, 
                        sharey = True, figsize = (12,6))
 
 iax = 0
-for sb in [2,3,4]:
+for sb in [2,3,4,5]:
     data_array = locals()['data_{}bands'.format(sb)]
     
     xx, yy = [], []
-    #print(sb)
     for j in range(sb):
         xx.append(data_array['nu_in'] - data_array['nu_rec'][j])
         yy.append(data_array['band{}'.format(j)])
     
-    #bla = [np.array([0,2,4]),np.array([1,3,5])]
-    #ble = [np.array([0.0, 0.2, 0.4]), np.array([0.1,0.3,0.5])]
     xsort_idx = np.argsort(np.array(xx).ravel())
-    #print(np.array(ble).ravel()[argsort])
     xx = np.array(xx).ravel()[xsort_idx]
     yy = np.array(yy).ravel()[xsort_idx]
     
-    #print(xx, yy)
     data = ax[iax].plot(np.array(xx).T, np.array(yy).T, 'o', c = 'b')
     
     #Save xData to make a fit
@@ -412,9 +471,9 @@ class MySplineFitting:
 ```{python}
 # Spline fitting
 nbspl = 13
-fig, ax = plt.subplots(nrows = 1, ncols = 3, figsize = (12, 4), sharey = True)
+fig, ax = plt.subplots(nrows = 1, ncols = 4, figsize = (12, 4), sharey = True)
 jax = 0
-for inu in [2, 3, 4]:
+for inu in [2, 3, 4, 5]:
     data_dict = locals()["data_{}bands".format(inu)]
     xfit = data_dict['Data_fit'][0]
     yfit = data_dict['Data_fit'][1]
@@ -432,6 +491,7 @@ for inu in [2, 3, 4]:
     ax[jax].plot(xfit, yfit, 'o', color='b', label='Data')
     ax[jax].plot(xvals, myspl(xvals)/np.max(myspl(xvals)), 'r', label='Spline fitting')
     ax[jax].set_xlim(-25,25)
+    ax[jax].set_ylim(-0.2,1.1)
     ax[jax].set_xlabel(r"$\nu - nu_{in}$", fontsize = 14)
     ax[0].set_ylabel(r"$I_{out}$", fontsize = 14)
     

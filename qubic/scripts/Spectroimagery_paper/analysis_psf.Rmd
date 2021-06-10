@@ -166,12 +166,12 @@ def read_run(jobid, repo=None, fixpar=True):
 ```
 
 ```{python}
-dictshift = {'34245779': -23, '34245774': -21,'34145323':-19,'34145299':-17, 
-             '33409471':-15,'33409418':-13, '33130322':-11,'33130175':-9,
-             '32832344':-7, '33130311':-5, '32759969':-4,'32759907':-3, 
-             '32574156':-2, '32574178':-1,'32574170':0, '32759934': 1,
-             '32574174': 2, '32759973':3, '33130307':5, '32832346':7, 
-             '33130149':9,'33130316':11,'33409459':13,'33409482':15}
+dictshift = {'34245779': -23, '34245774': -21,#'34145323':-19,'34145299':-17, 
+             '33409471':-15,'33409418':-13, #'33130322':-11,'33130175':-9,
+             '32832344':-7, '33130311':-5, #'32759969':-4,'32759907':-3, 
+             '32574156':-2, '32574178':-1,#'32574170':0, '32759934': 1,
+             '32574174': 2, '32759973':3, #'33130307':5, '32832346':7, 
+             '33130149':9,'33130316':11}#, '33409459':13,'33409482':15}
 
 jobids = list(dictshift.keys())
 
@@ -200,12 +200,10 @@ for ishift in dictshift.values():
 ```
 
 ```{python}
-
-```
-
-```{python}
 #Read for Nrec = 5. Simulations are different so we have another files.
-dictshift_5sb = {'42904592': -17,}
+dictshift_5sb = {'42904592': -17, '43012239':-15, #'43015130': -13, '43015132':-11,
+                '43015140':-9, '43015155':-3, #'43015161':-1, '43117112':0,
+                '43117144':1, '43117145':3, '43117146':5}
 
 jobids_5sb = list(dictshift_5sb.keys())
 
@@ -335,10 +333,6 @@ for NUS in ['2', '3', '4', '5']:
 Superimpose each sub-band by substracting $\nu_{jc}$ (no normalized by the width, it's not necessary) 
 
 ```{python}
-data_5bands['nu_rec']
-```
-
-```{python}
 fig, ax = plt.subplots(nrows = 1, ncols = 4, 
                        sharey = True, figsize = (12,6))
 
@@ -403,7 +397,7 @@ for ibnd in [2,3,4]:
     anim = FuncAnimation(fig, animate, steps, init_func=init, interval=1000, blit=False, repeat=False)
 
     # Save a .gif
-    anim.save('./{}FPSF.gif'.format(ibnd), writer='imagemagick')
+    #anim.save('./{}FPSF.gif'.format(ibnd), writer='imagemagick')
 ```
 
 ## Fit spline 
@@ -492,11 +486,73 @@ for inu in [2, 3, 4, 5]:
     ax[jax].plot(xvals, myspl(xvals)/np.max(myspl(xvals)), 'r', label='Spline fitting')
     ax[jax].set_xlim(-25,25)
     ax[jax].set_ylim(-0.2,1.1)
-    ax[jax].set_xlabel(r"$\nu - nu_{in}$", fontsize = 14)
+    ax[jax].set_xlabel(r"$\nu - \nu_{in}$", fontsize = 14)
     ax[0].set_ylabel(r"$I_{out}$", fontsize = 14)
     
+    #Plot "expected resolution" (I -Martin- don't like that concept)
+    xgauss = np.linspace(-25, 25, 100) 
+    ax[jax].plot(xgauss, np.exp(-0.5 * (xgauss ** 2 )/((150 / (20 -1)) / 2.355) ** 2  ), label  = "expected" )
+    
+    ax[0].legend(loc = 'upper right't)
     jax += 1
 fig.tight_layout()
+```
+
+### 5 bands
+With real data, we also reconstructed 5 bands. Let's try to superimpose.
+It is a bit more difficult. I am not sure it makes sens to do that, the FPSF may depend on the number of sub-bands...
+
+```{python}
+nusrec_5bands = np.array([134.63280448, 141.57278853, 148.8705114 , 156.54441361, 164.61388627])
+measure_5bands = np.array([-0.21088738,  0.20660622,  0.5078612,   0.35812012, -0.18409084])
+yerr_5bands = np.array([0.2309525,  0.12816038, 0.19878606, 0.16506726, 0.17398308])
+xerr_5bands = np.array([3.38280448, 3.55717958, 3.74054328, 3.93335893, 4.13611373])
+```
+
+```{python}
+#(8 - 1) * 1.4 * np.sqrt(2) 
+fwhm_dict = 0.39268176
+f_p = 3e10 / (fwhm_dict * 150e9 * 1.4) * 180 / np.pi
+print('f_p = ', f_p)
+print(r"FWHM_\nu = ", 150 / f_p)
+
+f_pTD = (8-1) / (22-1) * f_p
+print('f_pTD = ', f_pTD)
+
+FWHM_TD_ang =  3e10 / (150e9 * f_pTD *  1.4) *180/ np.pi
+print("FWHM_TD_ang = ", FWHM_TD_ang, "°")
+FWHM_TD_freq =  150 / (f_pTD)
+FWHMsig_TD_freq = FWHM_TD_freq /2.35
+print("FWHM_TD_freq = ", FWHM_TD_freq, "GHz -- FWHMsig_TD_freq = ", FWHMsig_TD_freq)
+```
+
+```{python}
+fig, ax = plt.subplots(nrows = 1, ncols = 1, figsize = (8, 4))
+
+data_dict = locals()["data_{}bands".format(5)]
+xfit = data_dict['Data_fit'][0]
+yfit = data_dict['Data_fit'][1]
+
+myspl = MySplineFitting(xfit, yfit, np.ones(len(xfit)), 13)
+
+xvals = np.linspace(np.min(xfit), np.max(xfit), 1000)
+
+ax.set_xlim(130,170)
+ax.plot(xvals + 150, myspl(xvals)/np.max(myspl(xvals)), 'm', ls = '--', label='FI spline fitting')
+ax.plot(xvals + 150, myspl(xvals / 3)/np.max(myspl(xvals)), 'm', ls = '-', label='TD scaled from FI fit')
+ax.errorbar(nusrec_5bands, measure_5bands / np.max(measure_5bands), xerr = xerr_5bands, yerr = yerr_5bands,
+           fmt = 'o', color = 'orange', label = "measurements")
+
+#Plot "expected resolution" (I -Martin- don't like that concept)
+xgauss = np.linspace(-25, 25, 100) 
+FWHM_FI = 150 / (22 - 1) /np.sqrt(2) / 2.35
+FWHM_TD = 3 * FWHM_FI
+ax.plot(xgauss + 150, np.exp(-0.5 * (xgauss ** 2 )/(FWHM_TD) ** 2  ), 
+        label  = "TD expected gaussian", color = 'r' )
+ax.plot(xgauss + 150, np.exp(-0.5 * (xgauss ** 2 )/(FWHMsig_TD_freq) ** 2  ), 
+        label  = r"TD expected gaussian - $\sigma$ mod", color = 'r', alpha = 0.5 )
+
+ax.legend()
 ```
 
 ### Angular resolution

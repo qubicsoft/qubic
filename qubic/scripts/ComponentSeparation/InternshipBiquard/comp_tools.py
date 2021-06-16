@@ -5,9 +5,52 @@ import pickle
 import numpy as np
 import numpy.ma as ma
 import healpy as hp
+import numpy.random
 import qubic
 from qubic import QubicSkySim as Qss
 from astropy.io import fits
+
+
+# credits to J. Errard for these two functions
+def intersect_mask(maps):
+    if hp.pixelfunc.is_ma(maps):
+        mask = maps.mask
+    else:
+        mask = maps == hp.UNSEEN
+
+    # Mask entire pixel if any of the frequencies in the pixel is masked
+    return np.any(mask, axis=tuple(range(maps.ndim - 1)))
+
+
+def format_alms(alms, lmin=0, nulling_option=True):
+    lmax = hp.Alm.getlmax(alms.shape[-1])
+    alms = np.asarray(alms, order='C')
+    alms = alms.view(np.float64)
+    em = hp.Alm.getlm(lmax)[1]
+    em = np.stack((em, em), axis=-1).reshape(-1)
+    mask_em = [m != 0 for m in em]
+    alms[..., mask_em] *= np.sqrt(2)
+    if nulling_option:
+        alms[..., np.arange(1, lmax + 1, 2)] = hp.UNSEEN  # mask imaginary m = 0
+        mask_alms = intersect_mask(alms)
+        alms[..., mask_alms] = 0  # thus no contribution to the spectral likelihood
+    alms = np.swapaxes(alms, 0, -1)
+    if lmin != 0:
+        ell = hp.Alm.getlm(lmax)[0]
+        ell = np.stack((ell, ell), axis=-1).reshape(-1)
+        mask_lmin = [ll < lmin for ll in ell]
+        if nulling_option:
+            alms[mask_lmin, ...] = hp.UNSEEN
+    return alms
+
+
+def add_errors_alm(alm_in, relative_error=1e-3, inplace=True):
+    errors = np.random.random(len(alm_in))
+    if inplace:
+        alm_in += errors * relative_error
+        return alm_in
+    else:
+        return alm_in * (1 + errors * relative_error)
 
 
 def append_to_npz(folder_path, file_name, dico) -> None:
@@ -31,9 +74,20 @@ def append_to_npz(folder_path, file_name, dico) -> None:
         np.savez(folder_path + file_name, **dico)
 
 
+def find_mantissa_exponent(x, e):
+    n = 0
+    if x < 1:
+        while x * e ** n < 1:
+            n += 1
+    elif x > e:
+        while x * e ** n > e:
+            n -= 1
+    return x * e ** n, n
+
+
 def generate_cmb_dust_maps(dico_fast_simulator, coverage, n_years, noise_profile, nunu, sc,
                            seed=None, save_maps=False, return_maps=True, dust_only=False, fwhm_gen=None,
-                           iib=True):
+                           iib=True, noise_covcut=None):
     """
     Save CMB+Dust maps to FITS image format for later use, and/or return them immediately.
 
@@ -49,7 +103,9 @@ def generate_cmb_dust_maps(dico_fast_simulator, coverage, n_years, noise_profile
     :param bool|None dust_only: generate sky maps containing only dust (no cmb)
     :param float|None fwhm_gen: smooth maps to this fwhm during generation
     :param bool iib: integrate simulated maps into output bands
-    :return: cmb+dust maps with noise, cmb+dust noiseless, and noise only maps
+    :param float|None noise_covcut: coverage cut when generating noise maps
+
+    :return: cmb+dust maps with noise, cmb+dust noiseless, noise only maps
     """
     if seed is None:
         seed = np.random.randint(1000000)
@@ -58,16 +114,25 @@ def generate_cmb_dust_maps(dico_fast_simulator, coverage, n_years, noise_profile
     else:
         sky_config = {'dust': 'd0', 'cmb': seed}
     qubic_sky = Qss.Qubic_sky(sky_config, dico_fast_simulator)
-    cmb_dust, cmb_dust_noiseless, cmb_dust_noise_only, _ = \
+
+    if noise_covcut is None and coverage is not None:
+        x, n = find_mantissa_exponent(np.min(coverage[coverage > 0]), 10)
+        noise_covcut = np.floor(x * 10) / 10 ** (n + 1)
+    if coverage is None:  # maps are full-sky
+        coverage = np.ones(hp.nside2npix(dico_fast_simulator['nside']))
+        noise_covcut = 0.1  # arbitrary but None would raise an error in the FastSimulator
+
+    cmb_dust, cmb_dust_noiseless, cmb_dust_noise_only, coverage_eff = \
         qubic_sky.get_partial_sky_maps_withnoise(coverage=coverage,
                                                  Nyears=n_years,
                                                  noise_profile=noise_profile,  # noise inhomogeneity
                                                  nunu_correlation=nunu,  # noise frequency correlations
                                                  spatial_noise=sc,  # noise spatial correlations
                                                  verbose=False,
-                                                 seed=seed,
+                                                 seed=None,
                                                  FWHMdeg=fwhm_gen,
-                                                 integrate_into_band=iib
+                                                 integrate_into_band=iib,
+                                                 noise_covcut=noise_covcut,
                                                  )
     if save_maps:
         save_dir = "/media/simon/CLE32/qubic/maps/"
@@ -84,7 +149,6 @@ def generate_cmb_dust_maps(dico_fast_simulator, coverage, n_years, noise_profile
 
         common_fmt = "{}bands_{}y"  # .format(band, nsub, nyears, seed)
         common = common_fmt.format(dico_fast_simulator['nf_recon'], n_years)
-        # TODO: add more possibilities
 
         hdu_cmb_dust = fits.PrimaryHDU(cmb_dust)
         hdu_cmb_dust.writeto(save_dir + common + "_cmbdust.fits", overwrite=True)
@@ -96,7 +160,7 @@ def generate_cmb_dust_maps(dico_fast_simulator, coverage, n_years, noise_profile
         hdu_cmb_dust_noise_only.writeto(save_dir + common + "_noise.fits", overwrite=True)
 
     if return_maps:
-        return cmb_dust, cmb_dust_noiseless, cmb_dust_noise_only
+        return cmb_dust, cmb_dust_noiseless, cmb_dust_noise_only, coverage_eff
     else:
         return
 
@@ -109,27 +173,32 @@ def get_coverage_from_file(folder_path, file_name=None, dtheta=40, pointing=6000
     :param file_name: the name of the file (optional)
     :param dtheta: angle of coverage (default: 40°)
     :param pointing: number of sky points (default: 6000)
+
     :return: the array containing the coverage map
     """
 
     if file_name is None:
-        t = pickle.load(open(folder_path + 'coverage_dtheta_{}_pointing_{}.pkl'.format(dtheta, pointing), 'rb'))
-    else:
-        t = pickle.load(open(folder_path + file_name, 'rb'))
-    return t['coverage']
+        file_name = 'coverage_dtheta_{}_pointing_{}'.format(dtheta, pointing)
+    t = pickle.load(open(folder_path + file_name + '.pkl', 'rb'))
+    return t['coverage'], file_name
 
 
-def get_depths(noise_maps, pix_size, mask=None):
+def get_depths(noise_maps, pix_size, mask=None, pixel_weights=None):
     """Compute depth_i and depth_p (sensitivities) from noise maps.
 
     :param noise_maps: the noise maps
     :param pix_size: the pixel size in arcmin
     :param mask: the mask to apply
+    :param pixel_weights: weighting of pixels (coverage)
+
     :return: depth_i and depth_p of the map
     """
+    # apply pixel weights
+    weighted_maps = np.empty_like(noise_maps)
+    weighted_maps[...] = noise_maps[...] * pixel_weights
 
     # apply mask
-    noise_ma = ma.array(noise_maps, mask=mask)
+    noise_ma = ma.array(weighted_maps, mask=mask)
 
     # noise estimation (in I component) using the noise maps
     depth_i = ma.getdata(ma.std(noise_ma[:, 0, :], axis=1))
@@ -176,6 +245,11 @@ def get_sub_freqs_and_resolutions(dico_fast_simulator):
     # nus_in are in GHz so we use inverse scaling of resolution with frequency
     # we know the fwhm at 150 GHz so the factor is 150 / (target frequency)
     return nus_in, dico_fast_simulator['synthbeam_peak150_fwhm'] * 150 / nus_in
+
+
+def print_list(list_, fmt=''):
+    list_fmt = "[" + ", ".join(["{:" + fmt + "}"] * len(list_)) + "]"
+    print(list_fmt.format(*list_))
 
 
 def same_resolution(maps_in, map_fwhms_deg, fwhm_target=None, verbose=False):

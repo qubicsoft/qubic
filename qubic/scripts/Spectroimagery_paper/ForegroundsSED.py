@@ -457,7 +457,8 @@ def DustSynch_model_pointer(x, *pars, extra_args = None):
 
 def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 		   maxfev = 10000, initP0 = None, verbose = False, chi2 = None, flatprior = None,
-		  nsamples = 5000, past_mcmc = False, plotcovar = False):
+		  nsamples = 5000, past_mcmc = False, nsiginit = 10, nsigprior = 20,):
+		  #plotcovar = False, external_data = False, external_initial_fit = None):
 	
 	#print(np.shape(covMat[:, :, istk, pix_red]))
 	#popt, pcov = curve_fit(ThermDust_Planck353_l, nus, maps[:, pix, istk], 
@@ -472,7 +473,8 @@ def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 		import mcmc_old as mcmc
 		myfit = mcmc.LogLikelihood(xvals = nus, yvals = maps[:, pix, istk], #chi2 = chi2,
 								   errors = covMat[:, :, istk, pix_red], 
-								   model = FuncModel, p0 = popt, plotcovar = plotcovar)
+								   model = FuncModel, p0 = popt, plotcovar = plotcovar,
+								   )
 			#print("myfit info: " )
 		fit_prep = myfit.run(nsamples)
 		#print("Doing chain")
@@ -492,7 +494,11 @@ def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 		from qubic import mcmc
 		myfit = mcmc.LogLikelihood(xvals = nus, yvals = maps[:, pix, istk], chi2 = chi2,
 								   errors = covMat[:, :, istk, pix_red], flatprior = flatprior,
-								   model = FuncModel, p0 = popt, plotcovar = plotcovar)
+								   model = FuncModel, p0 = popt, 
+								   nsiginit = nsiginit, nsigprior = nsigprior,)
+								   #plotcovar = plotcovar,
+								   #external_data = external_data, 
+								   #external_initial_fit = external_initial_fit)
 		#print("myfit info: " )
 		fit_prep = myfit.run(nsamples)
 		#print("Doing chain")
@@ -515,8 +521,10 @@ def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 
 
 def foregrounds_run_mcmc(dictionaries, fgr_map, Cp_prime, FuncModel,
-					nus_out, nus_edge, pixs, pixs_red = None, chi2 = None, plotcovar = False,
-					samples = 5000, verbose = True, initP0 = None, past_mcmc = False, flatprior = None):
+					nus_out, nus_edge, pixs, pixs_red = None, chi2 = None, 
+					samples = 5000, verbose = True, initP0 = None, past_mcmc = False, flatprior = None,
+					nsiginit = 10, nsigprior = 20,):
+					 #external_initial_fit = None, external_data = False, plotcovar = False,
 	t0 = time.time()
 
 	MeanVals = np.zeros((len(dictionaries), samples//2, 3))
@@ -526,7 +534,30 @@ def foregrounds_run_mcmc(dictionaries, fgr_map, Cp_prime, FuncModel,
 	#2496 if samples == 5k or 4992 if samples == 10k 7488 is sample == 15k 
 	ndim = 2496
 	_flat_samples = np.zeros((len(dictionaries), ndim, len(initP0)))
-
+	external_matrix_old = [np.array([[2.50692304e-05, 3.17124531e-04],[3.17124531e-04, 4.04001828e-03]]),
+							np.array([[0.00010975, 0.00134293],[0.00134293, 0.01672913]]),
+							np.array([[0.00292627, 0.00365206],[0.00365206, 0.00458563]]),
+							np.array([[0.00931016, 0.01083909],[0.01083909, 0.01292631]]),
+							np.array([[3.14095699e-07, 3.67453559e-05],[3.67453559e-05, 4.32749699e-03]]),
+							np.array([[9.45464848e-07, 1.06739404e-04],[1.06739404e-04, 1.23438268e-02]]),
+							np.array([[3.63430038e-07, -4.05881652e-05],[-4.05881652e-05, 4.56736628e-03]]),
+							np.array([[1.40401372e-06, -1.40328625e-04],[-1.40328625e-04, 1.43876148e-02]]),
+							np.array([[4.17638682e-07, -3.53425761e-05],[-3.53425761e-05, 3.01206364e-03]]),
+							np.array([[1.40020686e-06, -1.15836387e-04],[-1.15836387e-04, 9.84045768e-03]]),
+							np.array([[3.44300442e-06, 1.10819363e-04],[1.10819363e-04, 3.59408575e-03]]),
+							np.array([[1.37638309e-05, 4.26390949e-04],[4.26390949e-04, 1.35194414e-02]])   ]
+	external_matrix_new = [np.array([[0.00327079, 0.],[0.0, 0.52096453]]),
+	                      np.array([[0.00158881, 0.0],[0.0, 0.23300211]]),
+	                      np.array([[0.08568583, 0.],[0., 0.13567425]]),
+	                      np.array([[0.0005416 , 0.],[0., 0.00073348]]),
+	                      np.array([[4.49218135e-03, 0.],[0., 5.44424227e+01]]),
+	                      np.array([[1.66046948e-03, 1.82126501e-01],[1.82126501e-01, 2.01406126e+01]]),
+	                      np.array([[1.34828123e-03, -1.48500217e-01],[-1.48500217e-01,  1.65540333e+01]]),
+	                      np.array([[4.67854600e-04, -4.61885304e-02],[-4.61885304e-02,  4.60904633e+00]]),
+	                      np.array([[1.93364458e-03, -1.51052302e-01],[-1.51052302e-01,  1.19115691e+01]]),
+	                      np.array([[9.20499767e-04, -7.40511946e-02],[-7.40511946e-02,  6.03017062e+00]]),
+	                      np.array([[0.00682632, 0.21502597],[0.21502597, 6.80033658]]),
+	                      np.array([[0.00057326, 0.01745101],[0.01745101, 0.53564246]])   ]	
 	for istk in range(3):
 		if verbose: print("======== Doing {} Stokes parameter =============".format(dictionaries[0]['kind'][istk]))
 		for j in range(len(dictionaries)):
@@ -535,12 +566,17 @@ def foregrounds_run_mcmc(dictionaries, fgr_map, Cp_prime, FuncModel,
 				print(np.shape(dictionaries), np.shape(fgr_map[j]), np.shape(Cp_prime[j]), np.shape(nus_out[j]), 
 							np.shape(nus_edge[j])) 
 				print("initP0 ", initP0)
+
 			MeanVals[j, :, istk], StdVals[j, :, istk], xarr[j, :, istk], _flat_samples[j] = \
 														PixSED_Xstk(nus_out[j], fgr_map[j], FuncModel, 
 																	pixs[j], pixs_red[j], istk, Cp_prime[j], nus_edge[j], 
 																	chi2 = chi2, initP0 = initP0, nsamples = samples,
-																	past_mcmc = past_mcmc, plotcovar = plotcovar,
-																	flatprior = flatprior)
+																	flatprior = flatprior, nsiginit = nsiginit, 
+																	nsigprior = nsigprior, )
+																	#past_mcmc = past_mcmc, 
+																	#plotcovar = plotcovar,
+																	#external_initial_fit = external_matrix[count], 
+																	#external_data = external_data)
 	print('Done in {:.2f} min'.format((time.time()-t0)/60 ))
 
 	return MeanVals, StdVals, xarr[:,:,0], _flat_samples
@@ -673,6 +709,7 @@ def _plot_exampleSED(dictionary, center, nus_out, maskmaps, mapsarray = False,
 	label = ['dust', 'synchrotron', 'dust+synchrotron']
 	if mapsarray:
 		for j, imap in enumerate(maskmaps):
+			print(imap[:,IPIXG,0])
 			ax[1].plot(nus_out, imap[:,IPIXG,0], 'o', color=color[j], label = label[j])
 		ax[1].legend()
 		ax[0].cla()	
@@ -688,6 +725,7 @@ def _plot_exampleSED(dictionary, center, nus_out, maskmaps, mapsarray = False,
 					min = 0 ,
 					max = 0.23 * np.max(maskmaps[-1,:,0]), rot = center)
 	hp.projscatter(hp.pix2ang(dictionary['nside'], IPIXG), marker = '*', color = 'r',s = 180)
+	#ax[1].set_yscale("log")
 	ax[1].set_ylabel(r'$I_\nu$ [$\mu$K]')
 	ax[1].set_xlabel(r'$\nu$[GHz]')
 	dpar = 10

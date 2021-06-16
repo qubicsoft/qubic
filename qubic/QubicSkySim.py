@@ -365,7 +365,7 @@ class Qubic_sky(sky):
                                        Nyears=4., FWHMdeg=None, seed=None,
                                        noise_profile=True, spatial_noise=True, nunu_correlation=True,
                                        noise_only=False, integrate_into_band=True,
-                                       verbose=False):
+                                       verbose=False, noise_covcut=0.1):
         """
         This returns maps in the same way as with get_simple_sky_map but cut according to the coverage
         and with noise added according to this coverage and the RMS in muK.sqrt(sec) given by sigma_sec
@@ -504,7 +504,8 @@ class Qubic_sky(sky):
                                            Nyears=Nyears, verbose=verbose, seed=seed,
                                            effective_variance_invcov=effective_variance_invcov,
                                            clnoise=clnoise,
-                                           sub_bands_cov=sub_bands_cov)
+                                           sub_bands_cov=sub_bands_cov,
+                                           covcut=noise_covcut)
         if self.Nfout == 1:
             noisemaps = np.reshape(noisemaps, (1, len(coverage), 3))
         seenpix = noisemaps[0, :, 0] != 0

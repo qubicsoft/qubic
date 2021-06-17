@@ -201,9 +201,15 @@ for ishift in dictshift.values():
 
 ```{python}
 #Read for Nrec = 5. Simulations are different so we have another files.
-dictshift_5sb = {'42904592': -17, '43012239':-15, #'43015130': -13, '43015132':-11,
-                '43015140':-9, '43015155':-3, #'43015161':-1, '43117112':0,
+#FI
+dictshift_5sb = {'42904592': -17, '43012239':-15, '43015130': -13, '43015132':-11,
+                '43015140':-9, '43015155':-3, '43015161':-1, '43117112':0,
                 '43117144':1, '43117145':3, '43117146':5}
+#TD with low tol (1e-3)
+#dictshift_5sb = {'43427945':-11,
+#                 '43363513':-7, '43378395':-3, 
+#                 '43427908':0,
+#                 '43378408':3, '43363588':7, '43427951':11}
 
 jobids_5sb = list(dictshift_5sb.keys())
 
@@ -233,6 +239,41 @@ for ishift in dictshift_5sb.values():
 nusfulledge.update({'5': nusfulledge_5sb['5']})
 ```
 
+```{python}
+#Read for Nrec = 5. Simulations are different so we have another files.
+#TD
+dictshift_5sbTD = {'43306125':-11, '43306122':-7,
+                   '43306116':-3, '43287565':1, 
+                   '43287312':5, '43306128':9}
+
+jobids_5sbTD = list(dictshift_5sbTD.keys())
+
+allrecon_5sbTD = []
+allconv_5sbTD = []
+jobid = np.zeros((len(jobids_5sbTD)))
+for ijob in range(len(jobids_5sbTD)):
+    print('Reading job {} ({}/{})'.format(jobids_5sbTD[ijob], ijob + 1, len(jobids_5sbTD)))
+    if ijob == 0:
+        maprec, mapsconv, nusfull_5sbTD, nusfulledge_5sbTD, nus_in_5sbTD, center, d_5sbTD = read_run(jobids_5sbTD[ijob],
+                                                                                            fixpar = False)
+    else: 
+        maprec, mapsconv, _, _, _, _, _ = read_run(jobids_5sbTD[ijob], fixpar = False)
+        
+    allrecon_5sbTD.append(maprec)
+    allconv_5sbTD.append(mapsconv)
+allrecon_5sbTD = np.array(allrecon_5sbTD)
+allconv_5sbTD = np.array(allconv_5sbTD)
+
+NU0 = 150
+innu0_5sbTD = min(range(len(nus_in_5sbTD)), key = lambda i: abs(nus_in_5sbTD[i] - NU0))
+innu_5sbTD = []
+for ishift in dictshift_5sbTD.values():
+    innu_5sbTD.append(innu0_5sbTD + ishift)
+
+# Put all edges in same array:
+#nusfulledge.update({'5': nusfulledge_5sb['5']})
+```
+
 Save data for one pixel. I will create 3 structures: data_2bands, data_3bands, data_4bands. Each one has the amplitude for each realization, each frequency, each Stokes parameter (by the time only 'I' component it matters). You'll find 'nan' values for some simulations, this is due to the TIMEOUT in the end-to-end simulation.
 
 ```{python}
@@ -250,6 +291,9 @@ data_4bands = {'nu_in': nus_in[innu],
 data_5bands = {'nu_in': nus_in_5sb[innu_5sb],
                 'nu_rec': nusfull_5sb['5'],
                'nu_edge': nusfulledge_5sb['5'] }
+data_5bandsTD = {'nu_in': nus_in_5sbTD[innu_5sbTD],
+                'nu_rec': nusfull_5sbTD['5'],
+               'nu_edge': nusfulledge_5sbTD['5'] }
 
 for irec in d['nf_recon']:
     keys = ['band{}'.format(i) for i in range(irec)]
@@ -264,16 +308,22 @@ for irec in d['nf_recon']:
 keys_5sb = ['band{}'.format(i) for i in range(5)]
 for bnd in range(5):
     auxarr_5sb = np.empty((len(jobids_5sb)), dtype = object)
+    auxarr_5sbTD = np.empty((len(jobids_5sbTD)), dtype = object)
 
     for isim in range(len(jobids_5sb)):
         auxarr_5sb[isim] = allrecon_5sb[isim]['{}'.format(5)][0, bnd, pixel, 0]
     locals()["data_{}bands".format(5)].update({keys_5sb[bnd] : auxarr_5sb}) 
+    
+    for isimTD in range(len(jobids_5sbTD)):
+        auxarr_5sbTD[isimTD] = allrecon_5sbTD[isimTD]['{}'.format(5)][0, bnd, pixel, 0]
+    locals()["data_5bandsTD"].update({keys_5sb[bnd] : auxarr_5sbTD}) 
 
 #Normalization
 max2bands = np.max([np.max(data_2bands['band{}'.format(i)]) for i in range(2)])
 max3bands = np.max([np.max(data_3bands['band{}'.format(i)]) for i in range(3)])
 max4bands = np.max([np.max(data_4bands['band{}'.format(i)]) for i in range(4)])
 max5bands = np.max([np.max(data_5bands['band{}'.format(i)]) for i in range(5)])
+max5bandsTD = np.max([np.max(data_5bandsTD['band{}'.format(i)]) for i in range(5)])
 
 for i in range(2):
     data_2bands['band{}'.format(i)] /= max2bands
@@ -283,6 +333,7 @@ for i in range(4):
     data_4bands['band{}'.format(i)] /= max4bands
 for i in range(5):
     data_5bands['band{}'.format(i)] /= max5bands
+    data_5bandsTD['band{}'.format(i)] /= max5bandsTD
     
 ```
 
@@ -358,46 +409,45 @@ plt.tight_layout()
 
 ```
 
-## Another way to plot the same data
-
-See how the FPSF change when it changes the frequency of the point source
+### Same plot comparing TD and FI simulations for Nrec = 5
 
 ```{python}
-for ibnd in [2,3,4]:
-    fig = plt.figure(figsize=(4, 4))
-    ax = fig.gca()
-    data_array = locals()['data_{}bands'.format(ibnd)]
-    nsimu = len(data_array['nu_in'])
-    points, = ax.plot(data_array['nu_rec'], 
-                      np.array([data_array['band{}'.format(i)] for i in range(ibnd)]).T[0], 'ko')
-    line = ax.axvline(data_array['nu_in'][0], color = 'k', ls = '--')
-    text = ax.text(140, 1, r'$\nu_i=${:3.2f} GHz'.format(data_array['nu_in'][0]), fontsize=14)
+fig, ax = plt.subplots(nrows = 1, ncols = 1, 
+                       sharey = True, figsize = (8,6))
+sb = 5
+xx, yy, xxTD, yyTD = [], [], [], []
+for j in range(sb):
+    xx.append(data_5bands['nu_in'] - data_5bands['nu_rec'][j])
+    yy.append(data_5bands['band{}'.format(j)])
 
-    def init():
-        ax.axhline(0, color = 'k', ls = '-', alpha = 0.2)
-        c = ['b', 'g', 'y', 'r']
-        for ib in range(ibnd):
-            ax.axvspan(xmin = data_array['nu_edge'][ib], xmax = data_array['nu_edge'][ib + 1], 
-                       alpha = 0.2, color = c[ib])
-        ax.set_xlim(130,170)
-        ax.set_xlabel(r'$\nu$ [GHz]')
-        ax.set_ylabel(r'$I_{out}$')
-        ax.set_ylim(-0.2,1.1)
-        return points
+xsort_idx = np.argsort(np.array(xx).ravel())
 
-    def animate(i):
-        points.set_data(data_array['nu_rec'], 
-                        np.array([data_array['band{}'.format(i)] for i in range(ibnd)]).T[i])
-        line.set_xdata(data_array['nu_in'][i])
-        text.set_text(r'$\nu_i=${:3.2f} GHz'.format(data_array['nu_in'][i]))
-        return(points)
+for j in range(sb):
+    xxTD.append(data_5bandsTD['nu_in'] - data_5bandsTD['nu_rec'][j])
+    yyTD.append(data_5bandsTD['band{}'.format(j)])
+xsort_idxTD = np.argsort(np.array(xxTD).ravel())
+xxTD = np.array(xxTD).ravel()[xsort_idxTD]
+yyTD = np.array(yyTD).ravel()[xsort_idxTD]
+dataTD = ax.plot(np.array(xxTD).T, np.array(yyTD).T, 'o-', c = 'r', label = 'TD')
+data_5bandsTD.update({'Data_fit': dataTD[0].get_data()})
 
+xx = np.array(xx).ravel()[xsort_idx]
+yy = np.array(yy).ravel()[xsort_idx]
+data = ax.plot(np.array(xx).T, np.array(yy).T, 'o-', c = 'b', label = 'FI')
 
-    steps = np.arange(nsimu)
-    anim = FuncAnimation(fig, animate, steps, init_func=init, interval=1000, blit=False, repeat=False)
+xgauss = np.linspace(-25, 25, 100) 
+ax.plot(xgauss, np.exp(-0.5 * (xgauss ** 2 )/((150 / (8 -1)) / 2.355) ** 2  ), label  = "expected" )
 
-    # Save a .gif
-    #anim.save('./{}FPSF.gif'.format(ibnd), writer='imagemagick')
+ax.set_xlim(-22,22)
+ax.set_title("FPSF - 5 sub-bands", fontsize = 14)
+ax.set_xlabel(r"$\nu - \nu_{in}$", fontsize=14)    
+ax.set_ylabel(r"$FPSF$", fontsize=14)
+
+ax.legend()
+#Save xData to make a fit
+#data_array.update({'Data_fit': data[0].get_data()})
+plt.tight_layout()
+
 ```
 
 ## Fit spline 
@@ -480,10 +530,12 @@ for inu in [2, 3, 4, 5]:
         
     myspl = MySplineFitting(xfit, yfit, np.ones(len(xfit)), nbspl)
     
+    data_dict.update({'SplFunc': myspl})
+    
     xvals = np.linspace(np.min(xfit), np.max(xfit), 1000)
     
     ax[jax].plot(xfit, yfit, 'o', color='b', label='Data')
-    ax[jax].plot(xvals, myspl(xvals)/np.max(myspl(xvals)), 'r', label='Spline fitting')
+    ax[jax].plot(xvals, myspl(xvals)/np.max(myspl(xvals)), 'r', label='Fit')
     ax[jax].set_xlim(-25,25)
     ax[jax].set_ylim(-0.2,1.1)
     ax[jax].set_xlabel(r"$\nu - \nu_{in}$", fontsize = 14)
@@ -491,12 +543,71 @@ for inu in [2, 3, 4, 5]:
     
     #Plot "expected resolution" (I -Martin- don't like that concept)
     xgauss = np.linspace(-25, 25, 100) 
-    ax[jax].plot(xgauss, np.exp(-0.5 * (xgauss ** 2 )/((150 / (20 -1)) / 2.355) ** 2  ), label  = "expected" )
-    
-    ax[0].legend(loc = 'upper right't)
+    ax[jax].plot(xgauss, np.exp(-0.5 * (xgauss ** 2 )/((150 / (22 -1)) / 2.355) ** 2  ), label  = "Theor" )
+    #ax[jax].plot(xgauss, np.exp(-0.5 * (xgauss ** 2 )/((150 / (8 -1)) / 2.355) ** 2  ),'--', label  = "expected" )
+    ax[jax].axvspan(-np.diff(data_dict['nu_edge'])[0]/2,
+                    np.diff(data_dict['nu_edge'])[0]/2, color = 'k', alpha = 0.2)
+    ax[jax].text(-20,0.9, r"$N_r = {}$".format(inu))
+    ax[3].legend(loc = 'upper right')
     jax += 1
 fig.tight_layout()
 ```
+
+## Another way to plot the same data
+
+See how the FPSF change when it changes the frequency of the point source
+
+```{python}
+for ibnd in [2,3,4,5]:
+    fig = plt.figure(figsize=(4, 4))
+    ax = fig.gca()
+    data_array = locals()['data_{}bands'.format(ibnd)]
+    
+    #Generate xvals to plot spline
+    xfit = data_dict['Data_fit'][0]
+    xvals = np.linspace(np.min(xfit), np.max(xfit), 1000)
+    
+    nsimu = len(data_array['nu_in'])
+    points, = ax.plot(data_array['nu_rec'], 
+                      np.array([data_array['band{}'.format(i)] for i in range(ibnd)]).T[0], 'ko')
+    line = ax.axvline(data_array['nu_in'][0], color = 'k', ls = '--')
+    
+    line_spl, = ax.plot(xvals+data_array['nu_in'][0],
+                        data_array['SplFunc'](xvals), color = 'k', ls = '-')
+    #print(line_spl)
+    text = ax.text(140, 1, r'$\nu_i=${:3.2f} GHz'.format(data_array['nu_in'][0]), fontsize=14)
+
+    def init():
+        ax.axhline(0, color = 'k', ls = '-', alpha = 0.2)
+        c = ['b', 'g', 'y', 'orange', 'r']
+        for ib in range(ibnd):
+            ax.axvspan(xmin = data_array['nu_edge'][ib], xmax = data_array['nu_edge'][ib + 1], 
+                       alpha = 0.2, color = c[ib])
+        ax.set_xlim(130,170)
+        ax.set_xlabel(r'$\nu$ [GHz]')
+        ax.set_ylabel(r'$I_{out}$')
+        ax.set_ylim(-0.2,1.1)
+        return points
+
+    def animate(i):
+        points.set_data(data_array['nu_rec'], 
+                        np.array([data_array['band{}'.format(i)] for i in range(ibnd)]).T[i])
+        line.set_xdata(data_array['nu_in'][i])
+        line_spl.set_xdata(xvals + data_array['nu_in'][i])
+        text.set_text(r'$\nu_i=${:3.2f} GHz'.format(data_array['nu_in'][i]))
+        return(points)
+
+
+    steps = np.arange(nsimu)
+    anim = FuncAnimation(fig, animate, steps, init_func=init, interval=1000, blit=False, repeat=False)
+
+    # Save a .gif
+    anim.save('./{}FPSF.gif'.format(ibnd), writer='imagemagick')
+```
+
+### Fit TD simulations (5sub-bands)
+and compare it with FI (5subbands)
+
 
 ### 5 bands
 With real data, we also reconstructed 5 bands. Let's try to superimpose.
@@ -507,6 +618,49 @@ nusrec_5bands = np.array([134.63280448, 141.57278853, 148.8705114 , 156.54441361
 measure_5bands = np.array([-0.21088738,  0.20660622,  0.5078612,   0.35812012, -0.18409084])
 yerr_5bands = np.array([0.2309525,  0.12816038, 0.19878606, 0.16506726, 0.17398308])
 xerr_5bands = np.array([3.38280448, 3.55717958, 3.74054328, 3.93335893, 4.13611373])
+```
+
+```{python}
+from matplotlib import collections  as mc
+lines = [[(150, 0.1), (150 + (150 / (8 -1)) / 2.355 , 0.1)]]
+
+lc = mc.LineCollection(lines, colors = 'k', linestyle = '--', linewidths = 2, alpha = 0.6)
+
+# Spline fitting
+nbspl = 13
+fig, ax = plt.subplots(nrows = 1, ncols = 1, figsize = (8, 4))
+
+xfit = data_5bands['Data_fit'][0]
+yfit = data_5bands['Data_fit'][1]
+xfitTD = data_5bandsTD['Data_fit'][0]
+yfitTD = data_5bandsTD['Data_fit'][1]
+
+myspl = MySplineFitting(xfit, yfit, np.ones(len(xfit)), nbspl)
+mysplTD = MySplineFitting(xfitTD, yfitTD, np.ones(len(xfitTD)), 13)
+
+xvals = np.linspace(np.min(xfit), np.max(xfit), 1000)
+xvalsTD = np.linspace(np.min(xfitTD), np.max(xfitTD), 1000)
+
+ax.plot(xfit+150, yfit, 'o', color='b', label='FI data', alpha = 0.7)
+ax.plot(xfitTD+150, yfitTD, '*', color='m', label='TD data', alpha = 0.7)
+ax.plot(xvals+150, myspl(xvals)/np.max(myspl(xvals)), 'r--', label='FI Spline fitting')
+ax.plot(xvalsTD+150, mysplTD(xvalsTD)/np.max(mysplTD(xvalsTD)), 'r', label='TD Spline fitting')
+ax.set_xlim(150-25,150+25)
+ax.set_ylim(-0.5,1.1)
+ax.set_xlabel(r"$(\nu - \nu_{in} + 150)~[GHz]$", fontsize = 14)
+ax.set_ylabel(r"$I_{out}$", fontsize = 14)
+ax.errorbar(nusrec_5bands, measure_5bands , xerr = xerr_5bands, yerr = yerr_5bands,
+           fmt = 'o', color = 'orange', label = "measurements")
+#Plot "expected resolution" (I -Martin- don't like that concept)
+xgauss = np.linspace(-25, 25, 100) 
+ax.plot(xgauss+150, np.exp(-0.5 * (xgauss ** 2 )/((150 / (8 - 1)) / 2.355) ** 2  ) - 0.4, 
+        label  = "TD expected", c = 'b')
+
+ax.add_collection(lc)
+
+ax.legend(loc = 'upper right')
+
+fig.tight_layout()
 ```
 
 ```{python}
@@ -538,7 +692,7 @@ myspl = MySplineFitting(xfit, yfit, np.ones(len(xfit)), 13)
 xvals = np.linspace(np.min(xfit), np.max(xfit), 1000)
 
 ax.set_xlim(130,170)
-ax.plot(xvals + 150, myspl(xvals)/np.max(myspl(xvals)), 'm', ls = '--', label='FI spline fitting')
+#ax.plot(xvals + 150, myspl(xvals)/np.max(myspl(xvals)), 'm', ls = '--', label='FI spline fitting')
 ax.plot(xvals + 150, myspl(xvals / 3)/np.max(myspl(xvals)), 'm', ls = '-', label='TD scaled from FI fit')
 ax.errorbar(nusrec_5bands, measure_5bands / np.max(measure_5bands), xerr = xerr_5bands, yerr = yerr_5bands,
            fmt = 'o', color = 'orange', label = "measurements")
@@ -547,10 +701,10 @@ ax.errorbar(nusrec_5bands, measure_5bands / np.max(measure_5bands), xerr = xerr_
 xgauss = np.linspace(-25, 25, 100) 
 FWHM_FI = 150 / (22 - 1) /np.sqrt(2) / 2.35
 FWHM_TD = 3 * FWHM_FI
-ax.plot(xgauss + 150, np.exp(-0.5 * (xgauss ** 2 )/(FWHM_TD) ** 2  ), 
-        label  = "TD expected gaussian", color = 'r' )
-ax.plot(xgauss + 150, np.exp(-0.5 * (xgauss ** 2 )/(FWHMsig_TD_freq) ** 2  ), 
-        label  = r"TD expected gaussian - $\sigma$ mod", color = 'r', alpha = 0.5 )
+#ax.plot(xgauss + 150, np.exp(-0.5 * (xgauss ** 2 )/(FWHM_TD) ** 2  ), 
+#        label  = "TD expected gaussian", color = 'r' )
+#ax.plot(xgauss + 150, np.exp(-0.5 * (xgauss ** 2 )/(FWHMsig_TD_freq) ** 2  ), 
+#        label  = r"TD expected gaussian - $\sigma$ mod", color = 'r', alpha = 0.5 )
 
 ax.legend()
 ```
@@ -831,230 +985,110 @@ print('{:.2f}hs'.format(np.sum(t4[1:-1])), 2666/60)
 
 ```
 
-```{python}
-
-```
-
-Editing xaxis...It should be ~47 values 
-
-### Fit
-$\fbox{} \quad \mathrm{Sinusoidal} \quad y_{sin}(x) = \frac{\sin{x}}{x}$ (Model 1)
-
-$\fbox{} \quad \mathrm{Bessel} \quad y_{bes}(x) = 1 - \frac{x^2}{2^2} + \frac{x^4}{2^2~4^2} - \frac{x^6}{2^2~4^2 ~6^2}$ ... (Model 2)
-
-$\fbox{} \quad \mathrm{Polyn} \quad y_{pol}(x) = a+b~x + c~x^2/2+e~x^3/3 +$ ... (Model 3)
-
-
-Generate models...
+Pedagogical plot
 
 ```{python}
-from scipy.special import j0,j1,jn
-#Model 1
-def model_sin(x,a,b):#c,e,ph):
-    return a*np.sin(b*x)/(b*x)#+ e*np.exp(-c*x-ph)
-
-def model_exp(x, a, b, c, phi, y, y0, y1):
-    return a * np.exp(- b * x) * np.cos(c * x + phi) + y + y0 * x + y1 * x ** 2
-
-def model_bes(x,a,b):#,e):
-    return a*j0(b*x)#+e*np.exp(-c*(x-x0))
-
-def model_pol(x,a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12):
-    return a0+a1*x+a2*x**2+a3*x**3+a4*x**4+a5*x**5+a6*x**6 + \
-            a7*x**7+a8*x**8+a9*x**9+a10*x**10+a11*x**11+a12*x**12
-```
-
-```{python}
-xFPSF = xData
-yFPSF = yData
-
-#sinusoidal
-gmodel_sin = Model(model_sin, independent_vars=['x',], )
-params_sin = gmodel_sin.make_params(a=0.3,b=1)#c=1, e=0.4,ph=0.4)
-result_sin = gmodel_sin.fit(yFPSF, params_sin, x=xFPSF)
-#result_sin = gmodel_sin.fit(newyData, params_sin, x=newxData)
-parssin = list(result_sin.best_values.values())
-print('Sin. Chi2 {:.3f}'.format(result_sin.chisqr ))
-
-#exp
-gmodel_exp = Model(model_exp, independent_vars=['x',], )
-params_exp = gmodel_exp.make_params(a = 1, b = 0.1, c = 0.5,phi = 0., y = 0.5, y0 = 0.1, y1 = 0.5)
-result_exp = gmodel_exp.fit(yFPSF, params_exp, x=xFPSF, )
-parsexp = list(result_exp.best_values.values())
-print('Exp. Chi2 {:.3f}'.format(result_exp.chisqr) )
-
-#bessel
-gmodel_bes = Model(model_bes, independent_vars=['x',], )
-params_bes = gmodel_bes.make_params(a=0.3,b=0.1,)#c=0.3, e=0.5,x0=0.5 )
-result_bes = gmodel_bes.fit(yFPSF, params_bes, x=xFPSF)
-#result_bes = gmodel_bes.fit(newyData, params_bes, x=newxData)
-parsbes = list(result_bes.best_values.values())
-print('Bes. Chi2 {:.3f}'.format(result_bes.chisqr) )
-
-#polynomial
-gmodel_pol = Model(model_pol, independent_vars=['x',], )
-params_pol = gmodel_pol.make_params(a0=1,a1=1,a2=1,a3=1,a4=1,a5=1,a6=1,a7=1,a8=1,a9=1,a10=1,a11=1,a12=1 )
-result_pol = gmodel_pol.fit(yFPSF, params_pol, x=xFPSF)
-#result_pol = gmodel_pol.fit(newyData, params_pol, x=newxData)
-parspol = list(result_pol.best_values.values())
-print('Pol. Chi2 {:.3f}'.format(result_pol.chisqr) )
-
-```
-
-See results...
-
-```{python}
-fig = plt.figure(figsize = (10,6))
-plt.rc('font', size=16)
-
-result = result_pol
-#plt.subplot(121)
-plt.plot(xData, result.data, 'bo', label = 'data')
-plt.plot(xData, result.best_fit, 'r-', label = 'fit')
-dely = result.eval_uncertainty(sigma=3,)
-#plt.axvspan(-halfwidth[0],halfwidth[0],color='k',alpha=0.2)
-#plt.axvspan(-halfwidth[1],halfwidth[1],color='k',alpha=0.2)
-#plt.axvspan(-halfwidth[2],halfwidth[2],color='k',alpha=0.2)
-plt.axvspan(-halfwidth[3],halfwidth[3],color='k',alpha=0.2)
-#plt.axvspan(-1.5,-0.5,color='k',alpha=0.1)
-#plt.axvspan(0.5,1.5,color='k',alpha=0.1)
-#plt.xlim(-2.1,2.1)
-plt.xlim(-22,22)
-plt.fill_between(xData, result.best_fit-dely, result.best_fit+dely, color='red',#"#ABABAB",
-                 alpha=0.5, label='3$\sigma$ uncertainty band')
-#plt.xlabel(r'${\rm d}_{\nu_c}(\nu)$ ', fontsize = 18)
-plt.xlabel(r"$(\nu - \nu_{in})~[\mathrm{GHz}]$", fontsize = 18)
-plt.ylabel(r'Normalized FPSF', fontsize = 18)
-plt.legend(loc = "best", fontsize = 14)
-#plt.subplot(122)
-#c = ['b', 'r', 'g', 'm']
-#for j, ifr in enumerate(_freqsout_):
-#    plt.axvline(x = ifr, ymin = 0.8, ymax = 0.95, linestyle = "--", color = "k")
-#    plt.axvline(x = ifr, ymax = 0.65, linestyle = "--", color = "k")
-#    plt.text(ifr-2.5, 0.7, "{:.1f}".format(ifr))
-#    plt.axvspan(xmin = _freqsEdgeOut_[j], xmax = _freqsEdgeOut_[j + 1], 
-#                color = c[j], alpha = 0.2)
-#plt.plot((_freqsin_ [:30] ), (fpsf(_freqsin_[:30], _freqsout_[0], _freqswidth_[0]) ), 
-#        color = c[0])
-#plt.plot((_freqsin_[:38] ), (fpsf(_freqsin_[:38], _freqsout_[1], _freqswidth_[1])),
-#        color = c[1])
-#plt.plot((_freqsin_[8:] ), (fpsf(_freqsin_[8:], _freqsout_[2], _freqswidth_[2])),
-#        color = c[2])
-#plt.plot((_freqsin_[12:] ), (fpsf(_freqsin_[12:], _freqsout_[3], _freqswidth_[3])),
-#        color = c[3])
-plt.tight_layout()
-plt.tick_params(axis = 'both', bottom = True, top = True, 
-                  left = True, right = True, direction = 'in')
-plt.grid()
-#savefigs = True
-if savefigs:
-    plt.savefig('fpsf_nrec{}_new.pdf'.format(np.shape(Data)[0]), format='pdf' , bbox_inches = "tight")
-```
-
-```{python}
-def model_pol(x,a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12):
-    return a0+a1*x+a2*x**2+a3*x**3+a4*x**4+a5*x**5+a6*x**6 + \
-            a7*x**7+a8*x**8+a9*x**9+a10*x**10+a11*x**11+a12*x**12
-
-parspol = [1.0148592344536795, 0.09349606938655511, -2.4475688442596186, 
-           -0.17550734527944972, 1.8420819896602734, 0.10514202699252193, 
-           -0.6316268295742891, -0.02780935772683985, 0.10909049702236638, 
-           0.0033055903108466828, -0.009227105490183247, -0.000143491898172274, 
-           0.00030356820716515357]
-
-plt.plot(np.linspace(-1.5,1.5)*9.62*2.35+153.65, model_pol(np.linspace(-1.5,1.5),*parspol))
-```
-
-```{python}
-# TEst FPSF with a fake-map of a point source convolved with quebic resolution
-import scipy as sc
-# Generate map
-ps_map = np.zeros((48, 12 * d['nside'] ** 2, 3))
-ps_map_pxcenter = hp.ang2pix(d['nside'], np.radians(90 - center[1]), np.radians(center[0]))
-_freqsin_ = qubic.compute_freq(150, 48, 0.25)[2]
-_freqsEdgeOut_, _freqsout_, _freqswidth_ = qubic.compute_freq(150, 4, 0.25)[1:4]
-_idx_freq_ = 26
-print("PS centered in: ", _freqsin_[_idx_freq_])
-ps_map[_idx_freq_, ps_map_pxcenter, 0] = 1
-ps_map[_idx_freq_, :, 0] = hp.smoothing(ps_map[_idx_freq_, :, 0], verbose = False,
-                        fwhm = np.deg2rad(d['synthbeam_peak150_fwhm'] * 150 / _freqsin_[_idx_freq_] ))
-#Look at the map..ok
-#hp.gnomview(ps_map[_idx_freq_,:,0], rot = center, reso  = 2)
-
-#build the interp function for FPSF
-fpsf = lambda nu_i, nu_c, nu_w: np.interp((nu_i - nu_c) / nu_w, xData, result.best_fit)
-nbands = 4
-#plt.plot((_freqsin_ ), fpsf(_freqsin_, _freqsout_[0], _freqswidth_[0]))
-#plt.plot((_freqsin_ ), fpsf(_freqsin_, _freqsout_[1], _freqswidth_[1]))
-#plt.plot((_freqsin_ ), fpsf(_freqsin_, _freqsout_[2], _freqswidth_[2]))
-#sys.exit()
-integr = []
-for i in range(nbands):
-    integr.append( sc.integrate.simps(ps_map[:, ps_map_pxcenter, 0] * \
-          (fpsf(_freqsin_, _freqsout_[i], 2.35*_freqswidth_[i]) )**2*_freqswidth_[i]**2 ,
-                                      x = _freqsin_  ) )
-    #maskfreq = (_freqsin_ < _freqsEdgeOut_[i+1]) & (_freqsin_ > _freqsEdgeOut_[i])
-    #print(maskfreq)
-    #integr.append( sc.integrate.simps(ps_map[maskfreq, ps_map_pxcenter, 0] * \
-    #      abs(fpsf(_freqsin_[maskfreq], _freqsout_[i], _freqswidth_[i]) ) ,
-    #                                  x = _freqsin_[maskfreq]  ) )
-
-#def gauss(x, pars, extra_args = None):
-#    A = pars[0]
-#    x0 = pars[1]
-#    wd = pars[2]
-#    return A * np.exp(-0.5 * (x - x0) **2 / wd ** 2)
-def gauss(x, A, x0, wd):
-    return A * np.exp(-0.5 * (x - x0) **2 / wd ** 2)
-
-test_model = Model(gauss, independent_vars=['x',], )
-params_g = test_model.make_params(A = 0.3, x0 = _freqsin_[_idx_freq_], wd = 3)#c=1, e=0.4,ph=0.4)
-result_g = test_model.fit(np.array(integr), params_g, x = _freqsout_, weights= (np.diff(_freqsEdgeOut_)/2) )
-yvalues = gauss(_freqsin_, **result_g.best_values)
-fig, ax = plt.subplots(nrows=1, ncols= 1,)
-
-ax.errorbar(_freqsout_, integr/np.max(yvalues), color = 'r', marker = 'o', 
-             ls = " ", xerr = np.diff(_freqsEdgeOut_)/2, )
-ax.plot(_freqsin_, yvalues/np.max(yvalues), 'b', 
-        label = r'$\sigma$ = {:.2f}'.format(result_g.best_values['wd'] ))
-ax.grid(alpha = 0.5)
-ax.legend()
-
-#_freqsout_, integr/np.max(yvalues), np.diff(_freqsEdgeOut_)/2)
-#(_freqsin_, yvalues/np.max(yvalues))
-#print(_freqsin_)
-```
-
-```{python}
-if np.shape(Data)[0] == 2: xfake=np.linspace(-1.3,1.3)
-if np.shape(Data)[0] == 3: xfake=np.linspace(-2.2,2.2)
-if np.shape(Data)[0] == 4: xfake=np.linspace(-3,3)
-plt.xlabel(r'${\rm d}_{\nu_c}$ / $\Delta \nu$')
-plt.ylabel(r'${i_\nu}$[$\mu K$]')
-plt.plot(xFPSF, yFPSF, 'bo', label='Data')
-plt.plot(xfake,model_sin(xfake, *parssin),'r-',label='Sinusoidal')
-plt.plot(xfake,model_exp(xfake, *parsexp),'m-',label='Exponential')
-plt.plot(xfake,model_bes(xfake, *parsbes),'g-',label='Bessel')
-plt.plot(xfake,model_pol(xfake, *parspol),'c-',label='Polynom')
-plt.legend(fontsize=10)
+data_3bands['band0'][0],data_3bands['band1'][0],data_3bands['band2'][0]
 ```
 
 ```{python}
 
+#for ibnd in [2,3,4,5]:
+ibnd = 3
+fig = plt.figure(figsize=(4, 4))
+ax = fig.gca()
+data_array = locals()['data_{}bands'.format(ibnd)]
+
+#Generate xvals to plot spline
+xfit = data_dict['Data_fit'][0]
+xvals = np.linspace(np.min(xfit), np.max(xfit), 1000)
+
+nsimu = len(data_array['nu_in'])
+points, = ax.plot(data_array['nu_rec'], 
+                  np.array([data_array['band{}'.format(i)] for i in range(ibnd)]).T[0], 'ko', alpha = 0.3)
+line = ax.axvline(data_array['nu_in'][0], color = 'k', ls = '--', alpha = 0.3)
+
+#line_spl, = ax.plot(xvals+data_array['nu_in'][0],
+#                    data_array['SplFunc'](xvals), color = 'k', ls = '-')
+#print(line_spl)
+text = ax.text(140, 1, r'$\nu_i=${:3.2f} GHz'.format(data_array['nu_in'][0]), fontsize=14)
+
+def init():
+    ax.axhline(0, color = 'k', ls = '-', alpha = 0.2)
+    c = ['b', 'g', 'y', 'orange', 'r']
+    for ib in range(ibnd):
+        ax.axvspan(xmin = data_array['nu_edge'][ib], xmax = data_array['nu_edge'][ib + 1], 
+                   alpha = 0.2, color = c[ib])
+    ax.set_xlim(130,170)
+    ax.set_xlabel(r'$\nu$ [GHz]')
+    ax.set_ylabel(r'$I_{out}$')
+    ax.set_ylim(-0.2,1.1)
+    return points
+
+def animate(i):
+    #points.set_data(data_array['nu_rec'], 
+    #                np.array([data_array['band{}'.format(i)] for i in range(ibnd)]).T[i])
+    ax.plot(data_array['nu_rec'], 
+                    np.array([data_array['band{}'.format(i)] for i in range(ibnd)]).T[i], 'ko', alpha = 0.3)
+    line.set_xdata(data_array['nu_in'][i])
+    #line_spl.set_xdata(xvals + data_array['nu_in'][i])
+    text.set_text(r'$\nu_i=${:3.2f} GHz'.format(data_array['nu_in'][i]))
+    return(points)
+
+
+steps = np.arange(nsimu)
+anim = FuncAnimation(fig, animate, steps, init_func=init, interval=1000, blit=False, repeat=False)
+
+# Save a .gif
+anim.save('./{}FPSF_pedagogical.gif'.format(ibnd), writer='imagemagick')
 ```
 
 ```{python}
-def model_fwhm(x,a,b):#,e):
-    return a*x+b
-xSPSF = d['synthbeam_peak150_fwhm'] * 150 / fwhm#_measured
-#ySPSF_f = delta_fwhm_f
-ySPSF_g = delta_fwhm_g
+#for ibnd in [2,3,4,5]:
+ibnd = 3
+fig = plt.figure(figsize=(4, 4))
+ax = fig.gca()
+data_array = locals()['data_{}bands'.format(ibnd)]
 
-# Model 2 or g
-gmodel_fwhm_g = Model(model_fwhm, independent_vars=['x',], )
-params_fwhm_g = gmodel_fwhm_g.make_params(a=1,b=1)
-result_fwhm_g = gmodel_fwhm_g.fit(ySPSF_g, params_fwhm_g, x=xSPSF)
-parsfwhm_g = list(result_fwhm_g.best_values.values())
-print('Sin. Chi2 {:.3f}'.format(result_fwhm_g.chisqr ))
-result_fwhm_g.plot()
+#Generate xvals to plot spline
+xfit = data_dict['Data_fit'][0]
+xvals = np.linspace(np.min(xfit), np.max(xfit), 1000)
+
+nsimu = len(data_array['nu_in'])
+points, = ax.plot(data_array['nu_rec'], 
+                  np.array([data_array['band{}'.format(i)] for i in range(ibnd)]).T[0], 'ko', alpha = 0.3)
+line = ax.axvline(data_array['nu_in'][0], color = 'k', ls = '--', alpha = 0.3)
+text = ax.text(140, 1, r'$\nu_i=${:3.2f} GHz'.format(data_array['nu_in'][0]), fontsize=14)
+
+def init():
+    ax.axhline(0, color = 'k', ls = '-', alpha = 0.2)
+    c = ['b', 'g', 'y', 'orange', 'r']
+    for ib in range(ibnd):
+        ax.axvspan(xmin = data_array['nu_edge'][ib], xmax = data_array['nu_edge'][ib + 1], 
+                   alpha = 0.2, color = c[ib])
+    ax.set_xlim(130,170)
+    ax.set_xlabel(r'$\nu$ [GHz]')
+    ax.set_ylabel(r'$I_{out}$')
+    ax.set_ylim(-0.2,1.1)
+    return points
+
+def animate(i):
+    ax.plot(data_array['nu_rec'], 
+            np.array([data_array['band{}'.format(i)] for i in range(ibnd)]).T[0] - ,
+            'ko', alpha = 0.3)
+    line.set_xdata(data_array['nu_in'][i])
+    #line_spl.set_xdata(xvals + data_array['nu_in'][i])
+    text.set_text(r'$\nu_i=${:3.2f} GHz'.format(data_array['nu_in'][i]))
+    return(points)
+
+
+steps = np.arange(nsimu)
+anim = FuncAnimation(fig, animate, steps, init_func=init, interval=1000, blit=False, repeat=False)
+
+# Save a .gif
+anim.save('./{}FPSF_pedagogical.gif'.format(ibnd), writer='imagemagick')
+```
+
+```{python}
+
 ```

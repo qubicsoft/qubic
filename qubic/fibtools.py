@@ -242,7 +242,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
                 theargs.update(theguess)
 
         if isinstance(chi2, MyChi2):
-                m = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=0.1, print_level=print_level, **theargs)
+                m = iminuit.Minuit(chi2, name=parnames, errordef=0.1, print_level=print_level, **theargs)
                 m.migrad(ncall=ncallmax * nsplit, nsplit=nsplit, precision=precision)
 
         elif isinstance(chi2, Chi2Implement):
@@ -254,7 +254,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
                 #m = iminuit.Minuit(chi2, *guess)
                 #m.migrad(ncall = ncallmax * nsplit)
                 #if iminuit.version==1.3
-                m  = iminuit.Minuit(chi2, forced_parameters=parnames, errordef=0.1, print_level=print_level, **theargs)
+                m  = iminuit.Minuit(chi2, name=parnames, errordef=0.1, print_level=print_level, **theargs)
                 m.migrad(ncall=ncallmax * nsplit, nsplit=nsplit, precision=precision)
         # print('Migrad Done')
         if minos:

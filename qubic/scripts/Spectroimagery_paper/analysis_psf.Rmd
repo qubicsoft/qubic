@@ -75,10 +75,11 @@ def get_maps(file):
 
     maps_recon = simu['MAPS_RECON'].data
     maps_convo = simu['MAPS_CONVOLVED'].data
-
+    maps_cov = simu['COVERAGE'].data
+    
     diff = maps_recon - maps_convo
 
-    return maps_recon, maps_convo, diff
+    return maps_recon, maps_convo, diff, maps_cov
 
 def get_maps_many_files(rep_simu, name, verbose = True, nfreq = None, nside = 256):
     
@@ -90,6 +91,7 @@ def get_maps_many_files(rep_simu, name, verbose = True, nfreq = None, nside = 25
     all_maps_recon = []
     all_maps_convo = []
     all_maps_diff = []
+    all_maps_cov = []
     
     if nfiles == 0:
         map_recon = np.full((nfreq, 12 * nside ** 2, 3), np.nan)
@@ -102,7 +104,7 @@ def get_maps_many_files(rep_simu, name, verbose = True, nfreq = None, nside = 25
         del map_recon, map_convo, map_diff
     else:
         for i, fits in enumerate(all_fits):
-            map_recon, map_convo, map_diff = get_maps(fits)
+            map_recon, map_convo, map_diff, map_cov = get_maps(fits)
             if i == 0:
                 right_shape = map_recon.shape
             else:
@@ -111,9 +113,9 @@ def get_maps_many_files(rep_simu, name, verbose = True, nfreq = None, nside = 25
             all_maps_recon.append(map_recon)
             all_maps_convo.append(map_convo)
             all_maps_diff.append(map_diff)
-
+            all_maps_cov.append(map_cov)
     return all_fits, np.asarray(all_maps_recon), \
-           np.asarray(all_maps_convo), np.asarray(all_maps_diff)
+           np.asarray(all_maps_convo), np.asarray(all_maps_diff), np.array(all_maps_cov)
 
 def read_run(jobid, repo=None, fixpar=True):
     """
@@ -151,18 +153,20 @@ def read_run(jobid, repo=None, fixpar=True):
     print("Working with nf_sub = {} and nfrec = {}".format(d['nf_sub'], d['nf_recon']))
     mapsrec={}
     mapsconv={}
+    mapscov = {}
     nusfull = {}
     nusfulledge = {}
     for isub in d['nf_recon']:
-        _, maprec, mapconv, mapdif = get_maps_many_files(repo, '*recon{}*.fits'.format(isub),
+        _, maprec, mapconv, mapdif, mapcov = get_maps_many_files(repo, '*recon{}*.fits'.format(isub),
                                                         nfreq = isub, nside = nside )
         _, inusedge, inus, _, _, _ = qubic.compute_freq(150,isub,0.25)
         mapsrec.update({'{}'.format(isub): maprec})
         mapsconv.update({'{}'.format(isub): mapconv})
+        mapscov.update({'{}'.format(isub): mapcov})
         nusfull.update({'{}'.format(isub):inus})    
         nusfulledge.update({'{}'.format(isub):inusedge})    
     
-    return mapsrec, mapsconv,nusfull,nusfulledge, nus_in, center,d
+    return mapsrec, mapsconv, mapscov, nusfull, nusfulledge, nus_in, center,d
 ```
 
 ```{python}
@@ -177,18 +181,21 @@ jobids = list(dictshift.keys())
 
 allrecon = []
 allconv = []
+allcov = []
 jobid = np.zeros((len(jobids)))
 for ijob in range(len(jobids)):
     print('Reading job {} ({}/{})'.format(jobids[ijob],ijob+1,len(jobids)))
     if ijob == 0:
-        maprec, mapsconv, nusfull,nusfulledge,nus_in,center,d = read_run(jobids[ijob])
+        maprec, mapsconv, mapscov, nusfull, nusfulledge, nus_in, center, d = read_run(jobids[ijob])
     else: 
-        maprec, mapsconv, _, _, _, _, _ = read_run(jobids[ijob])
-        
+        maprec, mapsconv, _, _, _, _, _, _ = read_run(jobids[ijob])
+    
     allrecon.append(maprec)
     allconv.append(mapsconv)
+    allcov.append(mapscov)
 allrecon = np.array(allrecon)
 allconv = np.array(allconv)
+allcov = np.array(allcov)
 
 #Index where the point source was placed
 NU0 = 150
@@ -215,19 +222,23 @@ jobids_5sb = list(dictshift_5sb.keys())
 
 allrecon_5sb = []
 allconv_5sb = []
+allcov_5sb = []
+
 jobid = np.zeros((len(jobids_5sb)))
 for ijob in range(len(jobids_5sb)):
     print('Reading job {} ({}/{})'.format(jobids_5sb[ijob], ijob + 1, len(jobids_5sb)))
     if ijob == 0:
-        maprec, mapsconv, nusfull_5sb, nusfulledge_5sb, nus_in_5sb, center, d_5sb = read_run(jobids_5sb[ijob],
+        maprec, mapsconv, mapscov, nusfull_5sb, nusfulledge_5sb, nus_in_5sb, center, d_5sb = read_run(jobids_5sb[ijob],
                                                                                             fixpar = False)
     else: 
-        maprec, mapsconv, _, _, _, _, _ = read_run(jobids_5sb[ijob], fixpar = False)
+        maprec, mapsconv, _, _, _, _, _, _ = read_run(jobids_5sb[ijob], fixpar = False)
         
     allrecon_5sb.append(maprec)
     allconv_5sb.append(mapsconv)
+    allcov_5sb.append(mapscov)
 allrecon_5sb = np.array(allrecon_5sb)
 allconv_5sb = np.array(allconv_5sb)
+allcov_5sb = np.array(allcov_5sb)
 
 NU0 = 150
 innu0_5sb = min(range(len(nus_in_5sb)), key = lambda i: abs(nus_in_5sb[i] - NU0))
@@ -250,19 +261,22 @@ jobids_5sbTD = list(dictshift_5sbTD.keys())
 
 allrecon_5sbTD = []
 allconv_5sbTD = []
+allcov_5sbTD = []
 jobid = np.zeros((len(jobids_5sbTD)))
 for ijob in range(len(jobids_5sbTD)):
     print('Reading job {} ({}/{})'.format(jobids_5sbTD[ijob], ijob + 1, len(jobids_5sbTD)))
     if ijob == 0:
-        maprec, mapsconv, nusfull_5sbTD, nusfulledge_5sbTD, nus_in_5sbTD, center, d_5sbTD = read_run(jobids_5sbTD[ijob],
+        maprec, mapsconv, mapscov, nusfull_5sbTD, nusfulledge_5sbTD, nus_in_5sbTD, center, d_5sbTD = read_run(jobids_5sbTD[ijob],
                                                                                             fixpar = False)
     else: 
-        maprec, mapsconv, _, _, _, _, _ = read_run(jobids_5sbTD[ijob], fixpar = False)
+        maprec, mapsconv, _, _, _, _, _, _ = read_run(jobids_5sbTD[ijob], fixpar = False)
         
     allrecon_5sbTD.append(maprec)
     allconv_5sbTD.append(mapsconv)
+    allcov_5sbTD.append(mapscov)
 allrecon_5sbTD = np.array(allrecon_5sbTD)
 allconv_5sbTD = np.array(allconv_5sbTD)
+allcov_5sbTD = np.array(allcov_5sbTD)
 
 NU0 = 150
 innu0_5sbTD = min(range(len(nus_in_5sbTD)), key = lambda i: abs(nus_in_5sbTD[i] - NU0))
@@ -335,6 +349,140 @@ for i in range(5):
     data_5bands['band{}'.format(i)] /= max5bands
     data_5bandsTD['band{}'.format(i)] /= max5bandsTD
     
+```
+
+### Now I try to compute the photometric aperture as it's done with real data. 
+
+To compare betwen data and simulations I will normalize both data sets. 
+
+```{python}
+def plotcircle(c, r, color=None,lw=None, ls=None):
+    nn = 100
+    ang = np.linspace(0,2*np.pi, nn)
+    plot(c[0]+r*np.cos(ang), c[1]+r*np.sin(ang), color=color)
+    
+def aperture_photometry(img, centers, rads, plot=False, stampsize=25, 
+                        magnitude_zero=0, cmap='gray_r', subs=True):
+    """
+    aperture photometry
+    http://spiff.rit.edu/classes/phys373/lectures/photom_2003/photom_2010.html
+    """
+    npix = np.shape(img)[0]
+    xx,yy = np.meshgrid(np.arange(npix), np.arange(npix))
+    nobjects = np.shape(centers)[0]
+    flux = np.zeros(nobjects)
+    err_flux = np.zeros(nobjects)
+    nsq = int(np.ceil(np.sqrt(nobjects)))
+    for i in range(nobjects):
+        c = centers[i,:]
+        source_pix = np.sqrt((xx-c[0])**2+(yy-c[1])**2) < rads[0]
+        #inner_pix = np.sqrt((xx-c[0])**2+(yy-c[1])**2) < rads[1]
+        outer_pix = (np.sqrt((xx-c[0])**2+(yy-c[1])**2) > rads[1]) & (np.sqrt((xx-c[0])**2+(yy-c[1])**2) < rads[2])
+        Nsource = source_pix.sum()
+        #Nin = inner_pix.sum()
+        Nout = outer_pix.sum()
+        #bg = np.mean(img[outer_pix])
+        bg = np.median(img[outer_pix])
+        sigbg = np.std(img[outer_pix])/np.sqrt(Nout)
+        #flux[i] = np.sum(img[inner_pix])-bg*inner_pix.sum()
+        flux[i] = np.sum(img[source_pix]) - bg * outer_pix.sum()
+        #err_flux[i] = np.std(img[outer_pix]) * np.sqrt(Nin * (1+Nin*1./Nout))
+        err_flux[i] = np.std(img[outer_pix]) * np.sqrt(Nsource * (1+Nsource*1./Nout))
+    
+        if plot:
+            if subs:
+                subplot(nsq,nsq,i+1)
+            imshow(img, cmap=cmap, vmin=-5*np.std(img), vmax=5*np.std(img), origin='lower')
+            #colorbar()
+            #xlim(c[0]-stampsize, c[0]+stampsize)
+            #ylim(c[1]-stampsize, c[1]+stampsize)
+            plotcircle(c, rads[0], color='r', lw=2)
+            plotcircle(c, rads[1], color='r', ls = '-.-', lw=2)
+            plotcircle(c, rads[2], color='r', ls = '-.-', lw=2)
+    mag = -2.5*np.log10(flux) + magnitude_zero
+    err_mag = 2.5/np.log(10.) * err_flux/flux
+    return flux, err_flux, mag, err_mag
+```
+
+```{python}
+import qubic.fibtools as ft
+nsimu = 7 #0-10
+nrec = '5'
+if nrec == '5':
+    cov = allcov_5sb[nsimu][nrec][0]
+    map2use = allrecon_5sb[nsimu][nrec][0]
+else:
+    cov = allcov[nsimu][nrec][0]
+    map2use = allrecon[nsimu][nrec][0]
+data_array = locals()['data_{}bands'.format(int(nrec))]
+
+okpix = cov > 0.3
+all_maps_recon_custom_new_cut = np.array(map2use).copy()
+all_maps_recon_custom_new_cut[:,~okpix,:] = 0
+figure(figsize = (12,6))
+maps = []
+for k in range(int(nrec)):
+    okpix = all_maps_recon_custom_new_cut[k,:,0] != 0
+    mm, ss = ft.meancut(all_maps_recon_custom_new_cut[k,okpix,0],3)
+    # mini = mm-ss
+    # maxi = mm+3*ss
+    mini = -0.01
+    maxi = 1e3
+    mymap = hp.gnomview((all_maps_recon_custom_new_cut[k,:,0]), reso=4, rot=center, cmap = 'viridis', 
+                title='nu=[{0:5.1f},{1:5.1f}]'.format(data_array['nu_edge'][k], data_array['nu_edge'][k+1]),
+                        min=mini, max=maxi, sub=(1,5,k+1), 
+               return_projected_map=True)
+    hp.graticule(verbose = False)
+    maps.append(mymap)
+tight_layout()
+```
+
+```{python}
+def mygaussian(x, pars, extra_args=None):
+    return pars[0]+pars[1]*np.exp(-0.5*(x-pars[2])**2/pars[3]**2)
+
+mycenter = np.reshape(np.array([98.,100.]), (1,2))
+radius = np.array([10, 18, 30]) #* reso
+locals()['flux_{}sb'.format(int(nrec))] = np.zeros(len(maps))
+locals()['err_flux_{}sb'.format(int(nrec))] = np.zeros(len(maps))
+
+figure(figsize = (12, 6))
+for i in range(len(maps)):
+    subplot(1,5,i+1)
+    flux_bands = locals()['flux_{}sb'.format(int(nrec))]
+    err_flux_bands = locals()['err_flux_{}sb'.format(int(nrec))]
+    
+    flux_bands[i], err_flux_bands[i], mag, err_mag = aperture_photometry(maps[i], mycenter, 
+                                                                         radius, subs=False,
+                                                             plot=True, stampsize=100, 
+                                                             magnitude_zero=0, cmap=None)
+    title('nu=[{0:5.1f},{1:5.1f}]'.format(data_array['nu_edge'][i], data_array['nu_edge'][i+1]))
+tight_layout()
+
+nus = 0.5*(data_array['nu_edge'][1:] + data_array['nu_edge'][:-1])
+dnu = 0.5*(data_array['nu_edge'][1:] - data_array['nu_edge'][:-1])
+
+guess = np.array([0., np.max(flux_bands), 150., 5. ])
+
+fitg = ft.do_minuit(data_array['nu_rec'][flux_bands>0], flux_bands[flux_bands>0], 
+                    err_flux_bands[flux_bands>0], 
+                    guess, functname = mygaussian, fixpars = [1,0,0,0])
+
+xxx = np.linspace(130, 170, 100)
+#print(fitg[1])
+#print(fitg[2])
+figure()
+errorbar(data_array['nu_rec'], flux_bands, yerr = err_flux_bands, xerr = dnu, fmt = 'ro')
+plot(xxx, mygaussian(xxx, fitg[1]), 
+     label=r'$\nu_0$={0:5.1f} +/- {1:5.1f} ; $\sigma$={2:5.1f} +/- {3:5.1f}'.format(fitg[1][2], 
+                                                                                    fitg[2][2], 
+                                                                                    fitg[1][3], 
+                                                                                    fitg[2][3]))
+axhline(y = 0, color = 'k', ls = '--')
+xlabel('Frequency')
+ylabel('Source Flux')
+#ylim(-1.5, 3)
+legend()
 ```
 
 *Sub-band profile*. Plot intensity for all simulations for the pixel in a given sub-band in function of thefrequency of the point source $\nu_{in}$. The maximum should correspond when the distance between the center of the sub-band $\nu_{jc}$ and the position (in frequency) of the point source is minimum.
@@ -436,7 +584,10 @@ yy = np.array(yy).ravel()[xsort_idx]
 data = ax.plot(np.array(xx).T, np.array(yy).T, 'o-', c = 'b', label = 'FI')
 
 xgauss = np.linspace(-25, 25, 100) 
-ax.plot(xgauss, np.exp(-0.5 * (xgauss ** 2 )/((150 / (8 -1)) / 2.355) ** 2  ), label  = "expected" )
+ax.plot(xgauss, np.exp(-0.5 * (xgauss ** 2 )/((150 / (8 -1)) / 2.355) ** 2  ), '--',
+        label  = r"TD exp. $\sigma = {:.2f}$".format((150 / (8 -1)) / 2.355) )
+ax.plot(xgauss, np.exp(-0.5 * (xgauss ** 2 )/((150 / (22 -1)) / 2.355) ** 2  ), '--',
+        label  = r"FI exp. $\sigma = {:.2f}$".format((150 / (22 -1)) / 2.355) )
 
 ax.set_xlim(-22,22)
 ax.set_title("FPSF - 5 sub-bands", fontsize = 14)
@@ -548,7 +699,10 @@ for inu in [2, 3, 4, 5]:
     ax[jax].axvspan(-np.diff(data_dict['nu_edge'])[0]/2,
                     np.diff(data_dict['nu_edge'])[0]/2, color = 'k', alpha = 0.2)
     ax[jax].text(-20,0.9, r"$N_r = {}$".format(inu))
-    ax[3].legend(loc = 'upper right')
+    if jax == 3:
+        ax[3].text(-20,0.75, r"$\sigma_F = {:.2f}$".format((150/(22-1))/2.355))
+        ax[3].text(-20,0.6, r"$\sigma_T = {:.2f}$".format((150/(8-1))/2.355))
+        ax[3].legend(loc = 'upper right')
     jax += 1
 fig.tight_layout()
 ```
@@ -608,57 +762,99 @@ for ibnd in [2,3,4,5]:
 ### Fit TD simulations (5sub-bands)
 and compare it with FI (5subbands)
 
+```{python}
+data_dict = data_5bandsTD
+xfit = data_dict['Data_fit'][0]
+yfit = data_dict['Data_fit'][1]
+
+myspl = MySplineFitting(xfit, yfit, np.ones(len(xfit)), nbspl)
+
+data_dict.update({'SplFunc': myspl})
+```
 
 ### 5 bands
 With real data, we also reconstructed 5 bands. Let's try to superimpose.
 It is a bit more difficult. I am not sure it makes sens to do that, the FPSF may depend on the number of sub-bands...
 
 ```{python}
+nusrec_2bands = np.array([140.03675562, 158.78675562])
+measure_2bands =  np.array([0.3903377 , 0.57669081])
+yerr_2bands = np.array([0.02617904, 0.01513422])
+xerr_2bands = np.array([8.78675562, 9.96324438])
+
+nusrec_3bands = np.array([136.98433698, 148.95407944, 161.96974246])
+measure_3bands = np.array([0.09083623, 1.1396674 , 0.2478118 ])
+yerr_3bands = np.array([0.06007436, 0.04652871, 0.02315413])
+xerr_3bands = np.array([5.73433698, 6.23540548, 6.78025754])
+
+nusrec_4bands = np.array([135.50540829, 144.29216391, 153.6486907 , 163.61193508])
+measure_4bands = np.array([ 0.08521627,  0.29842826,  1.76806209, -0.16713637])
+yerr_4bands = np.array([0.08498496, 0.04851621, 0.06261273, 0.03330611])
+xerr_4bands = np.array([4.25540829, 4.53134733, 4.82517946, 5.13806492])
+
 nusrec_5bands = np.array([134.63280448, 141.57278853, 148.8705114 , 156.54441361, 164.61388627])
-measure_5bands = np.array([-0.21088738,  0.20660622,  0.5078612,   0.35812012, -0.18409084])
-yerr_5bands = np.array([0.2309525,  0.12816038, 0.19878606, 0.16506726, 0.17398308])
+measure_5bands = np.array([-0.19074754,  0.22935422,  1.74554219,  1.1064823,  -0.29887334])
+yerr_5bands = np.array([0.12271266, 0.06431844, 0.0779164,  0.06629246, 0.05168779])
 xerr_5bands = np.array([3.38280448, 3.55717958, 3.74054328, 3.93335893, 4.13611373])
+
+#measure_5bands /= np.max(measure_5bands)
+#yerr_5bands /= np.max(yerr_5bands)
 ```
 
 ```{python}
-from matplotlib import collections  as mc
-lines = [[(150, 0.1), (150 + (150 / (8 -1)) / 2.355 , 0.1)]]
-
-lc = mc.LineCollection(lines, colors = 'k', linestyle = '--', linewidths = 2, alpha = 0.6)
-
 # Spline fitting
 nbspl = 13
+tdblock = False
+sims = True
+data_array = locals()['data_{}bands'.format(nrec)]
+nu0 = data_array['nu_in'][nsimu]
+measure_bands = locals()['measure_{}bands'.format(nrec)]
+yerr_bands = locals()['yerr_{}bands'.format(nrec)]
+xerr_bands = locals()['xerr_{}bands'.format(nrec)]
+# Plot
 fig, ax = plt.subplots(nrows = 1, ncols = 1, figsize = (8, 4))
+ax.set_xlim(130, 170)
+ax.set_ylim(-0.3,1.2)
+ax.set_xlabel(r"$(\nu - \nu_{in} + \nu_0)~[GHz]$", fontsize = 14)
+ax.set_ylabel(r"$S/S_{max}$", fontsize = 14)
 
-xfit = data_5bands['Data_fit'][0]
-yfit = data_5bands['Data_fit'][1]
-xfitTD = data_5bandsTD['Data_fit'][0]
-yfitTD = data_5bandsTD['Data_fit'][1]
+xfit = data_array['Data_fit'][0]
+yfit = data_array['Data_fit'][1]
 
-myspl = MySplineFitting(xfit, yfit, np.ones(len(xfit)), nbspl)
-mysplTD = MySplineFitting(xfitTD, yfitTD, np.ones(len(xfitTD)), 13)
-
+myspl = data_array['SplFunc']#MySplineFitting(xfit, yfit, np.ones(len(xfit)), nbspl)
 xvals = np.linspace(np.min(xfit), np.max(xfit), 1000)
-xvalsTD = np.linspace(np.min(xfitTD), np.max(xfitTD), 1000)
 
-ax.plot(xfit+150, yfit, 'o', color='b', label='FI data', alpha = 0.7)
-ax.plot(xfitTD+150, yfitTD, '*', color='m', label='TD data', alpha = 0.7)
-ax.plot(xvals+150, myspl(xvals)/np.max(myspl(xvals)), 'r--', label='FI Spline fitting')
-ax.plot(xvalsTD+150, mysplTD(xvalsTD)/np.max(mysplTD(xvalsTD)), 'r', label='TD Spline fitting')
-ax.set_xlim(150-25,150+25)
-ax.set_ylim(-0.5,1.1)
-ax.set_xlabel(r"$(\nu - \nu_{in} + 150)~[GHz]$", fontsize = 14)
-ax.set_ylabel(r"$I_{out}$", fontsize = 14)
-ax.errorbar(nusrec_5bands, measure_5bands , xerr = xerr_5bands, yerr = yerr_5bands,
-           fmt = 'o', color = 'orange', label = "measurements")
+ax.plot(xvals + 150, myspl(xvals)/np.max(myspl(xvals)), 'r--', label='FI Spline fitting')
+if sims:
+    errorbar(data_array['nu_rec'], flux_bands/np.max(flux_bands), yerr = err_flux_bands/np.max(flux_bands), 
+         xerr = dnu, color = 'orange', fmt = 'o', ls = '' , label = 'measurements (sim)',
+        lw = 3,  mew = 3)
+elif not sims:
+    ax.errorbar(data_array['nu_rec'], measure_bands/np.max(measure_bands), 
+         yerr = yerr_bands/np.max(measure_bands), 
+         xerr = xerr_bands, color = 'r', fmt = 'o', ls = '' , label = 'measurements (real)',
+        lw = 3,  mew = 3)
+
+
+ax.axvline(nu0, linestyle = '--', color = 'k', alpha = 0.4)
+
+if tdblock:
+    xfitTD = data_5bandsTD['Data_fit'][0]
+    yfitTD = data_5bandsTD['Data_fit'][1]
+    xvalsTD = np.linspace(np.min(xfitTD), np.max(xfitTD), 1000)
+
+#ax.plot(xfitTD + nu0, yfitTD, '*', color='m', label='TD data', alpha = 0.7)
+#ax.plot(xvalsTD + 150, data_5bandsTD['SplFunc'](xvalsTD)/np.max(data_5bandsTD['SplFunc'](xvalsTD)), 
+#        'b--', label='TD Spline fitting')
+
+
 #Plot "expected resolution" (I -Martin- don't like that concept)
-xgauss = np.linspace(-25, 25, 100) 
-ax.plot(xgauss+150, np.exp(-0.5 * (xgauss ** 2 )/((150 / (8 - 1)) / 2.355) ** 2  ) - 0.4, 
-        label  = "TD expected", c = 'b')
+#xgauss = np.linspace(-25, 25, 100) 
+#ax.plot(xgauss+nu0, np.exp(-0.5 * (xgauss ** 2 )/((150 / (8 - 1)) / 2.355) ** 2  ) - 0.4, 
+#        label  = "TD expected", c = 'b')
+ax.axhline(0, linestyle = '--', color = 'k', alpha = 0.4)
 
-ax.add_collection(lc)
-
-ax.legend(loc = 'upper right')
+ax.legend(loc = 'upper left', fontsize = 14)
 
 fig.tight_layout()
 ```

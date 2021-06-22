@@ -442,7 +442,7 @@ def mygaussian(x, pars, extra_args=None):
     return pars[0]+pars[1]*np.exp(-0.5*(x-pars[2])**2/pars[3]**2)
 
 mycenter = np.reshape(np.array([98.,100.]), (1,2))
-radius = np.array([10, 18, 30]) #* reso
+radius = np.array([10, 18, 40]) #* reso
 locals()['flux_{}sb'.format(int(nrec))] = np.zeros(len(maps))
 locals()['err_flux_{}sb'.format(int(nrec))] = np.zeros(len(maps))
 

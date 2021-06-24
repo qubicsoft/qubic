@@ -269,6 +269,9 @@ print(thr)
 
 ```{python}
 # we can compare different thresholds again
+thrs = [0.5, 0.1, 0.01, 0.001, 0.0001, 0.00001]
+#thrs = [0.1]
+
 nf=3
 without_corrections = []
 with_corrections = []
@@ -285,12 +288,12 @@ for thr in thrs:
     r1 = separate(components, instrument, get_alm_maps(partial_maps, 
                                                        resol_correction=False, 
                                                        pixwin_correction=False,
-                                                       ref_arcmin=60*fwhm[0]*0),
+                                                       ref_arcmin=60*fwhm[0]),
                  print_option=False)
     r2 = separate(components, instrument, get_alm_maps(partial_maps, 
                                                        resol_correction=True, 
                                                        pixwin_correction=False,
-                                                       ref_arcmin=60*fwhm[0]*0),
+                                                       ref_arcmin=60*fwhm[0]),
                  print_option=False)
     without_corrections.append(r1.x[0])
     with_corrections.append(r2.x[0])
@@ -309,6 +312,20 @@ With ref fwhm = fwhm[0]:
 With ref fwhm = 0:
 - Without correction:  [1.5201363684183031]
 - With correction:  [1.5386471086780034]
+
+```{python}
+fig, axe = plt.subplots()
+fig.suptitle("dust index estimation for qubic sky and qubic resolutions")
+
+axe.semilogx(thrs, without_corrections, label='without corrections')
+axe.semilogx(thrs, with_corrections, label='with corrections')
+axe.set_xlabel("threshold on coverage map")
+axe.set_ylabel("beta estimate")
+axe.axhline(1.54, color='black', ls='--', label='true value')
+axe.legend()
+
+plt.show()
+```
 
 ```{python}
 print(fwhm)
@@ -353,17 +370,16 @@ legend()
 ```
 
 ```{python}
-# fig, axe = plt.subplots()
-# fig.suptitle("dust index estimation for qubic sky and qubic resolutions")
+plot(fref,np.array(vals_beta),'o-', label='Not Pixwin Corrected')
+plot(fref,np.array(vals_beta_pwcorr),'o-', label='Pixwin Corrected')
+ylim(0,2)
+axhline(y=1.54,ls=':', color='k')
+for k in range(len(fwhm)):
+    axvline(x=fwhm[k], ls=':', label='nu{}'.format(k))
+legend()
 
-# axe.semilogx(thrs, without_corrections, label='without corrections')
-# axe.semilogx(thrs, with_corrections, label='with corrections')
-# axe.set_xlabel("threshold on coverage map")
-# axe.set_ylabel("beta estimate")
-# axe.axhline(1.54, color='black', ls='--', label='true value')
-# axe.legend()
-
-# plt.show()
+for i in range(len(fref)):
+    print(fref[i], vals_beta_pwcorr[i])
 ```
 
 ```{python}

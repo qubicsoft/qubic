@@ -96,7 +96,7 @@ def get_alm_maps(pixel_maps, fwhms, resol_correction=False, ref_arcmin=0, pixwin
     ref_fl = np.exp(- 0.5 * np.square(ref_sigma_rad * ell))
 
     if verbose: 
-        print('In get_alm_maps: FWHM = ', fwhm)
+        print('In get_alm_maps: FWHM = ', fwhms)
     beam_sigmas_rad = np.deg2rad(fwhms) / (2*np.sqrt(2*np.log(2)))
     pixwin = hp.pixwin(nside, lmax=lmax) if pixwin_correction else np.ones(lmax + 1)
 
@@ -191,6 +191,7 @@ print(np.shape(maps_cmb))   #nu, Stk, pix
 print(np.shape(maps_dust))   #nu, Stk, pix
 
 rc('figure', figsize=(16, 10))
+suptitle('Simulated maps for each frequency', fontsize=30,y=1.05)
 nf = maps.shape[0]
 nstk = maps.shape[1]
 print(maps.shape)
@@ -200,8 +201,11 @@ for i in range(nf):
         hp.mollview(maps[i,j,:], sub=(nf,3,3*i+j+1), min = -1*ss, max=1*ss,
                    title='CMB+Dust {} nu={} GHz'.format(stk[j], freqs[i]))
 tight_layout()
+```
 
-figure()
+```{python}
+rc('figure', figsize=(16, 4))
+suptitle('Input CMB only at 150 GHz', fontsize=30)
 for j in range(nstk):
     ss = np.std(maps[0,j,:])
     hp.mollview(maps_cmb[j,:], sub=(1,3,j+1), min = -1*ss, max=1*ss,
@@ -209,6 +213,7 @@ for j in range(nstk):
 tight_layout()
 
 figure()
+suptitle('Input Dust only at 150 GHz', fontsize=30)
 for j in range(nstk):
     ss = np.std(maps[0,j,:])
     hp.mollview(maps_dust[j,:], sub=(1,3,j+1), min = -1*ss, max=1*ss,
@@ -221,6 +226,8 @@ Let's use the QUBIC cut-sky, as this is noiseless, we do not bother about the co
 
 ```{python slideshow={'slide_type': 'slide'}}
 covmap = hp.ud_grade(hp.read_map('QUBIC-Typical-Coverage.fits'), nside)
+
+suptitle('Cut-Sky (from QUBIC)', fontsize=30, y=1.2)
 hp.mollview(covmap, title='QUBIC Cov Map', sub=(1,2,1))
 
 thr = 0.1
@@ -248,6 +255,7 @@ for j in range(3):
 
 ```{python}
 rc('figure', figsize=(16, 10))
+suptitle('Cut-sky maps per freq. at same resolution', fontsize=30, y=1.05)
 nf = maps.shape[0]
 nstk = maps.shape[1]
 print(maps.shape)
@@ -260,18 +268,20 @@ tight_layout()
 ```
 
 ```{python}
-
+rc('figure', figsize=(16, 5))
 figure()
+suptitle('CMB Only input', fontsize=30, y=1.1)
 for j in range(nstk):
     ss = np.std(maps_conv[0,j,pixok])
-    hp.gnomview(maps_cmb_conv[j,:], sub=(nf,3,j+1), min = -1*ss, max=1*ss,
+    hp.gnomview(maps_cmb_conv[j,:], sub=(1,3,j+1), min = -1*ss, max=1*ss,
                title='CMB {} nu=150 GHz'.format(stk[j]), rot=center, reso=15)
 tight_layout()
 
 figure()
+suptitle('Dust Only input', fontsize=30, y=1.1)
 for j in range(nstk):
     ss = np.std(maps_conv[0,j,pixok])
-    hp.gnomview(maps_dust_conv[j,:], sub=(nf,3,j+1), min = -1*ss, max=1*ss,
+    hp.gnomview(maps_dust_conv[j,:], sub=(1,3,j+1), min = -1*ss, max=1*ss,
                title='Dust {} nu=150 GHz'.format(stk[j]), rot=center, reso=15)
 tight_layout()
 ```
@@ -289,44 +299,127 @@ print('Resulting beta: {}'.format(r.x[0]))
 
 ```{python}
 ### Resulting CMB and Dust
+rc('figure', figsize=(16, 12))
 dustrec = r.s[0,:,:]
-cmbrec = r.s[1,:,:]
-
+suptitle('Reconstructed dust (pixel based): Same Resolution', fontsize=30, y=1.05)
 for i in range(3):
     hp.gnomview(dustrec[i,:], sub=(2,3,i+1), title='Dust Rec: {}'.format(stk[i]), 
                 min=-3*np.std(dustrec[i,pixok]), max=3*np.std(dustrec[i,pixok]),
                rot=center, reso=15)
-    hp.gnomview(dustrec[i,:]-maps_dust_conv[i,:], sub=(2,3,3+i+1), title='Dust Residuals: {}'.format(stk[i]), 
-                #min=-3*np.std(dustrec[i,pixok]), max=3*np.std(dustrec[i,pixok]),
+    hp.gnomview(dustrec[i,:]-maps_dust_conv[i,:], sub=(2,3,3+i+1), 
+                title='Dust Residuals: {0:} \n RMS={1:4.2g}'.format(stk[i], 
+                                                                    np.std(dustrec[i,pixok]-maps_dust_conv[i,pixok])), 
+                min=-3*np.std(dustrec[i,pixok]), max=3*np.std(dustrec[i,pixok]),
                rot=center, reso=15)
-
+tight_layout()
 ```
 
 ```{python}
+rc('figure', figsize=(16, 12))
+cmbrec = r.s[1,:,:]
+suptitle('Reconstructed CMB (pixel based): Same Resolution', fontsize=30, y=1.05)
 for i in range(3):
     hp.gnomview(cmbrec[i,:], sub=(2,3,i+1), title='CMB Rec: {}'.format(stk[i]), 
                min=-3*np.std(cmbrec[i,pixok]), max=3*np.std(cmbrec[i,pixok]),
                rot=center, reso=15)
-    hp.gnomview(cmbrec[i,:]-maps_cmb_conv[i,:], sub=(2,3,3+i+1), title='CMB Residuals: {}'.format(stk[i]), 
-               #min=-3*np.std(cmbrec[i,pixok]), max=3*np.std(cmbrec[i,pixok]),
+    hp.gnomview(cmbrec[i,:]-maps_cmb_conv[i,:], sub=(2,3,3+i+1), 
+                title='CMB Residuals: {0:} \n RMS={1:4.2g}'.format(stk[i], np.std(cmbrec[i,pixok]-maps_cmb_conv[i,pixok])), 
+               min=-3*np.std(cmbrec[i,pixok]), max=3*np.std(cmbrec[i,pixok]),
                rot=center, reso=15)
 
 
 ```
 
 ```{python}
+suptitle('Residuals (pixel based): Same Resolution', fontsize=30, y=1.05)
 for i in range(3):
     subplot(3,1,i+1)
     resid_cmb = cmbrec[i,pixok]-maps_cmb_conv[i,pixok]
-    hist(resid_cmb, range=[-5*np.std(resid_cmb), 5*np.std(resid_cmb)], bins=100, alpha=0.5, color='r', label='CMB', normed=1)
+    hist(resid_cmb, range=[-5*np.std(resid_cmb), 5*np.std(resid_cmb)], 
+         bins=100, alpha=0.5, color='r', label='CMB: RMS={:4.2g}'.format(np.std(resid_cmb)), normed=1)
     resid_dust = dustrec[i,pixok]-maps_dust_conv[i,pixok]
-    hist(resid_dust, range=[-5*np.std(resid_cmb), 5*np.std(resid_cmb)], bins=100, alpha=0.5, color='b', label='Dust', normed=1)
+    hist(resid_dust, range=[-5*np.std(resid_cmb), 5*np.std(resid_cmb)], 
+         bins=100, alpha=0.5, color='b', label='Dust: RMS={:4.2g}'.format(np.std(resid_dust)), normed=1)
     title('Residuals Stokes {}'.format(stk[i]))
     legend()
 tight_layout()
 ```
 
 It works great !!!
+
+Let's check alm space version
+
+```{python}
+### FGB Configuration
+instrument = fgb.get_instrument('Qubic')
+instrument.frequency = freqs
+instrument.fwhm = np.zeros(len(freqs)) + myFWHM
+components = [fgb.Dust(150., temp=20.), fgb.CMB()]
+
+r = separate(components, instrument, get_alm_maps(maps_conv, np.zeros(len(freqs))+myFWHM, ref_arcmin=myFWHM, 
+                                                  resol_correction=False, verbose=True))
+print('Resulting beta: {}'.format(r.x[0]))
+
+### Resulting CMB and Dust
+almdustrec = r.s[0,:,:]
+almcmbrec = r.s[1,:,:]
+
+dustrec = hp.alm2map(almdustrec[..., ::2] + almdustrec[..., 1::2]*1j, nside)
+cmbrec = hp.alm2map(almcmbrec[..., ::2] + almcmbrec[..., 1::2]*1j, nside)
+dustrec[:,~pixok] = hp.UNSEEN
+cmbrec[:,~pixok] = hp.UNSEEN
+
+```
+
+```{python}
+### Resulting CMB and Dust
+rc('figure', figsize=(16, 12))
+suptitle('Reconstructed dust (alm based): Same Resolution', fontsize=30, y=1.05)
+for i in range(3):
+    hp.gnomview(dustrec[i,:], sub=(2,3,i+1), title='Dust Rec: {}'.format(stk[i]), 
+                min=-3*np.std(dustrec[i,pixok]), max=3*np.std(dustrec[i,pixok]),
+               rot=center, reso=15)
+    hp.gnomview(dustrec[i,:]-maps_dust_conv[i,:], sub=(2,3,3+i+1), 
+                title='Dust Residuals: {0:} \n RMS={1:4.2g}'.format(stk[i], 
+                                                                    np.std(dustrec[i,pixok]-maps_dust_conv[i,pixok])), 
+                min=-3*np.std(dustrec[i,pixok]), max=3*np.std(dustrec[i,pixok]),
+               rot=center, reso=15)
+tight_layout()
+```
+
+```{python}
+rc('figure', figsize=(16, 12))
+suptitle('Reconstructed CMB (alm based): Same Resolution', fontsize=30, y=1.05)
+for i in range(3):
+    hp.gnomview(cmbrec[i,:], sub=(2,3,i+1), title='CMB Rec: {}'.format(stk[i]), 
+               min=-3*np.std(cmbrec[i,pixok]), max=3*np.std(cmbrec[i,pixok]),
+               rot=center, reso=15)
+    hp.gnomview(cmbrec[i,:]-maps_cmb_conv[i,:], sub=(2,3,3+i+1), 
+                title='CMB Residuals: {0:} \n RMS={1:4.2g}'.format(stk[i], np.std(cmbrec[i,pixok]-maps_cmb_conv[i,pixok])), 
+               min=-3*np.std(cmbrec[i,pixok]), max=3*np.std(cmbrec[i,pixok]),
+               rot=center, reso=15)
+
+
+```
+
+```{python}
+suptitle('Residuals (alm based): Same Resolution', fontsize=30, y=1.05)
+for i in range(3):
+    subplot(3,1,i+1)
+    resid_cmb = cmbrec[i,pixok]-maps_cmb_conv[i,pixok]
+    hist(resid_cmb, range=[-5*np.std(resid_cmb), 5*np.std(resid_cmb)], 
+         bins=100, alpha=0.5, color='r', label='CMB: RMS={:4.2g}'.format(np.std(resid_cmb)), normed=1)
+    resid_dust = dustrec[i,pixok]-maps_dust_conv[i,pixok]
+    hist(resid_dust, range=[-5*np.std(resid_cmb), 5*np.std(resid_cmb)], 
+         bins=100, alpha=0.5, color='b', label='Dust: RMS={:4.2g}'.format(np.std(resid_dust)), normed=1)
+    title('Residuals Stokes {}'.format(stk[i]))
+    legend()
+tight_layout()
+```
+
+Not as good ! The alm transformation get sick from the edges...
+
+
 
 # Cut-Sky simulations with different resolutions
 this will require reconvolution to worst resolution
@@ -351,6 +444,7 @@ for j in range(3):
 
 ```{python}
 rc('figure', figsize=(16, 10))
+suptitle('Cut-sky maps per freq. at QUBIC resolutions', fontsize=30, y=1.05)
 nf = maps.shape[0]
 nstk = maps.shape[1]
 print(maps.shape)
@@ -363,16 +457,20 @@ tight_layout()
 ```
 
 ```{python}
+rc('figure', figsize=(16, 5))
+figure()
+suptitle('CMB Only input', fontsize=30, y=1.1)
 for j in range(nstk):
     ss = np.std(maps_conv[0,j,pixok])
-    hp.gnomview(maps_cmb_conv[j,:], sub=(nf,3,j+1), min = -1*ss, max=1*ss,
+    hp.gnomview(maps_cmb_conv[j,:], sub=(1,3,j+1), min = -1*ss, max=1*ss,
                title='CMB {} nu=150 GHz'.format(stk[j]), rot=center, reso=15)
 tight_layout()
 
 figure()
+suptitle('Dust Only input', fontsize=30, y=1.1)
 for j in range(nstk):
     ss = np.std(maps_conv[0,j,pixok])
-    hp.gnomview(maps_dust_conv[j,:], sub=(nf,3,j+1), min = -1*ss, max=1*ss,
+    hp.gnomview(maps_dust_conv[j,:], sub=(1,3,j+1), min = -1*ss, max=1*ss,
                title='Dust {} nu=150 GHz'.format(stk[j]), rot=center, reso=15)
 tight_layout()
 ```
@@ -397,37 +495,48 @@ print('Resulting beta: {}'.format(r.x[0]))
 ```
 
 ```{python}
-
+### Resulting CMB and Dust
+rc('figure', figsize=(16, 12))
+dustrec = r.s[0,:,:]
+suptitle('Reconstructed dust (pixel space): QUBIC Resolutions', fontsize=30, y=1.05)
 for i in range(3):
     hp.gnomview(dustrec[i,:], sub=(2,3,i+1), title='Dust Rec: {}'.format(stk[i]), 
-                min=-1*np.std(dustrec[i,pixok]), max=1*np.std(dustrec[i,pixok]),
+                min=-3*np.std(dustrec[i,pixok]), max=3*np.std(dustrec[i,pixok]),
                rot=center, reso=15)
-    hp.gnomview(dustrec[i,:]-maps_dust_conv[i,:], sub=(2,3,3+i+1), title='Dust Residuals: {}'.format(stk[i]), 
-                min=-1*np.std(dustrec[i,pixok]), max=1*np.std(dustrec[i,pixok]),
+    hp.gnomview(dustrec[i,:]-maps_dust_conv[i,:], sub=(2,3,3+i+1), 
+                title='Dust Residuals: {0:} \n RMS={1:4.2g}'.format(stk[i], 
+                                                                    np.std(dustrec[i,pixok]-maps_dust_conv[i,pixok])), 
+                min=-3*np.std(dustrec[i,pixok]), max=3*np.std(dustrec[i,pixok]),
                rot=center, reso=15)
-
+tight_layout()
 ```
 
 ```{python}
-
+rc('figure', figsize=(16, 12))
+cmbrec = r.s[1,:,:]
+suptitle('Reconstructed CMB (pixel space): QUBIC Resolutions', fontsize=30, y=1.05)
 for i in range(3):
     hp.gnomview(cmbrec[i,:], sub=(2,3,i+1), title='CMB Rec: {}'.format(stk[i]), 
-               min=-1*np.std(cmbrec[i,pixok]), max=1*np.std(cmbrec[i,pixok]),
+               min=-3*np.std(cmbrec[i,pixok]), max=3*np.std(cmbrec[i,pixok]),
                rot=center, reso=15)
-    hp.gnomview(cmbrec[i,:]-maps_cmb_conv[i,:], sub=(2,3,3+i+1), title='CMB Residuals: {}'.format(stk[i]), 
-               min=-1*np.std(cmbrec[i,pixok]), max=1*np.std(cmbrec[i,pixok]),
+    hp.gnomview(cmbrec[i,:]-maps_cmb_conv[i,:], sub=(2,3,3+i+1), 
+                title='CMB Residuals: {0:} \n RMS={1:4.2g}'.format(stk[i], np.std(cmbrec[i,pixok]-maps_cmb_conv[i,pixok])), 
+               min=-3*np.std(cmbrec[i,pixok]), max=3*np.std(cmbrec[i,pixok]),
                rot=center, reso=15)
 
 
 ```
 
 ```{python}
+suptitle('Residuals: QUBIC Resolutions (pixels space)', fontsize=30, y=1.05)
 for i in range(3):
     subplot(3,1,i+1)
     resid_cmb = cmbrec[i,pixok]-maps_cmb_conv[i,pixok]
-    hist(resid_cmb, range=[-5*np.std(maps_cmb_conv[i,pixok]), 5*np.std(maps_cmb_conv[i,pixok])], bins=100, alpha=0.5, color='r', label='CMB Residuals', normed=1)
+    hist(resid_cmb, range=[-5*np.std(resid_cmb), 5*np.std(resid_cmb)], 
+         bins=100, alpha=0.5, color='r', label='CMB: RMS={:4.2g}'.format(np.std(resid_cmb)), normed=1)
     resid_dust = dustrec[i,pixok]-maps_dust_conv[i,pixok]
-    hist(resid_dust, range=[-5*np.std(maps_cmb_conv[i,pixok]), 5*np.std(maps_cmb_conv[i,pixok])], bins=100, alpha=0.5, color='b', label='Dust Residuals', normed=1)
+    hist(resid_dust, range=[-5*np.std(resid_cmb), 5*np.std(resid_cmb)], 
+         bins=100, alpha=0.5, color='b', label='Dust: RMS={:4.2g}'.format(np.std(resid_dust)), normed=1)
     title('Residuals Stokes {}'.format(stk[i]))
     legend()
 tight_layout()
@@ -435,7 +544,94 @@ tight_layout()
 
 So now we have a bias. This is not surprising: near the edges, the reconvolutions results in incorrect values because it mixes know pixels with unknown information.
 
+Let's first check that get get a similar bias when working in alm space.
+
+```{python}
+### Alm space version
+
+### FGB Configuration
+instrument = fgb.get_instrument('Qubic')
+instrument.frequency = freqs
+instrument.fwhm = np.zeros(len(freqs)) + ref_fwhm
+components = [fgb.Dust(150., temp=20.), fgb.CMB()]
+
+r = separate(components, instrument, get_alm_maps(maps_conv, myFWHM, ref_arcmin=ref_fwhm, 
+                                                  resol_correction=True, verbose=True))
+print('Resulting beta: {}'.format(r.x[0]))
+
+### Resulting CMB and Dust
+almdustrec = r.s[0,:,:]
+almcmbrec = r.s[1,:,:]
+
+dustrec = hp.alm2map(almdustrec[..., ::2] + almdustrec[..., 1::2]*1j, nside)
+cmbrec = hp.alm2map(almcmbrec[..., ::2] + almcmbrec[..., 1::2]*1j, nside)
+dustrec[:,~pixok] = hp.UNSEEN
+cmbrec[:,~pixok] = hp.UNSEEN
+
+```
+
+```{python}
+### Resulting CMB and Dust
+rc('figure', figsize=(16, 12))
+suptitle(r'Reconstructed dust (alm space): QUBIC Resolutions', fontsize=30, y=1.05)
+for i in range(3):
+    hp.gnomview(dustrec[i,:], sub=(2,3,i+1), title='Dust Rec: {}'.format(stk[i]), 
+                min=-3*np.std(dustrec[i,pixok]), max=3*np.std(dustrec[i,pixok]),
+               rot=center, reso=15)
+    hp.gnomview(dustrec[i,:]-maps_dust_conv[i,:], sub=(2,3,3+i+1), 
+                title='Dust Residuals: {0:} \n RMS={1:4.2g}'.format(stk[i], 
+                                                                    np.std(dustrec[i,pixok]-maps_dust_conv[i,pixok])), 
+                min=-3*np.std(dustrec[i,pixok]), max=3*np.std(dustrec[i,pixok]),
+               rot=center, reso=15)
+tight_layout()
+```
+
+```{python}
+### Resulting CMB and Dust
+rc('figure', figsize=(16, 12))
+suptitle(r'Reconstructed CMB (alm space): QUBIC Resolutions', fontsize=30, y=1.05)
+for i in range(3):
+    hp.gnomview(cmbrec[i,:], sub=(2,3,i+1), title='CMB Rec: {}'.format(stk[i]), 
+                min=-3*np.std(cmbrec[i,pixok]), max=3*np.std(cmbrec[i,pixok]),
+               rot=center, reso=15)
+    hp.gnomview(cmbrec[i,:]-maps_cmb_conv[i,:], sub=(2,3,3+i+1), 
+                title='CMB Residuals: {0:} \n RMS={1:4.2g}'.format(stk[i], 
+                                                                    np.std(cmbrec[i,pixok]-maps_cmb_conv[i,pixok])), 
+                min=-3*np.std(cmbrec[i,pixok]), max=3*np.std(cmbrec[i,pixok]),
+                rot=center, reso=15)
+tight_layout()
+```
+
+```{python}
+suptitle('Residuals: QUBIC Resolutions (alm space)', fontsize=30, y=1.05)
+for i in range(3):
+    subplot(3,1,i+1)
+    resid_cmb = cmbrec[i,pixok]-maps_cmb_conv[i,pixok]
+    hist(resid_cmb, range=[-5*np.std(resid_cmb), 5*np.std(resid_cmb)], 
+         bins=100, alpha=0.5, color='r', label='CMB: RMS={:4.2g}'.format(np.std(resid_cmb)), normed=1)
+    resid_dust = dustrec[i,pixok]-maps_dust_conv[i,pixok]
+    hist(resid_dust, range=[-5*np.std(resid_cmb), 5*np.std(resid_cmb)], 
+         bins=100, alpha=0.5, color='b', label='Dust: RMS={:4.2g}'.format(np.std(resid_dust)), normed=1)
+    title('Residuals Stokes {}'.format(stk[i]))
+    legend()
+tight_layout()
+```
+
+So if we summarize the results:
+
+| Method | CMB I RMS | CMB Q RMS | CMB U RMS| Dust I RMS | Dust Q RMS | Dust U RMS |
+| --- | --- | --- | --- | --- | --- | --- |
+| Same Resolution (Pixel based)| 2.4e-6 | 1.2e-7 | 9.9e-8 | 8.1e-7 | 4.6e-8 | 3.8 e-8 |
+| Same Resolution (alm based)| 37 | 0.48 | 0.48 | 3.4 | 0.38 | 0.35 |
+| QUBIC Resolution (Pixel based)| 8.1 | 0.75 | 0.66 | 6.2 | 0.61 | 0.55 |
+| QUBIC Resolution (alm based)| 54 | 1.7 | 1.8 | 4.3 | 0.44 | 0.41 |
+
+
+
+
 A possible solution is to restrict the region after reconvolution...
+
+# Solution #1: Restricting to a smaller fiducial region after reconvolution in order to limit the effect of edge-convolution leakage.
 
 ```{python}
 maps_reconv = reconvolve(maps_conv, myFWHM, ref_fwhm, verbose=True)
@@ -453,7 +649,7 @@ for j in range(3):
 mapregions = np.zeros(12*nside**2) + hp.UNSEEN
 mapregions[pixok] = 1
 mapregions[fidregion] = 2
-hp.gnomview(mapregions, rot=center, reso=15, title='Fiducial region')
+hp.gnomview(mapregions, rot=center, reso=15, title='Fiducial region: {}'.format(newcut))
 
 ### FGB Configuration
 instrument = fgb.get_instrument('Qubic')
@@ -463,32 +659,60 @@ components = [fgb.Dust(150., temp=20.), fgb.CMB()]
 
 r = separate(components, instrument, maps_reconv)
 
-### Resulting CMB and Dust
-dustrec = r.s[0,:,:]
-cmbrec = r.s[1,:,:]
-
-dust_residuals = dustrec - mytrue_dust
-cmb_residuals = cmbrec - mytrue_cmb
-figure()
-for i in range(3):
-    hp.gnomview(dustrec[i,:], sub=(4,3,i+1), title='Dust Rec: {}'.format(stk[i]), 
-                min=-1*np.std(dustrec[i,fidregion]), max=1*np.std(dustrec[i,fidregion]),
-               rot=center, reso=15)
-    hp.gnomview(dust_residuals[i,:], sub=(4,3,3+i+1), title='Dust Residuals: {}'.format(stk[i]), 
-                min=-1*np.std(dustrec[i,fidregion]), max=1*np.std(dustrec[i,fidregion]),
-               rot=center, reso=15)
-
-for i in range(3):
-    hp.gnomview(cmbrec[i,:], sub=(4,3,6+i+1), title='CMB Rec: {}'.format(stk[i]), 
-               min=-1*np.std(cmbrec[i,fidregion]), max=1*np.std(cmbrec[i,fidregion]),
-               rot=center, reso=15)
-    hp.gnomview(cmb_residuals[i,:], sub=(4,3,9+i+1), title='CMB Rec: {}'.format(stk[i]), 
-               min=-1*np.std(cmbrec[i,fidregion]), max=1*np.std(cmbrec[i,fidregion]),
-               rot=center, reso=15)
-
-print('Resulting beta: {}'.format(r.x[0]))
 
 ```
+
+```{python}
+### Resulting CMB and Dust
+rc('figure', figsize=(16, 12))
+dustrec = r.s[0,:,:]
+suptitle('Reconstructed dust: QUBIC Resolutions (Fiducial cut {})'.format(newcut), fontsize=30, y=1.05)
+for i in range(3):
+    hp.gnomview(dustrec[i,:], sub=(2,3,i+1), title='Dust Rec: {}'.format(stk[i]), 
+                min=-3*np.std(dustrec[i,fidregion]), max=3*np.std(dustrec[i,fidregion]),
+               rot=center, reso=15)
+    hp.gnomview(dustrec[i,:]-maps_dust_conv[i,:], sub=(2,3,3+i+1), 
+                title='Dust Residuals: {0:} \n RMS={1:4.2g}'.format(stk[i], 
+                                                                    np.std(dustrec[i,fidregion]-maps_dust_conv[i,fidregion])), 
+               rot=center, reso=15)
+tight_layout()
+```
+
+```{python}
+rc('figure', figsize=(16, 12))
+cmbrec = r.s[1,:,:]
+suptitle('Reconstructed CMB: QUBIC Resolutions (Fiducial cut {})'.format(newcut), fontsize=30, y=1.05)
+for i in range(3):
+    hp.gnomview(cmbrec[i,:], sub=(2,3,i+1), title='CMB Rec: {}'.format(stk[i]), 
+               min=-3*np.std(cmbrec[i,fidregion]), max=3*np.std(cmbrec[i,fidregion]),
+               rot=center, reso=15)
+    hp.gnomview(cmbrec[i,:]-maps_cmb_conv[i,:], sub=(2,3,3+i+1), 
+                title='CMB Residuals: {0:} \n RMS={1:4.2g}'.format(stk[i], np.std(cmbrec[i,fidregion]-maps_cmb_conv[i,fidregion])), 
+               rot=center, reso=15)
+
+
+```
+
+```{python}
+suptitle('Residuals: QUBIC Resolutions (fiducial cut {})'.format(newcut), fontsize=30, y=1.05)
+for i in range(3):
+    subplot(3,1,i+1)
+    resid_cmb = cmbrec[i,fidregion]-maps_cmb_conv[i,fidregion]
+    hist(resid_cmb, range=[-5*np.std(resid_cmb), 5*np.std(resid_cmb)], 
+         bins=100, alpha=0.5, color='r', label='CMB: RMS={:4.2g}'.format(np.std(resid_cmb)), normed=1)
+    resid_dust = dustrec[i,fidregion]-maps_dust_conv[i,fidregion]
+    hist(resid_dust, range=[-5*np.std(resid_cmb), 5*np.std(resid_cmb)], 
+         bins=100, alpha=0.5, color='b', label='Dust: RMS={:4.2g}'.format(np.std(resid_dust)), normed=1)
+    title('Residuals Stokes {}'.format(stk[i]))
+    legend()
+tight_layout()
+```
+
+So we see a significant improvement **in the pixel domain case**:
+- without fiducial region (0.1 coverage cut), residuals have RMS of typically 7, 0.7, 0.7
+- With a fiducial cut at 0.15, they drop by almost an order of magnitude: 1.5, 0.07, 0.07
+
+Regarding $\beta$, we go from 0.86 to 1.465 
 
 Let's loop on increased cut value in order to see the residuals as well as the reconstructed beta
 

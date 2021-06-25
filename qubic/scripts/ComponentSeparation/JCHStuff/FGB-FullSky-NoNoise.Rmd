@@ -1,0 +1,376 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Context
+This notebooks is essentially copy-paste from    
+
+```{python}
+import pysm3
+import pysm3.units as u
+import numpy as np
+import numpy.ma as ma
+import healpy as hp
+import pickle
+import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
+import pickle
+from astropy.io import fits
+
+from qubic import camb_interface as qc
+import fgbuster as fgb
+
+import warnings
+warnings.filterwarnings("ignore")
+
+rc('figure', figsize=(16, 10))
+rc('font', size=15)
+
+```
+
+```{python}
+#### General Stuff ####
+nside = 256
+stk = ['I', 'Q', 'U']
+```
+
+### PySM stuff
+we generate PySM maps with CMB + Dust
+
+```{python}
+#### PYSM Stuff ####
+# generate I,Q,U sky maps with PySM
+unit = u.uK_CMB
+sky = pysm3.Sky(nside=nside, preset_strings=['d0', 'c1'], output_unit=unit)
+```
+
+Now we generate some frequency maps
+
+```{python}
+freqs = np.array([200, 220, 240])
+sky_emissions = [sky.get_emission(f * u.GHz) for f in freqs]
+maps = np.array([emission.value for emission in sky_emissions])
+
+print(np.shape(maps))   #nu, Stk, pix
+
+rc('figure', figsize=(16, 10))
+nf = maps.shape[0]
+nstk = maps.shape[1]
+print(maps.shape)
+for i in range(nf):
+    for j in range(nstk):
+        ss = np.std(maps[0,j,:])
+        hp.mollview(maps[i,j,:], sub=(nf,3,3*i+j+1), min = -3*ss, max=3*ss,
+                   title='{} nu={} GHz'.format(stk[j], freqs[i]))
+tight_layout()
+```
+
+# FGBuster noiseless
+
+## Full-Sky and Same infinite resolution
+Let's try a simple FGB pixel-based component separation with these maps: Full-sky and infinite resolution
+
+```{python}
+### FGB Configuration
+instrument = fgb.get_instrument('Qubic')
+instrument.frequency = freqs
+instrument.fwhm = freqs*0.    #Because here the maps were simulated at infinite resolution
+components = [fgb.Dust(150., temp=20.), fgb.CMB()]
+
+def separate(comp, instr, maps_to_separate, tol=1e-12, print_option=True):
+    solver_options = {}
+    solver_options['disp'] = True
+    fg_args = comp, instr, maps_to_separate
+    fg_kwargs = {'method': 'BFGS', 'tol': 1e-12, 'options': solver_options}
+    try:
+        res = fgb.basic_comp_sep(*fg_args, **fg_kwargs)
+    except KeyError:
+        fg_kwargs['options']['disp'] = False
+        res = fgb.basic_comp_sep(*fg_args, **fg_kwargs)
+    if print_option:
+        print()
+        print("message:", res.message)
+        print("success:", res.success)
+        print("result:", res.x)
+    return res
+
+r = separate(components, instrument, maps)
+
+print('Resulting beta: {}'.format(r.x[0]))
+```
+
+```{python}
+### Resulting CMB and Dust
+dustrec = r.s[0,:,:]
+cmbrec = r.s[1,:,:]
+
+for i in range(3):
+    hp.mollview(dustrec[i,:], sub=(2,3,i+1), title='Dust Rec: {}'.format(stk[i]), 
+                min=-3*np.std(dustrec[i,:]), max=3*np.std(dustrec[i,:]))
+
+for i in range(3):
+    hp.mollview(cmbrec[i,:], sub=(2,3,3+i+1), title='CMB Rec: {}'.format(stk[i]), 
+               min=-3*np.std(cmbrec[i,:]), max=3*np.std(cmbrec[i,:]))
+
+```
+
+OK it seemd to be working rather well. Now we can complexify a little bit by setting the maps to different resolutions.
+
+## Full Sky and same finite resolution
+We convolve all maps at the same angular resolution
+
+```{python}
+myFWHM = 0.5 # degrees
+maps_conv = np.array([hp.smoothing(m.copy(), fwhm=np.deg2rad(myFWHM), pol=True, verbose=False) for m in maps])
+```
+
+```{python}
+rc('figure', figsize=(16, 10))
+nf = maps.shape[0]
+nstk = maps.shape[1]
+print(maps.shape)
+for i in range(nf):
+    for j in range(nstk):
+        ss = np.std(maps_conv[0,j,:])
+        hp.mollview(maps_conv[i,j,:], sub=(nf,3,3*i+j+1), min = -3*ss, max=3*ss,
+                   title='{} nu={} GHz'.format(stk[j], freqs[i]))
+tight_layout()
+```
+
+```{python}
+### FGB Configuration
+instrument = fgb.get_instrument('Qubic')
+instrument.frequency = freqs
+instrument.fwhm = np.zeros(len(freqs)) + myFWHM
+components = [fgb.Dust(150., temp=20.), fgb.CMB()]
+
+r = separate(components, instrument, maps_conv)
+
+print('Resulting beta: {}'.format(r.x[0]))
+```
+
+```{python}
+### Resulting CMB and Dust
+dustrec = r.s[0,:,:]
+cmbrec = r.s[1,:,:]
+
+for i in range(3):
+    hp.mollview(dustrec[i,:], sub=(2,3,i+1), title='Dust Rec: {}'.format(stk[i]), 
+                min=-3*np.std(dustrec[i,:]), max=3*np.std(dustrec[i,:]))
+
+for i in range(3):
+    hp.mollview(cmbrec[i,:], sub=(2,3,3+i+1), title='CMB Rec: {}'.format(stk[i]), 
+               min=-3*np.std(cmbrec[i,:]), max=3*np.std(cmbrec[i,:]))
+
+```
+
+It works very well again. Let's now go to a more complicated problem where all maps are at different resolutions.
+
+## Full Sky and different resolutions
+We now convolve all maps to the expected QUBIC resolutions
+
+```{python}
+synthbeam_peak150_fwhm = 0.39268176  # in degrees
+myFWHM = synthbeam_peak150_fwhm * 150. / freqs  # Qubic beams
+maps_conv = np.array([hp.smoothing(m.copy(), fwhm=np.deg2rad(fw), pol=True, verbose=False) for m, fw in zip(maps,myFWHM)])
+```
+
+```{python}
+### FGB Configuration
+instrument = fgb.get_instrument('Qubic')
+instrument.frequency = freqs
+instrument.fwhm = myFWHM
+components = [fgb.Dust(150., temp=20.), fgb.CMB()]
+
+r = separate(components, instrument, maps_conv)
+
+print('Resulting beta: {}'.format(r.x[0]))
+```
+
+```{python}
+### Resulting CMB and Dust
+dustrec = r.s[0,:,:]
+cmbrec = r.s[1,:,:]
+
+for i in range(3):
+    hp.mollview(dustrec[i,:], sub=(2,3,i+1), title='Dust Rec: {}'.format(stk[i]), 
+                min=-3*np.std(dustrec[i,:]), max=3*np.std(dustrec[i,:]))
+
+for i in range(3):
+    hp.mollview(cmbrec[i,:], sub=(2,3,3+i+1), title='CMB Rec: {}'.format(stk[i]), 
+               min=-3*np.std(cmbrec[i,:]), max=3*np.std(cmbrec[i,:]))
+
+```
+
+OK, the result is now biased beacause we have fed FGBuster with maps at different resolutions. We need to correct for this and provide maps at the same resolution. This can be done either in pixel space by reconvolving to some common resolution, or in alm space by providing FGBuster with corrected alms.
+
+### Pixel-space reconvolution to a common resolution
+we reconvolve all maps to a reference resolution (it can be the worst one or any larger resolution).
+
+```{python}
+ref_fwhm = np.max(myFWHM)
+
+def reconvolve(maps, fwhms, ref_fwhm, verbose=False):
+    if verbose: 
+        print('Reconvolution to coommon FWHM')
+    sig_conv = np.sqrt(ref_fwhm**2 - fwhms**2)
+    maps_out = np.zeros_like(maps)
+    for i in range(len(fwhms)):
+        if sig_conv[i] == 0:
+            if verbose:
+                print('Map {0:} fwhmin={1:6.3f} fwhmout={2:6.3f} => We do not reconvolve'.format(i, 
+                                                                                             fwhms[i], ref_fwhm))
+            maps_out[i,:] = maps[i,:]
+        else:
+            if verbose:
+                print('Map {0:} fwhmin={1:6.3f} fwhmout={2:6.3f} => We reconvolve with {3:6.3f}'.format(i, 
+                                                                                                    fwhms[i], 
+                                                                                                    ref_fwhm, 
+                                                                                                    sig_conv[i]))
+            maps_out[i,:] = hp.smoothing(maps[i,:], fwhm=np.deg2rad(sig_conv[i]), pol=True, verbose=False)
+    return maps_out
+
+maps_reconv = reconvolve(maps_conv, myFWHM, ref_fwhm, verbose=True)
+
+### FGB Configuration
+instrument = fgb.get_instrument('Qubic')
+instrument.frequency = freqs
+instrument.fwhm = np.zeros(len(freqs)) + ref_fwhm
+components = [fgb.Dust(150., temp=20.), fgb.CMB()]
+
+r = separate(components, instrument, maps_reconv)
+
+print('Resulting beta: {}'.format(r.x[0]))
+
+```
+
+```{python}
+### Resulting CMB and Dust
+dustrec = r.s[0,:,:]
+cmbrec = r.s[1,:,:]
+
+for i in range(3):
+    hp.mollview(dustrec[i,:], sub=(2,3,i+1), title='Dust Rec: {}'.format(stk[i]), 
+                min=-3*np.std(dustrec[i,:]), max=3*np.std(dustrec[i,:]))
+
+for i in range(3):
+    hp.mollview(cmbrec[i,:], sub=(2,3,3+i+1), title='CMB Rec: {}'.format(stk[i]), 
+               min=-3*np.std(cmbrec[i,:]), max=3*np.std(cmbrec[i,:]))
+
+```
+
+Great! it works perfectly !
+
+We could have done this in alm space as FGBuster is agnostic w.r.t. the space it works with.
+
+### alm space beam correction
+This time we provide FGBuster with the alm of the maps after correcting them in suc a way they are at the same resolution. This needs to be perfectly equivalent to the above map-space.
+
+```{python}
+# this function is from Simon Biquard
+def get_alm_maps(pixel_maps, fwhms, resol_correction=False, ref_arcmin=0, pixwin_correction=False, verbose=False):
+    """
+    Compute alm maps from pixel maps and format them for FgBuster.
+    """
+    sh = np.shape(pixel_maps)
+    nside = hp.npix2nside(sh[2])
+    n = sh[0]
+    lmax = 2*nside+1
+    ell = np.arange(start=0, stop= lmax+1)
+
+    ref_sigma_rad = np.deg2rad(ref_arcmin / 60.) / 2.355
+    ref_fl = np.exp(- 0.5 * np.square(ref_sigma_rad * ell))
+
+    if verbose: 
+        print('In get_alm_maps: FWHM = ', fwhm)
+    beam_sigmas_rad = np.deg2rad(fwhms) / (2*np.sqrt(2*np.log(2)))
+    pixwin = hp.pixwin(nside, lmax=lmax) if pixwin_correction else np.ones(lmax + 1)
+
+    # compute maps
+    alm_maps = None
+    for f in range(n):
+        alms = hp.map2alm(pixel_maps[f], lmax=lmax, pol=True)
+        correction = None
+        if f == 0:
+            sh = np.shape(alms)
+            alm_maps = np.empty((n, sh[0], 2 * sh[1]))
+        if resol_correction:
+            print('Applying Resol Correction')
+            gauss_fl = np.exp(- 0.5 * np.square(beam_sigmas_rad[f] * ell))
+            correction = ref_fl / gauss_fl / pixwin
+        else:
+            print('No Resol Correction applied')
+        for i, t in enumerate(alms):
+            alm_maps[f, i] = format_alms(hp.almxfl(t, correction) if resol_correction else t)
+    return alm_maps
+
+# credits to J. Errard for these two functions
+def intersect_mask(maps):
+    if hp.pixelfunc.is_ma(maps):
+        mask = maps.mask
+    else:
+        mask = maps == hp.UNSEEN
+
+    # Mask entire pixel if any of the frequencies in the pixel is masked
+    return np.any(mask, axis=tuple(range(maps.ndim - 1)))
+
+def format_alms(alms, lmin=0, nulling_option=True):
+    lmax = hp.Alm.getlmax(alms.shape[-1])
+    alms = np.asarray(alms, order='C')
+    alms = alms.view(np.float64)
+    em = hp.Alm.getlm(lmax)[1]
+    em = np.stack((em, em), axis=-1).reshape(-1)
+    mask_em = [m != 0 for m in em]
+    alms[..., mask_em] *= np.sqrt(2)
+    if nulling_option:
+        alms[..., np.arange(1, lmax + 1, 2)] = hp.UNSEEN  # mask imaginary m = 0
+        mask_alms = intersect_mask(alms)
+        alms[..., mask_alms] = 0  # thus no contribution to the spectral likelihood
+    alms = np.swapaxes(alms, 0, -1)
+    if lmin != 0:
+        ell = hp.Alm.getlm(lmax)[0]
+        ell = np.stack((ell, ell), axis=-1).reshape(-1)
+        mask_lmin = [ll < lmin for ll in ell]
+        if nulling_option:
+            alms[mask_lmin, ...] = hp.UNSEEN
+    return alms
+
+```
+
+```{python}
+
+
+### FGB Configuration
+instrument = fgb.get_instrument('Qubic')
+instrument.frequency = freqs
+instrument.fwhm = np.zeros(len(freqs)) + ref_fwhm
+components = [fgb.Dust(150., temp=20.), fgb.CMB()]
+
+r = separate(components, instrument, get_alm_maps(maps_conv, myFWHM, ref_arcmin=ref_fwhm, 
+                                                  resol_correction=True, verbose=True))
+
+print('Resulting beta: {}'.format(r.x[0]))
+
+```
+
+So it works well. We cannot easily get the resulting maps as what we reconver iss the alms, so we need to go back to pixel space which is a pain in the neck. But anyway it works fine.
+
+So now there are two extra-complications we need to consider:
+- noise (homogeneous and inhomogeneous)
+- Cut-Sky: this will induce problems because of reconvolution at the edges.
+
+Let's first explore the second complication in another notebook: FGB-CutSky-NoNoise.Rmd
+
+```{python}
+
+```

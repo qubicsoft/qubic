@@ -17,6 +17,7 @@ import numpy as np
 import pickle 
 import astropy.io as fits
 from lmfit import Model
+import matplotlib.ticker as mtick
 
 # Specific qubic modules
 import qubic
@@ -503,7 +504,7 @@ def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 		fit_prep = myfit.run(nsamples)
 		#print("Doing chain")
 		flat_samples = fit_prep.get_chain(discard = nsamples//2, thin=32, flat=True)
-		print("Samples ", np.shape(flat_samples))
+		#print("Samples ", np.shape(flat_samples))
 		nspls = flat_samples.shape[0]
 		#Generating realizations for parameters of the model (fake X(nu))
 		
@@ -676,7 +677,7 @@ def make_fit_SED(xSED, xarr, Imvals, Isvals, FuncModel, fgr_map_ud, pixs_ud, nf_
 	return ySED_fit, Pmean, Perr
 
 def _plot_exampleSED(dictionary, center, nus_out, maskmaps, mapsarray = False, 
-					DeltaTheta = 0, DeltaPhi = 0, savefig = False):
+					DeltaTheta = 0, DeltaPhi = 0, savefig = False, set_logscale = False):
 
 	"""
 	Plot an example of Figure 10 (map + SED ) in paper 1
@@ -698,39 +699,58 @@ def _plot_exampleSED(dictionary, center, nus_out, maskmaps, mapsarray = False,
 
 	capsize=3
 	plt.rc('font', size=16)
+	if newnside == None:	
+		nside = dictionary['nside']
+	else:
+		nside = newnside
 
-	pixG = [hp.ang2pix(dictionary['nside'], np.pi / 2 - np.deg2rad(center[1] + DeltaTheta ), 
+	pixG = [hp.ang2pix(nside, np.pi / 2 - np.deg2rad(center[1] + DeltaTheta ), 
 					   np.deg2rad(center[0] + DeltaPhi) ), ]
+
 
 	fig,ax = plt.subplots(nrows=1,ncols=2,figsize=(14,5),)
 	ax = ax.ravel()
 	IPIXG = pixG[0] 
-	color = ['r','g','k']
+	color = ['g','g','k']
 	label = ['dust', 'synchrotron', 'dust+synchrotron']
+	marker = ['d', 's', 'o']
 	if mapsarray:
 		for j, imap in enumerate(maskmaps):
 			print(imap[:,IPIXG,0])
-			ax[1].plot(nus_out, imap[:,IPIXG,0], 'o', color=color[j], label = label[j])
+			ax[1].plot(nus_out, imap[:,IPIXG,0], marker = marker[j], color=color[j], label = label[j],
+				linestyle = "")
 		ax[1].legend()
+		ax[1].set_yscale("log")
 		ax[0].cla()	
 		plt.axes(ax[0])
-		hp.gnomview(maskmaps[-1][-1,:,0], reso = 15,hold = True, title = ' ',unit = r'$\mu$K', notext =True,
+		hp.gnomview(maskmaps[-1][-1,:,0], reso = 15,hold = True, title = ' ',unit = r'$\mu$K$_{CMB}$', notext =True,
 					min = 0 ,
-					max = 0.23 * np.max(maskmaps[-1][-1,:,0]), rot = center)
+					max = 0.23 * np.max(maskmaps[2][-1,:,0]), rot = center)
 	else:
 		ax[1].plot(nus_out, maskmaps[:,IPIXG,0], 'o-', color='r')
 		ax[0].cla()
 		plt.axes(ax[0])
-		hp.gnomview(maskmaps[-1,:,0], reso = 15,hold = True, title = ' ',unit = r'$\mu$K', notext =True,
+		hp.gnomview(maskmaps[-1,:,0], reso = 15,hold = True, title = ' ',unit = r'$\mu$K$_{CMB}$', notext =True,
 					min = 0 ,
 					max = 0.23 * np.max(maskmaps[-1,:,0]), rot = center)
 	hp.projscatter(hp.pix2ang(dictionary['nside'], IPIXG), marker = '*', color = 'r',s = 180)
-	#ax[1].set_yscale("log")
-	ax[1].set_ylabel(r'$I_\nu$ [$\mu$K]')
+	ylim = ax[1].get_ylim()
+	xlim = ax[1].get_xlim()
+	#ax[1].set_ylim(ylim[0], ylim[1]*2)
+	if set_logscale:
+		ax[1].set_xscale("log")
+		ax[1].set_yscale("log")
+		#ax[1].set_xticks([150, 220], ['150','220'])
+		ax[1].xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1f'))
+		ax[1].xaxis.set_minor_formatter(mtick.ScalarFormatter())
+		ax[1].tick_params(axis = "both", which = "both",
+		                  direction='in',width=1.3,)
+	ax[1].grid(which="both")
+
+	ax[1].set_ylabel(r'$I_\nu$ [$\mu$K$_{CMB}$]')
 	ax[1].set_xlabel(r'$\nu$[GHz]')
 	dpar = 10
 	dmer = 20
-	ax[1].grid()
 	#Watch out, the names are wrong (change it)
 	mer_coordsG = [ center[0] - dmer,   center[0], center[0] + dmer]
 	long_coordsG = [center[1] - 2*dpar, center[1] - dpar, center[1], 

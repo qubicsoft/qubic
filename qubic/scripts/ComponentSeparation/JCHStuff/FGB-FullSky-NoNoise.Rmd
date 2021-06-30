@@ -13,7 +13,7 @@ jupyter:
 ---
 
 # Context
-This notebooks is essentially copy-paste from    
+This notebook is essentially copy-paste from notebooks developed bby Mathias Régnier and Simon Biquard   
 
 ```{python}
 import pysm3

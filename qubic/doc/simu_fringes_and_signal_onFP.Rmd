@@ -347,6 +347,48 @@ scal.scatter_plot_FP(q, xONAFP, yONAFP, power, s=1,
                    norm=None)
 ```
 
+### Compare symmetric baselines (Figure 19 in paper QUBIC-III)
+
+```{python}
+open_horns1 = [60, 64]
+xONAFP, yONAFP, power1 = scal.get_power_Maynooth(rep, open_horns1, 
+                                                0., 150e9, 
+                                                q.horn.center,  
+                                                hwp_position=0,
+                                                verbose=True)
+open_horns2 = [1, 5]
+xONAFP, yONAFP, power2 = scal.get_power_Maynooth(rep, open_horns2, 
+                                                0., 150e9, 
+                                                q.horn.center,  
+                                                hwp_position=0,
+                                                verbose=True)
+print(xONAFP.shape)
+print(power.shape)
+fig, axs = plt.subplots(1, 3, figsize=(12, 6))
+ax1, ax2, ax3 = np.ravel(axs)
+
+scal.scatter_plot_FP(q, xONAFP, yONAFP, power1, s=1, 
+                     fig=fig, ax=ax1,
+                     frame='ONAFP', 
+                     title=f'Baseline {open_horns1}',
+                     unit='',
+                     norm=None)
+scal.scatter_plot_FP(q, xONAFP, yONAFP, power2, s=1, 
+                     fig=fig, ax=ax2,
+                     frame='ONAFP', 
+                     title=f'Baseline {open_horns2}', 
+                     unit='',
+                     norm=None)
+scal.scatter_plot_FP(q, xONAFP, yONAFP, power1 - power2, s=1, 
+                     fig=fig, ax=ax3,
+                     frame='ONAFP', 
+                     title='Difference', 
+                     unit='',
+                     norm=None)
+fig.tight_layout()
+#fig.savefig('/home/lmousset/QUBIC/Papiers/QUBIC_III/symmetric_baselines60-64_1-5.pdf', bbox_inches='tight')
+```
+
 ```{python}
 # Make a plot for paper 3 without any axis
 fig = plt.figure(figsize=(8, 8))

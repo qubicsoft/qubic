@@ -45,7 +45,7 @@ def plot_baseline(q, bs, ax=None):
 
 
 def scatter_plot_FP(q, x, y, FP_signal, frame, fig=None, ax=None,
-                    s=None, title=None, unit='[W / Hz]', cbar=True, fontsize=14, **kwargs):
+                    s=None, title=None, unit='[W / Hz]', cbar=True, fontsize=14, tikz=np.arange(-0.06, 0.09, 0.03), **kwargs):
     """
     Make a scatter plot of the focal plane.
     Parameters
@@ -84,6 +84,8 @@ def scatter_plot_FP(q, x, y, FP_signal, frame, fig=None, ax=None,
     ax.set_xlabel(f'X_{frame} [m]', fontsize=fontsize)
     ax.set_ylabel(f'Y_{frame} [m]', fontsize=fontsize)
     ax.axis('square')
+    ax.xaxis.set_ticks(tikz)
+    ax.yaxis.set_ticks(tikz)
     ax.set_title(title, fontsize=fontsize)
     return
 

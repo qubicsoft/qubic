@@ -37,6 +37,18 @@ rc('font', size=18)
 
 ```
 
+```{python}
+f = 220
+print('**********', f, 'GHz')
+for nb in np.arange(1, 9):
+    
+    print('Nbands', nb)
+    _, edges, center, _, _, _ = compute_freq(f, nb)
+    print('Edges:', np.around(edges, 2))
+    print('Centers:', np.around(center, 2), '\n')
+np.around
+```
+
 ## Get the cross spectra
 
 We can choose: 
@@ -51,24 +63,26 @@ datadir = os.environ['DATA_SPECTROIM']
 print(datadir)
 rep_fullpipe = datadir + '/NERSC_simuEnd2End/Bad_photon_noise2020/simu_NERSC_MC/IBCS_fullpipeline/'
 
-rep_spectrumCC = datadir + 'FastSimulator/cls_spectrum_fromCC/nbands6-7/'
+rep_spectrumCC = datadir + 'FastSimulator/cls_spectrum_fromCC/'
 print(rep_spectrumCC)
+
+
 ```
 
 ```{python}
 # Convert all files to one .npy
 # Do it just once
-# freq = 220
+# freq = 150
 # map_type = 'qubic'
 # IBCS_type = 'mix'
-# for nfrecon in [6, 7]:
-#     list_files = glob.glob(rep_spectrumCC + f'IBCS{IBCS_type}*nfrecon{nfrecon}*_{map_type}maps_*FI{freq}*_v4_gal*.npy')
+# for nfrecon in [3, 4, 5]:
+#     list_files = glob.glob(rep_spectrumCC + f'IBCS{IBCS_type}*nfrecon{nfrecon}*_{map_type}maps_*FI{freq}*_v5_*.npy')
 #     nfiles = len(list_files)
 #     print('# Files:', nfiles)
 #     for i in range(nfiles):
 #         cross = np.load(list_files[i])
-# #         with open(list_files[i], 'rb') as f:
-# #             cross = pickle.load(f)
+#  #         with open(list_files[i], 'rb') as f:
+#  #             cross = pickle.load(f)
 
 #         if i == 0:
 #             allcross = cross
@@ -76,12 +90,12 @@ print(rep_spectrumCC)
 #             allcross = np.concatenate((allcross, cross), axis=0)
 #     print('All cross shape:', allcross.shape)
 #     np.save(rep_spectrumCC + 
-#             f'IBCS{IBCS_type}_nfrecon{nfrecon}_{map_type}maps_FI{freq}_v4_galaxycenter.npy', allcross)
+#             f'IBCS{IBCS_type}_nfrecon{nfrecon}_{map_type}maps_FI{freq}_v5_qubicpatch.npy', allcross)
 ```
 
 ```{python}
 clnames = ['TT', 'EE', 'BB', 'TE']
-nfrecon = 6
+nfrecon = 3
 
 # Full pipeline
 # cls_cross = np.load(rep_fullpipe + 'IBCSsame_recon_{}bands_150fullpipeline.npy'.format(nfrecon))
@@ -89,8 +103,10 @@ nfrecon = 6
 # Fast Simulator
 # cls_cross = np.load(rep_spectrumCC + 
 #                     'cross_interband_samereal_nfrecon{}_noisemaps_FI150_v2_galaxycenter.npy'.format(nfrecon))
-cls_cross = np.load(rep_spectrumCC + 
-                    'IBCSsame_nfrecon{}_noisemaps_FI150_v4_galaxycenter.npy'.format(nfrecon))
+
+name = f'IBCSmix_nfrecon{nfrecon}_noisemaps_FI150_v4_galaxycenter.npy'
+name = f'v5/IBCSmix_nfrecon{nfrecon}_qubicmaps_FI150_v5_qubicpatch.npy'
+cls_cross = np.load(rep_spectrumCC + name)
 
 
 print(cls_cross.shape)
@@ -159,7 +175,7 @@ rc('figure', figsize=(12, 8))
 
 fig, axs = plt.subplots(2, 2)
 axs = axs.ravel()
-
+fig.suptitle(name)
 for i in range(4):
     ax = axs[i]
     for cross in range(ncombi):
@@ -204,15 +220,11 @@ sns.palplot(palet2)
 ```
 
 ```{python}
-ncombi
-```
-
-```{python}
 cls_cross_same = np.load(rep_spectrumCC + 
-                    'IBCSsame_nfrecon{}_noisemaps_FI150_v4_galaxycenter.npy'.format(nfrecon))
+                    'IBCSsame_nfrecon{}_noisemaps_FI150_v5_qubicpatch.npy'.format(nfrecon))
 
 cls_cross_mix = np.load(rep_spectrumCC + 
-                    'IBCSmix_nfrecon{}_noisemaps_FI150_v4_galaxycenter.npy'.format(nfrecon))
+                    'IBCSmix_nfrecon{}_noisemaps_FI150_v5_qubicpatch.npy'.format(nfrecon))
 
 # Reorder cross spectra
 permutation = []

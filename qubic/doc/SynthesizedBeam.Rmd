@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.7.1
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -40,6 +40,12 @@ rc('text',usetex=False)
 from qubicpack.utilities import Qubic_DataDir
 import qubic
 import qubic.selfcal_lib as sc 
+```
+
+```{python}
+# save_dir = '/home/martin/QUBIC/qubic/qubic/scripts/Spectroimagery_paper/'
+# save_dir = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/'
+save_dir = '/home/lmousset/QUBIC/These_manuscrit/tikz/'
 ```
 
 ```{python}
@@ -388,18 +394,16 @@ ax.text(4, 0.37, r"$\theta(\lambda)$", ha="center", va="center",
             bbox=dict(boxstyle="round", fc="w"))
 ax.xaxis.set_ticks(np.arange(-10, 15, 5))
 fig.tight_layout()
-# B(\theta_{off})
-# plt.savefig('/home/martin/QUBIC/qubic/qubic/scripts/Spectroimagery_paper/beam_cut_2TESb.pdf')
-# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/beam_cut_2TESb.pdf', 
-#             bbox_inches='tight')
+
+# plt.savefig(save_dir + 'beam_cut_2TESb.pdf', bbox_inches='tight')
 # import tikzplotlib as tkz
-# tkz.save('/home/lmousset/QUBIC/These_manuscrit/tikz/beam_cut_2TESb.tex')
+# tkz.save(save_dir + 'beam_cut_2TESb.tex')
 ```
 
 ```{python}
 color=iter(plt.cm.jet(np.linspace(0,1,6))[::-1] )
 sum_b = np.zeros((9,len(th_deg),) )
-NUNU=np.linspace(131e9,169e9,9)#[131e9,135e9,140e9,145e9,150e9,155e9,160e9,165e9,169e9]
+NUNU=np.linspace(131e9, 169e9, 9)#[131e9,135e9,140e9,145e9,150e9,155e9,160e9,165e9,169e9]
 for j,inu in enumerate(NUNU):
     d['filter_nu'] = NUNU[j]
     q = qubic.QubicInstrument(d)
@@ -457,11 +461,100 @@ ax[1].add_artist(leg);
 ax[1].grid()
 ax[1].tick_params(axis='both',bottom=True, top=True, left=True, right=True,direction='in')
 fig.tight_layout()
-# B(\theta_{off})
-# plt.savefig('/home/martin/QUBIC/qubic/qubic/scripts/Spectroimagery_paper/synth_beam_many_freq.pdf')
-plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/synth_beam_many_freq.pdf', 
-            bbox_inches='tight')
+
+# plt.savefig(save_dir + 'synth_beam_many_freq.pdf', bbox_inches='tight')
+
 ```
+
+#### Same plot but in two figures 
+
+```{python}
+th_deg = np.linspace(-20, 20, nn)
+fig = plt.figure(figsize=(10, 8))
+ax = fig.gca()
+ax.plot(th_deg, allbeams[0],'--', c = plt.cm.jet(np.linspace(0,1,6))[::-1][0],
+           label=r'${:.1f}~$GHz'.format(freqs[0]/1e9))
+ax.plot(th_deg, allbeams[1],'--', c = plt.cm.jet(np.linspace(0,1,6))[::-1][4],
+           label=r'${:.1f}~$GHz'.format(freqs[1]/1e9))
+ax.plot(th_deg, allbeams[0]*sb_noprim(th_deg, freqs[0],0), 
+           c = plt.cm.jet(np.linspace(0,1,6))[::-1][0],
+           label=None, lw=2)
+ax.plot(th_deg, allbeams[1]*sb_noprim(th_deg, freqs[1],0),
+           c = plt.cm.jet(np.linspace(0,1,6))[::-1][4],
+           label=None, lw=2)
+ax.grid()
+ax.legend(loc='best',fontsize=13)
+ax.set_xlabel(r'$\theta$ [deg]', fontsize=18)
+ax.set_ylabel('Synthesized beam', fontsize=18)
+ax.set_xlim(-20, 20)
+ax.tick_params(axis='both',bottom=True, top=True, left=True, right=True,direction='in')
+
+ax.plot([14.7, 14.7], [-0.02, 0.2], 'k--')
+
+# Arrow for the first peak
+ax.annotate(' ', xy=(7.5,0.33), xytext=(-0.3,0.33), ha="center", va="center",
+            arrowprops=dict(arrowstyle="<->",), rotation=0)
+ax.text(4, 0.35, r"$\lambda/\Delta$", ha="center", va="center", fontsize=15)
+
+# Arrow for the second peak
+ax.tick_params(axis='both',bottom=True, top=True, left=True, right=True,direction='in')
+ax.annotate(' ', xy=(14.9,0.15), xytext=(-0.3,0.15), ha="center", va="center",
+            arrowprops=dict(arrowstyle="<->",), rotation=0)
+ax.text(5, 0.17, r"$2\lambda/\Delta$", ha="center", va="center", fontsize=15)
+
+fig.tight_layout()
+plt.savefig(save_dir + 'beam_cut_lambda.pdf')
+```
+
+```{python}
+color=iter(plt.cm.jet(np.linspace(0,1,6))[::-1] )
+sum_b = np.zeros((9,len(th_deg),) )
+NUNU=np.linspace(131e9, 169e9, 9)#[131e9,135e9,140e9,145e9,150e9,155e9,160e9,165e9,169e9]
+for j,inu in enumerate(NUNU):
+    d['filter_nu'] = NUNU[j]
+    q = qubic.QubicInstrument(d)
+    beam=q.primary_beam(np.radians(th_deg), ph)
+    sum_b[j]= beam*sb_noprim(th_deg, NUNU[j], 0)
+    #_, sum_b[j] = beam_total(th_deg, ph, inu*1e9, 0)
+    
+allbeams=np.zeros((2,nn))
+freqs=[NUNU[0],NUNU[8]]
+for i in range(2):
+    d['filter_nu'] = freqs[i]
+    q = qubic.QubicInstrument(d)
+    allbeams[i, :] = q.primary_beam(np.radians(th_deg), ph)
+
+fig = plt.figure(figsize=(10, 8))
+ax = fig.gca()
+
+sumleg = ax.plot(th_deg, np.sum(sum_b, axis=0), 'k', lw=2)
+blo = []
+for i in range(0, len(NUNU), 2):
+    blo += ax.plot(th_deg, sum_b[i], c=next(color))
+
+ax.set_xlabel(r'$\theta$ [deg]', fontsize=18)
+ax.set_ylabel('Arbitrary units', fontsize=18)
+ax.legend(sumleg, [r'PolySB'], fontsize=13, loc='upper left', )
+ax.set_xlim(-12, 12)
+
+# Create the second legend and add the artist manually.
+from matplotlib.legend import Legend
+leg = Legend(ax, blo[:], [r'MonoSB @${:.1f}~$GHz'.format(NUNU[0]/1e9),
+                             '\t \t ${:.1f}~$GHz'.format(NUNU[2]/1e9),
+                             '\t \t ${:.1f}~$GHz'.format(NUNU[4]/1e9),
+                             '\t \t ${:.1f}~$GHz'.format(NUNU[6]/1e9),
+                            '\t \t ${:.1f}~$GHz'.format(NUNU[8]/1e9)],
+            fontsize=13,loc='upper right', )
+leg._legend_box.align = "right"
+ax.add_artist(leg);
+ax.grid()
+ax.tick_params(axis='both',bottom=True, top=True, left=True, right=True,direction='in')
+fig.tight_layout()
+
+plt.savefig(save_dir + 'beam_cut_poly.pdf')
+```
+
+#### Sum the synthetic beams
 
 ```{python}
 nn = 10000
@@ -482,10 +575,6 @@ ax.set_xlabel('theta [deg]')
 ax.set_ylabel('Intensity (relative)')
 ax.legend(fontsize=13)
 ax.grid()
-```
-
-```{python}
-
 ```
 
 ```{python}

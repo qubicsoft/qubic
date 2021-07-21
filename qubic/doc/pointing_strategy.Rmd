@@ -44,6 +44,11 @@ rc('font', size=13)
 ```
 
 ```{python}
+# If you want to save some plots, choose the directory
+dir_save = '/home/lmousset/QUBIC/These_manuscrit/'
+```
+
+```{python}
 # Repository for dictionary
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir='../')
 dictfilename = global_dir + 'dicts/pipeline_demo.dict'
@@ -135,12 +140,16 @@ plt.plot(p.index, hwp0, 'b--', label='Not equally spaced')
 plt.xlabel('Pointing index')
 plt.ylabel('HWP angle [deg]')
 plt.legend()
-# plt.savefig('/home/lmousset/QUBIC/Notes_presentations/HWP_angle_regularly_spaced/6HWPangles.pdf', bbox_inches='tight')
+
 # import tikzplotlib as tkz
-# tkz.save('/home/lmousset/QUBIC/These_manuscrit/tikz/HWPangles.tex')
+#tkz.save(dir_save + '/tikz/HWPangles.tex')
 
 # Apply the changes 
-p.angle_hwp = hwp0
+#p.angle_hwp = hwp0
+```
+
+```{python}
+print(p.angle_hwp)
 ```
 
 ```{python}
@@ -207,15 +216,30 @@ for istokes in range(3):
 ```
 
 ```{python}
+np.invert(unseen)
+```
+
+```{python}
 # Only plot the residuals
 rr = 7
 stokes = ['I', 'Q', 'U']
-plt.figure(figsize=(12, 4))
+plt.figure(figsize=(12, 5.5))
+#plt.suptitle('Not equally spaced: 0°, 30°, 40°', fontsize=20)
+plt.suptitle('Equally spaced: 0°, 30°, 60°', fontsize=20)
 for istokes in range(3):
+    std = np.std(diff[np.invert(unseen), istokes])
+    print(std)
+    if istokes == 0:
+        min = -0.2
+        max = 0.2
+    else:
+        min = -0.05
+        max = 0.05
     hp.gnomview(diff[:, istokes], cmap='jet',rot=center, sub=(1,3,istokes+1), reso=rr,
-                title='Residuals ' + stokes[istokes], unit='$\mu K$', min=None, max=None)
+                title='Residuals ' + stokes[istokes] + f' - STD = {std:.4f}',
+                unit='$\mu K$', min=min, max=max, notext=True)
 plt.tight_layout()
-# plt.savefig('/home/lmousset/QUBIC/Notes_presentations/HWP_angle_regularly_spaced/residuals_6HWP_equal_space.pdf', bbox_inches='tight')
+plt.savefig(dir_save + 'Figures/Plots/HWP_0-30-60.pdf', bbox_inches='tight')
 ```
 
 ```{python}

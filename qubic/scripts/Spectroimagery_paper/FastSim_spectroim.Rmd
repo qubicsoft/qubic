@@ -69,9 +69,9 @@ d['nf_recon'] = nbands
 d['nf_sub'] = nbands
 
 # Sky
-sky_config = {'dust': 'd1'}
-# seed=42
-# sky_config = {'cmb': seed}
+# sky_config = {'dust': 'd1'}
+seed = 42
+sky_config = {'cmb': seed}
 
 Qubic_sky = qss.Qubic_sky(sky_config, d)
 # Maps are convolved at the QUBIC resolution in the band => Beam_correction=True when you make Cls
@@ -99,11 +99,11 @@ print(fwhms)
 ```
 
 ```{python}
-RA_center = 0. #deg
-DEC_center = -57. #deg
-center = qubic.equ2gal(RA_center, DEC_center)
+#RA_center = 0. #deg
+#DEC_center = -57. #deg
+#center = qubic.equ2gal(RA_center, DEC_center)
 
-qubic_coverage = np.load('../../doc/FastSimulator/Data/coverage_nfsub15_nptgs10000_qubicpatch.npy')
+qubic_coverage = np.load('../../data/FastSimulator_version01/DataFastSimulator_FI150Q_coverage.npy')
 hp.mollview(qubic_coverage)
 
 ```
@@ -115,10 +115,9 @@ npix = 12 * d['nside']**2
 noisemaps = np.zeros((nreals, nbands, npix, 3))
 
 for r in range(nreals):
-    noisemaps[r, ...], coverage = Qubic_sky.get_partial_sky_maps_withnoise(coverage=None,
+    noisemaps[r, ...], coverage = Qubic_sky.get_partial_sky_maps_withnoise(coverage=qubic_coverage,
                                                                            noise_only=True, 
-                                                                           spatial_noise=True,
-                                                                           old_config=old_config)
+                                                                           spatial_noise=True)
 hp.mollview(coverage)
 
 # Make maps QUBIC = noise + CMB
@@ -134,17 +133,21 @@ x0[:, unseen, :] = 0.
 ```
 
 ```{python}
+center[0]
+```
+
+```{python}
 Stokes = ['I', 'Q', 'U']
 real = 0
 band = 0
 
 for s in range(3):
     hp.gnomview(noisemaps[real, band,:,s], reso=20, sub=(3, 3, s+1), 
-                title='Noise ' + Stokes[s] + f' Sub {band}')   
+                title='Noise ' + Stokes[s] + f' Sub {band}', rot=center)   
     hp.gnomview(dust_map[band,:,s], reso=20, sub=(3, 3, s+3+1), 
-                title='CMB ' + Stokes[s] + f' Sub {band}')        
+                title='CMB ' + Stokes[s] + f' Sub {band}', rot=center)        
     hp.gnomview(qubicmaps[real, band,:,s], reso=20, sub=(3, 3, s+6+1), 
-                title='QUBIC map ' + Stokes[s] + f' Sub {band}')        
+                title='QUBIC map ' + Stokes[s] + f' Sub {band}', rot=center)        
 
 ```
 
@@ -189,6 +192,53 @@ sns.palplot(palet)
 
 ```{python}
 cross_thconv = np.zeros((ncombi, nbins, 4))
+
+# Map convolved => Beam correction
+# As the beam correction is different for each spectrum, we need to calculate the workspace w each time
+for i, (band1, band2) in enumerate(combi):
+    print(f'Bands {band1} {band2}')
+
+    beam_corr = np.sqrt(fwhms[band1] * fwhms[band2])
+    print(beam_corr)
+    map1 = dust_map[band1, :, :]
+    map2 = dust_map[band2, :, :]
+    leff, cross_thconv[i, :, :], w = Namaster.get_spectra(map1.T,
+                                                      mask_apo,
+                                                      None,
+                                                      w=None,
+                                                      purify_e=True,
+                                                      purify_b=False,
+                                                      beam_correction=beam_corr,
+                                                      pixwin_correction=True)
+
+
+
+# plot the spectra
+clnames = ['TT', 'EE', 'BB', 'TE']
+
+fig, axs = plt.subplots(2, 2)
+axs = axs.ravel()
+fig.suptitle('CMB only (r=0 with lensing)')
+for s in range(4):
+    ax = axs[s]
+    for cross in range(ncombi): 
+        c = palet[cross]       
+        ax.plot(leff, cross_thconv[cross, :, s], 'o', color=c)        
+
+    ax.set_xlabel('$\\ell$')
+    ax.set_ylabel('$D_\\ell$')
+#     ax.set_ylabel('$C_\\ell$')
+    ax.grid()
+       
+    ax.set_title(clnames[s])
+    
+plt.tight_layout()
+```
+
+### Check convolution
+
+```{python}
+cross_thconv = np.zeros((ncombi, nbins, 4))
 cross_x0 = np.zeros((ncombi, nbins, 4))
 
 # Map convolved => Beam correction
@@ -202,7 +252,7 @@ for i, (band1, band2) in enumerate(combi):
     map2 = dust_map[band2, :, :]
     leff, cross_thconv[i, :, :], w = Namaster.get_spectra(map1.T,
                                                       mask_apo,
-                                                      map2.T,
+                                                      None,
                                                       w=None,
                                                       purify_e=True,
                                                       purify_b=False,
@@ -272,11 +322,11 @@ save_dir = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/'
 ```{python}
 # Load spectra already done at CC
 datadir = os.environ['DATA_SPECTROIM']
-rep_spectrumCC = datadir + '/FastSimulator/cls_spectrum_fromCC/'
+rep_spectrumCC = datadir + '/FastSimulator/cls_spectrum_fromCC/v5/'
 
 nbands = 3
-name = f'cross_interband_samereal_nfrecon{nbands}_qubicmaps_' + config + '_v2_galaxycenter'
-cross_samereal = np.load(rep_spectrumCC + name + '.npy')
+name = f'IBCSsame_nfrecon{nbands}_qubicmaps_' + config + '_v5_qubicpatch.npy'
+cross_samereal = np.load(rep_spectrumCC + name)
 
 print(cross_samereal.shape)
 ```
@@ -346,10 +396,10 @@ We make Inter Band Cross Spectra (IBCS) mixing 2 independant noise realisations.
 
 ```{python}
 datadir = os.environ['DATA_SPECTROIM']
-rep_spectrumCC = datadir + '/FastSimulator/cls_spectrum_fromCC/'
+rep_spectrumCC = datadir + '/FastSimulator/cls_spectrum_fromCC/v5/'
 
 
-name = f'cross_interband_mixreal_nfrecon{nbands}_qubicmaps_' + config + '_v2_galaxycenter'
+name = f'IBCSmix_nfrecon{nbands}_qubicmaps_' + config + '_v5_qubicpatch'
 cross_mixreal = np.load(rep_spectrumCC + name + '.npy')
 
 print(cross_mixreal.shape)
@@ -422,7 +472,6 @@ plt.tight_layout()
 ## Plot for the paper: BB at 150 and 220
 
 ```{python}
-
 nbands = 3
 name150 = f'cross_interband_mixreal_nfrecon{nbands}_qubicmaps_FI150_v2_galaxycenter'
 BBmix150 = np.load(rep_spectrumCC + name150 + '.npy')[:, :, :, 2]

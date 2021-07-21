@@ -83,7 +83,7 @@ hp.mollview(cov)
 # Define the seen pixels
 seenpix = cov > 0.1#(np.max(cov)/1000)
 
-Qubic_sky, x0, maps_observed = make_maps(d, seenpix)
+Qubic_sky, x0, maps_observed = make_maps(d, seenpix, noise_level=0.2)
 print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0))
 
 stn = ['I', 'Q', 'U']
@@ -225,6 +225,71 @@ for i in range(4):
 plt.tight_layout()
 ```
 
+### Make a cross spectrum
+
+```{python}
+Qubic_sky1, _, maps_observed1 = make_maps(d, seenpix, seed=42, noise_level=0.2)
+Qubic_sky2, _, maps_observed2 = make_maps(d, seenpix, seed=42, noise_level=0.2)
+input_Dl = Qubic_sky1.input_cmb_spectra
+
+# Make an 2D array containing IQU maps, the shape must be (3, #pixels)
+maps1 = maps_observed1[0].T
+maps2 = maps_observed2[0].T
+
+# Get cross-spectra
+leff, cells_cross, w = Namaster.get_spectra(maps1, 
+                                      map2=maps2,
+                                      purify_e=True, 
+                                      purify_b=False, 
+                                      beam_correction=None,
+                                      pixwin_correction=None)
+```
+
+```{python}
+plt.figure(figsize=(8, 6))
+i = 2
+plt.plot(input_ell[lmin:lmax], input_Dl[lmin:lmax, i], label='Input spectrum')
+plt.plot(leff[:lmax], cells[:lmax, i],'ro', label='Auto-spectrum')
+plt.plot(leff[:lmax], cells_cross[:lmax, i],'bo', label='Cross-spectrum')
+plt.xlabel('$\\ell$', fontsize=18)
+plt.ylabel('$D_\\ell$', fontsize=18)
+plt.xticks(np.arange(0., 600, 100))
+plt.yticks(np.arange(0., 0.13, 0.02))
+plt.legend()
+plt.title(clnames[i])
+
+plt.savefig(f'/home/lmousset/QUBIC/These_manuscrit/Figures/Plots/Namaster_{clnames[i]}_auto-cross.pdf')
+#tkz.save(f'/home/lmousset/QUBIC/These_manuscrit/tikz/Namaster_{clnames[i]}_auto-cross.tex')
+```
+
+### Compare pure or not pure 
+
+```{python}
+# Get spectra
+leff, cells_pureB, w = Namaster.get_spectra(maps, 
+                                      purify_e=False, 
+                                      purify_b=True, 
+                                      beam_correction=None,
+                                      pixwin_correction=None)
+leff, cells_notpureB, w = Namaster.get_spectra(maps, 
+                                      purify_e=True, 
+                                      purify_b=False, 
+                                      beam_correction=None,
+                                      pixwin_correction=None)
+
+plt.figure()
+for i in range(4):
+    plt.subplot(2, 2, i+1)
+    plt.plot(input_ell[:lmax], input_Dl[:lmax, i])
+    plt.plot(leff[:lmax], cells_pureB[:lmax, i],'o', label='B pure')
+    plt.plot(leff[:lmax], cells_notpureB[:lmax, i],'o', label='B not pure')
+    plt.xlabel('$\\ell$')
+    plt.ylabel('$D_\\ell$')
+    plt.title(clnames[i])
+    plt.legend()
+plt.tight_layout()
+```
+
 ### Test the beam correction
 
 ```{python}
@@ -259,6 +324,23 @@ for i in range(4):
     plt.title(clnames[i])
     plt.legend()
 plt.tight_layout()
+```
+
+```{python}
+import tikzplotlib as tkz
+i = 0
+plt.figure(figsize=(8, 6))
+plt.plot(input_ell[lmin:lmax][::5], input_Dl[lmin:lmax, i][::5], label='Input spectrum')
+plt.plot(leff_nobeam[:lmax], cells_nobeam[:lmax, i], 'mo', label='No beam correction')
+plt.plot(leff_beam[:lmax], cells_beam[:lmax, i], 'go', label='With beam correction')
+plt.xlabel('$\\ell$', fontsize=18)
+plt.ylabel(f'$D_\\ell$', fontsize=18)
+plt.title(clnames[i])
+plt.legend()
+plt.tight_layout()
+
+plt.savefig(f'/home/lmousset/QUBIC/These_manuscrit/Figures/Plots/Namaster_{clnames[i]}.pdf')
+#tkz.save(f'/home/lmousset/QUBIC/These_manuscrit/tikz/Namaster_{clnames[i]}.tex')
 ```
 
 ### Test the pixwin correction
@@ -310,39 +392,81 @@ for i in range(4):
 plt.tight_layout()
 ```
 
+```{python}
+import tikzplotlib as tkz
+
+i = 0
+plt.figure(figsize=(8, 6))
+plt.plot(input_ell[lmin:lmax][::5], input_Dl[lmin:lmax, i][::5], label='Input spectrum')
+plt.plot(leff_nopw[:lmax], cells_nopw[:lmax, i], 'mo', label='No pixwin')
+plt.plot(leff_pw[:lmax], cells_pw[:lmax, i], 'go', label='With pixwin')
+plt.xlabel('$\\ell$', fontsize=18)
+plt.ylabel(f'$D_\\ell$', fontsize=18)
+plt.title(clnames[i])
+plt.legend()
+plt.tight_layout()
+
+plt.savefig(f'/home/lmousset/QUBIC/These_manuscrit/Figures/Plots/Namaster_{clnames[i]}_pixwin.pdf')
+#tkz.save(f'/home/lmousset/QUBIC/These_manuscrit/tikz/Namaster_{clnames[i]}_pixwin.tex')
+```
+
 ### Do many realisations
 
 
 ```{python}
 # Do many realizations, same CMB (seed=42) but random noise realisations
-nsim = 4
+nsim = 20
 nsim_cells = []
+nsim_cells_nobeam = []
 for sim in range(nsim):
     Qubic_sky, x0, maps_observed = make_maps(d, seenpix, seed=42, noise_level=0.2)
+    input_Dl = Qubic_sky.input_cmb_spectra
     maps = maps_observed[0].T
-    leff, cells, w = Namaster.get_spectra(maps, purify_e=True, purify_b=False, beam_correction=None)
+    maps = hp.sphtfunc.smoothing(maps, fwhm=np.deg2rad(d['synthbeam_peak150_fwhm']))
+
+    leff, cells, w = Namaster.get_spectra(maps, purify_e=True, purify_b=False, 
+                                          beam_correction=True, pixwin_correction=False)
+    _, cells_nobeam, w = Namaster.get_spectra(maps, purify_e=True, purify_b=False, 
+                                          beam_correction=False, pixwin_correction=False)
     nsim_cells.append(cells)
+    nsim_cells_nobeam.append(cells_nobeam)
 nsim_cells = np.array(nsim_cells)
+nsim_cells_nobeam = np.array(nsim_cells_nobeam)
 print(nsim_cells.shape)
 ```
 
 ```{python}
 mean_cells = np.mean(nsim_cells, axis=0)
 std_cells = np.std(nsim_cells, axis=0)
+mean_cells_nobeam = np.mean(nsim_cells_nobeam, axis=0)
+std_cells_nobeam = np.std(nsim_cells_nobeam, axis=0)
 print(mean_cells.shape)
 
 clnames = ['TT', 'EE', 'BB', 'TE']
+
+```
+
+```{python}
 
 for i in range(4):
     plt.subplot(2, 2, i+1)
     plt.plot(input_ell[:lmax], input_Dl[:lmax, i], label='Input spectra')
     plt.errorbar(leff[:lmax], mean_cells[:lmax, i], std_cells[:, i], fmt='m.', label='Reconstructed Dls')
+    plt.errorbar(leff[:lmax], mean_cells_nobeam[:lmax, i], std_cells_nobeam[:, i], fmt='g.', label='No beam')
+
 #     plt.plot(leff, mean_cells[:, i], 'o', label='No correction')
     plt.xlabel('$\\ell$')
     plt.ylabel('$D_\\ell$')
     plt.title(clnames[i])
     plt.legend()
 plt.tight_layout()
+```
+
+```{python}
+xx = np.arange(0, 100, 0.1)
+plt.figure()
+plt.plot(xx, np.exp(-(xx-50)**2/150), 'r', lw=2)
+
 ```
 
 ```{python}

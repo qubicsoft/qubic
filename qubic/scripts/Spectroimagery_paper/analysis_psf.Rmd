@@ -52,6 +52,7 @@ from lmfit import Model
 from astropy.io import fits
 
 import qubic
+import qubic.fibtools as ft
 from qubicpack.utilities import Qubic_DataDir
 
 import AnalysisPSF as anpsf
@@ -170,11 +171,11 @@ def read_run(jobid, repo=None, fixpar=True):
 ```
 
 ```{python}
-dictshift = {'34245779': -23, '34245774': -21,#'34145323':-19,'34145299':-17, 
+dictshift = {'34245779': -23, #'34245774': -21,#'34145323':-19,'34145299':-17, 
              '33409471':-15,'33409418':-13, #'33130322':-11,'33130175':-9,
-             '32832344':-7, '33130311':-5, #'32759969':-4,'32759907':-3, 
+             '32832344':-7, #'33130311':-5, #'32759969':-4,'32759907':-3, 
              '32574156':-2, '32574178':-1,#'32574170':0, '32759934': 1,
-             '32574174': 2, '32759973':3, #'33130307':5, '32832346':7, 
+             '32574174': 2, #'32759973':3, #'33130307':5, '32832346':7, 
              '33130149':9,'33130316':11}#, '33409459':13,'33409482':15}
 
 jobids = list(dictshift.keys())
@@ -209,8 +210,8 @@ for ishift in dictshift.values():
 ```{python}
 #Read for Nrec = 5. Simulations are different so we have another files.
 #FI
-dictshift_5sb = {'42904592': -17, '43012239':-15, '43015130': -13, '43015132':-11,
-                '43015140':-9, '43015155':-3, '43015161':-1, '43117112':0,
+dictshift_5sb = {'42904592': -17, '43012239':-15, '43015130': -13, #'43015132':-11,
+                '43015140':-9, '43015155':-3, '43015161':-1, #'43117112':0,
                 '43117144':1, '43117145':3, '43117146':5}
 #TD with low tol (1e-3)
 #dictshift_5sb = {'43427945':-11,
@@ -360,8 +361,40 @@ def plotcircle(c, r, color=None,lw=None, ls=None):
     nn = 100
     ang = np.linspace(0,2*np.pi, nn)
     plot(c[0]+r*np.cos(ang), c[1]+r*np.sin(ang), color=color)
+
+def aperture_photometry(img, centers, rads, doplot=False, stampsize=25, magnitude_zero=0, cmap='gray_r', subs=True):
+    npix = np.shape(img)[0]
+    xx,yy = np.meshgrid(np.arange(npix), np.arange(npix))
+    nobjects = np.shape(centers)[0]
+    flux = np.zeros(nobjects)
+    err_flux = np.zeros(nobjects)
+    nsq = int(np.ceil(np.sqrt(nobjects)))
+    for i in range(nobjects):
+        c = centers[i,:]
+        inner_pix = np.sqrt((xx-c[0])**2+(yy-c[1])**2) < rads[0]
+        outer_pix = (np.sqrt((xx-c[0])**2+(yy-c[1])**2) > rads[0]) & (np.sqrt((xx-c[0])**2+(yy-c[1])**2) < rads[1])
+        Nin = inner_pix.sum()
+        Nout = outer_pix.sum()
+        #bg = np.mean(img[outer_pix])
+        bg = np.median(img[outer_pix])
+        sigbg = np.std(img[outer_pix])/np.sqrt(Nout)
+        flux[i] = np.sum(img[inner_pix])-bg*inner_pix.sum()
+        err_flux[i] = np.std(img[outer_pix]) * np.sqrt(Nin * (1+Nin*1./Nout))
     
-def aperture_photometry(img, centers, rads, plot=False, stampsize=25, 
+        if doplot:
+            if subs:
+                plt.subplot(nsq,nsq,i+1)
+            plt.imshow(img, cmap=cmap, vmin=-5*np.std(img), vmax=5*np.std(img), origin='lower')
+            #plt.colorbar()
+            plt.xlim(c[0]-stampsize, c[0]+stampsize)
+            plt.ylim(c[1]-stampsize, c[1]+stampsize)
+            plotcircle(c, rads[0], color='r', lw=2)
+            plotcircle(c, rads[1], color='r', lw=2)
+    mag = -2.5*np.log10(flux) + magnitude_zero
+    err_mag = 2.5/np.log(10.) * err_flux/flux
+    return flux, err_flux, mag, err_mag
+
+def aperture_photometry_2(img, centers, rads, plot=False, stampsize=25, 
                         magnitude_zero=0, cmap='gray_r', subs=True):
     """
     aperture photometry
@@ -402,11 +435,13 @@ def aperture_photometry(img, centers, rads, plot=False, stampsize=25,
     mag = -2.5*np.log10(flux) + magnitude_zero
     err_mag = 2.5/np.log(10.) * err_flux/flux
     return flux, err_flux, mag, err_mag
+
+def mygaussian(x, pars, extra_args=None):
+    return pars[0]+pars[1]*np.exp(-0.5*(x-pars[2])**2/pars[3]**2)
 ```
 
 ```{python}
-import qubic.fibtools as ft
-nsimu = 7 #0-10
+nsimu = 6 #0-10
 nrec = '5'
 if nrec == '5':
     cov = allcov_5sb[nsimu][nrec][0]
@@ -415,6 +450,7 @@ else:
     cov = allcov[nsimu][nrec][0]
     map2use = allrecon[nsimu][nrec][0]
 data_array = locals()['data_{}bands'.format(int(nrec))]
+print("Point source placed at {:.2f} GHz".format(data_array['nu_in'][nsimu]))
 
 okpix = cov > 0.3
 all_maps_recon_custom_new_cut = np.array(map2use).copy()
@@ -438,26 +474,34 @@ tight_layout()
 ```
 
 ```{python}
-def mygaussian(x, pars, extra_args=None):
-    return pars[0]+pars[1]*np.exp(-0.5*(x-pars[2])**2/pars[3]**2)
-
 mycenter = np.reshape(np.array([98.,100.]), (1,2))
-radius = np.array([10, 18, 40]) #* reso
+radius = np.array([12, 30, 40]) #* reso
 locals()['flux_{}sb'.format(int(nrec))] = np.zeros(len(maps))
 locals()['err_flux_{}sb'.format(int(nrec))] = np.zeros(len(maps))
+fracmc = 0.7
+sh = np.shape(maps[0])
+nbmc = 1000
+rndcenters = (np.random.rand(nbmc,2)-0.5)*(sh[0]*fracmc,sh[1]*fracmc)+mycenter
+mcflux = np.zeros((len(maps), nbmc))
 
-figure(figsize = (12, 6))
+fig = plt.figure(figsize = (12, 6))
 for i in range(len(maps)):
-    subplot(1,5,i+1)
+    plt.subplot(1,5,i+1)
     flux_bands = locals()['flux_{}sb'.format(int(nrec))]
     err_flux_bands = locals()['err_flux_{}sb'.format(int(nrec))]
     
     flux_bands[i], err_flux_bands[i], mag, err_mag = aperture_photometry(maps[i], mycenter, 
                                                                          radius, subs=False,
-                                                             plot=True, stampsize=100, 
+                                                             doplot=True, stampsize=100, 
                                                              magnitude_zero=0, cmap=None)
-    title('nu=[{0:5.1f},{1:5.1f}]'.format(data_array['nu_edge'][i], data_array['nu_edge'][i+1]))
-tight_layout()
+    plt.title('nu=[{0:5.1f},{1:5.1f}]'.format(data_array['nu_edge'][i], data_array['nu_edge'][i+1]))
+    mcflux[i,:], _, mag, err_mag = aperture_photometry(maps[i], rndcenters, radius)
+
+covar = np.cov(mcflux)
+
+err_flux = np.sqrt(np.diag(covar))
+
+fig.tight_layout()
 
 nus = 0.5*(data_array['nu_edge'][1:] + data_array['nu_edge'][:-1])
 dnu = 0.5*(data_array['nu_edge'][1:] - data_array['nu_edge'][:-1])
@@ -471,18 +515,18 @@ fitg = ft.do_minuit(data_array['nu_rec'][flux_bands>0], flux_bands[flux_bands>0]
 xxx = np.linspace(130, 170, 100)
 #print(fitg[1])
 #print(fitg[2])
-figure()
-errorbar(data_array['nu_rec'], flux_bands, yerr = err_flux_bands, xerr = dnu, fmt = 'ro')
-plot(xxx, mygaussian(xxx, fitg[1]), 
+fig = plt.figure()
+plt.errorbar(data_array['nu_rec'], flux_bands, yerr = err_flux, xerr = dnu, fmt = 'ro')
+plt.plot(xxx, mygaussian(xxx, fitg[1]), 
      label=r'$\nu_0$={0:5.1f} +/- {1:5.1f} ; $\sigma$={2:5.1f} +/- {3:5.1f}'.format(fitg[1][2], 
                                                                                     fitg[2][2], 
                                                                                     fitg[1][3], 
                                                                                     fitg[2][3]))
-axhline(y = 0, color = 'k', ls = '--')
-xlabel('Frequency')
-ylabel('Source Flux')
-#ylim(-1.5, 3)
-legend()
+plt.axhline(y = 0, color = 'k', ls = '--')
+plt.xlabel('Frequency')
+plt.ylabel('Source Flux')
+#plt.ylim(-1.5, 3)
+plt.legend()
 ```
 
 *Sub-band profile*. Plot intensity for all simulations for the pixel in a given sub-band in function of thefrequency of the point source $\nu_{in}$. The maximum should correspond when the distance between the center of the sub-band $\nu_{jc}$ and the position (in frequency) of the point source is minimum.
@@ -793,19 +837,44 @@ yerr_4bands = np.array([0.08498496, 0.04851621, 0.06261273, 0.03330611])
 xerr_4bands = np.array([4.25540829, 4.53134733, 4.82517946, 5.13806492])
 
 nusrec_5bands = np.array([134.63280448, 141.57278853, 148.8705114 , 156.54441361, 164.61388627])
-measure_5bands = np.array([-0.19074754,  0.22935422,  1.74554219,  1.1064823,  -0.29887334])
-yerr_5bands = np.array([0.12271266, 0.06431844, 0.0779164,  0.06629246, 0.05168779])
+measure_5bands = np.array([-1.7562727 ,  1.00363683,  3.51598014,  2.43479479, -1.67414293])
+yerr_5bands = np.array([1.26703809, 0.77269316, 1.14306026, 0.94277431, 1.10237627])
 xerr_5bands = np.array([3.38280448, 3.55717958, 3.74054328, 3.93335893, 4.13611373])
+#OLD: measure_5bands = np.array([-0.19074754,  0.22935422,  1.74554219,  1.1064823,  -0.29887334])
+#OLD: yerr_5bands = np.array([0.12271266, 0.06431844, 0.0779164,  0.06629246, 0.05168779])
 
+
+ 
 #measure_5bands /= np.max(measure_5bands)
 #yerr_5bands /= np.max(yerr_5bands)
+```
+
+```{python}
+def spline_fit(xv, a0, extra_args = None):
+    splmodel = data_5bands['SplFunc']
+    return a0 + splmodel(xv)
+```
+
+```{python}
+covar = np.array([[ 1.60538553, -0.52502133, -1.04703485, -0.46545794,  0.49917802],
+       [-0.52502133,  0.59705472,  0.37044056, -0.12924891, -0.13888477],
+       [-1.04703485,  0.37044056,  1.30658675,  0.62081814, -0.97352076],
+       [-0.46545794, -0.12924891,  0.62081814,  0.8888234 , -0.70385843],
+       [ 0.49917802, -0.13888477, -0.97352076, -0.70385843,  1.21523345]])
+
+guess = np.array([-0.5 ])
+fitg = ft.do_minuit(nusrec_5bands, measure_5bands, covar, guess, functname=spline_fit, fixpars=[0,])
+```
+
+```{python}
+fitg[2]
 ```
 
 ```{python}
 # Spline fitting
 nbspl = 13
 tdblock = False
-sims = True
+sims = False
 data_array = locals()['data_{}bands'.format(nrec)]
 nu0 = data_array['nu_in'][nsimu]
 measure_bands = locals()['measure_{}bands'.format(nrec)]
@@ -814,7 +883,7 @@ xerr_bands = locals()['xerr_{}bands'.format(nrec)]
 # Plot
 fig, ax = plt.subplots(nrows = 1, ncols = 1, figsize = (8, 4))
 ax.set_xlim(130, 170)
-ax.set_ylim(-0.3,1.2)
+ax.set_ylim(-0.5,1.2)
 ax.set_xlabel(r"$(\nu - \nu_{in} + \nu_0)~[GHz]$", fontsize = 14)
 ax.set_ylabel(r"$S/S_{max}$", fontsize = 14)
 

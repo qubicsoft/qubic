@@ -3,7 +3,6 @@ from __future__ import division, print_function
 import glob
 import numpy as np
 import pandas as pd
-import healpy as hp
 
 from scipy.interpolate import RegularGridInterpolator
 from scipy.integrate import dblquad
@@ -12,6 +11,7 @@ import scipy.optimize as sop
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+import qubic
 from qubicpack.pixel_translation import tes2index, make_id_focalplane
 
 __all__ = ['Model_Fringes_QubicSoft', 'Model_Fringes_Maynooth']
@@ -45,7 +45,7 @@ def plot_baseline(q, bs, ax=None):
 
 
 def scatter_plot_FP(q, x, y, FP_signal, frame, fig=None, ax=None,
-                    s=None, title=None, unit='[W / Hz]', cbar=True, fontsize=14, tikz=np.arange(-0.06, 0.09, 0.03), **kwargs):
+                    s=None, title=None, unit='[W / Hz]', cbar=True, fontsize=14, config='FI', **kwargs):
     """
     Make a scatter plot of the focal plane.
     Parameters
@@ -84,6 +84,10 @@ def scatter_plot_FP(q, x, y, FP_signal, frame, fig=None, ax=None,
     ax.set_xlabel(f'X_{frame} [m]', fontsize=fontsize)
     ax.set_ylabel(f'Y_{frame} [m]', fontsize=fontsize)
     ax.axis('square')
+    if config=='FI':
+        tikz = np.arange(-0.06, 0.09, 0.03)
+    else:
+        tikz = np.arange(-0.06, 0.03, 0.03)
     ax.xaxis.set_ticks(tikz)
     ax.yaxis.set_ticks(tikz)
     ax.set_title(title, fontsize=fontsize)
@@ -133,7 +137,7 @@ def pcolor_plot_FP(q, x, y, FP_signal, frame, title=None, fig=None, ax=None, cba
     return
 
 
-def plot_horn_and_FP(q, x, y, FP_signal, frame, s=None, title=None, unit='[W / Hz]', **kwargs):
+def plot_horn_and_FP(q, x, y, FP_signal, frame, s=None, title=None, unit='[W / Hz]', config='FI', **kwargs):
     """
     Plot the horn array in GRF and a scatter plot of the focal plane in GRF or ONAFP.
     See scatter_plot_FP()
@@ -144,7 +148,7 @@ def plot_horn_and_FP(q, x, y, FP_signal, frame, s=None, title=None, unit='[W / H
     fig.subplots_adjust(wspace=0.3)
 
     plot_horns(q, ax=ax0)
-    scatter_plot_FP(q, x, y, FP_signal, frame, s=s, fig=fig, ax=ax1, unit=unit, **kwargs)
+    scatter_plot_FP(q, x, y, FP_signal, frame, s=s, fig=fig, ax=ax1, unit=unit, config=config, **kwargs)
 
     return
 
@@ -188,6 +192,32 @@ def open_switches(q, switches):
     for i in switches:
         q.horn.open[i - 1] = True
 
+
+def horn_index_TD2FI(hornTD, d):
+    """
+    Convert a TD hor index to the FI horn index.
+    Parameters
+    ----------
+    hornTD: int
+        TD horn index, from 1 to 64.
+    d: a qubic dictionary
+
+    Returns
+    -------
+    The FI horn index.
+    """
+    if hornTD < 1 or hornTD > 64:
+        raise ValueError('The horn TD index must be between 1 and 64.')
+
+    d['config'] = 'TD'
+    qTD = qubic.QubicInstrument(d)
+
+    d['config'] = 'FI'
+    qFI = qubic.QubicInstrument(d)
+
+    hornTD_center = qTD.horn.center[hornTD - 1]
+    hornFI = np.where(np.all(qFI.horn.center == hornTD_center, axis=1))[0][0] + 1
+    return hornFI
 
 def get_TEScoordinates_ONAFP(q):
     """
@@ -355,8 +385,20 @@ def make_position(xmin, xmax, reso, focal_length):
 
 
 def give_bs_pars(q, bs, frame='GRF'):
-    """Find orientation angle and length for a baseline."""
+    """
+    Find orientation angle and length for a baseline.
+    Parameters
+    ----------
+    q: QUBIC instrument
+    bs: list
+        Baseline.
+    frame: str
+        Reference frame: GRF or ONAFP.
 
+    Returns
+    -------
+    theta, length, xycenter
+    """
     # X, Y coordinates of the 2 horns in GRF or ONAFP.
     if frame == 'ONAFP':
         hc = get_horn_coordinates_ONAFP(q)
@@ -929,7 +971,7 @@ class Model_Fringes_Ana:
         ----------
         q: QubicInstrument
         baseline: list
-            Baseline formed with 2 horns, index between 1 and 64 as on the instrument.
+            Baseline formed with 2 horns, index between 1 and 64 as on the TD instrument.
         theta_source: float
             The source zenith angle [rad].
         phi_source: float
@@ -982,13 +1024,13 @@ class Model_Fringes_Ana:
         return self.gaussian
 
     def get_fringes(self, times_gaussian=True):
-        if times_gaussian:
-            gaussian = self.make_gaussian()
-        else:
-            gaussian = 1.
+
         xprime = (self.x * np.cos(self.BL_angle) + self.y * np.sin(self.BL_angle))
         interfrange = self.lam * self.focal / self.BL_length
-        self.fringes = self.amp * np.cos((2. * np.pi / interfrange * xprime) + self.phase) * gaussian
+        self.fringes = self.amp * np.cos((2. * np.pi / interfrange * xprime) + self.phase)
+        if times_gaussian:
+            gaussian = self.make_gaussian()
+            self.fringes *= gaussian
 
         return self.x, self.y, self.fringes
 

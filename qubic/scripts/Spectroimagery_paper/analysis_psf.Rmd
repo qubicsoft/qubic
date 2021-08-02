@@ -382,6 +382,21 @@ parsfwhm_diff = list(result_fwhm_diff.best_values.values())
 ```
 
 ```{python}
+cal_df.keys()
+```
+
+```{python}
+#plt.plot(cal_df['frequencies'], cal_df["delta_fwhm"], 'k-')
+plt.plot(cal_df['frequencies'], cal_df["fwhm_th"], 'ro-', alpha= 0.5)
+plt.plot(cal_df['frequencies'], cal_df["fwhm_mes"], 'ro-')
+plt.quiver([cal_df['frequencies'][0]],
+           [cal_df["fwhm_mes"][0]],
+           [0],
+          [cal_df["fwhm_th"][0] - cal_df["fwhm_mes"][0] ])
+#plt.axhline(hp.nside2resol(512, arcmin = True) / 60, ls = "--", c = "k")
+```
+
+```{python}
 fig,ax = plt.subplots(nrows = 1, ncols = 1, figsize = (8, 5))
 
 plt.rc('font', size = 14)
@@ -421,13 +436,17 @@ qreso = lambda nu : d['synthbeam_peak150_fwhm'] * 150 / nu * 60
 print("nside \t hpreso r@130 \t r@140 \t r@150 \t r@160 \t r@170 \t r@190 \t r@210 \t r@230 \t r@250 " )
 for i in [8,16,32,64,128,256,512]:
     resol = hp.nside2resol(i, arcmin = True)
-    print("{} \t {:.1f} \t {:.1f} \t {:.1f} \t {:.1f} \t {:.1f} \t {:.1f}\
-     \t {:.1f} \t {:.1f} \t {:.1f} \t {:.1f}".format(i, resol, 
-                                                    qreso(130)/resol, qreso(140)/resol,
+    print("{} \t {:5.1f} \t {:.1f} \t {:.1f} \t {:.1f} \t {:.1f} \t {:.1f}\
+     {:.1f} \t {:.1f} \t {:.1f} \t {:.1f}".format(i, resol, 
+                                          qreso(130)/resol, qreso(140)/resol,
                                           qreso(150)/resol, qreso(160)/resol,
-                                          qreso(170)/resol, #qreso(180)/resol,
-                                          qreso(190)/resol, qreso(210)/resol,
-                                          qreso(230)/resol, qreso(250)/resol,))
+                                          qreso(170)/resol, qreso(190)/resol, 
+                                                  qreso(210)/resol, qreso(230)/resol, 
+                                                  qreso(250)/resol,))
+```
+
+```{python}
+
 ```
 
 ```{python}

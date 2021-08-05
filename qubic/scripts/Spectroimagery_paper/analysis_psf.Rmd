@@ -111,11 +111,13 @@ nf_recon = d['nf_recon'][0]
 ```{python}
 # Generate parameters to use. Up to now we reconstruct with only 4 sub-bands, so
 nusfull = {}
+nusedges = {}
 
-_, _, nus_recon, _,_,_ = qubic.compute_freq(d['filter_nu']/1e9, Nfreq = nf_recon, 
+_, nus_recon_edges, nus_recon, _,_,_ = qubic.compute_freq(d['filter_nu']/1e9, Nfreq = nf_recon, 
                    relative_bandwidth = d['filter_relative_bandwidth'])
 
 nusfull.update({'4': nus_recon})
+nusedges.update({'4': nus_recon_edges})
 
 # Center
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
@@ -292,6 +294,7 @@ def fwhm_from_maps(d, maps, nus, x, center,
     fwhmMeasured = np.zeros((len(arrMapsRec), NFREQ)) 
     
     result_fits = []
+    varx, vary = [], []
     for j_c, maps_recon_i in enumerate(arrMapsRec):
         for j, imap in enumerate(maps_recon_i):
             s0map = hp.gnomview(imap.T[0] / 1e5, rot = center, reso = reso,
@@ -315,6 +318,8 @@ def fwhm_from_maps(d, maps, nus, x, center,
             fwhmMeasured[j_c, j] = fwhm_s0
             
             result_fits.append(result_s0)
+            varx.append(result_s0.best_values['varx'])
+            vary.append(result_s0.best_values['vary'])
             if verbose: print('Done {}/{}, fwhm = {}'.format(j + 1, len(arrMapsRec[0]), fwhm_s0))
     if verbose: print('All done in {:.4f} seconds'.format((time.time() - t1) ) )
         
@@ -322,7 +327,9 @@ def fwhm_from_maps(d, maps, nus, x, center,
     d_data = {'frequencies': nus, 
               'fwhm_th': np.array(d['synthbeam_peak150_fwhm'] * 150 / nus),
              'fwhm_mes': fwhmMeasured[0],
-             'delta_fwhm': diff_fwhm}
+             'delta_fwhm': diff_fwhm,
+             'varx': np.array(varx),
+             'vary': np.array(vary)}
     
     df_data = pd.DataFrame(data = d_data)
     
@@ -418,17 +425,24 @@ ax.plot(nusfull["4"],
         color = 'r', marker = '*', ls = "", ms = 10,
         label = 'FWHM')
 
-ax.plot(nusfull["4"], fwhmTh(nusfull["4"]), 
-        color = 'b', marker = 'o', ms = 10, alpha = 0.5, ls = "",
+ax.plot(nusfull["4"], fwhmTh(nusfull["4"]),#  yerr = np.diff(fwhmTh(nusedges['4']))/2,
+        color = 'b', marker = 'o', ms = 10, alpha = 0.5, ls = "",# capsize = 5,
         label = 'FWHM theoretical')
 
+ax.set_xlim(nusedges['4'][0], nusedges['4'][-1])
 ax.legend(fontsize = 14)
 ax.tick_params(axis = 'both', bottom = True, top = True, 
                left = True, right = True, direction = 'in')
 ax.grid()
 #
 plt.tight_layout() #makes subplots nicely fit in the figure.
-plt.savefig('Angular-Resolution_reso{}_nside{}.pdf'.format(reso, nsidecal), format = 'pdf')
+#plt.savefig('Angular-Resolution_reso{}_nside{}.pdf'.format(reso, nsidecal), format = 'pdf')
+```
+
+```{python}
+print("Elipticidad")
+#(data_df['varx'] - data_df['vary']) / (data_df['varx'] + data_df['vary']) 
+print(1 - data_df['vary'] / data_df['varx'])
 ```
 
 ```{python}

@@ -677,7 +677,8 @@ def make_fit_SED(xSED, xarr, Imvals, Isvals, FuncModel, fgr_map_ud, pixs_ud, nf_
 	return ySED_fit, Pmean, Perr
 
 def _plot_exampleSED(dictionary, center, nus_out, maskmaps, mapsarray = False, 
-					DeltaTheta = 0, DeltaPhi = 0, savefig = False, set_logscale = False):
+					DeltaTheta = 0, DeltaPhi = 0, savefig = False, set_logscale = False,
+					newnside = None):
 
 	"""
 	Plot an example of Figure 10 (map + SED ) in paper 1

@@ -619,7 +619,7 @@ class SbModelIndepPeaks:
         if verbose:
             self.print_start()
 
-    def __call__(self, x, mypars, return_peaks=False):
+    def __call__(self, x, mypars, return_peaks=False, extra_args = None):
         # t0 = time.time()
         # self.ncalls += 1
         # print('Call #{0} - {1:5.2f} ms '.format(self.ncalls, 1000*(t0-self.time)))

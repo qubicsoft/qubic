@@ -4,8 +4,8 @@ jupyter:
     text_representation:
       extension: .Rmd
       format_name: rmarkdown
-      format_version: '1.1'
-      jupytext_version: 1.2.1
+      format_version: '1.2'
+      jupytext_version: 1.6.0rc0
   kernelspec:
     display_name: Python 3
     language: python
@@ -50,7 +50,7 @@ import pandas as pd
 ```{python}
 # Get the data
 freq_source = 130
-dirfiles = Qubic_DataDir(datafile='allTES_flat_{}.pdf'.format(freq_source))
+dirfiles = "/home/mgamboa/qubic/QUBIC/qubiccalibration/Data/150GHz-2019-04-06/"
 print('dirfiles :', dirfiles)
 
 # dirfreq = '150GHz-2019-04-06/'

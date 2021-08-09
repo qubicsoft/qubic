@@ -90,20 +90,21 @@ print(len(keys_sym))
 ```
 
 ```{python}
-#dirfreq = '150GHz-2019-04-06/'
-#dirallfreqs = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/'
-#dirfiles = dirallfreqs+dirfreq
-#dirsave = '/Users/hamilton/Qubic/Calib-TD/Synthesized_beams_fits/'+dirfreq
-#dir_sym = '/Users/hamilton/Qubic/Calib-TD/Synthesized_beams_fits/'+dirfreq
-#dir_asym = '/Users/hamilton/Qubic/Calib-TD/Synthesized_beams_fits/'+dirfreq
-
-dirallfreqs = os.environ["QUBIC_TODDIR"]
-dirfreq = '150GHz-2019-04-06/'
-dirfiles = dirallfreqs + dirfreq
-dirsave = dirallfreqs + dirfreq + "FitSB/"
-dir_sym = dirallfreqs + dirfreq + "FitSB/"
-dir_asym = dirallfreqs + dirfreq + "FitSB/"
-
+machine = os.uname()[1]
+if (machine=='apcdhcp52.in2p3.fr') or (machine=='MacJCH-2.local'):
+    dirfreq = '150GHz-2019-04-06/'
+    dirallfreqs = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/'
+    dirfiles = dirallfreqs+dirfreq
+    dirsave = '/Users/hamilton/Qubic/Calib-TD/Synthesized_beams_fits/'+dirfreq
+    dir_sym = '/Users/hamilton/Qubic/Calib-TD/Synthesized_beams_fits/'+dirfreq
+    dir_asym = '/Users/hamilton/Qubic/Calib-TD/Synthesized_beams_fits/'+dirfreq
+elif machine == "hain":
+    dirfreq = '150GHz-2019-04-06/'
+    dirallfreqs = '/home/martin/QUBIC/qubiccalibration/Data/Calib-TD/'
+    dirfiles = dirallfreqs+dirfreq
+    dirsave = dirfiles + "FitSB"
+    dir_sym = dirsave
+    dir_asym = dirsave
 print(dirallfreqs, "\n",dirfreq, "\n",dirfiles, "\n",dirsave)
 ```
 

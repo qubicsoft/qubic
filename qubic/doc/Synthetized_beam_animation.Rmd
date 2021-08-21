@@ -40,13 +40,15 @@ from qubicpack.pixel_translation import make_id_focalplane, tes2index
 ```
 
 ```{python}
+# If you want to save plots, set the directory here
+save_dir = '/home/lmousset/QUBIC/These_manuscrit/Figures/Plots/'
+```
+
+```{python}
 # Dictionary
 d = qubic.qubicdict.qubicDict()
 d.read_from_file('pipeline_demo.dict')
-
-# d.read_from_file(dictfilename)
 d['config'] = 'TD'
-
 d['synthbeam_kmax'] = 3
 
 # Instrument and scene
@@ -59,65 +61,30 @@ s = qubic.QubicScene(d)
 ```{python}
 sb = q.get_synthbeam(s, idet=None, external_A=None, hwp_position=0)
 print(sb.shape)
-```
 
-#### Coordinates of the peaks (spherical coordinates in radian) for each TES
-
-```{python}
 kmax = d['synthbeam_kmax']
 npeaks = (2 * kmax + 1)**2
+```
 
-horn_spacing = q.horn.spacing
-horn_angle = q.horn.angle
-nu = d['filter_nu']
+## Order the detectors in four regions as a function of the main peak 
 
-position_TES = q.detector.center
-
-# Coordinate on a simple grid
-theta, phi = q._peak_angles_kmax(kmax, horn_spacing, horn_angle, nu, position_TES)
-print(theta[0])
-
-# Coordinates ordered from highest intensity to the smallest one
-theta_order, phi_order, val = q._peak_angles(s, nu, q.detector.center, q.synthbeam, q.horn, q.primary_beam)
+```{python}
+# detector_type=[]
+# for l1 in allmain_peaks:
+#     for j, l2 in enumerate(allmain_peaks):
+#         if l1 == l2:
+#             detector_type.append(j)
+#             break  
+            
 
 ```
 
 ```{python}
-# Plot
-TES = 2
-
-# plt.figure(figsize=(8, 8))
-# plt.axis('off')
-hp.gnomview(sb[TES], min=0, max=1e5, rot=(0, 90), reso=30, title='Grid numbering')
-for p in range(npeaks):
-    th = theta[TES, p]
-    ph = phi[TES, p]
-#     hp.visufunc.projscatter(th, ph, color='w', marker='+')
-    hp.visufunc.projtext(th-0.02, ph-0.02, str(p), color='w', fontsize=14)
-
-# plt.figure(figsize=(8, 8))
-# plt.axis('off')
-hp.gnomview(sb[TES], min=0, max=1e5, rot=(0, 90), reso=30, title='Intensity numbering')
-for p in range(npeaks):
-    th2 = theta_order[TES, p]
-    ph2 = phi_order[TES, p]
-#     hp.visufunc.projscatter(th2, ph2, color='w', marker='+')
-    hp.visufunc.projtext(th2+0.02, ph2+0.02, str(p), color='w', fontsize=14)
-```
-
-#### Print on the sky the motion of the one peak for all TES 
-
-```{python}
-# Choose a peak
-p = 30
-hp.gnomview(sb[200] * 0., min=0, max=1e6, rot=(0, 90), reso=12, title=None)
-for TES in range(248):
-    color = 'w'
-    th = theta[TES, p]
-    ph = phi[TES, p]
-    hp.visufunc.projscatter(th, ph, color=color, marker='.')
-#     hp.visufunc.projtext(th, ph, str(TES), color=color, fontsize=10)
-
+theta, phi, theta_order, phi_order, val_order = scal.get_coords_peaks(q, s, d, verbose=True)
+allmain_peaks = scal.get_main_peak_list(theta, theta_order)
+print(set(allmain_peaks))
+the_nine_peaks = scal.get_peak_list(30)
+print(the_nine_peaks)
 ```
 
 ### Coordinates of the TES in ONAFP
@@ -134,40 +101,134 @@ To compare simu/measurement, it looks we have to do the following (not sure):
 * Simulation: centered on (lon=0, lat=90, phi=180)
 
 ```{python}
+weirdTES = [1, 2, 14, 16, 28, 33, 34, 35, 40, 41, 46, 47, 48,
+            49, 51, 53, 54, 55, 60, 73, 74, 80, 81, 85, 86, 92, 93, 104,
+            105, 110, 114, 115, 117, 122, 125, 127, 128]
+weirdx0, weirdy0 = [], []
+for tes in weirdTES:
+    x0, y0, FP_index, index_q = scal.TES_Instru2coord(tes, 2, q, frame='ONAFP')
+    weirdx0.append(x0)
+    weirdy0.append(y0)
+```
+
+```{python}
 # Choose a TES (Instrument numerotation)
-TES, ASIC = 6, 1
+TES, ASIC = 95, 1
 x0, y0, FP_index, index_q = scal.TES_Instru2coord(TES, ASIC, q, frame='ONAFP')
 
 plt.subplots(1, 2, figsize=(12, 7))
-plt.suptitle(f'TES {TES} - ASIC {ASIC} - Index_q {index_q}')
+plt.suptitle(f'TES {TES} - ASIC {ASIC}')#' - Index_q {index_q}')
 
 # Focal plane
 plt.subplot(121)
-plt.scatter(xONAFP, yONAFP, marker='s', s=100, alpha=0.3)
+plt.scatter(xONAFP, yONAFP, c=allmain_peaks, marker='s', s=180, alpha=0.8, cmap='jet')
 plt.xlabel('X_ONAFP')
 plt.ylabel('Y_ONAFP')
-plt.plot(x0, y0, 'ro')
+
+plt.plot(weirdx0, weirdy0, 'ro')
+plt.plot(x0, y0, 'bo')
 plt.axis('square')
 plt.title('Focal plane')
 
 # Simulation
 plt.subplot(122)
 plt.axis('off')
-hp.gnomview(sb[index_q], min=0, max=1e5, rot=(0, 90, 180), reso=12, sub=(122),
-            title='Simulation', cbar=False)
-hp.graticule()
-# for p in range(npeaks):
-#     th = theta[index_q, p]
-#     ph = phi[index_q, p]
+hp.gnomview(sb[index_q], min=0, max=5e5, rot=(0, 90, 180), reso=28, sub=(122),
+            title=f'Simulation - Main peak: {allmain_peaks[index_q]}', cbar=False)
+hp.graticule(dpar=5)
+for p in range(npeaks):
+    th = theta[index_q, p]
+    ph = phi[index_q, p]
 #     th2 = theta_order[index_q, p]
 #     ph2 = phi_order[index_q, p]
-#     hp.visufunc.projtext(th-0.02, ph-0.02, str(p), color='w', fontsize=10) 
+    hp.visufunc.projtext(th, ph, str(p), color='w', fontsize=10) 
 #     hp.visufunc.projtext(th2+0.02, ph2+0.02, str(p), color='r', fontsize=10) 
 
+#     th2 = theta_order[index_q, p]
+#     ph2 = phi_order[index_q, p]
+# #     hp.visufunc.projscatter(th2, ph2, color='w', marker='+')
+#     if p < 9:
+#         hp.visufunc.projtext(th2, ph2, str(p), color='r', fontsize=10)
+#     else:
+#         hp.visufunc.projtext(th2, ph2, str(p), color='orange', fontsize=10)
 
+#plt.savefig(save_dir + f'peak_numbering_TES{TES}_ASIC{ASIC}.pdf', bbox_inches='tight')
 ```
 
+```{python}
+(nine_peak_alldet==30).sum()
+```
+
+```{python}
+len(allmain_peaks)
+allmain_peaks[-10]
+```
+
+```{python}
+nine_peak_alldet.shape
+```
+
+```{python}
+TES, ASIC = 46, 2
+idx = get_index256array_from_TES(TES, ASIC)
+nine_peak_alldet[idx]
+```
+
+```{python}
+def get_index256array_from_TES(TES, ASIC):
+    idx = (ASIC-1) * 128 + (TES-1)
+    return idx
+
+def get_TES_from_index256array(idx):
+    TES = idx % 128 + 1
+    ASIC = idx // 128 + 1
+    return TES, ASIC
+
+
+def get_nine_peak_alldet(q, s, d, verbose=True):
+    theta, phi, theta_order, phi_order, val_order = scal.get_coords_peaks(q, s, d, verbose=True)
+    print(theta.shape)
+    allmain_peaks = scal.get_main_peak_list(theta, theta_order)
+    nine_peak_alldet = []
+    for idx in range(256):
+        TES, ASIC = get_TES_from_index256array(idx)
+        #print(TES, ASIC)
+        _, _, _, index_q = scal.TES_Instru2coord(TES, ASIC, q, verbose=verbose)
+        #print(index_q)
+        if index_q is not None: #To avoid thermometers:
+            main_peak = allmain_peaks[index_q]
+            nine_peak_alldet.append(scal.get_peak_list(main_peak))
+
+        else:
+            nine_peak_alldet.append([np.nan]*9)
+    return np.array(nine_peak_alldet)
+
+nine_peak_alldet = get_nine_peak_alldet(q, s, d, verbose=True)
+```
+
+#### Print on the sky the motion of the one peak for all TES 
+
+
 ### Animation to see the beam moving
+
+```{python}
+# Choose a peak
+color=['b', 'orange','g', 'r']
+hp.gnomview(sb[200] * 0., min=0, max=1e6, rot=(0, 90, 180), reso=12, title=None, cbar=False)
+hp.graticule(dpar=5)
+for i, p in enumerate([16, 23, 24, 30]):
+    for TES in range(248):
+        
+        th = theta[TES, p]
+        ph = phi[TES, p]
+        hp.visufunc.projscatter(th, ph, color=color[i], marker='.')
+    #     hp.visufunc.projtext(th, ph, str(TES), color=color, fontsize=10)
+#plt.savefig(save_dir + 'peak_displacement.pdf', bbox_inches='tight')
+```
+
+```{python}
+d['nside']
+```
 
 ```{python}
 def animate(det):
@@ -212,7 +273,7 @@ def init():
     
 fig, axs = plt.subplots(1, 2, figsize=(12, 8))
 ax1, ax2 = np.ravel(axs)
-ax1.scatter(xONAFP, yONAFP, marker='s', s=200, alpha=0.3)
+ax1.scatter(xONAFP, yONAFP, c=allmain_peaks, marker='s', s=200, alpha=0.8, cmap='jet')
 ax1.set_xlabel('X_ONAFP')
 ax1.set_ylabel('Y_ONAFP')
 

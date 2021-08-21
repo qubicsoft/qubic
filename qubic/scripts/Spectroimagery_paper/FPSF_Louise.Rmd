@@ -34,6 +34,11 @@ rc('font',size=14)
 # %matplotlib notebook
 ```
 
+```{python}
+# If you want to save plots, set the directory here
+save_dir = '/home/lmousset/QUBIC/These_manuscrit/Figures/Plots/'
+```
+
 <!-- #region slideshow={"slide_type": "slide"} -->
 ## About the FPSF...
 
@@ -146,20 +151,38 @@ for i in range(4):
 fig.tight_layout()
 ```
 
+```{python}
+from scipy.interpolate import interp1d
+```
+
+```{python}
+df['nu_in']
+```
+
 ```{python slideshow={'slide_type': 'slide'}}
 # The four plots on the same axis
-fig = plt.figure()
+import scipy
+xx = np.linspace(df['nu_in'][0], df['nu_in'][21], 100)
+
+fig = plt.figure(figsize=(8, 6))
 ax = fig.gca()
 for i in range(4):
-    ax.plot(df['nu_in'], df[f'band{i+1}'], 'o', color=mycolors[i])
-    ax.axvline(150, color='k')
-    ax.axvline(_nusrec_[i], color='grey')
-    ax.text(_nusrec_[i]-2, -0.3, r'$\nu_{c}$' + f'{i+1}', color='grey')
+    interp = interp1d(df['nu_in'], df[f'band{i+1}'])
+    ax.plot(xx, interp(xx), color=mycolors[i])
+    ax.plot(df['nu_in'], df[f'band{i+1}'], 'o', color=mycolors[i], label=f'Sub-band {i+1}')
+    #ax.axvline(150, color='k')
+    #ax.axvline(_nusrec_[i], color='grey')
+    #ax.text(_nusrec_[i]-0.5, -0.3, r'$\nu_{c}$' + f'{i+1}', color='grey')
+    ax.axvspan(xmin = _nusedge_[i], xmax = _nusedge_[i+1], alpha=0.2, color = mycolors[i])
 ax.set_xlim(130, 165)
 ax.set_ylim(-0.2, 1.1)
-ax.set_xlabel(r'$\nu_{in}$ [GHz]')
-ax.set_ylabel(r'$I_{out}$')
+ax.set_xlabel(r'$\nu_{in}$ [GHz]', fontsize=16)
+ax.set_ylabel(r'$I_{out}$', fontsize=16)
 ax.grid()
+ax.legend()
+
+fig.tight_layout()
+fig.savefig(save_dir + f'FPSF_band.pdf', bbox_inches='tight')
 ```
 
 <!-- #region slideshow={"slide_type": "slide"} -->
@@ -189,6 +212,28 @@ ax.legend()
 
 For each $\nu_{in}$ let's look at the four points in the sub-bands.
 <!-- #endregion -->
+
+```{python}
+# Just for one input frequency
+i = 21
+fig = plt.figure(figsize=(4, 4))
+ax = fig.gca()
+points, = ax.plot(_nusrec_, df.loc[i][1:], 'ko')
+line = ax.axvline(_nusin_[i], color = 'k', ls = '--', alpha=0.4)#, label=r'$\nu_{in}=$'+f'{nu:3.2f} GHz')
+text = ax.text(140, 1, r'$\nu_{in}=$'+f'{_nusin_[i]:3.2f} GHz', fontsize=14)
+
+ax.axhline(i, color='k', ls = '-', alpha = 0.2)
+ax.axvspan(xmin = _nusedge_[0], xmax = _nusedge_[1], alpha = 0.2, color = 'b')
+ax.axvspan(xmin = _nusedge_[1], xmax = _nusedge_[2], alpha = 0.2, color = 'g')
+ax.axvspan(xmin = _nusedge_[2], xmax = _nusedge_[3], alpha = 0.2, color = 'y')
+ax.axvspan(xmin = _nusedge_[3], xmax = _nusedge_[4], alpha = 0.2, color = 'r')
+ax.set_xlabel(r'$\nu$ [GHz]', fontsize=16)
+ax.set_ylabel(r'$I_{out}$', fontsize=16)
+ax.set_ylim(-0.2,1.1)
+
+fig.tight_layout()
+fig.savefig(save_dir + f'FPSF_nuin{_nusin_[i]:3.0f}.pdf', bbox_inches='tight')
+```
 
 ```{python slideshow={'slide_type': 'subslide'}}
 fig = plt.figure(figsize=(4, 4))

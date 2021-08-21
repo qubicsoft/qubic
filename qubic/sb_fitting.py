@@ -1,23 +1,12 @@
 from __future__ import division, print_function
 
-from qubicpack import qubicpack as qp
 import qubic.fibtools as ft
-import qubic.plotters as p
-import qubic.lin_lib as ll
 import qubic
-# import demodulation_lib as dl
 
 from pysimulators import FitsArray
-import numpy as np
 from matplotlib.pyplot import *
-import matplotlib.mlab as mlab
 import scipy.ndimage.filters as f
-import glob
-import string
 import scipy.signal as scsig
-from scipy import interpolate
-import datetime as dt
-import sys
 import healpy as hp
 import time
 import numexpr as ne
@@ -128,11 +117,13 @@ def thph2uv(th, ph):
     cph = np.cos(ph)
     return np.array([sth * cph, sth * sph, cth])
 
+
 def ang_dist(thph0, thph1):
     uv0 = thph2uv(thph0[0], thph0[1])
     uv1 = thph2uv(thph1[0], thph1[1])
     ang = np.arccos(np.sum(uv0*uv1))
     return ang
+
 
 def uv2thph(uv):
     r = np.sum(uv ** 2, axis=0)
@@ -182,8 +173,7 @@ def rotate_q2m(thin, phin, angs=np.radians(np.array([0., 90., 0.])), inverse=Fal
     return uv2thph(uvecout)
 
 
-#######################################################################################################################################
-# ######################################################################################################################################
+# ########################################################################################################
 class SimpleSbModel:
     """
     Class defining the simplest Synthesized Beam model for QUBIC:
@@ -442,7 +432,8 @@ class SbModelIndepPeaksAmpFWHM:
         sinang = np.sin(np.radians(angle))
         rotmat = np.array([[cosang, -sinang], [sinang, cosang]])
         newxxyy = np.zeros((4, self.npeaks))
-        for i in range(self.npeaks): newxxyy[0:2, i] = np.dot(rotmat, self.xxyy[:, i])
+        for i in range(self.npeaks):
+            newxxyy[0:2, i] = np.dot(rotmat, self.xxyy[:, i])
         # Scale it wit interpeak distance
         newxxyy *= dist
         # Apply Distorsions
@@ -779,7 +770,7 @@ def fit_sb(flatmap_init, az_init, el_init, model, newsize=70, dmax=5., az_center
 
     ### Get the peaks positions and amplitudes
     themap, newxxyy = model(x, fitpars, return_peaks=True)
-    ### Put the fitted amplitude values to zero when needed (when peak ouside the input image)
+    ### Put the fitted amplitude values to zero when needed (when peak outside the input image)
     if model.name == 'SbModelIndepPeaksAmp':
         xmin = np.min(az2d)
         xmax = np.max(az2d)

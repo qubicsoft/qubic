@@ -149,10 +149,6 @@ plt.legend()
 ```
 
 ```{python}
-print(p.angle_hwp)
-```
-
-```{python}
 # Model of the scene at the time of observation
 s = qubic.QubicScene(d)
 
@@ -239,7 +235,87 @@ for istokes in range(3):
                 title='Residuals ' + stokes[istokes] + f' - STD = {std:.4f}',
                 unit='$\mu K$', min=min, max=max, notext=True)
 plt.tight_layout()
-plt.savefig(dir_save + 'Figures/Plots/HWP_0-30-60.pdf', bbox_inches='tight')
+#plt.savefig(dir_save + 'Figures/Plots/HWP_0-30-60.pdf', bbox_inches='tight')
+```
+
+# Compare repeat and not repeat pointing
+
+```{python}
+d['npointings'] = 3000
+d['nhwp_angles'] = 3
+
+# Repeat
+d['random_pointing'] = False
+d['repeat_pointing'] = True
+d['sweeping_pointing'] = False
+
+p = qubic.get_pointing(d)
+s = qubic.QubicScene(d)
+q = qubic.QubicInstrument(d)
+a = qubic.QubicAcquisition(q, p, s, d)
+
+cov = a.get_coverage()
+TOD, maps_convolved = a.get_observation(x0[0], noiseless=d['noiseless'])
+maps_recon, nit, error = a.tod2map(TOD, d, cov=cov)
+
+diff = maps_recon - maps_convolved
+maxcov = np.max(cov)
+unseen = cov < maxcov * 0.15
+
+maps_convolved[unseen, :] = hp.UNSEEN
+maps_recon[unseen, :] = hp.UNSEEN
+diff[unseen, :] = hp.UNSEEN
+
+# Random
+d['random_pointing'] = True
+d['repeat_pointing'] = False
+d['sweeping_pointing'] = False
+
+p_rand = qubic.get_pointing(d)
+s_rand = qubic.QubicScene(d)
+q_rand = qubic.QubicInstrument(d)
+a_rand = qubic.QubicAcquisition(q_rand, p_rand, s_rand, d)
+
+cov_rand = a_rand.get_coverage()
+TOD_rand, maps_convolved_rand = a_rand.get_observation(x0[0], noiseless=d['noiseless'])
+maps_recon_rand, nit, error = a_rand.tod2map(TOD_rand, d, cov=cov_rand)
+
+diff_rand = maps_recon_rand - maps_convolved_rand
+maxcov_rand = np.max(cov_rand)
+unseen_rand = cov_rand < maxcov_rand * 0.15
+
+maps_convolved_rand[unseen_rand, :] = hp.UNSEEN
+maps_recon_rand[unseen_rand, :] = hp.UNSEEN
+diff_rand[unseen_rand, :] = hp.UNSEEN
+```
+
+```{python}
+d['dtheta']
+```
+
+```{python}
+# Only plot the residuals
+rr = 7
+stokes = ['I', 'Q', 'U']
+plt.figure(figsize=(12, 12))
+#plt.suptitle('Not equally spaced: 0°, 30°, 40°', fontsize=20)
+#plt.suptitle('Equally spaced: 0°, 30°, 60°', fontsize=20)
+for istokes in [1, 2]:
+    std = np.std(diff[np.invert(unseen), istokes])
+    std_rand = np.std(diff_rand[np.invert(unseen_rand), istokes])
+    print(std, std_rand)
+    hp.gnomview(diff[:, istokes], cmap='jet',rot=center, sub=(2, 2, istokes), reso=rr,
+                title='Repeat strategy \n Residuals ' + stokes[istokes] + f' - STD = {std:.4f}',
+                unit='$\mu K$', min=-0.01, max=0.005, notext=False)
+    hp.gnomview(diff_rand[:, istokes], cmap='jet',rot=center, sub=(2, 2, istokes+2), reso=rr,
+                title='Random strategy \n Residuals ' + stokes[istokes] + f' - STD = {std_rand:.4f}',
+                unit='$\mu K$', min=-0.4, max=0.4, notext=False)
+plt.tight_layout()
+plt.savefig(dir_save + 'Figures/Plots/repeat_random_strategy.pdf', bbox_inches='tight')
+```
+
+```{python}
+0.1/0.005
 ```
 
 ```{python}

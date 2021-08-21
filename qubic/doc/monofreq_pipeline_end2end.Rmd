@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.7.1
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -76,7 +76,7 @@ center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 print(center)
 d['effective_duration'] = 4
 # Adjust some parameters in the dictionary
-d['npointings'] = 3000
+d['npointings'] = 1000
 d['tol'] = 1e-5
 d['filter_nu'] = 220e9
 d['photon_noise'] = False

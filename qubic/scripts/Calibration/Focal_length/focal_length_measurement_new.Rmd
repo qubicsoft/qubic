@@ -1,0 +1,1301 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Measure the focal length from the beam
+
+edited on 31/07/2021 by Louise
+
+```{python}
+# -*- coding: utf-8 -*-
+from __future__ import division, print_function
+
+import glob
+import numpy as np
+import healpy as hp
+from astropy.io import fits
+import matplotlib.pyplot as plt
+import seaborn as sns
+from itertools import permutations
+
+import qubic
+import qubic.sb_fitting as sbfit
+import qubic.selfcal_lib as scal
+import qubic.fibtools as ft
+
+from qubicpack.utilities import Qubic_DataDir
+
+# %matplotlib notebook
+```
+
+```{python}
+# If you want to save plots, set the directory here
+save_dir = '/home/lmousset/QUBIC/These_manuscrit/Figures/Plots/'
+```
+
+```{python}
+def mymedian_absolute_deviation(x):
+    median = np.median(x)
+    mad = np.median(np.abs(x-median))
+    return mad
+
+def get_index256array_from_TES(TES, ASIC):
+    idx = (ASIC-1) * 128 + (TES-1)
+    return idx
+
+def get_TES_from_index256array(idx):
+    TES = idx % 128 + 1
+    ASIC = idx // 128 + 1
+    return TES, ASIC
+
+
+def get_all_fit(repository):
+    """
+    peak_azel: azimuth elevation of the 9 peak for all detectors [deg]
+    """
+    c50 = np.cos(np.deg2rad(50))
+    azmin = -15. / c50
+    azmax = 15. / c50
+    
+    tes_map = []
+    tes_fit = []
+    peak_azel = []
+    for tes in range(256):
+        flatmap, az, el, fitmap, newxxyy = sbfit.get_flatmap(tes + 1, repository, 
+                                                             fitted_directory=repository + '/FitSB',
+                                                             azmin=azmin, azmax=azmax)
+        peak_azel.append(newxxyy[0:2, :])
+        tes_fit.append(fitmap / np.sum(fitmap))
+        tes_map.append(flatmap)
+    peak_azel = np.array(peak_azel)
+    tes_fit = np.array(tes_fit)
+    tes_map = np.array(tes_map)
+
+    return tes_map, az, el, peak_azel, tes_fit
+
+def reorder_peaks_data(peak_azel, permutation):
+    peak_azel_reorder = peak_azel[:, :, permutation]
+    return peak_azel_reorder  
+
+
+def get_tes_xycoords_radial_dist(q, verbose=True):
+    tes_xONAFP = np.zeros(256)
+    tes_yONAFP = np.zeros(256)
+    tes_radial_dist = np.zeros(256)
+    for i in range(256):
+        if verbose:
+            print('\n')
+        TES, ASIC = get_TES_from_index256array(i)
+        tes_xONAFP[i], tes_yONAFP[i], _, index_q = scal.TES_Instru2coord(TES, ASIC, q, 
+                                                                         frame='ONAFP', verbose=verbose)
+
+        # None are the thermometers
+        if index_q is not None:
+            tes_radial_dist[i] = np.sqrt(tes_xONAFP[i] ** 2 + tes_yONAFP[i] ** 2)
+            if verbose:
+                print('r=', tes_radial_dist[i])
+
+    return tes_xONAFP, tes_yONAFP, tes_radial_dist
+
+
+def get_nine_peak_alldet(q, s, d, verbose=True):
+    """Attribute the correct nine peak number to each TES.
+    Return an array ordered as the data, i.e. with shape (256, 9) going 
+    from (TES 1, ASIC 1) to (TES 128, ASIC 2)."""
+    theta, phi, theta_order, phi_order, val_order = scal.get_coords_peaks(q, s, d, verbose=True)
+    print(theta.shape)
+    allmain_peaks = scal.get_main_peak_list(theta, theta_order)
+    nine_peak_alldet = []
+    for idx in range(256):
+        TES, ASIC = get_TES_from_index256array(idx)
+        #print(TES, ASIC)
+        _, _, _, index_q = scal.TES_Instru2coord(TES, ASIC, q, verbose=verbose)
+        #print(index_q)
+        if index_q is not None: #To avoid thermometers:
+            main_peak = allmain_peaks[index_q]
+            nine_peak_alldet.append(scal.get_peak_list(main_peak))
+        else:
+            nine_peak_alldet.append([np.nan]*9)
+    return np.array(nine_peak_alldet)
+
+
+def select_peaks(peak, nine_peak_alldet, verbose=True):
+    """
+    Give the index of detectors (0 to 255) and peak (0 to 8) where you have a given peak number.
+    peak: peak number
+    nine_peak_alldet: correct nine peak number to each TES, shape (256, 9).
+    """
+    
+    detector_idx, peak_idx = np.where(nine_peak_alldet==peak)
+    if verbose:
+        print(f'Peak {peak} appears {(nine_peak_alldet==peak).sum()} times')
+        print('Detectors concerned:', detector_idx)
+        print('with peaks:', peak_idx)
+       
+    return detector_idx, peak_idx
+
+def compute_azel_data_simu(p, nine_peak_alldet, peak_azel, peak_azel_simu_asdata):
+
+    detector_idx, peak_idx = select_peaks(p, nine_peak_alldet, verbose=False)
+
+    az_simu = peak_azel_simu_asdata[detector_idx, 0, p]
+    el_simu = peak_azel_simu_asdata[detector_idx, 1, p]
+    az_data = peak_azel[detector_idx, 0, peak_idx]
+    el_data = peak_azel[detector_idx, 1, peak_idx] - 50
+    
+    return az_simu, az_data, el_simu, el_data
+```
+
+```{python}
+# Get a dictionary
+d = qubic.qubicdict.qubicDict()
+d.read_from_file('pipeline_demo.dict')
+
+d['config'] = 'TD'
+d['nside'] = 256
+d['synthbeam_kmax'] = 3
+d['focal_length'] = 0.3
+d['filter_nu'] = 150e9
+q = qubic.QubicInstrument(d)
+s = qubic.QubicScene(d)
+```
+
+```{python}
+# Attribute the nine correct peaks to each detector
+nine_peak_alldet = get_nine_peak_alldet(q, s, d, verbose=False)
+print(nine_peak_alldet.shape)
+existing_peaks = np.unique(nine_peak_alldet[~np.isnan(nine_peak_alldet)])
+existing_peaks = [int(p) for p in existing_peaks]
+print(existing_peaks)
+```
+
+```{python}
+# Check the conversion idx to TES,ASIC
+TES = 3
+ASIC = 2
+idx = get_index256array_from_TES(TES, ASIC)
+print(idx)
+
+TES, ASIC = get_TES_from_index256array(idx)
+print(TES, ASIC)
+```
+
+```{python}
+# =========== Radial TES distances on the FP ================
+tes_xONAFP, tes_yONAFP, rdist = get_tes_xycoords_radial_dist(q, verbose=False)
+
+# Check we have the right radial distance by ploting in on the FP
+fig = plt.figure(figsize=(8, 8))
+ax = fig.gca()
+scal.scatter_plot_FP(q, tes_xONAFP, tes_yONAFP, rdist, frame='ONAFP', 
+                     s=150, config='TD', vmin=0., vmax=0.06, fig=fig, ax=ax, title='Radial distances')
+
+```
+
+## Simu QUBIC soft
+
+```{python}
+sb = q.get_synthbeam(s, idet=None, external_A=None, hwp_position=0)
+print(sb.shape)
+
+# Coordinates of the peaks (spherical coordinates in radian) for each TES
+npeaks = (2 * d['synthbeam_kmax'] + 1)**2
+print('npeaks:', npeaks)
+
+theta, phi, _, _, _ = scal.get_coords_peaks(q, s, d, verbose=True)
+print(theta.shape)
+
+peak_vec = np.zeros((248, 3, npeaks))
+#alpha_simu = np.zeros((npeaks, 248, 248))
+for p in range(npeaks):
+    #!!!!!!!!!!!!!! Pi rotation
+    peak_vec[:, :, p] = hp.ang2vec(theta[:, p], phi[:, p]+pi)
+    #print(hp.ang2vec(theta[:, p], phi[:, p]+pi))
+    #alpha_simu[p, :, :] = np.arccos(np.dot(peak_vec[:, :, p], peak_vec[:, :, p].T))
+
+# Put it in degree
+peak_azel_simu = np.rad2deg(peak_vec[:, :2, :])   
+
+cmaplist=['Blues', 'Greys', 'Greens', 'Reds', 'Oranges', 'Purples']*3
+print(cmaplist)
+plt.figure(figsize=(8, 8))
+for j, p in enumerate(existing_peaks):
+    p = int(p)
+    palet = sns.color_palette(cmaplist[j], n_colors=356)
+    for i in range(248):
+        if i==0:
+            label='peak {}'.format(p)
+        else:
+            label=None
+        az_simu = peak_azel_simu [i, 0, p]
+        el_simu = peak_azel_simu [i, 1, p]
+        if (np.abs(az_simu)/sqrt(2)+np.abs(el_simu)/sqrt(2))<sqrt(190):
+            plt.plot(az_simu,el_simu , '.', label=label, c=palet[i+100], ms=8)
+
+plt.xlabel('Azimuth [deg]', fontsize=16)
+plt.ylabel('Elevation [deg]', fontsize=16)
+#plt.legend()
+plt.gca().set_aspect('equal', adjustable='box')
+plt.ylim(-20, 20)
+plt.xlim(-20, 20)
+plt.grid()
+f = d['focal_length']
+nu = d['filter_nu']
+plt.title(fr'$f ={f*100:.0f}$ cm - $\nu= {nu/1e9:.0f}$ GHz', fontsize=16)
+plt.tight_layout()
+
+plt.savefig(save_dir + f'SB_simu_f{f*100:.0f}_nu{nu/1e9:.0f}.pdf', bbox_inches='tight')
+```
+
+```{python}
+plt.figure(figsize=(10, 10))
+p = 24
+az = peak_azel_simu [:, 0, p]
+el = peak_azel_simu [:, 1, p]
+for i in range(248):
+    FPindex = q.detector.index[i]
+    ASIC, TES = scal.index2tes(FPindex)
+    plt.plot(az[i], el[i], '.', label='peak {}'.format(p), c='g')
+    plt.text(az[i], el[i], (TES))
+```
+
+#### Reorder simu as data
+
+```{python}
+peak_azel_simu_asdata = np.zeros((256, 2, 49))
+for i in range(248):
+    FPindex = q.detector.index[i]
+    ASIC, TES = scal.index2tes(FPindex)
+    idx = get_index256array_from_TES(TES, ASIC)
+    peak_azel_simu_asdata[idx, :, :] = peak_azel_simu[i, :, :]    
+    
+plt.figure(figsize=(10, 10))
+p = 24
+az = peak_azel_simu_asdata[:, 0, p]
+el = peak_azel_simu_asdata[:, 1, p]
+for i in range(256):
+    if az[i] !=0:
+        TES, ASIC = get_TES_from_index256array(i)
+        plt.plot(az[i], el[i], '.', label='peak {}'.format(p), c='g')
+        plt.text(az[i], el[i], (TES))
+```
+
+## Get the data
+
+```{python}
+# Get the fit of the synthesized beams
+freq_source = 150
+rep = Qubic_DataDir(datafile='allFitSB_{}.pdf'.format(freq_source), datadir='/home/lmousset/QUBIC/Qubic_work')
+print(rep)
+
+tes_map, azimuth, elevation, peak_azel, tes_fit = get_all_fit(rep)
+print(peak_azel.shape)
+
+azimuth *= np.cos(np.deg2rad(50))
+elevation -= 50 # Recenter the elevation around 0
+
+az = peak_azel[:, 0, :]
+el = peak_azel[:, 1, :]-50 # Recenter the elevation around 0
+
+# TES = 93
+# ASIC = 1
+# idx = get_index256array_from_TES(TES, ASIC)
+# plt.figure()
+# for i in range(9):
+#     plt.plot(az[idx, i], el[idx, i], 'o')
+# plt.title(f'TES {TES}-ASIC {ASIC}')
+# plt.xlabel('Az [deg]')
+# plt.ylabel('el [deg]')
+
+colorlist=['b', 'orange', 'g', 'm', 'k', 'r', 'c', 'grey', 'purple']
+plt.figure(figsize=(8, 8))
+for peak in range(9):
+    plt.plot(az[:, peak], el[:, peak], '.', color=colorlist[peak], label='peak {}'.format(peak))
+plt.xlabel('Az [deg]')
+plt.ylabel('El [deg]')
+plt.legend()
+plt.axis('square')
+plt.xlim(-20, 20)
+plt.ylim(-20, 20)
+plt.title('Superposition of the 9 fit positions')
+
+
+```
+
+```{python}
+# Get the error file
+import pickle
+idx = 93
+thefile = open(rep + f'/FitSB/fiterr-TES{idx}.pk', 'rb')
+fiterrs = pickle.load(thefile, encoding='latin1')
+thefile.close()
+
+#print(fiterrs)
+```
+
+#### Look at a map with the fits
+
+```{python}
+idx63 = get_index256array_from_TES(63, 2)
+idx95 = get_index256array_from_TES(95, 1)
+ASIC=1
+for TES in [95]:#TESborder2330_ASIC2:#weirdTES:#6,9, 16, 22, 26, 27, 37, 50, 51, 58]:
+    idx = get_index256array_from_TES(TES, ASIC)
+    az = peak_azel[idx, 0, :]
+    el = peak_azel[idx, 1, :] - 50
+#     az63 = peak_azel[idx63, 0]
+#     el63 = peak_azel[idx63, 1]
+#     az95 = peak_azel[idx95, 0]
+#     el95 = peak_azel[idx95, 1]
+
+    extent=[azimuth[0], azimuth[-1], elevation[0], elevation[-1]]
+    plt.figure(figsize=(6, 6))
+    plt.imshow(tes_map[idx], origin=None, extent=extent,vmin=None, 
+               vmax=np.max(tes_map[idx])/2)
+    for p in range(9):
+        plt.plot(az[p], el[p], 'r.')
+#         plt.plot(az63[p], el63[p], 'go')
+#         plt.plot(az95[p], el95[p], 'ko')
+        plt.text(az[p]+0.2, el[p]+0.2, p, color='w', fontsize=18)
+    plt.title(f'TES {TES} - ASIC {ASIC}', fontsize=14)
+    plt.xlabel('Azimuth [deg]', fontsize=14)
+    plt.ylabel('Elevation [deg]', fontsize=14)
+    
+    plt.tight_layout()
+    #plt.savefig(save_dir + f'SB_fit_avril2019_TES{TES}-ASIC{ASIC}.pdf', bbox_inches='tight')
+```
+
+```{python}
+Bad_TES_ASIC1 = [1,2,3,4,7,8,10,11,12,13,14,15,17,19,20,21, 23,25,29,30,33,34,35,36,39,40,42,48,53,55,56,
+                62,63,65,66,68,84,89,91,92, 97,98,100,102,103,104,105,108,112,113,114,115, 116,119,121,125,126,127,128]
+
+Bad_TES_ASIC2 = [4,11,15,16,17,19,20,23,26,27,28, 29, 30,31,32,33,34,36,39,50,51,52,54,59,61,62,64,66,68,76,
+                79,81,83,89,92,93,94,97,99,100,102,104,105,106,110,112,113,114,115,116,117,118,120,121,
+                 123,124,125,126,127,128]
+```
+
+```{python}
+#Same plot as before but with only good TES
+az = peak_azel[:, 0, :]
+el = peak_azel[:, 1, :]-50 # Recenter the elevation around 0
+
+
+plt.figure(figsize=(8, 8))
+for peak in range(9):
+    for idx in range(256):
+        TES, ASIC = get_TES_from_index256array(idx)
+        if TES==93:
+            label='Fit {}'.format(peak)
+        else:
+            label=None
+        if ASIC==1 and TES not in Bad_TES_ASIC1:
+            plt.plot(az[idx, peak], el[idx, peak], '.', color=colorlist[peak], ms=8, label=label)
+        elif ASIC==2 and TES not in Bad_TES_ASIC2:
+            plt.plot(az[idx, peak], el[idx, peak], '.', color=colorlist[peak], ms=8)
+        else:
+            pass
+plt.xlabel('Azimuth [deg]', fontsize=14)
+plt.ylabel('Elevation [deg]', fontsize=14)
+plt.legend(fontsize=10)
+plt.axis('square')
+plt.xlim(-20, 20)
+plt.ylim(-20, 20)
+plt.title('Nine fit peak positions for the 137 best TES', fontsize=14)
+
+#plt.savefig(save_dir + f'SB_fit_avril2019_superposition.pdf', bbox_inches='tight')
+
+```
+
+#### Find the best permutation for the data peaks
+
+```{python}
+mypermuts = [[6,7,8,3,4,5,0,1,2], [8,5,2,7,4,1,6,3,0], [2,1,0,5,4,3,8,7,6], [8,7,6,5,4,3,2,1,0],
+             [6,3,0,7,4,1,8,5,2], [2,5,8,1,4,7,0,3,6], [0,3,6,1,4,7,2,5,8]]
+```
+
+```{python}
+nn = 9
+permut_list = list(permutations(range(nn), nn))
+
+npermut = len(permut_list)
+print('Number of permutations:', npermut)
+print(f'{nn}!=', np.math.factorial(nn))
+```
+
+```{python}
+def get_chi2(nine_peak_alldet, peak_azel, peak_azel_simu_asdata):
+    sigma=0.1
+    chi2 = 0
+    for p in [16, 23, 24, 30]:
+        az_simu, az_data, el_simu, el_data = compute_azel_data_simu(p, nine_peak_alldet, 
+                                                                    peak_azel, peak_azel_simu_asdata)
+        #print(az_simu[:10], az_data[:10])
+        chi2 += ((az_data-az_simu)**2/sigma**2 + (el_data-el_simu)**2/sigma**2).sum()
+    return chi2
+```
+
+```{python}
+## Compute the chi2 for each permutation
+chi2_list = []
+for i in range(7):
+    permut = mypermuts[i]
+    #permut = permut_list[i]
+    new_peak_azel = reorder_peaks_data(peak_azel, permut)
+    chi2 = get_chi2(nine_peak_alldet, new_peak_azel, peak_azel_simu_asdata)
+    print(chi2)
+    chi2_list.append(chi2)
+len(chi2_list)
+```
+
+```{python}
+# Choose the permutaion for which the chi2 is minimal
+print('Chi2 min:', np.min(chi2_list))
+index = np.argmin(chi2_list)
+#best_permut = permut_list[index]
+best_permut = mypermuts[index]
+print(best_permut )
+```
+
+```{python}
+plt.figure(figsize=(8, 6))
+plt.plot(chi2_list, ',')
+plt.ylabel('Chi2')
+plt.xlabel('Permutation')
+```
+
+```{python}
+# Reorder the peaks following the best permutation
+best_peak_azel = reorder_peaks_data(peak_azel, best_permut)
+```
+
+```{python}
+fig, axs =plt.subplots(1, 2, figsize=(12, 6))
+ax1, ax2 = axs.ravel()
+
+### Old order
+az = peak_azel[:, 0, :]
+el = peak_azel[:, 1, :]-50 # Recenter the elevation around 0
+for peak in range(9):
+    for idx in range(256):
+        TES, ASIC = get_TES_from_index256array(idx)
+        if TES==93:
+            label='peak {}'.format(peak)
+        else:
+            label=None
+        if ASIC==1 and TES not in Bad_TES_ASIC1:
+            ax1.plot(az[idx, peak], el[idx, peak], '.', color=colorlist[peak], label=label)
+        elif ASIC==2 and TES not in Bad_TES_ASIC2:
+            ax1.plot(az[idx, peak], el[idx, peak], '.', color=colorlist[peak])
+        else:
+            pass
+ax1.set_xlabel('Az [deg]', fontsize=14)
+ax1.set_ylabel('El [deg]', fontsize=14)
+ax1.legend()
+ax1.axis('square')
+ax1.set_xlim(-20, 20)
+ax1.set_ylim(-20, 20)
+ax1.set_title('Old order')
+
+
+### New order
+az = best_peak_azel[:, 0, :]
+el = best_peak_azel[:, 1, :]-50 # Recenter the elevation around 0
+
+for peak in range(9):
+    for idx in range(256):
+        TES, ASIC = get_TES_from_index256array(idx)
+        if TES==93:
+            label='peak {}'.format(peak)
+        else:
+            label=None
+        if ASIC==1 and TES not in Bad_TES_ASIC1:
+            ax2.plot(az[idx, peak], el[idx, peak], '.', color=colorlist[peak], label=label)
+        elif ASIC==2 and TES not in Bad_TES_ASIC2:
+            ax2.plot(az[idx, peak], el[idx, peak], '.', color=colorlist[peak])
+        else:
+            pass
+ax2.set_xlabel('Az [deg]', fontsize=14)
+ax2.set_ylabel('El [deg]', fontsize=14)
+ax2.legend()
+ax2.axis('square')
+ax2.set_xlim(-20, 20)
+ax2.set_ylim(-20, 20)
+ax2.set_title('New order')
+
+fig.tight_layout()
+```
+
+### Remove bad detectors
+
+```{python}
+a = 0
+for idx in range(256):
+    TES, ASIC = get_TES_from_index256array(idx)
+    if ASIC==1 and TES in Bad_TES_ASIC1:
+        best_peak_azel[idx, :, :] = 0.
+    elif ASIC==2 and TES in Bad_TES_ASIC2:
+        best_peak_azel[idx, :, :] = 0.
+    else:
+        a+=1
+print(best_peak_azel)
+print('Number of good TES:', a)
+```
+
+### Compare Data and simu with correct peak numbering
+
+Some peaks are clearly bad identified. This is due to a shift of the fit. It occurs especially at the transition of 2 zones in the focal plane.
+
+```{python}
+lim=19
+fig, axs = plt.subplots(1, 2, figsize=(16, 7))
+ax1, ax2 = np.ravel(axs)
+for j, p in enumerate(existing_peaks):
+    p=int(p)
+    palet = sns.color_palette(cmaplist[j], n_colors=356)
+    detector_idx, peak_idx = select_peaks(p, nine_peak_alldet, verbose=False)
+    #print(peak_idx)
+    
+    new_peak_azel = best_peak_azel[detector_idx, :, peak_idx]
+    az = new_peak_azel[:, 0]
+    el = new_peak_azel[:, 1] - 50
+    ndet = az.shape[0]
+    print(ndet)
+    for i in range(ndet):
+        if i==0:
+            label='peak {}'.format(p)
+        else:
+            label=None
+        idx = detector_idx[i]
+        #if 45<el[i]<47 and -2<az[i]<2:
+        TES, ASIC = get_TES_from_index256array(idx)
+        _, _, FPindex, index_q = scal.TES_Instru2coord(TES, ASIC, q, verbose=False)
+        ax1.plot(az[i], el[i], '.', label=label, c=palet[index_q+100], ms=12)
+
+        #plt.text(az[i], el[i], (TES, ASIC))
+ax1.set_ylim(-lim, lim)
+ax1.set_xlim(-lim, lim)
+ax1.set_xlabel('az [deg]')
+ax1.set_ylabel('el [deg]')
+#ax1.legend()
+ax1.grid()
+#ax1.axis('square')
+
+for j, p in enumerate(existing_peaks):
+    p=int(p)
+    palet = sns.color_palette(cmaplist[j], n_colors=356)
+    for i in range(248):
+        if i==0:
+            label='peak {}'.format(p)
+        else:
+            label=None
+        az_simu = peak_azel_simu [i, 0, p]
+        el_simu = peak_azel_simu [i, 1, p]
+        if (np.abs(az_simu)/sqrt(2)+np.abs(el_simu)/sqrt(2))<sqrt(190):
+            ax2.plot(az_simu,el_simu , '.', label=label, c=palet[i+100], ms=12)
+ax2.set_ylim(-lim, lim)
+ax2.set_xlim(-lim, lim)
+ax2.set_xlabel('az [deg]')
+ax2.set_ylabel('el [deg]')
+#ax2.axis('square')
+#ax2.legend()
+ax2.grid()
+```
+
+```{python}
+# Zoom on a region to identify bad detectors numbering
+minaz, maxaz =-5,0
+minel, maxel = 10, 15
+
+plt.figure(figsize=(8, 8))
+for j, p in enumerate(existing_peaks):
+    p=int(p)
+    palet = sns.color_palette(cmaplist[j], n_colors=356)
+    detector_idx, peak_idx = select_peaks(p, nine_peak_alldet, verbose=False)
+    
+    new_peak_azel = best_peak_azel[detector_idx, :, peak_idx]
+    az = new_peak_azel[:, 0]
+    el = new_peak_azel[:, 1]-50
+    
+    print(az.shape)
+    ndet = az.shape[0]
+    for i in range(ndet):
+        idx = detector_idx[i]
+        TES, ASIC = get_TES_from_index256array(idx)
+        _, _, FPindex, index_q = scal.TES_Instru2coord(TES, ASIC, q, verbose=False)
+        if minel<el[i]<maxel and minaz<az[i]<maxaz:
+            plt.plot(az[i], el[i], 'o', label='peak {}'.format(p), c=palet[index_q], ms=10)
+            #if ASIC==2:
+            if p==23 or p==24:
+                #print(TES)
+                plt.text(az[i], el[i], (TES, ASIC))
+plt.ylim(minel, maxel)
+plt.xlim(minaz, maxaz)
+plt.xlabel('az [deg]')
+plt.ylabel('el [deg]')
+plt.title(f'Peak {p}')
+#plt.legend()
+plt.grid()
+```
+
+#### Arrange the nine peak list for "bad fit" detectors 
+
+We shift the numbering manually.
+
+```{python}
+TESborder2330_ASIC2 = [1, 2, 14, 15, 16, 27, 28, 33, 34, 35, 40, 41, 46, 47, 48,
+                      49, 51, 53, 54, 55, 60, 73, 74, 80, 81, 85, 86, 92, 93, 104,
+                      105, 110, 114, 115, 117, 122, 125, 127, 128]
+
+weirdTESbis = [21, 22]
+TESborder1623_ASIC1 = [71, 77, 90, 109, 122]
+TESborder2324_ASIC1 = [45, 52, 82, 111, 124]
+
+TESborder2423_ASIC1 = [74,75,120]
+TESborder2423_ASIC2 = [10, 78, 21, 22]
+
+nine_peak_alldet_new = nine_peak_alldet.copy()
+for idx in range(256):
+    TES, ASIC = get_TES_from_index256array(idx)
+    if ASIC==2 and TES in TESborder2330_ASIC2:
+        nine_peak_alldet_new[idx] = np.array(scal.get_peak_list(30))
+        #print('coucou')
+    elif ASIC==1 and TES in TESborder1623_ASIC1:
+        nine_peak_alldet_new[idx] = np.array(scal.get_peak_list(23))
+    elif ASIC==1 and TES in TESborder2324_ASIC1:
+        nine_peak_alldet_new[idx] = np.array(scal.get_peak_list(24))
+    elif ASIC==2 and TES in weirdTESbis:
+        nine_peak_alldet_new[idx] = np.array(scal.get_peak_list(31))
+    elif ASIC==2 and TES in TESborder2423_ASIC2:
+        nine_peak_alldet_new[idx] = np.array(scal.get_peak_list(23))
+    elif ASIC==1 and TES in TESborder2423_ASIC1 :
+        nine_peak_alldet_new[idx] = np.array(scal.get_peak_list(23))
+```
+
+#### REmake the plot with the good numbering
+
+```{python}
+lim=20
+fig, axs = plt.subplots(1, 2, figsize=(16, 8))
+ax1, ax2 = np.ravel(axs)
+for j, p in enumerate(existing_peaks):
+    p=int(p)
+    palet = sns.color_palette(cmaplist[j], n_colors=356)
+    detector_idx, peak_idx = select_peaks(p, nine_peak_alldet_new, verbose=False)
+    #print(peak_idx)
+    
+    new_peak_azel = best_peak_azel[detector_idx, :, peak_idx]
+    az = new_peak_azel[:, 0]
+    el = new_peak_azel[:, 1] - 50
+    ndet = az.shape[0]
+    print(ndet)
+    for i in range(ndet):
+        if i==0:
+            label='peak {}'.format(p)
+        else:
+            label=None
+        idx = detector_idx[i]
+        #if 45<el[i]<47 and -2<az[i]<2:
+        TES, ASIC = get_TES_from_index256array(idx)
+        _, _, FPindex, index_q = scal.TES_Instru2coord(TES, ASIC, q, verbose=False)
+        ax1.plot(az[i], el[i], '.', label=label, c=palet[index_q+100], ms=8)
+
+        #plt.text(az[i], el[i], (TES, ASIC))
+ax1.set_ylim(-lim, lim)
+ax1.set_xlim(-lim, lim)
+ax1.set_xlabel('Azimuth [deg]', fontsize=16)
+ax1.set_ylabel('Elevation [deg]', fontsize=16)
+#ax1.legend()
+ax1.grid()
+ax1.set_title('Measurement', fontsize=16)
+ax1.set_aspect('equal', adjustable='box')
+
+for j, p in enumerate(existing_peaks):
+    p=int(p)
+    palet = sns.color_palette(cmaplist[j], n_colors=356)
+    for i in range(248):
+        if i==0:
+            label='peak {}'.format(p)
+        else:
+            label=None
+        az_simu = peak_azel_simu [i, 0, p]
+        el_simu = peak_azel_simu [i, 1, p]
+        if (np.abs(az_simu)/sqrt(2)+np.abs(el_simu)/sqrt(2))<sqrt(190):
+            ax2.plot(az_simu,el_simu , '.', label=label, c=palet[i+100], ms=8)
+ax2.set_ylim(-lim, lim)
+ax2.set_xlim(-lim, lim)
+ax2.set_xlabel('Azimuth [deg]', fontsize=16)
+ax2.set_ylabel('Elevation [deg]', fontsize=16)
+#ax2.legend()
+ax2.grid()
+ax2.set_title('Simulation', fontsize=16)
+#ax2.axis('square')
+ax2.set_aspect('equal', adjustable='box')
+
+
+fig.tight_layout()
+#plt.savefig(save_dir + f'SB_fit_avril2019_superposition_good_index.pdf', bbox_inches='tight')
+
+```
+
+```{python}
+minaz, maxaz =-10,-5
+minel, maxel = 0, 5
+
+plt.figure(figsize=(8, 8))
+for j, p in enumerate(existing_peaks):
+    p=int(p)
+    palet = sns.color_palette(cmaplist[j], n_colors=356)
+    detector_idx, peak_idx = select_peaks(p, nine_peak_alldet_new, verbose=False)
+    
+    new_peak_azel = best_peak_azel[detector_idx, :, peak_idx]
+    az = new_peak_azel[:, 0]
+    el = new_peak_azel[:, 1]-50
+    
+    print(az.shape)
+    ndet = az.shape[0]
+    for i in range(ndet):
+        idx = detector_idx[i]
+        TES, ASIC = get_TES_from_index256array(idx)
+        _, _, FPindex, index_q = scal.TES_Instru2coord(TES, ASIC, q, verbose=False)
+        if minel<el[i]<maxel and minaz<az[i]<maxaz:
+            plt.plot(az[i], el[i], 'o', label='peak {}'.format(p), c=palet[index_q+100], ms=10)
+            #if ASIC==2:
+            #if p==23 or p==24:
+                #print(TES)
+            plt.text(az[i], el[i], (TES, ASIC))
+plt.ylim(minel, maxel)
+plt.xlim(minaz, maxaz)
+plt.xlabel('az [deg]')
+plt.ylabel('el [deg]')
+plt.title(f'Peak {p}')
+#plt.legend()
+plt.grid()
+```
+
+### Look at the correlation Data/simu
+
+```{python}
+rdist = np.zeros(256)
+for idx in range(256):
+    TES, ASIC = get_TES_from_index256array(idx)
+    print(TES, ASIC)
+    if TES not in [4, 36, 68, 100]:#Thermometer!
+        xONAFP, yONAFP, FPindex, index_q = scal.TES_Instru2coord(TES, ASIC, q, frame='ONAFP', verbose=False)
+        rdist[idx] = np.sqrt(xONAFP**2 + yONAFP**2)
+```
+
+```{python}
+fig, axs = plt.subplots(2, 2, figsize=(12, 12))
+ax1, ax2, ax3, ax4= axs.ravel()
+for p in [23]:
+    az_simu, az_data, el_simu, el_data = compute_azel_data_simu(p, nine_peak_alldet_new, 
+                                                                    best_peak_azel, peak_azel_simu_asdata)
+    
+    # Do not take bad detectors
+    az_data_cut = az_data[az_data!=0.]
+    az_simu_cut = az_simu[az_data!=0.]
+    el_data_cut = el_data[az_data!=0.]
+    el_simu_cut = el_simu[az_data!=0.]
+
+    detector_idx, peak_idx = select_peaks(p, nine_peak_alldet_new, verbose=False)
+    rdist_new = rdist[detector_idx]
+    rdist_new = rdist_new[az_data!=0.]
+    
+    diff_az = np.abs(az_data_cut - az_simu_cut)
+    diff_el = np.abs(el_data_cut - el_simu_cut)
+#     p_diffaz = np.polyfit(rdist_new, diff_az, deg=2)
+#     p_diffel = np.polyfit(rdist_new, diff_el, deg=1)
+
+    ax1.plot(rdist_new, diff_az, '.', label=f'peak {p}')
+    ax1.set_xlabel('Radial distance', fontsize=14)
+    ax1.set_ylabel('|Az data - Az simu|', fontsize=14)
+    ax1.legend()
+    
+    ax2.plot(rdist_new, diff_el, '.', label=f'peak {p}')
+    ax2.set_ylabel('|EL data - El simu|', fontsize=14)
+    ax2.set_xlabel('Radial distance', fontsize=14)
+    ax2.legend()
+    
+    ax3.plot(az_simu_cut, az_data_cut, '.', label=f'peak {p}')
+    ax3.plot(az_simu_cut, az_simu_cut, label='y=x')
+    ax3.set_ylabel('Az data', fontsize=14)
+    ax3.set_xlabel('Az simu', fontsize=14)
+    ax3.legend()
+    
+    ax4.plot(el_simu_cut, el_data_cut, '.', label=f'peak {p}')
+    ax4.plot(el_simu_cut, el_simu_cut, label='y=x')
+    ax4.set_ylabel('El data', fontsize=14)
+    ax4.set_xlabel('El simu', fontsize=14)
+    ax4.legend()
+```
+
+```{python}
+# p_az = np.polyfit(az_simu_cut, az_data_cut, deg=1)
+# p_el = np.polyfit(el_simu_cut, el_data_cut, deg=1)
+
+# ax2.plot(xx, p_el[0]*xx + p_el[1], label='Linear fit')
+```
+
+```{python}
+# az_ratio_mean, az_ratio_std = ft.meancut(az_data/az_simu, nsig=3)
+# az_ratio_median = np.median(az_data/az_simu)
+# az_ratio_mad = mymedian_absolute_deviation(az_data/az_simu)
+
+# el_ratio_mean, el_ratio_std = ft.meancut(el_data/el_simu, nsig=3)
+# el_ratio_median = np.median(el_data/el_simu)
+# el_ratio_mad = mymedian_absolute_deviation(el_data/el_simu)
+
+# fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+# ax1, ax2 = np.ravel(axs)
+
+# ax1.hist(az_data/az_simu, bins=20, range=(-5, 5))
+# ax1.set_xlabel('Azimuth Data/simu', fontsize=16)
+# ax1.set_title(fr'Meancut at 3 sigma: ${az_ratio_mean:.3f} \pm {az_ratio_std:.3f}$', fontsize=16)
+# #ax1.set_title(fr'Median and MAD ${az_ratio_median:.3f} \pm {az_ratio_mad:.3f}$', fontsize=16)
+
+# ax2.hist(el_data/el_simu, bins=20, range=(-5, 5))
+# ax2.set_xlabel('Elevation Data/simu', fontsize=16)
+# ax2.set_title(fr'Meancut at 3 sigma: ${el_ratio_mean:.3f} \pm {el_ratio_std:.3f}$', fontsize=16)
+# #ax2.set_title(fr'Median and MAD ${el_ratio_median:.3f} \pm {el_ratio_mad:.3f}$', fontsize=16)
+```
+
+## Fit the focal length 
+
+```{python}
+# Get a dictionary
+d = qubic.qubicdict.qubicDict()
+d.read_from_file('pipeline_demo.dict')
+d['config'] = 'TD'
+d['nside'] = 256
+d['synthbeam_kmax'] = 3
+d['filter_nu'] = 150e9
+
+def get_chi2_focal(focal, sigma, existing_peaks, peak_azel, nine_peak_alldet):
+    d['focal_length'] = focal
+    q = qubic.QubicInstrument(d)
+    s = qubic.QubicScene(d)
+    
+    theta, phi, _, _, _ = scal.get_coords_peaks(q, s, d, verbose=False)
+    #print(theta[0, :10], phi[0, :10])
+    peak_vec = np.zeros((248, 3, npeaks))
+    for p in range(npeaks):
+        #!!!!!!!!!!!!!! Pi rotation
+        peak_vec[:, :, p] = hp.ang2vec(theta[:, p], phi[:, p]+pi)
+    # Put it in degree
+    peak_azel_simu = np.rad2deg(peak_vec[:, :2, :])   
+    
+    # Reorder as data
+    peak_azel_simu_asdata = np.zeros((256, 2, 49))
+    for i in range(248):
+        FPindex = q.detector.index[i]
+        ASIC, TES = scal.index2tes(FPindex)
+        idx = get_index256array_from_TES(TES, ASIC)
+        peak_azel_simu_asdata[idx, :, :] = peak_azel_simu[i, :, :]    
+    
+    #peak_azel_simu_asdata[:, 0, :] += (-0.997)
+    #_azel_simu_asdata[:, 1, :] += (-0.88)
+    
+    chi2 = 0
+    # Sum on the detectors and on the peaks
+    
+    nddl = 0
+    for p in existing_peaks:
+        az_simu, az_data, el_simu, el_data = compute_azel_data_simu(p, nine_peak_alldet, 
+                                                                    peak_azel, peak_azel_simu_asdata)
+        # Do not take bad detectors
+        az_data_cut = az_data[az_data!=0.]
+        az_simu_cut = az_simu[az_data!=0.]
+        el_data_cut = el_data[az_data!=0.]
+        el_simu_cut = el_simu[az_data!=0.]
+
+        nddl += az_simu_cut.shape[0]
+        #print(nddl)
+        chi2 += ((az_data_cut-az_simu_cut)**2/sigma**2 + (el_data_cut-el_simu_cut)**2/sigma**2).sum()
+    
+    nddl-=1 #Substract the number of fit param (only the focal here)
+    print('Chi2:', chi2)
+    print('Chi2 reduce:', chi2/nddl)
+    return chi2, nddl
+
+sigma = 0.83 # FWHM of the TD
+chi2, nddl = get_chi2_focal(0.3, sigma, existing_peaks, best_peak_azel, nine_peak_alldet_new)
+```
+
+```{python}
+FWHM = np.rad2deg(3e8/(150e9*7*sqrt(2)*14e-3))
+print(FWHM)
+```
+
+```{python}
+sigma = 0.83
+chi2_focal = []
+focal_list = np.arange(0.2, 0.48, 0.01)
+for f in focal_list:
+    print('\n Focal:', f)
+    chi2, nddl = get_chi2_focal(f, 0.83, existing_peaks, best_peak_azel, nine_peak_alldet_new)
+    chi2_focal.append(chi2)
+```
+
+```{python}
+import scipy
+chi2_interp = scipy.interpolate.interp1d(focal_list, chi2_focal)
+
+
+res = scipy.optimize.minimize(chi2_interp, x0=0.2, method='Nelder-Mead')
+print(res)
+focal_found = res.x
+print(focal_found)
+print(chi2_interp(focal_found))
+```
+
+```{python}
+chi2_reduce = float(chi2_interp(focal_found)/nddl)
+print('Redude chi2:', chi2_reduce)
+```
+
+```{python}
+ff = np.arange(0.2, 0.47, 0.0001)
+
+plt.figure(figsize=(8, 6))
+plt.plot(focal_list, chi2_focal , 'o', label=r'$\chi^2$ values')
+plt.plot(ff, chi2_interp(ff), 'r', label='Interpolation')
+plt.axvline(focal_found, color='g', linestyle='--', 
+            label=r'Minimum')# for $\chi^2_{\rm red}=$' +f'{chi2_reduce:.2f}')
+#plt.axhline(chi2_interp(focal_found)+1, color='g')
+
+plt.xlabel('Focal length [m]', fontsize=16)
+plt.ylabel(r'$\chi^2$', fontsize=16)
+plt.legend(fontsize=16)
+
+plt.tight_layout()
+plt.savefig(save_dir + f'fit_focal.pdf', bbox_inches='tight')
+```
+
+#### Find an error
+
+I do not believe in the errors so I normalize the $\chi^2$ so that $\chi^2/NDF = 1$, which means we are confident in the model.
+
+```{python}
+# Normalize the chi2
+chi2_normalized = chi2_focal/chi2_min*nddl
+
+print(np.min(chi2_normalized), nddl)
+print(np.min(chi2_normalized/nddl))
+```
+
+```{python}
+# Look at the focal such that the normalized chi2 is equal to chi2_min + 1
+chi2_min = np.min(chi2_normalized)
+#chi2_min = np.min(chi2_interp(focal_found))
+print(chi2_min)
+
+chi2_interp_norm = scipy.interpolate.interp1d(focal_list, chi2_normalized)
+
+from scipy.optimize import fsolve
+
+def g(f):
+    return chi2_interp_norm(f) - chi2_min - 1
+    #return chi2_interp(f) - chi2_min - 1
+
+roots = fsolve(g, [focal_found-1e-3, focal_found+1e-3])
+
+errors = roots-focal_found
+print('Errors in cm:', errors*100)
+```
+
+## Fit the shift in az and el
+
+```{python}
+d = qubic.qubicdict.qubicDict()
+d.read_from_file('pipeline_demo.dict')
+d['config'] = 'TD'
+d['nside'] = 256
+d['synthbeam_kmax'] = 3
+d['filter_nu'] = 150e9
+d['focal_length'] = 0.3
+q = qubic.QubicInstrument(d)
+s = qubic.QubicScene(d)
+theta, phi, _, _, _ = scal.get_coords_peaks(q, s, d, verbose=False)
+peak_vec = np.zeros((248, 3, npeaks))
+for p in range(npeaks):
+    #!!!!!!!!!!!!!! Pi rotation
+    peak_vec[:, :, p] = hp.ang2vec(theta[:, p], phi[:, p]+pi)
+# Put it in degree
+peak_azel_simu = np.rad2deg(peak_vec[:, :2, :])   
+
+# Reorder as data
+peak_azel_simu_asdata = np.zeros((256, 2, 49))
+for i in range(248):
+    FPindex = q.detector.index[i]
+    ASIC, TES = scal.index2tes(FPindex)
+    idx = get_index256array_from_TES(TES, ASIC)
+    peak_azel_simu_asdata[idx, :, :] = peak_azel_simu[i, :, :]  
+
+
+```
+
+```{python}
+def get_chi2_shift(az_shift, el_shift, sigma, existing_peaks, peak_azel_simu, peak_azel, nine_peak_alldet):
+    
+    my_peak_azel_simu = peak_azel_simu.copy()
+    my_peak_azel_simu[:, 0, :] += az_shift
+    my_peak_azel_simu[:, 1, :] += el_shift
+    
+    chi2 = 0
+    # Sum on the detectors and on the peaks
+    nddl = 0
+    for p in existing_peaks:
+        az_simu, az_data, el_simu, el_data = compute_azel_data_simu(p, nine_peak_alldet, 
+                                                                    peak_azel, my_peak_azel_simu)
+        # Do not take bad detectors
+        az_data_cut = az_data[az_data!=0.]
+        az_simu_cut = az_simu[az_data!=0.]
+        el_data_cut = el_data[az_data!=0.]
+        el_simu_cut = el_simu[az_data!=0.]
+
+        nddl += az_simu_cut.shape[0]
+        #print(nddl)
+
+        chi2 += ((az_data_cut-az_simu_cut)**2/sigma**2 + (el_data_cut-el_simu_cut)**2/sigma**2).sum()
+    
+    nddl-=1 #Substract the number of fit param (only the focal here)
+    print('Chi2:', chi2)
+    print('Chi2 reduce:', chi2/nddl)
+    return chi2
+
+sigma = 0.83   
+chi2 = get_chi2_shift(-0.6, -0.2, sigma, existing_peaks, peak_azel_simu_asdata, best_peak_azel, nine_peak_alldet_new)
+```
+
+```{python}
+from iminuit import Minuit
+def chi2_shift_minuit(params):
+    print(params)
+    az_shift = params[0]
+    el_shift = params[1]
+    chi2 = get_chi2_shift(az_shift, el_shift, sigma, existing_peaks, 
+                          peak_azel_simu_asdata, best_peak_azel, nine_peak_alldet_new)
+
+    return chi2
+
+# Choose a guess by hand
+params_guess = [-0.5, -0.2]
+ 
+# Initialize iMinuit
+m = Minuit.from_array_func(chi2_shift_minuit, 
+                           params_guess, 
+                           errordef=1, print_level=2,
+                           error=[0.1, 0.1])
+                           #fix=[False, False] + [False]*(nimages-1) + [False],
+                           #limit=[(0.25, 0.35), (np.deg2rad(-2), np.deg2rad(2))] + [(-8, 1)] * nimages)
+# Run the minimization
+m.migrad()
+```
+
+### Fit the focal and the shift together
+
+```{python}
+# Get a dictionary
+d = qubic.qubicdict.qubicDict()
+d.read_from_file('pipeline_demo.dict')
+d['config'] = 'TD'
+d['nside'] = 256
+d['synthbeam_kmax'] = 3
+d['filter_nu'] = 150e9
+
+def get_chi2_global(focal, az_shift, el_shift, sigma, existing_peaks, peak_azel_simu, peak_azel, nine_peak_alldet):
+    
+    #Make a simulation
+    d['focal_length'] = focal
+    q = qubic.QubicInstrument(d)
+    s = qubic.QubicScene(d)
+    
+    theta, phi, _, _, _ = scal.get_coords_peaks(q, s, d, verbose=False)
+    peak_vec = np.zeros((248, 3, npeaks))
+    for p in range(npeaks):
+        #!!!!!!!!!!!!!! Pi rotation
+        peak_vec[:, :, p] = hp.ang2vec(theta[:, p], phi[:, p] + np.pi)
+    # Put it in degree
+    peak_azel_simu = np.rad2deg(peak_vec[:, :2, :])   
+    
+    # Reorder as data
+    peak_azel_simu_asdata = np.zeros((256, 2, 49))
+    for i in range(248):
+        FPindex = q.detector.index[i]
+        ASIC, TES = scal.index2tes(FPindex)
+        idx = get_index256array_from_TES(TES, ASIC)
+        peak_azel_simu_asdata[idx, :, :] = peak_azel_simu[i, :, :]    
+    
+    # Shift the data
+    my_peak_azel_simu_asdata = peak_azel_simu_asdata.copy()
+    my_peak_azel_simu_asdata[:, 0, :] += az_shift
+    my_peak_azel_simu_asdata[:, 1, :] += el_shift
+    
+    chi2 = 0
+    # Sum on the detectors and on the peaks  
+    nddl = 0
+    for p in existing_peaks:
+        az_simu, az_data, el_simu, el_data = compute_azel_data_simu(p, nine_peak_alldet, 
+                                                                    peak_azel, my_peak_azel_simu_asdata)
+        # Do not take bad detectors
+        az_data_cut = az_data[az_data!=0.]
+        az_simu_cut = az_simu[az_data!=0.]
+        el_data_cut = el_data[az_data!=0.]
+        el_simu_cut = el_simu[az_data!=0.]
+
+        nddl += az_simu_cut.shape[0]
+        #print(nddl)
+
+        chi2 += ((az_data_cut-az_simu_cut)**2/sigma**2 + (el_data_cut-el_simu_cut)**2/sigma**2).sum()
+    
+    nddl-=3 #Substract the number of fit param (only the focal here)
+    print('Chi2:', chi2)
+    print('Chi2 reduce:', chi2/nddl)
+    return chi2
+
+
+```
+
+```{python}
+
+def chi2_global_minuit(params):
+    print('\n', params)
+    focal = params[0]
+    az_shift = params[1]
+    el_shift = params[2]
+    chi2 = get_chi2_global(focal, az_shift, el_shift, sigma, existing_peaks, 
+                           peak_azel_simu_asdata, best_peak_azel, nine_peak_alldet_new)
+
+    return chi2
+
+# Choose a guess by hand
+params_guess = [0.3, -0.5, -0.5]
+sigma = 0.83
+
+# Initialize iMinuit
+m = Minuit.from_array_func(chi2_global_minuit, 
+                           params_guess, 
+                           errordef=1, print_level=2,
+                           error=[0.01, 0.1, 0.1],
+                           fix=[False, False, False])
+                           #limit=[(0.25, 0.35), (np.deg2rad(-2), np.deg2rad(2))] + [(-8, 1)] * nimages)
+# Run the minimization
+m.migrad()
+```
+
+```{python}
+print(m.values)
+print(m.errors)
+```
+
+## Make a MCMC
+
+```{python}
+from qubic.mcmc import MCMC
+
+def lnlike(params, sigma, existing_peaks, peak_azel_simu, peak_azel, nine_peak_alldet):
+    focal = params[0]
+    az_shift = params[1]
+    el_shift = params[2]
+    chi2 = get_chi2_global(focal, az_shift, el_shift, sigma, existing_peaks, 
+                           peak_azel_simu, peak_azel, nine_peak_alldet)
+    LnLike = - 0.5 * chi2
+#     print('A:', A[:20])
+    #print('chi2:', chi2)
+    return LnLike
+
+def lnprior(params, bounds):   
+    in_bounds = True
+    for npar, par in enumerate(params):
+        if par < bounds[npar][0] or par > bounds[npar][1]:
+            in_bounds = False
+            break
+    if in_bounds:
+        return 0.
+    return -np.inf
+    
+
+def lnprob(params, sigma, existing_peaks, peak_azel_simu, peak_azel, nine_peak_alldet, bounds):
+    print('\n', params)
+    lp = lnprior(params, bounds)
+    #print('Prior', lp)
+    if not np.isfinite(lp):
+        return -np.inf
+    LnLike = lnlike(params, sigma, existing_peaks, peak_azel_simu, peak_azel, nine_peak_alldet)
+    #print(LnLike)
+    return lp + LnLike
+```
+
+```{python}
+params_guess = [0.3, -0.5, -0.5]
+ndim = len(params_guess)
+nwalkers = 10
+
+# Initial guess
+p0 = [params_guess + 1e-2 * np.random.rand(ndim) for i in range(nwalkers)]
+# print(p0)
+
+niter = 1502
+axis_names = ['f', 'deltaAz', 'deltaEl']
+
+mcmc = MCMC(nwalkers, niter, ndim, p0, burnin=300, axis_names=axis_names, withpool=False, 
+           emcee_filename='test_focal.h5')
+bounds = [[-np.inf, +np.inf]] * 3 # No bounds
+
+#bounds = [[0.25, 0.35], [np.deg2rad(-2), np.deg2rad(2)]] + [[-5, 1]]*nimages
+sigma = 0.83
+args = (sigma, existing_peaks, peak_azel_simu_asdata, best_peak_azel, nine_peak_alldet_new, bounds)
+```
+
+```{python}
+# Run the MCMC and save a backend
+sampler = mcmc.run(lnprob, args, backend=True)
+```
+
+```{python}
+mcmc.read_backends()
+chain_validity = mcmc.set_chain_validity()
+print(np.sum(chain_validity))
+```
+
+```{python}
+mcmc.plot_chains_chi2()
+```
+
+```{python}
+mcmc.convergence_tests()
+```
+
+```{python}
+mcmc.get_params_errors()
+```
+
+```{python}
+mysamples = mcmc.chains[mcmc.burnin:, mcmc.valid_chains, :].copy()
+
+import getdist
+from getdist import plots, MCSamples
+
+labels = [r'f', r'\delta_{az}', r'\delta_{el}']
+
+samps = MCSamples(samples=mysamples, names=mcmc.axis_names, labels=labels)
+                  #ranges={'Focal':(None, None), 'Theta':(None,None)})
+
+g = plots.getSubplotPlotter()
+g.triangle_plot(samps, filled=True, title_limit=1, markers=m.values)
+g.export(save_dir + 'corner_plot_focal_SBmaps.pdf')
+```
+
+```{python}
+
+```

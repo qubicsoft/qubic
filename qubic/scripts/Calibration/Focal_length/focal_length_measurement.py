@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from __future__ import division, print_function
 
 import glob
@@ -16,7 +17,6 @@ import qubic
 import qubic.sb_fitting as sbfit
 
 from qubicpack.pixel_translation import tes2index
-from pyoperators import Cartesian2SphericalOperator
 
 
 # ============= Functions =================
@@ -164,8 +164,8 @@ def get_FL_perTES(tes_xy, alpha, rdist=None, npeaks=9, ntes=256, nsig=3, goodtes
             plt.suptitle('Peak {}'.format(peak))
             plt.subplot(121)
 
-            plt.hist(np.ravel(fl), bins=100,
-                     label='mean = {:.5f} \n STD = {:.5f}'.format(fl_global_mean, fl_global_std))
+            plt.hist(np.ravel(fl), bins=100)
+                     #label='mean = {:.5f} \n STD = {:.5f}'.format(fl_global_mean, fl_global_std))
             plt.xlabel('Focal length [m]')
             plt.legend()
 

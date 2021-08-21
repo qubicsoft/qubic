@@ -273,31 +273,35 @@ def TES_Instru2coord(TES, ASIC, q, frame='ONAFP', verbose=True):
 
     """
     if TES in [4, 36, 68, 100]:
-        raise ValueError('This is a thermometer !')
-    FP_index = tes2index(TES, ASIC)
-    if verbose:
-        print('FP_index =', FP_index)
-
-    index_q = np.where(q.detector.index == FP_index)[0][0]
-    if verbose:
-        print('Index_q =', index_q)
-
-    centerGRF = q.detector.center[q.detector.index == FP_index][0]
-    xGRF = centerGRF[0]
-    yGRF = centerGRF[1]
-
-    if frame not in ['GRF', 'ONAFP']:
-         raise ValueError('The frame is not valid.')
-    elif frame == 'GRF':
         if verbose:
-            print('X_GRF = {:.3f} mm, Y_GRF = {:.3f} mm'.format(xGRF * 1e3, yGRF * 1e3))
-        return xGRF, yGRF, FP_index, index_q
-    elif frame == 'ONAFP':
-        xONAFP = - yGRF
-        yONAFP = xGRF
-        if verbose:
-            print('X_ONAFP = {:.3f} mm, Y_ONAFP = {:.3f} mm'.format(xONAFP * 1e3, yONAFP * 1e3))
+            print('This is a thermometer !')
+        xONAFP, yONAFP, FP_index, index_q = None, None, None, None
         return xONAFP, yONAFP, FP_index, index_q
+    else:
+        FP_index = tes2index(TES, ASIC)
+        if verbose:
+            print('FP_index =', FP_index)
+
+        index_q = np.where(q.detector.index == FP_index)[0][0]
+        if verbose:
+            print('Index_q =', index_q)
+
+        centerGRF = q.detector.center[q.detector.index == FP_index][0]
+        xGRF = centerGRF[0]
+        yGRF = centerGRF[1]
+
+        if frame not in ['GRF', 'ONAFP']:
+             raise ValueError('The frame is not valid.')
+        elif frame == 'GRF':
+            if verbose:
+                print('X_GRF = {:.3f} mm, Y_GRF = {:.3f} mm'.format(xGRF * 1e3, yGRF * 1e3))
+            return xGRF, yGRF, FP_index, index_q
+        elif frame == 'ONAFP':
+            xONAFP = - yGRF
+            yONAFP = xGRF
+            if verbose:
+                print('X_ONAFP = {:.3f} mm, Y_ONAFP = {:.3f} mm'.format(xONAFP * 1e3, yONAFP * 1e3))
+            return xONAFP, yONAFP, FP_index, index_q
 
 
 def get_TES_Instru_coords(q, frame='ONAFP', verbose=True):
@@ -490,6 +494,37 @@ def find_equivalent_baselines(all_bs, q):
     return BLs_sort, all_eqtype
 
 
+def get_coords_peaks(q, s, d, verbose=True):
+    kmax = d['synthbeam_kmax']
+    nu = d['filter_nu']
+
+    if verbose:
+        print(f'Number of peaks: {(2 * kmax + 1) ** 2}')
+
+    # Coordinate on a simple grid
+    theta, phi = q._peak_angles_kmax(kmax, q.horn.spacing, q.horn.angle, nu, q.detector.center)
+
+    # Coordinates ordered from highest intensity to the smallest one
+    theta_order, phi_order, val_order = q._peak_angles(s, nu, q.detector.center, q.synthbeam, q.horn, q.primary_beam)
+
+    return theta, phi, theta_order, phi_order, val_order
+
+
+def get_main_peak_list(theta, theta_order):
+    ndet = theta.shape[0]
+    allmain_peaks = []
+    for idx in range(ndet):
+        main_peak = list(theta[idx, :]).index(theta_order[idx, :1])
+        allmain_peaks.append(main_peak)
+    return allmain_peaks
+
+
+def get_peak_list(mp):
+    """mp: main peak index"""
+    the_nine_peaks = [mp - 8, mp - 7, mp - 6, mp - 1, mp, mp + 1, mp + 6, mp + 7, mp + 8]
+    return the_nine_peaks
+
+
 # ========== Compute power on the focal plane =============
 def make_external_A(rep, open_horns):
     """
@@ -646,7 +681,7 @@ def get_power_Maynooth(rep, open_horns, theta, nu, horn_center, hwp_position=0, 
     rep: str
         Repository with the simulation files.
     open_horns: list
-        List of open horns.
+        List of open horns from 1 to 64.
     theta: float
         The source zenith angle [rad].
     nu: float
@@ -1198,7 +1233,7 @@ class Model_Fringes_QubicSoft:
 class Model_Fringes_Maynooth:
     def __init__(self, q, baseline, rep,
                  theta_source=0., nu_source=150e9,
-                 frame='ONAFP', interp=False):
+                 frame='ONAFP', FIfocal_plane=False, interp=False):
         """
         Parameters
         ----------
@@ -1216,6 +1251,8 @@ class Model_Fringes_Maynooth:
         interp: bool
             If True, interpolate and integrate in each TES (takes time).
             If False, make the mean in each TES (faster).
+        FIfocal_plane: bool
+            If True, compute the fringes on the FI full focal plane.
         """
         self.q = q
         self.baseline = baseline
@@ -1224,10 +1261,15 @@ class Model_Fringes_Maynooth:
         self.nu_source = nu_source
         self.frame = frame
         self.interp = interp
+        self.FIfocal_plane = FIfocal_plane
 
-    def get_fringes(self, verbose=True):
+    def get_fringes(self, qFI=None, verbose=True):
         """
         Compute fringes on the focal plane from Maynooth simulations.
+        Parameters
+        ----------
+        qFI: Qubic FI instrument in case you want the Fringes on the FI focal plane.
+        verbose: bool
         Returns
         -------
         x, y coordinates on the FP in the ONAFP frame and the corresponding power.
@@ -1239,14 +1281,23 @@ class Model_Fringes_Maynooth:
         xONAFP, yONAFP, fringes_fullreso = get_power_Maynooth(self.rep, self.baseline,
                                                    self.theta_source, self.nu_source,
                                                    self.q.horn.center, verbose=verbose)
+        if self.FIfocal_plane:
+            # TES centers and TES vertex in the ONAFP frame
+            xONAFP_TES, yONAFP_TES, vONAFP_TES = get_TEScoordinates_ONAFP(qFI)
 
-        # TES centers and TES vertex in the ONAFP frame
-        xONAFP_TES, yONAFP_TES, vONAFP_TES = get_TEScoordinates_ONAFP(self.q)
+            self.fringes = fullreso2TESreso(xONAFP, yONAFP, fringes_fullreso,
+                                            vONAFP_TES, qFI.detector.area,
+                                            interp=self.interp,
+                                            verbose=verbose)
 
-        self.fringes = fullreso2TESreso(xONAFP, yONAFP, fringes_fullreso,
-                                        vONAFP_TES, self.q.detector.area,
-                                        interp=self.interp,
-                                        verbose=verbose)
+        else:
+            # TES centers and TES vertex in the ONAFP frame
+            xONAFP_TES, yONAFP_TES, vONAFP_TES = get_TEScoordinates_ONAFP(self.q)
+
+            self.fringes = fullreso2TESreso(xONAFP, yONAFP, fringes_fullreso,
+                                            vONAFP_TES, self.q.detector.area,
+                                            interp=self.interp,
+                                            verbose=verbose)
 
         # power_TES *= q.filter.bandwidth  # W/Hz to W
 

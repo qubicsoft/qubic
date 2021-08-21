@@ -44,7 +44,8 @@ plt.rcParams['image.cmap'] = 'jet'
 
 ```{python}
 # If you want to save maps somewhere, change the following path:
-save_dir = '/home/lmousset/QUBIC/Qubic_work/Component_sep/QSSmaps/'
+#save_dir = '/home/lmousset/QUBIC/Qubic_work/Component_sep/QSSmaps/'
+save_dir = '/home/lmousset/QUBIC/These_manuscrit/Figures/Plots/'
 ```
 
 This notebook is a demo for using the QUBIC FastSimulator which is a shortcut to produce QUBIC noise maps without having to go through the long and CPU greedy process of QUBIC Map-Making on supercomputers.
@@ -99,7 +100,7 @@ The maps are centered on the Galactic Center. You can provide your own coverage 
 ```{python}
 reload(qss)
 #### One can easily change the number of sub-bands by updating the dictionary
-nbands = 3
+nbands = 1
 d['nf_recon'] = nbands
 d['nf_sub'] = nbands
 
@@ -145,7 +146,7 @@ seenmap = coverage > np.max(coverage) * 0.1
 patch_noise = maps_noise[:, seenmap, :]
 
 name = f'NoisePatch_{nbands}bands_{config}_spatialCovTrue_nunuCovTrue.npy'
-np.save(save_dir + name, patch_noise)
+#np.save(save_dir + name, patch_noise)
 
 ```
 
@@ -156,7 +157,7 @@ Because in the above mode, most of the CPU time is spent on convolving the input
 reload(qss)
 
 newd = d.copy()
-newd['nf_recon'] = 3
+newd['nf_recon'] = 1
 
 ##### QubicSkySim instanciation
 seed = None
@@ -181,7 +182,7 @@ Of course we focus here on the noise_only results of the FastSimulator.
 
 ```{python}
 # !!!! Choose a number of bands for all the following
-nbands = 7
+nbands = 4
 
 newd = d.copy()
 newd['nf_recon'] = nbands
@@ -234,8 +235,10 @@ for isub in range(newd['nf_recon']):
     plt.plot(fitcov[isub][0,:], np.sqrt(fitcov[isub][2, :]), label='QU from End-to-End')
     plt.legend()
     plt.xlim(0.9, 10.1)
+    plt.xlabel('1/(Normalized coverage)')
 #     ylim(0, np.max(yyfs)*1.1)
-    
+plt.tight_layout()
+plt.savefig(save_dir + f'FastSim_RMSscaling_{config}_{nbands}bands.pdf', bbox_inches='tight')
 ```
 
 ### 2) SubBand-SubBand correlation:
@@ -253,22 +256,23 @@ new_corr_mats = [cInew, cQnew/2, cUnew/2]
 
 corr_mats = [DataFastSim['CovI'], DataFastSim['CovQ']/2, DataFastSim['CovU']/2]
 
-plt.figure()
+plt.figure(figsize=(12, 8))
 stn = ['I','Q/2', 'U/2']
 # bla = np.max([np.abs(np.array([corr_mats, new_corr_mats])), np.array([corr_mats, new_corr_mats])])
-mini = None
-maxi = None
+mini = -2
+maxi = 2
 for s in range(3):
     plt.subplot(2,3,1+s)
     plt.imshow(corr_mats[s], vmin=mini, vmax=maxi, cmap='bwr')
     plt.colorbar(orientation='horizontal')
-    plt.title('End-To-End Cov {} nsub={}'.format(stn[s],newd['nf_recon']))
+    plt.title('End-To-End \n Cov {} - {} bands'.format(stn[s], newd['nf_recon']))
     
     plt.subplot(2, 3, 4+s)
     plt.imshow(new_corr_mats[s], vmin=mini, vmax=maxi, cmap='bwr')
     plt.colorbar(orientation='horizontal')
-    plt.title('FastSim Cov {} nsub={}'.format(stn[s],newd['nf_recon']))
-
+    plt.title('FastSim \n Cov {} - {} bands'.format(stn[s], newd['nf_recon'] ))
+plt.tight_layout()
+plt.savefig(save_dir + f'FastSim_Corr_{config}_{nbands}bands.pdf', bbox_inches='tight')
 ```
 
 ### 3) Spatial correlation
@@ -303,14 +307,24 @@ for i in range(newd['nf_recon']):
 ```
 
 ```{python}
+cell = DataFastSim['clnoise']
+theta_deg, ctheta_end2end =  qc.cell_2_ctheta(cell, theta_deg=np.linspace(0, 20, 100))
+```
+
+```{python}
+plt.figure(figsize=(8, 6))
 for i in range(newd['nf_recon']):
-    plot(th, allcthI[i]/allcthI[i][0], 'o', label=f'Fast-Simulation I Sub {i+1}')
-    plot(th, allcthQ[i]/allcthQ[i][0], 'o', label=f'Fast-Simulation Q Sub {i+1}')
-    plot(th, allcthU[i]/allcthU[i][0], 'o', label=f'Fast-Simulation U Sub {i+1}')
-    
-legend()
-xlabel(r'$\theta$ [deg]')
-ylabel(r'$C(\theta$)')
+    plt.plot(th, allcthI[i]/allcthI[i][0], 'o', label=f'Sub-band {i+1}')
+#    plot(th, allcthQ[i]/allcthQ[i][0], 'o', label=f'Sub - band {i+1}')
+ #   plot(th, allcthU[i]/allcthU[i][0], 'o', label=f'Sub - band {i+1}')
+#plt.plot(theta_deg, ctheta_end2end/ctheta_end2end[0], 'k')
+plt.title(f'FastSim - I - {nbands} bands')    
+plt.legend()
+plt.xlabel(r'$\theta$ [deg]', fontsize=16)
+plt.ylabel(r'$C(\theta$)', fontsize=16)
+
+plt.tight_layout()
+plt.savefig(save_dir + f'FastSim_Ctheta_{config}_{nbands}bands.pdf', bbox_inches='tight')
 ```
 
 ### 4) RMS profile

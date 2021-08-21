@@ -1,4 +1,5 @@
 import emcee
+from multiprocessing import cpu_count, Pool
 from scipy.optimize import curve_fit
 from scipy.integrate import cumtrapz
 from pylab import *
@@ -199,3 +200,273 @@ class LogLikelihood:
             else:
                 myguess_params[:, i] = self.p0[i]
         return myguess_params
+
+
+class MCMC:
+    def __init__(self, nwalkers, niter, ndim, p0, burnin, axis_names, withpool=False, emcee_filename='emcee.h5'):
+        self.nwalkers = nwalkers
+        self.niter = niter
+        self.ndim = ndim
+        self.p0 = p0
+        self.burnin = burnin
+        self.axis_names = axis_names
+        self.withpool = withpool
+        self.emcee_filename = emcee_filename
+
+    def run(self, lnprob, args, backend=True):
+
+        with Pool() as pool:
+            if not self.withpool:
+                pool = None
+            if backend:
+                backend = emcee.backends.HDFBackend(self.emcee_filename)
+
+                sampler = emcee.EnsembleSampler(self.nwalkers, self.ndim, lnprob, args=args,
+                                                pool=pool,
+                                                backend=backend)
+                if backend.iteration > 0:
+                    self.p0 = backend.get_last_sample()
+                if self.niter - backend.iteration > 0:
+                    print("\n =========== Running production... ===========")
+                    start = time.time()
+                    sampler.run_mcmc(self.p0,
+                                     nsteps=max(0, self.niter - backend.iteration),
+                                     progress=True)
+            else:
+                sampler = emcee.EnsembleSampler(self.nwalkers, self.ndim, lnprob, args=args,
+                                                pool=pool,
+                                                backend=None)
+                print("\n =========== Running production... ===========")
+                start = time.time()
+                sampler.run_mcmc(self.p0, nsteps=self.niter, progress=True)
+
+        end = time.time()
+        print("MCMC took {0:.1f} seconds".format(end - start))
+        return sampler
+
+    def read_sampler(self, sampler, has_blobs=True):
+        if has_blobs:
+            self.blobs = sampler.get_blobs(flat=False)
+
+        self.chains = sampler.get_chain(discard=0, flat=False, thin=1)
+        self.chains_flat = sampler.get_chain(discard=0, flat=True, thin=1)
+        self.lnprobs = sampler.get_log_prob(discard=0, flat=False, thin=1)
+
+    def read_backends(self):
+        reader = emcee.backends.HDFBackend(self.emcee_filename)
+        try:
+            tau = reader.get_autocorr_time()
+        except emcee.autocorr.AutocorrError:
+            tau = -1
+        self.tau = tau
+        if reader.has_blobs():
+            self.blobs = reader.get_blobs(flat=False)
+        self.chains = reader.get_chain(discard=0, flat=False, thin=1)
+        self.chains_flat = reader.get_chain(discard=0, flat=True, thin=1)
+        self.lnprobs = reader.get_log_prob(discard=0, flat=False, thin=1)
+        return
+
+    def compute_local_acceptance_rate(self, start_index, last_index, walker_index):
+        """Compute the local acceptance rate in a chain.
+
+        Parameters
+        ----------
+        start_index: int
+            Beginning index.
+        last_index: int
+            End index.
+        walker_index: int
+            Index of the walker.
+
+        Returns
+        -------
+        freq: float
+            The acceptance rate.
+
+        """
+        frequences = []
+        test = -2 * self.lnprobs[start_index, walker_index]
+        counts = 1
+        for index in range(start_index + 1, last_index):
+            chi2 = -2 * self.lnprobs[index, walker_index]
+            if np.isclose(chi2, test):
+                counts += 1
+            else:
+                frequences.append(float(counts))
+                counts = 1
+                test = chi2
+        frequences.append(counts)
+        return 1.0 / np.mean(frequences)
+
+    def set_chain_validity(self):
+        """Test the validity of a chain: reject chains whose chi2 is far from the mean of the others.
+
+        Returns
+        -------
+        valid_chains: list
+            List of boolean values, True if the chain is valid, or False if invalid.
+
+        """
+        nchains = [k for k in range(self.nwalkers)]
+        chisq_averages = []
+        chisq_std = []
+        for k in nchains:
+            chisqs = -2 * self.lnprobs[self.burnin:, k]
+            chisq_averages.append(np.mean(chisqs))
+            chisq_std.append(np.std(chisqs))
+        self.global_average = np.mean(chisq_averages)
+        self.global_std = np.mean(chisq_std)
+        self.valid_chains = [False] * self.nwalkers
+        for k in nchains:
+            chisqs = -2 * self.lnprobs[self.burnin:, k]
+            chisq_average = np.mean(chisqs)
+            chisq_std = np.std(chisqs)
+            if 3 * self.global_std + self.global_average < chisq_average:
+                self.valid_chains[k] = False
+            elif chisq_std < 0.1 * self.global_std:
+                self.valid_chains[k] = False
+            else:
+                self.valid_chains[k] = True
+        return self.valid_chains
+
+    def get_reduce_chi2(self, nimages, ndet):
+        NDDL = (nimages * ndet - (ndet + nimages + 2))
+        return self.global_average / NDDL
+
+    def plot_chains_chi2(self, fontsize=14):
+        """Plot chains and chi2."""
+        chains = self.chains[self.burnin:, :, :]  # .reshape((-1, self.ndim))
+        nchains = [k for k in range(self.nwalkers)]
+        steps = np.arange(self.burnin, self.niter)
+
+        fig, ax = plt.subplots(self.ndim + 1, 1, figsize=(10, 7), sharex='all')
+
+        # Chi2 vs Index
+        print("Chisq statistics:")
+        for k in nchains:
+            chisqs = -2 * self.lnprobs[self.burnin:, k]
+            text = f"\tWalker {k:d}: {float(np.mean(chisqs)):.3f} +/- {float(np.std(chisqs)):.3f}"
+            if not self.valid_chains[k]:
+                text += " -> excluded"
+                ax[self.ndim].plot(steps, chisqs, c='0.5', linestyle='--')
+            else:
+                ax[self.ndim].plot(steps, chisqs)
+            print(text)
+
+        ax[self.ndim].set_ylim(
+            [self.global_average - 5 * self.global_std, self.global_average + 5 * self.global_std])
+
+        # Parameter vs Index
+        print("Computing Parameter vs Index plots...")
+        for i in range(self.ndim):
+            h = ax[i].set_ylabel(self.axis_names[i], fontsize=fontsize)
+            h.set_rotation(0)
+            for k in nchains:
+                if self.valid_chains[k]:
+                    ax[i].plot(steps, chains[:, k, i])
+                else:
+                    ax[i].plot(steps, chains[:, k, i], c='0.5', linestyle='--')
+                ax[i].get_yaxis().set_label_coords(-0.05, 0.5)
+        h = ax[self.ndim].set_ylabel(r'$\chi^2$', fontsize=fontsize)
+        h.set_rotation(0)
+        ax[self.ndim].set_xlabel('Steps', fontsize=fontsize)
+        ax[self.ndim].get_yaxis().set_label_coords(-0.05, 0.5)
+
+        fig.tight_layout()
+        plt.subplots_adjust(hspace=0)
+        figure_name = self.emcee_filename.replace('.h5', '_chains.pdf')
+        print(f'Save figure: {figure_name}')
+        fig.savefig(figure_name, dpi=100)
+
+        return
+
+    def convergence_tests(self, xlim=(None, None), fontsize=14):
+        """
+        Compute the convergence tests (Gelman-Rubin, acceptance rate).
+        """
+        chains = self.chains[self.burnin:, :, :]
+        nchains = [k for k in range(self.nwalkers)]
+        steps = np.arange(self.burnin, self.niter)
+
+        # Acceptance rate vs Index
+        print("Computing acceptance rate...")
+        min_len = self.niter
+        window = 100
+
+        fig, ax = plt.subplots(2, 1, figsize=(10, 7), sharex='all')
+        print(ax.shape)
+        if min_len > window:
+            for k in nchains:
+                ARs = []
+                indices = []
+                for pos in range(self.burnin + window, self.niter, window):
+                    ARs.append(self.compute_local_acceptance_rate(pos - window, pos, k))
+                    indices.append(pos)
+                if self.valid_chains[k]:
+                    ax[1].plot(indices, ARs, label=f'Walker {k:d}')
+                else:
+                    ax[1].plot(indices, ARs, label=f'Walker {k:d}', c='gray', linestyle='--')
+                ax[1].set_xlabel('Steps', fontsize=fontsize)
+                ax[1].set_ylabel('Aceptance rate', fontsize=fontsize)
+                ax[1].set_xlim(xlim)
+
+        # Gelman-Rubin test
+        if len(nchains) > 1:
+            step = max(1, (self.niter - self.burnin) // 20)
+            self.gelmans = []
+            print(f'Gelman-Rubin tests (burnin={self.burnin:d}, step={step:d}, nsteps={self.niter:d}):')
+            for i in range(self.ndim):
+                Rs = []
+                lens = []
+                for pos in range(self.burnin + step, self.niter, step):
+                    chain_averages = []
+                    chain_variances = []
+                    global_average = np.mean(self.chains[self.burnin:pos, self.valid_chains, i])
+                    for k in nchains:
+                        if not self.valid_chains[k]:
+                            continue
+                        chain_averages.append(np.mean(self.chains[self.burnin:pos, k, i]))
+                        chain_variances.append(np.var(self.chains[self.burnin:pos, k, i], ddof=1))
+                    W = np.mean(chain_variances)
+                    B = 0
+                    for n in range(len(chain_averages)):
+                        B += (chain_averages[n] - global_average) ** 2
+                    B *= ((pos + 1) / (len(chain_averages) - 1))
+                    R = (W * pos / (pos + 1) + B / (pos + 1) * (len(chain_averages) + 1) / len(chain_averages)) / W
+                    Rs.append(R - 1)
+                    lens.append(pos)
+                #                 print(f'\t{self.input_labels[i]}: R-1 = {Rs[-1]:.3f} (l = {lens[-1] - 1:d})')
+                self.gelmans.append(Rs[-1])
+                ax[0].plot(lens, Rs, lw=1, label=self.axis_names[i])
+
+            ax[0].axhline(0.03, c='k', linestyle='--', label='Threshold 0.03')
+            ax[0].set_xlabel('Walker length', fontsize=fontsize)
+            ax[0].set_ylabel('$R-1$', fontsize=fontsize)
+            ax[0].set_ylim(0, 0.3)
+            ax[0].set_yticks(np.arange(0, 0.3, 0.1))
+            ax[0].set_xlim(xlim)
+            ax[0].legend()
+        self.gelmans = np.array(self.gelmans)
+        fig.tight_layout()
+        plt.subplots_adjust(hspace=0)
+        figure_name = self.emcee_filename.replace('.h5', '_convergence.pdf')
+        print(f'Save figure: {figure_name}')
+        fig.savefig(figure_name, dpi=100)
+
+        return
+
+    def get_params_errors(self):
+        chains = self.chains[self.burnin:, self.valid_chains, :]
+
+        self.params = np.mean(chains, axis=(0, 1))
+        self.params_std = np.std(chains, axis=(0, 1))
+
+        for i in range(self.ndim):
+            print(f'***** {self.axis_names[i]}:')
+            print(f'{self.params[i]:.5f} +/- {self.params_std[i]:.5f}')
+
+        s, m, p, = np.shape(chains)
+        flat_chains = np.reshape(chains, (s * m, p))
+        self.params_cov = np.cov(flat_chains.T)
+        print(self.params_cov.shape)
+        return

@@ -35,6 +35,10 @@ from qubic import camb_interface as qc
 rc('font', size=15)
 ```
 
+```{python}
+save_dir = '/home/lmousset/QUBIC/These_manuscrit/Figures/Plots/'
+```
+
 # Build maps 
 
 In this first part, we build sky maps knowing the spectra. For that, we use PySM3 implemented in Qubic soft. 
@@ -257,9 +261,6 @@ plt.xticks(np.arange(0., 600, 100))
 plt.yticks(np.arange(0., 0.13, 0.02))
 plt.legend()
 plt.title(clnames[i])
-
-plt.savefig(f'/home/lmousset/QUBIC/These_manuscrit/Figures/Plots/Namaster_{clnames[i]}_auto-cross.pdf')
-#tkz.save(f'/home/lmousset/QUBIC/These_manuscrit/tikz/Namaster_{clnames[i]}_auto-cross.tex')
 ```
 
 ### Compare pure or not pure 
@@ -462,11 +463,90 @@ for i in range(4):
 plt.tight_layout()
 ```
 
-```{python}
-xx = np.arange(0, 100, 0.1)
-plt.figure()
-plt.plot(xx, np.exp(-(xx-50)**2/150), 'r', lw=2)
+#### With cross-spectra
 
+```{python}
+# Do many realizations, same CMB (seed=42) but random noise realisations
+nsim = 50
+nsim_cells1 = []
+nsim_cells2 = []
+nsim_cells_cross = []
+for sim in range(nsim):
+    Qubic_sky1, _, maps_observed1 = make_maps(d, seenpix, seed=42, noise_level=0.25)
+    Qubic_sky2, _, maps_observed2 = make_maps(d, seenpix, seed=42, noise_level=0.25)
+    # Make an 2D array containing IQU maps, the shape must be (3, #pixels)
+    maps1 = maps_observed1[0].T
+    maps2 = maps_observed2[0].T
+    input_Dl = Qubic_sky.input_cmb_spectra
+   
+    leff, cells1, w = Namaster.get_spectra(maps1, purify_e=True, purify_b=False, 
+                                          beam_correction=None, pixwin_correction=None)
+    leff, cells2, w = Namaster.get_spectra(maps2, purify_e=True, purify_b=False, 
+                                          beam_correction=None, pixwin_correction=None)
+    _, cells_cross, w = Namaster.get_spectra(maps1, map2=maps2, purify_e=True, purify_b=False, 
+                                          beam_correction=None, pixwin_correction=None)
+    nsim_cells1.append(cells1)
+    nsim_cells2.append(cells2)
+    nsim_cells_cross.append(cells_cross)
+nsim_cells1 = np.array(nsim_cells1)
+nsim_cells2 = np.array(nsim_cells2)
+nsim_cells_cross = np.array(nsim_cells_cross)
+print(nsim_cells1.shape)
+```
+
+```{python}
+nsim_cells = np.concatenate((nsim_cells1, nsim_cells2))
+print(nsim_cells.shape)
+```
+
+```{python}
+mean_cells = np.mean(nsim_cells, axis=0)
+std_cells = np.std(nsim_cells, axis=0)
+mean_cells_cross = np.mean(nsim_cells_cross, axis=0)
+std_cells_cross = np.std(nsim_cells_cross, axis=0)
+print(mean_cells.shape)
+
+clnames = ['TT', 'EE', 'BB', 'TE']
+
+```
+
+```{python}
+plt.figure(figsize=(8, 6))
+i = 2
+plt.plot(input_ell[lmin:lmax], input_Dl[lmin:lmax, i], label='Input spectrum')
+plt.errorbar(leff[:lmax], mean_cells[:lmax, i], yerr=std_cells[:lmax, i], fmt='ro', label='Auto-spectrum')
+plt.errorbar(leff[:lmax], mean_cells_cross[:lmax, i], yerr=std_cells_cross[:lmax, i]*sqrt(2), fmt='bo', 
+             label='Cross-spectrum')
+plt.xlabel(r'$\ell$', fontsize=18)
+plt.ylabel(r'$\langle D_\ell \rangle_r $', fontsize=18)
+plt.xticks(np.arange(0., 600, 100))
+#plt.yticks(np.arange(0., 0.13, 0.02))
+plt.legend()
+plt.title(clnames[i])
+
+plt.savefig(save_dir + f'Namaster_{clnames[i]}_auto-cross.pdf')
+#tkz.save(save_dir + f'Namaster_{clnames[i]}_auto-cross.tex')
+```
+
+```{python}
+plt.figure(figsize=(8, 6))
+i = 2
+for r in range(50):
+    plt.plot(leff[:lmax], nsim_cells[r, :lmax, i], 'o', label='Auto-spectrum')
+    plt.plot(leff[:lmax], nsim_cells_cross[r, :lmax, i], 'o', label='Cross-spectrum')
+plt.plot(input_ell[lmin:lmax], input_Dl[lmin:lmax, i], label='Input spectrum')
+
+plt.xlabel('$\\ell$', fontsize=18)
+plt.ylabel('$D_\\ell$', fontsize=18)
+plt.xticks(np.arange(0., 600, 100))
+#plt.yticks(np.arange(0., 0.13, 0.02))
+#plt.legend()
+plt.title(clnames[i])
+
+```
+
+```{python}
+nsim_cells.shape
 ```
 
 ```{python}

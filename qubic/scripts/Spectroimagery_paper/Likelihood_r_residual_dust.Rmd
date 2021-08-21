@@ -39,8 +39,9 @@ rc('font', size=18)
 ```
 
 ```{python}
-# If you plan to save data change the path here
+# If you plan to save data or plots change the path here
 dir_save = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/Simu_spectroim/FastSimulator'
+save_plot = '/home/lmousset/QUBIC/These_manuscrit/Figures/Plots/'
 ```
 
 ```{python}
@@ -174,7 +175,7 @@ binned_camblib = qc.bin_camblib(Namaster, '../../doc/CAMB/camblib_0to1_step001.p
 ```{python}
 # Compute BB cross spectra for dust once 
 # dust_fraction = [0., 0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05]
-dust_fraction = np.arange(0., 0.011, 0.001)
+dust_fraction = np.arange(0., 0.007, 0.001)
 print(dust_fraction)
 BBcross_dust = np.zeros((len(dust_fraction), ncombi, nbins))
 
@@ -225,14 +226,14 @@ sns.palplot(palet)
 ```
 
 ```{python}
-# for f, frac in enumerate(dust_fraction):
-#     c = palet[f]
-#     plt.plot(ell_binned, BBcross_dust[f, 0, :], color=c, label=r'$f_{dust}$' +f' = {frac}')
-# plt.title('BB dust')
-# plt.ylabel('$D_\ell$')
-# plt.xlabel('$\ell$')
-# plt.grid()
-# plt.legend()
+for f, frac in enumerate(dust_fraction):
+    c = palet[f]
+    plt.plot(ell_binned, BBcross_dust[f, 0, :], color=c, label=r'$f_{dust}$' +f' = {frac}')
+plt.title('BB dust')
+plt.ylabel('$D_\ell$')
+plt.xlabel('$\ell$')
+plt.grid()
+plt.legend()
 ```
 
 ```{python}
@@ -318,7 +319,7 @@ for f, frac in enumerate(dust_fraction[:]):
     ax0.axvline(x=allsigma68[f], linestyle='--', color=c)
 
 ax0.legend(loc='best', fontsize=12)
-ax0.set_xlim(0, 1)
+ax0.set_xlim(0, 0.08)
 ax0.set_xlabel('$r_{dust}$')
 ax0.set_ylabel('Posterior')
 
@@ -349,13 +350,11 @@ for f, frac in enumerate(dust_fraction[:]):
     ax.errorbar(dust_fraction[f], allr_dust[f],
              yerr=allsigma68[f] - allr_dust[f], 
              fmt='o', color='r')
-ax.set_xlabel('$f_{dust}$')
-ax.set_ylabel('$r_{dust}$')
+ax.set_xlabel(r'$f_{\rm dust}$', fontsize=16)
+ax.set_ylabel(r'$r_{\rm dust}$', fontsize=16)
 ax.grid()
 
-# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/'+
-#             f'Likelihood_dust_rdust_{config}_3y_{nbands}bands_rightplot_GoodPhotonNoise_fdust0to0.01.pdf', 
-#             bbox_inches='tight')
+#plt.savefig(save_plot + f'Likelihood_dust_rdust_{config}_3y_{nbands}bands_fdust0to06.pdf', bbox_inches='tight')
 ```
 
 ## Likelihood of each IBCS
@@ -430,7 +429,7 @@ for f, frac in enumerate(dust_fraction[:]):
                  
         plt.axvline(x=r_dust[f, i], linestyle='--', color=c, )
 
-plt.xlim(0, 1)
+plt.xlim(0, 0.1)
 plt.xlabel('r')
 plt.ylabel('Posterior')
 plt.grid()

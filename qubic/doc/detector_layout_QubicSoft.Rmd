@@ -27,11 +27,16 @@ from __future__ import division, print_function
 import numpy as np
 from astropy.io import fits
 import matplotlib.pyplot as plt
-
-from qubicpack.utilities import Qubic_DataDir
 import qubic
+from qubicpack.pixel_translation import plot_id_focalplane
+from qubicpack.utilities import Qubic_DataDir
+
 
 plt.rcParams['figure.figsize'] = (12, 6)
+```
+
+```{python}
+save_dir = '/home/lmousset/QUBIC/These_manuscrit/Figures/Plots/'
 ```
 
 ```{python}
@@ -49,8 +54,14 @@ d['MultiBand'] = False
 d['nf_sub'] = 1
 
 # Choose TD or FI
-config = 'TD'
+config = 'FI'
 d['config'] = config
+```
+
+### Summary of TES numbering from QUBIC pack
+
+```{python}
+plot_id_focalplane()
 ```
 
 ## Look at the DetArray calibration file
@@ -367,9 +378,27 @@ plt.colorbar()
 ```
 
 ```{python}
-plt.figure()
-plt.pcolor(xONAFP_2D, yONAFP_2D, q.detector.all.quadrant)
+
+fig = plt.figure(figsize=(12, 4.5))
+
+plt.subplot(121)
+plt.pcolor(x, y, ordering)
+plt.title('Detector ordering')
+plt.xlabel('X_ONAFP')
+plt.ylabel('Y_ONAFP')
 plt.colorbar()
+plt.axis('square')
+
+plt.subplot(122)
+plt.pcolor(xONAFP_2D, yONAFP_2D, index_2D)
+plt.title('Detector indices')
+plt.xlabel('X_ONAFP')
+plt.ylabel('Y_ONAFP')
+plt.colorbar()
+plt.axis('square')
+
+fig.tight_layout()
+fig.savefig(save_dir+ 'TES_index.pdf', bbox_inches='tight')
 ```
 
 ```{python}

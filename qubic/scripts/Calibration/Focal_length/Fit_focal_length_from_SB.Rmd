@@ -46,7 +46,7 @@ d.read_from_file(os.environ['QUBIC_DICT']+'pipeline_demo.dict')
 
 d['config'] = 'TD'
 d['synthbeam_kmax'] = 3
-d['nside'] = 256
+d['nside'] = 64
 NSIDE = d['nside']
 npix = 12 * NSIDE**2
 
@@ -71,7 +71,7 @@ myname = date + '_Healpix_maps.pdf'
 # Selection of good TES
 PIX_ok = [6, 9, 16, 22, 26, 27, 37, 50, 51, 58, 73, 74, 75, 76, 80, 83, 86, 87, 93, 107, 
           34, 135, 150, 170, 185, 186, 191, 195, 206, 210, 218, 219, 236] 
-PIX_ok = [93, 37, 73]
+PIX_ok = [6, 9, 16]
 
 # === 2020 January
 # date = '2020-01-14'
@@ -236,10 +236,18 @@ print(gains_fake)
 ### Compare real and fake data
 
 ```{python}
+myname = date + '_Healpix_maps_simu_data.pdf'
+myname
+```
+
+```{python}
 ### Save a pdf
 # myname = date + '_Healpix_maps_simu_data.pdf'
 # with PdfPages(mydir + myname) as pp:
 #     for idx in range(ndet):
+#         TES = PIX_ok[idx] % 128
+#         ASIC = PIX_ok[idx] // 128 + 1
+
 #         real = np.zeros(12 * NSIDE**2) + hp.UNSEEN
 #         real[ipix_patch] = mydata[idx]
 
@@ -247,9 +255,9 @@ print(gains_fake)
 #         fake[ipix_patch] = mydata_fake[idx]
 
 #         plt.figure(figsize=(12, 8))
-#         plt.suptitle(f'PIX {PIX_ok[idx]} - Index_q {index_q_ok[idx]}')
-#         hp.gnomview(real, sub=(121), reso=15, title='Real', min=0., max=None)#norm=SymLogNorm(1e3))
-#         hp.gnomview(fake, sub=(122), reso=15, title='Fake', min=0., max=None)#norm=SymLogNorm(1e4))
+#         plt.suptitle(f'TES {TES} - ASIC {ASIC} - {freq} GHz')
+#         hp.gnomview(real, sub=(121), reso=15, title='Measurement', min=0., max=None)#norm=SymLogNorm(1e3))
+#         hp.gnomview(fake, sub=(122), reso=15, title='Simulation', min=0., max=None)#norm=SymLogNorm(1e4))
 #         hp.graticule()
 #         hp.visufunc.projscatter(0., 0., color='r', marker='+', lonlat=True, s=100)
         
@@ -267,11 +275,11 @@ for idx in range(ndet):
 
     plt.figure(figsize=(12, 8))
     plt.suptitle(f'TES {TES} - ASIC {ASIC} - {freq} GHz')# - Index_q {index_q_ok[idx]}')
-    hp.gnomview(real, sub=(121), reso=13, title='Measurement', min=0., max=5e4)#norm=SymLogNorm(1e3))
+    hp.gnomview(real, sub=(121), reso=13, title='Measurement', min=0., max=1e4)#norm=SymLogNorm(1e3))
     hp.gnomview(fake, sub=(122), reso=13, title='Simulation', min=0., max=1e6)#norm=SymLogNorm(1e4))
-#     hp.graticule()
-#     hp.visufunc.projscatter(0., 0., color='r', marker='+', lonlat=True, s=100)
-
+    hp.graticule()
+    hp.visufunc.projscatter(0., 0., color='r', marker='+', lonlat=True, s=100)
+    #plt.savefig(mydir + date + f'_data_simu_TES{TES}-ASIC{ASIC}-{freq}GHz.pdf', bbox_inches='tight')
 ```
 
 ### Covariance matrix of the noise
@@ -280,7 +288,9 @@ for idx in range(ndet):
 # Covariance matrix (npix x npix)
 invcov = np.zeros((ndet, npix_patch, npix_patch))
 for i in range(ndet):
-#     cov = 100 * np.identity(npix_patch)
+    print(i)
+    #invcov[i, :, :] = np.identity(npix_patch)/10
+    #cov = 100 * np.identity(npix_patch)
     
     diago = np.abs(mydata_fake[i])
     cov = np.diag(diago)
@@ -312,7 +322,7 @@ def get_chi2(theta, data, invcov, d, s, radius=20, verbose=False):
     ndet = len(data)
     chi2 = 0.
     for idet in range(ndet):
-        M = model(theta, idet, d, s, radius=radius, doplot=False)
+        M = model(theta, idet, d, s, radius=radius, nu=freq * 1e9, PIrot=True, doplot=False)
         
         # Amplitude factor (linear so we can compute it analitically)
         sigma_A = 1. / (M.T @ invcov[idet] @ M)
@@ -454,6 +464,10 @@ def run(p0, nwalkers, niter, ndim, lnprob, args):
 
     return sampler, pos, prob, state
 
+```
+
+```{python}
+theta_guess = [0.3, 0.] 
 ```
 
 ```{python}

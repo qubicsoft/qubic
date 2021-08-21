@@ -45,12 +45,14 @@ plt.rcParams['figure.figsize'] = (12, 6)
 ```
 
 ```{python}
+#save_dir = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/'
+save_dir = '/home/lmousset/QUBIC/These_manuscrit/Figures/Plots/'
+```
+
+```{python}
 # Get a dictionary
 d = qubic.qubicdict.qubicDict()
 d.read_from_file('global_source_oneDet.dict')
-print(d['detarray'])
-print(d['MultiBand'])
-print(d['nf_sub'])
 
 d['MultiBand'] = False
 d['nf_sub'] = 1
@@ -64,7 +66,7 @@ d['beam_shape'] = 'gaussian'
 # QubicInstrument
 q = qubic.QubicInstrument(d)
 
-plt.figure(figsize=(6, 4))
+plt.figure(figsize=(8, 6))
 q.detector.plot(fill=True)
 plt.axis('square')
 plt.xlabel('X_GRF')
@@ -75,17 +77,21 @@ plt.title('q.detector.plot()')
 ```
 
 ```{python}
-# scal.close_switches(q, np.arange(1, 64))
-# scal.open_switches(q, [1, 45, 50])
+# Make a TD instrument
 d1 = qubic.qubicdict.qubicDict()
 d1.read_from_file('global_source_oneDet.dict')
 
 d1['config'] = 'TD'
 q1 = qubic.QubicInstrument(d1)
 
-fig = plt.figure(figsize=(10, 10))
-q.horn.plot(facecolor_open='grey', alpha=0.4)
-q1.horn.plot(facecolor_open='g', alpha=0.3)
+# Open or close switches
+scal.open_switches(q, np.arange(1, 401))
+scal.open_switches(q1, np.arange(1, 65))
+
+# Plot the horn array
+fig = plt.figure(figsize=(6, 6))
+q.horn.plot(facecolor_open='white', facecolor_closed='grey', alpha=0.4)
+q1.horn.plot(facecolor_open='y', facecolor_closed='g', alpha=0.3)
 
 # plt.xlabel('$X_{GRF}$ [m]', fontsize=20)
 # plt.ylabel('$Y_{GRF}$ [m]', fontsize=20)
@@ -94,44 +100,76 @@ plt.ylabel('$h_y$ [m]', fontsize=30)
 plt.axis('square')
 plt.rc('font', size=10) 
 fig.tight_layout()
-# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/horn_array.pdf', dpi=100)
+# plt.savefig(save_dir + 'horn_array.pdf', dpi=100)
 ```
 
+#### Horn numbering
+The instrument numbering goes from 1 to 64 and 1 to 400 for the FI as shown in the first figure.
+
+On the contrary, the qubicsoft horn index given by `q.horn.index` consider that the FI horn array is placed on a squared grid 22 x 22, numbered from 0 to 483. This is shown in the secon plot.
+
 ```{python}
-# Open or close switches
-# scal.close_switches(q, np.arange(1, 64))
-# scal.open_switches(q, [1, 45, 50])
+# Plot the horn array
+fig = plt.figure(figsize=(10, 10))
+q.horn.plot(facecolor_open='grey', alpha=0.2)
+q1.horn.plot(facecolor_open='g', alpha=0.2)
 
-# Plot the horn array and a baseline
-fig, axs = plt.subplots(1, 2, figsize=(12, 6))
-ax1, ax2 = np.ravel(axs)
-scal.plot_horns(q, simple=False, ax=ax1)
-# q.horn.plot()
-ax1.set_xlabel('$X_{GRF}$ [m]', fontsize=20)
-ax1.set_ylabel('$Y_{GRF}$ [m]', fontsize=20)
-
-
-# Numbering on the horns
+# FI numbering
 a = 1
 x = q.horn.center[:, 0]
 y = q.horn.center[:, 1]
-# for i,j in zip(x, y):
-#     corr = -0.005 # add a little correction to put annotation in marker's centrum
-#     ax1.annotate(str(a),  xy=(i + corr, j + corr), fontsize=14, color='r')
-#     a += 1
-
-q.horn.plot(facecolor_open='green', alpha=0.2)
-# scal.plot_baseline(q, [25, 57], ax=ax2)
-ax2.set_xlabel('$X_{GRF}$ [m]', fontsize=20)
-ax2.set_ylabel('$Y_{GRF}$ [m]', fontsize=20)
-
 for i,j in zip(x, y):
     corr = 0.001 # add a little correction to put annotation in marker's centrum
-    ax2.annotate(str(a),  xy=(i - (corr+0.001), j - corr), fontsize=10, color='k')
+    plt.annotate(str(a),  xy=(i - corr-0.003, j - corr), fontsize=10, color='b')
     a += 1
-ax2.axis('square')
 
+# TD numbering
+a = 1
+x = q1.horn.center[:, 0]
+y = q1.horn.center[:, 1]
+for i,j in zip(x, y):
+    corr = 0.001 # add a little correction to put annotation in marker's centrum
+    plt.annotate(str(a),  xy=(i - (corr+0.001), j - (corr+0.005)), fontsize=10, color='r')
+    a += 1
+
+plt.xlabel('$X_{GRF}$ [m]', fontsize=30)
+plt.ylabel('$Y_{GRF}$ [m]', fontsize=30)
+plt.axis('square')
+plt.rc('font', size=10) 
 fig.tight_layout()
+plt.savefig(save_dir + 'horn_array_numbering.pdf', bbox_inches='tight')
+```
+
+```{python}
+# Plot the horn array
+fig = plt.figure(figsize=(10, 10))
+q.horn.plot(facecolor_open='grey', alpha=0.2)
+q1.horn.plot(facecolor_open='g', alpha=0.2)
+
+# Horn QUBIC soft indices
+a = 1
+x = q.horn.center[:, 0]
+y = q.horn.center[:, 1]
+for i,j in zip(x, y):
+    corr = 0.001 # add a little correction to put annotation in marker's centrum
+    plt.annotate(str(q.horn.index[a-1]),  xy=(i - corr-0.003, j - corr), fontsize=10, color='k')
+    a += 1
+
+plt.xlabel('$X_{GRF}$ [m]', fontsize=30)
+plt.ylabel('$Y_{GRF}$ [m]', fontsize=30)
+plt.axis('square')
+plt.rc('font', size=10) 
+fig.tight_layout()
+plt.savefig(save_dir + 'horn_array_index.pdf', bbox_inches='tight')
+```
+
+#### Conversion from TD horn numbering to FI horn numbering
+
+```{python}
+d = qubic.qubicdict.qubicDict()
+d.read_from_file('global_source_oneDet.dict')
+hornFI = scal.horn_index_TD2FI(5, d)
+print(hornFI)
 ```
 
 ## Analytical function to simulate fringes
@@ -140,17 +178,19 @@ It is simply a 2D sine on the focal plane to make fringes according to the focal
 A gaussian apodization is done to represent the primary beam. The Gaussian is centered in (0, 0) when the source is on-axis (theta_source=0, phi_source=0.). It moves according to the position of the source. 
 
 ```{python}
-baseline = [60, 63]
+baseline = [49, 51]
 Model_Ana = scal.Model_Fringes_Ana(q, baseline, 
-                                   theta_source=np.deg2rad(0.), 
-                                   phi_source=np.deg2rad(0.), 
+                                   theta_source=np.deg2rad(0), 
+                                   phi_source=np.deg2rad(0), 
                                    nu_source=150e9, fwhm=20., amp=1., frame='ONAFP')
 print(Model_Ana.focal)
 
 xONAFP, yONAFP, fringes = Model_Ana.get_fringes(times_gaussian=True)
 
-scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP', s=50)
+scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP', s=40, title=f'Baseline {baseline}', 
+                     cmap='bwr', unit='[A.U.]')
 
+#plt.savefig(save_dir + f'fringes_simu_ana_BL{baseline[0]}-{baseline[1]}.pdf', bbox_inches='tight')
 ```
 
 # Qubic soft simulation (no aberrations)
@@ -175,16 +215,18 @@ ax = fig.gca()
 scal.scatter_plot_FP(q, xONAFP, yONAFP, power, frame='ONAFP', title='', s=190, unit=None, cbar=None,
                       vmin=0, vmax=1.5e-5, fig=fig, ax=ax, fontsize=30, Norm=SymLogNorm(1e-6))
 fig.tight_layout()
-plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/detector_array.pdf', dpi=100)
+#plt.savefig(save_dir + 'detector_array.pdf', dpi=100)
 ```
 
 #### Create a Fringes object
 
 ```{python}
-baseline = [274, 281] # for the FI
-# baseline = [1, 57]     # for the TD
+TDbaseline = [49, 51] 
+FIhorn_1 = scal.horn_index_TD2FI(TDbaseline[0], d)
+FIhorn_2 = scal.horn_index_TD2FI(TDbaseline[1], d)
+FIbaseline = [FIhorn_1, FIhorn_2]
 
-Model_QS = scal.Model_Fringes_QubicSoft(q, baseline,
+Model_QS = scal.Model_Fringes_QubicSoft(q, FIbaseline,
                                         theta_source=0., phi_source=0.,
                                         nu_source=150e9, spec_irrad_source=1.,
                                         frame='ONAFP', external_A=None, hwp_position=0)
@@ -234,13 +276,10 @@ scal.pcolor_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP', fig=fig, ax=ax2,
 ```
 
 ```{python}
-# Make a plot for paper 3 without any axis
-fig = plt.figure(figsize=(8, 8))
-ax = plt.gca()
-ax.axis('off')
-scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP', fig=fig, ax=ax,
-                     title='', norm=None, s=100, cbar=False, fontsize=18)
-# fig.savefig('/home/lmousset/QUBIC/Images/plots/fringes_QSsimu_BaselineTD57-64.png', transparent=True)
+scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes*1e7, frame='ONAFP', fig=None, ax=None, 
+                     title=f'Baseline: {TDbaseline}', norm=None, s=30, cbar=True, fontsize=14)
+
+#plt.savefig(save_dir + f'fringes_simu_QS_BL{TDbaseline[0]}-{TDbaseline[1]}.pdf', bbox_inches='tight')
 ```
 
 #### Get fringes from the combination 
@@ -251,9 +290,27 @@ This is what is actually done when we measure the fringes.
 x, y, S, Cminus_i, Sminus_ij, Cminus_j, Ci, Cj, Sij = Model_QS.get_all_combinations_power(doplot=True, 
                                                                                           verbose=True, 
                                                                                           norm=SymLogNorm(5e-8), 
-                                                                                          s=150)
+                                                                                          s=40)
 
 print('shape of each combination :', Cminus_i.shape)
+```
+
+```{python}
+# Save plots for each configuration
+scal.close_switches(q, np.arange(1, 401))
+scal.open_switches(q, [252, 254])
+
+fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+ax0, ax1 = np.ravel(axs)
+fig.suptitle(r'$S_{ij}$ - Horn 254 open', fontsize=18)
+fig.subplots_adjust(wspace=0.3)
+
+scal.plot_horns(q, ax=ax0, s=180) # TD horn array
+scal.scatter_plot_FP(q, xONAFP, yONAFP, Sij*1e7, frame='ONAFP', fig=fig, ax=ax1, 
+                     title='', norm=None, s=40, cbar=True, fontsize=14)
+fig.tight_layout()
+
+#fig.savefig(save_dir + 'Sij.pdf', bbox_inches='tight')
 ```
 
 #### Look at the cycle acquired during measurement
@@ -269,34 +326,39 @@ tes = scal.get_all_tes_numbers(q)
 ```
 
 ```{python}
-for i in range(100, 102):
-    plt.figure()
-    plt.step(np.arange(0, 7), cycle[:, i], where='post', color='r')
+for i in [100, 120]:
+    plt.figure(figsize=(10, 6))
+    plt.step(np.arange(1, 8), cycle[:, i], where='post', color='r')
     
-    plt.axvspan(0, 1, color='k', alpha=0.2, label='All open')
-    plt.axvspan(3, 4, color='k', alpha=0.2)
-    plt.axvspan(5, 6, color='k', alpha=0.2)
-    plt.axvspan(1, 2, color='b', alpha=0.2, label='H1 close')
-    plt.axvspan(2, 3, color='g', alpha=0.2, label='H1 H2 close')
-    plt.axvspan(4, 5, color='c', alpha=0.2, label='H2 close')
+    plt.axvspan(1, 2, color='k', alpha=0.1, label=r'All open: $S_{\rm tot}$')
+    plt.axvspan(4, 5, color='k', alpha=0.1)
+    plt.axvspan(6, 7, color='k', alpha=0.1)
+    plt.axvspan(2, 3, color='b', alpha=0.1, label=r'$h_1$ close: $C_{-i}$')
+    plt.axvspan(3, 4, color='g', alpha=0.1, label=r'$h_1$ and $h_2$ close: $S_{-ij}$')
+    plt.axvspan(5, 6, color='c', alpha=0.1, label=r'$h_2$ close: $C_{-j}$')
     
-    plt.xlim(0, 6)
-    plt.xlabel('Step index')
-    plt.ylabel('TOD')
-    plt.title(f'TES {tes[i, 1]} - ASIC {tes[i, 0]}')
-    plt.legend()
+    plt.xlim(1, 7)
+    plt.xticks(np.arange(1.5, 7.5), labels=('1', '2', '3', '4', '5', '6'))
+    plt.xlabel('Step index', fontsize=16)
+    plt.ylabel(r'Signal - $S_{\rm tot}$', fontsize=16)
+    plt.title(f'TES {tes[i, 1]} - ASIC {tes[i, 0]}', fontsize=16)
+    if i==100:
+        plt.legend(loc='upper left', fontsize=16)
+    
+    plt.savefig(save_dir + f'fringes_cycle_simu_TES{tes[i, 1]}_ASIC{tes[i, 0]}_BL{baseline}.pdf', 
+                bbox_inches='tight')
 ```
 
-```{python}
-# Make the combination to get the fringes
+####  Make the combination to get the fringes
 
+```{python}
 # Complete one: S_tot - Cminus_i - Cminus_j + Sminus_ij + Ci +Cj
 x, y, fringes_true = Model_QS.get_fringes_from_combination(measured_comb=False,
-                                                           doplot=True, verbose=False, s=150)
+                                                           doplot=True, verbose=False, s=40)
 
 # Measured one: S_tot - Cminus_i - Cminus_j + Sminus_ij
 x, y, fringes_meas = Model_QS.get_fringes_from_combination(measured_comb=True,
-                                                           doplot=True, verbose=False, s=150)
+                                                           doplot=True, verbose=False, s=40)
 ```
 
 ```{python}
@@ -304,14 +366,16 @@ x, y, fringes_meas = Model_QS.get_fringes_from_combination(measured_comb=True,
 
 fig, axs = plt.subplots(1, 2)
 ax1, ax2 = axs.ravel()
-fig.suptitle(f'Baseline: {baseline}', fontsize=18)
+fig.suptitle(f'TD baseline: {TDbaseline}', fontsize=18)
 fig.subplots_adjust(wspace=0.3)
 
-scal.scatter_plot_FP(q, x, y, fringes_true, frame='ONAFP', 
-                     fig=fig, ax=ax1, title='Complete combination', norm=None, s=150)
+scal.scatter_plot_FP(q, x, y, fringes_true*1e7, frame='ONAFP', 
+                     fig=fig, ax=ax1, title='Complete combination', norm=None, s=40)
 
-scal.scatter_plot_FP(q, x, y, fringes_meas, frame='ONAFP', 
-                     fig=fig, ax=ax2, title='Measured combination', norm=None, s=150)
+scal.scatter_plot_FP(q, x, y, fringes_meas*1e7, frame='ONAFP', 
+                     fig=fig, ax=ax2, title='Measured combination', norm=None, s=40, cmap='bwr')
+fig.tight_layout()
+#fig.savefig(save_dir + f'fringes_compare_combinations_BL{TDbaseline[0]}-{TDbaseline[1]}.pdf', bbox_inches='tight')
 ```
 
 # Power on the focal plane with Maynooth simulations
@@ -319,7 +383,7 @@ scal.scatter_plot_FP(q, x, y, fringes_meas, frame='ONAFP',
 Those simulations include optical aberrations.
 You need to download the files at : https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
 
-They are only available for the TD instrument.
+They are only available for the **TD instrument**.
 
 ```{python}
 # Path to the simulated files 
@@ -332,7 +396,7 @@ print('rep:', rep)
 This simulations are done in the ONAFP frame. The resolution is high (241 x 241) and it assumes an area bigger than the focal plane.
 
 ```{python}
-open_horns = np.arange(1, 64)
+open_horns = [49, 51]#np.arange(1, 64)
 xONAFP, yONAFP, power = scal.get_power_Maynooth(rep, open_horns, 
                                                 0., 150e9, 
                                                 q.horn.center,  
@@ -431,11 +495,11 @@ To decrease the resolution, you can either make a real interpolation (`interp=Tr
 ```{python}
 d['config'] = 'TD'
 q = qubic.QubicInstrument(d)
-baseline = [1, 57]  # for the TD
+baseline = [49, 51]  # for the TD
 
 Model_Maynooth = scal.Model_Fringes_Maynooth(q, baseline, rep, 
                                              theta_source=0., nu_source=150e9,
-                                             frame='ONAFP', interp=False)
+                                             frame='ONAFP', interp=False, FIfocal_plane=True)
 ```
 
 ```{python}
@@ -446,12 +510,31 @@ print(Model_Maynooth.baseline)
 ```
 
 ```{python}
-xONAFP, yONAFP, fringes = Model_Maynooth.get_fringes(verbose=True)
+# If you want to plot the FI focal plane
+d['config'] = 'FI'
+qFI = qubic.QubicInstrument(d)
 
-scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, s=200, 
-                       frame='ONAFP', 
-                       title='Maynooth at TES resolution', 
-                       norm=None)
+xONAFP_new, yONAFP_new, fringes = Model_Maynooth.get_fringes(qFI=qFI, verbose=True)
+
+fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+ax1, ax2 = axs.ravel()
+scal.scatter_plot_FP(q, xONAFP, yONAFP, power, s=1, 
+                     fig=fig, ax=ax1,
+                     frame='ONAFP', 
+                     title='Maynooth full resolution', 
+                     config='FI',
+                     norm=None)
+ax1.set_xlim(-0.06, 0.06)
+ax1.set_ylim(-0.06, 0.06)
+
+scal.scatter_plot_FP(q, xONAFP_new, yONAFP_new, fringes, s=30, 
+                     fig=fig, ax=ax2,
+                     frame='ONAFP', 
+                     title='Maynooth at TES resolution',
+                     config='FI',
+                     norm=None)
+fig.tight_layout()
+fig.savefig(save_dir + f'fringes_Maynooth_BL{TDbaseline[0]}-{TDbaseline[1]}.pdf', bbox_inches='tight')
 ```
 
 #### Get the fringes at TES reso doing the combination

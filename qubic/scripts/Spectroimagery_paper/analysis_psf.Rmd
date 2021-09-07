@@ -137,7 +137,7 @@ fwhm = d['synthbeam_peak150_fwhm'] * 150 / nusfull["4"]
 nsidecal = 512
 hpx = True
 smooth = True
-Ncalmaps = 50
+Ncalmaps = 10
 
 nus_cal = np.linspace(150-150*.125,150+150*.125,Ncalmaps)
 fwhm_cal = d['synthbeam_peak150_fwhm'] * 150 / nus_cal
@@ -338,6 +338,7 @@ def fwhm_from_maps(d, maps, nus, x, center,
 
 ```{python}
 data_df, result_fit = fwhm_from_maps(d, maps_recon_1, nusfull['4'], xscale, center)
+data_sim, result_sim = fwhm_from_maps(d, maps_convo_1, nusfull['4'], xscale, center)
 ```
 
 Look at the maps in one FITing
@@ -404,6 +405,11 @@ plt.quiver([cal_df['frequencies'][0]],
 ```
 
 ```{python}
+import matplotlib.patches as patches
+
+```
+
+```{python}
 fig,ax = plt.subplots(nrows = 1, ncols = 1, figsize = (8, 5))
 
 plt.rc('font', size = 14)
@@ -417,32 +423,44 @@ ax.plot(nusfull["4"],
         data_df["fwhm_mes"],
         color = 'r', marker = '*', ls = "", ms = 10,
         alpha = 0.5,
-        label = 'FWHM measured')
+        label = 'FWHM medido')
 
 ax.plot(nusfull["4"], 
         data_df["fwhm_mes"] - model_fwhm_diff(nusfull["4"], 
                                               *parsfwhm_diff) ,
         color = 'r', marker = '*', ls = "", ms = 10,
-        label = 'FWHM')
+        label = 'FWHM corregido')
 
 ax.plot(nusfull["4"], fwhmTh(nusfull["4"]),#  yerr = np.diff(fwhmTh(nusedges['4']))/2,
         color = 'b', marker = 'o', ms = 10, alpha = 0.5, ls = "",# capsize = 5,
-        label = 'FWHM theoretical')
+        label = 'FWHM teórico')
+for i in range(4):
+    ax.add_patch(
+     patches.Rectangle(
+        (nusedges['4'][i], fwhmTh(nusedges['4'][i+1])),
+        np.diff(nusedges['4'])[i], #ancho
+        fwhmTh(nusedges['4'][i]) - fwhmTh(nusedges['4'][i+1]), #altura
+        edgecolor = 'blue',
+        facecolor = 'blue',
+        fill=True, alpha = 0.1
+     ) )
 
-ax.set_xlim(nusedges['4'][0], nusedges['4'][-1])
+ax.set_xlim(nusedges['4'][0]*0.99, nusedges['4'][-1]*1.01)
 ax.legend(fontsize = 14)
 ax.tick_params(axis = 'both', bottom = True, top = True, 
                left = True, right = True, direction = 'in')
 ax.grid()
 #
 plt.tight_layout() #makes subplots nicely fit in the figure.
-#plt.savefig('Angular-Resolution_reso{}_nside{}.pdf'.format(reso, nsidecal), format = 'pdf')
+#plt.savefig('Angular-Resolution_reso{}_nside{}_rectangles.pdf'.format(reso, nsidecal), format = 'pdf')
 ```
 
 ```{python}
 print("Elipticidad")
 #(data_df['varx'] - data_df['vary']) / (data_df['varx'] + data_df['vary']) 
 print(1 - data_df['vary'] / data_df['varx'])
+print(1 - data_sim['vary'] / data_sim['varx'])
+print((1 - data_df['vary'] / data_df['varx'])/(1 - data_sim['vary'] / data_sim['varx']))
 ```
 
 ```{python}

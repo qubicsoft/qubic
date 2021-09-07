@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.0
+      jupytext_version: 1.7.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -37,8 +37,8 @@ from astropy.io import fits
 # Specific qubic modules
 from qubicpack.utilities import Qubic_DataDir
 from pysimulators import FitsArray
-import pysm
-import pysm.units as u
+import pysm3
+import pysm3.units as u
 
 import qubic
 from qubic import SpectroImLib as si
@@ -65,7 +65,8 @@ colorlist = list(mcolors.TABLEAU_COLORS.keys())
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
 print(global_dir)
 
-datadir = os.environ['DATA_SPECTROIM']
+#datadir = os.environ['DATA_SPECTROIM']
+datadir = '/home/martin/QUBIC/qubic/qubic/data/LouiseSims/'
 
 ```
 

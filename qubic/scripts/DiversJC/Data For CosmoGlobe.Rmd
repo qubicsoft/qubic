@@ -1,0 +1,187 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Data for CosmoGlobe
+Here is s script to build data for an exchange with CosmoGlobe. We want to provide 24h TOD with:
+- FI
+- Random pointing
+- 50 Hz sampling (should be enough)
+- Dust + CMB (r=0) [provide the input maps]
+
+
+```{python}
+##Loading modules. 
+
+# General modules
+from __future__ import division, print_function
+# %matplotlib inline
+import os
+import sys
+import time
+import datetime
+import shutil
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+import matplotlib.pyplot as plt
+import astropy.io.fits as fits
+
+# Specific qubic modules
+import pysm3
+import qubic
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+
+from qubic import SpectroImLib as si
+from pysm3 import models
+from qubic import QubicSkySim as qss
+
+rc('figure', figsize=(13, 10))
+rc('font', size=13)
+```
+
+```{python}
+# Repository for dictionary
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir='../')
+dictfilename = global_dir + 'dicts/SampleDataCosmoGlobe.dict'
+
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+
+# Set nf_sub to 12 to have good coverage in the band
+d['nf_sub'] = 12
+
+# No spectroimaging
+d['nf_recon'] = 1
+
+# Center of the patch observed in galactic coordinates
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+print(center)
+
+# Adjust some parameters in the dictionary
+d['repeat_pointing'] = False
+d['random_pointing'] = True
+
+d['period'] = 1./50
+
+d['filter_nu'] = 150e9
+d['noiseless'] = True
+
+print(d['filter_nu'])
+print(d['detector_nep'])
+print(d['photon_noise'])
+print(d['config'])
+d['effective_duration']
+```
+
+```{python}
+# Make a sky using PYSM
+### Pick one of these:
+seed = 42
+# sky_config = {'CMB': 'c1'} 
+# sky_config = {'cmb': 42}                ### CMB Only
+sky_config = {'cmb': seed, 'dust':'d1'}   ### CMB + Dust
+
+### Generate the maps at each sub-frequency
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+x0 = Qubic_sky.get_simple_sky_map()
+
+print('sky shape: ', x0.shape)
+
+# Look at the input sky maps using Healpy
+istokes = 0 # Stokes parameter (I, Q, U)
+rr = 9 # Resolution in arcmin
+
+plt.figure(figsize=(13,8))
+for istk in range(3):
+    plt.subplots_adjust(wspace=0.9)
+    hp.mollview(x0[0, :,istk], cmap='jet', sub = (3,2,2*istk+1), 
+                title = 'Mollview {0} Stokes parameter'.format(d['kind'][istk]))
+    hp.gnomview(x0[0, :,istk], cmap ='jet', sub = (3,2,2*istk+2), rot=center, reso=rr, 
+                title = 'Gnomview {0} Stokes parameter'.format(d['kind'][istk]))
+tight_layout()
+```
+
+```{python}
+def save_fits(data, others, save_dir, simu_name):
+    if save_dir[-1] != '/':
+        save_dir = save_dir + '/'
+
+    hdus = []
+    hdus.append(fits.PrimaryHDU())
+    hdus.append(fits.ImageHDU(data=data, name='TES_DATA'))
+    for k in others.keys():
+        hdus.append(fits.ImageHDU(data=others[k], name=k))
+
+    the_file = fits.HDUList(hdus)
+    the_file.writeto(save_dir + simu_name, 'warn')
+```
+
+```{python}
+total_time = 12/60
+duration_batch_minutes = 6
+d['npointings'] = int(60*duration_batch_minutes/d['period'])
+date_start = datetime.datetime(2022, 1, 1, 0, 0, 0, 0).timestamp()
+
+nbatch = int(total_time*60/duration_batch_minutes)
+print(nbatch)
+
+for i in range(nbatch):
+    print('')
+    this_t = date_start + duration_batch_minutes*60*i
+    this_date = datetime.datetime.fromtimestamp(this_t)
+    d['date_obs'] = str(this_date)
+    print(d['date_obs'])
+    
+    # Pointing strategy
+    p = qubic.get_pointing(d)
+    print('=== Pointing DONE! ===')
+
+    # Model of the scene at the time of observation
+    s = qubic.QubicScene(d)
+
+    # Create a monofrequency Instrument.
+    q = qubic.QubicInstrument(d)
+
+    # Create an acquisition operator which combines all relevant information
+    #scene, instrument configuration and pointing strategy. 
+    a = qubic.QubicAcquisition(q, p, s, d)
+
+    # Monofreq TOD making
+    TOD, maps_convolved = a.get_observation(x0[0], noiseless=d['noiseless'])#, convolution = True)
+
+    ptg = {'time':p.time + this_t,
+           'RA':p.equatorial[:,0],
+           'DEC':p.equatorial[:,1],
+           'Azimuth':p.azimuth,
+           'Elevation':p.elevation,
+          }
+    
+    print('TOD shape: ', TOD.shape)
+    print('maps conv shape: ', maps_convolved.shape)
+    
+    save_fits(TOD, ptg, '/Users/hamilton/Downloads/SaveCoscmoGlobe/','QUBIC-Sample-Data-'+str(this_date).replace(' ','-')+'.fits')
+
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

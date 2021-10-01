@@ -37,6 +37,7 @@ import healpy as hp
 import numpy as np
 import matplotlib.pyplot as plt
 import astropy.io.fits as fits
+import glob
 
 # Specific qubic modules
 import pysm3
@@ -127,12 +128,16 @@ def save_fits(data, others, save_dir, simu_name):
         hdus.append(fits.ImageHDU(data=others[k], name=k))
 
     the_file = fits.HDUList(hdus)
-    the_file.writeto(save_dir + simu_name, 'warn')
+    the_file.writeto(save_dir + simu_name, overwrite=True)
 ```
 
 ```{python}
-total_time = 12/60
+redo = False
+total_time = 12*60/60
 duration_batch_minutes = 6
+directory = '/Volumes/HD JC-Hamilton/QubicData/CosmoGlobe/'
+
+
 d['npointings'] = int(60*duration_batch_minutes/d['period'])
 date_start = datetime.datetime(2022, 1, 1, 0, 0, 0, 0).timestamp()
 
@@ -140,40 +145,119 @@ nbatch = int(total_time*60/duration_batch_minutes)
 print(nbatch)
 
 for i in range(nbatch):
+    p=0
+    s=0
+    q=0
+    a=0
+    TOD=0
+    maps_convolved=0
+    ptg=0
+    
+    
     print('')
     this_t = date_start + duration_batch_minutes*60*i
     this_date = datetime.datetime.fromtimestamp(this_t)
     d['date_obs'] = str(this_date)
-    print(d['date_obs'])
-    
-    # Pointing strategy
-    p = qubic.get_pointing(d)
-    print('=== Pointing DONE! ===')
+    filename = 'QUBIC-Sample-Data-'+str(this_date).replace(' ','-')+'.fits'
+    print('Doing '+filename)
+    print(glob.glob(directory+filename))
+    if len(glob.glob(directory+filename))>0:
+        print('Already done')
+    else:    
+        # Pointing strategy
+        p = qubic.get_pointing(d)
+        print('=== Pointing DONE! ===')
 
-    # Model of the scene at the time of observation
-    s = qubic.QubicScene(d)
+        # Model of the scene at the time of observation
+        s = qubic.QubicScene(d)
 
-    # Create a monofrequency Instrument.
-    q = qubic.QubicInstrument(d)
+        # Create a monofrequency Instrument.
+        q = qubic.QubicInstrument(d)
 
-    # Create an acquisition operator which combines all relevant information
-    #scene, instrument configuration and pointing strategy. 
-    a = qubic.QubicAcquisition(q, p, s, d)
+        # Create an acquisition operator which combines all relevant information
+        #scene, instrument configuration and pointing strategy. 
+        a = qubic.QubicAcquisition(q, p, s, d)
 
-    # Monofreq TOD making
-    TOD, maps_convolved = a.get_observation(x0[0], noiseless=d['noiseless'])#, convolution = True)
+        # Monofreq TOD making
+        TOD, maps_convolved = a.get_observation(x0[0], noiseless=d['noiseless'])#, convolution = True)
 
-    ptg = {'time':p.time + this_t,
-           'RA':p.equatorial[:,0],
-           'DEC':p.equatorial[:,1],
-           'Azimuth':p.azimuth,
-           'Elevation':p.elevation,
-          }
-    
-    print('TOD shape: ', TOD.shape)
-    print('maps conv shape: ', maps_convolved.shape)
-    
-    save_fits(TOD, ptg, '/Users/hamilton/Downloads/SaveCoscmoGlobe/','QUBIC-Sample-Data-'+str(this_date).replace(' ','-')+'.fits')
+        ptg = {'time':p.time + this_t,
+               'RA':p.equatorial[:,0],
+               'DEC':p.equatorial[:,1],
+               'Azimuth':p.azimuth,
+               'Elevation':p.elevation,
+              }
+
+        print('TOD shape: ', TOD.shape)
+        print('maps conv shape: ', maps_convolved.shape)
+
+        save_fits(TOD, ptg, directory,filename)
+
+
+```
+
+# Now test one file
+
+```{python}
+thefile = directory + 'QUBIC-Sample-Data-2022-01-01-11:54:00.fits'
+from pysimulators import FitsArray
+```
+
+```{python}
+fits.info(thefile)
+```
+
+```{python}
+TES_data = fits.getdata(thefile, ext=1)
+time = fits.getdata(thefile, ext=2)
+ra = fits.getdata(thefile, ext=3)
+dec = fits.getdata(thefile, ext=4)
+azimuth = fits.getdata(thefile, ext=5)
+elevation = fits.getdata(thefile, ext=6)
+
+```
+
+```{python}
+# TES data for TES 0 and 1
+plot(time, TES_data[0,:], label='TES #0')
+plot(time, TES_data[1,:], label='TES #1')
+xlabel('Time (Unix seconds)')
+ylabel('TES data in ADU')
+legend()
+```
+
+```{python}
+tt = time - time[0]
+subplot(2,3,1)
+plot(tt, azimuth)
+xlabel('Time (seconds)')
+ylabel('Azimuth (deg)')
+subplot(2,3,2)
+plot(tt, elevation)
+xlabel('Time (seconds)')
+ylabel('Elevation (deg)')
+subplot(2,3,3)
+plot(azimuth, elevation, ',')
+xlabel('Azimuth (deg)')
+ylabel('Elevation (deg)')
+
+
+ra = ((ra + 540) % 360) - 180
+
+subplot(2,3,4)
+plot(tt, ra)
+xlabel('Time (seconds)')
+ylabel('RA (deg)')
+subplot(2,3,5)
+plot(tt, dec)
+xlabel('Time (seconds)')
+ylabel('DEC (deg)')
+subplot(2,3,6)
+plot(ra, dec, ',')
+xlabel('RA (deg)')
+ylabel('DEC (deg)')
+
+tight_layout()
 
 
 ```

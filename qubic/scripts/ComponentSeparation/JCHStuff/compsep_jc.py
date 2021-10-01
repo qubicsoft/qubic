@@ -413,9 +413,9 @@ def apply_fgb(inmaps, freqs, fwhms, verbose=True,
             for i in range(3):
                 subplot(1,3,i+1)
                 hist(resid_dust[i, pixok], range=[-5*sigs_dust[i], 5*sigs_dust[i]], 
-                     bins=100, alpha=0.5, color='b', label='Dust: RMS={:4.2g}'.format(sigs_dust[i]), normed=1)
+                     bins=100, alpha=0.5, color='b', label='Dust: RMS={:4.2g}'.format(sigs_dust[i]), density=True)
                 hist(resid_cmb[i, pixok], range=[-5*sigs_cmb[i], 5*sigs_cmb[i]], 
-                    bins=100, alpha=0.5, color='r', label='CMB: RMS={:4.2g}'.format(sigs_cmb[i]), normed=1)
+                    bins=100, alpha=0.5, color='r', label='CMB: RMS={:4.2g}'.format(sigs_cmb[i]), density=True)
                 title('Residuals Stokes {}'.format(stk[i]))
                 legend()
             tight_layout()

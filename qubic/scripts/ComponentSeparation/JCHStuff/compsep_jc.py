@@ -166,9 +166,9 @@ def display_maps(inmaps, bigtitle=None, mytitle='', figsize=(16,10), nsig=3,
         suptitle(bigtitle, fontsize=30, y=1.05)
     sh = np.shape(inmaps)
     if len(sh)==2:
-        maps = np.reshape(inmaps, (1,sh[0], sh[1]))
+        maps = np.reshape(inmaps.copy(), (1,sh[0], sh[1]))
     else:
-        maps = inmaps
+        maps = inmaps.copy()
     if unseen is not None:
         maps[:,:,unseen] = hp.UNSEEN
     nf = maps.shape[0]

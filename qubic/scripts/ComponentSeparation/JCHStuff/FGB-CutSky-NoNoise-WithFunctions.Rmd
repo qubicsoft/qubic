@@ -138,10 +138,11 @@ csjc.display_maps(maps_conv, bigtitle='Cut-sky maps per freq. at same resolution
 ```
 
 ```{python}
+reload(csjc)
 csjc.display_maps(maps_dust, bigtitle='Input Dust only at 150 GHz (infinite resolution)', mytitle='Dust', 
-             figsize=(16,7), nsig=3, rot=center)
+             figsize=(16,7), nsig=3, rot=center, unseen=~pixok)
 csjc.display_maps(maps_cmb, bigtitle='Input CMB only at 150 GHz (infinite resolution)', mytitle='CMB', 
-             figsize=(16,7), nsig=3, rot=center)
+             figsize=(16,7), nsig=3, rot=center, unseen=~pixok)
 
 ```
 

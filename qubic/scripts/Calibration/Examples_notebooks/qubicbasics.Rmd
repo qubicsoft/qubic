@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.2
+      jupytext_version: 1.7.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -13,6 +13,7 @@ jupyter:
 ---
 
 ```{python}
+import os
 import qubic
 import numpy as np
 import glob
@@ -21,9 +22,10 @@ import matplotlib.pyplot as plt
 ```
 
 ```{python}
-day = '2020-11-10'
-keyword = '*2020*'
-data_dir = '/media/james/DATA/QUBIC_DATA/'+day+'/'
+#day = '2019-03-31'#'2020-11-10'
+day = '2021-09-09'#'2020-11-10'
+keyword = '*2021*'
+data_dir = os.environ['QUBIC_TODDIR'] + day + "/"#+ '/media/james/DATA/QUBIC_DATA/'+day+'/'
 dirs = np.sort(glob.glob(data_dir+keyword))
 print(dirs)
 print(data_dir+keyword)
@@ -31,7 +33,7 @@ print(data_dir+keyword)
 
 ```{python}
 """select your file"""
-ifile = 2
+ifile = 1
 thedir = dirs[ifile]
 print(thedir)
 
@@ -45,7 +47,10 @@ a.read_qubicstudio_dataset(thedir)
 ```
 
 ```{python}
-a.plot_timeline(TES=96,asic=1)
+fig, ax = plt.subplots(nrows = 1, ncols = 1, figsize = (12,8))
+ax.set_title("Data from Salta",loc = "left", pad = 25, fontsize = 17, color = "r")
+#ax.text(4300,0.01, "Data from Salta")
+a.plot_timeline(TES=96,asic=1, ax = ax)
 ```
 
 ```{python}
@@ -53,7 +58,7 @@ a.quicklook()
 ```
 
 ```{python}
-
+plt.figure(figsize = (12,12))
 a.plot_timeline_focalplane()
 ```
 
@@ -132,7 +137,9 @@ print(tt.shape)
 ```
 
 ```{python}
-a.plot_hwp()
+fig, ax = plt.subplots(nrows = 1, ncols = 1, figsize = (12,8))
+ax.set_title("Data from Salta",loc = "left", pad = 25, fontsize = 17, color = "r")
+a.plot_hwp(ax =ax)
 ```
 
 ```{python}

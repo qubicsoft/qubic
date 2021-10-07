@@ -72,13 +72,15 @@ datadir = '/home/martin/QUBIC/qubic/qubic/data/LouiseSims/'
 
 ```{python}
 # rep_mapCC = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/Simu_spectroim/FastSimulator/maps_FastSim/'
+rep_mapCC = '/home/martin/QUBIC/qubic/qubic/doc/FastSimulator/Data/NoiseLouiseFastSim/'
 
 # rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/galaxy_center_d1/test_residuals/31613089/'
 # rep = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_simu/29712494/'
 
 nfrecon = 3
 freq = 150
-rep = datadir + f'/NERSC_simuEnd2End/Good_photon_noise2020/simu_NERSC_MC/FI{freq}/galaxycenter_3bandes/'
+#rep = datadir + f'/NERSC_simuEnd2End/Good_photon_noise2020/simu_NERSC_MC/FI{freq}/galaxycenter_3bandes/'
+rep = datadir + f'34102467/'
 ```
 
 ```{python}
@@ -121,6 +123,56 @@ print('npix:', npix)
 patch = amc.get_residuals(fits_noise, fits_noiseless[0], 'noiseless')
 ```
 
+#### Probando numeracion de pixeles y orden
+
+```{python}
+# Copy the variables to a new ones 
+seenmap_prueba = rmc.get_seenmap(fits_noise[0])
+rec_prueba, _, _ = rmc.get_maps(fits_noise[0])#, seenmap_prueba)
+center_prueba = center
+print("Shapes: ", seenmap_prueba.shape, rec_prueba.shape)
+
+# Create pixel and angular vectors for full pixel array
+arr_prueba = np.arange(len(seenmap_prueba))
+ang_prueba = hp.pix2ang(256, arr_prueba)
+
+#Check the numeration is in arbitrary order in the patch (following ring ordering)
+#plt.figure(figsize = (10,10))
+#hp.gnomview(seenmap_prueba, reso = 3, 
+#            min = 0, max = 1)
+#for i in range(16293,16320):
+#    if i%100 == 0: print(i)
+#    hp.projtext(ang_prueba[0][seenmap_prueba][i],
+#           ang_prueba[1][seenmap_prueba][i], s = '{}'.format(i), fontsize = 12,
+#               rotation = 30)
+#for i in range(14283,14303):
+#    if i%100 == 0: print(i)
+#    hp.projtext(ang_prueba[0][seenmap_prueba][i],
+#           ang_prueba[1][seenmap_prueba][i], s = '{}'.format(i), fontsize = 12,
+#               rotation = 30)
+```
+
+```{python}
+#Seen arbitrary order to seen from center of the FOV
+#
+# Compute angular distance between center of the FOV and all pixels
+#
+center_vec = hp.ang2vec(np.pi/2-np.radians(center_prueba[1]), np.radians(center_prueba[0]))
+#print("center vec", center_vec)
+vec_prueba = hp.pix2vec(256, arr_prueba)
+distang = np.arccos(np.dot(center_vec, vec_prueba))
+index_distang = np.argsort(distang)
+#dict_order = {i: index_distang[i] for i in np.arange(len(arr_prueba))}
+#order_trad = np.array([arr_prueba, index])
+print(np.where(index_distang == 0))
+
+da_patch = distang[seenmap_prueba]
+sda = np.argsort(da_patch)
+
+# Change patch ordering
+#patch = patch[:,:, sda, :]
+```
+
 ```{python}
 stokes = ['I', 'Q', 'U']
 allrecon = [1, 2, 3, 4, 5, 8]
@@ -130,30 +182,30 @@ config = 'FI150'
 
 ```{python}
 # Make just one file
-# for nfrecon in allrecon:
-#     files = glob.glob(rep_mapCC + 'noisepatch_NOspat*_nbands{}*FI150*20reals*.npy'.format(nfrecon))
-#     nfiles = len(files)
-#     print('# files:', nfiles)
-
-#     for i, file in enumerate(files):
-#         pa = np.load(file)
-#         if i == 0:
-#             patch = pa
-#         else:
-#             patch = np.concatenate((patch, pa), axis=0)
-#     print(patch.shape)
-# #     patch_seen = patch[:, :, seenmap, :]
-# #     print(patch_seen.shape)
-
-#     # Save the full array 
-#     np.save(rep_mapCC + 'noisepatch_NOspatialcorr_nbands{}_FI150_500reals.npy'.format(nfrecon), patch)
+#for nfrecon in allrecon:
+#    files = glob.glob(rep_mapCC + 'noisepatch_NOspat*_nbands{}*FI150*20reals*.npy'.format(nfrecon))
+#    nfiles = len(files)
+#    print('# files:', nfiles)
+#
+#    for i, file in enumerate(files):
+#        pa = np.load(file)
+#        if i == 0:
+#            patch = pa
+#        else:
+#            patch = np.concatenate((patch, pa), axis=0)
+#    print(patch.shape)
+##     patch_seen = patch[:, :, seenmap, :]
+##     print(patch_seen.shape)
+#
+#    # Save the full array 
+#    np.save(rep_mapCC + 'noisepatch_NOspatialcorr_nbands{}_FI150_500reals.npy'.format(nfrecon), patch)
 ```
 
 ```{python}
-# Load a file already saved
-patch = np.load(rep_mapCC + f'noisepatch_NOspatialcorr_nbands{nfrecon}_' + config + '_500reals.npy')
-print(patch.shape)
-nreals = patch.shape[0]
+## Load a file already saved
+#patch = np.load(rep_mapCC + f'noisepatch_NOspatialcorr_nbands{nfrecon}_' + config + '_500reals.npy')
+#print(patch.shape)
+#nreals = patch.shape[0]
 ```
 
 ```{python}
@@ -209,10 +261,18 @@ print('npix:', npix)
 ```{python}
 fitsfile = fits.open(fits_noise[0])
 coverage = fitsfile['COVERAGE'].data
-hp.mollview(coverage)
-
+hp.gnomview(coverage, reso = 12)
 coverage_patch = coverage[seenmap]
 coverage_patch.shape
+
+#coverage_copy = np.zeros(coverage.shape)
+#masking1 = coverage > 0.6*coverage.max()
+#masking2 = coverage < 0.8*coverage.max()
+#coverage_copy[masking1 * masking2] = coverage[masking1 * masking2]
+#hp.gnomview(coverage_copy, reso = 12)
+#hp.projscatter(np.pi/2, np.radians(8.5), marker = '*', color = 'r', s = 200)
+#hp.projscatter(np.pi/2, np.radians(12.5), marker = '*', color = 'm', s = 200)
+#coverage_patch = coverage[masking1*masking2]
 ```
 
 ```{python}
@@ -232,7 +292,7 @@ s = 0
 plt.scatter(patch[:, 0, p, s], patch[:, 1, p, s])
 pval = np.polyfit(patch[:, 0, p, s], patch[:, 1, p, s], deg=1)
 print(pval)
-x = np.linspace(-40, 40, 10)
+x = np.linspace(-40, 140, 10)
 plt.plot(x, np.polyval(pval, x))
 plt.title(f'{stokes[s]} - pixel {p}')
 plt.xlabel('Freq 0')
@@ -400,7 +460,7 @@ ax = plt.gca()
 #                           color = 'k', 
 #                         fontsize = 30, style = 'italic', verticalalignment = 'center') 
 im = plt.imshow(bigcorr[:, :, 7], vmin=-1, vmax=1, cmap='bwr')
-plt.title('Pixel 7')
+plt.title('pixel')
 
 
 # create an axes on the right side of ax. The width of cax will be 5%
@@ -417,16 +477,20 @@ for s in range(nfrecon):
     
     
 # plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/corr_matrix_IQUmaplevel_avg_overpix_GoodPhotonNoise.pdf')
-# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/corr_matrix_IQUmaplevel_pixel7_GoodPhotonNoise.pdf')
+#plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/corr_matrix_IQUmaplevel_pixel7_GoodPhotonNoise.pdf')
+#plt.savefig('/home/martin/Doctorado/Tesis-Doctoral/Figuras_Tesis_Overleaf/corr_matrix_IQUmaplevel_pixel.png',
+#           format = "png")
 ```
 
 ### Covariances between pixels
 
 ```{python}
 # Too big we have to reduce it
-coverage_min = 0.8
-coverage_max = 0.9
-condition = (coverage_min<coverage_norm[seenmap]) & (coverage_norm[seenmap]<coverage_max)
+coverage_min = 0.6
+coverage_max = 0.99
+condition = (coverage_min<coverage_norm) & (coverage_norm<coverage_max)
+#condition = (coverage_min<coverage_norm[seenmap]) & (coverage_norm[seenmap]<coverage_max)
+print(len(condition))
 patch_reduce = patch[:, :, condition, :]
 print(patch_reduce.shape)
 cov_pix, corr_pix = amc.get_covcorr_between_pix(patch_reduce, verbose=True)
@@ -435,11 +499,12 @@ print(cov_pix.shape)
 
 ```{python}
 isub = 0
-s = 0
+s = 1
 
 plt.figure()
 vmax = np.max(np.abs(cov_pix[isub, s, :, :]))
-plt.imshow(cov_pix[isub, s, :, :], vmin=-vmax, vmax=vmax, cmap='bwr')
+#plt.imshow(cov_pix[isub, s, :, :], vmin=-vmax/20, vmax=vmax/20, cmap='bwr')
+plt.imshow(corr_pix[isub, s, :, :], vmin=-0.01, vmax=0.01, cmap='bwr')
 plt.title('Covariance pix/pix - ' + stokes[s] 
           + f' - Band {isub} for pixels with {coverage_min} < coverage < {coverage_max}')
 plt.colorbar()
@@ -450,7 +515,7 @@ plt.colorbar()
 We normalize the maps by the coverage and the factor to get a covariance matrix (Nbands x Nbands) for each Stokes parameter. 
 
 ```{python}
-covI, covQ, covU, all_fitcov, all_norm_noise = qss.get_cov_nunu(patch[10], coverage_norm[seenmap])
+covI, covQ, covU, all_fitcov, all_norm_noise = qss.get_cov_nunu(patch[10], coverage_norm)
 
 covJC = np.asarray([covI, covQ, covU])
 covJC.shape
@@ -477,7 +542,7 @@ The RMS on the maps is not proportional to sqrt(coverage) maybe because of borde
 ```{python}
 isub = 0
 xx, yy, fitcov = qss.get_noise_invcov_profile(patch[0, isub, :, :], 
-                                              coverage_norm[seenmap], 
+                                              coverage_norm, 
                                               nbins=20, 
                                               norm=False,
                                               label='sub-band: {}'.format(isub), 
@@ -488,10 +553,10 @@ print(fitcov.shape)
 ```
 
 ```{python}
-correction = np.interp(1. / coverage_norm[seenmap], fitcov[0, :], fitcov[1, :])
+correction = np.interp(1. / coverage_norm, fitcov[0, :], fitcov[1, :])
 print(correction.shape)
 
-norm_factor = coverage_norm[seenmap] / correction
+norm_factor = coverage_norm / correction
 print(norm_factor.shape)
 
 # Galactic center
@@ -503,7 +568,7 @@ ang = rmc.pix2ang(256, center, seenmap)
 
 plt.figure(figsize=(15, 5))
 plt.subplot(121)
-plt.plot(1 / coverage_norm[seenmap], correction, '.')
+plt.plot(1 / coverage_norm, correction, '.')
 plt.xlabel('1 / (Coverage / MAX(Coverage))')
 plt.ylabel('Correction')
 
@@ -521,7 +586,7 @@ plt.title('Normalisation factor')
 newpatch = np.zeros_like(patch)
 for i in range(nreals):
     newpatch[i], all_fitcov, all_norm_noise = qss.flatten_noise(patch[i], 
-                                                              coverage_norm[seenmap], 
+                                                              coverage_norm, 
                                                               nbins=20, 
                                                               doplot=False, 
                                                               QUsep=False)
@@ -533,12 +598,16 @@ bigcovJC, bigcorrJC = amc.get_covcorr_patch(newpatch, stokesjoint=True, doplot=T
 ```
 
 ```{python}
-labs = []
-for s in range(3):
-    for i in range(nfrecon):
-        labs.append(stokes[s]+' f{}'.format(i))
-        
-print(labs)
+#labs = []
+#for s in range(3):
+#    for i in range(nfrecon):
+#        labs.append(stokes[s]+' f{}'.format(i))
+#        
+#print(labs)
+```
+
+```{python}
+qubic.compute_freq(150,Nfreq = 2, relative_bandwidth=0.25)
 ```
 
 ```{python}
@@ -570,7 +639,10 @@ for p in range(0, 10):
 ```{python}
 # Average over pixels
 # We can average the covariance matrices because pixels were normalized before.
-plt.figure(figsize=(7, 7))
+rc('font', size=20)
+plt.figure(figsize=(10, 10))
+ax = plt.gca()
+
 bigcovJC_mean = np.mean(bigcovJC, axis=2)
 vmax = np.max(bigcovJC_mean)
 plt.imshow(bigcovJC_mean, vmin=-vmax, vmax=vmax, cmap='bwr')
@@ -584,18 +656,53 @@ for s in range(nfrecon):
     plt.axhline(y=(s+1)*nfrecon-0.5, lw=3, color='k')
     plt.axvline(x=(s+1)*nfrecon-0.5, lw=3, color='k')
     
+```
 
-plt.figure(figsize=(7, 7))
-plt.imshow(np.mean(bigcorrJC, axis=2), vmin=-1, vmax=1, cmap='bwr')
-plt.title('Correlation matrices averaged over pixels')
-plt.colorbar(orientation='horizontal')
+```{python}
+rc('font', size=20)
+#plt.figure(figsize=(10, 10))
+fig, ax = plt.subplots(nrows = 1, ncols = 1, figsize = (10,10))
 
-plt.xticks(np.arange(len(labs)), labs, fontsize=12)
-plt.yticks(np.arange(len(labs)), labs, fontsize=12)
+im = ax.imshow(np.mean(bigcorrJC, axis=2), vmin=-1, vmax=1, cmap='bwr')
+ax.set_title('Matriz de correlación promediada sobre pixeles')
+cax = divider.append_axes("bottom", size="5%", pad=0.5)
+fig.colorbar(im, cax=cax, orientation='horizontal')
+
+make_axis_label(ax, labs)
+
+#ax.set_xticks(np.arange(len(labs)))
+#ax.set_yticks(np.arange(len(labs)))
+#ax.set_xticklabels(labs)#, fontdict = {"fontsize":20})
+#ax.set_yticklabels(labs)#, fontdict = {"fontsize":20})
+#plt.yticks(np.arange(len(labs)), labs, fontsize=12)
 
 for s in range(nfrecon):
-    plt.axhline(y=(s+1)*nfrecon-0.5, lw=3, color='k')
-    plt.axvline(x=(s+1)*nfrecon-0.5, lw=3, color='k')
+    ax.axhline(y=(s+1)*nfrecon-0.5, lw=3, color='k')
+    ax.axvline(x=(s+1)*nfrecon-0.5, lw=3, color='k')
+
+#plt.savefig('/home/martin/Doctorado/Tesis-Doctoral/Figuras_Tesis_Overleaf/corr_matrix_IQUmaplevel_avg.png',
+#           format = "png")
+```
+
+```{python}
+rc('font', size=20)
+plt.figure(figsize=(10, 10))
+ax = plt.gca()
+
+im = plt.imshow(np.mean(bigcorrJC, axis=2), vmin=-1, vmax=1, cmap='bwr')
+plt.title('promedio sobre pixeles')
+
+divider = make_axes_locatable(ax)
+cax = divider.append_axes("bottom", size="5%", pad=0.5)
+plt.colorbar(im, cax=cax, orientation='horizontal')
+
+make_axis_label(ax, labs)
+
+for s in range(nfrecon):
+    ax.axhline(y=(s+1)*nfrecon-0.5, lw=3, color='k')
+    ax.axvline(x=(s+1)*nfrecon-0.5, lw=3, color='k')
+#plt.savefig('/home/martin/Doctorado/Tesis-Doctoral/Figuras_Tesis_Overleaf/corr_matrix_IQUmaplevel_avg.png',
+#           format = "png")
 ```
 
 ### Save matrices

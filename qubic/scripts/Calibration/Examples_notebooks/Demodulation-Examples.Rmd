@@ -4,16 +4,17 @@ jupyter:
     text_representation:
       extension: .Rmd
       format_name: rmarkdown
-      format_version: '1.1'
-      jupytext_version: 1.1.0
+      format_version: '1.2'
+      jupytext_version: 1.7.1
   kernelspec:
-    display_name: Python [default]
+    display_name: Python 2
     language: python
     name: python2
 ---
 
 ```{python}
 # #%matplotlib notebook
+import os 
 # %matplotlib inline
 from matplotlib import rc
 rc('figure',figsize=(16,8))
@@ -21,10 +22,12 @@ rc('font',size=12)
 rc('text',usetex=False)
 
 from qubicpack import qubicpack as qp
-import fibtools as ft
-import plotters as p
-import lin_lib as ll
-import demodulation_lib as dl
+import qubic.fibtools as ft
+import qubic.plotters as p
+import qubic.lin_lib as ll
+import qubic.demodulation_lib as dl
+import qubicpack
+from qubicpack.qubicfp import qubicfp
 
 import numpy as np
 from matplotlib.pyplot import *
@@ -45,15 +48,16 @@ from scipy import interpolate
 Get the directories corresponding to the day we consider:
 
 ```{python}
-day = '2019-02-22'
-data_dir = '/qubic/Data/Calib-TD/'+day+'/'
-dirs = np.sort(glob.glob(data_dir+'/*_Scan2'))
-print dirs
+day = '2019-03-31'#'2020-11-10'
+keyword = '*2019*'
+data_dir = os.environ['QUBIC_TODDIR'] + day + "/"
+dirs = np.sort(glob.glob(data_dir+keyword))
+print (dirs)
 labels = []
 for d in dirs:
     bla = str.split(d,'__')
     labels.append(bla[1])
-print labels
+print (labels)
 thedir = dirs[0]
 ```
 
@@ -61,19 +65,22 @@ thedir = dirs[0]
 
 ```{python}
 AsicNum = 1
-a = qp()
-a.read_qubicstudio_dataset(thedir, asic=AsicNum)
+a = qubicpack.qubicfp.qubicfp()
+a.read_qubicstudio_dataset(thedir, asic = AsicNum)
+```
+
+```{python}
+a.timeline_array(asic = AsicNum)
 ```
 
 ## Reading TES data
 
 ```{python}
 TESNum = 96
-data = a.timeline(TES=TESNum)
-t_data = a.timeline_timeaxis(axistype='pps')
+data = a.timeline(TES=TESNum, asic = AsicNum)
+t_data = a.timeaxis(axistype='pps', asic = AsicNum)
 
 plot(t_data, (data-np.mean(data))/np.std(data), label='Data')
-
 ```
 
 ## Reading Azimuth Data
@@ -85,8 +92,8 @@ t_az = a.pps2date(pps,gps)
 az = a.hk['INTERN_HK']['Platform-Azimut']
 az = (az-2.**15)/(2.**16)*360
 
-print t_az.shape
-print az.shape
+print (t_az.shape)
+print (az.shape)
 plot(t_az, az)
 ```
 
@@ -102,7 +109,10 @@ Let's check the modulation frequency (main peak in data)
 
 ```{python}
 FREQ_SAMPLING = 1./(t_data[1]-t_data[0])
-spectrum_f, freq_f = mlab.psd(data, Fs=FREQ_SAMPLING, NFFT=len(data), window=mlab.window_hanning)
+spectrum_f, freq_f = mlab.psd(data, 
+                              Fs = FREQ_SAMPLING, 
+                              NFFT = len(data), 
+                              window = mlab.window_hanning)
 plot(freq_f, f.gaussian_filter1d(spectrum_f,5),label='Data')
 yscale('log')
 xscale('log')
@@ -118,11 +128,10 @@ legend()
 ```{python}
 ##### The date format for calsrc has no '-' so we need to change the day to this very format.
 daycalsrc = "".join(str.split(day,'-'))
-fcalsrc = glob.glob('/qubic/Data/Calib-TD/calsource/*'+daycalsrc+'*')
+fcalsrc = glob.glob( os.environ['QUBIC_TODDIR'] + "calsource/"+'*'+daycalsrc+'*.dat')
 fcalsrc.sort()
-print fcalsrc
+print (fcalsrc)
 
-reload(dl)
 t_src, data_src = dl.read_cal_src_data(fcalsrc)
 plot(t_src, data_src,',', label='Measured Source Signal')
 legend()
@@ -194,27 +203,27 @@ subplot(1,2,1)
 plot(t_sim_src-t_data[0], data_sim_src,label='Simulated Source Signal', alpha=0.5)
 plot(t_src-t_data[0]-shift, (data_src-np.mean(data_src))/np.std(data_src)*3, label='Measured Source Signal', alpha=0.5)
 plot(t_data-t_data[0], (data_filtered-np.mean(data_filtered))/np.std(data_filtered), label='Filtered Data', alpha=0.5)
-ylim(-5,5)
-xlim(500,520)
+#ylim(-5,5)
+#xlim(500,520)
 legend()
 subplot(1,2,2)
 plot(t_sim_src-t_data[0], data_sim_src,label='Simulated Source Signal', alpha=0.5)
 plot(t_src-t_data[0]-shift, (data_src-np.mean(data_src))/np.std(data_src)*3, label='Measured Source Signal', alpha=0.5)
 plot(t_data-t_data[0], (data_filtered-np.mean(data_filtered))/np.std(data_filtered), label='Filtered Data', alpha=0.5)
-ylim(-5,5)
-xlim(4800,4820)
+#ylim(-5,5)
+#xlim(4800,4820)
 legend()
 
 ```
 
 ```{python}
-t_src = t_src -shift
+t_src = t_src #-7200#-shift
 ```
 
 #### As seen above, the source data is not always present for the whole time stream. So we focus on the common region between measured source data and TES data (end simulated source signal by construction) and we take data up to the first stop of the source data (here 2000 seconds after start)
 
 ```{python}
-maxtime_src = 2000
+maxtime_src = 20
 oksrc = (t_src-t_data[0]) < maxtime_src
 new_t_src = t_src[oksrc]
 new_data_src = data_src[oksrc]
@@ -222,30 +231,36 @@ new_data_src = data_src[oksrc]
 tmin = np.max([np.min(t_data-t_data[0]), np.min(new_t_src-t_data[0]), np.min(t_az-t_data[0])])
 tmax = np.min([np.max(t_data-t_data[0]), np.max(new_t_src-t_data[0]), np.max(t_az-t_data[0])])
 
-print tmin,tmax
-print ''
-print np.min(t_data)-t_data[0], np.max(t_data)-t_data[0]
-print np.min(t_az)-t_data[0], np.max(t_az)-t_data[0]
-print np.min(t_src)-t_data[0], np.max(t_src)-t_data[0]
-print ''
+print (tmin,tmax)
+print ('')
+print (np.min(t_data)-t_data[0], np.max(t_data)-t_data[0])
+print (np.min(t_az)-t_data[0], np.max(t_az)-t_data[0])
+print (np.min(t_src)-t_data[0], np.max(t_src)-t_data[0])
+print ('')
 okdata = ((t_data-t_data[0]) >= tmin) & ((t_data-t_data[0]) <= tmax)
-print okdata.sum()
+print (okdata.sum())
 okaz = ((t_az-t_data[0]) >= tmin) & ((t_az-t_data[0]) <= tmax)
-print okaz.sum()
+print (okaz.sum())
 oksrc = ((t_src-t_data[0]) >= tmin) & ((t_src-t_data[0]) <= tmax)
-print oksrc.sum()
+print (oksrc.sum())
 
 plot(t_az[okaz]-t_data[0], (az[okaz]-np.mean(az[okaz]))/np.std(az[okaz]), alpha=0.5, label='Az')
 plot(t_data[okdata]-t_data[0], (data[okdata]-np.mean(data))/np.std(data[okdata]), label='Raw Data', alpha=0.5)
 plot(t_sim_src[okdata]-t_data[0], data_sim_src[okdata],label='Simulated Source Signal', alpha=0.5)
 plot(t_src[oksrc]-t_data[0], (data_src[oksrc]-np.mean(data_src[oksrc]))/np.std(data_src[oksrc])*3, label='Measured Source Signal', alpha=0.5)
 plot(t_data[okdata]-t_data[0], (data_filtered[okdata]-np.mean(data_filtered[okdata]))/np.std(data_filtered[okdata]), label='Filtered Data', alpha=0.5)
-ylim(-5,5)
+#ylim(-5,5)
 legend()
 
 ```
 
 We apply the cut
+
+```{python}
+data_obj = a.azel_etc()
+data_obj['data'] = data_obj['data %i' % AsicNum] # hack
+data_obj['t_data'] = data_obj['t_data %i' % AsicNum] # hack
+```
 
 ```{python}
 t_data = t_data[okdata]
@@ -284,7 +299,7 @@ we just measure the RMS of the signal in each period of the modulation signal. W
 This method will require the use of a measure of the modulation source signal. We mutliply the data after filtering  by the modulation signal and get the moving average over a period. Here cone can use the measured source signal or the model.
 
 ```{python}
-reload(dl)
+#reload(dl)
 
 #### Parameters
 ppp = 1./freq_mod
@@ -293,12 +308,18 @@ highcut = 15.
 nbins = 150
 elevation = 50
 
-angle, sb, dsb, pars, err_pars = dl.general_demodulate(ppp, t_data, data, t_src, data_src, t_az, az, 
-                                                    lowcut, highcut, elevation, 
+unbinned, binned = dl.general_demodulate(ppp, data_obj, #data, t_src, data_src, t_az, az, 
+                                                    lowcut, highcut, #elevation, 
                                                     nbins=nbins, median=True, method='rms', 
-                                                    doplot=True, unbinned=False, 
+                                                    doplot=True, #unbinned=False, 
                                                     renormalize_plot=True)
+```
 
+```{python}
+unbinned.keys(), binned
+```
+
+```{python}
 angle, sb, dsb, pars, err_pars = dl.general_demodulate(ppp, t_data, data, t_src, data_src, t_az, az, 
                                                     lowcut, highcut, elevation, 
                                                     nbins=nbins, median=True, method='demod', 
@@ -312,8 +333,6 @@ angle, sb, dsb, pars, err_pars = dl.general_demodulate(ppp, t_data, data, t_sim_
                                                     label='SimSrc',
                                                     doplot=True, unbinned=False, 
                                                     renormalize_plot=True)
-
-
 ```
 
 ## Third Method: spline fitting of the modulation signal

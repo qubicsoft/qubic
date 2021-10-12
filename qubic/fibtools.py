@@ -106,7 +106,7 @@ def image_asics(data1=None, data2=None, all1=None):
 """
 
 
-def thepolynomial(x, pars):
+def thepolynomial(x, pars, extra_args=None):
         """
         Generic polynomial function
 
@@ -895,8 +895,8 @@ def filter_data(time_in, data_in, lowcut, highcut, rebin=True, verbose=False, no
                 data = data_in
 
         FREQ_SAMPLING = 1. / ((np.max(time) - np.min(time)) / len(time))
-        filt = scsig.butter(order, [2 * lowcut / FREQ_SAMPLING, 2 * highcut / FREQ_SAMPLING], btype='bandpass',
-                                                output='sos')
+        filt = scsig.butter(order, [ lowcut, highcut ], btype='bandpass',
+                                                output='sos', fs = FREQ_SAMPLING)
         if len(sh) == 1:
                 dataf = scsig.sosfilt(filt, data)
         else:
@@ -1064,7 +1064,7 @@ def fit_all(t, folded, av, initpars=None, fixpars=[0, 0, 0, 0],
                                 msg = 'Channel #{} - BEWARE THIS IS A THERMOMETER !'.format(i)
                         title(msg)
                         # Changing so 'i' select prompts plot inversion
-                        bla = raw_input("Press [y] if fit OK, [i] to invert, other key otherwise...")
+                        bla = input("Press [y] if fit OK, [i] to invert, other key otherwise...")
                         if bla == 'y':
                                 ok[i] = True
                         # invert to check if TES okay,
@@ -1073,7 +1073,7 @@ def fit_all(t, folded, av, initpars=None, fixpars=[0, 0, 0, 0],
                                 # clf()
                                 plot(t, thedd * (-1.0), color='olive')
                                 show()
-                                ibla = raw_input("Press [y] if INVERTED fit OK, otherwise anykey")
+                                ibla = input("Press [y] if INVERTED fit OK, otherwise anykey")
                                 # and invert thedd in the original datset
                                 if ibla == 'y':
                                         ok[i] = True
@@ -1138,7 +1138,7 @@ def run_asic(fpobj, idnum, Vtes, fff, dc, asic, reselect_ok=False, lowcut=0.5, h
         else:
                 if reselect_ok:
                         print('\n\n')
-                        answer = raw_input('This will overwrite the file for OK TES. Are you sure you want to proceed [y/n]')
+                        answer = input('This will overwrite the file for OK TES. Are you sure you want to proceed [y/n]')
                 else:
                         answer = 'n'
 

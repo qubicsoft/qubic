@@ -61,7 +61,7 @@ def give_sb(freq, nside):
 
 freqs=[150]
 for ff in freqs:
-    sb = give_sb(ff, 1024)
+    sb = give_sb(ff, 128)
     hp.gnomview(sb/np.max(sb), reso=10, rot=[0,90],min=0, max=0.15,cmap='viridis',title='Frequency = {} GHz'.format(ff))
 ```
 
@@ -84,6 +84,86 @@ for i in range(nnu):
         sbj = give_sb(nus[j], nside)
         bmat[i,j] = np.sum(sbi * sbj)
         bmat[j,i] = bmat[i,j]
+```
+
+```{python}
+imshow(bmat, origin='upper', extent=[numin, numax, numax, numin])
+xlabel('Frequency (GHz)')
+ylabel('Frequency (GHz)')
+colorbar()
+title('$C^{-1} = A^t\cdot A$')
+```
+
+```{python}
+rc('figure',figsize=(16,4))
+rc('font',size=12)
+
+import scipy.linalg
+Q = scipy.linalg.sqrtm(bmat, disp=True).real
+subplot(1,4,1)
+imshow(bmat, origin='upper', extent=[numin, numax, numax, numin])
+title('B')
+colorbar()
+
+subplot(1,4,2)
+imshow(Q, origin='upper', extent=[numin, numax, numax, numin])
+title('Q such as B=Q.Q')
+colorbar()
+
+subplot(1,4,3)
+imshow(np.dot(Q,Q), origin='upper', extent=[numin, numax, numax, numin])
+title('Q.Q')
+colorbar()
+
+subplot(1,4,4)
+imshow(bmat-np.dot(Q,Q), origin='upper', extent=[numin, numax, numax, numin])
+title('B-Q.Q')
+colorbar()
+
+
+```
+
+```{python}
+rc('figure',figsize=(8,4))
+rc('font',size=12)
+si = np.sum(Q, axis=1)
+R = np.zeros_like(Q)
+for i in range(nnu):
+    R[i,:] = Q[i,:] / si[i]
+Ctilde_inv = np.diag(1./si**2)
+
+ftest = np.zeros(nnu)
+ftest[nnu//2] = 1
+plot(nus, np.dot(R, ftest))
+xlabel('Frequency [GHz]')
+ylabel('FPSF')
+```
+
+```{python}
+rc('figure',figsize=(8,4))
+rc('font',size=12)
+
+truc = np.dot(R, ftest)
+ok = isfinite(truc)
+
+FPSF = np.zeros_like(nus)
+FPSF[ok] = truc[ok] - np.median(truc[ok])
+FPSF /= np.max(FPSF)
+bla = FPSF >= 0.5
+fwhm = max(nus[bla])-min(nus[bla])
+
+sqnh = 20
+thwidth = nu0/(sqnh-1)/2.35
+print(thwidth)
+
+plot(nus, FPSF, label='Analytical FPSF - $\sigma_{eff}$='+'{:3.1f} GHz'.format(fwhm/2.35))
+plot(nus, np.exp(-(nus-nu0)**2/(2*thwidth**2)), 
+     label='Rayleigh sqnh={}'.format(sqnh)+' - $\sigma_{rayleigh}$'+'={:3.1f} GHz'.format(thwidth))
+legend(loc='upper right', fontsize=10)
+xlim(130, 170)
+xlabel('Frequency [GHz]')
+ylabel('FPSF')
+title('SQNH={}'.format(sqnh))
 ```
 
 ```{python}

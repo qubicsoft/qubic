@@ -192,11 +192,11 @@ def get_qss_maps(d, duration=3, freq=150, nsub=3, seed=42, spatial_noise=True, c
 ```{python}
 spatial_noise=False
 nsub = [2, 2]
+band = [150, 220]
+duration = 30000000
 seed = 42
 
 #### Figure with error for each band...
-band = [150, 220]
-duration = 30000000
 maps_qubic, maps_noiseless, maps_noise, nus, maps_truth = get_qss_maps(d, duration=duration, freq=band, nsub=nsub, 
                                                 spatial_noise=spatial_noise, coverage=covmap, seed=seed)
 
@@ -251,6 +251,10 @@ pd.DataFrame(data,lines, names)
 Why does it find non zero residuals wheen beta is found to be 1.54 (nsub=1, nsub=1] ????
 
 OK for some convolution residuals,..but apart from this it should be essentially perfect ?
+
+```{python}
+# fgb?
+```
 
 ```{python}
 

@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.5.0
+      jupytext_version: 1.4.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -67,7 +67,7 @@ And more conveniently in our case, if we set all elements of $\vec{f}$ (the deco
 rc('figure',figsize=(16,6))
 rc('font',size=12)
 
-sqnh = 20
+sqnh = 8
 
 ### Theta range
 nth = 1000
@@ -95,6 +95,8 @@ plot(th,give_sbcut(th, 135, sqnh=sqnh), label='135 GHz')
 plot(th,give_sbcut(th, 150, sqnh=sqnh), label='150 GHz')
 plot(th,give_sbcut(th, 165, sqnh=sqnh), label='165 GHz')
 legend()
+ylabel('Synthesized beam')
+xlabel('Angle [Deg]')
 ```
 
 ## Let's now calculate the inverse covariance matrix $B=C^{-1}$
@@ -135,24 +137,33 @@ import scipy.linalg
 Q = scipy.linalg.sqrtm(bmat, disp=True).real
 subplot(1,4,1)
 imshow(bmat, origin='upper', extent=[numin, numax, numax, numin])
-title('B')
+title(r'$B=C^{-1}=A^t A$')
+xlabel('Frequency (GHz)')
+ylabel('Frequency (GHz)')
 colorbar()
 
 subplot(1,4,2)
 imshow(Q, origin='upper', extent=[numin, numax, numax, numin])
 title('Q such as B=Q.Q')
+xlabel('Frequency (GHz)')
+ylabel('Frequency (GHz)')
 colorbar()
 
 subplot(1,4,3)
 imshow(np.dot(Q,Q), origin='upper', extent=[numin, numax, numax, numin])
 title('Q.Q')
+xlabel('Frequency (GHz)')
+ylabel('Frequency (GHz)')
 colorbar()
 
 subplot(1,4,4)
 imshow(bmat-np.dot(Q,Q), origin='upper', extent=[numin, numax, numax, numin])
 title('B-Q.Q')
+xlabel('Frequency (GHz)')
+ylabel('Frequency (GHz)')
 colorbar()
 
+tight_layout()
 
 ```
 
@@ -161,7 +172,7 @@ And we now calculate the $R$ matrix that does the transformation from the deconv
 We also apply it to a "deconvolved" spectrum with all zeros but a single 1 at 150 GHz and we get the spectral response of the isntrment at 150 GHz: our FPSF.
 
 ```{python}
-rc('figure',figsize=(8,4))
+rc('figure',figsize=(12,4))
 rc('font',size=12)
 si = np.sum(Q, axis=1)
 R = np.zeros_like(Q)
@@ -169,11 +180,21 @@ for i in range(nnu):
     R[i,:] = Q[i,:] / si[i]
 Ctilde_inv = np.diag(1./si**2)
 
+subplot(1,2,1)
+imshow(R)
+xlabel('Frequency (GHz)')
+ylabel('Frequency (GHz)')
+title('R')
+
+subplot(1,2,2)
 ftest = np.zeros(nnu)
 ftest[nnu//2] = 1
 plot(nus, np.dot(R, ftest))
 xlabel('Frequency [GHz]')
 ylabel('FPSF')
+title('R applied to a Dirac at 150 GHz')
+ylim(0,0.013)
+tight_layout()
 ```
 
 Let's remove the offset and compare to the "Rayleigh" spectral resolution.

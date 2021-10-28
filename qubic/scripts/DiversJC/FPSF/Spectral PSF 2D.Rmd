@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.5.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -61,7 +61,7 @@ def give_sb(freq, nside):
 
 freqs=[150]
 for ff in freqs:
-    sb = give_sb(ff, 128)
+    sb = give_sb(ff, 256)
     hp.gnomview(sb/np.max(sb), reso=10, rot=[0,90],min=0, max=0.15,cmap='viridis',title='Frequency = {} GHz'.format(ff))
 ```
 
@@ -74,7 +74,7 @@ print(numin,numax)
 nnu = 101
 nus = np.linspace(numin, numax, nnu)
 
-nside = 128
+nside = 512
 
 bmat = np.zeros((nnu, nnu))
 for i in range(nnu):
@@ -156,7 +156,7 @@ sqnh = 20
 thwidth = nu0/(sqnh-1)/2.35
 print(thwidth)
 
-plot(nus, FPSF, label='Analytical FPSF - $\sigma_{eff}$='+'{:3.1f} GHz'.format(fwhm/2.35))
+plot(nus, FPSF, label='Analytical FPSF (2D) - $\sigma_{eff}$='+'{:3.1f} GHz'.format(fwhm/2.35))
 plot(nus, np.exp(-(nus-nu0)**2/(2*thwidth**2)), 
      label='Rayleigh sqnh={}'.format(sqnh)+' - $\sigma_{rayleigh}$'+'={:3.1f} GHz'.format(thwidth))
 legend(loc='upper right', fontsize=10)

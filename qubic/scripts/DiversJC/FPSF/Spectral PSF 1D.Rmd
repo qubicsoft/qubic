@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.5.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -195,7 +195,7 @@ fwhm = max(nus[bla])-min(nus[bla])
 thwidth = nu0/(sqnh-1)/2.35
 print(thwidth)
 
-plot(nus, FPSF, label='Analytical FPSF - $\sigma_{eff}$='+'{:3.1f} GHz'.format(fwhm/2.35))
+plot(nus, FPSF, label='Analytical FPSF (1D) - $\sigma_{eff}$='+'{:3.1f} GHz'.format(fwhm/2.35))
 plot(nus, np.exp(-(nus-nu0)**2/(2*thwidth**2)), 
      label='Rayleigh sqnh={}'.format(sqnh)+' - $\sigma_{rayleigh}$'+'={:3.1f} GHz'.format(thwidth))
 legend(loc='upper right', fontsize=10)

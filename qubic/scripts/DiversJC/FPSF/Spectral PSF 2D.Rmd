@@ -59,7 +59,7 @@ def give_sb(freq, nside):
     sb = inst.get_synthbeam(s, detpos=np.array([0,0,-0.3]))
     return sb
 
-freqs=[150]
+freqs=[135, 165]
 for ff in freqs:
     sb = give_sb(ff, 256)
     hp.gnomview(sb/np.max(sb), reso=10, rot=[0,90],min=0, max=0.15,cmap='viridis',title='Frequency = {} GHz'.format(ff))

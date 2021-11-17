@@ -80,8 +80,8 @@ def get_primbeam(th, lam, fwhmprimbeam_150=14.):
     return primbeam
 
 def give_sbcut(th, nu, dx=13.*1e-3, sqnh=20, Df=1., detpos=0., fwhmprimbeam_150=14.):
-    #filter_range = np.array([131.25, 168.75])
-    filter_range = np.array([0, 1e8])
+    filter_range = np.array([131.25, 168.75])
+    #filter_range = np.array([0, 1e8])
     if (nu<filter_range[0]) or (nu>filter_range[1]):
         return th*0
     else:
@@ -102,12 +102,12 @@ xlabel('Angle [Deg]')
 ## Let's now calculate the inverse covariance matrix $B=C^{-1}$
 
 ```{python}
-dnu_nu = 0.9
+dnu_nu = 0.3
 nu0 = 150.
 numin = nu0*(1-dnu_nu/2)
 numax = nu0*(1+dnu_nu/2)
 print(numin,numax)
-nnu = 301
+nnu = 1001
 nus = np.linspace(numin, numax, nnu)
 
 bmat = np.zeros((nnu, nnu))
@@ -204,10 +204,10 @@ rc('figure',figsize=(8,4))
 rc('font',size=12)
 
 truc = np.dot(R, ftest)
-ok = isfinite(truc)
+ok = isfinite(truc) 
 
 FPSF = np.zeros_like(nus)
-FPSF[ok] = truc[ok] - np.median(truc[ok])
+FPSF[ok] = truc[ok] - np.min(truc[ok])
 FPSF /= np.max(FPSF)
 bla = FPSF >= 0.5
 fwhm = max(nus[bla])-min(nus[bla])
@@ -226,12 +226,216 @@ ylabel('FPSF')
 title('SQNH={}'.format(sqnh))
 ```
 
-To do:
-- restrict the frequency domain to our band by setting to zero beyond ?
-- where does the offset come from, what meaning ?
+### Comparison with Real measurements (TD)
+The relative offset (that has been artificially removed in the measurements -> to be improved) is fitted along with an amplitude using Minuit.
+
+```{python}
+nu_calsrc = np.array([134.63280448, 141.57278853, 148.8705114 , 156.54441361,
+       164.61388627])
+data_calsrc = np.array([0.24000013, 0.65204242, 0.9588202 , 0.80646218, 0.26683838])
+err_calsrc = np.array([0.23605021, 0.12543431, 0.1951311 , 0.16140389, 0.16894312])
+
+from qubic import fibtools as ft
+def fpsf(nu, pars, extra_args=None):
+    return pars[1]*np.interp(nu, nus, FPSF)+pars[0]
+
+guess = np.array([0,1])
+fitg = ft.do_minuit(nu_calsrc, data_calsrc, err_calsrc, guess, functname=fpsf, fixpars=[0,0])
+
+newy = (data_calsrc-fitg[1][0])/fitg[1][1]
+newerr = err_calsrc/fitg[1][1]
+
+errorbar(nu_calsrc, newy, yerr=newerr, fmt='ro',label='Lab measurement with Cal. Src.')
+plot(nus, fpsf(nus, guess), label='Analytical FPSF (1D) - $\sigma_{eff}$='+'{:3.1f} GHz'.format(fwhm/2.35))
+plot(nus, np.exp(-(nus-nu0)**2/(2*thwidth**2)), 
+     label='Rayleigh sqnh={}'.format(sqnh)+' - $\sigma_{rayleigh}$'+'={:3.1f} GHz'.format(thwidth))
+legend(loc='upper right', fontsize=10)
+xlim(130, 170)
+xlabel('Frequency [GHz]')
+ylabel('FPSF')
+title('SQNH={}'.format(sqnh))
+ylim(-0.1,1.5)
+
+```
+
+### Now with the End-To-End simulations from Martin and Louise (those presented in QUBIC II 2021)
+
+```{python}
+rc('figure',figsize=(16,6))
+rc('font',size=12)
+
+#### Data from Martin Gamboa (End2End simulations with monochromatic point sources)
+#### The data for Fig. 8 in QUBIC II 2021
+# Input freqencies of the point source
+_nusin_ = [132.97971811, 134.37952271, 135.79406229, 137.22349195,
+          141.60269708, 143.09327106, 144.59953548, 146.12165553, 
+          146.8887135 , 147.6597981 ,  148.43493047, 149.21413186, 149.99742362, 150.78482723, 
+          151.57636428, 152.37205646, 153.97599357, 155.59681445, 
+          157.23469683, 158.8898203 , 160.56236634, 162.25251836]
+nsimu = len(_nusin_)
+
+# The four reconstructed sub-bands
+_nusrec_ = np.array([135.50540829, 144.29216391, 153.6486907 , 163.61193508])
+_nusedge_ = np.array([131.25, 139.76081658, 148.82351125, 158.47387016, 168.75])
+nu_bandwidth = np.diff(_nusedge_)
+
+# Measurement (intensity in the four sub-bands for each nu_in)
+datarec = np.array([[ 0.91601087, -0.16300357,  0.07148064, -0.02154493],
+                    [ 0.97108358, -0.12843866,  0.02048783, -0.01400606],
+                    [ 0.94662368, -0.06041048, -0.01865472, -0.00286433],
+                    [ 0.85516324,  0.07495715, -0.05477733,  0.00930614],
+                    [ 0.09077023,  0.82225625, -0.10677544,  0.03321614],
+                    [-0.03513556,  0.96278344, -0.09896842,  0.01836723],
+                    [-0.09086167,  0.99084585, -0.0621382 ,  0.00215334],
+                    [-0.10657393,  0.95787016,  0.0252968 , -0.0217093 ],
+                    [-0.09700264,  0.87454252,  0.09206298, -0.0290194 ],
+                    [-0.08114005,  0.77071529,  0.18829684, -0.03471806],
+                    [-0.05707247,  0.61135522,  0.33435032, -0.04617655],
+                    [-0.0329217 ,  0.41514615,  0.52139209, -0.06210269],
+                    [-0.02148455,  0.24494626,  0.68579009, -0.08144495],
+                    [-0.0081945 ,  0.1304667 ,  0.79391375, -0.08693801],
+                    [ 0.00326546,  0.04293615,  0.87552804, -0.08916238],
+                    [ 9.29098752e-04, -1.83078044e-02,  9.46933287e-01, -8.97956690e-02],
+                    [ 0.00475218, -0.09946185,  1.        , -0.06808089],
+                    [ 0.00940636, -0.12568378,  0.96436097,  0.00273789],
+                    [ 0.00452396, -0.13156937,  0.81214209,  0.17818687],
+                    [ 0.00121509, -0.08540265,  0.42981105,  0.50409209],
+                    [-0.01046448, -0.05775577,  0.14201797,  0.77813485],
+                    [-0.00907187, -0.04032238, -0.01218665,  0.91569607]]).T 
+
+# Make a dataframe unsing Pandas
+df = {'nu_in': _nusin_,
+        'band1': datarec[0],
+        'band2': datarec[1],
+        'band3': datarec[2],
+        'band4': datarec[3]}
+subplot(1,3,1)
+for i in range(4):
+    plot((df['nu_in'] - _nusrec_[i]), df[f'band{i+1}'], 
+            'o', label=f'Band{i+1}')
+legend()
+
+subplot(1,3,2)
+for i in range(4):
+    plot((df['nu_in'] - _nusrec_[i]), df[f'band{i+1}'], 
+            'o', color='b', label=f'Band{i+1}')
+legend()
+
+subplot(1,3,3)
+for i in range(4):
+    plot((df['nu_in']), df[f'band{i+1}'], 
+            'o', label=f'Band{i+1}')
+legend()
+```
+
+So here we have four reconstructed sub-bands, and in each case we scan in frequency. We have to apply the same to the analytical FPSF...
+
+```{python}
+print(_nusrec_)
+print(_nusedge_)
+print(_nusin_)
+```
+
+```{python}
+nbands = len(_nusrec_)
+integrated = np.zeros((nbands, len(_nusin_)))
+
+for i in range(nbands):
+    print('Band {}'.format(i))
+    ok = (nus > _nusedge_[i]) & (nus <= _nusedge_[i+1])
+    for j in range(len(_nusin_)):
+        index = np.argmin(np.abs(nus-_nusin_[j]))
+        ftest = np.zeros(nnu)
+        ftest[index] = 1
+        my_fpsf = np.dot(R, ftest)
+        my_fpsf -= np.nanmedian(my_fpsf)
+        integrated[i,j] = np.nanmean(my_fpsf[ok])
+        if j==10:
+            if i==0: plot(nus, my_fpsf, 'k')
+            p=plot(nus[ok], my_fpsf[ok], lw=4)
+            axvline(x=_nusedge_[i], ls=':', color='k')
+            axvline(x=_nusedge_[i+1], ls=':', color='k')
+            plot(nus[ok], nus[ok]*0+integrated[i,j], color=p[0].get_color())
+    integrated[i,:] /= np.max(integrated[i,:])
+
+figure()
+for i in range(4):
+    p=plot((df['nu_in']), df[f'band{i+1}'], 
+            'o', label=f'Band{i+1}')
+    plot(df['nu_in'], integrated[i,:],'.-', color=p[0].get_color())
+#legend()
+```
+
+```{python}
+subplot(1,2,1)
+for iband in range(4):
+    xxx = np.array(df['nu_in'])
+    yyy = np.array(df[f'band{iband+1}'])
+    from qubic import fibtools as ft
+    def fpsf_int(nu, pars, extra_args=None):
+        return pars[1]*np.interp(nu, xxx, integrated[iband,:])+pars[0]
+
+    guess = np.array([0,1])
+    fitg = ft.do_minuit(xxx, yyy, xxx*0+1, guess, functname=fpsf_int, fixpars=[0,0])
+
+    p=plot(xxx, yyy, 'o', label='Band [{0:5.1f}, {1:5.1f}]'.format(_nusedge_[iband], _nusedge_[iband+1]))
+    plot(xxx, fpsf_int(xxx, fitg[1]), '.-', color=p[0].get_color())
+
+legend1 = legend(loc='upper left', fontsize=10)
+
+ll0, = plot(-10,-10, 'ko', label='End-to-end simulations')
+ll1, = plot(-10,-10, 'k.-', label='Analytical FPSF (1D)')
+legend2 = legend([ll0,ll1],[ll0.get_label(), ll1.get_label()], fontsize=10)
+gca().add_artist(legend1)
+
+xlim(np.min(xxx), np.max(xxx))
+xlabel(r'$\nu_{src}$ [GHz]')
+ylabel('FPSF')
+title('SQNH={}'.format(sqnh))
+ylim(-0.2,1.4)
 
 
-# Next step: 2D with healpix maps
+
+
+subplot(1,2,2)
+for iband in range(4):
+    xxx = np.array(df['nu_in'])
+    yyy = np.array(df[f'band{iband+1}'])
+    from qubic import fibtools as ft
+    def fpsf_int(nu, pars, extra_args=None):
+        return pars[1]*np.interp(nu, xxx, integrated[iband,:])+pars[0]
+
+    guess = np.array([0,1])
+    fitg = ft.do_minuit(xxx, yyy, xxx*0+1, guess, functname=fpsf_int, fixpars=[0,0])
+
+    p=plot(xxx-_nusrec_[iband], yyy, 'o', label='Band [{0:5.1f}, {1:5.1f}]'.format(_nusedge_[iband], _nusedge_[iband+1]))
+    plot(xxx-_nusrec_[iband], fpsf_int(xxx, fitg[1]), '.-', color=p[0].get_color())
+
+legend1 = legend(loc='upper left', fontsize=10)
+ll0, = plot(-10,-10, 'ko', label='End-to-end simulations')
+ll1, = plot(-10,-10, 'k.-', label='Analytical FPSF (1D)')
+legend2 = legend([ll0,ll1],[ll0.get_label(), ll1.get_label()], fontsize=10)
+gca().add_artist(legend1)
+
+#xlim(np.min(xxx), np.max(xxx))
+xlabel(r'$\nu_{src}-\nu_{band}$ [GHz]')
+ylabel('FPSF')
+title('SQNH={}'.format(sqnh))
+ylim(-0.2,1.1)
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
 
 ```{python}
 

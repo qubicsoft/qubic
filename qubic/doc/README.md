@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 # qubic/doc
 
 ## Config: 
@@ -18,6 +19,11 @@ to define those variables you have to edit your `~/.bashrc` file and add the fol
 # qubic/doc
 
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+<!-- #region -->
+# qubic/doc
+
+>>>>>>> master
 
 ## Documentation on how QUBIC works and some improvements in end-to-end simulation pipeline:
 
@@ -33,10 +39,16 @@ to define those variables you have to edit your `~/.bashrc` file and add the fol
 .. SynthesizedBeam.Rmd: 
 	This notebook aims at showing how to obtain the QUBIC Synthesized beam for a given set of horns accounting for various effects (detector size, bandwidth...).
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> master
 <!-- #endregion -->
 
 ```python
 
 ```
+<<<<<<< HEAD
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+>>>>>>> master

@@ -6,10 +6,14 @@ jupyter:
       format_name: rmarkdown
       format_version: '1.2'
 <<<<<<< HEAD
+<<<<<<< HEAD
       jupytext_version: 1.4.0
 =======
       jupytext_version: 1.4.1
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+      jupytext_version: 1.7.1
+>>>>>>> master
   kernelspec:
     display_name: Python 3
     language: python
@@ -48,20 +52,28 @@ import matplotlib.pyplot as plt
 
 # Specific qubic modules
 <<<<<<< HEAD
+<<<<<<< HEAD
 import pysm
 =======
 import pysm3
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+import pysm3
+>>>>>>> master
 import qubic
 from qubicpack.utilities import Qubic_DataDir
 from pysimulators import FitsArray
 
 from qubic import SpectroImLib as si
 <<<<<<< HEAD
+<<<<<<< HEAD
 from pysm import models
 =======
 from pysm3 import models
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+from pysm3 import models
+>>>>>>> master
 from qubic import QubicSkySim as qss
 
 rc('figure', figsize=(13, 10))
@@ -86,29 +98,33 @@ d['nf_recon'] = 1
 # Center of the patch observed in galactic coordinates
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 print(center)
-
+d['effective_duration'] = 4
 # Adjust some parameters in the dictionary
 d['npointings'] = 3000
-
+d['tol'] = 1e-5
 d['filter_nu'] = 220e9
-d['photon_noise'] = True
+d['photon_noise'] = False
 d['noiseless'] = False
 
 print(d['filter_nu'])
 print(d['detector_nep'])
 print(d['photon_noise'])
 print(d['config'])
-d['effective_duration']
+print(d['effective_duration'])
 ```
 
 # Input sky
 ### Some words about maps.
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 In this case we read a map $X_0$ simulated previously which contains fluctuations in temperature and polarization. Because we are using Healpy module (HEALPix implemented in Python) the number of pixels of each map has to be $$n_{pix} = 12 \times n_{side}^2$$ where $nside = 2\times j, \qquad j = 1,2,... $.
 =======
 In this case we read a map $X_0$ simulated previously which contains fluctuations in temperature and polarization. Because we are using Healpy module (HEALPix implemented in Python) the number of pixels of each map has to be $$n_{pix} = 12 \times N_{side}^2$$ where $N_{side} = 2^j, \qquad j = 1,2,... $.
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+In this case we read a map $X_0$ simulated previously which contains fluctuations in temperature and polarization. Because we are using Healpy module (HEALPix implemented in Python) the number of pixels of each map has to be $$n_{pix} = 12 \times N_{side}^2$$ where $N_{side} = 2^j, \qquad j = 1,2,... $.
+>>>>>>> master
 
 ```{python}
 # Make a sky using PYSM
@@ -138,8 +154,11 @@ for istk in range(3):
 ```
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 # TOD simulation
 =======
+=======
+>>>>>>> master
 # Time Ordered Data (TOD) simulation
 
 TOD are the signal as a function of time for each bolometer.
@@ -147,7 +166,10 @@ TOD are the signal as a function of time for each bolometer.
 $$TOD = AS + n$$
 
 where $A$ is the pointing matrix, $S$ the sky and $n$ the noise.
+<<<<<<< HEAD
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+>>>>>>> master
 
 ```{python}
 # Pointing strategy
@@ -183,7 +205,10 @@ plt.title('FI - 220GHz - Noiseless={} CMB - STD = {:.4} W'.format( d['noiseless'
 ```
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> master
 ### About memory used 
 For end-2-end simulations, the dificulty is the memory requirement. This is why for large number of pointings, you need to parallelize on several machines. The Qubic soft is written in order that parallelization is possible.
 
@@ -223,7 +248,10 @@ Last remark, if you run on several machines **in parallel**, for example at NERS
     $ Info moussetDell: Allocating (2976000,9) elements = 408.69140625 MiB in FSRRotation3dMatrix.__init__.
 
 
+<<<<<<< HEAD
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+>>>>>>> master
 # Coverage map
 
 ```{python}
@@ -294,12 +322,13 @@ for istokes in range(3):
         min = -8
         max = 8
     hp.gnomview(maps_convolved[:, istokes], cmap='jet', rot=center, sub=(3,3,3*istokes+1), reso=rr,
-                title='Input ' + stokes[istokes], unit='$\mu K$', format='%g',  min=min, max=max)
+                title='Input ' + stokes[istokes], unit='$\mu K_{CMB}$', format='%g',  min=min, max=max)
     hp.gnomview(maps_recon[:, istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+2), reso=rr,
-                title='Output ' + stokes[istokes], unit='$\mu K$', min=min, max=max)
+                title='Output ' + stokes[istokes], unit='$\mu K_{CMB}$', min=min, max=max)
     hp.gnomview(diff[:, istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+3), reso=rr,
-                title='Difference ' + stokes[istokes], unit='$\mu K$', min=-2, max=2)
-# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/maps_1bands_4years.pdf')
+                title='Difference ' + stokes[istokes], unit='$\mu K_{CMB}$', min=-2, max=2)
+hp.graticule(dpar = 5, dmer = 5, verbose = False, alpha = 0.5)
+plt.savefig('/home/martin/QUBIC/ArticlesSet_2020/RRPII/plots_paperII/maps_1bands_4years.pdf')
 ```
 
 ```{python}

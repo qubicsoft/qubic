@@ -1,20 +1,27 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 import numpy as np
 =======
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+>>>>>>> master
 import emcee
 from scipy.optimize import curve_fit
 from scipy.integrate import cumtrapz
 from pylab import *
 <<<<<<< HEAD
+<<<<<<< HEAD
 import iminuit
 =======
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+>>>>>>> master
 from qubic import fibtools as ft
 
 __all__ = ['LogLikelihood']
 
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 
 class LogLikelihood:
@@ -28,6 +35,12 @@ class LogLikelihood:
                  nsiginit=10, nsigprior=20, flatprior=None, fixedpars=None,
                  covariance_model_funct=None, p0=None, nwalkers=32, chi2=None):
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+class LogLikelihood:
+    def __init__(self, xvals=None, yvals=None, errors=None, model=None, nbins=16,
+                 nsiginit=10, nsigprior=20, flatprior=None, fixedpars=None,
+                 covariance_model_funct=None, p0=None, nwalkers=32, chi2=None):
+>>>>>>> master
         self.prior = None
         self.model = model
         self.xvals = xvals
@@ -39,10 +52,14 @@ class LogLikelihood:
         self.nwalkers = nwalkers
         self.fixedpars = fixedpars
 <<<<<<< HEAD
+<<<<<<< HEAD
         self.p0=p0
 =======
         self.p0 = p0
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+        self.p0 = p0
+>>>>>>> master
         self.chi2 = chi2
 
         if np.ndim(errors) == 1:
@@ -54,6 +71,7 @@ class LogLikelihood:
         self.flatprior = flatprior
         if not flatprior:
 <<<<<<< HEAD
+<<<<<<< HEAD
             initial_fit = self.minuit(p0=self.p0, chi2 = self.chi2)
             self.fitresult = [initial_fit[0], initial_fit[1]]
  
@@ -62,6 +80,11 @@ class LogLikelihood:
             self.fitresult = [initial_fit[0], initial_fit[1]]
 
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+            initial_fit = self.minuit(p0=self.p0, chi2=self.chi2)
+            self.fitresult = [initial_fit[0], initial_fit[1]]
+
+>>>>>>> master
     def __call__(self, mytheta, extra_args=None, verbose=False):
         # if self.fixedpars is not None:
         #     theta = self.p0.copy()
@@ -95,9 +118,12 @@ class LogLikelihood:
             print(np.shape((self.yvals - self.modelval).T @ self.invcov))
             print(((self.yvals - self.modelval).T @ self.invcov)[0:10])
 <<<<<<< HEAD
+<<<<<<< HEAD
         # logLLH = lp - 0.5 * np.dot(np.dot(self.yvals - self.modelval, self.invcov), self.yvals - self.modelval)
 =======
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+>>>>>>> master
         logLLH = lp - 0.5 * (((self.yvals - self.modelval).T @ self.invcov) @ (self.yvals - self.modelval))
         if not np.isfinite(logLLH):
             return -np.inf
@@ -115,10 +141,14 @@ class LogLikelihood:
         LLH = [np.exp(logLLH([rvalues[i]])) for i in range(len(rvalues))]
 
 <<<<<<< HEAD
+<<<<<<< HEAD
         cumint = cumtrapz(LLH, x=rvalues) # Cumulative integral
 =======
         cumint = cumtrapz(LLH, x=rvalues)  # Cumulative integral
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+        cumint = cumtrapz(LLH, x=rvalues)  # Cumulative integral
+>>>>>>> master
         cumint /= np.max(cumint)
         sigma68 = np.interp(0.68, cumint, rvalues[1:])
 
@@ -154,26 +184,36 @@ class LogLikelihood:
                 pos[:, d] = np.random.randn(nwalkers) * np.sqrt(self.fitresult[1][d, d]) * nsigmas + self.fitresult[0][
                     d]
 <<<<<<< HEAD
+<<<<<<< HEAD
         print('Ndim init:',ndim)
 =======
         print('Ndim init:', ndim)
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+        print('Ndim init:', ndim)
+>>>>>>> master
         if self.fixedpars is not None:
             ndim = int(np.sum(self.fixedpars == 0))
         print('New ndim:', ndim)
         sampler = emcee.EnsembleSampler(nwalkers, ndim, self.__call__)
         if self.fixedpars is not None:
 <<<<<<< HEAD
+<<<<<<< HEAD
             print('Len(pos):',np.shape(pos))
             print('len(fixedpars):',len(self.fixedpars))
             pos = pos[:,self.fixedpars==0]
             print('New len(pos):',np.shape(pos))
 =======
+=======
+>>>>>>> master
             print('Len(pos):', np.shape(pos))
             print('len(fixedpars):', len(self.fixedpars))
             pos = pos[:, self.fixedpars == 0]
             print('New len(pos):', np.shape(pos))
+<<<<<<< HEAD
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+>>>>>>> master
         sampler.run_mcmc(pos, nbmc, progress=True)
         return sampler
 
@@ -199,16 +239,23 @@ class LogLikelihood:
     def curve_fit(self, p0=None):
         if p0 is None:
 <<<<<<< HEAD
+<<<<<<< HEAD
             p0=self.p0
         self.fitresult_curvefit = curve_fit(self.call4curvefit, self.xvals, self.yvals, sigma=np.sqrt(np.diag(self.covar)),
                                    maxfev=1000000, ftol=1e-5, p0=p0)
+=======
+            p0 = self.p0
+        self.fitresult_curvefit = curve_fit(self.call4curvefit, self.xvals, self.yvals,
+                                            sigma=np.sqrt(np.diag(self.covar)),
+                                            maxfev=1000000, ftol=1e-5, p0=p0)
+>>>>>>> master
         return self.fitresult_curvefit[0], self.fitresult_curvefit[1]
-
 
     ### This should be modified in order to call the current likelihood instead, not an external one...
     def minuit(self, p0=None, chi2=None, verbose=True, print_level=0, ncallmax=10000, extra_args=None, nsplit=1,
-                return_chi2fct=False):
+               return_chi2fct=False):
         if p0 is None:
+<<<<<<< HEAD
             p0=self.p0
         if verbose & (print_level>1):
 =======
@@ -225,10 +272,15 @@ class LogLikelihood:
             p0 = self.p0
         if verbose & (print_level > 1):
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+            p0 = self.p0
+        if verbose & (print_level > 1):
+>>>>>>> master
             print('About to call Minuit with chi2:')
             print(chi2)
             print('Initial parameters, fixed and bounds:')
             for i in range(len(p0)):
+<<<<<<< HEAD
 <<<<<<< HEAD
                 print('Param {0:}: init={1:6.2f} Fixed={2:} Range=[{3:6.3f}, {4:6.3f}]'.format(i, p0[i], 
                     self.fixedpars[i], self.flatprior[i][0], self.flatprior[i][1]))
@@ -244,12 +296,22 @@ class LogLikelihood:
                                                                                                self.flatprior[i][0],
                                                                                                self.flatprior[i][1]))
         self.fitresult_minuit = ft.do_minuit(self.xvals, self.yvals, self.covar, p0,
+=======
+                print('Param {0:}: init={1:6.2f} Fixed={2:} Range=[{3:6.3f}, {4:6.3f}]'.format(i, p0[i],
+                                                                                               self.fixedpars[i],
+                                                                                               self.flatprior[i][0],
+                                                                                               self.flatprior[i][1]))
+        self.fitresult_minuit = ft.do_minuit(self.xvals, self.yvals, self.covar, p0,
+>>>>>>> master
                                              functname=self.model,
                                              fixpars=self.fixedpars, rangepars=self.flatprior,
                                              verbose=verbose, chi2=self.chi2, print_level=print_level,
                                              ncallmax=ncallmax, extra_args=extra_args, nsplit=nsplit)
         if len(self.fitresult_minuit[3]) == 0:
+<<<<<<< HEAD
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+>>>>>>> master
             cov = np.diag(self.fitresult_minuit[2])
         else:
             cov = self.fitresult_minuit[3]
@@ -259,23 +321,36 @@ class LogLikelihood:
             return self.fitresult_minuit[1], cov
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     def random_explore_guess(self, ntry=100, fraction=1, verbose = True, extra_args=None):
 =======
     def random_explore_guess(self, ntry=100, fraction=1):
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+    def random_explore_guess(self, ntry=100, fraction=1):
+>>>>>>> master
         fit_range_simu = self.flatprior
         fit_fixed_simu = self.fixedpars
         myguess_params = np.zeros((ntry, len(fit_range_simu)))
         for i in range(len(fit_range_simu)):
+<<<<<<< HEAD
 <<<<<<< HEAD
             if fit_fixed_simu[i]==0:
                 rng = (fit_range_simu[i][1]-fit_range_simu[i][0]) * fraction
                 mini = np.max([fit_range_simu[i][0], self.p0[i]-rng/2])
                 maxi = np.min([fit_range_simu[i][0], self.p0[i]+rng/2])
                 myguess_params[:,i] = np.random.rand(ntry)*(maxi-mini)+mini
+=======
+            if fit_fixed_simu[i] == 0:
+                rng = (fit_range_simu[i][1] - fit_range_simu[i][0]) * fraction
+                mini = np.max([fit_range_simu[i][0], self.p0[i] - rng / 2])
+                maxi = np.min([fit_range_simu[i][0], self.p0[i] + rng / 2])
+                myguess_params[:, i] = np.random.rand(ntry) * (maxi - mini) + mini
+>>>>>>> master
             else:
-                myguess_params[:,i] = self.p0[i]
+                myguess_params[:, i] = self.p0[i]
         return myguess_params
+<<<<<<< HEAD
 
 
 
@@ -293,3 +368,5 @@ class LogLikelihood:
                 myguess_params[:, i] = self.p0[i]
         return myguess_params
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+>>>>>>> master

@@ -2,9 +2,12 @@ from __future__ import division, print_function
 import os
 import qubic
 <<<<<<< HEAD
+<<<<<<< HEAD
 from qubicpack.utilities import Qubic_DataDir
 =======
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+>>>>>>> master
 import healpy as hp
 import numpy as np
 import matplotlib as mpl
@@ -49,16 +52,19 @@ resultDir = '%s' % name
 os.makedirs(resultDir, exist_ok=True)
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 alaImager = True     # if True, the beam will be a simple gaussian
+=======
+alaImager = True        # if True, the beam will be a simple gaussian
+>>>>>>> master
 component = 1           # Choose the component number to plot (IQU)
 oneComponent = False    # True if you want to study only I component, otherwise False if you study IQU
 sel_det = True          # True if you want to use one detector, False if you want to use all detectors in focal plane
-dets_FPindex = [594]              # if sel_det == True, choose detector number
+dets_FPindex = [594]    # if sel_det == True, choose detector number
 
 # Dictionnary
-global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
-print('global_dir: ', global_dir)
 d = qubic.qubicdict.qubicDict()
+<<<<<<< HEAD
 d.read_from_file(global_dir + '/dicts/global_source_oneDet.dict')
 =======
 alaImager = True        # if True, the beam will be a simple gaussian
@@ -71,6 +77,9 @@ dets_FPindex = [594]    # if sel_det == True, choose detector number
 d = qubic.qubicdict.qubicDict()
 d.read_from_file('global_source_oneDet.dict')
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+d.read_from_file('global_source_oneDet.dict')
+>>>>>>> master
 
 # Scene
 s = qubic.QubicScene(d)

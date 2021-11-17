@@ -1,4 +1,7 @@
+<<<<<<< HEAD
 # -*- coding: utf-8 -*-
+=======
+>>>>>>> master
 """A set of tools for component separation."""
 
 import os
@@ -6,12 +9,16 @@ import pickle
 import numpy as np
 import numpy.ma as ma
 import healpy as hp
+<<<<<<< HEAD
 import numpy.random
+=======
+>>>>>>> master
 import qubic
 from qubic import QubicSkySim as Qss
 from astropy.io import fits
 
 
+<<<<<<< HEAD
 # credits to J. Errard for these two functions
 def intersect_mask(maps):
     if hp.pixelfunc.is_ma(maps):
@@ -54,6 +61,8 @@ def add_errors_alm(alm_in, relative_error=1e-3, inplace=True):
         return alm_in * (1 + errors * relative_error)
 
 
+=======
+>>>>>>> master
 def append_to_npz(folder_path, file_name, dico) -> None:
     """
     Save new data to a .npz archive, concatenate new values with already existing ones.
@@ -75,6 +84,7 @@ def append_to_npz(folder_path, file_name, dico) -> None:
         np.savez(folder_path + file_name, **dico)
 
 
+<<<<<<< HEAD
 def find_mantissa_exponent(x, e):
     n = 0
     if x < 1:
@@ -89,6 +99,10 @@ def find_mantissa_exponent(x, e):
 def generate_cmb_dust_maps(dico_fast_simulator, coverage, n_years, noise_profile, nunu, sc,
                            seed=None, save_maps=False, return_maps=True, dust_only=False, fwhm_gen=None,
                            iib=True, noise_covcut=None):
+=======
+def generate_cmb_dust_maps(dico_fast_simulator, coverage, n_years, noise_profile, nunu, sc,
+                           seed=None, save_maps=False, return_maps=True):
+>>>>>>> master
     """
     Save CMB+Dust maps to FITS image format for later use, and/or return them immediately.
 
@@ -99,6 +113,7 @@ def generate_cmb_dust_maps(dico_fast_simulator, coverage, n_years, noise_profile
     :param bool nunu: include noise frequency correlations
     :param bool sc: include noise spatial correlations
     :param seed: seed for the map generation (if None, a random seed is taken)
+<<<<<<< HEAD
     :param bool|None save_maps: save maps in the FITS format (warning: check code first!)
     :param bool|None return_maps: whether the function has to return the generated maps
     :param bool|None dust_only: generate sky maps containing only dust (no cmb)
@@ -124,16 +139,31 @@ def generate_cmb_dust_maps(dico_fast_simulator, coverage, n_years, noise_profile
         noise_covcut = 0.1  # arbitrary but None would raise an error in the FastSimulator
 
     cmb_dust, cmb_dust_noiseless, cmb_dust_noise_only, coverage_eff = \
+=======
+    :param bool save_maps: save maps in the FITS format (warning: check code first! default: False)
+    :param bool return_maps: whether the function has to return the generated maps (default: True)
+    :return: cmb+dust maps with noise, cmb+dust noiseless, and noise only maps
+    """
+    if seed is None:
+        seed = np.random.randint(1000000)
+    sky_config = {'dust': 'd0', 'cmb': seed}  # d0 is described in https://pysm3.readthedocs.io/en/latest/models.html
+    qubic_sky = Qss.Qubic_sky(sky_config, dico_fast_simulator)
+    cmb_dust, cmb_dust_noiseless, cmb_dust_noise_only, _ = \
+>>>>>>> master
         qubic_sky.get_partial_sky_maps_withnoise(coverage=coverage,
                                                  Nyears=n_years,
                                                  noise_profile=noise_profile,  # noise inhomogeneity
                                                  nunu_correlation=nunu,  # noise frequency correlations
                                                  spatial_noise=sc,  # noise spatial correlations
                                                  verbose=False,
+<<<<<<< HEAD
                                                  seed=None,
                                                  FWHMdeg=fwhm_gen,
                                                  integrate_into_band=iib,
                                                  noise_covcut=noise_covcut,
+=======
+                                                 seed=seed,
+>>>>>>> master
                                                  )
     if save_maps:
         save_dir = "/media/simon/CLE32/qubic/maps/"
@@ -150,6 +180,10 @@ def generate_cmb_dust_maps(dico_fast_simulator, coverage, n_years, noise_profile
 
         common_fmt = "{}bands_{}y"  # .format(band, nsub, nyears, seed)
         common = common_fmt.format(dico_fast_simulator['nf_recon'], n_years)
+<<<<<<< HEAD
+=======
+        # TODO: add more possibilities
+>>>>>>> master
 
         hdu_cmb_dust = fits.PrimaryHDU(cmb_dust)
         hdu_cmb_dust.writeto(save_dir + common + "_cmbdust.fits", overwrite=True)
@@ -161,7 +195,11 @@ def generate_cmb_dust_maps(dico_fast_simulator, coverage, n_years, noise_profile
         hdu_cmb_dust_noise_only.writeto(save_dir + common + "_noise.fits", overwrite=True)
 
     if return_maps:
+<<<<<<< HEAD
         return cmb_dust, cmb_dust_noiseless, cmb_dust_noise_only, coverage_eff
+=======
+        return cmb_dust, cmb_dust_noiseless, cmb_dust_noise_only
+>>>>>>> master
     else:
         return
 
@@ -174,22 +212,36 @@ def get_coverage_from_file(folder_path, file_name=None, dtheta=40, pointing=6000
     :param file_name: the name of the file (optional)
     :param dtheta: angle of coverage (default: 40°)
     :param pointing: number of sky points (default: 6000)
+<<<<<<< HEAD
 
+=======
+>>>>>>> master
     :return: the array containing the coverage map
     """
 
     if file_name is None:
+<<<<<<< HEAD
         file_name = 'coverage_dtheta_{}_pointing_{}'.format(dtheta, pointing)
     t = pickle.load(open(folder_path + file_name + '.pkl', 'rb'))
     return t['coverage'], file_name
 
 
 def get_depths(noise_maps, pix_size, mask=None, pixel_weights=None):
+=======
+        t = pickle.load(open(folder_path + 'coverage_dtheta_{}_pointing_{}.pkl'.format(dtheta, pointing), 'rb'))
+    else:
+        t = pickle.load(open(folder_path + file_name, 'rb'))
+    return t['coverage']
+
+
+def get_depths(noise_maps, pix_size, mask=None):
+>>>>>>> master
     """Compute depth_i and depth_p (sensitivities) from noise maps.
 
     :param noise_maps: the noise maps
     :param pix_size: the pixel size in arcmin
     :param mask: the mask to apply
+<<<<<<< HEAD
     :param pixel_weights: weighting of pixels (coverage)
 
     :return: depth_i and depth_p of the map
@@ -200,6 +252,13 @@ def get_depths(noise_maps, pix_size, mask=None, pixel_weights=None):
 
     # apply mask
     noise_ma = ma.array(weighted_maps, mask=mask)
+=======
+    :return: depth_i and depth_p of the map
+    """
+
+    # apply mask
+    noise_ma = ma.array(noise_maps, mask=mask)
+>>>>>>> master
 
     # noise estimation (in I component) using the noise maps
     depth_i = ma.getdata(ma.std(noise_ma[:, 0, :], axis=1))
@@ -218,7 +277,11 @@ def get_kernel_fwhms_for_smoothing(fwhms, target=None):
 
     :param fwhms: the list of original fwhms
     :param float target: the target resolution. If None, it is considered to be the biggest fwhm of the maps.
+<<<<<<< HEAD
     :return: the list of fwhms for the kernels, and the (updated) target
+=======
+    :return: the list of fwhms for the kernels.
+>>>>>>> master
     """
     if target is None:
         target = np.max(fwhms)
@@ -226,7 +289,11 @@ def get_kernel_fwhms_for_smoothing(fwhms, target=None):
     diff = target ** 2 - np.square(fwhms)
     diff[diff < 0] = 0
 
+<<<<<<< HEAD
     return np.sqrt(diff), target
+=======
+    return np.sqrt(diff)
+>>>>>>> master
 
 
 def get_sub_freqs_and_resolutions(dico_fast_simulator):
@@ -248,11 +315,14 @@ def get_sub_freqs_and_resolutions(dico_fast_simulator):
     return nus_in, dico_fast_simulator['synthbeam_peak150_fwhm'] * 150 / nus_in
 
 
+<<<<<<< HEAD
 def print_list(list_, fmt=''):
     list_fmt = "[" + ", ".join(["{:" + fmt + "}"] * len(list_)) + "]"
     print(list_fmt.format(*list_))
 
 
+=======
+>>>>>>> master
 def same_resolution(maps_in, map_fwhms_deg, fwhm_target=None, verbose=False):
     """
     Return copies of input maps smoothed to a common resolution.
@@ -266,7 +336,11 @@ def same_resolution(maps_in, map_fwhms_deg, fwhm_target=None, verbose=False):
         and fwhm_out the common (new) fwhm
     """
     # define common output resolution
+<<<<<<< HEAD
     kernel_fwhms, fwhm_out = get_kernel_fwhms_for_smoothing(map_fwhms_deg, fwhm_target)
+=======
+    kernel_fwhms = get_kernel_fwhms_for_smoothing(map_fwhms_deg, fwhm_target)
+>>>>>>> master
 
     # create array to contain output maps
     maps_out = np.zeros_like(maps_in)
@@ -285,4 +359,8 @@ def same_resolution(maps_in, map_fwhms_deg, fwhm_target=None, verbose=False):
                 print('  -> no convolution needed, sub-map {:d} already at required resolution.'.format(i))
             maps_out[i, :, :] = maps_in[i, :, :]
 
+<<<<<<< HEAD
     return maps_out, fwhm_out
+=======
+    return maps_out, np.max(kernel_fwhms)
+>>>>>>> master

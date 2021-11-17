@@ -10,9 +10,13 @@ from matplotlib import cm
 import scipy.optimize as sop
 from scipy.signal import resample
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 from astropy.stats import sigma_clip
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+from astropy.stats import sigma_clip
+>>>>>>> master
 
 from qubicpack.qubicfp import qubicfp
 import qubic.fibtools as ft
@@ -310,12 +314,17 @@ class FringesAnalysis:
         if doplot:
             for p in range(5):
 <<<<<<< HEAD
+<<<<<<< HEAD
                 plot_folding_fit(detectors_sort[p, 0], detectors_sort[p, 1], tfold, datafold, residuals_time,
                                  self.expected_period, params, err_params)
 =======
                 self._plot_folding_fit(detectors_sort[p, 0], detectors_sort[p, 1], tfold, datafold, residuals_time,
                                         self.expected_period, params, err_params)
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+                self._plot_folding_fit(detectors_sort[p, 0], detectors_sort[p, 1], tfold, datafold, residuals_time,
+                                        self.expected_period, params, err_params)
+>>>>>>> master
 
         return detectors_sort, ctimes
 
@@ -873,7 +882,10 @@ class FringesAnalysis:
         return
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> master
     def _plot_folding_fit(self, TES, ASIC, tfold, datafold, residuals_time, period, params, errs):
         idx = (ASIC - 1) * self.ndet_oneASIC + (TES - 1)
         amps = params[idx, 2:]
@@ -901,7 +913,10 @@ class FringesAnalysis:
         plt.ylim(-2.5, 2.5)
         return
 
+<<<<<<< HEAD
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+>>>>>>> master
 # =========================================
 class SaveFringesFitsPdf:
     def __init__(self, q, date_obs, allBLs, allstable_time, allNcycles, xTES, yTES, allfringes1D, allerr_fringes1D,
@@ -1190,6 +1205,7 @@ def make_cmap_nan_black(cmap):
 
 def plot_fringes_scatter(q, xTES, yTES, fringes1D, normalize=True, frame='ONAFP', fig=None, ax=None,
 <<<<<<< HEAD
+<<<<<<< HEAD
                          cbar=True, vmin=-1., vmax=1., cmap=make_cmap_nan_black('bwr'), s=None, title='Scatter plot'):
     x, y, fringes = remove_thermometers(xTES, yTES, fringes1D)
 
@@ -1205,6 +1221,16 @@ def plot_fringes_scatter(q, xTES, yTES, fringes1D, normalize=True, frame='ONAFP'
         clip_mask = sigma_clip(fringes, sigma=3)
         fringes /= np.std(clip_mask)
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+                         cbar=True, vmin=-1., vmax=1., cmap=make_cmap_nan_black('bwr'), s=None,
+                         title='Scatter plot', fontsize=14):
+    x, y, fringes = remove_thermometers(xTES, yTES, fringes1D)
+
+    if normalize:
+        # Clip weird detectors, NAN values are automatically clipped
+        clip_mask = sigma_clip(fringes, sigma=3)
+        fringes /= np.std(clip_mask)
+>>>>>>> master
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -1218,11 +1244,16 @@ def plot_fringes_scatter(q, xTES, yTES, fringes1D, normalize=True, frame='ONAFP'
                          vmax=vmax,
                          cbar=cbar,
 <<<<<<< HEAD
+<<<<<<< HEAD
                          plotnonfinite=True
 =======
                          plotnonfinite=True,
                          fontsize=fontsize
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+                         plotnonfinite=True,
+                         fontsize=fontsize
+>>>>>>> master
                          )
     return
 
@@ -1257,12 +1288,18 @@ def plot_fringes_imshow(fringes2D, normalize=True, interp=None, mask=None,
                         cmap='bwr', title='Imshow'):
     if normalize:
 <<<<<<< HEAD
+<<<<<<< HEAD
         fringes2D /= np.nanstd(fringes2D)
 =======
         # Clip weird detectors, NAN values are automatically clipped
         clip_mask = sigma_clip(fringes2D, sigma=3)
         fringes2D /= np.std(clip_mask)
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+        # Clip weird detectors, NAN values are automatically clipped
+        clip_mask = sigma_clip(fringes2D, sigma=3)
+        fringes2D /= np.std(clip_mask)
+>>>>>>> master
 
     if mask is not None:
         fringes2D *= mask
@@ -1282,6 +1319,7 @@ def plot_fringes_imshow(fringes2D, normalize=True, interp=None, mask=None,
     return
 
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 def plot_folding_fit(TES, ASIC, tfold, datafold, residuals_time, period,
                      params, errs, allh=[True, False, False, True, False, True]):
@@ -1358,6 +1396,54 @@ def plot_fringes_diagonal(fringes2D, idiag=[0], anti_diag=False,
     ax.set_ylim(ylim)
     ax.set_title(title)
     return
+=======
+def plot_fringes_diagonal(fringes2D, idiag=[0], anti_diag=False,
+                          fig=None, ax=None, figsize=(12, 8), ylim=(None, None), title=''):
+    """
+    Plot the diagonals in 1D and the sum of all diagonals.
+    Parameters
+    ----------
+    fringes2D: array
+        A 2D image of the focal plane (17x17).
+    idiag: list
+        Diagonal index you want to plot, 0 is the main one and it can be from -16 to 16.
+    anti_diag: bool
+        If True, it will take the anti-diagonals.
+    fig, ax: matplotlib figure
+        If not None, you can include the plot in matplotlib subplots.
+    figsize
+    ylim
+    title: str
+        Plot title
+
+    Returns
+    -------
+
+    """
+    fringes2D = np.nan_to_num(fringes2D)
+    if anti_diag:
+        fringes2D = np.fliplr(fringes2D)
+    sum_diag = sum_all_diag(fringes2D)
+
+    if fig is None:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.gca()
+    ax.plot(sum_diag, color='r', label='Sum of all diagonal')
+    for i in idiag:
+        diag = np.diagonal(fringes2D, offset=i)
+        if i == 0:
+            xx = np.arange(0, 33)[::2]
+        else:
+            xx = np.arange(0, 33)[np.abs(i):-np.abs(i)][::2]
+        ax.plot(xx, diag, 'o', label=f'Diagonal {i}')
+
+    ax.set_xlabel('TES index on the diagonal')
+    ax.set_ylabel('Signal')
+    ax.legend(fontsize=8)
+    ax.set_ylim(ylim)
+    ax.set_title(title)
+    return
+>>>>>>> master
 
 
 def sum_all_diag(fringes2D):
@@ -1383,4 +1469,7 @@ def sum_all_diag(fringes2D):
     sum_diag /= norm
 
     return sum_diag
+<<<<<<< HEAD
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+>>>>>>> master

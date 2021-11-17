@@ -4,9 +4,13 @@ import glob
 import numpy as np
 import pandas as pd
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 import healpy as hp
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+import healpy as hp
+>>>>>>> master
 
 from scipy.interpolate import RegularGridInterpolator
 from scipy.integrate import dblquad
@@ -49,10 +53,14 @@ def plot_baseline(q, bs, ax=None):
 
 def scatter_plot_FP(q, x, y, FP_signal, frame, fig=None, ax=None,
 <<<<<<< HEAD
+<<<<<<< HEAD
                     s=None, title=None, unit='[W / Hz]', cbar=True, **kwargs):
 =======
                     s=None, title=None, unit='[W / Hz]', cbar=True, fontsize=14, **kwargs):
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+                    s=None, title=None, unit='[W / Hz]', cbar=True, fontsize=14, **kwargs):
+>>>>>>> master
     """
     Make a scatter plot of the focal plane.
     Parameters
@@ -89,6 +97,7 @@ def scatter_plot_FP(q, x, y, FP_signal, frame, fig=None, ax=None,
         clb = fig.colorbar(img, cax=cax)
         clb.ax.set_title(unit)
 <<<<<<< HEAD
+<<<<<<< HEAD
     ax.set_xlabel(f'X_{frame} [m]', fontsize=14)
     ax.set_ylabel(f'Y_{frame} [m]', fontsize=14)
     ax.axis('square')
@@ -99,6 +108,12 @@ def scatter_plot_FP(q, x, y, FP_signal, frame, fig=None, ax=None,
     ax.axis('square')
     ax.set_title(title, fontsize=fontsize)
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+    ax.set_xlabel(f'X_{frame} [m]', fontsize=fontsize)
+    ax.set_ylabel(f'Y_{frame} [m]', fontsize=fontsize)
+    ax.axis('square')
+    ax.set_title(title, fontsize=fontsize)
+>>>>>>> master
     return
 
 
@@ -133,10 +148,14 @@ def pcolor_plot_FP(q, x, y, FP_signal, frame, title=None, fig=None, ax=None, cba
     FP_signal2D = q.detector.unpack(FP_signal)
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     img = ax.pcolor(x2D, y2D, FP_signal2D, **kwargs)
 =======
     img = ax.pcolor(x2D, y2D, FP_signal2D, shading='auto', **kwargs)
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+    img = ax.pcolor(x2D, y2D, FP_signal2D, shading='auto', **kwargs)
+>>>>>>> master
     if cbar:
         divider = make_axes_locatable(ax)
         cax = divider.append_axes('right', size='5%', pad=0.05)
@@ -822,14 +841,20 @@ def get_gains(allPowerPhi, allInvCov, allData):
 
     # Normalization
 <<<<<<< HEAD
+<<<<<<< HEAD
     A /= np.mean(A)
     Cov_A /= np.mean(A) ** 2
 =======
+=======
+>>>>>>> master
     weights = 1 / np.diag(Cov_A) # To cancel bad detectors
     avgA = np.average(A, weights=weights) # Weighted mean
     A /= avgA
     Cov_A /= avgA ** 2
+<<<<<<< HEAD
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+>>>>>>> master
 
     return A, Cov_A
 
@@ -845,10 +870,14 @@ def get_chi2(params, allInvCov, allData, BLs, q, nu_source=150e9, returnA=False)
     ----------
     params: list
 <<<<<<< HEAD
+<<<<<<< HEAD
         Focal length, source off-axis angle, global powers P_k
 =======
         Focal length, source off-axis angle, log_10 of global powers P_k
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+        Focal length, source off-axis angle, log_10 of global powers P_k
+>>>>>>> master
     allInvCov: list
         List with the inverse covariance matrices, one for each image.
     allData: list
@@ -870,10 +899,14 @@ def get_chi2(params, allInvCov, allData, BLs, q, nu_source=150e9, returnA=False)
     focal = params[0]
     theta_source = params[1]
 <<<<<<< HEAD
+<<<<<<< HEAD
     allP = params[2:]
 =======
     logP = params[2:]
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+    logP = params[2:]
+>>>>>>> master
     q.optics.focal_length = focal
     allPowerPhi = []
     for k in range(nimages):
@@ -886,10 +919,14 @@ def get_chi2(params, allInvCov, allData, BLs, q, nu_source=150e9, returnA=False)
 
         # Global amplitude
 <<<<<<< HEAD
+<<<<<<< HEAD
         allPowerPhi.append(Phi * allP[k])
 =======
         allPowerPhi.append(Phi * 10**logP[k])
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+        allPowerPhi.append(Phi * 10**logP[k])
+>>>>>>> master
 
     # Gain for each detector
     A, Cov_A = get_gains(allPowerPhi, allInvCov, allData)
@@ -897,9 +934,13 @@ def get_chi2(params, allInvCov, allData, BLs, q, nu_source=150e9, returnA=False)
     chi2 = 0.
     for k in range(nimages):
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
         # Compute the chi2
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+        # Compute the chi2
+>>>>>>> master
         M = np.diag(allPowerPhi[k]) @ A
         R = M - allData[k]
         chi2 += R.T @ allInvCov[k] @ R
@@ -912,6 +953,7 @@ def get_chi2(params, allInvCov, allData, BLs, q, nu_source=150e9, returnA=False)
 
 def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.25, fl_max=0.35,
 <<<<<<< HEAD
+<<<<<<< HEAD
                    th_min=np.deg2rad(-1.), th_max=np.deg2rad(1), fixPower=True):
     """Loop over the parameters (focal length and source off-axis angle) to explore the chi2.
     Global powers are fixed to 0.5 or optimized at each step by minimizing a temporary chi2 (longer)."""
@@ -920,6 +962,11 @@ def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.
     """Loop over the parameters (focal length and source off-axis angle) to explore the chi2.
     Global powers are fixed to Log_10(Power)=-1 or optimized at each step by minimizing a temporary chi2 (longer)."""
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+                   th_min=np.deg2rad(-1.), th_max=np.deg2rad(1), LogPower=-1, fixPower=True):
+    """Loop over the parameters (focal length and source off-axis angle) to explore the chi2.
+    Global powers are fixed to Log_10(Power)=-1 or optimized at each step by minimizing a temporary chi2 (longer)."""
+>>>>>>> master
     nimages = len(BLs)
     chi2_grid = np.zeros((nval_fl, nval_th))
 
@@ -928,6 +975,7 @@ def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.
 
     # Fast method
     if fixPower:
+<<<<<<< HEAD
 <<<<<<< HEAD
         # Global powers are fixed to 0.5 and we loop on fl and th.
         for i, fl in enumerate(all_fl):
@@ -939,6 +987,12 @@ def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.
             for j, th in enumerate(all_th):
                 params = [fl, th] + [LogPower] * nimages
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+        # Global powers are fixed to initPower and we loop on fl and th.
+        for i, fl in enumerate(all_fl):
+            for j, th in enumerate(all_th):
+                params = [fl, th] + [LogPower] * nimages
+>>>>>>> master
                 chi2_grid[i, j] = get_chi2(params, allInvCov, fringes, BLs, q)
         return all_fl, all_th, chi2_grid
 
@@ -956,12 +1010,17 @@ def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.
 
                 result = sop.minimize(chi2_temporary,
 <<<<<<< HEAD
+<<<<<<< HEAD
                                       x0=[0.5] * nimages,
                                       args=(allInvCov, fringes, BLs),
 =======
                                       x0=[LogPower] * nimages,
                                       args=(allInvCov, fringes, BLs, q),
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+                                      x0=[LogPower] * nimages,
+                                      args=(allInvCov, fringes, BLs, q),
+>>>>>>> master
                                       method='Nelder-Mead',
                                       options={'maxiter': 10000})
                 chi2_grid[i, j] = result['fun']
@@ -977,10 +1036,14 @@ def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.
 # ========== Fringe simulations =============
 class Model_Fringes_Ana:
 <<<<<<< HEAD
+<<<<<<< HEAD
     def __init__(self, q, baseline, theta_source=0., nu_source=150e9, fwhm=20., amp=1., frame='ONAFP'):
 =======
     def __init__(self, q, baseline, theta_source=0., phi_source=0., nu_source=150e9, fwhm=20., amp=1., frame='ONAFP'):
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+    def __init__(self, q, baseline, theta_source=0., phi_source=0., nu_source=150e9, fwhm=20., amp=1., frame='ONAFP'):
+>>>>>>> master
         """
 
         Parameters
@@ -991,10 +1054,15 @@ class Model_Fringes_Ana:
         theta_source: float
             The source zenith angle [rad].
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
         phi_source: float
             The source azimuthal angle [rad].
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+        phi_source: float
+            The source azimuthal angle [rad].
+>>>>>>> master
         nu_source: float
             Source frequency [Hz].
         fwhm: float
@@ -1006,9 +1074,13 @@ class Model_Fringes_Ana:
         self.focal = q.optics.focal_length
         self.theta_source = theta_source
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
         self.phi_source = phi_source
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+        self.phi_source = phi_source
+>>>>>>> master
         self.nu_source = nu_source
         self.lam = 3e8 / self.nu_source
         self.fwhm = fwhm
@@ -1037,6 +1109,7 @@ class Model_Fringes_Ana:
         self.phase = phase
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     def get_fringes(self, times_gaussian=True):
         if times_gaussian:
             sigma = np.deg2rad(self.fwhm / 2.355 * self.focal)
@@ -1055,6 +1128,20 @@ class Model_Fringes_Ana:
         if times_gaussian:
             gaussian = self.make_gaussian()
 >>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+    def make_gaussian(self):
+        sigma = np.deg2rad(self.fwhm / 2.355 * self.focal)
+        # The position of the gaussian depends on the position of the source
+        # Maybe there is a sign problem here...
+        x_center = self.focal * np.tan(self.theta_source) * np.cos(self.phi_source)
+        y_center = self.focal * np.tan(self.theta_source) * np.sin(self.phi_source)
+        self.gaussian = np.exp(- 0.5 * ((self.x - x_center) ** 2 + (self.y - y_center) ** 2) / sigma ** 2)
+        return self.gaussian
+
+    def get_fringes(self, times_gaussian=True):
+        if times_gaussian:
+            gaussian = self.make_gaussian()
+>>>>>>> master
         else:
             gaussian = 1.
         xprime = (self.x * np.cos(self.BL_angle) + self.y * np.sin(self.BL_angle))

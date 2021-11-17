@@ -72,7 +72,7 @@ if machine[:3]=='cca':
     fittedpeakfile = os.sep.join([top_dir,user_dir,synthbeam_topdir,'fitted_peaks.fits'])
     directory = os.sep.join([top_dir,user_dir,synthbeam_topdir,synthbeam_subdir,freq_subdir[freq_name]])
     fitted_directory = os.sep.join([top_dir,user_dir,freq_subdir[freq_name],'FitSB'])
-elif (machine=='apcdhcp44.in2p3.fr') or (machine=='MacJCH-2.local'):
+elif (machine=='apcdhcp98.in2p3.fr') or (machine=='MacJCH-2.local'):
     print('==========================================')
     print('You are on JCH laptop')
     top_dir = '/Users/hamilton/QUBIC/Calib-TD/'
@@ -1029,6 +1029,12 @@ tight_layout()
 
 
 
+```
+
+```{python}
+#nus
+#(flux-fitg[1][0])/fitg[1][1]
+err_flux/fitg[1][1]
 ```
 
 ```{python}

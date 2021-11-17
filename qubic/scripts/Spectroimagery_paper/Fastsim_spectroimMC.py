@@ -36,10 +36,13 @@ d.read_from_file(dictionary)
 nbands = int(sys.argv[2])
 d['nf_recon'] = nbands
 d['nf_sub'] = nbands
+<<<<<<< HEAD
 
 all_nfrecon = [1, 2, 3, 4, 5, 8]
 if nbands not in all_nfrecon:
     raise ValueError('Wrong number of subbands !')
+=======
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 print('\n nbands:', nbands)
 
 # Config and frequency
@@ -69,6 +72,11 @@ rnd_name = qss.random_string(10)
 nreals = 4
 npix = 12 * d['nside'] ** 2
 noisemaps = np.zeros((nreals, nbands, npix, 3))
+<<<<<<< HEAD
+=======
+Nyears = 3.
+print('Nyears:', Nyears)
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 # qubic_coverage = np.load('/pbs/home/l/lmousset/libs/qubic/qubic/scripts/Spectroimagery_paper/maps/'
 #                          'coverage_nfsub15_nptgs10000_qubicpatch.npy')
@@ -77,7 +85,11 @@ for r in range(nreals):
     noisemaps[r, ...], coverage = Qubic_sky.get_partial_sky_maps_withnoise(coverage=None,
                                                                            noise_only=True,
                                                                            spatial_noise=True,
+<<<<<<< HEAD
                                                                            Nyears=3.)
+=======
+                                                                           Nyears=Nyears)
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 # Make maps QUBIC = noise + CMB
 qubicmaps = np.zeros_like(noisemaps)
@@ -94,7 +106,11 @@ inputmaps[:, unseen, :] = 0.
 noisepatch = noisemaps[:, :, seenmap, :]
 
 # Save the noisy patch
+<<<<<<< HEAD
 np.save(rep_save + f'/noisepatch_nbands{nbands}_' + config + '_v3_galaxycenter_' + rnd_name + '.npy',
+=======
+np.save(rep_save + f'/noisepatch_nbands{nbands}_' + config + '_v4_galaxycenter_' + rnd_name + '.npy',
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
         noisepatch)
 
 # ================== Load maps already done =============================
@@ -201,10 +217,17 @@ for real in range(nreals):
                                                                                 beam_correction=beam_corr,
                                                                                 pixwin_correction=True)
 np.save(
+<<<<<<< HEAD
     rep_save + f'/IBCSsame_nfrecon{nbands}_qubicmaps_' + config + '_v3_galaxycenter_' + rnd_name + '.npy',
     cross_samereal_qubicmaps)
 np.save(
     rep_save + f'/IBCSsame_nfrecon{nbands}_noisemaps_' + config + '_v3_galaxycenter_' + rnd_name + '.npy',
+=======
+    rep_save + f'/IBCSsame_nfrecon{nbands}_qubicmaps_' + config + '_v4_galaxycenter_' + rnd_name + '.npy',
+    cross_samereal_qubicmaps)
+np.save(
+    rep_save + f'/IBCSsame_nfrecon{nbands}_noisemaps_' + config + '_v4_galaxycenter_' + rnd_name + '.npy',
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
     cross_samereal_noisemaps)
 
 # np.save(
@@ -254,11 +277,19 @@ for c1 in range(0, nreals - 1, 2):  # do not mix pairs to avoid correlation
     cross += 1
 
 np.save(
+<<<<<<< HEAD
     rep_save + f'/IBCSmix_nfrecon{nbands}_qubicmaps_' + config + '_v3_galaxycenter_' + rnd_name + '.npy',
     cross_mixreals_qubicmaps)
 
 np.save(
     rep_save + f'/IBCSmix_nfrecon{nbands}_noisemaps_' + config + '_v3_galaxycenter_' + rnd_name + '.npy',
+=======
+    rep_save + f'/IBCSmix_nfrecon{nbands}_qubicmaps_' + config + '_v4_galaxycenter_' + rnd_name + '.npy',
+    cross_mixreals_qubicmaps)
+
+np.save(
+    rep_save + f'/IBCSmix_nfrecon{nbands}_noisemaps_' + config + '_v4_galaxycenter_' + rnd_name + '.npy',
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
     cross_mixreals_noisemaps)
 
 # np.save(rep_save + f'/IBCSmix_recon_{nbands}bands_150fullpipeline.npy',

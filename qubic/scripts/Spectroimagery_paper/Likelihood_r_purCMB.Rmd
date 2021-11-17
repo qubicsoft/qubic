@@ -25,7 +25,11 @@ from importlib import reload
 
 # Specific qubic modules
 from qubicpack.utilities import Qubic_DataDir
+<<<<<<< HEAD
 import pysm
+=======
+import pysm3
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 import qubic
 from qubic import camb_interface as qc
 from qubic import NamasterLib as nam
@@ -43,12 +47,15 @@ sns.palplot(palet)
 ```
 
 ```{python}
+<<<<<<< HEAD
 ### Initialize
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
 print(global_dir)
 ```
 
 ```{python}
+=======
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 config = 'FI220'
 nside = 256 # Define here to avoid loading a diccionary
 ```
@@ -56,8 +63,12 @@ nside = 256 # Define here to avoid loading a diccionary
 ## Coverage and seenmap
 
 ```{python}
+<<<<<<< HEAD
 DataFastSimCoverage = pickle.load(open(global_dir +
                                        '/doc/FastSimulator/Data/DataFastSimulator_' + config +'_coverage.pkl',
+=======
+DataFastSimCoverage = pickle.load(open('../../doc/FastSimulator/Data/DataFastSimulator_' + config +'_coverage.pkl',
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
                                        "rb"))
 coverage = DataFastSimCoverage['coverage']
 seenmap = coverage > np.max(coverage) * 0.1
@@ -90,21 +101,35 @@ print('Fsky: {}'.format(Namaster.fsky))
 
 ```{python}
 # Make a Camb library
+<<<<<<< HEAD
 # rvalues = np.arange(0., 0.15001, 0.0001)
 # print(rvalues)
 # camblib = qc.rcamblib(rvalues, lmax=lmax, save=global_dir + '/doc/CAMB/camblib_0to02_step0001.pkl')
+=======
+# rvalues = np.arange(0., 0.1, 0.001)
+# print(rvalues)
+# camblib = qc.rcamblib(rvalues, lmax=lmax, save=global_dir + '/doc/CAMB/camblib_0to1_step001.pkl')
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 ```
 
 ```{python}
 # Load the CAMB library already saved
+<<<<<<< HEAD
 with open(global_dir + '/doc/CAMB/camblib_0to1_step001.pkl', "rb") as file:
+=======
+with open('../../doc/CAMB/camblib_0to1_step001.pkl', "rb") as file:
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
     camblib = pickle.load(file)
 [lll, rvalues, spec, specunlensed] = camblib
 # print(rvalues)
 ```
 
 ```{python}
+<<<<<<< HEAD
 binned_camblib = qc.bin_camblib(Namaster, global_dir + '/doc/CAMB/camblib_0to1_step001.pkl', nside, verbose=True)
+=======
+binned_camblib = qc.bin_camblib(Namaster, '../../doc/CAMB/camblib_0to1_step001.pkl', nside, verbose=True)
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 [lll_b, rvalues_b, spec_b, specunlensed_b] = binned_camblib
 ```
@@ -119,6 +144,7 @@ def myBBth(ell, r):
 ```
 
 ```{python}
+<<<<<<< HEAD
 config
 ```
 
@@ -127,11 +153,22 @@ nrun = 1
 LLH = np.zeros((nrun, 6, len(rvalues)))
 sigma68 = np.zeros((nrun, 6))
 sigma68_Fisher = np.zeros((nrun, 6))
+=======
+nrun = 1
+LLH = np.zeros((nrun, 8, len(rvalues)))
+sigma68 = np.zeros((nrun, 8))
+sigma68_Fisher = np.zeros((nrun, 8))
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 factor = 10
 for r in range(nrun):
     print(f'\n *************Run {r+1}/{nrun}*****************' )
+<<<<<<< HEAD
     for index, nbands in enumerate([1, 2, 3, 4, 5, 8]):
+=======
+    for index in range(8):
+        nbands = index + 1
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
         print('\n nbands:', nbands)
         # Possible combinations between bands
         combi = list(combinations_with_replacement(np.arange(nbands), 2))
@@ -140,8 +177,11 @@ for r in range(nrun):
         print('ncombi:', ncombi)
 
         # Covariance noise matrices
+<<<<<<< HEAD
     #     BBcov = 2 * np.load('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/'
     #                            + f'BBcovariance_bincross_nfrecon{nbands}_samereal_' + config + '_v2_clean.npy')
+=======
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
         BBcov = np.load('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/'
                                + f'BBcovariance_bincross_nfrecon{nbands}_samereal_' + config + '_v4_clean.npy')
 
@@ -149,12 +189,19 @@ for r in range(nrun):
 
         # =================== Likelihood ========================
         xvals = list(lll_b) * ncombi
+<<<<<<< HEAD
 
         fakedata = myBBth(lll_b, r=0.)
         
         
 #         for i in range(fakedata.shape[0]):
 # #             print(fakedata[i])
+=======
+        
+        # In order to get errorbars, we vary the data randomly
+        fakedata = myBBth(lll_b, r=0.)
+#         for i in range(fakedata.shape[0]):
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 #             fakedata[i] = np.random.normal(loc=fakedata[i], scale=np.sqrt(BBcov[i, i])/factor, size=None)
 # #             print(fakedata[i])
 
@@ -162,12 +209,21 @@ for r in range(nrun):
         print(error.shape)
 
         logLLH = mcmc.LogLikelihood(xvals=xvals, 
+<<<<<<< HEAD
                                    yvals=fakedata, 
                                    errors=error,
                                    nbins=nbins,
                                    model=myBBth, 
                                    flatprior=[[0,1]], 
                                    covariance_model_funct=Namaster.knox_covariance)
+=======
+                                    yvals=fakedata, 
+                                    errors=error,
+                                    nbins=nbins,
+                                    model=myBBth, 
+                                    flatprior=[[0, 1]], 
+                                    covariance_model_funct=Namaster.knox_covariance)
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
         LLH[r, index, :] , sigma68[r, index] = logLLH.compute_sigma68(logLLH, rvalues)
         
@@ -182,6 +238,7 @@ for r in range(nrun):
 ```{python}
 datadir = os.environ['DATA_SPECTROIM']
 # print(datadir)
+<<<<<<< HEAD
 # np.save(datadir + '/FastSimulator/sigma68pureCMB_samev4clean_theo_' + config + '.npy', sigma68[0, :])
 ```
 
@@ -243,6 +300,56 @@ plt.legend(loc='upper left', fontsize=18)
 plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/'+
             f'Likelihood_CMBonly_suboptimal_SameCleanv4_start0.pdf', 
             bbox_inches='tight') 
+=======
+# np.save(datadir + '/FastSimulator/sigma68pureCMB_samev4clean_SigmaOver10_' + config + '_with6-7.npy', sigma68)
+np.save(datadir + '/FastSimulator/sigma68pureCMB_samev4clean_theo_' + config + '_with6-7.npy', sigma68)
+```
+
+```{python}
+sigma68_FI220 = np.load(datadir + '/FastSimulator/sigma68pureCMB_samev4clean_SigmaOver10_FI220_with6-7.npy')
+sigma68_FI150 = np.load(datadir + '/FastSimulator/sigma68pureCMB_samev4clean_SigmaOver10_FI150_with6-7.npy')
+
+sigma68_FI220_theo = np.load(datadir + '/FastSimulator/sigma68pureCMB_samev4clean_theo_FI220_with6-7.npy')[0]
+sigma68_FI150_theo = np.load(datadir + '/FastSimulator/sigma68pureCMB_samev4clean_theo_FI150_with6-7.npy')[0]
+print(sigma68_FI150_theo.shape)
+
+sigma68_FI220_avg = np.nanmean(sigma68_FI220, axis=0)
+sigma68_FI220_std = np.nanstd(sigma68_FI220, axis=0)
+sigma68_FI150_avg = np.nanmean(sigma68_FI150, axis=0)
+sigma68_FI150_std = np.nanstd(sigma68_FI150, axis=0)
+```
+
+```{python}
+allbands = np.arange(1, 9)
+print(allbands)
+plt.figure(figsize=(12, 8))
+# plt.title(config +  'BBcov')#$\sqrt{diag}$')
+plt.errorbar(np.array(allbands) + 0.01, 
+             sigma68_FI150_theo / sigma68_FI150_theo[0],
+             sigma68_FI150_std * 10,
+             fmt='ro',
+             label='150 GHz')
+plt.errorbar(allbands, 
+             sigma68_FI220_theo / sigma68_FI220_theo[0],
+             yerr=sigma68_FI220_std * 10,
+             fmt='bo',
+             ls="",
+             label='220 GHz')
+
+
+
+
+plt.xlabel('Number of sub-bands', fontsize=20)
+plt.ylabel(r'$\sigma (r)$ / $\sigma_{1band}(r)$', fontsize=20)
+plt.ylim(0.9, 2)
+plt.axhline(y=1, c='k', ls='--', label='Optimal')
+plt.grid()
+plt.legend(loc='upper left', fontsize=20)
+plt.tight_layout()
+# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/'+
+#             f'Likelihood_CMBonly_suboptimal_SameCleanv4_start0.9.pdf', 
+#             bbox_inches='tight') 
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 ```
 
 ```{python}

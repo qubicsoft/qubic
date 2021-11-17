@@ -5,7 +5,11 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
+<<<<<<< HEAD
       jupytext_version: 1.4.1
+=======
+      jupytext_version: 1.4.0
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
   kernelspec:
     display_name: Python 3
     language: python
@@ -22,12 +26,20 @@ import pickle
 from importlib import reload
 import time
 import scipy
+<<<<<<< HEAD
+=======
+import matplotlib as mpl
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 
 # Specific qubic modules
 from qubicpack.utilities import Qubic_DataDir
 from pysimulators import FitsArray
+<<<<<<< HEAD
 import pysm
+=======
+import pysm3
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 import qubic
 from qubic import QubicSkySim as qss
 from qubic import fibtools as ft
@@ -55,11 +67,23 @@ The FastSimulator reproduces the noise structure that has been measured so far i
 
 
 ```{python}
+<<<<<<< HEAD
 ### Some initializations
 ### Initialize
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
 
 dictfilename = global_dir + '/dicts/BmodesNoDustNoSystPaper0_2020.dict'
+=======
+### Path to the files used for the FastSimulator
+version_FastSim = '01'
+dirFast = os.path.join('..', '..', 'data', f'FastSimulator_version{version_FastSim}') + os.sep
+```
+
+```{python}
+### Some initializations
+### Load a dictionnary
+dictfilename = 'BmodesNoDustNoSystPaper0_2020.dict'
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 # Read dictionary chosen
 d = qubic.qubicdict.qubicDict()
@@ -92,11 +116,19 @@ def read_files_mc(dirmap,file_rnd_string, verbose=False):
 ### detector_nep=4.7e-17
 ### effecgtive_duration = 3 years
 nptg = 200000
+<<<<<<< HEAD
 dirmaps=global_dir + '/doc/FastSimulator/Data/'
 file_rnd_string='H990hwzaGn'
 tol=1e-5
 
 m, c, cov, d, icl, ftype = read_files_mc(dirmaps, file_rnd_string, verbose=True)
+=======
+
+file_rnd_string='H990hwzaGn'
+tol=1e-5
+
+m, c, cov, d, icl, ftype = read_files_mc(dirFast, file_rnd_string, verbose=True)
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 nbins = 100   
 reload(qss)
@@ -229,7 +261,12 @@ An other important point here is that due to aliasing when simualting the nosie 
 NB: if the simualtions you intend to perform are not be tansformed into Cl but rather for working in map-space, it is probably very sufficient to neglect the spatial correlation of the noise and use clnoise=None qss.create_noise_maps()... This will have the important advantage of producing maps with a meaningful RMS.
 
 ```{python}
+<<<<<<< HEAD
 clth = pickle.load( open( global_dir + '/doc/FastSimulator/Data/cl_corr_noise_nersc200k.pk', "rb" ) )
+=======
+
+clth = pickle.load(open(dirFast + 'cl_corr_noise_nersc200k.pk', "rb" ) )
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 plot(clth,label='initial')
 alpha = 4.5 ### See notebook called "2pt-Correlation Function" for an empirical explanation of alpha
 clth = (clth -1 ) * alpha + 1
@@ -278,6 +315,16 @@ OK so we find a good approximation of the End-To-End spatial correlation. Howeve
 Here we need to construct the subband-subband correlations that were found by Louise form spectro-imaging End-To-End simulations. These simualtions can be found in Lyon in /sps/hep/qubic/Data/Sims/Spectro-Imaging-Louise/|
 
 ```{python}
+<<<<<<< HEAD
+=======
+### Directory where are the files
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+dirmaps = global_dir + '/doc/FastSimulator/Data/Spectro-Imaging-Louise/'
+
+```
+
+```{python}
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 import glob
 def get_maps_from_louise(directory, nfsub):
     mappatchfile = glob.glob(directory+'residualspatch_*_nfrecon{}.pkl'.format(nfsub))[0]
@@ -297,9 +344,13 @@ def get_maps_from_louise(directory, nfsub):
 ```
 
 ```{python}
+<<<<<<< HEAD
 dirmaps = global_dir + '/doc/FastSimulator/Data/Spectro-Imaging-Louise/'
 nfsub = 3
 
+=======
+nfsub = 3
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 maps, cov = get_maps_from_louise(dirmaps,nfsub)
 
 hp.mollview(cov, title='Coverage nfsub={}'.format(nfsub))
@@ -315,8 +366,11 @@ The first step is once more to fit the noise profile:
 
 ```{python}
 reload(qss)
+<<<<<<< HEAD
 dirmaps = global_dir + '/doc/FastSimulator/Data/Spectro-Imaging-Louise/'
 
+=======
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 all_nfsub = [1,2,3,4,5,8]
 
 for i in range(len(all_nfsub)):

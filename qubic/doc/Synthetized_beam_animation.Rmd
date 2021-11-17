@@ -32,7 +32,10 @@ rc('figure',figsize=(15,15))
 rc('font',size=14)
 #rc('text',usetex=False)
 
+<<<<<<< HEAD
 from qubicpack.utilities import Qubic_DataDir
+=======
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 import qubic 
 import qubic.sb_fitting as sbfit
 import qubic.selfcal_lib as scal
@@ -43,7 +46,11 @@ from qubicpack.pixel_translation import make_id_focalplane, tes2index
 ```{python}
 # Dictionary
 d = qubic.qubicdict.qubicDict()
+<<<<<<< HEAD
 d.read_from_file(os.environ['QUBIC_DICT']+'pipeline_demo.dict')
+=======
+d.read_from_file('pipeline_demo.dict')
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 # d.read_from_file(dictfilename)
 d['config'] = 'TD'

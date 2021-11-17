@@ -1,7 +1,10 @@
 from __future__ import division, print_function
 import os
 import qubic
+<<<<<<< HEAD
 from qubicpack.utilities import Qubic_DataDir
+=======
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 import healpy as hp
 import numpy as np
 import matplotlib as mpl
@@ -52,10 +55,15 @@ sel_det = True  # True if you want to use one detector, False if you want to use
 dets_FPindex = [594] # if sel_det == True, choose detector number
 
 # Dictionnary
+<<<<<<< HEAD
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
 print('global_dir: ', global_dir)
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(global_dir + '/dicts/global_source_oneDet.dict')
+=======
+d = qubic.qubicdict.qubicDict()
+d.read_from_file('global_source_oneDet.dict')
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 # Scene
 s = qubic.QubicScene(d)

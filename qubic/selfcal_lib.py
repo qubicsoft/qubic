@@ -3,6 +3,10 @@ from __future__ import division, print_function
 import glob
 import numpy as np
 import pandas as pd
+<<<<<<< HEAD
+=======
+import healpy as hp
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 from scipy.interpolate import RegularGridInterpolator
 from scipy.integrate import dblquad
@@ -44,7 +48,11 @@ def plot_baseline(q, bs, ax=None):
 
 
 def scatter_plot_FP(q, x, y, FP_signal, frame, fig=None, ax=None,
+<<<<<<< HEAD
                     s=None, title=None, unit='[W / Hz]', cbar=True, **kwargs):
+=======
+                    s=None, title=None, unit='[W / Hz]', cbar=True, fontsize=14, **kwargs):
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
     """
     Make a scatter plot of the focal plane.
     Parameters
@@ -80,10 +88,17 @@ def scatter_plot_FP(q, x, y, FP_signal, frame, fig=None, ax=None,
         cax = divider.append_axes('right', size='5%', pad=0.05)
         clb = fig.colorbar(img, cax=cax)
         clb.ax.set_title(unit)
+<<<<<<< HEAD
     ax.set_xlabel(f'X_{frame} [m]', fontsize=14)
     ax.set_ylabel(f'Y_{frame} [m]', fontsize=14)
     ax.axis('square')
     ax.set_title(title, fontsize=14)
+=======
+    ax.set_xlabel(f'X_{frame} [m]', fontsize=fontsize)
+    ax.set_ylabel(f'Y_{frame} [m]', fontsize=fontsize)
+    ax.axis('square')
+    ax.set_title(title, fontsize=fontsize)
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
     return
 
 
@@ -117,7 +132,11 @@ def pcolor_plot_FP(q, x, y, FP_signal, frame, title=None, fig=None, ax=None, cba
     y2D = q.detector.unpack(y)
     FP_signal2D = q.detector.unpack(FP_signal)
 
+<<<<<<< HEAD
     img = ax.pcolor(x2D, y2D, FP_signal2D, **kwargs)
+=======
+    img = ax.pcolor(x2D, y2D, FP_signal2D, shading='auto', **kwargs)
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
     if cbar:
         divider = make_axes_locatable(ax)
         cax = divider.append_axes('right', size='5%', pad=0.05)
@@ -802,8 +821,15 @@ def get_gains(allPowerPhi, allInvCov, allData):
     A = Cov_A @ Term
 
     # Normalization
+<<<<<<< HEAD
     A /= np.mean(A)
     Cov_A /= np.mean(A) ** 2
+=======
+    weights = 1 / np.diag(Cov_A) # To cancel bad detectors
+    avgA = np.average(A, weights=weights) # Weighted mean
+    A /= avgA
+    Cov_A /= avgA ** 2
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
     return A, Cov_A
 
@@ -818,7 +844,11 @@ def get_chi2(params, allInvCov, allData, BLs, q, nu_source=150e9, returnA=False)
     Parameters
     ----------
     params: list
+<<<<<<< HEAD
         Focal length, source off-axis angle, global powers P_k
+=======
+        Focal length, source off-axis angle, log_10 of global powers P_k
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
     allInvCov: list
         List with the inverse covariance matrices, one for each image.
     allData: list
@@ -839,7 +869,11 @@ def get_chi2(params, allInvCov, allData, BLs, q, nu_source=150e9, returnA=False)
     nimages = len(BLs)
     focal = params[0]
     theta_source = params[1]
+<<<<<<< HEAD
     allP = params[2:]
+=======
+    logP = params[2:]
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
     q.optics.focal_length = focal
     allPowerPhi = []
     for k in range(nimages):
@@ -851,13 +885,21 @@ def get_chi2(params, allInvCov, allData, BLs, q, nu_source=150e9, returnA=False)
         x, y, Phi = model.get_fringes(times_gaussian=False)
 
         # Global amplitude
+<<<<<<< HEAD
         allPowerPhi.append(Phi * allP[k])
+=======
+        allPowerPhi.append(Phi * 10**logP[k])
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
     # Gain for each detector
     A, Cov_A = get_gains(allPowerPhi, allInvCov, allData)
 
     chi2 = 0.
     for k in range(nimages):
+<<<<<<< HEAD
+=======
+        # Compute the chi2
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
         M = np.diag(allPowerPhi[k]) @ A
         R = M - allData[k]
         chi2 += R.T @ allInvCov[k] @ R
@@ -869,9 +911,15 @@ def get_chi2(params, allInvCov, allData, BLs, q, nu_source=150e9, returnA=False)
 
 
 def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.25, fl_max=0.35,
+<<<<<<< HEAD
                    th_min=np.deg2rad(-1.), th_max=np.deg2rad(1), fixPower=True):
     """Loop over the parameters (focal length and source off-axis angle) to explore the chi2.
     Global powers are fixed to 0.5 or optimized at each step by minimizing a temporary chi2 (longer)."""
+=======
+                   th_min=np.deg2rad(-1.), th_max=np.deg2rad(1), LogPower=-1, fixPower=True):
+    """Loop over the parameters (focal length and source off-axis angle) to explore the chi2.
+    Global powers are fixed to Log_10(Power)=-1 or optimized at each step by minimizing a temporary chi2 (longer)."""
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
     nimages = len(BLs)
     chi2_grid = np.zeros((nval_fl, nval_th))
 
@@ -880,10 +928,17 @@ def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.
 
     # Fast method
     if fixPower:
+<<<<<<< HEAD
         # Global powers are fixed to 0.5 and we loop on fl and th.
         for i, fl in enumerate(all_fl):
             for j, th in enumerate(all_th):
                 params = [fl, th] + [0.5] * nimages
+=======
+        # Global powers are fixed to initPower and we loop on fl and th.
+        for i, fl in enumerate(all_fl):
+            for j, th in enumerate(all_th):
+                params = [fl, th] + [LogPower] * nimages
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
                 chi2_grid[i, j] = get_chi2(params, allInvCov, fringes, BLs, q)
         return all_fl, all_th, chi2_grid
 
@@ -900,8 +955,13 @@ def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.
                     return chi2_temp
 
                 result = sop.minimize(chi2_temporary,
+<<<<<<< HEAD
                                       x0=[0.5] * nimages,
                                       args=(allInvCov, fringes, BLs),
+=======
+                                      x0=[LogPower] * nimages,
+                                      args=(allInvCov, fringes, BLs, q),
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
                                       method='Nelder-Mead',
                                       options={'maxiter': 10000})
                 chi2_grid[i, j] = result['fun']
@@ -916,7 +976,11 @@ def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.
 
 # ========== Fringe simulations =============
 class Model_Fringes_Ana:
+<<<<<<< HEAD
     def __init__(self, q, baseline, theta_source=0., nu_source=150e9, fwhm=20., amp=1., frame='ONAFP'):
+=======
+    def __init__(self, q, baseline, theta_source=0., phi_source=0., nu_source=150e9, fwhm=20., amp=1., frame='ONAFP'):
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
         """
 
         Parameters
@@ -926,6 +990,11 @@ class Model_Fringes_Ana:
             Baseline formed with 2 horns, index between 1 and 64 as on the instrument.
         theta_source: float
             The source zenith angle [rad].
+<<<<<<< HEAD
+=======
+        phi_source: float
+            The source azimuthal angle [rad].
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
         nu_source: float
             Source frequency [Hz].
         fwhm: float
@@ -936,6 +1005,10 @@ class Model_Fringes_Ana:
         self.q = q
         self.focal = q.optics.focal_length
         self.theta_source = theta_source
+<<<<<<< HEAD
+=======
+        self.phi_source = phi_source
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
         self.nu_source = nu_source
         self.lam = 3e8 / self.nu_source
         self.fwhm = fwhm
@@ -963,10 +1036,25 @@ class Model_Fringes_Ana:
         phase = - 2 * np.pi / 3e8 * self.nu_source * dist * np.sin(self.theta_source)
         self.phase = phase
 
+<<<<<<< HEAD
     def get_fringes(self, times_gaussian=True):
         if times_gaussian:
             sigma = np.deg2rad(self.fwhm / 2.355 * self.focal)
             gaussian = np.exp(- 0.5 * ((self.x - self.BL_xc) ** 2 + (self.y - self.BL_yc) ** 2) / sigma ** 2)
+=======
+    def make_gaussian(self):
+        sigma = np.deg2rad(self.fwhm / 2.355 * self.focal)
+        # The position of the gaussian depends on the position of the source
+        # Maybe there is a sign problem here...
+        x_center = self.focal * np.tan(self.theta_source) * np.cos(self.phi_source)
+        y_center = self.focal * np.tan(self.theta_source) * np.sin(self.phi_source)
+        self.gaussian = np.exp(- 0.5 * ((self.x - x_center) ** 2 + (self.y - y_center) ** 2) / sigma ** 2)
+        return self.gaussian
+
+    def get_fringes(self, times_gaussian=True):
+        if times_gaussian:
+            gaussian = self.make_gaussian()
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
         else:
             gaussian = 1.
         xprime = (self.x * np.cos(self.BL_angle) + self.y * np.sin(self.BL_angle))

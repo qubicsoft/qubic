@@ -35,8 +35,13 @@ from itertools import combinations_with_replacement
 # Specific qubic modules
 from qubicpack.utilities import Qubic_DataDir
 from pysimulators import FitsArray
+<<<<<<< HEAD
 import pysm
 import pysm.units as u
+=======
+import pysm3
+import pysm3.units as u
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 import qubic
 from qubic import SpectroImLib as si
@@ -60,11 +65,19 @@ rc('font', size=20)
 datadir = os.environ['DATA_SPECTROIM']
 
 
+<<<<<<< HEAD
 nfrecon = 1
 freq = 220 # GHz
 # rep = datadir + f'NERSC_simuEnd2End/Good_photon_noise2020/simu_FI{freq}/'
 # rep = datadir + f'NERSC_simuEnd2End/Good_photon_noise2020/simu_NERSC_MC/FI{freq}/galaxycenter_3bandes/'
 rep = datadir + f'NERSC_simuEnd2End/Good_photon_noise2020/simu_NERSC_MC/FI{freq}/qubicpatch/'
+=======
+nfrecon = 6
+freq = 150 # GHz
+rep = datadir + f'NERSC_simuEnd2End/Good_photon_noise2020/simu_FI{freq}/'
+# rep = datadir + f'NERSC_simuEnd2End/Good_photon_noise2020/simu_NERSC_MC/FI{freq}/galaxycenter_3bandes/'
+# rep = datadir + f'NERSC_simuEnd2End/Good_photon_noise2020/simu_NERSC_MC/FI{freq}/qubicpatch/'
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 dictionary = glob.glob(rep + '*.dict')[0]
 print(dictionary)
@@ -83,7 +96,11 @@ fits_noise = np.sort(glob.glob(rep + '*nfrecon{}_noiselessFalse*.fits'.format(nf
 fits_noiseless = np.sort(glob.glob(rep + '*nfrecon{}_noiselessTrue*.fits'.format(nfrecon), 
                               recursive=True))
 
+<<<<<<< HEAD
 # print(fits_noise, fits_noiseless)
+=======
+print(fits_noise, fits_noiseless)
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 ```
 
 ```{python}
@@ -145,6 +162,7 @@ maps_residu[:, :, seenmap, :] = residuals
 ```
 
 ```{python}
+<<<<<<< HEAD
 stokes = ['I', 'Q', 'U']
 istk = 0
 real = 0
@@ -154,10 +172,61 @@ min = None
 max = None
 
 # center = (0, 0)
+=======
+def hp_graticules_coords(dpar, dmer, xsize=200, ysize=200, reso=15, center=(0, 0), coord='G', 
+                         verbose=False, alpha=0.6):
+    
+    # Image size in degrees
+    xsize_deg = xsize * reso / 60
+    ysize_deg = ysize * reso / 60
+    
+    # Number of meridians and parallels to draw
+    npar = int(np.ceil(ysize_deg / dpar))
+    nmer = int(np.ceil(xsize_deg / dmer))
+    
+    # Positions of each paralel and meridian
+    first_par = center[0] - dpar * (int(npar/2))
+    coords_par = [first_par + i * dpar for i in range(npar)]
+    
+    first_mer = center[1] - dmer * (int(nmer/2))
+    coords_mer = [first_mer + i * dmer for i in range(nmer)]
+    
+    # Add the text on the image by hand
+    for i in coords_par: # Parallels
+        plt.text(np.deg2rad(center[0]- (xsize_deg/2 + dpar/1.5)), 1.12*np.deg2rad(i-1), fr'{i:.0f}$\degree$',)
+    
+    for i in coords_mer: # Meridians
+        plt.text(1.05*np.deg2rad(i-1), np.deg2rad(center[1] - (ysize_deg/2 + dmer/7)), fr'{i:.0f}$\degree$')
+        
+    return
+
+# hp_graticules_coords(dpar=10, dmer=20, xsize=200, ysize=200, center=(0, 0), coord='G')
+```
+
+```{python}
+stokes = ['I', 'Q', 'U']
+istk = 0
+real = 0
+plt.figure(figsize=(25, 35))
+rr = 15
+
+# For Q, U
+# min = -50
+# max = 150
+
+# For I
+min = 0.
+max = 1e4
+
+center = (0, 0)
+dmer=20
+dpar=10
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 # Plot for spectroim paper
 for band in range(nfrecon):
     hp.gnomview(maps_conv[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+1), 
                 rot=center, reso=rr,
+<<<<<<< HEAD
                 title = 'Input - {}'.format(d['kind'][istk]), unit='$\mu K$', min=min, max=max)
     plt.text(-1, 0., '{:3.0f} GHz'.format(nus[band]), fontsize=30)
     hp.gnomview(maps_recon[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+2), 
@@ -168,6 +237,26 @@ for band in range(nfrecon):
                 title = 'Residuals - {0}'.format(d['kind'][istk]), unit='$\mu K$', min=-10, max=10)
 # plt.tight_layout()
 # plt.savefig(f'/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/maps{stokes[istk]}_FI220_{nfrecon}bands_GoodPhotonNoise.pdf',
+=======
+                title = 'Input - {}'.format(d['kind'][istk]), unit='$\mu K$', min=min, max=max, notext=True)
+    plt.text(-1, 0., '{:3.0f} GHz'.format(nus[band]), fontsize=30)
+   
+    hp_graticules_coords(dpar=dpar, dmer=dmer, alpha=0.8)
+    
+    hp.gnomview(maps_recon[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+2), 
+                rot=center, reso=rr,
+                title = 'Output - {0}'.format(d['kind'][istk]), unit='$\mu K$', min=min, max=max, notext=True)
+    hp_graticules_coords(dpar=dpar, dmer=dmer, alpha=0.8)
+    
+    hp.gnomview(maps_residu[real, band, :, istk], cmap='jet', sub=(nfrecon, 3, 3*band+3), 
+                rot=center, reso=rr,
+                title = 'Residuals - {0}'.format(d['kind'][istk]), unit='$\mu K$', min=-90, max=90, notext=True)
+    hp_graticules_coords(dpar=dpar, dmer=dmer, alpha=0.8)
+    
+hp.graticule(dpar=dpar, dmer=dmer, verbose=False)
+plt.tight_layout()
+# plt.savefig(f'/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/maps{stokes[istk]}_FI220_{nfrecon}bands_GoodPhotonNoise_graticule.pdf',
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 #            bbox_inches='tight')
 ```
 
@@ -196,6 +285,7 @@ plt.legend()
 
 ## Save residuals, coverage and seenmap
 
+<<<<<<< HEAD
 Here we save the files that will be used to create data for FastSimulator
 
 ```{python}
@@ -204,6 +294,14 @@ Here we save the files that will be used to create data for FastSimulator
 rep_save = rep + 'filesJC/'
 
 for nfrecon in [1]:#, 2, 3, 4, 5, 8]:
+=======
+Here we save the files that will be used to create data for the Fast Simulator
+
+```{python}
+rep_save = datadir + 'Data_for_FastSimulator/'
+
+for nfrecon in [6, 7]:#, 2, 3, 4, 5, 8]:
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
     # Get fits files names in a list
     fits_noise = np.sort(glob.glob(rep + '*nfrecon{}_noiselessFalse*.fits'.format(nfrecon), 

@@ -23,7 +23,10 @@ import matplotlib.pyplot as plt
 from importlib import reload
 
 # Specific qubic modules
+<<<<<<< HEAD
 from qubicpack.utilities import Qubic_DataDir
+=======
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 from pysimulators import FitsArray
 import pysm
 import qubic
@@ -38,8 +41,12 @@ rc('text', usetex=False)
 Let's generate an underlying CMB (I,Q,U) on a partial coverage, and then add noise according to this coverage.
 
 ```{python}
+<<<<<<< HEAD
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
 dictfilename = global_dir + '/dicts/test_cross-spectra.dict'
+=======
+dictfilename = 'test_cross-spectra.dict'
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 # Read dictionary chosen
 d = qubic.qubicdict.qubicDict()

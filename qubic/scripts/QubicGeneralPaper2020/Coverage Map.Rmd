@@ -321,6 +321,13 @@ hp.graticule(dpar=dpar, dmer=dmer, alpha = 0.6, verbose = False)
 ```
 
 ```{python}
+<<<<<<< HEAD
+=======
+hp.write_map('QUBIC-Typical-Coverage.fits', cov)
+```
+
+```{python}
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 mymap = hp.gnomview(cov, rot=center, reso=20, return_projected_map=True)
 ```
 

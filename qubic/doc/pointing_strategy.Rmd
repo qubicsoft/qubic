@@ -124,7 +124,11 @@ p = qubic.get_pointing(d)
 
 # Change the HWP angles along the pointing
 hwp = p.angle_hwp
+<<<<<<< HEAD
 hwp0 = np.where(hwp>50., hwp-10., hwp*1)
+=======
+hwp0 = np.where(hwp>50., hwp-20., hwp*1)
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 # hwp1 = np.where(hwp<30., hwp+5., hwp*1)
 # hwp2 = np.where(hwp<20., hwp-15., hwp*1)
 
@@ -136,6 +140,11 @@ plt.xlabel('Pointing index')
 plt.ylabel('HWP angle [deg]')
 plt.legend()
 # plt.savefig('/home/lmousset/QUBIC/Notes_presentations/HWP_angle_regularly_spaced/6HWPangles.pdf', bbox_inches='tight')
+<<<<<<< HEAD
+=======
+# import tikzplotlib as tkz
+# tkz.save('/home/lmousset/QUBIC/These_manuscrit/tikz/HWPangles.tex')
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 # Apply the changes 
 p.angle_hwp = hwp0

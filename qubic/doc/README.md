@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # qubic/doc
 
 ## Config: 
@@ -12,6 +13,11 @@ to define those variables you have to edit your `~/.bashrc` file and add the fol
 `export QUBIC_DATADIR=/home/user/path/to/qubic/directory`
 
 `export QUBIC_DICT=/home/user/path/to/qubic/directory/dicts`
+=======
+<!-- #region -->
+# qubic/doc
+
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 ## Documentation on how QUBIC works and some improvements in end-to-end simulation pipeline:
 
@@ -26,3 +32,11 @@ to define those variables you have to edit your `~/.bashrc` file and add the fol
 
 .. SynthesizedBeam.Rmd: 
 	This notebook aims at showing how to obtain the QUBIC Synthesized beam for a given set of horns accounting for various effects (detector size, bandwidth...).
+<<<<<<< HEAD
+=======
+<!-- #endregion -->
+
+```python
+
+```
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19

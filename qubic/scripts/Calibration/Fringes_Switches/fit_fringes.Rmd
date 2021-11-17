@@ -42,6 +42,10 @@ from scipy.ndimage import gaussian_filter
 import pandas as pd
 import emcee
 import corner
+<<<<<<< HEAD
+=======
+from iminuit import Minuit
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 import qubic
 from qubic import selfcal_lib as scal
@@ -79,8 +83,14 @@ allfringes = fdict['FRINGES_1D']
 allerr = fdict['ERRORS']
 
 # Normalization 
+<<<<<<< HEAD
 for k in range(len(allfringes)):
     std = np.std(allfringes[k])
+=======
+std = np.std(allfringes)
+for k in range(len(allfringes)):
+#     std = np.nanstd(allfringes[k])
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
     allfringes[k] /= std
     allerr[k] /= std
 
@@ -134,8 +144,15 @@ plt.grid()
 There is a plateau around N=9,10 which leads to ~30 bad detectors. We will choose N=30.
 
 ```{python}
+<<<<<<< HEAD
 the_mask = flib.decide_bad_TES(allmask_bad_TES, condition=5)
 nbad = int(256 - np.nansum(the_mask))
+=======
+
+the_mask = flib.decide_bad_TES(allmask_bad_TES, condition=9)
+nbad = int(256 - np.nansum(the_mask))
+print(nbad)
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 # print(the_mask)
 flib.plot_fringes_scatter(q, xTES, yTES, the_mask, normalize=False, s=140, cbar=False)
@@ -161,7 +178,11 @@ for k in range(nimages):
     ax0, ax1 = axs.ravel()
     
     # Scatter plot
+<<<<<<< HEAD
     flib.plot_fringes_scatter(q, xTES, yTES, allfringes[k] * the_mask, normalize=False, s=180, fig=fig, ax=ax0)
+=======
+    flib.plot_fringes_scatter(q, xTES, yTES, allfringes[k] * the_mask, normalize=True, s=180, fig=fig, ax=ax0)
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 
     # Plot with Astropy convolution 
@@ -173,12 +194,30 @@ for k in range(nimages):
     
 ```
 
+<<<<<<< HEAD
+=======
+```{python}
+# Scatter plot for papers
+# k = 5
+# fig = plt.figure(figsize=(7, 7))
+# ax = fig.gca()
+# flib.plot_fringes_scatter(q, xTES, yTES, allfringes[k] * the_mask, normalize=False, s=350,
+#                           fig=fig, ax=ax, vmin=-0.3, vmax=0.3, title=f'Data - Baseline {BLs[k]}', fontsize=20)
+# fig.tight_layout()
+# fig.savefig('/home/lmousset/QUBIC/Images/Data20201027_fringes_49-51.pdf')
+```
+
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 ### Remove thermometers 
 
 Data contains 256 detectors, 248 are bolometers but 8 are thermometers. To compare with Qubic soft simulations, it is useful to remove thermometers.
 
 ```{python}
 xdata, ydata, the_mask = flib.remove_thermometers(xTES, yTES, the_mask)
+<<<<<<< HEAD
+=======
+
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 ndet = xdata.shape[0]
 print('Number of detectors:', ndet)
 
@@ -199,6 +238,13 @@ TES numbering on the instrument and in simulations are different. To compare the
 xONAFP, yONAFP, _ = scal.get_TEScoordinates_ONAFP(q)
 the_mask = flib.reorder_data(the_mask, xdata, ydata, xONAFP, yONAFP)
 
+<<<<<<< HEAD
+=======
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# the_mask[246] = np.nan
+# the_mask[230] = np.nan
+
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 fringes, errs = [], []
 for k in range(nimages):
     fringes.append(flib.reorder_data(data[k], xdata, ydata, xONAFP, yONAFP))
@@ -213,6 +259,7 @@ for k in range(nimages):
     fig.suptitle(f'BL {BLs[k]}')
     fig.subplots_adjust(wspace=0.5)
     ax0, ax1 = axs
+<<<<<<< HEAD
     scal.scatter_plot_FP(q, xdata, ydata, data[k]*the_mask, frame='ONAFP', 
                          fig=fig, ax=ax0, s=170, cmap='bwr', 
                          vmin=vmin, vmax=vmax, title='Original order', unit=None)
@@ -220,6 +267,17 @@ for k in range(nimages):
     scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes[k]*the_mask, frame='ONAFP', 
                          fig=fig, ax=ax1, s=170, cmap='bwr', 
                          vmin=vmin, vmax=vmax, title='Re-order', unit=None)
+=======
+    flib.plot_fringes_scatter(q, xdata, ydata, data[k]*the_mask, 
+                              normalize=True, vmin=vmin, vmax=vmax,
+                              s=180, fig=fig, ax=ax0,
+                              title='Original order')
+    
+    flib.plot_fringes_scatter(q, xONAFP, yONAFP, fringes[k]*the_mask, 
+                              normalize=True, vmin=vmin, vmax=vmax,
+                              s=180, fig=fig, ax=ax1,
+                              title='Re-ordered')
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 ```
 
 ### Make a selection
@@ -228,8 +286,14 @@ If you want to perform the fit on a reduce number of images, you can select them
 ```{python}
 selection = True
 if selection:
+<<<<<<< HEAD
     myselection = [0, 2, 5]
 #     myselection = [0, 1, 2, 3, 4, 5]
+=======
+    myselection = [2, 5, 11]
+#     myselection = [1, 2, 4, 5, 7, 8, 9, 10, 11]
+#     myselection = [0, 1, 2, 4, 5, 11]
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
     remind_all_fringes = fringes.copy() 
     fringes = [fringes[i] for i in myselection]
     errs = [errs[i] for i in myselection]
@@ -254,8 +318,13 @@ print('ndet:', ndet)
 # Parameters for the fit
 focal_fake = 0.29
 theta_fake = np.deg2rad(0.5)
+<<<<<<< HEAD
 # allP_fake = [0.5] * nimages
 allP_fake = list(np.random.rand(nimages))
+=======
+allP_fake = [0.5] * nimages
+# allP_fake = list(np.random.rand(nimages))
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 print('P_k fake:', allP_fake)
 params_fake = [focal_fake, theta_fake] + allP_fake
 
@@ -268,7 +337,11 @@ print('gain mean:', np.mean(gains_fake))
 print('gains fake:', gains_fake[:10])
 print('gains negative:', gains_fake[gains_fake<0.])
 
+<<<<<<< HEAD
 sigma = 0.3 # Gaussian noise
+=======
+sigma = 0.03 # Gaussian noise
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 fake_fringes = []
 allPhi_fake = []
@@ -320,10 +393,18 @@ To eliminate bad TES, we put a very high error on them => very small weight in t
 Then we make a list with an inverse covariance matrix for each image.
 
 ```{python}
+<<<<<<< HEAD
 for k in range(nimages):
     errs[k][np.isnan(the_mask)] *= 1e20 
 
 allInvCov = [scal.make_inverse_covariance(errs[k], verbose=True) for k in range(nimages)]
+=======
+allInvCov = []
+for k in range(nimages):
+    errs[k][np.isnan(the_mask)] *= 1e20
+
+    allInvCov.append(scal.make_inverse_covariance(errs[k], verbose=True))
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 ```
 
 #### Explore the chi2 to find guess parameters
@@ -332,13 +413,30 @@ allInvCov = [scal.make_inverse_covariance(errs[k], verbose=True) for k in range(
 all_fl, all_th, chi2_grid = scal.make_chi2_grid(allInvCov, fringes, BLs, q, 
                                 nval_fl=40, nval_th=40, 
                                 fl_min=0.25, fl_max=0.35,
+<<<<<<< HEAD
                                 th_min=np.deg2rad(-1.), th_max=np.deg2rad(1), 
                                 fixPower=True)
+=======
+                                th_min=np.deg2rad(-1), th_max=np.deg2rad(1), 
+                                LogPower=-1,
+                                fixPower=True)
+
+# all_fl, all_th, chi2_grid, popt = scal.make_chi2_grid(allInvCov, fringes, BLs, q, 
+#                                 nval_fl=10, nval_th=10, 
+#                                 fl_min=0.25, fl_max=0.35,
+#                                 th_min=np.deg2rad(-1), th_max=np.deg2rad(1), 
+#                                 LogPower=-1,
+#                                 fixPower=False)
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 ```
 
 ```{python}
 # Smooth with a gaussian to avoid loosing the min in random pixel very low (not always necessary).
+<<<<<<< HEAD
 smooth = True
+=======
+smooth = False
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 step_fl = all_fl[1] - all_fl[0]
 step_th = all_th[1] - all_th[0]
 if smooth:
@@ -365,6 +463,7 @@ if simu:
 
 ```{python}
 # Plot the chi2 map 
+<<<<<<< HEAD
 fig, ax = plt.subplots(figsize=(8, 8))
 c = ax.pcolor(np.rad2deg(all_th), all_fl, chi2_grid, vmin=0, vmax=1e7)#, norm=SymLogNorm(99e9))
 ax.set_xlabel('Theta')
@@ -374,6 +473,34 @@ if simu:
 ax.scatter(np.rad2deg(th_guess),  fl_guess,  marker='o', color='m', s=100, label='Guess')
 fig.colorbar(c, ax=ax)
 ax.legend()
+=======
+def plot_chi2_map(all_th, all_fl, chi2_grid,
+                  vmin=0, vmax=1e10, norm=None, 
+                  thetas=[], focals=[], labels=[]):
+    fig, ax = plt.subplots(figsize=(8, 8))
+    c = ax.pcolor(np.rad2deg(all_th), all_fl, chi2_grid, vmin=0, vmax=5e8, shading='auto')#, norm=SymLogNorm(99e9))
+    for i in range(len(thetas)):
+        ax.scatter(np.rad2deg(thetas[i]), focals[i],  marker='o', s=100, label=labels[i])
+    ax.set_xlabel('Theta')
+    ax.set_ylabel('Focal length')
+    fig.colorbar(c, ax=ax)
+    ax.legend()
+    
+    return
+
+if simu:
+    plot_chi2_map(all_th, all_fl, chi2_grid,
+                  vmin=0, vmax=1e10, norm=None,
+                  thetas=[th_guess, theta_fake], 
+                  focals=[fl_guess, focal_fake], 
+                  labels=['Guess', 'fake'])
+else:
+    plot_chi2_map(all_th, all_fl, chi2_grid,
+                  vmin=0, vmax=1e10, norm=None,
+                  thetas=[th_guess], 
+                  focals=[fl_guess], 
+                  labels=['Guess'])
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 ```
 
 ## Minimize the chi2 
@@ -382,6 +509,7 @@ Using `scipy.optimize.minimize`
 
 ```{python}
 # params_guess = [0.30, np.deg2rad(-0.5)] + [0.5]*3
+<<<<<<< HEAD
 result = sop.minimize(scal.get_chi2, 
                       x0=params_guess, 
                       args=(allInvCov, fringes, BLs, q), 
@@ -396,10 +524,62 @@ if simu:
     print('Fake:', focal_fake)
 print('Result:', result['x'][0])
 print('Guess:', fl_guess)
+=======
+# result = sop.minimize(scal.get_chi2, 
+#                       x0=params_guess, 
+#                       args=(allInvCov, fringes, BLs, q), 
+#                       method='Nelder-Mead',
+#                       options={'maxiter':10000})
+# print(result)
+```
+
+#### Using iMinuit
+
+We can change:
+   * the guess
+   * fix: fix parameters to a given value
+   * error: the step it moves around the parameter during minimization
+   * limit: bounds for the parameters (ex: focal and Pk positive)
+
+```{python}
+def chi2_minuit(params):
+    chi2 = scal.get_chi2(params, allInvCov, fringes, BLs, q, nu_source=150e9, returnA=False)
+    return chi2
+
+# Choose a guess by hand
+params_guess = [0.3, np.deg2rad(0.5)] + [-1.5] * nimages
+
+# Initialize iMinuit
+m = Minuit.from_array_func(chi2_minuit, 
+                           params_guess, 
+                           errordef=1, print_level=2,
+                           error=[2e-3, np.deg2rad(0.01)] + [0.001] * nimages,
+                           fix=[False, False] + [False]*(nimages-1) + [False],
+                           limit=[(None, None), (None, None)] + [(-15, 15)] * nimages)
+# Run the minimization
+m.migrad()
+```
+
+```{python}
+# Get the parameters
+chi2_Minuit = m.fcn(m.np_values())
+
+fl_minuit = m.np_values()[0]
+th_minuit = m.np_values()[1]
+LogPk_minuit = m.np_values()[2:]
+Pk_minuit = 10**(LogPk_minuit)
+
+print('***** Focal:')
+if simu:
+    print('Fake:', focal_fake)
+print('Result:', fl_minuit)
+print('Guess:', params_guess[0])
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 print('\n***** Theta:')
 if simu:
     print('Fake:', np.rad2deg(theta_fake))
+<<<<<<< HEAD
 print('Result:', np.round(np.rad2deg(result['x'][1]), 6))
 print('Guess:', np.round(np.rad2deg(th_guess), 6))
 
@@ -411,33 +591,116 @@ if simu:
     print('Fake / Result:', np.round(allP_fake / result['x'][2:], 4))
     
 print('\nReduce Chi2:', result['fun']/(nimages * ndet -(ndet + nimages + 2)))
+=======
+print('Result:', np.round(np.rad2deg(th_minuit), 6))
+print('Guess:', np.round(np.rad2deg(params_guess[1]), 6))
+
+print('\n***** Power Pk:')
+print('Guess:', [10**a for a in params_guess[2:]])
+print('Result:', Pk_minuit)
+if simu:
+    print('Fake:', np.round(allP_fake, 4))
+    print('Fake / Result:', np.round(allP_fake / Pk_minuit, 4))
+
+NDDL = nimages * ndet - (ndet + nimages + 2)
+print('\nReduce Chi2:', chi2_Minuit / NDDL)
+```
+
+```{python}
+# scal.get_chi2([0.3, np.deg2rad(0.5), 1.6e-4, 2.6e-2], allInvCov, fringes, BLs, q, nu_source=150e9, returnA=True)
+```
+
+```{python}
+fl_guess = params_guess[0]
+th_guess = params_guess[1]
+if simu:
+    plot_chi2_map(all_th, all_fl, chi2_grid,
+                  vmin=0, vmax=1e10, norm=None,
+                  thetas=[th_guess, theta_fake, th_minuit], 
+                  focals=[fl_guess, focal_fake, fl_minuit], 
+                  labels=['Guess', 'Fake', 'Minuit'])
+else:
+    plot_chi2_map(all_th, all_fl, chi2_grid,
+                  vmin=0, vmax=1e10, norm=None,
+                  thetas=[th_guess, th_minuit], 
+                  focals=[fl_guess, fl_minuit], 
+                  labels=['Guess', 'Minuit'])
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 ```
 
 #### Get the intercalibrations
 We compute the detector gains using the result of the minimisation.
 
 ```{python}
+<<<<<<< HEAD
 q.optics.focal_length = result['x'][0]
 allP_res = result['x'][2:]
 PowerPhi = []
 for k in range(nimages):
     model = scal.Model_Fringes_Ana(q, BLs[k], 
                                    theta_source=result['x'][1], 
+=======
+# Using minimize
+# th_source = result['x'][1]
+# q.optics.focal_length = result['x'][0]
+# allP_res = result['x'][2:]
+
+#Using Minuit
+th_source = th_minuit
+q.optics.focal_length = fl_minuit
+
+PowerPhi = []
+for k in range(nimages):
+    model = scal.Model_Fringes_Ana(q, BLs[k], 
+                                   theta_source=th_source, 
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
                                    nu_source=150e9, 
                                    frame='ONAFP')
 
     x, y, Phi = model.get_fringes(times_gaussian=False)
     
     # Global amplitude
+<<<<<<< HEAD
     PowerPhi.append(Phi * allP_res[k])
+=======
+    PowerPhi.append(Phi * Pk_minuit[k])
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
     
 
 # Gain for each detector
 A, Cov_A = scal.get_gains(PowerPhi, allInvCov, fringes)
 
 print('Gains found:\n', np.round(A[:10], 4))
+<<<<<<< HEAD
 if simu:
     print('\nGains fake:\n', np.round(gains_fake[:10], 4))
+=======
+print('Diagonal Cov_A:\n', np.diag(Cov_A[:10]))
+if simu:
+    print('\nGains fake:\n', np.round(gains_fake[:10], 4))
+    
+plt.figure(figsize=(12, 6))
+plt.errorbar(x=np.arange(ndet), y=A, yerr=np.sqrt(np.diag(Cov_A)),
+            fmt='o')
+plt.errorbar(x=np.arange(ndet)[np.isnan(the_mask)], y=A[np.isnan(the_mask)], yerr=np.sqrt(np.diag(Cov_A))[np.isnan(the_mask)],
+            fmt='o', color='k')
+plt.ylim(-5, 5)
+plt.xlabel('Detector index')
+plt.ylabel('Gains')
+plt.grid()
+```
+
+```{python}
+# Average A, it should be 1
+weights = 1/np.diag(Cov_A)
+avgA = np.average(A, weights=weights)
+print(avgA)
+
+print('Max A', np.nanmax(A*the_mask))
+print('Min A', np.nanmin(A*the_mask))
+
+# print(np.sort(A*the_mask))
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 ```
 
 ```{python}
@@ -459,6 +722,7 @@ if simu:
     ax4.legend()
     fig.tight_layout()
 else:
+<<<<<<< HEAD
     fig, axs = plt.subplots(1, 2, figsize=(13, 4))
     ax1, ax2 = np.ravel(axs)
     scal.scatter_plot_FP(q, xONAFP, yONAFP, A, fig=fig, ax=ax1, frame='ONAFP', title='Gains found', 
@@ -466,6 +730,19 @@ else:
     ax2.hist(A, bins=30, range=(-10, 10), label='{:.2f} +- {}'.format(np.mean(A), np.std(A)))
     ax2.set_xlabel('Gains found')
     ax2.axvline(np.mean(A), color='r')
+=======
+
+    fig, axs = plt.subplots(1, 2, figsize=(13, 4))
+    ax1, ax2 = np.ravel(axs)
+    flib.plot_fringes_scatter(q, xONAFP, yONAFP, A*the_mask, 
+                              fig=fig, ax=ax1, title='Gains found', 
+                              vmin=-10, vmax=10, normalize=False,
+                              s=100)
+    
+    ax2.hist(A*the_mask, bins=30, range=(-100, 100))
+    ax2.set_xlabel('Gains found')
+    ax2.axvline(avgA, color='r', label=f'Mean = {avgA:.3f}')
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
     ax2.legend()
     fig.tight_layout()
 ```
@@ -502,13 +779,44 @@ def make_colorbar(ax, image):
     cax = divider.append_axes('right', size='5%', pad=0.05)
     clb = fig.colorbar(image, cax=cax)
     return
+<<<<<<< HEAD
  
 def plot_residuals(q, xONAFP, yONAFP, BL, data, the_mask, PowerPhi, errors, gains, cmap='bwr', normalize=True):
     fig, axs = plt.subplots(4, 2, figsize=(12, 16))
+=======
+
+def get_pull(data, errors, gains, PowerPhi, mask=None):
+    if mask is not None:
+        data *= mask
+    correct = data/gains
+    residu = correct - PowerPhi
+    pull = residu / (errors/gains)
+    
+    return correct, residu, pull
+    
+def plot_residuals(q, xONAFP, yONAFP, BL, data, the_mask, PowerPhi, errors, gains, cmap='bwr', 
+                   normalize=True, vmin=-1, vmax=1, s=120):
+    """Make all plots, data, correction, residuals, model...
+    1D plots can only work with diagonal fringes."""
+    
+    # Orientation of the baseline
+    theta, _, _ = scal.give_bs_pars(q, BL)
+    if int(theta)== -45:
+        anti_diag = True
+    else:
+        anti_diag = False
+    print(int(theta))
+    
+    # Compute residuals, pull and mask the data
+    correct, residu, pull = get_pull(data, errors, gains, PowerPhi, mask=the_mask)
+    
+    fig, axs = plt.subplots(5, 2, figsize=(12, 20))
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
     fig.suptitle(f'BL {BL}')
     axs = np.ravel(axs)
     
     # Initial / corrected 
+<<<<<<< HEAD
     correct = data/gains
     flib.plot_fringes_scatter(q, xONAFP, yONAFP, data*the_mask, fig=fig, ax=axs[0], frame='ONAFP', 
                      title=f'Data', s=100, normalize=normalize)
@@ -548,13 +856,156 @@ def plot_residuals(q, xONAFP, yONAFP, BL, data, the_mask, PowerPhi, errors, gain
     plt.axvline
     fig.tight_layout()
     return
+=======
+    flib.plot_fringes_scatter(q, xONAFP, yONAFP, data, 
+                              fig=fig, ax=axs[0], cmap=cmap, title='Data', s=s, 
+                              normalize=normalize, vmin=vmin, vmax=vmax)
+    flib.plot_fringes_scatter(q, xONAFP, yONAFP, correct, 
+                              fig=fig, ax=axs[1], cmap=cmap, title='Data / gains', s=s, 
+                              normalize=normalize, vmin=vmin, vmax=vmax)
+    
+    # Plot fringes and corrected fringes in 1D diagonal
+    data2D = flib.make2Dfringes_QubicSoft(data, q, nan2zero=True)
+    flib.plot_fringes_diagonal(data2D, idiag=[-3, -4, -2, -1, 0, 1, 2, 3, 4], anti_diag=anti_diag,
+                          fig=fig, ax=axs[2], ylim=(-0.2, 0.2), title='Data')
+    
+    correct2D = flib.make2Dfringes_QubicSoft(correct, q, nan2zero=True)
+    flib.plot_fringes_diagonal(correct2D, idiag=[-3, -4, -2, -1, 0, 1, 2, 3, 4], anti_diag=anti_diag, 
+                          fig=fig, ax=axs[3], ylim=(-0.2, 0.2), title='Data / gains')
+        
+    # Fit
+    flib.plot_fringes_scatter(q, xONAFP, yONAFP, PowerPhi,
+                              fig=fig, ax=axs[4], cmap=cmap, title='Fit: Power x Phi', s=s,
+                              normalize=False, vmin=-0.01, vmax=0.01)
+    
+    # Residuals
+    flib.plot_fringes_scatter(q, xONAFP, yONAFP, residu,
+                             fig=fig, ax=axs[5], cmap=cmap, title='Residuals = Data/gains - Power x Phi', s=s,
+                             normalize=False, vmin=-0.1, vmax=0.1)
+    
+    # Plot model and residuals 1D diagonal
+    PowerPhi2D = flib.make2Dfringes_QubicSoft(PowerPhi, q, nan2zero=True)
+    flib.plot_fringes_diagonal(PowerPhi2D, idiag=[-3, -4, -2, -1, 0, 1, 2, 3, 4], anti_diag=anti_diag,
+                          fig=fig, ax=axs[6], title='Fit')
+    
+    residu2D = flib.make2Dfringes_QubicSoft(residu, q, nan2zero=True)
+    flib.plot_fringes_diagonal(residu2D, idiag=[-3, -4, -2, -1, 0, 1, 2, 3, 4], anti_diag=anti_diag,
+                          fig=fig, ax=axs[7], ylim=(-0.2, 0.2), title='Residuals')
+  
+    # Pull
+    mean_pull = np.nanmean(pull)
+    std_pull = np.nanstd(pull)
+    axs[8].hist(pull, range=(-15, 15), bins=15, label='{:.5f} +- {:.5f}'.format(mean_pull, std_pull))
+    axs[8].axvline(mean_pull, color='r')
+    axs[8].axvline(mean_pull+std_pull, color='r', linestyle='--')
+    axs[8].axvline(mean_pull-std_pull, color='r', linestyle='--')
+    axs[8].set_title('Pull = Residuals / (errors/gains)')
+    axs[8].legend()
+    
+    # Histogram Data/Gain and Residuals
+    axs[9].hist(correct*the_mask, bins=20, alpha=0.2, label='Data/Gain', range=(-0.3, 0.3))
+    axs[9].hist(residu*the_mask, bins=20, alpha=0.2, label='Residuals', range=(-0.3, 0.3))
+    axs[9].legend()
+    axs[9].set_title(f'STD(data/gain) / STD(Residus) = {np.nanstd(correct/residu):.3f}')
+    fig.tight_layout()
+    
+    return
+
+```
+
+```{python}
+# correct, residu, pull = get_pull(fringes[0], errs[0], A, PowerPhi[0])
+# pull*the_mask
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 ```
 
 ```{python}
 cmap_bwr=flib.make_cmap_nan_black('bwr')
+<<<<<<< HEAD
 for k in range(nimages):
     plot_residuals(q, xONAFP, yONAFP, BLs[k], fringes[k], the_mask, PowerPhi[k], errs[k], A, 
                    cmap=cmap_bwr, normalize=False)
+=======
+allmean_pull, allstd_pull = [], []
+for k in range(nimages):
+    
+    plot_residuals(q, xONAFP, yONAFP, BLs[k], fringes[k], the_mask, PowerPhi[k], errs[k], A, 
+                   cmap=cmap_bwr, normalize=True, vmin=-1, vmax=1, s=100)
+    _, _, pull = get_pull(fringes[k], errs[k], A, PowerPhi[k])
+    allmean_pull.append(np.mean(pull))
+    allstd_pull.append(np.std(pull))
+print(allstd_pull)
+```
+
+### Correct the errors to have std(Pull) = 1
+
+```{python}
+condition = np.any([np.abs(i - 1) > 0.5 for i in allstd_pull])
+condition
+```
+
+```{python}
+i = 0
+while condition:
+    i += 1
+    print(f'\n***** Run {i} ************* STD Pull:', allstd_pull)
+    # Correction a posteriori (bidouille to have STD(Pull) = 1)
+    allInvCov = []
+    for k in range(nimages):
+        errs[k] *= allstd_pull[k]
+        allInvCov.append(scal.make_inverse_covariance(errs[k], verbose=False))
+
+    # Minimization
+    m = Minuit.from_array_func(chi2_minuit, 
+                               params_guess, 
+                               errordef=1, print_level=2,
+                               error=[2e-3, np.deg2rad(0.01)] + [0.001] * nimages,
+                               fix=[False]*(nimages+2),
+                               limit=[(None, None), (None, None)] + [(None, None)] * nimages)
+    m.migrad()
+    fl_minuit = m.np_values()[0]
+    th_minuit = m.np_values()[1]
+    Pk_minuit = 10**(m.np_values()[2:])
+
+    #Using Minuit
+    th_source = th_minuit
+    q.optics.focal_length = fl_minuit
+
+    PowerPhi = []
+    for k in range(nimages):
+        model = scal.Model_Fringes_Ana(q, BLs[k], 
+                                       theta_source=th_source, 
+                                       nu_source=150e9, 
+                                       frame='ONAFP')
+
+        x, y, Phi = model.get_fringes(times_gaussian=False)
+
+        # Global amplitude
+        PowerPhi.append(Phi * Pk_minuit[k])
+
+
+    # Gain for each detector
+    A, Cov_A = scal.get_gains(PowerPhi, allInvCov, fringes)
+
+    print('Gains found:\n', np.round(A[:10], 4))
+    print('Diagonal Cov_A:\n', np.diag(Cov_A[:10]))
+    if simu:
+        print('\nGains fake:\n', np.round(gains_fake[:10], 4))
+
+
+    cmap_bwr=flib.make_cmap_nan_black('bwr')
+    allmean_pull, allstd_pull = [], []
+    for k in range(nimages):
+        _, _, pull = get_pull(fringes[k], errs[k], A, PowerPhi[k])
+        allmean_pull.append(np.mean(pull))
+        allstd_pull.append(np.std(pull))
+    
+    condition = np.any([np.abs(i - 1) > 0.5 for i in allstd_pull])
+
+for k in range(nimages):
+    plot_residuals(q, xONAFP, yONAFP, BLs[k], fringes[k], the_mask, PowerPhi[k], errs[k], A, 
+                   cmap=cmap_bwr, normalize=True, vmin=-1, vmax=1)
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 ```
 
@@ -578,9 +1029,15 @@ if selection:
         fig, axs = plt.subplots(1, 2)
         fig.suptitle(f'BL {bl}')
         flib.plot_fringes_scatter(q, xONAFP, yONAFP, fringes_not_used[k]*the_mask, fig=fig, ax=axs[0], frame='ONAFP', 
+<<<<<<< HEAD
                          title=f'Data', s=190, normalize=False)
         flib.plot_fringes_scatter(q, xONAFP, yONAFP, correct*the_mask, fig=fig, ax=axs[1], frame='ONAFP', 
                          title=f'Data / gains', s=190, normalize=False)
+=======
+                         title=f'Data', s=190, normalize=True)
+        flib.plot_fringes_scatter(q, xONAFP, yONAFP, correct*the_mask, fig=fig, ax=axs[1], frame='ONAFP', 
+                         title=f'Data / gains', s=190, normalize=True)
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
         fig.tight_layout()
 ```
 
@@ -597,14 +1054,23 @@ print("{0} CPUs".format(ncpu))
 
 ```{python}
 def lnlike(params, allInvCov, alldata, BLs):
+<<<<<<< HEAD
     chi2, A, Cov_A = scal.get_chi2(params, allInvCov, alldata, BLs, q, returnA=True)
     LnLike = - 0.5 * chi2
 #     print(chi2)
     return LnLike, A, Cov_A
+=======
+    chi2, A, _ = scal.get_chi2(params, allInvCov, alldata, BLs, q, returnA=True)
+    LnLike = - 0.5 * chi2
+#     print('A:', A[:20])
+#     print('chi2:', chi2)
+    return LnLike, A
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 def lnprior(params):
     fl = params[0]
     th = params[1]
+<<<<<<< HEAD
     allP = params[2:]
 
     if fl > 0.:
@@ -648,11 +1114,318 @@ def run(p0, nwalkers, niter, ndim, lnprob, args, withpool=True):
 ```{python}
 ndim = len(params_guess)
 nwalkers = 50
+=======
+    logP = params[2:]
+
+    if fl > 0.:
+        return 0.
+    return -np.inf
+    
+
+def lnprob(params, allInvCov, alldata, BLs):
+    lp = lnprior(params)
+#     print('Prior', lp)
+    ndet = alldata[0].shape[0]
+    if not np.isfinite(lp):
+        return -np.inf, np.ones(248)*(-np.inf)
+    LnLike, A = lnlike(params, allInvCov, alldata, BLs)
+    return lp + LnLike, A
+
+
+class MCMC:
+    def __init__(self, nwalkers, niter, ndim, p0, burnin, axis_names, withpool=False, emcee_filename='emcee.h5'):
+        self.nwalkers = nwalkers
+        self.niter = niter
+        self.ndim = ndim
+        self.p0 = p0
+        self.burnin = burnin
+        self.axis_names = axis_names
+        self.withpool = withpool
+        self.emcee_filename = emcee_filename
+   
+
+    def run(self, lnprob, args, backend=True):
+        
+        with Pool() as pool:
+            if not self.withpool:
+                pool = None
+            if backend:
+                backend = emcee.backends.HDFBackend(self.emcee_filename)
+     
+                sampler = emcee.EnsembleSampler(self.nwalkers, self.ndim, lnprob, args=args, 
+                                                pool=pool,
+                                                backend=backend)
+                if backend.iteration > 0:
+                    self.p0 = backend.get_last_sample()
+                if self.niter - backend.iteration > 0:
+                    print("\n =========== Running production... ===========")
+                    start = time.time()
+                    sampler.run_mcmc(self.p0, 
+                                     nsteps=max(0, self.niter - backend.iteration), 
+                                     progress=True)   
+            else:
+                sampler = emcee.EnsembleSampler(self.nwalkers, self.ndim, lnprob, args=args, 
+                                                pool=pool,
+                                                backend=None)
+                print("\n =========== Running production... ===========")
+                start = time.time()
+                sampler.run_mcmc(self.p0, nsteps=self.niter, progress=True)
+                
+        end = time.time()
+        print("MCMC took {0:.1f} seconds".format(end - start))       
+        return sampler
+    
+    def read_sampler(self, sampler, has_blobs=True):
+        if has_blobs:
+            self.blobs = sampler.get_blobs(flat=False)
+        
+        self.chains = sampler.get_chain(discard=0, flat=False, thin=1)
+        self.lnprobs = sampler.get_log_prob(discard=0, flat=False, thin=1)
+        
+
+    def read_backends(self):
+        reader = emcee.backends.HDFBackend(self.emcee_filename)
+        try:
+            tau = reader.get_autocorr_time()
+        except emcee.autocorr.AutocorrError:
+            tau = -1
+        self.tau = tau
+        if reader.has_blobs():
+            self.blobs = reader.get_blobs(flat=False)
+        self.chains = reader.get_chain(discard=0, flat=False, thin=1)
+        self.lnprobs = reader.get_log_prob(discard=0, flat=False, thin=1)
+        return
+    
+    def compute_local_acceptance_rate(self, start_index, last_index, walker_index):
+        """Compute the local acceptance rate in a chain.
+
+        Parameters
+        ----------
+        start_index: int
+            Beginning index.
+        last_index: int
+            End index.
+        walker_index: int
+            Index of the walker.
+
+        Returns
+        -------
+        freq: float
+            The acceptance rate.
+
+        """
+        frequences = []
+        test = -2 * self.lnprobs[start_index, walker_index]
+        counts = 1
+        for index in range(start_index + 1, last_index):
+            chi2 = -2 * self.lnprobs[index, walker_index]
+            if np.isclose(chi2, test):
+                counts += 1
+            else:
+                frequences.append(float(counts))
+                counts = 1
+                test = chi2
+        frequences.append(counts)
+        return 1.0 / np.mean(frequences)
+
+    def set_chain_validity(self):
+        """Test the validity of a chain: reject chains whose chi2 is far from the mean of the others.
+
+        Returns
+        -------
+        valid_chains: list
+            List of boolean values, True if the chain is valid, or False if invalid.
+
+        """
+        nchains = [k for k in range(self.nwalkers)]
+        chisq_averages = []
+        chisq_std = []
+        for k in nchains:
+            chisqs = -2 * self.lnprobs[self.burnin:, k]
+            chisq_averages.append(np.mean(chisqs))
+            chisq_std.append(np.std(chisqs))
+        self.global_average = np.mean(chisq_averages)
+        self.global_std = np.mean(chisq_std)
+        self.valid_chains = [False] * self.nwalkers
+        for k in nchains:
+            chisqs = -2 * self.lnprobs[self.burnin:, k]
+            chisq_average = np.mean(chisqs)
+            chisq_std = np.std(chisqs)
+            if 3 * self.global_std + self.global_average < chisq_average:
+                self.valid_chains[k] = False
+            elif chisq_std < 0.1 * self.global_std:
+                self.valid_chains[k] = False
+            else:
+                self.valid_chains[k] = True
+        return self.valid_chains
+    
+    def get_reduce_chi2(self, nimages, ndet):
+        NDDL = (nimages * ndet -(ndet + nimages + 2))
+        return self.global_average / NDDL
+    
+    def plot_chains_chi2(self, fontsize=14):
+        """Plot chains and chi2."""
+        chains = self.chains[self.burnin:, :, :]  # .reshape((-1, self.ndim))
+        nchains = [k for k in range(self.nwalkers)]
+        steps = np.arange(self.burnin, self.niter)
+        
+        fig, ax = plt.subplots(self.ndim + 1, 1, figsize=(10, 7), sharex='all')
+        
+        # Chi2 vs Index
+        print("Chisq statistics:")
+        for k in nchains:
+            chisqs = -2 * self.lnprobs[self.burnin:, k]
+            text = f"\tWalker {k:d}: {float(np.mean(chisqs)):.3f} +/- {float(np.std(chisqs)):.3f}"
+            if not self.valid_chains[k]:
+                text += " -> excluded"
+                ax[self.ndim].plot(steps, chisqs, c='0.5', linestyle='--')
+            else:
+                ax[self.ndim].plot(steps, chisqs)
+            print(text)
+        
+        ax[self.ndim].set_ylim(
+            [self.global_average - 5 * self.global_std, self.global_average + 5 * self.global_std])
+        
+        # Parameter vs Index
+        print("Computing Parameter vs Index plots...")
+        for i in range(self.ndim):
+            h = ax[i].set_ylabel(self.axis_names[i], fontsize=fontsize)
+            h.set_rotation(0)
+            for k in nchains:
+                if self.valid_chains[k]:
+                    ax[i].plot(steps, chains[:, k, i])
+                else:
+                    ax[i].plot(steps, chains[:, k, i], c='0.5', linestyle='--')
+                ax[i].get_yaxis().set_label_coords(-0.05, 0.5)
+        h = ax[self.ndim].set_ylabel(r'$\chi^2$', fontsize=fontsize)
+        h.set_rotation(0)
+        ax[self.ndim].set_xlabel('Steps', fontsize=fontsize)
+        ax[self.ndim].get_yaxis().set_label_coords(-0.05, 0.5)
+        
+        fig.tight_layout()
+        plt.subplots_adjust(hspace=0)
+        figure_name = self.emcee_filename.replace('.h5', '_chains.pdf')
+        print(f'Save figure: {figure_name}')
+        fig.savefig(figure_name, dpi=100)
+        
+        return
+    
+
+    def convergence_tests(self, fontsize=14):
+        """
+        Compute the convergence tests (Gelman-Rubin, acceptance rate).
+
+        """
+        chains = self.chains[self.burnin:, :, :]
+        nchains = [k for k in range(self.nwalkers)]
+        steps = np.arange(self.burnin, self.niter)
+        
+        # Acceptance rate vs Index
+        print("Computing acceptance rate...")
+        min_len = self.niter
+        window = 100
+        
+        fig, ax = plt.subplots(self.ndim + 1, 1, figsize=(10, 7), sharex='all')
+        print(ax.shape)
+        if min_len > window:
+            for k in nchains:
+                ARs = []
+                indices = []
+                for pos in range(self.burnin + window, self.niter, window):
+                    ARs.append(self.compute_local_acceptance_rate(pos - window, pos, k))
+                    indices.append(pos)
+                if self.valid_chains[k]:
+                    ax[self.ndim].plot(indices, ARs, label=f'Walker {k:d}')
+                else:
+                    ax[self.ndim].plot(indices, ARs, label=f'Walker {k:d}', c='gray', linestyle='--')
+                ax[self.ndim].set_xlabel('Steps', fontsize=fontsize)
+                ax[self.ndim].set_ylabel('Aceptance rate', fontsize=8)
+        
+        # Gelman-Rubin test
+        if len(nchains) > 1:
+            step = max(1, (self.niter - self.burnin) // 20)
+            self.gelmans = []
+            print(f'Gelman-Rubin tests (burnin={self.burnin:d}, step={step:d}, nsteps={self.niter:d}):')
+            for i in range(self.ndim):
+                Rs = []
+                lens = []
+                for pos in range(self.burnin + step, self.niter, step):
+                    chain_averages = []
+                    chain_variances = []
+                    global_average = np.mean(self.chains[self.burnin:pos, self.valid_chains, i])
+                    for k in nchains:
+                        if not self.valid_chains[k]:
+                            continue
+                        chain_averages.append(np.mean(self.chains[self.burnin:pos, k, i]))
+                        chain_variances.append(np.var(self.chains[self.burnin:pos, k, i], ddof=1))
+                    W = np.mean(chain_variances)
+                    B = 0
+                    for n in range(len(chain_averages)):
+                        B += (chain_averages[n] - global_average) ** 2
+                    B *= ((pos + 1) / (len(chain_averages) - 1))
+                    R = (W * pos / (pos + 1) + B / (pos + 1) * (len(chain_averages) + 1) / len(chain_averages)) / W
+                    Rs.append(R - 1)
+                    lens.append(pos)
+#                 print(f'\t{self.input_labels[i]}: R-1 = {Rs[-1]:.3f} (l = {lens[-1] - 1:d})')
+                self.gelmans.append(Rs[-1])
+                ax[i].plot(lens, Rs, lw=1, label=self.axis_names[i])
+                ax[i].axhline(0.03, c='k', linestyle='--')
+                ax[i].set_xlabel('Walker length', fontsize=fontsize)
+                ax[i].set_ylabel('$R-1$', fontsize=fontsize)
+                ax[i].set_ylim(0, 0.6)
+                # ax[self.dim, 3].legend(loc='best', ncol=2, fontsize=10)
+        self.gelmans = np.array(self.gelmans)
+        fig.tight_layout()
+        plt.subplots_adjust(hspace=0)
+        figure_name = self.emcee_filename.replace('.h5', '_convergence.pdf')
+        print(f'Save figure: {figure_name}')
+        fig.savefig(figure_name, dpi=100)
+        
+        return
+    
+    def get_params_errors(self):
+        chains = self.chains[self.burnin:, self.valid_chains, :] 
+        
+        self.params = np.mean(chains, axis=(0, 1))
+        self.params_std = np.std(chains, axis=(0, 1))
+        
+        for i in range(ndim):
+            print(f'***** {self.axis_names[i]}:')
+            if i == 1:
+                print(f'{np.rad2deg(mcmc.params[i]):.5f} +/- {np.rad2deg(mcmc.params_std[i]):.5f}')
+            else:
+                print(f'{mcmc.params[i]:.5f} +/- {mcmc.params_std[i]:.5f}')
+        
+        s, m, p, = np.shape(chains)
+        flat_chains = np.reshape(chains, (s*m, p))
+        self.params_cov = np.cov(flat_chains.T)
+        print(self.params_cov.shape)
+        return
+```
+
+```{python}
+myselection
+```
+
+```{python}
+Pk_minuit
+LogPk_minuit
+```
+
+```{python}
+params_guess = [fl_minuit, th_minuit] + list(LogPk_minuit)
+# params_guess = [0.3, np.deg2rad(0.5), 0.5, 0.5, 0.5]
+print('Guess:', params_guess)
+
+ndim = len(params_guess)
+nwalkers = 30
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 # Initial guess
 p0 = [params_guess + 1e-4 * np.random.rand(ndim) for i in range(nwalkers)]
 # print(p0)
 
+<<<<<<< HEAD
 niter = 2000
 args = (allInvCov, fringes, BLs)
 sampler, pos, prob, state, blob_A, blob_Cov_A = run(p0, nwalkers, niter, ndim, lnprob, args, withpool=False)
@@ -820,28 +1593,144 @@ for i in range(size):
     for k in range(nimages):
         model = scal.Model_Fringes_Ana(q, BLs[k], 
                                         theta_source=params[1], 
+=======
+niter = 3000
+axis_names = ['Focal', 'Theta'] + [f'LogP{i+1}' for i in range(nimages)]
+
+mcmc = MCMC(nwalkers, niter, ndim, p0, burnin=0, axis_names=axis_names, withpool=False, 
+            emcee_filename='emcee_2020-10-27_BLs1-2-4-5-7-8-9-10-11_v1.h5')
+args = (allInvCov, fringes, BLs)
+```
+
+```{python}
+# Run the MCMC and save a backend
+sampler = mcmc.run(lnprob, args, backend=True)
+```
+
+```{python}
+mcmc.read_backends()
+chain_validity = mcmc.set_chain_validity()
+print(np.sum(chain_validity))
+```
+
+```{python}
+mcmc.plot_chains_chi2()
+```
+
+```{python}
+mcmc.convergence_tests()
+```
+
+```{python}
+chi2_reduce = mcmc.get_reduce_chi2(nimages, ndet)
+
+print(f'Reduce Chi2: {chi2_reduce:.4f}')
+```
+
+```{python}
+mcmc.get_params_errors()
+from qubic.AnalysisMC import cov2corr
+# Covariance between parameters
+lim = 1#np.abs(np.max(mcmc.params_cov)/100)
+
+fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+im = ax.imshow(cov2corr(mcmc.params_cov), cmap='bwr', vmin=-lim, vmax=lim)
+ax.set_xticks(np.arange(nimages+2))
+ax.set_yticks(np.arange(nimages+2))
+ax.set_xticklabels(mcmc.axis_names)
+ax.set_yticklabels(mcmc.axis_names)
+ax.set_title('Correlation')
+fig.colorbar(im)
+
+```
+
+```{python}
+import getdist
+from getdist import plots, MCSamples
+
+mcmc.burnin = 0
+
+labels = ['f', r'\theta'] + [f'Log(P_{i+1})' for i in range(nimages)]
+samps = MCSamples(samples=mcmc.chains[mcmc.burnin:], names=mcmc.axis_names, labels=labels,
+        ranges={'Focal':(0, None), 'Theta':(None,None)})
+
+g = plots.getSubplotPlotter()
+g.triangle_plot(samps, filled=True, title_limit=2, 
+                markers=params_fake)
+
+```
+
+```{python}
+np.min(mcmc.chains[:,0,-1])
+```
+
+#### Get A from the fit parameters
+
+```{python}
+# Producing params with the covariance found with the MCMC
+# The distribution is considered as gaussian
+size = 1000
+distrib = np.random.multivariate_normal(mcmc.params, mcmc.params_cov, size=size)
+allA = np.zeros((size, ndet))
+for i in range(size):
+    params = distrib[i]
+    q.optics.focal_length = mcmc.params[0]
+    allPowerPhi = []
+    for k in range(nimages):
+        model = scal.Model_Fringes_Ana(q, BLs[k], 
+                                        theta_source=mcmc.params[1], 
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
                                         nu_source=150e9, 
                                         fwhm=20., amp=1., frame='ONAFP')
 
         x, y, Phi = model.get_fringes(times_gaussian=False)
         
         # Global amplitude
+<<<<<<< HEAD
         allPowerPhi.append(Phi * allP_res[k])
+=======
+        allPowerPhi.append(Phi * 10**mcmc.params[2+k])
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 
     # Gain for each detector
     allA[i, :], Cov_A = scal.get_gains(allPowerPhi, allInvCov, fringes)
 
+<<<<<<< HEAD
 stdA = np.std(allA, axis=0)    
 meanA = np.mean(allA, axis=0)    
+=======
+mcmcA_std = np.std(allA, axis=0)    
+mcmcA = np.mean(allA, axis=0)    
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 ```
 
 ```{python}
 # Get A from the blob (A computed and saved during the MCMC) 
+<<<<<<< HEAD
 blobA_mean = np.mean(blob_A[thin*cut:])
 blobA_std = np.std(blob_A[thin*cut:])
 plt.figure()
 plt.hist(blob_A[thin*cut::100][0])
+=======
+blobA = mcmc.blobs[mcmc.burnin:, :, :]
+blobA = np.reshape(blobA, ((mcmc.niter-mcmc.burnin)*mcmc.nwalkers, 248))
+
+# Mean and STD along the chain
+blobA_std = np.nanstd(blobA, axis=0)
+print(blobA_std.shape)
+
+blobA_mean = np.nanmean(blobA, axis=0)
+# print(blobA_man)
+
+
+Cov_A = np.cov(blobA.T)
+# print(Cov_A)
+weights = 1 / np.diag(Cov_A)
+weights = np.nan_to_num(weights, nan=1e-10)
+avgA = np.average(np.nan_to_num(blobA_mean, nan=1), weights=weights)
+print(avgA)
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 ```
 
 ```{python}
@@ -871,6 +1760,7 @@ if simu:
     ax3.set_title('Gain with MC')
     ax3.legend()
     
+<<<<<<< HEAD
     ax4.errorbar(gains_fake, blobA_mean, yerr=blobA_std, fmt='o', color='r', label='mean, STD')
     ax4.plot(xx, xx, 'k--', label='y=x')
     ax4.set_xlabel('Gain Fake Data')
@@ -882,10 +1772,24 @@ if simu:
 else:
     vmin=-10
     vmax = 10
+=======
+#     ax4.errorbar(gains_fake, blobA_mean, yerr=blobA_std, fmt='o', color='r', label='mean, STD')
+#     ax4.plot(xx, xx, 'k--', label='y=x')
+#     ax4.set_xlabel('Gain Fake Data')
+# #     ax4.set_ylabel('Gain with Monte Carlo')
+#     ax4.set_title('Gains from blob')
+#     ax4.legend()
+#     fig.tight_layout()
+
+else:
+    vmin=-5
+    vmax = 5
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
     fig, axs = plt.subplots(2, 2, figsize=(13, 10))
     fig.suptitle('Gains and errors found with MCMC')
     ax1, ax2, ax3, ax4 = np.ravel(axs)
     fig.subplots_adjust(wspace=0.4)
+<<<<<<< HEAD
     scal.scatter_plot_FP(q, xONAFP, yONAFP, blobA_mean, fig=fig, ax=ax1, frame='ONAFP', title='A', 
                          unit=None, vmin=vmin, vmax=vmax, s=100, cmap='bwr')
     scal.scatter_plot_FP(q, xONAFP, yONAFP, blobA_std, fig=fig, ax=ax2, 
@@ -896,6 +1800,21 @@ else:
     ax3.set_xlabel('Gains found with MCMC')
     ax3.axvline(np.mean(blobA_mean), color='r')
     ax3.legend()
+=======
+    flib.plot_fringes_scatter(q, xONAFP, yONAFP, blobA_mean*the_mask, 
+                              fig=fig, ax=ax1, title='Gains A', 
+                              normalize=False, vmin=vmin, vmax=vmax, 
+                              s=100)
+
+    flib.plot_fringes_scatter(q, xONAFP, yONAFP, blobA_std*the_mask, 
+                              fig=fig, ax=ax2, title='Errors STD(A)', 
+                              normalize=False, vmin=vmin, vmax=vmax, 
+                              s=100)
+    
+    ax3.hist(blobA_mean, bins=30, range=(-10, 10))
+    ax3.set_xlabel('Gains found with MCMC')
+#     ax3.axvline(np.nanmean(blobA_mean), color='r')
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
     
     fig.tight_layout()
     
@@ -911,13 +1830,24 @@ else:
 #### Residuals and data corrected by inter-calibrations
 
 ```{python}
+<<<<<<< HEAD
+=======
+cmap_viridis = flib.make_cmap_nan_black('viridis')
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 for k in range(nimages):
     plot_residuals(q, xONAFP, yONAFP, BLs[k], 
                    fringes[k], 
                    the_mask, 
                    allPowerPhi[k], 
                    errs[k], 
+<<<<<<< HEAD
                    blobA_mean, cmap=cmap_bwr)
+=======
+                   blobA_mean, cmap=cmap_viridis,
+                   normalize=True,
+                   vmin=-1, vmax=1,
+                   s=100)
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 
 ```
 

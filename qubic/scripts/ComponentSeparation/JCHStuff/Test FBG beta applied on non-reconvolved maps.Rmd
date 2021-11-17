@@ -1,0 +1,189 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+import pysm3
+import pysm3.units as u
+import numpy as np
+import numpy.ma as ma
+import healpy as hp
+import pickle
+import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
+import pickle
+from astropy.io import fits
+import pandas as pd
+from importlib import reload
+
+from qubic import camb_interface as qc
+import fgbuster as fgb
+
+#### This is a temporary library
+import compsep_jc as csjc
+
+
+import warnings
+warnings.filterwarnings("ignore")
+
+import qubic
+from qubic import NamasterLib as nam
+
+center = qubic.equ2gal(0, -57)
+
+rc('figure', figsize=(16, 10))
+rc('font', size=15)
+
+#### General Stuff ####
+nside = 256
+stk = ['I', 'Q', 'U']
+```
+
+# Context
+In this notebook I investigate a method, proposed (and used) by Josquin, to get an optimal FBG result. The idea is:
+- Estimate $\beta$ with FGB using pixel-space or alm-space and recovolving maps to the same angular resolution
+- Use this $\beta$ to recalculate the mixing matrix and apply it to **unreconvolved** input maps instead of reconvolved ones.
+- The effective $B_\ell$ can be calculated from each individual $B_\ell$ and the mixing matrix.
+In principle this should lead to a minimal S/N ratio loss related to angular resolution.
+
+Just for the record, here are the results from FGB-CutSky-NoNoise-WithFunctions:
+
+```{python}
+OKdata = [array([1.54000003e+00, 2.35315467e-06, 1.18320029e-07, 9.79560287e-08,
+        8.06419627e-07, 4.59150484e-08, 3.82179765e-08]),
+ array([1.54000000e+00, 2.34471797e-06, 1.16401811e-07, 9.38131746e-08,
+        7.93578105e-07, 4.25322768e-08, 3.31016462e-08]),
+ array([1.53583872, 4.23879749, 0.05999122, 0.05743616, 1.02854697,
+        0.09355629, 0.06065626]),
+ array([1.53601133, 4.238862  , 0.05999654, 0.05743788, 1.02864622,
+        0.09356794, 0.06066838])]
+
+import pandas as pd
+pd.options.display.float_format = '{:,.5g}'.format
+lines = ['Pixel Based - Same Resolution','alm Based - Same Resolution',
+                       'Pixel Based - QUBIC Resolutions','alm Based - QUBIC Resolutions']
+names = ['beta','CMB I RMS', 'CMB Q RMS', 'CMB U RMS', 'Dust I RMS', 'Dust Q RMS', 'Dust U RMS']
+pd.DataFrame(OKdata,lines, names)
+```
+
+# PySM maps generation
+
+```{python}
+#### PYSM Stuff ####
+# generate I,Q,U sky maps with PySM
+unit = u.uK_CMB
+np.random.seed(42)
+sky = pysm3.Sky(nside=nside, preset_strings=['d0', 'c1'], output_unit=unit)
+sky_cmb = pysm3.Sky(nside=nside, preset_strings=['c1'], output_unit=unit)
+sky_dust = pysm3.Sky(nside=nside, preset_strings=['d0'], output_unit=unit)
+
+freqs = np.array([200, 220, 240])
+
+# CMB+dust
+sky_emissions = [sky.get_emission(f * u.GHz) for f in freqs]
+maps = np.array([emission.value for emission in sky_emissions])
+
+# CMB
+sky_emissions_cmb = sky_cmb.get_emission(150 * u.GHz)
+maps_cmb = np.array([emission.value for emission in sky_emissions_cmb])
+
+sky_emissions_dust = sky_dust.get_emission(150 * u.GHz)
+maps_dust = np.array([emission.value for emission in sky_emissions_dust])
+
+print(np.shape(maps))   #nu, Stk, pix
+print(np.shape(maps_cmb))   #nu, Stk, pix
+print(np.shape(maps_dust))   #nu, Stk, pix
+
+csjc.display_maps(maps, bigtitle='Simulated maps for each frequency (no resolution-> infinite)', mytitle='CMB+Dust', 
+             figsize=(16,10), nsig=3, moll=True)
+
+csjc.display_maps(maps_dust, bigtitle='Input Dust only at 150 GHz (infinite resolution)', mytitle='CMB', 
+             figsize=(16,4), nsig=3, moll=True)
+csjc.display_maps(maps_cmb, bigtitle='Input CMB only at 150 GHz (infinite resolution)', mytitle='CMB', 
+             figsize=(16,4), nsig=3, moll=True)
+
+```
+
+# Cut-Sky from QUBIC
+
+```{python}
+rc('figure', figsize=(16, 4))
+
+covmap = hp.ud_grade(hp.read_map('QUBIC-Typical-Coverage.fits'), nside)
+
+fskytot=np.sum(covmap/np.max(covmap)/len(covmap))*100
+suptitle('Cut-Sky (from QUBIC)', fontsize=30, y=1.2)
+hp.mollview(covmap, title='QUBIC Cov Map: fsky={0:4.2f}%'.format(fskytot), sub=(1,2,1))
+
+thr = 0.1
+mymask = (covmap > (np.max(covmap)*thr)).astype(int)
+pixok = mymask > 0
+fsky=np.sum(covmap[pixok]/np.max(covmap)/len(covmap))*100
+hp.mollview(mymask, title='Mask with thr={0:}: fsky={1:4.2f}'.format(thr, fsky), sub=(1,2,2))
+
+
+
+```
+
+# Cut-sky simulations with different resolutions
+
+```{python}
+synthbeam_peak150_fwhm = 0.39268176  # in degrees
+myFWHM = synthbeam_peak150_fwhm * 150. / freqs  # Qubic beams
+print(myFWHM)
+ref_fwhm = np.max(myFWHM)*0+0.5
+
+maps_conv = csjc.convolve_maps(maps, myFWHM)
+
+### Mask them
+maps_conv[:,:,~pixok] = hp.UNSEEN
+
+csjc.display_maps(maps_conv, bigtitle='Cut-sky maps per freq. at QUBIC resolutions', rot=center)
+```
+
+# Test of the method
+
+```{python}
+reload(csjc)
+result_alm_qubic_bestres = csjc.apply_fgb(maps_conv, freqs, myFWHM, verbose=True, 
+                             alm_space=True,
+                             resol_correction=True, ref_fwhm=ref_fwhm, 
+                             plot_separated=True, center=center,
+                             truth=[maps_dust, maps_cmb], plot_residuals=True,
+                             apply_to_unconvolved=True)
+
+
+```
+
+```{python}
+data = [array([1.53601133, 4.238862  , 0.05999654, 0.05743788, 1.02864622,
+        0.09356794, 0.06066838]),
+        array([1.53601162, 7.74977607, 0.46107597, 0.48139844, 9.2435024 ,
+       0.98811418, 0.89371403]),
+       array([ 1.53601162, 18.9176714 ,  0.94512269,  0.96986542,  4.63774732,
+        0.19386885,  0.202066  ]),
+       np.append(result_alm_qubic_bestres[0], np.ravel([result_alm_qubic_bestres[4], 
+                                                           result_alm_qubic_bestres[3]]))]
+lines = ['To Ref Res',
+         'To Best Res: W.B',
+         'To Best Res: W.B.A.1',
+        'To best Res Test']
+names = ['beta','CMB I RMS', 'CMB Q RMS', 'CMB U RMS', 'Dust I RMS', 'Dust Q RMS', 'Dust U RMS']
+pd.DataFrame(data,lines, names)
+```
+
+So as such, it does not seem to lead to any improvement. But it is clear from the residuals that the calculation of the input-convolved is incorrect. We need to estimate better the effective beam after the operation.
+
+```{python}
+
+```

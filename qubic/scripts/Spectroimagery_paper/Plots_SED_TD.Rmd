@@ -5,7 +5,11 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
+<<<<<<< HEAD
       jupytext_version: 1.7.1
+=======
+      jupytext_version: 1.6.0rc0
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
   kernelspec:
     display_name: Python 3
     language: python
@@ -65,6 +69,10 @@ elif nside == 8:
 ```
 
 ```{python}
+<<<<<<< HEAD
+=======
+reload(fsed)
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 file = open("DataSED/SED-component_data.pk", 'rb')
 dictionaries, centers, nus, Maps = pk.load(file)
 _, nus_edge150, nus150, _, _, _ = qubic.compute_freq(dictionaries[0]['filter_nu'] / 1e9,  

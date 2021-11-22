@@ -7,11 +7,11 @@ from qubic import fibtools as ft
 
 __all__ = ['LogLikelihood']
 
+
 class LogLikelihood:
     def __init__(self, xvals=None, yvals=None, errors=None, model=None, nbins=16,
                  nsiginit=10, nsigprior=20, flatprior=None, fixedpars=None,
-                 covariance_model_funct=None, p0=None, nwalkers=32, chi2=None,
-                 extra_args = None):
+                 covariance_model_funct=None, p0=None, nwalkers=32, chi2=None):
         self.prior = None
         self.model = model
         self.xvals = xvals
@@ -84,7 +84,7 @@ class LogLikelihood:
     def compute_sigma68(self, logLLH, rvalues):
         LLH = [np.exp(logLLH([rvalues[i]])) for i in range(len(rvalues))]
 
-        cumint = cumtrapz(LLH, x=rvalues) # Cumulative integral
+        cumint = cumtrapz(LLH, x=rvalues)  # Cumulative integral
         cumint /= np.max(cumint)
         sigma68 = np.interp(0.68, cumint, rvalues[1:])
 
@@ -119,7 +119,7 @@ class LogLikelihood:
             for d in range(ndim):
                 pos[:, d] = np.random.randn(nwalkers) * np.sqrt(self.fitresult[1][d, d]) * nsigmas + self.fitresult[0][
                     d]
-        print('Ndim init:',ndim)
+        print('Ndim init:', ndim)
         if self.fixedpars is not None:
             ndim = int(np.sum(self.fixedpars == 0))
         print('New ndim:', ndim)
@@ -127,9 +127,8 @@ class LogLikelihood:
         if self.fixedpars is not None:
             print('Len(pos):', np.shape(pos))
             print('len(fixedpars):', len(self.fixedpars))
-            pos = pos[:,self.fixedpars==0]
+            pos = pos[:, self.fixedpars == 0]
             print('New len(pos):', np.shape(pos))
-
         sampler.run_mcmc(pos, nbmc, progress=True)
         return sampler
 
@@ -154,12 +153,10 @@ class LogLikelihood:
 
     def curve_fit(self, p0=None):
         if p0 is None:
-
             p0 = self.p0
         self.fitresult_curvefit = curve_fit(self.call4curvefit, self.xvals, self.yvals,
                                             sigma=np.sqrt(np.diag(self.covar)),
                                             maxfev=1000000, ftol=1e-5, p0=p0)
-
         return self.fitresult_curvefit[0], self.fitresult_curvefit[1]
 
     ### This should be modified in order to call the current likelihood instead, not an external one...
@@ -167,7 +164,7 @@ class LogLikelihood:
                return_chi2fct=False):
         if p0 is None:
             p0 = self.p0
-        if verbose & (print_level>1):
+        if verbose & (print_level > 1):
             print('About to call Minuit with chi2:')
             print(chi2)
             print('Initial parameters, fixed and bounds:')
@@ -181,7 +178,7 @@ class LogLikelihood:
                                              fixpars=self.fixedpars, rangepars=self.flatprior,
                                              verbose=verbose, chi2=self.chi2, print_level=print_level,
                                              ncallmax=ncallmax, extra_args=extra_args, nsplit=nsplit)
-        if len(self.fitresult_minuit[3])==0:
+        if len(self.fitresult_minuit[3]) == 0:
             cov = np.diag(self.fitresult_minuit[2])
         else:
             cov = self.fitresult_minuit[3]
@@ -190,8 +187,7 @@ class LogLikelihood:
         else:
             return self.fitresult_minuit[1], cov
 
-
-    def random_explore_guess(self, ntry=100, fraction=1, verbose = True, extra_args=None):
+    def random_explore_guess(self, ntry=100, fraction=1):
         fit_range_simu = self.flatprior
         fit_fixed_simu = self.fixedpars
         myguess_params = np.zeros((ntry, len(fit_range_simu)))

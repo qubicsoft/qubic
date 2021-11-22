@@ -1,29 +1,6 @@
-<<<<<<< HEAD
-<<<<<<< HEAD
-# qubic/doc
-
-## Config: 
-
-To use `synth_beam_many_frquencies.Rmd` and `SynthesizedBeam.Rmd` or `scanSource.py` you have to define two environment variables: `QUBIC_DATADIR` and `QUBIC_DICT`
-
-`QUBIC_DATADIR` points to the directory where qubicsoft script's (`instrument.py`, `acquisition.py`, etc) are.
-`QUBIC_DICT` points to directory where dictionaries are saved
-
-to define those variables you have to edit your `~/.bashrc` file and add the following lines:
-
-`export QUBIC_DATADIR=/home/user/path/to/qubic/directory`
-
-`export QUBIC_DICT=/home/user/path/to/qubic/directory/dicts`
-=======
 <!-- #region -->
 # qubic/doc
 
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
-<!-- #region -->
-# qubic/doc
-
->>>>>>> master
 
 ## Documentation on how QUBIC works and some improvements in end-to-end simulation pipeline:
 
@@ -38,17 +15,8 @@ to define those variables you have to edit your `~/.bashrc` file and add the fol
 
 .. SynthesizedBeam.Rmd: 
 	This notebook aims at showing how to obtain the QUBIC Synthesized beam for a given set of horns accounting for various effects (detector size, bandwidth...).
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-=======
->>>>>>> master
 <!-- #endregion -->
 
 ```python
 
 ```
-<<<<<<< HEAD
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
->>>>>>> master

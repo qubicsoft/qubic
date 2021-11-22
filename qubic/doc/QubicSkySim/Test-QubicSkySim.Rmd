@@ -175,13 +175,6 @@ Regarding CMB I have implemented three different possibilies for replacing the '
 
 ```{python}
 # Specific qubic modules
-<<<<<<< HEAD
-<<<<<<< HEAD
-from qubicpack.utilities import Qubic_DataDir
-=======
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
->>>>>>> master
 from pysimulators import FitsArray
 import qubic
 from qubic import QubicSkySim as qss
@@ -189,16 +182,7 @@ from importlib import reload
 reload(qss)
 
 ### Directories
-<<<<<<< HEAD
-<<<<<<< HEAD
-global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
-dictfilename = global_dir + '/dicts/test_QubicSkySim.dict'
-=======
 dictfilename = 'test_QubicSkySim.dict'
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
-dictfilename = 'test_QubicSkySim.dict'
->>>>>>> master
 ### Read dictionary chosen
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
@@ -240,34 +224,15 @@ for i in range(d['nf_sub']):
 for i in range(d['nf_sub']):
     print(np.mean(maps[0,:]/x0_1[i,:,0]))
     plot(maps[0,:]/x0_1[i,:,0], label=str(i))
-<<<<<<< HEAD
-<<<<<<< HEAD
-plot(maps[0,:]*0+1,'k--')
-legend()
-ylim(0.95,1.05)
-=======
 plt.plot(maps[0,:]*0+1,'k--')
 plt.legend()
 plt.ylim(0.95,1.05)
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
-plt.plot(maps[0,:]*0+1,'k--')
-plt.legend()
-plt.ylim(0.95,1.05)
->>>>>>> master
 ```
 
 #### 4.2 Specifying the input power spectra from CAMB
 
 ```{python}
 # Specific qubic modules
-<<<<<<< HEAD
-<<<<<<< HEAD
-from qubicpack.utilities import Qubic_DataDir
-=======
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
->>>>>>> master
 from pysimulators import FitsArray
 import qubic
 from qubic import QubicSkySim as qss
@@ -275,16 +240,7 @@ from importlib import reload
 reload(qss)
 
 ### Directories
-<<<<<<< HEAD
-<<<<<<< HEAD
-global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
-dictfilename = global_dir + '/dicts/test_QubicSkySim.dict'
-=======
 dictfilename = 'test_QubicSkySim.dict'
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
-dictfilename = 'test_QubicSkySim.dict'
->>>>>>> master
 ### Read dictionary chosen
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
@@ -320,13 +276,6 @@ for i in range(d['nf_sub']):
 
 ```{python}
 # Specific qubic modules
-<<<<<<< HEAD
-<<<<<<< HEAD
-from qubicpack.utilities import Qubic_DataDir
-=======
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
->>>>>>> master
 from pysimulators import FitsArray
 import qubic
 from qubic import QubicSkySim as qss
@@ -335,16 +284,7 @@ from importlib import reload
 reload(qss)
 
 ### Directories
-<<<<<<< HEAD
-<<<<<<< HEAD
-global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
-dictfilename = global_dir + '/dicts/test_QubicSkySim.dict'
-=======
 dictfilename = 'test_QubicSkySim.dict'
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
-dictfilename = 'test_QubicSkySim.dict'
->>>>>>> master
 ### Read dictionary chosen
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
@@ -397,13 +337,6 @@ This is not recommended as one cannot get the input maps neither the input power
 
 ```{python}
 # Specific qubic modules
-<<<<<<< HEAD
-<<<<<<< HEAD
-from qubicpack.utilities import Qubic_DataDir
-=======
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
->>>>>>> master
 from pysimulators import FitsArray
 import qubic
 from qubic import QubicSkySim as qss
@@ -411,16 +344,7 @@ from importlib import reload
 reload(qss)
 
 ### Directories
-<<<<<<< HEAD
-<<<<<<< HEAD
-global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
-dictfilename = global_dir + '/dicts/test_QubicSkySim.dict'
-=======
 dictfilename = 'test_QubicSkySim.dict'
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
-dictfilename = 'test_QubicSkySim.dict'
->>>>>>> master
 ### Read dictionary chosen
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
@@ -531,28 +455,3 @@ for i in range(4):
     if i==0: legend(fontsize=10, loc='upper right')
 
 ```
-<<<<<<< HEAD
-<<<<<<< HEAD
-
-```{python}
-
-```
-<<<<<<< HEAD
-
-```{python}
-
-```
-
-```{python}
-hp.npix2nside(12*256**2)
-```
-
-```{python}
-
-```
-=======
->>>>>>> ad49fd0cd60bec3cb378c2692e8b2e968ea1f6a8
-=======
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
->>>>>>> master

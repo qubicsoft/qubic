@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -91,6 +91,7 @@ print(d['effective_duration'])
 
 # Input sky
 ### Some words about maps.
+
 In this case we read a map $X_0$ simulated previously which contains fluctuations in temperature and polarization. Because we are using Healpy module (HEALPix implemented in Python) the number of pixels of each map has to be $$n_{pix} = 12 \times N_{side}^2$$ where $N_{side} = 2^j, \qquad j = 1,2,... $.
 
 ```{python}
@@ -119,7 +120,6 @@ for istk in range(3):
     hp.gnomview(x0[0, :,istk], cmap ='jet', sub = (3,2,2*istk+2), rot=center, reso=rr, 
                 title = 'Gnomview {0} Stokes parameter'.format(d['kind'][istk]))
 ```
-
 
 # Time Ordered Data (TOD) simulation
 

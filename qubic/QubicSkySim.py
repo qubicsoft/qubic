@@ -10,25 +10,10 @@ from pylab import *
 from scipy.optimize import curve_fit
 import pickle
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-import camb.correlations as cc
-
-=======
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
->>>>>>> master
 import qubic
 from qubic import camb_interface as qc
 from qubic import fibtools as ft
 from qubic.utils import progress_bar
-<<<<<<< HEAD
-<<<<<<< HEAD
-from qubicpack.utilities import Qubic_DataDir
-=======
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
->>>>>>> master
 
 __all__ = ['sky', 'Qubic_sky']
 
@@ -135,15 +120,7 @@ class sky(object):
                     self.input_cmb_maps = mymaps
                     self.input_cmb_spectra = totDL
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-                # Write a tenporary file with the maps so the PySM can read them
-=======
                 # Write a temporary file with the maps so the PySM can read them
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
-                # Write a temporary file with the maps so the PySM can read them
->>>>>>> master
                 rndstr = random_string(10)
                 hp.write_map('/tmp/' + rndstr, mymaps)
                 cmbmap = pysm.CMBMap(self.nside, map_IQU='/tmp/' + rndstr)
@@ -402,29 +379,11 @@ class Qubic_sky(sky):
                                                       verbose=verbose).T
         return fwhms, maps
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-    def get_partial_sky_maps_withnoise(self, coverage=None, sigma_sec=None,
-                                       Nyears=4., verbose=False, FWHMdeg=None, seed=None,
-                                       noise_profile=True,
-                                       spatial_noise=True,
-                                       nunu_correlation=True,
-                                       noise_only=False,
-                                       old_config=False,
-                                       integrate_into_band=True):
-=======
-=======
->>>>>>> master
     def get_partial_sky_maps_withnoise(self, coverage=None, version_FastSim='01', sigma_sec=None,
                                        Nyears=4., FWHMdeg=None, seed=None,
                                        noise_profile=True, spatial_noise=True, nunu_correlation=True,
                                        noise_only=False, integrate_into_band=True,
-<<<<<<< HEAD
-                                       verbose=False, noise_covcut=0.1):
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
                                        verbose=False):
->>>>>>> master
         """
         This returns maps in the same way as with get_simple_sky_map but cut according to the coverage
         and with noise added according to this coverage and the RMS in muK.sqrt(sec) given by sigma_sec
@@ -434,20 +393,6 @@ class Qubic_sky(sky):
 
         Parameters
         ----------
-<<<<<<< HEAD
-<<<<<<< HEAD
-        coverage
-        sigma_sec
-        Nyears
-        verbose
-        FWHMdeg
-        seed
-        effective_variance_invcov
-        integrate_into_band
-
-        Returns
-        -------
-=======
         coverage: array
             Coverage map of the sky.
             By default, we load a coverage centered on the galactic center with 10000 pointings.
@@ -478,33 +423,6 @@ class Qubic_sky(sky):
         Returns
         -------
         maps + noisemaps, maps, noisemaps, coverage
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
-        coverage: array
-            Coverage map of the sky.
-            By default, we load a coverage centered on the galactic center with 10000 pointings.
-        version_FastSim: str
-            Version of the FastSimulator files: 01, 02, 03... For now, only 01 exists.
-        sigma_sec: float
-        Nyears: float
-            Integration time for observation to scale the noise, by default it is 4.
-        FWHMdeg:
-        seed:
-        noise_profile:
-        spatial_noise: bool
-            If True, spatial noise correlations are added. True by default.
-        nunu_correlation: bool
-            If True, correlations between frequency sub-bands are added. True by default.
-        noise_only: bool
-            If True, only returns the noise maps and the coverage (without the sky signal).
-        integrate_into_band: bool
-            If True, averaging input sub-band maps into reconstruction sub-bands. True by default.
-        verbose: bool
-
-        Returns
-        -------
-        maps + noisemaps, maps, noisemaps, coverage
->>>>>>> master
 
         """
 
@@ -513,21 +431,9 @@ class Qubic_sky(sky):
                                                                                 self.Nfin,
                                                                                 self.filter_relative_bandwidth)
         ### Output bands
-<<<<<<< HEAD
-<<<<<<< HEAD
-        # Beware, all nf_sub are not yet available...
-        if self.Nfout not in [1, 2, 3, 4, 5, 8]:
-            raise NameError('Nfout needs to be in [1,2,3,4,5,8] for FastSimulation (currently...)')
-=======
         # Check Nfout is between 1 and 8.
         if self.Nfout < 1 or self.Nfout > 8:
             raise NameError("Nfout should be contained between 1 and 8 for FastSimulation.")
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
-        # Check Nfout is between 1 and 8.
-        if self.Nfout < 1 or self.Nfout > 8:
-            raise NameError("Nfout should be contained between 1 and 8 for FastSimulation.")
->>>>>>> master
         Nfreq_edges_out, nus_edge_out, nus_out, deltas_out, Delta_out, Nbbands_out = qubic.compute_freq(self.filter_nu,
                                                                                                         self.Nfout,
                                                                                                         self.filter_relative_bandwidth)
@@ -559,58 +465,20 @@ class Qubic_sky(sky):
         ##############################################################################################################
         # Restore data for FastSimulation ############################################################################
         ##############################################################################################################
-<<<<<<< HEAD
-<<<<<<< HEAD
-        # files location
-        global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
-
-=======
->>>>>>> master
         #### Directory for fast simulations
         dir_fast = os.path.join(os.path.dirname(__file__), 'data', f'FastSimulator_version{version_FastSim}')
         #### Integration time assumed in FastSim files
         fastsimfile_effective_duration = 2.
-<<<<<<< HEAD
-        if old_config:
-            #### Directory for fast simulations
-            dir_fast = '/doc/FastSimulator/Data/OldData_bad_photon_noise/'
-            #### Integration time assumed in FastSim files
-            fastsimfile_effective_duration = 4.
-
-        with open(global_dir + dir_fast +
-                  'DataFastSimulator_{}{}_nfsub_{}.pkl'.format(self.dictionary['config'],
-                                                               str(self.filter_nu),
-                                                               self.Nfout),
-=======
-        #### Directory for fast simulations
-        dir_fast = os.path.join(os.path.dirname(__file__), 'data', f'FastSimulator_version{version_FastSim}')
-        #### Integration time assumed in FastSim files
-        fastsimfile_effective_duration = 2.
-=======
->>>>>>> master
 
         with open(dir_fast + os.sep + 'DataFastSimulator_{}{}_nfsub_{}.pkl'.format(self.dictionary['config'],
                                                                           str(self.filter_nu),
                                                                           self.Nfout),
-<<<<<<< HEAD
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
->>>>>>> master
                   "rb") as file:
             DataFastSim = pickle.load(file)
             print(file)
         # Read Coverage map
         if coverage is None:
-<<<<<<< HEAD
-<<<<<<< HEAD
-            DataFastSimCoverage = pickle.load(open(global_dir + dir_fast +
-                                                   '/DataFastSimulator_{}{}_coverage.pkl'.format(
-=======
             DataFastSimCoverage = pickle.load(open(dir_fast + os.sep + 'DataFastSimulator_{}{}_coverage.pkl'.format(
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
-            DataFastSimCoverage = pickle.load(open(dir_fast + os.sep + 'DataFastSimulator_{}{}_coverage.pkl'.format(
->>>>>>> master
                                                        self.dictionary['config'],
                                                        str(self.filter_nu)), "rb"))
             coverage = DataFastSimCoverage['coverage']
@@ -654,12 +522,7 @@ class Qubic_sky(sky):
                                            Nyears=Nyears, verbose=verbose, seed=seed,
                                            effective_variance_invcov=effective_variance_invcov,
                                            clnoise=clnoise,
-<<<<<<< HEAD
                                            sub_bands_cov=sub_bands_cov)
-=======
-                                           sub_bands_cov=sub_bands_cov,
-                                           covcut=noise_covcut)
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
         if self.Nfout == 1:
             noisemaps = np.reshape(noisemaps, (1, len(coverage), 3))
         seenpix = noisemaps[0, :, 0] != 0

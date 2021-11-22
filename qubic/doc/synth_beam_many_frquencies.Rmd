@@ -4,18 +4,8 @@ jupyter:
     text_representation:
       extension: .Rmd
       format_name: rmarkdown
-<<<<<<< HEAD
-<<<<<<< HEAD
-      format_version: '1.1'
-      jupytext_version: 1.2.4
-=======
       format_version: '1.2'
       jupytext_version: 1.4.0
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
-      format_version: '1.2'
-      jupytext_version: 1.4.0
->>>>>>> master
   kernelspec:
     display_name: Python 3
     language: python
@@ -78,15 +68,7 @@ sel_det=True #If you want to select one detector
 
 # INSTRUMENT
 d = qubic.qubicdict.qubicDict()
-<<<<<<< HEAD
-<<<<<<< HEAD
-d.read_from_file(os.environ['QUBIC_DICT']+'global_source_oneDet.dict')
-=======
 d.read_from_file('global_source_oneDet.dict')
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
-d.read_from_file('global_source_oneDet.dict')
->>>>>>> master
 d['nside'] = 512
 d['RA'] = 0
 d['DEC'] = 0
@@ -309,15 +291,7 @@ def select_mband_det(q,id):
 
 # MULTIBAND INSTRUMENT
 dmb = qubic.qubicdict.qubicDict()
-<<<<<<< HEAD
-<<<<<<< HEAD
-dmb.read_from_file(os.environ['QUBIC_DICT']+'global_source_oneDet.dict')
-=======
 dmb.read_from_file('global_source_oneDet.dict')
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
-dmb.read_from_file('global_source_oneDet.dict')
->>>>>>> master
 dmb['nside'] = 512
 dmb['RA'] = 0
 dmb['DEC'] = 0

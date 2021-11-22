@@ -64,19 +64,11 @@ def myfct_martin(x, a, b, extra_args = None):
 # Now do the fit using Martin's way
 
 ```{python}
-<<<<<<< HEAD
 guess = np.array([0., 1.])
 myfit = ft.do_minuit(x, y, signoise, guess, functname=myfct_martin)
 
 errorbar(x, y, yerr=signoise, fmt='ro')
 plot(x, myfct_martin(x, *myfit[1]))
-=======
-# guess = np.array([0., 1.])
-# myfit = ft.do_minuit(x, y, signoise, guess, functname=myfct_martin)
-
-# errorbar(x, y, yerr=signoise, fmt='ro')
-# plot(x, myfct_martin(x, *myfit[1]))
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
 ```
 
 # Now do it the old way

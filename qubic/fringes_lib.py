@@ -9,6 +9,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib import cm
 import scipy.optimize as sop
 from scipy.signal import resample
+from astropy.stats import sigma_clip
 
 from qubicpack.qubicfp import qubicfp
 import qubic.fibtools as ft
@@ -308,8 +309,9 @@ class FringesAnalysis:
         # Plot the 5 best TES
         if self.doplot:
             for p in range(5):
-                plot_folding_fit(detectors_sort[p, 0], detectors_sort[p, 1], tfold, datafold, residuals_time,
+                self._plot_folding_fit(detectors_sort[p, 0], detectors_sort[p, 1], tfold, datafold, residuals_time,
                                         self.expected_period, params, err_params, save_plot=self.save_plot)
+
         return detectors_sort, ctimes
 
     def make_mask_bad_tes(self, detectors_sort, fraction=0.75):
@@ -1194,11 +1196,14 @@ def make_cmap_nan_black(cmap):
 
 
 def plot_fringes_scatter(q, xTES, yTES, fringes1D, normalize=True, frame='ONAFP', fig=None, ax=None,
-                         cbar=True, vmin=-1., vmax=1., cmap=make_cmap_nan_black('bwr'), s=None, title='Scatter plot'):
+                         cbar=True, vmin=-1., vmax=1., cmap=make_cmap_nan_black('bwr'), s=None,
+                         title='Scatter plot', config='FI', fontsize=14):
     x, y, fringes = remove_thermometers(xTES, yTES, fringes1D)
 
     if normalize:
-        fringes /= np.nanstd(fringes)
+        # Clip weird detectors, NAN values are automatically clipped
+        clip_mask = sigma_clip(fringes, sigma=3)
+        fringes /= np.std(clip_mask)
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -1211,7 +1216,10 @@ def plot_fringes_scatter(q, xTES, yTES, fringes1D, normalize=True, frame='ONAFP'
                          vmin=vmin,
                          vmax=vmax,
                          cbar=cbar,
-                         plotnonfinite=True)
+                         plotnonfinite=True,
+                         fontsize=fontsize,
+                         config=config
+                         )
     return
 
 
@@ -1244,7 +1252,6 @@ def plot_fringes_imshow(fringes2D, normalize=True, interp=None, mask=None,
                         fig=None, ax=None, cbar=True, vmin=-1, vmax=1.,
                         cmap='bwr', title='Imshow'):
     if normalize:
-
         # Clip weird detectors, NAN values are automatically clipped
         clip_mask = sigma_clip(fringes2D, sigma=3)
         fringes2D /= np.std(clip_mask)
@@ -1266,35 +1273,53 @@ def plot_fringes_imshow(fringes2D, normalize=True, interp=None, mask=None,
         fig.colorbar(img, cax=cax)
     return
 
-def plot_folding_fit(TES, ASIC, tfold, datafold, residuals_time, period,
-                     params, errs, allh=[True, False, False, True, False, True]):
-    idx = (ASIC - 1) * 128 + (TES - 1)
-    nsteps = len(params[idx, 2:])
-    amps = params[idx, 2:]
-    t0 = params[idx, 1]
-    stable_time = period / nsteps
-    print(stable_time)
-    mean_allh = np.mean(amps[allh])
 
-    plt.figure()
-    plt.plot(tfold, datafold[idx, :], label='Folded signal')
-    plt.errorbar(np.arange(0, period, period / nsteps), amps, yerr=errs[idx, 2:],
-                 fmt='o', color='r', label='Fit Amplitudes')
-    plt.plot(tfold, ft.simsig_fringes(tfold, period / nsteps, params[idx, :]),
-             label='Fit')
-    plt.plot(tfold, residuals_time[idx, :],
-             label='Residuals: RMS={0:6.4f}'.format(np.std(residuals_time[idx, :])))
-    for k in range(nsteps):
-        plt.axvline(x=stable_time * k + t0, color='k', ls=':', alpha=0.3)
-    plt.axhline(mean_allh, color='k', linestyle='--', label='Mean all open')
-    plt.legend(loc='upper right')
-    plt.xlabel('Time [s]')
-    plt.ylabel('TOD')
-    plt.title(f'TES {TES} - ASIC {ASIC}')
-    plt.grid()
-    plt.ylim(-2.5, 2.5)
+def plot_fringes_diagonal(fringes2D, idiag=[0], anti_diag=False,
+                          fig=None, ax=None, figsize=(12, 8), ylim=(None, None), title=''):
+    """
+    Plot the diagonals in 1D and the sum of all diagonals.
+    Parameters
+    ----------
+    fringes2D: array
+        A 2D image of the focal plane (17x17).
+    idiag: list
+        Diagonal index you want to plot, 0 is the main one and it can be from -16 to 16.
+    anti_diag: bool
+        If True, it will take the anti-diagonals.
+    fig, ax: matplotlib figure
+        If not None, you can include the plot in matplotlib subplots.
+    figsize
+    ylim
+    title: str
+        Plot title
+
+    Returns
+    -------
+
+    """
+    fringes2D = np.nan_to_num(fringes2D)
+    if anti_diag:
+        fringes2D = np.fliplr(fringes2D)
+    sum_diag = sum_all_diag(fringes2D)
+
+    if fig is None:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.gca()
+    ax.plot(sum_diag, color='r', label='Sum of all diagonal')
+    for i in idiag:
+        diag = np.diagonal(fringes2D, offset=i)
+        if i == 0:
+            xx = np.arange(0, 33)[::2]
+        else:
+            xx = np.arange(0, 33)[np.abs(i):-np.abs(i)][::2]
+        ax.plot(xx, diag, 'o', label=f'Diagonal {i}')
+
+    ax.set_xlabel('TES index on the diagonal')
+    ax.set_ylabel('Signal')
+    ax.legend(fontsize=8)
+    ax.set_ylim(ylim)
+    ax.set_title(title)
     return
-
 
 
 def sum_all_diag(fringes2D):

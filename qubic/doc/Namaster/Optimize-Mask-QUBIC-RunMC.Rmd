@@ -5,15 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-<<<<<<< HEAD
-<<<<<<< HEAD
-      jupytext_version: 1.4.1
-=======
       jupytext_version: 1.4.0
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
-      jupytext_version: 1.4.0
->>>>>>> master
   kernelspec:
     display_name: Python 3
     language: python
@@ -30,13 +22,6 @@ import matplotlib.pyplot as plt
 from importlib import reload
 
 # Specific qubic modules
-<<<<<<< HEAD
-<<<<<<< HEAD
-from qubicpack.utilities import Qubic_DataDir
-=======
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
->>>>>>> master
 from pysimulators import FitsArray
 import pysm
 import qubic
@@ -49,16 +34,7 @@ rc('text', usetex=False)
 ```
 
 ```{python}
-<<<<<<< HEAD
-<<<<<<< HEAD
-global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
-dictfilename = global_dir + '/dicts/test_cross-spectra.dict'
-=======
 dictfilename = 'test_cross-spectra.dict'
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
-dictfilename = 'test_cross-spectra.dict'
->>>>>>> master
 
 # Read dictionary chosen
 d = qubic.qubicdict.qubicDict()

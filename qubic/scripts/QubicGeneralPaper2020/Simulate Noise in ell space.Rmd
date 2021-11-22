@@ -5,15 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-<<<<<<< HEAD
-<<<<<<< HEAD
-      jupytext_version: 1.4.1
-=======
       jupytext_version: 1.4.0
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
-      jupytext_version: 1.4.0
->>>>>>> master
   kernelspec:
     display_name: Python 3
     language: python
@@ -30,28 +22,13 @@ import pickle
 from importlib import reload
 import time
 import scipy
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
 import matplotlib as mpl
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
-import matplotlib as mpl
->>>>>>> master
 
 
 # Specific qubic modules
 from qubicpack.utilities import Qubic_DataDir
 from pysimulators import FitsArray
-<<<<<<< HEAD
-<<<<<<< HEAD
-import pysm
-=======
 import pysm3
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
-=======
-import pysm3
->>>>>>> master
 import qubic
 from qubic import QubicSkySim as qss
 from qubic import fibtools as ft

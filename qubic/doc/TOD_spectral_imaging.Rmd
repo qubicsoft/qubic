@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.7.1
+      jupytext_version: 1.6.0rc0
   kernelspec:
     display_name: Python 3
     language: python
@@ -50,18 +50,17 @@ rc('font', size=13)
 ## Preparing the run...
 
 # Repository for dictionary and input maps
-#global_dir = Qubic_DataDir(datafile='instrument.py', datadir='../')
-#dictfilename = global_dir + '/dicts/'
-#dictmaps = global_dir + 'doc/'
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir='../')
+dictfilename = global_dir + '/dicts/pipeline_demo.dict'
+dictmaps = global_dir + 'doc/'
 
 # Read dictionary chosen
 d = qubic.qubicdict.qubicDict()
-d.read_from_file('pipeline_demo.dict')
+d.read_from_file(dictfilename)
 
 # Print a parameter from the dictionary. 
 print('beam shape :', d['beam_shape'])
 d['nside'] = 512
-d['npointings'] = 999
 
 # You can change it  as follows:
 # d['beam_shape'] = 'multi_freq' # or 'gaussian' or 'fitted_beam' 
@@ -147,36 +146,21 @@ rc('font', size=15)
 rc('lines', linewidth=3)
 print(np.max(TOD0))
 tes = 231
-
-#from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes
-#from mpl_toolkits.axes_grid1.inset_locator import mark_inset
-
-fig, ax = plt.subplots(nrows = 1, ncols=1, figsize=(12,8), sharex = True)
-ax.plot(TOD0[tes, :], 'b-', label = r'$\nu = {:.0f}~$GHz'.format(nus_in[1]))
-ax.plot(TOD1[tes, :], 'r-', label = r'$\nu = {:.0f}~$GHz'.format(nus_in[4]))
-ax.plot(TOD2[tes, :], 'y-', label = r'$\nu = {:.0f}~$GHz'.format(nus_in[7]))
-ax.plot((TOD0+TOD1+TOD2)[tes,:], 'k-', alpha = 0.4, label = "Suma de fuentes monocromáticas") 
-ax.set_xlim(50,150)
-ax.set_xlabel('Indice de apuntamiento')
-ax.set_ylabel('UA')
-ax.set_ylabel('UA')
-ax.set_ylim(-0.3e-17, 6e-17)
-#axins = zoomed_inset_axes(ax, 2, loc=1)
-#axins.plot(TOD0[tes, :], 'b-')
-#axins.plot(TOD1[tes, :], 'r-')
-#axins.plot(TOD2[tes, :], 'y-')
-#axins.plot((TOD0+TOD1+TOD2)[tes,:], 'k-', alpha = 0.4) 
-#axins.plot(TOD_sum[tes,:], 'k--') 
-#axins.set_xlim(150, 200)
-#axins.set_ylim(100, 200)
-#mark_inset(ax, axins, loc1 = 2, loc2 = 2,  fc="none", ec="0.5")
-
-ax.plot(TOD_sum[tes,:], 'k--', label = "Fuente policromática" ) 
-ax.legend(loc = 1, ncol =2)
-#plt.tight_layout()
-#plt.draw()
-#plt.show()
-plt.savefig('TOD_policromatico.pdf', format = 'pdf')
+fig, ax = plt.subplots(nrows = 2, ncols=1, figsize=(12,8), sharex = True)
+ax[0].plot(TOD0[tes, :], 'b-', label = r'$\nu = {:.0f}~$GHz'.format(nus_in[1]))
+ax[0].plot(TOD1[tes, :], 'r-', label = r'$\nu = {:.0f}~$GHz'.format(nus_in[4]))
+ax[0].plot(TOD2[tes, :], 'y-', label = r'$\nu = {:.0f}~$GHz'.format(nus_in[7]))
+ax[0].plot((TOD0+TOD1+TOD2)[tes,:], 'k-', alpha = 0.4) 
+ax[0].set_xlim(75,200)
+ax[1].set_xlabel('Indice de escaneo')
+ax[0].set_ylabel('UA')
+ax[1].set_ylabel('UA')
+ax[0].legend()
+ax[1].set_xlim(100,125)
+ax[1].plot((TOD0+TOD1+TOD2)[tes,:], 'k-', alpha = 0.4) 
+ax[1].plot(TOD_sum[tes,:], 'k--', ) 
+plt.tight_layout()
+plt.show()
 ```
 
 ```{python}

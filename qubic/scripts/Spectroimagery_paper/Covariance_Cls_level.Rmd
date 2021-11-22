@@ -64,8 +64,9 @@ print(datadir)
 rep_fullpipe = datadir + '/NERSC_simuEnd2End/Bad_photon_noise2020/simu_NERSC_MC/IBCS_fullpipeline/'
 
 rep_spectrumCC = datadir + 'FastSimulator/cls_spectrum_fromCC/'
-# rep_spectrumCC = datadir + 'FastSimulator/cls_spectrum_fromCC/nbands6-7/'
 print(rep_spectrumCC)
+
+
 ```
 
 ```{python}
@@ -88,14 +89,14 @@ print(rep_spectrumCC)
 #         else:
 #             allcross = np.concatenate((allcross, cross), axis=0)
 #     print('All cross shape:', allcross.shape)
-#     np.save(rep_spectrumCC +
+#     np.save(rep_spectrumCC + 
 #             f'IBCS{IBCS_type}_nfrecon{nfrecon}_{map_type}maps_FI{freq}_v5_qubicpatch.npy', allcross)
 ```
 
 ```{python}
 clnames = ['TT', 'EE', 'BB', 'TE']
-
 nfrecon = 3
+
 # Full pipeline
 # cls_cross = np.load(rep_fullpipe + 'IBCSsame_recon_{}bands_150fullpipeline.npy'.format(nfrecon))
 
@@ -202,7 +203,7 @@ plt.tight_layout()
 ```
 
 ```{python}
-nbands=3
+nbands = 6
 Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(150, nbands)
 print(nus)
 
@@ -211,9 +212,9 @@ combi_nus2 = list(combinations(nus, 2))
 combi_nus = combi_nus1 + combi_nus2
 print(combi_nus)
 
-palet1 = sns.cubehelix_palette(nbands, start=0, hue=1, light=0.75, dark=0.3)
+palet1 = sns.cubehelix_palette(ncombi, start=0, hue=1, light=0.75, dark=0.3)
 sns.palplot(palet1)
-palet2 = sns.cubehelix_palette(nbands, start=2, hue=1, light=0.75, dark=0.3)
+palet2 = sns.cubehelix_palette(ncombi, start=2, hue=1, light=0.75, dark=0.3)
 sns.palplot(palet2)
 
 ```
@@ -329,8 +330,7 @@ plt.ylabel('Freq 1')
 
 ```{python}
 # Compare noise between 150 and 220
-
-nfrecon = 1
+nfrecon = 6
 combi = list(combinations_with_replacement(np.arange(nfrecon), 2))
 ncombi = len(combi)
 
@@ -577,11 +577,7 @@ BBcorr = corrbinband[:, :, 2]
 ```
 
 ```{python}
-# Get matrices and save them for all nfrecon for Claudia
-rep_save = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/'
-freq = 220
-tipo = 'mix'
-allnfrecon = [1, 2, 3, 4, 5, 8]
+datadir
 ```
 
 ```{python}
@@ -591,6 +587,7 @@ freq = 220
 tipo = 'mix'
 
 for nfrecon in [6, 7]:
+    
     combi = list(combinations_with_replacement(np.arange(nfrecon), 2))
     ncombi = len(combi)
 
@@ -614,8 +611,8 @@ for nfrecon in [6, 7]:
      
     clean_BBcorr = clean_matrices(BBcorr, ncombi)
     clean_BBcov = clean_matrices(BBcov, ncombi)
-
-    np.save(rep_save +
+    
+    np.save(rep_save + 
             f'BBcovariance_bincross_nfrecon{nfrecon}_{tipo}real_FI{freq}_v4.npy', 
             BBcov)
     np.save(rep_save + 
@@ -632,22 +629,6 @@ for nfrecon in [6, 7]:
             f'BBcovariance_bincross_nfrecon{nfrecon}_{tipo}real_FI{freq}_v4_clean.npy', 
             clean_BBcov)
     np.save(rep_save + 
-            f'BBcovariance_bincross_nfrecon{nfrecon}_{tipo}real_FI{freq}_v4.npy', 
-            BBcov)
-    np.save(rep_save + 
-            f'BBcorrelation_bincross_nfrecon{nfrecon}_{tipo}real_FI{freq}_v4.npy', 
-            BBcorr)
-    
-#     np.save(rep_save + 
-#             f'BBcovariance_bincross_nfrecon{nfrecon}_{tipo}real_FI{freq}_v3_cleanbelow{threshold}.npy', 
-#             clean_BBcov)
-#     np.save(rep_save + 
-#             f'BBcorrelation_bincross_nfrecon{nfrecon}_{tipo}real_FI{freq}_v3_cleanbelow{threshold}.npy', 
-#             clean_BBcorr)
-    np.save(rep_save + 
-            f'BBcovariance_bincross_nfrecon{nfrecon}_{tipo}real_FI{freq}_v4_clean.npy', 
-            clean_BBcov)
-    np.save(rep_save +
             f'BBcorrelation_bincross_nfrecon{nfrecon}_{tipo}real_FI{freq}_v4_clean.npy', 
             clean_BBcorr)
 ```
@@ -664,9 +645,8 @@ for nfrecon in [6, 7]:
 # covbinbandBB = np.load(rep_save + 'BBcovariance_bincross_nfrecon{}_samereal_FI150_v1.npy'.format(nfrecon))
 # corrbinbandBB = np.load(rep_save + 'BBcorrelation_bincross_nfrecon{}_mixreal_FI150_v1.npy'.format(nfrecon))
 
-### FI220
-# covbinbandBB = np.load(rep_spectrumCC + 'BBcovariance_bincross_nfrecon{}_mixreal_FI220_v1.npy'.format(nfrecon))
-# corrbinbandBB = np.load(rep_spectrumCC + 'BBcorrelation_bincross_nfrecon{}_mixreal_FI220_v1.npy'.format(nfrecon))
+# covbinbandBB = np.load(rep_save + 'BBcovariance_bincross_nfrecon{}_mixreal_FI220_v1.npy'.format(nfrecon))
+# corrbinbandBB = np.load(rep_save + 'BBcorrelation_bincross_nfrecon{}_mixreal_FI220_v1.npy'.format(nfrecon))
 ```
 
 ```{python}
@@ -736,7 +716,6 @@ nbands = 3
 nbins = 16
 BBcovmix = np.load(rep_save + 'BBcovariance_bincross_nfrecon{}_mixreal_FI-150.npy'.format(nbands))
 BBcovsame = np.load(rep_save + 'BBcovariance_bincross_nfrecon{}_samereal_FI-150.npy'.format(nbands))
-
 
 combi = list(combinations_with_replacement(np.arange(nbands), 2))
 ncombi = len(combi)

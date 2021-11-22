@@ -4,13 +4,8 @@ jupyter:
     text_representation:
       extension: .Rmd
       format_name: rmarkdown
-<<<<<<< HEAD
       format_version: '1.1'
       jupytext_version: 1.2.4
-=======
-      format_version: '1.2'
-      jupytext_version: 1.4.1
->>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
   kernelspec:
     display_name: Python 3
     language: python

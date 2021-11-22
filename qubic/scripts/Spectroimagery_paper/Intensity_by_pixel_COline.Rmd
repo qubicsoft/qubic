@@ -1,0 +1,306 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+##Loading modules. 
+
+# General modules
+from __future__ import division, print_function
+# %matplotlib inline
+from pylab import *
+import os
+import sys
+import time
+import datetime
+import shutil
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+
+# Specific qubic modules
+import qubic
+from qubic import QubicSkySim as qss
+from qubic import SpectroImLib as si
+from so_pysm_models import COLines
+rc('figure', figsize=(13, 10))
+rc('font', size=13)
+```
+
+```{python}
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file('pipeline_demo.dict')
+
+# Print a parameter from the dictionary. 
+print('beam shape :', d['beam_shape'])
+d['nside'] = 32
+d['dtheta'] = 10
+freq = 220 #GHz
+d['filter_nu']= freq * 1e9
+
+# Check nf_sub/nf_sub_rec is an integer
+d['nf_sub'] = 25
+nf_sub = d['nf_sub']
+
+d['nf_recon'] = 5
+d['MultiBand'] = True
+d['npointings'] = 2000
+print(d['npointings'])
+
+# Center of the patch observed in galactic coordinates
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+```
+
+```{python}
+# Make a sky using PYSM
+seed = None
+sky_config = {'cmb': seed, 'dust': 'd1'}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+x0 = Qubic_sky.get_simple_sky_map()
+    
+print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0))
+```
+
+```{python}
+# Look at the input sky maps using Healpy
+
+istokes = 0 # Stokes parameter (I, Q, U)
+imap = 1 # Frequency subband, should be smaller than nf_sub
+rr = 9 # Resolution in arcmin
+
+plt.figure(figsize=(13,8))
+for istk in range(3):
+    plt.subplots_adjust(wspace=0.9)
+    hp.mollview(x0[imap,:,istk], cmap='jet', sub = (3,2,2*istk+1),
+                title = 'Mollview {0} Stokes parameter, map {1}'.format(d['kind'][istk], imap))
+    hp.gnomview(x0[imap,:,istk], cmap ='jet', sub = (3,2,2*istk+2), reso=rr, rot = center,
+                title = 'Gnomview {0} Stokes parameter, map {1}'.format(d['kind'][istk], imap))
+
+```
+
+```{python}
+#co = COLines(target_nside=16, output_units="uK_CMB", line="21")
+from so_pysm_models import GaussianSynchrotron
+synchrotron = GaussianSynchrotron(nside = 16)
+
+from so_pysm_models import COLines
+#co = COLines(target_nside=16, output_units="uK_CMB", line="10")
+#pysm_map += bandpass_weight * hp.smoothing(co.signal(), fwhm=fwhm)
+```
+
+```{python}
+from qubic.polyacquisition import compute_freq
+
+Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(freq, nf_sub)
+CO21 = 230.5
+
+plt.figure(figsize=(8, 6))
+for i, ed in enumerate(nus_edge):
+    plt.axvline(ed, linestyle='--')
+    if CO21 > ed and CO21< nus_edge[i+1]:
+        iband = i
+        print(iband)
+        plt.axvline(nus[iband], color='g')
+plt.axvline(CO21, color='r')
+plt.xlabel('f [GHz]')
+```
+
+```{python}
+sky_config = {'synchrotron': 's1'}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+y0 = Qubic_sky.get_simple_sky_map()*1000
+print(y0.shape, np.max(y0[:, :, 0]))
+print(np.max(x0[:, :, 0]))
+
+COsky = np.zeros_like(x0)
+print(COsky.shape)
+
+
+COsky[iband, :, 0] = y0[iband, :, 0]
+
+x0_CO = x0 + COsky
+```
+
+```{python}
+# Pointing strategy
+p = qubic.get_pointing(d)
+print('=== Pointing DONE! ===')
+
+# Model of the scene at the time of observation
+s = qubic.QubicScene(d)
+
+# Create MultibandInstrument. Model of the instrument with a focal plane sensitivity to 
+# multiple frequencies
+q = qubic.QubicMultibandInstrument(d)
+
+# Generate the sub-band limits to be used (later we can see what information we are ignoring with '_')
+_, nus_edge_in, nus_in, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, d['nf_sub'],
+                                                d['filter_relative_bandwidth'])
+
+# Finally create an acquisition multiband operator which combines all relevant information
+#scene, instrument configuration and strategy pointing. 
+a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_in)
+```
+
+```{python}
+TOD, _ = a.get_observation(x0, noiseless=d['noiseless'])#, convolution = True)
+TOD_CO, _ = a.get_observation(x0_CO, noiseless=d['noiseless'])#, convolution = True)
+```
+
+```{python}
+# Map-making process for a given number of reconstructed subbands
+nf_sub_rec = 5
+
+print('************* Map-Making on {} sub-map(s) *************'.format(nf_sub_rec))
+
+## Build a MultiAcquisition operator for reconstruction (map-making). As it is the inverse
+# process but seen with 'different' instrument (one with nf_rec channels).  
+# Recompute the edges of sub-bands :
+_, nus_edge, _, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, nf_sub_rec, d['filter_relative_bandwidth'])
+
+## Once we have the simulated TOD, we create a new instrument. This new instrument
+# is for the map-making. We have to simulate an instrument with the number of sub-bands
+# we want to rec
+#onstruct. This is done for safety and complete the concept of QUBIC, because the program 
+# does not need to create new instrument because it uses nus_edge limits to compute the sub-bands
+# for reconstruction
+d['nf_sub'] = nf_sub_rec
+qrec = qubic.QubicMultibandInstrument(d)
+
+# Create a MultiBandAcquisition
+arec = qubic.QubicMultibandAcquisition(qrec, p, s, d, nus_edge)
+
+# Get coverage map
+# i.e. how many times were seen each pixel of the sky (not trivial because of the synthetic beam)
+cov = arec.get_coverage()
+```
+
+```{python}
+d['tol']=1e-4
+```
+
+```{python}
+# From TOD reconstruct sky maps.
+maps_recon, nit, error = arec.tod2map(TOD, d, cov=cov)
+maps_recon_CO, nit_CO, error_CO = arec.tod2map(TOD_CO, d, cov=cov)
+
+print('The shape of the reconstructed maps is (nf_recon, #pixels, #stokes) :', maps_recon.shape)
+print('{} iterations were needed to get an error of {}'.format(nit, error))
+```
+
+```{python}
+# For comparison the convolved with the beam is required
+_, maps_convolved = arec.get_observation(x0, noiseless=d['noiseless'], convolution=True)
+_, maps_convolved_CO = arec.get_observation(x0_CO, noiseless=d['noiseless'], convolution=True)
+
+maps_convolved = np.array(maps_convolved) # Get an array and not a list
+maps_convolved_CO = np.array(maps_convolved_CO)
+print('The convolved maps have the same shape as the reconstructed maps : {}'.format(maps_convolved.shape))
+```
+
+```{python}
+# Compute the difference between input maps convolved and reconstructed maps
+diff = maps_recon - maps_convolved
+diff_CO = maps_recon_CO - maps_convolved_CO
+```
+
+```{python}
+# Keeping only the sky region which has been significantly observed
+# Pixels not seen enough are replaced by UNSEEN value
+cov = np.sum(cov, axis=0)
+maxcov = np.max(cov)
+print(cov)
+
+unseen = cov < maxcov * 0.1
+print(unseen)
+maps_convolved[:, unseen, :] = hp.UNSEEN
+maps_recon[:, unseen, :] = hp.UNSEEN
+diff[:, unseen, :] = hp.UNSEEN
+
+#maps_convolved_CO[:, unseen, :] = hp.UNSEEN
+#maps_recon_CO[:, unseen, :] = hp.UNSEEN
+#diff_CO[:, unseen, :] = hp.UNSEEN
+```
+
+```{python}
+rr=15 # Resolution in arcmin
+ifreq=1
+for istokes in [0,1,2]:
+    plt.figure(istokes,figsize=(12,12)) 
+    hp.gnomview(maps_convolved[ifreq, :,istokes], cmap='jet', rot=center, sub=(3,3,3*istokes+1), reso=rr,
+                title='Input '+d['kind'][istokes]+' SubFreq {}'.format(ifreq))
+    hp.gnomview(maps_recon[ifreq,:,istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+2), reso=rr,
+                title='Output '+d['kind'][istokes]+' SubFreq {}'.format(ifreq))
+    hp.gnomview(diff[ifreq,:,istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+3), reso=rr,
+                title='diff '+d['kind'][istokes]+' SubFreq {}'.format(ifreq))
+plt.show()
+```
+
+```{python}
+x0.shape
+```
+
+```{python}
+_, _, nus_rec, _, _, _ = qubic.compute_freq(freq, nf_sub_rec)
+_, _, nus, _, _, _ = qubic.compute_freq(freq, nf_sub)
+
+pix_indices = np.where(np.invert(unseen))[0][:5]
+```
+
+```{python}
+istk = 0
+for pix in pix_indices:
+    plt.figure()
+
+    plt.plot(nus, x0[:, pix, istk], 'go', label='Input sky')
+    plt.plot(nus_rec, maps_recon[:, pix, istk], 'ro', label='Recon')
+    plt.plot(nus_rec, maps_convolved[:, pix, istk], 'bo', label='Convolved')
+
+    plt.legend()
+    plt.title('Pixel {}, NSIDE=256'.format(pix))
+    plt.xlabel('Frequency [GHz]')
+    plt.ylabel('I (µK)')
+```
+
+```{python}
+istk = 0
+for pix in pix_indices:
+    plt.figure(figsize=(8, 6))
+
+    plt.plot(nus, x0_CO[:, pix, istk], 'go', label='Input sky')
+    plt.plot(nus_rec, maps_recon_CO[:, pix, istk], 'ro', label='Recon')
+    plt.plot(nus_rec, maps_convolved_CO[:, pix, istk], 'bo', label='Convolved')
+
+    plt.legend()
+    plt.title('Pixel {}, NSIDE=256'.format(pix))
+    plt.xlabel('Frequency [GHz]')
+    plt.ylabel('I (µK)')
+```
+
+```{python}
+plt.figure()
+plt.title('Sum over pixels')
+plt.plot(nus_rec, np.sum(maps_recon_CO[:, pix_indices, 0], axis=1), 'ro', label='Recon with CO')
+plt.plot(nus_rec, np.sum(maps_recon[:, pix_indices, 0], axis=1), 'go', label='Recon no CO')
+plt.axvline(CO21, color='k', label='CO-21')
+plt.xlabel('Frequency [GHz]')
+plt.ylabel('I (µK)')
+plt.grid()
+plt.legend()
+```
+
+```{python}
+
+```

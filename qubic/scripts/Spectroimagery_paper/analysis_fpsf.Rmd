@@ -1,0 +1,1098 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.7.1
+  kernelspec:
+    display_name: Python [conda env:py36env] *
+    language: python
+    name: conda-env-py36env-py
+---
+
+## Frequency point spread function (FPSF)
+
+```{python}
+from importlib import reload
+import pickle as pk
+import os
+import sys
+import time
+import glob
+
+import healpy as hp
+import numpy as np
+import matplotlib as mp
+import pandas as pd 
+
+import scipy.stats as sc
+from scipy.optimize import curve_fit
+from scipy.interpolate import interp1d
+from scipy import interpolate
+
+import matplotlib.pyplot as plt
+from matplotlib.pyplot import cm
+from matplotlib.patches import Ellipse
+from matplotlib.animation import FuncAnimation
+
+from lmfit import Model
+from astropy.io import fits
+from scipy.interpolate import griddata
+import lmfit 
+
+import qubic
+import qubic.fibtools as ft
+from qubicpack.utilities import Qubic_DataDir
+
+import AnalysisPSF as anpsf
+```
+
+```{python}
+def normalization(x,mapa):
+    ef = np.trapz((np.trapz(mapa,x,axis=0)),x)
+    return 1/ef
+
+def gaussian2d(z, amp,x0, y0, varx, vary):
+    x=z[0]
+    y=z[1]
+    gauss = amp*np.exp(-0.5*((x-x0)**2/varx**2+(y-y0)**2/vary**2))
+    return gauss.ravel()
+
+def get_maps(file):
+    simu = fits.open(file)
+
+    maps_recon = simu['MAPS_RECON'].data
+    maps_convo = simu['MAPS_CONVOLVED'].data
+    maps_cov = simu['COVERAGE'].data
+    
+    diff = maps_recon - maps_convo
+
+    return maps_recon, maps_convo, diff, maps_cov
+
+def get_maps_many_files(rep_simu, name, verbose = True, nfreq = None, nside = 256):
+    
+    all_fits = glob.glob(rep_simu + name)
+    nfiles = len(all_fits)
+    if verbose:
+        print('{} files have been found.'.format(nfiles))
+
+    all_maps_recon = []
+    all_maps_convo = []
+    all_maps_diff = []
+    all_maps_cov = []
+    
+    if nfiles == 0:
+        map_recon = np.full((nfreq, 12 * nside ** 2, 3), np.nan)
+        map_convo = np.full((nfreq, 12 * nside ** 2, 3), np.nan)
+        map_diff = np.full((nfreq, 12 * nside ** 2, 3), np.nan)
+        all_maps_recon.append(map_recon)
+        all_maps_convo.append(map_convo)
+        all_maps_diff.append(map_diff)
+        print('\t filling array with nan values.')
+        del map_recon, map_convo, map_diff
+    else:
+        for i, fits in enumerate(all_fits):
+            map_recon, map_convo, map_diff, map_cov = get_maps(fits)
+            if i == 0:
+                right_shape = map_recon.shape
+            else:
+                if map_recon.shape != right_shape:
+                    raise ValueError('You should take maps with identical shapes.')
+            all_maps_recon.append(map_recon)
+            all_maps_convo.append(map_convo)
+            all_maps_diff.append(map_diff)
+            all_maps_cov.append(map_cov)
+    return all_fits, np.asarray(all_maps_recon), \
+           np.asarray(all_maps_convo), np.asarray(all_maps_diff), np.array(all_maps_cov)
+
+def read_run(jobid, repo=None, fixpar=True):
+    """
+    Supose: dictionary inside directory
+    
+    =====================
+    Parameters:
+        jobid: number jobid from NERSC
+        repo: directory where runs are
+        fixpar: some parameters had have change from original dictionary values. These allows adapt it
+    Return:
+        
+    """
+    repo = os.environ['QUBIC_DATADIR']+'scripts/Spectroimagery_paper/output_paper/nersc/{}/'.format(jobid)
+    repodict = glob.glob(repo+'*.dict')[0]
+
+    d = qubic.qubicdict.qubicDict()
+    d.read_from_file(repodict)
+    center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+    if fixpar:
+        d['nf_sub'] = 48
+        d['nf_recon'] = [2,3,4]
+    else:
+        d['nf_sub'] = 45
+        d['nf_recon'] = [5,]
+        
+    _,_,nus_in,_,_,_ = qubic.compute_freq(150, d['nf_sub'], 0.25)
+    sigma2fwhm = np.sqrt(8*np.log(2))
+    # constant angular resolution using P = 19 and deltaX = 1.4cm
+    CteConf = d['synthbeam_peak150_fwhm'] * 150 #61.57622 #2.998e10/20/1.4/1e9/np.pi*180
+    size = 200
+    reso = 3
+    nside = d['nside']
+    
+    print("Working with nf_sub = {} and nfrec = {}".format(d['nf_sub'], d['nf_recon']))
+    mapsrec={}
+    mapsconv={}
+    mapscov = {}
+    nusfull = {}
+    nusfulledge = {}
+    for isub in d['nf_recon']:
+        _, maprec, mapconv, mapdif, mapcov = get_maps_many_files(repo, '*recon{}*.fits'.format(isub),
+                                                        nfreq = isub, nside = nside )
+        _, inusedge, inus, _, _, _ = qubic.compute_freq(150,isub,0.25)
+        mapsrec.update({'{}'.format(isub): maprec})
+        mapsconv.update({'{}'.format(isub): mapconv})
+        mapscov.update({'{}'.format(isub): mapcov})
+        nusfull.update({'{}'.format(isub):inus})    
+        nusfulledge.update({'{}'.format(isub):inusedge})    
+    
+    return mapsrec, mapsconv, mapscov, nusfull, nusfulledge, nus_in, center,d
+```
+
+```{python}
+dictshift = {'34245779': -23, '34245774': -21,'34145323':-19,'34145299':-17, 
+             '33409471':-15,'33409418':-13, '33130322':-11,'33130175':-9,
+             '32832344':-7, '33130311':-5, '32759969':-4,'32759907':-3, 
+             '32574156':-2, '32574178':-1,'32574170':0, '32759934': 1,
+             '32574174': 2, '32759973':3, '33130307':5, '32832346':7, 
+             '33130149':9,'33130316':11, '33409459':13,'33409482':15}
+
+jobids = list(dictshift.keys())
+
+allrecon = []
+allconv = []
+allcov = []
+jobid = np.zeros((len(jobids)))
+for ijob in range(len(jobids)):
+    print('Reading job {} ({}/{})'.format(jobids[ijob],ijob+1,len(jobids)))
+    if ijob == 0:
+        maprec, mapsconv, mapscov, nusfull, nusfulledge, nus_in, center, d = read_run(jobids[ijob])
+    else: 
+        maprec, mapsconv, _, _, _, _, _, _ = read_run(jobids[ijob])
+    
+    allrecon.append(maprec)
+    allconv.append(mapsconv)
+    allcov.append(mapscov)
+allrecon = np.array(allrecon)
+allconv = np.array(allconv)
+allcov = np.array(allcov)
+
+#Index where the point source was placed
+NU0 = 150
+
+innu0 = min(range(len(nus_in)), key = lambda i: abs(nus_in[i]-NU0))
+innu = []
+for ishift in dictshift.values():
+    innu.append(innu0+ishift)
+```
+
+```{python}
+#Read for Nrec = 5. Simulations are different so we have another files.
+#FI
+dictshift_5sb = {'42904592': -17, '43012239':-15, '43015130': -13, #'43015132':-11,
+                '43015140':-9, '43015155':-3, '43015161':-1, #'43117112':0,
+                '43117144':1, '43117145':3, '43117146':5}
+#TD with low tol (1e-3)
+#dictshift_5sb = {'43427945':-11,
+#                 '43363513':-7, '43378395':-3, 
+#                 '43427908':0,
+#                 '43378408':3, '43363588':7, '43427951':11}
+
+jobids_5sb = list(dictshift_5sb.keys())
+
+allrecon_5sb = []
+allconv_5sb = []
+allcov_5sb = []
+
+jobid = np.zeros((len(jobids_5sb)))
+for ijob in range(len(jobids_5sb)):
+    print('Reading job {} ({}/{})'.format(jobids_5sb[ijob], ijob + 1, len(jobids_5sb)))
+    if ijob == 0:
+        maprec, mapsconv, mapscov, nusfull_5sb, nusfulledge_5sb, nus_in_5sb, center, d_5sb = read_run(jobids_5sb[ijob],
+                                                                                            fixpar = False)
+    else: 
+        maprec, mapsconv, _, _, _, _, _, _ = read_run(jobids_5sb[ijob], fixpar = False)
+        
+    allrecon_5sb.append(maprec)
+    allconv_5sb.append(mapsconv)
+    allcov_5sb.append(mapscov)
+allrecon_5sb = np.array(allrecon_5sb)
+allconv_5sb = np.array(allconv_5sb)
+allcov_5sb = np.array(allcov_5sb)
+
+NU0 = 150
+innu0_5sb = min(range(len(nus_in_5sb)), key = lambda i: abs(nus_in_5sb[i] - NU0))
+innu_5sb = []
+for ishift in dictshift_5sb.values():
+    innu_5sb.append(innu0_5sb + ishift)
+
+# Put all edges in same array:
+nusfulledge.update({'5': nusfulledge_5sb['5']})
+```
+
+```{python}
+#Read for Nrec = 5. Simulations are different so we have another files.
+#TD
+dictshift_5sbTD = {'43306125':-11, '43306122':-7,
+                   '43306116':-3, '43287565':1, 
+                   '43287312':5, '43306128':9}
+
+jobids_5sbTD = list(dictshift_5sbTD.keys())
+
+allrecon_5sbTD = []
+allconv_5sbTD = []
+allcov_5sbTD = []
+jobid = np.zeros((len(jobids_5sbTD)))
+for ijob in range(len(jobids_5sbTD)):
+    print('Reading job {} ({}/{})'.format(jobids_5sbTD[ijob], ijob + 1, len(jobids_5sbTD)))
+    if ijob == 0:
+        maprec, mapsconv, mapscov, nusfull_5sbTD, nusfulledge_5sbTD, nus_in_5sbTD, center, d_5sbTD = read_run(jobids_5sbTD[ijob],
+                                                                                            fixpar = False)
+    else: 
+        maprec, mapsconv, _, _, _, _, _, _ = read_run(jobids_5sbTD[ijob], fixpar = False)
+        
+    allrecon_5sbTD.append(maprec)
+    allconv_5sbTD.append(mapsconv)
+    allcov_5sbTD.append(mapscov)
+allrecon_5sbTD = np.array(allrecon_5sbTD)
+allconv_5sbTD = np.array(allconv_5sbTD)
+allcov_5sbTD = np.array(allcov_5sbTD)
+
+NU0 = 150
+innu0_5sbTD = min(range(len(nus_in_5sbTD)), key = lambda i: abs(nus_in_5sbTD[i] - NU0))
+innu_5sbTD = []
+for ishift in dictshift_5sbTD.values():
+    innu_5sbTD.append(innu0_5sbTD + ishift)
+
+# Put all edges in same array:
+#nusfulledge.update({'5': nusfulledge_5sb['5']})
+```
+
+Save data for one pixel. I will create 3 structures: data_2bands, data_3bands, data_4bands. Each one has the amplitude for each realization, each frequency, each Stokes parameter (by the time only 'I' component it matters). You'll find 'nan' values for some simulations, this is due to the TIMEOUT in the end-to-end simulation.
+
+```{python}
+pixel = hp.pixelfunc.ang2pix(d['nside'], np.deg2rad(90 - center[1]), np.deg2rad(center[0]))
+
+neig = False
+if neig:
+    pixel = hp.get_all_neighbours(d['nside'], pixel)
+
+
+data_2bands = {'nu_in': nus_in[innu],
+              'nu_rec': nusfull['2'],
+              'nu_edge': nusfulledge['2']}
+data_3bands = {'nu_in': nus_in[innu],
+              'nu_rec': nusfull['3'],
+               'nu_edge': nusfulledge['3'] }
+data_4bands = {'nu_in': nus_in[innu],
+                'nu_rec': nusfull['4'],
+               'nu_edge': nusfulledge['4'] }
+data_5bands = {'nu_in': nus_in_5sb[innu_5sb],
+                'nu_rec': nusfull_5sb['5'],
+               'nu_edge': nusfulledge_5sb['5'] }
+data_5bandsTD = {'nu_in': nus_in_5sbTD[innu_5sbTD],
+                'nu_rec': nusfull_5sbTD['5'],
+               'nu_edge': nusfulledge_5sbTD['5'] }
+
+for irec in d['nf_recon']:
+    keys = ['band{}'.format(i) for i in range(irec)]
+    
+    for bnd in range(irec):
+        auxarr = np.empty((len(jobids)), dtype = object)
+        
+        for isim in range(len(jobids)):
+            auxarr[isim] = allrecon[isim]['{}'.format(irec)][0, bnd, pixel, 0]
+        locals()["data_{}bands".format(irec)].update({keys[bnd] : auxarr}) 
+
+keys_5sb = ['band{}'.format(i) for i in range(5)]
+for bnd in range(5):
+    auxarr_5sb = np.empty((len(jobids_5sb)), dtype = object)
+    auxarr_5sbTD = np.empty((len(jobids_5sbTD)), dtype = object)
+
+    for isim in range(len(jobids_5sb)):
+        auxarr_5sb[isim] = allrecon_5sb[isim]['{}'.format(5)][0, bnd, pixel, 0]
+    locals()["data_{}bands".format(5)].update({keys_5sb[bnd] : auxarr_5sb}) 
+    
+    for isimTD in range(len(jobids_5sbTD)):
+        auxarr_5sbTD[isimTD] = allrecon_5sbTD[isimTD]['{}'.format(5)][0, bnd, pixel, 0]
+    locals()["data_5bandsTD"].update({keys_5sb[bnd] : auxarr_5sbTD}) 
+
+#Normalization
+max2bands = np.max([np.max(data_2bands['band{}'.format(i)]) for i in range(2)])
+max3bands = np.max([np.max(data_3bands['band{}'.format(i)]) for i in range(3)])
+max4bands = np.max([np.max(data_4bands['band{}'.format(i)]) for i in range(4)])
+max5bands = np.max([np.max(data_5bands['band{}'.format(i)]) for i in range(5)])
+max5bandsTD = np.max([np.max(data_5bandsTD['band{}'.format(i)]) for i in range(5)])
+#max2bands = np.nanmax([allconv[j]['2'][0,:,:,0].max() for j in range(24)])
+#max3bands = np.nanmax([allconv[j]['3'][0,:,:,0].max() for j in range(24)])
+#max4bands = np.nanmax([allconv[j]['4'][0,:,:,0].max() for j in range(24)])
+#max5bands = np.nanmax([allconv_5sb[j]['5'][0,:,:,0].max() for j in range(9)])
+#max5bandsTD = np.nanmax([allconv_5sbTD[j]['5'][0,:,:,0].max() for j in range(6)])
+
+for i in range(2):
+    data_2bands['band{}'.format(i)] /= max2bands
+for i in range(3):
+    data_3bands['band{}'.format(i)] /= max3bands
+for i in range(4):
+    data_4bands['band{}'.format(i)] /= max4bands
+for i in range(5):
+    data_5bands['band{}'.format(i)] /= max5bands
+    data_5bandsTD['band{}'.format(i)] /= max5bandsTD
+
+```
+
+```{python}
+if neig:
+    aux2, aux3, aux4, aux5= np.zeros((24,2)), np.zeros((24,3)), np.zeros((24,4)), np.zeros((9,5))
+    aux5td = np.zeros((6,5))
+    for i in range(24):
+
+        aux2[i] = [np.median(data_2bands['band0'][i]), np.median(data_2bands['band1'][i])]
+        aux3[i] = [np.median(data_3bands['band0'][i]), np.median(data_3bands['band1'][i]), 
+                    np.median(data_3bands['band2'][i])]
+        aux4[i] = [np.median(data_4bands['band0'][i]), np.median(data_4bands['band1'][i]), 
+                    np.median(data_4bands['band2'][i]), np.median(data_4bands['band3'][i])]
+        if i < 9:
+            aux5[i] = [np.median(data_5bands['band0'][i]), np.median(data_5bands['band1'][i]), 
+                      np.median(data_5bands['band2'][i]), np.median(data_5bands['band3'][i]),
+                      np.median(data_5bands['band4'][i])]
+        if i < 6:
+            aux5td[i] = [np.median(data_5bandsTD['band0'][i]), np.median(data_5bandsTD['band1'][i]), 
+                      np.median(data_5bandsTD['band2'][i]), np.median(data_5bandsTD['band3'][i]),
+                      np.median(data_5bandsTD['band4'][i])]
+
+    data_2bands.update({'band0': aux2[:,0]})
+    data_2bands.update({'band1': aux2[:,1]})
+
+    data_3bands.update({'band0': aux3[:,0]})
+    data_3bands.update({'band1': aux3[:,1]})
+    data_3bands.update({'band2': aux3[:,2]})
+
+    data_4bands.update({'band0': aux4[:,0]})
+    data_4bands.update({'band1': aux4[:,1]})
+    data_4bands.update({'band2': aux4[:,2]})
+    data_4bands.update({'band3': aux4[:,3]})
+
+    data_5bands.update({'band0': aux5[:,0]})
+    data_5bands.update({'band1': aux5[:,1]})
+    data_5bands.update({'band2': aux5[:,2]})
+    data_5bands.update({'band3': aux5[:,3]})
+    data_5bands.update({'band4': aux5[:,4]})
+
+    data_5bandsTD.update({'band0': aux5[:,0]})
+    data_5bandsTD.update({'band1': aux5[:,1]})
+    data_5bandsTD.update({'band2': aux5[:,2]})
+    data_5bandsTD.update({'band3': aux5[:,3]})
+    data_5bandsTD.update({'band4': aux5[:,4]})
+
+```
+
+*Sub-band profile*. Plot intensity for all simulations for the pixel in a given sub-band in function of thefrequency of the point source $\nu_{in}$. The maximum should correspond when the distance between the center of the sub-band $\nu_{jc}$ and the position (in frequency) of the point source is minimum.
+
+We plot in grey the sub-band considered.
+
+```{python}
+for NUS in ['2', '3', '4', '5']:
+
+    NormFact = 1#48/int(NUS)
+    
+    data_array = locals()['data_{}bands'.format(int(NUS))]
+    fig,ax = plt.subplots(nrows = 1, ncols = int(NUS), figsize = (18,4), sharey = True)
+    ax = ax.ravel()
+    
+    for j in range(int(NUS)):
+    
+        color = iter(cm.jet(np.linspace(0,1,3)))
+        
+        ax[j].set_title(r'band - {:.0f}-{:.0f}GHz'.format(nusfulledge[NUS][j],
+                                                          nusfulledge[NUS][j+1]))
+        ax[j].set_xlabel(r'$\nu$[GHz]')
+
+        ax[j].set_ylabel(r'$I_\nu(px)$')
+        
+        if NUS != '5':
+            ax[j].set_xlim(data_array['nu_in'][0] * 0.98, data_array['nu_in'][-1] * 1.02)
+        else: 
+            ax[j].set_xlim(data_4bands['nu_in'][0] * 0.98, data_4bands['nu_in'][-1] * 1.02)
+            
+        xvals = nus_in[innu] - data_array['nu_rec'][j]
+        
+        ax[j].plot(data_array['nu_in'], data_array['band{}'.format(j)], 'o', c = next(color), ms = 12)
+        
+        xlim = ax[j].get_xlim()
+        for iedge in data_array['nu_edge']:
+            if (iedge > np.array(xlim)[0]) and (iedge < np.array(xlim)[1]):
+                ax[j].axvline(iedge, color='k', ls='--')
+        ax[j].grid()
+        ax[j].axvspan(data_array['nu_edge'][j], data_array['nu_edge'][j + 1], 
+                      color = 'k', alpha = 0.20)
+        ax[j].axvline(data_array['nu_rec'][j], ls = '-.', c = 'k')
+
+        
+```
+
+Superimpose each sub-band by substracting $\nu_{jc}$ (no normalized by the width, it's not necessary) 
+
+```{python}
+fig, ax = plt.subplots(nrows = 1, ncols = 4, 
+                       sharey = True, figsize = (12,6))
+
+iax = 0
+for sb in [2,3,4,5]:
+    data_array = locals()['data_{}bands'.format(sb)]
+    
+    xx, yy = [], []
+    for j in range(sb):
+        xx.append(data_array['nu_in'] - data_array['nu_rec'][j])
+        yy.append(data_array['band{}'.format(j)])
+    
+    xsort_idx = np.argsort(np.array(xx).ravel())
+    xx = np.array(xx).ravel()[xsort_idx]
+    yy = np.array(yy).ravel()[xsort_idx]
+    
+    data = ax[iax].plot(np.array(xx).T, np.array(yy).T, 'o', c = 'b')
+    
+    #Save xData to make a fit
+    data_array.update({'Data_fit': data[0].get_data()})
+    iax += 1
+plt.tight_layout()
+
+```
+
+### Same plot comparing TD and FI simulations for Nrec = 5
+
+```{python}
+fig, ax = plt.subplots(nrows = 1, ncols = 1, 
+                       sharey = True, figsize = (8,6))
+sb = 5
+xx, yy, xxTD, yyTD = [], [], [], []
+for j in range(sb):
+    xx.append(data_5bands['nu_in'] - data_5bands['nu_rec'][j])
+    yy.append(data_5bands['band{}'.format(j)])
+
+xsort_idx = np.argsort(np.array(xx).ravel())
+
+for j in range(sb):
+    xxTD.append(data_5bandsTD['nu_in'] - data_5bandsTD['nu_rec'][j])
+    yyTD.append(data_5bandsTD['band{}'.format(j)])
+xsort_idxTD = np.argsort(np.array(xxTD).ravel())
+xxTD = np.array(xxTD).ravel()[xsort_idxTD]
+yyTD = np.array(yyTD).ravel()[xsort_idxTD]
+dataTD = ax.plot(np.array(xxTD).T, np.array(yyTD).T, 'o-', c = 'r', label = 'TD')
+data_5bandsTD.update({'Data_fit': dataTD[0].get_data()})
+
+xx = np.array(xx).ravel()[xsort_idx]
+yy = np.array(yy).ravel()[xsort_idx]
+data = ax.plot(np.array(xx).T, np.array(yy).T, 'o-', c = 'b', label = 'FI')
+
+xgauss = np.linspace(-25, 25, 100) 
+ax.plot(xgauss, np.exp(-0.5 * (xgauss ** 2 )/((150 / (8 -1)) / 2.355) ** 2  ), '--',
+        label  = r"TD exp. $\sigma = {:.2f}$".format((150 / (8 -1)) / 2.355) )
+ax.plot(xgauss, np.exp(-0.5 * (xgauss ** 2 )/((150 / (22 -1)) / 2.355) ** 2  ), '--',
+        label  = r"FI exp. $\sigma = {:.2f}$".format((150 / (22 -1)) / 2.355) )
+
+ax.set_xlim(-22,22)
+ax.set_title("FPSF - 5 sub-bands", fontsize = 14)
+ax.set_xlabel(r"$\nu - \nu_{in}$", fontsize=14)    
+ax.set_ylabel(r"$FPSF$", fontsize=14)
+
+ax.legend()
+#Save xData to make a fit
+#data_array.update({'Data_fit': data[0].get_data()})
+plt.tight_layout()
+
+```
+
+## Fit spline 
+
+JCh lines to fit
+
+```{python}
+class MySplineFitting:
+    def __init__(self, xin, yin, covarin, nbspl, logspace = False):
+        # input parameters
+        self.x = xin
+        self.y = yin
+        self.nbspl = nbspl
+        covar = covarin
+        
+        if np.size(np.shape(covarin)) == 1:
+            err = covarin
+            covar = np.zeros((np.size(err), np.size(err)))
+            covar[np.arange(np.size(err)), np.arange(np.size(err))] = err**2
+        
+        self.covar = covar
+        self.invcovar = np.linalg.inv(covar)
+        
+        # Prepare splines
+        xspl = np.linspace(np.min(self.x), np.max(self.x), nbspl)
+        if logspace == True: xspl = np.logspace(np.log10(np.min(self.x)), np.log10(np.max(self.x)), nbspl)
+        self.xspl = xspl
+        F = np.zeros((np.size(xin), nbspl))
+        self.F = F
+        for i in np.arange(nbspl):
+            self.F[:,i] = self.get_spline_tofit(xspl, i, xin)
+        
+        # solution of the chi square
+        ft_cinv_y = np.dot(np.transpose(F), np.dot(self.invcovar, self.y))
+        covout = np.linalg.inv(np.dot(np.transpose(F),np.dot(self.invcovar, F)))
+        alpha = np.dot(covout, ft_cinv_y)
+        fitted = np.dot(F, alpha)
+        
+        # output
+        self.residuals = self.y - fitted
+        self.chi2 = np.dot(np.transpose(self.residuals), np.dot(self.invcovar, self.residuals))
+        self.ndf = np.size(xin) - np.size(alpha)
+        self.alpha = alpha
+        self.covout = covout
+        self.dalpha = np.sqrt(np.diagonal(covout))
+    
+    def __call__(self, x):
+        theF = np.zeros((np.size(x), self.nbspl))
+        for i in np.arange(self.nbspl): theF[:,i] = self.get_spline_tofit(self.xspl, i, x)
+        return(np.dot(theF, self.alpha))
+    
+    def with_alpha(self, x, alpha):
+        theF = np.zeros((np.size(x), self.nbspl))
+        for i in np.arange(self.nbspl): theF[:,i] = self.get_spline_tofit(self.xspl, i, x)
+        return(np.dot(theF, alpha))
+            
+    def get_spline_tofit(self, xspline, index, xx):
+        yspline = np.zeros(np.size(xspline))
+        yspline[index] = 1.
+        tck = interpolate.splrep(xspline, yspline)
+        yy = interpolate.splev(xx, tck, der = 0)
+        return(yy)
+```
+
+See one $N_{rec}$
+
+```{python}
+# Spline fitting
+plt.rc('font', size = 16)
+
+nbspl = 13
+fig, ax = plt.subplots(nrows = 1, ncols = 1, figsize = (6, 4), sharey = True)
+inu = 5
+data_dict = locals()["data_{}bands".format(inu)]
+xfit = data_dict['Data_fit'][0]
+yfit = data_dict['Data_fit'][1]
+    
+#for nrec = 4 we have NaN's values, so we remove them
+if inu == 4: 
+    wnan = np.isnan(data_dict["Data_fit"][1].astype(float))
+    xfit = np.delete(xfit, np.where(wnan == True)[0] )
+    yfit = np.delete(yfit, np.where(wnan == True)[0] )
+        
+myspl = MySplineFitting(xfit, yfit, np.ones(len(xfit)), nbspl)
+    
+data_dict.update({'SplFunc': myspl})
+    
+xvals = np.linspace(np.min(xfit), np.max(xfit), 1000)
+#print(xvals)
+#xvals = np.linspace(-25, 25, 1000)
+ax.grid()
+
+ax.plot(xfit, yfit, 'o', color='b', label='Datos')
+ax.plot(xvals, myspl(xvals), 'r', label='Ajuste')
+ax.set_xlim(-27,27)
+ax.set_ylim(-0.2,1.1)
+ax.set_xlabel(r"$\nu - \nu_{in}$")
+ax.set_ylabel(r"$I_{out}$")
+
+#Plot "expected resolution" (I -Martin- don't like that concept)
+xgauss = np.linspace(-25, 25, 100) 
+#ax.plot(xgauss, np.exp(-0.5 * (xgauss ** 2 )/((130 / (22 -1)) / 2.355) ** 2  ), 
+#        label  = "Theor", color = 'g')
+#ax.plot(xgauss, np.exp(-0.5 * (xgauss ** 2 )/((170 / (22 -1)) / 2.355) ** 2  ),
+#       color = 'g')
+ax.fill_between(xgauss, y1 = np.exp(-0.5 * (xgauss ** 2 )/((170 / (22 -1)) / 2.355) ** 2  ), 
+        y2 = np.exp(-0.5 * (xgauss ** 2 )/((130 / (22 - 1)) / 2.355) ** 2  ),
+               color = 'm', label = "Aprox. gaussiana")
+ax.axvspan(-np.diff(data_dict['nu_edge'])[0]/2,
+                np.diff(data_dict['nu_edge'])[0]/2, color = 'k', alpha = 0.2)
+ax.text(-16, 0.9, r"$N_r = {}$".format(inu))
+
+if inu == 3:
+    ax.text(-20,0.75, r"$\sigma_F = {:.2f}$".format((150/(22-1))/2.355))
+    ax.text(-20,0.6, r"$\sigma_T = {:.2f}$".format((150/(8-1))/2.355))
+    ax.legend(loc = 'upper right')
+
+fig.tight_layout()
+ax.legend(loc = 1, fontsize = 11)
+```
+
+See what happen in all $N_{rec}$'s
+
+```{python}
+# Spline fitting
+nbspl = 13
+fig, ax = plt.subplots(nrows = 1, ncols = 4, figsize = (15, 4), sharey = True)
+jax = 0
+for j, inu in enumerate([2, 3, 4, 5]):
+    ax[jax].grid()
+    
+    data_dict = locals()["data_{}bands".format(inu)]
+    xfit = data_dict['Data_fit'][0]
+    yfit = data_dict['Data_fit'][1]
+    
+    #for nrec = 4 we have NaN's values, so we remove them
+    if inu == 4: 
+        wnan = np.isnan(data_dict["Data_fit"][1].astype(float))
+        xfit = np.delete(xfit, np.where(wnan == True)[0] )
+        yfit = np.delete(yfit, np.where(wnan == True)[0] )
+        
+    myspl = MySplineFitting(xfit, yfit, np.ones(len(xfit)), nbspl)
+    
+    data_dict.update({'SplFunc': myspl})
+    
+    xvals = np.linspace(np.min(xfit), np.max(xfit), 1000)
+    
+    ax[jax].plot(xfit, yfit, 'o', color='b', label='Datos')
+    ax[jax].plot(xvals, myspl(xvals)/np.max(myspl(xvals)), 'r', label='Ajuste')
+    ax[jax].set_xlim(-25,25)
+    ax[jax].set_ylim(-0.2,1.1)
+    ax[jax].set_xlabel(r"$\nu - \nu_{in}$")
+    ax[0].set_ylabel(r"$I_{out}/ I_0$")
+    
+    #Plot "expected resolution" (I -Martin- don't like that concept)
+    xgauss = np.linspace(-25, 25, 100) 
+    #ax[jax].plot(xgauss, np.exp(-0.5 * (xgauss ** 2 )/((150 / (22 -1)) / 2.355) ** 2  ), label  = "Theor" )
+    ax[jax].fill_between(xgauss, y1 = np.exp(-0.5 * (xgauss ** 2 )/((170 / (22 -1)) / 2.355) ** 2  ), 
+        y2 = np.exp(-0.5 * (xgauss ** 2 )/((130 / (22 - 1)) / 2.355) ** 2  ),
+               color = 'm', label = "Aprox.")
+    #ax[jax].plot(xgauss, np.exp(-0.5 * (xgauss ** 2 )/((150 / (8 -1)) / 2.355) ** 2  ),'--', label  = "expected" )
+    ax[jax].axvspan(-np.diff(data_dict['nu_edge'])[0]/2,
+                    np.diff(data_dict['nu_edge'])[0]/2, color = 'k', alpha = 0.2)
+    ax[jax].text(-20,0.9, r"$N_r = {}$".format(inu))
+    if jax == 3:
+        #ax[3].text(-20,0.75, r"$\sigma_F = {:.2f}$".format((150/(22-1))/2.355))
+        #ax[3].text(-20,0.6, r"$\sigma_T = {:.2f}$".format((150/(8-1))/2.355))
+        ax[3].legend(loc = 'upper right', fontsize = 11)
+    jax += 1
+fig.tight_layout()
+#plt.savefig("FPSF_allfreq.pdf", format = "pdf")
+
+```
+
+## Another way to plot the same data
+
+See how the FPSF change when it changes the frequency of the point source
+
+```{python}
+for ibnd in [2,3,4,5]:
+    fig = plt.figure(figsize=(4, 4))
+    ax = fig.gca()
+    data_array = locals()['data_{}bands'.format(ibnd)]
+    
+    #Generate xvals to plot spline
+    xfit = data_dict['Data_fit'][0]
+    xvals = np.linspace(np.min(xfit), np.max(xfit), 1000)
+    
+    nsimu = len(data_array['nu_in'])
+    points, = ax.plot(data_array['nu_rec'], 
+                      np.array([data_array['band{}'.format(i)] for i in range(ibnd)]).T[0], 'ko')
+    line = ax.axvline(data_array['nu_in'][0], color = 'k', ls = '--')
+    
+    line_spl, = ax.plot(xvals+data_array['nu_in'][0],
+                        data_array['SplFunc'](xvals), color = 'k', ls = '-')
+    #print(line_spl)
+    text = ax.text(140, 1, r'$\nu_i=${:3.2f} GHz'.format(data_array['nu_in'][0]), fontsize=14)
+
+    def init():
+        ax.axhline(0, color = 'k', ls = '-', alpha = 0.2)
+        c = ['b', 'g', 'y', 'orange', 'r']
+        for ib in range(ibnd):
+            ax.axvspan(xmin = data_array['nu_edge'][ib], xmax = data_array['nu_edge'][ib + 1], 
+                       alpha = 0.2, color = c[ib])
+        ax.set_xlim(130,170)
+        ax.set_xlabel(r'$\nu$ [GHz]')
+        ax.set_ylabel(r'$I_{out}$')
+        ax.set_ylim(-0.2,1.1)
+        return points
+
+    def animate(i):
+        points.set_data(data_array['nu_rec'], 
+                        np.array([data_array['band{}'.format(i)] for i in range(ibnd)]).T[i])
+        line.set_xdata(data_array['nu_in'][i])
+        line_spl.set_xdata(xvals + data_array['nu_in'][i])
+        text.set_text(r'$\nu_i=${:3.2f} GHz'.format(data_array['nu_in'][i]))
+        return(points)
+
+
+    steps = np.arange(nsimu)
+    anim = FuncAnimation(fig, animate, steps, init_func=init, interval=1000, blit=False, repeat=False)
+
+    # Save a .gif
+    #anim.save('./{}FPSF.gif'.format(ibnd), writer='imagemagick')
+```
+
+### Now I try to compute the photometric aperture as it's done with real data. 
+
+To compare betwen data and simulations I will normalize both data sets. 
+
+```{python}
+nsimu = 6 #0-10
+nrec = '5'
+if nrec == '5':
+    cov = allcov_5sb[nsimu][nrec][0]
+    map2use = allrecon_5sb[nsimu][nrec][0]
+else:
+    cov = allcov[nsimu][nrec][0]
+    map2use = allrecon[nsimu][nrec][0]
+data_array = locals()['data_{}bands'.format(int(nrec))]
+print("Point source placed at {:.2f} GHz".format(data_array['nu_in'][nsimu]))
+
+okpix = cov > 0.3
+all_maps_recon_custom_new_cut = np.array(map2use).copy()
+all_maps_recon_custom_new_cut[:,~okpix,:] = 0
+figure(figsize = (12,6))
+maps = []
+for k in range(int(nrec)):
+    okpix = all_maps_recon_custom_new_cut[k,:,0] != 0
+    mm, ss = ft.meancut(all_maps_recon_custom_new_cut[k,okpix,0],3)
+    # mini = mm-ss
+    # maxi = mm+3*ss
+    mini = -0.01
+    maxi = 1e3
+    mymap = hp.gnomview((all_maps_recon_custom_new_cut[k,:,0]), reso=4, rot=center, cmap = 'viridis', 
+                title='nu=[{0:5.1f},{1:5.1f}]'.format(data_array['nu_edge'][k], data_array['nu_edge'][k+1]),
+                        min=mini, max=maxi, sub=(1,5,k+1), 
+               return_projected_map=True)
+    hp.graticule(verbose = False)
+    maps.append(mymap)
+tight_layout()
+```
+
+```{python}
+def plotcircle(c, r, color=None,lw=None, ls=None):
+    nn = 100
+    ang = np.linspace(0,2*np.pi, nn)
+    plot(c[0]+r*np.cos(ang), c[1]+r*np.sin(ang), color=color)
+
+def aperture_photometry(img, centers, rads, doplot=False, stampsize=25, magnitude_zero=0, cmap='gray_r', subs=True):
+    npix = np.shape(img)[0]
+    xx,yy = np.meshgrid(np.arange(npix), np.arange(npix))
+    nobjects = np.shape(centers)[0]
+    flux = np.zeros(nobjects)
+    err_flux = np.zeros(nobjects)
+    nsq = int(np.ceil(np.sqrt(nobjects)))
+    for i in range(nobjects):
+        c = centers[i,:]
+        inner_pix = np.sqrt((xx-c[0])**2+(yy-c[1])**2) < rads[0]
+        outer_pix = (np.sqrt((xx-c[0])**2+(yy-c[1])**2) > rads[0]) & (np.sqrt((xx-c[0])**2+(yy-c[1])**2) < rads[1])
+        Nin = inner_pix.sum()
+        Nout = outer_pix.sum()
+        #bg = np.mean(img[outer_pix])
+        bg = np.median(img[outer_pix])
+        sigbg = np.std(img[outer_pix])/np.sqrt(Nout)
+        flux[i] = np.sum(img[inner_pix])-bg*inner_pix.sum()
+        err_flux[i] = np.std(img[outer_pix]) * np.sqrt(Nin * (1+Nin*1./Nout))
+    
+        if doplot:
+            if subs:
+                plt.subplot(nsq,nsq,i+1)
+            plt.imshow(img, cmap=cmap, vmin=-5*np.std(img), vmax=5*np.std(img), origin='lower')
+            #plt.colorbar()
+            plt.xlim(c[0]-stampsize, c[0]+stampsize)
+            plt.ylim(c[1]-stampsize, c[1]+stampsize)
+            plotcircle(c, rads[0], color='r', lw=2)
+            plotcircle(c, rads[1], color='r', lw=2)
+    mag = -2.5*np.log10(flux) + magnitude_zero
+    err_mag = 2.5/np.log(10.) * err_flux/flux
+    return flux, err_flux, mag, err_mag
+
+def aperture_photometry_2(img, centers, rads, plot=False, stampsize=25, 
+                        magnitude_zero=0, cmap='gray_r', subs=True):
+    """
+    aperture photometry
+    http://spiff.rit.edu/classes/phys373/lectures/photom_2003/photom_2010.html
+    """
+    npix = np.shape(img)[0]
+    xx,yy = np.meshgrid(np.arange(npix), np.arange(npix))
+    nobjects = np.shape(centers)[0]
+    flux = np.zeros(nobjects)
+    err_flux = np.zeros(nobjects)
+    nsq = int(np.ceil(np.sqrt(nobjects)))
+    for i in range(nobjects):
+        c = centers[i,:]
+        source_pix = np.sqrt((xx-c[0])**2+(yy-c[1])**2) < rads[0]
+        #inner_pix = np.sqrt((xx-c[0])**2+(yy-c[1])**2) < rads[1]
+        outer_pix = (np.sqrt((xx-c[0])**2+(yy-c[1])**2) > rads[1]) & (np.sqrt((xx-c[0])**2+(yy-c[1])**2) < rads[2])
+        Nsource = source_pix.sum()
+        #Nin = inner_pix.sum()
+        Nout = outer_pix.sum()
+        #bg = np.mean(img[outer_pix])
+        bg = np.median(img[outer_pix])
+        sigbg = np.std(img[outer_pix])/np.sqrt(Nout)
+        #flux[i] = np.sum(img[inner_pix])-bg*inner_pix.sum()
+        flux[i] = np.sum(img[source_pix]) - bg * outer_pix.sum()
+        #err_flux[i] = np.std(img[outer_pix]) * np.sqrt(Nin * (1+Nin*1./Nout))
+        err_flux[i] = np.std(img[outer_pix]) * np.sqrt(Nsource * (1+Nsource*1./Nout))
+    
+        if plot:
+            if subs:
+                subplot(nsq,nsq,i+1)
+            imshow(img, cmap=cmap, vmin=-5*np.std(img), vmax=5*np.std(img), origin='lower')
+            #colorbar()
+            #xlim(c[0]-stampsize, c[0]+stampsize)
+            #ylim(c[1]-stampsize, c[1]+stampsize)
+            plotcircle(c, rads[0], color='r', lw=2)
+            plotcircle(c, rads[1], color='r', ls = '-.-', lw=2)
+            plotcircle(c, rads[2], color='r', ls = '-.-', lw=2)
+    mag = -2.5*np.log10(flux) + magnitude_zero
+    err_mag = 2.5/np.log(10.) * err_flux/flux
+    return flux, err_flux, mag, err_mag
+
+def mygaussian(x, pars, extra_args=None):
+    return pars[0]+pars[1]*np.exp(-0.5*(x-pars[2])**2/pars[3]**2)
+```
+
+```{python}
+mycenter = np.reshape(np.array([98.,100.]), (1,2))
+radius = np.array([12, 30, 40]) #* reso
+locals()['flux_{}sb'.format(int(nrec))] = np.zeros(len(maps))
+locals()['err_flux_{}sb'.format(int(nrec))] = np.zeros(len(maps))
+fracmc = 0.7
+sh = np.shape(maps[0])
+nbmc = 1000
+rndcenters = (np.random.rand(nbmc,2)-0.5)*(sh[0]*fracmc,sh[1]*fracmc)+mycenter
+mcflux = np.zeros((len(maps), nbmc))
+
+fig = plt.figure(figsize = (12, 6))
+for i in range(len(maps)):
+    plt.subplot(1,5,i+1)
+    flux_bands = locals()['flux_{}sb'.format(int(nrec))]
+    err_flux_bands = locals()['err_flux_{}sb'.format(int(nrec))]
+    
+    flux_bands[i], err_flux_bands[i], mag, err_mag = aperture_photometry(maps[i], mycenter, 
+                                                                         radius, subs=False,
+                                                             doplot=True, stampsize=100, 
+                                                             magnitude_zero=0, cmap=None)
+    plt.title('nu=[{0:5.1f},{1:5.1f}]'.format(data_array['nu_edge'][i], data_array['nu_edge'][i+1]))
+    mcflux[i,:], _, mag, err_mag = aperture_photometry(maps[i], rndcenters, radius)
+
+covar = np.cov(mcflux)
+
+err_flux = np.sqrt(np.diag(covar))
+
+fig.tight_layout()
+
+nus = 0.5*(data_array['nu_edge'][1:] + data_array['nu_edge'][:-1])
+dnu = 0.5*(data_array['nu_edge'][1:] - data_array['nu_edge'][:-1])
+
+guess = np.array([0., np.max(flux_bands), 150., 5. ])
+
+fitg = ft.do_minuit(data_array['nu_rec'][flux_bands>0], flux_bands[flux_bands>0], 
+                    err_flux_bands[flux_bands>0], 
+                    guess, functname = mygaussian, fixpars = [1,0,0,0])
+
+xxx = np.linspace(130, 170, 100)
+#print(fitg[1])
+#print(fitg[2])
+fig = plt.figure()
+plt.errorbar(data_array['nu_rec'], flux_bands, yerr = err_flux, xerr = dnu, fmt = 'ro')
+plt.plot(xxx, mygaussian(xxx, fitg[1]), 
+     label=r'$\nu_0$={0:5.1f} +/- {1:5.1f} ; $\sigma$={2:5.1f} +/- {3:5.1f}'.format(fitg[1][2], 
+                                                                                    fitg[2][2], 
+                                                                                    fitg[1][3], 
+                                                                                    fitg[2][3]))
+plt.axhline(y = 0, color = 'k', ls = '--')
+plt.xlabel('Frequency')
+plt.ylabel('Source Flux')
+#plt.ylim(-1.5, 3)
+plt.legend()
+```
+
+### Fit TD simulations (5sub-bands)
+and compare it with FI (5subbands)
+
+```{python}
+data_dict = data_5bandsTD
+xfit = data_dict['Data_fit'][0]
+yfit = data_dict['Data_fit'][1]
+
+myspl = MySplineFitting(xfit, yfit, np.ones(len(xfit)), nbspl)
+
+data_dict.update({'SplFunc': myspl})
+```
+
+### 5 bands
+With real data, we also reconstructed 5 bands. Let's try to superimpose.
+It is a bit more difficult. I am not sure it makes sens to do that, the FPSF may depend on the number of sub-bands...
+
+```{python}
+nusrec_2bands = np.array([140.03675562, 158.78675562])
+measure_2bands =  np.array([0.3903377 , 0.57669081])
+yerr_2bands = np.array([0.02617904, 0.01513422])
+xerr_2bands = np.array([8.78675562, 9.96324438])
+
+nusrec_3bands = np.array([136.98433698, 148.95407944, 161.96974246])
+measure_3bands = np.array([0.09083623, 1.1396674 , 0.2478118 ])
+yerr_3bands = np.array([0.06007436, 0.04652871, 0.02315413])
+xerr_3bands = np.array([5.73433698, 6.23540548, 6.78025754])
+
+nusrec_4bands = np.array([135.50540829, 144.29216391, 153.6486907 , 163.61193508])
+measure_4bands = np.array([ 0.08521627,  0.29842826,  1.76806209, -0.16713637])
+yerr_4bands = np.array([0.08498496, 0.04851621, 0.06261273, 0.03330611])
+xerr_4bands = np.array([4.25540829, 4.53134733, 4.82517946, 5.13806492])
+
+nusrec_5bands = np.array([134.63280448, 141.57278853, 148.8705114 , 156.54441361, 164.61388627])
+measure_5bands = np.array([-1.7562727 ,  1.00363683,  3.51598014,  2.43479479, -1.67414293])
+yerr_5bands = np.array([1.26703809, 0.77269316, 1.14306026, 0.94277431, 1.10237627])
+xerr_5bands = np.array([3.38280448, 3.55717958, 3.74054328, 3.93335893, 4.13611373])
+#OLD: measure_5bands = np.array([-0.19074754,  0.22935422,  1.74554219,  1.1064823,  -0.29887334])
+#OLD: yerr_5bands = np.array([0.12271266, 0.06431844, 0.0779164,  0.06629246, 0.05168779])
+
+
+ 
+#measure_5bands /= np.max(measure_5bands)
+#yerr_5bands /= np.max(yerr_5bands)
+```
+
+```{python}
+def spline_fit(xv, a0, extra_args = None):
+    splmodel = data_5bands['SplFunc']
+    return a0 + splmodel(xv)
+```
+
+```{python}
+covar = np.array([[ 1.60538553, -0.52502133, -1.04703485, -0.46545794,  0.49917802],
+       [-0.52502133,  0.59705472,  0.37044056, -0.12924891, -0.13888477],
+       [-1.04703485,  0.37044056,  1.30658675,  0.62081814, -0.97352076],
+       [-0.46545794, -0.12924891,  0.62081814,  0.8888234 , -0.70385843],
+       [ 0.49917802, -0.13888477, -0.97352076, -0.70385843,  1.21523345]])
+
+guess = np.array([-0.5 ])
+fitg = ft.do_minuit(nusrec_5bands, measure_5bands, covar, guess, functname=spline_fit, fixpars=[0,])
+```
+
+```{python}
+# Spline fitting
+nbspl = 13
+tdblock = False
+sims = False
+data_array = locals()['data_{}bands'.format(nrec)]
+#nu0 = data_array['nu_in'][nsimu]
+measure_bands = locals()['measure_{}bands'.format(nrec)]
+yerr_bands = locals()['yerr_{}bands'.format(nrec)]
+xerr_bands = locals()['xerr_{}bands'.format(nrec)]
+# Plot
+fig, ax = plt.subplots(nrows = 1, ncols = 1, figsize = (8, 4))
+ax.set_xlim(130, 170)
+ax.set_ylim(-0.5,1.2)
+ax.set_xlabel(r"$(\nu - \nu_{in} + \nu_0)~[GHz]$", fontsize = 14)
+ax.set_ylabel(r"$S/S_{max}$", fontsize = 14)
+
+xfit = data_array['Data_fit'][0]
+yfit = data_array['Data_fit'][1]
+
+myspl = data_array['SplFunc']#MySplineFitting(xfit, yfit, np.ones(len(xfit)), nbspl)
+xvals = np.linspace(np.min(xfit), np.max(xfit), 1000)
+
+ax.plot(xvals + 150, myspl(xvals)/np.max(myspl(xvals)), 'r--', label='FI Spline fitting')
+if sims:
+    errorbar(data_array['nu_rec'], flux_bands/np.max(flux_bands), yerr = err_flux_bands/np.max(flux_bands), 
+         xerr = dnu, color = 'orange', fmt = 'o', ls = '' , label = 'measurements (sim)',
+        lw = 3,  mew = 3)
+elif not sims:
+    ax.errorbar(data_array['nu_rec'], measure_bands/np.max(measure_bands), 
+         yerr = yerr_bands/np.max(measure_bands), 
+         xerr = xerr_bands, color = 'r', fmt = 'o', ls = '' , label = 'measurements (real)',
+        lw = 3,  mew = 3)
+
+
+#ax.axvline(nu0, linestyle = '--', color = 'k', alpha = 0.4)
+
+if tdblock:
+    xfitTD = data_5bandsTD['Data_fit'][0]
+    yfitTD = data_5bandsTD['Data_fit'][1]
+    xvalsTD = np.linspace(np.min(xfitTD), np.max(xfitTD), 1000)
+
+#ax.plot(xfitTD + nu0, yfitTD, '*', color='m', label='TD data', alpha = 0.7)
+#ax.plot(xvalsTD + 150, data_5bandsTD['SplFunc'](xvalsTD)/np.max(data_5bandsTD['SplFunc'](xvalsTD)), 
+#        'b--', label='TD Spline fitting')
+
+
+#Plot "expected resolution" (I -Martin- don't like that concept)
+#xgauss = np.linspace(-25, 25, 100) 
+#ax.plot(xgauss+nu0, np.exp(-0.5 * (xgauss ** 2 )/((150 / (8 - 1)) / 2.355) ** 2  ) - 0.4, 
+#        label  = "TD expected", c = 'b')
+ax.axhline(0, linestyle = '--', color = 'k', alpha = 0.4)
+
+ax.legend(loc = 'upper left', fontsize = 14)
+
+fig.tight_layout()
+```
+
+```{python}
+#(8 - 1) * 1.4 * np.sqrt(2) 
+fwhm_dict = 0.39268176
+f_p = 3e10 / (fwhm_dict * 150e9 * 1.4) * 180 / np.pi
+print('f_p = ', f_p)
+print(r"FWHM_\nu = ", 150 / f_p)
+
+f_pTD = (8-1) / (22-1) * f_p
+print('f_pTD = ', f_pTD)
+
+FWHM_TD_ang =  3e10 / (150e9 * f_pTD *  1.4) *180/ np.pi
+print("FWHM_TD_ang = ", FWHM_TD_ang, "°")
+FWHM_TD_freq =  150 / (f_pTD)
+FWHMsig_TD_freq = FWHM_TD_freq /2.35
+print("FWHM_TD_freq = ", FWHM_TD_freq, "GHz -- FWHMsig_TD_freq = ", FWHMsig_TD_freq)
+```
+
+```{python}
+fig, ax = plt.subplots(nrows = 1, ncols = 1, figsize = (8, 4))
+
+data_dict = locals()["data_{}bands".format(5)]
+xfit = data_dict['Data_fit'][0]
+yfit = data_dict['Data_fit'][1]
+
+myspl = MySplineFitting(xfit, yfit, np.ones(len(xfit)), 13)
+
+xvals = np.linspace(np.min(xfit), np.max(xfit), 1000)
+
+ax.set_xlim(130,170)
+#ax.plot(xvals + 150, myspl(xvals)/np.max(myspl(xvals)), 'm', ls = '--', label='FI spline fitting')
+ax.plot(xvals + 150, myspl(xvals / 3)/np.max(myspl(xvals)), 'm', ls = '-', label='TD scaled from FI fit')
+ax.errorbar(nusrec_5bands, measure_5bands / np.max(measure_5bands), xerr = xerr_5bands, yerr = yerr_5bands,
+           fmt = 'o', color = 'orange', label = "measurements")
+
+#Plot "expected resolution" (I -Martin- don't like that concept)
+xgauss = np.linspace(-25, 25, 100) 
+FWHM_FI = 150 / (22 - 1) /np.sqrt(2) / 2.35
+FWHM_TD = 3 * FWHM_FI
+#ax.plot(xgauss + 150, np.exp(-0.5 * (xgauss ** 2 )/(FWHM_TD) ** 2  ), 
+#        label  = "TD expected gaussian", color = 'r' )
+#ax.plot(xgauss + 150, np.exp(-0.5 * (xgauss ** 2 )/(FWHMsig_TD_freq) ** 2  ), 
+#        label  = r"TD expected gaussian - $\sigma$ mod", color = 'r', alpha = 0.5 )
+
+ax.legend()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

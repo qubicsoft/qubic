@@ -458,8 +458,17 @@ def DustSynch_model_pointer(x, *pars, extra_args = None):
 
 def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 		   maxfev = 10000, initP0 = None, verbose = False, chi2 = None, flatprior = None,
+<<<<<<< HEAD
+<<<<<<< HEAD
+		  nsamples = 5000, past_mcmc = False, plotcovar = False):
+=======
 		  nsamples = 5000, past_mcmc = False, nsiginit = 10, nsigprior = 20,):
 		  #plotcovar = False, external_data = False, external_initial_fit = None):
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+		  nsamples = 5000, past_mcmc = False, nsiginit = 10, nsigprior = 20,):
+		  #plotcovar = False, external_data = False, external_initial_fit = None):
+>>>>>>> master
 	
 	#print(np.shape(covMat[:, :, istk, pix_red]))
 	#popt, pcov = curve_fit(ThermDust_Planck353_l, nus, maps[:, pix, istk], 
@@ -474,8 +483,17 @@ def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 		import mcmc_old as mcmc
 		myfit = mcmc.LogLikelihood(xvals = nus, yvals = maps[:, pix, istk], #chi2 = chi2,
 								   errors = covMat[:, :, istk, pix_red], 
+<<<<<<< HEAD
+<<<<<<< HEAD
+								   model = FuncModel, p0 = popt, plotcovar = plotcovar)
+=======
 								   model = FuncModel, p0 = popt, plotcovar = plotcovar,
 								   )
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+								   model = FuncModel, p0 = popt, plotcovar = plotcovar,
+								   )
+>>>>>>> master
 			#print("myfit info: " )
 		fit_prep = myfit.run(nsamples)
 		#print("Doing chain")
@@ -495,11 +513,21 @@ def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 		from qubic import mcmc
 		myfit = mcmc.LogLikelihood(xvals = nus, yvals = maps[:, pix, istk], chi2 = chi2,
 								   errors = covMat[:, :, istk, pix_red], flatprior = flatprior,
+<<<<<<< HEAD
+<<<<<<< HEAD
+								   model = FuncModel, p0 = popt, plotcovar = plotcovar)
+=======
+=======
+>>>>>>> master
 								   model = FuncModel, p0 = popt, 
 								   nsiginit = nsiginit, nsigprior = nsigprior,)
 								   #plotcovar = plotcovar,
 								   #external_data = external_data, 
 								   #external_initial_fit = external_initial_fit)
+<<<<<<< HEAD
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+>>>>>>> master
 		#print("myfit info: " )
 		fit_prep = myfit.run(nsamples)
 		#print("Doing chain")
@@ -522,10 +550,21 @@ def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 
 
 def foregrounds_run_mcmc(dictionaries, fgr_map, Cp_prime, FuncModel,
+<<<<<<< HEAD
+<<<<<<< HEAD
+					nus_out, nus_edge, pixs, pixs_red = None, chi2 = None, plotcovar = False,
+					samples = 5000, verbose = True, initP0 = None, past_mcmc = False, flatprior = None):
+=======
+=======
+>>>>>>> master
 					nus_out, nus_edge, pixs, pixs_red = None, chi2 = None, 
 					samples = 5000, verbose = True, initP0 = None, past_mcmc = False, flatprior = None,
 					nsiginit = 10, nsigprior = 20,):
 					 #external_initial_fit = None, external_data = False, plotcovar = False,
+<<<<<<< HEAD
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+>>>>>>> master
 	t0 = time.time()
 
 	MeanVals = np.zeros((len(dictionaries), samples//2, 3))
@@ -535,6 +574,12 @@ def foregrounds_run_mcmc(dictionaries, fgr_map, Cp_prime, FuncModel,
 	#2496 if samples == 5k or 4992 if samples == 10k 7488 is sample == 15k 
 	ndim = 2496
 	_flat_samples = np.zeros((len(dictionaries), ndim, len(initP0)))
+<<<<<<< HEAD
+<<<<<<< HEAD
+
+=======
+=======
+>>>>>>> master
 	external_matrix_old = [np.array([[2.50692304e-05, 3.17124531e-04],[3.17124531e-04, 4.04001828e-03]]),
 							np.array([[0.00010975, 0.00134293],[0.00134293, 0.01672913]]),
 							np.array([[0.00292627, 0.00365206],[0.00365206, 0.00458563]]),
@@ -559,6 +604,10 @@ def foregrounds_run_mcmc(dictionaries, fgr_map, Cp_prime, FuncModel,
 	                      np.array([[9.20499767e-04, -7.40511946e-02],[-7.40511946e-02,  6.03017062e+00]]),
 	                      np.array([[0.00682632, 0.21502597],[0.21502597, 6.80033658]]),
 	                      np.array([[0.00057326, 0.01745101],[0.01745101, 0.53564246]])   ]	
+<<<<<<< HEAD
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+>>>>>>> master
 	for istk in range(3):
 		if verbose: print("======== Doing {} Stokes parameter =============".format(dictionaries[0]['kind'][istk]))
 		for j in range(len(dictionaries)):
@@ -567,17 +616,35 @@ def foregrounds_run_mcmc(dictionaries, fgr_map, Cp_prime, FuncModel,
 				print(np.shape(dictionaries), np.shape(fgr_map[j]), np.shape(Cp_prime[j]), np.shape(nus_out[j]), 
 							np.shape(nus_edge[j])) 
 				print("initP0 ", initP0)
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
 
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+
+>>>>>>> master
 			MeanVals[j, :, istk], StdVals[j, :, istk], xarr[j, :, istk], _flat_samples[j] = \
 														PixSED_Xstk(nus_out[j], fgr_map[j], FuncModel, 
 																	pixs[j], pixs_red[j], istk, Cp_prime[j], nus_edge[j], 
 																	chi2 = chi2, initP0 = initP0, nsamples = samples,
+<<<<<<< HEAD
+<<<<<<< HEAD
+																	past_mcmc = past_mcmc, plotcovar = plotcovar,
+																	flatprior = flatprior)
+=======
+=======
+>>>>>>> master
 																	flatprior = flatprior, nsiginit = nsiginit, 
 																	nsigprior = nsigprior, )
 																	#past_mcmc = past_mcmc, 
 																	#plotcovar = plotcovar,
 																	#external_initial_fit = external_matrix[count], 
 																	#external_data = external_data)
+<<<<<<< HEAD
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+>>>>>>> master
 	print('Done in {:.2f} min'.format((time.time()-t0)/60 ))
 
 	return MeanVals, StdVals, xarr[:,:,0], _flat_samples
@@ -677,7 +744,8 @@ def make_fit_SED(xSED, xarr, Imvals, Isvals, FuncModel, fgr_map_ud, pixs_ud, nf_
 	return ySED_fit, Pmean, Perr
 
 def _plot_exampleSED(dictionary, center, nus_out, maskmaps, mapsarray = False, 
-					DeltaTheta = 0, DeltaPhi = 0, savefig = False, set_logscale = False):
+					DeltaTheta = 0, DeltaPhi = 0, savefig = False, set_logscale = False,
+					newnside = None):
 
 	"""
 	Plot an example of Figure 10 (map + SED ) in paper 1
@@ -716,9 +784,17 @@ def _plot_exampleSED(dictionary, center, nus_out, maskmaps, mapsarray = False,
 	marker = ['d', 's', 'o']
 	if mapsarray:
 		for j, imap in enumerate(maskmaps):
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
+			print(imap[:,IPIXG,0])
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+			ax[1].plot(nus_out, imap[:,IPIXG,0], 'o', color=color[j], label = label[j])
+=======
 			print(imap[:,IPIXG,0])
 			ax[1].plot(nus_out, imap[:,IPIXG,0], marker = marker[j], color=color[j], label = label[j],
 				linestyle = "")
+>>>>>>> master
 		ax[1].legend()
 		ax[1].set_yscale("log")
 		ax[0].cla()	
@@ -734,6 +810,13 @@ def _plot_exampleSED(dictionary, center, nus_out, maskmaps, mapsarray = False,
 					min = 0 ,
 					max = 0.23 * np.max(maskmaps[-1,:,0]), rot = center)
 	hp.projscatter(hp.pix2ang(dictionary['nside'], IPIXG), marker = '*', color = 'r',s = 180)
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
+	#ax[1].set_yscale("log")
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+	ax[1].set_ylabel(r'$I_\nu$ [$\mu$K]')
+=======
 	ylim = ax[1].get_ylim()
 	xlim = ax[1].get_xlim()
 	#ax[1].set_ylim(ylim[0], ylim[1]*2)
@@ -748,6 +831,7 @@ def _plot_exampleSED(dictionary, center, nus_out, maskmaps, mapsarray = False,
 	ax[1].grid(which="both")
 
 	ax[1].set_ylabel(r'$I_\nu$ [$\mu$K$_{CMB}$]')
+>>>>>>> master
 	ax[1].set_xlabel(r'$\nu$[GHz]')
 	dpar = 10
 	dmer = 20

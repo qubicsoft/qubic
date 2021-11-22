@@ -225,7 +225,11 @@ class QubicInstrument(Instrument):
 
     def _init_beams(self, primary, secondary, filter_nu):
         # The beam shape is taken into account
+<<<<<<< HEAD
         nu = int(filter_nu / 1e9)
+=======
+        nu = filter_nu / 1e9   ### NB: this has been corrected on Nov 17th by JCH before nu was cast into an integer for a mysterious reason
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
         if primary == 'gaussian':
             PrimBeam = BeamGaussian(
                 np.radians(self.calibration.get('primbeam')), nu=nu)

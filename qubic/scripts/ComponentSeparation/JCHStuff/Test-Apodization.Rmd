@@ -1,0 +1,82 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+import pysm3
+import pysm3.units as u
+import numpy as np
+import numpy.ma as ma
+import healpy as hp
+import pickle
+import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
+import pickle
+from astropy.io import fits
+import pandas as pd
+from importlib import reload
+
+from qubic import camb_interface as qc
+import fgbuster as fgb
+
+import warnings
+warnings.filterwarnings("ignore")
+
+import qubic
+from qubic import NamasterLib as nam
+
+center = qubic.equ2gal(0, -57)
+
+rc('figure', figsize=(16, 10))
+rc('font', size=15)
+
+```
+
+```{python}
+nside = 256
+rc('figure', figsize=(16, 4))
+
+covmap = hp.ud_grade(hp.read_map('QUBIC-Typical-Coverage.fits'), nside)
+
+fskytot=np.sum(covmap/np.max(covmap)/len(covmap))*100
+suptitle('Cut-Sky (from QUBIC)', fontsize=30, y=1.2)
+hp.mollview(covmap, title='QUBIC Cov Map: fsky={0:4.2f}%'.format(fskytot), sub=(1,2,1))
+
+thr = 0.1
+mymask = (covmap > (np.max(covmap)*thr)).astype(int)
+pixok = mymask > 0
+fsky=np.sum(covmap[pixok]/np.max(covmap)/len(covmap))*100
+hp.mollview(mymask, title='Mask with thr={0:}: fsky={1:4.2f}'.format(thr, fsky), sub=(1,2,2))
+
+
+
+```
+
+```{python}
+reload(nam)
+
+apodize = 0.0
+mymask = pixok.astype(float)
+nmt = nam.Namaster(mymask, 40, 400, 30, aposize=apodize, apotype='C1')
+apodized_mask = nmt.mask_apo
+hp.gnomview(apodized_mask, title='Apodized Mask {} deg.'.format(apodize), reso=15, rot=center)
+
+```
+
+```{python}
+np.degrees(hp.nside2resol(256))
+```
+
+```{python}
+hp.npix2nside
+```

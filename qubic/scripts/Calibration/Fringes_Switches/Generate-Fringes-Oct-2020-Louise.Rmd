@@ -130,7 +130,11 @@ def get_fringes_datasets(rep, keyword, q):
     allBLs, allNcycles, allstable_time = [], [], []
     for ds in datasets:
         strs = ds.split('_')
-        print(strs)
+#         print(strs)
+#         allNcycles.append(100)
+#         allstable_time.append(3000.)
+        allNcycles.append(float(strs[strs.index('ncycles') + 1]))
+        allstable_time.append(float(strs[strs.index('wt') + 1]))
         # For 2019-06-07 data set only
         #allNcycles.append(20)
         #allstable_time.append(1000.)
@@ -197,10 +201,9 @@ for baseline in allBLs[5:6]:
                                             nu_source=150e9, spec_irrad_source=1.,
                                             frame='ONAFP', external_A=None, hwp_position=0)
 
-    xONAFP, yONAFP, fringes = Model_QS.get_fringes_from_combination(doplot=True, verbose=True, norm=None, unit=None, s=180)
+    xONAFP, yONAFP, fringes = Model_QS.get_fringes(doplot=True, verbose=True, norm=None, unit=None, s=180)
 
 #     print('fringes shape:', fringes.shape)
-
 
 lim = np.max(np.abs(fringes))
 fig = plt.figure(figsize=(7, 7))
@@ -224,7 +227,6 @@ fig = plt.figure(figsize=(7, 7))
 ax = fig.gca()
 scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP', s=350, fig=fig, ax=ax, unit=None,
                     title=f'Simulation - Baseline {allBLs[5]}', cmap='bwr', config='TD')
-
 ```
 
 ## Fringes Analysis
@@ -235,6 +237,7 @@ scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP', s=350, fig=fig, 
 look at the folded signal
 
 ```{python}
+
 i = 0
 BL = allBLs[i]
 print(f'\n ===================== Measurement {i+1}/{nBLs} - BL {BL} starting ===================')   
@@ -259,8 +262,7 @@ allTODresiduals = []
 allmask_bad_TES = []
 
 # Loop on the BLs
-for i in [2]:
-    BL=allBLs[i]
+for i, BL in enumerate(allBLs[:1]):
     print(f'\n ===================== Measurement {i+1}/{nBLs} - BL {BL} starting ===================')   
     print("Data folder:", datasets[i])
 
@@ -272,7 +274,7 @@ for i in [2]:
                                        verbose=True, doplot=True, save_plot=True)
     allmask_bad_TES.append(Fringes_Ana.mask_bad_TES)
     Fringes_Ana.plot_TOD()
-    
+
     m_points, err_m_points, Mcycles, err_Mcycles, \
     fringes1D, err_fringes1D, fringes1D_percycle, err_fringes1D_percycle = Fringes_Ana.analyse_fringes(
                                doplotTESsort=[0],
@@ -290,6 +292,8 @@ for i in [2]:
    
     allfringes1D_percycle.append(fringes1D_percycle)
     allerr_fringes1D_percycle.append(err_fringes1D_percycle)
+
+    Fringes_Ana.plot_TOD()
 ```
 
 ## Make some plots

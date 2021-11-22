@@ -81,6 +81,7 @@ inputmaps[:, unseen, :] = 0.
 noisepatch = noisemaps[:, :, seenmap, :]
 
 # Save the noisy patch
+
 np.save(rep_save + f'/noisepatch_nbands{nbands}_' + config + '_v4_galaxycenter_' + rnd_name + '.npy',
         noisepatch)
 
@@ -189,10 +190,6 @@ for real in range(nreals):
 np.save(
     rep_save + f'/IBCSsame_nfrecon{nbands}_qubicmaps_' + config + '_v4_galaxycenter_' + rnd_name + '.npy',
     cross_samereal_qubicmaps)
-np.save(
-    rep_save + f'/IBCSsame_nfrecon{nbands}_noisemaps_' + config + '_v4_galaxycenter_' + rnd_name + '.npy',
-    cross_samereal_noisemaps)
-
 # np.save(
 #     rep_save + f'/IBCSsame_recon_{nbands}bands_150fullpipeline.npy',
 #     cross_samereal_qubicmaps)
@@ -240,12 +237,12 @@ for c1 in range(0, nreals - 1, 2):  # do not mix pairs to avoid correlation
     cross += 1
 
 np.save(
-    rep_save + f'/IBCSmix_nfrecon{nbands}_qubicmaps_' + config + '_v4_galaxycenter_' + rnd_name + '.npy',
-    cross_mixreals_qubicmaps)
-
-np.save(
     rep_save + f'/IBCSmix_nfrecon{nbands}_noisemaps_' + config + '_v4_galaxycenter_' + rnd_name + '.npy',
     cross_mixreals_noisemaps)
+
+np.save(
+    rep_save + f'/IBCSmix_nfrecon{nbands}_qubicmaps_' + config + '_v4_galaxycenter_' + rnd_name + '.npy',
+    cross_mixreals_qubicmaps)
 
 # np.save(rep_save + f'/IBCSmix_recon_{nbands}bands_150fullpipeline.npy',
 #         cross_mixreals_qubicmaps)

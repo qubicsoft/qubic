@@ -39,8 +39,18 @@ setup(name=name,
                         'pysimulators>=1.0.8',
                         'healpy>=0.6.1',
                         'pyYAML'],
+<<<<<<< HEAD
+<<<<<<< HEAD
+      packages=['qubic', 'qubic/calfiles', 'qubic/data', 'qubic/io', 'qubic/dicts'],
+      package_data={'qubic': ['calfiles/*', 'data/*', 'scripts/*py', 'dicts/*.dict']},
+=======
       packages=['qubic', 'qubic/calfiles', 'qubic/data', 'qubic/io', 'qubic/dicts', 'qubic/data/FastSimulator_version01'],
       package_data={'qubic': ['calfiles/*', 'data/*', 'scripts/*py', 'dicts/*.dict', 'data/FastSimulator_version01/*.pkl']},
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+      packages=['qubic', 'qubic/calfiles', 'qubic/data', 'qubic/io', 'qubic/dicts', 'qubic/data/FastSimulator_version01'],
+      package_data={'qubic': ['calfiles/*', 'data/*', 'scripts/*py', 'dicts/*.dict', 'data/FastSimulator_version01/*.pkl']},
+>>>>>>> master
       platforms=platforms.split(','),
       keywords=keywords.split(','),
       cmdclass=hooks.get_cmdclass(),

@@ -1,0 +1,409 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# %matplotlib inline
+
+import random
+import healpy as hp
+import glob
+from scipy.optimize import curve_fit
+import pickle
+from importlib import reload
+import time
+import scipy
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import sys
+import pylab
+from pylab import arange, show, cm
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+import pysm3
+import pysm3.units as u
+import qubic
+from qubic import QubicSkySim as qss
+from qubic import fibtools as ft
+from qubic import camb_interface as qc
+from qubic import SpectroImLib as si
+from qubic import NamasterLib as nam
+from qubic import mcmc
+from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
+
+#FGBuster module
+from fgbuster import get_instrument, get_sky, get_observation  # Predefined instrumental and sky-creation configurations
+from fgbuster.visualization import corner_norm
+
+# Imports needed for component separation
+#from fgbuster import (CMB, Dust, Synchrotron,  # sky-fitting model
+#                      basic_comp_sep)  # separation routine
+#import yaml
+
+reload(qss)
+reload(ft)
+
+plt.rc('figure', figsize=(16, 10))
+plt.rc('font', size=15)
+plt.rcParams['image.cmap'] = 'jet'
+```
+
+```{python}
+### Some initializations
+### Initialize
+# os.environ['QUBIC_DATADIR'] = '/Users/edgarjaber/myqubic/qubic'
+# os.environ['QUBIC_DICT'] = '/Users/edgarjaber/myqubic/qubic/dicts'
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+```
+
+```{python}
+### This is for the FI
+config = 'FI-150'
+### Read some stuff
+# Read dictionary chosen
+dictfilename = global_dir + '/dicts/BmodesNoDustNoSystPaper0_2020.dict'.format(config)
+# dictfilename = global_dir + '/doc/FastSimulator/FastSimDemo_{}.dict'.format(config)
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+d['nside']=256
+#Define the number of reconstruction bands:
+nbands = 3
+d['nf_recon'] = nbands
+d['nf_sub'] = nbands
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+```
+
+```{python}
+reload(qss)
+
+sky_config = {'CMB':'c1'}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+
+#Raw qss map
+raw_qss_map = np.transpose(Qubic_sky.get_simple_sky_map(), (0, 2, 1))
+
+#Raw PySM map
+
+instrument = get_instrument('qubic')
+raw_pysm_map = get_observation(instrument, 'c1', nside=256)
+
+print(np.std((raw_qss_map - raw_pysm_map)[:,:,:], axis=2))
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+d['nf_sub'] = nbands
+d['npointings'] = 10000 
+p = qubic.get_pointing(d)
+s = qubic.QubicScene(d)
+# Qubic Instrument
+q = qubic.QubicMultibandInstrument(d)
+# number of sub frequencies for reconstruction
+_, nus_edge, _, _, _, _ = qubic.compute_freq(150, d['nf_sub'])
+# Operator for Maps Reconstruction
+a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge)
+# Coverage
+coverage = a.get_coverage()
+coverage = np.sum(coverage, axis=0)# Sum the bands
+coverage /= np.max(coverage)# Normalize by the max
+hp.mollview(coverage)
+a=0  ### this is to release memory: a is huge
+```
+
+```{python}
+#Meme résolution a la main
+
+def get_sigma_iband(q, iband):
+    """Get the sigma of one band."""
+    sigma = q[iband].synthbeam.peak150.sigma * (150e9 / q[iband].filter.nu)  
+    return sigma
+
+def get_sigma_prime(q, iband):
+    """Get the sigma needed to convolve one band at the first band resolution."""
+    sigma_band0 = get_sigma_iband(q, 0)
+    sigma_bandi = get_sigma_iband(q, iband)
+    sigma_prime = np.sqrt(sigma_band0**2 - sigma_bandi**2)
+    print(sigma_band0, sigma_bandi, sigma_prime)
+    return sigma_prime
+
+def make_all_bands_same_resolution(q, maps):
+    """ Convolve each band at the first band resolution."""
+    nbands = len(q)
+    maps_same_reso = np.zeros_like(maps)
+    for i in range(nbands):
+        sigma_prime = get_sigma_prime(q, i)
+        C = HealpixConvolutionGaussianOperator(sigma=sigma_prime)
+        maps_same_reso[i] = C(maps[i])
+    return maps_same_reso
+
+
+```
+
+```{python}
+#Meme resolution avec hp.smoothing()
+
+def make_all_maps_same_res(maps, q):
+    """
+    maps: list with shape (nbands, npix, 3)
+    final_rest: float, final resolution for all maps
+    """
+    good_res = np.zeros(maps.shape)
+    for i in range(maps.shape[0]):
+        good_res[i] = hp.sphtfunc.smoothing(maps[i, :, :], fwhm=2.35*get_sigma_prime(q, i))
+    return good_res
+```
+
+Sans aucune convolution (tout à résolution infinie)
+
+```{python}
+reload(qss)
+##### QubicSkySim instanciation
+sky_config = {'dust':'d0'}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+qubic_map_noiseless = Qubic_sky.get_simple_sky_map()
+
+##### PySM sky instanciation
+instrument = get_instrument('qubic')
+freq_map_pysm = get_observation(instrument, 'd0', nside=256)
+seenpix = coverage != 0
+freq_map_pysm[:,:,~seenpix] = 0
+
+
+### Comparing maps   (Freq, Nstokes, Npix)
+print(np.shape(freq_map_qubic))
+print(np.shape(freq_map_pysm))
+
+print(FWHMs)
+print(np.degrees([0.0075, 0.0069, 0.0063]))
+
+stk = 1
+nsig = 3
+for i in range(nbands):
+    qubicmap = freq_map_qubic[i,stk,:]
+    #### Raw map
+    pysmmap = freq_map_pysm[i,stk,:]
+    
+    sig = np.std(qubicmap[seenpix])
+    hp.gnomview(qubicmap, rot=center, reso=15, sub=(3,3,i+1), 
+                #min=-nsig*sig, max=nsig*sig,
+                title='QUBIC Stk{0:} Nu {1:} FWHM={2:3.2f}'.format(stk,i,FWHMs[i]))
+    hp.gnomview(pysmmap, rot=center, reso=15, sub=(3,3,i+1+3), 
+                #min=-nsig*sig, max=nsig*sig,
+                title='PySM Stk{} Nu {}'.format(stk,i))
+    diff = qubicmap/pysmmap
+    mm = np.mean(diff[seenpix])
+    ss = np.std(diff[seenpix])
+    hp.gnomview(diff, rot=center, reso=15, sub=(3,3,i+1+3*2), 
+                min=mm-nsig*ss, max=mm+nsig*ss,
+                title='Difference Stk{0:} Nu {1:} \n mm={2:6.5f} ss={3:6.5f}'.format(stk,i,mm,ss))
+tight_layout()
+```
+
+# Différence d0
+Avec résolution QSS, donc on convolue les cartes pysm à la résolution QUBIC
+
+```{python}
+reload(qss)
+
+##### QubicSkySim instanciation
+sky_config = {'dust':'d0'}
+
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+
+#### We create a qubic map with JC's fast-simulator
+_, qubic_map_noiseless, _, _ = Qubic_sky.get_partial_sky_maps_withnoise(spatial_noise=False, coverage=coverage)
+freq_map_qubic = np.transpose(qubic_map_noiseless, (0, 2, 1)) 
+FWHMs = Qubic_sky.dictionary['synthbeam_peak150_fwhm'] * 150. / Qubic_sky.qubic_central_nus * Qubic_sky.fi2td
+```
+
+```{python}
+##### PySM sky instanciation
+instrument = get_instrument('qubic')
+freq_map_pysm = get_observation(instrument, 'd0', nside=256)
+# We need to convolve pysm maps to the QUBIC resolution
+for i in range(nbands):
+    print(np.shape(freq_map_pysm[i,:,:]))
+    newmap = hp.sphtfunc.smoothing(freq_map_pysm[i,:,:], fwhm=np.deg2rad(FWHMs[i]),
+                                                              verbose=True)
+    print(np.shape(newmap))
+    freq_map_pysm[i,:,:] = newmap 
+
+
+seenpix = coverage != 0
+freq_map_pysm[:,:,~seenpix] = 0
+```
+
+```{python}
+### Comparing maps   (Freq, Nstokes, Npix)
+print(np.shape(freq_map_qubic))
+print(np.shape(freq_map_pysm))
+
+print(FWHMs)
+print(np.degrees([0.0075, 0.0069, 0.0063]))
+
+stk = 1
+nsig = 3
+for i in range(nbands):
+    qubicmap = freq_map_qubic[i,stk,:]
+    #### Raw map
+    pysmmap = freq_map_pysm[i,stk,:]
+    
+    sig = np.std(qubicmap[seenpix])
+    hp.gnomview(qubicmap, rot=center, reso=15, sub=(3,3,i+1), 
+                #min=-nsig*sig, max=nsig*sig,
+                title='QUBIC Stk{0:} Nu {1:} FWHM={2:3.2f}'.format(stk,i,FWHMs[i]))
+    hp.gnomview(pysmmap, rot=center, reso=15, sub=(3,3,i+1+3), 
+                #min=-nsig*sig, max=nsig*sig,
+                title='PySM Stk{} Nu {}'.format(stk,i))
+    diff = qubicmap/pysmmap-1
+    mm = np.mean(diff[seenpix])
+    ss = np.std(diff[seenpix])
+    hp.gnomview(diff, rot=center, reso=15, sub=(3,3,i+1+3*2), 
+                min=mm-nsig*ss/10, max=mm+nsig*ss/10,
+                title='Difference Stk{0:} Nu {1:} \n mm={2:6.5f} ss={3:6.5f}'.format(stk,i,mm,ss))
+tight_layout()
+```
+
+```{python}
+np.degrees(0.0075)
+```
+
+```{python}
+#Meme resolution a la main
+freq_map_qubic_0 = make_all_bands_same_resolution(q, np.transpose(freq_map_qubic, (0,2,1)))
+freq_map_pysm_0 = make_all_bands_same_resolution(q, np.transpose(freq_map_pysm, (0,2,1)))
+
+freq_map_qubic_0 = np.transpose(freq_map_qubic_0, (0,2,1))
+freq_map_pysm_0 = np.transpose(freq_map_pysm_0, (0,2,1))
+```
+
+```{python}
+#Meme resolution avec le smoothing
+freq_map_qubic_1 = make_all_maps_same_res(freq_map_qubic, q)
+freq_map_pysm_1 = make_all_maps_same_res(freq_map_pysm, q)
+```
+
+## Meme resolution a la main
+
+```{python}
+Stokes = ['I', 'Q', 'U']
+for i in range(3):
+    plt.figure()
+    for j in range(3):
+            hp.gnomview(freq_map_qubic_0[i,j,:],
+                rot=center,
+                reso=15,
+                sub=(3,3,3*j+1),
+                title= 'd0 QSS ' + Stokes[i] + ' ' + str(i+1) + '/3')   
+        
+            hp.gnomview(freq_map_pysm_0[i,j,:],
+                   rot=center,
+                   reso=15,
+                   sub=(3,3,3*j+2),
+                   title= 'd0 PySM ' + Stokes[i] +  ' ' + str(i+1) + '/3')
+        
+            hp.gnomview(freq_map_pysm_0[i,j,:] - freq_map_qubic_0[i,j,:],
+                   rot=center,
+                   reso=15,
+                   sub=(3,3,3*j+3),
+                   title= 'Difference' + ' ' + str(i+1) + '/3')
+```
+
+## Meme resolution avec hp.smoothing()
+
+```{python}
+Stokes = ['I', 'Q', 'U']
+for i in range(3):
+    plt.figure()
+    for j in range(3):
+            hp.gnomview(freq_map_qubic_1[i,j,:],
+                rot=center,
+                reso=15,
+                sub=(3,3,3*j+1),
+                title= 'd0 QSS ' + Stokes[i] + ' ' + str(i+1) + '/3')   
+        
+            hp.gnomview(freq_map_pysm_1[i,j,:],
+                   rot=center,
+                   reso=15,
+                   sub=(3,3,3*j+2),
+                   title= 'd0 PySM ' + Stokes[i] +  ' ' + str(i+1) + '/3')
+        
+            hp.gnomview(freq_map_pysm_1[i,j,:] - freq_map_qubic_1[i,j,:],
+                   rot=center,
+                   reso=15,
+                   sub=(3,3,3*j+3),
+                   title= 'Difference' + ' ' + str(i+1) + '/3')
+```
+
+## Comparaison des deux
+
+```{python}
+Stokes = ['I', 'Q', 'U']
+maxi=None
+mini= None
+for i in range(3):
+    plt.figure()
+    for j in range(3):
+            hp.gnomview(freq_map_qubic_0[i,j,:] - freq_map_qubic_1[i,j,:],
+                rot=center, min=mini, max=maxi,
+                reso=15,
+                sub=(3,3,3*j+1),
+                title= 'd0 QSS ' + Stokes[i] + ' ' + str(i+1) + '/3')   
+        
+            hp.gnomview(freq_map_pysm_0[i,j,:] - freq_map_pysm_1[i,j,:],
+                   rot=center, min=mini, max=maxi,
+                   reso=15,
+                   sub=(3,3,3*j+2),
+                   title= 'd0 PySM ' + Stokes[i] +  ' ' + str(i+1) + '/3')
+        
+            hp.gnomview(freq_map_pysm_0[i,j,:] - freq_map_qubic_0[i,j,:] - (freq_map_pysm_1[i,j,:] - freq_map_qubic_1[i,j,:]),
+                   rot=center, min=mini, max=maxi,
+                   reso=15,
+                   sub=(3,3,3*j+3),
+                   title= 'Difference' + ' ' + str(i+1) + '/3')
+```
+
+```{python}
+
+```

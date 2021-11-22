@@ -18,6 +18,13 @@ jupyter:
 import healpy as hp
 
 # Specific qubic modules
+<<<<<<< HEAD
+<<<<<<< HEAD
+from qubicpack.utilities import Qubic_DataDir
+=======
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+>>>>>>> master
 from pysimulators import FitsArray
 import qubic
 from qubic import QubicSkySim as qss
@@ -33,8 +40,19 @@ Trying to correct a bug: if d['nf_sub']=1 we don't get the correct spectrum for 
 ```{python}
 reload(qss)
 #### Debugging
+<<<<<<< HEAD
+<<<<<<< HEAD
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+dictfilename = global_dir + '/dicts/BmodesNoDustNoSystPaper0_2020.dict'
+# dictfilename = global_dir + '/dicts/test_QubicSkySim.dict'
+=======
 dictfilename = 'BmodesNoDustNoSystPaper0_2020.dict'
 # dictfilename = 'test_QubicSkySim.dict'
+>>>>>>> 817389f4cc3163541fa042c883a3919ba9169a19
+=======
+dictfilename = 'BmodesNoDustNoSystPaper0_2020.dict'
+# dictfilename = 'test_QubicSkySim.dict'
+>>>>>>> master
 
 # Read dictionary chosen
 d = qubic.qubicdict.qubicDict()

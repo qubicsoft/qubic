@@ -343,20 +343,49 @@ K_RJ2K_CMB_NU0 = K_RJ2K_CMB + ' / ' + K_RJ2K_CMB.replace('nu', 'nu0')
 
 
 beta_dust = 1.54
+xxx = np.linspace(100,500, 1000)
 
+##### FGB Dust model
 dust = Dust(dust_ref_freq, temp=20)
 print('dust:',dust.params)
+plot(xxx, dust.eval(xxx, 1.54), lw=3, label = 'FGB Dust (single beta)')
 
+##### FGB Modified black-body directly from analytical expression
 analytic_expr = ('(exp(nu0 / temp * h_over_k) -1)'
                  '/ (exp(nu / temp * h_over_k) - 1)'
                  '* (nu / nu0)**(1 + beta_d) * '+K_RJ2K_CMB_NU0)
-
 test = AnalyticComponent(analytic_expr, nu0=353, temp=20., h_over_k=constants.h * 1e9 / constants.k)
 print('test:',test.params)
-
-xxx = np.linspace(100,500, 1000)
-plot(xxx, dust.eval(xxx, 1.54), lw=3, label = 'FGB Dust (single beta)')
 plot(xxx, test.eval(xxx, 1.54), '--', lw=3, label = 'Ananlytical to FGB (single beta)')
+
+
+
+# ##### FGB Modified black-body directly from analytical expression with a heaviside
+# analytic_expr = ('(exp(nu0 / temp * h_over_k) -1)'
+#                  '/ (exp(nu / temp * h_over_k) - 1)'
+#                  '* (nu / nu0)**(1 + beta_d) * '+K_RJ2K_CMB_NU0 + '* heaviside(nu-200,0.5)')
+# test2 = AnalyticComponent(analytic_expr, nu0=353, temp=20., h_over_k=constants.h * 1e9 / constants.k)
+# print('test2:',test2.params)
+# plot(xxx, test2.eval(xxx, 1.54), '--', lw=3, label = 'Ananlytical to FGB (single beta) with Heaviside')
+
+##### modified black body with two betas
+analytic_expr1 = ('(exp(nu0 / temp * h_over_k) -1)'
+                 '/ (exp(nu / temp * h_over_k) - 1)'
+                 '* (nu / nu0)**(1 + beta_d0)   * (nu0 / nubreak)**(beta_d0-beta_d1) * '+K_RJ2K_CMB_NU0 + '* (1-heaviside(nu-nubreak,0.5))')
+
+analytic_expr2 = ('(exp(nu0 / temp * h_over_k) -1)'
+                 '/ (exp(nu / temp * h_over_k) - 1)'
+                 '* (nu / nu0)**(1 + beta_d1) * '+K_RJ2K_CMB_NU0 + '* heaviside(nu-nubreak,0.5)')
+analytic_expr = analytic_expr1 + ' + ' + analytic_expr2
+
+test3 = AnalyticComponent(analytic_expr, nu0=353, temp=20., h_over_k=constants.h * 1e9 / constants.k)
+print('test3:',test3.params)
+plot(xxx, test3.eval(xxx, 0.5, 3, 200), '--', lw=3, label = 'Double beta in mukCMB')
+
+axvline(x=353, ls=':', color='k')
+axhline(y=1, ls=':', color='k')
+
+yscale('log')
 legend()
 ```
 

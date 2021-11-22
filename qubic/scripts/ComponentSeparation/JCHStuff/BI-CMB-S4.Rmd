@@ -49,7 +49,7 @@ edges = [[edges_min[i], edges_max[i]] for i in range(len(freqs))]
 s4_config = {
     'nbands': len(freqs),
     'frequency': freqs,
-    'depth_p': 0.5*(muk_arcmin_EE + muk_arcmin_BB),
+    'depth_p': 0.5*(mukarcmin_EE + mukarcmin_BB),
     'depth_i': mukarcmin_TT,
     'depth_e': mukarcmin_EE,
     'depth_b': mukarcmin_BB,
@@ -367,19 +367,31 @@ plot(xxx, test.eval(xxx, 1.54))
 from fgbuster import AnalyticComponent
 from sympy import Heaviside
 from scipy import constants
+from astropy.cosmology import Planck15
 
-beta_dust = 
+H_OVER_K = constants.h * 1e9 / constants.k
+# # Conversion factor at frequency nu
+# K_RJ2K_CMB = ('(expm1(h_over_k * nu / Tcmb)**2'
+#               '/ (exp(h_over_k * nu / Tcmb) * (h_over_k * nu / Tcmb)**2))')
+# K_RJ2K_CMB = K_RJ2K_CMB.replace('Tcmb', str(Planck15.Tcmb(0).value))
+# K_RJ2K_CMB = K_RJ2K_CMB.replace('h_over_k', str(H_OVER_K))
 
-Dust(dust_ref_freq, beta_d=1.6, temp=20)
+
+
+beta_dust = 1.54
+
+dust = Dust(dust_ref_freq, temp=20)
+print('dust:',dust.params)
 
 analytic_expr = ('(exp(nu0 / temp * h_over_k) -1)'
                  '/ (exp(nu / temp * h_over_k) - 1)'
-                 '* (nu / nu0)**(1 + beta_d)')
+                 '* (nu / nu0)**(1 + beta_d) * ')
 
-test = AnalyticComponent(analytic_expr, nu0=353, temp=20., h_over_k=constants.h * 1e9 / constants.k)
-print(test.params)
+test = AnalyticComponent(analytic_expr, nu0=353, temp=20., h_over_k=H_OVER_K)
+print('test:',test.params)
 
 xxx = np.linspace(100,500, 1000)
+plot(xxx, dust.eval(xxx, 1.54))
 plot(xxx, test.eval(xxx, 1.54))
 
 ```

@@ -170,7 +170,7 @@ for istk in mystk:
     plot(nus, dust.eval(nus) * s_dust_353GHz[istk], label='Dust')
     plot(nus, sync.eval(nus) * s_sync_70GHz[istk], label='Synchrotron')
     plot(nus, cmb.eval(nus) * s_CMB[istk], label='CMB')
-    plot(nus, dbdust.eval(nus, 1.3, 1.54, 200) * s_CMB[istk], label='Double Beta Dust with beta_0={}, beta_1={}, nubreak={}'.format(beta0, beta1, nubreak))
+    plot(nus, dbdust.eval(nus, 1.3, 1.54, 200) * s_dust_353GHz[istk], label='Double Beta Dust with beta_0={}, beta_1={}, nubreak={}'.format(beta0, beta1, nubreak))
     xlabel('Frequency [GHz]')
     ylabel(r'SED [$\mu K_{CMB}$]')
     yscale('log')
@@ -178,6 +178,14 @@ for istk in mystk:
     title('Stokes '+stokes[istk]+' in clean QUBIC region {}%'.format(fsky*100))
     legend()
 tight_layout()
+```
+
+```{python}
+2*np.pi/(2.35**2)
+```
+
+```{python}
+
 ```
 
 ```{python}

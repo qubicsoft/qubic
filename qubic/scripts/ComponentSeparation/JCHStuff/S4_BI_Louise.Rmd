@@ -1,0 +1,23 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Study BI vs S4
+
+Edited 22/11/2021 by Louise
+
+I will start by copying the notebook by JC.
+
+```{python}
+
+```

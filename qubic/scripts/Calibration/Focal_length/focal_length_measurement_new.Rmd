@@ -205,6 +205,28 @@ scal.scatter_plot_FP(q, tes_xONAFP, tes_yONAFP, rdist, frame='ONAFP',
 ## Simu QUBIC soft
 
 ```{python}
+from pyoperators import Spherical2CartesianOperator, Cartesian2SphericalOperator
+from qubic.instrument import _pack_vector
+
+theta, phi, _, _, _ = scal.get_coords_peaks(q, s, d, verbose=True)
+thetaphi = _pack_vector(theta, phi) 
+print(thetaphi[:10, 1, :])
+
+direction = Spherical2CartesianOperator('zenith,azimuth')(thetaphi)
+print(direction[:10, 1, :])
+print(peak_vec[:10, :, 1])
+
+azel = Cartesian2SphericalOperator('azimuth,elevation', degrees=True)(direction)
+print(azel[:10, 1, :])
+```
+
+```{python}
+print(peak_azel_simu[:10, :, 1])
+
+print(azel[:10, 1, :])
+```
+
+```{python}
 sb = q.get_synthbeam(s, idet=None, external_A=None, hwp_position=0)
 print(sb.shape)
 
@@ -237,8 +259,10 @@ for j, p in enumerate(existing_peaks):
             label='peak {}'.format(p)
         else:
             label=None
-        az_simu = peak_azel_simu [i, 0, p]
-        el_simu = peak_azel_simu [i, 1, p]
+#         az_simu = peak_azel_simu [i, 0, p]
+#         el_simu = peak_azel_simu [i, 1, p]
+        az_simu = azel[i, p, 0]
+        el_simu = azel[i, p, 1]
         if (np.abs(az_simu)/sqrt(2)+np.abs(el_simu)/sqrt(2))<sqrt(190):
             plt.plot(az_simu,el_simu , '.', label=label, c=palet[i+100], ms=8)
 
@@ -246,15 +270,15 @@ plt.xlabel('Azimuth [deg]', fontsize=16)
 plt.ylabel('Elevation [deg]', fontsize=16)
 #plt.legend()
 plt.gca().set_aspect('equal', adjustable='box')
-plt.ylim(-20, 20)
-plt.xlim(-20, 20)
+#plt.ylim(-20, 20)
+#plt.xlim(-20, 20)
 plt.grid()
 f = d['focal_length']
 nu = d['filter_nu']
 plt.title(fr'$f ={f*100:.0f}$ cm - $\nu= {nu/1e9:.0f}$ GHz', fontsize=16)
 plt.tight_layout()
 
-plt.savefig(save_dir + f'SB_simu_f{f*100:.0f}_nu{nu/1e9:.0f}.pdf', bbox_inches='tight')
+#plt.savefig(save_dir + f'SB_simu_f{f*100:.0f}_nu{nu/1e9:.0f}.pdf', bbox_inches='tight')
 ```
 
 ```{python}
@@ -467,10 +491,10 @@ print(best_permut )
 ```
 
 ```{python}
-plt.figure(figsize=(8, 6))
-plt.plot(chi2_list, ',')
-plt.ylabel('Chi2')
-plt.xlabel('Permutation')
+# plt.figure(figsize=(8, 6))
+# plt.plot(chi2_list, ',')
+# plt.ylabel('Chi2')
+# plt.xlabel('Permutation')
 ```
 
 ```{python}
@@ -917,11 +941,29 @@ def get_chi2_focal(focal, sigma, existing_peaks, peak_azel, nine_peak_alldet):
         az_simu_cut = az_simu[az_data!=0.]
         el_data_cut = el_data[az_data!=0.]
         el_simu_cut = el_simu[az_data!=0.]
+        
+        # az, el -> theta phi
+        th_simu = np.deg2rad(90 - el_simu_cut)
+        phi_simu = np.deg2rad(az_simu_cut)
+        th_data = np.deg2rad(90 - el_data_cut)
+        phi_data = np.deg2rad(az_data_cut)
+        
+        # unit vector
+        u_simu = hp.ang2vec(th_simu, phi_simu)
+        u_data = hp.ang2vec(th_data, phi_data)
+        print(u_simu.shape)
+        
+        ndet = u_simu.shape[0]
+        alpha = np.zeros(ndet) # angle between u_simu and u_data for each det
+        for i in range(ndet):
+            alpha[i] = np.rad2deg(np.arccos(u_simu[i] @ u_data[i]))
+            print(alpha[i])
 
+        chi2 += (alpha**2/sigma**2).sum() # sum over detectors and peaks
+        #chi2 += ((az_data_cut-az_simu_cut)**2/sigma**2 + (el_data_cut-el_simu_cut)**2/sigma**2).sum()
+        
         nddl += az_simu_cut.shape[0]
-        #print(nddl)
-        chi2 += ((az_data_cut-az_simu_cut)**2/sigma**2 + (el_data_cut-el_simu_cut)**2/sigma**2).sum()
-    
+        
     nddl-=1 #Substract the number of fit param (only the focal here)
     print('Chi2:', chi2)
     print('Chi2 reduce:', chi2/nddl)
@@ -978,7 +1020,7 @@ plt.ylabel(r'$\chi^2$', fontsize=16)
 plt.legend(fontsize=16)
 
 plt.tight_layout()
-plt.savefig(save_dir + f'fit_focal.pdf', bbox_inches='tight')
+# plt.savefig(save_dir + f'fit_focal.pdf', bbox_inches='tight')
 ```
 
 #### Find an error
@@ -987,6 +1029,7 @@ I do not believe in the errors so I normalize the $\chi^2$ so that $\chi^2/NDF =
 
 ```{python}
 # Normalize the chi2
+chi2_min = np.min(chi2_focal)
 chi2_normalized = chi2_focal/chi2_min*nddl
 
 print(np.min(chi2_normalized), nddl)
@@ -1062,11 +1105,30 @@ def get_chi2_shift(az_shift, el_shift, sigma, existing_peaks, peak_azel_simu, pe
         az_simu_cut = az_simu[az_data!=0.]
         el_data_cut = el_data[az_data!=0.]
         el_simu_cut = el_simu[az_data!=0.]
+        
+        # az, el -> theta phi
+        th_simu = np.deg2rad(90 - el_simu_cut)
+        phi_simu = np.deg2rad(az_simu_cut)
+        th_data = np.deg2rad(90 - el_data_cut)
+        phi_data = np.deg2rad(az_data_cut)
+        
+        # unit vector
+        u_simu = hp.ang2vec(th_simu, phi_simu)
+        u_data = hp.ang2vec(th_data, phi_data)
+        print(u_simu.shape)
+        
+        ndet = u_simu.shape[0]
+        alpha = np.zeros(ndet) # angle between u_simu and u_data for each det
+        for i in range(ndet):
+            alpha[i] = np.rad2deg(np.arccos(u_simu[i] @ u_data[i]))
+            print(alpha[i])
+
+        chi2 += (alpha**2/sigma**2).sum() # sum over detectors and peaks
 
         nddl += az_simu_cut.shape[0]
         #print(nddl)
 
-        chi2 += ((az_data_cut-az_simu_cut)**2/sigma**2 + (el_data_cut-el_simu_cut)**2/sigma**2).sum()
+        #chi2 += ((az_data_cut-az_simu_cut)**2/sigma**2 + (el_data_cut-el_simu_cut)**2/sigma**2).sum()
     
     nddl-=1 #Substract the number of fit param (only the focal here)
     print('Chi2:', chi2)
@@ -1152,13 +1214,32 @@ def get_chi2_global(focal, az_shift, el_shift, sigma, existing_peaks, peak_azel_
         az_simu_cut = az_simu[az_data!=0.]
         el_data_cut = el_data[az_data!=0.]
         el_simu_cut = el_simu[az_data!=0.]
+        # az, el -> theta phi
+        th_simu = np.deg2rad(90 - el_simu_cut)
+        phi_simu = np.deg2rad(az_simu_cut)
+        th_data = np.deg2rad(90 - el_data_cut)
+        phi_data = np.deg2rad(az_data_cut)
+        
+        # unit vector
+        u_simu = hp.ang2vec(th_simu, phi_simu)
+        u_data = hp.ang2vec(th_data, phi_data)
+        print(u_simu.shape)
+        
+        ndet = u_simu.shape[0]
+        alpha = np.zeros(ndet) # angle between u_simu and u_data for each det
+        for i in range(ndet):
+            alpha[i] = np.rad2deg(np.arccos(u_simu[i] @ u_data[i]))
+            print(alpha[i])
+
+        chi2 += (alpha**2/sigma**2).sum() # sum over detectors and peaks
 
         nddl += az_simu_cut.shape[0]
-        #print(nddl)
+        
 
-        chi2 += ((az_data_cut-az_simu_cut)**2/sigma**2 + (el_data_cut-el_simu_cut)**2/sigma**2).sum()
+        #chi2 += ((az_data_cut-az_simu_cut)**2/sigma**2 + (el_data_cut-el_simu_cut)**2/sigma**2).sum()
     
     nddl-=3 #Substract the number of fit param (only the focal here)
+    print('NDDL', nddl)
     print('Chi2:', chi2)
     print('Chi2 reduce:', chi2/nddl)
     return chi2
@@ -1180,7 +1261,8 @@ def chi2_global_minuit(params):
 
 # Choose a guess by hand
 params_guess = [0.3, -0.5, -0.5]
-sigma = 0.83
+NDDL=1228
+sigma = 0.83 * sqrt(2.8)
 
 # Initialize iMinuit
 m = Minuit.from_array_func(chi2_global_minuit, 
@@ -1196,6 +1278,7 @@ m.migrad()
 ```{python}
 print(m.values)
 print(m.errors)
+#m.fcn(m.values)
 ```
 
 ## Make a MCMC
@@ -1293,7 +1376,7 @@ samps = MCSamples(samples=mysamples, names=mcmc.axis_names, labels=labels)
 
 g = plots.getSubplotPlotter()
 g.triangle_plot(samps, filled=True, title_limit=1, markers=m.values)
-g.export(save_dir + 'corner_plot_focal_SBmaps.pdf')
+# g.export(save_dir + 'corner_plot_focal_SBmaps.pdf')
 ```
 
 ```{python}

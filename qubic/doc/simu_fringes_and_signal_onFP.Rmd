@@ -46,7 +46,8 @@ plt.rcParams['figure.figsize'] = (12, 6)
 
 ```{python}
 #save_dir = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/'
-save_dir = '/home/lmousset/QUBIC/These_manuscrit/Figures/Plots/'
+save_dir = '/home/lmousset/QUBIC/Images/'
+#save_dir = '/home/lmousset/QUBIC/These_manuscrit/Figures/Plots/'
 ```
 
 ```{python}
@@ -101,6 +102,18 @@ plt.axis('square')
 plt.rc('font', size=10) 
 fig.tight_layout()
 # plt.savefig(save_dir + 'horn_array.pdf', dpi=100)
+```
+
+```{python}
+# Plot the horn array
+fig = plt.figure(figsize=(10, 10))
+q.horn.plot(facecolor_open='grey', alpha=0.6)
+#q1.horn.plot(facecolor_open='grey', alpha=0.2)
+
+plt.axis('square')
+plt.rc('font', size=10) 
+fig.tight_layout()
+plt.savefig(save_dir + 'horn_FI.png', bbox_inches='tight', transparent=True)
 ```
 
 #### Horn numbering

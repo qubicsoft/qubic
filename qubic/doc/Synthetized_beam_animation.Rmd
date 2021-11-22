@@ -125,7 +125,7 @@ plt.scatter(xONAFP, yONAFP, c=allmain_peaks, marker='s', s=180, alpha=0.8, cmap=
 plt.xlabel('X_ONAFP')
 plt.ylabel('Y_ONAFP')
 
-plt.plot(weirdx0, weirdy0, 'ro')
+# plt.plot(weirdx0, weirdy0, 'ro')
 plt.plot(x0, y0, 'bo')
 plt.axis('square')
 plt.title('Focal plane')
@@ -153,25 +153,6 @@ for p in range(npeaks):
 #         hp.visufunc.projtext(th2, ph2, str(p), color='orange', fontsize=10)
 
 #plt.savefig(save_dir + f'peak_numbering_TES{TES}_ASIC{ASIC}.pdf', bbox_inches='tight')
-```
-
-```{python}
-(nine_peak_alldet==30).sum()
-```
-
-```{python}
-len(allmain_peaks)
-allmain_peaks[-10]
-```
-
-```{python}
-nine_peak_alldet.shape
-```
-
-```{python}
-TES, ASIC = 46, 2
-idx = get_index256array_from_TES(TES, ASIC)
-nine_peak_alldet[idx]
 ```
 
 ```{python}
@@ -227,10 +208,6 @@ for i, p in enumerate([16, 23, 24, 30]):
 ```
 
 ```{python}
-d['nside']
-```
-
-```{python}
 def animate(det):
     index = q.detector.index[det]
        
@@ -244,49 +221,51 @@ def animate(det):
     
     
     # Simulation
-    hp.gnomview(sb[det], min=0, max=1e5, rot=(0, 90, 180), reso=20, sub=(122), 
-                title='Simulation', cbar=False)
+    hp.gnomview(sb[det], min=0, max=1e6, rot=(0, 90, 180), reso=20, sub=(121), 
+                title='', cbar=False)
     hp.graticule()
     
     # pixel with Highest intensity
     nside = hp.get_nside(sb[det])
     pix_max = np.argmax(sb[det])
     lon, lat = hp.pix2ang(hp.get_nside(sb[det]), pix_max, lonlat=True)
-    hp.visufunc.projscatter(lon, lat, color='r', marker='+', s=500, lonlat=True, label='Highest pixel')
+    hp.visufunc.projscatter(lon, lat, color='r', marker='+', s=700, lonlat=True, label='Highest pixel')
     plt.legend()
     # Numbering of the peaks (absolute and ordered by intensity)
-#     for p in range(npeaks):
-#         th = theta[det, p]
-#         ph = phi[det, p]
-#         th2 = theta_order[det, p]
-#         ph2 = phi_order[det, p]
-# #         hp.visufunc.projscatter(th, ph, color='w', marker='+')
-#         hp.visufunc.projtext(th-0.02, ph-0.02, str(p), color='w', fontsize=12) 
+    for p in range(npeaks):
+        th = theta[det, p]
+        ph = phi[det, p]
+        th2 = theta_order[det, p]
+        ph2 = phi_order[det, p]
+#         hp.visufunc.projscatter(th, ph, color='w', marker='+')
+        hp.visufunc.projtext(th-0.02, ph-0.02, str(p), color='w', fontsize=12) 
 #         hp.visufunc.projtext(th2+0.02, ph2+0.02, str(p), color='r', fontsize=12) 
     
 
 def init():
 #     ax1.set_title('Synthetic beam on the sky')
-    ax1.axis('square')
-    ax2.axis('off')
+    ax2.axis('square')
+    ax2.set_xticklabels('')
+    ax2.set_yticklabels('')
+    ax1.axis('off')
 
     
 fig, axs = plt.subplots(1, 2, figsize=(12, 8))
 ax1, ax2 = np.ravel(axs)
-ax1.scatter(xONAFP, yONAFP, c=allmain_peaks, marker='s', s=200, alpha=0.8, cmap='jet')
-ax1.set_xlabel('X_ONAFP')
-ax1.set_ylabel('Y_ONAFP')
+ax2.scatter(xONAFP, yONAFP, c=allmain_peaks, marker='s', s=200, alpha=0.8, cmap='jet')
+#ax2.set_xlabel('X_ONAFP')
+#ax2.set_ylabel('Y_ONAFP')
 
-det0 = 238
+det0 = 199
 x0 = xONAFP[det0]
 y0 = yONAFP[det0]
-point, = ax1.plot(x0, y0, 'ro')
-steps = np.arange(det0, det0+10, 1)
+point, = ax2.plot(x0, y0, 'ro')
+steps = np.arange(det0, det0+9, 1)
 
-anim = FuncAnimation(fig, animate, steps, init_func=init, interval=1000, blit=True, repeat=False)
+anim = FuncAnimation(fig, animate, steps, init_func=init, interval=1500, blit=True, repeat=False)
 
 # Save a .gif
-# anim.save('./animation_beam.gif', writer='imagemagick')
+anim.save('./animation_beam.gif', writer='imagemagick')
 ```
 
 ```{python}

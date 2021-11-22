@@ -88,20 +88,6 @@ Qubic_sky = qss.Qubic_sky(sky_config_dust, d)
 # print(dust_map.shape)
 ```
 
-```{python}
-Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(int(config[-3:]), nbands)
-print(nus)
-
-fwhms = [d['synthbeam_peak150_fwhm'] * 150 / nu for nu in nus]
-print(fwhms)
-
-nus_eff = []
-for i, (band1, band2) in enumerate(combi):
-    print(f'Bands {band1} {band2}')
-    nus_eff.append(np.sqrt(nus[band1] * nus[band2]))
-print(nus_eff)
-```
-
 ## Coverage and seenmap
 
 ```{python}
@@ -128,6 +114,20 @@ seenmap = coverage > np.max(coverage) * 0.1
 BBcov = np.load('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/'
                        + f'BBcovariance_bincross_nfrecon{nbands}_samereal_' + config + '_v4.npy')
 
+```
+
+```{python}
+Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(int(config[-3:]), nbands)
+print(nus)
+
+fwhms = [d['synthbeam_peak150_fwhm'] * 150 / nu for nu in nus]
+print(fwhms)
+
+nus_eff = []
+for i, (band1, band2) in enumerate(combi):
+    print(f'Bands {band1} {band2}')
+    nus_eff.append(np.sqrt(nus[band1] * nus[band2]))
+print(nus_eff)
 ```
 
 # Theoretical spectra
@@ -175,7 +175,7 @@ binned_camblib = qc.bin_camblib(Namaster, '../../doc/CAMB/camblib_0to1_step001.p
 ```{python}
 # Compute BB cross spectra for dust once 
 # dust_fraction = [0., 0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05]
-dust_fraction = np.arange(0., 0.007, 0.001)
+dust_fraction = np.arange(0., 0.008, 0.001)
 print(dust_fraction)
 BBcross_dust = np.zeros((len(dust_fraction), ncombi, nbins))
 
@@ -354,7 +354,7 @@ ax.set_xlabel(r'$f_{\rm dust}$', fontsize=16)
 ax.set_ylabel(r'$r_{\rm dust}$', fontsize=16)
 ax.grid()
 
-#plt.savefig(save_plot + f'Likelihood_dust_rdust_{config}_3y_{nbands}bands_fdust0to06.pdf', bbox_inches='tight')
+plt.savefig(save_plot + f'Likelihood_dust_rdust_{config}_3y_{nbands}bands_fdust0to06.pdf', bbox_inches='tight')
 ```
 
 ## Likelihood of each IBCS

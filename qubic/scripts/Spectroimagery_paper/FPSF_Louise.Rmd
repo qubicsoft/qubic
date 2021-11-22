@@ -131,7 +131,7 @@ As expected, the maximum corresponds to the center of the band $\nu_{cj}$.
 <!-- #endregion -->
 
 ```{python slideshow={'slide_type': 'subslide'}}
-mycolors = ['b', 'g', 'orange', 'r']
+mycolors = ['r', 'orange', 'g', 'b']
 # One plot for each band
 fig, axs = plt.subplots(2, 2, figsize=(8, 8))
 axs = np.ravel(axs)
@@ -182,7 +182,7 @@ ax.grid()
 ax.legend()
 
 fig.tight_layout()
-fig.savefig(save_dir + f'FPSF_band.pdf', bbox_inches='tight')
+#fig.savefig(save_dir + f'FPSF_band.pdf', bbox_inches='tight')
 ```
 
 <!-- #region slideshow={"slide_type": "slide"} -->
@@ -215,7 +215,7 @@ For each $\nu_{in}$ let's look at the four points in the sub-bands.
 
 ```{python}
 # Just for one input frequency
-i = 21
+i = 8
 fig = plt.figure(figsize=(4, 4))
 ax = fig.gca()
 points, = ax.plot(_nusrec_, df.loc[i][1:], 'ko')
@@ -223,10 +223,8 @@ line = ax.axvline(_nusin_[i], color = 'k', ls = '--', alpha=0.4)#, label=r'$\nu_
 text = ax.text(140, 1, r'$\nu_{in}=$'+f'{_nusin_[i]:3.2f} GHz', fontsize=14)
 
 ax.axhline(i, color='k', ls = '-', alpha = 0.2)
-ax.axvspan(xmin = _nusedge_[0], xmax = _nusedge_[1], alpha = 0.2, color = 'b')
-ax.axvspan(xmin = _nusedge_[1], xmax = _nusedge_[2], alpha = 0.2, color = 'g')
-ax.axvspan(xmin = _nusedge_[2], xmax = _nusedge_[3], alpha = 0.2, color = 'y')
-ax.axvspan(xmin = _nusedge_[3], xmax = _nusedge_[4], alpha = 0.2, color = 'r')
+for j in range(4):
+    ax.axvspan(xmin = _nusedge_[j], xmax = _nusedge_[j+1], alpha = 0.2, color=mycolors[j])
 ax.set_xlabel(r'$\nu$ [GHz]', fontsize=16)
 ax.set_ylabel(r'$I_{out}$', fontsize=16)
 ax.set_ylim(-0.2,1.1)
@@ -244,10 +242,8 @@ text = ax.text(140, 1, r'$\nu_{in}=$'+f'{_nusin_[0]:3.2f} GHz', fontsize=14)
 
 def init():
     ax.axhline(0, color = 'k', ls = '-', alpha = 0.2)
-    ax.axvspan(xmin = _nusedge_[0], xmax = _nusedge_[1], alpha = 0.2, color = 'b')
-    ax.axvspan(xmin = _nusedge_[1], xmax = _nusedge_[2], alpha = 0.2, color = 'g')
-    ax.axvspan(xmin = _nusedge_[2], xmax = _nusedge_[3], alpha = 0.2, color = 'y')
-    ax.axvspan(xmin = _nusedge_[3], xmax = _nusedge_[4], alpha = 0.2, color = 'r')
+    for i in range(4):
+        ax.axvspan(xmin = _nusedge_[i], xmax = _nusedge_[i+1], alpha = 0.2, color =mycolors[i])
     ax.set_xlabel(r'$\nu$ [GHz]')
     ax.set_ylabel(r'$I_{out}$')
     ax.set_ylim(-0.2,1.1)
@@ -301,11 +297,48 @@ fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=new_cmap),
 
 ```
 
+```{python}
+from scipy.optimize import curve_fit
+
+# Try to fit a sinus cardianl
+def sinc(x,*p):
+    A, mu, sigma = p
+    term = np.pi*(x-mu)/sigma
+    return A * np.sin(term) / term
+
+c = 3e8
+nu_diff = np.zeros((22, 4))
+lambda_diff = np.zeros((22, 4))
+yy = np.zeros((22, 4))
+for i in range(22):
+    nu_diff[i, :] = (_nusrec_ - df['nu_in'][i])
+    lambda_diff[i, :] = (c/_nusrec_ - c/df['nu_in'][i])    
+    yy[i, :] = df.loc[i][1:]
+
+nu_diff = np.ravel(nu_diff)
+idx = np.argsort(nu_diff)
+nu_diff = nu_diff[idx]
+
+yy = np.ravel(yy)[idx]
+print(nu_diff.shape)
+
+p0 = [1., 0., 5.]
+p1, var_matrix = curve_fit(sinc, nu_diff, yy, p0)
+print(p1)
+
+A1, mu1, sigma1 = p1
+```
+
 ```{python slideshow={'slide_type': 'slide'}}
 plt.figure()
-for i in range(22):
-    color = new_cmap(1 - i/22)
-    plt.plot((_nusrec_ - df['nu_in'][i]), df.loc[i][1:], 'o', color=color)
+#for i in range(22):
+#    color = new_cmap(1 - i/22)
+#    plt.plot((_nusrec_ - df['nu_in'][i]), df.loc[i][1:], 'o', color=color)
+plt.plot(nu_diff, yy, '.', color='k')
+
+xxx = np.linspace(-30, 30, 1000)
+
+plt.plot(xxx, sinc(xxx, A1, mu1, sigma1), color='r')
 plt.xlabel(r'$\nu - \nu_{in}$ [GHz]')
 plt.ylabel(r'$I_{out}$')
 # plt.xlim(-2, 2)
@@ -314,6 +347,41 @@ plt.ylabel(r'$I_{out}$')
 <!-- #region slideshow={"slide_type": "notes"} -->
 I think this is the good representation for the FPSF. I do not think we need to divide by $\Delta_\nu$.
 <!-- #endregion -->
+
+```{python}
+c = 3e8
+lambda_diff = np.zeros((22, 4))
+yy = np.zeros((22, 4))
+for i in range(22):
+    lambda_diff[i, :] = (c/_nusrec_/1e6- c/df['nu_in'][i]/1e6) # mm  
+    yy[i, :] = df.loc[i][1:]
+    
+lambda_diff = np.ravel(lambda_diff)
+idx = np.argsort(lambda_diff)
+lambda_diff = lambda_diff[idx]
+
+
+yy = np.ravel(yy)[idx]
+print(lambda_diff.shape)
+
+p0 = [1., 0., 0.1]
+p1, var_matrix = curve_fit(sinc, lambda_diff, yy, p0)
+print(p1)
+
+A1, mu1, sigma1 = p1
+
+plt.figure()
+#for i in range(22):
+#    color = new_cmap(1 - i/22)
+#    plt.plot((_nusrec_ - df['nu_in'][i]), df.loc[i][1:], 'o', color=color)
+plt.plot(lambda_diff, yy, '.', color='k')
+
+xxx = np.linspace(-0.4, 0.4, 1000)
+
+plt.plot(xxx, sinc(xxx, A1, mu1, sigma1), color='r')
+plt.xlabel(r'$\lambda - \lambda_{in}$ [mm]')
+plt.ylabel(r'$I_{out}$')
+```
 
 #### Spline fitting (JC method)
 
@@ -394,8 +462,8 @@ myspl = MySplineFitting(xx, yy, np.ones(len(xx)),nbspl)
 
 
 plt.figure(figsize=(8, 6))
-plt.plot(xx, yy/np.max(myspl(xvals)), 'o', color='b', label='Data')
 xvals = np.linspace(np.min(xx), np.max(xx), 1000)
+plt.plot(xx, yy/np.max(myspl(xvals)), 'o', color='b', label='Data')
 plt.plot(xvals, myspl(xvals)/np.max(myspl(xvals)), 'r', label='Spline fitting')
 
 P = 20

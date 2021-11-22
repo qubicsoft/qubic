@@ -91,6 +91,8 @@ def fct_subopt(nus):
     fct_subopt = poly1d(polyfit(subnus, subval, 1))
     return fct_subopt(nus)
 
+subnus = [150., 220]
+subval = [1.4, 1.2]
 plot(subnus, subval, 'ro',label='QUBIC End2End')
 plot(s4_config['frequency'], fct_subopt(s4_config['frequency']),'k.-', label='CMB-S4 extrapolation')
 xlabel('Frequency [GHz]')
@@ -121,10 +123,10 @@ def qubicify(config, qp_nsubs, qp_effective_fraction):
         newdepth_i = config['depth_i'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
         newdepth_e = config['depth_e'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
         newdepth_b = config['depth_b'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
-        newell_min = np.ones(nsub[i]) * config['ell_min'][i]
-        newnside = np.ones(nsub[i]) * config['nside'][i]
-        neweffective_fraction = np.ones(nsub[i]) * qp_effective_fraction[i]
-        initial_band = np.ones(nsub[i]) * config['frequency'][i]
+        newell_min = np.ones(qp_nsub[i]) * config['ell_min'][i]
+        newnside = np.ones(qp_nsub[i]) * config['nside'][i]
+        neweffective_fraction = np.ones(qp_nsub[i]) * qp_effective_fraction[i]
+        initial_band = np.ones(qp_nsub[i]) * config['frequency'][i]
         
         for k in range(qp_nsubs[i]):
             if qp_effective_fraction[i] != 0:
@@ -210,22 +212,6 @@ legend()
 title('All normalized to 1 at a ref frequency')
 ```
 
-```{python}
-
-myref = 200
-dust = Dust(myref, temp=20)
-print(dust.params)
-
-numin = np.min(qp_config['edges'])
-numax = np.max(qp_config['edges'])
-nnu = 1000
-nus = np.linspace(numin, numax, nnu)
-
-plot(nus, dust.eval(nus, 1.9), label='Dust')
-plot(nus, dust.eval(nus, 1.2), label='Dust')
-
-```
-
 # Realistic amplitudes
 
 ```{python}
@@ -260,10 +246,6 @@ mask[okpix] = 1
 
 hp.gnomview(mask, rot=center, reso=15)
 hp.mollview(mask)
-```
-
-```{python}
-map_sync_70GHz[0:2,:].shape
 ```
 
 ```{python}
@@ -329,25 +311,7 @@ for istk in mystk:
 tight_layout()
 ```
 
-```{python}
-
-```
-
-```{python}
-xxx = np.linspace(100,200, 1000)
-
-subplot(1,2,1)
-toto = lambda a : heaviside(a-150,1)
-plot(xxx, toto(xxx))
-
-subplot(1,2,2)
-from sympy.parsing.sympy_parser import parse_expr
-import sympy
-analytic_expr = ('heaviside(x-nu0,0.5)')
-truc = parse_expr(analytic_expr, local_dict={'nu0':150})
-func=sympy.lambdify(x,truc,modules=["numpy"])
-plot(xxx, func(xxx))
-```
+## Here we show that it is possible to add a heaviside() function to FGBuster
 
 ```{python}
 from fgbuster import AnalyticComponent
@@ -370,12 +334,12 @@ from scipy import constants
 from astropy.cosmology import Planck15
 
 H_OVER_K = constants.h * 1e9 / constants.k
-# # Conversion factor at frequency nu
-# K_RJ2K_CMB = ('(expm1(h_over_k * nu / Tcmb)**2'
-#               '/ (exp(h_over_k * nu / Tcmb) * (h_over_k * nu / Tcmb)**2))')
-# K_RJ2K_CMB = K_RJ2K_CMB.replace('Tcmb', str(Planck15.Tcmb(0).value))
-# K_RJ2K_CMB = K_RJ2K_CMB.replace('h_over_k', str(H_OVER_K))
-
+# Conversion factor at frequency nu
+K_RJ2K_CMB = ('(expm1(h_over_k * nu / Tcmb)**2'
+              '/ (exp(h_over_k * nu / Tcmb) * (h_over_k * nu / Tcmb)**2))')
+K_RJ2K_CMB = K_RJ2K_CMB.replace('Tcmb', str(Planck15.Tcmb(0).value))
+K_RJ2K_CMB = K_RJ2K_CMB.replace('h_over_k', str(H_OVER_K))
+K_RJ2K_CMB_NU0 = K_RJ2K_CMB + ' / ' + K_RJ2K_CMB.replace('nu', 'nu0')
 
 
 beta_dust = 1.54
@@ -385,15 +349,15 @@ print('dust:',dust.params)
 
 analytic_expr = ('(exp(nu0 / temp * h_over_k) -1)'
                  '/ (exp(nu / temp * h_over_k) - 1)'
-                 '* (nu / nu0)**(1 + beta_d) * ')
+                 '* (nu / nu0)**(1 + beta_d) * '+K_RJ2K_CMB_NU0)
 
-test = AnalyticComponent(analytic_expr, nu0=353, temp=20., h_over_k=H_OVER_K)
+test = AnalyticComponent(analytic_expr, nu0=353, temp=20., h_over_k=constants.h * 1e9 / constants.k)
 print('test:',test.params)
 
 xxx = np.linspace(100,500, 1000)
-plot(xxx, dust.eval(xxx, 1.54))
-plot(xxx, test.eval(xxx, 1.54))
-
+plot(xxx, dust.eval(xxx, 1.54), lw=3, label = 'FGB Dust (single beta)')
+plot(xxx, test.eval(xxx, 1.54), '--', lw=3, label = 'Ananlytical to FGB (single beta)')
+legend()
 ```
 
 ```{python}

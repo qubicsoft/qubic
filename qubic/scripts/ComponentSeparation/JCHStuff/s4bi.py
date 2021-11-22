@@ -14,6 +14,8 @@ from sympy import Heaviside
 from scipy import constants
 from astropy.cosmology import Planck15
 
+import qubic
+
 warnings.filterwarnings("ignore")
 
 
@@ -111,4 +113,57 @@ def qubicify(config, qp_nsubs, qp_effective_fraction):
         qp_config[fields[j]] = np.array(qp_config[fields[j]])
         
     return qp_config
+
+
+def get_coverage(fsky, nside, center_radec=[0., -57.]):
+    center = qubic.equ2gal(center_radec[0], center_radec[1])
+    uvcenter = np.array(hp.ang2vec(center[0], center[1], lonlat=True))
+    uvpix = np.array(hp.pix2vec(nside, np.arange(12*nside**2)))
+    ang = np.arccos(np.dot(uvcenter, uvpix))
+    indices = np.argsort(ang)
+    okpix = ang < -1
+    okpix[indices[0:int(fsky * 12*nside**2)]] = True
+    mask = np.zeros(12*nside**2)
+    mask[okpix] = 1
+    return mask
+
+def get_component_maps(components, ref_freqs, nside, fsky, center_radec=[0., -57.]):
+    maps = []
+    mask = get_coverage(fsky, nside, center_radec=center_radec)
+    okpix = mask == 1
+    for c,f in zip(components, ref_freqs):
+        print('Doing: '+c)
+        thesky = pysm3.Sky(nside=nside, preset_strings=[c])
+        themaps = np.zeros((4, 12*nside**2))     # four are I, Q, U and P
+        themaps[0:3,:] = thesky.get_emission(f * u.GHz).to(u.uK_CMB, equivalencies=u.cmb_equivalencies(f*u.GHz))
+        themaps[3,:] = np.sqrt(themaps[1,:]**2 + themaps[2,:]**2)
+        themaps[:, ~okpix] = hp.UNSEEN
+        maps.append(themaps)
+    return maps
+
+
+def double_beta_dust_FGB_Model():
+
+    H_OVER_K = constants.h * 1e9 / constants.k
+    # Conversion factor at frequency nu
+    K_RJ2K_CMB = ('(expm1(h_over_k * nu / Tcmb)**2'
+                  '/ (exp(h_over_k * nu / Tcmb) * (h_over_k * nu / Tcmb)**2))')
+    K_RJ2K_CMB = K_RJ2K_CMB.replace('Tcmb', str(Planck15.Tcmb(0).value))
+    K_RJ2K_CMB = K_RJ2K_CMB.replace('h_over_k', str(H_OVER_K))
+    K_RJ2K_CMB_NU0 = K_RJ2K_CMB + ' / ' + K_RJ2K_CMB.replace('nu', 'nu0')
+
+    analytic_expr1 = ('(exp(nu0 / temp * h_over_k) -1)'
+                     '/ (exp(nu / temp * h_over_k) - 1)'
+                     '* (nu / nu0)**(1 + beta_d0)   * (nu0 / nubreak)**(beta_d0-beta_d1) * '+K_RJ2K_CMB_NU0 + '* (1-heaviside(nu-nubreak,0.5))')
+
+    analytic_expr2 = ('(exp(nu0 / temp * h_over_k) -1)'
+                     '/ (exp(nu / temp * h_over_k) - 1)'
+                     '* (nu / nu0)**(1 + beta_d1) * '+K_RJ2K_CMB_NU0 + '* heaviside(nu-nubreak,0.5)')
+    analytic_expr = analytic_expr1 + ' + ' + analytic_expr2
+
+    return analytic_expr
+
+
+
+
 

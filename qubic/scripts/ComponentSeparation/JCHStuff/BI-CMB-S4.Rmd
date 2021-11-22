@@ -15,6 +15,8 @@ jupyter:
 ```{python}
 import s4bi
 from importlib import reload
+from scipy import constants
+from astropy.cosmology import Planck15
 rc('figure',figsize=(16,4))
 rc('font',size=12)
 
@@ -65,89 +67,24 @@ title('CMB-S4 Configuration')
 legend()
 ```
 
-# Foreground Models
+# Component maps
 
 ```{python}
-rc('figure',figsize=(16,8))
-rc('font',size=12)
-
-import fgbuster
-from fgbuster import CMB, Dust, Synchrotron, AnalyticComponent, ModifiedBlackBody
-
-#### Components
-dust_ref_freq = 353.
-sync_ref_freq = 70.
-dust = Dust(dust_ref_freq, beta_d=1.6, temp=20)
-cmb = CMB() 
-sync = Synchrotron(sync_ref_freq, beta_pl=-3)
-
-numin = np.min(qp_config['edges'])
-numax = np.max(qp_config['edges'])
-nnu = 1000
-nus = np.linspace(numin, numax, nnu)
-
-plot(nus, dust.eval(nus), label='Dust')
-plot(nus, sync.eval(nus), label='Synchrotron')
-plot(nus, cmb.eval(nus), label='CMB')
-xlabel('Frequency [GHz]')
-ylabel('SED')
-yscale('log')
-xscale('log')
-legend()
-title('All normalized to 1 at a ref frequency')
-```
-
-# Realistic amplitudes
-
-```{python}
-import pysm3
-import pysm3.units as u
-import healpy as hp
-import numpy as np
-import warnings
-warnings.filterwarnings("ignore")
-
-import qubic
-center = qubic.equ2gal(0., -57.)
-
-sky_cmb = pysm3.Sky(nside=256, preset_strings=['c1'])
-sky_dust = pysm3.Sky(nside=256, preset_strings=['d0'])
-sky_sync = pysm3.Sky(nside=256, preset_strings=['s0'])
-sky = pysm3.Sky(nside=256, preset_strings=['c1', 'd0', 's0'])
-
-```
-
-```{python}
-# Mask
+reload(s4bi)
+components = ['c1', 'd0', 's0']
+ref_freqs = [150., 353., 70.]
 fsky = 0.03
-uvcenter = np.array(hp.ang2vec(center[0], center[1], lonlat=True))
-uvpix = np.array(hp.pix2vec(256, np.arange(12*256**2)))
-ang = np.arccos(np.dot(uvcenter, uvpix))
-indices = np.argsort(ang)
-okpix = ang < -1
-okpix[indices[0:int(fsky * 12*256**2)]] = True
-mask = np.zeros(12*256**2)
-mask[okpix] = 1
+nside = 256
+radec_center = [0, -57]
+center = qubic.equ2gal(radec_center[0], radec_center[1])
 
-hp.gnomview(mask, rot=center, reso=15)
-hp.mollview(mask)
+map_CMB, map_dust_353GHz, map_sync_70GHz = s4bi.get_component_maps(components, ref_freqs, nside, fsky)
+
 ```
 
 ```{python}
-map_sync_70GHz = np.zeros((4, 12*256**2))
-map_sync_70GHz[0:3,:] = sky_sync.get_emission(sync_ref_freq * u.GHz).to(u.uK_CMB, equivalencies=u.cmb_equivalencies(70*u.GHz))
-map_sync_70GHz[3,:] = np.sqrt(map_sync_70GHz[1,:]**2 + map_sync_70GHz[2,:]**2)
-map_sync_70GHz[:, ~okpix] = hp.UNSEEN
-
-map_dust_353GHz = np.zeros((4, 12*256**2))
-map_dust_353GHz[0:3,:] = sky_dust.get_emission(dust_ref_freq * u.GHz).to(u.uK_CMB, equivalencies=u.cmb_equivalencies(353*u.GHz))
-map_dust_353GHz[3,:] = np.sqrt(map_dust_353GHz[1,:]**2 + map_dust_353GHz[2,:]**2)
-map_dust_353GHz[:, ~okpix] = hp.UNSEEN
-
-map_CMB = np.zeros((4, 12*256**2))
-map_CMB[0:3,:] = sky_cmb.get_emission(150 * u.GHz).to(u.uK_CMB, equivalencies=u.cmb_equivalencies(150*u.GHz))
-map_CMB[3,:] = np.sqrt(map_CMB[1,:]**2 + map_CMB[2,:]**2)
-map_CMB[:, ~okpix] = hp.UNSEEN
+stokes = ['I', 'Q', 'U', 'P']
+okpix = map_CMB[0,:] != hp.UNSEEN
 
 m_sync_70GHz = np.mean(map_sync_70GHz[:,okpix], axis=1)
 s_sync_70GHz = np.std(map_sync_70GHz[:,okpix], axis=1)
@@ -158,11 +95,12 @@ s_dust_353GHz = np.std(map_dust_353GHz[:,okpix], axis=1)
 m_CMB = np.mean(map_CMB[:,okpix], axis=1)
 s_CMB = np.std(map_CMB[:,okpix], axis=1)
 
-stokes = ['I', 'Q', 'U', 'P']
-figure()
-for istk in range(4):
-    hp.gnomview(map_sync_70GHz[istk,:], rot=center, reso=15, 
-                title='Synchrotron '+stokes[istk]+' at 70 GHz ($\mu$K$_{CMB}$)'+'\n {0:5.2g}+/-{1:5.2g}'.format(m_sync_70GHz[istk], s_sync_70GHz[istk]), sub=(1,4,istk+1))
+
+for c in components:
+    figure()
+    for istk in range(4):
+        hp.gnomview(map_sync_70GHz[istk,:], rot=center, reso=15, 
+                    title='Synchrotron '+stokes[istk]+' at 70 GHz ($\mu$K$_{CMB}$)'+'\n {0:5.2g}+/-{1:5.2g}'.format(m_sync_70GHz[istk], s_sync_70GHz[istk]), sub=(1,4,istk+1))
 
 figure()    
 for istk in range(4):
@@ -177,6 +115,51 @@ for istk in range(4):
 
 ```
 
+# Component Models
+
+FGBuster gives components scaled to 1 at their respective reference frequencies. We have added a double-beta component model.
+
+```{python}
+rc('figure',figsize=(16,8))
+rc('font',size=12)
+
+import fgbuster
+from fgbuster import CMB, Dust, Synchrotron, AnalyticComponent, ModifiedBlackBody
+
+dust_ref_freq = 353.
+sync_ref_freq = 70.
+dust = Dust(dust_ref_freq, beta_d=1.6, temp=20)
+cmb = CMB() 
+sync = Synchrotron(sync_ref_freq, beta_pl=-3)
+
+### The double beta component model
+dbdust = AnalyticComponent(analytic_expr, nu0=353, temp=20., h_over_k=constants.h * 1e9 / constants.k)
+print(dbdust.params)   # parameters are beta0, beta1 and nubreak
+# let's fix the params for now
+beta0 = 1.3
+beta1 = 1.54
+nubreak = 200.
+
+numin = 20
+numax = 400
+nnu = 1000
+nus = np.linspace(numin, numax, nnu)
+
+plot(nus, dust.eval(nus), label='Dust')
+plot(nus, sync.eval(nus), label='Synchrotron')
+plot(nus, cmb.eval(nus), label='CMB')
+plot(nus, dbdust.eval(nus, beta0, beta1, nubreak), 
+     label='Double Beta Dust with beta_0={}, beta_1={}, nubreak={}'.format(beta0, beta1, nubreak))
+xlabel('Frequency [GHz]')
+ylabel('SED')
+yscale('log')
+xscale('log')
+legend()
+title('All normalized to 1 at a ref frequency')
+```
+
+Now we use the normalization (RMS) found from PYSM in our region ito scale them:
+
 ```{python}
 mystk = [0,3]
 
@@ -187,6 +170,7 @@ for istk in mystk:
     plot(nus, dust.eval(nus) * s_dust_353GHz[istk], label='Dust')
     plot(nus, sync.eval(nus) * s_sync_70GHz[istk], label='Synchrotron')
     plot(nus, cmb.eval(nus) * s_CMB[istk], label='CMB')
+    plot(nus, dbdust.eval(nus, 1.3, 1.54, 200) * s_CMB[istk], label='Double Beta Dust with beta_0={}, beta_1={}, nubreak={}'.format(beta0, beta1, nubreak))
     xlabel('Frequency [GHz]')
     ylabel(r'SED [$\mu K_{CMB}$]')
     yscale('log')
@@ -194,84 +178,6 @@ for istk in mystk:
     title('Stokes '+stokes[istk]+' in clean QUBIC region {}%'.format(fsky*100))
     legend()
 tight_layout()
-```
-
-## Here we show that it is possible to add a heaviside() function to FGBuster
-
-```{python}
-from fgbuster import AnalyticComponent
-from sympy import Heaviside
-
-analytic_expr = ('heaviside(nu-nu0,0.5) * (nu/nu0)**beta_d0')
-
-test = AnalyticComponent(analytic_expr, nu0=150)
-print(test.params)
-
-xxx = np.linspace(100,200, 1000)
-plot(xxx, test.eval(xxx, 1.54))
-
-```
-
-```{python}
-from fgbuster import AnalyticComponent
-from sympy import Heaviside
-from scipy import constants
-from astropy.cosmology import Planck15
-
-H_OVER_K = constants.h * 1e9 / constants.k
-# Conversion factor at frequency nu
-K_RJ2K_CMB = ('(expm1(h_over_k * nu / Tcmb)**2'
-              '/ (exp(h_over_k * nu / Tcmb) * (h_over_k * nu / Tcmb)**2))')
-K_RJ2K_CMB = K_RJ2K_CMB.replace('Tcmb', str(Planck15.Tcmb(0).value))
-K_RJ2K_CMB = K_RJ2K_CMB.replace('h_over_k', str(H_OVER_K))
-K_RJ2K_CMB_NU0 = K_RJ2K_CMB + ' / ' + K_RJ2K_CMB.replace('nu', 'nu0')
-
-
-beta_dust = 1.54
-xxx = np.linspace(100,500, 1000)
-
-##### FGB Dust model
-dust = Dust(dust_ref_freq, temp=20)
-print('dust:',dust.params)
-plot(xxx, dust.eval(xxx, 1.54), lw=3, label = 'FGB Dust (single beta)')
-
-##### FGB Modified black-body directly from analytical expression
-analytic_expr = ('(exp(nu0 / temp * h_over_k) -1)'
-                 '/ (exp(nu / temp * h_over_k) - 1)'
-                 '* (nu / nu0)**(1 + beta_d) * '+K_RJ2K_CMB_NU0)
-test = AnalyticComponent(analytic_expr, nu0=353, temp=20., h_over_k=constants.h * 1e9 / constants.k)
-print('test:',test.params)
-plot(xxx, test.eval(xxx, 1.54), '--', lw=3, label = 'Ananlytical to FGB (single beta)')
-
-
-
-# ##### FGB Modified black-body directly from analytical expression with a heaviside
-# analytic_expr = ('(exp(nu0 / temp * h_over_k) -1)'
-#                  '/ (exp(nu / temp * h_over_k) - 1)'
-#                  '* (nu / nu0)**(1 + beta_d) * '+K_RJ2K_CMB_NU0 + '* heaviside(nu-200,0.5)')
-# test2 = AnalyticComponent(analytic_expr, nu0=353, temp=20., h_over_k=constants.h * 1e9 / constants.k)
-# print('test2:',test2.params)
-# plot(xxx, test2.eval(xxx, 1.54), '--', lw=3, label = 'Ananlytical to FGB (single beta) with Heaviside')
-
-##### modified black body with two betas
-analytic_expr1 = ('(exp(nu0 / temp * h_over_k) -1)'
-                 '/ (exp(nu / temp * h_over_k) - 1)'
-                 '* (nu / nu0)**(1 + beta_d0)   * (nu0 / nubreak)**(beta_d0-beta_d1) * '+K_RJ2K_CMB_NU0 + '* (1-heaviside(nu-nubreak,0.5))')
-
-analytic_expr2 = ('(exp(nu0 / temp * h_over_k) -1)'
-                 '/ (exp(nu / temp * h_over_k) - 1)'
-                 '* (nu / nu0)**(1 + beta_d1) * '+K_RJ2K_CMB_NU0 + '* heaviside(nu-nubreak,0.5)')
-analytic_expr = analytic_expr1 + ' + ' + analytic_expr2
-
-test3 = AnalyticComponent(analytic_expr, nu0=353, temp=20., h_over_k=constants.h * 1e9 / constants.k)
-print('test3:',test3.params)
-plot(xxx, test3.eval(xxx, 0.5, 3, 200), '--', lw=3, label = 'Double beta in mukCMB')
-
-axvline(x=353, ls=':', color='k')
-axhline(y=1, ls=':', color='k')
-
-yscale('log')
-legend()
 ```
 
 ```{python}

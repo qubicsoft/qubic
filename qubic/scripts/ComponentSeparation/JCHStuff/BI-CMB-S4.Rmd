@@ -334,73 +334,54 @@ tight_layout()
 ```
 
 ```{python}
+xxx = np.linspace(100,200, 1000)
+
+subplot(1,2,1)
+toto = lambda a : heaviside(a-150,1)
+plot(xxx, toto(xxx))
+
+subplot(1,2,2)
+from sympy.parsing.sympy_parser import parse_expr
+import sympy
+analytic_expr = ('heaviside(x-nu0,0.5)')
+truc = parse_expr(analytic_expr, local_dict={'nu0':150})
+func=sympy.lambdify(x,truc,modules=["numpy"])
+plot(xxx, func(xxx))
+```
+
+```{python}
 from fgbuster import AnalyticComponent
 from sympy import Heaviside
 
-analytic_expr = ('Heaviside(nu)*(nu/nu0)**beta_d')
-
+analytic_expr = ('heaviside(nu-nu0,0.5) * (nu/nu0)**beta_d0')
 
 test = AnalyticComponent(analytic_expr, nu0=150)
 print(test.params)
 
 xxx = np.linspace(100,200, 1000)
 plot(xxx, test.eval(xxx, 1.54))
-
-```
-
-```{python}
-
-```
-
-```{python}
 
 ```
 
 ```{python}
 from fgbuster import AnalyticComponent
+from sympy import Heaviside
+from scipy import constants
 
+beta_dust = 
 
-#toto = lambda a : a + 10
+Dust(dust_ref_freq, beta_d=1.6, temp=20)
 
+analytic_expr = ('(exp(nu0 / temp * h_over_k) -1)'
+                 '/ (exp(nu / temp * h_over_k) - 1)'
+                 '* (nu / nu0)**(1 + beta_d)')
 
-#analytic_expr = ('(nu/nu0)**beta_d + toto(nu)')
-
-#"IF(d == 0, 0, IF(d == 1, 1, 2))"
-#analytic_expr = ('IF(nu<150, (nu/nu0)**beta_d, 1)')
-
-analytic_expr = ('(nu/nu0)**beta_d')
-#analytic_expr = ('0 if nu<150 else 1')
-
-test = AnalyticComponent(analytic_expr, nu0=150)
+test = AnalyticComponent(analytic_expr, nu0=353, temp=20., h_over_k=constants.h * 1e9 / constants.k)
 print(test.params)
 
-xxx = np.linspace(100,200, 1000)
+xxx = np.linspace(100,500, 1000)
 plot(xxx, test.eval(xxx, 1.54))
 
-```
-
-```{python}
-
-```
-
-```{python}
-from sympy.parsing.sympy_parser import parse_expr
-x_str = "IF(c < 1, 0, 1)"
-# c_str = "IF(d == 0, 0, IF(d == 1, 1, 2))"
-c_str = "IF(d == 0, 0, 1)"
-x = parse_expr(x_str)
-c = parse_expr(c_str)
-d = {"x": x, "c": c}
-print("local dict:")
-print(d)
-x = parse_expr(x_str, local_dict=d)
-c = parse_expr(c_str, local_dict=d)
-```
-
-```{python}
-analytic_expr = ('(nu/nu0)**beta_d if nu<150 else 1')
-truc = parse_expr(analytic_expr, local_dict={'nu':100, 'beta_d':1.54})
-truc
 ```
 
 ```{python}

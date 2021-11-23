@@ -17,8 +17,12 @@ import s4bi
 from importlib import reload
 from scipy import constants
 from astropy.cosmology import Planck15
+import qubic
+from qubic import mcmc
+import healpy as hp
 rc('figure',figsize=(16,4))
 rc('font',size=12)
+
 
 
 ```
@@ -133,6 +137,7 @@ cmb = CMB()
 sync = Synchrotron(sync_ref_freq, beta_pl=-3)
 
 ### The double beta component model
+analytic_expr = s4bi.double_beta_dust_FGB_Model()
 dbdust = AnalyticComponent(analytic_expr, nu0=353, temp=20., h_over_k=constants.h * 1e9 / constants.k)
 print(dbdust.params)   # parameters are beta0, beta1 and nubreak
 # let's fix the params for now
@@ -380,6 +385,10 @@ g = plots.getSubplotPlotter()
 g.settings.scaling=False
 g.settings.axes_fontsize=12
 g.triangle_plot([samps, samps_qp], filled=True,title_limit=2, legend_labels=['CMB-S4', 'QUBIC+'], markers=mkrs)
+```
+
+```{python}
+
 ```
 
 ```{python}

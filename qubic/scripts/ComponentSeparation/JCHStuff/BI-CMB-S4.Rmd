@@ -128,7 +128,7 @@ from fgbuster import CMB, Dust, Synchrotron, AnalyticComponent, ModifiedBlackBod
 
 dust_ref_freq = 353.
 sync_ref_freq = 70.
-dust = Dust(dust_ref_freq, beta_d=1.6, temp=20)
+dust = Dust(dust_ref_freq, beta_d=1.54, temp=20)
 cmb = CMB() 
 sync = Synchrotron(sync_ref_freq, beta_pl=-3)
 
@@ -162,6 +162,9 @@ Now we use the normalization (RMS) found from PYSM in our region ito scale them:
 
 ```{python}
 mystk = [0,3]
+beta0 = 1.3
+beta1 = 1.54
+nubreak = 200.
 
 ii=0
 for istk in mystk:
@@ -170,7 +173,7 @@ for istk in mystk:
     plot(nus, dust.eval(nus) * s_dust_353GHz[istk], label='Dust')
     plot(nus, sync.eval(nus) * s_sync_70GHz[istk], label='Synchrotron')
     plot(nus, cmb.eval(nus) * s_CMB[istk], label='CMB')
-    plot(nus, dbdust.eval(nus, 1.3, 1.54, 200) * s_dust_353GHz[istk], label='Double Beta Dust with beta_0={}, beta_1={}, nubreak={}'.format(beta0, beta1, nubreak))
+    plot(nus, dbdust.eval(nus, beta0, beta1, nubreak) * s_dust_353GHz[istk], label='Double Beta Dust with beta_0={}, beta_1={}, nubreak={}'.format(beta0, beta1, nubreak))
     xlabel('Frequency [GHz]')
     ylabel(r'SED [$\mu K_{CMB}$]')
     yscale('log')
@@ -180,12 +183,203 @@ for istk in mystk:
 tight_layout()
 ```
 
+# First test: fitting the single beta with a true single beta
+
 ```{python}
-2*np.pi/(2.35**2)
+reload(s4bi)
+reload(mcmc)
+
+dust_ref_freq = 353.
+sync_ref_freq = 70.
+dust_model = Dust(dust_ref_freq, temp=20)
+sync_model = Synchrotron(sync_ref_freq)
+
+def model_1beta(x, pars, extra_args=None):
+    sync_amp = pars[0]
+    sync_pl = pars[1]
+    cmb = pars[2]
+    dust_amp = pars[3]
+    beta_dust = pars[4]
+    dust = dust_amp * dust_model.eval(x, beta_dust) 
+    sync = sync_amp * sync_model.eval(x, sync_pl)
+    return cmb + dust + sync
+
+pars_true = np.array([s_sync_70GHz[3], -3, s_CMB[3], s_dust_353GHz[3], 1.54])
+vals = model_1beta(nus, pars_true)
+
+arcmins_squared = 60**2
+
+#### S4 Data
+nus_s4 = s4bi.s4_config['frequency']
+sed_s4 = model_1beta(nus_s4, pars_true)
+err_sed_s4 = s4bi.s4_config['depth_p'] / np.sqrt(arcmins_squared)
+
+#### S4BI Data
+qp_nsub = np.array([1, 1, 1, 5, 5, 5, 5, 5, 5, 5])
+qp_effective_fraction = np.array([1., 1., 1., 1., 1., 1., 1., 1., 1.])
+qp_suboptimality = np.array([False, False, False, True, True, True, True, True, True])
+qp_config = s4bi.qubicify(s4bi.s4_config, qp_nsub, qp_effective_fraction, suboptimality=qp_suboptimality)
+nus_qp = qp_config['frequency']
+sed_qp = model_1beta(nus_qp, pars_true)
+err_sed_qp = qp_config['depth_p'] / np.sqrt(arcmins_squared)
+
+
+
+plot(nus, vals)
+errorbar(nus_qp, sed_qp, yerr=err_sed_qp, fmt='ro', capsize=4)
+errorbar(nus_s4, sed_s4, yerr=err_sed_s4, fmt='bo', capsize=4)
+yscale('log')
+xscale('log')
 ```
 
 ```{python}
+from qubic import mcmc
+reload(mcmc)
+p0 = pars_true.copy()
 
+fixedpars = np.array([1, 1, 0, 0, 0])
+
+ll = mcmc.LogLikelihood(xvals=nus_s4, yvals=sed_s4, errors=err_sed_s4,
+        p0=p0, model=model_1beta, fixedpars=fixedpars)
+nbmc = 3000
+samp = ll.run(nbmc)
+flat_samples_s4 = samp.get_chain(discard=nbmc//2, thin=32, flat=True)
+
+
+ll_qp = mcmc.LogLikelihood(xvals=nus_qp, yvals=sed_qp, errors=err_sed_qp,
+        p0=p0, model=model_1beta, fixedpars=fixedpars)
+nbmc = 3000
+samp_qp = ll_qp.run(nbmc)
+flat_samples_qp = samp_qp.get_chain(discard=nbmc//2, thin=32, flat=True)
+
+
+```
+
+```{python}
+from getdist import plots, MCSamples
+
+allnames = np.array(['SyncAmp', 'SyncBeta', 'CMB', 'DustAmp', 'DustBeta'])
+alllabels = np.array(['A_{sync}', r'\beta_{sync}', 'A_{CMB}', 'A_{dust}', r'\beta_{dust}'])
+
+names = allnames[fixedpars==0]
+labels = alllabels[fixedpars==0]
+mytrue = pars_true[fixedpars==0]
+
+mkrs = {}
+for i in range(len(names)):
+    mkrs[names[i]]=mytrue[i]
+
+samps = MCSamples(samples=flat_samples_s4, names=names, labels=labels)
+samps_qp = MCSamples(samples=flat_samples_qp, names=names, labels=labels)
+
+figure()
+g = plots.getSubplotPlotter()
+g.settings.scaling=False
+g.settings.axes_fontsize=12
+g.triangle_plot([samps_qp, samps], filled=True,title_limit=2, legend_labels=['QUBIC+', 'CMB-S4'], markers=mkrs)
+```
+
+# Second test: fitting the double beta with a single beta
+
+```{python}
+reload(s4bi)
+reload(mcmc)
+
+dust_ref_freq = 353.
+sync_ref_freq = 70.
+dust_model = Dust(dust_ref_freq, temp=20)
+print(dust_model.params)
+sync_model = Synchrotron(sync_ref_freq)
+double_dust_model = AnalyticComponent(analytic_expr, nu0=353, temp=20., h_over_k=constants.h * 1e9 / constants.k)
+print(double_dust_model.params)   # parameters are beta0, beta1 and nubreak
+
+
+
+
+def model_2beta(x, pars, extra_args=None):
+    sync_amp = pars[0]
+    sync_pl = pars[1]
+    cmb = pars[2]
+    dust_amp = pars[3]
+    beta0_dust = pars[4]
+    beta1_dust = pars[5]
+    nubreak_dust = pars[6]
+    dust = dust_amp * double_dust_model.eval(x, beta0_dust, beta1_dust, nubreak_dust) 
+    sync = sync_amp * sync_model.eval(x, sync_pl)
+    return cmb + dust + sync
+
+pars_true = np.array([s_sync_70GHz[3], -3, s_CMB[3]/30, s_dust_353GHz[3], 1.2, 1.8, 240])
+vals = model_2beta(nus, pars_true)
+
+arcmins_squared = 1240*60**2   #1240 = 3% of the sky
+
+#### S4 Data
+nus_s4 = s4bi.s4_config['frequency']
+sed_s4 = model_2beta(nus_s4, pars_true)
+err_sed_s4 = s4bi.s4_config['depth_p'] / np.sqrt(arcmins_squared)
+
+#### S4BI Data
+qp_nsub = np.array([1, 1, 1, 5, 5, 5, 5, 5, 5, 5])
+qp_effective_fraction = np.array([1., 1., 1., 1., 1., 1., 1., 1., 1.])
+qp_suboptimality = np.array([False, False, False, True, True, True, True, True, True])
+qp_config = s4bi.qubicify(s4bi.s4_config, qp_nsub, qp_effective_fraction, suboptimality=qp_suboptimality)
+nus_qp = qp_config['frequency']
+sed_qp = model_2beta(nus_qp, pars_true)
+err_sed_qp = qp_config['depth_p'] / np.sqrt(arcmins_squared)
+
+
+
+plot(nus, vals)
+errorbar(nus_qp, sed_qp, yerr=err_sed_qp, fmt='ro', capsize=4)
+errorbar(nus_s4, sed_s4, yerr=err_sed_s4, fmt='bo', capsize=4)
+axvline(x=pars_true[6],ls=':', color='k')
+yscale('log')
+xscale('log')
+```
+
+```{python}
+from qubic import mcmc
+reload(mcmc)
+p0 = pars_true.copy()
+
+fixedpars = np.array([1, 1, 0, 0, 0, 0, 0])
+
+ll = mcmc.LogLikelihood(xvals=nus_s4, yvals=sed_s4, errors=err_sed_s4,
+        p0=p0, model=model_2beta, fixedpars=fixedpars)
+nbmc = 15000
+samp = ll.run(nbmc)
+flat_samples_s4 = samp.get_chain(discard=nbmc//2, thin=32, flat=True)
+
+
+ll_qp = mcmc.LogLikelihood(xvals=nus_qp, yvals=sed_qp, errors=err_sed_qp,
+        p0=p0, model=model_2beta, fixedpars=fixedpars)
+nbmc = 15000
+samp_qp = ll_qp.run(nbmc)
+flat_samples_qp = samp_qp.get_chain(discard=nbmc//2, thin=32, flat=True)
+
+
+```
+
+```{python}
+allnames = np.array(['SyncAmp', 'SyncBeta', 'CMB', 'DustAmp', 'DustBeta0', 'DustBeta1', 'DustNuBreak'])
+alllabels = np.array(['A_{sync}', r'\beta_{sync}', 'A_{CMB}', 'A_{dust}', r'\beta^0_{dust}', r'\beta^1_{dust}', r'\nu^{break}_{dust}'])
+
+names = allnames[fixedpars==0]
+labels = alllabels[fixedpars==0]
+mytrue = pars_true[fixedpars==0]
+
+mkrs = {}
+for i in range(len(names)):
+    mkrs[names[i]]=mytrue[i]
+
+samps = MCSamples(samples=flat_samples_s4, names=names, labels=labels)
+samps_qp = MCSamples(samples=flat_samples_qp, names=names, labels=labels)
+
+figure()
+g = plots.getSubplotPlotter()
+g.settings.scaling=False
+g.settings.axes_fontsize=12
+g.triangle_plot([samps_qp, samps], filled=True,title_limit=2, legend_labels=['QUBIC+', 'CMB-S4'], markers=mkrs)
 ```
 
 ```{python}

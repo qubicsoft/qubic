@@ -8,14 +8,17 @@ __all__ = ['LogLikelihood']
 
 
 class LogLikelihood:
-    def __init__(self, xvals=None, yvals=None, errors=None, model=None, nbins=16,
+    def __init__(self, xvals=None, yvals=None, errors=None, model=None, nbins=None,
                  nsiginit=10, nsigprior=20, flatprior=None, fixedpars=None,
                  covariance_model_funct=None, p0=None, nwalkers=32, chi2=None):
         self.prior = None
         self.model = model
         self.xvals = xvals
         self.yvals = yvals
-        self.nbins = nbins
+        if nbins is None:
+            self.nbins = len(xvals)
+        else:
+            self.nbins = nbins
         self.nsiginit = nsiginit
         self.nsigprior = nsigprior
         self.covariance_model_funct = covariance_model_funct
@@ -36,13 +39,13 @@ class LogLikelihood:
             self.fitresult = [initial_fit[0], initial_fit[1]]
 
     def __call__(self, mytheta, extra_args=None, verbose=False):
-        # if self.fixedpars is not None:
-        #     theta = self.p0.copy()
-        #     #theta[self.fixedpars == 0] = mytheta
-        #     theta[self.fixedpars == 0] = mytheta[self.fixedpars == 0]
-        # else:
-        #     theta = mytheta
-        theta = mytheta
+        if self.fixedpars is not None:
+            theta = self.p0.copy()
+            theta[self.fixedpars == 0] = mytheta
+            #theta[self.fixedpars == 0] = mytheta[self.fixedpars == 0]
+        else:
+            theta = mytheta
+        # theta = mytheta
         self.modelval = self.model(self.xvals[:self.nbins], theta)
 
         if self.covariance_model_funct is None:

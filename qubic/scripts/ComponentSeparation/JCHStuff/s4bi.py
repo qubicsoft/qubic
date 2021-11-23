@@ -64,8 +64,10 @@ def fct_subopt(nus):
     fct_subopt = np.poly1d(np.polyfit(subnus, subval, 1))
     return fct_subopt(nus)
 
-def qubicify(config, qp_nsubs, qp_effective_fraction):
+def qubicify(config, qp_nsubs, qp_effective_fraction, suboptimality=None):
     nbands = np.sum(qp_nsubs)
+    if suboptimality is None:
+        suboptimality = np.ones(len(qp_nsubs)).astype(bool)
     qp_config = config.copy()
     for k in qp_config.keys():
         qp_config[k]=[]
@@ -81,7 +83,10 @@ def qubicify(config, qp_nsubs, qp_effective_fraction):
         newbandwidth = newedges[1:] - newedges[0:-1]
         newdnu_nu = newbandwidth / newfreqs
         newfwhm = config['fwhm'][i] * config['frequency'][i]/newfreqs
-        scalefactor_noise = np.sqrt(qp_nsubs[i]) * fct_subopt(config['frequency'][i]) / qp_effective_fraction[i]
+        scalefactor_noise = np.sqrt(qp_nsubs[i]) / qp_effective_fraction[i]
+        print(suboptimality[i])
+        if suboptimality[i]:
+            scalefactor_noise *= fct_subopt(config['frequency'][i])
         newdepth_p = config['depth_p'][i] * np.ones(qp_nsubs[i]) * scalefactor_noise
         newdepth_i = config['depth_i'][i] * np.ones(qp_nsubs[i]) * scalefactor_noise
         newdepth_e = config['depth_e'][i] * np.ones(qp_nsubs[i]) * scalefactor_noise

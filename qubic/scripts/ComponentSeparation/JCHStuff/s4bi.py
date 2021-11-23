@@ -108,9 +108,13 @@ def qubicify(config, qp_nsubs, qp_effective_fraction, suboptimality=None):
                 qp_config['dnu_nu'].append(newdnu_nu[k])
                 qp_config['ell_min'].append(newell_min[k])
                 qp_config['nside'].append(newnside[k])
-                qp_config['edges'].append(newedges[k])
                 qp_config['effective_fraction'].append(neweffective_fraction[k])
                 qp_config['initial_band'].append(initial_band[k])
+
+        for k in range(qp_nsubs[i]+1):
+            if qp_effective_fraction[i] != 0:
+                qp_config['edges'].append(newedges[k])
+
     
     fields = ['frequency', 'depth_p', 'depth_i', 'depth_e', 'depth_b', 'fwhm', 'bandwidth', 
               'dnu_nu', 'ell_min', 'nside', 'edges', 'effective_fraction', 'initial_band']

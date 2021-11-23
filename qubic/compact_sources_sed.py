@@ -11,6 +11,8 @@
 
 # ## Imports and common data
 
+# In[3]:
+
 
 import datetime                  as dt
 import pytz
@@ -21,10 +23,15 @@ import pickle
 from scipy import interpolate
 
 
+# In[4]:
+
 
 freqs    = ['030','044','070','100','143','217','353']
 freqs_ex = ['100','143','217','353']
 altnames = {           'Crab'       : '184.5-05.8',           'RCW28'      : '267.9-01.1',           'Orion'      : '209.0-19.4'}
+
+
+# In[5]:
 
 
 catalog_dir = '/home/daniele/Documents/QUBIC/operations/TD/operations_plan/catalogs/'
@@ -33,6 +40,8 @@ catalog_dir = '/home/daniele/Documents/QUBIC/operations/TD/operations_plan/catal
 # ## Functions
 
 # ### Check if source is in catalog
+
+# In[6]:
 
 
 def isincatalog(source, catalog):
@@ -54,11 +63,12 @@ def isincatalog(source, catalog):
         return False, ''       
 
 
-
 # ### Build catalog from PCCS
 
+# In[24]:
 
-def build_catalog(freqs = freqs, freqs_ex = freqs_ex, excluded = True):
+
+def build_catalog(freqs = 'All', freqs_ex = 'All', excluded = True):
     '''
     This function builds a dictionary containing the main parameters of the compact sources
     contained in the PCCS
@@ -74,6 +84,12 @@ def build_catalog(freqs = freqs, freqs_ex = freqs_ex, excluded = True):
     catalog      - DICT - Dictionary containing the data
     '''
     
+    if freqs == 'All':
+        freqs    = ['030','044','070','100','143','217','353']
+
+    if freqs_ex == 'All':
+        freqs_ex = ['100','143','217','353']
+    
     catalog = {}
 
     # Read normal catalogs
@@ -85,14 +101,36 @@ def build_catalog(freqs = freqs, freqs_ex = freqs_ex, excluded = True):
         fname = '%sCOM_PCCS_%s_R2.01.fits' % (catalog_dir, f)
         fd = fitsOpen(fname, "readonly")
         names    = fd[1].data['NAME    ']
+        
+        # Position
         ras      = fd[1].data['RA      ']
         decs     = fd[1].data['DEC     ']
         gLons    = fd[1].data['GLON    ']
         gLats    = fd[1].data['GLAT    ']
-        detFluxs = fd[1].data['DETFLUX ']
-        ps       = fd[1].data['P       ']
+        
+        # Intensity flux
+        detFluxs       = fd[1].data['DETFLUX      ']
+        detFluxs_err   = fd[1].data['DETFLUX_ERR  ']
+        aperFluxs      = fd[1].data['APERFLUX     ']
+        aperFluxs_err  = fd[1].data['APERFLUX_ERR ']
+        psfFluxs       = fd[1].data['PSFFLUX      ']
+        psfFluxs_err   = fd[1].data['PSFFLUX_ERR  ']
+        gauFluxs       = fd[1].data['GAUFLUX      ']
+        gauFluxs_err   = fd[1].data['GAUFLUX_ERR  ']
+        
+        # Polarized flux
+        ps                = fd[1].data['P                  ']
+        ps_err            = fd[1].data['P_ERR              ']
+        angle_ps          = fd[1].data['ANGLE_P            ']
+        angle_ps_err      = fd[1].data['ANGLE_P_ERR        ']
+        aper_ps           = fd[1].data['APER_P             ']
+        aper_ps_err       = fd[1].data['APER_P_ERR         ']
+        aper_angle_ps     = fd[1].data['APER_ANGLE_P       ']
+        aper_angle_ps_err = fd[1].data['APER_ANGLE_P_ERR   ']
+        
         fd.close()
-        for name, ra, dec, gLon, gLat, detFlux, p in zip (names, ras, decs, gLons, gLats, detFluxs, ps):
+        for name, ra, dec, gLon, gLat, detFlux, detFlux_err, aperFlux, aperFlux_err,              psfFlux, psfFlux_err, gauFlux, gauFlux_err, p, p_err, angle_p, angle_p_err, aper_p,            aper_p_err, aper_angle_p, aper_angle_p_err in         zip (names, ras, decs, gLons, gLats, detFluxs, detFluxs_err, aperFluxs, aperFluxs_err,              psfFluxs, psfFluxs_err, gauFluxs, gauFluxs_err, ps, ps_err, angle_ps, angle_ps_err, aper_ps,            aper_ps_err, aper_angle_ps, aper_angle_ps_err):
+            
             if f == freqs[0]:
                 # If we are scanning the first frequency then define names based on GLON and GLAT
                 # Rounded to 1 decimal place
@@ -114,12 +152,33 @@ def build_catalog(freqs = freqs, freqs_ex = freqs_ex, excluded = True):
                     global_namelist.append(new_name)
                 
             catalog[f][new_name]    = {}
-            catalog[f][new_name]['RA']      = np.float(ra)
-            catalog[f][new_name]['DEC']     = np.float(dec)
+            
+            # Position
+            catalog[f][new_name]['RA'  ]    = np.float(ra)
+            catalog[f][new_name]['DEC' ]    = np.float(dec)
             catalog[f][new_name]['GLON']    = np.float(gLon)
             catalog[f][new_name]['GLAT']    = np.float(gLat)
-            catalog[f][new_name]['DETFLUX'] = np.float(detFlux)
-            catalog[f][new_name]['PFLUX']   = np.float(p)
+            
+            # Intensity flux
+            catalog[f][new_name]['DETFLUX'      ] = np.float(detFlux)
+            catalog[f][new_name]['DETFLUX_ERR'  ] = np.float(detFlux_err)            
+            catalog[f][new_name]['APERFLUX'     ] = np.float(aperFlux)
+            catalog[f][new_name]['APERFLUX_ERR' ] = np.float(aperFlux_err)            
+            catalog[f][new_name]['PSFFLUX'      ] = np.float(psfFlux)
+            catalog[f][new_name]['PSFFLUX_ERR'  ] = np.float(psfFlux_err)            
+            catalog[f][new_name]['GAUFLUX'      ] = np.float(gauFlux)
+            catalog[f][new_name]['GAUFLUX_ERR'  ] = np.float(gauFlux_err) 
+            
+            # Polarized flux
+            catalog[f][new_name]['PFLUX'           ] = np.float(p)
+            catalog[f][new_name]['PFLUX_ERR'       ] = np.float(p_err)    
+            catalog[f][new_name]['ANGLE_P'         ] = np.float(angle_p)
+            catalog[f][new_name]['ANGLE_P_ERR'     ] = np.float(angle_p_err)    
+            catalog[f][new_name]['APER_P'          ] = np.float(aper_p)
+            catalog[f][new_name]['APER_P_ERR'      ] = np.float(aper_p_err)    
+            catalog[f][new_name]['APER_ANGLE_P'    ] = np.float(aper_angle_p)
+            catalog[f][new_name]['APER_ANGLE_P_ERR'] = np.float(aper_angle_p_err)    
+            
             catalog[f][new_name]['ALTNAME'] = ''
         
     if excluded:
@@ -130,14 +189,34 @@ def build_catalog(freqs = freqs, freqs_ex = freqs_ex, excluded = True):
             fname = '%sCOM_PCCS_%s-excluded_R2.01.fits' % (catalog_dir, f)
             fd = fitsOpen(fname, "readonly")
             names    = fd[1].data['NAME    ']
+
+            # Position
             ras      = fd[1].data['RA      ']
             decs     = fd[1].data['DEC     ']
             gLons    = fd[1].data['GLON    ']
             gLats    = fd[1].data['GLAT    ']
-            detFluxs = fd[1].data['DETFLUX ']
-            ps       = fd[1].data['P       ']
+
+            # Intensity flux
+            detFluxs       = fd[1].data['DETFLUX      ']
+            detFluxs_err   = fd[1].data['DETFLUX_ERR  ']
+            aperFluxs      = fd[1].data['APERFLUX     ']
+            aperFluxs_err  = fd[1].data['APERFLUX_ERR ']
+            psfFluxs       = fd[1].data['PSFFLUX      ']
+            psfFluxs_err   = fd[1].data['PSFFLUX_ERR  ']
+            gauFluxs       = fd[1].data['GAUFLUX      ']
+            gauFluxs_err   = fd[1].data['GAUFLUX_ERR  ']
+
+            # Polarized flux
+            ps                = fd[1].data['P                  ']
+            ps_err            = fd[1].data['P_ERR              ']
+            angle_ps          = fd[1].data['ANGLE_P            ']
+            angle_ps_err      = fd[1].data['ANGLE_P_ERR        ']
+            aper_ps           = fd[1].data['APER_P             ']
+            aper_ps_err       = fd[1].data['APER_P_ERR         ']
+            aper_angle_ps     = fd[1].data['APER_ANGLE_P       ']
+            aper_angle_ps_err = fd[1].data['APER_ANGLE_P_ERR   ']
             fd.close()
-            for name, ra, dec, gLon, gLat, detFlux, p in zip (names, ras, decs, gLons, gLats, detFluxs, ps):
+            for name, ra, dec, gLon, gLat, detFlux, detFlux_err, aperFlux, aperFlux_err,                  psfFlux, psfFlux_err, gauFlux, gauFlux_err, p, p_err, angle_p, angle_p_err, aper_p,                aper_p_err, aper_angle_p, aper_angle_p_err in             zip (names, ras, decs, gLons, gLats, detFluxs, detFluxs_err, aperFluxs, aperFluxs_err,                  psfFluxs, psfFluxs_err, gauFluxs, gauFluxs_err, ps, ps_err, angle_ps, angle_ps_err, aper_ps,                aper_ps_err, aper_angle_ps, aper_angle_ps_err):
 
                 new_name = build_name(name)
 
@@ -147,16 +226,38 @@ def build_catalog(freqs = freqs, freqs_ex = freqs_ex, excluded = True):
                     global_namelist.append(new_name)
  
                 catalog[f][new_name]    = {}
-                catalog[f][new_name]['RA']      = np.float(ra)
-                catalog[f][new_name]['DEC']     = np.float(dec)
+                # Position
+                catalog[f][new_name]['RA'  ]    = np.float(ra)
+                catalog[f][new_name]['DEC' ]    = np.float(dec)
                 catalog[f][new_name]['GLON']    = np.float(gLon)
                 catalog[f][new_name]['GLAT']    = np.float(gLat)
-                catalog[f][new_name]['DETFLUX'] = np.float(detFlux)
-                catalog[f][new_name]['PFLUX']   = np.float(p)
+
+                # Intensity flux
+                catalog[f][new_name]['DETFLUX'      ] = np.float(detFlux)
+                catalog[f][new_name]['DETFLUX_ERR'  ] = np.float(detFlux_err)            
+                catalog[f][new_name]['APERFLUX'     ] = np.float(aperFlux)
+                catalog[f][new_name]['APERFLUX_ERR' ] = np.float(aperFlux_err)            
+                catalog[f][new_name]['PSFFLUX'      ] = np.float(psfFlux)
+                catalog[f][new_name]['PSFFLUX_ERR'  ] = np.float(psfFlux_err)            
+                catalog[f][new_name]['GAUFLUX'      ] = np.float(gauFlux)
+                catalog[f][new_name]['GAUFLUX_ERR'  ] = np.float(gauFlux_err) 
+
+                # Polarized flux
+                catalog[f][new_name]['PFLUX'           ] = np.float(p)
+                catalog[f][new_name]['PFLUX_ERR'       ] = np.float(p_err)    
+                catalog[f][new_name]['ANGLE_P'         ] = np.float(angle_p)
+                catalog[f][new_name]['ANGLE_P_ERR'     ] = np.float(angle_p_err)    
+                catalog[f][new_name]['APER_P'          ] = np.float(aper_p)
+                catalog[f][new_name]['APER_P_ERR'      ] = np.float(aper_p_err)    
+                catalog[f][new_name]['APER_ANGLE_P'    ] = np.float(aper_angle_p)
+                catalog[f][new_name]['APER_ANGLE_P_ERR'] = np.float(aper_angle_p_err)    
+
                 catalog[f][new_name]['ALTNAME'] = ''
 
     return catalog
 
+
+# In[8]:
 
 
 def build_name(name):
@@ -179,6 +280,8 @@ def build_name(name):
     
     return new_name
 
+
+# In[9]:
 
 
 def duplicate_source(name, global_namelist, threshold = 0.1):
@@ -213,6 +316,8 @@ def duplicate_source(name, global_namelist, threshold = 0.1):
 # ### Build SEDs
 
 # #### SEDs of common sources
+
+# In[10]:
 
 
 def build_sed_allfreqs(catalog, freqs = freqs):
@@ -256,6 +361,8 @@ def build_sed_allfreqs(catalog, freqs = freqs):
 
 
 # #### SED of a given source
+
+# In[11]:
 
 
 def build_sed(source, catalog, plot = False, polyfit = 3):
@@ -333,8 +440,12 @@ def build_sed(source, catalog, plot = False, polyfit = 3):
     return SED
 
 
+# In[12]:
+
 
 # ### Translate from common source name to catalog name
+
+# In[12]:
 
 
 def name2cat(name, altnames):
@@ -347,6 +458,8 @@ def name2cat(name, altnames):
 
 
 # ### Return the frequencies of a given source name 
+
+# In[13]:
 
 
 def source2freqs(source, catalog, altnames = altnames):

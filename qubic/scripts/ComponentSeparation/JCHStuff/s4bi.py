@@ -138,9 +138,9 @@ def get_component_maps(components, ref_freqs, nside, fsky, center_radec=[0., -57
     okpix = mask == 1
     for c,f in zip(components, ref_freqs):
         print('Doing: '+c)
-        thesky = pysm3.Sky(nside=nside, preset_strings=[c])
+        thesky = pysm3.Sky(nside=nside, preset_strings=[c], output_unit="uK_CMB")
         themaps = np.zeros((4, 12*nside**2))     # four are I, Q, U and P
-        themaps[0:3,:] = thesky.get_emission(f * u.GHz).to(u.uK_CMB, equivalencies=u.cmb_equivalencies(f*u.GHz))
+        themaps[0:3,:] = thesky.get_emission(f * u.GHz)                  #.to(u.uK_CMB, equivalencies=u.cmb_equivalencies(f*u.GHz))
         themaps[3,:] = np.sqrt(themaps[1,:]**2 + themaps[2,:]**2)
         themaps[:, ~okpix] = hp.UNSEEN
         maps.append(themaps)

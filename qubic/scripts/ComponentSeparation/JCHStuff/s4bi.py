@@ -171,8 +171,6 @@ def double_beta_dust_FGB_Model():
     analytic_expr = analytic_expr1 + ' + ' + analytic_expr2
 
     return analytic_expr
-
-
-
+    
 
 

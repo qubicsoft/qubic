@@ -12,6 +12,9 @@ import random as rd
 import string
 import qubic
 from importlib import reload
+import s4bi
+from fgbuster.component_model import (CMB, Dust, Dust_2b, Synchrotron, AnalyticComponent)
+from scipy import constants
 
 def theoretical_noise_maps(sigma_sec, coverage, Nyears=4, verbose=False):
     """
@@ -153,6 +156,66 @@ def nus_for_iib(nu, bw):
     nus = np.linspace(min, max, 4)
     return nus
 
+def get_dust_convolved(model, nu, fwhm, modified=True, beta0=1.54, beta1=1.54, nb=100, verbose=True):
+
+    def scaling_factor(maps, nus, analytic_expr, beta0, beta1, nubreak):
+        nb_nus = maps.shape[0]
+        newmaps = np.zeros(maps.shape)
+        #print(sed1b)
+        for i in range(nb_nus):
+            _, sed1b = sed(analytic_expr, nus[i], beta1, beta1, nu0=nus[i], nubreak=nubreak)
+            _, sed2b = sed(analytic_expr, nus[i], beta0, beta1, nu0=nus[i], nubreak=nubreak)
+            print('nu is {} & Scaling factor is {:.8f}'.format(nus[i], sed2b))
+            newmaps[i] = maps[i] * sed2b
+        return newmaps, sed1b, sed2b
+
+
+    def sed(analytic_expr, nus, beta0, beta1, temp=20, hok=constants.h * 1e9 / constants.k, nubreak=200, nu0=200):
+        sed_expr = AnalyticComponent(analytic_expr,
+                             nu0=nu0,
+                             beta_d0=beta0,
+                             beta_d1=beta1,
+                             temp=temp,
+                             nubreak=nubreak,
+                             h_over_k = hok)
+        return nus, sed_expr.eval(nus)
+
+
+
+    sky = pysm3.Sky(nside=256, preset_strings=[model])
+    dust_maps = np.zeros(((len(nu), 3, 12*256**2)))
+    for indi, i in enumerate(nu) :
+        dust_maps[indi] = sky.get_emission(i*u.GHz, None)*utils.bandpass_unit_conversion(i*u.GHz,None, u.uK_CMB)
+        if verbose:
+            print('Convolved to {:.2f} deg'.format(fwhm[indi]))
+        dust_maps[indi] = hp.sphtfunc.smoothing(dust_maps[indi, :, :], fwhm=np.deg2rad(fwhm[indi]),verbose=False)
+
+    if modified:
+        print('y')
+        new_dust, _, _ = scaling_factor(dust_maps, nu, s4bi.double_beta_dust_FGB_Model(), beta0, beta1, nubreak=nb)
+    return new_dust
+
+def scaling_factor(maps, nus, analytic_expr, beta0, beta1, nubreak):
+    nb_nus = maps.shape[0]
+    newmaps = np.zeros(maps.shape)
+    #print(sed1b)
+    for i in range(nb_nus):
+        _, sed1b = sed(analytic_expr, nus[i], beta1, beta1, nu0=nus[i], nubreak=nubreak)
+        _, sed2b = sed(analytic_expr, nus[i], beta0, beta1, nu0=nus[i], nubreak=nubreak)
+        print('nu is {} & Scaling factor is {:.8f}'.format(nus[i], sed2b))
+        newmaps[i] = maps[i] * sed2b
+    return newmaps, sed1b, sed2b
+
+def sed(analytic_expr, nus, beta0, beta1, temp=20, hok=constants.h * 1e9 / constants.k, nubreak=200, nu0=200):
+    sed_expr = AnalyticComponent(analytic_expr,
+                             nu0=nu0,
+                             beta_d0=beta0,
+                             beta_d1=beta1,
+                             temp=temp,
+                             nubreak=nubreak,
+                             h_over_k = hok)
+    return nus, sed_expr.eval(nus)
+
 
 class S4(object):
 
@@ -161,7 +224,7 @@ class S4(object):
         self.skyconfig = skyconfig
         self.nus = self.dict['frequency']
         self.fwhm_arcmin = self.dict['fwhm']
-        self.fwhm = self.fwhm_arcmin/60
+        self.fwhmdeg = self.fwhm_arcmin/60
         self.bw = self.dict['bandwidth']
         self.edges = self.dict['edges']
         self.fsky = self.dict['fsky']
@@ -209,7 +272,7 @@ class S4(object):
 
         return sky
 
-    def getskymaps(self, same_resol=False, verbose=False, coverage=None, iib=False, noise=False):
+    def getskymaps(self, same_resol=None, verbose=False, coverage=None, iib=False, noise=False, signoise=1., beta=[]):
 
         """
         This function returns fullsky at S4 or QUBIC+ frequencies and resolutions.
@@ -218,8 +281,11 @@ class S4(object):
         sky=self.get_sky()
         allmaps = np.zeros(((len(self.nus), 3, self.npix)))
 
+        if same_resol is not None:
+            self.fwhmdeg = np.ones(len(self.nus))*same_resol
+
         if verbose:
-            print("    FWHM : {} deg \n    nus : {} GHz \n    Bandwidth : {} GHz\n\n".format(self.fwhm, self.nus, self.bw))
+            print("    FWHM : {} deg \n    nus : {} GHz \n    Bandwidth : {} GHz\n\n".format(self.fwhmdeg, self.nus, self.bw))
 
         if iib :
             def get_nus_for_iib(edge):
@@ -236,43 +302,45 @@ class S4(object):
                     print("Integrated from {:.2f} to {:.2f} GHz".format(nus_edges[0], nus_edges[-1]))
                 for indj, j in enumerate(nus_edges):
                     maps_edges[indj] = sky.get_emission(j*u.GHz, np.ones(4))*utils.bandpass_unit_conversion(j*u.GHz,np.ones(4), u.uK_CMB)
-                    if same_resol:
-                        if verbose and indj == 1:
-                            print('Reconvolution to {:.2f} deg'.format(np.max(self.fwhm)))
-                        maps_edges[indj] = hp.sphtfunc.smoothing(maps_edges[indj, :, :], fwhm=np.deg2rad(np.max(self.fwhm)),verbose=False)
-                    else:
-                        if verbose and indj == 1:
-                            print('Reconvolution to {:.2f} deg'.format(self.fwhm[indi]))
-                        maps_edges[indj] = hp.sphtfunc.smoothing(maps_edges[indj, :, :], fwhm=np.deg2rad(self.fwhm[indi]),verbose=False)
+                    if verbose and indj == 1:
+                        print('Reconvolution to {:.2f} deg'.format(self.fwhmdeg[indi]))
+
+                    maps_edges[indj] = hp.sphtfunc.smoothing(maps_edges[indj, :, :], fwhm=np.deg2rad(self.fwhmdeg[indi]),verbose=False)
 
 
                 allmaps[indi] = np.mean(maps_edges, axis=0)
         else:
-            for ind, i in enumerate(self.nus):
-                allmaps[ind] = sky.get_emission(i*u.GHz, None)*utils.bandpass_unit_conversion(i*u.GHz,None, u.uK_CMB)
+            if self.skyconfig != {}:
+                for ind, i in enumerate(self.nus):
+                    allmaps[ind] = sky.get_emission(i*u.GHz, None)*utils.bandpass_unit_conversion(i*u.GHz,None, u.uK_CMB)
 
-                if same_resol:
                     if verbose:
-                        print('Reconvolution to {:.2f} deg'.format(np.max(self.fwhm)))
-                    allmaps[ind] = hp.sphtfunc.smoothing(allmaps[ind, :, :], fwhm=np.deg2rad(np.max(self.fwhm)),verbose=False)
-                else:
-                    if verbose:
-                        print('Reconvolution to {:.2f} deg'.format(self.fwhm[ind]))
-                    allmaps[ind] = hp.sphtfunc.smoothing(allmaps[ind, :, :], fwhm=np.deg2rad(self.fwhm[ind]),verbose=False)
+                        print('Reconvolution to {:.2f} deg'.format(self.fwhmdeg[ind]))
 
-        def create_noisemaps():
+                    allmaps[ind] = hp.sphtfunc.smoothing(allmaps[ind, :, :], fwhm=np.deg2rad(self.fwhmdeg[ind]),verbose=False)
+
+            else:
+                dust=get_dust_convolved('d0', self.nus, self.fwhmdeg, modified=True, beta0=beta[0], beta1=beta[1], nb=beta[2], verbose=True)
+                allmaps+=dust
+
+
+
+        def create_noisemaps(signoise):
+            np.random.seed(None)
             N = np.zeros(((len(self.nus), 3, self.npix)))
             for ind_nu, nu in enumerate(self.nus):
-                sig_i=self.depth_i[ind_nu]/(np.sqrt(hp.nside2pixarea(self.nside, degrees=True)) * 60)
+
+                sig_i=signoise*self.depth_i[ind_nu]/(np.sqrt(hp.nside2pixarea(self.nside, degrees=True)) * 60)
                 N[ind_nu, 0] = np.random.normal(0, sig_i, 12*self.nside**2)
-                sig_p=self.depth_p[ind_nu]/(np.sqrt(hp.nside2pixarea(self.nside, degrees=True)) * 60)
+
+                sig_p=signoise*self.depth_p[ind_nu]/(np.sqrt(hp.nside2pixarea(self.nside, degrees=True)) * 60)
                 N[ind_nu, 1] = np.random.normal(0, sig_p, 12*self.nside**2)*np.sqrt(2)
                 N[ind_nu, 2] = np.random.normal(0, sig_p, 12*self.nside**2)*np.sqrt(2)
 
             return N
 
         if noise:
-            noisemaps = create_noisemaps()
+            noisemaps = create_noisemaps(signoise)
             maps_noisy = allmaps+noisemaps
 
             if coverage is not None:
@@ -291,84 +359,3 @@ class S4(object):
             pixok = mymask > 0
             allmaps[:, :, ~pixok] = hp.UNSEEN
         return allmaps
-
-
-
-
-    def create_noisemaps(self, coverage, nsub, index=None, covcut=0.1, verbose=False, eps=0, f=1):
-
-        #seenpix = (coverage / np.max(coverage)) > covcut
-        #npix = seenpix.sum()
-
-        # Sigma_sec for each Stokes: by default they are the same unless there is non trivial covariance
-        fact_I = np.ones(nsub)
-        fact_Q = np.ones(nsub)
-        fact_U = np.ones(nsub)
-
-        depth_i = self.depth_i
-        depth_p = self.depth_p
-
-        if coverage is not None:
-            thr = covcut
-            mymask = (coverage > (np.max(coverage)*thr)).astype(int)
-            pixok = mymask > 0
-        else:
-            pixok = np.ones(self.npix).astype(bool)
-
-        noise_maps = np.zeros((nsub, self.npix, 3))
-        for isub in range(nsub):
-            #print("depth i : {}".format(depth_i[isub]))
-            #print("depth p : {}".format(depth_p[isub]))
-            IrndFull = np.random.normal(0, depth_i[isub], np.sum(pixok))
-            QrndFull = np.random.normal(0, depth_p[isub], np.sum(pixok))
-            UrndFull = np.random.normal(0, depth_p[isub], np.sum(pixok))
-
-            ### put them into the whole sub-bandss array
-            noise_maps[isub, pixok, 0] = IrndFull
-            noise_maps[isub, pixok, 1] = QrndFull
-            noise_maps[isub, pixok, 2] = UrndFull
-
-        return np.transpose(noise_maps, (0, 2, 1))
-
-    def theoretical_noise_maps(self, sigma_sec, coverage, Nyears=4, verbose=False):
-        """
-        This returns a map of the RMS noise (not an actual realization, just the expected RMS - No covariance)
-
-        Parameters
-        ----------
-        sigma_sec: float
-            Noise level.
-        coverage: array
-            The coverage map.
-        Nyears: int
-        verbose: bool
-
-        Returns
-        -------
-
-        """
-
-        # ###### Noise normalization
-        # We assume we have integrated for a time Ttot in seconds with a sigma per root sec sigma_sec
-        Ttot = Nyears * 365 * 24 * 3600  # in seconds
-        if verbose:
-            print('Total time is {} seconds'.format(Ttot))
-        # Oberved pixels
-        thepix = coverage > 0
-        # Normalized coverage (sum=1)
-        covnorm = coverage / np.sum(coverage)
-        if verbose:
-            print('Normalized coverage sum: {}'.format(np.sum(covnorm)))
-
-        # Time per pixel
-        Tpix = np.zeros_like(covnorm)
-        Tpix[thepix] = Ttot * covnorm[thepix]
-        if verbose:
-            print('Sum Tpix: {} s  ; Ttot = {} s'.format(np.sum(Tpix), Ttot))
-
-        # RMS per pixel
-        Sigpix = np.zeros_like(covnorm)
-        Sigpix[thepix] = sigma_sec / np.sqrt(Tpix[thepix])
-        if verbose:
-            print('Total noise (with no averages in pixels): {}'.format(np.sum((Sigpix * Tpix) ** 2)))
-        return Sigpix

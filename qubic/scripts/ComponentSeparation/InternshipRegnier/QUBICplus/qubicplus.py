@@ -12,6 +12,9 @@ import random as rd
 import string
 import qubic
 from importlib import reload
+import s4bi
+from fgbuster.component_model import (CMB, Dust, Dust_2b, Synchrotron, AnalyticComponent)
+from scipy import constants
 
 def theoretical_noise_maps(sigma_sec, coverage, Nyears=4, verbose=False):
     """
@@ -153,24 +156,89 @@ def nus_for_iib(nu, bw):
     nus = np.linspace(min, max, 4)
     return nus
 
+def nus_for_iib(nu, bw):
+    min=nu-(bw/2)
+    max=nu+(bw/2)
+    #print(min, max)
+    nus = np.linspace(min, max, 4)
+    return nus
 
+def get_dust_convolved(model, nu, fwhm, modified=True, beta0=1.54, beta1=1.54, nb=100, verbose=True):
+
+    def scaling_factor(maps, nus, analytic_expr, beta0, beta1, nubreak):
+        nb_nus = maps.shape[0]
+        newmaps = np.zeros(maps.shape)
+        #print(sed1b)
+        for i in range(nb_nus):
+            _, sed1b = sed(analytic_expr, nus[i], beta1, beta1, nu0=nus[i], nubreak=nubreak)
+            _, sed2b = sed(analytic_expr, nus[i], beta0, beta1, nu0=nus[i], nubreak=nubreak)
+            print('nu is {} & Scaling factor is {:.8f}'.format(nus[i], sed2b))
+            newmaps[i] = maps[i] * sed2b
+        return newmaps, sed1b, sed2b
+
+
+    def sed(analytic_expr, nus, beta0, beta1, temp=20, hok=constants.h * 1e9 / constants.k, nubreak=200, nu0=200):
+        sed_expr = AnalyticComponent(analytic_expr,
+                             nu0=nu0,
+                             beta_d0=beta0,
+                             beta_d1=beta1,
+                             temp=temp,
+                             nubreak=nubreak,
+                             h_over_k = hok)
+        return nus, sed_expr.eval(nus)
+
+
+
+    sky = pysm3.Sky(nside=256, preset_strings=[model])
+    dust_maps = np.zeros(((len(nu), 3, 12*256**2)))
+    for indi, i in enumerate(nu) :
+        dust_maps[indi] = sky.get_emission(i*u.GHz, None)*utils.bandpass_unit_conversion(i*u.GHz,None, u.uK_CMB)
+        if verbose:
+            print('Convolved to {:.2f} deg'.format(fwhm[indi]))
+        dust_maps[indi] = hp.sphtfunc.smoothing(dust_maps[indi, :, :], fwhm=np.deg2rad(fwhm[indi]),verbose=False)
+
+    if modified:
+        print('y')
+        new_dust, _, _ = scaling_factor(dust_maps, nu, s4bi.double_beta_dust_FGB_Model(), beta0, beta1, nubreak=nb)
+    return new_dust
+
+def scaling_factor(maps, nus, analytic_expr, beta0, beta1, nubreak):
+    nb_nus = maps.shape[0]
+    newmaps = np.zeros(maps.shape)
+    #print(sed1b)
+    for i in range(nb_nus):
+        _, sed1b = sed(analytic_expr, nus[i], beta1, beta1, nu0=nus[i], nubreak=nubreak)
+        _, sed2b = sed(analytic_expr, nus[i], beta0, beta1, nu0=nus[i], nubreak=nubreak)
+        print('nu is {} & Scaling factor is {:.8f}'.format(nus[i], sed2b))
+        newmaps[i] = maps[i] * sed2b
+    return newmaps, sed1b, sed2b
+
+def sed(analytic_expr, nus, beta0, beta1, temp=20, hok=constants.h * 1e9 / constants.k, nubreak=200, nu0=200):
+    sed_expr = AnalyticComponent(analytic_expr,
+                             nu0=nu0,
+                             beta_d0=beta0,
+                             beta_d1=beta1,
+                             temp=temp,
+                             nubreak=nubreak,
+                             h_over_k = hok)
+    return nus, sed_expr.eval(nus)
 
 class QUBICplus(object):
 
-    def __init__(self, skyconfig, Nf):
-        self.nus = np.array([20, 30, 40, 85, 95, 145, 155, 220, 270])
-        self.bandwidth_S4 = np.array([5, 9, 12, 20.4, 22.8, 31.9, 34.1, 48.4, 59.4])
-        self.fwhmarcmin = np.array([11, 72.8, 72.8, 25.5, 25.5, 22.7, 22.7, 13, 13])
-        self.depth_i = np.array([16.55, 9.36, 11.85, 2.02, 1.78, 3.89, 4.16, 10.15, 17.40])
-        self.depth_p = np.array([10.23, 5.85, 7.40, 1.27, 1.12, 1.76, 1.89, 4.6, 7.89])
-        self.Nf=Nf
+    def __init__(self, skyconfig, dict):
+        self.dict = dict
+        self.skyconfig = skyconfig
+        self.nus = self.dict['frequency']
+        self.bw = self.dict['bandwidth']
+        self.fwhm = self.dict['fwhm']
+        self.depth_i = self.dict['depth_i']
+        self.depth_p = self.dict['depth_p']
         #self.depth_p_reconstructed = np.ones(self.Nf)*self.depth_i*np.sqrt(self.Nf)
         #self.depth_i_reconstructed = np.ones(self.Nf)*self.depth_p*np.sqrt(self.Nf)
-        self.fwhmdeg = self.fwhmarcmin/60
+        self.fwhmdeg = self.fwhm/60
+        self.fsky = self.dict['fsky']
+        self.edges = self.dict['edges']
 
-
-
-        self.skyconfig = skyconfig
         self.nside=256
         self.npix = 12*self.nside**2
         self.lmax=3 * self.nside
@@ -183,20 +251,6 @@ class QUBICplus(object):
             if k == 'cmb':
                 self.seed = self.skyconfig['cmb']
 
-        self.nus_reconstructed = np.zeros((self.Nf, len(self.nus)))
-        self.fwhm_reconstructed = np.zeros((self.Nf, len(self.nus)))
-        #self.depth_i_reconstructed = np.zeros((self.Nf, len(self.nus)))
-        #self.depth_p_reconstructed = np.zeros((self.Nf, len(self.nus)))
-        self.bandwidth_reconstructed = self.bandwidth_S4/self.Nf
-
-        for ind_nu, nu in enumerate(self.nus):
-            mn, f = give_me_nu_fwhm_S4_2_qubic(nu, self.bandwidth_S4[ind_nu], self.Nf, self.fwhmdeg[ind_nu])
-            self.nus_reconstructed[:, ind_nu]=mn
-            self.fwhm_reconstructed[:, ind_nu]=f
-            #self.depth_i_reconstructed[:, ind_nu]=np.ones(self.Nf)*self.depth_i[ind_nu]*np.sqrt(self.Nf)
-            #self.depth_p_reconstructed[:, ind_nu]=np.ones(self.Nf)*self.depth_p[ind_nu]*np.sqrt(self.Nf)
-        #self.bandwidth_reconstructed[:, k]=self.bandwidth_S4[k]/self.Nf
-        #print(self.bandwidth_reconstructed)
     def get_cmb(self):
         np.random.seed(self.seed)
         ell, totDL, unlensedCL = qc.get_camb_Dl(lmax=2*self.nside+1)
@@ -217,6 +271,8 @@ class QUBICplus(object):
                 cmbmap = pysm3.CMBMap(self.nside, map_IQU='/tmp/' + rndstr)
                 os.remove('/tmp/' + rndstr)
                 #setting.append(skyconfig[k])
+            elif k == 'dust':
+                pass
             else:
                 setting.append(self.skyconfig[k])
 
@@ -226,83 +282,96 @@ class QUBICplus(object):
 
         return sky
 
-    def get_fullsky_qubicplus(self, index=0, verbose=False, coverage=None, iib=False, Nyears=3.):
+    def getskymaps(self, same_resol=None, verbose=False, coverage=None, iib=False, noise=False, signoise=1., beta=[]):
 
         """
-        This function returns fullsky at QUBIC+ frequencies and resolutions.
+        This function returns fullsky at S4 or QUBIC+ frequencies and resolutions.
         """
 
         sky=self.get_sky()
-
-        nus, fwhmdeg, allmaps, bw = self.nus_reconstructed[:, index], self.fwhm_reconstructed[:, index], np.zeros(((self.Nf, 3, self.npix))), self.bandwidth_reconstructed
+        allmaps = np.zeros(((len(self.nus), 3, self.npix)))
+        if same_resol is not None:
+            self.fwhmdeg = np.ones(len(self.nus))*np.max(same_resol)
 
         if verbose:
-            print("    FWHM : {} deg \n    nus : {} GHz \n    Bandwidth : {} GHz\n\n".format(fwhmdeg, nus, bw))
+            print("    FWHM : {} deg \n    nus : {} GHz \n    Bandwidth : {} GHz\n\n".format(self.fwhmdeg, self.nus, self.bw))
 
-        if iib:
-            for indexi, i in enumerate(nus):
-                new_nus = nus_for_iib(nus[indexi], bw[index])
-                if verbose:
-                    #print(new_nus)
-                    print("Integration between {:.2f} and {:.2f}".format(nus[indexi] - bw[index]/2, nus[indexi] + bw[index]/2))
-                new_maps = np.zeros(((4, 3, self.npix)))
-                for indexj, j in enumerate(new_nus):
-                    #print(fwhmdeg[indexi])
-                    new_maps[indexj] = sky.get_emission(j*u.GHz, None)*utils.bandpass_unit_conversion(j*u.GHz,None, u.uK_CMB)
-                    new_maps[indexj] = hp.sphtfunc.smoothing(new_maps[indexj, :, :], fwhm=np.deg2rad(fwhmdeg[indexi]),verbose=False)
-                allmaps[indexi] = np.mean(new_maps, axis=0)
+        if iib :
+            def get_nus_for_iib(edge_min, edge_max):
+                min = edge_min
+                max = edge_max
+                nus = np.linspace(min, max, 4)
+                return nus
+            k=0
+            for indi, i in enumerate(self.nus[:-1]):
+                k+=1
+                if k%6==0:
+                    #print('i =', k)
+                    k=0
+                    pass
+                else:
+                    nus_edges = get_nus_for_iib(self.edges[indi], self.edges[indi+1])
+                    #print(nus_edges)
+                    #print()
+                    #print(get_nus_for_iib(self.edges[indi], self.edges[indi+1]))
+                    #print()
+                    maps_edges=np.zeros(((4, 3, self.npix)))
+                    if verbose:
+                        print("Integrated from {:.2f} to {:.2f} GHz".format(nus_edges[0], nus_edges[-1]))
+                    for indj, j in enumerate(nus_edges):
+                        maps_edges[indj] = sky.get_emission(j*u.GHz, np.ones(4))*utils.bandpass_unit_conversion(j*u.GHz,np.ones(4), u.uK_CMB)
+                        if verbose and indj == 1:
+                            print('Reconvolution to {:.2f} deg'.format(self.fwhmdeg[indi]))
+                        maps_edges[indj] = hp.sphtfunc.smoothing(maps_edges[indj, :, :], fwhm=np.deg2rad(self.fwhmdeg[indi]),verbose=False)
+
+                    allmaps[indi] = np.mean(maps_edges, axis=0)
         else:
-            for ind, i in enumerate(nus):
-                allmaps[ind] = sky.get_emission(i*u.GHz, None)*utils.bandpass_unit_conversion(i*u.GHz,None, u.uK_CMB)
+            allmaps=np.zeros(((len(self.nus), 3, self.npix)))
+            for i in self.skyconfig.keys():
+                if i == 'cmb':
+                    cmbmap = self.get_cmb()
+                    for j in range(len(self.nus)):
+                        allmaps[j]+=cmbmap
+                elif i == 'dust':
+                    if self.skyconfig[i] == 'd0':
+                        print('Model is d0')
+                        dustmaps = get_dust_convolved('d0', self.nus, self.fwhmdeg, modified=False, verbose=verbose)
+                        allmaps+=dustmaps
+                    elif self.skyconfig[i] == 'd02b':
+                        print('Model is d02b')
+                        dustmaps = get_dust_convolved('d0', self.nus, self.fwhmdeg, modified=True, beta0=beta[0], beta1=beta[1], nb=beta[2], verbose=verbose)
+                        allmaps+=dustmaps
+                    else:
+                        print('No dust')
 
-                if verbose:
-                    print('Reconvolution from {:.2f} to {:.2f} deg'.format(0, fwhmdeg[ind]))
-                allmaps[ind] = hp.sphtfunc.smoothing(allmaps[ind, :, :], fwhm=np.deg2rad(fwhmdeg[ind]),verbose=False)
-
-        noisemaps = self.create_noisemaps(coverage, nsub=self.Nf, covcut=0.1, verbose=verbose, index=index)
+                else:
+                    pass
 
 
-        if coverage is not None:
-            thr = 0.1
-            mymask = (coverage > (np.max(coverage)*thr)).astype(int)
-            pixok = mymask > 0
-            allmaps[:, :, ~pixok] = hp.UNSEEN
+        def create_noisemaps(signoise):
+            np.random.seed(None)
+            N = np.zeros(((len(self.nus), 3, self.npix)))
+            for ind_nu, nu in enumerate(self.nus):
 
-        return allmaps+noisemaps, allmaps, noisemaps, self.nus_reconstructed[:, index], self.fwhm_reconstructed[:, index], self.depth_i, self.depth_p
+                sig_i=signoise*self.depth_i[ind_nu]/(np.sqrt(hp.nside2pixarea(self.nside, degrees=True)) * 60)
+                N[ind_nu, 0] = np.random.normal(0, sig_i, 12*self.nside**2)
 
-    def create_noisemaps(self, coverage, nsub, index=0, covcut=0.1, verbose=False, eps=0, f=1):
+                sig_p=signoise*self.depth_p[ind_nu]/(np.sqrt(hp.nside2pixarea(self.nside, degrees=True)) * 60)
+                N[ind_nu, 1] = np.random.normal(0, sig_p, 12*self.nside**2)*np.sqrt(2)
+                N[ind_nu, 2] = np.random.normal(0, sig_p, 12*self.nside**2)*np.sqrt(2)
 
-        seenpix = (coverage / np.max(coverage)) > covcut
-        npix = seenpix.sum()
+            return N
 
-        # Sigma_sec for each Stokes: by default they are the same unless there is non trivial covariance
-        fact_I = np.ones(nsub)
-        fact_Q = np.ones(nsub)
-        fact_U = np.ones(nsub)
+        if noise:
+            noisemaps = create_noisemaps(signoise)
+            maps_noisy = allmaps+noisemaps
 
-        #print(self.depth_p)
+            if coverage is not None:
+                thr = 0.1
+                mymask = (coverage > (np.max(coverage)*thr)).astype(int)
+                pixok = mymask > 0
+                maps_noisy[:, :, ~pixok] = hp.UNSEEN
+                noisemaps[:, :, ~pixok] = hp.UNSEEN
+                allmaps[:, :, ~pixok] = hp.UNSEEN
 
-        depth_i = self.depth_i[index] * np.sqrt(self.Nf) * (1+eps)/f
-        depth_p = self.depth_p[index] * np.sqrt(self.Nf) * (1+eps)/f
-
-        #print(depth_p)
-        #print(index)
-
-        thr = covcut
-        mymask = (coverage > (np.max(coverage)*thr)).astype(int)
-        pixok = mymask > 0
-
-        noise_maps = np.zeros((nsub, len(coverage), 3))
-        for isub in range(nsub):
-            #print("depth i : {}".format(depth_i))
-            #print("depth p : {}".format(depth_p))
-            IrndFull = np.random.normal(0, depth_i, np.sum(pixok))
-            QrndFull = np.random.normal(0, depth_p, np.sum(pixok))
-            UrndFull = np.random.normal(0, depth_p, np.sum(pixok))
-
-            ### put them into the whole sub-bandss array
-            noise_maps[isub, seenpix, 0] = IrndFull
-            noise_maps[isub, seenpix, 1] = QrndFull
-            noise_maps[isub, seenpix, 2] = UrndFull
-
-        return np.transpose(noise_maps, (0, 2, 1))
+            return maps_noisy, allmaps, noisemaps

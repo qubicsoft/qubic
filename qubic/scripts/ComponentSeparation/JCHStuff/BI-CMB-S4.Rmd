@@ -826,11 +826,120 @@ legend()
 
 ```
 
+# Fit of the 2β with a 1β model and chi2 comparison
+
 ```{python}
+f = 0.1
+
+#### S4 Data
+nus_s4 = s4bi.s4_config['frequency']
+sed_s4 = model_2beta(nus_s4, pars_true)
+err_sed_s4 = s4bi.s4_config['depth_p'] / np.sqrt(arcmins_squared) / np.sqrt(1-f)
+
+#### S4BI Data
+qp_nsub = np.array([1, 1, 1, 5, 5, 5, 5, 5, 5, 5])
+qp_effective_fraction = np.array([1., 1., 1., 1., 1., 1., 1., 1., 1.])
+qp_suboptimality = np.array([False, False, False, True, True, True, True, True, True])
+qp_config = s4bi.qubicify(s4bi.s4_config, qp_nsub, qp_effective_fraction, suboptimality=qp_suboptimality)
+nus_qp = qp_config['frequency']
+sed_qp = model_2beta(nus_qp, pars_true)
+err_sed_qp = qp_config['depth_p'] / np.sqrt(arcmins_squared) / np.sqrt(f)
+
+### Mix with a fraction f for BI
+nus_both = np.append(nus_qp, nus_s4)
+sed_both = np.append(sed_qp, sed_s4)
+err_sed_both = np.append(err_sed_qp, err_sed_s4)
+
+
+
+### Fitting with the 1beta model
+p0 = np.array([s_sync_70GHz[3], -3, 0, s_dust_353GHz[3], 1.54])
+fixedpars = np.array([0, 0, 0, 0, 0])
+
+
+ll = mcmc.LogLikelihood(xvals=nus_s4, yvals=sed_s4, errors=err_sed_s4,
+        p0=p0, model=model_1beta, fixedpars=fixedpars)
+nbmc = 3000
+samp = ll.run(nbmc)
+flat_samples_s4 = samp.get_chain(discard=nbmc//2, thin=32, flat=True)
+
+ll_qp = mcmc.LogLikelihood(xvals=nus_qp, yvals=sed_qp, errors=err_sed_qp,
+        p0=p0, model=model_1beta, fixedpars=fixedpars)
+nbmc = 3000
+samp_qp = ll_qp.run(nbmc)
+flat_samples_qp = samp_qp.get_chain(discard=nbmc//2, thin=32, flat=True)
+
+ll_both = mcmc.LogLikelihood(xvals=nus_both, yvals=sed_both, errors=err_sed_both,
+        p0=p0, model=model_1beta, fixedpars=fixedpars)
+nbmc = 3000
+samp_both = ll_both.run(nbmc)
+flat_samples_both = samp_both.get_chain(discard=nbmc//2, thin=32, flat=True)
 
 ```
 
 ```{python}
+allnames = np.array(['SyncAmp', 'SyncBeta', 'CMB', 'DustAmp', 'DustBeta'])
+alllabels = np.array(['A_{sync}', r'\beta_{sync}', 'A_{CMB}', 'A_{dust}', r'\beta_{dust}'])
+names = allnames[fixedpars==0]
+labels = alllabels[fixedpars==0]
+
+
+# samps = MCSamples(samples=flat_samples_s4, names=names, labels=labels)
+# samps_qp = MCSamples(samples=flat_samples_qp, names=names, labels=labels)
+# samps_both = MCSamples(samples=flat_samples_both, names=names, labels=labels)
+
+# figure()
+# g = plots.getSubplotPlotter()
+# g.settings.scaling=False
+# g.settings.axes_fontsize=10
+# g.triangle_plot([samps, samps_qp, samps_both], 
+#                 filled=True,title_limit=None, 
+#                 legend_labels=['CMB-S4 {0:2.0f}%'.format(100*(1-f)), 'S4-BI {0:2.0f}%'.format(100*f), 'Both'])
+
+averages_s4 = np.mean(flat_samples_s4, axis=0)
+errors_s4 = np.std(flat_samples_s4, axis=0)
+
+averages_qp = np.mean(flat_samples_qp, axis=0)
+errors_qp = np.std(flat_samples_qp, axis=0)
+
+averages = np.mean(flat_samples_both, axis=0)
+errors = np.std(flat_samples_both, axis=0)
+
+
+print()
+print('CMB-S4')
+for i in range(len(names)):
+    print('{0:20s}: {1:7.3f} +/- {2:7.3f} '.format(names[i], averages_s4[i], errors_s4[i]))
+
+print()
+print('BI-S4')
+for i in range(len(names)):
+    print('{0:20s}: {1:7.3f} +/- {2:7.3f} '.format(names[i], averages_qp[i], errors_qp[i]))
+
+print()
+print('{0:3.0f}% Bolometric Interferometer'.format(f*100))
+for i in range(len(names)):
+    print('{0:20s}: {1:7.3f} +/- {2:7.3f} '.format(names[i], averages[i], errors[i]))
+
+
+```
+
+```{python}
+Delta_r_CMB = 0.021**2/0.345
+print('Delta r CMB = {0:5.4f}'.format(Delta_r_CMB))
+```
+
+```{python}
+### Chi2
+chi2_s4 = np.sum(((sed_s4 - model_1beta(nus_s4, averages_s4))/err_sed_s4)**2)
+ndf_s4 = len(sed_s4)-len(averages_s4)
+chi2_qp = np.sum(((sed_qp - model_1beta(nus_qp, averages_qp))/err_sed_qp)**2)
+ndf_qp = len(sed_qp)-len(averages_qp)
+chi2 = np.sum(((sed_both - model_1beta(nus_both, averages))/err_sed_both)**2)
+ndf = len(sed_both)-len(averages)
+print('CMBS4: chi2={} ndf={} chi2/ndf={}'.format(chi2_s4, ndf_s4, chi2_s4/ndf_s4))
+print('BI-S4: chi2={} ndf={} chi2/ndf={}'.format(chi2_qp, ndf_qp, chi2_qp/ndf_qp))
+print('Both: chi2={} ndf={} chi2/ndf={}'.format(chi2, ndf, chi2/ndf))
 
 ```
 

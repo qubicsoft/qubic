@@ -16,6 +16,31 @@ import s4bi
 from fgbuster.component_model import (CMB, Dust, Dust_2b, Synchrotron, AnalyticComponent)
 from scipy import constants
 
+def eval_scaled_dust_dbmmb_map(nu_ref, nu_test, beta0, beta1, nubreak, nside, fsky, radec_center):
+    #def double-beta dust model
+    analytic_expr = s4bi.double_beta_dust_FGB_Model()
+    dbdust = AnalyticComponent(analytic_expr, nu0=nu_ref, temp=20., h_over_k=constants.h * 1e9 / constants.k)
+    scaling_factor = dbdust.eval(nu_test, beta0, beta1, nubreak)
+
+    sky=pysm3.Sky(nside=nside, preset_strings=['d0'])
+    dust_map_ref = np.zeros((3, 12*nside**2)) #this way the output is w/0 units!!
+    dust_map_ref[0:3,:]=sky.get_emission(nu_ref*u.GHz).to(u.uK_CMB, equivalencies=u.cmb_equivalencies(nu_ref*u.GHz))
+
+    map_test=dust_map_ref*scaling_factor
+
+    mask = s4bi.get_coverage(fsky, nside, center_radec=radec_center)
+
+    return map_test
+
+def get_scaled_dust_dbmmb_map(nu_ref, nu_vec, beta0, beta1, nubreak, nside, fsky, radec_center):
+    #eval at each freq. In this way it can be called both in the single-freq and the multi-freq case
+    n_nu=len(nu_vec)
+    dust_map= np.zeros((n_nu, 3, 12*nside**2))
+    for i in range(n_nu):
+        map_eval=eval_scaled_dust_dbmmb_map(nu_ref, nu_vec[i], beta0, beta1, nubreak, nside, fsky, radec_center)
+        dust_map[i,:,:]=map_eval[:,:]
+    return dust_map
+
 def theoretical_noise_maps(sigma_sec, coverage, Nyears=4, verbose=False):
     """
     This returns a map of the RMS noise (not an actual realization, just the expected RMS - No covariance)
@@ -198,9 +223,9 @@ def get_dust_convolved(model, nu, fwhm, modified=True, beta0=1.54, beta1=1.54, n
         dust_maps[indi] = hp.sphtfunc.smoothing(dust_maps[indi, :, :], fwhm=np.deg2rad(fwhm[indi]),verbose=False)
 
     if modified:
-        print('y')
-        new_dust, _, _ = scaling_factor(dust_maps, nu, s4bi.double_beta_dust_FGB_Model(), beta0, beta1, nubreak=nb)
-    return new_dust
+        #print('y')
+        dust_maps, _, _ = scaling_factor(dust_maps, nu, s4bi.double_beta_dust_FGB_Model(), beta0, beta1, nubreak=nb)
+    return dust_maps
 
 def scaling_factor(maps, nus, analytic_expr, beta0, beta1, nubreak):
     nb_nus = maps.shape[0]
@@ -223,7 +248,7 @@ def sed(analytic_expr, nus, beta0, beta1, temp=20, hok=constants.h * 1e9 / const
                              h_over_k = hok)
     return nus, sed_expr.eval(nus)
 
-class QUBICplus(object):
+class BImaps(object):
 
     def __init__(self, skyconfig, dict):
         self.dict = dict
@@ -334,12 +359,15 @@ class QUBICplus(object):
                         allmaps[j]+=cmbmap
                 elif i == 'dust':
                     if self.skyconfig[i] == 'd0':
-                        print('Model is d0')
+                        if verbose:
+                            print('Model : d0 -> Spectral index beta is constant on the sky (set to 1.54)')
                         dustmaps = get_dust_convolved('d0', self.nus, self.fwhmdeg, modified=False, verbose=verbose)
                         allmaps+=dustmaps
                     elif self.skyconfig[i] == 'd02b':
-                        print('Model is d02b')
-                        dustmaps = get_dust_convolved('d0', self.nus, self.fwhmdeg, modified=True, beta0=beta[0], beta1=beta[1], nb=beta[2], verbose=verbose)
+                        if verbose:
+                            print('Model : d02b -> Twos spectral index beta with nu_break')
+                        dustmaps=get_scaled_dust_dbmmb_map(nu_ref=353, nu_vec=self.nus, beta0=beta[0], beta1=beta[1], nubreak=beta[2], nside=self.nside, fsky=0.03, radec_center=[0., -57.])
+                        #dustmaps = get_dust_convolved('d0', self.nus, self.fwhmdeg, modified=True, beta0=beta[0], beta1=beta[1], nb=beta[2], verbose=verbose)
                         allmaps+=dustmaps
                     else:
                         print('No dust')

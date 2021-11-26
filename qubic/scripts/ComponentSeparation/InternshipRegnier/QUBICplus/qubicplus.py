@@ -310,7 +310,7 @@ class BImaps(object):
     def getskymaps(self, same_resol=None, verbose=False, coverage=None, iib=False, noise=False, signoise=1., beta=[]):
 
         """
-        This function returns fullsky at S4 or QUBIC+ frequencies and resolutions.
+        
         """
 
         sky=self.get_sky()
@@ -366,6 +366,8 @@ class BImaps(object):
                     elif self.skyconfig[i] == 'd02b':
                         if verbose:
                             print('Model : d02b -> Twos spectral index beta with nu_break')
+
+                        #add Elenia's definition
                         dustmaps=get_scaled_dust_dbmmb_map(nu_ref=353, nu_vec=self.nus, beta0=beta[0], beta1=beta[1], nubreak=beta[2], nside=self.nside, fsky=0.03, radec_center=[0., -57.])
                         #dustmaps = get_dust_convolved('d0', self.nus, self.fwhmdeg, modified=True, beta0=beta[0], beta1=beta[1], nb=beta[2], verbose=verbose)
                         allmaps+=dustmaps

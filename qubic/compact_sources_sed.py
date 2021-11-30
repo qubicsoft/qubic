@@ -7,41 +7,23 @@
 #     Here I develop a set of functions to read the Planck PCCS and derive the SEDs of compact sources that are seen at all frequencies
 #     </p>
 
-# # Import and functions
-
-# ## Imports and common data
-
-# In[3]:
+# # Common data
 
 
-import datetime                  as dt
-import pytz
-import numpy                     as np       # Numerical Python
-import pylab                     as pl       # Matplotlib
-from astropy.io.fits import open as fitsOpen # For FITS files
-import pickle
-from scipy import interpolate
-
-
-# In[4]:
-
+import qubic
 
 freqs    = ['030','044','070','100','143','217','353']
 freqs_ex = ['100','143','217','353']
 altnames = {           'Crab'       : '184.5-05.8',           'RCW38'      : '267.9-01.1',           'Orion'      : '209.0-19.4'}
 
-
-# In[5]:
-
-
-catalog_dir = '/home/daniele/Documents/QUBIC/operations/TD/operations_plan/catalogs/'
+catalog_dir = qubic.data.PATH
 
 
-# ## Functions
+# # Functions
 
-# ### Check if source is in catalog
+# ## Check if source is in catalog
 
-# In[6]:
+# In[1]:
 
 
 def isincatalog(source, catalog):
@@ -63,9 +45,9 @@ def isincatalog(source, catalog):
         return False, ''       
 
 
-# ### Build catalog from PCCS
+# ## Build catalog from PCCS
 
-# In[24]:
+# In[2]:
 
 
 def build_catalog(freqs = 'All', freqs_ex = 'All', excluded = True):
@@ -83,6 +65,8 @@ def build_catalog(freqs = 'All', freqs_ex = 'All', excluded = True):
     Output
     catalog      - DICT - Dictionary containing the data
     '''
+    from astropy.io.fits import open as fitsOpen # For FITS files
+    import numpy as np
     
     if freqs == 'All':
         freqs    = ['030','044','070','100','143','217','353']
@@ -152,6 +136,9 @@ def build_catalog(freqs = 'All', freqs_ex = 'All', excluded = True):
                     global_namelist.append(new_name)
                 
             catalog[f][new_name]    = {}
+            
+            # Name
+            catalog[f][new_name]['NAME']    = new_name
             
             # Position
             catalog[f][new_name]['RA'  ]    = np.float(ra)
@@ -226,6 +213,10 @@ def build_catalog(freqs = 'All', freqs_ex = 'All', excluded = True):
                     global_namelist.append(new_name)
  
                 catalog[f][new_name]    = {}
+            
+                # Name
+                catalog[f][new_name]['NAME']    = new_name
+
                 # Position
                 catalog[f][new_name]['RA'  ]    = np.float(ra)
                 catalog[f][new_name]['DEC' ]    = np.float(dec)
@@ -257,7 +248,7 @@ def build_catalog(freqs = 'All', freqs_ex = 'All', excluded = True):
     return catalog
 
 
-# In[8]:
+# In[3]:
 
 
 def build_name(name):
@@ -270,6 +261,7 @@ def build_name(name):
     Output
     new_name     - STRING - source new name defined as lll.l±bb.b
     '''
+    import numpy as np
     
     name_l = np.round(np.float(name[-12:-6]),1)
     str_l  = '%05.1f' % name_l
@@ -281,7 +273,7 @@ def build_name(name):
     return new_name
 
 
-# In[9]:
+# In[4]:
 
 
 def duplicate_source(name, global_namelist, threshold = 0.1):
@@ -299,6 +291,8 @@ def duplicate_source(name, global_namelist, threshold = 0.1):
     Output
     isduplicate, new_name  - BOOL, STRING - whether a duplicate has been found, new name
     '''
+    import numpy as np
+    
     name_l = np.float(name[0:5])
     name_b = np.float(name[-5:])
     
@@ -313,14 +307,14 @@ def duplicate_source(name, global_namelist, threshold = 0.1):
     return False, name    
 
 
-# ### Build SEDs
+# ## Build SEDs
 
-# #### SEDs of common sources
+# ### SEDs of common sources
 
-# In[10]:
+# In[6]:
 
 
-def build_sed_allfreqs(catalog, freqs = freqs):
+def build_sed_allfreqs(catalog, freqs = ['030','044','070','100','143','217','353']):
     '''
     This function builds the SED of the sources in the catalog using data across frequencies specified
     in freqs
@@ -333,7 +327,9 @@ def build_sed_allfreqs(catalog, freqs = freqs):
     Output
     SED          - DICT - Dictionary containing the SED (frequencies, measured I_flux, measured P_flux
                           4th order polinomial fits to measured I_flux and P_flux
-    '''    
+    '''   
+    import numpy as np
+    
     # Build common set of sources
     inters = ''
     for f in freqs:
@@ -360,9 +356,9 @@ def build_sed_allfreqs(catalog, freqs = freqs):
     return SED
 
 
-# #### SED of a given source
+# ### SED of a given source
 
-# In[11]:
+# In[7]:
 
 
 def build_sed(source, catalog, plot = False, polyfit = 3):
@@ -383,6 +379,7 @@ def build_sed(source, catalog, plot = False, polyfit = 3):
     SED          - DICT - Dictionary containing the SED (frequencies, measured I_flux, measured P_flux
                           4th order polinomial fits to measured I_flux and P_flux
     '''    
+    import numpy as np
     
     # Check if source is in catalog
     exists, sourcename = isincatalog(source, catalog)
@@ -440,12 +437,9 @@ def build_sed(source, catalog, plot = False, polyfit = 3):
     return SED
 
 
-# In[12]:
+# ## Translate from common source name to catalog name
 
-
-# ### Translate from common source name to catalog name
-
-# In[12]:
+# In[8]:
 
 
 def name2cat(name, altnames):
@@ -457,9 +451,9 @@ def name2cat(name, altnames):
     return altnames[name]
 
 
-# ### Return the frequencies of a given source name 
+# ## Return the frequencies of a given source name 
 
-# In[13]:
+# In[12]:
 
 
 def source2freqs(source, catalog, altnames = altnames):
@@ -478,6 +472,8 @@ def source2freqs(source, catalog, altnames = altnames):
     Output
     freqlist     - LIST - List of frequencies where a source is found
     '''        
+    import numpy as np
+    
     exists, sourcename = isincatalog(source, catalog)
     
     if not exists:
@@ -487,6 +483,5 @@ def source2freqs(source, catalog, altnames = altnames):
     isinfreq = [sourcename in list(catalog[f].keys()) for f in freqs]
     
     return [freqs[i] for i in list(np.where(isinfreq)[0])]
-
 
 

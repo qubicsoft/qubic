@@ -51,11 +51,10 @@ catalog_dir = '/home/daniele/Documents/QUBIC/operations/TD/operations_plan/catal
 
 ## Functions
 
-<!-- #region heading_collapsed=true -->
-### Check if source is in catalog
-<!-- #endregion -->
 
-```{python hidden=TRUE}
+### Check if source is in catalog
+
+```{python}
 def isincatalog(source, catalog):
     
     freqs    = ['030','044','070','100','143','217','353']
@@ -75,15 +74,13 @@ def isincatalog(source, catalog):
         return False, ''       
 ```
 
-```{python hidden=TRUE}
+```{python}
 isincatalog('Crab',catalog)
 ```
 
-<!-- #region heading_collapsed=true -->
 ### Build catalog from PCCS
-<!-- #endregion -->
 
-```{python hidden=TRUE}
+```{python}
 def build_catalog(freqs = freqs, freqs_ex = freqs_ex, excluded = True):
     '''
     This function builds a dictionary containing the main parameters of the compact sources
@@ -184,7 +181,7 @@ def build_catalog(freqs = freqs, freqs_ex = freqs_ex, excluded = True):
     return catalog
 ```
 
-```{python hidden=TRUE}
+```{python}
 def build_name(name):
     '''
     This function builds a source name from the PCCS name by rounding l and b to the first decimal place
@@ -206,7 +203,7 @@ def build_name(name):
     return new_name
 ```
 
-```{python hidden=TRUE}
+```{python}
 def duplicate_source(name, global_namelist, threshold = 0.1):
     '''
     This function finds if a given source is a duplicate of others already found in catalogs
@@ -238,11 +235,10 @@ def duplicate_source(name, global_namelist, threshold = 0.1):
 
 ### Build SEDs
 
-<!-- #region heading_collapsed=true -->
-#### SEDs of common sources
-<!-- #endregion -->
 
-```{python hidden=TRUE}
+#### SEDs of common sources
+
+```{python}
 def build_sed_allfreqs(catalog, freqs = freqs):
     '''
     This function builds the SED of the sources in the catalog using data across frequencies specified
@@ -284,11 +280,9 @@ def build_sed_allfreqs(catalog, freqs = freqs):
 
 ```
 
-<!-- #region heading_collapsed=true -->
 #### SED of a given source
-<!-- #endregion -->
 
-```{python code_folding=c(), hidden=TRUE}
+```{python code_folding=c()}
 def build_sed(source, catalog, plot = False, polyfit = 3):
     '''
     This function builds the SED of a given source
@@ -365,15 +359,13 @@ def build_sed(source, catalog, plot = False, polyfit = 3):
 
 ```
 
-```{python hidden=TRUE}
-sed = build_sed('RCW28', catalog, plot = True, polyfit = 3)
+```{python}
+sed = build_sed('Crab', catalog, plot = True, polyfit = 3)
 ```
 
-<!-- #region heading_collapsed=true -->
 ### Translate from common source name to catalog name
-<!-- #endregion -->
 
-```{python hidden=TRUE}
+```{python}
 def name2cat(name, altnames):
 
     if name not in list(altnames.keys()):
@@ -383,11 +375,9 @@ def name2cat(name, altnames):
     return altnames[name]
 ```
 
-<!-- #region heading_collapsed=true -->
 ### Return the frequencies of a given source name 
-<!-- #endregion -->
 
-```{python hidden=TRUE}
+```{python}
 def source2freqs(source, catalog, altnames = altnames):
     '''
     This function return the list of frequencies in the catalog given a certain source
@@ -415,7 +405,7 @@ def source2freqs(source, catalog, altnames = altnames):
     return [freqs[i] for i in list(np.where(isinfreq)[0])]
 ```
 
-```{python hidden=TRUE}
+```{python}
 source2freqs('Orion',catalog)
 ```
 
@@ -435,29 +425,27 @@ with open(catalog_file, 'wb') as handle:
     pickle.dump(catalog, handle)
 ```
 
-<!-- #region heading_collapsed=true -->
 ## Load catalog from disk
-<!-- #endregion -->
 
-```{python hidden=TRUE}
+```{python}
 catalog_file = catalog_dir + 'qubic_pccs2.pickle'
 with open(catalog_file, 'rb') as handle:
     catalog = pickle.load(handle)
 ```
 
-```{python hidden=TRUE}
+```{python}
 catalog['070']['184.5-05.8']
 ```
 
-```{python hidden=TRUE}
-catalog['100']['184.5-05.8']
+```{python}
+catalog['143']['184.5-05.8']
 ```
 
-```{python hidden=TRUE}
-catalog['143']['209.0-17.8']
+```{python}
+catalog['143'][name2cat('RCW28',altnames)]
 ```
 
-```{python hidden=TRUE}
+```{python}
 catalog['143'].keys()
 ```
 

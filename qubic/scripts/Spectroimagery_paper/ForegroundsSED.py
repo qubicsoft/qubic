@@ -281,6 +281,8 @@ def _mask_maps(maps, coverages, nf_recon):
 
 		for jsub in range(nf_recon):
 			maps[j, jsub, ~icov, 0] = hp.UNSEEN
+			maps[j, jsub, ~icov, 1] = hp.UNSEEN
+			maps[j, jsub, ~icov, 2] = hp.UNSEEN
 
 		cov.append(icov)
 

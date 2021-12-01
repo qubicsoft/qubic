@@ -9,6 +9,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib import cm
 import scipy.optimize as sop
 from scipy.signal import resample
+from astropy.stats import sigma_clip
 
 from qubicpack.qubicfp import qubicfp
 import qubic.fibtools as ft
@@ -305,8 +306,8 @@ class FringesAnalysis:
         # Plot the 5 best TES
         if doplot:
             for p in range(5):
-                plot_folding_fit(detectors_sort[p, 0], detectors_sort[p, 1], tfold, datafold, residuals_time,
-                                 self.expected_period, params, err_params)
+                self._plot_folding_fit(detectors_sort[p, 0], detectors_sort[p, 1], tfold, datafold, residuals_time,
+                                        self.expected_period, params, err_params)
 
         return detectors_sort, ctimes
 
@@ -706,6 +707,10 @@ class FringesAnalysis:
                              s=100, fig=fig, ax=ax3, cmap=cmap_viridis, normalize=False, vmin=0., vmax=3.,
                              title='|Values/Errors|')
 
+        # Plot the result for the reference TES
+        self._plot_fringes_measurement_perTES(fringes1D, err_fringes1D, fringes1D_percycle, err_fringes1D_percycle,
+                                              TES=None, ASIC=None)
+
         return m_points, err_m_points, Mcycles, err_Mcycles, fringes1D, err_fringes1D, \
                fringes1D_percycle, err_fringes1D_percycle
 
@@ -810,6 +815,81 @@ class FringesAnalysis:
         ax.legend()
         return
 
+    def _plot_fringes_measurement_perTES(self, fringes1D, err_fringes1D, fringes1D_percycle, err_fringes1D_percycle,
+                                         TES=None, ASIC=None):
+        if TES is None or ASIC is None:
+            ASIC = self.refASICnum
+            TES = self.refTESnum
+        idx = (ASIC - 1) * self.ndet_oneASIC + (TES - 1)
+        xx = np.arange(1, self.ncycles + 1)
+
+        plt.figure()
+        plt.title(f'TES {TES} - ASIC {ASIC}')
+
+        # Measurement on each cycle
+        plt.errorbar(xx, fringes1D_percycle[idx, :],
+                     yerr=err_fringes1D_percycle[idx, :], fmt='o', color='b', label='Fringes per cycle')
+
+        # Fit
+        p = np.polyfit(xx, fringes1D_percycle[idx, :], deg=3, w=1 / err_fringes1D_percycle[idx, :])
+        fit = p[0] * xx ** 3 + p[1] * xx ** 2 + p[2] * xx + p[3]
+        plt.plot(xx, fit, 'b', label='Polynomial fit deg=3')
+
+        # Final measurement and the error
+        err_plus = fringes1D[idx] + err_fringes1D[idx]
+        err_minus = fringes1D[idx] - err_fringes1D[idx]
+        plt.axhline(err_plus, color='r', linestyle='--')
+        plt.axhline(err_minus, color='r', linestyle='--')
+        plt.fill_between(np.arange(0.5, 21.5), err_minus, err_plus, facecolor='r', alpha=0.15)
+        plt.axhline(fringes1D[idx], color='r', label='Fringes on all cycles')
+
+        # Mean over the measurements on each cycle
+        plt.axhline(np.mean(fringes1D_percycle[idx, :], axis=0), color='b', label='Simple mean')
+
+        # Median  over the measurements on each cycle
+        plt.axhline(np.median(fringes1D_percycle[idx, :], axis=0), color='c', label='Median')
+
+        # Meancut  over the measurements on each cycle
+        meancut_mean, mean_cut_std = ft.meancut(fringes1D_percycle[idx, :], nsig=3, med=False)
+        plt.axhline(meancut_mean, color='m', label='Mean cut')
+        plt.axhline(meancut_mean + mean_cut_std, color='m', linestyle='--')
+        plt.axhline(meancut_mean - mean_cut_std, color='m', linestyle='--')
+
+        plt.xlabel('Cycle index')
+        plt.ylabel('Fringes value')
+        plt.xlim(0.5, 20.5)
+        plt.xticks(np.arange(1, self.ncycles + 1))
+        plt.legend()
+        plt.ylim(- np.max(np.abs(fringes1D_percycle[idx, :])) * 1.2,
+                 np.max(np.abs(fringes1D_percycle[idx, :])) * 1.2)
+        return
+
+    def _plot_folding_fit(self, TES, ASIC, tfold, datafold, residuals_time, period, params, errs):
+        idx = (ASIC - 1) * self.ndet_oneASIC + (TES - 1)
+        amps = params[idx, 2:]
+        t0 = params[idx, 1]
+        stable_time = period / self.nsteps
+        print(stable_time)
+        mean_allh = np.mean(amps[self.allh])
+
+        plt.figure()
+        plt.plot(tfold, datafold[idx, :], label='Folded signal')
+        plt.errorbar(np.arange(0, period, period / self.nsteps), amps, yerr=errs[idx, 2:],
+                     fmt='o', color='r', label='Fit Amplitudes')
+        plt.plot(tfold, ft.simsig_fringes(tfold, period / self.nsteps, params[idx, :]),
+                 label='Fit')
+        plt.plot(tfold, residuals_time[idx, :],
+                 label='Residuals: RMS={0:6.4f}'.format(np.std(residuals_time[idx, :])))
+        for k in range(self.nsteps):
+            plt.axvline(x=stable_time * k + t0, color='k', ls=':', alpha=0.3)
+        plt.axhline(mean_allh, color='k', linestyle='--', label='Mean all open')
+        plt.legend(loc='upper right')
+        plt.xlabel('Time [s]')
+        plt.ylabel('TOD')
+        plt.title(f'TES {TES} - ASIC {ASIC}')
+        plt.grid()
+        plt.ylim(-2.5, 2.5)
+        return
 
 # =========================================
 class SaveFringesFitsPdf:
@@ -1031,16 +1111,11 @@ def remove_thermometers(x, y, fringes1D):
 def reorder_data(data, xdata, ydata, xqsoft, yqsoft):
     """Reorder data (TES signal) as ordered in the QUBIC soft.
     The number of TES should be 248 (without thermometers)."""
-    ndata = len(data)
     ndet = xdata.shape[0]
-    data_ordered = []
-    for k in range(ndata):
-        olddata = data[k]
-        newdata = np.zeros_like(olddata)
-        for det in range(ndet):
-            index_simu = np.where((xqsoft == xdata[det]) & (yqsoft == ydata[det]))[0][0]
-            newdata[index_simu] = olddata[det]
-        data_ordered.append(newdata)
+    data_ordered = np.zeros_like(data)
+    for det in range(ndet):
+        index_simu = np.where((xqsoft == xdata[det]) & (yqsoft == ydata[det]))[0][0]
+        data_ordered[index_simu] = data[det]
     return data_ordered
 
 
@@ -1103,11 +1178,14 @@ def make_cmap_nan_black(cmap):
 
 
 def plot_fringes_scatter(q, xTES, yTES, fringes1D, normalize=True, frame='ONAFP', fig=None, ax=None,
-                         cbar=True, vmin=-1., vmax=1., cmap=make_cmap_nan_black('bwr'), s=None, title='Scatter plot'):
+                         cbar=True, vmin=-1., vmax=1., cmap=make_cmap_nan_black('bwr'), s=None,
+                         title='Scatter plot', fontsize=14):
     x, y, fringes = remove_thermometers(xTES, yTES, fringes1D)
 
     if normalize:
-        fringes /= np.nanstd(fringes)
+        # Clip weird detectors, NAN values are automatically clipped
+        clip_mask = sigma_clip(fringes, sigma=3)
+        fringes /= np.std(clip_mask)
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -1120,7 +1198,8 @@ def plot_fringes_scatter(q, xTES, yTES, fringes1D, normalize=True, frame='ONAFP'
                          vmin=vmin,
                          vmax=vmax,
                          cbar=cbar,
-                         plotnonfinite=True
+                         plotnonfinite=True,
+                         fontsize=fontsize
                          )
     return
 
@@ -1128,6 +1207,7 @@ def plot_fringes_scatter(q, xTES, yTES, fringes1D, normalize=True, frame='ONAFP'
 def make2Dfringes_QubicSoft(fringes1D, q, nan2zero=False):
     """fringes1D must have 248 elements ordered as in Qubic soft."""
     fringes2D = q.detector.unpack(fringes1D)[17:, :17]
+    fringes2D = np.rot90(fringes2D, k=2)
     if nan2zero:
         fringes2D[np.isnan(fringes2D)] = 0.
     return fringes2D
@@ -1153,7 +1233,9 @@ def plot_fringes_imshow(fringes2D, normalize=True, interp=None, mask=None,
                         fig=None, ax=None, cbar=True, vmin=-1, vmax=1.,
                         cmap='bwr', title='Imshow'):
     if normalize:
-        fringes2D /= np.nanstd(fringes2D)
+        # Clip weird detectors, NAN values are automatically clipped
+        clip_mask = sigma_clip(fringes2D, sigma=3)
+        fringes2D /= np.std(clip_mask)
 
     if mask is not None:
         fringes2D *= mask
@@ -1173,31 +1255,74 @@ def plot_fringes_imshow(fringes2D, normalize=True, interp=None, mask=None,
     return
 
 
-def plot_folding_fit(TES, ASIC, tfold, datafold, residuals_time, period,
-                     params, errs, allh=[True, False, False, True, False, True]):
-    idx = (ASIC - 1) * 128 + (TES - 1)
-    nsteps = len(params[idx, 2:])
-    amps = params[idx, 2:]
-    t0 = params[idx, 1]
-    stable_time = period / nsteps
-    print(stable_time)
-    mean_allh = np.mean(amps[allh])
+def plot_fringes_diagonal(fringes2D, idiag=[0], anti_diag=False,
+                          fig=None, ax=None, figsize=(12, 8), ylim=(None, None), title=''):
+    """
+    Plot the diagonals in 1D and the sum of all diagonals.
+    Parameters
+    ----------
+    fringes2D: array
+        A 2D image of the focal plane (17x17).
+    idiag: list
+        Diagonal index you want to plot, 0 is the main one and it can be from -16 to 16.
+    anti_diag: bool
+        If True, it will take the anti-diagonals.
+    fig, ax: matplotlib figure
+        If not None, you can include the plot in matplotlib subplots.
+    figsize
+    ylim
+    title: str
+        Plot title
 
-    plt.figure()
-    plt.plot(tfold, datafold[idx, :], label='Folded signal')
-    plt.errorbar(np.arange(0, period, period / nsteps), amps, yerr=errs[idx, 2:],
-                 fmt='o', color='r', label='Fit Amplitudes')
-    plt.plot(tfold, ft.simsig_fringes(tfold, period / nsteps, params[idx, :]),
-             label='Fit')
-    plt.plot(tfold, residuals_time[idx, :],
-             label='Residuals: RMS={0:6.4f}'.format(np.std(residuals_time[idx, :])))
-    for k in range(nsteps):
-        plt.axvline(x=stable_time * k + t0, color='k', ls=':', alpha=0.3)
-    plt.axhline(mean_allh, color='k', linestyle='--', label='Mean all open')
-    plt.legend(loc='upper right')
-    plt.xlabel('Time [s]')
-    plt.ylabel('TOD')
-    plt.title(f'TES {TES} - ASIC {ASIC}')
-    plt.grid()
-    plt.ylim(-2.5, 2.5)
+    Returns
+    -------
+
+    """
+    fringes2D = np.nan_to_num(fringes2D)
+    if anti_diag:
+        fringes2D = np.fliplr(fringes2D)
+    sum_diag = sum_all_diag(fringes2D)
+
+    if fig is None:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.gca()
+    ax.plot(sum_diag, color='r', label='Sum of all diagonal')
+    for i in idiag:
+        diag = np.diagonal(fringes2D, offset=i)
+        if i == 0:
+            xx = np.arange(0, 33)[::2]
+        else:
+            xx = np.arange(0, 33)[np.abs(i):-np.abs(i)][::2]
+        ax.plot(xx, diag, 'o', label=f'Diagonal {i}')
+
+    ax.set_xlabel('TES index on the diagonal')
+    ax.set_ylabel('Signal')
+    ax.legend(fontsize=8)
+    ax.set_ylim(ylim)
+    ax.set_title(title)
     return
+
+
+def sum_all_diag(fringes2D):
+    """Sum diagonal in a 2D images. Pixels that are not TES (outside the FP should be at 0.
+    The sum is normalized to take into account the diagonal lengths and the pixels that are not TES."""
+    offsets = np.arange(-16, 17)
+    sum_diag = np.zeros(33)
+    norm = np.zeros(33)
+    for i in offsets:
+        diag = np.diagonal(fringes2D, offset=i)
+        # Fill the array at right places
+        first = np.abs(i)
+        if i == 0:
+            last = None
+        else:
+            last = - np.abs(i)
+        sum_diag[first:last][::2] += diag
+
+        # Build the normalization array (take into account 0. outside the FP)
+        for j, dd in enumerate(diag):
+            if dd != 0.:
+                norm[first:last][::2][j] += 1
+    sum_diag /= norm
+
+    return sum_diag

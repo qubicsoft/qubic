@@ -380,6 +380,7 @@ def build_sed(source, catalog, plot = False, polyfit = 3):
                           4th order polinomial fits to measured I_flux and P_flux
     '''    
     import numpy as np
+    import pylab as pl
     
     # Check if source is in catalog
     exists, sourcename = isincatalog(source, catalog)

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 #
 # Author: Martín M. Gamboa Lerena.
 # Date: Feb 15th 2021
@@ -288,8 +289,8 @@ def _mask_maps(maps, coverages, nf_recon):
 
 	return maps, cov
 
-###################### preparing MCMC runs
-#from lmfit import Model
+# ##################### preparing MCMC runs
+# from lmfit import Model
 
 def LinModel(x, a, b):
 	return a + x**b
@@ -400,7 +401,7 @@ def Synchrotron_storja_pointer(x, *pars, extra_args = None):
 	c = scipy.constants.c
 	k = scipy.constants.k
 	return pars[0] * 1e10 * x ** (- pars[1])
- 
+
 def Synchrotron_Planck(x, pars, extra_args = None ):
 	"""
 	x: frequency array [in GHz]
@@ -520,7 +521,7 @@ def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 	svals = np.std(vals, axis=1)
 	
 	return mvals, svals, x, flat_samples
-	
+
 
 def foregrounds_run_mcmc(dictionaries, fgr_map, Cp_prime, FuncModel,
 					nus_out, nus_edge, pixs, pixs_red = None, chi2 = None, 

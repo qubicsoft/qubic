@@ -53,36 +53,37 @@ print(datadir)
 #rep_fullpipe = datadir + '/NERSC_simuEnd2End/Bad_photon_noise2020/simu_NERSC_MC/IBCS_fullpipeline/'
 rep_fullpipe = datadir + 'data/LouiseSims/IBCS_fullpipeline/'
 
-#rep_spectrumCC = datadir + 'FastSimulator/cls_spectrum_fromCC/'
-rep_spectrumCC = datadir + 'data/LouiseSims/IBCS_fastsim/'
+rep_spectrumCC = datadir + 'FastSimulator/cls_spectrum_fromCC/nbands6-7/'
 print(rep_spectrumCC)
 ```
 
 ```{python}
 # Convert all files to one .npy
 # Do it just once
+# freq = 220
+# map_type = 'qubic'
+# IBCS_type = 'mix'
+# for nfrecon in [6, 7]:
+#     list_files = glob.glob(rep_spectrumCC + f'IBCS{IBCS_type}*nfrecon{nfrecon}*_{map_type}maps_*FI{freq}*_v4_gal*.npy')
+#     nfiles = len(list_files)
+#     print('# Files:', nfiles)
+#     for i in range(nfiles):
+#         cross = np.load(list_files[i])
+# #         with open(list_files[i], 'rb') as f:
+# #             cross = pickle.load(f)
 
-for nfrecon in [4,]:#[1, 2, 3, 4, 5, 8]:
-    list_files = glob.glob(rep_spectrumCC + f'IBCSmix*nfrecon{nfrecon}*_noisemaps_*FI220*_v4_gal*.npy')
-    nfiles = len(list_files)
-    print('# Files:', nfiles)
-    for i in range(nfiles):
-        cross = np.load(list_files[i])
-#         with open(list_files[i], 'rb') as f:
-#             cross = pickle.load(f)
-
-        if i == 0:
-            allcross = cross
-        else:
-            allcross = np.concatenate((allcross, cross), axis=0)
-    print('All cross shape:', allcross.shape)
-    np.save(rep_spectrumCC + 
-            f'IBCSmix_nfrecon{nfrecon}_noisemaps_FI220_v4_galaxycenter.npy', allcross)
+#         if i == 0:
+#             allcross = cross
+#         else:
+#             allcross = np.concatenate((allcross, cross), axis=0)
+#     print('All cross shape:', allcross.shape)
+#     np.save(rep_spectrumCC + 
+#             f'IBCS{IBCS_type}_nfrecon{nfrecon}_{map_type}maps_FI{freq}_v4_galaxycenter.npy', allcross)
 ```
 
 ```{python}
 clnames = ['TT', 'EE', 'BB', 'TE']
-nfrecon = 4
+nfrecon = 6
 
 # Full pipeline
 # cls_cross = np.load(rep_fullpipe + 'IBCSsame_recon_{}bands_150fullpipeline.npy'.format(nfrecon))
@@ -190,7 +191,7 @@ plt.tight_layout()
 ```
 
 ```{python}
-nbands=4
+nbands = 6
 Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(150, nbands)
 print(nus)
 
@@ -199,13 +200,15 @@ combi_nus2 = list(combinations(nus, 2))
 combi_nus = combi_nus1 + combi_nus2
 print(combi_nus)
 
-palet1 = sns.cubehelix_palette(nbands, start=0, hue=1, light=0.75, dark=0.3)
-#palet1 = sns.dark_palette("seagreen", n_colors = nbands)
+palet1 = sns.cubehelix_palette(ncombi, start=0, hue=1, light=0.75, dark=0.3)
 sns.palplot(palet1)
-palet2 = sns.cubehelix_palette(len(combi_nus2), start=2, hue=1, light=0.75, dark=0.3)
-#palet2 = sns.dark_palette("purple", n_colors = len(combi_nus2))
+palet2 = sns.cubehelix_palette(ncombi, start=2, hue=1, light=0.75, dark=0.3)
 sns.palplot(palet2)
 
+```
+
+```{python}
+ncombi
 ```
 
 ```{python}
@@ -236,11 +239,11 @@ std_mix = np.std(cls_cross_mix, axis=0) * np.sqrt(2)
 fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(15, 6))
 axs = axs.ravel()
 
-for cross in [0,1,2,3]:#range(ncombi):
-    if cross < nbands:
+for cross in range(ncombi):
+    if cross<int(ncombi/2+1):
         c = palet1[cross]
     else:
-        c = palet2[cross-4]
+        c = palet2[cross-int(ncombi/2+1)]
     ax0.errorbar(ell_binned[:], 
             mean_same[cross, :, 2],
             yerr=std_same[cross, :, 2],
@@ -255,11 +258,11 @@ ax0.set_title(clnames[2])
 ax0.grid()
 ax0.legend(fontsize=12, loc='upper left')
 
-for cross in [0,1,2,3]:#range(ncombi):
-    if cross < nbands:
+for cross in range(ncombi):
+    if cross<int(ncombi/2+1):
         c = palet1[cross]
     else:
-        c = palet2[cross-4]
+        c = palet2[cross-int(ncombi/2+1)]
     ax1.errorbar(ell_binned[:], 
             mean_mix[cross, :, 2],
             yerr=std_mix[cross, :, 2],
@@ -320,7 +323,7 @@ plt.ylabel('Freq 1')
 
 ```{python}
 # Compare noise between 150 and 220
-nfrecon = 4
+nfrecon = 6
 combi = list(combinations_with_replacement(np.arange(nfrecon), 2))
 ncombi = len(combi)
 
@@ -567,12 +570,16 @@ BBcorr = corrbinband[:, :, 2]
 ```
 
 ```{python}
+datadir
+```
+
+```{python}
 # Get matrices and save them for all nfrecon for Claudia
-freq = 150
+rep_save = '/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/'
+freq = 220
 tipo = 'mix'
-#allnfrecon = [1, 2, 3, 4, 5, 8]
-allnfrecon = [4,]
-for nfrecon in allnfrecon:
+
+for nfrecon in [6, 7]:
     
     combi = list(combinations_with_replacement(np.arange(nfrecon), 2))
     ncombi = len(combi)
@@ -598,23 +605,23 @@ for nfrecon in allnfrecon:
     clean_BBcorr = clean_matrices(BBcorr, ncombi)
     clean_BBcov = clean_matrices(BBcov, ncombi)
     
-    np.save(rep_spectrumCC + 
+    np.save(rep_save + 
             f'BBcovariance_bincross_nfrecon{nfrecon}_{tipo}real_FI{freq}_v4.npy', 
             BBcov)
-    np.save(rep_spectrumCC + 
+    np.save(rep_save + 
             f'BBcorrelation_bincross_nfrecon{nfrecon}_{tipo}real_FI{freq}_v4.npy', 
             BBcorr)
     
-#     np.save(rep_spectrumCC + 
+#     np.save(rep_save + 
 #             f'BBcovariance_bincross_nfrecon{nfrecon}_{tipo}real_FI{freq}_v3_cleanbelow{threshold}.npy', 
 #             clean_BBcov)
-#     np.save(rep_spectrumCC + 
+#     np.save(rep_save + 
 #             f'BBcorrelation_bincross_nfrecon{nfrecon}_{tipo}real_FI{freq}_v3_cleanbelow{threshold}.npy', 
 #             clean_BBcorr)
-    np.save(rep_spectrumCC + 
+    np.save(rep_save + 
             f'BBcovariance_bincross_nfrecon{nfrecon}_{tipo}real_FI{freq}_v4_clean.npy', 
             clean_BBcov)
-    np.save(rep_spectrumCC + 
+    np.save(rep_save + 
             f'BBcorrelation_bincross_nfrecon{nfrecon}_{tipo}real_FI{freq}_v4_clean.npy', 
             clean_BBcorr)
 ```
@@ -627,20 +634,12 @@ for nfrecon in allnfrecon:
 # ncombi = len(combi)
 # nbins=16
 
-# ### FI-150
-# covbinbandBB = np.load('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/'
-#                        + 'BBcovariance_bincross_nfrecon{}_samereal_FI-150.npy'.format(nfrecon))
-# corrbinbandBB = np.load('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/'
-#                        + 'BBcorrelation_bincross_nfrecon{}_samereal_FI-150.npy'.format(nfrecon))
-
 ### FI150
-# covbinbandBB = np.load('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/'
-#                        + 'BBcovariance_bincross_nfrecon{}_samereal_FI150_v1.npy'.format(nfrecon))
-# corrbinbandBB = np.load('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/'
-#                        + 'BBcorrelation_bincross_nfrecon{}_mixreal_FI150_v1.npy'.format(nfrecon))
+# covbinbandBB = np.load(rep_save + 'BBcovariance_bincross_nfrecon{}_samereal_FI150_v1.npy'.format(nfrecon))
+# corrbinbandBB = np.load(rep_save + 'BBcorrelation_bincross_nfrecon{}_mixreal_FI150_v1.npy'.format(nfrecon))
 
-# covbinbandBB = np.load(rep_spectrumCC + 'BBcovariance_bincross_nfrecon{}_mixreal_FI220_v1.npy'.format(nfrecon))
-# corrbinbandBB = np.load(rep_spectrumCC + 'BBcorrelation_bincross_nfrecon{}_mixreal_FI220_v1.npy'.format(nfrecon))
+# covbinbandBB = np.load(rep_save + 'BBcovariance_bincross_nfrecon{}_mixreal_FI220_v1.npy'.format(nfrecon))
+# corrbinbandBB = np.load(rep_save + 'BBcorrelation_bincross_nfrecon{}_mixreal_FI220_v1.npy'.format(nfrecon))
 ```
 
 ```{python}
@@ -708,10 +707,8 @@ plt.colorbar(im, cax=cax)
 ```{python}
 nbands = 4
 nbins = 16
-BBcovmix = np.load('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/'
-                           + 'BBcovariance_bincross_nfrecon{}_mixreal_FI-150.npy'.format(nbands))
-BBcovsame = np.load('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/'
-                           + 'BBcovariance_bincross_nfrecon{}_samereal_FI-150.npy'.format(nbands))
+BBcovmix = np.load(rep_save + 'BBcovariance_bincross_nfrecon{}_mixreal_FI-150.npy'.format(nbands))
+BBcovsame = np.load(rep_save + 'BBcovariance_bincross_nfrecon{}_samereal_FI-150.npy'.format(nbands))
 
 combi = list(combinations_with_replacement(np.arange(nbands), 2))
 ncombi = len(combi)
@@ -756,7 +753,7 @@ allrecon = [1, 2, 3, 4, 5, 8]
 covmax = np.zeros((len(allrecon), 4))
 for i, nfrecon in enumerate(allrecon[:-1]):
     print(i, nfrecon)
-    covbinband = np.load('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/corr_matrices/pourClaudia/BBcovariance_bincross_nfrecon{}_mixreal.npy'.format(nfrecon))
+    covbinband = np.load(rep_save + f'BBcovariance_bincross_nfrecon{nfrecon}_mixreal.npy')
     print(covbinband.shape)
     print(np.max(covbinband))
     covmax[i, :] = np.max(np.diag(covbinband))

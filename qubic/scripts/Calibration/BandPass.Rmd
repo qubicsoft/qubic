@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.10.0
+      jupytext_version: 1.4.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -51,7 +51,7 @@ Lets get the directories corresponding to each dataset:
 
 #### Only take from 80 to the end
 n = 'ScanFreq'
-datadir = '2019'
+datadir = '/Volumes/HD JC-Hamilton/QubicData/Calib-TD/'
 days = ['2019-04-15', '2019-04-16']
 
 dirs = []
@@ -96,28 +96,28 @@ for i in range(len(labels)):
 ```
 
 ```{python}
-ii = 20
-thedir = dirs[ii]
-print(thedir, 'Frequency =',freqs[ii])
-AsicNum = 1
-a = qubicfp()
-a.read_qubicstudio_dataset(thedir)
-data = a.azel_etc()
-data['t_src'] += 7200
-data['data'] = data['data %i' % AsicNum] # hack
-data['t_data'] = data['t_data %i' % AsicNum] # hack
+# ii = 20
+# thedir = dirs[ii]
+# print(thedir, 'Frequency =',freqs[ii])
+# AsicNum = 1
+# a = qubicfp()
+# a.read_qubicstudio_dataset(thedir)
+# data = a.azel_etc()
+# data['t_src'] += 7200
+# data['data'] = data['data %i' % AsicNum] # hack
+# data['t_data'] = data['t_data %i' % AsicNum] # hack
 
 ```
 
 ```{python}
-indata = data
-el = np.interp(indata['t_data'], indata['t_azel'], indata['el'])
+# indata = data
+# el = np.interp(indata['t_data'], indata['t_azel'], indata['el'])
 
-az = np.interp(indata['t_data'], indata['t_azel'], indata['az'])
-print(len(az),len(el))
-z = np.array([az,el])
-print(z.shape)
-print(data['data'].shape)
+# az = np.interp(indata['t_data'], indata['t_azel'], indata['az'])
+# print(len(az),len(el))
+# z = np.array([az,el])
+# print(z.shape)
+# print(data['data'].shape)
 ```
 
 ```{python}
@@ -173,6 +173,8 @@ colorbar()
 
 ```
 
+# Now loop over TES
+
 ```{python}
 allmm = np.zeros((256, len(dirs)))
 allss = np.zeros((256, len(dirs)))
@@ -184,10 +186,12 @@ reload(dl)
 reload(ft)
 
 #### Parameters
+freq_mod = 1.
 ppp = 1./freq_mod
 lowcut = 0.3
 highcut = 10.
 method = 'rms'
+# method = 'demod'
 
 nbins = 250
 
@@ -199,15 +203,16 @@ for ii in range(len(dirs)):
     print('##############################################################')
     if done[ii] == 0:
         print('Not Done yet: doing it...')
+        a = qubicfp()
+        a.read_qubicstudio_dataset(thedir)
+        data = a.azel_etc()
+        
         for iasic in [0,1]:
             print('======== ASIC {} ====================='.format(iasic))
             AsicNum = iasic+1
-            a = qubicfp()
-            a.read_qubicstudio_dataset(thedir)
-            data = a.azel_etc()
             data['data'] = data['data %i' % AsicNum] # hack
             data['t_data'] = data['t_data %i' % AsicNum] # hack
-            if data['t_src'] is not None: data['t_src'] += 7200
+            #if data['t_src'] is not None: data['t_src'] += 7200
             unbinned, binned = dl.general_demodulate(ppp, data, 
                                                     lowcut, highcut,
                                                     nbins=nbins, median=True, method=method, 
@@ -225,6 +230,71 @@ for d in days:
 FitsArray(allmm).save(savedir+'/allmm_'+name+'.fits')
 FitsArray(allss).save(savedir+'/allss_'+name+'.fits')    
 FitsArray(freqs).save(savedir+'/freqs_'+name+'.fits')    
+
+```
+
+```{python}
+allmm = np.zeros((256, len(dirs)))
+allss = np.zeros((256, len(dirs)))
+done = np.zeros(len(dirs))
+```
+
+```{python}
+reload(dl)
+reload(ft)
+
+#### Parameters
+freq_mod = 1.
+ppp = 1./freq_mod
+lowcut = 0.3
+highcut = 10.
+method = 'demod'
+
+nbins = 250
+
+
+for ii in range(len(dirs)):
+    thedir = dirs[ii]
+    print('##############################################################')
+    print('Directory {} / {} :'.format(ii, len(dirs)), thedir)
+    print('##############################################################')
+    if done[ii] == 0:
+        print('Not Done yet: doing it...')
+        a = qubicfp()
+        a.read_qubicstudio_dataset(thedir)
+        data = a.azel_etc()
+        
+        for iasic in [0,1]:
+            print('======== ASIC {} ====================='.format(iasic))
+            AsicNum = iasic+1
+            data['data'] = data['data %i' % AsicNum] # hack
+            data['t_data'] = data['t_data %i' % AsicNum] # hack
+            #if data['t_src'] is not None: data['t_src'] += 7200
+            unbinned, binned = dl.general_demodulate(ppp, data, 
+                                                    lowcut, highcut,
+                                                    nbins=nbins, median=True, method=method, 
+                                                    doplot=False, rebin=False, verbose=False)
+
+            for i in range(128):
+                allmm[iasic*128+i,ii], allss[iasic*128+i,ii] = ft.meancut(unbinned['sb'][i,:], 3)
+        done[ii] = 1
+    else:
+        print('Already Done: skipping')
+
+name = method+'_'+n
+for d in days:
+    name = name+'_'+d
+FitsArray(allmm).save(savedir+'/allmm_'+name+'.fits')
+FitsArray(allss).save(savedir+'/allss_'+name+'.fits')    
+FitsArray(freqs).save(savedir+'/freqs_'+name+'.fits')    
+
+```
+
+```{python}
+print(unbinned)
+```
+
+```{python}
 
 ```
 
@@ -260,8 +330,12 @@ legend()
 ylabel('dB')
 xlabel('Frequency [GHz]')
 title(name)
-ylim(-40,0)
+#ylim(-40,0)
 plot(ff[sorted_index],dl.dB(f_demod[sorted_index]),color='red')
+```
+
+```{python}
+f_demod
 ```
 
 ```{python}

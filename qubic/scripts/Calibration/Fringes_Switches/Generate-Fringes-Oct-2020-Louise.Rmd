@@ -71,8 +71,9 @@ xTES, yTES, allFP_index, allindex_q = scal.get_TES_Instru_coords(q, frame='ONAFP
 
 ```{python}
 global_dir = '/home/lmousset/QUBIC/Qubic_work/Calibration/datas/Fringes/'
-date = '2020-10-27'
+# date = '2020-10-27'
 # date = '2020-01-13'
+date = '2019-06-07'
 
 print(global_dir)
 vtes = 5
@@ -116,11 +117,11 @@ def get_fringes_datasets(rep, keyword, q):
     allBLs, allNcycles, allstable_time = [], [], []
     for ds in datasets:
         strs = ds.split('_')
-#         print(strs)
-#         allNcycles.append(100)
-#         allstable_time.append(3000.)
-        allNcycles.append(float(strs[strs.index('ncycles') + 1]))
-        allstable_time.append(float(strs[strs.index('wt') + 1]))
+        print(strs)
+        allNcycles.append(20)
+        allstable_time.append(1000.)
+#         allNcycles.append(float(strs[strs.index('ncycles') + 1]))
+#         allstable_time.append(float(strs[strs.index('wt') + 1]))
         allBLs.append([int(strs[-2]), int(strs[-1])])
 
     return datasets, allBLs, allNcycles, allstable_time
@@ -143,21 +144,78 @@ scal.plot_BLs_eq(allBLs, BLs_sort, q)
 ## Simulation to compare 
 
 ```{python}
-for baseline in allBLs:
+rep = '/home/lmousset/QUBIC/Qubic_work/Calibration/RF_switch/simu_creidhe_aberrations/creidhe_files/'
+for baseline in allBLs[5:6]:
+    Model_May = scal.Model_Fringes_Maynooth(q, baseline,
+                                            rep=rep,
+                                            theta_source=np.deg2rad(0.),
+                                            nu_source=150e9,
+                                            frame='ONAFP')
+
+    xONAFP, yONAFP, fringes = Model_May.get_fringes_from_combination(verbose=True)
+
+#     print('fringes shape:', fringes.shape)
+
+
+
+```
+
+```{python}
+lim = np.max(np.abs(fringes))
+fig = plt.figure(figsize=(7, 7))
+ax = fig.gca()
+scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP', s=350, fig=fig, ax=ax, unit=None,
+                    title=f'Simulation - Baseline {allBLs[5]}', cmap='bwr',
+                    vmin=-lim, vmax=lim, fontsize=20)
+fig.tight_layout()
+# fig.savefig('/home/lmousset/QUBIC/Images/simu_fringes_49-51_Maynooth.pdf')
+```
+
+```{python}
+for baseline in allBLs[5:6]:
     Model_QS = scal.Model_Fringes_QubicSoft(q, baseline,
                                             theta_source=0., phi_source=0.,
                                             nu_source=150e9, spec_irrad_source=1.,
                                             frame='ONAFP', external_A=None, hwp_position=0)
 
-    xONAFP, yONAFP, fringes = Model_QS.get_fringes(doplot=True, verbose=True, norm=None, unit=None, s=180)
+    xONAFP, yONAFP, fringes = Model_QS.get_fringes_from_combination(doplot=True, verbose=True, norm=None, unit=None, s=180)
 
 #     print('fringes shape:', fringes.shape)
+
+
+lim = np.max(np.abs(fringes))
+fig = plt.figure(figsize=(7, 7))
+ax = fig.gca()
+scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP', s=350, fig=fig, ax=ax, unit=None,
+                    title=f'Simulation - Baseline {allBLs[5]}', cmap='bwr',
+                    vmin=-lim, vmax=lim)
+
+```
+
+```{python}
+baseline=allBLs[5]
+Model_ana = scal.Model_Fringes_Ana(q, baseline,
+                                    theta_source=0.,
+                                    nu_source=150e9,
+                                    frame='ONAFP')
+
+xONAFP, yONAFP, fringes = Model_ana.get_fringes(times_gaussian=True)
+
+fig = plt.figure(figsize=(7, 7))
+ax = fig.gca()
+scal.scatter_plot_FP(q, xONAFP, yONAFP, fringes, frame='ONAFP', s=350, fig=fig, ax=ax, unit=None,
+                    title=f'Simulation - Baseline {allBLs[5]}', cmap='bwr')
+
 ```
 
 ## Fringes Analysis
 
 
 #### Analysis
+
+```{python}
+allBLs
+```
 
 ```{python}
 allm_points, allerr_m_points = [], []
@@ -168,34 +226,35 @@ allTODresiduals = []
 allmask_bad_TES = []
 
 # Loop on the BLs
-for i, BL in enumerate(allBLs[:1]):
+for i, BL in enumerate(allBLs[-1]):
+    i=7
     print(f'\n ===================== Measurement {i+1}/{nBLs} - BL {BL} starting ===================')   
     print("Data folder:", datasets[i])
 
     # Analysis
-    Fringes_Ana = flib.FringesAnalysis(datasets[i], date, q, BL, stable_time=5., ncycles=20, 
+    Fringes_Ana = flib.FringesAnalysis(datasets[i], date, q, BL, stable_time=1., ncycles=20, 
                                        refTESnum=None, refASICnum=None, fraction_bad_TES=0.75, 
-                                       sigma_conv_astropy=0.7, verbose=True)
-    allmask_bad_TES.append(Fringes_Ana.mask_bad_TES)
+                                       sigma_conv_astropy=0.5, verbose=True, sort_TES=True)
+#     allmask_bad_TES.append(Fringes_Ana.mask_bad_TES)
     Fringes_Ana.plot_TOD()
-    m_points, err_m_points, Mcycles, err_Mcycles, \
-    fringes1D, err_fringes1D, fringes1D_percycle, err_fringes1D_percycle = Fringes_Ana.analyse_fringes(
-                              doplotTESsort=[0, 50],
-                              median=True,
-                              Ncycles_to_use=None,
-                              remove_median_allh=True,
-                              rm_slope_percycle=True)
+#     m_points, err_m_points, Mcycles, err_Mcycles, \
+#     fringes1D, err_fringes1D, fringes1D_percycle, err_fringes1D_percycle = Fringes_Ana.analyse_fringes(
+#                               doplotTESsort=[0, 30],
+#                               median=True,
+#                               Ncycles_to_use=None,
+#                               remove_median_allh=True,
+#                               rm_slope_percycle=False)
 
-    allm_points.append(m_points)
-    allerr_m_points.append(err_m_points)
-    allMcycles.append(Mcycles)
-    allerr_Mcycles.append(err_Mcycles)
+#     allm_points.append(m_points)
+#     allerr_m_points.append(err_m_points)
+#     allMcycles.append(Mcycles)
+#     allerr_Mcycles.append(err_Mcycles)
     
-    allfringes1D.append(fringes1D)
-    allerr_fringes1D.append(err_fringes1D)
+#     allfringes1D.append(fringes1D)
+#     allerr_fringes1D.append(err_fringes1D)
     
-    allfringes1D_percycle.append(fringes1D_percycle)
-    allerr_fringes1D_percycle.append(err_fringes1D_percycle)
+#     allfringes1D_percycle.append(fringes1D_percycle)
+#     allerr_fringes1D_percycle.append(err_fringes1D_percycle)
 ```
 
 ## Make some plots

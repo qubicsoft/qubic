@@ -1,0 +1,665 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.5.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+<p style="font-size:260%;">Observing the sky with QUBIC TD</p>
+
+
+# Imports and functions
+
+
+## Imports
+
+```{python}
+import pylab as pl
+import os
+import sys
+import time
+import pickle
+from importlib import reload
+from IPython.display import Latex
+
+
+# Specific science modules
+import healpy as h
+import numpy as np
+import scipy
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+#from mpi4py import MPI
+# from pyoperators import MPI
+import pysm
+import qubic
+from qubic import QubicSkySim as qss
+from qubic import fibtools as ft
+from qubic import camb_interface as qc
+from qubic import SpectroImLib as si
+from qubic import NamasterLib as nam
+from qubic import mcmc
+from qubic import AnalysisMC as amc
+
+pl.rc('figure', figsize=(16, 10))
+pl.rc('font', size=15)
+pl.rcParams['image.cmap'] = 'jet'
+
+### Initialize
+dictfilename = 'RealisticScanning-BmodesNoDustNoSystPaper0_2020.dict'
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+d['nside'] = 128
+print(d['RA_center'], d['DEC_center'])
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+```
+
+## Sources
+
+```{python}
+class Sources:
+    def __init__(self):
+        self.source_list = [\
+                           'Crab',
+                           'RCW38'
+                           ]
+    class Crab:
+        def __init__(self):
+            self.name    = 'Crab'
+            self.altname = 'M1'
+            self.coords  = {\
+                            'RA'  :  83.6,\
+                            'DEC' :  22.0,\
+                            'GLON': 184.6,\
+                            'GLAT':  -5.8\
+                           }
+            
+            self.flux    = {\
+                            'INT' : 167.1,\
+                            'POL' :  12.0            
+                           }
+    class RCW38:
+        def __init__(self):
+            self.name    = 'RCW38'
+            self.altname = None
+            self.coords  = {\
+                            'RA'  : 134.8,\
+                            'DEC' : -47.5,\
+                            'GLON': 267.9,\
+                            'GLAT':  -1.1\
+                           }
+            self.flux    ={\
+                            'INT' : 103.7,\
+                            'POL' :  1.2            
+                           }
+```
+
+```{python}
+source = 'RCW38'
+srcs = Sources()
+if source in srcs.source_list:
+    string = 'srcs.'+source+'()'
+    source = eval(string)
+    print (source.altname)
+else:
+    print('Source not present')
+```
+
+## Functions
+
+
+### Generate input sky
+
+
+This is a simple wrapper to QUBIC functions to generate an input sky at the various sub-frequencies in the band defined in the QUBIC instrument dictionary
+
+```{python}
+def generate_input_sky(\
+                       instrument_dictionary,\
+                       sky_config = {\
+                                      'cmb' : None,\
+                                      'freefree' : 'f1',\
+                                      'synchrotron': 's1',\
+                                      'dust' : 'd1'\
+                                     }):
+    '''
+    Fuction that generates an input sky using PySM
+
+    INPUTS
+    instrument_dictionary  DICT  the dictionary containing all the instrumental parameters
+    sky_config             DICT  the configuration of the sky to be generated. By default it contains CMB,
+                                 synchrotron, dust and free free.
+    
+    OUTPUTS
+    sky_map               ARRAY  Shape[instrument_dictionary['nf_sub'], 12*instrument_dictionary['nside']**2,
+                                 3], the array of IQU maps at the various sub-frequencies defined in the 
+                                 dictionary
+    '''
+
+    Qubic_sky = qss.Qubic_sky(sky_config, instrument_dictionary)
+    x0 = Qubic_sky.get_simple_sky_map()
+
+    print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0))
+
+    # Check size map
+    if hp.get_nside(x0[0,:,0]) == d['nside']:
+        print('Good size')
+        sky_map = x0
+    else:
+        print('Bad size')
+        sky_map = np.empty((d['nf_sub'], 12 * d['nside'] ** 2, 3))
+        for i in range(d['nf_sub']):
+            for j in range(3):
+                sky_map[i, :, j] = hp.ud_grade(x0[i, :, j], d['nside'])
+    
+    return sky_map
+```
+
+### Show map around point source
+
+
+Here we want to show a gnomonic map of a chosen source. It is possible to show a map at a single frequency or an array of maps at every frequency in the band defined in the instrument dictionary. An optional (not implemented yet) feature is that of showing the SED of the source in pixels 1 degree wide. The sources are defined in the Sources class.
+
+```{python}
+def mapsource(skymap, sources, source, freq = 0, reso = 9, xsize = 200):
+
+    '''
+    Function that plots a map around a point source
+
+    INPUTS
+    sky_map               ARRAY  Shape[instrument_dictionary['nf_sub'], 12*instrument_dictionary['nside']**2,
+                                 3], the array of IQU maps at the various sub-frequencies defined in the 
+                                 dictionary
+    sources               CLASS  instantiation of the Sources() class
+    
+    source               STRING  string with source name
+    
+    freq                    INT  (Default = 0) index of the subfrequency to plot
+    
+    reso                  FLOAT  (Default = 9) resolution in arcmin
+    
+    xsize                   INT  (Default = 200) the size in pixel
+    
+    OUTPUTS
+    None
+    '''    
+ 
+    # Check if the source is in the list
+    if source in sources.source_list:
+        string = 'sources.'+source+'()'
+        src    = eval(string)
+        print(string)
+        coords = (src.coords['GLON'], src.coords['GLAT'])
+    else:
+        print('Source not present')
+        return None
+    
+    pl.figure(figsize=(13,13))
+
+    for i in range(3):
+        h.gnomview(skymap[freq,:,i], \
+                   cmap ='jet', \
+                   sub = (1,3,i+1), \
+                   reso = reso, \
+                   rot = coords,\
+                   xsize = xsize\
+                  )
+    
+    
+```
+
+```{python}
+d['nside'] = 1024
+```
+
+```{python}
+mysky = generate_input_sky(d, sky_config = {'dust':'d1'})
+```
+
+```{python}
+srcs = Sources()
+```
+
+```{python}
+mapsource(mysky, srcs, 'Crab', reso = 5, xsize = 30, freq = 1)
+```
+
+```{python}
+pol = np.sqrt(mysky[0,:,1]**2+mysky[0,:,2]**2)
+```
+
+```{python}
+h.gnomview(pol,rot=(184.6,-5.8), reso = 5, xsize = 30)
+```
+
+### Get coverage split
+
+```{python}
+def get_coverage_split(d, nsplit=1, ra_center=0., dec_center=-57, period=10., date_obs='2021-10-01 00:00:00', duration=24., 
+                 angspeed=0.4, delta_az=35.,nsweeps_per_elevation=100):
+    d['RA_center'] = ra_center
+    d['DEC_center'] = dec_center
+    d['period'] = period
+    d['date_obs'] = date_obs
+    d['duration'] = duration
+    d['angspeed'] = angspeed
+    d['delta_az'] = delta_az
+    d['nsweeps_per_elevation'] = nsweeps_per_elevation
+    
+    p = qubic.get_pointing(d)
+    s = qubic.QubicScene(d)
+    q = qubic.QubicInstrument(d)
+    
+    nmyp = len(p)//nsplit
+    cov = 0
+    for i in range(nsplit):
+        myp = p[i*nmyp:(i+1)*nmyp-1]
+        a = qubic.QubicAcquisition(q, myp, s, d)
+        cov += a.get_coverage()
+
+    covnorm = cov/np.max(cov)
+    eta = np.sum(covnorm)/np.sum(covnorm**2)
+    
+    fsky = np.sum(cov/np.max(cov))/len(cov)
+    return p, cov, eta, fsky
+
+```
+
+<!-- #region heading_collapsed=true -->
+### Get fsky cut
+<!-- #endregion -->
+
+```{python hidden=TRUE}
+def get_fsky_cut(cov, cut=0.1):
+    mycov = cov.copy()/np.max(cov)
+    mycov[mycov < cut] = 0
+    return np.sum(mycov/np.max(mycov))/len(mycov)
+```
+
+<!-- #region heading_collapsed=true -->
+### Gnomonic projection
+<!-- #endregion -->
+
+```{python hidden=TRUE}
+def gnomit(cov, title=None, sub=None, reso=20, center=center):
+    cov = cov / np.max(cov)
+    cov[cov<0.01] = hp.UNSEEN
+    mymap = hp.gnomview(cov, rot=center, reso=reso, hold = False, title = title, notext =False, min=0, max=1, 
+                        sub=sub, return_projected_map=True)
+    dmer = 20
+    dpar = 10
+    hp.graticule(dpar=dpar, dmer=dmer, alpha = 0.6, verbose = False)
+    return mymap
+```
+
+<!-- #region heading_collapsed=true -->
+### Plot pointing
+<!-- #endregion -->
+
+```{python hidden=TRUE}
+def plot_pointing(p, alpha=1):
+    plt.rc('figure', figsize=(13, 8))
+    plt.rc('font', size=15)
+
+    figure()
+    subplot(2,2,1)
+    plot(p.time, p.azimuth, ',')
+    xlabel('Time [sec]')
+    ylabel('Azimuth [deg]')
+
+    subplot(2,2,2)
+    plot(p.time, p.elevation,',')
+    xlabel('Time [sec]')
+    ylabel('Elevation [deg]')
+
+    subplot(2,3,4)
+    plot(p.azimuth,p.elevation,',')
+    xlabel('Azimuth [deg]')
+    ylabel('Elevation [sec]')
+
+    subplot(2,3,5)
+    plot(((p.equatorial[:,0]+180+360) % 360)-180,p.equatorial[:,1],',', alpha=alpha)
+    xlabel('RA [deg]')
+    ylabel('DEC [sec]')
+
+    subplot(2,3,6)
+    plot(((p.galactic[:,0]+180+360) % 360)-180,p.galactic[:,1],',', alpha=alpha)
+    xlabel('Galactic l [deg]')
+    ylabel('Galactic b [sec]')
+```
+
+# Point sources
+
+
+Here follows a list of some interesing point sources
+
+<style>
+table {
+  font-family: arial, sans-serif;
+  border-collapse: collapse;
+  width: 100%;
+}
+
+td, th {
+  border: 1px solid #dddddd;
+  text-align: left;
+  padding: 8px;
+}
+
+tr:nth-child(even) {
+  background-color: #dddddd;
+}
+</style>
+
+<body>
+
+<table>
+  <tr>
+    <th>Catalog</th>
+    <th>Name</th>
+    <th>Ra [deg]</th>
+    <th>Dec [deg]</th>
+    <th>GLon [deg]</th>
+    <th>GLat [deg]</th>
+    <th>I [mJy]</th>
+    <th>P [mJy]</th>
+  </tr>
+  <tr>
+    <td>PCCS2E</td>
+    <td>M1 (Crab)</td>
+    <td>83.6</td>
+    <td>22.0</td>
+    <td>184.6</td>
+    <td>-5.8</td>
+    <td>167.1</td>
+    <td>12.0</td>
+  </tr>
+</table>
+
+</body>
+
+
+# Diffuse regions
+
+
+# We first try with 10 secondes sampling (variable period)
+
+```{python}
+ra_center = 0.
+dec_center = -57.
+period = 10.
+date_obs = '2021-10-01 00:00:00'
+angspeed = 0.4
+delta_az = 35.
+nsweeps_per_elevation = 100
+duration = 24.
+
+p, cov, eta, fsky = get_coverage_split(d, ra_center=ra_center, dec_center=dec_center, period=period, 
+                      date_obs=date_obs, angspeed=angspeed, delta_az=delta_az,
+                      nsweeps_per_elevation=nsweeps_per_elevation, duration=duration)
+
+plot_pointing(p)
+
+plt.rc('figure', figsize=(13, 4))
+plt.rc('font', size=15)
+gnomit(cov, title='$\eta$={0:4.2f} fsky={1:4.2f}'.format(eta, fsky*100))
+
+hp.mollview(cov)
+```
+
+### Now with 1 second sampling but splitting into 10 the pointing 
+
+```{python}
+period = 1
+p, cov, eta, fsky = get_coverage_split(d, nsplit=10, ra_center=ra_center, dec_center=dec_center, period=period, 
+                      date_obs=date_obs, angspeed=angspeed, delta_az=delta_az,
+                      nsweeps_per_elevation=nsweeps_per_elevation, duration=duration)
+
+plot_pointing(p, alpha=0.1)
+
+plt.rc('figure', figsize=(13, 4))
+plt.rc('font', size=15)
+
+gnomit(cov, title='$\eta$={0:4.2f} fsky={1:4.2f}'.format(eta, fsky*100))
+```
+
+<!-- #region -->
+We get the same so it means that 10 seconds saampling is good enough for this test.
+
+
+### Now we want to optimize the flatness of the coverage for various values of nsweeps and angspeed
+<!-- #endregion -->
+
+# Angspeed
+
+```{python}
+### Angspeed
+nn = 10
+my_angspeeds = np.linspace(0.2,1., nn)
+print(my_angspeeds)
+
+period = 10
+all_etas = np.zeros(nn)
+all_fsky = np.zeros(nn)
+all_fsky_cut = np.zeros(nn)
+for i in range(nn):
+    p, cov, all_etas[i], all_fsky[i] = get_coverage_split(d, nsplit=1, ra_center=ra_center, dec_center=dec_center, period=period, 
+                          date_obs=date_obs, angspeed=my_angspeeds[i], delta_az=delta_az,
+                          nsweeps_per_elevation=nsweeps_per_elevation, duration=duration)
+    all_fsky_cut[i] = get_fsky_cut(cov)
+    gnomit(cov, title='$\eta$={0:4.2f} fsky={1:4.2f}'.format(all_etas[i], all_fsky[i]*100), sub=(2,5,i+1))
+
+
+```
+
+```{python}
+plt.rc('figure', figsize=(13, 8))
+plt.rc('font', size=15)
+plot(my_angspeeds, all_etas, label='$\eta$')
+plot(my_angspeeds, all_fsky*100, label='fsky (%)')
+plot(my_angspeeds, all_fsky_cut*100, label='fsky (%) [cut at 0.1]')
+legend()
+xlabel('Angular speed [deg/s]')
+```
+
+# Nsweeps
+
+```{python}
+### Nsweeps
+nn = 10
+my_nsweeps = np.linspace(10,200, nn, dtype=int)
+print(my_nsweeps)
+
+angspeed=0.4 
+
+period = 10
+all_etas = np.zeros(nn)
+all_fsky = np.zeros(nn)
+for i in range(nn):
+    p, cov, all_etas[i], all_fsky[i] = get_coverage_split(d, nsplit=1, ra_center=ra_center, dec_center=dec_center, period=period, 
+                          date_obs=date_obs, angspeed=angspeed, delta_az=delta_az,
+                          nsweeps_per_elevation=my_nsweeps[i], duration=duration)
+    all_fsky_cut[i] = get_fsky_cut(cov)
+    gnomit(cov, title='$\eta$={0:4.2f} fsky={1:4.2f}'.format(all_etas[i], all_fsky[i]), sub=(2,5,i+1))
+
+
+```
+
+```{python}
+plot(my_nsweeps, all_etas, label='$\eta$')
+plot(my_nsweeps, all_fsky*100, label='fsky (%)')
+plot(my_nsweeps, all_fsky_cut*100, label='fsky (%) [cut at 0.1]')
+legend()
+xlabel('Nsweeps')
+```
+
+# delta_az
+
+```{python}
+### Nsweeps
+nn = 10
+my_daz = np.linspace(25,40, nn, dtype=int)
+print(my_daz)
+
+angspeed=0.4 
+nsweeps = 100
+
+period = 10
+all_etas = np.zeros(nn)
+all_fsky = np.zeros(nn)
+for i in range(nn):
+    p, cov, all_etas[i], all_fsky[i] = get_coverage_split(d, nsplit=1, ra_center=ra_center, dec_center=dec_center, period=period, 
+                          date_obs=date_obs, angspeed=angspeed, delta_az=my_daz[i],
+                          nsweeps_per_elevation=nsweeps, duration=duration)
+    all_fsky_cut[i] = get_fsky_cut(cov)
+    gnomit(cov, title='$\eta$={0:4.2f} fsky={1:4.2f}'.format(all_etas[i], all_fsky[i]), sub=(2,5,i+1))
+
+
+```
+
+```{python}
+plot(my_daz, all_etas, label='$\eta$')
+plot(my_daz, all_fsky*100, label='fsky (%)')
+plot(my_daz, all_fsky_cut*100, label='fsky (%) [cut at 0.1]')
+legend()
+xlabel('$\Delta$Az [deg]')
+```
+
+So it seems that angspeed=0.4 and nsweeps=100 is more or less OK
+
+```{python}
+ra_center = 0.
+dec_center = -57.
+period = 10.
+date_obs = '2021-10-01 00:00:00'
+angspeed = 0.4
+delta_az = 35.
+nsweeps_per_elevation = 100
+duration = 24.
+
+p, cov, eta, fsky = get_coverage_split(d, ra_center=ra_center, dec_center=dec_center, period=period, 
+                      date_obs=date_obs, angspeed=angspeed, delta_az=delta_az,
+                      nsweeps_per_elevation=nsweeps_per_elevation, duration=duration)
+
+```
+
+```{python}
+cut = 0.1
+mycov = cov.copy()/np.max(cov)
+mycov[mycov < cut] = 0
+fsky_cut = np.sum(mycov/np.max(mycov))/len(mycov)
+
+plt.rc('figure', figsize=(13, 8))
+plt.rc('font', size=15)
+gnomit(mycov, reso=15, title='$\eta$={0:4.2f} fsky={1:4.1f}%'.format(eta, fsky_cut*100))
+
+
+figure()
+gnomit(mycov, reso=15, center=[316, -56], title='Galactic Coordinates - fsky={0:4.2f}%'.format(fsky_cut*100))
+
+mycovcut = mycov.copy()/np.max(mycov)
+mycovcut[mycovcut < 0.1] = hp.UNSEEN
+hp.mollview(mycovcut, title='Galactic Coordinates - fsky={0:4.2f}%'.format(fsky_cut*100), min=0, max=1)
+dmer = 20
+dpar = 10
+hp.graticule(dpar=dpar, dmer=dmer, alpha = 0.6, verbose = False)
+
+```
+
+```{python}
+mymap = hp.gnomview(cov, rot=center, reso=20, return_projected_map=True)
+```
+
+```{python}
+from mpl_toolkits.mplot3d import Axes3D
+fig, ax = plt.subplots(subplot_kw=dict(projection='3d'))
+x, y = np.meshgrid(np.arange(200), np.arange(200))
+ax.plot_surface(x,y,mymap)
+```
+
+### Now let's try to move slightly from one day to another
+
+```{python}
+print(ra_center)
+print(dec_center)
+
+nn = 4
+dx = 12.5
+ras = np.array([ra_center-dx, ra_center-dx, ra_center+dx*2, ra_center+dx*0.7])
+decs = np.array([dec_center-dx/2, dec_center+dx/2, dec_center-dx/2*0.7, dec_center+dx/2])
+
+ll, bb = qubic.equ2gal(ras, decs)
+
+
+subplot(1,2,1)
+plot(ras,decs,'ro')
+for i in range(len(bb)):
+               text(ras[i], decs[i],i)
+plot(ra_center, dec_center,'k*')
+xlim(-40,50)
+ylim(-70, -40)
+
+subplot(1,2,2)
+plot(ll, bb,'ro')
+for i in range(len(bb)):
+               text(ll[i], bb[i],i)
+plot(center[0], center[1],'k*')
+xlim(270,350)
+ylim(-70, -40)
+```
+
+```{python}
+### Angspeed
+nn = len(ras)
+
+angspeed=0.4 
+nsweeps = 100
+
+period = 10
+all_etas = np.zeros(nn)
+all_fsky = np.zeros(nn)
+fullcov = 0
+for i in range(nn):
+    p, cov, eta, fsky = get_coverage_split(d, nsplit=1, ra_center=ras[i], dec_center=decs[i], period=period, 
+                          date_obs=date_obs, angspeed=angspeed, delta_az=delta_az,
+                          nsweeps_per_elevation=nsweeps, duration=duration)
+    gnomit(cov, title='$\eta$={0:4.2f} fsky={1:4.2f}'.format(eta, fsky*100), sub=(2,2,i+1))
+    fullcov += cov
+
+```
+
+```{python}
+covnorm = fullcov/np.max(fullcov)
+eta = np.sum(covnorm)/np.sum(covnorm**2)
+fsky = np.sum(fullcov/np.max(fullcov))/len(fullcov)
+fsky_cut = get_fsky_cut(fullcov)
+
+mymap = gnomit(fullcov, reso=25, 
+       title='$\eta$={0:4.2f} fsky={1:4.2f} fsky_cut={2:4.2f}'.format(eta, fsky*100, fsky_cut*100))
+
+```
+
+```{python}
+mymap.data[mymap.data==hp.UNSEEN]=0
+from mpl_toolkits.mplot3d import Axes3D
+fig, ax = plt.subplots(subplot_kw=dict(projection='3d'))
+x, y = np.meshgrid(np.arange(200), np.arange(200))
+ax.plot_surface(x,y,mymap)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

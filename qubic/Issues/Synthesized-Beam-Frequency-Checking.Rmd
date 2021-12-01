@@ -47,7 +47,7 @@ def sb_noprim(th_deg, nu):
 ```{python}
 # With Multiband = False  => using a QubicInstrument
 d = qubic.qubicdict.qubicDict()
-d.read_from_file(os.environ['QUBIC_DICT']+'global_source_oneDet.dict')
+d.read_from_file('global_source_oneDet.dict')
 
 d['multiband'] = False
 
@@ -101,7 +101,7 @@ for j, ibeam in enumerate(beams):
 ```{python}
 # With multiband = True code have to be written differently
 d = qubic.qubicdict.qubicDict()
-d.read_from_file(os.environ['QUBIC_DICT']+'global_source_oneDet.dict')
+d.read_from_file('global_source_oneDet.dict')
 
 d['multiband'] = True
 

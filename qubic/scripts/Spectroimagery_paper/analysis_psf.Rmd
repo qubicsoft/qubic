@@ -185,7 +185,8 @@ def fwhm_from_calibration(
     
     delta_fwhm_g = np.zeros((Ncalmaps))
     fwhm_measured_g = []
-
+    xscalecal = x
+    
     gmodel_calb_g = Model(gaussian2d_b, independent_vars = ['x'])
 
     t0 = time.time()
@@ -354,23 +355,40 @@ fig, axs = plt.subplots(1, 3, figsize=(10, 3))
 vmax = np.nanpercentile(s0map, 99.9)
 vmin = -0.5
 ax = axs[0]
+ax.set_xlim(-1,1)
+ax.set_ylim(-1,1)
 art = ax.pcolor(X, Y, s0map, vmin=vmin, vmax=vmax, shading='auto')
 plt.colorbar(art, ax=ax, label='z')
-ax.set_title('Data')
+ax.set_title('Mapa')
 
 ax = axs[1]
+ax.set_xlim(-1,1)
+ax.set_ylim(-1,1)
 fit = np.reshape(gaussian2d_b(xscale, **result_fit[jj].best_values), (len(xscale), len(xscale)))
 art = ax.pcolor(X, Y, fit, vmin=vmin, vmax=vmax, shading='auto')
 plt.colorbar(art, ax=ax, label='z')
-ax.set_title('Fit')
+ax.set_title('Ajuste')
 
 ax = axs[2]
 #fit = model.func(X, Y, **result_s0.best_values)
-art = ax.pcolor(X, Y, s0map - fit, vmin=vmin, vmax=vmax, shading='auto')
+ax.set_xlim(-1,1)
+ax.set_ylim(-1,1)
+art = ax.pcolor(X, Y, s0map - fit, vmin=0.3*vmin, vmax=0.3*vmax, shading='auto')
 plt.colorbar(art, ax=ax, label='z')
-ax.set_title('Data - Fit')
+ax.set_title('Diferencia')
 fig.tight_layout()
+#plt.savefig("/home/martin/Doctorado/Tesis-Doctoral/Figuras_Tesis_Overleaf/fwhm_sketch")
 ```
+
+proj = hp.projector.CartesianProj(rot=center, coord=None, 
+                                  xsize=size, ysize=size, 
+                                  lonra=None, latra=None)
+long,lat = lambda th, ph: np.array([th,ph]) + np.array([360,0])
+hp.gnomview(maps_recon_1[jj,:,0] / 1e5, rot = center, max = 1)
+hp.get_all_neighbours(nside, hp.pix2ang(nside, ))
+#maps_recon_1[jj,:,0] / 1e5
+#hp.boundaries()
+
 
 ### Fit the calibration difference 
 and then removes the interpolated value from data maps

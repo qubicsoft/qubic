@@ -69,6 +69,54 @@ import pylab as pl
 import qubic.insert_point_sources_in_sky as ipss
 ```
 
+## Wrapper to PySM
+
+```{python}
+def generate_input_sky(\
+                       instrument_dictionary,\
+                       sky_config = {\
+                                      'cmb' : None,\
+                                      'freefree' : 'f1',\
+                                      'synchrotron': 's1',\
+                                      'dust' : 'd1'\
+                                     }):
+    '''
+    Fuction that generates an input sky using PySM
+
+    INPUTS
+    instrument_dictionary  DICT  the dictionary containing all the instrumental parameters
+    sky_config             DICT  the configuration of the sky to be generated. By default it contains CMB,
+                                 synchrotron, dust and free free.
+    
+    OUTPUTS
+    sky_map               ARRAY  Shape[instrument_dictionary['nf_sub'], 12*instrument_dictionary['nside']**2,
+                                 3], the array of IQU maps at the various sub-frequencies defined in the 
+                                 dictionary
+    '''
+
+    from qubic import QubicSkySim as qss
+    import healpy as hp
+    import numpy as np
+    
+    Qubic_sky = qss.Qubic_sky(sky_config, instrument_dictionary)
+    x0 = Qubic_sky.get_simple_sky_map()
+
+    print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(x0))
+
+    # Check size map
+    if hp.get_nside(x0[0,:,0]) == d['nside']:
+        print('Good size')
+        sky_map = x0
+    else:
+        print('Bad size')
+        sky_map = np.empty((d['nf_sub'], 12 * d['nside'] ** 2, 3))
+        for i in range(d['nf_sub']):
+            for j in range(3):
+                sky_map[i, :, j] = hp.ud_grade(x0[i, :, j], d['nside'])
+    
+    return sky_map
+```
+
 ## Generate map of the Crab at 143 GHz and compare with HFI 143 GHz data
 
 

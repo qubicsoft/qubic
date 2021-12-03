@@ -16,15 +16,16 @@ import s4bi
 from fgbuster.component_model import (CMB, Dust, Dust_2b, Synchrotron, AnalyticComponent)
 from scipy import constants
 
-def eval_scaled_dust_dbmmb_map(nu_ref, nu_test, beta0, beta1, nubreak, nside, fsky, radec_center):
+def eval_scaled_dust_dbmmb_map(nu_ref, nu_test, beta0, beta1, nubreak, nside, fsky, radec_center, temp):
     #def double-beta dust model
     analytic_expr = s4bi.double_beta_dust_FGB_Model()
-    dbdust = AnalyticComponent(analytic_expr, nu0=nu_ref, temp=20., h_over_k=constants.h * 1e9 / constants.k)
+    dbdust = AnalyticComponent(analytic_expr, nu0=nu_ref, h_over_k=constants.h * 1e9 / constants.k, temp=temp)
     scaling_factor = dbdust.eval(nu_test, beta0, beta1, nubreak)
 
     sky=pysm3.Sky(nside=nside, preset_strings=['d0'])
     dust_map_ref = np.zeros((3, 12*nside**2)) #this way the output is w/0 units!!
-    dust_map_ref[0:3,:]=sky.get_emission(nu_ref*u.GHz).to(u.uK_CMB, equivalencies=u.cmb_equivalencies(nu_ref*u.GHz))
+    dust_map_ref[0:3,:]=sky.get_emission(nu_ref*u.GHz, None)*utils.bandpass_unit_conversion(nu_ref*u.GHz,None, u.uK_CMB)
+
 
     map_test=dust_map_ref*scaling_factor
 
@@ -32,12 +33,13 @@ def eval_scaled_dust_dbmmb_map(nu_ref, nu_test, beta0, beta1, nubreak, nside, fs
 
     return map_test
 
-def get_scaled_dust_dbmmb_map(nu_ref, nu_vec, beta0, beta1, nubreak, nside, fsky, radec_center):
+def get_scaled_dust_dbmmb_map(nu_ref, nu_vec, beta0, beta1, nubreak, nside, fsky, radec_center, temp):
     #eval at each freq. In this way it can be called both in the single-freq and the multi-freq case
     n_nu=len(nu_vec)
     dust_map= np.zeros((n_nu, 3, 12*nside**2))
     for i in range(n_nu):
-        map_eval=eval_scaled_dust_dbmmb_map(nu_ref, nu_vec[i], beta0, beta1, nubreak, nside, fsky, radec_center)
+        map_eval=eval_scaled_dust_dbmmb_map(nu_ref, nu_vec[i], beta0, beta1, nubreak, nside, fsky, radec_center, temp)
+        #hp.mollview(map_eval[1])
         dust_map[i,:,:]=map_eval[:,:]
     return dust_map
 
@@ -296,7 +298,7 @@ class BImaps(object):
                 cmbmap = pysm3.CMBMap(self.nside, map_IQU='/tmp/' + rndstr)
                 os.remove('/tmp/' + rndstr)
                 #setting.append(skyconfig[k])
-            elif k == 'dust':
+            elif k=='dust':
                 pass
             else:
                 setting.append(self.skyconfig[k])
@@ -310,7 +312,7 @@ class BImaps(object):
     def getskymaps(self, same_resol=None, verbose=False, coverage=None, iib=False, noise=False, signoise=1., beta=[]):
 
         """
-        
+
         """
 
         sky=self.get_sky()
@@ -321,35 +323,31 @@ class BImaps(object):
         if verbose:
             print("    FWHM : {} deg \n    nus : {} GHz \n    Bandwidth : {} GHz\n\n".format(self.fwhmdeg, self.nus, self.bw))
 
-        if iib :
+        if iib:
             def get_nus_for_iib(edge_min, edge_max):
                 min = edge_min
                 max = edge_max
                 nus = np.linspace(min, max, 4)
                 return nus
-            k=0
-            for indi, i in enumerate(self.nus[:-1]):
-                k+=1
-                if k%6==0:
-                    #print('i =', k)
-                    k=0
-                    pass
-                else:
-                    nus_edges = get_nus_for_iib(self.edges[indi], self.edges[indi+1])
-                    #print(nus_edges)
-                    #print()
-                    #print(get_nus_for_iib(self.edges[indi], self.edges[indi+1]))
-                    #print()
-                    maps_edges=np.zeros(((4, 3, self.npix)))
-                    if verbose:
-                        print("Integrated from {:.2f} to {:.2f} GHz".format(nus_edges[0], nus_edges[-1]))
-                    for indj, j in enumerate(nus_edges):
-                        maps_edges[indj] = sky.get_emission(j*u.GHz, np.ones(4))*utils.bandpass_unit_conversion(j*u.GHz,np.ones(4), u.uK_CMB)
-                        if verbose and indj == 1:
-                            print('Reconvolution to {:.2f} deg'.format(self.fwhmdeg[indi]))
-                        maps_edges[indj] = hp.sphtfunc.smoothing(maps_edges[indj, :, :], fwhm=np.deg2rad(self.fwhmdeg[indi]),verbose=False)
 
-                    allmaps[indi] = np.mean(maps_edges, axis=0)
+            for indi, i in enumerate(self.nus[:-1]):
+
+                nus_edges = get_nus_for_iib(self.edges[indi][0], self.edges[indi][1])
+                #print(self.edges)
+                print(nus_edges)
+                #print()
+                #print(get_nus_for_iib(self.edges[indi], self.edges[indi+1]))
+                #print()
+                maps_edges=np.zeros(((4, 3, self.npix)))
+                if verbose:
+                    print("Integrated from {:.2f} to {:.2f} GHz".format(nus_edges[0], nus_edges[-1]))
+                for indj, j in enumerate(nus_edges):
+                    maps_edges[indj] = sky.get_emission(j*u.GHz, np.ones(4))*utils.bandpass_unit_conversion(j*u.GHz,np.ones(4), u.uK_CMB)
+                    if verbose and indj == 1:
+                        print('Reconvolution to {:.2f} deg'.format(self.fwhmdeg[indi]))
+                    maps_edges[indj] = hp.sphtfunc.smoothing(maps_edges[indj, :, :], fwhm=np.deg2rad(self.fwhmdeg[indi]),verbose=False)
+
+                allmaps[indi] = np.mean(maps_edges, axis=0)
         else:
             allmaps=np.zeros(((len(self.nus), 3, self.npix)))
             for i in self.skyconfig.keys():
@@ -361,21 +359,37 @@ class BImaps(object):
                     if self.skyconfig[i] == 'd0':
                         if verbose:
                             print('Model : d0 -> Spectral index beta is constant on the sky (set to 1.54)')
-                        dustmaps = get_dust_convolved('d0', self.nus, self.fwhmdeg, modified=False, verbose=verbose)
-                        allmaps+=dustmaps
+                        #dustmaps = get_dust_convolved('d0', self.nus, self.fwhmdeg, modified=False, verbose=verbose)
+                        #allmaps+=dustmaps
                     elif self.skyconfig[i] == 'd02b':
+                        print('> Modified Dust')
                         if verbose:
                             print('Model : d02b -> Twos spectral index beta with nu_break')
 
                         #add Elenia's definition
-                        dustmaps=get_scaled_dust_dbmmb_map(nu_ref=353, nu_vec=self.nus, beta0=beta[0], beta1=beta[1], nubreak=beta[2], nside=self.nside, fsky=0.03, radec_center=[0., -57.])
+                        dustmaps=get_scaled_dust_dbmmb_map(nu_ref=beta[3], nu_vec=self.nus, beta0=beta[0], beta1=beta[1], nubreak=beta[2], nside=self.nside, fsky=1, radec_center=[0., -57.], temp=20.)
                         #dustmaps = get_dust_convolved('d0', self.nus, self.fwhmdeg, modified=True, beta0=beta[0], beta1=beta[1], nb=beta[2], verbose=verbose)
                         allmaps+=dustmaps
                     else:
                         print('No dust')
 
+                elif i == 'synchrotron':
+                    print('> Synchrotron')
+                    sky_sync = pysm3.Sky(nside=self.nside, preset_strings=['s0'])
+                    sync_maps = np.zeros(((len(self.nus), 3, 12*self.nside**2)))
+                    for indi, i in enumerate(self.nus):
+                        sync_maps[indi] = sky_sync.get_emission(i*u.GHz, None)*utils.bandpass_unit_conversion(i*u.GHz,None, u.uK_CMB)
+                        allmaps[indi]+=sync_maps[indi]
+
                 else:
                     pass
+
+        #hp.mollview(allmaps[0, 1])
+
+        for j in range(len(self.fwhmdeg)):
+            allmaps[j] = hp.sphtfunc.smoothing(allmaps[j, :, :], fwhm=np.deg2rad(self.fwhmdeg[j]),verbose=False)
+
+
 
 
         def create_noisemaps(signoise):

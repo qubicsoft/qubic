@@ -1,46 +1,10 @@
 #!/usr/bin/env python
-# coding: utf-8
-
-# <p style="font-size:260%;line-height:1.5">Insert a compact source from the QUBIC catalog into a Healpix map </p>
-
-# # Imports and functions
-
-# ## Imports and common data
-
-# In[65]:
-
-
-# # Functions
-
-# ## Smooth a map with a pixel point source with a gaussian
-
-# <p style="font-size:120%;line-height:1.5">
-# Here we start from the position and flux of the source and smooth it with a gaussian with a user-defined fwhm converting it to K_CMB. The gaussian is defined as follows. It has maximum at 1 and its integral is $2\pi\sigma^2$
-# </p>
-#
-# <p style="font-size:120%;line-height:1.5">
-# \begin{equation}
-# P_n(\theta,\phi) = e^{-\frac{(\theta-\theta_0)^2 + (\phi-\phi_0)^2}{2\sigma^2}}
-# \end{equation}
-# </p>
-#
-# <p style="font-size:120%;line-height:1.5">
-# The flux density in Jy/sr at any point $(\theta, \phi)$ is given by
-# $$
-# I_\nu = \frac{F(\theta_0,\phi_0)P_n(\theta,\phi)}{\int_{4\pi}P_n(\theta,\phi)d\Omega}
-# $$
-# </p>
-#
-# <p style="font-size:120%;line-height:1.5">
-# The conversion between flux density in Jy/sr to K_CMB is provided by the astropy library and it is equal to:
-# $$
-# T[\,\mathrm{K_{CMB}}] = \frac{c^2}{2\,k\,\nu^2}\frac{(e^x-1)^2}{x^2e^x}\times I_\nu\,[\mathrm{Jy/sr}]
-# $$
-#     </p>
-
-# ### Define 2D gaussian
-
-# In[1]:
+## Module to insert point sources into a PySM sky map
+## Version 1.0 - Dec 3rd 2021
+## Aniello Mennella
+##
+## CHANGELOG
+## Version 1.0 - first working version of the module
 
 
 def gaussian2D(theta, theta0, phi, phi0, fwhm):
@@ -80,6 +44,8 @@ def gaussian2D(theta, theta0, phi, phi0, fwhm):
 
 
 # ### Generate a 2D grid for the Gaussian values
+
+# In[6]:
 
 
 def gaussian2D_grid(source_center_deg, fwhm_deg):
@@ -127,6 +93,8 @@ def gaussian2D_grid(source_center_deg, fwhm_deg):
 
 
 # ### Insert the source to a map that may be provided in input smoothing it with a Gaussian
+
+# In[7]:
 
 
 def insert_source(
@@ -257,6 +225,8 @@ def insert_source(
 
 # ### Center angles in the [-180,180] and [-90,90] ranges
 
+# In[8]:
+
 
 def center_ang(angle, degree=True):
     """
@@ -297,7 +267,7 @@ def center_ang(angle, degree=True):
 
 # ### Convert Jansky to K_CMB
 
-# In[5]:
+# In[9]:
 
 
 def Jansky_invsr_to_K_CMB(frequency):
@@ -323,7 +293,25 @@ def Jansky_invsr_to_K_CMB(frequency):
 
 # ## Add sources to a PYSM map array (defined in the QUBIC band)
 
-# In[50]:
+# <p style="font-size:120%;line-height:1.5">
+# This is the main function in the module. It takes a PySM map array and adds point sources with a frequency behaviour consistent with their SED as derived from the PCCS catalog
+# </p>
+#
+# <p style="font-size:120%;line-height:1.5">
+# It adds the point source both in temperature and polarization ($Q$ and $U$). For polarization the $Q$ and $U$ components are calculated according to the following equation:
+# </p>
+#
+# <p style="font-size:120%;line-height:1.5">
+# $$
+# Q = P\cos{2\Psi},\,U = P\sin{2\Psi}
+# $$
+# </p>
+#
+# <p style="font-size:120%;line-height:1.5">
+# \noindent where $\Psi$ is the polarization angle and $P$ the point source polarized flux. Both are derived from the PCCS. The total intensity flux in mJy is extracted from the catalog field specified by the 'DETFLUX' keyword, the polarized flux in mJy is extracted from the catalog field specified by the 'PFLUX' keyword, the polarization angle in degrees is extracted from the catalog field specified by the 'ANGLE_P' keyword.
+# </p>
+
+# In[54]:
 
 
 def add_sources_to_sky_map(
@@ -336,7 +324,9 @@ def add_sources_to_sky_map(
 ):
     """
     This function takes a PySM map array and adds point sources with a frequency behaviour
-    consisted with their SED ad derived from the PCCS catalog
+    consistent with their SED as derived from the PCCS catalog. The point source is added in total intensity
+    and polarization (Q and U). Stokes parameters Q and U are derived using the polarization angle present in
+    the catalog
         
     Input
     input_map        - NDARRAY         - An array shaped (nfreq, npix, 3) containing sky maps in the 
@@ -351,7 +341,7 @@ def add_sources_to_sky_map(
                                          by the factor specified in fwhm_deg[1]. If fwhm_deg[0] == 'Man' then
                                          the fwhm is specified directly, in degrees, in fwhm_deg[1]. Default
                                          is fwhm_deg = ('Auto', 1)
-    catalog_file        - STRIN        - the catalog filename (in pickle format) If catalog_file = 'Auto'
+    catalog_file        - STRING       - the catalog filename (in pickle format) If catalog_file = 'Auto'
                                          (Default) then catalog_file = qubic.data.PATH + 'qubic_pccs2.pickle'
     reference_frequency - STRING       - the reference frequency in GHz in the catalog to derive the source
                                          coordinates. It defaults to 143 GHz. Can be left to this value also
@@ -409,7 +399,10 @@ def add_sources_to_sky_map(
         catalog = pickle.load(handle)
 
     for source in sources:
-
+        print(
+            "Processing source %s (%i/%i)"
+            % (source, list(sources).index(source), len(sources))
+        )
         source_center_deg = (
             catalog[reference_frequency][source]["GLON"],
             catalog[reference_frequency][source]["GLAT"],
@@ -424,9 +417,20 @@ def add_sources_to_sky_map(
         for fq in frequencies:
             fq_index = list(frequencies).index(fq)
             print("Processing frequency # %i of %i" % (fq_index + 1, len(frequencies)))
-            i_flux = fi(fq / 1e9) / 1e3
-            p_flux = fp(fq / 1e9) / 1e3
-            flux = [i_flux, p_flux / np.sqrt(2), p_flux / np.sqrt(2)]
+            i_flux = fi(fq / 1e9) / 1e3  # Conversion from mJy -> Jy
+            p_flux = fp(fq / 1e9) / 1e3  # Conversion from mJy -> Jy
+
+            polarization_angle = (
+                catalog[reference_frequency][source]["ANGLE_P"] * np.pi / 180.0
+            )
+            if p_flux > 0.0:
+                q_flux = p_flux * np.cos(2.0 * polarization_angle)
+                u_flux = p_flux * np.sin(2.0 * polarization_angle)
+            else:
+                q_flux = 0
+                u_flux = 0
+
+            flux = [i_flux, q_flux, u_flux]
 
             for index in [0, 1, 2]:
                 outmap = insert_source(
@@ -441,12 +445,16 @@ def add_sources_to_sky_map(
 
                 output_map[fq_index, :, index] = outmap
 
-        return output_map
+        input_map = output_map.copy()
+
+        print("")
+
+    return output_map
 
 
 # ## Get source from catalog
 
-# In[7]:
+# In[11]:
 
 
 def getsource(source, frequency, catalog):

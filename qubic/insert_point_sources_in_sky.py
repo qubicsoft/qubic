@@ -401,7 +401,7 @@ def add_sources_to_sky_map(
     for source in sources:
         print(
             "Processing source %s (%i/%i)"
-            % (source, list(sources).index(source), len(sources))
+            % (source, list(sources).index(source) + 1, len(sources))
         )
         source_center_deg = (
             catalog[reference_frequency][source]["GLON"],

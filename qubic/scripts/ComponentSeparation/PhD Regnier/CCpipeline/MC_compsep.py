@@ -243,6 +243,10 @@ def run_MC_separation(name_conf, skyconfig, ref_fwhm, covmap, name_instr, ite, n
     else:
         comp = get_comp(skyconfig, [1.44, 1.64, nubreak])
 
+    thr = 0
+    mymask = (covmap > (np.max(covmap)*thr)).astype(int)
+    pixok = mymask > 0
+
     res1=separate(comp, instr, map1[:, :, pixok], tol=1e-6)
     res2=separate(comp, instr, map2[:, :, pixok], tol=1e-6)
 

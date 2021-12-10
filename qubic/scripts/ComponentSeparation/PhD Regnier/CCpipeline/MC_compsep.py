@@ -305,8 +305,8 @@ print("done !")
 #print(clqp[0, 0, :, 2])
 #print(clqp[0, 0, :, 2])
 
-mydict = {'map1':map1,
-          'map2':map2,
+mydict = {'allcomp1':allcomp1,
+          'allcomp2':allcomp2,
           'sysargv':sys.argv}
 
 CC=1

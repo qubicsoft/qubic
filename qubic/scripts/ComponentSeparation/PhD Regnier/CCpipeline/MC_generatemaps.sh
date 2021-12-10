@@ -18,5 +18,5 @@ export QUBIC_DATADIR=/pbs/home/m/mregnier/Libs/qubic/qubic/
 export QUBIC_DICT=$QUBIC_DATADIR/dicts
 
 python /pbs/home/m/mregnier/sps1/QUBIC+/MC_generatemaps.py $1 $2 $3 $4 $5 $6 $7
-python /pbs/home/m/mregnier/sps1/QUBIC+/MC_compsep.py $1 $2 $3 $4
+python /pbs/home/m/mregnier/sps1/QUBIC+/MC_compsep.py $1 $2 $3 $4 $5 $6 $7
 rm -r /pbs/home/m/mregnier/sps1/QUBIC+/results/onereals_maps_fwhm*

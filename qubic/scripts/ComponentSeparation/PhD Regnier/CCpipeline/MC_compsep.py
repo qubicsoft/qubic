@@ -314,6 +314,6 @@ if CC == 1:
     path='/pbs/home/m/mregnier/sps1/QUBIC+'
 else:
     path=''
-output = open(path+'/results/onereals_maps_fwhm{}_instrument{}_{}.pkl'.format(ref_fwhm, instr, ite), 'wb')
+output = open(path+'/results/onereals_maps_fwhm{}_instrument{}_{}.pkl'.format(ref_fwhm, name_instr, ite), 'wb')
 pickle.dump(mydict, output)
 output.close()

@@ -227,7 +227,7 @@ def get_comp(sky, beta):
     return comp
 
 def run_MC_separation(name_conf, skyconfig, ref_fwhm, covmap, name_instr, ite, normal, beta_out):
-    print(ref_fwhm)
+
     map1, map2, config = open_pkl('/pbs/home/m/mregnier/sps1/QUBIC+/results/', 'onereals_maps_fwhm{}_instrument{}_{}.pkl'.format(ref_fwhm, name_instr, ite), name_conf)
 
     # Define instrument
@@ -274,8 +274,6 @@ def run_MC_separation(name_conf, skyconfig, ref_fwhm, covmap, name_instr, ite, n
 
 print('Simulation started')
 
-print(ref_fwhm)
-
 if normal == 1 :
     typedust='d0'
     name='truebeta'
@@ -290,12 +288,10 @@ else:
 if ins == 0:
     name_instr='S4'
     name_conf='s4_config'
-    print(ref_fwhm)
     allcomp1, allcomp2 = run_MC_separation(name_conf, {'dust':typedust, 'cmb':42}, ref_fwhm, covmap, name_instr, ite, normal, beta_out)
 elif ins == 1:
     name_instr='BI'
     name_conf='qp_config'
-    print(ref_fwhm)
     allcomp1, allcomp2 = run_MC_separation(name_conf, {'dust':typedust, 'cmb':42}, ref_fwhm, covmap, name_instr, ite, normal, beta_out)
 else:
     raise TypeError('choose 0 for CMB-S4 or 1 for BI !')
@@ -311,9 +307,9 @@ mydict = {'allcomp1':allcomp1,
 
 CC=1
 if CC == 1:
-    path='/pbs/home/m/mregnier/sps1/QUBIC+'
+    path='/pbs/home/m/mregnier/sps1/QUBIC+/results'
 else:
     path=''
-output = open(path+'/results/onereals_maps_fwhm{}_instrument{}_{}.pkl'.format(ref_fwhm, name_instr, ite), 'wb')
+output = open(path+'/compsep_maps_fwhm{}_instrument{}_{}.pkl'.format(ref_fwhm, name_instr, ite), 'wb')
 pickle.dump(mydict, output)
 output.close()

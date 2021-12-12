@@ -266,15 +266,9 @@ def run_MC_separation(config, skyconfig, ref_fwhm, covmap, name_instr, ite, norm
     #                                                    radec_center=[0., -57.], temp=20)
 
 
-    compmaps1=np.zeros(((res1.s.shape[0], 3, 12*256**2)))
-    compmaps2=np.zeros(((res2.s.shape[0], 3, 12*256**2)))
-
-    compmaps1[:, :, pixok] = res1.s
-    compmaps2[:, :, pixok] = res2.s
 
 
-
-    return [map1, compmaps1], [map2, compmaps2], [res1.x, res2.x]
+    return [map1[:, :, pixok], res1.s], [map2[:, :, pixok], res2.s], [res1.x, res2.x]
 
 print('Simulation started')
 

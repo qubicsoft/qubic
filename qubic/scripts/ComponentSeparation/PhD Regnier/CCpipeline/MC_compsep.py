@@ -219,7 +219,7 @@ def get_comp(sky, beta):
     comp=[]
     for indi, i in enumerate(sky.keys()):
         if i =='dust':
-            comp.append(fgb.component_model.Dust_2b(nu0=beta[3]))
+            comp.append(fgb.component_model.Dust_2b(nu0=beta[3], temp=20))
         elif i =='cmb':
             comp.append(fgb.component_model.CMB())
 
@@ -245,7 +245,7 @@ def run_MC_separation(config, skyconfig, ref_fwhm, covmap, name_instr, ite, norm
     if beta_out is None:
         comp=[fgb.component_model.Dust(nu0=nu0), fgb.component_model.CMB(), fgb.component_model.Synchrotron(nu0=nu0)]
     else:
-        comp = get_comp(skyconfig, [1.44, 1.64, nubreak])
+        comp = get_comp(skyconfig, beta_out)
 
     #print('end comp')
 
@@ -265,10 +265,7 @@ def run_MC_separation(config, skyconfig, ref_fwhm, covmap, name_instr, ite, norm
     #new_dust_maps2=qubicplus.get_scaled_dust_dbmmb_map(nu0, [nu0], res2.x[0], res2.x[1], res2.x[2], 256, 0.03,
     #                                                    radec_center=[0., -57.], temp=20)
 
-
-
-
-    return [map1[:, :, pixok], res1.s], [map2[:, :, pixok], res2.s], [res1.x, res2.x]
+    return [res1.x, res2.x]
 
 print('Simulation started')
 
@@ -286,11 +283,11 @@ else:
 if ins == 0:
     name_instr='S4'
     name_conf='s4_config'
-    allcomp1, allcomp2, param_est = run_MC_separation(s4_config, {'dust':typedust, 'cmb':42, 'synchrotron':'s0'}, ref_fwhm, covmap, name_instr, ite, normal, beta_out)
+    param_est = run_MC_separation(s4_config, {'dust':typedust, 'cmb':42, 'synchrotron':'s0'}, ref_fwhm, covmap, name_instr, ite, normal, beta_out)
 elif ins == 1:
     name_instr='BI'
     name_conf='qp_config'
-    allcomp1, allcomp2, param_est = run_MC_separation(qp_config, {'dust':typedust, 'cmb':42, 'synchrotron':'s0'}, ref_fwhm, covmap, name_instr, ite, normal, beta_out)
+    param_est = run_MC_separation(qp_config, {'dust':typedust, 'cmb':42, 'synchrotron':'s0'}, ref_fwhm, covmap, name_instr, ite, normal, beta_out)
 else:
     raise TypeError('choose 0 for CMB-S4 or 1 for BI !')
 
@@ -299,9 +296,7 @@ print("done !")
 #print(clqp[0, 0, :, 2])
 #print(clqp[0, 0, :, 2])
 
-mydict = {'allcomp1':allcomp1,
-          'allcomp2':allcomp2,
-          'param_est':param_est,
+mydict = {'param_est':param_est,
           'sysargv':sys.argv}
 
 CC=1
@@ -309,6 +304,6 @@ if CC == 1:
     path='/pbs/home/m/mregnier/sps1/QUBIC+/results'
 else:
     path=''
-output = open(path+'/compsep_maps_fwhm{}_instrument{}_{}.pkl'.format(ref_fwhm, name_instr, ite), 'wb')
+output = open(path+'/paramest_2beta_maps_fwhm{}_instrument{}_{}.pkl'.format(ref_fwhm, name_instr, ite), 'wb')
 pickle.dump(mydict, output)
 output.close()

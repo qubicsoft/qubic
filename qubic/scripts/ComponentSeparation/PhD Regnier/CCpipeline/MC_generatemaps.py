@@ -216,11 +216,11 @@ else:
 if ins == 0:
     instr='S4'
     print(ref_fwhm)
-    map1, map2 = run_MC_generation(s4_config, {'dust':typedust, 'cmb':42}, ref_fwhm, covmap, tab_beta)
+    map1, map2 = run_MC_generation(s4_config, {'dust':typedust, 'cmb':42, 'synchrotron':'s0'}, ref_fwhm, covmap, tab_beta)
 elif ins == 1:
     instr='BI'
     print(ref_fwhm)
-    map1, map2 = run_MC_generation(qp_config, {'dust':typedust, 'cmb':42}, ref_fwhm, covmap, tab_beta)
+    map1, map2 = run_MC_generation(qp_config, {'dust':typedust, 'cmb':42, 'synchrotron':'s0'}, ref_fwhm, covmap, tab_beta)
 else:
     raise TypeError('choose 0 for CMB-S4 or 1 for BI !')
 
@@ -231,9 +231,7 @@ print("done !")
 
 mydict = {'map1':map1,
           'map2':map2,
-          'sysargv':sys.argv,
-          's4_config':s4_config,
-          'qp_config':qp_config}
+          'sysargv':sys.argv}
 
 CC=1
 if CC == 1:

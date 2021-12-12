@@ -159,13 +159,13 @@ def double_beta_dust_FGB_Model():
     K_RJ2K_CMB = K_RJ2K_CMB.replace('h_over_k', str(H_OVER_K))
     K_RJ2K_CMB_NU0 = K_RJ2K_CMB + ' / ' + K_RJ2K_CMB.replace('nu', 'nu0')
 
-    analytic_expr1 = ('(exp(nu0 / temp * h_over_k) -1)'
+    analytic_expr1 = ('(exp(nu0 / temp * h_over_k) - 1)'
                      '/ (exp(nu / temp * h_over_k) - 1)'
-                     '* (nu / nu0)**(1 + beta_d0) * (nu0 / nubreak)**(beta_d0-beta_d1) * '+K_RJ2K_CMB_NU0+' * (1-heaviside(nu-nubreak,0.5))')
+                     '* (nu / nu0)**(1 + beta_d0) * (nu0 / nubreak)**(beta_d0-beta_d1) * (1 - ( 0.5 + 0.5 * tanh((nu-nubreak)*50)))')#' * (1-heaviside(nu-nubreak ,0.5))')
 
     analytic_expr2 = ('(exp(nu0 / temp * h_over_k) - 1)'
                      '/ (exp(nu / temp * h_over_k) - 1)'
-                     '* (nu / nu0)**(1 + beta_d1) * '+K_RJ2K_CMB_NU0+'* heaviside(nu-nubreak,0.5)')
+                     '* (nu / nu0)**(1 + beta_d1) * ( 0.5 + 0.5 * tanh( (nu-nubreak) * 50 ))')#' * heaviside(nu-nubreak,0.5)')
     analytic_expr = analytic_expr1 + ' + ' + analytic_expr2
 
     return analytic_expr

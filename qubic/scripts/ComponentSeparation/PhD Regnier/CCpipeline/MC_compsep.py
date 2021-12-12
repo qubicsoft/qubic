@@ -163,6 +163,7 @@ def qubicify(config, qp_nsub, qp_effective_fraction):
 qp_nsubs = np.array([1, 1, 1, 5, 5, 5, 5, 5, 5])
 qp_effective_fraction = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1])
 qp_config=qubicify(s4_config, qp_nsubs, qp_effective_fraction)
+print(len(qp_config['frequency']))
 
 covmap = get_coverage(0.03, nside=256)
 
@@ -182,30 +183,33 @@ print('ins is {}'.format(ins))
 print('normal is {}'.format(normal))
 print("###################")
 
-def open_pkl(path, name, name_conf):
+print(len(qp_config['depth_i']))
+print(len(qp_config['depth_p']))
+
+def open_pkl(path, name):
 
     with open(path+name, 'rb') as f:
         data = pickle.load(f)
 
     map1=data['map1']
     map2=data['map2']
-    config=data[name_conf]
 
-    return map1, map2, config
+    return map1, map2
 
-def get_instr(name_conf, ref_fwhm, config):
+def get_instr(conf, ref_fwhm, config):
 
-    if name_conf=='qp_config':
+    if conf==qp_config:
         instr = get_instrument('Qubic+')
         ind_nu=15
-
-    elif name_conf=='s4_config':
+        n_nu=33
+    elif conf==s4_config:
         instr = get_instrument('CMBS4')
+        n_nu=9
         ind_nu=5
     else:
         raise TypeError('Choose QP or S4')
 
-    instr.fwhm = np.ones(len(config['frequency']))*ref_fwhm*60
+    instr.fwhm = np.ones(n_nu)*ref_fwhm*60
     instr.depth_i = config['depth_i']
     instr.depth_p = config['depth_p']
 
@@ -226,41 +230,41 @@ def get_comp(sky, beta):
 
     return comp
 
-def run_MC_separation(name_conf, skyconfig, ref_fwhm, covmap, name_instr, ite, normal, beta_out):
 
-    map1, map2, config = open_pkl('/pbs/home/m/mregnier/sps1/QUBIC+/results/', 'onereals_maps_fwhm{}_instrument{}_{}.pkl'.format(ref_fwhm, name_instr, ite), name_conf)
+def run_MC_separation(config, skyconfig, ref_fwhm, covmap, name_instr, ite, normal, beta_out):
 
+    print('Loading maps')
+    map1, map2 = open_pkl('/pbs/home/m/mregnier/sps1/QUBIC+/results/', 'onereals_maps_fwhm{}_instrument{}_{}.pkl'.format(ref_fwhm, name_instr, ite))
+    print(map1.shape)
+    print('Done!')
     # Define instrument
-    instr, ind_nu = get_instr(name_conf, ref_fwhm, config)
-    if normal == 1:
-        arg_est=np.zeros(2)
-    else:
-        arg_est=np.zeros(4)
-
+    print('begin instr')
+    instr, ind_nu = get_instr(config, ref_fwhm, config)
+    print('end instr')
     # Define component
     if beta_out is None:
-        comp=[fgb.component_model.Dust(nu0=nu0), fgb.component_model.CMB()]
+        comp=[fgb.component_model.Dust(nu0=nu0), fgb.component_model.CMB(), fgb.component_model.Synchrotron(nu0=nu0)]
     else:
         comp = get_comp(skyconfig, [1.44, 1.64, nubreak])
+
+    #print('end comp')
 
     thr = 0
     mymask = (covmap > (np.max(covmap)*thr)).astype(int)
     pixok = mymask > 0
-
+    print('Before separation')
     res1=separate(comp, instr, map1[:, :, pixok], tol=1e-6)
     res2=separate(comp, instr, map2[:, :, pixok], tol=1e-6)
-
-    if normal == 1:
-        arg_est[0] = res1.x[0]
-        arg_est[1] = res1.x[1]
-    else:
-        arg_est[0] = res1.x[0]
-        arg_est[1] = res1.x[1]
-        arg_est[2] = res1.x[2]
-        arg_est[3] = res1.x[3]
-    #print(arg_est)
+    print('After separation')
     print(res1.x)
     print(res2.x)
+
+    #new_dust_maps1=qubicplus.get_scaled_dust_dbmmb_map(nu0, [nu0], res1.x[0], res1.x[1], res1.x[2], 256, 0.03,
+    #                                                    radec_center=[0., -57.], temp=20)
+
+    #new_dust_maps2=qubicplus.get_scaled_dust_dbmmb_map(nu0, [nu0], res2.x[0], res2.x[1], res2.x[2], 256, 0.03,
+    #                                                    radec_center=[0., -57.], temp=20)
+
 
     compmaps1=np.zeros(((res1.s.shape[0], 3, 12*256**2)))
     compmaps2=np.zeros(((res2.s.shape[0], 3, 12*256**2)))
@@ -270,7 +274,7 @@ def run_MC_separation(name_conf, skyconfig, ref_fwhm, covmap, name_instr, ite, n
 
 
 
-    return [map1, compmaps1], [map2, compmaps2]
+    return [map1, compmaps1], [map2, compmaps2], [res1.x, res2.x]
 
 print('Simulation started')
 
@@ -288,11 +292,11 @@ else:
 if ins == 0:
     name_instr='S4'
     name_conf='s4_config'
-    allcomp1, allcomp2 = run_MC_separation(name_conf, {'dust':typedust, 'cmb':42}, ref_fwhm, covmap, name_instr, ite, normal, beta_out)
+    allcomp1, allcomp2, param_est = run_MC_separation(s4_config, {'dust':typedust, 'cmb':42, 'synchrotron':'s0'}, ref_fwhm, covmap, name_instr, ite, normal, beta_out)
 elif ins == 1:
     name_instr='BI'
     name_conf='qp_config'
-    allcomp1, allcomp2 = run_MC_separation(name_conf, {'dust':typedust, 'cmb':42}, ref_fwhm, covmap, name_instr, ite, normal, beta_out)
+    allcomp1, allcomp2, param_est = run_MC_separation(qp_config, {'dust':typedust, 'cmb':42, 'synchrotron':'s0'}, ref_fwhm, covmap, name_instr, ite, normal, beta_out)
 else:
     raise TypeError('choose 0 for CMB-S4 or 1 for BI !')
 
@@ -303,6 +307,7 @@ print("done !")
 
 mydict = {'allcomp1':allcomp1,
           'allcomp2':allcomp2,
+          'param_est':param_est,
           'sysargv':sys.argv}
 
 CC=1

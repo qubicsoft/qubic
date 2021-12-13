@@ -253,10 +253,10 @@ class BImaps(object):
         sky=self.get_sky()
         allmaps = np.zeros(((len(self.nus), 3, self.npix)))
         if same_resol is not None:
-            self.fwhmdeg = np.ones(len(self.nus))*np.max(same_resol)
+            self.fwhmdeg = np.ones(len(self.nus))*same_resol
 
         if verbose:
-            print("    FWHM : {} deg \n    nus : {} GHz \n    Bandwidth : {} GHz\n\n".format(self.fwhmdeg, self.nus, self.bw))
+            print("    FWHM : {} deg \n    nus : {} GHz\n\n".format(self.fwhmdeg, self.nus))
 
         allmaps=np.zeros(((len(self.nus), 3, self.npix)))
         for i in self.skyconfig.keys():

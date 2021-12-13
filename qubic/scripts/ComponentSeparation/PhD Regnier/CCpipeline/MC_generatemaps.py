@@ -16,6 +16,8 @@ import scipy
 import pysm3
 import qubic
 import pickle
+import fgbuster
+print(fgbuster.__path__)
 
 ### CMB-S4 config
 
@@ -148,7 +150,7 @@ qp_config=qubicify(s4_config, qp_nsubs, qp_effective_fraction)
 
 ref_fwhm=float(sys.argv[1])
 ite=int(sys.argv[2])
-ins=int(sys.argv[3])
+ins=str(sys.argv[3])
 normal=int(sys.argv[4])
 beta0=float(sys.argv[5])
 beta1=float(sys.argv[6])
@@ -166,61 +168,55 @@ print('normal is {}'.format(normal))
 print("###################")
 
 
-def run_MC_generation(config, skyconfig, ref_fwhm, covmap, beta_in):
+def run_MC_generation(config, skyconfig, ref_fwhm, covmap, beta):
 
     thr = 0
     mymask = (covmap > (np.max(covmap)*thr)).astype(int)
     pixok = mymask > 0
-
-    beta_out=beta_in
-    print(beta_out)
-    skyconfig['cmb']=np.random.randint(10000000)
+    print(skyconfig)
+    print(beta)
+    #skyconfig['cmb']=np.random.randint(10000000)
 
     print('Creation of first map..')
     map1, _, _ = qubicplus.BImaps(skyconfig, config).getskymaps(same_resol=ref_fwhm,
-                                                                iib=False,
-                                                                verbose=False,
+                                                                verbose=True,
                                                                 coverage=covmap,
                                                                 noise=True,
-                                                                signoise=1.,
-                                                                beta=beta_out)
+                                                                beta=beta)
+
+    reload(qubicplus)
 
     print('First map created !')
     print('Creation of second map..')
     map2, _, _ = qubicplus.BImaps(skyconfig, config).getskymaps(same_resol=ref_fwhm,
-                                                                iib=False,
-                                                                verbose=False,
+                                                                verbose=True,
                                                                 coverage=covmap,
                                                                 noise=True,
-                                                                signoise=1.,
-                                                                beta=beta_out)
+                                                                beta=beta)
     print('Second map created !')
 
     return map1, map2
 
 print('Simulation started')
 
+tab_beta=[beta0, beta1, nubreak, nu0]
 if normal == 1 :
-    tab_beta=None
     typedust='d0'
     name='truebeta'
-    print(ref_fwhm)
+    print(typedust)
 elif normal == 0 :
-    tab_beta=[beta0, beta1, nubreak, nu0]
     typedust='d02b'
     name='2beta'
-    print(ref_fwhm)
+    print(typedust)
 else:
     raise TypeError('choose 0 for one spectral index or 1 for modified BB !')
 
-if ins == 0:
+if ins == 'S4':
     instr='S4'
-    print(ref_fwhm)
-    map1, map2 = run_MC_generation(s4_config, {'dust':typedust, 'cmb':42, 'synchrotron':'s0'}, ref_fwhm, covmap, tab_beta)
-elif ins == 1:
+    map1, map2 = run_MC_generation(s4_config, {'cmb':42, 'dust':typedust, 'synchrotron':'s0'}, ref_fwhm, covmap, tab_beta)
+elif ins == 'BI':
     instr='BI'
-    print(ref_fwhm)
-    map1, map2 = run_MC_generation(qp_config, {'dust':typedust, 'cmb':42, 'synchrotron':'s0'}, ref_fwhm, covmap, tab_beta)
+    map1, map2 = run_MC_generation(qp_config, {'cmb':42, 'dust':typedust, 'synchrotron':'s0'}, ref_fwhm, covmap, tab_beta)
 else:
     raise TypeError('choose 0 for CMB-S4 or 1 for BI !')
 

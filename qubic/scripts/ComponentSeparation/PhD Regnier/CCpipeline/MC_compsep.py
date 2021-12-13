@@ -16,8 +16,7 @@ import scipy
 import pysm3
 import qubic
 import pickle
-from fgbuster.component_model import (CMB, Dust, Dust_2b, Synchrotron, AnalyticComponent)
-from fgbuster import basic_comp_sep, get_instrument
+import fgbuster
 
 def fct_subopt(nus):
     subnus = [150., 220]
@@ -62,20 +61,17 @@ s4_config = {
     'effective_fraction': np.zeros(len(freqs))+1.
             }
 
-import fgbuster as fgb
-from fgbuster import basic_comp_sep, get_instrument, Dust, CMB
-
 
 def separate(comp, instr, maps_to_separate, tol=1e-5, print_option=False):
     solver_options = {}
     solver_options['disp'] = False
     fg_args = comp, instr, maps_to_separate
-    fg_kwargs = {'method': 'Nelder-Mead', 'tol': tol, 'options': solver_options}
+    fg_kwargs = {'method': 'TNC', 'tol': tol, 'options': solver_options}
     try:
-        res = fgb.basic_comp_sep(*fg_args, **fg_kwargs)
+        res = fgbuster.separation_recipes.basic_comp_sep(*fg_args, **fg_kwargs)
     except KeyError:
         fg_kwargs['options']['disp'] = False
-        res = fgb.basic_comp_sep(*fg_args, **fg_kwargs)
+        res = fgbuster.separation_recipes.basic_comp_sep(*fg_args, **fg_kwargs)
     if print_option:
         print()
         print("message:", res.message)
@@ -163,13 +159,12 @@ def qubicify(config, qp_nsub, qp_effective_fraction):
 qp_nsubs = np.array([1, 1, 1, 5, 5, 5, 5, 5, 5])
 qp_effective_fraction = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1])
 qp_config=qubicify(s4_config, qp_nsubs, qp_effective_fraction)
-print(len(qp_config['frequency']))
 
 covmap = get_coverage(0.03, nside=256)
 
 ref_fwhm=float(sys.argv[1])
 ite=int(sys.argv[2])
-ins=int(sys.argv[3])
+ins=str(sys.argv[3])
 normal=int(sys.argv[4])
 beta0=float(sys.argv[5])
 beta1=float(sys.argv[6])
@@ -181,10 +176,10 @@ print('ref_fwhm is {}'.format(ref_fwhm))
 print('ite is {}'.format(ite))
 print('ins is {}'.format(ins))
 print('normal is {}'.format(normal))
+print('beta0 is {}'.format(beta0))
+print('beta1 is {}'.format(beta1))
+print('nubreak is {}'.format(nubreak))
 print("###################")
-
-print(len(qp_config['depth_i']))
-print(len(qp_config['depth_p']))
 
 def open_pkl(path, name):
 
@@ -196,65 +191,74 @@ def open_pkl(path, name):
 
     return map1, map2
 
-def get_instr(conf, ref_fwhm, config):
+def get_instr(ins, ref_fwhm, config):
 
-    if conf==qp_config:
-        instr = get_instrument('Qubic+')
+    if ins=='BI':
+        instr = fgbuster.observation_helpers.get_instrument('Qubic+')
         ind_nu=15
         n_nu=33
-    elif conf==s4_config:
-        instr = get_instrument('CMBS4')
+    elif ins=='S4':
+        instr = fgbuster.observation_helpers.get_instrument('CMBS4')
         n_nu=9
         ind_nu=5
     else:
         raise TypeError('Choose QP or S4')
 
     instr.fwhm = np.ones(n_nu)*ref_fwhm*60
-    instr.depth_i = config['depth_i']
-    instr.depth_p = config['depth_p']
 
-    return instr, ind_nu
+    return instr
 
-def get_comp(sky, beta):
+def get_comp(sky):
     comp=[]
     for indi, i in enumerate(sky.keys()):
         if i =='dust':
-            comp.append(fgb.component_model.Dust_2b(nu0=beta[3], temp=20))
+            print("-> Add dust in comp")
+            comp.append(fgbuster.component_model.Dust_2b(nu0=145.))
         elif i =='cmb':
-            comp.append(fgb.component_model.CMB())
+            print("-> Add cmb in comp")
+            comp.append(fgbuster.component_model.CMB())
 
         elif i =='synchrotron':
-            comp.append(fgb.component_model.Synchrotron(nu0=beta[3]))
+            print("-> Add sync in comp")
+            comp.append(fgbuster.component_model.Synchrotron(nu0=145.))
         else:
             pass
 
     return comp
 
 
-def run_MC_separation(config, skyconfig, ref_fwhm, covmap, name_instr, ite, normal, beta_out):
+def run_MC_separation(config, skyconfig, ref_fwhm, covmap, ite, beta_out, ins):
 
     print('Loading maps')
-    map1, map2 = open_pkl('/pbs/home/m/mregnier/sps1/QUBIC+/results/', 'onereals_maps_fwhm{}_instrument{}_{}.pkl'.format(ref_fwhm, name_instr, ite))
+    map1, map2 = open_pkl('/pbs/home/m/mregnier/sps1/QUBIC+/results/', 'onereals_maps_fwhm{}_instrument{}_{}.pkl'.format(ref_fwhm, ins, ite))
     print(map1.shape)
     print('Done!')
     # Define instrument
     print('begin instr')
-    instr, ind_nu = get_instr(config, ref_fwhm, config)
+    instr = get_instr(ins, ref_fwhm, config)
+    instr.depth_p=config['depth_p']
+    instr.depth_i=config['depth_i']
+    print(instr)
     print('end instr')
     # Define component
     if beta_out is None:
-        comp=[fgb.component_model.Dust(nu0=nu0), fgb.component_model.CMB(), fgb.component_model.Synchrotron(nu0=nu0)]
+        comp=[fgbuster.component_model.Dust(nu0=145.), fgbuster.component_model.CMB(), fgbuster.component_model.Synchrotron(nu0=145.)]
+        print('1', comp)
     else:
-        comp = get_comp(skyconfig, beta_out)
+        comp = comp=[fgbuster.component_model.Dust_2b(nu0=145.), fgbuster.component_model.CMB(), fgbuster.component_model.Synchrotron(nu0=145.)]
+        print('2', comp)
 
     #print('end comp')
 
     thr = 0
     mymask = (covmap > (np.max(covmap)*thr)).astype(int)
     pixok = mymask > 0
+    # Just to be sure
+    map1[:, :, ~pixok]=hp.UNSEEN
+    map2[:, :, ~pixok]=hp.UNSEEN
     print('Before separation')
-    res1=separate(comp, instr, map1[:, :, pixok], tol=1e-6)
-    res2=separate(comp, instr, map2[:, :, pixok], tol=1e-6)
+    res1=separate(comp, instr, map1[:, :, pixok])
+    res2=separate(comp, instr, map2[:, :, pixok])
     print('After separation')
     print(res1.x)
     print(res2.x)
@@ -280,14 +284,14 @@ elif normal == 0 :
 else:
     raise TypeError('choose 0 for one spectral index or 1 for modified BB !')
 
-if ins == 0:
+if ins == 'S4':
     name_instr='S4'
     name_conf='s4_config'
-    param_est = run_MC_separation(s4_config, {'dust':typedust, 'cmb':42, 'synchrotron':'s0'}, ref_fwhm, covmap, name_instr, ite, normal, beta_out)
-elif ins == 1:
+    param_est = run_MC_separation(s4_config, {'cmb':42, 'dust':typedust, 'synchrotron':'s0'}, ref_fwhm, covmap, ite, beta_out, ins)
+elif ins == 'BI':
     name_instr='BI'
     name_conf='qp_config'
-    param_est = run_MC_separation(qp_config, {'dust':typedust, 'cmb':42, 'synchrotron':'s0'}, ref_fwhm, covmap, name_instr, ite, normal, beta_out)
+    param_est = run_MC_separation(qp_config, {'cmb':42, 'dust':typedust, 'synchrotron':'s0'}, ref_fwhm, covmap, ite, beta_out, ins)
 else:
     raise TypeError('choose 0 for CMB-S4 or 1 for BI !')
 

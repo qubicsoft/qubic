@@ -1,17 +1,17 @@
 #!/bin/bash
 #$ -o /pbs/home/m/mregnier/sps1/QUBIC+/results
 #$ -N maps
-#$ -q mc_highmem
+#$ -q huge
 
 export mydir=/pbs/home/m/mregnier/sps1/QUBIC+
 
-export NUMBA_NUM_THREADS=2
-export MKL_NUM_THREADS=2
-export NUMEXPR_NUM_THREADS=2
-export OMP_NUM_THREADS=2
-export OPENBLAS_NUM_THREADS=2
-export VECLIB_MAXIMUM_THREADS=2
-export PYOPERATORS_NO_MPI=2
+export NUMBA_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export VECLIB_MAXIMUM_THREADS=1
+export PYOPERATORS_NO_MPI=1
 
 
 export QUBIC_DATADIR=/pbs/home/m/mregnier/Libs/qubic/qubic/

@@ -358,6 +358,9 @@ def add_sources_to_sky_map(
     import numpy as np
     import healpy as h
 
+    catalog_frequencies = ['030', '044', '070', '100', '143', '217', '353']
+    complement_frequencies = [f for f in catalog_frequencies if f != reference_frequency]
+    
     output_map = input_map.copy()
 
     # Check that the number of frequencies is consistent with the input map
@@ -399,6 +402,22 @@ def add_sources_to_sky_map(
         catalog = pickle.load(handle)
 
     for source in sources:
+        
+        # Check if source is in catalog with the reference frequency otherwise shift to the previous
+        # frequency
+        
+        if source not in catalog[reference_frequency].keys():
+            isincatalog = [source in catalog[f].keys() for f in complement_frequencies]
+            if True not in isincatalog:
+                print('Source %s is not in catalog' % source)
+                return -1
+            print('Source %s is not in catalog at frequency %s GHz' % (source, reference_frequency))
+            goodfreq = [i for i, x in enumerate(isincatalog) if x] 
+            diff_freq = np.abs(np.array(list(map(float, [complement_frequencies[i] for i in goodfreq]))) - float(reference_frequency))
+            index = np.where(diff_freq == np.min(diff_freq))[0]
+            reference_frequency = complement_frequencies[index[0]]
+            print('Switched to new reference frequency %s GHz' % reference_frequency)
+            	            
         print(
             "Processing source %s (%i/%i)"
             % (source, list(sources).index(source) + 1, len(sources))

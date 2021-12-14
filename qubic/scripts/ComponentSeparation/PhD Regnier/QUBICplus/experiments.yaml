@@ -1,0 +1,134 @@
+# Collection of experiments
+#
+# Possible information and units
+#
+# date: year (expected or achieved)
+# frequency: GHz
+# fwhm: arcmin
+# bandwidth: delta_nu_over_nu
+# pixel_size: mm
+# detectors: number
+# net_det: uK_sqrt_s
+# net_arr_i: uK_sqrt_s
+# net_arr_p:  uK_sqrt_s
+# depth_p: uK_arcmin
+# f_sky: fraction
+# status: forecast or achieved
+# type: satellite, ground, baloon
+#
+# They are either lists with one entry per channel
+# or signle entry in the "meta" argument
+
+LiteBIRD:
+  frequency:  [40.0,    50.0,   60.0,   68.0,   78.0,   89.0,   100.0,  119.0,  140.0,  166.0,  195.0,  235.0,  280.0,  337.0,  402.0]
+  depth_p:    [37.5,    24,     19.9,   16.2,   13.5,   11.7,   9.2,    7.6,    5.9,    6.5,    5.8,    7.7,    13.2,   19.5,   37.5]
+  depth_i:    [26.5,    17.0,   14.1,   11.5,   9.5,    8.3,    6.5,    5.4,    4.2,    4.6,    4.1,    5.4,    9.3,    13.8,   26.5]  # See note
+  fwhm:       [69.0,    56.0,   48.0,   43.0,   39.0,   35.0,   29.0,   25.0,   23.0,   21.0,   20.0,   19.0,   24.0,   20.0,   17.0]
+  bandwidth:  [0.3,     0.3,    0.23,   0.23,   0.23,   0.23,   0.23,   0.3,    0.3,    0.3,    0.3,    0.3,    0.3,    0.3,    0.23]
+  pixel_size: [18,      18,     18,     18,     18,     18,     12,     12,     12,     12,     12,     12,     5.4,    4.5,    4]
+  detectors:  [114,     114,    114,    114,    114,    114,    296,    222,    296,    222,    296,    222,    128,    128,    128]
+  net_det:    [172,     96,     79,     64,     54,     47,     59,     42,     38,     36,     37,     43,     55,     81,     156]
+  net_arr_i:  [18,      11.5,   9.5,    7.8,    6.5,    5.6,    4.4,    3.7,    2.8,    3.1,    2.8,    3.7,    6.3,    9.4,    18]
+  net_arr_p:  [25.5,    16.3,   13.5,   11.0,   9.2,    8.0,    6.2,    5.2,    4.0,    4.4,    3.9,    5.2,    8.9,    13.2,   25.5]
+  meta:
+    f_sky: 1.0
+    status: forecast
+    reference: "Journal of Low Temperature Physics, Volume 194, Issue 5-6, pp. 443-452"
+    type: satellite
+    note: "Warning: depth_i is not the official one but simply depth_p / sqrt(2)"
+
+SO_SAT:
+  frequency:  [27.0,    39.0,   93.0,   145.0,  225.0,  280]
+  depth_p:    [35.0,    21.0,   2.6,    3.3,    6.3,    16.0]  # Baseline
+  depth_i:    [24.7,    14.8,   1.8,    2.3,    4.5,    11.3]  # See note
+  fwhm:       [91.0,    63.0,   30.0,   17.0,   11.0,   9.0]
+  meta:
+    f_sky: 0.1
+    status: forecast
+    reference: "Journal of Cosmology and Astroparticle Physics, Issue 02, article id. 056 (2019)"
+    type: ground
+    note: "Warning: depth_i is not the official one but simply depth_p / sqrt(2)"
+
+SO_LAT:
+  frequency:  [27.0,    39.0,   93.0,   145.0,  225.0,  280.0]
+  depth_p:    [71.0,    36.0,   8.0,    10.0,   22.0,   54.0]  # Baseline
+  depth_i:    [50.2,    25.5,   5.7,    7.1,    15.6,   38.2]  # See note
+  fwhm:       [7.4,     5.1,    2.2,    1.4,    1.0,    0.9]
+  meta:
+    f_sky: 0.4
+    status: forecast
+    reference: "Journal of Cosmology and Astroparticle Physics, Issue 02, article id. 056 (2019)"
+    type: ground
+    note: "Warning: depth_i is not the official one but simply depth_p / sqrt(2)"
+
+Planck:
+  frequency:  [28.4,  44.1,  70.4,  100,  143,  217,  353,  545,  857]
+  depth_i:    [150.,  162.,  210.,  77.4, 33.,  46.8, 154,  42.,  5016.]
+  depth_p:    [210.,  240.,  300.,  118,  70.2, 105., 439,  .NAN, .NAN]
+  fwhm:       [32.29, 27.94, 13.08, 9.66, 7.22, 4.90, 4.92, 4.67, 4.22]
+  instrument: [lfi,   lfi,   lfi,   hfi,  hfi,  hfi,  hfi,  hfi,  hfi]
+  # Original quantities
+  # depth_t:  [2.5,   2.7,   3.5,   1.29, 0.55, 0.78, 2.56,] uK deg
+  # depth_t:  [,,,,,,,                                      0.04, 0.12]  kJy deg / sr
+  # depth_p:  [3.5,   4.0,   5.0,   1.96, 1.17, 1.75, 7.31] uK deg
+  meta:
+    date: 2018
+    f_sky: 1
+    status: achieved
+    reference: "arXiv:1807.06205"
+    type: satellite
+    note: "Warning: 545 and 857 depth_t are simple unit conversions from deg kJy / sr at nominal frequencies"
+
+Qubic+:
+  frequency: [20.  ,  30.  ,  40.  ,  76.84,  80.92,  85.  ,  89.08,  93.16,
+        85.88,  90.44,  95.  ,  99.56, 104.12, 132.24, 138.62, 145.  ,
+       151.38, 157.76, 141.36, 148.18, 155.  , 161.82, 168.64, 200.64,
+       210.32, 220.  , 229.68, 239.36, 246.24, 258.12, 270.  , 281.88,
+       293.76]
+  fwhm:      [11.        , 72.8       , 72.8       , 28.2079646 , 26.78571429,
+       25.5       , 24.33206107, 23.26642336, 28.2079646 , 26.78571429,
+       25.5       , 24.33206107, 23.26642336, 24.89035088, 23.74476987,
+       22.7       , 21.74329502, 20.86397059, 24.89035088, 23.74476987,
+       22.7       , 21.74329502, 20.86397059, 14.25438596, 13.59832636,
+       13.        , 12.45210728, 11.94852941, 14.25438596, 13.59832636,
+       13.        , 12.45210728, 11.94852941]
+  depth_i:   [16.5       ,  9.36      , 11.85      ,  7.16244517,  7.16244517,
+        7.16244517,  7.16244517,  7.16244517,  6.19774156,  6.19774156,
+        6.19774156,  6.19774156,  6.19774156, 12.3018877 , 12.3018877 ,
+       12.3018877 , 12.3018877 , 12.3018877 , 12.88997358, 12.88997358,
+       12.88997358, 12.88997358, 12.88997358, 27.23530797, 27.23530797,
+       27.23530797, 27.23530797, 27.23530797, 41.13087325, 41.13087325,
+       41.13087325, 41.13087325, 41.13087325]
+  depth_p:   [10.55      ,  6.025     ,  7.625     ,  4.62722324,  4.62722324,
+        4.62722324,  4.62722324,  4.62722324,  4.00415887,  4.00415887,
+        4.00415887,  4.00415887,  4.00415887,  5.62914141,  5.62914141,
+        5.62914141,  5.62914141,  5.62914141,  5.91823306,  5.91823306,
+        5.91823306,  5.91823306,  5.91823306, 12.49067572, 12.49067572,
+       12.49067572, 12.49067572, 12.49067572, 18.87528867, 18.87528867,
+       18.87528867, 18.87528867, 18.87528867]
+  meta:
+    date: 2018
+    f_sky: 0.01
+    status: not achieved
+    type: ground
+
+Qubic:
+  frequency: []
+  fwhm:      []
+  depth_i:   []
+  depth_p:   []
+  meta:
+    date: 2018
+    f_sky: 0.01
+    status: not achieved
+    type: ground
+
+
+CMBS4:
+  frequency:  [20.,  30.,  40.,  85.,  95., 145., 155., 220., 270.]
+  depth_i:    [16.5 ,  9.36, 11.85,  2.02,  1.78,  3.89,  4.16, 10.15, 17.4]
+  depth_p:    [10.55 ,  6.025,  7.625,  1.305,  1.15 ,  1.78 ,  1.91 ,  4.655, 7.985]
+  fwhm:       [11. , 72.8, 72.8, 25.5, 25.5, 22.7, 22.7, 13. , 13. ]
+  meta:
+    f_sky: 0.03
+    type: ground

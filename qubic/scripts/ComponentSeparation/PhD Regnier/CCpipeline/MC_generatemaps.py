@@ -195,7 +195,9 @@ def run_MC_generation(config, skyconfig, ref_fwhm, covmap, beta):
                                                                 beta=beta)
     print('Second map created !')
 
-    return map1, map2
+    seed=skyconfig['cmb']
+
+    return map1, map2, seed
 
 print('Simulation started')
 
@@ -213,10 +215,10 @@ else:
 
 if ins == 'S4':
     instr='S4'
-    map1, map2 = run_MC_generation(s4_config, {'cmb':42, 'dust':typedust, 'synchrotron':'s0'}, ref_fwhm, covmap, tab_beta)
+    map1, map2, seed = run_MC_generation(s4_config, {'cmb':np.random.randint(1000000), 'dust':typedust, 'synchrotron':'s0'}, ref_fwhm, covmap, tab_beta)
 elif ins == 'BI':
     instr='BI'
-    map1, map2 = run_MC_generation(qp_config, {'cmb':42, 'dust':typedust, 'synchrotron':'s0'}, ref_fwhm, covmap, tab_beta)
+    map1, map2, seed = run_MC_generation(qp_config, {'cmb':np.random.randint(1000000), 'dust':typedust, 'synchrotron':'s0'}, ref_fwhm, covmap, tab_beta)
 else:
     raise TypeError('choose 0 for CMB-S4 or 1 for BI !')
 
@@ -227,6 +229,7 @@ print("done !")
 
 mydict = {'map1':map1,
           'map2':map2,
+          'seed':seed,
           'sysargv':sys.argv}
 
 CC=1

@@ -188,8 +188,9 @@ def open_pkl(path, name):
 
     map1=data['map1']
     map2=data['map2']
+    seed=data['seed']
 
-    return map1, map2
+    return map1, map2, seed
 
 def get_instr(ins, ref_fwhm, config):
 
@@ -230,8 +231,8 @@ def get_comp(sky):
 def run_MC_separation(config, skyconfig, ref_fwhm, covmap, ite, beta_out, ins):
 
     print('Loading maps')
-    map1, map2 = open_pkl('/pbs/home/m/mregnier/sps1/QUBIC+/results/', 'onereals_maps_fwhm{}_instrument{}_{}.pkl'.format(ref_fwhm, ins, ite))
-    print(map1.shape)
+    map1, map2, seed = open_pkl('/pbs/home/m/mregnier/sps1/QUBIC+/results/', 'onereals_maps_fwhm{}_instrument{}_{}.pkl'.format(ref_fwhm, ins, ite))
+    print("seed is ", seed)
     print('Done!')
     # Define instrument
     print('begin instr')
@@ -241,12 +242,12 @@ def run_MC_separation(config, skyconfig, ref_fwhm, covmap, ite, beta_out, ins):
     print(instr)
     print('end instr')
     # Define component
-    if beta_out is None:
-        comp=[fgbuster.component_model.Dust(nu0=145.), fgbuster.component_model.CMB(), fgbuster.component_model.Synchrotron(nu0=145.)]
-        print('1', comp)
-    else:
-        comp = comp=[fgbuster.component_model.Dust_2b(nu0=145.), fgbuster.component_model.CMB(), fgbuster.component_model.Synchrotron(nu0=145.)]
-        print('2', comp)
+    #if beta_out is None:
+    comp=[fgbuster.component_model.Dust(nu0=145.), fgbuster.component_model.CMB(), fgbuster.component_model.Synchrotron(nu0=145.)]
+        #print('1', comp)
+    #else:
+        #comp = comp=[fgbuster.component_model.Dust_2b(nu0=145.), fgbuster.component_model.CMB(), fgbuster.component_model.Synchrotron(nu0=145.)]
+        #print('2', comp)
 
     #print('end comp')
 
@@ -263,13 +264,36 @@ def run_MC_separation(config, skyconfig, ref_fwhm, covmap, ite, beta_out, ins):
     print(res1.x)
     print(res2.x)
 
-    #new_dust_maps1=qubicplus.get_scaled_dust_dbmmb_map(nu0, [nu0], res1.x[0], res1.x[1], res1.x[2], 256, 0.03,
-    #                                                    radec_center=[0., -57.], temp=20)
 
-    #new_dust_maps2=qubicplus.get_scaled_dust_dbmmb_map(nu0, [nu0], res2.x[0], res2.x[1], res2.x[2], 256, 0.03,
-    #                                                    radec_center=[0., -57.], temp=20)
+    if skyconfig['dust'] == 'd0':
+        new_res1=[res1.x[0], None, None, res1.x[1], res1.x[2]]
+        new_res2=[res2.x[0], None, None, res2.x[1], res2.x[2]]
+    else:
+        new_res1=[res1.x[0], res1.x[1], res1.x[2], res1.x[3], res1.x[4]]
+        new_res2=[res2.x[0], res2.x[1], res2.x[2], res2.x[3], res2.x[4]]
 
-    return [res1.x, res2.x]
+    print(new_res1)
+    print(new_res2)
+
+    all_comp1=s4bi.get_component_maps_from_parameters({'cmb':seed, 'dust':skyconfig['dust'], 'synchrotron':'s0'}, config, nu0,
+                                   fsky=0.03,
+                                   nside=256,
+                                   betad0=new_res1[0],
+                                   betad1=new_res1[1],
+                                   nubreak=new_res1[2],
+                                   temp=new_res1[3],
+                                   betapl=new_res1[4])
+
+    all_comp2=s4bi.get_component_maps_from_parameters({'cmb':seed, 'dust':skyconfig['dust'], 'synchrotron':'s0'}, config, nu0,
+                                   fsky=0.03,
+                                   nside=256,
+                                   betad0=new_res2[0],
+                                   betad1=new_res2[1],
+                                   nubreak=new_res2[2],
+                                   temp=new_res2[3],
+                                   betapl=new_res2[4])
+
+    return [map1, map2], all_comp1, all_comp2, [res1.x, res2.x]
 
 print('Simulation started')
 
@@ -287,11 +311,11 @@ else:
 if ins == 'S4':
     name_instr='S4'
     name_conf='s4_config'
-    param_est = run_MC_separation(s4_config, {'cmb':42, 'dust':typedust, 'synchrotron':'s0'}, ref_fwhm, covmap, ite, beta_out, ins)
+    inputs, all_comp1, all_comp2, param_est = run_MC_separation(s4_config, {'cmb':42, 'dust':typedust, 'synchrotron':'s0'}, ref_fwhm, covmap, ite, beta_out, ins)
 elif ins == 'BI':
     name_instr='BI'
     name_conf='qp_config'
-    param_est = run_MC_separation(qp_config, {'cmb':42, 'dust':typedust, 'synchrotron':'s0'}, ref_fwhm, covmap, ite, beta_out, ins)
+    inputs, all_comp1, all_comp2, param_est = run_MC_separation(qp_config, {'cmb':42, 'dust':typedust, 'synchrotron':'s0'}, ref_fwhm, covmap, ite, beta_out, ins)
 else:
     raise TypeError('choose 0 for CMB-S4 or 1 for BI !')
 
@@ -301,6 +325,9 @@ print("done !")
 #print(clqp[0, 0, :, 2])
 
 mydict = {'param_est':param_est,
+          'inputs':inputs,
+          'all_comp1':all_comp1,
+          'all_comp2':all_comp2,
           'sysargv':sys.argv}
 
 CC=1
@@ -308,6 +335,6 @@ if CC == 1:
     path='/pbs/home/m/mregnier/sps1/QUBIC+/results'
 else:
     path=''
-output = open(path+'/paramest_2beta_maps_fwhm{}_instrument{}_{}.pkl'.format(ref_fwhm, name_instr, ite), 'wb')
+output = open(path+'/compmaps_maps_fwhm{}_instrument{}_{}.pkl'.format(ref_fwhm, name_instr, ite), 'wb')
 pickle.dump(mydict, output)
 output.close()

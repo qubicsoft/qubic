@@ -161,11 +161,121 @@ def double_beta_dust_FGB_Model():
 
     analytic_expr1 = ('(exp(nu0 / temp * h_over_k) - 1)'
                      '/ (exp(nu / temp * h_over_k) - 1)'
-                     '* (nu / nu0)**(1 + beta_d0) * (nu0 / nubreak)**(beta_d0-beta_d1) * (1 - ( 0.5 + 0.5 * tanh((nu-nubreak)*50)))')#' * (1-heaviside(nu-nubreak ,0.5))')
+                     '* (nu / nu0)**(1 + beta_d0) * (nu0 / nubreak)**(beta_d0-beta_d1) * (1 - ( 0.5 + 0.5 * tanh((nu-nubreak)*500)))')#' * (1-heaviside(nu-nubreak ,0.5))')
 
     analytic_expr2 = ('(exp(nu0 / temp * h_over_k) - 1)'
                      '/ (exp(nu / temp * h_over_k) - 1)'
-                     '* (nu / nu0)**(1 + beta_d1) * ( 0.5 + 0.5 * tanh( (nu-nubreak) * 50 ))')#' * heaviside(nu-nubreak,0.5)')
+                     '* (nu / nu0)**(1 + beta_d1) * ( 0.5 + 0.5 * tanh( (nu-nubreak) * 500 ))')#' * heaviside(nu-nubreak,0.5)')
     analytic_expr = analytic_expr1 + ' + ' + analytic_expr2
 
     return analytic_expr
+
+
+from fgbuster.component_model import (CMB, Dust, Dust_2b, Synchrotron, AnalyticComponent)
+from scipy import constants
+import pysm3
+import pysm3.units as u
+from pysm3 import utils
+
+def eval_scaled_dust_dbmmb_map(model, nu_ref, nu_test, beta0, beta1, nubreak, nside, fsky, radec_center, T):
+    #def double-beta dust model
+    if model == 'd0':
+        print('one beta model')
+        analytic_expr = ('(exp(nu0 / temp * h_over_k) -1)'
+                         '/ (exp(nu / temp * h_over_k) - 1)'
+                         '* (nu / nu0)**(1 + beta_d)')
+        dust = AnalyticComponent(analytic_expr, nu0=nu_ref, h_over_k=constants.h * 1e9 / constants.k, temp=T)
+        #print(dust)
+        scaling_factor = dust.eval(nu_test, beta0)
+    else:
+        print('double beta model')
+        analytic_expr = double_beta_dust_FGB_Model()
+        dbdust = AnalyticComponent(analytic_expr, nu0=nu_ref, h_over_k=constants.h * 1e9 / constants.k, temp=T)
+        scaling_factor = dbdust.eval(nu_test, beta0, beta1, nubreak)
+
+    sky=pysm3.Sky(nside=nside, preset_strings=['d0'])
+    dust_map_ref = np.zeros((3, 12*nside**2)) #this way the output is w/0 units!!
+    dust_map_ref[0:3,:]=sky.get_emission(nu_ref*u.GHz, None)*utils.bandpass_unit_conversion(nu_ref*u.GHz,None, u.uK_CMB)
+
+
+    map_test=dust_map_ref*scaling_factor
+
+    #mask = s4bi.get_coverage(fsky, nside, center_radec=radec_center)
+
+    return map_test
+
+def get_scaled_dust_dbmmb_map(model, nu_ref, nu_vec, beta0, beta1, nubreak, nside, fsky, radec_center, temp):
+    #eval at each freq. In this way it can be called both in the single-freq and the multi-freq case
+    n_nu=len(nu_vec)
+    dust_map= np.zeros((n_nu, 3, 12*nside**2))
+    for i in range(n_nu):
+        map_eval=eval_scaled_dust_dbmmb_map(model, nu_ref, nu_vec[i], beta0, beta1, nubreak, nside, fsky, radec_center, temp)
+        #hp.mollview(map_eval[1])
+        dust_map[i,:,:]=map_eval[:,:]
+    return dust_map
+
+import qubicplus
+
+def eval_scaled_sync_map(nu_ref, nu_test, betapl, nside, fsky, radec_center):
+    #def double-beta dust model
+    analytic_expr = '(nu / nu0)**(beta_pl)'
+    sync = AnalyticComponent(analytic_expr, nu0=nu_ref)
+    scaling_factor = sync.eval(nu_test, betapl)
+
+    sky=pysm3.Sky(nside=nside, preset_strings=['s0'])
+    sync_map_ref = np.zeros((3, 12*nside**2)) #this way the output is w/0 units!!
+    sync_map_ref[0:3,:]=sky.get_emission(nu_ref*u.GHz, None)*utils.bandpass_unit_conversion(nu_ref*u.GHz,None, u.uK_CMB)
+
+
+    map_test=sync_map_ref*scaling_factor
+
+    #mask = s4bi.get_coverage(fsky, nside, center_radec=radec_center)
+
+    return map_test
+
+def get_scaled_sync_map(nu_ref, nu_vec, betapl, nside, fsky, radec_center):
+    #eval at each freq. In this way it can be called both in the single-freq and the multi-freq case
+    n_nu=len(nu_vec)
+    sync_map= np.zeros((n_nu, 3, 12*nside**2))
+    for i in range(n_nu):
+        map_eval=eval_scaled_sync_map(nu_ref, nu_vec[i], betapl, nside, fsky, radec_center)
+        #hp.mollview(map_eval[1])
+        sync_map[i,:,:]=map_eval[:,:]
+    return sync_map
+
+def get_component_maps_from_parameters(skyconfig, config, nu0, fsky=0.03, nside=256, betad0=None, betad1=None, nubreak=None, temp=None, betapl=None):
+
+    all_comp=[]
+    covmap=get_coverage(fsky, nside)
+
+    for i in skyconfig.keys():
+        print(i, skyconfig[i])
+
+        if i == 'cmb':
+            cmb_maps=np.zeros(((1, 3, 12*nside**2)))
+            cmb_maps[0]=qubicplus.BImaps(skyconfig, config).get_cmb()*covmap
+            all_comp.append(cmb_maps)
+
+        elif i == 'dust':
+            dust_maps=get_scaled_dust_dbmmb_map(skyconfig[i], nu0, [nu0], betad0, betad1, nubreak, nside, fsky,
+                                                            radec_center=[0., -57.], temp=temp)*covmap
+
+            all_comp.append(dust_maps)
+
+        elif i == 'synchrotron':
+            sync_maps=get_scaled_sync_map(nu0, [nu0], betapl, nside, fsky,
+                                                        radec_center=[0., -57.])*covmap
+
+            all_comp.append(sync_maps)
+        else:
+            pass
+
+
+    return all_comp
+
+
+
+
+
+
+    return None

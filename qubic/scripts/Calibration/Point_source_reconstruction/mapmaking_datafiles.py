@@ -32,6 +32,70 @@ import qubic.SpectroImLib as si
 from qubicpack.pixel_translation import make_id_focalplane, plot_id_focalplane, tes2pix, tes2index
 
 
+
+def hall_pointing(az, el, angspeed_psi, maxpsi,
+                 date_obs=None, latitude=None, longitude=None,fix_azimuth=None,random_hwp=True):
+    """
+    This method will reproduce the pointing that is used in the hall to take the data. Will start from bottom
+    left and will go up at fixed elevation.
+    """
+
+    nsamples = len(az)*len(el)
+    pp = qubic.QubicSampling(nsamples,date_obs=date_obs, period=0.1, latitude=latitude,longitude=longitude)
+    
+    #Comented because we do not go and back in simulations.. 
+    #mult_el = []
+    #for eachEl in el:
+    #    mult_el.append(np.tile(eachEl, 2*len(az)))
+    # Azimuth go and back and same elevation. 
+    #az_back = az[::-1]
+    #az = list(az)
+    #az.extend(az_back)
+    #mult_az = np.tile(az, len(el))
+    #print(i,np.asarray(mult_el).ravel().shape)
+    #pp.elevation = np.asarray(mult_el).ravel()
+    #pp.azimuth = np.asarray(mult_az).ravel()
+    
+    mult_el = []
+    for eachEl in el:
+        mult_el.extend(np.tile(eachEl, len(az)))
+    mult_az = []
+    
+    mult_az.append(np.tile(az, len(el)))
+    
+    
+    pp.elevation = np.asarray(mult_el)#az2d.ravel()
+    pp.azimuth = np.asarray(mult_az[0])#el2d.ravel()
+    
+    ### scan psi as well,
+    pitch = pp.time * angspeed_psi
+    pitch = pitch % (4 * maxpsi)
+    mask = pitch > (2 * maxpsi)
+    pitch[mask] = -pitch[mask] + 4 * maxpsi
+    pitch -= maxpsi
+    
+    pp.pitch = pitch
+    
+    if random_hwp:
+        pp.angle_hwp = np.random.random_integers(0, 7, nsamples) * 11.25
+        
+    if fix_azimuth['apply']:
+        pp.fix_az=True
+        if fix_azimuth['fix_hwp']:
+            pp.angle_hwp=pp.pitch*0+ 11.25
+        if fix_azimuth['fix_pitch']:
+            pp.pitch= 0
+    else:
+        pp.fix_az=False
+
+    return pp
+
+
+
+
+
+
+
 def select_det(q,idqp):
 	"""
 	Returns a sub-instrument with detectors index given by idqp. These indices are to be understood

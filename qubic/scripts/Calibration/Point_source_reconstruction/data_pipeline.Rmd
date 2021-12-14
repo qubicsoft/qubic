@@ -199,50 +199,6 @@ ylim(-20,20)
 ```
 
 ```{python}
-lowcut = 0.5
-highcut = 70
-nharm = 10
-notch = np.array([[1.724, 0.005, nharm]])
-fourier_cuts = [lowcut, highcut, notch]
-
-#tod = QubicFP.timeline(TES=TESNum,asic=asic)
-#tt = QubicFP.timeaxis(axistype='pps', asic=asic)
-
-src = [tt, np.interp(tt, t_src, data_src)]
-period = 1.
-newt_demod, amp_demod, errors_demod = dl.demodulate_methods([tt, tod],
-                                                            1./period, 
-                                                            src_data_in=src,
-                                                            method='demod_quad', remove_noise=True,
-                                                           fourier_cuts=fourier_cuts)
-```
-
-```{python}
-newaz = np.interp(newt_demod, time_azel, az)
-newel = np.interp(newt_demod, time_azel, el)
-azmin = np.min(az)
-azmax = np.max(az)
-elmin = np.min(el)
-elmax = np.max(el)
-naz = 100
-nel = 51
-mymap, azmap, elmap = dl.coadd_flatmap(amp_demod, newaz, newel, 
-                                       filtering = None,
-                                       azmin = azmin, azmax = azmax, 
-                                       elmin = elmin, elmax = elmax, 
-                                       naz = naz, nel = nel)
-```
-
-```{python}
-imshow(mymap, aspect='equal',
-       extent=[np.cos(np.radians(50))*azmin, np.cos(np.radians(50))*azmax, elmax, elmin])
-title('TES {}'.format(TESNum))
-xlabel('Cos(50) x Az')
-ylabel('El')
-colorbar()
-```
-
-```{python}
 ##### Filtering to be used
 lowcut = 0.5
 highcut = 70
@@ -250,7 +206,16 @@ nharm = 10
 notch = np.array([[1.724, 0.005, nharm]])
 fourier_cuts = [lowcut, highcut, notch]
 
-amps_demod = np.zeros((256, len(amp_demod)))
+# Just to pick the shape 
+temp_amps = dl.demodulate_methods([QubicFP.timeaxis(axistype = 'pps', asic = 1), 
+                       QubicFP.timeline(TES = 1, asic = 1)], 
+                      1./period, 
+                      src_data_in = [tt, np.interp(tt, t_src, data_src)],
+                      method = 'demod_quad', 
+                      remove_noise = True,
+                      fourier_cuts = fourier_cuts)[1]
+
+amps_demod = np.zeros((256, len(temp_amps)))
 
 for asic in [1,2]:
     tt = QubicFP.timeaxis(axistype = 'pps', asic = asic)
@@ -270,13 +235,6 @@ for asic in [1,2]:
 ```
 
 ```{python}
-#saving azimuth and elevation
-from pysimulators import FitsArray as fa
-fa(azmap).save(savedirtest + 'azimuth.fits')
-fa(elmap).save(savedirtest + 'elevation.fits')
-```
-
-```{python}
 time_azel = QubicFP.timeaxis(datatype = 'hk', axistype = 'pps')
 az = QubicFP.azimuth()
 el = QubicFP.elevation()
@@ -287,11 +245,10 @@ azmin = min(az)
 azmax = max(az)
 elmin = min(el)
 elmax = max(el)
-naz = 20
-nel = 20
+naz = 40
+nel = 40
 nmaps = 256
 mapdata = np.zeros((nmaps, nel, naz))
-
 
 mapdata, azmap, elmap = dl.coadd_flatmap(amps_demod, newaz, newel, 
                                         filtering = None,
@@ -301,14 +258,23 @@ mapdata, azmap, elmap = dl.coadd_flatmap(amps_demod, newaz, newel,
 ```
 
 ```{python}
+#saving azimuth and elevation
+from pysimulators import FitsArray as fa
+fa(azmap).save(savedirtest + 'Flat/azimuth.fits')
+fa(elmap).save(savedirtest + 'Flat/elevation.fits')
+```
+
+```{python}
 #Look at one map
 TESNum = 95
-ites = TESNum-1
+ites = TESNum - 1
 mm, ss = ft.meancut(mapdata[ites,:,:],3)
-imshow(mapdata[ites,:,:], aspect='equal',
-       extent=[np.cos(np.radians(50))*azmin, np.cos(np.radians(50))*azmax, elmin, elmax],
-       #vmin=mm-ss, vmax=mm+30*ss)
-       vmin=0, vmax=4.5e6)
+imshow(mapdata[ites,:,:], aspect = 'equal',
+       extent = [np.cos(np.radians(50)) * azmin, 
+                 np.cos(np.radians(50)) * azmax, 
+                 elmin, 
+                 elmax],
+       vmin = 0, vmax = 2e6)
 title('TES {}'.format(ites+1))
 ```
 
@@ -324,21 +290,59 @@ doing this part can probably be improved. I think with jupyter only one core is 
 """save the maps
 you can see the numbering here doesn't really reflect the real naming of TES we use"""
 
-for i in range(4):
+for i in range(256):
     print("saving flat map for tes {}".format(i+1))
-    FitsArray(mapdata[i,:,:]).save(savedirtest+'imgflat_TESNum_{}.fits'.format(i+1))
+    FitsArray(mapdata[i,:,:]).save(savedirtest+'Flat/imgflat_TESNum_{}.fits'.format(i+1))    
+    FitsArray(mapdata[i,:,:]).save(savedirtest+'Flat/imgflat_TESNum_{}.fits'.format(i+1))
 ```
 
 Test load the maps...ok!
 
-```{python}
-flattest, az, el = sbfit.get_flatmap(1, savedirtest, 
+
+flattest = np.zeros([nmaps, nel, naz])
+flattest[0,:,:], az, el = sbfit.get_flatmap(256, savedirtest, 
                                      azmin = azmin, azmax = azmax, 
                                      remove = None)
-imshow(flattest)
-```
+imshow(flattest[0,:,:], aspect = 'equal',
+       extent = [np.cos(np.radians(50)) * azmin, 
+                 np.cos(np.radians(50)) * azmax, 
+                 elmin, 
+                 elmax],
+      vmin=0, vmax=2.e6)
+
 
 **2nd)** Once we have the flat/*helapy* maps we fit the position of the peaks for each TES. To do that we can select between fitting symetric gaussian or asymetric (`sym` or `asym`) for each peak.
+
+```{python}
+keys_sym = ['xc', 'yc', 'dist', 'angle', 'distx', 'disty', 'ampgauss', 
+            'xcgauss', 'ycgauss', 'fwhmgauss', 'fwhmpeaks']
+
+keys_asym = ['xc', 'yc', 'dist', 'angle', 'distx', 'disty', 'ampgauss', 
+            'xcgauss', 'ycgauss', 'fwhmgauss']
+for i in range(9):
+    keys_asym.append('fwhmxpeak_{}'.format(i))
+for i in range(9):
+    keys_asym.append('fwhmypeak_{}'.format(i))
+for i in range(9):
+    keys_asym.append('rhopeak_{}'.format(i))
+```
+
+```{python}
+flat_map, azinit, elinit, fitout, xxyynew = dl.fit_sb(93, savedirtest)
+```
+
+```{python}
+# Read the data
+for TESNum in range(1, 257):
+    print(TESNum)
+    flatmap, az, el = sbfit.get_flatmap(TESNum, savedirtest, remove=None, azmin=azmin, azmax=azmax)
+
+    #### Instantiate a model
+    sbfitmodel3 = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, no_xy_shift=False, distortion=False)
+    
+    fit, xypeaks = sbfit.fit_sb(flatmap, az, el, sbfitmodel3, verbose=False, resample=False, 
+                            doplot=False, extra_title='TES #{}'.format(TESNum))
+```
 
 ```{python}
 GaussianShape = 'sym'

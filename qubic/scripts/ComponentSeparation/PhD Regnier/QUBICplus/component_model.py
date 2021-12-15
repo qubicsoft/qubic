@@ -30,9 +30,8 @@ import sympy
 from sympy.parsing.sympy_parser import parse_expr
 import scipy
 from scipy import constants
-from sympy import *
 from astropy.cosmology import Planck15
-import sympy
+
 
 __all__ = [
     'Component',
@@ -560,19 +559,20 @@ class Synchrotron(PowerLaw):
     """
     pass
 
+
 class ModifiedBlackBody_2b(AnalyticComponent):
     """ Modified Black body
 
     Parameters
     ----------
     nu0: float
-        Reference frequency
+    Reference frequency
     temp: float
-        Black body temperature
+    Black body temperature
     beta_d: float
-        Spectral index
+    Spectral index
     units:
-        Output units (K_CMB and K_RJ available)
+    Output units (K_CMB and K_RJ available)
     """
     _REF_BETA_0 = 1.54
     _REF_BETA_1 = 1.54
@@ -594,23 +594,26 @@ class ModifiedBlackBody_2b(AnalyticComponent):
             K_RJ2K_CMB_NU0 = K_RJ2K_CMB + ' / ' + K_RJ2K_CMB.replace('nu', 'nu0')
 
             analytic_expr1 = ('(exp(nu0 / temp * h_over_k) - 1)'
-                             '/ (exp(nu / temp * h_over_k) - 1)'
-                             '* (nu / nu0)**(1 + beta_d0) * (nu0 / nubreak)**(beta_d0-beta_d1) * (1-(0.5 + 0.5*tanh((nu-nubreak)*500)))')#' * (1-heaviside(nu-nubreak ,0.5))')
+                              '/ (exp(nu / temp * h_over_k) - 1)'
+                              '* (nu / nu0)**(1 + beta_d0) * (nu0 / nubreak)**(beta_d0-beta_d1) * (1-(0.5 + 0.5*tanh((nu-nubreak)*500)))') #' * (1-heaviside(nu-nubreak ,0.5))')
 
             analytic_expr2 = ('(exp(nu0 / temp * h_over_k) - 1)'
-                             '/ (exp(nu / temp * h_over_k) - 1)'
-                             '* (nu / nu0)**(1 + beta_d1) * (0.5 + 0.5*tanh((nu-nubreak)*500))')#' * heaviside(nu-nubreak,0.5)')
-            analytic_expr = analytic_expr1 + ' + ' + analytic_expr2
+                              '/ (exp(nu / temp * h_over_k) - 1)'
+                              '* (nu / nu0)**(1 + beta_d1) * (0.5 + 0.5*tanh((nu-nubreak)*500))')#' * heaviside(nu-nubreak,0.5)')
+            #analytic_expr = (analytic_expr1 + ' + ' + analytic_expr2)
+            if 'K_CMB' in units:
+                #analytic_expr += ' * ' + K_RJ2K_CMB_NU0
+                #pass
+                analytic_expr = analytic_expr1 + ' * ' + K_RJ2K_CMB_NU0 + ' + ' + analytic_expr2 + ' * ' + K_RJ2K_CMB_NU0
+            elif 'K_RJ' in units:
+                #pass
+                analytic_expr = (analytic_expr1 + ' + ' + analytic_expr2)
+            else:
+                raise ValueError("Unsupported units: %s"%units)
 
             return analytic_expr
-        analytic_expr = (double_beta_dust_FGB_Model())
-        if 'K_CMB' in units:
-            pass
-            #analytic_expr += ' * ' + K_RJ2K_CMB_NU0
-        elif 'K_RJ' in units:
-            pass
-        else:
-            raise ValueError("Unsupported units: %s"%units)
+
+        analytic_expr = double_beta_dust_FGB_Model()
 
         # Parameters in the analytic expression are
         # - Fixed parameters -> into kwargs
@@ -624,8 +627,7 @@ class ModifiedBlackBody_2b(AnalyticComponent):
             nubreak=self._REF_NUBREAK, beta_d0=self._REF_BETA_0, beta_d1=self._REF_BETA_1, temp=self._REF_TEMP)
 
 
-
 class Dust_2b(ModifiedBlackBody_2b):
-    """ Alias of :class:`ModifiedBlackBody_2b`
+    """ Alias of :class:`ModifiedBlackBody`
     """
     pass

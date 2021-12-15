@@ -328,7 +328,31 @@ for i in range(9):
 ```
 
 ```{python}
-flat_map, azinit, elinit, fitout, xxyynew = dl.fit_sb(93, savedirtest)
+import debugging_fit as df
+```
+
+```{python}
+reload(df)
+flat_map, azinit, elinit, fitout, xxyynew = df.fit_sb(93, savedirtest)
+```
+
+```{python}
+import iminuit
+help(iminuit.Minuit)
+```
+
+```{python}
+sbfitmodel = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, 
+                                 no_xy_shift=False, distortion=False)
+detnums = [1,2,3,4]
+if verbose: 
+    print('Using Fit Model {} for TES #{}'.format(sbfitmodel.name,detnums[i]))
+
+flattest, az, el = sbfit.get_flatmap(detnums[1], savedirtest, azmin = azmin, azmax = azmax, remove = None)
+figure()
+fit, thexypeaks = sbfit.fit_sb(flattest, az, el, sbfitmodel, resample=False, newsize=70,
+                               verbose=True, doplot=True, 
+                               extra_title='TES #{}'.format(detnums[1]))
 ```
 
 ```{python}

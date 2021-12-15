@@ -4,6 +4,7 @@ import fgbuster
 from fgbuster import CMB, Dust, Synchrotron, AnalyticComponent, ModifiedBlackBody
 import pysm3
 import pysm3.units as u
+from pysm3 import utils
 import healpy as hp
 import numpy as np
 import warnings
@@ -13,7 +14,7 @@ from fgbuster import AnalyticComponent
 from sympy import Heaviside
 from scipy import constants
 from astropy.cosmology import Planck15
-
+import qubicplus
 import qubic
 
 warnings.filterwarnings("ignore")
@@ -159,23 +160,16 @@ def double_beta_dust_FGB_Model():
     K_RJ2K_CMB = K_RJ2K_CMB.replace('h_over_k', str(H_OVER_K))
     K_RJ2K_CMB_NU0 = K_RJ2K_CMB + ' / ' + K_RJ2K_CMB.replace('nu', 'nu0')
 
-    analytic_expr1 = ('(exp(nu0 / temp * h_over_k) - 1)'
+    analytic_expr1 = ('(exp(nu0 / temp * h_over_k) -1)'
                      '/ (exp(nu / temp * h_over_k) - 1)'
-                     '* (nu / nu0)**(1 + beta_d0) * (nu0 / nubreak)**(beta_d0-beta_d1) * (1 - ( 0.5 + 0.5 * tanh((nu-nubreak)*500)))')#' * (1-heaviside(nu-nubreak ,0.5))')
+                     '* (nu / nu0)**(1 + beta_d0) * (nu0 / nubreak)**(beta_d0-beta_d1) * '+K_RJ2K_CMB_NU0+' * (1-heaviside(nu-nubreak,0.5))')
 
     analytic_expr2 = ('(exp(nu0 / temp * h_over_k) - 1)'
                      '/ (exp(nu / temp * h_over_k) - 1)'
-                     '* (nu / nu0)**(1 + beta_d1) * ( 0.5 + 0.5 * tanh( (nu-nubreak) * 500 ))')#' * heaviside(nu-nubreak,0.5)')
+                     '* (nu / nu0)**(1 + beta_d1) * '+K_RJ2K_CMB_NU0+'* heaviside(nu-nubreak,0.5)')
     analytic_expr = analytic_expr1 + ' + ' + analytic_expr2
 
     return analytic_expr
-
-
-from fgbuster.component_model import (CMB, Dust, Dust_2b, Synchrotron, AnalyticComponent)
-from scipy import constants
-import pysm3
-import pysm3.units as u
-from pysm3 import utils
 
 def eval_scaled_dust_dbmmb_map(model, nu_ref, nu_test, beta0, beta1, nubreak, nside, fsky, radec_center, T):
     #def double-beta dust model
@@ -272,10 +266,3 @@ def get_component_maps_from_parameters(skyconfig, config, nu0, fsky=0.03, nside=
 
 
     return all_comp
-
-
-
-
-
-
-    return None

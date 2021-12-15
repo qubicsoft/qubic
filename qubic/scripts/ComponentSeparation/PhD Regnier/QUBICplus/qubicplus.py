@@ -19,14 +19,17 @@ from scipy import constants
 def eval_scaled_dust_dbmmb_map(nu_ref, nu_test, beta0, beta1, nubreak, nside, fsky, radec_center, temp):
     #def double-beta dust model
     analytic_expr = s4bi.double_beta_dust_FGB_Model()
-    #print(analytic_expr)
-    dbdust = AnalyticComponent(analytic_expr, nu0=nu_ref, h_over_k=constants.h * 1e9 / constants.k)
-    scaling_factor = dbdust.eval(nu_test, beta0, beta1, nubreak, temp)
+    dbdust = AnalyticComponent(analytic_expr, nu0=nu_ref, h_over_k=constants.h * 1e9 / constants.k, temp=temp)
+    scaling_factor = dbdust.eval(nu_test, beta0, beta1, nubreak)
 
-    sky=pysm3.Sky(nside=nside, preset_strings=['d0'], output_unit="uK_CMB")
+    sky=pysm3.Sky(nside=nside, preset_strings=['d0'])
     dust_map_ref = np.zeros((3, 12*nside**2)) #this way the output is w/0 units!!
-    dust_map_ref[0:3,:]=sky.get_emission(nu_ref*u.GHz, None)
+    dust_map_ref[0:3,:]=sky.get_emission(nu_ref*u.GHz, None)*utils.bandpass_unit_conversion(nu_ref*u.GHz,None, u.uK_CMB)
+
+
     map_test=dust_map_ref*scaling_factor
+
+    #mask = s4bi.get_coverage(fsky, nside, center_radec=radec_center)
 
     return map_test
 
@@ -36,8 +39,51 @@ def get_scaled_dust_dbmmb_map(nu_ref, nu_vec, beta0, beta1, nubreak, nside, fsky
     dust_map= np.zeros((n_nu, 3, 12*nside**2))
     for i in range(n_nu):
         map_eval=eval_scaled_dust_dbmmb_map(nu_ref, nu_vec[i], beta0, beta1, nubreak, nside, fsky, radec_center, temp)
+        #hp.mollview(map_eval[1])
         dust_map[i,:,:]=map_eval[:,:]
     return dust_map
+
+def theoretical_noise_maps(sigma_sec, coverage, Nyears=4, verbose=False):
+    """
+    This returns a map of the RMS noise (not an actual realization, just the expected RMS - No covariance)
+
+    Parameters
+    ----------
+    sigma_sec: float
+        Noise level.
+    coverage: array
+        The coverage map.
+    Nyears: int
+    verbose: bool
+
+    Returns
+    -------
+
+    """
+    # ###### Noise normalization
+    # We assume we have integrated for a time Ttot in seconds with a sigma per root sec sigma_sec
+    Ttot = Nyears * 365 * 24 * 3600  # in seconds
+    if verbose:
+        print('Total time is {} seconds'.format(Ttot))
+    # Oberved pixels
+    thepix = coverage > 0
+    # Normalized coverage (sum=1)
+    covnorm = coverage / np.sum(coverage)
+    if verbose:
+        print('Normalized coverage sum: {}'.format(np.sum(covnorm)))
+
+    # Time per pixel
+    Tpix = np.zeros_like(covnorm)
+    Tpix[thepix] = Ttot * covnorm[thepix]
+    if verbose:
+        print('Sum Tpix: {} s  ; Ttot = {} s'.format(np.sum(Tpix), Ttot))
+
+    # RMS per pixel
+    Sigpix = np.zeros_like(covnorm)
+    Sigpix[thepix] = sigma_sec / np.sqrt(Tpix[thepix])
+    if verbose:
+        print('Total noise (with no averages in pixels): {}'.format(np.sum((Sigpix * Tpix) ** 2)))
+    return Sigpix
 
 def give_me_nus(nu, largeur, Nf):
     largeurq=largeur/Nf
@@ -236,8 +282,10 @@ class BImaps(object):
                 cmbmap = pysm3.CMBMap(self.nside, map_IQU='/tmp/' + rndstr)
                 os.remove('/tmp/' + rndstr)
                 #setting.append(skyconfig[k])
-            else:
+            elif k=='dust':
                 pass
+            else:
+                setting.append(self.skyconfig[k])
 
         sky = pysm3.Sky(nside=self.nside, preset_strings=setting)
         if iscmb:
@@ -269,28 +317,23 @@ class BImaps(object):
                 if self.skyconfig[i] == 'd0':
                     if verbose:
                         print('Model : {}'.format(self.skyconfig[i]))
-                    sky=pysm3.Sky(nside=self.nside, preset_strings=['d0'], output_unit="uK_CMB")
-                    dustmaps = np.zeros(((len(self.nus), 3, 12*self.nside**2))) #this way the output is w/0 units!!
-                    for i in range(len(self.nus)):
-                        dustmaps[i,:,:]=sky.get_emission(self.nus[i]*u.GHz, None)
+                    dustmaps = get_fg_notconvolved('d0', self.nus, nside=self.nside)
+                    allmaps+=dustmaps
                 elif self.skyconfig[i] == 'd02b':
                     if verbose:
                         print('Model : d02b -> Twos spectral index beta ({:.2f} and {:.2f}) with nu_break = {:.2f}'.format(beta[0], beta[1], beta[2]))
-                    dustmaps = get_scaled_dust_dbmmb_map(nu_ref=beta[3], nu_vec=self.nus, beta0=beta[0], beta1=beta[1], nubreak=beta[2], nside=self.nside, fsky=1, radec_center=[0., -57.], temp=20.)
+
+                    #add Elenia's definition
+                    dustmaps=get_scaled_dust_dbmmb_map(nu_ref=beta[3], nu_vec=self.nus, beta0=beta[0], beta1=beta[1], nubreak=beta[2], nside=self.nside, fsky=1, radec_center=[0., -57.], temp=20.)
+                    allmaps+=dustmaps
                 else:
                     print('No dust')
-                allmaps+=dustmaps
-
-
 
             elif i == 'synchrotron':
                 if verbose:
                     print('Model : {}'.format(self.skyconfig[i]))
-                sky=pysm3.Sky(nside=self.nside, preset_strings=['s0'], output_unit="uK_CMB")
-                sync_map = np.zeros(((len(self.nus), 3, 12*self.nside**2))) #this way the output is w/0 units!!
-                for i in range(len(self.nus)):
-                    sync_map[i,:,:]=sky.get_emission(self.nus[i]*u.GHz, None)
-                allmaps+=sync_map
+                sync_maps = get_fg_notconvolved(self.skyconfig[i], self.nus, nside=self.nside)
+                allmaps+=sync_maps
 
             else:
                 pass
@@ -317,4 +360,3 @@ class BImaps(object):
                 allmaps[:, :, ~pixok] = hp.UNSEEN
 
             return maps_noisy, allmaps, noisemaps
-        return allmaps

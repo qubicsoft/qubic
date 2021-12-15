@@ -587,10 +587,7 @@ plt.show()
 ```
 
 ```{python}
-ress4=all_comp_true[0][0, istk]-mapdust_s4_est[0, istk]
-ress4[~pixok]=0
-hp.gnomview(ress4, rot=center, reso=15, sub=(1, 2, 1))
-#hp.gnomview(all_comp_true[0][0, istk]-mapdust_bi_est[0, istk], rot=center, reso=15, sub=(1, 2, 2))
+
 ```
 
 ```{python}

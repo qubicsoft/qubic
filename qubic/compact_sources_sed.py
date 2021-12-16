@@ -403,7 +403,7 @@ def build_sed(source, catalog, plot = False, polyfit = 3):
     import pylab as pl
     
     # Check if source is in catalog
-    exists, sourcename = isincatalog(source, catalog)
+    exists, sourcename, _ = isincatalog(source, catalog)
     
     if not exists:
         print('Source %s is not in catalog' % source)
@@ -495,7 +495,7 @@ def source2freqs(source, catalog, altnames = altnames):
     '''        
     import numpy as np
     
-    exists, sourcename = isincatalog(source, catalog)
+    exists, sourcename, _ = isincatalog(source, catalog)
     
     if not exists:
         print('Source %s is not in catalog' % source)

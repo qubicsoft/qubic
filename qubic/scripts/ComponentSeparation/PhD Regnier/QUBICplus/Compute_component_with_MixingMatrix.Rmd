@@ -1,0 +1,497 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.13.4
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Compute component maps with FGB routines
+
+
+With the previous analysis on 2 $\beta$ model, we saw that FGB estimate well parameters with BI than CMB-S4. Otherwise, there is a bug on FGB pipeline, we don't know why but the maps separated are not well estimated but parameters yes. This notebook try to estimate those maps correctly.
+
+```{python}
+import qubicplus
+import pysm3
+import pysm3.units as u
+from pysm3 import utils
+import numpy as np
+from qubic import camb_interface as qc
+import healpy as hp
+import matplotlib.pyplot as plt
+import os
+import random as rd
+import string
+import qubic
+from importlib import reload
+import pickle
+import s4bi
+from scipy import constants
+import fgbuster
+
+center = qubic.equ2gal(0, -57)
+# If there is not this command, the kernel shut down every time..
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+
+nside=256
+def get_coverage(fsky, nside, center_radec=[0., -57.]):
+    center = qubic.equ2gal(center_radec[0], center_radec[1])
+    uvcenter = np.array(hp.ang2vec(center[0], center[1], lonlat=True))
+    uvpix = np.array(hp.pix2vec(nside, np.arange(12*nside**2)))
+    ang = np.arccos(np.dot(uvcenter, uvpix))
+    indices = np.argsort(ang)
+    okpix = ang < -1
+    okpix[indices[0:int(fsky * 12*nside**2)]] = True
+    mask = np.zeros(12*nside**2)
+    mask[okpix] = 1
+    return mask
+
+covmap = get_coverage(0.03, nside)
+
+def separate(comp, instr, maps_to_separate, tol=1e-5, print_option=False):
+    solver_options = {}
+    solver_options['disp'] = False
+    fg_args = comp, instr, maps_to_separate
+    fg_kwargs = {'method': 'TNC', 'tol': tol, 'options': solver_options}
+    try:
+        res = fgbuster.basic_comp_sep(*fg_args, **fg_kwargs)
+    except KeyError:
+        fg_kwargs['options']['disp'] = False
+        res = fgbuster.basic_comp_sep(*fg_args, **fg_kwargs)
+    if print_option:
+        print()
+        print("message:", res.message)
+        print("success:", res.success)
+        print("result:", res.x)
+        
+    return res
+
+# Loading of dictionary from BI-CMBS4.ipynb 
+
+### CMB-S4 config
+
+freqs = np.array([20., 30., 40., 85., 95., 145., 155., 220., 270.])
+bandwidth = np.array([5., 9., 12., 20.4, 22.8, 31.9, 34.1, 48.4, 59.4])
+dnu_nu = bandwidth/freqs
+beam_fwhm = np.array([11., 72.8, 72.8, 25.5, 25.5, 22.7, 22.7, 13., 13.])
+mukarcmin_TT = np.array([16.5, 9.36, 11.85, 2.02, 1.78, 3.89, 4.16, 10.15, 17.4])
+mukarcmin_EE = np.array([10.87, 6.2, 7.85, 1.34, 1.18, 1.8, 1.93, 4.71, 8.08])
+mukarcmin_BB = np.array([10.23, 5.85, 7.4, 1.27, 1.12, 1.76, 1.89, 4.6, 7.89])
+ell_min = np.array([30, 30, 30, 30, 30, 30, 30, 30, 30])
+nside = np.array([256, 256, 256, 256, 256, 256, 256, 256, 256])
+edges_min = freqs * (1. - dnu_nu/2)
+edges_max = freqs * (1. + dnu_nu/2)
+edges = [[edges_min[i], edges_max[i]] for i in range(len(freqs))]
+s4_config = {
+    'nbands': len(freqs),
+    'frequency': freqs,
+    'depth_p': 0.5*(mukarcmin_EE + mukarcmin_BB),
+    'depth_i': mukarcmin_TT,
+    'depth_e': mukarcmin_EE,
+    'depth_b': mukarcmin_BB,
+    'fwhm': beam_fwhm,
+    'bandwidth': bandwidth,
+    'dnu_nu': dnu_nu,
+    'ell_min': ell_min,
+    'nside': nside,
+    'fsky': 0.03,
+    'ntubes': 12,
+    'nyears': 7.,
+    'edges': edges,
+    'effective_fraction': np.zeros(len(freqs))+1.
+            }
+
+def fct_subopt(nus):
+    subnus = [150., 220]
+    subval = [1.4, 1.2]
+    fct_subopt = np.poly1d(np.polyfit(subnus, subval, 1))
+    return fct_subopt(nus)
+
+subnus = [150., 220]
+subval = [1.4, 1.2]
+
+def qubicify(config, qp_nsub, qp_effective_fraction):
+    nbands = np.sum(qp_nsubs)
+    qp_config = config.copy()
+    for k in qp_config.keys():
+        qp_config[k]=[]
+    qp_config['nbands'] = nbands
+    qp_config['fsky'] = config['fsky']
+    qp_config['ntubes'] = config['ntubes']
+    qp_config['nyears'] = config['nyears']
+    qp_config['initial_band'] = []
+
+    for i in range(len(config['frequency'])):
+        #print(config['edges'][i][0], config['edges'][i][-1])
+        newedges = np.linspace(config['edges'][i][0], config['edges'][i][-1], qp_nsubs[i]+1)
+        #print(newedges)
+        newfreqs = (newedges[0:-1]+newedges[1:])/2
+        newbandwidth = newedges[1:] - newedges[0:-1]
+        newdnu_nu = newbandwidth / newfreqs
+        newfwhm = config['fwhm'][i] * config['frequency'][i]/newfreqs
+        scalefactor_noise = np.sqrt(qp_nsubs[i]) * fct_subopt(config['frequency'][i]) / qp_effective_fraction[i]
+        newdepth_p = config['depth_p'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
+        newdepth_i = config['depth_i'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
+        newdepth_e = config['depth_e'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
+        newdepth_b = config['depth_b'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
+        newell_min = np.ones(qp_nsub[i]) * config['ell_min'][i]
+        newnside = np.ones(qp_nsub[i]) * config['nside'][i]
+        neweffective_fraction = np.ones(qp_nsub[i]) * qp_effective_fraction[i]
+        initial_band = np.ones(qp_nsub[i]) * config['frequency'][i]
+
+        for k in range(qp_nsubs[i]):
+            if qp_effective_fraction[i] != 0:
+                qp_config['frequency'].append(newfreqs[k])
+                if i >= 3:
+                    qp_config['depth_p'].append(newdepth_p[k])
+                    qp_config['depth_i'].append(newdepth_i[k])
+                    qp_config['depth_e'].append(newdepth_e[k])
+                    qp_config['depth_b'].append(newdepth_b[k])
+                else:
+                    qp_config['depth_p'].append(s4_config['depth_p'][i])
+                    qp_config['depth_i'].append(s4_config['depth_i'][i])
+                    qp_config['depth_e'].append(s4_config['depth_e'][i])
+                    qp_config['depth_b'].append(s4_config['depth_b'][i])
+                qp_config['fwhm'].append(newfwhm[k])
+                qp_config['bandwidth'].append(newbandwidth[k])
+                qp_config['dnu_nu'].append(newdnu_nu[k])
+                qp_config['ell_min'].append(newell_min[k])
+                qp_config['nside'].append(newnside[k])
+
+                qp_config['effective_fraction'].append(neweffective_fraction[k])
+                qp_config['initial_band'].append(initial_band[k])
+        for k in range(qp_nsubs[i]+1):
+            if qp_effective_fraction[i] != 0:
+                qp_config['edges'].append(newedges[k])
+
+        #qp_config['depth_p'][:3] = s4_config['depth_p'][:3]
+        #qp_config['depth_i'][:3] = s4_config['depth_i'][:3]
+
+    fields = ['frequency', 'depth_p', 'depth_i', 'depth_e', 'depth_b', 'fwhm', 'bandwidth',
+              'dnu_nu', 'ell_min', 'nside', 'edges', 'effective_fraction', 'initial_band']
+    for j in range(len(fields)):
+        qp_config[fields[j]] = np.array(qp_config[fields[j]])
+
+    return qp_config
+
+thr = 0
+mymask = (covmap > (np.max(covmap)*thr)).astype(int)
+pixok = mymask > 0
+
+qp_nsubs = np.array([1, 1, 1, 5, 5, 5, 5, 5, 5])
+qp_effective_fraction = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1])
+qp_config=qubicify(s4_config, qp_nsubs, qp_effective_fraction)
+```
+
+```{python}
+def get_maps(skyconfig, covmap, beta=[1.44, 1.64, 242, 145]):
+    maps4, map_s4_noiseless, _ = qubicplus.BImaps(skyconfig, s4_config).getskymaps(same_resol=0, 
+                                      verbose=True, 
+                                      coverage=covmap, 
+                                      noise=True, 
+                                      signoise=1.,
+                                      beta=beta)
+
+    map_bi, map_bi_noiseless, _ = qubicplus.BImaps(skyconfig, qp_config).getskymaps(same_resol=0, 
+                                      verbose=True, 
+                                      coverage=covmap, 
+                                      noise=True, 
+                                      signoise=1.,
+                                      beta=beta)
+    
+    return map_bi, map_bi_noiseless, maps4, map_s4_noiseless
+```
+
+```{python}
+map_cmbdust_bi, map_cmbdust_bi_noiseless, map_cmbdust_s4, map_cmbdust_s4_noiseless = get_maps(
+                                            {'cmb':42, 'dust':'d02b'}, covmap)
+```
+
+```{python}
+map_dust_bi, map_dust_bi_noiseless, map_dust_s4, map_dust_s4_noiseless = get_maps({'dust':'d02b'}, covmap)
+```
+
+```{python}
+map_cmb_bi, map_cmb_bi_noiseless, map_cmb_s4, map_cmb_s4_noiseless = get_maps({'cmb':42}, covmap)
+```
+
+```{python}
+mean_dust=np.mean(map_dust_s4_noiseless[:, 0, pixok], axis=1)
+mean_dust_nu0=np.mean(map_dust_s4_noiseless[5, 0, pixok], axis=0)
+
+mean_cmb=np.mean(map_cmb_s4_noiseless[:, 0, pixok], axis=1)
+mean_cmb_nu0=np.mean(map_cmb_s4_noiseless[5, 0, pixok], axis=0)
+
+mean_allmaps = np.mean(map_cmbdust_s4_noiseless[:, 0, pixok], axis=1)
+mean_allmaps_nu0 = np.mean(map_cmbdust_s4_noiseless[5, 0, pixok], axis=0)
+
+
+
+
+
+mean_dust_bi=np.mean(map_dust_bi_noiseless[:, 0, pixok], axis=1)
+mean_dust_bi_nu0=np.mean(map_dust_bi_noiseless[15, 0, pixok], axis=0)
+
+mean_cmb_bi=np.mean(map_cmb_bi_noiseless[:, 0, pixok], axis=1)
+mean_cmb_bi_nu0=np.mean(map_cmb_bi_noiseless[15, 0, pixok], axis=0)
+
+mean_allmaps_bi = np.mean(map_cmbdust_bi_noiseless[:, 0, pixok], axis=1)
+mean_allmaps_bi_nu0 = np.mean(map_cmbdust_bi_noiseless[15, 0, pixok], axis=0)
+```
+
+Here we define 2 functions, the first is to get dictionary results of component separation and the second to get plot of maps. In the component separation definition, we see that we define others defaults parameters. Indeed, $x_0$ is the parameter for the first step of Likelihood maximization but the defaults avlues are ${beta}^0_d = 1.44$, ${beta}^1_d = 1.64$, $\nu_{break}=200$ GHz and $T=20$ K. Those values are near to the real value, to test the method, we define other set parameters to see if the algorithm converge to the same at the end. 
+
+```{python}
+def get_components_from_fgb(inputs, name, pixok):
+    
+    # Define instrument
+    instr=fgbuster.observation_helpers.get_instrument(name)
+    
+    # Define component separation
+    comp=[fgbuster.component_model.Dust_2b(nu0=145, temp=20), 
+          fgbuster.component_model.CMB()]
+    #comp[0].defaults=[1.4, 1.4, 200, 20]
+    
+    # Call comp sep method
+    r=separate(comp, instr, inputs[:, :, pixok], tol=1e-6)
+    
+    return r
+
+
+def plot_after_compsep(tab, rs4, rbi):
+    
+    thr = 0
+    mymask = (covmap > (np.max(covmap)*thr)).astype(int)
+    pixok = mymask > 0
+    
+    #input_map_noiseless = np.ones((3, 12*256**2))*hp.UNSEEN
+    input_map_noiseless = tab.copy()
+    
+    reconstruction_s4 = np.ones((3, 12*256**2))*hp.UNSEEN
+    reconstruction_s4[:, pixok] = rs4
+    
+    reconstruction_bi = np.ones((3, 12*256**2))*hp.UNSEEN
+    reconstruction_bi[:, pixok] = rbi
+    
+    plt.figure(figsize=(18, 12))
+    title=['True', 'S4', 'BI']
+    stk=['I', 'Q', 'U']
+    
+    k=1
+    for i in range(3):
+        hp.gnomview(input_map_noiseless[i], rot=center, reso=15, cmap='jet', sub=(3, 5, k), title = stk[i] + ' | ' + title[0])
+        hp.gnomview(reconstruction_s4[i], rot=center, reso=15, cmap='jet', sub=(3, 5, k+1), title =  stk[i] + ' | ' + title[1])
+        hp.gnomview(reconstruction_bi[i], rot=center, reso=15, cmap='jet', sub=(3, 5, k+2), title =  stk[i] + ' | ' + title[2])
+        
+        res_s4 = input_map_noiseless[i]-reconstruction_s4[i]
+        res_s4[~pixok]=hp.UNSEEN
+        
+        res_bi = input_map_noiseless[i]-reconstruction_bi[i]
+        res_bi[~pixok]=hp.UNSEEN
+        
+        hp.gnomview(res_s4, rot=center, reso=15, cmap='jet', sub=(3, 5, k+3), title = stk[i] + ' | ' + title[0]+'-'+title[1])
+        hp.gnomview(res_bi, rot=center, reso=15, cmap='jet', sub=(3, 5, k+4), title = stk[i] + ' | ' + title[0]+'-'+title[2])
+        k+=5
+```
+
+```{python}
+rs4 = get_components_from_fgb(map_cmbdust_s4, 'CMBS4', pixok)
+```
+
+```{python}
+rbi = get_components_from_fgb(map_cmbdust_bi, 'Qubic+', pixok)
+```
+
+```{python}
+print(rs4.x)
+print(rbi.x)
+```
+
+We try now to plot the maps directly return by FG-Buster.
+
+```{python}
+#plot_after_compsep(map_dust_s4_noiseless[0], rs4.s[0], rbi.s[0])
+```
+
+FG-Buster can't estimate the right dust maps. The new components can be calculated manually by estimating the mixing matrix $A_{ev}$. Data can be modeled by :
+
+$$d = A s \rightarrow s = A^{—1} d$$
+
+which A is the mixing matrix and it called $W$ for the inverse in FG-Buster. The noise can be included also but here we decide to take noiseless case to see the reconstruction of dust.
+
+```{python}
+comp=[fgbuster.component_model.Dust_2b(nu0=145, temp=20, nubreak=242), 
+      fgbuster.component_model.CMB()]
+
+instr_s4=fgbuster.observation_helpers.get_instrument('CMBS4')
+instr_bi=fgbuster.observation_helpers.get_instrument('Qubic+')
+
+instr_s4['fwhm'] = np.zeros(9)
+instr_bi['fwhm'] = np.zeros(33)
+```
+
+```{python}
+A = fgbuster.MixingMatrix(*comp)
+A_ev_bi = A.evaluator(instr_bi.frequency)
+A_ev_s4 = A.evaluator(instr_s4.frequency)
+#A_maxL_bi = A_ev_bi(rbi.x[[0, 1]])
+#A_maxL_s4 = A_ev_s4(rs4.x[[0, 1]])
+A_maxL_true = A_ev_bi([1.44, 1.64])
+```
+
+```{python}
+nus=np.linspace(20, 300, 1000)
+ind=np.where(nus > 145)[0][0]
+dust_model_2b = fgbuster.component_model.Dust_2b(nu0=145, beta_d0=1.44, beta_d1=1.64, nubreak=242, temp=20)
+cmb_model = fgbuster.component_model.CMB()
+sed_dust=dust_model_2b.eval(nus)
+sed_dust_modified = sed_dust/sed_dust[ind]#*mean_map_dust_nu0/sed_dust[ind]
+sed_cmb=cmb_model.eval(nus)
+#sed_cmbdust=sed_cmb+sed_dust
+```
+
+```{python}
+nu0=145
+nu0_bi=15
+nu0_s4=5
+
+fig, ax = plt.subplots(figsize=[10, 10])
+
+ax.plot(nus, sed_dust_modified*mean_dust_nu0)
+ax.plot(nus, sed_cmb*mean_cmb_nu0)
+ax.plot(nus, sed_cmb*mean_cmb_nu0+sed_dust_modified*mean_dust_nu0, ':k')
+
+#ax.scatter(qp_config['frequency'], (A_maxL_bi[:, 0] + A_maxL_bi[:, 1])*mean_allmaps_nu0, s=30, marker='x', label=r'$A^{BI}_{max \mathcal{L}}$')
+#ax.scatter(s4_config['frequency'], (A_maxL_s4[:, 0] + A_maxL_s4[:, 1])*mean_allmaps_nu0, s=30, marker='x', label=r'$A^{S4}_{max \mathcal{L}}$')
+ax.scatter(qp_config['frequency'], (A_maxL_true[:, 0])*mean_dust_nu0/sed_dust[ind], s=30, marker='d', label=r'$A^{True value}_{max \mathcal{L}}$')
+ax.scatter(qp_config['frequency'], (A_maxL_true[:, 1])*mean_cmb_nu0, s=30, marker='d', label=r'$A^{True value}_{max \mathcal{L}}$')
+ax.scatter(qp_config['frequency'], (A_maxL_true[:, 1])*mean_cmb_nu0+(A_maxL_true[:, 0])*mean_dust_nu0, s=30, marker='d', label=r'$A^{True value}_{max \mathcal{L}}$')
+
+
+ax.scatter(qp_config['frequency'], mean_allmaps_bi)
+ax.scatter(s4_config['frequency'], mean_allmaps)
+
+
+ax.set_yscale('log')
+ax.set_xscale('log')
+ax.set_xlabel('Frequency [GHz]', fontsize=20)
+ax.set_ylabel(r'SED [$\mu$K]', fontsize=20)
+
+#ax.legend(fontsize=20, frameon=False)
+ax.axvline(145, ls='--', color='black', alpha=0.5)
+
+plt.show()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+import fgbuster
+
+def compute_rdots(comp, r, instr, inputs):
+    
+    #prewhiten_factors = fgbuster.separation_recipes._get_prewhiten_factors(instr, inputs.shape, 256)
+    #invN = np.zeros(prewhiten_factors.shape+prewhiten_factors.shape[-1:])
+    #for i in range(3):
+    #    invN[i,:,:] = np.diag(prewhiten_factors[i,:]**2)
+    
+    A = fgbuster.MixingMatrix(*comp)
+    #print('A = {} \n '.format(A))
+    A_ev = A.evaluator(instr.frequency)
+    #print('\n A_ev = {} \n'.format(A_ev))
+    A_maxL = A_ev(r)/sed_dust[ind]
+    #print('A_maxL = {} \n '.format(A_maxL))
+    solution = fgbuster.algebra.Wd(A_maxL, inputs.T)#, invN=invN)
+    #print(solution.T.shape)
+    
+    return solution.T
+```
+
+```{python}
+def plot_1stk(truemaps, s4_maps, bi_maps, istk, figsize=(16, 10)):
+    
+    truemaps[istk, ~pixok]=hp.UNSEEN
+    s4_maps[istk, ~pixok]=hp.UNSEEN
+    bi_maps[istk, ~pixok]=hp.UNSEEN
+    
+    plt.figure(figsize=figsize)
+    hp.gnomview(truemaps[istk], rot=center, reso=15, cmap='jet', sub=(2, 3, 1), title='True dust maps')
+    hp.gnomview(s4_maps[istk], rot=center, reso=15, cmap='jet', sub=(2, 3, 2), title='Reconstruction with A_ev - S4')
+    hp.gnomview(bi_maps[istk], rot=center, reso=15, cmap='jet', sub=(2, 3, 3), title='Reconstruction with A_ev - BI')
+    
+    res_s4 = s4_maps[istk]-truemaps[istk]
+    res_bi = bi_maps[istk]-truemaps[istk]
+    
+    res_s4[~pixok]=hp.UNSEEN
+    res_bi[~pixok]=hp.UNSEEN
+    
+    #s_tm=np.std(truemaps[istk, pixok])
+    #nsig=0.5
+    
+    hp.gnomview(res_s4, rot=center, reso=15, cmap='jet', sub=(2, 3, 5), title='RMS = {:.5f}'.format(np.std(res_s4[pixok])))#, min=-nsig*s_tm, max=nsig*s_tm)
+    hp.gnomview(res_bi, rot=center, reso=15, cmap='jet', sub=(2, 3, 6), title='RMS = {:.5f}'.format(np.std(res_bi[pixok])))#, min=-nsig*s_tm, max=nsig*s_tm)
+    
+    plt.show()
+```
+
+```{python}
+comp=[fgbuster.component_model.Dust_2b(nu0=145, temp=20), 
+      fgbuster.component_model.CMB()]
+
+mysolution_s4=compute_rdots(comp, rs4.x[[0, 1, 2]], instr_s4, map_cmbdust_s4_noiseless)
+mysolution_bi=compute_rdots(comp, rbi.x[[0, 1, 2]], instr_bi, map_cmbdust_bi_noiseless)
+```
+
+```{python}
+plot_1stk(map_dust_s4_noiseless[5], mysolution_s4[0], mysolution_bi[0], 1)
+#plot_1stk(map_cmbdust_bi_noiseless[15], mysolution_s4[0]+mysolution_s4[1], mysolution_bi[0]+mysolution_bi[1], 1)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

@@ -150,26 +150,35 @@ def get_component_maps(components, ref_freqs, nside, fsky, center_radec=[0., -57
     return maps
 
 
-def double_beta_dust_FGB_Model():
+def double_beta_dust_FGB_Model(units='K_CMB'):
 
-    H_OVER_K = constants.h * 1e9 / constants.k
-    # Conversion factor at frequency nu
-    K_RJ2K_CMB = ('(expm1(h_over_k * nu / Tcmb)**2'
-                  '/ (exp(h_over_k * nu / Tcmb) * (h_over_k * nu / Tcmb)**2))')
-    K_RJ2K_CMB = K_RJ2K_CMB.replace('Tcmb', str(Planck15.Tcmb(0).value))
-    K_RJ2K_CMB = K_RJ2K_CMB.replace('h_over_k', str(H_OVER_K))
-    K_RJ2K_CMB_NU0 = K_RJ2K_CMB + ' / ' + K_RJ2K_CMB.replace('nu', 'nu0')
+            H_OVER_K = constants.h * 1e9 / constants.k
+            # Conversion factor at frequency nu
+            K_RJ2K_CMB = ('(expm1(h_over_k * nu / Tcmb)**2'
+                          '/ (exp(h_over_k * nu / Tcmb) * (h_over_k * nu / Tcmb)**2))')
+            K_RJ2K_CMB = K_RJ2K_CMB.replace('Tcmb', str(Planck15.Tcmb(0).value))
+            K_RJ2K_CMB = K_RJ2K_CMB.replace('h_over_k', str(H_OVER_K))
+            K_RJ2K_CMB_NU0 = K_RJ2K_CMB + ' / ' + K_RJ2K_CMB.replace('nu', 'nu0')
 
-    analytic_expr1 = ('(exp(nu0 / temp * h_over_k) -1)'
-                     '/ (exp(nu / temp * h_over_k) - 1)'
-                     '* (nu / nu0)**(1 + beta_d0) * (nu0 / nubreak)**(beta_d0-beta_d1) * '+K_RJ2K_CMB_NU0+' * (1-heaviside(nu-nubreak,0.5))')
+            analytic_expr1 = ('(exp(nu0 / temp * h_over_k) - 1)'
+                              '/ (exp(nu / temp * h_over_k) - 1)'
+                              '* (nu / nu0)**(1 + beta_d0) * (nu0 / nubreak)**(beta_d0-beta_d1) * (1-(0.5 + 0.5*tanh((nu-nubreak)*500)))') #' * (1-heaviside(nu-nubreak ,0.5))')
 
-    analytic_expr2 = ('(exp(nu0 / temp * h_over_k) - 1)'
-                     '/ (exp(nu / temp * h_over_k) - 1)'
-                     '* (nu / nu0)**(1 + beta_d1) * '+K_RJ2K_CMB_NU0+'* heaviside(nu-nubreak,0.5)')
-    analytic_expr = analytic_expr1 + ' + ' + analytic_expr2
+            analytic_expr2 = ('(exp(nu0 / temp * h_over_k) - 1)'
+                              '/ (exp(nu / temp * h_over_k) - 1)'
+                              '* (nu / nu0)**(1 + beta_d1) * (0.5 + 0.5*tanh((nu-nubreak)*500))')#' * heaviside(nu-nubreak,0.5)')
+            #analytic_expr = (analytic_expr1 + ' + ' + analytic_expr2)
+            if 'K_CMB' in units:
+                #analytic_expr += ' * ' + K_RJ2K_CMB_NU0
+                #pass
+                analytic_expr = analytic_expr1 + ' * ' + K_RJ2K_CMB_NU0 + ' + ' + analytic_expr2 + ' * ' + K_RJ2K_CMB_NU0
+            elif 'K_RJ' in units:
+                #pass
+                analytic_expr = (analytic_expr1 + ' + ' + analytic_expr2)
+            else:
+                raise ValueError("Unsupported units: %s"%units)
 
-    return analytic_expr
+            return analytic_expr
 
 def eval_scaled_dust_dbmmb_map(model, nu_ref, nu_test, beta0, beta1, nubreak, nside, fsky, radec_center, T):
     #def double-beta dust model
@@ -183,7 +192,7 @@ def eval_scaled_dust_dbmmb_map(model, nu_ref, nu_test, beta0, beta1, nubreak, ns
         scaling_factor = dust.eval(nu_test, beta0)
     else:
         print('double beta model')
-        analytic_expr = double_beta_dust_FGB_Model()
+        analytic_expr = double_beta_dust_FGB_Model(units='K_CMB')
         dbdust = AnalyticComponent(analytic_expr, nu0=nu_ref, h_over_k=constants.h * 1e9 / constants.k, temp=T)
         scaling_factor = dbdust.eval(nu_test, beta0, beta1, nubreak)
 

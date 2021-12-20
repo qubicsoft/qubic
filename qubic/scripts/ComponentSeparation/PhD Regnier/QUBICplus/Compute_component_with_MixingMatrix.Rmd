@@ -213,7 +213,7 @@ def get_maps(skyconfig, covmap, beta=[1.44, 1.64, 265]):
 reload(qubicplus)
 
 map_cmbdust_bi, map_cmbdust_bi_noiseless, map_cmbdust_s4, map_cmbdust_s4_noiseless = get_maps(
-                                            {'dust':'d02b', 'synchrotron':'s0'}, covmap)
+                                            {'cmb':42, 'dust':'d02b', 'synchrotron':'s0'}, covmap)
 ```
 
 ```{python}
@@ -284,11 +284,11 @@ def plot_after_compsep(tab, rs4, rbi):
 ```
 
 ```{python}
-rs4 = get_components_from_fgb(map_cmbdust_s4, 'CMBS4', pixok, 30)
+rs4 = get_components_from_fgb(map_cmbdust_s4_noiseless, 'CMBS4', pixok, 145)
 ```
 
 ```{python}
-rbi = get_components_from_fgb(map_cmbdust_bi, 'Qubic+', pixok, 145)
+rbi = get_components_from_fgb(map_cmbdust_bi_noiseless, 'Qubic+', pixok, 145)
 ```
 
 ```{python}
@@ -352,7 +352,6 @@ def compute_rdots(comp, r, instr, inputs, ind_nu):
     #    invN[i,:,:] = np.diag(prewhiten_factors[i,:]**2)
     
     
-    
     A = fgbuster.MixingMatrix(*comp)
     A_ev = A.evaluator(instr.frequency)
     A_maxL = A_ev(r)
@@ -360,6 +359,7 @@ def compute_rdots(comp, r, instr, inputs, ind_nu):
     
     solution = fgbuster.algebra.Wd(A_maxL, inputs.T)#, invN=invN)
     solution[:, :, 0]*=A_maxL[ind_nu, 0]
+    solution[:, :, 1]*=A_maxL[ind_nu, 1]
     solution[:, :, 2]*=A_maxL[ind_nu, 2]
     
     return solution.T
@@ -393,17 +393,17 @@ def plot_1stk(truemaps, s4_maps, bi_maps, istk, figsize=(16, 10)):
 ```
 
 ```{python}
-comp=[fgbuster.component_model.Dust_2b(nu0=353, temp=20), 
+comp=[fgbuster.component_model.Dust_2b(nu0=145, temp=20), 
       fgbuster.component_model.CMB(),
-      fgbuster.component_model.Synchrotron(nu0=70)]
+      fgbuster.component_model.Synchrotron(nu0=145)]
 
 
 instr_s4=fgbuster.observation_helpers.get_instrument('CMBS4')
 instr_bi=fgbuster.observation_helpers.get_instrument('Qubic+')
 
 
-mysolution_s4=compute_rdots(comp, [1.44, 1.64, 265, -3], instr_s4, map_cmbdust_s4_noiseless, 5)
-mysolution_bi=compute_rdots(comp, [1.44, 1.64, 265, -3], instr_bi, map_cmbdust_bi_noiseless, 15)
+mysolution_s4=compute_rdots(comp, np.round(rs4.x, 3), instr_s4, map_cmbdust_s4_noiseless, 5)
+mysolution_bi=compute_rdots(comp, np.round(rbi.x, 3), instr_bi, map_cmbdust_bi_noiseless, 15)
 ```
 
 ```{python}
@@ -411,11 +411,11 @@ plot_1stk(map_dust_s4_noiseless[5], mysolution_s4[0], mysolution_bi[0], 1)
 ```
 
 ```{python}
-rs4.x
+
 ```
 
 ```{python}
-rbi.x
+
 ```
 
 ```{python}

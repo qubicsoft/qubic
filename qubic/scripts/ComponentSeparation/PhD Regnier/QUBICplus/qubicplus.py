@@ -15,10 +15,73 @@ from importlib import reload
 import s4bi
 from fgbuster.component_model import (CMB, Dust, Dust_2b, Synchrotron, AnalyticComponent)
 from scipy import constants
+import fgbuster
+
+
+
+def create_dust_with_model2beta(nside, nus, betad0, betad1, nubreak, temp):
+
+    # Create 353 GHz dust maps
+    sky = pysm3.Sky(nside=nside, preset_strings=['d0'])
+    maps_353GHz = sky.get_emission(353*u.GHz, None)*utils.bandpass_unit_conversion(353*u.GHz,None, u.uK_CMB)
+
+    comp2b=[fgbuster.component_model.Dust_2b(nu0=353)]
+
+    A2b = fgbuster.MixingMatrix(*comp2b)
+    A2b_ev = A2b.evaluator(nus)
+    A2b_maxL = A2b_ev([betad0, betad1, nubreak, temp])
+
+    new_dust_map=np.zeros(((len(nus), 3, 12*nside**2)))
+    for i in range(len(nus)):
+        new_dust_map[i]=A2b_maxL[i, 0]*maps_353GHz
+
+    return new_dust_map
+
+
+def create_sync(nside, nus):
+
+    # Create 353 GHz dust maps
+    sky = pysm3.Sky(nside=nside, preset_strings=['s0'])
+    maps_70GHz = sky.get_emission(70*u.GHz, None)*utils.bandpass_unit_conversion(70*u.GHz,None, u.uK_CMB)
+
+    comp=[fgbuster.component_model.Synchrotron(nu0=70)]
+
+    A = fgbuster.MixingMatrix(*comp)
+    A_ev = A.evaluator(nus)
+    A_maxL = A_ev(np.array([-3]))
+
+    new_sync_map=np.zeros(((len(nus), 3, 12*nside**2)))
+    for i in range(len(nus)):
+        new_sync_map[i]=A_maxL[i, 0]*maps_70GHz
+
+    return new_sync_map
+
+
+def create_dustd0(nside, nus):
+
+    # Create 353 GHz dust maps
+    sky = pysm3.Sky(nside=nside, preset_strings=['d0'])
+    maps_353GHz = sky.get_emission(353*u.GHz, None)*utils.bandpass_unit_conversion(353*u.GHz,None, u.uK_CMB)
+
+    comp=[fgbuster.component_model.Dust(nu0=353)]
+
+    A = fgbuster.MixingMatrix(*comp)
+    A_ev = A.evaluator(nus)
+    A_maxL = A_ev(np.array([1.54, 20]))
+
+    new_dust_map=np.zeros(((len(nus), 3, 12*nside**2)))
+    for i in range(len(nus)):
+        new_dust_map[i]=A_maxL[i, 0]*maps_353GHz
+
+    return new_dust_map
+
+
+
+
 
 def eval_scaled_dust_dbmmb_map(nu_ref, nu_test, beta0, beta1, nubreak, nside, fsky, radec_center, temp):
     #def double-beta dust model
-    analytic_expr = s4bi.double_beta_dust_FGB_Model()
+    analytic_expr = s4bi.double_beta_dust_FGB_Model(units='K_CMB')
     dbdust = AnalyticComponent(analytic_expr, nu0=nu_ref, h_over_k=constants.h * 1e9 / constants.k, temp=temp)
     scaling_factor = dbdust.eval(nu_test, beta0, beta1, nubreak)
 
@@ -43,48 +106,6 @@ def get_scaled_dust_dbmmb_map(nu_ref, nu_vec, beta0, beta1, nubreak, nside, fsky
         dust_map[i,:,:]=map_eval[:,:]
     return dust_map
 
-def theoretical_noise_maps(sigma_sec, coverage, Nyears=4, verbose=False):
-    """
-    This returns a map of the RMS noise (not an actual realization, just the expected RMS - No covariance)
-
-    Parameters
-    ----------
-    sigma_sec: float
-        Noise level.
-    coverage: array
-        The coverage map.
-    Nyears: int
-    verbose: bool
-
-    Returns
-    -------
-
-    """
-    # ###### Noise normalization
-    # We assume we have integrated for a time Ttot in seconds with a sigma per root sec sigma_sec
-    Ttot = Nyears * 365 * 24 * 3600  # in seconds
-    if verbose:
-        print('Total time is {} seconds'.format(Ttot))
-    # Oberved pixels
-    thepix = coverage > 0
-    # Normalized coverage (sum=1)
-    covnorm = coverage / np.sum(coverage)
-    if verbose:
-        print('Normalized coverage sum: {}'.format(np.sum(covnorm)))
-
-    # Time per pixel
-    Tpix = np.zeros_like(covnorm)
-    Tpix[thepix] = Ttot * covnorm[thepix]
-    if verbose:
-        print('Sum Tpix: {} s  ; Ttot = {} s'.format(np.sum(Tpix), Ttot))
-
-    # RMS per pixel
-    Sigpix = np.zeros_like(covnorm)
-    Sigpix[thepix] = sigma_sec / np.sqrt(Tpix[thepix])
-    if verbose:
-        print('Total noise (with no averages in pixels): {}'.format(np.sum((Sigpix * Tpix) ** 2)))
-    return Sigpix
-
 def give_me_nus(nu, largeur, Nf):
     largeurq=largeur/Nf
     min=nu-largeur
@@ -107,13 +128,6 @@ def smoothing(maps, FWHMdeg, Nf, central_nus, verbose=True):
                 maps[i, :, :] = hp.sphtfunc.smoothing(maps[i, :, :].T, fwhm=np.deg2rad(fwhms[i]),
                                                       verbose=verbose).T
         return fwhms, maps
-
-def integrated(central_nus, bandwidth):
-    min_nu = central_nus * (1 - 0.5 * bandwidth)
-    max_nu = central_nus * (1 + 0.5 * bandwidth)
-    nus_reconstructed = np.linspace(min_nu, max_nu, 4)
-
-    return min_nu, max_nu, nus_reconstructed
 
 def random_string(nchars):
     lst = [rd.choice(string.ascii_letters + string.digits) for n in range(nchars)]
@@ -317,14 +331,14 @@ class BImaps(object):
                 if self.skyconfig[i] == 'd0':
                     if verbose:
                         print('Model : {}'.format(self.skyconfig[i]))
-                    dustmaps = get_fg_notconvolved('d0', self.nus, nside=self.nside)
+                    dustmaps=create_dustd0(self.nside, self.nus)#get_fg_notconvolved('d0', self.nus, nside=self.nside)
                     allmaps+=dustmaps
                 elif self.skyconfig[i] == 'd02b':
                     if verbose:
                         print('Model : d02b -> Twos spectral index beta ({:.2f} and {:.2f}) with nu_break = {:.2f}'.format(beta[0], beta[1], beta[2]))
 
                     #add Elenia's definition
-                    dustmaps=get_scaled_dust_dbmmb_map(nu_ref=beta[3], nu_vec=self.nus, beta0=beta[0], beta1=beta[1], nubreak=beta[2], nside=self.nside, fsky=1, radec_center=[0., -57.], temp=20.)
+                    dustmaps=create_dust_with_model2beta(self.nside, self.nus, beta[0], beta[1], beta[2], temp=20)#get_scaled_dust_dbmmb_map(nu_ref=beta[3], nu_vec=self.nus, beta0=beta[0], beta1=beta[1], nubreak=beta[2], nside=self.nside, fsky=1, radec_center=[0., -57.], temp=20.)
                     allmaps+=dustmaps
                 else:
                     print('No dust')
@@ -332,11 +346,12 @@ class BImaps(object):
             elif i == 'synchrotron':
                 if verbose:
                     print('Model : {}'.format(self.skyconfig[i]))
-                sync_maps = get_fg_notconvolved(self.skyconfig[i], self.nus, nside=self.nside)
+                sync_maps = create_sync(self.nside, self.nus)#get_fg_notconvolved(self.skyconfig[i], self.nus, nside=self.nside)
                 allmaps+=sync_maps
 
             else:
-                pass
+                print('No more components')
+                #pass
 
         #hp.mollview(allmaps[0, 1])
 
@@ -352,7 +367,7 @@ class BImaps(object):
             maps_noisy = allmaps+noisemaps
 
             if coverage is not None:
-                thr = 0.1
+                thr = 0
                 mymask = (coverage > (np.max(coverage)*thr)).astype(int)
                 pixok = mymask > 0
                 maps_noisy[:, :, ~pixok] = hp.UNSEEN
@@ -360,3 +375,4 @@ class BImaps(object):
                 allmaps[:, :, ~pixok] = hp.UNSEEN
 
             return maps_noisy, allmaps, noisemaps
+        return allmaps

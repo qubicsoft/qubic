@@ -191,16 +191,16 @@ qp_config=qubicify(s4_config, qp_nsubs, qp_effective_fraction)
 ```
 
 ```{python}
-def get_maps(skyconfig, covmap, beta=[1.44, 1.64, 242, 145]):
+def get_maps(skyconfig, covmap, beta=[1.44, 1.64, 265]):
     maps4, map_s4_noiseless, _ = qubicplus.BImaps(skyconfig, s4_config).getskymaps(same_resol=0, 
-                                      verbose=True, 
+                                      verbose=False, 
                                       coverage=covmap, 
                                       noise=True, 
                                       signoise=1.,
                                       beta=beta)
 
     map_bi, map_bi_noiseless, _ = qubicplus.BImaps(skyconfig, qp_config).getskymaps(same_resol=0, 
-                                      verbose=True, 
+                                      verbose=False, 
                                       coverage=covmap, 
                                       noise=True, 
                                       signoise=1.,
@@ -210,8 +210,15 @@ def get_maps(skyconfig, covmap, beta=[1.44, 1.64, 242, 145]):
 ```
 
 ```{python}
+reload(qubicplus)
+
 map_cmbdust_bi, map_cmbdust_bi_noiseless, map_cmbdust_s4, map_cmbdust_s4_noiseless = get_maps(
-                                            {'cmb':42, 'dust':'d02b'}, covmap)
+                                            {'dust':'d02b', 'synchrotron':'s0'}, covmap)
+```
+
+```{python}
+map_sync_bi, map_sync_bi_noiseless, map_sync_s4, map_sync_s4_noiseless = get_maps(
+                                            {'synchrotron':'s0'}, covmap)
 ```
 
 ```{python}
@@ -223,40 +230,15 @@ map_cmb_bi, map_cmb_bi_noiseless, map_cmb_s4, map_cmb_s4_noiseless = get_maps({'
 ```
 
 ```{python}
-mean_dust=np.mean(map_dust_s4_noiseless[:, 0, pixok], axis=1)
-mean_dust_nu0=np.mean(map_dust_s4_noiseless[5, 0, pixok], axis=0)
-
-mean_cmb=np.mean(map_cmb_s4_noiseless[:, 0, pixok], axis=1)
-mean_cmb_nu0=np.mean(map_cmb_s4_noiseless[5, 0, pixok], axis=0)
-
-mean_allmaps = np.mean(map_cmbdust_s4_noiseless[:, 0, pixok], axis=1)
-mean_allmaps_nu0 = np.mean(map_cmbdust_s4_noiseless[5, 0, pixok], axis=0)
-
-
-
-
-
-mean_dust_bi=np.mean(map_dust_bi_noiseless[:, 0, pixok], axis=1)
-mean_dust_bi_nu0=np.mean(map_dust_bi_noiseless[15, 0, pixok], axis=0)
-
-mean_cmb_bi=np.mean(map_cmb_bi_noiseless[:, 0, pixok], axis=1)
-mean_cmb_bi_nu0=np.mean(map_cmb_bi_noiseless[15, 0, pixok], axis=0)
-
-mean_allmaps_bi = np.mean(map_cmbdust_bi_noiseless[:, 0, pixok], axis=1)
-mean_allmaps_bi_nu0 = np.mean(map_cmbdust_bi_noiseless[15, 0, pixok], axis=0)
-```
-
-Here we define 2 functions, the first is to get dictionary results of component separation and the second to get plot of maps. In the component separation definition, we see that we define others defaults parameters. Indeed, $x_0$ is the parameter for the first step of Likelihood maximization but the defaults avlues are ${beta}^0_d = 1.44$, ${beta}^1_d = 1.64$, $\nu_{break}=200$ GHz and $T=20$ K. Those values are near to the real value, to test the method, we define other set parameters to see if the algorithm converge to the same at the end. 
-
-```{python}
-def get_components_from_fgb(inputs, name, pixok):
+def get_components_from_fgb(inputs, name, pixok, nu0):
     
     # Define instrument
     instr=fgbuster.observation_helpers.get_instrument(name)
     
     # Define component separation
-    comp=[fgbuster.component_model.Dust_2b(nu0=145, temp=20), 
-          fgbuster.component_model.CMB()]
+    comp=[fgbuster.component_model.Dust_2b(nu0=nu0, temp=20), 
+          fgbuster.component_model.CMB(),
+          fgbuster.component_model.Synchrotron(nu0=nu0)]
     #comp[0].defaults=[1.4, 1.4, 200, 20]
     
     # Call comp sep method
@@ -302,11 +284,11 @@ def plot_after_compsep(tab, rs4, rbi):
 ```
 
 ```{python}
-rs4 = get_components_from_fgb(map_cmbdust_s4, 'CMBS4', pixok)
+rs4 = get_components_from_fgb(map_cmbdust_s4, 'CMBS4', pixok, 30)
 ```
 
 ```{python}
-rbi = get_components_from_fgb(map_cmbdust_bi, 'Qubic+', pixok)
+rbi = get_components_from_fgb(map_cmbdust_bi, 'Qubic+', pixok, 145)
 ```
 
 ```{python}
@@ -316,9 +298,6 @@ print(rbi.x)
 
 We try now to plot the maps directly return by FG-Buster.
 
-```{python}
-#plot_after_compsep(map_dust_s4_noiseless[0], rs4.s[0], rbi.s[0])
-```
 
 FG-Buster can't estimate the right dust maps. The new components can be calculated manually by estimating the mixing matrix $A_{ev}$. Data can be modeled by :
 
@@ -327,111 +306,61 @@ $$d = A s \rightarrow s = A^{—1} d$$
 which A is the mixing matrix and it called $W$ for the inverse in FG-Buster. The noise can be included also but here we decide to take noiseless case to see the reconstruction of dust.
 
 ```{python}
-comp=[fgbuster.component_model.Dust_2b(nu0=145, temp=20, nubreak=242), 
-      fgbuster.component_model.CMB()]
+#comp=[fgbuster.component_model.Dust_2b(nu0=145, temp=20), 
+#      fgbuster.component_model.CMB(),
+#      fgbuster.component_model.Synchrotron(nu0=145)]
 
-instr_s4=fgbuster.observation_helpers.get_instrument('CMBS4')
-instr_bi=fgbuster.observation_helpers.get_instrument('Qubic+')
+#instr_s4=fgbuster.observation_helpers.get_instrument('CMBS4')
+#instr_bi=fgbuster.observation_helpers.get_instrument('Qubic+')
 
-instr_s4['fwhm'] = np.zeros(9)
-instr_bi['fwhm'] = np.zeros(33)
+#instr_s4['fwhm'] = np.zeros(9)
+#instr_bi['fwhm'] = np.zeros(33)
 ```
 
 ```{python}
-A = fgbuster.MixingMatrix(*comp)
-A_ev_bi = A.evaluator(instr_bi.frequency)
-A_ev_s4 = A.evaluator(instr_s4.frequency)
-#A_maxL_bi = A_ev_bi(rbi.x[[0, 1]])
-#A_maxL_s4 = A_ev_s4(rs4.x[[0, 1]])
-A_maxL_true = A_ev_bi([1.44, 1.64])
+#A = fgbuster.MixingMatrix(*comp)
+#A_ev_bi = A.evaluator(instr_bi.frequency)
+#A_ev_s4 = A.evaluator(instr_s4.frequency)
+#A_maxL_bi = A_ev_bi(rbi.x)
+#A_maxL_s4 = A_ev_s4(rs4.x)
+#A_maxL_true = A_ev_bi([1.44, 1.64, 265, -3])
 ```
 
 ```{python}
-nus=np.linspace(20, 300, 1000)
-ind=np.where(nus > 145)[0][0]
-dust_model_2b = fgbuster.component_model.Dust_2b(nu0=145, beta_d0=1.44, beta_d1=1.64, nubreak=242, temp=20)
-cmb_model = fgbuster.component_model.CMB()
-sed_dust=dust_model_2b.eval(nus)
-sed_dust_modified = sed_dust/sed_dust[ind]#*mean_map_dust_nu0/sed_dust[ind]
-sed_cmb=cmb_model.eval(nus)
+#nus=np.linspace(20, 400, 1000)
+#ind=np.where(nus > 145)[0][0]
+#dust_model_2b = fgbuster.component_model.Dust_2b(nu0=145, beta_d0=1.44, beta_d1=1.64, nubreak=265, temp=20)
+#cmb_model = fgbuster.component_model.CMB()
+#sed_dust=dust_model_2b.eval(nus)
+#sed_dust_modified = sed_dust/sed_dust[ind]#*mean_map_dust_nu0/sed_dust[ind]
+#sed_cmb=cmb_model.eval(nus)
+
+#sync_model = fgbuster.component_model.Synchrotron(nu0=145, beta_pl=-3)
+#sed_sync=sync_model.eval(nus)
+
 #sed_cmbdust=sed_cmb+sed_dust
-```
-
-```{python}
-nu0=145
-nu0_bi=15
-nu0_s4=5
-
-fig, ax = plt.subplots(figsize=[10, 10])
-
-ax.plot(nus, sed_dust_modified*mean_dust_nu0)
-ax.plot(nus, sed_cmb*mean_cmb_nu0)
-ax.plot(nus, sed_cmb*mean_cmb_nu0+sed_dust_modified*mean_dust_nu0, ':k')
-
-#ax.scatter(qp_config['frequency'], (A_maxL_bi[:, 0] + A_maxL_bi[:, 1])*mean_allmaps_nu0, s=30, marker='x', label=r'$A^{BI}_{max \mathcal{L}}$')
-#ax.scatter(s4_config['frequency'], (A_maxL_s4[:, 0] + A_maxL_s4[:, 1])*mean_allmaps_nu0, s=30, marker='x', label=r'$A^{S4}_{max \mathcal{L}}$')
-ax.scatter(qp_config['frequency'], (A_maxL_true[:, 0])*mean_dust_nu0/sed_dust[ind], s=30, marker='d', label=r'$A^{True value}_{max \mathcal{L}}$')
-ax.scatter(qp_config['frequency'], (A_maxL_true[:, 1])*mean_cmb_nu0, s=30, marker='d', label=r'$A^{True value}_{max \mathcal{L}}$')
-ax.scatter(qp_config['frequency'], (A_maxL_true[:, 1])*mean_cmb_nu0+(A_maxL_true[:, 0])*mean_dust_nu0, s=30, marker='d', label=r'$A^{True value}_{max \mathcal{L}}$')
-
-
-ax.scatter(qp_config['frequency'], mean_allmaps_bi)
-ax.scatter(s4_config['frequency'], mean_allmaps)
-
-
-ax.set_yscale('log')
-ax.set_xscale('log')
-ax.set_xlabel('Frequency [GHz]', fontsize=20)
-ax.set_ylabel(r'SED [$\mu$K]', fontsize=20)
-
-#ax.legend(fontsize=20, frameon=False)
-ax.axvline(145, ls='--', color='black', alpha=0.5)
-
-plt.show()
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
 ```
 
 ```{python}
 import fgbuster
 
-def compute_rdots(comp, r, instr, inputs):
+def compute_rdots(comp, r, instr, inputs, ind_nu):
     
     #prewhiten_factors = fgbuster.separation_recipes._get_prewhiten_factors(instr, inputs.shape, 256)
     #invN = np.zeros(prewhiten_factors.shape+prewhiten_factors.shape[-1:])
     #for i in range(3):
     #    invN[i,:,:] = np.diag(prewhiten_factors[i,:]**2)
     
+    
+    
     A = fgbuster.MixingMatrix(*comp)
-    #print('A = {} \n '.format(A))
     A_ev = A.evaluator(instr.frequency)
-    #print('\n A_ev = {} \n'.format(A_ev))
-    A_maxL = A_ev(r)/sed_dust[ind]
-    #print('A_maxL = {} \n '.format(A_maxL))
+    A_maxL = A_ev(r)
+    
+    
     solution = fgbuster.algebra.Wd(A_maxL, inputs.T)#, invN=invN)
-    #print(solution.T.shape)
+    solution[:, :, 0]*=A_maxL[ind_nu, 0]
+    solution[:, :, 2]*=A_maxL[ind_nu, 2]
     
     return solution.T
 ```
@@ -464,16 +393,29 @@ def plot_1stk(truemaps, s4_maps, bi_maps, istk, figsize=(16, 10)):
 ```
 
 ```{python}
-comp=[fgbuster.component_model.Dust_2b(nu0=145, temp=20), 
-      fgbuster.component_model.CMB()]
+comp=[fgbuster.component_model.Dust_2b(nu0=353, temp=20), 
+      fgbuster.component_model.CMB(),
+      fgbuster.component_model.Synchrotron(nu0=70)]
 
-mysolution_s4=compute_rdots(comp, rs4.x[[0, 1, 2]], instr_s4, map_cmbdust_s4_noiseless)
-mysolution_bi=compute_rdots(comp, rbi.x[[0, 1, 2]], instr_bi, map_cmbdust_bi_noiseless)
+
+instr_s4=fgbuster.observation_helpers.get_instrument('CMBS4')
+instr_bi=fgbuster.observation_helpers.get_instrument('Qubic+')
+
+
+mysolution_s4=compute_rdots(comp, [1.44, 1.64, 265, -3], instr_s4, map_cmbdust_s4_noiseless, 5)
+mysolution_bi=compute_rdots(comp, [1.44, 1.64, 265, -3], instr_bi, map_cmbdust_bi_noiseless, 15)
 ```
 
 ```{python}
 plot_1stk(map_dust_s4_noiseless[5], mysolution_s4[0], mysolution_bi[0], 1)
-#plot_1stk(map_cmbdust_bi_noiseless[15], mysolution_s4[0]+mysolution_s4[1], mysolution_bi[0]+mysolution_bi[1], 1)
+```
+
+```{python}
+rs4.x
+```
+
+```{python}
+rbi.x
 ```
 
 ```{python}

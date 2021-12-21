@@ -266,7 +266,7 @@ class BImaps(object):
 
         self.nside=256
         self.npix = 12*self.nside**2
-        self.lmax=3 * self.nside
+        self.lmax=2 * self.nside
         ell, totDL, unlensedCL = qc.get_camb_Dl(lmax=self.lmax)
         mycls = qc.Dl2Cl_without_monopole(ell, totDL)
         mymaps = hp.synfast(mycls.T, self.nside, verbose=False, new=True)

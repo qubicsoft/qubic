@@ -250,7 +250,7 @@ def create_noisemaps(signoise, nus, nside, depth_i, depth_p, npix):
 
 class BImaps(object):
 
-    def __init__(self, skyconfig, dict):
+    def __init__(self, skyconfig, dict, r=0):
         self.dict = dict
         self.skyconfig = skyconfig
         self.nus = self.dict['frequency']
@@ -266,19 +266,21 @@ class BImaps(object):
 
         self.nside=256
         self.npix = 12*self.nside**2
-        self.lmax=3 * self.nside
-        ell, totDL, unlensedCL = qc.get_camb_Dl(lmax=self.lmax)
+        self.lmax=2 * self.nside
+        self.r=r
+        ell, totDL, unlensedCL = qc.get_camb_Dl(lmax=self.lmax, r=self.r)
         mycls = qc.Dl2Cl_without_monopole(ell, totDL)
         mymaps = hp.synfast(mycls.T, self.nside, verbose=False, new=True)
         self.input_cmb_maps = mymaps
         self.input_cmb_spectra = totDL
+
         for k in skyconfig.keys():
             if k == 'cmb':
                 self.seed = self.skyconfig['cmb']
 
     def get_cmb(self):
         np.random.seed(self.seed)
-        ell, totDL, unlensedCL = qc.get_camb_Dl(lmax=2*self.nside+1)
+        ell, totDL, unlensedCL = qc.get_camb_Dl(lmax=2*self.nside+1, r=self.r)
         mycls = qc.Dl2Cl_without_monopole(ell, totDL)
         maps = hp.synfast(mycls.T, self.nside, verbose=False, new=True)
         return maps

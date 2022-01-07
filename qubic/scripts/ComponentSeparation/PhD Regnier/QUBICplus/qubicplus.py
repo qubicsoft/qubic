@@ -17,7 +17,17 @@ from fgbuster.component_model import (CMB, Dust, Dust_2b, Synchrotron, AnalyticC
 from scipy import constants
 import fgbuster
 
-
+def get_coverage(fsky, nside, center_radec=[0., -57.]):
+    center = qubic.equ2gal(center_radec[0], center_radec[1])
+    uvcenter = np.array(hp.ang2vec(center[0], center[1], lonlat=True))
+    uvpix = np.array(hp.pix2vec(nside, np.arange(12*nside**2)))
+    ang = np.arccos(np.dot(uvcenter, uvpix))
+    indices = np.argsort(ang)
+    okpix = ang < -1
+    okpix[indices[0:int(fsky * 12*nside**2)]] = True
+    mask = np.zeros(12*nside**2)
+    mask[okpix] = 1
+    return mask
 
 def create_dust_with_model2beta(nside, nus, betad0, betad1, nubreak, temp):
 
@@ -38,10 +48,10 @@ def create_dust_with_model2beta(nside, nus, betad0, betad1, nubreak, temp):
     return new_dust_map
 
 
-def create_sync(nside, nus):
+def create_sync(nside, nus, model):
 
     # Create 353 GHz dust maps
-    sky = pysm3.Sky(nside=nside, preset_strings=['s0'])
+    sky = pysm3.Sky(nside=nside, preset_strings=[model])
     maps_70GHz = sky.get_emission(70*u.GHz, None)*utils.bandpass_unit_conversion(70*u.GHz,None, u.uK_CMB)
 
     comp=[fgbuster.component_model.Synchrotron(nu0=70)]
@@ -74,6 +84,18 @@ def create_dustd0(nside, nus):
         new_dust_map[i]=A_maxL[i, 0]*maps_353GHz
 
     return new_dust_map
+
+
+def create_dustd1(nside, nus):
+
+    maps_dust = np.zeros(((len(nus), 3, 12*nside**2)))
+    sky = pysm3.Sky(nside=nside, preset_strings=['d1'])
+    for i, j in enumerate(nus):
+        maps_dust[i] = sky.get_emission(j*u.GHz).to(
+            getattr(u, 'uK_CMB'),
+            equivalencies=u.cmb_equivalencies(j * u.GHz))
+
+    return maps_dust
 
 
 
@@ -157,53 +179,6 @@ def give_me_nu_fwhm_S4_2_qubic(nu, largeur, Nf, fwhmS4):
 
     return mean_nu, fwhm
 
-def compute_freq(band, Nfreq=None, relative_bandwidth=2.5):
-    """
-    Prepare frequency bands parameters
-    band -- int,
-        QUBIC frequency band, in GHz.
-        Typical values: 150, 220
-    relative_bandwidth -- float, optional
-        Ratio of the difference between the edges of the
-        frequency band over the average frequency of the band:
-        2 * (nu_max - nu_min) / (nu_max + nu_min)
-        Typical value: 0.25
-    Nfreq -- int, optional
-        Number of frequencies within the wide band.
-        If not specified, then Nfreq = 15 if band == 150
-        and Nfreq = 20 if band = 220
-    """
-
-    if Nfreq is None:
-        Nfreq = {150: 15, 220: 20}[band]
-
-    nu_min = band * (1 - relative_bandwidth / 2)
-    nu_max = band * (1 + relative_bandwidth / 2)
-
-    Nfreq_edges = Nfreq + 1
-    base = (nu_max / nu_min) ** (1. / Nfreq)
-
-    nus_edge = nu_min * np.logspace(0, Nfreq, Nfreq_edges, endpoint=True, base=base)
-    nus = np.array([(nus_edge[i] + nus_edge[i - 1]) / 2 for i in range(1, Nfreq_edges)])
-    deltas = np.array([(nus_edge[i] - nus_edge[i - 1]) for i in range(1, Nfreq_edges)])
-    Delta = nu_max - nu_min
-    Nbbands = len(nus)
-    return Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands
-
-def nus_for_iib(nu, bw):
-    min=nu-(bw/2)
-    max=nu+(bw/2)
-    #print(min, max)
-    nus = np.linspace(min, max, 4)
-    return nus
-
-def nus_for_iib(nu, bw):
-    min=nu-(bw/2)
-    max=nu+(bw/2)
-    #print(min, max)
-    nus = np.linspace(min, max, 4)
-    return nus
-
 def get_fg_notconvolved(model, nu, nside=256):
 
     sky = pysm3.Sky(nside=nside, preset_strings=[model])
@@ -248,9 +223,40 @@ def create_noisemaps(signoise, nus, nside, depth_i, depth_p, npix):
 
     return N
 
+
+def give_me_maps_d1_modified(nus, nubreak, covmap, delta_b, nside, fix_temp=None):
+
+    maps_dust = np.ones(((len(nus), 3, 12*nside**2)))*hp.UNSEEN
+    ind=np.where(covmap > 0)[0]
+    sky = pysm3.Sky(nside=nside, preset_strings=['d1'])
+
+    maps_dust = sky.get_emission(353*u.GHz, None)*utils.bandpass_unit_conversion(353*u.GHz,None, u.uK_CMB)
+    map_index=np.array(sky.components[0].mbb_index)
+    if fix_temp is not None:
+        sky.components[0].mbb_temperature=fix_temp
+        map_temperature=np.array(np.ones(12*nside**2)*sky.components[0].mbb_temperature)
+    else:
+        map_temperature=np.array(sky.components[0].mbb_temperature)
+    #print(map_index.shape)
+
+    # Evaluation of Mixing Matrix for 2 beta model
+    comp2b=[fgbuster.component_model.Dust_2b(nu0=353)]
+    A2b = fgbuster.MixingMatrix(*comp2b)
+    A2b_ev = A2b.evaluator(nus)
+
+    new_dust_map=np.ones(((len(nus), 3, 12*nside**2)))*hp.UNSEEN
+    for i in ind :
+
+        A2b_maxL = A2b_ev([np.array(map_index)[i]-delta_b, np.array(map_index)[i]+delta_b, nubreak, np.array(map_temperature)[i]])
+
+        for j in range(len(nus)):
+            new_dust_map[j, :, i]=A2b_maxL[j, 0]*maps_dust[:, i]
+
+    return new_dust_map
+
 class BImaps(object):
 
-    def __init__(self, skyconfig, dict, r=0):
+    def __init__(self, skyconfig, dict, r=0, nside=16):
         self.dict = dict
         self.skyconfig = skyconfig
         self.nus = self.dict['frequency']
@@ -264,7 +270,7 @@ class BImaps(object):
         self.fsky = self.dict['fsky']
         self.edges = self.dict['edges']
 
-        self.nside=256
+        self.nside=nside
         self.npix = 12*self.nside**2
         self.lmax=2 * self.nside
         self.r=r
@@ -309,7 +315,7 @@ class BImaps(object):
 
         return sky
 
-    def getskymaps(self, same_resol=None, verbose=False, coverage=None, iib=False, noise=False, signoise=1., beta=[]):
+    def getskymaps(self, same_resol=None, verbose=False, coverage=None, iib=False, noise=False, signoise=1., beta=[], fix_temp=None):
 
         """
 
@@ -335,6 +341,19 @@ class BImaps(object):
                         print('Model : {}'.format(self.skyconfig[i]))
                     dustmaps=create_dustd0(self.nside, self.nus)#get_fg_notconvolved('d0', self.nus, nside=self.nside)
                     allmaps+=dustmaps
+
+                elif self.skyconfig[i] == 'd1':
+                    if verbose:
+                        print('Model : {}'.format(self.skyconfig[i]))
+                    dustmaps=create_dustd1(self.nside, self.nus)#get_fg_notconvolved('d0', self.nus, nside=self.nside)
+                    allmaps+=dustmaps
+
+                elif self.skyconfig[i] == 'd12b':
+                    if verbose:
+                        print('Model : {}'.format(self.skyconfig[i]))
+                    dustmaps=give_me_maps_d1_modified(self.nus, beta[2], coverage, abs(1.54-beta[0]), self.nside, fix_temp=fix_temp)
+                    allmaps+=dustmaps
+
                 elif self.skyconfig[i] == 'd02b':
                     if verbose:
                         print('Model : d02b -> Twos spectral index beta ({:.2f} and {:.2f}) with nu_break = {:.2f}'.format(beta[0], beta[1], beta[2]))
@@ -348,7 +367,7 @@ class BImaps(object):
             elif i == 'synchrotron':
                 if verbose:
                     print('Model : {}'.format(self.skyconfig[i]))
-                sync_maps = create_sync(self.nside, self.nus)#get_fg_notconvolved(self.skyconfig[i], self.nus, nside=self.nside)
+                sync_maps = create_sync(self.nside, self.nus, str(self.skyconfig[i]))#get_fg_notconvolved(self.skyconfig[i], self.nus, nside=self.nside)
                 allmaps+=sync_maps
 
             else:

@@ -1,0 +1,631 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.13.4
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+import numpy as np
+import pysm3
+import pysm3.units as u
+from pysm3 import utils
+import healpy as hp
+import fgbuster
+import matplotlib.pyplot as plt
+import os
+import qubic
+center = qubic.equ2gal(0, -57)
+# If there is not this command, the kernel shut down every time..
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+
+import warnings
+warnings.filterwarnings("ignore")
+
+nside=16
+freqs = np.array([20., 30., 40., 85., 95., 145., 155., 220., 270.])
+
+
+
+def get_coverage(fsky, nside, center_radec=[0., -57.]):
+    center = qubic.equ2gal(center_radec[0], center_radec[1])
+    uvcenter = np.array(hp.ang2vec(center[0], center[1], lonlat=True))
+    uvpix = np.array(hp.pix2vec(nside, np.arange(12*nside**2)))
+    ang = np.arccos(np.dot(uvcenter, uvpix))
+    indices = np.argsort(ang)
+    okpix = ang < -1
+    okpix[indices[0:int(fsky * 12*nside**2)]] = True
+    mask = np.zeros(12*nside**2)
+    mask[okpix] = 1
+    return mask
+
+
+covmap = get_coverage(0.03, nside)
+pixok = covmap > 0
+
+hp.mollview(covmap , title='Coverage')
+```
+
+```{python}
+freqs = np.array([20., 30., 40., 85., 95., 145., 155., 220., 270.])
+bandwidth = np.array([5., 9., 12., 20.4, 22.8, 31.9, 34.1, 48.4, 59.4])
+dnu_nu = bandwidth/freqs
+beam_fwhm = np.array([11., 72.8, 72.8, 25.5, 25.5, 22.7, 22.7, 13., 13.])
+mukarcmin_TT = np.array([16.5, 9.36, 11.85, 2.02, 1.78, 3.89, 4.16, 10.15, 17.4])
+mukarcmin_EE = np.array([10.87, 6.2, 7.85, 1.34, 1.18, 1.8, 1.93, 4.71, 8.08])
+mukarcmin_BB = np.array([10.23, 5.85, 7.4, 1.27, 1.12, 1.76, 1.89, 4.6, 7.89])
+ell_min = np.array([30, 30, 30, 30, 30, 30, 30, 30, 30])
+nside = np.array([512, 512, 512, 512, 512, 512, 512, 512, 512])
+edges_min = freqs * (1. - dnu_nu/2)
+edges_max = freqs * (1. + dnu_nu/2)
+edges = [[edges_min[i], edges_max[i]] for i in range(len(freqs))]
+s4_config = {
+    'nbands': len(freqs),
+    'frequency': freqs,
+    'depth_p': 0.5*(mukarcmin_EE + mukarcmin_BB),
+    'depth_i': mukarcmin_TT,
+    'depth_e': mukarcmin_EE,
+    'depth_b': mukarcmin_BB,
+    'fwhm': beam_fwhm,
+    'bandwidth': bandwidth,
+    'dnu_nu': dnu_nu,
+    'ell_min': ell_min,
+    'nside': nside,
+    'fsky': 0.03,
+    'ntubes': 12,
+    'nyears': 7.,
+    'edges': edges,
+    'effective_fraction': np.zeros(len(freqs))+1.
+            }
+
+### QUBIC Sub-optimality : values from Louise Mousset's PhD thesis
+def fct_subopt(nus):
+    subnus = [150., 220]
+    subval = [1.4, 1.2]
+    fct_subopt = np.poly1d(np.polyfit(subnus, subval, 1))
+    return fct_subopt(nus)
+
+subnus = [150., 220]
+subval = [1.4, 1.2]
+
+
+def qubicify(config, qp_nsubs, qp_effective_fraction):
+    nbands = np.sum(qp_nsubs)
+    qp_config = config.copy()
+    for k in qp_config.keys():
+        qp_config[k]=[]
+    qp_config['nbands'] = nbands
+    qp_config['fsky'] = config['fsky']
+    qp_config['ntubes'] = config['ntubes']
+    qp_config['nyears'] = config['nyears']
+    qp_config['initial_band'] = []
+    
+    for i in range(len(config['frequency'])):
+        #print(config['edges'][i][0], config['edges'][i][-1])
+        newedges = np.linspace(config['edges'][i][0], config['edges'][i][-1], qp_nsubs[i]+1)
+        #print(newedges)
+        newfreqs = (newedges[0:-1]+newedges[1:])/2
+        newbandwidth = newedges[1:] - newedges[0:-1]
+        newdnu_nu = newbandwidth / newfreqs
+        newfwhm = config['fwhm'][i] * config['frequency'][i]/newfreqs
+        scalefactor_noise = np.sqrt(qp_nsubs[i]) * fct_subopt(config['frequency'][i]) / qp_effective_fraction[i]
+        newdepth_p = config['depth_p'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
+        newdepth_i = config['depth_i'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
+        newdepth_e = config['depth_e'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
+        newdepth_b = config['depth_b'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
+        newell_min = np.ones(qp_nsub[i]) * config['ell_min'][i]
+        newnside = np.ones(qp_nsub[i]) * config['nside'][i]
+        neweffective_fraction = np.ones(qp_nsub[i]) * qp_effective_fraction[i]
+        initial_band = np.ones(qp_nsub[i]) * config['frequency'][i]
+        
+        for k in range(qp_nsubs[i]):
+            if qp_effective_fraction[i] != 0:
+                qp_config['frequency'].append(newfreqs[k])
+                qp_config['depth_p'].append(newdepth_p[k])
+                qp_config['depth_i'].append(newdepth_i[k])
+                qp_config['depth_e'].append(newdepth_e[k])
+                qp_config['depth_b'].append(newdepth_b[k])
+                qp_config['fwhm'].append(newfwhm[k])
+                qp_config['bandwidth'].append(newbandwidth[k])
+                qp_config['dnu_nu'].append(newdnu_nu[k])
+                qp_config['ell_min'].append(newell_min[k])
+                qp_config['nside'].append(newnside[k])
+                
+                qp_config['effective_fraction'].append(neweffective_fraction[k])
+                qp_config['initial_band'].append(initial_band[k])
+        for k in range(qp_nsubs[i]+1):
+            if qp_effective_fraction[i] != 0:
+                qp_config['edges'].append(newedges[k])
+    fields = ['frequency', 'depth_p', 'depth_i', 'depth_e', 'depth_b', 'fwhm', 'bandwidth', 
+              'dnu_nu', 'ell_min', 'nside', 'edges', 'effective_fraction', 'initial_band']
+    for j in range(len(fields)):
+        qp_config[fields[j]] = np.array(qp_config[fields[j]])
+        
+    return qp_config
+
+
+
+qp_nsub = np.array([1, 1, 1, 1, 1, 1, 1, 5, 5])
+qp_effective_fraction = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1])
+qp_config = qubicify(s4_config, qp_nsub, qp_effective_fraction)
+
+#Corrected depths
+qp_config['depth_p'][:7] = s4_config['depth_p'][:7]
+qp_config['depth_i'][:7] = s4_config['depth_i'][:7]
+```
+
+```{python}
+def give_me_maps_d1_modified(nus, nubreak, covmap, delta_b, nside):
+    
+    covmap = get_coverage(0.03, nside)
+    pixok = covmap>0
+    
+    maps_dust = np.ones(((len(nus), 3, 12*nside**2)))*hp.UNSEEN
+    ind=np.where(covmap > 0)[0]
+    sky = pysm3.Sky(nside=nside, preset_strings=['d1'])
+
+    maps_dust = sky.get_emission(353*u.GHz, None)*utils.bandpass_unit_conversion(353*u.GHz,None, u.uK_CMB)
+    map_index=sky.components[0].mbb_index
+    map_temperature=sky.components[0].mbb_temperature
+    #print(map_index.shape)
+
+    # Evaluation of Mixing Matrix for 2 beta model
+    comp2b=[fgbuster.component_model.Dust_2b(nu0=353)]
+    A2b = fgbuster.MixingMatrix(*comp2b)
+    A2b_ev = A2b.evaluator(nus)
+
+    new_dust_map=np.ones(((len(nus), 3, 12*nside**2)))*hp.UNSEEN
+    for i in ind :
+
+        A2b_maxL = A2b_ev([np.array(map_index)[i]-delta_b, np.array(map_index)[i]+delta_b, nubreak, np.array(map_temperature)[i]])
+        
+        for j in range(len(nus)):
+            new_dust_map[j, :, i]=A2b_maxL[j, 0]*maps_dust[:, i]
+
+    return new_dust_map
+
+
+def _sky_mapindex(instr, nside, model, noise, fix_temp=False, add_d1_2b=True, delta_beta=0.05, r=0):
+    
+    sky=fgbuster.observation_helpers.get_sky(nside, model)
+    preset_setting=[model[i:i+2] for i in range(0, len(model), 2)]
+    map_index=[]
+    
+    for i in range(len(preset_setting)):
+        if preset_setting[i] == 'd1':
+            map_index.append(np.array(sky.components[i].mbb_index))
+            if fix_temp:
+                sky.components[i].mbb_temperature.value[:] = 20
+            else:
+                map_index.append(np.array(sky.components[i].mbb_temperature.value))
+        
+            
+        elif preset_setting[i] == 's1':
+            map_index.append(np.array(sky.components[i].pl_index))
+            
+        elif preset_setting[i] == 'c1':
+            np.random.seed(seed)
+            ell, totDL, unlensedCL = qc.get_camb_Dl(lmax=2*nside+1, r=r)
+            mycls = qc.Dl2Cl_without_monopole(ell, totDL)
+            cmb = hp.synfast(mycls.T, nside, verbose=False, new=True)
+            
+        else:
+            pass
+
+    
+    maps = fgbuster.observation_helpers.get_observation(instr, sky, noise=noise)
+    
+    if add_d1_2b:
+        map_db = give_me_maps_d1_modified(instr['frequency'], 260, covmap, delta_beta, nside)
+        maps+=map_db
+    
+    return maps, map_index
+
+
+def give_me_dust_d1_estimated(nus, beta0, beta1, nubreak, T, covmap, nside):
+
+    maps_dust = np.ones(((len(nus), 3, 12*nside**2)))*hp.UNSEEN
+    ind=np.where(covmap > 0)[0]
+    sky = pysm3.Sky(nside=nside, preset_strings=['d1'])
+
+    maps_dust = sky.get_emission(353*u.GHz, None)*utils.bandpass_unit_conversion(353*u.GHz,None, u.uK_CMB)
+    #map_index=sky.components[0].mbb_index
+    #map_temperature=sky.components[0].mbb_temperature
+
+    # Evaluation of Mixing Matrix for 2 beta model
+    comp2b=[fgbuster.component_model.Dust_2b(nu0=353)]
+    A2b = fgbuster.MixingMatrix(*comp2b)
+    A2b_ev = A2b.evaluator(nus)
+
+    new_dust_map=np.ones(((len(nus), 3, 12*nside**2)))*hp.UNSEEN
+    for i in ind :
+
+        A2b_maxL = A2b_ev([beta0[i], beta1[i], nubreak[i], T[i]])
+        
+        for j in range(len(nus)):
+            new_dust_map[j, :, i]=A2b_maxL[j, 0]*maps_dust[:, i]
+
+    return new_dust_map
+
+def give_me_sync_d1_modified(nus, betapl, covmap, nside):
+
+    maps_sync = np.ones(((len(nus), 3, 12*nside**2)))*hp.UNSEEN
+    ind=np.where(covmap > 0)[0]
+    sky = pysm3.Sky(nside=nside, preset_strings=['s1'])
+
+    maps_sync = sky.get_emission(70*u.GHz, None)*utils.bandpass_unit_conversion(70*u.GHz,None, u.uK_CMB)
+    #map_index=sky.components[0].mbb_index
+    #map_temperature=sky.components[0].mbb_temperature
+
+    # Evaluation of Mixing Matrix for 2 beta model
+    comp=[fgbuster.component_model.Synchrotron(nu0=70)]
+    A2b = fgbuster.MixingMatrix(*comp)
+    A2b_ev = A2b.evaluator(nus)
+
+    new_sync_map=np.ones(((len(nus), 3, 12*nside**2)))*hp.UNSEEN
+    for i in ind :
+
+        A2b_maxL = A2b_ev(betapl[i])
+        
+        for j in range(len(nus)):
+            new_sync_map[j, :, i]=A2b_maxL[j, 0]*maps_sync[:, i]
+
+    return new_sync_map
+
+def go_to_nside_target(param_est, nside_param_out, config, sky_conf):
+    
+    nside_param_est_in=hp.pixelfunc.npix2nside(param_est.shape[1])
+    print('Nside in : ', nside_param_est_in)
+    
+    param_est_nsideout=np.zeros((param_est.shape[0], 12*nside_param_out**2))
+    for i in range(param_est.shape[0]):
+        param_est_nsideout[i] = hp.pixelfunc.ud_grade(param_est[i], nside_param_out)
+        
+    nside_param_est_out=hp.pixelfunc.npix2nside(param_est_nsideout.shape[1])
+    print('Nside out : ', nside_param_est_out)
+    
+    
+    # Dust reconstruction
+    
+    covmap = get_coverage(0.03, nside_param_out)
+    pixok = covmap>0
+    
+    
+    
+    
+    # Create components from beta estimated
+    
+    preset_strings = [sky_conf[i:i+1] for i in range(0, len(sky_conf), 1)]
+    
+    comp=np.zeros((((len(preset_strings), len(config['frequency']), 3, 12*nside_param_out**2))))
+    k=0
+    for i in preset_strings:
+        if i == 'd':
+            
+            
+            if param_est.shape[0] == 5:
+                map_beta0=param_est_nsideout[0]
+                map_beta1=param_est_nsideout[1]
+                map_nubreak=param_est_nsideout[2]
+                map_temp=param_est_nsideout[3]
+            else:
+                map_beta0=param_est_nsideout[0]
+                map_beta1=param_est_nsideout[1]
+                map_nubreak=param_est_nsideout[2]
+                map_temp=np.ones(12*nside_param_out**2)*20
+    
+            comp[k]=give_me_dust_d1_estimated(config['frequency'], map_beta0, map_beta1, map_nubreak, 
+                         map_temp, covmap, nside_param_out)
+            k+=1
+    
+        elif i == 's':
+            
+            map_betapl=param_est_nsideout[-1]
+            comp[k]=give_me_sync_d1_modified(config['frequency'], map_betapl, covmap, nside_param_out)
+            k+=1
+        else:
+            pass
+        
+    return comp, param_est_nsideout
+```
+
+```{python}
+import qubicplus
+
+def ParamCompSep_d1model_modified(config, NSIDE_PATCH, noise=True, delta_beta=0.05, nside_in=16, fix_temp=None):
+
+    covmap = get_coverage(0.03, nside_in)
+    pixok = covmap>0
+    
+    if len(config['frequency']) == 9 :
+        name='CMBS4'
+    elif len(config['frequency']) == 17 :
+        name='Qubic+'
+    else:
+        raise TypeError('Choose the right instrument')
+    
+    # Define instrument
+    instr = fgbuster.get_instrument(name)
+    instr.frequency = config['frequency']
+    instr.fwhm = np.zeros(len(config['frequency']))
+    instr.depth_i = config['depth_i']
+    instr.depth_p = config['depth_p']
+    
+    if noise:
+        input_d1_modified, _, _ = qubicplus.BImaps({'cmb':42, 'dust':'d12b', 'synchrotron':'s1'}, config, nside=nside_in).getskymaps(
+                                      same_resol=0, 
+                                      verbose=False, 
+                                      coverage=covmap, 
+                                      noise=True, 
+                                      signoise=1.,
+                                      beta=[1.54-delta_beta, 1.54+delta_beta, 260],
+                                      fix_temp=fix_temp)
+        
+    else:
+        _, input_d1_modified, _ = qubicplus.BImaps({'cmb':42, 'dust':'d12b', 'synchrotron':'s1'}, config, nside=nside_in).getskymaps(
+                                      same_resol=0, 
+                                      verbose=False, 
+                                      coverage=covmap, 
+                                      noise=True, 
+                                      signoise=1.,
+                                      beta=[1.54-delta_beta, 1.54+delta_beta, 260],
+                                      fix_temp=fix_temp)
+        
+        
+        
+    ###### Preparation for COMPSEP ######
+    
+    
+
+    
+
+    method='TNC'
+    if fix_temp is not None:
+        bounds=[(1, 2), (1, 2), (200, 300), (-3.5, -2.5)]
+        comp = [fgbuster.component_model.Dust_2b(nu0=145, temp=fix_temp),
+            fgbuster.component_model.CMB(),
+            fgbuster.component_model.Synchrotron(nu0=145)]
+    else:
+        bounds=[(1, 2), (1, 2), (200, 300), (10, 30), (-3.5, -2.5)]
+        comp = [fgbuster.component_model.Dust_2b(nu0=145),
+            fgbuster.component_model.CMB(),
+            fgbuster.component_model.Synchrotron(nu0=145)]
+
+    print('COMP SEP')
+    r_2b=fgbuster.basic_comp_sep(comp, instr, input_d1_modified, nside=NSIDE_PATCH, bounds=bounds)
+    
+    print('\nDone! \n')
+    
+    
+    mapcomp, _ = go_to_nside_target(r_2b.x, nside_in, config, 'ds')
+    
+    covmap = get_coverage(0.03, nside_in)
+    pixok = covmap>0
+    
+    mapcomp[:, :, :, ~pixok]=hp.UNSEEN
+    
+    
+    
+    cmb_est=input_d1_modified.copy()
+    for i in range(len(comp)-1) :
+        cmb_est-=mapcomp[i]
+    #covmap = get_coverage(0.03, 256)
+    #pixok = covmap>0
+    cmb_est[:, :, ~pixok]=hp.UNSEEN
+    
+    return cmb_est, mapcomp, r_2b
+```
+
+```{python}
+
+```
+
+```{python}
+nside_in=128                    # NSIDE of input maps
+db=0.1                          # Deviation from true beta maps
+NSIDE_PATCH=32                  # NSIDE used by FGB
+fix_temp=20                     # If you don't want to fix temp, put None
+noise=False
+
+CMB_est_s4, mapcomp_s4, r_2b_s4 = ParamCompSep_d1model_modified(s4_config, 
+                                                                NSIDE_PATCH=NSIDE_PATCH, 
+                                                                noise=noise, 
+                                                                delta_beta=db, 
+                                                                nside_in=nside_in,
+                                                                fix_temp=fix_temp)
+CMB_est_bi, mapcomp_bi, r_2b_bi = ParamCompSep_d1model_modified(qp_config, 
+                                                                NSIDE_PATCH=NSIDE_PATCH, 
+                                                                noise=noise, 
+                                                                delta_beta=db, 
+                                                                nside_in=nside_in,
+                                                                fix_temp=fix_temp)
+```
+
+```{python}
+nside=nside_in
+
+covmap = get_coverage(0.03, nside)
+pixok = covmap>0
+
+maps_dust = np.ones(((len(s4_config['frequency']), 3, 12*nside**2)))*hp.UNSEEN
+ind=np.where(covmap > 0)[0]
+sky = pysm3.Sky(nside=nside, preset_strings=['d1'])
+
+maps_dust = sky.get_emission(353*u.GHz, None)*utils.bandpass_unit_conversion(353*u.GHz,None, u.uK_CMB)
+map_index=np.array(sky.components[0].mbb_index)
+
+if fix_temp is not None:
+    map_temperature=np.ones(12*nside**2)*20#np.array(sky.components[0].mbb_temperature)
+else:
+    map_temperature=np.array(sky.components[0].mbb_temperature)
+
+map_beta0 = map_index-db
+map_beta1 = map_index+db
+
+map_beta0[~pixok]=hp.UNSEEN
+
+tab_param=np.concatenate((np.array([map_beta0]), 
+                np.array([map_beta1]), 
+                np.array([np.ones(12*nside**2)*260]), 
+                np.array([map_temperature])), axis=0)
+
+covmap = get_coverage(0.03, nside)
+pixok = covmap>0
+tab_param[:, ~pixok]=hp.UNSEEN
+print(tab_param.shape)
+
+comp_true, _ = go_to_nside_target(tab_param, nside, s4_config, 'd')
+```
+
+```{python}
+covmap = get_coverage(0.03, nside)
+pixok = covmap>0
+
+_, truecmb, _ = qubicplus.BImaps({'cmb':42}, s4_config, nside=nside).getskymaps(
+                                      same_resol=0, 
+                                      verbose=False, 
+                                      coverage=covmap, 
+                                      noise=True, 
+                                      signoise=1.,
+                                      beta=[])
+
+
+
+
+plt.figure(figsize=(15, 5))
+hp.gnomview(truecmb[5, 1], rot=center, reso=15, sub=(1, 5, 1), cmap='jet')
+hp.gnomview(CMB_est_s4[5, 1], rot=center, reso=15, sub=(1, 5, 2), cmap='jet')
+hp.gnomview(CMB_est_bi[5, 1], rot=center, reso=15, sub=(1, 5, 3), cmap='jet')
+
+r_s4=truecmb[5, 1]-CMB_est_s4[5, 1]
+r_s4[~pixok]=hp.UNSEEN
+
+r_bi=truecmb[5, 1]-CMB_est_bi[5, 1]
+r_bi[~pixok]=hp.UNSEEN
+hp.gnomview(r_s4, rot=center, reso=15, sub=(1, 5, 4), cmap='jet',
+            title='True - S4 -> dr : {:.6f}'.format((np.std(r_s4[pixok])/0.345)**2))
+hp.gnomview(r_bi, rot=center, reso=15, sub=(1, 5, 5), cmap='jet',
+            title='True - BI -> dr : {:.6f}'.format((np.std(r_bi[pixok])/0.345)**2))
+plt.show()
+```
+
+```{python}
+plt.figure(figsize=(15, 5))
+hp.gnomview(comp_true[0, 5, 1], rot=center, reso=15, sub=(1, 5, 1), cmap='jet', title='True')
+hp.gnomview(mapcomp_s4[0, 5, 1], rot=center, reso=15, sub=(1, 5, 2), cmap='jet', title='S4')
+hp.gnomview(mapcomp_bi[0, 5, 1], rot=center, reso=15, sub=(1, 5, 3), cmap='jet', title='BI')
+
+r_s4=comp_true[0, 5, 1]-mapcomp_s4[0, 5, 1]
+r_s4[~pixok]=hp.UNSEEN
+
+r_bi=comp_true[0, 5, 1]-mapcomp_bi[0, 5, 1]
+r_bi[~pixok]=hp.UNSEEN
+hp.gnomview(r_s4, rot=center, reso=15, sub=(1, 5, 4), cmap='jet')
+hp.gnomview(r_bi, rot=center, reso=15, sub=(1, 5, 5), cmap='jet')
+plt.show()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+# Component maps estimation with mixing matrix (not working for instance)
+
+```{python}
+def give_comp_with_mixingmatrix(r, comp, delta_beta, covmap, nside_out, config, nside_in):
+    
+    """
+    
+    This function estimate components from MixingMatrix of fgbuster with estimated parameters
+    
+    """
+    
+    new_r = np.zeros((5, 12*nside_out**2))
+    ind=np.where(covmap>0)[0]
+    for i in range(r.x.shape[0]):
+        new_r[i]=hp.ud_grade(r.x[i], nside_out)
+
+    _, inputs, _ = qubicplus.BImaps({'cmb':42, 'dust':'d12b', 'synchrotron':'s1'}, config, nside=nside_in).getskymaps(
+                                      same_resol=0, 
+                                      verbose=False, 
+                                      coverage=covmap, 
+                                      noise=True, 
+                                      signoise=1.,
+                                      beta=[1.54-delta_beta, 1.54+delta_beta, 260])
+    
+    
+    A = fgbuster.mixingmatrix.MixingMatrix(*comp)
+    A_ev = A.evaluator(config['frequency'])
+    
+    maps_separe=np.ones(((3, 3, 12*nside_out**2)))*hp.UNSEEN
+    for i in ind:
+        maps_separe[:, :, i]=fgbuster.algebra.Wd(A_ev(new_r[:, i]), inputs[:, :, i].T)
+        
+    return maps_separe
+```
+
+```{python}
+comp = [fgbuster.component_model.Dust_2b(nu0=145),
+        fgbuster.component_model.CMB(),
+        fgbuster.component_model.Synchrotron(nu0=145)]
+
+maps_s4=give_comp_with_mixingmatrix(r_2b_s4, comp, db, covmap, nside, s4_config, nside)
+maps_bi=give_comp_with_mixingmatrix(r_2b_bi, comp, db, covmap, nside, qp_config, nside)
+```
+
+```{python}
+istk=1
+
+plt.figure(figsize=(15, 5))
+
+hp.gnomview(truecmb[5, istk], rot=center, reso=15, cmap='jet', sub=(1, 5, 1))
+hp.gnomview(maps_s4[istk, 1], rot=center, reso=15, cmap='jet', sub=(1, 5, 2))
+hp.gnomview(maps_bi[istk, 1], rot=center, reso=15, cmap='jet', sub=(1, 5, 3))
+
+s4=truecmb[5, istk]-maps_s4[istk, 1]
+bi=truecmb[5, istk]-maps_bi[istk, 1]
+
+hp.gnomview(s4, rot=center, reso=15, cmap='jet', sub=(1, 5, 4),title='True - S4 -> dr : {:.6f}'.format((np.std(s4[pixok])/0.345)**2))
+hp.gnomview(bi, rot=center, reso=15, cmap='jet', sub=(1, 5, 5),title='True - BI -> dr : {:.6f}'.format((np.std(bi[pixok])/0.345)**2))
+
+plt.show()
+```
+
+```{python}
+
+```
+
+```{python}
+sky = pysm3.Sky(nside=nside, preset_strings=['d1'])
+
+maps_dust = sky.get_emission(353*u.GHz, None)*utils.bandpass_unit_conversion(353*u.GHz,None, u.uK_CMB)
+map_index=np.array(sky.components[0].mbb_index)
+map_temperature=np.array(sky.components[0].mbb_temperature)
+```
+
+```{python}
+map_temperature
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

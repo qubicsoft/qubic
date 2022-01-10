@@ -22,6 +22,7 @@ import fgbuster
 import matplotlib.pyplot as plt
 import os
 import qubic
+#center = qubic.equ2gal(-30, -30)
 center = qubic.equ2gal(0, -57)
 # If there is not this command, the kernel shut down every time..
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
@@ -29,8 +30,8 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 import warnings
 warnings.filterwarnings("ignore")
 
-nside=16
-freqs = np.array([20., 30., 40., 85., 95., 145., 155., 220., 270.])
+nside=256
+freqs = np.array([85., 95., 145., 155., 220., 270.])#np.array([20., 30., 40., 85., 95., 145., 155., 220., 270.])
 
 
 
@@ -54,15 +55,15 @@ hp.mollview(covmap , title='Coverage')
 ```
 
 ```{python}
-freqs = np.array([20., 30., 40., 85., 95., 145., 155., 220., 270.])
-bandwidth = np.array([5., 9., 12., 20.4, 22.8, 31.9, 34.1, 48.4, 59.4])
+freqs = np.array([85., 95., 145., 155., 220., 270.])
+bandwidth = np.array([20.4, 22.8, 31.9, 34.1, 48.4, 59.4])
 dnu_nu = bandwidth/freqs
-beam_fwhm = np.array([11., 72.8, 72.8, 25.5, 25.5, 22.7, 22.7, 13., 13.])
-mukarcmin_TT = np.array([16.5, 9.36, 11.85, 2.02, 1.78, 3.89, 4.16, 10.15, 17.4])
-mukarcmin_EE = np.array([10.87, 6.2, 7.85, 1.34, 1.18, 1.8, 1.93, 4.71, 8.08])
-mukarcmin_BB = np.array([10.23, 5.85, 7.4, 1.27, 1.12, 1.76, 1.89, 4.6, 7.89])
-ell_min = np.array([30, 30, 30, 30, 30, 30, 30, 30, 30])
-nside = np.array([512, 512, 512, 512, 512, 512, 512, 512, 512])
+beam_fwhm = np.array([25.5, 25.5, 22.7, 22.7, 13., 13.])
+mukarcmin_TT = np.array([2.02, 1.78, 3.89, 4.16, 10.15, 17.4])
+mukarcmin_EE = np.array([1.34, 1.18, 1.8, 1.93, 4.71, 8.08])
+mukarcmin_BB = np.array([1.27, 1.12, 1.76, 1.89, 4.6, 7.89])
+ell_min = np.array([30, 30, 30, 30, 30, 30])
+nside = np.array([512, 512, 512, 512, 512, 512])
 edges_min = freqs * (1. - dnu_nu/2)
 edges_max = freqs * (1. + dnu_nu/2)
 edges = [[edges_min[i], edges_max[i]] for i in range(len(freqs))]
@@ -152,13 +153,30 @@ def qubicify(config, qp_nsubs, qp_effective_fraction):
 
 
 
-qp_nsub = np.array([1, 1, 1, 1, 1, 1, 1, 5, 5])
-qp_effective_fraction = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1])
+qp_nsub = np.array([1, 1, 1, 1, 5, 5])
+qp_effective_fraction = np.array([1, 1, 1, 1, 1, 1])
 qp_config = qubicify(s4_config, qp_nsub, qp_effective_fraction)
 
 #Corrected depths
-qp_config['depth_p'][:7] = s4_config['depth_p'][:7]
-qp_config['depth_i'][:7] = s4_config['depth_i'][:7]
+qp_config['depth_p'][:4] = s4_config['depth_p'][:4]
+qp_config['depth_i'][:4] = s4_config['depth_i'][:4]
+
+plt.figure(figsize=(16, 5))
+plt.subplot(1,2,1)
+plt.errorbar(s4_config['frequency'], s4_config['depth_p'], xerr=s4_config['bandwidth']/2, fmt='ro', label='CMB-S4')
+plt.errorbar(qp_config['frequency'], qp_config['depth_p'], xerr=qp_config['bandwidth']/2, fmt='bo', label='BI')
+plt.xlabel('Frequency [GHz]')
+plt.ylabel(r'Depth_p [$\mu$K.arcmin]')
+plt.title('CMB-S4 Configuration')
+plt.legend()
+plt.subplot(1,2,2)
+plt.errorbar(s4_config['frequency'], s4_config['fwhm'], xerr=s4_config['bandwidth']/2, fmt='ro', label='CMB-S4')
+plt.errorbar(qp_config['frequency'], qp_config['fwhm'], xerr=qp_config['bandwidth']/2, fmt='bo', label='BI')
+plt.xlabel('Frequency [GHz]')
+plt.ylabel('FWHM [arcmin]')
+plt.title('CMB-S4 Configuration')
+plt.legend()
+plt.show()
 ```
 
 ```{python}
@@ -229,7 +247,7 @@ def _sky_mapindex(instr, nside, model, noise, fix_temp=False, add_d1_2b=True, de
     return maps, map_index
 
 
-def give_me_dust_d1_estimated(nus, beta0, beta1, nubreak, T, covmap, nside):
+def give_me_dust_d1_estimated(nus, beta0, beta1, nubreak, T, covmap, nside, fix_temp):
 
     maps_dust = np.ones(((len(nus), 3, 12*nside**2)))*hp.UNSEEN
     ind=np.where(covmap > 0)[0]
@@ -240,19 +258,35 @@ def give_me_dust_d1_estimated(nus, beta0, beta1, nubreak, T, covmap, nside):
     #map_temperature=sky.components[0].mbb_temperature
 
     # Evaluation of Mixing Matrix for 2 beta model
-    comp2b=[fgbuster.component_model.Dust_2b(nu0=353)]
-    A2b = fgbuster.MixingMatrix(*comp2b)
-    A2b_ev = A2b.evaluator(nus)
-
-    new_dust_map=np.ones(((len(nus), 3, 12*nside**2)))*hp.UNSEEN
-    for i in ind :
-
-        A2b_maxL = A2b_ev([beta0[i], beta1[i], nubreak[i], T[i]])
+    if fix_temp is not None:
+        comp2b=[fgbuster.component_model.Dust_2b(nu0=353, temp=fix_temp)]
         
-        for j in range(len(nus)):
-            new_dust_map[j, :, i]=A2b_maxL[j, 0]*maps_dust[:, i]
+        A2b = fgbuster.MixingMatrix(*comp2b)
+        A2b_ev = A2b.evaluator(nus)
+
+        new_dust_map=np.ones(((len(nus), 3, 12*nside**2)))*hp.UNSEEN
+        for i in ind :
+
+            A2b_maxL = A2b_ev([beta0[i], beta1[i], nubreak[i]])
+        
+            for j in range(len(nus)):
+                new_dust_map[j, :, i]=A2b_maxL[j, 0]*maps_dust[:, i]
+    else:
+        comp2b=[fgbuster.component_model.Dust_2b(nu0=353)]
+        
+        A2b = fgbuster.MixingMatrix(*comp2b)
+        A2b_ev = A2b.evaluator(nus)
+
+        new_dust_map=np.ones(((len(nus), 3, 12*nside**2)))*hp.UNSEEN
+        for i in ind :
+
+            A2b_maxL = A2b_ev([beta0[i], beta1[i], nubreak[i], T[i]])
+        
+            for j in range(len(nus)):
+                new_dust_map[j, :, i]=A2b_maxL[j, 0]*maps_dust[:, i]
 
     return new_dust_map
+    
 
 def give_me_sync_d1_modified(nus, betapl, covmap, nside):
 
@@ -279,17 +313,17 @@ def give_me_sync_d1_modified(nus, betapl, covmap, nside):
 
     return new_sync_map
 
-def go_to_nside_target(param_est, nside_param_out, config, sky_conf):
+def go_to_nside_target(param_est, nside_param_out, config, sky_conf, fix_temp):
     
     nside_param_est_in=hp.pixelfunc.npix2nside(param_est.shape[1])
-    print('Nside in : ', nside_param_est_in)
+    #print('Nside in : ', nside_param_est_in)
     
     param_est_nsideout=np.zeros((param_est.shape[0], 12*nside_param_out**2))
     for i in range(param_est.shape[0]):
         param_est_nsideout[i] = hp.pixelfunc.ud_grade(param_est[i], nside_param_out)
         
     nside_param_est_out=hp.pixelfunc.npix2nside(param_est_nsideout.shape[1])
-    print('Nside out : ', nside_param_est_out)
+    #print('Nside out : ', nside_param_est_out)
     
     
     # Dust reconstruction
@@ -322,7 +356,7 @@ def go_to_nside_target(param_est, nside_param_out, config, sky_conf):
                 map_temp=np.ones(12*nside_param_out**2)*20
     
             comp[k]=give_me_dust_d1_estimated(config['frequency'], map_beta0, map_beta1, map_nubreak, 
-                         map_temp, covmap, nside_param_out)
+                         map_temp, covmap, nside_param_out, fix_temp=fix_temp)
             k+=1
     
         elif i == 's':
@@ -344,13 +378,14 @@ def ParamCompSep_d1model_modified(config, NSIDE_PATCH, noise=True, delta_beta=0.
     covmap = get_coverage(0.03, nside_in)
     pixok = covmap>0
     
-    if len(config['frequency']) == 9 :
+    if len(config['frequency']) == 6 :
         name='CMBS4'
-    elif len(config['frequency']) == 17 :
+    elif len(config['frequency']) == 14 :
         name='Qubic+'
     else:
         raise TypeError('Choose the right instrument')
     
+    print('\n\nDefine instrument')
     # Define instrument
     instr = fgbuster.get_instrument(name)
     instr.frequency = config['frequency']
@@ -358,8 +393,9 @@ def ParamCompSep_d1model_modified(config, NSIDE_PATCH, noise=True, delta_beta=0.
     instr.depth_i = config['depth_i']
     instr.depth_p = config['depth_p']
     
+    print('Create maps')
     if noise:
-        input_d1_modified, _, _ = qubicplus.BImaps({'cmb':42, 'dust':'d12b', 'synchrotron':'s1'}, config, nside=nside_in).getskymaps(
+        input_d1_modified, _, _ = qubicplus.BImaps({'cmb':42, 'dust':'d12b'}, config, nside=nside_in).getskymaps(
                                       same_resol=0, 
                                       verbose=False, 
                                       coverage=covmap, 
@@ -369,7 +405,7 @@ def ParamCompSep_d1model_modified(config, NSIDE_PATCH, noise=True, delta_beta=0.
                                       fix_temp=fix_temp)
         
     else:
-        _, input_d1_modified, _ = qubicplus.BImaps({'cmb':42, 'dust':'d12b', 'synchrotron':'s1'}, config, nside=nside_in).getskymaps(
+        _, input_d1_modified, _ = qubicplus.BImaps({'cmb':42, 'dust':'d12b'}, config, nside=nside_in).getskymaps(
                                       same_resol=0, 
                                       verbose=False, 
                                       coverage=covmap, 
@@ -385,26 +421,32 @@ def ParamCompSep_d1model_modified(config, NSIDE_PATCH, noise=True, delta_beta=0.
     
 
     
-
+    print('Define components')
     method='TNC'
     if fix_temp is not None:
-        bounds=[(1, 2), (1, 2), (200, 300), (-3.5, -2.5)]
+        bounds=((1, 2), (1, 2), (200, 300), (-4, -2))
         comp = [fgbuster.component_model.Dust_2b(nu0=145, temp=fix_temp),
-            fgbuster.component_model.CMB(),
-            fgbuster.component_model.Synchrotron(nu0=145)]
+                fgbuster.component_model.CMB()]
+        #comp[0].defaults = [1.54, 1.54, 265]
     else:
-        bounds=[(1, 2), (1, 2), (200, 300), (10, 30), (-3.5, -2.5)]
+        bounds=((1, 2), (1, 2), (200, 300), (10, 30), (-4, -2))
         comp = [fgbuster.component_model.Dust_2b(nu0=145),
-            fgbuster.component_model.CMB(),
-            fgbuster.component_model.Synchrotron(nu0=145)]
+                fgbuster.component_model.CMB()]
+        #comp[0].defaults = [1.54, 1.54, 20, 265]
+        
+    options={'gtol': 1e-12, 'eps': 1e-12, 'maxiter': 1000, 'ftol': 1e-12}
 
-    print('COMP SEP')
-    r_2b=fgbuster.basic_comp_sep(comp, instr, input_d1_modified, nside=NSIDE_PATCH, bounds=bounds)
+    print('\n##### COMP SEP #####')
+    r_2b=fgbuster.basic_comp_sep(comp, 
+                                 instr, 
+                                 input_d1_modified, 
+                                 nside=NSIDE_PATCH, 
+                                 options=options)#, 
+                                 #bounds=bounds)
     
     print('\nDone! \n')
     
-    
-    mapcomp, _ = go_to_nside_target(r_2b.x, nside_in, config, 'ds')
+    mapcomp, _ = go_to_nside_target(r_2b.x, nside_in, config, 'd', fix_temp)
     
     covmap = get_coverage(0.03, nside_in)
     pixok = covmap>0
@@ -423,15 +465,13 @@ def ParamCompSep_d1model_modified(config, NSIDE_PATCH, noise=True, delta_beta=0.
     return cmb_est, mapcomp, r_2b
 ```
 
-```{python}
-
-```
+# You can play here with the code
 
 ```{python}
-nside_in=128                    # NSIDE of input maps
-db=0.1                          # Deviation from true beta maps
-NSIDE_PATCH=32                  # NSIDE used by FGB
-fix_temp=20                     # If you don't want to fix temp, put None
+nside_in=32                         # NSIDE of input maps
+db=0.2                              # Deviation from true beta maps
+NSIDE_PATCH=32                      # NSIDE used by FGB
+fix_temp=20                       # If you don't want to fix temp, put None
 noise=False
 
 CMB_est_s4, mapcomp_s4, r_2b_s4 = ParamCompSep_d1model_modified(s4_config, 
@@ -440,6 +480,8 @@ CMB_est_s4, mapcomp_s4, r_2b_s4 = ParamCompSep_d1model_modified(s4_config,
                                                                 delta_beta=db, 
                                                                 nside_in=nside_in,
                                                                 fix_temp=fix_temp)
+
+
 CMB_est_bi, mapcomp_bi, r_2b_bi = ParamCompSep_d1model_modified(qp_config, 
                                                                 NSIDE_PATCH=NSIDE_PATCH, 
                                                                 noise=noise, 
@@ -449,87 +491,125 @@ CMB_est_bi, mapcomp_bi, r_2b_bi = ParamCompSep_d1model_modified(qp_config,
 ```
 
 ```{python}
-nside=nside_in
+def plot_residuals(nside, db, r_s4, r_bi, fix_temp=None, plot=True):
+    
+    # Compute good coverage
+    covmap = get_coverage(0.03, nside)
+    pixok = covmap>0
+    
+    # Creation of index maps
+    maps_dust = np.ones(((len(s4_config['frequency']), 3, 12*nside**2)))*hp.UNSEEN
+    ind=np.where(covmap > 0)[0]
+    sky = pysm3.Sky(nside=nside, preset_strings=['d1'])
 
-covmap = get_coverage(0.03, nside)
-pixok = covmap>0
+    maps_dust = sky.get_emission(353*u.GHz, None)*utils.bandpass_unit_conversion(353*u.GHz,None, u.uK_CMB)
+    map_index=np.array(sky.components[0].mbb_index)
 
-maps_dust = np.ones(((len(s4_config['frequency']), 3, 12*nside**2)))*hp.UNSEEN
-ind=np.where(covmap > 0)[0]
-sky = pysm3.Sky(nside=nside, preset_strings=['d1'])
+    if fix_temp is not None:
+        map_temperature=np.ones(12*nside**2)*fix_temp#np.array(sky.components[0].mbb_temperature)
+    else:
+        map_temperature=np.array(sky.components[0].mbb_temperature)
 
-maps_dust = sky.get_emission(353*u.GHz, None)*utils.bandpass_unit_conversion(353*u.GHz,None, u.uK_CMB)
-map_index=np.array(sky.components[0].mbb_index)
+    map_beta0 = map_index-db
+    map_beta1 = map_index+db
+    map_nubreak=np.ones(12*nside**2)*260
 
-if fix_temp is not None:
-    map_temperature=np.ones(12*nside**2)*20#np.array(sky.components[0].mbb_temperature)
-else:
-    map_temperature=np.array(sky.components[0].mbb_temperature)
+    map_temperature[~pixok]=hp.UNSEEN
+    map_beta0[~pixok]=hp.UNSEEN
+    map_beta1[~pixok]=hp.UNSEEN
+    map_nubreak[~pixok]=hp.UNSEEN
 
-map_beta0 = map_index-db
-map_beta1 = map_index+db
+    tab_param=np.concatenate((np.array([map_beta0]), 
+                          np.array([map_beta1]), 
+                          np.array([map_nubreak]), 
+                          np.array([map_temperature])), axis=0)
+    
+    comp_true, _ = go_to_nside_target(tab_param, nside, s4_config, 'ds', fix_temp=fix_temp)
+    
+    
+    instrument=['S4', 'BI']
+    
+    if plot:
+        
+        plt.figure(figsize=(15, 12))
+        k=0
+        i_title=0
+        
+        if fix_temp is not None:
+            tab_param=tab_param[:-1].copy()
+            title=[r'$\beta_0$', r'$\beta_1$', r'$\nu_{break}$']
+        else:
+            title=[r'$\beta_0$', r'$\beta_1$', r'$\nu_{break}$', r'$T$']
+        
+        for i in range(len(tab_param)):
+            
 
-map_beta0[~pixok]=hp.UNSEEN
 
-tab_param=np.concatenate((np.array([map_beta0]), 
-                np.array([map_beta1]), 
-                np.array([np.ones(12*nside**2)*260]), 
-                np.array([map_temperature])), axis=0)
+            hp.gnomview(tab_param[i], rot=center, reso=15, sub=(tab_param.shape[0], 5, k+1), 
+                        title=title[i_title]+' | True', cmap='jet')
+            hp.gnomview(r_s4.x[i], rot=center, reso=15, sub=(tab_param.shape[0], 5, k+2), 
+                        title=title[i_title]+' | '+str(instrument[0]), cmap='jet')
+            hp.gnomview(r_bi.x[i], rot=center, reso=15, sub=(tab_param.shape[0], 5, k+3), 
+                        title=title[i_title]+' | '+str(instrument[1]), cmap='jet')
+            
 
-covmap = get_coverage(0.03, nside)
-pixok = covmap>0
-tab_param[:, ~pixok]=hp.UNSEEN
-print(tab_param.shape)
+            residuals_s4=tab_param[i]-r_2b_s4.x[i]
+            residuals_bi=tab_param[i]-r_2b_bi.x[i]
+            residuals_s4[~pixok]=hp.UNSEEN
+            residuals_bi[~pixok]=hp.UNSEEN
 
-comp_true, _ = go_to_nside_target(tab_param, nside, s4_config, 'd')
+            hp.gnomview(residuals_s4, rot=center, reso=15, sub=(tab_param.shape[0], 5, k+4), 
+                        title=title[i_title]+' | True - '+str(instrument[0]), cmap='jet')
+            hp.gnomview(residuals_bi, rot=center, reso=15, sub=(tab_param.shape[0], 5, k+5), 
+                        title=title[i_title]+' | True - '+str(instrument[1]), cmap='jet')
+
+            i_title+=1
+            
+            #hp.gnomview(hp.ud_grade(map_beta1, NSIDE_PATCH), rot=center, reso=15, sub=(4, 5, 6))
+            #hp.gnomview(r_2b_s4.x[1], rot=center, reso=15, sub=(4, 5, 7))
+            #hp.gnomview(r_2b_bi.x[1], rot=center, reso=15, sub=(4, 5, 8))
+
+            #residuals_s4=hp.ud_grade(map_beta1, NSIDE_PATCH)-r_2b_s4.x[1]
+            #residuals_bi=hp.ud_grade(map_beta1, NSIDE_PATCH)-r_2b_bi.x[1]
+            #residuals_s4[~pixok]=hp.UNSEEN
+            #residuals_bi[~pixok]=hp.UNSEEN
+
+            #hp.gnomview(residuals_s4, rot=center, reso=15, sub=(4, 5, 9))
+            #hp.gnomview(residuals_bi, rot=center, reso=15, sub=(4, 5, 10))
+            k+=5
+        plt.show()
+    
+    return tab_param, comp_true
+
+tab_param, components = plot_residuals(32, db, r_2b_s4, r_2b_bi, fix_temp=fix_temp)
 ```
 
 ```{python}
-covmap = get_coverage(0.03, nside)
-pixok = covmap>0
-
-_, truecmb, _ = qubicplus.BImaps({'cmb':42}, s4_config, nside=nside).getskymaps(
+_, truecmb, _ = qubicplus.BImaps({'cmb':42}, s4_config, nside=nside_in).getskymaps(
                                       same_resol=0, 
                                       verbose=False, 
                                       coverage=covmap, 
                                       noise=True, 
                                       signoise=1.,
-                                      beta=[])
+                                      beta=[],
+                                      fix_temp=fix_temp)
 
-
-
-
-plt.figure(figsize=(15, 5))
-hp.gnomview(truecmb[5, 1], rot=center, reso=15, sub=(1, 5, 1), cmap='jet')
-hp.gnomview(CMB_est_s4[5, 1], rot=center, reso=15, sub=(1, 5, 2), cmap='jet')
-hp.gnomview(CMB_est_bi[5, 1], rot=center, reso=15, sub=(1, 5, 3), cmap='jet')
-
-r_s4=truecmb[5, 1]-CMB_est_s4[5, 1]
-r_s4[~pixok]=hp.UNSEEN
-
-r_bi=truecmb[5, 1]-CMB_est_bi[5, 1]
-r_bi[~pixok]=hp.UNSEEN
-hp.gnomview(r_s4, rot=center, reso=15, sub=(1, 5, 4), cmap='jet',
-            title='True - S4 -> dr : {:.6f}'.format((np.std(r_s4[pixok])/0.345)**2))
-hp.gnomview(r_bi, rot=center, reso=15, sub=(1, 5, 5), cmap='jet',
-            title='True - BI -> dr : {:.6f}'.format((np.std(r_bi[pixok])/0.345)**2))
-plt.show()
+_, truedust, _ = qubicplus.BImaps({'dust':'d12b'}, s4_config, nside=nside_in).getskymaps(
+                                      same_resol=0, 
+                                      verbose=False, 
+                                      coverage=covmap, 
+                                      noise=True, 
+                                      signoise=1.,
+                                      beta=[1.54-db, 1.54+db, 260],
+                                      fix_temp=fix_temp)
 ```
 
 ```{python}
-plt.figure(figsize=(15, 5))
-hp.gnomview(comp_true[0, 5, 1], rot=center, reso=15, sub=(1, 5, 1), cmap='jet', title='True')
-hp.gnomview(mapcomp_s4[0, 5, 1], rot=center, reso=15, sub=(1, 5, 2), cmap='jet', title='S4')
-hp.gnomview(mapcomp_bi[0, 5, 1], rot=center, reso=15, sub=(1, 5, 3), cmap='jet', title='BI')
 
-r_s4=comp_true[0, 5, 1]-mapcomp_s4[0, 5, 1]
-r_s4[~pixok]=hp.UNSEEN
+```
 
-r_bi=comp_true[0, 5, 1]-mapcomp_bi[0, 5, 1]
-r_bi[~pixok]=hp.UNSEEN
-hp.gnomview(r_s4, rot=center, reso=15, sub=(1, 5, 4), cmap='jet')
-hp.gnomview(r_bi, rot=center, reso=15, sub=(1, 5, 5), cmap='jet')
-plt.show()
+```{python}
+
 ```
 
 ```{python}
@@ -547,7 +627,7 @@ plt.show()
 # Component maps estimation with mixing matrix (not working for instance)
 
 ```{python}
-def give_comp_with_mixingmatrix(r, comp, delta_beta, covmap, nside_out, config, nside_in):
+def give_comp_with_mixingmatrix(r, comp, delta_beta, covmap, nside_out, config, nside_in, noise, fix_temp):
     
     """
     
@@ -555,53 +635,111 @@ def give_comp_with_mixingmatrix(r, comp, delta_beta, covmap, nside_out, config, 
     
     """
     
+    if len(config['frequency']) == 6 :
+        name='CMBS4'
+    elif len(config['frequency']) == 14 :
+        name='Qubic+'
+    else:
+        raise TypeError('Choose the right instrument')
+        
     new_r = np.zeros((5, 12*nside_out**2))
     ind=np.where(covmap>0)[0]
     for i in range(r.x.shape[0]):
         new_r[i]=hp.ud_grade(r.x[i], nside_out)
+        
+    if noise:
 
-    _, inputs, _ = qubicplus.BImaps({'cmb':42, 'dust':'d12b', 'synchrotron':'s1'}, config, nside=nside_in).getskymaps(
+        inputs, _, _ = qubicplus.BImaps({'cmb':42, 'dust':'d12b'}, config, nside=nside_in).getskymaps(
                                       same_resol=0, 
                                       verbose=False, 
                                       coverage=covmap, 
                                       noise=True, 
                                       signoise=1.,
-                                      beta=[1.54-delta_beta, 1.54+delta_beta, 260])
+                                      beta=[1.54-delta_beta, 1.54+delta_beta, 260],
+                                      fix_temp=fix_temp)
+        
+    else:
+        _, inputs, _ = qubicplus.BImaps({'cmb':42, 'dust':'d12b'}, config, nside=nside_in).getskymaps(
+                                      same_resol=0, 
+                                      verbose=False, 
+                                      coverage=covmap, 
+                                      noise=True, 
+                                      signoise=1.,
+                                      beta=[1.54-delta_beta, 1.54+delta_beta, 260],
+                                      fix_temp=fix_temp)
     
-    
+    instr = fgbuster.get_instrument(name)
+    instr.frequency = config['frequency']
+    instr.fwhm = np.zeros(len(config['frequency']))
+    instr.depth_i = config['depth_i']
+    instr.depth_p = config['depth_p']
+
     A = fgbuster.mixingmatrix.MixingMatrix(*comp)
     A_ev = A.evaluator(config['frequency'])
+    invN = np.diag(hp.nside2resol(nside_out, arcmin=True) / (instr.depth_p))**2
     
-    maps_separe=np.ones(((3, 3, 12*nside_out**2)))*hp.UNSEEN
-    for i in ind:
-        maps_separe[:, :, i]=fgbuster.algebra.Wd(A_ev(new_r[:, i]), inputs[:, :, i].T)
-        
+    maps_separe=np.ones(((2, 3, 12*nside_out**2)))*hp.UNSEEN
+    
+    if noise:
+        for i in ind:
+            maps_separe[:, :, i]=fgbuster.algebra.Wd(A_ev(new_r[:, i]), inputs[:, :, i].T, invN=invN).T
+    
+    else:
+        for i in ind:
+            maps_separe[:, :, i]=fgbuster.algebra.Wd(A_ev(new_r[:, i]), inputs[:, :, i].T).T
     return maps_separe
 ```
 
 ```{python}
-comp = [fgbuster.component_model.Dust_2b(nu0=145),
-        fgbuster.component_model.CMB(),
-        fgbuster.component_model.Synchrotron(nu0=145)]
+comp = [fgbuster.component_model.Dust_2b(nu0=145, temp=fix_temp),
+        fgbuster.component_model.CMB()]
 
-maps_s4=give_comp_with_mixingmatrix(r_2b_s4, comp, db, covmap, nside, s4_config, nside)
-maps_bi=give_comp_with_mixingmatrix(r_2b_bi, comp, db, covmap, nside, qp_config, nside)
+covmap = get_coverage(0.03, nside_in)
+pixok = covmap>0
+
+maps_s4=give_comp_with_mixingmatrix(r_2b_s4, comp, db, covmap, nside_in, s4_config, NSIDE_PATCH, noise=noise, 
+                                    fix_temp=fix_temp)
+maps_bi=give_comp_with_mixingmatrix(r_2b_bi, comp, db, covmap, nside_in, qp_config, NSIDE_PATCH, noise=noise, 
+                                    fix_temp=fix_temp)
 ```
 
 ```{python}
 istk=1
 
-plt.figure(figsize=(15, 5))
+plt.figure(figsize=(15, 8))
 
-hp.gnomview(truecmb[5, istk], rot=center, reso=15, cmap='jet', sub=(1, 5, 1))
-hp.gnomview(maps_s4[istk, 1], rot=center, reso=15, cmap='jet', sub=(1, 5, 2))
-hp.gnomview(maps_bi[istk, 1], rot=center, reso=15, cmap='jet', sub=(1, 5, 3))
+hp.gnomview(truecmb[2, istk], rot=center, reso=15, cmap='jet', sub=(2, 5, 1))
+hp.gnomview(maps_s4[1, istk], rot=center, reso=15, cmap='jet', sub=(2, 5, 2))
+hp.gnomview(maps_bi[1, istk], rot=center, reso=15, cmap='jet', sub=(2, 5, 3))
 
-s4=truecmb[5, istk]-maps_s4[istk, 1]
-bi=truecmb[5, istk]-maps_bi[istk, 1]
+s4=truecmb[2, istk]-maps_s4[1, istk]
+bi=truecmb[2, istk]-maps_bi[1, istk]
 
-hp.gnomview(s4, rot=center, reso=15, cmap='jet', sub=(1, 5, 4),title='True - S4 -> dr : {:.6f}'.format((np.std(s4[pixok])/0.345)**2))
-hp.gnomview(bi, rot=center, reso=15, cmap='jet', sub=(1, 5, 5),title='True - BI -> dr : {:.6f}'.format((np.std(bi[pixok])/0.345)**2))
+s4[~pixok]=hp.UNSEEN
+bi[~pixok]=hp.UNSEEN
+
+hp.gnomview(s4, rot=center, reso=15, cmap='jet', sub=(2, 5, 4),
+            title='True - S4 -> dr : {:.6g}'.format((np.std(s4[pixok])/0.345)**2))
+hp.gnomview(bi, rot=center, reso=15, cmap='jet', sub=(2, 5, 5),
+            title='True - BI -> dr : {:.6g}'.format((np.std(bi[pixok])/0.345)**2))
+
+
+### Dust
+
+hp.gnomview(truedust[2, istk], rot=center, reso=15, cmap='jet', sub=(2, 5, 6))
+hp.gnomview(maps_s4[0, istk], rot=center, reso=15, cmap='jet', sub=(2, 5, 7))
+hp.gnomview(maps_bi[0, istk], rot=center, reso=15, cmap='jet', sub=(2, 5, 8))
+
+s4=truedust[2, istk]-maps_s4[0, istk]
+bi=truedust[2, istk]-maps_bi[0, istk]
+
+s4[~pixok]=hp.UNSEEN
+bi[~pixok]=hp.UNSEEN
+
+hp.gnomview(s4, rot=center, reso=15, cmap='jet', sub=(2, 5, 9),
+            title='True - S4 -> dr : {:.6g}'.format((np.std(s4[pixok])/0.345)**2))
+hp.gnomview(bi, rot=center, reso=15, cmap='jet', sub=(2, 5, 10),
+            title='True - BI -> dr : {:.6g}'.format((np.std(bi[pixok])/0.345)**2))
 
 plt.show()
 ```
@@ -611,15 +749,221 @@ plt.show()
 ```
 
 ```{python}
+'''
+covmap = get_coverage(0.03, NSIDE_PATCH)
+pixok = covmap>0
+
+from getdist import plots, MCSamples
+
+alllabels = [r'\nu_{break}', r'\beta_{sync}']
+allnames = ['nubreak', 'betasync']
+
+samps = MCSamples(samples=r_2b_s4.x[2:, pixok].T, names=allnames, labels=alllabels)
+
+#sampsBI = MCSamples(samples=r_2b_bi.x[2:, pixok].T, names=allnames, labels=alllabels)
+
+truths=[260, -3]
+mkrs = {}
+for i in range(len(allnames)):
+    mkrs[allnames[i]] = truths[i]
+
+plt.figure(figsize=(16, 16))
+g = plots.getSubplotPlotter()
+g.settings.scaling=False
+g.settings.axes_fontsize=12
+g.triangle_plot([samps], filled=True, title_limit=None, legend_labels=['S4'], markers=mkrs)
+plt.show()
+'''
+```
+
+```{python}
+'''
+from getdist import plots, MCSamples
+
+alllabels = [r'\nu_{break}', r'\beta_{sync}']
+allnames = ['nubreak', 'betasync']
+
+samps = MCSamples(samples=r_2b_bi.x[2:, pixok].T, names=allnames, labels=alllabels)
+
+#sampsBI = MCSamples(samples=r_2b_bi.x[2:, pixok].T, names=allnames, labels=alllabels)
+
+truths=[260, -3]
+mkrs = {}
+for i in range(len(allnames)):
+    mkrs[allnames[i]] = truths[i]
+
+plt.figure(figsize=(16, 16))
+g = plots.getSubplotPlotter()
+g.settings.scaling=False
+g.settings.axes_fontsize=12
+g.triangle_plot([samps], filled=True, title_limit=None, legend_labels=['BI'], markers=mkrs)
+plt.show()
+'''
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+# Multi-resolution method
+
+```{python}
+NSIDE_PATCH=64
+db=0.1
+import qubicplus
+covmap = get_coverage(0.03, NSIDE_PATCH)
+pixok = covmap>0
+fix_temp=20
+
+input_d1_modified, _, _ = qubicplus.BImaps({'cmb':42, 'dust':'d12b', 'synchrotron':'s1'}, qp_config, nside=NSIDE_PATCH).getskymaps(
+                                      same_resol=0, 
+                                      verbose=False, 
+                                      coverage=covmap, 
+                                      noise=True, 
+                                      signoise=1.,
+                                      beta=[1.54-db, 1.54+db, 260],
+                                      fix_temp=fix_temp)
+
+# Define instrument
+instr = fgbuster.get_instrument('Qubic+')
+instr.frequency = qp_config['frequency']
+instr.fwhm = np.zeros(len(qp_config['frequency']))
+instr.depth_i = qp_config['depth_i']
+instr.depth_p = qp_config['depth_p']
+
+comp = [fgbuster.component_model.Dust_2b(nu0=145, temp=20),
+        fgbuster.component_model.CMB(),
+        fgbuster.component_model.Synchrotron(nu0=145)]
+```
+
+```{python}
+comp
+```
+
+```{python}
+
+```
+
+```{python}
+input_d1_modified[:, :, ~pixok]=hp.UNSEEN
+
+
+hp.gnomview(input_d1_modified[5, 0], rot=center, reso=15, cmap='jet', sub=(1,3,1))
+hp.gnomview(input_d1_modified[5, 1], rot=center, reso=15, cmap='jet', sub=(1,3,2))
+hp.gnomview(input_d1_modified[5, 2], rot=center, reso=15, cmap='jet', sub=(1,3,3))
+```
+
+```{python}
+e=fgbuster.separation_recipes.multi_res_comp_sep(comp, instr, input_d1_modified[:, 1:, :], nsides=[16, 16, 8, 1], 
+                                                 options={}, method='BFGS')
+```
+
+```{python}
+plt.figure(figsize=(15, 5))
+hp.gnomview(e.x[0], rot=center, reso=15, sub=(1, 5, 1))
+hp.gnomview(e.x[1], rot=center, reso=15, sub=(1, 5, 2))
+hp.gnomview(e.x[2], rot=center, reso=15, sub=(1, 5, 3))
+hp.gnomview(e.x[3], rot=center, reso=15, sub=(1, 5, 4))
+plt.show()
+```
+
+```{python}
+nside=32
+
+covmap = get_coverage(0.03, nside)
+pixok = covmap>0
+
+maps_dust = np.ones(((len(s4_config['frequency']), 3, 12*nside**2)))*hp.UNSEEN
+ind=np.where(covmap > 0)[0]
 sky = pysm3.Sky(nside=nside, preset_strings=['d1'])
 
 maps_dust = sky.get_emission(353*u.GHz, None)*utils.bandpass_unit_conversion(353*u.GHz,None, u.uK_CMB)
 map_index=np.array(sky.components[0].mbb_index)
-map_temperature=np.array(sky.components[0].mbb_temperature)
+
+if fix_temp is not None:
+    map_temperature=np.ones(12*nside**2)*fix_temp#np.array(sky.components[0].mbb_temperature)
+else:
+    map_temperature=np.array(sky.components[0].mbb_temperature)
+
+map_beta0 = map_index-db
+map_beta1 = map_index+db
+
+map_temperature[~pixok]=hp.UNSEEN
+map_beta0[~pixok]=hp.UNSEEN
+map_beta1[~pixok]=hp.UNSEEN
+
+plt.figure(figsize=(15, 5))
+hp.gnomview(map_beta0, rot=center, reso=15, sub=(1, 4, 1))
+hp.gnomview(map_beta1, rot=center, reso=15, sub=(1, 4, 2))
+plt.show()
 ```
 
 ```{python}
-map_temperature
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 ```{python}

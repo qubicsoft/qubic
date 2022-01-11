@@ -1,0 +1,343 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.13.4
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+from pylab import *
+import os
+import sys
+import time
+import pickle
+from importlib import reload
+
+
+# Specific science modules
+import healpy as hp
+import numpy as np
+import scipy
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+#from mpi4py import MPI
+# from pyoperators import MPI
+import pysm3
+import qubic
+from qubic import QubicSkySim as qss
+from qubic import fibtools as ft
+from qubic import camb_interface as qc
+from qubic import SpectroImLib as si
+from qubic import NamasterLib as nam
+from qubic import mcmc
+from qubic import AnalysisMC as amc
+
+rc('figure', figsize=(16, 10))
+rc('font', size=15)
+plt.rcParams['image.cmap'] = 'jet'
+
+
+
+### Initialize
+#global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+
+```
+
+```{python}
+camblib = qc.read_camblib('/Users/mathiasregnier/Desktop/Thesis/Libs/qubic/qubic/doc/CAMB/camblib.pkl')
+
+rv = np.linspace(0,1,1000)
+
+lll = np.arange(512)
+cl0 = qc.get_Dl_fromlib(lll, 0, lib=camblib, unlensed=True)[0]   
+cl0_01 = qc.get_Dl_fromlib(lll, 0.01, lib=camblib, unlensed=True)[0]   
+
+
+ell, totDL0, _ = qc.get_camb_Dl(lmax=2*256+1, r=0)
+ell, totDL01, _ = qc.get_camb_Dl(lmax=2*256+1, r=0.01)
+```
+
+```{python}
+pwd
+```
+
+```{python}
+import pickle
+
+with open('test.pkl', 'rb') as f:
+    data = pickle.load(f)
+
+    
+cls4 = data['cls4'][:,:,2]
+print(np.shape(cls4))
+clbi=data['clbi'][:,:,2]
+print(np.shape(clbi))
+leff=data['leff'][:]
+print(np.shape(leff))
+covmap = data['covmap']
+print(np.shape(covmap))
+
+#cls4 += np.interp(leff, lll, cl0[:,2]) - np.interp(leff, ell, totDL0[:,2])
+#clbi += np.interp(leff, lll, cl0[:,2]) - np.interp(leff, ell, totDL0[:,2])
+
+mycls4 = np.mean(cls4, axis=0)
+myerrcls4 = np.std(cls4, axis=0)
+#myerrcls4[-1] *= 100
+
+myclbi = np.mean(clbi, axis=0)
+myerrclbi = np.std(clbi, axis=0)
+#myerrclbi[-1] *= 100
+
+ell, totDL, unlensedCL = qc.get_camb_Dl(lmax=2*256+1, r=0)
+#mycls = qc.Dl2Cl_without_monopole(ell, totDL)
+
+
+errorbar(leff, mycls4, yerr=myerrcls4, fmt='ro', label='S4')
+errorbar(leff, myclbi, yerr=myerrclbi, fmt='bo', label='BI')
+ylim(0, 0.06)
+plot(ell, np.abs(totDL[:,2]),label='r=0 ($D_\ell$)')
+#plot(lll, np.abs(cl0_01[:,2]),label='r=0.01 ($D_\ell$)')
+# plot(ell, np.abs(totDL0[:,2]),label='r=0 ($D_\ell$)')
+# plot(ell, np.abs(totDL01[:,2]),label='r=0.01 ($D_\ell$)')
+
+truecl = np.interp(leff, lll, np.abs(cl0[:,2]))
+figure()
+errorbar(leff, mycls4-totDL, yerr=myerrcls4, fmt='ro', label='S4')
+errorbar(leff, myclbi-totDL, yerr=myerrclbi, fmt='bo', label='BI')
+ylim(-0.005,0.005)
+axhline(y=0, color='k', ls=':')
+```
+
+```{python}
+reload(mcmc)
+reload(nam)
+def ana_likelihood(rv, leff, fakedata, errors, model, prior, 
+                   mylikelihood=mcmc.LogLikelihood, covariance_model_funct=None, otherp=None):
+    ll = mylikelihood(xvals=leff, yvals=fakedata, errors=errors, 
+                            model = model, flatprior=prior, covariance_model_funct=covariance_model_funct) 
+    #bla = ll(0.01)
+    like = np.zeros_like(rv)
+    for i in range(len(rv)):
+        like[i] = np.exp(ll([rv[i]]))
+        #print(rv[i],ll([rv[i]]),like[i])
+    cumint = scipy.integrate.cumtrapz(like, x=rv)
+    cumint = cumint / np.max(cumint)
+    onesigma = np.interp(0.68, cumint, rv[1:])
+    if otherp:
+        other = np.interp(otherp, cumint, rv[1:])
+        return like, cumint, onesigma, other
+    else:
+        return like, cumint, onesigma
+
+
+def explore_like(leff, cl, errors, lmin, dl, cc, rv, otherp=None,
+                 cov=None, plotlike=False, plotcls=False, 
+                 verbose=False, sample_variance=True, mytitle='', color=None, mylabel='',my_ylim=None):
+    
+#     print(lmin, dl, cc)
+#     print(leff)
+#     print(scl_noise[:,2])
+    ### Create Namaster Object
+    # Unfortunately we need to recalculate fsky for calculating sample variance
+    nside = 256
+    lmax = 2 * nside - 1
+    if cov is None:
+        Namaster = nam.Namaster(None, lmin=lmin, lmax=lmax, delta_ell=dl)
+        Namaster.fsky = 0.03
+    else:
+        okpix = cov > (np.max(cov) * float(cc))
+        maskpix = np.zeros(12*nside**2)
+        maskpix[okpix] = 1
+        Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=dl)
+    
+#     print('Fsky: {}'.format(Namaster.fsky))
+    lbinned, b = Namaster.get_binning(nside)
+
+    ### Bibnning CambLib
+#     binned_camblib = qc.bin_camblib(Namaster, '../../scripts/QubicGeneralPaper2020/camblib.pickle', 
+#                                     nside, verbose=False)
+    binned_camblib = qc.bin_camblib(Namaster, 'camblib.pkl', 
+                                    nside, verbose=False)
+
+
+    ### Redefine the function for getting binned Cls
+    def myclth(ell,r):
+        #clth = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=False)[0]
+        ell, totDL, unlensedCL = qc.get_camb_Dl(lmax=2*256+1, r=0)
+        return totDL
+    allfakedata = myclth(leff, 0.)
+    
+    ### And we need a fast one for BB only as well
+    def myBBth(ell, r):
+        clBB = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=False, specindex=2)[0]
+        return clBB
+       
+    
+    if sample_variance:
+        covariance_model_funct = Namaster.knox_covariance
+    else:
+        covariance_model_funct = None
+        
+    if otherp is None:
+        like, cumint, allrlim = ana_likelihood(rv, leff, cl, 
+                                            errors, 
+                                            myBBth, [[0,1]],
+                                           covariance_model_funct=covariance_model_funct)
+    else:
+        like, cumint, allrlim, other = ana_likelihood(rv, leff, cl, 
+                                            errors, 
+                                            myBBth, [[0,1]],
+                                           covariance_model_funct=covariance_model_funct, otherp=otherp)
+
+    if plotcls:
+        if plotlike:
+            subplot(1,2,1)
+            if np.ndim(BBcov) == 2:
+                errorstoplot = np.sqrt(np.diag(errors))
+            else:
+                errorstoplot = errors
+        #plot(inputl, inputcl[:,2], 'k', label='r=0')
+        plot(leff, errorstoplot, label=mylabel+' Errors', color=color)
+        xlim(0,lmax)
+        if my_ylim is None:
+            ylim(1e-4,1e0)
+        else:
+            ylim(my_ylim[0], my_ylim[1])
+        yscale('log')
+        xlabel('$\\ell$')
+        ylabel('$D_\\ell$')
+        legend(loc='upper left')
+    if plotlike:
+        if plotcls:
+            subplot(1,2,2)
+        p=plot(rv, like/np.max(like), 
+               label=mylabel+' $\sigma(r)={0:6.4f}$'.format(allrlim), color=color)
+        plot(allrlim+np.zeros(2), [0,1.2], ':', color=p[0].get_color())
+        xlabel('r')
+        ylabel('posterior')
+        legend(fontsize=8, loc='upper right')
+        xlim(0,0.1)
+        ylim(0,1.2)
+        title(mytitle)
+    
+    if otherp is None:
+        return like, cumint, allrlim
+    else:
+        return like, cumint, allrlim, other
+```
+
+```{python}
+rv = np.linspace(0,0.1,2000)
+lmin = 40
+delta_ell = 30
+covcut = 0
+
+beta=[0.05, 0.1, 0.2, 0.3]
+NSIDE=[32, 16, 8, 4]
+
+like_s4=np.zeros(((len(beta), len(NSIDE), 2000)))
+like_bi=np.zeros(((len(beta), len(NSIDE), 2000)))
+
+rlim68_s4=np.zeros(((len(beta), len(NSIDE), 1)))
+rlim68_bi=np.zeros(((len(beta), len(NSIDE), 1)))
+rlim95_s4=np.zeros(((len(beta), len(NSIDE), 1)))
+rlim95_bi=np.zeros(((len(beta), len(NSIDE), 1)))
+
+
+
+for i, j in enumerate(beta):
+    for ind_nside, nside in enumerate(NSIDE):
+        print(j, nside)
+        with open('results/cl/all_cls_NSIDE_PATCH{}_db{}.pkl'.format(nside, j), 'rb') as f:
+            data = pickle.load(f)
+        
+        cls4=data['cls4']
+        clbi=data['clbi']
+        leff=data['leff']
+    
+        mycls4=np.mean(cls4, axis=0)[:, 2]
+        myclbi=np.mean(clbi, axis=0)[:, 2]
+    
+        myerrcls4=np.std(cls4, axis=0)[:, 2]
+        myerrclbi=np.std(clbi, axis=0)[:, 2]
+    
+        like_s4[i, ind_nside], cumints4, rlim68_s4[i, ind_nside], rlim95_s4[i, ind_nside] = explore_like(leff, mycls4, myerrcls4, lmin, delta_ell, covcut, rv,
+                             cov=covmap, plotlike=False, plotcls=False, 
+                             verbose=True, sample_variance=True, otherp=0.95)
+
+        like_bi[i, ind_nside], cumintbi, rlim68_bi[i, ind_nside], rlim95_bi[i, ind_nside] = explore_like(leff, myclbi, myerrclbi, lmin, delta_ell, covcut, rv,
+                             cov=covmap, plotlike=False, plotcls=False, 
+                             verbose=True, sample_variance=True, otherp=0.95)
+    
+    
+#plt.figure(figsize=(15, 15))   
+#plt.subplot(2, 2, i+1)
+#plot(rv, likes4/np.max(likes4), label='S4: r < {:.4f}'.format(rlim95s4), color='red')
+#plot(rv, likebi/np.max(likebi), label='BI: r < {:.4f}'.format(rlim95bi), color='blue')
+#plt.title(r'$\Delta \beta$ = {}'.format(j))
+#plt.legend()
+#plt.xlim(0, 0.1)
+#plt.show()
+```
+
+```{python}
+'''
+rv = np.linspace(0,0.1,2000)
+lmin = 40
+delta_ell = 30
+covcut = 0
+
+beta=[0.05, 0.1, 0.2, 0.3]
+
+
+plt.figure(figsize=(15, 15))
+
+plt.subplot(2, 2, i+1)
+plot(rv, likes4/np.max(likes4), label='S4: r < {:.4f}'.format(rlim95s4), color='red')
+plot(rv, likebi/np.max(likebi), label='BI: r < {:.4f}'.format(rlim95bi), color='blue')
+plt.title(r'$\Delta \beta$ = {}'.format(j))
+plt.legend()
+plt.xlim(0, 0.1)
+plt.show()
+'''
+```
+
+```{python}
+plt.figure(figsize=(15, 15))
+
+plt.subplot(2, 2, i+1)
+s=30
+
+plot(beta, rlim68_s4[:, 1, 0], 'o-', color='red', label='S4')
+plot(beta, rlim68_bi[:, 1, 0], 'o-', color='blue', label='BI')
+
+#plot(rv, likebi/np.max(likebi), label='BI: r < {:.4f}'.format(rlim95bi), color='blue')
+plt.title(r'$\sigma (r)$ as function of $\Delta \beta$')
+plt.xlabel(r'$\Delta \beta$', fontsize=20)
+plt.ylabel(r'$\sigma (r)$', fontsize=20)
+plt.legend(fontsize=20)
+plt.ylim(3e-3, 7e-2)
+plt.yscale('log')
+plt.show()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

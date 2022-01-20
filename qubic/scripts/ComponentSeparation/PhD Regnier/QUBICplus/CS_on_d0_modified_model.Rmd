@@ -22,8 +22,8 @@ import fgbuster
 import matplotlib.pyplot as plt
 import os
 import qubic
-#center = qubic.equ2gal(-30, -30)
-center = qubic.equ2gal(0, -57)
+center = qubic.equ2gal(-30, -30)
+#center = qubic.equ2gal(0, -57)
 # If there is not this command, the kernel shut down every time..
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
@@ -32,7 +32,7 @@ warnings.filterwarnings("ignore")
 
 nside=256
 
-def get_coverage(fsky, nside, center_radec=[0, -57]):
+def get_coverage(fsky, nside, center_radec=[-30, -30]):
     center = qubic.equ2gal(center_radec[0], center_radec[1])
     uvcenter = np.array(hp.ang2vec(center[0], center[1], lonlat=True))
     uvpix = np.array(hp.pix2vec(nside, np.arange(12*nside**2)))
@@ -150,13 +150,13 @@ def qubicify(config, qp_nsubs, qp_effective_fraction):
 
 
 
-qp_nsub = np.array([1, 1, 1, 1, 1, 1, 1, 5, 5])
+qp_nsub = np.array([1, 1, 1, 5, 5, 5, 5, 5, 5])
 qp_effective_fraction = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1])
 qp_config = qubicify(s4_config, qp_nsub, qp_effective_fraction)
 
 #Corrected depths
-qp_config['depth_p'][:7] = s4_config['depth_p'][:7]
-qp_config['depth_i'][:7] = s4_config['depth_i'][:7]
+qp_config['depth_p'][:3] = s4_config['depth_p'][:3]
+qp_config['depth_i'][:3] = s4_config['depth_i'][:3]
 
 plt.figure(figsize=(16, 5))
 plt.subplot(1,2,1)
@@ -260,20 +260,20 @@ def get_comp_for_fgb(nu0, model, fix_temp):
             comp[1].defaults=[1.54]
         else:
             comp.append(fgbuster.component_model.Dust(nu0=nu0))
-            comp[1].defaults=[1.54, 21]
+            comp[1].defaults=[1.54, 22]
     elif model == '2b':
         if fix_temp is not None :
             comp.append(fgbuster.component_model.Dust_2b(nu0=nu0, temp=fix_temp))
-            comp[1].defaults=[1.54, 1.54, 220]
+            comp[1].defaults=[1.54, 1.54, 140]
         else:
             comp.append(fgbuster.component_model.Dust_2b(nu0=nu0))
-            comp[1].defaults=[1.54, 1.54, 220, 21]
+            comp[1].defaults=[1.54, 1.54, 140, 22]
             
     else:
         raise TypeError('Not the good model')
         
     comp.append(fgbuster.component_model.Synchrotron(nu0=145))
-    #comp[2].defaults=[-2.5]
+    comp[2].defaults=[-2.7]
       
     return comp
 
@@ -307,14 +307,14 @@ def get_comp_from_MixingMatrix(r, comp, instr, data, delta_beta, covmap, model, 
 ```{python}
 import qubicplus
 
-def ParamCompSep(config, nside, skyconfig, model, noise=True, delta_beta=0.05, fix_temp=None):
+def ParamCompSep(config, nside, skyconfig, model, noise=True, delta_beta=0.05, fix_temp=None, nubreak=260):
 
     covmap = get_coverage(0.03, nside)
     pixok = covmap>0
     
     if len(config['frequency']) == 9 :
         name='CMBS4'
-    elif len(config['frequency']) == 17 :
+    elif len(config['frequency']) == 33 :
         name='Qubic+'
     else:
         raise TypeError('Choose the right instrument')
@@ -327,7 +327,7 @@ def ParamCompSep(config, nside, skyconfig, model, noise=True, delta_beta=0.05, f
                                       coverage=covmap, 
                                       noise=True, 
                                       signoise=1.,
-                                      beta=[1.54-delta_beta, 1.54+delta_beta, 260],
+                                      beta=[1.54-delta_beta, 1.54+delta_beta, nubreak],
                                       fix_temp=fix_temp)
         
     else:
@@ -337,7 +337,7 @@ def ParamCompSep(config, nside, skyconfig, model, noise=True, delta_beta=0.05, f
                                       coverage=covmap, 
                                       noise=True, 
                                       signoise=1.,
-                                      beta=[1.54-delta_beta, 1.54+delta_beta, 260],
+                                      beta=[1.54-delta_beta, 1.54+delta_beta, nubreak],
                                       fix_temp=fix_temp)
         
         
@@ -355,11 +355,14 @@ def ParamCompSep(config, nside, skyconfig, model, noise=True, delta_beta=0.05, f
     
     print('Define components')
     comp=get_comp_for_fgb(nu0=145, model=model, fix_temp=fix_temp)
-    #print(comp)
 
     print('##### COMP SEP #####')
-
-    r=fgbuster.basic_comp_sep(comp, instr, inputs[:, :, pixok], method='TNC', options={'maxiter':500})
+    
+    options={'maxiter':100}
+    tol=1e-18
+    bnds=((0, None), (0, None), (0, None), (0, None), (None, 0))
+    r=fgbuster.basic_comp_sep(comp, instr, inputs[:, :, pixok], tol=tol, method='TNC', 
+                                                                             options=options, bounds=bnds)
     print('Done! \n')
     print(r.x)
     
@@ -373,8 +376,9 @@ def ParamCompSep(config, nside, skyconfig, model, noise=True, delta_beta=0.05, f
 ```{python}
 nside=256                            # NSIDE of input maps
 db=0.1                               # Deviation from true beta maps
-fix_temp=None                          # If you don't want to fix temp, put None
+fix_temp=None                        # If you don't want to fix temp, put None
 noise=False
+nubreak=100
 
 components_s4, r_s4 = ParamCompSep(s4_config,
                                    skyconfig={'cmb':42,'dust':'d02b', 'synchrotron':'s0'},
@@ -382,7 +386,8 @@ components_s4, r_s4 = ParamCompSep(s4_config,
                                    noise=noise,
                                    delta_beta=db,
                                    fix_temp=fix_temp,
-                                   nside=nside)
+                                   nside=nside,
+                                   nubreak=nubreak)
 
 components_bi, r_bi = ParamCompSep(qp_config,
                                    skyconfig={'cmb':42,'dust':'d02b', 'synchrotron':'s0'},
@@ -390,7 +395,8 @@ components_bi, r_bi = ParamCompSep(qp_config,
                                    noise=noise,
                                    delta_beta=db,
                                    fix_temp=fix_temp,
-                                   nside=nside)
+                                   nside=nside,
+                                   nubreak=nubreak)
 ```
 
 ```{python}
@@ -398,21 +404,21 @@ covmap=get_coverage(0.03, nside)
 pixok=covmap>0
 
 _, truecmb, _, _ = qubicplus.BImaps({'cmb':42}, s4_config, nside=nside).getskymaps(
-                                      same_resol=0, 
-                                      verbose=False, 
-                                      coverage=covmap, 
-                                      noise=True, 
+                                      same_resol=0,
+                                      verbose=False,
+                                      coverage=covmap,
+                                      noise=True,
                                       signoise=1.,
                                       beta=[],
                                       fix_temp=fix_temp)
 
 _, truedust, _, _ = qubicplus.BImaps({'dust':'d02b'}, s4_config, nside=nside).getskymaps(
-                                      same_resol=0, 
-                                      verbose=False, 
-                                      coverage=covmap, 
+                                      same_resol=0,
+                                      verbose=False,
+                                      coverage=covmap,
                                       noise=True,
                                       signoise=1.,
-                                      beta=[1.54-db, 1.54+db, 260],
+                                      beta=[1.54-db, 1.54+db, nubreak],
                                       fix_temp=fix_temp)
 ```
 
@@ -432,15 +438,15 @@ bi=truedust[ind, istk]-components_bi[1, istk]
 s4[~pixok]=hp.UNSEEN
 bi[~pixok]=hp.UNSEEN
 
-hp.gnomview(s4, rot=center, reso=15, cmap='jet', sub=(2, 5, 4), title='')#,
-            #title='True - S4 -> dr : {:.5g}'.format((np.std(s4[pixok])/0.345)**2))
-hp.gnomview(bi, rot=center, reso=15, cmap='jet', sub=(2, 5, 5), title='')#,
-            #title='True - BI -> dr : {:.5g}'.format((np.std(bi[pixok])/0.345)**2))
-    
+min=-np.max(s4[pixok])
+max=np.max(s4[pixok])
+
+hp.gnomview(s4, rot=center, reso=15, cmap='jet', sub=(2, 5, 4), title='RMS = {:.6g}'.format(np.std(s4[pixok])), min=min, max=max)
+hp.gnomview(bi, rot=center, reso=15, cmap='jet', sub=(2, 5, 5), title='RMS = {:.6g}'.format(np.std(bi[pixok])), min=min, max=max)
+
 hp.gnomview(truecmb[ind, istk], rot=center, reso=15, cmap='jet', sub=(2, 5, 6), title='True')
 hp.gnomview(components_s4[0, istk], rot=center, reso=15, cmap='jet', sub=(2, 5, 7), title='S4')
 hp.gnomview(components_bi[0, istk], rot=center, reso=15, cmap='jet', sub=(2, 5, 8), title='BI')
-
 
 s4=truecmb[ind, istk]-components_s4[0, istk]
 bi=truecmb[ind, istk]-components_bi[0, istk]
@@ -458,27 +464,67 @@ plt.show()
 ```
 
 ```{python}
+# MC
 
+delta=[0.0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1]
+nside=256                            # NSIDE of input maps
+fix_temp=None                        # If you don't want to fix temp, put None
+noise=False
+nubreak=100
+istk=1
+
+
+bias_on_r_s4=np.zeros(len(delta))
+bias_on_r_bi=np.zeros(len(delta))
+
+for indd, d in enumerate(delta):
+
+    components_s4, r_s4 = ParamCompSep(s4_config,
+                                   skyconfig={'cmb':42,'dust':'d02b', 'synchrotron':'s0'},
+                                   model='2b',
+                                   noise=noise,
+                                   delta_beta=d,
+                                   fix_temp=fix_temp,
+                                   nside=nside,
+                                   nubreak=nubreak)
+
+    components_bi, r_bi = ParamCompSep(qp_config,
+                                   skyconfig={'cmb':42,'dust':'d02b', 'synchrotron':'s0'},
+                                   model='2b',
+                                   noise=noise,
+                                   delta_beta=d,
+                                   fix_temp=fix_temp,
+                                   nside=nside,
+                                   nubreak=nubreak)
+    
+    _, truecmb, _, _ = qubicplus.BImaps({'cmb':42}, s4_config, nside=nside).getskymaps(
+                                      same_resol=0,
+                                      verbose=False,
+                                      coverage=covmap,
+                                      noise=True,
+                                      signoise=1.,
+                                      beta=[],
+                                      fix_temp=fix_temp)
+    
+    s4=truecmb[0, istk]-components_s4[0, istk]
+    bi=truecmb[0, istk]-components_bi[0, istk]
+    
+    bias_on_r_s4[indd]=(np.std(s4[pixok])/0.345)**2
+    bias_on_r_bi[indd]=(np.std(bi[pixok])/0.345)**2
 ```
 
 ```{python}
-
+bias_on_r_s4
 ```
 
 ```{python}
-
+bias_on_r_bi
 ```
 
 ```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
+plt.plot(delta, bias_on_r_s4, '-ro')
+plt.plot(delta, bias_on_r_bi, '-bo')
+plt.yscale('log')
 ```
 
 ```{python}

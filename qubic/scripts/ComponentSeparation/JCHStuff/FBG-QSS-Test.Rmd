@@ -1,0 +1,342 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Testing FGB on QubicSkySim simulations
+this is inspired by FGB-CutSky-NoNoise-WithFunctions for FGB
+
+```{python}
+import pysm3
+import pysm3.units as u
+import numpy as np
+import numpy.ma as ma
+import healpy as hp
+import pickle
+import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
+import pickle
+from astropy.io import fits
+import pandas as pd
+from importlib import reload
+
+from qubic import camb_interface as qc
+import fgbuster as fgb
+from pysm3 import utils
+
+
+# Specific qubic modules
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+#from mpi4py import MPI
+# from pyoperators import MPI
+import pysm
+import qubic
+from qubic import QubicSkySim as qss
+from qubic import fibtools as ft
+from qubic import camb_interface as qc
+from qubic import SpectroImLib as si
+from qubic import NamasterLib as nam
+from qubic import mcmc
+
+#### This is a temporary library
+import compsep_jc as csjc
+
+
+import warnings
+warnings.filterwarnings("ignore")
+
+import qubic
+from qubic import NamasterLib as nam
+
+center = qubic.equ2gal(0, -57)
+
+rc('figure', figsize=(16, 10))
+rc('font', size=15)
+
+#### General Stuff ####
+stk = ['I', 'Q', 'U']
+
+
+### Initialize
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
+
+dictfilename = global_dir + '/dicts/TestCompSep-JC-Sept2021.dict'
+
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+d['nside']=256
+
+```
+
+# Read QUBIC Coverage
+
+```{python}
+rc('figure', figsize=(16, 4))
+
+covmap = hp.ud_grade(hp.read_map('QUBIC-Typical-Coverage.fits'), d['nside'])
+
+fskytot=np.sum(covmap/np.max(covmap)/len(covmap))*100
+suptitle('Cut-Sky (from QUBIC)', fontsize=30, y=1.2)
+hp.mollview(covmap, title='QUBIC Cov Map: fsky={0:4.2f}%'.format(fskytot), sub=(1,2,1))
+
+thr = 0.1
+mymask = (covmap > (np.max(covmap)*thr)).astype(int)
+pixok = mymask > 0
+fsky=np.sum(covmap[pixok]/np.max(covmap)/len(covmap))*100
+hp.mollview(mymask, title='Mask with thr={0:}: fsky={1:4.2f}'.format(thr, fsky), sub=(1,2,2))
+
+```
+
+```{python}
+##### Function to get FastSiulator maps
+def get_map_band(d, band, qubic_sky = None, duration=3., nsnew = None, spatial_noise=False, 
+                 nbands=1, nf_in=None, coverage=None, seed=None):
+    center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+    d['nf_recon'] = nbands
+    if nf_in is not None:
+        d['nf_sub'] = nf_in
+    print(d['nf_sub'])
+
+    # Frequency band
+    dA = d.copy()
+    dA['filter_nu'] = band * 1e9
+
+    if seed is None:
+        seed = np.random.randint(100000)
+    sky_config = {'cmb': seed, 'Dust':'d0'}
+
+    if qubic_sky is None:
+        Qubic_sky_A = qss.Qubic_sky(sky_config, dA)
+    else:
+        Qubic_sky_A = qubic_sky
+
+    ##### Getting FastSimulator output maps
+    maps_qubicA, maps_noiselessA, maps_noiseA, coverageA = Qubic_sky_A.get_partial_sky_maps_withnoise(spatial_noise=spatial_noise,
+                                                                                 Nyears=duration, coverage=coverage)
+    pixok = coverageA > 0
+    maps_qubicA[:,~pixok,:] = hp.UNSEEN
+    maps_noiselessA[:,~pixok,:] = hp.UNSEEN
+    maps_noiseA[:,~pixok,:] = hp.UNSEEN
+    
+    ##### Corresponding frequencies
+    Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = qubic.compute_freq(dA['filter_nu'],
+                                                                        nbands,
+                                                                        dA['filter_relative_bandwidth'])
+    print(Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands)
+
+    if nsnew is not None:
+        print('Changinf to nside={}'.format(nsnew))
+        sh = np.shape(maps_qubicA)
+        new_maps = np.zeros((sh[0], 12*nsnew**2, 3))
+        for i in range(sh[0]):
+            for j in range(3):
+                new_maps[i,:,j] = hp.ud_grade(maps_noiseA[i,:,j], nsnew)
+        maps_noiseA = new_maps
+        coverageA = hp.ud_grade(coverageA, nsnew, power=-2)
+    
+    return maps_qubicA, maps_noiselessA, maps_noiseA, coverageA, Qubic_sky_A, nus
+```
+
+# We first start at 220 GHz as in FGB-CutSky-NoNoise-WithFunctions that used to work.
+
+```{python}
+spatial_noise=False
+nsub = 3
+seed = 42
+
+#### Figure with error for each band...
+band = 150
+duration = 3000000
+maps_qubic, maps_noiseless, maps_noise, coverage, qubic_sky, nus = get_map_band(d, band, duration=duration, nbands=nsub, 
+                                                spatial_noise=spatial_noise, coverage=covmap, seed=seed)
+
+print(np.shape(maps_qubic))
+
+maps_qubic = np.transpose(maps_qubic, axes=(0,2,1))
+maps_noise = np.transpose(maps_noise, axes=(0,2,1))
+maps_noiseless = np.transpose(maps_noiseless, axes=(0,2,1))
+
+print(np.shape(maps_qubic))
+
+```
+
+```{python}
+reload(csjc)
+csjc.display_maps(maps_qubic, bigtitle='Cut-sky maps per freq', rot=center, freqs=nus/1e9)
+```
+
+```{python}
+weights=1
+bpconv = utils.bandpass_unit_conversion(150 * u.GHz, weights,u.uK_CMB)
+
+sky_emissions_dust = qubic_sky.sky.components[0].get_emission(150 * u.GHz) * bpconv
+maps_dust = np.array([emission.value for emission in sky_emissions_dust])
+maps_dust[:,~pixok] = hp.UNSEEN
+csjc.display_maps(maps_dust, rot=center, freqs=[150], mytitle='Input Dust',
+                  bigtitle='Input Dust only at 150 GHz (infinite resolution)',
+             figsize=(16,7), nsig=3)
+
+sky_emissions_cmb = qubic_sky.sky.components[1].get_emission(150 * u.GHz) * bpconv
+maps_cmb = np.array([emission.value for emission in sky_emissions_cmb])
+maps_cmb[:,~pixok] = hp.UNSEEN
+csjc.display_maps(maps_cmb, rot=center, freqs=[150], mytitle='Input CMB',
+                  bigtitle='Input CMB only at 150 GHz (infinite resolution)',
+             figsize=(16,7), nsig=3)
+
+
+```
+
+## Now apply FGB
+
+```{python}
+freqs = nus / 1e9
+synthbeam_peak150_fwhm = 0.39268176  # in degrees
+myFWHM = synthbeam_peak150_fwhm * 150. / freqs # Qubic beams
+print(myFWHM)
+ref_fwhm = np.max(myFWHM)*0+0.5
+
+result_pix_qubic = csjc.apply_fgb(maps_noiseless, freqs, myFWHM, verbose=True, resol_correction=True, 
+                                  ref_fwhm=ref_fwhm,
+                                  plot_separated=True, 
+                                  center=center,
+                                  truth=[maps_dust, maps_cmb], plot_residuals=True)
+```
+
+```{python}
+r, dustrec, cmbrec, sigs_dust, sigs_cmb, resid_dust, resid_cmb, truth_dust, truth_cmb = result_pix_qubic
+
+okpix = cmbrec[0,:] != hp.UNSEEN
+stk = ['I','Q','U']
+for i in range(3):
+    subplot(2,3,i+1)
+    title('CMB {}'.format(stk[i]))
+    xlabel('In')
+    ylabel('Out')
+    plot(truth_cmb[i,okpix], cmbrec[i,okpix], 'o')
+    mini = np.min(cmbrec[i,okpix])
+    maxi = np.max(cmbrec[i,okpix])
+    xlim(mini, maxi)
+    ylim(mini, maxi)
+    x = np.linspace(mini, maxi)
+    plot(x,x,'k--', label='y=x')
+    myfit, covfit = np.polyfit(truth_cmb[i,okpix], cmbrec[i,okpix], 1, cov=True)
+    plot(x, np.poly1d(myfit)(x), lw=3, label='Slope: {0:5.3e} +/- {1:5.3e}'.format(myfit[0], np.sqrt(covfit[0,0])))
+    legend(fontsize=10)
+    
+    
+    subplot(2,3,3+i+1)
+    title('Dust {}'.format(stk[i]))
+    xlabel('In')
+    ylabel('Out')
+    plot(truth_dust[i,okpix], dustrec[i,okpix], 'o')
+    mini = np.min(dustrec[i,okpix])
+    maxi = np.max(dustrec[i,okpix])
+    xlim(mini, maxi)
+    ylim(mini, maxi)
+    x = np.linspace(mini, maxi)
+    plot(x,x,'k--', label='y=x')
+    myfit, covfit = np.polyfit(truth_dust[i,okpix], dustrec[i,okpix], 1, cov=True)
+    plot(x, np.poly1d(myfit)(x), lw=3, label='Slope: {0:5.3e} +/- {1:5.3e}'.format(myfit[0], np.sqrt(covfit[0,0])))
+    legend(fontsize=10)
+    
+tight_layout()
+```
+
+```{python}
+import pandas as pd
+pd.options.display.float_format = '{:,.5g}'.format
+
+data = [np.append(result_pix_qubic[0], np.ravel([result_pix_qubic[4], result_pix_qubic[3]]))]
+lines = ['Pixel Based - QSS Maps at 220 GHz (3 sub-bands) - Ref FWHM=0.5']
+names = ['beta','CMB I RMS', 'CMB Q RMS', 'CMB U RMS', 'Dust I RMS', 'Dust Q RMS', 'Dust U RMS']
+pd.DataFrame(data,lines, names)
+```
+
+```{python}
+freqs = nus / 1e9
+synthbeam_peak150_fwhm = 0.39268176  # in degrees
+myFWHM = synthbeam_peak150_fwhm * 150. / freqs # Qubic beams
+print(myFWHM)
+ref_fwhm = np.max(myFWHM)*0+0.5
+
+result_alm_qubic = csjc.apply_fgb(maps_noiseless, freqs, myFWHM, verbose=True, resol_correction=True, 
+                                  ref_fwhm=ref_fwhm, alm_space=True,
+                                  plot_separated=True, 
+                                  center=center,
+                                  truth=[maps_dust, maps_cmb], plot_residuals=True)
+```
+
+```{python}
+r, dustrec, cmbrec, sigs_dust, sigs_cmb, resid_dust, resid_cmb, truth_dust, truth_cmb = result_alm_qubic
+
+okpix = cmbrec[0,:] != hp.UNSEEN
+stk = ['I','Q','U']
+for i in range(3):
+    subplot(2,3,i+1)
+    title('CMB {}'.format(stk[i]))
+    xlabel('In')
+    ylabel('Out')
+    plot(truth_cmb[i,okpix], cmbrec[i,okpix], 'o')
+    mini = np.min(cmbrec[i,okpix])
+    maxi = np.max(cmbrec[i,okpix])
+    xlim(mini, maxi)
+    ylim(mini, maxi)
+    x = np.linspace(mini, maxi)
+    plot(x,x,'k--', label='y=x')
+    myfit, covfit = np.polyfit(truth_cmb[i,okpix], cmbrec[i,okpix], 1, cov=True)
+    plot(x, np.poly1d(myfit)(x), lw=3, label='Slope: {0:5.3e} +/- {1:5.3e}'.format(myfit[0], np.sqrt(covfit[0,0])))
+    legend(fontsize=10)
+    
+    
+    subplot(2,3,3+i+1)
+    title('Dust {}'.format(stk[i]))
+    xlabel('In')
+    ylabel('Out')
+    plot(truth_dust[i,okpix], dustrec[i,okpix], 'o')
+    mini = np.min(dustrec[i,okpix])
+    maxi = np.max(dustrec[i,okpix])
+    xlim(mini, maxi)
+    ylim(mini, maxi)
+    x = np.linspace(mini, maxi)
+    plot(x,x,'k--', label='y=x')
+    myfit, covfit = np.polyfit(truth_dust[i,okpix], dustrec[i,okpix], 1, cov=True)
+    plot(x, np.poly1d(myfit)(x), lw=3, label='Slope: {0:5.3e} +/- {1:5.3e}'.format(myfit[0], np.sqrt(covfit[0,0])))
+    legend(fontsize=10)
+    
+tight_layout()
+```
+
+```{python}
+import pandas as pd
+pd.options.display.float_format = '{:,.5g}'.format
+
+data = [np.append(result_pix_qubic[0], np.ravel([result_pix_qubic[4], result_pix_qubic[3]])),
+       np.append(result_alm_qubic[0], np.ravel([result_alm_qubic[4], result_alm_qubic[3]]))]
+lines = ['Pixel Based - QSS Maps at 220 GHz (3 sub-bands) - Ref FWHM=0.5',
+        'Alm Based - QSS Maps at 220 GHz (3 sub-bands) - Ref FWHM=0.5']
+names = ['beta','CMB I RMS', 'CMB Q RMS', 'CMB U RMS', 'Dust I RMS', 'Dust Q RMS', 'Dust U RMS']
+pd.DataFrame(data,lines, names)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

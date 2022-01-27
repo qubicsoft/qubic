@@ -22,7 +22,7 @@ import fgbuster
 import matplotlib.pyplot as plt
 import os
 import qubic
-center = qubic.equ2gal(-30, -30)
+center = qubic.equ2gal(0, -57)
 #center = qubic.equ2gal(0, -57)
 # If there is not this command, the kernel shut down every time..
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
@@ -32,7 +32,7 @@ warnings.filterwarnings("ignore")
 
 nside=256
 
-def get_coverage(fsky, nside, center_radec=[-30, -30]):
+def get_coverage(fsky, nside, center_radec=[0, -57]):
     center = qubic.equ2gal(center_radec[0], center_radec[1])
     uvcenter = np.array(hp.ang2vec(center[0], center[1], lonlat=True))
     uvpix = np.array(hp.pix2vec(nside, np.arange(12*nside**2)))
@@ -252,28 +252,27 @@ def go_to_nside_target(param_est, nside_param_out, config, sky_conf, fix_temp):
     return comp, param_est_nsideout
 
 
-def get_comp_for_fgb(nu0, model, fix_temp):
+def get_comp_for_fgb(nu0, model, fix_temp, x0):
     comp=[fgbuster.component_model.CMB()]
     if model == '1b':
         if fix_temp is not None :
             comp.append(fgbuster.component_model.Dust(nu0=nu0, temp=fix_temp))
-            comp[1].defaults=[1.54]
+            comp[1].defaults=x0
         else:
             comp.append(fgbuster.component_model.Dust(nu0=nu0))
-            comp[1].defaults=[1.54, 22]
+            comp[1].defaults=x0
     elif model == '2b':
         if fix_temp is not None :
             comp.append(fgbuster.component_model.Dust_2b(nu0=nu0, temp=fix_temp))
-            comp[1].defaults=[1.54, 1.54, 140]
+            comp[1].defaults=x0
         else:
             comp.append(fgbuster.component_model.Dust_2b(nu0=nu0))
-            comp[1].defaults=[1.54, 1.54, 140, 22]
-            
+            comp[1].defaults=x0
     else:
         raise TypeError('Not the good model')
         
     comp.append(fgbuster.component_model.Synchrotron(nu0=145))
-    comp[2].defaults=[-2.7]
+    comp[2].defaults=[-3]
       
     return comp
 
@@ -307,7 +306,7 @@ def get_comp_from_MixingMatrix(r, comp, instr, data, delta_beta, covmap, model, 
 ```{python}
 import qubicplus
 
-def ParamCompSep(config, nside, skyconfig, model, noise=True, delta_beta=0.05, fix_temp=None, nubreak=260):
+def ParamCompSep(config, nside, skyconfig, model, noise=True, delta_beta=0.05, fix_temp=None, nubreak=260, x0=[1.54, 1.54, 140, 22]):
 
     covmap = get_coverage(0.03, nside)
     pixok = covmap>0
@@ -354,7 +353,7 @@ def ParamCompSep(config, nside, skyconfig, model, noise=True, delta_beta=0.05, f
     instr.fwhm=np.zeros(len(config['frequency']))
     
     print('Define components')
-    comp=get_comp_for_fgb(nu0=145, model=model, fix_temp=fix_temp)
+    comp=get_comp_for_fgb(nu0=145, model=model, fix_temp=fix_temp, x0=x0)
 
     print('##### COMP SEP #####')
     
@@ -374,11 +373,13 @@ def ParamCompSep(config, nside, skyconfig, model, noise=True, delta_beta=0.05, f
 # You can play here with the code
 
 ```{python}
+'''
 nside=256                            # NSIDE of input maps
 db=0.1                               # Deviation from true beta maps
 fix_temp=None                        # If you don't want to fix temp, put None
 noise=False
 nubreak=100
+x0=[1.54, 1.54, 150, 22]
 
 components_s4, r_s4 = ParamCompSep(s4_config,
                                    skyconfig={'cmb':42,'dust':'d02b', 'synchrotron':'s0'},
@@ -387,7 +388,8 @@ components_s4, r_s4 = ParamCompSep(s4_config,
                                    delta_beta=db,
                                    fix_temp=fix_temp,
                                    nside=nside,
-                                   nubreak=nubreak)
+                                   nubreak=nubreak,
+                                   x0=x0)
 
 components_bi, r_bi = ParamCompSep(qp_config,
                                    skyconfig={'cmb':42,'dust':'d02b', 'synchrotron':'s0'},
@@ -396,33 +398,17 @@ components_bi, r_bi = ParamCompSep(qp_config,
                                    delta_beta=db,
                                    fix_temp=fix_temp,
                                    nside=nside,
-                                   nubreak=nubreak)
+                                   nubreak=nubreak,
+                                   x0=x0)
+'''
 ```
 
 ```{python}
-covmap=get_coverage(0.03, nside)
-pixok=covmap>0
 
-_, truecmb, _, _ = qubicplus.BImaps({'cmb':42}, s4_config, nside=nside).getskymaps(
-                                      same_resol=0,
-                                      verbose=False,
-                                      coverage=covmap,
-                                      noise=True,
-                                      signoise=1.,
-                                      beta=[],
-                                      fix_temp=fix_temp)
-
-_, truedust, _, _ = qubicplus.BImaps({'dust':'d02b'}, s4_config, nside=nside).getskymaps(
-                                      same_resol=0,
-                                      verbose=False,
-                                      coverage=covmap,
-                                      noise=True,
-                                      signoise=1.,
-                                      beta=[1.54-db, 1.54+db, nubreak],
-                                      fix_temp=fix_temp)
 ```
 
 ```{python}
+'''
 istk=1
 ind=5
 
@@ -461,43 +447,158 @@ hp.gnomview(bi, rot=center, reso=15, cmap='jet', sub=(2, 5, 10),
 
 
 plt.show()
+'''
 ```
 
 ```{python}
-# MC
+def get_good_config(config, prop):
+    config1=config[0]
+    config2=config[1]
+    nus=np.array(list(config1['frequency'])+list(config2['frequency']))
+    depth1_i=config1['depth_i']/(np.sqrt(prop[0]))
+    depth1_p=config1['depth_p']/(np.sqrt(prop[0]))
+    depth2_i=config2['depth_i']/(np.sqrt(prop[1]))
+    depth2_p=config2['depth_p']/(np.sqrt(prop[1]))
 
-delta=[0.0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1]
-nside=256                            # NSIDE of input maps
-fix_temp=None                        # If you don't want to fix temp, put None
-noise=False
-nubreak=100
-istk=1
-
-
-bias_on_r_s4=np.zeros(len(delta))
-bias_on_r_bi=np.zeros(len(delta))
-
-for indd, d in enumerate(delta):
-
-    components_s4, r_s4 = ParamCompSep(s4_config,
-                                   skyconfig={'cmb':42,'dust':'d02b', 'synchrotron':'s0'},
-                                   model='2b',
-                                   noise=noise,
-                                   delta_beta=d,
-                                   fix_temp=fix_temp,
-                                   nside=nside,
-                                   nubreak=nubreak)
-
-    components_bi, r_bi = ParamCompSep(qp_config,
-                                   skyconfig={'cmb':42,'dust':'d02b', 'synchrotron':'s0'},
-                                   model='2b',
-                                   noise=noise,
-                                   delta_beta=d,
-                                   fix_temp=fix_temp,
-                                   nside=nside,
-                                   nubreak=nubreak)
+    depth_i=np.array(list(depth1_i)+list(depth2_i))
+    depth_p=np.array(list(depth1_p)+list(depth2_p))
+    fwhm=np.zeros(42)
     
-    _, truecmb, _, _ = qubicplus.BImaps({'cmb':42}, s4_config, nside=nside).getskymaps(
+    if prop[0] == 1 :
+        depth_i=config1['depth_i']
+        depth_p=config1['depth_p']
+        nus=config1['frequency']
+        fwhm=np.zeros(9)
+    elif prop[1] == 1:
+        depth_i=config2['depth_i']
+        depth_p=config2['depth_p']
+        nus=config2['frequency']
+        fwhm=np.zeros(33)
+    else:
+        pass
+    
+    
+
+    return nus, depth_i, depth_p, fwhm
+
+def get_cov_for_weighted(n_freq, depths_i, depths_p, coverage, nside=256):
+    npix=12*nside**2
+    ind=coverage > 0
+    
+    noise_cov = np.ones(((n_freq, 3, npix)))
+    
+    for i in range(n_freq):
+        noise_cov[i, 0] = np.ones(npix)*1./depths_i[i]**2
+        noise_cov[i, 1] = np.ones(npix)*1./depths_p[i]**2
+        noise_cov[i, 2] = np.ones(npix)*1./depths_p[i]**2
+    
+    noise_cov[:, :, ~ind]=hp.UNSEEN
+    
+    return noise_cov
+
+def ParamCompSep(config, prop, nside, skyconfig, model, noise=True, delta_beta=0.05, fix_temp=None, nubreak=260, x0=[], weighted=False):
+
+    covmap = get_coverage(0.03, nside)
+    pixok = covmap>0
+
+
+
+    print('Create maps')
+    if noise:
+        inputs, _, _ = qubicplus.combinedmaps(skyconfig, config, nside=nside, prop=prop).getskymaps(
+                                      verbose=False,
+                                      coverage=covmap,
+                                      noise=True,
+                                      beta=[1.54-delta_beta, 1.54+delta_beta, nubreak],
+                                      fix_temp=fix_temp)
+
+    else:
+        _, inputs, _ = qubicplus.combinedmaps(skyconfig, config, nside=nside, prop=prop).getskymaps(
+                                      verbose=False,
+                                      coverage=covmap,
+                                      noise=True,
+                                      beta=[1.54-delta_beta, 1.54+delta_beta, nubreak],
+                                      fix_temp=fix_temp)
+
+
+
+    ###### Preparation for COMPSEP ######
+
+
+    nus, depth_i, depth_p, fwhm = get_good_config(config, prop)
+    
+    #if noise is False :
+    #    depth_i/=10000
+    #    depth_p/=10000
+    #    print('Reduce depths')
+    
+    if prop[0]==1:
+        name='CMBS4'
+        n_freq=9
+    elif prop[1]==1:
+        name='Qubic+'
+        n_freq=33
+    else:
+        name='CMBS4BI'
+        n_freq=42
+    
+    print('Define instrument')
+    instr = fgbuster.get_instrument(name)
+    instr.frequency=nus
+    instr.depth_i=depth_i
+    instr.depth_p=depth_p
+    instr.fwhm=fwhm
+
+    print('Define components')
+    comp=get_comp_for_fgb(nu0=145, model=model, fix_temp=fix_temp, x0=x0)
+
+    print('##### COMP SEP #####')
+
+    options={'maxiter':10000000, 'eps':1e-2} 
+    tol=1e-18
+    bnds=((0, None), (0, None), (0, None), (0, None), (None, 0))
+    
+    if weighted:
+        print('wei')
+        noise_cov=get_cov_for_weighted(n_freq, depth_i, depth_p, covmap)
+        r=fgbuster.weighted_comp_sep(comp, instr, inputs[:, :, :], cov=noise_cov, tol=tol, method='TNC',
+                                                                             options=option, bounds=bnds)
+        
+    else:
+        r=fgbuster.basic_comp_sep(comp, instr, inputs[:, :, pixok], tol=tol, method='TNC',
+                                                                             options=options, bounds=bnds)
+    
+    print('Done! \n')
+    print(r.x)
+
+    components=get_comp_from_MixingMatrix(r, comp, instr, inputs, delta_beta, covmap, model, noise, nside)
+    return components, r
+```
+
+```{python}
+ntest = 10
+#props = np.array([0.00001, 0.1, 0.9, 0.99999])
+props = np.linspace(0, 0.5, ntest)
+
+
+x_est=np.zeros((ntest, 5))
+rms_est=np.zeros(ntest)
+seed=42
+fix_temp=None
+db=0.05
+noise=True
+nside=256
+nubreak=100
+model='2b'
+x0=[1.54, 1.54, 140, 20]
+
+covmap=get_coverage(0.03, 256)
+pixok=covmap>0
+fix_temp=None
+```
+
+```{python}
+_, truecmb, _ = qubicplus.BImaps({'cmb':42}, s4_config, nside=nside).getskymaps(
                                       same_resol=0,
                                       verbose=False,
                                       coverage=covmap,
@@ -505,26 +606,75 @@ for indd, d in enumerate(delta):
                                       signoise=1.,
                                       beta=[],
                                       fix_temp=fix_temp)
+
+_, truedust, _ = qubicplus.BImaps({'dust':'d02b'}, s4_config, nside=nside).getskymaps(
+                                      same_resol=0,
+                                      verbose=False,
+                                      coverage=covmap,
+                                      noise=True,
+                                      signoise=1.,
+                                      beta=[1.54-db, 1.54+db, nubreak],
+                                      fix_temp=fix_temp)
+```
+
+```{python}
+for i in range(ntest):
     
-    s4=truecmb[0, istk]-components_s4[0, istk]
-    bi=truecmb[0, istk]-components_bi[0, istk]
+    BIprop=props[i]
+    S4prop=1-BIprop
+
+    components_comb_1, r_comb_1 = ParamCompSep([s4_config, qp_config],
+                                   prop=[S4prop, BIprop],
+                                   skyconfig={'cmb':seed, 'dust':'d02b', 'synchrotron':'s0'},
+                                   model=model,
+                                   noise=noise,
+                                   delta_beta=db,
+                                   fix_temp=fix_temp,
+                                   nside=nside,
+                                   nubreak=nubreak,
+                                   x0=x0,
+                                   weighted=False)
+    print()
+    print('#########')
+    print('Message from fgb -> ', r_comb_1.message)
+    print('# of function evaluations -> ', r_comb_1.nfev)
+    print('#########')
+    print()
     
-    bias_on_r_s4[indd]=(np.std(s4[pixok])/0.345)**2
-    bias_on_r_bi[indd]=(np.std(bi[pixok])/0.345)**2
+    x_est[i, :]=r_comb_1.x
+    rms_est[i]=np.std(truecmb[0, 1, pixok]-components_comb_1[0, 1, pixok])
+    print('RMS -> ', rms_est[i])
+    print('')
+    print('')
+    print('')
 ```
 
 ```{python}
-bias_on_r_s4
+
 ```
 
 ```{python}
-bias_on_r_bi
+plt.figure(figsize=(30, 6))
+truth=[1.49, 1.59, 100, 20, -3]
+truth_label=[r'$\beta_0$', r'$\beta_1$', r'$nu_{break}$', r'$T$', r'$\beta_s$']
+for i in range(5):
+    plt.subplot(1, 5, i+1)
+    plt.plot(props, x_est[:, i])
+    plt.axhline(truth[i], ls='--', color='black')
+    plt.ylabel(truth_label[i], fontsize=30)
+plt.show()
 ```
 
 ```{python}
-plt.plot(delta, bias_on_r_s4, '-ro')
-plt.plot(delta, bias_on_r_bi, '-bo')
-plt.yscale('log')
+plt.plot(props, rms_est)
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 ```{python}

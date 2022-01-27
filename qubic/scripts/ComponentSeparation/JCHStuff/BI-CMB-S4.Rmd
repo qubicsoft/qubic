@@ -23,7 +23,7 @@ import healpy as hp
 rc('figure',figsize=(16,4))
 rc('font',size=12)
 
-
+import fgbuster
 
 ```
 
@@ -142,6 +142,7 @@ rc('font',size=12)
 
 import fgbuster
 from fgbuster import CMB, Dust, Synchrotron, AnalyticComponent, ModifiedBlackBody
+reload(fgbuster)
 
 dust_ref_freq = 353.
 sync_ref_freq = 70.
@@ -150,15 +151,16 @@ cmb = CMB()
 sync = Synchrotron(sync_ref_freq, beta_pl=-3)
 
 ### The double beta component model
-analytic_expr = s4bi.double_beta_dust_FGB_Model()
-dbdust = AnalyticComponent(analytic_expr, nu0=353, temp=20., h_over_k=constants.h * 1e9 / constants.k)
+#analytic_expr = s4bi.double_beta_dust_FGB_Model()
+dbdust = fgbuster.component_model.Dust_2b(nu0=353, temp=20)
+#dbdust = AnalyticComponent(analytic_expr, nu0=353, temp=20., h_over_k=constants.h * 1e9 / constants.k)
 print(dbdust.params)   # parameters are beta0, beta1 and nubreak
 # let's fix the params for now
 av_beta = 1.54
-dbeta = 0.10
+dbeta = -0.5
 beta0 = av_beta+dbeta
 beta1 = av_beta-dbeta
-nubreak = 240.
+nubreak = 100.
 
 numin = 20
 numax = 400
@@ -170,6 +172,7 @@ plot(nus, cmb.eval(nus), label='CMB')
 plot(nus, dust.eval(nus), label=r'Dust ($\nu_r$={} GHz)'.format(353))
 plot(nus, dbdust.eval(nus, beta0, beta1, nubreak), 
      label=r'$2\beta$ Dust with $\beta_0$={0:4.2f}, $\beta_1$={1:4.2f}, $\nu_0$={2:3.0f} GHz'.format(beta0, beta1, nubreak))
+axvline(x=nubreak,ls=':', color='k',label=r'Break at $\nu_0$={0:3.0f} GHz'.format(nubreak))
 xlabel('Frequency [GHz]')
 ylabel('SED')
 yscale('log')
@@ -186,7 +189,7 @@ Now we use the normalization (RMS) found from PYSM in our region ito scale them:
 mystk = [0,3]
 beta0 = 1.39
 beta1 = 1.69
-nubreak = 200.
+nubreak = 100.
 
 ii=0
 for istk in mystk:
@@ -264,11 +267,48 @@ legend()
 ```
 
 ```{python}
+rc('figure',figsize=(5,5))
+rc('font',size=16)
+
+
+
+
+nubreak = 245
+
+figure()
+ax = axes()
+ax.set_facecolor("white")
+ax.patch.set_alpha(0.0)
+plot(nus, vals)
+errorbar(nus_s4, sed_s4, yerr=err_sed_s4, xerr=s4bi.s4_config['bandwidth']/2, capsize=4, fmt='ro', label='CMB-S4')
+axvline(x=nubreak,ls=':', color='k')
+yscale('log')
+xscale('log')
+xlabel('Frequency [GHz]')
+ylabel(r'Spectrum [$\mu K_{CMB}$]')
+legend()
+
+figure()
+ax = axes()
+ax.set_facecolor("white")
+ax.patch.set_alpha(0.0)
+plot(nus, vals)
+errorbar(nus_s4, sed_s4, yerr=err_sed_s4, xerr=s4bi.s4_config['bandwidth']/2, capsize=4, fmt='ro', label='CMB-S4')
+errorbar(nus_qp, sed_qp, yerr=err_sed_qp, xerr=qp_config['bandwidth']/2, fmt='bo', capsize=4, label='Bolometric Interferometer')
+axvline(x=nubreak,ls=':', color='k')
+yscale('log')
+xscale('log')
+xlabel('Frequency [GHz]')
+ylabel(r'Spectrum [$\mu K_{CMB}$]')
+legend()
+```
+
+```{python}
 from qubic import mcmc
 reload(mcmc)
 p0 = pars_true.copy()
 
-fixedpars = np.array([0, 0, 1, 0, 0])
+fixedpars = np.array([0, 0, 0, 0, 0])
 
 ll = mcmc.LogLikelihood(xvals=nus_s4, yvals=sed_s4, errors=err_sed_s4,
         p0=p0, model=model_1beta, fixedpars=fixedpars)
@@ -335,15 +375,20 @@ for i in range(len(names)):
 # Second test: fitting the double beta with a doublebeta
 
 ```{python}
+from getdist import plots, MCSamples
 reload(s4bi)
 reload(mcmc)
+reload(fgbuster)
+reload(fgbuster.component_model)
+
 
 dust_ref_freq = 353.
 sync_ref_freq = 70.
-dust_model = Dust(dust_ref_freq, temp=20)
+dust_model = fgbuster.component_model.Dust(dust_ref_freq, temp=20)
 print(dust_model.params)
-sync_model = Synchrotron(sync_ref_freq)
-double_dust_model = AnalyticComponent(analytic_expr, nu0=353, temp=20., h_over_k=constants.h * 1e9 / constants.k)
+sync_model = fgbuster.component_model.Synchrotron(sync_ref_freq)
+#double_dust_model = AnalyticComponent(analytic_expr, nu0=353, temp=20., h_over_k=constants.h * 1e9 / constants.k)
+double_dust_model = fgbuster.component_model.Dust_2b(nu0=353, temp=20)
 print(double_dust_model.params)   # parameters are beta0, beta1 and nubreak
 
 
@@ -363,7 +408,7 @@ def model_2beta(x, pars, extra_args=None):
 
 av_beta = 1.54
 dbeta = -0.10
-nubreak = 260
+nubreak = 100
 pars_true = np.array([s_sync_70GHz[3], -3, 0, s_dust_353GHz[3], av_beta-dbeta, av_beta+dbeta, nubreak])
 vals = model_2beta(nus, pars_true)
 
@@ -412,25 +457,31 @@ xlabel('Frequency [GHz]')
 ylabel(r'SED [$\mu K_{CMB}$]')
 title('fsky used: {0:3.1f}%'.format(myfsky*100))
 legend()
+
+print(nus_s4)
+print(nus_qp)
 ```
 
 ```{python}
+
 from qubic import mcmc
 reload(mcmc)
 p0 = pars_true.copy()
+print(p0)
+fixedpars = np.array([0, 0, 0, 0, 0, 0, 0])
 
-fixedpars = np.array([0, 0, 1, 0, 0, 0, 0])
+#flatpriors = np.array([[0.2, 0.35], [-3.1, -2.9], [-0.1, 0.1], [13.,19.], [1., 2.], [1., 2.], [70, 250]])
+flatpriors = None
 
 ll = mcmc.LogLikelihood(xvals=nus_s4, yvals=sed_s4, errors=err_sed_s4,
-        p0=p0, model=model_2beta, fixedpars=fixedpars)
-nbmc = 3000
+        p0=p0, model=model_2beta, fixedpars=fixedpars, flatprior=flatpriors)
+nbmc = 5000
 samp = ll.run(nbmc)
 flat_samples_s4 = samp.get_chain(discard=nbmc//2, thin=32, flat=True)
 
 
 ll_qp = mcmc.LogLikelihood(xvals=nus_qp, yvals=sed_qp, errors=err_sed_qp,
-        p0=p0, model=model_2beta, fixedpars=fixedpars)
-nbmc = 3000
+        p0=p0, model=model_2beta, fixedpars=fixedpars, flatprior=flatpriors)
 samp_qp = ll_qp.run(nbmc)
 flat_samples_qp = samp_qp.get_chain(discard=nbmc//2, thin=32, flat=True)
 
@@ -450,6 +501,7 @@ mkrs = {}
 for i in range(len(names)):
     mkrs[names[i]]=mytrue[i]
 
+
 samps = MCSamples(samples=flat_samples_s4, names=names, labels=labels)
 samps_qp = MCSamples(samples=flat_samples_qp, names=names, labels=labels)
 
@@ -465,7 +517,7 @@ figure()
 g = plots.getSubplotPlotter()
 g.settings.scaling=False
 g.settings.axes_fontsize=10
-g.triangle_plot([samps, samps_qp], ['DustAmp', 'DustBeta0', 'DustBeta1', 'DustNuBreak'], 
+g.triangle_plot([samps, samps_qp], ['CMB', 'DustAmp', 'DustBeta0', 'DustBeta1', 'DustNuBreak'], 
                 filled=True,title_limit=None, 
                 legend_labels=['CMB-S4 Double Beta', 'S4-BI Double Beta'], markers=mkrs)
 #suptitle('Marginalized over synchrotron')
@@ -481,6 +533,20 @@ print('Sigma_qp',errors_qp)
 print()
 for i in range(len(names)):
     print('{0:20s}: CMBS4: {1:7.3f} +/- {2:7.3f}      -     S4BI: {3:7.3f} +/- {4:7.3f}'.format(names[i], averages_s4[i], errors_s4[i], averages_qp[i], errors_qp[i]))
+
+```
+
+# Same with Loop over some parameters
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
 
 ```
 

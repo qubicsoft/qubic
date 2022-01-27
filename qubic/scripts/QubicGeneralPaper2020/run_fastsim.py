@@ -24,7 +24,7 @@ from qubic import NamasterLib as nam
 from qubic import mcmc
 
 ########################################################################################################
-#### Now in a function to loop over ell binning, lmin, coverage
+# ### Now in a function to loop over ell binning, lmin, coverage
 def run_mc(nbmc, Namaster, d, signoise, cov, effective_variance_invcov, verbose=False, clnoise=None):
     ell_bins, b = Namaster.get_binning(d['nside'])
     mask_apo = Namaster.mask_apo
@@ -63,8 +63,7 @@ def run_mc(nbmc, Namaster, d, signoise, cov, effective_variance_invcov, verbose=
     mcl_noise_qubic = np.mean(cl_noise_qubic, axis=0)
     scl_noise_qubic = np.std(cl_noise_qubic, axis=0)
     return leff, mcl_noise_qubic, scl_noise_qubic
-########################################################################################################
-
+""
 
 
 ### Decode arguments
@@ -132,8 +131,7 @@ print('Leff:')
 print(leff)
 print('Errors BB:')
 print(scl_noise_qubic[:,2])
-####################################################################################################################
-
+""
 # ################################### Cov Weighting #################################################################
 # ### Create a Namaster object
 # lmax = 2 * d['nside'] - 1
@@ -150,8 +148,7 @@ print(scl_noise_qubic[:,2])
 # ### Save Output
 # outfile = outname + 'MCFastNoise_n_{}_sig_{}_lmin_{}_dl_{}_cc_{}_Cov.pk'.format(nbmc, signoise, lmin, delta_ell, covcut)
 # pickle.dump([leff, mcl_noise_qubic, scl_noise_qubic, sys.argv], open(outfile, "wb"))
-# ####################################################################################################################
-
+""
 
 
 

@@ -17,7 +17,6 @@ import numpy as np
 import pickle 
 import astropy.io as fits
 from lmfit import Model
-import matplotlib.ticker as mtick
 
 # Specific qubic modules
 import qubic
@@ -506,7 +505,7 @@ def PixSED_Xstk(nus, maps, FuncModel, pix, pix_red, istk, covMat, nus_edge,
 		fit_prep = myfit.run(nsamples)
 		#print("Doing chain")
 		flat_samples = fit_prep.get_chain(discard = nsamples//2, thin=32, flat=True)
-		#print("Samples ", np.shape(flat_samples))
+		print("Samples ", np.shape(flat_samples))
 		nspls = flat_samples.shape[0]
 		#Generating realizations for parameters of the model (fake X(nu))
 		

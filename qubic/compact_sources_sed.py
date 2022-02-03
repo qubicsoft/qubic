@@ -24,25 +24,45 @@ catalog_dir = qubic.data.PATH
 # ## Check if source is in catalog
 
 # In[1]:
-
-
+    
 def isincatalog(source, catalog):
+    '''
+    This function checks if a certain source is in the catalog and returns the list of
+    frequencies where the source has data
+    
+    INPUT
+    source     -  STR - The source name. It can be in human-comprehensible form (e.g.
+                  "Crab") or in the catalog format (e.g. "209.0-19.4")
+
+    catalog    - DICT - The dictionary with point source catalog
+    
+    OUTPUT
+    isincatalog, source, freqs - BOOL, STR, LIST - 
+                               - isincatalog tells if the source is present (True) or not (False)
+                               - source is the source name in the catalog format
+                               - freqs is the list of frequencies where the source is present
+                                 in the catalog
+    '''
+    
+    result = False
     
     freqs    = ['030','044','070','100','143','217','353']
     
-    # Make list of all sources
-    allsources = []
-    for f in freqs:
-        allsources = allsources + list(catalog[f].keys())
-    allsources = list(set(allsources))
-
-    # Check if source exists in catalog
+    freq_list = []  # This is the list of frequencies where the source is present in the catalog
+    
     if source in list(altnames.keys()):
-        return True, altnames[source]
-    elif source in allsources:
-        return True, source
+        my_source = altnames[source]
     else:
-        return False, ''       
+        my_source = source
+    
+    for f in freqs:
+        if my_source in catalog[f].keys():
+                freq_list.append(f)
+    
+    if len(freq_list) > 0:
+        result = True
+
+    return result, my_source, freq_list     
 
 
 # ## Build catalog from PCCS
@@ -383,7 +403,7 @@ def build_sed(source, catalog, plot = False, polyfit = 3):
     import pylab as pl
     
     # Check if source is in catalog
-    exists, sourcename = isincatalog(source, catalog)
+    exists, sourcename, _ = isincatalog(source, catalog)
     
     if not exists:
         print('Source %s is not in catalog' % source)
@@ -475,7 +495,7 @@ def source2freqs(source, catalog, altnames = altnames):
     '''        
     import numpy as np
     
-    exists, sourcename = isincatalog(source, catalog)
+    exists, sourcename, _ = isincatalog(source, catalog)
     
     if not exists:
         print('Source %s is not in catalog' % source)

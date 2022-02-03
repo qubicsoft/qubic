@@ -30,7 +30,7 @@ import qubicpack
 from qubicpack.qubicfp import qubicfp
 
 import numpy as np
-from matplotlib.pyplot import *
+import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 import scipy.ndimage.filters as f
 import glob
@@ -40,7 +40,13 @@ from scipy import interpolate
 ```
 
 ```{python}
-
+#Set paths
+if 'QUBIC_TODDIR' in os.environ.keys():
+    qubic_toddir = os.environ['QUBIC_TODDIR']
+    print("TOD directory: ",qubic_toddir)
+else:
+    raise ValueError("You have to specify a directory where the Time Ordered Data (TOD) are. \
+    The ussual format of the TOD root directory is yyyy-mm-dd, e.g. /sps/qubic/Data/Calib-TD at CCA")
 ```
 
 ## Dataset
@@ -48,16 +54,16 @@ from scipy import interpolate
 Get the directories corresponding to the day we consider:
 
 ```{python}
-day = '2019-03-31'#'2020-11-10'
+day = '2019-04-06'#'2020-11-10'
 keyword = '*2019*'
-data_dir = os.environ['QUBIC_TODDIR'] + day + "/"
+data_dir = qubic_toddir + day + "/"
 dirs = np.sort(glob.glob(data_dir+keyword))
-print (dirs)
+print(dirs)
 labels = []
 for d in dirs:
     bla = str.split(d,'__')
     labels.append(bla[1])
-print (labels)
+print(labels)
 thedir = dirs[0]
 ```
 
@@ -69,40 +75,36 @@ a = qubicpack.qubicfp.qubicfp()
 a.read_qubicstudio_dataset(thedir, asic = AsicNum)
 ```
 
-```{python}
-a.timeline_array(asic = AsicNum)
-```
-
 ## Reading TES data
 
 ```{python}
 TESNum = 96
-data = a.timeline(TES=TESNum, asic = AsicNum)
-t_data = a.timeaxis(axistype='pps', asic = AsicNum)
+data = a.timeline(TES = TESNum, asic = AsicNum)
+t_data = a.timeaxis(axistype = 'pps', asic = AsicNum)
 
-plot(t_data, (data-np.mean(data))/np.std(data), label='Data')
+plt.plot(t_data, (data-np.mean(data))/np.std(data), label = 'Data')
 ```
 
 ## Reading Azimuth Data
 
 ```{python}
-pps=a.pps(hk='INTERN_HK')
-gps=a.gps(hk='INTERN_HK')
+pps = a.pps(hk = 'INTERN_HK')
+gps = a.gps(hk = 'INTERN_HK')
 t_az = a.pps2date(pps,gps)
 az = a.hk['INTERN_HK']['Platform-Azimut']
 az = (az-2.**15)/(2.**16)*360
 
-print (t_az.shape)
-print (az.shape)
-plot(t_az, az)
+print(t_az.shape)
+print(az.shape)
+plt.plot(t_az, az)
 ```
 
 ## Plot Data and Azimuth together (they should match)
 
 ```{python}
-plot(t_data, (data-np.mean(data))/np.std(data), label='Data')
-plot(t_az, (az-np.mean(az))/np.std(az), label='Az')
-legend()
+plt.plot(t_data, (data-np.mean(data))/np.std(data), label = 'Data')
+plt.plot(t_az, (az-np.mean(az))/np.std(az), label = 'Az')
+plt.legend()
 ```
 
 Let's check the modulation frequency (main peak in data)
@@ -113,14 +115,14 @@ spectrum_f, freq_f = mlab.psd(data,
                               Fs = FREQ_SAMPLING, 
                               NFFT = len(data), 
                               window = mlab.window_hanning)
-plot(freq_f, f.gaussian_filter1d(spectrum_f,5),label='Data')
-yscale('log')
-xscale('log')
-xlim(0.2,0.45)
+plt.plot(freq_f, f.gaussian_filter1d(spectrum_f,5), label = 'Data')
+plt.yscale('log')
+plt.xscale('log')
+plt.xlim(0.2,0.45)
 freq_mod = 0.333
-plot([freq_mod, freq_mod], [1e6, 1e12], label='Modulation Frequency: {}'.format(freq_mod))
-ylim(1e6, 1e12)
-legend()
+plt.plot([freq_mod, freq_mod], [1e6, 1e12], label='Modulation Frequency: {}'.format(freq_mod))
+plt.ylim(1e6, 1e12)
+plt.legend()
 ```
 
 ## Reading Calibration Source Data
@@ -128,14 +130,15 @@ legend()
 ```{python}
 ##### The date format for calsrc has no '-' so we need to change the day to this very format.
 daycalsrc = "".join(str.split(day,'-'))
-fcalsrc = glob.glob( os.environ['QUBIC_TODDIR'] + "calsource/"+'*'+daycalsrc+'*.dat')
+fcalsrc = glob.glob( qubic_toddir + "calsource/"+'*'+daycalsrc+'*.dat')
 fcalsrc.sort()
 print (fcalsrc)
 
 t_src, data_src = dl.read_cal_src_data(fcalsrc)
-plot(t_src, data_src,',', label='Measured Source Signal')
-legend()
-ylim(0,200)
+plt.plot(t_src, data_src,',', 
+     label = 'Measured Source Signal')
+plt.legend()
+plt.ylim(0,200)
 ```
 
 ## Simulating CalSrc Data
@@ -158,7 +161,8 @@ src_pars = np.array([src_amp_data, src_off_data, src_amp, src_period, src_phase,
 t_sim_src = t_data
 data_sim_src = ll.sinesat(t_sim_src, src_pars,)
 
-plot(t_sim_src, data_sim_src,',', label='Simulated Source Signal')
+plt.plot(t_sim_src, data_sim_src,',', 
+         label = 'Simulated Source Signal')
 ```
 
 ## Now Plot Data, Azimuth, Simulated and Measured source signal altogether
@@ -168,29 +172,40 @@ Data is filtered before plotting
 ####
 lowcut = 0.05
 highcut = FREQ_SAMPLING/2
-filt = scsig.butter(5, [lowcut / FREQ_SAMPLING, highcut / FREQ_SAMPLING], btype='bandpass', output='sos')
+filt = scsig.butter(5, [lowcut / FREQ_SAMPLING, highcut / FREQ_SAMPLING], 
+                    btype = 'bandpass', output = 'sos')
 data_filtered = -scsig.sosfilt(filt, data)
 
-subplot(2,1,1)
-plot(t_sim_src-t_data[0], data_sim_src,label='Simulated Source Signal', alpha=0.5)
-plot(t_src-t_data[0], (data_src-np.mean(data_src))/np.std(data_src), label='Measured Source Signal', alpha=0.5)
-plot(t_data-t_data[0], (data_filtered-np.mean(data_filtered))/np.std(data_filtered), label='Filtered Data', alpha=0.5)
-ylim(-5,5)
-legend()
-subplot(2,2,3)
-plot(t_sim_src-t_data[0], data_sim_src,label='Simulated Source Signal', alpha=0.5)
-plot(t_src-t_data[0], (data_src-np.mean(data_src))/np.std(data_src), label='Measured Source Signal', alpha=0.5)
-plot(t_data-t_data[0], (data_filtered-np.mean(data_filtered))/np.std(data_filtered), label='Filtered Data', alpha=0.5)
-ylim(-5,5)
-xlim(500,520)
-legend()
-subplot(2,2,4)
-plot(t_sim_src-t_data[0], data_sim_src,label='Simulated Source Signal', alpha=0.5)
-plot(t_src-t_data[0], (data_src-np.mean(data_src))/np.std(data_src), label='Measured Source Signal', alpha=0.5)
-plot(t_data-t_data[0], (data_filtered-np.mean(data_filtered))/np.std(data_filtered), label='Filtered Data', alpha=0.5)
-ylim(-5,5)
-xlim(4800,4820)
-legend()
+plt.subplot(2,1,1)
+plt.plot(t_sim_src - t_data[0], data_sim_src,
+     label = 'Simulated Source Signal', 
+     alpha = 0.5)
+plt.plot(t_src - t_data[0], (data_src - np.mean(data_src))/np.std(data_src), 
+     label = 'Measured Source Signal', alpha = 0.5)
+plt.plot(t_data - t_data[0], (data_filtered-np.mean(data_filtered))/np.std(data_filtered), 
+         label = 'Filtered Data', alpha = 0.5)
+plt.ylim(-5,5)
+plt.legend()
+plt.subplot(2,2,3)
+plt.plot(t_sim_src-t_data[0], data_sim_src,
+         label = 'Simulated Source Signal', alpha = 0.5)
+plt.plot(t_src-t_data[0], (data_src-np.mean(data_src))/np.std(data_src), 
+     label = 'Measured Source Signal', alpha = 0.5)
+plt.plot(t_data-t_data[0], (data_filtered-np.mean(data_filtered))/np.std(data_filtered), 
+     label = 'Filtered Data', alpha = 0.5)
+plt.ylim(-5,5)
+plt.xlim(500,520)
+plt.legend()
+plt.subplot(2,2,4)
+plt.plot(t_sim_src-t_data[0], data_sim_src,
+         label = 'Simulated Source Signal', alpha = 0.5)
+plt.plot(t_src-t_data[0], (data_src-np.mean(data_src))/np.std(data_src), 
+         label = 'Measured Source Signal', alpha = 0.5)
+plt.plot(t_data-t_data[0], (data_filtered-np.mean(data_filtered))/np.std(data_filtered), 
+         label = 'Filtered Data', alpha = 0.5)
+plt.ylim(-5,5)
+plt.xlim(4800,4820)
+plt.legend()
 
 ```
 
@@ -199,20 +214,26 @@ For some reason (to be investigated with Steve...) the measured source signal is
 ```{python}
 shift = 0.8
 
-subplot(1,2,1)
-plot(t_sim_src-t_data[0], data_sim_src,label='Simulated Source Signal', alpha=0.5)
-plot(t_src-t_data[0]-shift, (data_src-np.mean(data_src))/np.std(data_src)*3, label='Measured Source Signal', alpha=0.5)
-plot(t_data-t_data[0], (data_filtered-np.mean(data_filtered))/np.std(data_filtered), label='Filtered Data', alpha=0.5)
-#ylim(-5,5)
-#xlim(500,520)
-legend()
-subplot(1,2,2)
-plot(t_sim_src-t_data[0], data_sim_src,label='Simulated Source Signal', alpha=0.5)
-plot(t_src-t_data[0]-shift, (data_src-np.mean(data_src))/np.std(data_src)*3, label='Measured Source Signal', alpha=0.5)
-plot(t_data-t_data[0], (data_filtered-np.mean(data_filtered))/np.std(data_filtered), label='Filtered Data', alpha=0.5)
-#ylim(-5,5)
-#xlim(4800,4820)
-legend()
+plt.subplot(1,2,1)
+plt.plot(t_sim_src-t_data[0], data_sim_src,
+         label = 'Simulated Source Signal', alpha = 0.5)
+plt.plot(t_src-t_data[0]-shift, (data_src-np.mean(data_src))/np.std(data_src)*3, 
+         label = 'Measured Source Signal', alpha = 0.5)
+plt.plot(t_data-t_data[0], (data_filtered-np.mean(data_filtered))/np.std(data_filtered),
+         label = 'Filtered Data', alpha = 0.5)
+#plt.ylim(-5,5)
+#plt.xlim(500,520)
+plt.legend()
+plt.subplot(1,2,2)
+plt.plot(t_sim_src-t_data[0], data_sim_src,
+         label = 'Simulated Source Signal', alpha = 0.5)
+plt.plot(t_src-t_data[0]-shift, (data_src-np.mean(data_src))/np.std(data_src)*3, 
+         label = 'Measured Source Signal', alpha = 0.5)
+plt.plot(t_data-t_data[0], (data_filtered-np.mean(data_filtered))/np.std(data_filtered), 
+         label = 'Filtered Data', alpha = 0.5)
+#plt.ylim(-5,5)
+#plt.xlim(4800,4820)
+plt.legend()
 
 ```
 
@@ -223,7 +244,7 @@ t_src = t_src #-7200#-shift
 #### As seen above, the source data is not always present for the whole time stream. So we focus on the common region between measured source data and TES data (end simulated source signal by construction) and we take data up to the first stop of the source data (here 2000 seconds after start)
 
 ```{python}
-maxtime_src = 20
+maxtime_src = 20000
 oksrc = (t_src-t_data[0]) < maxtime_src
 new_t_src = t_src[oksrc]
 new_data_src = data_src[oksrc]
@@ -244,13 +265,19 @@ print (okaz.sum())
 oksrc = ((t_src-t_data[0]) >= tmin) & ((t_src-t_data[0]) <= tmax)
 print (oksrc.sum())
 
-plot(t_az[okaz]-t_data[0], (az[okaz]-np.mean(az[okaz]))/np.std(az[okaz]), alpha=0.5, label='Az')
-plot(t_data[okdata]-t_data[0], (data[okdata]-np.mean(data))/np.std(data[okdata]), label='Raw Data', alpha=0.5)
-plot(t_sim_src[okdata]-t_data[0], data_sim_src[okdata],label='Simulated Source Signal', alpha=0.5)
-plot(t_src[oksrc]-t_data[0], (data_src[oksrc]-np.mean(data_src[oksrc]))/np.std(data_src[oksrc])*3, label='Measured Source Signal', alpha=0.5)
-plot(t_data[okdata]-t_data[0], (data_filtered[okdata]-np.mean(data_filtered[okdata]))/np.std(data_filtered[okdata]), label='Filtered Data', alpha=0.5)
-#ylim(-5,5)
-legend()
+plt.plot(t_az[okaz]-t_data[0], (az[okaz]-np.mean(az[okaz]))/np.std(az[okaz]), 
+         alpha = 0.5, label = 'Az')
+plt.plot(t_data[okdata]-t_data[0], (data[okdata]-np.mean(data))/np.std(data[okdata]), 
+         label = 'Raw Data', alpha = 0.5)
+plt.plot(t_sim_src[okdata]-t_data[0], data_sim_src[okdata],
+         label = 'Simulated Source Signal', alpha = 0.5)
+plt.plot(t_src[oksrc]-t_data[0], (data_src[oksrc]-np.mean(data_src[oksrc]))/np.std(data_src[oksrc])*3, 
+         label = 'Measured Source Signal', alpha = 0.5)
+plt.plot(t_data[okdata]-t_data[0], 
+         (data_filtered[okdata]-np.mean(data_filtered[okdata]))/np.std(data_filtered[okdata]), 
+         label = 'Filtered Data', alpha = 0.5)
+#plt.ylim(-5,5)
+plt.legend()
 
 ```
 
@@ -278,13 +305,18 @@ data_src = data_src[oksrc]
 ```
 
 ```{python}
-plot(t_az-t_data[0], (az-np.mean(az))/np.std(az), alpha=0.5, label='Az')
-plot(t_data-t_data[0], (data-np.mean(data))/np.std(data), label='Raw Data', alpha=0.5)
-plot(t_sim_src-t_data[0], data_sim_src,label='Simulated Source Signal', alpha=0.5)
-plot(t_src-t_data[0], (data_src-np.mean(data_src))/np.std(data_src)*3, label='Measured Source Signal', alpha=0.5)
-plot(t_data-t_data[0], (data_filtered-np.mean(data_filtered))/np.std(data_filtered), label='Filtered Data', alpha=0.5)
-ylim(-5,5)
-legend()
+plt.plot(t_az-t_data[0], (az-np.mean(az))/np.std(az), 
+         alpha = 0.5, label = 'Az')
+plt.plot(t_data-t_data[0], (data-np.mean(data))/np.std(data), 
+         label = 'Raw Data', alpha = 0.5)
+plt.plot(t_sim_src-t_data[0], data_sim_src,
+         label = 'Simulated Source Signal', alpha = 0.5)
+plt.plot(t_src-t_data[0], (data_src-np.mean(data_src))/np.std(data_src)*3, 
+         label = 'Measured Source Signal', alpha = 0.5)
+plt.plot(t_data-t_data[0], (data_filtered-np.mean(data_filtered))/np.std(data_filtered), 
+         label = 'Filtered Data', alpha = 0.5)
+plt.ylim(-5,5)
+plt.legend()
 
 ```
 
@@ -357,8 +389,11 @@ angle2, sb2, dsb2, pars2, err_pars2 = dl.general_demodulate(ppp,
                                                             doplot=True, unbinned=False, 
                                                             renormalize_plot=True)
 
-errorbar(angle, sb/np.max(sb), yerr=dsb/np.max(sb), fmt='.', label='demod method for comparison')
-legend()
+plt.errorbar(angle, sb/np.max(sb), 
+             yerr = dsb/np.max(sb), 
+             fmt='.', 
+             label = 'demod method for comparison')
+plt.legend()
 ```
 
 ## Now loop on all TES with the two first methods
@@ -399,30 +434,30 @@ for TESNum in np.arange(128)+1:
 ```
 
 ```{python}
-rc('figure',figsize=(16,6))
+plt.rc('figure',figsize=(16,6))
 for im in xrange(len(methods)):
-    subplot(1,len(methods),im+1)
-    imshow(scans[im,:,:])
-    colorbar()
-    title(methods[im])
+    plt.subplot(1,len(methods),im+1)
+    plt.imshow(scans[im,:,:])
+    plt.colorbar()
+    plt.title(methods[im])
 ```
 
 ```{python}
-rc('figure',figsize=(16,6))
+plt.rc('figure',figsize=(16,6))
 for im in xrange(len(methods)):
-    hist(allpars[im,:,1], bins=10, range=[0.1,3], alpha=0.5, label=methods[im])
-legend()
+    plt.hist(allpars[im,:,1], bins=10, range=[0.1,3], alpha=0.5, label=methods[im])
+plt.legend()
 ```
 
 ```{python}
-rc('figure',figsize=(16,6))
+plt.rc('figure',figsize=(16,6))
 for im in xrange(len(methods)):
-    subplot(1,len(methods),im+1)
+    plt.subplot(1,len(methods),im+1)
     fwhm = allpars[im,:,1]
     img = ft.image_asics(data1=fwhm)
-    imshow(img,vmin=0,vmax=2)
-    colorbar()
-    title(methods[im])
+    plt.imshow(img,vmin=0,vmax=2)
+    plt.colorbar()
+    plt.title(methods[im])
 ```
 
 ```{python}

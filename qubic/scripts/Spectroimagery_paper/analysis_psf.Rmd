@@ -359,7 +359,7 @@ ax.set_xlim(-1,1)
 ax.set_ylim(-1,1)
 art = ax.pcolor(X, Y, s0map, vmin=vmin, vmax=vmax, shading='auto')
 plt.colorbar(art, ax=ax, label='z')
-ax.set_title('Mapa')
+ax.set_title('Map')
 
 ax = axs[1]
 ax.set_xlim(-1,1)
@@ -367,7 +367,7 @@ ax.set_ylim(-1,1)
 fit = np.reshape(gaussian2d_b(xscale, **result_fit[jj].best_values), (len(xscale), len(xscale)))
 art = ax.pcolor(X, Y, fit, vmin=vmin, vmax=vmax, shading='auto')
 plt.colorbar(art, ax=ax, label='z')
-ax.set_title('Ajuste')
+ax.set_title('Fit')
 
 ax = axs[2]
 #fit = model.func(X, Y, **result_s0.best_values)
@@ -375,7 +375,7 @@ ax.set_xlim(-1,1)
 ax.set_ylim(-1,1)
 art = ax.pcolor(X, Y, s0map - fit, vmin=0.3*vmin, vmax=0.3*vmax, shading='auto')
 plt.colorbar(art, ax=ax, label='z')
-ax.set_title('Diferencia')
+ax.set_title('Diff')
 fig.tight_layout()
 #plt.savefig("/home/martin/Doctorado/Tesis-Doctoral/Figuras_Tesis_Overleaf/fwhm_sketch")
 ```
@@ -441,17 +441,17 @@ ax.plot(nusfull["4"],
         data_df["fwhm_mes"],
         color = 'r', marker = '*', ls = "", ms = 10,
         alpha = 0.5,
-        label = 'FWHM medido')
+        label = 'FWHM measured')
 
 ax.plot(nusfull["4"], 
         data_df["fwhm_mes"] - model_fwhm_diff(nusfull["4"], 
                                               *parsfwhm_diff) ,
         color = 'r', marker = '*', ls = "", ms = 10,
-        label = 'FWHM corregido')
+        label = 'FWHM correct')
 
 ax.plot(nusfull["4"], fwhmTh(nusfull["4"]),#  yerr = np.diff(fwhmTh(nusedges['4']))/2,
         color = 'b', marker = 'o', ms = 10, alpha = 0.5, ls = "",# capsize = 5,
-        label = 'FWHM teórico')
+        label = 'FWHM theoretical')
 for i in range(4):
     ax.add_patch(
      patches.Rectangle(

@@ -47,14 +47,33 @@ In both cases, they are cross spectra on residuals so they should be 0.
 
 
 ```{python}
-#datadir = os.environ['DATA_SPECTROIM']
-datadir = '/home/martin/QUBIC/qubic/qubic/'
-print(datadir)
-#rep_fullpipe = datadir + '/NERSC_simuEnd2End/Bad_photon_noise2020/simu_NERSC_MC/IBCS_fullpipeline/'
-rep_fullpipe = datadir + 'data/LouiseSims/IBCS_fullpipeline/'
-
-rep_spectrumCC = datadir + 'FastSimulator/cls_spectrum_fromCC/nbands6-7/'
+#Set paths
+machine = os.uname()[1]
+def check_dir(dirfile):
+    if os.path.isdir( dirfile): 
+        print('dirfile:', dirfile); 
+    else: 
+        raise ValueError('dirfile {} is not an existing directory'.format(dirfile) )
+        
+if 'moussetDell' in machine:
+    datadir = os.environ['DATA_SPECTROIM']
+    rep_fullpipe = datadir + '/NERSC_simuEnd2End/Bad_photon_noise2020/simu_NERSC_MC/IBCS_fullpipeline/'
+    rep_spectrumCC = datadir + 'FastSimulator/cls_spectrum_fromCC/nbands6-7/'
+    check_dir(dirfiles)
+elif machine == 'hain':
+    datadir = '/home/martin/QUBIC/qubic/qubic/'
+    rep_spectrumCC = datadir + 'data/LouiseSims/IBCS_fastsim/'
+    #rep_fullpipe = datadir + 'data/LouiseSims/IBCS_fastsim/'
+    ##rep_spectrumCC = datadir + ''
+    check_dir(rep_spectrumCC)
+else:
+    raise ValueError("*dirfile variable not defined*. You are in machine named: {}. \
+    You have to specify a directory where the simulations of spectra are saved,\
+    e.g. [NERSC directory] /sps/qubic/Users/lmousset/SpectroImaging/FastSimMC/v4".format(machine))
+    
+    
 print(rep_spectrumCC)
+
 ```
 
 ```{python}
@@ -83,7 +102,7 @@ print(rep_spectrumCC)
 
 ```{python}
 clnames = ['TT', 'EE', 'BB', 'TE']
-nfrecon = 6
+nfrecon = 4
 
 # Full pipeline
 # cls_cross = np.load(rep_fullpipe + 'IBCSsame_recon_{}bands_150fullpipeline.npy'.format(nfrecon))

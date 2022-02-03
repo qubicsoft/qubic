@@ -22,17 +22,27 @@ import matplotlib.pyplot as plt
 ```
 
 ```{python}
-#day = '2019-03-31'#'2020-11-10'
-day = '2021-09-09'#'2020-11-10'
-keyword = '*2021*'
-data_dir = os.environ['QUBIC_TODDIR'] + day + "/"#+ '/media/james/DATA/QUBIC_DATA/'+day+'/'
+#Set paths
+if 'QUBIC_TODDIR' in os.environ.keys():
+    qubic_toddir = os.environ['QUBIC_TODDIR']
+    print("TOD directory: ",qubic_toddir)
+else:
+    raise ValueError("You have to specify a directory where the Time Ordered Data (TOD) are. \
+    The ussual format of the TOD root directory is yyyy-mm-dd, e.g. /sps/qubic/Data/Calib-TD at CCA")
+```
+
+```{python}
+day = '2019-03-31'#'2020-11-10'
+#day = '2021-09-09'#'2020-11-10'
+keyword = '*2019*'
+data_dir = qubic_toddir + day + "/"#+ '/media/james/DATA/QUBIC_DATA/'+day+'/'
 dirs = np.sort(glob.glob(data_dir+keyword))
 print(dirs)
 print(data_dir+keyword)
 ```
 
 ```{python}
-"""select your file"""
+print("select your file")
 ifile = 1
 thedir = dirs[ifile]
 print(thedir)
@@ -63,25 +73,20 @@ a.plot_timeline_focalplane()
 ```
 
 ```{python}
-
-```
-
-```{python}
-"""what keys do we have?"""
+print("what keys do we have?")
 print(a.hk.keys())
 a.hk.keys()
-
 ```
 
 ```{python}
-"""read key elements"""
+print("read key elements")
 print("The keys in this dictionary are:\n")
 for k in a.hk['CALSOURCE-CONF'].keys():
     print(k, a.hk['CALSOURCE-CONF'][k])
 ```
 
 ```{python}
-"""plot az el"""
+print("plot az el")
 #rc('figure',figsize=(12,12))
 
 time_azel = a.timeaxis(datatype='hk',axistype='pps')
@@ -131,7 +136,7 @@ TESNum = 76
 asic = 1
 tod = a.timeline(TES=TESNum, asic=asic)
 tt = a.timeaxis(axistype='pps', asic=asic)
-"""interpolate the calsource data to the shape of the TOD"""
+print("interpolate the calsource data to the shape of the TOD")
 #interp_src = np.interp(tt, t_src, data_src)
 print(tt.shape)
 ```
@@ -140,16 +145,4 @@ print(tt.shape)
 fig, ax = plt.subplots(nrows = 1, ncols = 1, figsize = (12,8))
 ax.set_title("Data from Salta",loc = "left", pad = 25, fontsize = 17, color = "r")
 a.plot_hwp(ax =ax)
-```
-
-```{python}
-a.calsource_info()
-```
-
-```{python}
-a.dataset_name
-```
-
-```{python}
-
 ```

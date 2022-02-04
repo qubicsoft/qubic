@@ -29,7 +29,7 @@ import numpy as np
 # Specific qubic modules
 from qubicpack.utilities import Qubic_DataDir
 from pysimulators import FitsArray
-import pysm
+import pysm3
 import qubic
 from qubic import SpectroImLib as si
 from qubic import QubicSkySim as qss

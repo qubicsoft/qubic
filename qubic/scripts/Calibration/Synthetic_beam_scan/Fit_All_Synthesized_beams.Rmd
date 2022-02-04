@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.6.0rc0
+      jupytext_version: 1.7.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -48,10 +48,33 @@ import pandas as pd
 ```
 
 ```{python}
+#Set paths
+machine = os.uname()[1]
+def check_dir(dirfile):
+    if os.path.isdir( dirfile): 
+        print('dirfile:', dirfile); 
+    else: 
+        raise ValueError('dirfile {} is not an existing directory'.format(dirfile) )
+        
+if (machine=='apcdhcp52.in2p3.fr') or (machine=='MacJCH-2.local'):
+    difiles = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/'
+    check_dir(dirfiles)
+elif machine == 'shaka':
+    dirfiles = "/home/mgamboa/qubic/QUBIC/qubiccalibration/Data/150GHz-2019-04-06/"
+    check_dir(dirfiles)
+elif machine == 'hain':
+    dirfiles = "/home/martin/QUBIC/qubiccalibration/Data/Calib-TD/150GHz-2019-04-06/"
+    check_dir(dirfiles)
+
+else:
+    raise ValueError("*dirfile variable not defined*. You are in machine named: {}. \
+    You have to specify a directory where the synthesized beam maps are saved in \
+    Flat or Healpix format (directories)".format(machine))
+```
+
+```{python}
 # Get the data
-freq_source = 130
-dirfiles = "/home/mgamboa/qubic/QUBIC/qubiccalibration/Data/150GHz-2019-04-06/"
-print('dirfiles :', dirfiles)
+freq_source = int(dirfiles.split("GHz")[0][-3:]) #130 
 
 # dirfreq = '150GHz-2019-04-06/'
 # dirallfreqs = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/Files/Synthesized Beams/Synthesized_Beams_Files/'

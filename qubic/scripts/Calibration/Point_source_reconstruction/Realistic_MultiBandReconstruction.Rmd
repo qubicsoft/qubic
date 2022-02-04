@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.10.0
+      jupytext_version: 1.4.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -23,9 +23,6 @@ import os
 import datetime as dt
 now = dt.datetime.now()
 now_str = now.strftime('%Y%m%dT%H%M%S')
-
-top_dir = '/sps/hep/qubic' # in CC-IN2P3
-user_dir = 'Users/satorchi' 
 
 # where to write output
 out_dir = None
@@ -52,12 +49,7 @@ if not os.path.isdir(out_dir):
 # synthbeam_topdir = 'SynthesizedBeams'
 # synthbeam_subdir = ''
 
-synthbeam_topdir = 'Synthesized Beams'
-synthbeam_subdir = 'Synthesized_Beams_Files'
 
-fittedpeakfile = os.sep.join([top_dir,user_dir,synthbeam_topdir,'fitted_peaks.fits'])
-if not os.path.isfile(fittedpeakfile):
-    print('File not found: ',fittedpeakfile)
     
 freq_subdir = {}
 freq_subdir[130] = '130GHz-2019-04-18'
@@ -66,16 +58,56 @@ freq_subdir[150] = '150GHz-2019-04-06'
 freq_subdir[170] = '170GHz-2019-04-14'
 
 freq_name = 150
-directory = os.sep.join([top_dir,user_dir,synthbeam_topdir,synthbeam_subdir,freq_subdir[freq_name]])
+
+
+machine = os.uname()[1]
+print(machine)
+if machine[:3]=='cca':
+    print('==========================================')
+    print('You are at the CC-IN2P3')
+    top_dir = '/sps/hep/qubic'
+    user_dir = os.environ['HOME']
+    synthbeam_topdir = 'Synthesized Beams'
+    synthbeam_subdir = 'Synthesized_Beams_Files'
+    fittedpeakfile = os.sep.join([top_dir,user_dir,synthbeam_topdir,'fitted_peaks.fits'])
+    directory = os.sep.join([top_dir,user_dir,synthbeam_topdir,synthbeam_subdir,freq_subdir[freq_name]])
+    fitted_directory = os.sep.join([top_dir,user_dir,freq_subdir[freq_name],'FitSB'])
+elif (machine=='apcdhcp98.in2p3.fr') or (machine=='MacJCH-2.local'):
+    print('==========================================')
+    print('You are on JCH laptop')
+    top_dir = '/Users/hamilton/QUBIC/Calib-TD/'
+    user_dir = os.environ['HOME']
+    synthbeam_topdir = '/Users/hamilton/Google Drive/QUBIC/Calib-TD/'
+    synthbeam_subdir = synthbeam_topdir + 'Files/Synthesized Beams/Synthesized_Beams_Files'
+    fittedpeakfile = synthbeam_topdir + 'Files/Synthesized Beams/fitted_peaks.fits'
+    directory = synthbeam_subdir+'/'+freq_subdir[freq_name]+'/'
+    fitted_directory = synthbeam_topdir + 'FitSB/'
+    
+print('==========================================')
+print('top_dir is          : ' + top_dir)
+print('user_dir is         : ' + user_dir) 
+print('synthbeam_topdir is : ' + synthbeam_topdir)
+print('synthbeam_subdir is : ' + synthbeam_subdir)
+print('directory is        : ' + directory)
+print('fitted directory is : ' + fitted_directory)
+print('fittedpeakfile is.  : ' + fittedpeakfile)
+print('==========================================')
+
+if not os.path.isfile(fittedpeakfile):
+    print('File not found: ',fittedpeakfile)
+
+
+
+
+
 
 if not os.path.isdir(directory):
-    print('Directory not found: ',directory)
+    print('Directory "directory" not found: ',directory)
 
-user_dir = 'Users/mmgamboa'
-fitted_directory = os.sep.join([top_dir,user_dir,freq_subdir[freq_name],'FitSB'])
 if not os.path.isdir(fitted_directory):
-    print('Directory not found: ',fitted_directory)
+    print('Directory "fitted_directory" not found: ',fitted_directory)
 
+    
 ```
 
 ```{python}
@@ -110,6 +142,10 @@ import qubic.selfcal_lib as sc
 import os,sys,inspect
 from qubic import jchinstrument as jcinst
 
+```
+
+```{python}
+out_dir
 ```
 
 ```{python}
@@ -830,6 +866,7 @@ def mygaussian(x, pars, extra_args=None):
 
 nu0 = 150.
 
+rc('font', size=12)
 sh = np.shape(maps[0])
 nbmc = 1000
 mycenter = np.reshape(np.array([100.,108.]), (1,2))
@@ -860,7 +897,7 @@ dnu = 0.5*(nus_edge[1:]-nus_edge[:-1])
 covar = np.cov(mcflux)
 err_flux = np.sqrt(np.diag(covar))
 
-thsig = nu0/8/2.35
+thsig = nu0/7/2.35
 guess = np.array([np.min(flux), np.max(flux)-np.min(flux), nu0, thsig ])
 fitg = ft.do_minuit(nus, flux, covar, guess, functname=mygaussian, fixpars=[0,0,0,0])
 
@@ -898,11 +935,41 @@ plot(xxx, mygaussian(xxx, fitg[1])-fitg[1][0], label=r'Expected: $\nu_0$={0:} $\
      #label=r'$\nu_0$={0:5.1f} +/- {1:5.1f}'.format(fitg[1][2], fitg[2][2])+'\n'+r'$\sigma$={0:5.1f} +/- {1:5.1f}'.format(fitg[1][3], fitg[2][3]))
 axhline(y=0,color='k', ls='--')
 title('QUBIC Laboratory data')
-xlabel('Frequency', fontsize=14)
-ylabel('Source Flux', fontsize=14)
+xlabel('Frequency', fontsize=12)
+ylabel('Source Flux', fontsize=12)
 ylim(-np.abs(np.min(flux-fitg[1][0])*1.3), np.max(flux-fitg[1][0])*1.3)
 xlim(130, 170)
+ylim(-0.5, 8)
 legend(loc='upper left')
+```
+
+```{python}
+
+#mycovar = covar.copy()
+mycovar = np.diag(np.diag(covar))
+
+guess = np.array([np.min(flux), np.max(flux)-np.min(flux), nu0, thsig ])
+fitg = ft.do_minuit(nus, flux, mycovar, guess, functname=mygaussian, fixpars=[0,0,1,1])
+
+resid = mygaussian(nus, fitg[1])-flux
+chi2 = np.dot(np.dot(resid.T, np.linalg.inv(mycovar)), resid)
+print('Chi2={} ndf={}'.format(chi2, len(flux)-2))
+
+xxx = np.linspace(120, 180, 100)
+print(fitg[1])
+print(fitg[2])
+subplot(2,3,1)
+errorbar(nus,flux-fitg[1][0], yerr=err_flux, xerr=dnu, fmt='ro', label='QUBIC Data')
+plot(xxx, mygaussian(xxx, fitg[1])-fitg[1][0], label='Theory')
+     #label=r'$\nu_0$={0:5.1f} +/- {1:5.1f}'.format(fitg[1][2], fitg[2][2])+'\n'+r'$\sigma$={0:5.1f} +/- {1:5.1f}'.format(fitg[1][3], fitg[2][3]))
+axhline(y=0,color='k', ls='--')
+#title('QUBIC Laboratory data')
+xlabel('Frequency', fontsize=15)
+ylabel('Source Flux', fontsize=15)
+ylim(-np.abs(np.min(flux-fitg[1][0])*1.3), np.max(flux-fitg[1][0])*1.3)
+xlim(130, 170)
+ylim(-0.5, 8)
+legend(loc='upper right')
 ```
 
 ```{python}
@@ -910,8 +977,8 @@ okpix = cov > 0.3
 all_maps_recon_custom_new_cut = all_maps_recon_custom_new.copy()
 all_maps_recon_custom_new_cut[:,~okpix] = 0
 fig = figure(figsize=(32,32))
-rc('xtick', labelsize=40) 
-rcParams['font.size'] = 40
+rc('xtick', labelsize=12) 
+rcParams['font.size'] = 12
 maps = []
 for k in range(nf_sub_rec):
     okpix = all_maps_recon_custom_new_cut[k,:] != 0
@@ -952,9 +1019,9 @@ plot(xxx, mygaussian(xxx, fitg[1])-fitg[1][0], label=r'Expected: $\nu_0$={0:} $\
      #label=r'$\nu_0$={0:5.1f} +/- {1:5.1f}'.format(fitg[1][2], fitg[2][2])+'\n'+r'$\sigma$={0:5.1f} +/- {1:5.1f}'.format(fitg[1][3], fitg[2][3]))
 axhline(y=0,color='k', ls='--')
 #title('QUBIC Laboratory data')
-xlabel('Frequency', fontsize=40)
-ylabel('Source Flux', fontsize=40)
-tick_params(axis='both',labelsize=40)
+xlabel('Frequency', fontsize=12)
+ylabel('Source Flux', fontsize=12)
+tick_params(axis='both',labelsize=12)
 ylim(-np.abs(np.min(flux-fitg[1][0])*1.3), np.max(flux-fitg[1][0])*1.5)
 xlim(130, 170)
 legend(loc='upper left',fontsize=20)
@@ -962,6 +1029,12 @@ tight_layout()
 
 
 
+```
+
+```{python}
+#nus
+#(flux-fitg[1][0])/fitg[1][1]
+err_flux/fitg[1][1]
 ```
 
 ```{python}

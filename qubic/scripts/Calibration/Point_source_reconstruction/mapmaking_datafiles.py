@@ -12,12 +12,16 @@ This file aims to have the functions to do map making using data files
 import os
 import sys 
 from warnings import warn
+import warnings
 import pickle 
 
 import numpy as np
 import healpy as hp
 import matplotlib.pyplot as plt 
 from matplotlib import *
+from astropy.io import fits as pyfits
+import glob
+import time
 
 from pysimulators import FitsArray
 
@@ -26,10 +30,240 @@ import qubic.selfcal_lib as sc
 from qubicpack.utilities import Qubic_DataDir
 import qubic.sb_fitting as sbfit
 import jchinstrument as jcinst
+import qubic.demodulation_lib as dl
 import toolfit_hpmap as fh
 import qubic.fibtools as ft
 import qubic.SpectroImLib as si
+from qubicpack.qubicfp import qubicfp
+
 from qubicpack.pixel_translation import make_id_focalplane, plot_id_focalplane, tes2pix, tes2index
+
+def read_calsource_data(qubic_fp, date = None, 
+						keyword = None, datadir = None,
+						datacal = None, verbose = False):
+
+	"""
+	This method read the calibration source data using qubicpack. The data was stored in a different way before 
+	Nov 2019 and after Nov 2019 that's why you will find there are two ways to find and read the data.
+
+	qubic_fp: 
+			qubicfp class. Focal plane of QUBIC build using qubicpack
+	date: 
+			string. YYYY-MM-DD of the scan
+	keyword:
+			string. keyword used in the scan
+	datadir: 
+			string. Root directory where RAW TOD is placed (the one where dirs for each scan are).
+	datacal:
+			string. Root directory where calibration data is placed. This argument is only need it
+			when you are reading data before Nov 2019 (arround 10th) and this data is usually saved in
+			"calsource" directory. The format of the files are "calsource_YYYYMMDDTHHMMSS.fits"
+	===============
+	return:
+			calsource_time and calsource_data. Time and data of the calibration source
+	"""
+
+	if not isinstance(date, str) or not isinstance(keyword, str) or not isinstance(datadir, str):
+		raise ValueError("date, key or datadir is not {} class".format(str))
+	if not isinstance(qubic_fp, qubicfp):
+		raise ValueError("qubic_fp is not the right class: {}".format(qubicfp().__class__))
+
+	try:
+		os.path.isdir(datadir)
+	except:
+		raise ValueError("[path problem] datadir does not exist in your machine: {}".format(datadir))
+
+	dirs = np.sort(glob.glob(datadir + keyword))
+
+	if int(date.replace("-", "")) > 20191110:
+		if verbose: print("Reading calibration source. Date: {}".format(date))
+		calsource_time = qubic_fp.calsource()[0]
+		calsource_data = qubic_fp.calsource()[1]
+	elif int(date.replace("-", "")) < 20191110:
+		if verbose: print("Reading calibration source. Date: {}".format(date))
+		warnings.warn("The format of this kind of files has some tricks to read and plot, keep that in mind.",
+						UserWarning, stacklevel=2)
+		if datacal == None: 
+			raise ValueError("[path problem] You have to provide a directory where the calsource data is.")
+		try:
+			os.path.isdir(datacal)
+		except:
+			raise ValueError("[path problem] datacal does not exist in your machine: {}".format(datacal))
+
+		filesname = glob.glob(datacal + "*{}*.fits".format(date.replace("-", "")))
+		calsource_time, calsource_data = [], []
+		for eachfile in filesname:
+			hdufile = pyfits.open(eachfile)
+			hdu = qubic_fp.read_calsource_fits(hdufile[1])
+			calsource_time.append(qubic_fp.hk['CALSOURCE']['timestamp'])
+			calsource_data.append(qubic_fp.hk['CALSOURCE']['Value'])
+	else:
+		raise ValueError("The day argument is not in the correct format 'YYYY-MM-DD'.")
+
+	return calsource_time, calsource_data
+
+def pipe_demodulation(QubicFocPlane, 
+					time_calsource, data_calsource,
+					path_demod_data_save, 
+					demodulate = False,
+					demod_method = "demod_quad",
+					remove_noise = True,
+					lowcut = 0.5,
+					highcut = 70,
+					nharm = 10,
+					verbose = False):
+
+	"""
+	This method computes the demodulation of the signal from the raw tod. It returns the amplitud
+	and time demodulated using demodulation_lib.py
+
+	====================
+	Arguments:
+		QubicFocPlane:
+			qubicpack.qubicfp.qubicfp instantiation.
+		time_calsource, data_calsource: 
+			time and data from the calibration source files. 
+		path_demod_data_save:
+			path where to save or read the demodulated time and data. 
+		demodulate:
+			If True, it demodulates the signal. Otherwise, if False, it reads the demodulated data 
+			from directory
+		demod_method: 
+			mthod to use to demodulate data (see options in demodulated_lib.demodulated_methods)
+		remove_noise:
+		lowcut:
+		highcut:
+		nharm:
+	====================
+	Return:
+		demodulated_time:
+			time demodulated
+		demodulated_data:
+			data demodulated
+		"""
+	thefreqmod = 1.
+
+	period = 1./ thefreqmod
+	notch = np.array([[1.724, 0.005, nharm]])
+	fourier_cuts = [lowcut, highcut, notch]
+
+	t0 = time.time()
+	if demodulate: 
+		try: 
+			if not os.path.isdir(path_demod_data_save): 
+				os.mkdir(path_demod_data_save) 
+			else: 
+				print("Saving demodulated data and time in existing directory: {}".format(
+					path_demod_data_save))
+				False 
+		except: 
+			raise ValueError("[path problem] I couldn't create the root directory \
+				where save the demodulated data: {}".format(path_demod_data_save))
+		# Do one TES to just pick the shape 
+		tod_temp = QubicFocPlane.timeaxis(axistype = 'pps', asic = 1)
+		temp_amps = dl.demodulate_methods([QubicFocPlane.timeaxis(
+			axistype = 'pps', asic = 1), QubicFocPlane.timeline(TES = 1, asic = 1)], 
+			1./period, 
+			src_data_in = [tod_temp, np.interp(tod_temp, time_calsource, data_calsource)],
+			method = demod_method, 
+			remove_noise = remove_noise,
+			fourier_cuts = fourier_cuts)[1]
+
+		demodulated_amps = np.zeros((256, len(temp_amps)))
+
+		for asic in [1,2]:
+			tod_time = QubicFocPlane.timeaxis(axistype = 'pps', asic = asic)
+			source = [tod_time, np.interp(tod_time, time_calsource, data_calsource)]
+			for i in range(128):
+				print('Mapmaking for Asic {} TES {}'.format(asic, i + 1))    
+				tod_data = QubicFocPlane.timeline(TES = i + 1, asic = asic)
+
+				print('- Demodulation')
+				demodulated_time, demodulated_amps[i+128*(asic-1),:], errors_demod = dl.demodulate_methods(
+																			[tod_time, tod_data],
+																			1./period, 
+																			src_data_in = source,
+																			method = demod_method, 
+																			remove_noise = remove_noise,
+																			fourier_cuts = fourier_cuts)
+		if verbose: print("Time spent in demodulate raw data: {} minutes".format((time.time()-t0)/60) )
+		for i in range(256):
+			FitsArray(demodulated_amps[i,:]).save(path_demod_data_save + \
+											'tod_data_demodulated_TESNum_{}.fits'.format(i+1))    
+		FitsArray(demodulated_time).save(path_demod_data_save + 'tod_time_demodulated.fits')
+		
+	elif not demodulate:
+		print("Reading demodulated data")
+		demodulated_amps = []
+		for i in range(256):
+			demodulated_amps.append(np.array(FitsArray(path_demod_data_save + \
+												 'tod_data_demodulated_TESNum_{}.fits'.format(i+1))))
+		demodulated_time = np.array(FitsArray(path_demod_data_save + 'tod_time_demodulated.fits'))
+		if verbose: print("Time spent in read demodulated data: {} minutes".format((time.time()-t0)/60))
+
+	return demodulated_time, demodulated_amps
+
+def hall_pointing(az, el, angspeed_psi, maxpsi,
+				 date_obs=None, latitude=None, longitude=None,fix_azimuth=None,random_hwp=True):
+	"""
+	This method will reproduce the pointing that is used in the hall to take the data. Will start from bottom
+	left and will go up at fixed elevation.
+	"""
+
+	nsamples = len(az)*len(el)
+	pp = qubic.QubicSampling(nsamples,date_obs=date_obs, period=0.1, latitude=latitude,longitude=longitude)
+	
+	#Comented because we do not go and back in simulations.. 
+	#mult_el = []
+	#for eachEl in el:
+	#    mult_el.append(np.tile(eachEl, 2*len(az)))
+	# Azimuth go and back and same elevation. 
+	#az_back = az[::-1]
+	#az = list(az)
+	#az.extend(az_back)
+	#mult_az = np.tile(az, len(el))
+	#print(i,np.asarray(mult_el).ravel().shape)
+	#pp.elevation = np.asarray(mult_el).ravel()
+	#pp.azimuth = np.asarray(mult_az).ravel()
+	
+	mult_el = []
+	for eachEl in el:
+		mult_el.extend(np.tile(eachEl, len(az)))
+	mult_az = []
+	
+	mult_az.append(np.tile(az, len(el)))
+	
+	
+	pp.elevation = np.asarray(mult_el)#az2d.ravel()
+	pp.azimuth = np.asarray(mult_az[0])#el2d.ravel()
+	
+	### scan psi as well,
+	pitch = pp.time * angspeed_psi
+	pitch = pitch % (4 * maxpsi)
+	mask = pitch > (2 * maxpsi)
+	pitch[mask] = -pitch[mask] + 4 * maxpsi
+	pitch -= maxpsi
+	
+	pp.pitch = pitch
+	
+	if random_hwp:
+		pp.angle_hwp = np.random.random_integers(0, 7, nsamples) * 11.25
+		
+	if fix_azimuth['apply']:
+		pp.fix_az=True
+		if fix_azimuth['fix_hwp']:
+			pp.angle_hwp=pp.pitch*0+ 11.25
+		if fix_azimuth['fix_pitch']:
+			pp.pitch= 0
+	else:
+		pp.fix_az=False
+
+	return pp
+
+
+
+
+
 
 
 def select_det(q,idqp):
@@ -269,7 +503,7 @@ def do_some_dets(detnums, d, p, directory, fittedpeakfile, az, el, proj_name, cu
 
 
 	if nside is not None:
-		d['nside']=nside
+		d['nside'] = nside
 	s = qubic.QubicScene(d)
 	
 	if q == None:

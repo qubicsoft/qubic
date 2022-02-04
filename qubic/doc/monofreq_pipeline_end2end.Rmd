@@ -92,7 +92,7 @@ print(d['effective_duration'])
 # Input sky
 ### Some words about maps.
 
-In this case we read a map $X_0$ simulated previously which contains fluctuations in temperature and polarization. Because we are using Healpy module (HEALPix implemented in Python) the number of pixels of each map has to be $$n_{pix} = 12 \times n_{side}^2$$ where $nside = 2\times j, \qquad j = 1,2,... $.
+In this case we read a map $X_0$ simulated previously which contains fluctuations in temperature and polarization. Because we are using Healpy module (HEALPix implemented in Python) the number of pixels of each map has to be $$n_{pix} = 12 \times N_{side}^2$$ where $N_{side} = 2^j, \qquad j = 1,2,... $.
 
 ```{python}
 # Make a sky using PYSM
@@ -121,7 +121,13 @@ for istk in range(3):
                 title = 'Gnomview {0} Stokes parameter'.format(d['kind'][istk]))
 ```
 
-# TOD simulation
+# Time Ordered Data (TOD) simulation
+
+TOD are the signal as a function of time for each bolometer.
+
+$$TOD = AS + n$$
+
+where $A$ is the pointing matrix, $S$ the sky and $n$ the noise.
 
 ```{python}
 # Pointing strategy
@@ -155,6 +161,45 @@ plt.xlabel('Pointing index')
 plt.ylabel(f'TOD from TES {tes} [W]')
 plt.title('FI - 220GHz - Noiseless={} CMB - STD = {:.4} W'.format( d['noiseless'], np.std(TOD)))
 ```
+
+### About memory used 
+For end-2-end simulations, the dificulty is the memory requirement. This is why for large number of pointings, you need to parallelize on several machines. The Qubic soft is written in order that parallelization is possible.
+
+During TOD making and map-making, you see this line printed:
+
+    $ Info moussetDell: Allocating (2976000,9) elements = 408.69140625 MiB in FSRRotation3dMatrix.__init__.
+
+This is the size of the pointing matrix A. The shape is $(N_{det} x N_{ptgs}, N_{peaks})$ where $N_{det}$ is the number of bolometers (992 for the FI and 248 for the TD), $N_{ptgs}$ the number of pointings and $N_{peaks}$ the number of peaks taken into account in the synthetic beam. 
+
+$N_{peaks}$ is fixed by the synthbeam kmax and the synthbeam fraction both defined in the dictionary.
+
+If the synthbeam fraction is one then $N_{peaks} = (2 \times kmax+1)^2$. Each peak has a given integral, they get smaller as kmax increases. The synthbeam fraction is the fraction of the total integral (over all the peaks) which corresponds to the number of peaks you keep.
+
+**Example**:
+
+    For 9 peaks, with the following repartition: 
+        * central peak 50\% of the power in its integral
+        * the 4 forming the nearest cross are each 10\%
+        * the 4 furthest one each 2.5\%
+    Then for $sb_frac = 0.9$, the 4 furthest ones will be eliminated. 
+
+Finally, with $N_{ptgs} = 3000$, $(N_{det}=992$, $kmax=1$ and $sb_frac=1$, the shape of A is (2976000,9).
+
+The **size in MiB** will be: 
+
+```{python}
+Ndet = len(q.detector.index) # Number of detectors
+Size = Ndet * d['npointings'] * 9 * 16
+print('Size of A:', Size, 'bits')
+print('Size of A:', Size/(1024**2), 'MiB')
+```
+
+Note that in case **polyacquisition** (several frequency bands), there is one operator A for each band so the memory required is proportionnal to the number of bands.
+
+Last remark, if you run on several machines **in parallel**, for example at NERSC or at CC-in2p3, the memory is split between the machines. So in the calculation above, you need to divide by the number of machines in order to understand the print:
+    
+    $ Info moussetDell: Allocating (2976000,9) elements = 408.69140625 MiB in FSRRotation3dMatrix.__init__.
+
 
 # Coverage map
 

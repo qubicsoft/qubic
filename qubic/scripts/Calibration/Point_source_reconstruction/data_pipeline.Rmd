@@ -5,11 +5,11 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.7.1
+      jupytext_version: 1.6.0rc0
   kernelspec:
-    display_name: Python [conda env:py36env] *
+    display_name: Python 3
     language: python
-    name: conda-env-py36env-py
+    name: python3
 ---
 
 # Pipeline for reconstruction point source from raw data
@@ -50,6 +50,7 @@ from importlib import reload
 import scipy.ndimage.filters as f
 import healpy as hp
 import pickle
+import numpy as np
 from matplotlib import rc
 import matplotlib.pyplot as plt
 from matplotlib import rc
@@ -90,8 +91,24 @@ Output files in: `/home/mgamboa/qubic/QUBIC/qubiccalibration/Data/150GHz-2019-04
 script used: `Analyse-Scan-2020-01-15-MemorySave.Rmd` and `Sample_Demodulation`
 
 ```{python}
+def check_dir(dirfile):
+    if os.path.isdir( dirfile): 
+        print('dirfile: {} exist'.format(dirfile)) 
+    else: 
+        raise ValueError('dirfile {} is not an existing directory'.format(dirfile) )
+        
+if 'QUBIC_TODDIR' in os.environ.keys():
+    qubic_toddir = os.environ['QUBIC_TODDIR']
+    print("TOD directory: ",qubic_toddir)
+    check_dir(qubic_toddir)
+else:
+    raise ValueError("You have to specify a directory where the Time Ordered Data (TOD) are. \
+    The ussual format of the TOD root directory is yyyy-mm-dd, e.g. /sps/qubic/Data/Calib-TD at CCA")
+```
+
+```{python}
 # Setup
-verbose = False
+verbose = True
 
 #Directories
 # Read data
@@ -104,14 +121,31 @@ if confg == "new":
 elif confg == "old":
     day = '2019-04-06'
     keyword = '*ScanMap*'
-    dirfile = "/home/martin/QUBIC/qubiccalibration/Data/Calib-TD/calsource/"
+    dirfile = qubic_toddir + "calsource/"
 
 # Directory where the raw TOD are save
-data_dir = '/home/martin/QUBIC/qubiccalibration/Data/Calib-TD/'+day+'/'
+data_dir = qubic_toddir + day + '/'
 
 # Where to save the demodulated data 
-savedirtest = '/home/martin/pruebas/qubicpipe/'
+savedirtest = '/home/mgamboa/pruebas/qubicpipe/'
 savetoddemod = savedirtest + "Demod_TOD/"
+saveflatmaps = savedirtest + "Flat/"
+#create directory if None
+if not os.path.isdir(savetoddemod):
+    print("Creating {} directory to save demodulated TODs".format(savetoddemod))
+    os.mkdir(savetoddemod)
+    print("Done? {}".format(os.path.isdir(savetoddemod)))
+else: 
+    print("Demodulated TODs in")
+    check_dir(savetoddemod)
+if not os.path.isdir(saveflatmaps):
+    print("Creating {} directory to save maps".format(saveflatmaps))
+    os.mkdir(saveflatmaps)
+    print("Done? {}".format(os.path.isdir(saveflatmaps)))
+else:
+    print("Flat maps in .fits format in")
+    check_dir(saveflatmaps)
+    
 #take files from raw data (TOD) diretory
 dirs = np.sort(glob.glob(data_dir + keyword))
 ```
@@ -263,7 +297,7 @@ nharm = 10
 notch = np.array([[1.724, 0.005, nharm]])
 fourier_cuts = [lowcut, highcut, notch]
 
-demodulate = False
+demodulate = True
 newt_demod, amps_demod = md.pipe_demodulation(QubicFP, t_src, data_src,
                                              savetoddemod,
                                              demodulate = demodulate,
@@ -326,7 +360,7 @@ azmax = max(az)
 elmin = min(el)
 elmax = max(el)
 
-ComputeFlatMaps = True
+ComputeFlatMaps = False
 if ComputeFlatMaps:
     newaz = np.interp(newt_demod, time_azel, az)
     newel = np.interp(newt_demod, time_azel, el)
@@ -341,17 +375,17 @@ if ComputeFlatMaps:
                                             azmin = azmin, azmax = azmax, 
                                             elmin = elmin, elmax = elmax, 
                                             naz = naz, nel = nel)
-    FitsArray(azmap).save(savedirtest + 'Demod_TOD/azimuth.fits')    
-    FitsArray(elmap).save(savedirtest + 'Demod_TOD/elevation.fits')    
+    FitsArray(azmap).save(savetoddemod + 'azimuth.fits')    
+    FitsArray(elmap).save(savetoddemod + 'elevation.fits')    
     for i in range(256):
-        FitsArray(mapdata[i,:,:]).save(savedirtest + 'Flat/imgflat_TESNum_{}.fits'.format(i+1))  
+        FitsArray(mapdata[i,:,:]).save(saveflatmaps + 'imgflat_TESNum_{}.fits'.format(i+1))  
     
 elif not ComputeFlatMaps:
-    azmap = np.array(FitsArray(savedirtest + 'Demod_TOD/azimuth.fits'))
-    elmap = np.array(FitsArray(savedirtest + 'Demod_TOD/elevation.fits'))
+    azmap = np.array(FitsArray(savetoddemod + 'azimuth.fits'))
+    elmap = np.array(FitsArray(savetoddemod + 'elevation.fits'))
     mapdata = np.zeros((256, len(azmap[0]), len(elmap[0])))
     for i in range(256):
-        mapdata[i,:,:] = np.array(FitsArray(savedirtest + 'Flat/imgflat_TESNum_{}.fits'.format(i+1)))
+        mapdata[i,:,:] = np.array(FitsArray(saveflatmaps + 'imgflat_TESNum_{}.fits'.format(i+1)))
 ```
 
 ```{python}
@@ -359,13 +393,13 @@ elif not ComputeFlatMaps:
 TESNum = 95
 ites = TESNum - 1
 mm, ss = ft.meancut(mapdata[ites,:,:],3)
-imshow(mapdata[ites,:,:], aspect = 'equal',
+plt.imshow(mapdata[ites,:,:], aspect = 'equal',
        extent = [np.cos(np.radians(50)) * azmin, 
                  np.cos(np.radians(50)) * azmax, 
                  elmin, 
                  elmax],
        vmin = 0, vmax = 2e6)
-title('TES {}'.format(ites+1))
+plt.title('TES {}'.format(ites+1))
 ```
 
 All TES. Save flat maps in files. 

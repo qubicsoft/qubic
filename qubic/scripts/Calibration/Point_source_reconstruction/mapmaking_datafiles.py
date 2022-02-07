@@ -149,6 +149,22 @@ def pipe_demodulation(QubicFocPlane,
 
 	t0 = time.time()
 	if demodulate: 
+		if os.path.isfile(path_demod_data_save + "tod_data_demodulated_TESNum_120.fits"):
+			print("In {} there EXISTS files so probably your data is already \
+				demodulated,".format(path_demod_data_save))
+			confirm_demodulate = input("Would you like to demodulate the data anyway? \
+				(1 if True, 0 if False)")
+
+			confirm_demodulate = bool(confirm_demodulate)
+			
+			if (confirm_demodulate == 1) or (confirm_demodulate == True): 
+			
+				warn("(re)Demodulation confirmed! ")
+			
+			else:
+			
+				sys.exit("Stopped!")
+
 		try: 
 			if not os.path.isdir(path_demod_data_save): 
 				os.mkdir(path_demod_data_save) 
@@ -186,7 +202,7 @@ def pipe_demodulation(QubicFocPlane,
 																			method = demod_method, 
 																			remove_noise = remove_noise,
 																			fourier_cuts = fourier_cuts)
-		if verbose: print("Time spent in demodulate raw data: {} minutes".format((time.time()-t0)/60) )
+		if verbose: print("Time spent in demodulate raw data: {:.2f} minutes".format((time.time()-t0)/60) )
 		for i in range(256):
 			FitsArray(demodulated_amps[i,:]).save(path_demod_data_save + \
 											'tod_data_demodulated_TESNum_{}.fits'.format(i+1))    
@@ -199,7 +215,7 @@ def pipe_demodulation(QubicFocPlane,
 			demodulated_amps.append(np.array(FitsArray(path_demod_data_save + \
 												 'tod_data_demodulated_TESNum_{}.fits'.format(i+1))))
 		demodulated_time = np.array(FitsArray(path_demod_data_save + 'tod_time_demodulated.fits'))
-		if verbose: print("Time spent in read demodulated data: {} minutes".format((time.time()-t0)/60))
+		if verbose: print("Time spent in read demodulated data: {:.2f} minutes".format((time.time()-t0)/60))
 
 	return demodulated_time, demodulated_amps
 

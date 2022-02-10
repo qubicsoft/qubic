@@ -106,12 +106,13 @@ def pipe_demodulation(QubicFocPlane,
 					time_calsource, data_calsource,
 					path_demod_data_save, 
 					demodulate = False,
-					demod_method = "demod_quad",
-					remove_noise = True,
+					#method = "demod_quad",
+					#remove_noise = True,
 					lowcut = 0.5,
 					highcut = 70,
 					nharm = 10,
-					verbose = False):
+					verbose = False,
+					**kwargs_demod_lib):
 
 	"""
 	This method computes the demodulation of the signal from the raw tod. It returns the amplitud
@@ -141,11 +142,13 @@ def pipe_demodulation(QubicFocPlane,
 		demodulated_data:
 			data demodulated
 		"""
+	#kwargs_demod_lib["method"] = demod_method
+	#kwargs_demod_lib["remove_noise"] = remove_noise
 	thefreqmod = 1.
 
 	period = 1./ thefreqmod
 	notch = np.array([[1.724, 0.005, nharm]])
-	fourier_cuts = [lowcut, highcut, notch]
+	kwargs_demod_lib["fourier_cuts"] = [lowcut, highcut, notch]
 
 	t0 = time.time()
 	if demodulate: 
@@ -156,7 +159,7 @@ def pipe_demodulation(QubicFocPlane,
 				(1 if True, 0 if False)")
 
 			confirm_demodulate = bool(confirm_demodulate)
-			
+			print(confirm_demodulate)
 			if (confirm_demodulate == 1) or (confirm_demodulate == True): 
 			
 				warn("(re)Demodulation confirmed! ")
@@ -175,21 +178,20 @@ def pipe_demodulation(QubicFocPlane,
 		except: 
 			raise ValueError("[path problem] I couldn't create the root directory \
 				where save the demodulated data: {}".format(path_demod_data_save))
+
 		# Do one TES to just pick the shape 
 		tod_temp = QubicFocPlane.timeaxis(axistype = 'pps', asic = 1)
+		kwargs_demod_lib["src_data_in"] = [tod_temp, np.interp(tod_temp, time_calsource, data_calsource)]
 		temp_amps = dl.demodulate_methods([QubicFocPlane.timeaxis(
 			axistype = 'pps', asic = 1), QubicFocPlane.timeline(TES = 1, asic = 1)], 
 			1./period, 
-			src_data_in = [tod_temp, np.interp(tod_temp, time_calsource, data_calsource)],
-			method = demod_method, 
-			remove_noise = remove_noise,
-			fourier_cuts = fourier_cuts)[1]
+			**kwargs_demod_lib)[1]
 
 		demodulated_amps = np.zeros((256, len(temp_amps)))
 
 		for asic in [1,2]:
 			tod_time = QubicFocPlane.timeaxis(axistype = 'pps', asic = asic)
-			source = [tod_time, np.interp(tod_time, time_calsource, data_calsource)]
+			kwargs_demod_lib["src_data_in"] = [tod_time, np.interp(tod_time, time_calsource, data_calsource)]
 			for i in range(128):
 				print('Mapmaking for Asic {} TES {}'.format(asic, i + 1))    
 				tod_data = QubicFocPlane.timeline(TES = i + 1, asic = asic)
@@ -198,14 +200,19 @@ def pipe_demodulation(QubicFocPlane,
 				demodulated_time, demodulated_amps[i+128*(asic-1),:], errors_demod = dl.demodulate_methods(
 																			[tod_time, tod_data],
 																			1./period, 
-																			src_data_in = source,
-																			method = demod_method, 
-																			remove_noise = remove_noise,
-																			fourier_cuts = fourier_cuts)
+																			**kwargs_demod_lib)
+																			
+				
+				index = 128 * (asic - 1) + i
+				num_for_name = int(index + 1)
+				if verbose: print("saving index {} number file {}".format(index, num_for_name ) ) 
+				
+				FitsArray(demodulated_amps[index,:]).save(path_demod_data_save + \
+											'tod_data_demodulated_TESNum_{}.fits'.format(num_for_name))
 		if verbose: print("Time spent in demodulate raw data: {:.2f} minutes".format((time.time()-t0)/60) )
-		for i in range(256):
-			FitsArray(demodulated_amps[i,:]).save(path_demod_data_save + \
-											'tod_data_demodulated_TESNum_{}.fits'.format(i+1))    
+		#for i in range(256):
+		#	FitsArray(demodulated_amps[i,:]).save(path_demod_data_save + \
+		#									'tod_data_demodulated_TESNum_{}.fits'.format(i+1))    
 		FitsArray(demodulated_time).save(path_demod_data_save + 'tod_time_demodulated.fits')
 		
 	elif not demodulate:

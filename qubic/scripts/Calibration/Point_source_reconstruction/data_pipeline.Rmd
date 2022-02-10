@@ -72,23 +72,11 @@ import qubic.SpectroImLib as si
 import qubic.selfcal_lib as sc
 import qubicpack as qp
 
-## Import jchinstrument from ../
-#current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-#parent_dir = os.path.dirname(current_dir)
-#sys.path.insert(0, parent_dir) 
-#import jchinstrument as jcinst
-
-#global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
-
 # Super local module
 import mapmaking_datafiles as md
 ```
 
-**1st)** Use `fit_sb` from `demodulation_lib` module from `qubicsoft` package. 
-
-Output files in: `/home/mgamboa/qubic/QUBIC/qubiccalibration/Data/150GHz-2019-04-06/[Flat, Healpix]`
-
-script used: `Analyse-Scan-2020-01-15-MemorySave.Rmd` and `Sample_Demodulation`
+**0th)** Set local paths --> `Directories` dictionary contains all necessary directories to run in this notebook
 
 ```{python}
 def check_dir(dirfile):
@@ -102,8 +90,12 @@ if 'QUBIC_TODDIR' in os.environ.keys():
     print("TOD directory: ",qubic_toddir)
     check_dir(qubic_toddir)
 else:
-    raise ValueError("You have to specify a directory where the Time Ordered Data (TOD) are. \
+    qubic_toddir = input("You have to specify a directory where the Time Ordered Data (TOD) are. \
     The ussual format of the TOD root directory is yyyy-mm-dd, e.g. /sps/qubic/Data/Calib-TD at CCA")
+    print("Introduce the directory where the TOD's are: ",qubic_toddir)
+    check_dir(qubic_toddir)
+    #raise ValueError("You have to specify a directory where the Time Ordered Data (TOD) are. \
+    #The ussual format of the TOD root directory is yyyy-mm-dd, e.g. /sps/qubic/Data/Calib-TD at CCA")
 ```
 
 ```{python}
@@ -113,21 +105,27 @@ verbose = True
 #Directories
 # Read data
 reload(md)
-confg = 'new'
+confg = 'old'
 if confg == "new":
     day = '2020-03-16'
     keyword = '*ScanFast*'
     dirfile = None
+    savedirtest = '/home/mgamboa/pruebas/qubicpipenew/'
 elif confg == "old":
-    day = '2019-04-06'
+    #day = '2019-04-06'
+    day = '2019-03-31'
     keyword = '*ScanMap*'
     dirfile = qubic_toddir + "calsource/"
+    savedirtest = '/home/mgamboa/pruebas/qubicpipeold/'
 
 # Directory where the raw TOD are save
 data_dir = qubic_toddir + day + '/'
 
+if not os.path.isdir(savedirtest):
+    print("Creating {} directory to save demodulated TODs".format(savedirtest))
+    os.mkdir(savedirtest)
+    print("Done? {}".format(os.path.isdir(savedirtest)))
 # Where to save the demodulated data 
-savedirtest = '/home/mgamboa/pruebas/qubicpipe/'
 savetoddemod = savedirtest + "Demod_TOD/"
 saveflatmaps = savedirtest + "Flat/"
 #create directory if None
@@ -145,29 +143,44 @@ if not os.path.isdir(saveflatmaps):
 else:
     print("Flat maps in .fits format in")
     check_dir(saveflatmaps)
-    
+
+Directories = {"RawTodDir": data_dir,
+               "parent_dir_work": savedirtest,
+              "demod_tod_work": savetoddemod,
+              "flat_maps_work": saveflatmaps,
+              "calsource_data": dirfile}
 #take files from raw data (TOD) diretory
-dirs = np.sort(glob.glob(data_dir + keyword))
+dirs = np.sort(glob.glob(Directories["RawTodDir"] + keyword))
+
+Directories.update({"sweeps_data": dirs})
 ```
+
+**1st)** Use `fit_sb` from `demodulation_lib` module from `qubicsoft` package. 
+
+Output files in: `/home/mgamboa/qubic/QUBIC/qubiccalibration/Data/150GHz-2019-04-06/[Flat, Healpix]`
+
+script used: `Analyse-Scan-2020-01-15-MemorySave.Rmd` and `Sample_Demodulation`
 
 ```{python}
 # Create focal plane object 
 QubicFP = qubicfp()
-QubicFP.read_qubicstudio_dataset(dirs[3])
+QubicFP.read_qubicstudio_dataset(Directories["sweeps_data"][0])
 ```
+
+### COPIAR DATOS DE CALIBRACION!! 
 
 ```{python}
 reload(md)
 t_src, data_src = md.read_calsource_data(QubicFP, date = day,
-                      keyword = keyword, datadir = data_dir,
-                      datacal = dirfile, verbose = True)
+                      keyword = keyword, datadir = Directories["RawTodDir"],
+                      datacal = Directories["calsource_data"], verbose = True)
 ```
 
 ```{python}
 #Read azimuth and elevation from raw data
 az = QubicFP.azimuth()
 el = QubicFP.elevation()
-if verbose: QubicFP.read_qubicstudio_dataset(dirs[3])
+if verbose: QubicFP.read_qubicstudio_dataset(Directories["sweeps_data"][3])
 ```
 
 ```{python}
@@ -252,8 +265,7 @@ plt.xlabel('Frequency [Hz]')
 plt.ylabel('Power Spectrum')
 plt.xlim(xmin, xmax)
 plt.ylim(ymin, ymax)
-plt.title('TES {} ASIC {}'.format(TESNum,
-                                  asic))
+plt.title('TES {} ASIC {}'.format(TESNum, asic))
 
 for i in range(10):
     plt.plot([1./period*i,1./period*i],[ymin,ymax],'k--',alpha=0.3)
@@ -297,11 +309,14 @@ nharm = 10
 notch = np.array([[1.724, 0.005, nharm]])
 fourier_cuts = [lowcut, highcut, notch]
 
+demod_kwvars = {"method": "demod",
+                "remove_noise": True}
 demodulate = True
 newt_demod, amps_demod = md.pipe_demodulation(QubicFP, t_src, data_src,
                                              savetoddemod,
                                              demodulate = demodulate,
-                                             verbose = True)
+                                             verbose = True,
+                                             **demod_kwvars)
 ```
 
 ##### Filtering to be used
@@ -360,13 +375,13 @@ azmax = max(az)
 elmin = min(el)
 elmax = max(el)
 
-ComputeFlatMaps = False
+ComputeFlatMaps = True
 if ComputeFlatMaps:
     newaz = np.interp(newt_demod, time_azel, az)
     newel = np.interp(newt_demod, time_azel, el)
 
-    naz = 40
-    nel = 40
+    naz = 200
+    nel = 150
     nmaps = 256
     mapdata = np.zeros((nmaps, nel, naz))
 
@@ -383,14 +398,14 @@ if ComputeFlatMaps:
 elif not ComputeFlatMaps:
     azmap = np.array(FitsArray(savetoddemod + 'azimuth.fits'))
     elmap = np.array(FitsArray(savetoddemod + 'elevation.fits'))
-    mapdata = np.zeros((256, len(azmap[0]), len(elmap[0])))
+    mapdata = np.zeros((256, len(azmap), len(elmap)))
     for i in range(256):
         mapdata[i,:,:] = np.array(FitsArray(saveflatmaps + 'imgflat_TESNum_{}.fits'.format(i+1)))
 ```
 
 ```{python}
 #Look at one map
-TESNum = 95
+TESNum = 93
 ites = TESNum - 1
 mm, ss = ft.meancut(mapdata[ites,:,:],3)
 plt.imshow(mapdata[ites,:,:], aspect = 'equal',
@@ -400,6 +415,26 @@ plt.imshow(mapdata[ites,:,:], aspect = 'equal',
                  elmax],
        vmin = 0, vmax = 2e6)
 plt.title('TES {}'.format(ites+1))
+```
+
+```{python}
+blil = sbfit.get_flatmap(93, "/home/mgamboa/qubic/QUBIC/qubiccalibration/Data/150GHz-2019-04-06/", 
+                        azmin = azmin, azmax = azmax, 
+                        remove = None)[0]
+blil2 = sbfit.get_flatmap(93, "/home/mgamboa/pruebas/qubicpipe/", 
+                        azmin = azmin, azmax = azmax, 
+                        remove = None)[0]
+```
+
+```{python}
+blil.shape, blil2.shape
+```
+
+```{python}
+plt.subplot(121)
+plt.imshow(blil)
+plt.subplot(122)
+plt.imshow(blil2)
 ```
 
 All TES. Save flat maps in files. 

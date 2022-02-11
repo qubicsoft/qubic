@@ -79,6 +79,9 @@ def read_calsource_data(qubic_fp, date = None,
 		if verbose: print("Reading calibration source. Date: {}".format(date))
 		calsource_time = qubic_fp.calsource()[0]
 		calsource_data = qubic_fp.calsource()[1]
+
+		return calsource_time, calsource_data
+		
 	elif int(date.replace("-", "")) < 20191110:
 		if verbose: print("Reading calibration source. Date: {}".format(date))
 		warnings.warn("The format of this kind of files has some tricks to read and plot, keep that in mind.",
@@ -92,15 +95,19 @@ def read_calsource_data(qubic_fp, date = None,
 
 		filesname = glob.glob(datacal + "*{}*.fits".format(date.replace("-", "")))
 		calsource_time, calsource_data = [], []
-		for eachfile in filesname:
+
+		for j, eachfile in enumerate(filesname):
 			hdufile = pyfits.open(eachfile)
+			if j == 0: 
+				if verbose: print ("Creating 'CALSOURCE' key in Qubic Focal Plane object ")
 			hdu = qubic_fp.read_calsource_fits(hdufile[1])
 			calsource_time.append(qubic_fp.hk['CALSOURCE']['timestamp'])
 			calsource_data.append(qubic_fp.hk['CALSOURCE']['Value'])
+	
+		return np.concatenate(calsource_time[:]), np.concatenate(calsource_data[:])
 	else:
 		raise ValueError("The day argument is not in the correct format 'YYYY-MM-DD'.")
 
-	return calsource_time, calsource_data
 
 def pipe_demodulation(QubicFocPlane, 
 					time_calsource, data_calsource,

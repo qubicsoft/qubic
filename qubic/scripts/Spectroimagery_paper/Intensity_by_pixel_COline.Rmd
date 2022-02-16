@@ -45,6 +45,7 @@ d.read_from_file('pipeline_demo.dict')
 
 # Print a parameter from the dictionary. 
 print('beam shape :', d['beam_shape'])
+d['config'] = 'FI'
 d['nside'] = 32
 d['dtheta'] = 10
 freq = 220 #GHz
@@ -56,7 +57,7 @@ nf_sub = d['nf_sub']
 
 d['nf_recon'] = 5
 d['MultiBand'] = True
-d['npointings'] = 2000
+d['npointings'] = 1000
 print(d['npointings'])
 
 # Center of the patch observed in galactic coordinates
@@ -91,13 +92,14 @@ for istk in range(3):
 ```
 
 ```{python}
-#co = COLines(target_nside=16, output_units="uK_CMB", line="21")
-from so_pysm_models import GaussianSynchrotron
-synchrotron = GaussianSynchrotron(nside = 16)
-
-from so_pysm_models import COLines
-#co = COLines(target_nside=16, output_units="uK_CMB", line="10")
+from pysm3 import COLines
+co = COLines(target_nside=32, output_units="uK_CMB", line="21")
 #pysm_map += bandpass_weight * hp.smoothing(co.signal(), fwhm=fwhm)
+```
+
+```{python}
+print(x0.shape)
+print(co.signal().shape)
 ```
 
 ```{python}
@@ -118,19 +120,33 @@ plt.xlabel('f [GHz]')
 ```
 
 ```{python}
-sky_config = {'synchrotron': 's1'}
-Qubic_sky = qss.Qubic_sky(sky_config, d)
-y0 = Qubic_sky.get_simple_sky_map()*1000
-print(y0.shape, np.max(y0[:, :, 0]))
-print(np.max(x0[:, :, 0]))
+# sky_config = {'synchrotron': 's1'}
+# Qubic_sky = qss.Qubic_sky(sky_config, d)
+# y0 = Qubic_sky.get_simple_sky_map()*1000
+# print(y0.shape, np.max(y0[:, :, 0]))
+# print(np.max(x0[:, :, 0]))
+from pysm3 import COLines
+co = COLines(target_nside=32, output_units="uK_CMB", line="21")
+#pysm_map += bandpass_weight * hp.smoothing(co.signal(), fwhm=fwhm)
 
-COsky = np.zeros_like(x0)
+COsky = x0.copy()
 print(COsky.shape)
 
+COsky[iband, :, :]+= co.signal().T
+```
 
-COsky[iband, :, 0] = y0[iband, :, 0]
+```{python}
+imap = 17
+istk=0
+plt.figure(figsize=(13,8))
+plt.subplots_adjust(wspace=0.9)
+hp.mollview(x0[imap,:,istk], cmap='jet', sub = (1,3,1),
+            title = 'x0', min=0, max=1000)
+hp.mollview(COsky[imap,:,istk], cmap ='jet', sub = (1,3,2),
+            title = 'x0 + CO', min=0, max=10000)
+hp.mollview(COsky[imap,:,istk]-x0[imap,:,istk], cmap ='jet', sub = (1,3,3),
+            title = 'Diff', min=0, max=100)
 
-x0_CO = x0 + COsky
 ```
 
 ```{python}
@@ -156,7 +172,7 @@ a = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_in)
 
 ```{python}
 TOD, _ = a.get_observation(x0, noiseless=d['noiseless'])#, convolution = True)
-TOD_CO, _ = a.get_observation(x0_CO, noiseless=d['noiseless'])#, convolution = True)
+TOD_CO, _ = a.get_observation(COsky, noiseless=d['noiseless'])#, convolution = True)
 ```
 
 ```{python}
@@ -165,25 +181,13 @@ nf_sub_rec = 5
 
 print('************* Map-Making on {} sub-map(s) *************'.format(nf_sub_rec))
 
-## Build a MultiAcquisition operator for reconstruction (map-making). As it is the inverse
-# process but seen with 'different' instrument (one with nf_rec channels).  
-# Recompute the edges of sub-bands :
+## Build a MultiAcquisition operator for reconstruction (map-making). 
 _, nus_edge, _, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, nf_sub_rec, d['filter_relative_bandwidth'])
 
-## Once we have the simulated TOD, we create a new instrument. This new instrument
-# is for the map-making. We have to simulate an instrument with the number of sub-bands
-# we want to rec
-#onstruct. This is done for safety and complete the concept of QUBIC, because the program 
-# does not need to create new instrument because it uses nus_edge limits to compute the sub-bands
-# for reconstruction
-d['nf_sub'] = nf_sub_rec
 qrec = qubic.QubicMultibandInstrument(d)
-
-# Create a MultiBandAcquisition
 arec = qubic.QubicMultibandAcquisition(qrec, p, s, d, nus_edge)
 
 # Get coverage map
-# i.e. how many times were seen each pixel of the sky (not trivial because of the synthetic beam)
 cov = arec.get_coverage()
 ```
 
@@ -193,7 +197,10 @@ d['tol']=1e-4
 
 ```{python}
 # From TOD reconstruct sky maps.
+print('\n ======== Starting map-making without CO ==========')
 maps_recon, nit, error = arec.tod2map(TOD, d, cov=cov)
+
+print('\n ======== Starting map-making with CO ==========')
 maps_recon_CO, nit_CO, error_CO = arec.tod2map(TOD_CO, d, cov=cov)
 
 print('The shape of the reconstructed maps is (nf_recon, #pixels, #stokes) :', maps_recon.shape)
@@ -262,25 +269,10 @@ pix_indices = np.where(np.invert(unseen))[0][:5]
 ```{python}
 istk = 0
 for pix in pix_indices:
-    plt.figure()
-
-    plt.plot(nus, x0[:, pix, istk], 'go', label='Input sky')
-    plt.plot(nus_rec, maps_recon[:, pix, istk], 'ro', label='Recon')
-    plt.plot(nus_rec, maps_convolved[:, pix, istk], 'bo', label='Convolved')
-
-    plt.legend()
-    plt.title('Pixel {}, NSIDE=256'.format(pix))
-    plt.xlabel('Frequency [GHz]')
-    plt.ylabel('I (µK)')
-```
-
-```{python}
-istk = 0
-for pix in pix_indices:
     plt.figure(figsize=(8, 6))
 
     plt.plot(nus, x0_CO[:, pix, istk], 'go', label='Input sky')
-    plt.plot(nus_rec, maps_recon_CO[:, pix, istk], 'ro', label='Recon')
+    plt.plot(nus_rec, maps_recon_CO[:, pix, istk], 'ro', label='Recon CO')
     plt.plot(nus_rec, maps_convolved_CO[:, pix, istk], 'bo', label='Convolved')
 
     plt.legend()
@@ -292,13 +284,17 @@ for pix in pix_indices:
 ```{python}
 plt.figure()
 plt.title('Sum over pixels')
-plt.plot(nus_rec, np.sum(maps_recon_CO[:, pix_indices, 0], axis=1), 'ro', label='Recon with CO')
-plt.plot(nus_rec, np.sum(maps_recon[:, pix_indices, 0], axis=1), 'go', label='Recon no CO')
+plt.plot(nus_rec, np.mean(maps_recon_CO[:, pix_indices, 0], axis=1)/, 'ro', label='Recon with CO')
+plt.plot(nus_rec, np.mean(maps_recon[:, pix_indices, 0], axis=1), 'go', label='Recon no CO')
 plt.axvline(CO21, color='k', label='CO-21')
 plt.xlabel('Frequency [GHz]')
 plt.ylabel('I (µK)')
 plt.grid()
 plt.legend()
+```
+
+```{python}
+
 ```
 
 ```{python}

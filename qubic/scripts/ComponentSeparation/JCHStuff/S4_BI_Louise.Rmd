@@ -19,5 +19,211 @@ Edited 22/11/2021 by Louise
 I will start by copying the notebook by JC.
 
 ```{python}
+import s4bi
+from importlib import reload
+from scipy import constants
+from astropy.cosmology import Planck15
+import healpy as hp
+import fgbuster
+from fgbuster import CMB, Dust, Synchrotron, AnalyticComponent, ModifiedBlackBody
+import qubic
+rc('figure',figsize=(16,4))
+rc('font',size=12)
+```
+
+### CMB-S4 description
+
+```{python}
+subplot(1,2,1)
+errorbar(s4bi.s4_config['frequency'], s4bi.s4_config['depth_p'], xerr=s4bi.s4_config['bandwidth']/2, fmt='ro')
+xlabel('Frequency [GHz]')
+ylabel(r'Depth_p [$\mu$K.arcmin]')
+title('CMB-S4 Configuration')
+
+subplot(1,2,2)
+errorbar(s4bi.s4_config['frequency'], s4bi.s4_config['fwhm'], xerr=s4bi.s4_config['bandwidth']/2, fmt='ro')
+xlabel('Frequency [GHz]')
+ylabel('FWHM [arcmin]')
+title('CMB-S4 Configuration')
+```
+
+### QUBIC+ description
+
+```{python}
+reload(s4bi)
+# QUBIC+
+qp_nsub = np.array([5, 5, 5, 5, 5, 5, 5, 5, 5, 5])
+qp_effective_fraction = np.array([1., 1., 1., 1., 1., 1., 1., 1., 1.])
+qp_config = s4bi.qubicify(s4bi.s4_config, qp_nsub, qp_effective_fraction)
+print(qp_config['frequency'])
+print(qp_config['depth_p'])
+print(qp_config['bandwidth'])
+    
+subplot(1,2,1)
+errorbar(s4bi.s4_config['frequency'], s4bi.s4_config['depth_p'], xerr=s4bi.s4_config['bandwidth']/2, fmt='ro', label='CMB-S4')
+errorbar(qp_config['frequency'], qp_config['depth_p'], xerr=qp_config['bandwidth']/2, fmt='bo', label='BI')
+xlabel('Frequency [GHz]')
+ylabel(r'Depth_p [$\mu$K.arcmin]')
+title('CMB-S4 Configuration')
+legend()
+subplot(1,2,2)
+errorbar(s4bi.s4_config['frequency'], s4bi.s4_config['fwhm'], xerr=s4bi.s4_config['bandwidth']/2, fmt='ro', label='CMB-S4')
+errorbar(qp_config['frequency'], qp_config['fwhm'], xerr=qp_config['bandwidth']/2, fmt='bo', label='BI')
+xlabel('Frequency [GHz]')
+ylabel('FWHM [arcmin]')
+title('CMB-S4 Configuration')
+legend()
+```
+
+### Component maps
+
+```{python}
+components = ['c1', 'd0', 's0']
+ref_freqs = [150., 353., 70.]
+fsky = 0.9
+nside = 256
+radec_center = [0, -57]
+center = qubic.equ2gal(radec_center[0], radec_center[1])
+
+def myget_component_maps(components, ref_freqs, nside, fsky, center_radec=[0., -57.]):
+    maps = []
+    mask = s4bi.get_coverage(fsky, nside, center_radec=center_radec)
+    okpix = mask == 1
+    for c, f in zip(components, ref_freqs):
+        print('Doing: ' + c)
+        thesky = pysm3.Sky(nside=nside, preset_strings=[c], output_unit="uK_RJ")
+        themaps = np.zeros((4, 12 * nside ** 2))  # four are I, Q, U and P
+        themaps[0:3, :] = thesky.get_emission(f * u.GHz)
+        themaps[3, :] = np.sqrt(themaps[1, :] ** 2 + themaps[2, :] ** 2)
+        themaps[:, ~okpix] = hp.UNSEEN
+        maps.append(themaps)
+    return maps
+
+
+map_CMB, map_dust_353GHz, map_sync_70GHz = myget_component_maps(components, ref_freqs, nside, fsky)
+```
+
+```{python}
+for i in range(4):
+    if i==0:#Intensity
+        fwhm = np.deg2rad(1)
+    else: # Polarization
+        fwhm = np.deg2rad(40/60)
+    map_CMB[i, :] = hp.smoothing(map_CMB[i, :], fwhm=fwhm)
+    map_dust_353GHz[i, :] = hp.smoothing(map_dust_353GHz[i, :], fwhm=fwhm)
+    map_sync_70GHz[i, :]= hp.smoothing(map_sync_70GHz[i, :], fwhm=fwhm)
+```
+
+```{python}
+unit = ' ($\mu$K$_{RJ}$)'
+stokes = ['I', 'Q', 'U', 'P']
+okpix = map_CMB[0,:] != hp.UNSEEN
+m_sync_70GHz = np.mean(map_sync_70GHz[:, okpix], axis=1)
+s_sync_70GHz = np.std(map_sync_70GHz[:, okpix], axis=1)
+m_dust_353GHz = np.mean(map_dust_353GHz[:, okpix], axis=1)
+s_dust_353GHz = np.std(map_dust_353GHz[:, okpix], axis=1)
+m_CMB = np.mean(map_CMB[:,okpix], axis=1)
+s_CMB = np.std(map_CMB[:,okpix], axis=1)
+for c in components:
+    figure()
+    for istk in range(4):
+        hp.gnomview(map_sync_70GHz[istk,:], rot=center, reso=15, 
+                    title='Synchrotron '+stokes[istk]+' at 70 GHz' + unit +'\n {0:5.2g}+/-{1:5.2g}'.format(m_sync_70GHz[istk], s_sync_70GHz[istk]), 
+                    sub=(1,4,istk+1))
+figure()    
+for istk in range(4):
+    hp.gnomview(map_dust_353GHz[istk,:], rot=center, reso=15, 
+                title='Dust '+stokes[istk]+' at 353 GHz' + unit + '\n {0:5.2g}+/-{1:5.2g}'.format(m_dust_353GHz[istk], s_dust_353GHz[istk]), 
+                sub=(1,4,istk+1))
+figure()    
+for istk in range(4):
+    hp.gnomview(map_CMB[istk,:], rot=center, reso=15, 
+                title='CMB '+stokes[istk]+ unit + '\n {0:5.2g}+/-{1:5.2g}'.format(m_CMB[istk], s_CMB[istk]), 
+                sub=(1,4,istk+1))
+
+```
+
+### Component Models
+
+FGBuster gives components scaled to 1 at their respective reference frequencies. We have added a double-beta component model.
+
+```{python}
+
+dust_ref_freq = 353.
+sync_ref_freq = 70.
+dust = Dust(dust_ref_freq, beta_d=1.54, temp=20, units='K_RJ') # Same as d0 PySM model
+cmb = CMB(units='K_RJ') 
+sync = Synchrotron(sync_ref_freq, beta_pl=-3, units='K_RJ')
+
+### The double beta component model
+analytic_expr = s4bi.double_beta_dust_FGB_Model()
+dbdust = AnalyticComponent(analytic_expr, nu0=353, temp=20., h_over_k=constants.h * 1e9 / constants.k)
+print(dbdust.params)   # parameters are beta0, beta1 and nubreak
+
+# let's fix the params for now
+# beta0 = 1.3
+# beta1 = 1.54
+# nubreak = 200.
+numin = 10
+numax = 1000
+nnu = 1000
+nus = np.linspace(numin, numax, nnu)
+plot(nus, dust.eval(nus), label='Dust')
+plot(nus, sync.eval(nus), label='Synchrotron')
+plot(nus, cmb.eval(nus), label='CMB')
+plot(nus, dbdust.eval(nus, beta0, beta1, nubreak), 
+     label='Double Beta Dust with beta_0={}, beta_1={}, nubreak={}'.format(beta0, beta1, nubreak))
+xlabel('Frequency [GHz]')
+ylabel('SED normalized')
+yscale('log')
+xscale('log')
+legend()
+title('All normalized to 1 at a ref frequency')
+```
+
+Now we use the normalization (RMS) found from PYSM in our region to scale them:
+
+```{python}
+mystk = [0,3]
+ii=0
+figure(figsize=(14, 6))
+for istk in mystk:
+    subplot(1,2,ii+1)
+    ii+=1
+    plot(nus, dust.eval(nus) * s_dust_353GHz[istk], 'r', label='Dust', linewidth=10)
+    plot(nus, sync.eval(nus) * s_sync_70GHz[istk], 'g', label='Synchrotron')
+    plot(nus, cmb.eval(nus) * s_CMB[istk], 'c', label='CMB')
+#     plot(nus, dbdust.eval(nus, 1.3, 1.54, 200) * s_dust_353GHz[istk], label='Double Beta Dust with beta_0={}, beta_1={}, nubreak={}'.format(beta0, beta1, nubreak))
+    ylim([0.03, 800])
+    xlim([10, 1000])
+    xlabel('Frequency [GHz]')
+    ylabel('SED' + unit)
+    xscale('log')
+    yscale('log')
+    
+    title('Stokes '+stokes[istk]+' in clean QUBIC region {}%'.format(fsky*100))
+    legend()
+    grid(True, which="both")
+    
+tight_layout()
+```
+
+```{python}
+import pysm3
+import pysm3.units as u
+c = 'c1'
+f = 150
+thesky = pysm3.Sky(nside=nside, preset_strings=[c], output_unit="uK_CMB")
+maps = thesky.get_emission(f * u.GHz)
+print(maps)
+
+thesky2 = pysm3.Sky(nside=nside, preset_strings=[c])
+maps2 = thesky2.get_emission(f * u.GHz).to(u.uK_CMB, equivalencies=u.cmb_equivalencies(f * u.GHz))
+print(maps2)
+#themaps = np.zeros((4, 12 * nside ** 2))  # four are I, Q, U and P
+#themaps[0:3, :] = thesky.get_emission(f * u.GHz).to(u.uK_CMB, equivalencies=u.cmb_equivalencies(f * u.GHz))
+```
+
+```{python}
 
 ```

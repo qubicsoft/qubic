@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.0
+      jupytext_version: 1.5.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -15,7 +15,6 @@ jupyter:
 ```{python}
 # %matplotlib inline
 
-import healpy as hp
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy
@@ -24,7 +23,6 @@ from itertools import combinations, combinations_with_replacement
 from importlib import reload
 
 # Specific qubic modules
-import pysm3
 import qubic
 from qubic.polyacquisition import compute_freq
 from qubic import QubicSkySim as qss
@@ -32,6 +30,14 @@ from qubic import camb_interface as qc
 from qubic import NamasterLib as nam
 from qubic import mcmc
 
+
+```
+
+```{python pycharm={'name': '#%%\n'}}
+import numpy
+```
+
+```{python pycharm={'name': '#%%\n'}}
 rc('figure', figsize=(16, 10))
 rc('font', size=15)
 plt.rcParams['image.cmap'] = 'jet'
@@ -173,10 +179,13 @@ binned_camblib = qc.bin_camblib(Namaster, '../../doc/CAMB/camblib_0to1_step001.p
 ## Loop over the residual dust fraction
 
 ```{python}
-# Compute BB cross spectra for dust once 
 # dust_fraction = [0., 0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05]
 dust_fraction = np.arange(0., 0.008, 0.001)
 print(dust_fraction)
+```
+
+```{python}
+# Compute BB cross spectra for dust once 
 BBcross_dust = np.zeros((len(dust_fraction), ncombi, nbins))
 
 for f, frac in enumerate(dust_fraction):
@@ -507,7 +516,7 @@ LLH_interp_CMBwithr = np.zeros((ncombi, nx))
 r_dust_CMBwithr = np.zeros(ncombi)
 sigma68_CMBwithr = np.zeros(ncombi)
 
-index = 3
+index = 6
 print('Dust fraction:', dust_fraction[index])
 
 smallr = r_dust[index, nbands-1]
@@ -568,7 +577,7 @@ plt.errorbar(np.array(nus_eff)+0.5,
                  yerr=sigma68_CMBwithr- r_dust_CMBwithr, 
                  fmt='o',
                  color='r', 
-                 label='CMB$(r = {:1.2f})$'.format(smallr))  
+                 label='CMB$(r = {:1.3f})$'.format(smallr))  
 plt.plot(x, np.polyval(popt_CMBwithr, x), color='r')
 
 

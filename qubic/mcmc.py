@@ -37,13 +37,13 @@ class LogLikelihood:
             self.fitresult = [initial_fit[0], initial_fit[1]]
 
     def __call__(self, mytheta, extra_args=None, verbose=False):
-        # if self.fixedpars is not None:
-        #     theta = self.p0.copy()
-        #     #theta[self.fixedpars == 0] = mytheta
-        #     theta[self.fixedpars == 0] = mytheta[self.fixedpars == 0]
-        # else:
-        #     theta = mytheta
-        theta = mytheta
+        if self.fixedpars is not None:
+            theta = self.p0.copy()
+            theta[self.fixedpars == 0] = mytheta
+            # theta[self.fixedpars == 0] = mytheta[self.fixedpars == 0]
+        else:
+            theta = mytheta
+        # theta = mytheta
         self.modelval = self.model(self.xvals[:self.nbins], theta)
 
         if self.covariance_model_funct is None:
@@ -51,7 +51,6 @@ class LogLikelihood:
         else:
             cov_repeat = self.make_covariance_matrix()
             self.invcov = np.linalg.inv(cov_repeat + self.covar)
-
         lp = self.log_priors(theta)
         if verbose:
             print('Pars')

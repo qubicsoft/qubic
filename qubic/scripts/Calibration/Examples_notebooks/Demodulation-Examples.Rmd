@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.7.1
+      jupytext_version: 1.6.0rc0
   kernelspec:
     display_name: Python 2
     language: python
@@ -284,9 +284,9 @@ plt.legend()
 We apply the cut
 
 ```{python}
-data_obj = a.azel_etc()
-data_obj['data'] = data_obj['data %i' % AsicNum] # hack
-data_obj['t_data'] = data_obj['t_data %i' % AsicNum] # hack
+#data_obj = a.azel_etc()
+data_obj['data'] = a.timeline_array(asic = AsicNum)#data_obj['data %i' % AsicNum] # hack
+data_obj['t_data'] = a.timeaxis(datatype = "science", asic = AsicNum)#data_obj['t_data %i' % AsicNum] # hack
 ```
 
 ```{python}

@@ -53,10 +53,11 @@ def plot_raw_data(tod_time, tod_data, calsrc_time, calsrc_data,
 	return
 
 def plot_data_and_src(tod_time, tod_data, tod_data_filtered,
-	calsrc_time, calsrc_data, ylim = [-5,5]):
+	calsrc_time, calsrc_data, **kwargs_plot):#ylim = [-5,5]):
 	"""
 	Plot calibration source, raw and filtered data
 	"""
+
 	plt.figure(figsize = (16,8))
 	plt.plot(calsrc_time, (calsrc_data - np.mean(calsrc_data)) / np.std(calsrc_data), 
 	         color = 'tab:orange', label = 'Calibration Source', alpha = 0.5)
@@ -65,8 +66,10 @@ def plot_data_and_src(tod_time, tod_data, tod_data_filtered,
 	plt.plot(tod_time, (tod_data - np.mean(tod_data)) / np.std(tod_data), 
 	         label = 'Raw Data', color = 'tab:blue', alpha = 0.99)
 	plt.xlabel('Unix Epoch (s)')
-
-	plt.ylim(ylim[0],ylim[1])
+	
+	#plt.xlim(kwargs_plot["xmin"], kwargs_plot["xmax"])
+	#plt.ylim(kwargs_plot["ymin"], kwargs_plot["ymax"])
+	plt.ylim(-5,5)
 	plt.legend()
 
 	return

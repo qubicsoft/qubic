@@ -105,15 +105,15 @@ verbose = True
 #Directories
 # Read data
 reload(md)
-confg = 'new'
+confg = 'old'
 if confg == "new":
     day = '2020-03-16'
     keyword = '*ScanFast*'
     dirfile = None
     savedirtest = '/home/mgamboa/pruebas/qubicpipenew/'
 elif confg == "old":
-    #day = '2019-04-06'
-    day = '2019-03-31'
+    day = '2019-04-06'
+    #day = '2019-03-31'
     keyword = '*ScanMap*'
     dirfile = qubic_toddir + "calsource/"
     savedirtest = '/home/mgamboa/pruebas/qubicpipeold/'
@@ -153,6 +153,10 @@ Paths = {"RawTodDir": data_dir,
 dirs = np.sort(glob.glob(Paths["RawTodDir"] + keyword))
 
 Paths.update({"sweeps_data": dirs})
+```
+
+```{python}
+print(Paths["sweeps_data"])
 ```
 
 **1st)** Use `fit_sb` from `demodulation_lib` module from `qubicsoft` package. 
@@ -224,7 +228,7 @@ tod_time = QubicFP.timeaxis(axistype = 'pps', asic = asic)
 
 ```{python}
 reload(mmp)
-#mmp.plot_raw_data(tod_time, tod_data, t_src, data_src, TESNum = TESNum, asic = asic)
+mmp.plot_raw_data(tod_time, tod_data, t_src, data_src, TESNum = TESNum, asic = asic)
 ```
 
 ## Filtering data
@@ -271,9 +275,12 @@ mmp.plot_spectra_comparisson(freq_raw, spectrum_raw, freq_filtered,
 
 ```{python}
 reload(mmp)
-#mmp.plot_data_and_src(tod_time, tod_data, 
-#                      tod_data_filtered,
-#                      t_src, data_src)
+#kwargs_plot = {"xmin": 0, "xmax": max(tod_time),
+#               "ymin": -5, "ymax": 5}
+mmp.plot_data_and_src(tod_time, tod_data, 
+                      tod_data_filtered,
+                      t_src, data_src,
+                     )#**kwargs_plot)
 
 ```
 
@@ -299,53 +306,9 @@ newt_demod, amps_demod = md.pipe_demodulation(QubicFP, t_src, data_src,
                                              **demod_kwvars)
 ```
 
-##### Filtering to be used
-lowcut = 0.5
-highcut = 70
-nharm = 10
-notch = np.array([[1.724, 0.005, nharm]])
-fourier_cuts = [lowcut, highcut, notch]
-
-demodulate = True
-if demodulate: 
-    # Just to pick the shape 
-    temp_amps = dl.demodulate_methods([QubicFP.timeaxis(axistype = 'pps', asic = 1), 
-                           QubicFP.timeline(TES = 1, asic = 1)], 
-                          1./period, 
-                          src_data_in = [tod_time, np.interp(tod_time, t_src, data_src)],
-                          method = 'demod_quad', 
-                          remove_noise = True,
-                          fourier_cuts = fourier_cuts)[1]
-
-    amps_demod = np.zeros((256, len(temp_amps)))
-
-    for asic in [1,2]:
-        tod_time = QubicFP.timeaxis(axistype = 'pps', asic = asic)
-        src = [tod_time, np.interp(tod_time, t_src, data_src)]
-        for i in range(128):
-            print('Mapmaking for Asic {} TES {}'.format(asic, i + 1))    
-            tod_data = QubicFP.timeline(TES = i + 1, asic = asic)
-
-            print('- Demodulation')
-            newt_demod, amps_demod[i+128*(asic-1),:], errors_demod = dl.demodulate_methods(
-                                                                        [tod_time, tod_data],
-                                                                        1./period, 
-                                                                        src_data_in = src,
-                                                                        method = 'demod_quad', 
-                                                                        remove_noise = True,
-                                                                        fourier_cuts = fourier_cuts)
-    for i in range(256):
-        FitsArray(amps_demod[i,:]).save(savedirtest + \
-                                        'Demod_TOD/tod_data_demodulated_TESNum_{}.fits'.format(i+1))    
-    FitsArray(newt_demod).save(savedirtest + 'Demod_TOD/tod_time_demodulated.fits')
-    
-elif not demodulate:
-    print("Reading demodulated data")
-    amps_demod = []
-    for i in range(256):
-        amps_demod.append(np.array(FitsArray(savedirtest + \
-                                             'Demod_TOD/tod_data_demodulated_TESNum_{}.fits'.format(i+1))))
-    newt_demod = np.array(FitsArray(savedirtest + 'Demod_TOD/tod_time_demodulated.fits'))
+```{python}
+QubicFP.azimuth(), QubicFP.elevation(), QubicFP.hk["INTERN_HK"]["Platform-Azimut"]
+```
 
 ```{python}
 time_azel = QubicFP.timeaxis(datatype = 'hk', axistype = 'pps')
@@ -389,11 +352,11 @@ TESNum = 95
 ites = TESNum - 1
 mm, ss = ft.meancut(mapdata[ites,:,:],3)
 plt.imshow(mapdata[ites,:,:], aspect = 'equal',
-       extent = [np.cos(np.radians(50)) * azmin, 
-                 np.cos(np.radians(50)) * azmax, 
-                 elmin, 
-                 elmax],
-       vmin = 0, vmax = 2e6)
+       #extent = [np.cos(np.radians(50)) * azmin, 
+       #          np.cos(np.radians(50)) * azmax, 
+       #          elmin, 
+       #          elmax],
+          )#vmin = 0, vmax = 2e6)
 plt.title('TES {}'.format(ites+1))
 ```
 

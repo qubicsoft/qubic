@@ -105,7 +105,7 @@ verbose = True
 #Directories
 # Read data
 reload(md)
-confg = 'old'
+confg = "new"
 if confg == "new":
     day = '2020-03-16'
     keyword = '*ScanFast*'
@@ -155,10 +155,6 @@ dirs = np.sort(glob.glob(Paths["RawTodDir"] + keyword))
 Paths.update({"sweeps_data": dirs})
 ```
 
-```{python}
-print(Paths["sweeps_data"])
-```
-
 **1st)** Use `fit_sb` from `demodulation_lib` module from `qubicsoft` package. 
 
 [Local]Output files in: `/home/mgamboa/qubic/QUBIC/qubiccalibration/Data/150GHz-2019-04-06/[Flat, Healpix]`
@@ -195,13 +191,13 @@ t0 = time_azel[0]
 
 #### check plot ... ok
 
-
+```{python}
 plt.subplot(2,2,1)
-plt.plot((time_azel - t0) / 3600, az, ',')
+plt.plot((time_azel-t0)/3600, az,',')
 plt.xlabel('Time [h]')
 plt.ylabel('Az')
 plt.subplot(2,2,2)
-plt.plot((time_azel - t0) / 3600, el[:artif_len], ',')
+plt.plot((time_azel-t0)/3600, el,',')
 plt.xlabel('Time [h]')
 plt.ylabel('El')
 plt.ylim(30,70)
@@ -212,9 +208,10 @@ plt.xlabel('Az')
 plt.ylabel('El')
 
 plt.subplot(2,2,4)
-plt.plot((t_src-t0)/3600, data_src,'.')
+plt.plot((t_src-t0)/3600, data_src,',')
 plt.xlabel('Time [h]')
 plt.ylabel('Src Data')
+```
 
 ```{python}
 # Read the timeline to test the way to do it
@@ -222,6 +219,34 @@ TESNum = 94
 asic = 1
 tod_data = QubicFP.timeline(TES = TESNum, asic = asic)
 tod_time = QubicFP.timeaxis(axistype = 'pps', asic = asic)
+```
+
+```{python}
+time_azel.shape
+```
+
+```{python}
+t0 = time_azel[0]
+
+plt.subplot(2,2,1)
+plt.plot((time_azel-t0)/3600, az,',')
+plt.xlabel('Time [h]')
+plt.ylabel('Az')
+plt.subplot(2,2,2)
+plt.plot((time_azel-t0)/3600, el,',')
+plt.xlabel('Time [h]')
+plt.ylabel('El')
+plt.ylim(30,70)
+
+plt.subplot(2,2,3)
+plt.plot(az*np.cos(np.radians(el)), el,',')
+plt.xlabel('Az')
+plt.ylabel('El')
+
+plt.subplot(2,2,4)
+plt.plot((t_src-t0)/3600, data_src,',')
+plt.xlabel('Time [h]')
+plt.ylabel('Src Data')
 ```
 
 `check plot` TOD(tes) data and calsource ... ok

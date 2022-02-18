@@ -11,28 +11,42 @@ This file contains functions to make consistency plots to check all is working w
 
 import os
 import sys 
-#from warnings import warn
-#import warnings
-#import pickle 
 
 import numpy as np
-#import healpy as hp
 import matplotlib.pyplot as plt 
 from astropy.io import fits as pyfits
-#import glob
-#import time
-
-#from pysimulators import FitsArray
 
 import scipy.ndimage.filters as f
 import qubic.sb_fitting as sbfit
 import qubic.demodulation_lib as dl
-#import toolfit_hpmap as fh
-#import qubic.fibtools as ft
-#import qubic.SpectroImLib as si
-#from qubicpack.qubicfp import qubicfp
-#
-#from qubicpack.pixel_translation import make_id_focalplane, plot_id_focalplane, tes2pix, tes2index
+
+def plot_scan(time_axis, t_src, data_src, az, el, ax = None ):
+	"""
+	Plot the scan in azimuth and elevation. Data + Calibration source
+	"""
+	if ax == None: fig, ax = plt.subplots(nrows = 1,
+		ncols = 1, figsize = (12,12))
+	t0 = time_axis[0]
+	ax.subplot(2,2,1)
+	ax.plot((time_axis-t0)/3600, az,',')
+	ax.xlabel('Time [h]')
+	ax.ylabel('Az')
+	ax.subplot(2,2,2)
+	ax.plot((time_axis-t0)/3600, el,',')
+	ax.xlabel('Time [h]')
+	ax.ylabel('El')
+	ax.ylim(30,70)
+
+	ax.subplot(2,2,3)
+	ax.plot(az*np.cos(np.radians(el)), el,',')
+	ax.xlabel('Az')
+	ax.ylabel('El')
+
+	ax.subplot(2,2,4)
+	ax.plot((t_src-t0)/3600, data_src,',')
+	ax.xlabel('Time [h]')
+	ax.ylabel('Src Data')
+	return
 
 def plot_raw_data(tod_time, tod_data, calsrc_time, calsrc_data,
 	TESNum = None, asic = None):

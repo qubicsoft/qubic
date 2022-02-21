@@ -20,32 +20,31 @@ import scipy.ndimage.filters as f
 import qubic.sb_fitting as sbfit
 import qubic.demodulation_lib as dl
 
-def plot_scan(time_axis, t_src, data_src, az, el, ax = None ):
+def plot_scan(time_axis, t_src, data_src, az, el):
 	"""
 	Plot the scan in azimuth and elevation. Data + Calibration source
 	"""
-	if ax == None: fig, ax = plt.subplots(nrows = 1,
-		ncols = 1, figsize = (12,12))
+	fig, ax = plt.subplots(nrows = 2,
+		ncols = 2, figsize = (12,12))
+	ax = ax.ravel()
 	t0 = time_axis[0]
-	ax.subplot(2,2,1)
-	ax.plot((time_axis-t0)/3600, az,',')
-	ax.xlabel('Time [h]')
-	ax.ylabel('Az')
-	ax.subplot(2,2,2)
-	ax.plot((time_axis-t0)/3600, el,',')
-	ax.xlabel('Time [h]')
-	ax.ylabel('El')
-	ax.ylim(30,70)
+	ax[0].plot((time_axis-t0)/3600, az,',')
+	ax[0].set_xlabel('Time [h]')
+	ax[0].set_ylabel('Az')
+	
+	ax[1].plot((time_axis-t0)/3600, el,',')
+	ax[1].set_xlabel('Time [h]')
+	ax[1].set_ylabel('El')
+	ax[1].set_ylim(30,70)
 
-	ax.subplot(2,2,3)
-	ax.plot(az*np.cos(np.radians(el)), el,',')
-	ax.xlabel('Az')
-	ax.ylabel('El')
+	ax[2].plot(az*np.cos(np.radians(el)), el,',')
+	ax[2].set_xlabel('Az')
+	ax[2].set_ylabel('El')
 
-	ax.subplot(2,2,4)
-	ax.plot((t_src-t0)/3600, data_src,',')
-	ax.xlabel('Time [h]')
-	ax.ylabel('Src Data')
+	ax[3].plot((t_src-t0)/3600, data_src,',')
+	ax[3].set_xlabel('Time [h]')
+	ax[3].set_ylabel('Src Data')
+
 	return
 
 def plot_raw_data(tod_time, tod_data, calsrc_time, calsrc_data,

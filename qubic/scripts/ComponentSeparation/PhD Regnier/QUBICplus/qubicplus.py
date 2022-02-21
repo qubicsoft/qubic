@@ -19,7 +19,7 @@ import fgbuster
 import warnings
 warnings.filterwarnings("ignore")
 
-def get_coverage(fsky, nside, center_radec=[0, -57]):
+def get_coverage(fsky, nside, center_radec=[-30, -30]):
     center = qubic.equ2gal(center_radec[0], center_radec[1])
     uvcenter = np.array(hp.ang2vec(center[0], center[1], lonlat=True))
     uvpix = np.array(hp.pix2vec(nside, np.arange(12*nside**2)))
@@ -30,13 +30,13 @@ def get_coverage(fsky, nside, center_radec=[0, -57]):
     mask = np.zeros(12*nside**2)
     mask[okpix] = 1
     return mask
-def create_dust_with_model2beta(nside, nus, betad0, betad1, nubreak, temp):
+def create_dust_with_model2beta(nside, nus, betad0, betad1, nubreak, temp, break_width):
 
     # Create 353 GHz dust maps
     sky = pysm3.Sky(nside=nside, preset_strings=['d0'])
     maps_353GHz = sky.get_emission(353*u.GHz, None)*utils.bandpass_unit_conversion(353*u.GHz,None, u.uK_CMB)
 
-    comp2b=[fgbuster.component_model.Dust_2b(nu0=353)]
+    comp2b=[fgbuster.component_model.Dust_2b(nu0=353, break_width=break_width)]
 
     A2b = fgbuster.MixingMatrix(*comp2b)
     A2b_ev = A2b.evaluator(nus)
@@ -47,10 +47,10 @@ def create_dust_with_model2beta(nside, nus, betad0, betad1, nubreak, temp):
         new_dust_map[i]=A2b_maxL[i, 0]*maps_353GHz
 
     return new_dust_map
-def create_sync(nside, nus, model):
+def create_sync(nside, nus):
 
     # Create 353 GHz dust maps
-    sky = pysm3.Sky(nside=nside, preset_strings=[model])
+    sky = pysm3.Sky(nside=nside, preset_strings=['s0'])
     maps_70GHz = sky.get_emission(70*u.GHz, None)*utils.bandpass_unit_conversion(70*u.GHz,None, u.uK_CMB)
 
     comp=[fgbuster.component_model.Synchrotron(nu0=70)]
@@ -68,19 +68,31 @@ def create_dustd0(nside, nus):
 
     # Create 353 GHz dust maps
     sky = pysm3.Sky(nside=nside, preset_strings=['d0'])
-    maps_353GHz = sky.get_emission(353*u.GHz, None)*utils.bandpass_unit_conversion(353*u.GHz,None, u.uK_CMB)
 
-    comp=[fgbuster.component_model.Dust(nu0=353)]
 
-    A = fgbuster.MixingMatrix(*comp)
-    A_ev = A.evaluator(nus)
-    A_maxL = A_ev(np.array([1.54, 20]))
+    #comp=[fgbuster.component_model.Dust(nu0=353, beta_d=1.54, temp=20)]
+
+    #A = fgbuster.MixingMatrix(*comp)
+    #A_ev = A.evaluator(nus)
+    #A_maxL = A_ev()
 
     new_dust_map=np.zeros(((len(nus), 3, 12*nside**2)))
     for i in range(len(nus)):
-        new_dust_map[i]=A_maxL[i, 0]*maps_353GHz
+        maps_XXXGHz = sky.get_emission(nus[i]*u.GHz, None)*utils.bandpass_unit_conversion(nus[i]*u.GHz,None, u.uK_CMB)
+        new_dust_map[i]=maps_XXXGHz.copy()
 
     return new_dust_map
+def get_freqs_inter(edges, N):
+
+    '''
+
+    This function returns intermediate frequency for integration into bands from edges.
+
+    '''
+    if N == 1:
+        return np.array([np.mean(edges)])
+    freqs_inter=np.linspace(edges[0], edges[1], N)
+    return freqs_inter
 def create_dustd1(nside, nus):
 
     maps_dust = np.zeros(((len(nus), 3, 12*nside**2)))
@@ -249,13 +261,10 @@ class BImaps(object):
         self.nus = self.dict['frequency']
         self.bw = self.dict['bandwidth']
         self.fwhm = self.dict['fwhm']
+        self.fwhmdeg = self.fwhm/60
         self.depth_i = self.dict['depth_i']
         self.depth_p = self.dict['depth_p']
-        #self.depth_p_reconstructed = np.ones(self.Nf)*self.depth_i*np.sqrt(self.Nf)
-        #self.depth_i_reconstructed = np.ones(self.Nf)*self.depth_p*np.sqrt(self.Nf)
-        self.fwhmdeg = self.fwhm/60
-        self.fsky = self.dict['fsky']
-        self.edges = self.dict['edges']
+        self.edges=self.dict['edges']
 
         self.nside=nside
         self.npix = 12*self.nside**2
@@ -309,23 +318,17 @@ class BImaps(object):
 
         return sky
 
-    def getskymaps(self, same_resol=None, verbose=False, coverage=None, iib=False, noise=False, signoise=1., beta=[], fix_temp=None, nside_index=256):
+    def getskymaps(self, same_resol=None, verbose=False, coverage=None, iib=1, noise=False, signoise=1., beta=[], fix_temp=None, nside_index=256):
 
         """
 
         """
-
-        #print(nside_index)
 
         sky=self.get_sky(coverage)
         allmaps = np.zeros(((len(self.nus), 3, self.npix)))
         if same_resol is not None:
             self.fwhmdeg = np.ones(len(self.nus))*np.max(same_resol)
 
-        if verbose:
-            print("    FWHM : {} deg \n    nus : {} GHz \n    Bandwidth : {} GHz\n\n".format(self.fwhmdeg, self.nus, self.bw))
-
-        allmaps=np.zeros(((len(self.nus), 3, self.npix)))
         for i in self.skyconfig.keys():
             if i == 'cmb':
                 cmbmap = self.get_cmb(coverage)
@@ -333,42 +336,52 @@ class BImaps(object):
                     allmaps[j]+=cmbmap
                 map_index=[]
             elif i == 'dust':
+                dustmaps=np.zeros(((len(self.nus), 3, self.npix)))
                 if self.skyconfig[i] == 'd0':
                     if verbose:
                         print('Model : {}'.format(self.skyconfig[i]))
-                    dustmaps=create_dustd0(self.nside, self.nus)#get_fg_notconvolved('d0', self.nus, nside=self.nside)
+
+                    for i in range(len(self.nus)):
+                        print(self.edges[i])
+                        nus_inter=get_freqs_inter(self.edges[i], iib)
+                        print(nus_inter)
+                        dustmaps_inter=create_dustd0(self.nside, nus_inter)#get_fg_notconvolved('d0', self.nus, nside=self.nside)
+                        mean_dust_maps=np.mean(dustmaps_inter, axis=0)
+                        dustmaps[i]=mean_dust_maps.copy()
                     allmaps+=dustmaps
                     map_index=[]
 
-                elif self.skyconfig[i] == 'd1':
-                    if verbose:
-                        print('Model : {}'.format(self.skyconfig[i]))
-                    dustmaps=create_dustd1(self.nside, self.nus)#get_fg_notconvolved('d0', self.nus, nside=self.nside)
-                    allmaps+=dustmaps
-                    map_index=[]
-
-                elif self.skyconfig[i] == 'd12b':
-                    if verbose:
-                        print('Model : {}'.format(self.skyconfig[i]))
-                    dustmaps, map_index=give_me_maps_d1_modified(self.nus, beta[2], coverage, abs(1.54-beta[0]), self.nside, fix_temp=fix_temp, nside_index=nside_index)
-                    allmaps+=dustmaps
 
                 elif self.skyconfig[i] == 'd02b':
                     if verbose:
                         print('Model : d02b -> Twos spectral index beta ({:.2f} and {:.2f}) with nu_break = {:.2f}'.format(beta[0], beta[1], beta[2]))
 
-                    #add Elenia's definition
-                    dustmaps=create_dust_with_model2beta(self.nside, self.nus, beta[0], beta[1], beta[2], temp=20)#get_scaled_dust_dbmmb_map(nu_ref=beta[3], nu_vec=self.nus, beta0=beta[0], beta1=beta[1], nubreak=beta[2], nside=self.nside, fsky=1, radec_center=[0., -57.], temp=20.)
+                    for i in range(len(self.nus)):
+                        print(i)
+                        #print(self.edges[i])
+                        nus_inter=get_freqs_inter(self.edges[i], iib)
+                        #print(nus_inter)
+                        #add Elenia's definition
+                        dustmaps_inter=create_dust_with_model2beta(self.nside, nus_inter, beta[0], beta[1], beta[2], temp=20, break_width=beta[3])
+                        #print(dustmaps_inter.shape)
+                        mean_dust_maps=np.mean(dustmaps_inter, axis=0)
+                        dustmaps[i]=mean_dust_maps.copy()
                     allmaps+=dustmaps
                     map_index=[]
                 else:
                     print('No dust')
 
             elif i == 'synchrotron':
-                if verbose:
-                    print('Model : {}'.format(self.skyconfig[i]))
-                sync_maps = create_sync(self.nside, self.nus, str(self.skyconfig[i]))#get_fg_notconvolved(self.skyconfig[i], self.nus, nside=self.nside)
-                allmaps+=sync_maps
+                syncmaps=np.zeros(((len(self.nus), 3, self.npix)))
+                print('Model : {}'.format(self.skyconfig[i]))
+
+                for i in range(len(self.nus)):
+                    nus_inter=get_freqs_inter(self.edges[i], iib)
+                    print(nus_inter)
+                    sync_maps_inter=create_sync(self.nside, nus_inter)
+                    mean_sync_maps=np.mean(sync_maps_inter, axis=0)
+                    syncmaps[i]=mean_sync_maps.copy()
+                allmaps+=syncmaps
                 map_index=[]
 
             else:
@@ -405,23 +418,35 @@ class combinedmaps(object):
         self.dict2=dict[1]
         self.skyconfig = skyconfig
         self.nus=np.array(list(self.dict1['frequency'])+list(self.dict2['frequency']))
+        self.n_freq=len(self.nus)
 
         self.depth1_i=self.dict1['depth_i']/np.sqrt(prop[0])
         self.depth1_p=self.dict1['depth_p']/np.sqrt(prop[0])
         self.depth2_i=self.dict2['depth_i']/np.sqrt(prop[1])
         self.depth2_p=self.dict2['depth_p']/np.sqrt(prop[1])
+        self.edges1=self.dict1['edges']
+        self.edges2=self.dict2['edges']
+        self.edges=list(self.edges1)+list(self.edges2)
 
         self.depth_i=np.array(list(self.depth1_i)+list(self.depth2_i))
         self.depth_p=np.array(list(self.depth1_p)+list(self.depth2_p))
 
         if prop[0] == 1 :
+            print('\n-------------------------------------')
+            print("You're using a full S4 configuration")
+            print('-------------------------------------\n')
             self.depth_i=self.dict1['depth_i']
             self.depth_p=self.dict1['depth_p']
             self.nus=self.dict1['frequency']
+            self.n_freq=len(self.nus)
         elif prop[1] == 1:
+            print('\n-------------------------------------')
+            print("You're using a full BI configuration")
+            print('-------------------------------------\n')
             self.depth_i=self.dict2['depth_i']
             self.depth_p=self.dict2['depth_p']
             self.nus=self.dict2['frequency']
+            self.n_freq=len(self.nus)
         else:
             print("\nYou're using a combination -> {:.2f} % of CMB-S4 and {:.2f} % of BI \n".format(prop[0]*100, prop[1]*100))
 
@@ -480,7 +505,7 @@ class combinedmaps(object):
 
         return sky
 
-    def getskymaps(self, verbose=False, coverage=None, noise=False, beta=[], fix_temp=None):
+    def getskymaps(self, same_resol=0, verbose=False, coverage=None, noise=False, beta=[], fix_temp=None, iib=1):
 
         signoise=1.
         """
@@ -500,10 +525,18 @@ class combinedmaps(object):
                     allmaps[j]+=cmbmap
                 map_index=[]
             elif i == 'dust':
+                dustmaps=np.zeros(((len(self.nus), 3, self.npix)))
                 if self.skyconfig[i] == 'd0':
                     if verbose:
                         print('Model : {}'.format(self.skyconfig[i]))
-                    dustmaps=create_dustd0(self.nside, self.nus)#get_fg_notconvolved('d0', self.nus, nside=self.nside)
+
+                    for i in range(len(self.nus)):
+                        print(self.edges[i])
+                        nus_inter=get_freqs_inter(self.edges[i], iib)
+                        print(nus_inter)
+                        dustmaps_inter=create_dustd0(self.nside, nus_inter)#get_fg_notconvolved('d0', self.nus, nside=self.nside)
+                        mean_dust_maps=np.mean(dustmaps_inter, axis=0)
+                        dustmaps[i]=mean_dust_maps.copy()
                     allmaps+=dustmaps
                     map_index=[]
 
@@ -511,22 +544,43 @@ class combinedmaps(object):
                     if verbose:
                         print('Model : d02b -> Twos spectral index beta ({:.2f} and {:.2f}) with nu_break = {:.2f}'.format(beta[0], beta[1], beta[2]))
 
-                    #add Elenia's definition
-                    dustmaps=create_dust_with_model2beta(self.nside, self.nus, beta[0], beta[1], beta[2], temp=20)
+                    for i in range(len(self.nus)):
+                        print(self.edges[i])
+                        nus_inter=get_freqs_inter(self.edges[i], iib)
+                        print(nus_inter)
+                        #add Elenia's definition
+                        dustmaps_inter=create_dust_with_model2beta(self.nside, nus_inter, beta[0], beta[1], beta[2], temp=20, break_width=beta[3])
+                        #print(dustmaps_inter.shape)
+                        mean_dust_maps=np.mean(dustmaps_inter, axis=0)
+                        dustmaps[i]=mean_dust_maps.copy()
                     allmaps+=dustmaps
                     map_index=[]
                 else:
                     print('No dust')
 
             elif i == 'synchrotron':
+                syncmaps=np.zeros(((len(self.nus), 3, self.npix)))
                 if verbose:
                     print('Model : {}'.format(self.skyconfig[i]))
-                sync_maps = create_sync(self.nside, self.nus, str(self.skyconfig[i]))#get_fg_notconvolved(self.skyconfig[i], self.nus, nside=self.nside)
-                allmaps+=sync_maps
+
+                for i in range(len(self.nus)):
+                    nus_inter=get_freqs_inter(self.edges[i], iib)
+                    sync_maps_inter=create_sync(self.nside, nus_inter)
+                    mean_sync_maps=np.mean(sync_maps_inter, axis=0)
+                    syncmaps[i]=mean_sync_maps.copy()
+                allmaps+=syncmaps
                 map_index=[]
 
             else:
                 print('No more components')
+
+
+        if same_resol != 0:
+            self.fwhmdeg = [same_resol]*self.n_freq
+            for j in range(len(self.fwhmdeg)):
+                if verbose:
+                    print('Convolution to {:.2f} deg'.format(self.fwhmdeg[j]))
+                allmaps[j] = hp.sphtfunc.smoothing(allmaps[j, :, :], fwhm=np.deg2rad(self.fwhmdeg[j]),verbose=False)
 
 
         if noise:

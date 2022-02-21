@@ -192,61 +192,16 @@ t0 = time_azel[0]
 #### check plot ... ok
 
 ```{python}
-plt.subplot(2,2,1)
-plt.plot((time_azel-t0)/3600, az,',')
-plt.xlabel('Time [h]')
-plt.ylabel('Az')
-plt.subplot(2,2,2)
-plt.plot((time_azel-t0)/3600, el,',')
-plt.xlabel('Time [h]')
-plt.ylabel('El')
-plt.ylim(30,70)
-
-plt.subplot(2,2,3)
-plt.plot(az*np.cos(np.radians(el)), el,',')
-plt.xlabel('Az')
-plt.ylabel('El')
-
-plt.subplot(2,2,4)
-plt.plot((t_src-t0)/3600, data_src,',')
-plt.xlabel('Time [h]')
-plt.ylabel('Src Data')
+reload(mmp)
+mmp.plot_scan(time_azel, t_src, data_src, az, el)
 ```
 
 ```{python}
 # Read the timeline to test the way to do it
-TESNum = 94
+TESNum = 95
 asic = 1
 tod_data = QubicFP.timeline(TES = TESNum, asic = asic)
 tod_time = QubicFP.timeaxis(axistype = 'pps', asic = asic)
-```
-
-```{python}
-time_azel.shape
-```
-
-```{python}
-t0 = time_azel[0]
-
-plt.subplot(2,2,1)
-plt.plot((time_azel-t0)/3600, az,',')
-plt.xlabel('Time [h]')
-plt.ylabel('Az')
-plt.subplot(2,2,2)
-plt.plot((time_azel-t0)/3600, el,',')
-plt.xlabel('Time [h]')
-plt.ylabel('El')
-plt.ylim(30,70)
-
-plt.subplot(2,2,3)
-plt.plot(az*np.cos(np.radians(el)), el,',')
-plt.xlabel('Az')
-plt.ylabel('El')
-
-plt.subplot(2,2,4)
-plt.plot((t_src-t0)/3600, data_src,',')
-plt.xlabel('Time [h]')
-plt.ylabel('Src Data')
 ```
 
 `check plot` TOD(tes) data and calsource ... ok
@@ -265,6 +220,29 @@ period = 1./ thefreqmod
 #Set parameters for filtering data
 lowcut = 0.5
 highcut = 20
+```
+
+```{python}
+plt.subplot(2,1,1)
+plt.plot((tod_time - t0)/3600, dl.renorm(tod_data), 
+     label='Data TES {} ASIC {}'.format(TESNum,asic))
+plt.plot((t_src - t0)/3600, dl.renorm(data_src)-5, label = 'source')
+plt.xlabel('Hours')
+plt.legend(loc = 'upper left')
+plt.title("bla")
+plt.ylim(-10,10)
+
+plt.subplot(2,1,2)
+tzoom = 1.2940
+dtzoom = 0.005
+oktime_d = np.abs((tod_time - t0)/3600-tzoom) < dtzoom
+oktime_s = np.abs((t_src - t0)/3600-tzoom) < dtzoom
+plt.plot((tod_time - t0)[oktime_d]/3600, dl.renorm(tod_data[oktime_d]), 
+     label='Data TES {} ASIC {}'.format(TESNum,asic))
+plt.plot((t_src[oktime_s]-t0)/3600, dl.renorm(data_src[oktime_s]), label='source')
+plt.xlabel('Hours')
+plt.legend(loc='upper left')
+plt.title("bla")
 ```
 
 ```{python}

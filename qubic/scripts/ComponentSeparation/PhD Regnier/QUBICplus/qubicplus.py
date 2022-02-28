@@ -30,11 +30,18 @@ def get_coverage(fsky, nside, center_radec=[-30, -30]):
     mask = np.zeros(12*nside**2)
     mask[okpix] = 1
     return mask
-def create_dust_with_model2beta(nside, nus, betad0, betad1, nubreak, temp, break_width):
+def get_dust_sky(nus, model, nside):
+    sky = pysm3.Sky(nside=nside, preset_strings=[model])
+    maps_dust = np.zeros(((len(nus), 3, 12*nside**2)))
 
-    # Create 353 GHz dust maps
-    sky = pysm3.Sky(nside=nside, preset_strings=['d0'])
-    maps_353GHz = sky.get_emission(353*u.GHz, None)*utils.bandpass_unit_conversion(353*u.GHz,None, u.uK_CMB)
+    for i_freq, freq in enumerate(nus):
+        maps_XXXGHz=sky.get_emission(freq*u.GHz, None)*utils.bandpass_unit_conversion(freq*u.GHz,None, u.uK_CMB)
+        maps_dust[i_freq]=maps_XXXGHz.copy()
+
+    return maps_dust
+def create_dust_with_model2beta(maps_353GHz, nside, nus, betad0, betad1, nubreak, temp, break_width):
+
+
 
     comp2b=[fgbuster.component_model.Dust_2b(nu0=353, break_width=break_width)]
 
@@ -42,8 +49,9 @@ def create_dust_with_model2beta(nside, nus, betad0, betad1, nubreak, temp, break
     A2b_ev = A2b.evaluator(nus)
     A2b_maxL = A2b_ev([betad0, betad1, nubreak, temp])
 
-    new_dust_map=np.zeros(((len(nus), 3, 12*nside**2)))
+    new_dust_map=np.zeros(((len(nus), maps_353GHz.shape[0], maps_353GHz.shape[1])))
     for i in range(len(nus)):
+        #print('i = ', i)
         new_dust_map[i]=A2b_maxL[i, 0]*maps_353GHz
 
     return new_dust_map
@@ -326,6 +334,7 @@ class BImaps(object):
 
         sky=self.get_sky(coverage)
         allmaps = np.zeros(((len(self.nus), 3, self.npix)))
+        pixok=coverage>0
         if same_resol is not None:
             self.fwhmdeg = np.ones(len(self.nus))*np.max(same_resol)
 
@@ -342,9 +351,10 @@ class BImaps(object):
                         print('Model : {}'.format(self.skyconfig[i]))
 
                     for i in range(len(self.nus)):
-                        print(self.edges[i])
+                        print('Integration into bands ({:.0f} bands) -> from {:.2f} to {:.2f} GHz'.format(iib, self.edges[i][0], self.edges[i][1]))
+                        #print(self.edges[i])
                         nus_inter=get_freqs_inter(self.edges[i], iib)
-                        print(nus_inter)
+                        #print(nus_inter)
                         dustmaps_inter=create_dustd0(self.nside, nus_inter)#get_fg_notconvolved('d0', self.nus, nside=self.nside)
                         mean_dust_maps=np.mean(dustmaps_inter, axis=0)
                         dustmaps[i]=mean_dust_maps.copy()
@@ -356,18 +366,43 @@ class BImaps(object):
                     if verbose:
                         print('Model : d02b -> Twos spectral index beta ({:.2f} and {:.2f}) with nu_break = {:.2f}'.format(beta[0], beta[1], beta[2]))
 
+
+                    # Create 353 GHz dust maps
+                    sky = pysm3.Sky(nside=self.nside, preset_strings=['d0'])
+                    maps_353GHz = sky.get_emission(353*u.GHz, None)*utils.bandpass_unit_conversion(353*u.GHz,None, u.uK_CMB)
                     for i in range(len(self.nus)):
-                        print(i)
+                        print('Integration into bands ({:.0f} bands) -> from {:.2f} to {:.2f} GHz'.format(iib, self.edges[i][0], self.edges[i][1]))
                         #print(self.edges[i])
                         nus_inter=get_freqs_inter(self.edges[i], iib)
                         #print(nus_inter)
+
+                        #print(nus_inter)
                         #add Elenia's definition
-                        dustmaps_inter=create_dust_with_model2beta(self.nside, nus_inter, beta[0], beta[1], beta[2], temp=20, break_width=beta[3])
+                        dustmaps_inter=create_dust_with_model2beta(maps_353GHz, self.nside, nus_inter, beta[0], beta[1], beta[2], temp=20, break_width=beta[3])
                         #print(dustmaps_inter.shape)
                         mean_dust_maps=np.mean(dustmaps_inter, axis=0)
                         dustmaps[i]=mean_dust_maps.copy()
                     allmaps+=dustmaps
                     map_index=[]
+
+                elif self.skyconfig[i] == 'd1' or self.skyconfig[i] == 'd2' or self.skyconfig[i] == 'd3' or self.skyconfig[i] == 'd4':
+                    skyconf=self.skyconfig[i]
+                    #if verbose:
+                    print('Model : {}'.format(skyconf))
+                    if iib == 1 :
+                        dustmaps=get_dust_sky(self.nus, skyconf, self.nside)
+                    else:
+                        dustmaps=np.zeros(((len(self.nus), 3, self.npix)))
+                        for i in range(len(self.nus)):
+                            nus_inter=get_freqs_inter(self.edges[i], iib)
+                            print(nus_inter)
+                            dustmaps_inter=get_dust_sky(nus_inter, skyconf, self.nside)
+                            dust_maps_i=np.mean(dustmaps_inter, axis=0)
+                            dustmaps[i]=dust_maps_i.copy()
+
+                    allmaps+=dustmaps
+
+
                 else:
                     print('No dust')
 
@@ -377,7 +412,7 @@ class BImaps(object):
 
                 for i in range(len(self.nus)):
                     nus_inter=get_freqs_inter(self.edges[i], iib)
-                    print(nus_inter)
+                    #print(nus_inter)
                     sync_maps_inter=create_sync(self.nside, nus_inter)
                     mean_sync_maps=np.mean(sync_maps_inter, axis=0)
                     syncmaps[i]=mean_sync_maps.copy()
@@ -545,9 +580,10 @@ class combinedmaps(object):
                         print('Model : d02b -> Twos spectral index beta ({:.2f} and {:.2f}) with nu_break = {:.2f}'.format(beta[0], beta[1], beta[2]))
 
                     for i in range(len(self.nus)):
-                        print(self.edges[i])
+                        print('Integration into bands ({:.0f} bands) -> from {:.2f} to {:.2f} GHz'.format(iib, self.edges[i][0], self.edges[i][1]))
+                        #print(self.edges[i])
                         nus_inter=get_freqs_inter(self.edges[i], iib)
-                        print(nus_inter)
+                        #print(nus_inter)
                         #add Elenia's definition
                         dustmaps_inter=create_dust_with_model2beta(self.nside, nus_inter, beta[0], beta[1], beta[2], temp=20, break_width=beta[3])
                         #print(dustmaps_inter.shape)

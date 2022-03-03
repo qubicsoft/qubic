@@ -128,6 +128,7 @@ def read_run(jobid, repo=None, fixpar=True):
     if fixpar:
         d['nf_sub'] = 48
         d['nf_recon'] = [2,3,4]
+        #d['nf_recon'] = [6,]
     else:
         d['nf_sub'] = 45
         d['nf_recon'] = [5,]
@@ -287,6 +288,15 @@ neig = False
 if neig:
     pixel = hp.get_all_neighbours(d['nside'], pixel)
 
+#for ib in [2,3,4]:
+#for ib in [6,]:
+#    #Create dictionary within local variables 
+#    locals().update({'data_6bands': {}})
+#    #Start to fill it
+#    data_sb = locals()['data_{}bands'.format(ib)]
+#    data_sb = {'nu_in': nus_in[innu],
+#              'nu_rec': nusfull['{}'.format(ib)],
+#              'nu_edge': nusfulledge['{}'.format(ib)]}
 
 data_2bands = {'nu_in': nus_in[innu],
               'nu_rec': nusfull['2'],
@@ -297,6 +307,9 @@ data_3bands = {'nu_in': nus_in[innu],
 data_4bands = {'nu_in': nus_in[innu],
                 'nu_rec': nusfull['4'],
                'nu_edge': nusfulledge['4'] }
+#data_6bands = {'nu_in': nus_in[innu],
+#                'nu_rec': nusfull['6'],
+#               'nu_edge': nusfulledge['6'] }
 data_5bands = {'nu_in': nus_in_5sb[innu_5sb],
                 'nu_rec': nusfull_5sb['5'],
                'nu_edge': nusfulledge_5sb['5'] }
@@ -331,13 +344,14 @@ for bnd in range(5):
 max2bands = np.max([np.max(data_2bands['band{}'.format(i)]) for i in range(2)])
 max3bands = np.max([np.max(data_3bands['band{}'.format(i)]) for i in range(3)])
 max4bands = np.max([np.max(data_4bands['band{}'.format(i)]) for i in range(4)])
+#max6bands = np.max([np.nanmax(data_6bands['band{}'.format(i)]) for i in range(6)])
 max5bands = np.max([np.max(data_5bands['band{}'.format(i)]) for i in range(5)])
 max5bandsTD = np.max([np.max(data_5bandsTD['band{}'.format(i)]) for i in range(5)])
-#max2bands = np.nanmax([allconv[j]['2'][0,:,:,0].max() for j in range(24)])
-#max3bands = np.nanmax([allconv[j]['3'][0,:,:,0].max() for j in range(24)])
-#max4bands = np.nanmax([allconv[j]['4'][0,:,:,0].max() for j in range(24)])
-#max5bands = np.nanmax([allconv_5sb[j]['5'][0,:,:,0].max() for j in range(9)])
-#max5bandsTD = np.nanmax([allconv_5sbTD[j]['5'][0,:,:,0].max() for j in range(6)])
+###max2bands = np.nanmax([allconv[j]['2'][0,:,:,0].max() for j in range(24)])
+###max3bands = np.nanmax([allconv[j]['3'][0,:,:,0].max() for j in range(24)])
+###max4bands = np.nanmax([allconv[j]['4'][0,:,:,0].max() for j in range(24)])
+###max5bands = np.nanmax([allconv_5sb[j]['5'][0,:,:,0].max() for j in range(9)])
+###max5bandsTD = np.nanmax([allconv_5sbTD[j]['5'][0,:,:,0].max() for j in range(6)])
 
 for i in range(2):
     data_2bands['band{}'.format(i)] /= max2bands
@@ -345,6 +359,9 @@ for i in range(3):
     data_3bands['band{}'.format(i)] /= max3bands
 for i in range(4):
     data_4bands['band{}'.format(i)] /= max4bands
+#for i in range(6):
+#    data_6bands['band{}'.format(i)] /= max6bands
+
 for i in range(5):
     data_5bands['band{}'.format(i)] /= max5bands
     data_5bandsTD['band{}'.format(i)] /= max5bandsTD
@@ -403,6 +420,7 @@ We plot in grey the sub-band considered.
 
 ```{python}
 for NUS in ['2', '3', '4', '5']:
+#for NUS in ['6', '5']:
 
     NormFact = 1#48/int(NUS)
     
@@ -423,7 +441,7 @@ for NUS in ['2', '3', '4', '5']:
         if NUS != '5':
             ax[j].set_xlim(data_array['nu_in'][0] * 0.98, data_array['nu_in'][-1] * 1.02)
         else: 
-            ax[j].set_xlim(data_4bands['nu_in'][0] * 0.98, data_4bands['nu_in'][-1] * 1.02)
+            ax[j].set_xlim(data_5bands['nu_in'][0] * 0.98, data_5bands['nu_in'][-1] * 1.02)
             
         xvals = nus_in[innu] - data_array['nu_rec'][j]
         
@@ -449,6 +467,7 @@ fig, ax = plt.subplots(nrows = 1, ncols = 4,
 
 iax = 0
 for sb in [2,3,4,5]:
+#for sb in [6,5]:
     data_array = locals()['data_{}bands'.format(sb)]
     
     xx, yy = [], []
@@ -637,8 +656,10 @@ See what happen in all $N_{rec}$'s
 ```{python}
 # Spline fitting
 nbspl = 13
-fig, ax = plt.subplots(nrows = 1, ncols = 4, figsize = (15, 4), sharey = True)
+fig, ax = plt.subplots(nrows = 2, ncols = 2, figsize = (10, 8), 
+                       sharex = True, sharey = True)
 jax = 0
+ax = ax.ravel()
 for j, inu in enumerate([2, 3, 4, 5]):
     ax[jax].grid()
     
@@ -659,26 +680,28 @@ for j, inu in enumerate([2, 3, 4, 5]):
     xvals = np.linspace(np.min(xfit), np.max(xfit), 1000)
     
     ax[jax].plot(xfit, yfit, 'o', color='b', label='Datos')
-    ax[jax].plot(xvals, myspl(xvals)/np.max(myspl(xvals)), 'r', label='Ajuste')
+    ax[jax].plot(xvals, myspl(xvals)/np.max(myspl(xvals)), 'r', label='FPSF')
     ax[jax].set_xlim(-25,25)
     ax[jax].set_ylim(-0.2,1.1)
-    ax[jax].set_xlabel(r"$\nu - \nu_{in}$")
+    if jax > 1:
+        ax[jax].set_xlabel(r"$\nu - \nu_{in}$")
     ax[0].set_ylabel(r"$I_{out}/ I_0$")
+    ax[2].set_ylabel(r"$I_{out}/ I_0$")
     
     #Plot "expected resolution" (I -Martin- don't like that concept)
     xgauss = np.linspace(-25, 25, 100) 
     #ax[jax].plot(xgauss, np.exp(-0.5 * (xgauss ** 2 )/((150 / (22 -1)) / 2.355) ** 2  ), label  = "Theor" )
     ax[jax].fill_between(xgauss, y1 = np.exp(-0.5 * (xgauss ** 2 )/((170 / (22 -1)) / 2.355) ** 2  ), 
         y2 = np.exp(-0.5 * (xgauss ** 2 )/((130 / (22 - 1)) / 2.355) ** 2  ),
-               color = 'm', label = "Aprox.")
+               color = 'm', label = "Gauss.")
     #ax[jax].plot(xgauss, np.exp(-0.5 * (xgauss ** 2 )/((150 / (8 -1)) / 2.355) ** 2  ),'--', label  = "expected" )
     ax[jax].axvspan(-np.diff(data_dict['nu_edge'])[0]/2,
                     np.diff(data_dict['nu_edge'])[0]/2, color = 'k', alpha = 0.2)
-    ax[jax].text(-20,0.9, r"$N_r = {}$".format(inu))
+    ax[jax].text(-20,0.9, r"$N_r$ = {0}".format(inu))
     if jax == 3:
         #ax[3].text(-20,0.75, r"$\sigma_F = {:.2f}$".format((150/(22-1))/2.355))
         #ax[3].text(-20,0.6, r"$\sigma_T = {:.2f}$".format((150/(8-1))/2.355))
-        ax[3].legend(loc = 'upper right', fontsize = 11)
+        ax[0].legend(loc = 'upper right', fontsize = 11)
     jax += 1
 fig.tight_layout()
 #plt.savefig("FPSF_allfreq.pdf", format = "pdf")

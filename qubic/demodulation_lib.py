@@ -1089,7 +1089,7 @@ def qubic_sb_model(x, pars, return_peaks=False):
         return themap
 
 
-def flattened_qubic_sb_model(x, pars):
+def flattened_qubic_sb_model(x, pars, extra_args = None):
     return np.ravel(qubic_sb_model(x, pars))
 
 
@@ -1235,7 +1235,7 @@ def qubic_sb_model_asym(x, pars, return_peaks=False):
         return themap
 
 
-def flattened_qubic_sb_model_asym(x, pars):
+def flattened_qubic_sb_model_asym(x, pars, extra_args = None):
     return np.ravel(qubic_sb_model_asym(x, pars))
 
 

@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.0
+      jupytext_version: 1.7.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -47,12 +47,33 @@ In both cases, they are cross spectra on residuals so they should be 0.
 
 
 ```{python}
-datadir = os.environ['DATA_SPECTROIM']
-print(datadir)
-rep_fullpipe = datadir + '/NERSC_simuEnd2End/Bad_photon_noise2020/simu_NERSC_MC/IBCS_fullpipeline/'
-
-rep_spectrumCC = datadir + 'FastSimulator/cls_spectrum_fromCC/nbands6-7/'
+#Set paths
+machine = os.uname()[1]
+def check_dir(dirfile):
+    if os.path.isdir( dirfile): 
+        print('dirfile:', dirfile); 
+    else: 
+        raise ValueError('dirfile {} is not an existing directory'.format(dirfile) )
+        
+if 'moussetDell' in machine:
+    datadir = os.environ['DATA_SPECTROIM']
+    rep_fullpipe = datadir + '/NERSC_simuEnd2End/Bad_photon_noise2020/simu_NERSC_MC/IBCS_fullpipeline/'
+    rep_spectrumCC = datadir + 'FastSimulator/cls_spectrum_fromCC/nbands6-7/'
+    check_dir(dirfiles)
+elif machine == 'hain':
+    datadir = '/home/martin/QUBIC/qubic/qubic/'
+    rep_spectrumCC = datadir + 'data/LouiseSims/IBCS_fastsim/'
+    #rep_fullpipe = datadir + 'data/LouiseSims/IBCS_fastsim/'
+    ##rep_spectrumCC = datadir + ''
+    check_dir(rep_spectrumCC)
+else:
+    raise ValueError("*dirfile variable not defined*. You are in machine named: {}. \
+    You have to specify a directory where the simulations of spectra are saved,\
+    e.g. [NERSC directory] /sps/qubic/Users/lmousset/SpectroImaging/FastSimMC/v4".format(machine))
+    
+    
 print(rep_spectrumCC)
+
 ```
 
 ```{python}
@@ -81,7 +102,7 @@ print(rep_spectrumCC)
 
 ```{python}
 clnames = ['TT', 'EE', 'BB', 'TE']
-nfrecon = 6
+nfrecon = 4
 
 # Full pipeline
 # cls_cross = np.load(rep_fullpipe + 'IBCSsame_recon_{}bands_150fullpipeline.npy'.format(nfrecon))
@@ -90,7 +111,7 @@ nfrecon = 6
 # cls_cross = np.load(rep_spectrumCC + 
 #                     'cross_interband_samereal_nfrecon{}_noisemaps_FI150_v2_galaxycenter.npy'.format(nfrecon))
 cls_cross = np.load(rep_spectrumCC + 
-                    'IBCSsame_nfrecon{}_noisemaps_FI150_v4_galaxycenter.npy'.format(nfrecon))
+                    'IBCSsame_nfrecon{}_qubicmaps_FI150_v4_galaxycenter.npy'.format(nfrecon))
 
 
 print(cls_cross.shape)
@@ -178,6 +199,8 @@ for i in range(4):
     ax.set_xlabel('$\\ell$')
     ax.set_ylabel('$D_\\ell$')
     ax.set_title(clnames[i])
+    #ax.set_xscale('log')
+    #ax.set_yscale('log')
     ax.grid()
     ax.legend(fontsize=8, loc='upper left')
 
@@ -283,24 +306,25 @@ plt.tight_layout(pad=3)
 fig = plt.figure(figsize=(12, 8))
 
 for cross in range(ncombi):
-    if cross<3:
+    if cross < nbands:
         c = palet1[cross]
     else:
-        c = palet2[cross-3]
+        c = palet2[cross-4]
     plt.errorbar(ell_binned[:], 
             mean_same[cross, :, 2],
             yerr=std_same[cross, :, 2],
+                 capsize  =3,
             marker='o', 
             color=c, 
             linestyle='none', 
             label='{:3.0f} x {:3.0f}'.format(combi_nus[cross][0], combi_nus[cross][1]))
 
-plt.xlabel('Multipole moment, $\\ell$')
+plt.xlabel('Momento multipolar, $\\ell$')
 plt.ylabel('$D_\\ell \,[\mu \mathrm{K}^2]$')
 plt.title(clnames[2])
 plt.grid()
 plt.legend(fontsize=16, loc='upper left')
-# plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/IBCS_noiseBBsame150_GoodPhotonNoise_v4.pdf')
+#plt.savefig('/home/martin/Doctorado/Tesis-Doctoral/Figuras_Tesis_Overleaf/IBCS_noiseBBsame150_v4')
 ```
 
 ```{python}
@@ -700,7 +724,7 @@ plt.colorbar(im, cax=cax)
 ### Diference between same and mix
 
 ```{python}
-nbands = 3
+nbands = 4
 nbins = 16
 BBcovmix = np.load(rep_save + 'BBcovariance_bincross_nfrecon{}_mixreal_FI-150.npy'.format(nbands))
 BBcovsame = np.load(rep_save + 'BBcovariance_bincross_nfrecon{}_samereal_FI-150.npy'.format(nbands))

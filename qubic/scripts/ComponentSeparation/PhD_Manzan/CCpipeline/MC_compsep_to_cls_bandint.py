@@ -1,0 +1,388 @@
+import numpy as np
+import pysm3
+import pysm3.units as u
+from pysm3 import utils
+import healpy as hp
+import fgbuster
+from pylab import *
+import os
+import qubic
+import warnings
+import pickle
+import sys
+from datetime import datetime
+from qubic import NamasterLib as nam
+warnings.filterwarnings("ignore")
+print(fgbuster.__path__)
+
+import qubicplus_skygen_lib
+import utilitylib
+
+
+#FUNCTION DEFINITION~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+def ParamCompSep(config, prop, nside, skyconfig, model, foreg_maps, coverage, noise=True, fix_temp=None,
+                 x0=[], break_width=1., fixsync=True, nu0=85):
+
+    covmap = coverage
+    pixok = covmap>0
+    
+
+    if prop[0] == 1 : #s4
+        conf=config[0]
+        fgmaps = foreg_maps[0]
+        print('Has fg_maps the same freq. length of the instrument? ', (len(conf['frequency'])==fgmaps.shape[0]))
+        inputs, inputs_noiseless, _ = qubicplus_skygen_lib.BImaps(skyconfig, conf, nside=nside).getskymaps(fg_maps=fgmaps,
+                                      same_resol=0,
+                                      verbose=True,
+                                      coverage=covmap,
+                                      noise=True)
+
+    elif prop[1] == 1: #bi
+        conf=config[1]
+        fgmaps = foreg_maps[1]
+        print('Has fg_maps the same freq. length of the instrument? ', (len(conf['frequency'])==fgmaps.shape[0]))
+        inputs, inputs_noiseless, _ = qubicplus_skygen_lib.BImaps(skyconfig, conf, nside=nside).getskymaps(fg_maps=fgmaps,
+                                      same_resol=0,
+                                      verbose=True,
+                                      coverage=covmap,
+                                      noise=True)
+    '''
+    else:
+        inputs, inputs_noiseless, _ = qubicplus_skygen_lib.combinedmaps(skyconfig, config, nside=nside, prop=prop).getskymaps(
+                                      same_resol=0,
+                                      verbose=False,
+                                      coverage=covmap,
+                                      noise=True,
+                                      beta=[1.54-delta_beta, 1.54+delta_beta, nubreak, break_width],
+                                      fix_temp=fix_temp,
+                                      iib=iib)'''
+
+
+
+
+    ###### Preparation for COMPSEP ######
+    nus, depth_i, depth_p, fwhm = utilitylib.get_good_config(config, prop)
+
+    if len(nus) == 9:
+        name='CMBS4'
+        n_freq=9
+    elif len(nus)==33:
+        name='QubicPlus'
+        n_freq=33
+    else:
+        name='CMBS4BI'
+        n_freq=42
+
+    print('Define instrument')
+    print()
+    instr = fgbuster.get_instrument(name)
+    instr.frequency=nus
+    instr.depth_i=depth_i
+    instr.depth_p=depth_p
+    instr.fwhm=fwhm
+
+    print('Define components')
+    print()
+    comp = utilitylib.get_comp_for_fgb(nu0=85, model=model, fix_temp=fix_temp, x0=x0, bw=break_width, fixsync=fixsync)
+
+    print('##### COMP SEP #####')
+    print()
+
+    options={'maxiter': 100000}
+    #tol=1e-18
+    #cov=get_cov_for_weighted(n_freq, depth_i, depth_p, covmap, nside=256)
+
+    #apply compsep only on the Q,U maps
+    r=fgbuster.basic_comp_sep(comp, instr, inputs[:, 1:, pixok], options=options, tol=1e-18, method='TNC')#, bounds=bnds)
+
+    print('\nMessage -> ', r.message)
+    print('# of function evaluation -> ', r.nfev)
+    print()
+
+    print('...compsep done! \n')
+    print('Estimated params: ', r.x)
+
+    components = utilitylib.get_comp_from_MixingMatrix(r, comp, instr, inputs[:, 1:, :], covmap, noise, nside)
+    components_noiseless = utilitylib.get_comp_from_MixingMatrix(r, comp, instr, inputs_noiseless[:, 1:, :], covmap, False, nside)
+    return components, components_noiseless, r
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+#~~~~~~~~~CODE PART~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+center_ra_dec = [-30,-30] #CMB-S4 sky patch
+center = qubic.equ2gal(center_ra_dec[0], center_ra_dec[1])
+print('Sky patch is centered at RA,DEC = ', center_ra_dec)
+print('WARNING: if you want to change the center of the sky patch, stop the code now!')
+
+fsky=0.03
+nside=256
+
+#def CMB-S4 config
+freqs = np.array([20., 30., 40., 85., 95., 145., 155., 220., 270.])
+bandwidth = np.array([5., 9., 12., 20.4, 22.8, 31.9, 34.1, 48.4, 59.4])
+dnu_nu = bandwidth/freqs
+beam_fwhm = np.array([11., 72.8, 72.8, 25.5, 25.5, 22.7, 22.7, 13., 13.])
+mukarcmin_TT = np.array([16.5, 9.36, 11.85, 2.02, 1.78, 3.89, 4.16, 10.15, 17.4])
+mukarcmin_EE = np.array([10.87, 6.2, 7.85, 1.34, 1.18, 1.8, 1.93, 4.71, 8.08])
+mukarcmin_BB = np.array([10.23, 5.85, 7.4, 1.27, 1.12, 1.76, 1.89, 4.6, 7.89])
+ell_min = np.array([30, 30, 30, 30, 30, 30, 30, 30, 30])
+Nside = np.array([512, 512, 512, 512, 512, 512, 512, 512, 512])
+edges_min = freqs * (1. - dnu_nu/2)
+edges_max = freqs * (1. + dnu_nu/2)
+edges = [[edges_min[i], edges_max[i]] for i in range(len(freqs))]
+#CMB-S4 config
+s4_config = {
+    'nbands': len(freqs),
+    'frequency': freqs,
+    'depth_p': 0.5*(mukarcmin_EE + mukarcmin_BB),
+    'depth_i': mukarcmin_TT,
+    'depth_e': mukarcmin_EE,
+    'depth_b': mukarcmin_BB,
+    'fwhm': beam_fwhm,
+    'bandwidth': bandwidth,
+    'dnu_nu': dnu_nu,
+    'ell_min': ell_min,
+    'nside': Nside,
+    'fsky': fsky,
+    'ntubes': 12,
+    'nyears': 7.,
+    'edges': edges,
+    'effective_fraction': np.zeros(len(freqs))+1.
+            }
+
+#define the pixok set
+covmap = utilitylib.get_coverage(s4_config['fsky'], nside, center_radec=center_ra_dec) 
+thr = 0
+mymask = (covmap > (np.max(covmap)*thr)).astype(int)
+pixok = mymask > 0
+
+#def BI config
+qp_nsub = np.array([1, 1, 1, 5, 5, 5, 5, 5, 5])
+qp_effective_fraction = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1])
+qp_config = utilitylib.qubicify(s4_config, qp_nsub, qp_effective_fraction)
+
+#def sky and instrument model
+nb_param=1
+noise=True
+
+nu0=85 #def nu0 value
+print('WARNING: nu0 is fixed at nu0 = {} GHz. If you want to change it, stop the code now!'.format(nu0))
+
+#variables from command line~~~~~~
+N=int(sys.argv[1])           # Number of iterations
+print('Total number of iterations: ', N)
+ite=int(sys.argv[2])         # Number of times this code is executed simultaneously
+print('Ite value = ', ite)
+nubreak=int(sys.argv[3])     # True value of nubreak
+iib=int(sys.argv[6]) #number of freqs to use in the band integration
+
+if int(sys.argv[4]) == 1:
+    T=20
+    name_T='_fixtemp'
+else:
+    T=None
+    name_T=''
+    nb_param+=1
+
+if int(sys.argv[5]) == 1:
+    fix_sync=True
+    name_s='_fixsync'
+else:
+    fix_sync=False
+    name_s=''
+    nb_param+=1
+
+print('T = {}'.format(T))
+print('Fix sync -> {}'.format(fix_sync))
+print('# of params -> {}'.format(nb_param))
+fix_temp=T
+fix_sync=fix_sync
+#~~~~~~~~~~~~~~~~~~~~~
+'''
+N=2       # Number of iterations
+ite=1         # To save
+nubreak=150 # True value of nubreak
+iib=1
+temp_conf = 1
+synch_conf = 1
+
+if temp_conf == 1:
+    T=20
+    name_T='_fixtemp'
+else:
+    T=None
+    name_T=''
+    nb_param+=1
+    
+if synch_conf == 1:
+    fix_sync=True
+    name_s='_fixsync'
+else:
+    fix_sync=False
+    name_s=''
+    nb_param+=1
+    
+print('T = {}'.format(T))
+print('Fix sync -> {}'.format(fix_sync))
+print('# of params -> {}'.format(nb_param))
+fix_temp=T
+fix_sync=fix_sync
+'''
+
+model='1b' #fitting dust model
+dust_config='d02b' #dust model for map creation
+bw=0.3 #steepness of the frequency break in the 2-beta dust model
+
+npix=hp.nside2npix(nside)
+
+maskpix = np.zeros(npix)
+maskpix[pixok] = 1
+Namaster = nam.Namaster(maskpix, lmin=40, lmax=2*nside-1, delta_ell=30)
+
+props=[0,1] #instrumental configurations
+db=np.linspace(0.0, 0.05, 6) #[0.0, 0.05] #delta beta cases
+
+#def fg maps
+nus_s4=len(s4_config['frequency'])
+nus_bi=len(qp_config['frequency'])
+
+fg_maps_s4 = np.empty((len(db),nus_s4,3,npix))
+fg_maps_bi = np.empty((len(db),nus_bi,3,npix))
+
+#define number of freq to use for bi and s4
+if iib==1: #this part is not physically correct, but returns the correct result
+    iib_bi=iib
+    iib_s4=iib
+else: #the number of s4 freqs is equal to the number of bi freqs in the overall PHYSICAl band
+    n_sub_bands_bi=qp_nsub[-1]
+    iib_bi=iib
+    iib_s4=iib_bi*n_sub_bands_bi
+
+#fill in the fg maps
+print('Creating foreground maps...')
+start_time_fg = datetime.now()
+skyconfig={'dust':'d02b', 'synchrotron':'s0'}
+
+for k, delta_beta in enumerate(db):
+    print('###################')
+    print(' Delta beta : {}'.format(db[k]))
+    print('###################')
+    
+    for conf in props:
+        if conf==0: #s4
+            start_time = datetime.now()
+            fg_maps_s4[k,:,:,:] = qubicplus_skygen_lib.BImaps(skyconfig, s4_config, nside=nside).get_fg_freq_integrated_maps(
+                verbose=True, iib=iib_s4, beta=[1.54-delta_beta, 1.54+delta_beta, nubreak, bw], temp=20)
+            print('Duration: {}'.format(datetime.now()-start_time))
+        elif conf==1: #bi
+            start_time = datetime.now()
+            #for bi below take iib=iib_bi
+            fg_maps_bi[k,:,:,:] = qubicplus_skygen_lib.BImaps(skyconfig, qp_config, nside=nside).get_fg_freq_integrated_maps(
+                verbose=True, iib=iib_bi, beta=[1.54-delta_beta, 1.54+delta_beta, nubreak, bw], temp=20)
+            print('Duration: {}'.format(datetime.now()-start_time))
+    
+            #set first 3 frequency maps for bi equal to s4 ones
+            fg_maps_bi[k,0:3,:,:]=fg_maps_s4[k,0:3,:,:]
+        else:
+            print('ERROR: Hybrid configurations have not been implemented yet! Exit code now!')
+            sys.exit()
+print('...generated maps in {}'.format(datetime.now()-start_time_fg))
+
+
+#def arrays to store results
+param_comb = np.zeros(((((2, N, len(props), len(db), nb_param)))))
+rms_est_cmb = np.zeros((((N, len(props), len(db), 1))))
+rms_est_dust = np.zeros((((N, len(props), len(db), 1))))
+cl=np.zeros(((((N, len(props), len(db), 16, 4)))))
+tabseed=np.zeros(N)
+
+#start iteration: generate cmb and noise, then do compsep
+print('Entering the iteration loop...')
+for j in range(N):
+    start_time_iter = datetime.now()
+    print('Start iteration number {}'.format(j+1))
+    
+    #gen. cmb seed and store it
+    seed=np.random.randint(1000000)
+    tabseed[j]=seed
+    print("seed is {}".format(seed))
+
+    for i in range(len(props)):
+        for k in range(len(db)):
+            start_time_db = datetime.now()
+            #set initial guess values
+            if fix_temp is not None:
+                x0=[1.54]
+            else:
+                x0=[1.54, 20]
+                
+            print('###################')
+            print(' BI fration : {}%'.format(props[i]*100))
+            print(' Delta beta : {}'.format(db[k]))
+            print(' Init : ', x0)
+            print('###################')
+            
+            #set instrument configuration
+            BIprop=props[i]
+            S4prop=1-BIprop
+            frac=[S4prop, BIprop]
+            foreground_map=[fg_maps_s4[k,:,:,:], fg_maps_bi[k,:,:,:]]
+
+            comp1, comp1_noiseless, r_comb_1 = ParamCompSep([s4_config, qp_config],
+                                    prop=frac,
+                                    skyconfig={'cmb':seed, 'dust':'d02b', 'synchrotron':'s0'},
+                                    model=model,
+                                    foreg_maps=foreground_map,
+                                    coverage=covmap,                       
+                                    noise=noise,
+                                    fix_temp=fix_temp,
+                                    nside=nside,
+                                    x0=x0,
+                                    break_width=bw,
+                                    fixsync=fix_sync,
+                                    nu0=nu0)
+
+            comp2, comp2_noiseless, r_comb_2 = ParamCompSep([s4_config, qp_config],
+                                    prop=frac,
+                                    skyconfig={'cmb':seed, 'dust':'d02b', 'synchrotron':'s0'},
+                                    model=model,
+                                    foreg_maps=foreground_map,
+                                    coverage=covmap,
+                                    noise=noise,
+                                    fix_temp=fix_temp,
+                                    nside=nside,
+                                    x0=x0,
+                                    break_width=bw,
+                                    fixsync=fix_sync,
+                                    nu0=nu0)
+            
+            #store estimated params
+            param_comb[0, j, i, k]=r_comb_1.x
+            param_comb[1, j, i, k]=r_comb_2.x
+
+            #store reconstructed cmb map. Place QU stokes parameters and 0 for I
+            maps1 = utilitylib.get_maps_for_namaster_QU(comp1, nside=nside)
+            maps2 = utilitylib.get_maps_for_namaster_QU(comp2, nside=nside)
+
+            # To be sure that not seen pixels are 0 and not hp.UNSEEN
+            maps1[:, ~pixok]=0
+            maps2[:, ~pixok]=0
+            
+            #eval and store cls
+            w=None
+            leff, cl[j, i, k], _ = Namaster.get_spectra(maps1, map2=maps2,
+                                         purify_e=False,
+                                         purify_b=True,
+                                         w=w,
+                                         verbose=False,
+                                         beam_correction=None,
+                                         pixwin_correction=False)
+
+            print('Estimated cross-Cl BB: ', cl[j, i, k, :, 2])
+            # Save results in pkl file
+            print('Saving results to file... \n')
+            pickle.dump([leff, cl, param_comb, tabseed, db, props, bw, sys.argv], open('./results/cls_iib{:.0f}_QU{}{}_truenub{:.0f}_{}reals_{}.pkl'.format(iib, name_T, name_s, nubreak, N, ite), "wb"))
+            print('Duration: {}'.format(datetime.now()-start_time_db))
+            
+    print('Iteration number {0} is over. Duration: {1}'.format(j+1, datetime.now()-start_time_iter))
+print('Code ended!')

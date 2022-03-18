@@ -14,6 +14,8 @@ jupyter:
 
 # Pipeline for reconstruction point source from raw data
 
+Auth: M. Gamboa
+
 
 Data used for JCh 
 
@@ -24,19 +26,21 @@ Data used for JCh
 * 170GHz-2019-04-14
 
 
-**Data measured** taken from CCA: `/sps/qubic/Data/Calib-TD`
+**Measured data** taken from CCA: `/sps/qubic/Data/Calib-TD`
 
-* If you are working in your personal machine, you can copy the dataset doing, in a terminal: 
+* If you are working in your personal computer, you can copy the dataset by running: 
 
 &nbsp;&nbsp;&nbsp;&nbsp;`scp -r USER-CCA@cca.in2p3.fr:/sps/qubic/Data/Calib-TD/2019-04-06 .`
 
-and you get a directory called `2019-04-06` (`2019-04-06`) in your current directory. It tooks more than 20  minutes (hours) (depens on your network speed and others probably) and size aprox 2GB (13GB). 
+in a terminal and getting a directory called `2019-04-06` (`2019-04-06`) in your current working directory. It tooks more than 20  minutes (hours) (depens on your network speed and others probably) and size aprox 2GB (13GB). 
 
-**Data calibration source** taken from CCA: `/sps/qubic/Data/Calib-TD/calsource`
+**Calibration source data** taken from CCA: `/sps/qubic/Data/Calib-TD/calsource`
 
-* If you are working in your personal machine, you can copy the dataset doing, in a terminal: 
+* If you are working in your personal computer, you can copy the dataset by running: 
 
-&nbsp;&nbsp;&nbsp;&nbsp;`scp -r USER-CCA@cca.in2p3.fr: /sps/qubic/Data/Calib-TD/calsource/*20190406* .`
+&nbsp;&nbsp;&nbsp;&nbsp;`scp -r USER-CCA@cca.in2p3.fr:/sps/qubic/Data/Calib-TD/calsource/*20190406* .`
+
+    in a terminal.
 
 ```{python}
 # %matplotlib inline
@@ -78,12 +82,12 @@ import mapmaking_datafiles as md
 import mapmaking_plots as mmp
 ```
 
-**0th)** Set local paths --> `Directories` dictionary contains all necessary directories to run in this notebook
+**0th)** Set local paths --> `Paths` dictionary containing all the directories needed to run the notebook
 
 ```{python}
 def check_dir(dirfile):
     if os.path.isdir( dirfile): 
-        print('The TOD {} directory exists'.format(dirfile)) 
+        print('TOD directory {} exists'.format(dirfile)) 
     else: 
         raise ValueError('dirfile {} is not an existing directory'.format(dirfile) )
         
@@ -93,8 +97,8 @@ if 'QUBIC_TODDIR' in os.environ.keys():
     check_dir(qubic_toddir)
 else:
     qubic_toddir = input("You have to specify a directory where the Time Ordered Data (TOD) are. \
-    The ussual format of the TOD root directory is yyyy-mm-dd, e.g. /sps/qubic/Data/Calib-TD at CCA")
-    print("Introduce the directory where the TOD's are: ",qubic_toddir)
+    The usual format of TOD root directories is yyyy-mm-dd, e.g. /sps/qubic/Data/Calib-TD at CCA")
+    print("Enter the directory where the TOD's are: ",qubic_toddir)
     check_dir(qubic_toddir)
 ```
 
@@ -168,7 +172,7 @@ sweep = 0
 QubicFP.read_qubicstudio_dataset(Paths["sweeps_data"][sweep])
 ```
 
-### COPIAR DATOS DE CALIBRACION!! 
+### Read calibration data
 
 ```{python}
 reload(md)
@@ -373,14 +377,17 @@ blil2 = sbfit.get_flatmap(93, "/home/mgamboa/pruebas/qubicpipe/",
 ```
 
 ```{python}
-blil.shape, blil2.shape
+blil.shape
 ```
 
 ```{python}
 plt.subplot(121)
-plt.imshow(blil)
+plt.imshow(blil, vmin = 0, 
+           vmax = 1e5, cmap = "bwr")
 plt.subplot(122)
-plt.imshow(blil2)
+plt.imshow(blil2, vmin = 0, 
+           vmax = 1e5, cmap = "bwr")
+plt.tight_layout()
 ```
 
 All TES. Save flat maps in files. 
@@ -441,7 +448,7 @@ for i in range(9):
 ### I couldn't make this work but it works for JCh so I read the fit of the synthesized beam from files
 
 ```{python}
-import debugging_fit as df
+#import debugging_fit as df
 
 sbfitmodel = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, 
                                  no_xy_shift=False, distortion=False)

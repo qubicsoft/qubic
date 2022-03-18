@@ -79,6 +79,9 @@ def read_calsource_data(qubic_fp, date = None,
 		if verbose: print("Reading calibration source. Date: {}".format(date))
 		calsource_time = qubic_fp.calsource()[0]
 		calsource_data = qubic_fp.calsource()[1]
+
+		return calsource_time, calsource_data
+		
 	elif int(date.replace("-", "")) < 20191110:
 		if verbose: print("Reading calibration source. Date: {}".format(date))
 		warnings.warn("The format of this kind of files has some tricks to read and plot, keep that in mind.",
@@ -92,26 +95,31 @@ def read_calsource_data(qubic_fp, date = None,
 
 		filesname = glob.glob(datacal + "*{}*.fits".format(date.replace("-", "")))
 		calsource_time, calsource_data = [], []
-		for eachfile in filesname:
+
+		for j, eachfile in enumerate(filesname):
 			hdufile = pyfits.open(eachfile)
+			if j == 0: 
+				if verbose: print ("Creating 'CALSOURCE' key in Qubic Focal Plane object ")
 			hdu = qubic_fp.read_calsource_fits(hdufile[1])
 			calsource_time.append(qubic_fp.hk['CALSOURCE']['timestamp'])
 			calsource_data.append(qubic_fp.hk['CALSOURCE']['Value'])
+	
+		return np.concatenate(calsource_time[:]), np.concatenate(calsource_data[:])
 	else:
 		raise ValueError("The day argument is not in the correct format 'YYYY-MM-DD'.")
 
-	return calsource_time, calsource_data
 
 def pipe_demodulation(QubicFocPlane, 
 					time_calsource, data_calsource,
 					path_demod_data_save, 
 					demodulate = False,
-					demod_method = "demod_quad",
-					remove_noise = True,
+					#method = "demod_quad",
+					#remove_noise = True,
 					lowcut = 0.5,
 					highcut = 70,
 					nharm = 10,
-					verbose = False):
+					verbose = False,
+					**kwargs_demod_lib):
 
 	"""
 	This method computes the demodulation of the signal from the raw tod. It returns the amplitud
@@ -141,14 +149,32 @@ def pipe_demodulation(QubicFocPlane,
 		demodulated_data:
 			data demodulated
 		"""
+	#kwargs_demod_lib["method"] = demod_method
+	#kwargs_demod_lib["remove_noise"] = remove_noise
 	thefreqmod = 1.
 
 	period = 1./ thefreqmod
 	notch = np.array([[1.724, 0.005, nharm]])
-	fourier_cuts = [lowcut, highcut, notch]
+	kwargs_demod_lib["fourier_cuts"] = [lowcut, highcut, notch]
 
 	t0 = time.time()
 	if demodulate: 
+		if os.path.isfile(path_demod_data_save + "tod_data_demodulated_TESNum_120.fits"):
+			print("In {} there EXISTS files so probably your data is already \
+				demodulated,".format(path_demod_data_save))
+			confirm_demodulate = input("Would you like to demodulate the data anyway? \
+				(1 if True, 0 if False)")
+
+			confirm_demodulate = bool(confirm_demodulate)
+			print(confirm_demodulate)
+			if (confirm_demodulate == 1) or (confirm_demodulate == True): 
+			
+				warn("(re)Demodulation confirmed! ")
+			
+			else:
+			
+				sys.exit("Stopped!")
+
 		try: 
 			if not os.path.isdir(path_demod_data_save): 
 				os.mkdir(path_demod_data_save) 
@@ -159,37 +185,43 @@ def pipe_demodulation(QubicFocPlane,
 		except: 
 			raise ValueError("[path problem] I couldn't create the root directory \
 				where save the demodulated data: {}".format(path_demod_data_save))
+
 		# Do one TES to just pick the shape 
 		tod_temp = QubicFocPlane.timeaxis(axistype = 'pps', asic = 1)
+		kwargs_demod_lib["src_data_in"] = [tod_temp, np.interp(tod_temp, time_calsource, data_calsource)]
 		temp_amps = dl.demodulate_methods([QubicFocPlane.timeaxis(
 			axistype = 'pps', asic = 1), QubicFocPlane.timeline(TES = 1, asic = 1)], 
 			1./period, 
-			src_data_in = [tod_temp, np.interp(tod_temp, time_calsource, data_calsource)],
-			method = demod_method, 
-			remove_noise = remove_noise,
-			fourier_cuts = fourier_cuts)[1]
+			**kwargs_demod_lib)[1]
 
 		demodulated_amps = np.zeros((256, len(temp_amps)))
 
 		for asic in [1,2]:
 			tod_time = QubicFocPlane.timeaxis(axistype = 'pps', asic = asic)
-			source = [tod_time, np.interp(tod_time, time_calsource, data_calsource)]
+			kwargs_demod_lib["src_data_in"] = [tod_time, np.interp(tod_time, time_calsource, data_calsource)]
 			for i in range(128):
 				print('Mapmaking for Asic {} TES {}'.format(asic, i + 1))    
 				tod_data = QubicFocPlane.timeline(TES = i + 1, asic = asic)
-
+				tod_data_filtered = ft.filter_data(tod_time, tod_data, lowcut, highcut, 
+						                         notch = notch, rebin = True, 
+                        						 verbose = True, order = 5)
 				print('- Demodulation')
 				demodulated_time, demodulated_amps[i+128*(asic-1),:], errors_demod = dl.demodulate_methods(
-																			[tod_time, tod_data],
+																			[tod_time, tod_data_filtered],
 																			1./period, 
-																			src_data_in = source,
-																			method = demod_method, 
-																			remove_noise = remove_noise,
-																			fourier_cuts = fourier_cuts)
-		if verbose: print("Time spent in demodulate raw data: {} minutes".format((time.time()-t0)/60) )
-		for i in range(256):
-			FitsArray(demodulated_amps[i,:]).save(path_demod_data_save + \
-											'tod_data_demodulated_TESNum_{}.fits'.format(i+1))    
+																			**kwargs_demod_lib)
+																			
+				
+				index = 128 * (asic - 1) + i
+				num_for_name = int(index + 1)
+				if verbose: print("saving index {} number file {}".format(index, num_for_name ) ) 
+				
+				FitsArray(demodulated_amps[index,:]).save(path_demod_data_save + \
+											'tod_data_demodulated_TESNum_{}.fits'.format(num_for_name))
+		if verbose: print("Time spent in demodulate raw data: {:.2f} minutes".format((time.time()-t0)/60) )
+		#for i in range(256):
+		#	FitsArray(demodulated_amps[i,:]).save(path_demod_data_save + \
+		#									'tod_data_demodulated_TESNum_{}.fits'.format(i+1))    
 		FitsArray(demodulated_time).save(path_demod_data_save + 'tod_time_demodulated.fits')
 		
 	elif not demodulate:
@@ -199,7 +231,7 @@ def pipe_demodulation(QubicFocPlane,
 			demodulated_amps.append(np.array(FitsArray(path_demod_data_save + \
 												 'tod_data_demodulated_TESNum_{}.fits'.format(i+1))))
 		demodulated_time = np.array(FitsArray(path_demod_data_save + 'tod_time_demodulated.fits'))
-		if verbose: print("Time spent in read demodulated data: {} minutes".format((time.time()-t0)/60))
+		if verbose: print("Time spent in read demodulated data: {:.2f} minutes".format((time.time()-t0)/60))
 
 	return demodulated_time, demodulated_amps
 

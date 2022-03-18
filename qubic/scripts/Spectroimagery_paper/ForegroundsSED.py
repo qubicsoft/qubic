@@ -679,7 +679,7 @@ def make_fit_SED(xSED, xarr, Imvals, Isvals, FuncModel, fgr_map_ud, pixs_ud, nf_
 
 def _plot_exampleSED(dictionary, center, nus_out, maskmaps, mapsarray = False, 
 					DeltaTheta = 0, DeltaPhi = 0, savefig = False, set_logscale = False,
-					newnside = None):
+					newnside = None, intensity = True, covmap = None):
 
 	"""
 	Plot an example of Figure 10 (map + SED ) in paper 1
@@ -716,18 +716,44 @@ def _plot_exampleSED(dictionary, center, nus_out, maskmaps, mapsarray = False,
 	color = ['g','g','k']
 	label = ['dust', 'synchrotron', 'dust+synchrotron']
 	marker = ['d', 's', 'o']
+
+	mask = covmap > 0.01 * np.max(covmap)
+	mask = mask[0]
+	print(mask.shape) 
+
 	if mapsarray:
-		for j, imap in enumerate(maskmaps):
-			print(imap[:,IPIXG,0])
-			ax[1].plot(nus_out, imap[:,IPIXG,0], marker = marker[j], color=color[j], label = label[j],
-				linestyle = "")
-		ax[1].legend()
-		ax[1].set_yscale("log")
-		ax[0].cla()	
-		plt.axes(ax[0])
-		hp.gnomview(maskmaps[-1][-1,:,0], reso = 15,hold = True, title = ' ',unit = r'$\mu$K$_{CMB}$', notext =True,
-					min = 0 ,
-					max = 0.23 * np.max(maskmaps[2][-1,:,0]), rot = center)
+		if intensity:
+			for j, imap in enumerate(maskmaps):
+				print(imap[:,IPIXG,0])
+				ax[1].plot(nus_out, imap[:,IPIXG,0], marker = marker[j], color=color[j], label = label[j],
+					linestyle = "")
+			ax[1].legend()
+			ax[1].set_yscale("log")
+			ax[0].cla()	
+			plt.axes(ax[0])
+			hp.gnomview(maskmaps[-1][-1,:,0], reso = 15,hold = True, title = ' ',unit = r'$\mu$K$_{CMB}$', notext =True,
+						min = 0 ,
+						max = 0.23 * np.max(maskmaps[2][-1,:,0]), rot = center)
+		elif not intensity:
+			for j, imap in enumerate(maskmaps):
+				#print(np.sqrt(imap[:,IPIXG,1]**2 + imap[:,IPIXG,2]**2))
+				ax[1].plot(nus_out, np.sqrt(imap[:,IPIXG,1]**2 + imap[:,IPIXG,2]**2), 
+					marker = marker[j], color=color[j], label = label[j],
+					linestyle = "")
+			ax[1].legend()
+			ax[1].set_yscale("log")
+			ax[0].cla()	
+			plt.axes(ax[0])
+			maximum = np.max(np.sqrt(maskmaps[-1][-1,mask,1]**2 + maskmaps[-1][-1,mask,2]**2))
+			print(maximum)
+			visumap = np.sqrt(maskmaps[-1][-1,:,1]**2 + maskmaps[-1][-1,:,2]**2)
+			visumap[~mask] = hp.UNSEEN
+			hp.gnomview(visumap, 
+				reso = 15,hold = True, title = ' ',
+				unit = r'$\mu$K$_{CMB}$', notext =True,
+				min = -80 ,
+				max = 80, rot = center)
+
 	else:
 		ax[1].plot(nus_out, maskmaps[:,IPIXG,0], 'o-', color='r')
 		ax[0].cla()
@@ -749,7 +775,7 @@ def _plot_exampleSED(dictionary, center, nus_out, maskmaps, mapsarray = False,
 		                  direction='in',width=1.3,)
 	ax[1].grid(which="both")
 
-	ax[1].set_ylabel(r'$I_\nu$ [$\mu$K$_{CMB}$]')
+	ax[1].set_ylabel(r'$I_\nu$ [$\mu$K$_{CMB}$]' if intensity else r'$P_\nu$ [$\mu$K$_{CMB}$]')
 	ax[1].set_xlabel(r'$\nu$[GHz]')
 	dpar = 10
 	dmer = 20

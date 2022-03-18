@@ -202,10 +202,12 @@ def pipe_demodulation(QubicFocPlane,
 			for i in range(128):
 				print('Mapmaking for Asic {} TES {}'.format(asic, i + 1))    
 				tod_data = QubicFocPlane.timeline(TES = i + 1, asic = asic)
-
+				tod_data_filtered = ft.filter_data(tod_time, tod_data, lowcut, highcut, 
+						                         notch = notch, rebin = True, 
+                        						 verbose = True, order = 5)
 				print('- Demodulation')
 				demodulated_time, demodulated_amps[i+128*(asic-1),:], errors_demod = dl.demodulate_methods(
-																			[tod_time, tod_data],
+																			[tod_time, tod_data_filtered],
 																			1./period, 
 																			**kwargs_demod_lib)
 																			

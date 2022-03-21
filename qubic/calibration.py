@@ -43,6 +43,8 @@ class QubicCalibration(object):
             The optics parameters calibration file name.
         primbeam : str, optional
             The primary beam parameter calibration file name.
+        synthbeam : str, optional
+            The synthetic beam parameter calibration file name.
 
         """
         self.path = os.path.abspath(path)
@@ -50,6 +52,7 @@ class QubicCalibration(object):
         self.hornarray = os.path.abspath(join(self.path, d['hornarray']))
         self.optics = os.path.abspath(join(self.path, d['optics'])) 
         self.primbeam = os.path.abspath(join(self.path, d['primbeam']))
+        self.synthbeam = os.path.abspath(join(self.path, d['synthbeam']))
         self.nu = int(d['filter_nu']/1e9)
 
     def __str__(self):
@@ -57,12 +60,14 @@ class QubicCalibration(object):
                  ('detarray', self.detarray),
                  ('hornarray', self.hornarray),
                  ('optics', self.optics),
-                 ('primbeam', self.primbeam)]
+                 ('primbeam', self.primbeam)
+                 ('synthbeam', self.synthbeam)]
         return '\n'.join([a + ': ' + repr(v) for a, v in state])
 
     __repr__ = __str__
 
     def get(self, name, *args):
+        
         """
         Access calibration files.
 
@@ -76,6 +81,7 @@ class QubicCalibration(object):
                 - 'primbeam'
 
         """
+        
         if name == 'detarray':
             hdus = fits.open(self.detarray)
             version = hdus[0].header['format version']
@@ -184,6 +190,26 @@ class QubicCalibration(object):
                  return parth, parfr, parbeam, alpha, xspl
                 
             raise ValueError('Invalid primary beam calibration version')
+
+        elif name == 'synthbeam':
+            
+            hdu =  fits.open(self.synthbeam)
+            header = hdu[0].header
+            theta=hdu[0].data
+            phi=hdu[1].data
+            val=hdu[2].data
+
+            return theta, phi, val, header
+        elif name == 'synthbeam_jc':
+            
+            hdu =  fits.open(self.synthbeam)
+            header = hdu[0].header
+            theta=hdu[0].data
+            phi=hdu[1].data
+            val=hdu[2].data
+            numpeaks=hdu[3].data
+            
+            return theta, phi, val,numpeaks, header
 
         raise ValueError("Invalid calibration item: '{}'".format(name))
 

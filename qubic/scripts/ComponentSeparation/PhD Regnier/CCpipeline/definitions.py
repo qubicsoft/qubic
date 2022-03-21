@@ -87,7 +87,7 @@ def qubicify(config, qp_nsub, qp_effective_fraction):
         newbandwidth = newedges[1:] - newedges[0:-1]
         newdnu_nu = newbandwidth / newfreqs
         newfwhm = config['fwhm'][i] * config['frequency'][i]/newfreqs
-        scalefactor_noise = 1#np.sqrt(qp_nsub[i]) * fct_subopt(config['frequency'][i])# / qp_effective_fraction[i]
+        scalefactor_noise = np.sqrt(qp_nsub[i]) * fct_subopt(config['frequency'][i])# / qp_effective_fraction[i]
         newdepth_p = config['depth_p'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
         newdepth_i = config['depth_i'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
         newdepth_e = config['depth_e'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
@@ -450,12 +450,13 @@ def get_like_onereals(ell, cl, tab, coverage, covbin):
 
 
     return maxL, rlim68, rlim95
-def _get_fgb_tools(config, prop):
+def _get_fgb_tools(config, prop, iib):
     comp=[fgbuster.component_model.CMB(),
-          fgbuster.component_model.Dust(nu0=145, temp=20)]#,
-          #fgbuster.component_model.Synchrotron(nu0=145)]
+          fgbuster.component_model.Dust(nu0=145, temp=20),
+          fgbuster.component_model.Synchrotron(nu0=145)]
 
-    #instr=get_instr(config, N_SAMPLE_BAND=1000, prop=prop)
+
+
     instr=fgbuster.get_instrument('INSTRUMENT')
     if prop == 0 or prop == 1 :
         instr.frequency = config['frequency']
@@ -468,6 +469,9 @@ def _get_fgb_tools(config, prop):
         instr.frequency=nus
         instr.depth_i=depth_i
         instr.depth_p=depth_p
+
+    if iib > 1 :
+        instr=get_instr(config, N_SAMPLE_BAND=1000, prop=prop)
 
     return comp, instr
 def get_comp_from_MixingMatrix(r, comp, instr, data, covmap, noise, nside, nus):
@@ -507,10 +511,10 @@ def get_maps_for_namaster_QU(comp, nside):
     new_comp=np.zeros((3, 12*nside**2))
     new_comp[1:]=comp[0].copy()
     return new_comp
-def _get_param(config, maps, N, Namaster, prop):
+def _get_param(config, maps, N, Namaster, prop, iib):
 
     nside=256
-    comp, instr=_get_fgb_tools(config, prop=prop)
+    comp, instr=_get_fgb_tools(config, prop=prop, iib=iib)
     covmap = get_coverage(0.03, nside)
     pixok = covmap>0
     ell_binned, _=Namaster.get_binning(256)
@@ -585,7 +589,7 @@ def create_noisemaps(signoise, nus, nside, depth_i, depth_p, npix):
         N[ind_nu, 2] = np.random.normal(0, sig_p, 12*nside**2)*np.sqrt(2)
 
     return N
-def _get_maps_without_noise(config, db, nubreak, prop, r):
+def _get_maps_without_noise(config, db, nubreak, prop, r, iib):
 
     nside=256
     covmap = get_coverage(0.03, nside)
@@ -595,7 +599,7 @@ def _get_maps_without_noise(config, db, nubreak, prop, r):
     else:
         dust_config='d02b'
 
-    skyconfig={'cmb':42, 'dust':dust_config}#, 'synchrotron':'s0'}
+    skyconfig={'cmb':42, 'dust':dust_config, 'synchrotron':'s0'}
 
     print('Skyconfig is ', skyconfig)
 
@@ -616,7 +620,7 @@ def _get_maps_without_noise(config, db, nubreak, prop, r):
                                       noise=True,
                                       beta=[1.54-db, 1.54, nubreak, 0.3],
                                       fix_temp=20,
-                                      iib=1)
+                                      iib=iib)
 
     return maps
 def _get_noise(config, prop):
@@ -713,7 +717,7 @@ def get_instr(config, N_SAMPLE_BAND, prop):
 
         new_list_of_freqs.append((freqs, weights))
 
-    instrument.frequency = freq_maps#new_list_of_freqs
+    instrument.frequency = new_list_of_freqs
     instrument.depth_i=depth_i
     instrument.depth_p=depth_p
 

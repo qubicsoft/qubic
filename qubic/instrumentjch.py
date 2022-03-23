@@ -308,6 +308,7 @@ class QubicInstrument(Instrument):
             self.thetafits = thetafits
             self.phifits = phifits
             self.valfits = valfits
+            self.freqs = np.array([self.nu])
 
     def _init_synthbeam(self, dtype, synthbeam_peak150_fwhm):
         sb = SyntheticBeam()

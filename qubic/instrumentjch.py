@@ -174,9 +174,6 @@ class QubicInstrument(Instrument):
         else:
             self.sbeam_fits = d['synthbeam']
         
-        #check if the file used is analytical or calculated from calibration data
-        self.analytical=bool(d.get(('analytical')))
-        
         
         # Choose the primary beam calibration file
         if d['beam_shape'] == 'gaussian':
@@ -1445,7 +1442,6 @@ class QubicMultibandInstrument:
                                                                         d['nf_sub'],
                                                                         d['filter_relative_bandwidth'])
         self.FRBW = d['filter_relative_bandwidth']  # initial Full Relative Band Width
-        self.analytical=bool(d.get(('analytical')))
         d1 = d.copy()
 
         self.nsubbands = len(filter_nus)
@@ -1462,10 +1458,6 @@ class QubicMultibandInstrument:
                 
                 jcedit=bool(d1.get(('jch_edit')))
                 usefiles=bool(d1.get(('use_file')))
-
-                #get file ID if used
-                file_ID=d.get('ID')
-                boolID=bool(file_ID)
                 config=d['config']
 
 
@@ -1473,17 +1465,7 @@ class QubicMultibandInstrument:
                     d1['synthbeam']=d['synthbeam']
                 else:
                     if usefiles == True:
-                        if self.analytical== True:
-                            beam_type='Analytical'
-                        else:
-                            beam_type='Calibrated'
-                    
-                        if boolID == True:
-                            #d1['synthbeam']='CalQubic_Synthbeam_'+beam_type+'_'+nuu+'_'+file_ID+'_'+config+'.fits'
-                            d1['synthbeam']=d['synthbeam']
-                        else:
-                            #d1['synthbeam']='CalQubic_Synthbeam_'+beam_type+'_'+nuu+'_'+config+'.fits'
-                            d1['synthbeam']=d['synthbeam']
+                        d1['synthbeam']=d['synthbeam']
                     else:
                         d1['synthbeam']='CalQubic_Synthbeam_Calibrated_Multifreq_FI.fits'
 

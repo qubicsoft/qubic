@@ -229,12 +229,13 @@ class BImaps(object):
         okpix = coverage > (np.max(coverage) * float(0))
         maskpix = np.zeros(12*self.nside**2)
         maskpix[okpix] = 1
-        Namaster = nam.Namaster(maskpix, lmin=40, lmax=2*self.nside-1, delta_ell=30)
+        Namaster = nam.Namaster(maskpix, lmin=21, lmax=2*self.nside-1, delta_ell=35)
+        #Namaster = nam.Namaster(maskpix, lmin=40, lmax=2*self.nside-1, delta_ell=30)
         ell=np.arange(2*self.nside-1)
 
         binned_camblib = qc.bin_camblib(Namaster, global_dir + '/doc/CAMB/camblib.pkl', self.nside, verbose=False)
 
-        cls = qc.get_Dl_fromlib(ell, self.r, lib=binned_camblib, unlensed=False)[0]
+        cls = qc.get_Dl_fromlib(ell, self.r, lib=binned_camblib, unlensed=True)[1]
         mycls = qc.Dl2Cl_without_monopole(ell, cls)
 
 

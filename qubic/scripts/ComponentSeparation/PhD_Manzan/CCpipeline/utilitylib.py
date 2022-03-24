@@ -216,7 +216,7 @@ def get_comp_for_fgb(nu0, model, fix_temp, bw=1., x0=[], fixsync=True):
     return comp
 
 
-def get_comp_from_MixingMatrix(r, comp, instr, data, covmap, noise, nside):
+def get_comp_from_MixingMatrix(r, comp, instr, data, frequency, covmap, noise, nside):
     """
     This function estimate components from MixingMatrix of fgbuster with estimated parameters
     """
@@ -224,7 +224,7 @@ def get_comp_from_MixingMatrix(r, comp, instr, data, covmap, noise, nside):
 
     # Define Mixing Matrix from FGB
     A=fgbuster.mixingmatrix.MixingMatrix(*comp)
-    A_ev=A.evaluator(np.array(instr.frequency))
+    A_ev=A.evaluator(np.array(frequency))
     A_maxL=A_ev(np.array(r.x))
 
     if noise:
@@ -279,12 +279,15 @@ def get_cov_for_weighted(n_freq, depths_i, depths_p, coverage, nside=256):
     npix=12*nside**2
     ind=coverage > 0
 
-    noise_cov = np.ones(((n_freq, 3, npix)))
+    noise_cov = np.ones(((n_freq, 2, npix)))
+    #noise_cov = np.ones(((n_freq, 3, npix)))
 
     for i in range(n_freq):
-        noise_cov[i, 0] = np.ones(npix)*depths_i[i]**2
+        noise_cov[i, 0] = np.ones(npix)*depths_p[i]**2
         noise_cov[i, 1] = np.ones(npix)*depths_p[i]**2
-        noise_cov[i, 2] = np.ones(npix)*depths_p[i]**2
+        #noise_cov[i, 0] = np.ones(npix)*depths_i[i]**2
+        #noise_cov[i, 1] = np.ones(npix)*depths_p[i]**2
+        #noise_cov[i, 2] = np.ones(npix)*depths_p[i]**2
 
     noise_cov[:, :, ~ind]=hp.UNSEEN
 

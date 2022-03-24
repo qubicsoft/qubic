@@ -25,7 +25,8 @@ from qubic import SpectroImLib as si
 from qubic import mcmc
 
 
-global_dir ='/sps/qubic/Users/emanzan/libraries/qubic/qubic'  #Qubic_DataDir(datafile='instrument.py', datadir='/home/elenia/libraries/qubic/qubic/')
+global_dir = './'  #'/sps/qubic/Users/emanzan/libraries/qubic/qubic'  #Qubic_DataDir(datafile='instrument.py', datadir='/home/elenia/libraries/qubic/qubic/')
+camblib_filename = 'camblib_with_r_from_m0.1_to_p0.1_minstep1e-06.pickle'  #'camblib_with_r_from_0.0001.pickle'
 
 
 #def covariance matrix
@@ -100,13 +101,12 @@ Def a function that returns the binned Dl (BB) spectra for any given r
 Def "fakedata" as Dl_BB binned spectra for r=0
 Through ana_likelihood, eval L(r) btw [0,1] by comparing Dl_BB for given r and Dl_BB(r=0)+errors
 ''' 
-def explore_like(leff, mcl_BB, errors, lmin, dl, cc, rv, otherp=None,
-                 cov=None, verbose=False, sample_variance=True):
+def explore_like(leff, mcl_BB, errors, lmin, dl, cc, rv, otherp=None, cov=None, verbose=False, sample_variance=True):
     
     ### Create Namaster Object: read a mask
     # Unfortunately we need to recalculate fsky for calculating sample variance
     nside = 256
-    lmax = 2 * nside - 1
+    lmax = 355  #2 * nside - 1
     if cov is None:
         Namaster = nam.Namaster(None, lmin=lmin, lmax=lmax, delta_ell=dl)
         Namaster.fsky = 0.03
@@ -119,20 +119,19 @@ def explore_like(leff, mcl_BB, errors, lmin, dl, cc, rv, otherp=None,
     lbinned, b = Namaster.get_binning(nside)
 
     ### Bin the spectra in "/doc/CAMB/camblib.pkl" using Namaster through CambLib
-#     binned_camblib = qc.bin_camblib(Namaster, '../../scripts/QubicGeneralPaper2020/camblib.pickle', 
-#                                     nside, verbose=False)
-    binned_camblib = qc.bin_camblib(Namaster, global_dir + '/doc/CAMB/camblib.pkl', 
-                                    nside, verbose=False)
-
+    
+    #binned_camblib = qc.bin_camblib(Namaster, global_dir + '/doc/CAMB/camblib.pkl', nside, verbose=False)
+    
+    binned_camblib = qc.bin_camblib(Namaster, global_dir + camblib_filename, nside, verbose=False)
 
     ### Redefine the function for getting binned Cls given certain r and mask
     def myclth(ell,r):
-        clth = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=False)[0]
+        clth = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=True)[1]
         return clth
     
     ### And we need a fast one for BB only as well
     def myBBth(ell, r):
-        clBB = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=False, specindex=2)[0]
+        clBB = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=True, specindex=2)[1]
         return clBB
 
     ### Def data ie. Cls BB from recon. cmb 
@@ -191,9 +190,10 @@ def get_results(ell, mcl, scl, coverage,
     
     ### Likelihood L(r)
     if rv is None:
-        rv = np.linspace(0,1,1000)
+        rv = np.linspace(-0.01,0.01,20000)
+        #rv = np.linspace(0,1,10000)
 
     like, cumint, rlim68, rlim95 = explore_like(leff, mclBB, to_use, lmin, delta_ell, covcut, rv,
-                                     cov=coverage, verbose=True, sample_variance=True, otherp=0.95)#, delensing_residuals=delensing_residuals)
+                                     cov=coverage, verbose=True, sample_variance=False, otherp=0.95)#, delensing_residuals=delensing_residuals)
     
     return leff, scl*factornoise**2, rv, like, cumint, rlim68, rlim95

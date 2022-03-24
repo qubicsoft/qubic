@@ -20,6 +20,51 @@ import utilitylib
 
 
 #FUNCTION DEFINITION~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+def get_instr(config, N_SAMPLE_BAND):
+    
+    freq_maps=config['frequency']
+    
+    if len(freq_maps) == 9:
+        name='CMBS4'
+        n_freq=9
+    elif len(freq_maps)==33:
+        name='QubicPlus'
+        n_freq=33
+    else:
+        name='CMBS4BI'
+        n_freq=42
+    
+    print('###################')
+    print('Instrument is: {}'.format(name))
+    print('Number of samples for bandpass integration: {}'.format(N_SAMPLE_BAND))
+    print('###################')
+    instrument = fgbuster.get_instrument(name)
+    #instrument.frequency=freq_maps
+    
+    bandpasses = config['bandwidth'] 
+    
+    freq_maps_bp_integrated = np.zeros_like(freq_maps)
+    new_list_of_freqs_flat = []
+    new_list_of_freqs = []
+    #freqs_init = instrument.frequency*1.0
+    
+    for f in range(freq_maps_bp_integrated.shape[0]):
+
+        fmin = freq_maps[f]-bandpasses[f]/2
+        fmax = freq_maps[f]+bandpasses[f]/2
+        #### bandpass_frequencies = np.linspace(fmin, fmax, fsteps) * u.GHz
+        freqs = np.linspace(fmin, fmax, N_SAMPLE_BAND)
+        weights_flat = np.ones(N_SAMPLE_BAND)
+        weights = weights_flat.copy() #/ _jysr2rj(freqs)
+        #weights /= _rj2cmb(freqs)
+        weights /= np.trapz(weights, freqs * 1e9)
+        new_list_of_freqs.append((freqs, weights))
+
+    instrument.frequency = new_list_of_freqs
+
+    return instrument
+
+
 def ParamCompSep(config, prop, nside, skyconfig, model, foreg_maps, coverage, noise=True, fix_temp=None,
                  x0=[], break_width=1., fixsync=True, nu0=85):
 
@@ -73,27 +118,35 @@ def ParamCompSep(config, prop, nside, skyconfig, model, foreg_maps, coverage, no
         name='CMBS4BI'
         n_freq=42
 
-    print('Define instrument')
     print()
+    print('Define instrument taking into account bandpass integration')
+    #def instrument and instrument.frequency taking bandpass integration into account
     instr = fgbuster.get_instrument(name)
     instr.frequency=nus
+    #instr = get_instr(conf, 100)
+    
+    #set depths and fwhm equal to the corresponding configuration
     instr.depth_i=depth_i
     instr.depth_p=depth_p
     instr.fwhm=fwhm
 
+    print()
     print('Define components')
-    print()
-    comp = utilitylib.get_comp_for_fgb(nu0=85, model=model, fix_temp=fix_temp, x0=x0, bw=break_width, fixsync=fixsync)
+    comp = utilitylib.get_comp_for_fgb(nu0=nu0, model=model, fix_temp=fix_temp, x0=x0, bw=break_width, fixsync=fixsync)
 
-    print('##### COMP SEP #####')
     print()
+    print('##### COMP SEP #####')
 
     options={'maxiter': 100000}
     #tol=1e-18
-    #cov=get_cov_for_weighted(n_freq, depth_i, depth_p, covmap, nside=256)
-
+    
     #apply compsep only on the Q,U maps
-    r=fgbuster.basic_comp_sep(comp, instr, inputs[:, 1:, pixok], options=options, tol=1e-18, method='TNC')#, bounds=bnds)
+    data = inputs[:, 1:, pixok] #take only pixok to speed up the code
+
+    #cov=utilitylib.get_cov_for_weighted(len(nus), depth_i, depth_p, covmap, nside=nside)
+
+    r=fgbuster.basic_comp_sep(comp, instr, data, options=options, tol=1e-18, method='TNC')#, bounds=bnds)
+    #r=fgbuster.weighted_comp_sep(comp, instr, data, cov, options=options, tol=1e-18, method='TNC')
 
     print('\nMessage -> ', r.message)
     print('# of function evaluation -> ', r.nfev)
@@ -102,8 +155,8 @@ def ParamCompSep(config, prop, nside, skyconfig, model, foreg_maps, coverage, no
     print('...compsep done! \n')
     print('Estimated params: ', r.x)
 
-    components = utilitylib.get_comp_from_MixingMatrix(r, comp, instr, inputs[:, 1:, :], covmap, noise, nside)
-    components_noiseless = utilitylib.get_comp_from_MixingMatrix(r, comp, instr, inputs_noiseless[:, 1:, :], covmap, False, nside)
+    components = utilitylib.get_comp_from_MixingMatrix(r, comp, instr, inputs[:, 1:, :], nus, covmap, noise, nside)
+    components_noiseless = utilitylib.get_comp_from_MixingMatrix(r, comp, instr, inputs_noiseless[:, 1:, :], nus, covmap, False, nside)
     return components, components_noiseless, r
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -175,6 +228,7 @@ ite=int(sys.argv[2])         # Number of times this code is executed simultaneou
 print('Ite value = ', ite)
 nubreak=int(sys.argv[3])     # True value of nubreak
 iib=int(sys.argv[6]) #number of freqs to use in the band integration
+additional_info = str(sys.argv[7]) #contains any additional info for the filename
 
 if int(sys.argv[4]) == 1:
     T=20
@@ -237,10 +291,22 @@ npix=hp.nside2npix(nside)
 
 maskpix = np.zeros(npix)
 maskpix[pixok] = 1
-Namaster = nam.Namaster(maskpix, lmin=40, lmax=2*nside-1, delta_ell=30)
+
+lmin=21
+lmax=355
+dl=35
+
+Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=dl)
+ell_binned, _=Namaster.get_binning(nside)
+num_bin = len(ell_binned)
+print('Number of Namaster bins: ', num_bin)
 
 props=[0,1] #instrumental configurations
-db=np.linspace(0.0, 0.05, 6) #[0.0, 0.05] #delta beta cases
+db=[0.0, 0.05] #np.linspace(0.0, 0.05, 6) #[0.0, 0.05] #delta beta cases
+print('###################')
+print('BEWARE: you are simulating... props = {0}, db = {1}'.format(props, db))
+print('###################')
+print()
 
 #def fg maps
 nus_s4=len(s4_config['frequency'])
@@ -272,13 +338,13 @@ for k, delta_beta in enumerate(db):
         if conf==0: #s4
             start_time = datetime.now()
             fg_maps_s4[k,:,:,:] = qubicplus_skygen_lib.BImaps(skyconfig, s4_config, nside=nside).get_fg_freq_integrated_maps(
-                verbose=True, iib=iib_s4, beta=[1.54-delta_beta, 1.54+delta_beta, nubreak, bw], temp=20)
+                verbose=True, iib=iib_s4, beta=[1.54-delta_beta, 1.54, nubreak, bw], temp=20)
             print('Duration: {}'.format(datetime.now()-start_time))
         elif conf==1: #bi
             start_time = datetime.now()
             #for bi below take iib=iib_bi
             fg_maps_bi[k,:,:,:] = qubicplus_skygen_lib.BImaps(skyconfig, qp_config, nside=nside).get_fg_freq_integrated_maps(
-                verbose=True, iib=iib_bi, beta=[1.54-delta_beta, 1.54+delta_beta, nubreak, bw], temp=20)
+                verbose=True, iib=iib_bi, beta=[1.54-delta_beta, 1.54, nubreak, bw], temp=20)
             print('Duration: {}'.format(datetime.now()-start_time))
     
             #set first 3 frequency maps for bi equal to s4 ones
@@ -293,8 +359,11 @@ print('...generated maps in {}'.format(datetime.now()-start_time_fg))
 param_comb = np.zeros(((((2, N, len(props), len(db), nb_param)))))
 rms_est_cmb = np.zeros((((N, len(props), len(db), 1))))
 rms_est_dust = np.zeros((((N, len(props), len(db), 1))))
-cl=np.zeros(((((N, len(props), len(db), 16, 4)))))
+cl=np.zeros(((((N, len(props), len(db), num_bin, 4)))))
 tabseed=np.zeros(N)
+
+#gen cmb seed
+seed=np.random.randint(1000000)
 
 #start iteration: generate cmb and noise, then do compsep
 print('Entering the iteration loop...')
@@ -302,8 +371,7 @@ for j in range(N):
     start_time_iter = datetime.now()
     print('Start iteration number {}'.format(j+1))
     
-    #gen. cmb seed and store it
-    seed=np.random.randint(1000000)
+    #store cmb seed
     tabseed[j]=seed
     print("seed is {}".format(seed))
 
@@ -381,7 +449,7 @@ for j in range(N):
             print('Estimated cross-Cl BB: ', cl[j, i, k, :, 2])
             # Save results in pkl file
             print('Saving results to file... \n')
-            pickle.dump([leff, cl, param_comb, tabseed, db, props, bw, sys.argv], open('./results/cls_iib{:.0f}_QU{}{}_truenub{:.0f}_{}reals_{}.pkl'.format(iib, name_T, name_s, nubreak, N, ite), "wb"))
+            pickle.dump([leff, cl, param_comb, tabseed, db, props, bw, sys.argv], open('./results/cls{}_iib{:.0f}_QU{}{}_truenub{:.0f}_{}reals_{}.pkl'.format(additional_info, iib, name_T, name_s, nubreak, N, ite), "wb"))
             print('Duration: {}'.format(datetime.now()-start_time_db))
             
     print('Iteration number {0} is over. Duration: {1}'.format(j+1, datetime.now()-start_time_iter))

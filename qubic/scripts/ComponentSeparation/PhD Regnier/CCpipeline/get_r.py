@@ -30,21 +30,27 @@ from qubic import AnalysisMC as amc
 covmap = definitions.get_coverage(0.03, nside=256)
 pixok = covmap > 0
 
-def getpkl(path, N, nb_exp, nubreak):
+def getpkl(path, N, nb_exp, nubreak, iib, ns, fixsync):
 
-    db=np.linspace(-0.1, 0.1, 11)
+    nparam=1
 
-    props=[0, 0.1, 0.2, 0.3, 1]
+    db=[0, 0.05]#np.linspace(-0.1, 0.1, 7)
+    props=[0, 1]
     nub=np.linspace(85, 270, 20)
+    if fixsync == 0:
+        nsync=''
+        nparam+=1
+    else:
+        nsync='_fixsync'
     #truenub=[100, 150, 200, 250]
     #tabparam = np.zeros((((N*nb_exp, len(props), len(db), nb_param))))
     #tabcl=np.zeros((((N*nb_exp, len(props), len(db), 16))))
     print('N = ', N)    #np.zeros((((len(prop), len(db), N, 1, 16, 4))))
-    tabparam = np.zeros((((len(props), len(db), 2*N*nb_exp, 2))))
-    tabcl=np.zeros((((len(props), len(db), N*nb_exp, 1, 9, 4))))
+    tabparam = np.zeros((((len(props), len(db), 2*N*nb_exp, nparam))))
+    tabcl=np.zeros((((len(props), len(db), N*nb_exp, 1, 8, 4))))
     for k in range(nb_exp):
         #print(k)
-        with open(path+'/cls_nolensing_fitd0_2b_r0.000_iib10_QU_fixtempfixsync_truenub{}_{}reals_{}.pkl'.format(nubreak, N, k+1), 'rb') as f:
+        with open(path+'/cls_split{}_nolensing_r0.000_iib{:.0f}_QU{}_truenub{}_{}reals_{}.pkl'.format(ns, iib, nsync, nubreak, N, k+1), 'rb') as f:
             data = pickle.load(f)
         #print(data[2].shape)
         #print(k*N,(k+1)*N)
@@ -60,9 +66,15 @@ N=int(sys.argv[1])
 nb_exp=int(sys.argv[2])
 nubreak=int(sys.argv[3])
 r=float(sys.argv[4])
+iib=int(sys.argv[5])
+fixsync=int(sys.argv[6])
+N_bands=int(sys.argv[7])
+qp_nsub = np.array([1, 1, 1, N_bands, N_bands, N_bands, N_bands, N_bands, N_bands])
+name_split=definitions._give_name_splitbands(qp_nsub)
+print(name_split)
 
 
-leff, tabcl, param, db = getpkl('/pbs/home/m/mregnier/sps1/QUBIC+/d0/cls/results', N, nb_exp, nubreak=nubreak)
+leff, tabcl, param, db = getpkl('/pbs/home/m/mregnier/sps1/QUBIC+/d0/cls/results', N, nb_exp, nubreak=nubreak, iib=iib, ns=name_split, fixsync=fixsync)
 
 #print(leff)
 #print(tabcl, tabcl.shape)
@@ -72,7 +84,7 @@ print(np.mean(param, axis=2))
 
 from getdist import densities
 
-prop=[0, 0.1, 0.2, 0.3, 1]
+prop=[0, 1]
 maxL=np.zeros(((len(prop), N*nb_exp, len(db))))
 rlim68=np.zeros(((len(prop), N*nb_exp, len(db))))
 rlim95=np.zeros(((len(prop), N*nb_exp, len(db))))
@@ -107,7 +119,10 @@ print('Mean rlim68 ->', np.mean(rlim68, axis=1))
 print()
 print('Mean rlim95 ->', np.mean(rlim95, axis=1))
 
-
+if fixsync == 0:
+    nsync=''
+else:
+    nsync='_fixsync'
 #maxLbi, rlim68_bi, rlim95_bi = get_like_onereals(leff, clsBBbi, db, covmap)
 
-pickle.dump([leff, maxL, rlim68, rlim95, param, tabcl, db, sys.argv], open('/pbs/home/m/mregnier/sps1/QUBIC+/d0/cls/r{:.3f}_nolensing_fixtempfixsync_param_cls_nubreak{}_iib10_{:.0f}reals.pkl'.format(r, nubreak, N*nb_exp), "wb"))
+pickle.dump([leff, maxL, rlim68, rlim95, param, tabcl, db, sys.argv], open('/pbs/home/m/mregnier/sps1/QUBIC+/d0/cls/r{:.3f}_split{}_nolensing_param{}_cls_nubreak{}_iib{:.0f}_{:.0f}reals.pkl'.format(r, name_split, nsync, nubreak, iib, N*nb_exp), "wb"))

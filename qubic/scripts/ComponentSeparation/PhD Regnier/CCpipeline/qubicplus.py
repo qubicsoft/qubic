@@ -327,7 +327,7 @@ class BImaps(object):
         global_dir='/pbs/home/m/mregnier/Libs/qubic/qubic'
         binned_camblib = qc.bin_camblib(Namaster, global_dir + '/doc/CAMB/camblib.pkl', self.nside, verbose=False)
 
-        cls = qc.get_Dl_fromlib(ell, self.r, lib=binned_camblib, unlensed=True)[0]
+        cls = qc.get_Dl_fromlib(ell, self.r, lib=binned_camblib, unlensed=True)[1]
         mycls = qc.Dl2Cl_without_monopole(ell, cls)
 
 
@@ -522,7 +522,7 @@ class combinedmaps(object):
         global_dir='/pbs/home/m/mregnier/Libs/qubic/qubic'
         binned_camblib = qc.bin_camblib(Namaster, global_dir + '/doc/CAMB/camblib.pkl', self.nside, verbose=False)
 
-        cls = qc.get_Dl_fromlib(ell, self.r, lib=binned_camblib, unlensed=True)[0]
+        cls = qc.get_Dl_fromlib(ell, self.r, lib=binned_camblib, unlensed=True)[1]
         mycls = qc.Dl2Cl_without_monopole(ell, cls)
 
 

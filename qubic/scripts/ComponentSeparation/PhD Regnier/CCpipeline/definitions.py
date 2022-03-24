@@ -342,17 +342,17 @@ def explore_like(leff, cl, errors, lmin, dl, cc, rv, otherp=None,
 
     ### Redefine the function for getting binned Cls
     def myclth(ell,r):
-        clth = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=True)[0]
+        clth = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=True)[1]
         #print(clth)
         #ell, clth, unlensedCL = qc.get_camb_Dl(lmax=3*256, r=0)
-        return clth
+        return clth[1:]
     allfakedata = myclth(leff, 0.)
     #lll, totDL, unlensedCL = qc.get_camb_Dl(lmax=3*256, r=0)
     ### And we need a fast one for BB only as well
     def myBBth(ell, r):
-        clBB = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=True, specindex=2)[0]
+        clBB = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=True, specindex=2)[1]
 
-        return clBB
+        return clBB[1:]
 
     ### Fake data
     fakedata = cl.copy()#myBBth(leff, 0.)
@@ -398,7 +398,7 @@ def get_like_onereals(ell, cl, tab, coverage, covbin):
 
     delta_ell=35
     covcut=0
-    nr=1000
+    nr=20000
     rv=np.linspace(-0.01,0.01,nr)
 
     lmin=21
@@ -450,10 +450,16 @@ def get_like_onereals(ell, cl, tab, coverage, covbin):
 
 
     return maxL, rlim68, rlim95
-def _get_fgb_tools(config, prop, iib):
-    comp=[fgbuster.component_model.CMB(),
-          fgbuster.component_model.Dust(nu0=145, temp=20),
-          fgbuster.component_model.Synchrotron(nu0=145)]
+def _get_fgb_tools(config, prop, iib, fixsync):
+
+    if fixsync == 0:
+        comp=[fgbuster.component_model.CMB(),
+          fgbuster.component_model.Dust(nu0=100, temp=20),
+          fgbuster.component_model.Synchrotron(nu0=100)]
+    else:
+        comp=[fgbuster.component_model.CMB(),
+          fgbuster.component_model.Dust(nu0=100, temp=20),
+          fgbuster.component_model.Synchrotron(nu0=100, beta_pl=-3)]
 
 
 
@@ -511,15 +517,23 @@ def get_maps_for_namaster_QU(comp, nside):
     new_comp=np.zeros((3, 12*nside**2))
     new_comp[1:]=comp[0].copy()
     return new_comp
-def _get_param(config, maps, N, Namaster, prop, iib):
+def _give_name_splitbands(A):
+    name=''
+    for i in range(len(A)):
+        name+=str(A[i])
+    return name
+def _get_param(config, maps, N, Namaster, prop, iib, fixsync):
 
     nside=256
-    comp, instr=_get_fgb_tools(config, prop=prop, iib=iib)
+    comp, instr=_get_fgb_tools(config, prop=prop, iib=iib, fixsync=fixsync)
     covmap = get_coverage(0.03, nside)
     pixok = covmap>0
     ell_binned, _=Namaster.get_binning(256)
     cl = np.zeros((((N, 1, len(ell_binned), 4))))
-    param=np.zeros((2*N, 2))
+    nparam=1
+    if fixsync == 0:
+        nparam+=1
+    param=np.zeros((2*N, nparam))
     j=0
     k=1
 
@@ -538,8 +552,8 @@ def _get_param(config, maps, N, Namaster, prop, iib):
         #cov=definitions.get_cov_for_weighted(n_freq, depths_i, depths_p, covmap, nside=256)
         #print(cov.shape)
         print('    ///// Components Separation')
-        r1=fgbuster.basic_comp_sep(comp, instr, maps1_noisy[:, 1:, pixok])#, cov=cov[:, 1:, pixok])
-        r2=fgbuster.basic_comp_sep(comp, instr, maps2_noisy[:, 1:, pixok])#, cov=cov[:, 1:, pixok])
+        r1=fgbuster.basic_comp_sep(comp, instr, maps1_noisy[:, 1:, pixok], method='TNC', tol=1e-18)#, cov=cov[:, 1:, pixok])
+        r2=fgbuster.basic_comp_sep(comp, instr, maps2_noisy[:, 1:, pixok], method='TNC', tol=1e-18)#, cov=cov[:, 1:, pixok])
         print('        -> ', r1.x)
         print('        -> ', r2.x)
 

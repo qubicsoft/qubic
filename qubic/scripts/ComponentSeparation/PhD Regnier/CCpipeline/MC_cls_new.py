@@ -18,15 +18,15 @@ import definitions
 print(fgbuster.__path__)
 warnings.filterwarnings("ignore")
 
-freqs = np.array([85., 95., 145., 155., 220., 270.])
-bandwidth = np.array([20.4, 22.8, 31.9, 34.1, 48.4, 59.4])
+freqs = np.array([20., 30., 40., 85., 95., 145., 155., 220., 270.])
+bandwidth = np.array([5., 9., 12., 20.4, 22.8, 31.9, 34.1, 48.4, 59.4])
 dnu_nu = bandwidth/freqs
-beam_fwhm = np.array([25.5, 25.5, 22.7, 22.7, 13., 13.])
-mukarcmin_TT = np.array([2.02, 1.78, 3.89, 4.16, 10.15, 17.4])
-mukarcmin_EE = np.array([1.34, 1.18, 1.8, 1.93, 4.71, 8.08])
-mukarcmin_BB = np.array([1.27, 1.12, 1.76, 1.89, 4.6, 7.89])
-ell_min = np.array([30, 30, 30, 30, 30, 30])
-nside = np.array([512, 512, 512, 512, 512, 512])
+beam_fwhm = np.array([11., 72.8, 72.8, 25.5, 25.5, 22.7, 22.7, 13., 13.])
+mukarcmin_TT = np.array([16.5, 9.36, 11.85, 2.02, 1.78, 3.89, 4.16, 10.15, 17.4])
+mukarcmin_EE = np.array([10.87, 6.2, 7.85, 1.34, 1.18, 1.8, 1.93, 4.71, 8.08])
+mukarcmin_BB = np.array([10.23, 5.85, 7.4, 1.27, 1.12, 1.76, 1.89, 4.6, 7.89])
+ell_min = np.array([30, 30, 30, 30, 30, 30, 30, 30, 30])
+nside = np.array([512, 512, 512, 512, 512, 512, 512, 512, 512])
 edges_min = freqs * (1. - dnu_nu/2)
 edges_max = freqs * (1. + dnu_nu/2)
 edges = [[edges_min[i], edges_max[i]] for i in range(len(freqs))]
@@ -53,8 +53,10 @@ s4_config = {
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
-qp_nsub = np.array([5, 5, 1, 1, 5, 5])
-qp_effective_fraction = np.array([1, 1, 1, 1, 1, 1])
+N_bands=int(sys.argv[7])
+qp_nsub = np.array([1, 1, 1, N_bands, N_bands, N_bands, N_bands, N_bands, N_bands])
+name_split=definitions._give_name_splitbands(qp_nsub)
+qp_effective_fraction = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1])
 qp_config = definitions.qubicify(s4_config, qp_nsub, qp_effective_fraction)
 
 #Corrected depths
@@ -68,6 +70,8 @@ N=int(sys.argv[1])
 ite=int(sys.argv[2])
 nubreak=int(sys.argv[3])
 r=float(sys.argv[4])
+iib=int(sys.argv[5])
+fixsync=int(sys.argv[6])
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ #
@@ -85,11 +89,16 @@ Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=355, delta_ell=dl)
 ell_binned, _=Namaster.get_binning(256)
 print('//////// Done')
 
-db=np.linspace(-0.1, 0.1, 11)
-prop=[0, 0.1, 0.2, 0.3, 1]
+db=[0, 0.05]#np.linspace(-0.1, 0.1, 7)
+prop=[0, 1]
+nparam=1
+name_s='_fixsync'
+if fixsync == 0 :
+    nparam+=1
+    name_s=''
 
-cl=np.zeros((((len(prop), len(db), N, 1, len(ell_binned), 4))))
-param=np.zeros((((len(prop), len(db), 2*N, 2))))
+cl=np.zeros((((len(prop), len(db), N, 1, len(ell_binned)-1, 4))))
+param=np.zeros((((len(prop), len(db), 2*N, nparam))))
 
 for idb, jdb in enumerate(db):
 
@@ -101,25 +110,25 @@ for idb, jdb in enumerate(db):
 
 
         if jpro == 0:
-            maps_db=definitions._get_maps_without_noise(s4_config, db=jdb, nubreak=nubreak, prop=prop[jprop], r=r)
+            maps_db=definitions._get_maps_without_noise(s4_config, db=jdb, nubreak=nubreak, prop=prop[jprop], r=r, iib=iib)
             leff, cl_db, param[jprop, idb]=definitions._get_param(s4_config, maps_db, N=N,
-                                                                Namaster=Namaster, prop=prop[jprop])
+                                                                Namaster=Namaster, prop=prop[jprop], iib=iib, fixsync=fixsync)
         elif jpro == 1:
-            maps_db=definitions._get_maps_without_noise(qp_config, db=jdb, nubreak=nubreak, prop=prop[jprop], r=r)
+            maps_db=definitions._get_maps_without_noise(qp_config, db=jdb, nubreak=nubreak, prop=prop[jprop], r=r, iib=iib)
             leff, cl_db, param[jprop, idb]=definitions._get_param(qp_config, maps_db, N=N,
-                                                                Namaster=Namaster, prop=prop[jprop])
+                                                                Namaster=Namaster, prop=prop[jprop], iib=iib, fixsync=fixsync)
 
         else:
-            maps_db=definitions._get_maps_without_noise(config, db=jdb, nubreak=nubreak, prop=prop[jprop], r=r)
+            maps_db=definitions._get_maps_without_noise(config, db=jdb, nubreak=nubreak, prop=prop[jprop], r=r, iib=iib)
             leff, cl_db, param[jprop, idb]=definitions._get_param(config, maps_db, N=N,
-                                                                    Namaster=Namaster, prop=prop[jprop])
+                                                                    Namaster=Namaster, prop=prop[jprop], iib=iib, fixsync=fixsync)
 
 
-        cl[jprop, idb]=cl_db.copy()
+        cl[jprop, idb, :, :, :]=cl_db[:, :, 1:, :].copy()
 
 
 #print(clBB)
 print()
 print(np.mean(param, axis=2)[:, :, 0])
 
-pickle.dump([leff, cl, param, db, sys.argv], open('/pbs/home/m/mregnier/sps1/QUBIC+/d0/cls/results/cls_nolensing_fitd0_2b_r{:.3f}_iib10_QU_fixtempfixsync_truenub{}_{}reals_{}.pkl'.format(r, nubreak, N, ite), "wb"))
+pickle.dump([leff, cl, param, db, sys.argv], open('/pbs/home/m/mregnier/sps1/QUBIC+/d0/cls/results/cls_split{}_nolensing_r{:.3f}_iib{:.0f}_QU{}_truenub{}_{}reals_{}.pkl'.format(name_split, r, iib, name_s, nubreak, N, ite), "wb"))

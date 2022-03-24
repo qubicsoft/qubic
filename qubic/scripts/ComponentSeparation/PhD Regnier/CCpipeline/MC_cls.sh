@@ -1,6 +1,6 @@
 #!/bin/bash
 #$ -o /pbs/home/m/mregnier/sps1/QUBIC+/d0/cls/results
-#$ -N fitbis
+#$ -N nss_fixsync
 #$ -q mc_huge
 
 export mydir=/pbs/home/m/mregnier/sps1/QUBIC+
@@ -20,10 +20,11 @@ export QUBIC_DICT=$QUBIC_DATADIR/dicts
 ####### Arguments ########
     # 1/ Number of iterations
     # 2/ Name of iterations
-    # 3/ Fitting model  0 -> d0    1 -> d02b    2 -> running beta
+    # 3/ nubreak
     # 4/ Value of r
-    # 5/ Fixsync (1 for True or 0 for False)
-    # 6/ Number of band for bandpass
+    # 5/ Bandpass integration
+    # 6/ Fix synchrotron
+    # 7/ # of sub-bands
 
-#python /pbs/home/m/mregnier/sps1/QUBIC+/d0/cls/MC_cls_new.py $1 $2 $3 $4
-python /pbs/home/m/mregnier/sps1/QUBIC+/d0/cls/get_r.py $1 $2 $3 $4
+#python /pbs/home/m/mregnier/sps1/QUBIC+/d0/cls/MC_cls_new.py $1 $2 $3 $4 $5 $6 $7
+python /pbs/home/m/mregnier/sps1/QUBIC+/d0/cls/get_r.py $1 $2 $3 $4 $5 $6 $7

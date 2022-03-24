@@ -158,9 +158,9 @@ class QubicInstrument(Instrument):
         nripples = d['nripples']
 
         #check if synthetic beam peaks are from file or calculated in peak_angles
-        use_file=d.get(('use_file'))
+        use_file=d.get(('use_synthbeam_fits_file'))
         self.use_file=bool(use_file)
-        self.jcedit=bool(d.get(('jch_edit')))
+        self.jcedit=bool(d.get(('get_many_frequencies_analytically')))
 
         sbeam=bool(d.get('synthbeam'))
         #print(d['synthbeam'])
@@ -865,8 +865,24 @@ class QubicInstrument(Instrument):
                     vals=valfits
                 
                 print('Getting Thetas from Fits File')
+                
+                #now remove insignificant peaks
+                vals[~np.isfinite(vals)] = 0
+                index = _argsort_reverse(vals)
+                thetas = thetas[index]
+                phis = phis[index]
+                vals = vals[index]
+                cumval = np.cumsum(vals, axis=-1)
+                imaxs = np.argmax(cumval >= synthbeam.fraction * cumval[:, -1, None],axis=-1) + 1
+                imax = max(imaxs)
+                # remove additional per-detector non-significant peaks
+                # and remove potential NaN in theta, phi
+                for idet, imax_ in enumerate(imaxs):
+                    vals[idet, imax_:] = 0
+                    thetas[idet, imax_:] = np.pi / 2 #XXX 0 fails in polarization.f90.src (en2ephi and en2etheta_ephi)
+                    phis[idet, imax_:] = 0
     
-        
+    
         else:
             thetas, phis, vals = QubicInstrument._peak_angles(scene, nu, position, synthbeam, horn, primary_beam)
                 
@@ -1040,6 +1056,7 @@ class QubicInstrument(Instrument):
 
     @staticmethod
     def _peak_angles_kmax(kmax, horn_spacing, angle, nu, position):
+        
         """
         Return the spherical coordinates (theta, phi) of the beam peaks,
         in radians up to a maximum diffraction order.

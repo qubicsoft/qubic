@@ -36,7 +36,7 @@ optics='CalQubic_Optics_v3_CC_FFF.txt'
 primbeam='CalQubic_PrimBeam_vX.fits' # X=2 gaussian, 3 fitted, 4 multi frequency splines
 detarray='CalQubic_DetArray_v4_CC.fits' # This can be used for TD and FI with the old number array
 hornarray='CalQubic_HornArray_CC.fits'
-synthbeam='CalQubic_Synthbeam_Calibrated_JCH_FI.fits'
+synthbeam='CalQubic_Synthbeam_Calibrated_Multifreq_FI.fits'
 
 ############################################# Scene ################################
 nside=128
@@ -97,10 +97,12 @@ verbose=False
 ####################################### Synthetic Beam #####################################
 
 #if true, use imported fits. if false, use theoretical theta,phi,val calculated in instrument.py
-use_file=True
+use_synthbeam_fits_file=False
 
 #choose between analytical and calibrated peak file names
 analytical = False
 
-#are you using 1 calibrated file and analytically changing the frequency or are you using multiple calibrated files
-jch_edit=True
+get_many_frequencies_analytically=False
+
+#optional file ID
+#ID=1234

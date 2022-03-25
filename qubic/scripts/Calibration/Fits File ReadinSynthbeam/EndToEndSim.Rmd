@@ -1,0 +1,323 @@
+---
+jupyter:
+  jupytext:
+    formats: ipynb,Rmd
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.13.7
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+##Loading modules. 
+
+# General modules
+from __future__ import division, print_function
+# # %matplotlib inline
+import os
+import sys
+import time
+import datetime
+import shutil
+```
+
+```{python}
+# Specific science modules
+import healpy as hp
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+
+```
+
+```{python}
+# Specific qubic modules
+import pysm3
+import qubic
+from qubicpack.utilities import Qubic_DataDir
+from pysimulators import FitsArray
+
+```
+
+```{python}
+from qubic import SpectroImLib as si
+from pysm3 import models
+from qubic import QubicSkySim as qss
+
+```
+
+```{python}
+# Repository for dictionary
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir='../')
+dictfilename = global_dir + 'dicts/pipeline_demo.dict'
+```
+
+```{python}
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+```
+
+```{python}
+# Set nf_sub to 1 to be in the monofreq case
+d['nf_sub'] = 1
+```
+
+```{python}
+# No spectroimaging
+d['nf_recon'] = 1
+```
+
+```{python}
+# Center of the patch observed in galactic coordinates
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+print(center)
+d['effective_duration'] = 4
+
+# Adjust some parameters in the dictionary
+d['npointings'] = 3000
+d['tol'] = 1e-5
+d['filter_nu'] = 220e9
+d['photon_noise'] = False
+d['noiseless'] = False
+
+```
+
+```{python}
+print(d['filter_nu'])
+print(d['detector_nep'])
+print(d['photon_noise'])
+print(d['config'])
+print(d['effective_duration'])
+```
+
+```{python}
+# decide whether to use fits file synth beam
+d['use_synthbeam_fits_file']=True
+
+```
+
+```{python}
+# Make a sky using PYSM
+### Pick one of these:
+seed = 42
+sky_config = {'CMB': 'c1'} 
+# sky_config = {'cmb': 42}                ### CMB Only
+#sky_config = {'cmb': seed, 'dust':'d1'}   ### CMB + Dust
+```
+
+```{python}
+### Generate the maps at each sub-frequency
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+x0 = Qubic_sky.get_simple_sky_map()
+```
+
+```{python}
+print('sky shape: ', x0.shape)
+```
+
+```{python}
+# Look at the input sky maps using Healpy
+istokes = 0 # Stokes parameter (I, Q, U)
+rr = 9 # Resolution in arcmin
+```
+
+```{python}
+plt.figure(figsize=(13,8))
+for istk in range(3):
+    plt.subplots_adjust(wspace=0.9)
+    hp.mollview(x0[0, :,istk], cmap='jet', sub = (3,2,2*istk+1), 
+        title = 'Mollview {0} Stokes parameter'.format(d['kind'][istk]))
+    hp.gnomview(x0[0, :,istk], cmap ='jet', sub = (3,2,2*istk+2), rot=center, reso=rr, 
+        title = 'Gnomview {0} Stokes parameter'.format(d['kind'][istk]))
+
+```
+
+```{python}
+# Pointing strategy
+p = qubic.get_pointing(d)
+print('=== Pointing DONE! ===')
+```
+
+```{python}
+# Model of the scene at the time of observation
+s = qubic.QubicScene(d)
+```
+
+```{python}
+# Create a monofrequency Instrument.
+q = qubic.QubicInstrument(d)
+```
+
+```{python}
+# Create an acquisition operator which combines all relevant information
+#scene, instrument configuration and pointing strategy. 
+a = qubic.QubicAcquisition(q, p, s, d)
+```
+
+```{python}
+# Monofreq TOD making
+TOD, maps_convolved = a.get_observation(x0[0], noiseless=d['noiseless'])#, convolution = True)
+```
+
+```{python}
+print('TOD shape: ', TOD.shape)
+print('maps conv shape: ', maps_convolved.shape)
+```
+
+```{python}
+# Look at TOD for one TES
+print('--------- TOD with shape (#detectors, #pointings) : {} '.format(np.shape(TOD)))
+
+tes = 6
+plt.plot(TOD[tes, :], label='TES {}'.format(tes))
+plt.xlabel('Pointing index')
+plt.ylabel(f'TOD from TES {tes} [W]')
+plt.title('FI - 220GHz - Noiseless={} CMB - STD = {:.4} W'.format( d['noiseless'], np.std(TOD)))
+```
+
+```{python}
+# Get coverage map
+# i.e. how many times were seen each pixel of the sky (not trivial because of the synthetic beam)
+cov = a.get_coverage()
+
+print(cov.shape)
+hp.mollview(cov)
+```
+
+```{python}
+# Check the pointing and the coverage coincide
+theta = p.galactic[:, 0]
+phi = p.galactic[:, 1]
+nside = d['nside']
+
+pix = hp.ang2pix(nside, theta, phi, lonlat=True)
+ptg_map = np.zeros(12 * nside**2)
+ptg_map[pix] = 200
+hp.mollview(ptg_map + cov)
+```
+
+```{python}
+hitmap = a.get_hitmap(d['nside'])
+hp.mollview(hitmap)
+```
+
+```{python}
+# From TOD reconstruct sky maps.
+maps_recon, nit, error = a.tod2map(TOD, d, cov=cov)
+
+print('The shape of the reconstructed maps is (#pixels, #stokes) :', maps_recon.shape)
+print('{} iterations were needed to get an error of {}'.format(nit, error))
+```
+
+```{python}
+# Compare with the convolved maps
+diff = maps_recon - maps_convolved
+print(diff.shape)
+print(maps_recon.shape)
+```
+
+```{python}
+# Keeping only the sky region which has been significantly observed
+# Pixels not seen enough are replaced by UNSEEN value
+maxcov = np.max(cov)
+unseen = cov < maxcov * 0.15
+
+maps_convolved[unseen, :] = hp.UNSEEN
+maps_recon[unseen, :] = hp.UNSEEN
+diff[unseen, :] = hp.UNSEEN
+```
+
+```{python}
+rr = 14 # Resolution in arcmin
+stokes = ['I', 'Q', 'U']
+plt.figure(figsize=(15, 15))
+for istokes in range(3):
+    if istokes == 0:
+        min = -200
+        max = 200
+    else:
+        min = -8
+        max = 8
+    hp.gnomview(maps_convolved[:, istokes], cmap='jet', rot=center, sub=(3,3,3*istokes+1), reso=rr,
+                title='Input ' + stokes[istokes], unit='$\mu K_{CMB}$', format='%g',  min=min, max=max)
+    hp.gnomview(maps_recon[:, istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+2), reso=rr,
+                title='Output ' + stokes[istokes], unit='$\mu K_{CMB}$', min=min, max=max)
+    hp.gnomview(diff[:, istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+3), reso=rr,
+                title='Difference ' + stokes[istokes], unit='$\mu K_{CMB}$', min=-2, max=2)
+hp.graticule(dpar = 5, dmer = 5, verbose = False, alpha = 0.5)
+plt.savefig('comparison_map.pdf')
+```
+
+```{python}
+# now run it all again with just the analytic calculation
+# decide whether to use fits file synth beam
+d['use_synthbeam_fits_file']=False
+# Pointing strategy
+p = qubic.get_pointing(d)
+print('=== Pointing DONE! ===')
+# Model of the scene at the time of observation
+s = qubic.QubicScene(d)
+# Create a monofrequency Instrument.
+q = qubic.QubicInstrument(d)
+# Create an acquisition operator which combines all relevant information
+#scene, instrument configuration and pointing strategy. 
+a = qubic.QubicAcquisition(q, p, s, d)
+```
+
+```{python}
+# Monofreq TOD making
+TOD2, maps_convolved2 = a.get_observation(x0[0], noiseless=d['noiseless'])#, convolution = True)
+```
+
+```{python}
+# From TOD reconstruct sky maps.
+maps_recon2, nit2, error2 = a.tod2map(TOD, d, cov=cov)
+
+print('The shape of the reconstructed maps is (#pixels, #stokes) :', maps_recon2.shape)
+print('{} iterations were needed to get an error of {}'.format(nit2, error2))
+```
+
+```{python}
+# Keeping only the sky region which has been significantly observed
+# Pixels not seen enough are replaced by UNSEEN value
+maxcov = np.max(cov)
+unseen = cov < maxcov * 0.15
+
+maps_convolved2[unseen, :] = hp.UNSEEN
+```
+
+```{python}
+diff2 = maps_convolved2 - maps_convolved
+diff2[unseen, :] = hp.UNSEEN
+```
+
+```{python}
+rr = 14 # Resolution in arcmin
+stokes = ['I', 'Q', 'U']
+plt.figure(figsize=(15, 15))
+for istokes in range(3):
+    if istokes == 0:
+        min = -200
+        max = 200
+    else:
+        min = -8
+        max = 8
+    hp.gnomview(maps_convolved2[:, istokes], cmap='jet', rot=center, sub=(3,3,3*istokes+1), reso=rr,
+                title='Input_Theoretical ' + stokes[istokes], unit='$\mu K_{CMB}$', format='%g',  min=min, max=max)
+    hp.gnomview(maps_convolved[:, istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+2), reso=rr,
+                title='Input_Fits ' + stokes[istokes], unit='$\mu K_{CMB}$', min=min, max=max)
+    hp.gnomview(diff2[:, istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+3), reso=rr,
+                title='Difference ' + stokes[istokes], unit='$\mu K_{CMB}$', min=-2, max=2)
+hp.graticule(dpar = 5, dmer = 5, verbose = False, alpha = 0.5)
+plt.savefig('comparison_map.pdf')
+```
+
+```{python}
+
+```

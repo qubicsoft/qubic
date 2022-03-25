@@ -18,9 +18,11 @@ jupyter:
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy
+from scipy.optimize import curve_fit
 import pickle
 from itertools import combinations, combinations_with_replacement
 from importlib import reload
+import seaborn as sns # For the color palet
 
 # Specific qubic modules
 import qubic
@@ -31,10 +33,6 @@ from qubic import NamasterLib as nam
 from qubic import mcmc
 
 
-```
-
-```{python pycharm={'name': '#%%\n'}}
-import numpy
 ```
 
 ```{python pycharm={'name': '#%%\n'}}
@@ -178,9 +176,13 @@ binned_camblib = qc.bin_camblib(Namaster, '../../doc/CAMB/camblib_0to1_step001.p
 
 ## Loop over the residual dust fraction
 
+Compute the BB power spectrum for each sky containing dust residuals.
+
+For a fraction of 0.0057, we detect r=0.036 whic corresponds to the BICEP limit today.
+
 ```{python}
 # dust_fraction = [0., 0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05]
-dust_fraction = np.arange(0., 0.008, 0.001)
+dust_fraction = np.arange(0.0056, 0.0059, 0.0001)
 print(dust_fraction)
 ```
 
@@ -218,7 +220,7 @@ for f, frac in enumerate(dust_fraction):
 ```
 
 ```{python}
-BBcross_dust = np.load(dir_save + '/BBcross_dust_d1_' + config[-3:] + f'_{nbands}bands_dustfrac0-0.01-step0.001.npy')
+# BBcross_dust = np.load(dir_save + '/BBcross_dust_d1_' + config[-3:] + f'_{nbands}bands_dustfrac0-0.01-step0.001.npy')
 # BBcross_dust = np.load(dir_save + '/BBcross_dust_d1_' + config[-3:] + f'_{nbands}bands_dustfrac0-0.05-step0.005.npy')
 # BBcross_dust = np.load(dir_save + '/BBcross_dust_d1_' + config[-3:] + f'_{nbands}bands_dustfrac0-0.05-step0.01.npy')
 print(BBcross_dust.shape)
@@ -228,8 +230,10 @@ print(BBcross_dust.shape)
 # hp.mollview(dust_map[0, :, 0], title='Dust residuals d1')
 ```
 
+### Plot the BB power spectra for each dust fraction
+
 ```{python}
-import seaborn as sns
+# Nice color palet
 palet = sns.cubehelix_palette(len(dust_fraction), start=3, hue=1, light=0.75)
 sns.palplot(palet)
 ```
@@ -245,33 +249,15 @@ plt.grid()
 plt.legend()
 ```
 
-```{python}
-# for i in range(3):
-#     plt.plot(ell_binned, BBcross_dust[f, 0, :], label=f'IBCS {i}')
-# plt.title('BB dust d2-d1')
-# plt.ylabel('$D_\ell$')
-# plt.xlabel('$\ell$')
-# plt.grid()
-# plt.legend()
-```
-
 ## Global likelihood for each dust fraction
+
+The likelihood on r is computed for all the IBCS at the same time. So we obtain one value of r for each case. 
 
 ```{python}
 def myBBth(ell, r):
     clBB = qc.get_Dl_fromlib(ell, r, lib=binned_camblib, unlensed=False, specindex=2)[0]
     clBB = np.array(list(clBB) * ncombi)
     return clBB
-
-
-# clBB = myBBth(ell_binned, r=0)
-# print(clBB.shape)
-# plt.plot(ell_binned, clBB[:nbins], color='r')
-# plt.title('CMB r = 0')
-# plt.ylabel('$D_\ell$')
-# plt.xlabel('$\ell$')
-# plt.grid()
-# plt.legend()
 ```
 
 ```{python}
@@ -288,9 +274,6 @@ allsigma68 = []
 for f, frac in enumerate(dust_fraction[:]):
     print('\n dust fraction:', frac)
     fakedata = myBBth(ell_binned, r=0.) + np.ravel(BBcross_dust[f, :, :])
-#     plt.plot(np.ravel(BBcross_dust[f, :, :]), label=frac)
-#     plt.legend()
-    print(len(fakedata))
 
     logLLH = mcmc.LogLikelihood(xvals=xvals, 
                               yvals=fakedata, 
@@ -303,14 +286,14 @@ for f, frac in enumerate(dust_fraction[:]):
 
     LLH, sigma68 = logLLH.compute_sigma68(logLLH, rvalues)
     allLLH.append(LLH)
-    print(sigma68)
+    print('sigma68 =', sigma68)
     allsigma68.append(sigma68)
     
     LLH_interp = np.interp(x, rvalues, LLH)
     allLLH_interp.append(LLH_interp)
     
     r_dust = x[np.argmax(LLH_interp)]
-    print(r_dust)
+    print('r_dust =', r_dust)
     allr_dust.append(r_dust)
 ```
 
@@ -322,7 +305,7 @@ for f, frac in enumerate(dust_fraction[:]):
     c = palet[f]
 #     ax0.plot(rvalues, allLLH[f] / np.max(allLLH[f]), 'o', color=c, label=f'Likelihood frac {frac}')
     ax0.plot(x, allLLH_interp[f]/ np.max(allLLH_interp[f]),
-                 color=c, label='{:1.1f} % dust residuals'.format(dust_fraction[f]*100))
+                 color=c, label=f'{dust_fraction[f]*100:1.2f} % dust residuals')
 
     ax0.axvline(x=allr_dust[f], color=c)
     ax0.axvline(x=allsigma68[f], linestyle='--', color=c)
@@ -355,7 +338,6 @@ ax = plt.gca()
 plt.title(config[-3:] + f' GHz - {nbands} bands')
 
 for f, frac in enumerate(dust_fraction[:]):
-    c = palet[f]
     ax.errorbar(dust_fraction[f], allr_dust[f],
              yerr=allsigma68[f] - allr_dust[f], 
              fmt='o', color='r')
@@ -363,10 +345,12 @@ ax.set_xlabel(r'$f_{\rm dust}$', fontsize=16)
 ax.set_ylabel(r'$r_{\rm dust}$', fontsize=16)
 ax.grid()
 
-plt.savefig(save_plot + f'Likelihood_dust_rdust_{config}_3y_{nbands}bands_fdust0to06.pdf', bbox_inches='tight')
+#plt.savefig(save_plot + f'Likelihood_dust_rdust_{config}_3y_{nbands}bands_fdust0to06.pdf', bbox_inches='tight')
 ```
 
 ## Likelihood of each IBCS
+
+The likelihood on r is computed for each IBCS separately. So we get one value of r for each IBCS. For example, in case of 2 sub-bands, we have 3 IBCS (f1, f1), (f1, f2) and (f2, f2).
 
 ```{python}
 # Cut BBcov for each IBCS
@@ -447,7 +431,6 @@ plt.grid()
 ```
 
 ```{python}
-from scipy.optimize import curve_fit
 def func(x, a, b):
     return a * x + b
 
@@ -469,7 +452,7 @@ x = np.linspace(195, 245, 10)
 
 fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(20, 6))
 fig.suptitle(config[-3:] + f' GHz - {nbands} bands')
-for f in range(len(dust_fraction[:])):
+for f in range(len(dust_fraction)):
     print(f)
     c = palet[f]
     ax0.errorbar(nus_eff[:], 
@@ -477,7 +460,7 @@ for f in range(len(dust_fraction[:])):
                  yerr=sigma68[f, :]- r_dust[f, :], 
                  fmt='o',
                  color=c, 
-                 label='{:1.1f} % dust residuals'.format(dust_fraction[f]*100) )   
+                 label=f'{dust_fraction[f]*100:1.2f} % dust residuals')   
 
     ax0.plot(x, np.polyval(popt[f, :], x),
              color=c)
@@ -486,7 +469,7 @@ ax0.set_ylabel(r'$r_{dust}$')
 ax0.legend(fontsize=12)
 ax0.grid()
 
-for f in range(1, 11):
+for f in range(len(dust_fraction)):
     c = palet[f]
     ax1.plot(dust_fraction[f], significance_a[f], 'o', color=c)#, label='Linear fit: a = {:1.4f} $\pm$ {:1.4f}'.
 #                  format(popt[f, 0], perr[f, 0]))
@@ -502,11 +485,21 @@ ax1.set_title('Slope significance')
 #             bbox_inches='tight')
 ```
 
-## CMB with r not 0
+### CMB with r not 0
+
+We compare two cases:
+- r is not 0 (B modes in the sky)
+- r is 0 but with dust residuals so we detect a non zero r.
+
+The value of r in the first cases is adjusted such that it is equal to the value of r detected with dust residuals.
+The likelihood is still computed for each IBCS.
+
+```{python}
+r_dust
+```
 
 ```{python}
 xvals = list(ell_binned)
-print(len(xvals))
 
 nx = 1000
 x = np.linspace(0., 1, nx)
@@ -516,7 +509,7 @@ LLH_interp_CMBwithr = np.zeros((ncombi, nx))
 r_dust_CMBwithr = np.zeros(ncombi)
 sigma68_CMBwithr = np.zeros(ncombi)
 
-index = 6
+index = 2
 print('Dust fraction:', dust_fraction[index])
 
 smallr = r_dust[index, nbands-1]
@@ -566,8 +559,8 @@ plt.errorbar(nus_eff,
              yerr=sigma68[index, :]- r_dust[index, :], 
              fmt='o',
              color='b', 
-             label=r'CMB$(r = 0)$' + ' + {:1.1f} % dust residuals'.format(dust_fraction[index]*100) + 
-                     '\nSlope significance: {:1.2f} $\sigma$'.format(significance_a[index]))   
+             label=r'CMB$(r = 0)$' + f' + {dust_fraction[index]*100:1.2f} % dust residuals' + 
+                     f'\nSlope significance: {significance_a[index]:1.2f} $\sigma$')   
 
 plt.plot(x, np.polyval(popt[index, :], x),
          color='b')
@@ -581,11 +574,11 @@ plt.errorbar(np.array(nus_eff)+0.5,
 plt.plot(x, np.polyval(popt_CMBwithr, x), color='r')
 
 
-plt.xlabel(r'$\nu$ [GHz]')
-plt.ylabel(r'$r_{dust}$')
+plt.xlabel(r'$\nu$ [GHz]', fontsize=20)
+plt.ylabel(r'$r_{\rm dust}$', fontsize=20)
 plt.legend(fontsize=14, loc='upper left')
 plt.grid()
-plt.title(config[-3:] + f' GHz - {nbands} bands')
+plt.title(config[-3:] + f' GHz - {nbands} bands', fontsize=20)
 # plt.savefig('/home/lmousset/QUBIC/Qubic_work/SpectroImagerie/paper_plot/'+
 #             f'Likelihood_dust_CMBwithr_{config}_3y_{nbands}bands_GoodPhotonNoise_dust{dust_fraction[index]}.pdf', 
 #             bbox_inches='tight')

@@ -865,8 +865,8 @@ class QubicInstrument(Instrument):
             
             else:
                 thetafits=thetafits[freqid].reshape((np.shape(thetafits)[1],np.shape(thetafits)[2]))
-                phifits=phifits[freqid].reshape((np.shape(thetafits)[1],np.shape(thetafits)[2]))
-                valfits=valfits[freqid].reshape((np.shape(thetafits)[1],np.shape(thetafits)[2]))
+                phifits=phifits[freqid].reshape((np.shape(phifits)[1],np.shape(phifits)[2]))
+                valfits=valfits[freqid].reshape((np.shape(valfits)[1],np.shape(valfits)[2]))
 
     
                 thetas, phis, vals, = thetafits, phifits, valfits
@@ -883,6 +883,8 @@ class QubicInstrument(Instrument):
         thetaphi = _pack_vector(thetas, phis)  # (ndetectors, ncolmax, 2)
         direction = Spherical2CartesianOperator('zenith,azimuth')(thetaphi)
         e_nf = direction[:, None, :, :]
+
+
         if nside > 8192:
             dtype_index = np.dtype(np.int64)
         else:
@@ -907,6 +909,10 @@ class QubicInstrument(Instrument):
         def func_thread(i):
             # e_nf[i] shape: (1, ncolmax, 3)
             # e_ni shape: (ntimes, ncolmax, 3)
+            thetaphis = _pack_vector(thetas, phis)  # (ndetectors, ncolmax, 2)
+            directions = Spherical2CartesianOperator('zenith,azimuth')(thetaphis)
+            e_nf = directions[:, None, :, :]
+    
             e_ni = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
             if nscene != nscenetot:
                 np.take(table, c2h(e_ni).astype(int), out=index[i])
@@ -978,6 +984,7 @@ class QubicInstrument(Instrument):
         #print('Factor = {}'.format(factor))
         import qubic.sb_fitting as sbfit
         sh  =  np.shape(theta)
+        print(sh)
         myposition =  -position / np.sqrt(np.sum(position**2, axis=-1))[..., None]
         local_dict = {'nx': myposition[:, 0, None], 'ny': myposition[:, 1, None]}
         thlos = ne.evaluate('arcsin(sqrt(nx**2 + ny**2))',local_dict=local_dict)
@@ -1014,7 +1021,7 @@ class QubicInstrument(Instrument):
             accounts for a specified energy fraction.
             
             """
-        normal = True
+        normal = False
         
         import matplotlib.pyplot as plt
         if normal:
@@ -1492,8 +1499,8 @@ class QubicMultibandInstrument:
                 nuu=str(nuu)
                 nuu=nuu[0:3]
                 
-                jcedit=bool(d1.get(('jch_edit')))
-                usefiles=bool(d1.get(('use_file')))
+                jcedit=bool(d1.get(('get_many_frequencies_analytically')))
+                usefiles=bool(d1.get(('use_synthbeam_fits_file')))
                 config=d['config']
 
 

@@ -6,7 +6,6 @@ import qubicplus
 import pysm3
 import pysm3.units as u
 from pysm3 import utils
-from pysm3 import bandpass_unit_conversion
 from qubic import camb_interface as qc
 import matplotlib.pyplot as plt
 from qubic import NamasterLib as nam
@@ -20,10 +19,10 @@ from scipy import constants
 import fgbuster
 import warnings
 warnings.filterwarnings("ignore")
-import sys
-from datetime import datetime
 
-global_dir='/sps/qubic/Users/emanzan/libraries/qubic/qubic'
+
+global_dir='/sps/qubic/Users/emanzan/libraries/qubic/qubic'   #'/home/elenia/libraries/qubic/qubic/'
+
 
 def get_coverage(fsky, nside, center_radec=[0, -57.]):
     center = qubic.equ2gal(center_radec[0], center_radec[1])
@@ -37,59 +36,11 @@ def get_coverage(fsky, nside, center_radec=[0, -57.]):
     mask[okpix] = 1
     return mask
 
-
-def _rj2cmb(freqs):
-    return (np.ones_like(freqs) * u.K_RJ).to(
-        u.K_CMB, equivalencies=u.cmb_equivalencies(freqs * u.GHz)).value
-
-
-def _cmb2rj(freqs):
-    return (np.ones_like(freqs) * u.K_CMB).to(
-        u.K_RJ, equivalencies=u.cmb_equivalencies(freqs * u.GHz)).value
-
-def _rj2jysr(freqs):
-    return (np.ones_like(freqs) * u.K_RJ).to(
-        u.Jy / u.sr, equivalencies=u.cmb_equivalencies(freqs * u.GHz)).value
-
-
-def _jysr2rj(freqs):
-    return (np.ones_like(freqs) * u.Jy / u.sr).to(
-        u.K_RJ, equivalencies=u.cmb_equivalencies(freqs * u.GHz)).value
-
-
-def _cmb2jysr(freqs):
-    return (np.ones_like(freqs) * u.K_CMB).to(
-        u.Jy / u.sr, equivalencies=u.cmb_equivalencies(freqs * u.GHz)).value
-
-
-def _jysr2cmb(freqs):
-    return (np.ones_like(freqs) * u.Jy / u.sr).to(
-        u.K_CMB, equivalencies=u.cmb_equivalencies(freqs * u.GHz)).value
-
 # FG and noise maps creation part ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-def create_dustd0_no_bp(nside, nus):
-    # Create d0 dust maps at given number of frequencies
-    sky = pysm3.Sky(nside=nside, preset_strings=['d0'])
-    maps_353GHz = sky.get_emission(353*u.GHz).to(u.uK_CMB, equivalencies=u.cmb_equivalencies(353*u.GHz))
-
-    comp=[fgbuster.component_model.Dust(nu0=353)]
-
-    A = fgbuster.MixingMatrix(*comp)
-    A_ev = A.evaluator(nus)
-    A_maxL = A_ev(np.array([1.54, 20]))
-
-    new_dust_map=np.zeros(((len(nus), 3, 12*nside**2)))
-    for i in range(len(nus)):
-        new_dust_map[i]=A_maxL[i, 0]*maps_353GHz
-
-    return new_dust_map
-
-
-def create_sync_no_bp(nside, nus):
+def create_sync(nside, nus):
     # Create synch maps at given number of frequencies
     sky = pysm3.Sky(nside=nside, preset_strings=['s0'])
-    maps_70GHz = sky.get_emission(70*u.GHz).to(u.uK_CMB, equivalencies=u.cmb_equivalencies(70*u.GHz))
+    maps_70GHz = sky.get_emission(70*u.GHz, None)*utils.bandpass_unit_conversion(70*u.GHz,None, u.uK_CMB)
 
     comp=[fgbuster.component_model.Synchrotron(nu0=70)]
 
@@ -104,10 +55,28 @@ def create_sync_no_bp(nside, nus):
     return new_sync_map
 
 
-def create_dust_with_model2beta_no_bp(nside, nus, betad0, betad1, nubreak, temp, break_width):
+def create_dustd0(nside, nus):
+    # Create d0 dust maps at given number of frequencies
+    sky = pysm3.Sky(nside=nside, preset_strings=['d0'])
+    maps_353GHz = sky.get_emission(353*u.GHz, None)*utils.bandpass_unit_conversion(353*u.GHz,None, u.uK_CMB)
+
+    comp=[fgbuster.component_model.Dust(nu0=353)]
+
+    A = fgbuster.MixingMatrix(*comp)
+    A_ev = A.evaluator(nus)
+    A_maxL = A_ev(np.array([1.54, 20]))
+
+    new_dust_map=np.zeros(((len(nus), 3, 12*nside**2)))
+    for i in range(len(nus)):
+        new_dust_map[i]=A_maxL[i, 0]*maps_353GHz
+
+    return new_dust_map
+
+
+def create_dust_with_model2beta(nside, nus, betad0, betad1, nubreak, temp, break_width):
     # Create d02b dust maps at given number of frequencies
     sky = pysm3.Sky(nside=nside, preset_strings=['d0'])
-    maps_353GHz = sky.get_emission(353*u.GHz).to(u.uK_CMB, equivalencies=u.cmb_equivalencies(353*u.GHz))
+    maps_353GHz = sky.get_emission(353*u.GHz, None)*utils.bandpass_unit_conversion(353*u.GHz,None, u.uK_CMB)
 
     comp2b=[fgbuster.component_model.Dust_2b(nu0=353, break_width=break_width)]
 
@@ -255,7 +224,6 @@ class BImaps(object):
             if k == 'cmb':
                 self.seed = self.skyconfig['cmb']
 
-
     def get_cmb(self, coverage):
 
         okpix = coverage > (np.max(coverage) * float(0))
@@ -275,7 +243,6 @@ class BImaps(object):
         maps = hp.synfast(mycls.T, self.nside, verbose=False, new=True)
         return maps
 
-        
     def get_sky(self, coverage):
         setting = []
         iscmb=False
@@ -300,78 +267,9 @@ class BImaps(object):
 
         return sky
     
-    
-    def get_fg_freq_integrated_maps(self, verbose=False, N_SAMPLE_BAND=100, beta=[], temp=20):
+    def get_fg_freq_integrated_maps(self, verbose=False, iib=1, beta=[], temp=20):
         '''
         This function generates dust and synch maps integrated over the frequency band
-        '''
-        #def output maps as transpose of (Nfreq,Nstk,Npix)
-        allmaps=np.zeros((self.npix, 3,len(self.nus)))
-        weights_flat = np.ones(N_SAMPLE_BAND) #weights in power unit
-                        
-        #apply band integration
-        for f in range(len(self.nus)):
-            start_time = datetime.now()
-            print('Integrate band: {0} GHz with {1} steps'.format(self.nus[f],N_SAMPLE_BAND))
-            
-            #def freq array
-            fmin = self.nus[f]-self.bw[f]/2
-            fmax = self.nus[f]+self.bw[f]/2
-            #### bandpass_frequencies = np.linspace(fmin, fmax, fsteps) * u.GHz
-            freqs = np.linspace(fmin, fmax, N_SAMPLE_BAND)
-
-            #convert weights from power unit to CMB unit
-            weights = weights_flat.copy() / _jysr2rj(freqs)
-            weights /= _rj2cmb(freqs)
-            weights /= np.trapz(weights, freqs * 1e9)
-            
-            #cycle on the foregrounds
-            for i in self.skyconfig.keys():
-                
-                if i == 'dust':
-                    if self.skyconfig[i] == 'd0':
-                        if verbose:
-                            print('Model : {}'.format(self.skyconfig[i]))
-                        #generate a dust map for each sampled freq
-                        fg_maps = create_dustd0_no_bp(self.nside, freqs) #fg in CMB unit
-                        #compute bandpass integration
-                        integrand = (fg_maps.T*weights)
-                        allmaps[:,:,f] += np.trapz( integrand[:,:], freqs * 1e9 ) 
-                
-                    elif self.skyconfig[i] == 'd02b':
-                        if verbose:
-                            print('Model : d02b -> Twos spectral index beta ({:.2f} and {:.2f}) with nu_break = {:.2f}'.format(beta[0], beta[1], beta[2]))
-                        #generate a dust map for each sampled freq
-                        fg_maps = create_dust_with_model2beta_no_bp(self.nside, freqs,
-                                                              beta[0], beta[1], beta[2],
-                                                              temp=temp, break_width=beta[3]) #fg in CMB unit
-                        #compute bandpass integration
-                        integrand = (fg_maps.T*weights)
-                        allmaps[:,:,f] += np.trapz( integrand[:,:], freqs * 1e9 )
-                    
-                    else: #
-                        print('No dust')
-                
-                elif i == 'synchrotron':
-                    if verbose:
-                        print('Model : {}'.format(self.skyconfig[i]))  
-                    #generate a dust map for each sampled freq
-                    fg_maps = create_sync_no_bp(self.nside, freqs) #fg in CMB unit
-                    #compute bandpass integration
-                    integrand = (fg_maps.T*weights)
-                    allmaps[:,:,f] += np.trapz( integrand[:,:], freqs * 1e9 )
-        
-                else: ##
-                    print('No more fg components')
-                
-            print('Duration: {}'.format(datetime.now()-start_time))
-                
-        return allmaps.T
-
-
-    def get_fg_freq_integrated_maps_w_pysm(self, verbose=False, N_SAMPLE_BAND=100, beta=[], temp=20):
-        '''
-        This function uses pysm3 bandpass integration to generate dust and synch maps integrated over the frequency band
         '''
         #def output maps
         allmaps=np.zeros(((len(self.nus), 3, self.npix)))
@@ -383,26 +281,28 @@ class BImaps(object):
                 if self.skyconfig[i] == 'd0':
                     if verbose:
                         print('Model : {}'.format(self.skyconfig[i]))
-                    #def sky model
-                    sky = pysm3.Sky(nside=self.nside, preset_strings=[self.skyconfig[i]])
                     #apply band integration
                     for i in range(len(self.nus)):
-                        fmin = self.nus[i]-self.bw[i]/2
-                        fmax = self.nus[i]+self.bw[i]/2
-                        #### bandpass_frequencies = np.linspace(fmin, fmax, fsteps) * u.GHz
-                        freqs = np.linspace(fmin, fmax, N_SAMPLE_BAND)
-                        weights_flat = np.ones(N_SAMPLE_BAND)
-
-                        dustmaps[i,:,:] = sky.get_emission(freqs * u.GHz, weights_flat) * bandpass_unit_conversion(freqs * u.GHz, weights_flat, u.uK_CMB)
+                        print('Integration into bands ({:.0f} bands) -> from {:.2f} to {:.2f} GHz'.format(iib, self.edges[i][0], self.edges[i][1]))
+                        nus_inter=get_freqs_inter(self.edges[i], iib)
+                        dustmaps_inter=create_dustd0(self.nside, nus_inter)#get_fg_notconvolved('d0', self.nus, nside=self.nside)
+                        mean_dust_maps=np.mean(dustmaps_inter, axis=0)
+                        dustmaps[i]=mean_dust_maps.copy()
                         
                     allmaps+=dustmaps
 
                 elif self.skyconfig[i] == 'd02b':
                     if verbose:
                         print('Model : d02b -> Twos spectral index beta ({:.2f} and {:.2f}) with nu_break = {:.2f}'.format(beta[0], beta[1], beta[2]))
-                    print('Error: Model : d02b NOT implemented yet!')
-                    sys.exit()
-                    
+                    #apply band integration
+                    for i in range(len(self.nus)):
+                        print('Integration into bands ({:.0f} bands) -> from {:.2f} to {:.2f} GHz'.format(iib, self.edges[i][0], self.edges[i][1]))
+                        nus_inter=get_freqs_inter(self.edges[i], iib)
+                        dustmaps_inter=create_dust_with_model2beta(self.nside, nus_inter, beta[0], beta[1], beta[2], temp=temp, break_width=beta[3])
+                        mean_dust_maps=np.mean(dustmaps_inter, axis=0)
+                        dustmaps[i]=mean_dust_maps.copy()
+                        
+                    allmaps+=dustmaps
                 
                 else: #
                     print('No dust')
@@ -411,25 +311,22 @@ class BImaps(object):
                 syncmaps=np.zeros(((len(self.nus), 3, self.npix)))
                 if verbose:
                     print('Model : {}'.format(self.skyconfig[i]))
-                #def sky model
-                sky = pysm3.Sky(nside=self.nside, preset_strings=[self.skyconfig[i]])
                 #apply band integration
                 for i in range(len(self.nus)):
-                    fmin = self.nus[i]-self.bw[i]/2
-                    fmax = self.nus[i]+self.bw[i]/2
-                    #### bandpass_frequencies = np.linspace(fmin, fmax, fsteps) * u.GHz
-                    freqs = np.linspace(fmin, fmax, N_SAMPLE_BAND)
-                    weights_flat = np.ones(N_SAMPLE_BAND)
-
-                    syncmaps[i,:,:] = sky.get_emission(freqs * u.GHz, weights_flat) * bandpass_unit_conversion(freqs * u.GHz, weights_flat, u.uK_CMB)
+                    print('Integration into bands ({:.0f} bands) -> from {:.2f} to {:.2f} GHz'.format(iib, self.edges[i][0], self.edges[i][1]))
+                    nus_inter=get_freqs_inter(self.edges[i], iib)
+                    sync_maps_inter=create_sync(self.nside, nus_inter)
+                    mean_sync_maps=np.mean(sync_maps_inter, axis=0)
+                    syncmaps[i]=mean_sync_maps.copy()
                     
                 allmaps+=syncmaps
 
             else: ##
                 print('No more fg components')
                 
-        return allmaps    
+        return allmaps
 
+        
         
     def getskymaps(self, fg_maps=None ,same_resol=None, verbose=False, coverage=None, iib=False, noise=False, signoise=1., nside_index=256):
         """

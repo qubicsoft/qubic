@@ -1,17 +1,14 @@
 #!/bin/bash
-#$ -o /pbs/home/m/mregnier/sps1/QUBIC+/d0/cls/results
-#$ -N nss_fixsync
-#$ -q mc_huge
 
-export mydir=/pbs/home/m/mregnier/sps1/QUBIC+
+#SBATCH --output=output_100_10.log
 
-export NUMBA_NUM_THREADS=8
-export MKL_NUM_THREADS=8
-export NUMEXPR_NUM_THREADS=8
-export OMP_NUM_THREADS=8
-export OPENBLAS_NUM_THREADS=8
-export VECLIB_MAXIMUM_THREADS=8
-export PYOPERATORS_NO_MPI=8
+export NUMBA_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export VECLIB_MAXIMUM_THREADS=1
+export PYOPERATORS_NO_MPI=1
 
 
 export QUBIC_DATADIR=/pbs/home/m/mregnier/Libs/qubic/qubic/
@@ -25,6 +22,9 @@ export QUBIC_DICT=$QUBIC_DATADIR/dicts
     # 5/ Bandpass integration
     # 6/ Fix synchrotron
     # 7/ # of sub-bands
+    # 8/ Model that you want to fit for
 
-#python /pbs/home/m/mregnier/sps1/QUBIC+/d0/cls/MC_cls_new.py $1 $2 $3 $4 $5 $6 $7
-python /pbs/home/m/mregnier/sps1/QUBIC+/d0/cls/get_r.py $1 $2 $3 $4 $5 $6 $7
+
+
+python /pbs/home/m/mregnier/sps1/QUBIC+/d0/cls/MC_cls_new.py $1 $2 $3 $4 $5 $6 $7 $8 $9
+#python /pbs/home/m/mregnier/sps1/QUBIC+/d0/cls/get_r.py $1 $2 $3 $4 $5 $6 $7 $8 $9

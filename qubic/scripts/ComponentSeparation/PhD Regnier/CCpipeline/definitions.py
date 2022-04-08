@@ -26,6 +26,34 @@ import warnings
 from scipy.optimize import curve_fit
 from getdist import densities
 
+def _rj2cmb(freqs):
+    return (np.ones_like(freqs) * u.K_RJ).to(
+        u.K_CMB, equivalencies=u.cmb_equivalencies(freqs * u.GHz)).value
+
+
+def _cmb2rj(freqs):
+    return (np.ones_like(freqs) * u.K_CMB).to(
+        u.K_RJ, equivalencies=u.cmb_equivalencies(freqs * u.GHz)).value
+
+def _rj2jysr(freqs):
+    return (np.ones_like(freqs) * u.K_RJ).to(
+        u.Jy / u.sr, equivalencies=u.cmb_equivalencies(freqs * u.GHz)).value
+
+
+def _jysr2rj(freqs):
+    return (np.ones_like(freqs) * u.Jy / u.sr).to(
+        u.K_RJ, equivalencies=u.cmb_equivalencies(freqs * u.GHz)).value
+
+
+def _cmb2jysr(freqs):
+    return (np.ones_like(freqs) * u.K_CMB).to(
+        u.Jy / u.sr, equivalencies=u.cmb_equivalencies(freqs * u.GHz)).value
+
+
+def _jysr2cmb(freqs):
+    return (np.ones_like(freqs) * u.Jy / u.sr).to(
+        u.K_CMB, equivalencies=u.cmb_equivalencies(freqs * u.GHz)).value
+
 print(fgbuster.__path__)
 warnings.filterwarnings("ignore")
 
@@ -60,8 +88,6 @@ def get_cov_for_weighted(n_freq, depths_i, depths_p, coverage, nside=256):
         noise_cov[i, 1] = np.ones(npix)*depths_p[i]**2
         noise_cov[i, 2] = np.ones(npix)*depths_p[i]**2
 
-    #noise_cov[:, :, ~ind]=hp.UNSEEN
-
     return noise_cov
 def fct_subopt(nus):
     subnus = [150., 220]
@@ -87,7 +113,7 @@ def qubicify(config, qp_nsub, qp_effective_fraction):
         newbandwidth = newedges[1:] - newedges[0:-1]
         newdnu_nu = newbandwidth / newfreqs
         newfwhm = config['fwhm'][i] * config['frequency'][i]/newfreqs
-        scalefactor_noise = np.sqrt(qp_nsub[i]) * fct_subopt(config['frequency'][i])# / qp_effective_fraction[i]
+        scalefactor_noise = np.sqrt(qp_nsub[i])# * fct_subopt(config['frequency'][i])# / qp_effective_fraction[i]
         newdepth_p = config['depth_p'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
         newdepth_i = config['depth_i'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
         newdepth_e = config['depth_e'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
@@ -450,37 +476,54 @@ def get_like_onereals(ell, cl, tab, coverage, covbin):
 
 
     return maxL, rlim68, rlim95
-def _get_fgb_tools(config, prop, iib, fixsync):
+def _get_fgb_tools(config, prop, iib, fixsync, fit):
 
-    if fixsync == 0:
-        comp=[fgbuster.component_model.CMB(),
-          fgbuster.component_model.Dust(nu0=100, temp=20),
-          fgbuster.component_model.Synchrotron(nu0=100)]
-    else:
-        comp=[fgbuster.component_model.CMB(),
-          fgbuster.component_model.Dust(nu0=100, temp=20),
-          fgbuster.component_model.Synchrotron(nu0=100, beta_pl=-3)]
+    if fit == 0:
+
+        if fixsync == 0:
+            comp=[fgbuster.component_model.CMB(),
+            fgbuster.component_model.Dust(nu0=100, temp=20),
+            fgbuster.component_model.Synchrotron(nu0=100)]
+            comp[1].defaults=[1.54]
+            comp[2].defaults=[-3]
+        else:
+            comp=[fgbuster.component_model.CMB(),
+            fgbuster.component_model.Dust(nu0=100, temp=20),
+            fgbuster.component_model.Synchrotron(nu0=100, beta_pl=-3)]
+            comp[1].defaults=[1.54]
+    elif fit == 1 :
+        if fixsync == 0:
+            comp=[fgbuster.component_model.CMB(),
+            fgbuster.component_model.Dust_2b(nu0=100, temp=20, break_width=0.3),
+            fgbuster.component_model.Synchrotron(nu0=100)]
+            comp[1].defaults=[1.54, 1.54, 150]
+        else:
+            comp=[fgbuster.component_model.CMB(),
+            fgbuster.component_model.Dust_2b(nu0=100, temp=20, break_width=0.3),
+            fgbuster.component_model.Synchrotron(nu0=100, beta_pl=-3)]
+            comp[1].defaults=[1.54, 1.54, 150]
 
 
 
-    instr=fgbuster.get_instrument('INSTRUMENT')
-    if prop == 0 or prop == 1 :
-        instr.frequency = config['frequency']
-        instr.depth_i=config['depth_i']
-        instr.depth_p=config['depth_p']
-    else:
-        nus=np.array(list(config[0]['frequency'])+list(config[1]['frequency']))
-        depth_i=np.array(list(config[0]['depth_i'])+list(config[1]['depth_i']))
-        depth_p=np.array(list(config[0]['depth_p'])+list(config[1]['depth_p']))
-        instr.frequency=nus
-        instr.depth_i=depth_i
-        instr.depth_p=depth_p
+    #instr=fgbuster.get_instrument('INSTRUMENT')
+    #if prop == 0 or prop == 1 :
+    #    instr.frequency = config['frequency']
+    #    instr.depth_i=config['depth_i']
+    #    instr.depth_p=config['depth_p']
+    #else:
+    #    nus=np.array(list(config[0]['frequency'])+list(config[1]['frequency']))
+    #    depth_i=np.array(list(config[0]['depth_i'])+list(config[1]['depth_i']))
+    #    depth_p=np.array(list(config[0]['depth_p'])+list(config[1]['depth_p']))
+    #    instr.frequency=nus
+    #    instr.depth_i=depth_i
+    #    instr.depth_p=depth_p
 
-    if iib > 1 :
-        instr=get_instr(config, N_SAMPLE_BAND=1000, prop=prop)
+    #if iib > 1 :
+    instr=get_instr(config, N_SAMPLE_BAND=100, prop=prop)
+
 
     return comp, instr
-def get_comp_from_MixingMatrix(r, comp, instr, data, covmap, noise, nside, nus):
+def get_comp_from_MixingMatrix(r, comp, instr, data, covmap, nside, nus):
 
     """
 
@@ -489,18 +532,28 @@ def get_comp_from_MixingMatrix(r, comp, instr, data, covmap, noise, nside, nus):
     """
 
     pixok=covmap>0
+    ind=np.where(pixok != 0)[0]
+    print(ind)
 
-    instr.frequency=nus
+    #instr.frequency=nus
     # Define Mixing Matrix from FGB
     A=fgbuster.mixingmatrix.MixingMatrix(*comp)
-    A_ev=A.evaluator(np.array(instr.frequency))
-    A_maxL=A_ev(np.array(r))
+    A_ev=A.evaluator(nus)
 
-    if noise:
+
+    print(len(r))
+    if len(r[0])==2:
+        print('d0model for reconstruction')
+        A_maxL=A_ev(np.array(r))
         invN = np.diag(hp.nside2resol(nside, arcmin=True) / (instr.depth_p))**2
         maps_separe=fgbuster.algebra.Wd(A_maxL, data.T, invN=invN).T
+
     else:
-        maps_separe=fgbuster.algebra.Wd(A_maxL, data.T).T
+        maps_separe=np.zeros((len(comp), 2, 12*nside**2))
+        invN = np.diag(hp.nside2resol(nside, arcmin=True) / (instr.depth_p))**2
+        for i in range(len(ind)):
+            A_maxL=A_ev(np.array(r)[:, ind[i]])
+            maps_separe[:, :, ind[i]]=fgbuster.algebra.Wd(A_maxL, data[:, :, ind[i]].T, invN=invN).T
 
     maps_separe[:, :, ~pixok]=hp.UNSEEN
 
@@ -522,17 +575,23 @@ def _give_name_splitbands(A):
     for i in range(len(A)):
         name+=str(A[i])
     return name
-def _get_param(config, maps, N, Namaster, prop, iib, fixsync):
+def _get_param(config, maps, N, Namaster, prop, iib, fixsync, fit):
 
     nside=256
-    comp, instr=_get_fgb_tools(config, prop=prop, iib=iib, fixsync=fixsync)
+    comp, instr=_get_fgb_tools(config, prop=prop, iib=iib, fixsync=fixsync, fit=fit)
+    print(comp)
     covmap = get_coverage(0.03, nside)
     pixok = covmap>0
     ell_binned, _=Namaster.get_binning(256)
     cl = np.zeros((((N, 1, len(ell_binned), 4))))
-    nparam=1
-    if fixsync == 0:
-        nparam+=1
+    if fit == 0:
+        nparam=1
+        if fixsync == 0:
+            nparam+=1
+    elif fit == 1:
+        nparam=3
+        if fixsync == 0:
+            nparam+=1
     param=np.zeros((2*N, nparam))
     j=0
     k=1
@@ -541,19 +600,13 @@ def _get_param(config, maps, N, Namaster, prop, iib, fixsync):
         print(i)
 
         noise1=_get_noise(config, prop=prop)
-        maps1_noisy=maps+noise1
+        maps1_noisy=maps[:, :, :]+noise1[:, :, :].copy()
         noise2=_get_noise(config, prop=prop)
-        maps2_noisy=maps+noise2
+        maps2_noisy=maps[:, :, :]+noise2[:, :, :].copy()
 
-        #n_freq=len(config['frequency'])
-        #depths_i=config['depth_i'].copy()
-        #depths_p=config['depth_p'].copy()
-
-        #cov=definitions.get_cov_for_weighted(n_freq, depths_i, depths_p, covmap, nside=256)
-        #print(cov.shape)
         print('    ///// Components Separation')
-        r1=fgbuster.basic_comp_sep(comp, instr, maps1_noisy[:, 1:, pixok], method='TNC', tol=1e-18)#, cov=cov[:, 1:, pixok])
-        r2=fgbuster.basic_comp_sep(comp, instr, maps2_noisy[:, 1:, pixok], method='TNC', tol=1e-18)#, cov=cov[:, 1:, pixok])
+        r1=fgbuster.separation_recipes.basic_comp_sep(comp, instr, maps1_noisy[:, 1:, pixok])
+        r2=fgbuster.separation_recipes.basic_comp_sep(comp, instr, maps2_noisy[:, 1:, pixok])
         print('        -> ', r1.x)
         print('        -> ', r2.x)
 
@@ -585,13 +638,13 @@ def _get_param(config, maps, N, Namaster, prop, iib, fixsync):
                                  w=w,
                                  verbose=False,
                                  beam_correction=None,
-                                 pixwin_correction=True)
+                                 pixwin_correction=False)
 
         cl[i, 0]=cls.copy()
 
     return leff, cl, param
 def create_noisemaps(signoise, nus, nside, depth_i, depth_p, npix):
-    np.random.seed(None)
+    #np.random.seed(None)
     N = np.zeros(((len(nus), 3, npix)))
     for ind_nu, nu in enumerate(nus):
 
@@ -617,32 +670,45 @@ def _get_maps_without_noise(config, db, nubreak, prop, r, iib):
 
     print('Skyconfig is ', skyconfig)
 
-    if prop == 0 or prop == 1 :
-        print('no combined')
-        Class_maps=qubicplus.BImaps(skyconfig, config, nside=nside, r=r)
+    if prop == 0 :
+        iib_instr=iib*5
+        _, maps, _=qubicplus.BImaps(skyconfig, config, r=r, nside=nside).getskymaps(same_resol=0,
+                                                                  verbose=False,
+                                                                  coverage=covmap,
+                                                                  iib=iib_instr,
+                                                                  noise=True,
+                                                                  signoise=1.,
+                                                                  beta=[1.54-db, 1.54, nubreak, 0.3],
+                                                                  fix_temp=20)
+    elif prop == 1 :
+        iib_instr=iib
+        _, maps, _=qubicplus.BImaps(skyconfig, config, r=r, nside=nside).getskymaps(same_resol=0,
+                                                                  verbose=False,
+                                                                  coverage=covmap,
+                                                                  iib=iib_instr,
+                                                                  noise=True,
+                                                                  signoise=1.,
+                                                                  beta=[1.54-db, 1.54, nubreak, 0.3],
+                                                                  fix_temp=20)
     else:
+        iib_instr=iib
         frac=[1-prop, prop]
-        print(frac)
-        #print(config)
-        print('combined')
-        Class_maps=qubicplus.combinedmaps(skyconfig, config, nside=nside, r=r, prop=frac)
-
-    _, maps, _ = Class_maps.getskymaps(
-                                      same_resol=0,
-                                      verbose=False,
-                                      coverage=covmap,
-                                      noise=True,
-                                      beta=[1.54-db, 1.54, nubreak, 0.3],
-                                      fix_temp=20,
-                                      iib=iib)
+        _, maps, _=qubicplus.combinedmaps(skyconfig, config, nside=nside, r=r, prop=frac).getskymaps(
+                                          same_resol=0,
+                                          verbose=True,
+                                          coverage=covmap,
+                                          noise=True,
+                                          beta=[1.54-db, 1.54, nubreak, 0.3],
+                                          fix_temp=20,
+                                          iib=iib_instr)
 
     return maps
-def _get_noise(config, prop):
+def _get_noise(config, prop, nside_out):
 
     nside=256
     npix=12*nside**2
 
-    np.random.seed(np.random.randint(1000000))
+    np.random.seed(None)
     covmap = get_coverage(0.03, nside)
     pixok = covmap>0
 
@@ -676,9 +742,13 @@ def _get_noise(config, prop):
         N[ind_nu, 1] = np.random.normal(0, sig_p, 12*nside**2)*np.sqrt(2)
         N[ind_nu, 2] = np.random.normal(0, sig_p, 12*nside**2)*np.sqrt(2)
 
-    #N[:, :, ~pixok]=0
+    newN=N.copy()
+    if nside_out != 256:
+        newN=np.zeros((N.shape[0], 3, 12*nside_out**2))
+        for i in range(N.shape[0]):
+            newN[i]=hp.pixelfunc.ud_grade(N[i], nside_out)
 
-    return N
+    return newN
 def gauss(x, H, A, x0, sigma):
     return H + A * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
 def gauss_fit(x, y):
@@ -708,8 +778,6 @@ def get_instr(config, N_SAMPLE_BAND, prop):
         depth_p=np.array(list(depth1_p)+list(depth2_p))
         bandpasses = list(config1['bandwidth'])+list(config2['bandwidth'])
     instrument=fgbuster.get_instrument('INSTRUMENT')
-    #instrument.frequency=freq_maps
-    #np.array([12, 15, 14, 16, 16, 18, 18, 20, 20, 23, 36, 42, 23, 36, 42, 50, 59, 59, 71, 84, 101, 92])*1.0
     freq_maps_bp_integrated = np.zeros_like(freq_maps)
     new_list_of_freqs_flat = []
     new_list_of_freqs = []
@@ -722,11 +790,8 @@ def get_instr(config, N_SAMPLE_BAND, prop):
         freqs = np.linspace(fmin, fmax, N_SAMPLE_BAND)
         weights_flat = np.ones(N_SAMPLE_BAND)
 
-        #sky = fgbuster.get_sky(256, 'c1d0')
-        #freq_maps_bp_integrated[f,:,:] = sky.get_emission(freqs * u.GHz, weights_flat) * bandpass_unit_conversion(freqs * u.GHz, weights_flat, u.uK_CMB)
-
-        weights = weights_flat.copy() #/ _jysr2rj(freqs)
-        #weights /= _rj2cmb(freqs)
+        weights = weights_flat.copy() / _jysr2rj(freqs)
+        weights /= _rj2cmb(freqs)
         weights /= np.trapz(weights, freqs * 1e9)
 
         new_list_of_freqs.append((freqs, weights))
@@ -734,5 +799,74 @@ def get_instr(config, N_SAMPLE_BAND, prop):
     instrument.frequency = new_list_of_freqs
     instrument.depth_i=depth_i
     instrument.depth_p=depth_p
+    instrument.fwhm=np.zeros(len(freq_maps))
 
     return instrument
+
+
+def get_cls(r1, r2, comp, instr, map1, map2, covmap, nus, Namaster):
+
+    nside=256
+    components1=get_comp_from_MixingMatrix(r1, comp, instr, map1[:, 1:, :], covmap,
+    nside, nus)
+    components2=get_comp_from_MixingMatrix(r2, comp, instr, map2[:, 1:, :], covmap,
+    nside, nus)
+
+    new_comp1=get_maps_for_namaster_QU(components1, nside)
+    new_comp2=get_maps_for_namaster_QU(components2, nside)
+
+    print('    ///// Get Cls')
+    print()
+    w=None
+    leff, cls, _ = Namaster.get_spectra(new_comp1, map2=new_comp2,
+                             purify_e=False,
+                             purify_b=True,
+                             w=w,
+                             verbose=False,
+                             beam_correction=None,
+                             pixwin_correction=True)
+
+    return leff, cls
+
+
+def give_me_maps_instr(config, r, covmap, db, nubreak, prop, iib, model, nside_out, nside_index, fixsync):
+    if db == 0:
+        dust=model
+        if model == 'd0':
+            sync='s0'
+        else:
+            sync='s1'
+    else:
+        dust='d02b'
+
+    if fixsync:
+        skyconfig={'cmb':42, 'dust':dust}
+    else:
+        skyconfig={'cmb':42, 'dust':dust, 'synchrotron':sync}
+    print(skyconfig)
+    _, map, _=qubicplus.BImaps(skyconfig, config, r=r, nside=256).getskymaps(same_resol=0,
+                                                          verbose=False,
+                                                          coverage=covmap,
+                                                          iib=iib,
+                                                          noise=True,
+                                                          signoise=1.,
+                                                          beta=[1.54-db, 1.54, nubreak, 0.3],
+                                                          fix_temp=20,
+                                                          nside_index=nside_index)
+
+
+    newmap=map.copy()
+    if nside_out != 256:
+        newmap=np.zeros((map.shape[0], 3, 12*nside_out**2))
+        for i in range(map.shape[0]):
+            newmap[i]=hp.pixelfunc.ud_grade(map[i], nside_out)
+
+    instr=get_instr(config, N_SAMPLE_BAND=iib, prop=prop)
+    if iib == 1 :
+        instr=fgbuster.get_instrument('INSTRUMENT')
+        instr.frequency=config['frequency']
+        instr.depth_i=config['depth_i']
+        instr.depth_p=config['depth_p']
+
+
+    return newmap, instr

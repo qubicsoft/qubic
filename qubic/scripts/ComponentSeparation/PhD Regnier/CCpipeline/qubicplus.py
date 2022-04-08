@@ -8,6 +8,7 @@ from pysm3 import utils
 from qubic import camb_interface as qc
 import matplotlib.pyplot as plt
 from qubic import NamasterLib as nam
+from pysm3 import bandpass_unit_conversion
 import os
 import random as rd
 import string
@@ -286,7 +287,68 @@ def give_me_maps_d1_modified(nus, nubreak, covmap, delta_b, nside, fix_temp=None
     return new_dust_map, [map_index, map_temperature]
 
 
-# -
+def _get_sky_d0s0(settings, nus, N_SAMPLE_BAND, bw, nside_pix):
+
+    notspectral_param=['d4', 'd5', 'd7', 'd8']    # Model which don't have parameters to change -> find a way
+    sky = pysm3.Sky(nside=256, preset_strings=settings)
+    k=0
+
+    # If model is not in notspectral_param -> fix temp at 20K
+    for i in range(len(notspectral_param)):
+        if settings[0] == notspectral_param[i]:
+            k+=1
+    if k > 0:
+        raise TypeError('Please choose d1, d2, d3 or d6 model for now')
+    else:
+        print("   -> Fix temp at 20 K on the full sky")
+        sky.components[0].mbb_temperature = 20 * sky.components[0].mbb_temperature.unit
+
+    list_index=[]
+    for i, j in enumerate(settings):
+        print(i, j)
+        if i == 0:
+            list_index.append(sky.components[0].mbb_index)
+        elif i == 1:
+            list_index.append(sky.components[1].pl_index)
+    print(list_index)
+
+
+    maps=np.zeros((len(nus), 3, 12*256**2))
+
+    for inu, nu in enumerate(nus):
+
+        fmin = nu - bw[inu]/2
+        fmax = nu + bw[inu]/2
+        print('Integrated from {:.2f} to {:.2f} GHz'.format(fmin, fmax))
+        #### bandpass_frequencies = np.linspace(fmin, fmax, fsteps) * u.GHz
+        freqs = np.linspace(fmin, fmax, N_SAMPLE_BAND)
+        #print(fmin, fmax)
+
+        k=0
+        NSIDE=256
+        if len(settings) != 0:
+            for spectral_param in list_index:
+                if inu == 0:
+                    print('\n Downgrade pixelization of {} to NSIDE = {}'.format(settings[k], nside_pix))
+                k+=1
+                for spectral_param in list_index:
+                    spectral_param[:] = hp.ud_grade(hp.ud_grade(spectral_param.value, nside_pix),
+                                    NSIDE) * spectral_param.unit
+                #print(spectral_param.shape)
+
+        weights_flat = np.ones(N_SAMPLE_BAND)
+        if N_SAMPLE_BAND != 1:
+            if inu==0:
+                print('Integration')
+            m=sky.get_emission(freqs * u.GHz, weights_flat) * bandpass_unit_conversion(freqs * u.GHz, weights_flat, u.uK_CMB)
+        else:
+            if inu==0:
+                print('No Integration')
+            m=sky.get_emission(nu * u.GHz, None) * bandpass_unit_conversion(nu * u.GHz, None, u.uK_CMB)
+        maps[inu]=m.copy()
+
+
+    return maps
 
 class BImaps(object):
 
@@ -323,9 +385,9 @@ class BImaps(object):
         Namaster = nam.Namaster(maskpix, lmin=21, lmax=2*self.nside-1, delta_ell=35)
         ell=np.arange(2*self.nside-1)
 
-        #global_dir='/pbs/home/m/mregnier/sps1/QUBIC+/d0/cls'#os.getcwd()
-        global_dir='/pbs/home/m/mregnier/Libs/qubic/qubic'
-        binned_camblib = qc.bin_camblib(Namaster, global_dir + '/doc/CAMB/camblib.pkl', self.nside, verbose=False)
+        global_dir='/pbs/home/m/mregnier/sps1/QUBIC+/d0/cls'#os.getcwd()
+        #global_dir='/Users/mathiasregnier/Desktop/Thesis/Libs/qubic/qubic'
+        binned_camblib = qc.bin_camblib(Namaster, global_dir + '/camblib.pkl', self.nside, verbose=False)
 
         cls = qc.get_Dl_fromlib(ell, self.r, lib=binned_camblib, unlensed=True)[1]
         mycls = qc.Dl2Cl_without_monopole(ell, cls)
@@ -366,6 +428,7 @@ class BImaps(object):
 
         #print(nside_index)
 
+        settings=[]
         sky=self.get_sky(coverage)
         allmaps = np.zeros(((len(self.nus), 3, self.npix)))
         if same_resol is not None:
@@ -378,62 +441,60 @@ class BImaps(object):
         for i in self.skyconfig.keys():
             if i == 'cmb':
                 cmbmap = self.get_cmb(coverage)
+                print('##### CMB Generation #####')
+                print('')
+                print('    -> r = {:.2f}'.format(self.r))
+                print('    -> No lensing')
                 for j in range(len(self.nus)):
                     allmaps[j]+=cmbmap
                 map_index=[]
             elif i == 'dust':
                 dustmaps=np.zeros(((len(self.nus), 3, self.npix)))
-                if self.skyconfig[i] == 'd0':
-                    if verbose:
-                        print('Model : {}'.format(self.skyconfig[i]))
-
-                    for i in range(len(self.nus)):
-                        print('Edges of {}-th band: '.format(i+1), self.edges[i])
-                        nus_inter=get_freqs_inter(self.edges[i], iib)
-                        print('Intermediate freqs used for band integration: ', nus_inter)
-                        dustmaps_inter=create_dustd0(self.nside, nus_inter)#get_fg_notconvolved('d0', self.nus, nside=self.nside)
-                        mean_dust_maps=np.mean(dustmaps_inter, axis=0)
-                        dustmaps[i]=mean_dust_maps.copy()
-                    allmaps+=dustmaps
-                    map_index=[]
-
-
-                elif self.skyconfig[i] == 'd02b':
-                    if verbose:
-                        print('Model : d02b -> Twos spectral index beta ({:.2f} and {:.2f}) with nu_break = {:.2f}'.format(beta[0], beta[1], beta[2]))
-
-                    for i in range(len(self.nus)):
-                        print('Edges of {}-th band: '.format(i+1), self.edges[i])
-                        print('Integration into bands ({:.0f} bands) -> from {:.2f} to {:.2f} GHz'.format(iib, self.edges[i][0], self.edges[i][1]))
-                        #print(self.edges[i])
-                        nus_inter=get_freqs_inter(self.edges[i], iib)
-                        #print(nus_inter)
-                        #print(nus_inter)
-                        #add Elenia's definition
-                        dustmaps_inter=create_dust_with_model2beta(self.nside, nus_inter, beta[0], beta[1], beta[2], temp=20, break_width=beta[3])
-                        #print(dustmaps_inter.shape)
-                        mean_dust_maps=np.mean(dustmaps_inter, axis=0)
-                        dustmaps[i]=mean_dust_maps.copy()
-                    allmaps+=dustmaps
-                    map_index=[]
-                else:
-                    print('No dust')
-
+                if self.skyconfig[i] != 'd02b':
+                    settings.append(self.skyconfig[i])
+                    print('\n##### Foregrounds Generation #####')
+                    print()
+                    print('   Dust model -> {}'.format(settings[0]))
             elif i == 'synchrotron':
-                syncmaps=np.zeros(((len(self.nus), 3, self.npix)))
-                if verbose:
-                    print('Model : {}'.format(self.skyconfig[i]))
+                if self.skyconfig[i] == 's0':
+                    settings.append('s0')
+                    print(settings)
+                    print('   Synchrotron model -> {}'.format(settings[1]))
 
-                for i in range(len(self.nus)):
-                    nus_inter=get_freqs_inter(self.edges[i], iib)
-                    sync_maps_inter=create_sync(self.nside, nus_inter)
-                    mean_sync_maps=np.mean(sync_maps_inter, axis=0)
-                    syncmaps[i]=mean_sync_maps.copy()
-                allmaps+=syncmaps
+                elif self.skyconfig[i] == 's1':
+                    settings.append('s1')
+                    print(settings)
+                    print('   Synchrotron model -> {}'.format(settings[1]))
+
+
+        if len(settings) != 0:
+            fg_maps=_get_sky_d0s0(settings, self.nus, iib, self.bw, nside_index)
+            allmaps+=fg_maps.copy()
+
+        """
+        elif self.skyconfig[i] == 'd02b':
+            if verbose:
+                print('Model : d02b -> Twos spectral index beta ({:.2f} and {:.2f}) with nu_break = {:.2f}'.format(beta[0], beta[1], beta[2]))
+
+            for i in range(len(self.nus)):
+                #print('Edges of {}-th band: '.format(i+1), self.edges[i])
+                print('Integration into bands ({:.0f} bands) -> from {:.2f} to {:.2f} GHz'.format(iib, self.edges[i][0], self.edges[i][1]))
+                #print(self.edges[i])
+                nus_inter=get_freqs_inter(self.edges[i], iib)
+                #print(nus_inter)
+                #print(nus_inter)
+                #add Elenia's definition
+                dustmaps_inter=create_dust_with_model2beta(self.nside, nus_inter, beta[0], beta[1], beta[2], temp=20, break_width=beta[3])
+                #print(dustmaps_inter.shape)
+                mean_dust_maps=np.mean(dustmaps_inter, axis=0)
+                dustmaps[i]=mean_dust_maps.copy()
+                allmaps+=dustmaps
                 map_index=[]
-
             else:
-                print('No more components')
+                print('No dust')
+            """
+
+
 
         #hp.mollview(allmaps[0, 1])
 

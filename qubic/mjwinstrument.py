@@ -909,10 +909,7 @@ class QubicInstrument(Instrument):
         def func_thread(i):
             # e_nf[i] shape: (1, ncolmax, 3)
             # e_ni shape: (ntimes, ncolmax, 3)
-            thetaphis = _pack_vector(thetas, phis)  # (ndetectors, ncolmax, 2)
-            directions = Spherical2CartesianOperator('zenith,azimuth')(thetaphis)
-            e_nf = directions[:, None, :, :]
-    
+            e_nf = direction[:, None, :, :]
             e_ni = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
             if nscene != nscenetot:
                 np.take(table, c2h(e_ni).astype(int), out=index[i])
@@ -984,7 +981,7 @@ class QubicInstrument(Instrument):
         #print('Factor = {}'.format(factor))
         import qubic.sb_fitting as sbfit
         sh  =  np.shape(theta)
-        print(sh)
+        #print(sh)
         myposition =  -position / np.sqrt(np.sum(position**2, axis=-1))[..., None]
         local_dict = {'nx': myposition[:, 0, None], 'ny': myposition[:, 1, None]}
         thlos = ne.evaluate('arcsin(sqrt(nx**2 + ny**2))',local_dict=local_dict)
@@ -1017,92 +1014,36 @@ class QubicInstrument(Instrument):
 
     def _peak_angles(scene, nu, position, synthbeam, horn, primary_beam):
         """
-            Compute the angles and intensity of the synthetic beam peaks which
-            accounts for a specified energy fraction.
-            
-            """
-        normal = False
+        Compute the angles and intensity of the synthetic beam peaks which
+        accounts for a specified energy fraction. 
+        """
         
-        import matplotlib.pyplot as plt
-        if normal:
-            theta, phi = QubicInstrument._peak_angles_kmax(synthbeam.kmax, horn.spacing,horn.angle, nu, position)
-            val = np.array(primary_beam(theta, phi), dtype=float, copy=False)
-            val[~np.isfinite(val)] = 0
-            index = _argsort_reverse(val)
-            theta = theta[index]
-            phi = phi[index]
-            val = val[index]
-            cumval = np.cumsum(val, axis=-1)
-            imaxs = np.argmax(cumval >= synthbeam.fraction * cumval[:, -1, None],axis=-1) + 1
-            imax = max(imaxs)
+
+        theta, phi = QubicInstrument._peak_angles_kmax(synthbeam.kmax, horn.spacing,horn.angle, nu, position)
+        print(np.shape(theta))
+        val = np.array(primary_beam(theta, phi), dtype=float, copy=False)
+        val[~np.isfinite(val)] = 0
+        index = _argsort_reverse(val)
+        theta = theta[index]
+        phi = phi[index]
+        val = val[index]
+        cumval = np.cumsum(val, axis=-1)
+        imaxs = np.argmax(cumval >= synthbeam.fraction * cumval[:, -1, None],axis=-1) + 1
+        imax = max(imaxs)
                                                            
-            # slice initial arrays to discard the non-significant peaks
-            theta = theta[:, :imax]
-            phi = phi[:, :imax]
-            val = val[:, :imax]
+        # slice initial arrays to discard the non-significant peaks
+        theta = theta[:, :imax]
+        phi = phi[:, :imax]
+        val = val[:, :imax]
                                                            
-            # remove additional per-detector non-significant peaks
-            # and remove potential NaN in theta, phi
-            for idet, imax_ in enumerate(imaxs):
-                val[idet, imax_:] = 0
-                theta[idet, imax_:] = np.pi / 2 #XXX 0 fails in polarization.f90.src (en2ephi and en2etheta_ephi)
-                phi[idet, imax_:] = 0
-                solid_angle = synthbeam.peak150.solid_angle * (150e9 / nu)**2
-            val *= solid_angle / scene.solid_angle * len(horn)
-        else:
-            #print('Custom Values')
-            #print('Nu  = {}'.format(nu/1e9))
-            import pickle
-            #file = open('/Users/hamilton/Qubic/RealistcReconstruction/peaks.pk', 'rb')
-            file = open(os.environ['QUBIC_PEAKS']+'peaks.pk', 'rb')
-            theta, phi, val, numpeaks = pickle.load(file)
-            file.close()
-        
-            ### Now we need to scale the SB peak position w.r.t. frequency
-            sh  =  np.shape(theta)
-            #print(numpeaks)
-            #theta is ndet by npeaks, as is phi, val
-            #numpeaks is ndet long and gives number of peaks from the data for each detector
-            # theta, phi to be taken as line of sight, used as the center of the homothety in frequency
-            ### Use one of the peaks, identified to be the right one... "bricolage"
-            factor = 150e9/nu
-            #print('Factor = {}'.format(factor))
-            import qubic.sb_fitting as sbfit
-            myposition =  -position / np.sqrt(np.sum(position**2, axis=-1))[..., None]
-            local_dict = {'nx': myposition[:, 0, None], 'ny': myposition[:, 1, None]}
-            #thlos = ne.evaluate('arcsin(sqrt(nx**2 + ny**2))',local_dict=local_dict)
-            #phlos = ne.evaluate('arctan2(ny, nx)', local_dict=local_dict)
-            #print('Numpeaks : {}'.format(numpeaks))
-            for idet in range(sh[0]):
-                #### Use the theoretical L.O.S ?
-                # myangs = np.array([phlos[idet][0]+np.pi,thlos[idet][0], phlos[idet][0]])
-                # plt.plot(phlos[idet][0],thlos[idet][0], 'r+', ms=10, markeredgewidth=3)
-                
-                #### Or use the measured location of the corresponding TES
-                numpeak=numpeaks[idet]
-                #print('idet={} - peak number = {}'.format(idet, numpeak))
-                thlos = theta[idet,numpeak]
-                phlos = phi[idet,numpeak]
-                #print('Using peak #{} as the pivot one'.format(numpeak) )
-                #plt.plot(phlos,thlos, 'r+', ms=10, markeredgewidth=3)
-                myangs = np.array([phlos,thlos, phlos])
-                
-                
-                #print('My Angs: {}'.format(myangs))
-                newth, newph = sbfit.rotate_q2m(theta[idet,:], phi[idet,:], angs=myangs, inverse=True)
-                theta[idet,:], phi[idet,:] = sbfit.rotate_q2m(newth*factor, newph, angs=myangs, inverse=False)
-            
-        '''
-        new_hdul = fits.HDUList()
-        new_hdul.append(fits.ImageHDU(theta))
-        new_hdul.append(fits.ImageHDU(phi))
-        new_hdul.append(fits.ImageHDU(val))
-        new_hdul.append(fits.ImageHDU(numpeaks))
-        nuu=str(nu)
-        nuu=nuu[0:3]
-    
-        new_hdul.writeto('CalQubic_Synthbeam_Calibrated_'+nuu+'_FI.fits', overwrite=True)
-        '''
+        # remove additional per-detector non-significant peaks
+        # and remove potential NaN in theta, phi
+        for idet, imax_ in enumerate(imaxs):
+            val[idet, imax_:] = 0
+            theta[idet, imax_:] = np.pi / 2 #XXX 0 fails in polarization.f90.src (en2ephi and en2etheta_ephi)
+            phi[idet, imax_:] = 0
+            solid_angle = synthbeam.peak150.solid_angle * (150e9 / nu)**2
+        val *= solid_angle / scene.solid_angle * len(horn)
         
         #print('Theta: ', theta)
         order = np.flip(np.argsort(np.ravel(val)))[0:9]
@@ -1134,6 +1075,8 @@ class QubicInstrument(Instrument):
             The focal plane positions for which the angles of the interference
             peaks are computed.
         """
+        
+        if peaknormal:
         lmbda = c / nu
         position = -position / np.sqrt(np.sum(position ** 2, axis=-1))[..., None]
         if angle != 0:
@@ -1146,9 +1089,12 @@ class QubicInstrument(Instrument):
         nx = position[:, 0, None] - lmbda * kx.ravel() / horn_spacing
         ny = position[:, 1, None] - lmbda * ky.ravel() / horn_spacing
         local_dict = {'nx': nx, 'ny': ny}
-        theta = ne.evaluate('arcsin(sqrt(nx**2 + ny**2))',
-                            local_dict=local_dict)
+        theta = ne.evaluate('arcsin(sqrt(nx**2 + ny**2))',local_dict=local_dict)
         phi = ne.evaluate('arctan2(ny, nx)', local_dict=local_dict)
+        
+        
+        
+        
         return theta, phi
 
     @staticmethod

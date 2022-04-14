@@ -1,0 +1,126 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Red Mount Angular Speed Tests
+[JCH April 2022]
+
+Data used (CC-IN2P3 mirror): `/sps/qubic/Data/Calib-TD/2022-04-12/2022-04-12_13.00.41__platform-speed-test`
+
+```{python}
+from IPython.display import set_matplotlib_formats
+set_matplotlib_formats('retina')
+from IPython.core.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+
+from qubicpack.qubicfp import qubicfp
+
+```
+
+```{python}
+mydatadir = '/Users/hamilton/Qubic/Calib-TD/'
+thedate = '2022-04-12'
+thedata = '2022-04-12_13.00.41__platform-speed-test'
+
+filename = mydatadir + '/' + thedate + '/' + thedata
+```
+
+```{python}
+### Read data
+a = qubicfp()
+a.read_qubicstudio_dataset(filename)
+
+az = a.azimuth()
+time = a.timeaxis(datatype='hk')
+time -= time[0]
+```
+
+```{python}
+### Plot raw data
+plot(time, az)
+xlabel('Time')
+ylabel('Azimuth')
+```
+
+```{python}
+### Identify zones
+ve = np.arange(6, 15)
+limits = np.array([[0, 180],
+                   [180, 460],
+                   [460, 730],
+                   [730, 970],
+                   [970, 1200],
+                   [1200, 1420],
+                   [1420, 1640],
+                   [1640, 1850],
+                   [1850, time[-1]]])
+myve = np.zeros(len(time))
+for i in range(len(ve)):
+    myve[(time >= limits[i,0]) & (time <= limits[i,1])] = ve[i]
+
+plot(time, az)
+plot(time, myve, label='VE')
+xlabel('Time')
+ylabel('Azimuth')
+legend()
+```
+
+```{python}
+rc('figure',figsize=(10,6))
+rc('font',size=12)
+
+### Calculate angular speed (and smooth it )
+from scipy.signal import medfilt
+from scipy.ndimage import gaussian_filter1d
+angspeed = np.gradient(az, time[1]-time[0])
+angspeed = medfilt(angspeed, kernel_size=31)
+# angspeed = gaussian_filter1d(angspeed, 3)
+
+speed_neg = np.zeros(len(ve))
+speed_pos = np.zeros(len(ve))
+for i in range(len(ve)):
+    ok = myve == ve[i]
+    okneg = (myve == ve[i]) & (angspeed < 0) & (az > -10) & (az < 10)
+    okpos = (myve == ve[i]) & (angspeed > 0) & (az > -10) & (az < 10)
+    if np.sum(okneg) > 0:
+        speed_neg[i] = np.median(angspeed[okneg])
+    else:
+        speed_neg[i] = np.nan
+    if np.sum(okpos) > 0:
+        speed_pos[i] = np.median(angspeed[okpos])
+    else:
+        speed_pos[i] = np.nan
+    plot(az[ok], angspeed[ok], label='VE{0:} : {1:4.2f} deg/s ; {2:4.2f} deg/s'.format(ve[i], speed_neg[i], speed_pos[i]))
+        
+    
+    
+    
+xlabel('Azimuth [deg]')
+ylabel('Angular speed [deg/s]')
+ylim(-1,1)
+legend(loc='upper right', fontsize=10)
+xlim(-20, 40)
+```
+
+```{python}
+plot(ve, speed_pos, 'ro', label='Measured data')
+plot(ve, ve*0.06 + 0.035, label = 'VE * 0.06 + 0.035')
+xlabel('VE')
+ylabel('Angular speed [deg/s]')
+legend()
+title('Red Mount Angular Velocity Calibration')
+```
+
+```{python}
+
+```

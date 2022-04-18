@@ -116,7 +116,7 @@ def pipe_demodulation(QubicFocPlane,
 					#method = "demod_quad",
 					#remove_noise = True,
 					lowcut = 0.5,
-					highcut = 70,
+					highcut = 20,
 					nharm = 10,
 					verbose = False,
 					**kwargs_demod_lib):
@@ -151,7 +151,7 @@ def pipe_demodulation(QubicFocPlane,
 		"""
 	#kwargs_demod_lib["method"] = demod_method
 	#kwargs_demod_lib["remove_noise"] = remove_noise
-	thefreqmod = 1.
+	thefreqmod = QubicFocPlane.hk['CALSOURCE-CONF']['Mod_freq']
 
 	period = 1./ thefreqmod
 	notch = np.array([[1.724, 0.005, nharm]])

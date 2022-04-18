@@ -140,3 +140,55 @@ def plot_spectra_comparisson(frequency_raw, spectra_raw, frequency_filtered, spe
 	plt.show()
 
 	return
+
+def plot_synchronizated_data(tod_time, src_time, tod_data, src_data):
+	"""
+
+	"""
+
+	#make some start and endpoints for plotting
+	endpt2  = max(tod_time) + 2
+	endpt1  = max(tod_time) - 3
+	startp1 = min(tod_time) - 1
+	startp2 = min(tod_time) + 4
+
+	plt.figure(figsize = (16,12))
+	#zoom on signal
+	plt.subplot(2,2,3)
+	plt.plot(src_time, (src_data - np.mean(src_data))/np.std(src_data), 
+				color = 'tab:orange', label = 'Measured Source Signal', alpha = 0.5)
+	plt.plot(tod_time, (tod_data - np.mean(tod_data))/np.std(tod_data),
+				color = 'tab:green',  label = 'Filtered Data', alpha = 0.5)
+	plt.ylim(-5,5)
+	plt.xlim(1.596100115e+09, 1.596100125e+09)
+	plt.legend(loc = 'lower right')
+	#zoom on signal
+	plt.subplot(2,2,4)
+	plt.plot(src_time, (src_data - np.mean(src_data))/np.std(src_data), 
+				color = 'tab:orange', label = 'Measured Source Signal', alpha = 0.5)
+	plt.plot(tod_time, (tod_data-np.mean(tod_data))/np.std(tod_data), 
+				color = 'tab:green', label = 'Filtered Data', alpha = 0.5)
+	plt.ylim(-5,5)
+	plt.xlim(1.59611721e+09, 1.59611722e+09)
+	plt.legend(loc = 'lower right')
+	#start point
+	plt.figure(figsize = (16,6))
+	plt.subplot(1,2,1)
+	plt.plot(src_time, (src_data - np.mean(src_data))/np.std(src_data), 
+				color = 'tab:orange', label = 'Measured Source Signal', alpha = 0.5)
+	plt.plot(tod_time, (tod_data - np.mean(tod_data))/np.std(tod_data), 
+				color = 'tab:green',  label = 'Filtered Data', alpha = 0.5)
+	plt.ylim(-5,5)
+	plt.xlim(startp1, startp2)
+	plt.legend(loc = 'lower right')
+	#endpoint
+	plt.subplot(1,2,2)
+	plt.plot(src_time, (src_data - np.mean(src_data))/np.std(src_data), 
+				color = 'tab:orange', label = 'Measured Source Signal', alpha = 0.5)
+	plt.plot(tod_time, (tod_data - np.mean(tod_data))/np.std(tod_data),
+				color = 'tab:green', label = 'Filtered Data', alpha = 0.5)
+	plt.ylim(-5,5)
+	plt.xlim(endpt1, endpt2)
+	plt.legend(loc = 'lower right')
+
+	return

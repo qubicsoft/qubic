@@ -111,13 +111,13 @@ verbose = True
 reload(md)
 confg = "new"
 if confg == "new":
-    day = '2020-03-16'
-    keyword = '*ScanFast*'
+    day = '2020-07-30'
+    keyword = '*2020*'
     dirfile = None
     savedirtest = '/home/mgamboa/pruebas/qubicpipenew/'
 elif confg == "old":
-    day = '2019-04-06'
-    #day = '2019-03-31'
+    #day = '2019-04-06'
+    day = '2019-03-31'
     keyword = '*ScanMap*'
     dirfile = qubic_toddir + "calsource/"
     savedirtest = '/home/mgamboa/pruebas/qubicpipeold/'
@@ -202,7 +202,7 @@ mmp.plot_scan(time_azel, t_src, data_src, az, el)
 
 ```{python}
 # Read the timeline to test the way to do it
-TESNum = 95
+TESNum = 94
 asic = 1
 tod_data = QubicFP.timeline(TES = TESNum, asic = asic)
 tod_time = QubicFP.timeaxis(axistype = 'pps', asic = asic)
@@ -219,11 +219,19 @@ mmp.plot_raw_data(tod_time, tod_data, t_src, data_src, TESNum = TESNum, asic = a
 
 ```{python}
 # Set parameters for harmonics of PT
-thefreqmod = 1.
+#load the modulation frequency from the HK data
+thefreqmod = QubicFP.hk['CALSOURCE-CONF']['Mod_freq']
+
 period = 1./ thefreqmod
 #Set parameters for filtering data
 lowcut = 0.5
 highcut = 20
+# New spectra
+# Using 10 harmonics
+nharm = 10
+#notch filter at each harmonic of the PTs
+notch = np.array([[1.724, 0.005, nharm]])
+#fourier_cuts = [lowcut, highcut, notch]
 ```
 
 ```{python}
@@ -254,13 +262,6 @@ plt.title("bla")
 # spectrum, freq = old "spectrum_f", "freq_f"
 spectrum_raw, freq_raw = ft.power_spectrum(tod_time, tod_data, 
                                        rebin = True)
-
-# New power spectra.
-# Using 10 harmonics
-nharm = 10
-#notch filter at each harmonic of the PTs
-notch = np.array([[1.724, 0.005, nharm]])
-
 #tod_data_filtered = old "newdata"
 tod_data_filtered = ft.filter_data(tod_time, tod_data, lowcut, highcut, 
                          notch = notch, rebin = True, 
@@ -295,12 +296,6 @@ mmp.plot_data_and_src(tod_time, tod_data,
 reload(md)
 
 ##### Filtering to be used
-lowcut = 0.5
-highcut = 70
-nharm = 10
-notch = np.array([[1.724, 0.005, nharm]])
-fourier_cuts = [lowcut, highcut, notch]
-
 demod_kwvars = {"method": "demod_quad",
                 "remove_noise": True}
 

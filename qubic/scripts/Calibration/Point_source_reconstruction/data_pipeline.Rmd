@@ -297,7 +297,7 @@ reload(md)
 
 ##### Filtering to be used
 demod_kwvars = {"method": "demod_quad",
-                "remove_noise": True}
+                "remove_noise": False}
 
 demodulate = True
 
@@ -313,6 +313,11 @@ QubicFP.azimuth(), QubicFP.elevation(), QubicFP.hk["INTERN_HK"]["Platform-Azimut
 ```
 
 ```{python}
+reload(mmp)
+mmp.plot_synchronizated_data(tod_time, t_src, tod_data_filtered, data_src)
+```
+
+```{python}
 time_azel = QubicFP.timeaxis(datatype = 'hk', axistype = 'pps')
 
 azmin = min(az)
@@ -325,7 +330,7 @@ if ComputeFlatMaps:
     newaz = np.interp(newt_demod, time_azel, az)
     newel = np.interp(newt_demod, time_azel, el)
 
-    naz = 200
+    naz = 150
     nel = 150
     nmaps = 256
     mapdata = np.zeros((nmaps, nel, naz))
@@ -350,7 +355,7 @@ elif not ComputeFlatMaps:
 
 ```{python}
 #Look at one map
-TESNum = 95
+TESNum = 93
 ites = TESNum - 1
 mm, ss = ft.meancut(mapdata[ites,:,:],3)
 plt.imshow(mapdata[ites,:,:], aspect = 'equal',

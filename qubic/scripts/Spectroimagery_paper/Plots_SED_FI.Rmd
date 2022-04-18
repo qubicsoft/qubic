@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.7.1
+      jupytext_version: 1.6.0rc0
   kernelspec:
     display_name: Python 3
     language: python
@@ -109,6 +109,12 @@ _, nus_edge220, nus220, _, _, _ = qubic.compute_freq(dictionaries[1]['filter_nu'
                             nf_recon,
                             dictionaries[1]['filter_relative_bandwidth'])
 
+```
+
+```{python}
+
+for i in range(4):
+    hp.gnomview(fgr_map_dust_ud[i,0,:,0], rot = centers[i], reso = 12, sub = (2,2,i+1))
 ```
 
 Define dust model to use with mcmc_old and fibtools_old

@@ -20,147 +20,151 @@ import healpy as hp
 from qubic.io import write_map
 import os
 
-class HandlingPip(object):
+
+class BeamMapsAnalysis(object):
 
     """
-    This class allows to make the same things that in Sample_demodulation.Rmd
+    This class allows to make the same things that in Sample_demodulation.Rmd. It generates raw data and make all the analysis to
+    obtain beam maps.
     """
 
-    def __init__(self, file):
+    def __init__(self, a, lc, hc, notch, TESNum, asic):
 
-        self.file=file
-        self.a = qubicfp()
-        self.a.read_qubicstudio_dataset(self.file)
+        '''
 
-        self.calconf=self.a.hk['CALSOURCE-CONF']
-        self.mod_freq=self.a.hk['CALSOURCE-CONF']['Mod_freq']
-        #print(self.calconf)
-        self.t_src = self.a.calsource()[0]
-        self.data_src = self.a.calsource()[1]
-        self.nharm = 10
-        self.notch = np.array([[1.724, 0.004, self.nharm]])
-    def get_azel(self):
-        return self.a.azimuth(), self.a.elevation()
-    def get_source_data(self):
-        return self.a.calsource()[0], self.a.calsource()[1]
-    def get_timeline_timeaxis(self, TESNum, asic):
-        tod = self.a.timeline(TES=TESNum, asic=asic)
-        tt = self.a.timeaxis(axistype='pps', asic=asic)
+        a is the object from qubicpack
+
+        '''
+        self.a = a
+        self.lowcut=lc
+        self.highcut=hc
+        self.notch=notch
+        self.TESNum=TESNum
+        self.asic=asic
+
+    def get_raw_data(self):
+
+        tod=self.a.timeline(TES=self.TESNum, asic=self.asic)
+        tt=self.a.timeaxis(axistype='pps', asic=self.asic)
+
         return tt, tod
-    def get_spectrum_data(self, TESNum, asic, filter=True, lowcut=0.5, highcut=20):
+    def filter_data(self, tt, tod, doplot=False):
 
-        #print('    -> Get timeline axis')
-        tt, data = self.get_timeline_timeaxis(TESNum, asic)
-        if filter:
-            #print('    -> Filtering')
-            data = ft.filter_data(tt, data, lowcut, highcut, notch=self.notch, rebin=True, verbose=True, order=5)
-        #print('    -> Done \n')
-        #print('    -> Get power spectrum')
-        spectrum, freq = ft.power_spectrum(tt, data, rebin=True)
-        #print('    -> Done \n')
+        filtered_data = ft.filter_data(tt, tod, self.lowcut, self.highcut, notch=self.notch, rebin=True, verbose=True, order=5)
 
-        return tt, data, freq, spectrum
-    def demodulation_simple(self, tt, newdata, TESNum, asic, makeflatmaps = True, lowcut=0.5, highcut=20):
+        if doplot:
 
-        time_azel, _=self.get_timeline_timeaxis(TESNum=TESNum, asic=asic)
-        az, el=self.get_azel()
-        src = [tt, np.interp(tt, self.t_src, self.data_src)]
-        fourier_cuts = [lowcut, highcut, self.notch]
-        #print('    -> Demodulation')
+            #plot limits
+            thefreqmod = abs(self.a.hk['CALSOURCE-CONF']['Mod_freq'])
+            #number of harmonics
+            nharm = 10
+            #filtering parameters
+            period = 1./ thefreqmod
+            xmin = 0.1
+            xmax = 90.
+            ymin = 1e0
+            ymax = 1e13
+            figure(figsize=(16, 8))
+            ############ Power spectrum RAW plot
+            spectrum_f, freq_f = ft.power_spectrum(tt, tod, rebin=True)
+            plot(freq_f, f.gaussian_filter1d(spectrum_f,1), label='Raw Data')
+            spectrum_f2, freq_f2 = ft.power_spectrum(tt, filtered_data, rebin=True)
+            plot(freq_f2, f.gaussian_filter1d(spectrum_f2,1), label='Filtered Data')
+            plot([self.lowcut, self.lowcut],[ymin,ymax],'k', lw=3, label='Bandpass')
+            plot([self.highcut, self.highcut],[ymin,ymax],'k', lw=3)
+            plot([1./period,1./period],[ymin,ymax],'k--', lw=3, alpha=0.3, label='Calsource Harmonics')
+            for i in range(10):
+                plot([1./period*i,1./period*i],[ymin,ymax],'k--', lw=3, alpha=0.3)
+            #plot the pulse tube harmoncs
+            plot([self.notch[0,0],self.notch[0,0]], [ymin,ymax],'m:', lw=3, label='Pulse Tube Harmonics')
+            for i in range(nharm):
+                plot([self.notch[0,0]*(i+1),self.notch[0,0]*(i+1)], [ymin,ymax],'m:', lw=3)
+            legend(loc='center left')
+            yscale('log')
+            xscale('log')
+            xlabel('Frequency [Hz]')
+            ylabel('Power Spectrum')
+            xlim(xmin, xmax)
+            ylim(ymin, ymax)
+            tight_layout()
+            show()
 
-        newt_demod, amp_demod, errors_demod = dl.demodulate_methods([tt, newdata],
-                                                            self.mod_freq,
+        return filtered_data
+    def demodulation(self, tt, data, remove_noise):
+
+        t_src = self.a.calsource()[0]
+        data_src = self.a.calsource()[1]
+        fourier_cuts = [self.lowcut, self.highcut, self.notch]
+        freq_mod = abs(a.hk['CALSOURCE-CONF']['Mod_freq'])
+        # internpolate
+        src = [tt, np.interp(tt, t_src, data_src)]
+        #demod in quadrature, should have no time dependance but increased RMS noise
+        newt_demod, amp_demod, err = dl.demodulate_methods([tt, data],
+                                                            freq_mod,
                                                             src_data_in=src,
-                                                            method='demod_quad', remove_noise=False,
+                                                            method='demod_quad', remove_noise=remove_noise,
                                                             fourier_cuts=fourier_cuts)
-        #print('    -> Done \n')
 
-        time_azel=self.a.timeaxis(datatype='hk',axistype='pps')
-        if makeflatmaps:
-            #for quad demod
-            newaz = np.interp(newt_demod, time_azel, az)
-            newel = np.interp(newt_demod, time_azel, el)
-
-            azmin = min(az)
-            azmax = max(az)
-            elmin = min(el)
-            elmax = max(el)
-            naz = 101
-            nel = 101
-            #map for quad demod
-            mymap, azmap, elmap = dl.coadd_flatmap(amp_demod, newaz, newel,
-                                    filtering=None,
-                                    azmin=azmin, azmax=azmax,
-                                    elmin=elmin, elmax=elmax,
-                                    naz=naz,nel=nel)
-
-            return newt_demod, amp_demod, errors_demod, mymap, azmap, elmap, newaz, newel
-        return newt_demod, amp_demod, errors_demod
-
-    def from_file_to_demodulation(self, TESNum, asic, filter=True, makeflatmaps=True, lowcut=0.5, highcut=20, save=False, verbose=False):
+        return newt_demod, amp_demod
+    def make_flat_map(self, tt, data, doplot=False):
 
         time_azel = self.a.timeaxis(datatype='hk',axistype='pps')
-        if verbose:
-            print('    ->Get Az El \n')
-        az, el = self.get_azel()
-        if verbose:
-            print('    -> Get source data \n')
-        t_src, data_src = self.get_source_data()
-        if verbose:
-            print('    -> Get TOD \n')
-        tt, tod = self.get_timeline_timeaxis(TESNum=TESNum, asic=asic)
-        if verbose:
-            print('    -> Get spectrum \n')
-        tt, tod, freq, spectrum=self.get_spectrum_data(TESNum, asic, filter=filter, lowcut=lowcut, highcut=highcut)
+        az = self.a.azimuth()
+        el = self.a.elevation()
 
-        if verbose:
-            print('    -> Demodulation \n')
-        newt_demod, amp_demod, errors_demod, mymap, azmap, elmap, newaz, newel = self.demodulation_simple(tt, tod,
-                                                    TESNum=TESNum, asic=asic, makeflatmaps=makeflatmaps)
-        if verbose:
-            print('    -> Saving Fits files \n')
-        hpmapa = dl.scan2hpmap(128, newaz*np.cos(np.radians(50)), newel-50, amp_demod)
-        if save:
-            self.save_azel_mymap(mymap, az, el, TESNum)
-            self.save_healpixmap(hpmapa, TESNum)
-
-        return newt_demod, amp_demod, errors_demod, mymap, azmap, elmap, hpmapa
-
-
-
-    def from_file_to_demodulation_allTES(self, makeflatmaps=True):
-
-        time_azel = self.a.timeaxis(datatype='hk',axistype='pps')
-        print('    -> Get Az El \n')
-        az, el = self.get_azel()
-        print('    -> Get source data \n')
-        t_src, data_src = self.get_source_data()
-        print('    -> Get TOD \n')
-        tt, tod = self.get_timeline_timeaxis(TESNum=94, asic=1)
-        newt_demod, amp_demod, errors_demod, mymap, azmap, elmap, newaz, newel = self.demodulation_simple(tt, tod,
-                                                    TESNum=94, asic=1, makeflatmaps=makeflatmaps)
-
+        #for quad demod
+        newaz = np.interp(tt, time_azel, az)
+        newel = np.interp(tt, time_azel, el)
+        azmin = min(az)
+        azmax = max(az)
+        elmin = min(el)
+        elmax = max(el)
         naz = 101
         nel = 101
-        mymaps = np.zeros(((256, naz, nel)))
-        hpmaps=np.zeros((256, 12*128**2))
-        # Loop over 2 asic
-        k=0
-        for i in range(2):
-            # Loop over 128 TES
-            for j in range(128):
-                print('{}/256'.format(k+1))
-                tod = self.a.timeline(TES=j, asic=i)
-                _, amp, _, mymaps[k], _, _, _, _ = self.demodulation_simple(tt, tod,
-                                                            TESNum=j, asic=i, makeflatmaps=makeflatmaps)
+        #map for quad demod
+        mymap, azmap, elmap = dl.coadd_flatmap(data,
+                                                newaz,
+                                                newel,
+                                                filtering=None,
+                                                azmin=azmin, azmax=azmax,
+                                                elmin=elmin, elmax=elmax,
+                                                naz=naz,nel=nel)
 
-                hpmaps[k] = dl.scan2hpmap(128, newaz*np.cos(np.radians(50)), newel-50, amp)
+        if doplot:
+            figure(figsize=(16,8))
+            imshow(-mymap, aspect='equal', origin='lower',
+                        extent=[azmin*np.cos(np.radians(50)), azmax*np.cos(np.radians(50)), elmin, elmax],)
+            colorbar()
+            show()
 
-                k+=1
 
-        self.save_maps_allTES(self, mymaps)
-        self.save_healpix_allTES(self, hpmaps)
-        return mymaps, hpmaps
+        return -mymap
+
+    def fullanalysis(self, filter=False, demod=False, remove_noise=True, doplot=True):
+
+        # Generate TOD from qubicpack
+        print('Get Raw data')
+        tt, tod = self.get_raw_data()
+        data=tod.copy()
+
+        # Filtering
+        if filter:
+            print('Filtering')
+            filtered_data=self.filter_data(tt, tod, doplot=doplot)
+            data=filtered_data.copy()
+
+        # Demodulation
+        if demod:
+            print('Demodulation')
+            newt, data=self.demodulation(tt, data, remove_noise=remove_noise)
+
+        print('Make Flat Maps')
+        mymap=self.make_flat_map(tt, data, doplot=doplot)
+
+        return mymap
+
+
+
 
 
 

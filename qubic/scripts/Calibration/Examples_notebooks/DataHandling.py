@@ -140,7 +140,7 @@ class BeamMapsAnalysis(object):
 
         return -mymap
 
-    def fullanalysis(self, filter=False, demod=False, remove_noise=True, doplot=True):
+    def fullanalysis(self, filter=False, demod=False, remove_noise=True, doplot=True, save=False):
 
         # Generate TOD from qubicpack
         print('Get Raw data')
@@ -160,6 +160,9 @@ class BeamMapsAnalysis(object):
 
         print('Make Flat Maps')
         mymap=self.make_flat_map(tt, data, doplot=doplot)
+
+        if save:
+            self.save_azel_mymap(mymap)
 
         return mymap
 
@@ -188,7 +191,7 @@ class BeamMapsAnalysis(object):
                 raise
 
         FitsArray(mymap).save(repository+'/healpix_allTES.fits')
-    def save_azel_mymap(self, mymap, az, el, TESNum):
+    def save_azel_mymap(self, mymap):
 
         repository=os.getcwd()+'/Fits/Flat'
         try:
@@ -197,11 +200,16 @@ class BeamMapsAnalysis(object):
             if not os.path.isdir(repository):
                 raise
 
-        FitsArray(mymap).save(repository+'/imgflat_TESNum_{}.fits'.format(TESNum))
+        if self.asic == 2:
+            factor=128
+        else:
+            factor=0
 
-        """save the az el files for flats..."""
-        FitsArray(az).save(repository+'/azimuth.fits')
-        FitsArray(el).save(repository+'/elevation.fits')
+        FitsArray(mymap).save(repository+'/imgflat_TESNum_{}.fits'.format(self.TESNum+factor))
+
+        #"""save the az el files for flats..."""
+        #FitsArray(az).save(repository+'/azimuth.fits')
+        #FitsArray(el).save(repository+'/elevation.fits')
     def save_healpixmap(self, healpixmap, TESNum):
 
         repository=os.getcwd()+'/Fits/Healpix'

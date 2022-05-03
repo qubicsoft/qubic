@@ -330,7 +330,7 @@ plot(myaz[okm], mytod[okm])
 ```
 
 ```{python}
-tauvals = np.linspace(0., 1, 20)
+tauvals = np.linspace(0., 1, 100)
 doplot = False
 chi2 = np.zeros(len(tauvals))
 for i in range(len(tauvals)):
@@ -365,11 +365,12 @@ for i in range(len(tauvals)):
         legend()
 
         subplot(1,2,2)
-        plot(azbins, scanp_deconv, label = 'Rebin Deconvolved +')
-        plot(azbins, scanm_deconv, label = 'Rebin Deconvolved -')
+        plot(azbins, scanp_deconv, label = 'Rebin Deconvolved +  (tau = {0:5.3f})'.format(tau))
+        plot(azbins, scanm_deconv, label = 'Rebin Deconvolved -  (tau = {0:5.3f})'.format(tau))
         legend()
 
         figure()
+        title('Deconvolved with tau={0:5.3f}'.format(tau))
         plot(azbins, scanp-scanm, label='Diff Raw')
         plot(azbins, scanp_deconv-scanm_deconv, label='Diff Deconv')
         legend()
@@ -377,10 +378,52 @@ for i in range(len(tauvals)):
 
 ```{python}
 plot(tauvals, chi2)
+mytau = tauvals[np.argmin(chi2)]
+axvline(x=mytau, ls='--', label='{}'.format(mytau))
+legend()
 ```
 
 ```{python}
+doplot = True
+tau = mytau
+sampling = 1./np.mean((myt-np.roll(myt,1))[1:-1])
+dtod_dt = np.gradient(mytod, 1./sampling)
+tod_deconv = mytod + dtod_dt * tau      
 
+#     lo = 1./10000000
+#     hi = 1./tau
+#     print(lo,hi)
+#     tod_deconv_filt = ft.butter_bandpass_filter(tod_deconv, lo, hi, sampling, order=2)
+
+
+
+### Rebin in azimuth bins
+nbins = 150
+azbins, scanp, daz, dscanp, _ = ft.profile(myaz[okp], mytod[okp], rng=[-20,20], nbins=nbins, plot=False)
+azbins, scanm, daz, dscanm, _ = ft.profile(myaz[okm], mytod[okm], rng=[-20,20], nbins=nbins, plot=False)
+
+azbins, scanp_deconv, daz, dscanp, _ = ft.profile(myaz[okp], tod_deconv[okp], rng=[-20,20], nbins=nbins, plot=False)
+azbins, scanm_deconv, daz, dscanp, _ = ft.profile(myaz[okm], tod_deconv[okm], rng=[-20,20], nbins=nbins, plot=False)
+
+
+chi2[i] = np.sum((scanp_deconv-scanm_deconv)**2)
+
+if doplot:
+    subplot(1,2,1)
+    plot(azbins, scanp, label='Rebin +')
+    plot(azbins, scanm, label='Rebin -')
+    legend()
+
+    subplot(1,2,2)
+    plot(azbins, scanp_deconv, label = 'Rebin Deconvolved +  (tau = {0:5.3f})'.format(tau))
+    plot(azbins, scanm_deconv, label = 'Rebin Deconvolved -  (tau = {0:5.3f})'.format(tau))
+    legend()
+
+    figure()
+    title('Deconvolved with tau={0:5.3f}'.format(tau))
+    plot(azbins, scanp-scanm, label='Diff Raw')
+    plot(azbins, scanp_deconv-scanm_deconv, label='Diff Deconv')
+    legend()
 ```
 
 ```{python}

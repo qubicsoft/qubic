@@ -250,3 +250,139 @@ legend()
 ```{python}
 
 ```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+# Trying with QUBIC data from Salta
+Data sent by Steve as Pickle files: 
+- `/Users/hamilton/Downloads/az.pickle`
+- `/Users/hamilton/Downloads/tod_ASIC1_TES33.pickle`
+
+
+```{python}
+import pickle
+fileaz = '/Users/hamilton/Downloads/az.pickle'
+filetod = '/Users/hamilton/Downloads/tod_ASIC1_TES33.pickle'
+
+with open(fileaz, 'rb') as f:
+    taz, az = pickle.load(f)
+
+with open(filetod, 'rb') as f:
+    t, tod = pickle.load(f)
+
+newaz = np.interp(t, taz, az)    
+sampling = 1./np.mean((t-np.roll(t,1))[1:-1])
+
+t -= t[0]
+
+subplot(1,2,1)
+plot(t, newaz)
+
+subplot(1,2,2)
+plot(t, tod)
+
+figure()
+plot(newaz, tod)
+```
+
+```{python}
+tmin = 11470
+tmax = 11610
+
+ok = (t>tmin) & (t<tmax)
+subplot(1,2,1)
+plot(t[ok], newaz[ok])
+subplot(1,2,2)
+plot(t[ok], tod[ok])
+
+figure()
+subplot(1,2,1)
+plot(newaz[ok], tod[ok])
+
+
+myt = t[ok]
+myaz = newaz[ok]
+mytod = tod[ok]
+
+iii = np.arange(len(myt))
+
+okp = iii < len(iii)//2
+okm = iii >= len(iii)//2
+
+subplot(1,2,2)
+plot(myaz[okp], mytod[okp])
+plot(myaz[okm], mytod[okm])
+
+```
+
+```{python}
+tauvals = np.linspace(0., 1, 20)
+doplot = False
+chi2 = np.zeros(len(tauvals))
+for i in range(len(tauvals)):
+    print(i)
+    tau = tauvals[i]
+    sampling = 1./np.mean((myt-np.roll(myt,1))[1:-1])
+    dtod_dt = np.gradient(mytod, 1./sampling)
+    tod_deconv = mytod + dtod_dt * tau      
+
+#     lo = 1./10000000
+#     hi = 1./tau
+#     print(lo,hi)
+#     tod_deconv_filt = ft.butter_bandpass_filter(tod_deconv, lo, hi, sampling, order=2)
+
+
+
+    ### Rebin in azimuth bins
+    nbins = 150
+    azbins, scanp, daz, dscanp, _ = ft.profile(myaz[okp], mytod[okp], rng=[-20,20], nbins=nbins, plot=False)
+    azbins, scanm, daz, dscanm, _ = ft.profile(myaz[okm], mytod[okm], rng=[-20,20], nbins=nbins, plot=False)
+
+    azbins, scanp_deconv, daz, dscanp, _ = ft.profile(myaz[okp], tod_deconv[okp], rng=[-20,20], nbins=nbins, plot=False)
+    azbins, scanm_deconv, daz, dscanp, _ = ft.profile(myaz[okm], tod_deconv[okm], rng=[-20,20], nbins=nbins, plot=False)
+
+
+    chi2[i] = np.sum((scanp_deconv-scanm_deconv)**2)
+
+    if doplot:
+        subplot(1,2,1)
+        plot(azbins, scanp, label='Rebin +')
+        plot(azbins, scanm, label='Rebin -')
+        legend()
+
+        subplot(1,2,2)
+        plot(azbins, scanp_deconv, label = 'Rebin Deconvolved +')
+        plot(azbins, scanm_deconv, label = 'Rebin Deconvolved -')
+        legend()
+
+        figure()
+        plot(azbins, scanp-scanm, label='Diff Raw')
+        plot(azbins, scanp_deconv-scanm_deconv, label='Diff Deconv')
+        legend()
+```
+
+```{python}
+plot(tauvals, chi2)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

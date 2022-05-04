@@ -18,6 +18,7 @@ from scipy.signal import chirp, find_peaks, peak_widths
 import qubic.sb_fitting as sbfit
 import healpy as hp
 from qubic.io import write_map
+from alive_progress import alive_bar
 import os
 
 

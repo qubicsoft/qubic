@@ -1,3 +1,5 @@
+import qubic
+from qubic import selfcal_lib as scal
 from qubicpack.qubicfp import qubicfp
 import qubic.fibtools as ft
 import qubic.demodulation_lib as dl

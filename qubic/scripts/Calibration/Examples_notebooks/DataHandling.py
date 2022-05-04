@@ -24,17 +24,29 @@ import os
 class BeamMapsAnalysis(object):
 
     """
-    This class allows to make the same things that in Sample_demodulation.Rmd. It generates raw data and make all the analysis to
-    obtain beam maps.
+    This class allows to make the same things that in Sample_demodulation.Rmd.
+    It generates raw data and make all the analysis to obtain beam maps.
     """
 
     def __init__(self, a, lc, hc, notch, TESNum, asic):
 
-        '''
+        """
+        Parameters
+        ----------
+        a: Object from qubicpack
+            Contains data
+        lc: float
+            Lower cut in frequency.
+        hc: float
+            Higher cut in frequency
+        notch: array
+            notch
+        TESNum: int
+            Number of seen TES.
+        asic: int
+            Number of seen asic.
+        """
 
-        a is the object from qubicpack
-
-        '''
         self.a = a
         self.lowcut=lc
         self.highcut=hc
@@ -222,7 +234,62 @@ class BeamMapsAnalysis(object):
         FitsArray(healpixmap).save(repository+'/healpix_'+'TESNum_'+str(TESNum)+'.fits')
 
 
+def plot_data_on_FP(datain, q, savepdf=None, **kwargs):
 
 
+    """
 
-print()
+    This definition allow to plot data on the focal plane. You have to give your data (for now the shape)
+    must be (N_tes x N_samples) for 1D plot or (N_tes x N_samples x N_samples) for 2D plot.
+    q is the instrument compute with qubic package.
+    savepdf is an option to save your plot in pdf file. If you want to save it, put the name of the file
+    (don't forget to finish by .pdf) and if you don't want to save, put None
+    You can add several arguments for the plot using **kwargs
+
+    """
+
+    if len(datain.shape)==3:
+        dimension=2
+    elif len(datain.shape)==2:
+        dimension=1
+
+    x=np.linspace(-0.0504, -0.0024, 17)
+    y=np.linspace(-0.0024, -0.0504, 17)
+
+    X, Y = np.meshgrid(x, y)
+
+    allTES=np.arange(1, 129, 1)
+
+    #delete thermometers tes
+    good_tes=np.delete(allTES, np.array([4,36,68,100])-1, axis=0)
+
+    fig, axs = subplots(nrows=17, ncols=17, figsize=(50, 50))
+    with alive_bar(len(good_tes)*2, force_tty=True) as bar:
+        k=0
+        for j in [1, 2]:
+            for ites, tes in enumerate(good_tes):
+                if j > 1:
+                    newtes=tes+128
+                else:
+                    newtes=tes
+                #print(ites, tes, j)
+
+                xtes, ytes, FP_index, index_q= scal.TES_Instru2coord(TES=tes, ASIC=j, q=q, frame='ONAFP', verbose=False)
+                ind=np.where((np.round(xtes, 4) == np.round(X, 4)) & (np.round(ytes, 4) == np.round(Y, 4)))
+
+
+                if dimension == 1:
+                    #beam=_read_fits_beam_maps(newtes)
+                    axs[ind[0][0], ind[1][0]].plot(datain[k], **kwargs)
+
+                elif dimension == 2:
+                    #beam=_read_fits_beam_maps(newtes)
+                    axs[ind[0][0], ind[1][0]].imshow(datain[k], **kwargs)
+
+                axs[ind[0][0], ind[1][0]].set_title('TES = {:.0f}'.format(tes))
+
+                bar()
+                k+=1
+    if savepdf != None:
+        savefig(savepdf, format="pdf", bbox_inches="tight")
+    show()

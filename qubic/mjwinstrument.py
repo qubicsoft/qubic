@@ -911,7 +911,7 @@ class QubicInstrument(Instrument):
             # e_ni shape: (ntimes, ncolmax, 3)
             thetaphis = _pack_vector(thetas, phis)  # (ndetectors, ncolmax, 2)
             directions = Spherical2CartesianOperator('zenith,azimuth')(thetaphis)
-            e_nf = directions[:, None, :, :]
+            e_nf = direction[:, None, :, :]
     
             e_ni = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
             if nscene != nscenetot:
@@ -984,7 +984,7 @@ class QubicInstrument(Instrument):
         #print('Factor = {}'.format(factor))
         import qubic.sb_fitting as sbfit
         sh  =  np.shape(theta)
-        print(sh)
+        #print(sh)
         myposition =  -position / np.sqrt(np.sum(position**2, axis=-1))[..., None]
         local_dict = {'nx': myposition[:, 0, None], 'ny': myposition[:, 1, None]}
         thlos = ne.evaluate('arcsin(sqrt(nx**2 + ny**2))',local_dict=local_dict)
@@ -1021,11 +1021,12 @@ class QubicInstrument(Instrument):
             accounts for a specified energy fraction.
             
             """
-        normal = False
+        normal = True
         
         import matplotlib.pyplot as plt
         if normal:
             theta, phi = QubicInstrument._peak_angles_kmax(synthbeam.kmax, horn.spacing,horn.angle, nu, position)
+            print(np.shape(theta))
             val = np.array(primary_beam(theta, phi), dtype=float, copy=False)
             val[~np.isfinite(val)] = 0
             index = _argsort_reverse(val)
@@ -1092,17 +1093,19 @@ class QubicInstrument(Instrument):
                 newth, newph = sbfit.rotate_q2m(theta[idet,:], phi[idet,:], angs=myangs, inverse=True)
                 theta[idet,:], phi[idet,:] = sbfit.rotate_q2m(newth*factor, newph, angs=myangs, inverse=False)
             
-        '''
+        '''        
         new_hdul = fits.HDUList()
         new_hdul.append(fits.ImageHDU(theta))
         new_hdul.append(fits.ImageHDU(phi))
         new_hdul.append(fits.ImageHDU(val))
-        new_hdul.append(fits.ImageHDU(numpeaks))
+        freqi=np.array([nu])
+        new_hdul.append(fits.ImageHDU(freqi))
         nuu=str(nu)
         nuu=nuu[0:3]
     
-        new_hdul.writeto('CalQubic_Synthbeam_Calibrated_'+nuu+'_FI.fits', overwrite=True)
+        new_hdul.writeto('CalQubic_Synthbeam_Maynooth_'+nuu+'_FI.fits', overwrite=True)
         '''
+       
         
         #print('Theta: ', theta)
         order = np.flip(np.argsort(np.ravel(val)))[0:9]
@@ -1134,21 +1137,42 @@ class QubicInstrument(Instrument):
             The focal plane positions for which the angles of the interference
             peaks are computed.
         """
-        lmbda = c / nu
-        position = -position / np.sqrt(np.sum(position ** 2, axis=-1))[..., None]
-        if angle != 0:
-            _kx, _ky = np.mgrid[-kmax:kmax + 1, -kmax:kmax + 1]
-            kx = _kx * np.cos(angle * np.pi / 180) - _ky * np.sin(angle * np.pi / 180)
-            ky = _kx * np.sin(angle * np.pi / 180) + _ky * np.cos(angle * np.pi / 180)
-        else:
-            kx, ky = np.mgrid[-kmax:kmax + 1, -kmax:kmax + 1]
+        
+        peaknormal=True
+        
+        if peaknormal:
+            lmbda = c / nu
+            position = -position / np.sqrt(np.sum(position ** 2, axis=-1))[..., None]
+            if angle != 0:
+                _kx, _ky = np.mgrid[-kmax:kmax + 1, -kmax:kmax + 1]
+                kx = _kx * np.cos(angle * np.pi / 180) - _ky * np.sin(angle * np.pi / 180)
+                ky = _kx * np.sin(angle * np.pi / 180) + _ky * np.cos(angle * np.pi / 180)
+            else:
+                kx, ky = np.mgrid[-kmax:kmax + 1, -kmax:kmax + 1]
 
-        nx = position[:, 0, None] - lmbda * kx.ravel() / horn_spacing
-        ny = position[:, 1, None] - lmbda * ky.ravel() / horn_spacing
-        local_dict = {'nx': nx, 'ny': ny}
-        theta = ne.evaluate('arcsin(sqrt(nx**2 + ny**2))',
-                            local_dict=local_dict)
-        phi = ne.evaluate('arctan2(ny, nx)', local_dict=local_dict)
+            nx = position[:, 0, None] - lmbda * kx.ravel() / horn_spacing
+            ny = position[:, 1, None] - lmbda * ky.ravel() / horn_spacing
+            local_dict = {'nx': nx, 'ny': ny}
+            theta = ne.evaluate('arcsin(sqrt(nx**2 + ny**2))',local_dict=local_dict)
+            phi = ne.evaluate('arctan2(ny, nx)', local_dict=local_dict)
+
+        else:
+            #read in pickle from maynooth simulations
+            import pickle
+            file1 = open(os.environ['QUBIC_PEAKS']+'maynoothbeams.pk', 'rb')
+            thetac, phic, valc = pickle.load(file1)
+            file1.close()
+            position = -position / np.sqrt(np.sum(position ** 2, axis=-1))[..., None]
+            nx = position[:, 0, None] - thetac
+            ny = position[:, 1, None] - phic
+        
+            local_dict = {'nx': nx, 'ny': ny}
+            theta = ne.evaluate('arcsin(sqrt(nx**2 + ny**2))',local_dict=local_dict)
+            phi = ne.evaluate('arctan2(ny, nx)', local_dict=local_dict)
+        
+        
+        
+        
         return theta, phi
 
     @staticmethod

@@ -22,11 +22,9 @@ class QubicCalibration(object):
     """
     Class representing the QUBIC calibration tree. It stores the calibration
     file names and "hardcoded" values and provides access to them.
-
     If the path name of a calibration file is relative, it is first searched
     relatively to the working directory and if not found, in the calibration
     path.
-
     """
     def __init__(self, d, path=PATH):
         """
@@ -45,7 +43,6 @@ class QubicCalibration(object):
             The primary beam parameter calibration file name.
         synthbeam : str, optional
             The synthetic beam parameter calibration file name.
-
         """
         self.path = os.path.abspath(path)
         self.detarray = os.path.abspath(join(self.path, d['detarray']))
@@ -70,7 +67,6 @@ class QubicCalibration(object):
         
         """
         Access calibration files.
-
         Parameters
         ----------
         name : str
@@ -79,7 +75,6 @@ class QubicCalibration(object):
                 - 'hornarray'
                 - 'optics'
                 - 'primbeam'
-
         """
         
         if name == 'detarray':
@@ -198,8 +193,9 @@ class QubicCalibration(object):
             theta=hdu[0].data
             phi=hdu[1].data
             val=hdu[2].data
+            freqs=hdu[3].data
 
-            return theta, phi, val, header
+            return theta, phi, val, freqs, header
         elif name == 'synthbeam_jc':
             
             hdu =  fits.open(self.synthbeam)

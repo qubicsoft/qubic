@@ -72,11 +72,15 @@ def get_header_values(dataset=None,
     if dataset is None:
         ans = input('Enter dataset name: ')
         if len(ans.strip())>0:            
-            if ans.find(',')>0: ans = ans.split(',')
-            hdr['DATASET'] = ans
+            dataset = ans
         else:
-            hdr['DATASET'] = 'UNKNOWN-dataset'
+            dataset = 'UNKNOWN-dataset'
 
+    if isinstance(dataset,str) and dataset.find(',')>0:
+        dataset = dataset.split(',')
+
+    hdr['DATASET'] = dataset
+            
     if isinstance(hdr['DATASET'],list):
         first_dataset = os.path.basename(hdr['DATASET'][0])
     else:
@@ -150,16 +154,26 @@ def write_goodbad(goodbad,
     prihdr = fits.Header()
     toolong = False
     for key in hdrval.keys():
-        cardlen_nocomment = len(key)+len(hdrval[key])
-        if cardlen_nocomment>80:
-            toolong = True
-            prihdr[key] = (hdrval[key],'')
-            continue
-        
-        if key in hdr_comment.keys() and (cardlen_nocomment+len(hdr_comment[key]))<=80:
-            prihdr[key] = (hdrval[key],hdr_comment[key])
+        val = hdrval[key]
+        if key in hdr_comment.keys():
+            comment = hdr_comment[key]
         else:
-            prihdr[key] = (hdrval[key],'')
+            comment = ''
+        
+        if isinstance(val,list):
+            for idx,dset in enumerate(val):
+                dset_num = idx + 1
+                subkey = 'SET%02i' % dset_num
+                cardlen = len(dset) + len(comment)
+                if cardlen<80:
+                    prihdr[subkey] = (dset,comment)
+                else:
+                    prihdr[subkey] = (dset,'')
+                    toolong = True
+        else:
+            cardlen = len(val) + len(comment)
+            if cardlen>80: comment = ''
+            prihdr[key] = (val,comment)
             
 
     if toolong:
@@ -186,9 +200,20 @@ def write_goodbad(goodbad,
         else:
             comment = ''
         val = hdrval[key]
-        fmt = 'A%i' % max((len(val),len(comment)))
-        col = fits.Column(name=key, format=fmt, unit='text', array=[val,comment])
-        columnlist.append(col)
+
+        # dataset could be a list
+        if isinstance(val,list):
+            for idx,dset in enumerate(val):
+                dset_num = idx + 1
+                subkey = 'SET%02i' % dset_num
+                
+                fmt = 'A%i' % max((len(dset),len(comment)))
+                col = fits.Column(name=subkey, format=fmt, unit='text', array=[dset,comment])
+                columnlist.append(col)
+        else:
+            fmt = 'A%i' % max((len(val),len(comment)))
+            col = fits.Column(name=key, format=fmt, unit='text', array=[val,comment])
+            columnlist.append(col)
     
     
     cols  = fits.ColDefs(columnlist)
@@ -242,12 +267,35 @@ def read_goodbad(filename,verbosity=1):
     ok = np.array(hdulist[1].data.field(0),dtype=bool)
     if verbosity<1: return ok
 
-    info = {}
-    infokeys = ['Dataset name','Analysis type','Analyser','elog','wikipage','Filename','File created']
-    for idx,key in enumerate(infokeys):
-        field_num = idx + 2
-        info[key] = hdulist[2].data.field(field_num)[0]
-        print('%s: %s' % (key,info[key]))
+    info = {} # maybe should return this?
+    infotitle = {}
+    for key in hdr_comment.keys():
+        infotitle[key] = hdr_comment[key]
+    infotitle['DATASET'] ='Dataset name'
+    infotitle['SET'] = 'Dataset name'
+    infotitle['ANALYSIS'] = 'Analysis type'
+    infotitle['ANALYSER'] = 'Analyser'
+    infotitle['ELOG'] = 'elog'
+    infotitle['WIKIPAGE'] = 'wikipage'
+    infotitle['FILENAME'] = 'Filename'
+    infotitle['FILEDATE'] = 'File created'
+    hdr = hdulist[2].header
+    dat = hdulist[2].data
+    nfields = hdr['TFIELDS']
+    for idx in range(nfields):
+        field_num = idx + 1
+        field_key = 'TTYPE%i' % field_num
+        field_name = hdr[field_key].strip()
+        if field_name.find('SET')==0:
+            ttl = infotitle['SET']
+        elif field_name in infotitle.keys():
+            ttl = infotitle[field_name]
+        elif field_name in hdr_comment.keys():
+            ttl = hdr_comment[field_name]
+        else:
+            ttl = "What is this? "
+        info[field_name] = dat.field(idx)[0]
+        print('%s: %s' % (ttl,info[field_name]))
               
-    
+    hdulist.close()
     return ok

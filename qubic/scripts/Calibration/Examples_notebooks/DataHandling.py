@@ -31,19 +31,13 @@ class BeamMapsAnalysis(object):
     It generates raw data and make all the analysis to obtain beam maps.
     """
 
-    def __init__(self, a, lc, hc, notch, TESNum, asic):
+    def __init__(self, a, TESNum, asic):
 
         """
         Parameters
         ----------
         a: Object from qubicpack
             Contains data
-        lc: float
-            Lower cut in frequency.
-        hc: float
-            Higher cut in frequency
-        notch: array
-            notch
         TESNum: int
             Number of seen TES.
         asic: int
@@ -51,9 +45,15 @@ class BeamMapsAnalysis(object):
         """
 
         self.a = a
-        self.lowcut=lc
-        self.highcut=hc
-        self.notch=notch
+        self.mod_freq=self.a.hk['CALSOURCE-CONF']['Mod_freq'][0]
+        if self.mod_freq < 0 :
+            self.demod=False
+        else:
+            self.demod=True
+        self.nharm=10
+        self.lowcut=self.a.hk['CALSOURCE-CONF']['Amp_hfreq'][0]
+        self.highcut=self.a.hk['CALSOURCE-CONF']['Amp_lfreq'][0]
+        self.notch=np.array([[1.724, 0.005, self.nharm]])
         self.TESNum=TESNum
         self.asic=asic
 
@@ -237,17 +237,20 @@ class BeamMapsAnalysis(object):
         FitsArray(healpixmap).save(repository+'/healpix_'+'TESNum_'+str(TESNum)+'.fits')
 
 
-def plot_data_on_FP(datain, q, savepdf=None, **kwargs):
+def plot_data_on_FP(datain, q, lim=None, savepdf=None, **kwargs):
 
 
     """
 
-    This definition allow to plot data on the focal plane. You have to give your data (for now the shape)
-    must be (N_tes x N_samples) for 1D plot or (N_tes x N_samples x N_samples) for 2D plot.
-    q is the instrument compute with qubic package.
-    savepdf is an option to save your plot in pdf file. If you want to save it, put the name of the file
-    (don't forget to finish by .pdf) and if you don't want to save, put None
-    You can add several arguments for the plot using **kwargs
+    Parameters :
+
+        - datain : array -> The data that you want to plot on the focal plane. The data must have the shape (N_tes x N_data)
+        for 1D plot or (N_tes x N_data x N_data) for 2D plot.
+        - q : object -> object of qubic computing with qubic package
+        - x : array -> for 1D plot, you can give x axis for the plot
+        - lim : array -> have the shape [x_min, x_max, y_min, y_max] if you want to put limit on axis
+        - savepdf : str -> Put the name of the file if you want to save the plot
+        - **kwargs : -> You can put severals arguments to modify the plot (color, linestyle, ...)
 
     """
 
@@ -267,32 +270,35 @@ def plot_data_on_FP(datain, q, savepdf=None, **kwargs):
     good_tes=np.delete(allTES, np.array([4,36,68,100])-1, axis=0)
 
     fig, axs = subplots(nrows=17, ncols=17, figsize=(50, 50))
-    with alive_bar(len(good_tes)*2, force_tty=True) as bar:
-        k=0
-        for j in [1, 2]:
-            for ites, tes in enumerate(good_tes):
-                if j > 1:
-                    newtes=tes+128
-                else:
-                    newtes=tes
-                #print(ites, tes, j)
+    k=0
+    for j in [1, 2]:
+        for ites, tes in enumerate(good_tes):
+            if j > 1:
+                newtes=tes+128
+            else:
+                newtes=tes
+            #print(ites, tes, j)
 
-                xtes, ytes, FP_index, index_q= scal.TES_Instru2coord(TES=tes, ASIC=j, q=q, frame='ONAFP', verbose=False)
-                ind=np.where((np.round(xtes, 4) == np.round(X, 4)) & (np.round(ytes, 4) == np.round(Y, 4)))
+            xtes, ytes, FP_index, index_q= scal.TES_Instru2coord(TES=tes, ASIC=j, q=q, frame='ONAFP', verbose=False)
+            ind=np.where((np.round(xtes, 4) == np.round(X, 4)) & (np.round(ytes, 4) == np.round(Y, 4)))
 
 
-                if dimension == 1:
-                    #beam=_read_fits_beam_maps(newtes)
-                    axs[ind[0][0], ind[1][0]].plot(datain[k], **kwargs)
+            if dimension == 1:
 
-                elif dimension == 2:
-                    #beam=_read_fits_beam_maps(newtes)
-                    axs[ind[0][0], ind[1][0]].imshow(datain[k], **kwargs)
+                axs[ind[0][0], ind[1][0]].plot(datain[k], **kwargs)
 
-                axs[ind[0][0], ind[1][0]].set_title('TES = {:.0f}'.format(tes))
+                if lim != None:
+                    axs[ind[0][0], ind[1][0]].set_xlim(lim[0], lim[1])
+                    axs[ind[0][0], ind[1][0]].set_ylim(lim[2], lim[3])
 
-                bar()
-                k+=1
+            elif dimension == 2:
+                #beam=_read_fits_beam_maps(newtes)
+                axs[ind[0][0], ind[1][0]].imshow(datain[k], **kwargs)
+
+            axs[ind[0][0], ind[1][0]].set_title('TES = {:.0f}'.format(tes))
+
+
+            k+=1
     if savepdf != None:
         savefig(savepdf, format="pdf", bbox_inches="tight")
     show()

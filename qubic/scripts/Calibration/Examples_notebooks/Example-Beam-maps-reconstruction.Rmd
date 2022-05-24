@@ -1,0 +1,183 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.13.4
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Example of Beam maps analysis
+
+
+This notebook is to explain how to use the new method for beam maps analysis. The new method brings all the old method to have a easy way to compute beam maps of QUBIC.
+
+
+# Importation
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(9,4.5))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack.qubicfp import qubicfp
+import qubic.demodulation_lib as dl
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+# import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+# import pickle
+from importlib import reload
+import healpy as hp
+import os
+
+import DataHandling as DH
+
+from qubicpack.utilities import Qubic_DataDir
+import qubic
+from qubic import selfcal_lib as scal
+# Get a dictionary
+basedir = Qubic_DataDir()
+print('basedir : ', basedir)
+dictfilename = basedir + '/dicts/global_source_oneDet.dict'
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+q = qubic.QubicInstrument(d)
+
+# If there is not this command, the kernel shut down every time..
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+```
+
+```{python}
+day = '2022-04-14'
+#day= '2020-11-10'
+keyword = '*Scan*'
+#keyword= '*test'
+#data_dir = '/sps/hep/qubic/Data/'+day+'/'
+data_dir = day+'/'
+dirs = np.sort(glob.glob(data_dir+keyword))
+print(dirs)
+```
+
+```{python}
+day = '2022-04-14'
+
+#day= '2020-11-10'
+keyword = '**'
+#keyword= '*test'
+#data_dir = '/sps/hep/qubic/Data/'+day+'/'
+data_dir = day+'/'
+dirs = np.sort(glob.glob(data_dir+keyword))
+print(dirs)
+
+ifile = 0
+thedir = dirs[ifile]
+print(thedir)
+#note here is how you load the data in memory!
+a = qubicfp()
+a.read_qubicstudio_dataset(thedir)
+#a.read_qubicstudio_dataset('/path/to/dataset')
+```
+
+Here you can have several information on the calibration source.
+
+```{python}
+print(a.hk.keys())
+a.hk.keys()
+
+print("The keys in this dictionary are:\n")
+for k in a.hk['CALSOURCE-CONF'].keys():
+    print(k, a.hk['CALSOURCE-CONF'][k])
+```
+
+For this dataset, the scan was performed without modulation of the source, so in this configuration you don't have to demodulate and to filter the data before making flat maps. 
+
+The analysis is perform in a very easy way, you just have to write a simple line to analyse all the TES and sev them. 
+
++ If you want to analyse all TES, keep `number_of_tes=None`
+
++ If not, put the number of the TES that you want to analyse (the number of the TES, not in python index).
+
+```{python}
+# If you already precompute beam maps, you can skip this step. If not, decomment and run the line to have them
+
+# If you want to save files, be careful to put save=True because the computation is long 
+
+
+# Make a loop over TES
+#from importlib import reload
+#reload(DH)
+
+# Construction of the object
+#analysis=DH.BeamMapsAnalysis(a)
+
+# Analysis of all TES
+#mymaps=analysis.fullanalysis(number_of_tes=None, filter=False, demod=False, remove_noise=True, 
+#                                                                          doplot=False, save=True)
+```
+
+Congratulation, you have analyse all the TES and created beam maps for this dataset ! Maybe you want to see your data, in `DataHandling.py`, you can see your data directly on the focal plane.
+
+
+# Visualisation
+
+
+The computation can be long for all TES, in `DataHandling.py` you can find a function to open previous fits file.
+
+```{python}
+reload(DH)
+tes=np.arange(1, 257, 1)
+
+allmaps=np.zeros((len(tes), 101, 101))
+
+for i in tes:
+    print(i)
+    beam=DH._read_fits_beam_maps(i)
+    allmaps[i-1]=beam.copy()
+```
+
+```{python}
+from importlib import reload
+reload(DH)
+DH.plot_data_on_FP(datain=allmaps, vmin=0, vmax=2e5, q=q, savepdf=None)
+```
+
+We can also see 1D plot, not for this dataset but it can be useful for others. You just have to adapt the shape of data.
+
+```{python}
+from importlib import reload
+reload(DH)
+DH.plot_data_on_FP(datain=allmaps[:, 51], q=q, savepdf=None)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

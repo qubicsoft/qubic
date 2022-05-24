@@ -31,17 +31,12 @@ class BeamMapsAnalysis(object):
     It generates raw data and make all the analysis to obtain beam maps.
     """
 
-    def __init__(self, a, TESNum, asic):
+    def __init__(self, a):
 
         """
         Parameters
         ----------
         a: Object from qubicpack
-            Contains data
-        TESNum: int
-            Number of seen TES.
-        asic: int
-            Number of seen asic.
         """
 
         self.a = a
@@ -54,18 +49,13 @@ class BeamMapsAnalysis(object):
         self.lowcut=self.a.hk['CALSOURCE-CONF']['Amp_hfreq'][0]
         self.highcut=self.a.hk['CALSOURCE-CONF']['Amp_lfreq'][0]
         self.notch=np.array([[1.724, 0.005, self.nharm]])
-        self.TESNum=TESNum
-        self.asic=asic
+        print('\n Loading data...\n')
+        self.tt, self.tod = self.a.tod()
+        print('Data loaded\n')
 
-    def get_raw_data(self):
+    def filter_data(self, tt, data, doplot=False):
 
-        tod=self.a.timeline(TES=self.TESNum, asic=self.asic)
-        tt=self.a.timeaxis(axistype='pps', asic=self.asic)
-
-        return tt, tod
-    def filter_data(self, tt, tod, doplot=False):
-
-        filtered_data = ft.filter_data(tt, tod, self.lowcut, self.highcut, notch=self.notch, rebin=True, verbose=True, order=5)
+        filtered_data = ft.filter_data(tt, data, self.lowcut, self.highcut, notch=self.notch, rebin=True, verbose=True, order=5)
 
         if doplot:
 
@@ -154,87 +144,54 @@ class BeamMapsAnalysis(object):
 
 
         return -mymap
-
-    def fullanalysis(self, filter=False, demod=False, remove_noise=True, doplot=True, save=False):
+    def fullanalysis(self, number_of_tes=None, filter=False, demod=False, remove_noise=True, doplot=True, save=False):
 
         # Generate TOD from qubicpack
-        print('Get Raw data')
-        tt, tod = self.get_raw_data()
-        data=tod.copy()
-
-        # Filtering
-        if filter:
-            print('Filtering')
-            filtered_data=self.filter_data(tt, tod, doplot=doplot)
-            data=filtered_data.copy()
-
-        # Demodulation
-        if demod:
-            print('Demodulation')
-            newt, data=self.demodulation(tt, data, remove_noise=remove_noise)
-
-        print('Make Flat Maps')
-        mymap=self.make_flat_map(tt, data, doplot=doplot)
-
-        if save:
-            self.save_azel_mymap(mymap)
-
-        return mymap
+        #print('Get Raw data')
+        #tt, tod = self.get_raw_data()
 
 
-
-
-
-
-    def save_maps_allTES(self, mymap):
-
-        repository=os.getcwd()+'/Fits/Flat'
-        try:
-            os.makedirs(repository)
-        except OSError:
-            if not os.path.isdir(repository):
-                raise
-
-        FitsArray(mymap).save(repository+'/imgflat_allTES.fits')
-    def save_healpix_allTES(self, mymap):
-
-        repository=os.getcwd()+'/Fits/Healpix'
-        try:
-            os.makedirs(repository)
-        except OSError:
-            if not os.path.isdir(repository):
-                raise
-
-        FitsArray(mymap).save(repository+'/healpix_allTES.fits')
-    def save_azel_mymap(self, mymap):
-
-        repository=os.getcwd()+'/Fits/Flat'
-        try:
-            os.makedirs(repository)
-        except OSError:
-            if not os.path.isdir(repository):
-                raise
-
-        if self.asic == 2:
-            factor=128
+        if number_of_tes == None:
+            sh=np.arange(1, self.tod.shape[0]+1, 1)
         else:
-            factor=0
+            sh=[number_of_tes]
 
-        FitsArray(mymap).save(repository+'/imgflat_TESNum_{}.fits'.format(self.TESNum+factor))
+        mymaps=np.zeros((len(sh), 101, 101))
 
-        #"""save the az el files for flats..."""
-        #FitsArray(az).save(repository+'/azimuth.fits')
-        #FitsArray(el).save(repository+'/elevation.fits')
-    def save_healpixmap(self, healpixmap, TESNum):
+        for ish, i in enumerate(sh) :
+            print('Analyse TES {:.0f} / {:.0f}'.format(i, len(sh)))
+            data=self.tod[i-1].copy()
+            # Filtering
+            if filter:
+                print('Filtering')
+                filtered_data=self.filter_data(self.tt, data, doplot=doplot)
+                data=filtered_data.copy()
 
-        repository=os.getcwd()+'/Fits/Healpix'
+            # Demodulation
+            if demod:
+                print('Demodulation')
+                newt, data=self.demodulation(self.tt, data, remove_noise=remove_noise)
+
+            print('Make Flat Maps')
+            mymaps[ish]=self.make_flat_map(self.tt, data, doplot=doplot)
+
+            if save:
+                self.save_azel_mymap(mymaps[ish], TESNum=i)
+
+        return mymaps
+
+
+
+    def save_azel_mymap(self, mymap, TESNum):
+
+        repository=os.getcwd()+'/Fits/Flat'
         try:
             os.makedirs(repository)
         except OSError:
             if not os.path.isdir(repository):
                 raise
 
-        FitsArray(healpixmap).save(repository+'/healpix_'+'TESNum_'+str(TESNum)+'.fits')
+        FitsArray(mymap).save(repository+'/imgflat_TESNum_{}.fits'.format(TESNum))
 
 
 def plot_data_on_FP(datain, q, lim=None, savepdf=None, **kwargs):
@@ -302,3 +259,16 @@ def plot_data_on_FP(datain, q, lim=None, savepdf=None, **kwargs):
     if savepdf != None:
         savefig(savepdf, format="pdf", bbox_inches="tight")
     show()
+
+def _read_fits_beam_maps(TESNum):
+    from astropy.io import fits as pyfits
+    path=os.getcwd()
+    folder='Fits/Flat/'
+    name='imgflat_TESNum_{:.0f}.fits'.format(TESNum)
+    allpath=path+folder+name
+    #print(allpath)
+
+    hdulist = pyfits.open(allpath)
+    header = hdulist[0].header
+
+    return hdulist[0].data

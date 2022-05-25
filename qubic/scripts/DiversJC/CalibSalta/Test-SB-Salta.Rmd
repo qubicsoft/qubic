@@ -135,7 +135,7 @@ def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, dopl
     ### Sampling for HK data
     timesample = np.median(thk[1:]-thk[:-1])
     ### angular velocity 
-    daz_dt = medfilt(np.gradient(az, timesample), median_size)
+    medaz_dt = medfilt(np.gradient(az, timesample), median_size)
     ### Identify regions of change
     # Low velocity -> Bad
     c0 = np.abs(medaz_dt) < thr_speedmin
@@ -619,16 +619,21 @@ hp.gnomview(mapdiff2, rot=[0,50], reso=reso, sub=(2,3,6), title=anatype+'\n Both
 
 ```
 
-So one casn see significant improvement: RMS of the backgroiund reduces from ~1.3e4 to 2.8e3.
+So one can see significant improvement: RMS of the background reduces from ~1.3e4 to 2.8e3.
 
-However, the simplistic "Azimuth pattern" we fitteede now appears to be insufficient. It seems that it also evolves with elevation... so we could measure it by elevation bins and get simething better.
+However, the simplistic "Azimuth pattern" we fitted now appears to be insufficient. It seems that it also evolves with elevation... so we could measure it by elevation bins and get something better.
 So there is still significant room for improvement.
 
-We can also test filtering, but we'll have to avoid signal harmonics, and the "Az/el" bacckground pattern will also be ein those harmonics. Also for this wee'll need to fill the `scantype==0` reeggions with a constrained realization of noise in order to avoid FFT bouncing.
+We can also test filtering, but we'll have to avoid signal harmonics, and the "Az/el" bacckground pattern will also be ein those harmonics. Also for this wee'll need to fill the `scantype==0` regions with a constrained realization of noise in order to avoid FFT bouncing. This will be donee in a second time.
 
-```{python}
 
-```
+### Improving on azimuth/elevation background pattern
+There are various ways for investigating this (and what I discuss here is surely not exhaustive):
+- Trying to avoid signal with thiis TES and see how this changes with elevation.
+- Use a dataset where the calibration source is off and cheeck how the pattern changes from one TES to another (important as it might give us some information on the optical or magnetic origin of this effect).
+- With a single dataset we could also use multiple TES and make some median in order to avoid the signal as it will not be present on all TES at the same az/el...
+
+For now, let's try the simplest approach: using a single TES.
 
 ```{python}
 

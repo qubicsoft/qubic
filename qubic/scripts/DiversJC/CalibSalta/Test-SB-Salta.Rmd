@@ -22,8 +22,11 @@ rc('figure',figsize=(16,8))
 rc('font',size=12)
 
 from scipy.signal import medfilt
+from scipy.interpolate import interp1d
+
 from qubicpack.qubicfp import qubicfp
 from qubic import fibtools as ft
+
 from importlib import reload
 import healpy as hp
 
@@ -34,16 +37,27 @@ import healpy as hp
 We use a Synthesized Beam scanning performed on April 16th 2022 in Salta (CalSrc at 140 GHz): 
 `2022-04-16_12.37.59__ScanMap_Speed_VE14_FastNoMod`
 
+Or alternatively, a scan a 170 GHz on April 14th:
+`2022-04-14_13.17.33__ScanMap_Speed_VE14_FastNoMod`
+
 ```{python}
+# mydatadir = '/Users/hamilton/Qubic/Calib-TD/'
+# thedate = '2022-04-16'
+# thedata = '2022-04-16_12.37.59__ScanMap_Speed_VE14_FastNoMod'
+
 mydatadir = '/Users/hamilton/Qubic/Calib-TD/'
-thedate = '2022-04-16'
-thedata = '2022-04-16_12.37.59__ScanMap_Speed_VE14_FastNoMod'
+thedate = '2022-04-14'
+thedata = '2022-04-14_13.17.33__ScanMap_Speed_VE14_FastNoMod'
+
+
 
 filename = mydatadir + '/' + thedate + '/' + thedata
 
 ### Read data
 a = qubicfp()
 a.read_qubicstudio_dataset(filename)
+
+tt, tod = a.tod()
 
 az = a.azimuth()
 el = a.elevation()
@@ -53,8 +67,9 @@ thk = a.timeaxis(datatype='hk')
 ### First just a glimpse at the data
 
 ```{python}
-tod = a.timeline(TES=33, asic=1)
-tt = a.timeaxis(asic=1)
+TESnum = 33
+tod = tod[TESnum-1,:]
+del(a)
 
 ### We remove tt[0]
 tinit = tt[0]
@@ -242,10 +257,8 @@ def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, dopl
         tight_layout()
 
     if tt is not None:
-        ### We propagate these at TOD sampling rate
-        scantype = np.interp(tt, thk, scantype_hk)
-        scantype[(np.floor(scantype) - scantype) != 0] = 0    #removes iintermediate interpolated values
-        scantype = medfilt(scantype, 3)   # removees last outliers
+        ### We propagate these at TOD sampling rate  (this is an "step interpolation": we do not want intermediatee values")
+        scantype = interp1d(thk, scantype_hk, kind='previous', fill_value='extrapolate')(tt)
         scantype = scantype.astype(int)
         count_them = np.sum(scantype==0) + np.sum(scantype<=-1) + np.sum(scantype>=1)
         if count_them != len(scantype):
@@ -265,8 +278,9 @@ def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, dopl
 ```{python}
 rc('figure',figsize=(20,10))
 rc('font',size=12)
+
 ### Identify scan types and numbers
-scantype_hk, azt, elt, scantype = identify_scans(thk, az, el, tt=tt-0.191, doplot=True, plotrange=[0,2000], thr_speedmin=0.1)
+scantype_hk, azt, elt, scantype = identify_scans(thk, az, el, tt=tt, doplot=True, plotrange=[0,2000], thr_speedmin=0.1)
 ```
 
 ```{python}
@@ -385,7 +399,7 @@ def remove_offset_scan(mytod, scantype, method='meancut', apply_to_bad = True):
     donefirst = 0
     
     nscans = np.max(np.abs(scantype))
-    for n in range(1, nscans):
+    for n in range(1, nscans+1):
         # scan +
         ok = scantype == n
         if method == 'meancut':
@@ -426,7 +440,8 @@ def remove_offset_scan(mytod, scantype, method='meancut', apply_to_bad = True):
             donefirst = 1
     
     return mytod
-    
+
+
 ```
 
 ```{python}
@@ -512,8 +527,6 @@ As expected, it does not affect the ground pickup, but does a good job equalizin
 ```{python}
 anatype = 'Az Corr removed'
 
-### Destriping for each scan with clipped mean
-nscans = np.max(np.abs(scantype))
 mytod = -tod.copy()
 
 # Remove offsets first usingg median (here we just want to have all scans at the same leveel before decorrelating from azimuth)
@@ -634,6 +647,187 @@ There are various ways for investigating this (and what I discuss here is surely
 - With a single dataset we could also use multiple TES and make some median in order to avoid the signal as it will not be present on all TES at the same az/el...
 
 For now, let's try the simplest approach: using a single TES.
+
+```{python}
+def get_chunks(mytod, scantype, value):
+    ### returns chunks corresponding to a given value
+    current_chunk = []
+    chunk_idx = []
+    inchunk = 0
+    chunknum = 0
+    for i in range(len(scantype)):
+        if scantype[i]==value:
+            inchunk = 1
+            current_chunk.append(i)
+        else:
+            if inchunk == 1:
+                chunknum += 1
+                chunk_idx.append([current_chunk[0], current_chunk[len(current_chunk)-1]])
+                current_chunk = []
+                inchunk = 0
+    if inchunk == 1:
+        chunk_idx.append([current_chunk[0], current_chunk[len(current_chunk)-1]])
+    return chunk_idx
+
+
+def linear_rescale_chunks(mytod, chunks, sz=1000):
+    for i in range(len(chunks)):
+        thechunk = chunks[i]
+        chunklen = thechunk[1] - thechunk[0]+1
+        if thechunk[0] == 0:
+            # this is the starting index => just the average
+            vals = np.zeros(chunklen) + np.median(mytod[thechunk[1]+1: thechunk[1]+sz]) + np.median(mytod[thechunk[0]:thechunk[1]])
+            mytod[thechunk[0]:thechunk[1]+1] -= vals
+        elif thechunk[1]==(len(mytod)-1):
+            # this is the last one => just the average
+            vals = np.zeros(chunklen) + np.median(mytod[thechunk[0]-1-sz: thechunk[0]-1]) + np.median(mytod[thechunk[0]:thechunk[1]])
+            mytod[thechunk[0]:thechunk[1]+1] -= vals
+        else:
+            left = np.median(mytod[thechunk[0]-1-sz: thechunk[0]-1])
+            right = np.median(mytod[thechunk[1]+1: thechunk[1]+sz])
+            vals = left + np.linspace(0,1, chunklen)*(right-left)
+            mytod[thechunk[0]:thechunk[1]+1] -= np.median(mytod[thechunk[0]:thechunk[1]+1]) - vals
+            
+    return mytod
+```
+
+```{python}
+anatype = 'Az/El Corr removed'
+
+### Destriping for each scan with clipped mean
+nscans = np.max(np.abs(scantype))
+mytod = -tod.copy()
+
+# Remove offsets first usingg median (here we just want to have all scans at the same leveel before decorrelating from azimuth)
+mytod = remove_offset_scan(mytod, scantype, method='median')
+
+### Profiling in Azimuth and elevation
+n_el = 20
+el_lims = np.linspace(np.min(el)-0.0001, np.max(el)+0.0001, n_el+1)
+el_av = 0.5 * (el_lims[1:] + el_lims[:-1])
+
+okall = np.abs(scantype) > 0 
+okpos = scantype > 0 
+okneg = scantype < 0 
+oks = [okpos, okneg]
+oks_names = ['+ scans', '- scans']
+minaz = np.min(azt[okall])
+maxaz = np.max(azt[okall])
+xaz = np.linspace(minaz, maxaz, 100)
+
+degree = 3
+coefficients = np.zeros((2, n_el, degree+1))
+for i in range(len(oks)):
+    subplot(1,2,i+1)
+    xlabel('Azimuth [deg]')
+    ylabel('Mode of TOD')
+    for j in range(n_el):
+        ok = oks[i] & (elt >= el_lims[j]) & (elt < el_lims[j+1])
+        xc, yc, dx, dy, _ = ft.profile(azt[ok], mytod[ok], rng=[minaz, maxaz], nbins=50, mode=True, dispersion=True, plot=False)
+        z = polyfit(xc, yc, degree, w=1./dy)
+        p = np.poly1d(z)
+        coefficients[i,j,:] = z
+        pl = errorbar(xc, yc, yerr=dy, xerr=dx, fmt='o')
+        plot(xaz, p(xaz), color=pl[0].get_color(), label = oks_names[i] + ' - El = {0:5.1f}'.format(np.mean(elt[ok])))
+    legend()
+show()
+
+### Now interpolate this to remove it to the data
+nscans = np.max(np.abs(scantype))
+for i in range(1, nscans+1):
+    okp = scantype == i
+    okn = scantype == (-i)
+    for ok in [okp, okn]:
+        the_el = np.median(elt[ok])
+        myp = np.poly1d([np.interp(the_el, el_av, coefficients[0,:,i]) for i in arange(degree+1)])
+        mytod[ok] -= myp(azt[ok])
+### And interpolate for scantype==0 regions
+bad_chunks = get_chunks(mytod, scantype, 0)
+mytod = linear_rescale_chunks(mytod, bad_chunks, sz=100)
+    
+
+# remove offsets again but this time with mode method as it appears to be less affected 
+# by the presence of the peaks (no underestimation of the offset resultingg is shadow around the peaks)
+mytod = remove_offset_scan(mytod, scantype, method='mode')
+
+figure()
+plot(tt[scantype>0], mytod[scantype>0], '.', label='Scan +')
+plot(tt[scantype<0], mytod[scantype<0], '.', label='Scan +')
+plot(tt[scantype==0], mytod[scantype==0], '.', label='Bad')
+xlim(0,1000)
+ylim(-30000, 30000)
+legend()
+show()
+
+
+### Then make the maps
+mapsb, mapcount = healpix_map(azt[scantype != 0], elt[scantype != 0], mytod[scantype != 0], nside=nside)
+mapsb_pos, _ = healpix_map(azt[scantype > 0], elt[scantype > 0], mytod[scantype > 0], nside=nside)
+mapsb_neg, _ = healpix_map(azt[scantype < 0], elt[scantype < 0], mytod[scantype < 0], nside=nside)
+```
+
+```{python}
+unseen = (mapsb == hp.UNSEEN) | (mapsb_pos == hp.UNSEEN) | (mapsb_neg == hp.UNSEEN)
+
+### Average of back and Forth
+mapav = (mapsb_pos + mapsb_neg)/2
+mapav[unseen] = hp.UNSEEN
+
+### Difference of back and Forth
+mapdiff = (mapsb_pos - mapsb_neg)
+mapdiff[unseen] = hp.UNSEEN
+
+### Difference of All and Av
+mapdiff2 = (mapav - mapsb)
+mapdiff2[unseen] = hp.UNSEEN
+
+nlo = 3
+nhi = 3
+reso = 12
+mm, ss = ft.meancut(mapsb[~unseen], 3)
+hp.gnomview(mapsb, rot=[0,50], reso=reso, sub=(2,3,1), title=anatype+'\n Both scans $\sigma$ = {0:5.3g}'.format(ss), min=-nlo*ss, max=nhi*ss)
+mmp, ssp = ft.meancut(mapsb_pos[~unseen], 3)
+hp.gnomview(mapsb_pos, rot=[0,50], reso=reso, sub=(2,3,2), title=anatype+'\n Pos scans $\sigma$ = {0:5.3g}'.format(ssp), min=-nlo*ss, max=nhi*ss)
+mmn, ssn = ft.meancut(mapsb_neg[~unseen], 3)
+hp.gnomview(mapsb_neg, rot=[0,50], reso=reso, sub=(2,3,3), title=anatype+'\n Neg scans $\sigma$ = {0:5.3g}'.format(ssn), min=-nlo*ss, max=nhi*ss)
+mma, ssa = ft.meancut(mapav[~unseen], 3)
+hp.gnomview(mapav, rot=[0,50], reso=reso, sub=(2,3,4), title=anatype+'\n Av of Both scans $\sigma$ = {0:5.3g}'.format(ssa), min=-nlo*ss, max=nhi*ss)
+mmd, ssd = ft.meancut(mapdiff[~unseen], 3)
+hp.gnomview(mapdiff, rot=[0,50], reso=reso, sub=(2,3,5), title=anatype+'\n Diff of both scans $\sigma$ = {0:5.3g}'.format(ssd), min=-nlo*ssd, max=nlo*ssd)
+mmd2, ssd2 = ft.meancut(mapdiff2[~unseen], 3)
+hp.gnomview(mapdiff2, rot=[0,50], reso=reso, sub=(2,3,6), title=anatype+'\n Both - Av $\sigma$ = {0:5.3g}'.format(ssd2), min=-nlo*ssd, max=nlo*ssd)
+
+
+figure()
+mini = -np.max(mapsb[~unseen])/10
+maxi = np.max(mapsb[~unseen])*0.8
+
+mm, ss = ft.meancut(mapsb[~unseen], 3)
+hp.gnomview(mapsb, rot=[0,50], reso=reso, sub=(2,3,1), title=anatype+'\n Both scans $\sigma$ = {0:5.3g}'.format(ss), min=mini, max=maxi)
+mmp, ssp = ft.meancut(mapsb_pos[~unseen], 3)
+hp.gnomview(mapsb_pos, rot=[0,50], reso=reso, sub=(2,3,2), title=anatype+'\n Pos scans $\sigma$ = {0:5.3g}'.format(ssp), min=mini, max=maxi)
+mmn, ssn = ft.meancut(mapsb_neg[~unseen], 3)
+hp.gnomview(mapsb_neg, rot=[0,50], reso=reso, sub=(2,3,3), title=anatype+'\n Neg scans $\sigma$ = {0:5.3g}'.format(ssn), min=mini, max=maxi)
+mma, ssa = ft.meancut(mapav[~unseen], 3)
+hp.gnomview(mapav, rot=[0,50], reso=reso, sub=(2,3,4), title=anatype+'\n Av of Both scans $\sigma$ = {0:5.3g}'.format(ssa), min=mini, max=maxi)
+mmd, ssd = ft.meancut(mapdiff[~unseen], 3)
+hp.gnomview(mapdiff, rot=[0,50], reso=reso, sub=(2,3,5), title=anatype+'\n Diff of both scans $\sigma$ = {0:5.3g}'.format(ssd), min=mini, max=maxi)
+mmd2, ssd2 = ft.meancut(mapdiff2[~unseen], 3)
+hp.gnomview(mapdiff2, rot=[0,50], reso=reso, sub=(2,3,6), title=anatype+'\n Both - Av $\sigma$ = {0:5.3g}'.format(ssd2), min=mini, max=maxi)
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
 
 ```{python}
 

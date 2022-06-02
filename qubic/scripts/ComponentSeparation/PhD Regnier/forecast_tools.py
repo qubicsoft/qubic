@@ -182,36 +182,41 @@ class ForecastMC(object):
     ##########
     Parameters:
         - config : Dictionnary of your instrument
-        - r : flaot, value of the Tensor-to-scalar ratio r that your are considering
+        - r : float, value of the Tensor-to-scalar ratio r that your are considering
         - Alens : float, value of the lensing
         - covmap : array, Coverage map of your instrument. If you're using a combination of instrument, that have the same coverage map.
 
     """
 
-    def __init__(self, config, r, Alens, covmap):
+    def __init__(self, config, r, Alens, radec, fsky):
 
         self.config=config
-        self.nus=self.config['frequency'].astype(float)
+        self.nus=self.config['frequency']
         self.depth_p=self.config['depth_p']
-        self.nside=64
+        self.nside=128
         self.npix=12*self.nside**2
         self.nfreqs=len(self.nus)
         self.w=None
-        self.lmin=2
-        self.lmax=180
+        self.lmin=20#2
+        self.lmax=220#180
         #self.lmax=355
-        self.dl=15#35
+        self.dl=20#15
         self.r=r
         self.Alens=Alens
         self.cc=0
-        self.covmap=covmap
+        self.fsky=fsky
+        self.radec=radec
+        self.covmap=get_coverage(self.fsky, self.nside, center_radec=self.radec)
 
 
         maskpix = np.zeros(12*self.nside**2)
-        pixok = self.covmap > 0
-        maskpix[pixok] = 1
+        self.pixok = self.covmap > 0
+        maskpix[self.pixok] = 1
         self.Namaster = nam.Namaster(maskpix, lmin=self.lmin, lmax=self.lmax, delta_ell=self.dl)
-        self.Namaster.fsky = 0.03
+        self.Namaster.fsky = self.fsky
+        self.Namaster.ell_binned, _=self.Namaster.get_binning(self.nside)
+        #self.Namaster.ell_binned=self.Namaster.ell_binned[:-1]
+        #print(self.Namaster.ell_binned.shape)
 
 
         print('*********************************')
@@ -220,6 +225,8 @@ class ForecastMC(object):
         print()
         print('    Frequency [GHz] : {}'.format(self.nus))
         print('    Nside : {}'.format(self.nside))
+        print('    Fsky : {}'.format(self.fsky))
+        print('    Patch sky : {}'.format(self.radec))
         print('    lmin : {}'.format(self.lmin))
         print('    lmax : {}'.format(self.lmax))
         print('    dl : {}'.format(self.dl))
@@ -230,9 +237,9 @@ class ForecastMC(object):
         print('*********************************')
         print('*********************************\n')
     def residuals_fg_cl(self, cmb, cmb_est):
-        pixok = self.covmap > 0
+        self.pixok = self.covmap > 0
         res=cmb-cmb_est
-        res[:, ~pixok]=0
+        res[:, ~self.pixok]=0
         cl=get_fg_res(res, lmax=self.lmax)
 
         return np.arange(1, 513, 1), cl
@@ -241,7 +248,7 @@ class ForecastMC(object):
         instr=fgbuster.get_instrument('INSTRUMENT')
         instr.frequency=self.nus
         instr.depth_p=self.depth_p
-        comp=[fgbuster.CMB(), fgbuster.Dust(nu0=145, temp=20), fgbuster.Synchrotron(nu0=145)]
+        comp=[fgbuster.CMB(), fgbuster.Dust(nu0=145, temp=20)]#, fgbuster.Synchrotron(nu0=145)]
 
         return instr, comp
     def compute_cmb(self, seed):
@@ -249,7 +256,8 @@ class ForecastMC(object):
 
         ell=np.arange(2*self.nside-1)
         mycls = _get_Cl_cmb(Alens=self.Alens, r=self.r)
-
+        mycls[1, :]=np.zeros(4000)
+        mycls[3, :]=np.zeros(4000)
 
         np.random.seed(seed)
         maps = hp.synfast(mycls, self.nside, verbose=False, new=True)
@@ -259,8 +267,8 @@ class ForecastMC(object):
         return mymaps
     def preset_fg(self, dustmodel, dict_dust):
 
-        print('********** Define foregrounds settings **********')
-        print()
+        #print('********** Define foregrounds settings **********')
+        #print()
         k=0
         for i in dict_dust.keys():
             if len(dict_dust)==k:
@@ -272,18 +280,18 @@ class ForecastMC(object):
         print()
     def compute_fg(self, dust_model, presets_dust=None, NSIDE_PATCH=4):
 
-        print("\nYou're computing thermal dust with model {}\n".format(dust_model))
+        #print("\nYou're computing thermal dust with model {}\n".format(dust_model))
 
         dustmaps=np.zeros((self.nfreqs, 3, self.npix))
-        settings=[dust_model, 's1']
+        settings=[dust_model]#, 's1']
         self.preset_fg(dustmodel=dust_model, dict_dust=presets_dust)
         sky = pysm3.Sky(nside = self.nside, preset_strings=settings)
 
         if dust_model == 'd1' or dust_model == 'd2' or dust_model == 'd3' or dust_model == 'd6':
             sky.components[0].mbb_temperature=20*sky.components[0].mbb_temperature.unit     # fix temp at 20 K across the sky
-            print('Downgrade pixelization of spectral indices at nside = {}'.format(NSIDE_PATCH))
+            #print('Downgrade pixelization of spectral indices at nside = {}'.format(NSIDE_PATCH))
 
-            for spectral_param in [sky.components[0].mbb_index, sky.components[1].pl_index]:
+            for spectral_param in [sky.components[0].mbb_index]:#, sky.components[1].pl_index]:
                 spectral_param[:] = hp.ud_grade(hp.ud_grade(spectral_param.value, NSIDE_PATCH),
                                     self.nside) * spectral_param.unit
 
@@ -324,7 +332,7 @@ class ForecastMC(object):
     def ana_likelihood(self, rv, leff, fakedata, errors, model, prior,mylikelihood=mcmc.LogLikelihood, covariance_model_funct=None):
 
         ll = mylikelihood(xvals=leff, yvals=fakedata, errors=errors,
-                                model = model, flatprior=prior, covariance_model_funct=covariance_model_funct)
+                                model = model, flatprior=prior, covariance_model_funct=covariance_model_funct, nbins=len(leff))
 
         like = np.zeros_like(rv)
         for i in range(len(rv)):
@@ -364,23 +372,21 @@ class ForecastMC(object):
         return like, cumint, allrlim
     def RUN_MC(self, N, dust_model, dict_dust, nside_fgb):
 
-        pixok = self.covmap > 0
-
         instr, comp = self.instrument()
-        clBB=np.zeros((N, 10))
+        clBB=np.zeros((N, len(self.Namaster.ell_binned)))
         seed=np.zeros(N)
 
-        cmb_est=np.zeros((N, 2, np.sum(pixok)))
+        cmb_est=np.zeros((N, 2, np.sum(self.pixok)))
         index_est=np.zeros((N, 12*nside_fgb**2))
-        cl_fg=np.zeros((N, 181))
+        cl_fg=np.zeros((N, self.lmax+1))
         for i in range(N):
             print('Iteration {:.0f} over {:.0f}'.format(i+1, N))
 
             s=np.random.randint(10000000)
             seed[i]=s
-            print('\nSeed of the CMB is {}\n'.format(s))
+            #print('\nSeed of the CMB is {}\n'.format(s))
             mycmb=self.compute_cmb(seed=s)
-            mycmb[:, :, ~pixok]=0
+            mycmb[:, :, ~self.pixok]=0
 
             maps_for_namaster=np.zeros((2, 3, self.npix))
             myfg=self.compute_fg(dust_model, presets_dust=dict_dust, NSIDE_PATCH=nside_fgb)
@@ -390,35 +396,35 @@ class ForecastMC(object):
                 maps_for_fgb+=myfg.copy()
                 maps_for_fgb+=mycmb.copy()
                 noise=self._get_noise()
-                print("RMS of noise {:.0f} : {:.6f} muK".format(nb+1, np.std(noise[0, 1, pixok])))
+                #print("RMS of noise {:.0f} : {:.6f} muK".format(nb+1, np.std(noise[0, 1, self.pixok])))
                 maps_for_fgb+=noise.copy()
 
-                maps_for_fgb[:, :, ~pixok]=hp.UNSEEN
+                maps_for_fgb[:, :, ~self.pixok]=hp.UNSEEN
 
 
                 r=fgbuster.separation_recipes.basic_comp_sep(comp,
                                                              instr,
                                                              maps_for_fgb[:, 1:, :], nside=nside_fgb, tol=1e-18, method='TNC')
 
-                cmb_est[i]=r.s[0, :, pixok].T.copy()
+                cmb_est[i]=r.s[0, :, self.pixok].T.copy()
                 index_est[i]=r.x[0].copy()
                 maps_for_namaster[nb, 1:]=r.s[0].copy()
 
-            print('Computing foregrounds residuals in Cl space...\n')
+            #print('Computing foregrounds residuals in Cl space...\n')
 
             ell, cl_fg[i] = self.residuals_fg_cl(mycmb[0], np.mean(maps_for_namaster, axis=0))
-            print('First bins of cl_fg -> {}'.format(cl_fg[i, 10:30]))
+            #print('First bins of cl_fg -> {}'.format(cl_fg[i, 10:30]))
             #print('Done\n')
-            print("\nComputing cross-spectra...")
+            #print("\nComputing cross-spectra...")
             leff, clBB[i] = self.get_clBB(maps_for_namaster[0], maps_for_namaster[1])
-            print('Estimated power spectrum : {}'.format(clBB[i]))
+            #print('Estimated power spectrum : {}'.format(clBB[i]))
         mydata=np.mean(clBB, axis=0)
         myerr=np.std(clBB, axis=0)
         rv=np.linspace(0, 0.2, 10000)
 
         print('\nComputing cosmological parameters...\n')
 
-        like, _, allrlim = self.explore_like(leff[1:-2], mydata[1:-2], myerr[1:-2], rv, cov=self.covmap, verbose=False, sample_variance=False)
+        like, _, allrlim = self.explore_like(leff[:-1], mydata[:-1], myerr[:-1], rv, cov=self.covmap, verbose=False, sample_variance=True)
 
         lim, szlim = confidence_interval(rv,like)
         CL95=lim[1][1]

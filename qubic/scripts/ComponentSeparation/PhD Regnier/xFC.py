@@ -26,37 +26,6 @@ center = qubic.equ2gal(-30, -30)
 # If there is not this command, the kernel shut down every time..
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
-freqs = np.array([134.63, 141.57, 148.87 , 156.54, 164.61, 197.46, 207.64, 218.34, 229.59, 241.43])
-bandwidth = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-dnu_nu = bandwidth/freqs
-beam_fwhm = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-mukarcmin_TT = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-mukarcmin_EE = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-mukarcmin_BB = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-ell_min = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-nside = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-edges_min = freqs * (1. - dnu_nu/2)
-edges_max = freqs * (1. + dnu_nu/2)
-edges = [[edges_min[i], edges_max[i]] for i in range(len(freqs))]
-qubic_spa_config = {
-    'nbands': len(freqs),
-    'frequency': freqs,
-    'depth_p': np.array([27.87, 33.82, 36.97, 34.19, 24.18, 20.34, 25.04, 27.07, 25.74, 21.20]),#0.5*(mukarcmin_EE + mukarcmin_BB),
-    'depth_i': np.array([29.03, 47.50, 41.63, 30.09, 30.99, 19.77, 25.97, 22.78, 22.81, 27.20]),#mukarcmin_TT,
-    'depth_e': mukarcmin_EE,
-    'depth_b': mukarcmin_BB,
-    'fwhm': beam_fwhm,
-    'bandwidth': bandwidth,
-    'dnu_nu': dnu_nu,
-    'ell_min': ell_min,
-    'nside': nside,
-    'fsky': 0.03,
-    'ntubes': 12,
-    'nyears': 7.,
-    'edges': edges,
-    'effective_fraction': np.zeros(len(freqs))+1.
-            }
-
 def get_coverage(fsky, nside, center_radec=[-30, -30]):
     center = qubic.equ2gal(center_radec[0], center_radec[1])
     uvcenter = np.array(hp.ang2vec(center[0], center[1], lonlat=True))
@@ -146,7 +115,7 @@ def combine_config(list_of_config):
         mydepth=conf['depth_p']
         for j in range(len(mynus)):
             mynewnus.append(mynus[j])
-            mynewdepth_i.append(1e10)
+            mynewdepth_i.append(1e3)
             mynewdepth_p.append(mydepth[j])
     dict={}
     dict['frequency']=np.array(mynewnus)
@@ -160,9 +129,12 @@ def get_list_config(name, nsub):
         if i % 2 == 0:
             with open('/pbs/home/m/mregnier/sps1/QUBIC+/forecast_decorrelation/{}_config.pkl'.format(name[i:i+2]), 'rb') as f:
                 config = pickle.load(f)
-                if nsub!=1 and name[i:i+2]=='S4':
-                    qp_effective_fraction=np.array([1, 1, 1, 1, 1, 1, 1, 1, 1])
-                    qp_config=qubicify(config, np.array([1, 1, 1, 1, 1, 1, 1, 1, 1])*nsub, qp_effective_fraction)
+
+                if name[i:i+2] == 'PL':
+                    myconf.append(config)
+                elif nsub!=1:
+                    qp_effective_fraction=np.ones(config['nbands'])
+                    qp_config=qubicify(config, np.ones(config['nbands']).astype(int)*nsub, qp_effective_fraction)
                     myconf.append(qp_config)
                 else:
                     myconf.append(config)
@@ -175,7 +147,6 @@ pixok = covmap > 0
 ############################## Parameters ############################
 ######################################################################
 
-#################################
 N=int(sys.argv[1])
 nside_out=int(sys.argv[2])
 r=float(sys.argv[3])
@@ -184,15 +155,20 @@ correlation_length=int(sys.argv[4])
 number_of_subbands=int(sys.argv[5])
 dust_model=str(sys.argv[6])
 name=str(sys.argv[7])
+fsky=float(sys.argv[8])
+if fsky == 0.01:
+    radec = [-30, 320]
+elif fsky == 0.03:
+    radec = [-30, -30]
 
-Alens=1.
+Alens=float(sys.argv[9])
 
 myconf=get_list_config(name=name, nsub=number_of_subbands)
 config=combine_config(myconf)
 
 
 
-object=forecast_tools.ForecastMC(config, r=r, Alens=Alens, covmap=covmap)
+object=forecast_tools.ForecastMC(config, r=r, Alens=Alens, fsky=fsky, radec=radec)  # S4 -> [-30, -30]   BK -> [-30, 320]
 
 if dust_model == 'd6':
     presets_dust={'correlation_length':correlation_length}
@@ -238,6 +214,6 @@ mydict = {'leff':leff,
           'sigma_r':sigma_r
         }
 output = open('/pbs/home/m/mregnier/sps1/QUBIC+/forecast_decorrelation/results/'+
-                'forecast_{}_model{}_decorrelation{}_nfsub{}_{}reals.pkl'.format(name, dust_model, correlation_length, number_of_subbands, N), 'wb')
+                'forecast_Alens{:.1f}_{}_model{}_decorrelation{}_nfsub{}_{}reals.pkl'.format(Alens, name, dust_model, correlation_length, number_of_subbands, N), 'wb')
 pickle.dump(mydict, output)
 output.close()

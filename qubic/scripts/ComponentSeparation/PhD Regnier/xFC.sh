@@ -18,4 +18,4 @@ export QUBIC_DATADIR=/pbs/home/m/mregnier/Libs/qubic/qubic/
 export QUBIC_DICT=$QUBIC_DATADIR/dicts
 
 
-python /pbs/home/m/mregnier/sps1/QUBIC+/forecast_decorrelation/xFC.py $1 $2 $3 $4 $5 $6 $7
+python /pbs/home/m/mregnier/sps1/QUBIC+/forecast_decorrelation/xFC.py $1 $2 $3 $4 $5 $6 $7 $8 $9

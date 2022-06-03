@@ -309,11 +309,8 @@ def get_mode(y, nbinsmin=51):
 ```
 
 ```{python}
-def display_one(mapsb, anatype='', sub=(1,1,1)):
-
-    nlo = 3
-    nhi = 3
-    reso = 12
+def display_one(mapsb, anatype='', sub=(1,1,1), nlo=3, nhi=3, reso=12):
+    unseen = (mapsb == hp.UNSEEN)
     mm, ss = ft.meancut(mapsb[~unseen], 3)
     hp.gnomview(mapsb, rot=[0,50], reso=reso, sub=sub, title=anatype+'\n Both scans $\sigma$ = {0:5.3g}'.format(ss), min=-nlo*ss, max=nhi*ss)
 
@@ -793,7 +790,7 @@ As a consequence we do not want to remove any feature in the TOD larger than the
 
 The angular velocity here is 0.75 degree/sec in azimuth, so this corresponds to 0.45 seconds, or 2.2 Hertz.
 
-This means that we expect no signal below 2 Hertz, we can then filter these modes out.
+This means that we expect no signal beyond 2 Hertz, we can then filter these modes out.
 
 ```{python}
 anatype = 'TS, Az/El Corrected + Filtering'
@@ -861,15 +858,17 @@ def brute_force_bandpass(ff, fcuts):
 ```{python}
 # 5. Low-pass filter the data
 sampling = 1./np.median(tt[1:]-tt[:-1])    # Sampling frequency
-fcut = 3. # Hz
+fmin = sampling/len(tod)
+print('fmin = {0:5.2g}'.format(fmin))
+fcut = 5e-1 # Hz
 
-mytod_brute_LP = fft_filter(mytod, sampling, fcut, brute_force_lopass)
-p5_brute_LP, ff = ft.power_spectrum(tt, mytod_brute_LP, rebin=True)
+# mytod_brute_LP = fft_filter(mytod, sampling, fcut, brute_force_lopass)
+# p5_brute_LP, ff = ft.power_spectrum(tt, mytod_brute_LP, rebin=True)
 
-mytod_butter_LP = ft.butter_bandpass_filter(mytod, 1./10000000, fcut, sampling, order=2)
-p5_butter_LP, ff = ft.power_spectrum(tt, mytod_butter_LP, rebin=True)
+# mytod_butter_LP = ft.butter_bandpass_filter(mytod, sampling/len(tod)/2, fcut, sampling, order=2)
+# p5_butter_LP, ff = ft.power_spectrum(tt, mytod_butter_LP, rebin=True)
 
-fcuts = [4e-3, fcut]
+fcuts = [1e-4, fcut]
 mytod_brute_BP = fft_filter(mytod, sampling, fcuts, brute_force_bandpass)
 p5_brute_BP, ff = ft.power_spectrum(tt, mytod_brute_BP, rebin=True)
 
@@ -896,24 +895,36 @@ legend()
 
 ```{python}
 ### Then make the maps
-mapsb_brute_LP, mapcount = healpix_map(azt[scantype != 0], elt[scantype != 0], mytod_brute_LP[scantype != 0], nside=nside)
-mapsb_butter_LP, mapcount = healpix_map(azt[scantype != 0], elt[scantype != 0], mytod_butter_LP[scantype != 0], nside=nside)
+# mapsb_brute_LP, mapcount = healpix_map(azt[scantype != 0], elt[scantype != 0], mytod_brute_LP[scantype != 0], nside=nside)
+# mapsb_butter_LP, mapcount = healpix_map(azt[scantype != 0], elt[scantype != 0], mytod_butter_LP[scantype != 0], nside=nside)
 mapsb_brute_BP, mapcount = healpix_map(azt[scantype != 0], elt[scantype != 0], mytod_brute_BP[scantype != 0], nside=nside)
 mapsb_butter_BP, mapcount = healpix_map(azt[scantype != 0], elt[scantype != 0], mytod_butter_BP[scantype != 0], nside=nside)
 ```
 
 ```{python}
 # Display Results
-display_one(mapsb, anatype='TS, Az/El Corrected', sub=(2,3,1))
-display_one(mapsb_brute_LP, anatype='Brute LP', sub=(2,3,2))
-display_one(mapsb_butter_LP, anatype='Butter LP', sub=(2,3,3))
-display_one(mapsb_brute_BP, anatype='Brute BP', sub=(2,3,5))
-display_one(mapsb_butter_BP, anatype='Butter BP', sub=(2,3,6))
+
+nlo = 3
+nhi = 3
+
+# nlo = 0.5
+# nhi = 100
+
+display_one(mapsb, anatype='TS, Az/El Corrected', sub=(2,3,1), nlo=nlo, nhi=nhi)
+display_one(mapsb_brute_LP, anatype='Brute LP', sub=(2,3,2), nlo=nlo, nhi=nhi)
+display_one(mapsb_butter_LP, anatype='Butter LP', sub=(2,3,3), nlo=nlo, nhi=nhi)
+display_one(mapsb_brute_BP, anatype='Brute BP', sub=(2,3,5), nlo=nlo, nhi=nhi)
+display_one(mapsb_butter_BP, anatype='Butter BP', sub=(2,3,6), nlo=nlo, nhi=nhi)
 
 ```
 
-```{python}
+We see tnat the gain is not huge... This si mostly due to the presence of the bright peaks. There are ways too overcome this, such as masking the regggions where the signal is strong in the TOD, then repacing them by some constrained noise realization, applying the filtering and putting the signal back. This is usually not too efficient unfortunately.
 
+With CMB data, we will have much more. crossings with various angles, a much lower signal to noise ratio (therefore no strong peak effect) so it will be much easier to filter. However,  one important thing about filter ing is that you always remove some of the signal with filtering. This has to be accounted for at Cl level by measuring the transfer function of the TOD pipeline and correcting the measured Cl accordingly.
+
+
+```{python}
+plot(arange(10))
 ```
 
 ```{python}

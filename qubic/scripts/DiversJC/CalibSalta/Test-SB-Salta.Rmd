@@ -5,17 +5,16 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.13.8
   kernelspec:
-    display_name: Python 3
+    display_name: Python 3 (ipykernel)
     language: python
     name: python3
 ---
 
 ```{python}
-from IPython.display import set_matplotlib_formats
-set_matplotlib_formats('retina')
-from IPython.core.display import display, HTML
+# %config InlineBackend.figure_format='retina'
+from IPython.display import display, HTML
 display(HTML("<style>.container { width:95% !important; }</style>"))
 
 rc('figure',figsize=(16,8))
@@ -44,11 +43,12 @@ Or alternatively, a scan a 170 GHz on April 14th:
 mydatadir = '/Users/hamilton/Qubic/Calib-TD/'
 thedate = '2022-04-16'
 thedata = '2022-04-16_12.37.59__ScanMap_Speed_VE14_FastNoMod'
+FreqSrc = 140.
 
 # mydatadir = '/Users/hamilton/Qubic/Calib-TD/'
 # thedate = '2022-04-14'
 # thedata = '2022-04-14_13.17.33__ScanMap_Speed_VE14_FastNoMod'
-
+# FreqSrc = 170.
 
 
 filename = mydatadir + '/' + thedate + '/' + thedata
@@ -62,11 +62,7 @@ tt, tod = a.tod()
 az = a.azimuth()
 el = a.elevation()
 thk = a.timeaxis(datatype='hk')
-```
 
-### First just a glimpse at the data
-
-```{python}
 TESnum = 33
 tod = tod[TESnum-1,:]
 del(a)
@@ -75,6 +71,15 @@ del(a)
 tinit = tt[0]
 tt -= tinit
 thk -= tinit
+
+```
+
+### First just a glimpse at the data
+
+```{python}
+rc('figure',figsize=(16,8))
+rc('font',size=12)
+
 
 subplot(2,2,1)
 plot(tt, tod)
@@ -378,7 +383,7 @@ scantype_hk, azt, elt, scantype = identify_scans(thk, az, el, tt=tt, doplot=Fals
 mytod = -tod - np.median(-tod[scantype != 0])
 
 # Map-making
-nside = 220
+nside = 256
 mapsb, mapcount = healpix_map(azt[scantype != 0], elt[scantype != 0], mytod[scantype != 0], nside=nside)
 mapsb_pos, _ = healpix_map(azt[scantype > 0], elt[scantype > 0], mytod[scantype > 0], nside=nside)
 mapsb_neg, _ = healpix_map(azt[scantype < 0], elt[scantype < 0], mytod[scantype < 0], nside=nside)
@@ -411,7 +416,7 @@ scantype_hk, azt, elt, scantype = identify_scans(thk, az, el, tt=tt-deltaT, dopl
 mytod = -tod - np.median(-tod[scantype != 0])
 
 # Map-making
-nside = 220
+nside = 256
 mapsb, mapcount = healpix_map(azt[scantype != 0], elt[scantype != 0], mytod[scantype != 0], nside=nside)
 mapsb_pos, _ = healpix_map(azt[scantype > 0], elt[scantype > 0], mytod[scantype > 0], nside=nside)
 mapsb_neg, _ = healpix_map(azt[scantype < 0], elt[scantype < 0], mytod[scantype < 0], nside=nside)
@@ -782,15 +787,90 @@ Our pipeline is now:
 We will try to improve things using Filtering at the end of the pipeline
 <!-- #endregion -->
 
-The first step here is to identify which are the frequencies (in the TOD domain) that are relevant for the signal we are about to reconstruct. Our signal is the synthesized beam which does not have features smaller that the peak width (arounf 1 degree on the sky for the TD, 0.39 degrees for the FI). So this corresponds to features in azimuth of:
-$$\cos(30) \times 1 deg = 0.87~deg~(el=30)$$
-$$\cos(70) \times 1 deg = 0.34~deg~(el=70)$$
+The first step here is to identify which are the frequencies (in the TOD domain) that are relevant for the signal we are about to reconstruct. Our signal is the synthesized beam which does not have features smaller that the peak width (around 1 degree FWHM on the sky for the TD, 0.39 degrees for the FI). So this corresponds to features (in terms of sigma) in azimuth of:
+$$1 deg  / 2.35 / \cos(50) = 0.66~deg~(el=50)$$
 
-As a consequence we do not want to remove any feature in the TOD larger than the smallest value.
+As a consequence we do not want to remove any feature in the TOD larger than this (and this is just a rough approximmation as we span 30-70 degrees).
 
-The angular velocity here is 0.75 degree/sec in azimuth, so this corresponds to 0.45 seconds, or 2.2 Hertz.
+The angular velocity here is 0.75 degree/sec in azimuth, so this corresponds to 0.88 seconds, or 1.1 Hertz.
 
-This means that we expect no signal beyond 2 Hertz, we can then filter these modes out.
+This means that we expect no signal beyond 1 Hertz, we can then filter these modes out.
+
+#### However it is better to check this with an actual simulation
+We take the theoretical synthesized beam and scan it with out scanning strategy and have a look at the expected TOD for the source alone. We take the theoretical map with a large nside in order to have a good sampling in TOD domain.
+
+```{python}
+import qubic
+from qubicpack.utilities import Qubic_DataDir
+# Repository for dictionary and input maps
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir='../')
+dictfilename = global_dir + '/dicts/pipeline_demo.dict'
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+d['config'] = 'TD'
+d['nside'] = 1024
+
+s = qubic.QubicScene(d)
+q = qubic.QubicMultibandInstrument(d)
+sb = q[0].get_synthbeam(s, idet=154)   # this is the QubicSoft number for TES #33 I think...
+
+### and now we rotathe this map to elevation 50
+rot_custom = hp.Rotator(rot=[180, 90-50], inv=True)
+rot_custom(0,0, lonlat=True)
+sbrot = rot_custom.rotate_map_alms(sb)
+
+#sbrot[hp.ud_grade(mapsb, d['nside'])==hp.UNSEEN] = hp.UNSEEN
+hp.gnomview(mapsb, rot=[0, 50], reso=12, sub=(2,2,1), title='Measured SB')
+hp.gnomview(sbrot, rot=[0, 50], reso=12, sub=(2,2,2), title='Theoretical SB')
+
+#### Now we scan it with the scanning strategy
+# index of pixels for each time sample
+ips = hp.ang2pix(d['nside'], np.radians(90-elt), np.radians(azt))
+tod_th = -sbrot[ips]/np.max(sbrot)
+
+### Put both at the same scale and baseline
+tod_th = tod_th * (np.max(tod)-np.min(tod)) + np.median(tod)
+
+subplot(2,1,2)
+plot(tt, tod, label='Raw TOD')
+plot(tt, tod_th, label='Theoretical TOD')
+legend()
+xlabel('Time')
+ylabel('ADU')
+legend()
+
+```
+
+Now let's look at the power spectrum of the signal alone, and compare to that of the data.
+
+This confirms the above reasonning: we expect no signal beyond 1 Hz, even a bit lower - typically 0.6 Hz.
+
+We also clearly see a few important things:
+- there is signal at very low frequency: this si bad news as it means that if we highpass the data, we will loose some signal... So 1/f features are going to be really annoying. We may have to live with them...
+- The real data shows a very strong peak at the scanning frequency 0.0063 Hz (calculated below from the data). This IS NOT signal, it is the scan-synchronous spurious signal (correlation with azimuth and elevation) that therefore has to be reduced down to the typical size of the theoretical signal.
+
+```{python}
+mytod = -tod.copy()
+p0, ff = ft.power_spectrum(tt, tod, rebin=True)
+pth, ff = ft.power_spectrum(tt, tod_th, rebin=True)
+
+plot(ff, p0, label='Raw')
+plot(ff, pth, label='Expected signal')
+xscale('log')
+yscale('log')
+xlabel('Frequency [Hz]')
+ylabel('PSD')
+
+# scanning period
+scanper = np.min(tt[scantype==60])-np.min(tt[scantype==59])
+scanfreq = 1./scanper
+axvline(x=scanfreq, ls=':', color='k', label='Scanning Frequency ~{0:5.2g} Hz'.format(scanfreq))
+
+legend()
+
+```
+
+### Let's try filtering
 
 ```{python}
 anatype = 'TS, Az/El Corrected + Filtering'
@@ -860,23 +940,21 @@ def brute_force_bandpass(ff, fcuts):
 sampling = 1./np.median(tt[1:]-tt[:-1])    # Sampling frequency
 fmin = sampling/len(tod)
 print('fmin = {0:5.2g}'.format(fmin))
-fcut = 5e-1 # Hz
+fcut = 6e-1 # Hz
 
-# mytod_brute_LP = fft_filter(mytod, sampling, fcut, brute_force_lopass)
-# p5_brute_LP, ff = ft.power_spectrum(tt, mytod_brute_LP, rebin=True)
+mytod_brute_LP = fft_filter(mytod, sampling, fcut, brute_force_lopass)
+p5_brute_LP, ff = ft.power_spectrum(tt, mytod_brute_LP, rebin=True)
 
-# mytod_butter_LP = ft.butter_bandpass_filter(mytod, sampling/len(tod)/2, fcut, sampling, order=2)
-# p5_butter_LP, ff = ft.power_spectrum(tt, mytod_butter_LP, rebin=True)
+mytod_butter_LP = ft.butter_bandpass_filter(mytod, sampling/len(tod)/2, fcut, sampling, order=2)
+p5_butter_LP, ff = ft.power_spectrum(tt, mytod_butter_LP, rebin=True)
 
 fcuts = [1e-4, fcut]
 mytod_brute_BP = fft_filter(mytod, sampling, fcuts, brute_force_bandpass)
 p5_brute_BP, ff = ft.power_spectrum(tt, mytod_brute_BP, rebin=True)
 
-mytod_butter_BP = ft.butter_bandpass_filter(mytod, fcuts[0], fcuts[1], sampling, order=2)
-p5_butter_BP, ff = ft.power_spectrum(tt, mytod_butter_BP, rebin=True)
-
 
 figure()
+plot(ff, pth, label='Theory')
 #plot(ff, p0, label='Raw')
 plot(ff, p2, label='After P2 (median scan)')
 plot(ff, p3, label='After P3 (Az/El Corr)')
@@ -884,7 +962,6 @@ plot(ff, p3, label='After P3 (Az/El Corr)')
 plot(ff, p5_brute_LP, label='After P5 (Brute Force Lo-Pass)')
 plot(ff, p5_butter_LP, label='After P5 (Butterworth Lo-Pass)')
 plot(ff, p5_brute_BP, label='After P5 (Brute Force Band-Pass)')
-plot(ff, p5_butter_BP, label='After P5 (Brute Force Band-Pass)')
 xscale('log')
 yscale('log')
 xlabel('Frequency [Hz]')
@@ -893,12 +970,13 @@ legend()
 
 ```
 
+### Let's remark that the azel correlation is very efficient in removing the scan-synchronous peak.
+
 ```{python}
 ### Then make the maps
-# mapsb_brute_LP, mapcount = healpix_map(azt[scantype != 0], elt[scantype != 0], mytod_brute_LP[scantype != 0], nside=nside)
-# mapsb_butter_LP, mapcount = healpix_map(azt[scantype != 0], elt[scantype != 0], mytod_butter_LP[scantype != 0], nside=nside)
+mapsb_brute_LP, mapcount = healpix_map(azt[scantype != 0], elt[scantype != 0], mytod_brute_LP[scantype != 0], nside=nside)
+mapsb_butter_LP, mapcount = healpix_map(azt[scantype != 0], elt[scantype != 0], mytod_butter_LP[scantype != 0], nside=nside)
 mapsb_brute_BP, mapcount = healpix_map(azt[scantype != 0], elt[scantype != 0], mytod_brute_BP[scantype != 0], nside=nside)
-mapsb_butter_BP, mapcount = healpix_map(azt[scantype != 0], elt[scantype != 0], mytod_butter_BP[scantype != 0], nside=nside)
 ```
 
 ```{python}
@@ -914,18 +992,15 @@ display_one(mapsb, anatype='TS, Az/El Corrected', sub=(2,3,1), nlo=nlo, nhi=nhi)
 display_one(mapsb_brute_LP, anatype='Brute LP', sub=(2,3,2), nlo=nlo, nhi=nhi)
 display_one(mapsb_butter_LP, anatype='Butter LP', sub=(2,3,3), nlo=nlo, nhi=nhi)
 display_one(mapsb_brute_BP, anatype='Brute BP', sub=(2,3,5), nlo=nlo, nhi=nhi)
-display_one(mapsb_butter_BP, anatype='Butter BP', sub=(2,3,6), nlo=nlo, nhi=nhi)
 
 ```
 
-We see tnat the gain is not huge... This si mostly due to the presence of the bright peaks. There are ways too overcome this, such as masking the regggions where the signal is strong in the TOD, then repacing them by some constrained noise realization, applying the filtering and putting the signal back. This is usually not too efficient unfortunately.
+We see that the gain is not huge. This is due to various effects:
+- the presence of the bright peaks. There are ways too overcome this, such as masking the regggions where the signal is strong in the TOD, then repacing them by some constrained noise realization, applying the filtering and putting the signal back. This is usually not too efficient unfortunately.
+- The stripes we would like to remove are actually medium-frequency (shorter than a scan but much longer that the HF cutoff we apply) so they are not well filtered by our method... Tiis is where redundancy becomes important. With CMB data, we will have much more crossings with various angles, a much lower signal to noise ratio (therefore no strong peak effect) so it will be much easier to filter. However,  one important thing about filter ing is that you always remove some of the signal with filtering. This has to be accounted for at Cl level by measuring the transfer function of the TOD pipeline and correcting the measured Cl accordingly.
 
-With CMB data, we will have much more. crossings with various angles, a much lower signal to noise ratio (therefore no strong peak effect) so it will be much easier to filter. However,  one important thing about filter ing is that you always remove some of the signal with filtering. This has to be accounted for at Cl level by measuring the transfer function of the TOD pipeline and correcting the measured Cl accordingly.
+Let's also remark that as anticipated, Band-Pass alters the signal significantly because it has a low-frequency component...
 
-
-```{python}
-plot(arange(10))
-```
 
 ```{python}
 

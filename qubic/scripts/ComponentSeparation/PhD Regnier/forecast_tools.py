@@ -18,7 +18,7 @@ from qubic import camb_interface as qc
 import scipy
 import qubic
 import os.path as op
-CMB_CL_FILE = op.join('/pbs/home/m/mregnier/sps1/QUBIC+/forecast/Cls_Planck2018_%s.fits')
+CMB_CL_FILE = op.join('/pbs/home/m/mregnier/sps1/QUBIC+/forecast_decorrelation/Cls_Planck2018_%s.fits')
 
 def cl2dl(ell, cl):
 
@@ -69,6 +69,12 @@ def confidence_interval(x,px):
         szlim[0] = szlim[1]
         szlim[1] = szlim[1]*2
     return lims, szlim
+def give_me_index(nside):
+
+    settings=['d1', 's1']
+    sky = pysm3.Sky(nside = nside, preset_strings=settings)
+    mbb_index=np.array(sky.components[0].mbb_index)
+    return mbb_index
 
 class Forecast(object):
 
@@ -188,23 +194,25 @@ class ForecastMC(object):
 
     """
 
-    def __init__(self, config, r, Alens, radec, fsky):
+    def __init__(self, config, r, Alens, radec):
 
         self.config=config
         self.nus=self.config['frequency']
         self.depth_p=self.config['depth_p']
-        self.nside=128
+        #print(self.depth_p)
+        #stop
+        self.nside=64
         self.npix=12*self.nside**2
         self.nfreqs=len(self.nus)
         self.w=None
-        self.lmin=20#2
-        self.lmax=220#180
+        self.lmin=20
+        self.lmax=2*self.nside-1
         #self.lmax=355
-        self.dl=20#15
+        self.dl=10
         self.r=r
         self.Alens=Alens
         self.cc=0
-        self.fsky=fsky
+        self.fsky=self.config['fsky']
         self.radec=radec
         self.covmap=get_coverage(self.fsky, self.nside, center_radec=self.radec)
 
@@ -224,6 +232,7 @@ class ForecastMC(object):
         print('*********************************')
         print()
         print('    Frequency [GHz] : {}'.format(self.nus))
+        print('    Depth [muK.arcmin] : {}'.format(self.depth_p))
         print('    Nside : {}'.format(self.nside))
         print('    Fsky : {}'.format(self.fsky))
         print('    Patch sky : {}'.format(self.radec))
@@ -232,6 +241,7 @@ class ForecastMC(object):
         print('    dl : {}'.format(self.dl))
         print('    r : {}'.format(self.r))
         print('    Alens : {}'.format(self.Alens))
+        print('    ell : {}'.format(self.Namaster.ell_binned))
         print()
         print('*********************************')
         print('*********************************')
@@ -248,7 +258,8 @@ class ForecastMC(object):
         instr=fgbuster.get_instrument('INSTRUMENT')
         instr.frequency=self.nus
         instr.depth_p=self.depth_p
-        comp=[fgbuster.CMB(), fgbuster.Dust(nu0=145, temp=20)]#, fgbuster.Synchrotron(nu0=145)]
+        #instr.depth_i=self.depth_i
+        comp=[fgbuster.CMB(), fgbuster.Dust(nu0=145, temp=20), fgbuster.Synchrotron(nu0=145)]
 
         return instr, comp
     def compute_cmb(self, seed):
@@ -256,8 +267,8 @@ class ForecastMC(object):
 
         ell=np.arange(2*self.nside-1)
         mycls = _get_Cl_cmb(Alens=self.Alens, r=self.r)
-        mycls[1, :]=np.zeros(4000)
-        mycls[3, :]=np.zeros(4000)
+        #mycls[1]=np.zeros(4000)
+        #mycls[3]=np.zeros(4000)
 
         np.random.seed(seed)
         maps = hp.synfast(mycls, self.nside, verbose=False, new=True)
@@ -283,24 +294,28 @@ class ForecastMC(object):
         #print("\nYou're computing thermal dust with model {}\n".format(dust_model))
 
         dustmaps=np.zeros((self.nfreqs, 3, self.npix))
-        settings=[dust_model]#, 's1']
+        if dust_model == 'd0':
+            sync_model = 's0'
+        else:
+            sync_model = 's1'
+        settings=[dust_model, sync_model]
         self.preset_fg(dustmodel=dust_model, dict_dust=presets_dust)
         sky = pysm3.Sky(nside = self.nside, preset_strings=settings)
 
-        if dust_model == 'd1' or dust_model == 'd2' or dust_model == 'd3' or dust_model == 'd6':
+        if dust_model == 'd0' or dust_model == 'd1' or dust_model == 'd2' or dust_model == 'd3' or dust_model == 'd6':
             sky.components[0].mbb_temperature=20*sky.components[0].mbb_temperature.unit     # fix temp at 20 K across the sky
             #print('Downgrade pixelization of spectral indices at nside = {}'.format(NSIDE_PATCH))
-
-            for spectral_param in [sky.components[0].mbb_index]:#, sky.components[1].pl_index]:
-                spectral_param[:] = hp.ud_grade(hp.ud_grade(spectral_param.value, NSIDE_PATCH),
-                                    self.nside) * spectral_param.unit
+            if dust_model != 'd0':
+                #print('Downgrade pixelization of spectral indices at nside = {}'.format(NSIDE_PATCH))
+                for spectral_param in [sky.components[0].mbb_index, sky.components[1].pl_index]:
+                    spectral_param[:] = hp.ud_grade(hp.ud_grade(spectral_param.value, NSIDE_PATCH),
+                                        self.nside) * spectral_param.unit
 
         for j in range(self.nfreqs):
             dustmaps[j]=np.array(sky.get_emission(self.nus[j]*u.GHz)*utils.bandpass_unit_conversion(self.nus[j]*u.GHz, None, u.uK_CMB))
 
         return dustmaps
     def get_clBB(self, map1, map2):
-
 
         leff, cls, _ = self.Namaster.get_spectra(map1, map2=map2,
                                  purify_e=False,
@@ -377,8 +392,11 @@ class ForecastMC(object):
         seed=np.zeros(N)
 
         cmb_est=np.zeros((N, 2, np.sum(self.pixok)))
-        index_est=np.zeros((N, 12*nside_fgb**2))
+        dust_est=np.zeros((N, 2, np.sum(self.pixok)))
+        if nside_fgb!=0: index_est=np.zeros((N, 12*nside_fgb**2))
+        else: index_est=np.zeros(N)
         cl_fg=np.zeros((N, self.lmax+1))
+        myfg=self.compute_fg(dust_model, presets_dust=dict_dust, NSIDE_PATCH=nside_fgb)
         for i in range(N):
             print('Iteration {:.0f} over {:.0f}'.format(i+1, N))
 
@@ -404,31 +422,36 @@ class ForecastMC(object):
 
                 r=fgbuster.separation_recipes.basic_comp_sep(comp,
                                                              instr,
-                                                             maps_for_fgb[:, 1:, :], nside=nside_fgb, tol=1e-18, method='TNC')
+                                                             maps_for_fgb[:, 1:, :], nside=nside_fgb)
+
+                #print(r.x)
+
+                #print(r.s.shape)
 
                 cmb_est[i]=r.s[0, :, self.pixok].T.copy()
+                dust_est[i]=r.s[1, :, self.pixok].T.copy()
                 index_est[i]=r.x[0].copy()
                 maps_for_namaster[nb, 1:]=r.s[0].copy()
+                maps_for_namaster[nb, 1:, ~self.pixok]=0
 
             #print('Computing foregrounds residuals in Cl space...\n')
 
             ell, cl_fg[i] = self.residuals_fg_cl(mycmb[0], np.mean(maps_for_namaster, axis=0))
-            #print('First bins of cl_fg -> {}'.format(cl_fg[i, 10:30]))
-            #print('Done\n')
-            #print("\nComputing cross-spectra...")
             leff, clBB[i] = self.get_clBB(maps_for_namaster[0], maps_for_namaster[1])
-            #print('Estimated power spectrum : {}'.format(clBB[i]))
-        mydata=np.mean(clBB, axis=0)
-        myerr=np.std(clBB, axis=0)
-        rv=np.linspace(0, 0.2, 10000)
+            #print('    -> Estimated spectra : {}'.format(clBB[i, :6]))
+        #print('    -> {}'.format(np.mean(index_est)))
+        #print(np.mean(index_est))
+        mydata=np.nanmean(clBB, axis=0)
+        myerr=np.nanstd(clBB, axis=0)
+        rv=np.linspace(0, 1, 10000)
 
         print('\nComputing cosmological parameters...\n')
 
         like, _, allrlim = self.explore_like(leff[:-1], mydata[:-1], myerr[:-1], rv, cov=self.covmap, verbose=False, sample_variance=True)
-
+        print('rlim from explore_like : {}'.format(allrlim))
         lim, szlim = confidence_interval(rv,like)
         CL95=lim[1][1]
         maxL=rv[like == np.max(like)][0]
-        sigma=lim[0][1]
+        sigma=allrlim#lim[0][1]
 
-        return leff, clBB, like, maxL, sigma, CL95, cmb_est, seed, cl_fg, index_est
+        return leff, clBB, like, maxL, sigma, CL95, cmb_est, dust_est, seed, cl_fg, index_est

@@ -1,0 +1,535 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.13.8
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+# %config InlineBackend.figure_format='retina'
+from IPython.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+
+rc('figure',figsize=(16,8))
+rc('font',size=12)
+
+from scipy.signal import medfilt
+from scipy.interpolate import interp1d
+from sklearn.cluster import DBSCAN
+
+from qubicpack.qubicfp import qubicfp
+from qubic import fibtools as ft
+
+from importlib import reload
+import healpy as hp
+
+import time_domain_tools as tdt
+```
+
+## Looking at all TES in order to asses the quality and see common features
+
+
+```{python}
+mydatadir = '/Users/hamilton/Qubic/Calib-TD/'
+thedate = '2022-04-16'
+thedata = '2022-04-16_12.37.59__ScanMap_Speed_VE14_FastNoMod'
+FreqSrc = 140.
+
+# mydatadir = '/Users/hamilton/Qubic/Calib-TD/'
+# thedate = '2022-04-14'
+# thedata = '2022-04-14_13.17.33__ScanMap_Speed_VE14_FastNoMod'
+# FreqSrc = 170.
+
+
+filename = mydatadir + '/' + thedate + '/' + thedata
+
+### Read data
+a = qubicfp()
+a.read_qubicstudio_dataset(filename)
+
+tt, alltod = a.tod()
+
+az = a.azimuth()
+el = a.elevation()
+thk = a.timeaxis(datatype='hk')
+
+del(a)
+
+### We remove tt[0]
+tinit = tt[0]
+tt -= tinit
+thk -= tinit
+
+```
+
+Let's first plot all TES in order to have an idea of the abvious issues.
+
+We clearly see the saturated ones here: they reach the maximum and minimum range in the plot below. SO we need to discard all TES that reach this value at a time. In a further analysis we may only cut the regions where saturation occurs. Here we decide to be a bit brutal and just remove any TES that reaches saturation, even for one time sample
+
+```{python}
+rc('figure',figsize=(16,8))
+rc('font',size=12)
+
+tst = 1000
+dt = 3000
+
+tes_list = np.arange(256)
+
+
+ok =(tt > tst) & (tt < (tst+dt))
+
+for i in range(len(tes_list)):
+    plot(tt[ok], -alltod[i,ok], label='TES {}'.format(i))
+```
+
+```{python}
+maxis = np.max(np.abs(alltod), axis=1)
+print('Saturation value: {}'.format(np.max(maxis)))
+
+frac = np.zeros(256)
+for i in range(256):
+    frac[i] = (np.abs(alltod[i,:])==np.max(maxis)).sum() / len(tt) * 100
+a=hist(frac, range=[0,100], bins=1000)  
+xlabel('Fraction of saturated time samples [%]')
+ylabel('Number of TES')
+xscale('log')
+yscale('log')
+
+oktes = (maxis < np.max(maxis))
+print('Number of never-saturated TES: {}'.format(oks.sum()))
+
+figure()
+for i in range(len(tes_list)):
+    if oks[i]:
+        plot(tt[ok], -alltod[i,ok], label='TES {}'.format(i))
+```
+
+We need to reduce this as much as we can... Most of this is due to the jumps. Can we prevent that with QUBIC Studio, or at a deeper level ? I don't remember seeing this with data taken in Paris...
+
+Anyway, let's continue with those "good TES"...
+
+```{python}
+# Covariance matrix of all TES
+mycovmat = np.cov(alltod[oktes,:])
+
+def cov2corr(mat):
+    """
+    Converts a Covariance Matrix in a Correlation Matrix
+    """
+    newmat = np.empty_like(mat)
+    ll, cc = np.shape(mat)
+    for i in range(ll):
+        for j in range(cc):
+            newmat[i, j] = mat[i, j] / np.sqrt(mat[i, i] * mat[j, j])
+    return newmat
+
+mycorrmat = cov2corr(mycovmat)
+
+subplot(1,2,1)
+imshow(np.log10(mycovmat))
+colorbar()
+subplot(1,2,2)
+imshow(np.log10(mycorrmat))
+colorbar()
+
+```
+
+```{python}
+rc('figure',figsize=(20,12))
+for j in range(8):
+    figure()
+    title('TES {} to {}'.format(j*32+1, (j+1)*32))
+    for i in range(32):
+        if oks[j*32+i]:
+            plot(tt[ok], -alltod[j*32+i,ok], label='TES {}'.format(j*32+i+1))  
+    legend(fontsize=8)
+    show()
+```
+
+There a re many things to remark here, each will require a specific code for dealing with it:
+- Jumps are a huge problem as said before (not in this reduced TES sample however)
+- At each end of scan, we perform a FLL reset that produces some very noisy data. This part of the data will be flagged as bad and should actually be replaced by a constrained noise realization (set from the data before and after).
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+# Jumps detection
+Haar wavelets (inspired form Camille Perbost PhD)
+
+```{python}
+import bottleneck as bn
+def haar(x, size=51):
+    out = np.zeros(x.size)
+    xf = bn.move_median(x, size)[size:]   # fen??tre glissante de taille size de la m??diane selon l'axe x
+    #xf = medfilt(x, size)[size:] # same but much slower...
+    out[size+size//2:-size+size//2] = xf[:-size] - xf[size:]
+    return out
+
+    
+
+def jumps_finder(dd, size_haar=51, threshold=10, size_fact=2., doplot=False, verbose=False, derivative=True):
+    ### Haar filter
+    hdd = haar(dd, size=size_haar)
+    hdd -= np.median(hdd)
+    mhdd, shdd = ft.meancut(hdd,3)
+    hdd /= shdd
+    ### Derivative
+    dhdd = np.gradient(hdd)
+    dhdd -= np.median(dhdd)
+    mdhdd, sdhdd = ft.meancut(dhdd,3)
+    dhdd /= sdhdd
+    
+    ### Thereshold to find jumps 
+    if  not derivative:
+        # On Haar filtered data
+        jumps = np.abs(hdd) > (threshold)
+        print('Haar')
+    else:
+        # On Derivative of Haar filtered data
+        jumps = np.abs(dhdd) > (threshold)
+        print('Derivative')
+        
+    print('Before DBScan, we have {} points above threshold'.format(np.sum(jumps)))
+    ### Find clusters in jumps samples in order to separate the jumps
+    idx = np.arange(len(dd))
+    jumps_tt = idx[jumps]
+    clust = DBSCAN(eps=3, min_samples=1).fit(np.reshape(jumps_tt, (len(jumps_tt),1)))
+    nc = np.max(clust.labels_)+1
+    xc = np.zeros(nc, dtype=int)
+    szc = np.zeros(nc, dtype=int)
+    for i in range(nc):
+        xc[i] = np.min(jumps_tt[clust.labels_ == i])
+        szc[i] = (size_fact*(np.max(jumps_tt[clust.labels_ == i])-xc[i])).astype(int)
+    
+    if verbose: print('Detected {} cluster'.format(len(xc)))
+    if verbose: print(xc)
+    
+    ### Jumps are only meaningful if they are followed by another one size_haar samples behind
+    xj = []
+    szj = []
+    for i in range(nc-1):
+        alldeltas = xc[i+1:]-xc[i]-size_haar
+        delta = np.min(np.abs(alldeltas))
+        if delta <= 4:
+            if verbose: 
+                print('Jump detected at {} dhdd/sigma={} with delta={}'.format(xc[i], dhdd[xc[i]]/sdd, delta))
+            xj.append(xc[i])
+            szj.append(szc[i])
+        else:
+            if verbose:
+                print('**** Jump REJECTED at {} dhdd/sigma={} with delta={}'.format(xc[i], dhdd[xc[i]]/sdd, delta))
+    if verbose: print('kept {} jumps'.format(len(xj)))
+    if verbose: print(xj)
+        
+    ### It happens that successive jumps are on top of each other because of noise in dhdd, so we remove the next on in that case
+    print()
+    ok = np.ones(len(xj)).astype(bool)
+    for i in range(len(xj)-1):
+        if ok[i]:
+            diff_to_subsequent = xj[i+1:]-(xj[i]+szj[i])
+            nums = np.arange(len(diff_to_subsequent))+1
+            print(diff_to_subsequent)
+            print(nums[diff_to_subsequent <= 0])
+            ok[i+nums[diff_to_subsequent <= 0]] = False
+    print(ok)
+    xj = np.array(xj)[ok]
+    szj = np.array(szj)[ok]
+        
+            
+    if doplot:
+        figure()
+        subplot(3,1,1)
+        title('Jumps Finder: input data')
+        xlabel('Index')
+        ylabel('Data')
+        plot(idx, dd)
+        plot(idx[jumps], dd[jumps], 'r.')
+        plot(idx[xc], dd[xc], 'go')
+        plot(idx[xj], dd[xj], 'mo')
+        for i in range(len(xj)):
+            axvspan(xj[i], xj[i]+szj[i], color='r', alpha=0.5)  
+            
+        subplot(3,1,2)
+        title('Jumps Finder: Normalized Haar Filtered data')
+        xlabel('Index')
+        ylabel('H/$\sigma$')            
+        plot(idx, hdd)
+        plot(idx[jumps], hdd[jumps], 'r.')
+        plot(idx[xc], hdd[xc], 'go')
+        plot(idx[xj], hdd[xj], 'mo')
+        axhline(y=threshold, color='k', ls=':')
+        axhline(y=-threshold, color='k', ls=':')
+        for i in range(len(xj)):
+            axvspan(xj[i], xj[i]+szj[i], color='r', alpha=0.5) 
+            
+        subplot(3,1,3)
+        title('Jumps Finder: Derivative of Haar Filtered data')
+        xlabel('Index')
+        ylabel('$\partial$H/$\sigma$')            
+        plot(idx, dhdd)
+        plot(idx[jumps], dhdd[jumps], 'r.')
+        plot(idx[xc], dhdd[xc], 'go')
+        plot(idx[xj], dhdd[xj], 'mo')
+        axhline(y=threshold, color='k', ls=':')
+        axhline(y=-threshold, color='k', ls=':')
+        for i in range(len(xj)):
+            axvspan(xj[i], xj[i]+szj[i], color='r', alpha=0.5)    
+            
+            
+        tight_layout()
+        
+    return list(xj), list(szj)
+
+
+def correct_jumps_flat(dd, xj, szj, doplot=True):
+    newdd = dd.copy()
+    ### Only removes the median of each region in between jumps
+    iinit = -1
+    szinit = 0
+    flags = np.zeros(len(dd))
+    # Add last element to have the full range
+    xj.append(len(dd))
+    szj.append(0)
+    # now do the loop over jumps regions
+    for ij, sj in zip(xj, szj):
+        myimin = iinit+szinit+1
+        myimax = ij-1
+        newdd[iinit+1:ij+1] -= np.median(dd[myimin:myimax])
+        flags[ij:ij+sj] = 2**8
+        iinit = ij
+        szinit = sj
+    if doplot:
+        figure()
+        idx = np.arange(len(dd))
+        plot(idx, newdd)
+        bad = flags != 0
+        plot(idx[bad], newdd[bad], 'r.')
+    return newdd-np.median(newdd), flags
+
+def correct_jumps_lin(dd, xj, szj, doplot=False):
+    newdd = dd.copy()
+    ### removes a line in between jumps
+    idx = np.arange(len(dd))
+    iinit = -1
+    szinit = 0
+    flags = np.zeros(len(dd))
+    # Add last element to have the full range
+    xj.append(len(dd))
+    szj.append(0)
+    # now do the loop over jumps regions
+    for ij, sj in zip(xj, szj):
+        myimin = np.min([iinit+szinit+1, ij-1])
+        myimax = np.max([iinit+szinit+1, ij-1])
+        #### Fit a line with those points (removing outliers)
+        xx = idx[myimin:myimax]
+        yy = dd[myimin:myimax]
+        mm, ss = ft.meancut(yy,3)
+        okfit = np.abs(yy-mm) < (4*ss)
+        p = np.poly1d(polyfit(xx[okfit], yy[okfit], 1))
+        newdd[iinit+1:ij+1] -= p(idx[iinit+1:ij+1])
+        flags[ij:ij+sj] = 2**8
+        iinit = ij
+        szinit = sj
+    if doplot:
+        figure()
+        plot(idx, newdd)
+        bad = flags != 0
+        plot(idx[bad], newdd[bad], 'r.')
+    return newdd-np.median(newdd), flags
+
+def correct_jumps_continuity(dd, xj, szj, zone_size=100, doplot=True):
+    newdd = dd.copy()
+    flags = np.zeros(len(dd))
+    ### ensures coninuity after jumps
+    # now do the loop over jumps regions
+    for ij, sj in zip(xj, szj):
+        mm_before, ss_before = ft.meancut(newdd[ij-zone_size:ij-1], 3)
+        mm_after, ss_after = ft.meancut(newdd[ij+sj:ij+sj+zone_size+1], 3)
+        newdd[ij:] -= -(mm_before-mm_after)
+        flags[ij:ij+sj] = 2**8
+    if doplot:
+        figure()
+        idx = np.arange(len(dd))
+        plot(idx, newdd)
+        bad = flags != 0
+        plot(idx[bad], newdd[bad], 'r.')
+    return newdd-np.median(newdd), flags
+
+
+def fill_bad_regions(dd, flags, flaglimit=1, zone_size=100):
+    idx = np.arange(len(dd))
+    badidx = idx[flags >= flaglimit]
+    clust = DBSCAN(eps=3, min_samples=2).fit(np.reshape(badidx, (len(badidx),1)))
+    nc = np.max(clust.labels_)+1
+    for i in range(nc):
+        imin = np.min(badidx[clust.labels_==i])
+        imax = np.max(badidx[clust.labels_==i])
+        mm_before, ss_before = ft.meancut(dd[imin-zone_size:imin-1], 3)
+        mm_after, ss_after = ft.meancut(dd[imax:imax+zone_size+1], 3)
+        dd[imin:imax] = mm_before + (mm_after-mm_before) / (imax-imin) * np.arange(imax-imin) + np.random.randn(imax-imin)*(ss_before+ss_after)/2
+    return dd
+```
+
+```{python}
+# %matplotlib notebook
+# # %matplotlib inline
+# %config InlineBackend.figure_format='retina'
+rc('figure',figsize=(15,8))
+
+
+
+numTES = 163
+
+# tmin = 1200
+# tmax = 1300
+tmin = 0
+tmax = 1600*0+1e7
+ok = (tt>=tmin) & (tt < tmax)
+dd = -alltod[numTES-1,:][ok]
+mytt = tt[ok]
+
+
+### Find jumps
+xjumps, szjumps = jumps_finder(dd, threshold=20, size_haar=51, doplot=True, verbose=True)
+
+### Correct for jumps and assign flags to bad regions
+# newdd, flags = correct_jumps_flat(dd, xjumps, szjumps, doplot=True)
+newdd, flags = correct_jumps_lin(dd, xjumps, szjumps, doplot=True)
+# newdd, flags = correct_jumps_continuity(dd, xjumps, szjumps, doplot=True)
+
+### Replace bad regions with constrained random noise realization
+newdd = fill_bad_regions(newdd, flags)
+
+figure()
+idx = np.arange(len(dd))
+subplot(2,1,1)
+plot(idx, dd, label='Data')
+legend()
+xlabel('Samples')
+ylabel('ADU')
+title('Raw TOD')
+subplot(2,1,2)
+plot(idx, newdd, label='Data')
+plot(idx[flags>0], newdd[flags>0], 'r.', label='Flagged bad')
+xlabel('Samples')
+ylabel('ADU')
+title('Corrected for jumps')
+legend()
+tight_layout()
+```
+
+```{python}
+debug
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+# Covariance matrix of all TES
+mycovmat = np.cov(alltod)
+
+def cov2corr(mat):
+    """
+    Converts a Covariance Matrix in a Correlation Matrix
+    """
+    newmat = np.empty_like(mat)
+    ll, cc = np.shape(mat)
+    for i in range(ll):
+        for j in range(cc):
+            newmat[i, j] = mat[i, j] / np.sqrt(mat[i, i] * mat[j, j])
+    return newmat
+
+mycorrmat = cov2corr(mycovmat)
+
+subplot(1,2,1)
+imshow(np.log10(mycovmat))
+colorbar()
+subplot(1,2,2)
+imshow(np.log10(mycorrmat))
+colorbar()
+
+```
+
+```{python}
+### Now we need to discard bad TES, roughly intercalibrate TESs... Tricky...
+allmedians = np.median(alltod, axis=1)
+allstd = np.std(alltod, axis=1)
+```
+
+```{python}
+mm, ss = ft.meancut(allmedians, 3)
+okmed = np.abs(allmedians) < ss/5
+okstd = allstd < 0.15e6
+
+ok = okmed & okstd
+
+np.sum(ok)
+
+subplot(1,3,1)
+plot(allmedians, allstd, 'ko', label='All')
+plot(allmedians[ok], allstd[ok], 'ro', label='Kept')
+xlabel('Median of TOD')
+ylabel('RMS')
+legend()
+
+subplot(1,3,2)
+a=hist(allmedians, range=[-5e6, 5e6], bins=101, color='k', alpha=0.3, label='All')
+a=hist(allmedians[ok], range=[-5e6, 5e6], bins=101, color='r', alpha =0.3, label='Kept')
+xlabel('Median of TOD')
+legend()
+
+subplot(1,3,3)
+a=hist(allstd, range=[0, 3e6], bins=101, color='k', alpha=0.3, label='All')
+a=hist(allstd[ok], range=[0, 3e6], bins=101, color='r', alpha =0.3, label='Kept')
+xlabel('STD of TOD')
+legend()
+
+todsok = alltod[ok,:]
+print('Kept: {} TES'.format(np.sum(ok)))
+print(np.shape(todsok))
+```
+
+```{python}
+todsok = ((todsok.T - allmedians[ok])).T
+med_tod = np.median((todsok.T/allstd[ok]**2), 1).T
+```
+
+```{python}
+import scipy
+from scipy import ndimage
+med_tod = scipy.ndimage.median_filter(med_tod, 10)
+```
+
+```{python}
+
+```

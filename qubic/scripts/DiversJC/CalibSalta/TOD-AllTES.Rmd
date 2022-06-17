@@ -187,7 +187,7 @@ def haar(x, size=51):
 
     
 
-def jumps_finder(dd, size_haar=51, threshold=10, size_fact=2., doplot=False, verbose=False, derivative=True):
+def jumps_finder(dd, size_haar=51, threshold=10, size_fact=3., doplot=False, verbose=False):
     ### Haar filter
     hdd = haar(dd, size=size_haar)
     hdd -= np.median(hdd)
@@ -200,20 +200,15 @@ def jumps_finder(dd, size_haar=51, threshold=10, size_fact=2., doplot=False, ver
     dhdd /= sdhdd
     
     ### Thereshold to find jumps 
-    if  not derivative:
-        # On Haar filtered data
-        jumps = np.abs(hdd) > (threshold)
-        print('Haar')
-    else:
-        # On Derivative of Haar filtered data
-        jumps = np.abs(dhdd) > (threshold)
-        print('Derivative')
+    # On Derivative of Haar filtered data
+    jumps = np.abs(dhdd) > (threshold)
         
-    print('Before DBScan, we have {} points above threshold'.format(np.sum(jumps)))
+    if verbose:
+        print('Before DBScan, we have {} points above threshold'.format(np.sum(jumps)))
     ### Find clusters in jumps samples in order to separate the jumps
     idx = np.arange(len(dd))
     jumps_tt = idx[jumps]
-    clust = DBSCAN(eps=3, min_samples=1).fit(np.reshape(jumps_tt, (len(jumps_tt),1)))
+    clust = DBSCAN(eps=size_haar//5, min_samples=1).fit(np.reshape(jumps_tt, (len(jumps_tt),1)))
     nc = np.max(clust.labels_)+1
     xc = np.zeros(nc, dtype=int)
     szc = np.zeros(nc, dtype=int)
@@ -230,7 +225,7 @@ def jumps_finder(dd, size_haar=51, threshold=10, size_fact=2., doplot=False, ver
     for i in range(nc-1):
         alldeltas = xc[i+1:]-xc[i]-size_haar
         delta = np.min(np.abs(alldeltas))
-        if delta <= 4:
+        if delta <= (size_haar//5):
             if verbose: 
                 print('Jump detected at {} dhdd/sigma={} with delta={}'.format(xc[i], dhdd[xc[i]]/sdd, delta))
             xj.append(xc[i])
@@ -238,22 +233,42 @@ def jumps_finder(dd, size_haar=51, threshold=10, size_fact=2., doplot=False, ver
         else:
             if verbose:
                 print('**** Jump REJECTED at {} dhdd/sigma={} with delta={}'.format(xc[i], dhdd[xc[i]]/sdd, delta))
-    if verbose: print('kept {} jumps'.format(len(xj)))
-    if verbose: print(xj)
+    xj = np.array(xj)
+    szj = np.array(szj)
+    if verbose: 
+        print()
+        print('Found {} jumps'.format(len(xj)))
+        for i in range(len(xj)):
+            print('Initial Jumps are {}: [{}-{}]'.format(i,xj[i],xj[i]+szj[i]))
         
     ### It happens that successive jumps are on top of each other because of noise in dhdd, so we remove the next on in that case
     print()
     ok = np.ones(len(xj)).astype(bool)
     for i in range(len(xj)-1):
         if ok[i]:
+            ### difference wrt ulterior jumps
             diff_to_subsequent = xj[i+1:]-(xj[i]+szj[i])
             nums = np.arange(len(diff_to_subsequent))+1
-            print(diff_to_subsequent)
-            print(nums[diff_to_subsequent <= 0])
-            ok[i+nums[diff_to_subsequent <= 0]] = False
-    print(ok)
+            ### if negative then jumps are within the current one
+            within = diff_to_subsequent <= 0
+            if np.sum(within) > 0:
+                if verbose:
+                    print('We have overlap for xj=[{}-{}]'.format(xj[i], xj[i]+szj[i]))
+                    print('Overlapping jumps are:')
+                for k in nums[within]:
+                    if verbose: 
+                        print('xj=[{}-{}]'.format(xj[i+k], xj[i+k]+szj[i+k]))
+                    ok[i+nums[within]] = False
+                szj[i] = np.max(xj[i+k]+szj[i+k]- xj[i])
+                if verbose: 
+                    print('New jump is xj=[{}-{}]'.format(xj[i], xj[i]+szj[i]))
     xj = np.array(xj)[ok]
     szj = np.array(szj)[ok]
+    if verbose: 
+        print()
+        print('Kept {} jumps'.format(len(xj)))
+        for i in range(len(xj)):
+            print('Final Jumps are {}: [{}-{}]'.format(i,xj[i],xj[i]+szj[i]))
         
             
     if doplot:
@@ -263,12 +278,13 @@ def jumps_finder(dd, size_haar=51, threshold=10, size_fact=2., doplot=False, ver
         xlabel('Index')
         ylabel('Data')
         plot(idx, dd)
-        plot(idx[jumps], dd[jumps], 'r.')
-        plot(idx[xc], dd[xc], 'go')
-        plot(idx[xj], dd[xj], 'mo')
+        plot(idx[jumps], dd[jumps], 'r.', label='trigger')
+        plot(idx[xc], dd[xc], 'go', label='clusters')
+        plot(idx[xj], dd[xj], 'mo', label='Final Jumps')
         for i in range(len(xj)):
             axvspan(xj[i], xj[i]+szj[i], color='r', alpha=0.5)  
-            
+        legend()
+        
         subplot(3,1,2)
         title('Jumps Finder: Normalized Haar Filtered data')
         xlabel('Index')
@@ -403,19 +419,19 @@ numTES = 163
 # tmin = 1200
 # tmax = 1300
 tmin = 0
-tmax = 1600*0+1e7
+tmax = 20000
 ok = (tt>=tmin) & (tt < tmax)
 dd = -alltod[numTES-1,:][ok]
 mytt = tt[ok]
 
 
 ### Find jumps
-xjumps, szjumps = jumps_finder(dd, threshold=20, size_haar=51, doplot=True, verbose=True)
+xjumps, szjumps = jumps_finder(dd, threshold=20, size_haar=51, doplot=True, verbose=False)
 
 ### Correct for jumps and assign flags to bad regions
 # newdd, flags = correct_jumps_flat(dd, xjumps, szjumps, doplot=True)
 newdd, flags = correct_jumps_lin(dd, xjumps, szjumps, doplot=True)
-# newdd, flags = correct_jumps_continuity(dd, xjumps, szjumps, doplot=True)
+# newdd, flags = correct_jumps_continuity(dd, xjumps, szjumps, doplot=False)
 
 ### Replace bad regions with constrained random noise realization
 newdd = fill_bad_regions(newdd, flags)
@@ -439,7 +455,7 @@ tight_layout()
 ```
 
 ```{python}
-debug
+
 ```
 
 ```{python}

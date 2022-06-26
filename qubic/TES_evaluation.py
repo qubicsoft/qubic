@@ -22,6 +22,7 @@ import os
 from astropy.io import fits
 import numpy as np
 import datetime as dt
+from glob import glob
 import qubic
 
 hdr_keys = ['TELESCOP',
@@ -299,3 +300,31 @@ def read_goodbad(filename,verbosity=1):
               
     hdulist.close()
     return ok
+
+def list_goodbad():
+    '''
+    list all the available TES good/bad files
+    '''
+    files = []
+    
+    pattern = '*_GoodBad-TES.fits'
+    localfiles = glob(pattern)
+    if len(localfiles)>0:
+        localfiles.sort()
+        files += localfiles
+
+    pkg_dir = os.path.dirname(qubic.__file__)    
+    pkgpattern = os.sep.join([pkg_dir,'TES',pattern])
+    pkgfiles = glob(pkgpattern)
+    if len(pkgfiles)>0:
+        pkgfiles.sort()
+        for F in pkgfiles:
+            files.append(os.path.basename(F))
+
+    if len(files)>0:
+        print('The following files are available:\n   %s' % '\n   '.join(files))
+        return files
+
+    print('No Good/Bad files found!')
+    return files
+

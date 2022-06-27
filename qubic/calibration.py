@@ -22,11 +22,9 @@ class QubicCalibration(object):
     """
     Class representing the QUBIC calibration tree. It stores the calibration
     file names and "hardcoded" values and provides access to them.
-
     If the path name of a calibration file is relative, it is first searched
     relatively to the working directory and if not found, in the calibration
     path.
-
     """
     def __init__(self, d, path=PATH):
         """
@@ -43,13 +41,15 @@ class QubicCalibration(object):
             The optics parameters calibration file name.
         primbeam : str, optional
             The primary beam parameter calibration file name.
-
+        synthbeam : str, optional
+            The synthetic beam parameter calibration file name.
         """
         self.path = os.path.abspath(path)
         self.detarray = os.path.abspath(join(self.path, d['detarray']))
         self.hornarray = os.path.abspath(join(self.path, d['hornarray']))
         self.optics = os.path.abspath(join(self.path, d['optics'])) 
         self.primbeam = os.path.abspath(join(self.path, d['primbeam']))
+        self.synthbeam = os.path.abspath(join(self.path, d['synthbeam']))
         self.nu = int(d['filter_nu']/1e9)
 
     def __str__(self):
@@ -57,15 +57,16 @@ class QubicCalibration(object):
                  ('detarray', self.detarray),
                  ('hornarray', self.hornarray),
                  ('optics', self.optics),
-                 ('primbeam', self.primbeam)]
+                 ('primbeam', self.primbeam)
+                 ('synthbeam', self.synthbeam)]
         return '\n'.join([a + ': ' + repr(v) for a, v in state])
 
     __repr__ = __str__
 
     def get(self, name, *args):
+        
         """
         Access calibration files.
-
         Parameters
         ----------
         name : str
@@ -74,8 +75,8 @@ class QubicCalibration(object):
                 - 'hornarray'
                 - 'optics'
                 - 'primbeam'
-
         """
+        
         if name == 'detarray':
             hdus = fits.open(self.detarray)
             version = hdus[0].header['format version']
@@ -184,6 +185,27 @@ class QubicCalibration(object):
                  return parth, parfr, parbeam, alpha, xspl
                 
             raise ValueError('Invalid primary beam calibration version')
+
+        elif name == 'synthbeam':
+            
+            hdu =  fits.open(self.synthbeam)
+            header = hdu[0].header
+            theta=hdu[0].data
+            phi=hdu[1].data
+            val=hdu[2].data
+            freqs=hdu[3].data
+
+            return theta, phi, val, freqs, header
+        elif name == 'synthbeam_jc':
+            
+            hdu =  fits.open(self.synthbeam)
+            header = hdu[0].header
+            theta=hdu[0].data
+            phi=hdu[1].data
+            val=hdu[2].data
+            numpeaks=hdu[3].data
+            
+            return theta, phi, val,numpeaks, header
 
         raise ValueError("Invalid calibration item: '{}'".format(name))
 

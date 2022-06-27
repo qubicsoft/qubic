@@ -1,0 +1,521 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.13.4
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# QUBIC +
+
+We try to construct another hypotetical instrument, QUBIC+ which is a combination of QUBIC and Simons obervatory experiments. 
+
+The maps of S4 have these parameters :
+
+$$\nu_i \hspace{1cm} \Delta \nu_i \hspace{1cm} \sigma_i$$
+
+with $\nu$ is the frequency, $\Delta \nu$ is the bandwidth and $\sigma$ is the RMS of noise maps. The index $i$ is the sub-band of the observations. We consider now QUBIC+ with those parameters :
+
+$$\nu_i \times n \hspace{1cm} \frac{\Delta \nu_i}{n} \hspace{1cm} \sigma_i \times \frac{\sqrt{n} \times (1 + \epsilon)}{f}$$
+
+with $n$ the number of reconstruted sub-bands. $\epsilon$ is the relative optimality because of bolometric interferometry, $f$ is the fraction of CMB-S4 sensitivity and goes from $ \sqrt{n} \times (1 + \epsilon)$ to $1$.
+
+```{python}
+import qubicplus
+import pysm3
+import pysm3.units as u
+from pysm3 import utils
+import numpy as np
+from qubic import camb_interface as qc
+import healpy as hp
+import matplotlib.pyplot as plt
+import os
+import random as rd
+import string
+import qubic
+from importlib import reload
+import pickle
+
+import fgbuster
+from fgbuster import AnalyticComponent
+from scipy import constants
+from fgbuster import CMB, Dust, Synchrotron, MixingMatrix
+
+plt.rc('figure',figsize=(16,4))
+plt.rc('font',size=12)
+
+center = qubic.equ2gal(0, -57)
+# If there is not this command, the kernel shut down every time..
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+```
+
+```{python}
+nside=256
+
+def get_coverage(fsky, nside, center_radec=[0., -57.]):
+    center = qubic.equ2gal(center_radec[0], center_radec[1])
+    uvcenter = np.array(hp.ang2vec(center[0], center[1], lonlat=True))
+    uvpix = np.array(hp.pix2vec(nside, np.arange(12*nside**2)))
+    ang = np.arccos(np.dot(uvcenter, uvpix))
+    indices = np.argsort(ang)
+    okpix = ang < -1
+    okpix[indices[0:int(fsky * 12*nside**2)]] = True
+    mask = np.zeros(12*nside**2)
+    mask[okpix] = 1
+    return mask
+
+covmap = get_coverage(0.03, nside)
+skyconfig = {'cmb':42, 'dust':'d0'}
+
+thr = 0.1
+mymask = (covmap > (np.max(covmap)*thr)).astype(int)
+pixok = mymask > 0
+
+plt.figure()
+hp.mollview(covmap, title = 'Coverage map', cmap='jet')
+plt.show()
+```
+
+```{python}
+# Loading of dictionary from BI-CMBS4.ipynb 
+
+### CMB-S4 config
+
+freqs = np.array([20., 30., 40., 85., 95., 145., 155., 220., 270.])
+bandwidth = np.array([5., 9., 12., 20.4, 22.8, 31.9, 34.1, 48.4, 59.4])
+dnu_nu = bandwidth/freqs
+beam_fwhm = np.array([11., 72.8, 72.8, 25.5, 25.5, 22.7, 22.7, 13., 13.])
+mukarcmin_TT = np.array([16.5, 9.36, 11.85, 2.02, 1.78, 3.89, 4.16, 10.15, 17.4])
+mukarcmin_EE = np.array([10.87, 6.2, 7.85, 1.34, 1.18, 1.8, 1.93, 4.71, 8.08])
+mukarcmin_BB = np.array([10.23, 5.85, 7.4, 1.27, 1.12, 1.76, 1.89, 4.6, 7.89])
+ell_min = np.array([30, 30, 30, 30, 30, 30, 30, 30, 30])
+nside = np.array([512, 512, 512, 512, 512, 512, 512, 512, 512])
+edges_min = freqs * (1. - dnu_nu/2)
+edges_max = freqs * (1. + dnu_nu/2)
+edges = [[edges_min[i], edges_max[i]] for i in range(len(freqs))]
+s4_config = {
+    'nbands': len(freqs),
+    'frequency': freqs,
+    'depth_p': 0.5*(mukarcmin_EE + mukarcmin_BB),
+    'depth_i': mukarcmin_TT,
+    'depth_e': mukarcmin_EE,
+    'depth_b': mukarcmin_BB,
+    'fwhm': beam_fwhm,
+    'bandwidth': bandwidth,
+    'dnu_nu': dnu_nu,
+    'ell_min': ell_min,
+    'nside': nside,
+    'fsky': 0.03,
+    'ntubes': 12,
+    'nyears': 7.,
+    'edges': edges,
+    'effective_fraction': np.zeros(len(freqs))+1.
+            }
+
+def fct_subopt(nus):
+    subnus = [150., 220]
+    subval = [1.4, 1.2]
+    fct_subopt = np.poly1d(np.polyfit(subnus, subval, 1))
+    return fct_subopt(nus)
+
+subnus = [150., 220]
+subval = [1.4, 1.2]
+
+def get_coverage(fsky, nside, center_radec=[0., -57.]):
+    center = qubic.equ2gal(center_radec[0], center_radec[1])
+    uvcenter = np.array(hp.ang2vec(center[0], center[1], lonlat=True))
+    uvpix = np.array(hp.pix2vec(nside, np.arange(12*nside**2)))
+    ang = np.arccos(np.dot(uvcenter, uvpix))
+    indices = np.argsort(ang)
+    okpix = ang < -1
+    okpix[indices[0:int(fsky * 12*nside**2)]] = True
+    mask = np.zeros(12*nside**2)
+    mask[okpix] = 1
+    return mask
+
+def qubicify(config, qp_nsub, qp_effective_fraction):
+    nbands = np.sum(qp_nsubs)
+    qp_config = config.copy()
+    for k in qp_config.keys():
+        qp_config[k]=[]
+    qp_config['nbands'] = nbands
+    qp_config['fsky'] = config['fsky']
+    qp_config['ntubes'] = config['ntubes']
+    qp_config['nyears'] = config['nyears']
+    qp_config['initial_band'] = []
+
+    for i in range(len(config['frequency'])):
+        #print(config['edges'][i][0], config['edges'][i][-1])
+        newedges = np.linspace(config['edges'][i][0], config['edges'][i][-1], qp_nsubs[i]+1)
+        #print(newedges)
+        newfreqs = (newedges[0:-1]+newedges[1:])/2
+        newbandwidth = newedges[1:] - newedges[0:-1]
+        newdnu_nu = newbandwidth / newfreqs
+        newfwhm = config['fwhm'][i] * config['frequency'][i]/newfreqs
+        scalefactor_noise = np.sqrt(qp_nsubs[i]) * fct_subopt(config['frequency'][i]) / qp_effective_fraction[i]
+        newdepth_p = config['depth_p'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
+        newdepth_i = config['depth_i'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
+        newdepth_e = config['depth_e'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
+        newdepth_b = config['depth_b'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
+        newell_min = np.ones(qp_nsub[i]) * config['ell_min'][i]
+        newnside = np.ones(qp_nsub[i]) * config['nside'][i]
+        neweffective_fraction = np.ones(qp_nsub[i]) * qp_effective_fraction[i]
+        initial_band = np.ones(qp_nsub[i]) * config['frequency'][i]
+
+        for k in range(qp_nsubs[i]):
+            if qp_effective_fraction[i] != 0:
+                qp_config['frequency'].append(newfreqs[k])
+                if i >= 3:
+                    qp_config['depth_p'].append(newdepth_p[k])
+                    qp_config['depth_i'].append(newdepth_i[k])
+                    qp_config['depth_e'].append(newdepth_e[k])
+                    qp_config['depth_b'].append(newdepth_b[k])
+                else:
+                    qp_config['depth_p'].append(s4_config['depth_p'][i])
+                    qp_config['depth_i'].append(s4_config['depth_i'][i])
+                    qp_config['depth_e'].append(s4_config['depth_e'][i])
+                    qp_config['depth_b'].append(s4_config['depth_b'][i])
+                qp_config['fwhm'].append(newfwhm[k])
+                qp_config['bandwidth'].append(newbandwidth[k])
+                qp_config['dnu_nu'].append(newdnu_nu[k])
+                qp_config['ell_min'].append(newell_min[k])
+                qp_config['nside'].append(newnside[k])
+
+                qp_config['effective_fraction'].append(neweffective_fraction[k])
+                qp_config['initial_band'].append(initial_band[k])
+        for k in range(qp_nsubs[i]+1):
+            if qp_effective_fraction[i] != 0:
+                qp_config['edges'].append(newedges[k])
+
+        #qp_config['depth_p'][:3] = s4_config['depth_p'][:3]
+        #qp_config['depth_i'][:3] = s4_config['depth_i'][:3]
+
+    fields = ['frequency', 'depth_p', 'depth_i', 'depth_e', 'depth_b', 'fwhm', 'bandwidth',
+              'dnu_nu', 'ell_min', 'nside', 'edges', 'effective_fraction', 'initial_band']
+    for j in range(len(fields)):
+        qp_config[fields[j]] = np.array(qp_config[fields[j]])
+
+    return qp_config
+
+
+covmap = get_coverage(0.03, nside=256)
+thr = 0.1
+mymask = (covmap > (np.max(covmap)*thr)).astype(int)
+pixok = mymask > 0
+
+
+qp_nsubs = np.array([1, 1, 1, 5, 5, 5, 5, 5, 5])
+qp_effective_fraction = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1])
+qp_config=qubicify(s4_config, qp_nsubs, qp_effective_fraction)
+
+
+plt.figure(figsize=(16, 5))
+plt.subplot(1,2,1)
+plt.errorbar(s4_config['frequency'], s4_config['depth_p'], xerr=s4_config['bandwidth']/2, fmt='ro', label='CMB-S4')
+plt.errorbar(qp_config['frequency'], qp_config['depth_p'], xerr=qp_config['bandwidth']/2, fmt='bo', label='BI')
+plt.xlabel('Frequency [GHz]')
+plt.ylabel(r'Depth_p [$\mu$K.arcmin]')
+plt.title('CMB-S4 Configuration')
+plt.legend()
+plt.subplot(1,2,2)
+plt.errorbar(s4_config['frequency'], s4_config['fwhm'], xerr=s4_config['bandwidth']/2, fmt='ro', label='CMB-S4')
+plt.errorbar(qp_config['frequency'], qp_config['fwhm'], xerr=qp_config['bandwidth']/2, fmt='bo', label='BI')
+plt.xlabel('Frequency [GHz]')
+plt.ylabel('FWHM [arcmin]')
+plt.title('CMB-S4 Configuration')
+plt.legend()
+plt.show()
+```
+
+<!-- #region -->
+To compute our maps, we created a python files **qubicplus** which allows to create maps according to the noise of CMB-S4 and for BI-S4. We have many caracteristics mandatory to compute those maps. Those caracteristics are in 2 dictionary :
+
++ **s4_config**
++ **qp_config**
+
+Thoses 2 configuration contains many caracteristics :
+
+- **nbands** : Number of bands
+- **Frequency** : Frequency observed
+- **depth_p** : Depths of polarisations maps, useful to compute noise maps of QU
+- **depth_i** : Depths of intensity maps, useful to compute noise maps of I
+- **fwhm** : Angular resolution in arcmin (can be modifie in function to have the always the same)
+- **nside** : Pixelisation of maps
+- **fsky** : sky fraction in %
+- **edges** : edges for integration into bands (not used for instance)
+
+
+We create class which take the dictionary and define itself the caracteristic seen before. So to compute maps you just have to define wome arguments :
+
+- **same_resol** : If same_resol is None -> Maps are at true fwhm define by dictionary
+               If same_resol is a number -> Maps are at this fwhm (all the same)
+- **verbose** : If True -> print some text
+- **coverage** : If coverage is None -> you have a fullsky map
+- **beta** : beta depend on type of dust you put in, if model of dust is d0 so beta is ignore, if dust model is d02b, you define in beta -> [beta0, beta1, nubreak, nu0]
+
+This function return if you put noise = True, 3 maps which is :
+
+- All components maps + noise
+- All components maps
+- noise
+
+If you turn off the noise, it return only :
+
+- All components maps 
+<!-- #endregion -->
+
+Let's try to compute SED from maps generated by **qubicplus.py** file to check it before component separation.
+
+
+# SED : one beta case
+
+```{python}
+reload(qubicplus)
+
+mapS4 = qubicplus.BImaps({'dust':'d0', 'synchrotron':'s0'}, s4_config).getskymaps(
+                                      same_resol=0, 
+                                      verbose=True, 
+                                      coverage=covmap, 
+                                      noise=False, 
+                                      signoise=1.,
+                                      beta=[1.54, 1.54, 145, 85])
+
+mapqp = qubicplus.BImaps({'dust':'d0', 'synchrotron':'s0'}, qp_config).getskymaps(
+                                      same_resol=0, 
+                                      verbose=True, 
+                                      coverage=covmap, 
+                                      noise=False, 
+                                      signoise=1.,
+                                      beta=[1.54, 1.54, 145, 85])
+
+mapS4_dust = qubicplus.BImaps({'dust':'d0'}, s4_config).getskymaps(same_resol=0, 
+                                      verbose=True, 
+                                      coverage=covmap, 
+                                      noise=False, 
+                                      signoise=1.,
+                                     beta=[1.54, 1.54, 145, 85])
+
+reload(qubicplus)
+
+mapS4_sync = qubicplus.BImaps({'synchrotron':'s0'}, s4_config).getskymaps(same_resol=0, 
+                                      verbose=True, 
+                                      coverage=covmap, 
+                                      noise=False, 
+                                      signoise=1.,
+                                     beta=[1.54, 1.54, 145, 85])
+
+
+reload(qubicplus)
+
+mapqp_dust = qubicplus.BImaps({'dust':'d0'}, qp_config).getskymaps(same_resol=0, 
+                                      verbose=True, 
+                                      coverage=covmap, 
+                                      noise=False, 
+                                      signoise=1.,
+                                     beta=[1.54, 1.54, 145, 85])
+
+reload(qubicplus)
+
+mapqp_sync = qubicplus.BImaps({'synchrotron':'s0'}, qp_config).getskymaps(same_resol=0, 
+                                      verbose=True, 
+                                      coverage=covmap, 
+                                      noise=False, 
+                                      signoise=1.,
+                                     beta=[1.54, 1.54, 145, 85])
+```
+
+Here we evaluate SED of dust and Synchrotron for $1 \beta$ model. We assume that temperature is $20$ K and spectral index is $\beta_d = 1.54$ and $\beta_s = -3$. Below, we generate PySM maps of dust at 353 GHz and at 70 GHz for synchrotron. These maps will be used for SED normalization.
+
+```{python}
+sky = pysm3.Sky(nside=256, preset_strings=['d0'])
+dust_353GHz = sky.get_emission(353*u.GHz, None)*utils.bandpass_unit_conversion(353*u.GHz, None, u.uK_CMB)
+sky = pysm3.Sky(nside=256, preset_strings=['s0'])
+sync_70GHz = sky.get_emission(70*u.GHz, None)*utils.bandpass_unit_conversion(70*u.GHz, None, u.uK_CMB)
+```
+
+```{python}
+nus=np.linspace(20, 400, 300)
+h_over_k_val = constants.h * 1e9 / constants.k  # Assumes frequencies in GHz
+
+# Dust
+dust_model = fgbuster.component_model.Dust(nu0=353, beta_d=1.54, temp=20)
+sed_dust=dust_model.eval(nus)
+
+# Synchrotron
+sync_model=Synchrotron(nu0=70, beta_pl=-3)
+sed_sync=sync_model.eval(nus)
+```
+
+Points of SED is the mean of intensity maps on the sky patch seen by the instrument. We compute also the mean for the reference frequency $\nu_0$ to normalize them.
+
+```{python}
+plt.figure(figsize=(10, 10))
+
+ipix=645823
+
+# Dust
+plt.loglog(nus, sed_dust*dust_353GHz[0, ipix], color='blue', label=r'd0 : $\beta_d = ${:.2f} & $T_d = ${:.2f} K'.format(1.54, 20))
+plt.loglog(nus, sed_sync*sync_70GHz[0, ipix], color='orange', label=r's0 : $\beta_s = ${:.2f}'.format(-3))
+
+sed_all=sed_dust*dust_353GHz[0, ipix]+sed_sync*sync_70GHz[0, ipix]
+plt.loglog(nus, sed_all, ':k', label=r'All foregrounds', lw=3)
+
+
+plt.scatter(s4_config['frequency'], mapS4_dust[:, 0, ipix], color='blue', s=100, label='Dust maps - From qubicplus.py')
+plt.scatter(s4_config['frequency'], mapS4_sync[:, 0, ipix], color='orange', s=100, label='Sync maps - From qubicplus.py')
+
+plt.scatter(qp_config['frequency'], mapqp[:, 0, ipix], marker='d', color='green', s=100, label='All maps - From qubicplus.py')
+plt.scatter(s4_config['frequency'], mapS4[:, 0, ipix], marker='d', color='red', s=100, label='All maps - From qubicplus.py')
+
+
+plt.legend(fontsize=14, frameon=False)
+plt.xlabel('Frequency [GHz]', fontsize=15)
+plt.ylabel(r'SED [$\mu K_{CMB}$]', fontsize=15)
+plt.show()
+```
+
+# 2 beta case
+
+
+We now move on the $2 \beta$ model. For the example, we assume that the second $beta$ (which is called $\beta^1_d$) is equal to $\beta^1_d = 4.64$, that is not physical but in order to have explicit plot after. The first $\beta$ is set to be equal $\beta^0_d = 1.44$. The break frequency $\nu_{break}$ is set at 242 GHz. This value is not a random set, we want to show that if there is a more complex model of dust than d0 model (spectral index constant on the sky) at high frequency, Bolometric interferometry is in the best position to recover that model.
+
+```{python}
+reload(qubicplus)
+
+mapS4 = qubicplus.BImaps({'dust':'d02b', 'synchrotron':'s0'}, s4_config).getskymaps(
+                                      same_resol=0, 
+                                      verbose=True, 
+                                      coverage=covmap, 
+                                      noise=False, 
+                                      signoise=1.,
+                                      beta=[1.44, 4.64, 242, 145])
+
+mapqp = qubicplus.BImaps({'dust':'d02b', 'synchrotron':'s0'}, qp_config).getskymaps(
+                                      same_resol=0, 
+                                      verbose=True, 
+                                      coverage=covmap, 
+                                      noise=False, 
+                                      signoise=1.,
+                                      beta=[1.44, 4.64, 242, 145])
+
+mapS4_dust = qubicplus.BImaps({'dust':'d02b'}, s4_config).getskymaps(same_resol=0, 
+                                      verbose=True, 
+                                      coverage=covmap, 
+                                      noise=False, 
+                                      signoise=1.,
+                                     beta=[1.44, 4.64, 242, 145])
+
+mapS4_sync = qubicplus.BImaps({'synchrotron':'s0'}, s4_config).getskymaps(same_resol=0, 
+                                      verbose=True, 
+                                      coverage=covmap, 
+                                      noise=False, 
+                                      signoise=1.,
+                                     beta=[1.44, 4.64, 242, 145])
+
+mapqp_dust = qubicplus.BImaps({'dust':'d02b'}, qp_config).getskymaps(same_resol=0, 
+                                      verbose=True, 
+                                      coverage=covmap, 
+                                      noise=False, 
+                                      signoise=1.,
+                                     beta=[1.44, 4.64, 242, 145])
+
+mapqp_sync = qubicplus.BImaps({'synchrotron':'s0'}, qp_config).getskymaps(same_resol=0, 
+                                      verbose=True, 
+                                      coverage=covmap, 
+                                      noise=False, 
+                                      signoise=1.,
+                                     beta=[1.44, 4.64, 242, 145])
+```
+
+```{python}
+nus=np.linspace(20, 400, 1000)
+
+h_over_k_val = constants.h * 1e9 / constants.k  # Assumes frequencies in GHz
+
+# Dust
+dust_model_2b = fgbuster.component_model.Dust_2b(nu0=353, beta_d0=1.44, beta_d1=4.64, nubreak=242, temp=20)
+sed_dust=dust_model_2b.eval(nus)
+
+# Synchrotron
+sync_model=Synchrotron(nu0=70, beta_pl=-3, running=0)
+sed_sync=sync_model.eval(nus)
+```
+
+Here we see that SED is well reconstructed by maps. With the values of beta, we clearly see a break at 242 GHz.
+
+```{python}
+plt.figure(figsize=(10, 10))
+
+# SED
+plt.loglog(nus, sed_dust*dust_353GHz[0, ipix], color='blue', label=r'd02b : $\beta^0_d = ${:.2f}, $\beta^1_d = ${:.2f} & $T_d = ${:.2f} K'.format(1.44, 4.64, 20))
+plt.loglog(nus, sed_sync*sync_70GHz[0, ipix], color='orange', label=r's0 : $\beta_s = ${:.2f}'.format(-3))
+plt.loglog(nus, sed_dust*dust_353GHz[0, ipix]+sed_sync*sync_70GHz[0, ipix], '--k', label='Total Foregrounds')
+
+# From real maps
+plt.scatter(s4_config['frequency'], mapS4_dust[:, 0, ipix], color='blue', label='Dust maps')
+plt.scatter(s4_config['frequency'], mapS4_sync[:, 0, ipix], color='orange', label='Sync maps')
+plt.scatter(qp_config['frequency'], mapqp[:, 0, ipix], marker='d', color='green', s=50, label='Maps from qubicplus.py')
+plt.scatter(s4_config['frequency'], mapS4[:, 0, ipix], marker='d', color='red', s=50, label='Maps from qubicplus.py')
+
+
+plt.axvline(242, ls=':', color='green', label=r'$\nu_{break}$')
+plt.axhline(1, ls=':', color='green')
+plt.legend(fontsize=14, frameon=False)
+plt.xlabel('Frequency [GHz]', fontsize=15)
+plt.ylabel(r'SED [$\mu K_{CMB}$]', fontsize=15)
+plt.show()
+```
+
+```{python}
+fig, ax = plt.subplots(figsize=[10, 10])
+ax.plot(nus, sed_dust*dust_353GHz[0, ipix], label='Dust maps', color='blue')
+ax.plot(nus, sed_sync*sync_70GHz[0, ipix], label='Sync maps', color='orange')
+ax.axvline(242, color='green', ls=':', label=r'$\nu_{break}$ = 242 GHz')
+ax.plot(nus, sed_dust*dust_353GHz[0, ipix]+sed_sync*sync_70GHz[0, ipix], ':k', lw=3, label='Total Foregrounds')
+
+
+ax.scatter(s4_config['frequency'], mapS4_dust[:, 0, ipix], color='blue', label='Dust maps')
+ax.scatter(s4_config['frequency'], mapS4_sync[:, 0, ipix], color='orange', label='Sync maps')
+ax.scatter(qp_config['frequency'], mapqp[:, 0, ipix], marker='d', color='green', s=70, label='BI : Dust+Sync')
+ax.scatter(s4_config['frequency'], mapS4[:, 0, ipix], marker='d', color='red', s=70, label='S4 : Dust+Sync')
+
+
+ax.set_xscale('log')
+ax.set_yscale('log')
+
+size=0.5
+
+axins = ax.inset_axes([1.2, 0.6, size, size])
+
+axins.plot(nus, sed_dust*dust_353GHz[0, ipix]+sed_sync*sync_70GHz[0, ipix], ':k', lw=3, label='Total Foregrounds')
+axins.plot(nus, sed_dust*dust_353GHz[0, ipix], color='blue', label='Dust maps')
+axins.plot(nus, sed_sync*sync_70GHz[0, ipix], color='orange', label='Sync maps')
+axins.scatter(s4_config['frequency'], mapS4_dust[:, 0, ipix], color='blue', label='Dust maps')
+axins.scatter(s4_config['frequency'], mapS4_sync[:, 0, ipix], color='orange', label='Sync maps')
+axins.scatter(qp_config['frequency'], mapqp[:, 0, ipix], marker='d', color='green', s=100, label='BI : Dust+Sync')
+axins.scatter(s4_config['frequency'], mapS4[:, 0, ipix], marker='d', color='red', s=100, label='S4 : Dust+Sync')
+
+
+x1, x2, y1, y2 = 210, 280, 35, 130
+axins.set_xlim(x1, x2)
+axins.set_ylim(y1, y2)
+axins.axvline(242, color='green', ls=':', lw=3)
+ax.indicate_inset_zoom(axins, edgecolor="black")
+axins.set_xlabel('Frequency [GHz]')
+axins.set_ylabel(r'SED [$\mu K_{CMB}$]')
+ax.set_xlabel('Frequency [GHz]')
+ax.set_ylabel(r'SED [$\mu K_{CMB}$]')
+ax.legend(loc='best', fontsize=15, frameon=False)
+
+plt.show()
+```
+
+```{python}
+
+```

@@ -42,8 +42,40 @@ in a terminal and getting a directory called `2019-04-06` (`2019-04-06`) in your
 
     in a terminal.
 
+<!-- #region -->
+## 2022-04-14
+
+
+1) Team: S. Torchinsky, M. Piat, C. Rodriguez, F. Rodriguez, G. Ramos, M. Platino
+
+2) Tasks: 
+
+2.1) We generated a map in Salta @170 GHz. The scanned region was +/- 20 deg in both az and el. The velocity of the scan was V14. No modulation on the calibration source
+
+Note that the signal generator does not accept offset=0, so it was set to offset=0.001.  In fact, we should just turn off the modulator when we don't want modulation.
+
+FLL PID=0,300,0
+
+script:  ScanMapFastNoModulation.dscript
+
+2.2) Calsource configuration:
+
+Calsource: frequency=170.00GHz
+modulator: frequency=N/A shape=dc amplitude=N/A offset=0.001Vdc duty_cycle=N/A
+amplifier: filter_mode=12db_low_pass dynamic_range=low_noise gain=2000 filter_low_frequency=10.0 filter_high_frequency=0.3 coupling=dc invert=ON
+
+3) Materials used: QUBIC Studio, QUBIC Central, QUBIC
+
+4) Providers for the materials: APC.
+
+5) Problems found: We had to use a value of 0.001 V for the offset setting of the CalS because it did not respond to seting the offset value to 0V.
+
+6) Reference to a Procedure followed: N/A
+<!-- #endregion -->
+
 ```{python}
 # %matplotlib inline
+
 # Importation modules
 import os
 import sys
@@ -80,6 +112,10 @@ import qubicpack as qp
 import mapmaking_datafiles as md
 # Super local module (plots)
 import mapmaking_plots as mmp
+import psutil
+initram = psutil.virtual_memory()[0]/1e9 # in Gb
+print("RAM available in GB %5.2f" %(initram))
+print("RAM used in GB %5.2f" %(psutil.virtual_memory()[3]/1e9))
 ```
 
 **0th)** Set local paths --> `Paths` dictionary containing all the directories needed to run the notebook
@@ -113,6 +149,8 @@ confg = "new"
 if confg == "new":
     day = '2020-07-30'
     keyword = '*2020*'
+    #day = '2022-04-14'
+    #keyword = '*ScanMap*'
     dirfile = None
     savedirtest = '/home/mgamboa/pruebas/qubicpipenew/'
 elif confg == "old":
@@ -167,18 +205,26 @@ script used: `Analyse-Scan-2020-01-15-MemorySave.Rmd` and `Sample_Demodulation`
 
 ```{python}
 # Create focal plane object 
+ram0_loc = psutil.virtual_memory()[3]/1e9 # in Gb
+
 QubicFP = qubicfp()
 sweep = 0
 QubicFP.read_qubicstudio_dataset(Paths["sweeps_data"][sweep])
+
+print("RAM used %5.2f Gb" %(psutil.virtual_memory()[3]/1e9 - ram0_loc))
 ```
 
 ### Read calibration data
 
 ```{python}
 reload(md)
+ram0_loc = psutil.virtual_memory()[3]/1e9 # in Gb
+
 t_src, data_src = md.read_calsource_data(QubicFP, date = day,
                       keyword = keyword, datadir = Paths["RawTodDir"],
                       datacal = Paths["calsource_data"], verbose = True)
+
+print("RAM used %5.2f Gb" %(psutil.virtual_memory()[3]/1e9 - ram0_loc))
 ```
 
 ```{python}
@@ -186,6 +232,12 @@ t_src, data_src = md.read_calsource_data(QubicFP, date = day,
 az = QubicFP.azimuth()
 el = QubicFP.elevation()
 #if verbose: QubicFP.read_qubicstudio_dataset(Paths["sweeps_data"][sweep])
+```
+
+```{python}
+print(QubicFP.hk["CALSOURCE-CONF"]["Amp_lfreq"], 
+      QubicFP.hk["CALSOURCE-CONF"]["Amp_hfreq"], 
+      QubicFP.hk["CALSOURCE-CONF"])
 ```
 
 ```{python}
@@ -218,14 +270,18 @@ mmp.plot_raw_data(tod_time, tod_data, t_src, data_src, TESNum = TESNum, asic = a
 ## Filtering data
 
 ```{python}
+QubicFP.hk["CALSOURCE-CONF"]["Amp_lfreq"], QubicFP.hk["CALSOURCE-CONF"]["Amp_lfreq"][0]
+```
+
+```{python}
 # Set parameters for harmonics of PT
 #load the modulation frequency from the HK data
 thefreqmod = QubicFP.hk['CALSOURCE-CONF']['Mod_freq']
 
 period = 1./ thefreqmod
 #Set parameters for filtering data
-lowcut = 0.5
-highcut = 20
+lowcut = QubicFP.hk["CALSOURCE-CONF"]["Amp_hfreq"][0]
+highcut = QubicFP.hk["CALSOURCE-CONF"]["Amp_lfreq"][0]
 # New spectra
 # Using 10 harmonics
 nharm = 10
@@ -254,12 +310,14 @@ plt.plot((tod_time - t0)[oktime_d]/3600, dl.renorm(tod_data[oktime_d]),
 plt.plot((t_src[oktime_s]-t0)/3600, dl.renorm(data_src[oktime_s]), label='source')
 plt.xlabel('Hours')
 plt.legend(loc='upper left')
-plt.title("bla")
+#plt.title("bla")
 ```
 
 ```{python}
 # Power spectra without filtering (raw power spectra of TOD)
 # spectrum, freq = old "spectrum_f", "freq_f"
+ram0_loc = psutil.virtual_memory()[3]/1e9
+
 spectrum_raw, freq_raw = ft.power_spectrum(tod_time, tod_data, 
                                        rebin = True)
 #tod_data_filtered = old "newdata"
@@ -268,6 +326,14 @@ tod_data_filtered = ft.filter_data(tod_time, tod_data, lowcut, highcut,
                          verbose = True, order = 5)
 # spectrum_filtered, freq_filtered ex "spectrum_f2", "freq_f2"
 spectrum_filtered, freq_filtered = ft.power_spectrum(tod_time, tod_data_filtered, rebin=True)
+
+print("RAM used %5.2f Gb" %(psutil.virtual_memory()[3]/1e9 - ram0_loc))
+
+tod_data_filtered2 = ft.filter_data(tod_time, tod_data, 0.03, 10, 
+                         notch = notch, rebin = True, 
+                         verbose = True, order = 5)
+# spectrum_filtered, freq_filtered ex "spectrum_f2", "freq_f2"
+spectrum_filtered2, freq_filtered2 = ft.power_spectrum(tod_time, tod_data_filtered2, rebin=True)
 ```
 
 `check plot` spectras for RAW data and filtered data
@@ -277,6 +343,25 @@ reload(mmp)
 
 mmp.plot_spectra_comparisson(freq_raw, spectrum_raw, freq_filtered, 
                              spectrum_filtered, period, lowcut, highcut, notch)
+```
+
+```{python}
+plt.subplot(211)
+plt.xscale("log")
+plt.yscale("log")
+plt.plot(freq_raw, spectrum_raw)
+plt.plot(freq_filtered, spectrum_filtered, label = "freq from hk")
+plt.plot(freq_filtered2, spectrum_filtered2, label = "manual values")
+plt.xlim(1e-2,9e1)
+plt.ylim(1e1, 1e17)
+plt.legend()
+plt.subplot(212)
+plt.xscale("log")
+plt.yscale("log")
+plt.plot(freq_filtered2, abs(spectrum_filtered - spectrum_filtered2), 'r-')
+plt.xlim(1e-2,9e1)
+plt.ylim(1e1, 1e17)
+
 ```
 
 `Check plot` comparing clasoruce data, raw and filtered tod... okk
@@ -289,6 +374,9 @@ mmp.plot_data_and_src(tod_time, tod_data,
                       tod_data_filtered,
                       t_src, data_src,
                      )#**kwargs_plot)
+mmp.plot_data_and_src(tod_time, tod_data, 
+                      tod_data_filtered2,
+                      t_src, data_src)
 
 ```
 
@@ -299,13 +387,16 @@ reload(md)
 demod_kwvars = {"method": "demod_quad",
                 "remove_noise": False}
 
-demodulate = True
+demodulate = False
 
+ram0_loc = psutil.virtual_memory()[3]/1e9
 newt_demod, amps_demod = md.pipe_demodulation(QubicFP, t_src, data_src,
                                              savetoddemod,
                                              demodulate = demodulate,
                                              verbose = True,
                                              **demod_kwvars)
+print("RAM used %5.2f Gb" %(psutil.virtual_memory()[3]/1e9 - ram0_loc))
+
 ```
 
 ```{python}
@@ -315,6 +406,19 @@ QubicFP.azimuth(), QubicFP.elevation(), QubicFP.hk["INTERN_HK"]["Platform-Azimut
 ```{python}
 reload(mmp)
 mmp.plot_synchronizated_data(tod_time, t_src, tod_data_filtered, data_src)
+```
+
+```{python}
+print("RAM available in GB %5.2f" %(psutil.virtual_memory()[0]/1e9))
+print("RAM used in GB %5.2f" %(psutil.virtual_memory()[3]/1e9))
+```
+
+```{python}
+azindex = (naz * (newaz - azmin) / (azmax - azmin)).astype(int)
+elindex = (nel * (newel - elmin) / (elmax - elmin)).astype(int)
+
+# ## Keeping only the inner part
+inside = (azindex >= 0) & (azindex < naz) & (elindex >= 0) & (elindex < nel)
 ```
 
 ```{python}
@@ -330,8 +434,8 @@ if ComputeFlatMaps:
     newaz = np.interp(newt_demod, time_azel, az)
     newel = np.interp(newt_demod, time_azel, el)
 
-    naz = 150
-    nel = 150
+    naz = 101
+    nel = 101
     nmaps = 256
     mapdata = np.zeros((nmaps, nel, naz))
 

@@ -169,10 +169,6 @@ There a re many things to remark here, each will require a specific code for dea
 
 ```
 
-```{python}
-
-```
-
 # Jumps detection
 Haar wavelets (inspired form Camille Perbost PhD)
 
@@ -189,20 +185,27 @@ reload(tdt)
 # tmin = 0
 # tmax = 2000
 
-# numTES = 33
+numTES = 33
 
 tmin = 0
 tmax = np.max(tt)
 ok = (tt>=tmin) & (tt <= tmax)
+
+idx = np.arange(len(alltod[numTES-1,:]))
+ok = (idx > 1.5e6) & (idx < 2e6+10000)
+#ok = (idx > 299000) & (idx < 305000)
+
+
 dd = -alltod[numTES-1,:][ok]
 mytt = tt[ok]
 
-newdd, flags = tdt.jumps_correction(dd, threshold=20, size_haar=51, doplot=False, verbose=False)
+newdd, flags = tdt.jumps_correction(dd, threshold=15, size_haar=51, doplot=False, verbose=False, method='lin')
 
 figure()
 idx = np.arange(len(dd))
 subplot(2,1,1)
 plot(idx, dd, label='Data')
+plot(idx[flags>0], dd[flags>0], 'r.', label='Flagged bad')
 legend()
 xlabel('Samples')
 ylabel('ADU')
@@ -215,6 +218,42 @@ ylabel('ADU')
 title('Corrected for jumps')
 legend()
 tight_layout()
+```
+
+```{python}
+debug
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 ```{python}

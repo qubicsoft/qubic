@@ -185,23 +185,41 @@ def haar(x, size=51):
     out[size+size//2:-size+size//2] = xf[:-size] - xf[size:]
     return out
 
-    
 
-def jumps_finder(dd, size_haar=51, threshold=10, size_fact=3., doplot=False, verbose=False):
+def move_median_jc(dd, sz, min_count=1):
+	### Avoid the shift in move_median
+	return np.nan_to_num(np.roll(bn.move_median(dd, sz, min_count=min_count), -sz//2+1))
+
+def move_std_jc(dd, sz, min_count=1):
+	### Avoid the shift in move_median
+	return np.nan_to_num(np.roll(bn.move_std(dd, sz, min_count=min_count), -sz//2))
+
+
+def jumps_finder(dd, size_haar=51, threshold=5, size_fact=3., doplot=False, verbose=False):
     ### Haar filter
     hdd = haar(dd, size=size_haar)
-    hdd -= np.median(hdd)
+    ### We remove a 3 times largen median filter version of the hhar filtered data
+    ### This allows to leave only square jumps of size_haar size corresponding to sharp jumps
+    ### while larger modulation (example SB peaks) are removed by this operation.
+    hdd -= move_median_jc(hdd, int(size_haar*2.5))
     mhdd, shdd = ft.meancut(hdd,3)
     hdd /= shdd
+
     ### Derivative
     dhdd = np.gradient(hdd)
-    dhdd -= np.median(dhdd)
+    # dhdd -= move_median_jc(dhdd, size_haar)
     mdhdd, sdhdd = ft.meancut(dhdd,3)
     dhdd /= sdhdd
+    dhdd = nan_to_num(dhdd)
+
+    ### Sort of moving "median"-std that will discard solitary peaks and be large when there are many n-std points 
+    ### (typically on synthesized beam peaks)
+    truc = bn.move_mean(np.sqrt(np.abs(move_median_jc(dhdd**2, size_haar//2) - move_median_jc(dhdd, size_haar//2)**2)) / sdhdd, size_haar)
+ 
     
     ### Thereshold to find jumps 
     # On Derivative of Haar filtered data
-    jumps = np.abs(dhdd) > (threshold)
+    jumps = (np.abs(dhdd) > threshold) & (truc < threshold)
         
     if verbose:
         print('Before DBScan, we have {} points above threshold'.format(np.sum(jumps)))
@@ -215,7 +233,13 @@ def jumps_finder(dd, size_haar=51, threshold=10, size_fact=3., doplot=False, ver
     for i in range(nc):
         xc[i] = np.min(jumps_tt[clust.labels_ == i])
         szc[i] = (size_fact*(np.max(jumps_tt[clust.labels_ == i])-xc[i])).astype(int)
-    
+
+    ### We remove cluster of zero size
+    ok = szc > 0
+    xc = xc[ok]
+    szc = szc[ok]
+    nc = len(xc)
+	    
     if verbose: print('Detected {} cluster'.format(len(xc)))
     if verbose: print(xc)
     
@@ -227,12 +251,12 @@ def jumps_finder(dd, size_haar=51, threshold=10, size_fact=3., doplot=False, ver
         delta = np.min(np.abs(alldeltas))
         if delta <= (size_haar//5):
             if verbose: 
-                print('Jump detected at {} dhdd/sigma={} with delta={}'.format(xc[i], dhdd[xc[i]]/sdd, delta))
+                print('Jump detected at {} with delta={}'.format(xc[i], delta))
             xj.append(xc[i])
             szj.append(szc[i])
         else:
             if verbose:
-                print('**** Jump REJECTED at {} dhdd/sigma={} with delta={}'.format(xc[i], dhdd[xc[i]]/sdd, delta))
+                print('**** Jump REJECTED at {} with delta={}'.format(xc[i], delta))
     xj = np.array(xj)
     szj = np.array(szj)
     if verbose: 
@@ -242,7 +266,6 @@ def jumps_finder(dd, size_haar=51, threshold=10, size_fact=3., doplot=False, ver
             print('Initial Jumps are {}: [{}-{}]'.format(i,xj[i],xj[i]+szj[i]))
         
     ### It happens that successive jumps are on top of each other because of noise in dhdd, so we remove the next on in that case
-    print()
     ok = np.ones(len(xj)).astype(bool)
     for i in range(len(xj)-1):
         if ok[i]:
@@ -273,45 +296,74 @@ def jumps_finder(dd, size_haar=51, threshold=10, size_fact=3., doplot=False, ver
             
     if doplot:
         figure()
-        subplot(3,1,1)
+        subplot(4,1,1)
         title('Jumps Finder: input data')
         xlabel('Index')
         ylabel('Data')
         plot(idx, dd)
         plot(idx[jumps], dd[jumps], 'r.', label='trigger')
-        plot(idx[xc], dd[xc], 'go', label='clusters')
-        plot(idx[xj], dd[xj], 'mo', label='Final Jumps')
-        for i in range(len(xj)):
-            axvspan(xj[i], xj[i]+szj[i], color='r', alpha=0.5)  
+        if len(xc)> 0: plot(idx[xc], dd[xc], 'go', label='clusters')
+        if len(xj)> 0: 
+        	plot(idx[xj], dd[xj], 'mo', label='Final Jumps')
+        	for i in range(len(xj)):
+        		axvspan(xj[i], xj[i]+szj[i], color='r', alpha=0.5)  
         legend()
+        xlim(0, idx[-1])
+        # xlim(276000, 284000)
+
         
-        subplot(3,1,2)
+        subplot(4,1,2)
         title('Jumps Finder: Normalized Haar Filtered data')
         xlabel('Index')
         ylabel('H/$\sigma$')            
         plot(idx, hdd)
         plot(idx[jumps], hdd[jumps], 'r.')
-        plot(idx[xc], hdd[xc], 'go')
-        plot(idx[xj], hdd[xj], 'mo')
+        if len(xc)> 0: plot(idx[xc], hdd[xc], 'go')
+        if len(xj)> 0: 
+        	plot(idx[xj], hdd[xj], 'mo')
+        	for i in range(len(xj)):
+        		axvspan(xj[i], xj[i]+szj[i], color='r', alpha=0.5) 
         axhline(y=threshold, color='k', ls=':')
         axhline(y=-threshold, color='k', ls=':')
-        for i in range(len(xj)):
-            axvspan(xj[i], xj[i]+szj[i], color='r', alpha=0.5) 
-            
-        subplot(3,1,3)
+        xlim(0, idx[-1])
+        # xlim(276000, 284000)
+
+           
+        subplot(4,1,3)
         title('Jumps Finder: Derivative of Haar Filtered data')
         xlabel('Index')
         ylabel('$\partial$H/$\sigma$')            
         plot(idx, dhdd)
+        plot(idx, move_median_jc(dhdd, size_haar//2), label='median')
+        plot(idx, move_std_jc(move_median_jc(dhdd, size_haar//2), size_haar*5), label='std(med)')
         plot(idx[jumps], dhdd[jumps], 'r.')
-        plot(idx[xc], dhdd[xc], 'go')
-        plot(idx[xj], dhdd[xj], 'mo')
+        if len(xc)> 0: plot(idx[xc], dhdd[xc], 'go')
+        if len(xj)> 0: 
+        	plot(idx[xj], dhdd[xj], 'mo')
+	        for i in range(len(xj)):
+	        	axvspan(xj[i], xj[i]+szj[i], color='r', alpha=0.5)    
         axhline(y=threshold, color='k', ls=':')
         axhline(y=-threshold, color='k', ls=':')
-        for i in range(len(xj)):
-            axvspan(xj[i], xj[i]+szj[i], color='r', alpha=0.5)    
-            
-            
+        xlim(0, idx[-1])
+        legend()
+        # xlim(276000, 284000)
+
+        subplot(4,1,4)
+        title('Jumps Finder: Moveing "median"-std of Derivative')
+        xlabel('Index')
+        plot(idx, truc)
+        plot(idx[jumps], truc[jumps], 'r.')
+        if len(xc)> 0: plot(idx[xc], truc[xc], 'go')
+        if len(xj)> 0: 
+        	plot(idx[xj], truc[xj], 'mo')
+	        for i in range(len(xj)):
+	        	axvspan(xj[i], xj[i]+szj[i], color='r', alpha=0.5)    
+        axhline(y=threshold, color='k', ls=':')
+        xlim(0, idx[-1])
+        ylim(0, np.max(truc[isfinite(truc)])*1.1)
+        legend()
+        # xlim(276000, 284000)
+
         tight_layout()
         
     return list(xj), list(szj)
@@ -340,6 +392,8 @@ def correct_jumps_flat(dd, xj, szj, doplot=True):
         plot(idx, newdd)
         bad = flags != 0
         plot(idx[bad], newdd[bad], 'r.')
+        title('Jump correction - correct_jumps_flat()')
+
     return newdd-np.median(newdd), flags
 
 def correct_jumps_lin(dd, xj, szj, doplot=False):
@@ -371,6 +425,7 @@ def correct_jumps_lin(dd, xj, szj, doplot=False):
         plot(idx, newdd)
         bad = flags != 0
         plot(idx[bad], newdd[bad], 'r.')
+        title('Jump correction - correct_jumps_lin()')
     return newdd-np.median(newdd), flags
 
 def correct_jumps_continuity(dd, xj, szj, zone_size=100, doplot=True):
@@ -389,6 +444,7 @@ def correct_jumps_continuity(dd, xj, szj, zone_size=100, doplot=True):
         plot(idx, newdd)
         bad = flags != 0
         plot(idx[bad], newdd[bad], 'r.')
+        title('Jump correction - correct_jumps_continuity()')
     return newdd-np.median(newdd), flags
 
 
@@ -405,7 +461,7 @@ def fill_bad_regions(dd, flags, flaglimit=1, zone_size=100):
         dd[imin:imax] = mm_before + (mm_after-mm_before) / (imax-imin) * np.arange(imax-imin) + np.random.randn(imax-imin)*(ss_before+ss_after)/2
     return dd
 
-def jumps_correction(dd, threshold=20, size_haar=51, doplot=False, verbose=False, method='lin'):
+def jumps_correction(dd, threshold=5, size_haar=51, doplot=False, verbose=False, method='lin'):
 	### Find the jumps
 	xjumps, szjumps = jumps_finder(dd, threshold=threshold, size_haar=size_haar, doplot=doplot, verbose=verbose)
 

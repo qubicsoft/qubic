@@ -5,11 +5,11 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.7.1
+      jupytext_version: 1.6.0rc0
   kernelspec:
-    display_name: Python [conda env:py36env] *
+    display_name: Python 3
     language: python
-    name: conda-env-py36env-py
+    name: python3
 ---
 
 ## Frequency point spread function (FPSF)
@@ -119,7 +119,8 @@ def read_run(jobid, repo=None, fixpar=True):
     Return:
         
     """
-    repo = os.environ['QUBIC_DATADIR']+'scripts/Spectroimagery_paper/output_paper/nersc/{}/'.format(jobid)
+    #repo = os.environ['QUBIC_DATADIR']+'scripts/Spectroimagery_paper/output_paper/nersc/{}/'.format(jobid)
+    repo = os.environ['QUBIC_DATADIR']+'/scripts/Spectroimagery_paper/NERSC_runs/{}/'.format(jobid)
     repodict = glob.glob(repo+'*.dict')[0]
 
     d = qubic.qubicdict.qubicDict()
@@ -660,8 +661,9 @@ fig, ax = plt.subplots(nrows = 2, ncols = 2, figsize = (10, 8),
                        sharex = True, sharey = True)
 jax = 0
 ax = ax.ravel()
+plt.grid()
 for j, inu in enumerate([2, 3, 4, 5]):
-    ax[jax].grid()
+    ax[jax].grid(True, zorder = 0)
     
     data_dict = locals()["data_{}bands".format(inu)]
     xfit = data_dict['Data_fit'][0]
@@ -679,8 +681,8 @@ for j, inu in enumerate([2, 3, 4, 5]):
     
     xvals = np.linspace(np.min(xfit), np.max(xfit), 1000)
     
-    ax[jax].plot(xfit, yfit, 'o', color='b', label='Datos')
-    ax[jax].plot(xvals, myspl(xvals)/np.max(myspl(xvals)), 'r', label='FPSF')
+    ax[jax].plot(xfit, yfit, 'o', color = 'b', label = 'Datos', zorder = 10)
+    ax[jax].plot(xvals, myspl(xvals)/np.max(myspl(xvals)), 'r', label='FPSF', zorder = 12)
     ax[jax].set_xlim(-25,25)
     ax[jax].set_ylim(-0.2,1.1)
     if jax > 1:
@@ -693,11 +695,11 @@ for j, inu in enumerate([2, 3, 4, 5]):
     #ax[jax].plot(xgauss, np.exp(-0.5 * (xgauss ** 2 )/((150 / (22 -1)) / 2.355) ** 2  ), label  = "Theor" )
     ax[jax].fill_between(xgauss, y1 = np.exp(-0.5 * (xgauss ** 2 )/((170 / (22 -1)) / 2.355) ** 2  ), 
         y2 = np.exp(-0.5 * (xgauss ** 2 )/((130 / (22 - 1)) / 2.355) ** 2  ),
-               color = 'm', label = "Gauss.")
+               color = 'm', label = "Gauss.", zorder = 10)
     #ax[jax].plot(xgauss, np.exp(-0.5 * (xgauss ** 2 )/((150 / (8 -1)) / 2.355) ** 2  ),'--', label  = "expected" )
     ax[jax].axvspan(-np.diff(data_dict['nu_edge'])[0]/2,
                     np.diff(data_dict['nu_edge'])[0]/2, color = 'k', alpha = 0.2)
-    ax[jax].text(-20,0.9, r"$N_r$ = {0}".format(inu))
+    ax[jax].text(-20,0.9, r"Nrec = {0}".format(inu))
     if jax == 3:
         #ax[3].text(-20,0.75, r"$\sigma_F = {:.2f}$".format((150/(22-1))/2.355))
         #ax[3].text(-20,0.6, r"$\sigma_T = {:.2f}$".format((150/(8-1))/2.355))
@@ -714,7 +716,7 @@ See how the FPSF change when it changes the frequency of the point source
 
 ```{python}
 for ibnd in [2,3,4,5]:
-    fig = plt.figure(figsize=(4, 4))
+    fig = plt.figure(figsize=(6, 4))
     ax = fig.gca()
     data_array = locals()['data_{}bands'.format(ibnd)]
     
@@ -727,7 +729,7 @@ for ibnd in [2,3,4,5]:
                       np.array([data_array['band{}'.format(i)] for i in range(ibnd)]).T[0], 'ko')
     line = ax.axvline(data_array['nu_in'][0], color = 'k', ls = '--')
     
-    line_spl, = ax.plot(xvals+data_array['nu_in'][0],
+    line_spl, = ax.plot(xvals + data_array['nu_in'][0],
                         data_array['SplFunc'](xvals), color = 'k', ls = '-')
     #print(line_spl)
     text = ax.text(140, 1, r'$\nu_i=${:3.2f} GHz'.format(data_array['nu_in'][0]), fontsize=14)
@@ -752,12 +754,72 @@ for ibnd in [2,3,4,5]:
         text.set_text(r'$\nu_i=${:3.2f} GHz'.format(data_array['nu_in'][i]))
         return(points)
 
-
     steps = np.arange(nsimu)
-    anim = FuncAnimation(fig, animate, steps, init_func=init, interval=1000, blit=False, repeat=False)
+    anim = FuncAnimation(fig, animate, steps, init_func = init, 
+                         interval = 1000, blit = False, repeat = False)
 
     # Save a .gif
+    fig.tight_layout()
     #anim.save('./{}FPSF.gif'.format(ibnd), writer='imagemagick')
+```
+
+```{python}
+np.array([data_array['band{}'.format(i)] for i in range(5)]).T#[k[5-2][j]]
+```
+
+```{python}
+fig, ax = plt.subplots(nrows = 4, ncols = 5, figsize=(14, 10),
+                      sharey = True, sharex = True)
+k = [[5,18],
+     [5,10,16],
+     [0,1,2,3],
+     [1,3,5,7,8]]
+
+#Generate xvals to plot spline
+xfit = data_dict['Data_fit'][0]
+xvals = np.linspace(np.min(xfit), np.max(xfit), 1000)
+
+nsimu = len(data_array['nu_in'])
+for ibnd in range(2,6):
+    data_array = locals()['data_{}bands'.format(ibnd)]
+    for j in range(ibnd):
+        #print(j, k[ibnd-2][j])
+        #print([i for i in range(ibnd)])
+        ax[ibnd-2, j].plot(data_array['nu_rec'], 
+                np.array([data_array['band{}'.format(i)] for i in range(ibnd)]).T[k[ibnd-2][j]], 'ko')
+
+        #plot inpt freq of the source
+        ax[ibnd-2, j].axvline(data_array['nu_in'][k[ibnd-2][j]], color = 'k', ls = '--')
+
+        #plot fpsf
+        #ax[ibnd-2, j].plot(xvals + data_array['nu_in'][k[ibnd-2][j]],
+        #        data_array['SplFunc'](xvals), 
+        #        color = 'k', ls = '-')
+        #print(line_spl)
+        #text = ax.text(140, 1, r'$\nu_i=${:3.2f} GHz'.format(data_array['nu_in'][0]), fontsize=14)
+
+        ax[ibnd-2, j].axhline(0, color = 'k', ls = '-', alpha = 0.2)
+        c = ['b', 'g', 'y', 'orange', 'r']
+        for ib in range(ibnd):
+            ax[ibnd-2, j].axvspan(xmin = data_array['nu_edge'][ib], xmax = data_array['nu_edge'][ib + 1], 
+                       alpha = 0.4, color = c[ib])
+        ax[ibnd-2,j].set_xlim(130,170)
+        ax[ibnd-2,j].set_ylim(-0.2,1.1)
+        if ibnd == 5: ax[3,j].set_xlabel(r'$\nu$ [GHz]', fontsize = 20)
+            
+    if j < ibnd:
+        #print(j)
+        for jj in range(j+1, 5):
+            ax[ibnd-2, jj].axis('off')
+    ax[ibnd-2,0].set_ylabel(r'$I_{out}$', fontsize = 20)
+    plt.subplots_adjust(wspace=0.0,
+                       hspace = 0,
+                       )#left = 0, right = 0.0001)
+    #text.set_text(r'$\nu_i=${:3.2f} GHz'.format(data_array['nu_in'][i]))
+
+    # Save a .gif
+    fig.tight_layout()
+    #plt.savefig("FPSF_manyfreqs.pdf", format = "pdf")
 ```
 
 ### Now I try to compute the photometric aperture as it's done with real data. 
@@ -779,7 +841,7 @@ print("Point source placed at {:.2f} GHz".format(data_array['nu_in'][nsimu]))
 okpix = cov > 0.3
 all_maps_recon_custom_new_cut = np.array(map2use).copy()
 all_maps_recon_custom_new_cut[:,~okpix,:] = 0
-figure(figsize = (12,6))
+plt.figure(figsize = (12,6))
 maps = []
 for k in range(int(nrec)):
     okpix = all_maps_recon_custom_new_cut[k,:,0] != 0
@@ -794,14 +856,14 @@ for k in range(int(nrec)):
                return_projected_map=True)
     hp.graticule(verbose = False)
     maps.append(mymap)
-tight_layout()
+plt.tight_layout()
 ```
 
 ```{python}
 def plotcircle(c, r, color=None,lw=None, ls=None):
     nn = 100
     ang = np.linspace(0,2*np.pi, nn)
-    plot(c[0]+r*np.cos(ang), c[1]+r*np.sin(ang), color=color)
+    plt.plot(c[0]+r*np.cos(ang), c[1]+r*np.sin(ang), color=color)
 
 def aperture_photometry(img, centers, rads, doplot=False, stampsize=25, magnitude_zero=0, cmap='gray_r', subs=True):
     npix = np.shape(img)[0]
@@ -865,8 +927,8 @@ def aperture_photometry_2(img, centers, rads, plot=False, stampsize=25,
     
         if plot:
             if subs:
-                subplot(nsq,nsq,i+1)
-            imshow(img, cmap=cmap, vmin=-5*np.std(img), vmax=5*np.std(img), origin='lower')
+                plt.subplot(nsq,nsq,i+1)
+            plt.imshow(img, cmap=cmap, vmin=-5*np.std(img), vmax=5*np.std(img), origin='lower')
             #colorbar()
             #xlim(c[0]-stampsize, c[0]+stampsize)
             #ylim(c[1]-stampsize, c[1]+stampsize)

@@ -192,14 +192,14 @@ tmax = np.max(tt)
 ok = (tt>=tmin) & (tt <= tmax)
 
 idx = np.arange(len(alltod[numTES-1,:]))
-ok = (idx > 1.5e6) & (idx < 2e6+10000)
-#ok = (idx > 299000) & (idx < 305000)
+# ok = (idx > 1.5e6) & (idx < 2e6+10000)
+#ok = (idx > (1.5e6+298000)) & (idx < (1.5e6+306000))
 
 
 dd = -alltod[numTES-1,:][ok]
 mytt = tt[ok]
 
-newdd, flags = tdt.jumps_correction(dd, threshold=15, size_haar=51, doplot=False, verbose=False, method='lin')
+newdd, flags = tdt.jumps_correction(dd, threshold=15, size_haar=51, doplot=False, verbose=False, method='continuity_lin')
 
 figure()
 idx = np.arange(len(dd))

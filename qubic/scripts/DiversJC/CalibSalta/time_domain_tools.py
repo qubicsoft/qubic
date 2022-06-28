@@ -368,6 +368,38 @@ def jumps_finder(dd, size_haar=51, threshold=5, size_fact=3., doplot=False, verb
         
     return list(xj), list(szj)
 
+def correct_jumps_edges(dd, xj, szj, zone_size=100, doplot=True):
+    doplot = True
+    newdd = dd.copy()
+    ### Removes the median between successive regions
+    iinit = -1
+    szinit = 0
+    flags = np.zeros(len(dd))
+    # Add last element to have the full range
+    xj.append(len(dd))
+    szj.append(0)
+    # now do the loop over jumps regions
+    for ij, sj in zip(xj, szj):
+        myimin = iinit+szinit+1
+        #myimax = ij-1
+        myimax = myimin + 100
+        print(ij, sj)
+        print(myimin, myimax)
+        print()
+        newdd[iinit+1:ij+1] -= np.median(newdd[myimin:myimax])
+        # newdd[iinit+1:] -= np.median(newdd[myimin:myimax])
+        flags[ij:ij+sj] = 2**8
+        iinit = ij
+        szinit = sj
+    if doplot:
+        figure()
+        idx = np.arange(len(dd))
+        plot(idx, newdd)
+        bad = flags != 0
+        plot(idx[bad], newdd[bad], 'r.')
+        title('Jump correction - correct_jumps_flat()')
+
+    return newdd-np.median(newdd), flags
 
 def correct_jumps_flat(dd, xj, szj, doplot=True):
     newdd = dd.copy()
@@ -381,7 +413,7 @@ def correct_jumps_flat(dd, xj, szj, doplot=True):
     # now do the loop over jumps regions
     for ij, sj in zip(xj, szj):
         myimin = iinit+szinit+1
-        myimax = ij-1
+        myimax = myimin + 100
         newdd[iinit+1:ij+1] -= np.median(dd[myimin:myimax])
         flags[ij:ij+sj] = 2**8
         iinit = ij
@@ -397,38 +429,40 @@ def correct_jumps_flat(dd, xj, szj, doplot=True):
     return newdd-np.median(newdd), flags
 
 def correct_jumps_lin(dd, xj, szj, doplot=False):
-    newdd = dd.copy()
-    ### removes a line in between jumps
-    idx = np.arange(len(dd))
-    iinit = -1
-    szinit = 0
-    flags = np.zeros(len(dd))
-    # Add last element to have the full range
-    xj.append(len(dd))
-    szj.append(0)
-    # now do the loop over jumps regions
-    for ij, sj in zip(xj, szj):
-        myimin = np.min([iinit+szinit+1, ij-1])
-        myimax = np.max([iinit+szinit+1, ij-1])
-        #### Fit a line with those points (removing outliers)
-        xx = idx[myimin:myimax]
-        yy = dd[myimin:myimax]
-        mm, ss = ft.meancut(yy,3)
-        okfit = np.abs(yy-mm) < (4*ss)
-        p = np.poly1d(polyfit(xx[okfit], yy[okfit], 1))
-        newdd[iinit+1:ij+1] -= p(idx[iinit+1:ij+1])
-        flags[ij:ij+sj] = 2**8
-        iinit = ij
-        szinit = sj
-    if doplot:
-        figure()
-        plot(idx, newdd)
-        bad = flags != 0
-        plot(idx[bad], newdd[bad], 'r.')
-        title('Jump correction - correct_jumps_lin()')
-    return newdd-np.median(newdd), flags
+	doplot = True
+	newdd = dd.copy()
+	### removes a line in between jumps
+	idx = np.arange(len(dd))
+	iinit = -1
+	szinit = 0
+	flags = np.zeros(len(dd))
+	# Add last element to have the full range
+	xj.append(len(dd))
+	szj.append(0)
+	# now do the loop over jumps regions
+	for ij, sj in zip(xj, szj):
+		myimin = np.min([iinit+szinit+1, ij-1])
+		myimax = np.max([iinit+szinit+1, ij-1])
+		#### Fit a line with those points (removing outliers)
+		xx = idx[myimin:myimax]
+		yy = newdd[myimin:myimax]
+		mm, ss = ft.meancut(yy,3)
+		okfit = np.abs(yy-mm) < (4*ss)
+		p = np.poly1d(polyfit(xx[okfit], yy[okfit], 1))
+		newdd[iinit+1:ij+1] -= p(idx[iinit+1:ij+1])
+		flags[ij:ij+sj] = 2**8
+		iinit = ij
+		szinit = sj
+	if doplot:
+		figure()
+		plot(idx, newdd)
+		bad = flags != 0
+		plot(idx[bad], newdd[bad], 'r.')
+		title('Jump correction - correct_jumps_lin()')
+	return newdd-np.median(newdd), flags
 
 def correct_jumps_continuity(dd, xj, szj, zone_size=100, doplot=True):
+    doplot = True
     newdd = dd.copy()
     flags = np.zeros(len(dd))
     ### ensures coninuity after jumps
@@ -447,8 +481,34 @@ def correct_jumps_continuity(dd, xj, szj, zone_size=100, doplot=True):
         title('Jump correction - correct_jumps_continuity()')
     return newdd-np.median(newdd), flags
 
+def correct_jumps_continuity_lin(dd, xj, szj, zone_size=100, doplot=True):
+    doplot = True
+    newdd = dd.copy()
+    flags = np.zeros(len(dd))
+    ### ensures coninuity after jumps and also removes a linear function
+    # now do the loop over jumps regions
+    for ij, sj in zip(xj, szj):
+        mm_before, ss_before = ft.meancut(newdd[ij-zone_size:ij-1], 3)
+        print()
+        print(ij, sj)
+        print('Before',ij-zone_size, ij-1, mm_before, ss_before)
+        mm_after, ss_after = ft.meancut(newdd[ij+sj:ij+sj+zone_size+1], 3)
+        print('Beginning',ij+sj, ij+sj+zone_size+1, mm_after, ss_after)
+        print('end', )
+        newdd[ij:] -= -(mm_before-mm_after)
+        flags[ij:ij+sj] = 2**8
+    if doplot:
+        figure()
+        idx = np.arange(len(dd))
+        plot(idx, dd)
+        plot(idx, newdd)
+        bad = flags != 0
+        plot(idx[bad], newdd[bad], 'r.')
+        title('Jump correction - correct_jumps_continuity()')
+    return newdd-np.median(newdd), flags
 
-def fill_bad_regions(dd, flags, flaglimit=1, zone_size=100):
+
+def fill_bad_regions(dd, flags, flaglimit=1, zone_size=10):
     idx = np.arange(len(dd))
     badidx = idx[flags >= flaglimit]
     clust = DBSCAN(eps=3, min_samples=2).fit(np.reshape(badidx, (len(badidx),1)))
@@ -468,10 +528,15 @@ def jumps_correction(dd, threshold=5, size_haar=51, doplot=False, verbose=False,
 	### Correct for the jumps
 	if method == 'flat':
 		newdd, flags = correct_jumps_flat(dd, xjumps, szjumps, doplot=doplot)
+	if method == 'edges':
+		newdd, flags = correct_jumps_edges(dd, xjumps, szjumps, doplot=doplot)
 	elif method == 'lin':
 		newdd, flags = correct_jumps_lin(dd, xjumps, szjumps, doplot=doplot)
 	elif method == 'continuity':
 		newdd, flags = correct_jumps_continuity(dd, xjumps, szjumps, doplot=doplot)
+	elif method == 'continuity_lin':
+		newdd, flags = correct_jumps_continuity(dd, xjumps, szjumps, doplot=doplot)
+		newdd, flags = correct_jumps_lin(dd, xjumps, szjumps, doplot=doplot)
 
 	### Fill bad regions with constrained random noise realization
 	newdd = fill_bad_regions(newdd, flags)

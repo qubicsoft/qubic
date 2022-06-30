@@ -1,0 +1,235 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.7.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+## Simulation of the Moon observed by QUBIC-TD
+
+
+Author: M.M. Gamboa Lerena complement of the work done by JCh
+
+This notebook aims to simulate the observation of the Moon by the QUBIC-TD using the current configuration of the instrument and the sampling modeled by JCh. 
+
+```{python}
+# Config notebook
+from IPython.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+```
+
+```{python}
+import numpy as np
+import matplotlib.pyplot as plt
+import healpy as hp
+
+import sys
+from importlib import reload
+from astropy.visualization import astropy_mpl_style, quantity_support
+plt.style.use(astropy_mpl_style)
+quantity_support()
+import astropy.units as u
+from astropy.time import Time
+from astropy.coordinates import SkyCoord, EarthLocation, AltAz, get_moon, get_sun#, HADec, BaseRADecFrame
+
+import qubic
+```
+
+```{python}
+Salta = EarthLocation(lat=-24.731358*u.deg, lon=-65.409535*u.deg, height=1152*u.m)
+utcoffset = -3*u.hour  # Eastern Daylight Time
+door_az = 105.
+az_span = 50.
+el_min = 30.
+el_max = 50.
+```
+
+```{python}
+days = ['2022-07-12']
+day = '2022-07-12'
+```
+
+```{python}
+start_obs_hour = '00:00:00'
+date = Time(day+ ' 00:00:00')
+start_obs_date = day +' '+start_obs_hour
+delta_time = np.linspace(12,30, 1000)*u.hour
+time0 = Time(start_obs_date)-utcoffset
+alltimes = time0 + delta_time
+local_time_hours = ((Time(start_obs_date) + delta_time).cxcsec - date.cxcsec)/3600
+### Local coordinates
+frame_Salta = AltAz(obstime=alltimes, location=Salta)
+### Moon
+moon_Salta = get_moon(alltimes)
+moonaltazs_Salta = moon_Salta.transform_to(frame_Salta)  
+### Moon
+sun_Salta = get_sun(alltimes)
+sunaltazs_Salta = sun_Salta.transform_to(frame_Salta)  
+delta_el = 20
+valid = (moonaltazs_Salta.alt.value < (el_max+delta_el)) & \
+        (moonaltazs_Salta.alt.value > (el_min-delta_el)) & \
+        (moonaltazs_Salta.az.value > 80) & \
+        (moonaltazs_Salta.az.value < 145)
+tstart = np.min(local_time_hours[valid])
+tstop = np.max(local_time_hours[valid])
+local_start = str(Time(start_obs_date)+tstart*u.hour)[:16]
+local_stop = str(Time(start_obs_date)+tstop*u.hour)[:16]
+UTC_start = str(Time(start_obs_date)-utcoffset+tstart*u.hour)[:16]
+UTC_stop = str(Time(start_obs_date)-utcoffset+tstop*u.hour)[:16]
+```
+
+```{python}
+d = qubic.qubicdict.qubicDict()
+d.read_from_file('MoonObservation.dict')
+d['date_obs'] = str(Time(start_obs_date)-utcoffset+tstart*u.hour)
+d['latitude'] = -24.731377    ### Salta Regional Noroeste
+d['longitude'] = -65.409546   ### Salta Regional Noroeste
+d['sampling'] = 1.
+moon_ra_mean = np.mean(moon_Salta.ra[valid]/u.deg)
+moon_dec_mean = np.mean(moon_Salta.dec[valid]/u.deg)
+d['RA_center'] = moon_ra_mean #deg
+d['DEC_center'] = moon_dec_mean #deg
+d['duration'] = tstop-tstart # Hours
+d['angspeed'] = 0.8 #deg/s
+d['delta_az'] = az_span #deg
+d['nsweeps_per_elevation'] = 1
+d['angspeed_psi'] = 0. #deg/s
+backforthdt = d['delta_az'] / d['angspeed'] * 2
+print('Scan Duration: ',backforthdt)
+d['dead_time'] = 0.
+print('Dead Time = {}'.format(d['dead_time']))
+```
+
+```{python}
+el_min = 30.
+el_max = 50.
+n_elevations = int(d['duration']*3600/(backforthdt+d['dead_time']))+1
+el_step = np.round((el_max - el_min) / n_elevations * 100) / 100
+d['fix_azimuth'] = {'apply':True,'az':105.,
+                     'el':40,'el_step':el_step, 'fix_hwp':True, 'fix_pitch':True}
+print(d['fix_azimuth'])
+print('call')
+p = qubic.get_pointing(d)
+print(p.elevation)
+
+el_min_final = np.min(p.elevation)
+el_max_final = np.max(p.elevation)
+```
+
+```{python}
+fig1 = figure()
+plot(p.azimuth, p.elevation, alpha=0.5, 
+     label = '{} scans with Δaz = {} deg, Δel = {} deg el_min={:5.2f} deg, el_max={:5.2f} deg, az_center={:5.1f} deg, dead_time={} sec'.format(n_elevations, 
+                    d['delta_az'], el_step, el_min_final, el_max_final, d['fix_azimuth']['az'], d['dead_time']))
+scatter(moonaltazs_Salta.az[valid], moonaltazs_Salta.alt[valid],
+            c=local_time_hours[valid], label='Moon', lw=0, s=200, marker='o', cmap='jet')
+plot(sunaltazs_Salta.az[valid], sunaltazs_Salta.alt[valid], 'r', lw=3, label='Sun (needs to be far)')
+fill_between([door_az-az_span/2, door_az+az_span/2], 
+             [el_max,el_max], y2=[el_min, el_min], color='r', alpha=0.5, 
+             label='Observing Window' )
+legend(loc='upper left', fontsize=10)
+title('Operations from {} to {} (local time)'.format(local_start, local_stop))
+colorbar().set_label('Local Time')
+xlabel('Absolute Azimuth [deg]')
+ylabel('Absolute Elevation [deg]')
+xlim(door_az-az_span/2-10, door_az+az_span/2+10)
+ylim(5, 75)
+
+```
+
+```{python}
+fig2 = figure()
+plot(p.equatorial[:,0], p.equatorial[:,1], alpha=0.5, 
+     label = '{} scans with Δaz = {} deg, Δel = {} deg el_min={:5.2f} deg, el_max={:5.2f} deg, az_center={:5.1f} deg, dead_time={} sec'.format(n_elevations, 
+                    d['delta_az'], el_step, el_min_final, el_max_final, d['fix_azimuth']['az'], d['dead_time']))
+scatter(moon_Salta.ra[valid]/u.deg, moon_Salta.dec[valid]/u.deg,
+            c=local_time_hours[valid], label='Moon', lw=0, s=200, marker='o', cmap='jet')
+plot(sun_Salta.ra[valid]/u.deg, sun_Salta.ra[valid]/u.deg, 'r', lw=3, label='Sun (needs to be far)')
+colorbar().set_label('Local Time')
+legend(loc='upper left', fontsize=10)
+title('Operations from {} to {} (local time)'.format(local_start, local_stop))
+xlabel('RA')
+ylabel('DEC')
+xlim(np.min(p.equatorial[:,0])-5, np.max(p.equatorial[:,0])+5)
+ylim(np.min(p.equatorial[:,1])-5, np.max(p.equatorial[:,1])+5)
+```
+
+```{python}
+fig3 = figure()
+title('Operations from {} to {} (local time)'.format(local_start, local_stop))
+subplot(2,1,1)
+plot(local_time_hours[valid][0]+p.time/3600, p.azimuth, label='Scanning')
+plot(local_time_hours[valid], moonaltazs_Salta.az[valid], label='Moon')
+plot(local_time_hours[valid], sunaltazs_Salta.az[valid], label='Sun')
+xlabel('Local Time in hour')
+ylabel('Absolute Azimuth [deg]')
+legend(loc='upper left')
+ylim(door_az-az_span/2-10, door_az+az_span/2+10)
+subplot(2,1,2)
+plot(local_time_hours[valid][0]+p.time/3600, p.elevation, label='Scanning')
+plot(local_time_hours[valid], moonaltazs_Salta.alt[valid], label='Moon')
+plot(local_time_hours[valid], sunaltazs_Salta.alt[valid], label='Sun')
+xlabel('Local Time in hour')
+ylabel('Absolute Elevation [deg]')
+legend(loc='upper left')
+ylim(5, 75)
+show()
+```
+
+Prepare qubicsoft for simulation
+* Create point source. I will model the Moon sky as follow:
+     + Fix a position in the sky in (RA, DEC) 
+     + Set to 30 arcmin size of the point source. 
+     + Continum and constant emission across the frequencies
+     + Arbitrary amplitude (high at the beggining = 1e5 $\mu$K$_{\rm CMB}$)
+     + Create 10 equal structures ($SkyMoon_i$) changing the RA, DEC of the Moon
+     + Sum $MoonSky = \sum_{i} MoonSky_i$
+
+```{python}
+# Center of the patch observed in galactic coordinates
+center = qubic.equ2gal(moon_Salta.ra[0]/u.deg, moon_Salta.dec[0]/u.deg)
+d['nside'] = 256
+nside = d['nside']
+```
+
+```{python}
+# Set position of the Moon in RA, DEC
+MoonPosition = hp.pixelfunc.ang2pix(nside, np.deg2rad(90-center[1]), np.deg2rad(center[0]))
+MoonVec = hp.pix2vec(nside, MoonPosition)
+MoonVecs = hp.pix2vec(nside, np.arange(12*nside**2))
+MoonAng = np.arccos(np.dot(MoonVec, MoonVecs))
+```
+
+```{python}
+sigma2fwhm = np.sqrt(8*np.log(2))
+#cte = 58.44
+cteTD = 175.3
+_, nus_edge_in, nus_in, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, 
+                                    d['nf_sub'],
+                                    d['filter_relative_bandwidth'])
+#nu = np.array([nus_in[innu0],])
+fwhm_in = cteTD/nus_in # nus to fwhm
+```
+
+```{python}
+def f(val, fwhm, sigma2fwhm):
+    return np.nan_to_num(np.exp(-0.5*val**2/(np.radians(fwhm)/sigma2fwhm)**2))
+```
+
+```{python}
+# Amplitude of the signal
+MoonAmp = 1e5
+for i in range(len(nus_in)):
+    x0[i,:,0] += MoonAmp*f(MoonAng, fwhm_in[i], sigma2fwhm)
+```
+
+```{python}
+
+```

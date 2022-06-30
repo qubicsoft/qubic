@@ -214,7 +214,7 @@ def jumps_finder(dd, size_haar=51, threshold=5, size_fact=3., doplot=False, verb
 
     ### Sort of moving "median"-std that will discard solitary peaks and be large when there are many n-std points 
     ### (typically on synthesized beam peaks)
-    truc = bn.move_mean(np.sqrt(np.abs(move_median_jc(dhdd**2, size_haar//2) - move_median_jc(dhdd, size_haar//2)**2)) / sdhdd, size_haar)
+    truc = bn.move_mean(np.sqrt(np.abs(move_median_jc(dhdd**2, size_haar//2) - move_median_jc(dhdd, size_haar//2)**2)) / sdhdd, size_haar//2)
  
     
     ### Thereshold to find jumps 
@@ -228,11 +228,14 @@ def jumps_finder(dd, size_haar=51, threshold=5, size_fact=3., doplot=False, verb
     jumps_tt = idx[jumps]
     clust = DBSCAN(eps=size_haar//5, min_samples=1).fit(np.reshape(jumps_tt, (len(jumps_tt),1)))
     nc = np.max(clust.labels_)+1
-    xc = np.zeros(nc, dtype=int)
-    szc = np.zeros(nc, dtype=int)
+    xc = np.zeros(nc+1, dtype=int)
+    szc = np.zeros(nc+1, dtype=int)
     for i in range(nc):
         xc[i] = np.min(jumps_tt[clust.labels_ == i])
         szc[i] = (size_fact*(np.max(jumps_tt[clust.labels_ == i])-xc[i])).astype(int)
+    ### Add last element to clusters
+    xc[nc] = idx[-1]
+    szc[nc] = 1
 
     ### We remove cluster of zero size
     ok = szc > 0
@@ -307,7 +310,7 @@ def jumps_finder(dd, size_haar=51, threshold=5, size_fact=3., doplot=False, verb
         	plot(idx[xj], dd[xj], 'mo', label='Final Jumps')
         	for i in range(len(xj)):
         		axvspan(xj[i], xj[i]+szj[i], color='r', alpha=0.5)  
-        legend()
+        legend(loc='upper left')
         xlim(0, idx[-1])
         # xlim(276000, 284000)
 
@@ -349,7 +352,7 @@ def jumps_finder(dd, size_haar=51, threshold=5, size_fact=3., doplot=False, verb
         # xlim(276000, 284000)
 
         subplot(4,1,4)
-        title('Jumps Finder: Moveing "median"-std of Derivative')
+        title('Jumps Finder: Moving "median"-std of Derivative')
         xlabel('Index')
         plot(idx, truc)
         plot(idx[jumps], truc[jumps], 'r.')
@@ -368,7 +371,7 @@ def jumps_finder(dd, size_haar=51, threshold=5, size_fact=3., doplot=False, verb
         
     return list(xj), list(szj)
 
-def correct_jumps_edges(dd, xj, szj, zone_size=100, doplot=True):
+def correct_jumps_edges(dd, xj, szj, zone_size=100, flag_margin=5, flag_value=2**8, doplot=True):
     doplot = True
     newdd = dd.copy()
     ### Removes the median between successive regions
@@ -388,7 +391,7 @@ def correct_jumps_edges(dd, xj, szj, zone_size=100, doplot=True):
         print()
         newdd[iinit+1:ij+1] -= np.median(newdd[myimin:myimax])
         # newdd[iinit+1:] -= np.median(newdd[myimin:myimax])
-        flags[ij:ij+sj] = 2**8
+        flags[ij-flag_margin:ij+sj+flag_margin] = flag_value
         iinit = ij
         szinit = sj
     if doplot:
@@ -401,7 +404,7 @@ def correct_jumps_edges(dd, xj, szj, zone_size=100, doplot=True):
 
     return newdd-np.median(newdd), flags
 
-def correct_jumps_flat(dd, xj, szj, doplot=True):
+def correct_jumps_flat(dd, xj, szj, flag_margin=5, flag_value=2**8, doplot=True):
     newdd = dd.copy()
     ### Only removes the median of each region in between jumps
     iinit = -1
@@ -415,7 +418,7 @@ def correct_jumps_flat(dd, xj, szj, doplot=True):
         myimin = iinit+szinit+1
         myimax = myimin + 100
         newdd[iinit+1:ij+1] -= np.median(dd[myimin:myimax])
-        flags[ij:ij+sj] = 2**8
+        flags[ij-flag_margin:ij+sj+flag_margin] = flag_value
         iinit = ij
         szinit = sj
     if doplot:
@@ -428,7 +431,7 @@ def correct_jumps_flat(dd, xj, szj, doplot=True):
 
     return newdd-np.median(newdd), flags
 
-def correct_jumps_lin(dd, xj, szj, doplot=False):
+def correct_jumps_lin(dd, xj, szj, flag_margin=5, flag_value=2**8, doplot=False):
 	doplot = True
 	newdd = dd.copy()
 	### removes a line in between jumps
@@ -450,7 +453,7 @@ def correct_jumps_lin(dd, xj, szj, doplot=False):
 		okfit = np.abs(yy-mm) < (4*ss)
 		p = np.poly1d(polyfit(xx[okfit], yy[okfit], 1))
 		newdd[iinit+1:ij+1] -= p(idx[iinit+1:ij+1])
-		flags[ij:ij+sj] = 2**8
+		flags[ij-flag_margin:ij+sj+flag_margin] = flag_value
 		iinit = ij
 		szinit = sj
 	if doplot:
@@ -461,7 +464,7 @@ def correct_jumps_lin(dd, xj, szj, doplot=False):
 		title('Jump correction - correct_jumps_lin()')
 	return newdd-np.median(newdd), flags
 
-def correct_jumps_continuity(dd, xj, szj, zone_size=100, doplot=True):
+def correct_jumps_continuity(dd, xj, szj, flag_margin=5, flag_value=2**8, zone_size=100, doplot=True):
     doplot = True
     newdd = dd.copy()
     flags = np.zeros(len(dd))
@@ -471,7 +474,7 @@ def correct_jumps_continuity(dd, xj, szj, zone_size=100, doplot=True):
         mm_before, ss_before = ft.meancut(newdd[ij-zone_size:ij-1], 3)
         mm_after, ss_after = ft.meancut(newdd[ij+sj:ij+sj+zone_size+1], 3)
         newdd[ij:] -= -(mm_before-mm_after)
-        flags[ij:ij+sj] = 2**8
+        flags[ij-flag_margin:ij+sj+flag_margin] = flag_value
     if doplot:
         figure()
         idx = np.arange(len(dd))
@@ -481,31 +484,34 @@ def correct_jumps_continuity(dd, xj, szj, zone_size=100, doplot=True):
         title('Jump correction - correct_jumps_continuity()')
     return newdd-np.median(newdd), flags
 
-def correct_jumps_continuity_lin(dd, xj, szj, zone_size=100, doplot=True):
-    doplot = True
-    newdd = dd.copy()
-    flags = np.zeros(len(dd))
-    ### ensures coninuity after jumps and also removes a linear function
-    # now do the loop over jumps regions
-    for ij, sj in zip(xj, szj):
-        mm_before, ss_before = ft.meancut(newdd[ij-zone_size:ij-1], 3)
-        print()
-        print(ij, sj)
-        print('Before',ij-zone_size, ij-1, mm_before, ss_before)
-        mm_after, ss_after = ft.meancut(newdd[ij+sj:ij+sj+zone_size+1], 3)
-        print('Beginning',ij+sj, ij+sj+zone_size+1, mm_after, ss_after)
-        print('end', )
-        newdd[ij:] -= -(mm_before-mm_after)
-        flags[ij:ij+sj] = 2**8
-    if doplot:
-        figure()
-        idx = np.arange(len(dd))
-        plot(idx, dd)
-        plot(idx, newdd)
-        bad = flags != 0
-        plot(idx[bad], newdd[bad], 'r.')
-        title('Jump correction - correct_jumps_continuity()')
-    return newdd-np.median(newdd), flags
+def correct_jumps_continuity_lin(dd, xj, szj, flag_margin=5, flag_value=2**8, zone_size=100, doplot=True):
+	newdd = dd.copy()
+	flags = np.zeros(len(dd))
+	idx = np.arange(len(dd))
+	### ensures coninuity after jumps and also removes a linear function
+	# now do the loop over jumps regions
+	xj.append(len(dd))
+	szj.append(0)
+
+	for i in range(len(xj)-1):
+		ij = xj[i]
+		sj = szj[i]
+		ijp = xj[i+1]
+		sjp = szj[i+1]
+		mm_before, ss_before = ft.meancut(newdd[ij-zone_size:ij-1], 3)
+		mm_beginning, ss_beginning = ft.meancut(newdd[ij+sj:ij+sj+zone_size+1], 3)
+		mm_end, ss_end = ft.meancut(newdd[ijp-zone_size-1:ijp-1], 3)
+		vals_lin = mm_beginning + (mm_end-mm_beginning) * np.arange(ijp-ij) / (ijp-ij)
+		newdd[ij:ijp] -= vals_lin - mm_before
+		flags[ij-flag_margin:ij+sj+flag_margin] = flag_value
+	if doplot:
+		figure()
+		plot(idx, dd)
+		plot(idx, newdd)
+		bad = flags != 0
+		plot(idx[bad], newdd[bad], 'r.')
+		title('Jump correction - correct_jumps_continuity_lin()')
+	return newdd-np.median(newdd), flags
 
 
 def fill_bad_regions(dd, flags, flaglimit=1, zone_size=10):
@@ -535,8 +541,9 @@ def jumps_correction(dd, threshold=5, size_haar=51, doplot=False, verbose=False,
 	elif method == 'continuity':
 		newdd, flags = correct_jumps_continuity(dd, xjumps, szjumps, doplot=doplot)
 	elif method == 'continuity_lin':
-		newdd, flags = correct_jumps_continuity(dd, xjumps, szjumps, doplot=doplot)
-		newdd, flags = correct_jumps_lin(dd, xjumps, szjumps, doplot=doplot)
+		newdd, flags = correct_jumps_continuity_lin(dd, xjumps, szjumps, doplot=doplot)
+		# newdd, flags = correct_jumps_continuity(dd, xjumps, szjumps, doplot=doplot)
+		# newdd, flags = correct_jumps_lin(dd, xjumps, szjumps, doplot=doplot)
 
 	### Fill bad regions with constrained random noise realization
 	newdd = fill_bad_regions(newdd, flags)

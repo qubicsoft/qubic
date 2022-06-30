@@ -180,26 +180,25 @@ rc('figure',figsize=(15,8))
 
 reload(tdt)
 
-#### Typical region
-# numTES = 163
-# tmin = 0
-# tmax = 2000
-
-numTES = 33
+numTES = 163
+# numTES = 41
+# numTES = 33
 
 tmin = 0
 tmax = np.max(tt)
 ok = (tt>=tmin) & (tt <= tmax)
 
 idx = np.arange(len(alltod[numTES-1,:]))
-# ok = (idx > 1.5e6) & (idx < 2e6+10000)
-#ok = (idx > (1.5e6+298000)) & (idx < (1.5e6+306000))
+# ok = (idx > 1.18e6) & (idx < 1.25e6+10000)
+# ok = (idx > 0.3e6) & (idx < 0.5e6)
+# ok = (idx > (1.5e6+298000)) & (idx < (1.5e6+306000))
+# ok = (idx > (2.5e6)) & (idx < (2.53e6))
 
 
 dd = -alltod[numTES-1,:][ok]
 mytt = tt[ok]
 
-newdd, flags = tdt.jumps_correction(dd, threshold=15, size_haar=51, doplot=False, verbose=False, method='continuity_lin')
+newdd, flags = tdt.jumps_correction(dd, threshold=10, size_haar=51, doplot=True, verbose=True, method='continuity_lin')
 
 figure()
 idx = np.arange(len(dd))
@@ -218,10 +217,6 @@ ylabel('ADU')
 title('Corrected for jumps')
 legend()
 tight_layout()
-```
-
-```{python}
-debug
 ```
 
 ```{python}

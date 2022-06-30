@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.7.1
+      jupytext_version: 1.6.0rc0
   kernelspec:
     display_name: Python 3
     language: python
@@ -88,6 +88,7 @@ UTC_stop = str(Time(start_obs_date)-utcoffset+tstop*u.hour)[:16]
 ```{python}
 d = qubic.qubicdict.qubicDict()
 d.read_from_file('MoonObservation.dict')
+d['nf_sub'] = 1
 d['date_obs'] = str(Time(start_obs_date)-utcoffset+tstart*u.hour)
 d['latitude'] = -24.731377    ### Salta Regional Noroeste
 d['longitude'] = -65.409546   ### Salta Regional Noroeste
@@ -124,63 +125,64 @@ el_max_final = np.max(p.elevation)
 ```
 
 ```{python}
-fig1 = figure()
-plot(p.azimuth, p.elevation, alpha=0.5, 
-     label = '{} scans with Δaz = {} deg, Δel = {} deg el_min={:5.2f} deg, el_max={:5.2f} deg, az_center={:5.1f} deg, dead_time={} sec'.format(n_elevations, 
+fig1 = plt.figure(figsize = (14,8))
+plt.plot(p.azimuth, p.elevation, alpha=0.5, 
+     label = '{} scans with Δaz = {} deg, Δel = {} deg el_min={:5.2f} deg, el_max={:5.2f} deg, \
+                 az_center={:5.1f} deg, dead_time={} sec'.format(n_elevations, 
                     d['delta_az'], el_step, el_min_final, el_max_final, d['fix_azimuth']['az'], d['dead_time']))
-scatter(moonaltazs_Salta.az[valid], moonaltazs_Salta.alt[valid],
+plt.scatter(moonaltazs_Salta.az[valid], moonaltazs_Salta.alt[valid],
             c=local_time_hours[valid], label='Moon', lw=0, s=200, marker='o', cmap='jet')
-plot(sunaltazs_Salta.az[valid], sunaltazs_Salta.alt[valid], 'r', lw=3, label='Sun (needs to be far)')
-fill_between([door_az-az_span/2, door_az+az_span/2], 
+plt.plot(sunaltazs_Salta.az[valid], sunaltazs_Salta.alt[valid], 'r', lw=3, label='Sun (needs to be far)')
+plt.fill_between([door_az-az_span/2, door_az+az_span/2], 
              [el_max,el_max], y2=[el_min, el_min], color='r', alpha=0.5, 
              label='Observing Window' )
-legend(loc='upper left', fontsize=10)
-title('Operations from {} to {} (local time)'.format(local_start, local_stop))
-colorbar().set_label('Local Time')
-xlabel('Absolute Azimuth [deg]')
-ylabel('Absolute Elevation [deg]')
-xlim(door_az-az_span/2-10, door_az+az_span/2+10)
-ylim(5, 75)
+plt.legend(loc='upper left', fontsize=10)
+plt.title('Operations from {} to {} (local time)'.format(local_start, local_stop))
+plt.colorbar().set_label('Local Time')
+plt.xlabel('Absolute Azimuth [deg]')
+plt.ylabel('Absolute Elevation [deg]')
+plt.xlim(door_az-az_span/2-10, door_az+az_span/2+10)
+plt.ylim(5, 75)
 
 ```
 
 ```{python}
-fig2 = figure()
-plot(p.equatorial[:,0], p.equatorial[:,1], alpha=0.5, 
+fig2 = plt.figure(figsize = (14,8))
+plt.plot(p.equatorial[:,0], p.equatorial[:,1], alpha=0.5, 
      label = '{} scans with Δaz = {} deg, Δel = {} deg el_min={:5.2f} deg, el_max={:5.2f} deg, az_center={:5.1f} deg, dead_time={} sec'.format(n_elevations, 
                     d['delta_az'], el_step, el_min_final, el_max_final, d['fix_azimuth']['az'], d['dead_time']))
-scatter(moon_Salta.ra[valid]/u.deg, moon_Salta.dec[valid]/u.deg,
+plt.scatter(moon_Salta.ra[valid]/u.deg, moon_Salta.dec[valid]/u.deg,
             c=local_time_hours[valid], label='Moon', lw=0, s=200, marker='o', cmap='jet')
-plot(sun_Salta.ra[valid]/u.deg, sun_Salta.ra[valid]/u.deg, 'r', lw=3, label='Sun (needs to be far)')
-colorbar().set_label('Local Time')
-legend(loc='upper left', fontsize=10)
-title('Operations from {} to {} (local time)'.format(local_start, local_stop))
-xlabel('RA')
-ylabel('DEC')
-xlim(np.min(p.equatorial[:,0])-5, np.max(p.equatorial[:,0])+5)
-ylim(np.min(p.equatorial[:,1])-5, np.max(p.equatorial[:,1])+5)
+plt.plot(sun_Salta.ra[valid]/u.deg, sun_Salta.ra[valid]/u.deg, 'r', lw=3, label='Sun (needs to be far)')
+plt.colorbar().set_label('Local Time')
+plt.legend(loc='upper left', fontsize=10)
+plt.title('Operations from {} to {} (local time)'.format(local_start, local_stop))
+plt.xlabel('RA')
+plt.ylabel('DEC')
+plt.xlim(np.min(p.equatorial[:,0])-5, np.max(p.equatorial[:,0])+5)
+plt.ylim(np.min(p.equatorial[:,1])-5, np.max(p.equatorial[:,1])+5)
 ```
 
 ```{python}
-fig3 = figure()
-title('Operations from {} to {} (local time)'.format(local_start, local_stop))
-subplot(2,1,1)
-plot(local_time_hours[valid][0]+p.time/3600, p.azimuth, label='Scanning')
-plot(local_time_hours[valid], moonaltazs_Salta.az[valid], label='Moon')
-plot(local_time_hours[valid], sunaltazs_Salta.az[valid], label='Sun')
-xlabel('Local Time in hour')
-ylabel('Absolute Azimuth [deg]')
-legend(loc='upper left')
-ylim(door_az-az_span/2-10, door_az+az_span/2+10)
-subplot(2,1,2)
-plot(local_time_hours[valid][0]+p.time/3600, p.elevation, label='Scanning')
-plot(local_time_hours[valid], moonaltazs_Salta.alt[valid], label='Moon')
-plot(local_time_hours[valid], sunaltazs_Salta.alt[valid], label='Sun')
-xlabel('Local Time in hour')
-ylabel('Absolute Elevation [deg]')
-legend(loc='upper left')
-ylim(5, 75)
-show()
+fig3 = plt.figure(figsize = (14,8))
+plt.title('Operations from {} to {} (local time)'.format(local_start, local_stop))
+plt.subplot(2,1,1)
+plt.plot(local_time_hours[valid][0]+p.time/3600, p.azimuth, label='Scanning')
+plt.plot(local_time_hours[valid], moonaltazs_Salta.az[valid], label='Moon')
+plt.plot(local_time_hours[valid], sunaltazs_Salta.az[valid], label='Sun')
+plt.xlabel('Local Time in hour')
+plt.ylabel('Absolute Azimuth [deg]')
+plt.legend(loc='upper left')
+plt.ylim(door_az-az_span/2-10, door_az+az_span/2+10)
+plt.subplot(2,1,2)
+plt.plot(local_time_hours[valid][0]+p.time/3600, p.elevation, label='Scanning')
+plt.plot(local_time_hours[valid], moonaltazs_Salta.alt[valid], label='Moon')
+plt.plot(local_time_hours[valid], sunaltazs_Salta.alt[valid], label='Sun')
+plt.xlabel('Local Time in hour')
+plt.ylabel('Absolute Elevation [deg]')
+plt.legend(loc='upper left')
+plt.ylim(5, 75)
+plt.show()
 ```
 
 Prepare qubicsoft for simulation
@@ -195,16 +197,24 @@ Prepare qubicsoft for simulation
 ```{python}
 # Center of the patch observed in galactic coordinates
 center = qubic.equ2gal(moon_Salta.ra[0]/u.deg, moon_Salta.dec[0]/u.deg)
+d['RA_center'] = center[0]#np.mean(moon_Salta.ra/u.deg)
+d['DEC_center'] = center[1]#np.mean(moon_Salta.dec/u.deg)
 d['nside'] = 256
 nside = d['nside']
 ```
 
 ```{python}
+hp.pixelfunc.nside2resol(256, arcmin = True)
+```
+
+```{python}
 # Set position of the Moon in RA, DEC
 MoonPosition = hp.pixelfunc.ang2pix(nside, np.deg2rad(90-center[1]), np.deg2rad(center[0]))
+# Moon has no 1 healpy-pixel size, but more. So we fill put a disc
+
 MoonVec = hp.pix2vec(nside, MoonPosition)
 MoonVecs = hp.pix2vec(nside, np.arange(12*nside**2))
-MoonAng = np.arccos(np.dot(MoonVec, MoonVecs))
+MoonAng = np.arccos(np.dot(MoonVec, MoonVecs)) #measure in minutes
 ```
 
 ```{python}
@@ -226,8 +236,146 @@ def f(val, fwhm, sigma2fwhm):
 ```{python}
 # Amplitude of the signal
 MoonAmp = 1e5
+MoonMap = np.zeros((d['nf_sub'], 12*nside**2, 3))
+MoonMapDisc = np.zeros((d['nf_sub'], 12*nside**2, 3))
 for i in range(len(nus_in)):
-    x0[i,:,0] += MoonAmp*f(MoonAng, fwhm_in[i], sigma2fwhm)
+    MoonMap[i,:,0] += MoonAmp*f(MoonAng, fwhm_in[i], sigma2fwhm)
+for i in range(len(nus_in)):
+    MoonMapDisc[i,MoonAng < np.radians(0.5),0] += MoonAmp
+    MoonMapDisc[i,:,0] = hp.smoothing(MoonMapDisc[i,:,0], fwhm = np.radians(fwhm_in[i]), verbose = False)
+```
+
+```{python}
+plt.figure(figsize = (12,8))
+hp.gnomview(MoonMap[0,:,0], rot = center, sub = 121, title = "Point source smoothed")
+hp.gnomview(MoonMapDisc[0,:,0], rot = center, sub = 122, title = "Disc 30arcmin smoothed")
+```
+
+See at all frequencies
+
+```{python}
+plt.figure(figsize = (16,8))
+for i in range(d['nf_sub']):
+    hp.gnomview(MoonMapDisc[i,:,0], rot = center, reso = 2, 
+                title = ' ',sub = (1,d['nf_sub'],i+1), notext = True)
+```
+
+For one position it works. Now I loop over all the positions of the Moon in the interval of the observation
+
+Let's try with 4 positions
+
+```{python}
+MoonAmp = 1e5
+nintervals = 8
+MoonMapDisc = np.zeros((nintervals, d['nf_sub'], 12*nside**2, len(d['kind'])))
+centers = []
+index = [i*1000//gg for i in range(gg-1)]
+for j, ipos in enumerate(index):
+    centers.append(qubic.equ2gal(moon_Salta.ra[ipos]/u.deg, moon_Salta.dec[ipos]/u.deg))
+    MoonPosition = hp.pixelfunc.ang2pix(nside, np.deg2rad(90-centers[j][1]), np.deg2rad(centers[j][0]))
+    # Moon has no 1 healpy-pixel size, but more. So we fill put a disc
+
+    MoonVec = hp.pix2vec(nside, MoonPosition)
+    MoonVecs = hp.pix2vec(nside, np.arange(12*nside**2))
+    MoonAng = np.arccos(np.dot(MoonVec, MoonVecs)) #measure in minutes
+
+    for i in range(len(nus_in)):
+        MoonMapDisc[j, i, MoonAng < np.radians(0.5),0] += MoonAmp
+        MoonMapDisc[j, i,:,0] = hp.smoothing(MoonMapDisc[j, i,:,0], 
+                                             fwhm = np.radians(fwhm_in[i]),
+                                            verbose = False)
+```
+
+Look across the intervals at fixed frequency
+
+```{python}
+plt.figure(figsize = (12,8))
+for j in range(nintervals):
+    hp.gnomview(MoonMapDisc[j, 0,:,0], title = '{} pos'.format(j), 
+                reso = 12, rot = centers[0], sub = (2, nintervals//2, j+1),)
+    hp.graticule(color = 'w',dpar = 8, dmer = 8, verbose = False)
+```
+
+```{python}
+hp.gnomview(np.sum(MoonMapDisc, axis = 0)[0,:,0], title = "Moon",
+            reso = 8, rot = centers[0])
+hp.graticule(dpar = 8, dmer = 8, color = 'w', verbose = False)
+```
+
+## $\texttt{qubicsoft}$ simulation 
+
+```{python}
+MoonMap4qs = np.sum(MoonMapDisc, axis = 0)
+print("shape of the map:", np.shape(MoonMap4qs))
+```
+
+```{python}
+s = qubic.QubicScene(d)
+    
+q = qubic.QubicInstrument(d)
+#q = qubic.QubicMultibandInstrument(d)
+atod = qubic.QubicAcquisition(q, p, s, d)
+#atod = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_in)
+```
+
+```{python}
+if d['nf_sub'] == 1:
+    TOD = atod.get_observation(MoonMap4qs[0, :, 0], noiseless = d['noiseless'], convolution=False)
+```
+
+Map-making
+
+```{python}
+p.galactic.T[0]
+```
+
+```{python}
+plt.scatter(p.galactic.T[0], p.galactic.T[1])
+plt.plot(np.array([d['RA_center']]), np.array([d['DEC_center']]), 'r*')
+plt.plot(centers[0], 'g*')
+```
+
+```{python}
+d['tol'] = 1e-3
+if d['nf_sub'] == 1:
+    #_, nus_edge, nus, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, 1, d['filter_relative_bandwidth'])
+    arec = qubic.QubicAcquisition(q, p, s, d)
+    cov = arec.get_coverage()
+    maps_recon, nit, error = arec.tod2map(TOD, d, cov=cov)
+    #_, maps_convolved = arec.get_observation(MoonMap4qs, noiseless = d['noiseless'], convolution = True)
+else: 
+    arec = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge)
+    cov = arec.get_coverage()
+    maps_recon, nit, error = arec.tod2map(TOD, d, cov=cov)
+    _, maps_convolved = arec.get_observation(x0, noiseless=d['noiseless'], convolution=True)
+    cov = np.sum(cov, axis=0)
+    
+```
+
+```{python}
+arec = qubic.QubicAcquisition(q, p, s, d)
+cov = arec.get_coverage()
+
+```
+
+```{python}
+_, maps_convolved = arec.get_observation(MoonMap4qs[0,:,0], noiseless=d['noiseless'], convolution=True)
+maxcov = np.max(cov)
+unseen = cov < maxcov * 0.1
+```
+
+```{python}
+if d['nf_sub'] == 1:
+    maps_convolved = np.array(maps_convolved)
+    maps_convolved[unseen] = hp.UNSEEN
+    maps_recon[unseen] = hp.UNSEEN
+```
+
+```{python}
+plt.figure(figsize = (12,8))
+hp.mollview(maps_convolved, rot= centers[0],  sub = 131)
+hp.mollview(maps_recon, rot= centers[0], sub = 132)
+hp.mollview(cov, rot = centers[0], sub = 133)
 ```
 
 ```{python}

@@ -69,6 +69,19 @@ thk -= tinit
 
 ```
 
+### Scanning related information
+we first apply the `identify_scans()` function to get relevant information from the scanning. It provides:
+- scantype_hk (1,-1 for azmuth directions, 0 for extreme of the scans -> to be discarded)
+- scantype, az, el sampled on the same time axis as the data
+
+```{python}
+# Identify scan types and numbers
+# %matplotlib inline
+rc('figure',figsize=(16,8))
+
+scantype_hk, azt, elt, scantype = tdt.identify_scans(thk, az, el, tt=tt, doplot=True, thr_speedmin=0.1)
+```
+
 Let's first plot all TES in order to have an idea of the abvious issues.
 
 We clearly see the saturated ones here: they reach the maximum and minimum range in the plot below. SO we need to discard all TES that reach this value at a time. In a further analysis we may only cut the regions where saturation occurs. Here we decide to be a bit brutal and just remove any TES that reaches saturation, even for one time sample
@@ -161,14 +174,6 @@ There a re many things to remark here, each will require a specific code for dea
 
 ```
 
-```{python}
-
-```
-
-```{python}
-
-```
-
 # Jumps detection
 Haar wavelets (inspired form Camille Perbost PhD)
 
@@ -181,7 +186,7 @@ rc('figure',figsize=(15,8))
 reload(tdt)
 
 numTES = 163
-# numTES = 41
+# numTES = 134
 # numTES = 33
 
 tmin = 0
@@ -192,35 +197,60 @@ idx = np.arange(len(alltod[numTES-1,:]))
 # ok = (idx > 1.18e6) & (idx < 1.25e6+10000)
 # ok = (idx > 0.3e6) & (idx < 0.5e6)
 # ok = (idx > (1.5e6+298000)) & (idx < (1.5e6+306000))
-# ok = (idx > (2.5e6)) & (idx < (2.53e6))
+# ok = (idx > (1.5e6)) & (idx < (2.e6))
 
 
-dd = -alltod[numTES-1,:][ok]
+ddinit = -alltod[numTES-1,:][ok]
 mytt = tt[ok]
+flags = np.zeros(len(ddinit), dtype=int)    ### At first all time samples are considered OK
 
-newdd, flags = tdt.jumps_correction(dd, threshold=10, size_haar=51, doplot=True, verbose=True, method='continuity_lin')
+
+### Flag-out the regions at the azimuth-edge of the scans
+flags[scantype[ok]==0] = 1e7   
+dd = tdt.fill_bad_regions(ddinit, flags, fill_baselines='equalize')
+
+figure()
+idx = np.arange(len(dd))
+subplot(2,1,1)
+plot(idx, ddinit, label='Initial Data')
+plot(idx[flags>0], ddinit[flags>0], 'r.', label='Flagged bad (scanning)')
+legend()
+xlabel('Samples')
+ylabel('ADU')
+title('Raw TOD')
+subplot(2,1,2)
+plot(idx, dd, label='Data')
+plot(idx[flags>0], dd[flags>0], 'r.', label='Flagged bad')
+xlabel('Samples')
+ylabel('ADU')
+title('Corrected for extreme scanning regions')
+legend()
+tight_layout()
+
+
+newdd, flags_jumps = tdt.jumps_correction(dd, threshold=15, size_haar=51, doplot=False, verbose=False, method='continuity_lin')
+flags += flags_jumps
+
 
 figure()
 idx = np.arange(len(dd))
 subplot(2,1,1)
 plot(idx, dd, label='Data')
-plot(idx[flags>0], dd[flags>0], 'r.', label='Flagged bad')
+plot(idx[flags>0], dd[flags>0], 'g.', label='Flagged bad')
+plot(idx[flags_jumps>0], dd[flags_jumps>0], 'r.', label='Flagged bad for jumps')
 legend()
 xlabel('Samples')
 ylabel('ADU')
 title('Raw TOD')
 subplot(2,1,2)
 plot(idx, newdd, label='Data')
-plot(idx[flags>0], newdd[flags>0], 'r.', label='Flagged bad')
+plot(idx[flags>0], newdd[flags>0], 'g.', label='Flagged bad')
+plot(idx[flags_jumps>0], newdd[flags_jumps>0], 'r.', label='Flagged bad for jumps')
 xlabel('Samples')
 ylabel('ADU')
 title('Corrected for jumps')
 legend()
 tight_layout()
-```
-
-```{python}
-
 ```
 
 ```{python}

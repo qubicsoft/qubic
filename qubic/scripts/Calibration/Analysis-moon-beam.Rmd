@@ -1,0 +1,322 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.13.4
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# #%matplotlib notebook
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(9,4.5))
+rc('font',size=12)
+rc('text',usetex=False)
+
+from qubicpack.qubicfp import qubicfp
+import qubic.demodulation_lib as dl
+from pysimulators import FitsArray
+
+import numpy as np
+from matplotlib.pyplot import *
+# import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+import glob
+import string
+# import pickle
+from importlib import reload
+import healpy as hp
+import os
+
+import DataHandling as DH
+import pymap3d
+
+from qubicpack.utilities import Qubic_DataDir
+import qubic
+from qubic import selfcal_lib as scal
+
+from qubic import progress_bar
+def display_healpix_map(maps, savepdf=None):
+    
+    figure(figsize=(30, 30))
+    #k=1
+    bar=progress_bar(maps.shape[0], 'Display healpix maps')
+    
+    x=np.linspace(-0.0504, -0.0024, 17)
+    y=np.linspace(-0.0024, -0.0504, 17)
+
+    X, Y = np.meshgrid(x, y)
+    
+    allTES=np.arange(1, 129, 1)
+    good_tes=np.delete(allTES, np.array([4,36,68,100])-1, axis=0)
+    k=0
+    for j in [1, 2]:
+        for i in good_tes:
+            
+            #print(i)
+            xtes, ytes, FP_index, index_q= scal.TES_Instru2coord(TES=i, ASIC=j, q=q, frame='ONAFP', verbose=False)
+            ind=np.where((np.round(xtes, 4) == np.round(X, 4)) & (np.round(ytes, 4) == np.round(Y, 4)))
+            #print(ind)
+            place_graph=ind[0][0]*17+ind[1][0]+1
+            #print(place_graph)
+            #pixok=mymaps[k]!= hp.UNSEEN
+            #res=mymaps[k]/np.max(mymaps[k])
+            #res[~pixok]=hp.UNSEEN
+            mytes=i
+            if j == 2:
+                mytes+=128
+            hp.gnomview(mymaps[mytes-1], rot=[-10, 48], reso=15, sub=(17, 17, place_graph), cmap='jet', #title='TES : {}'.format(i), 
+                notext=True, cbar=False, title='', margins=(0.001, 0.001, 0.001, 0.001))
+            
+            annotate('TES = {}'.format(mytes), xy=(0, 0),  xycoords='axes fraction', fontsize=15, color='black', 
+                     fontstyle='italic', xytext=(0.2, 0.8))
+            bar.update()
+            
+            k+=1
+    if savepdf != None:
+        savefig(savepdf, format="pdf", bbox_inches="tight")
+    show()
+    
+# Get a dictionary
+basedir = Qubic_DataDir()
+print('basedir : ', basedir)
+dictfilename = basedir + '/dicts/global_source_oneDet.dict'
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+q = qubic.QubicInstrument(d)
+
+# If there is not this command, the kernel shut down every time..
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+```
+
+```{python}
+day = '2022-07-12'
+#day= '2020-11-10'
+keyword = '**'
+#keyword= '*test'
+#data_dir = '/sps/hep/qubic/Data/'+day+'/'
+data_dir = day+'/'
+dirs = np.sort(glob.glob(data_dir+keyword))
+print(dirs)
+```
+
+```{python}
+#day= '2020-11-10'
+keyword = '**'
+#keyword= '*test'
+#data_dir = '/sps/hep/qubic/Data/'+day+'/'
+data_dir = day+'/'
+dirs = np.sort(glob.glob(data_dir+keyword))
+print(dirs)
+
+ifile = 2
+thedir = dirs[ifile]
+print(thedir)
+#note here is how you load the data in memory!
+a = qubicfp()
+a.read_qubicstudio_dataset(thedir)
+#a.read_qubicstudio_dataset('/path/to/dataset')
+```
+
+```{python}
+print(a.hk.keys())
+a.hk.keys()
+
+print("The keys in this dictionary are:\n")
+for k in a.hk['CALSOURCE-CONF'].keys():
+    print(k, a.hk['CALSOURCE-CONF'][k])
+```
+
+```{python}
+from importlib import reload
+reload(DH)
+
+# Construction of the object
+analysis=DH.BeamMapsAnalysis(a)
+```
+
+```{python}
+TESNum=25
+mymaps=analysis.fullanalysis(number_of_tes=TESNum, filter=False, demod=False, remove_noise=True, 
+                             make_maps='flat', doplot=False, save=False)
+
+```
+
+```{python}
+#display_healpix_map(mymaps, savepdf='FP_healpix_2022_07_12.pdf')
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+# test
+
+```{python}
+from astropy.coordinates import SkyCoord
+import astropy.units as u
+def azel_2_radec(az, el, loc, time):
+    ra, dec = pymap3d.azel2radec(az, el, loc[0], loc[1], time)
+    return ra, dec
+```
+
+```{python}
+loc=[-24.731358, -65.409535]
+azel_2_radec(az=100, el=49.69, loc=loc, time='2022-07-12 21:35:00.000')
+
+```
+
+```{python}
+
+```
+
+```{python}
+Salta = EarthLocation(lat=-24.731358*u.deg, lon=-65.409535*u.deg, height=1152*u.m)
+Salta
+```
+
+```{python}
+start_obs_hour = '21:35:00'
+date = Time(day+ ' 21:35:00')
+start_obs_date = day +' '+start_obs_hour
+delta_time = np.linspace(4,0, 10201)*u.hour
+time0 = Time(start_obs_date)#-utcoffset
+#print(time0)
+alltimes = time0 + delta_time
+alltimes=alltimes[::-1]
+```
+
+```{python}
+
+```
+
+```{python}
+newra=np.linspace(240, 280, 101)
+newdec=np.linspace(-50, 0, 101)
+newaz=np.linspace(80, 130, 101)
+newel=np.linspace(30, 50, 101)
+
+maps_radec = np.zeros((len(newra), len(newdec)))
+k=0
+from qubic import progress_bar
+bar=progress_bar(101*101, '')
+
+for ii, i in enumerate(newaz):
+    for jj, j in enumerate(newel):
+        #print(alltimes.value[k])
+        ra, dec = azel_2_radec(az=i, el=j, loc=loc, time=alltimes.value[k])
+        #print(ra, dec)
+        #print(np.where(newra < ra)[0])
+        index_ra = np.where(newra < ra)[0]
+        index_dec = np.where(newdec < dec)[0]
+
+        if len(index_ra) == 0:
+            index_ra=0
+        else:
+            index_ra=index_ra[-1]
+        if len(index_dec) == 0:
+            index_dec=0
+        else:
+            index_dec=index_dec[-1]
+        
+        #print(index_ra, index_dec)
+        maps_radec[index_dec, index_ra]=mymaps[0, ii, jj]
+        k+=1
+        bar.update()
+        
+        #if k > 2000:
+        #    stop
+```
+
+```{python}
+# %matplotlib notebook
+plt.figure(figsize=(10, 10))
+imshow(maps_radec, cmap='jet', extent=[240, 280, -50, 0])
+plt.show()
+```
+
+```{python}
+analysis.a.elevation()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+delta_time = np.linspace(12,30, 1000)*u.hour
+time0 = Time(start_obs_date)-utcoffset
+alltimes = time0 + delta_time
+Salta = EarthLocation(lat=-24.731358*u.deg, lon=-65.409535*u.deg, height=1152*u.m)
+frame_Salta = AltAz(obstime=alltimes, location=Salta)
+```
+
+```{python}
+
+pymap3d.azel2radec
+```
+
+```{python}
+
+```
+
+```{python}
+newAltAzcoordiantes = SkyCoord(l=100*u.degree, b=40*u.degree, obstime = alltimes, 
+                               frame = frame_Salta, location = Salta)
+newAltAzcoordiantes.icrs
+```
+
+```{python}
+p
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

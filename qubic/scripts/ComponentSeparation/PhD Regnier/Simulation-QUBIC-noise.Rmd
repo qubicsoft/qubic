@@ -1,0 +1,1077 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.13.4
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+import numpy as np
+import healpy as hp
+import qubic
+import os
+import matplotlib.pyplot as plt
+from qubic import progress_bar
+import fgbuster
+import pickle
+import warnings
+warnings.filterwarnings("ignore")
+
+
+import os.path as op
+CMB_CL_FILE = op.join('Cls_Planck2018_%s.fits')
+print(CMB_CL_FILE)
+```
+
+```{python}
+def cl2dl(ell, cl):
+
+    dl=np.zeros(ell.shape[0])
+    for i in range(ell.shape[0]):
+        dl[i]=(ell[i]*(ell[i]+1)*cl[i])/(2*np.pi)
+    return dl
+def get_coverage(fsky, nside, center_radec=[-30, -30]):
+    center = qubic.equ2gal(center_radec[0], center_radec[1])
+    uvcenter = np.array(hp.ang2vec(center[0], center[1], lonlat=True))
+    uvpix = np.array(hp.pix2vec(nside, np.arange(12*nside**2)))
+    ang = np.arccos(np.dot(uvcenter, uvpix))
+    indices = np.argsort(ang)
+    okpix = ang < -1
+    okpix[indices[0:int(fsky * 12*nside**2)]] = True
+    mask = np.zeros(12*nside**2)
+    mask[okpix] = 1
+    return mask
+def dl2cl(ell, dl):
+    
+    cl=np.zeros(ell.shape[0])
+    for i in range(ell.shape[0]):
+        cl[i]=(dl[i]*(2*np.pi))/(ell[i]*(ell[i]+1))
+    return cl
+def combine_config(list_of_config):
+    mynewnus=[]
+    mynewdepth_i=[]
+    mynewdepth_p=[]
+    myfsky=list_of_config[0]['fsky']
+    for conf in list_of_config:
+        mynus=conf['frequency']
+        mydepth=conf['depth_p']
+        for j in range(len(mynus)):
+            mynewnus.append(mynus[j])
+            mynewdepth_i.append(1e3)
+            mynewdepth_p.append(mydepth[j])
+    dict={}
+    dict['frequency']=np.array(mynewnus)
+    dict['fsky']=myfsky
+    dict['depth_i']=np.array(mynewdepth_i)
+    dict['depth_p']=np.array(mynewdepth_p)
+    return dict
+def _get_noise(nus, nside, config):
+    
+    npix=12*nside**2
+    nfreqs=len(nus)
+    np.random.seed(None)
+
+    N = np.zeros(((nfreqs, 3, npix)))
+    depth_i = config['depth_i']
+    depth_p = config['depth_p']
+
+    for ind_nu, nu in enumerate(nus):
+
+        sig_i=depth_i[ind_nu]/(np.sqrt(hp.nside2pixarea(nside, degrees=True)) * 60)
+        N[ind_nu, 0] = np.random.normal(0, sig_i, 12*nside**2)
+
+        sig_p=depth_p[ind_nu]/(np.sqrt(hp.nside2pixarea(nside, degrees=True)) * 60)
+        N[ind_nu, 1] = np.random.normal(0, sig_p, 12*nside**2)*np.sqrt(2)
+        N[ind_nu, 2] = np.random.normal(0, sig_p, 12*nside**2)*np.sqrt(2)
+
+    return N
+def get_list_config(name, nsub):
+    myconf=[]
+    tab=np.arange(0, len(name), 1)
+    for i in range(len(name)):
+        if i % 2 == 0:
+            #print(i)
+            with open('{}_config.pkl'.format(name[i:i+2]), 'rb') as f:
+                config = pickle.load(f)
+
+                if name[i:i+2] == 'PL':
+                    myconf.append(config)
+                elif nsub!=1 and i == 0:
+                    qp_effective_fraction=np.ones(config['nbands'])
+                    qp_config=qubicify(config, np.ones(config['nbands']).astype(int)*nsub, qp_effective_fraction)
+                    myconf.append(qp_config)
+                elif nsub==1 or i != 0:
+                    myconf.append(config)
+    return myconf
+
+def _get_Cl_cmb(Alens, r):
+    power_spectrum = hp.read_cl(CMB_CL_FILE%'lensed_scalar')[:,:4000]
+    if Alens != 1.:
+        power_spectrum[2] *= Alens
+    if r:
+        power_spectrum += r * hp.read_cl(CMB_CL_FILE
+                                         %'unlensed_scalar_and_tensor_r1')[:,:4000]
+    return power_spectrum
+def give_me_cmb(nus, seed, r, nside):
+    
+    npix=12*nside**2
+    ell=np.arange(2*nside-1)
+    mycls = _get_Cl_cmb(Alens=1, r=r)
+    mycls[1]=np.zeros(4000)
+    mycls[3]=np.zeros(4000)
+
+    np.random.seed(seed)
+    maps = hp.synfast(mycls, nside, verbose=False, new=True)
+    mymaps=np.zeros((nus.shape[0], 3, npix))
+    for i in range(nus.shape[0]):
+        mymaps[i]=maps.copy()
+    return mymaps
+
+def plot_errors_lines(leff, err, dl, color='r', label=''):
+    for i in range(len(leff)):
+        if i==0:
+            plt.plot([leff[i]-dl/2, leff[i]+dl/2], [err[i], err[i]],color, label=label)
+        else:
+            plt.plot([leff[i]-dl/2, leff[i]+dl/2], [err[i], err[i]],color)
+        if i < (len(leff)-1):
+            plt.plot([leff[i]+dl/2,leff[i]+dl/2], [err[i], err[i+1]], color)
+```
+
+```{python}
+myconf=get_list_config(name='S4', nsub=1)
+config=combine_config(myconf)
+nside=256
+fsky=0.03
+covmap=get_coverage(fsky, nside)
+pixok=covmap>0
+```
+
+# Define Namaster stuff
+
+```{python}
+from qubic import NamasterLib as nam
+
+lmin=40
+lmax=2*nside-1
+dl=30
+
+maskpix = np.zeros(12*nside**2)
+pixok = covmap > 0
+maskpix[pixok] = 1
+Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=dl)
+Namaster.fsky = fsky
+Namaster.ell_binned, _=Namaster.get_binning(nside)
+print(len(Namaster.ell_binned))
+
+def get_clBB(Namaster, map1, map2):
+
+    leff, cls, _ = Namaster.get_spectra(map1, map2=map2,
+                                 purify_e=False,
+                                 purify_b=True,
+                                 w=None,
+                                 verbose=False,
+                                 beam_correction=None,
+                                 pixwin_correction=False)
+
+    return leff, cls[:, 2]
+```
+
+```{python}
+def _get_Cl_noise(instrument, A, lmax):
+    try:
+        bl = np.array([hp.gauss_beam(np.radians(b/60.), lmax=lmax)
+                       for b in instrument.fwhm])
+    except AttributeError:
+        bl = np.ones((len(instrument.frequency), lmax+1))
+
+    nl = (bl / np.radians(instrument.depth_p/60.)[:, np.newaxis])**2
+    AtNA = np.einsum('fi, fl, fj -> lij', A, nl, A)
+    inv_AtNA = np.linalg.inv(AtNA)
+    return inv_AtNA.swapaxes(-3, -1)
+```
+
+# BKPL
+
+```{python}
+import pickle
+
+exp='S4'
+with open('results/scaling/cl_CMB_with_and_without_noise_{}_500reals.pkl'.format(exp), "rb") as file:
+    cl_instr = pickle.load(file)
+
+myconf=get_list_config(name=exp, nsub=1)
+config=combine_config(myconf)
+nside=256
+fsky=0.03
+covmap=get_coverage(fsky, nside)
+pixok=covmap>0
+
+instr=fgbuster.get_instrument('INSTRUMENT')
+instr.frequency=config['frequency']
+instr.depth_i=config['depth_i']
+instr.depth_p=config['depth_p']
+
+mycl_noisy=cl_instr['mycl_comparison']
+mycl_noiseless=cl_instr['mycl_withoutnoise']
+leff=cl_instr['leff']
+```
+
+```{python}
+def correct_clnoise(ell, clnoise, nside, dl, fsky, pix=False, samp=False):
+    pixwin = hp.pixwin(nside)[ell.astype(int)]
+    sample=np.sqrt(2/((2*ell+1)*dl*fsky))
+    clnoise_corrected=np.ones(len(ell))*clnoise
+    if pix:
+        clnoise_corrected *= (1/pixwin)**2
+    if samp:
+        clnoise_corrected *= sample
+        
+    return clnoise_corrected
+
+def _get_Cl_noise(instrument, A, lmax):
+    bl = np.ones((len(instrument.frequency), lmax+1))
+
+    nl = (bl / np.radians(instrument.depth_p/60.)[:, np.newaxis])**2
+    AtNA = np.einsum('fi, fl, fj -> lij', A, nl, A)
+    inv_AtNA = np.linalg.inv(AtNA)
+    return inv_AtNA.swapaxes(-3, -1)
+
+comp=[fgbuster.CMB(), fgbuster.Dust(nu0=150, temp=20)]
+A=fgbuster.mixingmatrix.MixingMatrix(*comp)
+A_ev = A.evaluator(instr.frequency)
+A_maxL = A_ev(np.array([1.54]))
+```
+
+```{python}
+# Compute clnoise and correct it
+
+clnoise=_get_Cl_noise(instr, A_maxL, 2*nside)
+print(clnoise[0, 0, 0])
+
+clnoise_corrected=correct_clnoise(leff, clnoise[0, 0, 0], nside, dl, fsky, pix=False, samp=True)*np.sqrt(2)
+```
+
+```{python}
+# %matplotlib inline
+plt.figure(figsize=(15, 5))
+
+lmax=530
+mycls = _get_Cl_cmb(Alens=0.1, r=0)[2, 25:lmax]
+ell=np.arange(25, lmax, 1)
+
+plt.subplot(1, 2, 1)
+plt.plot(ell, cl2dl(ell, mycls), lw=1)
+plt.errorbar(leff, np.mean(mycl_noisy, axis=0), yerr=np.std(mycl_noisy, axis=0), 
+             fmt='or', capsize=3, label='')
+plt.errorbar(leff, np.mean(mycl_noiseless, axis=0), yerr=np.std(mycl_noiseless, axis=0), 
+             fmt='ob', capsize=3, label='')
+plt.yscale('log')
+plt.title('Average', fontsize=15)
+plt.ylabel(r'$\mathcal{D}_{\ell}$', fontsize=15)
+plt.xlabel(r'$\ell$', fontsize=15)
+
+plt.subplot(1, 2, 2)
+plt.errorbar(leff, np.std(mycl_noisy, axis=0), fmt='-or', capsize=3, label='From MC')
+plt.errorbar(leff, np.std(mycl_noiseless, axis=0), fmt='-ob', capsize=3, label='Noiseless')
+plt.errorbar(leff, np.std(mycl_noiseless, axis=0)+cl2dl(leff, clnoise_corrected), 
+             fmt='-og', capsize=3, label='Corrected')
+
+
+plt.title('Errors-Bar', fontsize=15)
+plt.legend(frameon=False, fontsize=15)
+plt.ylabel(r'$\Delta \mathcal{D}_{\ell}$', fontsize=15)
+plt.xlabel(r'$\ell$', fontsize=15)
+
+plt.yscale('log')
+
+plt.suptitle(exp, fontsize=15)
+plt.savefig('/Users/mathiasregnier/Desktop/Picture BI VS S4/propagation_{}.png'.format(exp))
+plt.show()
+
+
+
+#plt.figure(figsize=(8, 8))
+#plt.plot(ell, cl2dl(ell, mycls))
+#plt.errorbar(leff, np.mean(mycl_noisy, axis=0), yerr=np.std(mycl_noisy, axis=0), 
+#             fmt='or', capsize=3)
+#plt.errorbar(leff, np.mean(mycl_noiseless, axis=0), 
+#             yerr=np.std(mycl_noiseless, axis=0)+cl2dl(leff, clnoise_corrected), 
+#             fmt='ob', capsize=3)
+#plt.errorbar(leff, np.mean(mycl_noiseless, axis=0), 
+#             yerr=np.std(mycl_noiseless, axis=0), 
+#             fmt='og', capsize=3)
+
+#plt.errorbar(leff_new, np.mean(mycl_new_withoutnoise, axis=0), 
+#             yerr=np.std(mycl_new_withoutnoise, axis=0)+cl2dl(leff_new, clnoise_corrected), fmt='-og', capsize=3)
+#plt.errorbar(leff, dl2cl(leff, np.mean(mycl, axis=0))-np.ones(11)*clnoise[0, 0, 0]*2, fmt='-ob', capsize=3)
+#plt.errorbar(leff, dl2cl(leff, np.mean(mycl_true, axis=0)), fmt='-ok', capsize=3)
+
+
+#plt.yscale('log')
+
+#plt.show()
+```
+
+```{python}
+pwd
+```
+
+# Estimate equivalent noise for QUBIC
+
+```{python}
+
+# Read dictionary -> 150 GHz
+
+filename='/Users/mathiasregnier/Desktop/Thesis/Libs/qubic/qubic/doc/FastSimulator/FastSimDemo_FI-150.dict'
+d150 = qubic.qubicdict.qubicDict()
+d150.read_from_file(filename)
+d150['nside'] = 256
+center = qubic.equ2gal(d150['RA_center'], d150['DEC_center'])
+d150['nf_recon'] = 1
+d150['nf_sub'] = 1    ### this is OK as we use noise-only simulations
+
+filename='/Users/mathiasregnier/Desktop/Thesis/Libs/qubic/qubic/doc/FastSimulator/FastSimDemo_FI-220.dict'
+d220 = qubic.qubicdict.qubicDict()
+d220.read_from_file(filename)
+d220['nside'] = 256
+center = qubic.equ2gal(d220['RA_center'], d220['DEC_center'])
+d220['nf_recon'] = 1
+d220['nf_sub'] = 1    ### this is OK as we use noise-only simulations
+fsky=0.015
+covqubic=get_coverage(fsky, d150['nside'], center_radec=center)
+```
+
+```{python}
+import pickle
+with open('results/QUBICnoise/clnoise_QUBIC_150_220_400reals.pkl', "rb") as file:
+    myclnoise = pickle.load(file)
+```
+
+```{python}
+mycl150=myclnoise['myclnoise150'].copy()
+mycl220=myclnoise['myclnoise220'].copy()
+leff=myclnoise['leff'].copy()
+```
+
+```{python}
+def plot_errors_lines(leff, err, dl, color='r', label=''):
+    for i in range(len(leff)):
+        if i==0:
+            plt.plot([leff[i]-dl/2, leff[i]+dl/2], [err[i], err[i]],color, label=label, lw=2)
+        else:
+            plt.plot([leff[i]-dl/2, leff[i]+dl/2], [err[i], err[i]],color, lw=2)
+        if i < (len(leff)-1):
+            plt.plot([leff[i]+dl/2,leff[i]+dl/2], [err[i], err[i+1]], color, lw=2)
+```
+
+```{python}
+mini=lmin
+maxi=lmax
+delta=maxi-mini
+
+ell=np.arange(mini, maxi, 1)
+
+sample=np.sqrt(2/((2*leff+1)*fsky*dl))
+sample_fgb=np.sqrt(2/((2*ell+1)*fsky*dl))
+
+myclnoise150=np.mean(mycl150, axis=0)
+myerrnoise150=np.std(mycl150, axis=0)
+myclnoise220=np.mean(mycl220, axis=0)
+myerrnoise220=np.std(mycl220, axis=0)
+
+plt.figure(figsize=(18, 6))
+plt.subplot(1, 2, 1)
+plt.errorbar(leff, abs(myclnoise150), capsize=3, fmt='-or', label='MC - 150 GHz')
+plt.errorbar(leff, abs(myclnoise220), capsize=3, fmt='-ob', label='MC - 220 GHz')
+
+plt.yscale('log')
+plt.xlabel(r'$\ell$', fontsize=20)
+plt.ylabel(r'$\mathcal{C}_{\ell}$', fontsize=20)
+plt.legend(frameon=False, fontsize=10)
+
+plt.subplot(1, 2, 2)
+
+plot_errors_lines(leff, myerrnoise150, dl, color='r', label='MC - 150 GHz')
+plot_errors_lines(leff, myerrnoise220, dl, color='b', label='MC - 220 GHz')
+plt.yscale('log')
+plt.xlabel(r'$\ell$', fontsize=20)
+plt.ylabel(r'$\Delta \mathcal{C}_{\ell}$', fontsize=20)
+#plt.ylim(1e-8, 1e-5)
+plt.show()
+```
+
+```{python}
+import pickle
+
+with open('/Users/mathiasregnier/Desktop/Thesis/Libs/qubic/qubic/doc/FastSimulator/Data/DataFastSimulator_FI220_nfsub_1.pkl',
+          "rb") as file:
+    DataFastSim220 = pickle.load(file)
+    
+with open('/Users/mathiasregnier/Desktop/Thesis/Libs/qubic/qubic/doc/FastSimulator/Data/DataFastSimulator_FI150_nfsub_1.pkl',
+          "rb") as file:
+    DataFastSim150 = pickle.load(file)
+
+def err_cl_th(nside, fwhm, delta_ell, fsky, lvalues=None, myclnoise=None, nambinning=None):
+    lvals = np.arange(2*nside)
+    pixwin = hp.pixwin(nside)[:2*nside]
+    bell = np.exp(-lvals**2*np.radians(fwhm/2.35)**2/2)
+    sample = np.sqrt(2./((2*lvals+1)*fsky*delta_ell))
+    clth = sample / bell**2 / pixwin**2
+    if myclnoise is not None:
+        clth = clth * myclnoise[:2*nside]
+    if lvalues is None:
+        if nambinning is None:
+            return clth
+        else:
+            return nambinning.bin_spectra(clth, nside)
+    else:
+        return np.interp(lvalues, lvals, clth)
+```
+
+```{python}
+ns=256
+
+rad2arcmin = np.degrees(1)*60
+
+err_th_150_mukarcmin_new = np.sqrt(err_cl_th(ns, 0, dl, fsky, 
+                                          myclnoise=abs(DataFastSim150['clnoise']), lvalues=leff))
+
+err_th_220_mukarcmin_new = np.sqrt(err_cl_th(ns, 0, dl, fsky, 
+                                          myclnoise=abs(DataFastSim220['clnoise']), lvalues=leff))
+
+mytherr_150 = (err_th_150_mukarcmin_new/rad2arcmin)**2 * leff * (leff+1)/(2*np.pi)
+mytherr_220 = (err_th_220_mukarcmin_new/rad2arcmin)**2 * leff * (leff+1)/(2*np.pi)
+
+fact_150_bi = np.sqrt(np.mean(myerrnoise150 / mytherr_150))
+fact_220_bi = np.sqrt(np.mean(myerrnoise220 / mytherr_220))
+
+pix_size = hp.nside2resol(ns, arcmin=True)
+print(fact_150_bi/pix_size)
+print(fact_220_bi/pix_size)
+```
+
+```{python}
+#Plot th White Noise
+ns=256
+err_th_150_mukarcmin = np.sqrt(err_cl_th(ns, 0, dl, fsky, nambinning=Namaster))
+err_th_220_mukarcmin = np.sqrt(err_cl_th(ns, 0, dl, fsky, nambinning=Namaster))
+err_th_150_mukarcmin.shape
+```
+
+```{python}
+mywnerr_150 = (err_th_150_mukarcmin[0]/rad2arcmin)**2 * leff * (leff+1)/2/np.pi
+mywnerr_220 = (err_th_220_mukarcmin[0]/rad2arcmin)**2 * leff * (leff+1)/2/np.pi
+fact_150_wn = fact_150_bi
+fact_220_wn = fact_220_bi
+# fact_150_wn = np.sqrt(np.mean(scl_150[:,s] / mywnerr_150))
+# fact_220_wn = np.sqrt(np.mean(scl_220[:,s] / mywnerr_220))
+```
+
+```{python}
+plt.figure(figsize=(18, 6))
+plt.subplot(1, 2, 1)
+plt.errorbar(leff, abs(myclnoise150), capsize=3, fmt='-or', label='MC - 150 GHz')
+plt.errorbar(leff, abs(myclnoise220), capsize=3, fmt='-ob', label='MC - 220 GHz')
+
+plt.yscale('log')
+plt.xlabel(r'$\ell$', fontsize=20)
+plt.ylabel(r'$\mathcal{C}_{\ell}$', fontsize=20)
+plt.legend(frameon=False, fontsize=10)
+
+plt.subplot(1, 2, 2)
+
+plt.plot(leff, fact_150_wn**2 * mywnerr_150, 
+     'r:',label='Th. White noise: {0:3.1f} $\mu$K.arcmin ($\Delta D_\ell$)'.format(fact_150_wn/pix_size))
+plt.plot(leff, fact_220_wn**2 * mywnerr_220, 
+     'b:',label='Th. White noise: {0:3.1f} $\mu$K.arcmin ($\Delta D_\ell$)'.format(fact_220_wn/pix_size))
+plot_errors_lines(leff, myerrnoise150, dl, color='r', label='MC - 150 GHz')
+plot_errors_lines(leff, myerrnoise220, dl, color='b', label='MC - 220 GHz')
+
+plt.yscale('log')
+plt.xlabel(r'$\ell$', fontsize=20)
+plt.ylabel(r'$\Delta \mathcal{C}_{\ell}$', fontsize=20)
+plt.legend()
+plt.ylim(6e-4, 1e0)
+plt.xlim(0, 400)
+plt.show()
+```
+
+```{python}
+plt.figure(figsize=(8, 8))
+
+plot_errors_lines(leff, np.ones(16)*(fact_150_bi/pix_size)*myerrnoise150/(fact_150_wn**2 * mywnerr_150), dl, color='r')
+plot_errors_lines(leff, np.ones(16)*(fact_220_bi/pix_size)*myerrnoise220/(fact_220_wn**2 * mywnerr_220), dl, color='b')
+#plt.yscale('log')
+plt.xlabel(r'$\ell$', fontsize=20)
+plt.ylabel(r'Equivalent Depth [$\mu K$.arcmin]', fontsize=20)
+plt.legend()
+plt.ylim(0, 2.8)
+plt.xlim(0, 400)
+plt.show()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+nbins=16
+mydepth_150=np.ones(nbins)*(fact_150_bi/pix_size)*myerrnoise150/(fact_150_wn**2 * mywnerr_150)
+mydepth_220=np.ones(nbins)*(fact_220_bi/pix_size)*myerrnoise220/(fact_220_wn**2 * mywnerr_220)
+```
+
+```{python}
+def propagate_noise(mydepth, nside, A):
+    
+    """
+    
+    This function allow to propagate noise. mydepth must be (N_ell)
+    
+    """
+    invN = np.diag(hp.nside2resol(nside, arcmin=True) / (mydepth))**2
+    #print(invN.shape)
+    inv_AtNA = np.linalg.inv(A.T.dot(invN).dot(A))
+    #print('invAtNA -> \n', inv_AtNA)
+    cl=inv_AtNA*(4*np.pi/(12*nside**2))
+    clnoise_cmb=cl[0, 0]
+    
+    return clnoise_cmb
+```
+
+```{python}
+nbins=16
+clnoise=np.zeros(nbins)
+clnoise_QU=np.zeros(nbins)
+A=fgbuster.mixingmatrix.MixingMatrix(*comp)
+A_ev = A.evaluator(instr.frequency)#np.array([150, 220]))
+A_maxL = A_ev(np.array([1.54]))
+for i in range(nbins):
+    cln=propagate_noise(instr.depth_p, nside, A_maxL)
+    print('leff = {:.0f} -> cln = {:.3e}'.format(leff[i], cln))
+    clnoise[i]=cln.copy()
+print()
+
+
+
+#A=fgbuster.mixingmatrix.MixingMatrix(*comp)
+#A_ev = A.evaluator(np.array([150, 220]))
+#A_maxL = A_ev(np.array([1.54]))
+#print(A_maxL.shape)
+#for i in range(nbins):
+#    #print(np.array([mydepth_150[i], mydepth_220[i]]))
+#    cln=propagate_noise(np.array([mydepth_150[i], mydepth_220[i]]), nside, A_maxL)
+#    print('leff = {:.0f} -> cln = {:.3e}'.format(leff[i], cln))
+#    clnoise_QU[i]=cln.copy()
+```
+
+```{python}
+fsky_SO=0.1
+fsky_BK=0.02
+fsky_QU=0.015
+fsky_S4=0.03
+
+sample=np.sqrt(2/((2*leff+1)*dl*fsky_S4))
+clnoise_corrected=np.ones(nbins)*clnoise*sample*np.sqrt(2)
+
+sample=np.sqrt(2/((2*leff+1)*dl*fsky_QU))
+clnoise_QU_corrected=np.ones(nbins)*clnoise_QU*sample*np.sqrt(2)
+
+plt.figure(figsize=(10, 5))
+plt.plot(leff, clnoise, '-or', label='Bicep/Keck + Planck')
+plt.plot(leff, clnoise_QU, '-ob', label='QUBIC')
+plt.yscale('log')
+plt.xlabel(r'$\ell$', fontsize=15)
+plt.ylabel(r'$\mathcal{C}_{\ell}$', fontsize=15)
+plt.legend(frameon=False, fontsize=15)
+plt.show()
+```
+
+```{python}
+cl_BKPL_d6_nbands1_10reals.pkl
+```
+
+```{python}
+
+#print(np.mean(np.mean(mybeta_QUBIC[:, pixok, 0], axis=1), axis=0))
+```
+
+```{python}
+
+```
+
+```{python}
+model='d0'
+N=200
+
+bands=np.arange(1, 11, 1)
+mycl_QUBIC=np.zeros((N, 16, len(bands)))
+
+for i in range(len(bands)):
+    #print(bands[i])
+    with open('results/scaling_QUBIC/cl_QUBIC_{}_nbands{}_{}reals.pkl'.format(model, bands[i], N),
+          "rb") as file:
+        Data = pickle.load(file)
+    
+    mycl_QUBIC[:, :, i]=Data['mycl']
+    #mybeta_QUBIC[:, :, i]=Data['mybeta']
+    #print(np.mean(mycl_QUBIC, axis=0)[:, i])
+leff=Data['leff']
+
+with open('results/scaling_QUBIC/cl_BKPL_{}_nbands1_{}reals.pkl'.format(model, N),
+          "rb") as file:
+    Data = pickle.load(file)
+    
+mycl_BKPL=Data['mycl']
+mybeta_BKPL=Data['mybeta']
+leff=Data['leff']
+
+with open('results/scaling_QUBIC/cl_S4_{}_nbands1_{}reals.pkl'.format(model, N),
+          "rb") as file:
+    Data = pickle.load(file)
+    
+mycl_S4=Data['mycl']
+mybeta_S4=Data['mybeta']
+leff=Data['leff']
+#print(np.mean(mycl_BKPL, axis=0))
+
+exp='SO'
+with open('results/scaling_QUBIC/cl_SO_{}_nbands1_{}reals.pkl'.format(model, N), "rb") as file:
+    Data = pickle.load(file)
+    
+mycl_SO=Data['mycl']
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+# Forecasting
+
+```{python}
+# Getting qubic noise cl
+
+def correct_clnoise(leff, clnoise, fsky, dl=30):
+    sample=np.sqrt(2/((2*leff+1)*dl*fsky))
+    clnoise_corrected=np.ones(len(leff))*clnoise*sample*np.sqrt(2)
+    return clnoise_corrected
+
+def give_me_clnoise_corrected(leff, nus, depth, mybeta, fsky, sample=False):
+    nbins=len(leff)
+    nside=256
+    clnoise=np.zeros(nbins)
+    comp=[fgbuster.CMB(), fgbuster.Dust(nu0=148.95, temp=20), fgbuster.Synchrotron(nu0=148.95)]
+    instr=fgbuster.get_instrument('INSTRUMENT')
+    instr.frequency=nus
+    instr.depth_p=depth
+    A_ev = A.evaluator(instr.frequency)#np.array([150, 220]))
+    A_maxL = A_ev(mybeta)
+    
+    if np.ndim(instr.depth_p) == 1:
+        for i in range(nbins):
+            cln=propagate_noise(instr.depth_p, nside, A_maxL)
+            print('leff = {:.0f} -> cln = {:.3e}'.format(leff[i], cln))
+            clnoise[i]=cln.copy()
+    else:
+        for i in range(nbins):
+            cln=propagate_noise(instr.depth_p[:, i], nside, A_maxL)
+            print('leff = {:.0f} -> cln = {:.3e}'.format(leff[i], cln))
+            clnoise[i]=cln.copy()
+    
+    
+    
+    
+    if sample:
+        cln_corr = correct_clnoise(leff, clnoise, fsky, dl=30)
+    else:
+        cln_corr=clnoise.copy()
+    
+    return cln_corr
+```
+
+```{python}
+myconf=get_list_config(name='S4', nsub=1)
+config=combine_config(myconf)
+
+nside=4
+fsky=config['fsky']
+covmap=get_coverage(fsky, nside)
+pixok=covmap>0
+#mean_beta=np.mean(np.mean(mybeta_S4[:, pixok], axis=1), axis=0)
+#print(mean_beta)
+samp=True
+clnoise_S4=give_me_clnoise_corrected(leff, 
+                                       config['frequency'], 
+                                       config['depth_p'], 
+                                       np.array([1.54, -3]), 
+                                       config['fsky'], 
+                                       sample=samp)
+```
+
+```{python}
+config['fsky']
+```
+
+```{python}
+myconf=get_list_config(name='SO', nsub=1)
+config=combine_config(myconf)
+
+nside=4
+fsky=config['fsky']
+covmap=get_coverage(fsky, nside)
+pixok=covmap>0
+#mean_beta=np.mean(np.mean(mybeta_SO[:, pixok], axis=1), axis=0)
+#print(mean_beta)
+samp=True
+clnoise_SO=give_me_clnoise_corrected(leff, 
+                                       config['frequency'], 
+                                       config['depth_p'], 
+                                       np.array([1.54, -3]), 
+                                       config['fsky'], 
+                                       sample=samp)
+```
+
+```{python}
+myconf=get_list_config(name='BKPL', nsub=1)
+config=combine_config(myconf)
+
+nside=4
+fsky=config['fsky']
+covmap=get_coverage(fsky, nside)
+pixok=covmap>0
+#mean_beta=np.mean(np.mean(mybeta_BKPL[:, pixok], axis=1), axis=0)
+#print(mean_beta)
+
+clnoise_BKPL=give_me_clnoise_corrected(leff, 
+                                       config['frequency'], 
+                                       config['depth_p'], 
+                                       np.array([1.54, -3]), 
+                                       config['fsky'], 
+                                       sample=samp)
+```
+
+```{python}
+#mean_beta=np.mean(np.mean(mybeta_QUBIC[:, pixok, 0], axis=1), axis=0)
+#print(mean_beta)
+clnoise_QUBIC=give_me_clnoise_corrected(leff, 
+                                        np.array([150, 220]), 
+                                        np.array([mydepth_150, mydepth_150]), 
+                                        np.array([1.54, -3]), 
+                                        0.015,
+                                        sample=samp)
+```
+
+```{python}
+plt.figure(figsize=(12, 5))
+plt.plot(leff, clnoise_BKPL, '-or')
+plt.plot(leff, clnoise_QUBIC, '-ob')
+plt.plot(leff, clnoise_SO, '-om')
+plt.plot(leff, clnoise_S4, '-og')
+plt.yscale('log')
+plt.show()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+from qubic import mcmc
+import scipy
+
+def _get_Cl_cmb(Alens, r):
+    power_spectrum = hp.read_cl(CMB_CL_FILE%'lensed_scalar')[:,:4000]
+    if Alens != 1.:
+        power_spectrum[2] *= Alens
+    if r:
+        power_spectrum += r * hp.read_cl(CMB_CL_FILE
+                                         %'unlensed_scalar_and_tensor_r1')[:,:4000]
+    return power_spectrum
+def ana_likelihood(rv, leff, fakedata, errors, model, prior,mylikelihood=mcmc.LogLikelihood, covariance_model_funct=None):
+
+    ll = mylikelihood(xvals=leff, yvals=fakedata, errors=errors,
+                                model = model, flatprior=prior, covariance_model_funct=covariance_model_funct, nbins=len(leff))
+
+    like = np.zeros_like(rv)
+    for i in range(len(rv)):
+        like[i] = np.exp(ll([rv[i]]))
+        #print(rv[i],ll([rv[i]]),like[i])
+    maxL = rv[like == np.max(like)]
+    cumint = scipy.integrate.cumtrapz(like, x=rv)
+    cumint = cumint / np.max(cumint)
+    onesigma = np.interp(0.68, cumint, rv[1:])
+
+    return like, cumint, onesigma
+def explore_like(leff, mcl_noise, errors, rv, cov=None, verbose=False, sample_variance=True, Alens=1):
+
+    lbinned, b = Namaster.get_binning(nside)
+
+    def myclth(ell, r):
+        clth = _get_Cl_cmb(Alens=Alens, r=r)[2, ell.astype(int)-1]
+        return clth
+
+    def myBBth(ell, r):
+        clBB = cl2dl(ell, _get_Cl_cmb(Alens=Alens, r=r)[2, ell.astype(int)-1])
+        return clBB
+
+    fakedata = mcl_noise.copy()
+
+    if sample_variance:
+        covariance_model_funct = Namaster.knox_covariance
+    else:
+        covariance_model_funct = None
+
+    like, cumint, allrlim = ana_likelihood(rv, leff, fakedata,
+                                                errors,
+                                                myBBth, [[0,1]],
+                                               covariance_model_funct=covariance_model_funct)
+
+
+    return like, cumint, allrlim
+```
+
+```{python}
+import pickle
+
+exp='S4'
+with open('results/scaling/cl_CMB_with_and_without_noise_{}_500reals.pkl'.format(exp), "rb") as file:
+    cl_instr = pickle.load(file)
+
+mycl_noisy_S4=cl_instr['mycl_comparison']
+
+exp='SO'
+with open('results/scaling/cl_CMB_with_and_without_noise_{}_500reals.pkl'.format(exp), "rb") as file:
+    cl_instr = pickle.load(file)
+
+mycl_noisy_SO=cl_instr['mycl_comparison']
+
+exp='BKPL'
+with open('results/scaling/cl_CMB_with_and_without_noise_{}_500reals.pkl'.format(exp), "rb") as file:
+    cl_instr = pickle.load(file)
+
+mycl_noisy_BKPL=cl_instr['mycl_comparison']
+```
+
+```{python}
+ell=np.arange(10, 500, 1)
+
+
+# %matplotlib inline
+plt.figure(figsize=(15, 5))
+
+plt.subplot(1, 2, 1)
+plt.errorbar(leff, np.mean(mycl_BKPL, axis=0), 
+             yerr=np.std(mycl_BKPL, axis=0)+cl2dl(leff, clnoise_BKPL)*np.sqrt(2), fmt='xb', capsize=3)
+plt.errorbar(leff, np.mean(mycl_SO, axis=0),
+             yerr=np.std(mycl_SO, axis=0)+cl2dl(leff, clnoise_SO)*np.sqrt(2), fmt='xg', capsize=3)
+
+plt.errorbar(leff, np.mean(mycl_S4, axis=0),
+             yerr=np.std(mycl_S4, axis=0)+cl2dl(leff, clnoise_S4)*np.sqrt(2), fmt='xr', capsize=3)
+mycls = _get_Cl_cmb(Alens=1.0, r=0)[2, :]
+plt.plot(ell, cl2dl(ell, mycls), '-b')
+
+mycls = _get_Cl_cmb(Alens=0.5, r=0)[2, :]
+plt.plot(ell, cl2dl(ell, mycls), '-g')
+
+mycls = _get_Cl_cmb(Alens=0.1, r=0)[2, :]
+plt.plot(ell, cl2dl(ell, mycls), '-r')
+
+plt.yscale('log')
+plt.xlim(25, 300)
+plt.ylim(4e-5, 4e-2)
+
+plt.subplot(1, 2, 2)
+plt.errorbar(leff, np.std(mycl_noisy_S4, axis=0), fmt='or', capsize=3)
+plt.errorbar(leff, np.std(mycl_noisy_SO, axis=0), fmt='og', capsize=3)
+plt.errorbar(leff, np.std(mycl_noisy_BKPL, axis=0), fmt='ob', capsize=3)
+
+plt.errorbar(leff, np.std(mycl_BKPL, axis=0)+cl2dl(leff, clnoise_BKPL)*np.sqrt(2), fmt='xb', capsize=3)
+plt.errorbar(leff, np.std(mycl_SO, axis=0)+cl2dl(leff, clnoise_SO)*np.sqrt(2), fmt='xg', capsize=3)
+plt.errorbar(leff, np.std(mycl_S4, axis=0)+cl2dl(leff, clnoise_S4)*np.sqrt(2), fmt='xr', capsize=3)
+
+#plt.errorbar(leff, np.std(mycl_noiseless, axis=0)+cl2dl(leff, clnoise_corrected), fmt='xk', capsize=3)
+
+plt.yscale('log')
+#plt.xlim(25, 200)
+#plt.ylim(4e-4, 4e-2)
+
+plt.show()
+```
+
+```{python}
+rmin=0.0
+rmax=0.01
+nr=1000
+var=True
+```
+
+```{python}
+# QUBIC
+maxL=np.zeros(len(bands))
+sig=np.zeros(len(bands))
+
+covmap_QU=get_coverage(0.015, nside)
+pixok_QU=covmap_QU>0
+
+rv=np.linspace(rmin, rmax, nr)
+for i in range(len(bands)):
+    print(i)
+    mcl3=np.mean(mycl_QUBIC, axis=0)[:, i]#np.mean(mycl_noiseless, axis=0)
+    scl3=np.std(mycl_QUBIC, axis=0)[:, i]+cl2dl(leff, clnoise_QUBIC*np.sqrt(2))
+
+    like3, _, allrlim3 = explore_like(leff[:-1], mcl3[:-1], scl3[:-1], rv, cov=covmap_QU, verbose=False, 
+                                  sample_variance=True, Alens=1)
+    sig[i]=allrlim3
+    maxL[i]=rv[like3 == np.max(like3)]
+    print(maxL[i], sig[i])
+```
+
+```{python}
+# BKPL
+
+rv=np.linspace(rmin, rmax, nr)
+
+covmap_BKPL=get_coverage(0.02, nside)
+pixok_BKPL=covmap_BKPL>0
+
+mcl3=np.mean(mycl_BKPL, axis=0)[:]#np.mean(mycl_noiseless, axis=0)
+scl3=np.std(mycl_BKPL, axis=0)[:]+cl2dl(leff, clnoise_BKPL*np.sqrt(2))
+
+like3, _, allrlim3 = explore_like(leff[:-1], mcl3[:-1], scl3[:-1], rv, cov=covmap_BKPL, verbose=False, 
+                                  sample_variance=True, Alens=1)
+
+maxL_BKPL = rv[like3 == np.max(like3)]
+sig_BKPL = allrlim3
+print(maxL_BKPL, sig_BKPL-maxL_BKPL)
+```
+
+```{python}
+# SO
+
+rv=np.linspace(rmin, rmax, nr)
+
+covmap_SO=get_coverage(0.1, nside)
+pixok_SO=covmap_SO>0
+
+mcl3=np.mean(mycl_SO, axis=0)[:]#np.mean(mycl_noiseless, axis=0)
+scl3=np.std(mycl_SO, axis=0)[:]+cl2dl(leff, clnoise_SO*np.sqrt(2))
+
+like3, _, allrlim3 = explore_like(leff[:-1], mcl3[:-1], scl3[:-1], rv, cov=covmap_SO, verbose=False, 
+                                  sample_variance=True, Alens=0.5)
+
+maxL_SO = rv[like3 == np.max(like3)]
+sig_SO = allrlim3
+print(maxL_SO, sig_SO-maxL_SO)
+```
+
+```{python}
+# CMB-S4
+
+rv=np.linspace(rmin, rmax, nr)
+
+covmap_S4=get_coverage(0.03, nside)
+pixok_S4=covmap_S4>0
+
+mcl3=np.mean(mycl_S4, axis=0)[:]#np.mean(mycl_noiseless, axis=0)
+scl3=np.std(mycl_S4, axis=0)[:]+cl2dl(leff, clnoise_S4*np.sqrt(2))
+
+like3, _, allrlim3 = explore_like(leff[:-1], mcl3[:-1], scl3[:-1], rv, cov=covmap_S4, verbose=False, 
+                                  sample_variance=True, Alens=0.1)
+
+maxL_S4 = rv[like3 == np.max(like3)]
+sig_S4 = allrlim3
+print(maxL_S4, sig_S4-maxL_S4)
+```
+
+```{python}
+# %matplotlib inline
+
+plt.figure(figsize=(15, 5))
+
+plt.subplot(1, 2, 1)
+plt.errorbar(bands, maxL, lolims=True, fmt='--ob')
+plt.errorbar([1], maxL_BKPL, lolims=True, fmt='--og')
+#plt.grid(True)
+#plt.title('QUBIC', fontsize=15)
+plt.xlim(0.5, 10.5)
+#plt.ylim(0.004, 0.02)
+plt.annotate('Bicep/Keck', xy=(1, 1),  xycoords='axes fraction', fontsize=15, color='green', fontstyle='italic',
+            xytext=(0.05, 0.45))
+
+plt.annotate('QUBIC (FI)', xy=(1, 1),  xycoords='axes fraction', fontsize=15, color='blue', fontstyle='italic',
+            xytext=(0.5, 0.6))
+
+plt.xlabel(r'$N_{bands}$', fontsize=15)
+plt.ylabel(r'$\mathcal{L}^{max}_{r}$', fontsize=15)
+
+plt.subplot(1, 2, 2)
+plt.errorbar(bands, sig-maxL, lolims=True, fmt='--ob')
+plt.errorbar([1], sig_BKPL-maxL_BKPL, lolims=True, fmt='--og')
+plt.xlabel(r'$N_{bands}$', fontsize=15)
+plt.ylabel(r'$\sigma(r)$', fontsize=15)
+plt.xlim(0.5, 10.5)
+#plt.ylim(0.008, 0.02)
+#plt.yscale('log')
+
+plt.suptitle('500 realizations - Foregrounds : d6s1 - Correlation length : 8', fontsize=15)
+
+plt.show()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

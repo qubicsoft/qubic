@@ -2,7 +2,7 @@ import os
 import time
 import numpy as np
 
-N=200
+N=500
 
 
 os.system(f'sbatch -p gpu --gres=gpu:1 scalingnoise_qubic.sh {N} BKPL 1')

@@ -483,6 +483,10 @@ print(thedir)
 a = qubicfp()
 a.read_qubicstudio_dataset(thedir)
 #a.read_qubicstudio_dataset('/path/to/dataset')
+az = a.azimuth()
+el = a.elevation()
+thk = a.timeaxis(datatype='hk')
+
 ```
 
 ```{python}
@@ -502,138 +506,18 @@ reload(DH)
 analysis=DH.BeamMapsAnalysis(a)
 ```
 
-# Raw map
-
 ```{python}
-TESNum=96 #40  #57 #46 #69
-mymaps=analysis.fullanalysis(number_of_tes=TESNum, filter=[2e-2, 10], demod=False, remove_noise=False, 
-                             make_maps='healpix', doplot=True, save=False)
-```
-
-```{python}
-# %matplotlib inline
-thefreqmod = abs(a.hk['CALSOURCE-CONF']['Mod_freq'])
-#number of harmonics
-nharm = 10
-#filtering parameters
-period = 1./ thefreqmod
-xmin = 0.001
-xmax = 90.
-ymin = 1e0
-ymax = 1e13
-figure(figsize=(16, 8))
-############ Power spectrum RAW plot
-spectrum_f, freq_f = ft.power_spectrum(analysis.tt, analysis.tod[TESNum-1], rebin=True)
-plot(freq_f, f.gaussian_filter1d(spectrum_f,1), label='Raw Data')
-#spectrum_f2, freq_f2 = ft.power_spectrum(analysis.tt, filtered_data, rebin=True)
-#plot(freq_f2, f.gaussian_filter1d(spectrum_f2,1), label='Filtered Data')
-#plot([self.lowcut, self.lowcut],[ymin,ymax],'k', lw=3, label='Bandpass')
-#plot([self.highcut, self.highcut],[ymin,ymax],'k', lw=3)
-#plot([1./period,1./period],[ymin,ymax],'k--', lw=3, alpha=0.3, label='Calsource Harmonics')
-#for i in range(10):
-#    plot([1./period*i,1./period*i],[ymin,ymax],'k--', lw=3, alpha=0.3)
-#plot the pulse tube harmoncs
-#plot([self.notch[0,0],self.notch[0,0]], [ymin,ymax],'m:', lw=3, label='Pulse Tube Harmonics')
-#for i in range(nharm):
-#    plot([self.notch[0,0]*(i+1),self.notch[0,0]*(i+1)], [ymin,ymax],'m:', lw=3)
-legend(loc='center left', fontsize=15, frameon=False)
-yscale('log')
-xscale('log')
-xlabel('Frequency [Hz]', fontsize=15)
-ylabel('Power Spectrum', fontsize=15)
-xlim(xmin, xmax)
-ylim(ymin, ymax)
-tight_layout()
-show()
-```
-
-```{python}
-for i in range(len(np.array(moonaltazs_Salta.az[valid]))):
-    if np.array(moonaltazs_Salta.alt[valid])[i] > 60:
-        ips = hp.ang2pix(256, np.array(moonaltazs_Salta.az[valid])[i], 
-                     np.array(moonaltazs_Salta.alt[valid])[i], lonlat=True)
-        #ips_inf = hp.ang2pix(256, az_moon[i]-130, delta_inf_el_moon[i], lonlat=True)
-        #ips_sup = hp.ang2pix(256, az_moon[i]-130, delta_sup_el_moon[i], lonlat=True)
-        th[i], phi[i] = hp.pix2ang(256, ips)
-        #th_inf[i], phi_inf[i] = hp.pix2ang(256, ips_inf)
-        #th_sup[i], phi_sup[i] = hp.pix2ang(256, ips_sup)
-
-```
-
-```{python}
-'''
-def make_healpix_map(azt, elt, tod, countcut=0):
-    nside=256
-    unseen_val=hp.UNSEEN
-    ips = hp.ang2pix(nside, azt, elt, lonlat=True)
-    mymap = np.zeros(12*nside**2)
-    mapcount = np.zeros(12*nside**2)
-    for i in range(len(azt)):
-        mymap[ips[i]] -= tod[i]
-        mapcount[ips[i]] += 1
-    unseen = mapcount <= countcut
-    mymap[unseen] = unseen_val
-    mapcount[unseen] = unseen_val
-    mymap[~unseen] = mymap[~unseen] / mapcount[~unseen]
-    return mymap
-
-mymaps_bis=np.zeros((256, 12*256**2))
-for i in range(256):
-    print(i)
-    cut=40
-    myindex_elt = np.where(analysis.elt > cut)[0]
-    mynew_elt=analysis.elt[myindex_elt]
-    mynew_azt=analysis.azt[myindex_elt]
-
-    mytod=analysis.tod[i][myindex_elt]
-    mytod_filtered=analysis.filter_data(analysis.tt[myindex_elt], mytod, 2e-2, 75, doplot=False)
-
-    mytod=mytod_filtered
-    mymaps_bis[i]=make_healpix_map(mynew_azt, mynew_elt, mytod)
-'''
-```
-
-```{python}
-# %matplotlib notebook
-plt.figure(figsize=(15, 10))
-plt.imshow(mymaps[0], cmap='jet', origin='lower', extent=[-30, 0, 30, 50])
-#plt.plot(np.array(moonaltazs_Salta.az[valid]), np.array(moonaltazs_Salta.alt[valid]))
-#plt.scatter(np.array(moonaltazs_Salta.az[valid])-115, np.array(moonaltazs_Salta.alt[valid]),
-#                c=np.array(local_time_hours[valid]), label='Moon', lw=0, s=100, marker='o', cmap='jet')
-#plt.plot(np.array(moonaltazs_Salta.az[valid])-3-115, np.array(moonaltazs_Salta.alt[valid]), '-k')
-#plt.plot(np.array(moonaltazs_Salta.az[valid])+3-115, np.array(moonaltazs_Salta.alt[valid]), '-k')
-plt.colorbar().set_label('Local Time')
-plt.title('TES : {}'.format(TESNum))
-plt.show()
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-np.array(moonaltazs_Salta.az)
-```
-
-```{python}
-import astropy.units as u
 from astropy.time import Time
+import astropy.units as u
 from astropy.coordinates import SkyCoord, EarthLocation, AltAz, BaseRADecFrame, get_moon, get_sun
 
 Salta = EarthLocation(lat=-24.731358*u.deg, lon=-65.409535*u.deg, height=1152*u.m)
 utcoffset = -3*u.hour  # Eastern Daylight Time
+
+door_az = 116.4
+az_span = 30.
+el_min = 30.
+el_max = 50.
 
 day='2022-07-14'
 start_obs_hour = '00:00:00'
@@ -656,90 +540,7 @@ local_start = str(Time(start_obs_date)+tstart*u.hour)[:16]
 local_stop = str(Time(start_obs_date)+tstop*u.hour)[:16]
 UTC_start = str(Time(start_obs_date)-utcoffset+tstart*u.hour)[:16]
 UTC_stop = str(Time(start_obs_date)-utcoffset+tstop*u.hour)[:16]
-```
 
-```{python}
-# %matplotlib inline
-#plt.plot(analysis.azt)
-#plt.plot(analysis.elt)
-plt.figure(figsize=(15, 5))
-plt.subplot(2, 2, 1)
-#plt.plot(analysis.azt)
-plt.plot(local_time_hours[valid], np.array(moonaltazs_Salta.az)[valid])
-plt.plot(local_time_hours[valid][0]+p.time/3600, p.azimuth, alpha=0.5)
-plt.subplot(2, 2, 2)
-plt.plot(local_time_hours[valid], moonaltazs_Salta.alt[valid])
-#plt.plot(local_time_hours[valid][0]+p.time/3600, p.elevation, alpha=0.5)
-
-plt.subplot(2, 2, 3)
-plt.plot(analysis.azt)
-
-plt.subplot(2, 2, 4)
-plt.plot(analysis.elt)
-plt.show()
-```
-
-```{python}
-
-```
-
-```{python}
-N=10
-az_moon=np.linspace(door_az-az_span/2, door_az+az_span/2, N)
-print(az_moon)
-el_moon=np.linspace(10, 70, N)
-delta_sup_el_moon=np.linspace(10, 70, N)+3
-delta_inf_el_moon=np.linspace(10, 70, N)-3
-```
-
-```{python}
-# %matplotlib inline
-
-th=np.zeros(len(np.array(moonaltazs_Salta.az[valid])))
-phi=np.zeros(len(np.array(moonaltazs_Salta.az[valid])))
-th_inf=np.zeros(N)
-phi_inf=np.zeros(N)
-th_sup=np.zeros(N)
-phi_sup=np.zeros(N)
-
-plt.figure(figsize=(7, 7))
-hp.gnomview(mymaps[0], rot=[-14, 42], reso=10, cmap='jet', sub=(1, 1, 1), title='TES : {}'.format(TESNum))
-#hp.gnomview(my, rot=[-14, 42], reso=10, cmap='jet', sub=(2, 2, 2), title='TES : {}'.format(TESNum))
-#hp.projscatter(, c='black', cmap='jet', lonlat=True)
-#for i in range(len(az_moon)):
-    #ips = hp.ang2pix(256, az_moon[i]-135, el_moon[i], lonlat=True)
-    #th1, phi1 = hp.pix2ang(256, ips)
-    #print(th1, phi1)
-    #hp.projscatter(th1, phi1, color='k', lonlat=False)
-    
-for i in range(len(np.array(moonaltazs_Salta.az[valid]))):
-    if np.array(moonaltazs_Salta.alt[valid])[i] > 60:
-        ips = hp.ang2pix(256, np.array(moonaltazs_Salta.az[valid])[i]-120, 
-                     np.array(moonaltazs_Salta.alt[valid])[i]-20, lonlat=True)
-        #ips_inf = hp.ang2pix(256, az_moon[i]-130, delta_inf_el_moon[i], lonlat=True)
-        #ips_sup = hp.ang2pix(256, az_moon[i]-130, delta_sup_el_moon[i], lonlat=True)
-        th[i], phi[i] = hp.pix2ang(256, ips)
-        #th_inf[i], phi_inf[i] = hp.pix2ang(256, ips_inf)
-        #th_sup[i], phi_sup[i] = hp.pix2ang(256, ips_sup)
-hp.projplot(th, phi, color='k', lonlat=False, alpha=0.8, lw=5)
-#hp.projplot(th_inf, phi_inf, color='k', lonlat=False)
-#hp.projplot(th_sup, phi_sup, color='k', lonlat=False)
-#hp.graticule()
-#plt.imshow(mymaps[0], extent=[80, 130, 30, 50])
-#plt.plot(np.array(moonaltazs_Salta.az[valid]), np.array(moonaltazs_Salta.alt[valid]))
-plt.show()
-```
-
-```{python}
-frame_Salta
-```
-
-```{python}
-az=np.array(moonaltazs_Salta.az)
-el=np.array(moonaltazs_Salta.alt)
-```
-
-```{python}
 # Now let's prepare a back & forth in elevation scanning strategy as provided in qubic_soft
 d = qubic.qubicdict.qubicDict()
 d.read_from_file('MoonObservation.dict')
@@ -760,10 +561,10 @@ d['dead_time']=74.05
 backforthdt = d['delta_az'] / d['angspeed'] * 2
 print('Scan Duration: ',backforthdt)
 print('Dead Time = {}'.format(d['dead_time']))
-    
-    
-el_min = 30.
-el_max = 50.
+
+
+
+
 n_elevations = int(d['duration']*3600/(backforthdt+d['dead_time']))+1
 el_step = np.round((el_max - el_min) / n_elevations * 100) / 100
 d['fix_azimuth'] = {'apply':True,'az':105.,
@@ -771,151 +572,209 @@ d['fix_azimuth'] = {'apply':True,'az':105.,
 print(d['fix_azimuth'])
 print('call')
 p = qubic.get_pointing(d)
+
+def give_me_moon_traj(az, el):
+    th=np.zeros(len(az))
+    phi=np.zeros(len(az))
+    for i in range(len(az)):
+        ips = hp.ang2pix(256, az[i]-120, el[i], lonlat=True)
+        th[i], phi[i] = hp.pix2ang(256, ips)
+    return th, phi
+
+def do_cut_in_elevation(maps, elcut):
+    if elcut is not None:
+        el_min=elcut[0]
+        el_max=elcut[1]
     
-```
+    index=np.where(maps!=hp.UNSEEN)[0]
+    
+    for ii, i in enumerate(index):
+        az, el = hp.pix2ang(256, i, lonlat=True)
+        #print(az-360, el)
 
-```{python}
-import pymap3d
-def azel_2_radec(az, el, loc, time):
-    ra, dec = pymap3d.azel2radec(az, el, loc[0], loc[1], time)
-    return ra, dec
-```
-
-```{python}
-p.elevation.shape
-```
-
-```{python}
-ra=np.zeros(1000)
-dec=np.zeros(1000)
-
-for i in range(1000):
-    ra[i], dec[i] = azel_2_radec(p.azimuth[:1000][i], p.elevation[:1000][i], loc=[-24.731358, -65.409535], time=frame_Salta.obstime.value[i])
-```
-
-```{python}
-# %matplotlib inline
-hp.gnomview(mymaps[0], coord=["G", "C"], rot=[225, -12], reso=10)
-```
-
-```{python}
-p.azimuth
-```
-
-```{python}
-ra=np.zeros(100)
-dec=np.zeros(100)
-delta_t=64
-for i in range(100):
-    ra[i], dec[i] = qubic.hor2equ(p.azimuth[:100][i], p.elevation[:100][i], time=i*64.865, date_obs=frame_Salta.obstime.value[i])
-```
-
-```{python}
- plt.plot(p.equatorial[:,0], p.equatorial[:,1])
-plt.plot(ra, dec)
-```
-
-```{python}
-hp.mollview(np.ones(12))
-hp.projscatter(ra, dec)
-hp.projscatter(p.equatorial[:, 0], p.equatorial[:, 1])
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-# test
-
-```{python}
-from astropy.coordinates import SkyCoord
-import astropy.units as u
-def azel_2_radec(az, el, loc, time):
-    ra, dec = pymap3d.azel2radec(az, el, loc[0], loc[1], time)
-    return ra, dec
-```
-
-```{python}
-loc=[-24.731358, -65.409535]
-azel_2_radec(az=100, el=49.69, loc=loc, time='2022-07-12 21:35:00.000')
-
-```
-
-```{python}
-
-```
-
-```{python}
-Salta = EarthLocation(lat=-24.731358*u.deg, lon=-65.409535*u.deg, height=1152*u.m)
-Salta
-```
-
-```{python}
-start_obs_hour = '21:35:00'
-date = Time(day+ ' 21:35:00')
-start_obs_date = day +' '+start_obs_hour
-delta_time = np.linspace(4,0, 10201)*u.hour
-time0 = Time(start_obs_date)#-utcoffset
-#print(time0)
-alltimes = time0 + delta_time
-alltimes=alltimes[::-1]
-```
-
-```{python}
-
-```
-
-```{python}
-newra=np.linspace(240, 280, 101)
-newdec=np.linspace(-50, 0, 101)
-newaz=np.linspace(80, 130, 101)
-newel=np.linspace(30, 50, 101)
-
-maps_radec = np.zeros((len(newra), len(newdec)))
-k=0
-from qubic import progress_bar
-bar=progress_bar(101*101, '')
-
-for ii, i in enumerate(newaz):
-    for jj, j in enumerate(newel):
-        #print(alltimes.value[k])
-        ra, dec = azel_2_radec(az=i, el=j, loc=loc, time=alltimes.value[k])
-        #print(ra, dec)
-        #print(np.where(newra < ra)[0])
-        index_ra = np.where(newra < ra)[0]
-        index_dec = np.where(newdec < dec)[0]
-
-        if len(index_ra) == 0:
-            index_ra=0
-        else:
-            index_ra=index_ra[-1]
-        if len(index_dec) == 0:
-            index_dec=0
-        else:
-            index_dec=index_dec[-1]
+        if elcut is not None:
+            if el < el_min or el > el_max :
+                maps[i]=hp.UNSEEN
         
-        #print(index_ra, index_dec)
-        maps_radec[index_dec, index_ra]=mymaps[0, ii, jj]
-        k+=1
-        bar.update()
-        
-        #if k > 2000:
-        #    stop
+    return maps
+
+def projplot_healpy(az, el, diff_az, diff_el, c, lw, alpha, ls='-'):
+    hp.projplot(az-diff_az, el-diff_el, 
+            color=c, lonlat=True, alpha=alpha, lw=lw, ls=ls)
+    
+def make_healpix_map(azt, elt, tod, countcut=0):
+    nside=256
+    unseen_val=hp.UNSEEN
+    ips = hp.ang2pix(nside, azt, elt, lonlat=True)
+    mymap = np.zeros(12*nside**2)
+    mapcount = np.zeros(12*nside**2)
+    for i in range(len(azt)):
+        mymap[ips[i]] -= tod[i]
+        mapcount[ips[i]] += 1
+    unseen = mapcount <= countcut
+    mymap[unseen] = unseen_val
+    mapcount[unseen] = unseen_val
+    mymap[~unseen] = mymap[~unseen] / mapcount[~unseen]
+    return mymap
+```
+
+# Raw map
+
+```{python}
+TESNum1=57 #40  #57 #46 #69[4e-2, 10]
+mymaps1=analysis.fullanalysis(number_of_tes=TESNum1, filter=None, demod=False, remove_noise=True, 
+                             make_maps='healpix', doplot=False, save=False)
+
+TESNum2=46 #40  #57 #46 #69[4e-2, 10]
+mymaps2=analysis.fullanalysis(number_of_tes=TESNum2, filter=None, demod=False, remove_noise=True, 
+                             make_maps='healpix', doplot=False, save=False)
+
+import pickle
+with open('pointing_offsets.pickle', 'rb') as f:
+    data = pickle.load(f)
+#data[:, 0]+=0.9
+```
+
+```{python}
+from qubic import fibtools as ft
+import scipy.ndimage.filters as f
+
+scantype_hk, azt, elt, scantype=identify_scans(thk, az, el, tt=analysis.tt, median_size=101, 
+                                               thr_speedmin=0.1, doplot=False, plotrange=[0,1000])
+```
+
+```{python}
+mytod1=ft.filter_data(analysis.tt, analysis.tod[TESNum1-1], lowcut=9e-3, highcut=2e-0, order=3)
+
+# %matplotlib notebook
+plt.figure(figsize=(15, 5))
+spectrum_f, freq_f = ft.power_spectrum(analysis.tt, mytod1, rebin=True)
+spectrum_f2, freq_f2 = ft.power_spectrum(analysis.tt, analysis.tod[TESNum1-1], rebin=True)
+plt.plot(freq_f, f.gaussian_filter1d(spectrum_f,1), label='Raw Data')
+plt.plot(freq_f2, f.gaussian_filter1d(spectrum_f2,1), label='Filtered data')
+plt.yscale('log')
+plt.xscale('log')
+plt.xlabel('Frequency [Hz]')
+plt.ylabel('Power Spectrum')
+plt.show()
+
+az_point=116.4
+delta_az=30
+az_real=120
+delta_pointing=az_real-az_point
 ```
 
 ```{python}
 # %matplotlib notebook
-plt.figure(figsize=(10, 10))
-imshow(maps_radec, cmap='jet', extent=[240, 280, -50, 0])
+plt.figure(figsize=(15, 5))
+plt.plot(analysis.tt, mytod1)
 plt.show()
 ```
 
 ```{python}
-analysis.a.elevation()
+# %matplotlib inline
+
+plt.figure(figsize=(20, 20))
+
+lowel=40
+highel=50
+
+my1=make_healpix_map(azt-3.6, elt, mytod1)
+my1=do_cut_in_elevation(my1, elcut=[lowel, highel])
+
+my2=make_healpix_map(azt-3.6, elt, mytod2)
+my2=do_cut_in_elevation(my2, elcut=[lowel, highel])
+
+
+hp.gnomview(my1, rot=[-17, 42], reso=8, cmap='jet')
+plt.title('TES : {}'.format(TESNum1))
+
+# Do edge
+#projplot_healpy(-az_real+np.ones(100)*(az_point-delta_az), np.linspace(lowel, highel, 100), 0, 0, c='red', lw=2, alpha=0.8)
+#projplot_healpy(-az_real+np.ones(100)*az_point, np.linspace(lowel, highel, 100), 0, 0, c='red', lw=2, alpha=0.8)
+#
+#projplot_healpy(-az_real+np.linspace(az_point-delta_az, az_point, 100), 
+#                np.ones(100)*lowel, 0, 0, c='red', lw=2, alpha=0.8)
+#projplot_healpy(-az_real+np.linspace(az_point-delta_az, az_point, 100), 
+#                np.ones(100)*highel, 0, 0, c='red', lw=2, alpha=0.8)
+
+# Annotate
+
+#az_min, az_max=86, 116
+#for ii, i in enumerate(np.linspace(lowel, highel, 10)):
+    #print(i)
+#    projplot_healpy(-az_real+np.linspace(az_min, az_max, 100), np.ones(100)*i, 0, 0, c='black', lw=1, alpha=0.5)
+    
+#for ii, i in enumerate(np.linspace(az_min, az_max, 20)):
+    #print(i)
+#    projplot_healpy(-az_real+np.ones(100)*(i), np.linspace(lowel, highel, 100), 0, 0, c='black', lw=1, alpha=0.5)
+
+#plt.annotate('Elevation = {:.0f}°'.format(highel), xy=(0, 0),  xycoords='figure fraction', rotation=-5, 
+#             xytext=(0.25, 0.60), textcoords='axes fraction', color='black', fontsize=10, fontstyle='italic')
+#plt.annotate('Elevation = {:.0f}°'.format(lowel), xy=(0, 0),  xycoords='figure fraction', rotation=-3, 
+#             xytext=(0.2, 0.25), textcoords='axes fraction', color='black', fontsize=10, fontstyle='italic')
+#plt.annotate('Azimuth = {:.1f}° (0°)'.format(az_point), xy=(0, 0),  xycoords='figure fraction', rotation=-80, 
+#             xytext=(0.87, 0.32), textcoords='axes fraction', color='black', fontsize=10, fontstyle='italic')
+#plt.annotate('Azimuth = {:.1f}° (-30°)'.format(az_point-30), xy=(0, 0),  xycoords='figure fraction', rotation=80, 
+#             xytext=(0.12, 0.33), textcoords='axes fraction', color='black', fontsize=10, fontstyle='italic')
+
+plt.show()
+```
+
+# Let's see the effect of the order
+
+```{python}
+lc=0.005
+hc=1
+
+tab_order=[0, 1, 2, 5]#np.arange(0, 6, 1)
+tab_tod=np.zeros((len(tab_order), 1998848))
+for ii, i in enumerate(tab_order):
+    mytod=ft.filter_data(analysis.tt, analysis.tod[TESNum1-1], lowcut=lc, highcut=hc, order=i)
+    tab_tod[ii]=mytod.copy()
+
+# %matplotlib inline
+plt.figure(figsize=(15, 5))
+spectrum_f2, freq_f2 = ft.power_spectrum(analysis.tt, analysis.tod[TESNum1-1], rebin=True)
+plt.plot(freq_f2, f.gaussian_filter1d(spectrum_f2,1), '--b', label='Raw data')
+for i in range(len(tab_order)):
+    spectrum_f, freq_f = ft.power_spectrum(analysis.tt, tab_tod[i], rebin=True)
+    plt.plot(freq_f, f.gaussian_filter1d(spectrum_f,1), label='Filtered Data')
+    
+plt.yscale('log')
+plt.xscale('log')
+plt.xlabel('Frequency [Hz]')
+plt.ylabel('Power Spectrum')
+
+#plt.axvline(lc, color='black', lw=5)
+#plt.axvline(hc, color='black', lw=5)
+plt.show()
+```
+
+```{python}
+# %matplotlib notebook
+plt.figure(figsize=(15, 5))
+for i in range(len(tab_order)):
+    plt.plot(analysis.tt, tab_tod[i])
+plt.show()
+```
+
+```{python}
+# %matplotlib inline
+
+plt.figure(figsize=(10, 10))
+
+lowel=40
+highel=45
+
+for i in range(len(tab_order)):
+    my1=make_healpix_map(azt, elt, tab_tod[i])
+    my1=do_cut_in_elevation(my1, elcut=[lowel, highel])
+
+
+    hp.gnomview(my1, rot=[-16, 42], reso=10, cmap='jet', sub=(1, 4, i+1))
+    plt.title('TES : {} - Order = {}'.format(TESNum1, tab_order[i]))
+plt.show()
 ```
 
 ```{python}
@@ -935,30 +794,27 @@ analysis.a.elevation()
 ```
 
 ```{python}
-delta_time = np.linspace(12,30, 1000)*u.hour
-time0 = Time(start_obs_date)-utcoffset
-alltimes = time0 + delta_time
-Salta = EarthLocation(lat=-24.731358*u.deg, lon=-65.409535*u.deg, height=1152*u.m)
-frame_Salta = AltAz(obstime=alltimes, location=Salta)
+
 ```
 
 ```{python}
 
-pymap3d.azel2radec
 ```
 
 ```{python}
-128+66
+
 ```
 
 ```{python}
-newAltAzcoordiantes = SkyCoord(l=100*u.degree, b=40*u.degree, obstime = alltimes, 
-                               frame = frame_Salta, location = Salta)
-newAltAzcoordiantes.icrs
+
 ```
 
 ```{python}
-p
+
+```
+
+```{python}
+
 ```
 
 ```{python}

@@ -729,8 +729,8 @@ for ibnd in [2,3,4,5]:
                       np.array([data_array['band{}'.format(i)] for i in range(ibnd)]).T[0], 'ko')
     line = ax.axvline(data_array['nu_in'][0], color = 'k', ls = '--')
     
-    line_spl, = ax.plot(xvals + data_array['nu_in'][0],
-                        data_array['SplFunc'](xvals), color = 'k', ls = '-')
+    #line_spl, = ax.plot(xvals + data_array['nu_in'][0],
+    #                    data_array['SplFunc'](xvals), color = 'k', ls = '-')
     #print(line_spl)
     text = ax.text(140, 1, r'$\nu_i=${:3.2f} GHz'.format(data_array['nu_in'][0]), fontsize=14)
 
@@ -750,7 +750,7 @@ for ibnd in [2,3,4,5]:
         points.set_data(data_array['nu_rec'], 
                         np.array([data_array['band{}'.format(i)] for i in range(ibnd)]).T[i])
         line.set_xdata(data_array['nu_in'][i])
-        line_spl.set_xdata(xvals + data_array['nu_in'][i])
+        #line_spl.set_xdata(xvals + data_array['nu_in'][i])
         text.set_text(r'$\nu_i=${:3.2f} GHz'.format(data_array['nu_in'][i]))
         return(points)
 
@@ -760,11 +760,72 @@ for ibnd in [2,3,4,5]:
 
     # Save a .gif
     fig.tight_layout()
-    #anim.save('./{}FPSF.gif'.format(ibnd), writer='imagemagick')
+    anim.save('./{}FPSF_noline.gif'.format(ibnd), writer='imagemagick')
 ```
 
 ```{python}
-np.array([data_array['band{}'.format(i)] for i in range(5)]).T#[k[5-2][j]]
+fig, ax = plt.subplots(nrows = 1, ncols = 1, figsize=(7, 5))
+
+k = [[5,18],
+     [5,10,16],
+     [0,1,2,3],
+     [1,3,5,7,8]]
+
+#Generate xvals to plot spline
+xfit = data_dict['Data_fit'][0]
+xvals = np.linspace(np.min(xfit), np.max(xfit), 1000)
+
+nsimu = len(data_array['nu_in'])
+ibnd = 5
+data_array = locals()['data_{}bands'.format(ibnd)]
+#plot inpt freq of the source
+ax.axvline(data_array['nu_in'][8], color = 'k', ls = '--')
+#5
+ax.set_xlim(130,170)
+ax.set_ylim(-0.2,1.1)
+ax.set_xlabel(r'$\nu$ [GHz]', fontsize = 20)
+ax.set_ylabel(r'$I_{out}$', fontsize = 20)
+
+c = ['b', 'g', 'y', 'orange', 'r']
+for ib in range(ibnd):
+    ax.axvspan(xmin = data_array['nu_edge'][ib], xmax = data_array['nu_edge'][ib + 1], 
+                       alpha = 0.4, color = c[ib])
+```
+
+```{python}
+ax.plot(data_array['nu_rec'], 
+         np.array([data_array['band{}'.format(i)] for i in range(ibnd)]).T[k[ibnd-2][j]], 'ko')
+
+
+        #plot fpsf
+        #ax[ibnd-2, j].plot(xvals + data_array['nu_in'][k[ibnd-2][j]],
+        #        data_array['SplFunc'](xvals), 
+        #        color = 'k', ls = '-')
+        #print(line_spl)
+        #text = ax.text(140, 1, r'$\nu_i=${:3.2f} GHz'.format(data_array['nu_in'][0]), fontsize=14)
+
+        ax[ibnd-2, j].axhline(0, color = 'k', ls = '-', alpha = 0.2)
+        c = ['b', 'g', 'y', 'orange', 'r']
+        for ib in range(ibnd):
+            ax[ibnd-2, j].axvspan(xmin = data_array['nu_edge'][ib], xmax = data_array['nu_edge'][ib + 1], 
+                       alpha = 0.4, color = c[ib])
+        ax[ibnd-2,j].set_xlim(130,170)
+        ax[ibnd-2,j].set_ylim(-0.2,1.1)
+        if ibnd == 5: ax[3,j].set_xlabel(r'$\nu$ [GHz]', fontsize = 20)
+            
+    if j < ibnd:
+        #print(j)
+        for jj in range(j+1, 5):
+            ax[ibnd-2, jj].axis('off')
+    ax[ibnd-2,0].set_ylabel(r'$I_{out}$', fontsize = 20)
+    plt.subplots_adjust(wspace=0.0,
+                       hspace = 0,
+                       )#left = 0, right = 0.0001)
+    #text.set_text(r'$\nu_i=${:3.2f} GHz'.format(data_array['nu_in'][i]))
+
+    # Save a .gif
+    fig.tight_layout()
+    #plt.savefig("FPSF_manyfreqs.pdf", format = "pdf")
 ```
 
 ```{python}

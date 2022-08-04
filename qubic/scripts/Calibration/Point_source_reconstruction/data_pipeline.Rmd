@@ -248,6 +248,21 @@ t0 = time_azel[0]
 #### check plot ... ok
 
 ```{python}
+plt.figure(figsize = (16,6))
+plt.subplot(121)
+plt.plot(time_azel, az, 'b-')
+plt.plot(time_azel, el-np.mean(el), 'r-')
+plt.yticks([])
+plt.xlabel('tiempo [s]')
+plt.subplot(122)
+plt.plot(time_azel[400:16000], az[400:16000], 'b-')
+plt.plot(time_azel[400:16000], el[400:16000]-np.mean(el), 'r-')
+plt.yticks([])
+plt.xlabel('tiempo [s]')
+
+```
+
+```{python}
 reload(mmp)
 mmp.plot_scan(time_azel, t_src, data_src, az, el)
 ```

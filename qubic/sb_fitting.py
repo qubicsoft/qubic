@@ -1,6 +1,3 @@
-from __future__ import division, print_function
-
-from qubicpack import qubicpack as qp
 import qubic.fibtools as ft
 import qubic.plotters as p
 import qubic.lin_lib as ll

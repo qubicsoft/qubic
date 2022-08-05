@@ -1,4 +1,3 @@
-from qubicpack import qubicpack as qp
 import qubic.fibtools as ft
 import qubic.plotters as p
 

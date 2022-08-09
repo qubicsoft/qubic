@@ -116,21 +116,28 @@ def thepolynomial(x, pars, extra_args=None):
         return f(x)
 
 
-class MyChi2:
+class MyChi2(object):
         """
         Class defining the minimizer and the data
         """
 
-        def __init__(self, xin, yin, covarin, functname, extra_args=None):
+        def __init__(self, xin, yin, covarin, functname, extra_args=None, invcovar=None, diag=False):
                 self.x = xin
                 self.y = yin
                 self.covar = covarin
-                self.invcov = np.linalg.inv(covarin)
+                if invcovar is None:
+                        self.invcov = np.linalg.inv(covarin)
+                else:
+                        self.invcov = invcovar
                 self.functname = functname
                 self.extra_args = extra_args
+                self.diag = diag
         def __call__(self, *pars, extra_args=None):
                 val = self.functname(self.x, pars, extra_args=self.extra_args)
-                chi2 = np.dot(np.dot(self.y - val, self.invcov), self.y - val)
+                if self.diag == False:
+                        chi2 = np.dot(np.dot(self.y - val, self.invcov), self.y - val)
+                else:
+                        chi2 = np.sum((self.y-val)**2 / np.diag(self.covar))
                 return chi2
 
 class Chi2Minimizer(object):
@@ -138,11 +145,14 @@ class Chi2Minimizer(object):
         Parent classes with the model to minimize
         """
 
-        def __init__(self, functname, xin, yin, covarin, extra_args = None):
+        def __init__(self, functname, xin, yin, covarin, extra_args = None, invcovar=None):
                 self.x = xin
                 self.y = yin
                 self.covar = covarin
-                self.invcov = np.linalg.inv(covarin)
+                if invcovar is None:
+                        self.invcov = np.linalg.inv(covarin)
+                else:
+                        self.invcov = invcovar
                 self.functname = functname
                 self.extra_args = extra_args
  
@@ -181,23 +191,26 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 
         # check if covariance or error bars were given
         covar = covarin.copy()
+        invcovar = None
+        diag = False
         if np.size(np.shape(covarin)) == 1:
+                diag = True
                 if force_diag:
                         covar = covarin.copy()
                 else:
                         err = covarin
                         covar = np.zeros((np.size(err), np.size(err)))
                         covar[np.arange(np.size(err)), np.arange(np.size(err))] = err ** 2
+                        invcovar = np.zeros((np.size(err), np.size(err)))
+                        invcovar[np.arange(np.size(err)), np.arange(np.size(err))] = 1. / err ** 2
         # instantiate minimizer
         if chi2 is None:
-                chi2 = MyChi2(x, y, covar, functname, extra_args=extra_args)
+                chi2 = MyChi2(x, y, covar, functname, extra_args=extra_args, invcovar=invcovar, diag=diag)
         else:
                 chi2 = Chi2Implement(functname, x, y, covar, extra_args=extra_args)
-
                 # nohesse=False
         #elif chi2.__name__ is 'MyChi2_nocov':
         #    chi2 = chi2(x, y, covar, functname)
-
         # variables
         ndim = np.size(guess)
         parnames = []

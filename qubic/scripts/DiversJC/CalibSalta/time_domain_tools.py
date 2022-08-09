@@ -9,6 +9,12 @@ from sklearn.cluster import DBSCAN
 from qubicpack.qubicfp import qubicfp
 from qubic import fibtools as ft
 
+def get_mode(y, nbinsmin=51):
+    mm, ss = ft.meancut(y, 4)
+    hh = np.histogram(y, bins=int(np.min([len(y) / 30, nbinsmin])), range=[mm - 5 * ss, mm + 5 * ss])
+    idmax = np.argmax(hh[0])
+    mymode = 0.5 * (hh[1][idmax + 1] + hh[1][idmax])
+    return mymode
 
 
 def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, doplot=False, plotrange=[0,1000]):
@@ -95,8 +101,8 @@ def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, dopl
 		title('Angular Velocity Vs. Azimuth - Dead time = {0:4.1f}%'.format(dead_time*100))
 		plot(az, medaz_dt)
 		plot(az[c0], medaz_dt[c0], 'ro', label='Slow speed')
-		plot(az[cpos], medaz_dt[cpos], '.', label='Scan +')
-		plot(az[cneg], medaz_dt[cneg], '.', label='Scan -')
+		plot(az[cpos], medaz_dt[cpos], '.', label='Scan + : mean={:4.2f}deg/s max={:4.2f}deg/s'.format(np.mean(medaz_dt[cpos]), np.max(medaz_dt[cpos])))
+		plot(az[cneg], medaz_dt[cneg], '.', label='Scan - : mean={:4.2f}deg/s max={:4.2f}deg/s'.format(np.mean(medaz_dt[cneg]), np.min(medaz_dt[cneg])))
 		xlabel('Azimuth [deg]')
 		ylabel('Ang. velocity [deg/s]')
 		legend(loc='upper left')

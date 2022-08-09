@@ -1,0 +1,739 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.13.8
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+# Analysis of the Moon Scan data from July 2022
+### JCH - Aug. 2022
+
+```{python}
+# %config InlineBackend.figure_format='retina'
+from IPython.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+
+rc('figure',figsize=(20,12))
+rc('font',size=12)
+
+from scipy.signal import medfilt
+from scipy.interpolate import interp1d
+import glob
+
+from qubicpack.qubicfp import qubicfp
+from qubic import fibtools as ft
+
+from importlib import reload
+import healpy as hp
+
+import time_domain_tools as tdt
+
+```
+
+```{python}
+mydatadir = '/Volumes/HD JCH SSD/Qubic/QubicData/Calib-TD/'
+thedate = '2022-07-14'
+thedirs = glob.glob(mydatadir + '/' + thedate + '/*')
+thedata = thedirs[0]
+
+### Read data
+a = qubicfp()
+a.read_qubicstudio_dataset(thedata)
+
+tt, alltod = a.tod()
+
+az = a.azimuth()
+el = a.elevation()
+thk = a.timeaxis(datatype='hk')
+
+del(a)
+
+### We remove tt[0]
+tinit = tt[0]
+tt -= tinit
+thk -= tinit
+
+```
+
+## Just a glimpse at the data
+
+```{python}
+TESnum = 33
+tod = alltod[TESnum-1,:]
+
+subplot(2,2,1)
+plot(tt, tod)
+xlabel('t')
+ylabel('TOD')
+
+subplot(2,2,2)
+plot(az, el)
+xlabel('az')
+ylabel('el')
+
+subplot(2,2,3)
+plot(thk, az)
+xlabel('t')
+ylabel('az')
+
+subplot(2,2,4)
+plot(thk, el)
+xlabel('t')
+ylabel('el')
+
+```
+
+## Identify scans
+
+```{python}
+reload(tdt)
+
+### Identify scan types and numbers
+speedmin = 0.05
+scantype_hk, azt, elt, scantype = tdt.identify_scans(thk, az, el, tt=tt, doplot=True, plotrange=[0,2000], thr_speedmin=speedmin)
+```
+
+```{python}
+def healpix_map(azt, elt, tod, flags=None, flaglimit=0, nside=128, countcut=0, unseen_val=hp.UNSEEN):
+    if flags is None:
+        flags = np.zeros(len(azt))
+    
+    ok = flags <= flaglimit 
+    return healpix_map_(azt[ok], elt[ok], tod[ok], nside=nside, countcut=countcut, unseen_val=unseen_val)
+
+
+def healpix_map_(azt, elt, tod, nside=128, countcut=0, unseen_val=hp.UNSEEN):
+    ips = hp.ang2pix(nside, azt, elt, lonlat=True)
+    mymap = np.zeros(12*nside**2)
+    mapcount = np.zeros(12*nside**2)
+    for i in range(len(azt)):
+        mymap[ips[i]] += tod[i]
+        mapcount[ips[i]] += 1
+    unseen = mapcount <= countcut
+    mymap[unseen] = unseen_val
+    mapcount[unseen] = unseen_val
+    mymap[~unseen] = mymap[~unseen] / mapcount[~unseen]
+    return mymap, mapcount
+
+def display_one(mapsb, anatype='', sub=(1,1,1), nlo=3, nhi=3, reso=12, rot=[0,50]):
+    unseen = (mapsb == hp.UNSEEN)
+    mm, ss = ft.meancut(mapsb[~unseen], 3)
+    hp.gnomview(mapsb, rot=rot, reso=reso, sub=sub, title=anatype+'\n Both scans $\sigma$ = {0:5.3g}'.format(ss), min=-nlo*ss, max=nhi*ss)
+
+
+def do_display_all(mapsb, mapsb_pos, mapsb_neg, mapav, mapdiff, mapdiff2, rot=[0,50], anatype='', reso=12, myrange=None, TESNum = None):
+    unseen = (mapsb == hp.UNSEEN) | (mapsb_pos == hp.UNSEEN) | (mapsb_neg == hp.UNSEEN)
+    mm, ss = ft.meancut(mapsb[~unseen], 3)
+    
+    if myrange is None:
+        mini = -3*ss
+        maxi = 3*ss
+    else:
+        mini = myrange[0]
+        maxi = myrange[1]
+        
+    if TESNum != None:
+        anatype += '\n TES# {}'.format(TESNum)
+
+    figure()
+    hp.gnomview(mapsb, rot=rot, reso=reso, sub=(2,3,1), title=anatype+'\n Both scans $\sigma$ = {0:5.4g}'.format(ss), min=mini, max=maxi)
+    mmp, ssp = ft.meancut(mapsb_pos[~unseen], 3)
+    hp.gnomview(mapsb_pos, rot=rot, reso=reso, sub=(2,3,2), title=anatype+'\n Pos scans $\sigma$ = {0:5.4g}'.format(ssp), min=mini, max=maxi)
+    mmn, ssn = ft.meancut(mapsb_neg[~unseen], 3)
+    hp.gnomview(mapsb_neg, rot=rot, reso=reso, sub=(2,3,3), title=anatype+'\n Neg scans $\sigma$ = {0:5.4g}'.format(ssn), min=mini, max=maxi)
+    mma, ssa = ft.meancut(mapav[~unseen], 3)
+    hp.gnomview(mapav, rot=rot, reso=reso, sub=(2,3,4), title=anatype+'\n Av of Both scans $\sigma$ = {0:5.4g}'.format(ssa), min=mini, max=maxi)
+    mmd, ssd = ft.meancut(mapdiff[~unseen], 3)
+    hp.gnomview(mapdiff, rot=rot, reso=reso, sub=(2,3,5), title=anatype+'\n Diff of both scans $\sigma$ = {0:5.4g}'.format(ssd), min=mini/ss*ssd, max=maxi/ss*ssd)
+    mmd2, ssd2 = ft.meancut(mapdiff2[~unseen], 3)
+    hp.gnomview(mapdiff2, rot=rot, reso=reso, sub=(2,3,6), title=anatype+'\n Both - Av $\sigma$ = {0:5.4g}'.format(ssd2), min=mini/ss**ssd, max=maxi/ss*ssd)
+    
+
+def display_all(mapsb, mapsb_pos, mapsb_neg, anatype='', rot=[0,50], highcontrast=False, reso=12, myrange=None, TESNum=None):
+    unseen = (mapsb == hp.UNSEEN) | (mapsb_pos == hp.UNSEEN) | (mapsb_neg == hp.UNSEEN)
+
+    ### Average of back and Forth
+    mapav = (mapsb_pos + mapsb_neg)/2
+    mapav[unseen] = hp.UNSEEN
+
+    ### Difference of back and Forth
+    mapdiff = (mapsb_pos - mapsb_neg)
+    mapdiff[unseen] = hp.UNSEEN
+
+    ### Difference of All and Av
+    mapdiff2 = (mapav - mapsb)
+    mapdiff2[unseen] = hp.UNSEEN
+    
+    if highcontrast:
+        myrange = [-np.max(mapsb[~unseen])/10, np.max(mapsb[~unseen])*0.8]
+        
+    do_display_all(mapsb, mapsb_pos, mapsb_neg, mapav, mapdiff, mapdiff2, rot=rot, anatype=anatype, reso=reso, myrange=myrange, TESNum=TESNum)
+    
+    
+```
+
+```{python}
+def remove_offset_scan(mytod, scantype, method='meancut', apply_to_bad = True):
+    ### We remove offsets for each good scan but we also need to remove a coomparable offset for the scantype==0 reggiions in order to keep coninuity 
+    ### This si donee by apply_to_bad=True
+    
+    indices = np.arange(len(mytod))
+    last_index = 0
+    myoffsetn = 0
+    myoffsetp = 0
+    donefirst = 0
+    
+    nscans = np.max(np.abs(scantype))
+    for n in range(1, nscans+1):
+        # scan +
+        ok = scantype == n
+        if method == 'meancut':
+            myoffsetp, _ = ft.meancut(mytod[ok], 3)
+        elif method == 'median':
+            myoffsetp = np.median(mytod[ok])
+        elif method == 'mode':
+            myoffsetp = tdt.get_mode(mytod[ok])
+        else:
+            break
+        mytod[ok] -= myoffsetp        
+        if apply_to_bad:
+            first_index = np.min(indices[ok])
+            if (n==1) & (donefirst==0): myoffsetn = myoffsetp ### deal with first region
+            vals_offsets = myoffsetn + np.linspace(0,1, first_index-last_index-1)*(myoffsetp-myoffsetn)
+            mytod[last_index+1:first_index] -= vals_offsets
+            last_index = np.max(indices[ok])
+            donefirst = 1
+        
+        
+        # scan -
+        ok = scantype == (-n)
+        if method == 'meancut':
+            myoffsetn, _ = ft.meancut(mytod[ok], 3)
+        elif method == 'median':
+            myoffsetn = np.median(mytod[ok])
+        elif method == 'mode':
+            myoffsetn = tdt.get_mode(mytod[ok])
+        else:
+            break
+        mytod[ok] -= myoffsetn
+        if apply_to_bad:
+            first_index = np.min(indices[ok])
+            if (n==1) & (donefirst==0): myoffsetp = myoffsetn ### deal with first region
+            vals_offsets = myoffsetp + np.linspace(0,1, first_index-last_index-1)*(myoffsetn-myoffsetp)
+            mytod[last_index+1:first_index] -= vals_offsets
+            last_index = np.max(indices[ok])
+            donefirst = 1
+    
+    return mytod
+
+from scipy import interpolate
+class MySplineFitting:
+    def __init__(self,xin,yin,covarin,nbspl,logspace=False):
+        # input parameters
+        self.x=xin
+        self.y=yin
+        self.nbspl=nbspl
+        covar=covarin
+        if np.size(np.shape(covarin)) == 1:
+            err=covarin
+            covar=np.zeros((np.size(err),np.size(err)))
+            covar[np.arange(np.size(err)),np.arange(np.size(err))]=err**2
+        
+        self.covar=covar
+        self.invcovar=np.linalg.inv(covar)
+        
+        # Prepare splines
+        xspl=np.linspace(np.min(self.x),np.max(self.x),nbspl)
+        if logspace==True: xspl=np.logspace(np.log10(np.min(self.x)),np.log10(np.max(self.x)),nbspl)
+        self.xspl=xspl
+        F=np.zeros((np.size(xin),nbspl))
+        self.F=F
+        for i in np.arange(nbspl):
+            self.F[:,i]=self.get_spline_tofit(xspl,i,xin)
+        
+        # solution of the chi square
+        ft_cinv_y=np.dot(np.transpose(F),np.dot(self.invcovar,self.y))
+        covout=np.linalg.inv(np.dot(np.transpose(F),np.dot(self.invcovar,F)))
+        alpha=np.dot(covout,ft_cinv_y)
+        fitted=np.dot(F,alpha)
+        
+        # output
+        self.residuals=self.y-fitted
+        self.chi2=np.dot(np.transpose(self.residuals), np.dot(self.invcovar, self.residuals))
+        self.ndf=np.size(xin)-np.size(alpha)
+        self.alpha=alpha
+        self.covout=covout
+        self.dalpha=np.sqrt(np.diagonal(covout))
+    
+    def __call__(self,x):
+        theF=np.zeros((np.size(x),self.nbspl))
+        for i in np.arange(self.nbspl): theF[:,i]=self.get_spline_tofit(self.xspl,i,x)
+        return(dot(theF,self.alpha))
+
+    def with_alpha(self,x,alpha):
+        theF=np.zeros((np.size(x),self.nbspl))
+        for i in np.arange(self.nbspl): theF[:,i]=self.get_spline_tofit(self.xspl,i,x)
+        return(dot(theF,alpha))
+            
+    def get_spline_tofit(self,xspline,index,xx):
+        yspline=zeros(np.size(xspline))
+        yspline[index]=1.
+        tck=interpolate.splrep(xspline,yspline)
+        yy=interpolate.splev(xx,tck,der=0)
+        return(yy)
+
+
+
+def decorel_azimuth(mytod, azt, scantype, degree=2, doplot=True):
+    ### Profiling in Azimuth
+    okall = np.abs(scantype) > 0 
+    okpos = scantype > 0 
+    okneg = scantype < 0 
+    oks = [okpos, okneg]
+    oks_names = ['+ scans', '- scans']
+    polys = []
+    if doplot:
+        figure()
+    for i in range(len(oks)):
+        ok = oks[i]
+        minaz = np.min(azt[ok])
+        maxaz = np.max(azt[ok])
+        xc, yc, dx, dy, _ = ft.profile(azt[ok], mytod[ok], rng=[minaz, maxaz], nbins=25, mode=True, dispersion=True, plot=False)
+        z = polyfit(xc, yc, degree, w=1./dy)
+        p = np.poly1d(z)
+        polys.append(p)
+        xaz = np.linspace(minaz, maxaz, 100)
+        if doplot:
+            pl = errorbar(xc, yc, yerr=dy, xerr=dx, fmt='o')
+            plot(xaz, p(xaz), label=oks_names[i], color=pl[0].get_color())
+    if doplot:
+        xlabel('Azimuth [deg]')
+        ylabel('Mode of TOD')
+        legend()
+
+    ### Removing the azimuthal effect
+    ok = scantype >= 0
+    mytod[ok] -= polys[0](azt[ok])
+    ok = scantype < 0
+    mytod[ok] -= polys[1](azt[ok])
+    
+    return mytod
+
+def get_chunks(mytod, scantype, value):
+    ### returns chunks corresponding to a given value
+    current_chunk = []
+    chunk_idx = []
+    inchunk = 0
+    chunknum = 0
+    for i in range(len(scantype)):
+        if scantype[i]==value:
+            inchunk = 1
+            current_chunk.append(i)
+        else:
+            if inchunk == 1:
+                chunknum += 1
+                chunk_idx.append([current_chunk[0], current_chunk[len(current_chunk)-1]])
+                current_chunk = []
+                inchunk = 0
+    if inchunk == 1:
+        chunk_idx.append([current_chunk[0], current_chunk[len(current_chunk)-1]])
+    return chunk_idx
+
+
+def linear_rescale_chunks(mytod, chunks, sz=1000):
+    for i in range(len(chunks)):
+        thechunk = chunks[i]
+        chunklen = thechunk[1] - thechunk[0]+1
+        if thechunk[0] == 0:
+            # this is the starting index => just the average
+            vals = np.zeros(chunklen) + np.median(mytod[thechunk[1]+1: thechunk[1]+sz]) + np.median(mytod[thechunk[0]:thechunk[1]])
+            mytod[thechunk[0]:thechunk[1]+1] -= vals
+        elif thechunk[1]==(len(mytod)-1):
+            # this is the last one => just the average
+            vals = np.zeros(chunklen) + np.median(mytod[thechunk[0]-1-sz: thechunk[0]-1]) + np.median(mytod[thechunk[0]:thechunk[1]])
+            mytod[thechunk[0]:thechunk[1]+1] -= vals
+        else:
+            left = np.median(mytod[thechunk[0]-1-sz: thechunk[0]-1])
+            right = np.median(mytod[thechunk[1]+1: thechunk[1]+sz])
+            vals = left + np.linspace(0,1, chunklen)*(right-left)
+            mytod[thechunk[0]:thechunk[1]+1] -= np.median(mytod[thechunk[0]:thechunk[1]+1]) - vals
+            
+    return mytod
+
+def decorel_azel(mytod, azt, elt, scantype, doplot=True, nbins=50, n_el=20, degree=None, nbspl=10):
+    ### Profiling in Azimuth and elevation
+    el_lims = np.linspace(np.min(el)-0.0001, np.max(el)+0.0001, n_el+1)
+    el_av = 0.5 * (el_lims[1:] + el_lims[:-1])
+
+    okall = np.abs(scantype) > 0 
+    okpos = scantype > 0 
+    okneg = scantype < 0 
+    oks = [okpos, okneg]
+    oks_names = ['+ scans', '- scans']
+    minaz = np.min(azt[okall])
+    maxaz = np.max(azt[okall])
+    xaz = np.linspace(minaz, maxaz, 100)
+    
+    ### Use polynomials or spline fitting to remove drifts and large features
+    if degree != None:
+        coefficients = np.zeros((2, n_el, degree+1))
+    else:
+        coefficients = np.zeros((2, n_el, nbspl))
+
+    if doplot: 
+        figure()
+    for i in range(len(oks)):
+        if doplot: 
+            subplot(1,2,i+1)
+            xlabel('Az')
+            ylabel('TOD')
+            title(oks_names[i])
+        for j in range(n_el):
+            ok = oks[i] & (elt >= el_lims[j]) & (elt < el_lims[j+1])
+            if np.sum(ok)==0:
+                break
+            xc, yc, dx, dy, _ = ft.profile(azt[ok], mytod[ok], rng=[minaz, maxaz], nbins=nbins, mode=True, dispersion=True, plot=False)
+
+            if degree != None:
+                ### Polynomial Fitting
+                z = polyfit(xc, yc, degree, w=1./dy)
+                coefficients[i,j,:] = z
+                p = np.poly1d(z)
+                fitted = p(xaz)
+            else:
+                ### Spline Fitting
+                splfit = MySplineFitting(xc, yc, dy, nbspl)
+                coefficients[i,j,:] = splfit.alpha
+                fitted = splfit(xaz)
+            if doplot:
+                pl = errorbar(xc, yc, yerr=dy, xerr=dx, fmt='o')
+                plot(xaz, fitted, color=pl[0].get_color(), label = oks_names[i] + ' - El = {0:5.1f}'.format(np.mean(elt[ok])))
+    #if doplot: legend()
+
+    ### Now interpolate this to remove it to the data
+    nscans = np.max(np.abs(scantype))
+    for i in range(1, nscans+1):
+        okp = scantype == i
+        okn = scantype == (-i)
+        for ok in [okp, okn]:
+            the_el = np.median(elt[ok])
+            if degree != None:
+                myp = np.poly1d([np.interp(the_el, el_av, coefficients[0,:,i]) for i in arange(degree+1)])
+                mytod[ok] -= myp(azt[ok])
+            else:
+                myalpha = [np.interp(the_el, el_av, coefficients[0,:,i]) for i in arange(nbspl)]
+                mytod[ok] -= splfit.with_alpha(azt[ok], myalpha)
+                    
+                    
+    ### And interpolate for scantype==0 regions
+    bad_chunks = get_chunks(mytod, scantype, 0)
+    mytod = linear_rescale_chunks(mytod, bad_chunks, sz=100)
+    return mytod
+```
+
+```{python}
+reload(tdt)
+anatype = 'TS, Az/El Corrected'
+# deltaT = 0.191  this was found with SB data from April 16th 2022 in Salta (CalSrc at 140 GHz)
+deltaT = 0.21  # this is now found by hand with this dataset
+
+TESNum = 33 #33, 96, 95, 133
+tod = alltod[TESNum-1,:]
+
+###### Pipeline:
+# 1. Identify scan types and numbers
+scantype_hk, azt, elt, scantype = tdt.identify_scans(thk, az, el, tt=tt-deltaT, doplot=False, thr_speedmin=speedmin)
+nscans = np.max(np.abs(scantype))
+
+# 2. Offset removal scan by scan using median 
+#    (here we just want to have all scans at the same level before decorrelating from azimuth)
+mytod = -tod.copy()
+mytod = remove_offset_scan(mytod, scantype, method='median')
+
+# 3. Remove azimuth correlation
+# low degree polynomials seem to reveal secondary peaks !
+mytod = decorel_azel(mytod, azt, elt, scantype, doplot=True, nbins=50, n_el=50, degree=3)
+
+    
+# 4. remove offsets again but this time with mode method as it appears to be less affected 
+#    by the presence of the peaks (no underestimation of the offset resultingg is shadow around the peaks)
+mytod = remove_offset_scan(mytod, scantype, method='mode')
+
+# Map-making
+nside = 256
+mapsb, mapcount = healpix_map(azt[scantype != 0], elt[scantype != 0], mytod[scantype != 0], nside=nside)
+mapsb_pos, _ = healpix_map(azt[scantype > 0], elt[scantype > 0], mytod[scantype > 0], nside=nside)
+mapsb_neg, _ = healpix_map(azt[scantype < 0], elt[scantype < 0], mytod[scantype < 0], nside=nside)
+
+# Display Results
+# display_all(mapsb, mapsb_pos, mapsb_neg, anatype=anatype, rot=[np.mean(az), np.mean(el)], reso=8, highcontrast=True)
+display_all(mapsb, mapsb_pos, mapsb_neg, anatype=anatype, rot=[np.mean(az), np.mean(el)], reso=8, myrange=[-5e3, 2.5e4], TESNum=TESNum)
+
+
+
+```
+
+# Try to improve with splines
+
+```{python}
+reload(tdt)
+anatype = 'TS, Az/El Corrected'
+# deltaT = 0.191  this was found with SB data from April 16th 2022 in Salta (CalSrc at 140 GHz)
+deltaT = 0.21  # this is now found by hand with this dataset
+
+TESNum = 33 #33, 96, 95, 133
+tod = alltod[TESNum-1,:]
+
+###### Pipeline:
+# 1. Identify scan types and numbers
+scantype_hk, azt, elt, scantype = tdt.identify_scans(thk, az, el, tt=tt-deltaT, doplot=False, thr_speedmin=speedmin)
+nscans = np.max(np.abs(scantype))
+
+# 2. Offset removal scan by scan using median 
+#    (here we just want to have all scans at the same level before decorrelating from azimuth)
+mytod = -tod.copy()
+mytod = remove_offset_scan(mytod, scantype, method='median')
+
+# 3. Remove azimuth correlation
+# 3.c : splines
+mytod = decorel_azel(mytod, azt, elt, scantype, doplot=True, nbins=50, n_el=50, nbspl=5)
+
+    
+# 4. remove offsets again but this time with mode method as it appears to be less affected 
+#    by the presence of the peaks (no underestimation of the offset resultingg is shadow around the peaks)
+mytod = remove_offset_scan(mytod, scantype, method='mode')
+
+# Map-making
+nside = 340
+mapsb, mapcount = healpix_map(azt[scantype != 0], elt[scantype != 0], mytod[scantype != 0], nside=nside)
+mapsb_pos, _ = healpix_map(azt[scantype > 0], elt[scantype > 0], mytod[scantype > 0], nside=nside)
+mapsb_neg, _ = healpix_map(azt[scantype < 0], elt[scantype < 0], mytod[scantype < 0], nside=nside)
+
+# Display Results
+# display_all(mapsb, mapsb_pos, mapsb_neg, anatype=anatype, rot=[np.mean(az), np.mean(el)], reso=8, highcontrast=True)
+display_all(mapsb, mapsb_pos, mapsb_neg, anatype=anatype, rot=[np.mean(az), np.mean(el)], reso=8, myrange=[-5e3, 2.5e4], TESNum=TESNum)
+
+
+
+```
+
+## Try using Moon az and el
+
+```{python}
+from datetime import datetime
+import matplotlib.pyplot as plt
+from astropy.visualization import astropy_mpl_style, quantity_support
+# plt.style.use(astropy_mpl_style)
+quantity_support()
+import astropy.units as u
+from astropy.time import Time
+from astropy.coordinates import SkyCoord, EarthLocation, AltAz, get_moon, get_sun
+
+Salta = EarthLocation(lat=-24.731358*u.deg, lon=-65.409535*u.deg, height=1152*u.m)
+utcoffset = -3*u.hour  # Eastern Daylight Time
+
+dt0 = datetime.fromtimestamp(int((tt+tinit)[0]))
+print(dt0)
+
+nbtime = 100
+tt_hours_loc = tt/3600+3
+delta_time = np.linspace(np.min(tt_hours_loc), np.max(tt_hours_loc), nbtime)*u.hour
+
+alltimes = Time(dt0) + delta_time
+
+### Local coordinates
+frame_Salta = AltAz(obstime=alltimes, location=Salta)
+
+### Moon
+moon_Salta = get_moon(alltimes)
+moonaltazs_Salta = moon_Salta.transform_to(frame_Salta)  
+
+myazmoon = moonaltazs_Salta.az.value
+myelmoon = moonaltazs_Salta.alt.value
+
+azmoon = np.interp(tt_hours_loc, delta_time/u.hour, myazmoon)
+elmoon = np.interp(tt_hours_loc, delta_time/u.hour, myelmoon)
+plot(myazmoon, myelmoon, 'ro')
+plot(azmoon, elmoon)
+```
+
+```{python}
+# Map-making
+nside = 340
+
+azqubic = 120
+newazt = (azt + azqubic - azmoon) * np.cos(np.radians(elt))
+newelt = -(elt - elmoon)
+
+mapsb, mapcount = healpix_map(newazt[scantype != 0], newelt[scantype != 0], mytod[scantype != 0], nside=nside)
+mapsb_pos, _ = healpix_map(newazt[scantype > 0], newelt[scantype > 0], mytod[scantype > 0], nside=nside)
+mapsb_neg, _ = healpix_map(newazt[scantype < 0], newelt[scantype < 0], mytod[scantype < 0], nside=nside)
+
+# Display Results
+display_all(mapsb, mapsb_pos, mapsb_neg, anatype=anatype, rot=[np.mean(newazt), np.mean(newelt)], reso=10, 
+            myrange=[-5e3, 2.5e4], TESNum=TESNum)
+
+
+```
+
+```{python}
+hp.gnomview(mapsb, reso=3, rot=[1, -5])
+```
+
+## Now for various TES
+
+```{python}
+reload(tdt)
+anatype = 'TS, Az/El Corrected'
+# deltaT = 0.191  this was found with SB data from April 16th 2022 in Salta (CalSrc at 140 GHz)
+deltaT = 0.21  # this is now found by hand with this dataset
+
+nside = 340
+azqubic = 120
+newazt = (azt + azqubic - azmoon) * np.cos(np.radians(elt))
+newelt = -(elt - elmoon)
+
+# Identify scan types and numbers
+scantype_hk, azt, elt, scantype = tdt.identify_scans(thk, az, el, tt=tt-deltaT, doplot=False, thr_speedmin=speedmin)
+nscans = np.max(np.abs(scantype))
+
+
+allTESNum = [33, 94, 95, 96, 133]
+allmaps = np.zeros((len(allTESNum), 12*nside**2))
+for i in range(len(allTESNum)):
+    
+    TESNum = allTESNum[i]
+    print('TES# {}'.format(TESNum))
+    tod = alltod[TESNum-1,:]
+
+    ###### Pipeline:
+    # 2. Offset removal scan by scan using median 
+    #    (here we just want to have all scans at the same level before decorrelating from azimuth)
+    mytod = -tod.copy()
+    mytod = remove_offset_scan(mytod, scantype, method='median')
+
+    # 3. Remove azimuth correlation
+    # 3.c : splines
+    mytod = decorel_azel(mytod, azt, elt, scantype, doplot=False, nbins=50, n_el=50, nbspl=5)
+
+
+    # 4. remove offsets again but this time with mode method as it appears to be less affected 
+    #    by the presence of the peaks (no underestimation of the offset resultingg is shadow around the peaks)
+    mytod = remove_offset_scan(mytod, scantype, method='mode')
+
+    # Map-making
+    mapsb, mapcount = healpix_map(newazt[scantype != 0], newelt[scantype != 0], mytod[scantype != 0], nside=nside)
+    allmaps[i,:] = mapsb
+
+
+
+```
+
+```{python}
+for i in range(len(allTESNum)):
+    ok = allmaps[i,:] != hp.UNSEEN
+    hp.gnomview(allmaps[i,:]-tdt.get_mode(allmaps[i,ok]), reso=12, sub=(3,3,i+1), min=-5e3, max=2.5e4, title=allTESNum[i])
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+from importlib import reload
+reload(ft)
+idx =0
+reso = 3.
+xs = 201
+mapxy = hp.gnomview(allmaps[idx,:], reso=reso, rot=[1, -5], return_projected_map=True, xsize=xs, no_plot=True).data
+
+x = (np.arange(xs)-(xs-1)/2)*reso/60
+y = x.copy()
+xx,yy = meshgrid(x,y)
+
+mm, ss = ft.meancut(mapxy, 3)
+
+subplot(1,3,1)
+imshow(mapxy, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mm-ss, vmax=np.max(mapxy))
+xlabel('Degrees')
+ylabel('Degrees')
+title('TES#{}'.format(allTESNum[idx]))
+
+np.savez('toto.npz', x=x,y=y,mapxy=mapxy)
+
+
+def gauss2d(x, pars, extra_args=None):
+    amp, xc, yc, sig = pars
+    mygauss = amp * np.exp(-0.5*((extra_args[0]-xc)**2+(extra_args[1]-yc)**2)/sig**2)
+    return np.ravel(mygauss)
+
+
+
+guess = np.array([np.max(mapxy), 0.,0., 1.])
+
+
+resfit = ft.do_minuit(np.ravel(xx), np.ravel(mapxy), np.ravel(xx)*0+ss, guess, 
+                      functname=gauss2d, extra_args=[xx,yy])
+
+fitted = np.reshape(gauss2d(x, resfit[1], extra_args=[xx,yy]), (xs, xs))
+
+subplot(1,3,2)
+imshow(fitted, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mm-ss, vmax=np.max(mapxy))
+xlabel('Degrees')
+ylabel('Degrees')
+title('FWHMFit = {:5.3f} +/- {:5.3f} degrees'.format(resfit[1][3]*2.35, resfit[2][3]*2.35))
+
+subplot(1,3,3)
+imshow(mapxy-fitted, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mm-ss, vmax=np.max(mapxy))
+xlabel('Degrees')
+ylabel('Degrees')
+title('Residuals')
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+x = np.linspace(0,10,10)
+y = 3*x+2 + np.random.randn(len(x))
+plot(x,y, 'ro')
+
+def fct(x,pars, extra_args=None):
+    return pars[0]*x+pars[1]
+
+from qubic import fibtools as ft
+resfit = ft.do_minuit(x, y, x*0+1, [0.,0.], functname=fct)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

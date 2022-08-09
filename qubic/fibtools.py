@@ -106,6 +106,7 @@ def image_asics(data1=None, data2=None, all1=None):
 """
 
 
+
 def thepolynomial(x, pars, extra_args=None):
         """
         Generic polynomial function
@@ -312,7 +313,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
         return m, np.array(parfit), np.array(errfit) * np.sqrt(correct), np.array(covariance) * correct, chi2(*parfit), ndf, chi2 
 
 
-# ##############################################################################
+###############################################################################
 # ##############################################################################
 
 
@@ -613,7 +614,7 @@ def notch_filter(data, f0, bw, fs):
                 Output of the notch filter
         """
         Q = f0 / bw
-        b, a = scsig.iirnotch(f0 / fs * 2, Q)
+        b, a = scsig.iirnotch(f0, Q, fs)
         y = scsig.lfilter(b, a, data)
         return y
 
@@ -787,7 +788,7 @@ def simsig_fringes(time, stable_time, params):
         return np.array(thesim).astype(np.float64)
 
 
-def fold_data(time, dd, period, lowcut, highcut, nbins,
+def fold_data(time, dd, period, nbins, lowcut=None, highcut=None, 
                           notch=None, rebin=None,
                           median=False, mode=False, clip=None,
                           return_error=False,
@@ -806,6 +807,8 @@ def fold_data(time, dd, period, lowcut, highcut, nbins,
                 Low cut for the band filter.
         highcut : float
                 High cut for the band filter.
+        Set lowcut = None and highcut = None to not apply cut frequency filter. In this case
+        notch filter can still be used.
         nbins
         notch
         return_error
@@ -841,21 +844,20 @@ def fold_data(time, dd, period, lowcut, highcut, nbins,
                 if not silent:
                         bar.update()
                 data = dd[THEPIX, :]
-                newdd = filter_data(time, data, lowcut, highcut, notch=notch, rebin=rebin, verbose=verbose)
-                t, yy, dx, dy, others = profile(tfold, newdd,
-                                                                                nbins=nbins, dispersion=False, plot=False,
-                                                                                cutbad=False, median=median, mode=mode, clip=clip)
+                newdd = filter_data(time, data, lowcut=lowcut, highcut=highcut, notch=notch, rebin=rebin, verbose=verbose)
+                newdata[THEPIX,:] = newdd
+                t, yy, dx, dy, others = profile(tfold, newdd, nbins=nbins, dispersion=False, plot=False,
+                                                cutbad=False, median=median, mode=mode, clip=clip)
                 folded[THEPIX, :] = (yy - np.mean(yy)) / np.std(yy)
                 folded_nonorm[THEPIX, :] = (yy - np.mean(yy))
                 dfolded[THEPIX, :] = dy / np.std(yy)
                 dfolded_nonorm[THEPIX, :] = dy
-                newdata[THEPIX,:] = newdd
+                
                 if return_noise_harmonics is not None:
                         spectrum, freq = power_spectrum(time, newdd, rebin=True)
                         for i in range(nharm):
                                 ok = (freq >= fmin[i]) & (freq < fmax[i])
                                 noise[THEPIX, i] = np.sqrt(np.mean(spectrum[ok]))
-
         if return_error:
                 if return_noise_harmonics is not None:
                         return folded, t, folded_nonorm, dfolded, dfolded_nonorm, newdata, fnoise, noise
@@ -881,7 +883,7 @@ def power_spectrum(time_in, data_in, rebin=True):
         return spectrum_f, freq_f
 
 
-def filter_data(time_in, data_in, lowcut, highcut, rebin=True, verbose=False, notch=None, order=5):
+def filter_data(time_in, data_in, lowcut = None, highcut = None, rebin=True, verbose=False, notch=None, order=5):
         sh = np.shape(data_in)
         if rebin:
                 if verbose: printnow('Rebinning before Filtering')
@@ -897,12 +899,34 @@ def filter_data(time_in, data_in, lowcut, highcut, rebin=True, verbose=False, no
                 data = data_in
 
         FREQ_SAMPLING = 1. / ((np.max(time) - np.min(time)) / len(time))
-        filt = scsig.butter(order, [ lowcut, highcut ], btype='bandpass',
-                                                output='sos', fs = FREQ_SAMPLING)
-        if len(sh) == 1:
-                dataf = scsig.sosfilt(filt, data)
+        
+        if lowcut is None and highcut is None:
+            dataf = data
+            if verbose:
+                print('No cut frequency filter applied')
         else:
-                dataf = scsig.sosfilt(filt, data, axis=1)
+            if lowcut is None and highcut is not None:
+                freqs = highcut
+                filter_type = 'lowpass'
+                if verbose:
+                    print('Applying lowpass filter with f_cut = {}'.format(highcut))
+            elif lowcut is not None and highcut is None:
+                freqs = lowcut
+                filter_type = 'highpass'
+                if verbose:
+                    print('Applying highpass filter with f_cut = {}'.format(lowcut))
+            else:
+                freqs = [ lowcut, highcut ]
+                filter_type = 'bandpass'
+                if verbose:
+                    print('Applying bandpass filter with f_cut = [{}, {}]'.format(lowcut,highcut))
+                
+            filt = scsig.butter(order, freqs, btype = filter_type,
+                            output='sos', fs = FREQ_SAMPLING)
+            if len(sh) == 1:
+                    dataf = scsig.sosfilt(filt, data)
+            else:
+                    dataf = scsig.sosfilt(filt, data, axis=1)
 
         if notch is not None:
                 for i in range(len(notch)):

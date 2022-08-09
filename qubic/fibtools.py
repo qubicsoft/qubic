@@ -834,22 +834,24 @@ def fold_data(time, dd, period, lowcut, highcut, nbins,
         folded_nonorm = np.zeros((ndet, nbins))
         dfolded = np.zeros((ndet, nbins))
         dfolded_nonorm = np.zeros((ndet, nbins))
+        newdata = np.zeros((ndet, len(time)))
         if not silent:
                 bar = progress_bar(ndet, 'Detectors ')
         for THEPIX in range(ndet):
                 if not silent:
                         bar.update()
                 data = dd[THEPIX, :]
-                newdata = filter_data(time, data, lowcut, highcut, notch=notch, rebin=rebin, verbose=verbose)
-                t, yy, dx, dy, others = profile(tfold, newdata,
+                newdd = filter_data(time, data, lowcut, highcut, notch=notch, rebin=rebin, verbose=verbose)
+                t, yy, dx, dy, others = profile(tfold, newdd,
                                                                                 nbins=nbins, dispersion=False, plot=False,
                                                                                 cutbad=False, median=median, mode=mode, clip=clip)
                 folded[THEPIX, :] = (yy - np.mean(yy)) / np.std(yy)
                 folded_nonorm[THEPIX, :] = (yy - np.mean(yy))
                 dfolded[THEPIX, :] = dy / np.std(yy)
                 dfolded_nonorm[THEPIX, :] = dy
+                newdata[THEPIX,:] = newdd
                 if return_noise_harmonics is not None:
-                        spectrum, freq = power_spectrum(time, newdata, rebin=True)
+                        spectrum, freq = power_spectrum(time, newdd, rebin=True)
                         for i in range(nharm):
                                 ok = (freq >= fmin[i]) & (freq < fmax[i])
                                 noise[THEPIX, i] = np.sqrt(np.mean(spectrum[ok]))
@@ -1122,7 +1124,8 @@ def run_asic(fpobj, idnum, Vtes, fff, dc, asic, reselect_ok=False, lowcut=0.5, h
         fib = idnum
         ### Read data
         time = fpobj.timeaxis(datatype='sci',asic=asic)
-        dd = fpobj.timeline_array(asic=asic)
+        dd = fpobj.timeline_array(asic=asic) # measured voltage (ADU)
+        dd = fpobj.ADU2I(dd) # convert ADU to current in muAmps
         FREQ_SAMPLING = 1/fpobj.asic(asic).sample_period()
         ndet, nsamples = np.shape(dd)
 
@@ -1178,10 +1181,10 @@ def run_asic(fpobj, idnum, Vtes, fff, dc, asic, reselect_ok=False, lowcut=0.5, h
                 #### Final Pass
                 #### The refit them all with only tau and amp as free parameters
                 #### also do not normalize amplitudes of folded
-                allparams, allerr, allchi2, ndf, ok_useless = fit_all(tt, folded_nonorm * 1e9, av,
+                allparams, allerr, allchi2, ndf, ok_useless = fit_all(tt, 1e3 * folded_nonorm, av,
                                                                                                                           initpars=[dc, params[1], params[2], params[3]],
                                                                                                                           rangepars=rangepars, fixpars=[1, 0, 1, 0],
-                                                                                                                          functname=simsig_nonorm)
+                                                                                                                          functname=simsig_nonorm) # 1e3 converts muA to nA
 
                 okfinal = ok * (allparams[:, 1] < 1.)
                 ### Make sure no thermometer is included
@@ -1199,7 +1202,7 @@ def run_asic(fpobj, idnum, Vtes, fff, dc, asic, reselect_ok=False, lowcut=0.5, h
                 else:
                         okfinal = np.array(FitsArray(okfile)).astype(bool)
                 if removesat:
-                        #### remove pixels looking saturated
+                        #### remove pixels looking saturated, sat_value in muA
                         saturated = (np.min(folded_nonorm, axis=1) < removesat)
                         okfinal = (okfinal * ~saturated).astype(bool)
 
@@ -1208,10 +1211,11 @@ def run_asic(fpobj, idnum, Vtes, fff, dc, asic, reselect_ok=False, lowcut=0.5, h
                 av, params, err = fit_average(tt, folded[okfinal, :], fff, dc, fib, Vtes, initpars=initpars,
                                                                           fixpars=[0, 0, 0, 0], doplot=False, clear=False, name=name)
 
-                allparams, allerr, allchi2, ndf, ok_useless = fit_all(tt, folded_nonorm * 1e9, av,
+                allparams, allerr, allchi2, ndf, ok_useless = fit_all(tt, 1e3 * folded_nonorm, av,
                                                                                                                           initpars=[dc, params[1], params[2], params[3]],
                                                                                                                           fixpars=[1, 0, 1, 0], functname=simsig_nonorm,
                                                                                                                           rangepars=rangepars)
+                                                                                                                          # 1e3 converts muA to nA
         else:
                 figure(figsize=(6, 8))
                 subplot(3, 1, 1)
@@ -1225,10 +1229,10 @@ def run_asic(fpobj, idnum, Vtes, fff, dc, asic, reselect_ok=False, lowcut=0.5, h
                         fixed = [0, 0, 0, 0]
                 else:
                         fixed = [1, 0, 1, 0]
-                allparams, allerr, allchi2, ndf, ok_useless = fit_all(tt, folded_nonorm * 1e9, av,
+                allparams, allerr, allchi2, ndf, ok_useless = fit_all(tt, 1e3 * folded_nonorm, av,
                                                                                                                           initpars=[dc, params[1], params[2], params[3]],
                                                                                                                           fixpars=fixed, functname=simsig_nonorm,
-                                                                                                                          stop_each=stop_each, rangepars=rangepars)
+                                                                                                                          stop_each=stop_each, rangepars=rangepars) # 1e3 converts muA to nA
 
                 subplot(3, 2, 3)
                 mmt, sst = meancut(allparams[okfinal, 1], 3)
@@ -1240,7 +1244,7 @@ def run_asic(fpobj, idnum, Vtes, fff, dc, asic, reselect_ok=False, lowcut=0.5, h
                 mma, ssa = meancut(allparams[okfinal, 3], 3)
                 hist(allparams[okfinal, 3], range=[0, mma + 4 * ssa], bins=10, label=statstr(allparams[okfinal, 3], cut=3))
                 legend()
-                xlabel('Amp [nA]')
+                xlabel('Amp [ nA ]')
 
                 pars = allparams
                 tau = pars[:, 1]

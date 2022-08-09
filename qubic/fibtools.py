@@ -804,11 +804,14 @@ def fold_data(time, dd, period, nbins, lowcut=None, highcut=None,
         period : float
                 Data will be folded on this period.
         lowcut : float
-                Low cut for the band filter.
+                Low cut for the filter.
         highcut : float
-                High cut for the band filter.
-        Set lowcut = None and highcut = None to not apply cut frequency filter. In this case
-        notch filter can still be used.
+                High cut for the filter.
+        If both lowcut and highcut are given, a bandpass filter is applied.
+        If lowcut is given but no highcut, a highpass filter at f_cut = lowcut is applied.
+        If highcut is given but no lowcut, a lowpass filter at f_cut = highcut is applied.
+        If none of them is given, no cut frequency filter is applied.
+        In any case notch filter can still be used.
         nbins
         notch
         return_error

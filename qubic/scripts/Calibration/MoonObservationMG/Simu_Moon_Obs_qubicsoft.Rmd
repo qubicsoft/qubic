@@ -348,7 +348,7 @@ For one position it works. Now I loop over all the positions of the Moon in the 
 # Amplitude of the signal
 MoonAmp = 1e5
 #MoonMap = np.zeros((d['nf_sub'], 12*nside**2, 3))
-nintervals = 30
+nintervals = 50
 MoonMap4scan = np.zeros((nintervals, d['nf_sub'], 12*nside**2, len(d['kind'])))
 
 #MoonMapDisc = np.zeros((d['nf_sub'], 12*nside**2, 3))
@@ -393,54 +393,54 @@ Make dicretize positions of the moon to chunk
 In (az, el) coords, the Moon varies: $(\Delta A, \Delta el) = (-13.68, 20)$ deg
 
 ```{python}
-#Longest interval
-print("Sampling interval from {} to {} seconds starting at {} (UTC) in {} intervals".format(p.time[0],
-                                                                                           p.time[-1], 
-                                                                                           d['date_obs'],
-                                                                                          len(p.time)))
-print("Moon data from {} to {} seconds starting at {} in {} intervals".format(elapsed_time_sec[0], 
-                                                                              elapsed_time_sec[-1],
-                                                                             UTC_start,
-                                                                             len(elapsed_time_sec)))
-print("We split the observation in different positions of the Moon. To do that \n we define \
-the number of divisions, and we average the position of the Moon in that interval of time. \n \
-Then we create an observation with the pointing up to that time")
-print("{} different positions of the Moon".format(len(local_time_hours)))
-nparts_samples = 10#len(local_time_hours)
+# #Longest interval
+# print("Sampling interval from {} to {} seconds starting at {} (UTC) in {} intervals".format(p.time[0],
+#                                                                                            p.time[-1], 
+#                                                                                            d['date_obs'],
+#                                                                                           len(p.time)))
+# print("Moon data from {} to {} seconds starting at {} in {} intervals".format(elapsed_time_sec[0], 
+#                                                                               elapsed_time_sec[-1],
+#                                                                              UTC_start,
+#                                                                              len(elapsed_time_sec)))
+# print("We split the observation in different positions of the Moon. To do that \n we define \
+# the number of divisions, and we average the position of the Moon in that interval of time. \n \
+# Then we create an observation with the pointing up to that time")
+# print("{} different positions of the Moon".format(len(local_time_hours)))
+# nparts_samples = 10#len(local_time_hours)
 
-az_chunks = np.zeros((len(moonaltazs_Salta.az[valid])))
-el_chunks = np.zeros((len(moonaltazs_Salta.alt[valid])))
+# az_chunks = np.zeros((len(moonaltazs_Salta.az[valid])))
+# el_chunks = np.zeros((len(moonaltazs_Salta.alt[valid])))
 
-print("We split the TOD in {} samples".format(len(elapsed_time_sec),))
-j = 0
-inichunk = int(j * 264 / 10)
-endchunk = int((j + 1) * 264 / 10)
-#plt.figure(figsize = (16,4))
-#plt.plot(p.time[maskchunk],p.time[maskchunk], 'r-', alpha = 1)
-#plt.plot(p.time[~maskchunk],p.time[~maskchunk], 'r-', alpha = 0.4)
-print("Shape of azimuth and elevation Moon data {}".format(len(moonaltazs_Salta.az[valid]) ))
-print("Average the az, el of the moon within that chunk")
-azmean_chunk = np.mean(moonaltazs_Salta.az[valid][inichunk:endchunk])
-elmean_chunk = np.mean(moonaltazs_Salta.alt[valid][inichunk:endchunk])
-#plt.figure(figsize = (10,8))
-#plt.plot(np.array(moonaltazs_Salta.az[valid]), np.array(moonaltazs_Salta.alt[valid]), 'co', label = 'Full')
-#plt.plot(azmean_chunk, elmean_chunk, 'r*', label = 'avrg')
-#plt.legend()
-print("Start the chunks in the sampling ")
-inichunk_samp = int(j * 170595 / 10)
-endchunk_samp = int((j + 1) * 170595 / 10) if j != 9 else 170594
-print(endchunk_samp)
-maskchunk = (p.time > p.time[inichunk_samp]) & (p.time < p.time[endchunk_samp])
-print("Number of samples per chunk ", maskchunk.sum())
-pchunks = p[inichunk_samp:endchunk_samp]
-#plt.figure(figsize = (14,6))
-#colors = sns.color_palette(n_colors = 10)
-#plt.plot(pchunks.azimuth, pchunks.elevation, 'o', color = colors[j], ms = 2, alpha=0.01)
-#plt.plot(azmean_chunk, elmean_chunk, 'o', markersize = 5, color = colors[j])
-#plt.ylim(10,80)
+# print("We split the TOD in {} samples".format(len(elapsed_time_sec),))
+# #j = 0
+# inichunk = int(j * 264 / 10)
+# endchunk = int((j + 1) * 264 / 10)
+# #plt.figure(figsize = (16,4))
+# #plt.plot(p.time[maskchunk],p.time[maskchunk], 'r-', alpha = 1)
+# #plt.plot(p.time[~maskchunk],p.time[~maskchunk], 'r-', alpha = 0.4)
+# print("Shape of azimuth and elevation Moon data {}".format(len(moonaltazs_Salta.az[valid]) ))
+# print("Average the az, el of the moon within that chunk")
+# azmean_chunk = np.mean(moonaltazs_Salta.az[valid][inichunk:endchunk])
+# elmean_chunk = np.mean(moonaltazs_Salta.alt[valid][inichunk:endchunk])
+# #plt.figure(figsize = (10,8))
+# #plt.plot(np.array(moonaltazs_Salta.az[valid]), np.array(moonaltazs_Salta.alt[valid]), 'co', label = 'Full')
+# #plt.plot(azmean_chunk, elmean_chunk, 'r*', label = 'avrg')
+# #plt.legend()
+# print("Start the chunks in the sampling ")
+# inichunk_samp = int(j * 170595 / 10)
+# endchunk_samp = int((j + 1) * 170595 / 10) if j != 9 else 170594
+# print(endchunk_samp)
+# maskchunk = (p.time > p.time[inichunk_samp]) & (p.time < p.time[endchunk_samp])
+# print("Number of samples per chunk ", maskchunk.sum())
+# pchunks = p[inichunk_samp:endchunk_samp]
+# #plt.figure(figsize = (14,6))
+# #colors = sns.color_palette(n_colors = 10)
+# #plt.plot(pchunks.azimuth, pchunks.elevation, 'o', color = colors[j], ms = 2, alpha=0.01)
+# #plt.plot(azmean_chunk, elmean_chunk, 'o', markersize = 5, color = colors[j])
+# #plt.ylim(10,80)
 
-print("DONE")
-print("The first part...")
+# print("DONE")
+# print("The first part...")
 
 ```
 
@@ -460,17 +460,19 @@ print("We split the observation in different positions of the Moon. To do that \
 the number of divisions, and we average the position of the Moon in that interval of time. \n \
 Then we create an observation with the pointing up to that time")
 print("{} different positions of the Moon".format(len(local_time_hours)))
-nparts_samples = 10#len(local_time_hours)
+nparts_samples = 50   #len(local_time_hours)
 
 az_chunks = np.zeros((len(moonaltazs_Salta.az[valid])))
 el_chunks = np.zeros((len(moonaltazs_Salta.alt[valid])))
 
 print("We split the TOD in {} samples".format(len(elapsed_time_sec),))
-j = 0
+
 pchunks = []
 for j in range(nparts_samples):
-    inichunk = int(j * 264 / 10)
-    endchunk = int((j + 1) * 264 / 10)
+    # The dims of the moon positions is different from the dims of the coordinates (264 vs ~170000)
+    inichunk = int(j * 264 / nparts_samples)
+    endchunk = int((j + 1) * 264 / nparts_samples)
+    print(inichunk,endchunk)
     #plt.figure(figsize = (16,4))
     #plt.plot(p.time[maskchunk],p.time[maskchunk], 'r-', alpha = 1)
     #plt.plot(p.time[~maskchunk],p.time[~maskchunk], 'r-', alpha = 0.4)
@@ -484,13 +486,13 @@ for j in range(nparts_samples):
     #plt.legend()
     print("Start the chunks in the sampling ")
     inichunk_samp = int(j * 170595 / nparts_samples)
-    endchunk_samp = int((j + 1) * 170595 / nparts_samples) if j != nparts_samples-1 else 170594
-    print(endchunk_samp)
+    endchunk_samp = int((j + 1) * 170595 / nparts_samples)-1 #if j != nparts_samples-1 else 170594
+    print(inichunk_samp,endchunk_samp)
     maskchunk = (p.time > p.time[inichunk_samp]) & (p.time < p.time[endchunk_samp])
     print("Number of samples per chunk ", maskchunk.sum())
-    pchunks.append(p[inichunk_samp:endchunk_samp])
+    pchunks.append(p[inichunk_samp:endchunk_samp+1])
 plt.figure(figsize = (14,6))
-colors = sns.color_palette(palette = 'tab10', n_colors = 10)
+colors = sns.color_palette(palette = 'tab10', n_colors = nparts_samples)
 for j in range(nparts_samples):
     plt.plot(pchunks[j].azimuth, pchunks[j].elevation, '.', color = colors[j], ms = 4, alpha=0.04)
     plt.plot(az_chunks[j], el_chunks[j], 'o', markersize = 5, color = colors[j])
@@ -500,6 +502,62 @@ plt.ylabel("El[deg]")
 print("DONE")
 print("The first part...")
 
+```
+
+```{python}
+from matplotlib.animation import FuncAnimation
+
+```
+
+```{python}
+### GIF
+colors = sns.color_palette(palette = 'tab10', n_colors = nparts_samples)
+for j in range(nparts_samples):
+    plt.plot(pchunks[j].azimuth, pchunks[j].elevation, '.', color = colors[j], ms = 4, alpha=0.04)
+    plt.plot(az_chunks[j], el_chunks[j], 'o', markersize = 5, color = colors[j])
+plt.ylim(10,80)
+plt.xlabel("Az[deg]")
+plt.ylabel("El[deg]")
+
+for ibnd in [2,3,4,5]:
+    fig = plt.figure(figsize = (14,6))
+    ax = fig.gca()
+    
+    points, = ax.plot(pchunks[0].azimuth, 
+                      pchunks[0].elevation, '.', color = colors[0], ms = 4, alpha = 0.4)
+    points1, = ax.plot(az_chunks[0], el_chunks[0], 'o', ms = 5, color = colors[0])
+    #line = ax.axvline(data_array['nu_in'][0], color = 'k', ls = '--')
+    
+    #line_spl, = ax.plot(xvals + data_array['nu_in'][0],
+    #                    data_array['SplFunc'](xvals), color = 'k', ls = '-')
+    #print(line_spl)
+    #text = ax.text(140, 1, r'$\nu_i=${:3.2f} GHz'.format(data_array['nu_in'][0]), fontsize=14)
+
+    def init():
+        #ax.axhline(0, color = 'k', ls = '-', alpha = 0.2)
+        #c = ['b', 'g', 'y', 'orange', 'r']
+        #for ib in range(ibnd):
+        #    ax.axvspan(xmin = data_array['nu_edge'][ib], xmax = data_array['nu_edge'][ib + 1], 
+        #               alpha = 0.2, color = c[ib])
+        ax.set_ylim(10,80)
+        ax.set_xlabel("Az[deg]")
+        ax.set_ylabel("El[deg]")
+        return points, points1
+
+    def animate(i):
+        points.set_data(ax.plot(pchunks[i].azimuth, 
+                      pchunks[i].elevation, '.', color = colors[i], ms = 4, alpha = 0.4))
+        #line_spl.set_xdata(xvals + data_array['nu_in'][i])
+        points1.set_data(az_chunks[i], el_chunks[i], 'o', marksize = 5, color = colors[i])
+        return(points, points1)
+
+    steps = np.arange(nparts_samples)
+    anim = FuncAnimation(fig, animate, steps, init_func = init, 
+                         interval = 3000, blit = False, repeat = False)
+
+    # Save a .gif
+    fig.tight_layout()
+    anim.save('./pointing_chuncks.gif'.format(ibnd), writer='imagemagick')
 ```
 
 ```{python}
@@ -637,7 +695,8 @@ q = qubic.QubicInstrument(d)
 #q = qubic.QubicMultibandInstrument(d)
 atod_chunks = []
 for i in range(nparts_samples):
-    atod_chunks.append(qubic.QubicAcquisition(q, pchunks[j], s, d))
+    #print(i)
+    atod_chunks.append(qubic.QubicAcquisition(q, pchunks[i], s, d))
     #atod = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_in)
 
 ```
@@ -658,8 +717,13 @@ if d['nf_sub'] == 1:
 todjoint = TOD[0]#np.zeros((248,nsamples))
 for k in range(1,nparts_samples):
     todjoint = np.concatenate((todjoint, TOD[k]), axis = 1) 
-    print(np.shape(todjoint))
-# I lose 5 points of the sample!!!
+    #print(np.shape(todjoint))
+```
+
+```{python}
+#Plot coadded map
+plt.scatter(ra*12/180, dec, s = todjoint[0], marker = 'o')
+plt.colorbar()
 ```
 
 Map-making
@@ -668,7 +732,7 @@ Map-making
 d['tol'] = 1e-5
 if d['nf_sub'] == 1:
     #_, nus_edge, nus, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, 1, d['filter_relative_bandwidth'])
-    arec = qubic.QubicAcquisition(q, p[:-5], s, d)
+    arec = qubic.QubicAcquisition(q, p, s, d)
     cov = arec.get_coverage()
     maps_recon, nit, error = arec.tod2map(todjoint, d, cov=cov)
     #_, maps_convolved = arec.get_observation(MoonMap4qs, noiseless = d['noiseless'], convolution = True)
@@ -700,18 +764,51 @@ if d['nf_sub'] == 1:
 
 ```{python}
 plt.figure(figsize = (16,8))
-hp.gnomview(maps_recon, rot = (116.4,40), sub = 132, title = 'Reconstructed',
+hp.gnomview(maps_recon, rot = (116.4,40), sub = 132, title = 'Reconstructed tol={}, chunks = {}'.format(d['tol'],
+                                                                                                       nparts_samples),
            reso = 12, xsize = 250, ysize = 200)
 hp.graticule(dpar = 8, dmer = 8, color = 'w', verbose = False)
 hp.gnomview(maps_convolved, rot = (116.4,40),  sub = 131, title = 'Convolved (1 chunk)',
            reso = 12, xsize = 250, ysize = 200)
 hp.graticule(dpar = 8, dmer = 8, color = 'w', verbose = False)
-hp.gnomview(cov, rot = (116.4,40), sub = 133, title = 'Coverage+moon',
+hp.gnomview(cov, rot = (116.4,40), sub = 133, title = 'Coverage',
            reso = 12, xsize = 250, ysize = 200)
 hp.graticule(dpar = 8, dmer = 8, color = 'w', verbose = False)
-hp.projscatter(az_chunks, el_chunks, label = 'input Moon',
-               lonlat = True, marker = 'o', s = 30, c = 'darkgreen')
+#hp.projscatter(az_chunks, el_chunks, label = 'input Moon',
+#               lonlat = True, marker = 'o', s = 30, c = 'darkgreen')
 plt.legend()
+```
+
+Now in equatorial coordinates
+
+```{python}
+covmsk = cov > np.max(cov)*0.1
+covmsked = cov.copy()
+covmsked[~covmsk] = hp.UNSEEN
+hp.mollview(covmsked)
+```
+
+```{python}
+# Convert all coords from healpix pixels (in lon, lat) in (az, el)
+lonlat = hp.pix2ang(nside, np.arange(12*nside**2), lonlat = True)
+```
+
+```{python}
+# Convert (az, el) in (ra, dec)
+lentime = len(p.time)
+racoord, decoord = np.zeros((lentime,)), np.zeros((lentime,))
+for i in range(12*256**2):
+    racoord[i], decoord[i] = qubic.hor2equ(lonlat[0][i], lonlat[1][i], p.time[i], d['date_obs'] )
+```
+
+```{python}
+# Convert (ra, dec) to (lon, lat)
+lonlat_new = racoord[]
+```
+
+```{python}
+angs = hp.pix2ang(nside, np.arange(12*nside**2))
+
 ```
 
 ```{python}

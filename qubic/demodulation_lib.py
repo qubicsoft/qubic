@@ -471,9 +471,18 @@ def demodulate_JC(period, indata, indata_src, others=None, verbose=False, templa
 
 def demodulate_methods(data_in, fmod, fourier_cuts=None, verbose=False, src_data_in=None, method='demod',
                        others=None, template=None, remove_noise=False):
-    # Various demodulation methods
-    # Others is a list of other vectors (with similar time sampling as the data to demodulate)
-    # that we need to sample the same way as the data
+    """
+    Various demodulation methods
+    Others is a list of other vectors (with similar time sampling as the data to demodulate)
+    that we need to sample the same way as the data.
+    ____
+    To filter the data before demodulation give the array fourier_cuts = [lowcut, highcut, notch].
+    If both lowcut and highcut are given, a bandpass filter is applied.
+    If lowcut is given but highcut = None, a highpass filter at f_cut = lowcut is applied.
+    If highcut is given but lowcut = None, a lowpass filter at f_cut = highcut is applied.
+    If none of them is given, no cut frequency filter is applied.
+    In any case notch filter can still be used. If notch = None, notch filter is not applied.
+    """
     if fourier_cuts is None:
         # Duplicate the input data
         data = data_in.copy()

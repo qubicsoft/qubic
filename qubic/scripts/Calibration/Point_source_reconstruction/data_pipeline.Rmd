@@ -14,6 +14,8 @@ jupyter:
 
 # Pipeline for reconstruction point source from raw data
 
+Auth: M. Gamboa
+
 
 Data used for JCh 
 
@@ -24,22 +26,56 @@ Data used for JCh
 * 170GHz-2019-04-14
 
 
-**Data measured** taken from CCA: `/sps/qubic/Data/Calib-TD`
+**Measured data** taken from CCA: `/sps/qubic/Data/Calib-TD`
 
-* If you are working in your personal machine, you can copy the dataset doing, in a terminal: 
+* If you are working in your personal computer, you can copy the dataset by running: 
 
 &nbsp;&nbsp;&nbsp;&nbsp;`scp -r USER-CCA@cca.in2p3.fr:/sps/qubic/Data/Calib-TD/2019-04-06 .`
 
-and you get a directory called `2019-04-06` (`2019-04-06`) in your current directory. It tooks more than 20  minutes (hours) (depens on your network speed and others probably) and size aprox 2GB (13GB). 
+in a terminal and getting a directory called `2019-04-06` (`2019-04-06`) in your current working directory. It tooks more than 20  minutes (hours) (depens on your network speed and others probably) and size aprox 2GB (13GB). 
 
-**Data calibration source** taken from CCA: `/sps/qubic/Data/Calib-TD/calsource`
+**Calibration source data** taken from CCA: `/sps/qubic/Data/Calib-TD/calsource`
 
-* If you are working in your personal machine, you can copy the dataset doing, in a terminal: 
+* If you are working in your personal computer, you can copy the dataset by running: 
 
-&nbsp;&nbsp;&nbsp;&nbsp;`scp -r USER-CCA@cca.in2p3.fr: /sps/qubic/Data/Calib-TD/calsource/*20190406* .`
+&nbsp;&nbsp;&nbsp;&nbsp;`scp -r USER-CCA@cca.in2p3.fr:/sps/qubic/Data/Calib-TD/calsource/*20190406* .`
+
+    in a terminal.
+
+<!-- #region -->
+## 2022-04-14
+
+
+1) Team: S. Torchinsky, M. Piat, C. Rodriguez, F. Rodriguez, G. Ramos, M. Platino
+
+2) Tasks: 
+
+2.1) We generated a map in Salta @170 GHz. The scanned region was +/- 20 deg in both az and el. The velocity of the scan was V14. No modulation on the calibration source
+
+Note that the signal generator does not accept offset=0, so it was set to offset=0.001.  In fact, we should just turn off the modulator when we don't want modulation.
+
+FLL PID=0,300,0
+
+script:  ScanMapFastNoModulation.dscript
+
+2.2) Calsource configuration:
+
+Calsource: frequency=170.00GHz
+modulator: frequency=N/A shape=dc amplitude=N/A offset=0.001Vdc duty_cycle=N/A
+amplifier: filter_mode=12db_low_pass dynamic_range=low_noise gain=2000 filter_low_frequency=10.0 filter_high_frequency=0.3 coupling=dc invert=ON
+
+3) Materials used: QUBIC Studio, QUBIC Central, QUBIC
+
+4) Providers for the materials: APC.
+
+5) Problems found: We had to use a value of 0.001 V for the offset setting of the CalS because it did not respond to seting the offset value to 0V.
+
+6) Reference to a Procedure followed: N/A
+<!-- #endregion -->
 
 ```{python}
 # %matplotlib inline
+
 # Importation modules
 import os
 import sys
@@ -76,14 +112,18 @@ import qubicpack as qp
 import mapmaking_datafiles as md
 # Super local module (plots)
 import mapmaking_plots as mmp
+import psutil
+initram = psutil.virtual_memory()[0]/1e9 # in Gb
+print("RAM available in GB %5.2f" %(initram))
+print("RAM used in GB %5.2f" %(psutil.virtual_memory()[3]/1e9))
 ```
 
-**0th)** Set local paths --> `Directories` dictionary contains all necessary directories to run in this notebook
+**0th)** Set local paths --> `Paths` dictionary containing all the directories needed to run the notebook
 
 ```{python}
 def check_dir(dirfile):
     if os.path.isdir( dirfile): 
-        print('The TOD {} directory exists'.format(dirfile)) 
+        print('TOD directory {} exists'.format(dirfile)) 
     else: 
         raise ValueError('dirfile {} is not an existing directory'.format(dirfile) )
         
@@ -93,8 +133,8 @@ if 'QUBIC_TODDIR' in os.environ.keys():
     check_dir(qubic_toddir)
 else:
     qubic_toddir = input("You have to specify a directory where the Time Ordered Data (TOD) are. \
-    The ussual format of the TOD root directory is yyyy-mm-dd, e.g. /sps/qubic/Data/Calib-TD at CCA")
-    print("Introduce the directory where the TOD's are: ",qubic_toddir)
+    The usual format of TOD root directories is yyyy-mm-dd, e.g. /sps/qubic/Data/Calib-TD at CCA")
+    print("Enter the directory where the TOD's are: ",qubic_toddir)
     check_dir(qubic_toddir)
 ```
 
@@ -107,13 +147,15 @@ verbose = True
 reload(md)
 confg = "new"
 if confg == "new":
-    day = '2020-03-16'
-    keyword = '*ScanFast*'
+    day = '2020-07-30'
+    keyword = '*2020*'
+    #day = '2022-04-14'
+    #keyword = '*ScanMap*'
     dirfile = None
     savedirtest = '/home/mgamboa/pruebas/qubicpipenew/'
 elif confg == "old":
-    day = '2019-04-06'
-    #day = '2019-03-31'
+    #day = '2019-04-06'
+    day = '2019-03-31'
     keyword = '*ScanMap*'
     dirfile = qubic_toddir + "calsource/"
     savedirtest = '/home/mgamboa/pruebas/qubicpipeold/'
@@ -163,18 +205,26 @@ script used: `Analyse-Scan-2020-01-15-MemorySave.Rmd` and `Sample_Demodulation`
 
 ```{python}
 # Create focal plane object 
+ram0_loc = psutil.virtual_memory()[3]/1e9 # in Gb
+
 QubicFP = qubicfp()
 sweep = 0
 QubicFP.read_qubicstudio_dataset(Paths["sweeps_data"][sweep])
+
+print("RAM used %5.2f Gb" %(psutil.virtual_memory()[3]/1e9 - ram0_loc))
 ```
 
-### COPIAR DATOS DE CALIBRACION!! 
+### Read calibration data
 
 ```{python}
 reload(md)
+ram0_loc = psutil.virtual_memory()[3]/1e9 # in Gb
+
 t_src, data_src = md.read_calsource_data(QubicFP, date = day,
                       keyword = keyword, datadir = Paths["RawTodDir"],
                       datacal = Paths["calsource_data"], verbose = True)
+
+print("RAM used %5.2f Gb" %(psutil.virtual_memory()[3]/1e9 - ram0_loc))
 ```
 
 ```{python}
@@ -185,6 +235,12 @@ el = QubicFP.elevation()
 ```
 
 ```{python}
+print(QubicFP.hk["CALSOURCE-CONF"]["Amp_lfreq"], 
+      QubicFP.hk["CALSOURCE-CONF"]["Amp_hfreq"], 
+      QubicFP.hk["CALSOURCE-CONF"])
+```
+
+```{python}
 time_azel = QubicFP.timeaxis(datatype = 'hk', axistype = 'pps')
 t0 = time_azel[0]
 ```
@@ -192,25 +248,23 @@ t0 = time_azel[0]
 #### check plot ... ok
 
 ```{python}
-plt.subplot(2,2,1)
-plt.plot((time_azel-t0)/3600, az,',')
-plt.xlabel('Time [h]')
-plt.ylabel('Az')
-plt.subplot(2,2,2)
-plt.plot((time_azel-t0)/3600, el,',')
-plt.xlabel('Time [h]')
-plt.ylabel('El')
-plt.ylim(30,70)
+plt.figure(figsize = (16,6))
+plt.subplot(121)
+plt.plot(time_azel, az, 'b-')
+plt.plot(time_azel, el-np.mean(el), 'r-')
+plt.yticks([])
+plt.xlabel('tiempo [s]')
+plt.subplot(122)
+plt.plot(time_azel[400:16000], az[400:16000], 'b-')
+plt.plot(time_azel[400:16000], el[400:16000]-np.mean(el), 'r-')
+plt.yticks([])
+plt.xlabel('tiempo [s]')
 
-plt.subplot(2,2,3)
-plt.plot(az*np.cos(np.radians(el)), el,',')
-plt.xlabel('Az')
-plt.ylabel('El')
+```
 
-plt.subplot(2,2,4)
-plt.plot((t_src-t0)/3600, data_src,',')
-plt.xlabel('Time [h]')
-plt.ylabel('Src Data')
+```{python}
+reload(mmp)
+mmp.plot_scan(time_azel, t_src, data_src, az, el)
 ```
 
 ```{python}
@@ -219,34 +273,6 @@ TESNum = 94
 asic = 1
 tod_data = QubicFP.timeline(TES = TESNum, asic = asic)
 tod_time = QubicFP.timeaxis(axistype = 'pps', asic = asic)
-```
-
-```{python}
-time_azel.shape
-```
-
-```{python}
-t0 = time_azel[0]
-
-plt.subplot(2,2,1)
-plt.plot((time_azel-t0)/3600, az,',')
-plt.xlabel('Time [h]')
-plt.ylabel('Az')
-plt.subplot(2,2,2)
-plt.plot((time_azel-t0)/3600, el,',')
-plt.xlabel('Time [h]')
-plt.ylabel('El')
-plt.ylim(30,70)
-
-plt.subplot(2,2,3)
-plt.plot(az*np.cos(np.radians(el)), el,',')
-plt.xlabel('Az')
-plt.ylabel('El')
-
-plt.subplot(2,2,4)
-plt.plot((t_src-t0)/3600, data_src,',')
-plt.xlabel('Time [h]')
-plt.ylabel('Src Data')
 ```
 
 `check plot` TOD(tes) data and calsource ... ok
@@ -259,32 +285,70 @@ mmp.plot_raw_data(tod_time, tod_data, t_src, data_src, TESNum = TESNum, asic = a
 ## Filtering data
 
 ```{python}
+QubicFP.hk["CALSOURCE-CONF"]["Amp_lfreq"], QubicFP.hk["CALSOURCE-CONF"]["Amp_lfreq"][0]
+```
+
+```{python}
 # Set parameters for harmonics of PT
-thefreqmod = 1.
+#load the modulation frequency from the HK data
+thefreqmod = QubicFP.hk['CALSOURCE-CONF']['Mod_freq']
+
 period = 1./ thefreqmod
 #Set parameters for filtering data
-lowcut = 0.5
-highcut = 20
+lowcut = QubicFP.hk["CALSOURCE-CONF"]["Amp_hfreq"][0]
+highcut = QubicFP.hk["CALSOURCE-CONF"]["Amp_lfreq"][0]
+# New spectra
+# Using 10 harmonics
+nharm = 10
+#notch filter at each harmonic of the PTs
+notch = np.array([[1.724, 0.005, nharm]])
+#fourier_cuts = [lowcut, highcut, notch]
+```
+
+```{python}
+plt.subplot(2,1,1)
+plt.plot((tod_time - t0)/3600, dl.renorm(tod_data), 
+     label='Data TES {} ASIC {}'.format(TESNum,asic))
+plt.plot((t_src - t0)/3600, dl.renorm(data_src)-5, label = 'source')
+plt.xlabel('Hours')
+plt.legend(loc = 'upper left')
+plt.title("bla")
+plt.ylim(-10,10)
+
+plt.subplot(2,1,2)
+tzoom = 1.2940
+dtzoom = 0.005
+oktime_d = np.abs((tod_time - t0)/3600-tzoom) < dtzoom
+oktime_s = np.abs((t_src - t0)/3600-tzoom) < dtzoom
+plt.plot((tod_time - t0)[oktime_d]/3600, dl.renorm(tod_data[oktime_d]), 
+     label='Data TES {} ASIC {}'.format(TESNum,asic))
+plt.plot((t_src[oktime_s]-t0)/3600, dl.renorm(data_src[oktime_s]), label='source')
+plt.xlabel('Hours')
+plt.legend(loc='upper left')
+#plt.title("bla")
 ```
 
 ```{python}
 # Power spectra without filtering (raw power spectra of TOD)
 # spectrum, freq = old "spectrum_f", "freq_f"
+ram0_loc = psutil.virtual_memory()[3]/1e9
+
 spectrum_raw, freq_raw = ft.power_spectrum(tod_time, tod_data, 
                                        rebin = True)
-
-# New power spectra.
-# Using 10 harmonics
-nharm = 10
-#notch filter at each harmonic of the PTs
-notch = np.array([[1.724, 0.005, nharm]])
-
 #tod_data_filtered = old "newdata"
 tod_data_filtered = ft.filter_data(tod_time, tod_data, lowcut, highcut, 
                          notch = notch, rebin = True, 
                          verbose = True, order = 5)
 # spectrum_filtered, freq_filtered ex "spectrum_f2", "freq_f2"
 spectrum_filtered, freq_filtered = ft.power_spectrum(tod_time, tod_data_filtered, rebin=True)
+
+print("RAM used %5.2f Gb" %(psutil.virtual_memory()[3]/1e9 - ram0_loc))
+
+tod_data_filtered2 = ft.filter_data(tod_time, tod_data, 0.03, 10, 
+                         notch = notch, rebin = True, 
+                         verbose = True, order = 5)
+# spectrum_filtered, freq_filtered ex "spectrum_f2", "freq_f2"
+spectrum_filtered2, freq_filtered2 = ft.power_spectrum(tod_time, tod_data_filtered2, rebin=True)
 ```
 
 `check plot` spectras for RAW data and filtered data
@@ -294,6 +358,25 @@ reload(mmp)
 
 mmp.plot_spectra_comparisson(freq_raw, spectrum_raw, freq_filtered, 
                              spectrum_filtered, period, lowcut, highcut, notch)
+```
+
+```{python}
+plt.subplot(211)
+plt.xscale("log")
+plt.yscale("log")
+plt.plot(freq_raw, spectrum_raw)
+plt.plot(freq_filtered, spectrum_filtered, label = "freq from hk")
+plt.plot(freq_filtered2, spectrum_filtered2, label = "manual values")
+plt.xlim(1e-2,9e1)
+plt.ylim(1e1, 1e17)
+plt.legend()
+plt.subplot(212)
+plt.xscale("log")
+plt.yscale("log")
+plt.plot(freq_filtered2, abs(spectrum_filtered - spectrum_filtered2), 'r-')
+plt.xlim(1e-2,9e1)
+plt.ylim(1e1, 1e17)
+
 ```
 
 `Check plot` comparing clasoruce data, raw and filtered tod... okk
@@ -306,6 +389,9 @@ mmp.plot_data_and_src(tod_time, tod_data,
                       tod_data_filtered,
                       t_src, data_src,
                      )#**kwargs_plot)
+mmp.plot_data_and_src(tod_time, tod_data, 
+                      tod_data_filtered2,
+                      t_src, data_src)
 
 ```
 
@@ -313,26 +399,41 @@ mmp.plot_data_and_src(tod_time, tod_data,
 reload(md)
 
 ##### Filtering to be used
-lowcut = 0.5
-highcut = 70
-nharm = 10
-notch = np.array([[1.724, 0.005, nharm]])
-fourier_cuts = [lowcut, highcut, notch]
-
 demod_kwvars = {"method": "demod_quad",
-                "remove_noise": True}
+                "remove_noise": False}
 
-demodulate = True
+demodulate = False
 
+ram0_loc = psutil.virtual_memory()[3]/1e9
 newt_demod, amps_demod = md.pipe_demodulation(QubicFP, t_src, data_src,
                                              savetoddemod,
                                              demodulate = demodulate,
                                              verbose = True,
                                              **demod_kwvars)
+print("RAM used %5.2f Gb" %(psutil.virtual_memory()[3]/1e9 - ram0_loc))
+
 ```
 
 ```{python}
 QubicFP.azimuth(), QubicFP.elevation(), QubicFP.hk["INTERN_HK"]["Platform-Azimut"]
+```
+
+```{python}
+reload(mmp)
+mmp.plot_synchronizated_data(tod_time, t_src, tod_data_filtered, data_src)
+```
+
+```{python}
+print("RAM available in GB %5.2f" %(psutil.virtual_memory()[0]/1e9))
+print("RAM used in GB %5.2f" %(psutil.virtual_memory()[3]/1e9))
+```
+
+```{python}
+azindex = (naz * (newaz - azmin) / (azmax - azmin)).astype(int)
+elindex = (nel * (newel - elmin) / (elmax - elmin)).astype(int)
+
+# ## Keeping only the inner part
+inside = (azindex >= 0) & (azindex < naz) & (elindex >= 0) & (elindex < nel)
 ```
 
 ```{python}
@@ -348,8 +449,8 @@ if ComputeFlatMaps:
     newaz = np.interp(newt_demod, time_azel, az)
     newel = np.interp(newt_demod, time_azel, el)
 
-    naz = 200
-    nel = 150
+    naz = 101
+    nel = 101
     nmaps = 256
     mapdata = np.zeros((nmaps, nel, naz))
 
@@ -373,7 +474,7 @@ elif not ComputeFlatMaps:
 
 ```{python}
 #Look at one map
-TESNum = 95
+TESNum = 93
 ites = TESNum - 1
 mm, ss = ft.meancut(mapdata[ites,:,:],3)
 plt.imshow(mapdata[ites,:,:], aspect = 'equal',
@@ -395,14 +496,17 @@ blil2 = sbfit.get_flatmap(93, "/home/mgamboa/pruebas/qubicpipe/",
 ```
 
 ```{python}
-blil.shape, blil2.shape
+blil.shape
 ```
 
 ```{python}
 plt.subplot(121)
-plt.imshow(blil)
+plt.imshow(blil, vmin = 0, 
+           vmax = 1e5, cmap = "bwr")
 plt.subplot(122)
-plt.imshow(blil2)
+plt.imshow(blil2, vmin = 0, 
+           vmax = 1e5, cmap = "bwr")
+plt.tight_layout()
 ```
 
 All TES. Save flat maps in files. 
@@ -463,7 +567,7 @@ for i in range(9):
 ### I couldn't make this work but it works for JCh so I read the fit of the synthesized beam from files
 
 ```{python}
-import debugging_fit as df
+#import debugging_fit as df
 
 sbfitmodel = sbfit.SbModelIndepPeaks(nrings=2, common_fwhm=True, 
                                  no_xy_shift=False, distortion=False)

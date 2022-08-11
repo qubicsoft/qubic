@@ -4,8 +4,8 @@ jupyter:
     text_representation:
       extension: .Rmd
       format_name: rmarkdown
-      format_version: '1.1'
-      jupytext_version: 1.2.4
+      format_version: '1.2'
+      jupytext_version: 1.6.0rc0
   kernelspec:
     display_name: Python 3
     language: python
@@ -67,8 +67,12 @@ Here are the vailable data:
 
 
 ```{python}
-day = '2020-03-16'
-keyword = '*ScanFast*'
+#day = '2020-03-16'
+#keyword = '*ScanMap'
+#day = '2022-04-14'
+#keyword = '*ScanFast*'
+day = '2022-04-23'
+keyword = '*ScanMap*'
 data_dir = '/qubic/Data/Calib-TD/'+day+'/'
 #data_dir = '/Users/hamilton/Qubic/Calib-TD/'+day+'/'
 dirs = np.sort(glob.glob(data_dir+keyword))

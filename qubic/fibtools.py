@@ -106,6 +106,7 @@ def image_asics(data1=None, data2=None, all1=None):
 """
 
 
+
 def thepolynomial(x, pars, extra_args=None):
         """
         Generic polynomial function
@@ -312,7 +313,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
         return m, np.array(parfit), np.array(errfit) * np.sqrt(correct), np.array(covariance) * correct, chi2(*parfit), ndf, chi2 
 
 
-# ##############################################################################
+###############################################################################
 # ##############################################################################
 
 
@@ -613,7 +614,7 @@ def notch_filter(data, f0, bw, fs):
                 Output of the notch filter
         """
         Q = f0 / bw
-        b, a = scsig.iirnotch(f0 / fs * 2, Q)
+        b, a = scsig.iirnotch(f0, Q, fs)
         y = scsig.lfilter(b, a, data)
         return y
 
@@ -787,7 +788,7 @@ def simsig_fringes(time, stable_time, params):
         return np.array(thesim).astype(np.float64)
 
 
-def fold_data(time, dd, period, lowcut, highcut, nbins,
+def fold_data(time, dd, period, nbins, lowcut=None, highcut=None, 
                           notch=None, rebin=None,
                           median=False, mode=False, clip=None,
                           return_error=False,
@@ -803,9 +804,14 @@ def fold_data(time, dd, period, lowcut, highcut, nbins,
         period : float
                 Data will be folded on this period.
         lowcut : float
-                Low cut for the band filter.
+                Low cut for the filter.
         highcut : float
-                High cut for the band filter.
+                High cut for the filter.
+        If both lowcut and highcut are given, a bandpass filter is applied.
+        If lowcut is given but no highcut, a highpass filter at f_cut = lowcut is applied.
+        If highcut is given but no lowcut, a lowpass filter at f_cut = highcut is applied.
+        If none of them is given, no cut frequency filter is applied.
+        In any case notch filter can still be used.
         nbins
         notch
         return_error
@@ -834,26 +840,27 @@ def fold_data(time, dd, period, lowcut, highcut, nbins,
         folded_nonorm = np.zeros((ndet, nbins))
         dfolded = np.zeros((ndet, nbins))
         dfolded_nonorm = np.zeros((ndet, nbins))
+        newdata = np.zeros((ndet, len(time)))
         if not silent:
                 bar = progress_bar(ndet, 'Detectors ')
         for THEPIX in range(ndet):
                 if not silent:
                         bar.update()
                 data = dd[THEPIX, :]
-                newdata = filter_data(time, data, lowcut, highcut, notch=notch, rebin=rebin, verbose=verbose)
-                t, yy, dx, dy, others = profile(tfold, newdata,
-                                                                                nbins=nbins, dispersion=False, plot=False,
-                                                                                cutbad=False, median=median, mode=mode, clip=clip)
+                newdd = filter_data(time, data, lowcut=lowcut, highcut=highcut, notch=notch, rebin=rebin, verbose=verbose)
+                newdata[THEPIX,:] = newdd
+                t, yy, dx, dy, others = profile(tfold, newdd, nbins=nbins, dispersion=False, plot=False,
+                                                cutbad=False, median=median, mode=mode, clip=clip)
                 folded[THEPIX, :] = (yy - np.mean(yy)) / np.std(yy)
                 folded_nonorm[THEPIX, :] = (yy - np.mean(yy))
                 dfolded[THEPIX, :] = dy / np.std(yy)
                 dfolded_nonorm[THEPIX, :] = dy
+                
                 if return_noise_harmonics is not None:
-                        spectrum, freq = power_spectrum(time, newdata, rebin=True)
+                        spectrum, freq = power_spectrum(time, newdd, rebin=True)
                         for i in range(nharm):
                                 ok = (freq >= fmin[i]) & (freq < fmax[i])
                                 noise[THEPIX, i] = np.sqrt(np.mean(spectrum[ok]))
-
         if return_error:
                 if return_noise_harmonics is not None:
                         return folded, t, folded_nonorm, dfolded, dfolded_nonorm, newdata, fnoise, noise
@@ -879,7 +886,7 @@ def power_spectrum(time_in, data_in, rebin=True):
         return spectrum_f, freq_f
 
 
-def filter_data(time_in, data_in, lowcut, highcut, rebin=True, verbose=False, notch=None, order=5):
+def filter_data(time_in, data_in, lowcut = None, highcut = None, rebin=True, verbose=False, notch=None, order=5):
         sh = np.shape(data_in)
         if rebin:
                 if verbose: printnow('Rebinning before Filtering')
@@ -895,12 +902,34 @@ def filter_data(time_in, data_in, lowcut, highcut, rebin=True, verbose=False, no
                 data = data_in
 
         FREQ_SAMPLING = 1. / ((np.max(time) - np.min(time)) / len(time))
-        filt = scsig.butter(order, [ lowcut, highcut ], btype='bandpass',
-                                                output='sos', fs = FREQ_SAMPLING)
-        if len(sh) == 1:
-                dataf = scsig.sosfilt(filt, data)
+        
+        if lowcut is None and highcut is None:
+            dataf = data
+            if verbose:
+                print('No cut frequency filter applied')
         else:
-                dataf = scsig.sosfilt(filt, data, axis=1)
+            if lowcut is None and highcut is not None:
+                freqs = highcut
+                filter_type = 'lowpass'
+                if verbose:
+                    print('Applying lowpass filter with f_cut = {}'.format(highcut))
+            elif lowcut is not None and highcut is None:
+                freqs = lowcut
+                filter_type = 'highpass'
+                if verbose:
+                    print('Applying highpass filter with f_cut = {}'.format(lowcut))
+            else:
+                freqs = [ lowcut, highcut ]
+                filter_type = 'bandpass'
+                if verbose:
+                    print('Applying bandpass filter with f_cut = [{}, {}]'.format(lowcut,highcut))
+                
+            filt = scsig.butter(order, freqs, btype = filter_type,
+                            output='sos', fs = FREQ_SAMPLING)
+            if len(sh) == 1:
+                    dataf = scsig.sosfilt(filt, data)
+            else:
+                    dataf = scsig.sosfilt(filt, data, axis=1)
 
         if notch is not None:
                 for i in range(len(notch)):
@@ -1122,7 +1151,8 @@ def run_asic(fpobj, idnum, Vtes, fff, dc, asic, reselect_ok=False, lowcut=0.5, h
         fib = idnum
         ### Read data
         time = fpobj.timeaxis(datatype='sci',asic=asic)
-        dd = fpobj.timeline_array(asic=asic)
+        dd = fpobj.timeline_array(asic=asic) # measured voltage (ADU)
+        dd = fpobj.ADU2I(dd) # convert ADU to current in muAmps
         FREQ_SAMPLING = 1/fpobj.asic(asic).sample_period()
         ndet, nsamples = np.shape(dd)
 
@@ -1178,10 +1208,10 @@ def run_asic(fpobj, idnum, Vtes, fff, dc, asic, reselect_ok=False, lowcut=0.5, h
                 #### Final Pass
                 #### The refit them all with only tau and amp as free parameters
                 #### also do not normalize amplitudes of folded
-                allparams, allerr, allchi2, ndf, ok_useless = fit_all(tt, folded_nonorm * 1e9, av,
+                allparams, allerr, allchi2, ndf, ok_useless = fit_all(tt, 1e3 * folded_nonorm, av,
                                                                                                                           initpars=[dc, params[1], params[2], params[3]],
                                                                                                                           rangepars=rangepars, fixpars=[1, 0, 1, 0],
-                                                                                                                          functname=simsig_nonorm)
+                                                                                                                          functname=simsig_nonorm) # 1e3 converts muA to nA
 
                 okfinal = ok * (allparams[:, 1] < 1.)
                 ### Make sure no thermometer is included
@@ -1199,7 +1229,7 @@ def run_asic(fpobj, idnum, Vtes, fff, dc, asic, reselect_ok=False, lowcut=0.5, h
                 else:
                         okfinal = np.array(FitsArray(okfile)).astype(bool)
                 if removesat:
-                        #### remove pixels looking saturated
+                        #### remove pixels looking saturated, sat_value in muA
                         saturated = (np.min(folded_nonorm, axis=1) < removesat)
                         okfinal = (okfinal * ~saturated).astype(bool)
 
@@ -1208,10 +1238,11 @@ def run_asic(fpobj, idnum, Vtes, fff, dc, asic, reselect_ok=False, lowcut=0.5, h
                 av, params, err = fit_average(tt, folded[okfinal, :], fff, dc, fib, Vtes, initpars=initpars,
                                                                           fixpars=[0, 0, 0, 0], doplot=False, clear=False, name=name)
 
-                allparams, allerr, allchi2, ndf, ok_useless = fit_all(tt, folded_nonorm * 1e9, av,
+                allparams, allerr, allchi2, ndf, ok_useless = fit_all(tt, 1e3 * folded_nonorm, av,
                                                                                                                           initpars=[dc, params[1], params[2], params[3]],
                                                                                                                           fixpars=[1, 0, 1, 0], functname=simsig_nonorm,
                                                                                                                           rangepars=rangepars)
+                                                                                                                          # 1e3 converts muA to nA
         else:
                 figure(figsize=(6, 8))
                 subplot(3, 1, 1)
@@ -1225,10 +1256,10 @@ def run_asic(fpobj, idnum, Vtes, fff, dc, asic, reselect_ok=False, lowcut=0.5, h
                         fixed = [0, 0, 0, 0]
                 else:
                         fixed = [1, 0, 1, 0]
-                allparams, allerr, allchi2, ndf, ok_useless = fit_all(tt, folded_nonorm * 1e9, av,
+                allparams, allerr, allchi2, ndf, ok_useless = fit_all(tt, 1e3 * folded_nonorm, av,
                                                                                                                           initpars=[dc, params[1], params[2], params[3]],
                                                                                                                           fixpars=fixed, functname=simsig_nonorm,
-                                                                                                                          stop_each=stop_each, rangepars=rangepars)
+                                                                                                                          stop_each=stop_each, rangepars=rangepars) # 1e3 converts muA to nA
 
                 subplot(3, 2, 3)
                 mmt, sst = meancut(allparams[okfinal, 1], 3)
@@ -1240,7 +1271,7 @@ def run_asic(fpobj, idnum, Vtes, fff, dc, asic, reselect_ok=False, lowcut=0.5, h
                 mma, ssa = meancut(allparams[okfinal, 3], 3)
                 hist(allparams[okfinal, 3], range=[0, mma + 4 * ssa], bins=10, label=statstr(allparams[okfinal, 3], cut=3))
                 legend()
-                xlabel('Amp [nA]')
+                xlabel('Amp [ nA ]')
 
                 pars = allparams
                 tau = pars[:, 1]

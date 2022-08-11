@@ -1,0 +1,140 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.6.0rc0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# Config notebook
+from IPython.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+```
+
+```{python}
+import numpy as np
+import matplotlib.pyplot as plt
+import healpy as hp
+import seaborn as sns
+
+import sys
+from importlib import reload
+from astropy.visualization import astropy_mpl_style, quantity_support
+plt.style.use(astropy_mpl_style)
+quantity_support()
+import astropy.units as u
+from astropy.time import Time
+from astropy.coordinates import SkyCoord, EarthLocation, AltAz, get_moon, get_sun#, HADec, BaseRADecFrame
+
+import qubic
+```
+
+```{python}
+Salta = EarthLocation(lat=-24.731358*u.deg, lon=-65.409535*u.deg, height=1152*u.m)
+utcoffset = -3*u.hour  # Eastern Daylight Time
+door_az = 116.4
+az_span = 50.
+el_min = 30.
+el_max = 50.
+```
+
+```{python}
+days = ['2022-07-12']
+day = '2022-07-12'
+```
+
+Split the observation time in three different blocks to simulate Ken's strategy
+
+```{python}
+#Entire Block 
+start_obs_hour = '00:00:00'
+date = Time(day+ ' 00:00:00')
+start_obs_date = day +' '+start_obs_hour
+delta_time = np.linspace(12,30, 1000)*u.hour
+time0 = Time(start_obs_date)-utcoffset
+alltimes = time0 + delta_time
+local_time_hours = ((Time(start_obs_date) + delta_time).cxcsec - date.cxcsec)/3600
+### Local coordinates
+frame_Salta = AltAz(obstime=alltimes, location=Salta)
+### Moon
+moon_Salta = get_moon(alltimes)
+moonaltazs_Salta = moon_Salta.transform_to(frame_Salta)  
+### Moon
+sun_Salta = get_sun(alltimes)
+sunaltazs_Salta = sun_Salta.transform_to(frame_Salta)  
+delta_el = 20
+valid = (moonaltazs_Salta.alt.value < (el_max+delta_el)) & \
+        (moonaltazs_Salta.alt.value > (el_min-delta_el)) & \
+        (moonaltazs_Salta.az.value > 80) & \
+        (moonaltazs_Salta.az.value < 145)
+tstart = np.min(local_time_hours[valid])
+tstop = np.max(local_time_hours[valid])
+local_start = str(Time(start_obs_date)+tstart*u.hour)[:16]
+local_stop = str(Time(start_obs_date)+tstop*u.hour)[:16]
+UTC_start = str(Time(start_obs_date)-utcoffset+tstart*u.hour)[:16]
+UTC_stop = str(Time(start_obs_date)-utcoffset+tstop*u.hour)[:16]
+```
+
+```{python}
+sum(valid)/3
+```
+
+```{python}
+#split the entire block in 3 differents blocks
+nblocks = 3
+#block 1
+valid_block1 = valid[]
+
+```
+
+```{python}
+d = qubic.qubicdict.qubicDict()
+d.read_from_file('MoonObservation.dict')
+d['nf_sub'] = 1
+d['date_obs'] = str(Time(start_obs_date)-utcoffset+tstart*u.hour)
+d['latitude'] = -24.731377    ### Salta Regional Noroeste
+d['longitude'] = -65.409546   ### Salta Regional Noroeste
+d['sampling'] = 1.
+moon_ra_mean = np.mean(moon_Salta.ra[valid]/u.deg)
+moon_dec_mean = np.mean(moon_Salta.dec[valid]/u.deg)
+d['RA_center'] = moon_ra_mean #deg
+d['DEC_center'] = moon_dec_mean #deg
+d['duration'] = tstop-tstart # Hours
+d['angspeed'] = 0.8 #deg/s
+d['delta_az'] = az_span #deg
+d['nsweeps_per_elevation'] = 1
+d['angspeed_psi'] = 0. #deg/s
+backforthdt = d['delta_az'] / d['angspeed'] * 2
+print('Scan Duration: ',backforthdt)
+d['dead_time'] = 0.
+print('Dead Time = {}'.format(d['dead_time']))
+```
+
+```{python}
+n_elevations = 3
+el_step = 0#np.round((el_max - el_min) / 3 * 100) / 100
+d['fix_azimuth'] = {'apply':True,'az':116.4,
+                     'el':40,'el_step':el_step, 'fix_hwp':True, 'fix_pitch':True}
+print(d['fix_azimuth'])
+print('call')
+p = qubic.get_pointing(d)
+print(p.elevation)
+
+el_min_final = np.min(p.elevation)
+el_max_final = np.max(p.elevation)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

@@ -16,7 +16,6 @@ from scipy import interpolate
 import datetime as dt
 import sys
 import healpy as hp
-import corner
 import getdist
 from getdist import plots, MCSamples
 

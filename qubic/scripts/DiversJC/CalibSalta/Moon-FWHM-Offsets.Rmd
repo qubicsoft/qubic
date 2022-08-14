@@ -1,0 +1,278 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.13.8
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+# %config InlineBackend.figure_format='retina'
+from IPython.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+
+rc('figure',figsize=(20,12))
+rc('font',size=12)
+
+import pickle
+import healpy as hp
+from importlib import reload
+
+from qubic import fibtools as ft
+import time_domain_tools as tdt
+```
+
+```{python}
+### Read Moon Coadded maps (calculated using the notebook: Analysis Moon July.Rmd)
+allTESNum, allmaps = pickle.load(open( "allmaps-July14-2022.pkl", "rb" ) )
+sh = np.shape(allmaps)
+### Find the nside of the maps from number of pixels
+nside = hp.npix2nside(sh[1])
+```
+
+```{python}
+# find where the map is non-UNSEEN in order to center the Gnomview
+ok = allmaps[0,:] != hp.UNSEEN
+azp, elp = hp.pix2ang(nside, np.arange(12*nside**2)[ok], lonlat=True)
+maz = 180 - 0.5*(np.min(azp) + np.max(azp))
+mel = 0.5*(np.min(elp) + np.max(elp))
+
+# Display all maps
+rc('figure',figsize=(20,20))
+rc('font',size=12)
+n0 = 6
+for i in range(len(allTESNum)):
+    ok = allmaps[i,:] != hp.UNSEEN
+    if (i%(n0**2))==0: figure()
+    mm = np.zeros(12*nside**2)+ hp.UNSEEN
+    mm[ok] = allmaps[i,ok]-tdt.get_mode(allmaps[i,ok])
+    mm[~ok] = hp.UNSEEN
+    hp.gnomview(mm, reso=10, sub=(n0,n0,(i%(n0**2))+1), min=-5e3, max=2.5e4, title=allTESNum[i], rot=[maz, mel])
+```
+
+# Fitting the main peak on a single TES with a Gaussian
+We first pick a roation "by eye" ([1., -4]) and then we will improve on it later.
+
+```{python}
+def gauss2d(x, pars, extra_args=None):
+    amp, xc, yc, sig = pars
+    mygauss = amp * np.exp(-0.5*((extra_args[0]-xc)**2+(extra_args[1]-yc)**2)/sig**2)
+    return np.ravel(mygauss)
+
+def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0.]), doplot=False, verbose=False):
+    ### get the gnomview back into a np.array in order to fit it
+    mm = allmaps[idx,:].copy()
+    badpix = mm ==hp.UNSEEN
+    mm[badpix] = 0          ### Set bad pixels to zero before returning the np.array()
+    mapxy = hp.gnomview(mm, reso=reso, rot=rot, return_projected_map=True, xsize=xs, no_plot=True).data
+
+    ### np.array coordinates
+    x = (np.arange(xs)-(xs-1)/2)*reso/60
+    y = x.copy()
+    xx,yy = meshgrid(x,y)
+
+    ### Displays the image as an array
+    mm, ss = ft.meancut(mapxy, 3)
+    if doplot:
+        subplot(1,4,2)
+        imshow(mapxy, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mm-ss, vmax=np.max(mapxy))
+        xlabel('Degrees')
+        ylabel('Degrees')
+        title('TES#{}'.format(allTESNum[idx]))
+
+    ### Guess where the maximum is and the other parameters
+    maxi = mapxy == np.nanmax(mapxy)
+    maxx = np.mean(xx[maxi])
+    maxy = np.mean(yy[maxi])
+    guess = np.array([np.max(mapxy),maxx, maxy, 1.])
+    if doplot:
+        # Plot a red cross at the expected location
+        plot(maxx,maxy,'rx', ms=30, lw=2)
+
+    ### Do the fit putting the UNSEEN to a very low weight
+    errpix = xx*0+ss
+    errpix[mapxy==0] *= 1e5
+    resfit = ft.do_minuit(np.ravel(xx), np.ravel(mapxy), np.ravel(errpix), guess, verbose=verbose,
+                          functname=gauss2d, extra_args=[xx,yy], rangepars = [[0.,1e8], [maxx-3, maxx+3], [maxy-3, maxy+3], [0., 10.]])
+
+    ### Image of the fitted Gaussian
+    fitted = np.reshape(gauss2d(x, resfit[1], extra_args=[xx,yy]), (xs, xs))
+    if doplot:
+        subplot(1,4,3)
+        imshow(fitted, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mm-ss, vmax=np.max(mapxy))
+        xlabel('Degrees')
+        ylabel('Degrees')
+        title('FWHMFit = {:5.3f} +/- {:5.3f} degrees'.format(resfit[1][3]*2.35, resfit[2][3]*2.35))
+
+        ### Display residuals
+        subplot(1,4,4)
+        imshow(mapxy-fitted, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mm-ss, vmax=np.max(mapxy))
+        xlabel('Degrees')
+        ylabel('Degrees')
+        title('Residuals')
+    
+    return resfit
+    
+```
+
+```{python}
+reload(ft)
+rc('figure',figsize=(20,8))
+rc('font',size=12)
+
+### Pick a TES number
+mynum = 248
+xs = 201
+myrotinit = np.array([1., -4.])
+
+idx = where(np.array(allTESNum)==mynum)[0][0]
+hp.gnomview(allmaps[idx,:], reso=10, rot=myrotinit, title='TES#{}'.format(mynum), min=-5e3, max=2.5e4, sub=(1,4,1))
+
+reso=4
+resfit = fit_one_tes(allmaps[idx,:], xs, reso, rot=np.array([maz, mel]), verbose=True, doplot=True)
+```
+
+# Now we do the same on all TES
+Most of them will have bad results as we will pick the trees. This is also why we use a small `reso`. But using the good ones, we will be able to reconstruct the offsets for each TES and hopefully predict better where the main peak should. So that we will get more TES.
+
+```{python}
+reso = 4.
+xs = 201
+allamp = np.zeros(len(allTESNum))
+allerramp = np.zeros(len(allTESNum))
+allFWHM = np.zeros(len(allTESNum))
+allerrFWHM = np.zeros(len(allTESNum))
+allxy = np.zeros((len(allTESNum),2))
+allerrxy = np.zeros((len(allTESNum),2))
+
+for i in range(len(allTESNum)):
+    idx = where(np.array(allTESNum)==i)[0][0]
+    resfit = fit_one_tes(allmaps[idx,:], xs, reso, rot=myrotinit, verbose=False, doplot=False)
+    allFWHM[i] = resfit[1][3]*2.35
+    allerrFWHM[i] = resfit[2][3]*2.35
+    allamp[i] = resfit[1][0]*2.35
+    allerramp[i] = resfit[2][0]*2.35
+    allxy[i,:] = resfit[1][1:3]
+    allerrxy[i,:] = resfit[2][1:3]
+    print('TES#{}: FWHM = {}'.format(i, resfit[1][3]*2.35))
+
+```
+
+```{python}
+### We need to perform cuts in order to keep good fits
+plot(allerrFWHM, allFWHM, 'ko')
+okfwhm = (np.abs(allFWHM-1) < 0.5) & (allerrFWHM < 0.01)
+plot(allerrFWHM[okfwhm], allFWHM[okfwhm], 'ro')
+
+xscale('log')
+```
+
+```{python}
+a = hist(allFWHM[okfwhm],bins=20, range=[0.5,1.5])
+xx = 0.5*(a[1][:-1]+a[1][1:])
+yy = a[0]
+
+def gauss(x, pars, extra_args=None):
+    return pars[0]*np.exp(-0.5*(x-pars[1])**2/pars[2]**2)
+
+guess = np.array([len(xx), 1., 0.2])
+ok = yy != 0
+resfit = ft.do_minuit(xx[ok], yy[ok], np.sqrt(yy[ok]), guess, verbose=True,
+                          functname=gauss)
+
+xxx = np.linspace(min(xx), max(xx), 1000)
+plot(xxx, gauss(xxx, resfit[1]), label='FWHM = {0:5.2f} +/- {1:5.2f}'.format(resfit[1][1], resfit[1][2]), lw=3)
+
+xlabel('FWHM (deg.)')
+ylabel('Number of TES')
+legend()
+```
+
+# Offsets
+We use DBSCAN to associate measured peaks to the ones predicted by creidhe
+
+**there is an inversion somewhere between az and el... it has to be understood.**
+
+
+
+```{python}
+#### Offsets from Créidhe
+import pickle
+offsets = pickle.load( open( 'pointing_offsets.pickle', 'rb') )
+print(np.shape(offsets))
+
+rc('figure',figsize=(10,8))
+rc('font',size=12)
+plot(offsets[:,0], offsets[:,1],'bo')
+
+```
+
+```{python}
+### DBSCAN
+from sklearn.cluster import DBSCAN
+def run_DBSCAN(params, doplot=False):
+    clustering = DBSCAN(eps=1.3, min_samples=10).fit(params)
+    labels = clustering.labels_
+    return labels
+```
+
+```{python}
+mytesn = np.array(allTESNum)
+xycreidhe = offsets[mytesn-1,:]
+
+delta_az = allxy[:,0] - xycreidhe[:,1]
+err_delta_az = allerrxy[:,0]
+delta_el = allxy[:,1] - xycreidhe[:,0]
+err_delta_el = allerrxy[:,1]
+
+params_dbscan = np.array([delta_az, delta_el, err_delta_az, err_delta_el, allFWHM, allerrFWHM]).T
+params_dbscan[isnan(params_dbscan)] = 1e8
+
+
+labels = run_DBSCAN(params_dbscan)
+ok = labels==0
+
+plot(delta_az, delta_el, 'ko', label='all ({})'.format(len(delta_az)))
+plot(delta_az[ok], delta_el[ok], 'ro', label='DBSCAN selected ({})'.format(len(delta_az[ok])))
+xlabel('$\Delta$az')
+ylabel('$\Delta$el')
+legend()
+```
+
+```{python}
+rc('figure',figsize=(16,8))
+rc('font',size=12)
+subplot(1,2,1)
+plot(xycreidhe[:,1], xycreidhe[:,0],'bo', label='Offsets from Créidhe')
+plot(allxy[:,0], allxy[:,1], 'ro', label='All Moon peaks')
+legend()
+
+maz, saz = ft.meancut(delta_az[labels==0], 3)
+mel, sel = ft.meancut(delta_el[labels==0], 3)
+
+
+subplot(1,2,2)
+plot(offsets[:,1], offsets[:,0], 'go', alpha=0.1, label='Offsets from Créidhe')
+plot(xycreidhe[ok,1], xycreidhe[ok,0],'bo', label='Offsets from Créidhe')
+plot(allxy[ok,0]-maz, allxy[ok,1]-mel, 'ro', label='Shifted Moon peaks')
+title('Shift: $\Delta$Az={0:5.2f} +/- {1:5.2f} deg ; $\Delta$El={2:5.2f} +/- {3:5.2f} deg'.format(maz, saz, mel, sel))
+legend()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

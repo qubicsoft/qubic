@@ -233,63 +233,6 @@ def remove_offset_scan(mytod, scantype, method='meancut', apply_to_bad = True):
     
     return mytod
 
-from scipy import interpolate
-class MySplineFitting:
-    def __init__(self,xin,yin,covarin,nbspl,logspace=False):
-        # input parameters
-        self.x=xin
-        self.y=yin
-        self.nbspl=nbspl
-        covar=covarin
-        if np.size(np.shape(covarin)) == 1:
-            err=covarin
-            covar=np.zeros((np.size(err),np.size(err)))
-            covar[np.arange(np.size(err)),np.arange(np.size(err))]=err**2
-        
-        self.covar=covar
-        self.invcovar=np.linalg.inv(covar)
-        
-        # Prepare splines
-        xspl=np.linspace(np.min(self.x),np.max(self.x),nbspl)
-        if logspace==True: xspl=np.logspace(np.log10(np.min(self.x)),np.log10(np.max(self.x)),nbspl)
-        self.xspl=xspl
-        F=np.zeros((np.size(xin),nbspl))
-        self.F=F
-        for i in np.arange(nbspl):
-            self.F[:,i]=self.get_spline_tofit(xspl,i,xin)
-        
-        # solution of the chi square
-        ft_cinv_y=np.dot(np.transpose(F),np.dot(self.invcovar,self.y))
-        covout=np.linalg.inv(np.dot(np.transpose(F),np.dot(self.invcovar,F)))
-        alpha=np.dot(covout,ft_cinv_y)
-        fitted=np.dot(F,alpha)
-        
-        # output
-        self.residuals=self.y-fitted
-        self.chi2=np.dot(np.transpose(self.residuals), np.dot(self.invcovar, self.residuals))
-        self.ndf=np.size(xin)-np.size(alpha)
-        self.alpha=alpha
-        self.covout=covout
-        self.dalpha=np.sqrt(np.diagonal(covout))
-    
-    def __call__(self,x):
-        theF=np.zeros((np.size(x),self.nbspl))
-        for i in np.arange(self.nbspl): theF[:,i]=self.get_spline_tofit(self.xspl,i,x)
-        return(dot(theF,self.alpha))
-
-    def with_alpha(self,x,alpha):
-        theF=np.zeros((np.size(x),self.nbspl))
-        for i in np.arange(self.nbspl): theF[:,i]=self.get_spline_tofit(self.xspl,i,x)
-        return(dot(theF,alpha))
-            
-    def get_spline_tofit(self,xspline,index,xx):
-        yspline=zeros(np.size(xspline))
-        yspline[index]=1.
-        tck=interpolate.splrep(xspline,yspline)
-        yy=interpolate.splev(xx,tck,der=0)
-        return(yy)
-
-
 
 def decorel_azimuth(mytod, azt, scantype, degree=2, doplot=True):
     ### Profiling in Azimuth
@@ -409,7 +352,7 @@ def decorel_azel(mytod, azt, elt, scantype, doplot=True, nbins=50, n_el=20, degr
                 fitted = p(xaz)
             else:
                 ### Spline Fitting
-                splfit = MySplineFitting(xc, yc, dy, nbspl)
+                splfit = tdt.MySplineFitting(xc, yc, dy, nbspl)
                 coefficients[i,j,:] = splfit.alpha
                 fitted = splfit(xaz)
             if doplot:
@@ -448,9 +391,12 @@ TESNum = 33 #33, 96, 95, 133
 tod = alltod[TESNum-1,:]
 
 ###### Pipeline:
-# 1. Identify scan types and numbers
+# 0. Identify scan types and numbers
 scantype_hk, azt, elt, scantype = tdt.identify_scans(thk, az, el, tt=tt-deltaT, doplot=False, thr_speedmin=speedmin)
 nscans = np.max(np.abs(scantype))
+
+# 1. Remove a slow spline to the data
+tod = tdt.remove_drifts_spline(tt, tod, nsplines=20, doplot=True)
 
 # 2. Offset removal scan by scan using median 
 #    (here we just want to have all scans at the same level before decorrelating from azimuth)
@@ -492,9 +438,12 @@ TESNum = 33 #33, 96, 95, 133
 tod = alltod[TESNum-1,:]
 
 ###### Pipeline:
-# 1. Identify scan types and numbers
+# 0. Identify scan types and numbers
 scantype_hk, azt, elt, scantype = tdt.identify_scans(thk, az, el, tt=tt-deltaT, doplot=False, thr_speedmin=speedmin)
 nscans = np.max(np.abs(scantype))
+
+# 1. Remove a slow spline to the data
+tod = tdt.remove_drifts_spline(tt, tod, nsplines=20, doplot=True)
 
 # 2. Offset removal scan by scan using median 
 #    (here we just want to have all scans at the same level before decorrelating from azimuth)
@@ -568,6 +517,32 @@ plot(azmoon, elmoon)
 # Map-making
 nside = 340
 
+newazt = azt.copy()
+newelt = elt.copy()
+
+# azqubic = 120
+# newazt = (azt + azqubic - azmoon) * np.cos(np.radians(elt))
+# newelt = -(elt - elmoon)
+
+azqubic = 120
+newazt = (azt + azqubic - azmoon)
+newelt = -(elt - elmoon)+40
+
+
+mapsb, mapcount = healpix_map(newazt[scantype != 0], newelt[scantype != 0], mytod[scantype != 0], nside=nside)
+mapsb_pos, _ = healpix_map(newazt[scantype > 0], newelt[scantype > 0], mytod[scantype > 0], nside=nside)
+mapsb_neg, _ = healpix_map(newazt[scantype < 0], newelt[scantype < 0], mytod[scantype < 0], nside=nside)
+
+# Display Results
+display_all(mapsb, mapsb_pos, mapsb_neg, anatype=anatype, rot=[np.mean(newazt), np.mean(newelt)], reso=10, 
+            myrange=[-5e3, 2.5e4], TESNum=TESNum)
+
+```
+
+```{python}
+# Map-making
+nside = 340
+
 azqubic = 120
 newazt = (azt + azqubic - azmoon) * np.cos(np.radians(elt))
 newelt = -(elt - elmoon)
@@ -605,62 +580,91 @@ scantype_hk, azt, elt, scantype = tdt.identify_scans(thk, az, el, tt=tt-deltaT, 
 nscans = np.max(np.abs(scantype))
 
 
-allTESNum = [33, 94, 95, 96, 133]
+# allTESNum = [33]
+# allTESNum = [22, 26, 27, 33, 40, 46, 49, 50, 51, 52, 54, 57, 59, 61, 62, 63, 64, 67, 69, 
+#               70, 72, 73, 79, 79, 80, 81, 82, 83, 84, 86, 87, 88, 94, 95, 96, 99, 
+#              107, 112, 113, 118, 129, 130, 131, 133, 135, 136, 137, 138, 139, 150, 152, 153,
+#              158, 159, 162, 163, 170, 171, 175, 177, 178, 181, 182, 187, 188, 189, 193, 194, 195,
+#              197, 198, 199, 200, 203, 205, 206, 207, 209, 210, 211, 212, 214, 215, 218, 221, 223,
+#              238, 241, 242, 243, 246, 247, 248, 250]
+# print(len(allTESNum))
+# ii=10
+# allTESNum = np.arange(25)+25*ii
+allTESNum = np.arange(256)
 allmaps = np.zeros((len(allTESNum), 12*nside**2))
 for i in range(len(allTESNum)):
-    
-    TESNum = allTESNum[i]
-    print('TES# {}'.format(TESNum))
-    tod = alltod[TESNum-1,:]
+    try:
+        TESNum = allTESNum[i]
+        print('TES# {}'.format(TESNum))
+        tod = alltod[TESNum-1,:]
 
-    ###### Pipeline:
-    # 2. Offset removal scan by scan using median 
-    #    (here we just want to have all scans at the same level before decorrelating from azimuth)
-    mytod = -tod.copy()
-    mytod = remove_offset_scan(mytod, scantype, method='median')
+        ###### Pipeline:
+        # 1. Remove a slow spline to the data
+        tod = tdt.remove_drifts_spline(tt, tod, nsplines=20)
 
-    # 3. Remove azimuth correlation
-    # 3.c : splines
-    mytod = decorel_azel(mytod, azt, elt, scantype, doplot=False, nbins=50, n_el=50, nbspl=5)
+        # 2. Offset removal scan by scan using median 
+        #    (here we just want to have all scans at the same level before decorrelating from azimuth)
+        mytod = -tod.copy()
+        mytod = remove_offset_scan(mytod, scantype, method='median')
+
+        # 3. Remove azimuth correlation
+        # 3.c : splines
+        mytod = decorel_azel(mytod, azt, elt, scantype, doplot=False, nbins=50, n_el=50, nbspl=5)
 
 
-    # 4. remove offsets again but this time with mode method as it appears to be less affected 
-    #    by the presence of the peaks (no underestimation of the offset resultingg is shadow around the peaks)
-    mytod = remove_offset_scan(mytod, scantype, method='mode')
+        # 4. remove offsets again but this time with mode method as it appears to be less affected 
+        #    by the presence of the peaks (no underestimation of the offset resultingg is shadow around the peaks)
+        mytod = remove_offset_scan(mytod, scantype, method='mode')
 
-    # Map-making
-    mapsb, mapcount = healpix_map(newazt[scantype != 0], newelt[scantype != 0], mytod[scantype != 0], nside=nside)
-    allmaps[i,:] = mapsb
+        # Map-making
+        mapsb, mapcount = healpix_map(newazt[scantype != 0], newelt[scantype != 0], mytod[scantype != 0], nside=nside)
+        allmaps[i,:] = mapsb
+    except:
+        print('Shit')
 
 
 
 ```
 
 ```{python}
+# import pickle
+# pickle.dump( [allTESNum, allmaps], open( "allmaps-July14-2022.pkl", "wb" ) )
+```
+
+```{python}
+n0 = 3
 for i in range(len(allTESNum)):
     ok = allmaps[i,:] != hp.UNSEEN
-    hp.gnomview(allmaps[i,:]-tdt.get_mode(allmaps[i,ok]), reso=12, sub=(3,3,i+1), min=-5e3, max=2.5e4, title=allTESNum[i])
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
+    if (i%(n0**2))==0: figure()
+    mm = np.zeros(12*nside**2)+ hp.UNSEEN
+    mm[ok] = allmaps[i,ok]-tdt.get_mode(allmaps[i,ok])
+    mm[~ok] = hp.UNSEEN
+    hp.gnomview(mm, reso=10, sub=(n0,n0,(i%(n0**2))+1), min=-5e3, max=2.5e4, title=allTESNum[i], rot=[np.mean(newazt), np.mean(newelt)])
 ```
 
 ```{python}
 from importlib import reload
 reload(ft)
-idx =0
-reso = 3.
+
+rc('figure',figsize=(20,8))
+rc('font',size=12)
+
+
+mynum = 248
+idx = where(np.array(allTESNum)==mynum)[0][0]
+reso = 10.
 xs = 201
-mapxy = hp.gnomview(allmaps[idx,:], reso=reso, rot=[1, -5], return_projected_map=True, xsize=xs, no_plot=True).data
+hp.gnomview(allmaps[idx,:], reso=reso, rot=[0, 0], xsize=xs, title='TES#{}'.format(mynum), min=-5e3, max=2.5e4, sub=(1,4,1))
+
+
+reso = 4.
+xs = 201
+mm = allmaps[idx,:].copy()
+badpix = mm==hp.UNSEEN
+mm[badpix] = 0
+# rot=np.array([1.-3.22, -5+4.44]) reso=7 => 30
+# rot=np.array([1., -5]) reso=3 => 50
+mapxy = hp.gnomview(mm, reso=reso, rot=np.array([1., -4]), return_projected_map=True, xsize=xs, no_plot=True).data
 
 x = (np.arange(xs)-(xs-1)/2)*reso/60
 y = x.copy()
@@ -668,14 +672,11 @@ xx,yy = meshgrid(x,y)
 
 mm, ss = ft.meancut(mapxy, 3)
 
-subplot(1,3,1)
+subplot(1,4,2)
 imshow(mapxy, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mm-ss, vmax=np.max(mapxy))
 xlabel('Degrees')
 ylabel('Degrees')
 title('TES#{}'.format(allTESNum[idx]))
-
-np.savez('toto.npz', x=x,y=y,mapxy=mapxy)
-
 
 def gauss2d(x, pars, extra_args=None):
     amp, xc, yc, sig = pars
@@ -683,22 +684,28 @@ def gauss2d(x, pars, extra_args=None):
     return np.ravel(mygauss)
 
 
+maxi = mapxy == np.nanmax(mapxy)
+maxx = np.mean(xx[maxi])
+maxy = np.mean(yy[maxi])
+print(maxx, maxy)
+plot(maxx,maxy,'r+', ms=30)
+guess = np.array([np.max(mapxy),maxx, maxy, 0.])
 
-guess = np.array([np.max(mapxy), 0.,0., 1.])
 
-
-resfit = ft.do_minuit(np.ravel(xx), np.ravel(mapxy), np.ravel(xx)*0+ss, guess, 
-                      functname=gauss2d, extra_args=[xx,yy])
+errpix = xx*0+ss
+errpix[mapxy==0] *= 1e5
+resfit = ft.do_minuit(np.ravel(xx), np.ravel(mapxy), np.ravel(errpix), guess, 
+                      functname=gauss2d, extra_args=[xx,yy], rangepars = [[0.,1e8], [maxx-3, maxx+3], [maxy-3, maxy+3], [0., 10.]])
 
 fitted = np.reshape(gauss2d(x, resfit[1], extra_args=[xx,yy]), (xs, xs))
 
-subplot(1,3,2)
+subplot(1,4,3)
 imshow(fitted, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mm-ss, vmax=np.max(mapxy))
 xlabel('Degrees')
 ylabel('Degrees')
 title('FWHMFit = {:5.3f} +/- {:5.3f} degrees'.format(resfit[1][3]*2.35, resfit[2][3]*2.35))
 
-subplot(1,3,3)
+subplot(1,4,4)
 imshow(mapxy-fitted, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mm-ss, vmax=np.max(mapxy))
 xlabel('Degrees')
 ylabel('Degrees')
@@ -707,31 +714,138 @@ title('Residuals')
 ```
 
 ```{python}
+reso = 4.
+xs = 201
+def gauss2d(x, pars, extra_args=None):
+    amp, xc, yc, sig = pars
+    mygauss = amp * np.exp(-0.5*((extra_args[0]-xc)**2+(extra_args[1]-yc)**2)/sig**2)
+    return np.ravel(mygauss)
+
+
+allFWHM = np.zeros(len(allTESNum))
+allxy = np.zeros((len(allTESNum),2))
+doplot = False
+for i in range(len(allTESNum)):
+    mynum = allTESNum[i]
+    idx = where(np.array(allTESNum)==mynum)[0][0]
+    mm = allmaps[idx,:].copy()
+    mm[mm==hp.UNSEEN] = 0
+    mapxy = hp.gnomview(mm, reso=reso, rot=[1., -4], return_projected_map=True, xsize=xs, no_plot=True).data
+
+    x = (np.arange(xs)-(xs-1)/2)*reso/60
+    y = x.copy()
+    xx,yy = meshgrid(x,y)
+
+    mm, ss = ft.meancut(mapxy, 3)
+
+    if doplot:
+        figure()
+        subplot(1,3,1)
+        imshow(mapxy, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mm-ss, vmax=np.max(mapxy))
+        xlabel('Degrees')
+        ylabel('Degrees')
+        title('TES#{}'.format(allTESNum[idx]))
+
+    maxi = mapxy == np.nanmax(mapxy)
+    maxx = np.mean(xx[maxi])
+    maxy = np.mean(yy[maxi])
+    if doplot:
+        axvline(x=maxx, color='r', ls='--', label='Input')
+        axhline(y=maxy, color='r', ls='--')
+    guess = np.array([np.max(mapxy),maxx, maxy, 0.])
+
+    errpix = xx*0+ss
+    errpix[mapxy==0] *= 1e5
+    resfit = ft.do_minuit(np.ravel(xx), np.ravel(mapxy), np.ravel(errpix), guess, verbose=False,
+                          functname=gauss2d, extra_args=[xx,yy], rangepars = [[0.,1e8], [maxx-3, maxx+3], [maxy-3, maxy+3], [0., 10.]])
+
+    fitted = np.reshape(gauss2d(x, resfit[1], extra_args=[xx,yy]), (xs, xs))
+    allFWHM[i] = resfit[1][3]*2.35
+    allxy[i,:] = resfit[1][1:3]
+    print('TES#{}: FWHM = {}'.format(mynum, resfit[1][3]*2.35))
+    if doplot:
+        axvline(x=resfit[1][1], color='g', ls='--', label='Fitted')
+        axhline(y=resfit[1][2], color='g', ls='--')
+        subplot(1,3,2)
+        imshow(fitted, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mm-ss, vmax=np.max(mapxy))
+        xlabel('Degrees')
+        ylabel('Degrees')
+        title('FWHMFit = {:5.3f} +/- {:5.3f} degrees'.format(resfit[1][3]*2.35, resfit[2][3]*2.35))
+
+        subplot(1,3,3)
+        imshow(mapxy-fitted, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mm-ss, vmax=np.max(mapxy))
+        xlabel('Degrees')
+        ylabel('Degrees')
+        title('Residuals')
+        subplot(1,3,1)
+        legend()
+        show()
 
 ```
 
 ```{python}
+a = hist(allFWHM,bins=20, range=[0.5,1.5])
+print(a)
+xx = 0.5*(a[1][:-1]+a[1][1:])
+yy = a[0]
+
+def gauss(x, pars, extra_args=None):
+    return pars[0]*np.exp(-0.5*(x-pars[1])**2/pars[2]**2)
+
+guess = np.array([len(xx), 1., 0.2])
+ok = yy != 0
+resfit = ft.do_minuit(xx[ok], yy[ok], np.sqrt(yy[ok]), guess, verbose=True,
+                          functname=gauss)
+
+xxx = np.linspace(min(xx), max(xx), 1000)
+plot(xxx, gauss(xxx, resfit[1]), label='FWHM = {0:5.2f} +/- {1:5.2f}'.format(resfit[1][1], resfit[1][2]), lw=3)
+
+xlabel('FWHM (deg.)')
+ylabel('Number of TES')
+legend()
+```
+
+# Offsets
+there is an inversion somewhere between az and el...
+
+```{python}
+#### Offsets from Créidhe
+import pickle
+offsets = pickle.load( open( 'pointing_offsets.pickle', 'rb') )
+print(np.shape(offsets))
+
+rc('figure',figsize=(10,8))
+rc('font',size=12)
+plot(offsets[:,0], offsets[:,1],'bo')
 
 ```
 
 ```{python}
+ok = (allFWHM > 0.8) & (allFWHM < 1.2)
+mytesn = np.array(allTESNum)[ok]
+xycreidhe = offsets[mytesn-1,:]
 
+rc('figure',figsize=(16,8))
+rc('font',size=12)
+subplot(1,2,1)
+plot(offsets[:,1], offsets[:,0], 'go', alpha=0.1, label='Offsets from Créidhe')
+plot(xycreidhe[:,1], xycreidhe[:,0],'bo', label='Offsets from Créidhe')
+plot(allxy[ok,0], allxy[ok,1], 'ro', label='Moon peaks')
+legend()
+
+maz, saz = ft.meancut(allxy[ok,0] - xycreidhe[:,1], 3)
+mel, sel = ft.meancut(allxy[ok,1] - xycreidhe[:,0], 3)
+
+subplot(1,2,2)
+plot(offsets[:,1], offsets[:,0], 'go', alpha=0.1, label='Offsets from Créidhe')
+plot(xycreidhe[:,1], xycreidhe[:,0],'bo', label='Offsets from Créidhe')
+plot(allxy[ok,0]-maz, allxy[ok,1]-mel, 'ro', label='Shifted Moon peaks')
+title('Shift: $\Delta$Az={0:5.2f} +/- {1:5.2f} deg ; $\Delta$El={2:5.2f} +/- {3:5.2f} deg'.format(maz, saz, mel, sel))
+legend()
 ```
 
 ```{python}
-x = np.linspace(0,10,10)
-y = 3*x+2 + np.random.randn(len(x))
-plot(x,y, 'ro')
-
-def fct(x,pars, extra_args=None):
-    return pars[0]*x+pars[1]
-
-from qubic import fibtools as ft
-resfit = ft.do_minuit(x, y, x*0+1, [0.,0.], functname=fct)
-```
-
-```{python}
-
+ok.sum()
 ```
 
 ```{python}

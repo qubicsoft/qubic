@@ -2,12 +2,103 @@ import numpy as np
 from pylab import *
 import bottleneck as bn
 from scipy.signal import medfilt
+import scipy.signal
 from scipy.interpolate import interp1d
 from sklearn.cluster import DBSCAN
+from scipy import interpolate
 
 
 from qubicpack.qubicfp import qubicfp
 from qubic import fibtools as ft
+
+
+class MySplineFitting:
+    def __init__(self,xin,yin,covarin,nbspl,logspace=False):
+        # input parameters
+        self.x=xin
+        self.y=yin
+        self.nbspl=nbspl
+        covar=covarin
+        if np.size(np.shape(covarin)) == 1:
+            err=covarin
+            covar=np.zeros((np.size(err),np.size(err)))
+            covar[np.arange(np.size(err)),np.arange(np.size(err))]=err**2
+        
+        self.covar=covar
+        self.invcovar=np.linalg.inv(covar)
+        
+        # Prepare splines
+        xspl=np.linspace(np.min(self.x),np.max(self.x),nbspl)
+        if logspace==True: xspl=np.logspace(np.log10(np.min(self.x)),np.log10(np.max(self.x)),nbspl)
+        self.xspl=xspl
+        F=np.zeros((np.size(xin),nbspl))
+        self.F=F
+        for i in np.arange(nbspl):
+            self.F[:,i]=self.get_spline_tofit(xspl,i,xin)
+        
+        # solution of the chi square
+        ft_cinv_y=np.dot(np.transpose(F),np.dot(self.invcovar,self.y))
+        covout=np.linalg.inv(np.dot(np.transpose(F),np.dot(self.invcovar,F)))
+        alpha=np.dot(covout,ft_cinv_y)
+        fitted=np.dot(F,alpha)
+        
+        # output
+        self.residuals=self.y-fitted
+        self.chi2=np.dot(np.transpose(self.residuals), np.dot(self.invcovar, self.residuals))
+        self.ndf=np.size(xin)-np.size(alpha)
+        self.alpha=alpha
+        self.covout=covout
+        self.dalpha=np.sqrt(np.diagonal(covout))
+    
+    def __call__(self,x):
+        theF=np.zeros((np.size(x),self.nbspl))
+        for i in np.arange(self.nbspl): theF[:,i]=self.get_spline_tofit(self.xspl,i,x)
+        return(dot(theF,self.alpha))
+
+    def with_alpha(self,x,alpha):
+        theF=np.zeros((np.size(x),self.nbspl))
+        for i in np.arange(self.nbspl): theF[:,i]=self.get_spline_tofit(self.xspl,i,x)
+        return(dot(theF,alpha))
+            
+    def get_spline_tofit(self,xspline,index,xx):
+        yspline=zeros(np.size(xspline))
+        yspline[index]=1.
+        tck=interpolate.splrep(xspline,yspline)
+        yy=interpolate.splev(xx,tck,der=0)
+        return(yy)
+
+
+def remove_drifts_spline(tt, tod, nsplines=20, nresample=1000, nedge=100, doplot=False):
+	### Linear function using the beginning and end of the samples (nn samples)
+	### In order to approach periodicity of the signal to be resampled
+	nnedge = 100
+	x0 = np.mean(tt[:nedge])
+	y0 = np.mean(tod[:nedge])
+	x1 = np.mean(tt[-nedge:])
+	y1 = np.mean(tod[-nedge:])	
+	p = np.poly1d(np.array([(y1-y0)/(x1-x0), y0]))
+	if doplot:
+		subplot(2,1,1)
+		plot(tt, tod, label='Input TOD')
+		plot(tt, p(tt), label='Linear function from edges')
+	### Resample TOD-linearfunction to apply spline
+	tt_resample = np.linspace(tt[0], tt[-1], nresample)
+	tod_resample = scipy.signal.resample(tod-p(tt), nresample) + p(tt_resample)
+	if doplot:
+		plot(tt_resample, tod_resample, label='Resampled TOD')
+
+	### Perfomr spline fitting
+	splfit = MySplineFitting(tt_resample, tod_resample, tod_resample*0+1, nsplines)
+	fitted = splfit(tt_resample)
+	if doplot:
+		plot(tt_resample, fitted, label='Fitted spline')
+		legend()
+		subplot(2,1,2)
+		plot(tt, tod-splfit(tt))
+
+	return tod-splfit(tt)
+
+
 
 def get_mode(y, nbinsmin=51):
     mm, ss = ft.meancut(y, 4)

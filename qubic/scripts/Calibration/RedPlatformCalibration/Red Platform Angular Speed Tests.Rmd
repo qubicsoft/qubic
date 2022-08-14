@@ -5,9 +5,9 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.13.8
   kernelspec:
-    display_name: Python 3
+    display_name: Python 3 (ipykernel)
     language: python
     name: python3
 ---
@@ -28,14 +28,12 @@ from qubicpack.qubicfp import qubicfp
 ```
 
 ```{python}
-mydatadir = '/Users/hamilton/Qubic/Calib-TD/'
+mydatadir = '/Volumes/HD JCH SSD/Qubic/QubicData/Calib-TD/'
 thedate = '2022-04-12'
 thedata = '2022-04-12_13.00.41__platform-speed-test'
 
 filename = mydatadir + '/' + thedate + '/' + thedata
-```
 
-```{python}
 ### Read data
 a = qubicfp()
 a.read_qubicstudio_dataset(filename)
@@ -119,6 +117,277 @@ xlabel('VE')
 ylabel('Angular speed [deg/s]')
 legend()
 title('Red Mount Angular Velocity Calibration')
+```
+
+```{python}
+angspeed_nofilt = np.gradient(az, time[1]-time[0])
+
+for theve in [7, 10, 14]:
+    ok = myve == theve
+    plot(az[ok], angspeed_nofilt[ok], label='VE{}'.format(theve))
+legend()
+```
+
+```{python}
+angspeed_nofilt = np.gradient(az, time[1]-time[0])
+
+for theve in [7, 10, 14]:
+    ok = (myve == theve) & (angspeed_nofilt > 0) & (az > -18) & (az < -12)
+    subplot(2,1,1)
+    xlabel('Time')
+    ylabel('Az')
+    plot(time[ok]-time[ok][0], az[ok], label='VE{}'.format(theve))
+    subplot(2,1,2)
+    xlabel('Time')
+    ylabel('Ang. Speed')
+    plot(time[ok]-time[ok][0], angspeed_nofilt[ok], label='VE{}'.format(theve))
+legend()
+tight_layout()
+```
+
+```{python}
+angspeed_nofilt = np.gradient(az, time[1]-time[0])
+
+for theve in [7, 10, 14]:
+    ok = (myve == theve) & (angspeed_nofilt > 0) & (az > -18) & (az < -12)
+    subplot(2,1,1)
+    xlabel('Az')
+    ylabel('Time')
+    plot(az[ok], time[ok]-time[ok][0], label='VE{}'.format(theve))
+    subplot(2,1,2)
+    plot(az[ok], angspeed_nofilt[ok], label='VE{}'.format(theve))
+    xlabel('Az')
+    ylabel('Ang Speed')
+legend()
+tight_layout()
+```
+
+```{python}
+ok = (myve == 7) & (angspeed_nofilt > 0) & (az > -18) & (az < -12)
+subplot(2,1,1)
+xlabel('Az')
+ylabel('Time')
+plot(az[ok], time[ok]-time[ok][0], label='VE{}'.format(theve))
+subplot(2,1,2)
+plot(az[ok], angspeed_nofilt[ok], label='VE{}'.format(theve))
+b = np.median(angspeed_nofilt[ok])
+axhline(y=b, color='r')
+xlabel('Az')
+ylabel('Ang Speed')
+legend()
+tight_layout()
+
+
+figure()
+tt = time[ok]-time[ok][0]
+aa = az[ok]
+
+plot(tt, (aa-aa[0]) / (b*tt))
+```
+
+<!-- #region -->
+The unpleasant features at +10 and -15 degrees are worrisome.
+Some more data is needed.
+
+
+
+## New data (April 19th 2022)
+On April 19th 2022, new data has been taken (see elog #832): (NB this was taken with VE14)
+
+> 2.2) Investigate platform speed slowdown near azimuth +10 and -10
+>
+> Starting from the position Az=0 El=50, data acquisition was carried out for the following movements
+0/ 20 / -20 / 20 / -20 / 20 / -20 / 0 in Azimuth.
+>
+> The He hoses and the UPS were rearranged. The same movements in azimuth were performed again at 10:58 salta time.
+>
+> Data acquisition name:
+>
+> Platform-oscilation-speed-test-1
+>
+> No change in platform speed was noticed by eye.`
+<!-- #endregion -->
+
+```{python}
+import datetime
+mydatadir = '/Users/hamilton/Qubic/Calib-TD/'
+thedate = '2022-04-19'
+thedata = '2022-04-19_13.44.43__platform-oscilation-speed-test-1'
+
+filename = mydatadir + '/' + thedate + '/' + thedata
+
+### Read data
+anew = qubicfp()
+anew.read_qubicstudio_dataset(filename)
+
+aznew = anew.azimuth()
+timenewinit = anew.timeaxis(datatype='hk')
+timenew = timenewinit - timenewinit[0]
+
+
+print()
+print('file_start: ', datetime.datetime.utcfromtimestamp(timenewinit[0]))
+print('file_end: ', datetime.datetime.utcfromtimestamp(timenewinit[-1]))
+```
+
+```{python}
+### 3 hours between UTC and Salta
+time_change = datetime.datetime(2022, 4, 19, 10+3, 58)
+print(time_change)
+time_change_ts = datetime.datetime.timestamp(time_change) + 7200 #bug related to timezones...
+print(time_change_ts, datetime.datetime.utcfromtimestamp(time_change_ts))
+```
+
+```{python}
+### Plot raw data
+ok0 = timenew < time_change_ts-timenewinit[0]
+ok1 = timenew >= time_change_ts-timenewinit[0]
+
+plot(timenew[ok0], aznew[ok0], label='Before moving stuff')
+plot(timenew[ok1], aznew[ok1], label='After moving stuff')
+axvline(x=time_change_ts-timenewinit[0], color='r', ls='-', label='Moving stuff')
+
+xlabel('Time')
+ylabel('Azimuth')
+```
+
+```{python}
+rc('figure',figsize=(16,8))
+rc('font',size=12)
+
+angspeednew = np.gradient(aznew, timenew[1]-timenew[0])
+angspeednew = medfilt(angspeednew, kernel_size=31)
+angspeednew_nofilt = np.gradient(aznew, timenew[1]-timenew[0])
+
+theve = 14
+ok = myve == theve
+
+subplot(2,1,1)
+title('VE{}'.format(theve))
+plot(az[ok], angspeed_nofilt[ok], label='Data from Apr. 12th', lw=4, alpha=0.7)
+plot(aznew[ok0], angspeednew_nofilt[ok0], label='Before moving stuff')
+plot(aznew[ok1], angspeednew_nofilt[ok1], label='After moving stuff')
+legend(loc='upper right')
+xlabel('Azimuth [deg]')
+ylabel('Angular velocity [deg/s]')
+ylim(-1.5, 1.5)
+
+subplot(2,2,3)
+title('VE{}'.format(theve))
+plot(az[ok], angspeed_nofilt[ok], label='Data from Apr. 12th', lw=4, alpha=0.7)
+plot(aznew[ok0], angspeednew_nofilt[ok0], label='Before moving stuff')
+plot(aznew[ok1], angspeednew_nofilt[ok1], label='After moving stuff')
+xlabel('Azimuth [deg]')
+ylabel('Angular velocity [deg/s]')
+legend()
+xlim(-20, -10)
+ylim(0., 1.5)
+
+subplot(2,2,4)
+title('VE{}'.format(theve))
+plot(az[ok], angspeed_nofilt[ok], label='Data from Apr. 12th', lw=4, alpha=0.7)
+plot(aznew[ok0], angspeednew_nofilt[ok0], label='Before moving stuff')
+plot(aznew[ok1], angspeednew_nofilt[ok1], label='After moving stuff')
+xlabel('Azimuth [deg]')
+ylabel('Angular velocity [deg/s]')
+legend()
+xlim(5,20)
+ylim(-1.5,0)
+
+tight_layout()
+```
+
+So I'm afraid the conclusion is that the effect observed on the angular velocity is:
+- Real and reproducible: it is observed at the same angle on April 12th and before rearranging He hoses and UPS
+- due to the mechanical resistance from hoses and UPS as it is still present but displaced to another azimuth after rearranging the He hoses and UPS.
+
+Of course this is only for the red mount, but we would not want to risk damaging the He hoses and we should really try to improve this...
+
+```{python}
+subplot(2,1,1)
+title('VE{}'.format(theve))
+plot(az[ok], angspeed[ok], label='Data from Apr. 12th', lw=4, alpha=0.7)
+plot(aznew[ok0], angspeednew[ok0], label='Before moving stuff')
+plot(aznew[ok1], angspeednew[ok1], label='After moving stuff')
+legend(loc='upper right')
+xlabel('Azimuth [deg]')
+ylabel('Angular velocity [deg/s]')
+ylim(-1.5, 1.5)
+
+subplot(2,2,3)
+title('VE{}'.format(theve))
+plot(az[ok], angspeed[ok], label='Data from Apr. 12th', lw=4, alpha=0.7)
+plot(aznew[ok0], angspeednew[ok0], label='Before moving stuff')
+plot(aznew[ok1], angspeednew[ok1], label='After moving stuff')
+xlabel('Azimuth [deg]')
+ylabel('Angular velocity [deg/s]')
+legend()
+xlim(-20, -10)
+ylim(0., 1.5)
+
+subplot(2,2,4)
+title('VE{}'.format(theve))
+plot(az[ok], angspeed[ok], label='Data from Apr. 12th', lw=4, alpha=0.7)
+plot(aznew[ok0], angspeednew[ok0], label='Before moving stuff')
+plot(aznew[ok1], angspeednew[ok1], label='After moving stuff')
+xlabel('Azimuth [deg]')
+ylabel('Angular velocity [deg/s]')
+legend()
+xlim(5,20)
+ylim(-1.5,0)
+
+tight_layout()
+```
+
+# Now it would be nice to compare with data taken at APC
+
+```{python}
+### NB: this is with VE4 => very slow...
+
+import datetime
+mydatadir = '/Users/hamilton/Qubic/Calib-TD/'
+thedate = '2019-11-15'
+thedata = '2019-11-15_15.33.28__TestAzScan_CalSourceOff_1.4V_Speed_VE4_El_50.00'
+
+filename = mydatadir + '/' + thedate + '/' + thedata
+
+### Read data
+aold = qubicfp()
+aold.read_qubicstudio_dataset(filename)
+
+azold = aold.azimuth()
+timeoldinit = aold.timeaxis(datatype='hk')
+timeold = timeoldinit - timeoldinit[0]
+
+```
+
+```{python}
+angspeedold_nofilt = np.gradient(azold, timeold[1]-timeold[0])
+
+subplot(2,1,1)
+plot(azold, angspeedold_nofilt)
+title('Data from 2019 Nov. 15th (APC) with VE4 (slow)')
+xlabel('Azimuth [deg]')
+ylabel('Angular velocity [deg/s]')
+xlim(-30,30)
+ylim(-0.4,0.4)
+
+subplot(2,2,3)
+plot(azold, angspeedold_nofilt)
+title('Data from 2019 Nov. 15th (APC) with VE4 (slow)')
+xlabel('Azimuth [deg]')
+ylabel('Angular velocity [deg/s]')
+xlim(-23, -18)
+ylim(0,0.4)
+
+subplot(2,2,4)
+plot(azold, angspeedold_nofilt)
+title('Data from 2019 Nov. 15th (APC) with VE4 (slow)')
+xlabel('Azimuth [deg]')
+ylabel('Angular velocity [deg/s]')
+xlim(22, 25)
+ylim(-0.4,0)
+
 ```
 
 ```{python}

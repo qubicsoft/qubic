@@ -64,13 +64,14 @@ dtheta=15.
 nhwp_angles=3 # use only for repeat_pointing
 seed=1
 
-sweeping_pointing=True
+sweeping_pointing_deadtime=True
 duration=20 #h
 angspeed= 0.4 #deg/s
 delta_az= 20 #deg
 nsweeps_per_elevation= 1
 angspeed_psi= 0.1 #deg/s
 maxpsi= 10 #deg
+dead_time = 74.05 # seconds   ### Measured in Salta at VE14 on July 5th 2022
 fix_azimuth={'apply':False,'az':50,'el':50,'el_step':1, 'fix_hwp':True, 'fix_pitch':True}
 
 ############################################# Acquisition ##############################

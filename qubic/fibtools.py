@@ -360,30 +360,31 @@ def profile(xin, yin, rng=None, nbins=10, fmt=None, plot=True, dispersion=True, 
                 others = None
         for i in np.arange(nbins):
                 ok = (x > xmin[i]) & (x < xmax[i])
-                newy = y[ok]
-                if clip is not None:
-                        for k in np.arange(3):
-                                newy, mini, maxi = scipy.stats.sigmaclip(newy, low=clip, high=clip)
-                nn[i] = len(newy)
-                if median:
-                        yval[i] = np.median(y[ok])
-                elif mode:
-                        mm, ss = meancut(y[ok], 3)
-                        hh = np.histogram(y[ok], bins=int(np.min([len(y[ok]) / 30, 100])), range=[mm - 5 * ss, mm + 5 * ss])
-                        idmax = np.argmax(hh[0])
-                        yval[i] = 0.5 * (hh[1][idmax + 1] + hh[1][idmax])
-                else:
-                        yval[i] = np.mean(y[ok])
-                xc[i] = (xmax[i] + xmin[i]) / 2
-                if rebin_as_well is not None:
-                        for o in range(nother):
-                                others[i, o] = np.mean(rebin_as_well[o][ok])
-                if dispersion:
-                        fact = 1
-                else:
-                        fact = np.sqrt(len(y[ok]))
-                dy[i] = np.std(y[ok]) / fact
-                dx[i] = np.std(x[ok]) / fact
+                if ok.sum() > 0:
+                        newy = y[ok]
+                        if clip is not None:
+                                for k in np.arange(3):
+                                        newy, mini, maxi = scipy.stats.sigmaclip(newy, low=clip, high=clip)
+                        nn[i] = len(newy)
+                        if median:
+                                yval[i] = np.median(y[ok])
+                        elif mode:
+                                mm, ss = meancut(y[ok], 3)
+                                hh = np.histogram(y[ok], bins=int(np.min([len(y[ok]) / 30, 100])), range=[mm - 5 * ss, mm + 5 * ss])
+                                idmax = np.argmax(hh[0])
+                                yval[i] = 0.5 * (hh[1][idmax + 1] + hh[1][idmax])
+                        else:
+                                yval[i] = np.mean(y[ok])
+                        xc[i] = (xmax[i] + xmin[i]) / 2
+                        if rebin_as_well is not None:
+                                for o in range(nother):
+                                        others[i, o] = np.mean(rebin_as_well[o][ok])
+                        if dispersion:
+                                fact = 1
+                        else:
+                                fact = np.sqrt(len(y[ok]))
+                        dy[i] = np.std(y[ok]) / fact
+                        dx[i] = np.std(x[ok]) / fact
         if plot:
                 if fmt is None:
                         fmt = 'ro'

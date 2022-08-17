@@ -9,7 +9,7 @@ from numpy.distutils.extension import Extension
 VERSION = '4.5'
 
 name = 'qubic'
-long_description = open('README.rst').read()
+long_description = open('README.md').read()
 keywords = 'scientific computing'
 platforms = 'MacOS X,Linux,Solaris,Unix,Windows'
 delattr(os, 'link')  # force sdist to copy files

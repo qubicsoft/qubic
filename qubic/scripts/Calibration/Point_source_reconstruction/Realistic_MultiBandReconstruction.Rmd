@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.6.0rc0
   kernelspec:
     display_name: Python 3
     language: python
@@ -57,7 +57,9 @@ freq_subdir[140] = '140GHz-2019-04-10'
 freq_subdir[150] = '150GHz-2019-04-06'
 freq_subdir[170] = '170GHz-2019-04-14'
 
-freq_name = 150
+freq_subdir['blind'] = '2022-04-23'
+
+freq_name = 'blind'
 
 
 machine = os.uname()[1]
@@ -82,7 +84,16 @@ elif (machine=='apcdhcp98.in2p3.fr') or (machine=='MacJCH-2.local'):
     fittedpeakfile = synthbeam_topdir + 'Files/Synthesized Beams/fitted_peaks.fits'
     directory = synthbeam_subdir+'/'+freq_subdir[freq_name]+'/'
     fitted_directory = synthbeam_topdir + 'FitSB/'
+elif machine == "shaka":
+    top_dir = '/home/mgamboa/qubic/QUBIC/qubiccalibration/Data/'
+    user_dir = os.environ['HOME']
+    synthbeam_topdir = '/home/mgamboa/qubic/QUBIC/qubiccalibration/Data/'
+    synthbeam_subdir = synthbeam_topdir #+ 'Files/Synthesized Beams/Synthesized_Beams_Files'
+    fittedpeakfile = synthbeam_topdir + '150GHz-2019-04-06/FitSB/fitted_peaks.fits'
+    directory = synthbeam_subdir+freq_subdir[freq_name]+'/'
+    fitted_directory = synthbeam_topdir + '150GHz-2019-04-06/FitSB'
     
+print(machine)   
 print('==========================================')
 print('top_dir is          : ' + top_dir)
 print('user_dir is         : ' + user_dir) 
@@ -95,11 +106,6 @@ print('==========================================')
 
 if not os.path.isfile(fittedpeakfile):
     print('File not found: ',fittedpeakfile)
-
-
-
-
-
 
 if not os.path.isdir(directory):
     print('Directory "directory" not found: ',directory)
@@ -142,10 +148,6 @@ import qubic.selfcal_lib as sc
 import os,sys,inspect
 from qubic import jchinstrument as jcinst
 
-```
-
-```{python}
-out_dir
 ```
 
 ```{python}
@@ -682,6 +684,10 @@ figure()
 plot(allnums, sumpeakamps/maxpeakamps, 'ko')
 plot(allnums[np.array(detsgood)-1], sumpeakamps[np.array(detsgood)-1]/maxpeakamps[np.array(detsgood)-1], 'ro')
 
+```
+
+```{python}
+fittedpeakfile
 ```
 
 ```{python}

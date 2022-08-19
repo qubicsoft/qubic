@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.6.0rc0
   kernelspec:
     display_name: Python 3
     language: python
@@ -302,17 +302,17 @@ plt.tight_layout()
 ```{python}
 # NEW (19 Feb 2021)
 reload(fsed)
-nside_new = 8
+nside_new = 64
 nf_recon = dictionaries[0]['nf_recon']
 
 _, _, fgr_map_dust_ud, _ = fsed.udgrade_maps(fground_maps_dust, noiseTD, nside_new, 
-                                                            nf_recon, nreals)
+                                            nf_recon, nreals, return_with_noise = True)
 _, _, fgr_map_synch_ud, _ = fsed.udgrade_maps(fground_maps_synch, noiseTD, nside_new, 
-                                                            nf_recon, nreals)
+                                            nf_recon, nreals, return_with_noise = True)
 maps_ud, std_ud, fgr_map_ud, noise_ud_i = fsed.udgrade_maps(fground_maps, noiseTD, nside_new, 
-                                                            nf_recon, nreals)
+                                            nf_recon, nreals, return_with_noise = True)
 
-_, covmask = fsed._mask_maps(maps, coveragesTD, nf_recon)
+_, covmask = fsed._mask_maps(fground_maps, coveragesTD, nf_recon)
 cov_ud = hp.ud_grade(covmask, nside_new)
 
 print("cov_ud shape", np.shape(cov_ud))
@@ -324,9 +324,9 @@ for br in range(len(dictionaries)):
 ```
 
 ```{python}
-
+bandreg = ["GalCen_Field150TD", ]
 for j, idict in enumerate(dictionaries):
-    FitsArray(Cp_prime[j]).save("SED_CovarMatrix_config{}_ nside{}_nreals{}_{}.fits".format(idict["config"],
+    FitsArray(Cp_prime[j]).save("DataSED/2022/SED_CovarMatrix_config{}_nside{}_nreals{}_{}.fits".format(bandreg[j],
                                                                                             nside_new,
                                                                                             nreals,
                                                                               "150"))
@@ -334,6 +334,10 @@ for j, idict in enumerate(dictionaries):
 
 ```{python}
 PixPix = lambda p: hp.ang2pix(nside_new, hp.pix2ang(dTD['nside'], p)[0], hp.pix2ang(dTD['nside'], p)[1] )
+```
+
+```{python}
+Cp_prime[0].shape
 ```
 
 ```{python}

@@ -1,0 +1,816 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.6.0rc0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+## Simulation of the Moon observed by QUBIC-TD
+
+
+Author: M.M. Gamboa Lerena complement of the work done by JCh
+
+This notebook aims to simulate the observation of the Moon by the QUBIC-TD using the current configuration of the instrument and the sampling modeled by JCh. 
+
+```{python}
+# Config notebook
+from IPython.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+```
+
+```{python}
+import numpy as np
+import matplotlib.pyplot as plt
+import healpy as hp
+import seaborn as sns
+
+import sys
+from importlib import reload
+from astropy.visualization import astropy_mpl_style, quantity_support
+plt.style.use(astropy_mpl_style)
+quantity_support()
+import astropy.units as u
+from astropy.time import Time
+from astropy.coordinates import SkyCoord, EarthLocation, AltAz, get_moon, get_sun#, HADec, BaseRADecFrame
+
+import qubic
+```
+
+```{python}
+def f(val, fwhm, sigma2fwhm):
+    return np.nan_to_num(np.exp(-0.5*val**2/(np.radians(fwhm)/sigma2fwhm)**2))
+```
+
+```{python}
+Salta = EarthLocation(lat=-24.731358*u.deg, lon=-65.409535*u.deg, height=1152*u.m)
+utcoffset = -3*u.hour  # Eastern Daylight Time
+door_az = 116.4
+az_span = 50.
+el_min = 30.
+el_max = 50.
+```
+
+```{python}
+days = ['2022-07-12']
+day = '2022-07-12'
+```
+
+```{python}
+start_obs_hour = '00:00:00'
+date = Time(day+ ' 00:00:00')
+start_obs_date = day +' '+start_obs_hour
+delta_time = np.linspace(12,30, 1000)*u.hour
+time0 = Time(start_obs_date)-utcoffset
+alltimes = time0 + delta_time
+local_time_hours = ((Time(start_obs_date) + delta_time).cxcsec - date.cxcsec)/3600
+### Local coordinates
+frame_Salta = AltAz(obstime=alltimes, location=Salta)
+### Moon
+moon_Salta = get_moon(alltimes)
+moonaltazs_Salta = moon_Salta.transform_to(frame_Salta)  
+### Moon
+sun_Salta = get_sun(alltimes)
+sunaltazs_Salta = sun_Salta.transform_to(frame_Salta)  
+delta_el = 20
+valid = (moonaltazs_Salta.alt.value < (el_max+delta_el)) & \
+        (moonaltazs_Salta.alt.value > (el_min-delta_el)) & \
+        (moonaltazs_Salta.az.value > 80) & \
+        (moonaltazs_Salta.az.value < 145)
+tstart = np.min(local_time_hours[valid])
+tstop = np.max(local_time_hours[valid])
+local_start = str(Time(start_obs_date)+tstart*u.hour)[:16]
+local_stop = str(Time(start_obs_date)+tstop*u.hour)[:16]
+UTC_start = str(Time(start_obs_date)-utcoffset+tstart*u.hour)[:16]
+UTC_stop = str(Time(start_obs_date)-utcoffset+tstop*u.hour)[:16]
+```
+
+```{python}
+d = qubic.qubicdict.qubicDict()
+d.read_from_file('MoonObservation.dict')
+d['nf_sub'] = 1
+d['date_obs'] = str(Time(start_obs_date)-utcoffset+tstart*u.hour)
+d['latitude'] = -24.731377    ### Salta Regional Noroeste
+d['longitude'] = -65.409546   ### Salta Regional Noroeste
+d['sampling'] = 1.
+moon_ra_mean = np.mean(moon_Salta.ra[valid]/u.deg)
+moon_dec_mean = np.mean(moon_Salta.dec[valid]/u.deg)
+d['RA_center'] = moon_ra_mean #deg
+d['DEC_center'] = moon_dec_mean #deg
+d['duration'] = tstop-tstart # Hours
+d['angspeed'] = 0.8 #deg/s
+d['delta_az'] = az_span #deg
+d['nsweeps_per_elevation'] = 1
+d['angspeed_psi'] = 0. #deg/s
+backforthdt = d['delta_az'] / d['angspeed'] * 2
+print('Scan Duration: ',backforthdt)
+d['dead_time'] = 0.
+print('Dead Time = {}'.format(d['dead_time']))
+```
+
+```{python}
+n_elevations = int(d['duration']*3600/(backforthdt+d['dead_time']))+1
+el_step = np.round((el_max - el_min) / n_elevations * 100) / 100
+d['fix_azimuth'] = {'apply':True,'az':116.4,
+                     'el':40,'el_step':el_step, 'fix_hwp':True, 'fix_pitch':True}
+print(d['fix_azimuth'])
+print('call')
+p = qubic.get_pointing(d)
+print(p.elevation)
+
+el_min_final = np.min(p.elevation)
+el_max_final = np.max(p.elevation)
+```
+
+```{python}
+# Elapsed time between observation sample and beginning of the observation
+elapsed_time_sec = (local_time_hours[valid]- local_time_hours[valid][0])*3600
+```
+
+```{python}
+fig1 = plt.figure(figsize = (14,8))
+plt.plot(p.azimuth, p.elevation, alpha=0.5, 
+     label = '{} scans with Δaz = {} deg, Δel = {} deg el_min={:5.2f} deg, el_max={:5.2f} deg, \
+                 az_center={:5.1f} deg, dead_time={} sec'.format(n_elevations, 
+                    d['delta_az'], el_step, el_min_final, el_max_final, d['fix_azimuth']['az'], d['dead_time']))
+plt.scatter(moonaltazs_Salta.az[valid], moonaltazs_Salta.alt[valid],
+            c=local_time_hours[valid], label='Moon', lw=0, s=200, marker='o', cmap='jet')
+plt.plot(sunaltazs_Salta.az[valid], sunaltazs_Salta.alt[valid], 'r', lw=3, label='Sun (needs to be far)')
+plt.fill_between([door_az-az_span/2, door_az+az_span/2], 
+             [el_max,el_max], y2=[el_min, el_min], color='r', alpha=0.5, 
+             label='Observing Window' )
+plt.legend(loc='upper left', fontsize=10)
+plt.title('Operations from {} to {} (local time)'.format(local_start, local_stop))
+plt.colorbar().set_label('Local Time')
+plt.xlabel('Absolute Azimuth [deg]')
+plt.ylabel('Absolute Elevation [deg]')
+plt.xlim(door_az-az_span/2-10, door_az+az_span/2+10)
+plt.ylim(5, 75)
+
+```
+
+```{python}
+fig2 = plt.figure(figsize = (14,8))
+plt.plot(p.equatorial[:,0]*12/180, p.equatorial[:,1], alpha=0.5, 
+     label = '{} scans with Δaz = {} deg, Δel = {} deg el_min={:5.2f} deg, el_max={:5.2f} deg, az_center={:5.1f} deg, dead_time={} sec'.format(n_elevations, 
+                    d['delta_az'], el_step, el_min_final, el_max_final, d['fix_azimuth']['az'], d['dead_time']))
+plt.scatter(moon_Salta.ra[valid]/u.deg*12/180, moon_Salta.dec[valid]/u.deg,
+            c=local_time_hours[valid], label='Moon', lw=0, s=200, marker='o', cmap='jet')
+plt.plot(sun_Salta.ra[valid]/u.deg*12/180, sun_Salta.ra[valid]/u.deg, 'r', lw=3, label='Sun (needs to be far)')
+plt.colorbar().set_label('Local Time')
+plt.legend(loc='upper left', fontsize=10)
+plt.title('Operations from {} to {} (local time)'.format(local_start, local_stop))
+plt.xlabel('RA[h]')
+plt.ylabel('DEC')
+plt.xlim((np.min(p.equatorial[:,0])-5)*12/180, (np.max(p.equatorial[:,0])+5)*12/180)
+plt.ylim(np.min(p.equatorial[:,1])-5, np.max(p.equatorial[:,1])+5)
+```
+
+```{python}
+fig, ax = plt.subplots(nrows = 2, ncols =1, sharex = True, figsize = (10,14))
+#What if I test rotating p.azimuth, p.elevation and using p.time and d['date_obs']
+ra, dec = qubic.hor2equ(p.azimuth, p.elevation, p.time, d['date_obs'],
+                       latitude = -24.731358, longitude = -65.409535)
+ax[0].plot(p.equatorial[:,0]*12/180, p.equatorial[:,1], alpha=0.5, 
+     label = 'from get_sampling')
+ax[0].plot(ra*12/180, dec, alpha = 0.5, 
+     label = 'from qubic.hor2equ')
+# Moon rotation
+ramoon, decmoon = qubic.hor2equ(np.array(moonaltazs_Salta.az[valid]), 
+                                    np.array(moonaltazs_Salta.alt[valid]), 
+                                    elapsed_time_sec, d['date_obs'],
+                               latitude = -24.731358, longitude = -65.409535)
+ax[0].scatter(moon_Salta.ra[valid]/u.deg*12/180, moon_Salta.dec[valid]/u.deg,
+            c=local_time_hours[valid], label='Moon from astropy', lw=0, s=20, marker='o', cmap='jet')
+ax[0].scatter(ramoon*12/180, decmoon, c = elapsed_time_sec*1/3600, label = 'from hor2equ')
+ax[0].legend()
+#
+#
+# not exactly the same but it shouldn't be a problem by now
+#
+#
+ax[1].scatter(moon_Salta.ra[valid]/u.deg*12/180, moon_Salta.dec[valid]/u.deg,
+            c=local_time_hours[valid], label='Moon from astropy', lw=0, s=20, marker='o', cmap='jet')
+ax[1].scatter(ramoon*12/180, decmoon, c = elapsed_time_sec*1/3600, label = 'from hor2equ')
+ax[1].legend()
+
+```
+
+```{python}
+plt.figure(figsize = (12,6))
+plt.scatter(moon_Salta.ra[valid]/u.deg*12/180, moon_Salta.dec[valid]/u.deg,
+            c=local_time_hours[valid], label='Moon from astropy', lw=0, s=40, 
+            marker='o', cmap='jet')
+plt.scatter(ramoon*12/180, decmoon, c = elapsed_time_sec*1/3600, 
+            marker = 's', s = 40, label = 'from hor2equ',
+           cmap='jet')
+#plt.colorbar(label = '')
+plt.xlabel('RA[h]')
+plt.ylabel('DEC[deg]')
+plt.legend()
+
+```
+
+```{python}
+fig3 = plt.figure(figsize = (14,8))
+plt.title('Operations from {} to {} (local time)'.format(local_start, local_stop))
+plt.subplot(2,1,1)
+plt.plot(local_time_hours[valid][0]+p.time/3600, p.azimuth, label='Scanning')
+plt.plot(local_time_hours[valid], moonaltazs_Salta.az[valid], label='Moon')
+plt.plot(local_time_hours[valid], sunaltazs_Salta.az[valid], label='Sun')
+plt.xlabel('Local Time in hour')
+plt.ylabel('Absolute Azimuth [deg]')
+plt.legend(loc='upper left')
+plt.ylim(door_az-az_span/2-10, door_az+az_span/2+10)
+plt.subplot(2,1,2)
+plt.plot(local_time_hours[valid][0]+p.time/3600, p.elevation, label='Scanning')
+plt.plot(local_time_hours[valid], moonaltazs_Salta.alt[valid], label='Moon')
+plt.plot(local_time_hours[valid], sunaltazs_Salta.alt[valid], label='Sun')
+plt.xlabel('Local Time in hour')
+plt.ylabel('Absolute Elevation [deg]')
+plt.legend(loc='upper left')
+plt.ylim(5, 75)
+plt.show()
+```
+
+Prepare qubicsoft for simulation
+* Create point source. I will model the Moon sky as follow:
+     + Fix a position in the sky in (RA, DEC) 
+     + Set to 30 arcmin size of the point source. 
+     + Continum and constant emission across the frequencies
+     + Arbitrary amplitude (high at the beggining = 1e5 $\mu$K$_{\rm CMB}$)
+     + Create 10 equal structures ($SkyMoon_i$) changing the RA, DEC of the Moon
+     + Sum $MoonSky = \sum_{i} MoonSky_i$
+
+```{python}
+# Center of the patch observed in galactic coordinates
+#center = np.array([d['RA_center'], d['DEC_center']])
+#center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+d['nside'] = 256
+nside = d['nside']
+```
+
+**Set coverage map in the center of the FOV** and see the moon moving towards it
+
+```{python}
+#d['RA_center'], d['DEC_center'] = 60,45#qubic.gal2equ(60, -45)
+s = qubic.QubicScene(d)
+    
+q = qubic.QubicInstrument(d)
+#q = qubic.QubicMultibandInstrument(d)
+atod = qubic.QubicAcquisition(q, p, s, d)
+#atod = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_in)
+
+#          COVERAGE MAP
+#
+# To study coordinates of coverage map
+cov = atod.get_coverage()
+
+hp.mollview(cov, title = "Coverage map")
+hp.graticule(dpar = 15, dmer = 8, color = 'w', verbose = False)
+
+```
+
+According with qubicsoft, coverage map is computed using the horizontal coordinates and then rotated to the instrumental ones. This means that zero's point of the coverage are -116.4 in azimuth and 40 in elevation?
+
+See this point rotating 116.4, 40 and see if it's ok. 
+
+It's OK! So, the coordinates of the moon are the ones in the coordinate system of the insturment
+
+USING COVERAGE MAP FROM SWEEPING POINTING, THE COORDINATES OF THE SKY HAVE TO BE IN (AZ, EL) (== LON, LAT from HEALPix)
+
+```{python}
+plt.figure(figsize = (14,8))
+hp.mollview(cov, rot = (116.4, 40), sub = (121), title = "Coverage map")
+hp.graticule(dpar = 15, dmer = 8, color = 'w', verbose = False)
+hp.projscatter(114, 40, color = 'darkgreen', s = 200,
+               lonlat = True)
+hp.gnomview(cov, rot = (116.4, 40), reso = 12, sub = (122), title = "Coverage map")
+hp.graticule(dpar = 15, dmer = 8, color = 'w', verbose = False)
+hp.projscatter(114, 40, color = 'darkgreen', s = 200,
+               lonlat = True)
+plt.tight_layout()
+```
+
+```{python}
+sigma2fwhm = np.sqrt(8*np.log(2))
+#cte = 58.44
+cteTD = 175.3
+_, nus_edge_in, nus_in, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, 
+                                    d['nf_sub'],
+                                    d['filter_relative_bandwidth'])
+#nu = np.array([nus_in[innu0],])
+fwhm_in = cteTD/nus_in # nus to fwhm
+
+```
+
+Compute one position of the moon. It works (position of the moon is in the region of the coverage map).. 
+
+```{python}
+#ji = 100
+#MoonPosition = hp.pixelfunc.ang2pix(nside, np.array(moonaltazs_Salta.az[valid][ji]),
+#                                    np.array(moonaltazs_Salta.alt[valid][ji]), 
+#                                    lonlat = True)
+#MoonVec = hp.pix2vec(nside, MoonPosition)
+#MoonVecs = hp.pix2vec(nside, np.arange(12*nside**2))
+#MoonAng = np.arccos(np.dot(MoonVec, MoonVecs)) #measure in minutes
+
+## Amplitude of the signal
+#MoonAmp = 1e5
+#MoonMap = np.zeros((d['nf_sub'], 12*nside**2, 3))
+##MoonMapDisc = np.zeros((d['nf_sub'], 12*nside**2, 3))
+#smooth = False
+##for i in range(len(nus_in)):
+##    MoonMap[i,:,0] += MoonAmp*f(MoonAng, fwhm_in[i], sigma2fwhm)
+#for i in range(len(nus_in)):
+#    MoonMap[i,MoonAng < np.radians(0.5),0] += MoonAmp
+#    MoonMap[i,(np.radians(0.5) < MoonAng)&\
+#                (MoonAng < np.radians(0.6)),0] += MoonAmp*0.5
+#    if smooth: 
+#        MoonMap[i,:,0] = hp.smoothing(MoonMap[i,:,0], 
+#                                          fwhm = np.radians(fwhm_in[i]), 
+#                                          verbose = False)
+## Plot
+#plt.figure(figsize = (12,8))
+#hp.mollview(MoonMap[0,:,0],  sub = 122, title = "Moon")
+```
+
+For one position it works. Now I loop over all the positions of the Moon in the interval of the observation
+
+
+```{python}
+# Amplitude of the signal
+MoonAmp = 1e5
+#MoonMap = np.zeros((d['nf_sub'], 12*nside**2, 3))
+nintervals = 50
+MoonMap4scan = np.zeros((nintervals, d['nf_sub'], 12*nside**2, len(d['kind'])))
+
+#MoonMapDisc = np.zeros((d['nf_sub'], 12*nside**2, 3))
+smooth = False
+#for i in range(len(nus_in)):
+#    MoonMap[i,:,0] += MoonAmp*f(MoonAng, fwhm_in[i], sigma2fwhm)
+# sample positions of the moon duyring scan simulation
+samp_moon_azalt = len(np.array(moonaltazs_Salta.az[valid]))
+index = [i*samp_moon_azalt//nintervals for i in range(nintervals)]
+
+for j, ipos in enumerate(index):
+    MoonPosition = hp.pixelfunc.ang2pix(nside, np.array(moonaltazs_Salta.az[valid][ipos]),
+                                    np.array(moonaltazs_Salta.alt[valid][ipos]), 
+                                    lonlat = True)        
+    # Moon has no 1 healpy-pixel size, but more. So we fill put a disc
+    MoonVec = hp.pix2vec(nside, MoonPosition)
+    MoonVecs = hp.pix2vec(nside, np.arange(12*nside**2))
+    MoonAng = np.arccos(np.dot(MoonVec, MoonVecs)) #measure in minutes
+
+    for i in range(len(nus_in)):
+        MoonMap4scan[j, i, MoonAng < np.radians(0.5),0] += MoonAmp
+        MoonMap4scan[j, i,(np.radians(0.5) < MoonAng)&\
+                    (MoonAng < np.radians(0.6)),0] += MoonAmp*0.5
+
+        if smooth:
+            MoonMap4scan[j, i,:,0] = hp.smoothing(MoonMap4scan[j, i,:,0], 
+                                             fwhm = np.radians(fwhm_in[i]),
+                                            verbose = False)
+            
+# Plot
+plt.figure(figsize = (16,12))
+hp.gnomview(np.sum(MoonMap4scan, axis = 0)[0,:,0], rot = (116.4,40), title = "Moon 1 freq", 
+            sub = (121), reso = 16)
+hp.gnomview(cov , title = "Cov map + Moon", sub = (122), rot = (116.4,40), reso = 16)
+hp.projscatter(np.array(moonaltazs_Salta.az[valid]), np.array(moonaltazs_Salta.alt[valid]),
+               lonlat = True, marker = 'o', s = 30, c = 'darkgreen')
+
+```
+
+Make dicretize positions of the moon to chunk
+
+In (az, el) coords, the Moon varies: $(\Delta A, \Delta el) = (-13.68, 20)$ deg
+
+```{python}
+# #Longest interval
+# print("Sampling interval from {} to {} seconds starting at {} (UTC) in {} intervals".format(p.time[0],
+#                                                                                            p.time[-1], 
+#                                                                                            d['date_obs'],
+#                                                                                           len(p.time)))
+# print("Moon data from {} to {} seconds starting at {} in {} intervals".format(elapsed_time_sec[0], 
+#                                                                               elapsed_time_sec[-1],
+#                                                                              UTC_start,
+#                                                                              len(elapsed_time_sec)))
+# print("We split the observation in different positions of the Moon. To do that \n we define \
+# the number of divisions, and we average the position of the Moon in that interval of time. \n \
+# Then we create an observation with the pointing up to that time")
+# print("{} different positions of the Moon".format(len(local_time_hours)))
+# nparts_samples = 10#len(local_time_hours)
+
+# az_chunks = np.zeros((len(moonaltazs_Salta.az[valid])))
+# el_chunks = np.zeros((len(moonaltazs_Salta.alt[valid])))
+
+# print("We split the TOD in {} samples".format(len(elapsed_time_sec),))
+# #j = 0
+# inichunk = int(j * 264 / 10)
+# endchunk = int((j + 1) * 264 / 10)
+# #plt.figure(figsize = (16,4))
+# #plt.plot(p.time[maskchunk],p.time[maskchunk], 'r-', alpha = 1)
+# #plt.plot(p.time[~maskchunk],p.time[~maskchunk], 'r-', alpha = 0.4)
+# print("Shape of azimuth and elevation Moon data {}".format(len(moonaltazs_Salta.az[valid]) ))
+# print("Average the az, el of the moon within that chunk")
+# azmean_chunk = np.mean(moonaltazs_Salta.az[valid][inichunk:endchunk])
+# elmean_chunk = np.mean(moonaltazs_Salta.alt[valid][inichunk:endchunk])
+# #plt.figure(figsize = (10,8))
+# #plt.plot(np.array(moonaltazs_Salta.az[valid]), np.array(moonaltazs_Salta.alt[valid]), 'co', label = 'Full')
+# #plt.plot(azmean_chunk, elmean_chunk, 'r*', label = 'avrg')
+# #plt.legend()
+# print("Start the chunks in the sampling ")
+# inichunk_samp = int(j * 170595 / 10)
+# endchunk_samp = int((j + 1) * 170595 / 10) if j != 9 else 170594
+# print(endchunk_samp)
+# maskchunk = (p.time > p.time[inichunk_samp]) & (p.time < p.time[endchunk_samp])
+# print("Number of samples per chunk ", maskchunk.sum())
+# pchunks = p[inichunk_samp:endchunk_samp]
+# #plt.figure(figsize = (14,6))
+# #colors = sns.color_palette(n_colors = 10)
+# #plt.plot(pchunks.azimuth, pchunks.elevation, 'o', color = colors[j], ms = 2, alpha=0.01)
+# #plt.plot(azmean_chunk, elmean_chunk, 'o', markersize = 5, color = colors[j])
+# #plt.ylim(10,80)
+
+# print("DONE")
+# print("The first part...")
+
+```
+
+### Now loop in chunks
+
+```{python}
+#Longest interval
+print("Sampling interval from {} to {} seconds starting at {} (UTC) in {} intervals".format(p.time[0],
+                                                                                           p.time[-1], 
+                                                                                           d['date_obs'],
+                                                                                          len(p.time)))
+print("Moon data from {} to {} seconds starting at {} in {} intervals".format(elapsed_time_sec[0], 
+                                                                              elapsed_time_sec[-1],
+                                                                             UTC_start,
+                                                                             len(elapsed_time_sec)))
+print("We split the observation in different positions of the Moon. To do that \n we define \
+the number of divisions, and we average the position of the Moon in that interval of time. \n \
+Then we create an observation with the pointing up to that time")
+print("{} different positions of the Moon".format(len(local_time_hours)))
+nparts_samples = 50   #len(local_time_hours)
+
+az_chunks = np.zeros((len(moonaltazs_Salta.az[valid])))
+el_chunks = np.zeros((len(moonaltazs_Salta.alt[valid])))
+
+print("We split the TOD in {} samples".format(len(elapsed_time_sec),))
+
+pchunks = []
+for j in range(nparts_samples):
+    # The dims of the moon positions is different from the dims of the coordinates (264 vs ~170000)
+    inichunk = int(j * 264 / nparts_samples)
+    endchunk = int((j + 1) * 264 / nparts_samples)
+    print(inichunk,endchunk)
+    #plt.figure(figsize = (16,4))
+    #plt.plot(p.time[maskchunk],p.time[maskchunk], 'r-', alpha = 1)
+    #plt.plot(p.time[~maskchunk],p.time[~maskchunk], 'r-', alpha = 0.4)
+    print("Shape of azimuth and elevation Moon data {}".format(len(moonaltazs_Salta.az[valid]) ))
+    print("Average the az, el of the moon within that chunk")
+    az_chunks[j] = np.mean(np.array(moonaltazs_Salta.az[valid][inichunk:endchunk]))
+    el_chunks[j] = np.mean(np.array(moonaltazs_Salta.alt[valid][inichunk:endchunk]))
+    #plt.figure(figsize = (10,8))
+    #plt.plot(np.array(moonaltazs_Salta.az[valid]), np.array(moonaltazs_Salta.alt[valid]), 'co', label = 'Full')
+    #plt.plot(azmean_chunk, elmean_chunk, 'r*', label = 'avrg')
+    #plt.legend()
+    print("Start the chunks in the sampling ")
+    inichunk_samp = int(j * 170595 / nparts_samples)
+    endchunk_samp = int((j + 1) * 170595 / nparts_samples)-1 #if j != nparts_samples-1 else 170594
+    print(inichunk_samp,endchunk_samp)
+    maskchunk = (p.time > p.time[inichunk_samp]) & (p.time < p.time[endchunk_samp])
+    print("Number of samples per chunk ", maskchunk.sum())
+    pchunks.append(p[inichunk_samp:endchunk_samp+1])
+plt.figure(figsize = (14,6))
+colors = sns.color_palette(palette = 'tab10', n_colors = nparts_samples)
+for j in range(nparts_samples):
+    plt.plot(pchunks[j].azimuth, pchunks[j].elevation, '.', color = colors[j], ms = 4, alpha=0.04)
+    plt.plot(az_chunks[j], el_chunks[j], 'o', markersize = 5, color = colors[j])
+plt.ylim(10,80)
+plt.xlabel("Az[deg]")
+plt.ylabel("El[deg]")
+print("DONE")
+print("The first part...")
+
+```
+
+```{python}
+from matplotlib.animation import FuncAnimation
+
+```
+
+```{python}
+### GIF
+colors = sns.color_palette(palette = 'tab10', n_colors = nparts_samples)
+for j in range(nparts_samples):
+    plt.plot(pchunks[j].azimuth, pchunks[j].elevation, '.', color = colors[j], ms = 4, alpha=0.04)
+    plt.plot(az_chunks[j], el_chunks[j], 'o', markersize = 5, color = colors[j])
+plt.ylim(10,80)
+plt.xlabel("Az[deg]")
+plt.ylabel("El[deg]")
+
+for ibnd in [2,3,4,5]:
+    fig = plt.figure(figsize = (14,6))
+    ax = fig.gca()
+    
+    points, = ax.plot(pchunks[0].azimuth, 
+                      pchunks[0].elevation, '.', color = colors[0], ms = 4, alpha = 0.4)
+    points1, = ax.plot(az_chunks[0], el_chunks[0], 'o', ms = 5, color = colors[0])
+    #line = ax.axvline(data_array['nu_in'][0], color = 'k', ls = '--')
+    
+    #line_spl, = ax.plot(xvals + data_array['nu_in'][0],
+    #                    data_array['SplFunc'](xvals), color = 'k', ls = '-')
+    #print(line_spl)
+    #text = ax.text(140, 1, r'$\nu_i=${:3.2f} GHz'.format(data_array['nu_in'][0]), fontsize=14)
+
+    def init():
+        #ax.axhline(0, color = 'k', ls = '-', alpha = 0.2)
+        #c = ['b', 'g', 'y', 'orange', 'r']
+        #for ib in range(ibnd):
+        #    ax.axvspan(xmin = data_array['nu_edge'][ib], xmax = data_array['nu_edge'][ib + 1], 
+        #               alpha = 0.2, color = c[ib])
+        ax.set_ylim(10,80)
+        ax.set_xlabel("Az[deg]")
+        ax.set_ylabel("El[deg]")
+        return points, points1
+
+    def animate(i):
+        points.set_data(ax.plot(pchunks[i].azimuth, 
+                      pchunks[i].elevation, '.', color = colors[i], ms = 4, alpha = 0.4))
+        #line_spl.set_xdata(xvals + data_array['nu_in'][i])
+        points1.set_data(az_chunks[i], el_chunks[i], 'o', marksize = 5, color = colors[i])
+        return(points, points1)
+
+    steps = np.arange(nparts_samples)
+    anim = FuncAnimation(fig, animate, steps, init_func = init, 
+                         interval = 3000, blit = False, repeat = False)
+
+    # Save a .gif
+    fig.tight_layout()
+    anim.save('./pointing_chuncks.gif'.format(ibnd), writer='imagemagick')
+```
+
+```{python}
+#plt.figure(figsize = (12,8))
+#for j in range(0,nintervals-1, 4):
+#    hp.gnomview(MoonMap4scan[j, 0,:,0], title = '{} pos'.format(j), reso = 20,
+#                rot = (116.4, 40), notext = True)
+#    hp.graticule(color = 'w',dpar = 8, dmer = 8, verbose = False)
+### 
+##
+#
+# Is it moving in the opposite direction?
+#
+##
+###
+```
+
+**We have to define** a criterion to determine what is the best time sampling in the simulation. 
+
+```{python}
+#print("Number of samplings for qubicsoft", len(p))
+#print("Number of sampled moon positions", len(moon_Salta))
+#print("Plot the Delta positions in equatorial coordinates")
+#plt.scatter(p.equatorial[:,0], p.equatorial[:,1])
+#plt.scatter(moon_Salta.ra, moon_Salta.dec)
+```
+
+## $\texttt{qubicsoft}$ simulation 
+
+
+### Compare coverage map of sweeping pointing vs repeat pointing
+
+see another notebook in this dir
+
+```{python}
+#d1 = d.copy()
+#d1['sweeping_pointing'] = False
+#d1['repeat_pointing'] = True
+#d1['npointings'] = 9000
+#p1 = qubic.get_pointing(d1)
+#s1 = qubic.QubicScene(d1)    
+#q1 = qubic.QubicInstrument(d1)
+##q = qubic.QubicMultibandInstrument(d)
+#atod1 = qubic.QubicAcquisition(q1, p1, s1, d1)
+#cov1 = atod1.get_coverage()
+
+#
+# PLOT
+#
+#plt.figure(figsize = (12,10))
+#hp.mollview(cov, sub = 121, 
+#            rot = np.degrees(hp.pix2ang(nside, (np.where(cov == cov.max())[0][0]) ))[::-1],
+#            title = 'sweep RA, DEC = {:2.1f},{:2.1f}'.format(d['RA_center'], d['DEC_center']))
+#hp.mollview(cov1, sub = 122, title = 'rand RA, DEC = {:2.1f}, {:2.1f}'.format(d1['RA_center'], d1['DEC_center']))
+```
+
+## Plot coverage map & moon in healpix
+
+```{python}
+dchunk = d.copy()
+```
+
+```{python}
+#tstart_chunk = np.min(local_time_hours[valid][inichunk:endchunk])
+#tstop_chunk = np.max(local_time_hours[valid][inichunk:endchunk])
+#local_start_chunk = str(Time(start_obs_date)+tstart_chunk*u.hour)[:16]
+#local_stop_chunk = str(Time(start_obs_date)+tstop_chunk*u.hour)[:16]
+#UTC_start_chunk = str(Time(start_obs_date)-utcoffset+tstart_chunk*u.hour)[:16]
+#UTC_stop_chunk = str(Time(start_obs_date)-utcoffset+tstop_chunk*u.hour)[:16]
+```
+
+```{python}
+# Prepare dict for each chunk
+#moon_ra_mean = np.mean(moon_Salta.ra[valid][inichunk:endchunk]/u.deg)
+#moon_dec_mean = np.mean(moon_Salta.dec[valid][inichunk:endchunk]/u.deg)
+#dchunk['RA_center'] = moon_ra_mean #deg
+#dchunk['DEC_center'] = moon_dec_mean #deg
+#dchunk['duration'] = tstop_chunk - tstart_chunk # Hours
+#d['angspeed'] = 0.8 #deg/s
+#d['delta_az'] = az_span #deg
+#d['nsweeps_per_elevation'] = 1
+#d['angspeed_psi'] = 0. #deg/s
+#backforthdt = d['delta_az'] / d['angspeed'] * 2
+#print('Scan Duration: ',backforthdt)
+#d['dead_time'] = 0.
+#print('Dead Time = {}'.format(d['dead_time']))
+
+#n_elevations = int(d['duration']*3600/(backforthdt+d['dead_time']))+1
+#el_step = np.round((el_max - el_min) / n_elevations * 100) / 100
+#d['fix_azimuth'] = {'apply':True,'az':116.4,
+#                     'el':40,'el_step':el_step, 'fix_hwp':True, 'fix_pitch':True}
+#print(d['fix_azimuth'])
+#print('call')
+#p = qubic.get_pointing(d)
+#print(p.elevation)
+
+#el_min_final = np.min(p.elevation)
+#el_max_final = np.max(p.elevation)
+```
+
+```{python}
+#Create maps for the chunk
+MoonAmp = 1e5
+MoonMap4scan = np.zeros((nparts_samples, d['nf_sub'], 12*nside**2, len(d['kind'])))
+
+for j in range(nparts_samples):
+    MoonPosition = hp.pixelfunc.ang2pix(nside, np.array(az_chunks[j]),
+                                    np.array(el_chunks[j]), 
+                                    lonlat = True)        
+    # Moon has no 1 healpy-pixel size, but more. So we fill put a disc
+    MoonVec = hp.pix2vec(nside, MoonPosition)
+    MoonVecs = hp.pix2vec(nside, np.arange(12*nside**2))
+    MoonAng = np.arccos(np.dot(MoonVec, MoonVecs)) #measure in minutes
+
+    for i in range(len(nus_in)):
+        MoonMap4scan[j, i, MoonAng < np.radians(0.5),0] += MoonAmp
+        MoonMap4scan[j, i,(np.radians(0.5) < MoonAng)&\
+                (MoonAng < np.radians(0.6)),0] += MoonAmp*0.5
+
+    if smooth:
+        MoonMap4scan[j, i,:,0] = hp.smoothing(MoonMap4scan[j, i,:,0], 
+                                         fwhm = np.radians(fwhm_in[i]),
+                                        verbose = False)
+
+```
+
+```{python}
+#hp.gnomview(MoonMap4scan[7,0,:,0], rot = (116.4,40), reso = 20)
+```
+
+```{python}
+s = qubic.QubicScene(d)
+    
+q = qubic.QubicInstrument(d)
+#q = qubic.QubicMultibandInstrument(d)
+atod_chunks = []
+for i in range(nparts_samples):
+    #print(i)
+    atod_chunks.append(qubic.QubicAcquisition(q, pchunks[i], s, d))
+    #atod = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge_in)
+
+```
+
+```{python}
+ndets = len(q) #monochromatic instrument
+nsamples = len(p)
+TOD = []#np.zeros((nparts_samples, ndets, nsamples))
+
+if d['nf_sub'] == 1:
+    for j in range(nparts_samples):
+        print(j)
+        TOD.append(atod_chunks[j].get_observation(MoonMap4scan[j, 0, :, 0], noiseless = d['noiseless'], convolution=False))
+
+```
+
+```{python}
+todjoint = TOD[0]#np.zeros((248,nsamples))
+for k in range(1,nparts_samples):
+    todjoint = np.concatenate((todjoint, TOD[k]), axis = 1) 
+    #print(np.shape(todjoint))
+```
+
+```{python}
+#Plot coadded map
+plt.scatter(ra*12/180, dec, s = todjoint[0], marker = 'o')
+plt.colorbar()
+```
+
+Map-making
+
+```{python}
+d['tol'] = 1e-5
+if d['nf_sub'] == 1:
+    #_, nus_edge, nus, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, 1, d['filter_relative_bandwidth'])
+    arec = qubic.QubicAcquisition(q, p, s, d)
+    cov = arec.get_coverage()
+    maps_recon, nit, error = arec.tod2map(todjoint, d, cov=cov)
+    #_, maps_convolved = arec.get_observation(MoonMap4qs, noiseless = d['noiseless'], convolution = True)
+else: 
+    arec = qubic.QubicMultibandAcquisition(q, p, s, d, nus_edge)
+    cov = arec.get_coverage()
+    maps_recon, nit, error = arec.tod2map(TOD, d, cov=cov)
+    _, maps_convolved = arec.get_observation(x0, noiseless=d['noiseless'], convolution=True)
+    cov = np.sum(cov, axis=0)
+    
+```
+
+```{python}
+_, maps_convolved = arec.get_observation(MoonMap4scan[5,0,:,0], noiseless=d['noiseless'], convolution=True)
+maxcov = np.max(cov)
+unseen = cov < maxcov * 0.1
+```
+
+```{python}
+maps_convolved.shape, unseen.sum(), maps_recon.shape
+```
+
+```{python}
+if d['nf_sub'] == 1:
+    maps_convolved = np.array(maps_convolved)
+    maps_convolved[unseen] = hp.UNSEEN
+    maps_recon[unseen] = hp.UNSEEN
+```
+
+```{python}
+plt.figure(figsize = (16,8))
+hp.gnomview(maps_recon, rot = (116.4,40), sub = 132, title = 'Reconstructed tol={}, chunks = {}'.format(d['tol'],
+                                                                                                       nparts_samples),
+           reso = 12, xsize = 250, ysize = 200)
+hp.graticule(dpar = 8, dmer = 8, color = 'w', verbose = False)
+hp.gnomview(maps_convolved, rot = (116.4,40),  sub = 131, title = 'Convolved (1 chunk)',
+           reso = 12, xsize = 250, ysize = 200)
+hp.graticule(dpar = 8, dmer = 8, color = 'w', verbose = False)
+hp.gnomview(cov, rot = (116.4,40), sub = 133, title = 'Coverage',
+           reso = 12, xsize = 250, ysize = 200)
+hp.graticule(dpar = 8, dmer = 8, color = 'w', verbose = False)
+#hp.projscatter(az_chunks, el_chunks, label = 'input Moon',
+#               lonlat = True, marker = 'o', s = 30, c = 'darkgreen')
+plt.legend()
+```
+
+Now in equatorial coordinates
+
+```{python}
+covmsk = cov > np.max(cov)*0.1
+covmsked = cov.copy()
+covmsked[~covmsk] = hp.UNSEEN
+hp.mollview(covmsked)
+```
+
+```{python}
+# Convert all coords from healpix pixels (in lon, lat) in (az, el)
+lonlat = hp.pix2ang(nside, np.arange(12*nside**2), lonlat = True)
+```
+
+```{python}
+# Convert (az, el) in (ra, dec)
+lentime = len(p.time)
+racoord, decoord = np.zeros((lentime,)), np.zeros((lentime,))
+for i in range(12*256**2):
+    racoord[i], decoord[i] = qubic.hor2equ(lonlat[0][i], lonlat[1][i], p.time[i], d['date_obs'] )
+```
+
+```{python}
+# Convert (ra, dec) to (lon, lat)
+lonlat_new = racoord[]
+```
+
+```{python}
+angs = hp.pix2ang(nside, np.arange(12*nside**2))
+
+```
+
+```{python}
+
+```

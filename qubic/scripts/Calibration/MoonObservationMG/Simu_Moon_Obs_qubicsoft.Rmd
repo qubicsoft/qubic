@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.6.0rc0
+      jupytext_version: 1.5.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -29,7 +29,7 @@ display(HTML("<style>.container { width:95% !important; }</style>"))
 import numpy as np
 import matplotlib.pyplot as plt
 import healpy as hp
-import seaborn as sns
+#import seaborn as sns
 
 import sys
 from importlib import reload
@@ -89,6 +89,10 @@ local_start = str(Time(start_obs_date)+tstart*u.hour)[:16]
 local_stop = str(Time(start_obs_date)+tstop*u.hour)[:16]
 UTC_start = str(Time(start_obs_date)-utcoffset+tstart*u.hour)[:16]
 UTC_stop = str(Time(start_obs_date)-utcoffset+tstop*u.hour)[:16]
+```
+
+```{python}
+qubic.qubicdict.qubicDict.dicts_dir
 ```
 
 ```{python}

@@ -110,6 +110,7 @@ class QubicInstrument(Instrument):
             'gaussian', 'fitted_beam' or 'multi_freq'
 
         """
+        self.d = d
         self.debug = d['debug']  # if True allows debuging prints
         filter_nu = d['filter_nu']
         filter_relative_bandwidth = d['filter_relative_bandwidth']
@@ -400,23 +401,7 @@ class QubicInstrument(Instrument):
             self.NEP_lowpassedge(noise, noise.lpe2)
 
         else:  # 220 GHz
-            # back to back horns, as seen by the detectors through the combiner   
-            # Here the physical horn area S_horns must be used
-            g[ib2b] = gp[ib2b, None] * S_horns * omega_det * (nu / c) ** 2 * \
-                      sec_beam * dnu
-            P_phot[ib2b] = (emissivities * tr_prod * h * nu /
-                            (np.exp(h * nu / k / temperatures[ib2b]) - 1))[ib2b, None] * \
-                           g[ib2b]
-            P_phot[ib2b] = P_phot[ib2b] * self.detector.efficiency
-            NEP_phot2_nobunch[ib2b] = h * nu * P_phot[ib2b] * 2     # MARTIN: same l.403
-            # note the factor 2 in the definition of the NEP^2
-            NEP_phot2[ib2b] = NEP_phot2_nobunch[ib2b] * (1 + P_phot[ib2b] /
-                                                         (h * nu * g[ib2b]))
-            if self.debug:
-                print(names[ib2b],
-                      ', T=', temperatures[ib2b],
-                      'K, P = {0:.2e} W'.format(P_phot[ib2b].max()),
-                      ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ib2b]).max()) + ' W/sqrt(Hz)')
+            self.NEP_horns(noise)
 
             # Environment NEP
             eff_factor = np.prod(transmissions[len(names) - 4:]) * \
@@ -746,19 +731,41 @@ class QubicInstrument(Instrument):
         """
 
         ib2b = noise.ib2b
-        # back to back horns, as seen by the detectors through the combiner
-        T = noise.temperatures[ib2b]
-        b = h * noise.nu_up / k / T
-        I1 = quad(funct, 0, b, (4, 1))[0]
-        I2 = quad(funct, 0, b, (4, 2))[0]
-        K1 = quad(funct, 0, b, (3, 1))[0]
-        eta = (noise.emissivities * noise.tr_prod)[ib2b] * \
-                                self.detector.efficiency
-        # Here the physical horn area S_horns must be used
-        noise.NEP_phot2[ib2b] = 2 * noise.gp[ib2b] * eta * (k * T) ** 5 / c ** 2 / h ** 3 * \
-                          (I1 + eta * I2) * noise.S_horns * noise.omega_det * noise.sec_beam
-        noise.P_phot[ib2b] = noise.gp[ib2b] * eta * (k * T) ** 4 / c ** 2 / h ** 3 * K1 * \
-                       noise.S_horns * noise.omega_det * noise.sec_beam
+        if int(self.d['filter_nu']/1e9)==150:
+            # back to back horns, as seen by the detectors through the combiner
+            T = noise.temperatures[ib2b]
+            b = h * noise.nu_up / k / T
+            I1 = quad(funct, 0, b, (4, 1))[0]
+            I2 = quad(funct, 0, b, (4, 2))[0]
+            K1 = quad(funct, 0, b, (3, 1))[0]
+            eta = (noise.emissivities * noise.tr_prod)[ib2b] * \
+                                    self.detector.efficiency
+            # Here the physical horn area S_horns must be used
+            noise.NEP_phot2[ib2b] = 2 * noise.gp[ib2b] * eta * (k * T) ** 5 / c ** 2 / h ** 3 * \
+                              (I1 + eta * I2) * noise.S_horns * noise.omega_det * noise.sec_beam
+            noise.P_phot[ib2b] = noise.gp[ib2b] * eta * (k * T) ** 4 / c ** 2 / h ** 3 * K1 * \
+                           noise.S_horns * noise.omega_det * noise.sec_beam
+        elif int(self.d['filter_nu']/1e9)==220:
+            # back to back horns, as seen by the detectors through the combiner   
+            # Here the physical horn area S_horns must be used
+            noise.g[ib2b] = noise.gp[ib2b, None] * noise.S_horns * noise.omega_det * (self.filter.nu / c) ** 2 * \
+                      noise.sec_beam * noise.dnu
+            #[MARTIN note: tr_prod has the proper indexes? (see eta computation for 150GHz band) ]
+            noise.P_phot[ib2b] = (noise.emissivities * noise.tr_prod * h * self.filter.nu /
+                            (np.exp(h * self.filter.nu / k / noise.temperatures[ib2b]) - 1))[ib2b, None] * \
+                           noise.g[ib2b]
+            noise.P_phot[ib2b] = noise.P_phot[ib2b] * self.detector.efficiency
+            noise.NEP_phot2_nobunch[ib2b] = h * self.filter.nu * noise.P_phot[ib2b] * 2
+            # note the factor 2 in the definition of the NEP^2
+            noise.NEP_phot2[ib2b] = noise.NEP_phot2_nobunch[ib2b] * (1 + noise.P_phot[ib2b] /
+                                                         (h * self.filter.nu * noise.g[ib2b]))
+            
+            # commented out, should work _raise_debug() method
+            #if self.debug:
+            #    print(names[ib2b],
+            #          ', T=', temperatures[ib2b],
+            #          'K, P = {0:.2e} W'.format(P_phot[ib2b].max()),
+            #          ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ib2b]).max()) + ' W/sqrt(Hz)')
 
         if self.debug: self._raise_debug(noise, noise.ib2b)
 

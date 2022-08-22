@@ -434,7 +434,7 @@ class QubicInstrument(Instrument):
     def load_NEP_parameters(self, scene):
         
         """
-        This method computes the parameters for the photon noise (NEP) computation.
+        This method loads the parameters for the photon noise (NEP) computation.
         The attributes are loaded into a Noise() class. The attributes are:
 
         temperatures, transmissions, emissivities, gp (polarization) of each component of the instrument,
@@ -647,8 +647,7 @@ class QubicInstrument(Instrument):
     def NEP_horns(self, noise, 
                   return_only = False, sampling = None):
         """
-        This method computes the noise for all the components before 
-        back-to-back array.
+        This method calculates the noise of the array of horns.
 
         Arguments:
             noise: parameters for the computation of the noise. It is loaded from
@@ -718,8 +717,7 @@ class QubicInstrument(Instrument):
                         return_only = False, sampling = None):
 
         """
-        This method computes the noise for all the components before 
-        back-to-back array.
+        This method calculates the environment noise.
 
         Arguments:
             noise: parameters for the computation of the noise. It is loaded from
@@ -789,8 +787,7 @@ class QubicInstrument(Instrument):
                     return_only = False, sampling = None):
 
         """
-        This method computes the noise for all the components before 
-        back-to-back array.
+        This method calculates the noise of the optical combiner (consider 2 mirrors).
 
         Arguments:
             noise: parameters for the computation of the noise. It is loaded from
@@ -855,8 +852,7 @@ class QubicInstrument(Instrument):
                     return_only = False, sampling = None):
 
         """
-        This method computes the noise for all the components before 
-        back-to-back array.
+        This method calculates the noise of the cold stop.
 
         Arguments:
             noise: parameters for the computation of the noise. It is loaded from
@@ -920,8 +916,7 @@ class QubicInstrument(Instrument):
                     return_only = False, sampling = None):
 
         """
-        This method computes the noise for all the components before 
-        back-to-back array.
+        This method calculates the noise of the dichroic. It's only accounted for the FI configuration.
 
         Arguments:
             noise: parameters for the computation of the noise. It is loaded from
@@ -983,9 +978,9 @@ class QubicInstrument(Instrument):
                                 return_only = False, sampling = None):
 
         """
-        This method computes the noise for all the components before 
-        back-to-back array.
-
+        This method calculates the noise of the neutral density filter for 150GHz band. 
+        In the case of the 220GHz the ndf is considered in an independent method called NEP_lastfilters_220.
+        
         Arguments:
             noise: parameters for the computation of the noise. It is loaded from
                 load_NEP_parameters method
@@ -1032,8 +1027,8 @@ class QubicInstrument(Instrument):
                         return_only = False, sampling = None):
 
         """
-        This method computes the noise for all the components before 
-        back-to-back array.
+        This method calculates the noise of the low pass edge filter.
+        
 
         Arguments:
             noise: parameters for the computation of the noise. It is loaded from

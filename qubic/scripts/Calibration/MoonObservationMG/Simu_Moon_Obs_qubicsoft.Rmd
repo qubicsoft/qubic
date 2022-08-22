@@ -510,6 +510,62 @@ print("The first part...")
 ```
 
 ```{python}
+from matplotlib.animation import FuncAnimation
+
+```
+
+```{python}
+### GIF
+colors = sns.color_palette(palette = 'tab10', n_colors = nparts_samples)
+for j in range(nparts_samples):
+    plt.plot(pchunks[j].azimuth, pchunks[j].elevation, '.', color = colors[j], ms = 4, alpha=0.04)
+    plt.plot(az_chunks[j], el_chunks[j], 'o', markersize = 5, color = colors[j])
+plt.ylim(10,80)
+plt.xlabel("Az[deg]")
+plt.ylabel("El[deg]")
+
+for ibnd in [2,3,4,5]:
+    fig = plt.figure(figsize = (14,6))
+    ax = fig.gca()
+    
+    points, = ax.plot(pchunks[0].azimuth, 
+                      pchunks[0].elevation, '.', color = colors[0], ms = 4, alpha = 0.4)
+    points1, = ax.plot(az_chunks[0], el_chunks[0], 'o', ms = 5, color = colors[0])
+    #line = ax.axvline(data_array['nu_in'][0], color = 'k', ls = '--')
+    
+    #line_spl, = ax.plot(xvals + data_array['nu_in'][0],
+    #                    data_array['SplFunc'](xvals), color = 'k', ls = '-')
+    #print(line_spl)
+    #text = ax.text(140, 1, r'$\nu_i=${:3.2f} GHz'.format(data_array['nu_in'][0]), fontsize=14)
+
+    def init():
+        #ax.axhline(0, color = 'k', ls = '-', alpha = 0.2)
+        #c = ['b', 'g', 'y', 'orange', 'r']
+        #for ib in range(ibnd):
+        #    ax.axvspan(xmin = data_array['nu_edge'][ib], xmax = data_array['nu_edge'][ib + 1], 
+        #               alpha = 0.2, color = c[ib])
+        ax.set_ylim(10,80)
+        ax.set_xlabel("Az[deg]")
+        ax.set_ylabel("El[deg]")
+        return points, points1
+
+    def animate(i):
+        points.set_data(ax.plot(pchunks[i].azimuth, 
+                      pchunks[i].elevation, '.', color = colors[i], ms = 4, alpha = 0.4))
+        #line_spl.set_xdata(xvals + data_array['nu_in'][i])
+        points1.set_data(az_chunks[i], el_chunks[i], 'o', marksize = 5, color = colors[i])
+        return(points, points1)
+
+    steps = np.arange(nparts_samples)
+    anim = FuncAnimation(fig, animate, steps, init_func = init, 
+                         interval = 3000, blit = False, repeat = False)
+
+    # Save a .gif
+    fig.tight_layout()
+    anim.save('./pointing_chuncks.gif'.format(ibnd), writer='imagemagick')
+```
+
+```{python}
 #plt.figure(figsize = (12,8))
 #for j in range(0,nintervals-1, 4):
 #    hp.gnomview(MoonMap4scan[j, 0,:,0], title = '{} pos'.format(j), reso = 20,

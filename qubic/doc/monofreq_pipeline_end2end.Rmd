@@ -5,17 +5,16 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.7.1
+      jupytext_version: 1.6.0rc0
   kernelspec:
     display_name: Python 3
     language: python
     name: python3
 ---
 
-<!-- #region -->
 # QUBIC monofrequency pipeline
 
-
+#### Edited by Martín Gamboa, 2022/08/11
 #### Edited by Louise Mousset, 2019/11/29
 
 This notebook shows the typical pipeline for data simulation and analysis. There are 2 parts :
@@ -23,7 +22,8 @@ This notebook shows the typical pipeline for data simulation and analysis. There
 * From those TOD, perform Map Making to reconstruct the input sky map
 
 Here we work with only one frequency band.
-<!-- #endregion -->
+
+Style programming guide acording: this link ([qubic wiki](http://qubic.in2p3.fr/wiki/uploads/SimulationsWorkingGroup/20210311OnZoom/collaborative_coding.pdf))
 
 ```{python}
 ##Loading modules. 
@@ -36,6 +36,7 @@ import sys
 import time
 import datetime
 import shutil
+from warnings import warn
 
 # Specific science modules
 import healpy as hp
@@ -52,14 +53,13 @@ from qubic import SpectroImLib as si
 from pysm3 import models
 from qubic import QubicSkySim as qss
 
-rc('figure', figsize=(13, 10))
-rc('font', size=13)
+plt.rc('figure', figsize = (13, 10))
+plt.rc('font', size = 13)
 ```
 
 ```{python}
 # Repository for dictionary
-global_dir = Qubic_DataDir(datafile='instrument.py', datadir='../')
-dictfilename = global_dir + 'dicts/pipeline_demo.dict'
+dictfilename = 'explanatory.dict'
 
 # Read dictionary chosen
 d = qubic.qubicdict.qubicDict()
@@ -72,21 +72,24 @@ d['nf_sub'] = 1
 d['nf_recon'] = 1
 
 # Center of the patch observed in galactic coordinates
+# because the pointing strategy is not in horizontal coordinates (only sweeping pointing it is)
+# the center of the FOV has to be in galactic coordinates
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 print(center)
 d['effective_duration'] = 4
 # Adjust some parameters in the dictionary
 d['npointings'] = 3000
 d['tol'] = 1e-5
-d['filter_nu'] = 220e9
+d['filter_nu'] = 150e9
+# source of noise: photon noise + detector noise. In this case we neglect photon noise
 d['photon_noise'] = False
 d['noiseless'] = False
 
-print(d['filter_nu'])
-print(d['detector_nep'])
-print(d['photon_noise'])
-print(d['config'])
-print(d['effective_duration'])
+print('Central frequency', d['filter_nu'])
+print('NEP (detector)', d['detector_nep'])
+print('photon noise?', d['photon_noise'])
+print('Instrument (TD or FI)', d['config'])
+print('Scan duration', d['effective_duration'])
 ```
 
 # Input sky
@@ -98,15 +101,14 @@ In this case we read a map $X_0$ simulated previously which contains fluctuation
 # Make a sky using PYSM
 ### Pick one of these:
 seed = 42
-sky_config = {'CMB': 'c1'} 
-# sky_config = {'cmb': 42}                ### CMB Only
+sky_config = {'CMB': 'c1'} ### CMB Only
 #sky_config = {'cmb': seed, 'dust':'d1'}   ### CMB + Dust
 
 ### Generate the maps at each sub-frequency
 Qubic_sky = qss.Qubic_sky(sky_config, d)
-x0 = Qubic_sky.get_simple_sky_map()
+input_map = Qubic_sky.get_simple_sky_map()
 
-print('sky shape: ', x0.shape)
+print('sky shape: ', input_map.shape)
 
 # Look at the input sky maps using Healpy
 istokes = 0 # Stokes parameter (I, Q, U)
@@ -115,9 +117,10 @@ rr = 9 # Resolution in arcmin
 plt.figure(figsize=(13,8))
 for istk in range(3):
     plt.subplots_adjust(wspace=0.9)
-    hp.mollview(x0[0, :,istk], cmap='jet', sub = (3,2,2*istk+1), 
+    hp.mollview(input_map[0, :,istk], cmap = 'jet', sub = (3, 2, 2 * istk + 1), 
                 title = 'Mollview {0} Stokes parameter'.format(d['kind'][istk]))
-    hp.gnomview(x0[0, :,istk], cmap ='jet', sub = (3,2,2*istk+2), rot=center, reso=rr, 
+    hp.gnomview(input_map[0, :,istk], cmap = 'jet', sub = (3, 2, 2 * istk + 2), 
+                rot = center, reso = rr, 
                 title = 'Gnomview {0} Stokes parameter'.format(d['kind'][istk]))
 ```
 
@@ -131,21 +134,30 @@ where $A$ is the pointing matrix, $S$ the sky and $n$ the noise.
 
 ```{python}
 # Pointing strategy
-p = qubic.get_pointing(d)
+pointing = qubic.get_pointing(d)
 print('=== Pointing DONE! ===')
 
 # Model of the scene at the time of observation
-s = qubic.QubicScene(d)
+scene = qubic.QubicScene(d)
 
 # Create a monofrequency Instrument.
-q = qubic.QubicInstrument(d)
+qinst = qubic.QubicInstrument(d)
 
+sizeoperators = d['npointings'] * len(qinst) * ((2 * d['synthbeam_kmax']+ 1)**2) * 16/1024**3
+sizeoperators = d['nf_sub']*sizeoperators
+confirm = input("you will use {:4.3f}Gb, do you want ot continue?".format(sizeoperators))
+confirm = bool(confirm)
+if (confirm == 1) or (confirm == True): 
+    warn("(re)Demodulation confirmed! ")
+else:
+    sys.exit("Stopped!")
+                
 # Create an acquisition operator which combines all relevant information
 #scene, instrument configuration and pointing strategy. 
-a = qubic.QubicAcquisition(q, p, s, d)
+acq = qubic.QubicAcquisition(qinst, pointing, scene, d)
 
 # Monofreq TOD making
-TOD, maps_convolved = a.get_observation(x0[0], noiseless=d['noiseless'])#, convolution = True)
+TOD, maps_convolved = acq.get_observation(input_map[0], noiseless = d['noiseless'])#, convolution = True)
 
 print('TOD shape: ', TOD.shape)
 print('maps conv shape: ', maps_convolved.shape)
@@ -159,7 +171,9 @@ tes = 6
 plt.plot(TOD[tes, :], label='TES {}'.format(tes))
 plt.xlabel('Pointing index')
 plt.ylabel(f'TOD from TES {tes} [W]')
-plt.title('FI - 220GHz - Noiseless={} CMB - STD = {:.4} W'.format( d['noiseless'], np.std(TOD)))
+plt.title('FI - {}GHz - Noiseless={} CMB - STD = {:.4} W'.format(int(d['filter_nu']/1e9),
+                                                                 d['noiseless'], 
+                                                                 np.std(TOD)))
 ```
 
 ### About memory used 
@@ -167,7 +181,7 @@ For end-2-end simulations, the dificulty is the memory requirement. This is why 
 
 During TOD making and map-making, you see this line printed:
 
-    $ Info moussetDell: Allocating (2976000,9) elements = 408.69140625 MiB in FSRRotation3dMatrix.__init__.
+    Info shaka: Allocating (2976000,9) elements = 408.69140625 MiB in FSRRotation3dMatrix.__init__.
 
 This is the size of the pointing matrix A. The shape is $(N_{det} x N_{ptgs}, N_{peaks})$ where $N_{det}$ is the number of bolometers (992 for the FI and 248 for the TD), $N_{ptgs}$ the number of pointings and $N_{peaks}$ the number of peaks taken into account in the synthetic beam. 
 
@@ -188,7 +202,7 @@ Finally, with $N_{ptgs} = 3000$, $(N_{det}=992$, $kmax=1$ and $sb_frac=1$, the s
 The **size in MiB** will be: 
 
 ```{python}
-Ndet = len(q.detector.index) # Number of detectors
+Ndet = len(qinst.detector.index) # Number of detectors
 Size = Ndet * d['npointings'] * 9 * 16
 print('Size of A:', Size, 'bits')
 print('Size of A:', Size/(1024**2), 'MiB')
@@ -206,26 +220,26 @@ Last remark, if you run on several machines **in parallel**, for example at NERS
 ```{python}
 # Get coverage map
 # i.e. how many times were seen each pixel of the sky (not trivial because of the synthetic beam)
-cov = a.get_coverage()
+cov_map = acq.get_coverage()
 
-print(cov.shape)
-hp.mollview(cov)
+print(cov_map.shape)
+hp.mollview(cov_map)
 ```
 
 ```{python}
 # Check the pointing and the coverage coincide
-theta = p.galactic[:, 0]
-phi = p.galactic[:, 1]
+theta = pointing.galactic[:, 0]
+phi = pointing.galactic[:, 1]
 nside = d['nside']
 
 pix = hp.ang2pix(nside, theta, phi, lonlat=True)
 ptg_map = np.zeros(12 * nside**2)
 ptg_map[pix] = 200
-hp.mollview(ptg_map + cov)
+hp.mollview(ptg_map + cov_map)
 ```
 
 ```{python}
-hitmap = a.get_hitmap(d['nside'])
+hitmap = acq.get_hitmap(d['nside'])
 hp.mollview(hitmap)
 ```
 
@@ -233,9 +247,9 @@ hp.mollview(hitmap)
 
 ```{python}
 # From TOD reconstruct sky maps.
-maps_recon, nit, error = a.tod2map(TOD, d, cov=cov)
+recons_map, nit, error = acq.tod2map(TOD, d, cov = cov_map)
 
-print('The shape of the reconstructed maps is (#pixels, #stokes) :', maps_recon.shape)
+print('The shape of the reconstructed maps is (#pixels, #stokes) :', recons_map.shape)
 print('{} iterations were needed to get an error of {}'.format(nit, error))
 ```
 
@@ -243,19 +257,19 @@ print('{} iterations were needed to get an error of {}'.format(nit, error))
 
 ```{python}
 # Compare with the convolved maps
-diff = maps_recon - maps_convolved
+diff = recons_map - maps_convolved
 print(diff.shape)
-print(maps_recon.shape)
+print(recons_map.shape)
 ```
 
 ```{python}
 # Keeping only the sky region which has been significantly observed
 # Pixels not seen enough are replaced by UNSEEN value
-maxcov = np.max(cov)
-unseen = cov < maxcov * 0.15
+maxcov = np.max(cov_map)
+unseen = cov_map < maxcov * 0.15
 
 maps_convolved[unseen, :] = hp.UNSEEN
-maps_recon[unseen, :] = hp.UNSEEN
+recons_map[unseen, :] = hp.UNSEEN
 diff[unseen, :] = hp.UNSEEN
 ```
 
@@ -270,22 +284,27 @@ for istokes in range(3):
     else:
         min = -8
         max = 8
-    hp.gnomview(maps_convolved[:, istokes], cmap='jet', rot=center, sub=(3,3,3*istokes+1), reso=rr,
-                title='Input ' + stokes[istokes], unit='$\mu K_{CMB}$', format='%g',  min=min, max=max)
-    hp.gnomview(maps_recon[:, istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+2), reso=rr,
-                title='Output ' + stokes[istokes], unit='$\mu K_{CMB}$', min=min, max=max)
-    hp.gnomview(diff[:, istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+3), reso=rr,
-                title='Difference ' + stokes[istokes], unit='$\mu K_{CMB}$', min=-2, max=2)
+    hp.gnomview(maps_convolved[:, istokes], cmap = 'jet', 
+                rot = center, sub = (3,3,3*istokes+1), reso = rr,
+                title = 'Input ' + stokes[istokes], unit = '$\mu K_{CMB}$', 
+                format = '%g',  min = min, max = max)
+    hp.gnomview(recons_map[:, istokes], cmap = 'jet',
+                rot = center, sub = (3,3,3*istokes+2), reso = rr,
+                title = 'Output ' + stokes[istokes], unit = '$\mu K_{CMB}$', 
+                min = min, max = max)
+    hp.gnomview(diff[:, istokes], cmap = 'jet', 
+                rot = center, sub = (3,3,3*istokes+3), reso = rr,
+                title = 'Difference ' + stokes[istokes], unit = '$\mu K_{CMB}$', 
+                min = -2, max = 2)
 hp.graticule(dpar = 5, dmer = 5, verbose = False, alpha = 0.5)
-plt.savefig('/home/martin/QUBIC/ArticlesSet_2020/RRPII/plots_paperII/maps_1bands_4years.pdf')
 ```
 
 ```{python}
-seenpix = cov > maxcov * 0.7
+seenpix = cov_map > maxcov * 0.3
 print(np.std(diff[seenpix, 2]))
 
 map_convcenter = np.copy(maps_convolved)
-map_reconcenter = np.copy(maps_recon)
+map_reconcenter = np.copy(recons_map)
 diffcenter = np.copy(diff)
 
 map_convcenter[~seenpix, :] = hp.UNSEEN

@@ -1028,7 +1028,7 @@ class QubicInstrument(Instrument):
 
         """
         This method calculates the noise of the low pass edge filter.
-        
+        In the case of the 220GHz the ndf is considered in an independent method called NEP_lastfilters_220.
 
         Arguments:
             noise: parameters for the computation of the noise. It is loaded from

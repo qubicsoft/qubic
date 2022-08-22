@@ -38,26 +38,26 @@ nside = hp.npix2nside(sh[1])
 
 ```{python}
 # find where the map is non-UNSEEN in order to center the Gnomview
-ok = allmaps[0,:] != hp.UNSEEN
-azp, elp = hp.pix2ang(nside, np.arange(12*nside**2)[ok], lonlat=True)
-maz = 180 - 0.5*(np.min(azp) + np.max(azp))
-mel = 0.5*(np.min(elp) + np.max(elp))
+# ok = allmaps[0,:] != hp.UNSEEN
+# azp, elp = hp.pix2ang(nside, np.arange(12*nside**2)[ok], lonlat=True)
+# maz = 180 - 0.5*(np.min(azp) + np.max(azp))
+# mel = 0.5*(np.min(elp) + np.max(elp))
 
-# Display all maps
-rc('figure',figsize=(20,20))
-rc('font',size=12)
-n0 = 6
-for i in range(len(allTESNum)):
-    ok = allmaps[i,:] != hp.UNSEEN
-    if (i%(n0**2))==0: figure()
-    mm = np.zeros(12*nside**2)+ hp.UNSEEN
-    mm[ok] = allmaps[i,ok]-tdt.get_mode(allmaps[i,ok])
-    mm[~ok] = hp.UNSEEN
-    hp.gnomview(mm, reso=10, sub=(n0,n0,(i%(n0**2))+1), min=-5e3, max=2.5e4, title=allTESNum[i], rot=[maz, mel])
+# # Display all maps
+# rc('figure',figsize=(20,20))
+# rc('font',size=12)
+# n0 = 6
+# for i in range(len(allTESNum)):
+#     ok = allmaps[i,:] != hp.UNSEEN
+#     if (i%(n0**2))==0: figure()
+#     mm = np.zeros(12*nside**2)+ hp.UNSEEN
+#     mm[ok] = allmaps[i,ok]-tdt.get_mode(allmaps[i,ok])
+#     mm[~ok] = hp.UNSEEN
+#     hp.gnomview(mm, reso=10, sub=(n0,n0,(i%(n0**2))+1), min=-5e3, max=2.5e4, title=allTESNum[i], rot=[maz, mel])
 ```
 
 # Fitting the main peak on a single TES with a Gaussian
-We first pick a roation "by eye" ([1., -4]) and then we will improve on it later.
+We first pick a rotation "by eye" ([-1., -4]) and then we will improve on it later.
 
 ```{python}
 def gauss2d(x, pars, extra_args=None):
@@ -65,9 +65,9 @@ def gauss2d(x, pars, extra_args=None):
     mygauss = amp * np.exp(-0.5*((extra_args[0]-xc)**2+(extra_args[1]-yc)**2)/sig**2)
     return np.ravel(mygauss)
 
-def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0.]), doplot=False, verbose=False):
+def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0.]), doplot=False, verbose=False, guess=None, distok=3, mynum=None):
     ### get the gnomview back into a np.array in order to fit it
-    mm = allmaps[idx,:].copy()
+    mm = mymap.copy()
     badpix = mm ==hp.UNSEEN
     mm[badpix] = 0          ### Set bad pixels to zero before returning the np.array()
     mapxy = hp.gnomview(mm, reso=reso, rot=rot, return_projected_map=True, xsize=xs, no_plot=True).data
@@ -84,23 +84,31 @@ def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0.]), doplot=False, verbose=F
         imshow(mapxy, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mm-ss, vmax=np.max(mapxy))
         xlabel('Degrees')
         ylabel('Degrees')
-        title('TES#{}'.format(allTESNum[idx]))
+        if mynum:
+            title('TES#{}'.format(mynum))
 
     ### Guess where the maximum is and the other parameters
-    maxi = mapxy == np.nanmax(mapxy)
-    maxx = np.mean(xx[maxi])
-    maxy = np.mean(yy[maxi])
-    guess = np.array([np.max(mapxy),maxx, maxy, 1.])
+    if guess is None:
+        maxi = mapxy == np.nanmax(mapxy)
+        maxx = np.mean(xx[maxi])
+        maxy = np.mean(yy[maxi])
+        guess = np.array([np.max(mapxy),maxx, maxy, 1.])
+    else:
+        maxx = guess[1]
+        maxy = guess[2]
     if doplot:
         # Plot a red cross at the expected location
-        plot(maxx,maxy,'rx', ms=30, lw=2)
+        plot(guess[1],guess[2],'yx', ms=30, mew=2, label='Guess')
 
     ### Do the fit putting the UNSEEN to a very low weight
     errpix = xx*0+ss
     errpix[mapxy==0] *= 1e5
     resfit = ft.do_minuit(np.ravel(xx), np.ravel(mapxy), np.ravel(errpix), guess, verbose=verbose,
-                          functname=gauss2d, extra_args=[xx,yy], rangepars = [[0.,1e8], [maxx-3, maxx+3], [maxy-3, maxy+3], [0., 10.]])
-
+                          functname=gauss2d, extra_args=[xx,yy], 
+                          rangepars = [[0.,1e8], [maxx-distok, maxx+distok], [maxy-distok, maxy+distok], [0., 10.]])
+    if doplot:
+        plot(resfit[1][1], resfit[1][2], 'rx', ms=30, mew=2, label='Fit')
+        legend()
     ### Image of the fitted Gaussian
     fitted = np.reshape(gauss2d(x, resfit[1], extra_args=[xx,yy]), (xs, xs))
     if doplot:
@@ -127,15 +135,15 @@ rc('figure',figsize=(20,8))
 rc('font',size=12)
 
 ### Pick a TES number
-mynum = 248
+mynum = 33
 xs = 201
-myrotinit = np.array([1., -4.])
+myrotinit = np.array([-1, -4.])
 
 idx = where(np.array(allTESNum)==mynum)[0][0]
 hp.gnomview(allmaps[idx,:], reso=10, rot=myrotinit, title='TES#{}'.format(mynum), min=-5e3, max=2.5e4, sub=(1,4,1))
 
 reso=4
-resfit = fit_one_tes(allmaps[idx,:], xs, reso, rot=np.array([maz, mel]), verbose=True, doplot=True)
+resfit = fit_one_tes(allmaps[idx,:], xs, reso, rot=myrotinit, verbose=True, doplot=True)
 ```
 
 # Now we do the same on all TES
@@ -152,7 +160,7 @@ allxy = np.zeros((len(allTESNum),2))
 allerrxy = np.zeros((len(allTESNum),2))
 
 for i in range(len(allTESNum)):
-    idx = where(np.array(allTESNum)==i)[0][0]
+    idx = where(np.array(allTESNum-1)==i)[0][0]
     resfit = fit_one_tes(allmaps[idx,:], xs, reso, rot=myrotinit, verbose=False, doplot=False)
     allFWHM[i] = resfit[1][3]*2.35
     allerrFWHM[i] = resfit[2][3]*2.35
@@ -160,44 +168,14 @@ for i in range(len(allTESNum)):
     allerramp[i] = resfit[2][0]*2.35
     allxy[i,:] = resfit[1][1:3]
     allerrxy[i,:] = resfit[2][1:3]
-    print('TES#{}: FWHM = {}'.format(i, resfit[1][3]*2.35))
+    print('TES#{0}: FWHM = {1:5.2f}'.format(i, resfit[1][3]*2.35))
 
-```
-
-```{python}
-### We need to perform cuts in order to keep good fits
-plot(allerrFWHM, allFWHM, 'ko')
-okfwhm = (np.abs(allFWHM-1) < 0.5) & (allerrFWHM < 0.01)
-plot(allerrFWHM[okfwhm], allFWHM[okfwhm], 'ro')
-
-xscale('log')
-```
-
-```{python}
-a = hist(allFWHM[okfwhm],bins=20, range=[0.5,1.5])
-xx = 0.5*(a[1][:-1]+a[1][1:])
-yy = a[0]
-
-def gauss(x, pars, extra_args=None):
-    return pars[0]*np.exp(-0.5*(x-pars[1])**2/pars[2]**2)
-
-guess = np.array([len(xx), 1., 0.2])
-ok = yy != 0
-resfit = ft.do_minuit(xx[ok], yy[ok], np.sqrt(yy[ok]), guess, verbose=True,
-                          functname=gauss)
-
-xxx = np.linspace(min(xx), max(xx), 1000)
-plot(xxx, gauss(xxx, resfit[1]), label='FWHM = {0:5.2f} +/- {1:5.2f}'.format(resfit[1][1], resfit[1][2]), lw=3)
-
-xlabel('FWHM (deg.)')
-ylabel('Number of TES')
-legend()
 ```
 
 # Offsets
 We use DBSCAN to associate measured peaks to the ones predicted by creidhe
 
-**there is an inversion somewhere between az and el... it has to be understood.**
+**there is an inversion somewhere between az and el... it has to be understood. It has been implemented here.**
 
 
 
@@ -209,6 +187,7 @@ print(np.shape(offsets))
 
 rc('figure',figsize=(10,8))
 rc('font',size=12)
+subplot().set_aspect(1)
 plot(offsets[:,0], offsets[:,1],'bo')
 
 ```
@@ -226,6 +205,7 @@ def run_DBSCAN(params, doplot=False):
 mytesn = np.array(allTESNum)
 xycreidhe = offsets[mytesn-1,:]
 
+######## Here we apply the inversion betwwen Az and El ##############
 delta_az = allxy[:,0] - xycreidhe[:,1]
 err_delta_az = allerrxy[:,0]
 delta_el = allxy[:,1] - xycreidhe[:,0]
@@ -238,6 +218,394 @@ params_dbscan[isnan(params_dbscan)] = 1e8
 labels = run_DBSCAN(params_dbscan)
 ok = labels==0
 
+subplot().set_aspect(1)
+plot(delta_az, delta_el, 'ko', label='all ({})'.format(len(delta_az)))
+plot(delta_az[ok], delta_el[ok], 'ro', label='DBSCAN selected ({})'.format(len(delta_az[ok])))
+xlabel('$\Delta_{az}^{Moon} - Offset_{Creidhe}$')
+ylabel('$\Delta_{el}^{Moon} - Offset_{Creidhe}$')
+legend()
+```
+
+```{python}
+### Here is a new version of the FWHM histogram with only the "good" TES
+subplot(1,1,1)
+a = hist(allFWHM[labels==0],bins=20, range=[0.5,1.5])
+xx = 0.5*(a[1][:-1]+a[1][1:])
+yy = a[0]
+
+def gauss(x, pars, extra_args=None):
+    return pars[0]*np.exp(-0.5*(x-pars[1])**2/pars[2]**2)
+
+guess = np.array([len(xx), 1., 0.2])
+notzero = yy != 0
+resfit = ft.do_minuit(xx[notzero], yy[notzero], np.sqrt(yy[notzero]), guess, verbose=True,
+                          functname=gauss)
+
+xxx = np.linspace(min(xx), max(xx), 1000)
+plot(xxx, gauss(xxx, resfit[1]), label='FWHM = {0:5.2f} +/- {1:5.2f}'.format(resfit[1][1], resfit[1][2]), lw=3)
+
+xlabel('FWHM (deg.)')
+ylabel('Number of TES')
+title('Ntes = {}'.format((labels==0).sum()))
+legend()
+```
+
+```{python}
+### Below the inversion between az and el is obvious from the inversion required to Créidhe's points
+```
+
+```{python}
+rc('figure',figsize=(16,8))
+rc('font',size=12)
+subplot(1,2,1).set_aspect(1)
+plot(xycreidhe[:,1], xycreidhe[:,0],'bo', alpha=0.2, label='Offsets from Créidhe')
+plot(allxy[:,0], allxy[:,1], 'ro', alpha=0.2, label='All Moon peaks')
+plot(xycreidhe[ok,1], xycreidhe[ok,0],'bo', label='Offsets from Créidhe (DBSCAN selected)')
+plot(allxy[ok,0], allxy[ok,1], 'ro', label='All Moon peaks (DBSCAN selected)')
+legend()
+xlabel('$\Delta_{az}$ [deg.]')
+ylabel('$\Delta_{el}$ [deg.]')
+
+maz, saz = ft.meancut(delta_az[labels==0], 3)
+mel, sel = ft.meancut(delta_el[labels==0], 3)
+
+
+subplot(1,2,2).set_aspect(1)
+plot(xycreidhe[:,1], xycreidhe[:,0], 'go', alpha=0.1, label='Offsets from Créidhe')      ### Inversion needed here
+plot(xycreidhe[ok,1], xycreidhe[ok,0],'bo', label='Offsets from Créidhe')                ### Inversion needed here
+plot(allxy[ok,0]-maz, allxy[ok,1]-mel, 'ro', label='Shifted Moon peaks')
+title('Shift: $\Delta$Az={0:5.2f} +/- {1:5.2f} deg ; $\Delta$El={2:5.2f} +/- {3:5.2f} deg'.format(maz, saz, mel, sel))
+legend()
+xlabel('$\Delta_{az}$ [deg.]')
+ylabel('$\Delta_{el}$ [deg.]')
+
+```
+
+Apparently there is a slight rotation between the locations predicted by Créidhe and the actual measurement. We need to understand this as well as the (az,el) inversion. This could just be due to a slight misalignment of the focal plane in the instrument, or to a non-zero inclination of the whole instrument...
+
+Let's find what this rotation angle is:
+
+```{python}
+### Function to rotate a set of points around a given center
+def rotate_translate_scale_2d(xin, theta, center, scale):
+    rotmat = np.array([[np.cos(theta), -np.sin(theta)],[np.sin(theta), np.cos(theta)]])
+    return scale * np.dot(rotmat, (xin-center).T).T
+
+def rot_trans_scale_pts(x, pars, extra_args=None):
+    pts = np.reshape(x, (len(x)//2, 2))
+    return np.ravel(rotate_translate_scale_2d(pts, np.radians(pars[0]), np.array([pars[1],pars[2]]), pars[3]))
+
+### Now apply it
+nn = ok.sum()
+initvec = np.zeros((nn,2))
+outvec = np.zeros((nn,2))
+weightvec = np.zeros(nn)
+
+initvec = np.zeros_like(xycreidhe[ok,:])
+initvec[:,0] = xycreidhe[ok,1]
+initvec[:,1] = xycreidhe[ok,0]
+
+outvec = allxy[ok,:]
+weightvec[:] = 1./np.sum(allerrxy[ok]**2, axis=1)
+
+subplot(1,2,1).set_aspect(1)
+plot(initvec[:,0], initvec[:,1], 'bo', label = 'Créidhe')
+plot(outvec[:,0], outvec[:,1], 'ro', label='Moon')
+
+guess = np.array([0., maz, mel, 1.])
+print(guess)
+
+
+resfit = ft.do_minuit(np.ravel(initvec), np.ravel(outvec), np.ravel(initvec)*0+1, guess, verbose=True,
+                           functname=rot_trans_scale_pts, fixpars=[0,0,0,1], force_chi2_ndf=True)
+
+newvec = np.reshape(rot_trans_scale_pts(np.ravel(initvec), resfit[1]), (nn,2))
+
+mylabel = 'Fit to match Moon: \n'+ r'$\theta$={0:3.2f}+/-{1:3.2f} deg'.format(resfit[1][0], resfit[2][0])
+mylabel += '\n' + r'$\Delta$az={0:3.2f}+/-{1:3.2f} deg'.format(resfit[1][1], resfit[2][1])
+mylabel += '\n' + r'$\Delta$el={0:3.2f}+/-{1:3.2f} deg'.format(resfit[1][2], resfit[2][2])
+plot(newvec[:,0], newvec[:,1], 'b+', ms=13, label=mylabel)
+xlabel('azimuth')
+xlabel('elevation')
+legend()
+xlabel('$\Delta_{az}$ [deg.]')
+ylabel('$\Delta_{el}$ [deg.]')
+
+
+```
+
+```{python}
+
+```
+
+```{python}
+reload(hp)
+### Guess for the Moon position
+newcreidhe = xycreidhe[:,::-1]   ### apply inversion of az and el
+moon_guess = np.reshape(rot_trans_scale_pts(np.ravel(newcreidhe), resfit[1]), (256,2))
+
+subplot(1,2,1).set_aspect(1)
+plot(newcreidhe[:,0], newcreidhe[:,1], 'bo', alpha=0.2, label='Initial Offsets')
+plot(outvec[:,0], outvec[:,1], 'ro', label='Moon Measurements')
+
+mylabel = 'Rotated offsets: \n'+ r'$\theta$={0:3.2f}+/-{1:3.2f} deg'.format(resfit[1][0], resfit[2][0])
+mylabel += '\n' + r'$\Delta$az={0:3.2f}+/-{1:3.2f} deg'.format(resfit[1][1], resfit[2][1])
+mylabel += '\n' + r'$\Delta$el={0:3.2f}+/-{1:3.2f} deg'.format(resfit[1][2], resfit[2][2])
+
+plot(moon_guess[:,0], moon_guess[:,1], 'ro', alpha=0.2, label=mylabel)
+xlabel('$\Delta_{az}$ [deg.]')
+ylabel('$\Delta_{el}$ [deg.]')
+legend()
+
+
+subplot(1,2,2).set_aspect(1)
+plot(outvec[:,0], outvec[:,1], 'ro', label='Moon Measurements')
+plot(moon_guess[:,0], moon_guess[:,1], 'ro', alpha=0.2, label=mylabel)
+xlabel('$\Delta_{az}$ [deg.]')
+ylabel('$\Delta_{el}$ [deg.]')
+
+
+TESok = allTESNum[ok]
+sh = np.shape(newvec)
+alldd = np.zeros(sh[0])
+allxd = np.zeros(sh[0])
+allyd = np.zeros(sh[0])
+for i in range(sh[0]):
+    xdist = [outvec[i,0], newvec[i,0]]
+    ydist = [outvec[i,1], newvec[i,1]]
+    allxd[i] = xdist[0]-xdist[1]
+    allyd[i] = ydist[0]-ydist[1]
+    alldd[i] = np.sqrt((xdist[0]-xdist[1])**2 + (ydist[0]-ydist[1])**2)
+    if alldd[i] > 0.2:
+        print('TES#{0} away by: {1:5.2f} deg.'.format(TESok[i], alldd[i]))
+        text(outvec[i,0], outvec[i,1], '{}'.format(TESok[i]), fontsize=10)
+    plot(xdist, ydist, 'b')
+legend()
+```
+
+```{python}
+print(resfit[1])
+```
+
+```{python}
+subplot(1,2,1).set_aspect(1)
+plot(newcreidhe[:,0], newcreidhe[:,1], 'bo', alpha=0.2, label='Initial Offsets')
+plot(outvec[:,0], outvec[:,1], 'ro', label='Moon Measurements')
+
+mylabel = 'Rotated offsets: \n'+ r'$\theta$={0:3.2f}+/-{1:3.2f} deg'.format(resfit[1][0], resfit[2][0])
+mylabel += '\n' + r'$\Delta$az={0:3.2f}+/-{1:3.2f} deg'.format(resfit[1][1], resfit[2][1])
+mylabel += '\n' + r'$\Delta$el={0:3.2f}+/-{1:3.2f} deg'.format(resfit[1][2], resfit[2][2])
+
+plot(moon_guess[:,0], moon_guess[:,1], 'ro', alpha=0.2, label=mylabel)
+xlabel('$\Delta_{az}$ [deg.]')
+ylabel('$\Delta_{el}$ [deg.]')
+legend()
+
+```
+
+```{python}
+### Distributions of distance
+
+guess = np.array([len(xx), 0., 0.1])
+xxx = np.linspace(-0.4, 0.4, 1000)
+
+figure()
+subplot(1,3,1)
+a=hist(allxd, range=[-0.4,0.4], bins=21)
+xlabel('Angle [deg]')
+xx = 0.5*(a[1][:-1]+a[1][1:])
+yy = a[0]
+notzero = a[0] != 0
+resfit = ft.do_minuit(xx[notzero], yy[notzero], np.sqrt(yy[notzero]), guess, verbose=False,
+                          functname=gauss)
+plot(xxx, gauss(xxx, resfit[1]), label='$\Delta_{az}^{Peak}$'+' = {0:5.2g} +/- {1:5.2g}'.format(resfit[1][1], resfit[1][2]), lw=3)
+legend()
+
+
+
+subplot(1,3,2)
+a=hist(allyd, range=[-0.4,0.4], bins=21)
+xlabel('Angle [deg]')
+xx = 0.5*(a[1][:-1]+a[1][1:])
+yy = a[0]
+notzero = a[0] != 0
+resfit = ft.do_minuit(xx[notzero], yy[notzero], np.sqrt(yy[notzero]), guess, verbose=False,
+                          functname=gauss)
+plot(xxx, gauss(xxx, resfit[1]), label='$\Delta_{El}^{Peak}$'+' = {0:5.2g} +/- {1:5.2g}'.format(resfit[1][1], resfit[1][2]), lw=3)
+legend()
+
+subplot(1,3,3)
+a=hist(0.5*(allxd+allyd), range=[-0.4,0.4], bins=21)
+xlabel('Angle [deg]')
+xx = 0.5*(a[1][:-1]+a[1][1:])
+yy = a[0]
+notzero = a[0] != 0
+resfit = ft.do_minuit(xx[notzero], yy[notzero], np.sqrt(yy[notzero]), guess, verbose=False,
+                          functname=gauss)
+plot(xxx, gauss(xxx, resfit[1]), label='$\Delta_{tot}^{Peak}$'+' = {0:5.2g} +/- {1:5.2g}'.format(resfit[1][1], resfit[1][2]), lw=3)
+legend()
+
+```
+
+```{python}
+### List of TES that were used for the first pass:
+print('All TES:')
+print(allTESNum)
+
+### List of "Matching TES"
+print('\nGood TES ({}):'.format(ok.sum()))
+print(allTESNum[ok])
+
+### List of "Not Matching TES"
+print('\nBad TES ({}):'.format((~ok).sum()))
+print(allTESNum[~ok])
+```
+
+#### Now we can check on all good TES one by one if the rotation calculated predicts the right location or not.
+
+We set up the right Gnomview rotation to place the expected Moon position to be at the centre of the image, then we set the guess position to (0,0). It works fine !
+
+```{python}
+reload(ft)
+rc('figure',figsize=(20,8))
+rc('font',size=12)
+
+### Pick a TES number
+mynum = 221
+xs = 201
+
+print(myrotinit)
+print(moon_guess[mynum-1,:])
+
+mynewrot = myrotinit-np.array([moon_guess[mynum-1,0], -moon_guess[mynum-1,1]])
+idx = where(np.array(allTESNum)==mynum)[0][0]
+
+reso=4
+resfit = fit_one_tes(allmaps[idx,:], xs, reso, rot=mynewrot, verbose=True, doplot=True, 
+                     guess=np.array([np.max(allmaps[idx,:]),0. ,0., 1]), mynum=mynum)
+
+```
+
+```{python}
+#Now position in the sky for all TES
+mynewrot = myrotinit-np.array([moon_guess[:,0], -moon_guess[:,1]]).T
+
+subplot().set_aspect(1)
+dec = 0.05
+plot(mynewrot[:,0], mynewrot[:,1],'ko', alpha=0.3)
+for i in range(256):
+    text(mynewrot[i,0]+dec, mynewrot[i,1]+dec, '{}'.format(i+1), fontsize=8)
+xlabel('$\Delta_{az}$ [deg.]')
+ylabel('$\Delta_{el}$ [deg.]')
+legend()
+
+np.savetxt('new_offsets_18082022_JC.txt', mynewrot)
+```
+
+# By eye, one can identify those among the bad ones that could have been taken as good:
+
+```{python}
+shouldbegood = [23, 72, 79, 82, 113, 115, 118, 133, 134, 135, 153, 157, 158, 159, 163, 169, 175, 
+                177, 185, 186, 187, 198, 200, 209, 214, 215, 238, 239, 243, 244, 247, 250, 252]
+```
+
+```{python}
+reload(ft)
+rc('figure',figsize=(20,8))
+rc('font',size=12)
+
+xs = 201
+for mynum in shouldbegood:
+    mynewrot = myrotinit-np.array([moon_guess[mynum-1,0], -moon_guess[mynum-1,1]])
+    if isfinite(np.sum(mynewrot)):
+        figure()
+        idx = where(np.array(allTESNum)==mynum)[0][0]
+        hp.gnomview(allmaps[idx,:], reso=10, rot=mynewrot, title='TES#{}'.format(mynum), min=-5e3, max=2.5e4, sub=(1,4,1))
+
+        reso=4
+        resfit = fit_one_tes(allmaps[idx,:], xs, reso, rot=mynewrot, verbose=True, doplot=True, 
+                         guess=np.array([np.max(allmaps[idx,:]), 0,0, 1]))
+        show()
+```
+
+## Interesting:
+for some of them, we see that we could get them back. Type A:
+
+```{python}
+willbeback = [23, 82, 200, 215, 247]
+```
+
+For others the fit goes sideways because of other bright features (the fit could be improved to be more robust with respect to this). 
+
+```{python}
+badconditions = [134, 135, 153, 158, 159, 186, 187, 198, 209, 239, 252]
+```
+
+We also see that 115 and 163 have very strong ghosts.
+
+```{python}
+ghosted = [115, 163]
+```
+
+But for some of them, the prediction is clearly OFF by a fair amount. Could they be TES for which numbers have been inverted ?
+Here is the list:
+
+```{python}
+badnumbering = [72, 79, 113, 118, 157, 177, 185, 214, 238, 243, 244, 250, 252]
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+# Now we perform a second pass using the predicted locations as a guess.
+
+# It seems to me that this is rather bugged for now... needs to be done better.
+
+```{python}
+reso = 4
+xs = 201
+allamp_2 = np.zeros(len(allTESNum))
+allerramp_2 = np.zeros(len(allTESNum))
+allFWHM_2 = np.zeros(len(allTESNum))
+allerrFWHM_2 = np.zeros(len(allTESNum))
+allxy_2 = np.zeros((len(allTESNum),2))
+allerrxy_2 = np.zeros((len(allTESNum),2))
+
+for i in range(256):
+    mynum = i+1
+    mynewrot = myrotinit-np.array([moon_guess[mynum-1,0], -moon_guess[mynum-1,1]])
+    if isfinite(np.sum(mynewrot)):
+        resfit = fit_one_tes(allmaps[i,:], xs, reso, rot=mynewrot, verbose=False, doplot=False, 
+                             guess=np.array([np.max(allmaps[i,:]), 0,0, 1]), distok=6, mynum=mynum)
+        allFWHM_2[i] = resfit[1][3]*2.35
+        allerrFWHM_2[i] = resfit[2][3]*2.35
+        allamp_2[i] = resfit[1][0]*2.35
+        allerramp_2[i] = resfit[2][0]*2.35
+        allxy_2[i,:] = resfit[1][1:3]
+        allerrxy_2[i,:] = resfit[2][1:3]
+        print('TES#{0}: FWHM = {1:5.2f}'.format(i+1, resfit[1][3]*2.35))
+
+```
+
+```{python}
+delta_az = allxy_2[:,0]
+err_delta_az = allerrxy_2[:,0]
+delta_el = allxy_2[:,1]
+err_delta_el = allerrxy_2[:,1]
+
+params_dbscan = np.array([delta_az, delta_el, err_delta_az, err_delta_el, allFWHM_2, allerrFWHM_2]).T
+params_dbscan[isnan(params_dbscan)] = 1e8
+
+
+labels = run_DBSCAN(params_dbscan)
+ok = labels==0
+
+subplot().set_aspect(1)
 plot(delta_az, delta_el, 'ko', label='all ({})'.format(len(delta_az)))
 plot(delta_az[ok], delta_el[ok], 'ro', label='DBSCAN selected ({})'.format(len(delta_az[ok])))
 xlabel('$\Delta$az')
@@ -246,27 +614,105 @@ legend()
 ```
 
 ```{python}
-rc('figure',figsize=(16,8))
-rc('font',size=12)
-subplot(1,2,1)
-plot(xycreidhe[:,1], xycreidhe[:,0],'bo', label='Offsets from Créidhe')
-plot(allxy[:,0], allxy[:,1], 'ro', label='All Moon peaks')
+subplot().set_aspect(1)
+plot(moon_guess[:,0], moon_guess[:,1], 'bo', alpha=0.2)
+plot(moon_guess[ok,0], moon_guess[ok,1], 'bo')
+plot(delta_az[ok] + moon_guess[ok,0], delta_el[ok] + moon_guess[ok,1], 'ro', label='DBSCAN selected ({})'.format(len(delta_az[ok])))
+xlabel('$\Delta$az')
+ylabel('$\Delta$el')
 legend()
+```
 
-maz, saz = ft.meancut(delta_az[labels==0], 3)
-mel, sel = ft.meancut(delta_el[labels==0], 3)
+```{python}
+### Here is a new version of the FWHM histogram with only the "good" TES
+subplot(1,2,1)
+a = hist(allFWHM_2[labels==0],bins=20, range=[0.5,1.5])
+xx = 0.5*(a[1][:-1]+a[1][1:])
+yy = a[0]
 
+def gauss(x, pars, extra_args=None):
+    return pars[0]*np.exp(-0.5*(x-pars[1])**2/pars[2]**2)
 
-subplot(1,2,2)
-plot(offsets[:,1], offsets[:,0], 'go', alpha=0.1, label='Offsets from Créidhe')
-plot(xycreidhe[ok,1], xycreidhe[ok,0],'bo', label='Offsets from Créidhe')
-plot(allxy[ok,0]-maz, allxy[ok,1]-mel, 'ro', label='Shifted Moon peaks')
-title('Shift: $\Delta$Az={0:5.2f} +/- {1:5.2f} deg ; $\Delta$El={2:5.2f} +/- {3:5.2f} deg'.format(maz, saz, mel, sel))
+guess = np.array([len(xx), 1., 0.2])
+notzero = yy != 0
+resfit = ft.do_minuit(xx[notzero], yy[notzero], np.sqrt(yy[notzero]), guess, verbose=True,
+                          functname=gauss)
+
+xxx = np.linspace(min(xx), max(xx), 1000)
+plot(xxx, gauss(xxx, resfit[1]), label='FWHM = {0:5.2f} +/- {1:5.2f}'.format(resfit[1][1], resfit[1][2]), lw=3)
+
+xlabel('FWHM (deg.)')
+ylabel('Number of TES')
+title('Ntes = {}'.format((labels==0).sum()))
 legend()
 ```
 
 ```{python}
 
+```
+
+```{python}
+### Now apply it
+okfit = ok & isfinite(np.sum(moon_guess, axis=1))
+nn = okfit.sum()
+initvec = np.zeros((nn,2))
+outvec = np.zeros((nn,2))
+weightvec = np.zeros(nn)
+
+
+initvec = moon_guess[okfit,:]
+outvec = allxy_2[okfit,:] + moon_guess[okfit,:]
+weightvec = 1./np.sum(allerrxy_2[okfit]**2, axis=1)
+
+subplot(1,2,1).set_aspect(1)
+plot(initvec[:,0], initvec[:,1], 'bo', label = 'Créidhe')
+plot(outvec[:,0], outvec[:,1], 'ro', label='Moon')
+
+guess = np.array([0., 0, 0, 1.])
+print(guess)
+
+
+resfit = ft.do_minuit(np.ravel(initvec), np.ravel(outvec), np.ravel(initvec)*0+1, guess, verbose=True,
+                           functname=rot_trans_scale_pts, fixpars=[0,0,0,1], force_chi2_ndf=True)
+
+newvec = np.reshape(rot_trans_scale_pts(np.ravel(initvec), resfit[1]), (nn,2))
+
+mylabel = 'Fit to match Moon: \n'+ r'$\theta$={0:3.2f}+/-{1:3.2f} deg'.format(resfit[1][0], resfit[2][0])
+mylabel += '\n' + r'$\Delta$az={0:3.2f}+/-{1:3.2f} deg'.format(resfit[1][1], resfit[2][1])
+mylabel += '\n' + r'$\Delta$el={0:3.2f}+/-{1:3.2f} deg'.format(resfit[1][2], resfit[2][2])
+plot(newvec[:,0], newvec[:,1], 'b+', ms=13, label=mylabel)
+xlabel('azimuth')
+xlabel('elevation')
+legend()
+xlabel('$\Delta_{az}$ [deg.]')
+ylabel('$\Delta_{el}$ [deg.]')
+
+```
+
+```{python}
+subplot(1,2,2).set_aspect(1)
+plot(outvec[:,0], outvec[:,1], 'ro', label='Moon Measurements')
+plot(moon_guess[:,0], moon_guess[:,1], 'ro', alpha=0.2, label=mylabel)
+xlabel('$\Delta_{az}$ [deg.]')
+ylabel('$\Delta_{el}$ [deg.]')
+
+
+TESok = allTESNum[ok]
+sh = np.shape(newvec)
+alldd = np.zeros(sh[0])
+allxd = np.zeros(sh[0])
+allyd = np.zeros(sh[0])
+for i in range(sh[0]):
+    xdist = [outvec[i,0], newvec[i,0]]
+    ydist = [outvec[i,1], newvec[i,1]]
+    allxd[i] = xdist[0]-xdist[1]
+    allyd[i] = ydist[0]-ydist[1]
+    alldd[i] = np.sqrt((xdist[0]-xdist[1])**2 + (ydist[0]-ydist[1])**2)
+    if alldd[i] > 0.2:
+        print('TES#{0} away by: {1:5.2f} deg.'.format(TESok[i], alldd[i]))
+        text(outvec[i,0], outvec[i,1], '{}'.format(TESok[i]), fontsize=10)
+    plot(xdist, ydist, 'b')
+legend()
 ```
 
 ```{python}

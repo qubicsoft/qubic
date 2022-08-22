@@ -517,33 +517,7 @@ plot(azmoon, elmoon)
 # Map-making
 nside = 340
 
-newazt = azt.copy()
-newelt = elt.copy()
-
-# azqubic = 120
-# newazt = (azt + azqubic - azmoon) * np.cos(np.radians(elt))
-# newelt = -(elt - elmoon)
-
-azqubic = 120
-newazt = (azt + azqubic - azmoon)
-newelt = -(elt - elmoon)+40
-
-
-mapsb, mapcount = healpix_map(newazt[scantype != 0], newelt[scantype != 0], mytod[scantype != 0], nside=nside)
-mapsb_pos, _ = healpix_map(newazt[scantype > 0], newelt[scantype > 0], mytod[scantype > 0], nside=nside)
-mapsb_neg, _ = healpix_map(newazt[scantype < 0], newelt[scantype < 0], mytod[scantype < 0], nside=nside)
-
-# Display Results
-display_all(mapsb, mapsb_pos, mapsb_neg, anatype=anatype, rot=[np.mean(newazt), np.mean(newelt)], reso=10, 
-            myrange=[-5e3, 2.5e4], TESNum=TESNum)
-
-```
-
-```{python}
-# Map-making
-nside = 340
-
-azqubic = 120
+azqubic = 116.4
 newazt = (azt + azqubic - azmoon) * np.cos(np.radians(elt))
 newelt = -(elt - elmoon)
 
@@ -559,7 +533,7 @@ display_all(mapsb, mapsb_pos, mapsb_neg, anatype=anatype, rot=[np.mean(newazt), 
 ```
 
 ```{python}
-hp.gnomview(mapsb, reso=3, rot=[1, -5])
+hp.gnomview(mapsb, reso=3, rot=[-2, -5])
 ```
 
 ## Now for various TES
@@ -571,7 +545,7 @@ anatype = 'TS, Az/El Corrected'
 deltaT = 0.21  # this is now found by hand with this dataset
 
 nside = 340
-azqubic = 120
+azqubic = 116.4
 newazt = (azt + azqubic - azmoon) * np.cos(np.radians(elt))
 newelt = -(elt - elmoon)
 
@@ -590,7 +564,7 @@ nscans = np.max(np.abs(scantype))
 # print(len(allTESNum))
 # ii=10
 # allTESNum = np.arange(25)+25*ii
-allTESNum = np.arange(256)
+allTESNum = np.arange(256)+1
 allmaps = np.zeros((len(allTESNum), 12*nside**2))
 for i in range(len(allTESNum)):
     try:

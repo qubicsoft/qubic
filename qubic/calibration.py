@@ -57,7 +57,7 @@ class QubicCalibration(object):
                  ('detarray', self.detarray),
                  ('hornarray', self.hornarray),
                  ('optics', self.optics),
-                 ('primbeam', self.primbeam)
+                 ('primbeam', self.primbeam),
                  ('synthbeam', self.synthbeam)]
         return '\n'.join([a + ': ' + repr(v) for a, v in state])
 

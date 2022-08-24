@@ -185,7 +185,7 @@ ax[0].plot(p.equatorial[:,0]*12/180, p.equatorial[:,1], alpha=0.5,
      label = 'from get_sampling')
 ax[0].plot(ra*12/180, dec, alpha = 0.5, 
      label = 'from qubic.hor2equ')
-# Moon rotation
+# Moon rotation #Sideral time? 
 ramoon, decmoon = qubic.hor2equ(np.array(moonaltazs_Salta.az[valid]), 
                                     np.array(moonaltazs_Salta.alt[valid]), 
                                     elapsed_time_sec, d['date_obs'],

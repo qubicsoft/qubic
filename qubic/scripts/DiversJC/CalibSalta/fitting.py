@@ -45,7 +45,7 @@ class Data:
 
         ### Instanciate the minuit object
         m = iminuit.Minuit(myminimizer, guess, name=self.pnames)
-\
+        
         ### Limits
         if limits is not None:
             mylimits = []

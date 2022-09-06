@@ -1,0 +1,331 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.0
+  kernelspec:
+    display_name: QUBIC with Python 3.8
+    language: python
+    name: python-3.8
+---
+
+```{python}
+# #%matplotlib inline
+import matplotlib as plt
+# %matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(9,4.5))
+rc('font',size=12)
+rc('text',usetex=False)
+import matplotlib.mlab as mlab
+from matplotlib.pyplot import *
+
+import sys,os
+import glob
+import string
+import datetime as dt
+import pickle
+from importlib import reload
+
+import numpy as np
+
+import scipy.ndimage.filters as f
+import scipy.signal as scsig
+from scipy import interpolate
+
+import qubic
+from qubicpack.demodulate import fold_data as qp_fold_data
+from qubic import fibtools as ft
+from qubicpack.qubicfp import qubicfp
+from qubicpack.pix2tes import *
+from qubicpack.pixel_translation import *
+import qubic.plotters as p
+import qubic.lin_lib as ll
+from qubicpack import demodulate
+from qubic import demodulation_lib as dl
+from qubicpack.utilities import Qubic_DataDir
+from qubic.utils import progress_bar
+
+from pysimulators import FitsArray
+```
+
+List of good/bad TES for the bandpass measurement of 18/08/2022
+
+```{python}
+day = '2022-08-18'
+data_dir = '/sps/qubic/Data/Calib-TD/'+day+'/'
+#dirs = np.sort(glob.glob(data_dir+'*test_sw*'))
+dirs = np.sort(glob.glob(data_dir+'*_12.*'))
+print(dirs)
+
+```
+
+```{python}
+day = '2022-08-18'
+data_dir = '/sps/qubic/Data/Calib-TD/'+day+'/'
+#dirs = np.sort(glob.glob(data_dir+'*test_sw*'))
+dirs1 = np.sort(glob.glob(data_dir+'*_13.*'))
+print(dirs1)
+```
+
+```{python}
+day = '2022-08-18'
+data_dir = '/sps/qubic/Data/Calib-TD/'+day+'/'
+#dirs = np.sort(glob.glob(data_dir+'*test_sw*'))
+dirs2 = np.sort(glob.glob(data_dir+'*_14.*'))
+print(dirs2)
+```
+
+```{python}
+def saturation(todarray): 
+    ok = np.ones(256,dtype=bool)
+    maxis = np.max(abs(todarray), axis=1)
+    upper_satval = np.max(maxis)
+    lower_satval = -np.max(maxis)
+    badtes = (maxis == np.max(maxis)) 
+    bad_idx = np.array(np.where(badtes==True)) #index of the TES saturated
+    bad_idx = np.reshape(bad_idx, (bad_idx.shape[1]))
+
+    frac_sat_pertes = np.zeros((256))
+    size = todarray.shape[1]
+
+    for i in range(len(todarray)): 
+        mask1 = todarray[i] == upper_satval
+        mask2 = todarray[i] == lower_satval
+        frac = (np.sum(mask1)+np.sum(mask2))/size
+        frac_sat_pertes[i] = frac
+    
+        if frac_sat_pertes[i] ==0:
+            ok[i] = True #good, no saturated
+        elif frac_sat_pertes[i] >0.1:
+            ok[i] = False #bad, saturated more than 10%
+        else: 
+            ok[i] = True #good, saturated but less than 10%
+    return ok, bad_idx, frac_sat_pertes
+```
+
+```{python}
+len(dirs)+len(dirs1)+len(dirs2)
+```
+
+```{python}
+for ifile in range(len(dirs)):
+    print(ifile)
+    thedir = dirs[ifile]
+    print('================', thedir,)
+    locals()['qfp12_{}'.format(ifile)] = qubicfp()
+    locals()['qfp12_{}'.format(ifile)].read_qubicstudio_dataset(thedir)
+    locals()['tod12_{}'.format(ifile)] = locals()['qfp12_{}'.format(ifile)].tod()
+```
+
+```{python}
+for ifile in range(len(dirs1)):
+    print(ifile)
+    thedir = dirs1[ifile]
+    print('================', thedir,)
+    locals()['qfp13_{}'.format(ifile)] = qubicfp()
+    locals()['qfp13_{}'.format(ifile)].read_qubicstudio_dataset(thedir)
+    locals()['tod13_{}'.format(ifile)] = locals()['qfp13_{}'.format(ifile)].tod()
+```
+
+```{python}
+for ifile in range(len(dirs2)):
+    print(ifile)
+    thedir = dirs2[ifile]
+    print('================', thedir,)
+    locals()['qfp14_{}'.format(ifile)] = qubicfp()
+    locals()['qfp14_{}'.format(ifile)].read_qubicstudio_dataset(thedir)
+    locals()['tod14_{}'.format(ifile)] = locals()['qfp14_{}'.format(ifile)].tod()
+```
+
+```{python}
+for ifile in range(len(dirs)):
+    print(ifile)
+    timeaxis = locals()['tod12_{}'.format(ifile)][0]
+    locals()['todarray12_{}'.format(ifile)] = locals()['tod12_{}'.format(ifile)][1]
+    locals()['ok12_{}'.format(ifile)], locals()['bad_idx12_{}'.format(ifile)], locals()['frac_sat_pertes12_{}'.format(ifile)] = saturation(locals()['todarray12_{}'.format(ifile)])
+    
+
+```
+
+```{python}
+for ifile in range(len(dirs1)):
+    print(ifile)
+    timeaxis = locals()['tod13_{}'.format(ifile)][0]
+    locals()['todarray13_{}'.format(ifile)] = locals()['tod13_{}'.format(ifile)][1]
+    locals()['ok13_{}'.format(ifile)], locals()['bad_idx13_{}'.format(ifile)], locals()['frac_sat_pertes13_{}'.format(ifile)] = saturation(locals()['todarray13_{}'.format(ifile)])
+    
+
+    
+```
+
+```{python}
+for ifile in range(len(dirs2)):
+    print(ifile)
+    timeaxis = locals()['tod14_{}'.format(ifile)][0]
+    locals()['todarray14_{}'.format(ifile)] = locals()['tod14_{}'.format(ifile)][1]
+    locals()['ok14_{}'.format(ifile)], locals()['bad_idx14_{}'.format(ifile)], locals()['frac_sat_pertes14_{}'.format(ifile)] = saturation(locals()['todarray14_{}'.format(ifile)])
+    
+
+```
+
+```{python}
+count_good = np.zeros(256)
+for i in range(len(dirs)): 
+    print('medicion {}'.format(i))
+    a = locals()['ok12_{}'.format(i)]
+    for j in range(256): 
+        valor = a[j]
+        if valor==True: 
+            count_good[j] += 1
+
+count2_good = np.zeros(256)
+for i in range(len(dirs1)): 
+    print('medicion {}'.format(i))
+    a = locals()['ok13_{}'.format(i)]
+    for j in range(256): 
+        valor = a[j]
+        if valor==True: 
+            count2_good[j] += 1
+            
+count3_good = np.zeros(256)
+for i in range(len(dirs2)): 
+    print('medicion {}'.format(i))
+    a = locals()['ok14_{}'.format(i)]
+    for j in range(256): 
+        valor = a[j]
+        if valor==True: 
+            count3_good[j] += 1
+           
+```
+
+```{python}
+counts_good = count_good + count2_good + count3_good
+```
+
+```{python}
+counts_good
+```
+
+```{python}
+tes = np.arange(256)
+```
+
+```{python}
+plt.hist(tes, bins=256, weights = counts_good)
+plt.xlabel('TES number')
+plt.ylabel('Number of times TES is evaluated as GOOD')
+plt.title('Histogram of saturation with 61 measurements')
+plt.savefig('histogram_good.png')
+```
+
+```{python}
+count_bad = np.zeros(256)
+for i in range(len(dirs)): 
+    print('medicion {}'.format(i))
+    a = locals()['ok12_{}'.format(i)]
+    for j in range(256): 
+        valor = a[j]
+        if valor==False: 
+            count_bad[j] += 1
+
+count2_bad = np.zeros(256)
+for i in range(len(dirs1)): 
+    print('medicion {}'.format(i))
+    a = locals()['ok13_{}'.format(i)]
+    for j in range(256): 
+        valor = a[j]
+        if valor==False: 
+            count2_bad[j] += 1
+            
+count3_bad = np.zeros(256)
+for i in range(len(dirs2)): 
+    print('medicion {}'.format(i))
+    a = locals()['ok14_{}'.format(i)]
+    for j in range(256): 
+        valor = a[j]
+        if valor==False: 
+            count3_bad[j] += 1
+           
+```
+
+```{python}
+counts_bad = count_bad + count2_bad + count3_bad
+```
+
+```{python}
+# %matplotlib inline
+```
+
+```{python}
+plt.hist(tes, bins=256, weights = counts_bad)
+plt.xlabel('TES number')
+plt.ylabel('Number of times TES is evaluated as BAD')
+plt.title('Histogram of saturation with 61 measurements')
+plt.savefig('histogram_bad.png')
+```
+
+```{python}
+print(counts_bad)
+```
+
+```{python}
+idx = np.where(counts_bad == 61)
+print(idx)
+```
+
+```{python}
+idx_all= np.where(counts_good == 0)
+print(idx_all)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+#write a list
+```
+
+```{python}
+from qubic.TES_evaluation import *
+```
+
+```{python}
+for ifile in range(len(dirs1)):
+    print(ifile)
+    thedir = dirs1[ifile]
+    dataset = thedir[36:]
+    oklist = locals()['ok13_{}'.format(i)]
+    write_goodbad(oklist,
+              analyser="Belen Costanza",
+              analysis="Saturation",
+              dataset=dataset,
+              wikipage='http://qubic.in2p3.fr/wiki/pmwiki.php/DataAnalysis/SaturationResults',
+              elog='no elog')
+```
+
+```{python}
+for ifile in range(len(dirs2)):
+    print(ifile)
+    thedir = dirs2[ifile]
+    dataset = thedir[36:]
+    oklist = locals()['ok14_{}'.format(i)]
+    write_goodbad(oklist,
+              analyser="Belen Costanza",
+              analysis="Saturation",
+              dataset=dataset,
+              wikipage='http://qubic.in2p3.fr/wiki/pmwiki.php/DataAnalysis/SaturationResults',
+              elog='no elog')
+```
+
+```{python}
+
+```

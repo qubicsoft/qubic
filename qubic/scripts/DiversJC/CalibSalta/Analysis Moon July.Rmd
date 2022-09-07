@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.13.8
+      jupytext_version: 1.14.0
   kernelspec:
     display_name: Python 3 (ipykernel)
     language: python
@@ -413,14 +413,15 @@ mytod = decorel_azel(mytod, azt, elt, scantype, doplot=True, nbins=50, n_el=50, 
 mytod = remove_offset_scan(mytod, scantype, method='mode')
 
 # Map-making
+azqubic = 116.4
 nside = 256
-mapsb, mapcount = healpix_map(azt[scantype != 0], elt[scantype != 0], mytod[scantype != 0], nside=nside)
-mapsb_pos, _ = healpix_map(azt[scantype > 0], elt[scantype > 0], mytod[scantype > 0], nside=nside)
-mapsb_neg, _ = healpix_map(azt[scantype < 0], elt[scantype < 0], mytod[scantype < 0], nside=nside)
+mapsb, mapcount = healpix_map(azt[scantype != 0] + azqubic, elt[scantype != 0], mytod[scantype != 0], nside=nside)
+mapsb_pos, _ = healpix_map(azt[scantype > 0] + azqubic, elt[scantype > 0], mytod[scantype > 0], nside=nside)
+mapsb_neg, _ = healpix_map(azt[scantype < 0] + azqubic, elt[scantype < 0], mytod[scantype < 0], nside=nside)
 
 # Display Results
 # display_all(mapsb, mapsb_pos, mapsb_neg, anatype=anatype, rot=[np.mean(az), np.mean(el)], reso=8, highcontrast=True)
-display_all(mapsb, mapsb_pos, mapsb_neg, anatype=anatype, rot=[np.mean(az), np.mean(el)], reso=8, myrange=[-5e3, 2.5e4], TESNum=TESNum)
+display_all(mapsb, mapsb_pos, mapsb_neg, anatype=anatype, rot=[np.mean(az) + azqubic, np.mean(el)], reso=8, myrange=[-5e3, 2.5e4], TESNum=TESNum)
 
 
 
@@ -461,13 +462,13 @@ mytod = remove_offset_scan(mytod, scantype, method='mode')
 
 # Map-making
 nside = 340
-mapsb, mapcount = healpix_map(azt[scantype != 0], elt[scantype != 0], mytod[scantype != 0], nside=nside)
-mapsb_pos, _ = healpix_map(azt[scantype > 0], elt[scantype > 0], mytod[scantype > 0], nside=nside)
-mapsb_neg, _ = healpix_map(azt[scantype < 0], elt[scantype < 0], mytod[scantype < 0], nside=nside)
+mapsb, mapcount = healpix_map(azt[scantype != 0] + azqubic, elt[scantype != 0], mytod[scantype != 0], nside=nside)
+mapsb_pos, _ = healpix_map(azt[scantype > 0] + azqubic, elt[scantype > 0], mytod[scantype > 0], nside=nside)
+mapsb_neg, _ = healpix_map(azt[scantype < 0] + azqubic, elt[scantype < 0], mytod[scantype < 0], nside=nside)
 
 # Display Results
 # display_all(mapsb, mapsb_pos, mapsb_neg, anatype=anatype, rot=[np.mean(az), np.mean(el)], reso=8, highcontrast=True)
-display_all(mapsb, mapsb_pos, mapsb_neg, anatype=anatype, rot=[np.mean(az), np.mean(el)], reso=8, myrange=[-5e3, 2.5e4], TESNum=TESNum)
+display_all(mapsb, mapsb_pos, mapsb_neg, anatype=anatype, rot=[np.mean(az) + azqubic, np.mean(el)], reso=8, myrange=[-5e3, 2.5e4], TESNum=TESNum)
 
 
 
@@ -515,9 +516,10 @@ plot(azmoon, elmoon)
 
 ```{python}
 # Map-making
-nside = 340
+nside = 256
 
-azqubic = 116.4
+print(len(azt))
+
 newazt = (azt + azqubic - azmoon) * np.cos(np.radians(elt))
 newelt = -(elt - elmoon)
 
@@ -527,13 +529,35 @@ mapsb_neg, _ = healpix_map(newazt[scantype < 0], newelt[scantype < 0], mytod[sca
 
 # Display Results
 display_all(mapsb, mapsb_pos, mapsb_neg, anatype=anatype, rot=[np.mean(newazt), np.mean(newelt)], reso=10, 
-            myrange=[-5e3, 2.5e4], TESNum=TESNum)
+            myrange=[-3e3, 1e4], TESNum=TESNum)
 
 
 ```
 
 ```{python}
-hp.gnomview(mapsb, reso=3, rot=[-2, -5])
+hp.gnomview(mapsb, rot=[np.mean(newazt), np.mean(newelt)], reso=12, sub=(1,4,1), title='Both scans', min=-3e3, max=1e4)
+hp.gnomview(mapsb_pos, rot=[np.mean(newazt), np.mean(newelt)], reso=12, sub=(1,4,2), title='+ scans', min=-3e3, max=1e4)
+hp.gnomview(mapsb_neg, rot=[np.mean(newazt), np.mean(newelt)], reso=12, sub=(1,4,3), title='- scans', min=-3e3, max=1e4)
+
+
+unseen = (mapsb == hp.UNSEEN) | (mapsb_pos == hp.UNSEEN) | (mapsb_neg == hp.UNSEEN)
+mapdiff = mapsb_pos-mapsb_neg
+mapdiff[unseen] = hp.UNSEEN
+
+hp.gnomview(mapdiff, rot=[np.mean(newazt), np.mean(newelt)], reso=12, sub=(1,4,4), title='Diff scans', min=-3e3, max=1e4)
+
+```
+
+```{python}
+mmm=hp.gnomview(mapsb, reso=3, rot=[-2, -5], return_projected_map=True)
+```
+
+```{python}
+print(np.max(mmm))
+a=hist(np.ravel(mmm), range=[-1e4, 1e4], bins=100)
+mm, ss = ft.meancut(mmm, 3)
+print(mm, ss)
+print('Max/sigma_noise = {}'.format(np.max(mmm)/ss))
 ```
 
 ## Now for various TES

@@ -257,7 +257,8 @@ class simulate_signal_intercal:
         return D
     def give_intercals(self, sky):
         D = np.reshape(np.dot(self.H, sky), (self.ndet, self.nsamples))
-        intercal = np.diag((np.linalg.inv(D @ D.T) @ D) @ self.d.T)
+        matrix = D @ D.T
+        intercal = np.diag((np.linalg.inv(matrix) @ D) @ self.d.T)
         intercal = intercal / intercal[0]
         return D, intercal
 
@@ -304,6 +305,10 @@ plot(myintercals-intercal, label='Residuals')
 xlabel('Det')
 ylabel('Intercal')
 legend()
+
+```
+
+```{python}
 
 ```
 

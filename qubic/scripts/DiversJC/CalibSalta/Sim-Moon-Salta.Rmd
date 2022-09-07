@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.13.8
+      jupytext_version: 1.14.0
   kernelspec:
     display_name: Python 3 (ipykernel)
     language: python
@@ -27,6 +27,7 @@ quantity_support()
 from matplotlib.backends.backend_pdf import PdfPages
 import mpld3
 import cartopy.crs as ccrs
+import os
 
 rc('figure',figsize=(16,8))
 rc('font',size=12)
@@ -73,13 +74,13 @@ reload(qubic)
 ### all days in July:
 # days = ['2022-07-10', '2022-07-11', '2022-07-12', '2022-07-13', '2022-07-14'] 
 ### Just one day in July
-# days = ['2022-07-09']
+days = ['2022-07-14']
 
 
 ### all days in August:
 # days = ['2022-08-06', '2022-08-07', '2022-08-08', '2022-08-09', '2022-08-10'] 
 ### Just one day in AUgust
-days = ['2022-08-10']
+# days = ['2022-08-10']
 
 save_html = False
 
@@ -280,6 +281,10 @@ for day in days:
     print('Operations start (UTC): '+UTC_start)
     print('Operations stop (UTC): '+UTC_stop)
     print()
+
+```
+
+```{python}
 
 ```
 

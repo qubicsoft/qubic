@@ -24,6 +24,119 @@ rc('font',size=12)
 from qubic import fibtools as ft
 ```
 
+# Time Constants:
+Our TES do not respond instantly to an impulsion, there is a timee constant. We have observed with a square sinal that wee have a rise time and a fall time that are not equal. For now, wee will assume they are equal to a single value $\tau$. This means that when trigered wiith a Dirac, our TES will rise following an exponeential and fall with the same exponential.
+
+This is shown below:
+
+```{python}
+duration = 30.
+sampling = 100. # Hz
+tau = 0.5 # time constant in ms
+
+nsamples = int(duration * sampling)
+tt = np.arange(nsamples)/sampling
+
+
+#### Dirac
+dirac_true = np.zeros(nsamples)
+dirac_true[nsamples//2] = 1    
+dirac_conv = ft.exponential_filter1d(dirac_true, tau*sampling, truncate=100)
+
+subplot(3,1,1)
+plot(tt, dirac_true, label='Impulse function')
+plot(tt, dirac_conv/np.max(dirac_conv), ls='--',label='Convolved by time-constant')
+xlabel('time')
+legend()
+
+#### Square
+square_true = np.zeros(nsamples)
+square_true[nsamples//3:2*nsamples//3] = 1    
+square_conv = ft.exponential_filter1d(square_true, tau*sampling, truncate=100)
+
+subplot(3,1,2)
+plot(tt, square_true, label='Impulse function')
+plot(tt, square_conv, ls='--', label='Convolved by time-constant')
+xlabel('time')
+legend()
+
+```
+
+The function used above for implementing the time-constant uses `correlate1d` which works with direct space kernel. In order to deeconvolve, we will neeed to work iin Fourier-space. So we need to deteermine which Fourier-space filter corresponds to our time-constant convolution.
+
+So let's try to reproduce the above, but with Fourier-Space filtering.
+
+Let's remind that:
+1. Symmetric Exponential: $ \exp(a\left|t\right|) \longrightarrow  \frac{2a}{a^2+\omega^2}$
+2. Time constant: $ \exp(-at)\times H(t) \longrightarrow  \frac{1}{a+i\omega}$
+3. Inverse time constant: $ \exp(at)\times H(-t) \longrightarrow  \frac{1}{a-i\omega}$
+
+
+```{python}
+def fft_filter(signal_in, sampling, pars, filter_fct):
+    freqs = np.fft.fftfreq(len(signal_in)) * sampling
+    myft = np.fft.fft(signal_in)
+    myft *= filter_fct(freqs, pars)
+    signal_out = np.real(np.fft.ifft(myft))
+    return signal_out
+
+### Symmetric exponential - not expected to work
+def fourier_sym_exp(ff, tau):
+    a = 1./tau
+    myfilter = np.ones(len(ff))
+    myfilter = 2*a / (a**2 + (2*np.pi * ff)**2)
+    myfilter /= myfilter[0]
+    return myfilter
+
+### FT of an exponential - this should work
+def fourier_exp(ff, tau):
+    myfilter = np.ones(len(ff))
+    myfilter = 1 / ((1./tau +  2*np.pi*ff*np.complex(0,1)))
+    myfilter /= np.real(myfilter[0])
+    return myfilter
+
+### FT of an exponential, but oriented towards the past. Not expected to work.
+def fourier_exp_past(ff, tau):
+    myfilter = np.ones(len(ff))
+    myfilter = 1 / ((1./tau -  2*np.pi*ff*np.complex(0,1)))
+    myfilter /= np.real(myfilter[0])
+    return myfilter
+
+
+```
+
+```{python}
+rc('figure',figsize=(24,10))
+rc('font',size=12)
+myfilters = [fourier_sym_exp, fourier_exp, fourier_exp_past]
+
+for i in range(len(myfilters)):
+    my_dirac_conv = fft_filter(dirac_true, sampling, tau, myfilters[i])
+    my_square_conv = fft_filter(square_true, sampling, tau, myfilters[i])
+    
+    subplot(2,len(myfilters), i+1)
+    plot(tt, dirac_true, label='Impulse function')
+    plot(tt, dirac_conv/np.max(dirac_conv),lw=3, label='Convolved by exponential_filter1d')
+    plot(tt, my_dirac_conv/np.max(my_dirac_conv),label='Convolved by '+myfilters[i].__name__)
+    legend(fontsize=8, loc='upper left')
+    ylim(0,1.3)
+    
+    subplot(2,len(myfilters), i+4)
+    plot(tt, square_true, label='Impulse function')
+    plot(tt, square_conv/np.max(square_conv),lw=3, label='Convolved by exponential_filter1d')
+    plot(tt, my_square_conv/np.max(my_square_conv),label='Convolved by '+myfilters[i].__name__)
+    legend(fontsize=8, loc='upper left')
+    ylim(0,1.3)
+
+```
+
+So, not surprisingly, the function we need to use for Fourier-Space convolution is:
+$$\exp(-at)\times H(t) \longrightarrow  \frac{1}{a+i\omega}$$
+
+
+# Simulation of QUBIC-case for synthesized beam scanning
+We use typical parameters for QUBIC (in-lab calobration with red-mount). Thee noise leveel can be adjusted with the variable `noiseeRMS`.
+
 ```{python}
 angspeed = 0.8 # deg/sec
 rangeaz = 15.    # we will do a back & forth scan
@@ -32,15 +145,14 @@ locs = [-5., 0., 8.]   # peak locations in az
 amps = [0.5, 1., 0.5]   # peak locations in az
 sampling = 100. # Hz
 
-tau = 0.3 # time constant in ms
-
-noiseRMS = 0.001
-
+tau = 0.5 # time constant in ms
 
 #### True Signal
 duration_scan = 4*rangeaz/angspeed
 nsamples = int(duration_scan * sampling)
 print(nsamples)
+
+noiseRMS = 0.0001
 
 tt = np.arange(nsamples)/sampling
 onescan = np.linspace(-rangeaz, rangeaz, nsamples//2)
@@ -55,7 +167,8 @@ for l,a in zip(locs, amps):
 
 
 #### Convolve true signal with exponential    
-signal_true_conv = ft.exponential_filter1d(signal_true, tau*sampling) + np.random.randn(nsamples)*noiseRMS
+signal_conv_noiseless = ft.exponential_filter1d(signal_true, tau*sampling, truncate=200)
+signal_conv = signal_conv_noiseless + np.random.randn(nsamples)*noiseRMS
 
 #### Now mean and difference
 newaz = onescan
@@ -71,18 +184,18 @@ diff_true_az = mean_true - true_az_signal
 
 
 # Convolved
-mean_true_conv = 0.5 * (signal_true_conv[direction == 1] + np.flip(signal_true_conv[direction == -1]))
-diff_true_conv = (signal_true_conv[direction == 1] - np.flip(signal_true_conv[direction == -1]))
+mean_true_conv = 0.5 * (signal_conv[direction == 1] + np.flip(signal_conv[direction == -1]))
+diff_true_conv = (signal_conv[direction == 1] - np.flip(signal_conv[direction == -1]))
 diff_true_conv_az = mean_true_conv - true_az_signal
 
-rc('figure',figsize=(16,8))
+rc('figure',figsize=(18,8))
 subplot(2,2,1)
 plot(tt, az)  
 xlabel('Time [sec]')
 ylabel('Az [deg]')
 
 subplot(2,2,2)
-plot(tt, signal_true_conv, label = 'Signal True Convolved', ls='--')
+plot(tt, signal_conv, label = 'Signal True Convolved', ls='--')
 plot(tt, signal_true, label = 'Signal True')
 xlabel('time [sec]')
 ylabel('Signal [ADU]')
@@ -96,14 +209,44 @@ ylabel('Signal [ADU]')
 legend()
 
 subplot(2,2,4)
-plot(az[direction == 1], signal_true_conv[direction == 1], label='Signal True Conv Direction +', lw=3)
-plot(az[direction == -1], signal_true_conv[direction == -1], label='Signal True Conv Direction -', ls='--', lw=3)
+plot(az[direction == 1], signal_conv[direction == 1], label='Signal True Conv Direction +', lw=3)
+plot(az[direction == -1], signal_conv[direction == -1], label='Signal True Conv Direction -', ls='--', lw=3)
 xlabel('Az [deg]')
 ylabel('Signal [ADU]')
 legend()
 tight_layout()
 
-rc('figure',figsize=(16,8))
+p_true, ff = ft.power_spectrum(tt, signal_true, rebin=True)
+p_conv_noiseless, ff = ft.power_spectrum(tt, signal_conv_noiseless, rebin=True)
+p_conv, ff = ft.power_spectrum(tt, signal_conv, rebin=True)
+
+rc('figure',figsize=(18,8))
+figure()
+subplot(1,2,1)
+plot(ff, p_true, label='P True')
+plot(ff, p_conv_noiseless, label='P conv noiseless')
+plot(ff, p_conv, label='P conv with noise')
+xscale('log')
+yscale('log')
+xlabel('Frequency [Hz]')
+ylabel('PSD')
+legend()
+xlim(1e-2, sampling/2)
+
+subplot(1,2,2)
+plot(ff, p_conv_noiseless / p_true)
+plot(ff, p_conv_noiseless / p_true, label='P conv noiseless / P True noiseless')
+plot(ff, p_conv / p_true, label='P conv / P True noiseless')
+plot(ff, fourier_exp(ff, tau), label='fourier_exp()')
+xscale('log')
+yscale('log')
+xlabel('Frequency [Hz]')
+ylabel('PSD')
+xlim(1e-2, sampling/2)
+legend()
+tight_layout()
+
+rc('figure',figsize=(18,8))
 figure()
 title('Difference beetween + and - scans')
 plot(newaz, mean_true, label='Mean True')
@@ -115,11 +258,11 @@ ylabel('Signal [ADU]')
 legend()
 tight_layout()
 
-rc('figure',figsize=(16,8))
+rc('figure',figsize=(18,8))
 figure()
 title('Reconstructed signal in azimuth')
 plot(newaz, true_az_signal, label='Mean True')
-plot(newaz, diff_true_az, label='Residuals True - UnCOnv')
+plot(newaz, diff_true_az, label='Residuals True - UnConv')
 plot(newaz, diff_true_conv_az, label='Residuals True - Conv')
 xlabel('Az [deg]')
 ylabel('Signal [ADU]')
@@ -128,123 +271,236 @@ tight_layout()
 
 ```
 
+## Let's try various flavours of the time-constant deconvolution 
+
+
+### Derivative
+this filtering clearly works very well (it has been proced to be exact: https://www.researchgate.net/publication/333237821_Reconstruction_of_exponentially_modified_functions ). Howevere it clearly increases thee noise at high frequency. So one needs to lowpass it to reggularize the TOD.
+
+### FFT
+Just divide by the expected fiilter in Fourier-Space. Note: this increases very significantly the noise at high frequency and theerefore needs refilteringg for reggularization.
+
+### Filters:
+#### Butterworth order 2:
+Affects the signal a bit
+
+Note that in Planck Early Results Analysis, https://www.aanda.org/articles/aa/full_html/2011/12/aa16462-11/aa16462-11.html (section 4.6) they suggest a specific form for the regularization filter that I need to implement.
+
 ```{python}
-#### Deconvolve
-derivative = np.gradient(signal_true_conv, 1./sampling)
-signal_deconv = signal_true_conv + derivative*tau        ### Well known proxy for exponential deconvolution
+import scipy.signal
 
+def fft_filter(signal_in, sampling, pars, filter_fct, divide=False):
+    freqs = np.fft.fftfreq(len(signal_in)) * sampling
+    myft = np.fft.fft(signal_in)
+    myfilter = filter_fct(freqs, pars)
+    if divide:
+        myft /= myfilter
+    else:
+        myft *= myfilter
+    signal_out = np.real(np.fft.ifft(myft))
+    return signal_out
 
-# Deconvolved
-mean_deconv = 0.5 * (signal_deconv[direction == 1] + np.flip(signal_deconv[direction == -1]))
-diff_deconv = (signal_deconv[direction == 1] - np.flip(signal_deconv[direction == -1]))
-diff_true_deconv_az = mean_deconv - true_az_signal
+def brute_force_lopass(ff, flopass):
+    myfilter = np.ones(len(ff))
+    myfilter[np.abs(ff) > flopass] = 0
+    return myfilter
 
+def deconvolve_tau_reproject(signal_in, tau, sampling, direction, method='derivative', refilter=None, args_refilter=None):   
+    ### Deconvolve in time-domain
+    signal_deconv = deconvolve_tau(signal_in, tau, sampling, method=method, refilter=refilter, args_refilter=args_refilter)    
+    ### Reproject to azimuth domain and calculate sum and difference between direection-scans
+    mean_deconv = 0.5 * (signal_deconv[direction == 1] + np.flip(signal_deconv[direction == -1]))
+    diff_deconv = (signal_deconv[direction == 1] - np.flip(signal_deconv[direction == -1]))
+    return signal_deconv, mean_deconv, diff_deconv
 
+def deconvolve_tau(signal_in, tau, sampling, method='derivative', refilter=None, args_refilter=None):
+    ### Several methods too implement here
+    
+    if method == 'derivative': 
+        ### Well known proxy for exponential deconvolution
+        derivative = np.gradient(signal_in, 1./sampling)
+        signal_deconv = signal_in + derivative*tau  
+    elif method == 'FFT':
+        signal_deconv = fft_filter(signal_in, sampling, tau, fourier_exp, divide=True)
+    else:
+        print('Method {} not implemented'.format(method))
+        signal_deconv = np.nan
+        
+    if refilter:
+        if refilter == 'butter':
+            signal_deconv =  ft.butter_bandpass_filter(signal_deconv, args_refilter[0], args_refilter[1], sampling, order=args_refilter[2])
+        else:
+            signal_deconv = fft_filter(signal_deconv, sampling, args_refilter, refilter)
+    return signal_deconv
 
-figure()
-title('Reconstructed signal in azimuth')
-plot(newaz, mean_true, label='Mean True')
-plot(newaz, mean_true, alpha=0)
-plot(newaz, mean_true_conv - mean_true, label='Residuals Conv - True')
-plot(newaz, diff_true_deconv_az, label='Residuals Deconv - True')
-xlabel('Az [deg]')
-ylabel('Signal [ADU]')
-legend()
-ylim(-0.1,0.1)
 ```
 
-So deconvolution works well but clearly amplifies the high-frequency noise (this is unavoidable). If this turns out problematic we may lowpass filter the deconvolved data...
-
-Let's have a look at the TOD power spectra in order to see the HF noise increase:
-
 ```{python}
-### Signal Power Spectrum
+# methods = ['derivative', 
+#            'derivative']
+
+# methods = ['FFT', 
+#            'FFT']
+# all_refilter = [None, 
+#                 'butter']
+# all_args_refilter = [None, 
+#                      [1./sampling, 2./tau, 2]]
+
+methods = ['FFT', 
+           'FFT']
+all_refilter = [None, 
+                brute_force_lopass]
+all_args_refilter = [None, 
+                     [1./tau]]
+
+# methods = ['derivative', 
+#            'derivative', 
+#            'FFT', 
+#            'FFT']
+# all_refilter = [None, 
+#                 'butter', 
+#                 None, 
+#                 'butter']
+# all_args_refilter = [None, 
+#                      [1./sampling/10000, 2./tau, 2],
+#                      None,
+#                      [1./sampling/10000, 2./tau, 2]]
+
 p_true, ff = ft.power_spectrum(tt, signal_true, rebin=True)
-p_true_conv, ff = ft.power_spectrum(tt, signal_true_conv, rebin=True)
-p_deconv, ff = ft.power_spectrum(tt, signal_deconv, rebin=True)
+p_conv_noiseless, ff = ft.power_spectrum(tt, signal_conv_noiseless, rebin=True)
+p_conv, ff = ft.power_spectrum(tt, signal_conv, rebin=True)
 
-### Residuals Power Spectrum
-r_true_conv, ff = ft.power_spectrum(tt, signal_true_conv - signal_true, rebin=True)
-r_deconv, ff = ft.power_spectrum(tt, signal_deconv - signal_true, rebin=True)
+r_true_conv, ff = ft.power_spectrum(tt, signal_conv - signal_true, rebin=True)
 
 
-subplot(1,2,1)
-title('TOD Signal Power Spectrum')
-plot(ff, p_true, label = 'Signal True')
-plot(ff, p_true_conv, label = 'Signal True Conv')
-plot(ff, p_deconv, label = 'Signal Deconv')
-xscale('log')
-yscale('log')
-xlabel('Frequency [Hz]')
-ylabel('PSD')
-legend()
 
-subplot(1,2,2)
-title('TOD Residuals Power Spectrum')
-plot(ff, p_true, label = 'True')
-plot(ff, r_true_conv, label = 'Residuals (Conv - True)')
-plot(ff, r_deconv, label = 'Residuals (Deconv - True)')
-xscale('log')
-yscale('log')
-xlabel('Frequency [Hz]')
-ylabel('PSD')
-legend()
-
-
-```
-
-```{python}
-#### Deconvolve and low-pass Filter
-lo = 1./sampling/10000000
-hi = 1./tau
-print(lo,hi)
-signal_deconv_filt = ft.butter_bandpass_filter(signal_deconv, lo, hi, sampling, order=2)
-
-# Deconvolved and filtered
-mean_deconv_filt = 0.5 * (signal_deconv_filt[direction == 1] + np.flip(signal_deconv_filt[direction == -1]))
-diff_deconv_filt = (signal_deconv_filt[direction == 1] - np.flip(signal_deconv_filt[direction == -1]))
-
-p_deconv_filt, ff = ft.power_spectrum(tt, signal_deconv_filt, rebin=True)
-
-### Residuals Power Spectrum
-r_deconv_filt, ff = ft.power_spectrum(tt, signal_deconv_filt - signal_true, rebin=True)
-
+rc('figure',figsize=(20,15))
 figure()
+subplot(3,1,1)
 title('Reconstructed signal in azimuth')
 plot(newaz, mean_true, label='Mean True')
-plot(newaz, mean_true, alpha=0)
+#plot(newaz, mean_true, alpha=0)
 plot(newaz, mean_true_conv - mean_true, label='Residuals Conv - True')
-plot(newaz, mean_deconv - mean_true, label='Residuals Deconv - True')
-plot(newaz, mean_deconv_filt - mean_true, label='Residuals DeconvFilt - True')
 xlabel('Az [deg]')
 ylabel('Signal [ADU]')
 legend()
 ylim(-0.1,0.1)
 
-figure()
-subplot(1,2,1)
-title('TOD Signal Power Spectrum')
-plot(ff, p_true, label = 'True')
-plot(ff, p_true_conv, label = 'True Conv')
-plot(ff, p_deconv, label = 'Deconv')
-plot(ff, p_deconv_filt, label = 'Deconv Filt')
-xscale('log')
-yscale('log')
-xlabel('Frequency [Hz]')
-ylabel('PSD')
-legend()
-
-subplot(1,2,2)
+subplot(3,2,3)
 title('TOD Residuals Power Spectrum')
 plot(ff, p_true, label = 'True')
 plot(ff, r_true_conv, label = 'Residuals True Conv')
-plot(ff, r_deconv, label = 'Residuals Deconv')
-plot(ff, r_deconv_filt, label = 'Residausl Deconv Filt')
+axvline(x=1./tau, color='k', ls=':', label=r'$1/\tau$')
 xscale('log')
 yscale('log')
 xlabel('Frequency [Hz]')
 ylabel('PSD')
-legend()
+xlim(1e-2, sampling/2)
+ylim(1e-15, 1)
+
+subplot(3,2,4)
+resid = signal_conv-signal_true
+hist(resid, range=(-2*np.std(resid), 2*np.std(resid)), bins=501, density=True, alpha=0.5, label='Residual Conv-True: RMS = {0:5.2g}'.format(np.std(resid)))
+
+subplot(3,2,5)
+xscale('log')
+yscale('log')
+xlabel('Frequency [Hz]')
+ylabel('PSD Ratio Out/In')
+xlim(1e-2, sampling/2)
+ylim(1e-2, 1e4)
+plot(ff, p_true / p_conv/1e10)
+plot(ff, p_true / p_conv, label='True/Conv')
+axvline(x=1./tau, color='k', ls='--', label=r'$1/\tau$')
+axhline(y=1, color='k', ls=':')
+
+subplot(3,2,6)
+xlabel('Frequency [Hz]')
+ylabel('PSD Ratio Out/True [noiseless]')
+xscale('log')
+yscale('log')
+xlim(1e-2, sampling/2)
+#ylim(1e-2, 1e4)
+axvline(x=1./tau, color='k', ls='--', label=r'$1/\tau$')
+axhline(y=1, color='k', ls=':')
+
+
+for i in range(len(methods)):
+    mymethod = methods[i]
+    # Deconvolve & project in azimuth space (sum & diff)
+    print(mymethod)
+    signal_deconv, mean_deconv, diff_deconv = deconvolve_tau_reproject(signal_conv, tau, sampling, direction, 
+                                                                       method=mymethod, 
+                                                                       refilter=all_refilter[i], args_refilter=all_args_refilter[i])
+    ### Same but on the noiseless TOD
+    signal_deconv_noiseless, _, _ = deconvolve_tau_reproject(signal_conv_noiseless, tau, sampling, direction, 
+                                                                       method=mymethod, 
+                                                                       refilter=all_refilter[i], args_refilter=all_args_refilter[i])
+    
+    
+    
+    # Power spectrum in Fourier space of signal
+    p_deconv, ff = ft.power_spectrum(tt, signal_deconv, rebin=True)
+    p_deconv_noiseless, ff = ft.power_spectrum(tt, signal_deconv_noiseless, rebin=True)
+    # power spectrum in Fourier space of residuals
+    r_deconv, ff = ft.power_spectrum(tt, signal_deconv - signal_true, rebin=True)
+    
+    subplot(3,1,1)
+    plot(newaz, mean_deconv - mean_true, label='Residuals [{} ; {}] - True'.format(mymethod, all_refilter[i]), alpha=0.5)
+    
+    subplot(3,2,3)
+    plot(ff, r_deconv, label = 'Residuals [{} ; {}] - True'.format(mymethod, all_refilter[i]), alpha=0.5)
+    
+    subplot(3,2,4)
+    thisresid = signal_deconv-signal_true
+    hist(thisresid, range=(-2*np.std(resid), 2*np.std(resid)), bins=501, density=True, alpha=0.5,
+         label='Residual [{0:} ; {1:}] RMS={2:5.2g}'.format(mymethod, all_refilter[i], np.std(thisresid)))
+    xlim(-5*np.std(thisresid), 5*np.std(thisresid))
+
+    subplot(3,2,5)
+    plot(ff, p_deconv / p_conv, label='{} {}'.format(mymethod, all_refilter[i]))
+ 
+    subplot(3,2,6)
+    plot(ff, p_deconv_noiseless / p_true, label='Deconv noiseless / True Noiseless {} {}'.format(mymethod, all_refilter[i]))
+
+
+
+subplot(3,1,1)
+legend(loc='lower right', fontsize=10)
+subplot(3,2,3)
+legend(fontsize=10)
+subplot(3,2,4)
+yscale('log')
+legend(fontsize=10)
+subplot(3,2,5)
+legend(fontsize=10)
+subplot(3,2,6)
+legend(fontsize=10)
+
+
+
+```
+
+
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 ```{python}
@@ -267,7 +523,43 @@ legend()
 
 ```
 
-# Trying with QUBIC data from Salta
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+# OLD - Trying with QUBIC data from Salta
 Data sent by Steve as Pickle files: 
 - `/Users/hamilton/Downloads/az.pickle`
 - `/Users/hamilton/Downloads/tod_ASIC1_TES33.pickle`
@@ -297,6 +589,15 @@ plot(t, tod)
 
 figure()
 plot(newaz, tod)
+```
+
+```{python}
+#### Check if time samples are missing
+
+dt = (t-np.roll(t,1))[1:]
+plot(dt)
+#ylim(0, 2*0.0065)
+print(dt)
 ```
 
 ```{python}

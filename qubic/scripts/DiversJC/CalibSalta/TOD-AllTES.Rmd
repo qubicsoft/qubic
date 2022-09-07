@@ -79,6 +79,7 @@ we first apply the `identify_scans()` function to get relevant information from 
 # %matplotlib inline
 rc('figure',figsize=(16,8))
 
+reload(tdt)
 scantype_hk, azt, elt, scantype = tdt.identify_scans(thk, az, el, tt=tt, doplot=True, thr_speedmin=0.1)
 ```
 
@@ -185,9 +186,10 @@ rc('figure',figsize=(15,8))
 
 reload(tdt)
 
-numTES = 163
+# numTES = 163
 # numTES = 134
 # numTES = 33
+numTES = 102
 
 tmin = 0
 tmax = np.max(tt)
@@ -213,14 +215,14 @@ figure()
 idx = np.arange(len(dd))
 subplot(2,1,1)
 plot(idx, ddinit, label='Initial Data')
-plot(idx[flags>0], ddinit[flags>0], 'r.', label='Flagged bad (scanning)')
+plot(idx[flags>0], ddinit[flags>0], 'g.', label='Flagged bad (scanning)')
 legend()
 xlabel('Samples')
 ylabel('ADU')
 title('Raw TOD')
 subplot(2,1,2)
 plot(idx, dd, label='Data')
-plot(idx[flags>0], dd[flags>0], 'r.', label='Flagged bad')
+plot(idx[flags>0], dd[flags>0], 'g.', label='Flagged bad')
 xlabel('Samples')
 ylabel('ADU')
 title('Corrected for extreme scanning regions')

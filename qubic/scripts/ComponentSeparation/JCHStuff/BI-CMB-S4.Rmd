@@ -327,6 +327,17 @@ flat_samples_qp = samp_qp.get_chain(discard=nbmc//2, thin=32, flat=True)
 ```
 
 ```{python}
+debug
+```
+
+```{python}
+import iminuit
+import numpy as np
+print(iminuit, iminuit.__version__)
+print(np, np.__version__)
+```
+
+```{python}
 from getdist import plots, MCSamples
 
 allnames = np.array(['SyncAmp', 'SyncBeta', 'CMB', 'DustAmp', 'DustBeta'])

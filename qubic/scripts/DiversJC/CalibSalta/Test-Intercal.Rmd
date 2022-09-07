@@ -143,19 +143,20 @@ legend()
 ```{python}
 ###### Simulate observations including intercalibration
 ndet = 5
-nsamples = 20
+nsamples = 200
 sig = 0.
 
-intercal = (np.random.rand(ndet)+0.5)
+intercal = np.append([1], (np.random.rand(ndet-1)+0.5))
 H = np.zeros((ndet*nsamples, npix))
 for i in range(npix):
     H[:,i] = np.random.randint(0,npix, size=nsamples*ndet)
     
     
-alltod = np.dot(H, truey) + np.random.randn(ndet*nsamples)*sig
+alltod_intercalibrated = np.dot(H, truey) + np.random.randn(ndet*nsamples)*sig
 
+alltod = alltod_intercalibrated.copy()
 for k in range(ndet):
-    alltod[k*ndet:(k+1)*ndet] *= intercal[k]
+    alltod[k*nsamples:(k+1)*nsamples] *= intercal[k]
 #########################
 
 class simulate_signal_intercal:
@@ -169,7 +170,7 @@ class simulate_signal_intercal:
         intercal = sky_and_intercal[len(self.xpix):]
         alltod = np.dot(self.H, sky)
         for k in range(self.ndet):
-            alltod[k*self.ndet:(k+1)*self.ndet] *= intercal[k]
+            alltod[k*self.nsamples:(k+1)*self.nsamples] *= intercal[k]
         return alltod
 
 
@@ -180,7 +181,9 @@ guess_sky = np.append(np.zeros(len(xpix)), np.ones(ndet))
 
 xxx = np.zeros(len(alltod))   # not used
 data = fit.Data(xxx, alltod, xxx*0+1, myH)
-m, ch2, ndf = data.fit_minuit(guess_sky)
+m, ch2, ndf = data.fit_minuit(guess_sky, fixpars = [len(xpix)])
+
+print(m.values)
 
 mymap3 = m.values[:len(xpix)]
 myintercals = m.values[len(xpix):]
@@ -223,10 +226,10 @@ Ne pas fitter les intercals avec minuit, mais les traiter linéairement
 ```{python}
 ###### Simulate observations including intercalibration
 ndet = 5
-nsamples = 20
+nsamples = 200
 sig = 0.
 
-intercal = (np.random.rand(ndet)+0.5)
+intercal = np.append([1], (np.random.rand(ndet-1)+0.5))
 H = np.zeros((ndet*nsamples, npix))
 for i in range(npix):
     H[:,i] = np.random.randint(0,npix, size=nsamples*ndet)
@@ -235,36 +238,43 @@ for i in range(npix):
 alltod = np.dot(H, truey) + np.random.randn(ndet*nsamples)*sig
 
 for k in range(ndet):
-    alltod[k*ndet:(k+1)*ndet] *= intercal[k]
+    alltod[k*nsamples:(k+1)*nsamples] *= intercal[k]
 #########################
 
 class simulate_signal_intercal:
-    def __init__(self, xpix, ndet, nsamples, H):
+    def __init__(self, xpix, ndet, nsamples, H, d):
         self.xpix = xpix
         self.ndet = ndet
         self.nsamples = nsamples
         self.H = H
-    def __call__(self, x, sky_and_intercal):
-        sky = sky_and_intercal[:len(self.xpix)]
-        intercal = sky_and_intercal[len(self.xpix):]
-        alltod = np.dot(self.H, sky)
+        self.d = np.reshape(d, (self.ndet, self.nsamples))
+    def __call__(self, x, sky):
+        D, intercal = self.give_intercals(sky)
         for k in range(self.ndet):
-            alltod[k*self.ndet:(k+1)*self.ndet] *= intercal[k]
-        return alltod
+            D[k,:] *= intercal[k]
+        return np.ravel(D)
+    def give_TOD(self, sky):
+        return D
+    def give_intercals(self, sky):
+        D = np.reshape(np.dot(self.H, sky), (self.ndet, self.nsamples))
+        intercal = np.diag((np.linalg.inv(D @ D.T) @ D) @ self.d.T)
+        intercal = intercal / intercal[0]
+        return D, intercal
 
 
 #### Solve the linear problem ignoring intercalibrations
-myH = simulate_signal_intercal(xpix, ndet, nsamples, H)
+myH = simulate_signal_intercal(xpix, ndet, nsamples, H, alltod)
 
-guess_sky = np.append(np.zeros(len(xpix)), np.ones(ndet))
+guess_sky = np.ones(len(xpix))
 
 xxx = np.zeros(len(alltod))   # not used
 data = fit.Data(xxx, alltod, xxx*0+1, myH)
 m, ch2, ndf = data.fit_minuit(guess_sky)
 
-mymap3 = m.values[:len(xpix)]
-myintercals = m.values[len(xpix):]
 
+
+mymap3 = m.values
+_, myintercals = myH.give_intercals(m.values)
 print(myintercals)
 print(intercal)
 
@@ -294,5 +304,9 @@ plot(myintercals-intercal, label='Residuals')
 xlabel('Det')
 ylabel('Intercal')
 legend()
+
+```
+
+```{python}
 
 ```

@@ -662,7 +662,7 @@ def meancut(data, nsig, med=False, disp=True):
                 return np.mean(dd), np.std(dd) / sc
 
 
-def weighted_mean(x, dx, dispersion=True):
+def weighted_mean(x, dx, dispersion=True, renorm=False):
         """
         Calculated the weighted mean of data, errors
         If dispersion is True (default) the error on the mean comes from the RMS of the data, otherwise
@@ -675,6 +675,10 @@ def weighted_mean(x, dx, dispersion=True):
                 ss = np.std(x)
         else:
                 ss = 1. / np.sqrt(sumw)
+        if renorm:
+                ### We scale errors to have a chi2=1
+                ch2 = np.sum(w*(x-mm)**2)
+                ss *= np.sqrt(ch2)
         return mm, ss
 
 

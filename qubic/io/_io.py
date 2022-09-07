@@ -1,6 +1,6 @@
 from __future__ import division
 from astropy.io import fits
-from collections import Container
+from collections.abc import Container
 from pyoperators.utils import ndarraywrap
 import healpy as hp
 import numpy as np

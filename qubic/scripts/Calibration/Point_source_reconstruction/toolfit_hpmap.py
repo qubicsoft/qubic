@@ -93,20 +93,21 @@ def create_hall_pointing(d, az, el, hor_center, angspeed_psi = 0, maxpsi = 0, pe
     pp.equatorial[:,1] = coords[:,1]
 
     if doplot:
-        fig, ax = subplots(nrows = 1, ncols = 2, figsize = (14,6))
+        fig, ax = subplots(nrows = 1, ncols = 1, figsize = (14,6))
         pixsH = hp.ang2pix(d['nside'], np.radians(90 - theta), np.radians(phi))
         mapaH = np.ones((12*d['nside']**2))
         mapaH[pixsH] = 100
-        axes(ax[0])
-        hp.gnomview(mapaH, title = "Horizontal coordinates", reso = 12,
-            rot = [np.mean(phi),np.mean(theta)], hold = True)
-        hp.graticule(verbose = False)
-        pixsEq = hp.ang2pix(d['nside'], np.radians(90 - pp.equatorial[:,1]), np.radians(pp.equatorial[:,0]))
-        mapaEq = np.ones((12*d['nside']**2))
-        mapaEq[pixsEq] = 100
-        axes(ax[1])
-        hp.mollview(mapaEq, title = "Equatorial coordinates", hold = True)
-        hp.graticule(verbose = False)
+        axes(ax)
+        hp.gnomview(mapaH, title = "Horizontal coordinates Nside = {}".format(d['nside']), reso = 12,
+        	xsize = 320, ysize = 190,
+            rot = [np.mean(phi),np.mean(theta)], hold = True, cbar = False)
+        hp.graticule(verbose = False, dmer = 10, dpar = 10)
+        #pixsEq = hp.ang2pix(d['nside'], np.radians(90 - pp.equatorial[:,1]), np.radians(pp.equatorial[:,0]))
+        #mapaEq = np.ones((12*d['nside']**2))
+        #mapaEq[pixsEq] = 100
+        #axes(ax[1])
+        #hp.mollview(mapaEq, title = "Equatorial coordinates", hold = True)
+        #hp.graticule(verbose = False)
         
     azcen_fov, elcen_fov = hor_center[0], hor_center[1]
     if period < 1e-4:

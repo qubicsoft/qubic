@@ -137,47 +137,10 @@ tight_layout()
 ```
 
 ```{python}
-npix = 20
-xpix = np.linspace(0,1,npix)
 
-x0 = 0.5
-maxy = 1.
-α = -maxy / (x0-x0**2)
-β = - α
-amp = 1.
-w0 = 0.1
-ph = 0.3
+```
 
-truey = α*xpix**2 + β*xpix + amp*np.sin(xpix/w0+2*np.pi * ph)
-
-plot(xpix, truey)
-
-
-
-###########
-
-
-
-
-ndet = 5
-nsamples = 20
-sig = 0.1
-
-intercal = np.random.rand(ndet)+0.5
-H = np.zeros((ndet*nsamples, npix))
-for i in range(npix):
-    H[:,i] = np.random.randint(0,npix, size=nsamples*ndet)
-    
-    
-alltod = np.dot(H, truey) + np.random.randn(ndet*nsamples)*sig
-
-for k in range(ndet):
-    alltod[k*ndet:(k+1)*ndet] *= intercal[k]
-
-
-mymap2 = np.linalg.inv(H.T@H)@H.T@alltod
-
-plot(xpix, mymap2, 'ro')
+```{python}
 
 ```
 

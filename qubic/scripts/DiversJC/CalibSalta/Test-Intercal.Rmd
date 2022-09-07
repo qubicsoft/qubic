@@ -1,0 +1,298 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.0
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+# %config InlineBackend.figure_format='retina'
+from IPython.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+
+from qubic import fibtools as ft
+import fitting as fit
+from importlib import reload
+
+rc('figure',figsize=(10,6))
+rc('font',size=12)
+
+```
+
+```{python}
+#### Simulate input true "sky"
+npix = 20
+xpix = np.linspace(0,1,npix)
+
+x0 = 0.5
+maxy = 1.
+α = -maxy / (x0-x0**2)
+β = - α
+amp = 1.
+w0 = 0.1
+ph = 0.3
+
+truey = α*xpix**2 + β*xpix + amp*np.sin(xpix/w0+2*np.pi * ph)
+
+plot(xpix, truey, label='True Sky')
+xlabel('pixel')
+ylabel('sky')
+legend()
+###########
+
+```
+
+# Résolution avec la solution "Map-making" exacte
+
+```{python}
+###### Simulate observations with perfect intercalibrations
+ndet = 5
+nsamples = 20
+sig = 0.01
+
+H = np.zeros((ndet*nsamples, npix))
+for i in range(npix):
+    H[:,i] = np.random.randint(0,npix, size=nsamples*ndet)
+    
+    
+alltod = np.dot(H, truey) + np.random.randn(ndet*nsamples)*sig
+#########################
+
+
+
+#### Solve the linear problem
+mymap = np.linalg.inv(H.T@H)@H.T@alltod
+
+subplot(1,2,1)
+plot(xpix, truey, label='True Sky')
+plot(xpix, mymap, 'ro', label='reconstructed')
+xlabel('pixel')
+ylabel('sky')
+legend()
+
+subplot(1,2,2)
+plot(xpix, mymap - truey, label='Residuals')
+xlabel('pixel')
+ylabel('sky')
+legend()
+
+```
+
+# Résolution du même problème mais avec Minuit
+=> c'est à dire philosophiquement, comme ce que l'on fait dans QUBIC
+
+```{python}
+###### Simulate observations including intercalibration
+ndet = 5
+nsamples = 20
+sig = 0.
+
+H = np.zeros((ndet*nsamples, npix))
+for i in range(npix):
+    H[:,i] = np.random.randint(0,npix, size=nsamples*ndet)
+    
+    
+alltod = np.dot(H, truey)# + np.random.randn(ndet*nsamples)*sig
+#########################
+
+
+class simulate_signal:
+    def __init__(self, xpix, ndet, nsamples, H):
+        self.xpix = xpix
+        self.ndet = ndet
+        self.nsamples = nsamples
+        self.H = H
+    def __call__(self, x, sky):
+        alltod = np.dot(self.H, sky)
+        return alltod
+
+
+myH = simulate_signal(xpix, ndet, nsamples, H)
+
+
+guess_sky = np.zeros(len(xpix))
+xxx = np.zeros(len(alltod))   # not used
+data = fit.Data(xxx, alltod, xxx*0+1, myH)
+
+m, ch2, ndf = data.fit_minuit(guess_sky)
+
+mymap2 = m.values
+
+subplot(1,2,1)
+plot(xpix, truey, label='True Sky')
+plot(xpix, mymap2, 'ro', label='reconstructed')
+xlabel('pixel')
+ylabel('sky')
+legend()
+
+subplot(1,2,2)
+plot(xpix, mymap2 - truey, label='Residuals')
+xlabel('pixel')
+ylabel('sky')
+legend()
+
+```
+
+```{python}
+###### Simulate observations including intercalibration
+ndet = 5
+nsamples = 20
+sig = 0.
+
+intercal = (np.random.rand(ndet)+0.5)
+H = np.zeros((ndet*nsamples, npix))
+for i in range(npix):
+    H[:,i] = np.random.randint(0,npix, size=nsamples*ndet)
+    
+    
+alltod = np.dot(H, truey) + np.random.randn(ndet*nsamples)*sig
+
+for k in range(ndet):
+    alltod[k*ndet:(k+1)*ndet] *= intercal[k]
+#########################
+
+class simulate_signal_intercal:
+    def __init__(self, xpix, ndet, nsamples, H):
+        self.xpix = xpix
+        self.ndet = ndet
+        self.nsamples = nsamples
+        self.H = H
+    def __call__(self, x, sky_and_intercal):
+        sky = sky_and_intercal[:len(self.xpix)]
+        intercal = sky_and_intercal[len(self.xpix):]
+        alltod = np.dot(self.H, sky)
+        for k in range(self.ndet):
+            alltod[k*self.ndet:(k+1)*self.ndet] *= intercal[k]
+        return alltod
+
+
+#### Solve the linear problem ignoring intercalibrations
+myH = simulate_signal_intercal(xpix, ndet, nsamples, H)
+
+guess_sky = np.append(np.zeros(len(xpix)), np.ones(ndet))
+
+xxx = np.zeros(len(alltod))   # not used
+data = fit.Data(xxx, alltod, xxx*0+1, myH)
+m, ch2, ndf = data.fit_minuit(guess_sky)
+
+mymap3 = m.values[:len(xpix)]
+myintercals = m.values[len(xpix):]
+
+print(myintercals)
+print(intercal)
+
+
+subplot(2,2,1)
+plot(xpix, truey, label='True Sky')
+plot(xpix, mymap3, 'ro', label='reconstructed')
+xlabel('pixel')
+ylabel('sky')
+legend()
+
+subplot(2,2,2)
+plot(xpix, mymap3 - truey, label='Residuals')
+xlabel('pixel')
+ylabel('sky')
+legend()
+
+subplot(2,2,3)
+plot(intercal, label='True Intercals')
+plot(myintercals, 'ro', label='reconstructed intercals')
+xlabel('Det')
+ylabel('Intercal')
+legend()
+
+subplot(2,2,4)
+plot(myintercals-intercal, label='Residuals')
+xlabel('Det')
+ylabel('Intercal')
+legend()
+
+```
+
+# Exercice suivant:
+Ne pas fitter les intercals avec minuit, mais les traiter linéairement
+
+```{python}
+###### Simulate observations including intercalibration
+ndet = 5
+nsamples = 20
+sig = 0.
+
+intercal = (np.random.rand(ndet)+0.5)
+H = np.zeros((ndet*nsamples, npix))
+for i in range(npix):
+    H[:,i] = np.random.randint(0,npix, size=nsamples*ndet)
+    
+    
+alltod = np.dot(H, truey) + np.random.randn(ndet*nsamples)*sig
+
+for k in range(ndet):
+    alltod[k*ndet:(k+1)*ndet] *= intercal[k]
+#########################
+
+class simulate_signal_intercal:
+    def __init__(self, xpix, ndet, nsamples, H):
+        self.xpix = xpix
+        self.ndet = ndet
+        self.nsamples = nsamples
+        self.H = H
+    def __call__(self, x, sky_and_intercal):
+        sky = sky_and_intercal[:len(self.xpix)]
+        intercal = sky_and_intercal[len(self.xpix):]
+        alltod = np.dot(self.H, sky)
+        for k in range(self.ndet):
+            alltod[k*self.ndet:(k+1)*self.ndet] *= intercal[k]
+        return alltod
+
+
+#### Solve the linear problem ignoring intercalibrations
+myH = simulate_signal_intercal(xpix, ndet, nsamples, H)
+
+guess_sky = np.append(np.zeros(len(xpix)), np.ones(ndet))
+
+xxx = np.zeros(len(alltod))   # not used
+data = fit.Data(xxx, alltod, xxx*0+1, myH)
+m, ch2, ndf = data.fit_minuit(guess_sky)
+
+mymap3 = m.values[:len(xpix)]
+myintercals = m.values[len(xpix):]
+
+print(myintercals)
+print(intercal)
+
+
+subplot(2,2,1)
+plot(xpix, truey, label='True Sky')
+plot(xpix, mymap3, 'ro', label='reconstructed')
+xlabel('pixel')
+ylabel('sky')
+legend()
+
+subplot(2,2,2)
+plot(xpix, mymap3 - truey, label='Residuals')
+xlabel('pixel')
+ylabel('sky')
+legend()
+
+subplot(2,2,3)
+plot(intercal, label='True Intercals')
+plot(myintercals, 'ro', label='reconstructed intercals')
+xlabel('Det')
+ylabel('Intercal')
+legend()
+
+subplot(2,2,4)
+plot(myintercals-intercal, label='Residuals')
+xlabel('Det')
+ylabel('Intercal')
+legend()
+
+```

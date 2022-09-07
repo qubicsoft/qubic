@@ -1,6 +1,7 @@
 # coding: utf-8
 from __future__ import division, print_function
 
+import cpuinfo
 import healpy as hp
 import numexpr as ne
 import numpy as np
@@ -149,7 +150,9 @@ class QubicInstrument(Instrument):
         detector_tau = d['detector_tau']
 
         polarizer = d['polarizer']
+        # replace by np.float64 for mac M1 processors
         synthbeam_dtype = np.float32
+        # synthbeam_dtype = np.float64
         synthbeam_fraction = d['synthbeam_fraction']
         synthbeam_kmax = d['synthbeam_kmax']
         synthbeam_peak150_fwhm = np.radians(d['synthbeam_peak150_fwhm'])
@@ -810,7 +813,8 @@ class QubicInstrument(Instrument):
         thetaphi = _pack_vector(thetas, phis)  # (ndetectors, ncolmax, 2)
         direction = Spherical2CartesianOperator('zenith,azimuth')(thetaphi)
         e_nf = direction[:, None, :, :]
-        if nside > 8192:
+        # if (nside > 8192) or (cpuinfo.get_cpu_info().get('brand_raw')=='VirtualApple @ 2.50GHz'):
+        if (nside > 8192):
             dtype_index = np.dtype(np.int64)
         else:
             dtype_index = np.dtype(np.int32)
@@ -1155,7 +1159,7 @@ class QubicInstrument(Instrument):
             sb = QubicInstrument._get_response(
                 theta[index_], phi[index_], bandwidth, position, area, nu,
                 horn, primary_beam, secondary_beam, external_A=external_A, hwp_position=hwp_position)
-            out[..., index_] = abs2(sb, dtype=synthbeam_dtype)
+            out[..., index_] = abs2(sb, dtype=synthbeam_dtype, casting='unsafe')
         return out
 
     def get_synthbeam(self, scene, idet=None, theta_max=45, external_A=None, hwp_position=0,

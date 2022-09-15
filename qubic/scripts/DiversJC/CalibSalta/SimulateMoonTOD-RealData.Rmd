@@ -540,7 +540,7 @@ hp.gnomview(newmapdiff, rot=[np.mean(newazt), np.mean(newelt)], reso=12, sub=(1,
 ```
 
 ```{python}
-
+d
 ```
 
 ```{python}

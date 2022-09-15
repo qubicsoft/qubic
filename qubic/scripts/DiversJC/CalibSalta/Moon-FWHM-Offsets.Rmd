@@ -23,13 +23,77 @@ rc('font',size=12)
 import pickle
 import healpy as hp
 from importlib import reload
+import xarray as xr
 
+
+from qubicpack.utilities import Qubic_DataDir
+import qubic
 from qubic import fibtools as ft
 from qubic import DataHandling as DH
+from qubic import selfcal_lib as scal
 import time_domain_tools as tdt
 import fitting as fit
+from qubic import progress_bar
+
+import qubicpack as qp
+
+### Correspondance between QP and QS indices: see "Pixel Indices.Rmd"
+def iQS2iQP(indexQS):
+    qpnumi, qpasici = qp.pix2tes.pix2tes(indexQS+1)
+    return qpnumi+(qpasici-1)*128-1
+
+def iQP2iQS(indexQP):
+    QStesnum = qp.pix2tes.tes2pix(indexQP%128+1, indexQP//128+1)
+    return QStesnum-1
 
 
+def display_healpix_map(maps, rot, q, reso=15, add_moon_traj=None, savepdf=None, radec=['G'], **kwargs):
+    if add_moon_traj is not None:
+        th, phi = add_moon_traj
+
+    figure(figsize=(30, 30))
+    #k=1
+    bar=progress_bar(maps.shape[0], 'Display healpix maps')
+
+    x=np.linspace(-0.0504, -0.0024, 17)
+    y=np.linspace(-0.0024, -0.0504, 17)
+
+    X, Y = np.meshgrid(x, y)
+
+    allTES=np.arange(1, 129, 1)
+    good_tes=np.delete(allTES, np.array([4,36,68,100])-1, axis=0)
+    k=0
+    for j in [1, 2]:
+        for i in good_tes:
+
+            #print(i)
+            xtes, ytes, FP_index, index_q= scal.TES_Instru2coord(TES=i, ASIC=j, q=q, frame='ONAFP', verbose=False)
+            ind=np.where((np.round(xtes, 4) == np.round(X, 4)) & (np.round(ytes, 4) == np.round(Y, 4)))
+            place_graph=ind[0][0]*17+ind[1][0]+1
+            mytes=i
+            if j == 2:
+                mytes+=128
+            hp.gnomview(maps[mytes-1], rot=rot, reso=reso, sub=(17, 17, place_graph), cmap='jet',
+                notext=True, cbar=False, title='', margins=(0.001, 0.001, 0.001, 0.001), coord=radec, **kwargs)
+
+            annotate('TES = {}'.format(mytes), xy=(0, 0),  xycoords='axes fraction', fontsize=15, color='black',
+                     fontstyle='italic', xytext=(0.2, 0.8))
+            bar.update()
+            if add_moon_traj is not None:
+                hp.projplot(th, phi, color='k', lonlat=False, alpha=0.8, lw=2)
+
+
+            k+=1
+    if savepdf != None:
+        savefig(savepdf, format="pdf", bbox_inches="tight")
+    show()
+    
+basedir = Qubic_DataDir()
+print('basedir : ', basedir)
+dictfilename = basedir + '/dicts/global_source_oneDet.dict'
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+q = qubic.QubicInstrument(d)
 ```
 
 ```{python}
@@ -41,7 +105,15 @@ nside = hp.npix2nside(sh[1])
 ```
 
 ```{python}
-allmaps.shape
+ok = allmaps[0,:] != hp.UNSEEN
+azp, elp = hp.pix2ang(nside, np.arange(12*nside**2)[ok], lonlat=True)
+maz = 180 - 0.5*(np.min(azp) + np.max(azp))
+mel = 0.5*(np.min(elp) + np.max(elp))
+
+#hp.gnomview(allmaps[32], reso=4, min=-5e3, max=1.5e4, rot=[maz, mel+3])
+
+#display_healpix_map(allmaps, [maz, mel], q, reso=10, min=-5e3, max=2.5e4, savepdf='allmoons.pdf')
+# display_healpix_map(allmaps, [maz, mel+3], q, reso=4, min=-5e3, max=1.5e4, savepdf='allmoons_zoom.pdf')
 ```
 
 ```{python}
@@ -68,6 +140,8 @@ allmaps.shape
 We first pick a rotation "by eye" ([-1., -4]) and then we will improve on it later.
 
 ```{python}
+reload(fit)
+
 class gauss2dfit:
     def __init__(self, xx, yy):
         self.xx = xx
@@ -78,9 +152,70 @@ class gauss2dfit:
         return np.ravel(mygauss)
 
 
+def fitgauss_img(mapxy, x, y, guess=None, doplot=False, distok=3, mytit='', nsig=1, mini=None, maxi=None, ms=10, renorm=False):
+    xx,yy = meshgrid(x,y)
+    
+    ### Displays the image as an array
+    mm, ss = ft.meancut(mapxy, 3)
+    if mini is None:
+        mini = mm-nsig*ss
+    if maxi is None:
+        maxi = np.max(mapxy)
+    if doplot:
+        subplot(2,3,1)
+        imshow(mapxy, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mini, vmax=maxi)
+        xlabel('Degrees')
+        ylabel('Degrees')
+        colorbar()
+        if mynum:
+            title('Data '+mytit)
 
+    ### Guess where the maximum is and the other parameters
+    if guess is None:
+        maxii = mapxy == np.nanmax(mapxy)
+        maxx = np.mean(xx[maxii])
+        maxy = np.mean(yy[maxii])
+        guess = np.array([np.max(mapxy),maxx, maxy, 1.])
+    else:
+        maxx = guess[1]
+        maxy = guess[2]
+    if doplot:
+        # Plot a red cross at the expected location
+        plot(guess[1],guess[2],'yx', ms=ms, mew=2, label='Guess')
+        
+    ### Do the fit putting the UNSEEN to a very low weight
+    errpix = xx*0+ss
+    errpix[mapxy==0] *= 1e5
+    g2d = gauss2dfit(xx, yy)
+    data = fit.Data(np.ravel(xx), np.ravel(mapxy), np.ravel(errpix), g2d)
+    m, ch2, ndf = data.fit_minuit(guess, limits=[[0, 0.,1e8], [1, maxx-distok, maxx+distok], [2, maxy-distok, maxy+distok], [3, 0., 10.]], renorm=renorm)
 
-def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0.]), doplot=False, verbose=False, guess=None, distok=3, mynum=None):
+    if doplot:
+        plot(m.values[1], m.values[2], 'rx', ms=ms, mew=2, label='Fit')
+        legend()
+    ### Image of the fitted Gaussian
+    fitted = np.reshape(g2d(x, m.values), (xs, xs))
+    if doplot:
+        subplot(2,3,2)
+        imshow(fitted, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mini, vmax=maxi)
+        colorbar()
+        xlabel('Degrees')
+        ylabel('Degrees')
+        title('FWHMFit = {:5.3f} +/- {:5.3f} degrees'.format(m.values[3]*2.35, m.errors[3]*2.35))
+
+        ### Display residuals
+        subplot(2,3,3)
+        imshow(mapxy-fitted, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mini, vmax=maxi)
+        colorbar()
+        xlabel('Degrees')
+        ylabel('Degrees')
+        title('Residuals')
+        
+    return m, fitted
+    
+    
+
+def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0.]), doplot=False, verbose=False, guess=None, distok=3, mytit='', return_images=False, ms=10, renorm=False):
     ### get the gnomview back into a np.array in order to fit it
     mm = mymap.copy()
     badpix = mm ==hp.UNSEEN
@@ -90,61 +225,15 @@ def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0.]), doplot=False, verbose=F
     ### np.array coordinates
     x = (np.arange(xs)-(xs-1)/2)*reso/60
     y = x.copy()
-    xx,yy = meshgrid(x,y)
 
-    ### Displays the image as an array
-    mm, ss = ft.meancut(mapxy, 3)
-    if doplot:
-        subplot(1,4,2)
-        imshow(mapxy, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mm-ss, vmax=np.max(mapxy))
-        xlabel('Degrees')
-        ylabel('Degrees')
-        if mynum:
-            title('TES#{}'.format(mynum))
-
-    ### Guess where the maximum is and the other parameters
-    if guess is None:
-        maxi = mapxy == np.nanmax(mapxy)
-        maxx = np.mean(xx[maxi])
-        maxy = np.mean(yy[maxi])
-        guess = np.array([np.max(mapxy),maxx, maxy, 1.])
-    else:
-        maxx = guess[1]
-        maxy = guess[2]
-    if doplot:
-        # Plot a red cross at the expected location
-        plot(guess[1],guess[2],'yx', ms=30, mew=2, label='Guess')
-
-    ### Do the fit putting the UNSEEN to a very low weight
-    errpix = xx*0+ss
-    errpix[mapxy==0] *= 1e5
-#     resfit = ft.do_minuit(np.ravel(xx), np.ravel(mapxy), np.ravel(errpix), guess, verbose=verbose,
-#                           functname=gauss2d, extra_args=[xx,yy], 
-#                           rangepars = [[0.,1e8], [maxx-distok, maxx+distok], [maxy-distok, maxy+distok], [0., 10.]])
-    g2d = gauss2dfit(xx, yy)
-    data = fit.Data(np.ravel(xx), np.ravel(mapxy), np.ravel(errpix), g2d)
-    m, ch2, ndf = data.fit_minuit(guess, limits=[[0, 0.,1e8], [1, maxx-distok, maxx+distok], [2, maxy-distok, maxy+distok], [3, 0., 10.]])
+    try:
+        m, fitted = fitgauss_img(mapxy, x, y, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm)
+    except:
+        m = None
+        fitted = None
     
-
-    if doplot:
-        plot(m.values[1], m.values[2], 'rx', ms=30, mew=2, label='Fit')
-        legend()
-    ### Image of the fitted Gaussian
-    fitted = np.reshape(g2d(x, m.values), (xs, xs))
-    if doplot:
-        subplot(1,4,3)
-        imshow(fitted, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mm-ss, vmax=np.max(mapxy))
-        xlabel('Degrees')
-        ylabel('Degrees')
-        title('FWHMFit = {:5.3f} +/- {:5.3f} degrees'.format(m.values[3]*2.35, m.errors[3]*2.35))
-
-        ### Display residuals
-        subplot(1,4,4)
-        imshow(mapxy-fitted, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mm-ss, vmax=np.max(mapxy))
-        xlabel('Degrees')
-        ylabel('Degrees')
-        title('Residuals')
-    
+    if return_images:
+        return m, mapxy, fitted, [np.min(x), np.max(x), np.min(y), np.max(y)]
     return m
     
 ```
@@ -160,10 +249,10 @@ xs = 201
 myrotinit = np.array([-1, -4.])
 
 idx = where(np.array(allTESNum)==mynum)[0][0]
-hp.gnomview(allmaps[idx,:], reso=10, rot=myrotinit, title='TES#{}'.format(mynum), min=-5e3, max=2.5e4, sub=(1,4,1))
+#hp.gnomview(allmaps[idx,:], reso=10, rot=myrotinit, title='TES#{}'.format(mynum), min=-5e3, max=2.5e4, sub=(1,4,1))
 
 reso=4
-resfit = fit_one_tes(allmaps[idx,:], xs, reso, rot=myrotinit, verbose=True, doplot=True)
+resfit = fit_one_tes(allmaps[idx,:], xs, reso, rot=myrotinit, verbose=True, doplot=True, renorm=True)
 ```
 
 # Now we do the same on all TES
@@ -202,7 +291,7 @@ We use DBSCAN to associate measured peaks to the ones predicted by creidhe
 ```{python}
 #### Offsets from Créidhe
 import pickle
-offsets = pickle.load( open( 'pointing_offsets.pickle', 'rb') )
+offsets = pickle.load( open( 'pointing_offsets_fixed_hole.pickle', 'rb') )
 print(np.shape(offsets))
 # for i in range(256):
 #     print(i, offsets[i,0], offsets[i,1])
@@ -494,7 +583,7 @@ rc('figure',figsize=(20,8))
 rc('font',size=12)
 
 ### Pick a TES number
-mynum = 221
+mynum = 33
 xs = 201
 
 print(myrotinit)
@@ -503,81 +592,412 @@ print(moon_guess[mynum-1,:])
 mynewrot = myrotinit-np.array([moon_guess[mynum-1,0], -moon_guess[mynum-1,1]])
 idx = where(np.array(allTESNum)==mynum)[0][0]
 
+print(idx)
+
 reso=4
 
-resfit = fit_one_tes(allmaps[idx,:], xs, reso, rot=mynewrot, verbose=True, doplot=True, 
-                     guess=np.array([np.max(allmaps[idx,:]),0. ,0., 1]), mynum=mynum)
+resfit, mapxy, mapfit, extent = fit_one_tes(allmaps[idx,:], xs, reso, rot=mynewrot, verbose=True, doplot=True, 
+                     guess=np.array([np.max(allmaps[idx,:]),0. ,0., 1]), mytit=str(mynum), return_images=True)
 
 ```
 
 ```{python}
-import qubicpack as qp
-
-### Correspondance between QP and QS indices: see "Pixel Indices.Rmd"
-def iQS2iQP(indexQS):
-    qpnumi, qpasici = qp.pix2tes.pix2tes(indexQS+1)
-    return qpnumi+(qpasici-1)*128-1
-
-def iQP2iQS(indexQP):
-    QStesnum = qp.pix2tes.tes2pix(indexQP%128+1, indexQP//128+1)
-    return QStesnum-1
 
     
 
-#Now position in the sky for all TES
-mynewrot = myrotinit-np.array([moon_guess[:,0], -moon_guess[:,1]]).T
+# #Now position in the sky for all TES
+# mynewrot = myrotinit-np.array([moon_guess[:,0], -moon_guess[:,1]]).T
 
-subplot(1,2,1).set_aspect(1)
-dec = 0.05
-plot(mynewrot[:,0], mynewrot[:,1],'ko', alpha=0.3)
-plot(-10,-10, 'k', label='Index QubicPack')
-plot(-10,-10, 'r', label='Index QubicSoft')
-for i in range(256):
-    text(mynewrot[i,0]+dec, mynewrot[i,1]+dec, '{}'.format(i), fontsize=7, color='k')
-    text(mynewrot[i,0]+dec*1.5, mynewrot[i,1]-dec*1.5, '{}'.format(iQP2iQS(i)), fontsize=7, color='r')
-xlabel('$\Delta_{az}$ [deg.]')
-ylabel('$\Delta_{el}$ [deg.]')
-xlim(-5,5)
-ylim(-9, 1)
-legend()
+# subplot(1,2,1).set_aspect(1)
+# dec = 0.05
+# plot(mynewrot[:,0], mynewrot[:,1],'ko', alpha=0.3)
+# plot(-10,-10, 'k', label='Index QubicPack')
+# plot(-10,-10, 'r', label='Index QubicSoft')
+# for i in range(256):
+#     text(mynewrot[i,0]+dec, mynewrot[i,1]+dec, '{}'.format(i), fontsize=7, color='k')
+#     text(mynewrot[i,0]+dec*1.5, mynewrot[i,1]-dec*1.5, '{}'.format(iQP2iQS(i)), fontsize=7, color='r')
+# xlabel('$\Delta_{az}$ [deg.]')
+# ylabel('$\Delta_{el}$ [deg.]')
+# xlim(-5,5)
+# ylim(-9, 1)
+# legend()
 
-subplot(1,2,2).set_aspect(1)
-dec = 0.05
-plot(mynewrot[:,0], mynewrot[:,1],'ko', alpha=0.3)
-plot(-10,-10, 'k', label='Number QubicPack')
-plot(-10,-10, 'r', label='Number QubicSoft')
-for i in range(256):
-    text(mynewrot[i,0]+dec, mynewrot[i,1]+dec, '{}'.format(i+1), fontsize=7, color='k')
-    text(mynewrot[i,0]+dec*1.5, mynewrot[i,1]-dec*1.5, '{}'.format(iQP2iQS(i)+1), fontsize=7, color='r')
-xlabel('$\Delta_{az}$ [deg.]')
-ylabel('$\Delta_{el}$ [deg.]')
-xlim(-5,5)
-ylim(-9, 1)
-legend()
+# subplot(1,2,2).set_aspect(1)
+# dec = 0.05
+# plot(mynewrot[:,0], mynewrot[:,1],'ko', alpha=0.3)
+# plot(-10,-10, 'k', label='Number QubicPack')
+# plot(-10,-10, 'r', label='Number QubicSoft')
+# for i in range(256):
+#     text(mynewrot[i,0]+dec, mynewrot[i,1]+dec, '{}'.format(i+1), fontsize=7, color='k')
+#     text(mynewrot[i,0]+dec*1.5, mynewrot[i,1]-dec*1.5, '{}'.format(iQP2iQS(i)+1), fontsize=7, color='r')
+# xlabel('$\Delta_{az}$ [deg.]')
+# ylabel('$\Delta_{el}$ [deg.]')
+# xlim(-5,5)
+# ylim(-9, 1)
+# legend()
 
-np.savetxt('new_offsets_18082022_JC.txt', mynewrot)
+# np.savetxt('new_offsets_18082022_JC.txt', mynewrot)
+
+# # !cat new_offsets_18082022_JC.txt
+```
+
+# Let's make a nice focal plane image
+
+```{python}
+figure(figsize=(30, 30))
+savepdf = 'allmoons.pdf'
+reso=3
+
+bar=progress_bar(256, 'Display healpix maps')
+
+x=np.linspace(-0.0504, -0.0024, 17)
+y=np.linspace(-0.0024, -0.0504, 17)
+
+X, Y = np.meshgrid(x, y)
+
+allxymaps = np.zeros((256, 201,201))
+allfitok = np.zeros(256)
+
+allTES=np.arange(1, 129, 1)
+good_tes=np.delete(allTES, np.array([4,36,68,100])-1, axis=0)
+good_tes = allTES
+coord_thermo=np.array([17*11+1, 17*12+1, 17*13+1, 17*14+1, 275, 276, 277, 278])
+k=0
+k_thermo=0
+for j in [1, 2]:
+    for i in good_tes:
+
+        if np.sum(i == np.array([4,36,68,100])) != 0:
+            place_graph=coord_thermo[k_thermo]
+            k_thermo+=1
+        else:
+            xtes, ytes, FP_index, index_q= scal.TES_Instru2coord(TES=i, ASIC=j, q=q, frame='ONAFP', verbose=False)
+            ind=np.where((np.round(xtes, 4) == np.round(X, 4)) & (np.round(ytes, 4) == np.round(Y, 4)))
+            place_graph=ind[0][0]*17+ind[1][0]+1
+        mytes=i
+        if j == 2:
+            mytes+=128
+
+            
+        mynewrot = myrotinit-np.array([moon_guess[mytes-1,0], -moon_guess[mytes-1,1]])
+        resfit, mapxy, mapfit, extent = fit_one_tes(allmaps[mytes-1,:], xs, reso, rot=mynewrot, verbose=True, doplot=False, 
+                     guess=np.array([np.max(allmaps[mytes-1,:]),0. ,0., 1]), mytit=str(mynum), return_images=True)
+        allxymaps[mytes-1,:,:] = mapxy
+        if resfit is None:
+            allfitok[i] = 0
+        else:
+            allfitok[i] = 1
+            
+        rc('font',size=6)
+        subplot(17,17, place_graph)
+        mm, ss = ft.meancut(mapxy, 3)
+        mini = mm-2*ss
+        maxi = mm+10*ss
+        imshow(mapxy, extent=extent, vmin=mini, vmax=maxi)
+        if mytes in allTESNum[ok]:
+            bgcol = 'lightgreen'
+        else:
+            bgcol = 'pink'
+        annotate('{}'.format(mytes), xy=(0, 0),  xycoords='axes fraction', fontsize=8, color='black',
+                 fontstyle='italic', fontweight='bold', xytext=(0.05,0.85),backgroundcolor=bgcol)
+            
+        bar.update()
+
+        k+=1
+# if savepdf != None:
+#     savefig(savepdf, format="pdf", bbox_inches="tight", dpi=200)
+show()
+tight_layout()
 ```
 
 ```{python}
-# !cat new_offsets_18082022_JC.txt
+# mylistQP = [99, 95, 96, 176, 181, 129]
+
+
+mylistQP = [99, 95, 96, 107, 76, 69, 87, 81, 82, 83, 57, 59, 86, 88, 63, 51, 52, 46, 218, 189, 80, 73, 
+            62, 64, 40, 34, 27, 28, 207, 172, 131, 67, 61, 33, 22, 206, 171, 152, 49, 26, 248, 205, 170, 
+            139, 212, 138, 150, 23, 242, 193, 200, 211, 178, 137, 199, 223, 247, 198, 210, 197, 209, 221, 
+            169, 182, 130, 142, 176, 181, 129, 215, 162, 175, 188, 136, 187, 135, 159, 158, 180, 133,   
+            94, 112, 70, 89, 90, 92, 84, 78, 172, 71, 66, 50, 252, 54, 10, 32, 184, 237, 204, 216, 202, 201, 213, 173, 186, 134, 145,
+           115, 195, 246, 194,163]   #the last line here contain ghosts...
+myfitok = np.zeros(256, dtype=bool)
+for i in range(len(mylistQP)):
+    myfitok[mylistQP[i]-1]=True
+
+
 ```
 
 ```{python}
-import qubicpack as qp
-qpnum = 1
+figure(figsize=(30, 30))
+savepdf = 'allmoons.pdf'
+reso=3
 
-QStesnum = qp.pix2tes.tes2pix(qpnum%128, qpnum//128+1)
+bar=progress_bar(256, 'Display healpix maps')
 
-print('Num TES in data: {} (index={}) -> Num in QS: {} (index={})'.format(qpnum, qpnum-1, QStesnum, QStesnum-1))
+x=np.linspace(-0.0504, -0.0024, 17)
+y=np.linspace(-0.0024, -0.0504, 17)
 
-qpnumback, qpasicback = qp.pix2tes.pix2tes(QStesnum)
-#print(qp.pix2tes.pix2tes(qpnumback, qpasicback))
-print(qpnumback, qpasicback)
-print('Check: {} = ({},{})'.format(qpnumback+(qpasicback-1)*128, qpnumback, qpasicback))
+X, Y = np.meshgrid(x, y)
+
+allxymaps = np.zeros((256, 201,201))
+allfitok = np.zeros(256)
+
+allTES=np.arange(1, 129, 1)
+good_tes=np.delete(allTES, np.array([4,36,68,100])-1, axis=0)
+good_tes = allTES
+coord_thermo=np.array([17*11+1, 17*12+1, 17*13+1, 17*14+1, 275, 276, 277, 278])
+k=0
+k_thermo=0
+for j in [1, 2]:
+    for i in good_tes:
+
+        if np.sum(i == np.array([4,36,68,100])) != 0:
+            place_graph=coord_thermo[k_thermo]
+            k_thermo+=1
+        else:
+            xtes, ytes, FP_index, index_q= scal.TES_Instru2coord(TES=i, ASIC=j, q=q, frame='ONAFP', verbose=False)
+            ind=np.where((np.round(xtes, 4) == np.round(X, 4)) & (np.round(ytes, 4) == np.round(Y, 4)))
+            place_graph=ind[0][0]*17+ind[1][0]+1
+        mytes=i
+        if j == 2:
+            mytes+=128
+
+            
+        mynewrot = myrotinit-np.array([moon_guess[mytes-1,0], -moon_guess[mytes-1,1]])
+        resfit, mapxy, mapfit, extent = fit_one_tes(allmaps[mytes-1,:], xs, reso, rot=mynewrot, verbose=True, doplot=False, 
+                     guess=np.array([np.max(allmaps[mytes-1,:]),0. ,0., 1]), mytit=str(mynum), return_images=True)
+        allxymaps[mytes-1,:,:] = mapxy
+        if resfit is None:
+            allfitok[i] = 0
+        else:
+            allfitok[i] = 1
+            
+        rc('font',size=6)
+        subplot(17,17, place_graph)
+        mm, ss = ft.meancut(mapxy, 3)
+        mini = mm-2*ss
+        maxi = mm+10*ss
+        imshow(mapxy, extent=extent, vmin=mini, vmax=maxi)
+        if mytes in mylistQP:
+            bgcol = 'lightgreen'
+        else:
+            bgcol = 'pink'
+        annotate('{}'.format(mytes), xy=(0, 0),  xycoords='axes fraction', fontsize=8, color='black',
+                 fontstyle='italic', fontweight='bold', xytext=(0.05,0.85),backgroundcolor=bgcol)
+            
+        bar.update()
+
+        k+=1
+# if savepdf != None:
+#     savefig(savepdf, format="pdf", bbox_inches="tight", dpi=200)
+show()
+tight_layout()
 ```
 
 ```{python}
-qp.pix2tes.pix2tes(77)
+rc('figure',figsize=(20,6))
+rc('font',size=12)
+### Image without intercals
+imgavok = np.zeros((201,201))
+
+for i in range(201):
+    for j in range(201):
+        imgavok[i,j], ss = ft.meancut(allxymaps[myfitok==1,i,j],3)
+        
+
+x = (np.arange(xs)-(xs-1)/2)*reso/60
+y = x.copy()
+m, fitted = fitgauss_img(imgavok, x, y, doplot=True, nsig=3, mytit='Raw Av')
+
+```
+
+```{python}
+class simulate_signal_intercal:
+    def __init__(self, nx, ny, ndet):
+        self.nx = nx
+        self.ny = ny
+        self.npix = nx * ny
+        self.ndet = ndet
+    def __call__(self, x, sky_and_intercal):
+        sky = np.reshape(sky_and_intercal[:self.npix], (self.nx, self.ny))
+        intercal = sky_and_intercal[self.npix:]
+        allimg = np.zeros((self.ndet, self.nx, self.ny))
+        for k in range(self.ndet):
+            allimg[k, :,:] = intercal[k] * sky
+        return np.ravel(allimg)
+
+def combine_moonmaps(mymaps, guessmap, resample=10):
+    ndet, ny, nx = np.shape(mymaps)
+    
+    ##### Resample the maps to the desired resampling factor
+    nxnew = nx//resample
+    nynew = ny//resample
+    # The guess map
+    new_guessmap = xr.DataArray(guessmap, dims=['x', 'y']).coarsen(x=resample, y=resample, boundary="trim").mean()
+    # all the maps
+    newimgs = np.zeros((ndet, nynew, nxnew))
+    newimgnoise = np.zeros((ndet, nynew, nxnew))
+    noiseval = np.zeros(ndet)
+    for i in range(ndet):
+        mm, ss = ft.meancut(mymaps[i,:,:], 3)
+        newimgs[i,:,:] = xr.DataArray(mymaps[i,:,:], dims=['x', 'y']).coarsen(x=nnn, y=nnn, boundary="trim").mean()
+        newimgnoise[i,:,:] = ss / nnn 
+        noiseval[i] = ss
+        
+    ##### Now the map averaging including intercalibrations
+    # Instanciate class to fit
+    myH = simulate_signal_intercal(nxnew, nxnew, ndet)
+    # Prepare the guess with nxnew*nynew unknowns for the average map and ndet unknowns for intercals
+    guess_sky = np.append(np.ravel(new_guessmap), np.ones(ndet))
+    # Declare the Data class
+    xxx = np.zeros(ndet*nxnew*nynew)   # not used but necessary
+    data = fit.Data(xxx, np.ravel(newimgs), np.ravel(newimgnoise), myH)
+    # Run the fit with Minuit, fixing the first of the intercalibrations to 1
+    m, ch2, ndf = data.fit_minuit(guess_sky, fixpars = [nxnew*nynew])
+    intercals = m.values[nxnew*nynew:]
+    
+    ##### Compute final HiRes weighted average
+    # Apply intercals to HiRes maps using numpy broadcasting
+    outimg_intercal = mymaps.T * intercals
+    newerrors = noiseval * intercals
+    # Weighted average
+    w = 1./newerrors**2
+    sumw = np.sum(w)
+    mm = np.sum(outimg_intercal * w, axis=2) / sumw
+    
+    return mm.T, intercals
+    
+
+    
+ndet = np.sum(myfitok==1)
+myimg = allxymaps[myfitok==1,:,:]
+
+mapmean, intercals = combine_moonmaps(myimg, imgavok, resample=10)
+        
+
+```
+
+```{python}
+all_intercals = np.zeros(256)
+all_intercals[myfitok==1] = intercals
+
+rc('figure',figsize=(20,6))
+rc('font',size=12)
+
+figure()
+x = (np.arange(xs)-(xs-1)/2)*reso/60
+y = x.copy()
+m, fitted = fitgauss_img(mapmean, x, y, doplot=True, nsig=3, mytit='(intercalibrated- {} dets)'.format(len(intercals)), ms=5, renorm=False)
+
+
+figure()
+subplot(1,2,1)
+plot(intercals)
+
+
+mymean, mysig = ft.meancut(mapmean, 3)
+mini = mymean - 2*mysig
+maxi = np.max(mapmean)
+
+
+subplot(1,2,2)
+imshow(mapmean, extent=extent, vmin=mini, vmax=maxi, origin='lower')
+xlabel('$\Delta_{az}$ [Deg.]')
+ylabel('$\Delta_{el}$ [Deg.]')
+title('Moon Observation with QUBIC (07/14/2022 - {0:} dets) \n FWHM = {1:4.3f}+/-{2:4.3f} deg'.format(len(intercals), m.values[3]*2.35, m.errors[3]*2.35))
+cbar = colorbar()
+cbar.set_label('A.D.U.', rotation=270)
+tight_layout()
+
+```
+
+```{python}
+a=hist(np.ravel(mapmean), bins=100, range=[-200, 800])
+```
+
+Now we can display the chosen TES on the detector array applying the intercalibration
+
+```{python}
+figure(figsize=(30, 30))
+reso=3
+
+bar=progress_bar(256, 'Display healpix maps')
+
+x=np.linspace(-0.0504, -0.0024, 17)
+y=np.linspace(-0.0024, -0.0504, 17)
+
+X, Y = np.meshgrid(x, y)
+
+allTES=np.arange(1, 129, 1)
+good_tes = allTES
+coord_thermo=np.array([17*11+1, 17*12+1, 17*13+1, 17*14+1, 275, 276, 277, 278])
+k=0
+k_thermo=0
+for j in [1, 2]:
+    for i in good_tes:
+
+        if np.sum(i == np.array([4,36,68,100])) != 0:
+            place_graph=coord_thermo[k_thermo]
+            k_thermo+=1
+        else:
+            xtes, ytes, FP_index, index_q= scal.TES_Instru2coord(TES=i, ASIC=j, q=q, frame='ONAFP', verbose=False)
+            ind=np.where((np.round(xtes, 4) == np.round(X, 4)) & (np.round(ytes, 4) == np.round(Y, 4)))
+            place_graph=ind[0][0]*17+ind[1][0]+1
+        mytes=i
+        if j == 2:
+            mytes+=128
+
+        rc('font',size=6)
+        subplot(17,17, place_graph)
+        if mytes in mylistQP:
+            bgcol = 'lightgreen'
+            mini = mymean - 5*mysig
+            maxi = np.max(mapmean)
+            imshow(allxymaps[mytes-1,:,:] / all_intercals[mytes-1], extent=extent, vmin=mini, vmax=maxi)
+        else:
+            bgcol = 'pink'
+        annotate('{}'.format(mytes), xy=(0, 0),  xycoords='axes fraction', fontsize=8, color='black',
+                 fontstyle='italic', fontweight='bold', xytext=(0.05,0.85),backgroundcolor=bgcol)
+            
+        bar.update()
+
+        k+=1
+# if savepdf != None:
+#     savefig(savepdf, format="pdf", bbox_inches="tight", dpi=200)
+show()
+tight_layout()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 # By eye, one can identify those among the bad ones that could have been taken as good:

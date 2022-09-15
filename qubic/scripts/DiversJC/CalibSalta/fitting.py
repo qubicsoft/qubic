@@ -33,7 +33,7 @@ class Data:
         legend(title="\n".join(self.fit_info))
 
 
-    def fit_minuit(self, guess, fixpars = None, limits=None, scan=None):
+    def fit_minuit(self, guess, fixpars = None, limits=None, scan=None, renorm=False):
         ok = np.isfinite(self.x) & (self.errors != 0)
 
         ### Prepare Minimizer
@@ -83,6 +83,9 @@ class Data:
             vi = m.values[i]
             ei = m.errors[i]
             self.fit_info.append(f"{m.parameters[i]} = ${vi:.3f} \\pm {ei:.3f}$")
+
+        if renorm:
+            m.errors *= 1./np.sqrt(ch2/ndf)
 
         return m, ch2, ndf
 

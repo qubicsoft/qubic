@@ -28,7 +28,7 @@ rc('font',size=12)
 
 ```{python}
 #### Simulate input true "sky"
-npix = 20
+npix = 50
 xpix = np.linspace(0,1,npix)
 
 x0 = 0.5
@@ -49,22 +49,31 @@ legend()
 
 ```
 
-# Résolution avec la solution "Map-making" exacte
+# Exact  "Map-making" solution
 
 ```{python}
 ###### Simulate observations with perfect intercalibrations
-ndet = 5
-nsamples = 20
-sig = 0.01
+ndet = 50
+nsamples = 100
+sig = 1e-2
+
 
 H = np.zeros((ndet*nsamples, npix))
 for i in range(npix):
-    H[:,i] = np.random.randint(0,npix, size=nsamples*ndet)
-    
-    
-alltod = np.dot(H, truey) + np.random.randn(ndet*nsamples)*sig
-#########################
+    H[:,i] = np.random.randint(0,2, size=nsamples*ndet)
 
+###### Here we assume that all detectors see all pixels a few times and all at the same time
+# nnn = nsamples // npix
+# H = np.zeros((ndet*nsamples, npix))
+# ### We want each pixel to be seen by all detectors
+# for i in range(npix):
+#     seenpix = np.zeros((ndet, nsamples))
+#     for k in range(nnn): 
+#         seenpix[:, k*npix+i] = 1
+#         H[:,i] = np.ravel(seenpix)
+#########################
+    
+alltod = np.dot(H, truey) + np.random.randn(ndet*nsamples)*sig 
 
 
 #### Solve the linear problem
@@ -78,30 +87,40 @@ ylabel('sky')
 legend()
 
 subplot(1,2,2)
-plot(xpix, mymap - truey, label='Residuals')
+plot(xpix, mymap - truey, label='Residuals σ={0:5.3g}'.format(np.std(mymap - truey)))
 xlabel('pixel')
 ylabel('sky')
 legend()
 
+tight_layout()
 ```
 
-# Résolution du même problème mais avec Minuit
-=> c'est à dire philosophiquement, comme ce que l'on fait dans QUBIC
+# Same problem resolution but with aconjugate gradient (Minuit)
+=> Philosophically what we do with QUBIC...
 
 ```{python}
 ###### Simulate observations including intercalibration
-ndet = 5
-nsamples = 20
-sig = 0.
+ndet = 50
+nsamples = 100
+sig = 1e-2
+
 
 H = np.zeros((ndet*nsamples, npix))
 for i in range(npix):
-    H[:,i] = np.random.randint(0,npix, size=nsamples*ndet)
-    
-    
-alltod = np.dot(H, truey)# + np.random.randn(ndet*nsamples)*sig
-#########################
+    H[:,i] = np.random.randint(0,2, size=nsamples*ndet)
 
+
+# nnn = nsamples // npix
+# H = np.zeros((ndet*nsamples, npix))
+# ### We want each pixel to be seen by all detectors
+# for i in range(npix):
+#     seenpix = np.zeros((ndet, nsamples))
+#     for k in range(nnn): 
+#         seenpix[:, k*npix+i] = 1
+#         H[:,i] = np.ravel(seenpix)
+    
+alltod = np.dot(H, truey) + np.random.randn(ndet*nsamples)*sig 
+#########################
 
 class simulate_signal:
     def __init__(self, xpix, ndet, nsamples, H):
@@ -117,48 +136,69 @@ class simulate_signal:
 myH = simulate_signal(xpix, ndet, nsamples, H)
 
 
-guess_sky = np.zeros(len(xpix))
+guess_sky = np.zeros(len(xpix)) 
 xxx = np.zeros(len(alltod))   # not used
 data = fit.Data(xxx, alltod, xxx*0+1, myH)
 
-m, ch2, ndf = data.fit_minuit(guess_sky)
+m, ch2, ndf = data.fit_minuit(guess_sky+1)
 
-mymap2 = m.values
+mymap = m.values
 
 subplot(1,2,1)
 plot(xpix, truey, label='True Sky')
-plot(xpix, mymap2, 'ro', label='reconstructed')
+plot(xpix, mymap, 'ro', label='reconstructed')
 xlabel('pixel')
 ylabel('sky')
 legend()
 
 subplot(1,2,2)
-plot(xpix, mymap2 - truey, label='Residuals')
+plot(xpix, mymap - truey, label='Residuals σ={0:5.3g}'.format(np.std(mymap - truey)))
 xlabel('pixel')
 ylabel('sky')
 legend()
 
+tight_layout()
 ```
+
+# Now let's put unknown intercalibrations and fit them alltogether with the sky - We also put a non uniform noise on the different detectors
 
 ```{python}
 ###### Simulate observations including intercalibration
-ndet = 5
-nsamples = 200
-sig = 0.
+ndet = 50
+nsamples = 100
 
-intercal = np.append([1], (np.random.rand(ndet-1)+0.5))
+###### Noise:
+# Uniform noise
+sig = 1e-2*np.random.rand(ndet) * 0 + 1e-2
+# Variable noise across detectors
+# sig = 1e-2*np.random.rand(ndet)
+
+
 H = np.zeros((ndet*nsamples, npix))
 for i in range(npix):
-    H[:,i] = np.random.randint(0,npix, size=nsamples*ndet)
-    
-    
-alltod_intercalibrated = np.dot(H, truey) + np.random.randn(ndet*nsamples)*sig
+    H[:,i] = np.random.randint(0,2, size=nsamples*ndet)
 
-alltod = alltod_intercalibrated.copy()
+# nnn = nsamples // npix
+# H = np.zeros((ndet*nsamples, npix))
+# ### We want each pixel to be seen by all detectors
+# for i in range(npix):
+#     seenpix = np.zeros((ndet, nsamples))
+#     for k in range(nnn): 
+#         seenpix[:, k*npix+i] = 1
+#         H[:,i] = np.ravel(seenpix)
+    
+intercal = np.append([1], (np.random.rand(ndet-1)+0.5))
+alltod = np.dot(H, truey)
 for k in range(ndet):
     alltod[k*nsamples:(k+1)*nsamples] *= intercal[k]
+    alltod[k*nsamples:(k+1)*nsamples] += np.random.randn(nsamples)*sig[k]
 #########################
 
+```
+
+# Here we fully sove with Minuit
+
+```{python}
 class simulate_signal_intercal:
     def __init__(self, xpix, ndet, nsamples, H):
         self.xpix = xpix
@@ -174,33 +214,31 @@ class simulate_signal_intercal:
         return alltod
 
 
-#### Solve the linear problem ignoring intercalibrations
 myH = simulate_signal_intercal(xpix, ndet, nsamples, H)
 
 guess_sky = np.append(np.zeros(len(xpix)), np.ones(ndet))
 
+sigmas = np.ones(len(alltod))
+for k in range(ndet):
+    sigmas[k*nsamples:(k+1)*nsamples] *= sig[k]
+
 xxx = np.zeros(len(alltod))   # not used
-data = fit.Data(xxx, alltod, xxx*0+1, myH)
+data = fit.Data(xxx, alltod, sigmas, myH)
 m, ch2, ndf = data.fit_minuit(guess_sky, fixpars = [len(xpix)])
 
-print(m.values)
-
-mymap3 = m.values[:len(xpix)]
+mymap = m.values[:len(xpix)]
 myintercals = m.values[len(xpix):]
-
-print(myintercals)
-print(intercal)
 
 
 subplot(2,2,1)
 plot(xpix, truey, label='True Sky')
-plot(xpix, mymap3, 'ro', label='reconstructed')
+plot(xpix, mymap, 'ro', label='reconstructed')
 xlabel('pixel')
 ylabel('sky')
 legend()
 
 subplot(2,2,2)
-plot(xpix, mymap3 - truey, label='Residuals')
+plot(xpix, mymap - truey, label='Residuals σ={0:5.3g}'.format(np.std(mymap - truey)))
 xlabel('pixel')
 ylabel('sky')
 legend()
@@ -213,41 +251,30 @@ ylabel('Intercal')
 legend()
 
 subplot(2,2,4)
-plot(myintercals-intercal, label='Residuals')
+plot(myintercals-intercal, label='Residuals σ={0:5.3g}'.format(np.std(myintercals-intercal)))
 xlabel('Det')
 ylabel('Intercal')
 legend()
 
+tight_layout()
 ```
 
-# Exercice suivant:
-Ne pas fitter les intercals avec minuit, mais les traiter linéairement
+# Next exercize:
+We do not fit the intercalibrations with the conjugate gradient but we use the fact that they are linear with the data to fit them analytically at each step of the conjugate gradient.
+
+We should get the same performance, but for now, we don't...
 
 ```{python}
-###### Simulate observations including intercalibration
-ndet = 5
-nsamples = 200
-sig = 0.
-
-intercal = np.append([1], (np.random.rand(ndet-1)+0.5))
-H = np.zeros((ndet*nsamples, npix))
-for i in range(npix):
-    H[:,i] = np.random.randint(0,npix, size=nsamples*ndet)
-    
-    
-alltod = np.dot(H, truey) + np.random.randn(ndet*nsamples)*sig
-
-for k in range(ndet):
-    alltod[k*nsamples:(k+1)*nsamples] *= intercal[k]
-#########################
+reload(fit)
 
 class simulate_signal_intercal:
-    def __init__(self, xpix, ndet, nsamples, H, d):
+    def __init__(self, xpix, ndet, nsamples, H, d, w):
         self.xpix = xpix
         self.ndet = ndet
         self.nsamples = nsamples
         self.H = H
         self.d = np.reshape(d, (self.ndet, self.nsamples))
+        self.w = np.reshape(w, (ndet, nsamples))
     def __call__(self, x, sky):
         D, intercal = self.give_intercals(sky)
         for k in range(self.ndet):
@@ -257,59 +284,216 @@ class simulate_signal_intercal:
         return D
     def give_intercals(self, sky):
         D = np.reshape(np.dot(self.H, sky), (self.ndet, self.nsamples))
-        matrix = D @ D.T
-        intercal = np.diag((np.linalg.inv(matrix) @ D) @ self.d.T)
+        matrix = (D*self.w) @ D.T
+        intercal = np.diag((np.linalg.inv(matrix) @ (D*self.w)) @ self.d.T)
         intercal = intercal / intercal[0]
         return D, intercal
 
-
 #### Solve the linear problem ignoring intercalibrations
-myH = simulate_signal_intercal(xpix, ndet, nsamples, H, alltod)
+sigmas = np.ones(len(alltod))
+for k in range(ndet):
+    sigmas[k*nsamples:(k+1)*nsamples] *= sig[k]
+
+myH = simulate_signal_intercal(xpix, ndet, nsamples, H, alltod, 1./sigmas**2)
 
 guess_sky = np.ones(len(xpix))
 
 xxx = np.zeros(len(alltod))   # not used
-data = fit.Data(xxx, alltod, xxx*0+1, myH)
+
+data = fit.Data(xxx, alltod, sigmas, myH)
 m, ch2, ndf = data.fit_minuit(guess_sky)
 
-
-
-mymap3 = m.values
-_, myintercals = myH.give_intercals(m.values)
-print(myintercals)
-print(intercal)
-
+mymap2 = np.array(m.values)
+_, myintercals2 = myH.give_intercals(m.values)
 
 subplot(2,2,1)
 plot(xpix, truey, label='True Sky')
-plot(xpix, mymap3, 'ro', label='reconstructed')
+plot(xpix, mymap2, 'ro', label='reconstructed')
 xlabel('pixel')
 ylabel('sky')
 legend()
 
 subplot(2,2,2)
-plot(xpix, mymap3 - truey, label='Residuals')
+plot(xpix, mymap2 - truey, label='Minuit + Ana Residuals σ={0:5.3g}'.format(np.std(mymap2 - truey)))
+plot(xpix, mymap - truey, label='Full Minuit Residuals σ={0:5.3g}'.format(np.std(mymap - truey)), alpha=0.5)
 xlabel('pixel')
 ylabel('sky')
 legend()
 
 subplot(2,2,3)
 plot(intercal, label='True Intercals')
-plot(myintercals, 'ro', label='reconstructed intercals')
+plot(myintercals2, 'ro', label='reconstructed intercals')
 xlabel('Det')
 ylabel('Intercal')
 legend()
 
 subplot(2,2,4)
-plot(myintercals-intercal, label='Residuals')
+plot(myintercals2-intercal, label='Minuit + Ana Residuals σ={0:5.3g}'.format(np.std(myintercals2-intercal)))
+plot(myintercals-intercal, label='Full Minuit Residuals σ={0:5.3g}'.format(np.std(myintercals-intercal)), alpha=0.5)
 xlabel('Det')
 ylabel('Intercal')
 legend()
+
+tight_layout()
+```
+
+```{python}
 
 ```
 
 ```{python}
 
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+# Small MC to check efficiency of accounting for errors
+
+```{python}
+def do_one(truey, ndet, nsamples, sig, intercal, H, flatw=False):
+    alltod = np.dot(H, truey)
+    for k in range(ndet):
+        alltod[k*nsamples:(k+1)*nsamples] *= intercal[k]
+        alltod[k*nsamples:(k+1)*nsamples] += np.random.randn(nsamples)*sig[k]
+
+    #### Solve the linear problem ignoring intercalibrations
+    sigmas = np.ones(len(alltod))
+    for k in range(ndet):
+        sigmas[k*nsamples:(k+1)*nsamples] *= sig[k]
+    if flatw==True:
+        sigmas = sigmas * 0 + 1
+        
+    myH = simulate_signal_intercal(xpix, ndet, nsamples, H, alltod, 1./sigmas**2)
+    guess_sky = np.ones(len(xpix))
+    xxx = np.zeros(len(alltod))   # not used
+    data = fit.Data(xxx, alltod, sigmas, myH)
+    m, ch2, ndf = data.fit_minuit(guess_sky)
+    mymap = m.values
+    _, myintercals = myH.give_intercals(m.values)
+    
+    return np.mean(mymap - truey), np.mean(myintercals-intercal), np.std(mymap - truey), np.std(myintercals-intercal)
+
+
+
+```
+
+```{python}
+nbmc = 50
+from qubic import progress_bar
+
+## non Uniform noise case and compare cases where we account for weights in the intercalibration or not
+ndet = 50
+nsamples = 100
+sig = 10 * np.random.rand(ndet)
+intercal = np.append([1], (np.random.rand(ndet-1)+0.5))
+H = np.zeros((ndet*nsamples, npix))
+for i in range(npix):
+    H[:,i] = np.random.randint(0,npix, size=nsamples*ndet)
+
+bar = progress_bar(nbmc)
+meanmap_nounif_flat = np.zeros(nbmc)
+meanintercal_nounif_flat = np.zeros(nbmc)
+meanmap_nounif = np.zeros(nbmc)
+meanintercal_nounif = np.zeros(nbmc)
+rmsmap_nounif_flat = np.zeros(nbmc)
+rmsintercal_nounif_flat = np.zeros(nbmc)
+rmsmap_nounif = np.zeros(nbmc)
+rmsintercal_nounif = np.zeros(nbmc)
+for i in range(nbmc):
+    meanmap_nounif[i], meanintercal_nounif[i], rmsmap_nounif[i], rmsintercal_nounif[i] = do_one(truey, ndet, nsamples, sig, intercal, H, flatw=False)
+    meanmap_nounif_flat[i], meanintercal_nounif_flat[i], rmsmap_nounif_flat[i], rmsintercal_nounif_flat[i] = do_one(truey, ndet, nsamples, sig, intercal, H, flatw=True)
+    bar.update()
+```
+
+```{python}
+reload(fit) 
+def gauss(x, pars):
+    return pars[0]*np.exp(-0.5*(x-pars[1])**2/pars[2]**2)
+
+def myhist(x, fitgauss=True, **kwargs):
+    thelabel = None
+    if 'label' in kwargs:
+        thelabel = kwargs['label']
+        kwargs['label'] = None
+    a = hist(x, **kwargs)
+    xx = 0.5*(a[1][:-1]+a[1][1:])
+    yy = a[0]
+    notzero = a[0] != 0
+    dd = fit.Data(xx[notzero], yy[notzero], np.sqrt(yy[notzero]), gauss)
+    guess = np.array([len(xx), np.mean(x), np.std(x)])
+    dd.fit_minuit(guess) 
+    if 'label' in kwargs:
+        label = ' {0:5.2g}+/-{1:5.2g}'.format(dd.fit[1], dd.fit[2])
+        a[2].set_label(thelabel + label)
+    else:
+        label=None
+    dd.plot(color=a[2][0].get_facecolor(), mylabel=None, nostat=True)
+    legend()
+
+
+subplot(2,2,1)
+rng = [np.min(meanmap_nounif_flat)*1.5,np.max(meanmap_nounif_flat)*1.5]
+nbins = 10
+#a = myhist(meanmap, bins=nbins, label='Unif: ', alpha=0.5, range=rng)
+a = myhist(meanmap_nounif_flat, bins=nbins, label='NonUnif, w=1 : ', alpha=0.5, range=rng)
+a = myhist(meanmap_nounif, bins=nbins, label='NonUnif, w : ', alpha=0.5, range=rng)
+legend(fontsize=8)
+title('Mean Map')
+
+subplot(2,2,2)
+rng = [np.min(meanintercal_nounif_flat)*1.5, np.max(meanintercal_nounif_flat)*1.5]
+nbins = 10
+#a = myhist(meanintercal, bins=nbins, label='Uniform noise', alpha=0.5, range=rng)
+a = myhist(meanintercal_nounif_flat, bins=nbins, label='Non Uniform noise - No weights', alpha=0.5, range=rng)
+a = myhist(meanintercal_nounif, bins=nbins, label='Non Uniform noise - Weights', alpha=0.5, range=rng)
+legend(fontsize=8)
+title('Mean Intercals')
+
+
+subplot(2,2,3)
+rng = [0,np.max(rmsmap_nounif_flat)*3]
+nbins = 25
+#a = myhist(rmsmap, bins=nbins, label='Unif: ', alpha=0.5, range=rng)
+a = myhist(rmsmap_nounif_flat, bins=nbins, label='NonUnif, w=1 : ', alpha=0.5, range=rng)
+a = myhist(rmsmap_nounif, bins=nbins, label='NonUnif, w : ', alpha=0.5, range=rng)
+legend(fontsize=8)
+title('RMS Map')
+
+subplot(2,2,4)
+rng = [0., np.max(rmsintercal_nounif_flat)*1.5]
+nbins = 25
+#a = myhist(rmsintercal, bins=nbins, label='Uniform noise', alpha=0.5, range=rng)
+a = myhist(rmsintercal_nounif_flat, bins=nbins, label='Non Uniform noise - No weights', alpha=0.5, range=rng)
+a = myhist(rmsintercal_nounif, bins=nbins, label='Non Uniform noise - Weights', alpha=0.5, range=rng)
+legend(fontsize=8)
+title('RMS Intercals')
+
+```
+
+```{python}
+rmsintercal
 ```
 
 ```{python}

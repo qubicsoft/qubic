@@ -25,15 +25,19 @@ class Data:
     def __call__(self):
         return 0
 
-    def plot(self, fmt='o', color='k', label='Data', nn=1000):
-        errorbar(self.x, self.y, yerr=self.errors, fmt=fmt, color=color, label=label)
+    def plot(self, nn=1000, color=None, mylabel=None, nostat=False):
+        p=errorbar(self.x, self.y, yerr=self.errors, fmt='o', color=color, alpha=1)
         if self.fit is not None:
             xx = np.linspace(np.min(self.x), np.max(self.x), nn)
-            plot(xx, self.model(xx, self.fit), 'r', lw=2, label='Fit')
-        legend(title="\n".join(self.fit_info))
+            plot(xx, self.model(xx, self.fit), color=p[0].get_color(), alpha=1, label=mylabel)
+        if mylabel is None:
+            if nostat == False:
+                legend(title="\n".join(self.fit_info))
+        else:
+            legend()
 
 
-    def fit_minuit(self, guess, fixpars = None, limits=None, scan=None, renorm=False):
+    def fit_minuit(self, guess, fixpars = None, limits=None, scan=None, renorm=False, simplex=False):
         ok = np.isfinite(self.x) & (self.errors != 0)
 
         ### Prepare Minimizer
@@ -44,7 +48,10 @@ class Data:
             myminimizer = LeastSquares(self.x[ok], self.y[ok], self.errors[ok], self.model)
 
         ### Instanciate the minuit object
-        m = iminuit.Minuit(myminimizer, guess, name=self.pnames)
+        if simplex == False:
+            m = iminuit.Minuit(myminimizer, guess, name=self.pnames)
+        else:
+            m = iminuit.Minuit(myminimizer, guess, name=self.pnames).simplex()
         
         ### Limits
         if limits is not None:

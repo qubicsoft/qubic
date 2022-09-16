@@ -46,6 +46,10 @@ plot(x, linearfit(x, m.values), 'r', lw=2)
 ```
 
 ```{python}
+m.interactive()
+```
+
+```{python}
 ### Use the fitting.py library 
 
 reload(fit)
@@ -64,6 +68,10 @@ mydata = fit.Data(x,y,sig, linearfit, pnames=['a', 'b'])
 guess = [0., 0.]
 mydata.fit_minuit(guess)
 mydata.plot()
+```
+
+```{python}
+m.interactive()
 ```
 
 # 2D fitting
@@ -132,7 +140,6 @@ tight_layout()
 ```
 
 ```{python}
-
 
 ```
 

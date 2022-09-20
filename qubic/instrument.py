@@ -666,7 +666,8 @@ class QubicInstrument(Instrument):
         """
 
         ib2b = noise.ib2b
-        if int(self.d['filter_nu']/1e9)==150:
+        #150GHz band
+        if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
             # back to back horns, as seen by the detectors through the combiner
             T = noise.temperatures[ib2b]
             b = h * noise.nu_up / k / T
@@ -680,7 +681,7 @@ class QubicInstrument(Instrument):
                               (I1 + eta * I2) * noise.S_horns * noise.omega_det * noise.sec_beam
             noise.P_phot[ib2b] = noise.gp[ib2b] * eta * (k * T) ** 4 / c ** 2 / h ** 3 * K1 * \
                            noise.S_horns * noise.omega_det * noise.sec_beam
-        elif int(self.d['filter_nu']/1e9)==220:
+        else: #220GHz band
             # back to back horns, as seen by the detectors through the combiner   
             # Here the physical horn area S_horns must be used
             noise.g[ib2b] = noise.gp[ib2b, None] * noise.S_horns * noise.omega_det * (self.filter.nu / c) ** 2 * \
@@ -807,8 +808,8 @@ class QubicInstrument(Instrument):
         """
 
         icomb = noise.icomb
-
-        if int(self.d['filter_nu']/1e9)==150:
+        #150GHz band
+        if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
             T = noise.temperatures[icomb]
             b = h * noise.nu_up / k / T
             J1 = quad(funct, 0, b, (4, 1))[0]
@@ -821,7 +822,7 @@ class QubicInstrument(Instrument):
             noise.P_phot[icomb] = noise.gp[icomb] * eta * (k * T) ** 4 / c ** 2 / h ** 3 * L1 * \
                             noise.S_det * noise.omega_comb * noise.sec_beam
 
-        elif int(self.d['filter_nu']/1e9)==220:
+        else: #220GHz band
             g[icomb] = noise.gp[icomb] * noise.S_det * noise.omega_comb * (self.filter.nu / c) ** 2 * noise.dnu
             # The combiner emissivity includes the fact that there are 2
             # mirrors
@@ -872,8 +873,8 @@ class QubicInstrument(Instrument):
         """
 
         ics = noise.ics
-
-        if int(self.d['filter_nu']/1e9)==150:
+        #150GHz band
+        if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
             T = noise.temperatures[ics]
             b = h * noise.nu_up / k / T
             J1 = quad(funct, 0, b, (4, 1))[0]
@@ -887,7 +888,7 @@ class QubicInstrument(Instrument):
             noise.P_phot[ics] = noise.gp[ics] * eta * (k * T) ** 4 / c ** 2 / h ** 3 * L1 * \
                           noise.S_det * noise.omega_coldstop * noise.sec_beam
 
-        elif int(self.d['filter_nu']/1e9)==220:
+        else:#220GHz band
             g[ics] = noise.gp[ics] * noise.S_det * noise.omega_coldstop * (self.filter.nu / c) ** 2 * noise.dnu
             noise.P_phot[ics] = noise.emissivities[ics] * noise.tr_prod[ics] * h * self.filter.nu / \
                           (np.exp(h * self.filter.nu / k / noise.temperatures[ics]) - 1) * g[ics] * \

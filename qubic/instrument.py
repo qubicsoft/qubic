@@ -770,7 +770,6 @@ class QubicInstrument(Instrument):
             #    print('Environment, T =', temperatures[ib2b],
             #          'K, P = {0:.2e} W'.format(noise.P_phot_env.max()),
             #          ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2_env).max()) + ' W/sqrt(Hz)')
-            print(noise.P_phot_env)
         if self.debug: self._raise_debug(noise, noise.ib2b,
                                         environment = True)     
 

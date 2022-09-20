@@ -668,6 +668,7 @@ class QubicInstrument(Instrument):
         ib2b = noise.ib2b
         #150GHz band
         if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
+            #print("======== 150GHz band horns NEP")
             # back to back horns, as seen by the detectors through the combiner
             T = noise.temperatures[ib2b]
             b = h * noise.nu_up / k / T
@@ -682,6 +683,7 @@ class QubicInstrument(Instrument):
             noise.P_phot[ib2b] = noise.gp[ib2b] * eta * (k * T) ** 4 / c ** 2 / h ** 3 * K1 * \
                            noise.S_horns * noise.omega_det * noise.sec_beam
         else: #220GHz band
+            #print("======== 220GHz band horns NEP")
             # back to back horns, as seen by the detectors through the combiner   
             # Here the physical horn area S_horns must be used
             noise.g[ib2b] = noise.gp[ib2b, None] * noise.S_horns * noise.omega_det * (self.filter.nu / c) ** 2 * \
@@ -741,6 +743,7 @@ class QubicInstrument(Instrument):
 
         ib2b = noise.ib2b
         if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
+            #print("======== 150GHz band env NEP")
             T = noise.temperatures[ib2b]
             b = h * noise.nu_up / k / T
             I1 = quad(funct, 0, b, (4, 1))[0]
@@ -757,6 +760,7 @@ class QubicInstrument(Instrument):
             NEP_phot2_env_nobunch = None
  
         else:##220GHz:
+            #print("======== 220GHz band env NEP")
             eff_factor = np.prod(noise.transmissions[(len(names) - 4):]) * \
                          self.detector.efficiency
             g_env = noise.gp[ib2b, None] * noise.S_det * noise.omega_coldstop * (self.filter.nu / c) ** 2 * \
@@ -810,6 +814,7 @@ class QubicInstrument(Instrument):
         icomb = noise.icomb
         #150GHz band
         if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
+            #print("======== 150GHz band comb NEP")
             T = noise.temperatures[icomb]
             b = h * noise.nu_up / k / T
             J1 = quad(funct, 0, b, (4, 1))[0]
@@ -823,15 +828,16 @@ class QubicInstrument(Instrument):
                             noise.S_det * noise.omega_comb * noise.sec_beam
 
         else: #220GHz band
-            g[icomb] = noise.gp[icomb] * noise.S_det * noise.omega_comb * (self.filter.nu / c) ** 2 * noise.dnu
+            #print("======== 220GHz band comb NEP")
+            noise.g[icomb] = noise.gp[icomb] * noise.S_det * noise.omega_comb * (self.filter.nu / c) ** 2 * noise.dnu
             # The combiner emissivity includes the fact that there are 2
             # mirrors
             noise.P_phot[icomb] = noise.emissivities[icomb] * noise.tr_prod[icomb] * h * self.filter.nu / \
-                            (np.exp(h * self.filter.nu / k / noise.temperatures[icomb]) - 1) * g[icomb] * \
+                            (np.exp(h * self.filter.nu / k / noise.temperatures[icomb]) - 1) * noise.g[icomb] * \
                             self.detector.efficiency
             noise.NEP_phot2_nobunch[icomb] = h * self.filter.nu * noise.P_phot[icomb] * 2
             noise.NEP_phot2[icomb] = noise.NEP_phot2_nobunch[icomb] * (1 + noise.P_phot[icomb] /
-                                                           (h * self.filter.nu * g[icomb]))
+                                                           (h * self.filter.nu * noise.g[icomb]))
             #if self.debug:
             #    print(names[icomb],
             #          ', T=', temperatures[icomb],
@@ -875,6 +881,7 @@ class QubicInstrument(Instrument):
         ics = noise.ics
         #150GHz band
         if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
+            #print("======== 150GHz band  CS NEP")
             T = noise.temperatures[ics]
             b = h * noise.nu_up / k / T
             J1 = quad(funct, 0, b, (4, 1))[0]
@@ -889,13 +896,14 @@ class QubicInstrument(Instrument):
                           noise.S_det * noise.omega_coldstop * noise.sec_beam
 
         else:#220GHz band
-            g[ics] = noise.gp[ics] * noise.S_det * noise.omega_coldstop * (self.filter.nu / c) ** 2 * noise.dnu
+            #print("======== 220GHz band CS NEP")
+            noise.g[ics] = noise.gp[ics] * noise.S_det * noise.omega_coldstop * (self.filter.nu / c) ** 2 * noise.dnu
             noise.P_phot[ics] = noise.emissivities[ics] * noise.tr_prod[ics] * h * self.filter.nu / \
-                          (np.exp(h * self.filter.nu / k / noise.temperatures[ics]) - 1) * g[ics] * \
+                          (np.exp(h * self.filter.nu / k / noise.temperatures[ics]) - 1) * noise.g[ics] * \
                           self.detector.efficiency
             noise.NEP_phot2_nobunch[ics] = h * self.filter.nu * noise.P_phot[ics] * 2
             noise.NEP_phot2[ics] = noise.NEP_phot2_nobunch[ics] * (1 + noise.P_phot[ics] /
-                                                       (h * self.filter.nu * g[ics]))
+                                                       (h * self.filter.nu * noise.g[ics]))
             #if self.debug:
             #    print(names[ics],
             #          ', T=', temperatures[ics],

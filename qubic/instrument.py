@@ -753,7 +753,8 @@ class QubicInstrument(Instrument):
             noise.NEP_phot2_env = 4 * noise.omega_coldstop * noise.S_det * \
                             (k * noise.temperatures[ib2b]) ** 5 / c ** 2 / h ** 3 * \
                             eff_factor * (I1 + I2 * eff_factor)
-        
+            NEP_phot2_env_nobunch = None
+ 
         else:##220GHz:
             eff_factor = np.prod(noise.transmissions[(len(names) - 4):]) * \
                          self.detector.efficiency
@@ -762,9 +763,9 @@ class QubicInstrument(Instrument):
             noise.P_phot_env = (eff_factor * h * self.filter.nu /
                           (np.exp(h * self.filter.nu / k / noise.temperatures[ib2b]) - 1))[ib2b, None] * \
                          g_env
-            noise.NEP_phot2_env_nobunch = h * self.filter.nu * noise.P_phot_env * 2
+            NEP_phot2_env_nobunch = h * self.filter.nu * noise.P_phot_env * 2
             # note the factor 2 in the definition of the NEP^2
-            noise.NEP_phot2_env = noise.NEP_phot2_env_nobunch[ib2b] * (1 + noise.P_phot_env /
+            noise.NEP_phot2_env = NEP_phot2_env_nobunch * (1 + noise.P_phot_env /
                                                            (h * self.filter.nu * g_env))
             #if self.debug:
             #    print('Environment, T =', temperatures[ib2b],
@@ -776,7 +777,7 @@ class QubicInstrument(Instrument):
         if return_only:
             nep_intern = np.sqrt(np.mean(noise.NEP_phot2_env[ib2b]))
             return {"power": noise.P_phot_env,
-                    "NEP_phot2_nobunch": noise.NEP_phot2_env_nobunch,
+                    "NEP_phot2_nobunch": NEP_phot2_env_nobunch,
                     "NEP_phot2_env": noise.NEP_phot2_env,
                     "NEP_array": Instrument.get_noise(self, sampling, nep = nep_intern)}
         else:

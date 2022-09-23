@@ -1,0 +1,889 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.6.0rc0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# Config notebook
+from IPython.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+```
+
+```{python}
+# %matplotlib notebook
+# %matplotlib inline
+import matplotlib.pyplot as plt
+from matplotlib import rc
+rc('figure',figsize=(9,4.5))
+rc('font',size=12)
+rc('text',usetex=False)
+#plt.rcParams['axes.facecolor']='red'
+#plt.rcParams['savefig.facecolor']='red'
+rc('axes', facecolor = 'white')
+rc('savefig', facecolor = 'white')
+
+from qubicpack.qubicfp import qubicfp
+#import qubic.fibtools as ft
+#import qubic.plotters as p
+#import qubic.lin_lib as ll
+#import qubic.demodulation_lib as dl
+import qubicpack as qp
+#import satorchipy as stpy
+from pysimulators import FitsArray
+from qubicpack.utilities import TES_index, figure_window_title
+from qubicpack.timeline import timeline_timeaxis
+from qubicpack.utilities import qc_utc_date
+
+import numpy as np
+#from matplotlib.pyplot import *
+#import matplotlib.mlab as mlab
+#import scipy.ndimage.filters as f
+import glob
+import warnings
+import matplotlib.cm as cm
+import warnings
+
+# To fit===================================
+# everything in iminuit is done through the Minuit object, so we import it
+from iminuit import Minuit
+
+#import pywt
+
+# we also need a cost function to fit and import the LeastSquares function
+#from iminuit.cost import LeastSquares
+from scipy.optimize import curve_fit
+#==========================================
+#import string
+import scipy.signal as scsig
+from scipy import interpolate
+
+#from sklearn.preprocessing import MinMaxScaler
+
+import datetime as dt
+import pickle
+from importlib import reload
+import datetime
+import pandas as pd
+```
+
+```{python}
+def verbosity_files(day, dirs, kwd0, ifile, setup = True):
+    if setup:
+        if ifile == 0:
+            print('===================================')
+            print('day {} - has {} files of {} test'. format(day, 
+                                                         len(dirs), 
+                                                         kwd0))
+        else:
+            if dirs[ifile][57:70] != kwd0:
+                kwd0 = dirs[ifile][57:70]
+                print('===================================')
+                print('day {} - has {} files of {} test'. format(day, 
+                                                         len(dirs), 
+                                                         dirs[ifile][57:])) 
+        return
+    else:
+        return
+# Fit
+#model
+# our line model, unicode parameter names are supported :)
+def line(x, a, b):
+    return b + x * a
+```
+
+```{python}
+#words = ['timeconstant', 'TimeCst']
+#keyword = ['*{}*'.format(word) for word in words]
+#print(keyword)
+```
+
+```{python}
+### === Check the existence of old calsource datasets
+# =====
+#
+
+#day = '2019-06-27'
+#keyword = '*TimeCst*'
+#data_dir = '/sps/qubic/Data/Calib-TD/'+day+'/'
+#dirs = np.sort(glob.glob(data_dir+keyword))
+#print(dirs)        
+#thedir = dirs[0]
+
+#a = qubicfp()
+#a.read_qubicstudio_dataset(thedir)
+#datacal = '/sps/qubic/Data/Calib-TD/calsource/*'
+#glob.glob(datacal + "*{}*.fits".format('2019-06-'.replace("-", "")))
+#glob.glob('/sps/qubic/Data/Calib-TD/calsource/*')
+```
+
+```{python tags=c()}
+#days = ['2022-{}-{}'.format(str(i).zfill(2), str(j).zfill(2))) for i in range(7,9) for j in range(13,32)]
+start = datetime.datetime.strptime("14-07-2022", "%d-%m-%Y")
+end = datetime.datetime.strptime("14-07-2022", "%d-%m-%Y")
+date_generated = pd.date_range(start, end = end)# periods=5)
+days = date_generated.strftime("%Y-%m-%d").to_list() 
+print('Days to read data', days)
+
+words = ['MoonScan']#, 'hwp']
+keywords = ['*{}*'.format(word) for word in words]
+#keywords = ['*']
+#filenames = []
+
+addfile = 0
+
+# container of data
+DataContainer = {}
+alldays = []
+onlycountfiles = True
+for keyword in keywords:
+    for day in days:
+        #data_dir = '/sps/qubic/Data/Calib-TD/'+day+'/'
+        data_dir = '/home/qubic/Calib-TD/'+day+'/'
+        dirs = np.sort(glob.glob(data_dir+keyword))
+        #print (dirs)
+        if len(dirs) == 0:
+            pass
+        else:
+            # Create a keyword with the day within the container
+            DataContainer['{}'.format(day)] = {}
+            auxdata = []
+
+            # Load the focal plane
+            #loop in dirs
+            kwd0 = dirs[0][57:]
+            filenames = []
+            for ifile in range(0, len(dirs)):
+                #ifile = 4 if day == '2022-07-13' else 0
+                print(ifile)
+                #loop in keyword for same day
+                # Printout
+                verbosity_files(day, dirs, kwd0, ifile, setup = True)
+
+                addfile += 1
+
+                thedir = dirs[ifile]
+                if keyword == '*':
+                    #print('================', thedir[57:],) if ifile == 0 else None
+                    auxdata = None
+                    filenames.append(thedir[57:])
+                else:
+                    locals()['qfp{}_{}'.format(day.replace('-',''),ifile)] = qubicfp()
+                    locals()['qfp{}_{}'.format(day.replace('-',''),ifile)].assign_verbosity(1)
+                    locals()['qfp{}_{}'.format(day.replace('-',''),ifile)].read_qubicstudio_dataset(thedir)
+                    auxdata.append(locals()['qfp{}_{}'.format(day.replace('-',''),ifile)])
+                    filenames.append(thedir)
+            alldays.append(day)
+            DataContainer.update({'{}'.format(day): auxdata, 'fnames{}'.format(day): filenames})
+DataContainer.update({'kwdays': alldays})
+
+print('There are {} files'.format(addfile))
+```
+
+See what keys() do we have into DataContainer
+
+```{python}
+## If you searched for all datasets to count filenames comment out this cell to 
+##know the names of each daily campaing and datasets
+
+#allfilenames = []
+#for istr in filenames:
+#    emp_str = ""
+#    for m in istr:
+#        if not m.isdigit():
+#            emp_str = emp_str + m
+#    allfilenames.append(emp_str)
+#print("Total files", len(allfilenames))
+#for i in set(allfilenames):
+#    print(i)
+```
+
+```{python}
+print(DataContainer.keys())
+#len(DataContainer['2022-08-18'])
+```
+
+### Plot 300mK temperatures for each dataset
+
+```{python}
+x = np.linspace(0,300,num = 200)
+y = 300 + 150*np.random.rand(x.shape[0],)
+threshold = 345
+maski = y < threshold
+masku = y >= threshold
+
+plt.text(10,380, 'Score = 0.', backgroundcolor = 'w', bbox=dict(facecolor='white', alpha=1), fontsize = 'large')
+plt.axhline(threshold, ls = '--', lw = 3, color = 'k')
+plt.plot(x[maski],y[maski],color = 'darkgreen', marker = 'o', ls = '', alpha = 0.7)
+
+plt.plot(x[masku],y[masku],color = 'darkred', marker = 'o', ls = '', alpha = 0.7)
+plt.text(10,320, 'Score = 1.', backgroundcolor = 'w', bbox=dict(facecolor='white', alpha=1), fontsize = 'large')
+plt.ylabel('Temperature (T)')
+plt.xlabel('time')
+
+ylim = plt.gca().get_ylim()
+plt.axhspan(threshold, ylim[1], color = 'r', alpha = 0.1)
+
+#plt.savefig('example')
+```
+
+```{python}
+listdays = list(set(DataContainer['kwdays']))
+print(listdays)
+wit = DataContainer[listdays[0]][0]
+ax = plt.subplot(111)
+fa = wit.plot_300mKtemperatures(ax = ax)
+axleg = ax.get_legend()
+
+```
+
+```{python}
+#### ax = plt.subplot(111)
+#from qubicpack.utilities import qc_utc_date
+
+##wit.plot_temperatures(ax,{'AVS47_1_CH6': '0.3K fridge CH'},'300mK Temperatures',12) 
+## get time
+#time_hk = wit.get_hk(data='RaspberryDate',hk='EXTERN_HK')
+#data_hk = wit.get_hk('AVS47_1_CH6')
+#tdate = []
+## qubic-central was changed to UTC on 2020-02-27
+#if time_hk[0] > float(qc_utc_date.strftime('%s.%f')):
+#    for tstamp in time_hk:
+#        tdate.append(dt.datetime.utcfromtimestamp(tstamp))
+#ax.plot(time_hk,data_hk, 'D',markersize=0.4*12)
+#ax.set_ylabel('Temperature / K',fontsize=12)
+#ax.set_xlabel('Date / UT',fontsize=12)
+#linepars, linecov = curve_fit(line, time_hk, data_hk)
+#ax.plot(time_hk, line(time_hk, linepars[0], linepars[1]), 'k-', lw =2)
+
+```
+
+iminuit does not work (error when computing hesse and migrad
+
+```{python}
+## iminuit contains a LeastSquares class to conveniently generate a least-squares cost function.
+## We will revisit how to write this by hand in a later section.
+#yerr = 0.1 * np.random.randn(len(data_hk))
+#least_squares = LeastSquares(time_hk, data_hk, 1, line)
+#m = Minuit(least_squares, a = 0., b = 0.)  # starting values for α and β
+#m.migrad()  # finds minimum of least_squares function
+#m.hesse()   # accurately computes uncertainties
+```
+
+```{python}
+fig = plt.figure(figsize = (15,9))
+#fig, ax = plt.subplots(nrows = len(set(DataContainer['kwdays'])), ncols = 1, figsize = (15,9))
+
+for j, day in enumerate(list(set(DataContainer['kwdays']))):
+    locals()['ax{}'.format(j)] = plt.subplot(len(set(DataContainer['kwdays'])), 1, j+1)
+    auxax = locals()['ax{}'.format(j)]
+    print('index, day', j, day)
+    for idata in DataContainer['{}'.format(day)]:
+        idata.plot_temperatures(auxax,{'AVS47_1_CH6': '0.3K fridge CH'},'300mK Temperatures',12)   
+        #idata.plot_temperatures(auxax,{'AVS47_1_ch1': '1K stage'},'1K stage',12)   
+        #idata.plot_azel(ax = auxax)
+    auxax.get_legend().remove()
+    auxax.axhline(0.345, ls = '--', color = 'k', alpha = 0.4)
+    #auxax.axhline(1.6, ls = '--', color = 'k', alpha = 0.4)
+    #auxax.set_ylim(0.34,0.35)
+    auxax.plot()
+    auxax.set_title('{}'.format(day))
+    
+plt.tight_layout()
+#plt.savefig('300mKStage_{}_diffDays'.format(words[0]) )
+```
+
+## Fit data and plot 300mK or 1K stage
+
+### 300mK stage (channels)
+* ['AVS47_1_CH2'] = 'TES stage RIRT'
+* ['AVS47_1_CH5'] = 'Film breaker'
+* ['AVS47_1_CH6'] = '0.3K fridge CH'
+
+### 1K stage (channels)
+* ['AVS47_1_ch1'] = '1K stage'
+* ['AVS47_1_ch3'] = 'M1'
+* ['AVS47_1_ch4'] = '1K fridge CH'
+* ['AVS47_1_ch7'] = 'M2'
+* ['AVS47_2_ch0'] = 'PT2 S2 CH'
+* ['AVS47_2_ch2'] = 'Fridge plate MHS'
+* ['AVS47_2_ch3'] = '1K stage back'
+* ['AVS47_2_ch4'] = '4K shield Cu braids'
+
+```{python}
+#Save dict with channels and labels
+labeldict = {'AVS47_1_CH2': 'TES stage RIRT', 'AVS47_1_CH5': 'Film breaker', 'AVS47_1_CH6': '0.3K fridge CH',
+    'AVS47_1_ch1': '1K stage', 'AVS47_1_ch3': 'M1', 'AVS47_1_ch4': '1K fridge CH', 'AVS47_1_ch7': 'M2', 'AVS47_2_ch0': 'PT2 S2 CH',
+    'AVS47_2_ch2': 'Fridge plate MHS', 'AVS47_2_ch3': '1K stage back', 'AVS47_2_ch4': '4K shield Cu braids'}
+```
+
+```{python}
+def flag_bathtemp(dataset, Tlim, verbose = False):
+    """
+    dataset: tod
+    Tlim: temperature that delimit good and bad sample
+    """
+    #We initialize the flag like all the data is good (cero)
+    flag_i = np.zeros((len(dataset)))
+
+    # Flag for temp lower than Tlow. 
+    maskl = np.where(dataset < Tlim)[0]
+    
+    if len(maskl) == 0:
+        if verbose: print(r'There are no samples with themperature lower than T_L = {:4.3f}. \n BAD DATASET'.format(Tlim))
+        pass
+    else:
+        flag_i[maskl] = 0
+        #print('low', np.mean(scores_i[maskl]))
+        
+    maskh = np.where(dataset >= Tlim)[0]
+    if len(maskh) == 0:
+        if verbose: print(r'There are no samples with themperature higher than T_L = {:4.3f}. \n GOOD DATASET'.format(Tlim))
+        pass
+    else:
+        flag_i[maskh] = 1.
+        #print('high', np.mean(scores_i[maskh]))
+    
+    return flag_i
+```
+
+```{python}
+def score_tilttemp(timeset, dataset, verbose = False, maxfev = 8000):
+    linepars, linecov = curve_fit(line, timeset, dataset, maxfev = maxfev)
+    score = np.cos(np.arctan(linepars[0]))
+    if verbose: print(score)
+    return linepars, score
+```
+
+Take a look to a dataset
+
+```{python}
+def detect_outliers(timeset, dataset, th = 1000):
+    # Create mask
+    mask = dataset > th
+    
+    # interpolation
+    ynew = np.interp(timeset[mask],timeset[~mask], dataset[~mask])
+    
+    # supplant values
+    dataset[mask] = ynew
+    if sum(mask) > 0:
+        warnings.warn('Outliers values detected')
+    return mask, dataset
+
+#### Example of what is implemented in detect_outliers
+#x = np.arange(0, 15, 1)
+#y = 300 + 150*np.random.rand(x.shape[0],)
+#y[5] = 1000
+#y[1] = 607
+#ith = 600
+#maskara = y > ith
+#plt.figure(figsize = (20,4))
+#plt.subplot(141)
+#plt.title('raw data')
+#plt.plot(x, y, 'ko')
+#plt.subplot(142)
+#plt.title('mark outlier')
+#plt.plot(x[~maskara], y[~maskara], 'ko')
+#plt.plot(x[maskara], y[maskara], 'ro', label = 'outlier')
+## interpolation
+#plt.subplot(143)
+#plt.title('show correction')
+#plt.plot(x[~maskara], y[~maskara], 'ko')
+#plt.plot(x[maskara], y[maskara], 'ro', label = 'outlier')
+#ynew = np.interp(x[maskara],x[~maskara],y[~maskara])
+#plt.plot(x[maskara], ynew, 'yo', label = 'outlier corrected')
+#plt.legend(fontsize = 'large')
+#ylim = plt.gca().get_ylim()
+## Supplant
+#plt.subplot(144)
+#plt.title('array corrected')
+#y[maskara] = ynew
+#plt.gca().set_ylim(ylim)
+#plt.plot(x, y, 'ko')
+
+```
+
+```{python}
+#len(DataContainer[iday])
+```
+
+```{python}
+# Flag and score computation
+
+iday = days[0]
+
+# 'AVS47_1_CH6' 300mK or 'AVS47_1_ch1' 1K stage
+label = 'AVS47_1_CH6'
+#label = 'AVS47_1_ch1'
+if label == 'AVS47_1_ch1':
+    labelw = '1Kstage'
+    Tlim = 1.6 #K
+elif label == 'AVS47_1_CH6':
+    labelw = '300mKstage'
+    Tlim = 0.345 #mK
+else: 
+    labelw = 'Not specified labelw'
+    sys.exit()
+
+plt.figure(figsize = (20,6))
+plt.suptitle('Experiment: {} - {} - {}'.format(words[0], labelw, iday))
+
+colors2 = cm.get_cmap('rainbow', len(DataContainer[iday]))(range(len(DataContainer[iday])))
+ylim = []
+for indx in range(len(DataContainer[iday])):
+    #indx = 0
+    testime = np.copy(DataContainer[day][indx].get_hk(data='RaspberryDate',hk='EXTERN_HK'))
+    testdata = np.copy(DataContainer[iday][indx].get_hk(label))
+
+    si = flag_bathtemp(testdata, Tlim)
+
+    #remove outliers to fit
+    maskoutliers, newdata = detect_outliers(testime, testdata) 
+
+    lpars, Stilt = score_tilttemp(testime, newdata)
+    # Plot
+    plt.subplot(131)
+    plt.title('Individual flags')
+    plt.plot(testime, si, 'bo')
+    plt.ylabel('Temp. flag for each timestamp')
+
+    plt.subplot(132)
+    plt.plot(testime, testdata, 'o', color = colors2[indx],
+             label = 'Flag. samp. = {}'.format(int(si.sum())))
+    plt.axhline(Tlim, color = 'k', alpha = 0.5, ls = '--')#, label = 'T_L = {}'.format(Tlim))
+    #plt.title('Flagged samples = {}'.format(int(si.sum())))
+    ylim.append(plt.gca().get_ylim())
+    if indx == len(DataContainer[iday])-1:
+        #print(np.shape(ylim))
+        ylimf = np.max(np.array(ylim)[:,1])
+        plt.axhspan(Tlim, ylimf, color = 'r', alpha = 0.3, label = 'flag zone = 0')
+    #plt.ylim(0.34,0.35)
+    #plt.legend(ncol = 4, loc = 'upper center')
+
+    plt.subplot(133)
+    plt.title('Tilt - Score = {:5.2e}'.format(Stilt))
+    plt.plot(testime, testdata, 'o', color = colors2[indx], alpha =0.4)
+    plt.plot(testime, line(testime, *lpars), '-', color = colors2[indx], lw =2, 
+            label = 'a = {:5.2e}, b = {:3.2f}'.format(lpars[0], lpars[1]))
+    #plt.ylim(0.34,0.35)
+    #plt.legend(ncol = 4, fontsize = 8, loc = 'upper left')
+plt.savefig('Flags_{}_{}_ind{}_Tlim{}.png'.format(words[0], labelw, indx, Tlim))
+```
+
+Loop and save flags file for each datasets
+
+for i in range(len(DataContainer['fnames2022-08-23'])):
+    print(DataContainer['fnames2022-08-23'][i])
+    testime = DataContainer['2022-08-23'][i].get_hk(data='RaspberryDate',hk='EXTERN_HK')
+    # 'AVS47_1_CH6' 300mK or 'AVS47_1_ch1' 1K stage
+    label = 'AVS47_1_CH6'
+    if label == 'AVS47_1_ch1':
+        labelw = '1Kstage'
+        Tlim = 1.6 #K
+    elif label == 'AVS47_1_CH6':
+        labelw = '300mKstage'
+        Tlim = 0.345 #mK
+    else: 
+        labelw = 'Not specified labelw'
+        sys.exit()
+    testdata = DataContainer['2022-08-23'][i].get_hk(label)
+
+    si = flag_bathtemp(testdata, Tlim)
+    np.savetxt(DataContainer['fnames2022-08-23'][i]+'/BathTemp_{}_{}.txt'.format(labelw, Tlim), si)
+
+```{python}
+fig = plt.figure(figsize = (15,9))
+
+channel = 'AVS47_1_ch1'#'AVS47_1_CH6'#
+filename = '300mK' if channel == 'AVS47_1_CH6' else '1K'
+fit = False
+wfit = 'fit' if fit else 'nofit'
+
+fig.suptitle('{} - {} ({})'.format(words[0], channel, labeldict[channel]))
+
+#fig, ax = plt.subplots(nrows = len(set(DataContainer['kwdays'])), ncols = 1, figsize = (15,9))
+for j, day in enumerate(list(set(DataContainer['kwdays']))):
+    locals()['ax{}'.format(j)] = plt.subplot(len(set(DataContainer['kwdays'])), 1, j+1)
+    auxax = locals()['ax{}'.format(j)]
+    print('index, day', j, day)
+    cumtime, cumdata = [], []
+    for idata in DataContainer['{}'.format(day)]:
+        time_hk = idata.get_hk(data='RaspberryDate',hk='EXTERN_HK')
+        data_hk = idata.get_hk(channel)
+        tdate = []
+        # qubic-central was changed to UTC on 2020-02-27
+        if time_hk[0] > float(qc_utc_date.strftime('%s.%f')):
+            for tstamp in time_hk:
+                tdate.append(dt.datetime.utcfromtimestamp(tstamp))
+        auxax.plot(time_hk,data_hk, 'D',markersize=0.4*12)
+        auxax.set_ylabel('Temperature / K',fontsize=12)
+        auxax.set_xlabel('Date / UT',fontsize=12)
+        cumtime.append(time_hk)
+        cumdata.append(data_hk)
+    if fit:
+        cumtime = np.concatenate(cumtime).ravel()
+        cumdata = np.concatenate(cumdata).ravel()
+        linepars, linecov = curve_fit(line, cumtime, cumdata)
+        auxax.plot(cumtime, line(cumtime, linepars[0], linepars[1]), 'k-', lw =2,
+              label = 'a = {:3.2e}, b = {:3.2f}'.format(linepars[0], linepars[1]))
+        #idata.plot_temperatures(auxax,{'AVS47_1_CH6': '0.3K fridge CH'},'300mK Temperatures',12)        
+        #auxax.get_legend().remove()
+        auxax.legend(loc = 'upper left')
+    auxax.set_title('{}'.format(day))
+
+plt.tight_layout()
+#plt.savefig('{}Stage_{}_{}_{}'.format(filename, words[0], wfit, day) )
+```
+
+Plot timeline for a given TES
+
+```{python}
+# Generate color palette
+
+colors = cm.get_cmap('bwr', 60)(range(60))
+colors2 = cm.get_cmap('cividis', 60)(range(30))
+```
+
+```{python}
+#len(DataContainer['2022-08-18']), len(DataContainer['2022-08-23']), len(DataContainer['2022-08-24'])
+```
+
+```{python}
+TESNum = 50
+asic = 1
+zoom = False
+fig, ax = plt.subplots(nrows = 3, ncols = 1, figsize = (15,10),sharex = True ) 
+fig.suptitle('{} - TES = {}'.format(words[0], TESNum))
+plt.subplots_adjust(hspace = 0.5)
+
+for j, day in enumerate(list(set(DataContainer['kwdays']))):
+    locals()['ax{}'.format(j)] = plt.subplot(len(set(DataContainer['kwdays'])), 1, j+1)
+    auxax = locals()['ax{}'.format(j)]
+    #print('index, day', j, day)
+    for i, idata in enumerate(DataContainer['{}'.format(day)]):
+        #plt.subplots_adjust(hspace=0.01)
+        tod = idata.timeline(TES = TESNum, asic = asic )
+        tt = idata.timeaxis(axistype='pps', asic = asic)
+        auxax.set_title('{} - {} files '.format(day, 
+                                               len(DataContainer['{}'.format(day)])))
+        auxax.plot(tt-tt[0], idata.ADU2I(tod), 
+                   color = colors[i], 
+                   label = '{}'.format(day) if i == 0 else None)    
+        auxax.legend()
+        auxax.set_ylabel(r'Current / $\mu$A')
+    if zoom: auxax.set_xlim(0,10)
+auxax.set_xlabel('PPS')
+        
+#plt.savefig('QUBIC_timelines_{}_TES{}_allfiles'.format(words[0], TESNum) )
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+# Wavelets
+
+
+### Haart transform
+
+Given a timeline $\{U\} = (u_0, u_1, u_2, \dots , u_N$) you can create two subsets by doing the sum and the difference of two consecutive elements: $S = \{u_0 + u_1, u_2 + u_3, \dots u_{N-1} + u_N$} and $D = \{u_0 - u_1, u_2 - u_3, \dots u_{N-1} - u_N$}.
+
+S will give an idea of Low pass, Sum, Smooth, Synthesis, and Trend behavior of the timeline.
+
+D will give an idea of High pass, Difference, Detail, Analysis, and Fluctuations
+
+```{python tags=c()}
+zoom = False
+asic = 1
+
+allstd = []
+plot = False
+
+for j in range(0,127):
+    TESNum = j+1
+    
+    print('doing TES = ', TESNum)
+    
+    stdarr = []
+    
+    #Save the std for same TES & different dataset
+    datastd = []
+    if plot:
+        fig, ax = plt.subplots(nrows = 1, ncols = 3, figsize = (15,5))
+        fig.suptitle('Wavelets study {} - TES {}'.format(day, TESNum))
+    for i in range(0, len(DataContainer['{}'.format(day)])):
+        idata = DataContainer['{}'.format(day)][i]
+        tod = idata.timeline(TES = TESNum, asic = asic )
+        tt = idata.timeaxis(axistype='pps', asic = asic)
+
+        if (len(tod) % 2) == 0:
+            pass
+        else:
+            tod = tod[:-1]
+            tod = idata.ADU2I(tod)
+            tt = tt[:-1]
+        S = 0.5*(tod[::2] + tod[1::2])
+        D = 0.5*(tod[::2] - tod[1::2])
+        newt = 0.5*(tt[::2] -tt[0] + tt[1::2] - tt[0])
+
+        ##Compute std
+        dstd = np.std(D)
+        datastd.append(dstd)
+                
+        if plot:
+            print(np.shape(tod), np.shape(S))
+            ax[0].set_title('S set (addition)')
+            ax[0].plot(S, label = '{}'.format(i),
+                        alpha = 0.8)
+            ax[0].legend()
+            ax[0].set_xlabel('Reduced timestamp')
+
+            ax[1].set_title('D set (difference)')
+            ax[1].plot(D, alpha = 0.8, label = r'$\sigma = {:6.2e}$'.format(dstd))
+            ax[1].set_xlabel('Reduced timestamp')
+
+            ax[1].legend()
+            ax[2].set_title('Time Ordered Data')
+            ax[2].plot(tod)
+            #ax[2].plot((tt-tt[0])[:len(S)], tod[:len(S)]-S)
+            ax[2].set_xlabel('Timestamp')
+    
+            plt.tight_layout()
+            ##plt.savefig('test_wavelet_{}'.format(str(TESNum).zfill(3)))
+            plt.show()
+            #plt.clf()    
+    
+    allstd.append(datastd)
+
+#Convert to array
+allstdarr = np.array(allstd) 
+print(np.shape(allstdarr))
+```
+
+```{python}
+allstdarr = np.mean(allstdarr, axis = 1)
+print(np.shape(allstdarr))
+```
+
+#### Look at the histogram std values
+
+```{python}
+len(tt), len(tod), len(newt), len(S)
+```
+
+```{python}
+# All dataset of the day
+#allsetstdarr = np.array(allstd) 
+#print(np.shape(allsetstdarr))
+```
+
+```{python}
+#Convert to array
+#Average standard deviations considering unequal sizes of the TOD[TES]
+#def AvStd(qfp, std):
+#    num, denm = 0, 0
+#    for i in range(128):
+#        itod = qfp.timeline(TES = i+1, asic = 1 )
+#        istd = std[i]
+#        nlen = len(itod)
+#        num += (nlen - 1) * istd**2
+#        denm += nlen
+#    denm = denm - len(tod)    
+#    return np.sqrt(num/denm)
+```
+
+```{python}
+threshold = 200.
+
+indexes = allstdarr < threshold
+
+fig = plt.figure(figsize = (20,10))
+#ax1 = plt.subplot(121)
+#ax2 = plt.subplot(122)
+#ax3 = plt.subplot(212)
+plt.suptitle('{}'.format(words[0]), fontsize = 20)
+plt.subplot(221)
+hist, bins = np.histogram(allstdarr, bins = 60)
+logbins = np.logspace(np.log10(bins[0]+1.),np.log10(bins[-1]),len(bins))
+plt.hist(allstdarr, bins = logbins)
+plt.axvline(threshold, ls = '--', lw = 2, color = 'k')
+plt.xscale('log')
+plt.hist(allstdarr[indexes], bins = logbins, color = 'r')
+plt.xlabel('Std Dev')
+plt.ylabel('Counts')
+plt.text(threshold, 10, '  Threshold {}'.format(threshold), fontsize = 'large')
+
+plt.subplot(222)
+plt.plot(allstdarr, 'ko')
+plt.xlabel('TES index')
+plt.ylabel('Std Dev')
+plt.plot(allstdarr[indexes], 'ro')
+
+print()
+plt.subplot(223)
+for j, idx in enumerate(indexes):
+    if idx:
+        plt.plot(DataContainer[day][0].ADU2I(DataContainer[day][0].timeline(TES = j+1, asic = 1)) )
+plt.title('TES corresp. to std dev < threshold')
+plt.ylabel('TOD [current]')
+plt.xlabel('Timestamp')
+plt.tight_layout()
+
+plt.subplot(224)
+for j, idx in enumerate(indexes[50:]):
+    if idx:
+        plt.plot(DataContainer[day][0].ADU2I(DataContainer[day][0].timeline(TES = j+1, asic = 1)) )
+plt.title('TES corresp. to std dev < threshold')
+plt.ylabel('TOD [current]')
+plt.xlabel('Timestamp')
+plt.tight_layout()
+
+#plt.savefig('{}_{}_Saturated_TES_threshold{}'.format(day, words[0], int(threshold)))
+```
+
+```{python}
+#Indexes of subsample
+subarr = [0,5,10,15,20,25]
+```
+
+```{python}
+colors2 = cm.get_cmap('rainbow', 6)(range(len(subarr)))
+print(np.shape(colors2))
+```
+
+```{python}
+TESind = 20
+plt.figure(figsize = (15,6))
+# Plot one TES across
+plt.subplot(121)
+plt.title('TES {} - day {}'.format(TESind, day))
+for i in range(len(subarr)):
+    plt.plot(subarr[i], scaled[TESind,i], 's-', color = colors2[i], label = 'subsample')
+#plt.plot(allsetstdarr[TESind,:]/np.max(allsetstdarr[TESind,:]), 'm.-', label ='full sample', alpha = 0.6)
+#plt.yscale('log')
+#plt.ylim(0.99,1.01)
+plt.xlabel('Experiment index', fontsize = 20)
+plt.ylabel('wavelet Std(D)', fontsize = 20)
+plt.grid()
+plt.legend()
+#Look at the data 
+plt.subplot(122)
+h=0
+for i in range(0, len(DataContainer['{}'.format(day)]), 5):
+    idata = DataContainer['{}'.format(day)][i]
+    tod =idata.timeline(TES = TESind, asic = asic )
+    tt = idata.timeaxis(axistype = 'pps', asic = asic)
+    plt.plot(tt-tt[0], idata.ADU2I(tod)/np.max(idata.ADU2I(tod)), color = colors2[h])
+    plt.xlabel('Timestamp', fontsize = 20)
+    plt.ylabel('Current (normalized)', fontsize = 20)
+    #plt.legend()
+    h+=1
+plt.grid()
+plt.tight_layout()
+```
+
+```{python}
+scaler = MinMaxScaler()
+# transform data
+scaled = scaler.fit_transform(allstdarr)
+datascaled = scaler.fit_transform([DataContainer[day][0].timeline(TES = TESind, asic = asic )[:1000], 
+                                   DataContainer[day][5].timeline(TES = TESind, asic = asic )[:1000]])
+```
+
+```{python}
+idata = DataContainer['{}'.format(day)][20]
+tod = idata.timeline(TES = TESind, asic = asic )
+tt = idata.timeaxis(axistype = 'pps', asic = asic)
+plt.plot(tt-tt[0], idata.ADU2I(tod)/np.max(idata.ADU2I(tod)))
+plt.xlabel('Timestamp', fontsize = 20)
+plt.ylabel('Current (normalized)', fontsize = 20)
+```
+
+```{python}
+#import sys
+# #!pip install --upgrade PyWavelets
+
+#import pywt
+```
+
+```{python}
+# Can we use GCloud to save the spreadsheet? 
+#import sys
+# #!conda install --yes --prefix {sys.prefix} pywt
+#import pywt
+# #!pip install --upgrade google-api-python-client google-auth-httplib2 google-auth-oauthlib
+# #!pip install --upgrade cachetools
+
+#from __future__ import print_function
+
+#import os.path
+
+#from google.auth.transport.requests import Request
+#from google.oauth2.credentials import Credentials
+#from google_auth_oauthlib.flow import InstalledAppFlow
+#from googleapiclient.discovery import build
+#from googleapiclient.errors import HttpError
+```
+
+```{python}
+tod = DataContainer['{}'.format(day)][1].timeline(TES = TESNum, asic = asic )
+tod = DataContainer['{}'.format(day)][1].ADU2I(tod)[:-1]
+tt = DataContainer['{}'.format(day)][1].timeaxis(axistype='pps', asic = asic)
+S = 0.5*(tod[::2] + tod[1::2])
+D = 0.5*(tod[::2] - tod[1::2])
+print(np.shape(tod), np.shape(S))
+plt.figure(figsize = (12,5))
+plt.subplot(121)
+plt.plot(S, label = 'sum')
+plt.subplot(122)
+plt.plot(D, label = 'diff')
+```
+
+```{python}
+Unew = []
+for i in range(len(D)):
+    Unew.append(S[i] + D[i])
+    Unew.append(S[i] - D[i])
+print(np.shape(Unew))
+plt.plot(tt, tod - np.array(Unew), 'k-', alpha = 0.3)
+#plt.plot(tt, np.array(Unew)-5000, 'r-')
+```
+
+```{python}
+
+```
+
+```{python}
+#    if zoom: ax[1].set_xlim(0,200)
+#for j, kdata in enumerate(DataContainer['{}'.format('2022-08-24')]):
+#    tod = kdata.timeline(TES = TESNum, asic = asic )
+#    tt = kdata.timeaxis(axistype='pps', asic = asic)
+#    ax[2].set_title('{} - {} files {} '.format('2022-08-24', 
+#                                                len(DataContainer['2022-08-24']),
+#                                              DataContainer['fnames2022-08-24'][0]))
+#    ax[2].plot(tt-tt[0], kdata.ADU2I(tod),
+#               color = colors2[-1-j], 
+#               label = '2022-08-24' if j == 0 else None )
+#    ax[2].legend()
+#    #if zoom: ax[1].set_xlim(0,200)
+##plt.savefig('QUBIC_timelines_{}_TES{}_allfiles'.format(words[0], TESNum) )
+```
+
+Plot bath temperature of a TES
+
+```{python}
+t_Tbath,Tbath = qfp.Tbath
+```

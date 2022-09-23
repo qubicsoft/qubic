@@ -18,7 +18,7 @@ __all__ = ['Model_Fringes_QubicSoft', 'Model_Fringes_Maynooth']
 
 
 # ========== Plot functions =============
-def plot_horns(q, simple=False, ax=None, s=100):
+def plot_horns(q, simple=False, ax=None, s=100, fontsize = 14):
     if ax is None:
         fig, ax = plt.subplots()
 
@@ -30,8 +30,8 @@ def plot_horns(q, simple=False, ax=None, s=100):
         ax.scatter(xhorns[np.invert(q.horn.open)], yhorns[np.invert(q.horn.open)], c='k', s=s)
         ax.scatter(xhorns[q.horn.open], yhorns[q.horn.open], c='k', s=s, alpha=0.1)
 
-    ax.set_xlabel('X_GRF [m]', fontsize=14)
-    ax.set_ylabel('Y_GRF [m]', fontsize=14)
+    ax.set_xlabel('X_GRF [m]', fontsize=fontsize)
+    ax.set_ylabel('Y_GRF [m]', fontsize=fontsize)
     ax.axis('square')
     return
 

@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.6.0rc0
+      jupytext_version: 1.7.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -54,12 +54,12 @@ from mpl_toolkits.mplot3d import Axes3D
 ```
 
 ```{python}
-nside = 8
-savefigs = True
-logscale = False
+nside = 64
+savefigs = False
+logscale = True
 if nside == 64:
     # pixels used in paper: 24448 and 22144
-    pixG_ud = 22144
+    pixG_ud = 24448
 elif nside == 8:
     # pixels used in paper: 368 or 272
     pixG_ud = 272
@@ -75,8 +75,9 @@ _, nus_edge150, nus150, _, _, _ = qubic.compute_freq(dictionaries[0]['filter_nu'
                             dictionaries[0]['filter_relative_bandwidth'])
 file.close()
 
-fsed._plot_exampleSED(dictionaries[0], centers[0], nus, Maps, mapsarray = True, 
-                     DeltaTheta = 1, DeltaPhi = 0, savefig = 1, set_logscale = True)
+print(centers[0])
+#fsed._plot_exampleSED(dictionaries[0], centers[0], nus, Maps, mapsarray = True, 
+#                     DeltaTheta = 1, DeltaPhi = 0, savefig = savefigs, set_logscale = logscale)
 ```
 
 ```{python}
@@ -95,6 +96,24 @@ file.close()
 file = open("DataSED/ForegroundMaps_TDnside{}.pk".format(nside), "rb")
 fgr_map_dust_ud, fgr_map_synch_ud, fgr_map_ud, maps_ud, cov_ud = pk.load(file)
 file.close()
+```
+
+```{python}
+plt.figure(figsize = (16,8))
+hp.gnomview((maps_ud - fgr_map_dust_ud - fgr_map_synch_ud)[0,0,:,0], 
+           reso = 8, sub = 133, title = "Map-(Dust+Synch)",
+           )
+hp.gnomview(maps_ud[0,0,:,0], 
+           reso = 8, sub = 131, title = "Map",
+           min = 0, max = 4e3)
+hp.gnomview(fgr_map_ud[0,0,:,0], 
+           reso = 8, sub = 132, title = "Dust+Sync",
+           min = 0, max = 4e3)
+
+```
+
+```{python}
+
 ```
 
 ```{python}

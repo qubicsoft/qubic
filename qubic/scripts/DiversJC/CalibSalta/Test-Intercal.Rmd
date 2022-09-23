@@ -148,23 +148,14 @@ nsamples = 100
 
 ###### Noise:
 # Uniform noise
-sig = np.zeros(ndet) + 1e-2
+# sig = np.zeros(ndet) + 1e-2
 # Variable noise across detectors
-# sig = 1e-2*np.random.rand(ndet)
+sig = 1e-2*np.random.rand(ndet)
 
 
 H = np.zeros((ndet*nsamples, npix))
 for i in range(npix):
     H[:,i] = np.random.randint(0,2, size=nsamples*ndet)
-
-# nnn = nsamples // npix
-# H = np.zeros((ndet*nsamples, npix))
-# ### We want each pixel to be seen by all detectors
-# for i in range(npix):
-#     seenpix = np.zeros((ndet, nsamples))
-#     for k in range(nnn): 
-#         seenpix[:, k*npix+i] = 1
-#         H[:,i] = np.ravel(seenpix)
     
 intercal = np.append([1], (np.random.rand(ndet-1)+0.5))
 alltod_intercal = np.dot(H, truey)
@@ -304,7 +295,7 @@ class simulate_signal_intercal:
         self.nsamples = nsamples
         self.H = H
         self.d = np.reshape(d, (ndet, nsamples))
-        self.w = np.reshape(w, (ndet, nsamples))
+        self.w = w
     def __call__(self, x, sky):
         D, intercal = self.give_intercals(sky)
         for k in range(self.ndet):
@@ -314,10 +305,10 @@ class simulate_signal_intercal:
         ### We remove the first detector from the fit as its intercalibration is forced to 1
         D = (np.reshape(np.dot(self.H, sky), (self.ndet, self.nsamples)))
         myD = D[1:,:]
-        myw = self.w[1:,:]# * 0 + 1
-        w = np.reshape(myw, (self.ndet-1, self.nsamples))
-        matrix = (myD*w) @ myD.T
-        intercal_rec = np.append(1, np.diag((np.linalg.inv(matrix) @ (myD*w)) @ self.d[1:,:].T))
+        myw = self.w[1:]
+        w = np.diag(myw)
+        matrix = myD @ (myD.T @ w)
+        intercal_rec = np.append(1, np.diag(np.linalg.inv(matrix) @ (myD @ (self.d[1:,:].T @ w))))
         return D, intercal_rec
 
 sigmas = np.ones(len(alltod))
@@ -325,14 +316,13 @@ for k in range(ndet):
     sigmas[k*nsamples:(k+1)*nsamples] *= sig[k]
 
 #### Fit
-myH = simulate_signal_intercal(xpix, ndet, nsamples, H, alltod, 1./sigmas**2)
+myH = simulate_signal_intercal(xpix, ndet, nsamples, H, alltod, 1./sig**2)
 guess_sky = np.ones(len(xpix))
 xxx = np.zeros(len(alltod))   # not used
 data = fit.Data(xxx, alltod, sigmas, myH)
 m, ch2, ndf = data.fit_minuit(guess_sky)
 mytod_th = myH(0, m.values)
 chi2_ana = np.sum( ((mytod_th-alltod)/sigmas)**2)
-
 
 
 
@@ -446,7 +436,7 @@ plot(myintercals_fit-intercal)
 
 ```
 
-# Forget hte following for now...
+# Forget the following for now...
 
 
 # Small MC to check efficiency of accounting for errors

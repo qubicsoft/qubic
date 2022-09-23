@@ -36,6 +36,7 @@ utcoffset = -3*u.hour  # Eastern Daylight Time
 from scipy.signal import medfilt
 from scipy.interpolate import interp1d
 import glob
+import gc
 
 from qubicpack.qubicfp import qubicfp
 from qubic import fibtools as ft
@@ -98,6 +99,11 @@ plot(thk, el)
 xlabel('t')
 ylabel('el')
 
+```
+
+```{python}
+del(a)
+gc.collect() 
 ```
 
 ```{python}
@@ -349,7 +355,7 @@ d['MultiBand'] = True
 d['sweeping_pointing_deadtime'] = False
 d['noiseless'] = True
 
-d['detector_tau'] = 0.15
+d['detector_tau'] = 0.01
 
 s = qubic.QubicScene(d)
 q = qubic.QubicMultibandInstrument(d)
@@ -360,7 +366,7 @@ _, nus_edge_in, nus_in, _, _, _ = qubic.compute_freq(d['filter_nu'] / 1e9, d['nf
 # Create an input map with the moon in each sub-frequency
 y0 = np.empty((d['nf_sub'], 12 * d['nside'] ** 2))
 for i in range(d['nf_sub']):
-    y0[i,:] = map_in
+    y0[i,:] = map_in * (150/nus_in[i])**4
 
 
 ### We use our fake moon-frame pointing qsmoon
@@ -368,7 +374,8 @@ qsmoon.fix_az = False
 a = qubic.QubicMultibandAcquisition(q, qsmoon, s, d, nus_edge_in)
 
 TOD, mapconv = a.get_observation(y0, noiseless=d['noiseless'], convolution = True)
-a=0
+del a
+gc.collect()   ### Important ! Frees the meory
 ```
 
 ```{python}
@@ -537,10 +544,6 @@ hp.gnomview(newmapsb_neg, rot=[np.mean(newazt), np.mean(newelt)], reso=12, sub=(
 hp.gnomview(newmapdiff, rot=[np.mean(newazt), np.mean(newelt)], reso=12, sub=(1,4,4), title='Diff scans', min=-3e3, max=np.max(newmapsb[~unseen]))
 
 
-```
-
-```{python}
-d
 ```
 
 ```{python}

@@ -772,6 +772,14 @@ class QubicInstrument(Instrument):
             # note the factor 2 in the definition of the NEP^2
             noise.NEP_phot2_env = NEP_phot2_env_nobunch * (1 + noise.P_phot_env /
                                                            (h * self.filter.nu * g_env))
+            if self.debug:
+                print("==========================")        
+                print("Shape of NEP_phot2_env_nobunch = ", np.shape(NEP_phot2_env_nobunch))
+                print("Shape of NEP_phot2_env_nobunch = ", np.shape(noise.P_phot_env))
+                print("ib2b", ib2b)
+                print("Value used in current version of qubicsoft", NEP_phot2_env_nobunch[ib2b])
+                print("==========================")
+
             #if self.debug:
             #    print('Environment, T =', temperatures[ib2b],
             #          'K, P = {0:.2e} W'.format(noise.P_phot_env.max()),
@@ -784,7 +792,9 @@ class QubicInstrument(Instrument):
             return {"power": noise.P_phot_env,
                     "NEP_phot2_nobunch": NEP_phot2_env_nobunch,
                     "NEP_phot2_env": noise.NEP_phot2_env,
-                    "NEP_array": Instrument.get_noise(self, sampling, nep = nep_intern)}
+                    "NEP_array": Instrument.get_noise(self, sampling, nep = nep_intern),
+                    "debug_current": NEP_phot2_env_nobunch[ib2b] * (1 + noise.P_phot_env /(h * self.filter.nu * g_env)),
+                    "debug_new": NEP_phot2_env_nobunch * (1 + noise.P_phot_env / (h * self.filter.nu * g_env))}
         else:
             return
 

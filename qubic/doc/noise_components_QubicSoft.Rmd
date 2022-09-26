@@ -251,25 +251,27 @@ fig3 = plt.figure(figsize = (16,6))
 fig3.suptitle('Comparisson btwn Current and New values of the environment NEP_phot ')
 gs = fig3.add_gridspec(1, 5)
 f3_ax1 = fig3.add_subplot(gs[0, :3])
+f3_ax2 = fig3.add_subplot(gs[0, 3:])
+
 f3_ax1.set_title('')
 f3_ax1.plot(np.arange(992), noise_env['debug_current'], 'g.-',label = "current version")
 f3_ax1.scatter(np.arange(992), noise_env['debug_new'], c = noise_env['debug_new'], label = "proposal")
 f3_ax1.set_xlabel("numb of detector")
 f3_ax1.set_ylabel(r"environmnt NEP$_{\rm phot}$")
+
+cp = f3_ax2.scatter(qinstrument[0].detector.center.T[0],
+           qinstrument[0].detector.center.T[1],
+          c = noise_env['debug_new'], marker = 's')
 cbar = fig3.colorbar(cp,)
 cbar.set_label('proposal')
 f3_ax1.legend()
 
-f3_ax2 = fig3.add_subplot(gs[0, 3:])
-cp = f3_ax2.scatter(qinstrument[0].detector.center.T[0],
-           qinstrument[0].detector.center.T[1],
-          c = noise_env['debug_new'], marker = 's')
 f3_ax2.set_title('')
 f3_ax2.set_xticklabels([])
 f3_ax2.set_yticklabels([])
 #f3_ax2.
 #qinstrument[0].detector.plot()
-plt.savefig("nep_phot2_env_nobunch.pdf", format = "pdf")
+#plt.savefig("nep_phot2_env_nobunch.pdf", format = "pdf")
 ```
 
 ```{python}

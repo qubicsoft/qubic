@@ -5,12 +5,18 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.11.3
+      jupytext_version: 1.6.0rc0
   kernelspec:
-    display_name: QUBIC with Python 3.8
+    display_name: Python 3
     language: python
-    name: python-3.8
+    name: python3
 ---
+
+```{python}
+# Config notebook
+from IPython.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+```
 
 ```{python}
 # %matplotlib notebook
@@ -50,17 +56,17 @@ import warnings
 # everything in iminuit is done through the Minuit object, so we import it
 from iminuit import Minuit
 
-import pywt
+#import pywt
 
 # we also need a cost function to fit and import the LeastSquares function
-from iminuit.cost import LeastSquares
+#from iminuit.cost import LeastSquares
 from scipy.optimize import curve_fit
 #==========================================
 #import string
 import scipy.signal as scsig
 from scipy import interpolate
 
-from sklearn.preprocessing import MinMaxScaler
+#from sklearn.preprocessing import MinMaxScaler
 
 import datetime as dt
 import pickle
@@ -121,13 +127,13 @@ def line(x, a, b):
 
 ```{python tags=c()}
 #days = ['2022-{}-{}'.format(str(i).zfill(2), str(j).zfill(2))) for i in range(7,9) for j in range(13,32)]
-start = datetime.datetime.strptime("30-06-2022", "%d-%m-%Y")
-end = datetime.datetime.strptime("30-06-2022", "%d-%m-%Y")
+start = datetime.datetime.strptime("14-07-2022", "%d-%m-%Y")
+end = datetime.datetime.strptime("14-07-2022", "%d-%m-%Y")
 date_generated = pd.date_range(start, end = end)# periods=5)
 days = date_generated.strftime("%Y-%m-%d").to_list() 
 print('Days to read data', days)
 
-words = ['calsource-door-closed']#, 'hwp']
+words = ['MoonScan']#, 'hwp']
 keywords = ['*{}*'.format(word) for word in words]
 #keywords = ['*']
 #filenames = []
@@ -140,7 +146,8 @@ alldays = []
 onlycountfiles = True
 for keyword in keywords:
     for day in days:
-        data_dir = '/sps/qubic/Data/Calib-TD/'+day+'/'
+        #data_dir = '/sps/qubic/Data/Calib-TD/'+day+'/'
+        data_dir = '/home/qubic/Calib-TD/'+day+'/'
         dirs = np.sort(glob.glob(data_dir+keyword))
         #print (dirs)
         if len(dirs) == 0:
@@ -235,6 +242,7 @@ wit = DataContainer[listdays[0]][0]
 ax = plt.subplot(111)
 fa = wit.plot_300mKtemperatures(ax = ax)
 axleg = ax.get_legend()
+
 ```
 
 ```{python}
@@ -405,7 +413,7 @@ def detect_outliers(timeset, dataset, th = 1000):
 ```
 
 ```{python}
-len(DataContainer[iday])
+#len(DataContainer[iday])
 ```
 
 ```{python}
@@ -414,8 +422,8 @@ len(DataContainer[iday])
 iday = days[0]
 
 # 'AVS47_1_CH6' 300mK or 'AVS47_1_ch1' 1K stage
-#label = 'AVS47_1_CH6'
-label = 'AVS47_1_ch1'
+label = 'AVS47_1_CH6'
+#label = 'AVS47_1_ch1'
 if label == 'AVS47_1_ch1':
     labelw = '1Kstage'
     Tlim = 1.6 #K

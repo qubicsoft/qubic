@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.5.0
+      jupytext_version: 1.6.0rc0
   kernelspec:
     display_name: Python 3
     language: python
@@ -29,7 +29,7 @@ display(HTML("<style>.container { width:95% !important; }</style>"))
 import numpy as np
 import matplotlib.pyplot as plt
 import healpy as hp
-#import seaborn as sns
+import seaborn as sns
 
 import sys
 from importlib import reload
@@ -58,8 +58,8 @@ el_max = 50.
 ```
 
 ```{python}
-days = ['2022-07-12']
-day = '2022-07-12'
+days = ['2022-07-14']
+day = '2022-07-14'
 ```
 
 ```{python}
@@ -89,10 +89,6 @@ local_start = str(Time(start_obs_date)+tstart*u.hour)[:16]
 local_stop = str(Time(start_obs_date)+tstop*u.hour)[:16]
 UTC_start = str(Time(start_obs_date)-utcoffset+tstart*u.hour)[:16]
 UTC_stop = str(Time(start_obs_date)-utcoffset+tstop*u.hour)[:16]
-```
-
-```{python}
-qubic.qubicdict.qubicDict.dicts_dir
 ```
 
 ```{python}
@@ -445,11 +441,16 @@ In (az, el) coords, the Moon varies: $(\Delta A, \Delta el) = (-13.68, 20)$ deg
 
 # print("DONE")
 # print("The first part...")
-=======
+#=======
 
 ```
 
 ### Now loop in chunks
+
+```{python}
+# #!conda install --yes --prefix {sys.prefix} seaborn
+
+```
 
 ```{python}
 #Longest interval
@@ -490,8 +491,8 @@ for j in range(nparts_samples):
     #plt.plot(azmean_chunk, elmean_chunk, 'r*', label = 'avrg')
     #plt.legend()
     print("Start the chunks in the sampling ")
-    inichunk_samp = int(j * 170595 / nparts_samples)
-    endchunk_samp = int((j + 1) * 170595 / nparts_samples)-1 #if j != nparts_samples-1 else 170594
+    inichunk_samp = int(j * len(p.time) / nparts_samples)
+    endchunk_samp = int((j + 1) * len(p.time) / nparts_samples)-1 #if j != nparts_samples-1 else 170594
     print(inichunk_samp,endchunk_samp)
     maskchunk = (p.time > p.time[inichunk_samp]) & (p.time < p.time[endchunk_samp])
     print("Number of samples per chunk ", maskchunk.sum())

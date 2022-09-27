@@ -148,9 +148,9 @@ nsamples = 100
 
 ###### Noise:
 # Uniform noise
-# sig = np.zeros(ndet) + 1e-2
+sig = np.zeros(ndet) + 1e-2
 # Variable noise across detectors
-sig = 1e-2*np.random.rand(ndet)
+# sig = 1e-2*np.random.rand(ndet)
 
 
 H = np.zeros((ndet*nsamples, npix))
@@ -167,6 +167,14 @@ for k in range(ndet):
     alltod[k*nsamples:(k+1)*nsamples] += np.random.randn(nsamples)*sig[k]
 #########################
 
+sigmas = np.ones(len(alltod))
+for k in range(ndet):
+    sigmas[k*nsamples:(k+1)*nsamples] *= sig[k]
+
+
+    
+chi2_noiseless = np.sum(((alltod-alltod_noiseless)/sigmas)**2)   
+print('Chi2 Noiseless: ',chi2_noiseless)
 ```
 
 # Here we fully sove with Minuit
@@ -191,13 +199,23 @@ myH = simulate_signal_intercal(xpix, ndet, nsamples, H)
 
 guess_sky = np.append(np.zeros(len(xpix)), np.ones(ndet))
 
-sigmas = np.ones(len(alltod))
-for k in range(ndet):
-    sigmas[k*nsamples:(k+1)*nsamples] *= sig[k]
-
 xxx = np.zeros(len(alltod))   # not used
 data = fit.Data(xxx, alltod, sigmas, myH)
 m, ch2, ndf = data.fit_minuit(guess_sky, fixpars = [len(xpix)])
+mytod_th = myH(0, m.values)
+chi2_ana = np.sum( ((mytod_th-alltod)/sigmas)**2)
+
+print('Minuit says : chi2={} ndf={}'.format(ch2, ndf))
+print('============================')
+print('My Chi2 = {}'.format(chi2_ana))
+print('The number of unknowns is: {}'.format(npix + ndet -1))
+print('The number of points is: {}'.format(len(alltod)))
+print('The ndf={}'.format(len(alltod)-(npix+ndet-1)))
+print('============================')
+print('With noiseless true TOD')
+chi2_true = np.sum( ((alltod_noiseless-alltod)/sigmas)**2)
+print('Chi2 True = {}'.format(chi2_true))
+
 
 mymap = m.values[:len(xpix)]
 myintercals = m.values[len(xpix):]
@@ -297,18 +315,19 @@ class simulate_signal_intercal:
         self.d = np.reshape(d, (ndet, nsamples))
         self.w = w
     def __call__(self, x, sky):
+        # get the intercalibrated TOD directly from the sky + the calculated intercalibrations
         D, intercal = self.give_intercals(sky)
-        for k in range(self.ndet):
-            D[k,:] *= intercal[k]
+        # apply the intercalibrations
+        D = (D.T * intercal).T
         return np.ravel(D)
     def give_intercals(self, sky):
         ### We remove the first detector from the fit as its intercalibration is forced to 1
         D = (np.reshape(np.dot(self.H, sky), (self.ndet, self.nsamples)))
         myD = D[1:,:]
-        myw = self.w[1:]
-        w = np.diag(myw)
-        matrix = myD @ (myD.T @ w)
-        intercal_rec = np.append(1, np.diag(np.linalg.inv(matrix) @ (myD @ (self.d[1:,:].T @ w))))
+        w = self.w[1:]
+        myw = np.diag(w)
+        matrix = myD @ (myD.T @ myw)
+        intercal_rec = np.append(1, np.diag(np.linalg.inv(matrix) @ (myD @ (self.d[1:,:].T @ myw))))
         return D, intercal_rec
 
 sigmas = np.ones(len(alltod))
@@ -334,10 +353,8 @@ print('The number of unknowns is: {}'.format(npix + ndet -1))
 print('The number of points is: {}'.format(len(alltod)))
 print('The ndf={}'.format(len(alltod)-(npix+ndet-1)))
 print('============================')
-print('With True Sky')
-
-mytod_true = myH(0, truey)
-chi2_true = np.sum( ((mytod_true-alltod)/sigmas)**2)
+print('With noiseless true TOD')
+chi2_true = np.sum( ((alltod_noiseless-alltod)/sigmas)**2)
 print('Chi2 True = {}'.format(chi2_true))
 
 mymap2 = np.array(m.values)
@@ -390,16 +407,17 @@ print('            {0:5.3g}   {1:5.3g}    {2:5.3g}   {3:5.3g}'.format(np.std(mym
 ```
 
 ```{python}
-mytod_true = myH(0, truey)
-chi2_true = np.sum( ((mytod_true-alltod)/sigmas)**2)
-print('Chi2 with the True sky',chi2_true)
+chi2_noiseless = np.sum( ((alltod_noiseless-alltod)/sigmas)**2)
+print('Chi2 with noiseless',chi2_noiseless)
 print()
 
+##### Intercalibrated TOD and intercalibration using the True Sky
 myD_true, myintercals_true = myH.give_intercals(truey)
+##### Or using the fitted one
 myD_fit, myintercals_fit = myH.give_intercals(m.values)
 
-print('Intercalibrates TOD difference')
-print('Init - myH(true)   RMS=',np.std(np.reshape(alltod_intercal, (ndet, nsamples)) - myD_true))
+print('Intercalibrated TOD difference')
+print('Init - myH(true) (=> should be 0)  RMS=',np.std(np.reshape(alltod_intercal, (ndet, nsamples)) - myD_true))
 print('Init - myH(fit)   RMS=',np.std(np.reshape(alltod_intercal, (ndet, nsamples)) - myD_fit))
 
 print()
@@ -409,8 +427,8 @@ print('Init - myH(fit)   RMS=',np.std(myintercals_fit-intercal))
 plot(myintercals_true-intercal)
 plot(myintercals_fit-intercal)
 
-### These two are very similar because even when you have the perfectly right sky, when calculating analytically the intercals, 
-# you calulate it against the noisy TOD => extra noise
+print('These two are very similar because even when you have the perfectly right sky, when calculating analytically the intercals')
+print('you calulate it against the noisy TOD => extra noise')
 ```
 
 - The extra noise we see on the intercalibration is also present when we calculate the intercalibrations with the true sky as an input. This comes from the fact that the measured TOD is involved in the intercal expression (last term). If this term is replaced by the noiseless TOD then the=is extra noise vanishes.

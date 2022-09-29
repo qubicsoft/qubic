@@ -222,33 +222,48 @@ mymap = m.values[:len(xpix)]
 myintercals = m.values[len(xpix):]
 
 
-subplot(2,2,1)
+subplot(2,3,1)
 plot(xpix, truey, label='True Sky')
 plot(xpix, mymap, 'ro', label='reconstructed')
 xlabel('pixel')
 ylabel('sky')
 legend()
 
-subplot(2,2,2)
-plot(xpix, mymap - truey, label='Residuals σ={0:5.3g}'.format(np.std(mymap - truey)))
+subplot(2,3,2)
+plot(xpix, mymap - truey, label='Full Minuit Residuals σ={0:5.3g}'.format(np.std(mymap - truey)), alpha=0.5)
 xlabel('pixel')
 ylabel('sky')
-legend()
+legend(fontsize=10)
 
-subplot(2,2,3)
+subplot(2,3,3)
+a = fit.myhist(mymap - truey, label='Full Minuit Residuals')
+
+subplot(2,3,4)
 plot(intercal, label='True Intercals')
 plot(myintercals, 'ro', label='reconstructed intercals')
 xlabel('Det')
 ylabel('Intercal')
 legend()
 
-subplot(2,2,4)
-plot(myintercals-intercal, label='Residuals σ={0:5.3g}'.format(np.std(myintercals-intercal)))
+subplot(2,3,5)
+plot(myintercals-intercal, label='Full Minuit Residuals σ={0:5.3g}'.format(np.std(myintercals-intercal)), alpha=0.5)
 xlabel('Det')
 ylabel('Intercal')
 legend()
 
+subplot(2,3,6)
+a = fit.myhist(myintercals-intercal, label='Full Minuit Residuals')
+
 tight_layout()
+
+print()
+print('RMS Residuals')
+print('         M')
+print('   Map.        Inter     ')
+print('  {0:5.3g}   {1:5.3g}'.format(np.std(mymap - truey), np.std(myintercals-intercal)))
+
+
+
 ```
 
 # Next exercize:

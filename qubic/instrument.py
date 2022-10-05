@@ -416,7 +416,13 @@ class QubicInstrument(Instrument):
             self.NEP_dichroic(noise)
 
             # Last three filters (ndf, lpe1, lpe2?)
-            self.NEP_lastfilters_220(noise)
+            self.NEP_lpefilter_220(noise, noise.indf)
+
+            self.NEP_lpefilter_220(noise, noise.lpe1)
+
+            self.NEP_lpefilter_220(noise, noise.lpe2)
+
+            #self.NEP_lastfilters_220(noise) #Old
         # 5.6 cm EDGE (150 GHz) or Band Defining Filter (220 GHZ)
         
         self.NEP_lastfilter(noise)
@@ -550,6 +556,17 @@ class QubicInstrument(Instrument):
         
         return noise
 
+    def _raise_sampling_error(self, return_only, sampling):
+        """
+        Raise an error in case you want to extract only one component of the photon noise (return_only=True)
+        but you did not give the sampling.
+        """
+        if return_only:
+            if sampling == None:
+                raise ValueError("If you want only a component of the photon noise, I need a qubic sampling to map it (qubic.get_sampling(dictionary)) ")
+        else:
+            return
+
     def _raise_debug(self, noisepar, indx,
                     before_b2b = False,
                     environment = False):
@@ -613,7 +630,8 @@ class QubicInstrument(Instrument):
                 "NEP_array" --> NEP array sampled. shape = (#det,#samples)
 
         """
-
+        #Check if there are a sampling array in case you asked for one component of the photon noise  
+        self._raise_sampling_error(return_only, sampling)
 
         ib2b = noise.ib2b
         noise.g[:ib2b] = noise.gp[:ib2b, None] * noise.S_horns_eff * noise.omega_det * (nu / c) ** 2 \
@@ -664,6 +682,8 @@ class QubicInstrument(Instrument):
                 "NEP_phot2" --> NEP squared. shape = (#det,)
                 "NEP_array" --> NEP array sampled. shape = (#det,#samples)                
         """
+        #Check if there are a sampling array in case you asked for one component of the photon noise  
+        self._raise_sampling_error(return_only, sampling)
 
         ib2b = noise.ib2b
         #150GHz band
@@ -740,6 +760,9 @@ class QubicInstrument(Instrument):
                 "NEP_array" --> NEP array sampled. shape = (#det,#samples)
                 
         """
+
+        #Check if there are a sampling array in case you asked for one component of the photon noise  
+        self._raise_sampling_error(return_only, sampling)
 
         ib2b = noise.ib2b
         if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
@@ -820,11 +843,12 @@ class QubicInstrument(Instrument):
                 "NEP_array" --> NEP array sampled. shape = (#det,#samples)
                 
         """
+        #Check if there are a sampling array in case you asked for one component of the photon noise  
+        self._raise_sampling_error(return_only, sampling)
 
         icomb = noise.icomb
         #150GHz band
         if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
-            #print("======== 150GHz band comb NEP")
             T = noise.temperatures[icomb]
             b = h * noise.nu_up / k / T
             J1 = quad(funct, 0, b, (4, 1))[0]
@@ -832,13 +856,12 @@ class QubicInstrument(Instrument):
             L1 = quad(funct, 0, b, (3, 1))[0]
             eta = (noise.emissivities * noise.tr_prod)[icomb] * \
                                         self.detector.efficiency
-            noise.NEP_phot2[icomb] = 2 * noise.gp[icomb] * eta * (k * T) ** 5 / c ** 2 / h ** 3 * \
-                               (J1 + eta * J2) * noise.S_det * noise.omega_comb * noise.sec_beam
             noise.P_phot[icomb] = noise.gp[icomb] * eta * (k * T) ** 4 / c ** 2 / h ** 3 * L1 * \
                             noise.S_det * noise.omega_comb * noise.sec_beam
+            noise.NEP_phot2[icomb] = 2 * noise.gp[icomb] * eta * (k * T) ** 5 / c ** 2 / h ** 3 * \
+                               (J1 + eta * J2) * noise.S_det * noise.omega_comb * noise.sec_beam
 
         else: #220GHz band
-            #print("======== 220GHz band comb NEP")
             noise.g[icomb] = noise.gp[icomb] * noise.S_det * noise.omega_comb * (self.filter.nu / c) ** 2 * noise.dnu
             # The combiner emissivity includes the fact that there are 2
             # mirrors
@@ -849,11 +872,6 @@ class QubicInstrument(Instrument):
             noise.NEP_phot2_nobunch[icomb] = h * self.filter.nu * noise.P_phot[icomb] * 2
             noise.NEP_phot2[icomb] = noise.NEP_phot2_nobunch[icomb] * (1 + noise.P_phot[icomb] /
                                                            (h * self.filter.nu * noise.g[icomb]))
-            #if self.debug:
-            #    print(names[icomb],
-            #          ', T=', temperatures[icomb],
-            #          'K, P = {0:.2e} W'.format(P_phot[icomb].max()),
-            #          ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[icomb]).max()) + ' W/sqrt(Hz)')
 
         if self.debug: self._raise_debug(noise, noise.icomb)
 
@@ -888,6 +906,8 @@ class QubicInstrument(Instrument):
                 "NEP_array" --> NEP array sampled. shape = (#det,#samples)
                 
         """
+        #Check if there are a sampling array in case you asked for one component of the photon noise  
+        self._raise_sampling_error(return_only, sampling)
 
         ics = noise.ics
         #150GHz band
@@ -955,6 +975,8 @@ class QubicInstrument(Instrument):
                 "NEP_array" --> NEP array sampled. shape = (#det,#samples)
                 
         """
+        #Check if there are a sampling array in case you asked for one component of the photon noise  
+        self._raise_sampling_error(return_only, sampling)
 
         idic = noise.idic
         if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
@@ -979,12 +1001,11 @@ class QubicInstrument(Instrument):
             noise.NEP_phot2_nobunch[idic] = h * noise.nu * noise.P_phot[idic] * 2
             noise.NEP_phot2[idic] = noise.NEP_phot2_nobunch[idic] * (1 + noise.P_phot[idic] /
                                                          (h * noise.nu * noise.g[idic]))
-        if self.debug:
-            print(noise.names[idic],
-                  ', T=', noise.temperatures[idic],
-                  'K, P = {0:.2e} W'.format(noise.P_phot[idic].max()),
-                  ', NEP = {0:.2e}'.format(np.sqrt(noise.NEP_phot2[idic]).max()) + ' W/sqrt(Hz)')
-
+        #if self.debug:
+        #    print(noise.names[idic],
+        #          ', T=', noise.temperatures[idic],
+        #          'K, P = {0:.2e} W'.format(noise.P_phot[idic].max()),
+        #          ', NEP = {0:.2e}'.format(np.sqrt(noise.NEP_phot2[idic]).max()) + ' W/sqrt(Hz)')
 
         if self.debug: self._raise_debug(noise, noise.idic)
 
@@ -1020,6 +1041,8 @@ class QubicInstrument(Instrument):
                 "NEP_array" --> NEP array sampled. shape = (#det,#samples)
                 
         """
+        #Check if there are a sampling array in case you asked for one component of the photon noise  
+        self._raise_sampling_error(return_only, sampling)
 
         indf = noise.indf
 
@@ -1070,6 +1093,8 @@ class QubicInstrument(Instrument):
                 "NEP_array" --> NEP array sampled. shape = (#det,#samples)
                 
         """
+        #Check if there are a sampling array in case you asked for one component of the photon noise  
+        self._raise_sampling_error(return_only, sampling)
 
         T = noise.temperatures[i]
         b = h * noise.nu_up / k / T
@@ -1117,6 +1142,8 @@ class QubicInstrument(Instrument):
                 "NEP_array" --> NEP array sampled. shape = (#det,#samples)
                 
         """
+        #Check if there are a sampling array in case you asked for one component of the photon noise  
+        self._raise_sampling_error(return_only, sampling)
 
         ilast = noise.ilast
         T = noise.temperatures[ilast]
@@ -1128,21 +1155,22 @@ class QubicInstrument(Instrument):
         if self.debug: self._raise_debug(noise, noise.ilast)
 
         if return_only:
-            nep_intern = np.sqrt(np.mean(noise.NEP_phot2[ilast]))
-            return {"power": noise.P_phot[ilast],
+            nep_intern = np.sqrt(np.mean(noise.NEP_phot2[noise.ilast]))
+            return {"power": noise.P_phot[noise.ilast],
                     "NEP_phot2_nobunch": None,
-                    "NEP_phot2": noise.NEP_phot2[ilast],
+                    "NEP_phot2": noise.NEP_phot2[noise.ilast],
                     "NEP_array": Instrument.get_noise(self, sampling, nep = nep_intern)}
         else:
             return
 
-    def NEP_lastfilters_220(self, noise, 
+    def NEP_lpefilter_220(self, noise, i, 
                         return_only = False, sampling = None):
 
         """
         Arguments:
             noise: parameters for the computation of the noise. It is loaded from
                 load_NEP_parameters method
+            i: noise component index
             return_only:
                 if True, the method returns a dictionary with the components of the noise
                 sampled using sampling in Instrument.get_noise() method from pysimulators
@@ -1156,33 +1184,38 @@ class QubicInstrument(Instrument):
                 "NEP_array" --> NEP array sampled. shape = (#det,#samples)
                 
         """
+        #Check if there are a sampling array in case you asked for one component of the photon noise  
+        self._raise_sampling_error(return_only, sampling)
 
-        for i in range(noise.idic + 1, noise.idic + 4):
-            if noise.emissivities[i] == 0.0:
-                noise.P_phot[i] = 0.0
-                noise.NEP_phot2[i] = 0.0
-            else:
-                noise.g[i] = noise.gp[i] * noise.S_det * noise.omega_dichro * (self.filter.nu / c) ** 2 * noise.dnu
-                noise.P_phot[i] = noise.emissivities[i] * noise.tr_prod[i] * h * self.filter.nu / \
-                            (np.exp(h * self.filter.nu / k / noise.temperatures[i]) - 1) * noise.g[i] * \
-                            self.detector.efficiency
-                noise.NEP_phot2_nobunch[i] = h * self.filter.nu * noise.P_phot[i] * 2
-                noise.NEP_phot2[i] = noise.NEP_phot2_nobunch[i] * (1 + noise.P_phot[i] /
-                                                       (h * self.filter.nu * noise.g[i]))
+        #for i in range(noise.idic + 1, noise.idic + 4):
+        if noise.emissivities[i] == 0.0:
+            noise.P_phot[i] = 0.0
+            noise.NEP_phot2[i] = 0.0
+        else:
+            noise.g[i] = noise.gp[i] * noise.S_det * noise.omega_dichro * (self.filter.nu / c) ** 2 * noise.dnu
+            noise.P_phot[i] = noise.emissivities[i] * noise.tr_prod[i] * h * self.filter.nu / \
+                        (np.exp(h * self.filter.nu / k / noise.temperatures[i]) - 1) * noise.g[i] * \
+                        self.detector.efficiency
+            noise.NEP_phot2_nobunch[i] = h * self.filter.nu * noise.P_phot[i] * 2
+            noise.NEP_phot2[i] = noise.NEP_phot2_nobunch[i] * (1 + noise.P_phot[i] /
+                                                   (h * self.filter.nu * noise.g[i]))
 
-        if self.debug: self._raise_debug(noise, noise.ilast)
+        if self.debug: self._raise_debug(noise, i)
+        #if self.debug: self._raise_debug(noise, noise.idic + 2)
+        #if self.debug: self._raise_debug(noise, noise.idic + 3)
 
         if return_only:
-            nep_intern = np.sqrt(np.mean(noise.NEP_phot2[ilast]))
-            return {"power": noise.P_phot[ilast],
+            #inep = []
+            #for i in range(noise.idic + 1, noise.idic + 4):
+            #    inep.append(np.sqrt(np.mean(noise.NEP_phot2[i])))
+            #nep_intern = np.sqrt(np.sum(inep)) # np.sqrt(np.mean(noise.NEP_phot2[noise.ilast]))
+            nep_intern = np.sqrt(np.mean(noise.NEP_phot2[i]))
+            return {"power": noise.P_phot[i],
                     "NEP_phot2_nobunch": None,
-                    "NEP_phot2": noise.NEP_phot2[ilast],
+                    "NEP_phot2": noise.NEP_phot2[i],
                     "NEP_array": Instrument.get_noise(self, sampling, nep = nep_intern)}
         else:
             return
-
-
-
 
     def get_aperture_integration_operator(self):
         """

@@ -22,7 +22,7 @@ jupyter:
 #matplotlib.use('Agg')
 ```
 
-```{python}
+```{python jupyter={'source_hidden': True}, tags=c()}
 # %matplotlib notebook
 # %matplotlib inline
 import matplotlib.pyplot as plt
@@ -107,108 +107,108 @@ from astropy.io import fits as pyfits
 ```
 
 ```{python}
-### === Check the existence of old calsource datasets
-# =====
+#### === Check the existence of old calsource datasets
+## =====
+##
+
+#day = '2019-04-12'
+#keyword = '*ScanFreq*'
+#data_dir = '/sps/qubic/Data/Calib-TD/'+day+'/'
+#dirs = np.sort(glob.glob(data_dir+keyword))
+##print(dirs)        
+#thedir = dirs[0]
+
+#a = qubicfp()
+#a.read_qubicstudio_dataset(thedir)
+#datacal = '/sps/qubic/Data/Calib-TD/calsource/*'
+##glob.glob(datacal + "*{}*.fits".format('2019-06-'.replace("-", "")))
+##glob.glob('/sps/qubic/Data/Calib-TD/calsource/*')
+```
+
+```{python}
+#def read_calsource_data(qubic_fp, date = None, 
+#						keyword = None, datadir = None,
+#						datacal = None, verbose = False):
+##
+#	"""
+#	This method read the calibration source data using qubicpack. The data was stored in a different way before 
+#	Nov 2019 and after Nov 2019 that's why you will find there are two ways to find and read the data.
 #
+#	qubic_fp: 
+#			qubicfp class. Focal plane of QUBIC build using qubicpack
+#	date: 
+#			string. YYYY-MM-DD of the scan
+#	keyword:
+#			string. keyword used in the scan
+#	datadir: 
+#			string. Root directory where RAW TOD is placed (the one where dirs for each scan are).
+#	datacal:
+#			string. Root directory where calibration data is placed. This argument is only need it
+#			when you are reading data before Nov 2019 (arround 10th) and this data is usually saved in
+#			"calsource" directory. The format of the files are "calsource_YYYYMMDDTHHMMSS.fits"
+#	===============
+#	return:
+#			calsource_time and calsource_data. Time and data of the calibration source
+#	"""
 
-day = '2019-04-12'
-keyword = '*ScanFreq*'
-data_dir = '/sps/qubic/Data/Calib-TD/'+day+'/'
-dirs = np.sort(glob.glob(data_dir+keyword))
-#print(dirs)        
-thedir = dirs[0]
+#	if not isinstance(date, str) or not isinstance(keyword, str) or not isinstance(datadir, str):
+#		raise ValueError("date, key or datadir is not {} class".format(str))
+#	if not isinstance(qubic_fp, qubicfp):
+#		raise ValueError("qubic_fp is not the right class: {}".format(qubicfp().__class__))
 
-a = qubicfp()
-a.read_qubicstudio_dataset(thedir)
-datacal = '/sps/qubic/Data/Calib-TD/calsource/*'
-#glob.glob(datacal + "*{}*.fits".format('2019-06-'.replace("-", "")))
-#glob.glob('/sps/qubic/Data/Calib-TD/calsource/*')
+#	try:
+#		os.path.isdir(datadir)
+#	except:
+#		raise ValueError("[path problem] datadir does not exist in your machine: {}".format(datadir))
+
+#	dirs = np.sort(glob.glob(datadir + keyword))
+
+#	if int(date.replace("-", "")) > 20191110:
+#		if verbose: print("Reading calibration source. Date: {}".format(date))
+#		calsource_time = qubic_fp.calsource()[0]
+#		calsource_data = qubic_fp.calsource()[1]
+
+#		return calsource_time, calsource_data
+#		
+#	elif int(date.replace("-", "")) < 20191110:
+#		if verbose: print("Reading calibration source. Date: {}".format(date))
+#		warnings.warn("The format of this kind of files has some tricks to read and plot, keep that in mind.",
+#						UserWarning, stacklevel=2)
+#		if datacal == None: 
+#			raise ValueError("[path problem] You have to provide a directory where the calsource data is.")
+#		try:
+#			os.path.isdir(datacal)
+#		except:
+#			raise ValueError("[path problem] datacal does not exist in your machine: {}".format(datacal))
+
+#		filesname = glob.glob(datacal + "*{}*.fits".format(date.replace("-", "")))
+#		calsource_time, calsource_data = [], []
+
+#		for j, eachfile in enumerate(filesname):
+#			hdufile = pyfits.open(eachfile)
+#			if j == 0: 
+#				if verbose: print ("Creating 'CALSOURCE' key in Qubic Focal Plane object ")
+#			hdu = qubic_fp.read_calsource_fits(hdufile[1])
+#			calsource_time.append(qubic_fp.hk['CALSOURCE']['timestamp'])
+#			calsource_data.append(qubic_fp.hk['CALSOURCE']['Value'])
+#	
+#		return np.concatenate(calsource_time[:]), np.concatenate(calsource_data[:])
+#	else:
+#		raise ValueError("The day argument is not in the correct format 'YYYY-MM-DD'.")
 ```
 
 ```{python}
-def read_calsource_data(qubic_fp, date = None, 
-						keyword = None, datadir = None,
-						datacal = None, verbose = False):
-
-	"""
-	This method read the calibration source data using qubicpack. The data was stored in a different way before 
-	Nov 2019 and after Nov 2019 that's why you will find there are two ways to find and read the data.
-
-	qubic_fp: 
-			qubicfp class. Focal plane of QUBIC build using qubicpack
-	date: 
-			string. YYYY-MM-DD of the scan
-	keyword:
-			string. keyword used in the scan
-	datadir: 
-			string. Root directory where RAW TOD is placed (the one where dirs for each scan are).
-	datacal:
-			string. Root directory where calibration data is placed. This argument is only need it
-			when you are reading data before Nov 2019 (arround 10th) and this data is usually saved in
-			"calsource" directory. The format of the files are "calsource_YYYYMMDDTHHMMSS.fits"
-	===============
-	return:
-			calsource_time and calsource_data. Time and data of the calibration source
-	"""
-
-	if not isinstance(date, str) or not isinstance(keyword, str) or not isinstance(datadir, str):
-		raise ValueError("date, key or datadir is not {} class".format(str))
-	if not isinstance(qubic_fp, qubicfp):
-		raise ValueError("qubic_fp is not the right class: {}".format(qubicfp().__class__))
-
-	try:
-		os.path.isdir(datadir)
-	except:
-		raise ValueError("[path problem] datadir does not exist in your machine: {}".format(datadir))
-
-	dirs = np.sort(glob.glob(datadir + keyword))
-
-	if int(date.replace("-", "")) > 20191110:
-		if verbose: print("Reading calibration source. Date: {}".format(date))
-		calsource_time = qubic_fp.calsource()[0]
-		calsource_data = qubic_fp.calsource()[1]
-
-		return calsource_time, calsource_data
-		
-	elif int(date.replace("-", "")) < 20191110:
-		if verbose: print("Reading calibration source. Date: {}".format(date))
-		warnings.warn("The format of this kind of files has some tricks to read and plot, keep that in mind.",
-						UserWarning, stacklevel=2)
-		if datacal == None: 
-			raise ValueError("[path problem] You have to provide a directory where the calsource data is.")
-		try:
-			os.path.isdir(datacal)
-		except:
-			raise ValueError("[path problem] datacal does not exist in your machine: {}".format(datacal))
-
-		filesname = glob.glob(datacal + "*{}*.fits".format(date.replace("-", "")))
-		calsource_time, calsource_data = [], []
-
-		for j, eachfile in enumerate(filesname):
-			hdufile = pyfits.open(eachfile)
-			if j == 0: 
-				if verbose: print ("Creating 'CALSOURCE' key in Qubic Focal Plane object ")
-			hdu = qubic_fp.read_calsource_fits(hdufile[1])
-			calsource_time.append(qubic_fp.hk['CALSOURCE']['timestamp'])
-			calsource_data.append(qubic_fp.hk['CALSOURCE']['Value'])
-	
-		return np.concatenate(calsource_time[:]), np.concatenate(calsource_data[:])
-	else:
-		raise ValueError("The day argument is not in the correct format 'YYYY-MM-DD'.")
+#tt,dat = read_calsource_data(a, date = day, 
+#                    keyword = keyword, datadir = data_dir,
+#                    datacal = data_dir+'../calsource/', verbose = False)
 ```
 
 ```{python}
-tt,dat = read_calsource_data(a, date = day, 
-                    keyword = keyword, datadir = data_dir,
-                    datacal = data_dir+'../calsource/', verbose = False)
-```
-
-```{python}
-plt.figure(figsize = (12,6))
-plt.title('Calsource data - day = {}'.format(day))
-plt.plot(tt, dat, 'r.')
-plt.xlabel("time")
-plt.ylabel("value")
+#plt.figure(figsize = (12,6))
+#plt.title('Calsource data - day = {}'.format(day))
+#plt.plot(tt, dat, 'r.')
+#plt.xlabel("time")
+#plt.ylabel("value")
 ```
 
 ```{python tags=c()}

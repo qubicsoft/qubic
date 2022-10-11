@@ -13,6 +13,16 @@ jupyter:
 ---
 
 ```{python}
+#import matplotlib as mp#.pyplot as plt
+# #!conda install -c conda-forge matplotlib
+# #!conda activate qubic_python38
+# #!source qubic_python38/bin/activate
+# #!conda env list
+#import matplotlib
+#matplotlib.use('Agg')
+```
+
+```{python}
 # %matplotlib notebook
 # %matplotlib inline
 import matplotlib.pyplot as plt
@@ -20,27 +30,17 @@ from matplotlib import rc
 rc('figure',figsize=(9,4.5))
 rc('font',size=12)
 rc('text',usetex=False)
-#plt.rcParams['axes.facecolor']='red'
-#plt.rcParams['savefig.facecolor']='red'
 rc('axes', facecolor = 'white')
 rc('savefig', facecolor = 'white')
 
 from qubicpack.qubicfp import qubicfp
-#import qubic.fibtools as ft
-#import qubic.plotters as p
-#import qubic.lin_lib as ll
-#import qubic.demodulation_lib as dl
 import qubicpack as qp
-#import satorchipy as stpy
 from pysimulators import FitsArray
 from qubicpack.utilities import TES_index, figure_window_title
 from qubicpack.timeline import timeline_timeaxis
 from qubicpack.utilities import qc_utc_date
 
 import numpy as np
-#from matplotlib.pyplot import *
-#import matplotlib.mlab as mlab
-#import scipy.ndimage.filters as f
 import glob
 import warnings
 import matplotlib.cm as cm
@@ -101,33 +101,125 @@ def line(x, a, b):
 ```
 
 ```{python}
+import os
+from astropy.io import fits as pyfits
+
+```
+
+```{python}
 ### === Check the existence of old calsource datasets
 # =====
 #
 
-#day = '2019-06-27'
-#keyword = '*TimeCst*'
-#data_dir = '/sps/qubic/Data/Calib-TD/'+day+'/'
-#dirs = np.sort(glob.glob(data_dir+keyword))
+day = '2019-04-12'
+keyword = '*ScanFreq*'
+data_dir = '/sps/qubic/Data/Calib-TD/'+day+'/'
+dirs = np.sort(glob.glob(data_dir+keyword))
 #print(dirs)        
-#thedir = dirs[0]
+thedir = dirs[0]
 
-#a = qubicfp()
-#a.read_qubicstudio_dataset(thedir)
-#datacal = '/sps/qubic/Data/Calib-TD/calsource/*'
+a = qubicfp()
+a.read_qubicstudio_dataset(thedir)
+datacal = '/sps/qubic/Data/Calib-TD/calsource/*'
 #glob.glob(datacal + "*{}*.fits".format('2019-06-'.replace("-", "")))
 #glob.glob('/sps/qubic/Data/Calib-TD/calsource/*')
 ```
 
+```{python}
+def read_calsource_data(qubic_fp, date = None, 
+						keyword = None, datadir = None,
+						datacal = None, verbose = False):
+
+	"""
+	This method read the calibration source data using qubicpack. The data was stored in a different way before 
+	Nov 2019 and after Nov 2019 that's why you will find there are two ways to find and read the data.
+
+	qubic_fp: 
+			qubicfp class. Focal plane of QUBIC build using qubicpack
+	date: 
+			string. YYYY-MM-DD of the scan
+	keyword:
+			string. keyword used in the scan
+	datadir: 
+			string. Root directory where RAW TOD is placed (the one where dirs for each scan are).
+	datacal:
+			string. Root directory where calibration data is placed. This argument is only need it
+			when you are reading data before Nov 2019 (arround 10th) and this data is usually saved in
+			"calsource" directory. The format of the files are "calsource_YYYYMMDDTHHMMSS.fits"
+	===============
+	return:
+			calsource_time and calsource_data. Time and data of the calibration source
+	"""
+
+	if not isinstance(date, str) or not isinstance(keyword, str) or not isinstance(datadir, str):
+		raise ValueError("date, key or datadir is not {} class".format(str))
+	if not isinstance(qubic_fp, qubicfp):
+		raise ValueError("qubic_fp is not the right class: {}".format(qubicfp().__class__))
+
+	try:
+		os.path.isdir(datadir)
+	except:
+		raise ValueError("[path problem] datadir does not exist in your machine: {}".format(datadir))
+
+	dirs = np.sort(glob.glob(datadir + keyword))
+
+	if int(date.replace("-", "")) > 20191110:
+		if verbose: print("Reading calibration source. Date: {}".format(date))
+		calsource_time = qubic_fp.calsource()[0]
+		calsource_data = qubic_fp.calsource()[1]
+
+		return calsource_time, calsource_data
+		
+	elif int(date.replace("-", "")) < 20191110:
+		if verbose: print("Reading calibration source. Date: {}".format(date))
+		warnings.warn("The format of this kind of files has some tricks to read and plot, keep that in mind.",
+						UserWarning, stacklevel=2)
+		if datacal == None: 
+			raise ValueError("[path problem] You have to provide a directory where the calsource data is.")
+		try:
+			os.path.isdir(datacal)
+		except:
+			raise ValueError("[path problem] datacal does not exist in your machine: {}".format(datacal))
+
+		filesname = glob.glob(datacal + "*{}*.fits".format(date.replace("-", "")))
+		calsource_time, calsource_data = [], []
+
+		for j, eachfile in enumerate(filesname):
+			hdufile = pyfits.open(eachfile)
+			if j == 0: 
+				if verbose: print ("Creating 'CALSOURCE' key in Qubic Focal Plane object ")
+			hdu = qubic_fp.read_calsource_fits(hdufile[1])
+			calsource_time.append(qubic_fp.hk['CALSOURCE']['timestamp'])
+			calsource_data.append(qubic_fp.hk['CALSOURCE']['Value'])
+	
+		return np.concatenate(calsource_time[:]), np.concatenate(calsource_data[:])
+	else:
+		raise ValueError("The day argument is not in the correct format 'YYYY-MM-DD'.")
+```
+
+```{python}
+tt,dat = read_calsource_data(a, date = day, 
+                    keyword = keyword, datadir = data_dir,
+                    datacal = data_dir+'../calsource/', verbose = False)
+```
+
+```{python}
+plt.figure(figsize = (12,6))
+plt.title('Calsource data - day = {}'.format(day))
+plt.plot(tt, dat, 'r.')
+plt.xlabel("time")
+plt.ylabel("value")
+```
+
 ```{python tags=c()}
 #days = ['2022-{}-{}'.format(str(i).zfill(2), str(j).zfill(2))) for i in range(7,9) for j in range(13,32)]
-start = datetime.datetime.strptime("30-06-2022", "%d-%m-%Y")
-end = datetime.datetime.strptime("30-06-2022", "%d-%m-%Y")
+start = datetime.datetime.strptime("18-08-2022", "%d-%m-%Y")
+end = datetime.datetime.strptime("18-08-2022", "%d-%m-%Y")
 date_generated = pd.date_range(start, end = end)# periods=5)
 days = date_generated.strftime("%Y-%m-%d").to_list() 
 print('Days to read data', days)
 
-words = ['calsource-door-closed']#, 'hwp']
+words = ['andpass']#, 'hwp']
 keywords = ['*{}*'.format(word) for word in words]
 #keywords = ['*']
 #filenames = []
@@ -207,23 +299,28 @@ print(DataContainer.keys())
 ### Plot 300mK temperatures for each dataset
 
 ```{python}
-x = np.linspace(0,300,num = 200)
-y = 300 + 150*np.random.rand(x.shape[0],)
-threshold = 345
-maski = y < threshold
-masku = y >= threshold
+####
+###
+##
+##     Sketchplot
+## 
+#x = np.linspace(0,300,num = 200)
+#y = 300 + 150*np.random.rand(x.shape[0],)
+#threshold = 345
+#maski = y < threshold
+#masku = y >= threshold
 
-plt.text(10,380, 'Score = 0.', backgroundcolor = 'w', bbox=dict(facecolor='white', alpha=1), fontsize = 'large')
-plt.axhline(threshold, ls = '--', lw = 3, color = 'k')
-plt.plot(x[maski],y[maski],color = 'darkgreen', marker = 'o', ls = '', alpha = 0.7)
+#plt.text(10,380, 'flag_i = 0.', backgroundcolor = 'w', bbox=dict(facecolor='white', alpha=1), fontsize = 'large')
+#plt.axhline(threshold, ls = '--', lw = 3, color = 'k')
+#plt.plot(x[maski],y[maski],color = 'darkgreen', marker = 'o', ls = '', alpha = 0.7)
 
-plt.plot(x[masku],y[masku],color = 'darkred', marker = 'o', ls = '', alpha = 0.7)
-plt.text(10,320, 'Score = 1.', backgroundcolor = 'w', bbox=dict(facecolor='white', alpha=1), fontsize = 'large')
-plt.ylabel('Temperature (T)')
-plt.xlabel('time')
+#plt.plot(x[masku],y[masku],color = 'darkred', marker = 'o', ls = '', alpha = 0.7)
+#plt.text(10,320, 'flag_ = 1.', backgroundcolor = 'w', bbox=dict(facecolor='white', alpha=1), fontsize = 'large')
+#plt.ylabel('Temperature (T)')
+#plt.xlabel('time')
 
-ylim = plt.gca().get_ylim()
-plt.axhspan(threshold, ylim[1], color = 'r', alpha = 0.1)
+#ylim = plt.gca().get_ylim()
+#plt.axhspan(threshold, ylim[1], color = 'r', alpha = 0.1)
 
 #plt.savefig('example')
 ```
@@ -272,7 +369,6 @@ iminuit does not work (error when computing hesse and migrad
 
 ```{python}
 fig = plt.figure(figsize = (15,9))
-#fig, ax = plt.subplots(nrows = len(set(DataContainer['kwdays'])), ncols = 1, figsize = (15,9))
 
 for j, day in enumerate(list(set(DataContainer['kwdays']))):
     locals()['ax{}'.format(j)] = plt.subplot(len(set(DataContainer['kwdays'])), 1, j+1)
@@ -283,14 +379,18 @@ for j, day in enumerate(list(set(DataContainer['kwdays']))):
         #idata.plot_temperatures(auxax,{'AVS47_1_ch1': '1K stage'},'1K stage',12)   
         #idata.plot_azel(ax = auxax)
     auxax.get_legend().remove()
-    auxax.axhline(0.345, ls = '--', color = 'k', alpha = 0.4)
-    #auxax.axhline(1.6, ls = '--', color = 'k', alpha = 0.4)
-    #auxax.set_ylim(0.34,0.35)
-    auxax.plot()
+    #auxax.set_ylim(0.910,1.365)
+    auxax.set_ylim(0.310,0.365)
+    auxax.axhspan(0.330,0.340, color = 'r', alpha = 0.05)
+    auxax.axhspan(0.340,0.350, color = 'r', alpha = 0.1)
+    auxax.axhspan(0.350,0.365, color = 'r', alpha = 0.2)
+    
+    #auxax.axhline(0.345, ls = '--', color = 'k', alpha = 0.4)
+    #auxax.plot()
     auxax.set_title('{}'.format(day))
     
 plt.tight_layout()
-#plt.savefig('300mKStage_{}_diffDays'.format(words[0]) )
+plt.savefig('300mKStage_{}_diffDays_20220818'.format(words[0]) )
 ```
 
 ## Fit data and plot 300mK or 1K stage
@@ -318,33 +418,193 @@ labeldict = {'AVS47_1_CH2': 'TES stage RIRT', 'AVS47_1_CH5': 'Film breaker', 'AV
 ```
 
 ```{python}
-def flag_bathtemp(dataset, Tlim, verbose = False):
-    """
-    dataset: tod
-    Tlim: temperature that delimit good and bad sample
-    """
-    #We initialize the flag like all the data is good (cero)
-    flag_i = np.zeros((len(dataset)))
-
-    # Flag for temp lower than Tlow. 
-    maskl = np.where(dataset < Tlim)[0]
+def flag_bathtemp(dataset, T_bit37 = 330., T_bit38 = 340., T_bit39 = 350., verbose = False):
     
-    if len(maskl) == 0:
-        if verbose: print(r'There are no samples with themperature lower than T_L = {:4.3f}. \n BAD DATASET'.format(Tlim))
-        pass
-    else:
-        flag_i[maskl] = 0
-        #print('low', np.mean(scores_i[maskl]))
+    """
+    ======================
+    Arguments:
+        dataset: TOD
+        T_bitXX [in mK]: Temperature from which the sample is flagged. XX is the corresponding bit for that flag.
+    Returns:
+        Flagged array [same size as TOD]
         
-    maskh = np.where(dataset >= Tlim)[0]
-    if len(maskh) == 0:
-        if verbose: print(r'There are no samples with themperature higher than T_L = {:4.3f}. \n GOOD DATASET'.format(Tlim))
-        pass
-    else:
-        flag_i[maskh] = 1.
-        #print('high', np.mean(scores_i[maskh]))
+    The flags are set for each timesample and considering if the temperature is above 330mK, above 340mK and above 350mK.
+    The corresponding flagid is 37, 38 and 39 respectively and the computation is
+    flag_i = bit37*2**37 + bit38*2**38 + bit39*2**39
+    """
     
-    return flag_i
+    def bitid_300mK(T):
+        # Return an integer
+        return (int(T > T_bit37) & int(T < T_bit38)) * 2**37 + \
+               (int(T > T_bit38) & int(T < T_bit39)) * 2**38 + \
+               int(T > T_bit39) * 2**39
+
+    flags300mK = list(map(bitid_300mK, dataset))
+    
+    return np.array(flags300mK, dtype = int)
+
+def flag_1Ktemp(dataset, T_bit31 = 1.1, T_bit32 = 1.2, T_bit33 = 1.3, verbose = False):
+    
+    """
+    ======================
+    Arguments:
+        dataset: TOD
+        T_bitXX [in K]: Temperature from which the sample is flagged. XX is the corresponding bit for that flag.
+    Returns:
+        Flagged array [same size as TOD]
+        
+    The flags are set for each timesample and considering if the temperature is above 1.1K, above 1.2K and above 1.3K.
+    The corresponding flagid is 31, 32 and 33 respectively and the computation is
+    flag_i = bit31*2**31 + bit32*2**32 + bit33*2**39
+    """
+
+    def bitid_1K(T):
+        # Return an integer
+        return (int(T > T_bit31) & int(T < T_bit32)) * 2**31 + \
+               (int(T > T_bit32) & int(T < T_bit33)) * 2**32 + \
+               int(T > T_bit33) * 2**33
+
+    flags1K = list(map(bitid_1K, dataset))
+    
+    return np.array(flags1K, dtype = int)
+
+def MaskDataWithFlags(flagarray, userflags):#, **newflags):
+    """
+    This method aims to mask the data according to user requirements. 
+    
+    The posible flags are:  'saturation', 'cosmic ray', 'uncorrelated flux jumps', 'end of scan',
+                'Tbath above 330mK', 'Tbath above 340mK', 'Tbath above 350mK', 'Tbath rising',
+                '1K above 1.1K', '1K above 1.2K', '1K above 1.3K', '1K rising',
+                'correlated flux jumps'
+        
+    ==============
+    Arguments:
+        flagarray: 
+                Array of 64-bit integers for a specific flag. It can be use an array of flags.
+        userflag: Default values for each key = False
+                Dictionary with boolean values with user requirements 
+    =========================
+    Return:
+        maskedata: 
+                Masked dataset
+                
+    =========================
+    Example:
+        If we have just five timesamples with the following features: 
+                saturated + Tbath 335mK, Tbath 380mK, 1K rising, no flag data, Tbath 345mK
+        
+        #Consider you read the files with the flagged arrays and add each array properly (TBD), you would get 
+        
+        flagarray = np.array([2**63 + 2**37, 2**39, 2**30, 0, 2**38])
+        
+        #or
+        
+        flagarray = np.array([9223372174293729280, 549755813888, 1073741824, 0, 274877906944])
+        
+        # Now, you requirements for the flagged array are: Not saturated TES and Tbath below 350mK:
+        
+        maskdict = {'saturation': True, 'Tbath above 350mK': True}
+        
+        maskarray = MaskDataWithFlags(flagarray, maskdict) 
+        #--> returns a mask with the timesamples that satisfy the requirements
+        print(maskarray)
+        out: np.array([0, 0, 1, 1, 1])
+    """
+    
+    # Testing initialization 
+    FullFlags = {'saturation': False, 'cosmic ray': False, 'uncorrelated flux jumps': False, 'end of scan': False,
+                'Tbath above 330mK': False, 'Tbath above 340mK': False, 'Tbath above 350mK': False, 'Tbath rising': False,
+                '1K above 1.1K': False, '1K above 1.2K': False, '1K above 1.3K': False, '1K rising': False,
+                'correlated flux jumps': False}
+    # Bit correspondance
+    BitFlags = {'saturation': 63, 'cosmic ray': 57, 'uncorrelated flux jumps': 51, 'end of scan': 45,
+                'Tbath above 350mK': 39, 'Tbath above 340mK': 38, 'Tbath above 330mK': 37, 'Tbath rising': 36,
+                '1K above 1.1K': 31, '1K above 1.2K': 32, '1K above 1.3K': 33, '1K rising': 30,
+                'correlated flux jumps': 27}
+    # Update dictionary with user requirements
+    FullFlags.update(userflags)
+    
+    # Create an empty mask as it's all data OK (= 0 for each timesample)
+    # Loook at the requirements
+    BitIds = []
+    for iflag in FullFlags.keys():
+        if FullFlags[iflag]:
+            BitIds.append(BitFlags[iflag])
+    
+    #Mask one sample through a function
+    def masksample(iflagarray, BitIds = BitIds):
+        return [not bool((int(iflagarray) & int(2**bit)) >> int(bit)) for bit in BitIds]
+    
+    MaskData = list(map(masksample, flagarray))
+
+    return np.prod(MaskData, axis = 1)
+```
+
+```{python}
+flagarray = np.array([int(9223372174293729280), int(549755813888), int(1073741824), int(0), int(274877906944)])
+maskdict = {'saturation': False, 'Tbath above 350mK': True}
+MaskDataWithFlags(flagarray, maskdict)
+
+#[bool((egflag & bidflag[j]) >> bidbit[j]) for j in range(2)]
+```
+
+```{python}
+# Test with real dataset
+#
+# Read dataset
+iday = days[0]
+testime = np.copy(DataContainer[iday][0].get_hk(data='RaspberryDate',hk='EXTERN_HK'))
+label300mK = 'AVS47_1_CH6' #300mK
+label1K = 'AVS47_1_ch1' # 1K
+testdata300mK = np.copy(DataContainer[iday][0].get_hk(label300mK))
+testdata1K = np.copy(DataContainer[iday][0].get_hk(label1K))
+
+flags300mK = flag_bathtemp(testdata300mK)
+flags1K = flag_1Ktemp(testdata1K)
+
+totalflags = flags300mK + flags1K
+#remove outliers to fit
+maskdict = {'saturation': False, 'Tbath above 330mK': True}
+MaskedTemp = MaskDataWithFlags(totalflags, maskdict)
+
+```
+
+```{python}
+### Compare LOOP vs map. Map is slower but probably better when run in parallel CPU's
+#arrsize = [1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8] 
+#tloop, tmap = [], []
+#for i in arrsize:
+#    fakedata = 300 + 150*np.random.rand((int(i)),)
+#    bb, itloop, itmap = flag_bathtemp(fakedata)
+#    tloop.append(itloop)
+#    tmap.append(itmap)
+#plt.plot(arrsize, tloop, 'r-', lw = 2, label = 'loop')
+#plt.plot(arrsize, tmap, 'b-', lw = 2, label = 'map')
+#plt.xscale("log")
+#plt.yscale("log")
+#plt.xlabel("Array size [log]", fontsize = 16)
+#plt.ylabel("time[sec]", fontsize = 16)
+#plt.legend(fontsize = 16)
+```
+
+```{python}
+#OLD CODE
+#if len(maskl) == 0:
+#        if verbose: print(r'There are no samples with themperature lower than T_L = {:4.3f}. \n BAD DATASET'.format(Tlim))
+#        pass
+#    else:
+#        flag_i[maskl] = 0
+#        #print('low', np.mean(scores_i[maskl]))
+#        
+#    maskh = np.where(dataset >= Tlim)[0]
+#    if len(maskh) == 0:
+#        if verbose: print(r'There are no samples with themperature higher than T_L = {:4.3f}. \n GOOD DATASET'.format(Tlim))
+#        pass
+#    else:
+#       flag_i[maskh] = 1.
+#       #print('high', np.mean(scores_i[maskh]))
+#    
+#    return flag_i
 ```
 
 ```{python}
@@ -405,23 +665,33 @@ def detect_outliers(timeset, dataset, th = 1000):
 ```
 
 ```{python}
-len(DataContainer[iday])
+#len(DataContainer[iday])
+```
+
+```{python}
+totalflags.shape
 ```
 
 ```{python}
 # Flag and score computation
 
-iday = days[0]
+iday = days[2]
 
 # 'AVS47_1_CH6' 300mK or 'AVS47_1_ch1' 1K stage
 #label = 'AVS47_1_CH6'
 label = 'AVS47_1_ch1'
 if label == 'AVS47_1_ch1':
     labelw = '1Kstage'
-    Tlim = 1.6 #K
+    Tlim1 = 1.1 #K
+    Tlim2 = 1.2#K
+    Tlim3 = 1.3#K
+    ylimf = 1.4
 elif label == 'AVS47_1_CH6':
     labelw = '300mKstage'
-    Tlim = 0.345 #mK
+    Tlim1 = 0.33 #mK
+    Tlim2 = 0.34 #mK
+    Tlim3 = 0.35 #mK
+    ylimf = 0.4
 else: 
     labelw = 'Not specified labelw'
     sys.exit()
@@ -433,42 +703,47 @@ colors2 = cm.get_cmap('rainbow', len(DataContainer[iday]))(range(len(DataContain
 ylim = []
 for indx in range(len(DataContainer[iday])):
     #indx = 0
-    testime = np.copy(DataContainer[day][indx].get_hk(data='RaspberryDate',hk='EXTERN_HK'))
+    testime = np.copy(DataContainer[iday][indx].get_hk(data='RaspberryDate',hk='EXTERN_HK'))
     testdata = np.copy(DataContainer[iday][indx].get_hk(label))
 
-    si = flag_bathtemp(testdata, Tlim)
+    # BUG
+    #flags300mK = flag_bathtemp(testdata)
+    #flags1K = flag_1Ktemp(testdata)
 
-    #remove outliers to fit
-    maskoutliers, newdata = detect_outliers(testime, testdata) 
-
-    lpars, Stilt = score_tilttemp(testime, newdata)
+    totalflags = flags300mK + flags1K
+    ##remove outliers to fit
+    #maskoutliers, newdata = detect_outliers(testime, testdata) 
+    #lpars, Stilt = score_tilttemp(testime, newdata)
     # Plot
-    plt.subplot(131)
-    plt.title('Individual flags')
-    plt.plot(testime, si, 'bo')
-    plt.ylabel('Temp. flag for each timestamp')
+    #plt.subplot(131)
+    #plt.title('Sample flags')
+    #plt.plot(testime, totalflags, 'bo')
+    #plt.ylabel('Total flags for each timestamp')
 
-    plt.subplot(132)
-    plt.plot(testime, testdata, 'o', color = colors2[indx],
-             label = 'Flag. samp. = {}'.format(int(si.sum())))
-    plt.axhline(Tlim, color = 'k', alpha = 0.5, ls = '--')#, label = 'T_L = {}'.format(Tlim))
+    plt.subplot(121)
+    plt.plot(testime, testdata, 'o', color = colors2[indx],)
+                #label = 'Flag. samp. = {}'.format(int(si.sum())))
+    #plt.axhline(Tlim, color = 'k', alpha = 0.5, ls = '--')#, label = 'T_L = {}'.format(Tlim))
     #plt.title('Flagged samples = {}'.format(int(si.sum())))
-    ylim.append(plt.gca().get_ylim())
+    #ylim.append(plt.gca().get_ylim())
+    plt.ylim(1,ylimf)
     if indx == len(DataContainer[iday])-1:
         #print(np.shape(ylim))
-        ylimf = np.max(np.array(ylim)[:,1])
-        plt.axhspan(Tlim, ylimf, color = 'r', alpha = 0.3, label = 'flag zone = 0')
+        #ylimf = np.max(np.array(ylim)[:,1])
+        plt.axhspan(Tlim1, Tlim2, color = 'r', alpha = 0.05) #, label = 'flag zone = 0')
+        plt.axhspan(Tlim2, Tlim3, color = 'r', alpha = 0.1) #, label = 'flag zone = 0')
+        plt.axhspan(Tlim3, ylimf, color = 'r', alpha = 0.2) #, label = 'flag zone = 0')
     #plt.ylim(0.34,0.35)
     #plt.legend(ncol = 4, loc = 'upper center')
 
-    plt.subplot(133)
+    plt.subplot(122)
     plt.title('Tilt - Score = {:5.2e}'.format(Stilt))
     plt.plot(testime, testdata, 'o', color = colors2[indx], alpha =0.4)
     plt.plot(testime, line(testime, *lpars), '-', color = colors2[indx], lw =2, 
             label = 'a = {:5.2e}, b = {:3.2f}'.format(lpars[0], lpars[1]))
     #plt.ylim(0.34,0.35)
     #plt.legend(ncol = 4, fontsize = 8, loc = 'upper left')
-plt.savefig('Flags_{}_{}_ind{}_Tlim{}.png'.format(words[0], labelw, indx, Tlim))
+plt.savefig('Flags_{}_{}_ind{}.png'.format(words[0], labelw, indx))
 ```
 
 Loop and save flags file for each datasets
@@ -495,7 +770,7 @@ for i in range(len(DataContainer['fnames2022-08-23'])):
 ```{python}
 fig = plt.figure(figsize = (15,9))
 
-channel = 'AVS47_1_ch1'#'AVS47_1_CH6'#
+channel = 'AVS47_1_CH6'#'AVS47_1_ch1'#
 filename = '300mK' if channel == 'AVS47_1_CH6' else '1K'
 fit = False
 wfit = 'fit' if fit else 'nofit'
@@ -510,6 +785,7 @@ for j, day in enumerate(list(set(DataContainer['kwdays']))):
     cumtime, cumdata = [], []
     for idata in DataContainer['{}'.format(day)]:
         time_hk = idata.get_hk(data='RaspberryDate',hk='EXTERN_HK')
+        print(time_hk[0], time_hk[-1])
         data_hk = idata.get_hk(channel)
         tdate = []
         # qubic-central was changed to UTC on 2020-02-27
@@ -564,7 +840,9 @@ for j, day in enumerate(list(set(DataContainer['kwdays']))):
     for i, idata in enumerate(DataContainer['{}'.format(day)]):
         #plt.subplots_adjust(hspace=0.01)
         tod = idata.timeline(TES = TESNum, asic = asic )
+        print(len(tod))
         tt = idata.timeaxis(axistype='pps', asic = asic)
+        print(tt[0], tt[-1])
         auxax.set_title('{} - {} files '.format(day, 
                                                len(DataContainer['{}'.format(day)])))
         auxax.plot(tt-tt[0], idata.ADU2I(tod), 
@@ -576,6 +854,7 @@ for j, day in enumerate(list(set(DataContainer['kwdays']))):
 auxax.set_xlabel('PPS')
         
 #plt.savefig('QUBIC_timelines_{}_TES{}_allfiles'.format(words[0], TESNum) )
+
 ```
 
 ```{python}

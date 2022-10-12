@@ -22,7 +22,7 @@ jupyter:
 #matplotlib.use('Agg')
 ```
 
-```{python jupyter={'source_hidden': True}, tags=c()}
+```{python tags=c()}
 # %matplotlib notebook
 # %matplotlib inline
 import matplotlib.pyplot as plt
@@ -42,6 +42,7 @@ from qubicpack.utilities import qc_utc_date
 
 import numpy as np
 import glob
+import os
 import warnings
 import matplotlib.cm as cm
 import warnings
@@ -55,10 +56,12 @@ import pywt
 # we also need a cost function to fit and import the LeastSquares function
 from iminuit.cost import LeastSquares
 from scipy.optimize import curve_fit
+from scipy.interpolate import interp1d
 #==========================================
 #import string
 import scipy.signal as scsig
 from scipy import interpolate
+from astropy.io import fits as pyfits
 
 from sklearn.preprocessing import MinMaxScaler
 
@@ -98,12 +101,6 @@ def line(x, a, b):
 #words = ['timeconstant', 'TimeCst']
 #keyword = ['*{}*'.format(word) for word in words]
 #print(keyword)
-```
-
-```{python}
-import os
-from astropy.io import fits as pyfits
-
 ```
 
 ```{python}
@@ -213,13 +210,13 @@ from astropy.io import fits as pyfits
 
 ```{python tags=c()}
 #days = ['2022-{}-{}'.format(str(i).zfill(2), str(j).zfill(2))) for i in range(7,9) for j in range(13,32)]
-start = datetime.datetime.strptime("18-08-2022", "%d-%m-%Y")
-end = datetime.datetime.strptime("18-08-2022", "%d-%m-%Y")
+start = datetime.datetime.strptime("14-07-2022", "%d-%m-%Y")
+end = datetime.datetime.strptime("14-07-2022", "%d-%m-%Y")
 date_generated = pd.date_range(start, end = end)# periods=5)
 days = date_generated.strftime("%Y-%m-%d").to_list() 
 print('Days to read data', days)
 
-words = ['andpass']#, 'hwp']
+words = ['MoonScan']#, 'hwp']
 keywords = ['*{}*'.format(word) for word in words]
 #keywords = ['*']
 #filenames = []
@@ -390,7 +387,7 @@ for j, day in enumerate(list(set(DataContainer['kwdays']))):
     auxax.set_title('{}'.format(day))
     
 plt.tight_layout()
-plt.savefig('300mKStage_{}_diffDays_20220818'.format(words[0]) )
+#plt.savefig('300mKStage_{}_diffDays'.format(words[0]) )
 ```
 
 ## Fit data and plot 300mK or 1K stage
@@ -418,13 +415,13 @@ labeldict = {'AVS47_1_CH2': 'TES stage RIRT', 'AVS47_1_CH5': 'Film breaker', 'AV
 ```
 
 ```{python}
-def flag_bathtemp(dataset, T_bit37 = 330., T_bit38 = 340., T_bit39 = 350., verbose = False):
+def flag_bathtemp(dataset, T_bit37 = 0.330, T_bit38 = 0.340, T_bit39 = 0.350, verbose = False):
     
     """
     ======================
     Arguments:
         dataset: TOD
-        T_bitXX [in mK]: Temperature from which the sample is flagged. XX is the corresponding bit for that flag.
+        T_bitXX [in K]: Temperature from which the sample is flagged. XX is the corresponding bit for that flag.
     Returns:
         Flagged array [same size as TOD]
         
@@ -441,7 +438,37 @@ def flag_bathtemp(dataset, T_bit37 = 330., T_bit38 = 340., T_bit39 = 350., verbo
 
     flags300mK = list(map(bitid_300mK, dataset))
     
-    return np.array(flags300mK, dtype = int)
+    return np.array(flags300mK, dtype = np.int64)
+
+def flag_bathtemp_rise(dataset, verbose = False):
+    
+    """
+    ======================
+    Arguments:
+        dataset: TOD
+        Verbose: boolean
+    Returns:
+        Flagged array [same size as TOD]. The last value is equal to the previous one in ordcer to have the same dimenssion of arrays
+        
+    A timestamp is flagged if the timestamp has a higher temperature compared with the previous timestamp value (interpolated using tod()[0].
+    The corresponding flagid is 36,
+    flag_i = bit36*2**36
+    """
+
+    signflag = np.zeros_like(dataset)
+    # Compute the difference in temperature between consecutive timestamps
+    #  + Get the sign (+ --> temperature rising, - --> temperature decreasing)
+    signflag[:-1] = np.sign(np.diff(dataset))
+    signflag[-1] = signflag[-2]
+    # 
+    
+    def bitid_rise300mK(T):
+        # Return an integer
+        return (int(T > 0) * 2**36)
+    
+    flag300mKRise = list(map(bitid_rise300mK, signflag))
+    
+    return np.array(flag300mKRise, dtype = np.int64)
 
 def flag_1Ktemp(dataset, T_bit31 = 1.1, T_bit32 = 1.2, T_bit33 = 1.3, verbose = False):
     
@@ -466,84 +493,118 @@ def flag_1Ktemp(dataset, T_bit31 = 1.1, T_bit32 = 1.2, T_bit33 = 1.3, verbose = 
 
     flags1K = list(map(bitid_1K, dataset))
     
-    return np.array(flags1K, dtype = int)
+    return np.array(flags1K, dtype = np.int64)
 
-def MaskDataWithFlags(flagarray, userflags):#, **newflags):
-    """
-    This method aims to mask the data according to user requirements. 
+def flag_1Ktemp_rise(dataset, verbose = False):
     
-    The posible flags are:  'saturation', 'cosmic ray', 'uncorrelated flux jumps', 'end of scan',
-                'Tbath above 330mK', 'Tbath above 340mK', 'Tbath above 350mK', 'Tbath rising',
-                '1K above 1.1K', '1K above 1.2K', '1K above 1.3K', '1K rising',
-                'correlated flux jumps'
-        
-    ==============
+    """
+    ======================
     Arguments:
-        flagarray: 
-                Array of 64-bit integers for a specific flag. It can be use an array of flags.
-        userflag: Default values for each key = False
-                Dictionary with boolean values with user requirements 
-    =========================
-    Return:
-        maskedata: 
-                Masked dataset
-                
-    =========================
-    Example:
-        If we have just five timesamples with the following features: 
-                saturated + Tbath 335mK, Tbath 380mK, 1K rising, no flag data, Tbath 345mK
+        dataset: TOD
+        Verbose: boolean
+    Returns:
+        Flagged array [same size as TOD]. The last value is equal to the previous one in ordcer to have the same dimenssion of arrays
         
-        #Consider you read the files with the flagged arrays and add each array properly (TBD), you would get 
-        
-        flagarray = np.array([2**63 + 2**37, 2**39, 2**30, 0, 2**38])
-        
-        #or
-        
-        flagarray = np.array([9223372174293729280, 549755813888, 1073741824, 0, 274877906944])
-        
-        # Now, you requirements for the flagged array are: Not saturated TES and Tbath below 350mK:
-        
-        maskdict = {'saturation': True, 'Tbath above 350mK': True}
-        
-        maskarray = MaskDataWithFlags(flagarray, maskdict) 
-        #--> returns a mask with the timesamples that satisfy the requirements
-        print(maskarray)
-        out: np.array([0, 0, 1, 1, 1])
+    A timestamp is flagged if the timestamp has a higher temperature compared with the previous timestamp value (interpolated using tod()[0].
+    The corresponding flagid is 30,
+    flag_i = bit30*2**30
     """
-    
-    # Testing initialization 
-    FullFlags = {'saturation': False, 'cosmic ray': False, 'uncorrelated flux jumps': False, 'end of scan': False,
-                'Tbath above 330mK': False, 'Tbath above 340mK': False, 'Tbath above 350mK': False, 'Tbath rising': False,
-                '1K above 1.1K': False, '1K above 1.2K': False, '1K above 1.3K': False, '1K rising': False,
-                'correlated flux jumps': False}
-    # Bit correspondance
-    BitFlags = {'saturation': 63, 'cosmic ray': 57, 'uncorrelated flux jumps': 51, 'end of scan': 45,
-                'Tbath above 350mK': 39, 'Tbath above 340mK': 38, 'Tbath above 330mK': 37, 'Tbath rising': 36,
-                '1K above 1.1K': 31, '1K above 1.2K': 32, '1K above 1.3K': 33, '1K rising': 30,
-                'correlated flux jumps': 27}
-    # Update dictionary with user requirements
-    FullFlags.update(userflags)
-    
-    # Create an empty mask as it's all data OK (= 0 for each timesample)
-    # Loook at the requirements
-    BitIds = []
-    for iflag in FullFlags.keys():
-        if FullFlags[iflag]:
-            BitIds.append(BitFlags[iflag])
-    
-    #Mask one sample through a function
-    def masksample(iflagarray, BitIds = BitIds):
-        return [not bool((int(iflagarray) & int(2**bit)) >> int(bit)) for bit in BitIds]
-    
-    MaskData = list(map(masksample, flagarray))
 
-    return np.prod(MaskData, axis = 1)
+    signflag = np.zeros_like(dataset)
+    # Compute the difference in temperature between consecutive timestamps
+    #  + Get the sign (+ --> temperature rising, - --> temperature decreasing)
+    signflag[:-1] = np.sign(np.diff(dataset))
+    signflag[-1] = signflag[-2]
+    # 
+    
+    def bitid_rise1K(T):
+        # Return an integer
+        return (int(T > 0) * 2**30)
+    
+    flag1KRise = list(map(bitid_rise1K, signflag))
+    
+    return np.array(flag1KRise, dtype = np.int64)
+
+class FlagToMask(): 
+    def __init__(self):
+        """
+        This method aims to mask the data according to user requirements. 
+
+        The posible flags are:  'saturation', 'cosmic ray', 'uncorrelated flux jumps', 'end of scan',
+                    'Tbath above 330mK', 'Tbath above 340mK', 'Tbath above 350mK', 'Tbath rising',
+                    '1K above 1.1K', '1K above 1.2K', '1K above 1.3K', '1K rising',
+                    'correlated flux jumps'
+
+        ==============
+        Arguments:
+            flagarray: 
+                    Array of 64-bit integers for a specific flag. It can be use an array of flags.
+            userflag: Default values for each key = False
+                    Dictionary with boolean values with user requirements 
+        =========================
+        Return:
+            maskedata: 
+                    Masked dataset
+
+        =========================
+        Example:
+            If we have just five timesamples with the following features: 
+                    saturated + Tbath 335mK, Tbath 380mK, 1K rising, no flag data, Tbath 345mK
+
+            #Consider you read the files with the flagged arrays and add each array properly (TBD), you would get 
+
+            flagarray = np.array([2**63 + 2**37, 2**39, 2**30, 0, 2**38])
+
+            #or
+
+            flagarray = np.array([9223372174293729280, 549755813888, 1073741824, 0, 274877906944])
+
+            # Now, you requirements for the flagged array are: Not saturated TES and Tbath below 350mK:
+
+            maskdict = {'saturation': True, 'Tbath above 350mK': True}
+
+            maskarray = MaskDataWithFlags(flagarray, maskdict) 
+            #--> returns a mask with the timesamples that satisfy the requirements
+            print(maskarray)
+            out: np.array([0, 0, 1, 1, 1])
+        """
+
+        # Testing initialization 
+        self.FullFlags = {'saturation': False, 'cosmic ray': False, 'uncorrelated flux jumps': False, 'end of scan': False,
+                    'Tbath above 330mK': False, 'Tbath above 340mK': False, 'Tbath above 350mK': False, 'Tbath rising': False,
+                    '1K above 1.1K': False, '1K above 1.2K': False, '1K above 1.3K': False, '1K rising': False,
+                    'correlated flux jumps': False}
+        # Bit correspondance
+        self.BitFlags = {'saturation': 63, 'cosmic ray': 57, 'uncorrelated flux jumps': 51, 'end of scan': 45,
+                    'Tbath above 350mK': 39, 'Tbath above 340mK': 38, 'Tbath above 330mK': 37, 'Tbath rising': 36,
+                    '1K above 1.1K': 31, '1K above 1.2K': 32, '1K above 1.3K': 33, '1K rising': 30,
+                    'correlated flux jumps': 27}
+    def __call__(self, flagarray, userflags):#, **newflags):)
+        # Update dictionary with user requirements
+        self.FullFlags.update(userflags)
+
+        # Create an empty mask as it's all data OK (= 0 for each timesample)
+        # Loook at the requirements
+        BitIds = []
+        for iflag in self.FullFlags.keys():
+            if self.FullFlags[iflag]:
+                BitIds.append(self.BitFlags[iflag])
+
+        #Mask one sample through a function
+        def masksample(iflagarray, BitIds = BitIds):
+            return [not bool((int(iflagarray) & int(2**bit)) >> int(bit)) for bit in BitIds]
+
+        MaskData = list(map(masksample, flagarray))
+
+        return np.prod(MaskData, axis = 1)
 ```
 
 ```{python}
 flagarray = np.array([int(9223372174293729280), int(549755813888), int(1073741824), int(0), int(274877906944)])
 maskdict = {'saturation': False, 'Tbath above 350mK': True}
-MaskDataWithFlags(flagarray, maskdict)
+testclass = FlagToMask()
+
+testclass(flagarray, maskdict)
 
 #[bool((egflag & bidflag[j]) >> bidbit[j]) for j in range(2)]
 ```
@@ -565,7 +626,8 @@ flags1K = flag_1Ktemp(testdata1K)
 totalflags = flags300mK + flags1K
 #remove outliers to fit
 maskdict = {'saturation': False, 'Tbath above 330mK': True}
-MaskedTemp = MaskDataWithFlags(totalflags, maskdict)
+initmask = FlagToMask()
+MaskedTemp = initmask(totalflags, maskdict)
 
 ```
 
@@ -618,9 +680,17 @@ def score_tilttemp(timeset, dataset, verbose = False, maxfev = 8000):
 Take a look to a dataset
 
 ```{python}
-def detect_outliers(timeset, dataset, th = 1000):
+def detect_outliers(timeset, dataset, channel):
+    
+    if channel == 'AVS47_1_CH6': #300mK stage
+        threshold = 10.
+    elif channel == 'AVS47_1_ch1': #1K stage
+        threshold = 1000.
+    else: 
+        raise ValueError('No channel programed into this method. Possible values: "AVS47_1_CH6" or "AVS47_1_ch1"')
     # Create mask
-    mask = dataset > th
+    
+    mask = dataset > threshold
     
     # interpolation
     ynew = np.interp(timeset[mask],timeset[~mask], dataset[~mask])
@@ -669,13 +739,9 @@ def detect_outliers(timeset, dataset, th = 1000):
 ```
 
 ```{python}
-totalflags.shape
-```
-
-```{python}
 # Flag and score computation
 
-iday = days[2]
+iday = days[0]
 
 # 'AVS47_1_CH6' 300mK or 'AVS47_1_ch1' 1K stage
 #label = 'AVS47_1_CH6'
@@ -683,20 +749,22 @@ label = 'AVS47_1_ch1'
 if label == 'AVS47_1_ch1':
     labelw = '1Kstage'
     Tlim1 = 1.1 #K
-    Tlim2 = 1.2#K
-    Tlim3 = 1.3#K
+    Tlim2 = 1.2 #K
+    Tlim3 = 1.3 #K
+    yliml = 1.
     ylimf = 1.4
 elif label == 'AVS47_1_CH6':
     labelw = '300mKstage'
     Tlim1 = 0.33 #mK
     Tlim2 = 0.34 #mK
     Tlim3 = 0.35 #mK
-    ylimf = 0.4
+    yliml = 0.31
+    ylimf = 0.36
 else: 
     labelw = 'Not specified labelw'
     sys.exit()
 
-plt.figure(figsize = (20,6))
+fig = plt.figure(figsize = (20,12))
 plt.suptitle('Experiment: {} - {} - {}'.format(words[0], labelw, iday))
 
 colors2 = cm.get_cmap('rainbow', len(DataContainer[iday]))(range(len(DataContainer[iday])))
@@ -705,48 +773,226 @@ for indx in range(len(DataContainer[iday])):
     #indx = 0
     testime = np.copy(DataContainer[iday][indx].get_hk(data='RaspberryDate',hk='EXTERN_HK'))
     testdata = np.copy(DataContainer[iday][indx].get_hk(label))
+   
+    # Regular time (used to interpolate flags)
+    regtime = DataContainer[iday][indx].tod()[0]
+    # 1st/2nd Step
+    if label == 'AVS47_1_CH6':
+        flags300mK = flag_bathtemp(testdata)
+        # Flag rising temperature
+        flags300mK_rise = flag_bathtemp_rise(testdata)
+        
+        # Interpolation of the flags
+        flags_interp_300mK = np.max(np.array([interp1d(testime, flags300mK, kind='previous', fill_value='extrapolate')(regtime), 
+                                              interp1d(testime, flags300mK, kind='next', fill_value='extrapolate')(regtime)]), axis=0, dtype = int)
+        flags_interp_300mK_rise = np.max(np.array([interp1d(testime, flags300mK_rise, kind='previous', fill_value='extrapolate')(regtime), 
+                                              interp1d(testime, flags300mK_rise, kind='next', fill_value='extrapolate')(regtime)]), axis=0, dtype = int)
+        totalflags = flags300mK + flags300mK_rise
+        totalflags_interp = flags_interp_300mK + flags_interp_300mK_rise
+        
+    elif label == 'AVS47_1_ch1':
+        flags1K = flag_1Ktemp(testdata)
+        # Flag rising temperature
+        flags1K_rise = flag_1Ktemp_rise(testdata)
 
-    # BUG
-    #flags300mK = flag_bathtemp(testdata)
-    #flags1K = flag_1Ktemp(testdata)
+        # Interpolation of the flags
+        flags_interp_1K = np.max(np.array([interp1d(testime, flags1K, kind='previous', fill_value='extrapolate')(regtime), 
+                                              interp1d(testime, flags1K, kind='next', fill_value='extrapolate')(regtime)]), axis=0)
+        flags_interp_1K_rise = np.max(np.array([interp1d(testime, flags1K_rise, kind='previous', fill_value='extrapolate')(regtime), 
+                                              interp1d(testime, flags1K_rise, kind='next', fill_value='extrapolate')(regtime)]), axis=0)
+        totalflags = flags1K + flags1K_rise
+        totalflags_interp = flags_interp_1K + flags_interp_1K_rise
+    
+    #totalflags = flags300mK + flags1K
+    #totalflags_interp = flags_interp_300mK + flags_interp_1K
 
-    totalflags = flags300mK + flags1K
     ##remove outliers to fit
-    #maskoutliers, newdata = detect_outliers(testime, testdata) 
-    #lpars, Stilt = score_tilttemp(testime, newdata)
-    # Plot
-    #plt.subplot(131)
-    #plt.title('Sample flags')
-    #plt.plot(testime, totalflags, 'bo')
-    #plt.ylabel('Total flags for each timestamp')
-
-    plt.subplot(121)
+    # 1st Step
+    # Detect and mask the outliers 
+    maskoutliers, newdata = detect_outliers(testime, testdata, label)
+    lpars, Stilt = score_tilttemp(testime, newdata)
+    
+    #plt.figure()
+    plt.subplot(221)
     plt.plot(testime, testdata, 'o', color = colors2[indx],)
-                #label = 'Flag. samp. = {}'.format(int(si.sum())))
-    #plt.axhline(Tlim, color = 'k', alpha = 0.5, ls = '--')#, label = 'T_L = {}'.format(Tlim))
-    #plt.title('Flagged samples = {}'.format(int(si.sum())))
-    #ylim.append(plt.gca().get_ylim())
-    plt.ylim(1,ylimf)
+    plt.ylim(yliml,ylimf)
+    plt.ylabel('Temperature [K]')
     if indx == len(DataContainer[iday])-1:
-        #print(np.shape(ylim))
-        #ylimf = np.max(np.array(ylim)[:,1])
         plt.axhspan(Tlim1, Tlim2, color = 'r', alpha = 0.05) #, label = 'flag zone = 0')
         plt.axhspan(Tlim2, Tlim3, color = 'r', alpha = 0.1) #, label = 'flag zone = 0')
         plt.axhspan(Tlim3, ylimf, color = 'r', alpha = 0.2) #, label = 'flag zone = 0')
-    #plt.ylim(0.34,0.35)
-    #plt.legend(ncol = 4, loc = 'upper center')
 
-    plt.subplot(122)
-    plt.title('Tilt - Score = {:5.2e}'.format(Stilt))
-    plt.plot(testime, testdata, 'o', color = colors2[indx], alpha =0.4)
-    plt.plot(testime, line(testime, *lpars), '-', color = colors2[indx], lw =2, 
-            label = 'a = {:5.2e}, b = {:3.2f}'.format(lpars[0], lpars[1]))
-    #plt.ylim(0.34,0.35)
-    #plt.legend(ncol = 4, fontsize = 8, loc = 'upper left')
+    plt.subplot(222)
+    plt.title('tod() timestamps')
+    plt.ylabel('Temperature flag value')
+    if label == 'AVS47_1_CH6':
+        plt.scatter(regtime, flags_interp_300mK, color = colors2[indx], label='Interpolated Flags' if indx == 0 else ' ')
+        plt.scatter(testime, flags300mK, color = 'b', label='Initial Flags' if indx == 0 else ' ')
+    elif label == 'AVS47_1_ch1':
+        plt.scatter(regtime, flags_interp_1K, color = colors2[indx], label='Interpolated Flags' if indx == 0 else ' ')
+        plt.scatter(testime, flags1K, color = 'r', label='Initial Flags' if indx == 0 else ' ')
+    plt.xlabel('Time (sec)')
+    #plt.legend(loc = 'upper right')
+    plt.subplot(223)
+    plt.title('is the temp rising?')
+    plt.ylabel('Flag value')
+    if label == 'AVS47_1_CH6':
+        plt.plot(regtime, flags_interp_300mK_rise, color = 'b', marker = '.', alpha =0.3, label='300mK' if indx ==0 else ' ', linestyle = ' ')
+    elif label == 'AVS47_1_ch1':
+        plt.plot(regtime, flags_interp_1K_rise, color = 'r', marker ='.', alpha = 0.3, label='1K' if indx == 0 else ' ', linestyle = ' ')
+    plt.xlabel('Time (sec)')
+    plt.subplot(224)
+    plt.title('Total flag for {}'.format(labelw))
+    plt.ylabel('Flag value')
+    if label == 'AVS47_1_CH6':
+        plt.plot(regtime, totalflags_interp, color = 'b', marker = '.', alpha =0.3, label='300mK' if indx ==0 else ' ', linestyle = ' ')
+    elif label == 'AVS47_1_ch1':
+        plt.plot(regtime, totalflags_interp, color = 'r', marker ='.', alpha = 0.3, label='1K' if indx == 0 else ' ', linestyle = ' ')
+    plt.xlabel('Time (sec)')
+    
+fig.tight_layout(pad=1.0)
 plt.savefig('Flags_{}_{}_ind{}.png'.format(words[0], labelw, indx))
 ```
 
-Loop and save flags file for each datasets
+## Now flag 300mK and 1K jointly
+
+```{python tags=c()}
+# Flag and score computation
+
+iday = days[0]
+
+# 'AVS47_1_CH6' 300mK or 'AVS47_1_ch1' 1K stage
+bothlabels = ['AVS47_1_CH6', 'AVS47_1_ch1']
+bothlabelw = ['300mKstage', '1Kstage']
+
+fig = plt.figure(figsize = (14,6))
+plt.suptitle('Experiment: {} - Total flags (300mK + 1K stages) - '.format(words[0]))
+
+totalflags = []
+totalflags_interp = []
+totaltime_interp = []
+rawtime = []
+
+colors2 = cm.get_cmap('rainbow', len(DataContainer[iday]))(range(len(DataContainer[iday])))
+for indx in range(len(DataContainer[iday])):
+    # Regular time (used to interpolate flags)
+    regtime = DataContainer[iday][indx].tod()[0]
+    totaltime_interp.append(regtime)
+
+    testime = np.copy(DataContainer[iday][indx].get_hk(data='RaspberryDate',hk='EXTERN_HK'))
+    rawtime.append(testime)
+    
+    for label in bothlabels: # loop in channels
+        #indx = 0
+        testdata = np.copy(DataContainer[iday][indx].get_hk(label))
+        
+        # 1st/2nd Step
+        if label == 'AVS47_1_CH6':
+            flags300mK = flag_bathtemp(testdata)
+            # Flag rising temperature
+            flags300mK_rise = flag_bathtemp_rise(testdata)
+
+            # Interpolation of the flags
+            flags_interp_300mK = np.max(np.array([interp1d(testime, flags300mK, kind='previous', fill_value='extrapolate')(regtime), 
+                                                  interp1d(testime, flags300mK, kind='next', fill_value='extrapolate')(regtime)], dtype = np.int64), axis=0)
+            flags_interp_300mK_rise = np.max(np.array([interp1d(testime, flags300mK_rise, kind='previous', fill_value='extrapolate')(regtime), 
+                                                  interp1d(testime, flags300mK_rise, kind='next', fill_value='extrapolate')(regtime)], dtype = np.int64), axis=0)
+            totalflags_300mK = flags300mK + flags300mK_rise
+            totalflags_300mK_interp = flags_interp_300mK + flags_interp_300mK_rise
+
+        elif label == 'AVS47_1_ch1':
+            flags1K = flag_1Ktemp(testdata)
+            # Flag rising temperature
+            flags1K_rise = flag_1Ktemp_rise(testdata)
+
+            # Interpolation of the flags
+            flags_interp_1K = np.max(np.array([interp1d(testime, flags1K, kind='previous', fill_value='extrapolate')(regtime), 
+                                                  interp1d(testime, flags1K, kind='next', fill_value='extrapolate')(regtime)], dtype = np.int64), axis=0)
+            flags_interp_1K_rise = np.max(np.array([interp1d(testime, flags1K_rise, kind='previous', fill_value='extrapolate')(regtime), 
+                                                  interp1d(testime, flags1K_rise, kind='next', fill_value='extrapolate')(regtime)], dtype = np.int64), axis=0)
+            totalflags_1K = flags1K + flags1K_rise
+            totalflags_1K_interp = flags_interp_1K + flags_interp_1K_rise
+
+    totalflags.append(totalflags_300mK + totalflags_1K)
+    totalflags_interp.append(totalflags_300mK_interp + totalflags_1K_interp)
+
+print(np.shape(rawtime), np.shape(totalflags), np.shape(totaltime_interp), np.shape(totalflags_interp))
+plt.ylabel('Flag value')
+plt.step(np.concatenate(rawtime), np.concatenate(totalflags), color = 'orange', alpha =0.3, label='no interp' if indx ==0 else ' ', linestyle = '-', lw = 3)
+plt.step(np.concatenate(totaltime_interp), np.concatenate(totalflags_interp), color = 'b', alpha = 0.3, label='interp' if indx == 0 else ' ', linestyle = '-', lw = 3)
+plt.xlabel('Time (sec)')
+#plt.legend(loc = 'upper right')
+
+fig.tight_layout(pad=1.0)
+#plt.savefig('Flags_Total300mK1K_{}.png'.format(iday))
+```
+
+```{python}
+#totalflags_interp = np.array(totalflags_interp, dtype = np.int64)
+```
+
+```{python}
+## Loop and save fits file with flags
+for i in range(61):
+    # Take filename
+    filename = DataContainer['fnames2022-08-18'][i].split('/')[-1]
+
+    # construct the name of the flag for that file
+    fileflag = 'TemperaturesFlags_{}.fits'.format(filename)
+
+    # Save
+    FitsArray(totalflags_interp[i]).save(fileflag)
+```
+
+```{python}
+## Read flags from file
+allflagsread = []
+for i in range(61):
+    filename = DataContainer['fnames2022-08-18'][i].split('/')[-1]
+
+    # construct the name of the flag for that file
+    fileflag = 'TemperaturesFlags_{}.fits'.format(filename)
+    allflagsread.append(FitsArray(fileflag))
+    
+flagread = np.concatenate(allflagsread)
+plt.ylabel('Flag value')
+plt.step(np.arange(len(flagread)), flagread, color = 'b', alpha = 0.3)
+plt.xlabel('Index')
+#Instantiate the flagtomask
+maskflag = FlagToMask()
+
+print(maskflag.FullFlags)
+
+maskdict = {'saturation': False, 'Tbath above 350mK': True, '1K above 1.2K': True, '1K rising': True}
+
+mask = maskflag(flagread, maskdict)
+
+```
+
+```{python}
+plt.plot(mask, 'k.')
+```
+
+```{python}
+# See in a TES
+TESNum = 50
+asic = 1
+
+fig, ax = plt.subplots(nrows = 1, ncols = 1, figsize = (15,10) ) 
+fig.suptitle('DataMasked using Flags- TES = {}'.format(TESNum))
+
+itime, idata = DataContainer[iday][0].tod()
+print(np.shape(itime), np.shape(idata), )
+
+ax.plot(itime, idata[TESNum + 1], label = 'raw data TES ={}'.format(TESNum))
+ax.plot(itime[mask], idata[TESNum + 1][mask], ls = '-', color = 'r',label = 'masked data',)
+ax.legend()
+#plt.savefig('FlaggToMask_exampleTES{}'.format(TESNum))
+
+```
+
+```{python}
+#Loop and save flags file for each datasets
 
 for i in range(len(DataContainer['fnames2022-08-23'])):
     print(DataContainer['fnames2022-08-23'][i])
@@ -765,12 +1011,13 @@ for i in range(len(DataContainer['fnames2022-08-23'])):
     testdata = DataContainer['2022-08-23'][i].get_hk(label)
 
     si = flag_bathtemp(testdata, Tlim)
-    np.savetxt(DataContainer['fnames2022-08-23'][i]+'/BathTemp_{}_{}.txt'.format(labelw, Tlim), si)
+    #np.savetxt(DataContainer['fnames2022-08-23'][i]+'/BathTemp_{}_{}.txt'.format(labelw, Tlim), si)
 
+```
 ```{python}
 fig = plt.figure(figsize = (15,9))
 
-channel = 'AVS47_1_CH6'#'AVS47_1_ch1'#
+channel = 'AVS47_1_ch1'#'AVS47_1_CH6'#
 filename = '300mK' if channel == 'AVS47_1_CH6' else '1K'
 fit = False
 wfit = 'fit' if fit else 'nofit'

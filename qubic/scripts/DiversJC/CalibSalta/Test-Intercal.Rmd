@@ -15,11 +15,12 @@ jupyter:
 ```{python}
 import iminuit
 from importlib import reload
-import fitting as fit
 from IPython.display import display, HTML
 # %config InlineBackend.figure_format = 'retina'
 
 display(HTML("<style>.container { width:95% !important; }</style>"))
+
+import fitting as fit
 
 rc('figure', figsize=(20, 6))
 rc('font', size=12)
@@ -364,8 +365,8 @@ class simulate_signal_intercal:
         # get the intercalibrated TOD directly from the sky + the calculated intercalibrations
         D, intercal = self.give_intercals(sky)
         # apply the intercalibrations
-        D = (D.T * intercal).T
-        return np.ravel(D)
+        d = (D.T * intercal).T
+        return np.ravel(d)
 
     def give_intercals(self, sky):
         ### We remove the first detector from the fit as its intercalibration is forced to 1
@@ -502,7 +503,7 @@ print('you calulate it against the noisy TOD => extra noise')
 
 
 # Alternative method: following [Stompor et al., 2009]
-We use the method proposed in [Stompor et al., 2009] (https://arxiv.org/pdf/0804.2645.pdf) for maximum-likelihood estimation of component separation. Here, intercalibrations are the analogous of the spectral behaviur of the astrophysical components. 
+We use the method proposed in [Stompor et al., 2009] (https://arxiv.org/pdf/0804.2645.pdf) for maximum-likelihood estimation of component separation. Here, intercalibrations are the analogous of the spectral behavior of the astrophysical components. 
 
 
 The method is the following:
@@ -530,7 +531,7 @@ The LogLikelihood writes:
 
 With formal solution for the sky $\vec{s}$:
     \begin{equation}
-        \hat{\vec{s}} = \left(B^t N^{-1} B\right)^{-1} B^t N^{-1} \vec{D}
+        \hat{\vec{s}} = \left(B^t N^{-1} B\right)^{-1} B^t N^{-1} \vec{d}
     \end{equation}
 
 Now the trick is to re-inject this solution into the LogLikelihood in order to have a Likelihood that only depends upon $A$ (through $B$):
@@ -650,10 +651,6 @@ subplot(2,3,6)
 a = fit.myhist(myintercals2-intercal, label='Minuit + Ana Residuals')
 a = fit.myhist(myintercals-intercal, label='Full Minuit Residuals')
 a = fit.myhist(m.values-intercal, label='Ridge Residuals')
-```
-
-```{python}
-
 ```
 
 ```{python}

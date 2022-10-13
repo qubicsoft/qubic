@@ -4,9 +4,7 @@ import iminuit
 from iminuit.cost import LeastSquares
 import numba_stats
 from numba_stats import norm
-
-from qubic import fibtools as ft
-
+import scipy.stats
 
 
 class Data:
@@ -118,7 +116,7 @@ def myhist(x, unbinned=True, nsig=4, **kwargs):
     else:
         thelabel=''
     if 'range' not in kwargs:
-        mm, ss = ft.meancut(x, 3)
+        mm, ss = meancut(x, 3)
         kwargs['range'] = [mm-nsig*ss, mm+nsig*ss]
         forcerng = False
     else:
@@ -126,7 +124,7 @@ def myhist(x, unbinned=True, nsig=4, **kwargs):
             
     if unbinned:
         c = iminuit.cost.UnbinnedNLL(x, gauss_pdf)
-        mm, ss = ft.meancut(x, 3)
+        mm, ss = meancut(x, 3)
         m = iminuit.Minuit(c, mu=mm, sigma=ss)
         m.migrad()
         m.hesse()
@@ -156,4 +154,33 @@ def myhist(x, unbinned=True, nsig=4, **kwargs):
         a.set_label(thelabel + label)
         
     legend(fontsize=10)
+
+def meancut(data, nsig, med=False, disp=True):
+        """
+        Parameters
+        ----------
+        data: array like
+        nsig: float
+                Lower and upper bound factor of sigma clipping.
+        med: bool
+                If True, perform the median and not the mean.
+        disp: bool
+                If True, return the dispersion (STD),
+                if False, return the error on the mean (STD/sqrt(N))
+        Returns
+        -------
+        The mean/median and the dispersion/error.
+
+        """
+        dd = data.copy()
+        for i in range(10):
+                dd, mini, maxi = scipy.stats.sigmaclip(dd, low=nsig, high=nsig)
+        if disp:
+                sc = 1
+        else:
+                sc = np.sqrt(len(dd))
+        if med:
+                return np.median(dd), np.std(dd) / sc
+        else:
+                return np.mean(dd), np.std(dd) / sc
 

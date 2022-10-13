@@ -233,43 +233,131 @@ noise_comb = qinstrument[0].NEP_combiner(noisepar,
                                          return_only = True, sampling = pointing)
 noise_cs = qinstrument[0].NEP_coldstop(noisepar, 
                                        return_only = True, sampling = pointing)
-noise_dich = qinstrument[0].NEP_dichroic(noisepar, return_only = True, sampling = pointing)
-noise_ndf = qinstrument[0].NEP_neutraldensityfilter(noisepar, 
-                                                    return_only = True, sampling = pointing)
-noise_lpe1 = qinstrument[0].NEP_lowpassedge(noisepar, noisepar.lpe1,
+if d['config'] == 'FI':
+    noise_dich = qinstrument[0].NEP_dichroic(noisepar, return_only = True, sampling = pointing)
+
+if d['filter_nu'] == 150e9:
+    noise_ndf = qinstrument[0].NEP_neutraldensityfilter(noisepar, 
                                            return_only = True, sampling = pointing)
-noise_lpe2 = qinstrument[0].NEP_lowpassedge(noisepar, noisepar.lpe2,
+    noise_lpe1 = qinstrument[0].NEP_lowpassedge(noisepar, noisepar.lpe1,
                                            return_only = True, sampling = pointing)
+    noise_lpe2 = qinstrument[0].NEP_lowpassedge(noisepar, noisepar.lpe2,
+                                           return_only = True, sampling = pointing)
+    
+else:
+    noise_ndf = qinstrument[0].NEP_lpefilter_220(noisepar, noisepar.indf, 
+                                           return_only = True, sampling = pointing)
+    noise_lpe1 = qinstrument[0].NEP_lpefilter_220(noisepar, noisepar.lpe1,
+                                           return_only = True, sampling = pointing)
+    noise_lpe2 = qinstrument[0].NEP_lpefilter_220(noisepar, noisepar.lpe2,
+                                           return_only = True, sampling = pointing)
+    
 noise_last = qinstrument[0].NEP_lastfilter(noisepar,
-                                          return_only = True, sampling = pointing)
+                                            return_only = True, sampling = pointing)
+
+allnoisearray = [noise_before,noise_b2b,noise_comb,noise_cs,#noise_env,
+                 noise_dich,noise_ndf,noise_lpe1,noise_lpe2, noise_last]
+
 ```
 
 #### Confirm a possible bug in NEP_environment
 
 ```{python}
-fig3 = plt.figure(figsize = (16,6))
-fig3.suptitle('Comparisson btwn Current and New values of the environment NEP_phot ')
-gs = fig3.add_gridspec(1, 5)
-f3_ax1 = fig3.add_subplot(gs[0, :3])
-f3_ax1.set_title('')
-f3_ax1.plot(np.arange(992), noise_env['debug_current'], 'g.-',label = "current version")
-f3_ax1.scatter(np.arange(992), noise_env['debug_new'], c = noise_env['debug_new'], label = "proposal")
-f3_ax1.set_xlabel("numb of detector")
-f3_ax1.set_ylabel(r"environmnt NEP$_{\rm phot}$")
-cbar = fig3.colorbar(cp,)
-cbar.set_label('proposal')
-f3_ax1.legend()
+#fig3 = plt.figure(figsize = (16,6))
+#fig3.suptitle('Comparisson btwn Current and New values of the environment NEP_phot ')
+#gs = fig3.add_gridspec(1, 5)
+#f3_ax1 = fig3.add_subplot(gs[0, :3])
+#f3_ax1.set_title('')
+#f3_ax1.plot(np.arange(992), noise_env['debug_current'], 'g.-',label = "current version")
+#f3_ax1.scatter(np.arange(992), noise_env['debug_new'], c = noise_env['debug_new'], label = "proposal")
+#f3_ax1.set_xlabel("numb of detector")
+#f3_ax1.set_ylabel(r"environmnt NEP$_{\rm phot}$")
+# 
+#f3_ax2 = fig3.add_subplot(gs[0, 3:])
+#cp = f3_ax2.scatter(qinstrument[0].detector.center.T[0],
+#           qinstrument[0].detector.center.T[1],
+#          c = noise_env['debug_new'], marker = 's')
+#cbar = fig3.colorbar(cp,)
+#cbar.set_label('proposal')
+#f3_ax1.legend()
 
-f3_ax2 = fig3.add_subplot(gs[0, 3:])
-cp = f3_ax2.scatter(qinstrument[0].detector.center.T[0],
-           qinstrument[0].detector.center.T[1],
-          c = noise_env['debug_new'], marker = 's')
-f3_ax2.set_title('')
-f3_ax2.set_xticklabels([])
-f3_ax2.set_yticklabels([])
-#f3_ax2.
-#qinstrument[0].detector.plot()
-plt.savefig("nep_phot2_env_nobunch.pdf", format = "pdf")
+#f3_ax2.set_title('')
+#f3_ax2.set_xticklabels([])
+#f3_ax2.set_yticklabels([])
+##f3_ax2.
+##qinstrument[0].detector.plot()
+##plt.savefig("nep_phot2_env_nobunch.pdf", format = "pdf")
+```
+
+```{python}
+#print(noisepar.names), len(noise_before["power"]), len(allnoisearray[1:]), len(noisepar.temperatures)
+```
+
+```{python}
+mp.rcParams["font.size"] = 18
+
+fig2, ax2 = plt.subplots(nrows = 3, ncols = 4, figsize = (16,12))
+fig2.suptitle('Mean optical spectral power of the effectively detected radiation (comp before B2B)')
+ax2 = ax2.ravel()
+ncomp_before_b2b = len(noise_before["power"])
+ncomp_after_b2b = len(allnoisearray[1:])
+for j in range(ncomp_before_b2b):
+    ax2[j].cla()
+    plt.axes(ax2[j])
+    ax2[j].set_title("{}".format(noisepar.names[j]))
+    cp = ax2[j].scatter(qinstrument[0].detector.center.T[0],
+               qinstrument[0].detector.center.T[1],
+              c = allnoisearray[0]['power'][j], marker = 's')
+    cbar = fig2.colorbar(cp,)
+    #cbar.set_label('proposal')
+    ax2[j].set_xticklabels("")
+    ax2[j].set_yticklabels("")
+
+fig, ax = plt.subplots(nrows = 2, ncols = 4, figsize = (16,10))
+fig.suptitle('Mean optical spectral power of the effectively detected radiation')
+ax = ax.ravel()
+for i in range(0,ncomp_after_b2b):
+    ax[i].cla()
+    plt.axes(ax[i])
+    ax[i].set_title("{}".format(noisepar.names[i + ncomp_before_b2b]))
+    cp = ax[i].scatter(qinstrument[0].detector.center.T[0],
+               qinstrument[0].detector.center.T[1],
+              c = allnoisearray[i+1]['power'], marker = 's')
+    cbar = fig.colorbar(cp,)
+    #cbar.set_label('proposal')
+    ax[i].set_xticklabels("")
+    ax[i].set_yticklabels("")
+
+```
+
+### Look at the same filter and different frequencies 
+
+NEP has to evolve with frequency because it changes the power recived?
+
+```{python}
+noise_per_freq = []#np.zeros((len(qinstrument)))
+
+fig, ax = plt.subplots(nrows = 3, ncols = 4, figsize = (16, 10))
+ax = ax.ravel()
+
+fig.suptitle("LPE1 all freqs")
+for i in range(len(qinstrument)):
+    if d['filter_nu'] == 220e9:
+        noise_per_freq.append(qinstrument[i].NEP_lpefilter_220(noisepar, noisepar.lpe1, 
+                                           return_only = True, sampling = pointing))
+    else:    
+        noise_per_freq.append(qinstrument[i].NEP_lowpassedge(noisepar, noisepar.lpe1,
+                              return_only = True, sampling = pointing))
+    ax[i].cla()
+    plt.axes(ax[i])
+    cp = ax[i].scatter(qinstrument[i].detector.center.T[0],
+               qinstrument[1].detector.center.T[1],
+              c = noise_per_freq[i]['power'], marker = 's')
+    cbar = fig.colorbar(cp,)
+    #cbar.set_label('proposal')
+    ax[i].set_xticklabels("")
+    ax[i].set_yticklabels("")
+
 ```
 
 ```{python}

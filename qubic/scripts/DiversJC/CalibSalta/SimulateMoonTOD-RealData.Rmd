@@ -30,7 +30,8 @@ quantity_support()
 import astropy.units as u
 from astropy.time import Time
 from astropy.coordinates import SkyCoord, EarthLocation, AltAz, get_moon, get_sun
-Salta = EarthLocation(lat=-24.731358*u.deg, lon=-65.409535*u.deg, height=1152*u.m)
+
+Salta = EarthLocation(lat=-24.731375*u.deg, lon=-65.409551*u.deg, height=1152*u.m)
 utcoffset = -3*u.hour  # Eastern Daylight Time
 
 from scipy.signal import medfilt
@@ -160,7 +161,7 @@ ylabel('el (deg)')
 We now need the coordinates of the Moon at these very same time samples. We use astropy for that purpose.
 
 ```{python}
-alltimes = Time(date_obs) + thk*u.second
+alltimes = Time(date_obs) + thk*u.second #+ 3*u.minute
 
 ### Local coordinates
 frame_Salta = AltAz(obstime=alltimes , location=Salta)
@@ -343,7 +344,7 @@ hp.gnomview(mapcov, rot=[lmoon_av, bmoon_av], reso=10, sub=(2,2,4))
 ### Let's simulate TOD from this
 # Repository for dictionary and input maps
 global_dir = Qubic_DataDir(datafile='instrument.py', datadir='../')
-dictfilename = global_dir + '/dicts/pipeline_demo.dict'
+dictfilename = global_dir + '/dicts/pipeline_MoonSalta.dict'
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 d['nside'] = 256
@@ -462,8 +463,55 @@ def display_all(mapsb, mapsb_pos, mapsb_neg, anatype='', rot=[0,50], highcontras
 ```
 
 ```{python}
-TESNum = 154     #33->154, 96->231
-tod = TOD[TESNum-1,:]
+import qubicpack as qp
+# Function to go from QubicSoft (Sims) indices (0-247) to QubicPack (data) indices (0-255)
+### The 8 thermometers are not in QubicSoft
+
+def iQS2iQP(indexQS):
+    qpnumi, qpasici = qp.pix2tes.pix2tes(indexQS+1)
+    return qpnumi+(qpasici-1)*128-1
+
+def iQP2iQS(indexQP):
+    QStesnum = qp.pix2tes.tes2pix(indexQP%128+1, indexQP//128+1)
+    return QStesnum-1
+
+```
+
+```{python}
+from pyoperators import Cartesian2SphericalOperator
+positions = q[0].detector.center
+plot(positions[:,0], positions[:,1], 'ro')
+q[0].detector.plot()
+
+uvecs = positions / np.sqrt(np.sum(positions ** 2, axis=-1))[..., None]
+sh = np.shape(uvecs)
+ths = np.zeros(sh[0])
+phs = np.zeros(sh[0])
+for i in range(sh[0]):
+    ths[i], phs[i] = Cartesian2SphericalOperator('zenith,azimuth')(uvecs[i,:])
+
+figure()
+subplot(1,3,1, projection="hammer")
+grid()
+plot(phs, np.pi/2-ths, 'k.')
+
+rotmat = hp.Rotator(rot=[0, 90, 0], deg=True)
+newths, newphs = rotmat(ths, phs)
+
+subplot(1,3,2, projection="hammer")
+grid()
+plot(newphs-np.pi, np.pi/2-newths, 'k.')
+
+subplot(1,3,3)
+plot(np.degrees(newphs), np.degrees(newths), 'ro')
+```
+
+```{python}
+TESNum = 96     #33->154, 96->231
+
+indexQS = iQP2iQS(TESNum-1)
+
+tod = TOD[indexQS,:]
 speedmin = 0.05
 
 nside = 256
@@ -473,11 +521,11 @@ nside = 256
 scantype_hk, azt, elt, scantype = tdt.identify_scans(thk, qs.azimuth, qs.elevation, tt=qs.time, doplot=False, thr_speedmin=speedmin)
 nscans = np.max(np.abs(scantype))
 
-# Map-making
-mapsb, mapcount = healpix_map(qs.azimuth[scantype != 0], qs.elevation[scantype != 0], tod[scantype != 0], nside=nside)
+# # Map-making
+# mapsb, mapcount = healpix_map(qs.azimuth[scantype != 0], qs.elevation[scantype != 0], tod[scantype != 0], nside=nside)
 
-# Display Results
-hp.gnomview(mapsb, rot=[np.mean(qs.azimuth), np.mean(qs.elevation)], reso=8, sub=(1,2,1), title='Az/El Co-added Map')
+# # Display Results
+# hp.gnomview(mapsb, rot=[np.mean(qs.azimuth), np.mean(qs.elevation)], reso=8, sub=(1,3,1), title='Az/El Co-added Map [QP #{} ; QS #{}]'.format(TESNum, indexQS+1))
 
 
 # Map-making
@@ -489,8 +537,27 @@ print(len(newazt))
 
 mapsb, mapcount = healpix_map(newazt[scantype != 0], newelt[scantype != 0], tod[scantype != 0], nside=nside)
 
+### This rotation is not understood
+deltath = 1.4 * 0
+deltaph = 0.
+
 # Display Results
-hp.gnomview(mapsb, rot=[np.mean(newazt), np.mean(newelt)], reso=12, sub=(1,2,2), title='Az/El wrt Moon')
+hp.gnomview(mapsb, reso=4, rot=[-deltaph, -deltath], sub=(1,2,1), title='Az/El wrt Moon [QP #{} ; QS #{}]'.format(TESNum, indexQS+1))
+
+
+### Centered on L.O.S
+dth_tes = np.degrees(np.pi/2-newths[indexQS])
+dph_tes = np.degrees(newphs[indexQS]-np.pi)
+hp.gnomview(mapsb, reso=5, rot=[-deltaph-dph_tes , -deltath-dth_tes], sub=(1,2,2), title='L.O.S. centered [QP #{} ; QS #{}]'.format(TESNum, indexQS+1))
+hp.graticule()
+hp.projplot(np.radians(90)+np.radians(deltath),np.radians(0)+np.radians(deltaph),'r+', mew=3, ms=10, label='FP center')
+hp.projplot(np.pi-newths+np.radians(deltath), -(newphs-np.pi)+np.radians(deltaph),'r.', label='detectors')
+hp.projplot(np.pi-newths[indexQS]+np.radians(deltath), -(newphs[indexQS]-np.pi)+np.radians(deltaph),'go', label='QP#{}'.format(TESNum))
+legend()
+```
+
+```{python}
+
 ```
 
 ```{python}
@@ -507,10 +574,10 @@ figure()
 unseen = (mapsb == hp.UNSEEN) | (mapsb_pos == hp.UNSEEN) | (mapsb_neg == hp.UNSEEN)
 mapdiff = mapsb_pos-mapsb_neg
 mapdiff[unseen] = hp.UNSEEN
-hp.gnomview(mapsb, rot=[np.mean(newazt), np.mean(newelt)], reso=12, sub=(1,4,1), title='Both scans', min=0, max=np.max(mapsb[~unseen]))
-hp.gnomview(mapsb_pos, rot=[np.mean(newazt), np.mean(newelt)], reso=12, sub=(1,4,2), title='+ scans', min=0, max=np.max(mapsb[~unseen]))
-hp.gnomview(mapsb_neg, rot=[np.mean(newazt), np.mean(newelt)], reso=12, sub=(1,4,3), title='- scans', min=0, max=np.max(mapsb[~unseen]))
-hp.gnomview(mapdiff, rot=[np.mean(newazt), np.mean(newelt)], reso=12, sub=(1,4,4), title='Diff scans')
+hp.gnomview(mapsb, rot=[np.mean(newazt), np.mean(newelt)], reso=12, sub=(1,4,1), title='Both scans QP#{}'.format(TESNum), min=0, max=np.max(mapsb[~unseen]))
+hp.gnomview(mapsb_pos, rot=[np.mean(newazt), np.mean(newelt)], reso=12, sub=(1,4,2), title='+ scans QP#{}'.format(TESNum), min=0, max=np.max(mapsb[~unseen]))
+hp.gnomview(mapsb_neg, rot=[np.mean(newazt), np.mean(newelt)], reso=12, sub=(1,4,3), title='- scans QP#{}'.format(TESNum), min=0, max=np.max(mapsb[~unseen]))
+hp.gnomview(mapdiff, rot=[np.mean(newazt), np.mean(newelt)], reso=12, sub=(1,4,4), title='Diff scans QP#{}'.format(TESNum))
 
 tight_layout()
 ```
@@ -543,6 +610,19 @@ hp.gnomview(newmapsb_pos, rot=[np.mean(newazt), np.mean(newelt)], reso=12, sub=(
 hp.gnomview(newmapsb_neg, rot=[np.mean(newazt), np.mean(newelt)], reso=12, sub=(1,4,3), title='- scans', min=-3e3, max=np.max(newmapsb[~unseen]))
 hp.gnomview(newmapdiff, rot=[np.mean(newazt), np.mean(newelt)], reso=12, sub=(1,4,4), title='Diff scans', min=-3e3, max=np.max(newmapsb[~unseen]))
 
+
+```
+
+```{python}
+# hp.mollview(mapsb)
+# hp.write_map('mapsim_TES{}.fits'.format(TESNum), mapsb)
+```
+
+```{python}
+
+```
+
+```{python}
 
 ```
 

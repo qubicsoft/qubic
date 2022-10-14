@@ -5,11 +5,11 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.11.3
+      jupytext_version: 1.14.0
   kernelspec:
-    display_name: QUBIC with Python 3.8
+    display_name: Python 3 (ipykernel)
     language: python
-    name: python-3.8
+    name: python3
 ---
 
 ```{python}
@@ -51,7 +51,7 @@ import warnings
 # everything in iminuit is done through the Minuit object, so we import it
 from iminuit import Minuit
 
-import pywt
+#import pywt
 
 # we also need a cost function to fit and import the LeastSquares function
 from iminuit.cost import LeastSquares
@@ -63,7 +63,7 @@ import scipy.signal as scsig
 from scipy import interpolate
 from astropy.io import fits as pyfits
 
-from sklearn.preprocessing import MinMaxScaler
+#from sklearn.preprocessing import MinMaxScaler
 
 import datetime as dt
 import pickle
@@ -229,7 +229,8 @@ alldays = []
 onlycountfiles = True
 for keyword in keywords:
     for day in days:
-        data_dir = '/sps/qubic/Data/Calib-TD/'+day+'/'
+        #data_dir = '/sps/qubic/Data/Calib-TD/'+day+'/'
+        data_dir = '/home/mgamboa/qubic/Data/Calib-TD/'+day+'/'
         dirs = np.sort(glob.glob(data_dir+keyword))
         #print (dirs)
         if len(dirs) == 0:
@@ -596,7 +597,7 @@ class FlagToMask():
 
         MaskData = list(map(masksample, flagarray))
 
-        return np.prod(MaskData, axis = 1)
+        return np.prod(MaskData, axis = 1, dtype = bool)
 ```
 
 ```{python}
@@ -605,7 +606,7 @@ maskdict = {'saturation': False, 'Tbath above 350mK': True}
 testclass = FlagToMask()
 
 testclass(flagarray, maskdict)
-
+print(type(testclass(flagarray, maskdict)[1]))
 #[bool((egflag & bidflag[j]) >> bidbit[j]) for j in range(2)]
 ```
 
@@ -784,9 +785,9 @@ for indx in range(len(DataContainer[iday])):
         
         # Interpolation of the flags
         flags_interp_300mK = np.max(np.array([interp1d(testime, flags300mK, kind='previous', fill_value='extrapolate')(regtime), 
-                                              interp1d(testime, flags300mK, kind='next', fill_value='extrapolate')(regtime)]), axis=0, dtype = int)
+                                              interp1d(testime, flags300mK, kind='next', fill_value='extrapolate')(regtime)]), axis=0)
         flags_interp_300mK_rise = np.max(np.array([interp1d(testime, flags300mK_rise, kind='previous', fill_value='extrapolate')(regtime), 
-                                              interp1d(testime, flags300mK_rise, kind='next', fill_value='extrapolate')(regtime)]), axis=0, dtype = int)
+                                              interp1d(testime, flags300mK_rise, kind='next', fill_value='extrapolate')(regtime)]), axis=0)
         totalflags = flags300mK + flags300mK_rise
         totalflags_interp = flags_interp_300mK + flags_interp_300mK_rise
         
@@ -851,7 +852,7 @@ for indx in range(len(DataContainer[iday])):
     plt.xlabel('Time (sec)')
     
 fig.tight_layout(pad=1.0)
-plt.savefig('Flags_{}_{}_ind{}.png'.format(words[0], labelw, indx))
+#plt.savefig('Flags_{}_{}_ind{}.png'.format(words[0], labelw, indx))
 ```
 
 ## Now flag 300mK and 1K jointly
@@ -933,9 +934,9 @@ fig.tight_layout(pad=1.0)
 
 ```{python}
 ## Loop and save fits file with flags
-for i in range(61):
+for i in range(1):
     # Take filename
-    filename = DataContainer['fnames2022-08-18'][i].split('/')[-1]
+    filename = DataContainer['fnames2022-07-14'][i].split('/')[-1]
 
     # construct the name of the flag for that file
     fileflag = 'TemperaturesFlags_{}.fits'.format(filename)
@@ -947,8 +948,8 @@ for i in range(61):
 ```{python}
 ## Read flags from file
 allflagsread = []
-for i in range(61):
-    filename = DataContainer['fnames2022-08-18'][i].split('/')[-1]
+for i in range(1):
+    filename = DataContainer['fnames2022-07-14'][i].split('/')[-1]
 
     # construct the name of the flag for that file
     fileflag = 'TemperaturesFlags_{}.fits'.format(filename)
@@ -971,6 +972,10 @@ mask = maskflag(flagread, maskdict)
 
 ```{python}
 plt.plot(mask, 'k.')
+```
+
+```{python}
+plt.plot(idata[TESNum + 1][mask])
 ```
 
 ```{python}

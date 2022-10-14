@@ -12,6 +12,12 @@ jupyter:
     name: python3
 ---
 
+```{python}
+# Config notebook
+from IPython.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+```
+
 ## Analyze Moon data
 
 ```{python}
@@ -58,6 +64,22 @@ thedir = dirs[ifile]
 print(thedir)
 qubic_focplane = qubicfp()
 qubic_focplane.read_qubicstudio_dataset(thedir)
+```
+
+```{python}
+ta1 = qubic_focplane.timeaxis(axistype = 'pps', asic = 1)
+ta2 = qubic_focplane.timeaxis(axistype = 'pps', asic = 2)
+```
+
+```{python}
+plt.plot(np.arange(len(ta1)),ta1-ta2, alpha = 0.4)
+print("timeaxis element 0 from (asic 1 - asic 2) differ in {}~ms".format((ta1[0]-ta2[0])*1000))
+print("timeaxis element -1 from (asic 1 - asic 2) differ in {}~ms".format((ta1[-1]-ta2[-1])*1000))
+print(ta1[1:-1]-ta2[1:-1])
+```
+
+```{python}
+qubic_focplane.tod()
 ```
 
 ```{python}

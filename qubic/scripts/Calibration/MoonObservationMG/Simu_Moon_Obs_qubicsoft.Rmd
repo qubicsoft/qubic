@@ -5,9 +5,9 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.6.0rc0
+      jupytext_version: 1.14.0
   kernelspec:
-    display_name: Python 3
+    display_name: Python 3 (ipykernel)
     language: python
     name: python3
 ---
@@ -29,7 +29,7 @@ display(HTML("<style>.container { width:95% !important; }</style>"))
 import numpy as np
 import matplotlib.pyplot as plt
 import healpy as hp
-import seaborn as sns
+#import seaborn as sns
 
 import sys
 from importlib import reload
@@ -199,7 +199,21 @@ ax[1].scatter(moon_Salta.ra[valid]/u.deg*12/180, moon_Salta.dec[valid]/u.deg,
             c=local_time_hours[valid], label='Moon from astropy', lw=0, s=20, marker='o', cmap='jet')
 ax[1].scatter(ramoon*12/180, decmoon, c = elapsed_time_sec*1/3600, label = 'from hor2equ')
 ax[1].legend()
+ax[1].set_ylabel('dec[deg]')
+ax[1].set_xlabel('RA[h]')
 
+```
+
+```{python}
+plt.figure(figsize = (14,4))
+plt.subplot(131)
+plt.title(r'$\alpha_{qs} - \alpha_{astropy}$')
+plt.plot(p.equatorial[:,0]*12/180 - ra*12/180, 'r.', ms = 1)
+plt.xlabel('time')
+plt.subplot(132)
+plt.title(r'$\delta_{qs} - \delta_{astropy}$')
+plt.plot(p.equatorial[:,1] -dec, 'g.', ms = 1)
+plt.xlabel('time')
 ```
 
 ```{python}

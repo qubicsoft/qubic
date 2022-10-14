@@ -29,10 +29,10 @@ from astropy.visualization import astropy_mpl_style, quantity_support
 quantity_support()
 import astropy.units as u
 from astropy.time import Time
-from astropy.coordinates import SkyCoord, EarthLocation, AltAz, get_moon, get_sun
+from astropy.coordinates import SkyCoord, EarthLocation, AltAz, get_moon, get_sun, get_body
 
 Salta = EarthLocation(lat=-24.731375*u.deg, lon=-65.409551*u.deg, height=1152*u.m)
-utcoffset = -3*u.hour  # Eastern Daylight Time
+####utcoffset = -3*u.hour  # Eastern Daylight Time
 
 from scipy.signal import medfilt
 from scipy.interpolate import interp1d
@@ -112,7 +112,7 @@ gc.collect()
 from qubic.samplings import QubicSampling
 
 ### Don;t forget the UTC offset
-utcoffset = 3.
+####utcoffset = 3.
 
 date_obs = str(datetime.utcfromtimestamp(tinit))
 print('Observations started at: {} UTC'.format(date_obs))
@@ -161,22 +161,56 @@ ylabel('el (deg)')
 We now need the coordinates of the Moon at these very same time samples. We use astropy for that purpose.
 
 ```{python}
+########## Old bugged code with GCRS and get_moon()
+# alltimes = Time(date_obs) + thk*u.second #+ 3*u.minute
+
+# ############################### Using Astropy #########################
+# ### Local coordinates
+# frame_Salta = AltAz(obstime=alltimes , location=Salta)
+
+# ### Moon
+# moon_Salta = get_moon(alltimes)
+# moonaltazs_Salta = moon_Salta.transform_to(frame_Salta)  
+
+# myazmoon = moonaltazs_Salta.az.value
+# myelmoon = moonaltazs_Salta.alt.value
+
+# moonra = moon_Salta.ra
+# moondec = moon_Salta.dec
+# moongal_l, moongal_b = qubic.equ2gal(moonra, moondec)
+# #moongal_l, moongal_b = qubic.equ2gal(moon_Salta.ra, moon_Salta.dec)
+
+# ### Now we know the equatorial/Galactic location of the moon 
+# lmoon_av = np.mean(np.array(moongal_l))
+# bmoon_av = np.mean(np.array(moongal_b))
+
+# ramoon_av = np.mean(moonra)
+# decmoon_av = np.mean(moondec)
+# #########################################################################
+```
+
+```{python}
+
 alltimes = Time(date_obs) + thk*u.second #+ 3*u.minute
 
+############################### Using Astropy #########################
 ### Local coordinates
 frame_Salta = AltAz(obstime=alltimes , location=Salta)
 
 ### Moon
-moon_Salta = get_moon(alltimes)
-moonaltazs_Salta = moon_Salta.transform_to(frame_Salta)  
+moon_Salta = get_body('Moon', alltimes, Salta)
 
-myazmoon = moonaltazs_Salta.az.value
-myelmoon = moonaltazs_Salta.alt.value
-
+### RA/DEC
 moonra = moon_Salta.ra
 moondec = moon_Salta.dec
-moongal_l, moongal_b = qubic.equ2gal(moonra, moondec)
-#moongal_l, moongal_b = qubic.equ2gal(moon_Salta.ra, moon_Salta.dec)
+
+### l,b
+g = SkyCoord(moon_Salta.ra, moon_Salta.dec, frame='icrs').galactic
+moongal_l, moongal_b = g.l.degree, g.b.degree
+
+moonaltazs_Salta = moon_Salta.transform_to(frame_Salta)  
+myazmoon = moonaltazs_Salta.az.value
+myelmoon = moonaltazs_Salta.alt.value
 
 ### Now we know the equatorial/Galactic location of the moon 
 lmoon_av = np.mean(np.array(moongal_l))
@@ -184,10 +218,10 @@ bmoon_av = np.mean(np.array(moongal_b))
 
 ramoon_av = np.mean(moonra)
 decmoon_av = np.mean(moondec)
+########################################################################
+```
 
-
-
-
+```{python}
 
 ```
 
@@ -224,6 +258,7 @@ legend()
 xlabel('l (deg)')
 ylabel('b (deg)')
 tight_layout()
+
 ```
 
 # Now trying to get the Moon moving
@@ -507,7 +542,7 @@ plot(np.degrees(newphs), np.degrees(newths), 'ro')
 ```
 
 ```{python}
-TESNum = 96     #33->154, 96->231
+TESNum = 125     #33->154, 96->231
 
 indexQS = iQP2iQS(TESNum-1)
 
@@ -542,13 +577,13 @@ deltath = 1.4 * 0
 deltaph = 0.
 
 # Display Results
-hp.gnomview(mapsb, reso=4, rot=[-deltaph, -deltath], sub=(1,2,1), title='Az/El wrt Moon [QP #{} ; QS #{}]'.format(TESNum, indexQS+1))
+hp.gnomview(mapsb, reso=7, rot=[-deltaph, -deltath], sub=(2,2,1), title='Az/El wrt Moon FP centered [QP #{} ; QS #{}]'.format(TESNum, indexQS+1))
 
 
 ### Centered on L.O.S
 dth_tes = np.degrees(np.pi/2-newths[indexQS])
 dph_tes = np.degrees(newphs[indexQS]-np.pi)
-hp.gnomview(mapsb, reso=5, rot=[-deltaph-dph_tes , -deltath-dth_tes], sub=(1,2,2), title='L.O.S. centered [QP #{} ; QS #{}]'.format(TESNum, indexQS+1))
+hp.gnomview(mapsb, reso=7, rot=[-deltaph-dph_tes , -deltath-dth_tes], sub=(2,2,2), title='L.O.S. centered [QP #{} ; QS #{}]'.format(TESNum, indexQS+1))
 hp.graticule()
 hp.projplot(np.radians(90)+np.radians(deltath),np.radians(0)+np.radians(deltaph),'r+', mew=3, ms=10, label='FP center')
 hp.projplot(np.pi-newths+np.radians(deltath), -(newphs-np.pi)+np.radians(deltaph),'r.', label='detectors')

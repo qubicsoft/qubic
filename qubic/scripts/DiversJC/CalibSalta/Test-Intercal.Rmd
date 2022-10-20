@@ -50,11 +50,12 @@ legend()
 ###########
 ```
 
-<!-- #region editable=false deletable=false run_control={"frozen": true} -->
-# Exact  "Map-making" solution
-<!-- #endregion -->
+# Without Intercalibrations
 
-```{python code_folding=c(), editable=FALSE, deletable=FALSE, run_control={'frozen': True}, eval=FALSE}
+
+## Exact  "Map-making" solution
+
+```{python code_folding=c()}
 # Simulate observations with perfect intercalibrations
 ndet = 50
 nsamples = 100
@@ -80,28 +81,34 @@ alltod = np.dot(H, truey) + np.random.randn(ndet * nsamples) * sig
 # Solve the linear problem
 mymap = np.linalg.inv(H.T @ H) @ H.T @ alltod
 
-subplot(1, 2, 1)
+subplot(1, 3, 1)
 plot(xpix, truey, label='True Sky')
 plot(xpix, mymap, 'ro', label='reconstructed')
 xlabel('pixel')
 ylabel('sky')
 legend()
 
-subplot(1, 2, 2)
+subplot(1, 3, 2)
 plot(xpix,
-     mymap - truey,
+     mymap - truey, color='b',
      label='Residuals σ={0:5.3g}'.format(np.std(mymap - truey)))
 xlabel('pixel')
 ylabel('sky')
 legend()
 
+subplot(1, 3, 3)
+a = fit.myhist(mymap - truey,  color='b',label='Residuals')
+
+
 tight_layout()
 ```
 
-# Same problem resolution but with aconjugate gradient (Minuit)
+## $\chi^2$ in TOD domain
+
+Same problem resolution but with aconjugate gradient (Minuit)
 => Philosophically what we do with QUBIC...
 
-```{python code_folding=c(), editable=FALSE, deletable=FALSE, run_control={'frozen': True}, eval=FALSE}
+```{python code_folding=c()}
 class simulate_signal:
 
     def __init__(self, xpix, ndet, nsamples, H):
@@ -123,31 +130,115 @@ data = fit.Data(xxx, alltod, xxx * 0 + 1, myH)
 
 m, ch2, ndf = data.fit_minuit(guess_sky + 1)
 
-mymap = m.values
+mymap2 = m.values
 
-subplot(1, 2, 1)
+subplot(1, 3, 1)
 plot(xpix, truey, label='True Sky')
 plot(xpix, mymap, 'ro', label='reconstructed')
 xlabel('pixel')
 ylabel('sky')
 legend()
 
-subplot(1, 2, 2)
+subplot(1, 3, 2)
 plot(xpix,
-     mymap - truey,
-     label='Residuals σ={0:5.3g}'.format(np.std(mymap - truey)))
+     mymap - truey, color='b',
+     label='Residuals Analytical σ={0:5.3g}'.format(np.std(mymap - truey)))
+plot(xpix,
+     mymap2 - truey, color='r',
+     label='Residuals Minuit σ={0:5.3g}'.format(np.std(mymap - truey)))
 xlabel('pixel')
 ylabel('sky')
 legend()
 
+subplot(1, 3, 3)
+a = fit.myhist(mymap - truey,  color='b',label='Residuals Analytical')
+a = fit.myhist(mymap2 - truey,  color='r',label='Residuals Minuit')
+
+
 tight_layout()
 ```
 
-# Now let's put unknown inter-calibrations
+## $\chi2$ in map domain
+Here we try to do as in `QubicSoft` reconstruction: we solve the equation $$A\cdot\vec{x}=\vec{b}$$ where:
+$$A= (H^t N^{-1} H)$$
+and
+$$b = H^t N^{-1} \vec{d}$$
+
+```{python}
+reload(fit)
+import iminuit
+
+
+class MyChi2MapDomain:
+    """
+    Ridge Chi2
+    """
+
+    errordef = iminuit.Minuit.LEAST_SQUARES  # for Minuit to compute errors correctly
+
+    def __init__(self, A,b):
+        self.b = b
+        self.A = A
+
+    def __call__(self, pars):
+        ch2 = np.sum( (self.A @ pars - self.b)**2)
+        return ch2
+
+    @property
+    def ndata(self):
+        return len(self.x)
+    
+A = H.T @ H
+b = H.T @ alltod
+mychi2 = MyChi2MapDomain(A, b)
+guess_sky = np.zeros(len(xpix))
+
+m = iminuit.Minuit(mychi2, guess_sky)
+m.migrad()  
+m.hesse() 
+
+mymap3 = m.values
+
+
+subplot(1, 3, 1)
+plot(xpix, truey, label='True Sky')
+plot(xpix, mymap2, 'ro', label='reconstructed')
+xlabel('pixel')
+ylabel('sky')
+legend()
+
+subplot(1, 3, 2)
+plot(xpix,
+     mymap - truey, color='b',
+     label='Residuals Analytical (TOD domain) σ={0:5.3g}'.format(np.std(mymap - truey)))
+plot(xpix,
+     mymap2 - truey, color='r',
+     label='Residuals Minuit (TOD domain) σ={0:5.3g}'.format(np.std(mymap2 - truey)))
+plot(xpix,
+     mymap3 - truey, color='g',
+     label='Residuals Mnuit (Map domain) σ={0:5.3g}'.format(np.std(mymap2 - truey)))
+xlabel('pixel')
+ylabel('sky')
+legend()
+
+subplot(1, 3, 3)
+a = fit.myhist(mymap - truey,  color='b',label='Residuals Analytical (TOD Domain)')
+a = fit.myhist(mymap2 - truey,  color='r',label='Residuals Minuit (TOD Domain)')
+a = fit.myhist(mymap3 - truey,  color='g',label='Residuals Minuit (Map Domain)')
+
+
+tight_layout()
+```
+
+```{python}
+
+```
+
+# With inter-calibrations
 We will fit them all together with the sky - We also put a non uniform noise on the different detectors
 
 ```{python}
-#np.random.seed(42)
+np.random.seed(42)
 ###### Simulate observations including intercalibration
 ndet = 50
 nsamples = 100
@@ -181,7 +272,10 @@ chi2_noiseless = np.sum(((alltod - alltod_noiseless) / sigmas)**2)
 print('Chi2 Noiseless: ', chi2_noiseless)
 ```
 
-# Here we fully sove with Minuit
+## $\chi^2$ in TOD domain
+
+
+### Here we fully sove with Minuit
 
 ```{python code_folding=c()}
 class simulate_signal_intercal:
@@ -234,15 +328,15 @@ legend()
 
 subplot(2, 3, 2)
 plot(xpix,
-     mymap - truey,
-     label='Full Minuit Residuals σ={0:5.3g}'.format(np.std(mymap - truey)),
+     mymap - truey, color='b',
+     label='Full Minuit Residuals  (TOD DOmain) σ={0:5.3g}'.format(np.std(mymap - truey)),
      alpha=0.5)
 xlabel('pixel')
 ylabel('sky')
 legend(fontsize=10)
 
 subplot(2, 3, 3)
-a = fit.myhist(mymap - truey, label='Full Minuit Residuals')
+a = fit.myhist(mymap - truey,  color='b',label='Full Minuit Residuals (TOD DOmain) ')
 
 subplot(2, 3, 4)
 plot(intercal, label='True Intercals')
@@ -252,8 +346,8 @@ ylabel('Intercal')
 legend()
 
 subplot(2, 3, 5)
-plot(myintercals - intercal,
-     label='Full Minuit Residuals σ={0:5.3g}'.format(
+plot(myintercals - intercal, color='b',
+     label='Full Minuit Residuals  (TOD DOmain) σ={0:5.3g}'.format(
          np.std(myintercals - intercal)),
      alpha=0.5)
 xlabel('Det')
@@ -261,7 +355,7 @@ ylabel('Intercal')
 legend()
 
 subplot(2, 3, 6)
-a = fit.myhist(myintercals - intercal, label='Full Minuit Residuals')
+a = fit.myhist(myintercals - intercal,  color='b',label='Full Minuit Residuals (TOD Domain)')
 
 tight_layout()
 
@@ -273,7 +367,7 @@ print('  {0:5.3g}   {1:5.3g}'.format(np.std(mymap - truey),
                                      np.std(myintercals - intercal)))
 ```
 
-# Next exercise: Fit inter-calibration separately as they are linear unknowns
+### Fit inter-calibration analytically
 We do not fit the inter-calibrations with the conjugate gradient but we use the fact that they are linear with the data to fit them analytically at each step of the conjugate gradient.
 
 <span class="mark">We should get the same performance, but for now, we don't...</span>
@@ -286,7 +380,7 @@ So the perfectly intercalibrated data writes:
 \end{equation}
 
 And the maximum likelihood solution would be:
-\ebgin{equation}
+\begin{equation}
 \hat{\vec{s}} = \left(H^t N^{-1} H\right)^{-1} H^t N^{-1} \vec{D}
 \end{equation}
     
@@ -333,7 +427,7 @@ and
 \end{equation}
 
 
-### In practice:
+#### In practice:
 If $N$ is dense it is possibly a large problem...
 
 - if $N\propto \mathbb{1}$ the problem is completely simplified and $N$ disappears:
@@ -372,12 +466,11 @@ class simulate_signal_intercal:
         ### We remove the first detector from the fit as its intercalibration is forced to 1
         D = (np.reshape(np.dot(self.H, sky), (self.ndet, self.nsamples)))
         myD = D[1:, :]
-        w = self.w[1:]
-        myw = np.diag(w)
-        matrix = myD @ (myD.T @ myw)
+        myw = np.diag(self.w[1:]) 
+        myDw = (myD.T @ myw).T
+        mydw = (self.d[1:, :].T @ myw).T
         intercal_rec = np.append(
-            1,
-            np.diag(np.linalg.inv(matrix) @ (myD @ (self.d[1:, :].T @ myw))))
+             1,  1/np.sum(myD*myDw, axis=1) * np.sum(myD * mydw, axis=1))
         return D, intercal_rec
 
 
@@ -420,19 +513,19 @@ legend()
 
 subplot(2, 3, 2)
 plot(xpix,
-     mymap2 - truey,
-     label='Minuit + Ana Residuals σ={0:5.3g}'.format(np.std(mymap2 - truey)))
-plot(xpix,
-     mymap - truey,
-     label='Full Minuit Residuals σ={0:5.3g}'.format(np.std(mymap - truey)),
+     mymap - truey, color='b',
+     label='Full Minuit Residuals (TOD Domain) σ={0:5.3g}'.format(np.std(mymap - truey)),
      alpha=0.5)
+plot(xpix,
+     mymap2 - truey, color='r',
+     label='Minuit + Ana Residuals (TOD Domain) σ={0:5.3g}'.format(np.std(mymap2 - truey)))
 xlabel('pixel')
 ylabel('sky')
 legend(fontsize=10)
 
 subplot(2, 3, 3)
-a = fit.myhist(mymap2 - truey, label='Minuit + Ana Residuals')
-a = fit.myhist(mymap - truey, label='Full Minuit Residuals')
+a = fit.myhist(mymap - truey,  color='b',label='Full Minuit Residuals (TOD Domain)')
+a = fit.myhist(mymap2 - truey,  color='r',label='Minuit + Ana Residuals (TOD Domain)')
 
 subplot(2, 3, 4)
 plot(intercal, label='True Intercals')
@@ -442,20 +535,20 @@ ylabel('Intercal')
 legend()
 
 subplot(2, 3, 5)
-plot(myintercals2 - intercal,
-     label='Minuit + Ana Residuals σ={0:5.3g}'.format(
-         np.std(myintercals2 - intercal)))
-plot(myintercals - intercal,
-     label='Full Minuit Residuals σ={0:5.3g}'.format(
+plot(myintercals - intercal, color='b',
+     label='Full Minuit Residuals  (TOD Domain)σ={0:5.3g}'.format(
          np.std(myintercals - intercal)),
      alpha=0.5)
+plot(myintercals2 - intercal, color='r',
+     label='Minuit + Ana Residuals  (TOD Domain)σ={0:5.3g}'.format(
+         np.std(myintercals2 - intercal)))
 xlabel('Det')
 ylabel('Intercal')
 legend()
 
 subplot(2, 3, 6)
-a = fit.myhist(myintercals2 - intercal, label='Minuit + Ana Residuals')
-a = fit.myhist(myintercals - intercal, label='Full Minuit Residuals')
+a = fit.myhist(myintercals - intercal,  color='b',label='Full Minuit Residuals (TOD Domain)')
+a = fit.myhist(myintercals2 - intercal,  color='r',label='Minuit + Ana Residuals (TOD Domain)')
 
 tight_layout()
 
@@ -468,43 +561,8 @@ print('            {0:5.3g}   {1:5.3g}    {2:5.3g}   {3:5.3g}'.format(
     np.std(mymap - truey), np.std(myintercals - intercal)))
 ```
 
-```{python}
-chi2_noiseless = np.sum(((alltod_noiseless - alltod) / sigmas)**2)
-print('Chi2 with noiseless', chi2_noiseless)
-print()
-
-##### Intercalibrated TOD and intercalibration using the True Sky
-myD_true, myintercals_true = myH.give_intercals(truey)
-##### Or using the fitted one
-myD_fit, myintercals_fit = myH.give_intercals(m.values)
-
-print('Intercalibrated TOD difference')
-print('Init - myH(true) (=> should be 0)  RMS=',
-      np.std(np.reshape(alltod_intercal, (ndet, nsamples)) - myD_true))
-print('Init - myH(fit)   RMS=',
-      np.std(np.reshape(alltod_intercal, (ndet, nsamples)) - myD_fit))
-
-print()
-print('Intercal differences')
-print('Init - myH(true)   RMS=', np.std(myintercals_true - intercal))
-print('Init - myH(fit)   RMS=', np.std(myintercals_fit - intercal))
-plot(myintercals_true - intercal)
-plot(myintercals_fit - intercal)
-
-print(
-    'These two are very similar because even when you have the perfectly right sky, when calculating analytically the intercals'
-)
-print('you calulate it against the noisy TOD => extra noise')
-```
-
-- The extra noise we see on the intercalibration is also present when we calculate the intercalibrations with the true sky as an input. This comes from the fact that the measured TOD is involved in the intercal expression (last term). If this term is replaced by the noiseless TOD then the=is extra noise vanishes.
-- So I suspect that my problem is due to a bad implementation of the w weighting. Maybe just multiplying as I do is not valid.
-- 2022-09-29 12:01:02 Not sure the above is correct... I have made severl checks and the implementaiton seems OK. I now beleive the method itself is not optimal, but can't understand why.
-
-
-# Alternative method: following [Stompor et al., 2009]
+### Ridge Likelihood
 We use the method proposed in [Stompor et al., 2009] (https://arxiv.org/pdf/0804.2645.pdf) for maximum-likelihood estimation of component separation. Here, intercalibrations are the analogous of the spectral behavior of the astrophysical components. 
-
 
 The method is the following:
 We have data from $n_d$ detectors that observe a sky $\vec{s}$ through an instrument modeled by the operator $H$. Each detector has its own intercalibration $A$.
@@ -550,6 +608,7 @@ We therefore minimize this $\chi^2$ using `Minuit` and once we have the bets-fit
 
 ```{python}
 reload(fit)
+import iminuit
 
 
 class RidgeChi2:
@@ -588,7 +647,7 @@ class giveB:
         self.H = H
 
     def __call__(self, x, intercals):
-        return (np.repeat(intercals, self.nsamples).T * H.T).T
+        return (np.repeat(intercals, self.nsamples).T * self.H.T).T
 
 
 sigmas = np.ones(len(alltod))
@@ -603,10 +662,13 @@ xxx = np.zeros(len(alltod))  # not used
 rc2 = RidgeChi2(xxx, alltod, sigmas, myB)
 
 data = fit.Data(xxx, alltod, sigmas, myB)
+guess_sky = np.ones(npix)
 m, ch2, ndf = data.fit_minuit(guess_sky, minimizer=RidgeChi2, fixpars=[0])
 
+ridge_intercals = np.array(m.values)
+
 ### Now get the sky
-bestB = myB(0, m.values)
+bestB = myB(0, ridge_intercals)
 bestSky = (np.linalg.inv(bestB.T * 1. / sigmas**2 @ bestB) @ bestB.T * 1. /
            sigmas**2 @ alltod)
 
@@ -620,45 +682,160 @@ ylabel('sky')
 legend()
 
 subplot(2,3,2)
-plot(xpix, mymap2 - truey, label='Minuit + Ana Residuals σ={0:5.3g}'.format(np.std(mymap2 - truey)))
-plot(xpix, mymap - truey, label='Full Minuit Residuals σ={0:5.3g}'.format(np.std(mymap - truey)), alpha=0.5)
-plot(xpix, bestSky - truey, label='Ridhe Residuals σ={0:5.3g}'.format(np.std(mymap - truey)), alpha=0.5)
+plot(xpix, mymap - truey, color='b', label='Full Minuit Residuals (TOD Domain) σ={0:5.3g}'.format(np.std(mymap - truey)), alpha=0.5)
+plot(xpix, mymap2 - truey, color='r', label='Minuit + Ana Residuals (TOD Domain) σ={0:5.3g}'.format(np.std(mymap2 - truey)))
+plot(xpix, bestSky - truey, color='g', label='Ridge Residuals (TOD Domain) σ={0:5.3g}'.format(np.std(mymap - truey)), alpha=0.5)
 xlabel('pixel')
 ylabel('sky')
 legend(fontsize=10)
 
 subplot(2,3,3)
-a = fit.myhist(mymap2 - truey, label='Minuit + Ana Residuals')
-a = fit.myhist(mymap - truey, label='Full Minuit Residuals')
-a = fit.myhist(bestSky - truey, label='Ridge Residuals')
+a = fit.myhist(mymap - truey, color='b', label='Full Minuit Residuals (TOD Domain)')
+a = fit.myhist(mymap2 - truey, color='r', label='Minuit + Ana Residuals (TOD Domain)')
+a = fit.myhist(bestSky - truey, color='g', label='Ridge Residuals (TOD Domain)')
 
 subplot(2,3,4)
 plot(intercal, label='True Intercals')
-plot(myintercals2, 'ro', label='reconstructed intercals')
+plot(ridge_intercals, 'ro', label='reconstructed intercals')
 xlabel('Det')
 ylabel('Intercal')
 legend()
 
 subplot(2,3,5)
-plot(myintercals2-intercal, label='Minuit + Ana Residuals σ={0:5.3g}'.format(np.std(myintercals2-intercal)))
-plot(myintercals-intercal, label='Full Minuit Residuals σ={0:5.3g}'.format(np.std(myintercals-intercal)), alpha=0.5)
-plot(m.values-intercal, label='Ridge Residuals σ={0:5.3g}'.format(np.std(m.values-intercal)), alpha=0.5)
+plot(myintercals-intercal, color='b', label='Full Minuit Residuals (TOD Domain) σ={0:5.3g}'.format(np.std(myintercals-intercal)), alpha=0.5)
+plot(myintercals2-intercal, color='r', label='Minuit + Ana Residuals (TOD Domain) σ={0:5.3g}'.format(np.std(myintercals2-intercal)))
+plot(ridge_intercals-intercal, color='g', label='Ridge Residuals (TOD Domain) σ={0:5.3g}'.format(np.std(ridge_intercals-intercal)), alpha=0.5)
 xlabel('Det')
 ylabel('Intercal')
 legend()
 
 subplot(2,3,6)
-a = fit.myhist(myintercals2-intercal, label='Minuit + Ana Residuals')
-a = fit.myhist(myintercals-intercal, label='Full Minuit Residuals')
-a = fit.myhist(m.values-intercal, label='Ridge Residuals')
+a = fit.myhist(myintercals-intercal, color='b', label='Full Minuit Residuals (TOD Domain)')
+a = fit.myhist(myintercals2-intercal, color='r', label='Minuit + Ana Residuals (TOD Domain)')
+a = fit.myhist(ridge_intercals-intercal, color='g', label='Ridge Residuals (TOD Domain)')
+```
+
+## $\chi^2$ in Map domain (Full Minuit)
+Does not work for some reason... but this is an absurd way of doing things...
+
+```{python}
+reload(fit)
+import iminuit
+
+
+class MyChi2MapDomain:
+    """
+    Chi2 for Map-Domain fitting of map+intercals
+    """
+    errordef = iminuit.Minuit.LEAST_SQUARES  # for Minuit to compute errors correctly
+
+    def __init__(self, y, err, H, npix, ndet, nsamples):
+        self.npix = npix
+        self.ndet = ndet
+        self.nsamples = nsamples
+        self.H = H  # model predicts y for given x
+        self.y = np.asarray(y)
+        self.err = np.asarray(err)
+        self.w = 1. / self.err**2
+
+    def __call__(self, pars):
+        thesky = pars[:npix]
+        theintercal = pars[npix:]
+        B = self.giveB(theintercal)   # B = A.H
+        BtNiB = B.T * self.w @ B  # B^t N^{-1} B as noise is uncorrelated across detectors
+        BtNid = B.T * self.w @ self.y  # (B^t N^{-1} d)
+        ch2 = np.sum( (BtNiB @ thesky - BtNid)**2 )
+        return ch2
+    
+    def giveB(self, intercals):
+        return (np.repeat(intercals, self.nsamples).T * self.H.T).T
+
+    @property
+    def ndata(self):
+        return len(self.x)
+
+    
+# ### Test: avec TOD_noiseless ca donne bien un chi2~0 ###
+# theB = (np.repeat(intercal, nsamples).T * H.T).T
+# BtNiB = theB.T * (1./sigmas**2) @ theB  # B^t N^{-1} B as noise is uncorrelated across detectors
+# BtNid = theB.T * (1./sigmas**2) @ alltod_noiseless  # (B^t N^{-1} d)
+# mych2 = np.sum( (BtNiB @ truey - BtNid)**2 )
+# print(mych2)
+
+
+xxx = np.zeros(len(alltod))  # not used
+mychi2 = MyChi2MapDomain(alltod, sigmas, H, npix, ndet, nsamples)
+guess = np.ones(npix+ndet)
+# guess = np.append(truey/2, np.ones(ndet)/2)
+# guess = np.append(truey*0.9, intercal*0.9)
+guess[npix] =1
+
+
+print(mychi2(guess))
+
+
+m = iminuit.Minuit(mychi2, guess)
+### Fix the first intercal to 1
+fixpars = [npix]
+for k in range(len(fixpars)):
+    m.fixed["x{}".format(fixpars[k])]=True
+m.migrad()  
+m.hesse() 
+
+mymap4 = m.values[:len(xpix)]
+myintercals4 = m.values[len(xpix):]
+
+
+subplot(2, 3, 1)
+plot(xpix, truey, label='True Sky')
+plot(xpix, mymap4, 'ro', label='reconstructed')
+xlabel('pixel')
+ylabel('sky')
+legend()
+
+subplot(2,3,2)
+plot(xpix, mymap - truey, color='b', label='Full Minuit Residuals (TOD Domain) σ={0:5.3g}'.format(np.std(mymap - truey)), alpha=0.5)
+plot(xpix, mymap2 - truey, color='r', label='Minuit + Ana Residuals (TOD Domain) σ={0:5.3g}'.format(np.std(mymap2 - truey)))
+plot(xpix, bestSky - truey, color='g', label='Ridhe Residuals (TOD Domain) σ={0:5.3g}'.format(np.std(mymap - truey)), alpha=0.5)
+plot(xpix, mymap3 - truey, color='m', label='Full Minuit Residuals (map Domain) σ={0:5.3g}'.format(np.std(mymap - truey)), alpha=0.5)
+xlabel('pixel')
+ylabel('sky')
+legend(fontsize=10)
+
+subplot(2,3,3)
+a = fit.myhist(mymap - truey, color='b', label='Full Minuit Residuals (TOD Domain)')
+a = fit.myhist(mymap2 - truey, color='r', label='Minuit + Ana Residuals (TOD Domain)')
+a = fit.myhist(bestSky - truey, color='g', label='Ridge Residuals (TOD Domain)')
+a = fit.myhist(mymap4 - truey, color='m', label='Full Minuit Residuals (Map Domain)')
+
+subplot(2,3,4)
+plot(intercal, label='True Intercals')
+plot(myintercals4, 'ro', label='reconstructed intercals')
+xlabel('Det')
+ylabel('Intercal')
+legend()
+
+subplot(2,3,5)
+plot(myintercals-intercal, color='b', label='Full Minuit Residuals (TOD Domain) σ={0:5.3g}'.format(np.std(myintercals-intercal)), alpha=0.5)
+plot(myintercals2-intercal, color='r', label='Minuit + Ana Residuals (TOD Domain) σ={0:5.3g}'.format(np.std(myintercals2-intercal)))
+plot(ridge_intercals-intercal, color='g', label='Ridge Residuals (TOD Domain) σ={0:5.3g}'.format(np.std(ridge_intercals-intercal)), alpha=0.5)
+plot(myintercals4-intercal, color='m', label='Full Minuit Residuals (Map Domain) σ={0:5.3g}'.format(np.std(myintercals-intercal)), alpha=0.5)
+xlabel('Det')
+ylabel('Intercal')
+legend()
+
+subplot(2,3,6)
+a = fit.myhist(myintercals-intercal, color='b', label='Full Minuit Residuals (TOD Domain)')
+a = fit.myhist(myintercals2-intercal, color='r', label='Minuit + Ana Residuals (TOD Domain)')
+a = fit.myhist(ridge_intercals-intercal, color='g', label='Ridge Residuals (TOD Domain)')
+a = fit.myhist(myintercals4-intercal, color='m', label='Full Minuit Residuals (Map Domain)')
+tight_layout()
+
+print(m.valid)
 ```
 
 ```{python}
-
-```
-
-```{python}
-
+myintercals4
 ```
 
 ```{python}

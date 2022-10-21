@@ -26,6 +26,7 @@ display(HTML("<style>.container { width:95% !important; }</style>"))
 ```
 
 ```{python}
+# %matplotlib inline
 import numpy as np
 import matplotlib.pyplot as plt
 import healpy as hp
@@ -75,6 +76,12 @@ frame_Salta = AltAz(obstime=alltimes, location=Salta)
 ### Moon
 moon_Salta = get_moon(alltimes)
 moonaltazs_Salta = moon_Salta.transform_to(frame_Salta)  
+from astropy.coordinates import get_body
+from astropy.coordinates import EarthLocation
+#t = Time("2014-09-22 23:22")
+loc = EarthLocation.of_site('greenwich') 
+with solar_system_ephemeris.set('builtin'):
+    moon_Salta_body = get_body('moon', alltimes, Salta)
 ### Moon
 sun_Salta = get_sun(alltimes)
 sunaltazs_Salta = sun_Salta.transform_to(frame_Salta)  
@@ -129,6 +136,21 @@ el_max_final = np.max(p.elevation)
 ```
 
 ```{python}
+d1 = d.copy()
+moonaltazs_Salta_body = moon_Salta_body.transform_to(frame_Salta)  
+moon_ra_mean_body = np.mean(moon_Salta_body.ra[valid]/u.deg)
+moon_dec_mean_body = np.mean(moon_Salta_body.dec[valid]/u.deg)
+d1['RA_center'] = moon_ra_mean_body #deg
+d1['DEC_center'] = moon_dec_mean_body #deg
+print(d['fix_azimuth'])
+p1 = qubic.get_pointing(d1)
+```
+
+```{python}
+d1['RA_center']-d['RA_center'], d1['DEC_center']-d['DEC_center']
+```
+
+```{python}
 # Elapsed time between observation sample and beginning of the observation
 elapsed_time_sec = (local_time_hours[valid]- local_time_hours[valid][0])*3600
 ```
@@ -140,7 +162,7 @@ plt.plot(p.azimuth, p.elevation, alpha=0.5,
                  az_center={:5.1f} deg, dead_time={} sec'.format(n_elevations, 
                     d['delta_az'], el_step, el_min_final, el_max_final, d['fix_azimuth']['az'], d['dead_time']))
 plt.scatter(moonaltazs_Salta.az[valid], moonaltazs_Salta.alt[valid],
-            c=local_time_hours[valid], label='Moon', lw=0, s=200, marker='o', cmap='jet')
+            c=local_time_hours[valid], label='Moon', lw=0, s=20, marker='o', cmap='jet')
 plt.plot(sunaltazs_Salta.az[valid], sunaltazs_Salta.alt[valid], 'r', lw=3, label='Sun (needs to be far)')
 plt.fill_between([door_az-az_span/2, door_az+az_span/2], 
              [el_max,el_max], y2=[el_min, el_min], color='r', alpha=0.5, 
@@ -156,11 +178,30 @@ plt.ylim(5, 75)
 ```
 
 ```{python}
+fig = plt.figure(figsize = (15,6))
+fig.suptitle("Difference between get_moon and get_body methods from AstroPy", fontsize = 20)
+plt.subplot(121)
+#plt.plot(3600*(moonaltazs_Salta.alt[valid]/u.deg-moonaltazs_Salta_body.alt[valid]/u.deg), 'r.',
+#            label='Moon')
+plt.plot((moon_Salta.dec[valid]/u.deg - moon_Salta_body.dec[valid]/u.deg), 'r.',
+            label='Moon')
+plt.xlabel('Samples')
+plt.ylabel(r'$\Delta \delta$ = dec_moon - dec_body (degs)')
+plt.subplot(122)
+plt.plot((moon_Salta.ra[valid]/u.deg - moon_Salta_body.ra[valid]/u.deg), 'b.',
+            label='Moon')
+plt.ylabel(r'$\Delta \alpha$ = ra_moon - ra_body (degs)')
+plt.xlabel('Samples')
+```
+
+```{python}
 fig2 = plt.figure(figsize = (14,8))
 plt.plot(p.equatorial[:,0]*12/180, p.equatorial[:,1], alpha=0.5, 
      label = '{} scans with Δaz = {} deg, Δel = {} deg el_min={:5.2f} deg, el_max={:5.2f} deg, az_center={:5.1f} deg, dead_time={} sec'.format(n_elevations, 
                     d['delta_az'], el_step, el_min_final, el_max_final, d['fix_azimuth']['az'], d['dead_time']))
 plt.scatter(moon_Salta.ra[valid]/u.deg*12/180, moon_Salta.dec[valid]/u.deg,
+            c=local_time_hours[valid], label='Moon', lw=0, s=200, marker='o', cmap='jet')
+plt.scatter(moon_Salta_body.ra[valid]/u.deg*12/180, moon_Salta_body.dec[valid]/u.deg,
             c=local_time_hours[valid], label='Moon', lw=0, s=200, marker='o', cmap='jet')
 plt.plot(sun_Salta.ra[valid]/u.deg*12/180, sun_Salta.ra[valid]/u.deg, 'r', lw=3, label='Sun (needs to be far)')
 plt.colorbar().set_label('Local Time')
@@ -173,21 +214,27 @@ plt.ylim(np.min(p.equatorial[:,1])-5, np.max(p.equatorial[:,1])+5)
 ```
 
 ```{python}
-fig, ax = plt.subplots(nrows = 2, ncols =1, sharex = True, figsize = (10,14))
+fig, ax = plt.subplots(nrows = 1, ncols = 2, figsize = (14,10))
 #What if I test rotating p.azimuth, p.elevation and using p.time and d['date_obs']
 ra, dec = qubic.hor2equ(p.azimuth, p.elevation, p.time, d['date_obs'],
                        latitude = -24.731358, longitude = -65.409535)
-ax[0].plot(p.equatorial[:,0]*12/180, p.equatorial[:,1], alpha=0.5, 
+ax[0].plot(p.equatorial[:,0]*12/180, p.equatorial[:,1], alpha=0.2, 
      label = 'from get_sampling')
-ax[0].plot(ra*12/180, dec, alpha = 0.5, 
+ax[0].plot(ra*12/180, dec, alpha = 0.2, 
      label = 'from qubic.hor2equ')
 # Moon rotation #Sideral time? 
 ramoon, decmoon = qubic.hor2equ(np.array(moonaltazs_Salta.az[valid]), 
                                     np.array(moonaltazs_Salta.alt[valid]), 
                                     elapsed_time_sec, d['date_obs'],
                                latitude = -24.731358, longitude = -65.409535)
+ramoon_body, decmoon_body = qubic.hor2equ(np.array(moonaltazs_Salta_body.az[valid]), 
+                                    np.array(moonaltazs_Salta_body.alt[valid]), 
+                                    elapsed_time_sec, d['date_obs'],
+                               latitude = -24.731358, longitude = -65.409535)
 ax[0].scatter(moon_Salta.ra[valid]/u.deg*12/180, moon_Salta.dec[valid]/u.deg,
-            c=local_time_hours[valid], label='Moon from astropy', lw=0, s=20, marker='o', cmap='jet')
+            c=local_time_hours[valid], label='Moon from astropy (get_moon)', lw=0, s=20, marker='o', cmap='jet')
+ax[0].scatter(moon_Salta_body.ra[valid]/u.deg*12/180, moon_Salta_body.dec[valid]/u.deg,
+            c=local_time_hours[valid], label='Moon from astropy (get_body)', lw=0, s=20, marker='o', cmap='jet')
 ax[0].scatter(ramoon*12/180, decmoon, c = elapsed_time_sec*1/3600, label = 'from hor2equ')
 ax[0].legend()
 #
@@ -196,8 +243,11 @@ ax[0].legend()
 #
 #
 ax[1].scatter(moon_Salta.ra[valid]/u.deg*12/180, moon_Salta.dec[valid]/u.deg,
-            c=local_time_hours[valid], label='Moon from astropy', lw=0, s=20, marker='o', cmap='jet')
-ax[1].scatter(ramoon*12/180, decmoon, c = elapsed_time_sec*1/3600, label = 'from hor2equ')
+            c='green', label='Moon from astropy (get_moon)', lw=0, s=200, marker='.')
+ax[1].scatter(moon_Salta_body.ra[valid]/u.deg*12/180, moon_Salta_body.dec[valid]/u.deg,
+            c='DarkGreen', label='Moon from astropy (get_body)', lw=0, s=200, marker='.')
+ax[1].scatter(ramoon*12/180, decmoon, c = 'r', label = 'from hor2equ')
+ax[1].scatter(ramoon_body*12/180, decmoon_body, c = 'orange', label = 'from hor2equ (body)')
 ax[1].legend()
 ax[1].set_ylabel('dec[deg]')
 ax[1].set_xlabel('RA[h]')

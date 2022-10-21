@@ -703,7 +703,6 @@ class QubicInstrument(Instrument):
             noise.P_phot[ib2b] = noise.gp[ib2b] * eta * (k * T) ** 4 / c ** 2 / h ** 3 * K1 * \
                            noise.S_horns * noise.omega_det * noise.sec_beam
         else: #220GHz band
-            #print("======== 220GHz band horns NEP")
             # back to back horns, as seen by the detectors through the combiner   
             # Here the physical horn area S_horns must be used
             noise.g[ib2b] = noise.gp[ib2b, None] * noise.S_horns * noise.omega_det * (self.filter.nu / c) ** 2 * \
@@ -718,13 +717,6 @@ class QubicInstrument(Instrument):
             noise.NEP_phot2[ib2b] = noise.NEP_phot2_nobunch[ib2b] * (1 + noise.P_phot[ib2b] /
                                                          (h * self.filter.nu * noise.g[ib2b]))
             
-            # commented out, should work _raise_debug() method
-            #if self.debug:
-            #    print(names[ib2b],
-            #          ', T=', temperatures[ib2b],
-            #          'K, P = {0:.2e} W'.format(P_phot[ib2b].max()),
-            #          ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ib2b]).max()) + ' W/sqrt(Hz)')
-
         if self.debug: self._raise_debug(noise, noise.ib2b)
 
         if return_only:
@@ -766,7 +758,6 @@ class QubicInstrument(Instrument):
 
         ib2b = noise.ib2b
         if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
-            #print("======== 150GHz band env NEP")
             T = noise.temperatures[ib2b]
             b = h * noise.nu_up / k / T
             I1 = quad(funct, 0, b, (4, 1))[0]
@@ -783,7 +774,6 @@ class QubicInstrument(Instrument):
             NEP_phot2_env_nobunch = None
  
         else:##220GHz:
-            #print("======== 220GHz band env NEP")
             eff_factor = np.prod(noise.transmissions[(len(names) - 4):]) * \
                          self.detector.efficiency
             g_env = noise.gp[ib2b, None] * noise.S_det * noise.omega_coldstop * (self.filter.nu / c) ** 2 * \
@@ -803,10 +793,6 @@ class QubicInstrument(Instrument):
                 print("Value used in current version of qubicsoft", NEP_phot2_env_nobunch[ib2b])
                 print("==========================")
 
-            #if self.debug:
-            #    print('Environment, T =', temperatures[ib2b],
-            #          'K, P = {0:.2e} W'.format(noise.P_phot_env.max()),
-            #          ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2_env).max()) + ' W/sqrt(Hz)')
         if self.debug: self._raise_debug(noise, noise.ib2b,
                                         environment = True)     
 
@@ -912,7 +898,6 @@ class QubicInstrument(Instrument):
         ics = noise.ics
         #150GHz band
         if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
-            #print("======== 150GHz band  CS NEP")
             T = noise.temperatures[ics]
             b = h * noise.nu_up / k / T
             J1 = quad(funct, 0, b, (4, 1))[0]
@@ -927,7 +912,6 @@ class QubicInstrument(Instrument):
                           noise.S_det * noise.omega_coldstop * noise.sec_beam
 
         else:#220GHz band
-            #print("======== 220GHz band CS NEP")
             eta = noise.emissivities[ics] * noise.tr_prod[ics] * \
                                             self.detector.efficiency
             noise.g[ics] = noise.gp[ics] * noise.S_det * noise.omega_coldstop * (self.filter.nu / c) ** 2 * noise.dnu
@@ -936,11 +920,6 @@ class QubicInstrument(Instrument):
             noise.NEP_phot2_nobunch[ics] = h * self.filter.nu * noise.P_phot[ics] * 2
             noise.NEP_phot2[ics] = noise.NEP_phot2_nobunch[ics] * (1 + noise.P_phot[ics] /
                                                        (h * self.filter.nu * noise.g[ics]))
-            #if self.debug:
-            #    print(names[ics],
-            #          ', T=', temperatures[ics],
-            #          'K, P = {0:.2e} W'.format(P_phot[ics].max()),
-            #          ', NEP = {0:.2e}'.format(np.sqrt(NEP_phot2[ics]).max()) + ' W/sqrt(Hz)')
 
         if self.debug: self._raise_debug(noise, noise.ics)
 
@@ -1001,11 +980,6 @@ class QubicInstrument(Instrument):
             noise.NEP_phot2_nobunch[idic] = h * noise.nu * noise.P_phot[idic] * 2
             noise.NEP_phot2[idic] = noise.NEP_phot2_nobunch[idic] * (1 + noise.P_phot[idic] /
                                                          (h * noise.nu * noise.g[idic]))
-        #if self.debug:
-        #    print(noise.names[idic],
-        #          ', T=', noise.temperatures[idic],
-        #          'K, P = {0:.2e} W'.format(noise.P_phot[idic].max()),
-        #          ', NEP = {0:.2e}'.format(np.sqrt(noise.NEP_phot2[idic]).max()) + ' W/sqrt(Hz)')
 
         if self.debug: self._raise_debug(noise, noise.idic)
 
@@ -1123,9 +1097,6 @@ class QubicInstrument(Instrument):
                         return_only = False, sampling = None):
 
         """
-        This method computes the noise for all the components before 
-        back-to-back array.
-
         Arguments:
             noise: parameters for the computation of the noise. It is loaded from
                 load_NEP_parameters method
@@ -1187,7 +1158,6 @@ class QubicInstrument(Instrument):
         #Check if there are a sampling array in case you asked for one component of the photon noise  
         self._raise_sampling_error(return_only, sampling)
 
-        #for i in range(noise.idic + 1, noise.idic + 4):
         if noise.emissivities[i] == 0.0:
             noise.P_phot[i] = 0.0
             noise.NEP_phot2[i] = 0.0
@@ -1201,14 +1171,8 @@ class QubicInstrument(Instrument):
                                                    (h * self.filter.nu * noise.g[i]))
 
         if self.debug: self._raise_debug(noise, i)
-        #if self.debug: self._raise_debug(noise, noise.idic + 2)
-        #if self.debug: self._raise_debug(noise, noise.idic + 3)
 
         if return_only:
-            #inep = []
-            #for i in range(noise.idic + 1, noise.idic + 4):
-            #    inep.append(np.sqrt(np.mean(noise.NEP_phot2[i])))
-            #nep_intern = np.sqrt(np.sum(inep)) # np.sqrt(np.mean(noise.NEP_phot2[noise.ilast]))
             nep_intern = np.sqrt(np.mean(noise.NEP_phot2[i]))
             return {"power": noise.P_phot[i],
                     "NEP_phot2_nobunch": None,

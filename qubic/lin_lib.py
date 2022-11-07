@@ -168,14 +168,15 @@ def source_cal(Vin, freq = 150., finterp_Vin = '', finterp_freq = ''):
 
         finterp_freq = interpolate.interp1d(data[0], data[1])
 
-        if hasattr(Vin, '__len__') == False:
-            result =  finterp_freq(freq)*finterp_Vin(Vin, freq)
-            result = result[0]
-        else:
-            result = []
-            for V in Vin:
-                dummy = finterp_freq(freq)*finterp_Vin(V, freq)
-                result.append(dummy[0])
+    # Here we treat the two cases in which Vin is a scalar or an array
+    if hasattr(Vin, '__len__') == False:
+        result =  finterp_freq(freq)*finterp_Vin(Vin, freq)
+        result = result[0]
+    else:
+        result = []
+        for V in Vin:
+            dummy = finterp_freq(freq)*finterp_Vin(V, freq)
+            result.append(dummy[0])
         
     return np.array(result)
 

@@ -193,8 +193,11 @@ class BeamMapsAnalysis(object):
 
         FitsArray(mymap).save(repository+'/imgflat_TESNum_{}.fits'.format(TESNum))
 
-
-def plot_data_on_FP(datain, q, lim=None, savepdf=None, **kwargs):
+        
+def plot_data_on_FP(datain, q, \
+                    xdata = [], lim=None, savepdf=None, mytext=None, \
+                    mybgcolors = None, mysuptitle=None, mytitle=None, \
+                    style = '', **kwargs):
 
 
     """
@@ -202,20 +205,39 @@ def plot_data_on_FP(datain, q, lim=None, savepdf=None, **kwargs):
     Parameters :
 
         - datain : array -> The data that you want to plot on the focal plane. The data must have the shape (N_tes x N_data)
-        for 1D plot or (N_tes x N_data x N_data) for 2D plot.
+          for 1D plot or (N_tes x N_data x N_data) for 2D plot. In case one wants to plot multiple 1D plots then data_in is a list
+          of data arrays
         - q : object -> object of qubic computing with qubic package
-        - x : array -> for 1D plot, you can give x axis for the plot
+        - xdata : array (or array of arrays) -> for 1D plot, you can give x axis for the plot. Default is xdata = []. If one wants to plot more than
+              one curve then xdata is an array of arrays
         - lim : array -> have the shape [x_min, x_max, y_min, y_max] if you want to put limit on axis
         - savepdf : str -> Put the name of the file if you want to save the plot
-        - **kwargs : -> You can put severals arguments to modify the plot (color, linestyle, ...)
+        - string or array of strings specifying the plot style
+        - **kwargs : -> You can put severals arguments to modify the plot (color, linestyle, ...). 
 
     """
 
-    if len(datain.shape)==3:
-        dimension=2
-    elif len(datain.shape)==2:
-        dimension=1
+    import numpy as np
 
+    if type(datain) == np.ndarray:
+        # This is the case we have a simple 1D or a 2D plot
+        if len(datain) != 0:
+            if len(datain.shape)==3:
+                dimension = 2
+            elif len(datain.shape) == 2:
+                dimension = 1
+                datain = np.array([datain])
+                if len(xdata) > 0:
+                    xdata = np.array([xdata])
+        else:
+            dimension = 0
+
+    elif type(datain) == list:
+        # This is the case where we plot multiple 1D plots
+        dimension = 1
+        if style == '':
+            style = ['' for i in np.arange(len(datain))]
+        
     x=np.linspace(-0.0504, -0.0024, 17)
     y=np.linspace(-0.0024, -0.0504, 17)
 
@@ -238,12 +260,27 @@ def plot_data_on_FP(datain, q, lim=None, savepdf=None, **kwargs):
 
             xtes, ytes, FP_index, index_q= scal.TES_Instru2coord(TES=tes, ASIC=j, q=q, frame='ONAFP', verbose=False)
             ind=np.where((np.round(xtes, 4) == np.round(X, 4)) & (np.round(ytes, 4) == np.round(Y, 4)))
+            #print(ind)
+            #stop
 
+            if dimension == 0:
+
+                axs[ind[0][0], ind[1][0]].axes.xaxis.set_visible(False)
+                axs[ind[0][0], ind[1][0]].axes.yaxis.set_visible(False)
+
+                if lim != None:
+                    axs[ind[0][0], ind[1][0]].set_xlim(lim[0], lim[1])
+                    axs[ind[0][0], ind[1][0]].set_ylim(lim[2], lim[3])
 
             if dimension == 1:
 
-                axs[ind[0][0], ind[1][0]].plot(datain[k], **kwargs)
-
+                nplots = len(datain)
+                for plot_index in np.arange(nplots):
+                    if len(xdata) == 0:
+                        axs[ind[0][0], ind[1][0]].plot(datain[plot_index][k], style[plot_index], **kwargs)
+                    else:
+                        axs[ind[0][0], ind[1][0]].plot(xdata[plot_index],datain[plot_index][k], style[plot_index], **kwargs)
+                        
                 if lim != None:
                     axs[ind[0][0], ind[1][0]].set_xlim(lim[0], lim[1])
                     axs[ind[0][0], ind[1][0]].set_ylim(lim[2], lim[3])
@@ -251,14 +288,96 @@ def plot_data_on_FP(datain, q, lim=None, savepdf=None, **kwargs):
             elif dimension == 2:
                 #beam=_read_fits_beam_maps(newtes)
                 axs[ind[0][0], ind[1][0]].imshow(datain[k], **kwargs)
+                
+            if mytext is not None:
+                axs[ind[0][0], ind[1][0]].annotate(mytext[k], xy=(0, 0),  xycoords='data', color='black', 
+                                                   fontsize=35, ha="center", va="center", xytext=(0.5, 0.5), textcoords='axes fraction')
 
-            axs[ind[0][0], ind[1][0]].set_title('TES = {:.0f}'.format(tes))
+            if mybgcolors is not None:
+                axs[ind[0][0], ind[1][0]].set_facecolor(mybgcolors[k])
+            
+                # Make title
+            if mytitle is not None:
+                axs[ind[0][0], ind[1][0]].set_title(mytitle[k])
+            else:
+                axs[ind[0][0], ind[1][0]].set_title('TES = {:.0f}'.format(tes))
+            
 
 
             k+=1
+    if mysuptitle is not None:
+        plt.suptitle(mysuptitle, fontsize=55)
+    #axs[ind[0][0], ind[1][0]].set_title('TES = {:.0f}'.format(tes))
     if savepdf != None:
         savefig(savepdf, format="pdf", bbox_inches="tight")
     show()
+
+    
+# def plot_data_on_FP(datain, q, lim=None, savepdf=None, **kwargs):
+
+
+#     """
+
+#     Parameters :
+
+#         - datain : array -> The data that you want to plot on the focal plane. The data must have the shape (N_tes x N_data)
+#         for 1D plot or (N_tes x N_data x N_data) for 2D plot.
+#         - q : object -> object of qubic computing with qubic package
+#         - x : array -> for 1D plot, you can give x axis for the plot
+#         - lim : array -> have the shape [x_min, x_max, y_min, y_max] if you want to put limit on axis
+#         - savepdf : str -> Put the name of the file if you want to save the plot
+#         - **kwargs : -> You can put severals arguments to modify the plot (color, linestyle, ...)
+
+#     """
+
+#     if len(datain.shape)==3:
+#         dimension=2
+#     elif len(datain.shape)==2:
+#         dimension=1
+
+#     x=np.linspace(-0.0504, -0.0024, 17)
+#     y=np.linspace(-0.0024, -0.0504, 17)
+
+#     X, Y = np.meshgrid(x, y)
+
+#     allTES=np.arange(1, 129, 1)
+
+#     #delete thermometers tes
+#     good_tes=np.delete(allTES, np.array([4,36,68,100])-1, axis=0)
+
+#     fig, axs = subplots(nrows=17, ncols=17, figsize=(50, 50))
+#     k=0
+#     for j in [1, 2]:
+#         for ites, tes in enumerate(good_tes):
+#             if j > 1:
+#                 newtes=tes+128
+#             else:
+#                 newtes=tes
+#             #print(ites, tes, j)
+
+#             xtes, ytes, FP_index, index_q= scal.TES_Instru2coord(TES=tes, ASIC=j, q=q, frame='ONAFP', verbose=False)
+#             ind=np.where((np.round(xtes, 4) == np.round(X, 4)) & (np.round(ytes, 4) == np.round(Y, 4)))
+
+
+#             if dimension == 1:
+
+#                 axs[ind[0][0], ind[1][0]].plot(datain[k], **kwargs)
+
+#                 if lim != None:
+#                     axs[ind[0][0], ind[1][0]].set_xlim(lim[0], lim[1])
+#                     axs[ind[0][0], ind[1][0]].set_ylim(lim[2], lim[3])
+
+#             elif dimension == 2:
+#                 #beam=_read_fits_beam_maps(newtes)
+#                 axs[ind[0][0], ind[1][0]].imshow(datain[k], **kwargs)
+
+#             axs[ind[0][0], ind[1][0]].set_title('TES = {:.0f}'.format(tes))
+
+
+#             k+=1
+#     if savepdf != None:
+#         savefig(savepdf, format="pdf", bbox_inches="tight")
+#     show()
 
 def _read_fits_beam_maps(TESNum):
     from astropy.io import fits as pyfits

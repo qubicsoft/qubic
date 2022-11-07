@@ -390,7 +390,7 @@ def profile(xin, yin, rng=None, nbins=10, fmt=None, plot=True, dispersion=True, 
                 if fmt is None:
                         fmt = 'ro'
                 errorbar(xc, yval, xerr=dx, yerr=dy, fmt=fmt)
-        ok = nn != 0
+        ok = (nn != 0) & (dy != 0)
         if cutbad:
                 if others is None:
                         return xc[ok], yval[ok], dx[ok], dy[ok], others

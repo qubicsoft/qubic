@@ -443,7 +443,7 @@ tod = alltod[TESNum-1,:]
 scantype_hk, azt, elt, scantype = tdt.identify_scans(thk, az, el, tt=tt-deltaT, doplot=False, thr_speedmin=speedmin)
 nscans = np.max(np.abs(scantype))
 
-# 1. Remove a slow spline to the data
+# 1. Remove a slow spline to the data ### default 20 splines
 tod = tdt.remove_drifts_spline(tt, tod, nsplines=20, doplot=True)
 
 # 2. Offset removal scan by scan using median 
@@ -452,7 +452,7 @@ mytod = -tod.copy()
 mytod = remove_offset_scan(mytod, scantype, method='median')
 
 # 3. Remove azimuth correlation
-# 3.c : splines
+# 3.c : splines # default 5
 mytod = decorel_azel(mytod, azt, elt, scantype, doplot=True, nbins=50, n_el=50, nbspl=5)
 
     
@@ -489,11 +489,11 @@ from astropy.coordinates import SkyCoord, EarthLocation, AltAz, get_moon, get_su
 Salta = EarthLocation(lat=-24.731358*u.deg, lon=-65.409535*u.deg, height=1152*u.m)
 utcoffset = -3*u.hour  # Eastern Daylight Time
 
-dt0 = datetime.fromtimestamp(int((tt+tinit)[0]))
+dt0 = datetime.utcfromtimestamp(int((tt+tinit)[0]))
 print(dt0)
 
 nbtime = 100
-tt_hours_loc = tt/3600+3
+tt_hours_loc = tt/3600
 delta_time = np.linspace(np.min(tt_hours_loc), np.max(tt_hours_loc), nbtime)*u.hour
 
 alltimes = Time(dt0) + delta_time

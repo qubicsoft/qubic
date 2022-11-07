@@ -135,20 +135,93 @@ colorbar()
 tight_layout()
 ```
 
-```{python}
+# Now using a user-defined cost function
 
+```{python}
+######### iminuit direct
+x = np.linspace(0,1,10)
+sig = np.ones(len(x)) * 1.
+errors = np.random.randn(len(x)) * sig
+y = 3*x+1 + errors
+
+def linearfit(x, pars):
+    return pars[0] + pars[1] * x
+
+class mychi2:
+    """
+    Generic least-squares cost function with error.
+    """
+    
+    errordef = iminuit.Minuit.LEAST_SQUARES # for Minuit to compute errors correctly
+
+    def __init__(self, x, y, err, model):
+        self.model = model  # model predicts y for given x
+        self.x = np.asarray(x)
+        self.y = np.asarray(y)
+        self.err = np.asarray(err)
+
+    def __call__(self, *par):  # we accept a variable number of model parameters
+        ym = self.model(self.x, *par)
+        return np.sum((self.y - ym) ** 2 / self.err ** 2)
+
+    @property
+    def ndata(self):
+        return len(self.x)
+
+import iminuit
+from iminuit.cost import LeastSquares
+myminimizer = mychi2(x, y, errors, linearfit)
+m = iminuit.Minuit(myminimizer, [0., 0.], name=None)
+m.migrad()
+m.hesse()
+
+print(m)
+
+errorbar(x, y, yerr=sig, fmt='ko')
+plot(x, linearfit(x, m.values), 'r', lw=2)
 ```
 
-```{python}
-
-```
+# Now with the fitting library
 
 ```{python}
+### Use the fitting.py library 
 
-```
+reload(fit)
 
-```{python}
+x = np.linspace(0,1,10)
+sig = np.ones(len(x)) * 1.
+errors = np.random.randn(len(x)) * sig
+y = 3*x+1 + errors
 
+def linearfit(x, pars):
+    return pars[0] + pars[1] * x
+
+class mychi2:
+    """
+    Generic least-squares cost function with error.
+    """
+    
+    errordef = iminuit.Minuit.LEAST_SQUARES # for Minuit to compute errors correctly
+
+    def __init__(self, x, y, err, model):
+        self.model = model  # model predicts y for given x
+        self.x = np.asarray(x)
+        self.y = np.asarray(y)
+        self.err = np.asarray(err)
+
+    def __call__(self, *par):  # we accept a variable number of model parameters
+        ym = self.model(self.x, *par)
+        return np.sum((self.y - ym) ** 2 / self.err ** 2)
+
+    @property
+    def ndata(self):
+        return len(self.x)
+
+mydata = fit.Data(x,y,sig, linearfit, pnames=['a', 'b'])
+
+guess = [0., 0.]
+mydata.fit_minuit(guess, minimizer=mychi2)
+mydata.plot()
 ```
 
 ```{python}

@@ -161,35 +161,6 @@ ylabel('el (deg)')
 We now need the coordinates of the Moon at these very same time samples. We use astropy for that purpose.
 
 ```{python}
-########## Old bugged code with GCRS and get_moon()
-# alltimes = Time(date_obs) + thk*u.second #+ 3*u.minute
-
-# ############################### Using Astropy #########################
-# ### Local coordinates
-# frame_Salta = AltAz(obstime=alltimes , location=Salta)
-
-# ### Moon
-# moon_Salta = get_moon(alltimes)
-# moonaltazs_Salta = moon_Salta.transform_to(frame_Salta)  
-
-# myazmoon = moonaltazs_Salta.az.value
-# myelmoon = moonaltazs_Salta.alt.value
-
-# moonra = moon_Salta.ra
-# moondec = moon_Salta.dec
-# moongal_l, moongal_b = qubic.equ2gal(moonra, moondec)
-# #moongal_l, moongal_b = qubic.equ2gal(moon_Salta.ra, moon_Salta.dec)
-
-# ### Now we know the equatorial/Galactic location of the moon 
-# lmoon_av = np.mean(np.array(moongal_l))
-# bmoon_av = np.mean(np.array(moongal_b))
-
-# ramoon_av = np.mean(moonra)
-# decmoon_av = np.mean(moondec)
-# #########################################################################
-```
-
-```{python}
 
 alltimes = Time(date_obs) + thk*u.second #+ 3*u.minute
 
@@ -207,6 +178,7 @@ moondec = moon_Salta.dec
 ### l,b
 g = SkyCoord(moon_Salta.ra, moon_Salta.dec, frame='icrs').galactic
 moongal_l, moongal_b = g.l.degree, g.b.degree
+# moongal_l, moongal_b = qubic.equ2gal(moonra, moondec)
 
 moonaltazs_Salta = moon_Salta.transform_to(frame_Salta)  
 myazmoon = moonaltazs_Salta.az.value
@@ -542,7 +514,59 @@ plot(np.degrees(newphs), np.degrees(newths), 'ro')
 ```
 
 ```{python}
-TESNum = 125     #33->154, 96->231
+TESNum = 96     #33->154, 96->231
+
+indexQS = iQP2iQS(TESNum-1)
+
+tod = TOD[indexQS,:]
+speedmin = 0.05
+
+nside = 256
+
+###### Pipeline:
+# 0. Identify scan types and numbers
+scantype_hk, azt, elt, scantype = tdt.identify_scans(thk, qs.azimuth, qs.elevation, tt=qs.time, doplot=False, thr_speedmin=speedmin)
+nscans = np.max(np.abs(scantype))
+
+# # Map-making
+# mapsb, mapcount = healpix_map(qs.azimuth[scantype != 0], qs.elevation[scantype != 0], tod[scantype != 0], nside=nside)
+
+# # Display Results
+# hp.gnomview(mapsb, rot=[np.mean(qs.azimuth), np.mean(qs.elevation)], reso=8, sub=(1,3,1), title='Az/El Co-added Map [QP #{} ; QS #{}]'.format(TESNum, indexQS+1))
+
+
+# Map-making
+azqubic = 116.4*0  ### it is already accounted for
+newazt = (qs.azimuth + azqubic - np.mean(myazmoon)) * np.cos(np.radians(qs.elevation))
+newelt = -(qs.elevation - np.mean(myelmoon))
+
+# Map-making in az,el
+azqubic = 116.4  ### it is already accounted for
+newazt = qs.azimuth-np.mean(qs.azimuth) - (myazmoon - np.mean(myazmoon))
+newelt = -(qs.elevation-np.mean(qs.elevation)) + (myelmoon - np.mean(myelmoon))
+
+
+print(len(newazt))
+
+mapsb, mapcount = healpix_map(newazt[scantype != 0], newelt[scantype != 0], tod[scantype != 0], nside=nside)
+
+# Display Results
+hp.gnomview(mapsb, reso=7, rot=[-deltaph, -deltath], sub=(1,2,1), title='Az/El wrt Moon FP centered [QP #{} ; QS #{}]'.format(TESNum, indexQS+1))
+
+
+### Centered on L.O.S
+dth_tes = np.degrees(np.pi/2-newths[indexQS])
+dph_tes = np.degrees(newphs[indexQS]-np.pi)
+hp.gnomview(mapsb, reso=7, rot=[-dph_tes , -dth_tes], sub=(1,2,2), title='L.O.S. centered [QP #{} ; QS #{}]'.format(TESNum, indexQS+1))
+hp.graticule()
+hp.projplot(np.radians(90),np.radians(0),'r+', mew=3, ms=10, label='FP center')
+hp.projplot(np.pi-newths, -(newphs-np.pi),'r.', label='detectors')
+hp.projplot(np.pi-newths[indexQS], -(newphs[indexQS]-np.pi),'go', label='QP#{}'.format(TESNum))
+legend()
+```
+
+```{python}
+TESNum = 96     #33->154, 96->231
 
 indexQS = iQP2iQS(TESNum-1)
 
@@ -573,26 +597,22 @@ print(len(newazt))
 mapsb, mapcount = healpix_map(newazt[scantype != 0], newelt[scantype != 0], tod[scantype != 0], nside=nside)
 
 ### This rotation is not understood
-deltath = 1.4 * 0
-deltaph = 0.
+deltath = 0
+deltaph = 0
 
 # Display Results
-hp.gnomview(mapsb, reso=7, rot=[-deltaph, -deltath], sub=(2,2,1), title='Az/El wrt Moon FP centered [QP #{} ; QS #{}]'.format(TESNum, indexQS+1))
+hp.gnomview(mapsb, reso=7, rot=[-deltaph, -deltath], sub=(1,2,1), title='Az/El wrt Moon FP centered [QP #{} ; QS #{}]'.format(TESNum, indexQS+1))
 
 
 ### Centered on L.O.S
 dth_tes = np.degrees(np.pi/2-newths[indexQS])
 dph_tes = np.degrees(newphs[indexQS]-np.pi)
-hp.gnomview(mapsb, reso=7, rot=[-deltaph-dph_tes , -deltath-dth_tes], sub=(2,2,2), title='L.O.S. centered [QP #{} ; QS #{}]'.format(TESNum, indexQS+1))
+hp.gnomview(mapsb, reso=7, rot=[-deltaph-dph_tes , -deltath-dth_tes], sub=(1,2,2), title='L.O.S. centered [QP #{} ; QS #{}]'.format(TESNum, indexQS+1))
 hp.graticule()
 hp.projplot(np.radians(90)+np.radians(deltath),np.radians(0)+np.radians(deltaph),'r+', mew=3, ms=10, label='FP center')
 hp.projplot(np.pi-newths+np.radians(deltath), -(newphs-np.pi)+np.radians(deltaph),'r.', label='detectors')
 hp.projplot(np.pi-newths[indexQS]+np.radians(deltath), -(newphs[indexQS]-np.pi)+np.radians(deltaph),'go', label='QP#{}'.format(TESNum))
 legend()
-```
-
-```{python}
-
 ```
 
 ```{python}
@@ -649,11 +669,92 @@ hp.gnomview(newmapdiff, rot=[np.mean(newazt), np.mean(newelt)], reso=12, sub=(1,
 ```
 
 ```{python}
-# hp.mollview(mapsb)
-# hp.write_map('mapsim_TES{}.fits'.format(TESNum), mapsb)
+class gauss2dfit:
+    def __init__(self, xx, yy):
+        self.xx = xx
+        self.yy = yy
+    def __call__(self, x, pars):
+        amp, xc, yc, sig = pars
+        mygauss = amp * np.exp(-0.5*((self.xx-xc)**2+(self.yy-yc)**2)/sig**2)
+        return np.ravel(mygauss)
+
+
+def fitgauss_img(mapxy, x, y, guess=None, doplot=False, distok=3, mytit='', nsig=1, mini=None, maxi=None, ms=10, renorm=False):
+    xx,yy = meshgrid(x,y)
+    
+    ### Displays the image as an array
+    mm, ss = ft.meancut(mapxy, 3)
+    if mini is None:
+        mini = mm-nsig*ss
+    if maxi is None:
+        maxi = np.max(mapxy)
+    if doplot:
+        subplot(2,3,1)
+        imshow(mapxy, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mini, vmax=maxi)
+        xlabel('Degrees')
+        ylabel('Degrees')
+        colorbar()
+        if mytit:
+            title('Data '+mytit)
+
+    ### Guess where the maximum is and the other parameters
+    if guess is None:
+        maxii = mapxy == np.nanmax(mapxy)
+        maxx = np.mean(xx[maxii])
+        maxy = np.mean(yy[maxii])
+        guess = np.array([np.max(mapxy),maxx, maxy, 1.])
+    else:
+        maxx = guess[1]
+        maxy = guess[2]
+    if doplot:
+        # Plot a red cross at the expected location
+        plot(guess[1],guess[2],'yx', ms=ms, mew=2, label='Guess')
+        
+    ### Do the fit putting the UNSEEN to a very low weight
+    errpix = xx*0+ss
+    errpix[mapxy==0] *= 1e5
+    g2d = gauss2dfit(xx, yy)
+    data = fit.Data(np.ravel(xx), np.ravel(mapxy), np.ravel(errpix), g2d)
+    m, ch2, ndf = data.fit_minuit(guess, limits=[[0, 0.,1e8], [1, maxx-distok, maxx+distok], [2, maxy-distok, maxy+distok], [3, 0., 10.]], renorm=renorm)
+
+    if doplot:
+        plot(m.values[1], m.values[2], 'rx', ms=ms, mew=2, label='Fit')
+        legend()
+    ### Image of the fitted Gaussian
+    fitted = np.reshape(g2d(x, m.values), (xs, xs))
+    if doplot:
+        subplot(2,3,2)
+        imshow(fitted, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mini, vmax=maxi)
+        colorbar()
+        xlabel('Degrees')
+        ylabel('Degrees')
+        title('FWHMFit = {:5.3f} +/- {:5.3f} degrees'.format(m.values[3]*2.35, m.errors[3]*2.35))
+
+        ### Display residuals
+        subplot(2,3,3)
+        imshow(mapxy-fitted, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mini, vmax=maxi)
+        colorbar()
+        xlabel('Degrees')
+        ylabel('Degrees')
+        title('Residuals')
+        
+    return m, fitted
+
 ```
 
 ```{python}
+import fitting as fit
+xs = 201
+reso = 3
+
+mymap = mapsb.copy()
+mymap[mymap==hp.UNSEEN] = 0
+mymap /= np.max(mymap)
+img = hp.gnomview(mymap, reso=reso, sub=(1,2,1), title='Az/El wrt Moon FP centered [QP #{} ; QS #{}]'.format(TESNum, indexQS+1), return_projected_map=True, xsize=xs,no_plot=True)
+img += np.random.randn(xs,xs)/100
+x = (np.arange(xs)-(xs-1)/2)*reso/60
+y = x.copy()
+m, fitted = fitgauss_img(img, x, y, doplot=True, nsig=3, mytit='Simulation', guess=[1,-0.5,-1,0.9])
 
 ```
 

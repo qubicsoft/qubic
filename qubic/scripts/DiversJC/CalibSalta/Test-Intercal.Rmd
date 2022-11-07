@@ -454,6 +454,7 @@ class simulate_signal_intercal:
         self.H = H
         self.d = np.reshape(d, (ndet, nsamples))
         self.w = w
+        self.intercal = None
 
     def __call__(self, x, sky):
         # get the intercalibrated TOD directly from the sky + the calculated intercalibrations
@@ -469,9 +470,9 @@ class simulate_signal_intercal:
         myw = np.diag(self.w[1:]) 
         myDw = (myD.T @ myw).T
         mydw = (self.d[1:, :].T @ myw).T
-        intercal_rec = np.append(
+        self.intercal = np.append(
              1,  1/np.sum(myD*myDw, axis=1) * np.sum(myD * mydw, axis=1))
-        return D, intercal_rec
+        return D, self.intercal
 
 
 sigmas = np.ones(len(alltod))
@@ -502,7 +503,8 @@ chi2_true = np.sum(((alltod_noiseless - alltod) / sigmas)**2)
 print('Chi2 True = {}'.format(chi2_true))
 
 mymap2 = np.array(m.values)
-myresult2, myintercals2 = myH.give_intercals(m.values)
+myintercals = myH.intercal
+#myresult2, myintercals2 = myH.give_intercals(m.values)
 
 subplot(2, 3, 1)
 plot(xpix, truey, label='True Sky')

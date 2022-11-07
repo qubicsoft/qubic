@@ -438,11 +438,6 @@ tight_layout()
 ```
 
 ```{python}
-moon_apparent_radius = 0.26
-np.sqrt(0.68**2 + (2.35*moon_apparent_radius)**2)
-```
-
-```{python}
 from matplotlib import cm
 from matplotlib.colors import LightSource
 
@@ -483,6 +478,51 @@ def myfunc(mytes, ax):
     ax.get_yaxis().set_visible(False)
 
 plot_fp.plot_fp(myfunc, savepdf='toto.pdf')
+
+```
+
+## Study of the Moon apparent FWHM
+the Moon is supposed to be a op-Hat with 0.26 deg FWHM. What do we expect when convolved with the QUBIC TD FWHM expected to be 0.68 deg ?
+
+```{python}
+### Calculation assuming a Gaussian shape
+moon_apparent_radius = 0.26
+np.sqrt(0.68**2 + (2.35*moon_apparent_radius)**2)
+```
+
+```{python}
+xxx = np.linspace(-10,10,1001)
+
+#### Moon apaprent radius 0.26 deg
+rmoon = 0.26
+moon = np.zeros(len(xxx))
+moon[np.abs(xxx) < rmoon] = 1
+
+#### QUBIC
+qFWHM = 0.68
+qsig = qFWHM/2.35
+qubic_beam = np.exp(-0.5 * xxx**2 / qsig**2)
+
+#### Convolve both
+moonqubic = np.convolve(moon, qubic_beam, mode='same')
+moonqubic = moonqubic/np.max(moonqubic)
+
+norm = np.trapz(moonqubic, x=xxx)
+fwhm_expected = np.sqrt(np.trapz(moonqubic/norm * xxx**2, x=xxx)) * 2.35
+
+
+plot(xxx, qubic_beam, label='QUBIC TD Resolution FWHM = {0:4.2f} deg'.format(qFWHM))
+plot(xxx, moon, label='Moon: radius = {0:4.2f} deg'.format(rmoon))
+plot(xxx, moonqubic, label='Convolution: FWHM = {0:4.2f} deg'.format(fwhm_expected))
+xlim(-3,3)
+legend()
+```
+
+```{python}
+
+```
+
+```{python}
 
 ```
 

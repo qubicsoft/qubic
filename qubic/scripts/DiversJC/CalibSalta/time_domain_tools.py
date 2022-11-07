@@ -13,59 +13,59 @@ from qubic import fibtools as ft
 
 
 class MySplineFitting:
-    def __init__(self,xin,yin,covarin,nbspl,logspace=False):
-        # input parameters
-        self.x=xin
-        self.y=yin
-        self.nbspl=nbspl
-        covar=covarin
-        if np.size(np.shape(covarin)) == 1:
-            err=covarin
-            covar=np.zeros((np.size(err),np.size(err)))
-            covar[np.arange(np.size(err)),np.arange(np.size(err))]=err**2
-        
-        self.covar=covar
-        self.invcovar=np.linalg.inv(covar)
-        
-        # Prepare splines
-        xspl=np.linspace(np.min(self.x),np.max(self.x),nbspl)
-        if logspace==True: xspl=np.logspace(np.log10(np.min(self.x)),np.log10(np.max(self.x)),nbspl)
-        self.xspl=xspl
-        F=np.zeros((np.size(xin),nbspl))
-        self.F=F
-        for i in np.arange(nbspl):
-            self.F[:,i]=self.get_spline_tofit(xspl,i,xin)
-        
-        # solution of the chi square
-        ft_cinv_y=np.dot(np.transpose(F),np.dot(self.invcovar,self.y))
-        covout=np.linalg.inv(np.dot(np.transpose(F),np.dot(self.invcovar,F)))
-        alpha=np.dot(covout,ft_cinv_y)
-        fitted=np.dot(F,alpha)
-        
-        # output
-        self.residuals=self.y-fitted
-        self.chi2=np.dot(np.transpose(self.residuals), np.dot(self.invcovar, self.residuals))
-        self.ndf=np.size(xin)-np.size(alpha)
-        self.alpha=alpha
-        self.covout=covout
-        self.dalpha=np.sqrt(np.diagonal(covout))
-    
-    def __call__(self,x):
-        theF=np.zeros((np.size(x),self.nbspl))
-        for i in np.arange(self.nbspl): theF[:,i]=self.get_spline_tofit(self.xspl,i,x)
-        return(dot(theF,self.alpha))
+	def __init__(self,xin,yin,covarin,nbspl,logspace=False):
+		# input parameters
+		self.x=xin
+		self.y=yin
+		self.nbspl=nbspl
+		covar=covarin
+		if np.size(np.shape(covarin)) == 1:
+			err=covarin
+			self.covar = np.diag(err**2)
+			self.invcovar = np.diag(1./err**2)
+		else:
+			self.covar=covarin
+			self.invcovar=np.linalg.inv(covarin)
+		
+		# Prepare splines
+		xspl=np.linspace(np.min(self.x),np.max(self.x),nbspl)
+		if logspace==True: xspl=np.logspace(np.log10(np.min(self.x)),np.log10(np.max(self.x)),nbspl)
+		self.xspl=xspl
+		F=np.zeros((np.size(xin),nbspl))
+		self.F=F
+		for i in np.arange(nbspl):
+			self.F[:,i]=self.get_spline_tofit(xspl,i,xin)
+		
+		# solution of the chi square
+		ft_cinv_y=np.dot(np.transpose(F),np.dot(self.invcovar,self.y))
+		covout=np.linalg.inv(np.dot(np.transpose(F),np.dot(self.invcovar,F)))
+		alpha=np.dot(covout,ft_cinv_y)
+		fitted=np.dot(F,alpha)
+		
+		# output
+		self.residuals=self.y-fitted
+		self.chi2=np.dot(np.transpose(self.residuals), np.dot(self.invcovar, self.residuals))
+		self.ndf=np.size(xin)-np.size(alpha)
+		self.alpha=alpha
+		self.covout=covout
+		self.dalpha=np.sqrt(np.diagonal(covout))
+	
+	def __call__(self,x):
+		theF=np.zeros((np.size(x),self.nbspl))
+		for i in np.arange(self.nbspl): theF[:,i]=self.get_spline_tofit(self.xspl,i,x)
+		return(dot(theF,self.alpha))
 
-    def with_alpha(self,x,alpha):
-        theF=np.zeros((np.size(x),self.nbspl))
-        for i in np.arange(self.nbspl): theF[:,i]=self.get_spline_tofit(self.xspl,i,x)
-        return(dot(theF,alpha))
-            
-    def get_spline_tofit(self,xspline,index,xx):
-        yspline=zeros(np.size(xspline))
-        yspline[index]=1.
-        tck=interpolate.splrep(xspline,yspline)
-        yy=interpolate.splev(xx,tck,der=0)
-        return(yy)
+	def with_alpha(self,x,alpha):
+		theF=np.zeros((np.size(x),self.nbspl))
+		for i in np.arange(self.nbspl): theF[:,i]=self.get_spline_tofit(self.xspl,i,x)
+		return(dot(theF,alpha))
+			
+	def get_spline_tofit(self,xspline,index,xx):
+		yspline=zeros(np.size(xspline))
+		yspline[index]=1.
+		tck=interpolate.splrep(xspline,yspline)
+		yy=interpolate.splev(xx,tck,der=0)
+		return(yy)
 
 
 def remove_drifts_spline(tt, tod, nsplines=20, nresample=1000, nedge=100, doplot=False):
@@ -101,11 +101,11 @@ def remove_drifts_spline(tt, tod, nsplines=20, nresample=1000, nedge=100, doplot
 
 
 def get_mode(y, nbinsmin=51):
-    mm, ss = ft.meancut(y, 4)
-    hh = np.histogram(y, bins=int(np.min([len(y) / 30, nbinsmin])), range=[mm - 5 * ss, mm + 5 * ss])
-    idmax = np.argmax(hh[0])
-    mymode = 0.5 * (hh[1][idmax + 1] + hh[1][idmax])
-    return mymode
+	mm, ss = ft.meancut(y, 4)
+	hh = np.histogram(y, bins=int(np.min([len(y) / 30, nbinsmin])), range=[mm - 5 * ss, mm + 5 * ss])
+	idmax = np.argmax(hh[0])
+	mymode = 0.5 * (hh[1][idmax + 1] + hh[1][idmax])
+	return mymode
 
 
 def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, doplot=False, plotrange=[0,1000]):

@@ -130,7 +130,7 @@ figure()
 title('Flags Histogram')
 a=hist(flags, bins=100, range=[0,5], alpha=0.3, label='Initial Flags')
 a=hist(flags_interp, bins=100, range=[0,5], alpha=0.3, label='Brute Interpolated Flags')
-a=hist(flags_interp_best, bins=100, range=[0,5], alpha=0.3, label='Brute Interpolated Flags')
+a=hist(flags_interp_best, bins=100, range=[0,5], alpha=0.3, label='Better Interpolated Flags')
 yscale('log')
 xlabel('Flag value')
 legend()
@@ -149,6 +149,10 @@ However, this solution might not be fully optimal for execution time reasons:
 ```{python}
 # %timeit flags_interp_best = np.max(np.array([interp1d(time, flags, kind='previous', fill_value='extrapolate')(newtime), 
                                              interp1d(time, flags, kind='next', fill_value='extrapolate')(newtime)]), axis=0)
+```
+
+```{python}
+len(time)
 ```
 
 # Resampling

@@ -250,6 +250,7 @@ def plot_data_on_FP(datain, q, \
 
     fig, axs = subplots(nrows=17, ncols=17, figsize=(50, 50))
     k=0
+
     for j in [1, 2]:
         for ites, tes in enumerate(good_tes):
             if j > 1:
@@ -260,8 +261,6 @@ def plot_data_on_FP(datain, q, \
 
             xtes, ytes, FP_index, index_q= scal.TES_Instru2coord(TES=tes, ASIC=j, q=q, frame='ONAFP', verbose=False)
             ind=np.where((np.round(xtes, 4) == np.round(X, 4)) & (np.round(ytes, 4) == np.round(Y, 4)))
-            #print(ind)
-            #stop
 
             if dimension == 0:
 
@@ -288,10 +287,11 @@ def plot_data_on_FP(datain, q, \
             elif dimension == 2:
                 #beam=_read_fits_beam_maps(newtes)
                 axs[ind[0][0], ind[1][0]].imshow(datain[k], **kwargs)
-                
+             
             if mytext is not None:
-                axs[ind[0][0], ind[1][0]].annotate(mytext[k], xy=(0, 0),  xycoords='data', color='black', 
-                                                   fontsize=35, ha="center", va="center", xytext=(0.5, 0.5), textcoords='axes fraction')
+            #    axs[ind[0][0], ind[1][0]].annotate(mytext[k], xy=(0, 0),  xycoords='data', color='black', 
+             #                                      fontsize=35, ha="center", va="center", xytext=(0.5, 0.5), textcoords='figure points')
+                axs[ind[0][0], ind[1][0]].text(0.5, 0.5, mytext[k], fontsize = 35, horizontalalignment='center', verticalalignment='center', transform=axs[ind[0][0], ind[1][0]].transAxes)
 
             if mybgcolors is not None:
                 axs[ind[0][0], ind[1][0]].set_facecolor(mybgcolors[k])

@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.4.0
   kernelspec:
     display_name: Python 3
     language: python
@@ -25,7 +25,6 @@ import healpy as hp
 import matplotlib.pyplot as plt
 
 # Specific qubic modules
-from qubicpack.utilities import Qubic_DataDir
 from pysimulators import FitsArray
 
 import qubic
@@ -42,10 +41,9 @@ In this first part, we build sky maps knowing the spectra. For that, we use PySM
 
 ```{python}
 #### Create sample CMB I,Q,U maps
-global_dir = Qubic_DataDir(datafile='instrument.py', datadir=os.environ['QUBIC_DATADIR'])
 
-# dictfilename = global_dir + '/dicts/BmodesNoDustNoSystPaper0_2020.dict'
-dictfilename = global_dir + '/dicts/test_QubicSkySim.dict'
+# dictfilename = 'BmodesNoDustNoSystPaper0_2020.dict'
+dictfilename = 'test_QubicSkySim.dict'
 
 # Read dictionary chosen
 d = qubic.qubicdict.qubicDict()

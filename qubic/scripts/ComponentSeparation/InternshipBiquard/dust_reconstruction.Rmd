@@ -1,0 +1,95 @@
+---
+jupyter:
+  jupytext:
+    formats: ipynb,Rmd
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.11.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+import sys, os
+import numpy as np
+import matplotlib.pyplot as plt
+```
+
+```{python}
+OUTDIR_LOCAL = "/home/simon/PycharmProjects/qubic_comp_sep/output/"
+DATADIR_LOCAL = "/home/simon/PycharmProjects/qubic_comp_sep/data/"
+```
+
+```{python}
+npz = np.load(OUTDIR_LOCAL+"BetaDustEstimate_IQU_SingleBand_400years.npz")
+print(npz.files)
+```
+
+```{python}
+print(np.max(npz['beta_150_3_00']))
+print(np.max(npz['beta_150_3_01']))
+print(np.max(npz['beta_150_3_10']))
+print(np.max(npz['beta_150_3_11']))
+```
+
+```{python}
+# 150 GHz results
+fig, axes = plt.subplots(3, 4, figsize=(16, 10))
+for i in range(3):
+    for j in range(4):
+        noise_properties = np.binary_repr(j, width=2)[::-1]
+        # spatial = bool(int(noise_properties[1]))
+        # nunu = bool(int(noise_properties[0]))
+        data = npz['beta_150_'+str(i+3)+'_'+noise_properties]
+        mean, std = np.mean(data), np.std(data)
+        axe = axes[i, j]
+        axe.hist(data, bins='auto', histtype='step', density=False)
+        axe.axvline(x=mean, color='blue')
+        axe.axvline(x=1.55, color='red')
+        axe.text(0.05, 0.9, "{:d} realizations".format(len(data)), transform=axe.transAxes, fontsize=10, ha='left')
+
+fig.suptitle("Histograms of fitted beta_dust at 150 GHz / 400 years and different noise properties", fontsize='xx-large')
+
+axes[0, 0].text(-0.3, 0.5, "#bands = 3", transform=axes[0, 0].transAxes, fontsize=18, fontweight='bold', va='center', rotation=90)
+axes[1, 0].text(-0.3, 0.5, "#bands = 4", transform=axes[1, 0].transAxes, fontsize=18, fontweight='bold', va='center', rotation=90)
+axes[2, 0].text(-0.3, 0.5, "#bands = 5", transform=axes[2, 0].transAxes, fontsize=18, fontweight='bold', va='center', rotation=90)
+
+axes[0, 0].text(0.5, 1.1, "white noise", transform=axes[0, 0].transAxes, fontsize=18, fontweight='bold', ha='center')
+axes[0, 1].text(0.5, 1.1, "nunu correlations", transform=axes[0, 1].transAxes, fontsize=18, fontweight='bold', ha='center')
+axes[0, 2].text(0.5, 1.1, "spatial correlations", transform=axes[0, 2].transAxes, fontsize=18, fontweight='bold', ha='center')
+axes[0, 3].text(0.5, 1.1, "all correlations", transform=axes[0, 3].transAxes, fontsize=18, fontweight='bold', ha='center')
+
+plt.show()
+```
+
+```{python}
+# 220 GHz results
+fig, axes = plt.subplots(3, 4, figsize=(16, 10))
+for i in range(3):
+    for j in range(4):
+        data = npz['beta_220_'+str(i+3)+'_'+np.binary_repr(j, width=2)[::-1]]
+        mean, std = np.mean(data), np.std(data)
+        axe = axes[i, j]
+        axe.hist(data, bins='auto', histtype='step', density=False)
+        axe.axvline(x=mean, color='blue')
+        axe.axvline(x=1.55, color='red')
+        axe.set_xlim([1.30, 1.6])
+        axe.text(0.05, 0.9, "{:d} realizations".format(len(data)), transform=axe.transAxes, fontsize=10, ha='left')
+
+fig.suptitle("Histograms of fitted beta_dust at 220 GHz / 400 years and different noise properties", fontsize='xx-large')
+
+axes[0, 0].text(-0.3, 0.5, "#bands = 3", transform=axes[0, 0].transAxes, fontsize=18, fontweight='bold', va='center', rotation=90)
+axes[1, 0].text(-0.3, 0.5, "#bands = 4", transform=axes[1, 0].transAxes, fontsize=18, fontweight='bold', va='center', rotation=90)
+axes[2, 0].text(-0.3, 0.5, "#bands = 5", transform=axes[2, 0].transAxes, fontsize=18, fontweight='bold', va='center', rotation=90)
+
+axes[0, 0].text(0.5, 1.1, "white noise", transform=axes[0, 0].transAxes, fontsize=18, fontweight='bold', ha='center')
+axes[0, 1].text(0.5, 1.1, "nunu correlations", transform=axes[0, 1].transAxes, fontsize=18, fontweight='bold', ha='center')
+axes[0, 2].text(0.5, 1.1, "spatial correlations", transform=axes[0, 2].transAxes, fontsize=18, fontweight='bold', ha='center')
+axes[0, 3].text(0.5, 1.1, "all correlations", transform=axes[0, 3].transAxes, fontsize=18, fontweight='bold', ha='center')
+
+plt.show()
+```

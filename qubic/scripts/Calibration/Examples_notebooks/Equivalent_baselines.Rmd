@@ -1,0 +1,342 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.2
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+### Step-by-step computation of equivalent baselines
+
+##### by Claudia
+
+Given an array of horns, there is a certain number of baselines you can define. Afterwards, you can partitionate the set in subsets of equivalent baselines.
+
+Let's work in a square array of $N=n \times n$ horns (for example, $n=8$ horns in a side of the array. Total number of horns: $N=64$)
+
+```{python}
+import numpy as np
+import matplotlib.pyplot as plt
+```
+
+```{python}
+n=8
+
+N= n*n
+```
+
+```{python}
+print("n= ",n, "N= ",N)
+```
+
+### Let's define the coordinates of the horns
+
+```{python}
+# Which are the coordinates of these horns? In normalized units (unit= separation of two horns in one axis):
+
+Coordinates_horns = []
+
+count = 0
+for i in range(n):
+    for j in range(n):
+        a = (i,j)
+        print("Coordinates (x,y) are ", a)
+        
+        Coordinates_horns.append(a)
+        
+        count += 1
+
+print("count: ", count)
+
+```
+
+```{python}
+print(Coordinates_horns)
+```
+
+```{python}
+Coordinates_horns = np.array(Coordinates_horns)
+Coordinates_horns.shape
+```
+
+<!-- #region -->
+**Note**:  The $i$ horn has coordinates $(x_i,y_i)$, which are stored in the $x_i*n +y_i$ element of the **Coordinates_horns** array.
+
+For example, for the horn with coordinates $(2,3)$, the position in the array is:
+
+
+$2n +3 = 19$
+
+We can take this number as the label of the horn.
+
+<!-- #endregion -->
+
+### Now, let's compute the baselines
+
+
+The number of baselines that you can construct with $N$ horns is ${N(N-1)} \over{2}$.
+
+(This gives all posible combinations of two **different** horns, without repetition).
+
+If we think of a $N \times N$ matrix with all the possible combinations, we would only take the upper (or lower) triangle.
+
+```{python}
+N_baselines = N*(N-1)/2
+
+print(N_baselines)
+```
+
+ Each baseline can be thought of as a pseudo-vector, with a given length $L$ and a given orientation $\alpha$ (i.e., an oriented segment). To be able to compute $L$ and $\alpha$, we need to know the position of the horns that form the baseline.
+
+Let's label somehow the baselines, using the label of the horns that constitute them.
+
+If a baseline is formed with horns $i$ and $j$, let's take the upper triangle. Then if $i$ labels the row and $j$ labels the column, we will have: $j > i$.
+
+So we do a loop over $i$ values, from $0$ to $N-1$, and then a nested loop over $j$ from $i+1$ to $N-1$.
+
+For each, I have a baseline. I compute the $L^2$ and the $\tan (\alpha)$
+
+$L^2= (x_i - x_j)^2 + ( y_i - y_j)^2 $
+
+$\tan (\alpha) = (y_j - y_i)/(x_j - x_i)$
+
+```{python}
+# Check how many combinations we have:
+count = 0
+for i in range(N):
+    for j in range(i+1,N):
+        count = count +1
+        print(count)
+```
+
+```{python}
+# Let's test the coordinates of the horns that form a given baseline.
+
+for i in range(N):
+    for j in range(i+1,N):
+        print("for the horn", i," the coordinates are: ", Coordinates_horns[i])
+        print("for the horn", j," the coordinates are: ", Coordinates_horns[j])
+        
+```
+
+```{python}
+# For each baseline, let us compute L2 and tan_alpha:
+
+baseline = []   #array that will keep L2 and the angle
+
+baseline_v2 = []    #array that will keep the label of the horns that form the baseline, L2 and the angle
+
+for i in range(N):
+    x_i,y_i = Coordinates_horns[i]
+
+    for j in range(i+1,N):
+        
+        x_j,y_j = Coordinates_horns[j]        
+
+
+        L2 = (x_i - x_j)**2 + (y_i - y_j)**2
+        
+        tan_alpha = (y_j - y_i)/(x_j - x_i)
+        
+        angle= np.arctan(tan_alpha)
+        
+        baseline.append([L2, angle])
+        
+        baseline_v2.append([i,j, L2, angle])
+        
+
+baseline = np.array(baseline)
+
+baseline_v2 = np.array(baseline_v2)
+
+```
+
+```{python}
+# I order following L2 and then following angle. Then, I will need to separate them in subgroups to count
+# how many there are in a given category.
+
+from operator import itemgetter
+
+ordered_baselines_v2 = sorted(baseline_v2, key= itemgetter(2,3))
+
+
+ordered_baselines_v2 = np.array(ordered_baselines_v2)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+# Check that we have an ordered array (and we have the explicit number of the horns)
+
+print(ordered_baselines_v2)
+```
+
+```{python}
+# Another check to see if I'm getting what I want:
+
+count = 0
+for i in range(N):
+
+    for j in range(i+1,N):      
+        
+        
+        print(i,j, ordered_baselines_v2[count])
+        
+        count += 1
+        
+        
+        
+```
+
+<!-- #region -->
+ ### Intermediate computing.
+    
+In the following, we do some computations, to separate the baselines in categories according to the value of $L2$ and **angle**.
+
+
+This is inspired by the example in the next (commented) cell.
+<!-- #endregion -->
+
+```{python active="", eval=FALSE}
+## useful example taken from:
+# https://stackoverflow.com/questions/31863083/python-split-numpy-array-based-on-values-in-the-array
+
+np.split(arr, np.where(np.diff(arr[:,1]))[0]+1)
+
+
+```
+
+```{python}
+# These are the L2 values:
+ordered_baselines_v2[:,2]
+```
+
+```{python}
+# I compute where the L2 value changes:
+np.diff(ordered_baselines_v2[:,2])
+```
+
+```{python}
+len(np.diff(ordered_baselines_v2[:,2]))
+```
+
+```{python}
+xx = np.diff(ordered_baselines_v2[:,2])
+```
+
+```{python}
+np.where(xx)[0]
+```
+
+```{python}
+# These are the indices where the L2 value changes 
+np.where(xx)[0]+1
+```
+
+```{python}
+# I split the array in the positions where L2 changes:
+
+zz= np.split(ordered_baselines_v2, np.where(np.diff(ordered_baselines_v2[:,2]))[0]+1)
+
+```
+
+```{python}
+
+```
+
+```{python}
+#Check:
+np.shape(zz)
+```
+
+```{python}
+# Now, for each distinct value of L2, I split the array in different values of the angle.
+
+partitioned_baselines = []
+
+for i in range(len(zz)):
+
+    
+    aa = zz[i]
+    
+    bb = np.split(aa, np.where(np.diff(aa[:,3]))[0]+1)
+
+    bb = np.array(bb)
+    
+    partitioned_baselines.append(bb)
+    
+
+partitioned_baselines = np.array(partitioned_baselines)
+
+```
+
+```{python}
+print(np.shape(partitioned_baselines))
+
+print(len(partitioned_baselines))
+
+```
+
+```{python}
+# for each value of L2, how many different values of the angle we have:
+
+for i in range(len(partitioned_baselines)):
+    print(len(partitioned_baselines[i]))
+    
+    
+```
+
+In the following cell, I compute each unique baseline (characterized by a given value of $L^2$ and an given angle), and compute how many equivalent baselines there are in each category. 
+
+If we want to make tests using equivalent baselines, we can read the corresponding horns' labels from the $0$ and $1$ elements of the **partitioned_baselines** array, and make the appropriate selection.
+
+```{python}
+# Now I compute the number of unique baselines, and for each of them, 
+# I compute the number of equivalent baselines (i.e. how many elements there are in that category):
+
+N_unique = 0
+
+for i in range(len(partitioned_baselines)):
+
+    n_angles  = len(partitioned_baselines[i])
+    
+    for j in range(n_angles):
+
+        print(partitioned_baselines[i][j])
+         
+        print(" ")
+        
+        N_eq = len(partitioned_baselines[i][j])
+
+        print(" Number of equivalent baselines for this particular baseline: ", N_eq)
+        print(" ")
+        print(" ")
+        
+        N_unique += 1
+
+        
+print("Number of unique baselines: ", N_unique)
+        
+    
+    
+```
+
+```{python active="", eval=FALSE}
+
+```
+
+```{python}
+
+```

@@ -1,11 +1,12 @@
-import os,sys
+import os, sys
 import string
 
-def ask_for( key ):
-    if sys.version_info.major==2:
-        s = raw_input( "flipperDict: enter value for '%s': " % key )
+
+def ask_for(key):
+    if sys.version_info.major == 2:
+        s = raw_input("flipperDict: enter value for '%s': " % key)
     else:
-        s = input( "flipperDict: enter value for '%s': " % key )
+        s = input("flipperDict: enter value for '%s': " % key)
     try:
         val = eval(s)
     except NameError:
@@ -13,11 +14,12 @@ def ask_for( key ):
         val = s
     return val
 
-class qubicDict( dict ):
+
+class qubicDict(dict):
     # assign the directory where to find dictionaries by default
     dicts_dir = os.path.dirname(__file__) + '/dicts'
 
-    def __init__( self, ask = False):
+    def __init__(self, ask=False):
         """
         @param ask if the dict doesn't have an entry for a key, ask for the associated value and assign
         """
@@ -26,18 +28,18 @@ class qubicDict( dict ):
 
         return
 
-    def __getitem__( self, key ):
+    def __getitem__(self, key):
         if key not in self:
             if self.ask:
                 print("flipperDict: parameter '%s' not found" % key)
-                val = ask_for( key )
-                print("flipperDict: setting '%s' = %s" % (key,repr(val)))
-                dict.__setitem__( self, key, val )
+                val = ask_for(key)
+                print("flipperDict: setting '%s' = %s" % (key, repr(val)))
+                dict.__setitem__(self, key, val)
             else:
                 return None
-        return dict.__getitem__( self, key )
+        return dict.__getitem__(self, key)
 
-    def read_from_file( self, filename ):
+    def read_from_file(self, filename):
         '''
         read a given dictionary file
         '''
@@ -48,17 +50,17 @@ class qubicDict( dict ):
 
             if 'QUBIC_DICT' in os.environ.keys():
                 # read from the users QUBIC_DICT path if defined
-                filename = os.environ['QUBIC_DICT']+os.sep+basename
+                filename = os.environ['QUBIC_DICT'] + os.sep + basename
 
             if not os.path.isfile(filename):
                 # try to read from the package path
-                filename = self.dicts_dir+os.sep+basename
+                filename = self.dicts_dir + os.sep + basename
 
                 if not os.path.isfile(filename):
                     print('Could not read dictionary.  File not found: %s' % basename)
                     return
-            
-        f = open( filename )
+
+        f = open(filename)
         old = ''
         for line in f:
             line = line.strip()
@@ -74,7 +76,7 @@ class qubicDict( dict ):
                 line = ' '.join([old, s[0]])
                 old = ''
             for i in range(len(line)):
-                if line[i]!=' ':
+                if line[i] != ' ':
                     line = line[i:]
                     break
             exec(line)
@@ -84,25 +86,25 @@ class qubicDict( dict ):
                 print(line)
                 continue
             key = s[0].strip()
-            val = eval(s[1].strip()) # XXX:make safer
+            val = eval(s[1].strip())  # XXX:make safer
             self[key] = val
         f.close()
-        #self.prefix_OutputName()
+        # self.prefix_OutputName()
 
     readFromFile = read_from_file
 
-    def write_to_file( self, filename, mode = 'w' ):
-        f = open( filename, mode )
+    def write_to_file(self, filename, mode='w'):
+        f = open(filename, mode)
         keys = self.keys()
         keys.sort()
         for key in keys:
-            f.write( "%s = %s\n" % (key,repr(self[key])) )
+            f.write("%s = %s\n" % (key, repr(self[key])))
         f.close()
 
     writeToFile = write_to_file
 
-    def cmp( self, otherDict ):
-        
+    def cmp(self, otherDict):
+
         diff = []
         ks = self.keys()
         for k in ks:

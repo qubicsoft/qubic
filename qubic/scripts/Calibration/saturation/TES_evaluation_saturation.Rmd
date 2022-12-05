@@ -1,0 +1,223 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.0
+  kernelspec:
+    display_name: QUBIC with Python 3.8
+    language: python
+    name: python-3.8
+---
+
+```{python}
+# %matplotlib inline
+import matplotlib as plt
+# #%matplotlib inline
+from matplotlib import rc
+rc('figure',figsize=(9,4.5))
+rc('font',size=12)
+rc('text',usetex=False)
+import matplotlib.mlab as mlab
+from matplotlib.pyplot import *
+
+import sys,os
+import glob
+import string
+import datetime as dt
+import pickle
+from importlib import reload
+
+import numpy as np
+
+import scipy.ndimage.filters as f
+import scipy.signal as scsig
+from scipy import interpolate
+
+import qubic
+from qubicpack.demodulate import fold_data as qp_fold_data
+from qubic import fibtools as ft
+from qubicpack.qubicfp import qubicfp
+from qubicpack.pix2tes import *
+from qubicpack.pixel_translation import *
+import qubic.plotters as p
+import qubic.lin_lib as ll
+from qubicpack import demodulate
+from qubic import demodulation_lib as dl
+from qubicpack.utilities import Qubic_DataDir
+from qubic.utils import progress_bar
+
+from pysimulators import FitsArray
+```
+
+```{python}
+day = '2022-08-18'
+data_dir = '/sps/qubic/Data/Calib-TD/'+day+'/'
+words = ['bandpass']
+keywords = ['*{}*'.format(word) for word in words]
+for keyword in keywords:
+    dirs = np.sort(glob.glob(data_dir+keyword))
+    print(dirs)
+```
+
+```{python}
+def saturation(todarray): 
+    ok = np.ones(256,dtype=bool)
+    maxis = np.max(abs(todarray), axis=1)
+    upper_satval = np.max(maxis)
+    lower_satval = -np.max(maxis)
+    badtes = (maxis == np.max(maxis))
+    number = badtes.sum() #number of TES saturated in every measurement
+    bad_idx = np.array(np.where(badtes==True)) #index of the TES saturated
+    bad_idx = np.reshape(bad_idx, (bad_idx.shape[1]))
+
+    frac_sat_pertes = np.zeros((256))
+    size = todarray.shape[1]
+
+    for i in range(len(todarray)): 
+        mask1 = todarray[i] == upper_satval
+        mask2 = todarray[i] == lower_satval
+        frac = (np.sum(mask1)+np.sum(mask2))/size
+        frac_sat_pertes[i] = frac
+    
+        if frac_sat_pertes[i] ==0:
+            ok[i] = True #good, no saturated
+        elif frac_sat_pertes[i] >0.1:
+            ok[i] = False #bad, saturated more than 10%
+        else: 
+            ok[i] = True #good, saturated but less than 10%
+    return ok, bad_idx, frac_sat_pertes, number
+```
+
+```{python}
+def flag(ok,todarray): 
+    size = 5
+    flags = np.zeros((256,len(timeaxis)))
+    maxis = np.max(abs(todarray), axis=1)
+    for i in range(256):
+        tod = todarray[i]
+        flag = flags[i]
+        for j in range(len(tod)):
+            if abs(tod[j]) == np.max(maxis): 
+                flag[j-size:j+size]=1
+    return flags
+```
+
+```{python}
+for ifile in range(len(dirs)):
+    print(ifile)
+    thedir = dirs[ifile]
+    print('================', thedir,)
+    locals()['qfp_{}'.format(ifile)] = qubicfp()
+    locals()['qfp_{}'.format(ifile)].read_qubicstudio_dataset(thedir)
+    locals()['tod_{}'.format(ifile)] = locals()['qfp_{}'.format(ifile)].tod()
+```
+
+```{python}
+for ifile in range(len(dirs)):
+    print(ifile)
+    timeaxis = locals()['tod_{}'.format(ifile)][0]
+    locals()['todarray_{}'.format(ifile)] = locals()['tod_{}'.format(ifile)][1]
+    locals()['ok_{}'.format(ifile)], locals()['bad_idx_{}'.format(ifile)], locals()['frac_sat_pertes_{}'.format(ifile)], locals()['num_{}'.format(ifile)] = saturation(locals()['todarray_{}'.format(ifile)])
+    locals()['flags_{}'.format(ifile)] = flag(locals()['ok_{}'.format(ifile)], locals()['todarray_{}'.format(ifile)])
+
+```
+
+```{python}
+count_good = np.zeros(256)
+for i in range(len(dirs)): 
+    print('medicion {}'.format(i))
+    a = locals()['ok_{}'.format(i)]
+    for j in range(256): 
+        valor = a[j]
+        if valor==True: 
+            count_good[j] += 1
+
+```
+
+```{python}
+count_good
+```
+
+```{python}
+count_bad = np.zeros(256)
+for i in range(len(dirs)): 
+    print('medicion {}'.format(i))
+    a = locals()['ok_{}'.format(i)]
+    for j in range(256): 
+        valor = a[j]
+        if valor==False: 
+            count_bad[j] += 1
+
+```
+
+```{python}
+count_bad
+```
+
+```{python}
+# %matplotlib inline
+```
+
+```{python}
+tes = np.arange(256)
+```
+
+```{python}
+plt.hist(tes, bins=256, weights = count_good)
+plt.xlabel('TES number')
+plt.ylabel('Number of times TES is evaluated as GOOD')
+plt.title('Histogram of saturation with 61 measurements')
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+#we have an array of flags for every measurement (61) with size (256,nsamples)
+np.shape(flags_0)
+```
+
+```{python}
+fig, ax=plt.subplots(ncols = 1, nrows= 1)
+ax.plot(timeaxis-timeaxis[0], flags_0[224], '.', label='flags')
+ax.set_xlabel('time')
+ax.set_ylabel('flag')
+ax2=ax.twinx()
+ax2.plot(timeaxis-timeaxis[0], todarray_0[224], 'r', label='tod')
+ax2.set_ylabel('tod')
+#plt.title('TES 12')
+#plt.legend()
+ax.legend()
+ax2.legend()
+plt.title('TES 225 18/08 120GHz')
+```
+
+```{python}
+from qubic.TES_evaluation import *
+```
+
+```{python}
+for ifile in range(len(dirs1)):
+    print(ifile)
+    thedir = dirs1[ifile]
+    dataset = thedir[36:]
+    oklist = locals()['ok_{}'.format(i)]
+    write_goodbad(oklist,
+              analyser="Belen Costanza",
+              analysis="Saturation",
+              dataset=dataset,
+              wikipage='http://qubic.in2p3.fr/wiki/pmwiki.php/DataAnalysis/SaturationResults',
+              elog='no elog')
+```

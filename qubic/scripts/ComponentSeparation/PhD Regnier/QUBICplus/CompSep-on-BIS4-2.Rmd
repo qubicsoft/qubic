@@ -1,0 +1,531 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.13.4
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Component Separation on CMB S4 and QUBIC+
+
+```{python}
+import qubicplus
+import pysm3
+import pysm3.units as u
+from pysm3 import utils
+import numpy as np
+from qubic import camb_interface as qc
+import healpy as hp
+import matplotlib.pyplot as plt
+import os
+import random as rd
+import string
+import qubic
+from importlib import reload
+import pickle
+import s4bi
+from scipy import constants
+from fgbuster import CMB, Dust, Synchrotron, AnalyticComponent
+
+center = qubic.equ2gal(0, -57)
+# If there is not this command, the kernel shut down every time..
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+
+nside=256
+def get_coverage(fsky, nside, center_radec=[0., -57.]):
+    center = qubic.equ2gal(center_radec[0], center_radec[1])
+    uvcenter = np.array(hp.ang2vec(center[0], center[1], lonlat=True))
+    uvpix = np.array(hp.pix2vec(nside, np.arange(12*nside**2)))
+    ang = np.arccos(np.dot(uvcenter, uvpix))
+    indices = np.argsort(ang)
+    okpix = ang < -1
+    okpix[indices[0:int(fsky * 12*nside**2)]] = True
+    mask = np.zeros(12*nside**2)
+    mask[okpix] = 1
+    return mask
+
+covmap = get_coverage(0.03, nside)
+
+
+thr = 0.1
+mymask = (covmap > (np.max(covmap)*thr)).astype(int)
+pixok = mymask > 0
+
+#from fgbuster import (separation_recipes, xForecast, CMB, Dust, Dust_2b, Synchrotron, FreeFree, PowerLaw,  # sky-fitting model
+                      #basic_comp_sep)
+import fgbuster as fgb
+from fgbuster import basic_comp_sep, get_instrument
+
+
+def separate(comp, instr, maps_to_separate, tol=1e-5, print_option=False):
+    solver_options = {}
+    solver_options['disp'] = False
+    fg_args = comp, instr, maps_to_separate
+    fg_kwargs = {'method': 'Nelder-Mead', 'tol': tol, 'options': solver_options}
+    try:
+        res = fgb.basic_comp_sep(*fg_args, **fg_kwargs)
+    except KeyError:
+        fg_kwargs['options']['disp'] = False
+        res = fgb.basic_comp_sep(*fg_args, **fg_kwargs)
+    if print_option:
+        print()
+        print("message:", res.message)
+        print("success:", res.success)
+        print("result:", res.x)
+        
+    return res
+
+
+def reconvolve(maps, fwhms, ref_fwhm, verbose=False):
+    if verbose:
+        print('Reconvolution to common FWHM')
+    sig_conv = np.sqrt(ref_fwhm**2 - fwhms**2)
+    maps_out = np.zeros_like(maps)
+    for i in range(len(fwhms)):
+        if sig_conv[i] == 0:
+            if verbose:
+                print('Map {0:} fwhmin={1:6.3f} fwhmout={2:6.3f} => We do not reconvolve'.format(i,
+                                                                                             fwhms[i], ref_fwhm))
+            maps_out[i,:] = maps[i,:]
+        else:
+            if verbose:
+                print('Map {0:} fwhmin={1:6.3f} fwhmout={2:6.3f} => We reconvolve with {3:6.3f}'.format(i,
+                                                                                                    fwhms[i],
+                                                                                                    ref_fwhm,
+                                                                                                    sig_conv[i]))
+            maps_out[i,:] = hp.smoothing(maps[i,:], fwhm=np.deg2rad(sig_conv[i]), pol=True, verbose=False)
+    return maps_out
+
+
+
+# Loading of dictionary from BI-CMBS4.ipynb 
+
+### CMB-S4 config
+
+freqs = np.array([20., 30., 40., 85., 95., 145., 155., 220., 270.])
+bandwidth = np.array([5., 9., 12., 20.4, 22.8, 31.9, 34.1, 48.4, 59.4])
+dnu_nu = bandwidth/freqs
+beam_fwhm = np.array([11., 72.8, 72.8, 25.5, 25.5, 22.7, 22.7, 13., 13.])
+mukarcmin_TT = np.array([16.5, 9.36, 11.85, 2.02, 1.78, 3.89, 4.16, 10.15, 17.4])
+mukarcmin_EE = np.array([10.87, 6.2, 7.85, 1.34, 1.18, 1.8, 1.93, 4.71, 8.08])
+mukarcmin_BB = np.array([10.23, 5.85, 7.4, 1.27, 1.12, 1.76, 1.89, 4.6, 7.89])
+ell_min = np.array([30, 30, 30, 30, 30, 30, 30, 30, 30])
+nside = np.array([512, 512, 512, 512, 512, 512, 512, 512, 512])
+edges_min = freqs * (1. - dnu_nu/2)
+edges_max = freqs * (1. + dnu_nu/2)
+edges = [[edges_min[i], edges_max[i]] for i in range(len(freqs))]
+s4_config = {
+    'nbands': len(freqs),
+    'frequency': freqs,
+    'depth_p': 0.5*(mukarcmin_EE + mukarcmin_BB),
+    'depth_i': mukarcmin_TT,
+    'depth_e': mukarcmin_EE,
+    'depth_b': mukarcmin_BB,
+    'fwhm': beam_fwhm,
+    'bandwidth': bandwidth,
+    'dnu_nu': dnu_nu,
+    'ell_min': ell_min,
+    'nside': nside,
+    'fsky': 0.03,
+    'ntubes': 12,
+    'nyears': 7.,
+    'edges': edges,
+    'effective_fraction': np.zeros(len(freqs))+1.
+            }
+
+def fct_subopt(nus):
+    subnus = [150., 220]
+    subval = [1.4, 1.2]
+    fct_subopt = np.poly1d(np.polyfit(subnus, subval, 1))
+    return fct_subopt(nus)
+
+subnus = [150., 220]
+subval = [1.4, 1.2]
+
+def get_coverage(fsky, nside, center_radec=[0., -57.]):
+    center = qubic.equ2gal(center_radec[0], center_radec[1])
+    uvcenter = np.array(hp.ang2vec(center[0], center[1], lonlat=True))
+    uvpix = np.array(hp.pix2vec(nside, np.arange(12*nside**2)))
+    ang = np.arccos(np.dot(uvcenter, uvpix))
+    indices = np.argsort(ang)
+    okpix = ang < -1
+    okpix[indices[0:int(fsky * 12*nside**2)]] = True
+    mask = np.zeros(12*nside**2)
+    mask[okpix] = 1
+    return mask
+
+def qubicify(config, qp_nsub, qp_effective_fraction):
+    nbands = np.sum(qp_nsubs)
+    qp_config = config.copy()
+    for k in qp_config.keys():
+        qp_config[k]=[]
+    qp_config['nbands'] = nbands
+    qp_config['fsky'] = config['fsky']
+    qp_config['ntubes'] = config['ntubes']
+    qp_config['nyears'] = config['nyears']
+    qp_config['initial_band'] = []
+
+    for i in range(len(config['frequency'])):
+        #print(config['edges'][i][0], config['edges'][i][-1])
+        newedges = np.linspace(config['edges'][i][0], config['edges'][i][-1], qp_nsubs[i]+1)
+        #print(newedges)
+        newfreqs = (newedges[0:-1]+newedges[1:])/2
+        newbandwidth = newedges[1:] - newedges[0:-1]
+        newdnu_nu = newbandwidth / newfreqs
+        newfwhm = config['fwhm'][i] * config['frequency'][i]/newfreqs
+        scalefactor_noise = np.sqrt(qp_nsubs[i]) * fct_subopt(config['frequency'][i]) / qp_effective_fraction[i]
+        newdepth_p = config['depth_p'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
+        newdepth_i = config['depth_i'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
+        newdepth_e = config['depth_e'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
+        newdepth_b = config['depth_b'][i] * np.ones(qp_nsub[i]) * scalefactor_noise
+        newell_min = np.ones(qp_nsub[i]) * config['ell_min'][i]
+        newnside = np.ones(qp_nsub[i]) * config['nside'][i]
+        neweffective_fraction = np.ones(qp_nsub[i]) * qp_effective_fraction[i]
+        initial_band = np.ones(qp_nsub[i]) * config['frequency'][i]
+
+        for k in range(qp_nsubs[i]):
+            if qp_effective_fraction[i] != 0:
+                qp_config['frequency'].append(newfreqs[k])
+                if i >= 3:
+                    qp_config['depth_p'].append(newdepth_p[k])
+                    qp_config['depth_i'].append(newdepth_i[k])
+                    qp_config['depth_e'].append(newdepth_e[k])
+                    qp_config['depth_b'].append(newdepth_b[k])
+                else:
+                    qp_config['depth_p'].append(s4_config['depth_p'][i])
+                    qp_config['depth_i'].append(s4_config['depth_i'][i])
+                    qp_config['depth_e'].append(s4_config['depth_e'][i])
+                    qp_config['depth_b'].append(s4_config['depth_b'][i])
+                qp_config['fwhm'].append(newfwhm[k])
+                qp_config['bandwidth'].append(newbandwidth[k])
+                qp_config['dnu_nu'].append(newdnu_nu[k])
+                qp_config['ell_min'].append(newell_min[k])
+                qp_config['nside'].append(newnside[k])
+
+                qp_config['effective_fraction'].append(neweffective_fraction[k])
+                qp_config['initial_band'].append(initial_band[k])
+        for k in range(qp_nsubs[i]+1):
+            if qp_effective_fraction[i] != 0:
+                qp_config['edges'].append(newedges[k])
+
+        #qp_config['depth_p'][:3] = s4_config['depth_p'][:3]
+        #qp_config['depth_i'][:3] = s4_config['depth_i'][:3]
+
+    fields = ['frequency', 'depth_p', 'depth_i', 'depth_e', 'depth_b', 'fwhm', 'bandwidth',
+              'dnu_nu', 'ell_min', 'nside', 'edges', 'effective_fraction', 'initial_band']
+    for j in range(len(fields)):
+        qp_config[fields[j]] = np.array(qp_config[fields[j]])
+
+    return qp_config
+
+
+covmap = get_coverage(0.03, nside=256)
+thr = 0.1
+mymask = (covmap > (np.max(covmap)*thr)).astype(int)
+pixok = mymask > 0
+
+
+qp_nsubs = np.array([1, 1, 1, 5, 5, 5, 5, 5, 5])
+qp_effective_fraction = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1])
+qp_config=qubicify(s4_config, qp_nsubs, qp_effective_fraction)
+
+
+plt.figure(figsize=(16, 5))
+plt.subplot(1,2,1)
+plt.errorbar(s4_config['frequency'], s4_config['depth_p'], xerr=s4_config['bandwidth']/2, fmt='ro', label='CMB-S4')
+plt.errorbar(qp_config['frequency'], qp_config['depth_p'], xerr=qp_config['bandwidth']/2, fmt='bo', label='BI')
+plt.xlabel('Frequency [GHz]')
+plt.ylabel(r'Depth_p [$\mu$K.arcmin]')
+plt.title('CMB-S4 Configuration')
+plt.legend()
+plt.subplot(1,2,2)
+plt.errorbar(s4_config['frequency'], s4_config['fwhm'], xerr=s4_config['bandwidth']/2, fmt='ro', label='CMB-S4')
+plt.errorbar(qp_config['frequency'], qp_config['fwhm'], xerr=qp_config['bandwidth']/2, fmt='bo', label='BI')
+plt.xlabel('Frequency [GHz]')
+plt.ylabel('FWHM [arcmin]')
+plt.title('CMB-S4 Configuration')
+plt.legend()
+plt.show()
+```
+
+# One beta case
+
+
+We see now the one beta case which the simple case. We expect that both instrument can recover parameters ($\beta_d$ and $\beta_s$) and reconstructed dust maps are the same than input dust maps. We generate below dust maps to compare with the final result.
+
+```{python}
+skyconfig = {'dust':'d0'}
+    
+thr=0
+mymask = (covmap > (np.max(covmap)*thr)).astype(int)
+pixok = mymask > 0
+fwhm=0
+    
+_, map_s4_dust, _ = qubicplus.BImaps(skyconfig, s4_config).getskymaps(
+                                                                    same_resol=fwhm, 
+                                                                    verbose=True, 
+                                                                    coverage=covmap, 
+                                                                    noise=True, 
+                                                                    signoise=1.,
+                                                                    beta=[])
+
+
+_, map_qp_dust, _ = qubicplus.BImaps(skyconfig, qp_config).getskymaps(
+                                                                    same_resol=fwhm, 
+                                                                    verbose=True, 
+                                                                    coverage=covmap, 
+                                                                    noise=True, 
+                                                                    signoise=1.,
+                                                                    beta=[])
+```
+
+We generate now our inputs maps, we define also the component to separe (fixing the temperature but it can be free parameter) and define our instrument.
+
+```{python}
+skyconfig = {'cmb':42, 'dust':'d0', 'synchrotron':'s0'}
+    
+thr=0
+mymask = (covmap > (np.max(covmap)*thr)).astype(int)
+pixok = mymask > 0
+fwhm=0
+    
+map_s4_noisy, map_s4_noiseless, _ = qubicplus.BImaps(skyconfig, s4_config).getskymaps(
+                                                                    same_resol=fwhm, 
+                                                                    verbose=True, 
+                                                                    coverage=covmap, 
+                                                                    noise=True, 
+                                                                    signoise=1.,
+                                                                    beta=[])
+
+
+map_qp_noisy, map_qp_noiseless, _ = qubicplus.BImaps(skyconfig, qp_config).getskymaps(
+                                                                    same_resol=fwhm, 
+                                                                    verbose=True, 
+                                                                    coverage=covmap, 
+                                                                    noise=True, 
+                                                                    signoise=1.,
+                                                                    beta=[])
+
+comp = [fgb.component_model.Dust(nu0=145., temp=20, units='K_CMB'), 
+        fgb.component_model.CMB(), 
+        fgb.component_model.Synchrotron(nu0=145)]
+        
+# Define instrument
+instr_s4 = get_instrument('CMBS4')
+instr_qp = get_instrument('Qubic+')
+```
+
+We now apply the component separation method.
+
+```{python}
+r_s4=separate(comp, instr_s4, map_s4_noiseless[:, :, pixok])
+r_qp=separate(comp, instr_qp, map_qp_noiseless[:, :, pixok])
+```
+
+```{python}
+print(r_s4.x)
+print(r_qp.x)
+
+map_s4_reconstructed_dust = np.ones((3, 12*256**2))*hp.UNSEEN
+map_qp_reconstructed_dust = np.ones((3, 12*256**2))*hp.UNSEEN
+
+map_s4_reconstructed_dust[:, pixok]=r_s4.s[0]
+map_qp_reconstructed_dust[:, pixok]=r_qp.s[0]
+```
+
+As we expected before, both instrument can recover parameter, now we look recovered maps.
+
+```{python}
+def plot_after_compsep(tab, tab_recons_s4, tab_recons_bi, covmap):
+    
+    plt.figure(figsize=(18, 12))
+    title=['True', 'S4', 'BI']
+    stk=['I', 'Q', 'U']
+    
+    thr = 0.1
+    mymask = (covmap > (np.max(covmap)*thr)).astype(int)
+    pixok = mymask > 0
+    
+    k=1
+    for i in range(3):
+        hp.gnomview(tab[i], rot=center, reso=15, cmap='jet', sub=(3, 5, k), title = stk[i] + ' | ' + title[0])
+        hp.gnomview(tab_recons_s4[i], rot=center, reso=15, cmap='jet', sub=(3, 5, k+1), title =  stk[i] + ' | ' + title[1])
+        hp.gnomview(tab_recons_bi[i], rot=center, reso=15, cmap='jet', sub=(3, 5, k+2), title =  stk[i] + ' | ' + title[2])
+        
+        res_s4 = tab[i]-tab_recons_s4[i]
+        res_s4[~pixok]=hp.UNSEEN
+        
+        res_bi = tab[i]-tab_recons_bi[i]
+        res_bi[~pixok]=hp.UNSEEN
+        
+        hp.gnomview(res_s4, rot=center, reso=15, cmap='jet', sub=(3, 5, k+3), title = stk[i] + ' | ' + title[0]+'-'+title[1])
+        hp.gnomview(res_bi, rot=center, reso=15, cmap='jet', sub=(3, 5, k+4), title = stk[i] + ' | ' + title[0]+'-'+title[2])
+        k+=5
+```
+
+```{python}
+plot_after_compsep(map_s4_dust[5], map_s4_reconstructed_dust,  map_qp_reconstructed_dust, covmap)
+```
+
+Ok, it seems that both instrument have good results for one beta case. That is for noiseless case, so to see with the noise, we perform a MC over 500 realizations on CC-IN2P3.
+
+```{python}
+with open('results/beta/params_est_fwhm0.0_500reals.pkl', 'rb') as f:
+    data = pickle.load(f)
+
+samples_s4=data['samples_s4']
+samples_bi=data['samples_bi']
+
+with open('results/beta/params_est_2beta_fwhm0.0_500reals.pkl', 'rb') as f:
+    data = pickle.load(f)
+
+samples_s4_2b=data['samples_s4_2b']
+samples_bi_2b=data['samples_bi_2b']
+
+from getdist import plots, MCSamples
+
+alllabels = [r'\beta_{dust}', 'T', r'\beta_{sync}']
+allnames = ['betadust', 'T', 'betasync']
+
+samps = MCSamples(samples=samples_s4.T, names=allnames, labels=alllabels)
+
+sampsBI = MCSamples(samples=samples_bi.T, names=allnames, labels=alllabels)
+
+truths=[1.54, 20, -3]
+mkrs = {}
+for i in range(len(allnames)):
+    mkrs[allnames[i]] = truths[i]
+
+plt.figure()
+g = plots.getSubplotPlotter()
+g.settings.scaling=False
+g.settings.axes_fontsize=12
+g.triangle_plot([samps, sampsBI], filled=True, title_limit=None, legend_labels=['S4', 'BI'], markers=mkrs)
+plt.show()
+```
+
+That plot means that all parameters are recovered and there are no instrument better than other.
+
+
+# 2 beta model
+
+
+We move now to another dust model, we assume a break in frequencies at $\nu_{break}$. For $\nu < \nu_{break}$, we have a spectral index of dust $\beta^0_d = 1.44$ and after we have $\beta^1_d = 1.64$.
+
+```{python}
+skyconfig = {'dust':'d02b'}
+    
+thr=0
+mymask = (covmap > (np.max(covmap)*thr)).astype(int)
+pixok = mymask > 0
+fwhm=0
+    
+_, map2b_s4_dust, _ = qubicplus.BImaps(skyconfig, s4_config).getskymaps(
+                                                                    same_resol=fwhm, 
+                                                                    verbose=True, 
+                                                                    coverage=covmap, 
+                                                                    noise=True, 
+                                                                    signoise=1.,
+                                                                    beta=[1.44, 1.64, 265])
+
+
+_, map2b_qp_dust, _ = qubicplus.BImaps(skyconfig, qp_config).getskymaps(
+                                                                    same_resol=fwhm, 
+                                                                    verbose=True, 
+                                                                    coverage=covmap, 
+                                                                    noise=True, 
+                                                                    signoise=1.,
+                                                                    beta=[1.44, 1.64, 265])
+```
+
+```{python}
+skyconfig = {'cmb':42, 'dust':'d02b', 'synchrotron':'s0'}
+    
+thr=0
+mymask = (covmap > (np.max(covmap)*thr)).astype(int)
+pixok = mymask > 0
+fwhm=0
+    
+map2b_s4_noisy, map2b_s4_noiseless, _ = qubicplus.BImaps(skyconfig, s4_config).getskymaps(
+                                                                    same_resol=fwhm, 
+                                                                    verbose=True, 
+                                                                    coverage=covmap, 
+                                                                    noise=True, 
+                                                                    signoise=1.,
+                                                                    beta=[1.44, 1.64, 265])
+
+
+map2b_qp_noisy, map2b_qp_noiseless, _ = qubicplus.BImaps(skyconfig, qp_config).getskymaps(
+                                                                    same_resol=fwhm, 
+                                                                    verbose=True, 
+                                                                    coverage=covmap, 
+                                                                    noise=True, 
+                                                                    signoise=1.,
+                                                                    beta=[1.44, 1.64, 265])
+
+comp = [fgb.component_model.Dust_2b(nu0=145., temp=20, units='K_CMB'), 
+        fgb.component_model.CMB(), 
+        fgb.component_model.Synchrotron(nu0=145)]
+        
+# Define instrument
+instr_s4 = get_instrument('CMBS4')
+instr_qp = get_instrument('Qubic+')
+```
+
+```{python}
+r2b_s4=separate(comp, instr_s4, map2b_s4_noiseless[:, :, pixok])
+r2b_qp=separate(comp, instr_qp, map2b_qp_noiseless[:, :, pixok])
+```
+
+```{python}
+print(r2b_s4.x)
+print(r2b_qp.x)
+
+map2b_s4_reconstructed_dust = np.ones((3, 12*256**2))*hp.UNSEEN
+map2b_qp_reconstructed_dust = np.ones((3, 12*256**2))*hp.UNSEEN
+
+map2b_s4_reconstructed_dust[:, pixok]=r2b_s4.s[0]
+map2b_qp_reconstructed_dust[:, pixok]=r2b_qp.s[0]
+```
+
+We see that BI can determine all parameters, but not CMB-S4. Let's see the reconstructed maps.
+
+```{python}
+plot_after_compsep(map2b_s4_dust[5], map2b_s4_reconstructed_dust,  map2b_qp_reconstructed_dust, covmap)
+```
+
+All parameters are well reconstructed but in the fifth columns, we see that dust reconstruction is really bad... There is a real problem in the reconstruction of maps but not in component separation method. To be sure that the component separation is well done, in the next notebook we'll try to estimate ourself dust reconstruction maps.
+
+Let's see now a MC over 500 realizations.
+
+```{python}
+#2beta
+from getdist import plots, MCSamples
+
+alllabels = [r'\beta_{0}', r'\beta_{1}', r'\nu_{break}', 'T', r'\beta_{sync}']
+allnames = ['betadust0', 'betadust1', 'nubreak', 'T', 'betasync']
+
+samps = MCSamples(samples=samples_s4_2b.T, names=allnames, labels=alllabels)
+
+sampsBI = MCSamples(samples=samples_bi_2b.T, names=allnames, labels=alllabels)
+
+truths=[1.44, 1.64, 260, 20, -3]
+mkrs = {}
+for i in range(len(allnames)):
+    mkrs[allnames[i]] = truths[i]
+
+plt.figure(figsize=(16, 16))
+g = plots.getSubplotPlotter()
+g.settings.scaling=False
+g.settings.axes_fontsize=12
+g.triangle_plot([samps, sampsBI], filled=True, title_limit=None, legend_labels=['S4', 'BI'], markers=mkrs)
+plt.show()
+```
+
+Now it's clear that BI have clear advantage for reconstruction of modified dust model.

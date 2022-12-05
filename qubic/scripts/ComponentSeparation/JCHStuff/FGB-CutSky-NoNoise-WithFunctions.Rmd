@@ -1,0 +1,700 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.4.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Context
+This notebook is an updated version of "FGB-CutSky-NoNoise.Rmd" but wiith more integrated functions in order to start having some convenient ways of using FGB.
+
+```{python}
+import pysm3
+import pysm3.units as u
+import numpy as np
+import numpy.ma as ma
+import healpy as hp
+import pickle
+import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
+import pickle
+from astropy.io import fits
+import pandas as pd
+from importlib import reload
+
+from qubic import camb_interface as qc
+import fgbuster as fgb
+
+#### This is a temporary library
+import compsep_jc as csjc
+
+
+import warnings
+warnings.filterwarnings("ignore")
+
+import qubic
+from qubic import NamasterLib as nam
+
+center = qubic.equ2gal(0, -57)
+
+rc('figure', figsize=(16, 10))
+rc('font', size=15)
+
+```
+
+```{python}
+#### General Stuff ####
+nside = 256
+stk = ['I', 'Q', 'U']
+```
+
+### PySM stuff
+we generate PySM maps with CMB + Dust
+
+```{python}
+#### PYSM Stuff ####
+# generate I,Q,U sky maps with PySM
+unit = u.uK_CMB
+np.random.seed(42)
+sky = pysm3.Sky(nside=nside, preset_strings=['d0', 'c1'], output_unit=unit)
+sky_cmb = pysm3.Sky(nside=nside, preset_strings=['c1'], output_unit=unit)
+sky_dust = pysm3.Sky(nside=nside, preset_strings=['d0'], output_unit=unit)
+
+```
+
+Now we generate some frequency maps
+
+```{python}
+freqs = np.array([200, 220, 240])
+
+# CMB+dust
+sky_emissions = [sky.get_emission(f * u.GHz) for f in freqs]
+maps = np.array([emission.value for emission in sky_emissions])
+
+# CMB
+sky_emissions_cmb = sky_cmb.get_emission(150 * u.GHz)
+maps_cmb = np.array([emission.value for emission in sky_emissions_cmb])
+
+sky_emissions_dust = sky_dust.get_emission(150 * u.GHz)
+maps_dust = np.array([emission.value for emission in sky_emissions_dust])
+
+print(np.shape(maps))   #nu, Stk, pix
+print(np.shape(maps_cmb))   #nu, Stk, pix
+print(np.shape(maps_dust))   #nu, Stk, pix
+
+csjc.display_maps(maps, bigtitle='Simulated maps for each frequency (no resolution-> infinite)', mytitle='CMB+Dust', 
+             figsize=(16,10), nsig=3, moll=True)
+
+```
+
+```{python}
+csjc.display_maps(maps_dust, bigtitle='Input Dust only at 150 GHz (infinite resolution)', mytitle='CMB', 
+             figsize=(16,4), nsig=3, moll=True)
+csjc.display_maps(maps_cmb, bigtitle='Input CMB only at 150 GHz (infinite resolution)', mytitle='CMB', 
+             figsize=(16,4), nsig=3, moll=True)
+
+```
+
+### Cut-Sky: from QUBIC
+Let's use the QUBIC cut-sky. As this is noiseless, we do not bother about the coverage values themselves, we just keep all pixels above some threshold on the coverage.
+
+```{python slideshow={'slide_type': 'slide'}}
+rc('figure', figsize=(16, 4))
+
+covmap = hp.ud_grade(hp.read_map('QUBIC-Typical-Coverage.fits'), nside)
+
+fskytot=np.sum(covmap/np.max(covmap)/len(covmap))*100
+suptitle('Cut-Sky (from QUBIC)', fontsize=30, y=1.2)
+hp.mollview(covmap, title='QUBIC Cov Map: fsky={0:4.2f}%'.format(fskytot), sub=(1,2,1))
+
+thr = 0.1
+mymask = (covmap > (np.max(covmap)*thr)).astype(int)
+pixok = mymask > 0
+fsky=np.sum(covmap[pixok]/np.max(covmap)/len(covmap))*100
+hp.mollview(mymask, title='Mask with thr={0:}: fsky={1:4.2f}'.format(thr, fsky), sub=(1,2,2))
+
+
+
+```
+
+# Cut-Sky simulations with identical resolutions => should work
+We now create noiseless reconstructed cut-sky maps at various frequencies, but with the simplification that they are at the same angular resolution.
+
+```{python}
+myFWHM = 0.5 # degrees
+maps_conv = csjc.convolve_maps(maps, myFWHM)
+
+### Mask them
+maps_conv[:,:,~pixok] = hp.UNSEEN
+
+csjc.display_maps(maps_conv, bigtitle='Cut-sky maps per freq. at same resolution', rot=center)
+```
+
+```{python}
+reload(csjc)
+csjc.display_maps(maps_dust, bigtitle='Input Dust only at 150 GHz (infinite resolution)', mytitle='Dust', 
+             figsize=(16,7), nsig=3, rot=center, unseen=~pixok)
+csjc.display_maps(maps_cmb, bigtitle='Input CMB only at 150 GHz (infinite resolution)', mytitle='CMB', 
+             figsize=(16,7), nsig=3, rot=center, unseen=~pixok)
+
+```
+
+## Pixel based version - Same resolution
+
+```{python}
+reload(csjc)
+result_pix_same = csjc.apply_fgb(maps_conv, freqs, np.zeros(len(freqs)) + myFWHM, verbose=True, 
+                              plot_separated=True, center=center,
+                             truth=[maps_dust, maps_cmb], plot_residuals=True)
+```
+
+```{python}
+r, dustrec, cmbrec, sigs_dust, sigs_cmb, resid_dust, resid_cmb, truth_dust, truth_cmb = result_pix_same
+
+okpix = cmbrec[0,:] != hp.UNSEEN
+stk = ['I','Q','U']
+for i in range(3):
+    subplot(2,3,i+1)
+    title('CMB {}'.format(stk[i]))
+    xlabel('In')
+    ylabel('Out')
+    plot(truth_cmb[i,okpix], cmbrec[i,okpix], 'o')
+    mini = np.min(cmbrec[i,okpix])
+    maxi = np.max(cmbrec[i,okpix])
+    xlim(mini, maxi)
+    ylim(mini, maxi)
+    x = np.linspace(mini, maxi)
+    plot(x,x,'k--', label='y=x')
+    myfit, covfit = np.polyfit(truth_cmb[i,okpix], cmbrec[i,okpix], 1, cov=True)
+    plot(x, np.poly1d(myfit)(x), lw=3, label='Slope: {0:5.2g} +/- {1:5.2e}'.format(myfit[0], np.sqrt(covfit[0,0])))
+    legend(fontsize=10)
+    
+    
+    subplot(2,3,3+i+1)
+    title('Dust {}'.format(stk[i]))
+    xlabel('In')
+    ylabel('Out')
+    plot(truth_dust[i,okpix], dustrec[i,okpix], 'o')
+    mini = np.min(dustrec[i,okpix])
+    maxi = np.max(dustrec[i,okpix])
+    xlim(mini, maxi)
+    ylim(mini, maxi)
+    x = np.linspace(mini, maxi)
+    plot(x,x,'k--', label='y=x')
+    myfit, covfit = np.polyfit(truth_dust[i,okpix], dustrec[i,okpix], 1, cov=True)
+    plot(x, np.poly1d(myfit)(x), lw=3, label='Slope: {0:5.2g} +/- {1:5.2e}'.format(myfit[0], np.sqrt(covfit[0,0])))
+    legend(fontsize=10)
+    
+tight_layout()
+```
+
+It works great !!!
+
+Let's check alm space version
+
+
+## alm based bersion - Same resolution
+
+```{python}
+reload(csjc)
+resol_correction = True
+ref_fwhm = 0.5
+
+result_alm_same = csjc.apply_fgb(maps_conv, freqs, np.zeros(len(freqs)) + myFWHM, verbose=True, alm_space=True,
+                            plot_separated=True, center=center, ref_fwhm=ref_fwhm, resol_correction=resol_correction,
+                            truth=[maps_dust, maps_cmb], plot_residuals=True)
+```
+
+```{python}
+r, dustrec, cmbrec, sigs_dust, sigs_cmb, resid_dust, resid_cmb, truth_dust, truth_cmb = result_alm_same
+
+okpix = cmbrec[0,:] != hp.UNSEEN
+stk = ['I','Q','U']
+bla = np.zeros(18)
+
+for i in range(3):
+    subplot(2,3,i+1)
+    title('CMB {}'.format(stk[i]))
+    xlabel('In')
+    ylabel('Out')
+    plot(truth_cmb[i,okpix], cmbrec[i,okpix], 'o')
+    mini = np.min(cmbrec[i,okpix])
+    maxi = np.max(cmbrec[i,okpix])
+    xlim(mini, maxi)
+    ylim(mini, maxi)
+    x = np.linspace(mini, maxi)
+    plot(x,x,'k--', label='y=x')
+    myfit, covfit = np.polyfit(truth_cmb[i,okpix], cmbrec[i,okpix], 1, cov=True)
+    plot(x, np.poly1d(myfit)(x), lw=3, label='Slope: {0:5.2g} +/- {1:5.2e}'.format(myfit[0], np.sqrt(covfit[0,0])))
+    legend(fontsize=10)    
+    ### Keep raw results and residuals RMS corrected for slope
+    bla[i*3] = np.std(resid_cmb[i,okpix])
+    bla[i*3+1] = myfit[0]
+    ### Keep results if we correct for the slope
+    bla[i*3+2] = np.std(cmbrec[i,okpix]-myfit[0]*truth_cmb[i,okpix])
+       
+    subplot(2,3,3+i+1)
+    title('Dust {}'.format(stk[i]))
+    xlabel('In')
+    ylabel('Out')
+    plot(truth_dust[i,okpix], dustrec[i,okpix], 'o')
+    mini = np.min(dustrec[i,okpix])
+    maxi = np.max(dustrec[i,okpix])
+    xlim(mini, maxi)
+    ylim(mini, maxi)
+    x = np.linspace(mini, maxi)
+    plot(x,x,'k--', label='y=x')
+    myfit, covfit = np.polyfit(truth_dust[i,okpix], dustrec[i,okpix], 1, cov=True)
+    plot(x, np.poly1d(myfit)(x), lw=3, label='Slope: {0:5.2g} +/- {1:5.2e}'.format(myfit[0], np.sqrt(covfit[0,0])))
+    legend(fontsize=10)
+    ### Keep results
+    bla[i*3+9] = np.std(resid_dust[i,okpix])
+    bla[i*3+1+9] = myfit[0]
+    bla[i*3+2+9] = np.std(dustrec[i,okpix]-myfit[0]*truth_dust[i,okpix])
+    
+tight_layout()
+
+print([resol_correction, ref_fwhm, r]+list(bla))
+```
+
+- The alm transformation gets sick from the edges...
+    - We confirm below that we get significant improvement with fiducial region / apodization
+
+Another possibility has been suggested by Josquin: oncee you fit beta (in alm ou pix space), you can recalculate the A matrix and calculate dust and cmb maps from the frequency maps... This is actually what he says he does with SO.
+
+This is now implemented above and works extremely well !
+
+
+# Cut-Sky simulations with different resolutions
+this will require reconvolution to worst resolution
+
+```{python}
+synthbeam_peak150_fwhm = 0.39268176  # in degrees
+myFWHM = synthbeam_peak150_fwhm * 150. / freqs  # Qubic beams
+print(myFWHM)
+ref_fwhm = np.max(myFWHM)*0+0.5
+
+maps_conv = csjc.convolve_maps(maps, myFWHM)
+
+### Mask them
+maps_conv[:,:,~pixok] = hp.UNSEEN
+
+print(maps_conv.shape)
+
+csjc.display_maps(maps_conv, bigtitle='Cut-sky maps per freq. at QUBIC resolutions', rot=center)
+```
+
+## Pixel based version
+
+```{python}
+result_pix_qubic = csjc.apply_fgb(maps_conv, freqs, myFWHM, verbose=True, resol_correction=True, ref_fwhm=ref_fwhm, 
+                             plot_separated=True, center=center,
+                             truth=[maps_dust, maps_cmb], plot_residuals=True)
+```
+
+```{python}
+r, dustrec, cmbrec, sigs_dust, sigs_cmb, resid_dust, resid_cmb, truth_dust, truth_cmb = result_pix_qubic
+
+okpix = cmbrec[0,:] != hp.UNSEEN
+stk = ['I','Q','U']
+for i in range(3):
+    subplot(2,3,i+1)
+    title('CMB {}'.format(stk[i]))
+    xlabel('In')
+    ylabel('Out')
+    plot(truth_cmb[i,okpix], cmbrec[i,okpix], 'o')
+    mini = np.min(cmbrec[i,okpix])
+    maxi = np.max(cmbrec[i,okpix])
+    xlim(mini, maxi)
+    ylim(mini, maxi)
+    x = np.linspace(mini, maxi)
+    plot(x,x,'k--', label='y=x')
+    myfit, covfit = np.polyfit(truth_cmb[i,okpix], cmbrec[i,okpix], 1, cov=True)
+    plot(x, np.poly1d(myfit)(x), lw=3, label='Slope: {0:5.2g} +/- {1:5.2e}'.format(myfit[0], np.sqrt(covfit[0,0])))
+    legend(fontsize=10)
+    
+    
+    subplot(2,3,3+i+1)
+    title('Dust {}'.format(stk[i]))
+    xlabel('In')
+    ylabel('Out')
+    plot(truth_dust[i,okpix], dustrec[i,okpix], 'o')
+    mini = np.min(dustrec[i,okpix])
+    maxi = np.max(dustrec[i,okpix])
+    xlim(mini, maxi)
+    ylim(mini, maxi)
+    x = np.linspace(mini, maxi)
+    plot(x,x,'k--', label='y=x')
+    myfit, covfit = np.polyfit(truth_dust[i,okpix], dustrec[i,okpix], 1, cov=True)
+    plot(x, np.poly1d(myfit)(x), lw=3, label='Slope: {0:5.2g} +/- {1:5.2e}'.format(myfit[0], np.sqrt(covfit[0,0])))
+    legend(fontsize=10)
+    
+tight_layout()
+```
+
+So now we have a bias, but only on the edges. 
+
+This is not surprising: near the edges, the reconvolutions results in incorrect values because it mixes know pixels with unknown information.
+
+Let's first check that get get a similar bias when working in alm space.
+
+## alm based version
+
+```{python}
+result_alm_qubic = csjc.apply_fgb(maps_conv, freqs, myFWHM, verbose=True, 
+                             alm_space=True,
+                             resol_correction=True, ref_fwhm=ref_fwhm, 
+                             plot_separated=True, center=center,
+                             truth=[maps_dust, maps_cmb], plot_residuals=True,
+                             apply_to_unconvolved=False)
+```
+
+```{python}
+r, dustrec, cmbrec, sigs_dust, sigs_cmb, resid_dust, resid_cmb, truth_dust, truth_cmb = result_alm_qubic
+
+okpix = cmbrec[0,:] != hp.UNSEEN
+stk = ['I','Q','U']
+for i in range(3):
+    subplot(2,3,i+1)
+    title('CMB {}'.format(stk[i]))
+    xlabel('In')
+    ylabel('Out')
+    plot(truth_cmb[i,okpix], cmbrec[i,okpix], 'o')
+    mini = np.min(cmbrec[i,okpix])
+    maxi = np.max(cmbrec[i,okpix])
+    xlim(mini, maxi)
+    ylim(mini, maxi)
+    x = np.linspace(mini, maxi)
+    plot(x,x,'k--', label='y=x')
+    myfit, covfit = np.polyfit(truth_cmb[i,okpix], cmbrec[i,okpix], 1, cov=True)
+    plot(x, np.poly1d(myfit)(x), lw=3, label='Slope: {0:5.2g} +/- {1:5.2e}'.format(myfit[0], np.sqrt(covfit[0,0])))
+    legend(fontsize=10)
+    
+    
+    subplot(2,3,3+i+1)
+    title('Dust {}'.format(stk[i]))
+    xlabel('In')
+    ylabel('Out')
+    plot(truth_dust[i,okpix], dustrec[i,okpix], 'o')
+    mini = np.min(dustrec[i,okpix])
+    maxi = np.max(dustrec[i,okpix])
+    xlim(mini, maxi)
+    ylim(mini, maxi)
+    x = np.linspace(mini, maxi)
+    plot(x,x,'k--', label='y=x')
+    myfit, covfit = np.polyfit(truth_dust[i,okpix], dustrec[i,okpix], 1, cov=True)
+    plot(x, np.poly1d(myfit)(x), lw=3, label='Slope: {0:5.2g} +/- {1:5.2e}'.format(myfit[0], np.sqrt(covfit[0,0])))
+    legend(fontsize=10)
+    
+tight_layout()
+```
+
+## Summary:
+So if we summarize the results:
+
+```{python}
+import pandas as pd
+pd.options.display.float_format = '{:,.5g}'.format
+
+data = [np.append(result_pix_same[0], np.ravel([result_pix_same[4], result_pix_same[3]])),
+       np.append(result_alm_same[0], np.ravel([result_alm_same[4], result_alm_same[3]])),
+       np.append(result_pix_qubic[0], np.ravel([result_pix_qubic[4], result_pix_qubic[3]])),
+       np.append(result_alm_qubic[0], np.ravel([result_alm_qubic[4], result_alm_qubic[3]]))]
+lines = ['Pixel Based - Same Resolution','alm Based - Same Resolution',
+                       'Pixel Based - QUBIC Resolutions','alm Based - QUBIC Resolutions']
+names = ['beta','CMB I RMS', 'CMB Q RMS', 'CMB U RMS', 'Dust I RMS', 'Dust Q RMS', 'Dust U RMS']
+pd.DataFrame(data,lines, names)
+```
+
+So it there is significant edge-related effects playing here that arises when convolving (alm transformation on a map that has sharp edges due to the cut-sky).
+
+We now find equivalent performance for pix or alm if we do as follows:
+- perform FGB in pix of alm space with maps reconvolved at the same res
+- in the alm case, just take beta from the fit and recalculate A matrix, apply it on input maps reconvolved at same resolution.
+(if we directly take the alm reconstructed by FGB, there are stronger residuals: => the beta estimation is more robust than the pixels one)
+
+The sad thing here is that in both cases we actually need reconvolution and therefore suffer from edges effects. 
+
+However Josquin says that in SO, he does the above, but applied to input maps **not reconvolved** at the same resolution (option `apply_to_unconvolved=True` above - `False` is the default). This is very strange that he does this... In the simulations above, doing this makes the results much worse residuals are 24.1, 1., 1 and 3.7, 0.25, 0.25. This is therefore about 2.5 times worse for CMB abd 5 times worse for dust. Anyway, by doing so, he mixes different resolution into the reconstructed CMB I,Q,U maps. He calculates the effective Bl function by applying the Wd operator on each frequency's Bl. He might get a pure result in terms of E/B polarization leakage but this needs to be verified as in some sense the effect is a bit like lensing: you mix polarization information from various directions... It is possible that because the beam is axisymmetric, this does not induce spurious B, but it would need to be checked.
+
+The higher residuals I see are not too surprizing as they are w.r.t. maps convolved at a given beam, while the eeffective beam of this map is complicated, so the residuals should be calculated with a map convolved with this effective beam.
+
+One more thing mentioned by Josquin is that hee actually puts the beam stuff in the Noise matrix and uses a weighted component separation. In this way, this is all part of the likelihood model and therefore it should be better than what we're doing here. So we havee now (or soon) to switch to weighted comp sep and start looking at this.
+
+NB: 
+- there is still some question about the `prewhithen` part I had to commeent in the FGB code.
+- for sure the choice of the output resolution plays a role here (Josquin uses 100 arcmin for SO !) so we'll need to optimize this later.
+
+
+
+# Now we want to see if we can improve on this with sky-cutting and/or apodization
+
+
+# Solution #1: Restricting to a smaller fiducial region after reconvolution in order to limit the effect of edge-convolution leakage.
+
+This solution is probably not so good as the reconvolution is done in harmonic space, so for sure the aliasing effects from the sharp edges will remain somehow and from looking at the reconstructed maps and residuals, they appear to be spread far away from the edges...
+
+For sure because the point here is to cut **after** reconvolution, this can only be applied to the *pixel-based* case.
+
+```{python}
+result_pix_qubic_recut = csjc.apply_fgb(maps_conv, freqs, myFWHM, verbose=True, 
+                                 coverage_recut=0.15, coverage=covmap,
+                                 resol_correction=True, ref_fwhm=ref_fwhm, 
+                                 plot_separated=True, center=center,
+                                 truth=[maps_dust, maps_cmb], plot_residuals=True)
+```
+
+```{python}
+data = [np.append(result_pix_qubic[0], np.ravel([result_pix_qubic[4], result_pix_qubic[3]])),
+        np.append(result_pix_qubic_recut[0], np.ravel([result_pix_qubic_recut[4], result_pix_qubic_recut[3]]))]
+lines = ['Pixel Based - QUBIC Resolutions','Pixel Based - QUBIC Resolutions - Recut {}'.format(thr)]
+names = ['Beta', 'CMB I RMS', 'CMB Q RMS', 'CMB U RMS', 'Dust I RMS', 'Dust Q RMS', 'Dust U RMS']
+pd.DataFrame(data,lines, names)
+```
+
+So we see a significant improvement **in the pixel domain case**:
+
+Let's loop on increased cut value in order to see the residuals as well as the reconstructed beta
+
+```{python}
+reload(csjc)
+newcuts = np.logspace(-1,np.log10(0.2), 10) #np.linspace(0.1, 0.5,10)
+betas = np.zeros(len(newcuts))
+resid_dust = np.zeros((len(newcuts), 3))
+resid_cmb = np.zeros((len(newcuts), 3))
+for k in range(len(newcuts)):
+    myresult = csjc.apply_fgb(maps_conv, freqs, myFWHM, verbose=False, 
+                        coverage_recut=newcuts[k], coverage=covmap,
+                        resol_correction=True, ref_fwhm=ref_fwhm, 
+                        plot_separated=False, center=center,
+                        truth=[maps_dust, maps_cmb], plot_residuals=False) 
+    betas[k] = myresult[0]
+    resid_dust[k,:] = myresult[3]
+    resid_cmb[k,:] = myresult[4]
+    print('{0:}/{1:}: cut={2:5.2f} beta {3:8.5f}, Dust {4:}, CMB {5:}'.format(k, len(newcuts), newcuts[k], betas[k], 
+                                                            resid_dust[k,:], resid_cmb[k,:]))
+
+
+
+
+```
+
+```{python}
+subplot(2,1,1)
+plot(newcuts, betas, 'ro-', label='Simulation')
+xlabel('Newcut on fsky (initial 0.1)')
+ylabel('Beta Dust')
+axhline(y=1.54, ls=':', color='k', label='Truth')
+axhline(y=result_pix_same[0], ls='--', color='b', label='No Reconv')
+legend()
+subplot(2,2,3)
+for i in range(3):
+    p=plot(newcuts, resid_dust[:,i], 'o-', label='Dust {}'.format(stk[i]))
+    axhline(y=result_pix_same[3][i], ls='--', color=p[0].get_color(), 
+            label='No reconv Dust {0:}: {1:3.1g}'.format(stk[i],result_pix_same[3][i]))
+legend(fontsize=10)
+yscale('log')
+xlabel('Newcut on fsky (initial 0.1)')
+ylabel('RMS Residuals')
+title('Dust Residuals')
+ylim(1e-8, 10)
+subplot(2,2,4)
+for i in range(3):
+    p=plot(newcuts, resid_cmb[:,i], 'o-', label='CMB {}'.format(stk[i]))
+    axhline(y=result_pix_same[4][i], ls='--', color=p[0].get_color(), 
+            label='No reconv CMB {0:}: {1:3.1g}'.format(stk[i], result_pix_same[4][i]))
+legend(fontsize=10)
+yscale('log')
+xlabel('Newcut on fsky (initial 0.1)')
+ylabel('RMS Residuals')
+title('CMB Residuals')
+ylim(1e-8, 10)
+
+tight_layout()
+```
+
+So we do see a clear drop in the residuals when removing the edges, but it saturates fast, and the bias on beta remains. This means that this method for avoiding the reconvolution edge effect is not a good one.
+
+So we need to explore other methods:
+- Apodization before reconvolution
+- Including Planck data information on the edges ?
+
+
+# Let's explore the apodization method
+
+```{python}
+synthbeam_peak150_fwhm = 0.39268176  # in degrees
+myFWHM = synthbeam_peak150_fwhm * 150. / freqs  # Qubic beams
+ref_fwhm = np.max(myFWHM)*0+0.35
+
+maps_conv = csjc.convolve_maps(maps, myFWHM)
+
+### Mask them
+maps_conv[:,:,~pixok] = hp.UNSEEN
+```
+
+```{python}
+apo = 5
+result_pix_qubic_apo = csjc.apply_fgb(maps_conv, freqs, myFWHM, verbose=True, 
+                                 apodize=apo, apocut=False, plot_apo=True, apotype='C1', coverage=covmap,
+                                 resol_correction=True, ref_fwhm=ref_fwhm, 
+                                 plot_separated=True, center=center,
+                                 truth=[maps_dust, maps_cmb], plot_residuals=True)
+```
+
+```{python}
+resid_pix_qubic_cmb = result_pix_qubic[6]
+resid_pix_qubic_cmb_apo = result_pix_qubic_apo[6]
+force_rng = [1, 0.1, 0.1]
+csjc.display_maps(resid_pix_qubic_cmb, rot=center, force_rng=force_rng, add_rms=True,
+             bigtitle='No Apodization (pixel based)', figsize=(16,7))
+csjc.display_maps(resid_pix_qubic_cmb_apo, rot=center, force_rng=force_rng, add_rms=True, 
+             bigtitle='{} deg. Apodization (pixel based)'.format(apo), figsize=(16,7))
+csjc.display_maps(resid_pix_qubic_cmb-resid_pix_qubic_cmb_apo, rot=center, force_rng=force_rng, add_rms=True,
+             bigtitle='Difference of residuals', figsize=(16,7))
+```
+
+```{python}
+data = [np.append(result_pix_qubic[0], np.ravel([result_pix_qubic[4], result_pix_qubic[3]])),
+        np.append(result_pix_qubic_apo[0], np.ravel([result_pix_qubic_apo[4], result_pix_qubic_apo[3]]))]
+lines = ['Pixel Based - QUBIC Resolutions','Pixel Based - QUBIC Resolutions - Apodized {}'.format(apo)]
+names = ['Beta', 'CMB I RMS', 'CMB Q RMS', 'CMB U RMS', 'Dust I RMS', 'Dust Q RMS', 'Dust U RMS']
+pd.DataFrame(data,lines, names)
+```
+
+There is clear improvement, but it's not perfect... Lets try to optimize the apodization scale as well as the apodization scheme which can be either C1, C2 or Smooth in NaMaster (we could actually use others...).
+
+```{python}
+apotypes = ['C1', 'C2', 'Smooth']
+apo_angles = np.logspace(-1, 1,10)
+betas = np.zeros((len(apotypes), len(apo_angles)))
+resid_dust = np.zeros((len(apotypes), len(apo_angles), 3))
+resid_cmb = np.zeros((len(apotypes), len(apo_angles), 3))
+for j in range(len(apotypes)):
+    for k in range(len(apo_angles)):
+        myresult = csjc.apply_fgb(maps_conv, freqs, myFWHM, verbose=False, 
+                            apodize=apo_angles[k], coverage=covmap, apotype=apotypes[j],
+                            resol_correction=True, ref_fwhm=ref_fwhm, 
+                            plot_separated=False, center=center,
+                            truth=[maps_dust, maps_cmb], plot_residuals=False) 
+        betas[j, k] = myresult[0]
+        resid_dust[j, k,:] = myresult[3]
+        resid_cmb[j, k,:] = myresult[4]
+        print(apotypes[j]+' {0:}/{1:}: Apo={2:5.2f} beta {3:8.5f}, Dust {4:}, CMB {5:}'.format(k, len(apo_angles), 
+                                                                                  apo_angles[k], 
+                                                                                  betas[j,k], 
+                                                                                  resid_dust[j,k,:], 
+                                                                                  resid_cmb[j,k,:]))
+
+
+
+
+```
+
+```{python}
+rc('figure', figsize=(16, 10))
+subplot(2,1,1)
+for j in range(len(apotypes)):
+    plot(apo_angles, betas[j,:], 'o-', label='Apodization '+apotypes[j])
+xlabel('Apodization Scale (deg.)')
+ylabel('Beta Dust')
+xscale('log')
+axhline(y=1.54, ls=':', color='k', label='Truth')
+axhline(y=result_pix_same[0], ls='--', color='b', label='No Reconv')
+legend(fontsize=9, loc='upper left')
+
+for istk in range(3):
+    subplot(2,3,4+istk)
+    title(stk[istk])
+    for j in range(len(apotypes)):
+        plot(apo_angles, resid_dust[j,:, istk], 'x-', label='Dust - Apodization '+apotypes[j])
+        plot(apo_angles, resid_cmb[j,:, istk], 'o:', label='CMB - Apodization '+apotypes[j])
+    legend(fontsize=10)
+    yscale('log')
+    xlabel('Apodization scale (deg.)')
+    ylabel('RMS Residuals')
+    ylim(1e-4, 10)
+
+tight_layout()
+```
+
+Well, this not as good as expected... not really better that cutting... we can try to do apodization before reconvolution, then restraining to the pixels at 1...
+
+```{python}
+apotypes = ['C1', 'C2', 'Smooth']
+apo_angles = np.logspace(-1, 1,10)
+betas_cut = np.zeros((len(apotypes), len(apo_angles)))
+resid_dust_cut = np.zeros((len(apotypes), len(apo_angles), 3))
+resid_cmb_cut = np.zeros((len(apotypes), len(apo_angles), 3))
+for j in range(len(apotypes)):
+    for k in range(len(apo_angles)):
+        myresult = csjc.apply_fgb(maps_conv, freqs, myFWHM, verbose=False, 
+                            apodize=apo_angles[k], apocut=True, coverage=covmap, apotype=apotypes[j],
+                            resol_correction=True, ref_fwhm=ref_fwhm, 
+                            plot_separated=False, center=center,
+                            truth=[maps_dust, maps_cmb], plot_residuals=False) 
+        betas_cut[j, k] = myresult[0]
+        resid_dust_cut[j, k,:] = myresult[3]
+        resid_cmb_cut[j, k,:] = myresult[4]
+        print(apotypes[j]+' {0:}/{1:}: Apo={2:5.2f} beta {3:8.5f}, Dust {4:}, CMB {5:}'.format(k, len(apo_angles), 
+                                                                                  apo_angles[k], 
+                                                                                  betas_cut[j,k], 
+                                                                                  resid_dust_cut[j,k,:], 
+                                                                                  resid_cmb_cut[j,k,:]))
+
+
+
+
+```
+
+```{python}
+rc('figure', figsize=(16, 10))
+subplot(3,1,1)
+for j in range(len(apotypes)):
+    p=plot(apo_angles, betas_cut[j,:], 'o-', label='Apodization + Cut '+apotypes[j])
+    plot(apo_angles, betas[j,:], '*--', label='Apodization '+apotypes[j], color=p[0].get_color())
+xlabel('Apodization Scale (deg.)')
+ylabel('Beta Dust')
+#xscale('log')
+axhline(y=1.54, ls=':', color='k', label='Truth')
+axhline(y=result_pix_same[0], ls='--', color='b', label='No Reconv')
+legend(fontsize=9, loc='lower right')
+
+
+for istk in range(3):
+    subplot(3,3,4+istk)
+    title('Dust '+stk[istk])
+    for j in range(len(apotypes)):
+        plot(apo_angles, resid_dust[j,:, istk], 'x--', label='Dust - Apodization '+apotypes[j])
+        plot(apo_angles, resid_dust_cut[j,:, istk], 'o-', label='Dust - Cut+Apodization '+apotypes[j])
+    legend(fontsize=10)
+    yscale('log')
+    #xscale('log')
+    xlabel('Apodization scale (deg.)')
+    ylabel('RMS Residuals')
+    ylim(1e-3, 10)
+    subplot(3,3,4+3+istk)
+    title('CMB '+stk[istk])
+    for j in range(len(apotypes)):
+        plot(apo_angles, resid_cmb[j,:, istk], 'x--', label='CMB - Apodization '+apotypes[j])
+        plot(apo_angles, resid_cmb_cut[j,:, istk], 'o-', label='CMB - Cut+Apodization '+apotypes[j])
+    legend(fontsize=10)
+    yscale('log')
+    #xscale('log')
+    xlabel('Apodization scale (deg.)')
+    ylabel('RMS Residuals')
+    ylim(1e-3, 10)
+
+tight_layout()
+```
+
+```{python}
+
+```

@@ -105,9 +105,13 @@ class Namaster(object):
         differentiable along the edges. The 'C1' and 'C2' apodization types
         supported by mask_apodization achieve this.
         """
-        mask_apo = nmt.mask_apodization(self.weight_mask,
-                                        aposize=self.aposize,
-                                        apotype=self.apotype)
+        resol = np.degrees(hp.nside2resol(hp.npix2nside(len(self.weight_mask))))
+        if resol < self.aposize:
+            mask_apo = nmt.mask_apodization(self.weight_mask,
+                                            aposize=self.aposize,
+                                            apotype=self.apotype)
+        else:
+            mask_apo = self.weight_mask.copy()
         return mask_apo
 
     def get_fields(self, map, mask_apo=None, purify_e=False, purify_b=True, beam_correction=None):

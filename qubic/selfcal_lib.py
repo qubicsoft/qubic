@@ -3,9 +3,11 @@ from __future__ import division, print_function
 import glob
 import numpy as np
 import pandas as pd
+import healpy as hp
 
 from scipy.interpolate import RegularGridInterpolator
 from scipy.integrate import dblquad
+import scipy.optimize as sop
 
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -43,7 +45,7 @@ def plot_baseline(q, bs, ax=None):
 
 
 def scatter_plot_FP(q, x, y, FP_signal, frame, fig=None, ax=None,
-                    s=None, title=None, unit='[W / Hz]', cbar=True, **kwargs):
+                    s=None, title=None, unit='[W / Hz]', cbar=True, fontsize=14, **kwargs):
     """
     Make a scatter plot of the focal plane.
     Parameters
@@ -79,10 +81,10 @@ def scatter_plot_FP(q, x, y, FP_signal, frame, fig=None, ax=None,
         cax = divider.append_axes('right', size='5%', pad=0.05)
         clb = fig.colorbar(img, cax=cax)
         clb.ax.set_title(unit)
-    ax.set_xlabel(f'X_{frame} [m]', fontsize=14)
-    ax.set_ylabel(f'Y_{frame} [m]', fontsize=14)
+    ax.set_xlabel(f'X_{frame} [m]', fontsize=fontsize)
+    ax.set_ylabel(f'Y_{frame} [m]', fontsize=fontsize)
     ax.axis('square')
-    ax.set_title(title, fontsize=14)
+    ax.set_title(title, fontsize=fontsize)
     return
 
 
@@ -116,7 +118,7 @@ def pcolor_plot_FP(q, x, y, FP_signal, frame, title=None, fig=None, ax=None, cba
     y2D = q.detector.unpack(y)
     FP_signal2D = q.detector.unpack(FP_signal)
 
-    img = ax.pcolor(x2D, y2D, FP_signal2D, **kwargs)
+    img = ax.pcolor(x2D, y2D, FP_signal2D, shading='auto', **kwargs)
     if cbar:
         divider = make_axes_locatable(ax)
         cax = divider.append_axes('right', size='5%', pad=0.05)
@@ -760,9 +762,165 @@ def fullreso2TESreso(x, y, power, TESvertex, TESarea, interp=False, verbose=True
     return powerTES
 
 
+# ========== Chi2 to fit the fringes =========
+def make_inverse_covariance(errors, verbose=True):
+    Cov = np.diag(errors ** 2)
+    if verbose:
+        print(Cov)
+
+    InvCov = np.diag(1. / np.diag(Cov))
+    return InvCov
+
+
+def get_gains(allPowerPhi, allInvCov, allData):
+    """
+    Compute a gain for each detector analytically.
+    Parameters
+    ----------
+    allPowerPhi: list
+        List with fringes models Phi multiply by a global power P.
+    allInvCov: list
+        List with the inverse covariance matrices, one for each image.
+    allData: list
+        List with the fringe images.
+    Returns
+    -------
+    Gains A and their covariance matrix Cov_A, normalized such as <A> = 1.
+    """
+    # Number of fringe images
+    nimages = len(allPowerPhi)
+
+    InvCov_A = np.zeros_like(allInvCov[0])
+    Term = np.zeros_like(allData[0])
+    for k in range(nimages):
+        # Make a diagonal matrix
+        PowerPhi_mat = np.diag(allPowerPhi[k])
+
+        InvCov_A += PowerPhi_mat.T @ allInvCov[k] @ PowerPhi_mat
+        Term += PowerPhi_mat.T @ allInvCov[k] @ allData[k]
+    Cov_A = np.linalg.inv(InvCov_A)
+
+    A = Cov_A @ Term
+
+    # Normalization
+    weights = 1 / np.diag(Cov_A) # To cancel bad detectors
+    avgA = np.average(A, weights=weights) # Weighted mean
+    A /= avgA
+    Cov_A /= avgA ** 2
+
+    return A, Cov_A
+
+def get_chi2(params, allInvCov, allData, BLs, q, nu_source=150e9, returnA=False):
+    """
+    Compute the Chi^2 for a list of fringe images (several baselines) and a model M.
+    M_k = P_k Phi_k(focal, source angle) @ A
+    where k is the image index, P_k a global power, Phi_k the fringes model given by Model_Fringes_Ana
+    and A contains the gains of the detectors.
+    For now, we use the analytical model but it could be adapted to a more complex model (QubicSoft or Maynooth).
+
+    Parameters
+    ----------
+    params: list
+        Focal length, source off-axis angle, log_10 of global powers P_k
+    allInvCov: list
+        List with the inverse covariance matrices, one for each image.
+    allData: list
+        List with the fringe images.
+    BLs: list
+        List of the baselines, for example [25, 57] is one baseline.
+    q: a Qubic instrument
+    nu_source: float
+        Frequency of the calibration source
+    returnA: bool
+        If True, it will return the detector gains and their covariance.
+
+    Returns
+    -------
+    The Chi^2.
+    """
+
+    nimages = len(BLs)
+    focal = params[0]
+    theta_source = params[1]
+    logP = params[2:]
+    q.optics.focal_length = focal
+    allPowerPhi = []
+    for k in range(nimages):
+        model = Model_Fringes_Ana(q,
+                                  BLs[k],
+                                  theta_source=theta_source,
+                                  nu_source=nu_source)
+
+        x, y, Phi = model.get_fringes(times_gaussian=False)
+
+        # Global amplitude
+        allPowerPhi.append(Phi * 10**logP[k])
+
+    # Gain for each detector
+    A, Cov_A = get_gains(allPowerPhi, allInvCov, allData)
+
+    chi2 = 0.
+    for k in range(nimages):
+        # Compute the chi2
+        M = np.diag(allPowerPhi[k]) @ A
+        R = M - allData[k]
+        chi2 += R.T @ allInvCov[k] @ R
+
+    if returnA:
+        return chi2, A, Cov_A
+    else:
+        return chi2
+
+
+def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.25, fl_max=0.35,
+                   th_min=np.deg2rad(-1.), th_max=np.deg2rad(1), LogPower=-1, fixPower=True):
+    """Loop over the parameters (focal length and source off-axis angle) to explore the chi2.
+    Global powers are fixed to Log_10(Power)=-1 or optimized at each step by minimizing a temporary chi2 (longer)."""
+    nimages = len(BLs)
+    chi2_grid = np.zeros((nval_fl, nval_th))
+
+    all_fl = np.linspace(fl_min, fl_max, nval_fl)
+    all_th = np.linspace(th_min, th_max, nval_th)
+
+    # Fast method
+    if fixPower:
+        # Global powers are fixed to initPower and we loop on fl and th.
+        for i, fl in enumerate(all_fl):
+            for j, th in enumerate(all_th):
+                params = [fl, th] + [LogPower] * nimages
+                chi2_grid[i, j] = get_chi2(params, allInvCov, fringes, BLs, q)
+        return all_fl, all_th, chi2_grid
+
+    # Slow method but more rigorous
+    else:
+        # Loop on fl and th and at each step, minimize the chi2 to find the best global powers.
+        power_optimize = np.zeros((nval_fl, nval_th, nimages))
+        step = 0
+        for i, fl in enumerate(all_fl):
+            for j, th in enumerate(all_th):
+                def chi2_temporary(mypower, allInvCov, fringes, BLs, q):
+                    params = [fl, th] + list(mypower)
+                    chi2_temp = get_chi2(params, allInvCov, fringes, BLs, q)
+                    return chi2_temp
+
+                result = sop.minimize(chi2_temporary,
+                                      x0=[LogPower] * nimages,
+                                      args=(allInvCov, fringes, BLs, q),
+                                      method='Nelder-Mead',
+                                      options={'maxiter': 10000})
+                chi2_grid[i, j] = result['fun']
+                power_optimize[i, j, :] = result['x']
+
+                print(f'\n***Step {step + 1}/{nval_fl * nval_th}')
+                print('Chi2 min:', result['fun'])
+                print('with powers =', result['x'])
+                step += 1
+        return all_fl, all_th, chi2_grid, power_optimize
+
+
 # ========== Fringe simulations =============
 class Model_Fringes_Ana:
-    def __init__(self, q, baseline, theta_source=0., nu_source=150e9, fwhm=20., amp=1., frame='ONAFP'):
+    def __init__(self, q, baseline, theta_source=0., phi_source=0., nu_source=150e9, fwhm=20., amp=1., frame='ONAFP'):
         """
 
         Parameters
@@ -772,6 +930,8 @@ class Model_Fringes_Ana:
             Baseline formed with 2 horns, index between 1 and 64 as on the instrument.
         theta_source: float
             The source zenith angle [rad].
+        phi_source: float
+            The source azimuthal angle [rad].
         nu_source: float
             Source frequency [Hz].
         fwhm: float
@@ -782,6 +942,7 @@ class Model_Fringes_Ana:
         self.q = q
         self.focal = q.optics.focal_length
         self.theta_source = theta_source
+        self.phi_source = phi_source
         self.nu_source = nu_source
         self.lam = 3e8 / self.nu_source
         self.fwhm = fwhm
@@ -809,10 +970,18 @@ class Model_Fringes_Ana:
         phase = - 2 * np.pi / 3e8 * self.nu_source * dist * np.sin(self.theta_source)
         self.phase = phase
 
+    def make_gaussian(self):
+        sigma = np.deg2rad(self.fwhm / 2.355 * self.focal)
+        # The position of the gaussian depends on the position of the source
+        # Maybe there is a sign problem here...
+        x_center = self.focal * np.tan(self.theta_source) * np.cos(self.phi_source)
+        y_center = self.focal * np.tan(self.theta_source) * np.sin(self.phi_source)
+        self.gaussian = np.exp(- 0.5 * ((self.x - x_center) ** 2 + (self.y - y_center) ** 2) / sigma ** 2)
+        return self.gaussian
+
     def get_fringes(self, times_gaussian=True):
         if times_gaussian:
-            sigma = np.deg2rad(self.fwhm / 2.355 * self.focal)
-            gaussian = np.exp(- 0.5 * ((self.x - self.BL_xc) ** 2 + (self.y - self.BL_yc) ** 2) / sigma ** 2)
+            gaussian = self.make_gaussian()
         else:
             gaussian = 1.
         xprime = (self.x * np.cos(self.BL_angle) + self.y * np.sin(self.BL_angle))
@@ -820,6 +989,7 @@ class Model_Fringes_Ana:
         self.fringes = self.amp * np.cos((2. * np.pi / interfrange * xprime) + self.phase) * gaussian
 
         return self.x, self.y, self.fringes
+
 
 
 class Model_Fringes_QubicSoft:

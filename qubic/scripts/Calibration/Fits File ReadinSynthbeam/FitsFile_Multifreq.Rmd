@@ -1,0 +1,85 @@
+---
+jupyter:
+  jupytext:
+    formats: ipynb,qmd,Rmd
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.13.7
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+#code to read in multiple fits files and merge them to one multifreq fits file
+```
+
+```{python}
+import healpy as hp
+import numpy as np
+from astropy.io import fits
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+```
+
+```{python}
+#first read in each individual fits file
+#set up the frequencies
+freqarray=np.array([133,136,137,141,146,148,151,156,161,166,220])
+```
+
+```{python}
+#create the fits files
+theta=np.zeros((len(freqarray),992,9))
+phi=np.zeros((len(freqarray),992,9))
+val=np.zeros((len(freqarray),992,9))
+
+for i in range (len(freqarray)):
+    fstring=str(freqarray[i])
+    hdul = fits.open('synthbeam_fits_files/CalQubic_Synthbeam_Analytical_'+fstring+'_FI.fits')
+    theta[i,:,:]=hdul[0].data
+    phi[i,:,:]=hdul[1].data
+    val[i,:,:]=hdul[2].data
+```
+
+```{python}
+#now need to save the files
+new_hdul = fits.HDUList()
+new_hdul.append(fits.ImageHDU(theta))
+new_hdul.append(fits.ImageHDU(phi))
+new_hdul.append(fits.ImageHDU(val))
+new_hdul.append(fits.ImageHDU(freqarray))
+    
+new_hdul.writeto('CalQubic_Synthbeam_Analytical_'+'Multifreq'+'_MJW_FI.fits', overwrite=True)
+```
+
+```{python}
+#lets try reading and plotting this
+hdul = fits.open('CalQubic_Synthbeam_Analytical_Multifreq_MJW_FI.fits')
+```
+
+```{python}
+theta[:,:,:]=hdul[0].data
+phi[:,:,:]=hdul[1].data
+val[:,:,:]=hdul[2].data
+freqarray=hdul[3].data
+```
+
+```{python}
+print(freqarray)
+```
+
+```{python}
+for i in range(len(freqarray)):
+    for j in range (35):
+        fig = plt.figure()
+        ax = fig.add_subplot(projection='polar')
+        c = ax.scatter(phi[i,j,:],theta[i,j,:] , c=val[i,j,:], s=30, cmap='cool', alpha=0.75)
+```
+
+```{python}
+
+```

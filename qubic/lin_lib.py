@@ -1,4 +1,3 @@
-from qubicpack import qubicpack as qp
 import qubic.fibtools as ft
 import qubic.plotters as p
 
@@ -26,78 +25,165 @@ def logistic(x,pars):
     result  - the logistic function
     '''
     return pars[3]+pars[0]*1./(1+np.exp(-(x-pars[1])/pars[2]))
+    
 
-def source_cal(Vin, freq = 150., folder = '/qubic/Data/Calib-TD/calsource', force_read=False):
-    import scipy as sc
+def source_cal(Vin, freq = 150., finterp_Vin = '', finterp_freq = ''):
+    import numpy as np
+    from scipy import interpolate
+
 
     '''
     This function interpolates the source calibration curve and returns an interpolated value at any point
 
     INPUTS
-    Vin    - FLOAT - the input voltage [V]
-    freq   - FLOAT - the RF frequency (default = 150 GHz)
-    folder - STRING - the folder containing the calibration curve
-
+    Vin          - FLOAT - the input voltage [V]
+    freq         - FLOAT - the RF frequency (default = 150 GHz)
+    finterp_Vin  - MIXED - the interpolating function that returns the fraction of power
+                           as a function of Vin. If it is provided externally then it is of type
+                           scipy.interpolate.interp2d. Default is an empty string, in this case the interpolation
+                           is carried out internally
+    finterp_freq - MIXED - the interpolating function that returns the maximum power
+                           as a function of the frequency in GHz. If it is provided externally then it is of type
+                           scipy.interpolate.interp1d. Default is an empty string, in this case the interpolation
+                           is carried out internally
     OUTPUTS
-    result  - FLOAT - the interpolated value at Vin
+    result  - FLOAT - the interpolated value at Vin, freq
 
     '''
 
-    if force_read:
-        ### Initial code by Daniele
-        calibration_file = '%s/source_calibration_curve_%sGHz.txt' % (folder,int(freq))
-        data = np.transpose(np.loadtxt(calibration_file))
+    # Check if the interpolating function is provided externally
+    if type(finterp_Vin).__name__ != 'interp2d':
+        
+        # The array "data" contains the calibration curves at the frequencies 130, 140, 150,
+        # 160 and 170 GHz. The array data[0] contains the Vin (abscissa) points, the arrays
+        # data[1]-->data[6] contain the five calibration curves
+
+        data = np.array([[1.00000000e-01, 1.98039216e-01, 2.96078431e-01, 3.94117647e-01,\
+                          4.92156863e-01, 5.90196078e-01, 6.88235294e-01, 7.86274510e-01,\
+                          8.84313725e-01, 9.82352941e-01, 1.08039216e+00, 1.17843137e+00,\
+                          1.27647059e+00, 1.37450980e+00, 1.47254902e+00, 1.57058824e+00,\
+                          1.66862745e+00, 1.76666667e+00, 1.86470588e+00, 1.96274510e+00,\
+                          2.06078431e+00, 2.15882353e+00, 2.25686275e+00, 2.35490196e+00,\
+                          2.45294118e+00, 2.55098039e+00, 2.64901961e+00, 2.74705882e+00,\
+                          2.84509804e+00, 2.94313725e+00, 3.04117647e+00, 3.13921569e+00,\
+                          3.23725490e+00, 3.33529412e+00, 3.43333333e+00, 3.53137255e+00,\
+                          3.62941176e+00, 3.72745098e+00, 3.82549020e+00, 3.92352941e+00,\
+                          4.02156863e+00, 4.11960784e+00, 4.21764706e+00, 4.31568627e+00,\
+                          4.41372549e+00, 4.51176471e+00, 4.60980392e+00, 4.70784314e+00,\
+                          4.80588235e+00, 4.90392157e+00, 5.00196078e+00],\
+                         [2.73972603e-03, 4.93150685e-03, 9.31506849e-03, 1.80821918e-02,\
+                          2.90410959e-02, 4.21917808e-02, 5.53424658e-02, 6.84931507e-02,\
+                          8.82191781e-02, 1.03561644e-01, 1.23287671e-01, 1.38630137e-01,\
+                          1.58356164e-01, 1.80273973e-01, 2.00000000e-01, 2.21917808e-01,\
+                          2.48219178e-01, 2.72328767e-01, 2.96438356e-01, 3.20547945e-01,\
+                          3.44657534e-01, 3.73150685e-01, 3.99452055e-01, 4.23561644e-01,\
+                          4.49863014e-01, 4.76164384e-01, 5.02465753e-01, 5.26575342e-01,\
+                          5.52876712e-01, 5.76986301e-01, 6.03287671e-01, 6.27397260e-01,\
+                          6.53698630e-01, 6.75616438e-01, 6.99726027e-01, 7.23835616e-01,\
+                          7.47945205e-01, 7.69863014e-01, 7.93972603e-01, 8.13698630e-01,\
+                          8.33424658e-01, 8.55342466e-01, 8.72876712e-01, 8.92602740e-01,\
+                          9.10136986e-01, 9.29863014e-01, 9.47397260e-01, 9.62739726e-01,\
+                          9.75890411e-01, 9.91232877e-01, 1.00000000e+00],\
+                         [1.00000000e-03, 2.09008229e-03, 4.23222335e-03, 1.29677880e-02,\
+                          2.17074761e-02, 3.70385261e-02, 4.79739603e-02, 6.77006260e-02,\
+                          8.30296142e-02, 9.83606642e-02, 1.18085268e-01, 1.37813996e-01,\
+                          1.59740531e-01, 1.79465135e-01, 2.01389608e-01, 2.21116274e-01,\
+                          2.45238555e-01, 2.71560706e-01, 2.95678864e-01, 3.21994830e-01,\
+                          3.48316981e-01, 3.74639132e-01, 4.00959221e-01, 4.29477119e-01,\
+                          4.57995016e-01, 4.86512913e-01, 5.12833002e-01, 5.41348838e-01,\
+                          5.67670989e-01, 5.96186824e-01, 6.22506913e-01, 6.46629195e-01,\
+                          6.75147092e-01, 6.99269373e-01, 7.21191785e-01, 7.47511874e-01,\
+                          7.69436348e-01, 7.93558629e-01, 8.13285295e-01, 8.35209768e-01,\
+                          8.54936434e-01, 8.72465292e-01, 8.94389766e-01, 9.11916562e-01,\
+                          9.29445419e-01, 9.44776469e-01, 9.60109581e-01, 9.73238700e-01,\
+                          9.86374004e-01, 9.95111630e-01, 9.99472196e-01],\
+                         [5.47945205e-04, 5.47945205e-04, 2.73972603e-03, 2.73972603e-03,\
+                          9.31506849e-03, 1.58904110e-02, 2.46575342e-02, 3.56164384e-02,\
+                          5.09589041e-02, 6.84931507e-02, 8.82191781e-02, 1.10136986e-01,\
+                          1.32054795e-01, 1.56164384e-01, 1.82465753e-01, 2.08767123e-01,\
+                          2.32876712e-01, 2.63561644e-01, 2.89863014e-01, 3.18356164e-01,\
+                          3.49041096e-01, 3.79726027e-01, 4.12602740e-01, 4.43287671e-01,\
+                          4.71780822e-01, 5.02465753e-01, 5.37534247e-01, 5.66027397e-01,\
+                          5.98904110e-01, 6.25205479e-01, 6.55890411e-01, 6.82191781e-01,\
+                          7.10684932e-01, 7.39178082e-01, 7.63287671e-01, 7.85205479e-01,\
+                          8.11506849e-01, 8.31232877e-01, 8.55342466e-01, 8.75068493e-01,\
+                          8.94794521e-01, 9.14520548e-01, 9.29863014e-01, 9.47397260e-01,\
+                          9.62739726e-01, 9.73698630e-01, 9.84657534e-01, 9.91232877e-01,\
+                          9.97808219e-01, 1.00000000e+00, 9.97808219e-01],\
+                         [5.47945205e-04, 9.31506849e-03, 1.80821918e-02, 3.12328767e-02,\
+                          4.87671233e-02, 6.84931507e-02, 9.47945205e-02, 1.16712329e-01,\
+                          1.45205479e-01, 1.69315068e-01, 1.97808219e-01, 2.26301370e-01,\
+                          2.54794521e-01, 2.85479452e-01, 3.13972603e-01, 3.42465753e-01,\
+                          3.73150685e-01, 4.03835616e-01, 4.32328767e-01, 4.60821918e-01,\
+                          4.89315068e-01, 5.15616438e-01, 5.44109589e-01, 5.70410959e-01,\
+                          5.94520548e-01, 6.20821918e-01, 6.44931507e-01, 6.66849315e-01,\
+                          6.93150685e-01, 7.17260274e-01, 7.41369863e-01, 7.63287671e-01,\
+                          7.85205479e-01, 8.04931507e-01, 8.26849315e-01, 8.48767123e-01,\
+                          8.70684932e-01, 8.90410959e-01, 9.12328767e-01, 9.25479452e-01,\
+                          9.43013699e-01, 9.60547945e-01, 9.73698630e-01, 9.80273973e-01,\
+                          9.91232877e-01, 9.95616438e-01, 1.00219178e+00, 1.00000000e+00,\
+                          9.95616438e-01, 9.86849315e-01, 9.75890411e-01],\
+                         [4.98451343e-03, 2.91476729e-02, 5.55026188e-02, 8.84329241e-02,\
+                          1.19171443e-01, 1.54293535e-01, 1.91607413e-01, 2.26727447e-01,\
+                          2.59661868e-01, 2.96975746e-01, 3.32097838e-01, 3.67219930e-01,\
+                          4.02344080e-01, 4.35270269e-01, 4.68204690e-01, 5.01132938e-01,\
+                          5.31871456e-01, 5.60418189e-01, 5.95542339e-01, 6.26280857e-01,\
+                          6.48250172e-01, 6.76798963e-01, 7.00962122e-01, 7.22933495e-01,\
+                          7.49286383e-01, 7.69065970e-01, 7.91041459e-01, 8.15202560e-01,\
+                          8.34982147e-01, 8.52569947e-01, 8.70159805e-01, 8.89939391e-01,\
+                          9.00953890e-01, 9.18539632e-01, 9.29554131e-01, 9.42754242e-01,\
+                          9.49387226e-01, 9.62591453e-01, 9.71412107e-01, 9.78040975e-01,\
+                          9.84669843e-01, 9.91296653e-01, 9.95735792e-01, 9.95789300e-01,\
+                          1.00022638e+00, 1.00466346e+00, 1.00033340e+00, 1.00038691e+00,\
+                          9.96056842e-01, 9.89534991e-01, 9.80804890e-01]])
+        
+
+        x = data[0]
+        y = np.arange(130,180,10)
+        z = data[1:]
+        
+        finterp_Vin = interpolate.interp2d(x,y,z)
+            
+    if type(finterp_freq).__name__ != 'interp1d':
+        data = np.array([[130., 130.96550379, 131.91908992, 132.93386782, 133.94873239,
+                          134.93317443, 135.94829902, 136.96359697, 137.9483857 ,
+                          138.93326111, 139.94829902, 140.96359697, 141.94873239,
+                          142.9339545 , 143.94985915, 144.9648104 , 145.94899242,
+                          146.9336078 , 147.94907909, 148.96507042, 149.98045504,
+                          150.9648104 , 151.94933911, 152.96524377, 153.95011918,
+                          154.96611051, 155.95089924, 156.93603467, 157.98192849,
+                          158.96593716, 159.98166847, 160.96689057, 161.98279523,
+                          162.96819068, 163.98452871, 164.94019502, 165.98877573,
+                          166.97434453, 167.95826652, 169.00424702, 169.95748646, 170.],
+                         [ 11.15492958, 11.15492958,  11.23943662,  11.43661972,  11.6056338 ,
+                           11.66197183,  11.74647887,  11.77464789,  11.71830986,
+                           11.63380282,  11.74647887,  11.77464789,  11.6056338 ,
+                           11.4084507 ,  11.23943662,  11.38028169,  11.52112676,
+                           11.52112676,  11.49295775,  11.29577465,  11.29577465,
+                           11.38028169,  11.4084507 ,  11.23943662,  11.15492958,
+                           10.95774648,  10.90140845,  10.73239437,  10.81690141,
+                           11.01408451,  10.90140845,  10.70422535,  10.53521127,
+                           10.28169014,   9.97183099,   9.38028169,   8.5915493 ,
+                           8.28169014,   8.50704225,   8.56338028,   8.76056338, 8.76056338]])
+
+        finterp_freq = interpolate.interp1d(data[0], data[1])
+
+    # Here we treat the two cases in which Vin is a scalar or an array
+    if hasattr(Vin, '__len__') == False:
+        result =  finterp_freq(freq)*finterp_Vin(Vin, freq)
+        result = result[0]
     else:
-        ### Replaced by JC in order not to read the data each time
-        if freq == 150.:
-            data = np.array([[1.00584093e-01, 2.12830746e-01, 2.94100096e-01, 3.94684189e-01,
-            4.91398314e-01, 5.91964856e-01, 6.88643879e-01, 7.85305350e-01,
-            8.85801689e-01, 9.78540539e-01, 1.07900178e+00, 1.17946301e+00,
-            1.27216676e+00, 1.37261045e+00, 1.47303658e+00, 1.56570523e+00,
-            1.66611381e+00, 1.75493004e+00, 1.86304346e+00, 1.95956453e+00,
-            2.05608559e+00, 2.15262421e+00, 2.24912772e+00, 2.34950120e+00,
-            2.44989224e+00, 2.54641330e+00, 2.63906440e+00, 2.73555036e+00,
-            2.83979381e+00, 2.94020240e+00, 3.03670591e+00, 3.13322698e+00,
-            3.22589562e+00, 3.32630421e+00, 3.42286037e+00, 3.52328651e+00,
-            3.61986022e+00, 3.71645149e+00, 3.81302521e+00, 3.91348645e+00,
-            4.01007772e+00, 4.10668653e+00, 4.21105284e+00, 4.30380924e+00,
-            4.40045316e+00, 4.50096705e+00, 4.59764608e+00, 4.69434265e+00,
-            4.79107432e+00, 4.89549329e+00, 4.95356037e+00],
-           [2.72108844e-03, 4.53514739e-04, 4.53514739e-04, 4.98866213e-03,
-            9.52380952e-03, 1.63265306e-02, 2.53968254e-02, 3.67346939e-02,
-            5.26077098e-02, 7.07482993e-02, 9.11564626e-02, 1.11564626e-01,
-            1.34240363e-01, 1.56916100e-01, 1.81859410e-01, 2.09070295e-01,
-            2.36281179e-01, 2.61224490e-01, 2.92970522e-01, 3.22448980e-01,
-            3.51927438e-01, 3.79138322e-01, 4.10884354e-01, 4.42630385e-01,
-            4.72108844e-01, 5.01587302e-01, 5.31065760e-01, 5.65079365e-01,
-            5.96825397e-01, 6.24036281e-01, 6.55782313e-01, 6.85260771e-01,
-            7.12471655e-01, 7.39682540e-01, 7.64625850e-01, 7.89569161e-01,
-            8.12244898e-01, 8.32653061e-01, 8.55328798e-01, 8.75736961e-01,
-            8.96145125e-01, 9.14285714e-01, 9.30158730e-01, 9.46031746e-01,
-            9.59637188e-01, 9.73242630e-01, 9.82312925e-01, 9.89115646e-01,
-            9.91383220e-01, 1.00045351e+00, 9.98185941e-01]])
-        else:
-            print('No data is known yet for the frequency you have requested: {}'.format(freq))
-            return -1
-    
-    ##### Initial code by Daniele
-    #if Vin <= data[0][0]:
-    #    out = data[1][0]
-    #elif Vin >= data[0][-1]:
-    #    out = data[1][-1]
-    #else:
-    #    fint = sc.interpolate.interp1d(data[0],data[1])
-    #    out = fint(Vin)
-    #return out
-
-    ##### Speedup by JC
-    return np.interp(Vin, data[0], data[1], left=data[1][0], right=data[1][-1])
+        result = []
+        for V in Vin:
+            dummy = finterp_freq(freq)*finterp_Vin(V, freq)
+            result.append(dummy[0])
+        
+    return np.array(result)
 
 
 
 
-def sim_generator_power(time, amplitude, offset, frequency, phase, 
-rf_freq = 150.):
+def sim_generator_power(time, amplitude, offset, frequency, phase, rf_freq = 150., finterp_Vin = '', finterp_freq = ''):
 
     '''
     This function simulates the power output of the source
@@ -110,21 +196,29 @@ rf_freq = 150.):
     frequency - FLOAT - the modulation frequency [Hz]
     phase     - FLOAT - the wave initial phase
     rf_freq   - FLOAT - the RF frequency (chosen to select the right calibration curve, defaults to 150 GHz)
+    finterp_Vin  - MIXED - the interpolating function that returns the fraction of power
+                           as a function of Vin. If it is provided externally then it is of type
+                           scipy.interpolate.interp2d. Default is an empty string, in this case the interpolation
+                           is carried out internally
+    finterp_freq - MIXED - the interpolating function that returns the maximum power
+                           as a function of the frequency in GHz. If it is provided externally then it is of type
+                           scipy.interpolate.interp1d. Default is an empty string, in this case the interpolation
+                           is carried out internally
 
     OUTPUTS
-    uncal_signal, cal_signal  - FLOAT - the uncalibrated signal and the calibrated signal
-                                     (percentage of max output power)interpolated value at Vin
-
+    cal_signal  - FLOAT - the calibrated signal
+                          
     '''
 
     if type(time) == float:
         tim = np.array([time])
     else:
         tim = time
+
     sine = amplitude/2. * np.sin(2.*np.pi * frequency * tim + phase) # Divide by 2 because we provide the p2p
     uncal_signal = sine + offset
     #cal_signal = np.array([source_cal(i) for i in uncal_signal])
-    cal_signal = source_cal(uncal_signal)
+    cal_signal = source_cal(uncal_signal, freq = rf_freq, finterp_Vin = finterp_Vin, finterp_freq = finterp_freq)
     return cal_signal
 
 def sine(x,pars):    

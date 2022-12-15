@@ -1,0 +1,226 @@
+---
+jupyter:
+  jupytext:
+    formats: ipynb,Rmd
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.13.7
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+#create the qubic synthesized beam
+```
+
+```{python}
+import numpy as np
+import scipy as sp
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import math as mt
+```
+
+```{python}
+def get_primbeam(th, lam, fwhmprimbeam_150=14.):
+    fwhmprim = 14. * lam / (3e8/150e9)
+    primbeam = np.exp(-0.5 * th**2 / (fwhmprim/2.35)**2)
+    return primbeam
+```
+
+```{python}
+def give_sbcut(th, dx, lam, sqnh, Df=1., detpos=0., fwhmprimbeam_150=14.):
+    primbeam =  get_primbeam(th, lam, fwhmprimbeam_150=fwhmprimbeam_150)
+    theth = th - np.degrees(detpos/Df)
+    sb = np.sin(sqnh * np.pi * dx / lam * np.radians(theth))**2 / np.sin(np.pi * dx / lam * np.radians(theth))**2
+    return sb/np.max(sb)*primbeam
+```
+
+```{python}
+#### Synthesized beam cut plot
+fwhmprim_150 = 14. #deg
+nu = 150e9
+lam = 3e8/nu    #m
+dx = 14./1000  #m
+sqnh = 20
+Df = 1. #m
+minth = -20.
+maxth = 20
+nth = 1000
+th = np.linspace(minth, maxth, nth)
+```
+
+```{python}
+sb = np.sin(sqnh * np.pi * dx / lam * np.radians(th))**2 / np.sin(np.pi * dx / lam * np.radians(th))**2
+sb = sb/max(sb)
+
+fwhmpeak = np.degrees(lam / sqnh / dx)
+thetapeak = np.degrees(lam / dx)
+```
+
+```{python}
+sbth = give_sbcut(th, dx, lam, sqnh, Df=Df, detpos=0.)
+```
+
+```{python}
+plt.figure()
+
+plt.subplot(1,2,1)
+dist = [0.]
+for d in dist:
+    nu0=140.
+    nu1=160.
+    lam0 = 3e8/(nu0*1e9)
+    lam1 = 3e8/(nu1*1e9)
+    b1 = give_sbcut(th, dx, lam0, sqnh, Df=Df, detpos=d/1000)
+    b2 = give_sbcut(th, dx, lam1, sqnh, Df=Df, detpos=d/1000)
+    plt.plot(th, b1, 'r', lw=2, label='Th. Synth. Beam at {0:3.0f} GHz'.format(nu0))
+    plt.plot(th, b2, 'b', lw=2, label='Th. Synth. Beam at {0:3.0f} GHz'.format(nu1))
+    plt.plot(th, get_primbeam(th, lam0), 'r--', lw=2, label='Th. Prim. Beam at {0:3.0f} GHz'.format(nu0))
+    plt.plot(th, get_primbeam(th, lam1), 'b--', lw=2, label='Th. Prim. Beam at {0:3.0f} GHz'.format(nu1))
+    plt.xlabel(r'$\theta$ [deg.]')
+    plt.ylabel('Synthesized beam')
+    plt.draw()
+    plt.ylim(0,1.5)
+    plt.xlim(-20,20)
+    plt.legend(loc='upper left')
+    bb1 = b1/np.sqrt(np.sum(b1**2))
+    bb2 = b2/np.sqrt(np.sum(b2**2))
+    #print(np.sum(bb1*bb2))
+    
+```
+
+```{python}
+# now lets do beam for detector offset from centre
+nu=150.
+lam=3e8/(nu*1e9)
+d1=0
+d2=20
+b1 = give_sbcut(th, dx, lam, sqnh, Df=Df, detpos=d1/1000)
+b2 = give_sbcut(th, dx, lam, sqnh, Df=Df, detpos=d2/1000)
+plt.plot(th, b1, 'g', lw=1, label='Th. Synth. Beam no offset'.format(nu0))
+plt.plot(th, b2, 'purple', lw=1, label='Th. Synth. Beam offset'.format(nu1))
+plt.plot(th, get_primbeam(th, lam), 'r--', lw=2, label='Th. Prim. Beam at 150 GHz'.format(nu0))
+plt.xlabel(r'$\theta$ [deg.]')
+plt.ylabel('Synthesized beam')
+plt.draw()
+plt.ylim(0,1.5)
+plt.xlim(-20,20)
+plt.legend(loc='upper left')
+```
+
+```{python}
+def get_primbeam_2d(thy, thx, lam, fwhmprimbeam_150=14.):
+    fwhmprim = 14. * lam / (3e8/150e9)
+    dist=np.sqrt(thx**2+thy**2)
+    primbeam = np.exp(-0.5 * dist**2 / (fwhmprim/2.35)**2)
+    return primbeam
+```
+
+```{python}
+def sb_2d(thx, thy, dx, lam, sqnh, Df=1., detposx=0., detposy=0., fwhmprimbeam_150=14.):
+    primbeam =  get_primbeam_2d(thx, thy, lam)
+    thetx = thx - np.degrees(detposx/Df)
+    thety = thy - np.degrees(detposy/Df)
+    sb = (np.sin(sqnh * np.pi * dx / lam * np.radians(thx))**2 / np.sin(np.pi * dx / lam * np.radians(thx))**2) *(np.sin(sqnh * np.pi * dx / lam * np.radians(thy))**2 / np.sin(np.pi * dx / lam * np.radians(thy))**2)
+    return sb/np.max(sb)*primbeam
+```
+
+```{python}
+tx = np.linspace(minth, maxth, nth)
+ty=np.linspace(minth,maxth,nth)
+_thx,_thy=np.meshgrid(tx,ty)
+angle = 44.9
+```
+
+```{python}
+thx = _thx * np.cos(angle * np.pi / 180) - _thy * np.sin(angle * np.pi / 180)
+thy = _thx * np.sin(angle * np.pi / 180) + _thy * np.cos(angle * np.pi / 180)
+```
+
+```{python}
+detposx=0.
+detposy=0.
+```
+
+```{python}
+sbeam=sb_2d(thx, thy, dx, lam, sqnh, Df, detposx, detposy)
+```
+
+```{python}
+plt.scatter(_thx,_thy, c=sbeam, s=5, cmap=cm.hot)
+cbar= plt.colorbar()
+plt.show()
+
+```
+
+```{python}
+#now just peaks method
+import numexpr as ne
+c=3e8
+kmax=2
+horn_spacing=dx
+angle=44.9
+```
+
+```{python}
+position=np.array([[0,0]])
+```
+
+```{python}
+lmbda = c / 150e9
+#position = -position / np.sqrt(np.sum(position ** 2, axis=-1))[..., None]
+if angle != 0:
+    _kx, _ky = np.mgrid[-kmax:kmax + 1, -kmax:kmax + 1]
+    kx = _kx * np.cos(angle * np.pi / 180) - _ky * np.sin(angle * np.pi / 180)
+    ky = _kx * np.sin(angle * np.pi / 180) + _ky * np.cos(angle * np.pi / 180)
+else:
+    kx, ky = np.mgrid[-kmax:kmax + 1, -kmax:kmax + 1]
+
+nx = position[:, 0, None] - lmbda * kx.ravel() / horn_spacing
+ny = position[:, 1, None] - lmbda * ky.ravel() / horn_spacing
+local_dict = {'nx': nx, 'ny': ny}
+theta = ne.evaluate('arcsin(sqrt(nx**2 + ny**2))',local_dict=local_dict)
+phi = ne.evaluate('arctan2(ny, nx)', local_dict=local_dict)
+
+xdeg=np.degrees(nx)
+ydeg=np.degrees(ny)
+
+```
+
+```{python}
+val = get_primbeam_2d(xdeg, ydeg, lam)
+```
+
+```{python}
+plt.scatter(xdeg,ydeg, c=val, s=20, cmap=cm.cool)
+cbar= plt.colorbar()
+plt.show()
+```
+
+```{python}
+#print theta phi and val
+print(theta)
+print(phi)
+print(val)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

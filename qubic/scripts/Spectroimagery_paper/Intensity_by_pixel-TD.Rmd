@@ -171,7 +171,130 @@ ix = 0
 
 MapsArray = [maskmaps_dust[ix], maskmaps_synch[ix], maskmaps_all[ix]]
 fsed._plot_exampleSED(dictionaries[ix], centers[ix], nus_out150, MapsArray, mapsarray = True, 
-                     DeltaTheta = 1, DeltaPhi = 1)
+                     DeltaTheta = 1, DeltaPhi = 1, intensity = False, covmap = coveragesTD)
+```
+
+### Compute the rms in different regions
+
+```{python}
+#maskmaps_dust, maskmaps_synch, maskmaps_all
+#print(coveragesTD[0], )
+#cov_lim = 1e3
+#cov_lims = 1e1
+add_dust = np.zeros((2,2,5))
+add_synch = np.zeros((2,2,5))
+add_all = np.zeros((2,2,5))
+stk = 1
+
+for stk in [0,1]:
+    if stk == 0:
+        lims = np.array([[1.7,1e2],[1.25e1,3e3]])
+    else:
+        lims = np.array([[-0.35,-8],[0.48,9]])
+
+    for j, limlim in enumerate(lims):
+        cov_lims = limlim[0]
+        cov_lim = limlim[1]
+        fig , ax = plt.subplots(nrows = 3, ncols = 5, figsize = (14,10))
+        for fr in range(5):
+            if stk == 0:
+                mmm = np.copy(maskmaps_dust[0,fr, :, stk])
+                mmsk = maskmaps_dust[0,fr, : ,stk] > cov_lim
+                mmm[~mmsk] = hp.UNSEEN
+
+                mmm_s = np.copy(maskmaps_synch[0,fr, :, stk])
+                mmsk_s = maskmaps_synch[0,fr, : ,stk] > cov_lims
+                mmm_s[~mmsk_s] = hp.UNSEEN
+
+                mmm_a = np.copy(maskmaps_all[0,fr, :, stk])
+                mmsk_a = maskmaps_all[0,fr, : ,stk] > cov_lim
+                mmm_a[~mmsk_a] = hp.UNSEEN
+
+            else:
+                mmm1, mmm2 = np.copy(maskmaps_dust[0,fr, :, stk]), np.copy(maskmaps_dust[0,fr, :, stk+1])
+                mmm = np.sqrt(mmm1**2 + mmm2**2)
+                mmsk1, mmsk2 = maskmaps_dust[0,fr, : ,stk] > cov_lim, maskmaps_dust[0,fr, : ,stk+1] > cov_lim
+                mmsk = mmsk1 * mmsk2
+                mmm[~mmsk] = hp.UNSEEN
+                #print(np.min(mmm[mmsk]), np.sum(coveragesTD[0] > 0)) 
+                mmm_s1, mmm_s2 = np.copy(maskmaps_synch[0,fr, :, stk]), np.copy(maskmaps_synch[0,fr, :, stk+1])
+                mmm_s = np.sqrt(mmm_s1**2 + mmm_s2**2)
+                mmsk_s1, mmsk_s2 = maskmaps_synch[0,fr, : ,stk] > cov_lims, maskmaps_synch[0,fr, : ,stk+1] > cov_lims
+                mmsk_s = mmsk_s1 * mmsk_s2
+                mmm_s[~mmsk_s] = hp.UNSEEN
+                #print(np.min(mmm_s[mmsk_s]))
+                mmm_a1, mmm_a2 = np.copy(maskmaps_all[0,fr, :, stk]), np.copy(maskmaps_all[0,fr, :, stk+1])
+                mmm_a = np.sqrt(mmm_a1**2 + mmm_a2**2)
+                mmsk_a1, mmsk_a2 = maskmaps_all[0,fr, : ,stk] > cov_lim, maskmaps_all[0,fr, : ,stk+1] > cov_lim
+                mmsk_a = mmsk_a1 * mmsk_a2
+                mmm_a[~mmsk_a] = hp.UNSEEN
+
+            ax[0,fr].cla()
+            plt.axes(ax[0,fr])
+            hp.gnomview(mmm, reso = 14, rot = centers[0], 
+                        title = "Polvo galáctico" if fr == 2 else " ",
+                        max = 6e3 if stk == 0 else 35, hold = True)
+            add_dust[stk,j] =np.sqrt(np.mean(mmm[mmsk]**2)) 
+            if fr == 2: print("Region coverage (dust) {}".format(sum(mmsk)/25800 ))
+            #mmm_s = np.copy(maskmaps_synch[0,fr, :, stk])
+            #mmsk_s = maskmaps_synch[0,fr, : ,stk] > cov_lims
+            #mmm_s[~mmsk_s] = hp.UNSEEN
+            ax[1,fr].cla()
+            plt.axes(ax[1,fr])
+            hp.gnomview(mmm_s, reso = 14, rot = centers[0], 
+                        title = "Sincrotrón" if fr == 2 else " ", 
+                        max = 30 if stk == 0 else 9, hold = True)
+            add_synch[stk,j] = np.sqrt(np.mean(mmm_s[mmsk_s]**2)) 
+            if fr == 2: print("Region coverage (synch) {}".format(sum(mmsk_s)/25800 ))
+
+            #mmm_a = np.copy(maskmaps_all[0,fr, :, stk])
+            #mmsk_a = maskmaps_all[0,fr, : ,stk] > cov_lim
+            #mmm_a[~mmsk_a] = hp.UNSEEN
+            plt.axes(ax[2,fr])
+            hp.gnomview(mmm_a, reso = 14, rot = centers[0], 
+                        title = "Polvo galáctico + sincrotrón" if fr == 2 else " ",
+                        max = 6e3 if stk == 0 else 35, hold = True)
+            add_all[stk,j] = np.sqrt(np.mean(mmm_a[mmsk_a]**2)) 
+            if fr == 2: print("Region coverage (dust+synch) {}".format(sum(mmsk_a)/25800 ))
+        plt.tight_layout()
+        #plt.savefig("RegionSky_SED{}".format(j))
+```
+
+```{python}
+for stk in [0,1]:
+    plt.fill_between(nus_out150, y1 = add_dust[stk,0], y2 = add_dust[stk,1],
+                     color = 'b' if stk == 0 else 'g', alpha = 0.6, 
+                     linestyle = "--", lw = 4,
+                    label = "Temperatura" if stk == 0 else "Polarización")
+    #if stk == 0:
+    #    plt.text(nus_out150[0], add_dust[0,0]+0.2, "$f_{region} \sim 0.8$", c = "k")
+    #    plt.text(nus_out150[0], add_dust[1,0]+1e3, "$f_{region} \sim 0.05$", c = "k")
+    #else:
+    #    plt.text(nus_out150[0], add_dust[0,0]+0.2, "$f_{region} \sim 0.8$", c = "k")
+    #    plt.text(nus_out150[0], add_dust[1,0]+1, "$f_{region} \sim 0.05$", c = "k")
+    plt.fill_between(nus_out150, y1 = add_synch[stk,0], y2 = add_synch[stk,1],
+                     color = 'b' if stk == 0 else 'g', alpha = 0.6, 
+                     linestyle = "--", lw = 4)
+
+    #if stk == 0: 
+    #    plt.text(nus_out150[0], add_synch[0,0]+1, "$f_{region} \sim 0.8$", c = "k")
+    #    plt.text(nus_out150[0], add_synch[1,0]+3, "$f_{region} \sim 0.05$", c = "k")
+    #else:
+    #    plt.text(nus_out150[0], add_synch[0,0], "$f_{region} \sim 0.8$", c = "k")
+    #    plt.text(nus_out150[0], add_synch[1,0]+0.2, "$f_{region} \sim 0.05$", c = "k")
+    plt.fill_between(nus_out150, y1 = add_all[stk,0], y2 = add_all[stk,1],
+                       color = 'r', alpha = 0.8)
+    plt.ylabel(r"$rms(\nu)~[\mu K_{\rm CMB}]$")# if stk == 0 else r"$P(\nu)~[\mu K_{\rm CMB}]$", fontsize = 18)
+    plt.xlabel(r"$\nu [GHz]$", fontsize = 18)
+    plt.yscale("log")
+    #if stk == 0:
+    #    plt.ylim(-0.2,3e4)
+    #else:
+    #    plt.ylim(-0.2,1e2)
+    plt.ylim(3e-1,5e4)
+    plt.legend(loc = "upper center", ncol = 2)
+plt.tight_layout()
+#plt.savefig("rms_Comp-Dust_synch")
 ```
 
 ## Udgrading maps

@@ -4,7 +4,7 @@ from qubicpack.qubicfp import qubicfp
 import qubic.fibtools as ft
 import qubic.demodulation_lib as dl
 from pysimulators import FitsArray
-from qubic import progress_bar
+
 import numpy as np
 from matplotlib.pyplot import *
 import scipy.ndimage.filters as f
@@ -205,123 +205,6 @@ def get_mode(y, nbinsmin=51):
     idmax = np.argmax(hh[0])
     mymode = 0.5 * (hh[1][idmax + 1] + hh[1][idmax])
     return mymode
-def cut_tod(tod, azt, elt, t, elmin=30, elmax=50):
-    index_el=np.where((elt > elmin) & (elt < elmax))[0]
-    tod_cut=tod[index_el].copy()
-    newazt=azt[index_el].copy()
-    newelt=elt[index_el].copy()
-    myt=t-t[0]
-    newt=myt[index_el].copy()
-    return tod_cut, newazt, newelt, newt
-
-
-class DirtyMaps:
-
-    def __init__(self, a):
-
-        """
-        Parameters
-        ----------
-        a: Object from qubicpack
-        """
-
-        self.a = a
-        self.thk = self.a.timeaxis(datatype='hk')
-        self.nside=256
-        self.nharm=10
-        self.notch=np.array([[1.724, 0.005, self.nharm]])
-
-        #Load data
-        self.tt, self.rawtod= self.a.tod()
-
-        self.az = self.a.azimuth()
-        self.el = self.a.elevation()
-        self.azt = np.interp(self.tt, self.thk, self.a.azimuth())
-        self.elt = np.interp(self.tt, self.thk, self.a.elevation())
-
-
-    def filter_data(self, d, lowcut, highcut, order=5):
-
-        filtered_data = ft.filter_data(self.tt, d, lowcut, highcut, notch=self.notch, rebin=True, verbose=True, order=order)
-
-        return filtered_data
-
-    def remove_noise(self, d):
-
-        hf_noise = hf_noise_estimate(self.tt, d) / np.sqrt(2)
-        var_diff = d ** 2 - hf_noise ** 2
-        data = np.sqrt(np.abs(var_diff)) * np.sign(var_diff)
-        return data
-
-    def make_flat_map(self, d):
-
-        time_azel = self.a.timeaxis(datatype='hk',axistype='pps')
-
-
-        #for quad demod
-        newaz = np.interp(self.tt, time_azel, self.az)
-        newel = np.interp(self.tt, time_azel, self.el)
-        azmin = min(self.az)
-        azmax = max(self.az)
-        elmin = min(self.el)
-        elmax = max(self.el)
-        naz = 101
-        nel = 101
-        #map for quad demod
-        mymap, azmap, elmap = dl.coadd_flatmap(d,
-                                                newaz,
-                                                newel,
-                                                filtering=None,
-                                                azmin=azmin, azmax=azmax,
-                                                elmin=elmin, elmax=elmax,
-                                                naz=naz,nel=nel)
-
-        return mymap
-
-    def make_healpix_map(self, d, elmin=30, elmax=50, countcut=0):
-
-        d, newazt, newelt, _ = cut_tod(d, self.azt, self.elt, self.tt, elmin=elmin, elmax=elmax)
-
-        unseen_val=hp.UNSEEN
-        ips = hp.ang2pix(self.nside, newazt, newelt, lonlat=True)
-        mymap = np.zeros(12*self.nside**2)
-        mapcount = np.zeros(12*self.nside**2)
-        for i in range(len(newazt)):
-            mymap[ips[i]] -= d[i]
-            mapcount[ips[i]] += 1
-        unseen = mapcount <= countcut
-        mymap[unseen] = unseen_val
-        mapcount[unseen] = unseen_val
-        mymap[~unseen] = mymap[~unseen] / mapcount[~unseen]
-        return mymap
-
-
-
-    def make_healpix_map_radec(self, d, st, elmin=30, elmax=50, countcut=0, latitude=-24.731358, longitude=-65.409535):
-
-        '''
-        This function allow to create healpix map in RADEC coordinates.
-            - d is your TOD
-            - st is the date when the observation started (exemple : st = '2022-07-14 23:54:19.113000')
-            - latitude and longitude are set to be in Salta lab
-        '''
-
-        d, newazt, newelt, newt = cut_tod(d, self.azt, self.elt, self.tt, elmin=elmin, elmax=elmax)
-        mymap = np.zeros(12*self.nside**2)
-        mapcount = np.zeros(12*self.nside**2)
-        myra, mydec = qubic.hor2equ(newazt+120, newelt, time=newt, date_obs=st, longitude=longitude, latitude=latitude)
-        ips=hp.ang2pix(self.nside, np.deg2rad(myra-180), np.deg2rad(mydec))
-        unseen_val=hp.UNSEEN
-        for i in range(len(d)):
-            mymap[ips[i]] -= d[i]
-            mapcount[ips[i]] += 1
-        unseen = mapcount <= countcut
-        mymap[unseen] = unseen_val
-        mapcount[unseen] = unseen_val
-        mymap[~unseen] = mymap[~unseen] / mapcount[~unseen]
-
-        return mymap
-
 
 class BeamMapsAnalysis(object):
 
@@ -505,7 +388,7 @@ class BeamMapsAnalysis(object):
 
             if make_maps=='healpix':
                 print('Making healpix maps')
-                mymaps_hp[ish]=self.make_healpix_map(self.azt+0.9, self.elt, data)
+                mymaps_hp[ish]=self.make_healpix_map(self.azt, self.elt, data)
             elif make_maps=='flat':
                 print('Make Flat Maps')
                 mymaps_flat[ish]=self.make_flat_map(self.tt, data, doplot=doplot)
@@ -549,47 +432,6 @@ class BeamMapsAnalysis(object):
 
         FitsArray(mymap).save(repository+'/imgHealpix_TESNum_{}.fits'.format(TESNum))
 
-def display_healpix_map(maps, rot, q, reso=15, add_moon_traj=None, savepdf=None, radec=['G']):
-
-    if add_moon_traj is not None:
-        th, phi = add_moon_traj
-
-    figure(figsize=(30, 30))
-    #k=1
-    bar=progress_bar(maps.shape[0], 'Display healpix maps')
-
-    x=np.linspace(-0.0504, -0.0024, 17)
-    y=np.linspace(-0.0024, -0.0504, 17)
-
-    X, Y = np.meshgrid(x, y)
-
-    allTES=np.arange(1, 129, 1)
-    good_tes=np.delete(allTES, np.array([4,36,68,100])-1, axis=0)
-    k=0
-    for j in [1, 2]:
-        for i in good_tes:
-
-            #print(i)
-            xtes, ytes, FP_index, index_q= scal.TES_Instru2coord(TES=i, ASIC=j, q=q, frame='ONAFP', verbose=False)
-            ind=np.where((np.round(xtes, 4) == np.round(X, 4)) & (np.round(ytes, 4) == np.round(Y, 4)))
-            place_graph=ind[0][0]*17+ind[1][0]+1
-            mytes=i
-            if j == 2:
-                mytes+=128
-            hp.gnomview(maps[mytes-1], rot=rot, reso=reso, sub=(17, 17, place_graph), cmap='jet',
-                notext=True, cbar=False, title='', margins=(0.001, 0.001, 0.001, 0.001), coord=radec)
-
-            annotate('TES = {}'.format(mytes), xy=(0, 0),  xycoords='axes fraction', fontsize=15, color='black',
-                     fontstyle='italic', xytext=(0.2, 0.8))
-            bar.update()
-            if add_moon_traj is not None:
-                hp.projplot(th, phi, color='k', lonlat=False, alpha=0.8, lw=2)
-
-
-            k+=1
-    if savepdf != None:
-        savefig(savepdf, format="pdf", bbox_inches="tight")
-    show()
 
 def plot_data_on_FP(datain, q, lim=None, savepdf=None, **kwargs):
 
@@ -599,39 +441,20 @@ def plot_data_on_FP(datain, q, lim=None, savepdf=None, **kwargs):
     Parameters :
 
         - datain : array -> The data that you want to plot on the focal plane. The data must have the shape (N_tes x N_data)
-          for 1D plot or (N_tes x N_data x N_data) for 2D plot. In case one wants to plot multiple 1D plots then data_in is a list
-          of data arrays
+        for 1D plot or (N_tes x N_data x N_data) for 2D plot.
         - q : object -> object of qubic computing with qubic package
-        - xdata : array (or array of arrays) -> for 1D plot, you can give x axis for the plot. Default is xdata = []. If one wants to plot more than
-              one curve then xdata is an array of arrays
+        - x : array -> for 1D plot, you can give x axis for the plot
         - lim : array -> have the shape [x_min, x_max, y_min, y_max] if you want to put limit on axis
         - savepdf : str -> Put the name of the file if you want to save the plot
-        - string or array of strings specifying the plot style
-        - **kwargs : -> You can put severals arguments to modify the plot (color, linestyle, ...). 
+        - **kwargs : -> You can put severals arguments to modify the plot (color, linestyle, ...)
 
     """
 
-    import numpy as np
+    if len(datain.shape)==3:
+        dimension=2
+    elif len(datain.shape)==2:
+        dimension=1
 
-    if type(datain) == np.ndarray:
-        # This is the case we have a simple 1D or a 2D plot
-        if len(datain) != 0:
-            if len(datain.shape)==3:
-                dimension = 2
-            elif len(datain.shape) == 2:
-                dimension = 1
-                datain = np.array([datain])
-                if len(xdata) > 0:
-                    xdata = np.array([xdata])
-        else:
-            dimension = 0
-
-    elif type(datain) == list:
-        # This is the case where we plot multiple 1D plots
-        dimension = 1
-        if style == '':
-            style = ['' for i in np.arange(len(datain))]
-        
     x=np.linspace(-0.0504, -0.0024, 17)
     y=np.linspace(-0.0024, -0.0504, 17)
 
@@ -654,27 +477,12 @@ def plot_data_on_FP(datain, q, lim=None, savepdf=None, **kwargs):
 
             xtes, ytes, FP_index, index_q= scal.TES_Instru2coord(TES=tes, ASIC=j, q=q, frame='ONAFP', verbose=False)
             ind=np.where((np.round(xtes, 4) == np.round(X, 4)) & (np.round(ytes, 4) == np.round(Y, 4)))
-            #print(ind)
-            #stop
 
-            if dimension == 0:
-
-                axs[ind[0][0], ind[1][0]].axes.xaxis.set_visible(False)
-                axs[ind[0][0], ind[1][0]].axes.yaxis.set_visible(False)
-
-                if lim != None:
-                    axs[ind[0][0], ind[1][0]].set_xlim(lim[0], lim[1])
-                    axs[ind[0][0], ind[1][0]].set_ylim(lim[2], lim[3])
 
             if dimension == 1:
 
-                nplots = len(datain)
-                for plot_index in np.arange(nplots):
-                    if len(xdata) == 0:
-                        axs[ind[0][0], ind[1][0]].plot(datain[plot_index][k], style[plot_index], **kwargs)
-                    else:
-                        axs[ind[0][0], ind[1][0]].plot(xdata[plot_index],datain[plot_index][k], style[plot_index], **kwargs)
-                        
+                axs[ind[0][0], ind[1][0]].plot(datain[k], **kwargs)
+
                 if lim != None:
                     axs[ind[0][0], ind[1][0]].set_xlim(lim[0], lim[1])
                     axs[ind[0][0], ind[1][0]].set_ylim(lim[2], lim[3])
@@ -682,96 +490,14 @@ def plot_data_on_FP(datain, q, lim=None, savepdf=None, **kwargs):
             elif dimension == 2:
                 #beam=_read_fits_beam_maps(newtes)
                 axs[ind[0][0], ind[1][0]].imshow(datain[k], **kwargs)
-                
-            if mytext is not None:
-                axs[ind[0][0], ind[1][0]].annotate(mytext[k], xy=(0, 0),  xycoords='data', color='black', 
-                                                   fontsize=35, ha="center", va="center", xytext=(0.5, 0.5), textcoords='axes fraction')
 
-            if mybgcolors is not None:
-                axs[ind[0][0], ind[1][0]].set_facecolor(mybgcolors[k])
-            
-                # Make title
-            if mytitle is not None:
-                axs[ind[0][0], ind[1][0]].set_title(mytitle[k])
-            else:
-                axs[ind[0][0], ind[1][0]].set_title('TES = {:.0f}'.format(tes))
-            
+            axs[ind[0][0], ind[1][0]].set_title('TES = {:.0f}'.format(tes))
 
 
             k+=1
-    if mysuptitle is not None:
-        plt.suptitle(mysuptitle, fontsize=55)
-    #axs[ind[0][0], ind[1][0]].set_title('TES = {:.0f}'.format(tes))
     if savepdf != None:
         savefig(savepdf, format="pdf", bbox_inches="tight")
     show()
-
-    
-# def plot_data_on_FP(datain, q, lim=None, savepdf=None, **kwargs):
-
-
-#     """
-
-#     Parameters :
-
-#         - datain : array -> The data that you want to plot on the focal plane. The data must have the shape (N_tes x N_data)
-#         for 1D plot or (N_tes x N_data x N_data) for 2D plot.
-#         - q : object -> object of qubic computing with qubic package
-#         - x : array -> for 1D plot, you can give x axis for the plot
-#         - lim : array -> have the shape [x_min, x_max, y_min, y_max] if you want to put limit on axis
-#         - savepdf : str -> Put the name of the file if you want to save the plot
-#         - **kwargs : -> You can put severals arguments to modify the plot (color, linestyle, ...)
-
-#     """
-
-#     if len(datain.shape)==3:
-#         dimension=2
-#     elif len(datain.shape)==2:
-#         dimension=1
-
-#     x=np.linspace(-0.0504, -0.0024, 17)
-#     y=np.linspace(-0.0024, -0.0504, 17)
-
-#     X, Y = np.meshgrid(x, y)
-
-#     allTES=np.arange(1, 129, 1)
-
-#     #delete thermometers tes
-#     good_tes=np.delete(allTES, np.array([4,36,68,100])-1, axis=0)
-
-#     fig, axs = subplots(nrows=17, ncols=17, figsize=(50, 50))
-#     k=0
-#     for j in [1, 2]:
-#         for ites, tes in enumerate(good_tes):
-#             if j > 1:
-#                 newtes=tes+128
-#             else:
-#                 newtes=tes
-#             #print(ites, tes, j)
-
-#             xtes, ytes, FP_index, index_q= scal.TES_Instru2coord(TES=tes, ASIC=j, q=q, frame='ONAFP', verbose=False)
-#             ind=np.where((np.round(xtes, 4) == np.round(X, 4)) & (np.round(ytes, 4) == np.round(Y, 4)))
-
-
-#             if dimension == 1:
-
-#                 axs[ind[0][0], ind[1][0]].plot(datain[k], **kwargs)
-
-#                 if lim != None:
-#                     axs[ind[0][0], ind[1][0]].set_xlim(lim[0], lim[1])
-#                     axs[ind[0][0], ind[1][0]].set_ylim(lim[2], lim[3])
-
-#             elif dimension == 2:
-#                 #beam=_read_fits_beam_maps(newtes)
-#                 axs[ind[0][0], ind[1][0]].imshow(datain[k], **kwargs)
-
-#             axs[ind[0][0], ind[1][0]].set_title('TES = {:.0f}'.format(tes))
-
-
-#             k+=1
-#     if savepdf != None:
-#         savefig(savepdf, format="pdf", bbox_inches="tight")
-#     show()
 
 def _read_fits_beam_maps(TESNum):
     from astropy.io import fits as pyfits

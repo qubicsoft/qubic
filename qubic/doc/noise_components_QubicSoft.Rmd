@@ -75,6 +75,7 @@ d["noiseless"] = False
 #
 d["debug"] = True
 d["filter_nu"]= 220e9
+d["synthbeam"]='CalQubic_Synthbeam_Analytical_FFF_CC.fits'
 ```
 
 ```{python}
